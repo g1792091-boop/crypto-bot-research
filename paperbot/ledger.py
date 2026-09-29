@@ -62,6 +62,11 @@ CREATE TABLE IF NOT EXISTS agent_calls (
     ok INTEGER NOT NULL,
     tokens INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS runs (
+    run_id TEXT NOT NULL,
+    started_ts INTEGER NOT NULL,
+    data TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS equity (
     run_id TEXT NOT NULL,
     ts INTEGER NOT NULL,
@@ -132,6 +137,16 @@ def load_trades(path: str, run_id: Optional[str] = None, book: Optional[str] = N
     if exit_to is not None:
         out = [t for t in out if t.exit_time < exit_to]
     return out
+
+
+def record_run(path: str, run_id: str, started_ts: int, info: dict) -> None:
+    """What a live run started with (books, strategies, brackets source), so
+    the evening review can tell "no strategy connected" from "quiet market"."""
+    conn = sqlite3.connect(path)
+    conn.executescript(SCHEMA)
+    conn.execute("INSERT INTO runs VALUES (?,?,?)", (run_id, started_ts, json.dumps(info)))
+    conn.commit()
+    conn.close()
 
 
 class RecordingNotifier:

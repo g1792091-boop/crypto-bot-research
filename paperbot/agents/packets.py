@@ -6,12 +6,15 @@ their packet, and every claim must point at the packet path it came from.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from collections import Counter
 from typing import Optional, Sequence
 
+from ..aggregate import Aggregator
 from ..analyze import analyze
 from ..config import Settings
+from ..context import REGIME_N, atr, regime
 from ..ledger import SCHEMA, BarStore, load_trades
 from ..metrics import standard_metrics
 from ..models import TradeRecord
@@ -84,7 +87,10 @@ def _ops(conn: sqlite3.Connection, start: int, end: int, symbols: Sequence[str])
     for s in symbols:
         n = conn.execute("SELECT COUNT(*) FROM bars1m WHERE symbol = ? AND open_time >= ? "
                          "AND open_time < ?", (s, start, end)).fetchone()[0]
-        bars[s] = {"recorded": n, "expected": minutes, "missing": max(0, minutes - n)}
+        last = conn.execute("SELECT MAX(open_time) FROM bars1m WHERE symbol = ?", (s,)).fetchone()[0]
+        bars[s] = {"recorded": n, "expected": minutes, "missing": max(0, minutes - n),
+                   "last_bar_kst": kst(last) if last is not None else None,
+                   "minutes_since_last_bar": (end - last) // 60_000 - 1 if last is not None else None}
     return {
         "signals": signals,
         "alerts": {"by_level": dict(levels), "count": len(alerts),
@@ -92,6 +98,88 @@ def _ops(conn: sqlite3.Connection, start: int, end: int, symbols: Sequence[str])
                             for a in alerts[-30:]]},
         "bars_1m": bars,
     }
+
+
+def _runs(conn: sqlite3.Connection, start: int, end: int) -> dict:
+    rows = conn.execute("SELECT run_id, started_ts, data FROM runs WHERE started_ts < ? "
+                        "ORDER BY started_ts", (end,)).fetchall()
+    if not rows:
+        return {"recorded": False,
+                "note": "no live run recorded in this ledger (bot never started with it)"}
+    run_id, ts, data = rows[-1]
+    info = json.loads(data)
+    return {"recorded": True, "latest_run": run_id, "started_kst": kst(ts),
+            "strategies_connected": len(info.get("strategies", [])),
+            "strategies": info.get("strategies", []), "books": info.get("books"),
+            "brackets": info.get("brackets"),
+            "starts_in_window": sum(1 for r in rows if start <= r[1] < end)}
+
+
+def _funnel(conn: sqlite3.Connection, book: str, start: int, end: int) -> dict:
+    """What happened to every signal in the window, for one book."""
+    rows = conn.execute(
+        "SELECT strategy_id, symbol, status, reason, COUNT(*) FROM signals "
+        "WHERE run_id LIKE ? AND step_ts >= ? AND step_ts < ? "
+        "GROUP BY strategy_id, symbol, status, reason", (f"%-{book}", start, end)).fetchall()
+    by_status: Counter = Counter()
+    by_reason: Counter = Counter()
+    by_strategy: dict = {}
+    for strat, sym, status, reason, n in rows:
+        by_status[status] += n
+        if status != "ENTERED":
+            by_reason[f"{status}: {reason}"] += n
+        d = by_strategy.setdefault(strat, Counter())
+        d[status] += n
+    last_sig = conn.execute("SELECT MAX(step_ts) FROM signals WHERE run_id LIKE ?",
+                            (f"%-{book}",)).fetchone()[0]
+    return {"signals": sum(by_status.values()), "by_status": dict(by_status),
+            "not_entered_reasons": dict(by_reason.most_common()),
+            "by_strategy": {k: dict(v) for k, v in by_strategy.items()},
+            "last_signal_kst": kst(last_sig) if last_sig is not None else None}
+
+
+def _aggregate(bars1m, tf: str) -> list:
+    agg = Aggregator([tf])
+    out = []
+    for b in bars1m:
+        out += [x for t, x in agg.add(b) if t == tf and not x.partial]
+    return out
+
+
+def _market(store: BarStore, symbols: Sequence[str], start: int, end: int) -> dict:
+    """Plain description of each symbol over the window and the day before,
+    from recorded 1m bars (no outside data)."""
+    out = {}
+    for sym in symbols:
+        bars = store.load(sym, start - DAY_MS, end - 1)
+        today = [b for b in bars if b.open_time >= start]
+        prev = [b for b in bars if b.open_time < start]
+        if not today:
+            out[sym] = {"available": False}
+            continue
+        hi, lo = max(b.high for b in today), min(b.low for b in today)
+        o, c = today[0].open, today[-1].close
+        # *_pct values are in percent (1.5 means 1.5%).
+        row = {"available": True, "open": o, "close": c,
+               "change_pct": round((c / o - 1) * 100, 3),
+               "range_pct": round((hi - lo) / o * 100, 3)}
+        if prev:
+            ph, pl = max(b.high for b in prev), min(b.low for b in prev)
+            row["prev_day_range_pct"] = round((ph - pl) / prev[0].open * 100, 3)
+        b15 = _aggregate(today, "15m")
+        if b15:
+            r15 = regime(b15, REGIME_N["15m"])
+            row["regime_15m"] = r15["label"]
+            if r15.get("er") is not None:
+                row["efficiency_15m"] = r15["er"]
+            a = atr(b15)
+            if a:
+                row["atr_15m_pct"] = round(a / c * 100, 4)
+        b1h = _aggregate(bars, "1h")
+        if b1h:
+            row["regime_1h_48h"] = regime(b1h, REGIME_N["1h"])["label"]
+        out[sym] = row
+    return out
 
 
 def _compact_whatif(w: dict) -> dict:
@@ -182,6 +270,21 @@ def evening_packet(ledger: str, now_ms: int, settings: Optional[Settings] = None
                                       for x in rep["sessions"]["windows"]}} if rep else None),
         }
     out["ops"] = _ops(conn, start, now_ms, s.symbols)
+    last_trade = {}
+    for book in books:
+        ts = [t.exit_time for t in load_trades(ledger, book=book)]
+        last_trade[book] = kst(max(ts)) if ts else None
+    out["activity"] = {
+        "run": _runs(conn, start, now_ms),
+        "trades_today": {b: (out["books"][b]["today"] or {}).get("trades", 0) for b in books},
+        "last_trade_exit_kst": last_trade,
+        "funnel": {b: _funnel(conn, b, start, now_ms) for b in books},
+        "note": "funnel = every signal the strategies produced in the window and what each "
+                "book did with it (ENTERED / SKIPPED / REJECTED and why)",
+    }
+    out["market"] = _market(store, s.symbols, start, now_ms)
+    out["meta"]["units"] = ("market.*_pct are percent (1.5 = 1.5%); win_rate, net_return, "
+                            "drawdown, roe and similar ratios are fractions (0.015 = 1.5%)")
     conn.close()
     store.close()
     return out

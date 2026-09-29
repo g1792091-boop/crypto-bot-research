@@ -32,7 +32,7 @@ from .config import Settings
 from .context import HTF, entry_context
 from .engine import PaperEngine
 from .feed import LiveFeed
-from .ledger import BarStore, Ledger, RecordingNotifier
+from .ledger import BarStore, Ledger, RecordingNotifier, record_run
 from .margin import Brackets
 from .notify import CRITICAL, INFO, WARN, ConsoleNotifier, Notifier, TelegramNotifier
 from .policy import RecommendedPolicy, RecommendedSettings, RiskGuards
@@ -192,6 +192,11 @@ def cmd_run(settings: Settings, args) -> int:
                                   run_id, args.equity_every, args.books.split(","))
     feed = LiveFeed(rest, settings.symbols, on_event=notifier.send)
     strategies: list[Strategy] = []  # strategies plug in here once validated
+    record_run(args.ledger, run_id, int(time.time() * 1000), {
+        "books": args.books.split(","), "brackets": src, "settings_version": settings.version,
+        "strategies": [{"id": st.strategy_id, "timeframe": st.timeframe,
+                        "style": getattr(st, "style", "")} for st in strategies],
+        "symbols": list(settings.symbols)})
     notifier.send(INFO, f"paper run {run_id} started; books: {args.books}; "
                         f"brackets: {src}; strategies: {len(strategies)}")
     store = BarStore(args.ledger)

@@ -36,8 +36,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     ev.add_argument("--timeout", type=float, default=900.0)
     ev.add_argument("--min-n", type=int, default=30)
     ev.add_argument("--out")
-    ev.add_argument("--always-run", action="store_true",
-                    help="run the agents even on a day with no closed trades")
+    ev.add_argument("--skip-no-trade-days", action="store_true",
+                    help="save usage: no agent calls on a day with no closed trades "
+                         "(by default the agents run and explain why there were none)")
     ev.add_argument("--max-calls", type=int, default=DEFAULT_MAX_CALLS,
                     help="daily cap on Claude calls (Korea-time day, all runs)")
     ev.add_argument("--max-tokens", type=int, default=DEFAULT_MAX_TOKENS,
@@ -61,7 +62,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     store = ReportStore(args.ledger)
     try:
         report = run_evening(packet, runner, store, notifier, now,
-                             skip_if_no_trades=not args.always_run)
+                             skip_if_no_trades=args.skip_no_trade_days)
     finally:
         store.close()
         if isinstance(runner, BudgetedRunner):

@@ -14,7 +14,7 @@ from paperbot.agents.pipeline import compose_telegram, run_evening, ReportStore
 from paperbot.agents.roles import EVENING_ROLES, check_output, resolve, system_prompt
 from paperbot.agents.runner import (AgentCallError, ClaudeCodeRunner, FakeRunner,
                                     UsageLimitReached, child_env, extract_json)
-from paperbot.ledger import BarStore, RecordingNotifier
+from paperbot.ledger import BarStore, RecordingNotifier, record_run
 from paperbot.live import make_books
 from paperbot.notify import ListNotifier
 from paperbot.replay import replay
@@ -213,27 +213,52 @@ def test_extract_json_variants():
 def test_cli_dry_run(ledger, capsys):
     db, _ = ledger
     out = db + ".report.json"
-    # The fixture's trades are old, so "today" has none: agents are skipped.
+    # The fixture's trades are old, so "today" has none; agents still run by default.
     code = agents_main(["evening", "--ledger", db, "--dry-run", "--out", out])
     rep = json.loads(open(out, encoding="utf-8").read())
-    assert code == 0 and rep["skipped"] and "AI 점검은 생략" in rep["telegram"]
-    code = agents_main(["evening", "--ledger", db, "--dry-run", "--always-run", "--out", out])
+    assert code == 0 and not rep["skipped"] and "(dry-run)" in rep["telegram"]
+    code = agents_main(["evening", "--ledger", db, "--dry-run", "--skip-no-trade-days",
+                        "--out", out])
     rep = json.loads(open(out, encoding="utf-8").read())
-    assert code == 0 and rep["failed"] == [] and "(dry-run)" in rep["telegram"]
+    assert code == 0 and rep["skipped"] and "AI 점검은 생략" in rep["telegram"]
 
 
-def test_no_trades_day_makes_no_calls(ledger):
+def test_no_trade_day_agents_run_by_default_and_skip_is_opt_in(ledger):
     db, now = ledger
     p = evening_packet(db, now + 3 * 86_400_000, boot=50)  # window with no closed trades
     runner = FakeRunner()
+    rep = run_evening(p, runner, None, None, now)
+    assert len(runner.calls) == 6 and not rep["skipped"]
+    pnl_call = [c for c in runner.calls if c["role"] == "pnl_reviewer"][0]["packet"]
+    assert "activity" in pnl_call and "market" in pnl_call
+    runner = FakeRunner()
     note = ListNotifier()
-    rep = run_evening(p, runner, None, note, now)
+    rep = run_evening(p, runner, None, note, now, skip_if_no_trades=True)
     assert runner.calls == [] and rep["skipped"]
     level, text = note.messages[-1]
     assert "AI 점검은 생략" in text and "[숫자: 코드 계산]" in text
     assert level == "WARN"  # 1m bars missing for five symbols is still reported
-    rep = run_evening(p, runner, None, None, now, skip_if_no_trades=False)
-    assert len(runner.calls) == 6
+
+
+def test_activity_funnel_and_market(ledger):
+    db, now = ledger
+    p = evening_packet(db, now, boot=50)
+    act = p["activity"]
+    assert act["run"]["recorded"] is False  # fixture never went through `live run`
+    f = act["funnel"]["owner"]
+    assert f["signals"] == sum(f["by_status"].values()) > 0
+    assert f["by_strategy"]["demo"]["ENTERED"] == f["by_status"]["ENTERED"]
+    assert act["trades_today"]["owner"] == p["books"]["owner"]["today"]["trades"]
+    m = p["market"]["BTCUSDT"]
+    assert m["available"] and m["range_pct"] > 0 and "prev_day_range_pct" in m
+    assert m["regime_15m"] in ("trend_up", "trend_down", "box", "chop", "unknown")
+    assert p["market"]["ETHUSDT"] == {"available": False}
+    assert p["ops"]["bars_1m"]["BTCUSDT"]["minutes_since_last_bar"] == 0
+    assert p["ops"]["bars_1m"]["ETHUSDT"]["last_bar_kst"] is None
+    record_run(db, "live1", now - 3600_000, {"strategies": [], "books": ["owner"],
+                                             "brackets": "file x"})
+    run = evening_packet(db, now, boot=50)["activity"]["run"]
+    assert run["recorded"] and run["strategies_connected"] == 0 and run["starts_in_window"] == 1
 
 
 class TokenRunner(FakeRunner):

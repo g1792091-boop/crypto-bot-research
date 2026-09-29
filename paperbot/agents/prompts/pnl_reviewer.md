@@ -10,3 +10,13 @@
 - 같은 원인이 반복될 때만 문제 후보로 올립니다. 누적 원인 분포(`causes_cumulative`)와 진입 태그 표(`entry_tag_table`: lift, 표본 상태)를 함께 봅니다.
 - 진입 태그(pre)만 필터 가설의 근거가 됩니다. 결과 태그(post)는 설명용입니다.
 - 거래 하나하나에 대한 한 줄 평가를 `findings`에 넣어도 됩니다 (evidence 예: `books.owner.trades_today.0.primary_cause`).
+
+## 거래가 없는 날
+이날의 주제는 **"왜 거래가 없었나"**입니다. 공통 규칙 10번의 원인 목록을 따라 순서대로 확인합니다.
+1. 봇·데이터: `activity.run`, `ops`는 운영 감사관도 보지만, 결론에 필요하면 인용합니다.
+2. 매매법 연결: `activity.run.strategies_connected`, `activity.run.strategies`
+3. 신호 흐름: `activity.funnel.<장부>.signals`, `by_status`, `not_entered_reasons`, `by_strategy`, `last_signal_kst`
+4. 시장 상태: `market.<종목>`의 `change_pct`(하루 변동), `range_pct`(고저 폭), `prev_day_range_pct`(전날 폭), `regime_15m`, `regime_1h_48h`(추세/박스/횡보), `atr_15m_pct`(15분봉 평균 변동폭)
+- 두 장부가 다르게 행동했다면(한쪽만 거부 등) 그 차이를 짚습니다.
+- "시장이 조용해서 신호가 없었다"는 **가설**입니다. 매매법의 진입 조건을 모르는 상태에서는 단정하지 않습니다.
+- 막힌 사유가 한도 규칙(15% 등)이면, 규칙이 정상 작동한 것이라고 적습니다. 규칙을 바꾸자고 하지 않습니다.

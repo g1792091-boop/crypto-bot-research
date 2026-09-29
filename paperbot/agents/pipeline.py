@@ -89,9 +89,10 @@ def _ops_trouble(packet: dict) -> bool:
 
 def run_evening(packet: dict, runner: Runner, store: Optional[ReportStore] = None,
                 notifier: Optional[Notifier] = None, now_ms: Optional[int] = None,
-                roles=EVENING_ROLES, skip_if_no_trades: bool = True) -> dict:
-    """``skip_if_no_trades``: on a day with no closed trade in any book, make
-    no Claude call and send only the code-computed numbers."""
+                roles=EVENING_ROLES, skip_if_no_trades: bool = False) -> dict:
+    """Agents run every day, also without trades: then they explain why
+    there were none. ``skip_if_no_trades`` (opt-in, to save usage) makes no
+    Claude call on such a day and sends only the code-computed numbers."""
     now_ms = now_ms or int(time.time() * 1000)
     psha = _sha(packet)
     if skip_if_no_trades and _no_trades(packet):
