@@ -274,7 +274,7 @@
 - 실측 왕복 비용(b)은 5.5 강등 기준(0.21% 초과 시 강등)과 4.3 재판정 비용(PREREG 공식보다 크면 실측값 사용)에 쓴다. 계좌 거래가 없는 경우 B에서 무엇을 실측 비용으로 볼지는 사용자가 정한다(4.3의 3번 v2.1 주, 10절).
 
 **재현 시험 (가동 전. 1·2단계는 통과 필수, 3단계는 기록만. 기준은 문서가 아니라 해시로 잠긴 코드 `sweep_lib.py`, `vendor/engine.py`):**
-1. 코드 동일성: 봇의 신호·청산 모듈에 스윕 입력 파일(Astral CSV. 저장소에 없음, 8절 MANIFEST 항목과 10절)을 넣어 `sweep_lib.compute_signals` 결과와 신호 배열이 전 봉에서 100% 일치. ① 칸은 `exits(..., return_trades=True)` 거래 목록과 signal_idx·entry_idx·exit_idx·reason 100% 일치, 가격·net 차이 1e-9 이하.
+1. 코드 동일성: 봇의 신호·청산 모듈에 스윕 입력 파일(Astral CSV. `analysis/sweep/data/inputs/rebuild.py`로 재생성, 8절 MANIFEST 항목)을 넣어 `sweep_lib.compute_signals` 결과와 신호 배열이 전 봉에서 100% 일치. ① 칸은 `exits(..., return_trades=True)` 거래 목록과 signal_idx·entry_idx·exit_idx·reason 100% 일치, 가격·net 차이 1e-9 이하.
 2. 실시간 경로 동일성: 봇을 바이낸스 과거 봉으로 "재생 모드"(봉이 하나씩 도착)로 돌린 결과가, 같은 봉 전체에 `sweep_lib`를 한 번에 돌린 결과와 100% 일치(봉 집계·확정 처리·워밍업 검증).
 3. 데이터 차이(판정 아님, 기록만): 같은 기간의 Astral 대 바이낸스 신호 일치율과 거래당 성과 차이를 칸별로 기록.
 - 가동 후: 매일 보관된 봉으로 신호를 일괄 재계산해 실시간 기록과 비교. 불일치가 1건이라도 있으면 경보.
@@ -379,7 +379,7 @@ analysis/audit_notes/, analysis/scripts/   검증 메모·스크립트
 - `analysis/sweep/PREREG.md`, `analysis/sweep/PREREG.sha256` — 확인: `cd analysis/sweep && sha256sum -c PREREG.sha256`(11/11 OK 확인됨)
 - `analysis/sweep/harness/`(`sweep_lib.py`, `run_gate_tf.py`, `vendor/` — vendor 사본은 저장소 원본과 sha256 일치)
 - `analysis/sweep/discover_g5m/`, `discover_g15_30/`, `discover_g1h_4h_1d/`(봉별 1차 표 `out/gate_is_<tf>.csv`. 5분은 `discover_g5m/out/gate_is_5m_sub328232f2.csv`·`gate_is_5m_sube97da1be.csv` 두 파일로 나뉨), `combine/`(선별 종합 `is_table_long.csv`, `out/gate_all_is_applied.csv`, `carried.json`), `holdout/`(`out/gate_all_oos_applied.csv`, `out/gate_all_final_applied.csv`, 지속성), `verify/`(독립 검증), `classify/`(①②③ 분류 `classification.csv`, 참고 구현 `classify.py`, 도지코인 보기 `doge_coin_view.csv`, 문턱 넘은 10칸 추적 `hurdle_cells_fate.csv`(칸마다 최선 보유기간 1줄, SWEEP 4절 표), 표 `table_ko.md`. `classify.py`는 저장소만으로 실행되고 `classification.csv`를 다시 만든다. 나머지 세 파일은 `make_views.py`가 저장소의 1차 표로 다시 만든다. 기본 출력은 `classify/` 자체이고 `--out 폴더`로 바꿀 수 있다. 결과가 커밋된 파일과 같아야 한다)
-- `analysis/sweep/data/MANIFEST.json`(입력 데이터 목록·sha256·clean_from), `analysis/sweep/data/qa/`, `analysis/sweep/data/tools/`. 데이터 자체(약 1GB)는 용량 때문에 저장소에 없다. 다시 만드는 절차는 `analysis/sweep/data/NOTES.md`의 "Reproduce"(stitch.py → build.py → manifest_build.py)다. 2025-03-18까지는 Astral `astral_price_get(symbol, "5m", limit=40000, end=..., delivery="download")`를 `end`를 앞으로 옮기며 이어 받는다. 2025-03-19 이후(6개 코인)와 도지 전체는 도지 데이터셋(`analysis/doge_strategy/data_MANIFEST.json`)에서 왔다. 이 스크립트들 안의 경로는 분석 세션 임시 폴더로 고정돼 있어 바꿔야 한다. `full/`·`final/` 파일은 모두 마지막 이틀(2026-09-27~29) 봉을 포함하고, 이 봉은 공급사가 수정 중이라 해시가 맞지 않을 가능성이 높다. 해시 대조는 `is/`·`oos/` 파일로 하는 것이 낫다(옛 봉도 수정될 수 있으므로 일치가 보장되지는 않음).
+- `analysis/sweep/data/MANIFEST.json`(입력 데이터 목록·sha256·clean_from), `analysis/sweep/data/qa/`, `analysis/sweep/data/tools/`. 데이터 자체(약 1GB)는 압축한 5분봉 원본(63MB)으로 `analysis/sweep/data/inputs/`에 있다. `python3 rebuild.py`로 224개 파일을 다시 만들면 MANIFEST 해시와 모두 일치한다(2026-09-30 확인). 다시 만드는 절차는 `analysis/sweep/data/NOTES.md`의 "Reproduce"(stitch.py → build.py → manifest_build.py)다. 2025-03-18까지는 Astral `astral_price_get(symbol, "5m", limit=40000, end=..., delivery="download")`를 `end`를 앞으로 옮기며 이어 받는다. 2025-03-19 이후(6개 코인)와 도지 전체는 도지 데이터셋(`analysis/doge_strategy/data_MANIFEST.json`)에서 왔다. 이 스크립트들 안의 경로는 분석 세션 임시 폴더로 고정돼 있어 바꿔야 한다. `full/`·`final/` 파일은 모두 마지막 이틀(2026-09-27~29) 봉을 포함하고, 이 봉은 공급사가 수정 중이라 해시가 맞지 않을 가능성이 높다. 해시 대조는 `is/`·`oos/` 파일로 하는 것이 낫다(옛 봉도 수정될 수 있으므로 일치가 보장되지는 않음).
 - `analysis/sizing/`(3.2 사용자 규칙 시뮬레이션: `math/`, `sim/`, 검증 `v_math/`, `v_sim/`), `analysis/tiered/`(3.3 좋은 자리 시뮬레이션)
 
 **진입점 (봇은 import해서 쓰고 다시 짜지 않는다. 다시 짜면 재현 시험 1단계 필수):**
@@ -419,7 +419,7 @@ analysis/audit_notes/, analysis/scripts/   검증 메모·스크립트
 - 4.3의 판정일(2027-04-01, 2027-10-01)과 5.5 수치(분석 세션 확정안) 승인.
 - ② 재판정으로 올라온 칸의 강등 기준값·크기 기준(μ_lo)·점검 시작일: 그 칸의 계좌를 켜기 전에 정한다(5.5 끝 v2.1 주). 청산은 재판정 2차에서 고른 1개다(4.3의 3번).
 - 경우 B에서 재판정 비용에 쓸 "실측 왕복 비용"의 정의: ② 신호의 호가 기준 추정 체결가로 볼지, PREREG 공식만 쓸지(4.3의 3번 v2.1 주).
-- 재현 시험 1단계용 스윕 입력 데이터(Astral CSV, 약 1GB, 저장소에 없음): 파일을 넘겨줄지, 에이전트 팀에 Astral 접근을 줄지(5.1, 8절).
+- (해결, 2026-09-30) 재현 시험 1단계용 스윕 입력 데이터: 사용자 요청으로 저장소에 보관했다. `analysis/sweep/data/inputs/`의 5분봉 7개(63MB)에서 `rebuild.py`로 224개 파일을 다시 만들고 MANIFEST 해시와 224/224 일치를 확인했다.
 - 봇을 돌릴 서버(VPS 위치), 그 서버에서 바이낸스 접속이 되는지, 읽기 전용 키를 발급할지.
 - (선택) Astral 연동(5.6)을 쓸지. 쓴다면 페이퍼 계정인지, 브로커(SnapTrade) 연결이 없는지.
 - (선택) 31개 세트 원본 코드 `CORE4_WINDOWS_EASY_V3_3_1.zip`의 `fingrad_bot/strategies/*.py`: 근사 포팅 12개를 원본과 대조하기 위해.
