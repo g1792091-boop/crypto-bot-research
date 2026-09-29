@@ -1,0 +1,15 @@
+# Paper trading on live Binance data. Installed by docs/paperbot.md.
+[Unit]
+Description=paperbot live paper trading
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=paperbot
+WorkingDirectory=/opt/crypto-bot-research
+# Read-only Binance key and Telegram settings.
+EnvironmentFile=/etc/paperbot/live.env
+ExecStart=/usr/bin/python3 -m paperbot.live run --ledger /var/lib/paperbot/paper.db --brackets /etc/paperbot/brackets.json
+# No automatic restart yet: a restarted engine would start again from the
+# initial equity. Restart recovery is still to be built.
+Restart=no

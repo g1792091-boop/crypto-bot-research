@@ -39,6 +39,20 @@ CREATE TABLE IF NOT EXISTS bars1m (
     mark_open REAL, mark_high REAL, mark_low REAL, mark_close REAL,
     PRIMARY KEY (symbol, open_time)
 );
+CREATE TABLE IF NOT EXISTS alerts (
+    ts INTEGER NOT NULL,
+    level TEXT NOT NULL,
+    text TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS agent_reports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts INTEGER NOT NULL,
+    pipeline TEXT NOT NULL,
+    role TEXT NOT NULL,
+    status TEXT NOT NULL,
+    packet_sha TEXT NOT NULL,
+    data TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS equity (
     run_id TEXT NOT NULL,
     ts INTEGER NOT NULL,
@@ -87,16 +101,51 @@ class Ledger:
         self.conn.close()
 
 
-def load_trades(path: str, run_id: Optional[str] = None) -> list[TradeRecord]:
+def load_trades(path: str, run_id: Optional[str] = None, book: Optional[str] = None,
+                exit_from: Optional[int] = None, exit_to: Optional[int] = None) -> list[TradeRecord]:
+    """``book`` matches run ids ending in ``-<book>`` (as written by make_books).
+    ``exit_from``/``exit_to`` filter on exit time in ms (inclusive/exclusive)."""
     conn = sqlite3.connect(path)
-    q = "SELECT data FROM trades"
-    args: tuple = ()
+    conn.executescript(SCHEMA)
+    q = "SELECT data FROM trades WHERE 1=1"
+    args: list = []
     if run_id:
-        q += " WHERE run_id = ?"
-        args = (run_id,)
+        q += " AND run_id = ?"
+        args.append(run_id)
+    if book:
+        q += " AND run_id LIKE ?"
+        args.append(f"%-{book}")
     rows = conn.execute(q + " ORDER BY id", args).fetchall()
     conn.close()
-    return [TradeRecord(**json.loads(r[0])) for r in rows]
+    out = [TradeRecord(**json.loads(r[0])) for r in rows]
+    if exit_from is not None:
+        out = [t for t in out if t.exit_time >= exit_from]
+    if exit_to is not None:
+        out = [t for t in out if t.exit_time < exit_to]
+    return out
+
+
+class RecordingNotifier:
+    """Keeps every alert in the ledger (for the operations auditor) and
+    passes it on to the real notifier."""
+
+    def __init__(self, path: str, inner, clock_ms=None):
+        import time as _time
+        self.conn = sqlite3.connect(path)
+        self.conn.execute("PRAGMA journal_mode=WAL")
+        self.conn.executescript(SCHEMA)
+        self.inner = inner
+        self.clock_ms = clock_ms or (lambda: int(_time.time() * 1000))
+
+    def send(self, level: str, text: str) -> None:
+        try:
+            self.conn.execute("INSERT INTO alerts VALUES (?,?,?)", (self.clock_ms(), level, text))
+            self.conn.commit()
+        finally:
+            self.inner.send(level, text)
+
+    def close(self) -> None:
+        self.conn.close()
 
 
 class BarStore:

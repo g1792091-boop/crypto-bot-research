@@ -32,7 +32,7 @@ from .config import Settings
 from .context import HTF, entry_context
 from .engine import PaperEngine
 from .feed import LiveFeed
-from .ledger import BarStore, Ledger
+from .ledger import BarStore, Ledger, RecordingNotifier
 from .margin import Brackets
 from .notify import CRITICAL, INFO, WARN, ConsoleNotifier, Notifier, TelegramNotifier
 from .policy import RecommendedPolicy, RecommendedSettings, RiskGuards
@@ -182,7 +182,7 @@ def cmd_check(settings: Settings) -> int:
 
 
 def cmd_run(settings: Settings, args) -> int:
-    notifier = _notifier()
+    notifier = RecordingNotifier(args.ledger, _notifier())
     rest = _rest()
     brackets, src = load_brackets(rest, settings.symbols, args.brackets,
                                   args.allow_example_brackets)
@@ -200,6 +200,7 @@ def cmd_run(settings: Settings, args) -> int:
         runner.run(poll_seconds=args.poll, max_steps=args.max_steps)
     finally:
         store.close()
+        notifier.close()
         for led in ledgers:
             led.close()
         print(json.dumps([e.summary() for e in engines], indent=2))

@@ -36,7 +36,10 @@ paperbot/tags.py       손익 원인 태그
 paperbot/whatif.py     가정 실험실 (청산 규칙만 바꿔 다시 계산)
 paperbot/sessions.py   요일·시간대 표 (KST)
 paperbot/analyze.py    위 세 가지를 묶은 보고서 명령
-tests/                 테스트 71개
+paperbot/metrics.py    표준 성과 지표
+paperbot/agents/       에이전트 저녁 점검 (docs/agents-evening.md)
+deploy/                서버용 systemd 파일, 환경 파일 예시
+tests/                 테스트 82개
 ```
 
 ## 실행
@@ -185,4 +188,7 @@ python3 -m paperbot.analyze --ledger paper.db --run-id <run_id>-owner --out repo
 1. ~~바이낸스 실시간 데이터 수신기~~ (완료, Vultr 연결 확인 필요)
 2. ~~권고 규칙 장부~~ (완료)
 3. ~~손익 원인 태그, 가정 실험실, 요일·시간대 표~~ (완료)
-4. 백테스트 결과 가져오기 + 재현 시험 (다른 세션의 `backtest/results` 브랜치가 올라오면)
+4. ~~에이전트 저녁 점검 파이프라인~~ (완료, docs/agents-evening.md)
+5. 재시작 복구, 킬스위치 명령
+6. 아침 파이프라인 (시장 데이터 수집기, 계획 관문)
+7. 백테스트 결과 가져오기 + 재현 시험 (다른 세션의 `backtest/results` 브랜치가 올라오면)

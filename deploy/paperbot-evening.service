@@ -1,0 +1,14 @@
+# Evening agent review (22:00 KST). Installed by docs/agents-evening.md.
+[Unit]
+Description=paperbot evening agent review
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=paperbot
+WorkingDirectory=/opt/crypto-bot-research
+# Holds CLAUDE_CODE_OAUTH_TOKEN and Telegram settings. Never ANTHROPIC_API_KEY.
+EnvironmentFile=/etc/paperbot/agents.env
+ExecStart=/usr/bin/python3 -m paperbot.agents evening --ledger /var/lib/paperbot/paper.db --out /var/lib/paperbot/evening-latest.json
+TimeoutStartSec=3600

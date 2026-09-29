@@ -1,0 +1,9 @@
+[Unit]
+Description=Run the paperbot evening review at 22:00 Korea time
+
+[Timer]
+OnCalendar=*-*-* 22:00:00 Asia/Seoul
+Persistent=true
+
+[Install]
+WantedBy=timers.target
