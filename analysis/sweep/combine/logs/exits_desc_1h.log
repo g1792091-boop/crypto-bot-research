@@ -1,0 +1,24 @@
+START 2026-09-29T12:36:00Z
+1h: recomputed signals for ['DOGE_L', 'N03_ADX_GC'] in 0.5s; last IS bar 2024-06-30 23:00:00+00:00
+  1h DOGE_L H64: 44s
+            exit  trades        pf   exp_net  symbols_pos  months_pos  months    z_exit     p_max  exit_criteria_met_DESCRIPTIVE
+0         TIME_H     948  1.150332  0.003286            5          18      35  1.934260  0.096346                          False
+1    ATR_SL2_TP3    1360  0.875027 -0.002096            2          15      35  0.578113  0.544850                          False
+2    ATR_SL3_TP6    1037  0.968917 -0.000825            3          15      35  1.576176  0.162791                          False
+3  TRAIL_SL3_TR3    1246  0.769065 -0.003547            1          10      35 -0.378476  0.887043                          False
+4     TIME_H_SL3    1051  0.957886 -0.000897            2          12      35  0.769135  0.471761                          False
+  1h N03_ADX_GC H4: 15s
+            exit  trades        pf   exp_net  symbols_pos  months_pos  months    z_exit     p_max  exit_criteria_met_DESCRIPTIVE
+0         TIME_H     180  1.193746  0.001147            3          14      35  2.052401  0.076412                          False
+1    ATR_SL2_TP3     180  1.317371  0.002669            6          20      35  2.158618  0.049834                           True
+2    ATR_SL3_TP6     180  1.040156  0.000391            4          17      35  0.930680  0.358804                          False
+3  TRAIL_SL3_TR3     180  1.098938  0.000906            4          16      35  1.209871  0.232558                          False
+4     TIME_H_SL3     180  1.106830  0.000678            2          14      35  1.762169  0.116279                          False
+  1h N03_ADX_GC H16: 16s
+            exit  trades        pf   exp_net  symbols_pos  months_pos  months    z_exit     p_max  exit_criteria_met_DESCRIPTIVE
+0         TIME_H     177  1.303749  0.002751            4          16      35  1.593342  0.159468                          False
+1    ATR_SL2_TP3     180  1.298092  0.003565            6          21      35  2.040267  0.053156                          False
+2    ATR_SL3_TP6     179  1.062973  0.001133            5          18      35  1.089655  0.315615                          False
+3  TRAIL_SL3_TR3     180  0.922385 -0.000947            4          14      35  0.562605  0.514950                          False
+4     TIME_H_SL3     180  1.107390  0.001047            4          17      35  1.223920  0.265781                          False
+END 2026-09-29T12:37:18Z rc=0

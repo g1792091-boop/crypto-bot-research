@@ -1,0 +1,36 @@
+== oos: rows 666 dups 0 splitcol ['oos']
+ family 486  z>2: 30 (exp 11.1)  p<.05: 46  fwd>=mu*: 27  fwd>=mu*&p<.05&p_vn<.05: 0  z mean/sd 0.34/1.07
+ own-family Holm significant (p_holm<.05):
+          strategy  tf  H      n       fwd   mu_star         z         p        ph      p_vn  pvh
+569  N20_EMA9_CHOP  5m  4  34510  0.000089  0.001712  3.924628  0.000043  0.021108  0.134978  1.0
+ own-family Holm on p_vn significant count: 3  of which fwd>=mu*: 0
+tf     15m   1d    1h    30m    4h      5m
+min  38430  318  9559  19183  2341  115129
+max  38490  378  9619  19243  2401  115189
+ Spearman IS vs oos (fwd-mu*): 0.335 (cells 612);  z-Spearman n>=100 both: 0.035 (cells 486)
+  mean within-(tf,H) z Spearman 0.063, positive groups 12/18
+  cells with z>1.645 AND fwd>cost in BOTH IS and oos:
+    strategy  tf   H  n_is      z_is    fwd_is  n_x      z_x    fwd_x  mu_star_x    p_vn_x
+406   DOGE_S  1h  16  1707  2.053503  0.001874  672  2.23486  0.00288   0.003826  0.717193
+== final: rows 666 dups 0 splitcol ['final']
+ family 493  z>2: 7 (exp 11.2)  p<.05: 17  fwd>=mu*: 8  fwd>=mu*&p<.05&p_vn<.05: 2  z mean/sd -0.05/0.88
+ own-family Holm significant (p_holm<.05):
+Empty DataFrame
+Columns: [strategy, tf, H, n, fwd, mu_star, z, p, ph, p_vn, pvh]
+Index: []
+ own-family Holm on p_vn significant count: 5  of which fwd>=mu*: 0
+tf     15m   1d     1h    30m    4h      5m
+min  39989  338   9951  19967  2439  119877
+max  40049  398  10011  20027  2499  119937
+ Spearman IS vs final (fwd-mu*): 0.322 (cells 621);  z-Spearman n>=100 both: 0.067 (cells 493)
+  mean within-(tf,H) z Spearman 0.025, positive groups 12/18
+  cells with z>1.645 AND fwd>cost in BOTH IS and final:
+Empty DataFrame
+Columns: [strategy, tf, H, n_is, z_is, fwd_is, n_x, z_x, fwd_x, mu_star_x, p_vn_x]
+Index: []
+cells with z>0 and fwd>cost in ALL THREE windows: 3
+            strategy  tf   H    n       z     z_o     z_f     fwd   fwd_o   fwd_f  mu_star  mu_star_o  mu_star_f  prev_examined  approx
+489  N09_ALLIG_AROON  4h  16  605  0.8552  0.9433  0.6101  0.0025  0.0051  0.0032   0.0065     0.0068     0.0057          False   False
+573      N25_DST_CCI  1d   4  262  0.3990  0.1899  0.2796  0.0035  0.0049  0.0040   0.0078     0.0083     0.0069          False   False
+577   N04_ST_KLINGER  1d   4  608  0.7586  0.4923  0.6704  0.0037  0.0068  0.0062   0.0078     0.0083     0.0069          False    True
+fraction of family cells with fwd>cost in IS/OOS/FINAL: 0.069 0.117 0.06

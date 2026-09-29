@@ -1,0 +1,5 @@
+raw IS tables: ['discover_g15_30/out/gate_is_15m.csv', 'discover_g15_30/out/gate_is_30m.csv', 'discover_g1h_4h_1d/out/gate_is_1d.csv', 'discover_g1h_4h_1d/out/gate_is_1h.csv', 'discover_g1h_4h_1d/out/gate_is_4h.csv', 'discover_g5m/out/gate_is_5m_sub328232f2.csv', 'discover_g5m/out/gate_is_5m_sube97da1be.csv']
+rows 666 strategies 37 tfs ['15m', '1d', '1h', '30m', '4h', '5m']
+m_family 528 gate_pass 0 gate_pass_spec 0
+min p 0.0007963894634292 min p_holm 0.42049363669061757
+max |p_holm diff| 5.551115123125783e-17 gate_pass equal True in_family equal True

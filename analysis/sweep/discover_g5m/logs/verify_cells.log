@@ -1,0 +1,6 @@
+all 111 cells: n equal; max |fwd diff| = 9.874371285911732e-17 ; E|r|, mu* equal
+N20_EMA9_CHOP H=4: z brute=2.815914 harness=2.815914  null_mean -1.061e-05/-1.061e-05 null_sd 1.8913e-05/1.8913e-05  p 0.00243/0.00243
+V45_AMB H=16: z brute=1.504256 harness=1.504256  null_mean -2.017e-06/-2.017e-06 null_sd 1.0695e-04/1.0695e-04  p 0.06626/0.06626
+N17_KC_RSI H=64: z brute=1.739066 harness=1.739066  null_mean 4.064e-06/4.064e-06 null_sd 2.3506e-04/2.3506e-04  p 0.04101/0.04101
+np.roll convention OK
+[timed] start=2026-09-29T12:12:31.791900Z end=2026-09-29T12:12:41.242393Z wall_s=9.5 user_s=7.9 sys_s=0.8 maxrss_MB=429 rc=0

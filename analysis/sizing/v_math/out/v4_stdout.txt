@@ -1,0 +1,21 @@
+1d H=1: 20x 0.2223  50x 0.6339
+4h H=16 20x 0.4199  1h H=16 20x 0.1595
+30m L=20: P(liq within 16 bars)=0.0804  TP/ATR=0.656  liq/ATR=5.90  fee/TP=0.280
+30m L=21: P(liq within 16 bars)=0.0899  TP/ATR=0.624  liq/ATR=5.59  fee/TP=0.294
+30m L=22: P(liq within 16 bars)=0.0996  TP/ATR=0.596  liq/ATR=5.30  fee/TP=0.308
+30m L=23: P(liq within 16 bars)=0.1098  TP/ATR=0.570  liq/ATR=5.05  fee/TP=0.322
+30m L=24: P(liq within 16 bars)=0.1201  TP/ATR=0.546  liq/ATR=4.81  fee/TP=0.336
+30m L=25: P(liq within 16 bars)=0.1308  TP/ATR=0.525  liq/ATR=4.59  fee/TP=0.350
+{'hour': 0, 'n': 13844, 'pTP': np.float64(0.9139699508812482), 'EROE': np.float64(-2.2599863478763353), 'se': 0.2633916231379073}
+{'hour': 6, 'n': 13830, 'pTP': np.float64(0.9005061460592914), 'EROE': np.float64(-3.814894287780188), 'se': 0.26214817991152317}
+{'hour': 12, 'n': 13834, 'pTP': np.float64(0.9074020529131126), 'EROE': np.float64(-2.986396342344946), 'se': 0.23866132253467456}
+{'hour': 18, 'n': 13836, 'pTP': np.float64(0.8957791269152935), 'EROE': np.float64(-4.257768141081236), 'se': 0.2878808262516709}
+stop0.5 20x 5m: n=28000 pTP=0.8228 EROE=-2.644%
+20 {'p': 0.9002, 'M': 0.2, 'med_losses': 10, 'P_K_le_med': 0.5858, 'median_mult': 0.3624, 'p_below_half': 0.6768, 'kelly_f': -0.5278, 'p_full': 0.9483, 'p_half': 0.9616, 'p_log0': np.float64(0.942)}
+20 breakeven {'med_losses': 6, 'P_K_le_med': 0.5255, 'median_mult': 0.9539}
+20 {'p': 0.9002, 'M': 0.4, 'med_losses': 10, 'P_K_le_med': 0.5858, 'median_mult': 0.0655, 'p_below_half': 0.8816, 'kelly_f': -0.5278, 'p_full': 0.9616, 'p_half': 0.988, 'p_log0': np.float64(0.9494)}
+20 breakeven {'med_losses': 6, 'P_K_le_med': 0.5255, 'median_mult': 0.5949}
+50 {'p': 0.8838, 'M': 0.2, 'med_losses': 11, 'P_K_le_med': 0.5012, 'median_mult': 0.1308, 'p_below_half': 0.9801, 'kelly_f': -3.0959, 'p_full': 0.9781, 'p_half': 0.9838, 'p_log0': np.float64(0.9754)}
+50 breakeven {'med_losses': 3, 'P_K_le_med': 0.7016, 'median_mult': 0.8799}
+50 {'p': 0.8838, 'M': 0.4, 'med_losses': 11, 'P_K_le_med': 0.5012, 'median_mult': 0.0078, 'p_below_half': 0.998, 'kelly_f': -3.0959, 'p_full': 0.9838, 'p_half': 0.9953, 'p_log0': np.float64(0.9786)}
+50 breakeven {'med_losses': 3, 'P_K_le_med': 0.7016, 'median_mult': 0.6238}

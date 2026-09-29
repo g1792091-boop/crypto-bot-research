@@ -1,0 +1,14 @@
+START 2026-09-29T12:06:00 python3 tail_check.py --tf 15m --cells S1_EMA_RSI_CHOP:16,S1_EMA_RSI_CHOP:4,N11_BREAKAWAY:4,V45_AMB:4,N07_ICHI_CMO:4 --reps 500
+S1_EMA_RSI_CHOP 15m 16 9s
+S1_EMA_RSI_CHOP 15m 4 18s
+N11_BREAKAWAY 15m 4 29s
+V45_AMB 15m 4 110s
+N07_ICHI_CMO 15m 4 213s
+       strategy  tf  H  reps    n   z_sd  zvn_sd  z_max  zvn_max  rate_z_gt_thr  rate_zvn_gt_thr  rate_both_gt_thr  rate_fwd_ge_mu  gate_spec  gate_A1  corr_z_zvn
+   N07_ICHI_CMO 15m  4   500 8950 0.9939  0.9808 3.1661   2.8716          0.000              0.0               0.0           0.000      0.000      0.0      0.7007
+  N11_BREAKAWAY 15m  4   500  273 1.3018  0.9925 3.8383   3.0910          0.002              0.0               0.0           0.002      0.002      0.0      0.7203
+S1_EMA_RSI_CHOP 15m  4   500  111 1.8282  0.9598 5.3378   2.5669          0.016              0.0               0.0           0.098      0.016      0.0      0.8048
+S1_EMA_RSI_CHOP 15m 16   500  111 1.5633  1.0353 4.0493   2.8595          0.008              0.0               0.0           0.130      0.008      0.0      0.7348
+        V45_AMB 15m  4   500 8432 0.9119  1.0728 2.2403   3.6259          0.000              0.0               0.0           0.000      0.000      0.0      0.7417
+thr_z 3.791
+END 2026-09-29T12:09:37 rc=0 wall_s=217

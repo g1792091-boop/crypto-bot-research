@@ -1,0 +1,6141 @@
+{
+ "generated_utc": "2026-09-29T11:16:19Z",
+ "data_dir": "/tmp/claude-0/-home-user-crypto-bot-research/e4f1f93f-891a-54cf-944d-5e95b2209f11/scratchpad/sweep/data",
+ "astral_calls": {
+  "price_get": 64,
+  "price_get_5m_chain": 60,
+  "price_get_crosscheck": 4,
+  "other_tools": 0,
+  "note": "all price_get with delivery=download and limit only (+end for chaining); never start+end together; every artifact sha256-verified"
+ },
+ "conventions": {
+  "ts": "bar-open UTC, ISO 8601 (YYYY-MM-DDTHH:MM:SSZ)",
+  "columns": [
+   "ts",
+   "open",
+   "high",
+   "low",
+   "close",
+   "volume"
+  ],
+  "resample": "open-labelled, left-closed; O first, H max, L min, C last, V sum over available 5m bars; zero-bar bins dropped; only bins fully inside the split window kept; in-progress last bin dropped; 1w bins start Monday 00:00 UTC",
+  "splits": {
+   "is": "[clean_from, 2024-07-01T00:00Z)",
+   "oos": "[2024-01-01T00:00Z, 2025-08-07T00:00Z)",
+   "final": "[2025-02-01T00:00Z, end of data]",
+   "full": "whole stitched series (includes pre-clean_from bars; DOGE from 2021-01-01)"
+  },
+  "holdout": "is/ contains no bar with ts >= 2024-07-01 and no bin extending past it (asserted in build.py). oos/ and final/ are for the Holdout agent only.",
+  "no_clipping": "No bar was modified or removed; suspects are only listed in suspects.csv"
+ },
+ "clean_from": {
+  "btcusd": "2021-07-01",
+  "ethusd": "2021-07-01",
+  "solusd": "2021-10-01",
+  "xrpusd": "2021-07-01",
+  "ltcusd": "2021-07-01",
+  "bchusd": "2021-07-01",
+  "dogeusd": "2021-08-01"
+ },
+ "clean_from_reasons": {
+  "BTCUSD/ETHUSD/LTCUSD/BCHUSD": "2021-07-01 (earliest allowed). June 2021 has elevated open-vs-prev-close jumps (BTC 29 >0.5%); July 2021 onward no gaps, 0 OHLC errors.",
+  "XRPUSD": "2021-07-01, BUT degraded-liquidity window 2022-03-01..2023-07-31 (see degraded_windows): 282 gap events, 813 flat bars, median USD volume/5m bar 7,064 vs ~81k before/after. Not corrupted (0 OHLC errors, lag-1 return autocorr in line with BTC) so not excluded.",
+  "SOLUSD": "2021-10-01: repeated round-number bad-print up-wicks Jun-Sep 2021 (e.g. 2021-08-18 11:15 high 114.000 vs prev close 73.784 = +54.5%; 2021-09-06 20:25 high 199.000 = +23.1%; 2021-07-07 09:45 high 40.000 = +14.3%); June 2021 has 134 gap events and 202 flat bars.",
+  "DOGEUSD": "2021-08-01 (inherited from the doge dataset analysis: cross-venue mixing to 2021-06, bad wicks through 2021-07)."
+ },
+ "degraded_windows": {
+  "xrp_before": {
+   "range": [
+    "2021-07-01",
+    "2022-03-01"
+   ],
+   "bars": 69984,
+   "expected": 69984,
+   "missing_slots": 0,
+   "gap_events": 0,
+   "flat_bars": 0,
+   "median_usd_vol_per_5m": 81953.0
+  },
+  "xrp_degraded": {
+   "range": [
+    "2022-03-01",
+    "2023-08-01"
+   ],
+   "bars": 148892,
+   "expected": 149184,
+   "missing_slots": 292,
+   "gap_events": 282,
+   "flat_bars": 813,
+   "median_usd_vol_per_5m": 7064.0
+  },
+  "xrp_after": {
+   "range": [
+    "2023-08-01",
+    "2024-07-01"
+   ],
+   "bars": 96480,
+   "expected": 96480,
+   "missing_slots": 0,
+   "gap_events": 0,
+   "flat_bars": 0,
+   "median_usd_vol_per_5m": 80819.0
+  },
+  "btc_degraded_window_ref": {
+   "range": [
+    "2022-03-01",
+    "2023-08-01"
+   ],
+   "bars": 149184,
+   "expected": 149184,
+   "missing_slots": 0,
+   "gap_events": 0,
+   "flat_bars": 0,
+   "median_usd_vol_per_5m": 1378797.0
+  },
+  "bch_2024_09": {
+   "range": [
+    "2024-09-01",
+    "2024-10-01"
+   ],
+   "bars": 8069,
+   "expected": 8640,
+   "missing_slots": 571,
+   "gap_events": 329,
+   "flat_bars": 331,
+   "median_usd_vol_per_5m": 5343.0
+  },
+  "bch_2025_10_to_2026_05": {
+   "range": [
+    "2025-10-01",
+    "2026-06-01"
+   ],
+   "bars": 69428,
+   "expected": 69984,
+   "missing_slots": 556,
+   "gap_events": 168,
+   "flat_bars": 227,
+   "median_usd_vol_per_5m": 9122.0
+  },
+  "bch_2024_01_to_2024_08": {
+   "range": [
+    "2024-01-01",
+    "2024-09-01"
+   ],
+   "bars": 70266,
+   "expected": 70272,
+   "missing_slots": 6,
+   "gap_events": 6,
+   "flat_bars": 8,
+   "median_usd_vol_per_5m": 18416.0
+  },
+  "sol_2021_06": {
+   "range": [
+    "2021-06-01",
+    "2021-07-01"
+   ],
+   "bars": 8506,
+   "expected": 8640,
+   "missing_slots": 134,
+   "gap_events": 134,
+   "flat_bars": 202,
+   "median_usd_vol_per_5m": 23292.0
+  }
+ },
+ "known_data_defects": [
+  "2026-04-22 whole day missing in every 5m series (288 bars); the direct Astral 1d pull DOES contain a 2026-04-22 bar (BTC and DOGE), so the 1d files here lack that day.",
+  "SOLUSD, XRPUSD, LTCUSD: 2025-03-25 whole day missing in 5m (inherited from the doge dataset files covering 2025-03-19+).",
+  "DOGEUSD 5m: 2026-09-29 06:00-07:05 missing (14 bars); the direct 1h pull has a 06:00 bar.",
+  "BCHUSD: 1h gap ending 2024-09-16 06:30; 329 gap events in 2024-09.",
+  "Most recent ~2 days (2026-09-27..29) are provisional: direct re-pulls at 11:13 UTC differ from the stitched data (DOGE 1h: 21 price-mismatch bars, max close diff 1.04% at 2026-09-28 15:00)."
+ ],
+ "seams": {
+  "btc": [
+   {
+    "a": "btc5m_p10.csv",
+    "b": "btc5m_p09.csv",
+    "a_last": "2021-10-16 00:00:00+00:00",
+    "b_first": "2021-10-16 00:00:00+00:00",
+    "overlap_bars": 1,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": 0.0,
+    "step_minutes_across_seam": 0.0
+   },
+   {
+    "a": "btc5m_p09.csv",
+    "b": "btc5m_p08.csv",
+    "a_last": "2022-03-03 21:15:00+00:00",
+    "b_first": "2022-03-03 21:20:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   },
+   {
+    "a": "btc5m_p08.csv",
+    "b": "btc5m_p07.csv",
+    "a_last": "2022-07-20 18:35:00+00:00",
+    "b_first": "2022-07-20 18:40:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   },
+   {
+    "a": "btc5m_p07.csv",
+    "b": "btc5m_p06.csv",
+    "a_last": "2022-12-06 15:55:00+00:00",
+    "b_first": "2022-12-06 16:00:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   },
+   {
+    "a": "btc5m_p06.csv",
+    "b": "btc5m_p05.csv",
+    "a_last": "2023-04-24 13:15:00+00:00",
+    "b_first": "2023-04-24 13:20:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   },
+   {
+    "a": "btc5m_p05.csv",
+    "b": "btc5m_p04.csv",
+    "a_last": "2023-09-10 10:35:00+00:00",
+    "b_first": "2023-09-10 10:40:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   },
+   {
+    "a": "btc5m_p04.csv",
+    "b": "btc5m_p03.csv",
+    "a_last": "2024-01-27 07:55:00+00:00",
+    "b_first": "2024-01-27 08:00:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   },
+   {
+    "a": "btc5m_p03.csv",
+    "b": "btc5m_p02.csv",
+    "a_last": "2024-06-14 05:15:00+00:00",
+    "b_first": "2024-06-14 05:20:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   },
+   {
+    "a": "btc5m_p02.csv",
+    "b": "btc5m_p01.csv",
+    "a_last": "2024-10-31 02:35:00+00:00",
+    "b_first": "2024-10-31 02:40:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   },
+   {
+    "a": "btc5m_p01.csv",
+    "b": "btcusd-5m-ohlcv.csv",
+    "a_last": "2025-03-18 23:55:00+00:00",
+    "b_first": "2025-03-19 00:00:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   }
+  ],
+  "eth": [
+   {
+    "a": "eth5m_p10.csv",
+    "b": "eth5m_p09.csv",
+    "a_last": "2021-10-16 00:00:00+00:00",
+    "b_first": "2021-10-16 00:00:00+00:00",
+    "overlap_bars": 1,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": 0.0,
+    "step_minutes_across_seam": 0.0
+   },
+   {
+    "a": "eth5m_p09.csv",
+    "b": "eth5m_p08.csv",
+    "a_last": "2022-03-03 21:15:00+00:00",
+    "b_first": "2022-03-03 21:20:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   },
+   {
+    "a": "eth5m_p08.csv",
+    "b": "eth5m_p07.csv",
+    "a_last": "2022-07-20 18:35:00+00:00",
+    "b_first": "2022-07-20 18:40:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   },
+   {
+    "a": "eth5m_p07.csv",
+    "b": "eth5m_p06.csv",
+    "a_last": "2022-12-06 15:55:00+00:00",
+    "b_first": "2022-12-06 16:00:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   },
+   {
+    "a": "eth5m_p06.csv",
+    "b": "eth5m_p05.csv",
+    "a_last": "2023-04-24 13:15:00+00:00",
+    "b_first": "2023-04-24 13:20:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   },
+   {
+    "a": "eth5m_p05.csv",
+    "b": "eth5m_p04.csv",
+    "a_last": "2023-09-10 10:35:00+00:00",
+    "b_first": "2023-09-10 10:40:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   },
+   {
+    "a": "eth5m_p04.csv",
+    "b": "eth5m_p03.csv",
+    "a_last": "2024-01-27 07:55:00+00:00",
+    "b_first": "2024-01-27 08:00:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   },
+   {
+    "a": "eth5m_p03.csv",
+    "b": "eth5m_p02.csv",
+    "a_last": "2024-06-14 05:15:00+00:00",
+    "b_first": "2024-06-14 05:20:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   },
+   {
+    "a": "eth5m_p02.csv",
+    "b": "eth5m_p01.csv",
+    "a_last": "2024-10-31 02:35:00+00:00",
+    "b_first": "2024-10-31 02:40:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   },
+   {
+    "a": "eth5m_p01.csv",
+    "b": "ethusd-5m-ohlcv.csv",
+    "a_last": "2025-03-18 23:55:00+00:00",
+    "b_first": "2025-03-19 00:00:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   }
+  ],
+  "sol": [
+   {
+    "a": "sol5m_p10.csv",
+    "b": "sol5m_p09.csv",
+    "a_last": "2021-10-15 23:35:00+00:00",
+    "b_first": "2021-10-15 23:35:00+00:00",
+    "overlap_bars": 1,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": 0.0,
+    "step_minutes_across_seam": 0.0
+   },
+   {
+    "a": "sol5m_p09.csv",
+    "b": "sol5m_p08.csv",
+    "a_last": "2022-03-03 20:50:00+00:00",
+    "b_first": "2022-03-03 20:55:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   },
+   {
+    "a": "sol5m_p08.csv",
+    "b": "sol5m_p07.csv",
+    "a_last": "2022-07-20 18:10:00+00:00",
+    "b_first": "2022-07-20 18:15:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   },
+   {
+    "a": "sol5m_p07.csv",
+    "b": "sol5m_p06.csv",
+    "a_last": "2022-12-06 15:30:00+00:00",
+    "b_first": "2022-12-06 15:35:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   },
+   {
+    "a": "sol5m_p06.csv",
+    "b": "sol5m_p05.csv",
+    "a_last": "2023-04-24 13:05:00+00:00",
+    "b_first": "2023-04-24 13:10:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   },
+   {
+    "a": "sol5m_p05.csv",
+    "b": "sol5m_p04.csv",
+    "a_last": "2023-09-10 10:25:00+00:00",
+    "b_first": "2023-09-10 10:30:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   },
+   {
+    "a": "sol5m_p04.csv",
+    "b": "sol5m_p03.csv",
+    "a_last": "2024-01-27 07:45:00+00:00",
+    "b_first": "2024-01-27 07:50:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   },
+   {
+    "a": "sol5m_p03.csv",
+    "b": "sol5m_p02.csv",
+    "a_last": "2024-06-14 05:05:00+00:00",
+    "b_first": "2024-06-14 05:10:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   },
+   {
+    "a": "sol5m_p02.csv",
+    "b": "sol5m_p01.csv",
+    "a_last": "2024-10-31 02:35:00+00:00",
+    "b_first": "2024-10-31 02:40:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   },
+   {
+    "a": "sol5m_p01.csv",
+    "b": "solusd-5m-ohlcv.csv",
+    "a_last": "2025-03-18 23:55:00+00:00",
+    "b_first": "2025-03-19 00:00:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   }
+  ],
+  "xrp": [
+   {
+    "a": "xrp5m_p10.csv",
+    "b": "xrp5m_p09.csv",
+    "a_last": "2021-10-14 23:40:00+00:00",
+    "b_first": "2021-10-14 23:40:00+00:00",
+    "overlap_bars": 1,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": 0.0,
+    "step_minutes_across_seam": 0.0
+   },
+   {
+    "a": "xrp5m_p09.csv",
+    "b": "xrp5m_p08.csv",
+    "a_last": "2022-03-02 20:55:00+00:00",
+    "b_first": "2022-03-02 21:00:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   },
+   {
+    "a": "xrp5m_p08.csv",
+    "b": "xrp5m_p07.csv",
+    "a_last": "2022-07-19 18:50:00+00:00",
+    "b_first": "2022-07-19 18:55:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   },
+   {
+    "a": "xrp5m_p07.csv",
+    "b": "xrp5m_p06.csv",
+    "a_last": "2022-12-05 22:25:00+00:00",
+    "b_first": "2022-12-05 22:30:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   },
+   {
+    "a": "xrp5m_p06.csv",
+    "b": "xrp5m_p05.csv",
+    "a_last": "2023-04-24 03:00:00+00:00",
+    "b_first": "2023-04-24 03:05:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   },
+   {
+    "a": "xrp5m_p05.csv",
+    "b": "xrp5m_p04.csv",
+    "a_last": "2023-09-10 10:35:00+00:00",
+    "b_first": "2023-09-10 10:40:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   },
+   {
+    "a": "xrp5m_p04.csv",
+    "b": "xrp5m_p03.csv",
+    "a_last": "2024-01-27 07:55:00+00:00",
+    "b_first": "2024-01-27 08:00:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   },
+   {
+    "a": "xrp5m_p03.csv",
+    "b": "xrp5m_p02.csv",
+    "a_last": "2024-06-14 05:15:00+00:00",
+    "b_first": "2024-06-14 05:20:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   },
+   {
+    "a": "xrp5m_p02.csv",
+    "b": "xrp5m_p01.csv",
+    "a_last": "2024-10-31 02:35:00+00:00",
+    "b_first": "2024-10-31 02:40:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   },
+   {
+    "a": "xrp5m_p01.csv",
+    "b": "xrpusd-5m-ohlcv.csv",
+    "a_last": "2025-03-18 23:55:00+00:00",
+    "b_first": "2025-03-19 00:00:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   }
+  ],
+  "ltc": [
+   {
+    "a": "ltc5m_p10.csv",
+    "b": "ltc5m_p09.csv",
+    "a_last": "2021-10-15 23:00:00+00:00",
+    "b_first": "2021-10-15 23:00:00+00:00",
+    "overlap_bars": 1,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": 0.0,
+    "step_minutes_across_seam": 0.0
+   },
+   {
+    "a": "ltc5m_p09.csv",
+    "b": "ltc5m_p08.csv",
+    "a_last": "2022-03-03 20:15:00+00:00",
+    "b_first": "2022-03-03 20:20:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   },
+   {
+    "a": "ltc5m_p08.csv",
+    "b": "ltc5m_p07.csv",
+    "a_last": "2022-07-20 17:35:00+00:00",
+    "b_first": "2022-07-20 17:40:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   },
+   {
+    "a": "ltc5m_p07.csv",
+    "b": "ltc5m_p06.csv",
+    "a_last": "2022-12-06 14:55:00+00:00",
+    "b_first": "2022-12-06 15:00:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   },
+   {
+    "a": "ltc5m_p06.csv",
+    "b": "ltc5m_p05.csv",
+    "a_last": "2023-04-24 12:15:00+00:00",
+    "b_first": "2023-04-24 12:20:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   },
+   {
+    "a": "ltc5m_p05.csv",
+    "b": "ltc5m_p04.csv",
+    "a_last": "2023-09-10 09:35:00+00:00",
+    "b_first": "2023-09-10 09:40:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   },
+   {
+    "a": "ltc5m_p04.csv",
+    "b": "ltc5m_p03.csv",
+    "a_last": "2024-01-27 06:55:00+00:00",
+    "b_first": "2024-01-27 07:00:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   },
+   {
+    "a": "ltc5m_p03.csv",
+    "b": "ltc5m_p02.csv",
+    "a_last": "2024-06-14 04:15:00+00:00",
+    "b_first": "2024-06-14 04:20:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   },
+   {
+    "a": "ltc5m_p02.csv",
+    "b": "ltc5m_p01.csv",
+    "a_last": "2024-10-31 02:35:00+00:00",
+    "b_first": "2024-10-31 02:40:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   },
+   {
+    "a": "ltc5m_p01.csv",
+    "b": "ltcusd-5m-ohlcv.csv",
+    "a_last": "2025-03-18 23:55:00+00:00",
+    "b_first": "2025-03-19 00:00:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   }
+  ],
+  "bch": [
+   {
+    "a": "bch5m_p10.csv",
+    "b": "bch5m_p09.csv",
+    "a_last": "2021-10-13 20:10:00+00:00",
+    "b_first": "2021-10-13 20:10:00+00:00",
+    "overlap_bars": 1,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": 0.0,
+    "step_minutes_across_seam": 0.0
+   },
+   {
+    "a": "bch5m_p09.csv",
+    "b": "bch5m_p08.csv",
+    "a_last": "2022-03-01 17:25:00+00:00",
+    "b_first": "2022-03-01 17:30:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   },
+   {
+    "a": "bch5m_p08.csv",
+    "b": "bch5m_p07.csv",
+    "a_last": "2022-07-18 14:45:00+00:00",
+    "b_first": "2022-07-18 14:50:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   },
+   {
+    "a": "bch5m_p07.csv",
+    "b": "bch5m_p06.csv",
+    "a_last": "2022-12-04 12:05:00+00:00",
+    "b_first": "2022-12-04 12:10:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   },
+   {
+    "a": "bch5m_p06.csv",
+    "b": "bch5m_p05.csv",
+    "a_last": "2023-04-22 11:35:00+00:00",
+    "b_first": "2023-04-22 11:40:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   },
+   {
+    "a": "bch5m_p05.csv",
+    "b": "bch5m_p04.csv",
+    "a_last": "2023-09-08 09:35:00+00:00",
+    "b_first": "2023-09-08 09:40:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   },
+   {
+    "a": "bch5m_p04.csv",
+    "b": "bch5m_p03.csv",
+    "a_last": "2024-01-25 07:25:00+00:00",
+    "b_first": "2024-01-25 07:30:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   },
+   {
+    "a": "bch5m_p03.csv",
+    "b": "bch5m_p02.csv",
+    "a_last": "2024-06-12 05:05:00+00:00",
+    "b_first": "2024-06-12 05:10:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   },
+   {
+    "a": "bch5m_p02.csv",
+    "b": "bch5m_p01.csv",
+    "a_last": "2024-10-31 02:35:00+00:00",
+    "b_first": "2024-10-31 02:40:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   },
+   {
+    "a": "bch5m_p01.csv",
+    "b": "bchusd-5m-ohlcv.csv",
+    "a_last": "2025-03-18 23:55:00+00:00",
+    "b_first": "2025-03-19 00:00:00+00:00",
+    "overlap_bars": 0,
+    "overlap_price_mismatch_cells": 0,
+    "overlap_max_rel_diff": 0.0,
+    "overlap_vol_max_rel": null,
+    "step_minutes_across_seam": 5.0
+   }
+  ]
+ },
+ "seam_open_vs_prev_close": {
+  "btc": [
+   [
+    "2021-10-16 00:00",
+    0.0065,
+    68.0
+   ],
+   [
+    "2022-03-03 21:20",
+    0.0704,
+    94.9
+   ],
+   [
+    "2022-07-20 18:40",
+    0.0001,
+    38.3
+   ],
+   [
+    "2022-12-06 16:00",
+    0.0,
+    0.0
+   ],
+   [
+    "2023-04-24 13:20",
+    0.0012,
+    46.6
+   ],
+   [
+    "2023-09-10 10:40",
+    0.0,
+    0.0
+   ],
+   [
+    "2024-01-27 08:00",
+    0.037,
+    90.1
+   ],
+   [
+    "2024-06-14 05:20",
+    0.001,
+    45.2
+   ],
+   [
+    "2024-10-31 02:40",
+    0.0,
+    26.8
+   ],
+   [
+    "2025-03-19 00:00",
+    0.008,
+    71.7
+   ]
+  ],
+  "eth": [
+   [
+    "2021-10-16 00:00",
+    0.0003,
+    18.3
+   ],
+   [
+    "2022-03-03 21:20",
+    0.112,
+    97.2
+   ],
+   [
+    "2022-07-20 18:40",
+    0.0089,
+    70.9
+   ],
+   [
+    "2022-12-06 16:00",
+    0.0024,
+    43.7
+   ],
+   [
+    "2023-04-24 13:20",
+    0.0,
+    0.0
+   ],
+   [
+    "2023-09-10 10:40",
+    0.0499,
+    93.1
+   ],
+   [
+    "2024-01-27 08:00",
+    0.0341,
+    90.7
+   ],
+   [
+    "2024-06-14 05:20",
+    0.0108,
+    75.5
+   ],
+   [
+    "2024-10-31 02:40",
+    0.0034,
+    49.4
+   ],
+   [
+    "2025-03-19 00:00",
+    0.3081,
+    99.9
+   ]
+  ],
+  "sol": [
+   [
+    "2021-10-15 23:35",
+    0.0061,
+    38.2
+   ],
+   [
+    "2022-03-03 20:55",
+    0.0211,
+    65.3
+   ],
+   [
+    "2022-07-20 18:15",
+    0.0,
+    0.0
+   ],
+   [
+    "2022-12-06 15:35",
+    0.0716,
+    91.3
+   ],
+   [
+    "2023-04-24 13:10",
+    0.0462,
+    82.9
+   ],
+   [
+    "2023-09-10 10:30",
+    0.0544,
+    87.5
+   ],
+   [
+    "2024-01-27 07:50",
+    0.0329,
+    75.5
+   ],
+   [
+    "2024-06-14 05:10",
+    0.0068,
+    40.4
+   ],
+   [
+    "2024-10-31 02:40",
+    0.0057,
+    36.5
+   ],
+   [
+    "2025-03-19 00:00",
+    0.0239,
+    68.1
+   ]
+  ],
+  "xrp": [
+   [
+    "2021-10-14 23:40",
+    0.0132,
+    44.6
+   ],
+   [
+    "2022-03-02 21:00",
+    0.0805,
+    88.1
+   ],
+   [
+    "2022-07-19 18:55",
+    0.0,
+    0.0
+   ],
+   [
+    "2022-12-05 22:30",
+    0.0103,
+    40.8
+   ],
+   [
+    "2023-04-24 03:05",
+    0.0235,
+    63.3
+   ],
+   [
+    "2023-09-10 10:40",
+    0.0,
+    0.0
+   ],
+   [
+    "2024-01-27 08:00",
+    0.0378,
+    73.5
+   ],
+   [
+    "2024-06-14 05:20",
+    0.0,
+    0.0
+   ],
+   [
+    "2024-10-31 02:40",
+    0.0,
+    0.0
+   ],
+   [
+    "2025-03-19 00:00",
+    0.0241,
+    63.7
+   ]
+  ],
+  "ltc": [
+   [
+    "2021-10-15 23:00",
+    0.0317,
+    74.4
+   ],
+   [
+    "2022-03-03 20:20",
+    0.0091,
+    31.1
+   ],
+   [
+    "2022-07-20 17:40",
+    0.0,
+    0.0
+   ],
+   [
+    "2022-12-06 15:00",
+    0.0126,
+    41.8
+   ],
+   [
+    "2023-04-24 12:20",
+    0.0569,
+    89.0
+   ],
+   [
+    "2023-09-10 09:40",
+    0.1137,
+    96.6
+   ],
+   [
+    "2024-01-27 07:00",
+    0.0331,
+    75.8
+   ],
+   [
+    "2024-06-14 04:20",
+    0.0125,
+    41.7
+   ],
+   [
+    "2024-10-31 02:40",
+    0.0278,
+    69.8
+   ],
+   [
+    "2025-03-19 00:00",
+    0.0,
+    0.0
+   ]
+  ],
+  "bch": [
+   [
+    "2021-10-13 20:10",
+    0.0136,
+    35.0
+   ],
+   [
+    "2022-03-01 17:30",
+    0.0153,
+    38.0
+   ],
+   [
+    "2022-07-18 14:50",
+    0.0593,
+    85.1
+   ],
+   [
+    "2022-12-04 12:10",
+    0.0091,
+    26.5
+   ],
+   [
+    "2023-04-22 11:40",
+    0.0083,
+    23.3
+   ],
+   [
+    "2023-09-08 09:40",
+    0.0103,
+    29.4
+   ],
+   [
+    "2024-01-25 07:30",
+    0.0042,
+    15.1
+   ],
+   [
+    "2024-06-12 05:10",
+    0.0158,
+    39.0
+   ],
+   [
+    "2024-10-31 02:40",
+    0.0376,
+    69.6
+   ],
+   [
+    "2025-03-19 00:00",
+    0.0,
+    0.0
+   ]
+  ]
+ },
+ "crosscheck": "{\n \"window\": [\n  \"2024-02-27 00:00:00+00:00\",\n  \"2024-06-30 23:00:00+00:00\"\n ],\n \"mine_bars\": 3000,\n \"astral_bars\": 3000,\n \"common\": 3000,\n \"only_mine\": [],\n \"only_astral\": [],\n \"n_only_mine\": 0,\n \"n_only_astral\": 0,\n \"open\": {\n  \"exact\": 100.0,\n  \"within_1bp\": 100.0,\n  \"within_10bp\": 100.0,\n  \"max_rel\": 0.0,\n  \"n_gt_1pct\": 0,\n  \"worst_ts\": \"2024-02-27 00:00:00+00:00\"\n },\n \"high\": {\n  \"exact\": 100.0,\n  \"within_1bp\": 100.0,\n  \"within_10bp\": 100.0,\n  \"max_rel\": 0.0,\n  \"n_gt_1pct\": 0,\n  \"worst_ts\": \"2024-02-27 00:00:00+00:00\"\n },\n \"low\": {\n  \"exact\": 100.0,\n  \"within_1bp\": 100.0,\n  \"within_10bp\": 100.0,\n  \"max_rel\": 0.0,\n  \"n_gt_1pct\": 0,\n  \"worst_ts\": \"2024-02-27 00:00:00+00:00\"\n },\n \"close\": {\n  \"exact\": 100.0,\n  \"within_1bp\": 100.0,\n  \"within_10bp\": 100.0,\n  \"max_rel\": 0.0,\n  \"n_gt_1pct\": 0,\n  \"worst_ts\": \"2024-02-27 00:00:00+00:00\"\n },\n \"volume\": {\n  \"exact\": 100.0,\n  \"within_1bp\": 100.0,\n  \"within_10bp\": 100.0,\n  \"max_rel\": 4.717300788365008e-16,\n  \"n_gt_1pct\": 0,\n  \"worst_ts\": \"2024-05-19 06:00:00+00:00\"\n }\n}\n{\n \"window\": [\n  \"2026-05-27 11:00:00+00:00\",\n  \"2026-09-29 08:00:00+00:00\"\n ],\n \"mine_bars\": 2997,\n \"astral_bars\": 2998,\n \"common\": 2997,\n \"only_mine\": [],\n \"only_astral\": [\n  \"2026-09-29 06:00:00+00:00\"\n ],\n \"n_only_mine\": 0,\n \"n_only_astral\": 1,\n \"open\": {\n  \"exact\": 99.666,\n  \"within_1bp\": 99.8,\n  \"within_10bp\": 99.967,\n  \"max_rel\": 0.0020061239573434244,\n  \"n_gt_1pct\": 0,\n  \"worst_ts\": \"2026-09-29 07:00:00+00:00\"\n },\n \"high\": {\n  \"exact\": 99.833,\n  \"within_1bp\": 99.9,\n  \"within_10bp\": 99.967,\n  \"max_rel\": 0.005270517371195056,\n  \"n_gt_1pct\": 0,\n  \"worst_ts\": \"2026-09-28 15:00:00+00:00\"\n },\n \"low\": {\n  \"exact\": 99.833,\n  \"within_1bp\": 99.833,\n  \"within_10bp\": 99.933,\n  \"max_rel\": 0.0029280989046741824,\n  \"n_gt_1pct\": 0,\n  \"worst_ts\": \"2026-09-28 15:00:00+00:00\"\n },\n \"close\": {\n  \"exact\": 99.8,\n  \"within_1bp\": 99.9,\n  \"within_10bp\": 99.967,\n  \"max_rel\": 0.01039523551705471,\n  \"n_gt_1pct\": 1,\n  \"worst_ts\": \"2026-09-28 15:00:00+00:00\"\n },\n \"volume\": {\n  \"exact\": 98.866,\n  \"within_1bp\": 98.866,\n  \"within_10bp\": 98.866,\n  \"max_rel\": 1.705138102335802,\n  \"n_gt_1pct\": 34,\n  \"worst_ts\": \"2026-09-28 15:00:00+00:00\"\n }\n}\n{\n \"window\": [\n  \"2021-05-31 00:00:00+00:00\",\n  \"2026-09-28 00:00:00+00:00\"\n ],\n \"mine_bars\": 1946,\n \"astral_bars\": 1947,\n \"common\": 1946,\n \"only_mine\": [],\n \"only_astral\": [\n  \"2026-04-22 00:00:00+00:00\"\n ],\n \"n_only_mine\": 0,\n \"n_only_astral\": 1,\n \"open\": {\n  \"exact\": 99.897,\n  \"within_1bp\": 99.949,\n  \"within_10bp\": 100.0,\n  \"max_rel\": 0.00022022812525864508,\n  \"n_gt_1pct\": 0,\n  \"worst_ts\": \"2026-08-26 00:00:00+00:00\"\n },\n \"high\": {\n  \"exact\": 100.0,\n  \"within_1bp\": 100.0,\n  \"within_10bp\": 100.0,\n  \"max_rel\": 0.0,\n  \"n_gt_1pct\": 0,\n  \"worst_ts\": \"2021-05-31 00:00:00+00:00\"\n },\n \"low\": {\n  \"exact\": 99.897,\n  \"within_1bp\": 99.949,\n  \"within_10bp\": 100.0,\n  \"max_rel\": 0.00033467736741077105,\n  \"n_gt_1pct\": 0,\n  \"worst_ts\": \"2026-08-26 00:00:00+00:00\"\n },\n \"close\": {\n  \"exact\": 99.846,\n  \"within_1bp\": 99.846,\n  \"within_10bp\": 99.949,\n  \"max_rel\": 0.0028049591487744286,\n  \"n_gt_1pct\": 0,\n  \"worst_ts\": \"2026-09-27 00:00:00+00:00\"\n },\n \"volume\": {\n  \"exact\": 99.589,\n  \"within_1bp\": 99.743,\n  \"within_10bp\": 99.743,\n  \"max_rel\": 2.296582927911327,\n  \"n_gt_1pct\": 4,\n  \"worst_ts\": \"2026-08-26 00:00:00+00:00\"\n }\n}\n{\n \"window\": [\n  \"2021-04-09 00:00:00+00:00\",\n  \"2026-09-28 00:00:00+00:00\"\n ],\n \"mine_bars\": 1998,\n \"astral_bars\": 1999,\n \"common\": 1998,\n \"only_mine\": [],\n \"only_astral\": [\n  \"2026-04-22 00:00:00+00:00\"\n ],\n \"n_only_mine\": 0,\n \"n_only_astral\": 1,\n \"open\": {\n  \"exact\": 100.0,\n  \"within_1bp\": 100.0,\n  \"within_10bp\": 100.0,\n  \"max_rel\": 0.0,\n  \"n_gt_1pct\": 0,\n  \"worst_ts\": \"2021-04-09 00:00:00+00:00\"\n },\n \"high\": {\n  \"exact\": 100.0,\n  \"within_1bp\": 100.0,\n  \"within_10bp\": 100.0,\n  \"max_rel\": 0.0,\n  \"n_gt_1pct\": 0,\n  \"worst_ts\": \"2021-04-09 00:00:00+00:00\"\n },\n \"low\": {\n  \"exact\": 100.0,\n  \"within_1bp\": 100.0,\n  \"within_10bp\": 100.0,\n  \"max_rel\": 0.0,\n  \"n_gt_1pct\": 0,\n  \"worst_ts\": \"2021-04-09 00:00:00+00:00\"\n },\n \"close\": {\n  \"exact\": 99.95,\n  \"within_1bp\": 99.95,\n  \"within_10bp\": 99.95,\n  \"max_rel\": 0.0013134851138352725,\n  \"n_gt_1pct\": 0,\n  \"worst_ts\": \"2024-06-16 00:00:00+00:00\"\n },\n \"volume\": {\n  \"exact\": 99.6,\n  \"within_1bp\": 99.8,\n  \"within_10bp\": 99.85,\n  \"max_rel\": 0.00325295112930873,\n  \"n_gt_1pct\": 0,\n  \"worst_ts\": \"2026-05-13 00:00:00+00:00\"\n }\n}\n{\n \"window\": [\n  \"2021-08-01 00:00:00+00:00\",\n  \"2026-09-28 00:00:00+00:00\"\n ],\n \"mine_bars\": 1884,\n \"astral_bars\": 1885,\n \"common\": 1884,\n \"only_mine\": [],\n \"only_astral\": [\n  \"2026-04-22 00:00:00+00:00\"\n ],\n \"n_only_mine\": 0,\n \"n_only_astral\": 1,\n \"open\": {\n  \"exact\": 100.0,\n  \"within_1bp\": 100.0,\n  \"within_10bp\": 100.0,\n  \"max_rel\": 0.0,\n  \"n_gt_1pct\": 0,\n  \"worst_ts\": \"2021-08-01 00:00:00+00:00\"\n },\n \"high\": {\n  \"exact\": 100.0,\n  \"within_1bp\": 100.0,\n  \"within_10bp\": 100.0,\n  \"max_rel\": 0.0,\n  \"n_gt_1pct\": 0,\n  \"worst_ts\": \"2021-08-01 00:00:00+00:00\"\n },\n \"low\": {\n  \"exact\": 100.0,\n  \"within_1bp\": 100.0,\n  \"within_10bp\": 100.0,\n  \"max_rel\": 0.0,\n  \"n_gt_1pct\": 0,\n  \"worst_ts\": \"2021-08-01 00:00:00+00:00\"\n },\n \"close\": {\n  \"exact\": 99.947,\n  \"within_1bp\": 99.947,\n  \"within_10bp\": 99.947,\n  \"max_rel\": 0.0013134851138352725,\n  \"n_gt_1pct\": 0,\n  \"worst_ts\": \"2024-06-16 00:00:00+00:00\"\n },\n \"volume\": {\n  \"exact\": 99.735,\n  \"within_1bp\": 99.788,\n  \"within_10bp\": 99.841,\n  \"max_rel\": 0.00325295112930873,\n  \"n_gt_1pct\": 0,\n  \"worst_ts\": \"2026-05-13 00:00:00+00:00\"\n }\n}\n",
+ "suspects": {
+  "file": "suspects.csv",
+  "rows": 492,
+  "definition": "range/prev_close > 8x rolling median range (previous 288 bars, floor 5bp) AND excursion fully reverts (within bar: |c-pc|<=0.25*E, or next bar: |c_next-pc|<=0.25*E) AND isolated (neighbour ranges < 4x median, contiguous)"
+ },
+ "raw_pulls": [
+  {
+   "file": "bch5m_p01.csv",
+   "sha256": "c0ade425a7f6426fee94d6515af63d358276e272406164cff7b1e9690325e793",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2024-10-31T02:40:00+0000",
+   "last": "2025-03-18T23:55:00+0000"
+  },
+  {
+   "file": "bch5m_p02.csv",
+   "sha256": "567889ed2e8b063cd62d9a4b04a07514d94a99315dd7b8e2ef42081a9fb807b4",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2024-06-12T05:10:00+0000",
+   "last": "2024-10-31T02:35:00+0000"
+  },
+  {
+   "file": "bch5m_p03.csv",
+   "sha256": "b1d4ae2a2554b04408ca0defdb150e954cf4afe16289b783feac32e0cb838f2d",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2024-01-25T07:30:00+0000",
+   "last": "2024-06-12T05:05:00+0000"
+  },
+  {
+   "file": "bch5m_p04.csv",
+   "sha256": "ce5b7c36a4da3a71ed41f7dadf6b5b076495af6c3e8dc30f98551bd6c85a7d94",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2023-09-08T09:40:00+0000",
+   "last": "2024-01-25T07:25:00+0000"
+  },
+  {
+   "file": "bch5m_p05.csv",
+   "sha256": "a4ebd1f758a0fc4540e4d0c9fec3de9c41e81d20a65a457c216cdd555c2a6a61",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2023-04-22T11:40:00+0000",
+   "last": "2023-09-08T09:35:00+0000"
+  },
+  {
+   "file": "bch5m_p06.csv",
+   "sha256": "7524a8ec591624eab2529f64aeaba1558137b9e6f475470b19fc1279adbc1555",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2022-12-04T12:10:00+0000",
+   "last": "2023-04-22T11:35:00+0000"
+  },
+  {
+   "file": "bch5m_p07.csv",
+   "sha256": "729290fdaa688f915dd9eb6b851f2d9c6f64cca5d81c7c39f57808b9e84b6031",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2022-07-18T14:50:00+0000",
+   "last": "2022-12-04T12:05:00+0000"
+  },
+  {
+   "file": "bch5m_p08.csv",
+   "sha256": "2e6dec265ae03a273ce214d31d67b0ba1c76895929225e8524888eb4311810c5",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2022-03-01T17:30:00+0000",
+   "last": "2022-07-18T14:45:00+0000"
+  },
+  {
+   "file": "bch5m_p09.csv",
+   "sha256": "c3d301480f9b03cc11e77135902bdcf5ce080d35a9e5a3485b5a4c8d552c324e",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2021-10-13T20:10:00+0000",
+   "last": "2022-03-01T17:25:00+0000"
+  },
+  {
+   "file": "bch5m_p10.csv",
+   "sha256": "4c8cdea94af321dcb44a49a70cb6b29d2384c06d4eec4457843a49cdd354809b",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2021-05-27T22:55:00+0000",
+   "last": "2021-10-13T20:10:00+0000"
+  },
+  {
+   "file": "btc1d_xcheck.csv",
+   "sha256": "6afc12a3bd288df68fa4ded8d421f2cfc86c0f906ca7c1f94f170c1e88b86aa6",
+   "sha256_matches_astral_artifact": true,
+   "rows": 2000,
+   "first": "2021-04-08T00:00:00+0000",
+   "last": "2026-09-28T00:00:00+0000"
+  },
+  {
+   "file": "btc1h_xcheck.csv",
+   "sha256": "3018573a7c7625ce3a93c3f39dca1012821d9ba974f554bc99621b89ece77d8a",
+   "sha256_matches_astral_artifact": true,
+   "rows": 3000,
+   "first": "2024-02-27T00:00:00+0000",
+   "last": "2024-06-30T23:00:00+0000"
+  },
+  {
+   "file": "btc5m_p01.csv",
+   "sha256": "d8e231ec1a7ea53d7d455d5068c90b1b893dacfb3fc190376856e024360fbf1e",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2024-10-31T02:40:00+0000",
+   "last": "2025-03-18T23:55:00+0000"
+  },
+  {
+   "file": "btc5m_p02.csv",
+   "sha256": "02d199ef4156fd08a7ee1149b112dc16cb0fb2533d4d6038d60739682552acee",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2024-06-14T05:20:00+0000",
+   "last": "2024-10-31T02:35:00+0000"
+  },
+  {
+   "file": "btc5m_p03.csv",
+   "sha256": "2c39f550cf24d6d799c61c7a4139f75f6a9d6ec0b1dfb2df7e87d7ca42f763d5",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2024-01-27T08:00:00+0000",
+   "last": "2024-06-14T05:15:00+0000"
+  },
+  {
+   "file": "btc5m_p04.csv",
+   "sha256": "6bbfc74f1015ee4c85b1421d2a3b6b556caaf687ee08feb72cc0a077bafc85dd",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2023-09-10T10:40:00+0000",
+   "last": "2024-01-27T07:55:00+0000"
+  },
+  {
+   "file": "btc5m_p05.csv",
+   "sha256": "fcf659dadb8a1b4beb8657169f1bbf3ad58acfa7e8fa0abb3d5f2e1e601d92b1",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2023-04-24T13:20:00+0000",
+   "last": "2023-09-10T10:35:00+0000"
+  },
+  {
+   "file": "btc5m_p06.csv",
+   "sha256": "06331dcce01425d234bc3f18e416b60198a66d6124e921194e404ea0436aa8c5",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2022-12-06T16:00:00+0000",
+   "last": "2023-04-24T13:15:00+0000"
+  },
+  {
+   "file": "btc5m_p07.csv",
+   "sha256": "e5e8b383d0ef8e1be65b0a94f4e9a74313fb16d34ce014f25ee922cc5ec228c2",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2022-07-20T18:40:00+0000",
+   "last": "2022-12-06T15:55:00+0000"
+  },
+  {
+   "file": "btc5m_p08.csv",
+   "sha256": "454d6c7bb8477f4a084343245bb45c1c2fd37f2452a25cd1ceb574b813a64c80",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2022-03-03T21:20:00+0000",
+   "last": "2022-07-20T18:35:00+0000"
+  },
+  {
+   "file": "btc5m_p09.csv",
+   "sha256": "0a3854523557472084c537065cfaa76db7c69d738b3192d96e9a1e864a1433eb",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2021-10-16T00:00:00+0000",
+   "last": "2022-03-03T21:15:00+0000"
+  },
+  {
+   "file": "btc5m_p10.csv",
+   "sha256": "50b23a21ad0c96601e5ba9d6c72259ca2782fae3ea40fb0aefcd2b5b931d9ad2",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2021-05-30T02:45:00+0000",
+   "last": "2021-10-16T00:00:00+0000"
+  },
+  {
+   "file": "doge1d_xcheck.csv",
+   "sha256": "4eb57ee5c4c3085076a211d6713f3a97f2fdc6546b656fe3d3d8e74e6338f9af",
+   "sha256_matches_astral_artifact": true,
+   "rows": 2000,
+   "first": "2021-04-09T00:00:00+0000",
+   "last": "2026-09-29T00:00:00+0000"
+  },
+  {
+   "file": "doge1h_xcheck.csv",
+   "sha256": "deda40dd3b922854585a8806d86673a4c2c484182dbdca5a08ca874b3d4db956",
+   "sha256_matches_astral_artifact": true,
+   "rows": 3000,
+   "first": "2026-05-27T11:00:00+0000",
+   "last": "2026-09-29T10:00:00+0000"
+  },
+  {
+   "file": "eth5m_p01.csv",
+   "sha256": "1e6015bd2f0115cae7823dacae0c6a43d499d8a4905ead00d80c0cad261c7a7e",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2024-10-31T02:40:00+0000",
+   "last": "2025-03-18T23:55:00+0000"
+  },
+  {
+   "file": "eth5m_p02.csv",
+   "sha256": "b5e8dc5843f372b219f9fad5fd7625de0f3fab68454c12cb995f69ce315ceae9",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2024-06-14T05:20:00+0000",
+   "last": "2024-10-31T02:35:00+0000"
+  },
+  {
+   "file": "eth5m_p03.csv",
+   "sha256": "8ebd80f57061086670aed92cc9e4bbd1e974da894c6f2e56b1244dae7a7b1e47",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2024-01-27T08:00:00+0000",
+   "last": "2024-06-14T05:15:00+0000"
+  },
+  {
+   "file": "eth5m_p04.csv",
+   "sha256": "f6c76bb68d6268f9a1915d582aa41bab5fd3dab13f47e68cf62496df85ad25c3",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2023-09-10T10:40:00+0000",
+   "last": "2024-01-27T07:55:00+0000"
+  },
+  {
+   "file": "eth5m_p05.csv",
+   "sha256": "f82a46f0b97d47ae758372e3891d21d3c152e3215f6617b47b06e7c73cab33c0",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2023-04-24T13:20:00+0000",
+   "last": "2023-09-10T10:35:00+0000"
+  },
+  {
+   "file": "eth5m_p06.csv",
+   "sha256": "460032ce351a6866d775e2773ab996cb11909d06a2b40f6c5c044327eee55ec6",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2022-12-06T16:00:00+0000",
+   "last": "2023-04-24T13:15:00+0000"
+  },
+  {
+   "file": "eth5m_p07.csv",
+   "sha256": "d28f235c53c6c2474c48b1bcffa17d799a4de3ff29c4e59f078e1b2199fb0212",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2022-07-20T18:40:00+0000",
+   "last": "2022-12-06T15:55:00+0000"
+  },
+  {
+   "file": "eth5m_p08.csv",
+   "sha256": "a256a760e18f2385aaed048f09c05c8aa0cabd9b645d077946d26e2d6826caee",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2022-03-03T21:20:00+0000",
+   "last": "2022-07-20T18:35:00+0000"
+  },
+  {
+   "file": "eth5m_p09.csv",
+   "sha256": "401bd05500f5da850d69301289665a6d7c3c577319d15589eca4b02a212de38f",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2021-10-16T00:00:00+0000",
+   "last": "2022-03-03T21:15:00+0000"
+  },
+  {
+   "file": "eth5m_p10.csv",
+   "sha256": "6ef1f9d4428f3505409ffb834a143784a9ace0fbdf318d43af61baa4bf2d05e4",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2021-05-30T02:45:00+0000",
+   "last": "2021-10-16T00:00:00+0000"
+  },
+  {
+   "file": "ltc5m_p01.csv",
+   "sha256": "94030c9531602ec6387447834c304e34bbcbd56daa349292546e145da6e17f77",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2024-10-31T02:40:00+0000",
+   "last": "2025-03-18T23:55:00+0000"
+  },
+  {
+   "file": "ltc5m_p02.csv",
+   "sha256": "f85f3053660920eeae4c42511096b2125be22c0b8bbb6f2e9fa8a7f4d693e5e1",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2024-06-14T04:20:00+0000",
+   "last": "2024-10-31T02:35:00+0000"
+  },
+  {
+   "file": "ltc5m_p03.csv",
+   "sha256": "eebae5c3b4a10e34ba71d7e10fb19b0856018ec17b2da2d9365529bda6776356",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2024-01-27T07:00:00+0000",
+   "last": "2024-06-14T04:15:00+0000"
+  },
+  {
+   "file": "ltc5m_p04.csv",
+   "sha256": "c5bd751d431ed86c3da43bac77b2d9b184cb730d72ef74b58fcb384133231fb9",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2023-09-10T09:40:00+0000",
+   "last": "2024-01-27T06:55:00+0000"
+  },
+  {
+   "file": "ltc5m_p05.csv",
+   "sha256": "0778ab2dc4f2202530c1a6341eb3fa0543111164fa804a44ea54b2c2b0c875bb",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2023-04-24T12:20:00+0000",
+   "last": "2023-09-10T09:35:00+0000"
+  },
+  {
+   "file": "ltc5m_p06.csv",
+   "sha256": "4c895166a27607016004a9fcc4e29114575ab87620ae867785a319aa3d820a94",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2022-12-06T15:00:00+0000",
+   "last": "2023-04-24T12:15:00+0000"
+  },
+  {
+   "file": "ltc5m_p07.csv",
+   "sha256": "0fb9de5d4adb8732788c6d31752532227fe798197944c51ea1cf1d9240ca41da",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2022-07-20T17:40:00+0000",
+   "last": "2022-12-06T14:55:00+0000"
+  },
+  {
+   "file": "ltc5m_p08.csv",
+   "sha256": "5f22df39a4f9941c9c3765d77f6af27c062968d30d5aa63f1fb91e444be25dc3",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2022-03-03T20:20:00+0000",
+   "last": "2022-07-20T17:35:00+0000"
+  },
+  {
+   "file": "ltc5m_p09.csv",
+   "sha256": "0d87ccdd0b859c08e27dae63200a4d37f33df742092e2be08c5b56a67bcd4589",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2021-10-15T23:00:00+0000",
+   "last": "2022-03-03T20:15:00+0000"
+  },
+  {
+   "file": "ltc5m_p10.csv",
+   "sha256": "5e7eb67f5e0a707a359ccd45f355f1afb97d9eb9dbac37db69f5b0c784e49d14",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2021-05-30T01:45:00+0000",
+   "last": "2021-10-15T23:00:00+0000"
+  },
+  {
+   "file": "sol5m_p01.csv",
+   "sha256": "910a66c4ba6215b9e3f82e02d719e90aa7e6baf11985305e61f718596fa6ce55",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2024-10-31T02:40:00+0000",
+   "last": "2025-03-18T23:55:00+0000"
+  },
+  {
+   "file": "sol5m_p02.csv",
+   "sha256": "ae5be2cf78ef899c951a13ff18fe0232165e99ce72afa68eb04f92379966af4e",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2024-06-14T05:10:00+0000",
+   "last": "2024-10-31T02:35:00+0000"
+  },
+  {
+   "file": "sol5m_p03.csv",
+   "sha256": "b391063a538d9fd9fbf47b21e3d99534f959448b5cd64d43820c430a60023b42",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2024-01-27T07:50:00+0000",
+   "last": "2024-06-14T05:05:00+0000"
+  },
+  {
+   "file": "sol5m_p04.csv",
+   "sha256": "1a302c77a22dd55fa29edabee6a7d0b1ff253503a6280ec8c330298ef0355c87",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2023-09-10T10:30:00+0000",
+   "last": "2024-01-27T07:45:00+0000"
+  },
+  {
+   "file": "sol5m_p05.csv",
+   "sha256": "a86b54f015e3e681fc5e335bfa4c7700ecbd63a7a6aa18bd38b83eafdb8aa06a",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2023-04-24T13:10:00+0000",
+   "last": "2023-09-10T10:25:00+0000"
+  },
+  {
+   "file": "sol5m_p06.csv",
+   "sha256": "126e84c2e104b09005e5b862319ba6791138d58d8e790dfe83b2971eaae083c1",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2022-12-06T15:35:00+0000",
+   "last": "2023-04-24T13:05:00+0000"
+  },
+  {
+   "file": "sol5m_p07.csv",
+   "sha256": "bfefbceae91da65760aacd15e68d22b7eba91a4ca3dd4b2a3bd3e66684e283ff",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2022-07-20T18:15:00+0000",
+   "last": "2022-12-06T15:30:00+0000"
+  },
+  {
+   "file": "sol5m_p08.csv",
+   "sha256": "96702502088910a68eee3ed00e2333eb3800979fb93449cc4c9b4d061ff20335",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2022-03-03T20:55:00+0000",
+   "last": "2022-07-20T18:10:00+0000"
+  },
+  {
+   "file": "sol5m_p09.csv",
+   "sha256": "b94862009aff61e9c7c4a22f42de6c876e8106c323b66132bcf57b4a3cb2987d",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2021-10-15T23:35:00+0000",
+   "last": "2022-03-03T20:50:00+0000"
+  },
+  {
+   "file": "sol5m_p10.csv",
+   "sha256": "399cce3475eb746ed634eb53d87a210b94f81d178d17a88242380f046aaf774b",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2021-05-29T14:35:00+0000",
+   "last": "2021-10-15T23:35:00+0000"
+  },
+  {
+   "file": "xrp5m_p01.csv",
+   "sha256": "ec906f915817cd9c38e814ecadfe07a15d2aaa5f877a9c51f78e4ec11fa42614",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2024-10-31T02:40:00+0000",
+   "last": "2025-03-18T23:55:00+0000"
+  },
+  {
+   "file": "xrp5m_p02.csv",
+   "sha256": "3f6d17d8e5c725069b25c030d671da58cb727313d6a5ab870da1e770abc7a36e",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2024-06-14T05:20:00+0000",
+   "last": "2024-10-31T02:35:00+0000"
+  },
+  {
+   "file": "xrp5m_p03.csv",
+   "sha256": "46edec72453f60b3c143c3669f0606dd369e16d037e78cf7095c1104b6c19d33",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2024-01-27T08:00:00+0000",
+   "last": "2024-06-14T05:15:00+0000"
+  },
+  {
+   "file": "xrp5m_p04.csv",
+   "sha256": "53a9224218533651ebaedf2a8ad9d28b9c2a365f8cf4249c7d02e6f13b29b118",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2023-09-10T10:40:00+0000",
+   "last": "2024-01-27T07:55:00+0000"
+  },
+  {
+   "file": "xrp5m_p05.csv",
+   "sha256": "ca087309bf8e66b3afa8d448528cfafa9a680b4f9eaf3c1909080e1c0717921a",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2023-04-24T03:05:00+0000",
+   "last": "2023-09-10T10:35:00+0000"
+  },
+  {
+   "file": "xrp5m_p06.csv",
+   "sha256": "699be63baa5e84996e6ea743da190176efd05b96c1f8533512f669ec92fa65f1",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2022-12-05T22:30:00+0000",
+   "last": "2023-04-24T03:00:00+0000"
+  },
+  {
+   "file": "xrp5m_p07.csv",
+   "sha256": "d18795c0544cb67811d4c399c6bc0c9eff2fc0bc99f79f4b52c24d8ed6197a15",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2022-07-19T18:55:00+0000",
+   "last": "2022-12-05T22:25:00+0000"
+  },
+  {
+   "file": "xrp5m_p08.csv",
+   "sha256": "8a7662f8de2ed9068b21ececffe455fde9b5400e239ccfc0e7595d22c4823d50",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2022-03-02T21:00:00+0000",
+   "last": "2022-07-19T18:50:00+0000"
+  },
+  {
+   "file": "xrp5m_p09.csv",
+   "sha256": "410cab82d5cd6abaeddbc92e185ee29ef5e7c4477adc61fc801199293788aacb",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2021-10-14T23:40:00+0000",
+   "last": "2022-03-02T20:55:00+0000"
+  },
+  {
+   "file": "xrp5m_p10.csv",
+   "sha256": "0c1a70828d49dbc991beaa6f9bcbb04bf72fd5f920719151505a024bf641c5a5",
+   "sha256_matches_astral_artifact": true,
+   "rows": 40000,
+   "first": "2021-05-29T02:25:00+0000",
+   "last": "2021-10-14T23:40:00+0000"
+  }
+ ],
+ "files": {
+  "full/bchusd-15m.csv": {
+   "symbol": "BCHUSD",
+   "split": "full",
+   "tf": "15m",
+   "rows": 187097,
+   "first": "2021-05-27T23:00:00Z",
+   "last": "2026-09-29T09:15:00Z",
+   "sha256": "9c79c4b962b2f931b7388179adb82bac40c44594501eaabfc8bc38f3db373bff",
+   "bytes": 11921711,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 187242,
+    "missing_bins": 145,
+    "gap_events": 44,
+    "max_gap": "1 days 00:15:00",
+    "partial_bins": 555,
+    "constituent_5m_bars": 560541
+   }
+  },
+  "full/bchusd-1d.csv": {
+   "symbol": "BCHUSD",
+   "split": "full",
+   "tf": "1d",
+   "rows": 1949,
+   "first": "2021-05-28T00:00:00Z",
+   "last": "2026-09-28T00:00:00Z",
+   "sha256": "df1d5bb6606960d4d8e0277e117bba3d16e9b8f507fa8813cd3ed1aecef45e69",
+   "bytes": 125889,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 1950,
+    "missing_bins": 1,
+    "gap_events": 1,
+    "max_gap": "2 days 00:00:00",
+    "partial_bins": 40,
+    "constituent_5m_bars": 560415
+   }
+  },
+  "full/bchusd-1h.csv": {
+   "symbol": "BCHUSD",
+   "split": "full",
+   "tf": "1h",
+   "rows": 46786,
+   "first": "2021-05-27T23:00:00Z",
+   "last": "2026-09-29T08:00:00Z",
+   "sha256": "cd8662bdee640b5a4f0bf4d91e5c68a8df79782ac0583526aeb9a2c7a6769226",
+   "bytes": 2983885,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 46810,
+    "missing_bins": 24,
+    "gap_events": 1,
+    "max_gap": "1 days 01:00:00",
+    "partial_bins": 238,
+    "constituent_5m_bars": 560535
+   }
+  },
+  "full/bchusd-1w.csv": {
+   "symbol": "BCHUSD",
+   "split": "full",
+   "tf": "1w",
+   "rows": 278,
+   "first": "2021-05-31T00:00:00Z",
+   "last": "2026-09-21T00:00:00Z",
+   "sha256": "bba505c172cdf1eb6513a277253898f70cac9342705ce2a5f7ce5515d10ec3c6",
+   "bytes": 18051,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 278,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 34,
+    "constituent_5m_bars": 559263
+   }
+  },
+  "full/bchusd-2h.csv": {
+   "symbol": "BCHUSD",
+   "split": "full",
+   "tf": "2h",
+   "rows": 23392,
+   "first": "2021-05-28T00:00:00Z",
+   "last": "2026-09-29T06:00:00Z",
+   "sha256": "691b641b5205a3b86ac261d9493f505aec7a503d256b8066b5fc116bb33fc529",
+   "bytes": 1494815,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 23404,
+    "missing_bins": 12,
+    "gap_events": 1,
+    "max_gap": "1 days 02:00:00",
+    "partial_bins": 142,
+    "constituent_5m_bars": 560511
+   }
+  },
+  "full/bchusd-30m.csv": {
+   "symbol": "BCHUSD",
+   "split": "full",
+   "tf": "30m",
+   "rows": 93569,
+   "first": "2021-05-27T23:00:00Z",
+   "last": "2026-09-29T09:00:00Z",
+   "sha256": "af99903d6b6aa416f3059dc08162424ec41be9239e19fcedf43275d0f87469fe",
+   "bytes": 5962689,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 93621,
+    "missing_bins": 52,
+    "gap_events": 5,
+    "max_gap": "1 days 00:30:00",
+    "partial_bins": 393,
+    "constituent_5m_bars": 560541
+   }
+  },
+  "full/bchusd-4h.csv": {
+   "symbol": "BCHUSD",
+   "split": "full",
+   "tf": "4h",
+   "rows": 11696,
+   "first": "2021-05-28T00:00:00Z",
+   "last": "2026-09-29T04:00:00Z",
+   "sha256": "c0253ea4a57718b23a51b4f6b1e78ee6cab414f66e3cb7311bf46ef27515fad7",
+   "bytes": 748793,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 11702,
+    "missing_bins": 6,
+    "gap_events": 1,
+    "max_gap": "1 days 04:00:00",
+    "partial_bins": 92,
+    "constituent_5m_bars": 560511
+   }
+  },
+  "full/bchusd-5m.csv": {
+   "symbol": "BCHUSD",
+   "split": "full",
+   "tf": "5m",
+   "rows": 560544,
+   "first": "2021-05-27T22:55:00Z",
+   "last": "2026-09-29T09:35:00Z",
+   "sha256": "5b96d4fbb04d5a61c30c9b7c88b9b1e06b5c94e12ed5f20522ca214414963bd5",
+   "bytes": 35101013,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 561729,
+    "missing_bins": 1185,
+    "gap_events": 538,
+    "max_gap": "1 days 00:05:00",
+    "partial_bins": 0,
+    "constituent_5m_bars": 560544
+   }
+  },
+  "full/btcusd-15m.csv": {
+   "symbol": "BTCUSD",
+   "split": "full",
+   "tf": "15m",
+   "rows": 186939,
+   "first": "2021-05-30T02:45:00Z",
+   "last": "2026-09-29T09:15:00Z",
+   "sha256": "f482c0c98e75c569da623989534c6017a948156802fe7358b31d4e108bfa32d8",
+   "bytes": 13578781,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 187035,
+    "missing_bins": 96,
+    "gap_events": 1,
+    "max_gap": "1 days 00:15:00",
+    "partial_bins": 1,
+    "constituent_5m_bars": 560816
+   }
+  },
+  "full/btcusd-1d.csv": {
+   "symbol": "BTCUSD",
+   "split": "full",
+   "tf": "1d",
+   "rows": 1946,
+   "first": "2021-05-31T00:00:00Z",
+   "last": "2026-09-28T00:00:00Z",
+   "sha256": "aa5e748d9b4ed487b0706c6c1fe2473f4306fbc9a2af0f39e4c5efed06b9ae1e",
+   "bytes": 141095,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 1947,
+    "missing_bins": 1,
+    "gap_events": 1,
+    "max_gap": "2 days 00:00:00",
+    "partial_bins": 1,
+    "constituent_5m_bars": 560447
+   }
+  },
+  "full/btcusd-1h.csv": {
+   "symbol": "BTCUSD",
+   "split": "full",
+   "tf": "1h",
+   "rows": 46734,
+   "first": "2021-05-30T03:00:00Z",
+   "last": "2026-09-29T08:00:00Z",
+   "sha256": "75c1cbc1e785d24bb89d032487773b628e7037c53d08e1ce4f2fa5f79569690b",
+   "bytes": 3378372,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 46758,
+    "missing_bins": 24,
+    "gap_events": 1,
+    "max_gap": "1 days 01:00:00",
+    "partial_bins": 1,
+    "constituent_5m_bars": 560807
+   }
+  },
+  "full/btcusd-1w.csv": {
+   "symbol": "BTCUSD",
+   "split": "full",
+   "tf": "1w",
+   "rows": 278,
+   "first": "2021-05-31T00:00:00Z",
+   "last": "2026-09-21T00:00:00Z",
+   "sha256": "8c699d8df457e606f2d023b44b9c63c90142f58cdb4d4564ad8e2b26bed6b768",
+   "bytes": 20257,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 278,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 2,
+    "constituent_5m_bars": 560159
+   }
+  },
+  "full/btcusd-2h.csv": {
+   "symbol": "BTCUSD",
+   "split": "full",
+   "tf": "2h",
+   "rows": 23366,
+   "first": "2021-05-30T04:00:00Z",
+   "last": "2026-09-29T06:00:00Z",
+   "sha256": "6d8c6d61d87fee0f6d82f9e47d7043d503dadc257976c75cca224221fd421681",
+   "bytes": 1687278,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 23378,
+    "missing_bins": 12,
+    "gap_events": 1,
+    "max_gap": "1 days 02:00:00",
+    "partial_bins": 1,
+    "constituent_5m_bars": 560783
+   }
+  },
+  "full/btcusd-30m.csv": {
+   "symbol": "BTCUSD",
+   "split": "full",
+   "tf": "30m",
+   "rows": 93469,
+   "first": "2021-05-30T03:00:00Z",
+   "last": "2026-09-29T09:00:00Z",
+   "sha256": "e4c31f86ce1a35e292dc28fd93f4dddb5ae6fad7e2cf72eec66b1f8baf3dcd6d",
+   "bytes": 6773521,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 93517,
+    "missing_bins": 48,
+    "gap_events": 1,
+    "max_gap": "1 days 00:30:00",
+    "partial_bins": 1,
+    "constituent_5m_bars": 560813
+   }
+  },
+  "full/btcusd-4h.csv": {
+   "symbol": "BTCUSD",
+   "split": "full",
+   "tf": "4h",
+   "rows": 11683,
+   "first": "2021-05-30T04:00:00Z",
+   "last": "2026-09-29T04:00:00Z",
+   "sha256": "f5d404a425e75170301f4234b67c9a0279b3fd3742f7449dbde7bd09c1fa6af5",
+   "bytes": 843396,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 11689,
+    "missing_bins": 6,
+    "gap_events": 1,
+    "max_gap": "1 days 04:00:00",
+    "partial_bins": 1,
+    "constituent_5m_bars": 560783
+   }
+  },
+  "full/btcusd-5m.csv": {
+   "symbol": "BTCUSD",
+   "split": "full",
+   "tf": "5m",
+   "rows": 560818,
+   "first": "2021-05-30T02:45:00Z",
+   "last": "2026-09-29T09:35:00Z",
+   "sha256": "a5d059c62fd5b6223c2084883f2b217ba505f3e326e5f6a42bab689655e9e268",
+   "bytes": 40436926,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 561107,
+    "missing_bins": 289,
+    "gap_events": 2,
+    "max_gap": "1 days 00:05:00",
+    "partial_bins": 0,
+    "constituent_5m_bars": 560818
+   }
+  },
+  "full/dogeusd-15m.csv": {
+   "symbol": "DOGEUSD",
+   "split": "full",
+   "tf": "15m",
+   "rows": 201249,
+   "first": "2021-01-01T00:00:00Z",
+   "last": "2026-09-29T09:00:00Z",
+   "sha256": "b113be19b43e72ce1a457551faa323a445c30d694bbba3cca5d2134ff87951cb",
+   "bytes": 14341596,
+   "clean_from": "2021-08-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 201349,
+    "missing_bins": 100,
+    "gap_events": 2,
+    "max_gap": "1 days 00:15:00",
+    "partial_bins": 68,
+    "constituent_5m_bars": 603676
+   }
+  },
+  "full/dogeusd-1d.csv": {
+   "symbol": "DOGEUSD",
+   "split": "full",
+   "tf": "1d",
+   "rows": 2096,
+   "first": "2021-01-01T00:00:00Z",
+   "last": "2026-09-28T00:00:00Z",
+   "sha256": "bfa9dcb3484015ff9e1a6cb7c2d7e1b900d259da1e12fa8ad760a60f3a2b72d3",
+   "bytes": 151350,
+   "clean_from": "2021-08-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 2097,
+    "missing_bins": 1,
+    "gap_events": 1,
+    "max_gap": "2 days 00:00:00",
+    "partial_bins": 23,
+    "constituent_5m_bars": 603579
+   }
+  },
+  "full/dogeusd-1h.csv": {
+   "symbol": "DOGEUSD",
+   "split": "full",
+   "tf": "1h",
+   "rows": 50312,
+   "first": "2021-01-01T00:00:00Z",
+   "last": "2026-09-29T08:00:00Z",
+   "sha256": "89c9f1c220bcfbd4146df921acbc605660460ddd459751ad0173c029ead692cc",
+   "bytes": 3601652,
+   "clean_from": "2021-08-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 50337,
+    "missing_bins": 25,
+    "gap_events": 2,
+    "max_gap": "1 days 01:00:00",
+    "partial_bins": 62,
+    "constituent_5m_bars": 603673
+   }
+  },
+  "full/dogeusd-1w.csv": {
+   "symbol": "DOGEUSD",
+   "split": "full",
+   "tf": "1w",
+   "rows": 299,
+   "first": "2021-01-04T00:00:00Z",
+   "last": "2026-09-21T00:00:00Z",
+   "sha256": "b7531bca878322d9da14ac8b9a9d360f03ffde036f5effdfdd8f8df7a6b28fb3",
+   "bytes": 21643,
+   "clean_from": "2021-08-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 299,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 10,
+    "constituent_5m_bars": 602431
+   }
+  },
+  "full/dogeusd-2h.csv": {
+   "symbol": "DOGEUSD",
+   "split": "full",
+   "tf": "2h",
+   "rows": 25156,
+   "first": "2021-01-01T00:00:00Z",
+   "last": "2026-09-29T06:00:00Z",
+   "sha256": "7e5ed5efa8a530952b1140a956064e9dcc9b64f33e459161929b583dda575035",
+   "bytes": 1805345,
+   "clean_from": "2021-08-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 25168,
+    "missing_bins": 12,
+    "gap_events": 1,
+    "max_gap": "1 days 02:00:00",
+    "partial_bins": 56,
+    "constituent_5m_bars": 603661
+   }
+  },
+  "full/dogeusd-30m.csv": {
+   "symbol": "DOGEUSD",
+   "split": "full",
+   "tf": "30m",
+   "rows": 100624,
+   "first": "2021-01-01T00:00:00Z",
+   "last": "2026-09-29T08:30:00Z",
+   "sha256": "4451b9e30c5fdcb3f23e589c1abcef16e4cfd994dda081667b903b740b6bab53",
+   "bytes": 7186985,
+   "clean_from": "2021-08-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 100674,
+    "missing_bins": 50,
+    "gap_events": 2,
+    "max_gap": "1 days 00:30:00",
+    "partial_bins": 65,
+    "constituent_5m_bars": 603673
+   }
+  },
+  "full/dogeusd-4h.csv": {
+   "symbol": "DOGEUSD",
+   "split": "full",
+   "tf": "4h",
+   "rows": 12578,
+   "first": "2021-01-01T00:00:00Z",
+   "last": "2026-09-29T04:00:00Z",
+   "sha256": "40db69ca5a03fb9fe9cbd23ce110f4eec953ea898bb44d89aa5f7cb8a381a854",
+   "bytes": 904994,
+   "clean_from": "2021-08-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 12584,
+    "missing_bins": 6,
+    "gap_events": 1,
+    "max_gap": "1 days 04:00:00",
+    "partial_bins": 49,
+    "constituent_5m_bars": 603661
+   }
+  },
+  "full/dogeusd-5m.csv": {
+   "symbol": "DOGEUSD",
+   "split": "full",
+   "tf": "5m",
+   "rows": 603677,
+   "first": "2021-01-01T00:00:00Z",
+   "last": "2026-09-29T09:15:00Z",
+   "sha256": "c8ee2f3335905e15a17bdf1b003d73654aef2e6bfc127884d5df6b195da47842",
+   "bytes": 42528032,
+   "clean_from": "2021-08-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 604048,
+    "missing_bins": 371,
+    "gap_events": 68,
+    "max_gap": "1 days 00:05:00",
+    "partial_bins": 0,
+    "constituent_5m_bars": 603677
+   }
+  },
+  "full/ethusd-15m.csv": {
+   "symbol": "ETHUSD",
+   "split": "full",
+   "tf": "15m",
+   "rows": 186939,
+   "first": "2021-05-30T02:45:00Z",
+   "last": "2026-09-29T09:15:00Z",
+   "sha256": "b3242fc32b5809ac1a44f522c025e7f465c86d10f9acc922c0435217e71d0578",
+   "bytes": 12886827,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 187035,
+    "missing_bins": 96,
+    "gap_events": 1,
+    "max_gap": "1 days 00:15:00",
+    "partial_bins": 1,
+    "constituent_5m_bars": 560816
+   }
+  },
+  "full/ethusd-1d.csv": {
+   "symbol": "ETHUSD",
+   "split": "full",
+   "tf": "1d",
+   "rows": 1946,
+   "first": "2021-05-31T00:00:00Z",
+   "last": "2026-09-28T00:00:00Z",
+   "sha256": "35e1afdb1ab0eed32b4ad58efde438b86fff9c42b965a3522dab3069265f6371",
+   "bytes": 134655,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 1947,
+    "missing_bins": 1,
+    "gap_events": 1,
+    "max_gap": "2 days 00:00:00",
+    "partial_bins": 1,
+    "constituent_5m_bars": 560447
+   }
+  },
+  "full/ethusd-1h.csv": {
+   "symbol": "ETHUSD",
+   "split": "full",
+   "tf": "1h",
+   "rows": 46734,
+   "first": "2021-05-30T03:00:00Z",
+   "last": "2026-09-29T08:00:00Z",
+   "sha256": "64695c38bf1b9a5fd86e2702e5ca18d9f2711bc621311c4ced02125a6f6f4890",
+   "bytes": 3214389,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 46758,
+    "missing_bins": 24,
+    "gap_events": 1,
+    "max_gap": "1 days 01:00:00",
+    "partial_bins": 1,
+    "constituent_5m_bars": 560807
+   }
+  },
+  "full/ethusd-1w.csv": {
+   "symbol": "ETHUSD",
+   "split": "full",
+   "tf": "1w",
+   "rows": 278,
+   "first": "2021-05-31T00:00:00Z",
+   "last": "2026-09-21T00:00:00Z",
+   "sha256": "b4100e07edc8ae8cf3e5fb960d6eeea4f6b1a911de9c524dde3b44fc8fb8ab64",
+   "bytes": 19329,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 278,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 2,
+    "constituent_5m_bars": 560159
+   }
+  },
+  "full/ethusd-2h.csv": {
+   "symbol": "ETHUSD",
+   "split": "full",
+   "tf": "2h",
+   "rows": 23366,
+   "first": "2021-05-30T04:00:00Z",
+   "last": "2026-09-29T06:00:00Z",
+   "sha256": "fa4511a74810af5b18e09ca3e818d2148da533120b2eef19b67c2fcdd1205243",
+   "bytes": 1607117,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 23378,
+    "missing_bins": 12,
+    "gap_events": 1,
+    "max_gap": "1 days 02:00:00",
+    "partial_bins": 1,
+    "constituent_5m_bars": 560783
+   }
+  },
+  "full/ethusd-30m.csv": {
+   "symbol": "ETHUSD",
+   "split": "full",
+   "tf": "30m",
+   "rows": 93469,
+   "first": "2021-05-30T03:00:00Z",
+   "last": "2026-09-29T09:00:00Z",
+   "sha256": "72b862828acf7d866e7ce9bb9eb7913453bf0f7be1043057027ac6aa768d7912",
+   "bytes": 6435545,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 93517,
+    "missing_bins": 48,
+    "gap_events": 1,
+    "max_gap": "1 days 00:30:00",
+    "partial_bins": 1,
+    "constituent_5m_bars": 560813
+   }
+  },
+  "full/ethusd-4h.csv": {
+   "symbol": "ETHUSD",
+   "split": "full",
+   "tf": "4h",
+   "rows": 11683,
+   "first": "2021-05-30T04:00:00Z",
+   "last": "2026-09-29T04:00:00Z",
+   "sha256": "fdae4b88d7bc66b6991eb8a2d52f41cf0adf6df3954b234348edceaec4cf932a",
+   "bytes": 804122,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 11689,
+    "missing_bins": 6,
+    "gap_events": 1,
+    "max_gap": "1 days 04:00:00",
+    "partial_bins": 1,
+    "constituent_5m_bars": 560783
+   }
+  },
+  "full/ethusd-5m.csv": {
+   "symbol": "ETHUSD",
+   "split": "full",
+   "tf": "5m",
+   "rows": 560816,
+   "first": "2021-05-30T02:45:00Z",
+   "last": "2026-09-29T09:25:00Z",
+   "sha256": "8dc84515091a4c59883ec49318ad3627b474b3ea897ddcd466f7f21483e412b9",
+   "bytes": 38389164,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 561105,
+    "missing_bins": 289,
+    "gap_events": 2,
+    "max_gap": "1 days 00:05:00",
+    "partial_bins": 0,
+    "constituent_5m_bars": 560816
+   }
+  },
+  "full/ltcusd-15m.csv": {
+   "symbol": "LTCUSD",
+   "split": "full",
+   "tf": "15m",
+   "rows": 186846,
+   "first": "2021-05-30T01:45:00Z",
+   "last": "2026-09-29T09:15:00Z",
+   "sha256": "55a35cea9d0a78a493f6455d03261a26fe64e09fbb5dc051f62c5829ddbc101b",
+   "bytes": 11665922,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 187039,
+    "missing_bins": 193,
+    "gap_events": 3,
+    "max_gap": "1 days 00:15:00",
+    "partial_bins": 11,
+    "constituent_5m_bars": 560527
+   }
+  },
+  "full/ltcusd-1d.csv": {
+   "symbol": "LTCUSD",
+   "split": "full",
+   "tf": "1d",
+   "rows": 1945,
+   "first": "2021-05-31T00:00:00Z",
+   "last": "2026-09-28T00:00:00Z",
+   "sha256": "c8b3e8bdc4568dfe52fa0b0f017c925901edf840bb99d9116cc849b0e95b2943",
+   "bytes": 122432,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 1947,
+    "missing_bins": 2,
+    "gap_events": 2,
+    "max_gap": "2 days 00:00:00",
+    "partial_bins": 7,
+    "constituent_5m_bars": 560146
+   }
+  },
+  "full/ltcusd-1h.csv": {
+   "symbol": "LTCUSD",
+   "split": "full",
+   "tf": "1h",
+   "rows": 46711,
+   "first": "2021-05-30T02:00:00Z",
+   "last": "2026-09-29T08:00:00Z",
+   "sha256": "25a2cdfc0276316db694950fffc557ee1eace0cc96778e3d6aa9d0fa3244cad8",
+   "bytes": 2913574,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 46759,
+    "missing_bins": 48,
+    "gap_events": 2,
+    "max_gap": "1 days 01:00:00",
+    "partial_bins": 11,
+    "constituent_5m_bars": 560518
+   }
+  },
+  "full/ltcusd-1w.csv": {
+   "symbol": "LTCUSD",
+   "split": "full",
+   "tf": "1w",
+   "rows": 278,
+   "first": "2021-05-31T00:00:00Z",
+   "last": "2026-09-21T00:00:00Z",
+   "sha256": "591b612dd8948ae7a769d91e4eede31529f23d98ef61231287b60dbd59382cef",
+   "bytes": 17675,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 278,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 7,
+    "constituent_5m_bars": 559858
+   }
+  },
+  "full/ltcusd-2h.csv": {
+   "symbol": "LTCUSD",
+   "split": "full",
+   "tf": "2h",
+   "rows": 23355,
+   "first": "2021-05-30T02:00:00Z",
+   "last": "2026-09-29T06:00:00Z",
+   "sha256": "b9c17470dbfb887ba7681bf373ca98d996f5ba819a5555db9864e08b4ea089e5",
+   "bytes": 1459571,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 23379,
+    "missing_bins": 24,
+    "gap_events": 2,
+    "max_gap": "1 days 02:00:00",
+    "partial_bins": 11,
+    "constituent_5m_bars": 560506
+   }
+  },
+  "full/ltcusd-30m.csv": {
+   "symbol": "LTCUSD",
+   "split": "full",
+   "tf": "30m",
+   "rows": 93423,
+   "first": "2021-05-30T02:00:00Z",
+   "last": "2026-09-29T09:00:00Z",
+   "sha256": "5488046ad8fb1a8ae0583bd725a72c939d99cca6ea1dc1e1d6bc6d5e13ef57ba",
+   "bytes": 5831360,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 93519,
+    "missing_bins": 96,
+    "gap_events": 2,
+    "max_gap": "1 days 00:30:00",
+    "partial_bins": 12,
+    "constituent_5m_bars": 560524
+   }
+  },
+  "full/ltcusd-4h.csv": {
+   "symbol": "LTCUSD",
+   "split": "full",
+   "tf": "4h",
+   "rows": 11677,
+   "first": "2021-05-30T04:00:00Z",
+   "last": "2026-09-29T04:00:00Z",
+   "sha256": "e4c2834cc0ad7bbf94c3e6cf6da06302939bf1552bd7d1f8edb1519797cc3f6f",
+   "bytes": 730255,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 11689,
+    "missing_bins": 12,
+    "gap_events": 2,
+    "max_gap": "1 days 04:00:00",
+    "partial_bins": 10,
+    "constituent_5m_bars": 560482
+   }
+  },
+  "full/ltcusd-5m.csv": {
+   "symbol": "LTCUSD",
+   "split": "full",
+   "tf": "5m",
+   "rows": 560528,
+   "first": "2021-05-30T01:45:00Z",
+   "last": "2026-09-29T09:30:00Z",
+   "sha256": "f987c61c5a16931347e85bab6a78bb16787e1f3167a0e7490748e9f7f46c129c",
+   "bytes": 34530615,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 561118,
+    "missing_bins": 590,
+    "gap_events": 14,
+    "max_gap": "1 days 00:05:00",
+    "partial_bins": 0,
+    "constituent_5m_bars": 560528
+   }
+  },
+  "full/solusd-15m.csv": {
+   "symbol": "SOLUSD",
+   "split": "full",
+   "tf": "15m",
+   "rows": 186891,
+   "first": "2021-05-29T14:45:00Z",
+   "last": "2026-09-29T09:15:00Z",
+   "sha256": "7cd3d9b9576b8a1a31bb10cc02844ebd27024d969965ee279555f77feafcb8cd",
+   "bytes": 11951504,
+   "clean_from": "2021-10-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 187083,
+    "missing_bins": 192,
+    "gap_events": 2,
+    "max_gap": "1 days 00:15:00",
+    "partial_bins": 147,
+    "constituent_5m_bars": 560524
+   }
+  },
+  "full/solusd-1d.csv": {
+   "symbol": "SOLUSD",
+   "split": "full",
+   "tf": "1d",
+   "rows": 1946,
+   "first": "2021-05-30T00:00:00Z",
+   "last": "2026-09-28T00:00:00Z",
+   "sha256": "ba491d3146a9afe78d2b37a561724684fe4864d32fe721370cbc466303492f45",
+   "bytes": 125365,
+   "clean_from": "2021-10-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 1948,
+    "missing_bins": 2,
+    "gap_events": 2,
+    "max_gap": "2 days 00:00:00",
+    "partial_bins": 24,
+    "constituent_5m_bars": 560299
+   }
+  },
+  "full/solusd-1h.csv": {
+   "symbol": "SOLUSD",
+   "split": "full",
+   "tf": "1h",
+   "rows": 46722,
+   "first": "2021-05-29T15:00:00Z",
+   "last": "2026-09-29T08:00:00Z",
+   "sha256": "f71b524e4659fe9e76ad8e8220f0346cabb8e995a5293c97b262d7b4961fd4b6",
+   "bytes": 2988119,
+   "clean_from": "2021-10-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 46770,
+    "missing_bins": 48,
+    "gap_events": 2,
+    "max_gap": "1 days 01:00:00",
+    "partial_bins": 111,
+    "constituent_5m_bars": 560515
+   }
+  },
+  "full/solusd-1w.csv": {
+   "symbol": "SOLUSD",
+   "split": "full",
+   "tf": "1w",
+   "rows": 278,
+   "first": "2021-05-31T00:00:00Z",
+   "last": "2026-09-21T00:00:00Z",
+   "sha256": "6e2f3ca2b0bb56d96a8ea2a324a61402bc016ca3201d1980baa41f2dc1c5218c",
+   "bytes": 18016,
+   "clean_from": "2021-10-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 278,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 12,
+    "constituent_5m_bars": 559725
+   }
+  },
+  "full/solusd-2h.csv": {
+   "symbol": "SOLUSD",
+   "split": "full",
+   "tf": "2h",
+   "rows": 23360,
+   "first": "2021-05-29T16:00:00Z",
+   "last": "2026-09-29T06:00:00Z",
+   "sha256": "07ce586256fa78dc1b173e8887c10acef2f8208f1dcf1d6d4989da8276e1fe6c",
+   "bytes": 1495036,
+   "clean_from": "2021-10-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 23384,
+    "missing_bins": 24,
+    "gap_events": 2,
+    "max_gap": "1 days 02:00:00",
+    "partial_bins": 90,
+    "constituent_5m_bars": 560491
+   }
+  },
+  "full/solusd-30m.csv": {
+   "symbol": "SOLUSD",
+   "split": "full",
+   "tf": "30m",
+   "rows": 93445,
+   "first": "2021-05-29T15:00:00Z",
+   "last": "2026-09-29T09:00:00Z",
+   "sha256": "a95ec08c99fe4ab3c70f1073f2e4736ca225fe71fbfde8682b190dd3ac39440d",
+   "bytes": 5978891,
+   "clean_from": "2021-10-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 93541,
+    "missing_bins": 96,
+    "gap_events": 2,
+    "max_gap": "1 days 00:30:00",
+    "partial_bins": 131,
+    "constituent_5m_bars": 560521
+   }
+  },
+  "full/solusd-4h.csv": {
+   "symbol": "SOLUSD",
+   "split": "full",
+   "tf": "4h",
+   "rows": 11680,
+   "first": "2021-05-29T16:00:00Z",
+   "last": "2026-09-29T04:00:00Z",
+   "sha256": "77f6d0af3f07ede12f9c9d4fa4e661e5ce98dfafb01cfddfef618d0f5bb5d2b0",
+   "bytes": 748692,
+   "clean_from": "2021-10-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 11692,
+    "missing_bins": 12,
+    "gap_events": 2,
+    "max_gap": "1 days 04:00:00",
+    "partial_bins": 63,
+    "constituent_5m_bars": 560491
+   }
+  },
+  "full/solusd-5m.csv": {
+   "symbol": "SOLUSD",
+   "split": "full",
+   "tf": "5m",
+   "rows": 560526,
+   "first": "2021-05-29T14:35:00Z",
+   "last": "2026-09-29T09:25:00Z",
+   "sha256": "55e5a02b4ce22e76f9a6bb86aa67268b9b4b1a261ef34e35b0c76497d2e62123",
+   "bytes": 35431830,
+   "clean_from": "2021-10-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 561251,
+    "missing_bins": 725,
+    "gap_events": 151,
+    "max_gap": "1 days 00:05:00",
+    "partial_bins": 0,
+    "constituent_5m_bars": 560526
+   }
+  },
+  "full/xrpusd-15m.csv": {
+   "symbol": "XRPUSD",
+   "split": "full",
+   "tf": "15m",
+   "rows": 186940,
+   "first": "2021-05-29T02:30:00Z",
+   "last": "2026-09-29T09:15:00Z",
+   "sha256": "7d334076ab1cacc9b363dbbb7c3659035b9a385eda086064bc2129bd46a290d6",
+   "bytes": 12630007,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 187132,
+    "missing_bins": 192,
+    "gap_events": 2,
+    "max_gap": "1 days 00:15:00",
+    "partial_bins": 287,
+    "constituent_5m_bars": 560525
+   }
+  },
+  "full/xrpusd-1d.csv": {
+   "symbol": "XRPUSD",
+   "split": "full",
+   "tf": "1d",
+   "rows": 1946,
+   "first": "2021-05-30T00:00:00Z",
+   "last": "2026-09-28T00:00:00Z",
+   "sha256": "a9c265fa851170ecfca9ae19d631646a34f881c0a1e414994bb2e49daab07710",
+   "bytes": 133222,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 1948,
+    "missing_bins": 2,
+    "gap_events": 2,
+    "max_gap": "2 days 00:00:00",
+    "partial_bins": 125,
+    "constituent_5m_bars": 560153
+   }
+  },
+  "full/xrpusd-1h.csv": {
+   "symbol": "XRPUSD",
+   "split": "full",
+   "tf": "1h",
+   "rows": 46734,
+   "first": "2021-05-29T03:00:00Z",
+   "last": "2026-09-29T08:00:00Z",
+   "sha256": "c1db786e3942d6adc38cf46acf54b78b328740edf2688e8fa833e34baad525b5",
+   "bytes": 3170961,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 46782,
+    "missing_bins": 48,
+    "gap_events": 2,
+    "max_gap": "1 days 01:00:00",
+    "partial_bins": 255,
+    "constituent_5m_bars": 560513
+   }
+  },
+  "full/xrpusd-1w.csv": {
+   "symbol": "XRPUSD",
+   "split": "full",
+   "tf": "1w",
+   "rows": 278,
+   "first": "2021-05-31T00:00:00Z",
+   "last": "2026-09-21T00:00:00Z",
+   "sha256": "cabbe0ce62d2f0e57263c1180fd5c485dd6501a2f85734b1826bae0920217c02",
+   "bytes": 19042,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 278,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 51,
+    "constituent_5m_bars": 559577
+   }
+  },
+  "full/xrpusd-2h.csv": {
+   "symbol": "XRPUSD",
+   "split": "full",
+   "tf": "2h",
+   "rows": 23366,
+   "first": "2021-05-29T04:00:00Z",
+   "last": "2026-09-29T06:00:00Z",
+   "sha256": "c4141c8d939e09f1c4b61427ac1ea47a5f1dbe2a28b9fef1ed264efe236c2c5d",
+   "bytes": 1587380,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 23390,
+    "missing_bins": 24,
+    "gap_events": 2,
+    "max_gap": "1 days 02:00:00",
+    "partial_bins": 229,
+    "constituent_5m_bars": 560489
+   }
+  },
+  "full/xrpusd-30m.csv": {
+   "symbol": "XRPUSD",
+   "split": "full",
+   "tf": "30m",
+   "rows": 93470,
+   "first": "2021-05-29T02:30:00Z",
+   "last": "2026-09-29T09:00:00Z",
+   "sha256": "2bdd624ff94fb692d4f0d181b184977d26044de5fe58dc9b93b50bf644154edb",
+   "bytes": 6327253,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 93566,
+    "missing_bins": 96,
+    "gap_events": 2,
+    "max_gap": "1 days 00:30:00",
+    "partial_bins": 274,
+    "constituent_5m_bars": 560525
+   }
+  },
+  "full/xrpusd-4h.csv": {
+   "symbol": "XRPUSD",
+   "split": "full",
+   "tf": "4h",
+   "rows": 11683,
+   "first": "2021-05-29T04:00:00Z",
+   "last": "2026-09-29T04:00:00Z",
+   "sha256": "5239cd84349a84167c0885479e3588508e47bc140c4813d30561f606f977327a",
+   "bytes": 795603,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 11695,
+    "missing_bins": 12,
+    "gap_events": 2,
+    "max_gap": "1 days 04:00:00",
+    "partial_bins": 203,
+    "constituent_5m_bars": 560489
+   }
+  },
+  "full/xrpusd-5m.csv": {
+   "symbol": "XRPUSD",
+   "split": "full",
+   "tf": "5m",
+   "rows": 560526,
+   "first": "2021-05-29T02:25:00Z",
+   "last": "2026-09-29T09:25:00Z",
+   "sha256": "37f2b9bfe03f06203fa008497d012216a1de8ea54c7cfe245fcdd0ead9b2dac1",
+   "bytes": 37409064,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 561397,
+    "missing_bins": 871,
+    "gap_events": 287,
+    "max_gap": "1 days 00:05:00",
+    "partial_bins": 0,
+    "constituent_5m_bars": 560526
+   }
+  },
+  "is/bchusd-15m.csv": {
+   "symbol": "BCHUSD",
+   "split": "is",
+   "tf": "15m",
+   "rows": 105213,
+   "first": "2021-07-01T00:00:00Z",
+   "last": "2024-06-30T23:45:00Z",
+   "sha256": "fa7a28b2d8f7ad8aac004a26f3eee38bfebae870087191cbbe70db002362f61c",
+   "bytes": 6694518,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 105216,
+    "missing_bins": 3,
+    "gap_events": 3,
+    "max_gap": "0 days 00:30:00",
+    "partial_bins": 31,
+    "constituent_5m_bars": 315603
+   }
+  },
+  "is/bchusd-1d.csv": {
+   "symbol": "BCHUSD",
+   "split": "is",
+   "tf": "1d",
+   "rows": 1096,
+   "first": "2021-07-01T00:00:00Z",
+   "last": "2024-06-30T00:00:00Z",
+   "sha256": "c36ce96b0ac7104669b85d945a5bc0403911e1477ddec20bd285095af52e0e99",
+   "bytes": 70511,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 1096,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 18,
+    "constituent_5m_bars": 315603
+   }
+  },
+  "is/bchusd-1h.csv": {
+   "symbol": "BCHUSD",
+   "split": "is",
+   "tf": "1h",
+   "rows": 26304,
+   "first": "2021-07-01T00:00:00Z",
+   "last": "2024-06-30T23:00:00Z",
+   "sha256": "6c70b4dd2328ad6fbcf1a25d50348d929b211ebbe9087c766c69986f89b2e70f",
+   "bytes": 1673802,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 26304,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 25,
+    "constituent_5m_bars": 315603
+   }
+  },
+  "is/bchusd-1w.csv": {
+   "symbol": "BCHUSD",
+   "split": "is",
+   "tf": "1w",
+   "rows": 156,
+   "first": "2021-07-05T00:00:00Z",
+   "last": "2024-06-24T00:00:00Z",
+   "sha256": "4b9fe215f4a045c57b7a3ab4d7c3a5234a786096709b5aad28134040a581c7a5",
+   "bytes": 10121,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 156,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 15,
+    "constituent_5m_bars": 314451
+   }
+  },
+  "is/bchusd-2h.csv": {
+   "symbol": "BCHUSD",
+   "split": "is",
+   "tf": "2h",
+   "rows": 13152,
+   "first": "2021-07-01T00:00:00Z",
+   "last": "2024-06-30T22:00:00Z",
+   "sha256": "e9b3e2bac73b0b39589ce97a264b96bac78ee50af2cc8f5b952d73ee1ec6856b",
+   "bytes": 837851,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 13152,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 23,
+    "constituent_5m_bars": 315603
+   }
+  },
+  "is/bchusd-30m.csv": {
+   "symbol": "BCHUSD",
+   "split": "is",
+   "tf": "30m",
+   "rows": 52608,
+   "first": "2021-07-01T00:00:00Z",
+   "last": "2024-06-30T23:30:00Z",
+   "sha256": "d336c8da56764aa3f17fd4a8fa2ad2be3b916dd5ff7f2c02b81d9eac76b2e057",
+   "bytes": 3345330,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 52608,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 27,
+    "constituent_5m_bars": 315603
+   }
+  },
+  "is/bchusd-4h.csv": {
+   "symbol": "BCHUSD",
+   "split": "is",
+   "tf": "4h",
+   "rows": 6576,
+   "first": "2021-07-01T00:00:00Z",
+   "last": "2024-06-30T20:00:00Z",
+   "sha256": "f40371df80b5187adaf06038f5e38b7753d28a81019ada37de29d29dc8776043",
+   "bytes": 419341,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 6576,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 22,
+    "constituent_5m_bars": 315603
+   }
+  },
+  "is/bchusd-5m.csv": {
+   "symbol": "BCHUSD",
+   "split": "is",
+   "tf": "5m",
+   "rows": 315603,
+   "first": "2021-07-01T00:00:00Z",
+   "last": "2024-06-30T23:55:00Z",
+   "sha256": "71f700d0a448bb9c51f3b105b6c90db6246a4bde6fadf397ef03b16008b285ad",
+   "bytes": 19740595,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 315648,
+    "missing_bins": 45,
+    "gap_events": 31,
+    "max_gap": "0 days 00:25:00",
+    "partial_bins": 0,
+    "constituent_5m_bars": 315603
+   }
+  },
+  "is/btcusd-15m.csv": {
+   "symbol": "BTCUSD",
+   "split": "is",
+   "tf": "15m",
+   "rows": 105216,
+   "first": "2021-07-01T00:00:00Z",
+   "last": "2024-06-30T23:45:00Z",
+   "sha256": "35b03e68c52866614bdd500bfdc9b80b2dd768e9720f8500d4f92f09d1343435",
+   "bytes": 7635380,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 105216,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 0,
+    "constituent_5m_bars": 315648
+   }
+  },
+  "is/btcusd-1d.csv": {
+   "symbol": "BTCUSD",
+   "split": "is",
+   "tf": "1d",
+   "rows": 1096,
+   "first": "2021-07-01T00:00:00Z",
+   "last": "2024-06-30T00:00:00Z",
+   "sha256": "e5bc64f3152ff3b755e766067d1468a9fd0c2137f3e788933d8d2ddc8e0aa556",
+   "bytes": 79415,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 1096,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 0,
+    "constituent_5m_bars": 315648
+   }
+  },
+  "is/btcusd-1h.csv": {
+   "symbol": "BTCUSD",
+   "split": "is",
+   "tf": "1h",
+   "rows": 26304,
+   "first": "2021-07-01T00:00:00Z",
+   "last": "2024-06-30T23:00:00Z",
+   "sha256": "40d817817b22bdc7a1d0b1e8574ef13bc6d39c2af2ba27e3770df05e06d4e819",
+   "bytes": 1899858,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 26304,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 0,
+    "constituent_5m_bars": 315648
+   }
+  },
+  "is/btcusd-1w.csv": {
+   "symbol": "BTCUSD",
+   "split": "is",
+   "tf": "1w",
+   "rows": 156,
+   "first": "2021-07-05T00:00:00Z",
+   "last": "2024-06-24T00:00:00Z",
+   "sha256": "8b556cf5e860ece0d134e10e7b83fbc72610df6fc4bd13f2fa2f5da68effa502",
+   "bytes": 11380,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 156,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 0,
+    "constituent_5m_bars": 314496
+   }
+  },
+  "is/btcusd-2h.csv": {
+   "symbol": "BTCUSD",
+   "split": "is",
+   "tf": "2h",
+   "rows": 13152,
+   "first": "2021-07-01T00:00:00Z",
+   "last": "2024-06-30T22:00:00Z",
+   "sha256": "701458b40f5b5349cb19195735d57a1f74393dca3098831db9d1e219d2f56a3d",
+   "bytes": 949247,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 13152,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 0,
+    "constituent_5m_bars": 315648
+   }
+  },
+  "is/btcusd-30m.csv": {
+   "symbol": "BTCUSD",
+   "split": "is",
+   "tf": "30m",
+   "rows": 52608,
+   "first": "2021-07-01T00:00:00Z",
+   "last": "2024-06-30T23:30:00Z",
+   "sha256": "578a7b2e9d4c599dbb8b319304f323380bf318b59cf6e409955ab76076868ae6",
+   "bytes": 3808897,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 52608,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 0,
+    "constituent_5m_bars": 315648
+   }
+  },
+  "is/btcusd-4h.csv": {
+   "symbol": "BTCUSD",
+   "split": "is",
+   "tf": "4h",
+   "rows": 6576,
+   "first": "2021-07-01T00:00:00Z",
+   "last": "2024-06-30T20:00:00Z",
+   "sha256": "8609931ed4b88e619d666c4ab11c6da25cf667aef10907376588e1c6372788c9",
+   "bytes": 474102,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 6576,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 0,
+    "constituent_5m_bars": 315648
+   }
+  },
+  "is/btcusd-5m.csv": {
+   "symbol": "BTCUSD",
+   "split": "is",
+   "tf": "5m",
+   "rows": 315648,
+   "first": "2021-07-01T00:00:00Z",
+   "last": "2024-06-30T23:55:00Z",
+   "sha256": "90fea960240cd6ad5cff83f3593ffd9ca178afbe4f52284778fd761a6ea44b03",
+   "bytes": 22730262,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 315648,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 0,
+    "constituent_5m_bars": 315648
+   }
+  },
+  "is/dogeusd-15m.csv": {
+   "symbol": "DOGEUSD",
+   "split": "is",
+   "tf": "15m",
+   "rows": 102240,
+   "first": "2021-08-01T00:00:00Z",
+   "last": "2024-06-30T23:45:00Z",
+   "sha256": "d3c66a9c606de876b31eecdf0d23d2f25f84c75df25170d8c527cea24035ba03",
+   "bytes": 7181777,
+   "clean_from": "2021-08-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 102240,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 1,
+    "constituent_5m_bars": 306719
+   }
+  },
+  "is/dogeusd-1d.csv": {
+   "symbol": "DOGEUSD",
+   "split": "is",
+   "tf": "1d",
+   "rows": 1065,
+   "first": "2021-08-01T00:00:00Z",
+   "last": "2024-06-30T00:00:00Z",
+   "sha256": "0dfc90fbfd7f2b243e3b0444d7498a22375c69bea4b8c2f5f46847e2719db859",
+   "bytes": 76175,
+   "clean_from": "2021-08-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 1065,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 1,
+    "constituent_5m_bars": 306719
+   }
+  },
+  "is/dogeusd-1h.csv": {
+   "symbol": "DOGEUSD",
+   "split": "is",
+   "tf": "1h",
+   "rows": 25560,
+   "first": "2021-08-01T00:00:00Z",
+   "last": "2024-06-30T23:00:00Z",
+   "sha256": "b3f2ec445c0399ba958eeff4ca8a5a2e7545f184901825f6c70a2bb22a478656",
+   "bytes": 1804855,
+   "clean_from": "2021-08-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 25560,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 1,
+    "constituent_5m_bars": 306719
+   }
+  },
+  "is/dogeusd-1w.csv": {
+   "symbol": "DOGEUSD",
+   "split": "is",
+   "tf": "1w",
+   "rows": 152,
+   "first": "2021-08-02T00:00:00Z",
+   "last": "2024-06-24T00:00:00Z",
+   "sha256": "b6fb9629eda7483dab0f984f09725a9fd26a83c5a3a2f4d0d614917f911f1172",
+   "bytes": 10910,
+   "clean_from": "2021-08-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 152,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 1,
+    "constituent_5m_bars": 306431
+   }
+  },
+  "is/dogeusd-2h.csv": {
+   "symbol": "DOGEUSD",
+   "split": "is",
+   "tf": "2h",
+   "rows": 12780,
+   "first": "2021-08-01T00:00:00Z",
+   "last": "2024-06-30T22:00:00Z",
+   "sha256": "e3c3e15ce657f7902b25ab24b94dfc6914e12b616ba0012eb2e5219478e9f1ca",
+   "bytes": 905723,
+   "clean_from": "2021-08-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 12780,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 1,
+    "constituent_5m_bars": 306719
+   }
+  },
+  "is/dogeusd-30m.csv": {
+   "symbol": "DOGEUSD",
+   "split": "is",
+   "tf": "30m",
+   "rows": 51120,
+   "first": "2021-08-01T00:00:00Z",
+   "last": "2024-06-30T23:30:00Z",
+   "sha256": "d20ec007952655c67c487f57993f4ddb2eab026354235f4a38e1067ebcc0ed58",
+   "bytes": 3600550,
+   "clean_from": "2021-08-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 51120,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 1,
+    "constituent_5m_bars": 306719
+   }
+  },
+  "is/dogeusd-4h.csv": {
+   "symbol": "DOGEUSD",
+   "split": "is",
+   "tf": "4h",
+   "rows": 6390,
+   "first": "2021-08-01T00:00:00Z",
+   "last": "2024-06-30T20:00:00Z",
+   "sha256": "1f03faf592afbf88dfbfee70e53ecfe31aad8bf4ece0235e6f9d50bd536ea235",
+   "bytes": 454389,
+   "clean_from": "2021-08-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 6390,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 1,
+    "constituent_5m_bars": 306719
+   }
+  },
+  "is/dogeusd-5m.csv": {
+   "symbol": "DOGEUSD",
+   "split": "is",
+   "tf": "5m",
+   "rows": 306719,
+   "first": "2021-08-01T00:00:00Z",
+   "last": "2024-06-30T23:55:00Z",
+   "sha256": "b0a747d490e338f61be3903e9c244987cc69e210013d61a1d7eeb0dfac79c072",
+   "bytes": 21243937,
+   "clean_from": "2021-08-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 306720,
+    "missing_bins": 1,
+    "gap_events": 1,
+    "max_gap": "0 days 00:10:00",
+    "partial_bins": 0,
+    "constituent_5m_bars": 306719
+   }
+  },
+  "is/ethusd-15m.csv": {
+   "symbol": "ETHUSD",
+   "split": "is",
+   "tf": "15m",
+   "rows": 105216,
+   "first": "2021-07-01T00:00:00Z",
+   "last": "2024-06-30T23:45:00Z",
+   "sha256": "e2edc4602792603925b5230933d5263f5fb9aa526db3c6bc27a076e8fb1117fe",
+   "bytes": 7263415,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 105216,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 0,
+    "constituent_5m_bars": 315648
+   }
+  },
+  "is/ethusd-1d.csv": {
+   "symbol": "ETHUSD",
+   "split": "is",
+   "tf": "1d",
+   "rows": 1096,
+   "first": "2021-07-01T00:00:00Z",
+   "last": "2024-06-30T00:00:00Z",
+   "sha256": "0b17526e81af5f0115fe915fa415fb10fb1d2ccc9eec11711e416226cebcfe58",
+   "bytes": 75863,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 1096,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 0,
+    "constituent_5m_bars": 315648
+   }
+  },
+  "is/ethusd-1h.csv": {
+   "symbol": "ETHUSD",
+   "split": "is",
+   "tf": "1h",
+   "rows": 26304,
+   "first": "2021-07-01T00:00:00Z",
+   "last": "2024-06-30T23:00:00Z",
+   "sha256": "b4942c54d63d7ea3111f5a4744742d905aafe7ae76e935962e5e675890a9ef85",
+   "bytes": 1810385,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 26304,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 0,
+    "constituent_5m_bars": 315648
+   }
+  },
+  "is/ethusd-1w.csv": {
+   "symbol": "ETHUSD",
+   "split": "is",
+   "tf": "1w",
+   "rows": 156,
+   "first": "2021-07-05T00:00:00Z",
+   "last": "2024-06-24T00:00:00Z",
+   "sha256": "c3fccb50a75bf8070f04d3aa36a3cae0735a784019de7ee0e988e631cd7b9890",
+   "bytes": 10878,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 156,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 0,
+    "constituent_5m_bars": 314496
+   }
+  },
+  "is/ethusd-2h.csv": {
+   "symbol": "ETHUSD",
+   "split": "is",
+   "tf": "2h",
+   "rows": 13152,
+   "first": "2021-07-01T00:00:00Z",
+   "last": "2024-06-30T22:00:00Z",
+   "sha256": "067ea8c6b5628cd2d9dd5ad19d72f08c5f37dce511c5e34bb4f6b4fb4b4ec6a5",
+   "bytes": 904902,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 13152,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 0,
+    "constituent_5m_bars": 315648
+   }
+  },
+  "is/ethusd-30m.csv": {
+   "symbol": "ETHUSD",
+   "split": "is",
+   "tf": "30m",
+   "rows": 52608,
+   "first": "2021-07-01T00:00:00Z",
+   "last": "2024-06-30T23:30:00Z",
+   "sha256": "c21c6f747df805a521a2db439d9b9b564f9fed86ee9e417d034635f413ef12cc",
+   "bytes": 3625782,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 52608,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 0,
+    "constituent_5m_bars": 315648
+   }
+  },
+  "is/ethusd-4h.csv": {
+   "symbol": "ETHUSD",
+   "split": "is",
+   "tf": "4h",
+   "rows": 6576,
+   "first": "2021-07-01T00:00:00Z",
+   "last": "2024-06-30T20:00:00Z",
+   "sha256": "3d0505c507d87bf340a4bd887f9c0c34e1c43c2629f9f612263d9a12291886cd",
+   "bytes": 452483,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 6576,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 0,
+    "constituent_5m_bars": 315648
+   }
+  },
+  "is/ethusd-5m.csv": {
+   "symbol": "ETHUSD",
+   "split": "is",
+   "tf": "5m",
+   "rows": 315648,
+   "first": "2021-07-01T00:00:00Z",
+   "last": "2024-06-30T23:55:00Z",
+   "sha256": "b7cbc3554131f95a53ca8ab7270cc1d7acaf0add155eb58b294890734f641d54",
+   "bytes": 21639781,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 315648,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 0,
+    "constituent_5m_bars": 315648
+   }
+  },
+  "is/ltcusd-15m.csv": {
+   "symbol": "LTCUSD",
+   "split": "is",
+   "tf": "15m",
+   "rows": 105216,
+   "first": "2021-07-01T00:00:00Z",
+   "last": "2024-06-30T23:45:00Z",
+   "sha256": "09a3e43495dc3527b41abb1efdf61aa242a75796cffc67956e55d5dbf145189f",
+   "bytes": 6530628,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 105216,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 1,
+    "constituent_5m_bars": 315647
+   }
+  },
+  "is/ltcusd-1d.csv": {
+   "symbol": "LTCUSD",
+   "split": "is",
+   "tf": "1d",
+   "rows": 1096,
+   "first": "2021-07-01T00:00:00Z",
+   "last": "2024-06-30T00:00:00Z",
+   "sha256": "0148b81c5e463794cd7e0605f34f70419ed033a53702828a7eba7a5e8179700d",
+   "bytes": 68844,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 1096,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 1,
+    "constituent_5m_bars": 315647
+   }
+  },
+  "is/ltcusd-1h.csv": {
+   "symbol": "LTCUSD",
+   "split": "is",
+   "tf": "1h",
+   "rows": 26304,
+   "first": "2021-07-01T00:00:00Z",
+   "last": "2024-06-30T23:00:00Z",
+   "sha256": "372438ef0171220e59f96c24e4c0c75a72a12ed09cdb7b9b368a5af8d6d9abd9",
+   "bytes": 1631739,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 26304,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 1,
+    "constituent_5m_bars": 315647
+   }
+  },
+  "is/ltcusd-1w.csv": {
+   "symbol": "LTCUSD",
+   "split": "is",
+   "tf": "1w",
+   "rows": 156,
+   "first": "2021-07-05T00:00:00Z",
+   "last": "2024-06-24T00:00:00Z",
+   "sha256": "f8c107efccc238e6daab391dd40b271195451070496cab66903c274691d8c2b4",
+   "bytes": 9925,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 156,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 1,
+    "constituent_5m_bars": 314495
+   }
+  },
+  "is/ltcusd-2h.csv": {
+   "symbol": "LTCUSD",
+   "split": "is",
+   "tf": "2h",
+   "rows": 13152,
+   "first": "2021-07-01T00:00:00Z",
+   "last": "2024-06-30T22:00:00Z",
+   "sha256": "ad991e52ab3d003f7a61b43f580c0473fca9f4e50eebd7d7433518cff2fe4a38",
+   "bytes": 817619,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 13152,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 1,
+    "constituent_5m_bars": 315647
+   }
+  },
+  "is/ltcusd-30m.csv": {
+   "symbol": "LTCUSD",
+   "split": "is",
+   "tf": "30m",
+   "rows": 52608,
+   "first": "2021-07-01T00:00:00Z",
+   "last": "2024-06-30T23:30:00Z",
+   "sha256": "a7fcde57e48a06f97aefc2e78757292da256f22841c806b91614fa85d60e35ac",
+   "bytes": 3263332,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 52608,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 1,
+    "constituent_5m_bars": 315647
+   }
+  },
+  "is/ltcusd-4h.csv": {
+   "symbol": "LTCUSD",
+   "split": "is",
+   "tf": "4h",
+   "rows": 6576,
+   "first": "2021-07-01T00:00:00Z",
+   "last": "2024-06-30T20:00:00Z",
+   "sha256": "7073623eb86dc6fb0d8e22d457484c3b57933d915481a5b11494f57542d0cfd8",
+   "bytes": 409203,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 6576,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 1,
+    "constituent_5m_bars": 315647
+   }
+  },
+  "is/ltcusd-5m.csv": {
+   "symbol": "LTCUSD",
+   "split": "is",
+   "tf": "5m",
+   "rows": 315647,
+   "first": "2021-07-01T00:00:00Z",
+   "last": "2024-06-30T23:55:00Z",
+   "sha256": "33258f17a965cdd1943ac4a45d1a59de3005436971dc1da23732714f608b24a9",
+   "bytes": 19319995,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 315648,
+    "missing_bins": 1,
+    "gap_events": 1,
+    "max_gap": "0 days 00:10:00",
+    "partial_bins": 0,
+    "constituent_5m_bars": 315647
+   }
+  },
+  "is/solusd-15m.csv": {
+   "symbol": "SOLUSD",
+   "split": "is",
+   "tf": "15m",
+   "rows": 96384,
+   "first": "2021-10-01T00:00:00Z",
+   "last": "2024-06-30T23:45:00Z",
+   "sha256": "90f1549af3861e8c268b7224e27585b47d1ec171c0fb22ddfe1c4939026383ee",
+   "bytes": 6070136,
+   "clean_from": "2021-10-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 96384,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 4,
+    "constituent_5m_bars": 289148
+   }
+  },
+  "is/solusd-1d.csv": {
+   "symbol": "SOLUSD",
+   "split": "is",
+   "tf": "1d",
+   "rows": 1004,
+   "first": "2021-10-01T00:00:00Z",
+   "last": "2024-06-30T00:00:00Z",
+   "sha256": "62ce32e94a6ce714a1bf2345de97103c451f5590045e0142ddbb72b50da946b2",
+   "bytes": 63874,
+   "clean_from": "2021-10-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 1004,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 3,
+    "constituent_5m_bars": 289148
+   }
+  },
+  "is/solusd-1h.csv": {
+   "symbol": "SOLUSD",
+   "split": "is",
+   "tf": "1h",
+   "rows": 24096,
+   "first": "2021-10-01T00:00:00Z",
+   "last": "2024-06-30T23:00:00Z",
+   "sha256": "46555109d0ff45c398551585cb7030104df33c2d7c072fcaff47eaaf10bf5a7b",
+   "bytes": 1518792,
+   "clean_from": "2021-10-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 24096,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 3,
+    "constituent_5m_bars": 289148
+   }
+  },
+  "is/solusd-1w.csv": {
+   "symbol": "SOLUSD",
+   "split": "is",
+   "tf": "1w",
+   "rows": 143,
+   "first": "2021-10-04T00:00:00Z",
+   "last": "2024-06-24T00:00:00Z",
+   "sha256": "34f512fe0fb6385d474a06737e23787c7f7fc0fb5c25b60b439818efe4414a2d",
+   "bytes": 9195,
+   "clean_from": "2021-10-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 143,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 3,
+    "constituent_5m_bars": 288284
+   }
+  },
+  "is/solusd-2h.csv": {
+   "symbol": "SOLUSD",
+   "split": "is",
+   "tf": "2h",
+   "rows": 12048,
+   "first": "2021-10-01T00:00:00Z",
+   "last": "2024-06-30T22:00:00Z",
+   "sha256": "739af373d83acd4c066d35ef88e1243216048d0b904be99c1ad0a5ef76d660ef",
+   "bytes": 760361,
+   "clean_from": "2021-10-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 12048,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 3,
+    "constituent_5m_bars": 289148
+   }
+  },
+  "is/solusd-30m.csv": {
+   "symbol": "SOLUSD",
+   "split": "is",
+   "tf": "30m",
+   "rows": 48192,
+   "first": "2021-10-01T00:00:00Z",
+   "last": "2024-06-30T23:30:00Z",
+   "sha256": "f28343e66cc95deaee4d4cad3089ed80b584db98b6d62f156561d8289d80a8ef",
+   "bytes": 3037855,
+   "clean_from": "2021-10-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 48192,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 3,
+    "constituent_5m_bars": 289148
+   }
+  },
+  "is/solusd-4h.csv": {
+   "symbol": "SOLUSD",
+   "split": "is",
+   "tf": "4h",
+   "rows": 6024,
+   "first": "2021-10-01T00:00:00Z",
+   "last": "2024-06-30T20:00:00Z",
+   "sha256": "ec81a76f225b4fc54435007efa27240af01dbb30b469d6f32ed60ac005bc56df",
+   "bytes": 380910,
+   "clean_from": "2021-10-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 6024,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 3,
+    "constituent_5m_bars": 289148
+   }
+  },
+  "is/solusd-5m.csv": {
+   "symbol": "SOLUSD",
+   "split": "is",
+   "tf": "5m",
+   "rows": 289148,
+   "first": "2021-10-01T00:00:00Z",
+   "last": "2024-06-30T23:55:00Z",
+   "sha256": "9e6c71a4aa6b56a1e53e3a899362cbe205ab28f060730f0f18411da744282766",
+   "bytes": 17948189,
+   "clean_from": "2021-10-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 289152,
+    "missing_bins": 4,
+    "gap_events": 4,
+    "max_gap": "0 days 00:10:00",
+    "partial_bins": 0,
+    "constituent_5m_bars": 289148
+   }
+  },
+  "is/xrpusd-15m.csv": {
+   "symbol": "XRPUSD",
+   "split": "is",
+   "tf": "15m",
+   "rows": 105216,
+   "first": "2021-07-01T00:00:00Z",
+   "last": "2024-06-30T23:45:00Z",
+   "sha256": "d6d7bc119c6541900124369f56889ef561a4a94d3e1e135f7067d15ea15af579",
+   "bytes": 7156628,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 105216,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 284,
+    "constituent_5m_bars": 315356
+   }
+  },
+  "is/xrpusd-1d.csv": {
+   "symbol": "XRPUSD",
+   "split": "is",
+   "tf": "1d",
+   "rows": 1096,
+   "first": "2021-07-01T00:00:00Z",
+   "last": "2024-06-30T00:00:00Z",
+   "sha256": "bd9ba8660fbb57982d5e63db45c120f4b461ef974e11d74cf04347c72b09d834",
+   "bytes": 75779,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 1096,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 122,
+    "constituent_5m_bars": 315356
+   }
+  },
+  "is/xrpusd-1h.csv": {
+   "symbol": "XRPUSD",
+   "split": "is",
+   "tf": "1h",
+   "rows": 26304,
+   "first": "2021-07-01T00:00:00Z",
+   "last": "2024-06-30T23:00:00Z",
+   "sha256": "f1a4dad1720304fb7430e0efbbde44272ce75029de87d78d7aca149e3aad334b",
+   "bytes": 1797883,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 26304,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 252,
+    "constituent_5m_bars": 315356
+   }
+  },
+  "is/xrpusd-1w.csv": {
+   "symbol": "XRPUSD",
+   "split": "is",
+   "tf": "1w",
+   "rows": 156,
+   "first": "2021-07-05T00:00:00Z",
+   "last": "2024-06-24T00:00:00Z",
+   "sha256": "3ddf937316030d957f65649888cf1cd1e75bed34bda07d55bc281b672759b3a3",
+   "bytes": 10821,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 156,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 46,
+    "constituent_5m_bars": 314204
+   }
+  },
+  "is/xrpusd-2h.csv": {
+   "symbol": "XRPUSD",
+   "split": "is",
+   "tf": "2h",
+   "rows": 13152,
+   "first": "2021-07-01T00:00:00Z",
+   "last": "2024-06-30T22:00:00Z",
+   "sha256": "bf757a3429b4310ee0d52b481d3990ba1a728b1d75a39b2d08d7701ef618ba78",
+   "bytes": 900725,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 13152,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 226,
+    "constituent_5m_bars": 315356
+   }
+  },
+  "is/xrpusd-30m.csv": {
+   "symbol": "XRPUSD",
+   "split": "is",
+   "tf": "30m",
+   "rows": 52608,
+   "first": "2021-07-01T00:00:00Z",
+   "last": "2024-06-30T23:30:00Z",
+   "sha256": "86d99cf7404da3e83c41af7678ad5d31e102085e814421c15a16aa2fec555070",
+   "bytes": 3586168,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 52608,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 271,
+    "constituent_5m_bars": 315356
+   }
+  },
+  "is/xrpusd-4h.csv": {
+   "symbol": "XRPUSD",
+   "split": "is",
+   "tf": "4h",
+   "rows": 6576,
+   "first": "2021-07-01T00:00:00Z",
+   "last": "2024-06-30T20:00:00Z",
+   "sha256": "d52de7c753d6463c805474ae35c28c89b4f3d397b6bb730e2f686abb9b8419db",
+   "bytes": 451714,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 6576,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 200,
+    "constituent_5m_bars": 315356
+   }
+  },
+  "is/xrpusd-5m.csv": {
+   "symbol": "XRPUSD",
+   "split": "is",
+   "tf": "5m",
+   "rows": 315356,
+   "first": "2021-07-01T00:00:00Z",
+   "last": "2024-06-30T23:55:00Z",
+   "sha256": "6791cf79d625fd37bfa79bc1fed0ccdd9818afaefb7868dd5e94728e4a298d23",
+   "bytes": 21095868,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": true,
+   "gaps": {
+    "expected_bins": 315648,
+    "missing_bins": 292,
+    "gap_events": 282,
+    "max_gap": "0 days 00:15:00",
+    "partial_bins": 0,
+    "constituent_5m_bars": 315356
+   }
+  },
+  "oos/bchusd-15m.csv": {
+   "symbol": "BCHUSD",
+   "split": "oos",
+   "tf": "15m",
+   "rows": 56034,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-08-06T23:45:00Z",
+   "sha256": "9ff3ed4bcf10a732b07901fa536ab60474cb970414788259649fb03deba42962",
+   "bytes": 3580065,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 56064,
+    "missing_bins": 30,
+    "gap_events": 26,
+    "max_gap": "0 days 01:00:00",
+    "partial_bins": 361,
+    "constituent_5m_bars": 167605
+   }
+  },
+  "oos/bchusd-1d.csv": {
+   "symbol": "BCHUSD",
+   "split": "oos",
+   "tf": "1d",
+   "rows": 584,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-08-06T00:00:00Z",
+   "sha256": "2509d300221ffc5537f3b731f6079e24972e89e3a432da5fd4231f81f3b55cbd",
+   "bytes": 37841,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 584,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 15,
+    "constituent_5m_bars": 167605
+   }
+  },
+  "oos/bchusd-1h.csv": {
+   "symbol": "BCHUSD",
+   "split": "oos",
+   "tf": "1h",
+   "rows": 14016,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-08-06T23:00:00Z",
+   "sha256": "0a2faf76ecc10a1b5a0d2eb88cfa0a52c07e61e502c8f583f4b8d5a4ddbd2d72",
+   "bytes": 896602,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 14016,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 131,
+    "constituent_5m_bars": 167605
+   }
+  },
+  "oos/bchusd-1w.csv": {
+   "symbol": "BCHUSD",
+   "split": "oos",
+   "tf": "1w",
+   "rows": 83,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-07-28T00:00:00Z",
+   "sha256": "06706632d3770a6715dd750e00e5d253f1e7da76cb64a5d33f85c3c99b6a1bdd",
+   "bytes": 5420,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 83,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 12,
+    "constituent_5m_bars": 166741
+   }
+  },
+  "oos/bchusd-2h.csv": {
+   "symbol": "BCHUSD",
+   "split": "oos",
+   "tf": "2h",
+   "rows": 7008,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-08-06T22:00:00Z",
+   "sha256": "adb224219aa59c95d90ae5d4ab6733aa88eeab788139cdff00da746327ba7ee5",
+   "bytes": 449188,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 7008,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 70,
+    "constituent_5m_bars": 167605
+   }
+  },
+  "oos/bchusd-30m.csv": {
+   "symbol": "BCHUSD",
+   "split": "oos",
+   "tf": "30m",
+   "rows": 28029,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-08-06T23:30:00Z",
+   "sha256": "29ced339fc0736bc816eee2c1816b8a2471d75b1f957ce2dcca3aae61212a2e2",
+   "bytes": 1791200,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 28032,
+    "missing_bins": 3,
+    "gap_events": 3,
+    "max_gap": "0 days 01:00:00",
+    "partial_bins": 237,
+    "constituent_5m_bars": 167605
+   }
+  },
+  "oos/bchusd-4h.csv": {
+   "symbol": "BCHUSD",
+   "split": "oos",
+   "tf": "4h",
+   "rows": 3504,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-08-06T20:00:00Z",
+   "sha256": "5d08650a9e3c2b4bf37c924d6f408e3a2b6e4eaf7f32b19b3bc50c1649f957da",
+   "bytes": 224998,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 3504,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 40,
+    "constituent_5m_bars": 167605
+   }
+  },
+  "oos/bchusd-5m.csv": {
+   "symbol": "BCHUSD",
+   "split": "oos",
+   "tf": "5m",
+   "rows": 167605,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-08-06T23:55:00Z",
+   "sha256": "d01799ee2c07728db26a68daef7fe0ac52ded3cce5484b55253b40e8d45563ee",
+   "bytes": 10521382,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 168192,
+    "missing_bins": 587,
+    "gap_events": 342,
+    "max_gap": "0 days 01:00:00",
+    "partial_bins": 0,
+    "constituent_5m_bars": 167605
+   }
+  },
+  "oos/btcusd-15m.csv": {
+   "symbol": "BTCUSD",
+   "split": "oos",
+   "tf": "15m",
+   "rows": 56064,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-08-06T23:45:00Z",
+   "sha256": "31f439b164026121f905e44ad0130abaf3bcc58e3bd035a69c35d68aea3adf6c",
+   "bytes": 4096525,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 56064,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 0,
+    "constituent_5m_bars": 168192
+   }
+  },
+  "oos/btcusd-1d.csv": {
+   "symbol": "BTCUSD",
+   "split": "oos",
+   "tf": "1d",
+   "rows": 584,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-08-06T00:00:00Z",
+   "sha256": "cfb0b8363729db4da9b0fc5ff008cc4dc23965858242130f5d13b88cbc900a6c",
+   "bytes": 42486,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 584,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 0,
+    "constituent_5m_bars": 168192
+   }
+  },
+  "oos/btcusd-1h.csv": {
+   "symbol": "BTCUSD",
+   "split": "oos",
+   "tf": "1h",
+   "rows": 14016,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-08-06T23:00:00Z",
+   "sha256": "a972d3ef7e8067960ae23f2979e361cb9d955d65fe0eaf4428c7ee085de8ab4d",
+   "bytes": 1017777,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 14016,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 0,
+    "constituent_5m_bars": 168192
+   }
+  },
+  "oos/btcusd-1w.csv": {
+   "symbol": "BTCUSD",
+   "split": "oos",
+   "tf": "1w",
+   "rows": 83,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-07-28T00:00:00Z",
+   "sha256": "03337d6dc3253b8d392460d7025e6827dd6fab9df750415920bba30b0fa69f17",
+   "bytes": 6083,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 83,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 0,
+    "constituent_5m_bars": 167328
+   }
+  },
+  "oos/btcusd-2h.csv": {
+   "symbol": "BTCUSD",
+   "split": "oos",
+   "tf": "2h",
+   "rows": 7008,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-08-06T22:00:00Z",
+   "sha256": "c7568daa3fa2b962d55df865590dc636c93ae4c4565850304132d51b2e4b86ca",
+   "bytes": 508104,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 7008,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 0,
+    "constituent_5m_bars": 168192
+   }
+  },
+  "oos/btcusd-30m.csv": {
+   "symbol": "BTCUSD",
+   "split": "oos",
+   "tf": "30m",
+   "rows": 28032,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-08-06T23:30:00Z",
+   "sha256": "56f571ec1f5bcea6c80172ced98562273710ea42aa6b63cb80af45fe1f4be7ab",
+   "bytes": 2042272,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 28032,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 0,
+    "constituent_5m_bars": 168192
+   }
+  },
+  "oos/btcusd-4h.csv": {
+   "symbol": "BTCUSD",
+   "split": "oos",
+   "tf": "4h",
+   "rows": 3504,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-08-06T20:00:00Z",
+   "sha256": "a97a366e9416360407f2aab48b9fc099cf0b9fffab2da913c2a48ea652e4e74a",
+   "bytes": 254079,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 3504,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 0,
+    "constituent_5m_bars": 168192
+   }
+  },
+  "oos/btcusd-5m.csv": {
+   "symbol": "BTCUSD",
+   "split": "oos",
+   "tf": "5m",
+   "rows": 168192,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-08-06T23:55:00Z",
+   "sha256": "6845a2d91b573457dfe3d4143aa30d080714f2dcc46333274574a05b0cdfd096",
+   "bytes": 12213223,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 168192,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 0,
+    "constituent_5m_bars": 168192
+   }
+  },
+  "oos/dogeusd-15m.csv": {
+   "symbol": "DOGEUSD",
+   "split": "oos",
+   "tf": "15m",
+   "rows": 56064,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-08-06T23:45:00Z",
+   "sha256": "933442f59bcc128f4cf11f6bbcdee32049f1cfb59646db62898d1922db073b62",
+   "bytes": 3992010,
+   "clean_from": "2021-08-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 56064,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 17,
+    "constituent_5m_bars": 168174
+   }
+  },
+  "oos/dogeusd-1d.csv": {
+   "symbol": "DOGEUSD",
+   "split": "oos",
+   "tf": "1d",
+   "rows": 584,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-08-06T00:00:00Z",
+   "sha256": "ab16f020eb1dfb9319f9deb01e9f592336e1e35112a381e0c896b511f5b4607b",
+   "bytes": 42119,
+   "clean_from": "2021-08-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 584,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 6,
+    "constituent_5m_bars": 168174
+   }
+  },
+  "oos/dogeusd-1h.csv": {
+   "symbol": "DOGEUSD",
+   "split": "oos",
+   "tf": "1h",
+   "rows": 14016,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-08-06T23:00:00Z",
+   "sha256": "0a839a9579f568afb0fce6c122bdea01a630973c351bc83421bd8206e93d9ebf",
+   "bytes": 1001973,
+   "clean_from": "2021-08-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 14016,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 15,
+    "constituent_5m_bars": 168174
+   }
+  },
+  "oos/dogeusd-1w.csv": {
+   "symbol": "DOGEUSD",
+   "split": "oos",
+   "tf": "1w",
+   "rows": 83,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-07-28T00:00:00Z",
+   "sha256": "611f02af560bdfca8da33a9255970b87f5e859f1788f3c8453a2448b4f0c9c93",
+   "bytes": 6030,
+   "clean_from": "2021-08-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 83,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 3,
+    "constituent_5m_bars": 167310
+   }
+  },
+  "oos/dogeusd-2h.csv": {
+   "symbol": "DOGEUSD",
+   "split": "oos",
+   "tf": "2h",
+   "rows": 7008,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-08-06T22:00:00Z",
+   "sha256": "793c9953ed51b49d444405cb245ef7c8f55b7cdc9c683ce48c688ec5d517f707",
+   "bytes": 502121,
+   "clean_from": "2021-08-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 7008,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 13,
+    "constituent_5m_bars": 168174
+   }
+  },
+  "oos/dogeusd-30m.csv": {
+   "symbol": "DOGEUSD",
+   "split": "oos",
+   "tf": "30m",
+   "rows": 28032,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-08-06T23:30:00Z",
+   "sha256": "a430d834d0b0c40c08051bdad9a90f8155ef84bf8d16be6084b0264983d57610",
+   "bytes": 1999977,
+   "clean_from": "2021-08-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 28032,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 16,
+    "constituent_5m_bars": 168174
+   }
+  },
+  "oos/dogeusd-4h.csv": {
+   "symbol": "DOGEUSD",
+   "split": "oos",
+   "tf": "4h",
+   "rows": 3504,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-08-06T20:00:00Z",
+   "sha256": "08a47ffc946c1a5914e4a4a3fdc78121fd7519cb6423c6a7869ddc807b9342dd",
+   "bytes": 251932,
+   "clean_from": "2021-08-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 3504,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 12,
+    "constituent_5m_bars": 168174
+   }
+  },
+  "oos/dogeusd-5m.csv": {
+   "symbol": "DOGEUSD",
+   "split": "oos",
+   "tf": "5m",
+   "rows": 168174,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-08-06T23:55:00Z",
+   "sha256": "239925373cfbbe852120c61904e982ab161afae91346c2476c19a72ba469cbf3",
+   "bytes": 11878781,
+   "clean_from": "2021-08-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 168192,
+    "missing_bins": 18,
+    "gap_events": 16,
+    "max_gap": "0 days 00:15:00",
+    "partial_bins": 0,
+    "constituent_5m_bars": 168174
+   }
+  },
+  "oos/ethusd-15m.csv": {
+   "symbol": "ETHUSD",
+   "split": "oos",
+   "tf": "15m",
+   "rows": 56064,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-08-06T23:45:00Z",
+   "sha256": "c41d97954aac3dbe382688fe8e6b4e0134a7622abf93f454ebf3956614d5f714",
+   "bytes": 3850667,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 56064,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 0,
+    "constituent_5m_bars": 168192
+   }
+  },
+  "oos/ethusd-1d.csv": {
+   "symbol": "ETHUSD",
+   "split": "oos",
+   "tf": "1d",
+   "rows": 584,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-08-06T00:00:00Z",
+   "sha256": "fa11ed872e7e0b2c521724e9f4dd679cb69fa1d05a9e8bacc3ba504a05e445db",
+   "bytes": 40167,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 584,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 0,
+    "constituent_5m_bars": 168192
+   }
+  },
+  "oos/ethusd-1h.csv": {
+   "symbol": "ETHUSD",
+   "split": "oos",
+   "tf": "1h",
+   "rows": 14016,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-08-06T23:00:00Z",
+   "sha256": "361a093861e732595db57e67ca7fabd1cf01b8d78d801f3cb1dcfb03cbe8b6f5",
+   "bytes": 959553,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 14016,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 0,
+    "constituent_5m_bars": 168192
+   }
+  },
+  "oos/ethusd-1w.csv": {
+   "symbol": "ETHUSD",
+   "split": "oos",
+   "tf": "1w",
+   "rows": 83,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-07-28T00:00:00Z",
+   "sha256": "502d38cd9919240f087862291a504acf2883c3eeb4ab2b296226814512c97f36",
+   "bytes": 5728,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 83,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 0,
+    "constituent_5m_bars": 167328
+   }
+  },
+  "oos/ethusd-2h.csv": {
+   "symbol": "ETHUSD",
+   "split": "oos",
+   "tf": "2h",
+   "rows": 7008,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-08-06T22:00:00Z",
+   "sha256": "251eb81e5439a30104c8503d9cc3aef60632d5101ae44cbb5fd3befdc1abfc89",
+   "bytes": 479594,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 7008,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 0,
+    "constituent_5m_bars": 168192
+   }
+  },
+  "oos/ethusd-30m.csv": {
+   "symbol": "ETHUSD",
+   "split": "oos",
+   "tf": "30m",
+   "rows": 28032,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-08-06T23:30:00Z",
+   "sha256": "0ebec0ab9abe02fec2557bb06dfc6fa9e212dcb4982bf77bba12789e0facf768",
+   "bytes": 1922339,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 28032,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 0,
+    "constituent_5m_bars": 168192
+   }
+  },
+  "oos/ethusd-4h.csv": {
+   "symbol": "ETHUSD",
+   "split": "oos",
+   "tf": "4h",
+   "rows": 3504,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-08-06T20:00:00Z",
+   "sha256": "acf87f55b770234bb3c0445e2307a33337d6b694131006fb213a92f25753ec43",
+   "bytes": 240132,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 3504,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 0,
+    "constituent_5m_bars": 168192
+   }
+  },
+  "oos/ethusd-5m.csv": {
+   "symbol": "ETHUSD",
+   "split": "oos",
+   "tf": "5m",
+   "rows": 168192,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-08-06T23:55:00Z",
+   "sha256": "f7be6445141639253a79129d1f962c5ca68d3657c27a4cce9006d238a0d87b69",
+   "bytes": 11477018,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 168192,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 0,
+    "constituent_5m_bars": 168192
+   }
+  },
+  "oos/ltcusd-15m.csv": {
+   "symbol": "LTCUSD",
+   "split": "oos",
+   "tf": "15m",
+   "rows": 55967,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-08-06T23:45:00Z",
+   "sha256": "a0c88d566f99a2fbd41fac84758e045634f77b262f28e8a22179585cbfe63aba",
+   "bytes": 3481666,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 56064,
+    "missing_bins": 97,
+    "gap_events": 2,
+    "max_gap": "1 days 00:15:00",
+    "partial_bins": 10,
+    "constituent_5m_bars": 167891
+   }
+  },
+  "oos/ltcusd-1d.csv": {
+   "symbol": "LTCUSD",
+   "split": "oos",
+   "tf": "1d",
+   "rows": 583,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-08-06T00:00:00Z",
+   "sha256": "426c93e3bd2b2ea2e17453e63022c705171d2887c31748462e041525f86cb1cb",
+   "bytes": 36577,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 584,
+    "missing_bins": 1,
+    "gap_events": 1,
+    "max_gap": "2 days 00:00:00",
+    "partial_bins": 6,
+    "constituent_5m_bars": 167891
+   }
+  },
+  "oos/ltcusd-1h.csv": {
+   "symbol": "LTCUSD",
+   "split": "oos",
+   "tf": "1h",
+   "rows": 13992,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-08-06T23:00:00Z",
+   "sha256": "c6054dc333a501d0e29a3d847f45b50a6cbab4fd6134e9c0720bdc1b02755e5f",
+   "bytes": 869845,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 14016,
+    "missing_bins": 24,
+    "gap_events": 1,
+    "max_gap": "1 days 01:00:00",
+    "partial_bins": 10,
+    "constituent_5m_bars": 167891
+   }
+  },
+  "oos/ltcusd-1w.csv": {
+   "symbol": "LTCUSD",
+   "split": "oos",
+   "tf": "1w",
+   "rows": 83,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-07-28T00:00:00Z",
+   "sha256": "580c0a5ec84219a9888551e095b62365a4b6a3714e29effb38e52d62c53d3688",
+   "bytes": 5280,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 83,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 5,
+    "constituent_5m_bars": 167027
+   }
+  },
+  "oos/ltcusd-2h.csv": {
+   "symbol": "LTCUSD",
+   "split": "oos",
+   "tf": "2h",
+   "rows": 6996,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-08-06T22:00:00Z",
+   "sha256": "540c45aba4fb041b99a0edbd3ae01ed5d4ac4bbc8116605c0bf4232f1268ea84",
+   "bytes": 435652,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 7008,
+    "missing_bins": 12,
+    "gap_events": 1,
+    "max_gap": "1 days 02:00:00",
+    "partial_bins": 10,
+    "constituent_5m_bars": 167891
+   }
+  },
+  "oos/ltcusd-30m.csv": {
+   "symbol": "LTCUSD",
+   "split": "oos",
+   "tf": "30m",
+   "rows": 27984,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-08-06T23:30:00Z",
+   "sha256": "d17c077043ec79b29f39cf6b58738f62050dcf67e89a4d2f39fc5601052da78a",
+   "bytes": 1741687,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 28032,
+    "missing_bins": 48,
+    "gap_events": 1,
+    "max_gap": "1 days 00:30:00",
+    "partial_bins": 11,
+    "constituent_5m_bars": 167891
+   }
+  },
+  "oos/ltcusd-4h.csv": {
+   "symbol": "LTCUSD",
+   "split": "oos",
+   "tf": "4h",
+   "rows": 3498,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-08-06T20:00:00Z",
+   "sha256": "fb3a6718a38029a8f10007d281c4716f2479b3cb36f771054fe7517e881a4e86",
+   "bytes": 218022,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 3504,
+    "missing_bins": 6,
+    "gap_events": 1,
+    "max_gap": "1 days 04:00:00",
+    "partial_bins": 9,
+    "constituent_5m_bars": 167891
+   }
+  },
+  "oos/ltcusd-5m.csv": {
+   "symbol": "LTCUSD",
+   "split": "oos",
+   "tf": "5m",
+   "rows": 167891,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-08-06T23:55:00Z",
+   "sha256": "711a919292d16a409485644a360685df4dfccf90cd4f20ba6d88235ebadd60dd",
+   "bytes": 10305077,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 168192,
+    "missing_bins": 301,
+    "gap_events": 12,
+    "max_gap": "1 days 00:05:00",
+    "partial_bins": 0,
+    "constituent_5m_bars": 167891
+   }
+  },
+  "oos/solusd-15m.csv": {
+   "symbol": "SOLUSD",
+   "split": "oos",
+   "tf": "15m",
+   "rows": 55968,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-08-06T23:45:00Z",
+   "sha256": "254cc67a86e3d9ae9677adef197dd4115b2e92dcb2c861e6acfd965a95f15479",
+   "bytes": 3664930,
+   "clean_from": "2021-10-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 56064,
+    "missing_bins": 96,
+    "gap_events": 1,
+    "max_gap": "1 days 00:15:00",
+    "partial_bins": 3,
+    "constituent_5m_bars": 167901
+   }
+  },
+  "oos/solusd-1d.csv": {
+   "symbol": "SOLUSD",
+   "split": "oos",
+   "tf": "1d",
+   "rows": 583,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-08-06T00:00:00Z",
+   "sha256": "ec7e8f0b30c7e6e81081bec0da31501fe38bf96ab6d20aaccd8174e20e7fe141",
+   "bytes": 38327,
+   "clean_from": "2021-10-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 584,
+    "missing_bins": 1,
+    "gap_events": 1,
+    "max_gap": "2 days 00:00:00",
+    "partial_bins": 3,
+    "constituent_5m_bars": 167901
+   }
+  },
+  "oos/solusd-1h.csv": {
+   "symbol": "SOLUSD",
+   "split": "oos",
+   "tf": "1h",
+   "rows": 13992,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-08-06T23:00:00Z",
+   "sha256": "7cb2e0c30088c9e1358c973070861ca6eab278674bc8a5bf042970cdbdcdc128",
+   "bytes": 915241,
+   "clean_from": "2021-10-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 14016,
+    "missing_bins": 24,
+    "gap_events": 1,
+    "max_gap": "1 days 01:00:00",
+    "partial_bins": 3,
+    "constituent_5m_bars": 167901
+   }
+  },
+  "oos/solusd-1w.csv": {
+   "symbol": "SOLUSD",
+   "split": "oos",
+   "tf": "1w",
+   "rows": 83,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-07-28T00:00:00Z",
+   "sha256": "309356401eb0c263d1675d9af1d78e937311014d1c0187d0e49aa044b3c0fbbc",
+   "bytes": 5491,
+   "clean_from": "2021-10-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 83,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 4,
+    "constituent_5m_bars": 167037
+   }
+  },
+  "oos/solusd-2h.csv": {
+   "symbol": "SOLUSD",
+   "split": "oos",
+   "tf": "2h",
+   "rows": 6996,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-08-06T22:00:00Z",
+   "sha256": "89eb6c999fe6f8396d376f47f6e74c74ae6be623557740c78ce4856a4c1fd60d",
+   "bytes": 457834,
+   "clean_from": "2021-10-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 7008,
+    "missing_bins": 12,
+    "gap_events": 1,
+    "max_gap": "1 days 02:00:00",
+    "partial_bins": 3,
+    "constituent_5m_bars": 167901
+   }
+  },
+  "oos/solusd-30m.csv": {
+   "symbol": "SOLUSD",
+   "split": "oos",
+   "tf": "30m",
+   "rows": 27984,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-08-06T23:30:00Z",
+   "sha256": "ce96fe5fc148c833fd7ffcb37740fb2d5d29ed769cd8ba7720bb503e10654371",
+   "bytes": 1832884,
+   "clean_from": "2021-10-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 28032,
+    "missing_bins": 48,
+    "gap_events": 1,
+    "max_gap": "1 days 00:30:00",
+    "partial_bins": 3,
+    "constituent_5m_bars": 167901
+   }
+  },
+  "oos/solusd-4h.csv": {
+   "symbol": "SOLUSD",
+   "split": "oos",
+   "tf": "4h",
+   "rows": 3498,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-08-06T20:00:00Z",
+   "sha256": "a52d76a4f8593e8591a8fd8d558d277d69aa1e22d7c11aa5758f19eaf3527f12",
+   "bytes": 229001,
+   "clean_from": "2021-10-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 3504,
+    "missing_bins": 6,
+    "gap_events": 1,
+    "max_gap": "1 days 04:00:00",
+    "partial_bins": 3,
+    "constituent_5m_bars": 167901
+   }
+  },
+  "oos/solusd-5m.csv": {
+   "symbol": "SOLUSD",
+   "split": "oos",
+   "tf": "5m",
+   "rows": 167901,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-08-06T23:55:00Z",
+   "sha256": "94fc3cf38e42aa1e173f1e287c260d5059879fbf7d2d78467d2bff99eb374fa2",
+   "bytes": 10914867,
+   "clean_from": "2021-10-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 168192,
+    "missing_bins": 291,
+    "gap_events": 4,
+    "max_gap": "1 days 00:05:00",
+    "partial_bins": 0,
+    "constituent_5m_bars": 167901
+   }
+  },
+  "oos/xrpusd-15m.csv": {
+   "symbol": "XRPUSD",
+   "split": "oos",
+   "tf": "15m",
+   "rows": 55968,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-08-06T23:45:00Z",
+   "sha256": "ff08418c7167aeb1d7b986e790346daed53706b79524beb6b93eba27656f3f6a",
+   "bytes": 3741897,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 56064,
+    "missing_bins": 96,
+    "gap_events": 1,
+    "max_gap": "1 days 00:15:00",
+    "partial_bins": 1,
+    "constituent_5m_bars": 167903
+   }
+  },
+  "oos/xrpusd-1d.csv": {
+   "symbol": "XRPUSD",
+   "split": "oos",
+   "tf": "1d",
+   "rows": 583,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-08-06T00:00:00Z",
+   "sha256": "ccbd07147fd45934187b8c3c51f53ebde26dd52fee871f96eb37e70d9d286964",
+   "bytes": 39515,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 584,
+    "missing_bins": 1,
+    "gap_events": 1,
+    "max_gap": "2 days 00:00:00",
+    "partial_bins": 1,
+    "constituent_5m_bars": 167903
+   }
+  },
+  "oos/xrpusd-1h.csv": {
+   "symbol": "XRPUSD",
+   "split": "oos",
+   "tf": "1h",
+   "rows": 13992,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-08-06T23:00:00Z",
+   "sha256": "bd7b1f73c8ddb7bbc596163bd760c00001e1aa97c9d640e3bf17251073020442",
+   "bytes": 939032,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 14016,
+    "missing_bins": 24,
+    "gap_events": 1,
+    "max_gap": "1 days 01:00:00",
+    "partial_bins": 1,
+    "constituent_5m_bars": 167903
+   }
+  },
+  "oos/xrpusd-1w.csv": {
+   "symbol": "XRPUSD",
+   "split": "oos",
+   "tf": "1w",
+   "rows": 83,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-07-28T00:00:00Z",
+   "sha256": "5516860eda6333bcca9b11799485e4f7e859354b8657fc088af1e88c33838338",
+   "bytes": 5624,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 83,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 2,
+    "constituent_5m_bars": 167039
+   }
+  },
+  "oos/xrpusd-2h.csv": {
+   "symbol": "XRPUSD",
+   "split": "oos",
+   "tf": "2h",
+   "rows": 6996,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-08-06T22:00:00Z",
+   "sha256": "df70e1c047ac234beb2184ed53445855aa8ecac2788217f0aca5bee9e0bb1db6",
+   "bytes": 469970,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 7008,
+    "missing_bins": 12,
+    "gap_events": 1,
+    "max_gap": "1 days 02:00:00",
+    "partial_bins": 1,
+    "constituent_5m_bars": 167903
+   }
+  },
+  "oos/xrpusd-30m.csv": {
+   "symbol": "XRPUSD",
+   "split": "oos",
+   "tf": "30m",
+   "rows": 27984,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-08-06T23:30:00Z",
+   "sha256": "c8731386e1928a59762167b4653837c9ad336f0af3e456d53c0309afaf75ca43",
+   "bytes": 1873789,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 28032,
+    "missing_bins": 48,
+    "gap_events": 1,
+    "max_gap": "1 days 00:30:00",
+    "partial_bins": 1,
+    "constituent_5m_bars": 167903
+   }
+  },
+  "oos/xrpusd-4h.csv": {
+   "symbol": "XRPUSD",
+   "split": "oos",
+   "tf": "4h",
+   "rows": 3498,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-08-06T20:00:00Z",
+   "sha256": "1152a66acab4e9fa17bbffa254fa031442a0938edd3717178b66a9c48fab9f38",
+   "bytes": 235526,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 3504,
+    "missing_bins": 6,
+    "gap_events": 1,
+    "max_gap": "1 days 04:00:00",
+    "partial_bins": 1,
+    "constituent_5m_bars": 167903
+   }
+  },
+  "oos/xrpusd-5m.csv": {
+   "symbol": "XRPUSD",
+   "split": "oos",
+   "tf": "5m",
+   "rows": 167903,
+   "first": "2024-01-01T00:00:00Z",
+   "last": "2025-08-06T23:55:00Z",
+   "sha256": "5c4aafbc5ffe6474a179eb3746b73c93ba3f546d6071ac5c4f6469755ce7e972",
+   "bytes": 11133311,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 168192,
+    "missing_bins": 289,
+    "gap_events": 2,
+    "max_gap": "1 days 00:05:00",
+    "partial_bins": 0,
+    "constituent_5m_bars": 167903
+   }
+  },
+  "final/bchusd-15m.csv": {
+   "symbol": "BCHUSD",
+   "split": "final",
+   "tf": "15m",
+   "rows": 58006,
+   "first": "2025-02-01T00:00:00Z",
+   "last": "2026-09-29T09:15:00Z",
+   "sha256": "0135e31d4545d4411603d1f8b8aaca05cbe4f66c3adf22a1718652bc66a4e7b5",
+   "bytes": 3707450,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 58118,
+    "missing_bins": 112,
+    "gap_events": 15,
+    "max_gap": "1 days 00:15:00",
+    "partial_bins": 172,
+    "constituent_5m_bars": 173791
+   }
+  },
+  "final/bchusd-1d.csv": {
+   "symbol": "BCHUSD",
+   "split": "final",
+   "tf": "1d",
+   "rows": 604,
+   "first": "2025-02-01T00:00:00Z",
+   "last": "2026-09-28T00:00:00Z",
+   "sha256": "42047cb71ff626513c8b98f6b015d7a2b7aecfa4957b44a023ed051a2918c5ce",
+   "bytes": 39384,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 605,
+    "missing_bins": 1,
+    "gap_events": 1,
+    "max_gap": "2 days 00:00:00",
+    "partial_bins": 13,
+    "constituent_5m_bars": 173677
+   }
+  },
+  "final/bchusd-1h.csv": {
+   "symbol": "BCHUSD",
+   "split": "final",
+   "tf": "1h",
+   "rows": 14505,
+   "first": "2025-02-01T00:00:00Z",
+   "last": "2026-09-29T08:00:00Z",
+   "sha256": "fe7e431fbec7e94d7713f66dedc71e79c4ab028d59ccd6752cf869bcc8ff50c1",
+   "bytes": 929394,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 14529,
+    "missing_bins": 24,
+    "gap_events": 1,
+    "max_gap": "1 days 01:00:00",
+    "partial_bins": 89,
+    "constituent_5m_bars": 173785
+   }
+  },
+  "final/bchusd-1w.csv": {
+   "symbol": "BCHUSD",
+   "split": "final",
+   "tf": "1w",
+   "rows": 86,
+   "first": "2025-02-03T00:00:00Z",
+   "last": "2026-09-21T00:00:00Z",
+   "sha256": "5dd4427bddd22253203785a5005456c1ae663d4fbc6e271d05d319bd3509c013",
+   "bytes": 5644,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 86,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 13,
+    "constituent_5m_bars": 172813
+   }
+  },
+  "final/bchusd-2h.csv": {
+   "symbol": "BCHUSD",
+   "split": "final",
+   "tf": "2h",
+   "rows": 7252,
+   "first": "2025-02-01T00:00:00Z",
+   "last": "2026-09-29T06:00:00Z",
+   "sha256": "82a820813ec84eca75d093675032b853009039b771d08d4189ec07c1452a2260",
+   "bytes": 466304,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 7264,
+    "missing_bins": 12,
+    "gap_events": 1,
+    "max_gap": "1 days 02:00:00",
+    "partial_bins": 55,
+    "constituent_5m_bars": 173773
+   }
+  },
+  "final/bchusd-30m.csv": {
+   "symbol": "BCHUSD",
+   "split": "final",
+   "tf": "30m",
+   "rows": 29010,
+   "first": "2025-02-01T00:00:00Z",
+   "last": "2026-09-29T09:00:00Z",
+   "sha256": "a72ddb7c4eefbc2d875d8808b78373eab5f2b4851e16c3d60ec16719eb622cf4",
+   "bytes": 1856648,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 29059,
+    "missing_bins": 49,
+    "gap_events": 2,
+    "max_gap": "1 days 00:30:00",
+    "partial_bins": 136,
+    "constituent_5m_bars": 173791
+   }
+  },
+  "final/bchusd-4h.csv": {
+   "symbol": "BCHUSD",
+   "split": "final",
+   "tf": "4h",
+   "rows": 3626,
+   "first": "2025-02-01T00:00:00Z",
+   "last": "2026-09-29T04:00:00Z",
+   "sha256": "794c951dd0dcc904f870983f09f2ce36326603f56838b28e3684fa322d670c33",
+   "bytes": 234096,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 3632,
+    "missing_bins": 6,
+    "gap_events": 1,
+    "max_gap": "1 days 04:00:00",
+    "partial_bins": 36,
+    "constituent_5m_bars": 173773
+   }
+  },
+  "final/bchusd-5m.csv": {
+   "symbol": "BCHUSD",
+   "split": "final",
+   "tf": "5m",
+   "rows": 173793,
+   "first": "2025-02-01T00:00:00Z",
+   "last": "2026-09-29T09:35:00Z",
+   "sha256": "5017e0507001c6effb6ea074f7ebffbbc2e7ac038821418b827c5f5c9b66cd46",
+   "bytes": 10910878,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 174356,
+    "missing_bins": 563,
+    "gap_events": 173,
+    "max_gap": "1 days 00:05:00",
+    "partial_bins": 0,
+    "constituent_5m_bars": 173793
+   }
+  },
+  "final/btcusd-15m.csv": {
+   "symbol": "BTCUSD",
+   "split": "final",
+   "tf": "15m",
+   "rows": 58022,
+   "first": "2025-02-01T00:00:00Z",
+   "last": "2026-09-29T09:15:00Z",
+   "sha256": "e2480cd792206fe3966380ee808c5727f5e8d5c5662a43078ef0dab9b21db03b",
+   "bytes": 4222558,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 58118,
+    "missing_bins": 96,
+    "gap_events": 1,
+    "max_gap": "1 days 00:15:00",
+    "partial_bins": 1,
+    "constituent_5m_bars": 174065
+   }
+  },
+  "final/btcusd-1d.csv": {
+   "symbol": "BTCUSD",
+   "split": "final",
+   "tf": "1d",
+   "rows": 604,
+   "first": "2025-02-01T00:00:00Z",
+   "last": "2026-09-28T00:00:00Z",
+   "sha256": "36f46baeac5d5ba4142437b27e47881745a05ef91300fa7e18ac104d3edea8ca",
+   "bytes": 43874,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 605,
+    "missing_bins": 1,
+    "gap_events": 1,
+    "max_gap": "2 days 00:00:00",
+    "partial_bins": 1,
+    "constituent_5m_bars": 173951
+   }
+  },
+  "final/btcusd-1h.csv": {
+   "symbol": "BTCUSD",
+   "split": "final",
+   "tf": "1h",
+   "rows": 14505,
+   "first": "2025-02-01T00:00:00Z",
+   "last": "2026-09-29T08:00:00Z",
+   "sha256": "816d1e392a7a3fd118d69c228c09400d5c8467487548b8a29ac7b1084f206743",
+   "bytes": 1050329,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 14529,
+    "missing_bins": 24,
+    "gap_events": 1,
+    "max_gap": "1 days 01:00:00",
+    "partial_bins": 1,
+    "constituent_5m_bars": 174059
+   }
+  },
+  "final/btcusd-1w.csv": {
+   "symbol": "BTCUSD",
+   "split": "final",
+   "tf": "1w",
+   "rows": 86,
+   "first": "2025-02-03T00:00:00Z",
+   "last": "2026-09-21T00:00:00Z",
+   "sha256": "5b0d2e329f72a3213283c5d833d29be923eba0145ee4a672d0c248177d4f6b94",
+   "bytes": 6294,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 86,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 2,
+    "constituent_5m_bars": 173087
+   }
+  },
+  "final/btcusd-2h.csv": {
+   "symbol": "BTCUSD",
+   "split": "final",
+   "tf": "2h",
+   "rows": 7252,
+   "first": "2025-02-01T00:00:00Z",
+   "last": "2026-09-29T06:00:00Z",
+   "sha256": "7ed0d7148049a30328b3a3fc6f2d863241a15933da2a898684cc933937d1a3fd",
+   "bytes": 524526,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 7264,
+    "missing_bins": 12,
+    "gap_events": 1,
+    "max_gap": "1 days 02:00:00",
+    "partial_bins": 1,
+    "constituent_5m_bars": 174047
+   }
+  },
+  "final/btcusd-30m.csv": {
+   "symbol": "BTCUSD",
+   "split": "final",
+   "tf": "30m",
+   "rows": 29011,
+   "first": "2025-02-01T00:00:00Z",
+   "last": "2026-09-29T09:00:00Z",
+   "sha256": "963822446b2a597c00190cee6e65a5b738e81bcd13b9fe379ec48580fbae0709",
+   "bytes": 2106174,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 29059,
+    "missing_bins": 48,
+    "gap_events": 1,
+    "max_gap": "1 days 00:30:00",
+    "partial_bins": 1,
+    "constituent_5m_bars": 174065
+   }
+  },
+  "final/btcusd-4h.csv": {
+   "symbol": "BTCUSD",
+   "split": "final",
+   "tf": "4h",
+   "rows": 3626,
+   "first": "2025-02-01T00:00:00Z",
+   "last": "2026-09-29T04:00:00Z",
+   "sha256": "7e19768338479860665c1aee79e733793edc70afd3f6f0874858e810d805903d",
+   "bytes": 262606,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 3632,
+    "missing_bins": 6,
+    "gap_events": 1,
+    "max_gap": "1 days 04:00:00",
+    "partial_bins": 1,
+    "constituent_5m_bars": 174047
+   }
+  },
+  "final/btcusd-5m.csv": {
+   "symbol": "BTCUSD",
+   "split": "final",
+   "tf": "5m",
+   "rows": 174067,
+   "first": "2025-02-01T00:00:00Z",
+   "last": "2026-09-29T09:35:00Z",
+   "sha256": "9a94d07f31cd55040343c1640d1f85a1659fcb0a9a5310aef1e9525ba0a6bb56",
+   "bytes": 12579312,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 174356,
+    "missing_bins": 289,
+    "gap_events": 2,
+    "max_gap": "1 days 00:05:00",
+    "partial_bins": 0,
+    "constituent_5m_bars": 174067
+   }
+  },
+  "final/dogeusd-15m.csv": {
+   "symbol": "DOGEUSD",
+   "split": "final",
+   "tf": "15m",
+   "rows": 58017,
+   "first": "2025-02-01T00:00:00Z",
+   "last": "2026-09-29T09:00:00Z",
+   "sha256": "3b23fd2b8d48119534bb7b0072371a497b884754c6cb1458ddb52bb9ad0b40d9",
+   "bytes": 4156669,
+   "clean_from": "2021-08-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 58117,
+    "missing_bins": 100,
+    "gap_events": 2,
+    "max_gap": "1 days 00:15:00",
+    "partial_bins": 3,
+    "constituent_5m_bars": 174047
+   }
+  },
+  "final/dogeusd-1d.csv": {
+   "symbol": "DOGEUSD",
+   "split": "final",
+   "tf": "1d",
+   "rows": 604,
+   "first": "2025-02-01T00:00:00Z",
+   "last": "2026-09-28T00:00:00Z",
+   "sha256": "abb230fdf974c154fe1a8605db4cd93d41a368599c58378e1949829963755f88",
+   "bytes": 43842,
+   "clean_from": "2021-08-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 605,
+    "missing_bins": 1,
+    "gap_events": 1,
+    "max_gap": "2 days 00:00:00",
+    "partial_bins": 2,
+    "constituent_5m_bars": 173950
+   }
+  },
+  "final/dogeusd-1h.csv": {
+   "symbol": "DOGEUSD",
+   "split": "final",
+   "tf": "1h",
+   "rows": 14504,
+   "first": "2025-02-01T00:00:00Z",
+   "last": "2026-09-29T08:00:00Z",
+   "sha256": "e41852413ab58e4911ab1f99ae7b5d204cb4bdc05af182389f40298e10391aa5",
+   "bytes": 1043698,
+   "clean_from": "2021-08-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 14529,
+    "missing_bins": 25,
+    "gap_events": 2,
+    "max_gap": "1 days 01:00:00",
+    "partial_bins": 3,
+    "constituent_5m_bars": 174044
+   }
+  },
+  "final/dogeusd-1w.csv": {
+   "symbol": "DOGEUSD",
+   "split": "final",
+   "tf": "1w",
+   "rows": 86,
+   "first": "2025-02-03T00:00:00Z",
+   "last": "2026-09-21T00:00:00Z",
+   "sha256": "ae855522eef9ce80489c839e13e05d40becf51f77abb36b4977df4b4cd3f35a3",
+   "bytes": 6273,
+   "clean_from": "2021-08-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 86,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 3,
+    "constituent_5m_bars": 173086
+   }
+  },
+  "final/dogeusd-2h.csv": {
+   "symbol": "DOGEUSD",
+   "split": "final",
+   "tf": "2h",
+   "rows": 7252,
+   "first": "2025-02-01T00:00:00Z",
+   "last": "2026-09-29T06:00:00Z",
+   "sha256": "113ecda6eb22fadf391bcd788e12b2c1be39fd988a790f217858dae132471ad8",
+   "bytes": 522610,
+   "clean_from": "2021-08-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 7264,
+    "missing_bins": 12,
+    "gap_events": 1,
+    "max_gap": "1 days 02:00:00",
+    "partial_bins": 3,
+    "constituent_5m_bars": 174032
+   }
+  },
+  "final/dogeusd-30m.csv": {
+   "symbol": "DOGEUSD",
+   "split": "final",
+   "tf": "30m",
+   "rows": 29008,
+   "first": "2025-02-01T00:00:00Z",
+   "last": "2026-09-29T08:30:00Z",
+   "sha256": "2123c2a18148aec9086d227ec2775447224126d1e3e714a4a2718133795c7b7f",
+   "bytes": 2082261,
+   "clean_from": "2021-08-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 29058,
+    "missing_bins": 50,
+    "gap_events": 2,
+    "max_gap": "1 days 00:30:00",
+    "partial_bins": 3,
+    "constituent_5m_bars": 174044
+   }
+  },
+  "final/dogeusd-4h.csv": {
+   "symbol": "DOGEUSD",
+   "split": "final",
+   "tf": "4h",
+   "rows": 3626,
+   "first": "2025-02-01T00:00:00Z",
+   "last": "2026-09-29T04:00:00Z",
+   "sha256": "ffb76e7cb3967e1141f607ad9986636d320d6830dcf43923a8814217f0fbab13",
+   "bytes": 261760,
+   "clean_from": "2021-08-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 3632,
+    "missing_bins": 6,
+    "gap_events": 1,
+    "max_gap": "1 days 04:00:00",
+    "partial_bins": 3,
+    "constituent_5m_bars": 174032
+   }
+  },
+  "final/dogeusd-5m.csv": {
+   "symbol": "DOGEUSD",
+   "split": "final",
+   "tf": "5m",
+   "rows": 174048,
+   "first": "2025-02-01T00:00:00Z",
+   "last": "2026-09-29T09:15:00Z",
+   "sha256": "fec1609b6fd655f3cd8c68339f6972a38a3a5a380df95ee114327f3a850af1fc",
+   "bytes": 12363034,
+   "clean_from": "2021-08-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 174352,
+    "missing_bins": 304,
+    "gap_events": 4,
+    "max_gap": "1 days 00:05:00",
+    "partial_bins": 0,
+    "constituent_5m_bars": 174048
+   }
+  },
+  "final/ethusd-15m.csv": {
+   "symbol": "ETHUSD",
+   "split": "final",
+   "tf": "15m",
+   "rows": 58022,
+   "first": "2025-02-01T00:00:00Z",
+   "last": "2026-09-29T09:15:00Z",
+   "sha256": "2ede3a0282f53dec256f7dd8292aec943714fbac819e03fbe2ecaf7f126c4753",
+   "bytes": 4000839,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 58118,
+    "missing_bins": 96,
+    "gap_events": 1,
+    "max_gap": "1 days 00:15:00",
+    "partial_bins": 1,
+    "constituent_5m_bars": 174065
+   }
+  },
+  "final/ethusd-1d.csv": {
+   "symbol": "ETHUSD",
+   "split": "final",
+   "tf": "1d",
+   "rows": 604,
+   "first": "2025-02-01T00:00:00Z",
+   "last": "2026-09-28T00:00:00Z",
+   "sha256": "9a5b74a9db5e2e4865845343fae7b2192f982dd392714e20d635e366e72c29b2",
+   "bytes": 41960,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 605,
+    "missing_bins": 1,
+    "gap_events": 1,
+    "max_gap": "2 days 00:00:00",
+    "partial_bins": 1,
+    "constituent_5m_bars": 173951
+   }
+  },
+  "final/ethusd-1h.csv": {
+   "symbol": "ETHUSD",
+   "split": "final",
+   "tf": "1h",
+   "rows": 14505,
+   "first": "2025-02-01T00:00:00Z",
+   "last": "2026-09-29T08:00:00Z",
+   "sha256": "65e1daddffc63a6758c736449fb5e48d1783a379e7979c5dc1e165753129bb98",
+   "bytes": 999788,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 14529,
+    "missing_bins": 24,
+    "gap_events": 1,
+    "max_gap": "1 days 01:00:00",
+    "partial_bins": 1,
+    "constituent_5m_bars": 174059
+   }
+  },
+  "final/ethusd-1w.csv": {
+   "symbol": "ETHUSD",
+   "split": "final",
+   "tf": "1w",
+   "rows": 86,
+   "first": "2025-02-03T00:00:00Z",
+   "last": "2026-09-21T00:00:00Z",
+   "sha256": "3530c269e3e5d2a1fb810f0f967a6291f982d7ee7c8640aba0ac3762e7cfc73a",
+   "bytes": 6005,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 86,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 2,
+    "constituent_5m_bars": 173087
+   }
+  },
+  "final/ethusd-2h.csv": {
+   "symbol": "ETHUSD",
+   "split": "final",
+   "tf": "2h",
+   "rows": 7252,
+   "first": "2025-02-01T00:00:00Z",
+   "last": "2026-09-29T06:00:00Z",
+   "sha256": "c04faf03c71246233ea47f159d2138aab3e85e3217a8f2086d01fdc110d2225a",
+   "bytes": 500146,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 7264,
+    "missing_bins": 12,
+    "gap_events": 1,
+    "max_gap": "1 days 02:00:00",
+    "partial_bins": 1,
+    "constituent_5m_bars": 174047
+   }
+  },
+  "final/ethusd-30m.csv": {
+   "symbol": "ETHUSD",
+   "split": "final",
+   "tf": "30m",
+   "rows": 29011,
+   "first": "2025-02-01T00:00:00Z",
+   "last": "2026-09-29T09:00:00Z",
+   "sha256": "5ccd89a71bb5da08ec77201c3cac74a93457a7eb2f10ae4b9ce0865693a26107",
+   "bytes": 2000368,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 29059,
+    "missing_bins": 48,
+    "gap_events": 1,
+    "max_gap": "1 days 00:30:00",
+    "partial_bins": 1,
+    "constituent_5m_bars": 174065
+   }
+  },
+  "final/ethusd-4h.csv": {
+   "symbol": "ETHUSD",
+   "split": "final",
+   "tf": "4h",
+   "rows": 3626,
+   "first": "2025-02-01T00:00:00Z",
+   "last": "2026-09-29T04:00:00Z",
+   "sha256": "92ec430cd3bb35a16c9a9ea7c6d3c93958902b19aacd1d2793793b9641a10b15",
+   "bytes": 250396,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 3632,
+    "missing_bins": 6,
+    "gap_events": 1,
+    "max_gap": "1 days 04:00:00",
+    "partial_bins": 1,
+    "constituent_5m_bars": 174047
+   }
+  },
+  "final/ethusd-5m.csv": {
+   "symbol": "ETHUSD",
+   "split": "final",
+   "tf": "5m",
+   "rows": 174065,
+   "first": "2025-02-01T00:00:00Z",
+   "last": "2026-09-29T09:25:00Z",
+   "sha256": "5b056bb17092838aa5a9d46f0409910186828a30bb2f75876ece228fcc7f8003",
+   "bytes": 11916314,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 174354,
+    "missing_bins": 289,
+    "gap_events": 2,
+    "max_gap": "1 days 00:05:00",
+    "partial_bins": 0,
+    "constituent_5m_bars": 174065
+   }
+  },
+  "final/ltcusd-15m.csv": {
+   "symbol": "LTCUSD",
+   "split": "final",
+   "tf": "15m",
+   "rows": 57926,
+   "first": "2025-02-01T00:00:00Z",
+   "last": "2026-09-29T09:15:00Z",
+   "sha256": "b32a413489f4ddaa946c7c86580527eaeadf8149f7abc1ee3dd91a5b952f1c9a",
+   "bytes": 3652140,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 58118,
+    "missing_bins": 192,
+    "gap_events": 2,
+    "max_gap": "1 days 00:15:00",
+    "partial_bins": 2,
+    "constituent_5m_bars": 173776
+   }
+  },
+  "final/ltcusd-1d.csv": {
+   "symbol": "LTCUSD",
+   "split": "final",
+   "tf": "1d",
+   "rows": 603,
+   "first": "2025-02-01T00:00:00Z",
+   "last": "2026-09-28T00:00:00Z",
+   "sha256": "e4eff9a5e479d3518ad311fc44fc338713502f94f8de0453adf98b119b9364d3",
+   "bytes": 38099,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 605,
+    "missing_bins": 2,
+    "gap_events": 2,
+    "max_gap": "2 days 00:00:00",
+    "partial_bins": 2,
+    "constituent_5m_bars": 173662
+   }
+  },
+  "final/ltcusd-1h.csv": {
+   "symbol": "LTCUSD",
+   "split": "final",
+   "tf": "1h",
+   "rows": 14481,
+   "first": "2025-02-01T00:00:00Z",
+   "last": "2026-09-29T08:00:00Z",
+   "sha256": "1a0c5c403effdb0312e1807e68daf74a873797520aa7c2e801a88517525218d8",
+   "bytes": 911277,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 14529,
+    "missing_bins": 48,
+    "gap_events": 2,
+    "max_gap": "1 days 01:00:00",
+    "partial_bins": 2,
+    "constituent_5m_bars": 173770
+   }
+  },
+  "final/ltcusd-1w.csv": {
+   "symbol": "LTCUSD",
+   "split": "final",
+   "tf": "1w",
+   "rows": 86,
+   "first": "2025-02-03T00:00:00Z",
+   "last": "2026-09-21T00:00:00Z",
+   "sha256": "32ea503106050e642613ede67f9a4cc6f466684496b02fd18e1e265ce83431c1",
+   "bytes": 5486,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 86,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 4,
+    "constituent_5m_bars": 172798
+   }
+  },
+  "final/ltcusd-2h.csv": {
+   "symbol": "LTCUSD",
+   "split": "final",
+   "tf": "2h",
+   "rows": 7240,
+   "first": "2025-02-01T00:00:00Z",
+   "last": "2026-09-29T06:00:00Z",
+   "sha256": "01c7c6305397ed9085ff8d03ce8478d275ddaea265acd989996c2205dd229c87",
+   "bytes": 456281,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 7264,
+    "missing_bins": 24,
+    "gap_events": 2,
+    "max_gap": "1 days 02:00:00",
+    "partial_bins": 2,
+    "constituent_5m_bars": 173758
+   }
+  },
+  "final/ltcusd-30m.csv": {
+   "symbol": "LTCUSD",
+   "split": "final",
+   "tf": "30m",
+   "rows": 28963,
+   "first": "2025-02-01T00:00:00Z",
+   "last": "2026-09-29T09:00:00Z",
+   "sha256": "76fcf781b861269b2f2f586ea1cee19f8afec81bfbcb23c3b156fa2b296ae5f5",
+   "bytes": 1826276,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 29059,
+    "missing_bins": 96,
+    "gap_events": 2,
+    "max_gap": "1 days 00:30:00",
+    "partial_bins": 2,
+    "constituent_5m_bars": 173776
+   }
+  },
+  "final/ltcusd-4h.csv": {
+   "symbol": "LTCUSD",
+   "split": "final",
+   "tf": "4h",
+   "rows": 3620,
+   "first": "2025-02-01T00:00:00Z",
+   "last": "2026-09-29T04:00:00Z",
+   "sha256": "bd1dd94ba87c5f837d4a9f0678489bf7097ff903c2472d2a4aa9137c6cf13cc3",
+   "bytes": 228296,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 3632,
+    "missing_bins": 12,
+    "gap_events": 2,
+    "max_gap": "1 days 04:00:00",
+    "partial_bins": 2,
+    "constituent_5m_bars": 173758
+   }
+  },
+  "final/ltcusd-5m.csv": {
+   "symbol": "LTCUSD",
+   "split": "final",
+   "tf": "5m",
+   "rows": 173777,
+   "first": "2025-02-01T00:00:00Z",
+   "last": "2026-09-29T09:30:00Z",
+   "sha256": "48f0cbda1a5ff2260f9758bbdf823f40431bafd573bdfca4d962d1e0e658ab1c",
+   "bytes": 10823743,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 174355,
+    "missing_bins": 578,
+    "gap_events": 4,
+    "max_gap": "1 days 00:05:00",
+    "partial_bins": 0,
+    "constituent_5m_bars": 173777
+   }
+  },
+  "final/solusd-15m.csv": {
+   "symbol": "SOLUSD",
+   "split": "final",
+   "tf": "15m",
+   "rows": 57926,
+   "first": "2025-02-01T00:00:00Z",
+   "last": "2026-09-29T09:15:00Z",
+   "sha256": "a65f22863e90638088c0a422f23f58032a37daf0095f8e39afc8232443878c77",
+   "bytes": 3756102,
+   "clean_from": "2021-10-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 58118,
+    "missing_bins": 192,
+    "gap_events": 2,
+    "max_gap": "1 days 00:15:00",
+    "partial_bins": 3,
+    "constituent_5m_bars": 173775
+   }
+  },
+  "final/solusd-1d.csv": {
+   "symbol": "SOLUSD",
+   "split": "final",
+   "tf": "1d",
+   "rows": 603,
+   "first": "2025-02-01T00:00:00Z",
+   "last": "2026-09-28T00:00:00Z",
+   "sha256": "9eeb976af61be5e3cba60eb62c17779126a926c41c2fa9c3b8028622edbde43b",
+   "bytes": 39316,
+   "clean_from": "2021-10-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 605,
+    "missing_bins": 2,
+    "gap_events": 2,
+    "max_gap": "2 days 00:00:00",
+    "partial_bins": 3,
+    "constituent_5m_bars": 173661
+   }
+  },
+  "final/solusd-1h.csv": {
+   "symbol": "SOLUSD",
+   "split": "final",
+   "tf": "1h",
+   "rows": 14481,
+   "first": "2025-02-01T00:00:00Z",
+   "last": "2026-09-29T08:00:00Z",
+   "sha256": "8d4c62c105232b81364698f895c1957364e6297f5629b51bad39b6be56ff01aa",
+   "bytes": 938603,
+   "clean_from": "2021-10-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 14529,
+    "missing_bins": 48,
+    "gap_events": 2,
+    "max_gap": "1 days 01:00:00",
+    "partial_bins": 3,
+    "constituent_5m_bars": 173769
+   }
+  },
+  "final/solusd-1w.csv": {
+   "symbol": "SOLUSD",
+   "split": "final",
+   "tf": "1w",
+   "rows": 86,
+   "first": "2025-02-03T00:00:00Z",
+   "last": "2026-09-21T00:00:00Z",
+   "sha256": "6d7a0c6b6cde2085775203021f60f1322acf4306b22de0ad420476002e69bee6",
+   "bytes": 5633,
+   "clean_from": "2021-10-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 86,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 5,
+    "constituent_5m_bars": 172797
+   }
+  },
+  "final/solusd-2h.csv": {
+   "symbol": "SOLUSD",
+   "split": "final",
+   "tf": "2h",
+   "rows": 7240,
+   "first": "2025-02-01T00:00:00Z",
+   "last": "2026-09-29T06:00:00Z",
+   "sha256": "dcdb521eecdb41a4606726d791cbd53c3897bde29beec1dfe3a3d097fca7a075",
+   "bytes": 469186,
+   "clean_from": "2021-10-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 7264,
+    "missing_bins": 24,
+    "gap_events": 2,
+    "max_gap": "1 days 02:00:00",
+    "partial_bins": 3,
+    "constituent_5m_bars": 173757
+   }
+  },
+  "final/solusd-30m.csv": {
+   "symbol": "SOLUSD",
+   "split": "final",
+   "tf": "30m",
+   "rows": 28963,
+   "first": "2025-02-01T00:00:00Z",
+   "last": "2026-09-29T09:00:00Z",
+   "sha256": "36586ca6ddba13d22eeaa3f5ac66b2b45ed68a1062dfd64faf77663c38d213ca",
+   "bytes": 1878905,
+   "clean_from": "2021-10-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 29059,
+    "missing_bins": 96,
+    "gap_events": 2,
+    "max_gap": "1 days 00:30:00",
+    "partial_bins": 3,
+    "constituent_5m_bars": 173775
+   }
+  },
+  "final/solusd-4h.csv": {
+   "symbol": "SOLUSD",
+   "split": "final",
+   "tf": "4h",
+   "rows": 3620,
+   "first": "2025-02-01T00:00:00Z",
+   "last": "2026-09-29T04:00:00Z",
+   "sha256": "dba767f4747e926d5af0e529a4d008ef8fddf1129829db2f6f59632021a2b106",
+   "bytes": 235052,
+   "clean_from": "2021-10-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 3632,
+    "missing_bins": 12,
+    "gap_events": 2,
+    "max_gap": "1 days 04:00:00",
+    "partial_bins": 3,
+    "constituent_5m_bars": 173757
+   }
+  },
+  "final/solusd-5m.csv": {
+   "symbol": "SOLUSD",
+   "split": "final",
+   "tf": "5m",
+   "rows": 173775,
+   "first": "2025-02-01T00:00:00Z",
+   "last": "2026-09-29T09:25:00Z",
+   "sha256": "1ee9456f4a4ed49af4c39a68776cc6d8a0289f3c78126cff24d2a93c4406c2f0",
+   "bytes": 11189142,
+   "clean_from": "2021-10-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 174354,
+    "missing_bins": 579,
+    "gap_events": 5,
+    "max_gap": "1 days 00:05:00",
+    "partial_bins": 0,
+    "constituent_5m_bars": 173775
+   }
+  },
+  "final/xrpusd-15m.csv": {
+   "symbol": "XRPUSD",
+   "split": "final",
+   "tf": "15m",
+   "rows": 57926,
+   "first": "2025-02-01T00:00:00Z",
+   "last": "2026-09-29T09:15:00Z",
+   "sha256": "e809a2af1cc9b7a37fb873ad4776d695494d85cefe14772d9824df229d562938",
+   "bytes": 3871842,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 58118,
+    "missing_bins": 192,
+    "gap_events": 2,
+    "max_gap": "1 days 00:15:00",
+    "partial_bins": 3,
+    "constituent_5m_bars": 173775
+   }
+  },
+  "final/xrpusd-1d.csv": {
+   "symbol": "XRPUSD",
+   "split": "final",
+   "tf": "1d",
+   "rows": 603,
+   "first": "2025-02-01T00:00:00Z",
+   "last": "2026-09-28T00:00:00Z",
+   "sha256": "df99a79a54fca371d9914eed8d72759a5b7e6a7575c47b781eaa506a96d840ff",
+   "bytes": 40628,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 605,
+    "missing_bins": 2,
+    "gap_events": 2,
+    "max_gap": "2 days 00:00:00",
+    "partial_bins": 3,
+    "constituent_5m_bars": 173661
+   }
+  },
+  "final/xrpusd-1h.csv": {
+   "symbol": "XRPUSD",
+   "split": "final",
+   "tf": "1h",
+   "rows": 14481,
+   "first": "2025-02-01T00:00:00Z",
+   "last": "2026-09-29T08:00:00Z",
+   "sha256": "825c726362b140223f1249ad413035ed8ab6fd4ef0f68fd5a1264e6c29008d8a",
+   "bytes": 971628,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 14529,
+    "missing_bins": 48,
+    "gap_events": 2,
+    "max_gap": "1 days 01:00:00",
+    "partial_bins": 3,
+    "constituent_5m_bars": 173769
+   }
+  },
+  "final/xrpusd-1w.csv": {
+   "symbol": "XRPUSD",
+   "split": "final",
+   "tf": "1w",
+   "rows": 86,
+   "first": "2025-02-03T00:00:00Z",
+   "last": "2026-09-21T00:00:00Z",
+   "sha256": "43506ac12e22415fd5e0fcc30d8c013686f597ed436ace08a7b30e8970e1ff1f",
+   "bytes": 5805,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 86,
+    "missing_bins": 0,
+    "gap_events": 0,
+    "max_gap": null,
+    "partial_bins": 5,
+    "constituent_5m_bars": 172797
+   }
+  },
+  "final/xrpusd-2h.csv": {
+   "symbol": "XRPUSD",
+   "split": "final",
+   "tf": "2h",
+   "rows": 7240,
+   "first": "2025-02-01T00:00:00Z",
+   "last": "2026-09-29T06:00:00Z",
+   "sha256": "e47ed9295c4d45819d765a7649db2634d977e6f891cb229936f59c5a08a03e48",
+   "bytes": 485693,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 7264,
+    "missing_bins": 24,
+    "gap_events": 2,
+    "max_gap": "1 days 02:00:00",
+    "partial_bins": 3,
+    "constituent_5m_bars": 173757
+   }
+  },
+  "final/xrpusd-30m.csv": {
+   "symbol": "XRPUSD",
+   "split": "final",
+   "tf": "30m",
+   "rows": 28963,
+   "first": "2025-02-01T00:00:00Z",
+   "last": "2026-09-29T09:00:00Z",
+   "sha256": "73509514011361a8c2bd3205f91d8ba21d32f7485704d3a4803222b3118f3f1b",
+   "bytes": 1939748,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 29059,
+    "missing_bins": 96,
+    "gap_events": 2,
+    "max_gap": "1 days 00:30:00",
+    "partial_bins": 3,
+    "constituent_5m_bars": 173775
+   }
+  },
+  "final/xrpusd-4h.csv": {
+   "symbol": "XRPUSD",
+   "split": "final",
+   "tf": "4h",
+   "rows": 3620,
+   "first": "2025-02-01T00:00:00Z",
+   "last": "2026-09-29T04:00:00Z",
+   "sha256": "e04770157610a5f2a82a58daff7835ded60172a40117176754db60e29eb641f0",
+   "bytes": 243240,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 3632,
+    "missing_bins": 12,
+    "gap_events": 2,
+    "max_gap": "1 days 04:00:00",
+    "partial_bins": 3,
+    "constituent_5m_bars": 173757
+   }
+  },
+  "final/xrpusd-5m.csv": {
+   "symbol": "XRPUSD",
+   "split": "final",
+   "tf": "5m",
+   "rows": 173775,
+   "first": "2025-02-01T00:00:00Z",
+   "last": "2026-09-29T09:25:00Z",
+   "sha256": "42320a0f8c789a2be24b7858403f6bd5d13cf8d29d347dc83ecb5503aee72df0",
+   "bytes": 11549228,
+   "clean_from": "2021-07-01",
+   "starts_at_clean_from": false,
+   "gaps": {
+    "expected_bins": 174354,
+    "missing_bins": 579,
+    "gap_events": 5,
+    "max_gap": "1 days 00:05:00",
+    "partial_bins": 0,
+    "constituent_5m_bars": 173775
+   }
+  }
+ }
+}

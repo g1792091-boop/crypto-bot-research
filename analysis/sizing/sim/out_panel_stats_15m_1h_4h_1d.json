@@ -1,0 +1,266 @@
+{
+ "15m": {
+  "H": 16,
+  "lam": 4.5,
+  "grid": 102224,
+  "ndays": 1065,
+  "Eabs_pooled": 1.11,
+  "coins": {
+   "btcusd": {
+    "n_ok": 102224,
+    "atr_med": 0.405,
+    "Eabs_rH": 0.747,
+    "range_med": 0.354,
+    "frac_range_gt_10x_med": 0.00145,
+    "max_range": 19.96
+   },
+   "ethusd": {
+    "n_ok": 102224,
+    "atr_med": 0.478,
+    "Eabs_rH": 0.944,
+    "range_med": 0.42,
+    "frac_range_gt_10x_med": 0.00141,
+    "max_range": 20.6
+   },
+   "solusd": {
+    "n_ok": 96268,
+    "atr_med": 0.739,
+    "Eabs_rH": 1.523,
+    "range_med": 0.664,
+    "frac_range_gt_10x_med": 0.00195,
+    "max_range": 34.56
+   },
+   "xrpusd": {
+    "n_ok": 102224,
+    "atr_med": 0.502,
+    "Eabs_rH": 1.062,
+    "range_med": 0.442,
+    "frac_range_gt_10x_med": 0.00234,
+    "max_range": 35.8
+   },
+   "dogeusd": {
+    "n_ok": 102124,
+    "atr_med": 0.613,
+    "Eabs_rH": 1.262,
+    "range_med": 0.541,
+    "frac_range_gt_10x_med": 0.00279,
+    "max_range": 42.8
+   },
+   "ltcusd": {
+    "n_ok": 102224,
+    "atr_med": 0.553,
+    "Eabs_rH": 1.109,
+    "range_med": 0.483,
+    "frac_range_gt_10x_med": 0.00149,
+    "max_range": 33.33
+   },
+   "bchusd": {
+    "n_ok": 102199,
+    "atr_med": 0.498,
+    "Eabs_rH": 1.146,
+    "range_med": 0.428,
+    "frac_range_gt_10x_med": 0.00228,
+    "max_range": 33.59
+   }
+  },
+  "sec": 2.0
+ },
+ "1h": {
+  "H": 16,
+  "lam": 1.5,
+  "grid": 25544,
+  "ndays": 1065,
+  "Eabs_pooled": 2.288,
+  "coins": {
+   "btcusd": {
+    "n_ok": 25544,
+    "atr_med": 0.81,
+    "Eabs_rH": 1.595,
+    "range_med": 0.688,
+    "frac_range_gt_10x_med": 0.00117,
+    "max_range": 22.17
+   },
+   "ethusd": {
+    "n_ok": 25544,
+    "atr_med": 0.956,
+    "Eabs_rH": 2.009,
+    "range_med": 0.832,
+    "frac_range_gt_10x_med": 0.00125,
+    "max_range": 19.98
+   },
+   "solusd": {
+    "n_ok": 23980,
+    "atr_med": 1.517,
+    "Eabs_rH": 3.115,
+    "range_med": 1.345,
+    "frac_range_gt_10x_med": 0.00175,
+    "max_range": 32.35
+   },
+   "xrpusd": {
+    "n_ok": 25544,
+    "atr_med": 1.056,
+    "Eabs_rH": 2.138,
+    "range_med": 0.91,
+    "frac_range_gt_10x_med": 0.00219,
+    "max_range": 35.24
+   },
+   "dogeusd": {
+    "n_ok": 25444,
+    "atr_med": 1.265,
+    "Eabs_rH": 2.595,
+    "range_med": 1.083,
+    "frac_range_gt_10x_med": 0.00252,
+    "max_range": 42.97
+   },
+   "ltcusd": {
+    "n_ok": 25544,
+    "atr_med": 1.142,
+    "Eabs_rH": 2.271,
+    "range_med": 0.974,
+    "frac_range_gt_10x_med": 0.00153,
+    "max_range": 33.48
+   },
+   "bchusd": {
+    "n_ok": 25544,
+    "atr_med": 1.08,
+    "Eabs_rH": 2.347,
+    "range_med": 0.915,
+    "frac_range_gt_10x_med": 0.00211,
+    "max_range": 33.06
+   }
+  },
+  "sec": 0.3
+ },
+ "4h": {
+  "H": 4,
+  "lam": 0.42857142857142855,
+  "grid": 6386,
+  "ndays": 1065,
+  "Eabs_pooled": 2.287,
+  "coins": {
+   "btcusd": {
+    "n_ok": 6386,
+    "atr_med": 1.64,
+    "Eabs_rH": 1.6,
+    "range_med": 1.408,
+    "frac_range_gt_10x_med": 0.00078,
+    "max_range": 26.44
+   },
+   "ethusd": {
+    "n_ok": 6386,
+    "atr_med": 1.968,
+    "Eabs_rH": 2.016,
+    "range_med": 1.734,
+    "frac_range_gt_10x_med": 0.00094,
+    "max_range": 27.86
+   },
+   "solusd": {
+    "n_ok": 5920,
+    "atr_med": 3.144,
+    "Eabs_rH": 3.128,
+    "range_med": 2.772,
+    "frac_range_gt_10x_med": 0.00152,
+    "max_range": 50.97
+   },
+   "xrpusd": {
+    "n_ok": 6386,
+    "atr_med": 2.23,
+    "Eabs_rH": 2.143,
+    "range_med": 1.899,
+    "frac_range_gt_10x_med": 0.00188,
+    "max_range": 44.2
+   },
+   "dogeusd": {
+    "n_ok": 6286,
+    "atr_med": 2.681,
+    "Eabs_rH": 2.56,
+    "range_med": 2.231,
+    "frac_range_gt_10x_med": 0.00191,
+    "max_range": 42.97
+   },
+   "ltcusd": {
+    "n_ok": 6386,
+    "atr_med": 2.38,
+    "Eabs_rH": 2.274,
+    "range_med": 2.05,
+    "frac_range_gt_10x_med": 0.00125,
+    "max_range": 41.57
+   },
+   "bchusd": {
+    "n_ok": 6386,
+    "atr_med": 2.333,
+    "Eabs_rH": 2.354,
+    "range_med": 1.985,
+    "frac_range_gt_10x_med": 0.00125,
+    "max_range": 37.67
+   }
+  },
+  "sec": 0.1
+ },
+ "1d": {
+  "H": 4,
+  "lam": 0.21428571428571427,
+  "grid": 992,
+  "ndays": 1065,
+  "Eabs_pooled": 5.755,
+  "coins": {
+   "btcusd": {
+    "n_ok": 992,
+    "atr_med": 4.229,
+    "Eabs_rH": 4.135,
+    "range_med": 3.696,
+    "frac_range_gt_10x_med": 0.0,
+    "max_range": 27.91
+   },
+   "ethusd": {
+    "n_ok": 992,
+    "atr_med": 4.958,
+    "Eabs_rH": 5.055,
+    "range_med": 4.434,
+    "frac_range_gt_10x_med": 0.0,
+    "max_range": 27.47
+   },
+   "solusd": {
+    "n_ok": 900,
+    "atr_med": 8.051,
+    "Eabs_rH": 8.18,
+    "range_med": 7.066,
+    "frac_range_gt_10x_med": 0.00111,
+    "max_range": 93.63
+   },
+   "xrpusd": {
+    "n_ok": 992,
+    "atr_med": 5.917,
+    "Eabs_rH": 5.035,
+    "range_med": 4.852,
+    "frac_range_gt_10x_med": 0.00101,
+    "max_range": 58.76
+   },
+   "dogeusd": {
+    "n_ok": 961,
+    "atr_med": 7.129,
+    "Eabs_rH": 6.359,
+    "range_med": 5.879,
+    "frac_range_gt_10x_med": 0.0,
+    "max_range": 56.87
+   },
+   "ltcusd": {
+    "n_ok": 992,
+    "atr_med": 6.034,
+    "Eabs_rH": 5.586,
+    "range_med": 5.204,
+    "frac_range_gt_10x_med": 0.0,
+    "max_range": 38.35
+   },
+   "bchusd": {
+    "n_ok": 992,
+    "atr_med": 6.091,
+    "Eabs_rH": 6.181,
+    "range_med": 5.166,
+    "frac_range_gt_10x_med": 0.0,
+    "max_range": 39.76
+   }
+  },
+  "sec": 0.0
+ }
+}

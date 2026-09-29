@@ -1,0 +1,49 @@
+cells: [('N16_BBRSI', '5m', np.int64(64)), ('N16_BBRSI', '5m', np.int64(16)), ('N09_ALLIG_AROON', '15m', np.int64(16)), ('N02_ST_KST', '15m', np.int64(16)), ('N06_MACD_ORB', '30m', np.int64(64)), ('N23_HA_ST', '30m', np.int64(64)), ('N25_DST_CCI', '1h', np.int64(16)), ('DOGE_L', '1h', np.int64(16)), ('N05_PSAR_POC', '4h', np.int64(16)), ('N02_ST_KST', '4h', np.int64(64)), ('S2_ST_ROC', '1d', np.int64(64)), ('S4_BB_BBP', '1d', np.int64(16)), ('N13_3OUTSIDE', '4h', 64), ('N13_3OUTSIDE', '4h', 16), ('DOGE_L', '1h', 64), ('V45_AMB', '1h', 16), ('V45_AMB', '15m', 64), ('N04_ST_KLINGER', '1d', 64), ('V45_AMB', '1d', 64)]
+N16_BBRSI         5m H16  n 22859/22859  fwd -4.818073e-06/-4.818073e-06  z -0.0605/-0.0605  z_vn -0.2526/-0.2526  mu* 1.992713e-03/1.992713e-03  z_own(B2000) -0.083 p_emp_own 0.5372  sym 4/4
+N16_BBRSI         5m H64  n 22857/22857  fwd -1.136742e-04/-1.136742e-04  z -0.7403/-0.7403  z_vn 0.4020/0.4020  mu* 2.630608e-03/2.630608e-03  z_own(B2000) -0.739 p_emp_own 0.7691  sym 3/3
+-- 5m done 238s
+N02_ST_KST       15m H16  n 18688/18688  fwd -5.210256e-05/-5.210256e-05  z -0.2229/-0.2229  z_vn -6.7117/-6.7117  mu* 2.456259e-03/2.456259e-03  z_own(B2000) -0.217 p_emp_own 0.6002  sym 3/3
+N09_ALLIG_AROON  15m H16  n 10062/10062  fwd -9.526997e-05/-9.526997e-05  z -0.4336/-0.4336  z_vn -5.9967/-5.9967  mu* 2.456259e-03/2.456259e-03  z_own(B2000) -0.478 p_emp_own 0.6717  sym 2/2
+V45_AMB          15m H64  n 8416/8416  fwd -3.214229e-04/-3.214229e-04  z -0.3722/-0.3722  z_vn -0.7030/-0.7030  mu* 3.672892e-03/3.672892e-03  z_own(B2000) -0.301 p_emp_own 0.6112  sym 3/3
+-- 15m done 43s
+N06_MACD_ORB     30m H64  n 3396/3396  fwd -1.293975e-03/-1.293975e-03  z -1.0873/-1.0873  z_vn -3.7339/-3.7339  mu* 4.783642e-03/4.783642e-03  z_own(B2000) -1.120 p_emp_own 0.8666  sym 2/2
+N23_HA_ST        30m H64  n 36455/36455  fwd 8.264404e-05/8.264404e-05  z 0.0498/0.0498  z_vn -3.8245/-3.8245  mu* 4.783642e-03/4.783642e-03  z_own(B2000) 0.142 p_emp_own 0.4383  sym 2/2
+-- 30m done 6s
+DOGE_L            1h H16  n 1718/1718  fwd 1.504137e-03/1.504137e-03  z 1.0158/1.0158  z_vn -2.6570/-2.6570  mu* 3.675246e-03/3.675246e-03  z_own(B2000) 0.942 p_emp_own 0.1629  sym 6/6
+DOGE_L            1h H64  n 1717/1717  fwd 8.111066e-03/8.111066e-03  z 2.6376/2.6376  z_vn 0.1492/0.1492  mu* 6.487218e-03/6.487218e-03  z_own(B2000) 2.670 p_emp_own 0.0095  sym 7/7
+N25_DST_CCI       1h H16  n 7687/7687  fwd 2.311515e-04/2.311515e-04  z 0.3274/0.3274  z_vn 0.6526/0.6526  mu* 3.675246e-03/3.675246e-03  z_own(B2000) 0.403 p_emp_own 0.3393  sym 5/5
+V45_AMB           1h H16  n 2232/2232  fwd 1.651270e-04/1.651270e-04  z 0.1166/0.1166  z_vn 0.7700/0.7700  mu* 3.675246e-03/3.675246e-03  z_own(B2000) 0.174 p_emp_own 0.4303  sym 4/4
+-- 1h done 14s
+N02_ST_KST        4h H64  n 1090/1090  fwd -4.458521e-03/-4.458521e-03  z -0.3365/-0.3365  z_vn -1.1083/-1.1083  mu* 1.363205e-02/1.363205e-02  z_own(B2000) -0.339 p_emp_own 0.6077  sym 2/2
+N05_PSAR_POC      4h H16  n 313/313  fwd -1.207179e-03/-1.207179e-03  z -0.2762/-0.2762  z_vn -1.4394/-1.4394  mu* 6.452987e-03/6.452987e-03  z_own(B2000) -0.204 p_emp_own 0.5952  sym 3/3
+N13_3OUTSIDE      4h H16  n 236/236  fwd 1.237769e-02/1.237769e-02  z 2.5907/2.5907  z_vn 2.1287/2.1287  mu* 6.452987e-03/6.452987e-03  z_own(B2000) 2.462 p_emp_own 0.0040  sym 7/7
+N13_3OUTSIDE      4h H64  n 234/234  fwd 3.332057e-02/3.332057e-02  z 3.1572/3.1572  z_vn 2.0583/2.0583  mu* 1.363205e-02/1.363205e-02  z_own(B2000) 2.993 p_emp_own 0.0035  sym 6/6
+-- 4h done 3s
+N04_ST_KLINGER    1d H64  n 576/576  fwd 6.794002e-02/6.794002e-02  z 1.8513/1.8513  z_vn 1.7215/1.7215  mu* 4.462791e-02/4.462791e-02  z_own(B2000) 1.852 p_emp_own 0.0565  sym 5/5
+S2_ST_ROC         1d H64  n 488/488  fwd 5.860029e-02/5.860029e-02  z 1.4602/1.4602  z_vn 0.9565/0.9565  mu* 4.462791e-02/4.462791e-02  z_own(B2000) 1.447 p_emp_own 0.0890  sym 6/6
+S4_BB_BBP         1d H16  n 218/218  fwd 3.027810e-03/3.027810e-03  z 0.3608/0.3608  z_vn -0.4241/-0.4241  mu* 1.738311e-02/1.738311e-02  z_own(B2000) 0.309 p_emp_own 0.4028  sym 4/4
+V45_AMB           1d H64  n 15/15  fwd -3.588678e-02/-3.588678e-02  z -0.6047/-0.6047  z_vn -0.2600/-0.2600  mu* 4.462791e-02/4.462791e-02  z_own(B2000) -0.681 p_emp_own 0.6987  sym 0/0
+-- 1d done 5s
+n              max abs diff 0.000e+00  nan-mismatch 0
+fwd            max abs diff 8.977e-17  nan-mismatch 0
+z              max abs diff 2.665e-15  nan-mismatch 0
+z_vn           max abs diff 5.324e-12  nan-mismatch 0
+mu_star        max abs diff 9.888e-17  nan-mismatch 0
+E_abs_r        max abs diff 9.021e-17  nan-mismatch 0
+cost_H         max abs diff 6.679e-17  nan-mismatch 0
+symbols_pos    max abs diff 0.000e+00  nan-mismatch 0
+n_coins_ge10   max abs diff 0.000e+00  nan-mismatch 0
+fwd_BTCUSD     max abs diff 9.498e-17  nan-mismatch 0
+fwd_ETHUSD     max abs diff 8.413e-17  nan-mismatch 0
+fwd_SOLUSD     max abs diff 9.714e-17  nan-mismatch 0
+fwd_XRPUSD     max abs diff 9.454e-17  nan-mismatch 0
+fwd_DOGEUSD    max abs diff 8.999e-17  nan-mismatch 0
+fwd_LTCUSD     max abs diff 8.890e-17  nan-mismatch 0
+fwd_BCHUSD     max abs diff 9.021e-17  nan-mismatch 0
+n_BTCUSD       max abs diff 0.000e+00  nan-mismatch 0
+n_ETHUSD       max abs diff 0.000e+00  nan-mismatch 0
+n_SOLUSD       max abs diff 0.000e+00  nan-mismatch 0
+n_XRPUSD       max abs diff 0.000e+00  nan-mismatch 0
+n_DOGEUSD      max abs diff 0.000e+00  nan-mismatch 0
+n_LTCUSD       max abs diff 0.000e+00  nan-mismatch 0
+n_BCHUSD       max abs diff 0.000e+00  nan-mismatch 0

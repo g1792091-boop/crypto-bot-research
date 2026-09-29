@@ -1,0 +1,23 @@
+files 7 rows 666 dups 0
+strategies 37 tfs ['15m', '1d', '1h', '30m', '4h', '5m'] H [np.int64(4), np.int64(16), np.int64(64)]
+max |p - sf(z)| 2.220446049250313e-16
+max |p_vn - sf(z_vn)| 1.942890293094024e-16
+max |cost_H - mine| 6.678685382510707e-17
+max |mu* - mine| 9.020562075079397e-17
+family m 528 {'15m': 102, '1d': 45, '1h': 96, '30m': 99, '4h': 81, '5m': 105}
+symbols_pos mismatch 0 n10 mismatch 0
+gate_pass_spec 0 gate_pass 0
+c1 0 c2 15 c3 15 c4 220
+min p 0.0007963894634292 {'strategy': 'N13_3OUTSIDE', 'tf': '4h', 'H': 64, 'n': 234, 'z': 3.1572259170659818, 'p': 0.0007963894634292, 'ph': 0.42049363669061757, 'p_vn': 0.0197791017858539}
+holm first step 9.46969696969697e-05 m needed for min p to pass 62.78335198547622
+raw-level (no multiplicity) passes: 3
+           strategy  tf   H    n       fwd   mu_star         z         p      p_vn  symbols_pos  n_coins_ge10
+507    N13_3OUTSIDE  4h  16  236  0.012378  0.006453  2.590704  0.004789  0.016640            7             7
+544    N13_3OUTSIDE  4h  64  234  0.033321  0.013632  3.157226  0.000796  0.019779            6             7
+651  N04_ST_KLINGER  1d  64  576  0.067940  0.044628  1.851300  0.032063  0.042576            5             7
+merge rows 666 max|ph diff| 5.551115123125783e-17 max|pvh diff| 9.71445146547012e-17 fwd diff 0.0 gp any False False
+cells with p<0.05/1: 31
+cells with p<0.05/10: 5
+cells with p<0.05/37: 1
+cells with p<0.05/62: 1
+cells with p<0.05/100: 0

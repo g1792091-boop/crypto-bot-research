@@ -1,0 +1,98 @@
+{
+ "xrp_before": {
+  "range": [
+   "2021-07-01",
+   "2022-03-01"
+  ],
+  "bars": 69984,
+  "expected": 69984,
+  "missing_slots": 0,
+  "gap_events": 0,
+  "flat_bars": 0,
+  "median_usd_vol_per_5m": 81953.0
+ },
+ "xrp_degraded": {
+  "range": [
+   "2022-03-01",
+   "2023-08-01"
+  ],
+  "bars": 148892,
+  "expected": 149184,
+  "missing_slots": 292,
+  "gap_events": 282,
+  "flat_bars": 813,
+  "median_usd_vol_per_5m": 7064.0
+ },
+ "xrp_after": {
+  "range": [
+   "2023-08-01",
+   "2024-07-01"
+  ],
+  "bars": 96480,
+  "expected": 96480,
+  "missing_slots": 0,
+  "gap_events": 0,
+  "flat_bars": 0,
+  "median_usd_vol_per_5m": 80819.0
+ },
+ "btc_degraded_window_ref": {
+  "range": [
+   "2022-03-01",
+   "2023-08-01"
+  ],
+  "bars": 149184,
+  "expected": 149184,
+  "missing_slots": 0,
+  "gap_events": 0,
+  "flat_bars": 0,
+  "median_usd_vol_per_5m": 1378797.0
+ },
+ "bch_2024_09": {
+  "range": [
+   "2024-09-01",
+   "2024-10-01"
+  ],
+  "bars": 8069,
+  "expected": 8640,
+  "missing_slots": 571,
+  "gap_events": 329,
+  "flat_bars": 331,
+  "median_usd_vol_per_5m": 5343.0
+ },
+ "bch_2025_10_to_2026_05": {
+  "range": [
+   "2025-10-01",
+   "2026-06-01"
+  ],
+  "bars": 69428,
+  "expected": 69984,
+  "missing_slots": 556,
+  "gap_events": 168,
+  "flat_bars": 227,
+  "median_usd_vol_per_5m": 9122.0
+ },
+ "bch_2024_01_to_2024_08": {
+  "range": [
+   "2024-01-01",
+   "2024-09-01"
+  ],
+  "bars": 70266,
+  "expected": 70272,
+  "missing_slots": 6,
+  "gap_events": 6,
+  "flat_bars": 8,
+  "median_usd_vol_per_5m": 18416.0
+ },
+ "sol_2021_06": {
+  "range": [
+   "2021-06-01",
+   "2021-07-01"
+  ],
+  "bars": 8506,
+  "expected": 8640,
+  "missing_slots": 134,
+  "gap_events": 134,
+  "flat_bars": 202,
+  "median_usd_vol_per_5m": 23292.0
+ }
+}

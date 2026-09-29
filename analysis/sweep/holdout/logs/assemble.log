@@ -1,0 +1,7 @@
+oos: 7 tables, 666 rows; missing 0; extra 0
+  oos: family m=486, min p=4.34e-05, min p_holm=0.0211, gate_pass(own family, descriptive)=0, spec=0, Holm-sig p_vn=3
+  n-range per tf: {'15m': {'min': 0, 'median': 3010.0, 'max': 30859}, '1d': {'min': 0, 'median': 34.0, 'max': 376}, '1h': {'min': 0, 'median': 863.0, 'max': 9569}, '30m': {'min': 0, 'median': 1550.0, 'max': 16855}, '4h': {'min': 0, 'median': 223.0, 'max': 2717}, '5m': {'min': 0, 'median': 9011.0, 'max': 85611}}
+final: 7 tables, 666 rows; missing 0; extra 0
+  final: family m=493, min p=0.00248, min p_holm=1, gate_pass(own family, descriptive)=0, spec=0, Holm-sig p_vn=5
+  n-range per tf: {'15m': {'min': 0, 'median': 3440.0, 'max': 32967}, '1d': {'min': 0, 'median': 30.0, 'max': 353}, '1h': {'min': 0, 'median': 878.0, 'max': 10257}, '30m': {'min': 0, 'median': 1742.0, 'max': 19104}, '4h': {'min': 0, 'median': 190.0, 'max': 2622}, '5m': {'min': 0, 'median': 10406.0, 'max': 86212}}
+wrote out/cells_is_oos_final_long.csv (666, 68)

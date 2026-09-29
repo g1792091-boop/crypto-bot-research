@@ -1,0 +1,60 @@
+IS
+       strategy tf  H  n     fwd  mu_star       z  p_emp600  p_emp_all     z_vn  symbols_pos  n_coins_ge10
+S5_DONCHIAN_MFI 4h  4 70 0.01961  0.00367 4.54434   0.00166    0.00018  0.49995            2             2
+S5_DONCHIAN_MFI 4h 16 70 0.01323  0.00645 1.51303   0.05990    0.05991 -0.74418            2             2
+S5_DONCHIAN_MFI 4h 64 70 0.03457  0.01363 1.82756   0.03993    0.04719 -0.50414            1             2
+OOS
+       strategy tf  H  n      fwd  mu_star        z  p_emp600  p_emp_all     z_vn  symbols_pos  n_coins_ge10
+S5_DONCHIAN_MFI 4h  4 22 -0.00299  0.00382 -0.36221   0.66722    0.63226 -1.13617            0             0
+S5_DONCHIAN_MFI 4h 16 22 -0.02888  0.00683 -1.74429   0.96672    0.94569 -2.03443            0             0
+S5_DONCHIAN_MFI 4h 64 22 -0.05151  0.01444 -1.12543   0.88686    0.88522 -1.43122            0             0
+FINAL
+       strategy tf  H  n      fwd  mu_star        z  p_emp600  p_emp_all     z_vn  symbols_pos  n_coins_ge10
+S5_DONCHIAN_MFI 4h  4 27  0.00355  0.00331  0.62797   0.24626    0.24970  0.19239            0             0
+S5_DONCHIAN_MFI 4h 16 27 -0.01768  0.00572 -1.65066   0.94176    0.94949 -2.39281            0             0
+S5_DONCHIAN_MFI 4h 64 27  0.00207  0.01163  0.23647   0.42928    0.40415 -0.38196            0             0
+IS
+    strategy tf  H  n     fwd  mu_star       z  p_emp600  p_emp_all    z_vn  symbols_pos  n_coins_ge10
+N13_3OUTSIDE 1d  4 38 0.05505  0.00781 3.62322   0.00166    0.00126 1.18329            0             0
+N13_3OUTSIDE 1d 16 38 0.02992  0.01738 0.98111   0.15141    0.15762 0.79277            0             0
+N13_3OUTSIDE 1d 64 38 0.04599  0.04463 0.72149   0.25291    0.25205 0.98049            0             0
+OOS
+    strategy tf  H  n     fwd  mu_star       z  p_emp600  p_emp_all    z_vn  symbols_pos  n_coins_ge10
+N13_3OUTSIDE 1d  4 18 0.01507  0.00829 0.69999   0.20466    0.22703 0.60547            0             0
+N13_3OUTSIDE 1d 16 18 0.08107  0.01904 1.90917   0.03494    0.03593 1.88324            0             0
+N13_3OUTSIDE 1d 64 17 0.04105  0.05510 1.59156   0.00166    0.00526 2.51332            0             0
+FINAL
+    strategy tf  H  n      fwd  mu_star        z  p_emp600  p_emp_all     z_vn  symbols_pos  n_coins_ge10
+N13_3OUTSIDE 1d  4 11  0.01026  0.00689  0.41298   0.32113    0.30256  0.17108            0             0
+N13_3OUTSIDE 1d 16 10 -0.01782  0.01462 -0.51441   0.72379    0.72034  0.07322            0             0
+N13_3OUTSIDE 1d 64  8  0.01211  0.03942 -0.20067   0.60067    0.60476 -0.17342            0             0
+IS
+       strategy tf  H  n      fwd  mu_star        z  p_emp600  p_emp_all     z_vn  symbols_pos  n_coins_ge10
+S5_DONCHIAN_MFI 1d  4  2  0.01473  0.00781  0.26233   0.40433    0.37042 -1.10810            0             0
+S5_DONCHIAN_MFI 1d 16  2 -0.07323  0.01738 -0.49204   0.77205    0.75762 -0.88873            0             0
+S5_DONCHIAN_MFI 1d 64  2  0.02857  0.04463  0.36268   0.37105    0.39444  0.07180            0             0
+OOS
+       strategy tf  H  n      fwd  mu_star        z  p_emp600  p_emp_all     z_vn  symbols_pos  n_coins_ge10
+S5_DONCHIAN_MFI 1d  4  2 -0.02142  0.00829 -0.38626   0.60566    0.64865  0.17254            0             0
+S5_DONCHIAN_MFI 1d 16  2 -0.10470  0.01904 -0.74328   0.86356    0.85329 -0.70656            0             0
+S5_DONCHIAN_MFI 1d 64  2  0.02695  0.05510 -0.53282   0.58902    0.55789  0.03306            0             0
+FINAL
+       strategy tf  H  n     fwd  mu_star       z  p_emp600  p_emp_all    z_vn  symbols_pos  n_coins_ge10
+S5_DONCHIAN_MFI 1d  4  5 0.04908  0.00689 1.66433   0.05824    0.07179 0.72881            0             0
+S5_DONCHIAN_MFI 1d 16  5 0.03212  0.01462 0.66994   0.23295    0.22316 0.00161            0             0
+S5_DONCHIAN_MFI 1d 64  4 0.13187  0.03942 0.68804   0.30283    0.27619 0.12840            0             0
+IS
+       strategy tf  H   n      fwd  mu_star        z  p_emp600  p_emp_all     z_vn  symbols_pos  n_coins_ge10
+S5_DONCHIAN_MFI 1h  4 367 -0.00175  0.00246 -1.70898   0.94676    0.96054 -3.96851            1             7
+S5_DONCHIAN_MFI 1h 16 367 -0.00078  0.00368 -0.41039   0.65225    0.65221 -2.12900            3             7
+S5_DONCHIAN_MFI 1h 64 367 -0.00174  0.00649 -0.41199   0.64393    0.66475 -2.39135            3             7
+OOS
+       strategy tf  H   n      fwd  mu_star        z  p_emp600  p_emp_all     z_vn  symbols_pos  n_coins_ge10
+S5_DONCHIAN_MFI 1h  4 118 -0.00143  0.00252 -0.66392   0.75374    0.77515 -1.37518            3             6
+S5_DONCHIAN_MFI 1h 16 118 -0.00135  0.00383 -0.31321   0.62729    0.63185 -0.45312            3             6
+S5_DONCHIAN_MFI 1h 64 118 -0.00761  0.00684 -0.93794   0.81864    0.80935 -1.33311            3             6
+FINAL
+       strategy tf  H   n      fwd  mu_star        z  p_emp600  p_emp_all     z_vn  symbols_pos  n_coins_ge10
+S5_DONCHIAN_MFI 1h  4 149 -0.00052  0.00226 -0.36896   0.64393    0.64801 -0.79996            4             7
+S5_DONCHIAN_MFI 1h 16 149 -0.00056  0.00331 -0.19265   0.58236    0.58784 -1.24048            3             7
+S5_DONCHIAN_MFI 1h 64 148 -0.00909  0.00573 -1.71895   0.95507    0.94523 -1.61193            1             7

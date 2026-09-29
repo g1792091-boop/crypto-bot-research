@@ -1,0 +1,3 @@
+L=20: p0=0.9023 theta=16.52 -> annual IR = theta*sigma/2 = 7.47
+L=30: p0=0.8962 theta=41.70 -> annual IR = theta*sigma/2 = 18.86
+L=50: p0=0.8832 theta=154.76 -> annual IR = theta*sigma/2 = 70.02

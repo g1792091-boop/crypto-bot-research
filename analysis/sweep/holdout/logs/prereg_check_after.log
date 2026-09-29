@@ -1,0 +1,18 @@
+2026-09-29T13:02:33Z
+PREREG.md: OK
+harness/sweep_lib.py: OK
+harness/run_gate_tf.py: OK
+harness/vendor/engine.py: OK
+harness/vendor/strategies.py: OK
+harness/vendor/fg_indicators.py: OK
+harness/vendor/fg_fast.py: OK
+harness/vendor/pine_indicators.py: OK
+harness/vendor/ports12.py: OK
+harness/vendor/poc_fast.py: OK
+harness/vendor/doge_strategy.py: OK
+16a4e23d90c9b7605ec291d7bf936e03f505c8de50b0bd57ec859943a7a89d50  PREREG.md
+2b20c3c155f31bbe3b51cc3b7b96a8b8c01226d6cf573cb601077d89f98cd543  lib/sweep_lib.py
+8cec4d91e7ed22c6aa6f30db9b12200786af73c44699e29792bff98c4e2b2571  lib/run_gate_tf.py
+vendor identical
+git porcelain lines: 0
+files in sweep/data modified after PREREG.sha256: 0

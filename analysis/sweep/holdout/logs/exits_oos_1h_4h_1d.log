@@ -1,0 +1,145 @@
+START 2026-09-29T12:57:06 python3 exits_holdout.py oos 1h 4h 1d
+oos: 17 cells
+  cache check signals_oos_1h.npz DOGE_L: OK
+  cache check signals_oos_1h.npz N03_ADX_GC: OK
+oos 1h: last bar 2025-08-06 23:00:00+00:00; strategies ['DOGE_L', 'N03_ADX_GC']
+  oos 1h DOGE_L H64 (IS near-miss (fwd>=mu*) + IS top-5 by z (family)): 22s
+            exit  trades        pf   exp_net   sum_net  symbols_pos  months_pos  months     p_max  exit_criteria_met_DESCRIPTIVE
+0         TIME_H     393  1.322380  0.007247  2.847893            5           9      14  0.481728                          False
+1    ATR_SL2_TP3     534  0.986779 -0.000221 -0.117821            3           7      14  0.687708                          False
+2    ATR_SL3_TP6     412  1.048306  0.001286  0.529762            4           6      14  0.797342                          False
+3  TRAIL_SL3_TR3     464  1.216865  0.003277  1.520416            5           7      14  0.209302                          False
+4     TIME_H_SL3     421  1.215703  0.004668  1.965198            4           7      14  0.634551                          False
+  oos 1h N03_ADX_GC H4 (IS near-miss (fwd>=mu*)): 11s
+            exit  trades        pf   exp_net   sum_net  symbols_pos  months_pos  months     p_max  exit_criteria_met_DESCRIPTIVE
+0         TIME_H      68  0.884185 -0.000843 -0.057300            4           6      14  0.617940                          False
+1    ATR_SL2_TP3      68  0.994585 -0.000061 -0.004150            5           5      14  0.578073                          False
+2    ATR_SL3_TP6      68  0.865384 -0.001681 -0.114333            4           6      14  0.787375                          False
+3  TRAIL_SL3_TR3      68  0.824476 -0.001983 -0.134818            3           6      14  0.730897                          False
+4     TIME_H_SL3      68  0.952361 -0.000322 -0.021883            4           6      14  0.514950                          False
+  oos 1h N03_ADX_GC H16 (IS near-miss (fwd>=mu*)): 11s
+            exit  trades        pf   exp_net   sum_net  symbols_pos  months_pos  months     p_max  exit_criteria_met_DESCRIPTIVE
+0         TIME_H      67  0.912177 -0.001047 -0.070120            4           6      14  0.714286                          False
+1    ATR_SL2_TP3      68  1.055828  0.000789  0.053640            5           5      14  0.501661                          False
+2    ATR_SL3_TP6      68  1.260327  0.004861  0.330548            5           7      14  0.332226                          False
+3  TRAIL_SL3_TR3      68  1.064793  0.000797  0.054192            4           7      14  0.551495                          False
+4     TIME_H_SL3      68  0.857504 -0.001780 -0.121025            4           5      14  0.757475                          False
+  cache check signals_oos_4h.npz N13_3OUTSIDE: OK
+oos 4h: last bar 2025-08-06 20:00:00+00:00; strategies ['N13_3OUTSIDE']
+  oos 4h N13_3OUTSIDE H16 (IS near-miss (fwd>=mu*) + IS top-5 by z (family)): 11s
+            exit  trades        pf   exp_net   sum_net  symbols_pos  months_pos  months     p_max  exit_criteria_met_DESCRIPTIVE
+0         TIME_H      94  1.024444  0.000674  0.063351            4           7      14  0.661130                          False
+1    ATR_SL2_TP3     102  1.113598  0.003400  0.346849            4           7      14  0.478405                          False
+2    ATR_SL3_TP6      89  1.165098  0.006865  0.610956            3           7      14  0.458472                          False
+3  TRAIL_SL3_TR3      95  1.007879  0.000245  0.023273            2           5      14  0.730897                          False
+4     TIME_H_SL3      98  1.007181  0.000195  0.019087            4           7      14  0.734219                          False
+  oos 4h N13_3OUTSIDE H64 (IS near-miss (fwd>=mu*) + IS top-5 by z (family)): 11s
+            exit  trades        pf   exp_net   sum_net  symbols_pos  months_pos  months     p_max  exit_criteria_met_DESCRIPTIVE
+0         TIME_H      78  1.253107  0.013328  1.039587            4           8      14  0.428571                          False
+1    ATR_SL2_TP3     102  1.069020  0.002176  0.221908            4           7      14  0.641196                          False
+2    ATR_SL3_TP6      82  1.321111  0.015524  1.272991            4           7      14  0.186047                          False
+3  TRAIL_SL3_TR3      95  1.031139  0.001009  0.095822            3           5      14  0.790698                          False
+4     TIME_H_SL3      87  1.299315  0.012663  1.101638            3           7      14  0.352159                          False
+  cache check signals_oos_1d.npz N01_ST_EMA: OK
+  cache check signals_oos_1d.npz N02_ST_KST: OK
+  cache check signals_oos_1d.npz N04_ST_KLINGER: OK
+  cache check signals_oos_1d.npz N18_VWMA_MACD: OK
+  cache check signals_oos_1d.npz N23_HA_ST: OK
+  cache check signals_oos_1d.npz N25_DST_CCI: OK
+  cache check signals_oos_1d.npz S2_ST_ROC: OK
+oos 1d: last bar 2025-08-06 00:00:00+00:00; strategies ['N01_ST_EMA', 'N02_ST_KST', 'N04_ST_KLINGER', 'N18_VWMA_MACD', 'N23_HA_ST', 'N25_DST_CCI', 'S2_ST_ROC']
+/tmp/claude-0/-home-user-crypto-bot-research/e4f1f93f-891a-54cf-944d-5e95b2209f11/scratchpad/sweep/holdout/lib/sweep_lib.py:784: RuntimeWarning: Mean of empty slice
+  mu = np.nanmean(null, axis=0)
+/usr/local/lib/python3.11/dist-packages/numpy/lib/_nanfunctions_impl.py:1997: RuntimeWarning: Degrees of freedom <= 0 for slice.
+  var = nanvar(a, axis=axis, dtype=dtype, out=out, ddof=ddof,
+  oos 1d N01_ST_EMA H64 (IS near-miss (fwd>=mu*)): 0s
+            exit  trades  pf  exp_net  sum_net  symbols_pos  months_pos  months  p_max  exit_criteria_met_DESCRIPTIVE
+0         TIME_H       0 NaN      NaN      0.0            0           0       0    NaN                          False
+1    ATR_SL2_TP3       0 NaN      NaN      0.0            0           0       0    NaN                          False
+2    ATR_SL3_TP6       0 NaN      NaN      0.0            0           0       0    NaN                          False
+3  TRAIL_SL3_TR3       0 NaN      NaN      0.0            0           0       0    NaN                          False
+4     TIME_H_SL3       0 NaN      NaN      0.0            0           0       0    NaN                          False
+  oos 1d N02_ST_KST H4 (IS near-miss (fwd>=mu*)): 10s
+            exit  trades        pf   exp_net   sum_net  symbols_pos  months_pos  months     p_max  exit_criteria_met_DESCRIPTIVE
+0         TIME_H      70  0.721374 -0.009990 -0.699288            2           5      11  0.843854                          False
+1    ATR_SL2_TP3      69  0.713183 -0.019567 -1.350129            1           4      11  0.843854                          False
+2    ATR_SL3_TP6      62  0.696783 -0.022670 -1.405561            2           4      11  0.817276                          False
+3  TRAIL_SL3_TR3      65  0.638699 -0.025688 -1.669748            2           3      11  0.850498                          False
+4     TIME_H_SL3      70  0.704667 -0.010840 -0.758794            2           5      11  0.863787                          False
+/tmp/claude-0/-home-user-crypto-bot-research/e4f1f93f-891a-54cf-944d-5e95b2209f11/scratchpad/sweep/holdout/lib/sweep_lib.py:784: RuntimeWarning: Mean of empty slice
+  mu = np.nanmean(null, axis=0)
+/usr/local/lib/python3.11/dist-packages/numpy/lib/_nanfunctions_impl.py:1997: RuntimeWarning: Degrees of freedom <= 0 for slice.
+  var = nanvar(a, axis=axis, dtype=dtype, out=out, ddof=ddof,
+  oos 1d N02_ST_KST H64 (IS near-miss (fwd>=mu*)): 0s
+            exit  trades  pf  exp_net  sum_net  symbols_pos  months_pos  months  p_max  exit_criteria_met_DESCRIPTIVE
+0         TIME_H       0 NaN      NaN      0.0            0           0       0    NaN                          False
+1    ATR_SL2_TP3       0 NaN      NaN      0.0            0           0       0    NaN                          False
+2    ATR_SL3_TP6       0 NaN      NaN      0.0            0           0       0    NaN                          False
+3  TRAIL_SL3_TR3       0 NaN      NaN      0.0            0           0       0    NaN                          False
+4     TIME_H_SL3       0 NaN      NaN      0.0            0           0       0    NaN                          False
+/tmp/claude-0/-home-user-crypto-bot-research/e4f1f93f-891a-54cf-944d-5e95b2209f11/scratchpad/sweep/holdout/lib/sweep_lib.py:784: RuntimeWarning: Mean of empty slice
+  mu = np.nanmean(null, axis=0)
+/usr/local/lib/python3.11/dist-packages/numpy/lib/_nanfunctions_impl.py:1997: RuntimeWarning: Degrees of freedom <= 0 for slice.
+  var = nanvar(a, axis=axis, dtype=dtype, out=out, ddof=ddof,
+  oos 1d N04_ST_KLINGER H64 (IS near-miss (fwd>=mu*)): 0s
+            exit  trades  pf  exp_net  sum_net  symbols_pos  months_pos  months  p_max  exit_criteria_met_DESCRIPTIVE
+0         TIME_H       0 NaN      NaN      0.0            0           0       0    NaN                          False
+1    ATR_SL2_TP3       0 NaN      NaN      0.0            0           0       0    NaN                          False
+2    ATR_SL3_TP6       0 NaN      NaN      0.0            0           0       0    NaN                          False
+3  TRAIL_SL3_TR3       0 NaN      NaN      0.0            0           0       0    NaN                          False
+4     TIME_H_SL3       0 NaN      NaN      0.0            0           0       0    NaN                          False
+  oos 1d N18_VWMA_MACD H4 (IS near-miss (fwd>=mu*)): 10s
+            exit  trades        pf   exp_net   sum_net  symbols_pos  months_pos  months     p_max  exit_criteria_met_DESCRIPTIVE
+0         TIME_H      88  1.370011  0.009518  0.837625            4           6      14  0.295681                          False
+1    ATR_SL2_TP3      75  1.211516  0.010359  0.776934            3           6      14  0.465116                          False
+2    ATR_SL3_TP6      68  1.239058  0.013078  0.889317            5           5      14  0.431894                          False
+3  TRAIL_SL3_TR3      72  1.272501  0.013945  1.004046            4           5      14  0.365449                          False
+4     TIME_H_SL3      88  1.303279  0.008201  0.721713            4           6      14  0.322259                          False
+  oos 1d N23_HA_ST H4 (IS near-miss (fwd>=mu*)): 13s
+            exit  trades        pf   exp_net   sum_net  symbols_pos  months_pos  months     p_max  exit_criteria_met_DESCRIPTIVE
+0         TIME_H     239  0.886505 -0.003765 -0.899836            3           4      14  0.667774                          False
+1    ATR_SL2_TP3     154  0.731771 -0.016902 -2.602952            1           6      14  0.800664                          False
+2    ATR_SL3_TP6     132  0.752163 -0.019370 -2.556799            2           5      14  0.740864                          False
+3  TRAIL_SL3_TR3     148  0.740213 -0.018803 -2.782832            2           3      14  0.734219                          False
+4     TIME_H_SL3     239  0.851558 -0.005151 -1.231102            2           4      14  0.691030                          False
+  oos 1d N23_HA_ST H16 (IS near-miss (fwd>=mu*)): 11s
+            exit  trades        pf   exp_net   sum_net  symbols_pos  months_pos  months     p_max  exit_criteria_met_DESCRIPTIVE
+0         TIME_H     120  0.877519 -0.008691 -1.042952            3           6      14  0.674419                          False
+1    ATR_SL2_TP3     119  0.595467 -0.035628 -4.239688            0           5      14  0.916944                          False
+2    ATR_SL3_TP6      74  0.725678 -0.031551 -2.334787            1           4      12  0.760797                          False
+3  TRAIL_SL3_TR3     108  0.673493 -0.028893 -3.120409            2           4      14  0.760797                          False
+4     TIME_H_SL3     127  0.844952 -0.011284 -1.433018            3           5      14  0.727575                          False
+/tmp/claude-0/-home-user-crypto-bot-research/e4f1f93f-891a-54cf-944d-5e95b2209f11/scratchpad/sweep/holdout/lib/sweep_lib.py:784: RuntimeWarning: Mean of empty slice
+  mu = np.nanmean(null, axis=0)
+/usr/local/lib/python3.11/dist-packages/numpy/lib/_nanfunctions_impl.py:1997: RuntimeWarning: Degrees of freedom <= 0 for slice.
+  var = nanvar(a, axis=axis, dtype=dtype, out=out, ddof=ddof,
+  oos 1d N23_HA_ST H64 (IS near-miss (fwd>=mu*)): 0s
+            exit  trades  pf  exp_net  sum_net  symbols_pos  months_pos  months  p_max  exit_criteria_met_DESCRIPTIVE
+0         TIME_H       0 NaN      NaN      0.0            0           0       0    NaN                          False
+1    ATR_SL2_TP3       0 NaN      NaN      0.0            0           0       0    NaN                          False
+2    ATR_SL3_TP6       0 NaN      NaN      0.0            0           0       0    NaN                          False
+3  TRAIL_SL3_TR3       0 NaN      NaN      0.0            0           0       0    NaN                          False
+4     TIME_H_SL3       0 NaN      NaN      0.0            0           0       0    NaN                          False
+/tmp/claude-0/-home-user-crypto-bot-research/e4f1f93f-891a-54cf-944d-5e95b2209f11/scratchpad/sweep/holdout/lib/sweep_lib.py:784: RuntimeWarning: Mean of empty slice
+  mu = np.nanmean(null, axis=0)
+/usr/local/lib/python3.11/dist-packages/numpy/lib/_nanfunctions_impl.py:1997: RuntimeWarning: Degrees of freedom <= 0 for slice.
+  var = nanvar(a, axis=axis, dtype=dtype, out=out, ddof=ddof,
+  oos 1d N25_DST_CCI H64 (IS near-miss (fwd>=mu*)): 0s
+            exit  trades  pf  exp_net  sum_net  symbols_pos  months_pos  months  p_max  exit_criteria_met_DESCRIPTIVE
+0         TIME_H       0 NaN      NaN      0.0            0           0       0    NaN                          False
+1    ATR_SL2_TP3       0 NaN      NaN      0.0            0           0       0    NaN                          False
+2    ATR_SL3_TP6       0 NaN      NaN      0.0            0           0       0    NaN                          False
+3  TRAIL_SL3_TR3       0 NaN      NaN      0.0            0           0       0    NaN                          False
+4     TIME_H_SL3       0 NaN      NaN      0.0            0           0       0    NaN                          False
+/tmp/claude-0/-home-user-crypto-bot-research/e4f1f93f-891a-54cf-944d-5e95b2209f11/scratchpad/sweep/holdout/lib/sweep_lib.py:784: RuntimeWarning: Mean of empty slice
+  mu = np.nanmean(null, axis=0)
+/usr/local/lib/python3.11/dist-packages/numpy/lib/_nanfunctions_impl.py:1997: RuntimeWarning: Degrees of freedom <= 0 for slice.
+  var = nanvar(a, axis=axis, dtype=dtype, out=out, ddof=ddof,
+  oos 1d S2_ST_ROC H64 (IS near-miss (fwd>=mu*)): 0s
+            exit  trades  pf  exp_net  sum_net  symbols_pos  months_pos  months  p_max  exit_criteria_met_DESCRIPTIVE
+0         TIME_H       0 NaN      NaN      0.0            0           0       0    NaN                          False
+1    ATR_SL2_TP3       0 NaN      NaN      0.0            0           0       0    NaN                          False
+2    ATR_SL3_TP6       0 NaN      NaN      0.0            0           0       0    NaN                          False
+3  TRAIL_SL3_TR3       0 NaN      NaN      0.0            0           0       0    NaN                          False
+4     TIME_H_SL3       0 NaN      NaN      0.0            0           0       0    NaN                          False
+END 2026-09-29T12:58:57 rc=0 wall_s=111

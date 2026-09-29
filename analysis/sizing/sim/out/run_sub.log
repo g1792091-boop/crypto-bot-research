@@ -1,0 +1,41 @@
+4h: H=4 lam=0.429/day grid=6386 edges=[0.0, 0.00025, 0.0005, 0.00075, 0.001, 0.0015, 0.002, 0.003, 0.004, 0.006, 0.008, 0.01, 0.0125, 0.015] combos=42 load 4.1s
+  seed 0 n_cand=454 taken(P3|A|10,e0)=441 t=6s
+  seed 10 n_cand=463 taken(P3|A|10,e0)=450 t=10s
+  seed 20 n_cand=474 taken(P3|A|10,e0)=455 t=13s
+  seed 30 n_cand=460 taken(P3|A|10,e0)=434 t=18s
+  seed 40 n_cand=462 taken(P3|A|10,e0)=436 t=21s
+  seed 50 n_cand=453 taken(P3|A|10,e0)=432 t=25s
+  seed 59 n_cand=467 taken(P3|A|10,e0)=443 t=29s
+done 4h 31s
+wrote 4h 588 rows
+1d: H=4 lam=0.214/day grid=1042 edges=[0.0, 0.00025, 0.0005, 0.00075, 0.001, 0.0015, 0.002, 0.003, 0.004, 0.006, 0.008, 0.01, 0.0125, 0.015, 0.02, 0.025, 0.03] combos=42 load 3.9s
+  seed 0 n_cand=231 taken(P3|A|10,e0)=225 t=6s
+  seed 10 n_cand=240 taken(P3|A|10,e0)=234 t=14s
+  seed 20 n_cand=198 taken(P3|A|10,e0)=196 t=22s
+  seed 30 n_cand=246 taken(P3|A|10,e0)=240 t=30s
+  seed 40 n_cand=246 taken(P3|A|10,e0)=238 t=38s
+  seed 50 n_cand=214 taken(P3|A|10,e0)=211 t=45s
+  seed 59 n_cand=230 taken(P3|A|10,e0)=223 t=52s
+done 1d 53s
+wrote 1d 714 rows
+1h: H=16 lam=1.500/day grid=25544 edges=[0.0, 0.00025, 0.0005, 0.00075, 0.001, 0.0015, 0.002, 0.003, 0.004, 0.006, 0.008, 0.01, 0.0125, 0.015] combos=42 load 4.1s
+  seed 0 n_cand=1649 taken(P3|A|10,e0)=1330 t=7s
+  seed 10 n_cand=1548 taken(P3|A|10,e0)=1277 t=19s
+  seed 20 n_cand=1591 taken(P3|A|10,e0)=1296 t=32s
+  seed 30 n_cand=1613 taken(P3|A|10,e0)=1305 t=44s
+  seed 40 n_cand=1628 taken(P3|A|10,e0)=1325 t=56s
+  seed 50 n_cand=1559 taken(P3|A|10,e0)=1313 t=68s
+  seed 59 n_cand=1610 taken(P3|A|10,e0)=1318 t=79s
+done 1h 81s
+wrote 1h 588 rows
+15m: H=16 lam=4.500/day grid=102224 edges=[0.0, 0.00025, 0.0005, 0.00075, 0.001, 0.0015, 0.002, 0.003, 0.004, 0.006] combos=42 load 7.2s
+  seed 0 n_cand=4751 taken(P3|A|10,e0)=3572 t=10s
+  seed 10 n_cand=4835 taken(P3|A|10,e0)=3630 t=37s
+  seed 20 n_cand=4805 taken(P3|A|10,e0)=3597 t=53s
+  seed 30 n_cand=4803 taken(P3|A|10,e0)=3580 t=69s
+  seed 40 n_cand=4824 taken(P3|A|10,e0)=3575 t=85s
+  seed 50 n_cand=4823 taken(P3|A|10,e0)=3630 t=100s
+  seed 59 n_cand=4758 taken(P3|A|10,e0)=3542 t=114s
+done 15m 116s
+wrote 15m 420 rows
+ALLDONE

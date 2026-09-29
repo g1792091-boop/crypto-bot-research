@@ -1,0 +1,16 @@
+1d offset-0 rebuilt from 1h vs official 1d file, max rel diff: 0.0
+5m: entries=80000 cap_bars=25920 t=6s
+15m: entries=80000 cap_bars=8640 t=8s
+30m: entries=80000 cap_bars=4320 t=9s
+1h: entries=80000 cap_bars=2160 t=10s
+4h: entries=83028 cap_bars=540 t=10s
+1d: entries=55310 cap_bars=90 t=12s
+5m-resolved btcusd t=13s
+5m-resolved ethusd t=14s
+5m-resolved solusd t=15s
+5m-resolved xrpusd t=16s
+5m-resolved dogeusd t=17s
+5m-resolved ltcusd t=19s
+5m-resolved bchusd t=20s
+5m-resolved dropped entries (no exact 5m bar or <90d left): {'15m': 10, '30m': 8, '1h': 2, '4h': 14, '1d': 14}
+done t=24s

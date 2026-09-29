@@ -1,0 +1,12 @@
+START 2026-09-29T12:25:37 python3 tail_check.py --tf 1h --reps 500 --cells DOGE_L:64,N20_EMA9_CHOP:64,N03_ADX_GC:4,N05_PSAR_POC:4
+DOGE_L 1h 64 8s
+N20_EMA9_CHOP 1h 64 36s
+N03_ADX_GC 1h 4 38s
+N05_PSAR_POC 1h 4 43s
+     strategy tf  H  reps    n   z_sd  zvn_sd  z_max  zvn_max  rate_z_gt_thr  rate_zvn_gt_thr  rate_both_gt_thr  rate_fwd_ge_mu  gate_spec  gate_A1  corr_z_zvn
+       DOGE_L 1h 64   500 1717 1.2421  1.0133 3.8668   2.7152          0.004              0.0               0.0           0.016      0.004      0.0      0.8596
+   N03_ADX_GC 1h  4   500  180 1.8923  0.9676 4.2611   2.9653          0.008              0.0               0.0           0.212      0.008      0.0      0.4651
+ N05_PSAR_POC 1h  4   500 1365 0.9677  1.0589 3.3274   3.2632          0.000              0.0               0.0           0.000      0.000      0.0      0.7430
+N20_EMA9_CHOP 1h 64   500 7051 0.8157  0.9153 2.4710   2.3366          0.000              0.0               0.0           0.000      0.000      0.0      0.8640
+thr_z 3.791
+END 2026-09-29T12:26:23 rc=0 wall_s=46

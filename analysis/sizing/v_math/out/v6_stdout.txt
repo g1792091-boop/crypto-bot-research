@@ -1,0 +1,16 @@
+pooled 20 0 0.8947 -4.407
+pooled 20 3 0.9271 -0.836
+pooled 20 4 0.9342 -0.058
+pooled 20 5 0.9399 0.567
+pooled 20 6 0.9451 1.149
+pooled 20 8 0.9528 1.987
+pooled 20 10 0.9591 2.686
+==> L=20 mode=pooled: break-even IR 4.09
+local 20 0 0.8947 -4.407
+local 20 3 0.9172 -1.93
+local 20 4 0.923 -1.301
+local 20 5 0.9288 -0.66
+local 20 6 0.9342 -0.069
+local 20 8 0.9434 0.947
+local 20 10 0.9506 1.737
+==> L=20 mode=local: break-even IR 6.14

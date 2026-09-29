@@ -1,0 +1,8 @@
+START 2026-09-29T12:23:42 python3 controls_1d_tail.py --tf 4h --Hs 64 --reps 500
+tf  H   kind  n_target  reps  n_mean  null_z_sd  vn_null_z_sd  null_max_z  vn_null_max_z  null_rate_holm1  vn_null_rate_holm1  fp_raw  fp_A1  null_rate_gate  null_rate_gate_and_vn
+4h 64    iid       150   500 150.040     0.9703        0.9851      3.2845         3.5262              0.0                 0.0       0      0             0.0                    0.0
+4h 64    iid       500   500 499.030     0.9990        1.0166      2.8335         2.9689              0.0                 0.0       0      0             0.0                    0.0
+4h 64 burst4       150   500 150.940     0.9658        1.0111      3.3603         2.6045              0.0                 0.0       0      0             0.0                    0.0
+4h 64 burst4       500   500 500.194     0.9864        1.0020      2.7432         3.0567              0.0                 0.0       0      0             0.0                    0.0
+saved /tmp/claude-0/-home-user-crypto-bot-research/e4f1f93f-891a-54cf-944d-5e95b2209f11/scratchpad/sweep/discover_g1h_4h_1d/out/controls_extra_is_4h_seed2.csv 16s
+END 2026-09-29T12:23:59 rc=0 wall_s=17

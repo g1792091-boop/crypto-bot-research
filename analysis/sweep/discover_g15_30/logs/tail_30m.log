@@ -1,0 +1,10 @@
+START 2026-09-29T12:06:00 python3 tail_check.py --tf 30m --cells N18_VWMA_MACD:16,N03_ADX_GC:4,N11_BREAKAWAY:16 --reps 500
+N18_VWMA_MACD 30m 16 272s
+N03_ADX_GC 30m 4 277s
+N11_BREAKAWAY 30m 16 280s
+     strategy  tf  H  reps     n   z_sd  zvn_sd  z_max  zvn_max  rate_z_gt_thr  rate_zvn_gt_thr  rate_both_gt_thr  rate_fwd_ge_mu  gate_spec  gate_A1  corr_z_zvn
+   N03_ADX_GC 30m  4   500   337 1.5784  0.9843 3.9141   3.8715          0.002            0.002               0.0           0.008      0.002      0.0      0.5927
+N11_BREAKAWAY 30m 16   500   157 1.3398  1.0997 3.4062   3.4454          0.000            0.000               0.0           0.148      0.000      0.0      0.7982
+N18_VWMA_MACD 30m 16   500 32546 1.0156  0.9945 2.5064   2.8845          0.000            0.000               0.0           0.000      0.000      0.0      0.7730
+thr_z 3.791
+END 2026-09-29T12:10:43 rc=0 wall_s=283

@@ -1,0 +1,19 @@
+START 2026-09-29T12:58:57 python3 exits_holdout.py oos 5m
+oos: 17 cells
+  cache check signals_oos_5m_sub328232f2.npz N20_EMA9_CHOP: OK
+oos 5m: last bar 2025-08-06 23:55:00+00:00; strategies ['N20_EMA9_CHOP']
+  oos 5m N20_EMA9_CHOP H4 (IS top-5 by z (family)): 9s
+            exit  trades        pf   exp_net    sum_net  symbols_pos  months_pos  months  p_max  exit_criteria_met_DESCRIPTIVE
+0         TIME_H   26888  0.429973 -0.001344 -36.141823            0           0      14    NaN                          False
+1    ATR_SL2_TP3   17161  0.626791 -0.001443 -24.757216            0           0      14    NaN                          False
+2    ATR_SL3_TP6   15718  0.646026 -0.001410 -22.160579            0           0      14    NaN                          False
+3  TRAIL_SL3_TR3   16497  0.613718 -0.001485 -24.492932            0           0      14    NaN                          False
+4     TIME_H_SL3   26915  0.430418 -0.001342 -36.119776            0           0      14    NaN                          False
+  oos 5m N20_EMA9_CHOP H16 (IS top-5 by z (family)): 9s
+            exit  trades        pf   exp_net    sum_net  symbols_pos  months_pos  months  p_max  exit_criteria_met_DESCRIPTIVE
+0         TIME_H   15335  0.630374 -0.001489 -22.829267            0           0      14    NaN                          False
+1    ATR_SL2_TP3   12633  0.713972 -0.001477 -18.657604            0           0      14    NaN                          False
+2    ATR_SL3_TP6    9035  0.772635 -0.001508 -13.625942            0           1      14    NaN                          False
+3  TRAIL_SL3_TR3   12175  0.647694 -0.001772 -21.577846            0           0      14    NaN                          False
+4     TIME_H_SL3   15716  0.630606 -0.001474 -23.160888            0           0      14    NaN                          False
+END 2026-09-29T12:59:20 rc=0 wall_s=23

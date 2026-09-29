@@ -1,0 +1,12 @@
+START 2026-09-29T12:22:46 python3 controls_1d_tail.py --tf 1d --Hs 16,64 --reps 1000
+tf  H   kind  n_target  reps  n_mean  null_z_sd  vn_null_z_sd  null_max_z  vn_null_max_z  null_rate_holm1  vn_null_rate_holm1  fp_raw  fp_A1  null_rate_gate  null_rate_gate_and_vn
+1d 16    iid       150  1000 149.701     1.0427        1.0555      3.2469         3.5839            0.000               0.000       0      0           0.000                  0.000
+1d 16    iid       500  1000 499.307     1.0301        1.0371      4.1849         3.8565            0.001               0.001       1      1           0.001                  0.001
+1d 16 burst4       150  1000 148.467     1.0055        1.0052      3.5029         3.2369            0.000               0.000       0      0           0.000                  0.000
+1d 16 burst4       500  1000 483.446     1.0479        1.0390      3.0895         3.5374            0.000               0.000       0      0           0.000                  0.000
+1d 64    iid       150  1000 149.833     1.1972        1.1892      4.7378         4.6824            0.005               0.002       5      2           0.005                  0.002
+1d 64    iid       500  1000 499.681     1.1902        1.1679      3.8449         3.7213            0.002               0.000       1      0           0.001                  0.000
+1d 64 burst4       150  1000 148.069     1.2231        1.1980      5.2923         5.3097            0.001               0.001       1      1           0.001                  0.001
+1d 64 burst4       500  1000 483.059     1.2247        1.2246      4.5558         4.2317            0.001               0.001       1      0           0.001                  0.000
+saved /tmp/claude-0/-home-user-crypto-bot-research/e4f1f93f-891a-54cf-944d-5e95b2209f11/scratchpad/sweep/discover_g1h_4h_1d/out/controls_extra_is_1d_seed2.csv 55s
+END 2026-09-29T12:23:42 rc=0 wall_s=56

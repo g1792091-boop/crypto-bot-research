@@ -1,0 +1,17 @@
+    sym  ac1_open_to_open  ac1_close_to_close  frac_zero_ret_oo      n
+ BTCUSD           -0.0462             -0.0496            0.0012 306718
+ ETHUSD           -0.0292             -0.0325            0.0022 306718
+ SOLUSD           -0.0356             -0.0420            0.0583 280506
+ XRPUSD           -0.0423             -0.0555            0.0224 306426
+DOGEUSD           -0.0285             -0.0325            0.0498 298077
+ LTCUSD           -0.0215             -0.0235            0.0337 306717
+ BCHUSD           -0.0094             -0.0141            0.0158 306673
+           strategy   H        n       fwd   mu_star           z             p    fwd_vn        z_vn           p_vn  symbols_pos
+0  CANARY_LOOKAHEAD   4  2058284  0.001564  0.001696  324.075329  0.000000e+00  0.376472  429.838722   0.000000e+00            7
+1      BAR_REVERSAL   4  2056522  0.000027  0.001696    5.719555  5.340157e-09  0.030536   37.590252  1.550962e-309            7
+2  CANARY_LOOKAHEAD  16  2058202  0.001563  0.001993  178.232002  0.000000e+00  0.170666  211.553625   0.000000e+00            7
+3      BAR_REVERSAL  16  2056439  0.000021  0.001993    2.403501  8.119452e-03  0.020916   25.332636  6.981606e-142            6
+4  CANARY_LOOKAHEAD  64  2057877  0.001543  0.002631   89.835723  0.000000e+00  0.081032  112.058147   0.000000e+00            7
+5      BAR_REVERSAL  64  2056112  0.000050  0.002631    3.011440  1.300057e-03  0.010884   15.042657   1.928767e-51            6
+saved /tmp/claude-0/-home-user-crypto-bot-research/e4f1f93f-891a-54cf-944d-5e95b2209f11/scratchpad/sweep/discover_g5m/out/controls_canary_5m.csv 24s
+[timed] start=2026-09-29T12:06:04.400748Z end=2026-09-29T12:06:30.751371Z wall_s=26.4 user_s=11.7 sys_s=1.4 maxrss_MB=567 rc=0

@@ -1,0 +1,53 @@
+test,ok,detail
+tf_minutes,True,
+warmup_bars,True,"{'5m': 8640, '15m': 2880, '30m': 1440, '1h': 720, '4h': 300, '1d': 200}"
+cost_h,True,"{'5m': [0.1404, 0.1417, 0.1467], '15m': [0.1412, 0.145, 0.16], '30m': [0.1425, 0.15, 0.18], '1h': [0.145, 0.16, 0.22], '4h': [0.16, 0.22, 0.46], '1d': [0.26, 0.62, 2.06]}"
+v45_generalised_equals_original_5m,True,signals orig=60
+v45_all_subsignals_equal,True,"{'AMIX_L': 120, 'AMIX_S': 146, 'ASAME_L': 195, 'ASAME_S': 220, 'B_L': 77, 'B_S': 84, 'C_L': 110, 'C_S': 124}"
+doge_params_5m_default,True,"{'ema_fast': 63, 'ema_slow': 156, 'ema_trend': 600, 'ema_short': 21, 'stoch_rsi_len': 70, 'stoch_len': 70, 'k_smooth': 4, 'd_smooth': 3, 'rsi_len': 26, 'chop_len': 14}"
+doge_params_match_run_tf,True,"{'mine': {'5m': '63/156/600/21/70/70/4/3/26/14', '15m': '21/52/200/7/23/23/2/2/9/5', '30m': '11/26/100/4/12/12/2/2/4/2', '1h': '5/13/50/2/6/6/2/2/2/2', '4h': '2/3/13/2/2/2/2/2/2/2', '1d': '2/2/2/2/2/2/2/2/2/2'}, 'run_tf': {'15m': '21/52/200/7/23/23/2/2/9/5', '30m': '11/26/100/4/12/12/2/2/4/2', '1h': '5/13/50/2/6/6/2/2/2/2'}}"
+doge_5m_equals_port_default,True,L=83 S=79
+htf_mapping_5m,True,"{'tf': '5m', 'htf': '15m', 'chart_bars': 8991, 'htf_bars': 3000, 'used_closed_before_open': True, 'next_closes_after_open': True, 'weekly_bins_monday': True, 'share_unmapped': 0.000333667000333667}"
+htf_mapping_15m,True,"{'tf': '15m', 'htf': '1h', 'chart_bars': 5991, 'htf_bars': 1500, 'used_closed_before_open': True, 'next_closes_after_open': True, 'weekly_bins_monday': True, 'share_unmapped': 0.0006676681689200467}"
+htf_mapping_30m,True,"{'tf': '30m', 'htf': '2h', 'chart_bars': 5991, 'htf_bars': 1500, 'used_closed_before_open': True, 'next_closes_after_open': True, 'weekly_bins_monday': True, 'share_unmapped': 0.0006676681689200467}"
+htf_mapping_1h,True,"{'tf': '1h', 'htf': '4h', 'chart_bars': 5991, 'htf_bars': 1500, 'used_closed_before_open': True, 'next_closes_after_open': True, 'weekly_bins_monday': True, 'share_unmapped': 0.0006676681689200467}"
+htf_mapping_4h,True,"{'tf': '4h', 'htf': '1d', 'chart_bars': 3991, 'htf_bars': 667, 'used_closed_before_open': True, 'next_closes_after_open': True, 'weekly_bins_monday': True, 'share_unmapped': 0.0015033826108744675}"
+htf_mapping_1d,True,"{'tf': '1d', 'htf': '1w', 'chart_bars': 1991, 'htf_bars': 287, 'used_closed_before_open': True, 'next_closes_after_open': True, 'weekly_bins_monday': True, 'share_unmapped': 0.0020090406830738324}"
+fft_null_equals_brute_roll,True,null_mean -9.575e-05 brute -9.575e-05
+direct_gather_equals_fft,True,z 1.639730 vs 1.639730; z_vn 1.387874 vs 1.387874
+vn_definition,True,
+shift_range,True,"(160, 4017, 4039)"
+fwd_definition,True,
+holm,True,[0.04  0.09  0.09  0.025 0.2  ]
+sympos_rule,True,
+engine_time_exit,True,"[{'side': 1, 'entry_idx': 1001, 'exit_idx': 1016, 'gross': 0.01016350263167154, 'net': 0.008963502631671538, 'hold': 16, 'reason': 'TIME'}, {'side': -1, 'entry_idx': 1501, 'exit_idx': 1516, 'gross': 0.0093844175628921, 'net': 0.008184417562892099, 'hold': 16, 'reason': 'TIME'}]"
+truncation_5m_seed101,True,"350 checks, 37 strategies, failures=[] vacuous(no signals)=['N14_ICHI_RSI', 'N15_KC_AO', 'N21_ST_RSI_ADX', 'S1_EMA_RSI_CHOP'] 23s"
+canaries_detected_5m_seed101,True,"{'CANARY_LOOKAHEAD|plain': True, 'CANARY_V45_CURRENT_HTF|components_explicit': True, 'CANARY_V45_CURRENT_HTF|components_resample': True, 'CANARY_V45_CURRENT_HTF|explicit': True, 'CANARY_V45_CURRENT_HTF|resample': False}"
+truncation_5m_seed202,True,"346 checks, 37 strategies, failures=[] vacuous(no signals)=['N14_ICHI_RSI', 'N21_ST_RSI_ADX', 'S1_EMA_RSI_CHOP'] 23s"
+canaries_detected_5m_seed202,True,"{'CANARY_LOOKAHEAD|plain': True, 'CANARY_V45_CURRENT_HTF|components_explicit': True, 'CANARY_V45_CURRENT_HTF|components_resample': True, 'CANARY_V45_CURRENT_HTF|explicit': False, 'CANARY_V45_CURRENT_HTF|resample': False}"
+truncation_15m_seed101,True,"347 checks, 37 strategies, failures=[] vacuous(no signals)=['N14_ICHI_RSI', 'N15_KC_AO', 'N21_ST_RSI_ADX', 'S1_EMA_RSI_CHOP'] 20s"
+canaries_detected_15m_seed101,True,"{'CANARY_LOOKAHEAD|plain': True, 'CANARY_V45_CURRENT_HTF|components_explicit': True, 'CANARY_V45_CURRENT_HTF|components_resample': False, 'CANARY_V45_CURRENT_HTF|explicit': False, 'CANARY_V45_CURRENT_HTF|resample': False}"
+truncation_15m_seed202,True,"349 checks, 37 strategies, failures=[] vacuous(no signals)=['N14_ICHI_RSI', 'N15_KC_AO', 'N21_ST_RSI_ADX', 'S1_EMA_RSI_CHOP'] 20s"
+canaries_detected_15m_seed202,True,"{'CANARY_LOOKAHEAD|plain': True, 'CANARY_V45_CURRENT_HTF|components_explicit': True, 'CANARY_V45_CURRENT_HTF|components_resample': True, 'CANARY_V45_CURRENT_HTF|explicit': False, 'CANARY_V45_CURRENT_HTF|resample': False}"
+truncation_30m_seed101,True,"349 checks, 37 strategies, failures=[] vacuous(no signals)=['N14_ICHI_RSI', 'N15_KC_AO', 'N21_ST_RSI_ADX', 'S1_EMA_RSI_CHOP'] 21s"
+canaries_detected_30m_seed101,True,"{'CANARY_LOOKAHEAD|plain': True, 'CANARY_V45_CURRENT_HTF|components_explicit': True, 'CANARY_V45_CURRENT_HTF|components_resample': False, 'CANARY_V45_CURRENT_HTF|explicit': True, 'CANARY_V45_CURRENT_HTF|resample': False}"
+truncation_30m_seed202,True,"349 checks, 37 strategies, failures=[] vacuous(no signals)=['N14_ICHI_RSI', 'N15_KC_AO', 'N21_ST_RSI_ADX'] 18s"
+canaries_detected_30m_seed202,True,"{'CANARY_LOOKAHEAD|plain': True, 'CANARY_V45_CURRENT_HTF|components_explicit': True, 'CANARY_V45_CURRENT_HTF|components_resample': True, 'CANARY_V45_CURRENT_HTF|explicit': False, 'CANARY_V45_CURRENT_HTF|resample': False}"
+truncation_1h_seed101,True,"350 checks, 37 strategies, failures=[] vacuous(no signals)=['N14_ICHI_RSI', 'N15_KC_AO', 'N21_ST_RSI_ADX', 'S1_EMA_RSI_CHOP'] 19s"
+canaries_detected_1h_seed101,True,"{'CANARY_LOOKAHEAD|plain': True, 'CANARY_V45_CURRENT_HTF|components_explicit': True, 'CANARY_V45_CURRENT_HTF|components_resample': True, 'CANARY_V45_CURRENT_HTF|explicit': True, 'CANARY_V45_CURRENT_HTF|resample': False}"
+truncation_1h_seed202,True,"347 checks, 37 strategies, failures=[] vacuous(no signals)=['N14_ICHI_RSI', 'N15_KC_AO', 'N21_ST_RSI_ADX'] 19s"
+canaries_detected_1h_seed202,True,"{'CANARY_LOOKAHEAD|plain': True, 'CANARY_V45_CURRENT_HTF|components_explicit': True, 'CANARY_V45_CURRENT_HTF|components_resample': True, 'CANARY_V45_CURRENT_HTF|explicit': True, 'CANARY_V45_CURRENT_HTF|resample': False}"
+truncation_4h_seed101,True,"337 checks, 37 strategies, failures=[] vacuous(no signals)=['DOGE_L', 'DOGE_S', 'N14_ICHI_RSI', 'N15_KC_AO', 'N21_ST_RSI_ADX', 'S1_EMA_RSI_CHOP'] 13s"
+canaries_detected_4h_seed101,True,"{'CANARY_LOOKAHEAD|plain': True, 'CANARY_V45_CURRENT_HTF|components_explicit': True, 'CANARY_V45_CURRENT_HTF|components_resample': True, 'CANARY_V45_CURRENT_HTF|explicit': False, 'CANARY_V45_CURRENT_HTF|resample': False}"
+truncation_4h_seed202,True,"339 checks, 37 strategies, failures=[] vacuous(no signals)=['DOGE_L', 'DOGE_S', 'N14_ICHI_RSI', 'N15_KC_AO', 'N21_ST_RSI_ADX'] 13s"
+canaries_detected_4h_seed202,True,"{'CANARY_LOOKAHEAD|plain': True, 'CANARY_V45_CURRENT_HTF|components_explicit': True, 'CANARY_V45_CURRENT_HTF|components_resample': True, 'CANARY_V45_CURRENT_HTF|explicit': True, 'CANARY_V45_CURRENT_HTF|resample': False}"
+truncation_1d_seed101,True,"323 checks, 37 strategies, failures=[] vacuous(no signals)=['DOGE_L', 'DOGE_S', 'N06_MACD_ORB', 'N14_ICHI_RSI', 'N15_KC_AO', 'N21_ST_RSI_ADX', 'S1_EMA_RSI_CHOP'] 8s"
+canaries_detected_1d_seed101,True,"{'CANARY_LOOKAHEAD|plain': True, 'CANARY_V45_CURRENT_HTF|components_explicit': True, 'CANARY_V45_CURRENT_HTF|components_resample': True, 'CANARY_V45_CURRENT_HTF|explicit': True, 'CANARY_V45_CURRENT_HTF|resample': False}"
+truncation_1d_seed202,True,"329 checks, 37 strategies, failures=[] vacuous(no signals)=['DOGE_L', 'DOGE_S', 'N03_ADX_GC', 'N06_MACD_ORB', 'N14_ICHI_RSI', 'N21_ST_RSI_ADX', 'S1_EMA_RSI_CHOP'] 8s"
+canaries_detected_1d_seed202,True,"{'CANARY_LOOKAHEAD|plain': True, 'CANARY_V45_CURRENT_HTF|components_explicit': True, 'CANARY_V45_CURRENT_HTF|components_resample': True, 'CANARY_V45_CURRENT_HTF|explicit': False, 'CANARY_V45_CURRENT_HTF|resample': False}"
+truncation_rare_5m,True,"failures=[] still_vacuous=['N14_ICHI_RSI', 'N21_ST_RSI_ADX'] max_signals={'DOGE_L': 83, 'DOGE_S': 58, 'N03_ADX_GC': 6, 'N06_MACD_ORB': 18, 'N08_ICHI_WR': 13, 'N11_BREAKAWAY': 16, 'N14_ICHI_RSI': 0, 'N15_KC_AO': 1, 'N21_ST_RSI_ADX': 0, 'S1_EMA_RSI_CHOP': 7, 'S5_DONCHIAN_MFI': 21, 'V45_AMB': 37}"
+truncation_rare_15m,True,"failures=[] still_vacuous=['N14_ICHI_RSI', 'N15_KC_AO', 'N21_ST_RSI_ADX'] max_signals={'DOGE_L': 110, 'DOGE_S': 133, 'N03_ADX_GC': 3, 'N06_MACD_ORB': 32, 'N08_ICHI_WR': 16, 'N11_BREAKAWAY': 17, 'N14_ICHI_RSI': 0, 'N15_KC_AO': 0, 'N21_ST_RSI_ADX': 0, 'S1_EMA_RSI_CHOP': 4, 'S5_DONCHIAN_MFI': 25, 'V45_AMB': 29}"
+truncation_rare_30m,True,"failures=[] still_vacuous=['N14_ICHI_RSI', 'N21_ST_RSI_ADX'] max_signals={'DOGE_L': 130, 'DOGE_S': 127, 'N03_ADX_GC': 6, 'N06_MACD_ORB': 48, 'N08_ICHI_WR': 15, 'N11_BREAKAWAY': 18, 'N14_ICHI_RSI': 0, 'N15_KC_AO': 1, 'N21_ST_RSI_ADX': 0, 'S1_EMA_RSI_CHOP': 4, 'S5_DONCHIAN_MFI': 29, 'V45_AMB': 26}"
+truncation_rare_1h,True,"failures=[] still_vacuous=['N14_ICHI_RSI', 'N15_KC_AO', 'N21_ST_RSI_ADX'] max_signals={'DOGE_L': 116, 'DOGE_S': 123, 'N03_ADX_GC': 5, 'N06_MACD_ORB': 62, 'N08_ICHI_WR': 16, 'N11_BREAKAWAY': 16, 'N14_ICHI_RSI': 0, 'N15_KC_AO': 0, 'N21_ST_RSI_ADX': 0, 'S1_EMA_RSI_CHOP': 4, 'S5_DONCHIAN_MFI': 27, 'V45_AMB': 34}"
+truncation_rare_4h,True,"failures=[] still_vacuous=['DOGE_S', 'N14_ICHI_RSI', 'N15_KC_AO', 'N21_ST_RSI_ADX'] max_signals={'DOGE_L': 2, 'DOGE_S': 0, 'N03_ADX_GC': 3, 'N06_MACD_ORB': 51, 'N08_ICHI_WR': 11, 'N11_BREAKAWAY': 9, 'N14_ICHI_RSI': 0, 'N15_KC_AO': 0, 'N21_ST_RSI_ADX': 0, 'S1_EMA_RSI_CHOP': 6, 'S5_DONCHIAN_MFI': 11, 'V45_AMB': 18}"
+truncation_rare_1d,True,"failures=[] still_vacuous=['DOGE_L', 'DOGE_S', 'N06_MACD_ORB', 'N14_ICHI_RSI', 'N21_ST_RSI_ADX'] max_signals={'DOGE_L': 0, 'DOGE_S': 0, 'N03_ADX_GC': 2, 'N06_MACD_ORB': 0, 'N08_ICHI_WR': 5, 'N11_BREAKAWAY': 6, 'N14_ICHI_RSI': 0, 'N15_KC_AO': 3, 'N21_ST_RSI_ADX': 0, 'S1_EMA_RSI_CHOP': 4, 'S5_DONCHIAN_MFI': 8, 'V45_AMB': 8}"

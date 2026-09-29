@@ -1,0 +1,14 @@
+15m: HE=6 bars  E|r_he| 0.453-0.928%  scen=21 cases=288 load 6.7s
+  seed 0 n_cand=4229 taken(tiered S0 base)=3548 liq=5 t=9s
+  seed 5 n_cand=4198 taken(tiered S0 base)=3538 liq=8 t=18s
+  seed 10 n_cand=4328 taken(tiered S0 base)=3682 liq=7 t=27s
+  seed 15 n_cand=4289 taken(tiered S0 base)=3589 liq=2 t=37s
+  seed 20 n_cand=4302 taken(tiered S0 base)=3687 liq=10 t=45s
+  seed 25 n_cand=4092 taken(tiered S0 base)=3506 liq=8 t=52s
+  seed 30 n_cand=4259 taken(tiered S0 base)=3632 liq=9 t=59s
+  seed 35 n_cand=4160 taken(tiered S0 base)=3511 liq=11 t=66s
+  seed 40 n_cand=4313 taken(tiered S0 base)=3618 liq=6 t=72s
+  seed 45 n_cand=4344 taken(tiered S0 base)=3703 liq=3 t=79s
+  seed 47 n_cand=4315 taken(tiered S0 base)=3702 liq=8 t=82s
+done 15m 83s
+ALLDONE

@@ -1,0 +1,5 @@
+rep 1 done 111s  z sd=1.12 zvn sd=1.07 max z=3.57
+rep 3 done 213s  z sd=1.23 zvn sd=1.09 max z=2.61
+rep 5 done 300s  z sd=1.14 zvn sd=1.09 max z=2.31
+saved /tmp/claude-0/-home-user-crypto-bot-research/e4f1f93f-891a-54cf-944d-5e95b2209f11/scratchpad/sweep/discover_g5m/out/controls_signflip_5m_part1.csv 324 300s
+[timed] start=2026-09-29T12:06:30.819907Z end=2026-09-29T12:11:33.643259Z wall_s=302.8 user_s=146.1 sys_s=4.3 maxrss_MB=686 rc=0

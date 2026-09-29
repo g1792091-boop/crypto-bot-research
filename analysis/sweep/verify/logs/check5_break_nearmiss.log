@@ -1,0 +1,60 @@
+
+=== N13_3OUTSIDE 4h H16: n=236 fwd=1.238% mu*=0.645% z=2.59 z_vn=2.13
+ per-coin fwd%: {'BCHUSD': np.float64(0.32), 'BTCUSD': np.float64(0.94), 'DOGEUSD': np.float64(2.06), 'ETHUSD': np.float64(1.51), 'LTCUSD': np.float64(2.28), 'SOLUSD': np.float64(0.98), 'XRPUSD': np.float64(0.23)}  n: {'ETHUSD': 44, 'SOLUSD': 37, 'BCHUSD': 37, 'LTCUSD': 37, 'DOGEUSD': 31, 'BTCUSD': 25, 'XRPUSD': 25}
+  drop BTCUSD  : n= 211 fwd=1.273% fwd/mu*=1.91 z=2.50 z_vn=2.20
+  drop ETHUSD  : n= 192 fwd=1.175% fwd/mu*=1.80 z=2.19 z_vn=1.88
+  drop SOLUSD  : n= 199 fwd=1.286% fwd/mu*=2.08 z=2.55 z_vn=1.90
+  drop XRPUSD  : n= 211 fwd=1.358% fwd/mu*=2.08 z=2.63 z_vn=2.28
+  drop DOGEUSD : n= 205 fwd=1.114% fwd/mu*=1.75 z=2.25 z_vn=1.99
+  drop LTCUSD  : n= 199 fwd=1.043% fwd/mu*=1.62 z=1.93 z_vn=1.20
+  drop BCHUSD  : n= 199 fwd=1.408% fwd/mu*=2.19 z=2.76 z_vn=2.49
+ best months (sum of signed r): {'2024-01': 0.463, '2021-09': 0.41, '2023-12': 0.389}
+  excl best 1 month(s): n=223 fwd=1.102%  fwd/mu*=1.71
+  excl best 3 month(s): n=208 fwd=0.798%  fwd/mu*=1.24
+  IS first half (<2023-04): n=129 fwd=0.683%  fwd/mu*=1.06
+  IS second half (>=2023-04): n=107 fwd=1.907%  fwd/mu*=2.95
+ by year: {2021: (27, 2.89), 2022: (85, 0.06), 2023: (70, 1.59), 2024: (54, 1.82)}
+  share of total from top-10 signals: 0.54;  median signal r: 1.007%
+  net after cost_H + extra 0.04% RT: 0.978%  (vs hurdle margin 0.552%)
+  net after cost_H + extra 0.10% RT: 0.918%  (vs hurdle margin 0.492%)
+  delayed fill (close of t+1, i.e. one bar late): fwd=1.155%  fwd/mu*=1.79
+
+=== N13_3OUTSIDE 4h H64: n=234 fwd=3.332% mu*=1.363% z=3.16 z_vn=2.06
+ per-coin fwd%: {'BCHUSD': np.float64(4.48), 'BTCUSD': np.float64(-0.33), 'DOGEUSD': np.float64(6.14), 'ETHUSD': np.float64(4.08), 'LTCUSD': np.float64(2.72), 'SOLUSD': np.float64(2.52), 'XRPUSD': np.float64(2.61)}  n: {'ETHUSD': 44, 'SOLUSD': 37, 'BCHUSD': 36, 'LTCUSD': 36, 'DOGEUSD': 31, 'BTCUSD': 25, 'XRPUSD': 25}
+  drop BTCUSD  : n= 209 fwd=3.770% fwd/mu*=2.68 z=3.42 z_vn=2.54
+  drop ETHUSD  : n= 190 fwd=3.159% fwd/mu*=2.29 z=2.58 z_vn=1.37
+  drop SOLUSD  : n= 197 fwd=3.484% fwd/mu*=2.68 z=3.44 z_vn=2.20
+  drop XRPUSD  : n= 209 fwd=3.419% fwd/mu*=2.47 z=2.92 z_vn=1.82
+  drop DOGEUSD : n= 203 fwd=2.903% fwd/mu*=2.15 z=2.65 z_vn=1.93
+  drop LTCUSD  : n= 198 fwd=3.443% fwd/mu*=2.50 z=2.95 z_vn=1.59
+  drop BCHUSD  : n= 198 fwd=3.123% fwd/mu*=2.32 z=2.73 z_vn=2.15
+ best months (sum of signed r): {'2022-10': 1.826, '2023-06': 1.531, '2022-06': 0.8}
+  excl best 1 month(s): n=226 fwd=2.642%  fwd/mu*=1.94
+  excl best 3 month(s): n=204 fwd=1.785%  fwd/mu*=1.31
+  IS first half (<2023-04): n=129 fwd=3.140%  fwd/mu*=2.30
+  IS second half (>=2023-04): n=105 fwd=3.568%  fwd/mu*=2.62
+ by year: {2021: (27, 4.59), 2022: (85, 3.32), 2023: (70, 4.05), 2024: (52, 1.73)}
+  share of total from top-10 signals: 0.72;  median signal r: 1.422%
+  net after cost_H + extra 0.04% RT: 2.832%  (vs hurdle margin 1.929%)
+  net after cost_H + extra 0.10% RT: 2.772%  (vs hurdle margin 1.869%)
+  delayed fill (close of t+1, i.e. one bar late): fwd=3.234%  fwd/mu*=2.37
+
+=== DOGE_L 1h H64: n=1717 fwd=0.811% mu*=0.649% z=2.64 z_vn=0.15
+ per-coin fwd%: {'BCHUSD': np.float64(1.35), 'BTCUSD': np.float64(0.59), 'DOGEUSD': np.float64(1.1), 'ETHUSD': np.float64(0.54), 'LTCUSD': np.float64(0.29), 'SOLUSD': np.float64(1.6), 'XRPUSD': np.float64(0.16)}  n: {'BCHUSD': 257, 'LTCUSD': 255, 'SOLUSD': 255, 'ETHUSD': 246, 'XRPUSD': 245, 'DOGEUSD': 237, 'BTCUSD': 222}
+  drop BTCUSD  : n=1495 fwd=0.845% fwd/mu*=1.26 z=2.66 z_vn=0.13
+  drop ETHUSD  : n=1471 fwd=0.857% fwd/mu*=1.30 z=2.82 z_vn=0.23
+  drop SOLUSD  : n=1462 fwd=0.673% fwd/mu*=1.08 z=2.42 z_vn=-0.06
+  drop XRPUSD  : n=1472 fwd=0.919% fwd/mu*=1.40 z=2.80 z_vn=0.32
+  drop DOGEUSD : n=1480 fwd=0.765% fwd/mu*=1.19 z=2.28 z_vn=0.14
+  drop LTCUSD  : n=1462 fwd=0.902% fwd/mu*=1.39 z=2.74 z_vn=0.53
+  drop BCHUSD  : n=1460 fwd=0.716% fwd/mu*=1.11 z=2.14 z_vn=-0.21
+ best months (sum of signed r): {'2024-02': 3.161, '2023-06': 2.734, '2022-07': 2.216}
+  excl best 1 month(s): n=1653 fwd=0.651%  fwd/mu*=1.00
+  excl best 3 month(s): n=1530 fwd=0.380%  fwd/mu*=0.59
+  IS first half (<2023-04): n=1016 fwd=0.521%  fwd/mu*=0.80
+  IS second half (>=2023-04): n=701 fwd=1.232%  fwd/mu*=1.90
+ by year: {2021: (256, 0.54), 2022: (594, 0.35), 2023: (572, 1.19), 2024: (295, 1.23)}
+  share of total from top-10 signals: 0.29;  median signal r: -0.178%
+  net after cost_H + extra 0.04% RT: 0.551%  (vs hurdle margin 0.122%)
+  net after cost_H + extra 0.10% RT: 0.491%  (vs hurdle margin 0.062%)
+  delayed fill (close of t+1, i.e. one bar late): fwd=0.815%  fwd/mu*=1.26

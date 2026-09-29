@@ -1,0 +1,88 @@
+START 2026-09-29T12:36:00Z
+4h: recomputed signals for ['N13_3OUTSIDE'] in 0.0s; last IS bar 2024-06-30 20:00:00+00:00
+  4h N13_3OUTSIDE H16: 16s
+            exit  trades        pf   exp_net  symbols_pos  months_pos  months    z_exit     p_max  exit_criteria_met_DESCRIPTIVE
+0         TIME_H     224  1.595606  0.010721            6          21      35  2.850745  0.013289                           True
+1    ATR_SL2_TP3     221  1.441019  0.010857            5          19      35  3.248170  0.003322                           True
+2    ATR_SL3_TP6     199  1.267259  0.009589            5          20      35  2.032695  0.059801                          False
+3  TRAIL_SL3_TR3     213  1.520498  0.012118            6          21      35  3.349359  0.003322                           True
+4     TIME_H_SL3     226  1.510420  0.009669            6          22      35  2.796176  0.013289                           True
+  4h N13_3OUTSIDE H64: 15s
+            exit  trades        pf   exp_net  symbols_pos  months_pos  months    z_exit     p_max  exit_criteria_met_DESCRIPTIVE
+0         TIME_H     178  1.485787  0.018777            5          24      35  2.195212  0.063123                          False
+1    ATR_SL2_TP3     219  1.516816  0.013103            5          23      35  3.591317  0.003322                           True
+2    ATR_SL3_TP6     184  1.316783  0.014578            4          19      35  2.235018  0.049834                           True
+3  TRAIL_SL3_TR3     210  1.559431  0.013231            6          23      35  3.396536  0.003322                           True
+4     TIME_H_SL3     192  1.522030  0.019820            5          20      35  2.896308  0.016611                           True
+1d: recomputed signals for ['N01_ST_EMA', 'N02_ST_KST', 'N04_ST_KLINGER', 'N18_VWMA_MACD', 'N23_HA_ST', 'N25_DST_CCI', 'S2_ST_ROC'] in 0.4s; last IS bar 2024-06-30 00:00:00+00:00
+  1d N01_ST_EMA H64: 12s
+            exit  trades        pf   exp_net  symbols_pos  months_pos  months    z_exit     p_max  exit_criteria_met_DESCRIPTIVE
+0         TIME_H      63  1.173240  0.017806            4          13      26  1.299506  0.242525                          False
+1    ATR_SL2_TP3     113  0.746306 -0.021364            1          10      27 -0.321139  0.870432                          False
+2    ATR_SL3_TP6      70  0.778484 -0.031077            2           8      25  0.583406  0.591362                          False
+3  TRAIL_SL3_TR3     114  0.762050 -0.018574            2           8      27  0.361714  0.661130                          False
+4     TIME_H_SL3      86  1.196553  0.020502            5           8      26  1.097525  0.305648                          False
+  1d N02_ST_KST H4: 13s
+            exit  trades        pf   exp_net  symbols_pos  months_pos  months    z_exit     p_max  exit_criteria_met_DESCRIPTIVE
+0         TIME_H     145  1.787349  0.016801            5          15      28  2.478677  0.036545                           True
+1    ATR_SL2_TP3     142  0.585261 -0.028000            1          11      28 -1.621357  0.993355                          False
+2    ATR_SL3_TP6     137  0.575361 -0.031185            1           9      28 -1.370616  0.993355                          False
+3  TRAIL_SL3_TR3     140  0.577738 -0.029026            1           7      28 -1.369718  0.993355                          False
+4     TIME_H_SL3     146  1.792228  0.016744            5          15      28  2.557563  0.026578                           True
+  1d N02_ST_KST H64: 12s
+            exit  trades        pf   exp_net  symbols_pos  months_pos  months    z_exit     p_max  exit_criteria_met_DESCRIPTIVE
+0         TIME_H      66  1.094645  0.011820            3           9      22  2.768834  0.006645                          False
+1    ATR_SL2_TP3     121  0.506726 -0.048488            0           8      28 -2.155917  1.000000                          False
+2    ATR_SL3_TP6      79  0.591456 -0.060033            1           7      26 -0.058817  0.870432                          False
+3  TRAIL_SL3_TR3     116  0.579060 -0.038842            0           7      28 -1.104037  1.000000                          False
+4     TIME_H_SL3      94  0.858419 -0.018405            4           8      27  0.418398  0.767442                          False
+  1d N04_ST_KLINGER H64: 13s
+            exit  trades        pf   exp_net  symbols_pos  months_pos  months    z_exit     p_max  exit_criteria_met_DESCRIPTIVE
+0         TIME_H      88  1.422974  0.042499            5          16      30  2.573666  0.063123                          False
+1    ATR_SL2_TP3     191  0.871744 -0.010788            3          13      30  0.473572  0.744186                          False
+2    ATR_SL3_TP6      82  1.080345  0.009378            4          12      25  2.165445  0.079734                          False
+3  TRAIL_SL3_TR3     174  0.845571 -0.011279            1          12      29  1.164930  0.445183                          False
+4     TIME_H_SL3     121  0.936732 -0.007021            3          12      29  0.740096  0.644518                          False
+  1d N18_VWMA_MACD H4: 13s
+            exit  trades        pf   exp_net  symbols_pos  months_pos  months    z_exit     p_max  exit_criteria_met_DESCRIPTIVE
+0         TIME_H     152  1.761879  0.019033            6          15      30  2.526523  0.023256                           True
+1    ATR_SL2_TP3     146  0.743196 -0.016656            2          12      30 -0.913995  0.950166                          False
+2    ATR_SL3_TP6     132  0.797064 -0.013158            2          11      30 -0.375452  0.820598                          False
+3  TRAIL_SL3_TR3     134  0.777752 -0.014074            2          12      30 -0.451502  0.847176                          False
+4     TIME_H_SL3     154  1.718809  0.018280            6          15      30  2.492511  0.023256                           True
+  1d N23_HA_ST H4: 20s
+            exit  trades        pf   exp_net  symbols_pos  months_pos  months    z_exit     p_max  exit_criteria_met_DESCRIPTIVE
+0         TIME_H     514  1.302063  0.008334            6          18      30  2.231330  0.056478                          False
+1    ATR_SL2_TP3     333  0.958787 -0.002251            3          14      30  0.431885  0.491694                          False
+2    ATR_SL3_TP6     284  1.138548  0.007626            4          14      30  1.311517  0.205980                          False
+3  TRAIL_SL3_TR3     305  1.040226  0.002181            5          17      30  0.982688  0.285714                          False
+4     TIME_H_SL3     519  1.239951  0.006881            6          18      30  2.078388  0.069767                          False
+  1d N23_HA_ST H16: 16s
+            exit  trades        pf   exp_net  symbols_pos  months_pos  months    z_exit     p_max  exit_criteria_met_DESCRIPTIVE
+0         TIME_H     259  1.546839  0.027149            7          18      30  2.454826  0.029900                           True
+1    ATR_SL2_TP3     235  0.778604 -0.018369            2          10      30 -0.791510  0.970100                          False
+2    ATR_SL3_TP6     144  0.855931 -0.016301            3          10      29  0.083383  0.691030                          False
+3  TRAIL_SL3_TR3     205  0.914449 -0.006534            2          13      30  0.434497  0.531561                          False
+4     TIME_H_SL3     275  1.360840  0.019625            6          16      30  1.960636  0.086379                          False
+  1d N23_HA_ST H64: 13s
+            exit  trades        pf   exp_net  symbols_pos  months_pos  months    z_exit     p_max  exit_criteria_met_DESCRIPTIVE
+0         TIME_H      88  1.646813  0.057920            6          15      30  2.939182  0.013289                          False
+1    ATR_SL2_TP3     210  0.754463 -0.021896            3          10      30 -0.677025  0.976744                          False
+2    ATR_SL3_TP6      94  0.853150 -0.020583            3          12      27  1.278674  0.368771                          False
+3  TRAIL_SL3_TR3     183  0.894724 -0.007987            2          12      29  1.907232  0.109635                          False
+4     TIME_H_SL3     115  1.288426  0.030017            3           9      29  2.792814  0.019934                          False
+  1d N25_DST_CCI H64: 13s
+            exit  trades        pf   exp_net  symbols_pos  months_pos  months    z_exit     p_max  exit_criteria_met_DESCRIPTIVE
+0         TIME_H      72  0.986694 -0.001796            4          13      26  1.371607  0.262458                          False
+1    ATR_SL2_TP3     124  0.912644 -0.006771            3          13      28  0.646130  0.514950                          False
+2    ATR_SL3_TP6      66  1.025773  0.003197            3           8      20  2.144714  0.039867                          False
+3  TRAIL_SL3_TR3     120  1.005749  0.000397            4          11      28  1.337412  0.282392                          False
+4     TIME_H_SL3      94  1.410434  0.035810            5          10      25  1.685026  0.122924                          False
+  1d S2_ST_ROC H64: 13s
+            exit  trades        pf   exp_net  symbols_pos  months_pos  months    z_exit     p_max  exit_criteria_met_DESCRIPTIVE
+0         TIME_H      87  1.209587  0.023576            4          13      28  2.050637  0.083056                          False
+1    ATR_SL2_TP3     193  0.775761 -0.019431            2          11      30 -0.318315  0.883721                          False
+2    ATR_SL3_TP6      88  0.795131 -0.029533            2           8      26  1.120901  0.445183                          False
+3  TRAIL_SL3_TR3     171  0.989577 -0.000769            3          12      29  2.144664  0.073090                          False
+4     TIME_H_SL3     119  1.113230  0.012540            3           8      26  1.517811  0.235880                          False
+END 2026-09-29T12:38:51Z rc=0

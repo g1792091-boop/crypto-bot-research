@@ -1,0 +1,25 @@
+raw files: 7 rows: 666 dups: 0
+expected cells: 666 present: 666 missing: 0 extra: 0
+assembled rows: 666 merged: 666 max abs diff raw vs assembled: {"n": 0.0, "n_nan_mismatch": 0, "fwd": 0.0, "fwd_nan_mismatch": 0, "z": 4.440892098500626e-16, "z_nan_mismatch": 0, "p": 0.0, "p_nan_mismatch": 0, "p_vn": 0.0, "p_vn_nan_mismatch": 0, "z_vn": 4.440892098500626e-16, "z_vn_nan_mismatch": 0, "mu_star": 0.0, "mu_star_nan_mismatch": 0, "cost_H": 0.0, "cost_H_nan_mismatch": 0, "symbols_pos": 0.0, "symbols_pos_nan_mismatch": 0, "n_coins_ge10": 0.0, "n_coins_ge10_nan_mismatch": 0, "net_time": 0.0, "net_time_nan_mismatch": 0, "fwd_minus_hurdle": 0.0, "fwd_minus_hurdle_nan_mismatch": 0}
+family size m = 528 (cells with n>=100 and finite p, p_vn)
+family by tf: {'5m': 105, '15m': 102, '30m': 99, '1h': 96, '4h': 81, '1d': 45}
+cells n<100 or non-finite p: 138
+n>=100 but non-finite p/p_vn: 0 []
+Holm first step: p < 9.470e-05 (z > 3.733)
+gate_pass survivors: 0
+gate_pass_spec survivors (descriptive): 0
+family cells meeting each condition: {'c1_p_holm': 0, 'c2_p_vn_holm': 15, 'c3_fwd_ge_mu': 15, 'c4_sympos': 220}
+family cells meeting c3 & c4: 15
+smallest p_holm: 0.42049363669061757 smallest p_vn_holm: 4.3396251806897233e-138
+          strategy   tf   H      n       fwd   mu_star         z         p    p_holm       z_vn          p_vn     p_vn_holm  symbols_pos  n_coins_ge10
+488   N13_3OUTSIDE   4h  64    234  0.033321  0.013632  3.157226  0.000796  0.420494   2.058333  1.977910e-02  1.000000e+00            6             7
+63   N20_EMA9_CHOP   5m   4  95158  0.000043  0.001696  2.815914  0.002432  1.000000  -3.648628  9.998682e-01  1.000000e+00            6             7
+64   N20_EMA9_CHOP   5m  16  95158  0.000094  0.001993  2.772005  0.002786  1.000000  -1.280966  8.998972e-01  1.000000e+00            7             7
+335         DOGE_L   1h  64   1717  0.008111  0.006487  2.637607  0.004175  1.000000   0.149216  4.406918e-01  1.000000e+00            7             7
+487   N13_3OUTSIDE   4h  16    236  0.012378  0.006453  2.590704  0.004789  1.000000   2.128696  1.663971e-02  1.000000e+00            7             7
+398  N20_EMA9_CHOP   1h  64   7051  0.001852  0.006487  2.444864  0.007245  1.000000   2.589129  4.810945e-03  1.000000e+00            4             7
+351   N05_PSAR_POC   1h   4   1365  0.001140  0.002457  2.357574  0.009197  1.000000  -0.527515  7.010819e-01  1.000000e+00            6             7
+165     N17_KC_RSI  15m   4  81718  0.000197  0.001915  2.350101  0.009384  1.000000  15.031849  2.270765e-51  1.194423e-48            6             7
+358   N07_ICHI_CMO   1h  16   2153  0.002346  0.003675  2.314730  0.010314  1.000000  -0.595658  7.242982e-01  1.000000e+00            7             7
+373    N12_ICHI_AO   1h  16   2440  0.002222  0.003675  2.226731  0.012983  1.000000  -1.207102  8.863036e-01  1.000000e+00            6             7
+wrote /tmp/claude-0/-home-user-crypto-bot-research/e4f1f93f-891a-54cf-944d-5e95b2209f11/scratchpad/sweep/combine/out/gate_all_is_applied.csv
