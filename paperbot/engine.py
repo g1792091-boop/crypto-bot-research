@@ -26,7 +26,7 @@ from .config import Settings
 from .margin import Brackets, liquidation_price
 from .models import Bar, Position, Signal, SignalOutcome, TradeRecord
 from .notify import CRITICAL, INFO, WARN, NullNotifier, Notifier
-from .sizing import size_position, tp_from_roe
+from .policy import OwnerPolicy, Policy, RiskGuards
 
 
 class PaperEngine:
@@ -35,8 +35,13 @@ class PaperEngine:
                  symbol_specs: Optional[dict[str, dict]] = None,
                  on_trade: Optional[Callable[[TradeRecord], None]] = None,
                  on_outcome: Optional[Callable[[SignalOutcome], None]] = None,
-                 on_equity: Optional[Callable[[int, float, float], None]] = None):
+                 on_equity: Optional[Callable[[int, float, float], None]] = None,
+                 policy: Optional[Policy] = None, guards: Optional[RiskGuards] = None,
+                 book: Optional[str] = None):
         self.s = settings
+        self.policy = policy or OwnerPolicy(settings)
+        self.guards = guards
+        self.book = book or self.policy.name
         self.brackets = brackets
         self.notifier = notifier or NullNotifier()
         self.specs = symbol_specs or {}
@@ -139,6 +144,13 @@ class PaperEngine:
             for sig, bar in ready:
                 self._record(sig, "REJECTED", f"halted: {self.halt_reason}", bar.open_time)
             return False
+        if self.guards is not None and self.position is None:
+            ts = min(bar.open_time for _, bar in ready)
+            why = self.guards.check(ts, self.equity())
+            if why:
+                for sig, bar in ready:
+                    self._record(sig, "REJECTED", f"guard: {why}", bar.open_time)
+                return False
         if self.s.single_position and self.position is not None:
             held = self.position
             for sig, bar in ready:
@@ -161,10 +173,7 @@ class PaperEngine:
         side = sig.side
         fill = bar.open * (1 + side * self.s.slippage_frac)
         spec = self.specs.get(sig.symbol, {})
-        dec = size_position(self.s, self.wallet, side, fill, sig.stop_price,
-                            sig.tier, self.brackets[sig.symbol], atr=sig.atr,
-                            qty_step=spec.get("qty_step", 0.0),
-                            min_notional=spec.get("min_notional", 0.0))
+        dec = self.policy.size(self.wallet, sig, fill, self.brackets[sig.symbol], spec)
         if not dec.ok:
             self._record(sig, "REJECTED", "sizing", bar.open_time,
                          reasons=dec.reasons, fill=fill)
@@ -172,8 +181,7 @@ class PaperEngine:
         notional = dec.qty * fill
         fee = notional * self.s.taker_fee
         self.wallet -= fee
-        roe = sig.tp_roe if sig.tp_roe is not None else self.s.default_tp_roe
-        tp = tp_from_roe(side, fill, dec.leverage, roe)
+        tp = self.policy.take_profit(sig, fill, dec)
         self.position = Position(
             signal=sig, symbol=sig.symbol, side=side, qty=dec.qty,
             entry_price=fill, entry_time=bar.open_time, leverage=dec.leverage,
@@ -184,7 +192,7 @@ class PaperEngine:
                      leverage=dec.leverage, margin=dec.margin, fill=fill,
                      downgrades=dec.reasons)
         self.notifier.send(INFO, (
-            f"ENTRY {sig.symbol} {'LONG' if side > 0 else 'SHORT'} {sig.strategy_id} "
+            f"[{self.book}] ENTRY {sig.symbol} {'LONG' if side > 0 else 'SHORT'} {sig.strategy_id} "
             f"{dec.tier} {dec.leverage}x margin {dec.margin:.2f} @ {fill:.6g} "
             f"SL {sig.stop_price:.6g} TP {tp:.6g} LIQ {dec.liq_price:.6g}"))
         return True
@@ -254,7 +262,7 @@ class PaperEngine:
         self.wallet -= p.margin
         self._finish(p.liq_price, ts, "LIQ", exit_fee=0.0, forced_pnl=-p.margin)
         self.notifier.send(CRITICAL, (
-            f"LIQUIDATED {p.symbol} {p.leverage}x lost margin {p.margin_initial:.2f}"))
+            f"[{self.book}] LIQUIDATED {p.symbol} {p.leverage}x lost margin {p.margin_initial:.2f}"))
 
     def _finish(self, price: float, ts: int, reason: str, exit_fee: float,
                 forced_pnl: Optional[float] = None) -> None:
@@ -276,10 +284,12 @@ class PaperEngine:
             equity_after=self.wallet, score=p.signal.score)
         self.trades.append(rec)
         self.position = None
+        if self.guards is not None:
+            self.guards.on_trade(rec)
         if self.on_trade:
             self.on_trade(rec)
         self.notifier.send(INFO, (
-            f"EXIT {rec.symbol} {reason} pnl {rec.pnl:+.2f} ROE {rec.roe:+.1%} "
+            f"[{self.book}] EXIT {rec.symbol} {reason} pnl {rec.pnl:+.2f} ROE {rec.roe:+.1%} "
             f"equity {self.wallet:.2f}"))
 
     # ------------------------------------------------------------ funding
@@ -308,7 +318,7 @@ class PaperEngine:
         for lvl in self.s.dd_warn_levels:
             if dd >= lvl and lvl not in self._warned:
                 self._warned.add(lvl)
-                self.notifier.send(WARN, f"drawdown {dd:.1%} (level {lvl:.0%}), equity {eq:.2f}")
+                self.notifier.send(WARN, f"[{self.book}] drawdown {dd:.1%} (level {lvl:.0%}), equity {eq:.2f}")
         if dd >= self.s.dd_halt:
             if self.position is not None and self.position.symbol in bars:
                 self._close_market(bars[self.position.symbol].close, ts, "HALT")
@@ -317,14 +327,16 @@ class PaperEngine:
     def _halt(self, reason: str) -> None:
         self.halted = True
         self.halt_reason = reason
-        self.notifier.send(CRITICAL, f"ENGINE HALTED: {reason}. Operator action required.")
+        self.notifier.send(CRITICAL, f"[{self.book}] ENGINE HALTED: {reason}. Operator action required.")
 
     # ------------------------------------------------------------ report
     def summary(self) -> dict:
         n = len(self.trades)
         wins = sum(1 for t in self.trades if t.pnl > 0)
         return {
+            "book": self.book,
             "settings_version": self.s.version,
+            "policy_version": getattr(getattr(self.policy, "r", None), "version", self.s.version),
             "trades": n,
             "win_rate": wins / n if n else None,
             "net_pnl": sum(t.pnl for t in self.trades),

@@ -61,6 +61,8 @@ class Signal:
     tier: str = "base"
     score: float = 0.0
     tp_roe: Optional[float] = None
+    # Strategy's own take-profit price; used by the recommended book.
+    tp_price: Optional[float] = None
     atr: Optional[float] = None
     meta: dict[str, Any] = field(default_factory=dict)
 

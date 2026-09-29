@@ -90,7 +90,12 @@ def test_replay_cli_end_to_end(tmp_path, capsys):
         w.writerow([MIN - 1, "BTCUSDT", "1m", "demo", 1, 99.0, "base"])
     out = tmp_path / "summary.json"
     replay_main(["--bars", str(bdir), "--signals", str(sfile), "--out", str(out)])
-    summary = json.loads(out.read_text())
-    assert summary["trades"] == 1
-    assert summary["brackets_source"].startswith("EXAMPLE")
-    assert summary["final_equity"] > 1000
+    books = {b["book"]: b for b in json.loads(out.read_text())}
+    assert set(books) == {"owner", "recommended"}
+    for b in books.values():
+        assert b["brackets_source"].startswith("EXAMPLE")
+        assert b["signals"] == 1
+    # Same signal, different exits: the owner book's ROE-10% target (0.5% at
+    # 20x) is hit on this path; the recommended book's 2R target is not yet.
+    assert books["owner"]["trades"] == 1 and books["owner"]["final_equity"] > 1000
+    assert books["recommended"]["trades"] == 0

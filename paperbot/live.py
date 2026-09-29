@@ -33,14 +33,18 @@ from .feed import LiveFeed
 from .ledger import Ledger
 from .margin import Brackets
 from .notify import CRITICAL, INFO, WARN, ConsoleNotifier, Notifier, TelegramNotifier
+from .policy import RecommendedPolicy, RecommendedSettings, RiskGuards
 from .strategy import Strategy, StrategyRunner
 
 
 class LiveRunner:
-    def __init__(self, feed: LiveFeed, engine: PaperEngine,
-                 strategies: Sequence[Strategy], notifier: Notifier):
+    """Drives one or more books (engines) with the same bars and signals."""
+
+    def __init__(self, feed: LiveFeed, engine, strategies: Sequence[Strategy],
+                 notifier: Notifier):
         self.feed = feed
-        self.engine = engine
+        self.engines: list[PaperEngine] = list(engine) if isinstance(engine, (list, tuple)) else [engine]
+        self.engine = self.engines[0]
         self.runner = StrategyRunner(strategies)
         tfs = {s.timeframe for s in strategies} | {"1m"}
         self.agg = Aggregator(tfs)
@@ -49,7 +53,8 @@ class LiveRunner:
 
     def process(self, steps) -> None:
         for _t, bars, funding in steps:
-            self.engine.step(bars, funding or None)
+            for eng in self.engines:
+                eng.step(bars, funding or None)
             for sym in sorted(bars):
                 for tf, bar in self.agg.add(bars[sym]):
                     if bar.partial:
@@ -58,7 +63,8 @@ class LiveRunner:
                         self.runner.history.setdefault((sym, tf), []).append(bar)
                         continue
                     for sig in self.runner.on_closed_bar(tf, bar):
-                        self.engine.submit(sig)
+                        for eng in self.engines:
+                            eng.submit(sig)
             self.steps += 1
 
     def run(self, poll_seconds: float = 5.0, max_steps: Optional[int] = None) -> None:
@@ -160,21 +166,44 @@ def cmd_run(settings: Settings, args) -> int:
                                   args.allow_example_brackets)
     specs = rest.exchange_info(settings.symbols)
     run_id = args.run_id or uuid.uuid4().hex[:12]
-    ledger = Ledger(args.ledger, run_id, settings.version, equity_every=args.equity_every)
-    engine = PaperEngine(settings, brackets, notifier=notifier, symbol_specs=specs,
-                         on_trade=ledger.trade, on_outcome=ledger.outcome,
-                         on_equity=ledger.equity)
+    engines, ledgers = make_books(settings, brackets, specs, notifier, args.ledger,
+                                  run_id, args.equity_every, args.books.split(","))
     feed = LiveFeed(rest, settings.symbols, on_event=notifier.send)
     strategies: list[Strategy] = []  # strategies plug in here once validated
-    notifier.send(INFO, f"paper run {run_id} started; brackets: {src}; "
-                        f"strategies: {len(strategies)}")
-    runner = LiveRunner(feed, engine, strategies, notifier)
+    notifier.send(INFO, f"paper run {run_id} started; books: {args.books}; "
+                        f"brackets: {src}; strategies: {len(strategies)}")
+    runner = LiveRunner(feed, engines, strategies, notifier)
     try:
         runner.run(poll_seconds=args.poll, max_steps=args.max_steps)
     finally:
-        ledger.close()
-        print(json.dumps(engine.summary(), indent=2))
+        for led in ledgers:
+            led.close()
+        print(json.dumps([e.summary() for e in engines], indent=2))
     return 0
+
+
+def make_books(settings: Settings, brackets, specs, notifier, ledger_path: Optional[str],
+               run_id: str, equity_every: int = 1, books=("owner", "recommended"),
+               rec: RecommendedSettings = RecommendedSettings()):
+    """Build the requested books. Each gets its own ledger run id
+    (``<run_id>-<book>``) in the same database."""
+    engines, ledgers = [], []
+    for book in books:
+        kw = {}
+        if book == "recommended":
+            kw = {"policy": RecommendedPolicy(settings, rec), "guards": RiskGuards(rec)}
+        elif book != "owner":
+            raise SystemExit(f"unknown book {book!r}")
+        cb = {}
+        if ledger_path:
+            led = Ledger(ledger_path, f"{run_id}-{book}",
+                         settings.version if book == "owner" else rec.version,
+                         equity_every=equity_every)
+            ledgers.append(led)
+            cb = {"on_trade": led.trade, "on_outcome": led.outcome, "on_equity": led.equity}
+        engines.append(PaperEngine(settings, brackets, notifier=notifier, symbol_specs=specs,
+                                   book=book, **kw, **cb))
+    return engines, ledgers
 
 
 def main(argv: Optional[list[str]] = None) -> int:
@@ -190,6 +219,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     r.add_argument("--poll", type=float, default=5.0)
     r.add_argument("--max-steps", type=int)
     r.add_argument("--equity-every", type=int, default=1)
+    r.add_argument("--books", default="owner,recommended",
+                   help="comma list of books to run side by side")
     args = ap.parse_args(argv)
     settings = Settings()
     if args.cmd == "check":

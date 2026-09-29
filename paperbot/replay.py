@@ -9,7 +9,7 @@ live, and to run what-if comparisons on the same signals.
 bars DIR: one CSV per symbol named <SYMBOL>.csv with columns
     open_time,close_time,open,high,low,close[,mark_open,mark_high,mark_low,mark_close]
 signals.csv columns:
-    ts,symbol,timeframe,strategy_id,side,stop_price[,tier,score,tp_roe,atr]
+    ts,symbol,timeframe,strategy_id,side,stop_price[,tier,score,tp_roe,tp_price,atr]
 funding.csv columns: ts,symbol,rate   (ts = settlement time, ms)
 brackets.json: Binance GET /fapi/v1/leverageBracket response (list)
 """
@@ -55,7 +55,8 @@ def load_signals(path: str) -> list[Signal]:
             ts=int(r["ts"]), symbol=r["symbol"], timeframe=r["timeframe"],
             strategy_id=r["strategy_id"], side=int(r["side"]),
             stop_price=float(r["stop_price"]), tier=r.get("tier") or "base",
-            score=_f(r, "score") or 0.0, tp_roe=_f(r, "tp_roe"), atr=_f(r, "atr"))
+            score=_f(r, "score") or 0.0, tp_roe=_f(r, "tp_roe"),
+            tp_price=_f(r, "tp_price"), atr=_f(r, "atr"))
             for r in csv.DictReader(fh)), key=lambda s: s.ts)
 
 
@@ -70,8 +71,11 @@ def load_funding(path: Optional[str]) -> dict[int, dict[str, float]]:
 
 def replay(settings: Settings, bars: dict[str, list[Bar]], signals: list[Signal],
            brackets: dict[str, Brackets], funding: dict[int, dict[str, float]],
-           engine: Optional[PaperEngine] = None) -> PaperEngine:
+           engine=None):
+    """Replay into one engine or a list of engines (books). Returns what
+    was passed in, or a new owner-rules engine."""
     eng = engine or PaperEngine(settings, brackets)
+    engines = list(eng) if isinstance(eng, (list, tuple)) else [eng]
     by_time: dict[int, dict[str, Bar]] = defaultdict(dict)
     for sym, rows in bars.items():
         for b in rows:
@@ -81,13 +85,15 @@ def replay(settings: Settings, bars: dict[str, list[Bar]], signals: list[Signal]
     si = 0
     for t in sorted(by_time):
         while si < len(signals) and signals[si].ts <= t:
-            eng.submit(signals[si])
+            for e in engines:
+                e.submit(signals[si])
             si += 1
         step_funding: dict[str, float] = {}
         while fi < len(funding_times) and funding_times[fi] <= t:
             step_funding.update(funding[funding_times[fi]])
             fi += 1
-        eng.step(by_time[t], step_funding or None)
+        for e in engines:
+            e.step(by_time[t], step_funding or None)
     return eng
 
 
@@ -99,6 +105,7 @@ def main(argv: Optional[list[str]] = None) -> None:
     ap.add_argument("--funding")
     ap.add_argument("--brackets", help="leverageBracket JSON; example table if omitted")
     ap.add_argument("--out")
+    ap.add_argument("--books", default="owner,recommended")
     args = ap.parse_args(argv)
 
     settings = Settings()
@@ -108,11 +115,14 @@ def main(argv: Optional[list[str]] = None) -> None:
         brackets = {p["symbol"]: Brackets.from_binance(p) for p in payload}
     else:
         brackets = {s: Brackets.example() for s in settings.symbols}
-    eng = replay(settings, load_bars(args.bars, settings.symbols),
-                 load_signals(args.signals), brackets, load_funding(args.funding))
-    summary = eng.summary()
-    summary["brackets_source"] = args.brackets or "EXAMPLE TABLE (not exchange data)"
-    text = json.dumps(summary, indent=2)
+    from .live import make_books
+    engines, _ = make_books(settings, brackets, {}, None, None, "replay",
+                            books=args.books.split(","))
+    replay(settings, load_bars(args.bars, settings.symbols),
+           load_signals(args.signals), brackets, load_funding(args.funding), engines)
+    src = args.brackets or "EXAMPLE TABLE (not exchange data)"
+    summaries = [dict(e.summary(), brackets_source=src) for e in engines]
+    text = json.dumps(summaries if len(summaries) > 1 else summaries[0], indent=2)
     if args.out:
         with open(args.out, "w") as fh:
             fh.write(text)
