@@ -2,6 +2,8 @@
 
 코인 선물 자동매매 전략 연구 저장소 (봇 코드 아님 — 백테스트·검증 전용).
 
+- **[HANDOFF_PASTE_KO.md](HANDOFF_PASTE_KO.md)** — 에이전트 팀 채팅방 복붙용 전체 인수인계 (이것부터)
+
 - **[HANDOFF_AGENT_TEAM_KO.md](HANDOFF_AGENT_TEAM_KO.md)** — 에이전트 팀 인수인계 최종판(v2.1) (먼저 읽을 것): 결과·판단 규칙·PAPER 봇 요구사항
 - **[SWEEP_RESULTS_KO.md](SWEEP_RESULTS_KO.md)** — 전체 백테스트 결과(매매법 37개 × 봉 6개 × 코인 7개)
 - [ANALYSIS_KO.md](ANALYSIS_KO.md) — 1단계 인수인계 검토 결과(다음 단계는 `HANDOFF_AGENT_TEAM_KO.md`로 대체됨)
