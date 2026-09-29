@@ -1,0 +1,22 @@
+== pre-registered splits ==
+p3 2025-03-20..08-06         {'n': 637, 'exp_pct': np.float64(-0.0929), 'pf': np.float64(0.844), 't': np.float64(-1.42)} pos 0 /3
+p2 2025-08-06..12-23         {'n': 630, 'exp_pct': np.float64(-0.0872), 'pf': np.float64(0.857), 't': np.float64(-1.27)} pos 1 /3
+p1 2025-12-23..2026-05-12    {'n': 669, 'exp_pct': np.float64(0.0313), 'pf': np.float64(1.067), 't': np.float64(0.59)} pos 2 /3
+first 9.2 months p1+p2       {'n': 1299, 'exp_pct': np.float64(-0.0262), 'pf': np.float64(0.951), 't': np.float64(-0.61)} pos 2 /3
+ALL                          {'n': 1936, 'exp_pct': np.float64(-0.0481), 'pf': np.float64(0.913), 't': np.float64(-1.34)} pos 0 /3
+== side split (descriptive) ==
+OOS side 1 {'n': 890, 'exp_pct': np.float64(-0.0515), 'pf': np.float64(0.905), 't': np.float64(-1.0)}
+OOS side -1 {'n': 1046, 'exp_pct': np.float64(-0.0452), 'pf': np.float64(0.919), 't': np.float64(-0.9)}
+IS  side 1 {'n': 304, 'exp_pct': np.float64(0.2397), 'pf': np.float64(1.73), 't': np.float64(3.24)}
+IS  side -1 {'n': 314, 'exp_pct': np.float64(-0.0262), 'pf': np.float64(0.933), 't': np.float64(-0.42)}
+long share OOS 0.46 IS 0.492
+== post-hoc: excluding 2025-03/04 (tariff crash) == {'n': 1748, 'exp_pct': np.float64(-0.0129), 'pf': np.float64(0.975), 't': np.float64(-0.36)} pos 1
+months positive: 7 / 15
+IS excess +0.1428 (sd 0.0703);  OOS excess -0.0039 (sd 0.0492)
+OOS rejects full IS excess at z=2.98; half IS excess at z=1.53
+OOS 95% one-sided upper bound on excess: +0.0771%  -> net/trade upper bound +0.0329%
+inverse-variance pooled IS+OOS excess +0.0444 +- 0.0403  z=1.10
+IS-vs-OOS difference z=1.71
+fwd64 pooled IS 0.1353 OOS -0.0319
+signals/30d IS 354.5  OOS 366.6
+meta {"BTCUSD": {"n": 120000, "first": "2025-03-20 07:55:00+00:00", "last": "2026-05-11 23:55:00+00:00", "gaps5": 2, "signals_after_warmup": 1644, "long_share": 0.4708029197080292}, "ETHUSD": {"n": 120000, "first": "2025-03-20 07:55:00+00:00", "last": "2026-05-11 23:55:00+00:00", "gaps5": 2, "signals_after_warmup": 1792, "long_share": 0.44252232142857145}, "SOLUSD": {"n": 120000, "first": "2025-03-19 07:50:00+00:00", "last": "2026-05-11 23:55:00+00:00", "gaps5": 4, "signals_after_warmup": 1656, "long_share": 0.41847826086956524}}

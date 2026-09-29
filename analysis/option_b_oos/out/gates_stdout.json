@@ -1,0 +1,350 @@
+{
+ "G1_sha": {
+  "btcusd_15m_p1.csv": {
+   "sha": "b1fdc35d9f2823692fca66d3b6c4c87b271d0749825f4084b8c16dab4cb3145c",
+   "expected": "b1fdc35d9f2823692fca66d3b6c4c87b271d0749825f4084b8c16dab4cb3145c",
+   "ok": true
+  },
+  "btcusd_15m_p2.csv": {
+   "sha": "c5f76986bb6881569e0b00ea2ecc71ea9ee388f95ad0bf3950a5e6bcb0e1744d",
+   "expected": "c5f76986bb6881569e0b00ea2ecc71ea9ee388f95ad0bf3950a5e6bcb0e1744d",
+   "ok": true
+  },
+  "btcusd_5m_p1.csv": {
+   "sha": "d5cf09aebac25f62b920a7ec049f394701dbb3f35d295acfd901ee9e4f5f0800",
+   "expected": "d5cf09aebac25f62b920a7ec049f394701dbb3f35d295acfd901ee9e4f5f0800",
+   "ok": true
+  },
+  "btcusd_5m_p2.csv": {
+   "sha": "a55e1388de2b38abd9bd1da1266f6d0235976930ee85c068c6a5a884f39892e3",
+   "expected": "a55e1388de2b38abd9bd1da1266f6d0235976930ee85c068c6a5a884f39892e3",
+   "ok": true
+  },
+  "btcusd_5m_p3.csv": {
+   "sha": "6da06bc201628ed9a293caa70f6e90f076ec1710c43f1afb8e7601c4f03093bd",
+   "expected": "6da06bc201628ed9a293caa70f6e90f076ec1710c43f1afb8e7601c4f03093bd",
+   "ok": true
+  },
+  "ethusd_15m_p1.csv": {
+   "sha": "f316304498bc29b9df94770f2a60ab639f8f6f4b60b9cd0d2dc3bb6fe712e252",
+   "expected": "f316304498bc29b9df94770f2a60ab639f8f6f4b60b9cd0d2dc3bb6fe712e252",
+   "ok": true
+  },
+  "ethusd_15m_p2.csv": {
+   "sha": "61ae816a034ee3b16e8e2f2b7d4ce7ee43cfa2cbebecaad63b32aa779d7c706a",
+   "expected": "61ae816a034ee3b16e8e2f2b7d4ce7ee43cfa2cbebecaad63b32aa779d7c706a",
+   "ok": true
+  },
+  "ethusd_5m_p1.csv": {
+   "sha": "b23fca17629a8534736d963dc63990af85d494bafbb0ead6b1069a54739bda53",
+   "expected": "b23fca17629a8534736d963dc63990af85d494bafbb0ead6b1069a54739bda53",
+   "ok": true
+  },
+  "ethusd_5m_p2.csv": {
+   "sha": "9a371e931b32e56e6c57189f5c8fbddba8a2848ab18e7e9323f70c5267846715",
+   "expected": "9a371e931b32e56e6c57189f5c8fbddba8a2848ab18e7e9323f70c5267846715",
+   "ok": true
+  },
+  "ethusd_5m_p3.csv": {
+   "sha": "6970e69358706b95e767808b5aec91118783323eca5fa242002e2f0582a00c25",
+   "expected": "6970e69358706b95e767808b5aec91118783323eca5fa242002e2f0582a00c25",
+   "ok": true
+  },
+  "solusd_15m_p1.csv": {
+   "sha": "ee4eaf93772d69e1b2a2059e7d22967dafa8dc3b6625e842f9ffd2efe59e4de6",
+   "expected": "ee4eaf93772d69e1b2a2059e7d22967dafa8dc3b6625e842f9ffd2efe59e4de6",
+   "ok": true
+  },
+  "solusd_15m_p2.csv": {
+   "sha": "44d838e944d716352ec48ad8c0dd56ecef4c65e60d7dbbba551d4209c0c75d09",
+   "expected": "44d838e944d716352ec48ad8c0dd56ecef4c65e60d7dbbba551d4209c0c75d09",
+   "ok": true
+  },
+  "solusd_5m_p1.csv": {
+   "sha": "710c3bd710029e13d7cbcb91989d54b9aa8602ac1e142f0b42bf8d360c8c2b8a",
+   "expected": "710c3bd710029e13d7cbcb91989d54b9aa8602ac1e142f0b42bf8d360c8c2b8a",
+   "ok": true
+  },
+  "solusd_5m_p2.csv": {
+   "sha": "a4b849df43e59dbeae0a8c4052d659b2ca3b1297440ce3540342fc635f9369a2",
+   "expected": "a4b849df43e59dbeae0a8c4052d659b2ca3b1297440ce3540342fc635f9369a2",
+   "ok": true
+  },
+  "solusd_5m_p3.csv": {
+   "sha": "46fe7c20feab4976323b7f8cae942e84c2936b2dbb81bbd8f078ffcc1c939b28",
+   "expected": "46fe7c20feab4976323b7f8cae942e84c2936b2dbb81bbd8f078ffcc1c939b28",
+   "ok": true
+  }
+ },
+ "files": {
+  "btcusd_5m": {
+   "parts": [
+    "btcusd_5m_p1.csv",
+    "btcusd_5m_p2.csv",
+    "btcusd_5m_p3.csv"
+   ],
+   "rows_per_part": [
+    40000,
+    40000,
+    40000
+   ],
+   "G2_overlap": [
+    {
+     "common": 0,
+     "identical": true
+    },
+    {
+     "common": 0,
+     "identical": true
+    }
+   ],
+   "rows": 120000,
+   "first": "2025-03-20 07:55:00+00:00",
+   "last": "2026-05-11 23:55:00+00:00",
+   "n_gaps": 2,
+   "max_gap_min": 1445.0,
+   "gaps_top": [
+    [
+     "2026-04-21 23:55:00+00:00",
+     1445.0
+    ],
+    [
+     "2025-12-24 02:30:00+00:00",
+     10.0
+    ]
+   ],
+   "flat_bars": 0
+  },
+  "btcusd_15m": {
+   "parts": [
+    "btcusd_15m_p1.csv",
+    "btcusd_15m_p2.csv"
+   ],
+   "rows_per_part": [
+    40000,
+    40000
+   ],
+   "G2_overlap": [
+    {
+     "common": 0,
+     "identical": true
+    }
+   ],
+   "rows": 80000,
+   "first": "2024-01-28 15:45:00+00:00",
+   "last": "2026-05-11 23:45:00+00:00",
+   "n_gaps": 2,
+   "max_gap_min": 1455.0,
+   "gaps_top": [
+    [
+     "2026-04-21 23:45:00+00:00",
+     1455.0
+    ],
+    [
+     "2025-03-21 07:30:00+00:00",
+     30.0
+    ]
+   ],
+   "flat_bars": 0
+  },
+  "ethusd_5m": {
+   "parts": [
+    "ethusd_5m_p1.csv",
+    "ethusd_5m_p2.csv",
+    "ethusd_5m_p3.csv"
+   ],
+   "rows_per_part": [
+    40000,
+    40000,
+    40000
+   ],
+   "G2_overlap": [
+    {
+     "common": 0,
+     "identical": true
+    },
+    {
+     "common": 0,
+     "identical": true
+    }
+   ],
+   "rows": 120000,
+   "first": "2025-03-20 07:55:00+00:00",
+   "last": "2026-05-11 23:55:00+00:00",
+   "n_gaps": 2,
+   "max_gap_min": 1445.0,
+   "gaps_top": [
+    [
+     "2026-04-21 23:55:00+00:00",
+     1445.0
+    ],
+    [
+     "2025-12-24 02:30:00+00:00",
+     10.0
+    ]
+   ],
+   "flat_bars": 0
+  },
+  "ethusd_15m": {
+   "parts": [
+    "ethusd_15m_p1.csv",
+    "ethusd_15m_p2.csv"
+   ],
+   "rows_per_part": [
+    40000,
+    40000
+   ],
+   "G2_overlap": [
+    {
+     "common": 0,
+     "identical": true
+    }
+   ],
+   "rows": 80000,
+   "first": "2024-01-28 15:45:00+00:00",
+   "last": "2026-05-11 23:45:00+00:00",
+   "n_gaps": 2,
+   "max_gap_min": 1455.0,
+   "gaps_top": [
+    [
+     "2026-04-21 23:45:00+00:00",
+     1455.0
+    ],
+    [
+     "2025-03-21 07:30:00+00:00",
+     30.0
+    ]
+   ],
+   "flat_bars": 0
+  },
+  "solusd_5m": {
+   "parts": [
+    "solusd_5m_p1.csv",
+    "solusd_5m_p2.csv",
+    "solusd_5m_p3.csv"
+   ],
+   "rows_per_part": [
+    40000,
+    40000,
+    40000
+   ],
+   "G2_overlap": [
+    {
+     "common": 0,
+     "identical": true
+    },
+    {
+     "common": 0,
+     "identical": true
+    }
+   ],
+   "rows": 120000,
+   "first": "2025-03-19 07:50:00+00:00",
+   "last": "2026-05-11 23:55:00+00:00",
+   "n_gaps": 4,
+   "max_gap_min": 1445.0,
+   "gaps_top": [
+    [
+     "2025-03-24 23:55:00+00:00",
+     1445.0
+    ],
+    [
+     "2026-04-21 23:55:00+00:00",
+     1445.0
+    ],
+    [
+     "2025-03-20 07:45:00+00:00",
+     10.0
+    ],
+    [
+     "2025-12-24 02:30:00+00:00",
+     10.0
+    ]
+   ],
+   "flat_bars": 0
+  },
+  "solusd_15m": {
+   "parts": [
+    "solusd_15m_p1.csv",
+    "solusd_15m_p2.csv"
+   ],
+   "rows_per_part": [
+    40000,
+    40000
+   ],
+   "G2_overlap": [
+    {
+     "common": 0,
+     "identical": true
+    }
+   ],
+   "rows": 80000,
+   "first": "2024-01-27 15:45:00+00:00",
+   "last": "2026-05-11 23:45:00+00:00",
+   "n_gaps": 3,
+   "max_gap_min": 1455.0,
+   "gaps_top": [
+    [
+     "2025-03-24 23:45:00+00:00",
+     1455.0
+    ],
+    [
+     "2026-04-21 23:45:00+00:00",
+     1455.0
+    ],
+    [
+     "2025-03-21 07:30:00+00:00",
+     30.0
+    ]
+   ],
+   "flat_bars": 0
+  }
+ },
+ "G3_resample": {
+  "btcusd": {
+   "common_complete_bars": 39998,
+   "ohlc_match": 1.0,
+   "volume_match": 1.0,
+   "pass_98": true
+  },
+  "ethusd": {
+   "common_complete_bars": 39998,
+   "ohlc_match": 1.0,
+   "volume_match": 1.0,
+   "pass_98": true
+  },
+  "solusd": {
+   "common_complete_bars": 39997,
+   "ohlc_match": 1.0,
+   "volume_match": 1.0,
+   "pass_98": true
+  }
+ },
+ "G4_vs_delivered15m": {
+  "btcusd": {
+   "common": 26552,
+   "ohlc_match": 1.0,
+   "first_mismatch": []
+  },
+  "ethusd": {
+   "common": 26553,
+   "ohlc_match": 1.0,
+   "first_mismatch": []
+  },
+  "solusd": {
+   "common": 26550,
+   "ohlc_match": 1.0,
+   "first_mismatch": []
+  }
+ },
+ "G5_before_IS": {
+  "btcusd": true,
+  "ethusd": true,
+  "solusd": true
+ },
+ "warmup_15m_bars_before_5m_start": {
+  "btcusd": 40001,
+  "ethusd": 40001,
+  "solusd": 40001
+ }
+}

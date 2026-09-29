@@ -1,0 +1,5 @@
+MAKER exit real: n=1936 exp=-0.0425% pf=0.923 pos=0/3 | null: mean exp -0.0455%, pf median 0.916, p95 1.023; P(null pf>=real)=0.477; null PASS rate=0.000; P(null exp>=real)=0.473
+TAKER exit real: n=1936 exp=-0.0925% pf=0.840 pos=0/3 | null: mean exp -0.0886%, pf median 0.845, p95 0.944; P(null pf>=real)=0.540; null PASS rate=0.000; P(null exp>=real)=0.540
+--- common shift across symbols (keeps cross-symbol co-timing) ---
+MAKER exit real exp=-0.0425% pf=0.923 | null exp mean -0.0391 sd 0.0462 -> z=-0.07; P(null exp>=real)=0.530; null PASS rate=0.003
+TAKER exit real exp=-0.0925% pf=0.840 | null exp mean -0.0941 sd 0.0459 -> z=0.03; P(null exp>=real)=0.473; null PASS rate=0.000

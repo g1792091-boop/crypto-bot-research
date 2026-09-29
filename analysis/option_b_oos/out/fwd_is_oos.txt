@@ -1,0 +1,15 @@
+/tmp/claude-0/-home-user-crypto-bot-research/e4f1f93f-891a-54cf-944d-5e95b2209f11/scratchpad/gap_1/work/fwd_oos.py:16: FutureWarning: DataFrameGroupBy.apply operated on the grouping columns. This behavior is deprecated, and in a future version of pandas the grouping columns will be excluded from the operation. Either pass `include_groups=False` to exclude the groupings or explicitly select the grouping columns after groupby to silence this warning.
+  out=pd.DataFrame({"signals":g.signals.sum(),**{f"fwd{h}":g.apply(lambda x,h=h: np.average(x[f"fwd{h}_mean_pct"],weights=x.signals)) for h in HORIZONS}})
+                         signals    fwd1    fwd4    fwd8   fwd16   fwd32   fwd64
+window strategy                                                                 
+IS     V45_EXACT_AMB        1641 -0.0001  0.0100  0.0181  0.0317  0.0624  0.1353
+       V45_EXACT_AMB_G1     1620 -0.0001  0.0098  0.0152  0.0334  0.0647  0.1377
+OOS    V45_EXACT_AMB        5092  0.0007 -0.0015 -0.0016  0.0053  0.0038 -0.0319
+       V45_EXACT_AMB_G1     4990  0.0009 -0.0013 -0.0001  0.0069  0.0059 -0.0241
+window symbol  signals  fwd16_mean_pct  fwd64_mean_pct  fwd64_t
+    IS BTCUSD      563           0.043           0.090    2.790
+    IS ETHUSD      550           0.003           0.140    2.914
+    IS SOLUSD      528           0.049           0.178    3.047
+   OOS BTCUSD     1644           0.015           0.008    0.307
+   OOS ETHUSD     1792           0.021          -0.045   -1.102
+   OOS SOLUSD     1656          -0.021          -0.058   -1.357

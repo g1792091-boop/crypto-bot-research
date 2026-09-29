@@ -1,0 +1,6 @@
+btcusd common 13331 match 0.9835 mismatch by col (n, median |rel diff| %): {'open': (166, 0.015262716653982437), 'high': (38, 0.00776408160458337), 'low': (120, 0.014783971047043133), 'close': (203, 0.013774592965847945)} first/last mismatch 2026-08-19 00:00:00+00:00 2026-09-29 01:45:00+00:00
+   mismatches per month: {Timestamp('2026-08-01 00:00:00+0000', tz='UTC'): 192, Timestamp('2026-09-01 00:00:00+0000', tz='UTC'): 28}
+ethusd common 13328 match 0.9994 mismatch by col (n, median |rel diff| %): {'open': (2, 0.020382307285380232), 'high': (1, 0.04579334172257493), 'low': (3, 0.02753109339364559), 'close': (6, 0.050285750935176815)} first/last mismatch 2026-09-22 02:15:00+00:00 2026-09-29 01:45:00+00:00
+   mismatches per month: {Timestamp('2026-09-01 00:00:00+0000', tz='UTC'): 8}
+solusd common 13332 match 0.9994 mismatch by col (n, median |rel diff| %): {'open': (0, 0), 'high': (1, 0.32889188733344626), 'low': (2, 0.062341581467128857), 'close': (8, 0.009773061797031725)} first/last mismatch 2026-09-28 21:00:00+00:00 2026-09-28 23:30:00+00:00
+   mismatches per month: {Timestamp('2026-09-01 00:00:00+0000', tz='UTC'): 8}
