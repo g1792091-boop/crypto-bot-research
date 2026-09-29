@@ -120,6 +120,9 @@ class TradeRecord:
     mfe_price: float
     equity_after: float
     score: float
+    # Chart situation at the signal (confirmed bars only), see context.py.
+    context: dict[str, Any] = field(default_factory=dict)
+    strategy_style: str = ""
 
 
 @dataclass

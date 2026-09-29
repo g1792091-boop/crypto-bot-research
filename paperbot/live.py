@@ -23,14 +23,16 @@ import os
 import sys
 import time
 import uuid
+from dataclasses import replace
 from typing import Optional, Sequence
 
 from .aggregate import Aggregator
 from .binance import BinanceError, BinanceREST, RegionBlocked
 from .config import Settings
+from .context import HTF, entry_context
 from .engine import PaperEngine
 from .feed import LiveFeed
-from .ledger import Ledger
+from .ledger import BarStore, Ledger
 from .margin import Brackets
 from .notify import CRITICAL, INFO, WARN, ConsoleNotifier, Notifier, TelegramNotifier
 from .policy import RecommendedPolicy, RecommendedSettings, RiskGuards
@@ -41,20 +43,39 @@ class LiveRunner:
     """Drives one or more books (engines) with the same bars and signals."""
 
     def __init__(self, feed: LiveFeed, engine, strategies: Sequence[Strategy],
-                 notifier: Notifier):
+                 notifier: Notifier, bar_store: Optional[BarStore] = None):
         self.feed = feed
         self.engines: list[PaperEngine] = list(engine) if isinstance(engine, (list, tuple)) else [engine]
         self.engine = self.engines[0]
         self.runner = StrategyRunner(strategies)
+        self.styles = {s.strategy_id: getattr(s, "style", "") for s in strategies}
         tfs = {s.timeframe for s in strategies} | {"1m"}
+        # Higher timeframes are built too, for the entry context (regime, HTF box).
+        tfs |= {HTF[tf] for tf in tfs if HTF.get(tf)}
         self.agg = Aggregator(tfs)
         self.notifier = notifier
+        self.bar_store = bar_store
         self.steps = 0
+
+    def _with_context(self, sig):
+        """Attach the chart situation at the signal (confirmed bars only)."""
+        hist = self.runner.history
+        tf_bars = [b for b in hist.get((sig.symbol, sig.timeframe), []) if not b.partial]
+        htf = HTF.get(sig.timeframe)
+        htf_bars = [b for b in hist.get((sig.symbol, htf), [])
+                    if not b.partial and b.close_time <= sig.ts] if htf else []
+        ctx = entry_context(sig.timeframe, tf_bars, htf_bars)
+        meta = dict(sig.meta)
+        meta.setdefault("ctx", ctx)
+        meta.setdefault("style", self.styles.get(sig.strategy_id, ""))
+        return replace(sig, meta=meta)
 
     def process(self, steps) -> None:
         for _t, bars, funding in steps:
             for eng in self.engines:
                 eng.step(bars, funding or None)
+            if self.bar_store is not None and bars:
+                self.bar_store.add(bars.values())
             for sym in sorted(bars):
                 for tf, bar in self.agg.add(bars[sym]):
                     if bar.partial:
@@ -63,6 +84,7 @@ class LiveRunner:
                         self.runner.history.setdefault((sym, tf), []).append(bar)
                         continue
                     for sig in self.runner.on_closed_bar(tf, bar):
+                        sig = self._with_context(sig)
                         for eng in self.engines:
                             eng.submit(sig)
             self.steps += 1
@@ -172,10 +194,12 @@ def cmd_run(settings: Settings, args) -> int:
     strategies: list[Strategy] = []  # strategies plug in here once validated
     notifier.send(INFO, f"paper run {run_id} started; books: {args.books}; "
                         f"brackets: {src}; strategies: {len(strategies)}")
-    runner = LiveRunner(feed, engines, strategies, notifier)
+    store = BarStore(args.ledger)
+    runner = LiveRunner(feed, engines, strategies, notifier, bar_store=store)
     try:
         runner.run(poll_seconds=args.poll, max_steps=args.max_steps)
     finally:
+        store.close()
         for led in ledgers:
             led.close()
         print(json.dumps([e.summary() for e in engines], indent=2))

@@ -9,7 +9,9 @@ import json
 import sqlite3
 from dataclasses import asdict
 
-from .models import SignalOutcome, TradeRecord
+from typing import Iterable, Optional
+
+from .models import Bar, SignalOutcome, TradeRecord
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS trades (
@@ -28,6 +30,14 @@ CREATE TABLE IF NOT EXISTS signals (
     strategy_id TEXT NOT NULL,
     timeframe TEXT NOT NULL,
     data TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS bars1m (
+    symbol TEXT NOT NULL,
+    open_time INTEGER NOT NULL,
+    close_time INTEGER NOT NULL,
+    open REAL, high REAL, low REAL, close REAL,
+    mark_open REAL, mark_high REAL, mark_low REAL, mark_close REAL,
+    PRIMARY KEY (symbol, open_time)
 );
 CREATE TABLE IF NOT EXISTS equity (
     run_id TEXT NOT NULL,
@@ -72,6 +82,49 @@ class Ledger:
         self.conn.execute("INSERT INTO equity VALUES (?,?,?,?)",
                           (self.run_id, ts, equity, drawdown))
         self.conn.commit()
+
+    def close(self) -> None:
+        self.conn.close()
+
+
+def load_trades(path: str, run_id: Optional[str] = None) -> list[TradeRecord]:
+    conn = sqlite3.connect(path)
+    q = "SELECT data FROM trades"
+    args: tuple = ()
+    if run_id:
+        q += " WHERE run_id = ?"
+        args = (run_id,)
+    rows = conn.execute(q + " ORDER BY id", args).fetchall()
+    conn.close()
+    return [TradeRecord(**json.loads(r[0])) for r in rows]
+
+
+class BarStore:
+    """1m bars as seen live, kept for tagging and the what-if lab."""
+
+    def __init__(self, path: str):
+        self.conn = sqlite3.connect(path)
+        self.conn.execute("PRAGMA journal_mode=WAL")
+        self.conn.executescript(SCHEMA)
+
+    def add(self, bars: Iterable[Bar]) -> None:
+        self.conn.executemany(
+            "INSERT OR REPLACE INTO bars1m VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            [(b.symbol, b.open_time, b.close_time, b.open, b.high, b.low, b.close,
+              b.mark_open, b.mark_high, b.mark_low, b.mark_close) for b in bars])
+        self.conn.commit()
+
+    def load(self, symbol: str, start: int = 0, end: Optional[int] = None) -> list[Bar]:
+        q = ("SELECT symbol, open_time, close_time, open, high, low, close, mark_open, "
+             "mark_high, mark_low, mark_close FROM bars1m WHERE symbol = ? AND open_time >= ?")
+        args: list = [symbol, start]
+        if end is not None:
+            q += " AND open_time <= ?"
+            args.append(end)
+        return [Bar(*r) for r in self.conn.execute(q + " ORDER BY open_time", args)]
+
+    def symbols(self) -> list[str]:
+        return [r[0] for r in self.conn.execute("SELECT DISTINCT symbol FROM bars1m")]
 
     def close(self) -> None:
         self.conn.close()

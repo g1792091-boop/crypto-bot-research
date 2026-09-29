@@ -281,7 +281,9 @@ class PaperEngine:
             roe=net / p.margin_initial,
             price_move=p.side * (price / p.entry_price - 1),
             mae_price=p.mae_price, mfe_price=p.mfe_price,
-            equity_after=self.wallet, score=p.signal.score)
+            equity_after=self.wallet, score=p.signal.score,
+            context=dict(p.signal.meta.get("ctx", {})),
+            strategy_style=str(p.signal.meta.get("style", "")))
         self.trades.append(rec)
         self.position = None
         if self.guards is not None:
