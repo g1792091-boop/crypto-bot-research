@@ -1,0 +1,28 @@
+--- /home/user/crypto-bot-research/analysis/sizing/sim/run_sim.py	2026-09-29 12:22:32.267837999 +0000
++++ /tmp/claude-0/-home-user-crypto-bot-research/e4f1f93f-891a-54cf-944d-5e95b2209f11/scratchpad/netTP/sizing/run_sim.py	2026-09-29 21:24:57.281338333 +0000
+@@ -19,6 +19,7 @@
+ ap.add_argument("--cost", default="taker")      # taker = market entry 0.07 %; maker = limit entry 0.02 % (optimistic: always filled)
+ ap.add_argument("--subbar", type=int, default=0)   # 1 = resolve exits on 5m sub-bars
+ ap.add_argument("--edge_h", type=int, default=0)   # 0 = plant the edge at H; >0 = at edge_h bars (front-loaded)
++ap.add_argument("--tpnet", type=int, default=0)    # 1 = TP price distance = ROE/L + 0.14 % round trip (TP ROE net of costs)
+ args = ap.parse_args()
+ 
+ def combo_list(which):
+@@ -82,6 +83,8 @@
+     NN = np.empty((nC, n)); MM = np.empty((nC, n)); LL = np.empty((nC, n))
+     for j, cname in enumerate(COMBOS):
+         M_, L_, N_, dl, sd, td = policy_params(cname.replace("P5c|", "P5|"), pp["atr"])
++        if args.tpnet:
++            td = td + 2 * (simlib.FEE_T + simlib.SLIP)
+         NN[j], MM[j], LL[j] = N_, M_, L_
+         for si, sgn in enumerate((1, -1)):
+             k, cc, gg, r, y = outcomes(pp, np.full(n, sgn), M_, L_, N_, dl, sd, td, P.path_tfm,
+@@ -165,7 +168,7 @@
+ np.savez_compressed(os.path.join(outdir, f"{args.tf}_stats.npz"), ST=ST, names=np.array(stat_names),
+                     **{f"kelly_y_{e}": np.concatenate(kelly_y[e]) for e in range(nE)})
+ meta = dict(tf=args.tf, H=H, lam=P.lam, tfm=tfm, edges=EDG, combos=COMBOS, seeds=S, ndays=ND, wick=args.wick,
+-            order=args.order, edge_h=args.edge_h, subbar=args.subbar, cost=args.cost, C_IN=simlib.C_IN, Eabs={c: P.Eabs[c] for c in COINS}, Eabs_pooled=P.Eabs_pooled,
++            order=args.order, edge_h=args.edge_h, subbar=args.subbar, cost=args.cost, tpnet=args.tpnet, C_IN=simlib.C_IN, Eabs={c: P.Eabs[c] for c in COINS}, Eabs_pooled=P.Eabs_pooled,
+             atr_med={c: P.atr_med[c] for c in COINS}, q=qmat.tolist(), runtime_s=time.time() - t0)
+ json.dump(meta, open(os.path.join(outdir, f"{args.tf}_meta.json"), "w"), indent=1)
+ print("done", args.tf, f"{time.time()-t0:.0f}s")

@@ -1,0 +1,21 @@
+--- /home/user/crypto-bot-research/analysis/sizing/math/work/common.py	2026-09-29 11:36:45.412064690 +0000
++++ /tmp/claude-0/-home-user-crypto-bot-research/e4f1f93f-891a-54cf-944d-5e95b2209f11/scratchpad/netTP/math/work/common.py	2026-09-29 21:24:36.250295550 +0000
+@@ -4,7 +4,7 @@
+ import pandas as pd
+ 
+ IS_DIR = "/tmp/claude-0/-home-user-crypto-bot-research/e4f1f93f-891a-54cf-944d-5e95b2209f11/scratchpad/sweep/data/is"
+-OUT = "/tmp/claude-0/-home-user-crypto-bot-research/e4f1f93f-891a-54cf-944d-5e95b2209f11/scratchpad/sizing/math/out"
++OUT = "/tmp/claude-0/-home-user-crypto-bot-research/e4f1f93f-891a-54cf-944d-5e95b2209f11/scratchpad/netTP/math/out"
+ COINS = ["btcusd", "ethusd", "solusd", "xrpusd", "dogeusd", "ltcusd", "bchusd"]
+ TFS = ["5m", "15m", "30m", "1h", "4h", "1d"]
+ TF_MIN = {"5m": 5, "15m": 15, "30m": 30, "1h": 60, "4h": 240, "1d": 1440}
+@@ -29,7 +29,8 @@
+ 
+ 
+ def tp_dist(L):
+-    return TP_ROE / L
++    # netTP rerun: TP at +10% ROE NET of the 0.14% round trip (user decision 2026-09-29)
++    return TP_ROE / L + RT
+ 
+ 
+ def load(sym, tf):

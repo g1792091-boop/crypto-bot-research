@@ -1,0 +1,70 @@
+15m: H=16 lam=4.500/day grid=102224 edges=[0.0, 0.00025, 0.0005, 0.00075, 0.001, 0.0015, 0.002, 0.003, 0.004, 0.006] combos=42 load 8.8s
+  seed 0 n_cand=4751 taken(P3|A|10,e0)=3430 t=11s
+  seed 10 n_cand=4835 taken(P3|A|10,e0)=3491 t=22s
+  seed 20 n_cand=4805 taken(P3|A|10,e0)=3440 t=32s
+  seed 30 n_cand=4803 taken(P3|A|10,e0)=3430 t=42s
+  seed 40 n_cand=4824 taken(P3|A|10,e0)=3441 t=52s
+  seed 50 n_cand=4823 taken(P3|A|10,e0)=3463 t=62s
+  seed 60 n_cand=4759 taken(P3|A|10,e0)=3404 t=73s
+  seed 70 n_cand=4778 taken(P3|A|10,e0)=3429 t=83s
+  seed 80 n_cand=4850 taken(P3|A|10,e0)=3481 t=93s
+  seed 90 n_cand=4754 taken(P3|A|10,e0)=3417 t=103s
+  seed 99 n_cand=4820 taken(P3|A|10,e0)=3446 t=112s
+done 15m 115s
+wrote 15m 420 rows
+1h: H=16 lam=1.500/day grid=25544 edges=[0.0, 0.00025, 0.0005, 0.00075, 0.001, 0.0015, 0.002, 0.003, 0.004, 0.006, 0.008, 0.01, 0.0125, 0.015] combos=42 load 0.4s
+  seed 0 n_cand=1649 taken(P3|A|10,e0)=1257 t=1s
+  seed 10 n_cand=1548 taken(P3|A|10,e0)=1230 t=6s
+  seed 20 n_cand=1591 taken(P3|A|10,e0)=1254 t=10s
+  seed 30 n_cand=1613 taken(P3|A|10,e0)=1257 t=14s
+  seed 40 n_cand=1628 taken(P3|A|10,e0)=1268 t=18s
+  seed 50 n_cand=1559 taken(P3|A|10,e0)=1250 t=23s
+  seed 60 n_cand=1598 taken(P3|A|10,e0)=1251 t=27s
+  seed 70 n_cand=1566 taken(P3|A|10,e0)=1208 t=31s
+  seed 80 n_cand=1578 taken(P3|A|10,e0)=1241 t=35s
+  seed 90 n_cand=1691 taken(P3|A|10,e0)=1305 t=40s
+  seed 99 n_cand=1631 taken(P3|A|10,e0)=1261 t=44s
+done 1h 46s
+wrote 1h 588 rows
+4h: H=4 lam=0.429/day grid=6386 edges=[0.0, 0.00025, 0.0005, 0.00075, 0.001, 0.0015, 0.002, 0.003, 0.004, 0.006, 0.008, 0.01, 0.0125, 0.015] combos=42 load 0.2s
+  seed 0 n_cand=454 taken(P3|A|10,e0)=439 t=0s
+  seed 10 n_cand=463 taken(P3|A|10,e0)=447 t=1s
+  seed 20 n_cand=474 taken(P3|A|10,e0)=449 t=3s
+  seed 30 n_cand=460 taken(P3|A|10,e0)=431 t=4s
+  seed 40 n_cand=462 taken(P3|A|10,e0)=432 t=5s
+  seed 50 n_cand=453 taken(P3|A|10,e0)=424 t=6s
+  seed 60 n_cand=482 taken(P3|A|10,e0)=450 t=7s
+  seed 70 n_cand=450 taken(P3|A|10,e0)=426 t=8s
+  seed 80 n_cand=459 taken(P3|A|10,e0)=436 t=10s
+  seed 90 n_cand=481 taken(P3|A|10,e0)=451 t=11s
+  seed 99 n_cand=470 taken(P3|A|10,e0)=442 t=12s
+done 4h 14s
+wrote 4h 588 rows
+1d: H=4 lam=0.214/day grid=1042 edges=[0.0, 0.00025, 0.0005, 0.00075, 0.001, 0.0015, 0.002, 0.003, 0.004, 0.006, 0.008, 0.01, 0.0125, 0.015, 0.02, 0.025, 0.03] combos=42 load 0.0s
+  seed 0 n_cand=231 taken(P3|A|10,e0)=224 t=0s
+  seed 10 n_cand=240 taken(P3|A|10,e0)=230 t=1s
+  seed 20 n_cand=198 taken(P3|A|10,e0)=196 t=2s
+  seed 30 n_cand=246 taken(P3|A|10,e0)=238 t=3s
+  seed 40 n_cand=246 taken(P3|A|10,e0)=234 t=3s
+  seed 50 n_cand=214 taken(P3|A|10,e0)=211 t=4s
+  seed 60 n_cand=216 taken(P3|A|10,e0)=210 t=5s
+  seed 70 n_cand=208 taken(P3|A|10,e0)=199 t=6s
+  seed 80 n_cand=208 taken(P3|A|10,e0)=205 t=6s
+  seed 90 n_cand=208 taken(P3|A|10,e0)=203 t=7s
+  seed 99 n_cand=227 taken(P3|A|10,e0)=225 t=8s
+done 1d 11s
+wrote 1d 714 rows
+5m: H=16 lam=8.000/day grid=306704 edges=[0.0, 0.00025, 0.0005, 0.00075, 0.001, 0.0015, 0.002, 0.003, 0.004] combos=42 load 5.3s
+  seed 0 n_cand=8541 taken(P3|A|10,e0)=6447 t=8s
+  seed 10 n_cand=8427 taken(P3|A|10,e0)=6381 t=24s
+  seed 20 n_cand=8522 taken(P3|A|10,e0)=6469 t=40s
+  seed 30 n_cand=8630 taken(P3|A|10,e0)=6520 t=57s
+  seed 40 n_cand=8467 taken(P3|A|10,e0)=6389 t=74s
+  seed 50 n_cand=8641 taken(P3|A|10,e0)=6514 t=90s
+  seed 60 n_cand=8650 taken(P3|A|10,e0)=6494 t=106s
+  seed 70 n_cand=8370 taken(P3|A|10,e0)=6351 t=123s
+  seed 80 n_cand=8395 taken(P3|A|10,e0)=6355 t=139s
+  seed 90 n_cand=8467 taken(P3|A|10,e0)=6478 t=156s
+  seed 99 n_cand=8736 taken(P3|A|10,e0)=6556 t=171s
+done 5m 174s
+wrote 5m 378 rows

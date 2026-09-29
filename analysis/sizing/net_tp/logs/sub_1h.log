@@ -1,0 +1,10 @@
+1h: H=16 lam=1.500/day grid=25544 edges=[0.0, 0.00025, 0.0005, 0.00075, 0.001, 0.0015, 0.002, 0.003, 0.004, 0.006, 0.008, 0.01, 0.0125, 0.015] combos=42 load 4.3s
+  seed 0 n_cand=1649 taken(P3|A|10,e0)=1256 t=7s
+  seed 10 n_cand=1548 taken(P3|A|10,e0)=1232 t=19s
+  seed 20 n_cand=1591 taken(P3|A|10,e0)=1248 t=31s
+  seed 30 n_cand=1613 taken(P3|A|10,e0)=1259 t=42s
+  seed 40 n_cand=1628 taken(P3|A|10,e0)=1268 t=54s
+  seed 50 n_cand=1559 taken(P3|A|10,e0)=1252 t=66s
+  seed 59 n_cand=1610 taken(P3|A|10,e0)=1254 t=77s
+done 1h 79s
+wrote 1h 588 rows

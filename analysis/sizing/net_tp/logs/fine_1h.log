@@ -1,0 +1,13 @@
+1h: HE=3 bars  E|r_he| 0.647-1.321%  scen=24 cases=312 load 4.4s
+  seed 0 n_cand=1644 taken(tiered S0 base)=1409 liq=28 t=7s
+  seed 5 n_cand=1671 taken(tiered S0 base)=1429 liq=22 t=15s
+  seed 10 n_cand=1545 taken(tiered S0 base)=1357 liq=24 t=23s
+  seed 15 n_cand=1622 taken(tiered S0 base)=1383 liq=19 t=31s
+  seed 20 n_cand=1590 taken(tiered S0 base)=1369 liq=22 t=39s
+  seed 25 n_cand=1582 taken(tiered S0 base)=1374 liq=20 t=47s
+  seed 30 n_cand=1612 taken(tiered S0 base)=1378 liq=30 t=55s
+  seed 35 n_cand=1578 taken(tiered S0 base)=1360 liq=16 t=63s
+  seed 40 n_cand=1627 taken(tiered S0 base)=1412 liq=22 t=71s
+  seed 45 n_cand=1552 taken(tiered S0 base)=1328 liq=29 t=80s
+  seed 47 n_cand=1576 taken(tiered S0 base)=1378 liq=25 t=83s
+done 1h 83s

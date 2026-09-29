@@ -1,0 +1,28 @@
+--- /tmp/claude-0/-home-user-crypto-bot-research/e4f1f93f-891a-54cf-944d-5e95b2209f11/scratchpad/tiered/sim/run.py	2026-09-29 12:15:13.444758830 +0000
++++ /tmp/claude-0/-home-user-crypto-bot-research/e4f1f93f-891a-54cf-944d-5e95b2209f11/scratchpad/netTP/tiered/run.py	2026-09-29 21:24:57.281907487 +0000
+@@ -18,6 +18,7 @@
+ ap.add_argument("--fine", type=int, default=0)       # 1 = resolve exits on 5m sub-bars (15m/1h/4h)
+ ap.add_argument("--tag", default="")
+ ap.add_argument("--he", type=int, default=0)         # >0: force the edge horizon (fine runs reuse the TF-bar run's h_e)
++ap.add_argument("--tpnet", type=int, default=0)      # 1 = TP price distance = 10%/L + 0.14 % (TP ROE net of costs)
+ args = ap.parse_args()
+ t0 = time.time()
+ P = Panel(args.tf, fine=bool(args.fine))
+@@ -107,7 +108,8 @@
+             K = np.empty((4, 2, n), np.int16); CC = np.empty((4, 2, n), np.int8)   # K: exit offset (5m bars if fine)
+             G = np.empty((4, 2, n), np.float32); CO = np.empty((4, 2, n), np.float32); Y = np.empty((4, 2, n), np.float32)
+             for li, L in enumerate(LS):
+-                td = np.full(n, 0.10 / L) if tp == "roe" else np.maximum(0.10 / L, 2.0 * sd)
++                NETADD = 2 * (FEE + SLIP) if args.tpnet else 0.0
++                td = np.full(n, 0.10 / L + NETADD) if tp == "roe" else np.maximum(0.10 / L + NETADD, 2.0 * sd)
+                 for sx in (0, 1):
+                     K[li, sx], CC[li, sx], G[li, sx], CO[li, sx], Y[li, sx] = exits(mv[sx], L, sd, td, TFM_EXIT, o)
+             OUT[(st, tp, o)] = (K, CC, G, CO, Y)
+@@ -171,6 +173,7 @@
+ meta = dict(tf=args.tf, tfm=tfm, HE=HE, Eabs=Eabs, S=S, ND=ND, lam=P.lam, scen=SCEN, cases=CASES, stn=STN,
+             conc=[CONC_TOP, CONC_REST], runtime_s=time.time() - t0)
+ meta["fine"] = P.fine
++meta["tpnet"] = args.tpnet
+ meta["HE_measured_this_run"] = HE_MEASURED
+ json.dump(meta, open(os.path.join("out", f"{TAG}_meta.json"), "w"), indent=0)
+ print("done", args.tf, f"{time.time()-t0:.0f}s", flush=True)

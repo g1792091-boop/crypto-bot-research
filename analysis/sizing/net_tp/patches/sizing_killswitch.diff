@@ -1,0 +1,18 @@
+--- /home/user/crypto-bot-research/analysis/sizing/sim/killswitch.py	2026-09-29 12:01:53.828154355 +0000
++++ /tmp/claude-0/-home-user-crypto-bot-research/e4f1f93f-891a-54cf-944d-5e95b2209f11/scratchpad/netTP/sizing/killswitch.py	2026-09-29 21:24:36.251403014 +0000
+@@ -8,7 +8,7 @@
+ rng = np.random.default_rng(11)
+ rows = []
+ for tf in ["5m", "15m", "1h", "4h", "1d"]:
+-    d = "out/base"
++    d = "out/net"
+     meta = json.load(open(os.path.join(d, f"{tf}_meta.json")))
+     daily = np.load(os.path.join(d, f"{tf}_daily.npy"), mmap_mode="r")
+     dmin = np.load(os.path.join(d, f"{tf}_dmin.npy"), mmap_mode="r")
+@@ -37,5 +37,5 @@
+                              median_days_to_dd20=float(np.median(first)) if np.mean(first <= 365) >= 0.5 else np.nan,
+                              median_equity_when_fired=float(np.nanmedian(eq_at)) if np.isfinite(eq_at).any() else np.nan))
+ df = pd.DataFrame(rows)
+-df.to_csv("out/killswitch.csv", index=False)
++df.to_csv("out/killswitch_net.csv", index=False)
+ print(df.to_string(index=False, float_format=lambda v: f"{v:.3g}"))

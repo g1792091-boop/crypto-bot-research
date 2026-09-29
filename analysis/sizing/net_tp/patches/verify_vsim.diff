@@ -1,0 +1,19 @@
+--- /tmp/claude-0/-home-user-crypto-bot-research/e4f1f93f-891a-54cf-944d-5e95b2209f11/scratchpad/tiered/verify/vsim.py	2026-09-29 12:36:17.798071105 +0000
++++ /tmp/claude-0/-home-user-crypto-bot-research/e4f1f93f-891a-54cf-944d-5e95b2209f11/scratchpad/netTP/verify/vsim.py	2026-09-29 21:27:59.993188918 +0000
+@@ -14,6 +14,7 @@
+ CIN = FEE + SLIP
+ import os as _os
+ TPFEE = float(_os.environ.get('TPFEE', FEE))
++NETADD = 2 * (FEE + SLIP) if _os.environ.get('TPNET') == '1' else 0.0   # net-of-cost TP (user decision 2026-09-30)
+ 
+ tf = sys.argv[1]; S = int(sys.argv[2]); HE = int(sys.argv[3]); ORDER = sys.argv[4] if len(sys.argv) > 4 else "adv"
+ BASE = int(sys.argv[5]) if len(sys.argv) > 5 else 777
+@@ -144,7 +145,7 @@
+                 if pol == "tiered": L = [20., 30., 50.][tier[i]]; N = [4., 9., 20.][tier[i]]
+                 elif pol == "flat20": L, N = 20., 4.
+                 else: L = 10.; N = min([0.01, 0.01, 0.02][tier[i]] / sd[i], 10.)
+-                ex, g, code, cost, y, hb = get(i, int(side[i]), L, max(0.10 / L, 2 * sd[i]) if _os.environ.get('TPMODE') == '2x' else 0.10 / L)
++                ex, g, code, cost, y, hb = get(i, int(side[i]), L, max(0.10 / L + NETADD, 2 * sd[i]) if _os.environ.get('TPMODE') == '2x' else 0.10 / L + NETADD)
+                 f = 1 + N * y
+                 assert f > 0
+                 tr.append((ex, np.log(f), code, g, N * cost, tier[i], dr[i], N))
