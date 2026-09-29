@@ -2,15 +2,14 @@
 
 코인 선물 자동매매 전략 연구 저장소 (봇 코드 아님 — 백테스트·검증 전용).
 
-- **[ANALYSIS_KO.md](ANALYSIS_KO.md)** — 1단계 인수인계 검토 결과 (먼저 읽을 것)
+- **[HANDOFF_AGENT_TEAM_KO.md](HANDOFF_AGENT_TEAM_KO.md)** — 에이전트 팀 인수인계 최종판(v2.1) (먼저 읽을 것): 결과·판단 규칙·PAPER 봇 요구사항
+- **[SWEEP_RESULTS_KO.md](SWEEP_RESULTS_KO.md)** — 전체 백테스트 결과(매매법 37개 × 봉 6개 × 코인 7개)
+- [ANALYSIS_KO.md](ANALYSIS_KO.md) — 1단계 인수인계 검토 결과(다음 단계는 `HANDOFF_AGENT_TEAM_KO.md`로 대체됨)
+- [DOGE_STRATEGY_ANALYSIS_KO.md](DOGE_STRATEGY_ANALYSIS_KO.md) — 친구 도지코인 5분 매매법(Astral #5864) 검토 결과
 - [HANDOFF_FOR_CLAUDE_CODE.md](HANDOFF_FOR_CLAUDE_CODE.md) — 1단계 인수인계 원본
 - `bt/` — 백테스트 엔진·전략 포팅 (1단계 원본 그대로)
 - `data/` — Astral OHLCV (현물 집계가). `data/fresh/`는 이번 검토에서 추가로 받은 데이터 (.csv.gz)
 - `results/` — 1단계 결과표
-- `analysis/` — 검토 근거 (B안 사전 등록 표본 외 검정, 감사 메모, 추가 검정 스크립트)
+- `analysis/` — 검토 근거 (B안 사전 등록 표본 외 검정, 감사 메모, 추가 검정 스크립트, 도지 매매법 검토 `doge_strategy/`, 전체 백테스트 `sweep/`, 크기 시뮬레이션 `sizing/`·`tiered/`)
 
 재현: `pip install "pandas>=2,<3" numpy && cd bt && python3 run.py --window IS --tag all5 && python3 analyze.py --window IS --tag all5`
-
-- **[DOGE_STRATEGY_ANALYSIS_KO.md](DOGE_STRATEGY_ANALYSIS_KO.md)** — 친구 도지코인 5분 매매법(Astral #5864) 검토 결과
-- **[HANDOFF_AGENT_TEAM_KO.md](HANDOFF_AGENT_TEAM_KO.md)** — 에이전트 팀 인수인계 최종판(v2): 결과·판단 규칙·PAPER 봇 요구사항
-- **[SWEEP_RESULTS_KO.md](SWEEP_RESULTS_KO.md)** — 전체 백테스트 결과(매매법 37개 × 봉 6개 × 코인 7개)
