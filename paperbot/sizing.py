@@ -80,6 +80,13 @@ def size_position(settings: Settings, equity: float, side: int, entry: float,
     return SizeDecision(False, reasons=reasons)
 
 
-def tp_from_roe(side: int, entry: float, leverage: int, roe: float) -> float:
-    """Take-profit price for a gross ROE target on isolated margin."""
-    return entry * (1 + side * roe / leverage)
+def tp_from_roe(side: int, entry: float, leverage: int, roe: float,
+                round_trip: float = 0.0, funding: float = 0.0) -> float:
+    """Take-profit price for an ROE target on isolated margin.
+
+    With ``round_trip`` (and expected ``funding``) as fractions of notional the
+    target is net of costs: price distance = roe / leverage + round_trip +
+    funding. The owners set 10% net ROE (2026-09-30); with the conservative
+    0.14% round trip this is 0.64% at 20x, 0.47% at 30x, 0.39% at 40x and
+    0.34% at 50x, the same figures the backtest session used."""
+    return entry * (1 + side * (roe / leverage + round_trip + funding))

@@ -45,7 +45,9 @@ DAY_MS = 86_400_000
 class ExitPolicy:
     """Exit rule. Unset fields keep the trade's original value.
 
-    sl_roe / tp_roe: distance as ROE on margin (price move = roe / leverage).
+    sl_roe: stop distance as gross ROE on margin (price move = roe / leverage).
+    tp_roe: take-profit as net ROE (price move = roe / leverage + 0.14% round trip),
+        the owners' take-profit definition since 2026-09-30.
     tp_r: take-profit at this multiple of the original stop distance.
     be_at_r: move the stop to entry (plus round-trip fees) after the price
         has moved this many R in favour (checked on bar close).
@@ -92,13 +94,13 @@ class SimResult:
     flags: list[str] = field(default_factory=list)
 
 
-def _levels(t: TradeRecord, pol: ExitPolicy) -> tuple[float, float]:
+def _levels(t: TradeRecord, pol: ExitPolicy, settings: Settings) -> tuple[float, float]:
     e, s = t.entry_price, t.side
     stop, tp = t.stop_price, t.tp_price
     if pol.sl_roe is not None:
         stop = e * (1 - s * pol.sl_roe / t.leverage)
     if pol.tp_roe is not None:
-        tp = e * (1 + s * pol.tp_roe / t.leverage)
+        tp = e * (1 + s * (pol.tp_roe / t.leverage + settings.round_trip_cost))  # net ROE
     if pol.tp_r is not None:
         tp = e + s * pol.tp_r * abs(t.entry_price - t.stop_price)
     return stop, tp
@@ -112,7 +114,7 @@ def simulate(t: TradeRecord, pol: ExitPolicy, bars: Sequence[Bar], settings: Set
     q = t.qty
     slip = settings.slippage_frac
     entry_fee = q * e * settings.taker_fee
-    stop, tp = _levels(t, pol)
+    stop, tp = _levels(t, pol, settings)
     liq = t.liq_price
     d0 = abs(e - t.stop_price)
     atr = t.context.get("atr") if t.context else None
@@ -301,7 +303,7 @@ def run_lab(trades: Sequence[TradeRecord], bars_by_symbol: dict[str, list[Bar]],
                 skipped[key] = skipped.get(key, 0) + 1
                 continue
             flags = list(res.flags)
-            stop, _ = _levels(t, pol)
+            stop, _ = _levels(t, pol, settings)
             loss_at_stop = (t.qty * abs(t.entry_price - stop)
                             + t.qty * (t.entry_price + stop) * settings.taker_fee)
             if eq0 > 0 and loss_at_stop > settings.max_loss_frac * eq0 * (1 + 1e-9):

@@ -202,7 +202,11 @@ def test_live_runner_fills_signal_at_next_1m_open():
     assert eng.position is None and len(eng.pending) == 1
     runner.process(steps[5:6])
     assert eng.outcomes[-1].status == "ENTERED"
-    t = eng.trades[-1]  # bar 5's high trades through the ROE-10% take-profit
+    # Net 10% ROE at 20x = 0.64% above entry; bar 5's high (101.1) stays below it.
+    fill = 100.5 * (1 + s.slippage_frac)
+    assert eng.position.tp_price == pytest.approx(fill * 1.0064)
+    runner.process(steps[6:7])  # bar 6's high (101.2) trades through the target
+    t = eng.trades[-1]
     assert t.entry_time == T0 + 5 * MIN
     assert t.entry_price == pytest.approx(100.5 * (1 + s.slippage_frac))
     assert t.stop_price == pytest.approx(100.5 * 0.99)  # 5m close x 0.99

@@ -44,7 +44,7 @@ class OwnerPolicy:
 
     def take_profit(self, sig, entry, dec):
         roe = sig.tp_roe if sig.tp_roe is not None else self.s.default_tp_roe
-        return tp_from_roe(sig.side, entry, dec.leverage, roe)
+        return tp_from_roe(sig.side, entry, dec.leverage, roe, round_trip=self.s.round_trip_cost)
 
 
 @dataclass(frozen=True)

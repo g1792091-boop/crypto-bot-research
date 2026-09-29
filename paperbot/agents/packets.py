@@ -312,8 +312,9 @@ def evening_packet(ledger: str, now_ms: int, settings: Optional[Settings] = None
                     "max_loss_per_trade": f"{s.max_loss_frac:.0%} of ACCOUNT EQUITY at the stop, "
                                           f"fees and slippage included (not of margin); a "
                                           f"signal is downgraded a tier or rejected if over",
-                    "take_profit": f"ROE {s.default_tp_roe:.0%} on margin unless the strategy "
-                                   f"sets its own ROE target",
+                    "take_profit": f"{s.default_tp_roe:.0%} ROE net of costs (price distance = "
+                                   f"{s.default_tp_roe:.0%} / leverage + {s.round_trip_cost:.2%} round "
+                                   f"trip: 0.64% at 20x, 0.34% at 50x) unless the strategy sets its own",
                     "drawdown": f"warn at {', '.join(f'-{x:.0%}' for x in s.dd_warn_levels)}, "
                                 f"halt at -{s.dd_halt:.0%}",
                     "daily_loss_stop": "none (owners' decision)",

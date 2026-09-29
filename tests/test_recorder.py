@@ -146,6 +146,14 @@ def test_build_frames_drops_the_forming_bar():
     pd.testing.assert_frame_equal(fr["1h"], full.iloc[:-1].reset_index(drop=True), check_like=True)
 
 
+def test_build_frames_drops_a_partial_first_bar():
+    df = synth(days=2).iloc[9:].reset_index(drop=True)  # starts at 00:45
+    fr = build_frames(L, df, ["1h"])
+    assert fr["1h"]["ts"].iloc[0] == pd.Timestamp(START, tz="UTC") + pd.Timedelta(hours=1)
+    full = L.resample_ohlcv(df, "1h")
+    assert full["ts"].iloc[0] == pd.Timestamp(START, tz="UTC")  # sweep_lib keeps it; we drop it
+
+
 def _direct(df, cells):
     """Signals straight from sweep_lib on the same bars read the way the backtest read them."""
     out = {}

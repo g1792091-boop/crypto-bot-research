@@ -85,15 +85,20 @@ def _ms(series) -> np.ndarray:
 
 
 def build_frames(lib, df5, tfs: Iterable[str]) -> dict:
-    """Chart frames per timeframe from 5m bars, without the forming bar."""
-    last_close = int(_ms(df5["ts"])[-1]) + FIVE_MIN
+    """Chart frames per timeframe from 5m bars, without the forming bar at the
+    end and without a partial bar at the start (a bin that opens before the
+    first 5m bar). Both match the backtest's input files, which kept bins with
+    open >= series start and open + length <= series end."""
+    ts5 = _ms(df5["ts"])
+    first_open, last_close = int(ts5[0]), int(ts5[-1]) + FIVE_MIN
     frames = {}
     for tf in tfs:
         if tf == "5m":
             df = df5
         else:
             r = lib.resample_ohlcv(df5, tf)
-            keep = _ms(r["ts"]) + TF_MS[tf] <= last_close
+            t = _ms(r["ts"])
+            keep = (t >= first_open) & (t + TF_MS[tf] <= last_close)
             df = r.loc[keep].reset_index(drop=True)
         df.attrs["tf"] = tf
         frames[tf] = df

@@ -38,6 +38,11 @@ def test_brackets_from_binance_payload():
 def test_tp_from_roe():
     assert tp_from_roe(+1, 100.0, 20, 0.10) == pytest.approx(100.5)
     assert tp_from_roe(-1, 100.0, 50, 0.10) == pytest.approx(99.8)
+    # Owners' rule since 2026-09-30: 10% net ROE after the 0.14% round trip.
+    rt = Settings().round_trip_cost
+    assert rt == pytest.approx(0.0014)
+    for lev, dist in ((20, 0.0064), (30, 0.0047333), (40, 0.0039), (50, 0.0034)):
+        assert tp_from_roe(+1, 100.0, lev, 0.10, round_trip=rt) == pytest.approx(100 * (1 + dist))
 
 
 S = Settings()

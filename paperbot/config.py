@@ -30,7 +30,8 @@ DEFAULT_TIERS: tuple[Tier, ...] = (
 
 @dataclass(frozen=True)
 class Settings:
-    version: str = "paper-v1"
+    # v2: take-profit is net ROE (after the 0.14% round trip), owners' decision 2026-09-30.
+    version: str = "paper-v2"
 
     symbols: tuple[str, ...] = (
         "BTCUSDT", "ETHUSDT", "SOLUSDT", "LTCUSDT", "BCHUSDT", "DOGEUSDT",
@@ -59,7 +60,13 @@ class Settings:
     liq_buffer_atr_mult: float = 3.0
     liq_buffer_min_frac: float = 0.002
 
-    default_tp_roe: float = 0.10
+    default_tp_roe: float = 0.10  # net of costs, see round_trip_cost
+
+    @property
+    def round_trip_cost(self) -> float:
+        """Conservative round trip as a fraction of notional: taker fee and
+        slippage on both sides (0.14% with the defaults)."""
+        return 2 * (self.taker_fee + self.slippage_frac)
 
     # Only one open position across all symbols.
     single_position: bool = True
