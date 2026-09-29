@@ -13,3 +13,4 @@
 - `analysis/` — 검토 근거 (B안 사전 등록 표본 외 검정, 감사 메모, 추가 검정 스크립트, 도지 매매법 검토 `doge_strategy/`, 전체 백테스트 `sweep/`, 크기 시뮬레이션 `sizing/`·`tiered/`)
 
 재현: `pip install "pandas>=2,<3" numpy && cd bt && python3 run.py --window IS --tag all5 && python3 analyze.py --window IS --tag all5`
+- **[TRADE_STATS_KO.md](TRADE_STATS_KO.md)** — 매매 성적표: 봉별·매매법별 승패·승률·손익비·PF·낙폭 (설명용)
