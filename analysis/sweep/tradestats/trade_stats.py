@@ -63,7 +63,7 @@ def run(tf):
             for ex, tr in res.items():
                 rows.append(dict(tf=tf, split=sp, strategy=name, exit=ex, **stats(tr, panel)))
                 if len(tr):
-                    t = tr[["symbol", "side", "entry_idx", "gross", "net", "hold", "reason"]].copy()
+                    t = tr[["symbol", "side", "entry_idx", "gross", "net", "hold", "reason", "mae", "fee", "funding"]].copy()
                     t["ets"] = [panel[s_]["ts"].iloc[i] for s_, i in zip(t["symbol"], t["entry_idx"])]
                     t = t.assign(tf=tf, split=sp, strategy=name, exit=ex)
                     TR.append(t)
