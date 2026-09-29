@@ -8,6 +8,7 @@ import pytest
 
 from paperbot import Brackets, Settings, Signal
 from paperbot.agents.__main__ import main as agents_main
+from paperbot.agents.budget import BudgetedRunner
 from paperbot.agents.packets import evening_packet, slice_for
 from paperbot.agents.pipeline import compose_telegram, run_evening, ReportStore
 from paperbot.agents.roles import EVENING_ROLES, check_output, resolve, system_prompt
@@ -212,6 +213,72 @@ def test_extract_json_variants():
 def test_cli_dry_run(ledger, capsys):
     db, _ = ledger
     out = db + ".report.json"
-    code = agents_main(["evening", "--ledger", db, "--dry-run", "--out", out, "--min-n", "30"])
+    # The fixture's trades are old, so "today" has none: agents are skipped.
+    code = agents_main(["evening", "--ledger", db, "--dry-run", "--out", out])
+    rep = json.loads(open(out, encoding="utf-8").read())
+    assert code == 0 and rep["skipped"] and "AI 점검은 생략" in rep["telegram"]
+    code = agents_main(["evening", "--ledger", db, "--dry-run", "--always-run", "--out", out])
     rep = json.loads(open(out, encoding="utf-8").read())
     assert code == 0 and rep["failed"] == [] and "(dry-run)" in rep["telegram"]
+
+
+def test_no_trades_day_makes_no_calls(ledger):
+    db, now = ledger
+    p = evening_packet(db, now + 3 * 86_400_000, boot=50)  # window with no closed trades
+    runner = FakeRunner()
+    note = ListNotifier()
+    rep = run_evening(p, runner, None, note, now)
+    assert runner.calls == [] and rep["skipped"]
+    level, text = note.messages[-1]
+    assert "AI 점검은 생략" in text and "[숫자: 코드 계산]" in text
+    assert level == "WARN"  # 1m bars missing for five symbols is still reported
+    rep = run_evening(p, runner, None, None, now, skip_if_no_trades=False)
+    assert len(runner.calls) == 6
+
+
+class TokenRunner(FakeRunner):
+    def __init__(self, tokens):
+        super().__init__()
+        self.tokens = tokens
+
+    def call(self, model, system_prompt, instruction, packet):
+        res = super().call(model, system_prompt, instruction, packet)
+        res.meta = {"usage": {"input_tokens": self.tokens, "output_tokens": 0}}
+        return res
+
+
+def test_daily_call_cap_spans_runs_and_resets_next_day(ledger):
+    db, now = ledger
+    p = evening_packet(db, now, boot=50)
+    clock = {"t": now}
+    runner = BudgetedRunner(FakeRunner(), db, max_calls=8, max_tokens=10**9,
+                            clock_ms=lambda: clock["t"])
+    first = run_evening(p, runner, None, None, now)
+    assert first["failed"] == [] and runner.used_today()[0] == 6
+    note = ListNotifier()
+    second = run_evening(p, runner, None, note, now)
+    assert len(runner.runner.calls) == 8  # stopped at the cap, 2 more calls only
+    assert second["stopped"].startswith("budget") and len(second["failed"]) == 4
+    assert "하루 사용량 상한" in note.messages[-1][1]
+    clock["t"] = now + 86_400_000  # next Korea-time day
+    assert runner.used_today() == (0, 0)
+    assert run_evening(p, runner, None, None, now)["failed"] == []
+    runner.close()
+
+
+def test_daily_token_cap_and_failed_calls_count(ledger):
+    db, now = ledger
+    p = evening_packet(db, now, boot=50)
+    runner = BudgetedRunner(TokenRunner(40_000), db, max_calls=100, max_tokens=100_000,
+                            clock_ms=lambda: now)
+    rep = run_evening(p, runner, None, None, now)
+    assert runner.used_today() == (3, 120_000)  # third call ran past the cap, fourth refused
+    assert rep["stopped"].startswith("budget")
+    runner.close()
+    failing = BudgetedRunner(FakeRunner(fail={"ops_auditor": AgentCallError("x")}), db,
+                             max_calls=100, max_tokens=10**9, clock_ms=lambda: now + 5 * 86_400_000)
+    failing.call("sonnet", "s", "i", {"role": "performance_analyst"})
+    with pytest.raises(AgentCallError):
+        failing.call("sonnet", "s", "i", {"role": "ops_auditor"})
+    assert failing.used_today()[0] == 2
+    failing.close()

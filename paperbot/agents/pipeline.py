@@ -22,6 +22,7 @@ from ..ledger import SCHEMA
 from ..notify import INFO, WARN, Notifier
 from .packets import slice_for
 from .roles import EVENING_ROLES, Role, check_output, system_prompt
+from .budget import BudgetExceeded
 from .runner import AgentCallError, Runner, UsageLimitReached
 
 INSTRUCTION = ("표준입력으로 받은 JSON 패킷만 근거로, 시스템 프롬프트의 역할과 출력 형식에 맞춰 "
@@ -75,11 +76,33 @@ class ReportStore:
         self.conn.close()
 
 
+def _no_trades(packet: dict) -> bool:
+    return all(not (b.get("today") or {}).get("trades") for b in packet["books"].values())
+
+
+def _ops_trouble(packet: dict) -> bool:
+    ops = packet.get("ops") or {}
+    missing = any(v.get("missing") for v in (ops.get("bars_1m") or {}).values())
+    crit = ((ops.get("alerts") or {}).get("by_level") or {}).get("CRITICAL")
+    return bool(missing or crit)
+
+
 def run_evening(packet: dict, runner: Runner, store: Optional[ReportStore] = None,
                 notifier: Optional[Notifier] = None, now_ms: Optional[int] = None,
-                roles=EVENING_ROLES) -> dict:
+                roles=EVENING_ROLES, skip_if_no_trades: bool = True) -> dict:
+    """``skip_if_no_trades``: on a day with no closed trade in any book, make
+    no Claude call and send only the code-computed numbers."""
     now_ms = now_ms or int(time.time() * 1000)
     psha = _sha(packet)
+    if skip_if_no_trades and _no_trades(packet):
+        report = {"analysts": {}, "risk": None, "lead": None, "failed": [], "dropped_claims": {},
+                  "stopped": "", "skipped": "no trades today", "packet_sha": psha}
+        report["telegram"] = compose_telegram(packet, report)
+        if notifier:
+            notifier.send(WARN if _ops_trouble(packet) else INFO, report["telegram"])
+        if store:
+            store.add(now_ms, "evening", "pipeline", "skipped_no_trades", psha, {})
+        return report
     analysts: dict = {}
     risk: Optional[dict] = None
     lead: Optional[dict] = None
@@ -99,6 +122,11 @@ def run_evening(packet: dict, runner: Runner, store: Optional[ReportStore] = Non
         given = _input_for(role, packet, analysts, risk, failed)
         try:
             clean, problems, meta, tries = _call_role(role, given, runner)
+        except BudgetExceeded as exc:
+            stopped = f"budget: {exc}"
+            failed.append(role.rid)
+            save(role.rid, "budget", {"error": str(exc)})
+            continue
         except UsageLimitReached as exc:
             stopped = f"usage limit: {exc}"
             failed.append(role.rid)
@@ -117,7 +145,7 @@ def run_evening(packet: dict, runner: Runner, store: Optional[ReportStore] = Non
         else:
             lead = clean
 
-    report = {"analysts": analysts, "risk": risk, "lead": lead, "failed": failed,
+    report = {"skipped": "", "analysts": analysts, "risk": risk, "lead": lead, "failed": failed,
               "dropped_claims": {k: v for k, v in notes.items() if v}, "stopped": stopped,
               "packet_sha": psha}
     report["telegram"] = compose_telegram(packet, report)
@@ -138,6 +166,9 @@ def compose_telegram(packet: dict, report: dict) -> str:
     lead = report.get("lead")
     if lead:
         L += [f"{i + 1}. {s}" for i, s in enumerate(lead["summary"])]
+    elif report.get("skipped"):
+        L.append("오늘 끝난 거래가 없어 AI 점검은 생략했습니다 (사용량 절약). "
+                 "아래 숫자는 코드가 직접 계산한 값입니다.")
     else:
         L.append("팀장 요약 없음 (실패). 아래 숫자는 코드가 직접 계산한 값입니다.")
     L += ["", "[숫자: 코드 계산]"]
@@ -175,8 +206,10 @@ def compose_telegram(packet: dict, report: dict) -> str:
     tail = []
     if report["failed"]:
         tail.append(f"실패/미실행 역할: {', '.join(report['failed'])}")
-    if report.get("stopped"):
-        tail.append("사용량 한도로 중단됨")
+    if report.get("stopped", "").startswith("budget"):
+        tail.append("하루 사용량 상한에 도달해 중단됨")
+    elif report.get("stopped"):
+        tail.append("Claude 구독 사용량 한도로 중단됨")
     n_drop = sum(len(v) for v in report.get("dropped_claims", {}).values())
     if n_drop:
         tail.append(f"근거 검사에서 버린 주장 {n_drop}개")

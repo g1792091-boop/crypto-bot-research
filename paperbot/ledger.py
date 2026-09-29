@@ -53,6 +53,15 @@ CREATE TABLE IF NOT EXISTS agent_reports (
     packet_sha TEXT NOT NULL,
     data TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS agent_calls (
+    ts INTEGER NOT NULL,
+    day TEXT NOT NULL,
+    pipeline TEXT NOT NULL,
+    role TEXT NOT NULL,
+    model TEXT NOT NULL,
+    ok INTEGER NOT NULL,
+    tokens INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS equity (
     run_id TEXT NOT NULL,
     ts INTEGER NOT NULL,

@@ -17,6 +17,7 @@ from typing import Optional
 
 from ..live import _notifier
 from ..notify import ConsoleNotifier
+from .budget import DEFAULT_MAX_CALLS, DEFAULT_MAX_TOKENS, BudgetedRunner
 from .packets import evening_packet
 from .pipeline import ReportStore, run_evening
 from .runner import ClaudeCodeRunner, FakeRunner, billing_warnings
@@ -35,6 +36,12 @@ def main(argv: Optional[list[str]] = None) -> int:
     ev.add_argument("--timeout", type=float, default=900.0)
     ev.add_argument("--min-n", type=int, default=30)
     ev.add_argument("--out")
+    ev.add_argument("--always-run", action="store_true",
+                    help="run the agents even on a day with no closed trades")
+    ev.add_argument("--max-calls", type=int, default=DEFAULT_MAX_CALLS,
+                    help="daily cap on Claude calls (Korea-time day, all runs)")
+    ev.add_argument("--max-tokens", type=int, default=DEFAULT_MAX_TOKENS,
+                    help="daily cap on tokens (Korea-time day, all runs)")
     args = ap.parse_args(argv)
 
     now = int(time.time() * 1000)
@@ -46,13 +53,19 @@ def main(argv: Optional[list[str]] = None) -> int:
     if warn and not args.dry_run:
         print(f"note: {', '.join(warn)} set in this environment; it is NOT passed to "
               f"Claude Code (subscription login only).", file=sys.stderr)
-    runner = FakeRunner() if args.dry_run else ClaudeCodeRunner(args.claude_bin, args.timeout)
+    inner = FakeRunner() if args.dry_run else ClaudeCodeRunner(args.claude_bin, args.timeout)
+    # Dry runs are not counted against the daily cap.
+    runner = inner if args.dry_run else BudgetedRunner(inner, args.ledger, args.max_calls,
+                                                        args.max_tokens)
     notifier = ConsoleNotifier() if (args.no_send or args.dry_run) else _notifier()
     store = ReportStore(args.ledger)
     try:
-        report = run_evening(packet, runner, store, notifier, now)
+        report = run_evening(packet, runner, store, notifier, now,
+                             skip_if_no_trades=not args.always_run)
     finally:
         store.close()
+        if isinstance(runner, BudgetedRunner):
+            runner.close()
     if args.out:
         with open(args.out, "w", encoding="utf-8") as fh:
             json.dump(report, fh, ensure_ascii=False, indent=2, default=str)
