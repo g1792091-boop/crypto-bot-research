@@ -10,3 +10,5 @@
 - `analysis/` — 검토 근거 (B안 사전 등록 표본 외 검정, 감사 메모, 추가 검정 스크립트)
 
 재현: `pip install "pandas>=2,<3" numpy && cd bt && python3 run.py --window IS --tag all5 && python3 analyze.py --window IS --tag all5`
+
+- **[DOGE_STRATEGY_ANALYSIS_KO.md](DOGE_STRATEGY_ANALYSIS_KO.md)** — 친구 도지코인 5분 매매법(Astral #5864) 검토 결과

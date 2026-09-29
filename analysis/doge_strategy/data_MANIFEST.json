@@ -1,0 +1,682 @@
+{
+ "generated_utc": "2026-09-29T09:46:21Z",
+ "data_dir": "/tmp/claude-0/-home-user-crypto-bot-research/e4f1f93f-891a-54cf-944d-5e95b2209f11/scratchpad/doge/data",
+ "astral_calls": {
+  "total": 46,
+  "symbol_resolve": 1,
+  "price_get": 45,
+  "backtests": 0,
+  "note": "every price_get used delivery=download; every artifact sha256-verified (raw_pulls). Never used start+end together."
+ },
+ "timestamp_convention": "UTC bar-open, ISO like 2026-05-13T05:10:00+0000",
+ "strategy_window": "2026-09-13T00:00Z..2026-09-28T23:55Z",
+ "files": {
+  "dogeusd-5m-ohlcv.csv": {
+   "path": "/tmp/claude-0/-home-user-crypto-bot-research/e4f1f93f-891a-54cf-944d-5e95b2209f11/scratchpad/doge/data/dogeusd-5m-ohlcv.csv",
+   "rows": 603677,
+   "first_ts": "2021-01-01T00:00:00+0000",
+   "last_ts": "2026-09-29T09:15:00+0000",
+   "timeframe": "5m",
+   "expected_slots": 604048,
+   "missing_slots": 371,
+   "missing_pct": 0.0614,
+   "gap_events": 68,
+   "max_gap": "1 days 00:05:00",
+   "gaps_ge_1h_missing_ranges": [
+    {
+     "first_missing": "2026-04-22 00:00:00+00:00",
+     "last_missing": "2026-04-22 23:55:00+00:00",
+     "bars": 288
+    },
+    {
+     "first_missing": "2026-09-29 06:00:00+00:00",
+     "last_missing": "2026-09-29 07:05:00+00:00",
+     "bars": 14
+    }
+   ],
+   "duplicates": 0,
+   "ohlc_inconsistent": 0,
+   "nan_rows": 0,
+   "vol_le_0": 0,
+   "strategy_window_2026_09_13_to_28": {
+    "rows": 4608,
+    "expected": 4608,
+    "missing": 0
+   },
+   "bytes": 44942748,
+   "sha256": "6d87c81730b546c9acdca95728e25a8f7d2a6157b48326b3e2a213c9242344bd",
+   "clean_from": "2021-08-01",
+   "sources": "raw/doge5m_p01..p16 (16 chained astral_price_get pulls, limit=40000, end-chained; p16 limit=3700); trimmed to >=2021-01-01",
+   "notes": [
+    "2021-01..2021-06-02 corrupted by cross-venue mixing (2021Q2 median bar range 26.3%, 5,113 open-vs-prev-close jumps >2%, 3,129 3%-spikes); isolated bad wicks persist through 2021-07-31 (June 267, July 10, August 0).",
+    "Until 2022-05-31 ~87% of closes have <=4 decimals (0.0001 tick = 0.03-0.17% of price), comparable to the strategy trail distances 0.20-0.35%; use 2022-06-01+ for tick-sensitive trailing-stop work.",
+    "Whole day 2026-04-22 missing (288 bars) - present in every Astral crypto series checked.",
+    "2026-09-29 06:00-07:05 missing (14 bars) in 5m; still missing in a 09:40 re-pull; present in 1m and direct 15m.",
+    "Single-bar bad lows inside clean range: 2021-10-21 11:30/11:35 (0.176 / 0.150 vs ~0.25), 2026-05-17 23:40 (0.081 vs ~0.109).",
+    "Re-pull at 09:40 UTC of 2026-09-27 06:30..09-29 09:35: 596 common bars byte-identical in OHLC (volume 99.66% exact)."
+   ],
+   "clean_from_tick_sensitive": "2022-06-01"
+  },
+  "dogeusd-15m-ohlcv.csv": {
+   "path": "/tmp/claude-0/-home-user-crypto-bot-research/e4f1f93f-891a-54cf-944d-5e95b2209f11/scratchpad/doge/data/dogeusd-15m-ohlcv.csv",
+   "rows": 201249,
+   "first_ts": "2021-01-01T00:00:00+0000",
+   "last_ts": "2026-09-29T09:00:00+0000",
+   "timeframe": "15m",
+   "expected_slots": 201349,
+   "missing_slots": 100,
+   "missing_pct": 0.0497,
+   "gap_events": 2,
+   "max_gap": "1 days 00:15:00",
+   "gaps_ge_1h_missing_ranges": [
+    {
+     "first_missing": "2026-04-22 00:00:00+00:00",
+     "last_missing": "2026-04-22 23:45:00+00:00",
+     "bars": 96
+    },
+    {
+     "first_missing": "2026-09-29 06:00:00+00:00",
+     "last_missing": "2026-09-29 06:45:00+00:00",
+     "bars": 4
+    }
+   ],
+   "duplicates": 0,
+   "ohlc_inconsistent": 0,
+   "nan_rows": 0,
+   "vol_le_0": 0,
+   "strategy_window_2026_09_13_to_28": {
+    "rows": 1536,
+    "expected": 1536,
+    "missing": 0
+   },
+   "bytes": 15146599,
+   "sha256": "3b3f7d3559f593ca56b78886ee4bb1de60dcf5dbeb6a69715c9d1364ed8f7cf6",
+   "clean_from": "2021-08-01",
+   "sources": "resampled from dogeusd-5m-ohlcv.csv (tools/resample.py, open-labelled, left-closed, partial bins kept, trailing incomplete bin dropped)",
+   "notes": [
+    "68 bins built from <3 5m bars (partial).",
+    "Spot-check vs direct 15m pull (raw/doge15m_p01.csv, last 40,000 bars): close exact on all common bins; O/H/L >=99.99% exact; differences only at 5m-missing bins (2026-09-29 06:00-07:00) and 2 isolated bins (2026-05-13 11:45 low, 2026-07-21 22:30 open/high); 21 volume mismatches."
+   ]
+  },
+  "dogeusd-1h-ohlcv.csv": {
+   "path": "/tmp/claude-0/-home-user-crypto-bot-research/e4f1f93f-891a-54cf-944d-5e95b2209f11/scratchpad/doge/data/dogeusd-1h-ohlcv.csv",
+   "rows": 50312,
+   "first_ts": "2021-01-01T00:00:00+0000",
+   "last_ts": "2026-09-29T08:00:00+0000",
+   "timeframe": "1h",
+   "expected_slots": 50337,
+   "missing_slots": 25,
+   "missing_pct": 0.0497,
+   "gap_events": 2,
+   "max_gap": "1 days 01:00:00",
+   "gaps_ge_1h_missing_ranges": [
+    {
+     "first_missing": "2026-04-22 00:00:00+00:00",
+     "last_missing": "2026-04-22 23:00:00+00:00",
+     "bars": 24
+    },
+    {
+     "first_missing": "2026-09-29 06:00:00+00:00",
+     "last_missing": "2026-09-29 06:00:00+00:00",
+     "bars": 1
+    }
+   ],
+   "duplicates": 0,
+   "ohlc_inconsistent": 0,
+   "nan_rows": 0,
+   "vol_le_0": 0,
+   "strategy_window_2026_09_13_to_28": {
+    "rows": 384,
+    "expected": 384,
+    "missing": 0
+   },
+   "bytes": 3802907,
+   "sha256": "031114e44b97df380013eceb62561e10bb5875e7b9d8c262d82703e1bf3c1622",
+   "clean_from": "2021-08-01",
+   "sources": "resampled from dogeusd-5m-ohlcv.csv (same method as 15m)",
+   "notes": [
+    "62 bins built from <12 5m bars (partial)."
+   ]
+  },
+  "dogeusd-1m-ohlcv.csv": {
+   "path": "/tmp/claude-0/-home-user-crypto-bot-research/e4f1f93f-891a-54cf-944d-5e95b2209f11/scratchpad/doge/data/dogeusd-1m-ohlcv.csv",
+   "rows": 40000,
+   "first_ts": "2026-09-01T14:24:00+0000",
+   "last_ts": "2026-09-29T09:29:00+0000",
+   "timeframe": "1m",
+   "expected_slots": 40026,
+   "missing_slots": 26,
+   "missing_pct": 0.065,
+   "gap_events": 25,
+   "max_gap": "0 days 00:03:00",
+   "gaps_ge_1h_missing_ranges": [],
+   "duplicates": 0,
+   "ohlc_inconsistent": 0,
+   "nan_rows": 0,
+   "vol_le_0": 0,
+   "strategy_window_2026_09_13_to_28": {
+    "rows": 23025,
+    "expected": 23040,
+    "missing": 15
+   },
+   "bytes": 2993581,
+   "sha256": "15ed2d6e322ea5001ea9852c29de39ea742ac93f2bfdbde596376ac3ac7b0b58",
+   "clean_from": "file start (2026-09-01T14:24)",
+   "sources": "raw/doge1m_p01.csv (last 40,000 1m bars, one pull)",
+   "notes": [
+    "1m->5m vs 5m file: close exact 99.862%, 9 bins >1bp (max 0.063%), 50 volume mismatches - 1m and 5m are close but not identical; intrabar replays from 1m will not exactly match 5m OHLC.",
+    "Missing 1m bars are no-trade minutes (sporadic single minutes)."
+   ]
+  },
+  "btcusd-5m-ohlcv.csv": {
+   "path": "/tmp/claude-0/-home-user-crypto-bot-research/e4f1f93f-891a-54cf-944d-5e95b2209f11/scratchpad/doge/data/btcusd-5m-ohlcv.csv",
+   "rows": 160819,
+   "first_ts": "2025-03-19T00:00:00+0000",
+   "last_ts": "2026-09-29T09:35:00+0000",
+   "timeframe": "5m",
+   "expected_slots": 161108,
+   "missing_slots": 289,
+   "missing_pct": 0.1794,
+   "gap_events": 2,
+   "max_gap": "1 days 00:05:00",
+   "gaps_ge_1h_missing_ranges": [
+    {
+     "first_missing": "2026-04-22 00:00:00+00:00",
+     "last_missing": "2026-04-22 23:55:00+00:00",
+     "bars": 288
+    }
+   ],
+   "duplicates": 0,
+   "ohlc_inconsistent": 0,
+   "nan_rows": 0,
+   "vol_le_0": 0,
+   "strategy_window_2026_09_13_to_28": {
+    "rows": 4608,
+    "expected": 4608,
+    "missing": 0
+   },
+   "bytes": 12269105,
+   "sha256": "d167deed62f52ad1613e3bed31565dd7adf189a4a94ea2aa37a07f2722c59067",
+   "clean_from": "2025-03-19 (whole file; no corruption signature in quarterly QA)",
+   "rows_by_source_priority_order": {
+    "btc5m_recheck.csv": 120,
+    "btc5m_fresh.csv": 120000,
+    "btc5m_stage1.csv": 39966,
+    "btc5m_bridge.csv": 350,
+    "btc5m_ext.csv": 0,
+    "btc5m_head.csv": 383,
+    "unattributed": 0
+   },
+   "merge_policy": "first-listed source wins on duplicate timestamps (order = rows_by_source keys)",
+   "notes": [
+    "All series: 2026-04-22 whole day missing (vendor-wide).",
+    "fresh/ and data/ copies = verbatim repo files (sha256 matched expected_sha256.txt / sha256_uncompressed.txt); bridge = Astral pull 2026-05-06T13:20..05-13T11:55 closing the 05-12/05-13 seam; ext/recheck = latest tail pulls; head = 2025-03-19 prefix.",
+    "Tail 2026-09-28T23:40..09-29T09:35 taken from the 09:40 re-pull (latest wins): vs the ~09:25 pull, 14 previously-missing bars appeared (09-29 05:05-05:25, 07:05-07:45) plus 2 new tail bars, close exact on only 67.3% of 104 common bars (max 0.13%), volume exact 54.8%."
+   ]
+  },
+  "ethusd-5m-ohlcv.csv": {
+   "path": "/tmp/claude-0/-home-user-crypto-bot-research/e4f1f93f-891a-54cf-944d-5e95b2209f11/scratchpad/doge/data/ethusd-5m-ohlcv.csv",
+   "rows": 160817,
+   "first_ts": "2025-03-19T00:00:00+0000",
+   "last_ts": "2026-09-29T09:25:00+0000",
+   "timeframe": "5m",
+   "expected_slots": 161106,
+   "missing_slots": 289,
+   "missing_pct": 0.1794,
+   "gap_events": 2,
+   "max_gap": "1 days 00:05:00",
+   "gaps_ge_1h_missing_ranges": [
+    {
+     "first_missing": "2026-04-22 00:00:00+00:00",
+     "last_missing": "2026-04-22 23:55:00+00:00",
+     "bars": 288
+    }
+   ],
+   "duplicates": 0,
+   "ohlc_inconsistent": 0,
+   "nan_rows": 0,
+   "vol_le_0": 0,
+   "strategy_window_2026_09_13_to_28": {
+    "rows": 4608,
+    "expected": 4608,
+    "missing": 0
+   },
+   "bytes": 11651997,
+   "sha256": "481d232c0a6c3a627198c661a3370183ca3083d824128893aa41410fad5050e0",
+   "clean_from": "2025-03-19 (whole file; no corruption signature in quarterly QA)",
+   "rows_by_source_priority_order": {
+    "eth5m_bridge2.csv": 260,
+    "eth5m_fresh.csv": 120000,
+    "eth5m_stage1.csv": 39952,
+    "eth5m_bridge.csv": 113,
+    "eth5m_ext.csv": 109,
+    "eth5m_head.csv": 383,
+    "unattributed": 0
+   },
+   "merge_policy": "first-listed source wins on duplicate timestamps (order = rows_by_source keys)",
+   "notes": [
+    "All series: 2026-04-22 whole day missing (vendor-wide).",
+    "Repo stage-1 ETH file (pulled ~03:57 UTC) has a hole 2026-09-27 20:30..09-28 15:40 (inside the backtest window); filled by raw/eth5m_bridge2.csv (09:40 pull) which also replaced 49 overlapping stage-1 bars: close exact on only 36.7% of them (max 0.063%), volume 2% exact - ETH bars ~36h old were still being revised.",
+    "head = 2025-03-19 prefix."
+   ]
+  },
+  "solusd-5m-ohlcv.csv": {
+   "path": "/tmp/claude-0/-home-user-crypto-bot-research/e4f1f93f-891a-54cf-944d-5e95b2209f11/scratchpad/doge/data/solusd-5m-ohlcv.csv",
+   "rows": 160527,
+   "first_ts": "2025-03-19T00:00:00+0000",
+   "last_ts": "2026-09-29T09:25:00+0000",
+   "timeframe": "5m",
+   "expected_slots": 161106,
+   "missing_slots": 579,
+   "missing_pct": 0.3594,
+   "gap_events": 5,
+   "max_gap": "1 days 00:05:00",
+   "gaps_ge_1h_missing_ranges": [
+    {
+     "first_missing": "2025-03-25 00:00:00+00:00",
+     "last_missing": "2025-03-25 23:55:00+00:00",
+     "bars": 288
+    },
+    {
+     "first_missing": "2026-04-22 00:00:00+00:00",
+     "last_missing": "2026-04-22 23:55:00+00:00",
+     "bars": 288
+    }
+   ],
+   "duplicates": 0,
+   "ohlc_inconsistent": 0,
+   "nan_rows": 0,
+   "vol_le_0": 0,
+   "strategy_window_2026_09_13_to_28": {
+    "rows": 4607,
+    "expected": 4608,
+    "missing": 1
+   },
+   "bytes": 10962448,
+   "sha256": "ed5e5d20c45e1a3c14dbf00ebf123013fadbe08e317da2d37fd735f0fdefa4f1",
+   "clean_from": "2025-03-26 if continuous data needed (2025-03-25 missing); otherwise 2025-03-19",
+   "rows_by_source_priority_order": {
+    "sol5m_fresh.csv": 120000,
+    "sol5m_stage1.csv": 40000,
+    "sol5m_bridge.csv": 349,
+    "sol5m_ext.csv": 84,
+    "sol5m_head.csv": 94,
+    "unattributed": 0
+   },
+   "merge_policy": "first-listed source wins on duplicate timestamps (order = rows_by_source keys)",
+   "notes": [
+    "All series: 2026-04-22 whole day missing (vendor-wide).",
+    "2025-03-25 whole day missing (also in repo fresh file, XRP and LTC)."
+   ]
+  },
+  "xrpusd-5m-ohlcv.csv": {
+   "path": "/tmp/claude-0/-home-user-crypto-bot-research/e4f1f93f-891a-54cf-944d-5e95b2209f11/scratchpad/doge/data/xrpusd-5m-ohlcv.csv",
+   "rows": 160527,
+   "first_ts": "2025-03-19T00:00:00+0000",
+   "last_ts": "2026-09-29T09:25:00+0000",
+   "timeframe": "5m",
+   "expected_slots": 161106,
+   "missing_slots": 579,
+   "missing_pct": 0.3594,
+   "gap_events": 5,
+   "max_gap": "1 days 00:05:00",
+   "gaps_ge_1h_missing_ranges": [
+    {
+     "first_missing": "2025-03-25 00:00:00+00:00",
+     "last_missing": "2025-03-25 23:55:00+00:00",
+     "bars": 288
+    },
+    {
+     "first_missing": "2026-04-22 00:00:00+00:00",
+     "last_missing": "2026-04-22 23:55:00+00:00",
+     "bars": 288
+    }
+   ],
+   "duplicates": 0,
+   "ohlc_inconsistent": 0,
+   "nan_rows": 0,
+   "vol_le_0": 0,
+   "strategy_window_2026_09_13_to_28": {
+    "rows": 4608,
+    "expected": 4608,
+    "missing": 0
+   },
+   "bytes": 11312879,
+   "sha256": "a3ade09fd171dba17adb820837a5633e6a99b59778ee049d5e78c9d398400524",
+   "clean_from": "2025-03-26 if continuous data needed (2025-03-25 missing); otherwise 2025-03-19",
+   "rows_by_source_priority_order": {
+    "xrp5m_p01.csv": 40000,
+    "xrp5m_p02.csv": 40000,
+    "xrp5m_p03.csv": 40000,
+    "xrp5m_p04.csv": 40000,
+    "xrp5m_head.csv": 527,
+    "unattributed": 0
+   },
+   "merge_policy": "first-listed source wins on duplicate timestamps (order = rows_by_source keys)",
+   "notes": [
+    "All series: 2026-04-22 whole day missing (vendor-wide).",
+    "2025-03-25 whole day missing."
+   ]
+  },
+  "ltcusd-5m-ohlcv.csv": {
+   "path": "/tmp/claude-0/-home-user-crypto-bot-research/e4f1f93f-891a-54cf-944d-5e95b2209f11/scratchpad/doge/data/ltcusd-5m-ohlcv.csv",
+   "rows": 160529,
+   "first_ts": "2025-03-19T00:00:00+0000",
+   "last_ts": "2026-09-29T09:30:00+0000",
+   "timeframe": "5m",
+   "expected_slots": 161107,
+   "missing_slots": 578,
+   "missing_pct": 0.3588,
+   "gap_events": 4,
+   "max_gap": "1 days 00:05:00",
+   "gaps_ge_1h_missing_ranges": [
+    {
+     "first_missing": "2025-03-25 00:00:00+00:00",
+     "last_missing": "2025-03-25 23:55:00+00:00",
+     "bars": 288
+    },
+    {
+     "first_missing": "2026-04-22 00:00:00+00:00",
+     "last_missing": "2026-04-22 23:55:00+00:00",
+     "bars": 288
+    }
+   ],
+   "duplicates": 0,
+   "ohlc_inconsistent": 0,
+   "nan_rows": 0,
+   "vol_le_0": 0,
+   "strategy_window_2026_09_13_to_28": {
+    "rows": 4608,
+    "expected": 4608,
+    "missing": 0
+   },
+   "bytes": 10615717,
+   "sha256": "41d13151c2d27380fac7801b56bbf5b015e32ed6526196f560d9631583710c3c",
+   "clean_from": "2025-03-26 if continuous data needed (2025-03-25 missing); otherwise 2025-03-19",
+   "rows_by_source_priority_order": {
+    "ltc5m_p01.csv": 40000,
+    "ltc5m_p02.csv": 40000,
+    "ltc5m_p03.csv": 40000,
+    "ltc5m_p04.csv": 40000,
+    "ltc5m_head.csv": 529,
+    "unattributed": 0
+   },
+   "merge_policy": "first-listed source wins on duplicate timestamps (order = rows_by_source keys)",
+   "notes": [
+    "All series: 2026-04-22 whole day missing (vendor-wide).",
+    "2025-03-25 whole day missing."
+   ]
+  },
+  "bchusd-5m-ohlcv.csv": {
+   "path": "/tmp/claude-0/-home-user-crypto-bot-research/e4f1f93f-891a-54cf-944d-5e95b2209f11/scratchpad/doge/data/bchusd-5m-ohlcv.csv",
+   "rows": 160545,
+   "first_ts": "2025-03-19T00:00:00+0000",
+   "last_ts": "2026-09-29T09:35:00+0000",
+   "timeframe": "5m",
+   "expected_slots": 161108,
+   "missing_slots": 563,
+   "missing_pct": 0.3495,
+   "gap_events": 173,
+   "max_gap": "1 days 00:05:00",
+   "gaps_ge_1h_missing_ranges": [
+    {
+     "first_missing": "2026-04-22 00:00:00+00:00",
+     "last_missing": "2026-04-22 23:55:00+00:00",
+     "bars": 288
+    }
+   ],
+   "duplicates": 0,
+   "ohlc_inconsistent": 0,
+   "nan_rows": 0,
+   "vol_le_0": 0,
+   "strategy_window_2026_09_13_to_28": {
+    "rows": 4608,
+    "expected": 4608,
+    "missing": 0
+   },
+   "bytes": 10720117,
+   "sha256": "e53248299f4bb18f27ed5f6bdd73250d5ef195266fe5a55556e0df2f4e0608dc",
+   "clean_from": "2025-03-19 (whole file; no corruption signature in quarterly QA)",
+   "rows_by_source_priority_order": {
+    "bch5m_p01.csv": 40000,
+    "bch5m_p02.csv": 40000,
+    "bch5m_p03.csv": 40000,
+    "bch5m_p04.csv": 40000,
+    "bch5m_head.csv": 545,
+    "unattributed": 0
+   },
+   "merge_policy": "first-listed source wins on duplicate timestamps (order = rows_by_source keys)",
+   "notes": [
+    "All series: 2026-04-22 whole day missing (vendor-wide).",
+    "Illiquid: 173 gap events (sporadic no-trade 5m slots), flat bars up to 0.45%/quarter; open!=prev close ~91-93%."
+   ]
+  }
+ },
+ "raw_pulls": [
+  {
+   "file": "raw/doge5m_p01.csv",
+   "sha256": "6d223574d8f221af397cb2d82bdea80b6aa675cad0d8a33091425d96cd0e4a58",
+   "verified_now": true
+  },
+  {
+   "file": "raw/doge5m_p02.csv",
+   "sha256": "c3a863c746cd8d5fe34875ae9398c808812b4e373ea49f8749d543da89c23b8c",
+   "verified_now": true
+  },
+  {
+   "file": "raw/doge5m_p03.csv",
+   "sha256": "5ae2af48de42dde425724c73e49b0e27850881c3d6cbd17e099f3fc50716544d",
+   "verified_now": true
+  },
+  {
+   "file": "raw/doge5m_p04.csv",
+   "sha256": "84f596796f9e5d16b35004c083b6ad008f9d7cde7ee4cc9f4c9ef5ef0a410d52",
+   "verified_now": true
+  },
+  {
+   "file": "raw/doge5m_p05.csv",
+   "sha256": "f8b619a5f7d58b50ea8c6475a52ae6b9a7d61657941293174c2175cc72a9a791",
+   "verified_now": true
+  },
+  {
+   "file": "raw/doge5m_p06.csv",
+   "sha256": "8a1ccf33c052d53e355fd038808987269367b6a0fa279be20c762ccd3eed5411",
+   "verified_now": true
+  },
+  {
+   "file": "raw/doge5m_p07.csv",
+   "sha256": "709eb614b51d2feb171216e1c64c9c35e36b920b6b479e7ef49267f11ba013a7",
+   "verified_now": true
+  },
+  {
+   "file": "raw/doge5m_p08.csv",
+   "sha256": "423a0220e79b26b06b4f69d68455e1d9444afd9ce051a422e4a7fdf8704e8544",
+   "verified_now": true
+  },
+  {
+   "file": "raw/doge5m_p09.csv",
+   "sha256": "cf86fa1e1a971381f65c1e925c2c6ca64ac338260fb8a2700fc9b978a7d4489a",
+   "verified_now": true
+  },
+  {
+   "file": "raw/doge5m_p10.csv",
+   "sha256": "bfc19b8d8aef5411ec48c3e930dbe431ce192c050fc7a78e4e324f027db4d680",
+   "verified_now": true
+  },
+  {
+   "file": "raw/doge5m_p11.csv",
+   "sha256": "37180393c28839c61d5689ceeed76dd1c8e0ea7dce8e0655a667e9afa2d716ac",
+   "verified_now": true
+  },
+  {
+   "file": "raw/doge5m_p12.csv",
+   "sha256": "7f370eabd5131fc86706eee883fc16df9075271213e1c2d4da2f919f3f5710c4",
+   "verified_now": true
+  },
+  {
+   "file": "raw/doge5m_p13.csv",
+   "sha256": "7772d8b4ff6e4ab45ec4c9d4fee8c050c4b1593ecd863dd5bdfb9c4b4849ac1f",
+   "verified_now": true
+  },
+  {
+   "file": "raw/doge5m_p14.csv",
+   "sha256": "d5d05245850de477e34db2a277b9cb8d04105c266dcf1f765d2851e1df5f2158",
+   "verified_now": true
+  },
+  {
+   "file": "raw/doge5m_p15.csv",
+   "sha256": "4b4e5faf3fd4cec5c82f352f4b4b296791ec2299f65564b3f2a9d66ddb091f0c",
+   "verified_now": true
+  },
+  {
+   "file": "raw/doge5m_p16.csv",
+   "sha256": "e6b80f35faafcb93c81b7dd59cf4515e94312396f96073374d79ddbf3bdc95ac",
+   "verified_now": true
+  },
+  {
+   "file": "raw/doge1m_p01.csv",
+   "sha256": "fa96c40aa1f7f57dc44d06ba7dfb7cfe3e91eca6a8b6167996788734f90a9691",
+   "verified_now": true
+  },
+  {
+   "file": "raw/doge15m_p01.csv",
+   "sha256": "4509b7efa40b4eabcf4cd6e0de5e2bc3fd24d7c22672b5e9ad24acfdaeef7b4f",
+   "verified_now": true
+  },
+  {
+   "file": "raw/btc5m_bridge.csv",
+   "sha256": "956a986fb3014c3fa2b35d390925214a4bb81fd3d08f9c96a110bba68d85e8b8",
+   "verified_now": true
+  },
+  {
+   "file": "raw/eth5m_bridge.csv",
+   "sha256": "bdc4cf5646822e1f998a7faeb594d4ab34dda8f24607a70c2581eaa47664fbb6",
+   "verified_now": true
+  },
+  {
+   "file": "raw/sol5m_bridge.csv",
+   "sha256": "0167336ec018d2d4a9ee6972df6352c2aa2d95f4ec058c43bda7723040208228",
+   "verified_now": true
+  },
+  {
+   "file": "raw/btc5m_ext.csv",
+   "sha256": "432dc94834c0172acdb7d727206018c49bbbb5f7f6ecdec083ad016b8664c83a",
+   "verified_now": true
+  },
+  {
+   "file": "raw/eth5m_ext.csv",
+   "sha256": "165921ce7e553cc2a658c1c409900ef96e6338ba45733698d29152e11e068dcd",
+   "verified_now": true
+  },
+  {
+   "file": "raw/sol5m_ext.csv",
+   "sha256": "05233dd03929c1963c8409b848f9d5821f945857e301061b46ac1ccdf08f730b",
+   "verified_now": true
+  },
+  {
+   "file": "raw/xrp5m_p01.csv",
+   "sha256": "326f61b03325fcd1a9ff657b5709253d947fa9cebe009e2faf1eb7ad35888dfe",
+   "verified_now": true
+  },
+  {
+   "file": "raw/xrp5m_p02.csv",
+   "sha256": "0ca89345971dfb6e84198d3986d8bd4ff539e764c7652361d6f4c086e41c9bdb",
+   "verified_now": true
+  },
+  {
+   "file": "raw/xrp5m_p03.csv",
+   "sha256": "3337968a372e8e2dfb306814b654e7ddb1429f9f9c48da12f22b64aa34804105",
+   "verified_now": true
+  },
+  {
+   "file": "raw/xrp5m_p04.csv",
+   "sha256": "cdc6c71b7942ddb4e5410bb07a227c5d92c42c196170cd62fa49ba7ff9f87091",
+   "verified_now": true
+  },
+  {
+   "file": "raw/ltc5m_p01.csv",
+   "sha256": "dd3bd090253537f4e74df444c6c3611e0508ef4b969eb600c577c8dd00d96fbf",
+   "verified_now": true
+  },
+  {
+   "file": "raw/ltc5m_p02.csv",
+   "sha256": "51a2a690294521cc8464cd9830e8a916e0294dfd420fe5674b906104e622afbe",
+   "verified_now": true
+  },
+  {
+   "file": "raw/ltc5m_p03.csv",
+   "sha256": "d9a5a10eb8b5b0f3fd29982bb0307d6a526cff9215c82730fc5eb754f60b0b47",
+   "verified_now": true
+  },
+  {
+   "file": "raw/ltc5m_p04.csv",
+   "sha256": "7ca53a8d49ac9a31854dfe769fe17f79778e7096a71b58f4bc2a5c33f1b7fc6a",
+   "verified_now": true
+  },
+  {
+   "file": "raw/bch5m_p01.csv",
+   "sha256": "ffb985ba52f446ed88bb632f8d06caedc065bb4e9ad73a8ba0274128440b86ac",
+   "verified_now": true
+  },
+  {
+   "file": "raw/bch5m_p02.csv",
+   "sha256": "98eeabb3b1d0d7ddfac7b08b715325422556bd5d1bfae400ad4e773e81d0ce0d",
+   "verified_now": true
+  },
+  {
+   "file": "raw/bch5m_p03.csv",
+   "sha256": "cd3d55326ae64cecef3e9f2095fdef141c6e8f10ab5e9c17b2a27c445235d3a9",
+   "verified_now": true
+  },
+  {
+   "file": "raw/bch5m_p04.csv",
+   "sha256": "2a111f7de8adf1df926c5d86e874e52877a780ab563b3b99cf96edd0a93688d0",
+   "verified_now": true
+  },
+  {
+   "file": "raw/xrp5m_head.csv",
+   "sha256": "56d90a8530128fb7059c9c7545046e64d7b92763ed277230bbfa8e2e0d574faf",
+   "verified_now": true
+  },
+  {
+   "file": "raw/bch5m_head.csv",
+   "sha256": "883ec6ee35b1adf6d3ade5cd5383d10238e9c5e0a1612a511fc1537f4de28c0c",
+   "verified_now": true
+  },
+  {
+   "file": "raw/ltc5m_head.csv",
+   "sha256": "773cc0dfec3526e1ef2bc6f26d0411269fb47433ff819b3eaa77f846f9cde870",
+   "verified_now": true
+  },
+  {
+   "file": "raw/btc5m_head.csv",
+   "sha256": "b1ff96184ab09bcaef3779140022039f06a2cd847f6181f030b93f899b456bb7",
+   "verified_now": true
+  },
+  {
+   "file": "raw/eth5m_head.csv",
+   "sha256": "9a8e56cfd615776b34a83ca7e07fc137dd7682eb7e7abb1ae8242a1674e9aa51",
+   "verified_now": true
+  },
+  {
+   "file": "raw/sol5m_head.csv",
+   "sha256": "6f0d74da5854d34755a69dc5b01c2526d8956b1d3f8cb1f2e09260bbde80ae54",
+   "verified_now": true
+  },
+  {
+   "file": "raw/eth5m_bridge2.csv",
+   "sha256": "de683f39d1a057dc2018615b4204584acea34eaf7dbf77fdc39b4e5dee4edf6c",
+   "verified_now": true
+  },
+  {
+   "file": "raw/doge5m_recheck.csv",
+   "sha256": "b111b271971e7cd00f1d6c5f9c161aa57b34d03966c72263d985c6e927965963",
+   "verified_now": true
+  },
+  {
+   "file": "raw/btc5m_recheck.csv",
+   "sha256": "8ec260587cd1dbeb9c900e50486e99707686bcf7a8012c4b2531f13f400b6ded",
+   "verified_now": true
+  }
+ ]
+}
