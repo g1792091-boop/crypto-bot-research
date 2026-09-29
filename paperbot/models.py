@@ -23,6 +23,8 @@ class Bar:
     mark_high: Optional[float] = None
     mark_low: Optional[float] = None
     mark_close: Optional[float] = None
+    # True when an aggregated bar is missing some of its 1m bars.
+    partial: bool = False
 
     @property
     def m_open(self) -> float:
