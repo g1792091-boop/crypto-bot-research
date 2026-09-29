@@ -14,3 +14,4 @@
 
 재현: `pip install "pandas>=2,<3" numpy && cd bt && python3 run.py --window IS --tag all5 && python3 analyze.py --window IS --tag all5`
 - **[TRADE_STATS_KO.md](TRADE_STATS_KO.md)** — 매매 성적표: 봉별·매매법별 승패·승률·손익비·PF·낙폭 (설명용)
+- **[NEXT_STEPS_KO.md](NEXT_STEPS_KO.md)** — 정리: 기존 매매법 처리, Lucas Lalk 공개 전략 5년 검증, 다음 아이디어 후보
