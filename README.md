@@ -12,3 +12,4 @@
 재현: `pip install "pandas>=2,<3" numpy && cd bt && python3 run.py --window IS --tag all5 && python3 analyze.py --window IS --tag all5`
 
 - **[DOGE_STRATEGY_ANALYSIS_KO.md](DOGE_STRATEGY_ANALYSIS_KO.md)** — 친구 도지코인 5분 매매법(Astral #5864) 검토 결과
+- **[HANDOFF_AGENT_TEAM_KO.md](HANDOFF_AGENT_TEAM_KO.md)** — 에이전트 팀 인수인계 사전판(v1): 백테스트 결과 이후 판단 규칙·PAPER 봇 요구사항
