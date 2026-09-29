@@ -7,10 +7,12 @@ their packet, and every claim must point at the packet path it came from.
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 from collections import Counter
 from typing import Optional, Sequence
 
+from .. import sweepsig
 from ..aggregate import Aggregator
 from ..analyze import analyze
 from ..config import Settings
@@ -182,6 +184,94 @@ def _market(store: BarStore, symbols: Sequence[str], start: int, end: int) -> di
     return out
 
 
+def _tables(conn: sqlite3.Connection) -> set:
+    return {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+
+
+def _recording(market: str, ledger: str, start: int, end: int, symbols: Sequence[str]) -> dict:
+    """Health of the record-only signal log (market.db, written by the recorder).
+    Counts only: the agents do not evaluate these signals."""
+    conn = sqlite3.connect(market)
+    try:
+        have = _tables(conn)
+        if "sweep_runs" not in have or "kline5m" not in have:
+            return {"available": False, "note": "recorder has not run on this database yet"}
+        last = conn.execute("SELECT run_id, started_ts, finished_ts, status, data FROM sweep_runs "
+                            "ORDER BY started_ts DESC LIMIT 1").fetchone()
+        runs = conn.execute("SELECT status, COUNT(*) FROM sweep_runs WHERE started_ts >= ? AND "
+                            "started_ts < ? GROUP BY status", (start, end)).fetchall()
+        out: dict = {"available": True, "runs_in_window": dict(runs)}
+        if last:
+            d = json.loads(last[4] or "{}")
+            out["last_run"] = {
+                "status": last[3], "started_kst": kst(last[1]),
+                "finished_kst": kst(last[2]) if last[2] else None,
+                "hours_since_start": round((end - last[1]) / 3_600_000, 1),
+                "new_signals": d.get("new_signals"), "mismatches": d.get("mismatches"),
+                "errors": d.get("n_errors"), "first_errors": (d.get("errors") or [])[:5],
+                "data_until_kst": {k: kst(v) for k, v in (d.get("horizons") or {}).items()},
+                "bot_version": d.get("code_commit"),
+                "locked_signal_code": {
+                    "copied_from": f"backtest branch commit {d.get('source_commit')}",
+                    "hash_check": "passed" if last[3] == "ok" else "see errors",
+                    "note": "bot_version is this repository's commit and differs from the "
+                            "backtest commit by design; the locked files are checked by hash "
+                            "before every run and the run refuses to start if one differs"}}
+        sig = conn.execute("SELECT tf, symbol, strategy, side, latency_ms, est_fill, book_bid, book_ask "
+                           "FROM sweep_signals WHERE recorded_ts >= ? AND recorded_ts < ?",
+                           (start, end)).fetchall()
+        by_tf, by_sym, by_strat = Counter(), Counter(), Counter()
+        sides = Counter()
+        late = with_book = 0
+        spread_bps = []
+        for tf, sym, strat, side, lat, est, bid, ask in sig:
+            by_tf[tf] += 1
+            by_sym[sym] += 1
+            by_strat[strat] += 1
+            sides["long" if side > 0 else "short"] += 1
+            late += lat > 0
+            if est is not None and bid and ask:
+                with_book += 1
+                spread_bps.append((ask - bid) / ((ask + bid) / 2) * 1e4)
+        spread_bps.sort()
+        out["signals_in_window"] = {
+            "total": len(sig), "by_tf": dict(by_tf), "by_symbol": dict(by_sym),
+            "top_strategies": dict(by_strat.most_common(10)), "sides": dict(sides),
+            "entry_after_a_gap": late, "with_order_book_estimate": with_book,
+            "median_spread_bps": spread_bps[len(spread_bps) // 2] if spread_bps else None}
+        mm = conn.execute("SELECT kind, signal_id, detail FROM sweep_mismatch WHERE ts >= ? AND ts < ?",
+                          (start, end)).fetchall()
+        out["mismatches_in_window"] = {"total": len(mm), "by_kind": dict(Counter(m[0] for m in mm)),
+                                       "examples": [{"kind": k, "signal": sid} for k, sid, _ in mm[:5]]}
+        out["revisions_in_window"] = conn.execute(
+            "SELECT COUNT(*) FROM revisions WHERE ts >= ? AND ts < ?", (start, end)).fetchone()[0]
+        cov = {}
+        minutes5 = (end - start) // 300_000
+        for sym in symbols:
+            n = conn.execute("SELECT COUNT(*) FROM kline5m WHERE symbol = ? AND open_time >= ? AND "
+                             "open_time < ?", (sym, start, end)).fetchone()[0]
+            m = conn.execute("SELECT COUNT(*) FROM mark5m WHERE symbol = ? AND open_time >= ? AND "
+                             "open_time < ?", (sym, start, end)).fetchone()[0]
+            f = conn.execute("SELECT COUNT(*) FROM funding WHERE symbol = ? AND funding_time >= ? AND "
+                             "funding_time < ?", (sym, start, end)).fetchone()[0]
+            lb = conn.execute("SELECT MAX(open_time) FROM kline5m WHERE symbol = ?", (sym,)).fetchone()[0]
+            cov[sym] = {"bars_5m": n, "expected_5m": minutes5, "missing_5m": max(0, minutes5 - n),
+                        "mark_5m": m, "funding_rows": f,
+                        "last_5m_bar_kst": kst(lb) if lb is not None else None}
+        out["coverage_in_window"] = cov
+    finally:
+        conn.close()
+    bconn = sqlite3.connect(ledger)
+    try:
+        if "book" in _tables(bconn):
+            out["order_book_snapshots_in_window"] = dict(bconn.execute(
+                "SELECT symbol, COUNT(*) FROM book WHERE ts >= ? AND ts < ? GROUP BY symbol",
+                (start, end)).fetchall())
+    finally:
+        bconn.close()
+    return out
+
+
 def _compact_whatif(w: dict) -> dict:
     keep = ("policy", "group", "n", "win_rate", "mean_ret", "compounded", "liquidations",
             "over_cap", "paired_n", "verdict", "p_holm")
@@ -200,7 +290,7 @@ def _compact_whatif(w: dict) -> dict:
 
 def evening_packet(ledger: str, now_ms: int, settings: Optional[Settings] = None,
                    books: Sequence[str] = BOOKS, min_n: int = 30, boot: int = 1000,
-                   window_ms: int = DAY_MS) -> dict:
+                   window_ms: int = DAY_MS, market: Optional[str] = None) -> dict:
     """Last ``window_ms`` (default 24h) plus cumulative results per book."""
     s = settings or Settings()
     start = now_ms - window_ms
@@ -243,6 +333,19 @@ def evening_packet(ledger: str, now_ms: int, settings: Optional[Settings] = None
                      "(books.owner.whatif.policies.TP_ROE30.verdict), list items by 0-based index "
                      "(books.owner.trades_today.0.primary_cause)",
             "note": "paper trading; no real orders. Past results describe, they do not prove.",
+            "mode": {
+                "case": "B (backtest: no strategy x timeframe passed)",
+                "cells": {"trade": sweepsig.class_counts()["1"],
+                          "record_only": sweepsig.class_counts()["2"],
+                          "excluded": sweepsig.class_counts()["3"]},
+                "what_the_bot_does": "records every signal of the record-only cells for 7 coins "
+                                     "(XRPUSDT recorded only, never traded) and tests the "
+                                     "execution infrastructure; no strategy trades, so 0 trades "
+                                     "is expected",
+                "judgement": "record-only cells are judged only on fixed dates 2027-04-01 and "
+                             "2027-10-01 with the backtest session's locked code; never from "
+                             "daily or weekly results",
+            },
         },
         "books": {},
     }
@@ -283,6 +386,11 @@ def evening_packet(ledger: str, now_ms: int, settings: Optional[Settings] = None
                 "book did with it (ENTERED / SKIPPED / REJECTED and why)",
     }
     out["market"] = _market(store, s.symbols, start, now_ms)
+    if market and os.path.exists(market):
+        from ..archive import RECORD_SYMBOLS
+        out["recording"] = _recording(market, ledger, start, now_ms, RECORD_SYMBOLS)
+    else:
+        out["recording"] = {"available": False, "note": "no market.db given or found"}
     out["meta"]["units"] = ("market.*_pct are percent (1.5 = 1.5%); win_rate, net_return, "
                             "drawdown, roe and similar ratios are fractions (0.015 = 1.5%)")
     conn.close()

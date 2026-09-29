@@ -10,10 +10,11 @@ from paperbot import Brackets, Settings, Signal
 from paperbot.agents.__main__ import main as agents_main
 from paperbot.agents.budget import BudgetedRunner
 from paperbot.agents.packets import evening_packet, slice_for
-from paperbot.agents.pipeline import compose_telegram, run_evening, ReportStore
+from paperbot.agents.pipeline import run_evening, ReportStore
 from paperbot.agents.roles import EVENING_ROLES, check_output, resolve, system_prompt
 from paperbot.agents.runner import (AgentCallError, ClaudeCodeRunner, FakeRunner,
                                     UsageLimitReached, child_env, extract_json)
+from paperbot.archive import RECORD_SYMBOLS
 from paperbot.ledger import BarStore, RecordingNotifier, record_run
 from paperbot.live import make_books
 from paperbot.notify import ListNotifier
@@ -307,3 +308,48 @@ def test_daily_token_cap_and_failed_calls_count(ledger):
         failing.call("sonnet", "s", "i", {"role": "ops_auditor"})
     assert failing.used_today()[0] == 2
     failing.close()
+
+
+def test_cli_writes_agent_tables_to_agents_db_only(ledger):
+    db, _ = ledger
+    agents_main(["evening", "--ledger", db, "--dry-run"])
+    import sqlite3
+    agents_db = os.path.join(os.path.dirname(db), "agents.db")
+    assert sqlite3.connect(agents_db).execute("SELECT COUNT(*) FROM agent_reports").fetchone()[0] > 0
+    assert sqlite3.connect(db).execute("SELECT COUNT(*) FROM agent_reports").fetchone()[0] == 0
+
+
+def test_packet_recording_section_and_mode(tmp_path):
+    from test_recorder import CELLS, fill, synth
+    from paperbot.archive import MarketArchive
+    from paperbot.ledger import BookStore
+    from paperbot.recorder import Recorder, _ms
+    df = synth()
+    market = str(tmp_path / "market.db")
+    ledger_db = str(tmp_path / "paper.db")
+    arch = MarketArchive(market)
+    fill(arch, df)
+    ms = _ms(df["ts"])
+    books = BookStore(ledger_db, ["BTCUSDT"], clock_ms=lambda: int(ms[-50]))
+    books.add([{"symbol": "BTCUSDT", "bidPrice": "100", "askPrice": "100.02", "time": 1}])
+    books.close()
+    now = int(ms[-1]) + 300_000
+    Recorder(arch, ledger_path=ledger_db, cells=CELLS, clock_ms=lambda: now - 1000).run(["BTCUSDT"])
+    arch.close()
+    p = evening_packet(ledger_db, now, boot=50, market=market)
+    assert p["meta"]["mode"]["cells"] == {"trade": 0, "record_only": 164, "excluded": 58}
+    rec = p["recording"]
+    assert rec["available"] and rec["last_run"]["status"] == "ok"
+    assert rec["signals_in_window"]["total"] > 20
+    assert rec["signals_in_window"]["by_symbol"] == {"BTCUSDT": rec["signals_in_window"]["total"]}
+    assert rec["mismatches_in_window"]["total"] == 0
+    cov = rec["coverage_in_window"]
+    assert set(cov) == set(RECORD_SYMBOLS) and cov["BTCUSDT"]["missing_5m"] == 0
+    assert cov["XRPUSDT"]["bars_5m"] == 0 and cov["XRPUSDT"]["last_5m_bar_kst"] is None
+    assert rec["order_book_snapshots_in_window"] == {"BTCUSDT": 1}
+    ops = slice_for(p, ROLE["ops_auditor"].inputs)
+    lead = slice_for(p, ROLE["team_lead"].inputs)
+    assert "recording" in ops and lead["recording"]["signals_in_window"]["total"] > 20
+    assert resolve(ops, "recording.coverage_in_window.XRPUSDT.missing_5m")[0]
+    none = evening_packet(ledger_db, now, boot=50)
+    assert none["recording"]["available"] is False

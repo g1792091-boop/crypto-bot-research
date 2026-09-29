@@ -38,8 +38,13 @@ paperbot/sessions.py   요일·시간대 표 (KST)
 paperbot/analyze.py    위 세 가지를 묶은 보고서 명령
 paperbot/metrics.py    표준 성과 지표
 paperbot/agents/       에이전트 저녁 점검 (docs/agents-evening.md)
+paperbot/sweepsig.py   백테스트 세션의 잠긴 신호 코드 불러오기 (해시 검사 후)
+paperbot/archive.py    시장 데이터 보관 (market.db: 5분봉·마크가·펀딩)
+paperbot/recorder.py   ② 신호 기록기 (docs/signal-recording.md)
+paperbot/record.py     기록기 명령 (sync / compute / daily / status)
+third_party/sweep/     백테스트 세션 코드 원본 사본 (고치지 않음)
 deploy/                서버용 systemd 파일, 환경 파일 예시
-tests/                 테스트 82개
+tests/                 테스트 98개
 ```
 
 ## 실행
@@ -189,6 +194,7 @@ python3 -m paperbot.analyze --ledger paper.db --run-id <run_id>-owner --out repo
 2. ~~권고 규칙 장부~~ (완료)
 3. ~~손익 원인 태그, 가정 실험실, 요일·시간대 표~~ (완료)
 4. ~~에이전트 저녁 점검 파이프라인~~ (완료, docs/agents-evening.md)
-5. 재시작 복구, 킬스위치 명령
-6. 아침 파이프라인 (시장 데이터 수집기, 계획 관문)
-7. 백테스트 결과 가져오기 + 재현 시험 (다른 세션의 `backtest/results` 브랜치가 올라오면)
+5. ~~백테스트 결과 반영: 경우 B, 신호 기록 모드~~ (완료, docs/signal-recording.md)
+6. 관찰용 계좌 (두 분이 ② 칸을 고르면) + 재시작 복구 + 킬스위치
+7. 권고 장부를 인수인계 v2 수치로 갱신
+8. 아침 파이프라인 (시장 데이터 수집기, 계획 관문)

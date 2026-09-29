@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from typing import Optional
@@ -28,7 +29,11 @@ def main(argv: Optional[list[str]] = None) -> int:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     ev = sub.add_parser("evening")
-    ev.add_argument("--ledger", required=True)
+    ev.add_argument("--ledger", required=True, help="paper.db (written by the live runner)")
+    ev.add_argument("--market", help="market.db of the signal recorder "
+                                     "(default: market.db next to the ledger)")
+    ev.add_argument("--agents-db", help="where agent answers and usage are stored "
+                                        "(default: agents.db next to the ledger)")
     ev.add_argument("--dry-run", action="store_true")
     ev.add_argument("--print-packet", action="store_true")
     ev.add_argument("--no-send", action="store_true", help="print the report instead of Telegram")
@@ -45,8 +50,11 @@ def main(argv: Optional[list[str]] = None) -> int:
                     help="daily cap on tokens (Korea-time day, all runs)")
     args = ap.parse_args(argv)
 
+    here = os.path.dirname(os.path.abspath(args.ledger))
+    market = args.market or os.path.join(here, "market.db")
+    agents_db = args.agents_db or os.path.join(here, "agents.db")
     now = int(time.time() * 1000)
-    packet = evening_packet(args.ledger, now, min_n=args.min_n)
+    packet = evening_packet(args.ledger, now, min_n=args.min_n, market=market)
     if args.print_packet:
         print(json.dumps(packet, ensure_ascii=False, indent=2, default=str))
         return 0
@@ -56,10 +64,11 @@ def main(argv: Optional[list[str]] = None) -> int:
               f"Claude Code (subscription login only).", file=sys.stderr)
     inner = FakeRunner() if args.dry_run else ClaudeCodeRunner(args.claude_bin, args.timeout)
     # Dry runs are not counted against the daily cap.
-    runner = inner if args.dry_run else BudgetedRunner(inner, args.ledger, args.max_calls,
+    # Each database has one writer: agent answers and usage go to agents.db.
+    runner = inner if args.dry_run else BudgetedRunner(inner, agents_db, args.max_calls,
                                                         args.max_tokens)
     notifier = ConsoleNotifier() if (args.no_send or args.dry_run) else _notifier()
-    store = ReportStore(args.ledger)
+    store = ReportStore(agents_db)
     try:
         report = run_evening(packet, runner, store, notifier, now,
                              skip_if_no_trades=args.skip_no_trade_days)

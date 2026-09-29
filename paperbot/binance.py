@@ -147,6 +147,10 @@ class BinanceREST:
             p["startTime"] = start_time
         return self._get("/fapi/v1/fundingRate", p)
 
+    def book_tickers(self) -> list[dict]:
+        """Best bid/ask for every symbol in one request (weight 5)."""
+        return self._get("/fapi/v1/ticker/bookTicker")
+
     def depth(self, symbol: str, limit: int = 20) -> dict:
         return self._get("/fapi/v1/depth", {"symbol": symbol, "limit": limit})
 

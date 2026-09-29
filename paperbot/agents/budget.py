@@ -1,6 +1,6 @@
 """Daily usage cap for agent calls.
 
-Every Claude call is counted in the ledger (agent_calls table), failed ones
+Every Claude call is counted in agents.db (agent_calls table), failed ones
 included. Before each call the day's totals (Korea-time day) are checked;
 over the cap, the call is not made and the pipeline stops like it does at
 the plan's own usage limit. Tokens are known only after a call, so one
@@ -37,11 +37,11 @@ def tokens_of(meta: dict) -> int:
 
 
 class BudgetedRunner:
-    def __init__(self, runner: Runner, ledger: str, max_calls: int = DEFAULT_MAX_CALLS,
+    def __init__(self, runner: Runner, db_path: str, max_calls: int = DEFAULT_MAX_CALLS,
                  max_tokens: int = DEFAULT_MAX_TOKENS, pipeline: str = "evening",
                  clock_ms: Optional[Callable[[], int]] = None):
         self.runner = runner
-        self.conn = sqlite3.connect(ledger)
+        self.conn = sqlite3.connect(db_path)
         self.conn.executescript(SCHEMA)
         self.max_calls = max_calls
         self.max_tokens = max_tokens

@@ -1,0 +1,5 @@
+# Signal recorder (third_party/sweep): same major versions as the backtest session.
+numpy>=1.26
+pandas>=2,<3
+scipy>=1.11
+pytest>=8

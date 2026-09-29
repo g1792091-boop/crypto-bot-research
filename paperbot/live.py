@@ -24,7 +24,7 @@ import sys
 import time
 import uuid
 from dataclasses import replace
-from typing import Optional, Sequence
+from typing import Callable, Optional, Sequence
 
 from .aggregate import Aggregator
 from .binance import BinanceError, BinanceREST, RegionBlocked
@@ -32,7 +32,8 @@ from .config import Settings
 from .context import HTF, entry_context
 from .engine import PaperEngine
 from .feed import LiveFeed
-from .ledger import BarStore, Ledger, RecordingNotifier, record_run
+from .archive import RECORD_SYMBOLS
+from .ledger import BarStore, BookStore, Ledger, RecordingNotifier, record_run
 from .margin import Brackets
 from .notify import CRITICAL, INFO, WARN, ConsoleNotifier, Notifier, TelegramNotifier
 from .policy import RecommendedPolicy, RecommendedSettings, RiskGuards
@@ -43,7 +44,9 @@ class LiveRunner:
     """Drives one or more books (engines) with the same bars and signals."""
 
     def __init__(self, feed: LiveFeed, engine, strategies: Sequence[Strategy],
-                 notifier: Notifier, bar_store: Optional[BarStore] = None):
+                 notifier: Notifier, bar_store: Optional[BarStore] = None,
+                 book_fn: Optional[Callable[[], list]] = None,
+                 book_store: Optional[BookStore] = None):
         self.feed = feed
         self.engines: list[PaperEngine] = list(engine) if isinstance(engine, (list, tuple)) else [engine]
         self.engine = self.engines[0]
@@ -55,6 +58,8 @@ class LiveRunner:
         self.agg = Aggregator(tfs)
         self.notifier = notifier
         self.bar_store = bar_store
+        self.book_fn = book_fn
+        self.book_store = book_store
         self.steps = 0
 
     def _with_context(self, sig):
@@ -88,6 +93,11 @@ class LiveRunner:
                         for eng in self.engines:
                             eng.submit(sig)
             self.steps += 1
+        if steps and self.book_fn is not None and self.book_store is not None:
+            try:
+                self.book_store.add(self.book_fn())
+            except BinanceError as exc:
+                self.notifier.send(WARN, f"order book snapshot failed: {exc}")
 
     def run(self, poll_seconds: float = 5.0, max_steps: Optional[int] = None) -> None:
         while max_steps is None or self.steps < max_steps:
@@ -200,11 +210,14 @@ def cmd_run(settings: Settings, args) -> int:
     notifier.send(INFO, f"paper run {run_id} started; books: {args.books}; "
                         f"brackets: {src}; strategies: {len(strategies)}")
     store = BarStore(args.ledger)
-    runner = LiveRunner(feed, engines, strategies, notifier, bar_store=store)
+    books = BookStore(args.ledger, RECORD_SYMBOLS)
+    runner = LiveRunner(feed, engines, strategies, notifier, bar_store=store,
+                        book_fn=rest.book_tickers, book_store=books)
     try:
         runner.run(poll_seconds=args.poll, max_steps=args.max_steps)
     finally:
         store.close()
+        books.close()
         notifier.close()
         for led in ledgers:
             led.close()

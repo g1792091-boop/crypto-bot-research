@@ -12,7 +12,7 @@
 - 거래 하나하나에 대한 한 줄 평가를 `findings`에 넣어도 됩니다 (evidence 예: `books.owner.trades_today.0.primary_cause`).
 
 ## 거래가 없는 날
-이날의 주제는 **"왜 거래가 없었나"**입니다. 공통 규칙 10번의 원인 목록을 따라 순서대로 확인합니다.
+이날의 주제는 **"왜 거래가 없었나"**입니다. 공통 규칙 10번의 원인 목록을 따라 순서대로 확인합니다. 기록 전용 모드(`meta.mode`)에서는 "매매하는 매매법이 없음(설계대로)"이 기본 원인이고, 기록된 신호 수(`recording.signals_in_window`)는 참고로만 적습니다.
 1. 봇·데이터: `activity.run`, `ops`는 운영 감사관도 보지만, 결론에 필요하면 인용합니다.
 2. 매매법 연결: `activity.run.strategies_connected`, `activity.run.strategies`
 3. 신호 흐름: `activity.funnel.<장부>.signals`, `by_status`, `not_entered_reasons`, `by_strategy`, `last_signal_kst`

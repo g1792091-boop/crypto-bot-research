@@ -1,0 +1,10 @@
+[Unit]
+Description=Record signals twice a day (after the daily close, and before the evening review)
+
+[Timer]
+OnCalendar=*-*-* 09:10:00 Asia/Seoul
+OnCalendar=*-*-* 21:40:00 Asia/Seoul
+Persistent=true
+
+[Install]
+WantedBy=timers.target

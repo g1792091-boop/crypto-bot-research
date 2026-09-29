@@ -63,21 +63,23 @@ class Role:
 
 EVENING_ROLES: tuple[Role, ...] = (
     Role("ops_auditor", "운영 감사관", "sonnet", "ops_auditor.md",
-         ("ops", "activity", "books.*.whatif", "books.*.equity"), ANALYST_SCHEMA, "analyst"),
+         ("ops", "activity", "recording", "books.*.whatif", "books.*.equity"), ANALYST_SCHEMA,
+         "analyst"),
     Role("performance_analyst", "성과 분석가", "sonnet", "performance_analyst.md",
          ("books.*.today", "books.*.cumulative", "books.*.equity", "books.*.sessions",
           "activity"), ANALYST_SCHEMA, "analyst"),
     Role("pnl_reviewer", "손익 복기 분석가", "sonnet", "pnl_reviewer.md",
          ("books.*.trades_today", "books.*.causes_cumulative", "books.*.entry_tag_table",
-          "books.*.today", "activity", "market"), ANALYST_SCHEMA, "analyst"),
+          "books.*.today", "activity", "market", "recording.signals_in_window"), ANALYST_SCHEMA,
+         "analyst"),
     Role("whatif_analyst", "가정 분석가", "sonnet", "whatif_analyst.md",
          ("books.*.whatif", "books.*.cumulative"), ANALYST_SCHEMA, "analyst"),
     Role("risk_officer", "리스크 책임자", "opus", "risk_officer.md",
          ("books.*.equity", "books.*.today", "books.*.cumulative", "books.*.trades_today",
           "activity"), RISK_SCHEMA, "risk"),
     Role("team_lead", "팀장", "sonnet", "team_lead.md",
-         ("books.*.today", "books.*.equity", "activity.run", "activity.trades_today"),
-         LEAD_SCHEMA, "lead"),
+         ("books.*.today", "books.*.equity", "activity.run", "activity.trades_today",
+          "recording.last_run", "recording.signals_in_window.total"), LEAD_SCHEMA, "lead"),
 )
 
 RISK_ACTIONS = {"keep", "reduce", "pause_strategy", "pause_all"}

@@ -4,11 +4,11 @@
 
 ## 흐름
 ```
-코드: 장부(paper.db)에서 데이터 패킷 생성 (숫자는 모두 코드가 계산)
+코드: 장부(paper.db)와 신호 기록(market.db)에서 데이터 패킷 생성 (숫자는 모두 코드가 계산)
  → 운영 감사관 → 성과 분석가 → 손익 복기 분석가 → 가정 분석가   (Sonnet)
  → 리스크 책임자                                                (Opus)
  → 팀장                                                         (Sonnet)
- → 코드: 텔레그램 보고 조립·발송, 모든 답을 장부(agent_reports 표)에 저장
+ → 코드: 텔레그램 보고 조립·발송, 모든 답을 agents.db(agent_reports 표)에 저장
 ```
 
 | 에이전트 | 받는 데이터 | 하는 일 |
@@ -41,14 +41,14 @@
    - 토큰 **30만** (`--max-tokens`). 실제 측정한 한 번 점검은 거래 27건인 날 약 10.5만, 거래가 없는 날 약 5.1만입니다.
    - 상한에 닿으면 남은 에이전트는 부르지 않고, 보고에 "하루 사용량 상한에 도달해 중단됨"이 붙습니다. 숫자 부분은 그대로 옵니다.
    - 토큰 수는 호출이 끝나야 알 수 있어서, 마지막 한 번은 상한을 조금 넘을 수 있습니다. 그다음 호출부터 막습니다.
-   - 실패한 호출도 한 번으로 셉니다. 모든 호출은 `paper.db`의 `agent_calls` 표에 남습니다.
+   - 실패한 호출도 한 번으로 셉니다. 모든 호출은 `agents.db`의 `agent_calls` 표에 남습니다.
    - `--dry-run`은 Claude를 부르지 않으므로 세지 않습니다.
 - 상한을 바꾸려면 `deploy/paperbot-evening.service`의 실행 줄 끝에 `--max-calls 20 --max-tokens 500000`처럼 붙입니다.
 
 ## 사용량 확인 방법
 - 서버나 PC의 Claude Code에서 `/usage`: 구독 사용량 막대(5시간·주간)와 무엇이 사용량을 썼는지 보여 줍니다. ([비용 문서](https://code.claude.com/docs/en/costs))
 - claude.ai의 [설정 → 사용량](https://claude.ai/settings/usage)
-- 에이전트가 쓴 양만 따로: `paper.db`의 `agent_calls` 표 (날짜별 호출 수, 토큰)
+- 에이전트가 쓴 양만 따로: `agents.db`의 `agent_calls` 표 (날짜별 호출 수, 토큰)
 
 ## 구독 방식: 확인된 사실 (공식 문서 기준)
 - 서버처럼 브라우저가 없는 곳에서는 `claude setup-token`으로 **1년짜리 로그인 토큰**을 만들어 `CLAUDE_CODE_OAUTH_TOKEN`에 넣습니다. Pro·Max 요금제에서 쓸 수 있습니다. ([인증 문서](https://code.claude.com/docs/en/authentication))
@@ -105,7 +105,13 @@ sudo systemctl daemon-reload && sudo systemctl enable --now paperbot-evening.tim
 systemctl list-timers paperbot-evening.timer   # 다음 실행 시각 확인
 ```
 - 데이터 패킷만 보고 싶으면: `python3 -m paperbot.agents evening --ledger paper.db --print-packet`
-- 에이전트 답은 모두 `paper.db`의 `agent_reports` 표에 남습니다. 나중에 학습 관리 에이전트가 이 기록을 사례 기억으로 씁니다.
+- 에이전트 답은 모두 `agents.db`의 `agent_reports` 표에 남습니다(장부와 따로 둬서 데이터베이스마다 쓰는 프로세스가 하나). 나중에 학습 관리 에이전트가 이 기록을 사례 기억으로 씁니다.
+- `market.db`, `agents.db`는 기본적으로 `--ledger` 파일과 같은 폴더에서 찾고 만듭니다(`--market`, `--agents-db`로 바꿀 수 있음).
+
+## 기록 전용 모드에서의 점검 (2026-09-30 추가)
+백테스트 결과 매매할 매매법이 0개라, 봇은 ② 164칸 신호를 기록만 합니다(`docs/signal-recording.md`).
+- 패킷의 `meta.mode`가 모든 에이전트에게 "거래 0건이 정상, ② 신호의 수익은 평가하지 않음, 판정은 2027-04-01·2027-10-01에만"을 알려 줍니다.
+- `recording` 항목(운영 감사관): 기록기 마지막 실행, 재계산 불일치, 7개 코인(XRP 포함) 5분봉·마크가·펀딩 누락, 호가 스냅샷, 신호 수(활동량으로만).
 
 ## 아직 없는 것
 1. **재시작 복구**: paper 엔진이 다시 켜지면 잔고가 처음(1000)부터 시작합니다. 그래서 `paperbot-live.service`는 자동 재시작을 꺼 두었습니다. 다음 작업 후보입니다.

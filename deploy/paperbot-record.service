@@ -1,0 +1,16 @@
+# Record-only signal mode: sync Binance futures data, then record signals.
+# Installed by docs/signal-recording.md.
+[Unit]
+Description=paperbot signal recorder (record-only cells)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=paperbot
+WorkingDirectory=/opt/crypto-bot-research
+# Telegram settings for alerts; public market data needs no API key.
+EnvironmentFile=/etc/paperbot/live.env
+ExecStart=/usr/bin/python3 -m paperbot.record daily --market /var/lib/paperbot/market.db --ledger /var/lib/paperbot/paper.db
+# The first run backfills three years of 5m bars and can take a while.
+TimeoutStartSec=4h

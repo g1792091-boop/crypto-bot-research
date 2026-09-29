@@ -67,6 +67,13 @@ CREATE TABLE IF NOT EXISTS runs (
     started_ts INTEGER NOT NULL,
     data TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS book (
+    ts INTEGER NOT NULL,
+    symbol TEXT NOT NULL,
+    bid REAL NOT NULL, bid_qty REAL, ask REAL NOT NULL, ask_qty REAL,
+    exchange_ts INTEGER
+);
+CREATE INDEX IF NOT EXISTS book_sym_ts ON book (symbol, ts);
 CREATE TABLE IF NOT EXISTS equity (
     run_id TEXT NOT NULL,
     ts INTEGER NOT NULL,
@@ -201,3 +208,52 @@ class BarStore:
 
     def close(self) -> None:
         self.conn.close()
+
+
+class BookStore:
+    """Best bid/ask snapshots taken by the live runner after each closed 1m
+    bar. The signal recorder uses them to estimate the fill a market order
+    would have got right after a signal bar closed."""
+
+    def __init__(self, path: str, symbols: Iterable[str], clock_ms=None):
+        import time as _time
+        self.conn = sqlite3.connect(path)
+        self.conn.execute("PRAGMA journal_mode=WAL")
+        self.conn.executescript(SCHEMA)
+        self.symbols = set(symbols)
+        self.clock_ms = clock_ms or (lambda: int(_time.time() * 1000))
+
+    def add(self, tickers: list[dict]) -> int:
+        now = self.clock_ms()
+        rows = [(now, t["symbol"], float(t["bidPrice"]), float(t.get("bidQty") or 0),
+                 float(t["askPrice"]), float(t.get("askQty") or 0),
+                 int(t["time"]) if t.get("time") else None)
+                for t in tickers if t.get("symbol") in self.symbols]
+        self.conn.executemany("INSERT INTO book VALUES (?,?,?,?,?,?,?)", rows)
+        self.conn.commit()
+        return len(rows)
+
+    def close(self) -> None:
+        self.conn.close()
+
+
+def open_book_reader(path: str) -> Optional[sqlite3.Connection]:
+    """Read-only connection to the live runner's book snapshots, or None if
+    the database or table does not exist. Other processes only read paper.db."""
+    import os
+    if not os.path.exists(path):
+        return None
+    conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    has = conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'book'").fetchone()
+    if not has:
+        conn.close()
+        return None
+    return conn
+
+
+def book_near(conn: sqlite3.Connection, symbol: str, after_ms: int,
+              within_ms: int = 180_000) -> Optional[dict]:
+    """First snapshot at or after ``after_ms`` (within ``within_ms``)."""
+    r = conn.execute("SELECT ts, bid, ask FROM book WHERE symbol = ? AND ts >= ? AND ts <= ? "
+                     "ORDER BY ts LIMIT 1", (symbol, after_ms, after_ms + within_ms)).fetchone()
+    return {"ts": r[0], "bid": r[1], "ask": r[2]} if r else None
