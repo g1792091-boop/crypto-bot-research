@@ -229,6 +229,17 @@ NVIDIA 가 모델을 종료(410 end of life)하거나 내리면(404) 그 모델�
 
 ## 실행
 
+### 서버에서 24시간 (무료) — `deploy/`
+오라클 클라우드 Always Free(한국 리전) 같은 리눅스 서버에 한 줄로 설치: 자세한 순서는 [deploy/SERVER-GUIDE-KO.md](deploy/SERVER-GUIDE-KO.md).
+```bash
+curl -fsSL https://raw.githubusercontent.com/g1792091-boop/crypto-bot-research/claude/sweet-pascal-t82h6j/deploy/install.sh | sudo bash
+```
+- `launcher.py --server`: 창 없이 `HOST`(기본 0.0.0.0)·`PORT` 로 받는다. **`APP_PASSWORD` 가 없으면 시작하지 않는다**
+  (`app/auth.py`: 모든 요청에 HTTP Basic 비밀번호 · 아이디는 아무거나 · 같은 IP 10분에 10번 틀리면 10분 차단 · `/healthz` 만 예외).
+- `install.sh`: python·git 설치 → 코드(`/opt/gh-quant`) → 설정·기록(`/opt/gh-quant-data`, 업데이트해도 유지) → systemd 서비스 `gh-quant`
+  (꺼지면 5초 뒤 재시작 · 부팅 때 시작) → Tailscale(권장, 포트 안 엶) 또는 방화벽 포트 열기. 메모리 2GB 미만이면 스왑 2GB.
+  `APP_PASSWORD=… NVIDIA_API_KEY=… USE_TAILSCALE=n sudo -E bash install.sh` 로 묻지 않고 설치. 업데이트는 `deploy/update.sh`.
+
 ### 파이썬 없이 실행 (추천)
 
 1. [Releases → desktop-latest](https://github.com/g1792091-boop/crypto-bot-research/releases/tag/desktop-latest)에서 운영체제에 맞는 zip을 받는다.

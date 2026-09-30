@@ -17,6 +17,7 @@ from .llm import LLMUnavailable
 from .paper import PaperManager
 from .quant import copilot, entry, footprint, forecast, portfolio, risk, toptraders
 from .quant.scanner import scanner
+from .auth import PasswordMiddleware
 from .team import engine as team
 from .strategy import StrategySpec, validate
 
@@ -40,6 +41,12 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="GH Quant", lifespan=lifespan)
+app.add_middleware(PasswordMiddleware)        # APP_PASSWORD 가 있으면 접속 비밀번호 (서버에서 24시간 돌릴 때)
+
+
+@app.get("/healthz")
+def healthz():
+    return {"ok": True}
 
 
 def _bad(e: Exception):

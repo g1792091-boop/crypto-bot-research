@@ -53,6 +53,12 @@ DATA_SOURCE=auto
 
 # 사용할 포트 (이미 사용 중이면 자동으로 다른 포트를 고릅니다)
 PORT=8000
+
+# ── 서버(클라우드)에서 24시간 돌릴 때 ──
+# 접속 비밀번호. 서버 모드(launcher.py --server)에서는 꼭 넣어야 합니다. 브라우저가 물으면 아이디는 아무거나, 비밀번호는 이것.
+APP_PASSWORD=
+# 서버 모드에서 받을 주소 (0.0.0.0 = 모든 곳에서 접속 · 127.0.0.1 = 이 컴퓨터에서만)
+HOST=0.0.0.0
 """
 
 
@@ -106,11 +112,21 @@ def main() -> None:
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(line_buffering=True, errors="replace")
     base = app_dir()
-    load_settings(base / "settings.txt")
-    os.environ["SETTINGS_FILE"] = str(base / "settings.txt")   # 화면에서 키를 넣으면 이 파일에 저장
+    server = "--server" in sys.argv or os.environ.get("SERVER_MODE") == "1"   # 클라우드 서버: 창 없이 · 정해진 포트 · 비밀번호 필수
+    settings = Path(os.environ.get("SETTINGS_FILE") or base / "settings.txt")
+    load_settings(settings)
+    os.environ["SETTINGS_FILE"] = str(settings)          # 화면에서 키를 넣으면 이 파일에 저장
     os.environ.setdefault("STATE_DIR", str(base / "state"))
-    port = pick_port(int(os.environ.get("PORT") or 8000))
-    url = f"http://127.0.0.1:{port}"
+    host = (os.environ.get("HOST") or "0.0.0.0") if server else "127.0.0.1"
+    if host not in ("127.0.0.1", "localhost", "::1") and not os.environ.get("APP_PASSWORD", "").strip():
+        print("=" * 56)
+        print(" 서버 모드는 접속 비밀번호가 필요합니다.")
+        print(f" {settings} 의 APP_PASSWORD= 뒤에 비밀번호를 넣고 다시 실행하세요.")
+        print(" (비밀번호 없이 쓰려면 HOST=127.0.0.1 로 두고 SSH 터널로 접속)")
+        print("=" * 56)
+        sys.exit(2)
+    port = int(os.environ.get("PORT") or 8000) if server else pick_port(int(os.environ.get("PORT") or 8000))
+    url = f"http://127.0.0.1:{port}" if not server else f"http://<서버 IP>:{port}"
 
     # 설정을 환경 변수에 올린 뒤에 앱을 불러와야 config 가 값을 읽는다
     import uvicorn
@@ -123,11 +139,11 @@ def main() -> None:
     ai = {"claude": "Claude", "nvidia": f"NVIDIA ({'자동 선택' if _cfg.NVIDIA_MODEL == 'auto' else _cfg.NVIDIA_MODEL})", "gemini": "Gemini"}.get(_cfg.provider() or "", "미설정 (규칙 기반)")
     print(f" AI: {ai}"
           f" / CoinGlass: {'연결' if os.environ.get('COINGLASS_API_KEY') else '미설정 (바이낸스 대체)'}")
-    print(" 종료하려면 이 창을 닫거나 Ctrl+C 를 누르세요.")
+    print(" 서버 모드 · 접속 비밀번호 켜짐" if server else " 종료하려면 이 창을 닫거나 Ctrl+C 를 누르세요.")
     print("=" * 56)
-    if not os.environ.get("NO_BROWSER"):
+    if not os.environ.get("NO_BROWSER") and not server:
         threading.Timer(1.5, webbrowser.open, [url]).start()
-    uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
+    uvicorn.run(app, host=host, port=port, log_level="warning", proxy_headers=False)
 
 
 if __name__ == "__main__":
