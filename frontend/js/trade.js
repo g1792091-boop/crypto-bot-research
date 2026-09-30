@@ -5,7 +5,7 @@ import {
   $, $$, INTERVALS, IV_LABEL, TV_INTERVAL, api, big, busy, cls, css, emit, esc, fmt, hhmm, on, pct,
   px, savePrefs, state, toast, tradeRows,
 } from "./core.js";
-import { DEFAULT_INDICATORS, INDICATORS } from "./ind.js";
+import { DEFAULT_INDICATORS, GROUPS, INDICATORS } from "./ind.js";
 
 const MACRO = [
   ["NASDAQ:NDX", "나스닥100"], ["CAPITALCOM:US100", "나스닥 CFD"], ["SP:SPX", "S&P500"], ["TVC:DXY", "달러인덱스"],
@@ -14,6 +14,7 @@ const MACRO = [
 state.indicators ||= DEFAULT_INDICATORS;
 state.overlays ||= { heat: false, whales: false, bots: true, scenario: true, sr: true };
 state.overlays.sr ??= true;
+state.overlays.countdown ??= true;
 state.layout ||= 1;
 state.multi ||= [{ symbol: "ETHUSDT", interval: "1h" }, { symbol: "SOLUSDT", interval: "1h" }, { symbol: "BTCUSDT", interval: "4h" }];
 
@@ -152,7 +153,7 @@ function renderChart() {
       charts.push(new TermChart(el, {
         symbol: i ? state.multi[i - 1].symbol : state.symbol, interval: i ? state.multi[i - 1].interval : state.interval,
         indicators: i ? state.indicators.filter((x) => INDICATORS[x.key]?.pane !== "sub").concat(subInd.slice(0, 1)) : state.indicators,
-        overlays: i ? { heat: false, whales: false, bots: true, scenario: false, sr: state.overlays.sr } : { ...state.overlays },
+        overlays: i ? { heat: false, whales: false, bots: true, scenario: false, sr: state.overlays.sr, countdown: state.overlays.countdown } : { ...state.overlays },
         onDrawDone: () => $$("#draw-tools button").forEach((b) => b.classList.remove("on")),
         onEditPosition: editPosition,
       }));
@@ -183,11 +184,12 @@ function indicatorPanel(e) {
   const m = $("#ind-menu");
   if (!m.hidden && !e.refresh) { m.hidden = true; return; }
   if (state.chartMode === "tv") return tvStudiesMenu(e);
-  const groups = {};
+  const groups = Object.fromEntries(GROUPS.map((g) => [g, []]));
   Object.entries(INDICATORS).forEach(([k, d]) => (groups[d.group] ||= []).push([k, d]));
+  const used = new Set(state.indicators.map((x) => x.key));
   m.innerHTML = `<div class="ind-panel">
-    <div class="ind-list"><input id="ind-q" placeholder="지표 검색">${Object.entries(groups).map(([g, xs]) => `<div class="sub">${g}</div>` +
-      xs.map(([k, d]) => `<div class="ind-item" data-add="${k}">${esc(d.name)}</div>`).join("")).join("")}</div>
+    <div class="ind-list"><input id="ind-q" placeholder="지표 검색 (${Object.keys(INDICATORS).length}개 · 한글/영문)">${Object.entries(groups).filter(([, xs]) => xs.length).map(([g, xs]) => `<div class="sub" data-g="${esc(g)}">${g}</div>` +
+      xs.map(([k, d]) => `<div class="ind-item" data-add="${k}" data-g="${esc(g)}" data-q="${esc(`${d.name} ${k} ${d.desc || ""}`.toLowerCase())}" title="${esc(d.desc || d.name)}">${esc(d.name)}${used.has(k) ? ' <span class="accent">✓</span>' : ""}</div>`).join("")).join("")}</div>
     <div class="ind-active"><div class="sub">적용된 지표 ${state.indicators.length}개 · 제한 없음</div>${state.indicators.map((s, i) => {
       const d = INDICATORS[s.key]; if (!d) return "";
       return `<div class="ind-row"><span class="grow">${esc(d.name)}</span>${Object.entries({ ...d.params, ...s.params }).map(([k, v]) =>
@@ -197,7 +199,11 @@ function indicatorPanel(e) {
   m.style.left = `${Math.max(8, Math.min(r.left, innerWidth - 640))}px`; m.style.top = `${r.bottom + 4}px`;
   m.hidden = false;
   e.stopPropagation?.();
-  $("#ind-q").oninput = (ev) => $$(".ind-item", m).forEach((it) => (it.hidden = !it.textContent.toLowerCase().includes(ev.target.value.toLowerCase())));
+  $("#ind-q").oninput = (ev) => {
+    const q = ev.target.value.trim().toLowerCase().replace(/\s+/g, "");
+    $$(".ind-item", m).forEach((it) => (it.hidden = !!q && !it.dataset.q.replace(/\s+/g, "").includes(q)));
+    $$(".ind-list .sub", m).forEach((h) => (h.hidden = !$$(`.ind-item[data-g="${h.dataset.g}"]`, m).some((it) => !it.hidden)));
+  };
   if (!e.refresh) $("#ind-q").focus();
 }
 function applyIndicators() {
@@ -462,7 +468,8 @@ export function initTrade() {
     if (!k) return;
     state.overlays[k] = !state.overlays[k];
     savePrefs(); renderToolbar();
-    charts[0]?.setOverlay(k, state.overlays[k]);
+    if (k === "countdown") charts.forEach((c) => { c.opts.overlays.countdown = state.overlays.countdown; c.countdown.update(); });
+    else charts[0]?.setOverlay(k, state.overlays[k]);
     if (k === "scenario") charts[0]?.setScenario(state.overlays.scenario ? state.analysis?.scenarios?.[0] : null, state.analysis?.symbol);
   };
   $("#layouts").onclick = (e) => { const n = +e.target.dataset.layout; if (n) { state.layout = n; savePrefs(); renderChart(); } };

@@ -1,5 +1,5 @@
 // 자체 차트 엔진 (lightweight-charts v5 + 자체 보조지표 + 오버레이)
-import { INDICATORS } from "./ind.js";
+import { INDICATORS, volumeProfile } from "./ind.js";
 import { IV_LABEL, api, big, css, esc, fmt, px } from "./core.js";
 
 const LC = LightweightCharts;
@@ -14,6 +14,43 @@ class Layer {
   attached(p) { this.p = p; }
   detached() { this.p = null; }
   paneViews() { return [this._view]; }
+  update() { this.p?.requestUpdate(); }
+}
+
+// 봉 마감까지 남은 시간
+const IV_SEC = { "1m": 60, "3m": 180, "5m": 300, "15m": 900, "30m": 1800, "1h": 3600, "2h": 7200, "4h": 14400, "6h": 21600,
+  "8h": 28800, "12h": 43200, "1d": 86400, "3d": 259200, "1w": 604800 };
+export function barEnd(openTime, iv) {
+  if (iv === "1M" || iv === "1y") {
+    const d = new Date(openTime * 1000);
+    return Date.UTC(d.getUTCFullYear() + (iv === "1y" ? 1 : 0), iv === "1M" ? d.getUTCMonth() + 1 : 0, 1) / 1000;
+  }
+  return openTime + (IV_SEC[iv] || 3600);
+}
+export function fmtLeft(sec) {
+  sec = Math.max(0, Math.floor(sec));
+  const d = Math.floor(sec / 86400), h = Math.floor(sec % 86400 / 3600), m = Math.floor(sec % 3600 / 60), x = sec % 60, z = (n) => String(n).padStart(2, "0");
+  return d ? `${d}일 ${z(h)}:${z(m)}:${z(x)}` : h ? `${z(h)}:${z(m)}:${z(x)}` : `${z(m)}:${z(x)}`;
+}
+
+// 가격축의 현재가 라벨 바로 아래에 남은 시간을 표시 (트레이딩뷰 방식)
+class Countdown {
+  constructor(tc) {
+    this.tc = tc; this.y = null; this.text = ""; this.bg = "#444";
+    this._view = { coordinate: () => this.y ?? -100, text: () => this.text, textColor: () => "#fff", backColor: () => this.bg, visible: () => !!this.text, tickVisible: () => false };
+  }
+  attached(p) { this.p = p; }
+  detached() { this.p = null; }
+  updateAllViews() {
+    const tc = this.tc, b = tc.candles.at(-1);
+    if (!b || tc.opts.overlays.countdown === false) { this.text = ""; return; }
+    const y = tc.candle.priceToCoordinate(b.close);
+    if (y == null) { this.text = ""; return; }
+    this.y = y + (tc.chart.options().layout.fontSize || 11) + 7;
+    this.text = fmtLeft(barEnd(b.time, tc.interval) - Date.now() / 1000);
+    this.bg = b.close >= b.open ? css("--up") : css("--down");
+  }
+  priceAxisViews() { return [this._view]; }
   update() { this.p?.requestUpdate(); }
 }
 
@@ -51,14 +88,18 @@ export class TermChart {
     this.whaleLayer = new Layer((ctx, size, p) => this._drawWhales(ctx, size, p), "normal");
     this.drawLayer = new Layer((ctx, size, p) => this._drawTrends(ctx, size, p), "top");
     this.srLayer = new Layer((ctx, size) => this._drawSR(ctx, size), "bottom");
-    [this.srLayer, this.heatLayer, this.whaleLayer, this.drawLayer].forEach((l) => this.candle.attachPrimitive(l));
+    this.vpLayer = new Layer((ctx, size) => this._drawVP(ctx, size), "bottom");
+    this.countdown = new Countdown(this);
+    [this.vpLayer, this.srLayer, this.heatLayer, this.whaleLayer, this.drawLayer, this.countdown].forEach((l) => this.candle.attachPrimitive(l));
+    this.sigMarkers = [];     // 보조지표 신호 (골든크로스·UT Bot·다이버전스 등) — 가격 창 화살표
+    this._cdTimer = setInterval(() => !document.hidden && this.countdown.update(), 1000);
     this.editLines = {};
     this._setupDrag();
     this.chart.subscribeCrosshairMove((p) => this._legend(p));
     this.chart.subscribeClick((p) => this._click(p));
   }
 
-  destroy() { clearInterval(this._timer); this.chart.remove(); this.el.innerHTML = ""; }
+  destroy() { clearInterval(this._timer); clearInterval(this._cdTimer); this.chart.remove(); this.el.innerHTML = ""; }
 
   // 지금 보고 있는 코인·봉인지 확인 (늦게 도착한 이전 코인의 응답을 버리기 위함)
   _is(sym, iv) { return sym === this.symbol && iv === this.interval; }
@@ -70,7 +111,7 @@ export class TermChart {
       // 이전 코인의 포지션선·시나리오·청산맵·고래·지지저항이 새 코인 차트에 남지 않도록 즉시 비운다
       clearInterval(this._timer);
       this.markers = this.heat = this.whales = this.sr = this.scenario = null;
-      this.ext = {};
+      this.ext = {}; this.sigMarkers = [];
       this._applyMarkers();
       [this.heatLayer, this.whaleLayer, this.srLayer].forEach((l) => l.update());
     }
@@ -80,7 +121,8 @@ export class TermChart {
       // 없는 종목이면 이전 코인 봉을 그대로 두지 말고 비운다 (다른 코인 차트가 새 이름으로 보이는 문제)
       if (this._is(symbol, interval)) {
         this.candles = []; this.candle.setData([]);
-        this.ind.forEach((it) => it.series.forEach((s) => s.setData([])));
+        this.ind.forEach((it) => it.series.forEach((s) => s?.setData([])));
+        this.sigMarkers = []; this._pushMarkers();
         this._legend();
       }
       throw e;
@@ -139,9 +181,10 @@ export class TermChart {
     if (!c.length) return;
     if (valuesOnly && this.ind.length === this.indicators.length) {
       this.ind.forEach((it) => { const r = INDICATORS[it.spec.key].compute(c, it.params, this.ext); r.plots.forEach((pl, k) => it.series[k] && it.series[k].setData(toData(c, pl))); it.last = r; });
+      this._applySignals();
       return;
     }
-    for (const it of this.ind) it.series.forEach((s) => this.chart.removeSeries(s));
+    for (const it of this.ind) { it.markers?.detach(); it.series.forEach((s) => s && this.chart.removeSeries(s)); }
     this.ind = [];
     while (this.chart.panes().length > 1) {
       try { this.chart.removePane(this.chart.panes().length - 1); } catch { break; }
@@ -154,7 +197,8 @@ export class TermChart {
       const r = def.compute(c, params, this.ext);
       const pane = def.pane === "sub" ? ++paneNo : 0;
       const series = r.plots.map((pl) => {
-        const common = { priceLineVisible: false, lastValueVisible: def.pane === "sub", title: "" };
+        if (pl.type === "signals") return null;   // 화살표로 표시
+        const common = { priceLineVisible: false, lastValueVisible: def.pane === "sub" && pl.legend !== false, title: "" };
         let s;
         if (pl.type === "hist") {
           s = this.chart.addSeries(LC.HistogramSeries, { ...common, ...(def.pane === "volume" ? { priceScaleId: "vol", priceFormat: { type: "volume" } } : {}) }, pane);
@@ -167,13 +211,63 @@ export class TermChart {
         return s;
       });
       if (def.pane === "volume") this.chart.priceScale("vol").applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
-      if (r.levels && series[0]) r.levels.forEach((lv) => series[0].createPriceLine({ price: lv, color: "rgba(164,172,182,.35)", lineWidth: 1, lineStyle: 2, axisLabelVisible: false }));
-      this.ind.push({ spec, params, series, pane, last: r });
+      const first = series.find(Boolean);
+      if (r.levels && first) r.levels.forEach((lv) => first.createPriceLine({ price: lv, color: "rgba(164,172,182,.35)", lineWidth: 1, lineStyle: 2, axisLabelVisible: false }));
+      this.ind.push({ spec, params, series, pane, last: r, profile: !!def.profile });
     }
+    this._applySignals();
+    this.vpLayer.update();
     const panes = this.chart.panes();
     // 가격 창이 항상 절반 이상을 차지하도록
     panes.forEach((p, i) => p.setStretchFactor(i === 0 ? Math.max(2, panes.length - 1) : 1));
     this._legend();
+  }
+
+  // 지표 신호 → 마커. 가격 위 지표는 캔들에, 아래 창 지표는 그 지표선에 붙인다
+  _applySignals() {
+    const c = this.candles, main = [];
+    // 오래된 신호는 글자 없이 작은 화살표만 (최근 KEEP 개만 글자 표시 — 차트가 글자로 덮이지 않게)
+    const KEEP = 12;
+    const toMk = (sg, i, recent, line) => ({ time: c[i].time, shape: sg.shape || (sg.dir > 0 ? "arrowUp" : "arrowDown"),
+      color: sg.color || (sg.dir > 0 ? css("--up") : css("--down")), text: recent ? sg.text || "" : "",
+      // 아래 창에서는 선 위에 바로 찍는다 (위/아래 여백을 잡아먹어 지표선이 눌리지 않게)
+      ...(line ? { position: sg.dir > 0 ? "atPriceBottom" : "atPriceTop", price: line[i] } : { position: sg.dir > 0 ? "belowBar" : "aboveBar" }),
+      ...(sg.size || !recent ? { size: sg.size ?? 0.6 } : {}) });
+    for (const it of this.ind) {
+      const list = [], sub = it.pane !== 0, line = sub ? it.last.plots.find((pl) => pl.type !== "signals")?.data : null;
+      it.last.plots.forEach((pl) => {
+        if (pl.type !== "signals") return;
+        const idx = pl.data.map((sg, i) => sg && c[i] && (!line || line[i] != null) ? i : -1).filter((i) => i >= 0);
+        idx.forEach((i, k) => list.push(toMk(pl.data[i], i, k >= idx.length - KEEP, line)));
+      });
+      if (it.pane === 0) { main.push(...list); continue; }
+      const host = it.series.find(Boolean);
+      if (!host) continue;
+      if (!it.markers && list.length) it.markers = LC.createSeriesMarkers(host, []);
+      it.markers?.setMarkers(list);
+    }
+    this.sigMarkers = main;
+    this._pushMarkers();
+  }
+
+  // 볼륨 프로파일: 화면에 보이는 봉만으로 계산해서 오른쪽에 가로 막대로
+  _drawVP(ctx, size) {
+    const it = this.ind.find((x) => x.profile);
+    const range = this.chart.timeScale().getVisibleLogicalRange();
+    if (!it || !range || !this.candles.length) { this.vp = null; return; }
+    const vis = this.candles.slice(Math.max(0, Math.floor(range.from)), Math.min(this.candles.length, Math.ceil(range.to) + 1));
+    const vp = this.vp = volumeProfile(vis, Math.max(6, Math.min(120, +it.params.rows || 30)), +it.params.va || 70);
+    if (!vp) return;
+    const maxW = size.width * Math.min(0.6, (+it.params.width || 28) / 100), right = size.width;
+    for (const b of vp.bins) {
+      const y1 = this.candle.priceToCoordinate(b.hi), y2 = this.candle.priceToCoordinate(b.lo);
+      if (y1 == null || y2 == null) continue;
+      const h = Math.max(1, y2 - y1 - 1), wb = maxW * b.buy / vp.max, ws = maxW * b.sell / vp.max, a = b.va ? 0.42 : 0.18;
+      ctx.fillStyle = `rgba(34,176,125,${a})`; ctx.fillRect(right - wb - ws, y1, wb, h);
+      ctx.fillStyle = `rgba(229,72,77,${a})`; ctx.fillRect(right - ws, y1, ws, h);
+    }
+    const py = this.candle.priceToCoordinate(vp.poc);
+    if (py != null) { ctx.strokeStyle = "rgba(245,165,36,.85)"; ctx.setLineDash([4, 3]); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(0, py); ctx.lineTo(size.width, py); ctx.stroke(); ctx.setLineDash([]); }
   }
 
   // ------------------------------------------------------------ 오버레이
@@ -256,6 +350,12 @@ export class TermChart {
       if (sc.alt) { line(sc.alt.entry, "상단 숏", css("--accent"), 0); line(sc.alt.stop, "숏 손절", css("--down")); }
     }
     this.userLines.forEach((u) => this.priceLines.push(this.candle.createPriceLine({ price: u, color: "#a4acb6", lineWidth: 1, lineStyle: 0, axisLabelVisible: true, title: "" })));
+    this._baseMarkers = mk;
+    this._pushMarkers();
+  }
+
+  _pushMarkers() {
+    const mk = [...(this._baseMarkers || []), ...(this.sigMarkers || [])];
     mk.sort((a, b) => a.time - b.time);
     this.markerApi.setMarkers(mk);
   }
@@ -468,14 +568,17 @@ export class TermChart {
       <span class="muted">시</span> ${px(b.open)} <span class="muted">고</span> ${px(b.high)} <span class="muted">저</span> ${px(b.low)} <span class="muted">종</span> ${px(b.close)}
       <span class="${chg >= 0 ? "up" : "down"}">${chg >= 0 ? "+" : ""}${chg.toFixed(2)}%</span>`;
     const mainInd = this.ind.filter((it) => it.pane === 0);
-    if (mainInd.length) html += `<br>` + mainInd.map((it) => `<span style="color:${it.last.plots[0]?.color || "inherit"}">${esc(INDICATORS[it.spec.key].name)}${paramStr(it.params)}</span> ${it.last.plots.map((pl) => val(pl.data[idx])).join(" ")}`).join(" · ");
+    const vals = (it) => it.last.plots.filter((pl) => pl.type !== "signals" && pl.legend !== false).map((pl) => val(pl.data[idx])).join(" ");
+    const extra = (it) => it.profile && this.vp ? ` <span class="muted">POC</span> ${px(this.vp.poc)} <span class="muted">가치영역</span> ${px(this.vp.val)}~${px(this.vp.vah)}`
+      : it.last.note ? ` <span class="muted">${esc(it.last.note)}</span>` : "";
+    if (mainInd.length) html += `<br>` + mainInd.map((it) => `<span style="color:${it.last.plots.find((pl) => pl.color)?.color || "inherit"}">${esc(INDICATORS[it.spec.key].name)}${paramStr(it.params)}</span> ${vals(it)}${extra(it)}`).join(" · ");
     if (this.heat) html += `<br><span class="muted">청산맵: ${this.heat.model === "coinglass" ? "CoinGlass" : this.heat.model === "estimate_oi" ? "OI 기반 추정" : "거래대금 기반 추정"}</span> <span class="scale"></span>`;
     if (this.whales) html += `<br><span class="muted">고래 체결 ≥ $${big(this.whales.min_usd)} · ${this.whales.trades.length}건${this.whales.source === "binance" && this.whales.collecting_since ? " (프로그램 실행 후 수집분)" : ""} · 호가벽 ${this.whales.walls.length}개</span>`;
     html += `</div>`;
     for (const it of this.ind.filter((x) => x.pane > 0)) {
       const top = tops[it.pane];
       if (top == null) continue;
-      html += `<div style="top:${top + 3}px"><span class="dim">${esc(INDICATORS[it.spec.key].name)}${paramStr(it.params)}</span> ${it.last.plots.map((pl) => `<span style="color:${pl.color || "inherit"}">${val(pl.data[idx])}</span>`).join(" ")}${it.last.note ? ` <span class="accent">${esc(it.last.note)}</span>` : ""}</div>`;
+      html += `<div style="top:${top + 3}px"><span class="dim">${esc(INDICATORS[it.spec.key].name)}${paramStr(it.params)}</span> ${it.last.plots.filter((pl) => pl.type !== "signals" && pl.legend !== false).map((pl) => `<span style="color:${pl.color || "inherit"}">${val(pl.data[idx])}</span>`).join(" ")}${it.last.note ? ` <span class="accent">${esc(it.last.note)}</span>` : ""}</div>`;
     }
     this.legendEl.innerHTML = html;
   }
@@ -488,7 +591,7 @@ function toData(c, pl) {
     const v = pl.data[i];
     if (v == null || Number.isNaN(v)) return { time: b.time };
     const d = { time: b.time, value: v };
-    if (pl.type === "hist" && pl.colors?.[i]) d.color = pl.colors[i];
+    if (pl.colors?.[i]) d.color = pl.colors[i];
     return d;
   });
 }

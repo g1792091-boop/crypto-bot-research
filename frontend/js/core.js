@@ -64,6 +64,7 @@ export async function busy(btn, fn) {
 // 가격 자릿수: 가격 크기에 맞춰 자동
 export function px(v) {
   if (v == null || Number.isNaN(+v)) return "–";
+  if (+v === 0) return "0";
   const a = Math.abs(v);
   const d = a >= 1000 ? 1 : a >= 100 ? 2 : a >= 1 ? 3 : a >= 0.01 ? 5 : 7;
   return Number(v).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });

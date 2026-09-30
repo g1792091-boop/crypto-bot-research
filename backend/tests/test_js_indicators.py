@@ -31,7 +31,15 @@ const out = { ema: ema(cl, 20), rsi: rsi(cl, 14), atr: atr(c, 14),
   stoch: I.stoch.compute(c, { length: 14, k: 3, d: 3 }).plots[0].data, bbu: I.bb.compute(c, { length: 20, mult: 2 }).plots[0].data,
   cci: I.cci.compute(c, { length: 20 }).plots[0].data, st: st[0].data.map((v, i) => v != null ? 1 : st[1].data[i] != null ? -1 : null) };
 let bad = [];
-for (const [k, d] of Object.entries(I)) { try { d.compute(c, d.params, {}).plots.forEach((p) => p.data.length !== c.length && bad.push(k)); } catch (e) { bad.push(k + ":" + e.message); } }
+for (const [k, d] of Object.entries(I)) {
+  try {
+    d.compute(c, d.params, {}).plots.forEach((p) => {
+      if (p.data.length !== c.length) bad.push(k + ":len");
+      else if (p.type !== "signals" && p.data.some((v) => v != null && !Number.isFinite(v))) bad.push(k + ":nonfinite");
+    });
+  } catch (e) { bad.push(k + ":" + e.message); }
+}
+if (Object.keys(I).length < 90) bad.push("count");
 out.bad = bad;
 console.log(JSON.stringify(out));
 """)
