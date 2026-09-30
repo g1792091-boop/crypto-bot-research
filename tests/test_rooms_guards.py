@@ -820,7 +820,9 @@ def test_the_bust_reserve_survives_a_loss_cluster_that_hits_its_reduced_cap_midw
 
 
 def test_the_liquidation_reserve_survives_a_non_critical_incident_that_hits_its_reduced_cap(world):
-    prefill(world, QUIET, incident=7)
+    world.agents.executemany("INSERT INTO agent_calls VALUES (?,?,?,?,?,?,?)",     # 7 small incident calls
+                             [(QUIET - HOUR, R.kst_day(QUIET), "incident", "x", "sonnet", 1, 8_000)] * 7)
+    world.agents.commit()
     world.store.alert(QUIET - 5 * MIN, "WARN", "data gap at 123: no bar for ['BTCUSDT']")
     world.store.commit()
     runner = QueueRunner({"ops_auditor": ["not json", team_answer("o")], "data_quality": [team_answer("d")],
@@ -845,7 +847,8 @@ def test_the_reserves_keep_their_share_of_the_tokens_too(world):
     assert (loss.max_calls, loss.max_tokens) == (16, 700_000 * 16 // 24) and (bust.max_calls, bust.max_tokens) == (24, 700_000)
     inc = RM.round_budget(TR.Due("team:ops", "incident", 0, {"class": "incident", "counts": {"data_gap": 1}},
                                  "incident"), ctx)
-    assert (inc.max_calls, inc.max_tokens) == (10, 400_000 * 10 // 15)
+    keep = max(400_000 - 400_000 * 10 // 15, RM.reserve_meeting_tokens(5, RM.RoomsPolicy().reserve_call_input_tokens))
+    assert (inc.max_calls, inc.max_tokens) == (10, 400_000 - keep) and keep > 400_000 // 3
 
 
 # --- a Claude plan limit the CLI words differently is still a plan limit, never counted as calls
@@ -1823,3 +1826,33 @@ def test_a_runaway_turn_is_skipped_and_a_later_liquidation_is_still_met(world):
                                   "team_lead": [LEAD]}), QUIET + 3 * HOUR + 5 * MIN)
     assert [(r["trigger"], r["status"]) for r in out["rounds"]] == [("incident", "done")]
     assert R.usage_today(world.agents, QUIET)["by_class"]["incident"]["tokens"] <= RM.DEFAULT_BUDGETS["incident"][1]
+
+
+def test_the_liquidation_reserve_still_carries_a_whole_meeting_under_the_larger_charge(world):
+    """The check now charges 2 x input + 3 x the ceiling per call. With the incident tokens split pro rata
+    (1/3 = 133k kept for liquidations), a liquidation's 3-call meeting of ~30k-token packets met a refused
+    second call once the non-critical incidents had used their share: the meeting stopped before its lead."""
+    ctx = RM.RoundContext(world.agents, None, None, None, _Answers(), None, QUIET, clock_ms=lambda: QUIET)
+    gap = RM.round_budget(TR.Due("team:ops", "incident", 0, {"class": "incident", "counts": {"data_gap": 1}},
+                                 "incident"), ctx)
+    world.agents.executemany("INSERT INTO agent_calls VALUES (?,?,?,?,?,?,?)",
+                             [(QUIET - HOUR, R.kst_day(QUIET), "incident", "x", "sonnet", 1, gap.max_tokens // 5)] * 5)
+    world.agents.commit()
+    with pytest.raises(RM.SubCapExceeded):
+        gap.check(RM.estimate_tokens({"role": "x"}))                # the non-critical share is used up
+    liq = RM.round_budget(TR.Due("team:ops", "incident", 0, {"class": "incident", "critical": True,
+                                                              "counts": {"liquidation": 1}}, "incident"), ctx)
+    assert liq.max_tokens == RM.DEFAULT_BUDGETS["incident"][1] and RM.is_critical(
+        TR.Due("team:ops", "incident", 0, {"class": "incident", "critical": True, "counts": {"liquidation": 1}}, "incident"))
+
+    class Big:
+        def call(self, model, system_prompt, instruction, packet):
+            from paperbot.agents.runner import CallResult
+            return CallResult("{}", {}, {"usage": {"input_tokens": 30_500, "output_tokens": 3_000}})
+    liq.runner = Big()
+    packet = {"role": "x", "blob": "가" * 28_900}                     # about 30k tokens estimated
+    assert 29_000 < RM.estimate_tokens(packet) <= RM.RoomsPolicy().reserve_call_input_tokens
+    for _ in range(3):                                              # ops auditor, code reviewer, lead
+        liq.call("sonnet", "", "", packet)
+    assert liq.used_today()[1] <= RM.DEFAULT_BUDGETS["incident"][1]
+

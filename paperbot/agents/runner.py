@@ -307,53 +307,133 @@ def extract_json(text: str) -> Optional[dict]:
 class ClaudeCodeRunner:
     def __init__(self, claude_bin: str = "claude", timeout: float = 900.0,
                  workdir: Optional[str] = None, env: Optional[dict] = None,
-                 run: Callable = subprocess.run):
+                 run: Optional[Callable] = None, popen: Callable = subprocess.Popen):
         self.bin = claude_bin
         self.timeout = timeout
         self.workdir = workdir or tempfile.mkdtemp(prefix="paperbot-agent-")
         if workdir is None:             # our own scratch folder: removed with the runner (or at exit)
             weakref.finalize(self, shutil.rmtree, self.workdir, True)
         self.env = call_env(env)
-        self._run = run
+        self._run = run                 # tests: a subprocess.run stand-in (whole output at once, no stop)
+        self._popen = popen
 
     def command(self, model: str, prompt_file: str, instruction: str) -> list[str]:
-        return [self.bin, "-p", instruction, "--model", model, "--output-format", "json",
+        return [self.bin, "-p", instruction, "--model", model, "--output-format", "stream-json", "--verbose",
                 "--safe-mode", "--strict-mcp-config", "--no-session-persistence", "--setting-sources", "",
                 "--system-prompt-file", prompt_file, "--tools", ""]
+
+    def _stream(self, cmd: list[str], payload: str, st: _Stream) -> tuple[Optional[int], str, str]:
+        """Run the CLI, feeding its stdout lines to ``st`` as they come. Returns (exit code, stderr, why):
+        why is '' when it ended by itself, 'more' when it was stopped because it started another model
+        request, 'timeout' when it ran out of time (then it was stopped too)."""
+        with tempfile.TemporaryFile(dir=self.workdir) as err:
+            proc = self._popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=err, text=True,
+                               encoding="utf-8", errors="replace", cwd=self.workdir, env=self.env,
+                               start_new_session=True)
+            lines: queue.Queue = queue.Queue()
+            done = object()
+
+            def feed() -> None:             # a large packet never blocks the reading below
+                try:
+                    proc.stdin.write(payload)
+                    proc.stdin.close()
+                except (OSError, ValueError):
+                    pass
+
+            def read() -> None:
+                try:
+                    for line in proc.stdout:
+                        lines.put(line)
+                except (OSError, ValueError):
+                    pass
+                finally:
+                    lines.put(done)
+
+            threading.Thread(target=feed, daemon=True).start()
+            threading.Thread(target=read, daemon=True).start()
+            deadline = time.monotonic() + self.timeout
+            why = ""
+            while True:
+                left = deadline - time.monotonic()
+                if left <= 0:
+                    why = "timeout"
+                    break
+                try:
+                    line = lines.get(timeout=min(left, 1.0))
+                except queue.Empty:
+                    continue
+                if line is done:
+                    break
+                if st.feed(line):
+                    why = "more"
+                    break
+                if st.result is not None:   # the call's last event: the CLI is exiting
+                    break
+            if why:
+                _kill(proc)
+            try:
+                code = proc.wait(timeout=max(1.0, min(30.0, deadline - time.monotonic())))
+            except subprocess.TimeoutExpired:
+                _kill(proc)
+                code = proc.wait(timeout=10)
+            try:
+                err.seek(0)
+                stderr = err.read().decode("utf-8", "replace")
+            except (OSError, ValueError):
+                stderr = ""
+        return code, stderr, why
 
     def call(self, model: str, system_prompt: str, instruction: str, packet: dict) -> CallResult:
         with tempfile.NamedTemporaryFile("w", suffix=".md", dir=self.workdir, delete=False,
                                          encoding="utf-8") as fh:
             fh.write(system_prompt)
             prompt_file = fh.name
+        st = _Stream()
         try:
             payload = json.dumps(packet, ensure_ascii=False, default=str)
             payload = payload.encode("utf-8", "replace").decode("utf-8")    # a lone surrogate never breaks stdin
             payload = escape_mentions(payload)       # no packet text can make the CLI attach a local file
-            proc = self._run(self.command(model, prompt_file, instruction), input=payload,
-                             capture_output=True, text=True, timeout=self.timeout,
-                             cwd=self.workdir, env=self.env)
-        except subprocess.TimeoutExpired as exc:
-            raise AgentTimeout(f"timed out after {self.timeout:.0f}s") from exc
+            est = input_estimate(payload, system_prompt, instruction)
+            cmd = self.command(model, prompt_file, instruction)
+            if self._run is not None:
+                try:
+                    proc = self._run(cmd, input=payload, capture_output=True, text=True, timeout=self.timeout,
+                                     cwd=self.workdir, env=self.env)
+                except subprocess.TimeoutExpired as exc:
+                    raise AgentTimeout(f"timed out after {self.timeout:.0f}s") from exc
+                for line in (proc.stdout or "").splitlines():
+                    st.feed(line)
+                code, err, why = proc.returncode, proc.stderr or "", ""
+            else:
+                code, err, why = self._stream(cmd, payload, st)
         finally:
             os.unlink(prompt_file)
-        out, err = proc.stdout or "", proc.stderr or ""
-        try:
-            envelope = json.loads(out)
-        except json.JSONDecodeError:
-            envelope = None
-        text = envelope.get("result", "") if isinstance(envelope, dict) else out
-        failed = proc.returncode != 0 or (isinstance(envelope, dict) and envelope.get("is_error"))
+        envelope = st.result
+        if why == "timeout":
+            exc = AgentTimeout(f"timed out after {self.timeout:.0f}s")
+            exc.tokens = max(st.worst(est) if st.active or st.inputs else 0, _usage_tokens(envelope))
+            raise exc
+        if why == "more":
+            exc = AgentCallError("Claude Code started another model request for this call (the answer reached "
+                                 f"the {MAX_OUTPUT_TOKENS} output token ceiling or had no text): stopped")
+            exc.tokens = max(st.worst(est), _usage_tokens(envelope))
+            raise exc
+        text = envelope.get("result", "") if isinstance(envelope, dict) else "\n".join(st.lines)
+        text = text if isinstance(text, str) else json.dumps(text, ensure_ascii=False, default=str)
+        failed = code != 0 or (isinstance(envelope, dict) and envelope.get("is_error"))
         if failed:
             blob = f"{text}\n{err}"
-            exc: Exception = (UsageLimitReached(blob.strip()[:300]) if LIMIT_RE.search(blob)
-                              else AgentCallError(f"exit {proc.returncode}: {blob.strip()[:300]}"))
+            exc = (UsageLimitReached(blob.strip()[:300]) if LIMIT_RE.search(blob)
+                   else AgentCallError(f"exit {code}: {blob.strip()[:300]}"))
             exc.tokens = _usage_tokens(envelope)
             raise exc
         meta = {}
         if isinstance(envelope, dict):
-            meta = {k: envelope.get(k) for k in ("duration_ms", "num_turns", "session_id", "usage")
+            meta = {k: envelope.get(k) for k in ("duration_ms", "num_turns", "session_id")
                     if k in envelope}
+            u = _usage_dict(envelope)
+            if u:
+                meta["usage"] = u
         data = envelope.get("structured_output") if isinstance(envelope, dict) else None
         if not isinstance(data, dict):
             data = extract_json(text)
