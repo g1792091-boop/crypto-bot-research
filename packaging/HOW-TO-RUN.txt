@@ -16,8 +16,12 @@
 2. 터미널 창이 열리고 브라우저가 자동으로 열립니다.
 
 [API 키 넣기 (선택)]
-- 같은 폴더의 settings.txt 를 메모장으로 열어 ANTHROPIC_API_KEY=, COINGLASS_API_KEY= 뒤에
-  키를 붙여넣고 저장 → 프로그램을 껐다 켜면 적용됩니다.
+- 같은 폴더의 settings.txt 를 메모장으로 열어 '=' 뒤에 키를 붙여넣고 저장 → 프로그램을 껐다 켜면 적용됩니다.
+- 무료 AI (Gemini): https://aistudio.google.com/apikey 에 구글 계정으로 들어가 "Create API key" →
+  나온 키를 GEMINI_API_KEY= 뒤에 붙여넣기. 오른쪽 위에 "Gemini" 가 초록색으로 뜨면 연결된 것입니다.
+  무료 등급은 분당 약 10회 제한이 있어 AI 분석팀 실행에 30초~1분 정도 걸릴 수 있습니다.
+- 유료 AI (Claude): ANTHROPIC_API_KEY= 뒤에 키. 둘 다 넣으면 Claude 를 씁니다 (LLM_PROVIDER=gemini 로 바꾸면 Gemini).
+- CoinGlass: COINGLASS_API_KEY= 뒤에 키.
 - 키가 없어도 모든 화면이 동작합니다 (AI는 규칙 기반, 파생 데이터는 바이낸스 무료 데이터).
 
 [사용 팁]

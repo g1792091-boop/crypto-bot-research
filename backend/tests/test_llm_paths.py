@@ -14,7 +14,7 @@ def test_nl_strategy_retries_once_on_invalid_spec(monkeypatch):
         calls.append(user)
         return bad if len(calls) == 1 else good
 
-    monkeypatch.setattr(config, "llm_enabled", lambda: True)
+    monkeypatch.setattr(config, "provider", lambda: "claude")
     monkeypatch.setattr(llm, "parse", fake_parse)
     spec, engine = nl_strategy.from_text("RSI 30 아래면 롱")
     assert engine == "claude" and spec.name == "good"
@@ -33,7 +33,7 @@ def test_agent_team_pipeline_with_llm(monkeypatch):
         return TradeDecision(action="long", confidence=65, entry=100, stop_loss=98, take_profits=[104],
                              leverage=3, position_pct=10, rationale="t")
 
-    monkeypatch.setattr(config, "llm_enabled", lambda: True)
+    monkeypatch.setattr(config, "provider", lambda: "claude")
     monkeypatch.setattr(llm, "parse", fake_parse)
     out = agents.run_team("BTCUSDT")
     assert out["engine"] == "claude" and out["decision"]["action"] == "long"

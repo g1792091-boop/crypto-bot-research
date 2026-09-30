@@ -85,7 +85,8 @@ cd backend
 pip install -r requirements.txt
 
 # 선택: 키가 있으면 기능이 확장된다
-export ANTHROPIC_API_KEY=sk-ant-...   # 자연어 변환과 에이전트 팀을 Claude로 (없으면 규칙 기반)
+export GEMINI_API_KEY=...             # 무료: 자연어 변환·에이전트 팀을 Gemini로 (https://aistudio.google.com/apikey)
+export ANTHROPIC_API_KEY=sk-ant-...   # 또는 Claude (둘 다 있으면 Claude, 없으면 규칙 기반)
 export COINGLASS_API_KEY=...          # OI, 펀딩, 롱숏, 청산을 CoinGlass로 (없으면 바이낸스 공개 API)
 
 uvicorn app.main:app --reload --port 8000
@@ -96,6 +97,10 @@ uvicorn app.main:app --reload --port 8000
 |---|---|---|
 | `ANTHROPIC_API_KEY` | – | Claude 사용 여부 |
 | `CLAUDE_MODEL` | `claude-opus-5-5` | 전략 변환과 에이전트에 쓰는 모델 |
+| `GEMINI_API_KEY` | – | Gemini 사용 (무료 등급 키 가능) |
+| `GEMINI_MODEL` | 자동 | 비우면 키로 쓸 수 있는 최신 Flash 모델을 목록 API로 골라 쓴다. 한도에 걸리면 다른 Flash/Flash-Lite 로 넘어감 |
+| `GEMINI_RPM` | `10` | 분당 최대 요청 수 (무료 등급 한도에 맞춰 호출 간격 조절) |
+| `LLM_PROVIDER` | `auto` | `auto`(Claude 키 우선) / `claude` / `gemini` |
 | `COINGLASS_API_KEY` | – | CoinGlass v4 API 키 (Hobbyist 플랜 이상) |
 | `DATA_SOURCE` | `auto` | `auto`(바이낸스 → 실패 시 합성), `binance`, `synthetic`(오프라인 데모) |
 | `PAPER_POLL_SECONDS` | `15` | 페이퍼 봇과 계좌 폴링 주기 |
@@ -118,7 +123,8 @@ BTC 1시간봉 EMA 20/50 골든크로스 롱, 데드크로스 숏. RSI 70 이상
 볼린저 하단 이탈 + MACD 골든크로스 + 펀딩비 음수일 때 롱
 ```
 
-API 키가 없으면 규칙 파서가 위와 같은 흔한 패턴만 이해한다. 키가 있으면 Claude가 구조화 출력(JSON 스키마)으로 임의의 설명을 변환하고, 검증 오류가 나면 한 번 더 고친다.
+API 키가 없으면 규칙 파서가 위와 같은 흔한 패턴만 이해한다. 키가 있으면 Claude 또는 Gemini 가 구조화 출력(JSON 스키마)으로 임의의 설명을 변환하고, 검증 오류가 나면 한 번 더 고친다.
+AI 호출이 실패하면(무료 한도 초과, 키 오류 등) 전략 변환·대화 수정·에이전트 팀은 규칙 기반으로 대신 처리하고 화면에 이유를 표시한다.
 
 ## 전략 JSON (DSL)
 
@@ -173,7 +179,8 @@ backend/app/
   paper.py           페이퍼 봇, 수동 페이퍼 계좌, 백그라운드 루프
   nl_strategy.py     자연어 → 전략 (Claude 구조화 출력 / 규칙 파서)
   agents.py          AI 에이전트 팀
-  llm.py             Claude API 래퍼 (구조화 출력, 서버측 폴백)
+  llm.py             AI 래퍼: Claude(구조화 출력, 서버측 폴백) 또는 Gemini 로 분기
+  gemini.py          Gemini REST 호출 (모델 자동 선택, 분당 한도 조절, 429 시 대기·다른 모델, JSON 스키마 검증·재요청)
 frontend/            바닐라 JS 모듈 (js/: core, chart, ind, trade, alerts, lab, agents, market), lightweight-charts 5.2.1 vendored (Apache-2.0)
 docs/ANALYSIS.md     레퍼런스 사이트 분석, 외부 서비스 제약, 로드맵
 ```

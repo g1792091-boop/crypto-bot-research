@@ -38,7 +38,7 @@ def _bad(e: Exception):
 @app.get("/api/status")
 def status():
     return {
-        "llm": config.llm_enabled(), "model": config.CLAUDE_MODEL if config.llm_enabled() else None,
+        "llm": config.llm_enabled(), "llm_provider": llm.provider(), "llm_label": llm.label(), "model": llm.model_name(),
         "intervals": market.INTERVALS,
         "coinglass": coinglass.enabled(), "data_source_mode": config.DATA_SOURCE,
         "indicators": {k: {"outputs": v["outputs"], "defaults": v["defaults"], "desc": v["desc"], "tv": v["tv"]}
@@ -178,9 +178,9 @@ _brief_cache: dict[tuple, dict] = {}
 
 @app.get("/api/news/brief")
 def news_brief(limit: int = 15):
-    """Claude 가 헤드라인을 한국어로 옮기고 호재/악재·영향도(1~3)를 붙인다."""
+    """AI(Claude/Gemini)가 헤드라인을 한국어로 옮기고 호재/악재·영향도(1~3)를 붙인다."""
     if not config.llm_enabled():
-        raise HTTPException(400, "ANTHROPIC_API_KEY 가 필요합니다.")
+        raise HTTPException(400, "AI 키(ANTHROPIC_API_KEY 또는 무료 GEMINI_API_KEY)가 필요합니다.")
     items = news.headlines(limit)["items"]
     key = tuple(i["id"] for i in items)
     if key not in _brief_cache:
@@ -220,13 +220,25 @@ class AutoReq(TextStrategyReq):
     start_paper: bool = False
 
 
+def _from_text(text: str, symbol: str | None, interval: str | None) -> tuple[StrategySpec, str, str | None]:
+    """AI 로 변환. AI 가 실패하면(무료 한도 초과·키 오류 등) 기본 변환기로 대신하고 이유를 함께 돌려준다."""
+    try:
+        spec, engine = nl_strategy.from_text(text, symbol, interval)
+        return spec, engine, None
+    except LLMUnavailable as e:
+        try:
+            return nl_strategy.rule_parse(text, symbol, interval), "rules", str(e)
+        except ValueError as e2:
+            raise ValueError(f"AI 를 쓸 수 없어({e}) 기본 변환기로 시도했지만 이해하지 못했습니다. {e2}") from e2
+
+
 @app.post("/api/strategy/parse")
 def parse_strategy(req: TextStrategyReq):
     try:
-        spec, engine = nl_strategy.from_text(req.text, req.symbol, req.interval)
-    except (ValueError, LLMUnavailable) as e:
+        spec, engine, ai_error = _from_text(req.text, req.symbol, req.interval)
+    except ValueError as e:
         _bad(e)
-    return {"spec": spec.model_dump(), "engine": engine, "problems": validate(spec)}
+    return {"spec": spec.model_dump(), "engine": engine, "ai_error": ai_error, "problems": validate(spec)}
 
 
 class RefineReq(BaseModel):
@@ -249,11 +261,16 @@ def refine_strategy(req: RefineReq):
             result = backtest.run_live_data(spec, min(req.bars, 5000))
             return {"spec": spec.model_dump(), "changes": rep["changes"], "reply": rep.get("ai_summary") or reply,
                     "engine": "improve", "improve": rep, "backtest": result}
-        spec, changes, reply, engine = nl_strategy.refine(req.spec, req.message, req.history, req.metrics)
-        result = backtest.run_live_data(spec, min(req.bars, 5000)) if changes or engine == "claude" else None
+        ai_error = None
+        try:
+            spec, changes, reply, engine = nl_strategy.refine(req.spec, req.message, req.history, req.metrics)
+        except LLMUnavailable as e:   # AI 실패 → 기본 편집기로
+            ai_error = str(e)
+            spec, changes, reply, engine = nl_strategy.refine(req.spec, req.message, req.history, req.metrics, use_ai=False)
+        result = backtest.run_live_data(spec, min(req.bars, 5000)) if changes or engine in ("claude", "gemini") else None
     except (ValueError, LLMUnavailable) as e:
         _bad(e)
-    return {"spec": spec.model_dump(), "changes": changes, "reply": reply, "engine": engine, "backtest": result}
+    return {"spec": spec.model_dump(), "changes": changes, "reply": reply, "engine": engine, "ai_error": ai_error, "backtest": result}
 
 
 class ImproveReq(BaseModel):
@@ -282,11 +299,12 @@ def run_backtest(req: BacktestReq):
 def auto(req: AutoReq):
     """자연어 → 전략 변환 → 백테스트 → (선택) 페이퍼 봇 가동까지 한 번에."""
     try:
-        spec, engine = nl_strategy.from_text(req.text, req.symbol, req.interval)
+        spec, engine, ai_error = _from_text(req.text, req.symbol, req.interval)
         result = backtest.run_live_data(spec, min(req.bars, 5000), req.initial_equity)
     except (ValueError, LLMUnavailable) as e:
         _bad(e)
     result["engine"] = engine
+    result["ai_error"] = ai_error
     if req.start_paper:
         result["paper_bot"] = paper.add_bot(spec, req.initial_equity).to_dict()
     return result

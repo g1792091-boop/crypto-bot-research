@@ -294,12 +294,15 @@ def improve(spec: StrategySpec, candles: list[dict], deriv: dict | None = None, 
     }
     if with_ai and config.llm_enabled():
         import json
-        report["ai_summary"] = llm.text(
+        try:
+            report["ai_summary"] = llm.text(
             "너는 퀀트 트레이딩 코치다. 아래 전략 복기 결과(손실 원인 집계, 익절 특징, 개선 후보와 학습/검증 성과)를 보고 "
             "한국어로 5~7문장 코멘트를 쓴다. 무엇이 수익을 냈고 무엇이 손실을 냈는지, 적용된 변경이 왜 타당한지(또는 왜 "
             "아무것도 적용되지 않았는지), 다음에 시도할 만한 것을 구체적으로 말한다. 과최적화 위험도 짚는다.",
             json.dumps({k: report[k] for k in ("changes", "baseline", "after", "candidates", "loss_causes", "win_traits")},
                        ensure_ascii=False, default=str), effort="medium")
+        except llm.LLMUnavailable:
+            report["ai_summary"] = None   # AI 코멘트 없이 규칙 기반 결과만
     return report
 
 

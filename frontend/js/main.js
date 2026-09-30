@@ -18,7 +18,8 @@ function renderStatus() {
   $("#status").innerHTML = [
     [src === "synthetic" ? "warn" : "ok", src === "synthetic" ? "가상 데이터" : "바이낸스 연결", src === "synthetic" ? "거래소에 연결되지 않아 가상 시세를 보여주고 있습니다" : ""],
     [s.coinglass ? "ok" : "", s.coinglass ? "CoinGlass" : "CoinGlass 미연결", s.coinglass ? "" : "settings.txt 에 COINGLASS_API_KEY 를 넣으면 연결됩니다"],
-    [s.llm ? "ok" : "", s.llm ? "Claude" : "Claude 미연결", s.llm ? s.model : "settings.txt 에 ANTHROPIC_API_KEY 를 넣으면 연결됩니다"],
+    [s.llm ? "ok" : "", s.llm ? s.llm_label : "AI 미연결", s.llm ? `${s.model}${s.llm_provider === "gemini" ? " · 무료 등급은 분당 요청 수가 적어 느릴 수 있습니다" : ""}`
+      : "settings.txt 에 GEMINI_API_KEY(무료) 또는 ANTHROPIC_API_KEY 를 넣으면 연결됩니다"],
   ].map(([c, l, t]) => `<span class="${c}" title="${esc(t)}"><i></i>${l}</span>`).join("");
 }
 

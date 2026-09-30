@@ -273,7 +273,10 @@ def run_team(symbol: str) -> dict:
 
     def run_one(key):
         if use_llm:
-            return llm.parse(AGENTS[key][1], _agent_input(key, snap), AnalystReport)
+            try:
+                return llm.parse(AGENTS[key][1], _agent_input(key, snap), AnalystReport)
+            except llm.LLMUnavailable as e:   # 무료 한도 초과 등 → 이 분석가만 기본 분석으로
+                errors[key] = f"AI 실패 → 기본 분석으로 대체: {e}"
         return {"technical": _rule_technical, "derivatives": _rule_derivatives, "news": _rule_news}[key](snap)
 
     with ThreadPoolExecutor(max_workers=3) as ex:
@@ -287,20 +290,25 @@ def run_team(symbol: str) -> dict:
 
     board = "\n\n".join(f"## {AGENTS[k][0]}\n{r.model_dump_json()}" for k, r in reports.items())
     vol = {tf: snap["timeframes"][tf]["atr_pct"] for tf in snap["timeframes"]}
+    risk = decision = None
     if use_llm:
-        risk = llm.parse(RISK_PROMPT, f"{board}\n\nATR%: {_fmt(vol)}\n이벤트: {_fmt(snap['calendar'])}", RiskReview)
-        decision = llm.parse(TRADER_PROMPT,
-                             f"심볼 {symbol}, 현재가 {snap['timeframes']['1h']['price']}, "
-                             f"1h ATR {snap['timeframes']['1h']['atr14']}\n\n{board}\n\n## 리스크 매니저\n"
-                             f"{risk.model_dump_json()}", TradeDecision, effort="high")
-    else:
+        try:
+            risk = llm.parse(RISK_PROMPT, f"{board}\n\nATR%: {_fmt(vol)}\n이벤트: {_fmt(snap['calendar'])}", RiskReview)
+            decision = llm.parse(TRADER_PROMPT,
+                                 f"심볼 {symbol}, 현재가 {snap['timeframes']['1h']['price']}, "
+                                 f"1h ATR {snap['timeframes']['1h']['atr14']}\n\n{board}\n\n## 리스크 매니저\n"
+                                 f"{risk.model_dump_json()}", TradeDecision, effort="high")
+        except llm.LLMUnavailable as e:
+            errors["trader"] = f"AI 실패 → 기본 리스크·결정 규칙으로 대체: {e}"
+            risk = decision = None
+    if risk is None or decision is None:
         risk = _rule_risk(snap, reports)
         decision = _rule_trader(snap, reports, risk)
 
     return {
         "symbol": symbol,
-        "engine": "claude" if use_llm else "rules",
-        "model": config.CLAUDE_MODEL if use_llm else None,
+        "engine": (llm.provider() or "claude") if use_llm else "rules",
+        "model": llm.model_name() if use_llm else None,
         "elapsed_sec": round(time.time() - t0, 1),
         "reports": {k: {"name": AGENTS[k][0], **r.model_dump()} for k, r in reports.items()},
         "risk": risk.model_dump(),

@@ -6,7 +6,7 @@ const ACTION = { long: ["롱", "up"], short: ["숏", "down"], stay_flat: ["관�
 
 async function run() {
   const r = await api("/api/agents/run", { method: "POST", body: { symbol: state.symbol } });
-  $("#agents-meta").textContent = `${state.symbol} · ${r.engine === "claude" ? r.model : "기본 분석기"} · ${r.elapsed_sec}초${r.snapshot.data_source === "synthetic" ? " · 가상 데이터" : ""}`;
+  $("#agents-meta").textContent = `${state.symbol} · ${r.engine === "rules" ? "기본 분석기" : r.model} · ${r.elapsed_sec}초${r.snapshot.data_source === "synthetic" ? " · 가상 데이터" : ""}`;
   const cards = Object.values(r.reports).map((a) => {
     const [l, c] = STANCE[a.stance];
     return `<div class="panel agent"><div class="ph"><span class="t">${esc(a.name)}</span><div class="grow"></div>
@@ -15,7 +15,8 @@ async function run() {
   }).join("");
   const rk = r.risk, d = r.decision, [al, ac] = ACTION[d.action];
   const kv = (k, v, c = "") => `<span class="k">${k}</span><span class="${c}">${v}</span>`;
-  $("#agents-out").innerHTML = `<div class="cols-3">${cards}</div>
+  const errs = [...new Set(Object.values(r.errors || {}).map((e) => e.replace(/^AI 실패 → [^:]+: /, "AI 실패 → 기본 규칙으로 대체: ")))];
+  $("#agents-out").innerHTML = `${errs.length ? `<div class="help accent" style="margin-bottom:8px">${errs.map(esc).join("<br>")}</div>` : ""}<div class="cols-3">${cards}</div>
     <div class="cols-2" style="margin-top:12px">
       <div class="panel"><div class="ph"><span class="t">리스크 한도</span></div><div class="pb">
         <div class="kv">${kv("최대 레버리지", rk.max_leverage + "x")}${kv("권장 비중", rk.position_pct + "%")}${kv("이벤트 위험", rk.event_risk ? "있음" : "없음", rk.event_risk ? "down" : "")}</div>

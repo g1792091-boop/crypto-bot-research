@@ -1,6 +1,6 @@
 """자연어 진입 기준 → StrategySpec.
 
-ANTHROPIC_API_KEY 가 있으면 Claude 가 구조화 출력(JSON 스키마)으로 변환하고,
+AI 키(Claude 또는 Gemini)가 있으면 AI 가 구조화 출력(JSON 스키마)으로 변환하고,
 없으면 한국어/영어 키워드 규칙 파서로 흔한 패턴만 변환한다.
 """
 from __future__ import annotations
@@ -46,7 +46,7 @@ def _indicator_table() -> str:
 
 
 def from_text(text: str, symbol: str | None = None, interval: str | None = None) -> tuple[StrategySpec, str]:
-    """(spec, engine) 반환. engine 은 'claude' 또는 'rules'."""
+    """(spec, engine) 반환. engine 은 'claude' / 'gemini' / 'rules'."""
     hint = ""
     if symbol or interval:
         hint = f"\n\n(기본값: symbol={symbol or 'BTCUSDT'}, interval={interval or '1h'} — 문장에 다른 값이 있으면 문장을 따른다)"
@@ -59,7 +59,7 @@ def from_text(text: str, symbol: str | None = None, interval: str | None = None)
                              f"{text}{hint}\n\n이전 변환 결과:\n{spec.model_dump_json()}\n\n"
                              f"검증 오류: {problems}\n오류를 고친 StrategySpec 을 다시 출력하라.",
                              StrategySpec, effort="high")
-        return spec, "claude"
+        return spec, llm.provider() or "claude"
     spec = rule_parse(text, symbol, interval)
     return spec, "rules"
 
@@ -190,7 +190,7 @@ def rule_parse(text: str, symbol: str | None = None, interval: str | None = None
     if not long_c and not short_c:
         raise ValueError("규칙 파서가 이해한 조건이 없습니다. 예: 'BTC 1시간봉 EMA 20/50 골든크로스 롱, "
                          "RSI 70 이상이면 제외, 손절 2% 익절 4%, 레버리지 5배'. "
-                         "복잡한 문장은 ANTHROPIC_API_KEY 를 설정하면 Claude 가 변환합니다.")
+                         "복잡한 문장은 settings.txt 에 AI 키(무료 GEMINI_API_KEY 또는 ANTHROPIC_API_KEY)를 넣으면 AI 가 변환합니다.")
 
     only_long = bool(re.search(r"롱만|롱 전용|long only|매수만", t))
     only_short = bool(re.search(r"숏만|숏 전용|short only|매도만", t))
@@ -245,9 +245,9 @@ def wants_improve(message: str) -> bool:
 
 
 def refine(spec: StrategySpec, message: str, history: list[dict] | None = None,
-           metrics: dict | None = None) -> tuple[StrategySpec, list[str], str, str]:
+           metrics: dict | None = None, use_ai: bool = True) -> tuple[StrategySpec, list[str], str, str]:
     """(새 전략, 변경 목록, 답변, 엔진)."""
-    if config.llm_enabled():
+    if use_ai and config.llm_enabled():
         convo = "\n".join(f"{h.get('role')}: {h.get('text')}" for h in (history or [])[-8:])
         user = (f"현재 전략 JSON:\n{spec.model_dump_json()}\n\n직전 백테스트 결과:\n{json.dumps(metrics or {}, ensure_ascii=False)}\n\n"
                 f"지금까지 대화:\n{convo}\n\n사용자 요청: {message}")
@@ -257,12 +257,12 @@ def refine(spec: StrategySpec, message: str, history: list[dict] | None = None,
             rev = llm.parse(REFINE_PROMPT.format(indicator_table=_indicator_table()),
                             user + f"\n\n직전 수정안:\n{rev.spec.model_dump_json()}\n검증 오류: {problems}\n오류를 고친 수정안을 다시 내라.",
                             Revision, effort="high")
-        return rev.spec, rev.changes, rev.reply, "claude"
+        return rev.spec, rev.changes, rev.reply, llm.provider() or "claude"
     new, changes = rule_edit(spec, message)
     if not changes:
         reply = ("어떤 부분을 바꿀지 이해하지 못했습니다. 예: '손절 3%로', '레버리지 10배', 'RSI 조건 빼줘', "
                  "'MACD 골든크로스도 추가', '롱만', '4시간봉으로', '알아서 개선해줘'. "
-                 "복잡한 요청은 ANTHROPIC_API_KEY 를 넣으면 Claude가 처리합니다.")
+                 "복잡한 요청은 settings.txt 에 AI 키(무료 GEMINI_API_KEY 또는 ANTHROPIC_API_KEY)를 넣으면 AI 가 처리합니다.")
     else:
         reply = "반영했습니다: " + " / ".join(changes)
     return new, changes, reply, "rules"

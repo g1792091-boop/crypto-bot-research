@@ -2,6 +2,8 @@
 import { $, $$, IV_LABEL, api, busy, cls, css, emit, esc, fmt, makeChart, mdhm, pct, px, savePrefs, state, toast, tradeRows } from "./core.js";
 import { showOnChart } from "./trade.js";
 
+const AI = { claude: "Claude", gemini: "Gemini" };
+
 const LC = LightweightCharts;
 const PRICE_REFS = ["close", "open", "high", "low", "volume", "hl2", "hlc3"];
 const DERIV_REFS = ["funding", "oi", "oi_change_pct", "long_short"];
@@ -69,7 +71,7 @@ async function send(text) {
       setSpec(r.spec);
       renderBacktest(r);
       addVersion(r.spec, r.metrics, "처음 작성");
-      lab.chat.push({ role: "bot", text: `'${r.spec.name}' 전략을 만들어 ${r.spec.symbol} ${IV_LABEL[r.spec.interval] || r.spec.interval} ${r.candles.length}봉으로 백테스트했습니다.${r.engine === "claude" ? "" : " (기본 변환기 사용)"}\n고칠 점을 말해 주세요.`,
+      lab.chat.push({ role: "bot", text: `'${r.spec.name}' 전략을 만들어 ${r.spec.symbol} ${IV_LABEL[r.spec.interval] || r.spec.interval} ${r.candles.length}봉으로 백테스트했습니다.${AI[r.engine] ? ` (${AI[r.engine]})` : " (기본 변환기 사용)"}${r.ai_error ? `\n※ AI를 쓰지 못해 기본 변환기로 처리했습니다: ${r.ai_error}` : ""}\n고칠 점을 말해 주세요.`,
         delta: delta(null, M(r.metrics)) });
     } else {
       const before = lab.versions[lab.cur]?.metrics, prev = state.spec;
@@ -81,7 +83,7 @@ async function send(text) {
         addVersion(r.spec, r.backtest.metrics, (r.changes || []).join(", ").slice(0, 60) || text.slice(0, 40));
       }
       if (r.improve) renderImprove(r.improve, false);
-      let reply = r.reply;
+      let reply = r.reply + (r.ai_error ? `\n※ AI를 쓰지 못해 기본 편집기로 처리했습니다: ${r.ai_error}` : "");
       if (r.spec && (r.spec.symbol !== prev?.symbol || r.spec.interval !== prev?.interval) && r.backtest) reply += `\n(대상: ${r.spec.symbol} ${IV_LABEL[r.spec.interval] || r.spec.interval})`;
       const after = r.backtest && M(r.backtest.metrics);
       if (before && after && r.engine !== "improve") {
@@ -92,7 +94,7 @@ async function send(text) {
         if (warn.length) reply += "\n\n주의: " + warn.join("\n");
       }
       lab.chat.push({ role: "bot", text: reply, changes: r.changes, delta: r.backtest ? delta(before, after) : "" });
-      $("#chat-engine").textContent = r.engine === "claude" ? "Claude" : r.engine === "improve" ? "자동 개선" : "기본 편집기";
+      $("#chat-engine").textContent = AI[r.engine] || (r.engine === "improve" ? "자동 개선" : "기본 편집기");
     }
   } catch (e) {
     lab.chat.push({ role: "bot", text: "처리하지 못했습니다: " + e.message });

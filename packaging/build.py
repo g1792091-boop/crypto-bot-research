@@ -32,6 +32,8 @@ def main() -> None:
         "--add-data", f"{ROOT / 'frontend'}{os.pathsep}frontend",
         # uvicorn 은 루프/프로토콜 구현을 문자열로 동적 import 한다
         "--collect-submodules", "uvicorn",
+        # 함수 안에서 불러오는 모듈 (Gemini 등)도 빠짐없이 넣는다
+        "--collect-submodules", "app",
         "--distpath", str(ROOT / "dist" / "bin"),
         "--workpath", str(ROOT / "build"),
         "--specpath", str(ROOT / "build"),

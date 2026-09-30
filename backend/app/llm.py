@@ -1,4 +1,4 @@
-"""Claude API 호출 래퍼."""
+"""AI 호출 래퍼 — Claude(ANTHROPIC_API_KEY) 또는 Gemini(GEMINI_API_KEY, 무료 등급 가능)."""
 from __future__ import annotations
 
 from typing import TypeVar
@@ -20,9 +20,26 @@ class LLMUnavailable(RuntimeError):
     pass
 
 
+def provider() -> str | None:
+    return config.provider()
+
+
+def model_name() -> str | None:
+    p = provider()
+    if p == "gemini":
+        from . import gemini
+        return gemini.last_model or config.GEMINI_MODEL or "Gemini Flash (자동 선택)"
+    return config.CLAUDE_MODEL if p == "claude" else None
+
+
+def label() -> str:
+    """화면 표시용 이름."""
+    return {"claude": "Claude", "gemini": "Gemini"}.get(provider() or "", "기본 분석기")
+
+
 def client() -> anthropic.Anthropic:
     global _client
-    if not config.llm_enabled():
+    if not config.ANTHROPIC_API_KEY:
         raise LLMUnavailable("ANTHROPIC_API_KEY 가 설정되지 않았습니다.")
     if _client is None:
         _client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
@@ -30,6 +47,9 @@ def client() -> anthropic.Anthropic:
 
 
 def parse(system: str, user: str, schema: type[T], effort: str = "medium", max_tokens: int = 16000) -> T:
+    if provider() == "gemini":
+        from . import gemini
+        return gemini.parse(system, user, schema, max_tokens=max_tokens)
     resp = client().beta.messages.parse(
         model=config.CLAUDE_MODEL,
         max_tokens=max_tokens,
@@ -47,6 +67,9 @@ def parse(system: str, user: str, schema: type[T], effort: str = "medium", max_t
 
 
 def text(system: str, user: str, effort: str = "medium", max_tokens: int = 16000) -> str:
+    if provider() == "gemini":
+        from . import gemini
+        return gemini.text(system, user, max_tokens=max_tokens)
     resp = client().beta.messages.create(
         model=config.CLAUDE_MODEL,
         max_tokens=max_tokens,

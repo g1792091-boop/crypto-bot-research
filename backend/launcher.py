@@ -21,8 +21,19 @@ SETTINGS_TEMPLATE = """\
 # 이 파일을 메모장으로 열어 '=' 뒤에 값을 넣고 저장한 뒤, 프로그램을 다시 실행하세요.
 # 비워 두어도 동작합니다 (AI는 규칙 기반, 파생 데이터는 바이낸스 무료 데이터 사용).
 
-# Claude API 키 (https://console.anthropic.com) — 자연어 전략 변환, AI 에이전트 팀
+# ── AI 키 (둘 중 하나만 넣어도 됩니다. 둘 다 넣으면 Claude 를 씁니다) ──
+# 자연어 전략 변환 · 전략 대화 수정 · AI 에이전트 팀 · 뉴스 한 줄 요약 · 차트 AI 코멘트에 쓰입니다.
+
+# Gemini API 키 — 무료 (구글 계정으로 https://aistudio.google.com/apikey 에서 "Create API key")
+#   무료 등급은 분당 약 10회·하루 수백 회 제한이 있어 AI 기능이 조금 느릴 수 있습니다.
+#   무료 등급에서는 입력한 내용이 구글의 서비스 개선에 쓰일 수 있습니다.
+GEMINI_API_KEY=
+
+# Claude API 키 (유료, https://console.anthropic.com)
 ANTHROPIC_API_KEY=
+
+# 둘 다 넣었을 때 강제로 고르려면: auto / gemini / claude
+LLM_PROVIDER=auto
 
 # CoinGlass API 키 (https://www.coinglass.com/pricing) — OI/펀딩/롱숏/청산 데이터
 COINGLASS_API_KEY=
@@ -45,6 +56,12 @@ def load_settings(path: Path) -> None:
     if not path.exists():
         path.write_text(SETTINGS_TEMPLATE, encoding="utf-8")
         print(f"설정 파일을 만들었습니다: {path}")
+    elif "GEMINI_API_KEY" not in path.read_text(encoding="utf-8-sig"):
+        # 예전 버전의 설정 파일이면 무료 Gemini 키 칸을 덧붙여 준다 (기존 값은 그대로)
+        start = SETTINGS_TEMPLATE.index("# Gemini API 키")
+        with path.open("a", encoding="utf-8") as f:
+            f.write("\n" + SETTINGS_TEMPLATE[start:SETTINGS_TEMPLATE.index("# Claude API 키")])
+        print("설정 파일에 무료 Gemini 키 칸(GEMINI_API_KEY)을 추가했습니다.")
     for line in path.read_text(encoding="utf-8-sig").splitlines():
         line = line.strip()
         if not line or line.startswith("#") or "=" not in line:
@@ -85,7 +102,10 @@ def main() -> None:
     print("=" * 56)
     print(" 코인 선물 터미널 실행 중")
     print(f" 브라우저 주소: {url}")
-    print(f" AI(Claude): {'연결' if os.environ.get('ANTHROPIC_API_KEY') else '미설정 (규칙 기반)'}"
+    ai = "Claude" if os.environ.get("ANTHROPIC_API_KEY") else "Gemini" if os.environ.get("GEMINI_API_KEY") else "미설정 (규칙 기반)"
+    if os.environ.get("LLM_PROVIDER", "").lower() == "gemini" and os.environ.get("GEMINI_API_KEY"):
+        ai = "Gemini"
+    print(f" AI: {ai}"
           f" / CoinGlass: {'연결' if os.environ.get('COINGLASS_API_KEY') else '미설정 (바이낸스 대체)'}")
     print(" 종료하려면 이 창을 닫거나 Ctrl+C 를 누르세요.")
     print("=" * 56)
