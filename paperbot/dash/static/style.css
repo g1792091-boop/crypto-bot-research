@@ -1,0 +1,137 @@
+:root {
+  color-scheme: light;
+  --surface-0: #f4f4f2;
+  --surface-1: #fcfcfb;
+  --surface-2: #efeeea;
+  --line: #deddd8;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #7a7974;
+  --series-1: #2a78d6;
+  --gain: #0a7f0a;
+  --loss: #c23434;
+  --warn: #9a6a00;
+  --accent: #2a78d6;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --surface-0: #111110;
+    --surface-1: #1a1a19;
+    --surface-2: #242422;
+    --line: #33332f;
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted: #8f8e86;
+    --series-1: #3987e5;
+    --gain: #0ca30c;
+    --loss: #e66767;
+    --warn: #fab219;
+    --accent: #3987e5;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface-0: #111110;
+  --surface-1: #1a1a19;
+  --surface-2: #242422;
+  --line: #33332f;
+  --text-primary: #ffffff;
+  --text-secondary: #c3c2b7;
+  --text-muted: #8f8e86;
+  --series-1: #3987e5;
+  --gain: #0ca30c;
+  --loss: #e66767;
+  --warn: #fab219;
+  --accent: #3987e5;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--surface-0);
+  color: var(--text-primary);
+  font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+.num { font-variant-numeric: tabular-nums; }
+.muted { color: var(--text-muted); }
+.sec { color: var(--text-secondary); }
+.gain { color: var(--gain); }
+.loss { color: var(--loss); }
+.warn { color: var(--warn); }
+
+header {
+  position: sticky; top: 0; z-index: 5;
+  background: var(--surface-1); border-bottom: 1px solid var(--line);
+}
+.bar { display: flex; align-items: center; gap: 12px; padding: 10px 16px; }
+.brand { font-weight: 700; letter-spacing: .02em; }
+.live { font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); display: inline-block; }
+.dot.ok { background: var(--gain); }
+.dot.bad { background: var(--loss); }
+.spacer { flex: 1; }
+button, select {
+  font: inherit; color: var(--text-primary); background: var(--surface-2);
+  border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; cursor: pointer;
+}
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+nav.tabs { display: flex; gap: 4px; padding: 0 12px; overflow-x: auto; scrollbar-width: none; }
+nav.tabs button {
+  background: none; border: 0; border-bottom: 2px solid transparent; border-radius: 0;
+  padding: 10px 8px; color: var(--text-secondary); white-space: nowrap;
+}
+nav.tabs button.on { color: var(--text-primary); border-bottom-color: var(--accent); font-weight: 600; }
+.ticker { display: flex; gap: 14px; padding: 6px 16px 8px; overflow-x: auto; font-size: 12px; scrollbar-width: none; }
+.ticker span b { font-weight: 600; margin-right: 4px; }
+
+main { max-width: 1200px; margin: 0 auto; padding: 16px; }
+section.view { display: none; }
+section.view.on { display: block; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.tile { background: var(--surface-1); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+.tile .k { font-size: 12px; color: var(--text-secondary); }
+.tile .v { font-size: 22px; font-weight: 700; margin-top: 2px; }
+.tile .s { font-size: 12px; color: var(--text-muted); }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; background: var(--surface-1); padding: 6px 10px; }
+.seg button.on { background: var(--accent); color: #fff; }
+.card { background: var(--surface-1); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-bottom: 14px; }
+.card h3 { margin: 0 0 10px; font-size: 15px; }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { font-size: 12px; color: var(--text-secondary); font-weight: 600; position: sticky; top: 0; background: var(--surface-1); }
+td.r, th.r { text-align: right; }
+tr.click { cursor: pointer; }
+tr.click:hover { background: var(--surface-2); }
+.scroll { overflow-x: auto; }
+.chip { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--text-secondary); }
+.chip.pos { border-color: var(--accent); color: var(--text-primary); }
+.chip.bust { border-color: var(--loss); color: var(--loss); }
+.chart { height: 280px; }
+.chart.tall { height: 360px; }
+.kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px 16px; }
+.kv div span { display: block; font-size: 12px; color: var(--text-secondary); }
+.empty { padding: 24px; text-align: center; color: var(--text-muted); }
+.toast {
+  position: fixed; right: 16px; bottom: 16px; max-width: 360px; z-index: 20;
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+  box-shadow: 0 6px 24px rgba(0,0,0,.25); font-size: 13px; opacity: 0; transition: opacity .2s;
+}
+.toast.show { opacity: 1; }
+.back { margin-bottom: 12px; }
+
+/* phones: the leaderboard becomes cards */
+@media (max-width: 720px) {
+  main { padding: 12px 16px; }
+  table.board thead { display: none; }
+  table.board, table.board tbody, table.board tr, table.board td { display: block; width: 100%; }
+  table.board tr { background: var(--surface-1); border: 1px solid var(--line); border-radius: 12px; margin-bottom: 8px; padding: 8px 10px; }
+  table.board td { border: 0; padding: 2px 0; white-space: normal; }
+  table.board td[data-k]::before { content: attr(data-k) "  "; color: var(--text-muted); font-size: 12px; }
+  table.board td.name { font-weight: 600; font-size: 15px; }
+  td.r { text-align: left; }
+  .tile .v { font-size: 19px; }
+}

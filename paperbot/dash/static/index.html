@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paper v3</title>
+<link rel="stylesheet" href="/static/style.css">
+<script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <span class="brand">Paper v3</span>
+    <span class="live"><span id="hbdot" class="dot"></span><span id="hbtext">연결 중</span></span>
+    <span class="spacer"></span>
+    <button id="theme" title="밝게/어둡게">◐</button>
+    <button id="logout">로그아웃</button>
+  </div>
+  <div class="ticker num" id="ticker"></div>
+  <nav class="tabs" id="tabs">
+    <button data-v="board" class="on">순위표</button>
+    <button data-v="account">계좌</button>
+    <button data-v="signals">신호</button>
+    <button data-v="agents">에이전트 팀</button>
+    <button data-v="status">서버 상태</button>
+  </nav>
+</header>
+<main>
+  <section class="view on" id="v-board">
+    <div class="tiles" id="tiles"></div>
+    <div class="filters">
+      <div class="seg" id="f-tf">
+        <button data-tf="" class="on">전체</button><button data-tf="5m">5분</button><button data-tf="15m">15분</button>
+        <button data-tf="30m">30분</button><button data-tf="1h">1시간</button><button data-tf="4h">4시간</button>
+      </div>
+      <div class="seg" id="f-kind">
+        <button data-k="" class="on">전체</button><button data-k="strategy">매매법</button><button data-k="random">동전 봇</button>
+      </div>
+      <select id="f-sort" aria-label="정렬">
+        <option value="wallet">잔고순</option><option value="trades">거래 수순</option>
+        <option value="win">승률순</option><option value="dd">낙폭 작은 순</option><option value="name">이름순</option>
+      </select>
+    </div>
+    <div class="scroll">
+      <table class="board num">
+        <thead><tr>
+          <th>#</th><th>계좌</th><th class="r">잔고</th><th class="r">수익률</th><th class="r">거래</th>
+          <th class="r">승률</th><th class="r">최대 낙폭</th><th>상태</th><th>동전 봇 대비</th>
+        </tr></thead>
+        <tbody id="board"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="view" id="v-account">
+    <button class="back" id="back">← 순위표</button>
+    <div id="acct-empty" class="empty">순위표에서 계좌를 누르세요.</div>
+    <div id="acct" hidden>
+      <h2 id="a-title" style="margin:0 0 10px"></h2>
+      <div class="tiles" id="a-tiles"></div>
+      <div class="card" id="a-pos"></div>
+      <div class="card"><h3>자본 곡선</h3><div class="chart" id="a-eq"></div></div>
+      <div class="card">
+        <h3>차트와 진입·청산 <select id="a-sym"></select></h3>
+        <div class="chart tall" id="a-candles"></div>
+      </div>
+      <div class="card"><h3>거래 내역</h3>
+        <div class="scroll"><table class="num"><thead><tr>
+          <th>청산 시각</th><th>코인</th><th>방향</th><th class="r">레버리지</th><th class="r">진입</th>
+          <th class="r">청산</th><th>이유</th><th class="r">ROE</th><th class="r">손익</th><th class="r">잔고</th>
+        </tr></thead><tbody id="a-trades"></tbody></table></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="view" id="v-signals">
+    <div class="filters"><div class="seg" id="s-tf">
+      <button data-tf="" class="on">전체</button><button data-tf="5m">5분</button><button data-tf="15m">15분</button>
+      <button data-tf="30m">30분</button><button data-tf="1h">1시간</button><button data-tf="4h">4시간</button><button data-tf="1d">일봉(기록)</button>
+    </div></div>
+    <div class="card scroll"><table class="num"><thead><tr>
+      <th>봉 마감</th><th>봉</th><th>매매법</th><th>코인</th><th>방향</th><th class="r">기준가</th><th class="r">지연</th><th>상태</th>
+    </tr></thead><tbody id="signals"></tbody></table></div>
+  </section>
+
+  <section class="view" id="v-agents">
+    <div class="card"><h3>에이전트 팀</h3>
+      <p class="sec">에이전트 팀 회의 기록은 에이전트 v3 연결 후 여기에 실시간으로 표시됩니다.</p>
+    </div>
+  </section>
+
+  <section class="view" id="v-status">
+    <div class="tiles" id="st-tiles"></div>
+    <div class="card"><h3>최근 24시간 신호</h3><div class="scroll"><table class="num"><thead><tr>
+      <th>봉</th><th>상태</th><th class="r">개수</th><th class="r">평균 지연</th></tr></thead><tbody id="st-sig"></tbody></table></div></div>
+    <div class="card"><h3>경고</h3><div class="scroll"><table><thead><tr><th>시각</th><th>수준</th><th>내용</th></tr></thead>
+      <tbody id="st-alerts"></tbody></table></div></div>
+  </section>
+</main>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>

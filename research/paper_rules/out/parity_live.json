@@ -1,0 +1,59 @@
+{
+ "checks": 26603,
+ "mismatches": 2,
+ "not_ready": 1,
+ "by_tf": {
+  "15m": {
+   "checks": 4440,
+   "mismatch": 0,
+   "nonzero_full": 251
+  },
+  "1d": {
+   "checks": 4440,
+   "mismatch": 2,
+   "nonzero_full": 263
+  },
+  "1h": {
+   "checks": 4403,
+   "mismatch": 0,
+   "nonzero_full": 270
+  },
+  "30m": {
+   "checks": 4440,
+   "mismatch": 0,
+   "nonzero_full": 232
+  },
+  "4h": {
+   "checks": 4440,
+   "mismatch": 0,
+   "nonzero_full": 253
+  },
+  "5m": {
+   "checks": 4440,
+   "mismatch": 0,
+   "nonzero_full": 256
+  }
+ },
+ "mismatch_rows": [
+  {
+   "tf": "1d",
+   "coin": "BCHUSD",
+   "boundary": 1731542400000,
+   "strategy": "N03_ADX_GC",
+   "live": 1.0,
+   "full": 0.0,
+   "ok": false,
+   "why": NaN
+  },
+  {
+   "tf": "1d",
+   "coin": "ETHUSD",
+   "boundary": 1750723200000,
+   "strategy": "V45_AMB",
+   "live": 1.0,
+   "full": 0.0,
+   "ok": false,
+   "why": NaN
+  }
+ ]
+}

@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paper v3 로그인</title>
+<link rel="stylesheet" href="/static/login.css">
+</head>
+<body>
+<form id="f" class="box">
+  <h1>Paper v3</h1>
+  <p class="sec">모의 매매 대시보드</p>
+  <input id="pw" type="password" autocomplete="current-password" placeholder="비밀번호" required>
+  <button class="primary" type="submit">로그인</button>
+  <p id="err" class="err" role="alert"></p>
+</form>
+<script>
+document.getElementById("f").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const r = await fetch("/api/login", {method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({password: document.getElementById("pw").value})});
+  if (r.ok) { location.href = "/"; return; }
+  const j = await r.json().catch(() => ({}));
+  document.getElementById("err").textContent = r.status === 429 ? "시도가 너무 많습니다. 15분 뒤에 다시 하세요." : "비밀번호가 틀렸습니다.";
+});
+</script>
+</body>
+</html>

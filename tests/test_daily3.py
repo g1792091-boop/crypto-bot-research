@@ -1,0 +1,93 @@
+import json
+
+import numpy as np
+
+from paperbot import Bar, Brackets
+from paperbot.accounts import AccountBook, day_key
+from paperbot.config import V3_SYMBOLS, v3_settings
+from paperbot.daily3 import compare, data_quality, day_signals, limit_fill, make_signal, replay, stored_trades
+from paperbot.store3 import Store3
+
+MIN = 60_000
+DAY = 86_400_000
+S = v3_settings()
+BR = {s: Brackets.example() for s in V3_SYMBOLS}
+
+
+def _steps(n, seed=5):
+    rng = np.random.default_rng(seed)
+    px = {s: 100.0 for s in V3_SYMBOLS}
+    out = []
+    for i in range(n):
+        bars = {}
+        for s in V3_SYMBOLS:
+            o = px[s]
+            c = o * np.exp(rng.normal(0, 0.0015))
+            h = max(o, c) * (1 + abs(rng.normal(0, 0.0007)))
+            lo = min(o, c) * (1 - abs(rng.normal(0, 0.0007)))
+            bars[s] = Bar(s, i * MIN, i * MIN + MIN - 1, o, h, lo, c, o, h, lo, c, volume=10.0)
+            px[s] = c
+        fund = {s: 0.0001 for s in V3_SYMBOLS} if i % 480 == 0 and i else {}
+        out.append((i * MIN, bars, fund))
+    return out
+
+
+def _live_day(path):
+    """Run the account book over one synthetic UTC day the way live3 does."""
+    store = Store3(path)
+    book = AccountBook(S, BR, store)
+    book.open_accounts([{"strategy": k, "timeframe": "15m", "kind": "strategy"} for k in "AB"], 0)
+    steps = _steps(DAY // MIN + 1)
+    rng = np.random.default_rng(9)
+    for ts, bars, fund in steps:
+        book.step(ts, bars, fund)
+        b = ts + MIN
+        if b % (15 * MIN) == 0 and rng.random() < 0.6:
+            s = V3_SYMBOLS[int(rng.integers(6))]
+            row = {"bar_close": b, "timeframe": "15m", "strategy": "AB"[int(rng.integers(2))], "symbol": s,
+                   "side": 1 if rng.random() < 0.5 else -1, "atr": 0.15, "ref_price": bars[s].close,
+                   "ref_time": b + 5000, "delay_ms": 5000, "status": "SUBMITTED"}
+            store.log_signals([row])
+            book.submit(f"{row['strategy']}@15m", make_signal(row))
+        book.save(ts)
+    store.commit()
+    return store, steps
+
+
+def test_replay_matches_live_day(tmp_path):
+    store, steps = _live_day(str(tmp_path / "p.db"))
+    conn = store.conn
+    snap = json.loads(conn.execute("SELECT data FROM state WHERE k = ?", (day_key(0),)).fetchone()[0])
+    day_steps = [s for s in steps if s[0] < DAY]
+    rep = replay(S, BR, {}, snap, day_signals(conn, 0, DAY), day_steps)
+    stored = stored_trades(conn, 0, DAY)
+    assert sum(len(v) for v in stored.values()) > 10
+    assert compare({a: [t for t in ts if t.exit_time < DAY] for a, ts in rep.items()}, stored) == []
+    # a changed record is caught
+    k = next(iter(stored))
+    stored[k][0]["exit_price"] *= 1.001
+    assert [m["account_id"] for m in compare({a: [t for t in ts if t.exit_time < DAY] for a, ts in rep.items()},
+                                             stored)] == [k]
+
+
+def test_limit_fill_needs_trade_through():
+    steps = _steps(40)
+    b = steps[10][1]["BTCUSDT"]
+    row = {"bar_close": 10 * MIN, "timeframe": "1m", "symbol": "BTCUSDT", "side": 1, "atr": 0.0,
+           "ref_price": b.low}
+    assert limit_fill(row, steps, 10) is None                      # limit at the low: touch only
+    row["ref_price"] = b.low + 1e-6
+    assert limit_fill(row, steps, 10) == (10, b.low + 1e-6)
+
+
+def test_data_quality_counts_gaps_and_outliers():
+    steps = _steps(120)
+    del steps[50][1]["ETHUSDT"]
+    bars = steps[60][1]
+    x = bars["SOLUSDT"]
+    bars["SOLUSDT"] = Bar(x.symbol, x.open_time, x.close_time, x.open, x.open * 1.2, x.open * 0.8, x.close,
+                          x.open, x.open * 1.2, x.open * 0.8, x.close * 1.01, volume=0.0)
+    q = data_quality(steps, V3_SYMBOLS, 0, 120 * MIN)
+    assert q["ETHUSDT"]["missing"] == 1 and q["BTCUSDT"]["missing"] == 0
+    assert q["SOLUSDT"]["extreme_ranges"] == 1 and q["SOLUSDT"]["zero_volume"] == 1
+    assert q["SOLUSDT"]["max_last_mark_gap_pct"] > 0.9

@@ -21,6 +21,12 @@ from .notify import CRITICAL, NullNotifier, Notifier
 from .store3 import Store3
 
 STATE_KEY = "accounts"
+DAY_MS = 86_400_000
+
+
+def day_key(ts: int) -> str:
+    import datetime as _dt
+    return "day:" + _dt.datetime.fromtimestamp(ts / 1000, _dt.timezone.utc).strftime("%Y-%m-%d")
 
 
 def account_id(strategy: str, timeframe: str) -> str:
@@ -102,8 +108,13 @@ class AccountBook:
         self.engines[aid].submit(sig)
 
     def step(self, ts: int, bars: dict[str, Bar], funding: Optional[dict[str, float]] = None) -> None:
-        """One aligned 1m step for every account. ``ts`` is the bar open time."""
+        """One aligned 1m step for every account. ``ts`` is the bar open time.
+        At 00:00 UTC the state before the step is kept as ``day:<YYYY-MM-DD>`` so the
+        nightly check (daily3.py) can replay the day from it."""
         self._now = ts
+        if ts % DAY_MS == 0:
+            self.store.put_state(day_key(ts), ts, {
+                "engines": {aid: engine_state(e) for aid, e in self.engines.items()}})
         for aid, e in self.engines.items():
             e.step(bars, funding)
             e.outcomes.clear()  # already written to the store
