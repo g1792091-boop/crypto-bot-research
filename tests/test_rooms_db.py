@@ -5,7 +5,7 @@ from datetime import datetime
 import pytest
 
 from paperbot.agents import rooms_db as R
-from paperbot.agents.roster3 import ROLES, STRATEGY_KO
+from paperbot.agents.roster3 import STRATEGY_KO
 from paperbot.sessions import KST
 
 NOW = int(datetime(2026, 9, 30, 10, 0, tzinfo=KST).timestamp() * 1000)   # 10:00 KST
@@ -121,9 +121,8 @@ def test_ensure_rooms_creates_41_rooms_with_the_right_members(db):
                                 "validator", "approver"]
     for t in ("market", "risk", "ops", "review", "lead"):
         r = R.get_room(conn, f"team:{t}")
-        own = [x[0] for x in ROLES if x[2] == t]
         assert r["kind"] == "team" and r["strategy"] is None
-        assert r["members"][:len(own)] == own            # the roster3 team first
+        assert r["members"] == list(R.TEAM_ROOM_MEMBERS[t])  # the roles that speak there (rooms.team_plan)
         assert set(r["members"]) <= set(R.ROLE_NAMES)    # every member is a real role
     assert R.get_room(conn, "team:market")["title"] == "시장분석팀"
     assert "team_lead" in R.get_room(conn, "team:lead")["members"]

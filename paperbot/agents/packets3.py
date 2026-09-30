@@ -27,6 +27,7 @@ import json
 import os
 import re
 import sqlite3
+import urllib.parse
 import statistics
 from collections import Counter, defaultdict
 from typing import Optional
@@ -45,7 +46,8 @@ TRADE_TFS = ("5m", "15m", "30m", "1h", "4h")
 def _ro(path: str) -> Optional[sqlite3.Connection]:
     if not path or not os.path.exists(path):
         return None
-    c = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=10)
+    # quoted: a '?' or '#' in the path must never change the open mode
+    c = sqlite3.connect(f"file:{urllib.parse.quote(os.path.abspath(path))}?mode=ro", uri=True, timeout=10)
     c.row_factory = sqlite3.Row
     return c
 

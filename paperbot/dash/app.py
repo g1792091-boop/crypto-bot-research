@@ -320,7 +320,7 @@ def agent_feed(agents_db: Optional[str], limit: int = 200) -> list[dict]:
     """Meeting messages written by the v3 agent pipelines (their own database)."""
     if not agents_db or not os.path.exists(agents_db):
         return []
-    c = sqlite3.connect(f"file:{agents_db}?mode=ro", uri=True, timeout=5)
+    c = sqlite3.connect(f"file:{urllib.parse.quote(os.path.abspath(agents_db))}?mode=ro", uri=True, timeout=5)
     c.row_factory = sqlite3.Row
     try:
         return [dict(r) for r in c.execute(
@@ -332,6 +332,8 @@ def agent_feed(agents_db: Optional[str], limit: int = 200) -> list[dict]:
 
 
 # ---------------------------------------------------------------- agent rooms
+PUBLIC_PATHS = ("/login", "/api/login", "/static/login.html", "/static/login.css", "/static/login.js")
+TICK_EVERY_MS = 15 * 60_000  # the agents timer (deploy/paperbot-agents.timer)
 SAY_MAX_CHARS = 1_000        # one owner post (rooms_db.MAX_OWNER_TEXT)
 SAY_PER_HOUR = 20            # owner posts per hour, both owners together (counted in inbox.db)
 AUTHOR_MAX = 20
@@ -438,8 +440,10 @@ class Rooms:
         self.owners = tuple(owners)
         self._caps: Optional[dict] = None
         self.specs = {s["room_id"]: s for s in rooms_db.room_specs()}
-        from ..agents.roster3 import ROLES, SPECIALISTS
-        self.roles = {r[0]: {"id": r[0], "name": r[1], "team": r[2], "duty": r[5]} for r in ROLES + SPECIALISTS}
+        from ..agents.roster3 import ROLES, SPECIALISTS, room_duty
+        # the duty a member has in the rooms (what the room staff can really do), not the v3 roster's
+        self.roles = {r[0]: {"id": r[0], "name": r[1], "team": r[2], "duty": room_duty(r[0])}
+                      for r in ROLES + SPECIALISTS}
 
     # -- connections
     @contextlib.contextmanager
@@ -466,11 +470,24 @@ class Rooms:
         except (sqlite3.Error, TypeError, ValueError):
             return 0
 
+    def _cursor_obj(self, a: Optional[sqlite3.Connection], k: str) -> Optional[dict]:
+        if a is None:
+            return None
+        try:
+            r = a.execute("SELECT v FROM cursors WHERE k = ?", (k,)).fetchone()
+            v = json.loads(r[0]) if r and r[0] else None
+        except (sqlite3.Error, TypeError, ValueError):
+            return None
+        return v if isinstance(v, dict) else None
+
     # -- read side
     def overview(self, now_ms: Optional[int] = None) -> dict:
         with self.ro(self.agents_db) as a:
             rows = {r["room_id"]: r for r in self.R.rooms_overview(a, now_ms)}
             ready = a is not None
+            # the agents tick's last sign of life ({ts, ok, why}): the page tells the owners when the
+            # staff have stopped (timer off, login refused, crashed) instead of promising an answer
+            last_tick = self._cursor_obj(a, self.R.TICK_CURSOR)
         out = []
         for rid, spec in self.specs.items():
             r = {"room_id": rid, "kind": spec["kind"], "strategy": spec["strategy"], "title": spec["title"],
@@ -489,6 +506,7 @@ class Rooms:
             for r in out:
                 r["open_proposals"] = waiting.get(r["room_id"], 0)
         return {"ready": ready, "now": int(time.time() * 1000) if now_ms is None else now_ms,
+                "last_tick": last_tick, "tick_every_ms": TICK_EVERY_MS,
                 "max_id": max((int(r.get("last_id") or 0) for r in out), default=0), "rooms": out}
 
     def room_info(self, room_id: str) -> dict:
@@ -539,8 +557,22 @@ class Rooms:
 
     def trials(self, strategy: Optional[str], room_id: Optional[str], limit: int = 50) -> dict:
         with self.ro(self.agents_db) as a:
-            return {"counts": self.R.trial_counts(a, strategy),
-                    "trials": self.R.trial_history(a, strategy, room_id, limit=min(max(int(limit), 1), 500))}
+            out = {"counts": self.R.trial_counts(a, strategy),
+                   "trials": self.R.trial_history(a, strategy, room_id, limit=min(max(int(limit), 1), 500))}
+        # a copy-proposal row carries the PROPOSAL it recorded (the number the owners approve or reject)
+        # and that proposal's status as the owners should see it; its own id is only a ledger row number
+        props: Optional[list] = None
+        for t in out["trials"]:
+            if t.get("kind") != "copy_proposal":
+                continue
+            if props is None:
+                props = self.proposals(strategy=strategy, room_id=room_id, limit=1000)
+            ft = (t.get("spec") or {}).get("from_trial") if isinstance(t.get("spec"), dict) else None
+            cands = [p for p in props if ft is not None and p.get("trial_id") == ft]
+            if cands:      # written together (same time); several when a capped proposal was made again
+                p = min(cands, key=lambda p: (abs(int(p.get("ts") or 0) - int(t.get("ts") or 0)), int(p["id"])))
+                t["proposal_id"], t["proposal_status"] = int(p["id"]), p.get("effective_status") or p.get("status")
+        return out
 
     def author(self, body: dict) -> str:
         """The signer of an owner write: one of the configured owner names, else nobody in particular."""
@@ -758,7 +790,7 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
 
     async def _guarded(req: Request, call_next):
         path = req.url.path
-        if path in ("/login", "/api/login") or path.startswith("/static/login"):
+        if path in PUBLIC_PATHS:            # exact paths only: '/static/login/../app.js' is not public
             return await call_next(req)
         if not authed(req):
             if path.startswith("/api/"):
@@ -786,7 +818,7 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
         recent = [t for t in fails.get(ip, []) if time.time() - t < 900]
         if len(recent) >= 10:
             raise HTTPException(429, "too many attempts, wait 15 minutes")
-        body = await req.json()
+        body = await _json_object(req)       # size-capped before it is parsed (no login needed to send it)
         if password_hash is None or check_password(str(body.get("password", "")), password_hash):
             fails.pop(ip, None)
             resp = JSONResponse({"ok": True})

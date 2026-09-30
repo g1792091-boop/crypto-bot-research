@@ -49,9 +49,10 @@ ENV_BILLING = ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_USE_BED
                "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY")
 
 # Plan usage / rate limits in the CLI's error text (e.g. "5-hour limit reached ∙ resets 3pm",
-# "You've hit your limit · resets 3pm", "API Error: 429 rate_limit_error").
-LIMIT_RE = re.compile(r"(session|weekly|usage|rate|hour|opus)[ -]?limit|limit reached|hit your limit"
-                      r"|rate_limit_error|\b429\b", re.I)
+# "You've hit your limit · resets 3pm", "You've hit your Sonnet limit · resets …" (the Sonnet weekly
+# limit of Max plans), "You're out of extra usage · resets …", "API Error: 429 rate_limit_error").
+LIMIT_RE = re.compile(r"(session|weekly|usage|rate|hour|opus|sonnet)[ -]?limit|limit reached"
+                      r"|hit your (?:\w+ )?limit|out of extra usage|rate_limit_error|\b429\b", re.I)
 
 
 class UsageLimitReached(RuntimeError):

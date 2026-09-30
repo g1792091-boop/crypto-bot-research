@@ -557,24 +557,26 @@ def test_what_a_budget_stop_pauses(w):
 def test_a_plan_usage_limit_pauses_everything_for_an_hour_only(w):
     t = QUIET
     w.say(ROOM, "질문", t - 10 * MIN)
-    _stopped(w, w.due(t)[0], t, "usage_limit")
+    _stopped(w, w.due(t)[0], t, "usage_limit")                 # the round stops at t + 1 min
     assert w.due(t + 30 * MIN) == []
-    ds = w.due(t + HOUR)
+    assert w.due(t + HOUR) == []                               # the hour runs from the stop, not the start
+    ds = w.due(t + HOUR + MIN)
     assert keys(ds) == [(ROOM, "owner", 1)] and ds[0].data["retry_of"] is None
-    assert w.due(t + HOUR, TriggerPolicy(usage_backoff_ms=2 * HOUR)) == []
+    assert w.due(t + HOUR + MIN, TriggerPolicy(usage_backoff_ms=2 * HOUR)) == []
 
 
 def test_transient_failures_are_retried_with_a_growing_pause(w):
     t = QUIET
     w.say(ROOM, "질문", t - 10 * MIN)
-    for k, (at, pause) in enumerate(((t, 10), (t + 10 * MIN, 20), (t + 30 * MIN, 40))):
+    # each round fails 1 min after it starts; the pause runs from the failure
+    for k, (at, pause) in enumerate(((t, 10), (t + 11 * MIN, 20), (t + 32 * MIN, 40))):
         [d] = w.due(at)
         assert d.data["retry_of"] is None                          # never counted as a failed attempt
         rid = begin_round(w.agents, d, at)
         finish_round(w.agents, rid, "failed", at + MIN, decision={"error": "x", "transient": True, "calls_ok": 0},
                      calls=2)
-        assert w.due(at + (pause - 1) * MIN) == []
-    assert keys(w.due(t + 70 * MIN)) == [(ROOM, "owner", 1)]
+        assert w.due(at + pause * MIN) == []
+    assert keys(w.due(t + 73 * MIN)) == [(ROOM, "owner", 1)]
     # transient rounds with no answer do not use the room's daily slots
     st = T._Rooms(w.agents, t + 70 * MIN, TriggerPolicy())
     assert st.rounds_today(ROOM) == 0

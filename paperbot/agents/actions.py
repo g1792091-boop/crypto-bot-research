@@ -29,6 +29,7 @@ import json
 import math
 import re
 import sqlite3
+import unicodedata
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
@@ -213,7 +214,7 @@ def validate(prop: Any, *, strategy: Optional[str] = None,
             got = bad("알림 수준은 INFO 또는 WARN만 가능")
             got[0]["detail"] = str(lvl)[:20]
             return got[0], got[1]
-        t = _text(prop.get("text"), MAX_FLAG)
+        t = " ".join(_text(prop.get("text"), MAX_FLAG).split())     # one line: it follows code's own prefix
         return ({"action": "flag_owners", "level": lvl, "text": t}, []) if t else bad("알림 내용이 비어 있음")
     return bad("처리할 수 없음")  # pragma: no cover
 
@@ -268,16 +269,17 @@ def hypothesis(env: ActionEnv, a: dict) -> dict:
     return _done("hypothesis", True, "가설을 장부에 기록", trial_id=tid)
 
 
-# links and @mentions in model-written words (Telegram makes them clickable): never sent as such
-_LINK = re.compile(r"(?i)(?:https?://|www\.)\S+"
-                   r"|\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|net|org|io|xyz|ru|cn|kr|co|me|app|link|info|biz|top|site"
-                   r"|online|ly|gg|to|tk|ml|cc|us|uk|de|jp|example)\b(?:/\S*)?"
+# links and @mentions in model-written words (Telegram makes them clickable): never sent as such. Any
+# scheme (https://, tg://), www., any name.tld (every top-level domain, not a fixed list), @names.
+_LINK = re.compile(r"(?i)\b[a-z][a-z0-9+.-]*://\S+|\bwww\.\S+"
+                   r"|(?<![\w.])[\w-]+(?:\.[\w-]+)*\.[a-z]{2,24}\b(?:/\S*)?"
                    r"|(?<![\w.])@\w{3,}")
 
 
 def telegram_safe(text: str) -> str:
-    """Model-written words bound for Telegram: links and @mentions replaced by '(링크 생략)'."""
-    return _LINK.sub("(링크 생략)", text or "")
+    """Model-written words bound for Telegram: links and @mentions replaced by '(링크 생략)'.
+    Full-width and other look-alike forms are normalised first (NFKC), so 'ｅｖｉｌ．ｃｏｍ' is a link too."""
+    return _LINK.sub("(링크 생략)", unicodedata.normalize("NFKC", text or ""))
 
 
 def flag_owners(env: ActionEnv, a: dict) -> dict:
@@ -291,9 +293,13 @@ def flag_owners(env: ActionEnv, a: dict) -> dict:
     text = f"[에이전트 알림] {title}: {telegram_safe(a['text'])}"
     R.set_cursor(env.conn, key, used + 1)
     try:
-        env.notifier.send(a["level"], text)
+        ok = env.notifier.send(a["level"], text)
     except Exception as exc:  # delivery must not break the round
-        env.post("system", f"알림 전송 실패: {type(exc).__name__}", {"action": "flag_owners", "sent": False})
+        ok, why = False, type(exc).__name__
+    else:
+        why = "텔레그램이 받지 않음"
+    if ok is False:           # never claim a message was sent when it was not
+        env.post("system", f"알림 전송 실패: {why}", {"action": "flag_owners", "sent": False})
         return _done("flag_owners", False, "전송 실패", sent=False)
     env.post("action", f"📣 두 분께 텔레그램 알림({a['level']})을 보냈습니다{env.by()}. 오늘 {used + 1}번째.",
              {"action": "flag_owners", "sent": True, "level": a["level"], "n_today": used + 1, "text": a["text"],

@@ -421,3 +421,144 @@ def test_inbox_db_must_be_its_own_file(tmp_path):
         assert main(["--db", paper, "--agents-db", agents, "--inbox-db", agents]) == 2
     finally:
         del os.environ["DASH_PASSWORD_HASH"], os.environ["DASH_SECRET"]
+
+
+# ---------------------------------------------------------------- confirmation review
+ROOMS_JS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "paperbot", "dash", "static",
+                        "rooms.js")
+
+
+def _js(names: tuple, body: str) -> dict:
+    """Run pure helpers of rooms.js (extracted by name) in node with ``body``; returns what it prints."""
+    import re
+    import shutil
+    import subprocess
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("needs node")
+    with open(ROOMS_JS, encoding="utf-8") as fh:
+        src = fh.read()
+    parts = ["const esc = (s) => String(s == null ? '' : s).replace(/[&<>\"']/g, (c) => '&#' + c.charCodeAt(0) + ';');"]
+    for n in names:
+        m = re.search(r"^(?:function %s\(.*?^}|const %s = .*?;)$" % (n, n), src, re.S | re.M)
+        assert m, n
+        parts.append(m.group(0))
+    r = subprocess.run([node, "-e", "\n".join(parts) + "\n" + body], capture_output=True, text=True, timeout=30)
+    assert r.returncode == 0, r.stderr
+    return json.loads(r.stdout)
+
+
+def test_the_page_shows_when_the_agents_have_stopped(env, monkeypatch):
+    from paperbot.agents import rooms as RM
+    c = env["client"]
+    _login(c)
+    assert c.get("/api/rooms").json()["last_tick"] is None           # never ran with this code: unknown
+    assert c.post(f"/api/rooms/{ROOM}/say", json={"text": "왜 계속 지나요?"}).status_code == 200
+    for k in range(3):                                                  # every tick refused by the login check
+        out = RM.tick(None, None, env["agents"], env["inbox"], None, now_ms=env["now"] + k * 900_000,
+                      preflight=lambda: (False, "Claude Code would use an API key (ANTHROPIC_API_KEY)"))
+        assert out["skipped"].startswith("preflight")
+    ov = c.get("/api/rooms").json()
+    assert ov["last_tick"]["ok"] is False and ov["last_tick"]["why"] == "login"
+    assert ov["last_tick"]["ts"] == env["now"] + 2 * 900_000 and ov["tick_every_ms"] == 900_000
+    assert len(c.get(f"/api/rooms/{ROOM}/messages").json()["pending_owner"]) == 1
+    # a 'running' round a dead tick left behind is not shown as a live meeting
+    a = R.open_agents(env["agents"])
+    a.executemany("INSERT INTO rounds (room_id, trigger, trigger_data, started_ts, status) VALUES (?,?,?,?,?)",
+                  [("team:risk", "owner", "{}", env["now"] - 3 * 3_600_000, "running"),
+                   ("team:market", "morning", "{}", env["now"] - 60_000, "running")])
+    a.commit()
+    a.close()
+    by = {r["room_id"]: r for r in c.get("/api/rooms", params={}).json()["rooms"]}
+    assert by["team:risk"]["running"] is False and by["team:market"]["running"] is True
+
+
+def test_the_page_logic_for_a_stopped_agent():
+    got = _js(("agentsState", "agoKo", "pendingHint"), """
+const now = 1e12, H = 3600000, T = 900000;
+const ov = (last_tick, running, ready) => ({ready: ready !== false, now, tick_every_ms: T, last_tick,
+  rooms: [{running: !!running}]});
+const st = (o) => agentsState(o).st;
+console.log(JSON.stringify({
+  ok: st(ov({ts: now - 60000, ok: true})), stale: st(ov({ts: now - 2 * H, ok: true})),
+  long_meeting: st(ov({ts: now - 2 * H, ok: true}, true)), missing: st(ov(null)),
+  login: st(ov({ts: now - 60000, ok: false, why: "login"})), error: st(ov({ts: now, ok: false, why: "error"})),
+  never: st(ov(null, false, false)), hint_ok: pendingHint("ok"), hint_stopped: pendingHint("stopped"),
+  hint_login: pendingHint("login"), ago: agoKo(2 * H)}));
+""")
+    assert (got["ok"], got["stale"], got["long_meeting"], got["missing"], got["login"], got["error"], got["never"]) == (
+        "ok", "stopped", "ok", "stopped", "login", "error", "new")
+    assert got["hint_ok"] == "직원들이 다음 차례에 읽고 답합니다"
+    assert got["hint_stopped"] == got["hint_login"] == "에이전트가 멈춰 있어 아직 전달되지 않습니다"
+    assert got["ago"] == "마지막 점검 120분 전"
+    with open(ROOMS_JS, encoding="utf-8") as fh:
+        src = fh.read()
+    assert "'<div class=\"hint\">직원들이 다음 차례에 읽고 답합니다</div>'" not in src     # never promised unconditionally
+    assert "자동 토론이 멈춰 있습니다" in src and "로그인 확인에서 멈춤" in src
+
+
+def test_room_members_and_duties_are_what_the_room_staff_do():
+    rm = Rooms(None, None)
+    risk = rm.room_info("team:risk")["members_info"]
+    assert [m["id"] for m in risk] == ["risk_officer", "team_lead"]
+    assert "승인·변경하지 못함" in risk[0]["duty"] and "계획 승인·축소·거부" not in risk[0]["duty"]
+    val = next(m for m in rm.room_info(ROOM)["members_info"] if m["id"] == "validator")
+    assert "통과·불통과는 코드가 정함" in val["duty"]
+    market = [m["id"] for m in rm.room_info("team:market")["members_info"]]
+    assert "macro_corr" not in market and "similar_pattern" not in market
+
+
+def test_the_ledger_names_a_copy_proposal_by_its_proposal_number(env):
+    c = env["client"]
+    _login(c)
+    a = R.open_agents(env["agents"])
+    now = env["now"]
+    t2 = R.add_trial(a, ROOM, S, "test", {"template": "stop_atr", "k": 1.5, "strategy": S}, 1, ts=now - 800)
+    R.add_trial_result(a, t2, "failed", {"gate": {"pass": False, "reasons": ["x"]}}, ts=now - 790)
+    R.add_trial(a, ROOM, S, "copy_proposal", {"from_trial": t2, "test": {"template": "stop_atr", "k": 1.5}}, 1,
+                ts=now - 700)
+    blocked = R.add_proposal(a, ROOM, S, t2, {"strategy": S, "test": {"template": "stop_atr", "k": 1.5}},
+                             {"pass": False, "reasons": ["x"]}, "blocked_gate", ts=now - 700)
+    R.add_trial(a, ROOM, S, "copy_proposal", {"from_trial": env["trial"], "test": {"template": "stop_atr", "k": 2.5}},
+                1, ts=now - 2_000)                       # written with the awaiting proposal (same time)
+    a.close()
+    rows = [t for t in c.get("/api/trials", params={"strategy": S}).json()["trials"] if t["kind"] == "copy_proposal"]
+    by = {t["spec"]["from_trial"]: t for t in rows}
+    assert (by[t2]["proposal_id"], by[t2]["proposal_status"]) == (blocked, "blocked_gate")
+    assert (by[env["trial"]]["proposal_id"], by[env["trial"]]["proposal_status"]) == (env["ok_proposal"],
+                                                                                       "awaiting_owner")
+    shown = _js(("PSTATUS_KO", "TRIAL_KIND_KO", "TRIAL_ST_KO", "testKo", "ledgerRow"),
+                "console.log(JSON.stringify(%s.map(ledgerRow)));" % json.dumps([by[t2], by[env["trial"]]]))
+    assert f"복제 제안 #{blocked}" in shown[0] and "(시험 #%d)" % t2 in shown[0] and "코드 관문에서 막힘" in shown[0]
+    assert f"#{by[t2]['id']} 복제 제안" not in shown[0]      # never the ledger row's own number as '#N'
+    assert f"복제 제안 #{env['ok_proposal']}" in shown[1] and "두 분 확인 대기" in shown[1]
+
+
+def _raw_status(app, method: str, path: str) -> int:
+    """One request straight to the ASGI app: the path exactly as a client may send it (no normalising)."""
+    import asyncio
+    scope = {"type": "http", "asgi": {"version": "3.0"}, "http_version": "1.1", "method": method, "scheme": "http",
+             "path": path, "raw_path": path.encode(), "root_path": "", "query_string": b"",
+             "headers": [(b"host", b"testserver")], "client": ("127.0.0.1", 1), "server": ("testserver", 80)}
+    sent: list = []
+
+    async def receive():
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(m):
+        sent.append(m)
+    asyncio.run(app(scope, receive, send))
+    return next(m["status"] for m in sent if m["type"] == "http.response.start")
+
+
+def test_only_the_login_page_files_are_public(env):
+    app = env["client"].app
+    assert _raw_status(app, "GET", "/static/login.css") == 200
+    for path in ("/static/login/../app.js", "/static/login/../rooms.js", "/static/loginx.js"):
+        assert _raw_status(app, "GET", path) in (302, 307, 401), path
+
+
+def test_a_huge_login_body_is_refused_before_it_is_parsed(env):
+    r = env["client"].post("/api/login", content=b'{"password": "' + b"x" * 40_000 + b'"}',
+                           headers={"content-type": "application/json"})
+    assert r.status_code == 413

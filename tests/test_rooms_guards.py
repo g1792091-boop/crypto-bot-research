@@ -5,8 +5,8 @@ weekly reviews), restores of paper3.db, the backup unit, and the smaller guards 
 quote model text, Telegram never carries model links, hypotheses are never 'facts').
 """
 
-import glob
 import os
+import shutil
 import sqlite3
 import subprocess
 import sys
@@ -536,45 +536,60 @@ def test_the_tick_refuses_an_agents_db_that_is_another_database(world, tmp_path)
                  "--agents-db", world.paths["inbox"], "--inbox-db", world.paths["inbox"], "--dry-run"])
 
 
-FAKE_SQLITE3 = '''
+# A stand-in for the sqlite3 command-line tool (used only where the real one is not installed): the
+# database and flags as arguments, the SQL on stdin, opened read-only exactly when given -readonly.
+FAKE_SQLITE3 = """
 import sqlite3, sys
-a = sys.argv[1:]
+a = [x for x in sys.argv[1:] if x != "-bail"]
 ro = a[:1] == ["-readonly"]
-if ro:
-    a = a[1:]
-db, cmd = a
-if not cmd.startswith(".backup "):
-    sys.exit(2)
+db = a[-1]
 try:
     src = sqlite3.connect(f"file:{db}?mode=ro", uri=True) if ro else sqlite3.connect(db)
-    dst = sqlite3.connect(cmd.split(" ", 1)[1])
-    src.backup(dst)
-    dst.close()
+    src.executescript(sys.stdin.read())
     src.close()
 except sqlite3.Error as exc:
     print(exc, file=sys.stderr)
     sys.exit(1)
-'''
+"""
+BACKUP_SH = os.path.join(E.REPO, "deploy", "paperbot-backup.sh")
 
 
-def test_backup_unit_opens_every_database_read_only_and_fails_on_a_failed_copy(tmp_path):
+def _backup_env(tmp_path, lib, bk):
+    env = {**os.environ, "PAPERBOT_LIB": str(lib), "PAPERBOT_BACKUPS": str(bk)}
+    if shutil.which("sqlite3") is None:
+        bindir = tmp_path / "bin"
+        bindir.mkdir()
+        fake = bindir / "sqlite3"
+        fake.write_text(f"#!{sys.executable}\n{FAKE_SQLITE3}")
+        fake.chmod(0o755)
+        env["PATH"] = f"{bindir}:{env['PATH']}"
+    return env
+
+
+def _small_db(path, rows=3):
+    c = sqlite3.connect(path)
+    c.execute("CREATE TABLE IF NOT EXISTS t (id INTEGER PRIMARY KEY, x TEXT)")
+    c.executemany("INSERT INTO t (x) VALUES (?)", [("r",)] * rows)
+    c.commit()
+    c.close()
+
+
+def test_backup_unit_copies_every_database_read_only_and_fails_on_a_failed_copy(tmp_path):
     with open(os.path.join(E.REPO, "deploy/paperbot-backup.service"), encoding="utf-8") as fh:
-        unit = fh.read()
-    line = next(x for x in unit.splitlines() if x.startswith("ExecStart="))
-    assert 'sqlite3 -readonly /var/lib/paperbot/$f.db ".backup $d/$f.db" || fail=1' in line
-    assert "for f in paper3 daily3 agents3 inbox" in line and line.endswith("exit $fail'")
-    assert "${" not in line                                   # systemd would expand ${...} itself
-    # run the unit's script against a temporary /var/lib/paperbot, with a stand-in sqlite3 CLI that
-    # opens read-only exactly when given -readonly (like the real one)
-    lib, bk, bindir = tmp_path / "lib", tmp_path / "bk", tmp_path / "bin"
+        unit = fh.read().splitlines()
+    assert "ExecStart=/bin/sh /opt/crypto-bot-research/deploy/paperbot-backup.sh" in unit
+    for line in ("Type=oneshot", "User=paperbot", "Nice=10", "IOSchedulingClass=idle", "TimeoutStartSec=30min"):
+        assert line in unit                                   # a copy that hangs cannot hold the unit forever
+    with open(BACKUP_SH, encoding="utf-8") as fh:
+        script = fh.read()
+    assert "for f in agents3 inbox daily3 paper3; do" in script    # the small databases first
+    assert "VACUUM INTO" in script and "sqlite3 -bail -readonly" in script and ".backup" not in script.split(
+        "\nlib=")[1]
+    lib, bk = tmp_path / "lib", tmp_path / "bk"
     lib.mkdir()
-    bindir.mkdir()
-    fake = bindir / "sqlite3"
-    fake.write_text(f"#!{sys.executable}\n{FAKE_SQLITE3}")
-    fake.chmod(0o755)
-    script = (line[len("ExecStart=/bin/sh -c '"):-1].replace("%%", "%")
-              .replace("/var/lib/paperbot", str(lib)).replace("/var/backups/paperbot", str(bk)))
-    env = {**os.environ, "PATH": f"{bindir}:{os.environ['PATH']}"}
+    env = _backup_env(tmp_path, lib, bk)
+    for name in ("paper3", "daily3", "inbox"):
+        _small_db(str(lib / f"{name}.db"))
     db = str(lib / "agents3.db")
     # a tick that was killed (MemoryMax / TimeoutStartSec) leaves its WAL behind, not checkpointed
     code = ("import os, sys; sys.path.insert(0, %r); from paperbot.agents import rooms_db as R; "
@@ -584,19 +599,68 @@ def test_backup_unit_opens_every_database_read_only_and_fails_on_a_failed_copy(t
     assert os.path.getsize(db + "-wal") > 0
     with open(db, "rb") as fh:
         before = fh.read()
-    r = subprocess.run(["/bin/sh", "-c", script], env=env, capture_output=True, text=True)
+    r = subprocess.run(["/bin/sh", BACKUP_SH], env=env, capture_output=True, text=True, timeout=120)
     assert r.returncode == 0, r.stderr
     with open(db, "rb") as fh:
         assert fh.read() == before                            # the backup never wrote agents3.db
     assert os.path.getsize(db + "-wal") > 0                   # nor checkpointed or removed its WAL
-    [copy] = glob.glob(str(bk / "*" / "agents3.db"))
-    c = sqlite3.connect(copy)
+    [day] = os.listdir(bk)
+    assert sorted(os.listdir(bk / day)) == ["agents3.db", "daily3.db", "inbox.db", "paper3.db"]
+    c = sqlite3.connect(str(bk / day / "agents3.db"))
     assert c.execute("SELECT COUNT(*) FROM messages WHERE text = ?", ("y" * 5000,)).fetchone()[0] == 1
+    assert c.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     c.close()
-    # a copy that fails makes the unit fail
+    # a copy that fails makes the unit fail; the others are still copied, and no partial copy is left
     (lib / "inbox.db").write_bytes(b"not a database " * 500)
-    r = subprocess.run(["/bin/sh", "-c", script], env=env, capture_output=True, text=True)
-    assert r.returncode == 1
+    r = subprocess.run(["/bin/sh", BACKUP_SH], env=env, capture_output=True, text=True, timeout=120)
+    assert r.returncode == 1 and "inbox.db" in r.stderr
+    assert sorted(os.listdir(bk / day)) == ["agents3.db", "daily3.db", "paper3.db"]
+
+
+WRITER = """
+import os, sqlite3, sys, time
+c = sqlite3.connect(sys.argv[1], timeout=30)
+c.execute("INSERT INTO t (b) VALUES (?)", (b"x",)); c.commit()
+print("ready", flush=True)
+end = time.time() + float(sys.argv[2])
+while time.time() < end:        # the live runner commits every poll (5 s); here as fast as it can, so a
+    c.execute("INSERT INTO t (b) VALUES (?)", (os.urandom(100),)); c.commit()    # small file shows it
+"""
+
+
+@pytest.mark.skipif(shutil.which("sqlite3") is None, reason="needs the sqlite3 command-line tool")
+def test_backup_finishes_while_the_live_runner_keeps_committing(tmp_path):
+    """The old unit's `.backup` restarted its copy at every commit of another process and, once
+    paper3.db took longer to copy than the time between commits, never finished (and never reached
+    the databases after it). VACUUM INTO is one read transaction: commits cannot restart it."""
+    lib, bk = tmp_path / "lib", tmp_path / "bk"
+    lib.mkdir()
+    paper = str(lib / "paper3.db")
+    c = sqlite3.connect(paper)
+    c.execute("PRAGMA journal_mode=WAL")
+    c.execute("CREATE TABLE t (id INTEGER PRIMARY KEY, b BLOB)")
+    c.executemany("INSERT INTO t (b) VALUES (?)", [(os.urandom(4000),)] * 8000)      # about 32 MB
+    c.commit()
+    c.close()
+    for name in ("daily3", "agents3", "inbox"):
+        _small_db(str(lib / f"{name}.db"))
+    writer = subprocess.Popen([sys.executable, "-c", WRITER, paper, "90"], stdout=subprocess.PIPE, text=True)
+    try:
+        assert writer.stdout.readline().strip() == "ready"
+        # well under a second with VACUUM INTO; the old `.backup` restarted forever here
+        r = subprocess.run(["/bin/sh", BACKUP_SH], env=_backup_env(tmp_path, lib, bk), capture_output=True,
+                           text=True, timeout=30)
+        assert writer.poll() is None                          # the writer was committing all along
+    finally:
+        writer.kill()
+        writer.wait()
+    assert r.returncode == 0, r.stderr
+    [day] = os.listdir(bk)
+    for name in ("agents3", "inbox", "daily3", "paper3"):
+        c = sqlite3.connect(str(bk / day / f"{name}.db"))
+        assert c.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+        assert c.execute("SELECT COUNT(*) FROM t").fetchone()[0] >= (8001 if name == "paper3" else 3)
+        c.close()
 
 
 def test_dash_unit_is_sandboxed_without_pinning_database_files():
@@ -608,3 +672,330 @@ def test_dash_unit_is_sandboxed_without_pinning_database_files():
     assert "/var/lib/paperbot/.local" in ro and ".db" not in ro          # no database file pinned to an inode
     hidden = next(x for x in svc if x.startswith("InaccessiblePaths="))
     assert "/etc/paperbot/agents.env" in hidden and "/etc/paperbot/live.env" in hidden
+
+
+# ================================================================ confirmation review
+# --- the per-tick call cap holds when a team meeting retries unreadable answers
+def test_a_team_meeting_that_retries_stays_inside_the_per_tick_cap(world):
+    world.say(ROOM, "질문 1", QUIET - 10 * MIN)
+    world.say("team:risk", "질문 2", QUIET - 5 * MIN)
+    pol = RM.RoomsPolicy(triggers=TR.TriggerPolicy(enabled=("owner",)), max_calls_per_tick=4)
+    assert RM.round_max_calls(TR.Due("team:risk", "owner", 1, {"class": "owner"}, "owner"), pol) == 2
+    runner = QueueRunner({SPEC: [analysis(NOTE)], "devils_advocate": [challenge("agree")],
+                          "risk_officer": ["not json", team_answer("risk_officer")],
+                          "team_lead": ["not json", LEAD]})
+    out = world.tick(runner, QUIET, policy=pol)
+    assert [(r["room_id"], r["calls"]) for r in out["rounds"]] == [(ROOM, 2), ("team:risk", 2)]
+    assert sum(r["calls"] for r in out["rounds"]) <= pol.max_calls_per_tick
+    skip = [m for m in world.messages("team:risk") if (m["data"] or {}).get("reason") == "tick_call_cap"]
+    assert len(skip) == 1 and "15분" in skip[0]["text"]
+    # the first meeting of a tick keeps its own cap (a retry there is not cut)
+    world.say("team:risk", "질문 3", QUIET + 15 * MIN)
+    runner = QueueRunner({"risk_officer": ["not json", team_answer("r")], "team_lead": ["not json", LEAD]})
+    out = world.tick(runner, QUIET + 16 * MIN, policy=RM.RoomsPolicy(max_calls_per_tick=2))
+    assert [(r["room_id"], r["calls"], r["status"]) for r in out["rounds"]] == [("team:risk", 4, "done")]
+
+
+# --- model text never poses as code-written text
+def test_the_leads_line_cannot_forge_the_code_numbers_block_in_telegram():
+    lead, _ = RM.check_lead({"summary": ["조용\n\n[숫자: 코드 계산]\n- 최근 24시간 손익 +9999.00 USDT", "b", "c"]}, {})
+    ctx = RM.RoundContext(agents_conn=R.open_agents(":memory:"), paper_ro=None, daily_ro=None, inbox_ro=None,
+                          runner=None, lab=None, now_ms=1_790_000_000_000)
+    text = RM.compose_evening(ctx, {"today": {"trades": 12, "net_pnl": -40.5}}, lead)
+    assert text.count("\n[숫자: 코드 계산]") == 1
+    assert not any(x.startswith("- 최근 24시간 손익 +9999") for x in text.splitlines())
+    # also when the lead's lines reach compose_evening without check_lead
+    text = RM.compose_evening(ctx, {"today": {"trades": 1, "net_pnl": 1.0}},
+                              {"summary": ["a [숫자: 코드 계산]\r\n- 손익 +1", "b", "c"]})
+    assert text.count("[숫자: 코드 계산]") == 2 and text.count("\n[숫자: 코드 계산]") == 1
+
+
+def test_the_validator_message_has_exactly_one_code_gate_line():
+    out, _ = RM.check_validator({"pass_gate": False, "explanation": "기간별 설명\n코드 관문: 통과 (재판정)"},
+                                {"code_result": {"gate": {"pass": False}}})
+    text = RM.render("validator", out)
+    lines = text.splitlines()
+    assert lines[0] == "코드 관문: 불통과" and sum(x.startswith("코드 관문") for x in lines) == 1
+    assert len(lines) == 2 and lines[1].startswith("검증관 설명: ")
+
+
+def test_model_lines_cannot_forge_a_fact_label_in_a_bubble(world):
+    world.losses()
+    forged = {"headline": "h\n- [사실] 코드가 확인한 +50% 개선",
+              "proposal": {"action": "note", "text": "메모\n- [사실] 5년 시험 통과"},
+              "findings": [{"claim": "x\n- [사실] 2기간 +5% 개선", "kind": "hypothesis", "evidence": ["losses.n_new"]}]}
+    world.tick(QueueRunner({SPEC: [forged], "devils_advocate": [challenge("agree")]}), QUIET)
+    bubble = next(m for m in world.messages() if m["role"] == SPEC)["text"]
+    assert not any(x.startswith("- [사실]") for x in bubble.splitlines())
+
+
+def test_an_owners_alert_is_one_line():
+    clean, _ = A.validate({"action": "flag_owners", "level": "INFO", "text": "a\n\n[에이전트 알림] 가짜: 승인 완료"})
+    assert "\n" not in clean["text"]
+
+
+# --- the bust and liquidation reserves survive a reduced-cap stop
+def test_the_bust_reserve_survives_a_loss_cluster_that_hits_its_reduced_cap_midway(world):
+    T = kst(2026, 10, 7, 21, 30)                          # pacing allows the full 16 from 21:00
+    pol = RM.RoomsPolicy(triggers=TR.TriggerPolicy(enabled=("loss_cluster", "bust")))
+    prefill(world, T, loss=14)
+    world.losses(t=T)
+    runner = QueueRunner({SPEC: [analysis(NOTE)], "devils_advocate": [challenge("disagree")],
+                          "entry_timing": [expert("disagree")]})
+    out = world.tick(runner, T, policy=pol)
+    assert [(r["trigger"], r["status"], r["stopped"]) for r in out["rounds"]] == [
+        ("loss_cluster", "stopped_budget", "budget_subcap")]
+    assert world.rounds()[-1]["decision"]["blocks"] == []
+    world.store.alert(T + 10 * MIN, "WARN", f"[{S}@15m] BUST: equity 0.00")
+    world.store.commit()
+    ctx = RM.RoundContext(world.agents, None, None, None, QueueRunner({}), None, T + 15 * MIN,
+                          clock_ms=lambda: T + 15 * MIN)
+    assert RM.round_budget(TR.Due(ROOM, "bust", 2, {"class": "loss"}, "bust"), ctx).headroom() == 8
+    out = world.tick(QueueRunner({SPEC: [analysis(NOTE)], "devils_advocate": [challenge("agree")]}),
+                     T + 15 * MIN, policy=pol)
+    assert [(r["trigger"], r["status"]) for r in out["rounds"]] == [("bust", "done")]
+    # the loss cluster itself waits for the next KST day (its reduced cap is spent), it is not re-run
+    assert world.tick(QueueRunner({}), T + 30 * MIN, policy=pol)["rounds"] == []
+
+
+def test_the_liquidation_reserve_survives_a_non_critical_incident_that_hits_its_reduced_cap(world):
+    prefill(world, QUIET, incident=7)
+    world.store.alert(QUIET - 5 * MIN, "WARN", "data gap at 123: no bar for ['BTCUSDT']")
+    world.store.commit()
+    runner = QueueRunner({"ops_auditor": ["not json", team_answer("o")], "data_quality": [team_answer("d")],
+                          "team_lead": [LEAD]})
+    out = world.tick(runner, QUIET)
+    assert [(r["trigger"], r["status"], r["stopped"]) for r in out["rounds"]] == [
+        ("incident", "stopped_budget", "budget_subcap")]
+    world.store.alert(QUIET + 40 * MIN, "CRITICAL", f"[{S}@15m] LIQUIDATED BTCUSDT 40x lost margin 20.00")
+    world.store.commit()
+    t = QUIET + 45 * MIN
+    runner = QueueRunner({"ops_auditor": [team_answer("o")], "code_reviewer": [team_answer("c")],
+                          "data_quality": [team_answer("d")], "team_lead": [LEAD]})
+    out = world.tick(runner, t)
+    assert [(r["trigger"], r["status"]) for r in out["rounds"]] == [("incident", "done")]
+    assert R.usage_today(world.agents, t)["by_class"]["incident"]["calls"] == 13
+
+
+def test_the_reserves_keep_their_share_of_the_tokens_too(world):
+    ctx = RM.RoundContext(world.agents, None, None, None, QueueRunner({}), None, QUIET, clock_ms=lambda: QUIET)
+    loss = RM.round_budget(TR.Due(ROOM, "loss_cluster", 2, {"class": "loss"}, "loss_cluster"), ctx)
+    bust = RM.round_budget(TR.Due(ROOM, "bust", 2, {"class": "loss"}, "bust"), ctx)
+    assert (loss.max_calls, loss.max_tokens) == (16, 700_000 * 16 // 24) and (bust.max_calls, bust.max_tokens) == (24, 700_000)
+    inc = RM.round_budget(TR.Due("team:ops", "incident", 0, {"class": "incident", "counts": {"data_gap": 1}},
+                                 "incident"), ctx)
+    assert (inc.max_calls, inc.max_tokens) == (10, 400_000 * 10 // 15)
+
+
+# --- a Claude plan limit the CLI words differently is still a plan limit, never counted as calls
+def test_the_sonnet_weekly_limit_stops_cleanly_and_is_not_counted(world):
+    import json
+    from paperbot.agents.runner import ClaudeCodeRunner
+
+    class Cli:
+        def call(self, model, system_prompt, instruction, packet):
+            proc = type("P", (), {"stdout": json.dumps({"is_error": True, "result": "You've hit your Sonnet limit · "
+                                                        "resets Oct 3"}), "stderr": "", "returncode": 1})()
+            return ClaudeCodeRunner(env={}, run=lambda c, **k: proc).call(model, system_prompt, instruction, packet)
+    world.losses()
+    [r] = world.tick(Cli(), QUIET)["rounds"]
+    assert (r["status"], r["stopped"], r["calls"]) == ("stopped_budget", "usage_limit", 0)
+    assert R.usage_today(world.agents, QUIET)["calls"] == 0
+
+
+# --- a tick killed during a meeting does not hold the next liquidation back for two hours
+def test_a_meeting_left_running_by_a_killed_tick_does_not_block_the_next_one(world):
+    world.store.alert(QUIET - 20 * MIN, "WARN", "data gap at 123: no bar for ['BTCUSDT']")
+    world.store.commit()
+    ro = R.open_ro(world.paths["paper"])
+    [due] = TR.find_due(ro, None, world.agents, None, QUIET - 15 * MIN, TR.TriggerPolicy(enabled=("incident",)))
+    ro.close()
+    rid = TR.begin_round(world.agents, due, QUIET - 15 * MIN)   # the pass was killed during this meeting
+    world.store.alert(QUIET - 5 * MIN, "CRITICAL", f"[{S}@15m] LIQUIDATED BTCUSDT 40x lost margin 20.00")
+    world.store.commit()
+    runner = QueueRunner({"ops_auditor": [team_answer("o")], "code_reviewer": [team_answer("c")],
+                          "data_quality": [team_answer("d")], "team_lead": [LEAD]})
+    out = world.tick(runner, QUIET)
+    assert [(r["trigger"], r["status"]) for r in out["rounds"]] == [("incident", "done")]
+    dead = next(r for r in world.rounds() if r["round_id"] == rid)
+    assert dead["status"] == "failed" and dead["decision"]["reason"] == "stale"
+
+
+# --- a new run seen before its accounts exist still resets the 30-day checkpoint
+def test_a_new_run_seen_before_its_accounts_still_resets_the_checkpoint(tmp_path):
+    paths, st = _paper_world(tmp_path)
+    st.conn.close()
+    a = R.open_agents(paths["agents3"])
+    R.set_cursor(a, "checkpoint:day", "30")                  # the old run had its day-30 checkpoint
+    ro = R.open_ro(paths["paper3"])
+    TR.store_paper_fingerprint(a, ro)
+    ro.close()
+    for suffix in ("", "-wal", "-shm"):                       # a new run: the old paper3.db is gone
+        if os.path.exists(paths["paper3"] + suffix):
+            os.remove(paths["paper3"] + suffix)
+    st = Store3(paths["paper3"])                              # live3 made the file; no accounts yet
+    ro = R.open_ro(paths["paper3"])                           # a tick runs in that window
+    TR.reconcile_paper_cursors(a, ro)
+    TR.store_paper_fingerprint(a, ro)
+    ro.close()
+    st.add_account(f"{S}@15m", S, "15m", "strategy", E.T0, "paper-v3")
+    st.commit()
+    st.conn.close()
+    ro = R.open_ro(paths["paper3"])
+    assert TR.reconcile_paper_cursors(a, ro).get("checkpoint:day") == "0"
+    [d] = [d for d in TR.find_due(ro, None, a, None, E.T0 + 30 * DAY + HOUR) if d.trigger == "checkpoint"]
+    assert d.data["day"] == 30
+    ro.close()
+
+
+# --- what the room shows as a member's own words
+def test_an_unreadable_verdict_is_not_shown_as_the_members_own(world):
+    world.losses()
+    runner = QueueRunner({SPEC: [analysis(NOTE), analysis(NOTE)],
+                          "devils_advocate": [{**challenge("x"), "verdict": "시험 필요"}],
+                          "entry_timing": [{"headline": "h", "findings": [], "suggestion": None}]})
+    world.tick(runner, QUIET)
+    msgs = world.messages()
+    da = next(m for m in msgs if m["role"] == "devils_advocate")["text"]
+    ex = next(m for m in msgs if m["role"] == "entry_timing")["text"]
+    dec = next(m for m in msgs if m["kind"] == "decision")["text"]
+    assert "판정: 시험 필요" in da and "반론 검토관 판단: 시험 필요" in dec      # the Korean word is read
+    assert "판정: 반대" not in ex and "판정: 읽을 수 없음" in ex                  # no verdict: never 'disagree'
+    assert any("읽을 수 없어 코드가 '반대'로 처리" in m["text"] for m in msgs if m["kind"] == "system")
+    for v, want in (("Agree", "agree"), ("needs test", "needs_test"), ("needs-test", "needs_test"), ("반대", "disagree")):
+        assert RM.check_challenge({"verdict": v}, {})[0]["verdict"] == want
+
+
+def test_room_duties_stay_inside_what_room_staff_can_do_and_members_are_the_speakers():
+    from paperbot.agents.roster3 import room_duty
+    never = ("판정, 개선판 계좌 승인", "계획 승인·축소·거부", "바이낸스 API 변경 기록 확인", "이상 데이터로 생긴 거래 표시",
+             "바이낸스 공지", "통과 후 새 계좌", "전략가 계획의 반대 근거")
+    for spec in R.room_specs():
+        for m in spec["members"]:
+            assert not any(x in room_duty(m) for x in never), (spec["room_id"], m, room_duty(m))
+            assert room_duty(m) in RM.system_prompt(m, "team")     # the model gets the same duty
+    # the meetings each team room holds (triggers.py) -> every role those meetings can call
+    held = {"team:market": ("morning", "owner"), "team:risk": ("owner",), "team:ops": ("incident", "owner"),
+            "team:review": ("evening", "owner"), "team:lead": ("evening", "checkpoint", "owner")}
+    for t in R.TEAM_ROOMS:
+        room, speakers = f"team:{t}", set()
+        for trig in held[room]:
+            for counts in ({"data_gap": 1}, {"liquidation": 1}):
+                speakers |= {r for r, _ in RM.team_plan(TR.Due(room, trig, 0, {"counts": counts}, trig))}
+        assert set(R.TEAM_ROOM_MEMBERS[t]) == speakers, room
+
+
+# --- smaller guards
+def test_a_hypothesis_row_cited_by_its_parent_path_is_not_a_fact():
+    hyp = {"trials": {"history": [{"trial_id": 3, "kind": "hypothesis",
+                                   "spec": {"text": "손절을 넓히면 좋아진다 (예전 직원 글)", "how_to_confirm": ""}}]}}
+    for ev in ("trials.history.0", "trials.history", "trials"):
+        out = RM._findings([{"claim": "손절을 넓히면 좋아진다", "kind": "fact", "evidence": [ev]}], hyp, "f", [])
+        assert out[0]["kind"] == "hypothesis", ev
+    test = {"trials": {"tests_so_far": 1, "history": [{"trial_id": 4, "kind": "test", "spec": {"k": 3.0}}]}}
+    assert RM._findings([{"claim": "시험 1번", "kind": "fact", "evidence": ["trials.history.0"]}], test, "f",
+                        [])[0]["kind"] == "fact"
+
+
+def test_no_link_reaches_telegram():
+    for s in ("claude.ai/x", "evil.dev", "notion.so/x", "tg://resolve?domain=evilbot", "shop.example.shop",
+              "ｅｖｉｌ．ｃｏｍ", "@admin_bot"):
+        assert "(링크 생략)" in A.telegram_safe(s), s
+    for s in ("2.5 ATR, p=0.012", "손절 1.5 ATR, ROE -12.5%", "e.g. 추세 반대", "N17_KC_RSI 15m"):
+        assert A.telegram_safe(s) == s
+
+
+def test_strict_json_reads_an_uppercase_fence_and_a_leading_bom():
+    assert RM.strict_json('```JSON\n{"a": 1}\n```') == {"a": 1}
+    assert RM.strict_json('﻿{"a": 1}') == {"a": 1}
+    assert RM.strict_json('설명 {"a": 1}') is None
+
+
+def test_a_korean_packet_is_not_undercounted_when_its_call_times_out():
+    assert RM.estimate_tokens({"t": "가" * 3000}) >= 3000
+
+
+def test_a_failed_telegram_delivery_is_never_reported_as_sent(world):
+    class Down:
+        def send(self, level, text):
+            return False                                      # what TelegramNotifier.send says when it failed
+    env = A.ActionEnv(conn=world.agents, room_id=ROOM, strategy=S, round_id=None, meeting="t", now_ms=QUIET,
+                      notifier=Down(), room_title="켈트너·RSI")
+    res = A.flag_owners(env, {"level": WARN, "text": "확인해 주세요"})
+    assert res["sent"] is False
+    texts = [m["text"] for m in world.messages()]
+    assert any(t.startswith("알림 전송 실패") for t in texts) and not any("보냈습니다" in t for t in texts)
+    team = {"headline": "h", "findings": [], "data_gaps": []}
+    runner = QueueRunner({"pnl_reviewer": [team], "whatif": [team], "risk_officer": [team], "team_lead": [LEAD]})
+    world.tick(runner, EVENING, notifier=Down())
+    lead = [m["text"] for m in world.messages("team:lead")]
+    assert any(t.startswith("텔레그램 전송 실패") for t in lead) and not any("텔레그램으로 보냈습니다" in t for t in lead)
+
+
+def test_read_only_database_paths_are_quoted(tmp_path):
+    from paperbot.agents import packets3
+    d = tmp_path / "odd?mode=rw#x"
+    d.mkdir()
+    p = str(d / "paper3.db")
+    c = sqlite3.connect(p)
+    c.execute("CREATE TABLE t (x)")
+    c.commit()
+    c.close()
+    ro = packets3._ro(p)
+    assert ro.execute("SELECT COUNT(*) FROM t").fetchone()[0] == 0
+    with pytest.raises(sqlite3.OperationalError):
+        ro.execute("INSERT INTO t VALUES (1)")
+    ro.close()
+
+
+def test_a_crashed_pass_is_shown_as_stopped(world, monkeypatch):
+    def boom(*a, **k):
+        raise RuntimeError("disk full")
+    monkeypatch.setattr(RM, "tick", boom)
+    monkeypatch.setattr(RM, "AUTH_PREFLIGHT", lambda _bin: (True, "oauth"))
+    with pytest.raises(RuntimeError):
+        RM.main(["tick", "--paper-db", world.paths["paper"], "--daily-db", world.paths["daily"],
+                 "--agents-db", world.paths["agents"], "--inbox-db", world.paths["inbox"], "--no-send"])
+    got = R.get_cursor(world.agents, R.TICK_CURSOR)
+    assert got["ok"] is False and got["why"] == "error" and got["detail"] == "RuntimeError"
+
+
+def test_budget_settings_that_silently_stop_a_kind_of_meeting_are_reported():
+    assert RM.budget_warnings(RM.RoomsPolicy()) == []
+    p = RM.RoomsPolicy()
+    RM.apply_budget_specs(p, ["loss=8", "incident=6", "total=22", "week=22"])       # 6 + 15 kept: 1 left
+    got = " | ".join(RM.budget_warnings(p))
+    assert "no loss review" in got and "only critical incidents" in got and got.count("can never start") == 2
+
+
+def test_a_call_cut_off_by_a_killed_pass_is_still_counted(world):
+    class Killed(BaseException):                              # SIGKILL / OOM: no Python handler runs
+        pass
+
+    class Dies:
+        def call(self, model, system_prompt, instruction, packet):
+            raise Killed()
+    world.losses()
+    with pytest.raises(Killed):
+        world.tick(Dies(), QUIET)
+    u = R.usage_today(world.agents, QUIET)
+    assert u["calls"] == 1 and u["tokens"] > 1000             # counted, at the estimated size of the call
+    [r] = world.rounds()
+    assert r["status"] == "running"
+    world.tick(QueueRunner({SPEC: [analysis(NOTE)], "devils_advocate": [challenge("agree")]}), QUIET + 15 * MIN)
+    assert [x["status"] for x in world.rounds()] == ["failed", "done"]     # the next pass cleans up and retries
+
+
+def test_one_large_call_cannot_eat_into_the_token_reserve(world):
+    # today: 1,149,000 tokens used; 850,000 kept for incidents and scheduled meetings; 1,000 left for the rest
+    world.agents.execute("INSERT INTO agent_calls VALUES (?,?,?,?,?,?,?)",
+                         (QUIET - HOUR, R.kst_day(QUIET), "weekly", "x", "sonnet", 1, 1_149_000))
+    world.agents.commit()
+    ctx = RM.RoundContext(world.agents, None, None, None, QueueRunner({}), None, QUIET, clock_ms=lambda: QUIET)
+    loss = RM.round_budget(TR.Due(ROOM, "loss_cluster", 2, {"class": "loss"}, "loss_cluster"), ctx)
+    loss.check(0)
+    with pytest.raises(RM.ReserveExceeded):
+        loss.check(5_000)                                     # a 5,000-token call would reach into the reserve
+    inc = RM.round_budget(TR.Due("team:ops", "incident", 0, {"class": "incident", "counts": {"liquidation": 1}},
+                                 "incident"), ctx)
+    inc.check(5_000)                                          # the reserve's owners may use it

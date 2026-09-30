@@ -1103,7 +1103,9 @@ def test_transient_failures_never_drop_the_owners_question(world):
 
 def test_limit_messages_the_cli_prints_are_usage_limits():
     for msg in ("5-hour limit reached ∙ resets 3pm", "You've hit your limit · resets 3pm",
-                "API Error: 429 rate_limit_error", "Claude AI usage limit reached|1760000000"):
+                "API Error: 429 rate_limit_error", "Claude AI usage limit reached|1760000000",
+                "You've hit your Sonnet limit · resets 3pm", "You've hit your Opus limit · resets Mon",
+                "You're out of extra usage · resets 3pm"):
         r = ClaudeCodeRunner(env={}, run=lambda c, m=msg, **k: type("P", (), {
             "stdout": json.dumps({"is_error": True, "result": m}), "stderr": "", "returncode": 1})())
         with pytest.raises(UsageLimitReached):

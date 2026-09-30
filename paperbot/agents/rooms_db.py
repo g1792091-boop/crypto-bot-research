@@ -52,20 +52,25 @@ APPROVAL_DECISIONS = ("approve", "reject")
 # allowed status changes after a proposal is written (anything else is refused, also by a trigger)
 PROPOSAL_FLOW = {"awaiting_owner": ("approved", "rejected"), "approved": ("rejected",)}
 
+RUNNING_FRESH_MS = 2 * 3_600_000   # a 'running' round older than this is not live (its tick died)
+TICK_CURSOR = "tick:last"          # {"ts", "ok", "why"?, "detail"?}: the agents tick's last sign of life
 MAX_TEXT = 8_000          # a room message longer than this is cut (the full answer stays in ``data``)
 MAX_OWNER_TEXT = 1_000    # what the dashboard accepts from an owner in one post
 
 STRATEGY_ROOM_ROLES = ("entry_timing", "exit_timing", "whatif", "devils_advocate", "validator", "approver")
 TEAM_ROOMS = ("market", "risk", "ops", "review", "lead")
-# Roles from other teams that speak in a team room's meetings (morning: strategist, devils_advocate,
-# team_lead in team:market; evening: risk_officer in team:review; incident: code_reviewer, team_lead in
-# team:ops; checkpoint: league_referee, rule_keeper in team:lead). Listed after the team's own members.
-TEAM_ROOM_GUESTS = {
-    "market": ("strategist", "devils_advocate", "team_lead"),
-    "risk": (),
-    "ops": ("code_reviewer", "team_lead"),
-    "review": ("risk_officer",),
-    "lead": ("league_referee", "rule_keeper"),
+# The members of a team room are exactly the roles its meetings call (rooms.team_plan; a test keeps the
+# two in step): morning chart_regime, derivs_flow, strategist, devils_advocate, team_lead in team:market;
+# evening pnl_reviewer, whatif, risk_officer in team:review and team_lead in team:lead; incident
+# ops_auditor, data_quality or code_reviewer, team_lead in team:ops; checkpoint league_referee,
+# rule_keeper, team_lead in team:lead; owner posts the room's responder(s) and team_lead. Roster roles
+# that never speak in a room are not listed as its members.
+TEAM_ROOM_MEMBERS = {
+    "market": ("chart_regime", "derivs_flow", "strategist", "devils_advocate", "team_lead"),
+    "risk": ("risk_officer", "team_lead"),
+    "ops": ("ops_auditor", "data_quality", "code_reviewer", "team_lead"),
+    "review": ("pnl_reviewer", "whatif", "risk_officer", "team_lead"),
+    "lead": ("team_lead", "league_referee", "rule_keeper"),
 }
 
 ROLE_NAMES = {r[0]: r[1] for r in ROLES + SPECIALISTS}
@@ -354,8 +359,7 @@ def room_specs() -> list[dict]:
     team_names = dict(TEAMS)
     out = []
     for t in TEAM_ROOMS:
-        own = [r[0] for r in ROLES if r[2] == t]
-        members = own + [g for g in TEAM_ROOM_GUESTS.get(t, ()) if g not in own]
+        members = list(TEAM_ROOM_MEMBERS[t])
         name = team_names[t]                     # "① 시장분석팀" -> "시장분석팀"
         title = name.split(" ", 1)[1] if " " in name else name
         out.append({"room_id": team_room_id(t), "kind": "team", "strategy": None, "title": title,
@@ -463,7 +467,8 @@ def last_message_id(conn_ro: Optional[sqlite3.Connection]) -> int:
 
 def rooms_overview(conn_ro: Optional[sqlite3.Connection], now_ms: Optional[int] = None) -> list[dict]:
     """One line per room for the room list: title, members, last message (id for the unread dot),
-    rounds started today (KST), proposals awaiting the owners, whether a round is running."""
+    rounds started today (KST), proposals awaiting the owners, whether a round is running (started
+    within ``RUNNING_FRESH_MS``: an older 'running' row is a dead tick's, not a live meeting)."""
     now_ms = _now_ms() if now_ms is None else now_ms
     day0 = kst_day_start_ms(now_ms)
 
@@ -476,7 +481,8 @@ def rooms_overview(conn_ro: Optional[sqlite3.Connection], now_ms: Optional[int] 
             "ORDER BY r.rowid"))
         today = dict(conn_ro.execute("SELECT room_id, COUNT(*) FROM rounds WHERE started_ts >= ? "
                                      "GROUP BY room_id", (day0,)).fetchall())
-        running = {r[0] for r in conn_ro.execute("SELECT DISTINCT room_id FROM rounds WHERE status = 'running'")}
+        running = {r[0] for r in conn_ro.execute("SELECT DISTINCT room_id FROM rounds WHERE status = 'running' "
+                                                 "AND started_ts >= ?", (now_ms - RUNNING_FRESH_MS,))}
         waiting = dict(conn_ro.execute("SELECT room_id, COUNT(*) FROM proposals WHERE status = 'awaiting_owner' "
                                        "GROUP BY room_id").fetchall())
         for r in rows:

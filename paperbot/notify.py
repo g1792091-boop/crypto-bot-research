@@ -7,7 +7,7 @@ import os
 import sys
 import urllib.parse
 import urllib.request
-from typing import Protocol
+from typing import Optional, Protocol
 
 INFO = "INFO"
 WARN = "WARN"
@@ -15,7 +15,8 @@ CRITICAL = "CRITICAL"
 
 
 class Notifier(Protocol):
-    def send(self, level: str, text: str) -> None: ...
+    # False: delivery failed (a notifier that cannot tell returns None)
+    def send(self, level: str, text: str) -> Optional[bool]: ...
 
 
 class NullNotifier:
@@ -55,7 +56,8 @@ class TelegramNotifier:
         }
         self.timeout = timeout
 
-    def send(self, level: str, text: str) -> None:
+    def send(self, level: str, text: str) -> bool:
+        """True when Telegram accepted the message; False when delivery failed (never raises)."""
         data = urllib.parse.urlencode({
             "chat_id": self.chats.get(level, self.chats[CRITICAL]),
             "text": f"[{level}] {text}",
@@ -66,6 +68,8 @@ class TelegramNotifier:
             urllib.request.urlopen(url, data=data, timeout=self.timeout).read()
         except Exception as exc:  # delivery failure must not stop trading logic
             print(f"telegram send failed: {type(exc).__name__}", file=sys.stderr)
+            return False
+        return True
 
 
 KO_KINDS = (("BUST", "파산"), ("drawdown", "낙폭"), ("ENGINE HALTED", "정지"), ("LIQUIDATED", "강제청산"))

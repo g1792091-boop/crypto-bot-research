@@ -1,12 +1,17 @@
-# Consistent copies of the paper databases (sqlite online backup), 14 days kept. agents3.db holds the
-# agents' hypothesis ledger (the gate's test count) and inbox.db the owners' posts and approvals.
-# The backup is not a writer of any of them: every source is opened read-only (sqlite3 -readonly, the
-# same as file:...?mode=ro), so closing it never checkpoints a left-over WAL into the database file.
-# A copy that fails makes the unit fail (exit status), after the old copies are pruned.
+# Consistent copies of the paperbot databases, 14 days kept (deploy/paperbot-backup.sh). agents3.db
+# holds the agents' hypothesis ledger (the gate's test count) and inbox.db the owners' posts and
+# approvals; they are copied first. Each copy is `VACUUM INTO` on a read-only connection: one read
+# transaction, so the live runner's commits every few seconds cannot restart it (the old `.backup`
+# restarted on every commit and never finished on a large paper3.db). The backup is not a writer of
+# any database. A copy that fails makes the unit fail (exit status), after the old copies are pruned;
+# a copy that hangs is stopped after 30 minutes (the unit fails then too).
 [Unit]
 Description=paperbot database backup
 
 [Service]
 Type=oneshot
 User=paperbot
-ExecStart=/bin/sh -c 'd=/var/backups/paperbot/$(date -u +%%Y%%m%%d); mkdir -p "$d" || exit 1; fail=0; for f in paper3 daily3 agents3 inbox; do [ -f /var/lib/paperbot/$f.db ] && { sqlite3 -readonly /var/lib/paperbot/$f.db ".backup $d/$f.db" || fail=1; }; done; find /var/backups/paperbot -mindepth 1 -maxdepth 1 -type d -mtime +14 -exec rm -rf {} +; exit $fail'
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=30min
+ExecStart=/bin/sh /opt/crypto-bot-research/deploy/paperbot-backup.sh

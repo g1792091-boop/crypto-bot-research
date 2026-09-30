@@ -24,8 +24,8 @@ EnvironmentFile=/etc/paperbot/agents.env
 Environment=PATH=/var/lib/paperbot/.local/bin:/usr/local/bin:/usr/bin:/bin
 ExecStart=/opt/paperbot/venv/bin/python -m paperbot.agents.rooms tick --paper-db /var/lib/paperbot/paper3.db --daily-db /var/lib/paperbot/daily3.db --agents-db /var/lib/paperbot/agents3.db --inbox-db /var/lib/paperbot/inbox.db --lab-dir /var/lib/paperbot/lab
 # The live runner comes first: the agents (and their 5-year tests) get lower CPU and disk priority
-# and bounded memory. A pass cut off here leaves its meeting 'running'; after 2 hours the meeting
-# counts as failed and is tried once more.
+# and bounded memory. A pass cut off here leaves its meeting 'running'; the next pass (it holds the
+# lock, so that meeting is dead) marks it failed and tries it once more.
 Nice=10
 CPUWeight=20
 IOSchedulingClass=best-effort

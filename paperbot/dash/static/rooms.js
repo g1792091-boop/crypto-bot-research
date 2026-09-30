@@ -18,7 +18,7 @@ const PSTATUS_KO = {awaiting_owner: "두 분 확인 대기", approved: "승인�
 const TRIAL_KIND_KO = {hypothesis: "가설", test: "5년 시험", copy_proposal: "복제 제안"};
 const TRIAL_ST_KO = {passed: "통과", failed: "불통과", described: "설명용", no_data: "자료 없음", error: "오류"};
 const rs = {ov: null, filter: "", q: "", cur: null, room: null, msgs: [], pending: [], lastId: 0, hasMore: false,
-  seen: null, busy: false, again: false, side: {}, confirm: null, req: 0, sideReq: 0};
+  seen: null, busy: false, again: false, side: {}, confirm: null, req: 0, sideReq: 0, agentSt: ""};
 
 // ------------------------------------------------------------ helpers
 function sget(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }
@@ -62,6 +62,24 @@ function testKo(t) {   // a trial spec / proposed change in one short Korean lin
   return t.text || t.template || "내용 없음";
 }
 const curOv = () => rs.ov && rs.ov.rooms.find((r) => r.room_id === rs.cur);
+// Are the staff really running? The agents tick leaves its last sign of life in agents3.db (last_tick:
+// {ts, ok, why}). "stopped": no sign for three ticks and no meeting running (timer off, server down);
+// "login": the subscription login check refused the meetings (API key found, token expired); "error":
+// the last pass crashed; "new": the agents have never run. Only "ok" may promise an answer soon.
+function agentsState(ov) {
+  if (!ov || !ov.ready) return {st: "new", age: null};
+  const lt = ov.last_tick, running = (ov.rooms || []).some((r) => r.running);
+  const age = lt && lt.ts ? Math.max(0, (ov.now || Date.now()) - lt.ts) : null;
+  if (lt && lt.ok === false) return {st: lt.why === "login" ? "login" : "error", age};
+  if (!running && (age == null || age > 3 * (ov.tick_every_ms || 900000))) return {st: "stopped", age};
+  return {st: "ok", age};
+}
+const agoKo = (age) => age == null ? "점검 기록 없음" : `마지막 점검 ${Math.round(age / 60000)}분 전`;
+function pendingHint(st) {
+  if (st === "ok") return "직원들이 다음 차례에 읽고 답합니다";
+  if (st === "new") return "에이전트가 돌기 시작하면 읽고 답합니다";
+  return "에이전트가 멈춰 있어 아직 전달되지 않습니다";
+}
 const unread = (r) => r.last_id > ((rs.seen && rs.seen[r.room_id]) || 0);
 const roomVisible = () => state.view === "rooms" && !!rs.cur && document.visibilityState === "visible" &&
   (!narrow() || $("rooms").dataset.pane === "chat");
@@ -81,22 +99,32 @@ async function loadOverview() {
       sset("pb-room-seen", rs.seen);
     }
   }
+  const st = agentsState(ov).st, stChanged = st !== rs.agentSt;
+  rs.agentSt = st;
   renderRoomList(); navDot(); aiChip();
   if (rs.cur) {
     renderHead();
-    if (wasRunning !== !!(curOv() || {}).running) renderChat(nearBottom());
+    if (stChanged || wasRunning !== !!(curOv() || {}).running) renderChat(nearBottom());
   }
 }
 function aiChip() {
   const ov = rs.ov;
   if (!ov) return;
   const running = ov.rooms.filter((r) => r.running).length;
-  if (!ov.ready) chip("chip-ai", null, "에이전트 시작 전");
+  const a = agentsState(ov), ago = agoKo(a.age);
+  if (a.st === "new") chip("chip-ai", null, "에이전트 시작 전");
+  else if (a.st === "login") chip("chip-ai", false, "에이전트 멈춤 (로그인 확인)");
+  else if (a.st === "error") chip("chip-ai", false, `에이전트 멈춤 (오류, ${ago})`);
+  else if (a.st === "stopped") chip("chip-ai", null, `에이전트 멈춤 (${ago})`);
   else chip("chip-ai", true, running ? `자동 토론 중 ${running}곳` : "자동 토론 대기");
-  $("r-auto").classList.toggle("off", !ov.ready);
-  $("r-auto").innerHTML = ov.ready
-    ? "<b>● 자동 토론</b> 손실이 쌓이거나 사고가 나거나 정해진 시간이 되면 직원들이 스스로 회의를 열고 결정합니다. 두 분이 글을 쓰지 않아도 됩니다."
-    : "<b>○ 자동 토론 시작 전</b> 서버에서 에이전트 순번이 돌기 시작하면 직원들이 스스로 회의를 엽니다. 지금 남긴 글은 그때 읽습니다.";
+  $("r-auto").classList.toggle("off", a.st !== "ok");
+  $("r-auto").innerHTML = {
+    ok: "<b>● 자동 토론</b> 손실이 쌓이거나 사고가 나거나 정해진 시간이 되면 직원들이 스스로 회의를 열고 결정합니다. 두 분이 글을 쓰지 않아도 됩니다.",
+    new: "<b>○ 자동 토론 시작 전</b> 서버에서 에이전트 순번이 돌기 시작하면 직원들이 스스로 회의를 엽니다. 지금 남긴 글은 그때 읽습니다.",
+    stopped: `<b>○ 자동 토론이 멈춰 있습니다 — 서버 확인 필요</b> 에이전트 순번이 돌지 않고 있습니다(${esc(ago)}). 타이머가 꺼졌거나 서버에 문제가 있을 수 있습니다. 남긴 글은 다시 돌기 시작하면 읽습니다.`,
+    login: "<b>⚠ 로그인 확인에서 멈춤(API 키 감지 등): 회의가 열리지 않습니다</b> 서버에서 Claude 구독 로그인을 확인해 주세요(docs/agent-rooms.md의 설치 1번). 남긴 글은 그 뒤에 읽습니다.",
+    error: `<b>⚠ 에이전트 실행 중 오류로 멈춤</b> 서버 기록(journalctl -u paperbot-agents)을 확인해 주세요(${esc(ago)}). 남긴 글은 다시 돌기 시작하면 읽습니다.`,
+  }[a.st];
 }
 function navDot() {
   const n = rs.ov ? rs.ov.rooms.filter(unread).length : 0;
@@ -240,7 +268,9 @@ function renderHead() {
   $("r-sub").textContent = `${base.kind === "team" ? "팀 방" : "매매법 전담 방"} · 멤버 ${members}명` +
     (r ? ` · 오늘 회의 ${r.rounds_today}번` : "");
   $("r-state").innerHTML = r && r.running ? '<span class="pill live">토론 중</span>'
-    : '<span class="pill" title="조건이 되면 직원들이 스스로 회의를 엽니다">다음 회의 대기</span>';
+    : ["ok", "new"].includes(agentsState(rs.ov).st)
+      ? '<span class="pill" title="조건이 되면 직원들이 스스로 회의를 엽니다">다음 회의 대기</span>'
+      : '<span class="pill bad" title="에이전트가 멈춰 있어 회의가 열리지 않습니다">에이전트 멈춤</span>';
   const n = r ? r.open_proposals : 0;
   $("r-banner").hidden = !n;
   if (n) $("r-banner").innerHTML = `두 분 확인을 기다리는 제안 <b>${n}건</b><span>승인·거절 →</span>`;
@@ -269,7 +299,7 @@ function ownerHtml(m, pending) {
   const who = pending ? (m.author ? `두 분 (${m.author})` : "두 분") : (m.speaker_name || "두 분");
   return `<div class="m owner ${pending ? "pending" : ""}"><div class="bd"><div class="who"><time>${hm(m.ts)}</time><b>${esc(who)}</b>
     ${pending ? '<span class="kchip wait">전달 대기</span>' : ""}</div><div class="bub">${esc(m.text)}</div>
-    ${pending ? '<div class="hint">직원들이 다음 차례에 읽고 답합니다</div>' : ""}</div></div>`;
+    ${pending ? `<div class="hint">${esc(pendingHint(agentsState(rs.ov).st))}</div>` : ""}</div></div>`;
 }
 function msgHtml(m) {
   const k = m.kind, who = m.speaker_name || m.role;
@@ -335,7 +365,8 @@ $("r-form").onsubmit = async (e) => {
     const d = await apiPost(`/api/rooms/${encodeURIComponent(id)}/say`, {text});
     rin.value = ""; growInput();
     if (id === rs.cur) { rs.pending.push(d); renderChat(true); }
-    toast("전달했습니다. 직원들이 다음 차례에 읽고 답합니다");
+    const st = agentsState(rs.ov).st;
+    toast(st === "ok" ? "전달했습니다. 직원들이 다음 차례에 읽고 답합니다" : `저장했습니다. ${pendingHint(st)}`);
   } catch (err) { toast(err.message); } finally { $("r-send").disabled = false; }
 };
 
@@ -384,6 +415,21 @@ function propCard(p) {
     ${(g.reasons || []).length ? `<ul class="reasons">${g.reasons.slice(0, 5).map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
     ${acts}</div>`;
 }
+// One row of the hypothesis ledger. A copy proposal is named by its PROPOSAL number (the one the owners
+// approve or reject, "제안 #N") with its status; the test it came from is "시험 #M"; other rows are "기록 #K".
+function ledgerRow(t) {
+  const sp = t.spec || {};
+  if (t.kind === "copy_proposal") {
+    const st = t.proposal_status;
+    const cls = st === "approved" ? "ok" : st === "awaiting_owner" ? "acc"
+      : (st && (st.startsWith("blocked") || st === "rejected")) ? "bad" : "";
+    return `<div class="trow"><span>${t.proposal_id != null ? `복제 제안 #${esc(t.proposal_id)}` : "복제 제안"} · ${esc(testKo(sp.test))}${sp.from_trial != null ? ` (시험 #${esc(sp.from_trial)})` : ""}</span>
+      ${st ? `<span class="pill ${cls}">${esc(PSTATUS_KO[st] || st)}</span>` : ""}</div>`;
+  }
+  const label = t.kind === "test" ? `시험 #${esc(t.id)}` : `기록 #${esc(t.id)} ${esc(TRIAL_KIND_KO[t.kind] || t.kind)}`;
+  return `<div class="trow"><span>${label} · ${esc(testKo(sp))}</span>
+    ${t.result ? `<span class="pill ${t.result.status === "passed" ? "ok" : t.result.status === "failed" ? "bad" : ""}">${esc(TRIAL_ST_KO[t.result.status] || t.result.status)}</span>` : ""}</div>`;
+}
 function bar(v, cap) {
   if (!cap) return "";
   const f = Math.min(1, (v || 0) / cap);
@@ -405,7 +451,7 @@ function renderSide() {
     <div class="hint">직원들이 스스로 회의를 열고 결정합니다. 두 분이 글을 남기면 다음 차례에 그 이야기도 다룹니다.</div></div>`;
   if (info && info.members_info) h += `<div class="rsec2"><h4>멤버 <small>${info.members_info.length}명</small></h4>${info.members_info.map((m) =>
     `<div class="mem">${roleAv(m.id, m.name)}<div class="mb"><div class="nm">${esc(m.name)}</div><div class="du">${esc(m.duty)}</div></div></div>`).join("")}</div>`;
-  if (past.length) h += `<div class="rsec2"><h4>지난 제안</h4>${past.map((p) => `<div class="prow"><span>#${esc(p.id)} ${esc(testKo((p.change || {}).test))}</span>
+  if (past.length) h += `<div class="rsec2"><h4>지난 제안</h4>${past.map((p) => `<div class="prow"><span>제안 #${esc(p.id)} ${esc(testKo((p.change || {}).test))}</span>
     <span class="pill ${p.effective_status === "approved" ? "ok" : p.effective_status.startsWith("blocked") ? "bad" : ""}">${esc(PSTATUS_KO[p.effective_status] || p.effective_status)}</span>
     ${p.status === "approved" && !(p.owner_decision && !p.owner_decision.applied) ? decideButtons(p, "reject-only") : ""}</div>`).join("")}</div>`;
   h += `<div class="rsec2"><h4>메모 <small>${notes.length}</small></h4>${notes.length ? notes.slice(0, 8).map((n) =>
@@ -415,8 +461,7 @@ function renderSide() {
     h += `<div class="rsec2"><h4>가설 장부 ${rs.cur.startsWith("team:") ? "<small>전체 매매법</small>" : ""}</h4>
       <div class="ledger"><div><b>${esc(c.hypothesis || 0)}</b><span>가설</span></div><div><b>${esc(c.test || 0)}</b><span>5년 시험</span></div>
       <div><b>${esc(c.copy_proposal || 0)}</b><span>복제 제안</span></div></div>
-      ${(trials.trials || []).slice(0, 5).map((t) => `<div class="trow"><span>#${esc(t.id)} ${esc(TRIAL_KIND_KO[t.kind] || t.kind)} · ${esc(testKo(t.spec))}</span>
-        ${t.result ? `<span class="pill ${t.result.status === "passed" ? "ok" : t.result.status === "failed" ? "bad" : ""}">${esc(TRIAL_ST_KO[t.result.status] || t.result.status)}</span>` : ""}</div>`).join("")}
+      ${(trials.trials || []).slice(0, 5).map(ledgerRow).join("")}
       <div class="hint">시험을 많이 할수록 통과 기준이 엄격해집니다(우연 방지).</div></div>`;
   }
   if (usage) {

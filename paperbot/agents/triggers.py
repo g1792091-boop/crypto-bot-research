@@ -39,20 +39,23 @@ written to ``cursors`` only when the round ends as ``done`` or ``no_action``.
 Until then the same evidence is found again, so a crash never loses a trigger:
 
 - a ``running`` round younger than 2h blocks the same trigger in the same room
-  (it may still be working);
+  (it may still be working; the rooms tick, which holds the tick lock, first marks every
+  'running' round it finds as failed, since no live pass can own one then);
 - a ``running`` round older than 2h, or a ``failed`` round, counts as a failed
   attempt: the trigger fires again once (``data["retry_of"]``); after two failed
   attempts for the same evidence it waits for new evidence;
 - a ``stopped_budget`` round pauses what its stop says (``decision.stopped``): a class
   cap its own class, the total / weekly cap every class, the reserve for incidents and
   scheduled meetings the other classes, until the next KST day (the budgets reset); a
-  Claude plan usage limit pauses everything for ``usage_backoff_ms`` (1h), because the
-  plan's window resets within hours, not at midnight. A stopped round does not count
+  Claude plan usage limit pauses everything for ``usage_backoff_ms`` (1h from when the round
+  stopped), because the plan's window resets within hours, not at midnight. A loss_cluster or
+  non-critical incident round stopped at its reduced cap (``budget_subcap``) pauses nothing: the
+  reserve for busts / liquidations stays usable. A stopped round does not count
   against the room's daily cap;
 - a ``failed`` round marked ``transient`` (the runner never answered: outage, CLI error)
   is not a failed attempt: the same evidence fires again. Nothing is due for
-  ``transient_backoff_ms`` after it, doubling with each transient failure in a row (at
-  most ``transient_backoff_max_ms``), so a long outage does not fill a room with notices;
+  ``transient_backoff_ms`` after it (from when it failed), doubling with each transient failure
+  in a row (at most ``transient_backoff_max_ms``), so a long outage does not fill a room with notices;
 - a round that ended ``done`` / ``no_action`` is never repeated for the same
   evidence key, even if its cursors were not written.
 
@@ -94,7 +97,8 @@ CLASSES = ("incident", "owner", "loss", "scheduled", "weekly")
 # What a stopped_budget round pauses until the next KST day, by decision.stopped (when the
 # decision has no explicit 'blocks' list). None = only the round's own class.
 STOP_BLOCKS = {"budget_class": None, "budget_total": CLASSES, "budget_week": CLASSES,
-               "budget_reserve": ("owner", "loss", "weekly")}
+               "budget_reserve": ("owner", "loss", "weekly"),
+               "budget_subcap": ()}      # a reduced cap (class minus the bust / critical reserve): nothing
 
 # (kind, level, text fragment) for paper3.db alerts; the first match wins, "" matches any text.
 INCIDENT_ALERTS = (
@@ -231,15 +235,16 @@ class _Rooms:
         self.now, self.p = now_ms, p
         self.cursors = {k: v for k, v in _rows(conn, "SELECT k, v FROM cursors")}
         self.rounds = []
-        for rid, room, trig, tdata, started, status, calls, decision in _rows(
-                conn, "SELECT round_id, room_id, trigger, trigger_data, started_ts, status, calls, decision "
+        for rid, room, trig, tdata, started, ended, status, calls, decision in _rows(
+                conn, "SELECT round_id, room_id, trigger, trigger_data, started_ts, ended_ts, status, calls, decision "
                       "FROM rounds WHERE started_ts >= ? OR status = 'running' ORDER BY round_id",
                 (now_ms - p.rounds_lookback_ms,)):
             d, dec = _json(tdata), _json(decision)
             blocks = dec.get("blocks")
             self.rounds.append({"round_id": rid, "room_id": room, "trigger": trig, "key": d.get("key"),
                                 "class": d.get("class") or TRIGGER_CLASS.get(trig),
-                                "started_ts": _int(started), "status": status, "calls": _int(calls),
+                                "started_ts": _int(started), "ended_ts": _int(ended, _int(started)),
+                                "status": status, "calls": _int(calls),
                                 "stopped": dec.get("stopped"), "transient": dec.get("transient") is True,
                                 "calls_ok": _int(dec.get("calls_ok"), _int(calls)),
                                 "blocks": tuple(blocks) if isinstance(blocks, list) else None})
@@ -296,9 +301,10 @@ class _Rooms:
                    and cls in self.blocks(r) for r in self.rounds)
 
     def usage_paused(self) -> bool:
-        """A round hit the Claude plan's usage limit less than ``usage_backoff_ms`` ago."""
+        """A round hit the Claude plan's usage limit less than ``usage_backoff_ms`` ago (measured from
+        when it stopped, not from when it started)."""
         return any(r["status"] == "stopped_budget" and r["stopped"] == "usage_limit"
-                   and self.now - r["started_ts"] < self.p.usage_backoff_ms for r in self.rounds)
+                   and self.now - r["ended_ts"] < self.p.usage_backoff_ms for r in self.rounds)
 
     def transient_paused(self) -> bool:
         """The latest finished rounds failed because the runner never answered: back off."""
@@ -309,7 +315,7 @@ class _Rooms:
             if not (r["status"] == "failed" and r["transient"]):
                 break
             k += 1
-            last = r["started_ts"] if last is None else last
+            last = r["ended_ts"] if last is None else last      # the pause runs from when it failed
         if not k:
             return False
         pause = min(self.p.transient_backoff_max_ms, self.p.transient_backoff_ms * 2 ** min(k - 1, 20))
@@ -745,14 +751,17 @@ def advance_cursors(agents_conn: sqlite3.Connection, due_or_data: Union[Due, dic
 
 
 def expire_stale_rounds(agents_conn: sqlite3.Connection, now_ms: int,
-                        policy: Optional[TriggerPolicy] = None) -> list[int]:
-    """Mark 'running' rounds older than ``policy.stale_ms`` as 'failed' (a tick died during
-    them), so the dashboard stops showing them as live. Optional: ``find_due`` already treats
-    them as failed attempts, so calling this does not change which rounds are due."""
+                        policy: Optional[TriggerPolicy] = None, *, stale_ms: Optional[int] = None,
+                        detail: str = "회의 도중 멈춤 (2시간 넘게 진행 중)") -> list[int]:
+    """Mark 'running' rounds older than ``policy.stale_ms`` (or ``stale_ms``) as 'failed' (a tick died
+    during them), so the dashboard stops showing them as live; each counts as one failed attempt (the
+    evidence is tried once more). The rooms tick calls it with ``stale_ms=0`` once it holds the tick
+    lock: no other pass can own a 'running' round then."""
     p = policy or TriggerPolicy()
+    age = p.stale_ms if stale_ms is None else int(stale_ms)
     ids = [int(r[0]) for r in _rows(agents_conn, "SELECT round_id FROM rounds WHERE status = 'running' "
-                                                 "AND started_ts <= ?", (now_ms - p.stale_ms,))]
-    why = json.dumps({"reason": "stale", "detail": "회의 도중 멈춤 (2시간 넘게 진행 중)"}, ensure_ascii=False)
+                                                 "AND started_ts <= ?", (now_ms - age,))]
+    why = json.dumps({"reason": "stale", "detail": detail}, ensure_ascii=False)
     for rid in ids:
         agents_conn.execute("UPDATE rounds SET status = 'failed', ended_ts = ?, decision = ? WHERE round_id = ?",
                             (int(now_ms), why, rid))
@@ -920,12 +929,17 @@ def reconcile_paper_cursors(agents_conn: sqlite3.Connection, paper_ro: Optional[
 
 
 def store_paper_fingerprint(agents_conn: sqlite3.Connection, paper_ro: Optional[sqlite3.Connection]) -> Optional[dict]:
-    """Remember what the cursors stand on now (``paper_fingerprint``), for the next tick's check."""
+    """Remember what the cursors stand on now (``paper_fingerprint``), for the next tick's check.
+    While paper3.db has no run start yet (a new run's file before its accounts are committed, or a
+    crash loop at that point) the run start of the last fingerprint is kept, so the tick that first
+    sees the new accounts still finds the run changed (checkpoint:day back to 0)."""
     fp = paper_fingerprint(paper_ro, agents_conn)
     if fp is None:
         return None
-    text = json.dumps(fp, sort_keys=True)
     r = _one(agents_conn, "SELECT v FROM cursors WHERE k = ?", (PAPER_FP,))
+    if fp.get("run") is None and r is not None:
+        fp["run"] = _json(r[0]).get("run")
+    text = json.dumps(fp, sort_keys=True)
     if r is None or r[0] != text:
         agents_conn.execute("INSERT INTO cursors (k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v",
                             (PAPER_FP, text))

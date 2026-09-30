@@ -122,6 +122,43 @@ SPECIALISTS = tuple(
      "now")
     for k, v in STRATEGY_KO.items())
 
+# What each role does in the agent ROOMS (docs/agent-rooms.md): shown as the member's duty on the
+# dashboard and given to the model as its '담당:' line. Worded within what room staff can do: read the
+# JSON packet code built (no tools, files or internet) and answer; code runs one of six actions (note,
+# hypothesis, 5-year test, copy proposal, owners' alert, nothing); code judges the gate. The roster duties
+# above describe the wider v3 team and claim powers the rooms do not have.
+ROOM_DUTY = {
+    "devils_advocate": "앞 사람(전담 에이전트·전략가)의 분석과 제안에 반대 근거를 내고 동의·반대·시험 필요 중 하나로 판정",
+    "entry_timing": "코드가 계산한 진입 순간의 차트 상황(추세 반대, 추격 등)과 새 손실을 읽고 의견",
+    "exit_timing": "첫 익절 잠금 근처까지 갔다가 진 손실 등 청산 기록을 읽고 의견",
+    "whatif": "밤 점검이 계산한 '손절을 1.5·2.5·3 ATR로 했다면' 결과를 읽고 의견(손실 거래만 본 결과)",
+    "validator": "코드가 계산한 5년 시험 결과를 쉬운 말로 설명(통과·불통과는 코드가 정함)",
+    "approver": "관문을 통과한 시험의 복제 계좌 제안에 찬성·반대 의견(코드 관문과 복제 자리 한도는 뒤집지 못하고, "
+                "계좌를 만들지 않음)",
+    "chart_regime": "코드가 계산한 코인별 장세(추세·박스 등)를 읽고 해석(판정은 코드)",
+    "derivs_flow": "패킷의 장세·체결·밤 점검 숫자로 과열·쏠림을 해석(패킷에 없는 자료는 '모름')",
+    "strategist": "장세와 리그 성적을 읽고 코인별 방향 의견(원본 계좌에는 적용하지 않음)",
+    "team_lead": "회의 내용을 세 줄로 요약하고 두 분이 할 일을 정리(텔레그램 발송은 코드)",
+    "risk_officer": "손실·레버리지·파산 위험 숫자를 읽고 의견(계획을 승인·변경하지 못함)",
+    "pnl_reviewer": "최근 손익과 손실 특징을 읽고 원인 정리(거래 30건 미만이면 가설로만)",
+    "ops_auditor": "사고 때 코드가 모은 알림·밤 점검 기록을 읽고 원인과 영향 설명",
+    "data_quality": "빠진 봉·튀는 가격 기록을 읽고 영향 설명",
+    "code_reviewer": "사고 때 코드가 모은 오류·알림 기록을 읽고 원인 추정(코드를 읽거나 고치지 못함)",
+    "league_referee": "코드가 계산한 합격 현황과 리그 성적을 읽고 실력인지 운인지 설명",
+    "rule_keeper": "고정된 규칙·합격 기준이 지켜지는지 점검(규칙·기준을 바꾸지 못함)",
+    **{f"spec_{k}": (f"{v} 매매법({k})의 5개 봉 계좌를 맡음. 코드가 만든 손실 카드와 성적을 읽고 원인을 분석해 "
+                     "여섯 가지 행동 중 하나를 제안(5년 시험 요청 포함. 통과해도 복제 계좌는 두 분 승인과 "
+                     "복제 기능이 생긴 뒤)") for k, v in STRATEGY_KO.items()},
+}
+
+
+def room_duty(role: str) -> str:
+    """The role's duty in the rooms (``ROOM_DUTY``), else its roster duty."""
+    if role in ROOM_DUTY:
+        return ROOM_DUTY[role]
+    return next((r[5] for r in ROLES + SPECIALISTS if r[0] == role), "")
+
+
 MEETINGS = (
     ("morning", "아침 계획", "매일 08:00 (한국 시간)"),
     ("evening", "저녁 점검", "매일 22:00"),
