@@ -2012,3 +2012,49 @@ def test_a_hung_api_does_not_use_up_the_liquidation_calls(world):
     with pytest.raises(AgentTimeout):
         b.call("sonnet", "s", "i", {"role": "x"})
     assert b.used_class("incident") == (1, 50_000)
+
+
+def test_telegram_text_has_no_invisible_format_characters():
+    """NFKC keeps bidi controls (U+202E, U+2066 ...) and zero-width characters: model text could reorder
+    its Telegram line or hide a link from the check with them."""
+    got = A.telegram_safe("손실 ‮3.5배‬ 승률 ⁦x⁩ see evil​.com now")
+    assert not any(__import__("unicodedata").category(ch) == "Cf" for ch in got)
+    assert "(링크 생략)" in got and got.startswith("손실 3.5배 승률 x")
+
+
+def test_the_rules_say_when_no_further_test_can_pass_gate_one(world, monkeypatch):
+    """With 2,000 bootstrap draws p is never below 1/2001: from the 101st test of a room gate (a) cannot pass,
+    and the packet and the gate reason now say so (the agents kept asking for tests that could not pass)."""
+    ctx = RM.RoundContext(world.agents, None, None, None, QueueRunner({}), None, QUIET, clock_ms=lambda: QUIET)
+    for n, can in ((10, True), (99, True), (100, False), (150, False)):
+        monkeypatch.setattr(R, "trial_count", lambda *a, _n=n, **k: _n)
+        got = RM._rules(ctx, ROOM, None)
+        assert got["next_test_can_pass_gate"] is can and got["p_floor"] == round(1 / 2001, 6), n
+    assert "넘을 수 없음" in L.gate({"ok": True, "periods": {}}, 101)["reasons"][0]
+    assert "넘을 수 없음" not in L.gate({"ok": True, "periods": {}}, 100)["reasons"][0]
+
+
+def test_the_dry_run_never_replays_a_stale_wal_of_a_restored_agents_db(tmp_path):
+    src = tmp_path / "agents3.db"
+    live = sqlite3.connect(str(tmp_path / "live.db"))
+    live.execute("CREATE TABLE t (x)")
+    live.execute(f"VACUUM INTO '{src}'")                      # a backup copy: rollback-journal header
+    live.close()
+    (tmp_path / "agents3.db-wal").write_bytes(b"old wal of the replaced file")
+    assert R.stale_wal(str(src))
+    dst = tmp_path / "copy.db"
+    RM._copy_db(str(src), str(dst))
+    assert not dst.exists() and (tmp_path / "agents3.db-wal").read_bytes() == b"old wal of the replaced file"
+
+
+def test_no_later_call_of_a_slow_meeting_can_outlive_the_pass(world):
+    """tick_wall_s was checked only before a meeting starts: a slow meeting's later calls (900 s each) could
+    run past the service's TimeoutStartSec, and the killed pass counted as a failed attempt of its evidence."""
+    world.losses()
+    staff = QueueRunner({SPEC: [analysis(NOTE)], "devils_advocate": [challenge("agree")]})
+    staff.timeout = 900.0
+    out = world.tick(staff, QUIET, policy=RM.RoomsPolicy(tick_hard_s=899.0))
+    assert [c["role"] for c in staff.calls] == [SPEC]                 # the first call ran, the second could not
+    said = [m for m in world.messages() if m["kind"] == "system" and "시간 한도" in m["text"]]
+    assert said and (said[0].get("data") or {}).get("reason") == "tick_wall"
+    assert out["rounds"][0]["calls"] == 1

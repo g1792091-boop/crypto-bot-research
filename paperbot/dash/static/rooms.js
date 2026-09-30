@@ -448,6 +448,11 @@ function ledgerRow(t) {
   return `<div class="trow"><span>${label} · ${esc(testKo(sp))}</span>
     ${t.result ? `<span class="pill ${t.result.status === "passed" ? "ok" : t.result.status === "failed" ? "bad" : ""}">${esc(TRIAL_ST_KO[t.result.status] || t.result.status)}</span>` : ""}</div>`;
 }
+// a meeting kind's bar: whichever of its call and token caps is nearer (a token cap often binds first)
+function classBar(c) {
+  if (!c.cap_calls && !c.cap_tokens) return "";
+  return bar(Math.max(c.cap_calls ? (c.calls || 0) / c.cap_calls : 0, c.cap_tokens ? (c.tokens || 0) / c.cap_tokens : 0), 1);
+}
 function bar(v, cap) {
   if (!cap) return "";
   const f = Math.min(1, (v || 0) / cap);
@@ -485,9 +490,11 @@ function renderSide() {
   if (usage) {
     h += `<div class="rsec2"><h4>오늘 AI 사용</h4><div class="ubig"><b>${esc(usage.calls)}</b>${usage.cap_calls ? ` / ${esc(usage.cap_calls)}회` : "회"}
       <span class="muted">· 토큰 ${kfmt(usage.tokens)}${usage.cap_tokens ? " / " + kfmt(usage.cap_tokens) : ""}</span></div>${bar(usage.calls, usage.cap_calls)}
-      ${usage.classes.map((c) => `<div class="urow"><span>${esc(c.name_ko)}</span><span class="mono">${esc(c.calls)}${c.cap_calls ? " / " + esc(c.cap_calls) : ""}</span></div>${bar(c.calls, c.cap_calls)}`).join("")}
+      ${usage.classes.map((c) => `<div class="urow"><span>${esc(c.name_ko)}</span><span class="mono">${esc(c.calls)}${c.cap_calls ? " / " + esc(c.cap_calls) : ""}회 · 토큰 ${kfmt(c.tokens || 0)}${c.cap_tokens ? " / " + kfmt(c.cap_tokens) : ""}</span></div>${classBar(c)}`).join("")}
       ${usage.week ? `<div class="urow"><span>최근 7일 합계</span><span class="mono">${esc(usage.week.calls)}${usage.week.cap_calls ? " / " + esc(usage.week.cap_calls) : ""}</span></div>${bar(usage.week.calls, usage.week.cap_calls)}` : ""}
-      <div class="hint">두 분의 Claude 구독 사용량을 함께 씁니다. 한도에 닿으면 회의를 다음으로 미룹니다.</div></div>`;
+      <div class="hint">두 분의 Claude 구독 사용량을 함께 씁니다. 한도에 닿으면 회의를 다음으로 미룹니다.
+        하루 합계 중 사고 점검과 08:00·22:00 회의 몫(아직 안 쓴 부분)은 늘 비워 두므로, 다른 회의는 합계 막대가 다 차기 전에 멈춥니다.
+        호출이 크면 토큰 한도가 호출 수보다 먼저 닿습니다.</div></div>`;
   }
   $("r-side").innerHTML = h;
   document.querySelectorAll("#r-side [data-dec]").forEach((b) => b.onclick = () => {

@@ -697,15 +697,6 @@ class Rooms:
         return out
 
     @staticmethod
-    def _decision_of(p: dict, decs: dict) -> Optional[dict]:
-        """The owners' latest click on this proposal; a click older than the proposal is not about it (an
-        agents3.db restored from an older backup reuses proposal ids) and is never shown or counted."""
-        dec = decs.get(int(p["id"]))
-        if dec is not None and int(dec.get("ts") or 0) < int(p.get("ts") or 0):
-            return None
-        return dec
-
-    @staticmethod
     def _effective(p: dict, dec: Optional[dict], applied_upto: int) -> tuple[str, bool]:
         """(status the owners should see, whether their latest click is already applied)."""
         if dec is None:
@@ -725,7 +716,7 @@ class Rooms:
             upto = self._cursor(a, "inbox:approvals")
             now = self._gate_now(a)
         for p in rows:
-            dec = self._decision_of(p, decs)
+            dec = decs.get(int(p["id"]))
             eff, applied = self._effective(p, dec, upto)
             p["gate_now"] = now.get(str(p["id"]))
             p["strategy_ko"] = STRATEGY_KO.get(p.get("strategy") or "", p.get("strategy"))
@@ -833,7 +824,7 @@ class Rooms:
             now = self._gate_now(a).get(str(proposal_id))
         if p is None:
             raise HTTPException(404, "그런 제안이 없습니다")
-        dec = self._decision_of(p, self._decisions())
+        dec = self._decisions().get(int(proposal_id))
         eff, _ = self._effective(p, dec, upto)
         gate_ok = isinstance(p.get("gate"), dict) and p["gate"].get("pass") is True
         if decision == "approve":

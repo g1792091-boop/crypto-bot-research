@@ -233,6 +233,9 @@ class RoomsPolicy:
     pace_lead_hours: float = 3.0
     max_calls_per_tick: int = 12            # no new meeting once a tick has used this many (incidents exempt)
     tick_wall_s: float = 45 * 60            # no new meeting after this many seconds of one tick
+    # no model call starts once this many seconds of the tick plus the runner's timeout would pass it (the
+    # service's TimeoutStartSec is 100 minutes: a pass killed there counts as a failed attempt of its evidence)
+    tick_hard_s: float = 95 * 60
     copy_cap_per_strategy: int = 1
     copy_cap_total: int = 10
     flag_max_per_day: int = 3
@@ -1288,9 +1291,13 @@ def _passed_unproposed(ctx: RoundContext, room: str, strategy: str) -> list[int]
 
 def _rules(ctx: RoundContext, room: str, strategy: Optional[str]) -> dict:
     n = R.trial_count(ctx.agents_conn, room_id=room, kinds=("test",))
+    pf = float(getattr(A._lab, "P_FLOOR", 1 / 2001))
     return {"allowed_actions": {a: A.ACTION_KO[a] for a in A.ALLOWED_ACTIONS},
             "tests": A.test_rules(), "min_trades_for_pattern": ctx.policy.min_n,
             "trials_so_far": n, "next_test_p_threshold": _r(0.05 / (n + 1), 5),
+            # the smallest p the 5-year test's bootstrap can give: once the threshold is at or below it,
+            # no further test of this room can pass gate (a) (a test then only informs)
+            "p_floor": _r(pf, 6), "next_test_can_pass_gate": 0.05 / (n + 1) > pf,
             "copy_slots": {"strategy_active": R.active_proposals(ctx.agents_conn, strategy),
                            "strategy_cap": ctx.policy.copy_cap_per_strategy,
                            "total_active": R.active_proposals(ctx.agents_conn), "total_cap": ctx.policy.copy_cap_total},
@@ -1300,6 +1307,15 @@ def _rules(ctx: RoundContext, room: str, strategy: Optional[str]) -> dict:
 
 
 # ---------------------------------------------------------------- one round
+def _runner_timeout(runner: Any) -> float:
+    """Seconds one call of this runner may take (``ClaudeCodeRunner.timeout``; the budget wrapper's runner's)."""
+    for r in (runner, getattr(runner, "runner", None)):
+        t = getattr(r, "timeout", None)
+        if isinstance(t, (int, float)) and math.isfinite(t) and t > 0:
+            return float(t)
+    return 0.0
+
+
 class _Round:
     def __init__(self, due: TR.Due, ctx: RoundContext, round_id: int, budget: Runner, max_calls: int):
         self.due, self.ctx, self.round_id, self.budget, self.max_calls = due, ctx, round_id, budget, max_calls
@@ -1350,6 +1366,13 @@ class _Round:
         problems: list[str] = []
         answered = ran = False
         for _ in range(self.ctx.policy.retries + 1):
+            t0 = self.ctx.cache.get("tick_t0")
+            if self.calls and t0 is not None and (time.monotonic() - float(t0) + _runner_timeout(self.ctx.runner)
+                                                  > self.ctx.policy.tick_hard_s):
+                # a later turn of a slow meeting: the call could still run when systemd stops the pass
+                self.system(f"이번 에이전트 실행의 시간 한도에 가까워 {role_ko(role)} 차례를 건너뜁니다.",
+                            {"role": role, "reason": "tick_wall"})
+                return None
             if self.calls >= self.max_calls:
                 where = "이번 차례(15분)의 AI 호출 한도" if self.tick_capped else "이번 회의의 AI 호출 한도"
                 self.system(f"{where}({self.max_calls}회)에 닿아 {role_ko(role)} 차례를 건너뜁니다.",
@@ -2030,14 +2053,6 @@ def apply_approvals(conn: sqlite3.Connection, inbox_ro: Optional[sqlite3.Connect
         # each click is one transaction: the proposal, the room line and the cursor land together
         if p is None:
             done.append({"approval_id": a["id"], "ok": False, "why": "no proposal"})
-        elif _int0(a.get("ts")) < _int0(p.get("ts")):
-            # a click cannot predate its proposal: it was about an earlier proposal with the same id (an
-            # agents3.db restored from an older backup reuses ids); never applied to this one
-            R.post(conn, p["room_id"], None, "owner_decision", "code", None, "system",
-                   f"제안 #{p['id']}이 만들어지기 전에 누른 {verb} 클릭이 있어 반영하지 않았습니다 "
-                   "(같은 번호의 예전 제안에 대한 클릭입니다). 이 제안은 다시 눌러 주세요.",
-                   {**ref, "predates_proposal": True}, ts=now_ms, commit=False)
-            done.append({"approval_id": a["id"], "ok": False, "proposal_id": p["id"], "why": "predates"})
         elif want == "approved" and p["status"] == "awaiting_owner" and \
                 (gn := gate_now(conn, p, now_ms))[0].get("pass") is not True:
             # the room ran more tests since: judged now (Bonferroni over its current count) the test
@@ -2242,6 +2257,7 @@ def tick(paper_db: Optional[str], daily_db: Optional[str], agents_db: str, inbox
             ctx = RoundContext(agents_conn=conn, paper_ro=paper_ro, daily_ro=daily_ro, inbox_ro=inbox_ro, runner=runner,
                                lab=lab, now_ms=now, policy=policy, notifier=notifier or NullNotifier(),
                                clock_ms=clock_ms, cards_path=cards_path)
+            ctx.cache["tick_t0"] = t0                  # _Round.ask: no call that could outlive the pass
             results: list[dict] = []
             first: Optional[list] = None
             met: list[str] = []
@@ -2381,7 +2397,13 @@ def _notifier() -> Notifier:
 
 
 def _copy_db(src: str, dst: str) -> None:
+    """The dry run's copy of agents3.db; a restore that left the old -wal next to it is never read (it
+    would be replayed onto the copy): the dry run then starts from an empty database, like the tick."""
     if not os.path.exists(src):
+        return
+    if R.stale_wal(src):
+        print(f"note: {R.STALE_WAL_TEXT.format(path=src)}; the dry run starts from an empty agents3.db "
+              "(a real tick stops)", file=sys.stderr)
         return
     s = sqlite3.connect("file:" + urllib.parse.quote(os.path.abspath(src)) + "?mode=ro", uri=True)
     d = sqlite3.connect(dst)

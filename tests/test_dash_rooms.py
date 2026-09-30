@@ -242,7 +242,8 @@ def test_decide(env):
     assert p["owner_decision"]["decision"] == "approve" and p["owner_decision"]["applied"] is False
     room = next(r for r in c.get("/api/rooms").json()["rooms"] if r["room_id"] == ROOM)
     assert room["open_proposals"] == 0                                 # decided: no longer waits for the owners
-    assert c.post(f"/api/proposals/{ok}/decide", json={"decision": "approve"}).status_code == 409   # already
+    r = c.post(f"/api/proposals/{ok}/decide", json={"decision": "approve"})
+    assert r.status_code == 409 and r.json()["detail"].endswith("(승인됨)")                    # already; in Korean
     assert c.post(f"/api/proposals/{ok}/decide", json={"decision": "reject"}).status_code == 200    # changed mind
     assert c.post(f"/api/proposals/{ok}/decide", json={"decision": "approve"}).status_code == 409   # reject is final
     assert c.post(f"/api/proposals/{ok}/decide", json={"decision": "reject"}).status_code == 409
@@ -677,3 +678,13 @@ def test_timeouts_of_an_outage_are_labelled_in_the_usage_panel(env):
     _login(c)
     got = {x["class"]: x for x in c.get("/api/agents/usage").json()["classes"]}
     assert got["timeout"]["calls"] == 1 and "시간 초과" in got["timeout"]["name_ko"]
+
+
+def test_a_class_bar_fills_by_whichever_cap_is_nearer():
+    """The usage panel drew each meeting kind's bar by calls only, while a token cap often binds first."""
+    got = _js(("bar", "classBar"), """
+console.log(JSON.stringify({tok: classBar({calls: 5, cap_calls: 20, tokens: 480000, cap_tokens: 500000}),
+  calls: classBar({calls: 18, cap_calls: 20, tokens: 1000, cap_tokens: 500000}),
+  none: classBar({calls: 3, tokens: 50000})}));
+""")
+    assert "width:96%" in got["tok"] and "width:90%" in got["calls"] and got["none"] == ""

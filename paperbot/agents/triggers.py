@@ -811,11 +811,15 @@ def expire_stale_rounds(agents_conn: sqlite3.Connection, now_ms: int,
     """Mark 'running' rounds older than ``policy.stale_ms`` (or ``stale_ms``) as 'failed' (a tick died
     during them), so the dashboard stops showing them as live; each counts as one failed attempt (the
     evidence is tried once more). The rooms tick calls it with ``stale_ms=0`` once it holds the tick
-    lock: no other pass can own a 'running' round then."""
+    lock: no other pass can own a 'running' round then, so every one is failed whatever its start time
+    (after the clock stepped back, a dead pass's round can have started 'later' than now)."""
     p = policy or TriggerPolicy()
     age = p.stale_ms if stale_ms is None else int(stale_ms)
-    ids = [int(r[0]) for r in _rows(agents_conn, "SELECT round_id FROM rounds WHERE status = 'running' "
-                                                 "AND started_ts <= ?", (now_ms - age,))]
+    if age <= 0:
+        ids = [int(r[0]) for r in _rows(agents_conn, "SELECT round_id FROM rounds WHERE status = 'running'", ())]
+    else:
+        ids = [int(r[0]) for r in _rows(agents_conn, "SELECT round_id FROM rounds WHERE status = 'running' "
+                                                     "AND started_ts <= ?", (now_ms - age,))]
     why = json.dumps({"reason": "stale", "detail": detail}, ensure_ascii=False)
     for rid in ids:
         agents_conn.execute("UPDATE rounds SET status = 'failed', ended_ts = ?, decision = ? WHERE round_id = ?",

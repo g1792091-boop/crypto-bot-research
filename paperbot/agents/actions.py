@@ -283,8 +283,12 @@ def telegram_safe(text: str) -> str:
     """Model-written words bound for Telegram: links and @mentions replaced by '(링크 생략)'.
     Full-width and other look-alike forms are normalised first (NFKC), so 'ｅｖｉｌ．ｃｏｍ' is a link too;
     NFKC keeps the ideographic full stop (and maps the half-width one to it), so 'evil。com' becomes
-    'evil.com' before the check."""
-    return _LINK.sub("(링크 생략)", unicodedata.normalize("NFKC", text or "").replace("\u3002", "."))
+    'evil.com' before the check. Invisible format characters (Unicode category Cf: bidi overrides and
+    isolates such as U+202E, zero-width spaces and joiners) are removed first: they could reorder the line
+    as shown in Telegram or hide a link from the check ('evil\u200b.com')."""
+    t = unicodedata.normalize("NFKC", text or "").replace("\u3002", ".")
+    t = "".join(ch for ch in t if unicodedata.category(ch) != "Cf")
+    return _LINK.sub("(링크 생략)", t)
 
 
 def flag_owners(env: ActionEnv, a: dict) -> dict:

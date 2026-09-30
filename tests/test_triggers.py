@@ -437,6 +437,19 @@ def test_expiring_stale_rounds_changes_nothing_about_what_is_due(w):
     assert w.cursors() == {}
 
 
+def test_a_round_left_running_is_expired_under_the_lock_even_after_the_clock_stepped_back(w):
+    """With the tick lock held (stale_ms=0) no other pass owns a 'running' round; one whose start is 'later'
+    than now (the clock stepped back after the pass died) kept blocking its room and trigger."""
+    t = QUIET
+    for k in range(3):
+        w.trade(f"{S}@15m", -10.0, t - 3 * HOUR + k)
+    d = w.due(t)[0]
+    rid = begin_round(w.agents, d, t + 20 * 60_000)             # started by a pass whose clock was ahead
+    assert expire_stale_rounds(w.agents, t + 5 * 60_000) == []  # without the lock: possibly still working
+    assert expire_stale_rounds(w.agents, t + 5 * 60_000, stale_ms=0) == [rid]
+    assert w.agents.execute("SELECT status FROM rounds WHERE round_id = ?", (rid,)).fetchone()[0] == "failed"
+
+
 def test_failed_round_retries_once_and_done_is_never_repeated(w):
     t = QUIET
     w.say(ROOM, "질문", t)

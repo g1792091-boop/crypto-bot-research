@@ -82,6 +82,7 @@ TFS = ("5m", "15m", "30m", "1h", "4h")
 BASE_K = 2.0
 BASE_LADDER = LadderSpec()
 N_BOOT = 2000
+P_FLOOR = 1 / (N_BOOT + 1)     # the smallest p the bootstrap can give: gate (a) cannot pass once 0.05/n <= it
 ALPHA = 0.05
 MIN_TRADES_P1 = 300
 MIN_TRADES_P2 = 100
@@ -726,8 +727,10 @@ def gate(result: dict, n_trials_so_far: int) -> dict:
     checks, reasons = {}, []
     checks["a"] = d1 is not None and pv1 is not None and d1 > 0 and pv1 < alpha1
     reasons.append(f"① 1기간 개선 {_pp(d1)}, p={_pv(pv1)} — 기준 p < {alpha1:.4g} "
-                   f"(0.05 ÷ 이 방의 시험 {n}번, 여러 번 시험한 만큼 기준을 엄격하게): "
-                   f"{'통과' if checks['a'] else '미달'}")
+                   f"(0.05 ÷ 이 방의 시험 {n}번, 여러 번 시험한 만큼 기준을 엄격하게"
+                   + (f"; 부트스트랩 {N_BOOT}번으로 p는 {P_FLOOR:.4g}보다 작아질 수 없어 이 기준은 넘을 수 없음"
+                      if alpha1 <= P_FLOOR else "")
+                   + f"): {'통과' if checks['a'] else '미달'}")
     nv2 = int(num(p2, "variant", "trades") or 0)
     checks["b"] = d2 is not None and pv2 is not None and d2 > 0 and pv2 < ALPHA and nv2 >= MIN_TRADES_P2
     reasons.append(f"② 2기간도 같은 방향 {_pp(d2)}, p={_pv(pv2)}, 바꾼 규칙 거래 {nv2:,}건 — 기준 p < 0.05, "
@@ -757,8 +760,8 @@ def gate(result: dict, n_trials_so_far: int) -> dict:
         n1, n2 = num(p1, "diff_notional"), num(p2, "diff_notional")
         checks["f"] = n1 is not None and n2 is not None and n1 > 0 and n2 > 0
         reasons.append(f"⑥ 레버리지 차이를 뺀 가격 수익률도 나아졌는지(거래당, 명목금액 기준): 1기간 "
-                       f"{_pp(n1)}, 2기간 {_pp(n2)} — 둘 다 0보다 커야 함 (넓은 손절은 레버리지가 낮아져 "
-                       f"손실만 작아 보일 수 있음): {'통과' if checks['f'] else '미달'}")
+                       f"{_pp(n1)}, 2기간 {_pp(n2)} — 둘 다 0보다 커야 함 (손절 거리를 바꾸면 레버리지도 "
+                       f"바뀌어 ROE 차이가 레버리지 탓일 수 있음): {'통과' if checks['f'] else '미달'}")
     else:
         checks["f"] = True
     ok = all(checks[k] for k in "abcdef")
