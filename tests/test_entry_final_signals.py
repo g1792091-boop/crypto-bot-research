@@ -89,7 +89,8 @@ def test_signal_arrays_format_matches_period12_cache():
         a = arr[f"s__{n}"]
         assert a.dtype == np.int8 and len(a) == len(df) and set(np.unique(a)) <= {-1, 0, 1}
     raw = L.compute_signals({"BTCUSD": df}, "1h", ["DOGE_L", "DOGE_S", "N17_KC_RSI"], strict=True)
-    assert np.array_equal(arr["s__DOGE"], raw["DOGE_L"]["BTCUSD"] - raw["DOGE_S"]["BTCUSD"])
+    from paperbot.sigservice import doge_join
+    assert np.array_equal(arr["s__DOGE"], doge_join(raw["DOGE_L"]["BTCUSD"], raw["DOGE_S"]["BTCUSD"]))
     assert np.array_equal(arr["s__N17_KC_RSI"], raw["N17_KC_RSI"]["BTCUSD"])
     assert np.array_equal(arr["v"], df["volume"].to_numpy(float))
     assert F.content_digest(arr) == F.content_digest(dict(arr))

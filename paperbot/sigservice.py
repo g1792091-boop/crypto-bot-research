@@ -54,6 +54,18 @@ def strategy_names(lib) -> list[str]:
     return [n for n in lib.NAMES if n not in DOGE_PARTS] + ["DOGE"]
 
 
+def doge_join(long_part, short_part):
+    """The friend's DOGE bot as one long/short account.
+
+    The locked compute_signals returns long - short per registry entry, so DOGE_L is +1 on its
+    long bars and DOGE_S is ALREADY -1 on its short bars (sweep_lib.doge_short returns
+    (zeros, short)). The account side is therefore their SUM: +1 long, -1 short, 0 when both
+    fire on the same bar. (Until 2026-09-30 this was DOGE_L - DOGE_S, which turned every short
+    signal into a long; found by the entry study, research/entry_study.)
+    Works on ints and on int arrays."""
+    return np.sign(np.asarray(long_part, dtype=np.int16) + np.asarray(short_part, dtype=np.int16)).astype(np.int8)
+
+
 def window_5m(lib, tf: str) -> int:
     """5m bars kept for a timeframe: two warm-ups plus a few bars of slack."""
     per = lib.tf_minutes(tf) // 5
@@ -85,7 +97,7 @@ def compute_last(job: tuple) -> dict:
     for n in lib.NAMES:
         arr = sigs.get(n, {}).get(symbol)
         sides[n] = int(arr[-1]) if arr is not None else 0
-    sides["DOGE"] = int(np.sign(sides.pop("DOGE_L", 0) - sides.pop("DOGE_S", 0))) if "DOGE_L" in sides else 0
+    sides["DOGE"] = int(doge_join(sides.pop("DOGE_L", 0), sides.pop("DOGE_S", 0))) if "DOGE_L" in sides else 0
     atr = lib.fg.atr(df, 14).to_numpy(float)[-1]
     out.update(ready=True, bar_open=last_open, close=float(df["close"].iloc[-1]),
                atr=float(atr) if np.isfinite(atr) else None, sides=sides)

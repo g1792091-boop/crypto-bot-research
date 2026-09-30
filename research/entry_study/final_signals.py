@@ -46,6 +46,7 @@ sys.path.insert(0, os.path.join(ROOT, "research", "paper_rules"))
 warnings.filterwarnings("ignore")
 
 from paperbot import sweepsig  # noqa: E402
+from paperbot.sigservice import doge_join  # noqa: E402
 import rules_bt as RB  # noqa: E402
 
 PRE2021 = os.path.join(ROOT, "data", "pre2021")
@@ -130,7 +131,7 @@ def signal_arrays(L, df: pd.DataFrame, tf: str, coin: str) -> dict:
     import fg_indicators as fg
     raw = L.compute_signals({coin: df}, tf, list(L.NAMES), strict=True)
     sig = {n: raw[n][coin] for n in L.NAMES if n not in ("DOGE_L", "DOGE_S")}
-    sig["DOGE"] = (raw["DOGE_L"][coin].astype(np.int8) - raw["DOGE_S"][coin].astype(np.int8)).astype(np.int8)
+    sig["DOGE"] = doge_join(raw["DOGE_L"][coin], raw["DOGE_S"][coin])  # DOGE_S is already -1 on shorts
     atr = fg.atr(df, 14).to_numpy(float)
     return dict(ts=RB._ns(df["ts"]), o=df["open"].to_numpy(float), h=df["high"].to_numpy(float),
                 l=df["low"].to_numpy(float), c=df["close"].to_numpy(float), v=df["volume"].to_numpy(float),
