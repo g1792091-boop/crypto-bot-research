@@ -150,6 +150,7 @@ class TriggerPolicy:
     usage_backoff_ms: int = HOUR_MS      # after a Claude plan usage limit, nothing is due for this long
     transient_backoff_ms: int = 10 * MIN_MS      # after a transient failure (runner down): wait, doubling
     transient_backoff_max_ms: int = 4 * HOUR_MS  # per failure in a row, up to this
+    transient_same_key: int = 3          # this many in a row for ONE meeting: it waits alone (not an outage)
     rounds_lookback_ms: int = 40 * DAY_MS
     # incident
     incident_alerts: tuple = INCIDENT_ALERTS
@@ -306,19 +307,45 @@ class _Rooms:
         return any(r["status"] == "stopped_budget" and r["stopped"] == "usage_limit"
                    and self.now - r["ended_ts"] < self.p.usage_backoff_ms for r in self.rounds)
 
+    def _backoff(self, k: int) -> int:
+        return min(self.p.transient_backoff_max_ms, self.p.transient_backoff_ms * 2 ** min(max(k, 1) - 1, 20))
+
+    def transient_run(self, room: str, trigger: str, key: str) -> list[dict]:
+        """This evidence's latest rounds, newest first, while they are transient failures."""
+        out = []
+        for r in reversed(self.same_key(room, trigger, key)):
+            if r["status"] == "failed" and r["transient"]:
+                out.append(r)
+            elif r["status"] != "running":
+                break
+        return out
+
+    def key_waiting(self, room: str, trigger: str, key: str) -> bool:
+        """This meeting failed 'transiently' ``transient_same_key`` times in a row (its first speaker's
+        model is refused, its packet always times out) while the others may be fine: it waits on its
+        own, with the same growing pause, instead of pausing every room."""
+        run = self.transient_run(room, trigger, key)
+        if len(run) < self.p.transient_same_key:
+            return False
+        return self.now - run[0]["ended_ts"] < self._backoff(len(run))
+
     def transient_paused(self) -> bool:
-        """The latest finished rounds failed because the runner never answered: back off."""
-        k, last = 0, None
+        """The latest finished rounds failed because the runner never answered: back off. Not when
+        they are all the same meeting failing ``transient_same_key`` times or more (``key_waiting``)."""
+        k, last, keys = 0, None, set()
         for r in reversed(self.rounds):
             if r["status"] == "running":
                 continue
             if not (r["status"] == "failed" and r["transient"]):
                 break
             k += 1
+            keys.add((r["room_id"], r["trigger"], r["key"]))
             last = r["ended_ts"] if last is None else last      # the pause runs from when it failed
         if not k:
             return False
-        pause = min(self.p.transient_backoff_max_ms, self.p.transient_backoff_ms * 2 ** min(k - 1, 20))
+        if len(keys) == 1 and len(self.transient_run(*next(iter(keys)))) >= self.p.transient_same_key:
+            return False            # one meeting keeps failing by itself: it waits alone (key_waiting)
+        pause = self._backoff(k)
         return self.now - last < pause
 
     def _counted(self, r: dict) -> bool:
@@ -689,6 +716,8 @@ def find_due(paper_ro: Optional[sqlite3.Connection], daily_ro: Optional[sqlite3.
         failed = st.failed_attempts(d.room_id, d.trigger, key)
         if len(failed) >= p.max_attempts:
             continue
+        if st.key_waiting(d.room_id, d.trigger, key):
+            continue            # this meeting keeps failing by itself: it waits its own pause
         if can_start is not None and not can_start(d):
             continue            # e.g. its AI budget cannot carry it now: found again on a later tick
         if failed:

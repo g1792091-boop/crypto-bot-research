@@ -21,7 +21,7 @@ from ..notify import ConsoleNotifier
 from .budget import DEFAULT_MAX_CALLS, DEFAULT_MAX_TOKENS, BudgetedRunner
 from .packets import evening_packet
 from .pipeline import ReportStore, run_evening
-from .runner import ClaudeCodeRunner, FakeRunner, billing_warnings
+from .runner import ClaudeCodeRunner, FakeRunner, auth_preflight, billing_warnings
 
 
 def main(argv: Optional[list[str]] = None) -> int:
@@ -62,6 +62,12 @@ def main(argv: Optional[list[str]] = None) -> int:
     if warn and not args.dry_run:
         print(f"note: {', '.join(warn)} set in this environment; it is NOT passed to "
               f"Claude Code (subscription login only).", file=sys.stderr)
+    if not args.dry_run:
+        # subscription login only, never an API key or a cloud provider (the agent rooms check the same)
+        ok, why = auth_preflight(args.claude_bin)
+        if not ok:
+            print(f"refusing to run the evening review: {why}", file=sys.stderr)
+            return 2
     inner = FakeRunner() if args.dry_run else ClaudeCodeRunner(args.claude_bin, args.timeout)
     # Dry runs are not counted against the daily cap.
     # Each database has one writer: agent answers and usage go to agents.db.

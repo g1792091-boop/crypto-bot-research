@@ -28,6 +28,7 @@ import hmac
 import json
 import os
 import sqlite3
+import sys
 import time
 import urllib.parse
 import urllib.request
@@ -79,6 +80,11 @@ def token_ok(secret: bytes, token: Optional[str], now: Optional[float] = None) -
 
 
 # ---------------------------------------------------------------- data
+def _ro_uri(path: str) -> str:
+    """Read-only SQLite URI; the path quoted, so a '?', '#' or '%' in it never changes the open mode."""
+    return f"file:{urllib.parse.quote(os.path.abspath(path))}?mode=ro"
+
+
 class Data:
     def __init__(self, db: str, daily_db: Optional[str] = None):
         self.db = db
@@ -87,7 +93,7 @@ class Data:
     def _daily(self) -> Optional[sqlite3.Connection]:
         if not self.daily_db or not os.path.exists(self.daily_db):
             return None
-        return sqlite3.connect(f"file:{self.daily_db}?mode=ro", uri=True, timeout=5)
+        return sqlite3.connect(_ro_uri(self.daily_db), uri=True, timeout=5)
 
     def _round_trip(self, c) -> float:
         from ..config import v3_settings
@@ -117,7 +123,7 @@ class Data:
                 "tags": tag_stats(cs)}
 
     def conn(self) -> sqlite3.Connection:
-        c = sqlite3.connect(f"file:{self.db}?mode=ro", uri=True, timeout=5)
+        c = sqlite3.connect(_ro_uri(self.db), uri=True, timeout=5)
         c.row_factory = sqlite3.Row
         return c
 
@@ -488,6 +494,7 @@ class Rooms:
             # the agents tick's last sign of life ({ts, ok, why}): the page tells the owners when the
             # staff have stopped (timer off, login refused, crashed) instead of promising an answer
             last_tick = self._cursor_obj(a, self.R.TICK_CURSOR)
+            waits, per_day = self._owner_waits(a, int(time.time() * 1000) if now_ms is None else now_ms)
         out = []
         for rid, spec in self.specs.items():
             r = {"room_id": rid, "kind": spec["kind"], "strategy": spec["strategy"], "title": spec["title"],
@@ -497,6 +504,9 @@ class Rooms:
             r["schedule_ko"] = room_schedule_ko(rid)
             out.append(r)
         out += list(rows.values())          # rooms the tick knows and this code does not (newer roster)
+        for r in out:
+            # why an owner post in this room is answered only after 00:00 KST (None: on the next turn)
+            r["owner_wait"] = waits.get(r["room_id"], waits.get("*"))
         if any(r.get("open_proposals") for r in out):
             # a proposal the owners already decided (not yet applied by the tick) no longer waits for them
             waiting: dict = {}
@@ -506,8 +516,42 @@ class Rooms:
             for r in out:
                 r["open_proposals"] = waiting.get(r["room_id"], 0)
         return {"ready": ready, "now": int(time.time() * 1000) if now_ms is None else now_ms,
-                "last_tick": last_tick, "tick_every_ms": TICK_EVERY_MS,
+                "last_tick": last_tick, "tick_every_ms": TICK_EVERY_MS, "rounds_per_room_day": per_day,
                 "max_id": max((int(r.get("last_id") or 0) for r in out), default=0), "rooms": out}
+
+    def _owner_waits(self, a: Optional[sqlite3.Connection], now_ms: int) -> tuple[dict, int]:
+        """({room_id: why, '*': why for every room}, the room's daily meeting cap): the owners' posts that
+        the agents tick answers only after 00:00 KST, judged with the tick's own rules (triggers._Rooms
+        on agents3.db, the limits it stored in 'policy:caps'): 'room_full' when the room had its meetings
+        today, 'budget' when today's owner-post AI budget is used up or paused."""
+        caps = self._stored_caps(a) or {}
+        lim = caps.get("rooms") if isinstance(caps.get("rooms"), dict) else {}
+        try:
+            from ..agents import triggers as TR
+            kw = {k: int(lim[k]) for k in ("max_rounds_per_room_day", "owner_reserved_per_room_day")
+                  if isinstance(lim.get(k), int)}
+            pol = TR.TriggerPolicy(**kw)
+        except Exception:  # the engine is optional for the dashboard
+            return {}, 3
+        if a is None:
+            return {}, pol.max_rounds_per_room_day
+        out: dict = {}
+        try:
+            st = TR._Rooms(a, now_ms, pol)
+            for rid in list(self.specs) + sorted(st.rooms - set(self.specs)):
+                if st.room_full(rid, "owner"):
+                    out[rid] = "room_full"
+            blocked = st.class_blocked("owner")
+        except (sqlite3.Error, TypeError, ValueError):
+            return {}, pol.max_rounds_per_room_day
+        if not caps and self._caps is None:
+            self._caps = budget_caps(self.budget_env)
+        cap = (caps or self._caps or {}).get("owner") or {}
+        used = self.R.usage_today(a, now_ms)["by_class"].get("owner") or {}
+        if blocked or any(isinstance(cap.get(k), int) and int(used.get(k) or 0) >= cap[k] for k in ("calls", "tokens")):
+            out["*"] = "budget"
+            out = {k: ("budget" if v != "room_full" else v) for k, v in out.items()}
+        return out, pol.max_rounds_per_room_day
 
     def room_info(self, room_id: str) -> dict:
         spec = dict(self.specs[room_id])
@@ -693,7 +737,12 @@ class Rooms:
     def _inbox(self) -> sqlite3.Connection:
         if not self.inbox_db:
             raise HTTPException(503, "두 분 메시지 저장소(inbox.db)가 설정되지 않았습니다")
-        return self.R.open_inbox_rw(self.inbox_db)
+        try:
+            return self.R.open_inbox_rw(self.inbox_db)
+        except RuntimeError as exc:           # restored with the old -wal next to it (rooms_db.refuse_stale_wal)
+            print(f"inbox.db not opened: {exc}", file=sys.stderr)
+            raise HTTPException(503, "inbox.db를 백업에서 되살린 뒤 예전 -wal 파일이 남아 있어 저장하지 않았습니다. "
+                                     "서비스를 멈추고 inbox.db-wal·inbox.db-shm을 지운 뒤 다시 켜 주세요")
 
     def say(self, room_id: str, text: str, author: str, now_ms: Optional[int] = None) -> dict:
         now_ms = int(time.time() * 1000) if now_ms is None else now_ms
@@ -735,7 +784,7 @@ class Rooms:
         finally:
             c.close()
         return {"ok": True, "approval_id": aid, "proposal_id": proposal_id, "decision": decision,
-                "message": "전달했습니다. 직원들이 다음 차례에 반영합니다"}
+                "message": "전달했습니다. 다음 차례(15분 안)에 코드가 반영합니다"}
 
 
 async def _json_object(req: Request, limit: int = BODY_MAX) -> dict:

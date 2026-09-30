@@ -531,7 +531,7 @@ def propose_copy(env: ActionEnv, trial_id: int, why: str, check: dict, approver:
            "blocked_cap": f"복제 계좌 한도 때문에 막혔습니다 ({check.get('cap')})",
            "rejected": "승인관이 거부했습니다",
            "awaiting_owner": "승인관이 승인했고, 두 분의 확인을 기다립니다 (대시보드에서 승인/거절)",
-           "approved": "승인되었습니다"}[status]
+           "approved": "자율 승인관이 승인했습니다(두 분 확인 없이: 설정, 또는 기본 설정에서 운영 61일째부터)"}[status]
     waits = (" 승인된 제안도 지금은 계좌를 만들지 않고, live 실행기의 복제 계좌 기능이 생길 때까지 기다립니다."
              if status in ("awaiting_owner", "approved") else "")
     env.post("action", f"📄 복제 계좌 제안 #{pid} (시험 #{trial_id}): {msg}.{waits}",

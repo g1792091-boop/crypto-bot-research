@@ -341,6 +341,19 @@ def test_passing_gate_approved_directly_when_owner_ok_not_required(world, good_l
                              policy=RM.RoomsPolicy(owner_ok_required=False))
     [p] = R.list_proposals(world.agents)
     assert p["status"] == "approved" and p["decided_by"] == "approver"
+    # the room says the owners were not asked (setting, or from day 61 by default)
+    line = next(m["text"] for m in world.messages() if m["kind"] == "action" and "복제 계좌 제안" in m["text"])
+    assert "자율 승인관이 승인했습니다" in line and "두 분 확인 없이" in line
+
+
+def test_member_duties_say_who_approves_a_copy():
+    """The member panel (and each model's '담당:' line) must not promise an owner veto that the default
+    AGENTS_OWNER_OK=auto drops after 60 days: the approver alone approves from day 61."""
+    from paperbot.agents.roster3 import room_duty
+    spec, approver = room_duty(SPEC), room_duty("approver")
+    assert "두 분 승인과" not in spec and "자율 승인관" in spec and "60일" in spec
+    assert "의견" not in approver and "60일" in approver and "이 판단만으로 승인" in approver
+    assert "뒤집지 못" in approver and "계좌를 만들지 않" in approver
 
 
 def test_approver_no_rejects(world, good_lab):
@@ -557,7 +570,12 @@ def test_usage_limit_stops_the_tick(world):
     out = world.tick(runner, QUIET)
     assert len(out["rounds"]) == 1 and out["rounds"][0]["stopped"] == "usage_limit"
     assert out["rounds"][0]["status"] == "stopped_budget"
-    assert world.messages("team:lead")[-1]["text"] == RM.LIMIT_TEXT
+    # the Claude plan's own limit (it also blocks the owners' own Claude chats), never "today's AI cap"
+    assert world.messages("team:lead")[-1]["text"] == RM.USAGE_LIMIT_TEXT != RM.LIMIT_TEXT
+    assert "구독" in RM.USAGE_LIMIT_TEXT and "1시간" in RM.USAGE_LIMIT_TEXT
+    assert world.rounds()[-1]["decision"]["summary_ko"] == RM.USAGE_LIMIT_TEXT
+    assert [RM.limit_text(k) for k in ("budget_class", "budget_total", "budget_reserve")] == [
+        RM.LIMIT_TEXT, RM.LIMIT_TEXT, RM.RESERVE_TEXT]
     assert [r["status"] for r in world.rounds()] == ["stopped_budget"]     # the loss room did not start
     assert "owner:team:lead" not in world.cursors()
 
@@ -1218,6 +1236,35 @@ def test_an_inbox_restored_from_an_older_backup_keeps_old_posts_handled(world, t
         ("옛 질문", False), ("복구 뒤 질문", True)]
 
 
+def test_a_post_copied_by_a_stopped_meeting_is_still_answered_after_an_inbox_restore(world, tmp_path):
+    """After an inbox.db restore the 'answered' cursor is rebuilt from the last post a FINISHED meeting
+    handled, not from the newest post copied into the room (a meeting that then stopped never answered it)."""
+    import os
+    import shutil
+    lead = {"summary": ["a", "b", "c"], "human_actions": [], "watch_next": [], "reply_to_owner": "답"}
+    world.say("team:lead", "질문 A", QUIET - 60 * MIN)
+    world.tick(QueueRunner({"team_lead": [lead]}), QUIET - 50 * MIN)
+    assert world.cursors()["owner:team:lead"] == "1"
+    world.say("team:lead", "질문 C", QUIET - 40 * MIN)
+    world.inbox.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    shutil.copy(world.paths["inbox"], tmp_path / "backup.db")               # backup: A and C
+    world.say("team:risk", "질문 D", QUIET - 35 * MIN)
+    out = world.tick(QueueRunner({"team_lead": [UsageLimitReached("5-hour limit reached")]}), QUIET - 30 * MIN)
+    assert [(r["room_id"], r["status"]) for r in out["rounds"]] == [("team:lead", "stopped_budget")]
+    assert world.cursors()["owner_copied:team:lead"] == "2" and world.cursors()["owner:team:lead"] == "1"
+    world.inbox.close()
+    for suffix in ("-wal", "-shm"):
+        if os.path.exists(world.paths["inbox"] + suffix):
+            os.remove(world.paths["inbox"] + suffix)
+    shutil.copy(tmp_path / "backup.db", world.paths["inbox"])
+    world.inbox = R.open_inbox_rw(world.paths["inbox"])
+    runner = QueueRunner({"team_lead": [lead]})
+    out = world.tick(runner, QUIET + 2 * HOUR)                             # after the plan limit's hour
+    assert [(r["room_id"], r["trigger"], r["status"]) for r in out["rounds"]] == [("team:lead", "owner", "done")]
+    assert [(m["text"], m["new"]) for m in runner.calls[0]["packet"]["owner_messages"]][-1] == ("질문 C", True)
+    assert [m["text"] for m in world.messages("team:lead") if m["kind"] == "owner"] == ["질문 A", "질문 C"]
+
+
 def test_approvals_from_before_this_agents_db_are_never_applied(world, good_lab):
     R.add_approval(world.inbox, 1, "approve", "owner1", ts=QUIET - DAY)   # about an older agents3.db's proposal 1
     run_test_round(world, object(), {"pass_gate": True, "explanation": "ok"}, approver={"approve": True, "reason": "ok"})
@@ -1228,6 +1275,34 @@ def test_approvals_from_before_this_agents_db_are_never_applied(world, good_lab)
     R.add_approval(world.inbox, 1, "approve", "owner1", ts=QUIET + 2 * MIN)
     out = world.tick(QueueRunner({}), QUIET + 3 * MIN)
     assert [a["status"] for a in out["approvals"]] == ["approved"]
+
+
+def test_old_clicks_stay_unapplied_after_the_inbox_is_restored_from_an_older_backup(world, good_lab, tmp_path):
+    """Clicks about an EARLIER agents3.db's proposals, then inbox.db restored from an older backup: the
+    rebuilt cursors still count them as handled, so a new proposal with the same id is never approved by
+    a click nobody made about it (the owners' OK is never bypassed)."""
+    import os
+    import shutil
+    R.add_approval(world.inbox, 1, "approve", "owner1", ts=QUIET - 3 * DAY)     # an older agents3.db's #1
+    world.inbox.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    shutil.copy(world.paths["inbox"], tmp_path / "inbox-backup.db")             # backup: click 1 only
+    R.add_approval(world.inbox, 2, "reject", "owner1", ts=QUIET - 2 * DAY)      # an older agents3.db's #2
+    run_test_round(world, object(), {"pass_gate": True, "explanation": "ok"}, approver={"approve": True, "reason": "ok"})
+    [p] = R.list_proposals(world.agents)
+    assert p["id"] == 1 and p["status"] == "awaiting_owner"
+    assert world.cursors()["inbox:approvals_base"] == "2"
+    world.inbox.close()
+    for suffix in ("-wal", "-shm"):
+        if os.path.exists(world.paths["inbox"] + suffix):
+            os.remove(world.paths["inbox"] + suffix)
+    shutil.copy(tmp_path / "inbox-backup.db", world.paths["inbox"])
+    world.inbox = R.open_inbox_rw(world.paths["inbox"])
+    out = world.tick(QueueRunner({}), QUIET + 10 * MIN)
+    assert out["approvals"] == [] and R.get_proposal(world.agents, 1)["status"] == "awaiting_owner"
+    R.add_approval(world.inbox, 1, "approve", "owner1", ts=QUIET + 11 * MIN)      # a real click after the restore
+    out = world.tick(QueueRunner({}), QUIET + 12 * MIN)
+    assert [(a["proposal_id"], a["status"]) for a in out["approvals"]] == [(1, "approved")]
+    assert R.get_proposal(world.agents, 1)["decided_by"] == "owner:owner1"
 
 
 def test_tick_lock_follows_symlinks(world, tmp_path):
@@ -1252,6 +1327,10 @@ def test_runner_ignores_settings_files():
     ({"loggedIn": True, "authMethod": "oauth_token", "apiKeySource": "/login managed key"}, False),
     ({"loggedIn": True, "authMethod": "api_key", "apiKeySource": "ANTHROPIC_API_KEY"}, False),
     ({"loggedIn": True, "authMethod": "api_key"}, False),
+    ({"loggedIn": True, "authMethod": "claude.ai", "apiProvider": "firstParty"}, True),
+    ({"loggedIn": True, "authMethod": "third_party", "apiProvider": "bedrock"}, False),
+    ({"loggedIn": True, "authMethod": "third_party", "apiProvider": "vertex"}, False),
+    ({"loggedIn": True, "authMethod": "oauth_token", "apiProvider": "foundry"}, False),
 ])
 def test_auth_preflight(status, ok):
     seen = {}

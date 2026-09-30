@@ -74,6 +74,12 @@ if [ "$REPO_DIR" != "$APP" ]; then
     systemctl is-active --quiet "$u" 2>/dev/null && RUNNING="$RUNNING $u"
   done
   [ -n "$RUNNING" ] && systemctl stop $RUNNING
+  # A pass already running (up to 100 min) loads prompts and modules as it goes: end it before the
+  # swap so it never mixes two versions or finds the tree missing. It is not restarted: the next timer
+  # pass fails its interrupted meeting and tries it once more.
+  if systemctl is-active --quiet paperbot-agents.service 2>/dev/null; then
+    systemctl stop paperbot-agents.service
+  fi
   rm -rf "$APP.old"
   [ -d "$APP" ] && mv "$APP" "$APP.old"
   mv "$APP.new" "$APP"

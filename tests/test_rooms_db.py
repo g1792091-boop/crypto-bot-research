@@ -449,3 +449,58 @@ def test_numpy_values_from_lab_code_are_stored_as_plain_json(db):
         R.add_proposal(conn, "strat:DOGE", "DOGE", t, {}, {"pass": np.bool_(False)}, "approved")
     R.post(conn, "strat:DOGE", None, "m", "code", None, "code_result", "결과", {"trades": np.int64(301)}, ts=NOW)
     assert R.room_messages(conn, "strat:DOGE")[-1]["data"] == {"trades": 301}
+
+
+# ---------------------------------------------------------------- restore: a stale -wal next to the copy
+def _restored_with_stale_wal(tmp_path, name, opener):
+    """A live WAL-mode database, last night's VACUUM INTO backup, more writes (a pass killed with its WAL
+    left behind), then the backup copied over the file while the old -wal stays next to it."""
+    import os
+    import shutil
+    path, bk = str(tmp_path / name), str(tmp_path / f"backup-{name}")
+    conn = opener(path)
+    conn.execute("CREATE TABLE IF NOT EXISTS t (x)")
+    conn.executemany("INSERT INTO t VALUES (?)", [(i,) for i in range(100)])
+    conn.commit()
+    conn.execute("VACUUM INTO ?", (bk,))
+    conn.executemany("INSERT INTO t VALUES (?)", [(i,) for i in range(3000)])
+    conn.commit()
+    shutil.copy(path + "-wal", str(tmp_path / "old-wal"))       # what a killed pass leaves behind
+    conn.close()
+    shutil.copy(bk, path)                                      # the restore, -wal not deleted
+    for sfx in ("-wal", "-shm"):
+        if os.path.exists(path + sfx):
+            os.remove(path + sfx)
+    shutil.copy(str(tmp_path / "old-wal"), path + "-wal")
+    assert os.path.getsize(path + "-wal") > 0
+    return path
+
+
+@pytest.mark.parametrize("name,opener", [("agents3.db", R.open_agents), ("inbox.db", R.open_inbox_rw)])
+def test_a_restored_database_with_an_old_wal_next_to_it_is_not_opened(tmp_path, name, opener):
+    import os
+    path = _restored_with_stale_wal(tmp_path, name, opener)
+    before = open(path, "rb").read()
+    with pytest.raises(RuntimeError, match="-wal"):
+        opener(path)                                           # SQLite would replay the old WAL onto the copy
+    assert R.open_ro(path) is None                             # the tick reads it as missing instead
+    assert open(path, "rb").read() == before                   # the restored bytes are untouched
+    for sfx in ("-wal", "-shm"):                               # the documented restore: delete them first
+        if os.path.exists(path + sfx):
+            os.remove(path + sfx)
+    conn = opener(path)
+    assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+    assert conn.execute("SELECT COUNT(*) FROM t").fetchone()[0] == 100
+    other = opener(path)                                       # a live WAL database with its own -wal: fine
+    other.execute("INSERT INTO t VALUES (1)")
+    other.commit()
+    ro = R.open_ro(path)
+    assert ro is not None and ro.execute("SELECT COUNT(*) FROM t").fetchone()[0] == 101
+    ro.close()
+    other.close()
+    conn.close()
+
+
+def test_an_unopenable_path_reads_as_missing(tmp_path):
+    (tmp_path / "paper3.db").mkdir()                           # e.g. a restore gone wrong: a directory
+    assert R.open_ro(str(tmp_path / "paper3.db")) is None

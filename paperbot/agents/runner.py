@@ -56,11 +56,23 @@ LIMIT_RE = re.compile(r"(session|weekly|usage|rate|hour|opus|sonnet)[ -]?limit|l
 
 
 class UsageLimitReached(RuntimeError):
-    pass
+    tokens = 0          # usage the CLI still reported for the failed call (then it ran and is counted)
 
 
 class AgentCallError(RuntimeError):
-    pass
+    tokens = 0          # usage the CLI still reported for the failed call
+
+
+def _usage_tokens(envelope) -> int:
+    """Tokens in the CLI envelope's ``usage`` (same fields as budget.tokens_of), 0 when absent."""
+    u = envelope.get("usage") if isinstance(envelope, dict) else None
+    if not isinstance(u, dict):
+        return 0
+    try:
+        return sum(int(u.get(k) or 0) for k in ("input_tokens", "cache_creation_input_tokens",
+                                                 "cache_read_input_tokens", "output_tokens"))
+    except (TypeError, ValueError):
+        return 0
 
 
 class AgentTimeout(AgentCallError):
@@ -164,9 +176,10 @@ class ClaudeCodeRunner:
         failed = proc.returncode != 0 or (isinstance(envelope, dict) and envelope.get("is_error"))
         if failed:
             blob = f"{text}\n{err}"
-            if LIMIT_RE.search(blob):
-                raise UsageLimitReached(blob.strip()[:300])
-            raise AgentCallError(f"exit {proc.returncode}: {blob.strip()[:300]}")
+            exc: Exception = (UsageLimitReached(blob.strip()[:300]) if LIMIT_RE.search(blob)
+                              else AgentCallError(f"exit {proc.returncode}: {blob.strip()[:300]}"))
+            exc.tokens = _usage_tokens(envelope)
+            raise exc
         meta = {}
         if isinstance(envelope, dict):
             meta = {k: envelope.get(k) for k in ("duration_ms", "num_turns", "session_id", "usage")
@@ -182,8 +195,10 @@ def auth_preflight(claude_bin: str = "claude", env: Optional[dict] = None, run: 
     """Before a real tick: is Claude Code logged in with the subscription (not an API key)?
     Runs ``claude --setting-sources "" auth status --json`` (no model call) with the child's own
     environment. Refuses when not logged in, when the answer names an ``apiKeySource`` (an
-    ANTHROPIC_API_KEY reaching the child, or a Console key stored by /login in ~/.claude.json)
-    or when authMethod is 'api_key': any of these bills per token, outside the plan's limits.
+    ANTHROPIC_API_KEY reaching the child, or a Console key stored by /login in ~/.claude.json),
+    when authMethod is 'api_key', or when the provider is not first-party (Bedrock, Vertex: authMethod
+    'third_party' or an apiProvider other than 'firstParty'): any of these bills per token, outside
+    the plan's limits.
     Returns (ok, reason)."""
     cmd = [claude_bin, "--setting-sources", "", "auth", "status", "--json"]
     try:
@@ -203,6 +218,10 @@ def auth_preflight(claude_bin: str = "claude", env: Optional[dict] = None, run: 
                        "the subscription; remove it (ANTHROPIC_API_KEY, or the Console login in ~/.claude.json)")
     if st.get("authMethod") == "api_key":
         return False, "Claude Code is logged in with an API key, not the subscription"
+    # Bedrock / Vertex / Foundry (e.g. a root-managed settings env): billed to a cloud account per token
+    if st.get("authMethod") == "third_party" or st.get("apiProvider") not in (None, "firstParty"):
+        return False, (f"Claude Code would use a third-party provider ({st.get('apiProvider') or st.get('authMethod')}), "
+                       "billed per token outside the subscription")
     return True, str(st.get("authMethod") or "")
 
 

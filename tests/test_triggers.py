@@ -582,6 +582,30 @@ def test_transient_failures_are_retried_with_a_growing_pause(w):
     assert st.rounds_today(ROOM) == 0
 
 
+def test_one_meeting_that_keeps_failing_transiently_waits_alone(w):
+    """Three transient failures in a row of ONE meeting (e.g. its first speaker's model is refused):
+    it waits on its own growing pause, and the other rooms are no longer paused."""
+    t = QUIET
+    w.say(ROOM, "질문", t - 10 * MIN)
+    at = t
+    for pause in (10, 20, 40):
+        [d] = w.due(at)
+        rid = begin_round(w.agents, d, at)
+        finish_round(w.agents, rid, "failed", at + MIN, decision={"error": "x", "transient": True, "calls_ok": 0},
+                     calls=2)
+        at += MIN + pause * MIN
+    w.say(ROOM2, "다른 방 질문", at - 30 * MIN)
+    ended = at - 40 * MIN                                      # the third failure
+    assert keys(w.due(ended + MIN)) == [(ROOM2, "owner", 1)]   # the other room meets; ROOM waits alone
+    assert keys(w.due(ended + 40 * MIN)) == [(ROOM, "owner", 1), (ROOM2, "owner", 1)]
+    # two different meetings failing in a row is an outage again: every room waits
+    [d] = [x for x in w.due(ended + 40 * MIN) if x.room_id == ROOM2]
+    rid = begin_round(w.agents, d, ended + 41 * MIN)
+    finish_round(w.agents, rid, "failed", ended + 42 * MIN, decision={"error": "x", "transient": True, "calls_ok": 0},
+                 calls=2)
+    assert w.due(ended + 43 * MIN) == []
+
+
 def test_stopped_rounds_do_not_use_the_rooms_daily_slots(w):
     t = QUIET
     for k in range(3):

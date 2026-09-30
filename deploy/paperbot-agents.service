@@ -40,7 +40,9 @@ TimeoutStartSec=100min
 # The -wal files are NOT listed: a file listed here is pinned to the inode it had when the pass
 # started, and the writers delete and re-create their -wal (the nightly check at every run), so a
 # pinned one would be a stale WAL next to the live -shm. The code opens those databases read-only
-# (file:...?mode=ro, query_only) in any case. Restore a database only with this timer stopped.
+# (file:...?mode=ro, query_only) in any case. Restore a database only with this timer AND
+# paperbot-agents.service stopped (stopping the timer does not end a pass in progress), after deleting
+# the restored file's -wal/-shm: SQLite would replay an old -wal onto the restored copy (docs/agent-rooms.md).
 NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict

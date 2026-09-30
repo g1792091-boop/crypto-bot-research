@@ -310,6 +310,13 @@ def test_daily_token_cap_and_failed_calls_count(ledger):
     failing.close()
 
 
+def test_cli_refuses_to_call_claude_without_the_subscription_login(ledger, tmp_path):
+    db, _ = ledger
+    code = agents_main(["evening", "--ledger", db, "--claude-bin", str(tmp_path / "no-such-claude"),
+                        "--agents-db", str(tmp_path / "agents.db")])
+    assert code == 2 and not os.path.exists(tmp_path / "agents.db")     # no call made, nothing counted
+
+
 def test_cli_writes_agent_tables_to_agents_db_only(ledger):
     db, _ = ledger
     agents_main(["evening", "--ledger", db, "--dry-run"])

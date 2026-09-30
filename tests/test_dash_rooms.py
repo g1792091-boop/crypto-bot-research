@@ -562,3 +562,52 @@ def test_a_huge_login_body_is_refused_before_it_is_parsed(env):
     r = env["client"].post("/api/login", content=b'{"password": "' + b"x" * 40_000 + b'"}',
                            headers={"content-type": "application/json"})
     assert r.status_code == 413
+
+
+# ---------------------------------------------------------------- confirmation review, round 2
+def test_a_post_that_waits_for_midnight_is_told_so():
+    got = _js(("pendingHint",), """
+console.log(JSON.stringify({ok: pendingHint("ok"), full: pendingHint("ok", "room_full", 3),
+  budget: pendingHint("ok", "budget", 3), stopped: pendingHint("stopped", "room_full", 3)}));
+""")
+    assert got["ok"] == "직원들이 다음 차례에 읽고 답합니다"
+    assert "자정" in got["full"] and "하루 3번" in got["full"] and "다음 차례에" not in got["full"]
+    assert "자정" in got["budget"] and "AI 한도" in got["budget"]
+    assert got["stopped"] == "에이전트가 멈춰 있어 아직 전달되지 않습니다"
+
+
+def test_the_owner_post_ai_budget_used_up_is_shown_for_every_room(env):
+    a = R.open_agents(env["agents"])
+    day = R.kst_day(env["now"])
+    a.executemany("INSERT INTO agent_calls VALUES (?,?,?,?,?,?,?)",
+                  [(env["now"] - 1_000, day, "owner", "x", "sonnet", 1, 1000)] * 20)     # the default cap: 20
+    a.commit()
+    a.close()
+    ov = Rooms(env["agents"], env["inbox"]).overview(now_ms=env["now"])
+    assert {r["owner_wait"] for r in ov["rooms"]} == {"budget"} and ov["rounds_per_room_day"] == 3
+    assert {r["owner_wait"] for r in Rooms(env["agents"], env["inbox"]).overview(
+        now_ms=env["now"] + 86_400_000)["rooms"]} == {None}                             # a new KST day
+
+
+def test_an_owner_decision_is_not_promised_while_the_agents_are_stopped():
+    """Timer off for 2 hours: the owners' approve click must not say it is applied on the next turn (the
+    page already says their posts are not delivered). In the 'login' state apply_approvals still runs."""
+    got = _js(("agentsState", "decisionWhen", "decideButtons", "testKo", "propCard"), """
+const now = 1e12;
+const prop = {id: 2, status: "awaiting_owner", effective_status: "approved", change: {test: {template: "stop_atr", k: 3}},
+  gate: {pass: true, n_trials: 2, reasons: []}, gate_now: {pass: true, n_trials: 2},
+  owner_decision: {decision: "approve", ts: now - 60000, note: "", applied: false}, trial_id: 3, strategy_ko: "켈트너·RSI"};
+const ov = (tick) => ({ready: true, now, tick_every_ms: 900000, last_tick: tick, rooms: [{running: false}]});
+var rs = {confirm: null, ov: ov({ts: now - 120 * 60000, ok: true})};
+const stopped = propCard(prop);
+rs.ov = ov({ts: now - 60000, ok: true});
+const ok = propCard(prop);
+rs.ov = ov({ts: now - 60000, ok: false, why: "login"});
+const login = propCard(prop);
+console.log(JSON.stringify({stopped, ok, login}));
+""")
+    assert "다음 차례" not in got["stopped"] and "멈춰 있어 아직 반영되지 않습니다" in got["stopped"]
+    assert "다음 차례(15분 안)에 코드가 반영합니다" in got["ok"] and "다음 차례(15분 안)에 코드가 반영합니다" in got["login"]
+    with open(ROOMS_JS, encoding="utf-8") as fh:
+        src = fh.read()
+    assert "직원들이 다음 차례에 반영합니다" not in src

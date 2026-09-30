@@ -315,8 +315,35 @@ def room_strategy(room_id: str) -> Optional[str]:
 
 
 # ---------------------------------------------------------------- openers
+def stale_wal(path: Optional[str]) -> bool:
+    """A restored backup copy (``VACUUM INTO`` writes a rollback-journal header: byte 18 == 1) with the
+    replaced file's non-empty -wal still next to it. SQLite would replay that old WAL onto the restored
+    file (corrupting it, or silently undoing the restore). A live WAL-mode file (byte 18 == 2) with its
+    own -wal, or a new file (under 20 bytes), is never stale."""
+    if not path:
+        return False
+    try:
+        with open(path, "rb") as fh:
+            h = fh.read(20)
+        return len(h) == 20 and h[:16] == b"SQLite format 3\x00" and h[18] == 1 and os.path.getsize(path + "-wal") > 0
+    except OSError:
+        return False
+
+
+STALE_WAL_TEXT = ("{path} was restored from a backup but the replaced file's -wal is still next to it; stop the "
+                  "services, delete {path}-wal and {path}-shm, then start them again (docs/agent-rooms.md)")
+
+
+def refuse_stale_wal(path: Optional[str]) -> None:
+    """Raise instead of opening a restored file whose old -wal SQLite would replay onto it (``stale_wal``)."""
+    if stale_wal(path):
+        raise RuntimeError(STALE_WAL_TEXT.format(path=path))
+
+
 def open_agents(path: str) -> sqlite3.Connection:
-    """The agents tick's (only) writer connection to agents3.db. Creates the schema; safe to repeat."""
+    """The agents tick's (only) writer connection to agents3.db. Creates the schema; safe to repeat.
+    Refuses a restored copy with an old -wal next to it (``refuse_stale_wal``)."""
+    refuse_stale_wal(path)
     conn = sqlite3.connect(path, timeout=10)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
@@ -326,7 +353,9 @@ def open_agents(path: str) -> sqlite3.Connection:
 
 
 def open_inbox_rw(path: str) -> sqlite3.Connection:
-    """The dashboard's (only) writer connection to inbox.db. Creates the schema; safe to repeat."""
+    """The dashboard's (only) writer connection to inbox.db. Creates the schema; safe to repeat.
+    Refuses a restored copy with an old -wal next to it (``refuse_stale_wal``)."""
+    refuse_stale_wal(path)
     conn = sqlite3.connect(path, timeout=10)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
@@ -340,14 +369,19 @@ def open_ro(path: Optional[str]) -> Optional[sqlite3.Connection]:
     Rows come back as ``sqlite3.Row`` (index or name access). Writes raise OperationalError."""
     if not path or not os.path.exists(path):
         return None
+    if stale_wal(path):                    # a restore that left the old -wal: never read (or replay) it
+        print(f"note: {STALE_WAL_TEXT.format(path=path)}; treated as missing", file=sys.stderr)
+        return None
     uri = "file:" + urllib.parse.quote(os.path.abspath(path)) + "?mode=ro"
-    conn = sqlite3.connect(uri, uri=True, timeout=5)
-    conn.row_factory = sqlite3.Row
+    conn = None
     try:
+        conn = sqlite3.connect(uri, uri=True, timeout=5)
+        conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA query_only=ON")
         conn.execute("SELECT 1 FROM sqlite_master LIMIT 1").fetchall()
-    except sqlite3.DatabaseError as exc:   # not a SQLite file (bad restore, disk error): treat as missing
-        conn.close()
+    except sqlite3.DatabaseError as exc:   # not a SQLite file (bad restore, disk error, a directory): missing
+        if conn is not None:
+            conn.close()
         print(f"note: {path} is not readable as a database ({exc}); treated as missing", file=sys.stderr)
         return None
     return conn

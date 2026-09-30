@@ -18,7 +18,7 @@ const PSTATUS_KO = {awaiting_owner: "두 분 확인 대기", approved: "승인�
 const TRIAL_KIND_KO = {hypothesis: "가설", test: "5년 시험", copy_proposal: "복제 제안"};
 const TRIAL_ST_KO = {passed: "통과", failed: "불통과", described: "설명용", no_data: "자료 없음", error: "오류"};
 const rs = {ov: null, filter: "", q: "", cur: null, room: null, msgs: [], pending: [], lastId: 0, hasMore: false,
-  seen: null, busy: false, again: false, side: {}, confirm: null, req: 0, sideReq: 0, agentSt: ""};
+  seen: null, busy: false, again: false, side: {}, confirm: null, req: 0, sideReq: 0, agentSt: "", ownerWait: ""};
 
 // ------------------------------------------------------------ helpers
 function sget(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }
@@ -75,10 +75,21 @@ function agentsState(ov) {
   return {st: "ok", age};
 }
 const agoKo = (age) => age == null ? "점검 기록 없음" : `마지막 점검 ${Math.round(age / 60000)}분 전`;
-function pendingHint(st) {
+// wait: why the tick answers this room's posts only after 00:00 KST (/api/rooms owner_wait), perDay: the
+// room's daily meeting cap. Only a running agent with no such wait may promise the next turn.
+function pendingHint(st, wait, perDay) {
+  if (st === "ok" && wait === "room_full") return `이 방은 오늘 회의를 다 해서(하루 ${perDay || 3}번) 한국 시간 자정 뒤 첫 차례에 답합니다`;
+  if (st === "ok" && wait === "budget") return "오늘 두 분 글에 쓰는 AI 한도를 다 써서 한국 시간 자정 뒤 첫 차례에 답합니다";
   if (st === "ok") return "직원들이 다음 차례에 읽고 답합니다";
   if (st === "new") return "에이전트가 돌기 시작하면 읽고 답합니다";
   return "에이전트가 멈춰 있어 아직 전달되지 않습니다";
+}
+const roomHint = () => pendingHint(agentsState(rs.ov).st, (curOv() || {}).owner_wait, (rs.ov || {}).rounds_per_room_day);
+// An owner's approve/reject click is applied by code at the start of the next pass (before the login
+// check, so also in the 'login' state); while the agents are stopped nothing applies it.
+function decisionWhen(st) {
+  return ["stopped", "error", "new"].includes(st) ? "에이전트가 멈춰 있어 아직 반영되지 않습니다(다시 돌기 시작하면 코드가 반영)"
+    : "다음 차례(15분 안)에 코드가 반영합니다";
 }
 const unread = (r) => r.last_id > ((rs.seen && rs.seen[r.room_id]) || 0);
 const roomVisible = () => state.view === "rooms" && !!rs.cur && document.visibilityState === "visible" &&
@@ -104,7 +115,10 @@ async function loadOverview() {
   renderRoomList(); navDot(); aiChip();
   if (rs.cur) {
     renderHead();
-    if (stChanged || wasRunning !== !!(curOv() || {}).running) renderChat(nearBottom());
+    const w = (curOv() || {}).owner_wait || "", wChanged = w !== rs.ownerWait;
+    rs.ownerWait = w;
+    if (stChanged || wChanged || wasRunning !== !!(curOv() || {}).running) renderChat(nearBottom());
+    if (stChanged && rs.side && rs.side.props) renderSide();     // the proposal cards follow the state too
   }
 }
 function aiChip() {
@@ -299,7 +313,7 @@ function ownerHtml(m, pending) {
   const who = pending ? (m.author ? `두 분 (${m.author})` : "두 분") : (m.speaker_name || "두 분");
   return `<div class="m owner ${pending ? "pending" : ""}"><div class="bd"><div class="who"><time>${hm(m.ts)}</time><b>${esc(who)}</b>
     ${pending ? '<span class="kchip wait">전달 대기</span>' : ""}</div><div class="bub">${esc(m.text)}</div>
-    ${pending ? `<div class="hint">${esc(pendingHint(agentsState(rs.ov).st))}</div>` : ""}</div></div>`;
+    ${pending ? `<div class="hint">${esc(roomHint())}</div>` : ""}</div></div>`;
 }
 function msgHtml(m) {
   const k = m.kind, who = m.speaker_name || m.role;
@@ -365,8 +379,8 @@ $("r-form").onsubmit = async (e) => {
     const d = await apiPost(`/api/rooms/${encodeURIComponent(id)}/say`, {text});
     rin.value = ""; growInput();
     if (id === rs.cur) { rs.pending.push(d); renderChat(true); }
-    const st = agentsState(rs.ov).st;
-    toast(st === "ok" ? "전달했습니다. 직원들이 다음 차례에 읽고 답합니다" : `저장했습니다. ${pendingHint(st)}`);
+    const hint = roomHint();
+    toast(hint === pendingHint("ok") ? `전달했습니다. ${hint}` : `저장했습니다. ${hint}`);
   } catch (err) { toast(err.message); } finally { $("r-send").disabled = false; }
 };
 
@@ -403,7 +417,7 @@ function propCard(p) {
   const stale = !!(gn && gn.pass === false && (p.status === "awaiting_owner" || p.status === "approved"));
   let acts = "";
   if (od && !od.applied) {
-    acts = `<div class="pdone">두 분 결정: <b>${od.decision === "approve" ? "승인" : "거절"}</b> · 직원들이 다음 차례에 반영합니다</div>` +
+    acts = `<div class="pdone">두 분 결정: <b>${od.decision === "approve" ? "승인" : "거절"}</b> · ${esc(decisionWhen(agentsState(rs.ov).st))}</div>` +
       (p.effective_status === "approved" ? decideButtons(p, "reject-only") : "");
   } else if (p.status === "awaiting_owner") acts = stale ? decideButtons(p, "stale") : decideButtons(p);
   return `<div class="pcard"><div class="ttl">제안 #${esc(p.id)} · ${esc(p.strategy_ko || p.strategy || "")}</div>
@@ -484,7 +498,8 @@ function renderSide() {
     b.disabled = true;
     try {
       const d = await apiPost(`/api/proposals/${c.id}/decide`, {decision: c.dec, note: c.note});
-      toast(d.message || "전달했습니다");
+      const st = agentsState(rs.ov).st;
+      toast(["ok", "login"].includes(st) ? (d.message || "전달했습니다") : `저장했습니다. ${decisionWhen(st)}`);
     } catch (err) { toast(err.message); }
     rs.confirm = null;
     loadSide(); loadOverview();

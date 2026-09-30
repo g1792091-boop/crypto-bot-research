@@ -403,6 +403,44 @@ def test_evening_meeting_after_midnight_reports_its_own_day(world):
     assert "2026-10-07 0시부터 회의 1번" in text and "2026-10-07 0시부터 AI 호출 4회" in text
 
 
+def _owner_round_staff():
+    return Staff({SPEC: [{"headline": "답함", "findings": [], "reply_to_owner": "답을 드립니다.",
+                          "proposal": {"action": "no_action", "reason": "질문 답변"}}],
+                  "devils_advocate": [{"headline": "동의", "objections": [], "verdict": "agree"}]})
+
+
+def test_a_post_that_waits_for_midnight_is_not_promised_the_next_turn(world, dash):
+    """A busy room: one loss meeting and two owner meetings today (the room's 3). The owners' next
+    question is answered only after 00:00 KST, so the page must not promise '다음 차례' (15 minutes):
+    /api/rooms says why the post waits."""
+    from paperbot.agents import triggers as TR
+    from paperbot.dash.app import Rooms
+    p, lab = world["paths"], world["lab"]
+    staff = Staff({**lab_round_answers(WIDER), "validator": [{"pass_gate": True, "explanation": "통과"}],
+                   "approver": [{"approve": True, "reason": "통과"}]})
+    _tick(p, staff, T0, lab)
+    t = T0
+    for k in range(3):
+        t += 15 * 60_000
+        ib = R.open_inbox_rw(p["inbox"])
+        R.add_owner_message(ib, ROOM, "", f"질문 {k + 1}", ts=t - 60_000)
+        ib.close()
+        _tick(p, _owner_round_staff(), t, lab)
+    only = RM.RoomsPolicy(triggers=TR.TriggerPolicy(enabled=("loss_cluster", "owner")))
+    for h in range(1, 9):                                     # 16:45 .. 23:45 KST: nothing is due
+        assert _tick(p, Staff({}), t + h * HOUR, lab, policy=only)["rounds"] == []
+    assert [m["text"] for m in dash.get(f"/api/rooms/{ROOM}/messages").json()["pending_owner"]] == ["질문 3"]
+    ov = Rooms(p["agents3"], p["inbox"]).overview(now_ms=t + 8 * HOUR)
+    by = {r["room_id"]: r for r in ov["rooms"]}
+    assert by[ROOM]["owner_wait"] == "room_full" and ov["rounds_per_room_day"] == 3
+    assert by["team:risk"]["owner_wait"] is None and by["strat:V45_AMB"]["owner_wait"] is None
+    # after midnight the room has its meetings again, and the post is answered
+    ov = Rooms(p["agents3"], p["inbox"]).overview(now_ms=t + 10 * HOUR)
+    assert {r["room_id"]: r for r in ov["rooms"]}[ROOM]["owner_wait"] is None
+    out = _tick(p, _owner_round_staff(), t + 10 * HOUR, lab, policy=only)
+    assert [(r["room_id"], r["trigger"], r["status"]) for r in out["rounds"]] == [(ROOM, "owner", "no_action")]
+
+
 def test_owner_settings_from_env_reach_the_tick_and_the_dashboard(world, dash):
     env = {"AGENTS_BUDGET": "loss=14:90000, total=40", "AGENTS_OWNER_OK": "no", "AGENTS_COPY_CAP_TOTAL": "4",
            "AGENTS_MAX_ROUNDS_PER_TICK": "2", "AGENTS_FLAG_MAX_PER_DAY": "1"}

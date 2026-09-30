@@ -311,6 +311,57 @@ def test_the_week_cap_keeps_todays_reserve_for_a_liquidation_and_the_evening(wor
     assert use["incident"]["calls"] == 3 and use["scheduled"]["calls"] == 4
 
 
+class _Tokens30k:
+    def call(self, model, system_prompt, instruction, packet):
+        from paperbot.agents.runner import CallResult
+        return CallResult("{}", {}, {"usage": {"input_tokens": 30_000}})
+
+
+def test_a_light_day_leaving_the_week_window_never_starves_the_next_days_reserve(world):
+    """Day 0 has no calls (install day, or the agents were stopped), days 1-6 are busy. When day 0 leaves
+    the rolling window, day 7 must still have calls for a liquidation, the 08:00 meeting and the 22:00
+    meeting: the week cap keeps the incident/scheduled reserve for the NEXT days too, not only today's.
+    Every call goes through the real ClassBudget.call (check() first), 30k tokens each."""
+    day0 = TR.kst_day_start(QUIET) + 10 * DAY
+    clock = {"t": day0}
+    ctx = RM.RoundContext(world.agents, None, None, None, _Tokens30k(), None, day0, clock_ms=lambda: clock["t"])
+
+    def due(trig, room, **data):
+        return TR.Due(room, trig, 0, {"class": TR.TRIGGER_CLASS[trig], **data}, trig)
+    LIQ, GAP = due("incident", "team:ops", counts={"liquidation": 1}), due("incident", "team:ops", counts={"data_gap": 1})
+    MORN, CHK = due("morning", "team:market"), due("checkpoint", "team:lead")
+    EVE_R, EVE_L = due("evening", "team:review"), due("evening", "team:lead")
+    OWN, LOSS, WEEK = due("owner", "strat:V45_AMB"), due("loss_cluster", "strat:V45_AMB"), due("weekly", "strat:V45_AMB")
+
+    def calls(d, hour, dd, n):
+        clock["t"] = day0 + d * DAY + int(hour * HOUR)
+        for i in range(n):
+            try:
+                RM.round_budget(dd, ctx).call("sonnet", "", "", {"role": "x"})
+            except RM.BudgetExceeded:
+                return i
+        return n
+    busy = ((8, MORN, 5), (10, OWN, 14), (12, GAP, 9), (21.1, LOSS, 16), (21.3, WEEK, 20), (22.1, EVE_R, 3),
+            (22.2, EVE_L, 1))
+    for d in range(1, 6):
+        for h, dd, n in busy:
+            calls(d, h, dd, n)
+    for h, dd, n in busy + ((8.5, CHK, 3), (14, LIQ, 6)):         # day 6: + the checkpoint and a liquidation
+        calls(6, h, dd, n)
+    # day 7: a liquidation at 03:00, the 08:00 meeting, a liquidation at 15:00, the 22:00 meeting
+    for h, dd in ((3, LIQ), (8.1, MORN), (15, LIQ), (22.1, EVE_R)):
+        clock["t"] = day0 + 7 * DAY + int(h * HOUR)
+        assert RM.can_start(dd, ctx), (h, dd.trigger)
+        n = RM.round_min_calls(dd, ctx.policy)
+        assert calls(7, h, dd, n) == n, (h, dd.trigger)
+    clock["t"] = day0 + 7 * DAY + 23 * HOUR
+    assert RM.round_budget(LIQ, ctx).used_week()[1] <= RM.DEFAULT_WEEK[1]
+    # the other classes still ran on the busy days (the extra reserve binds only after a light day)
+    per_day = dict(world.agents.execute("SELECT day, COUNT(*) FROM agent_calls WHERE pipeline = 'owner' "
+                                        "GROUP BY day").fetchall())
+    assert per_day[R.kst_day(day0 + 1 * DAY)] == 14
+
+
 def test_owner_meetings_that_cannot_start_never_take_the_evenings_slots(world):
     prefill(world, EVENING, owner=19)                         # owner class: 1 call left, every owner meeting needs 2
     rooms = ["strat:V45_AMB", "strat:S1_EMA_RSI_CHOP", "strat:N01_ST_EMA", "team:risk", "strat:N02_ST_KST"]
@@ -999,3 +1050,111 @@ def test_one_large_call_cannot_eat_into_the_token_reserve(world):
     inc = RM.round_budget(TR.Due("team:ops", "incident", 0, {"class": "incident", "counts": {"liquidation": 1}},
                                  "incident"), ctx)
     inc.check(5_000)                                          # the reserve's owners may use it
+
+
+# ================================================================ confirmation review, round 2
+class _OpusRefused(QueueRunner):
+    """Every opus call fails with a CLI error that is not a usage limit (e.g. the model is not available
+    for this plan or account); sonnet calls answer."""
+
+    def call(self, model, system_prompt, instruction, packet):
+        from paperbot.agents.runner import AgentCallError
+        if model == "opus":
+            self.calls.append({"role": packet["role"], "model": model})
+            raise AgentCallError("exit 1: model not available for this account")
+        return super().call(model, system_prompt, instruction, packet)
+
+
+def test_one_role_that_always_fails_neither_stalls_its_meeting_nor_every_room(world):
+    """One role's calls always fail (opus refused), others answer: the meeting skips that turn instead of
+    calling it an outage, so the liquidation meeting finishes and the evening summary is sent. A meeting
+    whose FIRST speaker is that role (team:risk owner post) fails 'transiently' by itself: after three in
+    a row it waits alone, and the other rooms keep meeting."""
+    world.store.alert(QUIET - 2 * MIN, "CRITICAL", f"[{S}@15m] LIQUIDATED BTCUSDT 40x lost margin 20.00")
+    world.store.commit()
+    world.say("team:risk", "리스크 어때요?", QUIET - MIN)          # its owner round starts with risk_officer (opus)
+    team = ("ops_auditor", "chart_regime", "derivs_flow", "pnl_reviewer", "whatif", "league_referee")
+    log, n, t = [], ListNotifier(), QUIET                       # 15:00 KST, one day of 15-minute ticks
+    for _ in range(4 * 24):
+        answers = {r: [team_answer(r)] * 5 for r in team}
+        answers.update(team_lead=[LEAD] * 5, devils_advocate=[challenge("agree")] * 5)
+        out = world.tick(_OpusRefused(answers), t, notifier=n)
+        log += [((t - QUIET) // MIN, r["room_id"], r["trigger"], r["status"]) for r in out["rounds"]]
+        t += 15 * MIN
+    assert (0, "team:ops", "incident", "done") in log              # at once, with the code reviewer's turn skipped
+    skipped = [m["text"] for m in world.messages("team:ops") if m["kind"] == "system"]
+    assert any("코드 리뷰어 호출이 실패해 이번 차례는 건너뜁니다" in x for x in skipped), skipped
+    assert [x[3] for x in log if x[2] == "evening"] == ["done", "done"] and len(n.messages) == 1
+    assert [x[3] for x in log if x[2] == "morning"] == ["done"]
+    risk = [x for x in log if x[1] == "team:risk"]
+    assert risk and all(x[3] == "failed" for x in risk) and len(risk) < 12     # it waits on its own, growing
+    assert R.usage_today(world.agents, QUIET)["by_class"]["incident"]["calls"] <= 4
+
+
+def _proc(stdout, returncode=0):
+    return lambda cmd, **kw: type("P", (), {"stdout": stdout, "stderr": "", "returncode": returncode})()
+
+
+def test_calls_that_ran_are_counted_with_their_tokens(world):
+    """An answer whose stdout is not one JSON envelope (a warning line first) is counted at its estimated
+    size, never 0; a failed call whose text only looks like a limit but that reported usage is kept."""
+    import json as _json
+    from paperbot.agents.runner import ClaudeCodeRunner
+    env = {"answer": _json.dumps({"type": "result", "is_error": False, "result": "{}",
+                                  "usage": {"input_tokens": 30_000}})}
+    packet = {"role": "x", "blob": "가" * 30_000}                     # about 30k tokens estimated
+    b = RM.ClassBudget(ClaudeCodeRunner(env={}, run=_proc("warning: something\n" + env["answer"])), world.agents,
+                       "owner", 20, 10**9, 80, 10**9, lambda: QUIET)
+    b.call("sonnet", "s", "i", packet)
+    assert world.q("SELECT ok, tokens FROM agent_calls") == [(1, RM.estimate_tokens(packet, "s"))]
+    world.agents.execute("DELETE FROM agent_calls")
+    world.agents.commit()
+    ran = _json.dumps({"is_error": True, "result": "the tag limit reached 3 of 3", "usage": {"input_tokens": 30_000}})
+    b = RM.ClassBudget(ClaudeCodeRunner(env={}, run=_proc(ran, 1)), world.agents, "owner", 20, 10**9, 80, 10**9,
+                       lambda: QUIET)
+    with pytest.raises(UsageLimitReached):
+        b.call("sonnet", "s", "i", {"role": "x"})
+    assert world.q("SELECT ok, tokens FROM agent_calls") == [(0, 30_000)]
+    world.agents.execute("DELETE FROM agent_calls")
+    world.agents.commit()
+    refused = _json.dumps({"is_error": True, "result": "Claude AI usage limit reached|1760000000"})
+    b = RM.ClassBudget(ClaudeCodeRunner(env={}, run=_proc(refused, 1)), world.agents, "owner", 20, 10**9, 80, 10**9,
+                       lambda: QUIET)
+    with pytest.raises(UsageLimitReached):
+        b.call("sonnet", "s", "i", {"role": "x"})
+    assert world.q("SELECT COUNT(*) FROM agent_calls") == [(0,)]       # the plan refused it: not counted
+
+
+def test_a_call_that_would_pass_a_token_cap_is_not_made(world):
+    """Token caps compare the call's own estimated size too (no cap is passed by one ~30k-token call)."""
+    prefill(world, QUIET, owner=1)                                 # 20k tokens used by the owner class
+    packet = {"role": "x", "blob": "가" * 30_000}
+    b = RM.ClassBudget(QueueRunner({}), world.agents, "owner", 20, 45_000, 80, 10**9, lambda: QUIET)
+    with pytest.raises(RM.BudgetExceeded):
+        b.call("sonnet", "", "", packet)                           # 20k + ~30k > 45k
+    b = RM.ClassBudget(QueueRunner({}), world.agents, "incident", 20, 10**9, 80, 45_000, lambda: QUIET)
+    with pytest.raises(RM.TotalBudgetExceeded):
+        b.call("sonnet", "", "", packet)
+    b = RM.ClassBudget(QueueRunner({}), world.agents, "incident", 20, 10**9, 80, 10**9, lambda: QUIET,
+                       week=(420, 45_000))
+    with pytest.raises(RM.WeekBudgetExceeded):
+        b.call("sonnet", "", "", packet)
+    assert world.q("SELECT COUNT(*) FROM agent_calls") == [(1,)]      # none of them was made
+
+
+def test_the_decision_line_and_the_end_of_the_meeting_are_one_transaction(world, monkeypatch):
+    """A pass killed between the code's 'decision' line and the end of the round leaves neither: the
+    meeting is not shown finished while it is still 'running' (the next pass fails it and retries)."""
+    class Killed(BaseException):
+        pass
+
+    def dies(*a, **kw):
+        raise Killed()
+    monkeypatch.setattr(TR, "finish_round", dies)
+    world.losses()
+    with pytest.raises(Killed):
+        world.tick(QueueRunner({SPEC: [analysis(NOTE)], "devils_advocate": [challenge("agree")]}), QUIET)
+    ro = R.open_ro(world.paths["agents"])
+    kinds = [r[0] for r in ro.execute("SELECT kind FROM messages WHERE room_id = ?", (ROOM,))]
+    ro.close()
+    assert "analysis" in kinds and "decision" not in kinds
