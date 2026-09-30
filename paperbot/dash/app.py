@@ -72,8 +72,41 @@ def token_ok(secret: bytes, token: Optional[str], now: Optional[float] = None) -
 
 # ---------------------------------------------------------------- data
 class Data:
-    def __init__(self, db: str):
+    def __init__(self, db: str, daily_db: Optional[str] = None):
         self.db = db
+        self.daily_db = daily_db
+
+    def _daily(self) -> Optional[sqlite3.Connection]:
+        if not self.daily_db or not os.path.exists(self.daily_db):
+            return None
+        return sqlite3.connect(f"file:{self.daily_db}?mode=ro", uri=True, timeout=5)
+
+    def _round_trip(self, c) -> float:
+        from ..config import v3_settings
+        run = self.state(c, "run")
+        fee = run[1].get("taker_fee") if run else None
+        return v3_settings(**({"taker_fee": fee} if fee else {})).round_trip_cost
+
+    def cards(self, strategy: Optional[str], tf: Optional[str], days: Optional[float], limit: int,
+              losses_only: bool = True) -> list[dict]:
+        """Trade cards of the last ``days`` days (all history when None)."""
+        from ..agents.roster3 import STRATEGY_KO
+        from ..cards import cards_from_db
+        since = 0 if days is None else int(time.time() * 1000 - days * 86_400_000)
+        d = self._daily()
+        try:
+            with self.conn() as c:
+                return cards_from_db(c, self._round_trip(c), strategy, tf, losses_only, since, limit, d,
+                                     STRATEGY_KO)
+        finally:
+            if d is not None:
+                d.close()
+
+    def card_stats(self, strategy: Optional[str], tf: Optional[str], days: Optional[float]) -> dict:
+        from ..cards import tag_stats
+        cs = self.cards(strategy, tf, days, 2000, losses_only=False)
+        return {"trades": len(cs), "losses": sum(c["pnl"] < 0 for c in cs), "wins": sum(c["pnl"] > 0 for c in cs),
+                "tags": tag_stats(cs)}
 
     def conn(self) -> sqlite3.Connection:
         c = sqlite3.connect(f"file:{self.db}?mode=ro", uri=True, timeout=5)
@@ -247,9 +280,9 @@ def agent_feed(agents_db: Optional[str], limit: int = 200) -> list[dict]:
 
 
 def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fetch_candles,
-               agents_db: Optional[str] = None) -> FastAPI:
+               agents_db: Optional[str] = None, daily_db: Optional[str] = None) -> FastAPI:
     app = FastAPI(title="paper v3", docs_url=None, redoc_url=None, openapi_url=None)
-    data = Data(db)
+    data = Data(db, daily_db)
     fails: dict[str, list[float]] = {}
 
     def authed(req: Request) -> bool:
@@ -325,6 +358,23 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
     def agents_roster():
         from ..agents.roster3 import roster
         return roster()
+
+    @app.get("/api/cards")
+    def get_cards(strategy: Optional[str] = None, tf: Optional[str] = None, days: float = 30,
+                  limit: int = 100, all: int = 0):
+        return data.cards(strategy, tf, days if days > 0 else None, min(max(limit, 1), 500), losses_only=not all)
+
+    @app.get("/api/cards/stats")
+    def get_card_stats(strategy: Optional[str] = None, tf: Optional[str] = None, days: float = 30):
+        return data.card_stats(strategy, tf, days if days > 0 else None)
+
+    @app.get("/api/profile/{strategy}")
+    def get_profile(strategy: str):
+        from ..agents.packets3 import profile_card
+        c = profile_card(strategy)
+        if c is None:
+            raise HTTPException(404, "unknown strategy")
+        return c
 
     @app.get("/api/agents/feed")
     def agents_feed(limit: int = 200):

@@ -109,3 +109,21 @@ def test_notify_report_routes_by_severity():
 
     clean = notify_report({"day": "d", "parity": "no 00:00 snapshot", "data_quality": {}}, ListNotifier())
     assert [m[0] for m in clean] == ["WARN", "INFO"]
+
+
+def test_stop_variants_cover_every_losing_trade_and_match_actual_at_2atr(tmp_path):
+    from paperbot.daily3 import _alone, stop_shadows
+    store, steps = _live_day(str(tmp_path / "s.db"))
+    conn = store.conn
+    idx = {ts: k for k, (ts, _, _) in enumerate(steps)}
+    sigs = day_signals(conn, -1, DAY - 1)
+    rows = stop_shadows(S, BR, {}, conn, "d", 0, DAY, steps, sigs, idx)
+    lost = conn.execute("SELECT COUNT(*) FROM trades WHERE exit_reason IN ('SL','LIQ')").fetchone()[0]
+    assert lost > 0 and len(rows) == 3 * lost
+    assert {r["kind"] for r in rows} == {"stop1.5", "stop2.5", "stop3.0"}
+    # the same machinery at 2 ATR reproduces the stored losing trade
+    aid, data = conn.execute("SELECT account_id, data FROM trades WHERE exit_reason = 'SL' LIMIT 1").fetchone()
+    t = json.loads(data)
+    d = next(x for x in sigs[t["signal_ts"] + 1] if f"{x['strategy']}@15m" == aid and x["symbol"] == t["symbol"])
+    alone, ok = _alone(S, BR, {}, make_signal(d, stop_atr=2.0), steps, idx[t["signal_ts"] + 1])
+    assert ok and alone.exit_time == t["exit_time"] and abs(alone.roe - t["roe"]) < 1e-9

@@ -81,3 +81,19 @@ def test_login_rate_limit(client):
     for _ in range(10):
         client.post("/api/login", json={"password": "no"})
     assert client.post("/api/login", json={"password": "correct horse battery"}).status_code == 429
+
+
+def test_loss_cards_and_profile(client):
+    client.post("/api/login", json={"password": "correct horse battery"})
+    assert client.get("/api/cards").json() == []                       # last 30 days: nothing (1970 data)
+    cards = client.get("/api/cards", params={"days": 0}).json()
+    assert len(cards) == 1
+    c = cards[0]
+    assert c["account_id"] == "A@15m" and c["reason_ko"] == "손절" and c["side_ko"] == "롱"
+    assert c["if_stop"] == {} and isinstance(c["tags"], list)
+    assert client.get("/api/cards", params={"days": 0, "strategy": "B"}).json() == []
+    st = client.get("/api/cards/stats", params={"days": 0}).json()
+    assert st["trades"] == 1 and st["losses"] == 1 and len(st["tags"]) >= 5
+    p = client.get("/api/profile/N17_KC_RSI").json()
+    assert p["name_ko"] == "켈트너·RSI" and len(p["rows"]) == 5
+    assert client.get("/api/profile/NOPE").status_code == 404

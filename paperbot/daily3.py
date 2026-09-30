@@ -42,6 +42,7 @@ from .binance import BinanceREST, bars_from_klines
 from .config import V3_STOP_ATR, V3_SYMBOLS, Settings, v3_settings
 from .engine import PaperEngine, restore_engine
 from .models import Bar, Signal
+from .cards import STOP_VARIANTS
 from .notify import CRITICAL, INFO, WARN
 
 MIN = 60_000
@@ -213,6 +214,38 @@ def shadows(settings: Settings, brackets, specs, conn, day: str, start: int, end
                      "account_id": aid, "symbol": s["symbol"], "timeframe": s["timeframe"], "side": s["side"],
                      "filled": None, "roe": None if t is None else t.roe,
                      "exit_reason": None if t is None else t.exit_reason, "resolved": int(resolved), "data": "{}"})
+    rows += stop_shadows(settings, brackets, specs, conn, day, start, end, steps, sigs, idx)
+    return rows
+
+
+def stop_shadows(settings: Settings, brackets, specs, conn, day: str, start: int, end: int, steps,
+                 sigs: dict, idx: dict) -> list[dict]:
+    """For every losing trade (stop or liquidation) whose signal bar closed in the day: the
+    same signal alone with a 1.5 / 2.5 / 3 ATR stop (leverage re-chosen by the same rules).
+    Feeds the loss cards (cards.py)."""
+    rows = []
+    q = ("SELECT account_id, data FROM trades WHERE exit_reason IN ('SL', 'LIQ') "
+         "AND entry_time >= ? AND entry_time < ?")
+    lost = {}
+    for aid, data in conn.execute(q, (start, end + DAY_MS)):
+        t = json.loads(data)
+        lost[(aid, t["symbol"], t["signal_ts"] + 1)] = t
+    for bc, lst in sigs.items():
+        i0 = idx.get(bc)
+        if i0 is None:
+            continue
+        for d in lst:
+            aid = f"{d['strategy']}@{d['timeframe']}"
+            if (aid, d["symbol"], bc) not in lost:
+                continue
+            for k in STOP_VARIANTS:
+                t, resolved = _alone(settings, brackets, specs, make_signal(d, stop_atr=k), steps, i0)
+                rows.append({"key": f"stop{k}|{aid}|{d['symbol']}|{bc}", "day": day, "kind": f"stop{k}",
+                             "account_id": aid, "symbol": d["symbol"], "timeframe": d["timeframe"],
+                             "side": d["side"], "filled": None, "roe": None if t is None else t.roe,
+                             "exit_reason": None if t is None else t.exit_reason, "resolved": int(resolved),
+                             "data": json.dumps({"leverage": None if t is None else t.leverage,
+                                                 "actual_roe": lost[(aid, d["symbol"], bc)]["roe"]})})
     return rows
 
 
@@ -265,7 +298,16 @@ def run_day(conn, out: sqlite3.Connection, rest: BinanceREST, settings: Settings
         "limit_mean_roe": float(np.mean([r["roe"] for r in lim if r["roe"] is not None]))
         if any(r["roe"] is not None for r in lim) else None,
         "skipped": sum(1 for r in sh if r["kind"] == "skipped"),
+        "stop_variants": {},
     }
+    for k in STOP_VARIANTS:
+        v = [r for r in sh if r["kind"] == f"stop{k}" and r["roe"] is not None and r["resolved"]]
+        report["shadows"]["stop_variants"][str(k)] = {
+            "losing_trades": len(v),
+            "mean_roe": float(np.mean([r["roe"] for r in v])) if v else None,
+            "turned_positive": sum(1 for r in v if r["roe"] > 0),
+            "better_than_actual": sum(1 for r in v if r["roe"] > json.loads(r["data"])["actual_roe"]),
+        }
     report["data_quality"] = data_quality(day_steps, symbols, start, end)
     out.execute("DELETE FROM mismatches WHERE day = ?", (day,))
     out.executemany("INSERT INTO mismatches VALUES (?,?,?)", [(day, m["account_id"], json.dumps(m)) for m in mism])

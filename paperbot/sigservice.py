@@ -89,7 +89,40 @@ def compute_last(job: tuple) -> dict:
     atr = lib.fg.atr(df, 14).to_numpy(float)[-1]
     out.update(ready=True, bar_open=last_open, close=float(df["close"].iloc[-1]),
                atr=float(atr) if np.isfinite(atr) else None, sides=sides)
+    if any(sides.values()):
+        try:
+            out["ctx"] = chart_context(lib, symbol, df5, df, tf)
+        except Exception as exc:  # the chart description must never block a signal
+            out["ctx_error"] = f"{type(exc).__name__}: {exc}"[:300]
     return out
+
+
+def _bars(df: pd.DataFrame, symbol: str, tf: str) -> list[Bar]:
+    ms = df["ts"].astype("int64").to_numpy() // 1_000_000 if str(df["ts"].dtype).startswith("datetime") \
+        else df["ts"].to_numpy()
+    span = TF_MS[tf]
+    return [Bar(symbol, int(t), int(t) + span - 1, float(o), float(h), float(lo), float(c))
+            for t, o, h, lo, c in zip(ms, df["open"], df["high"], df["low"], df["close"])]
+
+
+def chart_context(lib, symbol: str, df5: pd.DataFrame, df: pd.DataFrame, tf: str) -> dict:
+    """Chart situation on the signal bar (confirmed bars only), for loss cards and the
+    specialists: regime of this and the higher timeframe (context.py), ADX and DI."""
+    from .context import HTF, REGIME_N, entry_context
+    from .recorder import build_frames
+    n = REGIME_N.get(tf, 60)
+    bars = _bars(df.iloc[-(n + 60):], symbol, tf)
+    htf = HTF.get(tf)
+    hbars = []
+    if htf:
+        h = build_frames(lib, df5, [htf])[htf]
+        hbars = _bars(h.iloc[-(REGIME_N.get(htf, 30) + 5):], symbol, htf) if len(h) else []
+    ctx = entry_context(tf, bars, hbars)
+    adx, pdi, mdi = lib.fg.adx_dmi(df, 14)
+    for k, ser in (("adx", adx), ("di_plus", pdi), ("di_minus", mdi)):
+        v = float(ser.iloc[-1])
+        ctx[k] = v if np.isfinite(v) else None
+    return {k: (round(v, 6) if isinstance(v, float) else v) for k, v in ctx.items()}
 
 
 class SignalTimeout(RuntimeError):
@@ -201,14 +234,15 @@ class SignalService:
                 rows.append({"bar_close": boundary, "timeframe": tf, "strategy": name, "symbol": sym,
                              "side": int(side), "atr": r["atr"], "ref_price": ref, "ref_time": ready_at,
                              "delay_ms": delay, "status": status,
-                             "data": {"close": r["close"], "bid": bid, "ask": ask}})
+                             "data": {"close": r["close"], "bid": bid, "ask": ask, "ctx": r.get("ctx")}})
                 if status == "SUBMITTED":
                     aid = f"{name}@{tf}"
                     subs.append((aid, Signal(
                         ts=boundary - 1, symbol=sym, timeframe=tf, strategy_id=name, side=int(side),
                         stop_price=0.0, tier="best", atr=r["atr"],
                         meta={"stop_dist": self.stop_atr * r["atr"], "ref_price": ref,
-                              "ref_time": ready_at, "delay_ms": delay, "account": aid})))
+                              "ref_time": ready_at, "delay_ms": delay, "account": aid,
+                              "ctx": r.get("ctx") or {}})))
         return rows, subs, results
 
     def _random(self, boundary: int, tf: str, sym: str) -> dict:
