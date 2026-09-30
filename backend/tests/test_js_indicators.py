@@ -39,7 +39,7 @@ for (const [k, d] of Object.entries(I)) {
     });
   } catch (e) { bad.push(k + ":" + e.message); }
 }
-if (Object.keys(I).length < 90) bad.push("count");
+if (Object.keys(I).length < 120) bad.push("count");
 out.bad = bad;
 console.log(JSON.stringify(out));
 """)

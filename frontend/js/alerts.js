@@ -10,10 +10,12 @@ const OPTS = [
   ["calendar", "경제지표 발표 (30분 전 · 5분 전 · 발표)"],
   ["regime", "시장 판단 변화 (롱/숏/횡보 전환)"],
   ["bots", "페이퍼 봇 체결"],
+  ["scanner", "시그널 스캐너 (관심 코인 자동 분석 신호)"],
+  ["scanner_strong", "└ 강한 신호(강도 2 이상)만"],
   ["sound", "알림음"],
   ["desktop", "바탕화면 알림 (브라우저 창이 뒤에 있어도)"],
 ];
-const opts = { news_important: true, news_all: false, calendar: true, regime: true, bots: true, sound: true, desktop: false,
+const opts = { news_important: true, news_all: false, calendar: true, regime: true, bots: true, scanner: true, scanner_strong: true, sound: true, desktop: false,
   ...load("ft.alertOpts", {}) };
 let log = load("ft.alertLog", []);
 let priceAlerts = load("ft.priceAlerts", []);
@@ -84,6 +86,26 @@ async function pollNews() {
       }
     }
   } catch { /* 네트워크 오류는 다음 주기에 */ }
+}
+
+// ---------------------------------------------------------------- 시그널 스캐너
+let sigSince = null;
+const IVK = { "1m": "1분", "3m": "3분", "5m": "5분", "15m": "15분", "30m": "30분", "1h": "1시간", "2h": "2시간", "4h": "4시간", "6h": "6시간", "12h": "12시간", "1d": "일봉", "3d": "3일", "1w": "주봉", "1M": "월봉" };
+async function pollSignals() {
+  try {
+    if (sigSince == null) { sigSince = (await api("/api/scanner/signals?limit=1")).now; return; }   // 켜기 전 신호로는 알림 안 띄움
+    const d = await api(`/api/scanner/signals?since=${sigSince}`);
+    sigSince = d.now;
+    if (!d.items.length) return;
+    emit("signals", d.items);
+    if (!opts.scanner) return;
+    const show = d.items.filter((s) => !opts.scanner_strong || s.strength >= 2);
+    for (const s of show.slice(0, 5).reverse()) {
+      notify({ title: `[시그널] ${s.symbol.replace(/USDT$/, "")} ${IVK[s.interval] || s.interval} ${s.dir === "long" ? "▲ 롱" : s.dir === "short" ? "▼ 숏" : "●"} · ${s.label}`,
+        msg: `${s.text} · 강도 ${"●".repeat(s.strength)}${s.confluence ? ` (${s.confluence}개 겹침)` : ""}`, cat: "signal", kind: s.dir === "long" ? "up" : s.dir === "short" ? "err" : "" });
+    }
+    if (show.length > 5) notify({ title: `[시그널] 새 신호 ${show.length - 5}개 더`, msg: "'퀀트 → 시그널 스캐너'에서 전체를 볼 수 있습니다", cat: "signal" });
+  } catch { /* 다음 주기에 */ }
 }
 
 // ---------------------------------------------------------------- 경제지표
@@ -187,6 +209,7 @@ export function initAlerts() {
     store("ft.alertOpts", opts);
   };
   pollNews(); setInterval(pollNews, 60_000);
+  pollSignals(); setInterval(pollSignals, 20_000);
   loadCalendar(); setInterval(loadCalendar, 10 * 60_000);
   setInterval(checkCalendar, 20_000);
 }

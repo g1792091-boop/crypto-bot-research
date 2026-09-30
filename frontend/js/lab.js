@@ -277,6 +277,9 @@ function specToTv() {
 // ================================================================ 결과
 function renderBacktest(r) {
   lastResult = r;
+  // 퀀트 화면(몬테카를로 · 포지션 크기 계산기)이 쓰도록
+  state.lastBacktest = { name: state.spec?.name, symbol: state.spec?.symbol, interval: state.spec?.interval, trades: r.trades, initial: r.metrics.initial_equity, metrics: r.metrics };
+  emit("backtest", state.lastBacktest);
   if (r.warnings?.length) toast("데이터 경고", r.warnings.join(" / "), "err");
   const m = r.metrics;
   $("#bt-src").textContent = `${r.data_source === "synthetic" ? "가상 데이터 (거래소 연결 안 됨)" : "바이낸스 선물"}${r.derivatives_source ? " · 파생: " + r.derivatives_source : ""}`;

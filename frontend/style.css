@@ -31,6 +31,7 @@ a:hover { color: var(--accent); }
 .num, td, .px { font-variant-numeric: tabular-nums; }
 .up { color: var(--up); } .down { color: var(--down); } .muted { color: var(--muted); } .dim { color: var(--text-2); }
 .accent { color: var(--accent); }
+.info { color: var(--info); }
 svg.i { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; vertical-align: -2px; }
 
 button, input, select, textarea { font: inherit; color: var(--text); }
@@ -309,3 +310,35 @@ summary.ph { list-style: none; } summary.ph::-webkit-details-marker { display: n
 .lab-target .k { color: var(--text-2); font-size: 12px; }
 .chk { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border: 1px solid var(--line); border-radius: 3px; cursor: pointer; font-size: 12px; user-select: none; }
 .chk.on { border-color: var(--accent); color: var(--accent); }
+
+/* 패턴 예측 */
+.fc-sec { padding: 10px 12px; border-bottom: 1px solid var(--line); }
+.fc-sec .bar { height: 4px; background: var(--line); border-radius: 2px; margin-top: 6px; overflow: hidden; }
+.fc-sec .bar i { display: block; height: 100%; }
+.fc-sec .kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; }
+.fc-sec .kv .k { color: var(--muted); }
+.fc-match { display: flex; gap: 8px; align-items: center; padding: 4px 0; border-bottom: 1px dashed var(--line); }
+
+/* 퀀트 */
+.qpane { margin-top: 12px; }
+.rrg { position: relative; width: 100%; }
+.rrg svg { display: block; width: 100%; height: auto; }
+.rrg text { font-size: 10.5px; fill: var(--text-2); }
+.rrg .lbl { fill: var(--text); font-size: 10.5px; }
+.rrg .ql { fill: var(--muted); font-size: 11px; }
+.legend-row { display: flex; gap: 12px; flex-wrap: wrap; margin: 6px 0; color: var(--text-2); font-size: 11px; }
+.legend-row i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 4px; vertical-align: -1px; }
+.qtip { position: fixed; z-index: 50; pointer-events: none; background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 3px; padding: 6px 8px; font-size: 11px; color: var(--text); max-width: 260px; box-shadow: 0 4px 14px rgba(0,0,0,.4); }
+.hbar { display: grid; grid-template-columns: 90px 1fr 64px; gap: 6px; align-items: center; padding: 2px 0; }
+.hbar .track { position: relative; height: 10px; }
+.hbar .track i { position: absolute; top: 0; height: 100%; border-radius: 2px; }
+.hbar .track b { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--line-2); }
+.heat td { text-align: center; font-family: var(--mono); font-size: 11px; padding: 4px 2px; color: var(--text); border: 2px solid var(--panel); }
+.heat th { font-weight: normal; color: var(--text-2); font-size: 11px; }
+.sig { display: grid; grid-template-columns: 44px 1fr auto; gap: 8px; padding: 7px 10px; border-bottom: 1px solid var(--line); align-items: start; }
+.sig .d { font-weight: 600; }
+.sig .st { letter-spacing: 1px; color: var(--accent); }
+.board td, .board th { text-align: center; }
+.board td.bcell { cursor: pointer; }
+.board td.bcell:hover { background: var(--hover); }
+.sw-grid td { cursor: default; }

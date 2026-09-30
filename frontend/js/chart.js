@@ -89,8 +89,11 @@ export class TermChart {
     this.drawLayer = new Layer((ctx, size, p) => this._drawTrends(ctx, size, p), "top");
     this.srLayer = new Layer((ctx, size) => this._drawSR(ctx, size), "bottom");
     this.vpLayer = new Layer((ctx, size) => this._drawVP(ctx, size), "bottom");
+    this.boxLayer = new Layer((ctx, size) => this._drawBoxes(ctx, size), "bottom");
+    this.fcLayer = new Layer((ctx, size) => this._drawForecast(ctx, size), "bottom");
+    this.fc = null; this.fcSeries = [];
     this.countdown = new Countdown(this);
-    [this.vpLayer, this.srLayer, this.heatLayer, this.whaleLayer, this.drawLayer, this.countdown].forEach((l) => this.candle.attachPrimitive(l));
+    [this.vpLayer, this.boxLayer, this.fcLayer, this.srLayer, this.heatLayer, this.whaleLayer, this.drawLayer, this.countdown].forEach((l) => this.candle.attachPrimitive(l));
     this.sigMarkers = [];     // 보조지표 신호 (골든크로스·UT Bot·다이버전스 등) — 가격 창 화살표
     this._cdTimer = setInterval(() => !document.hidden && this.countdown.update(), 1000);
     this.editLines = {};
@@ -112,6 +115,7 @@ export class TermChart {
       clearInterval(this._timer);
       this.markers = this.heat = this.whales = this.sr = this.scenario = null;
       this.ext = {}; this.sigMarkers = [];
+      this.setForecast(null);
       this._applyMarkers();
       [this.heatLayer, this.whaleLayer, this.srLayer].forEach((l) => l.update());
     }
@@ -169,6 +173,7 @@ export class TermChart {
     const sym = this.symbol, iv = this.interval, ext = {};
     const jobs = [];
     if (need.has("derivatives")) jobs.push(api(`/api/derivatives?symbol=${sym}&interval=${iv}&limit=500`).then((d) => Object.assign(ext, d)).catch(() => {}));
+    if (need.has("btc")) jobs.push(api(`/api/candles?symbol=BTCUSDT&interval=${iv}&limit=${Math.max(500, this.candles.length || 1000)}`).then((d) => (ext.btc = d.candles)).catch(() => {}));
     if (need.has("cbp")) jobs.push(api(`/api/coinbase-premium?symbol=${sym}&interval=${iv}`).then((d) => (ext.series = d.series)).catch(() => (ext.series = [])));
     await Promise.all(jobs);
     if (this._is(sym, iv)) this.ext = ext;
@@ -181,7 +186,7 @@ export class TermChart {
     if (!c.length) return;
     if (valuesOnly && this.ind.length === this.indicators.length) {
       this.ind.forEach((it) => { const r = INDICATORS[it.spec.key].compute(c, it.params, this.ext); r.plots.forEach((pl, k) => it.series[k] && it.series[k].setData(toData(c, pl))); it.last = r; });
-      this._applySignals();
+      this._applySignals(); this.boxLayer.update();
       return;
     }
     for (const it of this.ind) { it.markers?.detach(); it.series.forEach((s) => s && this.chart.removeSeries(s)); }
@@ -197,7 +202,7 @@ export class TermChart {
       const r = def.compute(c, params, this.ext);
       const pane = def.pane === "sub" ? ++paneNo : 0;
       const series = r.plots.map((pl) => {
-        if (pl.type === "signals") return null;   // 화살표로 표시
+        if (pl.type === "signals" || pl.type === "boxes") return null;   // 화살표·상자는 따로 그림
         const common = { priceLineVisible: false, lastValueVisible: def.pane === "sub" && pl.legend !== false, title: "" };
         let s;
         if (pl.type === "hist") {
@@ -216,7 +221,7 @@ export class TermChart {
       this.ind.push({ spec, params, series, pane, last: r, profile: !!def.profile });
     }
     this._applySignals();
-    this.vpLayer.update();
+    this.vpLayer.update(); this.boxLayer.update();
     const panes = this.chart.panes();
     // 가격 창이 항상 절반 이상을 차지하도록
     panes.forEach((p, i) => p.setStretchFactor(i === 0 ? Math.max(2, panes.length - 1) : 1));
@@ -248,6 +253,77 @@ export class TermChart {
     }
     this.sigMarkers = main;
     this._pushMarkers();
+  }
+
+  // FVG · 오더블록 같은 가격 구간 상자
+  _drawBoxes(ctx, size) {
+    const c = this.candles, ts = this.chart.timeScale();
+    if (!c.length) return;
+    ctx.font = "10px " + getComputedStyle(document.body).fontFamily;
+    for (const it of this.ind) {
+      if (it.pane !== 0) continue;
+      for (const pl of it.last.plots) {
+        if (pl.type !== "boxes") continue;
+        for (const b of pl.boxes) {
+          const x0 = ts.logicalToCoordinate(b.i0), x1 = b.i1 == null ? size.width : ts.logicalToCoordinate(b.i1);
+          const y0 = this.candle.priceToCoordinate(b.top), y1 = this.candle.priceToCoordinate(b.bottom);
+          if (x0 == null || x1 == null || y0 == null || y1 == null || x1 < 0 || x0 > size.width) continue;
+          ctx.fillStyle = b.color; ctx.fillRect(x0, y0, Math.max(1, x1 - x0), Math.max(1, y1 - y0));
+          if (b.label && x1 - x0 > 34 && y1 - y0 > 9) { ctx.fillStyle = "rgba(230,232,234,.55)"; ctx.fillText(b.label, Math.max(2, x0 + 3), y0 + 10); }
+        }
+      }
+    }
+  }
+
+  // ------------------------------------------------------------ 패턴 예측 (미래 구간 부채꼴 + 다음 봉 유령 캔들)
+  setForecast(f) {
+    const ts = this.chart.timeScale(), atEdge = this.candles.length && (ts.getVisibleLogicalRange()?.to ?? 0) >= this.candles.length - 3;
+    this.fcSeries.forEach((s) => this.chart.removeSeries(s));
+    this.fcSeries = [];
+    this.fc = f && f.symbol === this.symbol && f.interval === this.interval && this.candles.length ? f : null;
+    const a = this.fc?.analog, last = this.candles.at(-1);
+    if (a?.times?.length) {
+      const mk = (vals, color, style, width = 1) => {
+        const s = this.chart.addSeries(LC.LineSeries, { color, lineWidth: width, lineStyle: style, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+        s.setData([{ time: last.time, value: last.close }, ...a.times.map((t, h) => ({ time: t, value: vals[h] }))]);
+        this.fcSeries.push(s);
+      };
+      mk(a.bands.p50, css("--accent"), 0, 2);
+    }
+    const nb = this.fc?.next_bar;
+    if (nb?.candle) {
+      const up = nb.candle.close >= nb.candle.open;
+      const g = this.chart.addSeries(LC.CandlestickSeries, { upColor: "rgba(34,176,125,.25)", downColor: "rgba(229,72,77,.25)", borderVisible: true,
+        borderUpColor: css("--up"), borderDownColor: css("--down"), wickUpColor: css("--up"), wickDownColor: css("--down"), priceLineVisible: false, lastValueVisible: false });
+      g.setData([{ time: nb.time, ...nb.candle }]);
+      LC.createSeriesMarkers(g, [{ time: nb.time, position: up ? "aboveBar" : "belowBar", shape: "circle", size: 0.4, color: css("--text-2"), text: nb.p_up === 50 ? "다음 봉 방향 불분명" : `다음 봉 ${nb.p_up > 50 ? "상승" : "하락"} ${Math.max(nb.p_up, 100 - nb.p_up)}%` }]);
+      this.fcSeries.push(g);
+    }
+    // 최신 봉을 보고 있었다면 예측 구간(미래)이 잘 보이게: 코인·봉마다 처음 한 번은 최근 150봉 + 예측 구간으로 확대
+    if (atEdge && this.fcSeries.length) {
+      const key = `${this.symbol}:${this.interval}`, n = this.candles.length, hz = a?.times?.length || 1;
+      if (this._fcZoom !== key) { this._fcZoom = key; ts.setVisibleLogicalRange({ from: Math.max(0, n - 150), to: n + hz + 4 }); }
+      else ts.scrollToRealTime();
+    }
+    this.fcLayer.update();
+  }
+
+  _drawForecast(ctx) {
+    const a = this.fc?.analog, last = this.candles.at(-1);
+    if (!a?.times?.length || !last) return;
+    const ts = this.chart.timeScale(), x0 = ts.timeToCoordinate(last.time), y0 = this.candle.priceToCoordinate(last.close);
+    if (x0 == null || y0 == null) return;
+    const pts = (key) => a.times.map((t, h) => [ts.timeToCoordinate(t), this.candle.priceToCoordinate(a.bands[key][h])]).filter(([x, y]) => x != null && y != null);
+    const band = (lo, hi, fill) => {
+      const L = pts(lo), H = pts(hi);
+      if (!L.length || L.length !== H.length) return;
+      ctx.beginPath(); ctx.moveTo(x0, y0);
+      H.forEach(([x, y]) => ctx.lineTo(x, y));
+      [...L].reverse().forEach(([x, y]) => ctx.lineTo(x, y));
+      ctx.closePath(); ctx.fillStyle = fill; ctx.fill();
+    };
+    band("p10", "p90", "rgba(245,165,36,.08)");
+    band("p25", "p75", "rgba(245,165,36,.16)");
   }
 
   // 볼륨 프로파일: 화면에 보이는 봉만으로 계산해서 오른쪽에 가로 막대로
@@ -568,7 +644,7 @@ export class TermChart {
       <span class="muted">시</span> ${px(b.open)} <span class="muted">고</span> ${px(b.high)} <span class="muted">저</span> ${px(b.low)} <span class="muted">종</span> ${px(b.close)}
       <span class="${chg >= 0 ? "up" : "down"}">${chg >= 0 ? "+" : ""}${chg.toFixed(2)}%</span>`;
     const mainInd = this.ind.filter((it) => it.pane === 0);
-    const vals = (it) => it.last.plots.filter((pl) => pl.type !== "signals" && pl.legend !== false).map((pl) => val(pl.data[idx])).join(" ");
+    const vals = (it) => it.last.plots.filter((pl) => pl.type !== "signals" && pl.type !== "boxes" && pl.legend !== false).map((pl) => val(pl.data[idx])).join(" ");
     const extra = (it) => it.profile && this.vp ? ` <span class="muted">POC</span> ${px(this.vp.poc)} <span class="muted">가치영역</span> ${px(this.vp.val)}~${px(this.vp.vah)}`
       : it.last.note ? ` <span class="muted">${esc(it.last.note)}</span>` : "";
     if (mainInd.length) html += `<br>` + mainInd.map((it) => `<span style="color:${it.last.plots.find((pl) => pl.color)?.color || "inherit"}">${esc(INDICATORS[it.spec.key].name)}${paramStr(it.params)}</span> ${vals(it)}${extra(it)}`).join(" · ");
@@ -578,7 +654,7 @@ export class TermChart {
     for (const it of this.ind.filter((x) => x.pane > 0)) {
       const top = tops[it.pane];
       if (top == null) continue;
-      html += `<div style="top:${top + 3}px"><span class="dim">${esc(INDICATORS[it.spec.key].name)}${paramStr(it.params)}</span> ${it.last.plots.filter((pl) => pl.type !== "signals" && pl.legend !== false).map((pl) => `<span style="color:${pl.color || "inherit"}">${val(pl.data[idx])}</span>`).join(" ")}${it.last.note ? ` <span class="accent">${esc(it.last.note)}</span>` : ""}</div>`;
+      html += `<div style="top:${top + 3}px"><span class="dim">${esc(INDICATORS[it.spec.key].name)}${paramStr(it.params)}</span> ${it.last.plots.filter((pl) => pl.type !== "signals" && pl.type !== "boxes" && pl.legend !== false).map((pl) => `<span style="color:${pl.color || "inherit"}">${val(pl.data[idx])}</span>`).join(" ")}${it.last.note ? ` <span class="accent">${esc(it.last.note)}</span>` : ""}</div>`;
     }
     this.legendEl.innerHTML = html;
   }

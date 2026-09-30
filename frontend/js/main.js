@@ -4,6 +4,7 @@ import { initAlerts } from "./alerts.js";
 import { $, $$, api, emit, esc, on, state, toast } from "./core.js";
 import { initLab } from "./lab.js";
 import { initMarket } from "./market.js";
+import { initQuant } from "./quant.js";
 import { initTrade } from "./trade.js";
 
 function go(view) {
@@ -30,6 +31,7 @@ async function init() {
   initLab();
   initAgents();
   initMarket();
+  initQuant();
   renderStatus();
   on("tickers", renderStatus);
   on("goto", go);

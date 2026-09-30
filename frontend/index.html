@@ -16,6 +16,7 @@
     <button data-view="trade" class="on">트레이드</button>
     <button data-view="lab">전략 · 백테스트</button>
     <button data-view="agents">AI 분석팀</button>
+    <button data-view="quant">퀀트</button>
     <button data-view="market">마켓</button>
   </nav>
   <div class="grow"></div>
@@ -73,6 +74,7 @@
           <button data-ov="sr" title="자동 지지·저항 구간과 추세선">지지·저항</button>
           <button data-ov="bots" title="페이퍼 봇 · 내 모의 매매 진입/청산 기록">매매 기록</button>
           <button data-ov="scenario" title="자동 시나리오 진입/손절/목표선">시나리오선</button>
+          <button data-ov="forecast" title="과거 비슷한 차트로 본 앞으로의 예상 범위(부채꼴)와 다음 봉 예측(흐린 캔들)">패턴 예측</button>
           <button data-ov="countdown" title="가격축 현재가 아래에 봉 마감까지 남은 시간">마감 카운트</button>
         </div>
         <span class="sep term-only"></span>
@@ -93,8 +95,9 @@
 
     <aside class="side">
       <div class="regime" id="regime"><span class="muted">분석 중…</span></div>
-      <div class="ph"><div class="tabs" id="side-tabs"><button data-t="sc" class="on">시나리오</button><button data-t="book">호가</button><button data-t="order">주문</button></div></div>
+      <div class="ph"><div class="tabs" id="side-tabs"><button data-t="sc" class="on">시나리오</button><button data-t="fc">예측</button><button data-t="book">호가</button><button data-t="order">주문</button></div></div>
       <div class="pb" id="side-sc"></div>
+      <div class="pb" id="side-fc" hidden></div>
       <div class="pb" id="side-book" hidden></div>
       <div class="pb" id="side-order" hidden>
         <div class="order">
@@ -204,6 +207,94 @@
       <div class="pb help">기술 · 파생 · 뉴스/매크로 분석 → 리스크 한도 → 최종 결정. 결정은 페이퍼 계좌로만 주문됩니다.</div></div>
     <div id="agents-out"></div>
   </div>
+</section>
+
+<!-- ============================================================ 퀀트 -->
+<section class="view" id="v-quant">
+  <div class="page">
+    <div class="panel"><div class="ph"><div class="tabs" id="q-tabs">
+      <button data-q="rot" class="on">순환매</button><button data-q="scan">시그널 스캐너</button><button data-q="risk">리스크 · 포트폴리오</button></div>
+      <div class="grow"></div><span class="muted" id="q-meta"></span></div></div>
+
+    <!-- 순환매 -->
+    <div id="q-rot" class="qpane">
+      <div class="panel"><div class="pb row" style="flex-wrap:wrap;gap:8px">
+        <label class="f">봉<select id="rot-iv"><option value="4h">4시간</option><option value="1d" selected>일</option><option value="1w">주</option></select></label>
+        <label class="f">기준<select id="rot-bench"><option value="btc">비트코인 대비</option><option value="ew">시장 평균 대비</option></select></label>
+        <label class="f">비교 기간(봉)<input id="rot-lb" type="number" value="14" min="3" max="200" style="width:70px"></label>
+        <label class="f">코인<select id="rot-univ"><option value="default">주요 21개</option><option value="watch">관심 종목</option></select></label>
+        <button class="pri" id="rot-run" style="align-self:flex-end">분석</button>
+        <span class="muted" style="align-self:flex-end">자금은 보통 비트코인 → 이더리움 → 대형 알트 → 중소형 → 밈코인 순으로 돕니다.</span></div></div>
+      <div class="cols-2" style="margin-top:12px;align-items:start">
+        <div class="panel"><div class="ph"><span class="t">상대강도 회전 그래프 (RRG)</span><div class="grow"></div><span class="muted">꼬리 = 최근 8봉 궤적</span></div>
+          <div class="pb"><div id="rrg" class="rrg"></div><div class="legend-row" id="rrg-legend"></div>
+          <div class="help">오른쪽 위 <b>주도</b> → 오른쪽 아래 <b>약화</b> → 왼쪽 아래 <b>소외</b> → 왼쪽 위 <b>개선</b> 순서(시계 방향)로 도는 경우가 많습니다. 개선 → 주도로 넘어가는 코인이 다음 순환 후보입니다.</div></div></div>
+        <div style="display:grid;gap:12px">
+          <div class="panel"><div class="ph"><span class="t">지금 순환 단계</span></div><div class="pb" id="rot-phase"><div class="empty">분석을 누르세요.</div></div></div>
+          <div class="panel"><div class="ph"><span class="t">상대강도 순위</span></div><div class="pb" style="padding:0;max-height:360px;overflow:auto"><table id="rot-rank"></table></div></div>
+        </div>
+      </div>
+      <div class="panel" style="margin-top:12px"><div class="ph"><span class="t">순환매 전략 백테스트</span><div class="grow"></div><span class="muted">모멘텀 상위 코인을 주기적으로 갈아타기</span></div>
+        <div class="pb">
+          <div class="row" style="flex-wrap:wrap;gap:8px">
+            <label class="f">모멘텀 기간<input id="rb-lb" type="number" value="20" min="2" style="width:64px"></label>
+            <label class="f">보유 개수<input id="rb-top" type="number" value="3" min="1" max="10" style="width:56px"></label>
+            <label class="f">교체 주기(봉)<input id="rb-reb" type="number" value="7" min="1" style="width:64px"></label>
+            <label class="f">방식<select id="rb-mode"><option value="long">상위 매수</option><option value="long_short">상위 매수 + 하위 숏 (시장 중립)</option></select></label>
+            <label class="f">점수<select id="rb-score"><option value="momentum">수익률</option><option value="risk_adj">변동성 대비 수익률</option></select></label>
+            <label class="f">봉 개수<input id="rb-bars" type="number" value="1000" min="200" max="3000" style="width:70px"></label>
+            <label class="row" style="gap:4px;align-self:flex-end"><input type="checkbox" id="rb-abs" checked style="height:auto"> 모멘텀이 음수면 현금</label>
+            <button class="pri" id="rb-run" style="align-self:flex-end">백테스트</button></div>
+          <div id="rb-out" style="margin-top:10px"></div>
+          <div class="chart" id="rb-chart" style="margin-top:8px" hidden></div>
+        </div></div>
+    </div>
+
+    <!-- 시그널 스캐너 -->
+    <div id="q-scan" class="qpane" hidden>
+      <div class="panel"><div class="ph"><span class="t">스캐너 설정</span><div class="grow"></div>
+        <label class="row" style="gap:4px"><input type="checkbox" id="sc-on" style="height:auto"> 자동 스캔 켜기</label>
+        <button class="sm" id="sc-now">지금 스캔</button></div>
+        <div class="pb">
+          <div class="row" style="flex-wrap:wrap;gap:6px" id="sc-syms"></div>
+          <div class="row" style="gap:6px;margin-top:6px"><input id="sc-add" placeholder="코인 추가 (예: 아발란체)" style="width:180px">
+            <button class="sm" id="sc-watch">관심 종목 가져오기</button></div>
+          <div class="row" style="flex-wrap:wrap;gap:6px;margin-top:8px" id="sc-ivs"></div>
+          <div class="row" style="flex-wrap:wrap;gap:6px;margin-top:8px" id="sc-types"></div>
+          <div class="help" style="margin-top:6px">프로그램이 켜져 있는 동안 30초마다 확정된 봉을 검사합니다. 새 신호는 오른쪽 위 종 알림으로도 옵니다 (종 → '시그널 스캐너').</div>
+        </div></div>
+      <div class="cols-2" style="margin-top:12px;align-items:start">
+        <div class="panel"><div class="ph"><span class="t">실시간 신호</span><div class="grow"></div>
+          <select id="sc-filter" style="height:22px"><option value="1">전체</option><option value="2">강도 2 이상</option><option value="3">강도 3만</option></select></div>
+          <div class="pb" style="padding:0;max-height:560px;overflow:auto" id="sc-list"></div></div>
+        <div class="panel"><div class="ph"><span class="t">시장 보드</span><div class="grow"></div><span class="muted" id="sc-last"></span></div>
+          <div class="pb" style="padding:0;overflow:auto" id="sc-board"></div></div>
+      </div>
+    </div>
+
+    <!-- 리스크 -->
+    <div id="q-risk" class="qpane" hidden>
+      <div class="cols-2" style="align-items:start">
+        <div class="panel"><div class="ph"><span class="t">상관관계 · 변동성 · VaR</span><div class="grow"></div>
+          <select id="rk-iv" style="height:22px"><option value="1h">1시간</option><option value="4h">4시간</option><option value="1d" selected>일</option></select>
+          <button class="sm" id="rk-run">계산</button></div>
+          <div class="pb"><div id="rk-matrix"><div class="empty">관심 종목으로 계산합니다. '계산'을 누르세요.</div></div></div></div>
+        <div style="display:grid;gap:12px">
+          <div class="panel"><div class="ph"><span class="t">내 포지션 위험 (모의 계좌 + 봇)</span><div class="grow"></div>
+            <label class="row" style="gap:4px">BTC<input id="pf-shock" type="number" value="-10" style="width:56px;height:22px">%</label><button class="sm" id="pf-run">계산</button></div>
+            <div class="pb" id="pf-out"><div class="empty">열린 포지션의 하루 최대 예상 손실(VaR)과 BTC 급락 시 손익을 계산합니다.</div></div></div>
+          <div class="panel"><div class="ph"><span class="t">포지션 크기 계산기</span></div><div class="pb" id="sz"></div></div>
+        </div>
+      </div>
+      <div class="cols-2" style="margin-top:12px;align-items:start">
+        <div class="panel"><div class="ph"><span class="t">몬테카를로 (최근 백테스트)</span><div class="grow"></div><button class="sm" id="mc-run">실행</button></div>
+          <div class="pb" id="mc-out"><div class="empty">'전략 · 백테스트'에서 백테스트를 한 번 돌린 뒤 실행하세요. 거래 순서를 2000번 섞어 운이 달랐다면 어땠을지 봅니다.</div></div></div>
+        <div class="panel"><div class="ph"><span class="t">파라미터 민감도 (과최적화 점검)</span><div class="grow"></div><button class="sm" id="sw-run">실행</button></div>
+          <div class="pb"><div class="row" style="flex-wrap:wrap;gap:6px" id="sw-form"></div><div id="sw-out" style="margin-top:8px"></div></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="qtip" id="q-tip" hidden></div>
 </section>
 
 <!-- ============================================================ 마켓 -->

@@ -608,8 +608,271 @@ Object.assign(INDICATORS, {
   } },
 });
 
+// ---------------------------------------------------------------- 추가 지표 2: 필터 · 스마트머니 · 통계 · BTC 대비
+// type: "boxes" = 가격 구간 상자 (FVG·오더블록). boxes: [{i0, i1(null=오른쪽 끝까지), top, bottom, color, label}]
+const boxesPlot = (name, boxes) => ({ name, type: "boxes", data: Array(boxes.n).fill(null), boxes: boxes.list });
+const barsPerYear = (c) => (c.length > 1 ? 365 * 86400 / Math.max(60, c.at(-1).time - c.at(-2).time) : 365);
+function kalman(x, resp) {
+  let est = null, p = 1;
+  return x.map((v) => { if (v == null) return est; if (est == null) return (est = v); p += resp; const k = p / (p + 1); est += k * (v - est); p *= 1 - k; return est; });
+}
+function superSmoother(x, n) {
+  const a = Math.exp(-1.414 * Math.PI / n), b = 2 * a * Math.cos(1.414 * Math.PI / n), c2 = b, c3 = -a * a, c1 = 1 - c2 - c3, o = [];
+  x.forEach((v, i) => o.push(i < 2 ? v : c1 * (v + x[i - 1]) / 2 + c2 * o[i - 1] + c3 * o[i - 2]));
+  return o;
+}
+function btcAligned(c, ext) {
+  const m = new Map((ext?.btc || []).map((b) => [b.time, b.close]));
+  return c.map((b) => m.get(b.time) ?? null);
+}
+function rollCorr(a, b, n) {
+  return a.map((_, i) => {
+    if (i < n) return null;
+    let sa = 0, sb = 0, k = 0; const xs = [], ys = [];
+    for (let j = i - n + 1; j <= i; j++) { if (a[j] == null || b[j] == null) continue; xs.push(a[j]); ys.push(b[j]); sa += a[j]; sb += b[j]; k++; }
+    if (k < n * 0.8) return null;
+    const ma = sa / k, mb = sb / k; let cov = 0, va = 0, vb = 0;
+    for (let j = 0; j < k; j++) { cov += (xs[j] - ma) * (ys[j] - mb); va += (xs[j] - ma) ** 2; vb += (ys[j] - mb) ** 2; }
+    return va && vb ? { corr: cov / Math.sqrt(va * vb), beta: cov / vb } : null;
+  });
+}
+const rets = (x) => x.map((v, i) => i && v != null && x[i - 1] ? v / x[i - 1] - 1 : null);
+function structure(c, len) {   // 스윙 고점·저점 돌파 → BOS(추세 지속) / CHoCH(추세 전환)
+  const hs = pivots(c.map((b) => b.high), len, len, true), ls = pivots(c.map((b) => b.low), len, len, false);
+  const confirmH = new Map(hs.map((i) => [i + len, i])), confirmL = new Map(ls.map((i) => [i + len, i]));
+  const s = sig(c.length), H = Array(c.length).fill(null), Lw = Array(c.length).fill(null);
+  let hi = null, lo = null, trend = 0;
+  c.forEach((b, i) => {
+    if (confirmH.has(i)) hi = { v: c[confirmH.get(i)].high, used: false };
+    if (confirmL.has(i)) lo = { v: c[confirmL.get(i)].low, used: false };
+    if (hi && !hi.used && b.close > hi.v) { s[i] = { dir: 1, text: trend === -1 ? "CHoCH" : "BOS", shape: trend === -1 ? "arrowUp" : "circle", size: 0.6 }; trend = 1; hi.used = true; }
+    if (lo && !lo.used && b.close < lo.v) { s[i] = { dir: -1, text: trend === 1 ? "CHoCH" : "BOS", shape: trend === 1 ? "arrowDown" : "circle", size: 0.6 }; trend = -1; lo.used = true; }
+    H[i] = hi && !hi.used ? hi.v : null; Lw[i] = lo && !lo.used ? lo.v : null;
+  });
+  return { s, H, L: Lw };
+}
+
+Object.assign(INDICATORS, {
+  // ---------- 추세 · 필터
+  kalman: { name: "칼만 필터", group: "추세", pane: "main", desc: "노이즈를 걸러낸 가격 추정선. resp 가 클수록 빠르게 따라감", params: { resp: 0.05 }, compute: (c, p) => ({ plots: [line("Kalman", kalman(src(c), p.resp), C.b, { lineWidth: 2 })] }) },
+  super_smoother: { name: "슈퍼 스무더 (Ehlers)", group: "추세", pane: "main", params: { length: 20 }, compute: (c, p) => ({ plots: [line(`SS ${p.length}`, superSmoother(src(c), p.length), C.c, { lineWidth: 2 })] }) },
+  itrend: { name: "순간 추세선 (Ehlers)", group: "추세", pane: "main", desc: "추세선(굵은 선)과 트리거가 교차하면 추세 전환", params: { alpha: 0.07 }, compute: (c, p) => {
+    const x = src(c, "hl2"), a = p.alpha, it = [];
+    x.forEach((v, i) => it.push(i < 7 ? (v + 2 * (x[i - 1] ?? v) + (x[i - 2] ?? v)) / 4
+      : (a - a * a / 4) * v + 0.5 * a * a * x[i - 1] - (a - 0.75 * a * a) * x[i - 2] + 2 * (1 - a) * it[i - 1] - (1 - a) ** 2 * it[i - 2]));
+    const tr = it.map((v, i) => i < 2 ? null : 2 * v - it[i - 2]);
+    return { plots: [line("추세선", it, C.a, { lineWidth: 2 }), line("트리거", tr, C.b, { lineWidth: 1 }), { name: "신호", type: "signals", data: crossSignals(tr, it, "↑", "↓") }] };
+  } },
+  frama: { name: "FRAMA (프랙탈 적응 이평)", group: "추세", pane: "main", params: { length: 16 }, compute: (c, p) => {
+    const N = Math.max(4, Math.round(p.length / 2) * 2), h = N / 2, x = src(c), o = Array(c.length).fill(null); let f = null, D = 1.5;
+    const rng = (a, b) => { let hi = -Infinity, lo = Infinity; for (let j = a; j <= b; j++) { hi = Math.max(hi, c[j].high); lo = Math.min(lo, c[j].low); } return hi - lo; };
+    for (let i = N - 1; i < c.length; i++) {
+      const n1 = rng(i - h + 1, i) / h, n2 = rng(i - N + 1, i - h) / h, n3 = rng(i - N + 1, i) / N;
+      if (n1 > 0 && n2 > 0 && n3 > 0) D = (Math.log(n1 + n2) - Math.log(n3)) / Math.LN2;
+      const al = Math.min(1, Math.max(0.01, Math.exp(-4.6 * (D - 1))));
+      f = f == null ? x[i] : al * x[i] + (1 - al) * f; o[i] = f;
+    }
+    return { plots: [line(`FRAMA ${N}`, o, C.e, { lineWidth: 2 })] };
+  } },
+  vidya: { name: "VIDYA (가변 지수 이평)", group: "추세", pane: "main", params: { length: 14, cmo: 9 }, compute: (c, p) => {
+    const x = src(c), [u, d] = upDown(x, p.cmo), a = 2 / (p.length + 1); let v = null;
+    return { plots: [line(`VIDYA ${p.length}`, x.map((q, i) => { if (u[i] == null) return v; const k = Math.abs(u[i] - d[i]) / ((u[i] + d[i]) || 1); v = v == null ? q : a * k * q + (1 - a * k) * v; return v; }), C.f, { lineWidth: 2 })] };
+  } },
+  t3: { name: "T3 (틸슨)", group: "추세", pane: "main", params: { length: 5, vfactor: 0.7 }, compute: (c, p) => {
+    const v = p.vfactor, e = [ema(src(c), p.length)]; for (let k = 1; k < 6; k++) e.push(ema(e[k - 1], p.length));
+    const c1 = -(v ** 3), c2 = 3 * v * v + 3 * v ** 3, c3 = -6 * v * v - 3 * v - 3 * v ** 3, c4 = 1 + 3 * v + v ** 3 + 3 * v * v;
+    return { plots: [line(`T3 ${p.length}`, e[5].map((q, i) => q == null ? null : c1 * q + c2 * e[4][i] + c3 * e[3][i] + c4 * e[2][i]), C.d, { lineWidth: 2 })] };
+  } },
+  gmma: { name: "GMMA (구피 다중 이평)", group: "추세", pane: "main", desc: "단기 6개(초록)·장기 6개(빨강) 이평 묶음. 두 묶음이 벌어지면 추세 강함", params: {}, compute: (c) => {
+    const x = src(c);
+    return { plots: [[3, 5, 8, 10, 12, 15].map((n) => line(`단기 ${n}`, ema(x, n), "rgba(34,176,125,.6)", { lineWidth: 1 })),
+      [30, 35, 40, 45, 50, 60].map((n) => line(`장기 ${n}`, ema(x, n), "rgba(229,72,77,.55)", { lineWidth: 1 }))].flat() };
+  } },
+  range_filter: { name: "레인지 필터", group: "신호 · 패턴", pane: "main", desc: "잔파동을 걸러낸 추세선. 방향 전환 시 매수·매도 신호 (DonovanWall 방식)", params: { period: 100, mult: 3 }, compute: (c, p) => {
+    const x = src(c), ch = x.map((v, i) => i ? Math.abs(v - x[i - 1]) : null), r = mul(ema(ema(ch, p.period), p.period * 2 - 1), p.mult);
+    const f = Array(c.length).fill(null), hb = [...f], lb = [...f], col = [...f], s = sig(c.length); let up = 0, dn = 0, cond = 0;
+    for (let i = 1; i < c.length; i++) {
+      if (r[i] == null) continue;
+      const pf = f[i - 1] ?? x[i], v = x[i];
+      f[i] = v > pf ? (v - r[i] < pf ? pf : v - r[i]) : (v + r[i] > pf ? pf : v + r[i]);
+      up = f[i] > pf ? up + 1 : f[i] < pf ? 0 : up; dn = f[i] < pf ? dn + 1 : f[i] > pf ? 0 : dn;
+      hb[i] = f[i] + r[i]; lb[i] = f[i] - r[i]; col[i] = up > 0 ? C.up : dn > 0 ? C.dn : C.a;
+      const lc = v > f[i] && up > 0, sc = v < f[i] && dn > 0, prev = cond;
+      cond = lc ? 1 : sc ? -1 : cond;
+      if (lc && prev === -1) s[i] = { dir: 1, text: "매수" }; else if (sc && prev === 1) s[i] = { dir: -1, text: "매도" };
+    }
+    return { plots: [line("필터", f, C.a, { lineWidth: 2, colors: col }), line("상단", hb, "rgba(164,172,182,.35)", { lineWidth: 1 }), line("하단", lb, "rgba(164,172,182,.35)", { lineWidth: 1 }), { name: "신호", type: "signals", data: s }] };
+  } },
+  nwe: { name: "나다라야-왓슨 엔벨로프", group: "신호 · 패턴", pane: "main", desc: "커널 회귀 중심선 ± 평균 오차 밴드. 과거 값만 쓰는 방식이라 다시 그려지지 않음. 밴드 밖으로 나갔다 들어오면 신호", params: { bandwidth: 8, mult: 3, window: 100 }, compute: (c, p) => {
+    const x = src(c), W = Math.min(p.window, 300), w = Array.from({ length: W }, (_, j) => Math.exp(-(j * j) / (2 * p.bandwidth ** 2))), y = Array(c.length).fill(null);
+    for (let i = W - 1; i < c.length; i++) { let sw = 0, sx = 0; for (let j = 0; j < W; j++) { sw += w[j]; sx += w[j] * x[i - j]; } y[i] = sx / sw; }
+    const mae = mul(sma(x.map((v, i) => y[i] == null ? null : Math.abs(v - y[i])), W), p.mult), s = sig(c.length);
+    const up = y.map((v, i) => v == null || mae[i] == null ? null : v + mae[i]), dn = y.map((v, i) => v == null || mae[i] == null ? null : v - mae[i]);
+    for (let i = 1; i < c.length; i++) {
+      if (up[i] == null || up[i - 1] == null) continue;
+      if (x[i - 1] > up[i - 1] && x[i] <= up[i]) s[i] = { dir: -1, text: "▼" }; else if (x[i - 1] < dn[i - 1] && x[i] >= dn[i]) s[i] = { dir: 1, text: "▲" };
+    }
+    return { plots: [line("중심", y, "rgba(245,165,36,.8)", { lineWidth: 1 }), line("상단", up, C.dn, { lineWidth: 1 }), line("하단", dn, C.up, { lineWidth: 1 }), { name: "신호", type: "signals", data: s }] };
+  } },
+  td_seq: { name: "TD 시퀀셜 (9 카운트)", group: "신호 · 패턴", pane: "main", desc: "4봉 전보다 9번 연속 높게(낮게) 마감하면 추세 소진 가능성", params: {}, compute: (c) => {
+    const s = sig(c.length); let up = 0, dn = 0;
+    c.forEach((b, i) => {
+      if (i < 4) return;
+      up = b.close > c[i - 4].close ? up + 1 : 0; dn = b.close < c[i - 4].close ? dn + 1 : 0;
+      if (up === 9) s[i] = { dir: -1, text: "9", shape: "arrowDown", color: C.dn };
+      if (dn === 9) s[i] = { dir: 1, text: "9", shape: "arrowUp", color: C.up };
+    });
+    return { plots: [{ name: "TD", type: "signals", data: s }] };
+  } },
+  candles: { name: "캔들 패턴", group: "신호 · 패턴", pane: "main", desc: "장악형·망치형·유성형·샛별형·석별형 (몸통이 ATR 절반 이상일 때만)", params: { min_body_atr: 0.5 }, compute: (c, p) => {
+    const a = atr(c, 14), e = ema(src(c), 20), s = sig(c.length);
+    for (let i = 2; i < c.length; i++) {
+      const b = c[i], q = c[i - 1], r = c[i - 2]; if (a[i] == null || e[i] == null) continue;
+      const body = Math.abs(b.close - b.open), rng = b.high - b.low || 1e-12, up = b.high - Math.max(b.open, b.close), lw = Math.min(b.open, b.close) - b.low;
+      const big = body >= p.min_body_atr * a[i];
+      if (big && b.close > b.open && q.close < q.open && b.close >= q.open && b.open <= q.close) s[i] = { dir: 1, text: "장악형" };
+      else if (big && b.close < b.open && q.close > q.open && b.close <= q.open && b.open >= q.close) s[i] = { dir: -1, text: "장악형" };
+      else if (lw >= 2 * body && up <= 0.3 * rng && rng >= a[i] && b.close < e[i]) s[i] = { dir: 1, text: "망치형" };
+      else if (up >= 2 * body && lw <= 0.3 * rng && rng >= a[i] && b.close > e[i]) s[i] = { dir: -1, text: "유성형" };
+      else if (r.close < r.open && Math.abs(r.close - r.open) >= a[i] * 0.8 && Math.abs(q.close - q.open) <= a[i] * 0.3 && b.close > b.open && b.close > (r.open + r.close) / 2) s[i] = { dir: 1, text: "샛별형" };
+      else if (r.close > r.open && Math.abs(r.close - r.open) >= a[i] * 0.8 && Math.abs(q.close - q.open) <= a[i] * 0.3 && b.close < b.open && b.close < (r.open + r.close) / 2) s[i] = { dir: -1, text: "석별형" };
+    }
+    return { plots: [{ name: "패턴", type: "signals", data: s }] };
+  } },
+  // ---------- 스마트머니 (SMC)
+  structure: { name: "시장 구조 (BOS · CHoCH)", group: "스마트머니 (SMC)", pane: "main", desc: "스윙 고점·저점을 종가로 돌파하면 BOS(추세 지속), 반대 방향 첫 돌파는 CHoCH(추세 전환). 점선 = 아직 안 깨진 스윙 레벨", params: { length: 5 }, compute: (c, p) => {
+    const r = structure(c, p.length);
+    return { plots: [line("스윙 고점", r.H, "rgba(229,72,77,.6)", { lineWidth: 1, lineStyle: 2 }), line("스윙 저점", r.L, "rgba(34,176,125,.6)", { lineWidth: 1, lineStyle: 2 }), { name: "구조", type: "signals", data: r.s }] };
+  } },
+  fvg: { name: "FVG (공정가치 갭)", group: "스마트머니 (SMC)", pane: "main", desc: "세 봉 사이에 생긴 가격 빈 구간. 가격이 다시 채우러 오는 경우가 많음. 다 채워지면 상자가 끝남", params: { min_pct: 0.1, keep: 20 }, compute: (c, p) => {
+    const list = [];
+    for (let i = 2; i < c.length; i++) {
+      const b = c[i], a = c[i - 2];
+      if (b.low > a.high && (b.low - a.high) / b.close * 100 >= p.min_pct) list.push({ i0: i - 1, i1: null, top: b.low, bottom: a.high, bull: true });
+      else if (b.high < a.low && (a.low - b.high) / b.close * 100 >= p.min_pct) list.push({ i0: i - 1, i1: null, top: a.low, bottom: b.high, bull: false });
+      else continue;
+      const g = list.at(-1);
+      for (let j = i + 1; j < c.length; j++) if (g.bull ? c[j].low <= g.bottom : c[j].high >= g.top) { g.i1 = j; break; }
+    }
+    const shown = [...list.filter((g) => g.i1 == null).slice(-p.keep), ...list.filter((g) => g.i1 != null).slice(-Math.ceil(p.keep / 2))]
+      .map((g) => ({ ...g, color: g.bull ? (g.i1 == null ? "rgba(34,176,125,.22)" : "rgba(34,176,125,.08)") : (g.i1 == null ? "rgba(229,72,77,.22)" : "rgba(229,72,77,.08)"), label: g.i1 == null ? "FVG" : "" }));
+    return { plots: [boxesPlot("FVG", { n: c.length, list: shown })], note: `미체결 ${list.filter((g) => g.i1 == null).length}개` };
+  } },
+  order_blocks: { name: "오더블록", group: "스마트머니 (SMC)", pane: "main", desc: "강한 장대봉(ATR의 mult배)이 구조를 깨기 직전의 마지막 반대색 캔들 구간. 종가로 뚫리면 무효", params: { mult: 1.5, keep: 8 }, compute: (c, p) => {
+    const a = atr(c, 14), list = [];
+    for (let i = 12; i < c.length; i++) {
+      const b = c[i]; if (a[i] == null || Math.abs(b.close - b.open) < p.mult * a[i]) continue;
+      const bull = b.close > b.open, prevHi = Math.max(...c.slice(i - 10, i).map((q) => q.high)), prevLo = Math.min(...c.slice(i - 10, i).map((q) => q.low));
+      if (bull ? b.close <= prevHi : b.close >= prevLo) continue;
+      let k = i - 1; while (k > i - 6 && (bull ? c[k].close >= c[k].open : c[k].close <= c[k].open)) k--;
+      if (k <= i - 6) continue;
+      const ob = { i0: k, i1: null, top: c[k].high, bottom: c[k].low, bull };
+      for (let j = i + 1; j < c.length; j++) if (bull ? c[j].close < ob.bottom : c[j].close > ob.top) { ob.i1 = j; break; }
+      if (!list.some((o) => o.i0 === ob.i0)) list.push(ob);
+    }
+    const shown = list.filter((o) => o.i1 == null).slice(-p.keep).map((o) => ({ ...o, color: o.bull ? "rgba(57,135,229,.2)" : "rgba(213,81,129,.2)", label: o.bull ? "매수 OB" : "매도 OB" }));
+    return { plots: [boxesPlot("OB", { n: c.length, list: shown })], note: `유효 ${shown.length}개` };
+  } },
+  sweeps: { name: "유동성 스윕", group: "스마트머니 (SMC)", pane: "main", desc: "직전 스윙 고점(저점)을 꼬리로만 넘었다가 안쪽으로 마감 — 손절 물량을 쓸고 반대로 가는 경우", params: { length: 5 }, compute: (c, p) => {
+    const hs = pivots(c.map((b) => b.high), p.length, p.length, true), ls = pivots(c.map((b) => b.low), p.length, p.length, false), s = sig(c.length);
+    let hi = null, lo = null; const ch = new Map(hs.map((i) => [i + p.length, i])), cl = new Map(ls.map((i) => [i + p.length, i]));
+    c.forEach((b, i) => {
+      if (ch.has(i)) hi = c[ch.get(i)].high; if (cl.has(i)) lo = c[cl.get(i)].low;
+      if (hi != null && b.high > hi && b.close < hi) { s[i] = { dir: -1, text: "스윕" }; hi = null; } else if (hi != null && b.close > hi) hi = null;
+      if (lo != null && b.low < lo && b.close > lo) { s[i] = { dir: 1, text: "스윕" }; lo = null; } else if (lo != null && b.close < lo) lo = null;
+    });
+    return { plots: [{ name: "스윕", type: "signals", data: s }] };
+  } },
+  avwap: { name: "앵커드 VWAP (최근 고점·저점)", group: "레벨 · 프로파일", pane: "main", desc: "최근 n봉의 최고점·최저점부터 누적한 VWAP — 그 뒤 들어온 매수자·매도자의 평균 단가", params: { lookback: 150 }, compute: (c, p) => {
+    const n = Math.min(p.lookback, c.length), st = c.length - n; let hi = st, lo = st;
+    for (let i = st; i < c.length; i++) { if (c[i].high > c[hi].high) hi = i; if (c[i].low < c[lo].low) lo = i; }
+    const from = (a) => { let pv = 0, v = 0; return c.map((b, i) => { if (i < a) return null; const tp = (b.high + b.low + b.close) / 3; pv += tp * b.volume; v += b.volume; return v ? pv / v : tp; }); };
+    return { plots: [line("고점 기준", from(hi), C.dn, { lineWidth: 2 }), line("저점 기준", from(lo), C.up, { lineWidth: 2 })] };
+  } },
+  // ---------- 오실레이터 (추가 2)
+  cyber_cycle: { name: "사이버 사이클 (Ehlers)", group: "오실레이터", pane: "sub", params: { alpha: 0.07 }, compute: (c, p) => {
+    const x = src(c, "hl2"), a = p.alpha, sm = x.map((v, i) => i < 3 ? v : (v + 2 * x[i - 1] + 2 * x[i - 2] + x[i - 3]) / 6), cy = [];
+    x.forEach((v, i) => cy.push(i < 7 ? (i < 2 ? 0 : (v - 2 * x[i - 1] + x[i - 2]) / 4)
+      : (1 - 0.5 * a) ** 2 * (sm[i] - 2 * sm[i - 1] + sm[i - 2]) + 2 * (1 - a) * cy[i - 1] - (1 - a) ** 2 * cy[i - 2]));
+    return { plots: [line("Cycle", cy, C.b), line("트리거", cy.map((_, i) => i ? cy[i - 1] : null), C.a, { lineWidth: 1 })], levels: [0] };
+  } },
+  smi: { name: "SMI (스토캐스틱 모멘텀)", group: "오실레이터", pane: "sub", params: { length: 10, smooth: 3, signal: 3 }, compute: (c, p) => {
+    const hh = highest(c.map((b) => b.high), p.length), ll = lowest(c.map((b) => b.low), p.length);
+    const d = c.map((b, i) => hh[i] == null ? null : b.close - (hh[i] + ll[i]) / 2), r = hh.map((v, i) => v == null ? null : v - ll[i]);
+    const v = ratio(mul(ema(ema(d, p.smooth), p.smooth), 100), mul(ema(ema(r, p.smooth), p.smooth), 0.5));
+    return { plots: [line("SMI", v, C.b), line("시그널", ema(v, p.signal), C.a)], levels: [-40, 0, 40] };
+  } },
+  // ---------- 통계 · 퀀트
+  hurst: { name: "허스트 지수", group: "통계 · 퀀트", pane: "sub", desc: "0.5 위 = 추세가 이어지는 장(추세추종 유리), 0.5 아래 = 되돌리는 장(역추세 유리)", params: { window: 100 }, compute: (c, p) => {
+    const r = rets(src(c)), W = Math.max(32, p.window), sizes = [8, 16, 32, 64].filter((s) => s <= W / 2);
+    return { plots: [line("H", r.map((_, i) => {
+      if (i < W) return null;
+      const xs = [], ys = [];
+      for (const sz of sizes) {
+        let acc = 0, k = 0;
+        for (let st = i - W + 1; st + sz - 1 <= i; st += sz) {
+          const seg = r.slice(st, st + sz); if (seg.some((v) => v == null)) continue;
+          const m = seg.reduce((a, b) => a + b, 0) / sz; let cum = 0, mx = -Infinity, mn = Infinity, ss = 0;
+          for (const v of seg) { cum += v - m; mx = Math.max(mx, cum); mn = Math.min(mn, cum); ss += (v - m) ** 2; }
+          const sd = Math.sqrt(ss / sz); if (sd > 0) { acc += (mx - mn) / sd; k++; }
+        }
+        if (k) { xs.push(Math.log(sz)); ys.push(Math.log(acc / k)); }
+      }
+      if (xs.length < 2) return null;
+      const mx = xs.reduce((a, b) => a + b, 0) / xs.length, my = ys.reduce((a, b) => a + b, 0) / ys.length;
+      let num = 0, den = 0; xs.forEach((x, j) => { num += (x - mx) * (ys[j] - my); den += (x - mx) ** 2; });
+      return den ? num / den : null;
+    }), C.e, { lineWidth: 2 })], levels: [0.5] };
+  } },
+  fdi: { name: "프랙탈 차원 (FDI)", group: "통계 · 퀀트", pane: "sub", desc: "1.5 아래 = 추세, 1.5 위 = 잡음·횡보", params: { length: 30 }, compute: (c, p) => {
+    const x = src(c), n = p.length;
+    return { plots: [line("FDI", x.map((_, i) => {
+      if (i < n - 1) return null;
+      let hi = -Infinity, lo = Infinity; for (let j = i - n + 1; j <= i; j++) { hi = Math.max(hi, x[j]); lo = Math.min(lo, x[j]); }
+      if (hi === lo) return 1;
+      let L = 0; for (let j = i - n + 2; j <= i; j++) { const dy = (x[j] - x[j - 1]) / (hi - lo), dx = 1 / (n - 1); L += Math.sqrt(dx * dx + dy * dy); }
+      return 1 + (Math.log(L) + Math.LN2) / Math.log(2 * (n - 1));
+    }), C.c)], levels: [1.5] };
+  } },
+  vol_est: { name: "실현 변동성 (파킨슨 · 가먼-클라스, 연율 %)", group: "통계 · 퀀트", pane: "sub", params: { length: 20 }, compute: (c, p) => {
+    const k = Math.sqrt(barsPerYear(c)) * 100;
+    const pk = sma(c.map((b) => Math.log(b.high / b.low) ** 2), p.length).map((v) => v == null ? null : Math.sqrt(v / (4 * Math.LN2)) * k);
+    const gk = sma(c.map((b) => 0.5 * Math.log(b.high / b.low) ** 2 - (2 * Math.LN2 - 1) * Math.log(b.close / b.open) ** 2), p.length).map((v) => v == null ? null : Math.sqrt(Math.max(0, v)) * k);
+    return { plots: [line("Parkinson", pk, C.a), line("Garman-Klass", gk, C.b)] };
+  } },
+  vol_rank: { name: "변동성 백분위", group: "통계 · 퀀트", pane: "sub", desc: "지금 변동성이 최근 n봉 중 몇 % 수준인지. 10 아래 = 압축(곧 큰 움직임), 90 위 = 과열", params: { length: 20, rank: 250 }, compute: (c, p) => {
+    const sd = stdev(rets(src(c)), p.length); return { plots: [line("Vol %", percentrank(sd, p.rank), C.f)], levels: [10, 50, 90] };
+  } },
+  skew_kurt: { name: "왜도 · 첨도 (수익률)", group: "통계 · 퀀트", pane: "sub", desc: "왜도 < 0 = 급락 꼬리, 첨도가 크면 극단적 움직임이 잦음", params: { length: 50 }, compute: (c, p) => {
+    const r = rets(src(c)), n = p.length, sk = Array(c.length).fill(null), ku = [...sk];
+    for (let i = n; i < c.length; i++) {
+      const w = r.slice(i - n + 1, i + 1); if (w.some((v) => v == null)) continue;
+      const m = w.reduce((a, b) => a + b, 0) / n, v2 = w.reduce((a, b) => a + (b - m) ** 2, 0) / n; if (!v2) continue;
+      sk[i] = w.reduce((a, b) => a + (b - m) ** 3, 0) / n / v2 ** 1.5; ku[i] = w.reduce((a, b) => a + (b - m) ** 4, 0) / n / v2 ** 2 - 3;
+    }
+    return { plots: [line("왜도", sk, C.b), line("첨도", ku, C.a, { lineWidth: 1 })], levels: [0] };
+  } },
+  autocorr: { name: "자기상관 (추세 지속성)", group: "통계 · 퀀트", pane: "sub", desc: "+ = 오른 뒤 또 오르는 경향(모멘텀), − = 오른 뒤 내리는 경향(평균회귀)", params: { length: 50 }, compute: (c, p) => {
+    const r = rets(src(c)), cr = rollCorr(r, shift(r, 1), p.length); return { plots: [hist("AC(1)", cr.map((v) => v?.corr ?? null), cr.map((v) => v == null ? null : v.corr >= 0 ? "rgba(34,176,125,.7)" : "rgba(229,72,77,.7)"))], levels: [0] };
+  } },
+  rs_btc: { name: "BTC 대비 상대강도", group: "통계 · 퀀트", pane: "sub", remote: "btc", desc: "이 코인 ÷ BTC (시작 = 100). 오르면 비트코인보다 강함", params: { ema: 20 }, compute: (c, p, ext) => {
+    const b = btcAligned(c, ext), r = c.map((q, i) => b[i] ? q.close / b[i] : null), f = r.find((v) => v != null);
+    const v = r.map((x) => x == null || !f ? null : x / f * 100);
+    return { plots: [line("RS", v, C.a, { lineWidth: 2 }), line(`EMA ${p.ema}`, ema(v, p.ema), C.b, { lineWidth: 1 })], levels: [100], note: ext?.btc ? "" : "BTC 데이터 불러오는 중" };
+  } },
+  corr_btc: { name: "BTC 상관 · 베타", group: "통계 · 퀀트", pane: "sub", remote: "btc", desc: "상관 1 = BTC 와 똑같이 움직임. 베타 1.5 = BTC 가 1% 움직일 때 1.5% 움직임", params: { length: 30 }, compute: (c, p, ext) => {
+    const cr = rollCorr(rets(src(c)), rets(btcAligned(c, ext)), p.length);
+    return { plots: [line("상관", cr.map((v) => v?.corr ?? null), C.b, { lineWidth: 2 }), line("베타", cr.map((v) => v?.beta ?? null), C.a, { lineWidth: 1 })], levels: [0, 1] };
+  } },
+  // ---------- 거래량 (추가 2)
+  tmf: { name: "트위그스 머니 플로우", group: "거래량", pane: "sub", params: { length: 21 }, compute: (c, p) => {
+    const ad = c.map((b, i) => { const pc = i ? c[i - 1].close : b.open, th = Math.max(b.high, pc), tl = Math.min(b.low, pc); return th === tl ? 0 : b.volume * ((b.close - tl) - (th - b.close)) / (th - tl); });
+    const v = ratio(rma(ad, p.length), rma(c.map((b) => b.volume), p.length)); return { plots: [hist("TMF", v, signColors(v))], levels: [0] };
+  } },
+});
+
 // 선택 창에 보이는 그룹 순서
-export const GROUPS = ["추세", "신호 · 패턴", "레벨 · 프로파일", "변동성", "오실레이터", "거래량", "파생 · 코인글라스"];
+export const GROUPS = ["추세", "신호 · 패턴", "스마트머니 (SMC)", "레벨 · 프로파일", "변동성", "오실레이터", "통계 · 퀀트", "거래량", "파생 · 코인글라스"];
 
 // 서버 시계열 (time, value) → 캔들 시간축 (forward-fill)
 export function align(c, pts, ffill = true) {

@@ -15,6 +15,8 @@ from . import agents, analysis, backtest, config, improve, indicators, liquidati
 from .data import coinglass, exchanges, market, news, sentiment, symbols
 from .llm import LLMUnavailable
 from .paper import PaperManager
+from .quant import forecast, risk, rotation
+from .quant.scanner import scanner
 from .strategy import StrategySpec, validate
 
 paper = PaperManager()
@@ -24,6 +26,7 @@ paper = PaperManager()
 async def lifespan(_app: FastAPI):
     paper.start()
     orderflow.tracker.start()
+    scanner.start()
     yield
 
 
@@ -545,6 +548,147 @@ def execute_decision(req: ExecuteDecisionReq):
         _bad(e)
     paper.save()
     return res
+
+
+# ------------------------------------------------------------------ 퀀트: 패턴 예측 · 순환매 · 스캐너 · 리스크
+@app.get("/api/forecast")
+def get_forecast(symbol: str = "BTCUSDT", interval: str = "1h", window: int = 48, horizon: int = 24):
+    """과거 비슷한 차트의 이후 흐름(예상 시나리오 범위) + 다음 봉 예측."""
+    try:
+        return forecast.forecast(symbols.resolve(symbol), interval, max(16, min(window, 200)), max(4, min(horizon, 120)))
+    except ValueError as e:
+        _bad(e)
+
+
+def _syms(csv: str | None) -> list[str] | None:
+    return [symbols.resolve(s) for s in csv.split(",") if s.strip()] if csv else None
+
+
+@app.get("/api/rotation/rrg")
+def get_rrg(symbols_csv: str | None = None, interval: str = "1d", bench: Literal["btc", "ew"] = "btc", lookback: int = 14):
+    try:
+        return rotation.rrg(_syms(symbols_csv), interval, bench, lookback=max(3, min(lookback, 200)))
+    except ValueError as e:
+        _bad(e)
+
+
+class RotationReq(BaseModel):
+    symbols: Optional[list[str]] = None
+    interval: str = "1d"
+    lookback: int = 20
+    top: int = 3
+    rebalance: int = 7
+    mode: Literal["long", "long_short"] = "long"
+    abs_filter: bool = True
+    score: Literal["momentum", "risk_adj"] = "momentum"
+    fee_pct: float = 0.04
+    bars: int = 1000
+
+
+@app.post("/api/rotation/backtest")
+def rotation_backtest(req: RotationReq):
+    try:
+        return rotation.backtest([symbols.resolve(s) for s in req.symbols] if req.symbols else None, req.interval,
+                                 max(2, req.lookback), max(1, req.top), max(1, req.rebalance), req.mode, req.abs_filter,
+                                 req.score, req.fee_pct, min(req.bars, 3000))
+    except ValueError as e:
+        _bad(e)
+
+
+@app.get("/api/scanner")
+def scanner_status():
+    return scanner.status()
+
+
+@app.get("/api/scanner/signals")
+def scanner_signals(since: int = 0, limit: int = 100):
+    return {"now": int(time.time()), "items": scanner.recent(since, min(limit, 400))}
+
+
+class ScannerCfg(BaseModel):
+    enabled: Optional[bool] = None
+    symbols: Optional[list[str]] = None
+    intervals: Optional[list[str]] = None
+    signals: Optional[dict[str, bool]] = None
+
+
+@app.post("/api/scanner/config")
+def scanner_config(cfg: ScannerCfg):
+    return scanner.set_config(**cfg.model_dump())
+
+
+@app.post("/api/scanner/run")
+def scanner_run():
+    n = scanner.scan()
+    return {"new": n, **scanner.status()}
+
+
+class RiskMatrixReq(BaseModel):
+    symbols: list[str]
+    interval: str = "1d"
+    bars: int = 120
+
+
+@app.post("/api/risk/matrix")
+def risk_matrix(req: RiskMatrixReq):
+    try:
+        return risk.matrix([symbols.resolve(s) for s in req.symbols][:30], req.interval, max(30, min(req.bars, 1500)))
+    except ValueError as e:
+        _bad(e)
+
+
+@app.get("/api/risk/portfolio")
+def risk_portfolio(interval: str = "1d", shock_pct: float = -10.0):
+    """모의 계좌 + 실행 중인 봇 포지션을 합친 위험 (VaR · BTC 급락 스트레스)."""
+    pos = [{"symbol": p["symbol"], "side": p["side"], "notional": p["qty"] * p["mark_price"], "who": "수동"}
+           for p in paper.manual.snapshot()["positions"]]
+    for b in paper.bots.values():
+        p = b.sim.position
+        if p is not None:
+            pos.append({"symbol": b.spec.symbol, "side": "long" if p.side == 1 else "short",
+                        "notional": p.qty * (b.last_price or p.entry_price), "who": f"봇 {b.spec.name}"})
+    if not pos:
+        return {"positions": 0, "items": []}
+    try:
+        return {**risk.portfolio(pos, interval, shock_pct=shock_pct), "items": pos}
+    except ValueError as e:
+        _bad(e)
+
+
+class MonteCarloReq(BaseModel):
+    pnls: list[float]
+    initial_equity: float = 10_000
+    sims: int = 2000
+
+
+@app.post("/api/risk/montecarlo")
+def risk_montecarlo(req: MonteCarloReq):
+    try:
+        return risk.montecarlo(req.pnls, req.initial_equity, max(200, min(req.sims, 10000)))
+    except ValueError as e:
+        _bad(e)
+
+
+class SweepReq(BaseModel):
+    spec: StrategySpec
+    p1: str
+    v1: list[float]
+    p2: Optional[str] = None
+    v2: Optional[list[float]] = None
+    bars: int = 1500
+
+
+@app.post("/api/risk/params")
+def risk_params(spec: StrategySpec):
+    return risk.params_of(spec.model_dump())
+
+
+@app.post("/api/risk/sweep")
+def risk_sweep(req: SweepReq):
+    try:
+        return risk.sweep(_norm(req.spec).model_dump(), req.p1, req.v1, req.p2, req.v2, min(req.bars, 5000))
+    except (ValueError, KeyError, IndexError) as e:
+        _bad(ValueError(f"스윕 실패: {e}"))
 
 
 # ------------------------------------------------------------------ 프론트엔드

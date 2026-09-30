@@ -2,7 +2,7 @@
 import { addPriceAlert, getPriceAlerts, removePriceAlert } from "./alerts.js";
 import { TermChart } from "./chart.js";
 import {
-  $, $$, INTERVALS, IV_LABEL, TV_INTERVAL, api, big, busy, cls, css, emit, esc, fmt, hhmm, on, pct,
+  $, $$, INTERVALS, IV_LABEL, TV_INTERVAL, api, big, busy, cls, css, emit, esc, fmt, hhmm, mdhm, on, pct,
   px, savePrefs, state, toast, tradeRows,
 } from "./core.js";
 import { DEFAULT_INDICATORS, GROUPS, INDICATORS } from "./ind.js";
@@ -15,6 +15,7 @@ state.indicators ||= DEFAULT_INDICATORS;
 state.overlays ||= { heat: false, whales: false, bots: true, scenario: true, sr: true };
 state.overlays.sr ??= true;
 state.overlays.countdown ??= true;
+state.overlays.forecast ??= true;
 state.layout ||= 1;
 state.multi ||= [{ symbol: "ETHUSDT", interval: "1h" }, { symbol: "SOLUSDT", interval: "1h" }, { symbol: "BTCUSDT", interval: "4h" }];
 
@@ -160,6 +161,7 @@ function renderChart() {
     });
   }
   charts.forEach((c, i) => c.load(i ? state.multi[i - 1].symbol : state.symbol, i ? state.multi[i - 1].interval : state.interval)
+    .then(() => { if (!i && state.overlays.forecast && state.forecast) c.setForecast(state.forecast); })
     .catch((e) => toast("차트 오류", e.message, "err")));
   if (state.analysis?.symbol === state.symbol) charts[0]?.setScenario(state.overlays.scenario ? state.analysis.scenarios[0] : null, state.analysis.symbol);
 }
@@ -243,10 +245,66 @@ export async function loadAnalysis(withAi = false) {
     renderRegime(a); renderScenarios(a);
     charts[0]?.setScenario(state.overlays.scenario ? a.scenarios[0] : null, a.symbol);
     emit("analysis", a);
+    loadForecast();
   } catch (e) {
     $("#regime").innerHTML = `<span class="muted">분석 실패: ${esc(e.message)}</span>`;
   }
   analysisTimer = setTimeout(() => loadAnalysis(), 60_000);
+}
+
+// ================================================================ 패턴 예측 · 다음 봉
+let fcBusy = false;
+async function loadForecast() {
+  if (fcBusy) return;
+  const sym = state.symbol, iv = state.interval;
+  if (iv === "1y") { $("#side-fc").innerHTML = `<div class="empty">연봉은 데이터가 적어 예측하지 않습니다.</div>`; return; }
+  fcBusy = true;
+  try {
+    const f = await api(`/api/forecast?symbol=${sym}&interval=${iv}`);
+    if (sym !== state.symbol || iv !== state.interval) return;
+    const changed = state.forecast?.bar_time !== f.bar_time || state.forecast?.symbol !== f.symbol || state.forecast?.interval !== f.interval;
+    state.forecast = f;
+    renderForecast(f);
+    if (changed) charts[0]?.setForecast(state.overlays.forecast ? f : null);
+    emit("forecast", f);
+  } catch (e) {
+    $("#side-fc").innerHTML = `<div class="empty">예측 실패: ${esc(e.message)}</div>`;
+  } finally { fcBusy = false; }
+}
+
+function spark(shape, split, ret) {
+  const w = 132, h = 34, lo = Math.min(...shape), hi = Math.max(...shape), sx = w / (shape.length - 1), y = (v) => h - 2 - (v - lo) / ((hi - lo) || 1) * (h - 4);
+  const pts = (a, b) => shape.slice(a, b + 1).map((v, i) => `${((a + i) * sx).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="과거 비슷한 구간과 그 뒤 흐름">
+    <line x1="${split * sx}" x2="${split * sx}" y1="0" y2="${h}" stroke="var(--line-2)" stroke-dasharray="2 2"/>
+    <polyline points="${pts(0, split)}" fill="none" stroke="var(--text-2)" stroke-width="1.5"/>
+    <polyline points="${pts(split, shape.length - 1)}" fill="none" stroke="${ret >= 0 ? "var(--up)" : "var(--down)"}" stroke-width="2"/></svg>`;
+}
+
+function renderForecast(f) {
+  const a = f.analog, nb = f.next_bar;
+  const bar = (p) => `<div class="bar"><i style="width:${p}%;background:${p >= 50 ? "var(--up)" : "var(--down)"}"></i></div>`;
+  const pctS = (v) => `<span class="${cls(v)}">${v > 0 ? "+" : ""}${fmt(v, 2)}%</span>`;
+  $("#side-fc").innerHTML = `
+    <div class="fc-sec"><div class="sub" style="padding-left:0">다음 봉 예측 <span class="muted">(${IV_LABEL[f.interval]} 1개)</span></div>
+      ${nb ? `<div class="row"><b class="${nb.p_up > 50 ? "up" : nb.p_up < 50 ? "down" : "accent"}" style="font-size:18px">${nb.p_up === 50 ? "방향 불분명 50%" : `${nb.p_up > 50 ? "상승" : "하락"} ${Math.max(nb.p_up, 100 - nb.p_up)}%`}</b>
+          <span class="muted">예상 ${pctS(nb.median_ret_pct)} · 범위 ${px(nb.range.low)} ~ ${px(nb.range.high)}</span></div>${bar(nb.p_up)}
+        <div class="kv" style="margin-top:6px"><span class="k">최근 ${nb.backtest.evaluated}봉 적중률</span><span><b>${nb.backtest.accuracy_pct ?? "–"}%</b> <span class="muted">(찍기 기준 ${nb.backtest.baseline_pct}%)</span></span>
+          <span class="k">확신 높은 때만</span><span>${nb.backtest.confident_accuracy_pct ?? "–"}% <span class="muted">(${nb.backtest.confident_n}번)</span></span></div>
+        <div class="help" style="margin-top:4px">${esc(nb.verdict)}. 12가지 특징이 비슷했던 과거 ${nb.neighbors}개 봉의 다음 봉 결과로 계산합니다. 차트 오른쪽 흐린 캔들이 예상 모양입니다.</div>`
+        : `<div class="muted">${esc(f.next_bar_error || "계산할 수 없습니다")}</div>`}</div>
+    <div class="fc-sec"><div class="sub" style="padding-left:0">과거 유사 패턴 시나리오 <span class="muted">(${a ? a.horizon + "봉 뒤까지" : ""})</span></div>
+      ${a ? `<div class="row"><b class="${a.prob_up >= 50 ? "up" : "down"}" style="font-size:18px">상승 ${a.prob_up}%</b>
+          <span class="muted">중간값 ${pctS(a.median_ret_pct)} · 유사도 ${a.avg_corr} · 신뢰도 ${a.reliability}</span></div>${bar(a.prob_up)}
+        <div class="mtf" style="margin-top:6px">${Object.entries(a.prob_up_by_h).map(([h, p]) => `<div><span class="k">${h}봉 뒤</span><span class="${p >= 50 ? "up" : "down"}">상승 ${p}%</span></div>`).join("")}</div>
+        <div class="kv" style="margin-top:6px"><span class="k">예상 범위 (10~90%)</span><span>${pctS(a.p10_ret_pct)} ~ ${pctS(a.p90_ret_pct)}</span>
+          <span class="k">가격 범위</span><span>${px(a.bands.p10.at(-1))} ~ ${px(a.bands.p90.at(-1))}</span></div>
+        <div class="help" style="margin-top:4px">${esc(a.summary)} 차트의 주황 부채꼴이 이 범위(진한 곳 25~75%, 옅은 곳 10~90%), 주황선이 중간값입니다.</div>
+        <div class="sub" style="padding-left:0;margin-top:8px">가장 비슷했던 과거 구간</div>
+        ${a.matches.slice(0, 6).map((m) => `<div class="fc-match"><div>${spark(m.shape, a.window - 1, m.ret_pct)}</div>
+          <div><div class="muted">${mdhm(m.end)} · 유사도 ${m.corr}</div><div>${a.horizon}봉 뒤 ${pctS(m.ret_pct)} <span class="muted">최고 ${fmt(m.max_up_pct, 1)}% · 최저 ${fmt(m.max_down_pct, 1)}%</span></div></div></div>`).join("")}`
+        : `<div class="muted">${esc(f.analog_error || "계산할 수 없습니다")}</div>`}</div>
+    <div class="help" style="padding:10px 0">통계적 참고 자료입니다. 과거에 비슷했다고 똑같이 움직이지는 않습니다. 적중률이 '찍기 기준'보다 높지 않으면 믿지 마세요.</div>`;
 }
 
 const ST_CLS = { long: "up", short: "down", range: "accent" };
@@ -468,7 +526,8 @@ export function initTrade() {
     if (!k) return;
     state.overlays[k] = !state.overlays[k];
     savePrefs(); renderToolbar();
-    if (k === "countdown") charts.forEach((c) => { c.opts.overlays.countdown = state.overlays.countdown; c.countdown.update(); });
+    if (k === "forecast") charts[0]?.setForecast(state.overlays.forecast ? state.forecast : null);
+    else if (k === "countdown") charts.forEach((c) => { c.opts.overlays.countdown = state.overlays.countdown; c.countdown.update(); });
     else charts[0]?.setOverlay(k, state.overlays[k]);
     if (k === "scenario") charts[0]?.setScenario(state.overlays.scenario ? state.analysis?.scenarios?.[0] : null, state.analysis?.symbol);
   };
@@ -538,7 +597,7 @@ export function initTrade() {
     const t = e.target.dataset.t;
     if (!t) return;
     $$("#side-tabs button").forEach((b) => b.classList.toggle("on", b.dataset.t === t));
-    $("#side-sc").hidden = t !== "sc"; $("#side-order").hidden = t !== "order"; $("#side-book").hidden = t !== "book";
+    $("#side-sc").hidden = t !== "sc"; $("#side-order").hidden = t !== "order"; $("#side-book").hidden = t !== "book"; $("#side-fc").hidden = t !== "fc";
     if (t === "book") loadBook();
   };
   $("#side-sc").onclick = (e) => {
