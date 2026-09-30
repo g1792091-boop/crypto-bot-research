@@ -7,7 +7,7 @@ Writes ``DIR/sig_<tf>_<COIN>.npz`` in the format of research/paper_rules/rules_b
 (mirrors ``rules_bt._signals_job``): ts (int64 ns, bar open, UTC), o, h, l, c, atr (ATR14 of the
 bar), s__<STRATEGY> (int8 +1/-1/0 on the signal bar; entry is the next bar's open). Signals come
 from the locked backtest code (``paperbot.sweepsig.lib().compute_signals``, hash-checked), run on
-the whole series (the code is causal); DOGE = DOGE_L - DOGE_S as in rules_bt.
+the whole series (the code is causal); DOGE = sigservice.doge_join(DOGE_L, DOGE_S) as in rules_bt (DOGE_S is already -1 on shorts).
 
 Bars: USD-M futures klines of the timeframe itself from
 https://data.binance.vision/data/futures/um/monthly/klines/<SYMBOL>/<tf>/<SYMBOL>-<tf>-<YYYY-MM>.zip
@@ -41,6 +41,7 @@ import numpy as np
 import pandas as pd
 
 from .. import sweepsig
+from ..sigservice import doge_join
 
 BASE_URL = "https://data.binance.vision/data/futures/um"
 TFS = ("5m", "15m", "30m", "1h", "4h")
@@ -200,7 +201,7 @@ def signal_arrays(df: pd.DataFrame, tf: str, coin: str) -> dict:
     df.attrs["tf"] = tf
     raw = L.compute_signals({coin: df}, tf, list(L.NAMES), strict=True)
     sig = {n: raw[n][coin] for n in L.NAMES if n not in ("DOGE_L", "DOGE_S")}
-    sig["DOGE"] = (raw["DOGE_L"][coin].astype(np.int8) - raw["DOGE_S"][coin].astype(np.int8)).astype(np.int8)
+    sig["DOGE"] = doge_join(raw["DOGE_L"][coin], raw["DOGE_S"][coin])  # DOGE_S is already -1 on shorts
     atr = L.fg.atr(df, 14).to_numpy(float)
     return dict(ts=RB._ns(df["ts"]), o=df["open"].to_numpy(float), h=df["high"].to_numpy(float),
                 l=df["low"].to_numpy(float), c=df["close"].to_numpy(float), atr=atr,

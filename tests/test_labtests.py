@@ -217,6 +217,19 @@ def test_stop_and_lock_runs_report_all_periods(cache):
         assert r["gate"]["n_trials"] == 3 and r["gate"]["pass"] is False  # < 300 trades in period 1
         assert r["gate"]["checks"]["e"] is False
         assert "5년 시험" in r["summary_ko"] and "판정" in r["summary_ko"]
+        for row in r["periods"].values():
+            for arm in ("baseline", "variant"):
+                x = row[arm]
+                assert 20 <= x["mean_lev"] <= 50 and x["mean_ret_notional"] is not None
+                assert x["mean_pnl_equity"] == pytest.approx(x["mean_roe"] * 0.4, rel=0.6)   # 40%/30%/20% margin
+        if spec["template"] == "stop_atr":
+            p1 = r["periods"]["1"]
+            assert set(r["gate"]["checks"]) == set("abcdef") and "diff_notional" in p1 and 0 < p1["p_notional"] <= 1
+            assert p1["diff_notional"] == pytest.approx(p1["variant"]["mean_ret_notional"]
+                                                        - p1["baseline"]["mean_ret_notional"])
+            assert "평균 레버리지" in r["summary_ko"]
+        else:
+            assert "diff_notional" not in r["periods"]["1"] and "평균 레버리지" not in r["summary_ko"]
         json.dumps(r)
     # the same request gives the same numbers (fixed bootstrap seed)
     a = LT.run_test({"template": "stop_atr", "strategy": "BBB", "timeframe": "1h", "k": 1.5}, data)
@@ -248,18 +261,20 @@ def test_block_bootstrap():
 
 
 # ------------------------------------------------------------------ gate
-def _result(d1=0.01, p1=0.001, d2=0.01, p2=0.01, m1=0.02, m2=0.01, n1=500, p3=None):
-    def row(d, p, m, n):
+def _result(d1=0.01, p1=0.001, d2=0.01, p2=0.01, m1=0.02, m2=0.01, n1=500, p3=None, n2=400, dn=(0.0002, 0.0001),
+            template="stop_atr"):
+    def row(d, p, m, n, dnot):
         return {"available": True, "baseline": {"trades": n, "mean_roe": m - d}, "variant": {"trades": n, "mean_roe": m},
-                "diff": d, "p": p}
-    per = {"1": row(d1, p1, m1, n1), "2": row(d2, p2, m2, 400),
+                "diff": d, "p": p, "diff_notional": dnot, "p_notional": 0.01}
+    per = {"1": row(d1, p1, m1, n1, dn[0]), "2": row(d2, p2, m2, n2, dn[1]),
            "3": p3 if p3 is not None else {"available": False}}
-    return {"ok": True, "template": "stop_atr", "periods": per}
+    return {"ok": True, "template": template, "periods": per}
 
 
 def test_gate_passes_only_when_every_check_passes():
     g = LT.gate(_result(), 1)
-    assert g["pass"] is True and all(g["checks"].values()) and len(g["reasons"]) == 5
+    assert g["pass"] is True and all(g["checks"].values()) and len(g["reasons"]) == 6
+    assert len(LT.gate(_result(template="skip_tag"), 1)["reasons"]) == 5     # ⑥ is for stop_atr only
     assert any("0.05 ÷ 이 방의 시험 1번" in r for r in g["reasons"])
     assert LT.gate(_result(p1=0.02), 1)["pass"] is True
     assert LT.gate(_result(p1=0.02), 3)["pass"] is False           # Bonferroni: 0.05 / 3
@@ -274,7 +289,24 @@ def test_gate_passes_only_when_every_check_passes():
     p3_bad = {"available": True, "baseline": {"trades": 100}, "variant": {"trades": 100}, "diff": -0.001, "p": 0.6}
     assert LT.gate(_result(p3=p3_bad), 1)["checks"]["c"] is False  # (c) period 3 other sign
     p3_small = dict(p3_bad, baseline={"trades": 10}, variant={"trades": 10})
-    assert LT.gate(_result(p3=p3_small), 1)["pass"] is True        # too few trades: not judged
+    assert LT.gate(_result(p3=p3_small), 1)["pass"] is True        # too few baseline trades: not judged
+    # a variant that keeps almost nothing of 200 period-3 trades, and loses on it, is not replicated
+    p3_gone = {"available": True, "baseline": {"trades": 200}, "variant": {"trades": 4, "mean_roe": -0.5},
+               "diff": -0.48, "p": 0.99}
+    g = LT.gate(_result(p3=p3_gone), 1)
+    assert g["pass"] is False and g["checks"]["c"] is False and "4건뿐" in g["reasons"][2]
+    p3_few_but_better = dict(p3_gone, variant={"trades": 4, "mean_roe": 0.1}, diff=0.12)
+    assert LT.gate(_result(p3=p3_few_but_better), 1)["checks"]["c"] is False
+    # period-2 "replication" on a handful of trades is not replication
+    g = LT.gate(_result(n2=5), 1)
+    assert g["pass"] is False and g["checks"]["b"] is False and "100건 이상" in g["reasons"][1]
+    assert LT.gate(_result(n2=100), 1)["pass"] is True
+    # stop_atr: an ROE gain that is only the lower leverage of a wider stop does not pass (⑥)
+    g = LT.gate(_result(dn=(-0.00001, 0.0001)), 1)
+    assert g["pass"] is False and g["checks"]["f"] is False and all(g["checks"][k] for k in "abcde")
+    assert "레버리지" in g["reasons"][5]
+    assert LT.gate(_result(dn=(0.0001, None)), 1)["pass"] is False
+    assert LT.gate(_result(dn=(-1, -1), template="skip_tag"), 1)["pass"] is True    # other templates: no ⑥
     p3_ok = dict(p3_bad, diff=0.002)
     assert LT.gate(_result(p3=p3_ok), 1)["pass"] is True
     assert LT.gate({"ok": False}, 1)["pass"] is False
@@ -302,6 +334,12 @@ def test_normalize_spec():
         {"template": "lock_start", "strategy": "A; DROP", "timeframe": "1h", "first_lock": 0.2},
         "stop_atr",
     ]
+    bad += [{"template": ["stop_atr"], "strategy": "AAA", "timeframe": "1h", "k": 2.5},      # unhashable values
+            {"template": {"x": 1}, "strategy": "AAA", "timeframe": "1h", "k": 2.5},
+            {"template": "stop_atr", "strategy": "AAA", "timeframe": ["1h"], "k": 2.5},
+            {"template": "stop_atr", "strategy": "AAA", "timeframe": "1h", "k": 10 ** 400},    # float overflow
+            {"template": "skip_tag", "strategy": "AAA", "timeframe": "1h", "tag": ["횡보장 진입"]},
+            {"template": "stop_atr", "strategy": ["AAA"], "timeframe": "1h", "k": 2.5}]
     for spec in bad:
         with pytest.raises(LT.SpecError):
             LT.normalize_spec(spec)

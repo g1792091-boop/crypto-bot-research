@@ -95,6 +95,10 @@ def system_prompt(role: Role) -> str:
 
 
 # ------------------------------------------------------------ checks
+MAX_PATH = 300        # an evidence path longer than this is not a packet path
+MAX_EVIDENCE = 20     # evidence paths per claim
+
+
 def resolve(data: Any, path: str) -> tuple[bool, Any]:
     """Follow a dotted path. Dict keys may themselves contain dots
     (e.g. policy "TP_1.5R"); the longest matching key wins."""
@@ -113,7 +117,8 @@ def resolve(data: Any, path: str) -> tuple[bool, Any]:
             return False, None
         if isinstance(cur, list):
             p = parts[i]
-            if p.lstrip("-").isdigit() and -len(cur) <= int(p) < len(cur):
+            # isascii: '²'.isdigit() is True but int('²') fails
+            if p.isascii() and p.lstrip("-").isdigit() and -len(cur) <= int(p) < len(cur):
                 return walk(cur[int(p)], i + 1)
         return False, None
 
@@ -130,9 +135,12 @@ def _check_evidence(items: list, given: dict, where: str, problems: list) -> lis
         if not isinstance(ev, list) or not ev:
             problems.append(f"{where}[{i}] has no evidence: {str(it.get('claim') or it.get('change') or it)[:80]}")
             continue
-        bad = [p for p in ev if not isinstance(p, str) or not resolve(given, p)[0]]
+        bad = [p for p in ev[:MAX_EVIDENCE] if not isinstance(p, str) or len(p) > MAX_PATH
+               or not resolve(given, p)[0]]
+        if len(ev) > MAX_EVIDENCE:
+            bad.append(f"...{len(ev)} paths (at most {MAX_EVIDENCE})")
         if bad:
-            problems.append(f"{where}[{i}] cites paths not in its packet: {bad[:3]}")
+            problems.append(f"{where}[{i}] cites paths not in its packet: {[str(b)[:80] for b in bad[:3]]}")
             continue
         kept.append(it)
     return kept

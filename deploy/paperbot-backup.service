@@ -1,8 +1,9 @@
-# Consistent copies of the paper databases (sqlite online backup), 14 days kept.
+# Consistent copies of the paper databases (sqlite online backup), 14 days kept. agents3.db holds the
+# agents' hypothesis ledger (the gate's test count) and inbox.db the owners' posts and approvals.
 [Unit]
 Description=paperbot database backup
 
 [Service]
 Type=oneshot
 User=paperbot
-ExecStart=/bin/sh -c 'd=/var/backups/paperbot/$(date -u +%%Y%%m%%d); mkdir -p "$d" && for f in paper3 daily3; do [ -f /var/lib/paperbot/$f.db ] && sqlite3 /var/lib/paperbot/$f.db ".backup $d/$f.db"; done; find /var/backups/paperbot -mindepth 1 -maxdepth 1 -type d -mtime +14 -exec rm -rf {} +'
+ExecStart=/bin/sh -c 'd=/var/backups/paperbot/$(date -u +%%Y%%m%%d); mkdir -p "$d" && for f in paper3 daily3 agents3 inbox; do [ -f /var/lib/paperbot/$f.db ] && sqlite3 /var/lib/paperbot/$f.db ".backup $d/$f.db"; done; find /var/backups/paperbot -mindepth 1 -maxdepth 1 -type d -mtime +14 -exec rm -rf {} +'

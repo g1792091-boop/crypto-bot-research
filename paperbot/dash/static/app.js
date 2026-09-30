@@ -12,7 +12,7 @@ const $ = (id) => document.getElementById(id);
 const state = {
   board: null, mark: {}, fund: {}, tick: {}, sym: "BTCUSDT", tf: "15m", acct: "", markers: true, view: "trade",
   sideTab: "pos", botTab: "allpos", account: null, sigTf: "", bf: {tf: "", kind: "", sort: "wallet"},
-  roster: null, feed: [], role: null, lastCandle: null,
+  lastCandle: null,
 };
 
 // ------------------------------------------------------------ helpers
@@ -81,7 +81,7 @@ function show(v) {
   if (v === "board") renderBoard();
   if (v === "signals") loadSignals();
   if (v === "status") loadStatus();
-  if (v === "agents") loadAgents();
+  if (v === "rooms" && typeof loadRooms === "function") loadRooms();
   if (v === "strat" && typeof loadStrat === "function") loadStrat();
   if (v === "trade" && tchart) tchart.timeScale().scrollToRealTime();
 }
@@ -411,39 +411,6 @@ async function drawAcctCandles(d) {
   c.timeScale().fitContent();
 }
 
-// ------------------------------------------------------------ agents
-const initials = (n) => n.replace(/[·\s]/g, "").slice(0, 2);
-async function loadAgents() {
-  if (!state.roster) state.roster = await api("/api/agents/roster").catch(() => null);
-  state.feed = await api("/api/agents/feed").catch(() => []);
-  const r = state.roster; if (!r) return;
-  $("ag-count").textContent = `팀원 ${r.roles.length}명 · ${r.teams.length}개 팀`;
-  $("roster").innerHTML = r.teams.map((t) => {
-    const rs = r.roles.filter((x) => x.team === t.id);
-    return `<div class="team">${esc(t.name)}<small>${rs.length}명</small></div>` + rs.map((x) => `<div class="role ${state.role === x.id ? "sel" : ""}" data-r="${x.id}">
-      <span class="av">${esc(initials(x.name))}</span><span><div class="nm">${esc(x.name)}</div><div class="du">${esc(x.duty)}</div></span>
-      <span class="badge ${x.model === "opus" ? "opus" : ""} ${x.start !== "now" ? "later" : ""}">${x.start !== "now" ? "대기" : x.model === "opus" ? "Opus" : "Sonnet"}</span></div>`).join("");
-  }).join("");
-  document.querySelectorAll("#roster .role").forEach((el) => el.onclick = () => { state.role = el.dataset.r; loadAgents(); });
-  $("meet-seg").innerHTML = r.meetings.map((m) => `<button disabled title="${esc(m.when)}">${esc(m.name)}</button>`).join("");
-  $("chat").innerHTML = state.feed.length ? state.feed.slice().reverse().map((m) => {
-    const role = r.roles.find((x) => x.id === m.role);
-    return `<div class="msg"><span class="av">${esc(initials(role ? role.name : m.role))}</span><div class="bub">
-      <div class="who"><b>${esc(role ? role.name : m.role)}</b> · ${esc(m.meeting)} · ${tsKo(m.ts)}</div>${esc(m.text)}</div></div>`;
-  }).join("") : `<div class="empty">에이전트 팀이 아직 연결되지 않았습니다.<br>연결되면 아침 계획·저녁 점검·주간 검토 회의가 여기에 채팅처럼 실시간으로 올라옵니다.</div>`;
-  const sel = state.role && r.roles.find((x) => x.id === state.role);
-  $("ag-side-title").textContent = sel ? sel.name : "운영 원칙";
-  $("ag-side").innerHTML = sel ? `<div class="note"><h4>하는 일</h4><div class="dim">${esc(sel.duty)}</div></div>
-      <div class="note"><h4>언제</h4><div class="dim">${esc(sel.when)}</div></div>
-      <div class="note"><h4>모델</h4><div class="dim">${sel.model === "opus" ? "Opus (판단 책임이 큰 역할)" : "Sonnet (반복 분석)"}</div></div>
-      <div class="note"><h4>시작</h4><div class="dim">${sel.start === "now" ? "paper 첫날부터" : esc(sel.start)}</div></div>`
-    : `<div class="note"><h4>에이전트가 못 하는 것</h4><ul><li>주문을 넣지 않습니다 (주문 기능 자체가 없음)</li>
-      <li>원본 계좌 195개의 규칙을 바꾸지 않습니다</li><li>합격 기준을 옮기지 않습니다</li></ul></div>
-      <div class="note"><h4>개선안 절차</h4><ul><li>거래 30건 이상인 매매법만</li><li>검증관이 운인지 검사 → 승인관 승인</li>
-      <li>승인되면 새 계좌($1,000)로 따로 시작, 원본은 그대로</li></ul></div>
-      <div class="note"><h4>회의</h4><ul>${r.meetings.map((m) => `<li>${esc(m.name)}: ${esc(m.when)}</li>`).join("")}</ul></div>`;
-}
-
 // ------------------------------------------------------------ signals & status
 seg("s-tf", "tf", (v) => { state.sigTf = v; loadSignals(); });
 async function loadSignals() {
@@ -478,9 +445,11 @@ function heartbeat(hb) {
 }
 function stream() {
   const es = new EventSource("/api/stream");
+  es.onopen = () => { if (typeof onRoomsStream === "function") onRoomsStream(null); };   // (re)connected: catch up
   es.onmessage = (ev) => {
     const d = JSON.parse(ev.data);
     heartbeat(d.heartbeat);
+    if (d.rooms && Object.keys(d.rooms).length && typeof onRoomsStream === "function") onRoomsStream(d.rooms);
     if (Object.keys(d.changed).length) loadBoard();
     d.trades.forEach((t) => toast(`${t.account_id} ${coin(t.symbol)} ${REASON_KO[t.exit_reason] || t.exit_reason} ${pct(t.roe)} → $${fmt(t.equity_after)}`));
     d.alerts.filter(toastWorthy).forEach((a) => toast(`⚠ ${alertKo(a.text)}`));
@@ -525,6 +494,10 @@ setInterval(() => {
 }, 1000);
 
 // ------------------------------------------------------------ start
+// the top bar wraps on phones: full-height panes (rooms) subtract its real height
+function topHeight() { document.documentElement.style.setProperty("--toph", document.querySelector(".topbar").offsetHeight + "px"); }
+window.addEventListener("resize", topHeight);
+topHeight();
 themeInit();
 chip("chip-ai", null, "에이전트 연결 전");
 renderWatch();

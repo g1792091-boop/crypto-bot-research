@@ -3,7 +3,12 @@
     python -m paperbot.agents.rooms tick --paper-db P --daily-db D --agents-db A --inbox-db I
                                          [--lab-dir L] [--dry-run] [--no-send]
 
-Every tick (a systemd timer, e.g. every 10 minutes) does, in one process that is the only
+Limits (AI budgets per trigger class, copy caps, owner confirmation, rounds per tick) come from
+env AGENTS_* (/etc/paperbot/agents.env, see ``policy_from_env`` and deploy/agents.env.example),
+then from the flags. The caps in force are stored in agents3.db (cursor ``policy:caps``) so the
+dashboard shows the real ones. Owner docs: docs/agent-rooms.md.
+
+Every tick (deploy/paperbot-agents.timer: every 15 minutes) does, in one process that is the only
 writer of agents3.db:
   1. applies the owners' approve/reject clicks (inbox.db, read-only) to proposals;
   2. asks ``triggers.find_due`` which rooms should meet now (code only: new losses, busts,
@@ -44,6 +49,7 @@ import argparse
 import contextlib
 import fcntl
 import json
+import math
 import os
 import shutil
 import sqlite3
@@ -62,7 +68,8 @@ from . import triggers as TR
 from .budget import BudgetedRunner, BudgetExceeded, tokens_of
 from .roles import _check_evidence
 from .roster3 import ROLES, SPECIALISTS, STRATEGY_KO, TEAMS
-from .runner import AgentCallError, CallResult, Runner, UsageLimitReached, billing_warnings
+from .runner import (AgentCallError, AgentTimeout, CallResult, Runner, UsageLimitReached, auth_preflight,
+                     billing_warnings)
 
 PROMPT_DIR = os.path.join(os.path.dirname(__file__), "prompts3")
 DAY_MS = 86_400_000
@@ -140,10 +147,17 @@ EXPERT_FILE = {"entry_timing": "rooms_entry_timing.md", "exit_timing": "rooms_ex
 TURN_KIND = {"specialist": "analysis", "revision": "revision", "challenge": "challenge", "expert": "expert",
              "validator": "verdict", "approver": "verdict", "team": "analysis", "lead": "summary"}
 
-# Default AI budget per KST day and trigger class (calls, tokens); plus a total over all classes.
-DEFAULT_BUDGETS = {"incident": (15, 400_000), "owner": (30, 800_000), "loss": (40, 1_200_000),
-                   "scheduled": (20, 600_000), "weekly": (30, 900_000)}
-DEFAULT_TOTAL = (120, 3_500_000)
+# Default AI budget per KST day and trigger class (calls, tokens); plus a total over all classes and a
+# rolling 7-day cap. Expected use is about 50-80 calls a day (docs/agent-rooms.md); the caps are a
+# ceiling, and every call counts against the owners' own Claude plan.
+DEFAULT_BUDGETS = {"incident": (15, 400_000), "owner": (20, 500_000), "loss": (24, 700_000),
+                   "scheduled": (15, 450_000), "weekly": (20, 550_000)}
+DEFAULT_TOTAL = (80, 2_000_000)
+DEFAULT_WEEK = (420, 10_000_000)
+# The unused part of these classes' caps is kept inside the total: other classes cannot use it, so
+# a busy day never leaves a liquidation or the 22:00 summary without calls.
+RESERVED_CLASSES = ("incident", "scheduled")
+CRITICAL_INCIDENTS = ("liquidation", "engine_halted", "critical")
 
 
 # ---------------------------------------------------------------- policy and context
@@ -157,6 +171,13 @@ class RoomsPolicy:
     retries: int = 1                        # one more try when an answer is unreadable
     owner_ok_required: Optional[bool] = None  # None: required for the first ``owner_ok_days`` of the run
     owner_ok_days: int = 60
+    week_budget: tuple = DEFAULT_WEEK       # rolling 7 KST days (calls, tokens), all classes
+    bust_reserve_calls: int = 8             # of the loss class: loss_cluster rounds leave these for busts
+    critical_reserve_calls: int = 5         # of the incident class: kept for CRITICAL alerts (liquidations)
+    paced_triggers: tuple = ("loss_cluster", "weekly")   # spread over the KST day, not all at 00:00
+    pace_lead_hours: float = 3.0
+    max_calls_per_tick: int = 12            # no new meeting once a tick has used this many (incidents exempt)
+    tick_wall_s: float = 45 * 60            # no new meeting after this many seconds of one tick
     copy_cap_per_strategy: int = 1
     copy_cap_total: int = 10
     flag_max_per_day: int = 3
@@ -193,52 +214,246 @@ class RoundContext:
 
 
 class TotalBudgetExceeded(BudgetExceeded):
-    pass
+    """The day's total over all classes is used up (every class waits for the next KST day)."""
+
+
+class ReserveExceeded(TotalBudgetExceeded):
+    """What is left of the total is kept for incidents and scheduled meetings (other classes wait)."""
+
+
+class WeekBudgetExceeded(BudgetExceeded):
+    """The rolling 7-day cap is used up."""
 
 
 class RoundFailed(RuntimeError):
     pass
 
 
+class RunnerUnavailable(RuntimeError):
+    """Every attempt of a turn failed before the model answered (network, CLI error, timeout): the
+    evidence is not at fault, so the round is 'transient' and the trigger fires again."""
+
+
+def estimate_tokens(packet: dict, system_prompt: str = "") -> int:
+    """Rough tokens of a call that timed out (its real usage is never reported): chars / 3."""
+    try:
+        n = len(json.dumps(packet, ensure_ascii=False, default=str)) + len(system_prompt or "")
+    except (TypeError, ValueError, RecursionError):
+        n = 0
+    return n // 3
+
+
 class ClassBudget(BudgetedRunner):
-    """BudgetedRunner with a sub-budget per trigger class (agent_calls.pipeline = class) and a
-    total over all classes, on the tick's own agents3.db connection."""
+    """BudgetedRunner with a sub-budget per trigger class (agent_calls.pipeline = class), a total over
+    all classes (for owner/loss/weekly minus the unused part of the incident and scheduled caps, so
+    those always keep their calls), a rolling 7-day cap, and optional pacing over the KST day, on
+    the tick's own agents3.db connection. ``check`` (hard caps) runs before every call;
+    ``headroom`` (hard caps and pacing) tells the tick whether a new meeting may start."""
 
     def __init__(self, runner: Runner, conn: sqlite3.Connection, cls: str, max_calls: int, max_tokens: int,
-                 total_calls: int, total_tokens: int, clock_ms: Callable[[], int]):
+                 total_calls: int, total_tokens: int, clock_ms: Callable[[], int], budgets: Optional[dict] = None,
+                 week: Optional[tuple] = None, paced: bool = False, pace_lead_hours: float = 3.0):
         # BudgetedRunner.__init__ is not called: it opens a second connection and a v2 schema.
         self.runner, self.conn, self.pipeline = runner, conn, cls
         self.max_calls, self.max_tokens = max_calls, max_tokens
         self.total_calls, self.total_tokens = total_calls, total_tokens
         self.clock_ms = clock_ms
+        self.budgets = dict(budgets or {})
+        self.week = tuple(week) if week else None
+        self.paced, self.pace_lead_hours = paced, pace_lead_hours
+
+    def _sum(self, where: str, args: tuple) -> tuple[int, int]:
+        r = self.conn.execute(f"SELECT COUNT(*), COALESCE(SUM(tokens), 0) FROM agent_calls WHERE {where}",
+                              args).fetchone()
+        return int(r[0]), int(r[1])
+
+    def used_class(self, cls: str) -> tuple[int, int]:
+        return self._sum("day = ? AND pipeline = ?", (R.kst_day(self.clock_ms()), cls))
 
     def used_today(self) -> tuple[int, int]:
-        r = self.conn.execute("SELECT COUNT(*), COALESCE(SUM(tokens), 0) FROM agent_calls WHERE day = ? "
-                              "AND pipeline = ?", (R.kst_day(self.clock_ms()), self.pipeline)).fetchone()
-        return int(r[0]), int(r[1])
+        return self.used_class(self.pipeline)
 
     def used_total(self) -> tuple[int, int]:
-        r = self.conn.execute("SELECT COUNT(*), COALESCE(SUM(tokens), 0) FROM agent_calls WHERE day = ?",
-                              (R.kst_day(self.clock_ms()),)).fetchone()
-        return int(r[0]), int(r[1])
+        return self._sum("day = ?", (R.kst_day(self.clock_ms()),))
+
+    def used_week(self) -> tuple[int, int]:
+        """Calls and tokens of the last 7 KST days, today included."""
+        return self._sum("day >= ?", (R.kst_day(self.clock_ms() - 6 * DAY_MS),))
+
+    def reserve(self) -> tuple[int, int]:
+        """Unused calls/tokens of the incident and scheduled caps (0 for those classes themselves)."""
+        if self.pipeline in RESERVED_CLASSES:
+            return 0, 0
+        rc = rt = 0
+        for k in RESERVED_CLASSES:
+            if k in self.budgets:
+                c, t = self.used_class(k)
+                rc += max(0, int(self.budgets[k][0]) - c)
+                rt += max(0, int(self.budgets[k][1]) - t)
+        return rc, rt
+
+    def pace_allowance(self) -> Optional[int]:
+        """Calls this class may have used by now: ceil(cap x (hours since 00:00 KST + lead) / 24)."""
+        if not self.paced:
+            return None
+        now = self.clock_ms()
+        hours = (now - R.kst_day_start_ms(now)) / 3_600_000
+        return math.ceil(self.max_calls * min(1.0, (hours + self.pace_lead_hours) / 24))
+
+    def check(self) -> None:
+        """Raise before a call that would go over a hard cap."""
+        calls, tokens = self.used_today()
+        if calls >= self.max_calls or tokens >= self.max_tokens:
+            raise BudgetExceeded(f"daily cap of {self.pipeline}: {calls}/{self.max_calls} calls, "
+                                 f"{tokens:,}/{self.max_tokens:,} tokens")
+        tc, tt = self.used_total()
+        if tc >= self.total_calls or tt >= self.total_tokens:
+            raise TotalBudgetExceeded(f"daily total cap: {tc}/{self.total_calls} calls, "
+                                      f"{tt:,}/{self.total_tokens:,} tokens")
+        rc, rt = self.reserve()
+        if tc + rc >= self.total_calls or tt + rt >= self.total_tokens:
+            raise ReserveExceeded(f"daily total cap: {tc}/{self.total_calls} calls used, {rc} kept for incidents "
+                                  f"and scheduled meetings")
+        if self.week:
+            wc, wt = self.used_week()
+            if wc >= self.week[0] or wt >= self.week[1]:
+                raise WeekBudgetExceeded(f"7-day cap: {wc}/{self.week[0]} calls, {wt:,}/{self.week[1]:,} tokens")
+
+    def headroom(self) -> int:
+        """Calls a NEW meeting of this kind may make now (0 = defer it; nothing is posted)."""
+        calls, tokens = self.used_today()
+        tc, tt = self.used_total()
+        rc, rt = self.reserve()
+        if tokens >= self.max_tokens or tt + rt >= self.total_tokens:
+            return 0
+        room = [self.max_calls - calls, self.total_calls - tc - rc]
+        if self.week:
+            wc, wt = self.used_week()
+            if wt >= self.week[1]:
+                return 0
+            room.append(self.week[0] - wc)
+        pa = self.pace_allowance()
+        if pa is not None:
+            room.append(pa - calls)
+        return max(0, min(room))
 
     def call(self, model: str, system_prompt: str, instruction: str, packet: dict) -> CallResult:
-        calls, tokens = self.used_total()
-        if calls >= self.total_calls or tokens >= self.total_tokens:
-            raise TotalBudgetExceeded(f"daily total cap: {calls}/{self.total_calls} calls, "
-                                      f"{tokens:,}/{self.total_tokens:,} tokens")
-        return super().call(model, system_prompt, instruction, packet)
+        self.check()
+        role = str(packet.get("role", ""))
+        try:
+            res = self.runner.call(model, system_prompt, instruction, packet)
+        except AgentTimeout:
+            self._record(role, model, False, estimate_tokens(packet, system_prompt))   # it ran, unreported
+            raise
+        except Exception:
+            self._record(role, model, False, 0)
+            raise
+        self._record(role, model, True, tokens_of(res.meta))
+        return res
 
     def close(self) -> None:  # the connection belongs to the tick
         pass
 
 
+def stop_kind(exc: BaseException) -> str:
+    if isinstance(exc, ReserveExceeded):
+        return "budget_reserve"
+    if isinstance(exc, TotalBudgetExceeded):
+        return "budget_total"
+    if isinstance(exc, WeekBudgetExceeded):
+        return "budget_week"
+    if isinstance(exc, BudgetExceeded):
+        return "budget_class"
+    return "usage_limit"
+
+
+def stop_blocks(stopped: str, cls: str) -> list[str]:
+    """Trigger classes a stop pauses until the next KST day (triggers._Rooms.class_blocked). A plan
+    usage limit pauses everything for a while instead (TriggerPolicy.usage_backoff_ms)."""
+    if stopped == "budget_class":
+        return [cls]
+    if stopped == "budget_reserve":
+        return [c for c in TR.CLASSES if c not in RESERVED_CLASSES]
+    if stopped in ("budget_total", "budget_week"):
+        return list(TR.CLASSES)
+    return []
+
+
 def budget_caps(policy: Optional[RoomsPolicy] = None) -> dict:
-    """Caps for the dashboard's usage panel: {class: {calls, tokens}, 'total': {...}}."""
+    """Caps for the dashboard's usage panel: {class: {calls, tokens}, 'total': {...}, 'week': {...}}."""
     p = policy or RoomsPolicy()
     out = {k: {"calls": c, "tokens": t} for k, (c, t) in p.budgets.items()}
     out["total"] = {"calls": p.total_budget[0], "tokens": p.total_budget[1]}
+    out["week"] = {"calls": p.week_budget[0], "tokens": p.week_budget[1]}
     return out
+
+
+POLICY_CURSOR = "policy:caps"     # the caps a tick really used; the dashboard reads them (read-only)
+
+
+def apply_budget_specs(policy: RoomsPolicy, specs: list[str]) -> None:
+    """Apply ``CLASS=CALLS[:TOKENS]`` items (the tick's --budget flag and env AGENTS_BUDGET) to
+    ``policy``. CLASS is a trigger class (incident, owner, loss, scheduled, weekly), total (per KST
+    day) or week (rolling 7 KST days). Raises ValueError on anything else, so a typo never silently
+    drops a limit."""
+    for spec in specs:
+        spec = spec.strip()
+        if not spec:
+            continue
+        k, _, v = spec.partition("=")
+        k = k.strip()
+        calls, _, toks = v.strip().partition(":")
+        names = (*DEFAULT_BUDGETS, "total", "week")
+        if k not in names or not calls.isdigit() or (toks and not toks.isdigit()):
+            raise ValueError(f"budget {spec!r}: use CLASS=CALLS[:TOKENS] with CLASS in {', '.join(names)}")
+        cur = {"total": policy.total_budget, "week": policy.week_budget}.get(k) or policy.budgets[k]
+        new = (int(calls), int(toks) if toks else cur[1])
+        if k == "total":
+            policy.total_budget = new
+        elif k == "week":
+            policy.week_budget = new
+        else:
+            policy.budgets[k] = new
+
+
+OWNER_OK = {"auto": None, "yes": True, "no": False}
+# env name -> (where in the policy, minimum). All optional; see deploy/agents.env.example.
+ENV_INTS = {
+    "AGENTS_OWNER_OK_DAYS": ("owner_ok_days", 0),
+    "AGENTS_COPY_CAP_PER_STRATEGY": ("copy_cap_per_strategy", 0),
+    "AGENTS_COPY_CAP_TOTAL": ("copy_cap_total", 0),
+    "AGENTS_FLAG_MAX_PER_DAY": ("flag_max_per_day", 0),
+    "AGENTS_MAX_ROUNDS_PER_TICK": ("triggers.max_rounds_per_tick", 1),
+    "AGENTS_MAX_ROUNDS_PER_ROOM_DAY": ("triggers.max_rounds_per_room_day", 1),
+    "AGENTS_MAX_CALLS_PER_TICK": ("max_calls_per_tick", 1),
+}
+
+
+def policy_from_env(environ: Optional[dict] = None) -> RoomsPolicy:
+    """The rooms policy with the owners' settings from the environment (/etc/paperbot/agents.env):
+    AGENTS_BUDGET="loss=40:1200000,total=120" (same syntax as --budget), AGENTS_OWNER_OK=auto|yes|no,
+    and the integers in ``ENV_INTS``. Unset or empty means the default. A bad value raises
+    ValueError (the tick refuses to start rather than run without the intended limit).
+    None of these can loosen the code gate: they only set budgets, caps and when owners confirm."""
+    env = os.environ if environ is None else environ
+    p = RoomsPolicy()
+    b = (env.get("AGENTS_BUDGET") or "").strip()
+    if b:
+        apply_budget_specs(p, b.replace(";", ",").split(","))
+    ok = (env.get("AGENTS_OWNER_OK") or "").strip().lower()
+    if ok:
+        if ok not in OWNER_OK:
+            raise ValueError(f"AGENTS_OWNER_OK={ok!r}: use auto, yes or no")
+        p.owner_ok_required = OWNER_OK[ok]
+    for name, (attr, lo) in ENV_INTS.items():
+        raw = (env.get(name) or "").strip()
+        if not raw:
+            continue
+        if not raw.isdigit() or int(raw) < lo:
+            raise ValueError(f"{name}={raw!r}: use a whole number >= {lo}")
+        obj, _, leaf = attr.rpartition(".")
+        setattr(getattr(p, obj) if obj else p, leaf, int(raw))
+    return p
 
 
 # ---------------------------------------------------------------- prompts
@@ -269,11 +484,22 @@ def role_ko(role: str) -> str:
 
 # ---------------------------------------------------------------- answer checks (code)
 def _s(v: Any, n: int) -> str:
-    return v.strip()[:n] if isinstance(v, str) else ""
+    return R.clean_text(v.strip()[:n]) if isinstance(v, str) else ""
 
 
 def _strs(v: Any, n: int = 6, each: int = 300) -> list[str]:
-    return [x.strip()[:each] for x in (v or []) if isinstance(x, str) and x.strip()][:n] if isinstance(v, list) else []
+    return ([R.clean_text(x.strip()[:each]) for x in v if isinstance(x, str) and x.strip()][:n]
+            if isinstance(v, list) else [])
+
+
+# Packet sections computed by code. A claim is shown as a fact only when it cites at least one of
+# these; owner posts, room talk, notes and this round's answers are other people's words.
+CODE_ROOTS = ("losses", "specialist", "board", "trials", "rules", "meeting", "room", "code_result", "copy_check",
+              "today_rounds", "waiting_for_owners", "expert_reason")
+
+
+def _code_backed(paths: list) -> bool:
+    return any(isinstance(p, str) and p.split(".", 1)[0] in CODE_ROOTS for p in paths)
 
 
 def _findings(items: Any, given: dict, where: str, problems: list, n: int = 8) -> list[dict]:
@@ -283,8 +509,12 @@ def _findings(items: Any, given: dict, where: str, problems: list, n: int = 8) -
         if not claim:
             problems.append(f"{where}: 빈 주장")
             continue
+        ev = [p for p in it["evidence"]][:6]
         kind = it.get("kind") if it.get("kind") in ("fact", "hypothesis") else "hypothesis"
-        out.append({"claim": claim, "kind": kind, "evidence": [p for p in it["evidence"]][:6]})
+        if kind == "fact" and not _code_backed(ev):
+            kind = "hypothesis"
+            problems.append(f"{where}: 코드가 계산한 자료를 근거로 대지 않은 '사실'을 가설로 표시: {claim[:60]}")
+        out.append({"claim": claim, "kind": kind, "evidence": ev})
     return out[:n]
 
 
@@ -310,7 +540,7 @@ def check_challenge(out: Any, given: dict) -> tuple[Optional[dict], list[str]]:
         return None, ["답이 JSON 객체가 아님"]
     problems: list[str] = []
     verdict = out.get("verdict")
-    if verdict not in VERDICT_KO:
+    if not isinstance(verdict, str) or verdict not in VERDICT_KO:
         problems.append(f"verdict 값이 이상함: {str(verdict)[:30]!r} -> disagree로 봄")
         verdict = "disagree"
     objs = []
@@ -327,7 +557,7 @@ def check_expert(out: Any, given: dict) -> tuple[Optional[dict], list[str]]:
         return None, ["답이 JSON 객체가 아님"]
     problems: list[str] = []
     verdict = out.get("verdict")
-    if verdict not in VERDICT_KO:
+    if not isinstance(verdict, str) or verdict not in VERDICT_KO:
         problems.append(f"verdict 값이 이상함: {str(verdict)[:30]!r} -> disagree로 봄")
         verdict = "disagree"
     return {"headline": _s(out.get("headline"), 300),
@@ -335,10 +565,19 @@ def check_expert(out: Any, given: dict) -> tuple[Optional[dict], list[str]]:
             "verdict": verdict, "suggestion": _proposal(out, "suggestion", given)}, problems
 
 
+def code_gate_of(given: dict) -> bool:
+    """The code gate's verdict in the packet the validator saw (code_result.gate.pass)."""
+    cr = given.get("code_result") if isinstance(given.get("code_result"), dict) else {}
+    g = cr.get("gate") if isinstance(cr.get("gate"), dict) else {}
+    return g.get("pass") is True
+
+
 def check_validator(out: Any, given: dict) -> tuple[Optional[dict], list[str]]:
     if not isinstance(out, dict) or not isinstance(out.get("pass_gate"), bool):
         return None, ["pass_gate(true/false)가 없음"]
-    return {"pass_gate": out["pass_gate"], "explanation": _s(out.get("explanation"), 800)}, []
+    code = code_gate_of(given)
+    return {"pass_gate": out["pass_gate"], "code_gate": code, "matches_gate": out["pass_gate"] == code,
+            "explanation": _s(out.get("explanation"), 800)}, []
 
 
 def check_approver(out: Any, given: dict) -> tuple[Optional[dict], list[str]]:
@@ -406,7 +645,11 @@ def render_proposal(p: Optional[dict]) -> str:
 def render(turn: str, out: dict) -> str:
     L: list[str] = []
     if turn == "validator":
-        return (f"코드 관문 판단 확인: {'통과' if out['pass_gate'] else '불통과'}\n{out['explanation']}").strip()
+        # the headline is always the CODE gate; the validator's own reading is only its explanation
+        head = f"코드 관문: {'통과' if out.get('code_gate') else '불통과'}"
+        if out.get("matches_gate") is False:
+            head += " · 검증관은 반대로 판단했지만 코드 관문을 따릅니다"
+        return f"{head}\n{out['explanation']}".strip()
     if turn == "approver":
         return f"{'승인' if out['approve'] else '거부'}: {out['reason']}".strip()
     if turn == "lead":
@@ -415,6 +658,8 @@ def render(turn: str, out: dict) -> str:
             L += ["두 분이 할 일:"] + [f"- {x}" for x in out["human_actions"]]
         if out.get("watch_next"):
             L += ["다음에 볼 것: " + " / ".join(out["watch_next"])]
+        if out.get("flag_owners"):
+            L.append(f"📣 두 분께 알림 제안({out['flag_owners']['level']}): {out['flag_owners']['text']}")
     else:
         if out.get("headline"):
             L.append(out["headline"])
@@ -470,9 +715,10 @@ def round_trip(paper_ro: Optional[sqlite3.Connection]) -> float:
 
 def _compact_card(c: dict, new_since: Optional[int]) -> dict:
     ctx = c.get("ctx") or {}
-    return {"account": c["account_id"], "tf": c.get("timeframe"), "symbol": c.get("symbol"), "side": c.get("side_ko"),
-            "leverage": c.get("leverage"), "exit": c.get("reason_ko"), "roe": _r(c.get("roe")),
-            "hold_min": _r(c.get("hold_min"), 1), "best_roe": _r(c.get("best_roe")), "worst_roe": _r(c.get("worst_roe")),
+    return {"account": c["account_id"], "tf": c.get("timeframe"), "symbol": c.get("symbol"),
+            "side": c.get("side_ko"), "leverage": c.get("leverage"), "exit": c.get("reason_ko"),
+            "roe": _r(c.get("roe")), "hold_min": _r(c.get("hold_min"), 1), "best_roe": _r(c.get("best_roe")),
+            "worst_roe": _r(c.get("worst_roe")),
             "touched_first_lock": bool(c.get("touched_first_lock")), "tags": list(c.get("tags") or []),
             "regime": c.get("regime_ko"), "htf_regime": c.get("htf_regime_ko"), "adx": _r(ctx.get("adx"), 1),
             "exit_time": c.get("exit_time"),
@@ -562,8 +808,9 @@ def _market(ctx: RoundContext) -> dict:
     if ctx.paper_ro is None:
         return out
     try:
-        rows = ctx.paper_ro.execute("SELECT symbol, timeframe, MAX(bar_close), data FROM signal_log WHERE bar_close >= ? "
-                                    "GROUP BY symbol, timeframe", (ctx.now_ms - DAY_MS,)).fetchall()
+        rows = ctx.paper_ro.execute("SELECT symbol, timeframe, MAX(bar_close), data FROM signal_log "
+                                    "WHERE bar_close >= ? GROUP BY symbol, timeframe",
+                                    (ctx.now_ms - DAY_MS,)).fetchall()
     except sqlite3.Error:
         return out
     for sym, tf, bc, data in rows:
@@ -597,12 +844,30 @@ def _room_messages(ctx: RoundContext, room: str) -> list[dict]:
             for m in R.room_messages(ctx.agents_conn, room, limit=ctx.policy.recent_messages)]
 
 
+def _int0(v: Any) -> int:
+    try:
+        return int(v or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def owner_upto(ctx: RoundContext, room: str, due: TR.Due) -> int:
+    """Highest owner-post id this meeting may show: an owner meeting, the posts it was called for;
+    any other meeting, the posts already handled (newer ones get their own owner meeting, so a post
+    is never answered twice)."""
+    ids = [i for i in (due.data.get("message_ids") or []) if isinstance(i, int) and not isinstance(i, bool)]
+    if due.trigger == "owner" and ids:
+        return max(ids)
+    return _int0(R.get_cursor(ctx.agents_conn, f"owner:{room}", 0))
+
+
 def _owner_messages(ctx: RoundContext, room: str, due: TR.Due) -> list[dict]:
     if ctx.inbox_ro is None:
         return []
     try:
-        rows = ctx.inbox_ro.execute("SELECT id, ts, author, text FROM owner_messages WHERE room_id = ? "
-                                    "ORDER BY id DESC LIMIT ?", (room, ctx.policy.owner_msgs_in_packet)).fetchall()
+        rows = ctx.inbox_ro.execute("SELECT id, ts, author, text FROM owner_messages WHERE room_id = ? AND id <= ? "
+                                    "ORDER BY id DESC LIMIT ?",
+                                    (room, owner_upto(ctx, room, due), ctx.policy.owner_msgs_in_packet)).fetchall()
     except sqlite3.Error:
         return []
     new = set(due.data.get("message_ids") or [])
@@ -617,16 +882,26 @@ def _meeting(due: TR.Due) -> dict:
             "data": {k: v for k, v in due.data.items() if k not in hide and k != "summary_ko"}}
 
 
+def _gate_env(ctx: RoundContext, room: str, strategy: Optional[str]) -> A.ActionEnv:
+    return A.ActionEnv(conn=ctx.agents_conn, room_id=room, strategy=strategy, round_id=None, meeting="",
+                       now_ms=ctx.now_ms)
+
+
 def _trials(ctx: RoundContext, room: str, strategy: Optional[str]) -> dict:
     hist = []
+    env = _gate_env(ctx, room, strategy)
     for t in R.trial_history(ctx.agents_conn, strategy=strategy, room_id=None if strategy else room,
                              limit=ctx.policy.trials_in_packet):
         res = t.get("result") or {}
         body = res.get("result") if isinstance(res.get("result"), dict) else {}
         gate = body.get("gate") if isinstance(body.get("gate"), dict) else None
-        hist.append({"trial_id": t["id"], "kind": t["kind"], "spec": t["spec"], "status": res.get("status"),
-                     "gate_pass": None if gate is None else gate.get("pass") is True,
-                     "gate_reasons": [str(x)[:160] for x in (gate or {}).get("reasons", [])][:4]})
+        row = {"trial_id": t["id"], "kind": t["kind"], "spec": t["spec"], "status": res.get("status"),
+               "gate_pass": None if gate is None else gate.get("pass") is True,
+               "gate_reasons": [str(x)[:160] for x in (gate or {}).get("reasons", [])][:4]}
+        if t["kind"] == "test" and res.get("status") == "passed":
+            # re-judged with the room's current number of tests (Bonferroni)
+            row["gate_pass_now"] = A.current_gate(env, t)[0].get("pass") is True
+        hist.append(row)
     return {"tests_so_far": R.trial_count(ctx.agents_conn, room_id=room, kinds=("test",)),
             "counts": R.trial_counts(ctx.agents_conn, strategy), "history": hist}
 
@@ -639,12 +914,16 @@ def owner_ok_required(ctx: RoundContext) -> bool:
     return start is None or ctx.now_ms - start < ctx.policy.owner_ok_days * DAY_MS
 
 
-def _passed_unproposed(ctx: RoundContext, strategy: str) -> list[int]:
+def _passed_unproposed(ctx: RoundContext, room: str, strategy: str) -> list[int]:
+    """Tests of this strategy that pass the gate NOW (re-judged with the room's current number of
+    tests) and were not proposed yet."""
     proposed = {p.get("trial_id") for p in R.list_proposals(ctx.agents_conn, strategy=strategy, limit=1000)
                 if p.get("status") != "blocked_cap"}
+    env = _gate_env(ctx, room, strategy)
     out = []
     for t in R.trial_history(ctx.agents_conn, strategy=strategy, kinds=("test",), limit=200):
-        if (t.get("result") or {}).get("status") == "passed" and t["id"] not in proposed:
+        if ((t.get("result") or {}).get("status") == "passed" and t["id"] not in proposed
+                and A.current_gate(env, t)[0].get("pass") is True):
             out.append(t["id"])
     return out
 
@@ -658,7 +937,7 @@ def _rules(ctx: RoundContext, room: str, strategy: Optional[str]) -> dict:
                            "strategy_cap": ctx.policy.copy_cap_per_strategy,
                            "total_active": R.active_proposals(ctx.agents_conn), "total_cap": ctx.policy.copy_cap_total},
             "owner_ok_required": owner_ok_required(ctx),
-            "passed_trials": _passed_unproposed(ctx, strategy) if strategy else [],
+            "passed_trials": _passed_unproposed(ctx, room, strategy) if strategy else [],
             "note": "행동 실행과 관문 판정은 코드가 합니다. 원본 계좌·규칙·합격 기준은 바꿀 수 없습니다"}
 
 
@@ -669,6 +948,7 @@ class _Round:
         self.room = due.room_id
         self.strategy = R.room_strategy(self.room)
         self.calls = 0
+        self.calls_ok = 0                       # calls the model answered
         self.tokens = 0
         self.this_round: dict = {}
         self.spoke: list[str] = []
@@ -685,23 +965,25 @@ class _Round:
     def system(self, text: str, data: Any = None) -> int:
         return self.post("code", "system", text, data)
 
-    def env(self) -> A.ActionEnv:
+    def env(self, proposer: str = "") -> A.ActionEnv:
         p = self.ctx.policy
         return A.ActionEnv(conn=self.ctx.agents_conn, room_id=self.room, strategy=self.strategy,
                            round_id=self.round_id, meeting=self.due.meeting, now_ms=self.ctx.clock(),
                            room_title=self.title, notifier=self.ctx.notifier, lab=self.ctx.lab,
                            owner_ok_required=owner_ok_required(self.ctx),
                            copy_cap_per_strategy=p.copy_cap_per_strategy, copy_cap_total=p.copy_cap_total,
-                           flag_max_per_day=p.flag_max_per_day)
+                           flag_max_per_day=p.flag_max_per_day, proposer=proposer)
 
     # -- one model turn
     def ask(self, role: str, turn: str, packet: dict) -> Optional[dict]:
         """Ask one role; returns the checked answer or None (unreadable / call cap). Budget and
-        usage-limit errors propagate (the round stops)."""
+        usage-limit errors propagate (the round stops); when no attempt got an answer at all
+        (outage, CLI error) RunnerUnavailable propagates (the round is transient)."""
         given = {**packet, "role": role, "turn": turn, "this_round": json.loads(json.dumps(self.this_round,
                                                                                             default=str))}
         check = CHECKS[turn]
         problems: list[str] = []
+        answered = False
         for _ in range(self.ctx.policy.retries + 1):
             if self.calls >= self.max_calls:
                 self.system(f"이번 회의의 AI 호출 한도({self.max_calls}회)에 닿아 {role_ko(role)} 차례를 건너뜁니다.",
@@ -710,14 +992,25 @@ class _Round:
             self.calls += 1
             try:
                 res = self.budget.call(role_model(role), system_prompt(role, turn), INSTRUCTION, given)
+            except UsageLimitReached:                   # our cap (BudgetExceeded) or the plan's limit:
+                self.calls -= 1                          # not an attempt of this meeting
+                raise
             except AgentCallError as exc:
                 problems = [f"호출 실패: {str(exc)[:200]}"]
                 continue
+            answered = True
+            self.calls_ok += 1
             self.tokens += tokens_of(res.meta)
-            clean, problems = check(res.data, given)
+            try:
+                clean, problems = check(res.data, given)
+            except (TypeError, ValueError, OverflowError, KeyError, AttributeError, IndexError,
+                    RecursionError) as exc:             # a checker bug is an unreadable answer, never a crash
+                clean, problems = None, [f"답 검사 실패: {type(exc).__name__}"]
             if clean is not None:
                 self._say(role, turn, clean, problems)
                 return clean
+        if not answered:
+            raise RunnerUnavailable(f"{role_ko(role)}: {problems[0] if problems else '호출 실패'}")
         self.system(f"{role_ko(role)}의 답을 읽을 수 없어 이번 차례는 건너뜁니다.", {"role": role, "problems": problems[:5]})
         return None
 
@@ -751,10 +1044,13 @@ class _Round:
         if self.ctx.inbox_ro is None:
             return 0
         k = f"owner_copied:{self.room}"
-        after = int(R.get_cursor(self.ctx.agents_conn, k, 0) or 0)
+        after = _int0(R.get_cursor(self.ctx.agents_conn, k, 0))
+        upto = owner_upto(self.ctx, self.room, self.due)
         n = 0
         last = after
         for m in R.pending_inbox(self.ctx.inbox_ro, after, self.room, limit=50):
+            if int(m["id"]) > upto:        # posted after this meeting was called: the next one answers it
+                break
             self.post("owner", "owner", m["text"], {"inbox_id": m["id"], "author": m["author"]},
                       speaker=f"두 분 ({m['author']})" if m.get("author") else "두 분", ts=m["ts"])
             last = max(last, int(m["id"]))
@@ -814,17 +1110,19 @@ def _strategy_round(rnd: _Round) -> tuple[str, dict]:
         raise RoundFailed("전담 에이전트의 첫 분석을 받지 못했습니다")
     t2 = rnd.ask("devils_advocate", "challenge", base)
     verdict = t2["verdict"] if t2 else None
-    expert, why = pick_expert(base, rnd.due)
-    t3 = rnd.ask(expert, "expert", {**base, "expert_reason": why}) if expert else None
     first = t1["proposal"]
-    early = (verdict == "agree" and (t3 is None or t3["verdict"] == "agree")
-             and first.get("action") in ("note", "no_action"))
+    expert, t3 = None, None
+    # early stop: the devil's advocate agrees with a note / no action -> no expert, no revision
+    early = verdict == "agree" and first.get("action") in ("note", "no_action")
     if early:
-        final = first
+        final, proposer = first, spec_role
     else:
+        expert, why = pick_expert(base, rnd.due)
+        t3 = rnd.ask(expert, "expert", {**base, "expert_reason": why}) if expert else None
         t4 = rnd.ask(spec_role, "revision", base)
         final = t4["proposal"] if t4 else {"action": "no_action", "reason": "최종안을 받지 못함"}
-    res = _execute(rnd, final)
+        proposer = spec_role
+    res = _execute(rnd, final, proposer)
     status = "no_action" if final.get("action") == "no_action" else "done"
     decision = {"action": final.get("action"), "final": final, "early_stop": early, "challenge": verdict,
                 "expert": expert if t3 else None, "result": A.summary_numbers(res)}
@@ -832,8 +1130,8 @@ def _strategy_round(rnd: _Round) -> tuple[str, dict]:
     return status, decision
 
 
-def _execute(rnd: _Round, final: dict) -> dict:
-    env = rnd.env()
+def _execute(rnd: _Round, final: dict, proposer: str = "") -> dict:
+    env = rnd.env(proposer)
     a = final.get("action")
     if a == "request_test":
         return _do_test(rnd, env, final)
@@ -850,12 +1148,10 @@ def _gate_view(res: dict) -> dict:
 
 def _validate(rnd: _Round, code_result: dict) -> Optional[dict]:
     t5 = rnd.ask("validator", "validator", {**rnd.base, "code_result": code_result})
-    gate_pass = (code_result.get("gate") or {}).get("pass") is True
-    if t5 is not None and t5["pass_gate"] != gate_pass:
+    if t5 is not None and not t5["matches_gate"]:
         rnd.system(f"검증관의 판단({'통과' if t5['pass_gate'] else '불통과'})이 코드 관문"
-                   f"({'통과' if gate_pass else '불통과'})과 달라, 코드 관문을 따릅니다.",
-                   {"validator": t5["pass_gate"], "gate": gate_pass})
-        t5 = {**t5, "matches_gate": False}
+                   f"({'통과' if t5['code_gate'] else '불통과'})과 달라, 코드 관문을 따릅니다.",
+                   {"validator": t5["pass_gate"], "gate": t5["code_gate"]})
     return t5
 
 
@@ -879,25 +1175,21 @@ def _do_copy(rnd: _Round, env: A.ActionEnv, trial_id: int, why: str, code_result
         if not validated:
             t = check["trial"] or {}
             body = ((t.get("result") or {}).get("result")) or {}
+            # the gate as code judges it NOW (the room's current number of tests), not as stored
             code_result = {"trial_id": trial_id, "spec": t.get("spec"), "status": (t.get("result") or {}).get("status"),
-                           "result": body.get("result"), "gate": body.get("gate"), "n_trials": body.get("n_trials"),
+                           "result": body.get("result"), "gate": check.get("gate"), "n_trials": check.get("n_trials"),
                            "reused": True}
-            env.post("code_result", "저장된 시험 결과 (코드):\n" + A.render_result_ko(t.get("spec") or {}, body.get("result"),
-                                                                             body.get("gate"), body.get("n_trials")),
-                     code_result)
+            env.post("code_result", "저장된 시험 결과 (코드, 판정은 이 방의 지금 시험 수로 다시 계산):\n"
+                     + A.render_result_ko(t.get("spec") or {}, body.get("result"), check.get("gate"),
+                                          check.get("n_trials")), code_result)
             validator = _validate(rnd, code_result)
         approver = rnd.ask("approver", "approver", {
             **rnd.base, "code_result": code_result, "validator": validator,
-            "copy_check": {"gate_pass": True, "cap": check.get("cap") or "", "owner_ok_required": env.owner_ok_required}})
+            "copy_check": {"gate_pass": True, "cap": check.get("cap") or "",
+                           "owner_ok_required": env.owner_ok_required}})
         if approver is not None and approver["approve"]:
-            again = A.copy_check(env, trial_id)          # code re-checks gate and cap after any approval
-            if again.get("ok"):
-                check = again
+            check = A.copy_check(env, trial_id)          # code re-checks gate and cap after any approval
     return A.propose_copy(env, trial_id, why, check, approver)
-
-
-def _meeting_numbers(due: TR.Due) -> str:
-    return due.data.get("summary_ko", "")
 
 
 def _strategy_summary(rnd: _Round, final: dict, res: dict, early: bool, verdict: Optional[str],
@@ -916,7 +1208,8 @@ def _strategy_summary(rnd: _Round, final: dict, res: dict, early: bool, verdict:
             L.append(f"- 시험 #{res.get('trial_id')}: {res.get('text', '')}")
         cp = res.get("copy")
         if cp:
-            L.append(f"- 복제 제안: {cp.get('text', '')}" + (f" (제안 #{cp['proposal_id']})" if cp.get("proposal_id") else ""))
+            L.append(f"- 복제 제안: {cp.get('text', '')}"
+                     + (f" (제안 #{cp['proposal_id']})" if cp.get("proposal_id") else ""))
     elif a == "propose_copy":
         L.append(f"- {res.get('text', '')}" + (f" (제안 #{res['proposal_id']})" if res.get("proposal_id") else ""))
     elif a in ("note", "hypothesis", "flag_owners"):
@@ -927,8 +1220,8 @@ def _strategy_summary(rnd: _Round, final: dict, res: dict, early: bool, verdict:
     if expert:
         L.append(f"- 전문가: {role_ko(expert)}")
     if early:
-        L.append("- 반론 검토관이 동의해 수정 차례는 생략했습니다 (AI 호출 절약)")
-    L.append(f"- 계기(코드 집계): {_meeting_numbers(rnd.due)}")
+        L.append("- 반론 검토관이 동의해 전문가와 수정 차례는 생략했습니다 (AI 호출 절약)")
+    L.append(f"- 계기(코드 집계): {rnd.due.data.get('summary_ko', '')}")
     L.append(f"- AI 호출 {rnd.calls}회")
     return "\n".join(L)
 
@@ -975,9 +1268,17 @@ def team_plan(due: TR.Due) -> list[tuple[str, str]]:
     return [lead]
 
 
-def _today_rounds(ctx: RoundContext) -> list[dict]:
+def meeting_day_start(ctx: RoundContext, due: Optional[TR.Due] = None) -> int:
+    """00:00 KST of the day a meeting is about: the day of its 08:00 / 22:00 slot (an evening
+    meeting may run until 02:00 the next day), else today."""
+    slot = (due.data.get("slot_start") if due is not None else None)
+    return R.kst_day_start_ms(int(slot) if isinstance(slot, (int, float)) else ctx.now_ms)
+
+
+def _today_rounds(ctx: RoundContext, since_ms: Optional[int] = None) -> list[dict]:
     out = []
-    for r in R.rounds_of(ctx.agents_conn, since_ms=R.kst_day_start_ms(ctx.now_ms), limit=100):
+    since = R.kst_day_start_ms(ctx.now_ms) if since_ms is None else since_ms
+    for r in R.rounds_of(ctx.agents_conn, since_ms=since, limit=100):
         d = r.get("decision") if isinstance(r.get("decision"), dict) else {}
         out.append({"round_id": r["round_id"], "room_id": r["room_id"], "trigger": r["trigger"], "status": r["status"],
                     "action": d.get("action"), "summary_ko": str(d.get("summary_ko") or "")[:300]})
@@ -1001,7 +1302,7 @@ def _team_packet(rnd: _Round, role: str, board: dict) -> dict:
     if "error" in board:
         pk["board"]["error"] = board["error"]
     if role == "team_lead":
-        pk["today_rounds"] = _today_rounds(ctx)
+        pk["today_rounds"] = _today_rounds(ctx, meeting_day_start(ctx, rnd.due))
         pk["waiting_for_owners"] = len(R.list_proposals(ctx.agents_conn, status="awaiting_owner"))
         if rnd.due.trigger == "evening":
             pk["review_meeting"] = _review_meeting(ctx)
@@ -1028,19 +1329,25 @@ def _team_round(rnd: _Round) -> tuple[str, dict]:
         raise RoundFailed("회의에서 아무도 답하지 못했습니다")
     extra: dict = {}
     if lead and lead.get("flag_owners"):
-        extra["flag"] = A.flag_owners(rnd.env(), lead["flag_owners"])
+        extra["flag"] = A.flag_owners(rnd.env("team_lead"), lead["flag_owners"])
     if rnd.due.trigger == "evening" and room == "team:lead":
         if lead is None:
             raise RoundFailed("팀장 요약을 받지 못해 저녁 보고를 보내지 못했습니다")
-        text = compose_evening(ctx, board, lead)
-        try:
-            ctx.notifier.send(INFO, text)
-            extra["telegram"] = True
-            rnd.post("code", "action", "📨 저녁 요약을 텔레그램으로 보냈습니다.", {"action": "telegram", "level": INFO,
-                                                                     "text": text})
-        except Exception as exc:  # delivery must not break the round
+        text = compose_evening(ctx, board, lead, rnd.due)
+        sent_key = f"telegram:evening:{rnd.due.data.get('slot') or R.kst_day(ctx.now_ms)}"
+        if R.get_cursor(ctx.agents_conn, sent_key):          # a retried round never sends it twice
             extra["telegram"] = False
-            rnd.system(f"텔레그램 전송 실패: {type(exc).__name__}")
+            rnd.system("오늘 저녁 요약은 이미 텔레그램으로 보냈습니다.")
+        else:
+            R.set_cursor(ctx.agents_conn, sent_key, str(ctx.clock()))
+            try:
+                ctx.notifier.send(INFO, text)
+                extra["telegram"] = True
+                rnd.post("code", "action", "📨 저녁 요약을 텔레그램으로 보냈습니다.",
+                         {"action": "telegram", "level": INFO, "text": text})
+            except Exception as exc:  # delivery must not break the round
+                extra["telegram"] = False
+                rnd.system(f"텔레그램 전송 실패: {type(exc).__name__}")
     decision = {"action": "team_meeting", "speakers": rnd.spoke, **{k: v for k, v in extra.items() if k != "flag"},
                 "flagged": bool(extra.get("flag", {}).get("sent"))}
     decision["summary_ko"] = _team_summary(rnd, board, extra)
@@ -1064,9 +1371,11 @@ def _team_summary(rnd: _Round, board: dict, extra: dict) -> str:
     return "\n".join(L)
 
 
-def compose_evening(ctx: RoundContext, board: dict, lead: dict) -> str:
-    """Evening Telegram: the lead's three lines (AI) + numbers written by code."""
-    day = R.kst_day(ctx.now_ms)
+def compose_evening(ctx: RoundContext, board: dict, lead: dict, due: Optional[TR.Due] = None) -> str:
+    """Evening Telegram: the lead's three lines (AI) + numbers written by code. The day is the
+    meeting's own (22:00 slot), also when the meeting runs after midnight."""
+    day0 = meeting_day_start(ctx, due)
+    day = R.kst_day(day0)
     L = [f"📋 에이전트 저녁 점검 ({day})", "", "[팀장 요약]"]
     L += [f"{i + 1}. {s}" for i, s in enumerate(lead["summary"][:3])]
     L += ["", "[숫자: 코드 계산]"]
@@ -1074,19 +1383,23 @@ def compose_evening(ctx: RoundContext, board: dict, lead: dict) -> str:
     if today:
         L.append(f"- 최근 24시간 끝난 거래 {today.get('trades', 0)}건, 손익 {float(today.get('net_pnl') or 0):+.2f} USDT, "
                  f"이긴 거래 {today.get('wins', 0)}건, 파산 계좌 누적 {today.get('busts_total', 0)}개")
-    rounds = [r for r in _today_rounds(ctx) if r["status"] in ("done", "no_action")]
+    rounds = [r for r in _today_rounds(ctx, day0) if r["status"] in ("done", "no_action")]
     acts: dict[str, int] = {}
     for r in rounds:
         a = r.get("action") or "?"
         acts[a] = acts.get(a, 0) + 1
     names = {**A.ACTION_KO, "team_meeting": "팀 회의"}
+    late = R.kst_day(ctx.now_ms) != day                   # the 22:00 meeting ran after midnight
+    since = f"{day} 0시부터 " if late else "오늘 "
     if rounds:
-        L.append(f"- 오늘 회의 {len(rounds)}번: " + ", ".join(f"{names.get(a, a)} {n}" for a, n in acts.items()))
+        L.append(f"- {since}회의 {len(rounds)}번: " + ", ".join(f"{names.get(a, a)} {n}" for a, n in acts.items()))
     waiting = len(R.list_proposals(ctx.agents_conn, status="awaiting_owner"))
     if waiting:
         L.append(f"- 두 분 확인을 기다리는 복제 제안 {waiting}건 (대시보드 '에이전트 방')")
-    use = R.usage_today(ctx.agents_conn, ctx.now_ms)
-    L.append(f"- 오늘 AI 호출 {use['calls']}회")
+    calls = R.usage_today(ctx.agents_conn, ctx.now_ms)["calls"]
+    if late:
+        calls += R.usage_today(ctx.agents_conn, day0)["calls"]
+    L.append(f"- {since}AI 호출 {calls}회")
     if lead.get("human_actions"):
         L += ["", "[두 분이 할 일]"] + [f"- {x}" for x in lead["human_actions"]]
     text = "\n".join(L)
@@ -1094,18 +1407,64 @@ def compose_evening(ctx: RoundContext, board: dict, lead: dict) -> str:
 
 
 # ---------------------------------------------------------------- run one round
+RETRY_TEXT = "한 번 더 시도합니다."
+GIVE_UP_TEXT = "같은 계기로는 다시 열지 않고, 새 일이 생기면 다시 모입니다."
+TRANSIENT_TEXT = "AI를 부르지 못해(연결 또는 프로그램 오류) 회의를 멈췄습니다. 잠시 뒤 같은 내용으로 다시 엽니다."
+
+
+def is_strategy_room(room_id: str) -> bool:
+    return room_id.startswith("strat:") and R.room_strategy(room_id) in STRATEGY_KO
+
+
+def is_critical(due: TR.Due) -> bool:
+    counts = due.data.get("counts") if isinstance(due.data.get("counts"), dict) else {}
+    return any(counts.get(k) for k in CRITICAL_INCIDENTS)
+
+
+def round_budget(due: TR.Due, ctx: RoundContext) -> ClassBudget:
+    """The AI budget a meeting for ``due`` runs under: its class cap (loss_cluster rounds leave
+    ``bust_reserve_calls`` for busts; non-critical incidents leave ``critical_reserve_calls`` for
+    liquidations), the total, the 7-day cap, and pacing for loss clusters and weekly reviews."""
+    p = ctx.policy
+    cls = due.data.get("class") or TR.TRIGGER_CLASS.get(due.trigger, "scheduled")
+    cap_calls, cap_tokens = p.budgets.get(cls, (0, 0))
+    if due.trigger == "loss_cluster":
+        cap_calls = max(0, cap_calls - p.bust_reserve_calls)
+    if due.trigger == "incident" and not is_critical(due):
+        cap_calls = max(0, cap_calls - p.critical_reserve_calls)
+    return ClassBudget(ctx.runner, ctx.agents_conn, cls, cap_calls, cap_tokens, p.total_budget[0], p.total_budget[1],
+                       ctx.clock, budgets=p.budgets, week=p.week_budget, paced=due.trigger in p.paced_triggers,
+                       pace_lead_hours=p.pace_lead_hours)
+
+
+def round_min_calls(due: TR.Due, policy: RoomsPolicy) -> int:
+    """Fewest calls a meeting can end with: strategy room T1 + T2 (early stop); team room its plan."""
+    if is_strategy_room(due.room_id):
+        return 2
+    return max(1, min(len(team_plan(due)), policy.max_calls_team_round))
+
+
+def _will_retry(conn: sqlite3.Connection, due: TR.Due, round_id: int, policy: RoomsPolicy) -> bool:
+    """Will find_due give this evidence one more try after this round fails?"""
+    prior = 0
+    for tdata, decision in conn.execute("SELECT trigger_data, decision FROM rounds WHERE room_id = ? AND trigger = ? "
+                                        "AND status = 'failed' AND round_id != ?",
+                                        (due.room_id, due.trigger, round_id)).fetchall():
+        if TR._json(tdata).get("key") == due.data.get("key") and TR._json(decision).get("transient") is not True:
+            prior += 1
+    return prior + 1 < policy.triggers.max_attempts
+
+
 def run_round(due: TR.Due, ctx: RoundContext) -> dict:
     """Run one meeting for ``due``; always ends the round row. Returns
     {round_id, room_id, trigger, status, calls, tokens, action, stopped, error}."""
     conn = ctx.agents_conn
     if R.get_room(conn, due.room_id) is None:
         R.ensure_rooms(conn, ts=ctx.now_ms)
-    round_id = TR.begin_round(conn, due, ctx.now_ms)
-    cls = due.data.get("class") or TR.TRIGGER_CLASS.get(due.trigger, "scheduled")
-    cap_calls, cap_tokens = ctx.policy.budgets.get(cls, (0, 0))
-    budget = ClassBudget(ctx.runner, conn, cls, cap_calls, cap_tokens, ctx.policy.total_budget[0],
-                         ctx.policy.total_budget[1], ctx.clock)
-    is_strategy = due.room_id.startswith("strat:") and R.room_strategy(due.room_id) in STRATEGY_KO
+    round_id = TR.begin_round(conn, due, ctx.clock())    # a tick may run several long rounds
+    budget = round_budget(due, ctx)
+    cls = budget.pipeline
+    is_strategy = is_strategy_room(due.room_id)
     rnd = _Round(due, ctx, round_id, budget,
                  ctx.policy.max_calls_strategy_round if is_strategy else ctx.policy.max_calls_team_round)
     status, decision, stopped, error = "failed", {}, None, None
@@ -1117,20 +1476,37 @@ def run_round(due: TR.Due, ctx: RoundContext) -> dict:
         rnd.post("code", "decision", decision.get("summary_ko", ""),
                  {k: v for k, v in decision.items() if k != "summary_ko"})
     except (BudgetExceeded, UsageLimitReached) as exc:
-        stopped = ("budget_total" if isinstance(exc, TotalBudgetExceeded)
-                   else "budget_class" if isinstance(exc, BudgetExceeded) else "usage_limit")
+        stopped = stop_kind(exc)
         status = "stopped_budget"
-        decision = {"action": None, "stopped": stopped, "detail": str(exc)[:300], "summary_ko": LIMIT_TEXT}
+        decision = {"action": None, "stopped": stopped, "blocks": stop_blocks(stopped, cls),
+                    "detail": str(exc)[:300], "summary_ko": LIMIT_TEXT}
         _safe_system(rnd, LIMIT_TEXT, {"reason": stopped})
+    except RunnerUnavailable as exc:                     # the evidence is fine; the runner is not
+        status, error, stopped = "failed", str(exc)[:300], "runner_error"
+        decision = {"action": None, "error": error, "transient": True, "calls_ok": rnd.calls_ok,
+                    "summary_ko": TRANSIENT_TEXT}
+        _safe_system(rnd, TRANSIENT_TEXT, {"error": error, "transient": True})
     except RoundFailed as exc:
         status, error = "failed", str(exc)
-        decision = {"action": None, "error": error, "summary_ko": f"회의를 마치지 못했습니다: {error}"}
-        _safe_system(rnd, f"회의를 마치지 못했습니다: {error}. 한 번 더 시도합니다.", {"error": error})
-    except Exception as exc:  # never leave a round 'running'; the trigger fires again once
+        again = _will_retry(conn, due, round_id, ctx.policy)
+        decision = {"action": None, "error": error, "calls_ok": rnd.calls_ok,
+                    "summary_ko": f"회의를 마치지 못했습니다: {error}"}
+        _safe_system(rnd, f"회의를 마치지 못했습니다: {error}. {RETRY_TEXT if again else GIVE_UP_TEXT}",
+                     {"error": error, "retry": again})
+    except Exception as exc:  # never leave a round 'running'
         status, error = "failed", f"{type(exc).__name__}: {str(exc)[:300]}"
-        decision = {"action": None, "error": error, "summary_ko": "회의 중 오류가 나서 멈췄습니다"}
         traceback.print_exc(file=sys.stderr)
-        _safe_system(rnd, "회의 중 오류가 나서 멈췄습니다. 한 번 더 시도합니다.", {"error": error})
+        if isinstance(exc, OSError):              # e.g. the claude binary is missing: stop the tick, retry later
+            stopped = "runner_error"
+            decision = {"action": None, "error": error, "transient": True, "calls_ok": rnd.calls_ok,
+                        "summary_ko": TRANSIENT_TEXT}
+            _safe_system(rnd, TRANSIENT_TEXT, {"error": error, "transient": True})
+        else:
+            again = _will_retry(conn, due, round_id, ctx.policy)
+            decision = {"action": None, "error": error, "calls_ok": rnd.calls_ok,
+                        "summary_ko": "회의 중 오류가 나서 멈췄습니다"}
+            _safe_system(rnd, f"회의 중 오류가 나서 멈췄습니다. {RETRY_TEXT if again else GIVE_UP_TEXT}",
+                         {"error": error, "retry": again})
     TR.finish_round(conn, round_id, status, ctx.clock(), decision, rnd.calls, rnd.tokens)
     return {"round_id": round_id, "room_id": due.room_id, "trigger": due.trigger, "class": cls, "status": status,
             "calls": rnd.calls, "tokens": rnd.tokens, "action": decision.get("action"), "stopped": stopped,
@@ -1140,15 +1516,29 @@ def run_round(due: TR.Due, ctx: RoundContext) -> dict:
 def _safe_system(rnd: _Round, text: str, data: Any = None) -> None:
     try:
         rnd.system(text, data)
-    except sqlite3.Error:
+    except (sqlite3.Error, ValueError):
         pass
 
 
 # ---------------------------------------------------------------- owner approvals (inbox.db -> proposals)
+APPROVALS_BASE = "inbox:approvals_base"   # inbox.db approvals up to this id predate this agents3.db
+
 def apply_approvals(conn: sqlite3.Connection, inbox_ro: Optional[sqlite3.Connection], now_ms: int) -> list[dict]:
     """Apply the owners' approve/reject clicks. The code gate and the copy cap are never
     overturned: a blocked proposal cannot be approved (rooms_db refuses it)."""
-    after = int(R.get_cursor(conn, "inbox:approvals", 0) or 0)
+    if R.get_cursor(conn, APPROVALS_BASE) is None:
+        # first tick of this agents3.db: clicks already in inbox.db were about the proposals of an
+        # earlier agents3.db (ids restart at 1 in a new one); they are never applied here
+        base = 0
+        if inbox_ro is not None:
+            try:
+                base = int(inbox_ro.execute("SELECT COALESCE(MAX(id), 0) FROM approvals").fetchone()[0])
+            except sqlite3.DatabaseError:
+                base = 0
+        R.set_cursor(conn, APPROVALS_BASE, str(base))
+        if _int0(R.get_cursor(conn, "inbox:approvals", 0)) < base:
+            R.set_cursor(conn, "inbox:approvals", str(base))
+    after = _int0(R.get_cursor(conn, "inbox:approvals", 0))
     done = []
     for a in R.pending_approvals(inbox_ro, after):
         p = R.get_proposal(conn, int(a["proposal_id"]))
@@ -1180,10 +1570,38 @@ def apply_approvals(conn: sqlite3.Connection, inbox_ro: Optional[sqlite3.Connect
 
 
 # ---------------------------------------------------------------- tick
+def reconcile_inbox_cursors(conn: sqlite3.Connection, inbox_ro: Optional[sqlite3.Connection]) -> dict:
+    """inbox.db replaced by an older copy (restore) or recreated: its ids restart below the cursors
+    kept here, and new posts would be ignored until they passed them. Pull such cursors back to
+    the inbox's current highest id (what is there now counts as seen). Returns what changed."""
+    if inbox_ro is None:
+        return {}
+    top = {}
+    for table in ("owner_messages", "approvals"):
+        try:
+            top[table] = int(inbox_ro.execute(f"SELECT COALESCE(MAX(id), 0) FROM {table}").fetchone()[0])
+        except sqlite3.DatabaseError:
+            return {}                      # an inbox without our tables: nothing to compare yet
+    changed = {}
+    for k, v in R.all_cursors(conn, "owner").items():
+        if (k.startswith("owner:") or k.startswith("owner_copied:")) and _int0(v) > top["owner_messages"]:
+            changed[k] = top["owner_messages"]
+    for k in ("inbox:approvals", APPROVALS_BASE):
+        if _int0(R.get_cursor(conn, k, 0)) > top["approvals"]:
+            changed[k] = top["approvals"]
+    for k, v in changed.items():
+        R.set_cursor(conn, k, str(v), commit=False)
+    if changed:
+        conn.commit()
+        print(f"note: inbox.db ids are below the saved cursors (replaced?); reset {sorted(changed)}", file=sys.stderr)
+    return changed
+
+
 @contextlib.contextmanager
 def tick_lock(agents_db: str) -> Iterator[bool]:
-    """Exclusive lock file next to agents3.db; yields False when another tick holds it."""
-    path = os.path.abspath(agents_db) + ".lock"
+    """Exclusive lock file next to agents3.db (real path, so a symlinked spelling shares it); yields
+    False when another tick holds it. Run manual ticks as the service user (sudo -u paperbot)."""
+    path = os.path.realpath(agents_db) + ".lock"
     fh = open(path, "a+")
     try:
         try:
@@ -1202,10 +1620,15 @@ def tick_lock(agents_db: str) -> Iterator[bool]:
 def tick(paper_db: Optional[str], daily_db: Optional[str], agents_db: str, inbox_db: Optional[str], runner: Runner,
          *, lab: Any = None, notifier: Optional[Notifier] = None, policy: Optional[RoomsPolicy] = None,
          now_ms: Optional[int] = None, clock_ms: Optional[Callable[[], int]] = None,
-         cards_path: Optional[str] = None) -> dict:
-    """One pass of the agents process (the only writer of agents3.db)."""
+         cards_path: Optional[str] = None, preflight: Optional[Callable[[], tuple]] = None) -> dict:
+    """One pass of the agents process (the only writer of agents3.db). Meetings run one at a time;
+    after each one ``find_due`` is asked again (code only), so a new incident goes first. A meeting
+    starts only when its AI budget can carry it (``ClassBudget.headroom``, pacing included); what
+    cannot start now is simply found again on a later tick. ``preflight`` (the real runner's login
+    check) runs once, before the first meeting."""
     policy = policy or RoomsPolicy()
     now = int(time.time() * 1000) if now_ms is None else int(now_ms)
+    t0 = time.monotonic()
     with tick_lock(agents_db) as got:
         if not got:
             return {"skipped": "another tick is running", "rounds": [], "due": []}
@@ -1213,30 +1636,75 @@ def tick(paper_db: Optional[str], daily_db: Optional[str], agents_db: str, inbox
         paper_ro, daily_ro, inbox_ro = R.open_ro(paper_db), R.open_ro(daily_db), R.open_ro(inbox_db)
         try:
             R.ensure_rooms(conn, ts=now)
+            caps = budget_caps(policy)
+            if R.get_cursor(conn, POLICY_CURSOR) != caps:   # the dashboard shows the caps in force
+                R.set_cursor(conn, POLICY_CURSOR, caps)
             TR.expire_stale_rounds(conn, now, policy.triggers)
+            reconcile_inbox_cursors(conn, inbox_ro)
             approvals = apply_approvals(conn, inbox_ro, now)
-            dues = TR.find_due(paper_ro, daily_ro, conn, inbox_ro, now, policy.triggers)
             ctx = RoundContext(agents_conn=conn, paper_ro=paper_ro, daily_ro=daily_ro, inbox_ro=inbox_ro, runner=runner,
                                lab=lab, now_ms=now, policy=policy, notifier=notifier or NullNotifier(),
                                clock_ms=clock_ms, cards_path=cards_path)
             results: list[dict] = []
-            spent: set = set()
-            for d in dues[:policy.max_rounds_per_tick]:
-                if d.data.get("class") in spent:
-                    continue
-                res = run_round(d, ctx)
-                results.append(res)
-                if res["stopped"] in ("usage_limit", "budget_total"):
+            first: Optional[list] = None
+            met: list[str] = []
+            tick_calls = 0
+            checked = preflight is None
+            while len(results) < policy.max_rounds_per_tick:
+                if results and time.monotonic() - t0 > policy.tick_wall_s:
+                    break                                   # a long tick: the rest waits for the next one
+                dues = TR.find_due(paper_ro, daily_ro, conn, inbox_ro, now, policy.triggers,
+                                   defer_triggers=deferred_triggers(ctx), skip_rooms=met)
+                if first is None:
+                    first = dues
+                pick = None
+                for d in dues:
+                    need = round_min_calls(d, policy)
+                    if round_budget(d, ctx).headroom() < need:
+                        continue                            # deferred: the budget cannot carry it now
+                    if d.trigger != "incident" and results and tick_calls + need > policy.max_calls_per_tick:
+                        continue
+                    pick = d
                     break
-                if res["stopped"] == "budget_class":
-                    spent.add(res["class"])
-            return {"skipped": "", "approvals": approvals, "due": [(d.room_id, d.trigger) for d in dues],
+                if pick is None:
+                    break
+                if not checked:
+                    ok, why = preflight()
+                    checked = True
+                    if not ok:
+                        return {"skipped": f"preflight: {why}", "approvals": approvals,
+                                "due": [(d.room_id, d.trigger) for d in first], "rounds": results}
+                res = run_round(pick, ctx)
+                results.append(res)
+                met.append(pick.room_id)
+                tick_calls += res["calls"]
+                if res["stopped"] in ("usage_limit", "budget_total", "budget_week", "runner_error"):
+                    break
+            return {"skipped": "", "approvals": approvals, "due": [(d.room_id, d.trigger) for d in first or []],
                     "rounds": results}
         finally:
             for c in (paper_ro, daily_ro, inbox_ro):
                 if c is not None:
                     c.close()
             conn.close()
+
+
+# (trigger, room, minimum calls) of a typical meeting per trigger, for the coarse check below
+_PROBE = {"incident": ("team:ops", 1), "owner": ("team:risk", 1), "loss_cluster": ("strat:", 2), "bust": ("strat:", 2),
+          "checkpoint": ("team:lead", 1), "morning": ("team:market", 1), "evening": ("team:lead", 1),
+          "weekly": ("strat:", 2)}
+
+
+def deferred_triggers(ctx: RoundContext) -> list[str]:
+    """Triggers whose AI budget cannot start a meeting now (class cap, total, reserve, 7-day cap,
+    pacing). find_due leaves them out, so a paced loss cluster never hides the 08:00 meeting.
+    Exact per-meeting checks (its own minimum, the critical reserve) follow in tick."""
+    out = []
+    for trig, (room, need) in _PROBE.items():
+        data = {"class": TR.TRIGGER_CLASS[trig], "counts": {"critical": 1}}
+        if round_budget(TR.Due(room, trig, 0, data, trig), ctx).headroom() < need:
+            out.append(trig)
+    return out
 
 
 # ---------------------------------------------------------------- dry run
@@ -1303,6 +1771,9 @@ def _copy_db(src: str, dst: str) -> None:
         d.close()
 
 
+AUTH_PREFLIGHT = auth_preflight          # tests replace it (no subprocess)
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m paperbot.agents.rooms", description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -1318,25 +1789,25 @@ def main(argv: Optional[list[str]] = None) -> int:
     t.add_argument("--no-send", action="store_true", help="print Telegram messages instead of sending")
     t.add_argument("--claude-bin", default="claude")
     t.add_argument("--timeout", type=float, default=900.0)
-    t.add_argument("--owner-ok", choices=("auto", "yes", "no"), default="auto",
-                   help="approved copies wait for the owners (auto: first 60 days of the run)")
+    t.add_argument("--owner-ok", choices=tuple(OWNER_OK), default=None,
+                   help="approved copies wait for the owners (auto: first 60 days of the run; "
+                        "default: env AGENTS_OWNER_OK, else auto)")
     t.add_argument("--budget", action="append", default=[], metavar="CLASS=CALLS[:TOKENS]",
-                   help="daily AI budget of a trigger class (incident, owner, loss, scheduled, weekly, total)")
+                   help="daily AI budget of a trigger class (incident, owner, loss, scheduled, weekly, total); "
+                        "overrides env AGENTS_BUDGET")
     args = ap.parse_args(argv)
 
-    policy = RoomsPolicy(owner_ok_required={"auto": None, "yes": True, "no": False}[args.owner_ok])
-    for spec in args.budget:
-        k, _, v = spec.partition("=")
-        calls, _, toks = v.partition(":")
-        cur = policy.total_budget if k == "total" else policy.budgets.get(k, DEFAULT_BUDGETS.get(k, (0, 0)))
-        new = (int(calls), int(toks) if toks else cur[1])
-        if k == "total":
-            policy.total_budget = new
-        else:
-            policy.budgets[k] = new
+    try:
+        policy = policy_from_env()                 # /etc/paperbot/agents.env (AGENTS_*), then the flags
+        apply_budget_specs(policy, args.budget)
+    except ValueError as exc:
+        ap.error(str(exc))
+    if args.owner_ok is not None:
+        policy.owner_ok_required = OWNER_OK[args.owner_ok]
     lab = _load_lab(args.lab_dir)
     agents_db = args.agents_db
     tmp = None
+    preflight: Optional[Callable[[], tuple]] = None
     if args.dry_run:
         tmp = tempfile.mkdtemp(prefix="rooms-dry-")
         agents_db = os.path.join(tmp, "agents3.db")
@@ -1351,6 +1822,10 @@ def main(argv: Optional[list[str]] = None) -> int:
         from .runner import ClaudeCodeRunner
         runner = ClaudeCodeRunner(args.claude_bin, args.timeout)
         notifier = ConsoleNotifier() if args.no_send else _notifier()
+        claude_bin = args.claude_bin
+
+        def preflight() -> tuple:            # subscription login, never an API key (no model call)
+            return AUTH_PREFLIGHT(claude_bin)
     try:
         before = 0
         if args.dry_run and os.path.exists(agents_db):
@@ -1358,17 +1833,21 @@ def main(argv: Optional[list[str]] = None) -> int:
             before = R.last_message_id(ro)
             ro.close()
         out = tick(args.paper_db, args.daily_db, agents_db, args.inbox_db, runner, lab=lab, notifier=notifier,
-                   policy=policy)
+                   policy=policy, preflight=preflight)
+        if out["skipped"].startswith("preflight"):
+            print(f"refusing to run the rooms: {out['skipped']}", file=sys.stderr)
+            return 2
         if out["skipped"]:
             print(f"skipped: {out['skipped']}")
             return 0
         for r in out["rounds"]:
             print(f"{r['room_id']} {r['trigger']}: {r['status']} ({r['calls']} calls) action={r['action']}"
-                  + (f" stopped={r['stopped']}" if r["stopped"] else "") + (f" error={r['error']}" if r["error"] else ""))
+                  + (f" stopped={r['stopped']}" if r["stopped"] else "")
+                  + (f" error={r['error']}" if r["error"] else ""))
         if not out["rounds"]:
             print("nothing due")
-        if args.dry_run:
-            ro = R.open_ro(agents_db)
+        ro = R.open_ro(agents_db) if args.dry_run else None
+        if ro is not None:
             for m in ro.execute("SELECT room_id, role, kind, text FROM messages WHERE id > ? ORDER BY id", (before,)):
                 print(f"  [{m[0]}] {R.role_name(m[1])} <{m[2]}> {m[3][:200]}")
             ro.close()

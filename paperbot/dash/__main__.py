@@ -1,4 +1,4 @@
-"""python -m paperbot.dash [--db paper3.db] [--host 127.0.0.1] [--port 8080]
+"""python -m paperbot.dash [--db paper3.db] [--agents-db agents3.db] [--inbox-db inbox.db] [--host 127.0.0.1] [--port 8080]
 python -m paperbot.dash hash            # prints a DASH_PASSWORD_HASH for a password you type"""
 
 import argparse
@@ -11,7 +11,9 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("cmd", nargs="?", default="serve", choices=["serve", "hash"])
     ap.add_argument("--db", default="paper3.db")
-    ap.add_argument("--agents-db", default=None, help="agents3.db written by the v3 agent pipelines")
+    ap.add_argument("--agents-db", default=None, help="agents3.db written by the agents tick (read-only here)")
+    ap.add_argument("--inbox-db", default=None,
+                    help="inbox.db: owner posts and approve/reject clicks (the dashboard is its only writer)")
     ap.add_argument("--daily-db", default=None, help="daily3.db written by the nightly check (stop what-ifs)")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8080)
@@ -35,7 +37,7 @@ def main(argv=None) -> int:
         return 1
     import uvicorn
     uvicorn.run(create_app(args.db, pw_hash, secret.encode(), agents_db=args.agents_db,
-                           daily_db=args.daily_db), host=args.host, port=args.port,
+                           daily_db=args.daily_db, inbox_db=args.inbox_db), host=args.host, port=args.port,
                 log_level="warning", proxy_headers=False)
     return 0
 

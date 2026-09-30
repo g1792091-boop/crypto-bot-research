@@ -34,11 +34,19 @@ with difference <= 0) / 2,001).
 
 ``gate(result, n_trials_so_far)`` passes only if ALL of:
   (a) period-1 improvement with one-sided p < 0.05 / max(1, n_trials_so_far)  (Bonferroni over
-      the room's number of tests, stated in the reasons),
-  (b) period 2 improves too, with p < 0.05,
-  (c) period 3 improves too when it has data (both arms >= 30 trades),
+      the room's number of tests, stated in the reasons; actions.copy_check re-judges a stored
+      test with the room's CURRENT count when it is proposed),
+  (b) period 2 improves too, with p < 0.05 and >= 100 variant trades,
+  (c) period 3 improves too when it has data (baseline >= 30 trades there); a variant that keeps
+      fewer than 30 of them there is "not replicated", not "no data",
   (d) the variant's own mean ROE per trade > 0 in periods 1 and 2,
-  (e) >= 300 variant trades in period 1.
+  (e) >= 300 variant trades in period 1,
+  (f) stop_atr only: the improvement is not just the leverage change. ROE on margin is
+      leverage x price return, and size_position picks a lower leverage for a wider stop, so a
+      losing strategy "loses less" with any wider stop. The mean return per unit of notional
+      (ROE / leverage) must improve too, in periods 1 and 2.
+Per arm the table also shows mean leverage, return per notional and P&L on equity (ROE x the
+tier's margin share: 50x/40x 40%, 30x 30%, 20x 20%).
 
 LabData reads ``sig_<tf>_<COIN>.npz`` files (keys ts [int64 ns, bar open, UTC], o, h, l, c, atr,
 s__<STRATEGY>) as written by research/paper_rules/rules_bt.py ``signals`` or
@@ -74,6 +82,7 @@ BASE_LADDER = LadderSpec()
 N_BOOT = 2000
 ALPHA = 0.05
 MIN_TRADES_P1 = 300
+MIN_TRADES_P2 = 100
 MIN_TRADES_P3 = 30
 
 # (id, start, end, cache). Signal bar time in [start, end).
@@ -416,11 +425,11 @@ def normalize_spec(spec: Any, strategy: Optional[str] = None) -> dict:
     if not isinstance(spec, dict):
         raise SpecError("시험 요청은 JSON 객체여야 합니다.")
     t = spec.get("template")
-    if t not in TEMPLATES:
+    if not isinstance(t, str) or t not in TEMPLATES:
         raise SpecError(f"없는 시험 종류입니다: {str(t)[:40]!r}. 가능한 것: {', '.join(TEMPLATES)}.")
     s = spec.get("strategy")
     if strategy is not None:
-        if s not in (None, "", strategy):
+        if s not in (None, "", strategy):     # a tuple: == only, never a hash (a list value is fine)
             raise SpecError("이 방의 전략만 시험할 수 있습니다.")
         s = strategy
     if not isinstance(s, str) or not _STRAT_RE.match(s):
@@ -446,7 +455,7 @@ def normalize_spec(spec: Any, strategy: Optional[str] = None) -> dict:
         else:
             try:
                 x = float(v) if not isinstance(v, bool) else float("nan")
-            except (TypeError, ValueError):
+            except (TypeError, ValueError, OverflowError):
                 x = float("nan")
             hit = [a for a in allowed if abs(x - a) < 1e-9]
             if not hit:
@@ -507,14 +516,34 @@ def block_bootstrap(week_b: np.ndarray, roe_b: np.ndarray, week_v: np.ndarray, r
     return {"diff": diff, "p": (1 + not_better) / (n_boot + 1), "weeks": int(W)}
 
 
-def _arm(roe: np.ndarray, reason: np.ndarray, held: np.ndarray) -> dict:
+def margin_frac(lev: np.ndarray) -> np.ndarray:
+    """Share of equity put up as margin at each leverage (the paper v3 tiers of rules_bt.SETTINGS:
+    50x/40x 40%, 30x 30%, 20x 20%)."""
+    P = profiles_module()
+    by_lev = {int(x): float(t.margin_frac) for t in P.RB.SETTINGS.tiers for x in t.leverages}
+    lev = np.asarray(lev, float)
+    out = np.full(len(lev), np.nan)
+    for x, f in by_lev.items():
+        out[np.isclose(lev, x)] = f
+    return out
+
+
+def _arm(roe: np.ndarray, reason: np.ndarray, held: np.ndarray, lev: Optional[np.ndarray] = None) -> dict:
     n = int(len(roe))
     if not n:
         return {"trades": 0, "mean_roe": None, "win_rate": None, "stop_share": None, "lock_share": None,
-                "liq_share": None, "median_hold_bars": None}
-    return {"trades": n, "mean_roe": float(np.mean(roe)), "win_rate": float(np.mean(roe > 0)),
-            "stop_share": float(np.mean(reason == 0)), "lock_share": float(np.mean(reason == 1)),
-            "liq_share": float(np.mean(reason == 2)), "median_hold_bars": float(np.median(held))}
+                "liq_share": None, "median_hold_bars": None, "mean_lev": None, "mean_ret_notional": None,
+                "mean_pnl_equity": None}
+    out = {"trades": n, "mean_roe": float(np.mean(roe)), "win_rate": float(np.mean(roe > 0)),
+           "stop_share": float(np.mean(reason == 0)), "lock_share": float(np.mean(reason == 1)),
+           "liq_share": float(np.mean(reason == 2)), "median_hold_bars": float(np.median(held))}
+    if lev is not None and len(lev) == n:
+        lev = np.asarray(lev, float)
+        mf = margin_frac(lev)
+        out["mean_lev"] = float(np.mean(lev))
+        out["mean_ret_notional"] = float(np.mean(roe / lev))          # price return per unit of notional
+        out["mean_pnl_equity"] = float(np.nanmean(roe * mf)) if np.isfinite(mf).any() else None
+    return out
 
 
 def _seed(spec: dict, period: str) -> int:
@@ -560,24 +589,28 @@ def _collect(spec: dict, data: LabData, tf: str, variant: Optional[dict]) -> dic
                 a = acc[pid]
                 m = d & (lab == k)
                 a["coins"].append(coin)
-                a["b"].append((b["ts"][base["idx"][m]], base["roe"][m], base["reason"][m], base["held"][m]))
+                a["b"].append((b["ts"][base["idx"][m]], base["roe"][m], base["reason"][m], base["held"][m],
+                               base["lev"][m]))
                 if variant is None:
                     continue
                 if tagged is not None:
                     mv = m & ~tagged
                     a["skipped"] += int((m & tagged).sum())
-                    a["v"].append((b["ts"][base["idx"][mv]], base["roe"][mv], base["reason"][mv], base["held"][mv]))
+                    a["v"].append((b["ts"][base["idx"][mv]], base["roe"][mv], base["reason"][mv], base["held"][mv],
+                                   base["lev"][mv]))
                 else:
                     labv = np.searchsorted(starts, b["ts"][var["idx"]], side="right")
                     mv = var["done"] & (labv == k)
-                    a["v"].append((b["ts"][var["idx"][mv]], var["roe"][mv], var["reason"][mv], var["held"][mv]))
+                    a["v"].append((b["ts"][var["idx"][mv]], var["roe"][mv], var["reason"][mv], var["held"][mv],
+                                   var["lev"][mv]))
     return acc
 
 
 def _cat(parts: list) -> tuple:
+    """(ts, roe, reason, held, lev) of all coins."""
     if not parts:
-        return (np.zeros(0, np.int64), np.zeros(0), np.zeros(0), np.zeros(0))
-    return tuple(np.concatenate([p[j] for p in parts]) for j in range(4))
+        return (np.zeros(0, np.int64), np.zeros(0), np.zeros(0), np.zeros(0), np.zeros(0))
+    return tuple(np.concatenate([p[j] for p in parts]) for j in range(5))
 
 
 def _period_table(spec: dict, acc: dict, with_variant: bool) -> dict:
@@ -589,14 +622,19 @@ def _period_table(spec: dict, acc: dict, with_variant: bool) -> dict:
             row["why"] = "자료 없음" if src == "main" else "2021년 이전 자료가 없습니다"
             out[pid] = row
             continue
-        tb, rb, qb, hb = _cat(a["b"])
-        row["baseline"] = _arm(rb, qb, hb)
+        tb, rb, qb, hb, lb = _cat(a["b"])
+        row["baseline"] = _arm(rb, qb, hb, lb)
         if with_variant:
-            tv, rv, qv, hv = _cat(a["v"])
-            row["variant"] = _arm(rv, qv, hv)
+            tv, rv, qv, hv, lv = _cat(a["v"])
+            row["variant"] = _arm(rv, qv, hv, lv)
             if spec["template"] == "skip_tag":
                 row["skipped"] = a["skipped"]
             row.update(block_bootstrap(week_of(tb), rb, week_of(tv), rv, N_BOOT, _seed(spec, pid)))
+            if spec["template"] == "stop_atr":
+                # the same test on return per unit of notional (ROE / leverage): a wider stop gets a
+                # lower leverage tier, which by itself shrinks a loss on margin
+                nb = block_bootstrap(week_of(tb), rb / lb, week_of(tv), rv / lv, N_BOOT, _seed(spec, pid))
+                row["diff_notional"], row["p_notional"] = nb["diff"], nb["p"]
         out[pid] = row
     return out
 
@@ -688,17 +726,19 @@ def gate(result: dict, n_trials_so_far: int) -> dict:
     reasons.append(f"① 1기간 개선 {_pp(d1)}, p={_pv(pv1)} — 기준 p < {alpha1:.4g} "
                    f"(0.05 ÷ 이 방의 시험 {n}번, 여러 번 시험한 만큼 기준을 엄격하게): "
                    f"{'통과' if checks['a'] else '미달'}")
-    checks["b"] = d2 is not None and pv2 is not None and d2 > 0 and pv2 < ALPHA
-    reasons.append(f"② 2기간도 같은 방향 {_pp(d2)}, p={_pv(pv2)} — 기준 p < 0.05: "
-                   f"{'통과' if checks['b'] else '미달'}")
-    nb3, nv3 = num(p3, "baseline", "trades") or 0, num(p3, "variant", "trades") or 0
-    if p3.get("available") and nb3 >= MIN_TRADES_P3 and nv3 >= MIN_TRADES_P3:
+    nv2 = int(num(p2, "variant", "trades") or 0)
+    checks["b"] = d2 is not None and pv2 is not None and d2 > 0 and pv2 < ALPHA and nv2 >= MIN_TRADES_P2
+    reasons.append(f"② 2기간도 같은 방향 {_pp(d2)}, p={_pv(pv2)}, 바꾼 규칙 거래 {nv2:,}건 — 기준 p < 0.05, "
+                   f"거래 {MIN_TRADES_P2}건 이상: {'통과' if checks['b'] else '미달'}")
+    nb3, nv3 = int(num(p3, "baseline", "trades") or 0), int(num(p3, "variant", "trades") or 0)
+    if p3.get("available") and nb3 >= MIN_TRADES_P3:
         d3 = num(p3, "diff")
-        checks["c"] = d3 is not None and d3 > 0
-        reasons.append(f"③ 3기간(2020~2021년 7월)도 같은 방향 {_pp(d3)}: {'통과' if checks['c'] else '미달'}")
+        checks["c"] = nv3 >= MIN_TRADES_P3 and d3 is not None and d3 > 0
+        few = f", 바꾼 규칙 거래 {nv3:,}건뿐(기준 {MIN_TRADES_P3}건)" if nv3 < MIN_TRADES_P3 else ""
+        reasons.append(f"③ 3기간(2020~2021년 7월)도 같은 방향 {_pp(d3)}{few}: {'통과' if checks['c'] else '미달'}")
     else:
         checks["c"] = True
-        why = "자료 없음" if not p3.get("available") else f"거래 {MIN_TRADES_P3}건 미만"
+        why = "자료 없음" if not p3.get("available") else f"지금 규칙 거래 {MIN_TRADES_P3}건 미만"
         reasons.append(f"③ 3기간(2020~2021년 7월): {why}이라 판단에서 뺌")
     m1, m2 = num(p1, "variant", "mean_roe"), num(p2, "variant", "mean_roe")
     checks["d"] = m1 is not None and m2 is not None and m1 > 0 and m2 > 0
@@ -707,7 +747,15 @@ def gate(result: dict, n_trials_so_far: int) -> dict:
     nv1 = int(num(p1, "variant", "trades") or 0)
     checks["e"] = nv1 >= MIN_TRADES_P1
     reasons.append(f"⑤ 1기간 거래 수 {nv1:,}건 — 기준 {MIN_TRADES_P1}건 이상: {'통과' if checks['e'] else '미달'}")
-    ok = all(checks[k] for k in "abcde")
+    if result.get("template") == "stop_atr":
+        n1, n2 = num(p1, "diff_notional"), num(p2, "diff_notional")
+        checks["f"] = n1 is not None and n2 is not None and n1 > 0 and n2 > 0
+        reasons.append(f"⑥ 레버리지 차이를 뺀 가격 수익률도 나아졌는지(거래당, 명목금액 기준): 1기간 "
+                       f"{_pp(n1)}, 2기간 {_pp(n2)} — 둘 다 0보다 커야 함 (넓은 손절은 레버리지가 낮아져 "
+                       f"손실만 작아 보일 수 있음): {'통과' if checks['f'] else '미달'}")
+    else:
+        checks["f"] = True
+    ok = all(checks[k] for k in "abcdef")
     return {**base, "pass": bool(ok), "checks": {k: bool(v) for k, v in checks.items()}, "reasons": reasons}
 
 
@@ -742,6 +790,10 @@ def summary_ko(result: dict) -> str:
         lines.append(f"{lab}: 지금 규칙 거래당 평균 {_pct(bl['mean_roe'], True)} ({bl['trades']:,}건) → "
                      f"바꾼 규칙 {_pct(vr['mean_roe'], True)} ({vr['trades']:,}건){extra}, "
                      f"차이 {_pp(row.get('diff'))}, p={_pv(row.get('p'))}")
+        if result.get("template") == "stop_atr" and bl.get("mean_lev") and vr.get("mean_lev"):
+            lines.append(f"  평균 레버리지 {bl['mean_lev']:.1f}배 → {vr['mean_lev']:.1f}배, 레버리지를 뺀 거래당 가격 "
+                         f"수익률 {_pct(bl.get('mean_ret_notional'), True)} → {_pct(vr.get('mean_ret_notional'), True)} "
+                         f"(차이 {_pp(row.get('diff_notional'))}, p={_pv(row.get('p_notional'))})")
     rows = [r for r in result["periods"].values() if r.get("available")]
     if result.get("template") == "skip_tag" and rows and not any(r.get("skipped") for r in rows):
         lines.append("이 태그가 붙은 신호가 5년 동안 한 번도 없어 바뀌는 것이 없습니다.")

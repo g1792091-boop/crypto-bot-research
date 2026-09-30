@@ -18,7 +18,9 @@ the fixed lists, becomes ``no_action`` (the room is told why).
 
 Copy accounts are NOT created here. An 'approved' proposal only waits for the future
 copy-account feature of the live runner (paper3.db has one writer: the live runner).
-All texts for the owners are Korean and written by code from stored numbers.
+All texts for the owners are Korean and written by code from stored numbers. A line posted
+as role 'code' never quotes model text (the model's words stay in its own message), so a
+model cannot write something that looks like a code result.
 """
 
 from __future__ import annotations
@@ -98,21 +100,38 @@ def test_rules() -> dict:
 
 # ---------------------------------------------------------------- validation (pure)
 def _text(v: Any, n: int) -> str:
-    return v.strip()[:n] if isinstance(v, str) else ""
+    return R.clean_text(v.strip()[:n]) if isinstance(v, str) else ""
 
 
 def _same(a: Any, b: Any) -> bool:
     if isinstance(a, bool) or isinstance(b, bool):
         return a is b
     if isinstance(a, (int, float)) and isinstance(b, (int, float)):
-        return math.isclose(float(a), float(b), rel_tol=0, abs_tol=1e-9)
+        try:
+            return math.isclose(float(a), float(b), rel_tol=0, abs_tol=1e-9)
+        except OverflowError:                       # a huge int from a model answer
+            return False
     return a == b
+
+
+MAX_ID = 2 ** 63                                    # SQLite INTEGER
+
+
+def _row_id(v: Any) -> Optional[int]:
+    """A real positive row number from a model answer, or None (NaN, Infinity, 1e26, "1", true...)."""
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, float):
+        if not math.isfinite(v) or not v.is_integer():
+            return None
+        v = int(v)
+    return v if isinstance(v, int) and 0 < v < MAX_ID else None
 
 
 def _fallback_spec(test: dict, strategy: str) -> tuple[Optional[dict], str]:
     tmpl = templates()
     name = test.get("template")
-    if name not in tmpl:
+    if not isinstance(name, str) or name not in tmpl:
         return None, f"없는 시험 종류: {str(name)[:40]!r}"
     if test.get("strategy") not in (None, "", strategy):
         return None, "이 방의 전략만 시험할 수 있음"
@@ -142,7 +161,7 @@ def _test_spec(test: Any, strategy: Optional[str]) -> tuple[Optional[dict], str]
         return _fallback_spec(test, strategy)
     try:
         return dict(norm(test, strategy)), ""
-    except ValueError as exc:
+    except (ValueError, TypeError, OverflowError) as exc:
         return None, str(exc)[:200]
 
 
@@ -176,13 +195,14 @@ def validate(prop: Any, *, strategy: Optional[str] = None,
         spec, why = _test_spec(prop.get("test"), strategy)
         if spec is None:
             return bad(why)
-        return {"action": "request_test", "test": spec, "propose_copy_if_pass": prop.get("propose_copy_if_pass") is True,
+        return {"action": "request_test", "test": spec,
+                "propose_copy_if_pass": prop.get("propose_copy_if_pass") is True,
                 "why": _text(prop.get("why"), MAX_REASON)}, []
     if a == "propose_copy":
-        tid = prop.get("trial_id")
-        if isinstance(tid, bool) or not isinstance(tid, (int, float)) or int(tid) != tid or tid <= 0:
+        tid = _row_id(prop.get("trial_id"))
+        if tid is None:
             return bad("trial_id가 올바른 번호가 아님")
-        return {"action": "propose_copy", "trial_id": int(tid), "why": _text(prop.get("why"), MAX_REASON)}, []
+        return {"action": "propose_copy", "trial_id": tid, "why": _text(prop.get("why"), MAX_REASON)}, []
     if a == "flag_owners":
         lvl = prop.get("level", INFO)
         if lvl not in FLAG_LEVELS:
@@ -208,9 +228,14 @@ class ActionEnv:
     copy_cap_per_strategy: int = 1
     copy_cap_total: int = 10
     flag_max_per_day: int = 3
+    proposer: str = ""                  # role id whose proposal is being carried out (named, never quoted)
 
     def post(self, kind: str, text: str, data: Any = None, role: str = "code") -> int:
-        return R.post(self.conn, self.room_id, self.round_id, self.meeting, role, None, kind, text, data, ts=self.now_ms)
+        return R.post(self.conn, self.room_id, self.round_id, self.meeting, role, None, kind, text, data,
+                      ts=self.now_ms)
+
+    def by(self) -> str:
+        return f" (제안: {R.role_name(self.proposer)})" if self.proposer else ""
 
 
 def _done(action: str, ok: bool, text: str, **extra) -> dict:
@@ -219,7 +244,8 @@ def _done(action: str, ok: bool, text: str, **extra) -> dict:
 
 def note(env: ActionEnv, a: dict) -> dict:
     nid = R.add_note(env.conn, env.room_id, env.strategy, a["text"], env.round_id, ts=env.now_ms)
-    env.post("action", f"📝 메모를 남겼습니다 (메모 #{nid}): {a['text']}", {"action": "note", "note_id": nid})
+    env.post("action", f"📝 메모 #{nid}을 방 메모에 남겼습니다{env.by()}.",
+             {"action": "note", "note_id": nid, "text": a["text"], "proposer": env.proposer})
     return _done("note", True, "메모를 남김", note_id=nid)
 
 
@@ -231,8 +257,8 @@ def hypothesis(env: ActionEnv, a: dict) -> dict:
                  {"action": "hypothesis", "trial_id": old["id"], "duplicate": True})
         return _done("hypothesis", True, "이미 있는 가설", trial_id=old["id"], duplicate=True)
     tid = R.add_trial(env.conn, env.room_id, env.strategy, "hypothesis", spec, env.round_id, ts=env.now_ms)
-    env.post("action", f"🧪 가설 장부에 적었습니다 (#{tid}, 아직 시험 전): {a['text']}",
-             {"action": "hypothesis", "trial_id": tid})
+    env.post("action", f"🧪 가설 #{tid}을 가설 장부에 적었습니다 (아직 시험 전){env.by()}.",
+             {"action": "hypothesis", "trial_id": tid, "text": a["text"], "proposer": env.proposer})
     return _done("hypothesis", True, "가설을 장부에 기록", trial_id=tid)
 
 
@@ -251,8 +277,9 @@ def flag_owners(env: ActionEnv, a: dict) -> dict:
     except Exception as exc:  # delivery must not break the round
         env.post("system", f"알림 전송 실패: {type(exc).__name__}", {"action": "flag_owners", "sent": False})
         return _done("flag_owners", False, "전송 실패", sent=False)
-    env.post("action", f"📣 두 분께 알림을 보냈습니다 ({a['level']}): {a['text']}",
-             {"action": "flag_owners", "sent": True, "level": a["level"], "n_today": used + 1})
+    env.post("action", f"📣 두 분께 텔레그램 알림({a['level']})을 보냈습니다{env.by()}. 오늘 {used + 1}번째.",
+             {"action": "flag_owners", "sent": True, "level": a["level"], "n_today": used + 1, "text": a["text"],
+              "proposer": env.proposer})
     return _done("flag_owners", True, "알림 보냄", sent=True, level=a["level"])
 
 
@@ -343,7 +370,8 @@ def request_test(env: ActionEnv, a: dict) -> dict:
                      result=None, gate=no_gate, n_trials=n_trials)
     try:
         result = lab.run_test(spec, env.lab, n_trials=n_trials, strategy=env.strategy)
-        gate = lab.gate(result, n_trials) if result.get("ok") else (result.get("gate") or no_gate)
+        # the lab's own gate is never trusted: code re-runs it (a failed run has no gate at all)
+        gate = lab.gate(result, n_trials) if isinstance(result, dict) and result.get("ok") else no_gate
     except Exception as exc:  # recorded; asking for the same test later re-runs it under the same number
         result = {"ok": False, "status": "error", "error": f"{type(exc).__name__}: {str(exc)[:300]}"}
         gate = no_gate
@@ -367,25 +395,52 @@ def request_test(env: ActionEnv, a: dict) -> dict:
 
 
 # ---------------------------------------------------------------- copy proposals
+def current_gate(env: ActionEnv, t: dict) -> tuple[dict, int]:
+    """The code gate of a stored test, re-computed now with the room's CURRENT number of tests
+    (Bonferroni over every test the room has run, also those after this one). Fails closed: a
+    trial that did not end 'passed', or whose stored result cannot be re-judged, does not pass.
+    Returns (gate, n_trials used)."""
+    st, body = _stored(t)
+    n_now = max(R.trial_count(env.conn, room_id=env.room_id, kinds=("test",)), _row_id(body.get("n_trials")) or 1)
+    result = body.get("result")
+    judge = getattr(_lab, "gate", None) if _lab is not None else None
+    if st != "passed":
+        stored = body.get("gate") if isinstance(body.get("gate"), dict) else {}
+        return {**stored, "pass": False, "reasons": [str(r) for r in stored.get("reasons") or []]
+                or [f"시험 상태가 '{st}'라 통과가 아님"]}, n_now
+    if judge is None or not isinstance(result, dict) or result.get("ok") is not True:
+        return {"pass": False, "n_trials": n_now,
+                "reasons": ["저장된 시험 결과를 지금 기준으로 다시 판정할 수 없어 통과로 보지 않습니다."]}, n_now
+    try:
+        g = judge(result, n_now)
+    except Exception as exc:  # a broken stored result never passes
+        return {"pass": False, "n_trials": n_now, "reasons": [f"다시 판정하지 못함: {type(exc).__name__}"]}, n_now
+    g = dict(g) if isinstance(g, dict) else {}
+    return {**g, "pass": g.get("pass") is True, "reasons": [str(r) for r in g.get("reasons") or []],
+            "n_trials": n_now}, n_now
+
+
 def copy_check(env: ActionEnv, trial_id: int) -> dict:
     """What code knows before any approver speaks: does the trial exist for this room's
-    strategy, did its test pass the gate, is a copy slot free, was it proposed before."""
+    strategy, does its test pass the gate NOW (re-judged with the room's current test count),
+    is a copy slot free, was it proposed before."""
     t = R.get_trial(env.conn, trial_id)
     if t is None or t.get("kind") != "test" or t.get("strategy") != env.strategy:
         return {"ok": False, "why": "이 방의 시험 번호가 아님", "trial": None, "gate": None}
     st, body = _stored(t)
-    gate = body.get("gate") if isinstance(body.get("gate"), dict) else {"pass": False, "reasons": ["시험 결과 없음"]}
+    gate, n_now = current_gate(env, t)
     prev = [p for p in R.list_proposals(env.conn, strategy=env.strategy, limit=1000) if p.get("trial_id") == trial_id]
-    if any(p["status"] != "blocked_cap" for p in prev):
-        return {"ok": False, "why": f"이미 제안된 시험 (제안 #{prev[0]['id']}, {prev[0]['status']})", "trial": t,
+    live = [p for p in prev if p["status"] != "blocked_cap"]
+    if live:
+        return {"ok": False, "why": f"이미 제안된 시험 (제안 #{live[0]['id']}, {live[0]['status']})", "trial": t,
                 "gate": gate, "duplicate": True}
     cap = ""
     if R.active_proposals(env.conn, env.strategy) >= env.copy_cap_per_strategy:
         cap = f"이 매매법은 이미 진행 중인 제안이 {env.copy_cap_per_strategy}개 있음"
     elif R.active_proposals(env.conn) >= env.copy_cap_total:
         cap = f"전체 진행 중인 제안이 한도 {env.copy_cap_total}개에 도달"
-    return {"ok": True, "trial": t, "gate": gate, "gate_pass": gate.get("pass") is True, "result_status": st,
-            "cap": cap, "n_trials": body.get("n_trials")}
+    return {"ok": True, "trial": t, "gate": gate, "gate_pass": st == "passed" and gate.get("pass") is True,
+            "result_status": st, "cap": cap, "n_trials": n_now, "n_trials_at_test": body.get("n_trials")}
 
 
 def propose_copy(env: ActionEnv, trial_id: int, why: str, check: dict, approver: Optional[dict]) -> dict:
@@ -422,8 +477,9 @@ def propose_copy(env: ActionEnv, trial_id: int, why: str, check: dict, approver:
            "rejected": "승인관이 거부했습니다",
            "awaiting_owner": "승인관이 승인했고, 두 분의 확인을 기다립니다 (대시보드에서 승인/거절)",
            "approved": "승인되었습니다"}[status]
-    env.post("action", f"📄 복제 계좌 제안 #{pid} (시험 #{trial_id}): {msg}. 승인된 제안도 지금은 계좌를 만들지 않고, "
-             "live 실행기의 복제 계좌 기능이 생길 때까지 기다립니다.",
+    waits = (" 승인된 제안도 지금은 계좌를 만들지 않고, live 실행기의 복제 계좌 기능이 생길 때까지 기다립니다."
+             if status in ("awaiting_owner", "approved") else "")
+    env.post("action", f"📄 복제 계좌 제안 #{pid} (시험 #{trial_id}): {msg}.{waits}",
              {"action": "propose_copy", "proposal_id": pid, "trial_id": trial_id, "status": status})
     return _done("propose_copy", status in ("awaiting_owner", "approved"), msg, created=True, proposal_id=pid,
                  status=status, trial_id=trial_id)

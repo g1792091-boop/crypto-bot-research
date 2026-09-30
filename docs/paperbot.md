@@ -37,7 +37,8 @@ paperbot/whatif.py     가정 실험실 (청산 규칙만 바꿔 다시 계산)
 paperbot/sessions.py   요일·시간대 표 (KST)
 paperbot/analyze.py    위 세 가지를 묶은 보고서 명령
 paperbot/metrics.py    표준 성과 지표
-paperbot/agents/       에이전트 저녁 점검 (docs/agents-evening.md)
+paperbot/agents/       에이전트 저녁 점검 (docs/agents-evening.md), 에이전트 방: 직원들이 스스로 토론하고
+                       결정 (rooms.py, triggers.py, actions.py, labtests.py; docs/agent-rooms.md)
 paperbot/sweepsig.py   백테스트 세션의 잠긴 신호 코드 불러오기 (해시 검사 후)
 paperbot/archive.py    시장 데이터 보관 (market.db: 5분봉·마크가·펀딩)
 paperbot/recorder.py   ② 신호 기록기 (docs/signal-recording.md)

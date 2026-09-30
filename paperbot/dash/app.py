@@ -1,8 +1,14 @@
 """Paper v3 dashboard: read-only web view of paper3.db (docs/dashboard.md).
 
-    DASH_PASSWORD_HASH=... DASH_SECRET=... python -m paperbot.dash --db paper3.db --port 8080
+    DASH_PASSWORD_HASH=... DASH_SECRET=... python -m paperbot.dash --db paper3.db --port 8080 \
+        --agents-db agents3.db --inbox-db inbox.db
 
 - Opens the store read-only; the live runner stays the only writer.
+- Agent rooms ('에이전트 방'): the staff discuss, decide and resolve by themselves (the agents tick
+  writes agents3.db; opened read-only here). The owners may join in and approve/reject copy
+  proposals: those two things are written to inbox.db, whose only writer is this dashboard. The
+  agents tick reads inbox.db read-only on its next turn. Nothing here touches paper3.db or
+  agents3.db for writing, calls a model, or places an order.
 - Login: one password (PBKDF2 hash in DASH_PASSWORD_HASH, make one with
   ``python -m paperbot.dash hash``) and a signed session cookie (DASH_SECRET).
 - Live updates: /api/stream (server-sent events) sends changed accounts, new
@@ -16,14 +22,16 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import contextlib
 import hashlib
 import hmac
 import json
 import os
 import sqlite3
 import time
+import urllib.parse
 import urllib.request
-from typing import Optional
+from typing import Iterator, Optional
 
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
@@ -323,10 +331,396 @@ def agent_feed(agents_db: Optional[str], limit: int = 200) -> list[dict]:
         c.close()
 
 
+# ---------------------------------------------------------------- agent rooms
+SAY_MAX_CHARS = 1_000        # one owner post (rooms_db.MAX_OWNER_TEXT)
+SAY_PER_HOUR = 20            # owner posts per hour, both owners together (counted in inbox.db)
+AUTHOR_MAX = 20
+BODY_MAX = 16_384            # bytes of one owner write (a 1,000-character post is at most ~4 KB of JSON)
+BUDGET_CLASSES = ("incident", "owner", "loss", "scheduled", "weekly")
+CLASS_KO = {"incident": "긴급 점검", "owner": "두 분 메시지", "loss": "손실·파산 복기", "scheduled": "정기 회의",
+            "weekly": "주간 검토"}
+WEEKDAY_KO = "월화수목금토일"
+
+
+def budget_caps(env_text: Optional[str] = None) -> dict:
+    """Daily AI caps per trigger class {class: {calls, tokens}} plus 'total' (per KST day) and 'week'
+    (rolling 7 KST days) until the agents tick has run once (after that the dashboard shows the caps
+    the tick stored in agents3.db): the rooms engine's defaults, overridden by env
+    AGENTS_BUDGET="incident=15:400000,owner=20,total=80:2000000,week=420" (same CLASS=CALLS[:TOKENS]
+    syntax as the tick's --budget). Empty when neither is available."""
+    caps: dict = {}
+    try:
+        from ..agents.rooms import DEFAULT_BUDGETS, DEFAULT_TOTAL, DEFAULT_WEEK
+        caps = {k: {"calls": int(v[0]), "tokens": int(v[1])} for k, v in DEFAULT_BUDGETS.items()}
+        caps["total"] = {"calls": int(DEFAULT_TOTAL[0]), "tokens": int(DEFAULT_TOTAL[1])}
+        caps["week"] = {"calls": int(DEFAULT_WEEK[0]), "tokens": int(DEFAULT_WEEK[1])}
+    except Exception:  # the engine is optional for the dashboard
+        caps = {}
+    for part in (env_text or "").replace(";", ",").split(","):
+        k, _, v = part.strip().partition("=")
+        calls, _, toks = v.strip().partition(":")
+        if not k or not calls.isdigit():
+            continue
+        caps[k] = {"calls": int(calls), "tokens": int(toks) if toks.isdigit() else caps.get(k, {}).get("tokens")}
+    return caps
+
+
+def _trigger_defaults() -> dict:
+    """Numbers for the 'when does this room meet' line (from triggers.TriggerPolicy when importable)."""
+    d = {"loss_min_count": 3, "loss_min_gap_ms": 4 * 3_600_000, "weekly_min_trades": 30,
+         "checkpoint_every_days": 30, "morning_hour_kst": 8, "evening_hour_kst": 22}
+    try:
+        from ..agents.triggers import TriggerPolicy
+        p = TriggerPolicy()
+        d = {k: getattr(p, k, v) for k, v in d.items()}
+    except Exception:
+        pass
+    return d
+
+
+def room_schedule_ko(room_id: str) -> str:
+    """Plain Korean: when the staff of this room meet by themselves (no one has to type)."""
+    from ..agents.roster3 import STRATEGY_KO
+    d = _trigger_defaults()
+    if room_id.startswith("strat:"):
+        names = list(STRATEGY_KO)
+        s = room_id[len("strat:"):]
+        wd = WEEKDAY_KO[names.index(s) % 7] if s in names else "정해진"
+        gap_h = int(d["loss_min_gap_ms"] // 3_600_000)
+        return (f"새 손실이 {d['loss_min_count']}건 쌓이면 (같은 방은 {gap_h}시간 간격), 계좌가 파산하면, "
+                f"거래가 {d['weekly_min_trades']}건 더 쌓인 뒤 {wd}요일 주간 검토 때 스스로 회의를 엽니다.")
+    m, e, c = d["morning_hour_kst"], d["evening_hour_kst"], d["checkpoint_every_days"]
+    return {
+        "team:market": f"매일 {m:02d}:00 아침 회의: 장세 → 파생·쏠림 → 전략가 → 반론 → 팀장 요약.",
+        "team:review": f"매일 {e:02d}:00 저녁 점검: 손익 복기 → 가정 분석 → 리스크 책임자.",
+        "team:lead": f"매일 {e:02d}:00 팀장 3줄 요약(텔레그램 발송), {c}·{2 * c}·{3 * c}일째 중간 점검.",
+        "team:ops": "사고가 나면 바로: 강제청산, 밤 점검 불일치, 데이터 끊김, 신호 지연.",
+        "team:risk": "정해진 회의는 없고, 두 분이 남긴 메시지에 답합니다.",
+    }.get(room_id, "")
+
+
+def same_origin(req: Request) -> bool:
+    """Write endpoints: refuse a request whose Origin header is present and is not this site, scheme
+    included (http://host is not https://host), and any browser request marked cross-site. The
+    dashboard is served directly (Tailscale / SSH tunnel); behind a proxy that changes the scheme
+    or the Host header every owner write would be refused (run uvicorn with --proxy-headers then)."""
+    origin = req.headers.get("origin")
+    if origin is not None:
+        try:
+            o = urllib.parse.urlsplit(origin)
+        except ValueError:
+            return False
+        if not o.netloc or o.netloc.lower() != req.headers.get("host", "").lower():
+            return False
+        if (o.scheme or "").lower() != req.url.scheme.lower():
+            return False
+    return req.headers.get("sec-fetch-site", "") != "cross-site"
+
+
+def owner_names(env_text: Optional[str] = None) -> tuple[str, ...]:
+    """Names an owner post or decision may be signed with (env DASH_OWNERS="이름1,이름2"). Anything
+    else is dropped: the author is not a free field (it could imitate '코드(자동 계산)')."""
+    return tuple(n.strip()[:AUTHOR_MAX] for n in (env_text or "").split(",") if n.strip())
+
+
+class Rooms:
+    """Agent rooms for the dashboard. agents3.db (the agents tick writes it) is only ever opened
+    read-only here; inbox.db (owner posts and approve/reject clicks) is written only here."""
+
+    def __init__(self, agents_db: Optional[str], inbox_db: Optional[str], budget_env: Optional[str] = None,
+                 say_per_hour: int = SAY_PER_HOUR, owners: tuple = ()):
+        from ..agents import rooms_db
+        self.R = rooms_db
+        self.agents_db = agents_db
+        self.inbox_db = inbox_db
+        self.budget_env = budget_env
+        self.say_per_hour = say_per_hour
+        self.owners = tuple(owners)
+        self._caps: Optional[dict] = None
+        self.specs = {s["room_id"]: s for s in rooms_db.room_specs()}
+        from ..agents.roster3 import ROLES, SPECIALISTS
+        self.roles = {r[0]: {"id": r[0], "name": r[1], "team": r[2], "duty": r[5]} for r in ROLES + SPECIALISTS}
+
+    # -- connections
+    @contextlib.contextmanager
+    def ro(self, path: Optional[str]) -> Iterator[Optional[sqlite3.Connection]]:
+        try:
+            c = self.R.open_ro(path)
+        except sqlite3.Error:
+            c = None
+        try:
+            yield c
+        finally:
+            if c is not None:
+                c.close()
+
+    def known(self, room_id: str) -> bool:
+        return room_id in self.specs
+
+    def _cursor(self, a: Optional[sqlite3.Connection], k: str) -> int:
+        if a is None:
+            return 0
+        try:
+            r = a.execute("SELECT v FROM cursors WHERE k = ?", (k,)).fetchone()
+            return int(json.loads(r[0])) if r and r[0] is not None else 0
+        except (sqlite3.Error, TypeError, ValueError):
+            return 0
+
+    # -- read side
+    def overview(self, now_ms: Optional[int] = None) -> dict:
+        with self.ro(self.agents_db) as a:
+            rows = {r["room_id"]: r for r in self.R.rooms_overview(a, now_ms)}
+            ready = a is not None
+        out = []
+        for rid, spec in self.specs.items():
+            r = {"room_id": rid, "kind": spec["kind"], "strategy": spec["strategy"], "title": spec["title"],
+                 "members": spec["members"], "last_id": 0, "last_ts": None, "last_kind": None, "last_role": None,
+                 "last_speaker": None, "last_text": "", "rounds_today": 0, "open_proposals": 0, "running": False}
+            r.update({k: v for k, v in rows.pop(rid, {}).items() if v is not None or k not in r})
+            r["schedule_ko"] = room_schedule_ko(rid)
+            out.append(r)
+        out += list(rows.values())          # rooms the tick knows and this code does not (newer roster)
+        if any(r.get("open_proposals") for r in out):
+            # a proposal the owners already decided (not yet applied by the tick) no longer waits for them
+            waiting: dict = {}
+            for p in self.proposals(status="awaiting_owner", limit=1000):
+                if p["effective_status"] == "awaiting_owner":
+                    waiting[p["room_id"]] = waiting.get(p["room_id"], 0) + 1
+            for r in out:
+                r["open_proposals"] = waiting.get(r["room_id"], 0)
+        return {"ready": ready, "now": int(time.time() * 1000) if now_ms is None else now_ms,
+                "max_id": max((int(r.get("last_id") or 0) for r in out), default=0), "rooms": out}
+
+    def room_info(self, room_id: str) -> dict:
+        spec = dict(self.specs[room_id])
+        with self.ro(self.agents_db) as a:
+            got = self.R.get_room(a, room_id)
+        if got:
+            spec.update({k: got[k] for k in ("title", "members") if got.get(k)})
+        spec["members_info"] = [self.roles.get(m, {"id": m, "name": self.R.role_name(m), "team": "", "duty": ""})
+                                for m in spec["members"]]
+        spec["schedule_ko"] = room_schedule_ko(room_id)
+        return spec
+
+    def pending_owner(self, a: Optional[sqlite3.Connection], room_id: str) -> list[dict]:
+        """Owner posts in inbox.db the staff have not seen yet (not copied into the room)."""
+        with self.ro(self.inbox_db) as ib:
+            if ib is None:
+                return []
+            after = self._cursor(a, f"owner_copied:{room_id}")
+            got = self.R.pending_inbox(ib, after, room_id, limit=200)
+        if not got:
+            return []
+        copied: set = set()
+        if a is not None:
+            try:
+                copied = {int(r[0]) for r in a.execute(
+                    "SELECT json_extract(data, '$.inbox_id') FROM messages WHERE room_id = ? AND kind = 'owner' "
+                    "AND json_extract(data, '$.inbox_id') IS NOT NULL", (room_id,))}
+            except (sqlite3.Error, TypeError, ValueError):
+                copied = set()
+        return [{**m, "pending": True} for m in got if int(m["id"]) not in copied][-50:]
+
+    def messages(self, room_id: str, after_id: int = 0, limit: int = 200, before_id: int = 0) -> dict:
+        limit = min(max(int(limit or 1), 1), 500)
+        with self.ro(self.agents_db) as a:
+            msgs = self.R.room_messages(a, room_id, after_id, limit, before_id or None)
+            pending = self.pending_owner(a, room_id)
+            last = self.R.last_message_id(a)
+        out = {"room_id": room_id, "messages": msgs, "pending_owner": pending,
+               "has_more": (not after_id) and len(msgs) >= limit, "max_id": last}
+        if not after_id and not before_id:
+            out["room"] = self.room_info(room_id)
+        return out
+
+    def notes(self, room_id: str, limit: int = 50) -> list[dict]:
+        with self.ro(self.agents_db) as a:
+            return self.R.room_notes(a, room_id, limit)
+
+    def trials(self, strategy: Optional[str], room_id: Optional[str], limit: int = 50) -> dict:
+        with self.ro(self.agents_db) as a:
+            return {"counts": self.R.trial_counts(a, strategy),
+                    "trials": self.R.trial_history(a, strategy, room_id, limit=min(max(int(limit), 1), 500))}
+
+    def author(self, body: dict) -> str:
+        """The signer of an owner write: one of the configured owner names, else nobody in particular."""
+        a = body.get("author")
+        a = " ".join(a.split())[:AUTHOR_MAX] if isinstance(a, str) else ""
+        return a if a and a in self.owners else ""
+
+    def _decisions(self) -> dict:
+        """Latest owner decision per proposal id, from inbox.db. Clicks older than this agents3.db
+        (cursor 'inbox:approvals_base': proposal ids restart at 1 in a new one) are not shown."""
+        with self.ro(self.agents_db) as a:
+            base = self._cursor(a, "inbox:approvals_base")
+        with self.ro(self.inbox_db) as ib:
+            rows = self.R.pending_approvals(ib, base, limit=1000)
+        out: dict = {}
+        for r in rows:
+            out[int(r["proposal_id"])] = {**r, "rejected_before": out.get(int(r["proposal_id"]), {}).get(
+                "rejected_before", False) or r["decision"] == "reject"}
+        return out
+
+    @staticmethod
+    def _effective(p: dict, dec: Optional[dict], applied_upto: int) -> tuple[str, bool]:
+        """(status the owners should see, whether their latest click is already applied)."""
+        if dec is None:
+            return p["status"], True
+        applied = int(dec["id"]) <= applied_upto or (
+            (p["status"], dec["decision"]) in (("approved", "approve"), ("rejected", "reject")))
+        if applied or p["status"] not in ("awaiting_owner", "approved"):
+            return p["status"], applied
+        return ("approved" if dec["decision"] == "approve" else "rejected"), False
+
+    def proposals(self, status: Optional[str] = None, strategy: Optional[str] = None,
+                  room_id: Optional[str] = None, limit: int = 100) -> list[dict]:
+        from ..agents.roster3 import STRATEGY_KO
+        decs = self._decisions()
+        with self.ro(self.agents_db) as a:
+            rows = self.R.list_proposals(a, status, strategy, room_id, limit)
+            upto = self._cursor(a, "inbox:approvals")
+        for p in rows:
+            dec = decs.get(int(p["id"]))
+            eff, applied = self._effective(p, dec, upto)
+            p["strategy_ko"] = STRATEGY_KO.get(p.get("strategy") or "", p.get("strategy"))
+            p["owner_decision"] = None if dec is None else {
+                "decision": dec["decision"], "ts": dec["ts"], "note": dec.get("note"), "applied": applied}
+            p["effective_status"] = eff
+        return rows
+
+    def _stored_caps(self, a: Optional[sqlite3.Connection]) -> Optional[dict]:
+        """The caps the agents tick really used (it stores them in agents3.db, cursor 'policy:caps')."""
+        if a is None:
+            return None
+        try:
+            r = a.execute("SELECT v FROM cursors WHERE k = 'policy:caps'").fetchone()
+            v = json.loads(r[0]) if r and r[0] else None
+        except (sqlite3.Error, TypeError, ValueError):
+            return None
+        return v if isinstance(v, dict) and v else None
+
+    def usage(self, now_ms: Optional[int] = None) -> dict:
+        with self.ro(self.agents_db) as a:
+            u = self.R.usage_today(a, now_ms)
+            stored = self._stored_caps(a)
+        if stored is None and self._caps is None:
+            self._caps = budget_caps(self.budget_env)
+        caps = stored if stored is not None else self._caps
+        classes = []
+        for k in list(BUDGET_CLASSES) + sorted(set(u["by_class"]) - set(BUDGET_CLASSES)):
+            got = u["by_class"].get(k, {"calls": 0, "failed": 0, "tokens": 0})
+            cap = caps.get(k, {})
+            classes.append({"class": k, "name_ko": CLASS_KO.get(k, k), **got,
+                            "cap_calls": cap.get("calls"), "cap_tokens": cap.get("tokens")})
+        total, wk = caps.get("total", {}), caps.get("week", {})
+        with self.ro(self.agents_db) as a:
+            w = self.R.usage_days(a, now_ms, 7)
+        return {"day": u["day"], "calls": u["calls"], "tokens": u["tokens"], "cap_calls": total.get("calls"),
+                "cap_tokens": total.get("tokens"), "classes": classes,
+                "week": {"calls": w["calls"], "tokens": w["tokens"], "cap_calls": wk.get("calls"),
+                         "cap_tokens": wk.get("tokens"), "since": w["since"]},
+                "caps_source": "tick" if stored is not None else "defaults"}
+
+    def since(self, after_id: int) -> tuple[int, dict]:
+        """Rooms with messages newer than ``after_id`` -> {room_id: newest id}; for the live stream."""
+        with self.ro(self.agents_db) as a:
+            if a is None:
+                return after_id, {}
+            try:
+                top = int(a.execute("SELECT COALESCE(MAX(id), 0) FROM messages").fetchone()[0])
+                if top < after_id:           # agents3.db was replaced: start over
+                    after_id = 0
+                rows = a.execute("SELECT room_id, MAX(id) FROM messages WHERE id > ? GROUP BY room_id",
+                                 (after_id,)).fetchall()
+            except sqlite3.Error:
+                return after_id, {}
+        changed = {r[0]: int(r[1]) for r in rows}
+        return max([after_id, *changed.values()]), changed
+
+    def last_id(self) -> int:
+        with self.ro(self.agents_db) as a:
+            return self.R.last_message_id(a)
+
+    # -- write side (inbox.db only)
+    def _inbox(self) -> sqlite3.Connection:
+        if not self.inbox_db:
+            raise HTTPException(503, "두 분 메시지 저장소(inbox.db)가 설정되지 않았습니다")
+        return self.R.open_inbox_rw(self.inbox_db)
+
+    def say(self, room_id: str, text: str, author: str, now_ms: Optional[int] = None) -> dict:
+        now_ms = int(time.time() * 1000) if now_ms is None else now_ms
+        c = self._inbox()
+        try:
+            if self.R.owner_posts_since(c, None, now_ms - 3_600_000) >= self.say_per_hour:
+                raise HTTPException(429, f"한 시간에 {self.say_per_hour}번까지 남길 수 있습니다. 잠시 뒤에 다시 보내 주세요")
+            mid = self.R.add_owner_message(c, room_id, author, text, ts=now_ms)
+        finally:
+            c.close()
+        return {"ok": True, "id": mid, "ts": now_ms, "room_id": room_id, "author": author, "text": text,
+                "pending": True}
+
+    def decide(self, proposal_id: int, decision: str, note: str, author: str) -> dict:
+        with self.ro(self.agents_db) as a:
+            p = self.R.get_proposal(a, proposal_id)
+            upto = self._cursor(a, "inbox:approvals")
+        if p is None:
+            raise HTTPException(404, "그런 제안이 없습니다")
+        dec = self._decisions().get(int(proposal_id))
+        eff, _ = self._effective(p, dec, upto)
+        gate_ok = isinstance(p.get("gate"), dict) and p["gate"].get("pass") is True
+        if decision == "approve":
+            if not gate_ok:
+                raise HTTPException(409, "코드 관문을 통과하지 못한 제안은 누구도 승인할 수 없습니다")
+            if eff != "awaiting_owner" or (dec is not None and dec.get("rejected_before")):
+                raise HTTPException(409, f"이 제안은 지금 승인할 수 없는 상태입니다 ({eff})")
+        elif eff not in ("awaiting_owner", "approved"):
+            raise HTTPException(409, f"이 제안은 지금 거절할 수 없는 상태입니다 ({eff})")
+        c = self._inbox()
+        try:
+            aid = self.R.add_approval(c, proposal_id, decision, author, note or None)
+        finally:
+            c.close()
+        return {"ok": True, "approval_id": aid, "proposal_id": proposal_id, "decision": decision,
+                "message": "전달했습니다. 직원들이 다음 차례에 반영합니다"}
+
+
+async def _json_object(req: Request, limit: int = BODY_MAX) -> dict:
+    """The request's JSON object, read with a size cap (a huge body is refused before it is parsed)."""
+    try:
+        if int(req.headers.get("content-length") or 0) > limit:
+            raise HTTPException(413, "보낸 내용이 너무 큽니다")
+    except ValueError:
+        raise HTTPException(400, "잘못된 요청입니다")
+    raw = bytearray()
+    async for chunk in req.stream():
+        raw += chunk
+        if len(raw) > limit:
+            raise HTTPException(413, "보낸 내용이 너무 큽니다")
+    try:
+        body = json.loads(bytes(raw).decode("utf-8"))
+    except (ValueError, UnicodeDecodeError, RecursionError):
+        raise HTTPException(400, "JSON 본문이 필요합니다")
+    if not isinstance(body, dict):
+        raise HTTPException(400, "JSON 객체가 필요합니다")
+    return body
+
+
+def _storable(text: str) -> bool:
+    """Text SQLite can store as UTF-8 (a lone surrogate like the JSON escape \\ud800 cannot)."""
+    try:
+        text.encode("utf-8")
+        return True
+    except UnicodeEncodeError:
+        return False
+
+
 def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fetch_candles,
-               agents_db: Optional[str] = None, daily_db: Optional[str] = None, frames=fetch_frame) -> FastAPI:
+               agents_db: Optional[str] = None, daily_db: Optional[str] = None, frames=fetch_frame,
+               inbox_db: Optional[str] = None, say_per_hour: int = SAY_PER_HOUR) -> FastAPI:
     app = FastAPI(title="paper v3", docs_url=None, redoc_url=None, openapi_url=None)
     data = Data(db, daily_db)
+    rooms = Rooms(agents_db, inbox_db, os.environ.get("AGENTS_BUDGET"), say_per_hour,
+                  owner_names(os.environ.get("DASH_OWNERS")))
     fails: dict[str, list[float]] = {}
 
     def authed(req: Request) -> bool:
@@ -462,6 +856,71 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
     def agents_feed(limit: int = 200):
         return agent_feed(agents_db, min(max(limit, 1), 1000))
 
+    # ------------------------------------------------ agent rooms: reads (agents3.db, read-only)
+    def _room(room_id: str) -> str:
+        if not rooms.known(room_id):
+            raise HTTPException(404, "그런 방이 없습니다")
+        return room_id
+
+    @app.get("/api/rooms")
+    def get_rooms():
+        return rooms.overview()
+
+    @app.get("/api/rooms/{room_id}/messages")
+    def get_room_messages(room_id: str, after_id: int = 0, limit: int = 200, before_id: int = 0):
+        return rooms.messages(_room(room_id), max(after_id, 0), limit, max(before_id, 0))
+
+    @app.get("/api/rooms/{room_id}/notes")
+    def get_room_notes(room_id: str, limit: int = 50):
+        return rooms.notes(_room(room_id), limit)
+
+    @app.get("/api/trials")
+    def get_trials(strategy: Optional[str] = None, room_id: Optional[str] = None, limit: int = 50):
+        return rooms.trials(strategy or None, room_id or None, limit)
+
+    @app.get("/api/proposals")
+    def get_proposals(status: Optional[str] = None, strategy: Optional[str] = None, room_id: Optional[str] = None,
+                      limit: int = 100):
+        if status and status not in rooms.R.PROPOSAL_STATUSES:
+            raise HTTPException(400, "unknown status")
+        return rooms.proposals(status or None, strategy or None, room_id or None, min(max(limit, 1), 1000))
+
+    @app.get("/api/agents/usage")
+    def get_agents_usage():
+        return rooms.usage()
+
+    # ------------------------------------------------ agent rooms: owner writes (inbox.db only)
+    @app.post("/api/rooms/{room_id}/say")
+    async def room_say(room_id: str, req: Request):
+        if not same_origin(req):
+            raise HTTPException(403, "다른 사이트에서 온 요청은 받지 않습니다")
+        _room(room_id)
+        body = await _json_object(req)
+        text = body.get("text")
+        if not isinstance(text, str) or not text.strip():
+            raise HTTPException(400, "보낼 내용이 없습니다")
+        text = text.strip()
+        if len(text) > SAY_MAX_CHARS:
+            raise HTTPException(400, f"{SAY_MAX_CHARS:,}자까지 보낼 수 있습니다")
+        if not _storable(text):
+            raise HTTPException(400, "보낼 수 없는 글자가 들어 있습니다")
+        return rooms.say(room_id, text, rooms.author(body))
+
+    @app.post("/api/proposals/{proposal_id}/decide")
+    async def proposal_decide(proposal_id: int, req: Request):
+        if not same_origin(req):
+            raise HTTPException(403, "다른 사이트에서 온 요청은 받지 않습니다")
+        body = await _json_object(req)
+        decision = body.get("decision")
+        if decision not in ("approve", "reject"):
+            raise HTTPException(400, "decision은 approve 또는 reject")
+        note = body.get("note") or ""
+        if not isinstance(note, str) or len(note.strip()) > SAY_MAX_CHARS:
+            raise HTTPException(400, f"메모는 {SAY_MAX_CHARS:,}자까지 쓸 수 있습니다")
+        if not _storable(note):
+            raise HTTPException(400, "보낼 수 없는 글자가 들어 있습니다")
+        return rooms.decide(proposal_id, decision, note.strip(), rooms.author(body))
+
     @app.get("/api/candles")
     def get_candles(symbol: str, interval: str = "15m", limit: int = 300):
         if symbol not in ("BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "LTCUSDT", "BCHUSDT", "XRPUSDT"):
@@ -471,13 +930,17 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
         return candles(symbol, interval, min(max(limit, 10), 1500))
 
     @app.get("/api/stream")
-    async def stream(req: Request, trade_id: int = 0, alert_row: int = 0):
+    async def stream(req: Request, trade_id: int = 0, alert_row: int = 0, room_msg: int = 0):
         async def gen():
-            nonlocal trade_id, alert_row
+            nonlocal trade_id, alert_row, room_msg
             last_board = None
             if not trade_id and not alert_row:   # a new page starts from now, not from the first trade
                 trade_id, alert_row = data.latest_ids()
+            if not room_msg:
+                room_msg = rooms.last_id()
             while not await req.is_disconnected():
+                # new agent-room messages (agents3.db max(id)): the page refreshes the rooms that changed
+                room_msg, rooms_changed = rooms.since(room_msg)
                 d = data.since(trade_id, alert_row)
                 if d["trades"]:
                     trade_id = d["trades"][-1]["id"]
@@ -488,7 +951,7 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
                 changed = {k: v for k, v in slim.items() if last_board is None or last_board.get(k) != v}
                 last_board = slim
                 payload = {"ts": b["ts"], "changed": changed, "trades": d["trades"], "alerts": d["alerts"],
-                           "heartbeat": d["heartbeat"]}
+                           "heartbeat": d["heartbeat"], "room_msg": room_msg, "rooms": rooms_changed}
                 yield f"data: {json.dumps(payload)}\n\n"
                 await asyncio.sleep(3)
         return StreamingResponse(gen(), media_type="text/event-stream")

@@ -31,6 +31,7 @@ import json
 import os
 import re
 import sqlite3
+import sys
 import time
 import urllib.parse
 from datetime import datetime
@@ -235,8 +236,18 @@ def _json_default(o: Any) -> Any:
     return str(o)
 
 
+def clean_text(s: str) -> str:
+    """Text that SQLite can store as UTF-8: a lone surrogate (e.g. the JSON escape "\\ud800" in a
+    model answer or an owner post) becomes '?' instead of raising UnicodeEncodeError."""
+    try:
+        s.encode("utf-8")
+        return s
+    except UnicodeEncodeError:
+        return s.encode("utf-8", "replace").decode("utf-8")
+
+
 def _dumps(x: Any) -> Optional[str]:
-    return None if x is None else json.dumps(x, ensure_ascii=False, default=_json_default)
+    return None if x is None else clean_text(json.dumps(x, ensure_ascii=False, default=_json_default))
 
 
 def _loads(s: Optional[str]) -> Any:
@@ -260,7 +271,7 @@ def _safe(conn: Optional[sqlite3.Connection], fn, empty):
         return empty
     try:
         return fn()
-    except sqlite3.OperationalError:
+    except sqlite3.DatabaseError:        # missing table, or a file that is not a database (bad restore)
         return empty
 
 
@@ -277,7 +288,7 @@ def kst_day(now_ms: int) -> str:
 def spec_hash(spec: Any) -> str:
     """Stable hash of a trial spec (key order and spacing do not matter)."""
     canon = json.dumps(spec, sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=_json_default)
-    return hashlib.sha256(canon.encode("utf-8")).hexdigest()
+    return hashlib.sha256(clean_text(canon).encode("utf-8")).hexdigest()
 
 
 def role_name(role: str) -> str:
@@ -325,7 +336,13 @@ def open_ro(path: Optional[str]) -> Optional[sqlite3.Connection]:
     uri = "file:" + urllib.parse.quote(os.path.abspath(path)) + "?mode=ro"
     conn = sqlite3.connect(uri, uri=True, timeout=5)
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA query_only=ON")
+    try:
+        conn.execute("PRAGMA query_only=ON")
+        conn.execute("SELECT 1 FROM sqlite_master LIMIT 1").fetchall()
+    except sqlite3.DatabaseError as exc:   # not a SQLite file (bad restore, disk error): treat as missing
+        conn.close()
+        print(f"note: {path} is not readable as a database ({exc}); treated as missing", file=sys.stderr)
+        return None
     return conn
 
 
@@ -388,14 +405,14 @@ def post(conn: sqlite3.Connection, room_id: str, round_id: Optional[int], meetin
         raise ValueError(f"unknown message kind: {kind!r}")
     if not room_id or not role:
         raise ValueError("room_id and role are required")
-    text = "" if text is None else str(text)
+    text = "" if text is None else clean_text(str(text))
     if len(text) > MAX_TEXT:
         text = text[:MAX_TEXT - 1] + "…"
     cur = conn.execute(
         "INSERT INTO messages (ts, room_id, round_id, meeting, role, speaker_name, kind, text, data, evidence) "
         "VALUES (?,?,?,?,?,?,?,?,?,?)",
-        (_now_ms() if ts is None else ts, room_id, round_id, meeting, role, speaker_name or role_name(role),
-         kind, text, _dumps(data), _dumps(evidence)))
+        (_now_ms() if ts is None else ts, room_id, round_id, meeting, role,
+         clean_text(speaker_name or role_name(role)), kind, text, _dumps(data), _dumps(evidence)))
     conn.commit()
     return int(cur.lastrowid)
 
@@ -556,7 +573,7 @@ def rounds_today(conn: Optional[sqlite3.Connection], room_id: str, now_ms: int,
 # ---------------------------------------------------------------- notes
 def add_note(conn: sqlite3.Connection, room_id: str, strategy: Optional[str], text: str,
              round_id: Optional[int] = None, *, ts: Optional[int] = None) -> int:
-    text = str(text or "").strip()
+    text = clean_text(str(text or "")).strip()
     if not text:
         raise ValueError("empty note")
     cur = conn.execute("INSERT INTO notes (ts, room_id, strategy, text, round_id) VALUES (?,?,?,?,?)",
@@ -778,11 +795,24 @@ def usage_today(conn_ro: Optional[sqlite3.Connection], now_ms: Optional[int] = N
     return _safe(conn_ro, q, {"day": day, "calls": 0, "tokens": 0, "by_class": {}})
 
 
+def usage_days(conn_ro: Optional[sqlite3.Connection], now_ms: Optional[int] = None, days: int = 7) -> dict:
+    """Model calls and tokens of the last ``days`` KST days, today included (the rolling cap)."""
+    now_ms = _now_ms() if now_ms is None else now_ms
+    since = kst_day(now_ms - (days - 1) * 86_400_000)
+
+    def q():
+        calls, tokens = conn_ro.execute("SELECT COUNT(*), COALESCE(SUM(tokens), 0) FROM agent_calls WHERE day >= ?",
+                                        (since,)).fetchone()
+        return {"since": since, "calls": int(calls), "tokens": int(tokens)}
+    return _safe(conn_ro, q, {"since": since, "calls": 0, "tokens": 0})
+
+
 # ---------------------------------------------------------------- inbox (written by the dashboard only)
 def add_owner_message(conn: sqlite3.Connection, room_id: str, author: str, text: str,
                       *, ts: Optional[int] = None) -> int:
     """Dashboard side: an owner's post in a room. Stored as data; the agents read it as data only."""
-    text = str(text or "").strip()
+    text = clean_text(str(text or "")).strip()
+    author = clean_text(str(author or ""))
     if not text:
         raise ValueError("empty message")
     if len(text) > MAX_OWNER_TEXT:
@@ -802,8 +832,8 @@ def add_approval(conn: sqlite3.Connection, proposal_id: int, decision: str, auth
     if decision not in APPROVAL_DECISIONS:
         raise ValueError(f"decision must be approve or reject, not {decision!r}")
     cur = conn.execute("INSERT INTO approvals (ts, proposal_id, decision, author, note) VALUES (?,?,?,?,?)",
-                       (_now_ms() if ts is None else ts, int(proposal_id), decision, author or "",
-                        (note or "")[:MAX_OWNER_TEXT] or None))
+                       (_now_ms() if ts is None else ts, int(proposal_id), decision, clean_text(author or ""),
+                        clean_text(note or "")[:MAX_OWNER_TEXT] or None))
     conn.commit()
     return int(cur.lastrowid)
 

@@ -1,0 +1,32 @@
+# Agent rooms: the staff discuss, decide and resolve by themselves (docs/agent-rooms.md).
+# One short pass, started every 15 minutes by paperbot-agents.timer: apply the owners' approve/reject
+# clicks, find the rooms that are due, run at most 4 meetings, then exit. Two passes never overlap
+# (lock file /var/lib/paperbot/agents3.db.lock).
+# The only writer of agents3.db. Reads paper3.db, daily3.db and inbox.db read-only. Never places an
+# order, never calls an exchange API, never changes the 195 accounts, the rules or the code.
+[Unit]
+Description=paperbot agent rooms (one pass)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=paperbot
+Group=paperbot
+WorkingDirectory=/opt/crypto-bot-research
+# CLAUDE_CODE_OAUTH_TOKEN (subscription login), Telegram, optional AGENTS_* limits.
+# Never ANTHROPIC_API_KEY (the runner strips it anyway). Template: deploy/agents.env.example
+EnvironmentFile=/etc/paperbot/agents.env
+# Claude Code is installed for the paperbot user (~/.local/bin, docs/agent-rooms.md)
+Environment=PATH=/var/lib/paperbot/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/opt/paperbot/venv/bin/python -m paperbot.agents.rooms tick --paper-db /var/lib/paperbot/paper3.db --daily-db /var/lib/paperbot/daily3.db --agents-db /var/lib/paperbot/agents3.db --inbox-db /var/lib/paperbot/inbox.db --lab-dir /var/lib/paperbot/lab
+# The live runner comes first: the agents (and their 5-year tests) get lower CPU and disk priority
+# and bounded memory. A pass cut off here leaves its meeting 'running'; after 2 hours the meeting
+# counts as failed and is tried once more.
+Nice=10
+CPUWeight=20
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+MemoryHigh=2G
+MemoryMax=3G
+TimeoutStartSec=100min

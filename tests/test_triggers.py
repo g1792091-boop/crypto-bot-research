@@ -355,8 +355,8 @@ def test_priority_order_oldest_evidence_and_global_cap(tmp_path):
     w.alert(now - 2 * HOUR, "WARN", f"[{S2}@1h] BUST: bust: equity 9.00 below 10.00")
     w.say("team:risk", "레버리지 너무 높지 않나요?", now - 5 * MIN)
     w.alert(now - 10 * MIN, "CRITICAL", f"[{S2}@15m] LIQUIDATED ETHUSDT 50x lost margin 20.00")
-    everything = [("team:ops", "incident", 0), ("team:risk", "owner", 1), (ROOM, "loss_cluster", 2),
-                  (ROOM2, "bust", 2), ("team:lead", "checkpoint", 3), ("team:market", "morning", 3)]
+    everything = [("team:ops", "incident", 0), ("team:risk", "owner", 1), (ROOM2, "bust", 2),   # a bust first
+                  (ROOM, "loss_cluster", 2), ("team:lead", "checkpoint", 3), ("team:market", "morning", 3)]
     assert keys(w.due(now)) == everything[:4]                  # at most 4 rounds per tick
     assert keys(w.due(now, TriggerPolicy(max_rounds_per_tick=10))) == everything   # N17 weekly waits (1/room/tick)
     got = w.due(now, TriggerPolicy(max_rounds_per_tick=10, max_per_room_per_tick=2))
@@ -403,7 +403,9 @@ def test_running_round_blocks_then_fires_again_once_after_two_hours(w):
     begin_round(w.agents, ds[0], t + 2 * HOUR)                 # ... and dies again
     assert w.due(t + 4 * HOUR + 1) == []                       # only once: waits for new evidence
     w.trade(f"{S}@1h", -10.0, t + 4 * HOUR)
-    ds = w.due(t + 4 * HOUR + 1)
+    # the two crashed rounds used 2 of the room's 3 daily slots; the 3rd is kept for an owner post
+    assert w.due(t + 4 * HOUR + 1) == []
+    ds = w.due(t + 4 * HOUR + 1, TriggerPolicy(owner_reserved_per_room_day=0))
     assert keys(ds) == [(ROOM, "loss_cluster", 2)] and ds[0].data["retry_of"] is None
     assert ds[0].data["losses"] == 4                           # nothing was lost
     w.run(ds[0], t + 4 * HOUR + 1)

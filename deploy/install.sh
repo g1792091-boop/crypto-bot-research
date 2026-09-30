@@ -32,6 +32,8 @@ systemctl enable --now fail2ban chrony
 echo "== user and directories"
 id paperbot >/dev/null 2>&1 || useradd --system --create-home --home-dir /var/lib/paperbot --shell /usr/sbin/nologin paperbot
 install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot /var/backups/paperbot
+# 5-year test caches for the agent rooms (python -m paperbot.agents.labdata build --out /var/lib/paperbot/lab)
+install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot/lab
 install -d -o root -g paperbot -m 750 /etc/paperbot
 
 echo "== code version"
@@ -57,7 +59,8 @@ install -d -m 755 /opt/paperbot
 echo "== code"
 # Copy to a staging folder first, then swap while the services are stopped, so a
 # running bot never reads a half-copied tree. The previous code stays in $APP.old.
-UNITS="paperbot-live3 paperbot-dash"
+# The agents timer is paused too, so no agent pass starts on a half-copied tree.
+UNITS="paperbot-live3 paperbot-dash paperbot-agents.timer"
 RUNNING=""
 if [ "$REPO_DIR" != "$APP" ]; then
   rm -rf "$APP.new"
@@ -86,7 +89,7 @@ done
 
 echo "== systemd units (installed, not started)"
 for u in paperbot-live3.service paperbot-dash.service paperbot-daily3.service paperbot-daily3.timer \
-         paperbot-backup.service paperbot-backup.timer; do
+         paperbot-backup.service paperbot-backup.timer paperbot-agents.service paperbot-agents.timer; do
   install -m 644 "$APP/deploy/$u" /etc/systemd/system/$u
 done
 systemctl daemon-reload
@@ -102,4 +105,7 @@ Done. Next (docs/server-setup-v3.md):
   2. edit /etc/paperbot/live.env   (read-only Binance key, Telegram)  -- on the server, never in chat
   3. edit /etc/paperbot/dash.env   (python -m paperbot.dash hash; openssl rand -hex 32)
   4. sudo systemctl enable --now paperbot-live3 paperbot-dash paperbot-daily3.timer paperbot-backup.timer
+  5. agent rooms (optional, docs/agent-rooms.md): install Claude Code for the paperbot user, fill
+     /etc/paperbot/agents.env, try one pass with --dry-run, then
+     sudo systemctl enable --now paperbot-agents.timer
 NEXT

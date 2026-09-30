@@ -15,7 +15,7 @@
     <button data-v="strat">매매법</button>
     <button data-v="board">순위표</button>
     <button data-v="account">계좌</button>
-    <button data-v="agents">에이전트 팀</button>
+    <button data-v="rooms" id="nav-rooms">에이전트 방<i class="ndot" hidden></i></button>
     <button data-v="signals">신호</button>
     <button data-v="status">서버 상태</button>
   </nav>
@@ -145,18 +145,37 @@
   </div>
 </div></section>
 
-<!-- ========================================================= agents -->
-<section class="view" id="v-agents">
-  <div class="agents">
-    <div class="roster"><div class="ph"><span class="t" id="ag-count">팀원</span></div><div class="pb" id="roster"></div></div>
-    <div class="chatcol">
-      <div class="ph"><span class="t">에이전트 팀 채팅</span><span class="grow"></span><span class="seg" id="meet-seg"></span></div>
-      <div class="chat" id="chat"></div>
-      <div class="chatin"><input id="chat-in" placeholder="에이전트 팀 연결 후 @이름으로 질문할 수 있습니다" disabled><button disabled>보내기</button></div>
+<!-- ========================================================= agent rooms -->
+<section class="view" id="v-rooms">
+  <div class="rooms" id="rooms" data-pane="list">
+    <div class="rlist">
+      <div class="ph"><span class="t">에이전트 방</span><span class="grow"></span>
+        <div class="seg" id="rl-filter"><button data-f="" class="on">전체</button><button data-f="team">팀</button><button data-f="strategy">매매법</button></div>
+      </div>
+      <div class="rauto" id="r-auto"><b>● 자동 토론</b> 손실이 쌓이거나 사고가 나거나 정해진 시간이 되면 직원들이 스스로 회의를 열고 결정합니다. 두 분이 글을 쓰지 않아도 됩니다.</div>
+      <div class="rsearch"><input id="r-q" type="search" placeholder="방 이름 찾기" aria-label="방 이름 찾기" autocomplete="off"></div>
+      <div class="pb" id="rlist"></div>
     </div>
-    <div class="agside">
-      <div class="ph"><span class="t" id="ag-side-title">운영 원칙</span></div>
-      <div class="pb" id="ag-side"></div>
+    <div class="rchat">
+      <div class="ph rhead">
+        <button class="rback" id="r-back" aria-label="방 목록">←</button>
+        <span id="r-av" class="ravw"></span>
+        <div class="rt"><b id="r-title">방을 고르세요</b><span id="r-sub"></span></div>
+        <span class="grow"></span>
+        <span id="r-state"></span>
+        <button class="rinfo" id="r-info">정보</button>
+      </div>
+      <button class="rbanner" id="r-banner" hidden></button>
+      <div class="rc" id="r-chat"></div>
+      <button class="rnew" id="r-new" hidden>새 메시지 ↓</button>
+      <form class="rin" id="r-form" autocomplete="off">
+        <textarea id="r-in" rows="2" maxlength="1000" placeholder="끼어들기(선택): 직원들은 자동으로 토론합니다. 질문이나 의견을 남기면 다음 차례에 반영됩니다"></textarea>
+        <div class="sc"><button class="pri" id="r-send" type="submit">보내기</button><small id="r-count">0/1000</small></div>
+      </form>
+    </div>
+    <div class="rside">
+      <div class="ph"><button class="rback" id="r-back2" aria-label="대화로">←</button><span class="t" id="r-side-title">방 정보</span></div>
+      <div class="pb" id="r-side"></div>
     </div>
   </div>
 </section>
@@ -183,5 +202,6 @@
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script src="/static/app.js"></script>
 <script src="/static/strat.js"></script>
+<script src="/static/rooms.js"></script>
 </body>
 </html>

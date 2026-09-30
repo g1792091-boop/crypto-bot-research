@@ -17,9 +17,16 @@ Why these flags:
   print mode an API key in the environment is always used and billed
   separately. Exchange and Telegram secrets are removed too.
 
+- ``--setting-sources ""`` ignores the user/project/local settings files: an
+  ``env`` block in ~/.claude/settings.json (e.g. an ANTHROPIC_API_KEY) would
+  otherwise switch the child to pay-per-token API billing. Login still works.
+  A Console API key stored by ``/login`` in ~/.claude.json is used whatever
+  the flags; ``auth_preflight`` refuses to run when one is configured.
+
 Login on the server: run ``claude setup-token`` once (browser sign-in to the
 subscription), put the printed token in the agents' env file as
-CLAUDE_CODE_OAUTH_TOKEN (chmod 600). Calls count against the same plan
+CLAUDE_CODE_OAUTH_TOKEN (chmod 600). Never choose "Anthropic Console account"
+when logging in as the paperbot user. Calls count against the same plan
 usage limits as chats and other Claude Code sessions.
 """
 
@@ -41,7 +48,10 @@ ENV_ALLOW = ("PATH", "HOME", "LANG", "LC_ALL", "TZ", "USER", "TMPDIR",
 ENV_BILLING = ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_USE_BEDROCK",
                "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY")
 
-LIMIT_RE = re.compile(r"(session|weekly|usage|rate)[ -]limit", re.I)
+# Plan usage / rate limits in the CLI's error text (e.g. "5-hour limit reached ∙ resets 3pm",
+# "You've hit your limit · resets 3pm", "API Error: 429 rate_limit_error").
+LIMIT_RE = re.compile(r"(session|weekly|usage|rate|hour|opus)[ -]?limit|limit reached|hit your limit"
+                      r"|rate_limit_error|\b429\b", re.I)
 
 
 class UsageLimitReached(RuntimeError):
@@ -50,6 +60,10 @@ class UsageLimitReached(RuntimeError):
 
 class AgentCallError(RuntimeError):
     pass
+
+
+class AgentTimeout(AgentCallError):
+    """The call ran out of time; it probably used tokens that are never reported."""
 
 
 @dataclass
@@ -101,8 +115,9 @@ def extract_json(text: str) -> Optional[dict]:
                 depth -= 1
                 if depth == 0:
                     try:
-                        obj = json.loads(text[start:i + 1])
-                    except json.JSONDecodeError:
+                        # NaN / Infinity are not JSON numbers: they become null, never reach code
+                        obj = json.loads(text[start:i + 1], parse_constant=lambda _c: None)
+                    except (ValueError, RecursionError):
                         break
                     return obj if isinstance(obj, dict) else None
         start = text.find("{", start + 1)
@@ -121,7 +136,7 @@ class ClaudeCodeRunner:
 
     def command(self, model: str, prompt_file: str, instruction: str) -> list[str]:
         return [self.bin, "-p", instruction, "--model", model, "--output-format", "json",
-                "--safe-mode", "--strict-mcp-config", "--no-session-persistence",
+                "--safe-mode", "--strict-mcp-config", "--no-session-persistence", "--setting-sources", "",
                 "--system-prompt-file", prompt_file, "--tools", ""]
 
     def call(self, model: str, system_prompt: str, instruction: str, packet: dict) -> CallResult:
@@ -130,12 +145,13 @@ class ClaudeCodeRunner:
             fh.write(system_prompt)
             prompt_file = fh.name
         try:
-            proc = self._run(self.command(model, prompt_file, instruction),
-                             input=json.dumps(packet, ensure_ascii=False, default=str),
+            payload = json.dumps(packet, ensure_ascii=False, default=str)
+            payload = payload.encode("utf-8", "replace").decode("utf-8")    # a lone surrogate never breaks stdin
+            proc = self._run(self.command(model, prompt_file, instruction), input=payload,
                              capture_output=True, text=True, timeout=self.timeout,
                              cwd=self.workdir, env=self.env)
         except subprocess.TimeoutExpired as exc:
-            raise AgentCallError(f"timed out after {self.timeout:.0f}s") from exc
+            raise AgentTimeout(f"timed out after {self.timeout:.0f}s") from exc
         finally:
             os.unlink(prompt_file)
         out, err = proc.stdout or "", proc.stderr or ""
@@ -158,6 +174,35 @@ class ClaudeCodeRunner:
         if not isinstance(data, dict):
             data = extract_json(text)
         return CallResult(text, data, meta)
+
+
+def auth_preflight(claude_bin: str = "claude", env: Optional[dict] = None, run: Callable = subprocess.run,
+                   timeout: float = 30.0) -> tuple[bool, str]:
+    """Before a real tick: is Claude Code logged in with the subscription (not an API key)?
+    Runs ``claude --setting-sources "" auth status --json`` (no model call) with the child's own
+    environment. Refuses when not logged in, when the answer names an ``apiKeySource`` (an
+    ANTHROPIC_API_KEY reaching the child, or a Console key stored by /login in ~/.claude.json)
+    or when authMethod is 'api_key': any of these bills per token, outside the plan's limits.
+    Returns (ok, reason)."""
+    cmd = [claude_bin, "--setting-sources", "", "auth", "status", "--json"]
+    try:
+        proc = run(cmd, capture_output=True, text=True, timeout=timeout, env=child_env(env))
+    except (OSError, subprocess.SubprocessError) as exc:
+        return False, f"claude auth status failed: {type(exc).__name__}: {str(exc)[:200]}"
+    try:
+        st = json.loads(proc.stdout or "")
+    except ValueError:
+        st = None
+    if not isinstance(st, dict):
+        return False, f"claude auth status gave no JSON (exit {proc.returncode}): {(proc.stderr or '')[:200]}"
+    if st.get("loggedIn") is not True:
+        return False, "Claude Code is not logged in for this user (run `claude setup-token`)"
+    if "apiKeySource" in st:
+        return False, (f"Claude Code would use an API key ({st.get('apiKeySource')}), billed per token outside "
+                       "the subscription; remove it (ANTHROPIC_API_KEY, or the Console login in ~/.claude.json)")
+    if st.get("authMethod") == "api_key":
+        return False, "Claude Code is logged in with an API key, not the subscription"
+    return True, str(st.get("authMethod") or "")
 
 
 class FakeRunner:

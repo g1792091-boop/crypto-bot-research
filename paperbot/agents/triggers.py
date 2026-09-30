@@ -25,8 +25,10 @@ Triggers (defaults in ``TriggerPolicy``; every number is configurable):
     weekly        4  strat:<S>     on weekday (strategy index mod 7, KST) when the strategy has
                                    >= 30 closed trades since its last weekly review.
 
-Limits: at most 3 rounds per room per KST day (incidents exempt), one round per
-room per tick, at most 4 rounds per tick. Output order: (priority, oldest evidence).
+Limits: at most 3 rounds per room per KST day (incidents exempt; one of the 3 is kept
+for the owners' posts until they have used one that day), one round per room per tick,
+at most 4 rounds per tick. Output order: (priority, bust before loss_cluster, oldest
+evidence).
 
 Crash safety (the caller's side of the contract; ``begin_round`` / ``finish_round``
 implement it): the round row stores ``trigger_data`` = ``Due.data`` (JSON) when
@@ -39,8 +41,16 @@ Until then the same evidence is found again, so a crash never loses a trigger:
 - a ``running`` round older than 2h, or a ``failed`` round, counts as a failed
   attempt: the trigger fires again once (``data["retry_of"]``); after two failed
   attempts for the same evidence it waits for new evidence;
-- a ``stopped_budget`` round (AI usage cap) pauses its trigger class until the
-  next KST day, when the budgets reset;
+- a ``stopped_budget`` round pauses what its stop says (``decision.stopped``): a class
+  cap its own class, the total / weekly cap every class, the reserve for incidents and
+  scheduled meetings the other classes, until the next KST day (the budgets reset); a
+  Claude plan usage limit pauses everything for ``usage_backoff_ms`` (1h), because the
+  plan's window resets within hours, not at midnight. A stopped round does not count
+  against the room's daily cap;
+- a ``failed`` round marked ``transient`` (the runner never answered: outage, CLI error)
+  is not a failed attempt: the same evidence fires again. Nothing is due for
+  ``transient_backoff_ms`` after it, doubling with each transient failure in a row (at
+  most ``transient_backoff_max_ms``), so a long outage does not fill a room with notices;
 - a round that ended ``done`` / ``no_action`` is never repeated for the same
   evidence key, even if its cursors were not written.
 
@@ -74,6 +84,11 @@ TRIGGER_CLASS = {"incident": "incident", "owner": "owner", "loss_cluster": "loss
                  "checkpoint": "scheduled", "morning": "scheduled", "evening": "scheduled",
                  "weekly": "weekly"}
 ENDED_OK = ("done", "no_action")      # the only statuses that advance cursors
+CLASSES = ("incident", "owner", "loss", "scheduled", "weekly")
+# What a stopped_budget round pauses until the next KST day, by decision.stopped (when the
+# decision has no explicit 'blocks' list). None = only the round's own class.
+STOP_BLOCKS = {"budget_class": None, "budget_total": CLASSES, "budget_week": CLASSES,
+               "budget_reserve": ("owner", "loss", "weekly")}
 
 # (kind, level, text fragment) for paper3.db alerts; the first match wins, "" matches any text.
 INCIDENT_ALERTS = (
@@ -116,11 +131,15 @@ class TriggerPolicy:
     # rate limits
     max_rounds_per_room_day: int = 3
     cap_exempt: tuple = ("incident",)
+    owner_reserved_per_room_day: int = 1     # slots of the daily cap only an owner post may use
     max_rounds_per_tick: int = 4
     max_per_room_per_tick: int = 1
     # crash safety
     stale_ms: int = 2 * HOUR_MS          # a 'running' round older than this has failed
     max_attempts: int = 2                # first try + one retry for the same evidence
+    usage_backoff_ms: int = HOUR_MS      # after a Claude plan usage limit, nothing is due for this long
+    transient_backoff_ms: int = 10 * MIN_MS      # after a transient failure (runner down): wait, doubling
+    transient_backoff_max_ms: int = 4 * HOUR_MS  # per failure in a row, up to this
     rounds_lookback_ms: int = 40 * DAY_MS
     # incident
     incident_alerts: tuple = INCIDENT_ALERTS
@@ -172,7 +191,7 @@ def _rows(conn: Optional[sqlite3.Connection], sql: str, args: Iterable = ()) -> 
         return []
     try:
         return [tuple(r) for r in conn.execute(sql, tuple(args)).fetchall()]
-    except sqlite3.OperationalError:
+    except sqlite3.DatabaseError:        # missing table, or not a database file (bad restore)
         return []
 
 
@@ -206,13 +225,18 @@ class _Rooms:
         self.now, self.p = now_ms, p
         self.cursors = {k: v for k, v in _rows(conn, "SELECT k, v FROM cursors")}
         self.rounds = []
-        for rid, room, trig, tdata, started, status, calls in _rows(
-                conn, "SELECT round_id, room_id, trigger, trigger_data, started_ts, status, calls FROM rounds "
-                      "WHERE started_ts >= ? OR status = 'running' ORDER BY round_id",
+        for rid, room, trig, tdata, started, status, calls, decision in _rows(
+                conn, "SELECT round_id, room_id, trigger, trigger_data, started_ts, status, calls, decision "
+                      "FROM rounds WHERE started_ts >= ? OR status = 'running' ORDER BY round_id",
                 (now_ms - p.rounds_lookback_ms,)):
-            d = _json(tdata)
+            d, dec = _json(tdata), _json(decision)
+            blocks = dec.get("blocks")
             self.rounds.append({"round_id": rid, "room_id": room, "trigger": trig, "key": d.get("key"),
-                                "started_ts": _int(started), "status": status, "calls": _int(calls)})
+                                "class": d.get("class") or TRIGGER_CLASS.get(trig),
+                                "started_ts": _int(started), "status": status, "calls": _int(calls),
+                                "stopped": dec.get("stopped"), "transient": dec.get("transient") is True,
+                                "calls_ok": _int(dec.get("calls_ok"), _int(calls)),
+                                "blocks": tuple(blocks) if isinstance(blocks, list) else None})
         self.day_start = kst_day_start(now_ms)
         self.rooms = set(all_rooms()) | {r[0] for r in _rows(conn, "SELECT room_id FROM rooms")}
 
@@ -236,7 +260,10 @@ class _Rooms:
         return any(r["status"] in ENDED_OK for r in self.same_key(room, trigger, key))
 
     def failed_attempts(self, room: str, trigger: str, key: str) -> list[dict]:
-        return [r for r in self.same_key(room, trigger, key) if r["status"] == "failed" or self.stale(r)]
+        """Rounds that tried this evidence and failed. A 'transient' failure (the runner never
+        answered: outage, CLI error) is not an attempt: the evidence fires again next tick."""
+        return [r for r in self.same_key(room, trigger, key)
+                if (r["status"] == "failed" and not r["transient"]) or self.stale(r)]
 
     def settled(self, room: str, trigger: str, key: str) -> bool:
         """Nothing more will happen for this evidence (met, given up, or deferred by the budget)."""
@@ -249,14 +276,60 @@ class _Rooms:
               and (r["status"] in ENDED_OK or (r["status"] == "running" and not self.stale(r)))]
         return max(ts) if ts else None
 
+    def blocks(self, r: dict) -> tuple:
+        """Classes a stopped_budget round pauses for the rest of its KST day."""
+        if r["blocks"] is not None:
+            return r["blocks"]
+        got = STOP_BLOCKS.get(r["stopped"] or "budget_class", None)
+        if r["stopped"] == "usage_limit":
+            return ()                      # handled by usage_paused (hours, not the whole day)
+        return (r["class"],) if got is None else got
+
     def class_blocked(self, cls: str) -> bool:
         return any(r["status"] == "stopped_budget" and r["started_ts"] >= self.day_start
-                   and TRIGGER_CLASS.get(r["trigger"]) == cls for r in self.rounds)
+                   and cls in self.blocks(r) for r in self.rounds)
 
-    def rounds_today(self, room: str) -> int:
+    def usage_paused(self) -> bool:
+        """A round hit the Claude plan's usage limit less than ``usage_backoff_ms`` ago."""
+        return any(r["status"] == "stopped_budget" and r["stopped"] == "usage_limit"
+                   and self.now - r["started_ts"] < self.p.usage_backoff_ms for r in self.rounds)
+
+    def transient_paused(self) -> bool:
+        """The latest finished rounds failed because the runner never answered: back off."""
+        k, last = 0, None
+        for r in reversed(self.rounds):
+            if r["status"] == "running":
+                continue
+            if not (r["status"] == "failed" and r["transient"]):
+                break
+            k += 1
+            last = r["started_ts"] if last is None else last
+        if not k:
+            return False
+        pause = min(self.p.transient_backoff_max_ms, self.p.transient_backoff_ms * 2 ** min(k - 1, 20))
+        return self.now - last < pause
+
+    def _counted(self, r: dict) -> bool:
+        """Does this round use one of its room's daily slots? Budget/usage stops and transient
+        failures without any answered call do not (the same evidence runs again later)."""
+        if r["status"] == "stopped_budget":
+            return False
+        return not (r["transient"] and r["calls_ok"] == 0)
+
+    def rounds_today(self, room: str, trigger: Optional[str] = None) -> int:
         return sum(1 for r in self.rounds if r["room_id"] == room and r["started_ts"] >= self.day_start
-                   and r["trigger"] not in self.p.cap_exempt
-                   and not (r["status"] == "stopped_budget" and r["calls"] == 0))
+                   and r["trigger"] not in self.p.cap_exempt and (trigger is None or r["trigger"] == trigger)
+                   and self._counted(r))
+
+    def room_full(self, room: str, trigger: str, extra: int = 0) -> bool:
+        """The room's daily cap. Until an owner round has run today, ``owner_reserved_per_room_day``
+        slots are kept for the owners' posts (other triggers stop earlier)."""
+        if trigger in self.p.cap_exempt:
+            return False
+        cap = self.p.max_rounds_per_room_day
+        if trigger != "owner":
+            cap -= max(0, self.p.owner_reserved_per_room_day - self.rounds_today(room, "owner"))
+        return self.rounds_today(room) + extra >= cap
 
 
 # ---------------------------------------------------------------- paper3.db helpers
@@ -427,14 +500,17 @@ def _bust(paper_ro, st: _Rooms) -> list[Due]:
     accts = {aid: (s, tf) for aid, s, tf in _rows(paper_ro, "SELECT account_id, strategy, timeframe FROM accounts "
                                                              "WHERE kind = 'strategy'")}
     busts: dict[str, int] = {}
-    r = _one(paper_ro, "SELECT ts, data FROM state WHERE k = 'accounts'")
-    if r is not None:
-        for aid, e in (_json(r[1]).get("engines") or {}).items():
-            if isinstance(e, dict) and e.get("bust"):
-                busts[aid] = int(r[0])
+    # evidence time: the first BUST alert; for a bust only seen in the saved state (whose row time
+    # changes at every save), the account's last closed trade (the one that emptied it)
     for ts, text in _rows(paper_ro, "SELECT ts, text FROM alerts WHERE level = 'WARN' AND text LIKE '[%] BUST:%'"):
         aid = text[1:text.find("]")]
         busts[aid] = min(int(ts), busts.get(aid, int(ts)))
+    r = _one(paper_ro, "SELECT ts, data FROM state WHERE k = 'accounts'")
+    if r is not None:
+        for aid, e in (_json(r[1]).get("engines") or {}).items():
+            if isinstance(e, dict) and e.get("bust") and aid not in busts:
+                last = _one(paper_ro, "SELECT MAX(exit_time) FROM trades WHERE account_id = ?", (aid,))
+                busts[aid] = int(last[0]) if last and last[0] is not None else int(r[0])
     by_s: dict[str, dict] = {}
     for aid, ts in busts.items():
         if aid in accts and accts[aid][0] in STRATEGY_KO and st.cursor(f"bust:{aid}") is None:
@@ -523,10 +599,18 @@ def _due(st: _Rooms, room: str, trigger: str, key: str, evidence_ts: int, cursor
 # ---------------------------------------------------------------- main entry
 def find_due(paper_ro: Optional[sqlite3.Connection], daily_ro: Optional[sqlite3.Connection],
              agents_conn: sqlite3.Connection, inbox_ro: Optional[sqlite3.Connection], now_ms: int,
-             policy: Optional[TriggerPolicy] = None) -> list[Due]:
-    """Rounds to run now, sorted by (priority, oldest evidence). Reads only."""
+             policy: Optional[TriggerPolicy] = None, *, defer_classes: Iterable[str] = (),
+             defer_triggers: Iterable[str] = (), skip_rooms: Iterable[str] = ()) -> list[Due]:
+    """Rounds to run now, sorted by (priority, bust before loss_cluster, oldest evidence). Reads only.
+    ``defer_classes`` / ``defer_triggers``: what the caller cannot start now (its AI budget is used
+    up or paced), left out before the per-tick pick so it never hides other meetings;
+    ``skip_rooms``: rooms that already met in the caller's current tick."""
     p = policy or TriggerPolicy()
     st = _Rooms(agents_conn, now_ms, p)
+    if st.usage_paused() or st.transient_paused():
+        return []
+    defer, skip = set(defer_classes), set(skip_rooms)
+    defer_t = set(defer_triggers)
     found: list[Due] = []
     if "incident" in p.enabled:
         found += _incident(paper_ro, daily_ro, st)
@@ -545,6 +629,8 @@ def find_due(paper_ro: Optional[sqlite3.Connection], daily_ro: Optional[sqlite3.
     ok: list[Due] = []
     for d in found:
         key = d.data["key"]
+        if d.data["class"] in defer or d.trigger in defer_t or d.room_id in skip:
+            continue
         if st.class_blocked(d.data["class"]) or st.running_fresh(d.room_id, d.trigger):
             continue
         if st.handled(d.room_id, d.trigger, key):
@@ -556,7 +642,9 @@ def find_due(paper_ro: Optional[sqlite3.Connection], daily_ro: Optional[sqlite3.
             d.data["retry_of"] = failed[-1]["round_id"]
             d.data["summary_ko"] = "(중단된 회의 다시 시작) " + d.data["summary_ko"]
         ok.append(d)
-    ok.sort(key=lambda d: (d.priority, d.data["evidence_ts"], d.data.get("seq", 0), d.room_id))
+    # within a priority a bust (an account at zero) goes before routine loss clusters
+    ok.sort(key=lambda d: (d.priority, 0 if d.trigger == "bust" else 1, d.data["evidence_ts"],
+                           d.data.get("seq", 0), d.room_id))
 
     picked: list[Due] = []
     per_room: dict[str, int] = {}
@@ -566,12 +654,11 @@ def find_due(paper_ro: Optional[sqlite3.Connection], daily_ro: Optional[sqlite3.
         room = d.room_id
         if per_room.get(room, 0) >= p.max_per_room_per_tick:
             continue
-        if d.trigger not in p.cap_exempt and st.rounds_today(room) + per_room.get(room, 0) \
-                >= p.max_rounds_per_room_day:
+        if st.room_full(room, d.trigger, per_room.get(room, 0)):
             continue
         after = d.data.get("after")
         if after and not (st.settled(after["room_id"], d.trigger, after["key"])
-                          or st.rounds_today(after["room_id"]) >= p.max_rounds_per_room_day
+                          or st.room_full(after["room_id"], d.trigger)
                           or any(x.room_id == after["room_id"] and x.data["key"] == after["key"]
                                  for x in picked)):
             continue            # the lead meets after the review team
