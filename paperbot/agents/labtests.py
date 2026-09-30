@@ -333,6 +333,17 @@ class LabData:
                 "main": {tf: self.coins("main", tf) for tf in TFS},
                 "pre2021": {tf: self.coins("pre2021", tf) for tf in TFS} if self.pre2021_dir else {}}
 
+    def matches_research(self) -> Optional[bool]:
+        """labdata's last check (labdata_manifest.json): True when every file is identical to the
+        research caches, False when one differs or is missing, None when never checked."""
+        if not self.main_dir:
+            return None
+        try:
+            with open(os.path.join(self.main_dir, "labdata_manifest.json")) as fh:
+                return bool(json.load(fh).get("all_identical"))
+        except (OSError, ValueError):
+            return None
+
     def strategies(self, tf: str = "1h") -> list[str]:
         for source in ("main", "pre2021"):
             cs = self.coins(source, tf)
@@ -673,7 +684,8 @@ def run_test(spec: dict, data: Optional[LabData], *, n_trials: int = 1, strategy
                     "description_ko": describe_ko(sp), "n_boot": N_BOOT,
                     "block": "week (Monday 00:00 UTC)", "p_rule": "(1 + resamples with diff <= 0) / (n_boot + 1)",
                     "outcomes": "paper v3 per signal, research/strategy_profiles/profiles.py _sizer/_scan",
-                    "data": {"main_dir": data.main_dir, "pre2021": bool(data.pre2021_dir and data.available("pre2021"))}}
+                    "data": {"main_dir": data.main_dir, "pre2021": bool(data.pre2021_dir and data.available("pre2021")),
+                             "matches_research": data.matches_research()}}
     if sp["template"] in DESCRIPTIVE:
         result["baseline_rule"] = {"k": BASE_K, "first_lock": BASE_LADDER.first_lock}
         result["timeframes"] = {tf: _period_table(sp, _collect(sp, data, tf, None), False) for tf in tfs}

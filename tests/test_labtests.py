@@ -1,20 +1,16 @@
-"""Lab tests (paperbot/agents/labtests.py) and the cache builder's parsing (labdata.py).
+"""Lab tests (paperbot/agents/labtests.py); the cache builder (labdata.py) is in test_labdata.py.
 
 Everything runs on small synthetic caches written into tmp dirs; nothing touches the network.
 """
 
-import io
 import json
 import os
-import zipfile
-from datetime import date
 
 import numpy as np
 import pandas as pd
 import pytest
 
 from paperbot import cards, sweepsig
-from paperbot.agents import labdata as LD
 from paperbot.agents import labtests as LT
 from paperbot.ladder import LadderSpec
 
@@ -390,104 +386,3 @@ def test_labdata_from_env(cache, monkeypatch):
     assert d.strategies("1h") == list(NAMES)
     monkeypatch.setenv("LAB_DATA_DIR", "/nonexistent/lab")
     assert LT.LabData.from_env() is None
-
-
-# ------------------------------------------------------------------ labdata (no network)
-HEADER = "open_time,open,high,low,close,volume,close_time,quote_volume,count,taker_buy_volume,taker_buy_quote_volume,ignore\n"
-
-
-def _rows(start_ms, n, step_ms, px=100.0, micro=False):
-    out = []
-    for k in range(n):
-        t = start_ms + k * step_ms
-        tt = t * 1000 if micro else t
-        out.append(f"{tt},{px + k},{px + k + 1},{px + k - 1},{px + k + 0.5},{10 + k},{t + step_ms - 1},1,1,1,1,0")
-    return "\n".join(out) + "\n"
-
-
-def _zip(name, text):
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w") as z:
-        z.writestr(name, text)
-    return buf.getvalue()
-
-
-def test_parse_kline_csv_with_and_without_header_and_microseconds():
-    t0 = int(pd.Timestamp("2024-01-01", tz="UTC").value // 1_000_000)
-    a = LD.parse_kline_csv(_rows(t0, 3, 3_600_000))
-    b = LD.parse_kline_csv(HEADER + _rows(t0, 3, 3_600_000))
-    c = LD.parse_kline_csv(HEADER + _rows(t0, 3, 3_600_000, micro=True))
-    for df in (a, b, c):
-        assert list(df.columns) == ["ts", "open", "high", "low", "close", "volume"]
-        assert len(df) == 3 and df["ts"].iloc[0] == pd.Timestamp("2024-01-01", tz="UTC")
-        assert df["ts"].iloc[2] == pd.Timestamp("2024-01-01 02:00", tz="UTC")
-        assert df["close"].tolist() == [100.5, 101.5, 102.5] and df["volume"].iloc[1] == 11.0
-    z = LD.parse_kline_zip(_zip("BTCUSDT-1h-2024-01.csv", HEADER + _rows(t0, 2, 3_600_000)))
-    assert len(z) == 2 and z["high"].iloc[1] == 102.0
-
-
-def test_urls_and_months():
-    assert LD.symbol_of("BTCUSD") == "BTCUSDT"
-    assert LD.monthly_url("BTCUSDT", "1h", "2024-01") == \
-        "https://data.binance.vision/data/futures/um/monthly/klines/BTCUSDT/1h/BTCUSDT-1h-2024-01.zip"
-    assert LD.daily_url("SOLUSDT", "5m", "2026-09-01").endswith("/daily/klines/SOLUSDT/5m/SOLUSDT-5m-2026-09-01.zip")
-    assert LD.months_between("2023-11-15", "2024-02-01") == ["2023-11", "2023-12", "2024-01"]
-    assert LD.months_between("2023-11-01", "2024-02-02") == ["2023-11", "2023-12", "2024-01", "2024-02"]
-
-
-def test_load_klines_with_a_fake_archive(tmp_path):
-    import hashlib
-    sym, tf, step = "BTCUSDT", "1d", 86_400_000
-    files = {}
-    for month, days in (("2024-01", 31), ("2024-02", 29)):
-        t0 = int(pd.Timestamp(month + "-01", tz="UTC").value // 1_000_000)
-        blob = _zip(f"{sym}-{tf}-{month}.csv", HEADER + _rows(t0, days, step))
-        url = LD.monthly_url(sym, tf, month)
-        files[url] = blob
-        files[url + ".CHECKSUM"] = f"{hashlib.sha256(blob).hexdigest()}  {sym}-{tf}-{month}.zip\n".encode()
-    for day in ("2024-03-01", "2024-03-02"):          # March not published monthly yet
-        t0 = int(pd.Timestamp(day, tz="UTC").value // 1_000_000)
-        files[LD.daily_url(sym, tf, day)] = _zip(f"{sym}-{tf}-{day}.csv", _rows(t0, 1, step))
-    calls = []
-
-    def getter(url):
-        calls.append(url)
-        return files.get(url)
-
-    df, notes = LD.load_klines(sym, tf, "2023-12-01", "2024-03-10", str(tmp_path / "k"), getter,
-                               today=date(2024, 3, 3))
-    assert notes["months"] == ["2024-01", "2024-02"] and notes["months_missing"] == ["2023-12"]
-    assert notes["days"] == ["2024-03-01", "2024-03-02"]
-    assert len(df) == 31 + 29 + 2 and df["ts"].is_monotonic_increasing and df["ts"].is_unique
-    assert df["ts"].iloc[-1] == pd.Timestamp("2024-03-02", tz="UTC")
-    # second load reads the download cache only
-    calls.clear()
-    df2, _ = LD.load_klines(sym, tf, "2024-01-01", "2024-03-01", str(tmp_path / "k"), getter, today=date(2024, 3, 3))
-    assert len(df2) == 60 and calls == []
-    # a corrupted download is refused
-    bad = dict(files)
-    bad[LD.monthly_url(sym, tf, "2024-01")] = files[LD.monthly_url(sym, tf, "2024-02")]
-    with pytest.raises(RuntimeError, match="checksum"):
-        LD.load_klines(sym, tf, "2024-01-01", "2024-02-01", None, bad.get, today=date(2024, 3, 3))
-
-
-def test_build_one_writes_a_cache_the_lab_can_read(tmp_path):
-    L = sweepsig.lib()
-    df = L.synth_ohlcv(900, "4h", seed=5, start="2024-01-01")
-    ms = (df["ts"].astype("int64") // 1_000_000).to_numpy()
-    text = HEADER + "".join(f"{t},{o},{h},{lo},{c},{v},{t + 14_400_000 - 1},1,1,1,1,0\n" for t, o, h, lo, c, v in
-                            zip(ms, df["open"], df["high"], df["low"], df["close"], df["volume"]))
-    by_month = {}
-    for line in text.splitlines()[1:]:
-        m = pd.Timestamp(int(line.split(",")[0]), unit="ms").strftime("%Y-%m")
-        by_month.setdefault(m, []).append(line)
-    files = {LD.monthly_url("ETHUSDT", "4h", m): _zip("x.csv", "\n".join(rows) + "\n") for m, rows in by_month.items()}
-    row = LD.build_one("4h", "ETHUSD", str(tmp_path), "2024-01-01", "2024-06-30", None, files.get, verify=False)
-    assert row["bars"] == int((df["ts"] < pd.Timestamp("2024-06-30", tz="UTC")).sum()) and "error" not in row
-    with np.load(tmp_path / "sig_4h_ETHUSD.npz") as z:
-        keys = set(z.files)
-        assert {"ts", "o", "h", "l", "c", "atr", "s__DOGE"} <= keys and "s__DOGE_L" not in keys
-        assert z["ts"].dtype == np.int64 and z["s__DOGE"].dtype == np.int8
-        assert len([k for k in keys if k.startswith("s__")]) == 36
-    d = LT.LabData(str(tmp_path))
-    assert d.coins("main", "4h") == ["ETHUSD"] and len(d.strategies("4h")) == 36

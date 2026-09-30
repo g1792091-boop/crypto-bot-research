@@ -1,0 +1,247 @@
+{
+ "note": "content_digest (research/entry_study/final_signals.py) of the signal caches the research used after the DOGE join fix: main = research/binance_data (Binance USDT-M, 2021-01 .. 2026-09-29), pre2021 = final_signals.build from data/pre2021. paperbot.agents.labdata checks a server build against these.",
+ "main": {
+  "5m_BTCUSD": {
+   "digest": "52df70f3cfc82d44edd2fb7b543aad10e060d5e886b525b5fd744b5c37f37925",
+   "bars": 604177
+  },
+  "5m_ETHUSD": {
+   "digest": "44f1bd683933113c1ac4dd7ee37a64fbc10c5d240d4a42979b1ee33f63d4e4be",
+   "bars": 604177
+  },
+  "5m_SOLUSD": {
+   "digest": "ae18ad47dfcf6981344744eb445099c96858ca363a30c6fddaf20e6c8150502c",
+   "bars": 604177
+  },
+  "5m_DOGEUSD": {
+   "digest": "5a253b1563ec3031d66603483b7352be536752159c5b6420c0e9660b01fc9a1f",
+   "bars": 604177
+  },
+  "5m_LTCUSD": {
+   "digest": "1a7636732850d3fc52fe3e89700f4c61c7eaa6e805100e7b8d3c059bb34c37f3",
+   "bars": 604177
+  },
+  "5m_BCHUSD": {
+   "digest": "717630e71daad4cb18edf3b17c6ff6a12fa9500a3999c571e1556778d8bbd4b5",
+   "bars": 604177
+  },
+  "15m_BTCUSD": {
+   "digest": "d51f41750735424fd224990609297153be7a5ab6e9793296d77180b7aba74a9c",
+   "bars": 201398
+  },
+  "15m_ETHUSD": {
+   "digest": "849e3ec2652c54c15d2d3ac708874fea72b4602ae7127e1fdfe44c2c91f074a4",
+   "bars": 201398
+  },
+  "15m_SOLUSD": {
+   "digest": "f7f08370b80b2d83df17f49bcd18ca37b2fdfd8f80f9b1f8ad0948a329fe4c94",
+   "bars": 201398
+  },
+  "15m_DOGEUSD": {
+   "digest": "435027fac3daf668ae52f13d392efc191eaa53ead0ebd3ae734e97c97c522590",
+   "bars": 201398
+  },
+  "15m_LTCUSD": {
+   "digest": "928d460b693f5b6589625922dc2564ecd126dae315d6157fcb78c9d8e3f544ae",
+   "bars": 201398
+  },
+  "15m_BCHUSD": {
+   "digest": "1cf5b985a10017a9a44f16cfd4e560c8e55cf0eadc106d160a7b1695dedac709",
+   "bars": 201398
+  },
+  "30m_BTCUSD": {
+   "digest": "61dd398d818ea311c9fd8e55ded64a2fb26009c2425165542defcb7640d492e6",
+   "bars": 100701
+  },
+  "30m_ETHUSD": {
+   "digest": "4b5d6f72d95f39906ae67b559f2ba215459e1f4747760966d74609f6bec8aee5",
+   "bars": 100701
+  },
+  "30m_SOLUSD": {
+   "digest": "beeaf7028ee45611909a93639815583b0cf7fcebc1b61855d61d259c21e4c779",
+   "bars": 100701
+  },
+  "30m_DOGEUSD": {
+   "digest": "bf725789d4778a672bd40f3ae0481b0028c84cc0d1fc76ef82615990ca518309",
+   "bars": 100701
+  },
+  "30m_LTCUSD": {
+   "digest": "ee59bb451401060298e1499fdd5c0ac9c47365f1c1e84d892251e4da48eef9f2",
+   "bars": 100701
+  },
+  "30m_BCHUSD": {
+   "digest": "0008e1646551eac7ea0bec8bc6091793b1cee14558b570da3adcb7bb1f8e7bd7",
+   "bars": 100701
+  },
+  "1h_BTCUSD": {
+   "digest": "be3448029f0adedd8701bbaaf11b4dffaa2b3566267eda06706ff4f8330be02a",
+   "bars": 50351
+  },
+  "1h_ETHUSD": {
+   "digest": "5eb059becaa71c0ee12cfa6a90d3c89e1304e87df446cc028275aaaecbe10609",
+   "bars": 50351
+  },
+  "1h_SOLUSD": {
+   "digest": "99f7d2cfb675f17cf2541d30c3816ebed01762cfbe8e0f7720dcced76b0a3910",
+   "bars": 50351
+  },
+  "1h_DOGEUSD": {
+   "digest": "c1d1770af5135ffd5646e2d22637fb911584775953cca8677a211a9bf3de5e26",
+   "bars": 50351
+  },
+  "1h_LTCUSD": {
+   "digest": "38a5d89e5fb5b56b509f23e6279a554a7b9bef37b6e07ac2a9f37bf04102fe04",
+   "bars": 50351
+  },
+  "1h_BCHUSD": {
+   "digest": "76ea64183ffb081065e8034afd74dfaf67e2b861c51fc58ca3370e921df8dd66",
+   "bars": 50351
+  },
+  "4h_BTCUSD": {
+   "digest": "7bf1905bf47feb539384e10256f2ea042920dd26148f9141fbe46cc1e434c8dd",
+   "bars": 12588
+  },
+  "4h_ETHUSD": {
+   "digest": "7be1438a57e69a39cb0f520cf6ca617add5463f174a3da705457bd3dfc899380",
+   "bars": 12588
+  },
+  "4h_SOLUSD": {
+   "digest": "ce8f89ac78af1e1ffe35708769bed143628e0f2814f8aceb95f2d551d43e9999",
+   "bars": 12588
+  },
+  "4h_DOGEUSD": {
+   "digest": "8bc06c4e552f29153d1f2d0796aecc8ee358ec743543a26ac84495dca3a8767c",
+   "bars": 12588
+  },
+  "4h_LTCUSD": {
+   "digest": "6a6791276c32b8934939f4ff18f2cfd54db3a701f14b2c765c73aaef945fde39",
+   "bars": 12588
+  },
+  "4h_BCHUSD": {
+   "digest": "4d89b8d5b398b863673abf5b1ba5b2c92ebaa9ea2a31d3d5f1fea9a84d6166c9",
+   "bars": 12588
+  }
+ },
+ "pre2021": {
+  "5m_BTCUSD": {
+   "digest": "78a56c5a2a6aa12fb97dcc2835ff5f97fc7c4594680722ced383b3194a7a7b9f",
+   "bars": 175392
+  },
+  "5m_ETHUSD": {
+   "digest": "78940b6b43d5de2a10cb1367c1e228a211d93ec6b0b555cbed820dba1250cfdc",
+   "bars": 175392
+  },
+  "5m_SOLUSD": {
+   "digest": "a822fc659dfd59443e44009bbbd12c1ac6b5903ca0eba4f572f612cb797c905e",
+   "bars": 101292
+  },
+  "5m_DOGEUSD": {
+   "digest": "5f5665394d057834127465ee35c43d0e17f6601fca3d9a5a31ed6163ee947dbc",
+   "bars": 120276
+  },
+  "5m_LTCUSD": {
+   "digest": "3f81d68d09a8e91006620aa69e0b8d336d584bead97f1d1651b09af33118029d",
+   "bars": 172991
+  },
+  "5m_BCHUSD": {
+   "digest": "407022b956645b3217e48fd30cbeccfcbf1ae13a1b9d1a7fa016b291d59d62bf",
+   "bars": 175392
+  },
+  "15m_BTCUSD": {
+   "digest": "fa002e06a33caa85f7b6c578ed302ed6b54f857b59048ee21c5a372c845e4165",
+   "bars": 58464
+  },
+  "15m_ETHUSD": {
+   "digest": "c1b09a743de2c36923fa339eb8f894a19d5aa3e6d02fad2f321cf3e74f725757",
+   "bars": 58464
+  },
+  "15m_SOLUSD": {
+   "digest": "f1e895028fbd3ccddacf9c7aa181c9c6fb9cec326b798aea97f5ae38e0ac4a91",
+   "bars": 33764
+  },
+  "15m_DOGEUSD": {
+   "digest": "229bb777857219eca215ec8558dc2cfe7376674f4881b939852ad270e59664ed",
+   "bars": 40092
+  },
+  "15m_LTCUSD": {
+   "digest": "0dd2f67ffa7cae762b2a101a43cccc01b4042f13da2dce32d63d148a9b1640a4",
+   "bars": 57663
+  },
+  "15m_BCHUSD": {
+   "digest": "d349ddbd5306f22502bfb0dad487a4fb571e1587e6bcacf2ea13b62bff1caab5",
+   "bars": 58464
+  },
+  "30m_BTCUSD": {
+   "digest": "5e68590a646cf12ce02ebf103be1acec0b7696e6bd95b0fc392138bbfd1cf5cf",
+   "bars": 29232
+  },
+  "30m_ETHUSD": {
+   "digest": "9c6b3772506e4d48bc5538b489d3cc20c6ea929d02733e18e359f6feef8ace84",
+   "bars": 29232
+  },
+  "30m_SOLUSD": {
+   "digest": "d7e8e705574099a0f657712114cc7f48aae91b5a9dd987b1448f98860207cc96",
+   "bars": 16882
+  },
+  "30m_DOGEUSD": {
+   "digest": "277e43e0c6ed9d836b7dd11212125e7333b79e6245a7c354041ebd842d970821",
+   "bars": 20046
+  },
+  "30m_LTCUSD": {
+   "digest": "5cb7457fda5dfac18783f4770d31e51407b8e84f1023712dfab6fda6a52b651b",
+   "bars": 28831
+  },
+  "30m_BCHUSD": {
+   "digest": "38a0995267f056441d18ecf12d08de84b88659cac371dbb913a69824cbfb8c31",
+   "bars": 29232
+  },
+  "1h_BTCUSD": {
+   "digest": "9d6aeecd6a8bc288f0a75844f095d919ecf6d21035cc2375280e5b8969a03874",
+   "bars": 14616
+  },
+  "1h_ETHUSD": {
+   "digest": "0b96a36496f57842d471f152e7c83dc3ac4b15a5b41a2ce464da3143d87c8309",
+   "bars": 14616
+  },
+  "1h_SOLUSD": {
+   "digest": "c63acfd471d82cb122d63d80acf2f1463983c2824d1159c527c8e3b88d972be7",
+   "bars": 8441
+  },
+  "1h_DOGEUSD": {
+   "digest": "bac909474d4b3b567e02b607ef1970b8ed45d4e44cddd12e19dedf1b5afe264a",
+   "bars": 10023
+  },
+  "1h_LTCUSD": {
+   "digest": "9656d345d926c77e2a60b64b8a3891220cec16b46634743a1280917ccfb2f030",
+   "bars": 14415
+  },
+  "1h_BCHUSD": {
+   "digest": "c7f959a6e30d3a90e3b0e096e76cf223f4743127608c3390c4c3d6854550b608",
+   "bars": 14616
+  },
+  "4h_BTCUSD": {
+   "digest": "7e6e1779108759372fa7a2871a8faa6d61b21bfa03a10266806f781875f293ca",
+   "bars": 3654
+  },
+  "4h_ETHUSD": {
+   "digest": "987a9a284fd3a879208bd834ce21fe23fdf483b71035646841066329aa242902",
+   "bars": 3654
+  },
+  "4h_SOLUSD": {
+   "digest": "f6fb739359ce7e9eb622feddc6c887445a1c4f69b83ecefe188d2c9c302842b6",
+   "bars": 2110
+  },
+  "4h_DOGEUSD": {
+   "digest": "7471ad609d130004e254dde1e74da86ddcbd5fe91287c65fbdd41bb34076c0d5",
+   "bars": 2505
+  },
+  "4h_LTCUSD": {
+   "digest": "ba224917b3bca5f4ab3e64fe0c6dfc0bd908fd2770e718a1f1d4ddc87f6ba30a",
+   "bars": 3603
+  },
+  "4h_BCHUSD": {
+   "digest": "353a152d8d38c853379e6d04121bf8e4fb9ee8467095861ce031eae20536716a",
+   "bars": 3654
+  }
+ }
+}

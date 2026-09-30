@@ -32,7 +32,8 @@ systemctl enable --now fail2ban chrony
 echo "== user and directories"
 id paperbot >/dev/null 2>&1 || useradd --system --create-home --home-dir /var/lib/paperbot --shell /usr/sbin/nologin paperbot
 install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot /var/backups/paperbot
-# 5-year test caches for the agent rooms (python -m paperbot.agents.labdata build --out /var/lib/paperbot/lab)
+# 5-year test caches for the agent rooms (python -m paperbot.agents.labdata build --out /var/lib/paperbot/lab;
+# same build as the research, checked file by file against paperbot/agents/labdata_reference.json)
 install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot/lab
 install -d -o root -g paperbot -m 750 /etc/paperbot
 

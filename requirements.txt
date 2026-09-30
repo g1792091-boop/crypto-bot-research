@@ -5,6 +5,8 @@ scipy>=1.11
 pytest>=8
 # Liquidation stream recorder (paperbot/liqstream.py)
 websocket-client>=1.6
+# Agent lab 5-year caches (research/binance_data/build.py download)
+requests>=2.31
 # Paper v3 dashboard (paperbot/dash)
 fastapi>=0.110
 uvicorn>=0.29

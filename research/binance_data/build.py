@@ -87,10 +87,10 @@ from paperbot import sweepsig  # noqa: E402
 BASE = os.environ.get("BINANCE_DIR", os.path.join(SCRATCH, "binance"))
 RAW = os.path.join(BASE, "raw")
 BARS = os.path.join(BASE, "bars")
-SIGNALS = os.path.join(BASE, "signals")
+SIGNALS = os.environ.get("BINANCE_SIGNALS", os.path.join(BASE, "signals"))
 FUNDING = os.path.join(BASE, "funding")
 MANIFEST = os.path.join(BASE, "manifest_download.json")
-OUT = os.path.join(HERE, "out")
+OUT = os.environ.get("BINANCE_REPORTS", os.path.join(HERE, "out"))   # the server lab build writes its reports elsewhere
 SWEEP_CACHE = os.path.join(SCRATCH, "paper_rules", "signals")          # periods 1-2, sweep (spot) bars
 PRE2021_CACHE = os.path.join(SCRATCH, "entry_study", "signals_pre2021")  # period 3, Binance futures
 
@@ -593,7 +593,9 @@ def _signals_job(args) -> dict:
     t1 = time.time()
     arrs = FS.signal_arrays(L, df, tf, coin)
     t2 = time.time()
-    ref_keys = set(np.load(_sig_path(SWEEP_CACHE, tf, coin)).files)
+    ref = _sig_path(SWEEP_CACHE, tf, coin)
+    # the sweep cache exists only in the research scratchpad; the server lab build checks digests instead
+    ref_keys = set(np.load(ref).files) if os.path.exists(ref) else set(arrs) - {"v"}
     if set(arrs) != ref_keys | {"v"}:
         raise RuntimeError(f"{tf} {coin}: keys {sorted(set(arrs) ^ (ref_keys | {'v'}))} differ from the sweep cache")
     tmp = _sig_path(SIGNALS, tf, coin) + ".tmp.npz"

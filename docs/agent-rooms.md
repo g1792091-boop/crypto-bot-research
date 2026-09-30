@@ -191,8 +191,12 @@ sudo -u paperbot -H /var/lib/paperbot/.local/bin/claude setup-token
 #          → "apiKeySource"가 없어야 하고, "apiProvider"가 있다면 "firstParty"여야 합니다. 아니면 틱이 회의를 열지 않고 멈춥니다(상태 코드 2).
 
 # 2) (선택) 5년 시험 자료 만들기. 공개 바이낸스 자료만 받습니다(키 필요 없음). 없으면 시험은 '자료 없음'으로 기록됩니다.
+#    연구와 같은 코드(research/binance_data/build.py, research/entry_study/final_signals.py)로 만들고,
+#    끝나면 60개 파일이 연구 자료와 똑같은지 스스로 확인합니다("60/60 files identical"이 나와야 합니다).
+#    받는 양 약 230MB, 디스크 약 1.5GB, 시간 30분~1시간(2코어 기준). 중간에 끊기면 같은 명령을 다시 실행하면 이어서 합니다.
+cd /opt/crypto-bot-research
 sudo -u paperbot nice -n 10 /opt/paperbot/venv/bin/python -m paperbot.agents.labdata build --out /var/lib/paperbot/lab --procs 2
-sudo -u paperbot nice -n 10 /opt/paperbot/venv/bin/python -m paperbot.agents.labdata build --out /var/lib/paperbot/lab --pre2021 --procs 2
+#    확인만 다시 하려면: ... -m paperbot.agents.labdata check --out /var/lib/paperbot/lab
 
 # 3) 배관 점검 (AI 호출 없음, 실제 agents3.db는 건드리지 않음)
 cd /opt/crypto-bot-research
