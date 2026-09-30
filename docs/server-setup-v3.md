@@ -103,4 +103,4 @@ sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.live3 status --db /va
    ```bash
    sudo -u paperbot bash -c 'set -a; . /etc/paperbot/live.env; /opt/paperbot/venv/bin/python -m paperbot.testnet drill --symbol BTCUSDT'
    ```
-4. 확인하는 것: 한 방향 모드·격리 마진·레버리지 설정 → 시장가 진입 체결 → **거래소에 걸린 손절**(마크 가격 기준) → 잠금선 올리기(새 손절 먼저, 옛 손절 나중 취소: 보호 공백 없음) → 재시작 점검(손절 없는 포지션 발견·복구) → 청산 → 포지션·주문 0개. 모든 줄이 `[OK]`여야 합니다.
+4. 확인하는 것: 한 방향 모드·격리 마진·레버리지 설정 → 시장가 진입 체결 → **거래소에 걸린 손절**(마지막 체결가 기준으로 바꿀 예정: `docs/paper-v3-rules-addendum.md` Q4. 지금 연습 코드는 아직 마크 가격이라 실거래 연습 전에 고칩니다) → 잠금선 올리기(새 손절 먼저, 옛 손절 나중 취소: 보호 공백 없음) → 재시작 점검(손절 없는 포지션 발견·복구) → 청산 → 포지션·주문 0개. 모든 줄이 `[OK]`여야 합니다.
