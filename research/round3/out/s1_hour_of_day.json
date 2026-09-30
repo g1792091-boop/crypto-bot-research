@@ -1,0 +1,64 @@
+{
+ "cells_selected": 6,
+ "cells": [
+  {
+   "coin": "XRPUSD",
+   "hour": 1,
+   "mean": -0.000898,
+   "std": 0.009544,
+   "size": 1065,
+   "t": -3.070384
+  },
+  {
+   "coin": "XRPUSD",
+   "hour": 4,
+   "mean": 0.000636,
+   "std": 0.007042,
+   "size": 1065,
+   "t": 2.948464
+  },
+  {
+   "coin": "XRPUSD",
+   "hour": 6,
+   "mean": -0.000887,
+   "std": 0.007772,
+   "size": 1065,
+   "t": -3.724801
+  },
+  {
+   "coin": "XRPUSD",
+   "hour": 8,
+   "mean": -0.000672,
+   "std": 0.008412,
+   "size": 1065,
+   "t": -2.605803
+  },
+  {
+   "coin": "XRPUSD",
+   "hour": 18,
+   "mean": 0.000998,
+   "std": 0.008839,
+   "size": 1065,
+   "t": 3.683615
+  },
+  {
+   "coin": "XRPUSD",
+   "hour": 23,
+   "mean": -0.000592,
+   "std": 0.007317,
+   "size": 1064,
+   "t": -2.636995
+  }
+ ],
+ "cf_trades": 4909,
+ "cf_mean_pct": -0.1324911334205761,
+ "cf_p": 1.0,
+ "cf_win_pct": 38.847015685475654,
+ "cf_coins_pos": 0,
+ "cf_coins": 1,
+ "cf_gross_pct": 0.007508866579423883,
+ "cf_own_trades": 4909,
+ "cf_own_final_x": 5.5556033531993e-13,
+ "cf_own_mdd_pct": -99.99999999995507,
+ "candidate_20x": false
+}
