@@ -1,0 +1,1375 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style></head><body><title>건축설계 AI 스튜디오</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: drafting-table dashboard — left rail nav, KPI strip, viewport center, AI console right; stacks on phones */
+:root{
+  --bg:#EEF0EC; --panel:#F8F9F6; --panel-2:#E4E7E1; --line:#CDD2CA; --ink:#1C2326; --muted:#5D6862;
+  --accent:#1F5C8C; --accent-ink:#FFFFFF; --mark:#D9A21B; --ok:#2E7D4F; --warn:#B7791F; --bad:#B23B2E;
+  --viewport:#DDE2DC;
+  --f-body:"IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --r:6px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#141A1C; --panel:#1B2326; --panel-2:#232D31; --line:#34413F; --ink:#E4E9E4; --muted:#95A39C;
+  --accent:#6FA8D6; --accent-ink:#0F171B; --mark:#E8B84A; --ok:#5DBB83; --warn:#E0A94A; --bad:#E07A6C;
+  --viewport:#10171A; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#141A1C; --panel:#1B2326; --panel-2:#232D31; --line:#34413F; --ink:#E4E9E4; --muted:#95A39C;
+  --accent:#6FA8D6; --accent-ink:#0F171B; --mark:#E8B84A; --ok:#5DBB83; --warn:#E0A94A; --bad:#E07A6C;
+  --viewport:#10171A; color-scheme:dark}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.5}
+*{box-sizing:border-box}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+
+.app{display:grid;grid-template-columns:200px minmax(0,1fr);min-height:100%}
+.rail{background:var(--panel);border-right:1px solid var(--line);padding:18px 12px;display:flex;flex-direction:column;gap:18px}
+.brand{display:flex;flex-direction:column;gap:2px;padding:0 6px}
+.brand b{font-size:16px;letter-spacing:-.01em}
+.brand span{font-size:11px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+.nav{display:flex;flex-direction:column;gap:4px}
+.nav button{all:unset;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 10px;border-radius:var(--r);color:var(--muted);font-weight:500}
+.nav button:hover{background:var(--panel-2);color:var(--ink)}
+.nav button[aria-current="page"]{background:var(--ink);color:var(--bg)}
+.nav button:focus-visible{outline:2px solid var(--accent)}
+.badge{min-width:20px;padding:0 6px;height:20px;border-radius:10px;background:var(--mark);color:#1C2326;font-size:11px;font-weight:700;display:inline-flex;align-items:center;justify-content:center}
+.rail-foot{margin-top:auto;font-size:11px;color:var(--muted);padding:0 6px;display:flex;flex-direction:column;gap:6px}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:11px;padding:2px 8px;border-radius:10px;border:1px solid var(--line);color:var(--muted)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--muted)}
+.dot.on{background:var(--ok)}
+
+main{padding-block:18px;padding-inline:20px;display:flex;flex-direction:column;gap:16px;min-width:0}
+.view{display:flex;flex-direction:column;gap:16px;min-width:0}
+.head{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:10px}
+.head h1{font-size:20px;margin:0;letter-spacing:-.01em;text-wrap:balance}
+.head p{margin:2px 0 0;color:var(--muted);font-size:13px}
+
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.kpi label{font-size:11px;color:var(--muted);letter-spacing:.04em}
+.kpi .v{font-family:var(--f-mono);font-size:18px;font-weight:500}
+.kpi .s{font-size:11px;color:var(--muted)}
+.kpi.good .v{color:var(--ok)} .kpi.over .v{color:var(--bad)}
+.kpi .bar{height:4px;background:var(--panel-2);border-radius:2px;overflow:hidden;margin-top:4px}
+.kpi .bar i{display:block;height:100%;background:var(--accent)}
+.kpi.over .bar i{background:var(--bad)}
+
+.studio{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px;min-width:0;align-items:start}
+.stage{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);display:flex;flex-direction:column;min-width:0;overflow:hidden}
+.toolbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px;border-bottom:1px solid var(--line)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.seg button{border:0;background:transparent;padding:5px 10px;font-size:12px;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.tb-sp{flex:1}
+.canvas-wrap{position:relative;height:clamp(320px,58vh,640px);background:var(--viewport)}
+.canvas-wrap canvas{display:block;width:100%;height:100%;touch-action:none}
+.hint{position:absolute;left:10px;bottom:8px;font-size:11px;color:var(--muted);pointer-events:none}
+.legend{position:absolute;right:10px;top:10px;display:flex;flex-direction:column;gap:3px;background:color-mix(in srgb,var(--panel) 88%,transparent);border:1px solid var(--line);border-radius:var(--r);padding:8px 10px;font-size:11px;max-height:calc(100% - 20px);overflow:auto}
+.legend div{display:flex;align-items:center;gap:6px}
+.legend i{width:10px;height:10px;border-radius:2px;display:inline-block}
+.loading{position:absolute;inset:0;display:grid;place-items:center;color:var(--muted);font-size:13px}
+
+.side{display:flex;flex-direction:column;gap:16px;min-width:0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);display:flex;flex-direction:column;min-width:0}
+.card h2{font-size:13px;margin:0;padding:10px 12px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:8px}
+.card h2 small{font-weight:400;color:var(--muted);font-size:11px}
+.card .body{padding:12px;display:flex;flex-direction:column;gap:10px;min-width:0}
+
+.chat{height:clamp(300px,46vh,520px)}
+.log{flex:1;overflow:auto;padding:12px;display:flex;flex-direction:column;gap:10px}
+.msg{max-width:92%;padding:8px 10px;border-radius:var(--r);font-size:13px;white-space:pre-wrap;word-break:break-word}
+.msg.me{align-self:flex-end;background:var(--ink);color:var(--bg)}
+.msg.ai{align-self:flex-start;background:var(--panel-2)}
+.msg.sys{align-self:center;font-size:11px;color:var(--muted);background:transparent;padding:0}
+.composer{border-top:1px solid var(--line);padding:8px;display:flex;flex-direction:column;gap:6px}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);background:transparent;border-radius:14px;padding:3px 9px;font-size:11px;color:var(--muted)}
+.chip:hover{border-color:var(--accent);color:var(--ink)}
+.row{display:flex;gap:6px;align-items:flex-end}
+textarea,input[type=text],input[type=number],select{background:var(--bg);border:1px solid var(--line);border-radius:var(--r);padding:7px 9px;min-width:0}
+textarea{resize:vertical;flex:1;min-height:40px;max-height:160px}
+.btn{border:1px solid var(--line);background:var(--panel);border-radius:var(--r);padding:7px 12px;font-weight:500;font-size:13px;white-space:nowrap}
+.btn:hover{border-color:var(--ink)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.small{padding:4px 9px;font-size:12px}
+.btn:disabled{opacity:.5;cursor:default}
+
+.form{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.form label{display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--muted);min-width:0}
+.form label.wide{grid-column:1/-1}
+.form input,.form select{width:100%;color:var(--ink);font-size:13px}
+
+.rooms{display:flex;flex-direction:column;gap:4px;max-height:220px;overflow:auto}
+.room{display:grid;grid-template-columns:28px minmax(0,1fr) 64px 24px;gap:6px;align-items:center;font-size:12px}
+.room input{padding:4px 6px;font-size:12px;width:100%}
+.room .x{border:0;background:transparent;color:var(--muted);padding:0}
+
+.export-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.xcard{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:8px}
+.xcard h3{margin:0;font-size:15px}
+.xcard .fmt{font-family:var(--f-mono);font-size:12px;color:var(--accent)}
+.xcard p{margin:0;color:var(--muted);font-size:12.5px}
+.xcard ol{margin:0;padding-left:18px;font-size:12.5px;color:var(--muted)}
+.xcard .btn{align-self:flex-start;margin-top:auto}
+pre.out{background:var(--bg);border:1px solid var(--line);border-radius:var(--r);padding:10px;font-family:var(--f-mono);font-size:11px;max-height:260px;overflow:auto;white-space:pre}
+
+/* auction */
+.filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;align-items:end}
+.filters label{display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--muted)}
+.table-wrap{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:var(--r)}
+table{border-collapse:collapse;width:100%;min-width:860px;font-size:13px}
+th,td{padding:9px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
+th{font-size:11px;color:var(--muted);font-weight:500;letter-spacing:.04em;background:var(--panel-2)}
+td.r,th.r{text-align:right}
+tr.hit td:first-child{box-shadow:inset 3px 0 0 var(--mark)}
+tr:last-child td{border-bottom:0}
+.tag{display:inline-block;font-size:11px;padding:1px 7px;border-radius:9px;background:var(--panel-2);color:var(--muted);white-space:nowrap}
+.tag.hot{background:var(--mark);color:#1C2326;font-weight:600}
+.tag.warn{background:color-mix(in srgb,var(--bad) 18%,transparent);color:var(--bad)}
+.sample-note{font-size:12px;color:var(--muted);border:1px dashed var(--line);border-radius:var(--r);padding:8px 10px}
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start}
+.links{display:flex;flex-wrap:wrap;gap:8px}
+.links a{color:var(--accent);font-size:13px}
+.analysis{white-space:pre-wrap;font-size:13px}
+
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:var(--r);font-size:13px;z-index:10;max-width:calc(100% - 32px)}
+
+@media (max-width:1100px){.studio{grid-template-columns:minmax(0,1fr)}.two{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:760px){
+  .app{grid-template-columns:minmax(0,1fr)}
+  .rail{flex-direction:row;flex-wrap:wrap;align-items:center;border-right:0;border-bottom:1px solid var(--line);padding:10px 16px;gap:10px}
+  .nav{flex-direction:row;flex-wrap:wrap}
+  .nav button{padding:6px 9px;font-size:13px}
+  .rail-foot{display:none}
+  main{padding-inline:16px}
+  .form{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div class="app">
+  <aside class="rail">
+    <div class="brand"><b>건축설계 AI</b><span>Design Studio</span></div>
+    <nav class="nav" aria-label="메뉴">
+      <button data-view="studio" aria-current="page">설계 스튜디오</button>
+      <button data-view="auction">경매·부동산 알림 <span class="badge" id="alertBadge" hidden>0</span></button>
+      <button data-view="export">Revit·CAD·SketchUp</button>
+    </nav>
+    <div class="rail-foot">
+      <span class="pill"><i class="dot" id="aiDot"></i><span id="aiState">AI 연결 확인 중</span></span>
+      <span>설치 없이 브라우저에서 실행됩니다.</span>
+    </div>
+  </aside>
+
+  <main>
+    <!-- ===== STUDIO ===== -->
+    <section class="view" id="view-studio">
+      <div class="head">
+        <div>
+          <h1 id="projName">프로젝트</h1>
+          <p id="projSub">조건을 말하면 AI가 건물 매스, 평면, 인테리어를 만듭니다.</p>
+        </div>
+        <div class="row">
+          <button class="btn small" id="btnUndo" disabled>되돌리기</button>
+          <button class="btn small" id="btnGoExport">내보내기</button>
+        </div>
+      </div>
+
+      <div class="kpis" id="kpis"></div>
+
+      <div class="studio">
+        <div class="stage">
+          <div class="toolbar">
+            <div class="seg" role="group" aria-label="보기 모드">
+              <button data-mode="exterior" aria-pressed="true">외관</button>
+              <button data-mode="interior" aria-pressed="false">인테리어</button>
+              <button data-mode="plan" aria-pressed="false">평면도</button>
+            </div>
+            <div class="seg" role="group" aria-label="층 선택" id="floorSeg"></div>
+            <span class="tb-sp"></span>
+            <button class="btn small" id="btnResetCam">시점 초기화</button>
+          </div>
+          <div class="canvas-wrap" id="canvasWrap">
+            <canvas id="c3d" aria-label="건물 3D 모델"></canvas>
+            <canvas id="c2d" aria-label="평면도" hidden></canvas>
+            <div class="loading" id="loading">3D 엔진을 불러오는 중…</div>
+            <div class="legend" id="legend"></div>
+            <div class="hint" id="hint">드래그: 회전 · 오른쪽 드래그/Shift: 이동 · 휠: 확대</div>
+          </div>
+        </div>
+
+        <div class="side">
+          <div class="card chat">
+            <h2>AI 설계 어시스턴트 <small id="aiMode">—</small></h2>
+            <div class="log" id="log" aria-live="polite"></div>
+            <div class="composer">
+              <div class="chips" id="chips"></div>
+              <div class="row">
+                <textarea id="prompt" rows="2" placeholder="예: 대지 20×25m에 3층 단독주택, 방 4개, 1층 카페, 스칸디나비아 인테리어. 레빗으로 줘"></textarea>
+                <button class="btn primary" id="send">보내기</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>설계 조건 <small>직접 수정 가능</small></h2>
+            <div class="body">
+              <div class="form">
+                <label class="wide">프로젝트 이름<input type="text" id="f-name"></label>
+                <label>용도<select id="f-use">
+                  <option value="house">단독주택</option><option value="multi">다가구·다세대</option>
+                  <option value="mixed">상가주택</option><option value="office">근린생활·사무</option>
+                  <option value="cafe">카페·상가</option></select></label>
+                <label>용도지역<select id="f-zone"></select></label>
+                <label>대지 가로(m)<input type="number" id="f-sw" min="5" max="200" step="0.5"></label>
+                <label>대지 세로(m)<input type="number" id="f-sd" min="5" max="200" step="0.5"></label>
+                <label>건물 가로(m)<input type="number" id="f-bw" min="4" max="150" step="0.5"></label>
+                <label>건물 세로(m)<input type="number" id="f-bd" min="4" max="150" step="0.5"></label>
+                <label>층수<input type="number" id="f-fl" min="1" max="15" step="1"></label>
+                <label>층고(m)<input type="number" id="f-fh" min="2.6" max="6" step="0.1"></label>
+                <label>외관 스타일<select id="f-style">
+                  <option value="modern">모던(백색 스타코)</option><option value="concrete">노출콘크리트</option>
+                  <option value="brick">적벽돌</option><option value="wood">목재 루버</option>
+                  <option value="glass">커튼월(유리)</option></select></label>
+                <label>지붕<select id="f-roof"><option value="flat">평지붕</option><option value="gable">박공지붕</option></select></label>
+                <label class="wide">인테리어 스타일<select id="f-int">
+                  <option value="modern">모던 화이트</option><option value="scandi">스칸디나비아</option>
+                  <option value="industrial">인더스트리얼</option><option value="natural">내추럴 우드</option>
+                  <option value="hanok">한옥 모던</option><option value="luxury">호텔식 럭셔리</option></select></label>
+              </div>
+              <div>
+                <div class="row" style="justify-content:space-between;margin-bottom:6px">
+                  <span style="font-size:12px;color:var(--muted)">층별 실 구성 (㎡)</span>
+                  <button class="btn small" id="addRoom">실 추가</button>
+                </div>
+                <div class="rooms" id="rooms"></div>
+              </div>
+              <button class="btn primary" id="apply">조건으로 다시 설계</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== AUCTION ===== -->
+    <section class="view" id="view-auction" hidden>
+      <div class="head">
+        <div>
+          <h1>경매·부동산 알림</h1>
+          <p>알림 조건에 맞는 물건을 표시하고, 마음에 드는 부지에 바로 건물을 설계합니다.</p>
+        </div>
+      </div>
+      <div class="sample-note">아래 물건은 화면 구성을 보여 주기 위한 <b>예시 데이터</b>입니다. 실제 물건은 법원경매정보·온비드에서 확인한 뒤 "물건 직접 추가"로 등록하세요. 등록한 물건과 알림 조건은 이 브라우저에 저장됩니다.</div>
+
+      <div class="card">
+        <h2>알림 조건 <small id="ruleSummary"></small></h2>
+        <div class="body">
+          <div class="filters">
+            <label>지역(포함 단어)<input type="text" id="r-region" placeholder="예: 경기, 마포"></label>
+            <label>물건 종류<select id="r-type"><option value="">전체</option><option>대지</option><option>단독주택</option><option>근린시설</option><option>다가구</option><option>전</option><option>임야</option></select></label>
+            <label>최저가 상한(억원)<input type="number" id="r-max" step="0.5" min="0"></label>
+            <label>감정가 대비 할인 ≥ (%)<input type="number" id="r-disc" step="5" min="0" max="90"></label>
+            <label>토지면적 ≥ (㎡)<input type="number" id="r-land" step="10" min="0"></label>
+            <label><span>&nbsp;</span><button class="btn" id="r-reset">조건 초기화</button></label>
+          </div>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>사건번호</th><th>소재지</th><th>종류</th><th class="r">토지(㎡)</th><th class="r">감정가</th><th class="r">최저가</th><th class="r">할인</th><th>유찰</th><th>매각기일</th><th>용도지역</th><th></th></tr></thead>
+          <tbody id="lots"></tbody>
+        </table>
+      </div>
+
+      <div class="two">
+        <div class="card">
+          <h2>물건 직접 추가</h2>
+          <div class="body">
+            <div class="form">
+              <label>사건번호<input type="text" id="n-no" placeholder="2026타경12345"></label>
+              <label>종류<select id="n-type"><option>대지</option><option>단독주택</option><option>근린시설</option><option>다가구</option><option>전</option><option>임야</option></select></label>
+              <label class="wide">소재지<input type="text" id="n-addr" placeholder="서울 ○○구 ○○동 123-4"></label>
+              <label>토지면적(㎡)<input type="number" id="n-land" min="1"></label>
+              <label>용도지역<select id="n-zone"></select></label>
+              <label>감정가(억원)<input type="number" id="n-appr" step="0.01" min="0"></label>
+              <label>최저가(억원)<input type="number" id="n-min" step="0.01" min="0"></label>
+              <label>유찰 횟수<input type="number" id="n-fail" min="0" max="10" value="0"></label>
+              <label>매각기일<input type="text" id="n-date" placeholder="2026-11-20"></label>
+            </div>
+            <button class="btn primary" id="n-add">물건 추가</button>
+            <div class="links">
+              <a href="https://www.courtauction.go.kr" target="_blank" rel="noopener">법원경매정보</a>
+              <a href="https://www.onbid.co.kr" target="_blank" rel="noopener">온비드(공매)</a>
+              <a href="https://rt.molit.go.kr" target="_blank" rel="noopener">국토부 실거래가</a>
+              <a href="https://www.eum.go.kr" target="_blank" rel="noopener">토지이음(규제 확인)</a>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <h2>AI 물건 분석 <small id="anTarget">물건을 선택하세요</small></h2>
+          <div class="body">
+            <div class="analysis" id="analysis">표에서 "분석"을 누르면 AI가 권리·수익성 체크포인트와 개발 가능 규모를 정리합니다. 투자 판단은 반드시 등기부·현장 확인과 전문가 상담을 거쳐야 합니다.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== EXPORT ===== -->
+    <section class="view" id="view-export" hidden>
+      <div class="head">
+        <div>
+          <h1>Revit · AutoCAD · SketchUp 내보내기</h1>
+          <p>현재 설계를 각 프로그램에서 열 수 있는 파일로 묶어 ZIP으로 받습니다. 단위는 모두 미터(m)입니다.</p>
+        </div>
+      </div>
+      <div class="export-grid">
+        <div class="xcard">
+          <h3>Revit</h3><span class="fmt">.ifc (IFC4)</span>
+          <p>층(Storey), 벽, 슬래브, 실(Space) 정보가 담긴 BIM 파일입니다.</p>
+          <ol><li>Revit ▸ 열기 ▸ IFC</li><li>또는 삽입 ▸ IFC 링크</li></ol>
+          <button class="btn primary" data-export="revit">Revit 패키지 받기</button>
+        </div>
+        <div class="xcard">
+          <h3>AutoCAD</h3><span class="fmt">.dxf (R12)</span>
+          <p>층별 평면도(벽·창·실명·치수)와 3D 매스가 레이어별로 들어 있습니다.</p>
+          <ol><li>AutoCAD ▸ 열기 ▸ 파일 형식 DXF</li><li>레이어: WALL, WINDOW, ROOM, DIM, MASS3D</li></ol>
+          <button class="btn primary" data-export="autocad">AutoCAD 패키지 받기</button>
+        </div>
+        <div class="xcard">
+          <h3>SketchUp</h3><span class="fmt">.dae (COLLADA) · .obj</span>
+          <p>재질 색상이 포함된 3D 모델입니다. 가구와 인테리어도 함께 들어갑니다.</p>
+          <ol><li>SketchUp ▸ 파일 ▸ 가져오기 ▸ COLLADA(.dae)</li><li>단위 확인 후 배치</li></ol>
+          <button class="btn primary" data-export="sketchup">SketchUp 패키지 받기</button>
+        </div>
+        <div class="xcard">
+          <h3>전체 패키지</h3><span class="fmt">ifc · dxf · dae · obj · json</span>
+          <p>모든 형식과 설계 조건(JSON)을 한 번에 받습니다. JSON은 이 대시보드로 다시 불러올 수 있습니다.</p>
+          <div class="row"><button class="btn primary" data-export="all">전체 받기</button><label class="btn" for="importJson">JSON 불러오기</label></div>
+          <input type="file" id="importJson" accept=".json,application/json" hidden>
+        </div>
+      </div>
+      <div class="card">
+        <h2>미리보기 <small id="previewName">형식을 고르세요</small></h2>
+        <div class="body">
+          <div class="seg" role="group" aria-label="미리보기 형식" id="previewSeg">
+            <button data-prev="ifc" aria-pressed="false">IFC</button><button data-prev="dxf" aria-pressed="false">DXF</button>
+            <button data-prev="dae" aria-pressed="false">DAE</button><button data-prev="json" aria-pressed="true">JSON</button>
+          </div>
+          <pre class="out" id="previewOut"></pre>
+          <button class="btn small" id="copyPrev" style="align-self:flex-start">내용 복사</button>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(() => {
+"use strict";
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem("archai:"+k); return v ? JSON.parse(v) : d; }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem("archai:"+k, JSON.stringify(v)); }catch(e){} }
+};
+const toast = msg => { const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast._t); toast._t = setTimeout(() => t.hidden = true, 2600); };
+const fmt = (n, d=1) => Number(n).toLocaleString("ko-KR", {maximumFractionDigits:d, minimumFractionDigits:0});
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+/* ---------- 법규 기준 (국토계획법 시행령 상한, 지자체 조례로 더 낮을 수 있음) ---------- */
+const ZONES = {
+  "제1종전용주거": {bcr:50, far:100},
+  "제2종전용주거": {bcr:50, far:150},
+  "제1종일반주거": {bcr:60, far:200},
+  "제2종일반주거": {bcr:60, far:250},
+  "제3종일반주거": {bcr:50, far:300},
+  "준주거": {bcr:70, far:500},
+  "근린상업": {bcr:70, far:900},
+  "일반상업": {bcr:80, far:1300},
+  "준공업": {bcr:70, far:400},
+  "계획관리": {bcr:40, far:100},
+  "생산관리": {bcr:20, far:80},
+  "자연녹지": {bcr:20, far:100}
+};
+const USE_LABEL = {house:"단독주택", multi:"다가구·다세대", mixed:"상가주택", office:"근린생활·사무", cafe:"카페·상가"};
+/* 대략적인 ㎡당 공사비(원, 2026 기준 추정치). 설계·인허가·토지비 제외 */
+const COST_M2 = {modern:2600000, concrete:2900000, brick:2750000, wood:2800000, glass:3300000};
+const INT_M2 = {modern:550000, scandi:600000, industrial:520000, natural:650000, hanok:800000, luxury:1100000};
+
+/* ---------- 방 종류 ---------- */
+const ROOM_TYPES = {
+  living:{label:"거실", color:"#E8D9B5"}, kitchen:{label:"주방·식당", color:"#F0C987"},
+  bed:{label:"침실", color:"#B9D3E8"}, master:{label:"안방", color:"#9EC1E0"},
+  bath:{label:"욕실", color:"#A8DCD1"}, study:{label:"서재", color:"#C9C2E6"},
+  stair:{label:"계단실", color:"#B8BDB5"}, hall:{label:"현관·복도", color:"#D8D4CC"},
+  shop:{label:"상가", color:"#F2B8A2"}, cafe:{label:"카페", color:"#E9B48A"},
+  office:{label:"사무실", color:"#C6D8B0"}, storage:{label:"창고·다용도", color:"#CFC7B8"},
+  terrace:{label:"테라스", color:"#BFD9A8"}, garage:{label:"주차", color:"#BFC3C7"}
+};
+const guessType = name => {
+  const n = String(name);
+  const map = [["안방","master"],["침실","bed"],["주방","kitchen"],["식당","kitchen"],["욕실","bath"],["화장실","bath"],["드레스","storage"],["서재","study"],["작업","study"],["거실","living"],["계단","stair"],["현관","hall"],["복도","hall"],["상가","shop"],["점포","shop"],["카페","cafe"],["사무","office"],["오피스","office"],["창고","storage"],["다용도","storage"],["테라스","terrace"],["주차","garage"],["차고","garage"],["방","bed"]];
+  for (const [k,t] of map) if (n.includes(k)) return t;
+  return "study";
+};
+
+/* ---------- 인테리어 팔레트 ---------- */
+const INTERIORS = {
+  modern:{label:"모던 화이트", floor:"#D9D6D0", wall:"#F4F4F2", wood:"#8A8580", fabric:"#3A3F44", accent:"#1F5C8C"},
+  scandi:{label:"스칸디나비아", floor:"#D8BF95", wall:"#F6F3EC", wood:"#C9A97A", fabric:"#9FB2A6", accent:"#E3B04B"},
+  industrial:{label:"인더스트리얼", floor:"#7C7C78", wall:"#B9B2A8", wood:"#5A3E2B", fabric:"#3B3B3B", accent:"#B5542F"},
+  natural:{label:"내추럴 우드", floor:"#B98B5A", wall:"#EFE7D8", wood:"#A0703F", fabric:"#D9CBB0", accent:"#6E8B5B"},
+  hanok:{label:"한옥 모던", floor:"#A77B4F", wall:"#F1EBDD", wood:"#6B4A2E", fabric:"#E6DCC8", accent:"#8C2F2A"},
+  luxury:{label:"호텔식 럭셔리", floor:"#E4DED3", wall:"#EAE4DA", wood:"#3E2E24", fabric:"#6D5A4A", accent:"#B8914A"}
+};
+const FACADES = {
+  modern:{wall:"#F1F0EC", trim:"#3A3F44", label:"모던 스타코"},
+  concrete:{wall:"#A9ABA6", trim:"#4B4E4B", label:"노출콘크리트"},
+  brick:{wall:"#A4553C", trim:"#3B2A24", label:"적벽돌"},
+  wood:{wall:"#9C7650", trim:"#2E2A26", label:"목재 루버"},
+  glass:{wall:"#6F8FA3", trim:"#2A3238", label:"커튼월"}
+};
+
+/* ---------- 기본 설계 ---------- */
+function defaultRooms(use, floors, bw, bd){
+  const fp = bw*bd, R = [];
+  const add = (f, name, area) => R.push({floor:f, name, type:guessType(name), area:Math.round(area)});
+  for (let f=0; f<floors; f++){
+    const first = f===0, last = f===floors-1;
+    if (use==="house"){
+      if (first){ add(f,"거실",fp*.34); add(f,"주방·식당",fp*.24); add(f,"욕실",fp*.08); add(f,"침실",fp*.16); add(f,"다용도실",fp*.06); }
+      else if (last && floors>2){ add(f,"서재",fp*.3); add(f,"테라스",fp*.4); add(f,"욕실",fp*.1); }
+      else { add(f,"안방",fp*.3); add(f,"침실",fp*.2); add(f,"침실",fp*.18); add(f,"욕실",fp*.1); add(f,"드레스룸",fp*.08); }
+    } else if (use==="mixed"){
+      if (f<1){ add(f,"상가",fp*.7); add(f,"화장실",fp*.08); }
+      else { add(f,"거실",fp*.3); add(f,"주방·식당",fp*.2); add(f,"안방",fp*.2); add(f,"침실",fp*.14); add(f,"욕실",fp*.08); }
+    } else if (use==="multi"){
+      add(f,"거실",fp*.24); add(f,"주방",fp*.14); add(f,"침실",fp*.16); add(f,"침실",fp*.14); add(f,"욕실",fp*.08);
+    } else if (use==="office"){
+      if (first){ add(f,"상가",fp*.62); add(f,"화장실",fp*.1); } else { add(f,"사무실",fp*.62); add(f,"회의실 서재",fp*.14); add(f,"화장실",fp*.08); }
+    } else {
+      if (first){ add(f,"카페",fp*.6); add(f,"주방",fp*.16); add(f,"화장실",fp*.08); } else { add(f,"카페",fp*.66); add(f,"화장실",fp*.08); }
+    }
+  }
+  return R;
+}
+function defaultSpec(){
+  return {
+    name:"판교 3층 단독주택", use:"house", zone:"제1종전용주거",
+    site:{w:18, d:22}, building:{w:12, d:10}, floors:3, floorH:3.0,
+    style:"modern", roof:"flat", interior:"scandi",
+    rooms: defaultRooms("house", 3, 12, 10)
+  };
+}
+function normalizeSpec(s){
+  const d = defaultSpec();
+  const o = Object.assign({}, d, s || {});
+  o.site = {w: clamp(+(o.site?.w)||d.site.w, 5, 300), d: clamp(+(o.site?.d)||d.site.d, 5, 300)};
+  o.building = {w: clamp(+(o.building?.w)||d.building.w, 4, 200), d: clamp(+(o.building?.d)||d.building.d, 4, 200)};
+  o.building.w = Math.min(o.building.w, o.site.w - 1); o.building.d = Math.min(o.building.d, o.site.d - 1);
+  o.floors = clamp(Math.round(+o.floors||1), 1, 20);
+  o.floorH = clamp(+o.floorH||3, 2.4, 8);
+  if (!USE_LABEL[o.use]) o.use = "house";
+  if (!ZONES[o.zone]) o.zone = "제2종일반주거";
+  if (!FACADES[o.style]) o.style = "modern";
+  if (!INTERIORS[o.interior]) o.interior = "modern";
+  if (o.roof !== "gable") o.roof = "flat";
+  if (!Array.isArray(o.rooms) || !o.rooms.length) o.rooms = defaultRooms(o.use, o.floors, o.building.w, o.building.d);
+  o.rooms = o.rooms.map(r => ({floor: clamp(Math.round(+r.floor||0), 0, o.floors-1), name: String(r.name||"실").slice(0,20),
+    type: ROOM_TYPES[r.type] ? r.type : guessType(r.name), area: Math.max(2, +r.area||10)}));
+  for (let f=0; f<o.floors; f++) if (!o.rooms.some(r => r.floor===f)) o.rooms.push({floor:f, name:"다목적실", type:"study", area:30});
+  o.name = String(o.name||"새 프로젝트").slice(0,40);
+  return o;
+}
+
+/* ---------- 평면 배치 (코어 + squarified treemap) ---------- */
+function squarify(items, rect){
+  const out = [];
+  const total = items.reduce((a,b)=>a+b.area,0) || 1;
+  const scale = rect.w*rect.h/total;
+  let list = items.map(it => ({...it, a: it.area*scale})).sort((a,b)=>b.a-a.a);
+  let r = {...rect};
+  const worst = (row, len) => { const s = row.reduce((a,b)=>a+b.a,0); let m=0; for (const it of row){ const w1 = s/len, h1 = it.a/w1; m = Math.max(m, Math.max(w1/h1, h1/w1)); } return m; };
+  while (list.length){
+    const len = Math.min(r.w, r.h);
+    let row = [list[0]], i = 1;
+    while (i < list.length && worst([...row, list[i]], len) <= worst(row, len)) { row.push(list[i]); i++; }
+    const s = row.reduce((a,b)=>a+b.a,0);
+    if (r.w >= r.h){ const cw = s / r.h; let y = r.y; for (const it of row){ const h = it.a/cw; out.push({...it, x:r.x, y, w:cw, d:h}); y += h; } r = {x:r.x+cw, y:r.y, w:r.w-cw, h:r.h}; }
+    else { const ch = s / r.w; let x = r.x; for (const it of row){ const w = it.a/ch; out.push({...it, x, y:r.y, w, d:ch}); x += w; } r = {x:r.x, y:r.y+ch, w:r.w, h:r.h-ch}; }
+    list = list.slice(i);
+  }
+  return out;
+}
+function layoutFloors(spec){
+  const W = spec.building.w, D = spec.building.d, floors = [];
+  const hasCore = spec.floors > 1;
+  const coreW = hasCore ? Math.min(3, W*0.3) : 0;
+  for (let f=0; f<spec.floors; f++){
+    const rooms = spec.rooms.filter(r => r.floor===f && r.type!=="stair");
+    const placed = [];
+    if (hasCore){
+      const sd = Math.min(5.4, D*0.55);
+      placed.push({name:"계단실", type:"stair", x:0, y:0, w:coreW, d:sd, area:coreW*sd});
+      placed.push({name: f===0 ? "현관·복도" : "복도", type:"hall", x:0, y:sd, w:coreW, d:D-sd, area:coreW*(D-sd)});
+    }
+    const main = {x:coreW, y:0, w:W-coreW, h:D};
+    const items = rooms.length ? rooms : [{name:"다목적실", type:"study", area:main.w*main.h}];
+    for (const p of squarify(items, main)) placed.push(p);
+    for (const p of placed) p.area = p.w*p.d;
+    floors.push(placed);
+  }
+  return floors;
+}
+
+/* ---------- 상태 ---------- */
+let spec = normalizeSpec(store.get("spec", null) || defaultSpec());
+let history = [];
+let layout = layoutFloors(spec);
+let viewMode = "exterior", floorSel = -1;
+
+function metrics(s, lay){
+  const siteA = s.site.w*s.site.d, fp = s.building.w*s.building.d, gfa = fp*s.floors;
+  const z = ZONES[s.zone];
+  const bcr = fp/siteA*100, far = gfa/siteA*100;
+  const cost = gfa*COST_M2[s.style] + gfa*INT_M2[s.interior];
+  const height = s.floors*s.floorH + (s.roof==="gable" ? Math.min(s.building.w, s.building.d)*0.28 : 0.6);
+  return {siteA, fp, gfa, bcr, far, z, cost, height, bcrOk: bcr<=z.bcr, farOk: far<=z.far};
+}
+function setSpec(next, note){
+  history.push(JSON.stringify(spec)); if (history.length>30) history.shift();
+  spec = normalizeSpec(next); layout = layoutFloors(spec);
+  store.set("spec", spec);
+  $("#btnUndo").disabled = !history.length;
+  if (floorSel >= spec.floors) floorSel = -1;
+  drawScene._lastMode = null;
+  renderAll();
+  if (note) toast(note);
+}
+
+/* ---------- KPI ---------- */
+function renderKpis(){
+  const m = metrics(spec, layout);
+  const pyeong = v => fmt(v/3.3058, 1);
+  const k = [
+    {l:"대지면적", v: fmt(m.siteA,1)+"㎡", s: pyeong(m.siteA)+"평 · "+spec.site.w+"×"+spec.site.d+"m"},
+    {l:"연면적", v: fmt(m.gfa,1)+"㎡", s: pyeong(m.gfa)+"평 · 지상 "+spec.floors+"층"},
+    {l:"건폐율", v: fmt(m.bcr,1)+"%", s:"한도 "+m.z.bcr+"% ("+spec.zone+")", cls: m.bcrOk?"good":"over", bar: m.bcr/m.z.bcr},
+    {l:"용적률", v: fmt(m.far,1)+"%", s:"한도 "+m.z.far+"%", cls: m.farOk?"good":"over", bar: m.far/m.z.far},
+    {l:"건물 높이", v: fmt(m.height,1)+"m", s:"층고 "+spec.floorH+"m"},
+    {l:"추정 공사비", v: fmt(m.cost/1e8,2)+"억", s:"인테리어 포함 · 토지비 제외"}
+  ];
+  $("#kpis").innerHTML = k.map(x => `<div class="kpi ${x.cls||""}"><label>${x.l}</label><span class="v">${x.v}</span><span class="s">${x.s}</span>${x.bar!=null?`<span class="bar"><i style="width:${clamp(x.bar*100,2,100)}%"></i></span>`:""}</div>`).join("");
+  $("#projName").textContent = spec.name;
+  $("#projSub").textContent = `${USE_LABEL[spec.use]} · ${FACADES[spec.style].label} 외관 · ${INTERIORS[spec.interior].label} 인테리어` + (m.bcrOk && m.farOk ? " · 건폐율·용적률 적합" : " · 법규 한도 초과, 규모를 줄여야 합니다");
+}
+
+/* ---------- 폼 ---------- */
+function fillZoneSelect(sel){ sel.innerHTML = Object.keys(ZONES).map(z => `<option>${z}</option>`).join(""); }
+fillZoneSelect($("#f-zone")); fillZoneSelect($("#n-zone"));
+function renderForm(){
+  $("#f-name").value = spec.name; $("#f-use").value = spec.use; $("#f-zone").value = spec.zone;
+  $("#f-sw").value = spec.site.w; $("#f-sd").value = spec.site.d; $("#f-bw").value = spec.building.w; $("#f-bd").value = spec.building.d;
+  $("#f-fl").value = spec.floors; $("#f-fh").value = spec.floorH; $("#f-style").value = spec.style; $("#f-roof").value = spec.roof; $("#f-int").value = spec.interior;
+  $("#rooms").innerHTML = spec.rooms.map((r,i) => `<div class="room" data-i="${i}">
+    <span class="num" style="color:var(--muted)">${r.floor+1}F</span>
+    <input type="text" id="rm-n-${i}" value="${esc(r.name)}" aria-label="실 이름">
+    <input type="number" id="rm-a-${i}" value="${Math.round(r.area)}" min="2" aria-label="면적">
+    <button class="x" aria-label="삭제" data-del="${i}">✕</button></div>`).join("");
+}
+function esc(s){ return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function readForm(){
+  const n = JSON.parse(JSON.stringify(spec));
+  n.name = $("#f-name").value; n.use = $("#f-use").value; n.zone = $("#f-zone").value;
+  n.site = {w:+$("#f-sw").value, d:+$("#f-sd").value}; n.building = {w:+$("#f-bw").value, d:+$("#f-bd").value};
+  const oldFloors = spec.floors;
+  n.floors = +$("#f-fl").value; n.floorH = +$("#f-fh").value; n.style = $("#f-style").value; n.roof = $("#f-roof").value; n.interior = $("#f-int").value;
+  $$("#rooms .room").forEach(el => { const i = +el.dataset.i; n.rooms[i].name = $("#rm-n-"+i).value; n.rooms[i].type = guessType(n.rooms[i].name); n.rooms[i].area = +$("#rm-a-"+i).value; });
+  if (n.use !== spec.use || n.floors !== oldFloors) n.rooms = defaultRooms(n.use, n.floors, n.building.w, n.building.d);
+  return n;
+}
+$("#apply").onclick = () => setSpec(readForm(), "조건을 반영해 다시 설계했습니다");
+$("#rooms").addEventListener("click", e => { const i = e.target.dataset.del; if (i==null) return; const n = readForm(); n.rooms.splice(+i,1); setSpec(n); });
+$("#addRoom").onclick = () => { const n = readForm(); const f = floorSel>=0 ? floorSel : 0; n.rooms.push({floor:f, name:"침실", type:"bed", area:12}); setSpec(n, (f+1)+"층에 침실을 추가했습니다"); };
+$("#btnUndo").onclick = () => { if (!history.length) return; spec = normalizeSpec(JSON.parse(history.pop())); layout = layoutFloors(spec); store.set("spec", spec); $("#btnUndo").disabled = !history.length; renderAll(); toast("이전 설계로 되돌렸습니다"); };
+
+/* ---------- 층 선택 / 모드 ---------- */
+function renderFloorSeg(){
+  const b = [`<button data-floor="-1" aria-pressed="${floorSel<0}">전체</button>`];
+  for (let f=0; f<spec.floors; f++) b.push(`<button data-floor="${f}" aria-pressed="${floorSel===f}">${f+1}F</button>`);
+  $("#floorSeg").innerHTML = b.join("");
+}
+$("#floorSeg").addEventListener("click", e => { const f = e.target.dataset.floor; if (f==null) return; floorSel = +f; renderFloorSeg(); drawScene(); });
+$$("[data-mode]").forEach(b => b.onclick = () => { viewMode = b.dataset.mode; $$("[data-mode]").forEach(x => x.setAttribute("aria-pressed", x===b)); if (viewMode==="plan" && floorSel<0) floorSel = 0; if (viewMode==="interior" && floorSel<0) floorSel = 0; renderFloorSeg(); drawScene(); });
+
+/* ---------- Legend ---------- */
+function renderLegend(){
+  const types = new Set(); layout.forEach(fl => fl.forEach(r => types.add(r.type)));
+  if (viewMode==="exterior"){ $("#legend").innerHTML = `<div><i style="background:${FACADES[spec.style].wall}"></i>외벽 · ${FACADES[spec.style].label}</div><div><i style="background:#8FB4CC"></i>창호</div><div><i style="background:#9DB58A"></i>대지 ${spec.site.w}×${spec.site.d}m</div>`; return; }
+  $("#legend").innerHTML = [...types].map(t => `<div><i style="background:${ROOM_TYPES[t].color}"></i>${ROOM_TYPES[t].label}</div>`).join("");
+}
+
+/* ======================================================================
+   3D (three.js)
+   ====================================================================== */
+let three = null;
+function initThree(){
+  if (!window.THREE){ $("#loading").textContent = "3D 엔진을 불러오지 못했습니다. 평면도 보기는 계속 쓸 수 있습니다."; return; }
+  $("#loading").hidden = true;
+  const canvas = $("#c3d");
+  const renderer = new THREE.WebGLRenderer({canvas, antialias:true, preserveDrawingBuffer:true});
+  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio||1));
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 2000);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x8a8f86, 0.75));
+  const sun = new THREE.DirectionalLight(0xffffff, 0.8);
+  sun.position.set(30, 50, 20); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+  scene.add(sun); scene.add(sun.target);
+  const root = new THREE.Group(); scene.add(root);
+  const orbit = {theta:-0.75, phi:1.05, r:40, target:new THREE.Vector3()};
+  three = {renderer, scene, camera, root, sun, orbit};
+  bindOrbit(canvas);
+  new ResizeObserver(resize).observe($("#canvasWrap"));
+  resize(); drawScene(); resetCam();
+  (function loop(){ requestAnimationFrame(loop); if (!$("#c3d").hidden && three.dirty !== false){ updateCam(); renderer.render(scene, camera); three.dirty = false; } })();
+}
+function themeColor(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function resize(){
+  const wrap = $("#canvasWrap"), w = wrap.clientWidth, h = wrap.clientHeight;
+  if (!w || !h) return;
+  if (three){ three.renderer.setSize(w, h, false); three.camera.aspect = w/h; three.camera.updateProjectionMatrix(); three.dirty = true; }
+  if (viewMode==="plan") drawPlan();
+}
+function updateCam(){
+  const o = three.orbit, c = three.camera;
+  c.position.set(o.target.x + o.r*Math.sin(o.phi)*Math.cos(o.theta), o.target.y + o.r*Math.cos(o.phi), o.target.z + o.r*Math.sin(o.phi)*Math.sin(o.theta));
+  c.lookAt(o.target);
+}
+function resetCam(){
+  if (!three) return;
+  const size = Math.max(spec.site.w, spec.site.d, spec.floors*spec.floorH);
+  const o = three.orbit;
+  if (viewMode==="interior"){ o.r = Math.max(spec.building.w, spec.building.d)*1.5; o.phi = 0.75; o.target.set(0, (Math.max(floorSel,0))*spec.floorH, 0); }
+  else { o.r = size*1.9; o.phi = 1.1; o.target.set(0, spec.floors*spec.floorH*0.4, 0); }
+  o.theta = -0.8; three.dirty = true;
+}
+$("#btnResetCam").onclick = resetCam;
+function bindOrbit(el){
+  let drag = null; const pts = new Map();
+  el.addEventListener("contextmenu", e => e.preventDefault());
+  el.addEventListener("pointerdown", e => { el.setPointerCapture(e.pointerId); pts.set(e.pointerId, {x:e.clientX, y:e.clientY}); drag = {x:e.clientX, y:e.clientY, pan: e.button===2 || e.shiftKey}; });
+  el.addEventListener("pointermove", e => {
+    if (!drag) return; const o = three.orbit;
+    if (pts.size===2){ const prev = [...pts.values()]; const d0 = Math.hypot(prev[0].x-prev[1].x, prev[0].y-prev[1].y); pts.set(e.pointerId, {x:e.clientX, y:e.clientY}); const cur = [...pts.values()]; const d1 = Math.hypot(cur[0].x-cur[1].x, cur[0].y-cur[1].y); if (d0>0) o.r = clamp(o.r*d0/d1, 3, 400); three.dirty = true; return; }
+    pts.set(e.pointerId, {x:e.clientX, y:e.clientY});
+    const dx = e.clientX-drag.x, dy = e.clientY-drag.y; drag.x = e.clientX; drag.y = e.clientY;
+    if (drag.pan){
+      const s = o.r*0.0016, c = three.camera; const right = new THREE.Vector3().setFromMatrixColumn(c.matrix, 0); const up = new THREE.Vector3(0,1,0);
+      o.target.addScaledVector(right, -dx*s).addScaledVector(up, dy*s);
+    } else { o.theta += dx*0.008; o.phi = clamp(o.phi - dy*0.008, 0.08, Math.PI/2 - 0.02); }
+    three.dirty = true;
+  });
+  const end = e => { pts.delete(e.pointerId); if (!pts.size) drag = null; };
+  el.addEventListener("pointerup", end); el.addEventListener("pointercancel", end);
+  el.addEventListener("wheel", e => { e.preventDefault(); three.orbit.r = clamp(three.orbit.r*(1+Math.sign(e.deltaY)*0.1), 3, 400); three.dirty = true; }, {passive:false});
+}
+
+/* ---------- 씬 모델 (내보내기와 공유하는 중립 형식) ----------
+   model = { boxes:[{x,y,z,w,h,d, color, layer, name}], ... }  단위 m, y-up, 원점 = 건물 중심 바닥 */
+function buildModel(s, lay, opts){
+  const o = Object.assign({interior:true, glass:true, site:true, cut:-1, roof:true}, opts||{});
+  const B = [], W = s.building.w, D = s.building.d, H = s.floorH, ox = -W/2, oz = -D/2;
+  const fac = FACADES[s.style], it = INTERIORS[s.interior];
+  const box = (x,y,z,w,h,d,color,layer,name) => { if (w>0.001 && h>0.001 && d>0.001) B.push({x,y,z,w,h,d,color,layer,name}); };
+  const t = 0.25, ti = 0.12, slab = 0.2;
+  if (o.site){
+    box(-s.site.w/2, -0.05, -s.site.d/2, s.site.w, 0.05, s.site.d, "#9DB58A", "SITE", "대지");
+    box(ox-1.2, 0, oz-1.2, W+2.4, 0.02, D+2.4, "#C9C5BC", "SITE", "포장");
+  }
+  const topFloor = o.cut>=0 ? o.cut : s.floors-1;
+  for (let f=0; f<=topFloor; f++){
+    const y0 = f*H, rooms = lay[f];
+    box(ox, y0, oz, W, slab, D, "#BDBAB2", "SLAB", (f+1)+"F 슬래브");
+    const wallH = H - slab;
+    const yb = y0 + slab;
+    // 외벽: 창 개구부를 남기고 조각으로 생성
+    const extWall = (ax, az, len, alongX, name) => {
+      const win = 1.6, sill = 0.9, head = Math.min(2.2, wallH-0.3), pier = 1.1;
+      const isGlass = s.style==="glass";
+      const shopFront = f===0 && (s.use==="mixed"||s.use==="cafe"||s.use==="office");
+      const n = Math.max(0, Math.floor((len - pier) / (win + pier)));
+      const mk = (a, b, y, h, color, layer, nm) => { if (alongX) box(ax + a, y, az, b, h, t, color, layer, nm); else box(ax, y, az + a, t, h, b, color, layer, nm); };
+      if (isGlass || shopFront){
+        const frame = 0.12, bays = Math.max(1, Math.round(len/1.8)), bw = len/bays;
+        for (let i=0;i<bays;i++){ mk(i*bw, frame, yb, wallH, fac.trim, "WALL", name+" 멀리언"); if (o.glass) mk(i*bw+frame, bw-frame, yb, wallH, "#8FB4CC", "GLASS", name+" 유리"); }
+        mk(len-frame, frame, yb, wallH, fac.trim, "WALL", name);
+        mk(0, len, yb + wallH - 0.25, 0.25, fac.trim, "WALL", name+" 인방");
+        return;
+      }
+      if (!n){ mk(0, len, yb, wallH, fac.wall, "WALL", name); return; }
+      const used = n*win + (n+1)*pier, extra = (len - used)/(n+1), p = pier + extra;
+      let a = 0;
+      for (let i=0;i<n;i++){
+        mk(a, p, yb, wallH, fac.wall, "WALL", name); a += p;
+        mk(a, win, yb, sill, fac.wall, "WALL", name+" 창대");
+        mk(a, win, yb+head, wallH-head, fac.wall, "WALL", name+" 인방");
+        if (o.glass) mk(a, win, yb+sill, head-sill, "#8FB4CC", "GLASS", name+" 창");
+        a += win;
+      }
+      mk(a, len - a, yb, wallH, fac.wall, "WALL", name);
+    };
+    extWall(ox, oz, W, true, (f+1)+"F 북측 외벽");
+    extWall(ox, oz + D - t, W, true, (f+1)+"F 남측 외벽");
+    extWall(ox, oz + t, D - 2*t, false, (f+1)+"F 서측 외벽");
+    extWall(ox + W - t, oz + t, D - 2*t, false, (f+1)+"F 동측 외벽");
+    // 실 바닥 마감 + 내벽 (오른쪽/위쪽 변만 그려 중복 방지, 문 개구부 0.9m)
+    for (const r of rooms){
+      const rx = ox + r.x, rz = oz + r.y;
+      if (o.interior) box(rx+0.02, yb, rz+0.02, r.w-0.04, 0.02, r.d-0.04, r.type==="bath" ? "#E6ECEC" : r.type==="terrace" ? "#A89A86" : it.floor, "FINISH", r.name+" 바닥");
+      const partH = wallH, door = 0.9;
+      const edgeX = r.x + r.w, edgeY = r.y + r.d;
+      if (edgeX < W - 0.05){ const len = r.d, a0 = rz, mid = len/2; box(ox+edgeX-ti/2, yb, a0, ti, partH, Math.max(0, mid-door/2), it.wall, "PARTITION", r.name+" 내벽"); box(ox+edgeX-ti/2, yb, a0+mid+door/2, ti, partH, Math.max(0, len-mid-door/2), it.wall, "PARTITION", r.name+" 내벽"); box(ox+edgeX-ti/2, yb+2.1, a0+mid-door/2, ti, partH-2.1, door, it.wall, "PARTITION", r.name+" 문 인방"); }
+      if (edgeY < D - 0.05){ const len = r.w, a0 = rx, mid = len/2; box(a0, yb, oz+edgeY-ti/2, Math.max(0, mid-door/2), partH, ti, it.wall, "PARTITION", r.name+" 내벽"); box(a0+mid+door/2, yb, oz+edgeY-ti/2, Math.max(0, len-mid-door/2), partH, ti, it.wall, "PARTITION", r.name+" 내벽"); box(a0+mid-door/2, yb+2.1, oz+edgeY-ti/2, door, partH-2.1, ti, it.wall, "PARTITION", r.name+" 문 인방"); }
+      if (o.interior) furnish(r, rx, yb, rz, it, box, H, s, f);
+    }
+  }
+  // 지붕
+  if (o.roof && o.cut < 0){
+    const yTop = s.floors*H;
+    if (s.roof==="flat"){
+      box(ox-0.15, yTop, oz-0.15, W+0.3, 0.3, D+0.3, "#8C8F8A", "ROOF", "평지붕");
+      box(ox-0.15, yTop+0.3, oz-0.15, W+0.3, 0.6, 0.15, fac.trim, "ROOF", "파라펫"); box(ox-0.15, yTop+0.3, oz+D, W+0.3, 0.6, 0.15, fac.trim, "ROOF", "파라펫");
+      box(ox-0.15, yTop+0.3, oz, 0.15, 0.6, D, fac.trim, "ROOF", "파라펫"); box(ox+W, yTop+0.3, oz, 0.15, 0.6, D, fac.trim, "ROOF", "파라펫");
+    } else {
+      B.push({gable:true, x:ox-0.4, y:yTop, z:oz-0.4, w:W+0.8, d:D+0.8, h:Math.min(W,D)*0.28, color: s.style==="brick" ? "#4A3A33" : "#3E4448", layer:"ROOF", name:"박공지붕"});
+      box(ox, yTop, oz, W, 0.2, D, "#BDBAB2", "SLAB", "지붕 슬래브");
+    }
+  }
+  return B;
+}
+function furnish(r, x, y, z, it, box, H, s, floor){
+  const cx = x + r.w/2, cz = z + r.d/2, W = r.w, D = r.d, L = "FURNITURE", n = r.name;
+  const pad = 0.35;
+  switch (r.type){
+    case "living": {
+      const sw = Math.min(2.6, W-2*pad), sd = 0.9;
+      box(cx-sw/2, y, z+D-pad-sd, sw, 0.45, sd, it.fabric, L, n+" 소파"); box(cx-sw/2, y+0.45, z+D-pad-0.25, sw, 0.4, 0.25, it.fabric, L, n+" 소파 등받이");
+      box(cx-0.6, y, cz-0.1, 1.2, 0.4, 0.6, it.wood, L, n+" 커피테이블");
+      box(cx-1.6, y, cz-1.1, 3.2, 0.01, 2.4, it.accent, L, n+" 러그");
+      box(cx-0.9, y, z+pad, 1.8, 0.5, 0.4, it.wood, L, n+" TV장"); box(cx-0.7, y+0.5, z+pad+0.1, 1.4, 0.8, 0.05, "#1A1C1E", L, n+" TV");
+      break; }
+    case "kitchen": case "cafe": {
+      const cl = Math.min(W-2*pad, 3.4);
+      box(x+pad, y, z+pad, cl, 0.9, 0.6, it.wall==="#F4F4F2" ? "#E9E9E6" : it.wood, L, n+" 주방 카운터");
+      box(x+pad, y+0.9, z+pad, cl, 0.04, 0.6, "#D8D8D4", L, n+" 상판");
+      const tables = r.type==="cafe" ? Math.max(1, Math.floor((W*D)/9)) : 1;
+      for (let i=0;i<Math.min(tables,12);i++){
+        const cols = Math.max(1, Math.floor((W-1)/2.4)), tx = x + 1.2 + (i%cols)*2.4, tz = z + 1.9 + Math.floor(i/cols)*2.2;
+        if (tz+0.8 > z+D-0.2 || tx+0.9 > x+W-0.2) break;
+        box(tx, y, tz, 0.9, 0.75, 0.8, it.wood, L, n+" 테이블");
+        box(tx+0.2, y, tz-0.5, 0.45, 0.45, 0.4, it.fabric, L, n+" 의자"); box(tx+0.2, y, tz+0.9, 0.45, 0.45, 0.4, it.fabric, L, n+" 의자");
+      }
+      break; }
+    case "bed": case "master": {
+      const bw = r.type==="master" ? 1.8 : 1.4, bl = 2.1;
+      if (W > bw+0.6 && D > bl+0.5){
+        box(cx-bw/2, y, z+pad, bw, 0.45, bl, "#F2F0EA", L, n+" 침대"); box(cx-bw/2, y, z+pad-0.08, bw, 1.0, 0.08, it.wood, L, n+" 헤드보드");
+        box(cx-bw/2-0.55, y, z+pad, 0.45, 0.5, 0.4, it.wood, L, n+" 협탁"); box(cx+bw/2+0.1, y, z+pad, 0.45, 0.5, 0.4, it.wood, L, n+" 협탁");
+        box(cx-bw/2+0.1, y+0.45, z+pad+1.2, bw-0.2, 0.05, 0.8, it.accent, L, n+" 베드스프레드");
+      }
+      box(x+W-pad-0.6, y, z+D-pad-Math.min(2, D*0.4), 0.6, 2.1, Math.min(2, D*0.4), it.wood, L, n+" 붙박이장");
+      break; }
+    case "bath": {
+      box(x+pad*0.5, y, z+pad*0.5, 0.45, 0.4, 0.7, "#FFFFFF", L, n+" 변기");
+      box(x+W-pad*0.5-0.6, y, z+pad*0.5, 0.6, 0.85, 0.45, "#FFFFFF", L, n+" 세면대");
+      if (D > 2.2 && W > 1.6) box(x+pad*0.5, y, z+D-pad*0.5-0.8, Math.min(1.6, W-0.4), 0.55, 0.8, "#FFFFFF", L, n+" 욕조");
+      break; }
+    case "study": case "office": {
+      const desks = r.type==="office" ? Math.max(1, Math.floor(W*D/7)) : 1;
+      const cols = Math.max(1, Math.floor((W-0.6)/1.8));
+      for (let i=0;i<Math.min(desks,24);i++){
+        const dx = x+0.4+(i%cols)*1.8, dz = z+0.5+Math.floor(i/cols)*2.1;
+        if (dz+1.4 > z+D) break;
+        box(dx, y, dz, 1.4, 0.74, 0.7, it.wood, L, n+" 책상"); box(dx+0.45, y, dz+0.85, 0.5, 0.45, 0.5, it.fabric, L, n+" 의자");
+      }
+      if (r.type==="study") box(x+W-0.5, y, z+0.3, 0.35, 2.0, Math.min(2.4, D-0.6), it.wood, L, n+" 책장");
+      break; }
+    case "shop": {
+      box(x+pad, y, z+D-1.2, Math.min(3, W-2*pad), 1.0, 0.6, it.wood, L, n+" 카운터");
+      for (let i=0;i<Math.floor((W-1)/2.2);i++) box(x+0.8+i*2.2, y, cz-0.5, 1.4, 1.2, 0.6, it.accent, L, n+" 진열대");
+      break; }
+    case "stair": {
+      const half = Math.ceil(H/0.18/2), rise = H/(2*half), run = (D-1.2)/half, sw = W/2 - 0.05;
+      for (let i=0;i<half;i++) box(x+0.05, y+i*rise, z+0.2+i*run, sw, rise, run, "#A6A39C", L, "계단");
+      box(x, y+(half-1)*rise, z+D-1.0, W, rise, 0.95, "#A6A39C", L, "계단참");
+      for (let i=0;i<half-1;i++) box(x+W/2, y+(half+i)*rise, z+D-1.0-(i+1)*run, sw, rise, run, "#A6A39C", L, "계단");
+      break; }
+    case "terrace": {
+      box(x+pad, y, z+pad, 1.8, 0.4, 0.8, it.wood, L, n+" 벤치");
+      box(cx-0.5, y, cz-0.5, 1.0, 0.7, 1.0, it.wood, L, n+" 테이블");
+      box(x+W-1.1, y, z+D-1.1, 0.8, 0.9, 0.8, "#6E8B5B", L, n+" 화분");
+      break; }
+    case "garage": box(cx-1, y, cz-2.3, 2.0, 1.4, 4.6, "#4A5560", L, "차량"); break;
+    case "storage": box(x+0.2, y, z+0.2, Math.min(1.8, W-0.4), 1.9, 0.5, it.wood, L, n+" 수납장"); break;
+    default: break;
+  }
+}
+
+const matCache = new Map();
+function mat(color, layer){
+  const key = color + layer;
+  if (!matCache.has(key)){
+    const glass = layer==="GLASS";
+    matCache.set(key, new THREE.MeshStandardMaterial({color, roughness: glass ? 0.1 : 0.85, metalness: glass ? 0.1 : 0, transparent: glass, opacity: glass ? 0.45 : 1}));
+  }
+  return matCache.get(key);
+}
+function drawScene(){
+  renderLegend();
+  const c2 = $("#c2d"), c3 = $("#c3d");
+  if (viewMode==="plan"){ c2.hidden = false; c3.hidden = true; $("#hint").textContent = "평면도 · 층을 선택하세요 · 치수 단위 m"; drawPlan(); return; }
+  c2.hidden = true; c3.hidden = false; $("#hint").textContent = "드래그: 회전 · 오른쪽 드래그/Shift: 이동 · 휠/핀치: 확대";
+  if (!three) return;
+  const root = three.root;
+  while (root.children.length){ const c = root.children.pop(); c.geometry && c.geometry.dispose(); }
+  const interior = viewMode==="interior";
+  const cut = interior ? Math.max(0, floorSel) : (floorSel>=0 ? floorSel : -1);
+  const boxes = buildModel(spec, layout, {interior, cut, roof: !interior});
+  const geo = new THREE.BoxGeometry(1,1,1);
+  for (const b of boxes){
+    if (b.gable){ root.add(gableMesh(b)); continue; }
+    if (!interior && (b.layer==="FURNITURE")) continue;
+    const m = new THREE.Mesh(geo, mat(b.color, b.layer));
+    m.scale.set(b.w, b.h, b.d); m.position.set(b.x + b.w/2, b.y + b.h/2, b.z + b.d/2);
+    m.castShadow = b.layer!=="GLASS" && b.layer!=="SITE"; m.receiveShadow = true;
+    root.add(m);
+  }
+  const sz = Math.max(spec.site.w, spec.site.d);
+  const s = three.sun.shadow.camera; s.left = -sz; s.right = sz; s.top = sz; s.bottom = -sz; s.far = 200; s.updateProjectionMatrix();
+  three.scene.background = new THREE.Color(themeColor("--viewport") || "#DDE2DC");
+  three.dirty = true;
+  if (drawScene._lastMode !== viewMode + floorSel){ drawScene._lastMode = viewMode + floorSel; resetCam(); }
+}
+function gableTriangles(b){
+  // 박공 지붕: 가로(x) 방향 용마루
+  const x0=b.x, x1=b.x+b.w, z0=b.z, z1=b.z+b.d, zm=(z0+z1)/2, y0=b.y, y1=b.y+b.h;
+  const P = {a:[x0,y0,z0], b:[x1,y0,z0], c:[x1,y0,z1], d:[x0,y0,z1], e:[x0,y1,zm], f:[x1,y1,zm]};
+  return [[P.a,P.e,P.f],[P.a,P.f,P.b],[P.d,P.c,P.f],[P.d,P.f,P.e],[P.a,P.d,P.e],[P.b,P.f,P.c],[P.a,P.b,P.c],[P.a,P.c,P.d]];
+}
+function gableMesh(b){
+  const g = new THREE.BufferGeometry(), pos = [];
+  for (const t of gableTriangles(b)) for (const p of t) pos.push(...p);
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals();
+  const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({color:b.color, roughness:0.8, side:THREE.DoubleSide}));
+  m.castShadow = true; return m;
+}
+
+/* ---------- 2D 평면도 ---------- */
+function drawPlan(){
+  const cv = $("#c2d"), wrap = $("#canvasWrap"), dpr = Math.min(2, window.devicePixelRatio||1);
+  const w = wrap.clientWidth, h = wrap.clientHeight;
+  cv.width = w*dpr; cv.height = h*dpr; cv.style.width = w+"px"; cv.style.height = h+"px";
+  const g = cv.getContext("2d"); g.setTransform(dpr,0,0,dpr,0,0);
+  const bg = themeColor("--viewport"), ink = themeColor("--ink"), muted = themeColor("--muted"), accent = themeColor("--accent");
+  g.fillStyle = bg; g.fillRect(0,0,w,h);
+  const f = Math.max(0, floorSel), rooms = layout[f], W = spec.building.w, D = spec.building.d;
+  const m = 56, sc = Math.min((w-2*m)/W, (h-2*m)/D), ox = (w - W*sc)/2, oy = (h - D*sc)/2;
+  // 그리드 1m
+  g.strokeStyle = muted; g.globalAlpha = 0.15; g.lineWidth = 1;
+  for (let i=0;i<=W;i++){ g.beginPath(); g.moveTo(ox+i*sc, oy); g.lineTo(ox+i*sc, oy+D*sc); g.stroke(); }
+  for (let j=0;j<=D;j++){ g.beginPath(); g.moveTo(ox, oy+j*sc); g.lineTo(ox+W*sc, oy+j*sc); g.stroke(); }
+  g.globalAlpha = 1;
+  for (const r of rooms){
+    g.fillStyle = ROOM_TYPES[r.type].color; g.globalAlpha = 0.55; g.fillRect(ox+r.x*sc, oy+r.y*sc, r.w*sc, r.d*sc); g.globalAlpha = 1;
+    g.strokeStyle = ink; g.lineWidth = 2; g.strokeRect(ox+r.x*sc, oy+r.y*sc, r.w*sc, r.d*sc);
+    const fs = clamp(Math.min(r.w, r.d)*sc/5, 9, 14);
+    g.fillStyle = ink; g.font = `600 ${fs}px ${getComputedStyle(document.body).fontFamily}`; g.textAlign = "center"; g.textBaseline = "middle";
+    const cx = ox+(r.x+r.w/2)*sc, cy = oy+(r.y+r.d/2)*sc;
+    g.fillText(r.name, cx, cy - fs*0.6);
+    g.font = `${fs*0.85}px ${themeColor("--f-mono") || "monospace"}`; g.fillStyle = muted;
+    g.fillText(`${fmt(r.area,1)}㎡ (${fmt(r.area/3.3058,1)}평)`, cx, cy + fs*0.7);
+  }
+  // 외벽
+  g.strokeStyle = ink; g.lineWidth = 5; g.strokeRect(ox, oy, W*sc, D*sc);
+  // 치수선
+  g.strokeStyle = accent; g.fillStyle = accent; g.lineWidth = 1; g.font = `12px ${themeColor("--f-mono") || "monospace"}`;
+  const dim = (x1,y1,x2,y2,label,off) => { g.beginPath(); g.moveTo(x1,y1); g.lineTo(x2,y2); g.stroke(); g.beginPath(); g.arc(x1,y1,2.5,0,7); g.arc(x2,y2,2.5,0,7); g.fill(); g.textAlign="center"; g.textBaseline = "middle"; g.save(); g.translate((x1+x2)/2 + (off?off:0), (y1+y2)/2 + (off?0:-10)); if (off) g.rotate(-Math.PI/2); g.fillText(label, 0, off? -10:0); g.restore(); };
+  dim(ox, oy-22, ox+W*sc, oy-22, fmt(W,2)+" m");
+  dim(ox-22, oy, ox-22, oy+D*sc, fmt(D,2)+" m", 1);
+  g.fillStyle = muted; g.textAlign = "left"; g.textBaseline = "top"; g.font = `600 13px ${getComputedStyle(document.body).fontFamily}`;
+  g.fillText(`${f+1}층 평면도 · 바닥면적 ${fmt(W*D,1)}㎡`, 12, 10);
+  // 방위표
+  g.save(); g.translate(w-30, h-40); g.strokeStyle = ink; g.fillStyle = ink; g.beginPath(); g.moveTo(0,-14); g.lineTo(6,6); g.lineTo(0,2); g.lineTo(-6,6); g.closePath(); g.fill(); g.font = "600 11px sans-serif"; g.textAlign="center"; g.fillText("N", 0, -28); g.restore();
+}
+
+/* ======================================================================
+   AI 대화
+   ====================================================================== */
+let sample = null, downloads = null, turns = [];
+const SCHEMA_DOC = `설계 JSON 형식:
+{"name":문자열,"use":"house|multi|mixed|office|cafe","zone":${JSON.stringify(Object.keys(ZONES).join("|"))},
+ "site":{"w":m,"d":m},"building":{"w":m,"d":m},"floors":정수,"floorH":m,
+ "style":"modern|concrete|brick|wood|glass","roof":"flat|gable",
+ "interior":"modern|scandi|industrial|natural|hanok|luxury",
+ "rooms":[{"floor":0부터 시작하는 층 번호,"name":"한국어 실명","type":"${Object.keys(ROOM_TYPES).join("|")}","area":㎡}]}`;
+function rulesPrompt(){
+  return `너는 한국 건축설계 AI 어시스턴트다. 사용자의 말을 듣고 건물 설계 JSON을 만들거나 고친다.
+규칙:
+- 항상 JSON 하나만 답한다: {"reply":"사용자에게 할 한국어 답변(3~6문장, 설계 의도·법규 체크·다음 제안 포함)","spec":설계 JSON,"target":"revit|autocad|sketchup|none"}
+- target: 사용자가 레빗/Revit이면 "revit", 오토캐드/AutoCAD/CAD/도면이면 "autocad", 스케치업/SketchUp이면 "sketchup", 언급이 없으면 "none".
+- 평수는 1평=3.3058㎡로 환산한다. 건물 크기는 대지보다 작게, 건폐율·용적률 한도(국토계획법 시행령 기준: ${Object.entries(ZONES).map(([k,v])=>k+" "+v.bcr+"/"+v.far).join(", ")})를 넘지 않게 잡는다. 넘는 요구면 이유를 답변에 쓰고 한도 안으로 맞춘다.
+- 층마다 실 면적 합이 대략 건물 바닥면적(building.w×building.d)에서 계단·복도(2층 이상일 때 약 3m×세로)를 뺀 값이 되게 한다. 계단실·복도는 자동 생성되니 rooms에 넣지 않는다.
+- 인테리어 요청은 interior 스타일과 실 구성으로 반영한다. 사용자가 바꾸라고 하지 않은 항목은 현재 설계를 유지한다.
+${SCHEMA_DOC}`;
+}
+function addMsg(role, text){
+  const el = document.createElement("div"); el.className = "msg " + role; el.textContent = text; $("#log").append(el); $("#log").scrollTop = 1e9; return el;
+}
+const CHIPS = ["대지 60평에 2층 단독주택, 방 3개, 박공지붕", "1층 카페 2~3층 주거 상가주택, 노출콘크리트", "인테리어를 인더스트리얼로 바꿔줘", "4층 근생 사무실, 커튼월, 레빗으로 줘", "스케치업용으로 한옥 모던 인테리어"];
+$("#chips").innerHTML = CHIPS.map(c => `<button class="chip">${c}</button>`).join("");
+$("#chips").addEventListener("click", e => { if (e.target.classList.contains("chip")){ $("#prompt").value = e.target.textContent; $("#prompt").focus(); } });
+$("#prompt").addEventListener("keydown", e => { if (e.key==="Enter" && !e.shiftKey && !e.isComposing){ e.preventDefault(); send(); } });
+$("#send").onclick = send;
+let ctl = null;
+async function send(){
+  const text = $("#prompt").value.trim(); if (!text) return;
+  $("#prompt").value = ""; addMsg("me", text);
+  if (sample){
+    const bubble = addMsg("ai", "설계 중…");
+    $("#send").disabled = true;
+    turns.push({role:"user", content: `현재 설계:\n${JSON.stringify(compactSpec(spec))}\n\n요청: ${text}`});
+    turns = turns.slice(-8);
+    ctl = new AbortController();
+    try {
+      const res = await sample.json([{role:"user", content:rulesPrompt()}, ...turns], {signal: ctl.signal, cache:false});
+      if (!res || typeof res !== "object" || !res.spec) throw {code:"invalid_json"};
+      bubble.textContent = res.reply || "설계를 반영했습니다.";
+      turns.push({role:"assistant", content: JSON.stringify({reply:res.reply})});
+      setSpec(Object.assign({}, spec, res.spec));
+      afterDesign(res.target);
+    } catch (e){
+      turns.pop();
+      if (e && (e.code==="not_granted" || e.code==="unavailable")) { sample = null; setAiState(false); }
+      const local = localDesign(text);
+      bubble.textContent = (e && e.code==="rate_limited" ? "AI 요청이 많아 잠시 뒤 다시 시도하세요. " : e && e.code==="not_granted" ? "AI 사용이 허용되지 않아 " : "AI 응답을 읽지 못해 ") + "내장 규칙 엔진으로 설계했습니다.\n" + local.reply;
+    } finally { $("#send").disabled = false; }
+  } else {
+    const local = localDesign(text);
+    addMsg("ai", local.reply);
+  }
+}
+function compactSpec(s){ return {...s, rooms: s.rooms.map(r => ({floor:r.floor, name:r.name, type:r.type, area:Math.round(r.area)}))}; }
+function afterDesign(target){
+  if (target && target !== "none" && EXPORTS[target]){
+    addMsg("sys", `${EXPORTS[target].label}용 파일을 받을 수 있습니다.`);
+    const b = document.createElement("button"); b.className = "btn small primary"; b.textContent = EXPORTS[target].label + " 패키지 받기"; b.style.alignSelf = "flex-start";
+    b.onclick = () => doExport(target); $("#log").append(b); $("#log").scrollTop = 1e9;
+  }
+}
+
+/* ---------- 내장 규칙 엔진 (AI 미연결 시) ---------- */
+function localDesign(text){
+  const t = text.replace(/\s+/g, " ");
+  const n = JSON.parse(JSON.stringify(spec));
+  const notes = [];
+  let resetRooms = false;
+  const num = re => { const m = t.match(re); return m ? parseFloat(m[1]) : null; };
+  const siteWD = t.match(/대지[^0-9]{0,6}(\d+(?:\.\d+)?)\s*[x×*]\s*(\d+(?:\.\d+)?)/);
+  if (siteWD){ n.site = {w:+siteWD[1], d:+siteWD[2]}; notes.push(`대지 ${n.site.w}×${n.site.d}m`); }
+  const pyeong = num(/(?:대지|땅|부지)[^0-9]{0,6}(\d+(?:\.\d+)?)\s*평/);
+  const sqm = num(/(?:대지|땅|부지)[^0-9]{0,6}(\d+(?:\.\d+)?)\s*(?:㎡|m2|제곱)/);
+  if (pyeong || sqm){ const a = sqm || pyeong*3.3058; const w = Math.round(Math.sqrt(a*0.8)*2)/2; n.site = {w, d: Math.round(a/w*2)/2}; notes.push(`대지 약 ${fmt(a,0)}㎡ (${n.site.w}×${n.site.d}m로 가정)`); }
+  const flAll = [...t.matchAll(/(\d+)\s*층(?!에)/g)].map(m => +m[1]);
+  if (flAll.length){ const fl = clamp(Math.max(...flAll),1,15); if (fl !== n.floors){ n.floors = fl; resetRooms = true; } notes.push(`지상 ${n.floors}층`); }
+  const useMap = [[/상가\s*주택|1층\s*(?:상가|카페|점포)/, "mixed"], [/다가구|다세대|원룸|빌라/, "multi"], [/사무|오피스|근생|근린/, "office"], [/카페|베이커리|식당/, "cafe"], [/단독|주택|전원|집/, "house"]];
+  for (const [re,u] of useMap) if (re.test(t)){ if (n.use!==u){ n.use = u; resetRooms = true; } notes.push(USE_LABEL[u]); break; }
+  const zone = Object.keys(ZONES).find(z => t.includes(z) || t.includes(z.replace("일반","").replace("전용",""))); if (zone) n.zone = zone;
+  const exterior = /외관|외벽|외장|파사드/.test(t);
+  const styles = [[/콘크리트/, "concrete", true], [/벽돌/, "brick", true], [/목재\s*루버|루버/, "wood", true], [/커튼월|유리\s*건물|통유리/, "glass", true], [/목재|나무/, "wood", false], [/모던|화이트|스타코/, "modern", false]];
+  for (const [re,s,strong] of styles) if (re.test(t) && (strong || exterior)){ n.style = s; notes.push(FACADES[s].label+" 외관"); break; }
+  if (/박공|경사\s*지붕|뾰족/.test(t)) n.roof = "gable"; if (/평지붕|옥상/.test(t)) n.roof = "flat";
+  const ints = [[/스칸디|북유럽/, "scandi"], [/인더스트리얼|공장|빈티지/, "industrial"], [/내추럴|원목|우드/, "natural"], [/한옥|한식|전통/, "hanok"], [/럭셔리|호텔|고급/, "luxury"], [/모던\s*화이트|미니멀/, "modern"]];
+  for (const [re,s] of ints) if (re.test(t)){ n.interior = s; notes.push(INTERIORS[s].label+" 인테리어"); break; }
+  const bw = t.match(/건물[^0-9]{0,6}(\d+(?:\.\d+)?)\s*[x×*]\s*(\d+(?:\.\d+)?)/);
+  const z = ZONES[n.zone];
+  if (bw) n.building = {w:+bw[1], d:+bw[2]};
+  else if (siteWD || pyeong || sqm || resetRooms){
+    // 건폐율 한도의 90% 안에서 건물 크기 결정
+    const maxFp = n.site.w*n.site.d*z.bcr/100*0.9, farFp = n.site.w*n.site.d*z.far/100/n.floors*0.95;
+    const fp = Math.min(maxFp, farFp, (n.site.w-3)*(n.site.d-3));
+    const ratio = n.site.w/n.site.d; const w = Math.max(5, Math.round(Math.sqrt(fp*ratio)*2)/2); n.building = {w, d: Math.max(5, Math.round(fp/w*2)/2)};
+  }
+  if (resetRooms) n.rooms = defaultRooms(n.use, n.floors, n.building.w, n.building.d);
+  const bedCount = num(/(?:방|침실)\s*(\d+)\s*개/);
+  if (bedCount){
+    n.rooms = n.rooms.filter(r => r.type!=="bed" && r.type!=="master");
+    const upper = n.floors>1 ? [...Array(n.floors-1)].map((_,i)=>i+1) : [0];
+    for (let i=0;i<bedCount;i++){ const f = upper[i % upper.length]; n.rooms.push({floor:f, name: i===0 ? "안방" : "침실"+(i+1), type: i===0?"master":"bed", area: i===0?18:12}); }
+    notes.push(`침실 ${bedCount}개`);
+  }
+  if (/주차|차고/.test(t) && !n.rooms.some(r=>r.type==="garage")) { n.rooms.push({floor:0, name:"주차", type:"garage", area:15}); notes.push("1층 주차"); }
+  if (/테라스|루프탑|옥상정원/.test(t) && !n.rooms.some(r=>r.type==="terrace")) n.rooms.push({floor:n.floors-1, name:"테라스", type:"terrace", area:20});
+  const nm = t.match(/(?:이름|프로젝트)\s*(?:은|는|:)?\s*["']?([^"',.]+)["']?/); if (nm) n.name = nm[1].trim().slice(0,30);
+  else if (resetRooms) n.name = `${n.floors}층 ${USE_LABEL[n.use]}`;
+  let target = "none"; if (/레빗|revit/i.test(t)) target = "revit"; else if (/오토\s*캐드|autocad|캐드|cad|도면/i.test(t)) target = "autocad"; else if (/스케치\s*업|sketchup/i.test(t)) target = "sketchup";
+  setSpec(n);
+  const m = metrics(spec, layout);
+  const legal = (m.bcrOk && m.farOk) ? `건폐율 ${fmt(m.bcr)}% / 용적률 ${fmt(m.far)}%로 ${spec.zone} 한도(${m.z.bcr}%/${m.z.far}%) 안입니다.` : `건폐율 ${fmt(m.bcr)}% / 용적률 ${fmt(m.far)}%로 ${spec.zone} 한도(${m.z.bcr}%/${m.z.far}%)를 넘습니다. 층수나 건물 크기를 줄여 주세요.`;
+  const reply = (notes.length ? notes.join(" · ") + "로 설계했습니다. " : "요청을 이해하지 못한 부분은 현재 설계를 유지했습니다. ") + legal + ` 연면적 ${fmt(m.gfa)}㎡, 추정 공사비 약 ${fmt(m.cost/1e8,2)}억 원입니다.`;
+  afterDesign(target);
+  return {reply};
+}
+
+/* ======================================================================
+   내보내기: IFC4 / DXF R12 / COLLADA / OBJ / JSON → ZIP
+   ====================================================================== */
+function exportModel(){ return buildModel(spec, layout, {interior:true, glass:true, site:true, roof:true}); }
+function boxTris(b){
+  if (b.gable) return gableTriangles(b);
+  const x0=b.x, x1=b.x+b.w, y0=b.y, y1=b.y+b.h, z0=b.z, z1=b.z+b.d;
+  const v = [[x0,y0,z0],[x1,y0,z0],[x1,y1,z0],[x0,y1,z0],[x0,y0,z1],[x1,y0,z1],[x1,y1,z1],[x0,y1,z1]];
+  const q = [[0,3,2,1],[4,5,6,7],[0,1,5,4],[3,7,6,2],[0,4,7,3],[1,2,6,5]];
+  const t = []; for (const [a,b2,c,d] of q){ t.push([v[a],v[b2],v[c]]); t.push([v[a],v[c],v[d]]); } return t;
+}
+const r3 = n => (Math.round(n*1000)/1000).toString();
+function toOBJ(boxes){
+  let out = `# ${spec.name} — 건축설계 AI\n# units: meters, Y-up\nmtllib model.mtl\n`, mtl = "", vi = 1; const mats = new Set();
+  boxes.forEach((b,i) => {
+    const mname = b.layer + "_" + b.color.slice(1);
+    if (!mats.has(mname)){ mats.add(mname); const c = hex3(b.color); mtl += `newmtl ${mname}\nKd ${c.map(r3).join(" ")}\nd ${b.layer==="GLASS"?0.45:1}\n\n`; }
+    out += `o ${b.layer}_${i}\nusemtl ${mname}\n`;
+    for (const t of boxTris(b)){ for (const p of t) out += `v ${r3(p[0])} ${r3(p[1])} ${r3(p[2])}\n`; out += `f ${vi} ${vi+1} ${vi+2}\n`; vi += 3; }
+  });
+  return {obj: out, mtl};
+}
+function hex3(h){ const n = parseInt(h.slice(1),16); return [(n>>16&255)/255, (n>>8&255)/255, (n&255)/255]; }
+function toDAE(boxes){
+  const groups = new Map();
+  for (const b of boxes){ const k = b.layer+"_"+b.color.slice(1); if (!groups.has(k)) groups.set(k, {color:b.color, glass:b.layer==="GLASS", tris:[]}); groups.get(k).tris.push(...boxTris(b)); }
+  let eff = "", mats = "", geos = "", nodes = "";
+  for (const [k,g] of groups){
+    const c = hex3(g.color).map(r3).join(" ");
+    eff += `<effect id="${k}-fx"><profile_COMMON><technique sid="common"><lambert><diffuse><color>${c} 1</color></diffuse>${g.glass?`<transparency><float>0.45</float></transparency>`:""}</lambert></technique></profile_COMMON></effect>\n`;
+    mats += `<material id="${k}-mat" name="${k}"><instance_effect url="#${k}-fx"/></material>\n`;
+    const pos = []; g.tris.forEach(t => t.forEach(p => pos.push(r3(p[0]), r3(p[1]), r3(p[2]))));
+    const n = g.tris.length*3, idx = [...Array(n).keys()].join(" ");
+    geos += `<geometry id="${k}-geo" name="${k}"><mesh><source id="${k}-pos"><float_array id="${k}-pos-arr" count="${pos.length}">${pos.join(" ")}</float_array><technique_common><accessor source="#${k}-pos-arr" count="${n}" stride="3"><param name="X" type="float"/><param name="Y" type="float"/><param name="Z" type="float"/></accessor></technique_common></source><vertices id="${k}-vtx"><input semantic="POSITION" source="#${k}-pos"/></vertices><triangles material="${k}-sym" count="${g.tris.length}"><input semantic="VERTEX" source="#${k}-vtx" offset="0"/><p>${idx}</p></triangles></mesh></geometry>\n`;
+    nodes += `<node id="${k}-node" name="${k}"><instance_geometry url="#${k}-geo"><bind_material><technique_common><instance_material symbol="${k}-sym" target="#${k}-mat"/></technique_common></bind_material></instance_geometry></node>\n`;
+  }
+  return `<?xml version="1.0" encoding="utf-8"?>
+<COLLADA xmlns="http://www.collada.org/2005/11/COLLADASchema" version="1.4.1">
+<asset><contributor><authoring_tool>건축설계 AI</authoring_tool></contributor><created>${new Date().toISOString()}</created><modified>${new Date().toISOString()}</modified><unit name="meter" meter="1"/><up_axis>Y_UP</up_axis></asset>
+<library_effects>\n${eff}</library_effects>
+<library_materials>\n${mats}</library_materials>
+<library_geometries>\n${geos}</library_geometries>
+<library_visual_scenes><visual_scene id="Scene" name="${xmlEsc(spec.name)}">\n${nodes}</visual_scene></library_visual_scenes>
+<scene><instance_visual_scene url="#Scene"/></scene>
+</COLLADA>`;
+}
+function xmlEsc(s){ return String(s).replace(/[<>&"]/g, c => ({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c])); }
+function dxfText(s){ // R12 DXF는 ASCII 기본: 한글은 \U+XXXX 로 인코딩
+  return String(s).replace(/[^\x20-\x7E]/g, c => "\\U+" + c.charCodeAt(0).toString(16).toUpperCase().padStart(4,"0"));
+}
+function toDXF(boxes){
+  const E = [];
+  const line = (x1,y1,x2,y2,layer,color) => E.push(`0\nLINE\n8\n${layer}\n62\n${color}\n10\n${r3(x1)}\n20\n${r3(y1)}\n30\n0\n11\n${r3(x2)}\n21\n${r3(y2)}\n31\n0`);
+  const rect = (x,y,w,h,layer,color) => { line(x,y,x+w,y,layer,color); line(x+w,y,x+w,y+h,layer,color); line(x+w,y+h,x,y+h,layer,color); line(x,y+h,x,y,layer,color); };
+  const text = (x,y,h,s,layer,color,center) => E.push(`0\nTEXT\n8\n${layer}\n62\n${color}\n10\n${r3(x)}\n20\n${r3(y)}\n30\n0\n40\n${r3(h)}\n1\n${dxfText(s)}${center?`\n72\n1\n73\n2\n11\n${r3(x)}\n21\n${r3(y)}\n31\n0`:""}`);
+  const W = spec.building.w, D = spec.building.d, gap = 8;
+  // 층별 평면: 층마다 x 방향으로 (W+gap)씩 배치. DXF는 Y가 위 → 평면 y(남쪽이 아래)로 뒤집기
+  layout.forEach((rooms, f) => {
+    const ox = f*(W+gap), fy = y => D - y;
+    rect(ox, 0, W, D, "WALL", 7); rect(ox+0.25, 0.25, W-0.5, D-0.5, "WALL", 7);
+    for (const r of rooms){
+      rect(ox + r.x, fy(r.y + r.d), r.w, r.d, "ROOM", 8);
+      text(ox + r.x + r.w/2, fy(r.y + r.d/2) + 0.2, 0.35, r.name, "ROOM", 2, true);
+      text(ox + r.x + r.w/2, fy(r.y + r.d/2) - 0.4, 0.25, fmt(r.area,1) + " m2", "ROOM", 8, true);
+    }
+    // 창: 외벽 박스 중 GLASS 레이어
+    for (const b of boxes) if (b.layer==="GLASS" && b.y >= f*spec.floorH && b.y < (f+1)*spec.floorH){
+      const x0 = b.x + W/2, z0 = b.z + D/2; line(ox + x0, fy(z0), ox + x0 + b.w, fy(z0 + b.d), "WINDOW", 4);
+    }
+    line(ox, -1.2, ox+W, -1.2, "DIM", 1); text(ox+W/2, -1.0, 0.3, fmt(W,2)+" m", "DIM", 1, true);
+    line(ox-1.2, 0, ox-1.2, D, "DIM", 1); text(ox-1.8, D/2, 0.3, fmt(D,2)+" m", "DIM", 1, true);
+    text(ox, D+1.2, 0.6, `${f+1}F PLAN / ${spec.name}`, "TITLE", 7, false);
+  });
+  // 3D 매스(3DFACE): 평면 오른쪽 아래 영역, CAD 좌표계 Z-up (x, -z, y)
+  const off = -(D + 20);
+  for (const b of boxes){ if (b.layer==="FURNITURE" || b.layer==="FINISH") continue;
+    for (const t of boxTris(b)){ const p = t.map(v => [v[0], -v[2] + off, v[1]]);
+      E.push(`0\n3DFACE\n8\nMASS3D\n62\n${b.layer==="GLASS"?4:b.layer==="ROOF"?1:7}\n` + [0,1,2,2].map((k,i) => `${10+i}\n${r3(p[k][0])}\n${20+i}\n${r3(p[k][1])}\n${30+i}\n${r3(p[k][2])}`).join("\n")); } }
+  return `0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1009\n0\nENDSEC\n0\nSECTION\n2\nENTITIES\n${E.join("\n")}\n0\nENDSEC\n0\nEOF\n`;
+}
+function ifcStr(s){ // IFC 문자열: 비ASCII는 \X2\XXXX\X0\ 인코딩
+  return "'" + String(s).replace(/'/g, "''").replace(/[^\x20-\x7E]+/g, m => "\\X2\\" + [...m].map(c => c.charCodeAt(0).toString(16).toUpperCase().padStart(4,"0")).join("") + "\\X0\\") + "'";
+}
+function rr(n){ let v = Math.round(n*1000)/1000; if (Object.is(v,-0)) v = 0; const t = String(v); return /[.eE]/.test(t) ? t : t + "."; }
+function guid(){ const c = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$"; let s = c[Math.floor(Math.random()*4)]; for (let i=0;i<21;i++) s += c[Math.floor(Math.random()*64)]; return "'" + s + "'"; }
+function toIFC(){
+  let id = 0; const L = []; const e = s => { id++; L.push(`#${id}=${s};`); return "#"+id; };
+  const pt = (x,y,z) => e(`IFCCARTESIANPOINT((${rr(x)},${rr(y)},${rr(z)}))`);
+  const pt2 = (x,y) => e(`IFCCARTESIANPOINT((${rr(x)},${rr(y)}))`);
+  const dirZ = e("IFCDIRECTION((0.,0.,1.))"), dirX = e("IFCDIRECTION((1.,0.,0.))");
+  const place3 = (x,y,z) => e(`IFCAXIS2PLACEMENT3D(${pt(x,y,z)},${dirZ},${dirX})`);
+  const local = (rel,x,y,z) => e(`IFCLOCALPLACEMENT(${rel||"$"},${place3(x,y,z)})`);
+  const origin = place3(0,0,0);
+  const ctx = e(`IFCGEOMETRICREPRESENTATIONCONTEXT($,'Model',3,1.E-05,${origin},$)`);
+  const body = e(`IFCGEOMETRICREPRESENTATIONSUBCONTEXT('Body','Model',*,*,*,*,${ctx},$,.MODEL_VIEW.,$)`);
+  const uL = e("IFCSIUNIT(*,.LENGTHUNIT.,$,.METRE.)"), uA = e("IFCSIUNIT(*,.AREAUNIT.,$,.SQUARE_METRE.)"), uV = e("IFCSIUNIT(*,.VOLUMEUNIT.,$,.CUBIC_METRE.)"), uR = e("IFCSIUNIT(*,.PLANEANGLEUNIT.,$,.RADIAN.)");
+  const units = e(`IFCUNITASSIGNMENT((${uL},${uA},${uV},${uR}))`);
+  const proj = e(`IFCPROJECT(${guid()},$,${ifcStr(spec.name)},${ifcStr(USE_LABEL[spec.use])},$,$,$,(${ctx}),${units})`);
+  const sitePl = local(null,0,0,0);
+  const site = e(`IFCSITE(${guid()},$,'Site',${ifcStr("대지 "+spec.site.w+"x"+spec.site.d+"m")},$,${sitePl},$,$,.ELEMENT.,$,$,$,$,$)`);
+  const bldPl = local(sitePl,0,0,0);
+  const bld = e(`IFCBUILDING(${guid()},$,${ifcStr(spec.name)},$,$,${bldPl},$,$,.ELEMENT.,$,$,$)`);
+  e(`IFCRELAGGREGATES(${guid()},$,$,$,${proj},(${site}))`);
+  e(`IFCRELAGGREGATES(${guid()},$,$,$,${site},(${bld}))`);
+  const extr = (cx, cy, w, d, h) => { // 중심(cx,cy), 크기 w×d, 높이 h 의 직육면체
+    const prof = e(`IFCRECTANGLEPROFILEDEF(.AREA.,$,${e(`IFCAXIS2PLACEMENT2D(${pt2(cx,cy)},$)`)},${rr(w)},${rr(d)})`);
+    const solid = e(`IFCEXTRUDEDAREASOLID(${prof},${place3(0,0,0)},${dirZ},${rr(h)})`);
+    return e(`IFCPRODUCTDEFINITIONSHAPE($,$,(${e(`IFCSHAPEREPRESENTATION(${body},'Body','SweptSolid',(${solid}))`)}))`);
+  };
+  const W = spec.building.w, D = spec.building.d, H = spec.floorH, t = 0.25, ox = -W/2, oy = -D/2;
+  const storeys = [];
+  layout.forEach((rooms, f) => {
+    const stPl = local(bldPl, 0, 0, f*H);
+    const st = e(`IFCBUILDINGSTOREY(${guid()},$,${ifcStr((f+1)+"층")},$,$,${stPl},$,$,.ELEMENT.,${rr(f*H)})`);
+    storeys.push(st);
+    const elems = [], spaces = [];
+    const slabPl = local(stPl,0,0,0);
+    elems.push(e(`IFCSLAB(${guid()},$,${ifcStr((f+1)+"층 슬래브")},$,$,${slabPl},${extr(0,0,W,D,0.2)},$,.FLOOR.)`));
+    const wall = (name, cx, cy, w, d) => { const pl = local(stPl,0,0,0.2); elems.push(e(`IFCWALL(${guid()},$,${ifcStr(name)},$,$,${pl},${extr(cx,cy,w,d,H-0.2)},$,.STANDARD.)`)); };
+    wall((f+1)+"F 외벽 N", 0, -oy-t/2, W, t); wall((f+1)+"F 외벽 S", 0, oy+t/2, W, t);
+    wall((f+1)+"F 외벽 W", ox+t/2, 0, t, D-2*t); wall((f+1)+"F 외벽 E", -ox-t/2, 0, t, D-2*t);
+    for (const r of rooms){
+      const cx = ox + r.x + r.w/2, cy = -(oy + r.y + r.d/2); // 평면 y(남쪽 +)를 IFC y(북쪽 +)로 반전
+      if (r.x + r.w < W-0.05) wall(r.name+" 내벽", ox + r.x + r.w, cy, 0.12, r.d);
+      if (r.y + r.d < D-0.05) wall(r.name+" 내벽", cx, -(oy + r.y + r.d), r.w, 0.12);
+      const spPl = local(stPl,0,0,0.2);
+      spaces.push(e(`IFCSPACE(${guid()},$,${ifcStr(r.name)},${ifcStr(ROOM_TYPES[r.type].label+" "+fmt(r.area,1)+"m2")},$,${spPl},${extr(cx,cy,r.w-0.1,r.d-0.1,H-0.25)},${ifcStr(r.name)},.ELEMENT.,.INTERNAL.,$)`));
+    }
+    e(`IFCRELCONTAINEDINSPATIALSTRUCTURE(${guid()},$,$,$,(${elems.join(",")}),${st})`);
+    if (spaces.length) e(`IFCRELAGGREGATES(${guid()},$,$,$,${st},(${spaces.join(",")}))`);
+  });
+  const roofPl = local(bldPl,0,0,spec.floors*H);
+  const roof = e(`IFCSLAB(${guid()},$,'Roof',$,$,${roofPl},${extr(0,0,W+0.3,D+0.3,0.3)},$,.ROOF.)`);
+  const topSt = storeys[storeys.length-1];
+  e(`IFCRELCONTAINEDINSPATIALSTRUCTURE(${guid()},$,'Roof',$,(${roof}),${topSt})`);
+  e(`IFCRELAGGREGATES(${guid()},$,$,$,${bld},(${storeys.join(",")}))`);
+  const now = new Date().toISOString().slice(0,19);
+  return `ISO-10303-21;\nHEADER;\nFILE_DESCRIPTION(('ViewDefinition [ReferenceView]'),'2;1');\nFILE_NAME(${ifcStr(spec.name+".ifc")},'${now}',('ArchAI'),('ArchAI'),'ArchAI','ArchAI Studio','');\nFILE_SCHEMA(('IFC4'));\nENDSEC;\nDATA;\n${L.join("\n")}\nENDSEC;\nEND-ISO-10303-21;\n`;
+}
+
+/* ---------- ZIP (저장 방식, 압축 없음) ---------- */
+const CRC = (() => { const t = new Uint32Array(256); for (let n=0;n<256;n++){ let c=n; for (let k=0;k<8;k++) c = c&1 ? 0xEDB88320^(c>>>1) : c>>>1; t[n]=c>>>0; } return t; })();
+function crc32(u8){ let c = 0xFFFFFFFF; for (let i=0;i<u8.length;i++) c = CRC[(c^u8[i])&255]^(c>>>8); return (c^0xFFFFFFFF)>>>0; }
+function makeZip(files){
+  const enc = new TextEncoder(), parts = [], central = []; let off = 0;
+  const d = new Date(), dt = ((d.getHours()<<11)|(d.getMinutes()<<5)|(d.getSeconds()>>1)) & 0xFFFF, dd = (((d.getFullYear()-1980)<<9)|((d.getMonth()+1)<<5)|d.getDate()) & 0xFFFF;
+  for (const f of files){
+    const name = enc.encode(f.name), data = typeof f.data==="string" ? enc.encode(f.data) : f.data, crc = crc32(data);
+    const h = new DataView(new ArrayBuffer(30));
+    h.setUint32(0,0x04034b50,true); h.setUint16(4,20,true); h.setUint16(6,0x0800,true); h.setUint16(8,0,true); h.setUint16(10,dt,true); h.setUint16(12,dd,true);
+    h.setUint32(14,crc,true); h.setUint32(18,data.length,true); h.setUint32(22,data.length,true); h.setUint16(26,name.length,true); h.setUint16(28,0,true);
+    parts.push(new Uint8Array(h.buffer), name, data);
+    const c = new DataView(new ArrayBuffer(46));
+    c.setUint32(0,0x02014b50,true); c.setUint16(4,20,true); c.setUint16(6,20,true); c.setUint16(8,0x0800,true); c.setUint16(10,0,true); c.setUint16(12,dt,true); c.setUint16(14,dd,true);
+    c.setUint32(16,crc,true); c.setUint32(20,data.length,true); c.setUint32(24,data.length,true); c.setUint16(28,name.length,true); c.setUint32(42,off,true);
+    central.push(new Uint8Array(c.buffer), name);
+    off += 30 + name.length + data.length;
+  }
+  const csize = central.reduce((a,b)=>a+b.length,0);
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0,0x06054b50,true); end.setUint16(8,files.length,true); end.setUint16(10,files.length,true); end.setUint32(12,csize,true); end.setUint32(16,off,true);
+  return new Blob([...parts, ...central, new Uint8Array(end.buffer)], {type:"application/zip"});
+}
+const EXPORTS = {
+  revit:{label:"Revit", files:["ifc"]},
+  autocad:{label:"AutoCAD", files:["dxf"]},
+  sketchup:{label:"SketchUp", files:["dae","obj"]},
+  all:{label:"전체", files:["ifc","dxf","dae","obj"]}
+};
+function buildFiles(kind){
+  const boxes = exportModel(), base = safeName(spec.name), out = [];
+  const want = EXPORTS[kind].files;
+  if (want.includes("ifc")) out.push({name: base+".ifc", data: toIFC()});
+  if (want.includes("dxf")) out.push({name: base+".dxf", data: toDXF(boxes)});
+  if (want.includes("dae")) out.push({name: base+".dae", data: toDAE(boxes)});
+  if (want.includes("obj")){ const o = toOBJ(boxes); out.push({name: base+".obj", data: o.obj.replace("mtllib model.mtl", "mtllib "+base+".mtl")}, {name: base+".mtl", data: o.mtl}); }
+  out.push({name: base+"_설계조건.json", data: JSON.stringify(spec, null, 2)});
+  out.push({name: "읽어주세요.txt", data: readme(kind, base)});
+  return out;
+}
+function safeName(s){ return String(s).replace(/[\\/:*?"<>|\s]+/g, "_").slice(0,40) || "design"; }
+function readme(kind, base){
+  const m = metrics(spec, layout);
+  return `${spec.name}\n용도 ${USE_LABEL[spec.use]} / ${spec.zone} / 지상 ${spec.floors}층 / 연면적 ${fmt(m.gfa)}㎡\n건폐율 ${fmt(m.bcr)}% (한도 ${m.z.bcr}%) / 용적률 ${fmt(m.far)}% (한도 ${m.z.far}%)\n단위: 미터(m)\n\n` +
+  `[Revit] ${base}.ifc → Revit에서 파일 ▸ 열기 ▸ IFC. 층, 벽(IfcWall), 슬래브, 실(IfcSpace) 이름이 들어 있습니다.\n` +
+  `[AutoCAD] ${base}.dxf → 층별 평면(WALL/ROOM/WINDOW/DIM 레이어)이 가로로 나란히, 아래쪽에 3D 매스(MASS3D, 3DFACE)가 있습니다.\n` +
+  `[SketchUp] ${base}.dae → 파일 ▸ 가져오기 ▸ COLLADA. 재질 색상과 가구가 포함됩니다. OBJ(.obj+.mtl)는 SketchUp 2024 이상·Blender·Rhino용입니다.\n\n` +
+  `이 파일은 기획·매스 검토용 초안입니다. 인허가·시공 도면은 건축사의 검토를 받아야 합니다.\n`;
+}
+async function doExport(kind){
+  const files = buildFiles(kind), zip = makeZip(files), filename = safeName(spec.name) + "_" + EXPORTS[kind].label + ".zip";
+  if (downloads){
+    try { await downloads.save({filename, data: zip}); toast("저장했습니다: " + filename); return; }
+    catch (e){ if (e && e.code==="declined") { toast("저장을 취소했습니다"); return; } }
+  }
+  if (window.claude){ toast("이 화면에서는 파일 저장을 쓸 수 없습니다. 미리보기에서 내용을 복사하세요."); showView("export"); return; }
+  const a = document.createElement("a"); a.href = URL.createObjectURL(zip); a.download = filename; document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  toast("다운로드: " + filename);
+}
+$$("[data-export]").forEach(b => b.onclick = () => doExport(b.dataset.export));
+$("#btnGoExport").onclick = () => showView("export");
+let prevKind = "json";
+function renderPreview(){
+  const boxes = exportModel(); let txt = "";
+  if (prevKind==="ifc") txt = toIFC(); else if (prevKind==="dxf") txt = toDXF(boxes); else if (prevKind==="dae") txt = toDAE(boxes); else txt = JSON.stringify(spec, null, 2);
+  $("#previewName").textContent = `${safeName(spec.name)}.${prevKind} · ${fmt(txt.length/1024,1)} KB`;
+  $("#previewOut").textContent = txt.length > 60000 ? txt.slice(0,60000) + "\n… (미리보기는 앞부분만 표시)" : txt;
+  $("#previewOut")._full = txt;
+}
+$("#previewSeg").addEventListener("click", e => { const k = e.target.dataset.prev; if (!k) return; prevKind = k; $$("#previewSeg button").forEach(b => b.setAttribute("aria-pressed", b===e.target)); renderPreview(); });
+$("#copyPrev").onclick = async () => { const txt = $("#previewOut")._full || ""; try { await navigator.clipboard.writeText(txt); toast("복사했습니다"); } catch(e){ const r = document.createRange(); r.selectNodeContents($("#previewOut")); const s = getSelection(); s.removeAllRanges(); s.addRange(r); toast("내용을 선택했습니다. Ctrl+C로 복사하세요"); } };
+$("#importJson").addEventListener("change", async e => { const f = e.target.files[0]; if (!f) return; try { setSpec(JSON.parse(await f.text()), "설계를 불러왔습니다"); showView("studio"); } catch(err){ toast("JSON 형식이 올바르지 않습니다"); } e.target.value = ""; });
+
+/* ======================================================================
+   경매·부동산
+   ====================================================================== */
+const SAMPLE_LOTS = [
+  {no:"2026타경10482", addr:"경기 성남시 분당구 운중동", type:"대지", land:231, zone:"제1종전용주거", appr:14.2, min:9.94, fail:1, date:"2026-10-21", sample:true},
+  {no:"2026타경20517", addr:"경기 양평군 서종면 문호리", type:"대지", land:495, zone:"계획관리", appr:4.8, min:2.35, fail:2, date:"2026-10-24", sample:true},
+  {no:"2026타경3391", addr:"서울 마포구 연남동", type:"단독주택", land:165, zone:"제2종일반주거", appr:28.6, min:22.88, fail:1, date:"2026-10-29", sample:true},
+  {no:"2025타경88120", addr:"인천 중구 운서동", type:"근린시설", land:330, zone:"일반상업", appr:19.5, min:9.56, fail:3, date:"2026-11-04", sample:true},
+  {no:"2026타경15073", addr:"경기 용인시 수지구 고기동", type:"전", land:612, zone:"자연녹지", appr:6.1, min:4.27, fail:1, date:"2026-11-07", sample:true},
+  {no:"2026타경7240", addr:"서울 은평구 진관동", type:"대지", land:198, zone:"제1종일반주거", appr:12.4, min:12.4, fail:0, date:"2026-11-11", sample:true},
+  {no:"2026타경22908", addr:"대전 유성구 봉명동", type:"다가구", land:264, zone:"제2종일반주거", appr:11.3, min:7.23, fail:2, date:"2026-11-13", sample:true},
+  {no:"2026타경4516", addr:"제주 제주시 애월읍", type:"임야", land:1320, zone:"계획관리", appr:8.9, min:6.23, fail:1, date:"2026-11-18", sample:true}
+];
+let myLots = store.get("lots", []);
+let rules = store.get("rules", {region:"", type:"", max:15, disc:30, land:150});
+const allLots = () => [...myLots, ...SAMPLE_LOTS];
+function lotHit(l){
+  const disc = (1 - l.min/l.appr)*100;
+  return (!rules.region || rules.region.split(/[,\s]+/).filter(Boolean).some(w => l.addr.includes(w)))
+    && (!rules.type || l.type===rules.type)
+    && (!rules.max || l.min <= rules.max)
+    && (!rules.disc || disc >= rules.disc)
+    && (!rules.land || l.land >= rules.land);
+}
+function renderRules(){ $("#r-region").value = rules.region; $("#r-type").value = rules.type; $("#r-max").value = rules.max||""; $("#r-disc").value = rules.disc||""; $("#r-land").value = rules.land||""; }
+function readRules(){ rules = {region: $("#r-region").value.trim(), type: $("#r-type").value, max: +$("#r-max").value||0, disc: +$("#r-disc").value||0, land: +$("#r-land").value||0}; store.set("rules", rules); renderLots(); }
+["#r-region","#r-type","#r-max","#r-disc","#r-land"].forEach(s => $(s).addEventListener("input", readRules));
+$("#r-reset").onclick = () => { rules = {region:"", type:"", max:0, disc:0, land:0}; store.set("rules", rules); renderRules(); renderLots(); };
+function dday(d){ const t = new Date(d+"T00:00:00"), n = new Date(); n.setHours(0,0,0,0); return Math.round((t-n)/864e5); }
+function renderLots(){
+  const lots = allLots().sort((a,b) => a.date.localeCompare(b.date));
+  const hits = lots.filter(lotHit);
+  $("#alertBadge").hidden = !hits.length; $("#alertBadge").textContent = hits.length;
+  const parts = []; if (rules.region) parts.push(rules.region); if (rules.type) parts.push(rules.type); if (rules.max) parts.push(`최저가 ≤ ${rules.max}억`); if (rules.disc) parts.push(`할인 ≥ ${rules.disc}%`); if (rules.land) parts.push(`토지 ≥ ${rules.land}㎡`);
+  $("#ruleSummary").textContent = `${hits.length}건 일치 · ` + (parts.join(" · ") || "조건 없음");
+  $("#lots").innerHTML = lots.map((l, i) => {
+    const disc = (1 - l.min/l.appr)*100, hit = lotHit(l), dd = dday(l.date);
+    return `<tr class="${hit?"hit":""}">
+      <td class="num">${esc(l.no)} ${l.sample?'<span class="tag">예시</span>':'<span class="tag">내 물건</span>'}</td>
+      <td>${esc(l.addr)} ${hit?'<span class="tag hot">알림</span>':""}</td>
+      <td>${esc(l.type)}</td>
+      <td class="r num">${fmt(l.land,0)}<br><span style="color:var(--muted);font-size:11px">${fmt(l.land/3.3058,1)}평</span></td>
+      <td class="r num">${fmt(l.appr,2)}억</td>
+      <td class="r num"><b>${fmt(l.min,2)}억</b></td>
+      <td class="r num">${fmt(disc,0)}%</td>
+      <td>${l.fail ? `<span class="tag ${l.fail>=3?"warn":""}">${l.fail}회</span>` : '<span class="tag">신건</span>'}</td>
+      <td class="num">${esc(l.date)}<br><span style="color:var(--muted);font-size:11px">${dd>=0?"D-"+dd:"종료"}</span></td>
+      <td>${esc(l.zone)}</td>
+      <td><div class="row"><button class="btn small primary" data-design="${esc(l.no)}">이 땅에 설계</button><button class="btn small" data-analyze="${esc(l.no)}">분석</button>${l.sample?"":`<button class="btn small" data-remove="${esc(l.no)}" aria-label="삭제">삭제</button>`}</div></td>
+    </tr>`;
+  }).join("");
+}
+$("#lots").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  const find = no => allLots().find(l => l.no===no);
+  if (b.dataset.design) designOnLot(find(b.dataset.design));
+  if (b.dataset.analyze) analyzeLot(find(b.dataset.analyze));
+  if (b.dataset.remove){ myLots = myLots.filter(l => l.no!==b.dataset.remove); store.set("lots", myLots); renderLots(); toast("삭제했습니다"); }
+});
+$("#n-add").onclick = () => {
+  const l = {no: $("#n-no").value.trim(), addr: $("#n-addr").value.trim(), type: $("#n-type").value, land: +$("#n-land").value, zone: $("#n-zone").value, appr: +$("#n-appr").value, min: +$("#n-min").value, fail: +$("#n-fail").value||0, date: $("#n-date").value.trim() || new Date().toISOString().slice(0,10)};
+  if (!l.no || !l.addr || !l.land || !l.appr || !l.min){ toast("사건번호, 소재지, 토지면적, 감정가, 최저가를 입력하세요"); return; }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(l.date)){ toast("매각기일은 2026-11-20 형식으로 입력하세요"); return; }
+  myLots = [l, ...myLots.filter(x => x.no!==l.no)]; store.set("lots", myLots); renderLots(); toast(lotHit(l) ? "추가했습니다. 알림 조건에 맞는 물건입니다" : "추가했습니다");
+  ["#n-no","#n-addr","#n-land","#n-appr","#n-min","#n-date"].forEach(s => $(s).value = "");
+};
+function designOnLot(l){
+  if (!l) return;
+  const z = ZONES[l.zone] || ZONES["제2종일반주거"];
+  const sw = Math.round(Math.sqrt(l.land*1.25)*2)/2, sd = Math.round(l.land/sw*2)/2;
+  const use = l.type==="근린시설" ? "office" : l.type==="다가구" ? "multi" : "house";
+  const fp = Math.min(l.land*z.bcr/100*0.9, (sw-3)*(sd-3));
+  const floors = clamp(Math.floor(l.land*z.far/100*0.95/fp), 1, use==="house" ? 3 : 6);
+  const bw = Math.max(5, Math.round(Math.sqrt(fp*sw/sd)*2)/2), bd = Math.max(5, Math.round(fp/bw*2)/2);
+  setSpec({...spec, name: l.addr.split(" ").slice(-2).join(" ") + " " + USE_LABEL[use], use, zone: l.zone, site:{w:sw, d:sd}, building:{w:bw, d:bd}, floors, rooms: defaultRooms(use, floors, bw, bd)});
+  showView("studio");
+  addMsg("sys", `${l.no} 부지(${fmt(l.land,0)}㎡, ${l.zone})에 맞춰 설계했습니다.`);
+  const m = metrics(spec, layout);
+  addMsg("ai", `${l.addr} 대지를 ${sw}×${sd}m로 가정하고 건폐율 ${fmt(m.bcr)}%, 용적률 ${fmt(m.far)}%로 지상 ${floors}층 ${USE_LABEL[use]}를 배치했습니다. 추정 공사비는 약 ${fmt(m.cost/1e8,2)}억 원, 최저가를 더한 총사업비는 약 ${fmt(m.cost/1e8 + l.min,2)}억 원입니다. 원하는 조건을 말하면 바로 고칩니다.`);
+}
+let anCtl = null;
+async function analyzeLot(l){
+  if (!l) return;
+  $("#anTarget").textContent = l.no;
+  const z = ZONES[l.zone] || {bcr:60, far:200};
+  const disc = (1 - l.min/l.appr)*100;
+  const base = `■ ${l.addr} (${l.type}, ${fmt(l.land,0)}㎡ / ${fmt(l.land/3.3058,1)}평)\n· ${l.zone}: 건폐율 ${z.bcr}% → 최대 바닥면적 약 ${fmt(l.land*z.bcr/100,0)}㎡, 용적률 ${z.far}% → 최대 연면적 약 ${fmt(l.land*z.far/100,0)}㎡\n· 최저가 ${fmt(l.min,2)}억 (감정가 대비 ${fmt(disc,0)}% 낮음, 유찰 ${l.fail}회) · ㎡당 ${fmt(l.min*1e8/l.land/1e4,0)}만원\n· 매각기일 ${l.date}\n`;
+  const checklist = `\n확인할 것\n· 등기부: 말소기준권리, 선순위 임차인·가처분·유치권 여부\n· 토지이음: 도로 접도(4m 이상), 지구단위계획, 건축선\n· 현장: 경사도, 상하수도·도시가스 인입, 인접 대지 경계\n${l.fail>=3?"· 유찰 3회 이상: 권리상 하자나 법정지상권 여부를 특히 확인\n":""}${/전|임야/.test(l.type)?"· 농지·산지: 농지취득자격증명, 개발행위허가·전용 부담금 확인\n":""}`;
+  $("#analysis").textContent = base + checklist;
+  if (!sample) return;
+  anCtl?.abort(); anCtl = new AbortController();
+  const out = $("#analysis"); const head = base + "\nAI 분석 중…";
+  out.textContent = head;
+  try {
+    await sample(`한국 부동산 경매 물건을 건축 개발 관점에서 검토해줘. 한국어로, 아래 형식의 짧은 글머리표로만 답해. 투자 권유는 하지 말고 확인 포인트 중심으로.\n1) 개발 가능 규모(건폐율/용적률 기준 최대 바닥·연면적, 추천 층수와 용도)\n2) 사업성 거친 추정(토지 최저가 + ㎡당 공사비 260만~330만원 가정, 범위로)\n3) 권리·법규 리스크 체크리스트(유찰 횟수와 물건 종류 반영)\n4) 이 대시보드에서 바로 해볼 설계 제안 한 줄\n\n물건: ${JSON.stringify(l)}\n용도지역 한도: 건폐율 ${z.bcr}%, 용적률 ${z.far}%`, {
+      signal: anCtl.signal, onText: ({text}) => { out.textContent = base + "\n" + text; } });
+  } catch (e){ if (e.code!=="cancelled") out.textContent = base + checklist + "\n(AI 분석을 가져오지 못해 기본 체크리스트를 표시합니다.)"; }
+}
+
+/* ---------- 뷰 전환 ---------- */
+function showView(v){
+  $$(".view").forEach(s => s.hidden = s.id !== "view-"+v);
+  $$("[data-view]").forEach(b => { if (b.dataset.view===v) b.setAttribute("aria-current","page"); else b.removeAttribute("aria-current"); });
+  if (v==="export") renderPreview();
+  if (v==="studio") requestAnimationFrame(resize);
+  try { sessionStorage.setItem("archai:view", v); } catch(e){}
+}
+$$("[data-view]").forEach(b => b.onclick = () => showView(b.dataset.view));
+
+function renderAll(){ renderKpis(); renderForm(); renderFloorSeg(); drawScene(); if (!$("#view-export").hidden) renderPreview(); }
+function setAiState(on){
+  $("#aiDot").classList.toggle("on", on);
+  $("#aiState").textContent = on ? "Claude AI 연결됨" : "내장 규칙 엔진";
+  $("#aiMode").textContent = on ? "Claude가 설계" : "오프라인 규칙 엔진";
+}
+
+/* ---------- 시작 ---------- */
+renderAll(); renderRules(); renderLots();
+addMsg("ai", "안녕하세요. 짓고 싶은 건물을 말씀해 주세요. 대지 크기, 층수, 용도, 방 개수, 외관과 인테리어 스타일을 말하면 3D 모델과 평면도를 만듭니다. '레빗으로', '오토캐드로', '스케치업으로'라고 하면 해당 프로그램용 파일도 준비합니다.");
+setAiState(false);
+initThree();
+try { const v = sessionStorage.getItem("archai:view"); if (v && v!=="studio") showView(v); } catch(e){}
+const hash = location.hash.slice(1); if (["studio","auction","export"].includes(hash)) showView(hash);
+if (window.claude && window.claude.use){
+  window.claude.use("sample").then(s => { if (s){ sample = s; setAiState(true); } }).catch(() => {});
+  window.claude.use("downloads").then(d => { downloads = d; }).catch(() => {});
+}
+window.__archai = {toIFC, toDXF, toDAE, toOBJ, exportModel, buildFiles, makeZip, localDesign, get spec(){return spec;}, layout: () => layout};
+})();
+</script>
+</body></html>
