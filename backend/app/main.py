@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import agents, analysis, backtest, config, improve, indicators, liquidation, llm, nl_strategy, orderflow
-from .data import coinglass, exchanges, market, news, sentiment
+from .data import coinglass, exchanges, market, news, sentiment, symbols
 from .llm import LLMUnavailable
 from .paper import PaperManager
 from .strategy import StrategySpec, validate
@@ -54,6 +54,12 @@ def candles(symbol: str = "BTCUSDT", interval: str = "1h", limit: int = 500):
     except ValueError as e:
         _bad(e)
     return {"source": src, "candles": rows}
+
+
+@app.get("/api/resolve")
+def resolve_symbol(q: str):
+    """검색어(한글 이름·티커) → 바이낸스 선물 심볼."""
+    return {"symbol": symbols.resolve(q)}
 
 
 @app.get("/api/tickers")

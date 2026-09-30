@@ -62,6 +62,13 @@ def candles(symbol: str, interval: str, limit: int = 500) -> tuple[list[dict], s
         rows = _cached(("klines", symbol, interval, limit), 5,
                        lambda: _binance_candles(symbol, interval, limit))
         return rows, "binance"
+    except httpx.HTTPStatusError as e:
+        # 네트워크 문제가 아니라 바이낸스가 "없는 심볼"이라고 답한 경우: 가짜 차트를 보여주지 않는다
+        if e.response.status_code == 400:
+            raise ValueError(f"{symbol} 은(는) 바이낸스 선물에 없는 종목입니다.") from e
+        if src == "binance":
+            raise
+        return synthetic.candles(symbol, interval, limit), "synthetic"
     except Exception:
         if src == "binance":
             raise

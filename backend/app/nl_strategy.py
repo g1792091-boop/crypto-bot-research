@@ -11,6 +11,7 @@ import re
 from pydantic import BaseModel, Field
 
 from . import config, indicators, llm
+from .data.symbols import find_in_text
 from .strategy import Condition, ConditionGroup, IndicatorSpec, RiskSpec, StrategySpec, validate
 
 SYSTEM_PROMPT = """당신은 코인 선물 퀀트 전략 엔지니어다. 사용자가 말로 설명한 진입/청산 기준을
@@ -67,10 +68,6 @@ def from_text(text: str, symbol: str | None = None, interval: str | None = None)
 # 규칙 기반 파서 (API 키 없을 때)
 # ---------------------------------------------------------------------------
 
-_SYMBOLS = [
-    (r"\b(btc|xbt)\b|비트", "BTCUSDT"), (r"\beth\b|이더", "ETHUSDT"), (r"\bsol\b|솔라나", "SOLUSDT"),
-    (r"\bxrp\b|리플", "XRPUSDT"), (r"\bbnb\b|바낸", "BNBUSDT"), (r"\bdoge\b|도지", "DOGEUSDT"),
-]
 _INTERVALS = [
     (r"(?<!\d)15\s*m\b|(?<!\d)15분", "15m"), (r"(?<!\d)30\s*m\b|(?<!\d)30분", "30m"),
     (r"(?<!\d)5\s*m\b|(?<!\d)5분", "5m"), (r"(?<!\d)1\s*m\b|(?<!\d)1분", "1m"),
@@ -87,7 +84,7 @@ def _find(pattern: str, t: str):
 
 def rule_parse(text: str, symbol: str | None = None, interval: str | None = None) -> StrategySpec:
     t = text.lower()
-    sym = symbol or next((s for p, s in _SYMBOLS if re.search(p, t)), "BTCUSDT")
+    sym = find_in_text(text) or symbol or "BTCUSDT"
     iv = next((i for p, i in _INTERVALS if re.search(p, t)), interval or "1h")
 
     inds: dict[str, IndicatorSpec] = {}
@@ -302,7 +299,7 @@ def rule_edit(spec: StrategySpec, message: str) -> tuple[StrategySpec, list[str]
     iv = next((i for p, i in _INTERVALS if re.search(p, t)), None)
     if iv and iv != s.interval:
         s.interval = iv; ch.append(f"봉 → {iv}")
-    sym = next((sy for p, sy in _SYMBOLS if re.search(p, t)), None)
+    sym = find_in_text(message)
     if sym and sym != s.symbol:
         s.symbol = sym; ch.append(f"심볼 → {sym}")
 

@@ -16,15 +16,25 @@ INTERVAL_SECONDS = {
     "1M": 2592000, "1y": 31536000,
 }
 
-BASE_PRICE = {"BTC": 65000.0, "ETH": 3200.0, "SOL": 150.0, "XRP": 0.6, "BNB": 580.0, "DOGE": 0.15}
+BASE_PRICE = {
+    "BTC": 65000.0, "ETH": 3200.0, "SOL": 150.0, "XRP": 0.6, "BNB": 580.0, "DOGE": 0.15,
+    "ADA": 0.45, "AVAX": 28.0, "LINK": 14.0, "SUI": 1.8, "TRX": 0.15, "DOT": 5.5, "LTC": 75.0,
+    "BCH": 380.0, "ETC": 22.0, "TON": 5.5, "NEAR": 4.5, "APT": 8.0, "ARB": 0.6, "OP": 1.6,
+    "UNI": 8.0, "ATOM": 6.0, "FIL": 4.0, "INJ": 20.0, "WLD": 2.0, "SEI": 0.35, "TIA": 5.0,
+    "HBAR": 0.07, "XLM": 0.1, "ENA": 0.5, "ONDO": 1.0, "AAVE": 150.0, "FET": 1.3, "RENDER": 6.0,
+    "WIF": 2.0, "ORDI": 30.0, "1000SHIB": 0.018, "1000PEPE": 0.01, "1000BONK": 0.025, "1000FLOKI": 0.15,
+}
 
 # (주기[시간], 진폭[로그가격]) — 절대 시간 기준이라 모든 봉 간격이 같은 가격 경로를 공유한다
 _WAVES = ((2400, 0.22), (700, 0.10), (160, 0.04), (45, 0.015), (13, 0.006))
 
 
 def _base(symbol: str) -> float:
-    for k, v in BASE_PRICE.items():
-        if symbol.upper().startswith(k):
+    base = symbol.upper().removesuffix("USDT")
+    if base in BASE_PRICE:
+        return BASE_PRICE[base]
+    for k, v in BASE_PRICE.items():   # BTCUSD 처럼 접미사가 다른 경우
+        if base.startswith(k):
             return v
     return 100.0
 

@@ -69,10 +69,10 @@ async function send(text) {
       setSpec(r.spec);
       renderBacktest(r);
       addVersion(r.spec, r.metrics, "처음 작성");
-      lab.chat.push({ role: "bot", text: `'${r.spec.name}' 전략을 만들어 ${r.candles.length}봉으로 백테스트했습니다.${r.engine === "claude" ? "" : " (기본 변환기 사용)"}\n고칠 점을 말해 주세요.`,
+      lab.chat.push({ role: "bot", text: `'${r.spec.name}' 전략을 만들어 ${r.spec.symbol} ${IV_LABEL[r.spec.interval] || r.spec.interval} ${r.candles.length}봉으로 백테스트했습니다.${r.engine === "claude" ? "" : " (기본 변환기 사용)"}\n고칠 점을 말해 주세요.`,
         delta: delta(null, M(r.metrics)) });
     } else {
-      const before = lab.versions[lab.cur]?.metrics;
+      const before = lab.versions[lab.cur]?.metrics, prev = state.spec;
       const history = lab.chat.slice(-10).map((m) => ({ role: m.role, text: m.text }));
       const r = await api("/api/strategy/refine", { method: "POST", body: { spec: state.spec, message: text, history, metrics: lastResult?.metrics, bars } });
       if (r.backtest) {
@@ -82,6 +82,7 @@ async function send(text) {
       }
       if (r.improve) renderImprove(r.improve, false);
       let reply = r.reply;
+      if (r.spec && (r.spec.symbol !== prev?.symbol || r.spec.interval !== prev?.interval) && r.backtest) reply += `\n(대상: ${r.spec.symbol} ${IV_LABEL[r.spec.interval] || r.spec.interval})`;
       const after = r.backtest && M(r.backtest.metrics);
       if (before && after && r.engine !== "improve") {
         const warn = [];

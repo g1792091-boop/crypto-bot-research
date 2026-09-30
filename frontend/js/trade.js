@@ -52,8 +52,10 @@ function renderTickerBar() {
 
 let premium = null;
 async function pollDerivatives() {
+  const sym = state.symbol;
   try {
-    const d = await api(`/api/derivatives?symbol=${state.symbol}&interval=1h&limit=48`);
+    const d = await api(`/api/derivatives?symbol=${sym}&interval=1h&limit=48`);
+    if (sym !== state.symbol) return;
     premium = d.premium;
     const oi = d.open_interest.at(-1)?.value, oi24 = d.open_interest.at(-25)?.value;
     $("#t-oi").innerHTML = oi ? `${big(oi)} <span class="${cls(oi - oi24)}">${oi24 ? pct((oi / oi24 - 1) * 100, 1) : ""}</span>` : "–";
@@ -76,11 +78,21 @@ async function pollSentiment() {
     $("#t-fng").innerHTML = `<span class="${c}">${f.value}</span> <span class="muted">${f.label}</span>`;
     emit("fng", f);
   }).catch(() => ($("#t-fng").textContent = "–"));
-  api(`/api/exchanges?symbol=${state.symbol}`).then((e) => {
+  const sym = state.symbol;
+  api(`/api/exchanges?symbol=${sym}`).then((e) => {
+    if (sym !== state.symbol) return;
     state.exchanges = e;
     $("#t-kimp").innerHTML = e.kimchi_pct == null ? "–" : `<span class="${cls(e.kimchi_pct)}">${pct(e.kimchi_pct)}</span>`;
     if (bottomTab === "ex") renderBottom();
   }).catch(() => ($("#t-kimp").textContent = "–"));
+}
+
+// "페페", "도지", "pepe" 같은 입력 → 바이낸스 선물 심볼 (1000PEPEUSDT 등)
+async function lookup(q) {
+  q = q.trim();
+  if (/^[A-Z0-9]+USDT$/.test(q)) return q;
+  try { return (await api(`/api/resolve?q=${encodeURIComponent(q)}`)).symbol; }
+  catch { q = q.toUpperCase(); return q.endsWith("USDT") ? q : q + "USDT"; }
 }
 
 function setSymbol(sym) {
@@ -90,6 +102,8 @@ function setSymbol(sym) {
   if (!state.watch.includes(sym)) state.watch.push(sym);
   savePrefs();
   $("#t-last").dataset.v = "";
+  ["#t-oi", "#t-ls", "#t-fund", "#t-kimp"].forEach((id) => ($(id).textContent = "–"));
+  premium = null; state.exchanges = null; bookStep = null;
   renderWatchlist();
   pollTickers(); pollDerivatives(); pollSentiment(); loadBook();
   renderChart(); loadAnalysis();
@@ -146,7 +160,7 @@ function renderChart() {
   }
   charts.forEach((c, i) => c.load(i ? state.multi[i - 1].symbol : state.symbol, i ? state.multi[i - 1].interval : state.interval)
     .catch((e) => toast("차트 오류", e.message, "err")));
-  if (state.analysis?.symbol === state.symbol) charts[0]?.setScenario(state.overlays.scenario ? state.analysis.scenarios[0] : null);
+  if (state.analysis?.symbol === state.symbol) charts[0]?.setScenario(state.overlays.scenario ? state.analysis.scenarios[0] : null, state.analysis.symbol);
 }
 
 function renderTv(symbol, studies) {
@@ -221,7 +235,7 @@ export async function loadAnalysis(withAi = false) {
     if (!withAi && state.analysis?.ai_comment && state.analysis.bar_time === a.bar_time && state.analysis.symbol === sym) a.ai_comment = state.analysis.ai_comment;
     state.analysis = a;
     renderRegime(a); renderScenarios(a);
-    charts[0]?.setScenario(state.overlays.scenario ? a.scenarios[0] : null);
+    charts[0]?.setScenario(state.overlays.scenario ? a.scenarios[0] : null, a.symbol);
     emit("analysis", a);
   } catch (e) {
     $("#regime").innerHTML = `<span class="muted">분석 실패: ${esc(e.message)}</span>`;
@@ -276,8 +290,10 @@ let bookStep = null, bookTimer;
 async function loadBook() {
   clearTimeout(bookTimer);
   if ($("#side-book").hidden) return;
+  const sym = state.symbol;
   try {
-    const ob = await api(`/api/orderbook?symbol=${state.symbol}&rows=18${bookStep ? "&step=" + bookStep : ""}`);
+    const ob = await api(`/api/orderbook?symbol=${sym}&rows=18${bookStep ? "&step=" + bookStep : ""}`);
+    if (sym !== state.symbol) { bookTimer = setTimeout(loadBook, 0); return; }
     const max = Math.max(...ob.asks.map((x) => x.cum), ...ob.bids.map((x) => x.cum));
     const row = (x, sd) => `<div class="ob-row ${sd}"><i style="width:${(x.cum / max * 100).toFixed(1)}%"></i>
       <span class="${sd === "ask" ? "down" : "up"}">${px(x.price)}</span><span>${fmt(x.qty, x.qty >= 100 ? 0 : 3)}</span><span class="dim">${big(x.usd)}</span></div>`;
@@ -447,15 +463,19 @@ export function initTrade() {
     state.overlays[k] = !state.overlays[k];
     savePrefs(); renderToolbar();
     charts[0]?.setOverlay(k, state.overlays[k]);
-    if (k === "scenario") charts[0]?.setScenario(state.overlays.scenario ? state.analysis?.scenarios?.[0] : null);
+    if (k === "scenario") charts[0]?.setScenario(state.overlays.scenario ? state.analysis?.scenarios?.[0] : null, state.analysis?.symbol);
   };
   $("#layouts").onclick = (e) => { const n = +e.target.dataset.layout; if (n) { state.layout = n; savePrefs(); renderChart(); } };
-  $("#term-grid").onchange = (e) => {
+  $("#term-grid").onchange = async (e) => {
     const i = +e.target.dataset.cell;
     if (!i) return;
-    let v = e.target.value.trim().toUpperCase();
-    if (e.target.dataset.k === "symbol" && !v.endsWith("USDT")) v += "USDT";
-    state.multi[i - 1][e.target.dataset.k] = e.target.dataset.k === "interval" ? e.target.value : v; savePrefs();
+    const k = e.target.dataset.k;
+    if (k === "symbol") {
+      const v = await lookup(e.target.value);
+      e.target.value = v.replace(/USDT$/, "");
+      state.multi[i - 1].symbol = v;
+    } else state.multi[i - 1][k] = e.target.value;
+    savePrefs();
     charts[i]?.load(state.multi[i - 1].symbol, state.multi[i - 1].interval).catch((err) => toast("차트 오류", err.message, "err"));
   };
   $("#draw-tools").onclick = (e) => {
@@ -500,7 +520,11 @@ export function initTrade() {
     if (!r || r.dataset.sym === state.symbol) return;
     state.watch = state.watch.filter((s) => s !== r.dataset.sym); savePrefs(); renderWatchlist();
   };
-  $("#wl-search").onkeydown = (e) => { if (e.key === "Enter" && e.target.value.trim()) { setSymbol(e.target.value.trim()); e.target.value = ""; } };
+  $("#wl-search").onkeydown = async (e) => {
+    if (e.key !== "Enter" || !e.target.value.trim()) return;
+    const q = e.target.value; e.target.value = "";
+    setSymbol(await lookup(q));
+  };
   $("#symbtn").onclick = () => $("#wl-search").focus();
 
   $("#side-tabs").onclick = (e) => {
@@ -516,7 +540,7 @@ export function initTrade() {
       state.overlays.scenario = true; savePrefs();
       if (state.chartMode !== "term") { state.chartMode = "term"; renderChart(); }
       renderToolbar();
-      charts[0]?.setScenario(state.analysis.scenarios[+b.dataset.sc]);
+      charts[0]?.setScenario(state.analysis.scenarios[+b.dataset.sc], state.analysis.symbol);
     }
     if (e.target.id === "ai-comment") busy(e.target, () => loadAnalysis(true));
   };

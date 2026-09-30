@@ -60,16 +60,38 @@ export class TermChart {
 
   destroy() { clearInterval(this._timer); this.chart.remove(); this.el.innerHTML = ""; }
 
+  // 지금 보고 있는 코인·봉인지 확인 (늦게 도착한 이전 코인의 응답을 버리기 위함)
+  _is(sym, iv) { return sym === this.symbol && iv === this.interval; }
+
   async load(symbol = this.symbol, interval = this.interval) {
     const changed = symbol !== this.symbol || interval !== this.interval || !this.candles.length;
     this.symbol = symbol; this.interval = interval;
-    const d = await api(`/api/candles?symbol=${symbol}&interval=${interval}&limit=${interval === "1m" ? 1500 : 1000}`);
-    if (symbol !== this.symbol || interval !== this.interval) return;
+    if (changed) {
+      // 이전 코인의 포지션선·시나리오·청산맵·고래·지지저항이 새 코인 차트에 남지 않도록 즉시 비운다
+      clearInterval(this._timer);
+      this.markers = this.heat = this.whales = this.sr = this.scenario = null;
+      this.ext = {};
+      this._applyMarkers();
+      [this.heatLayer, this.whaleLayer, this.srLayer].forEach((l) => l.update());
+    }
+    let d;
+    try { d = await api(`/api/candles?symbol=${symbol}&interval=${interval}&limit=${interval === "1m" ? 1500 : 1000}`); }
+    catch (e) {
+      // 없는 종목이면 이전 코인 봉을 그대로 두지 말고 비운다 (다른 코인 차트가 새 이름으로 보이는 문제)
+      if (this._is(symbol, interval)) {
+        this.candles = []; this.candle.setData([]);
+        this.ind.forEach((it) => it.series.forEach((s) => s.setData([])));
+        this._legend();
+      }
+      throw e;
+    }
+    if (!this._is(symbol, interval)) return;
     this.source = d.source;
     this.candles = d.candles;
     this.candle.setData(this.candles);
     if (changed) { this.chart.timeScale().fitContent(); this.chart.timeScale().scrollToRealTime(); this._loadDrawings(); }
     await this._loadExt();
+    if (!this._is(symbol, interval)) return;
     this.renderIndicators();
     this.refreshOverlays();
     this._legend();
@@ -79,8 +101,10 @@ export class TermChart {
 
   async _tick() {
     if (document.hidden || !this.candles.length) return;
+    const sym = this.symbol, iv = this.interval;
     let d;
-    try { d = await api(`/api/candles?symbol=${this.symbol}&interval=${this.interval}&limit=3`); } catch { return; }
+    try { d = await api(`/api/candles?symbol=${sym}&interval=${iv}&limit=3`); } catch { return; }
+    if (!this._is(sym, iv)) return;   // 그 사이 코인을 바꿨으면 버린다
     let newBar = false;
     for (const b of d.candles) {
       const last = this.candles.at(-1);
@@ -100,10 +124,12 @@ export class TermChart {
   // ------------------------------------------------------------ 보조지표
   async _loadExt() {
     const need = new Set(this.indicators.map((i) => INDICATORS[i.key]?.remote).filter(Boolean));
+    const sym = this.symbol, iv = this.interval, ext = {};
     const jobs = [];
-    if (need.has("derivatives")) jobs.push(api(`/api/derivatives?symbol=${this.symbol}&interval=${this.interval}&limit=500`).then((d) => Object.assign(this.ext, d)).catch(() => {}));
-    if (need.has("cbp")) jobs.push(api(`/api/coinbase-premium?symbol=${this.symbol}&interval=${this.interval}`).then((d) => (this.ext.series = d.series)).catch(() => (this.ext.series = [])));
+    if (need.has("derivatives")) jobs.push(api(`/api/derivatives?symbol=${sym}&interval=${iv}&limit=500`).then((d) => Object.assign(ext, d)).catch(() => {}));
+    if (need.has("cbp")) jobs.push(api(`/api/coinbase-premium?symbol=${sym}&interval=${iv}`).then((d) => (ext.series = d.series)).catch(() => (ext.series = [])));
     await Promise.all(jobs);
+    if (this._is(sym, iv)) this.ext = ext;
   }
 
   setIndicators(list) { this.indicators = list; this._loadExt().then(() => this.renderIndicators()); }
@@ -153,22 +179,21 @@ export class TermChart {
   // ------------------------------------------------------------ 오버레이
   async refreshOverlays() {
     const o = this.opts.overlays, sym = this.symbol, iv = this.interval;
+    const got = { heat: null, whales: null, markers: null, sr: null };
     const jobs = [];
     if (o.heat) jobs.push(api(`/api/liq-heatmap?symbol=${sym}&interval=${iv}&limit=500`).then((h) => {
       const v = h.columns.flatMap(([, col]) => col.map(([, x]) => x)).sort((a, b) => a - b);
       h.norm = v[Math.floor(v.length * 0.995)] || 1;
       h.byTime = new Map(h.columns.map(([t, col]) => [t, col]));
-      this.heat = h;
-    }).catch(() => (this.heat = null)));
-    else this.heat = null;
+      got.heat = h;
+    }).catch(() => {}));
     if (o.whales) jobs.push(api(`/api/whales?symbol=${sym}&interval=${iv}&limit=1000${this.opts.whaleMin ? "&min_usd=" + this.opts.whaleMin : ""}`)
-      .then((w) => (this.whales = w)).catch(() => (this.whales = null)));
-    else this.whales = null;
-    jobs.push(api(`/api/paper/markers?symbol=${sym}`).then((m) => (this.markers = m)).catch(() => (this.markers = null)));
-    if (o.sr) jobs.push(api(`/api/levels?symbol=${sym}&interval=${iv}`).then((l) => (this.sr = l)).catch(() => (this.sr = null)));
-    else this.sr = null;
+      .then((w) => (got.whales = w)).catch(() => {}));
+    jobs.push(api(`/api/paper/markers?symbol=${sym}`).then((m) => (got.markers = { ...m, symbol: sym })).catch(() => {}));
+    if (o.sr) jobs.push(api(`/api/levels?symbol=${sym}&interval=${iv}`).then((l) => (got.sr = l)).catch(() => {}));
     await Promise.all(jobs);
-    if (sym !== this.symbol || iv !== this.interval) return;
+    if (!this._is(sym, iv)) return;   // 기다리는 동안 코인·봉을 바꿨으면 이전 결과는 버린다
+    Object.assign(this, got);
     this._applyMarkers();
     this.heatLayer.update(); this.whaleLayer.update(); this.srLayer.update();
     this._legend();
@@ -176,7 +201,10 @@ export class TermChart {
 
   setOverlay(name, on) { this.opts.overlays[name] = on; this.refreshOverlays(); }
 
-  setScenario(sc) { this.scenario = sc; this._applyMarkers(); }
+  setScenario(sc, symbol = this.symbol) {
+    this.scenario = symbol === this.symbol ? sc : null;
+    this._applyMarkers();
+  }
 
   _barTime(t) {
     const c = this.candles;
@@ -190,7 +218,7 @@ export class TermChart {
     this.priceLines.forEach((l) => this.candle.removePriceLine(l));
     this.priceLines = [];
     const mk = [], line = (price, title, color, style = 2) => price && this.priceLines.push(this.candle.createPriceLine({ price, color, lineWidth: 1, lineStyle: style, axisLabelVisible: true, title }));
-    const m = this.markers;
+    const m = this.markers?.symbol === this.symbol ? this.markers : null;
     if (this.opts.overlays.bots && m) {
       const add = (t, who) => {
         const et = this._barTime(t.entry_time), xt = this._barTime(t.exit_time), long = t.side === "long";
@@ -210,7 +238,7 @@ export class TermChart {
       m.manual.trades.forEach((t) => add(t, "수동"));
     }
     this.editLines = {};
-    const my = m?.manual?.position;
+    const my = this._pos();
     if (my) {
       const et = this._barTime(my.entry_time);
       if (et) mk.push({ time: et, position: my.side === "long" ? "belowBar" : "aboveBar", shape: my.side === "long" ? "arrowUp" : "arrowDown", color: css("--info"), text: `내 ${my.side === "long" ? "롱" : "숏"}` });
@@ -312,7 +340,7 @@ export class TermChart {
   }
 
   // ------------------------------------------------------------ 내 포지션 선 (끌어서 손절·익절 수정)
-  _pos() { return this.markers?.manual?.position; }
+  _pos() { return this.markers?.symbol === this.symbol ? this.markers.manual?.position : null; }
   _entryTitle() {
     const p = this._pos(), last = this.candles.at(-1)?.close;
     if (!p || !last) return "내 포지션";
@@ -429,7 +457,7 @@ export class TermChart {
   // ------------------------------------------------------------ 범례
   _legend(p) {
     const c = this.candles;
-    if (!c.length) return;
+    if (!c.length) { this.legendEl.innerHTML = `<div style="top:4px"><b>${esc(this.symbol)}</b> <span class="down">데이터 없음</span></div>`; return; }
     let idx = c.length - 1;
     if (p?.time != null) { const k = c.findIndex((b) => b.time === p.time); if (k >= 0) idx = k; }
     const b = c[idx], prev = c[idx - 1] || b, chg = (b.close / prev.close - 1) * 100;
