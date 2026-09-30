@@ -114,3 +114,52 @@ def test_settings_and_overlap():
     ai_auto.SETTINGS["enabled"] = True
     ai_auto.state["last"] = {}
     assert set(ai_auto.due()) == {j for j, m in ai_auto.SETTINGS["every_min"].items() if m}
+
+
+def test_ai_signal_record_grade_and_notify():
+    """사용자 요청: AI 진입 시그널을 차트에 — 롱/숏 아이디어를 기록하고 결과(익절·손절·미체결)를 매긴다."""
+    from app.quant import copilot
+    lt = {"symbol": "TESTUSDT", "interval": "1h", "bar_time": 1000, "price": 100, "atr": 2,
+          "candles": [{"time": 0}, {"time": 1000}]}
+    res = {"confidence": 70, "headline": "h", "entry_idea": {"action": "long", "entry": 100, "stop": 98, "take": 104, "trigger": "t", "reason": "r"}}
+    n = len(autopilot.signals)
+    s1 = copilot.record_signal(lt, res, "nvidia", "m")
+    assert s1 and s1["side"] == "long" and autopilot.signals[-1]["type"] == "ai_entry" and len(autopilot.signals) == n + 1
+    assert copilot.record_signal(lt, res, "nvidia", "m") is None                      # 같은 방향·비슷한 진입가 → 하나로
+    assert copilot.record_signal(lt, {**res, "entry_idea": {**res["entry_idea"], "action": "wait"}}, "rules", None) is None
+    bar = lambda t, lo, hi: {"time": t, "open": lo, "high": hi, "low": lo, "close": hi}
+    assert copilot.grade(s1, [bar(1000, 101, 102), bar(2000, 99.5, 101), bar(3000, 101, 104.5)])["status"] == "take"
+    assert copilot.grade(s1, [bar(1000, 99, 101), bar(2000, 97, 100)])["status"] == "stop"
+    assert copilot.grade(s1, [bar(1000, 97.5, 104.5)])["status"] == "stop"              # 한 봉에 둘 다 → 보수적으로 손절
+    assert copilot.grade(s1, [bar(1000 + i * 1000, 101, 102) for i in range(13)])["status"] == "expired"
+    assert copilot.grade(s1, [bar(1000, 101, 102)])["status"] == "waiting"
+    r = c.get("/api/copilot/signals?symbol=BTCUSDT&interval=1h").json()
+    assert "items" in r and "stats" in r
+    copilot.ai_signals.remove(s1)
+
+
+def test_signals_job_rotates_all_coins(monkeypatch):
+    from app.quant import copilot
+    seen = []
+    real = copilot.live
+    monkeypatch.setattr(copilot, "live", lambda s, iv, **k: seen.append(s) or real(s, iv, use_ai=False))
+    old = dict(autopilot.context)
+    autopilot.context.update(symbol="BTCUSDT", interval="1h", watch=["BTCUSDT", "ETHUSDT", "SOLUSDT"])
+    ai_auto.state["rr"] = 0
+    for _ in range(3):
+        r = ai_auto.run_job("signals")
+    assert seen == ["ETHUSDT", "SOLUSDT", "ETHUSDT"] and "순환 분석" in r["headline"]           # 차트 코인은 'trade' 작업이 맡음
+    autopilot.context.update(old)
+
+
+def test_team_briefing_job(monkeypatch):
+    from app.team import engine as team
+    team.save_settings(coins=["BTCUSDT", "ETHUSDT"])
+    n = len(autopilot.signals)
+    r = ai_auto.run_job("team")
+    run = team.runs[r["run_id"]]
+    assert run.pipeline == "briefing" and run.status == "done" and r["headline"]
+    senders = {m["from"] for m in run.messages}
+    assert {"chart", "flow", "macro", "news", "risk", "lead"} <= senders
+    assert len(autopilot.signals) == n + 1 and "브리핑" in autopilot.signals[-1]["text"]
+    assert ai_auto.team_active()

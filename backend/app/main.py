@@ -770,7 +770,7 @@ def autopilot_context(req: ApContext):
 
 class ApSettings(BaseModel):
     enabled: Optional[bool] = None
-    scope: Optional[Literal["chart", "chart+watch"]] = None
+    scope: Optional[Literal["chart", "chart+watch", "all"]] = None
     extra_interval: Optional[bool] = None
     max_bots: Optional[int] = None
     search_every_hours: Optional[float] = None
@@ -779,6 +779,7 @@ class ApSettings(BaseModel):
     team_monitor_min: Optional[int] = None
     copilot_every_min: Optional[int] = None
     ai_candidates: Optional[bool] = None
+    ai_candidate_targets: Optional[int] = None
     ai_signal_comment: Optional[bool] = None
     leverage: Optional[float] = None
     position_pct: Optional[float] = None
@@ -788,7 +789,7 @@ class ApSettings(BaseModel):
 def autopilot_settings(req: ApSettings):
     kw = req.model_dump()
     if kw.get("max_bots") is not None:
-        kw["max_bots"] = max(0, min(10, kw["max_bots"]))
+        kw["max_bots"] = max(0, min(30, kw["max_bots"]))
     if kw.get("search_every_hours") is not None:
         kw["search_every_hours"] = max(1, min(72, kw["search_every_hours"]))
     if kw.get("leverage") is not None:
@@ -827,7 +828,7 @@ def team_roster():
 
 
 class TeamRunReq(BaseModel):
-    pipeline: Literal["morning", "evening", "weekly", "emergency"]
+    pipeline: Literal["morning", "evening", "weekly", "emergency", "briefing"]
 
 
 @app.post("/api/team/run")
@@ -949,6 +950,16 @@ class CopilotCfg(BaseModel):
     watch: Optional[bool] = None
     auto_ai: Optional[bool] = None
     interval: Optional[str] = None
+
+
+@app.get("/api/copilot/signals")
+def copilot_signals(symbol: Optional[str] = None, interval: Optional[str] = None, limit: int = 60):
+    """AI 진입 시그널 (차트 'AI 시그널' 표시) + 결과(진입 대기·미체결·진행 중·익절·손절)와 적중률."""
+    try:
+        sym = symbols.resolve(symbol) if symbol else None
+    except ValueError as e:
+        _bad(e)
+    return copilot.signals_for(sym, interval, max(1, min(limit, 300)))
 
 
 @app.post("/api/copilot/config")

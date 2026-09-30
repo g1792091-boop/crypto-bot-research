@@ -121,7 +121,7 @@ export class TermChart {
     if (changed) {
       // 이전 코인의 포지션선·시나리오·청산맵·고래·지지저항이 새 코인 차트에 남지 않도록 즉시 비운다
       clearInterval(this._timer);
-      this.markers = this.heat = this.whales = this.sr = this.scenario = null;
+      this.markers = this.heat = this.whales = this.sr = this.scenario = this.ai = null;
       this.ext = {}; this.sigMarkers = [];
       this.setForecast(null); this.fp = null; this.fpMarkers = []; this.fpLayer.update();
       this.book = null; if (this.opts.overlays.ladder) this._loadBook();
@@ -617,7 +617,7 @@ export class TermChart {
   // ------------------------------------------------------------ 오버레이
   async refreshOverlays() {
     const o = this.opts.overlays, sym = this.symbol, iv = this.interval;
-    const got = { heat: null, whales: null, markers: null, sr: null };
+    const got = { heat: null, whales: null, markers: null, sr: null, ai: null };
     const jobs = [];
     if (o.heat) jobs.push(api(`/api/liq-heatmap?symbol=${sym}&interval=${iv}&limit=500`).then((h) => {
       const v = h.columns.flatMap(([, col]) => col.map(([, x]) => x)).sort((a, b) => a - b);
@@ -629,6 +629,7 @@ export class TermChart {
       .then((w) => (got.whales = w)).catch(() => {}));
     jobs.push(api(`/api/paper/markers?symbol=${sym}`).then((m) => (got.markers = { ...m, symbol: sym })).catch(() => {}));
     if (o.sr) jobs.push(api(`/api/levels?symbol=${sym}&interval=${iv}`).then((l) => (got.sr = l)).catch(() => {}));
+    if (o.ai) jobs.push(api(`/api/copilot/signals?symbol=${sym}&interval=${iv}&limit=40`).then((d) => (got.ai = d)).catch(() => {}));
     if (o.footprint) jobs.push(this.loadFootprint());
     await Promise.all(jobs);
     if (!this._is(sym, iv)) return;   // 기다리는 동안 코인·봉을 바꿨으면 이전 결과는 버린다
@@ -636,6 +637,16 @@ export class TermChart {
     this._applyMarkers();
     this.heatLayer.update(); this.whaleLayer.update(); this.srLayer.update();
     this._legend();
+  }
+
+  // AI 진입 시그널만 다시 (새 분석이 나왔을 때)
+  async refreshAi() {
+    if (!this.opts.overlays.ai || !this.candles.length) return;
+    const sym = this.symbol, iv = this.interval;
+    let d;
+    try { d = await api(`/api/copilot/signals?symbol=${sym}&interval=${iv}&limit=40`); } catch { return; }
+    if (!this._is(sym, iv)) return;
+    this.ai = d; this._applyMarkers(); this._legend();
   }
 
   setOverlay(name, on) {
@@ -777,6 +788,22 @@ export class TermChart {
         }
       });
       m.manual.trades.forEach((t) => add(t, "수동"));
+    }
+    if (this.opts.overlays.ai && this.ai?.items?.length) {
+      // AI 진입 시그널: 화살표(보라) + 결과, 아직 유효한 마지막 시그널은 진입·손절·익절선
+      const OUT = { take: "익절✓", stop: "손절✗", expired: "미체결", open: "진행 중", waiting: "대기" }, AIC = "#9d7bff";
+      for (const x of this.ai.items) {
+        const t = this._barTime(x.bar_time);
+        if (!t) continue;
+        const long = x.side === "long", who = x.engine === "rules" ? "규칙" : "AI";
+        mk.push({ time: t, position: long ? "belowBar" : "aboveBar", shape: long ? "arrowUp" : "arrowDown", color: AIC,
+          text: `${who} ${long ? "롱" : "숏"}${x.confidence != null ? ` ${x.confidence}%` : ""} · ${OUT[x.outcome?.status] || ""}` });
+      }
+      const live = [...this.ai.items].reverse().find((x) => ["waiting", "open"].includes(x.outcome?.status));
+      if (live) {
+        const who = live.engine === "rules" ? "규칙" : "AI";
+        line(live.entry, `${who} ${live.side === "long" ? "롱" : "숏"} 진입`, AIC, 0); line(live.stop, `${who} 손절`, css("--down")); line(live.take, `${who} 익절`, css("--up"));
+      }
     }
     this.editLines = {};
     const my = this._pos();

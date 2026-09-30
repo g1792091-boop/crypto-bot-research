@@ -20,6 +20,7 @@ state.overlays.forecast ??= true;
 state.overlays.footprint ??= false;
 delete state.overlays.rotation;
 state.overlays.ladder ??= true;
+state.overlays.ai ??= true;           // AI 진입 시그널
 // 차트 분할: 칸 수 · 열/행 비율 · (큰 칸이 있으면) 영역 배치
 const LAYOUT_LIST = [
   ["1", { n: 1, cols: "1fr", rows: "1fr", name: "차트 1개" }],
@@ -181,7 +182,7 @@ function renderChart() {
         symbol: i ? state.multi[i - 1].symbol : state.symbol, interval: i ? state.multi[i - 1].interval : state.interval,
         // 작은 칸에는 보조지표 창을 줄인다 (6칸 이상이면 가격 위 지표만)
         indicators: i ? state.indicators.filter((x) => INDICATORS[x.key]?.pane !== "sub").concat(n >= 6 ? [] : subInd.slice(0, 1)) : state.indicators,
-        overlays: i ? { heat: false, whales: false, bots: true, scenario: false, sr: state.overlays.sr, countdown: state.overlays.countdown } : { ...state.overlays },
+        overlays: i ? { heat: false, whales: false, bots: true, scenario: false, sr: state.overlays.sr, countdown: state.overlays.countdown, ai: state.overlays.ai } : { ...state.overlays },
         onDrawDone: () => $$("#draw-tools button").forEach((b) => b.classList.remove("on")),
         onEditPosition: editPosition,
       }));
@@ -621,6 +622,12 @@ let alertLog = [];
 on("alertlog", (l) => { alertLog = l; if (bottomTab === "alerts") renderBottom(); });
 on("news", () => { if (bottomTab === "news") renderBottom(); });
 on("pricealerts", renderPriceAlerts);
+// 새 AI 분석 · 새 AI 진입 시그널이 나오면 차트의 'AI 시그널'을 다시 그린다
+on("copilot", () => charts.forEach((c) => c.refreshAi?.()));
+on("apsignals", (items) => {
+  const syms = new Set((items || []).filter((x) => x.type === "ai_entry").map((x) => x.symbol));
+  charts.forEach((c) => syms.has(c.symbol) && c.refreshAi?.());
+});
 
 async function loadBots() {
   try { bots = await api("/api/paper/bots"); } catch { return; }

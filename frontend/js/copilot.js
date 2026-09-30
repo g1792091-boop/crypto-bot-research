@@ -2,7 +2,7 @@
 // 몇 초마다 /api/copilot 을 읽는다. 경고 · 포지션은 매번 새로, AI 분석은 서버가 필요할 때만(새 봉 · 가격 급변 · 포지션 변경 ·
 // 새 위험 경고 · 최대 간격 경과) 다시 만든다. 탭을 열지 않아도 1분마다 스스로 분석하고 차트 위 'AI 배지'에 결과를 띄운다.
 import { addPriceAlert } from "./alerts.js";
-import { $, IV_LABEL, api, busy, cls, esc, hhmm, pct, px, state, toast } from "./core.js";
+import { $, IV_LABEL, api, busy, cls, emit, esc, hhmm, pct, px, state, toast } from "./core.js";
 
 const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
 const store = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* 무시 */ } };
@@ -72,11 +72,13 @@ async function refresh(force = false) {
   if (force) $("#ai-status").textContent = "AI 가 분석 중… (AI 는 10~30초 걸릴 수 있음)";
   try {
     lastLoad = Date.now();
-    const r = await api(`/api/copilot?symbol=${sym}&interval=${iv}&max_age=${prefs.maxAge}${force ? "&force=true" : ""}`);
+    const age = visible() ? prefs.maxAge : Math.max(prefs.maxAge, 900);      // 탭을 안 볼 때는 AI 를 덜 부른다 (무료 한도)
+    const r = await api(`/api/copilot?symbol=${sym}&interval=${iv}&max_age=${age}${force ? "&force=true" : ""}`);
     if (sym !== state.symbol || iv !== state.interval) return;
     const fresh = !last || last.analyzed_at !== r.analyzed_at;
     last = { ...r, got: Date.now() };
     render(fresh);
+    if (fresh) emit("copilot", r);
   } catch (e) {
     $("#ai-status").textContent = "실패: " + e.message;
   } finally { loading = false; }

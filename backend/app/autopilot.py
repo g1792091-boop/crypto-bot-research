@@ -29,9 +29,10 @@ from .strategy import INTERVALS, StrategySpec, validate
 
 SETTINGS = {
     "enabled": True,
-    "scope": "chart",                # chart = 지금 차트 코인·봉 / chart+watch = 관심 종목 앞 3개도
+    "scope": "all",                  # all = 관심 종목의 모든 코인 / chart = 지금 차트 코인·봉 / chart+watch = 관심 종목 앞 3개도
     "extra_interval": True,          # 차트 봉보다 한 단계 긴 봉도 같이 탐색
-    "max_bots": 3,
+    "max_bots": 10,
+    "ai_candidate_targets": 4,       # AI 매매법 제안은 앞의 몇 개 코인·봉에만 (무료 한도 보호, 차트 코인이 먼저)
     "search_every_hours": 6,
     "observe_if_none": True,         # 통과가 없으면 가장 나은 후보를 관찰 봇으로
     "team_review": True,             # 통과 매매법은 에이전트 팀 검토 뒤 배치 (승인관이 거부하면 배치 안 함)
@@ -57,6 +58,9 @@ def bind(paper_manager) -> None:
     _paper = paper_manager
     saved = _load()
     SETTINGS.update(saved.get("settings", {}))
+    if saved.get("settings") and saved.get("settings_v", 1) < 2:        # 예전 설정 → 모든 코인으로 (사용자 요청)
+        SETTINGS["scope"] = "all"
+        SETTINGS["max_bots"] = max(int(SETTINGS.get("max_bots") or 0), 10)
     context.update(saved.get("context", {}))
     state["bots"] = saved.get("bots", {})
     state["history"] = saved.get("history", [])
@@ -81,8 +85,8 @@ def _load() -> dict:
 def save() -> None:
     try:
         config.STATE_DIR.mkdir(parents=True, exist_ok=True)
-        _path().write_text(json.dumps({"settings": SETTINGS, "context": context, "bots": state["bots"], "history": state["history"][-100:],
-                                       "results": state["results"][-8:], "last_search": state["last_search"],
+        _path().write_text(json.dumps({"settings": SETTINGS, "settings_v": 2, "context": context, "bots": state["bots"], "history": state["history"][-100:],
+                                       "results": state["results"][-60:], "last_search": state["last_search"],
                                        "last_context_key": state["last_context_key"], "signals": list(signals)[-200:]},
                                       ensure_ascii=False, default=str), encoding="utf-8")
     except OSError:
@@ -374,14 +378,14 @@ def _ok(s: dict, g: dict) -> bool:
     return s["trades"] >= g["trades"] and (s["pf"] or 0) >= g["pf"] and s["net"] > 0
 
 
-def evaluate(symbol: str, interval: str, indicators: list[dict]) -> dict:
+def evaluate(symbol: str, interval: str, indicators: list[dict], use_ai: bool = True) -> dict:
     t0 = time.time()
     c, src = market.candles(symbol, interval, SETTINGS["bars"])
     if len(c) < 600:
         return {"symbol": symbol, "interval": interval, "error": f"봉이 부족합니다 ({len(c)}개)", "tried": 0, "rows": []}
     t1, t2 = c[int(len(c) * 0.6)]["time"], c[int(len(c) * 0.8)]["time"]
     specs, used_default = candidates(symbol, interval, indicators)
-    ai_specs, ai_note = ai_candidates(symbol, interval, indicators, c) if SETTINGS.get("ai_candidates") else ([], "")
+    ai_specs, ai_note = ai_candidates(symbol, interval, indicators, c) if SETTINGS.get("ai_candidates") and use_ai else ([], "")
     specs += ai_specs
     rows = []
     for sp in specs:
@@ -518,12 +522,14 @@ def targets() -> list[tuple[str, str]]:
     syms = [context["symbol"]]
     if SETTINGS["scope"] == "chart+watch":
         syms += [s for s in context.get("watch", []) if s != context["symbol"]][:3]
+    elif SETTINGS["scope"] == "all":                                   # 관심 종목의 모든 코인 (차트 코인이 먼저)
+        syms += [s for s in dict.fromkeys(context.get("watch", [])) if s != context["symbol"]][:30]
     ivs = [context["interval"]] + ([NEXT_IV[context["interval"]]] if SETTINGS["extra_interval"] and context["interval"] in NEXT_IV else [])
     return [(s, iv) for s in syms for iv in ivs]
 
 
 def _context_key() -> str:
-    return json.dumps([targets(), sorted(x["key"] + json.dumps(x.get("params"), sort_keys=True) for x in context["indicators"])])
+    return json.dumps([sorted(targets()), sorted(x["key"] + json.dumps(x.get("params"), sort_keys=True) for x in context["indicators"])])
 
 
 def search_now(reason: str = "직접 요청") -> dict:
@@ -536,19 +542,25 @@ def search_now(reason: str = "직접 요청") -> dict:
 
 def _search(reason: str):
     try:
-        log(f"매매법 탐색 시작 ({reason}) — {', '.join(f'{s} {iv}' for s, iv in targets())}")
+        tg = targets()
+        names = ", ".join(f"{s[:-4] if s.endswith('USDT') else s} {iv}" for s, iv in tg)
+        log(f"매매법 탐색 시작 ({reason}) — 코인·봉 {len(tg)}개: {names}")
         results = []
-        for s, iv in targets():
+        for i, (s, iv) in enumerate(tg):
+            state["progress"] = {"done": i, "total": len(tg), "current": f"{s} {iv}"}
             try:
-                r = evaluate(s, iv, context["indicators"])
+                r = evaluate(s, iv, context["indicators"], use_ai=i < int(SETTINGS.get("ai_candidate_targets", 4)))
             except Exception as e:
                 r = {"symbol": s, "interval": iv, "error": str(e)[:160], "tried": 0}
             results.append(r)
+            if len(tg) > 2:
+                state["results"] = list(results)                     # 진행 중에도 화면에 보이게
             if r.get("error"):
                 log(f"{s} {iv}: {r['error']}")
             else:
                 log(f"{s} {iv}: 후보 {r['tried']}개 → 학습 통과 {r['train_pass']} → 검증·최종 통과 {len(r['passed'])} ({r['seconds']}초)")
         state["results"] = results
+        state["progress"] = None
         state["last_search"] = time.time()
         state["last_context_key"] = _context_key()
         _deploy_from(results)
@@ -657,7 +669,7 @@ def tick():
             _copilot_watch()
         except Exception as e:
             log(f"실시간 AI 감시 오류: {str(e)[:100]}")
-    if SETTINGS["team_monitor_min"] and now - state["last_team_monitor"] >= SETTINGS["team_monitor_min"] * 60:
+    if SETTINGS["team_monitor_min"] and not ai_auto.team_active() and now - state["last_team_monitor"] >= SETTINGS["team_monitor_min"] * 60:
         from .team import engine as team
         if not any(x.status == "running" for x in team.runs.values()):
             state["last_team_monitor"] = now
@@ -679,7 +691,7 @@ def status() -> dict:
                                                                  "stop": p.stop, "take": p.take, "liq": p.liq_price, "leverage": p.leverage},
                      "last_price": b.last_price})
     return {"settings": SETTINGS, "context": context, "usable": usable(context["indicators"]), "targets": targets(),
-            "searching": state["searching"], "last_search": state["last_search"],
+            "searching": state["searching"], "last_search": state["last_search"], "progress": state.get("progress"),
             "next_search": state["last_search"] + SETTINGS["search_every_hours"] * 3600,
             "results": [{k: v for k, v in r.items() if k not in ("top_train",)} for r in state["results"]],
             "bots": bots, "history": state["history"][-20:], "log": list(state["log"])[:60], "gate": GATE,

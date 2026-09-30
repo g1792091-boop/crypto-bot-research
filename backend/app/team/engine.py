@@ -30,7 +30,7 @@ DEFAULT_SETTINGS = {
     "auto": {"morning": True, "evening": True, "weekly": True, "emergency": True},
     "times": {"morning": "08:00", "evening": "22:00", "weekly": "SUN 21:00"},
     "bot_gate": False,                       # 켜면 페이퍼 봇이 오늘의 허용범위 밖 방향으로는 진입하지 않음 (코드 관문)
-    "daily_call_limit": 150,                  # 하루 AI 호출 상한 (넘으면 규칙 분석)
+    "daily_call_limit": 400,                  # 하루 AI 호출 상한 (넘으면 규칙 분석)
     "rules": {"leverage": "1~20배 (모의)", "margin_pct": "계좌의 10~40%", "max_loss_per_trade_pct": 15,
               "note": "사람이 정한 한도. 에이전트는 평가만 하고 바꾸지 않음"},
 }
@@ -63,6 +63,8 @@ def bind(paper_manager) -> None:
     global _paper, settings
     _paper = paper_manager
     saved = _load_json("settings.json", {})
+    if saved.get("daily_call_limit") == 150:              # 예전 기본값 → 상황 브리핑이 늘어 새 기본값으로
+        saved["daily_call_limit"] = DEFAULT_SETTINGS["daily_call_limit"]
     for k, v in saved.items():
         if isinstance(v, dict) and isinstance(settings.get(k), dict):
             settings[k].update(v)
@@ -316,10 +318,15 @@ def build_packet(kind: str, run: Run, extra: Optional[dict] = None) -> dict:
     pk: dict = {"meta": _meta(kind), "knowledge": {"lessons": k["lessons"][-12:], "rejected": k["rejected"][-12:],
                                                   "memos": k["memos"][-20:], "scorecards": scorecards()}}
     t0 = time.time()
-    if kind in ("morning", "emergency", "weekly", "monitor"):
+    if kind in ("morning", "emergency", "weekly", "monitor", "briefing"):
         pk["market"] = packets.market_section(coins)
     if kind == "monitor":
         pk["flow"] = packets.flow_section(coins)
+    if kind == "briefing":
+        pk["flow"] = packets.flow_section(coins)
+        pk["macro"] = packets.macro_section(coins)
+        pk["news"] = packets.news_section()
+        pk["signals"] = packets.signals_section(coins)
     if kind == "morning":
         pk["flow"] = packets.flow_section(coins)
         pk["macro"] = packets.macro_section(coins)
@@ -453,7 +460,7 @@ def _monitor_coins() -> list[str]:
 def _execute(run: Run, extra: Optional[dict] = None):
     kind = run.pipeline
     extra = dict(extra or {})
-    if kind == "monitor" and not extra.get("coins"):
+    if kind in ("monitor", "briefing") and not extra.get("coins"):
         extra["coins"] = _monitor_coins()
     try:
         run.post("code", f"[{run.title}] 시작 — {PIPELINES[kind][1]}" + ("" if llm.provider() else " (AI 키 없음 → 규칙 분석)"), "system")

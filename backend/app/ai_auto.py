@@ -8,6 +8,9 @@
   bots    : 봇 코치 — 페이퍼 봇 성과를 보고 유지/주의/멈춤 권고. 거래가 쌓였는데 성과가 나쁜 봇은
             코드 관문(검증 구간에서 나아질 때만)으로 스스로 개선. '자동 멈춤'을 켜면 낙폭 큰 봇을 멈춘다 (코드 규칙).
   scanner : 스캐너 시그널 코멘트 — 강한 시그널(강도 2 이상)에 AI 가 근거·주의점 한 줄을 붙인다.
+  signals : AI 진입 시그널 — 관심 종목의 모든 코인을 한 번에 하나씩 차례로 분석(AI 는 코인마다 새 봉·급변 때, 아니면 1시간에 한 번)해서
+            롱/숏 진입 아이디어(진입·손절·익절)가 나오면 차트에 'AI 시그널'로 그리고 알림. 결과(익절·손절)도 채점한다.
+  team    : 에이전트 팀 상황 브리핑 — 부르지 않아도 정해진 간격으로 팀이 모여 지금 상황을 브리핑 (에이전트 팀 채팅방에 남고 알림)
   (포지션 위험 경고가 뜨면 AI 분석을 붙이는 것은 copilot.SETTINGS["auto_ai"] — 'positions' 설정으로 켠다)
 
 AI 는 판단·설명만 한다. 실제로 바뀌는 것은 모의(페이퍼) 봇의 코드 관문 통과 개선과, 켰을 때의 낙폭 규칙 멈춤뿐이다.
@@ -28,6 +31,8 @@ from . import config, llm
 
 JOBS = {
     "trade": ("차트 실시간 AI", "화면 차트 코인·봉을 계속 분석하고 판단이 바뀌면 알림"),
+    "signals": ("AI 진입 시그널 (모든 코인)", "관심 종목 코인을 차례로 분석해 진입 시그널을 차트에 표시 · 알림"),
+    "team": ("에이전트 팀 상황 브리핑", "부르지 않아도 팀이 모여 지금 상황 브리핑 (채팅방에 남음)"),
     "market": ("마켓 브리핑", "장세·심리·펀딩·호가·뉴스·일정으로 지금 시장 요약"),
     "risk": ("포트폴리오 리스크", "모의 계좌 + 봇 포지션의 위험 점검과 할 일"),
     "bots": ("봇 코치", "페이퍼 봇 성과 점검 · 성과 나쁜 봇 코드 관문 개선"),
@@ -35,19 +40,19 @@ JOBS = {
 }
 SETTINGS = {
     "enabled": True,
-    "every_min": {"trade": 3, "market": 30, "risk": 30, "bots": 120, "scanner": 1},   # 0 = 그 작업 끔
+    "every_min": {"trade": 3, "signals": 2, "team": 60, "market": 30, "risk": 30, "bots": 120, "scanner": 1},   # 0 = 그 작업 끔
     "positions": True,             # 포지션 위험 경고가 뜨면 AI 분석을 붙임
     "bots_auto_improve": True,     # 거래 10건 이상 · 성과 나쁜 봇을 코드 관문 개선 (하루 한 번)
     "bots_auto_pause": False,      # 낙폭 35% 넘는 페이퍼 봇 자동 멈춤 (코드 규칙)
     "notify": True,                # 판단 변경·위험 수준 상승을 알림(오토파일럿 시그널)으로
-    "daily_limit": 400,            # 이 모드가 하루에 부르는 AI 호출 상한 (넘으면 규칙 분석)
+    "daily_limit": 600,            # 이 모드가 하루에 부르는 AI 호출 상한 (넘으면 규칙 분석)
 }
 LEVELS = ("ok", "caution", "danger")
 
 _paper = None
 _lock = threading.RLock()
 state: dict = {"insights": {}, "last": {}, "running": {}, "errors": {}, "calls": {"day": "", "n": 0},
-               "scanner_seen": 0, "improved": {}, "bias": {}}
+               "scanner_seen": 0, "improved": {}, "bias": {}, "rr": 0}
 feed: deque[dict] = deque(maxlen=200)
 
 
@@ -87,6 +92,9 @@ def bind(paper_manager) -> None:
     state["insights"].update(saved.get("insights") or {})
     state["last"].update(saved.get("last") or {})
     _sync_positions()
+    from .quant import copilot
+    if _on_ai_signal not in copilot.on_signal:
+        copilot.on_signal.append(_on_ai_signal)
 
 
 def _path():
@@ -201,7 +209,8 @@ def job_trade() -> dict:
     from .quant import copilot
     sym, iv = autopilot.context.get("symbol") or "BTCUSDT", autopilot.context.get("interval") or "1h"
     before = (copilot._state.get((sym, iv)) or {}).get("time")
-    r = copilot.live(sym, iv, max_age=max(60, SETTINGS["every_min"]["trade"] * 60), use_ai=_budget_ok())
+    # 간격(분)은 '확인' 주기. AI 는 새 봉·급변·포지션 변경·새 위험 경고 때, 아니면 15분에 한 번만 (무료 한도 보호)
+    r = copilot.live(sym, iv, max_age=max(900, SETTINGS["every_min"]["trade"] * 60), use_ai=_budget_ok())
     if r["analyzed_at"] != (int(before) if before else None) and r["engine"] != "rules":
         _spend()
     a = r["analysis"]
@@ -218,6 +227,86 @@ def job_trade() -> dict:
            "job": "trade", "title": JOBS["trade"][0], "at": r["analyzed_at"], "engine": r["engine"] if r["engine"] == "rules" else f"{r['engine']}:{r.get('model') or ''}",
            "error": r.get("error"), "symbol": sym, "interval": iv, "confidence": a["confidence"], "price": r["price"]}
     state["insights"]["trade"] = row
+    return row
+
+
+# ---------------------------------------------------------------- 작업: AI 진입 시그널 (모든 코인)
+def _on_ai_signal(sig: dict) -> None:
+    if not SETTINGS["enabled"]:
+        return
+    who = "AI" if sig.get("engine") not in (None, "rules") else "규칙 분석"
+    side = "롱" if sig["side"] == "long" else "숏"
+    text = (f"{who} 진입 시그널 {side} — 진입 {sig['entry']:.6g} · 손절 {sig['stop']:.6g} · 익절 {sig['take']:.6g}"
+            + (f" (확신 {sig['confidence']}%)" if sig.get("confidence") is not None else ""))
+    feed.appendleft({"created": sig["created"], "job": "signals", "title": JOBS["signals"][0], "text": f"{sig['symbol']} {sig['interval']} {text}",
+                     "level": "caution", "symbol": sig["symbol"]})
+    if SETTINGS["notify"]:
+        try:
+            from . import autopilot
+            autopilot._signal({"type": "ai_entry", "symbol": sig["symbol"], "interval": sig["interval"], "side": sig["side"], "status": "ai",
+                               "strategy": (sig.get("trigger") or "")[:80], "text": text, "entry": sig["entry"], "stop": sig["stop"], "take": sig["take"]})
+        except Exception:
+            pass
+
+
+def job_signals() -> dict:
+    """관심 종목 코인을 한 번에 하나씩 (차트 코인은 'trade' 작업이 맡음). 서버는 새 봉·급변·30분 경과 때만 다시 분석."""
+    from . import autopilot
+    from .quant import copilot
+    iv = autopilot.context.get("interval") or "1h"
+    chart = autopilot.context.get("symbol")
+    coins = [s for s in dict.fromkeys(autopilot.context.get("watch") or ["BTCUSDT", "ETHUSDT"]) if s != chart] or ["BTCUSDT"]
+    sym = coins[state["rr"] % len(coins)]
+    state["rr"] += 1
+    before = (copilot._state.get((sym, iv)) or {}).get("time")
+    r = copilot.live(sym, iv, max_age=3600, use_ai=_budget_ok())
+    if r["analyzed_at"] != (int(before) if before else None) and r["engine"] != "rules":
+        _spend()
+    sig = copilot.signals_for(None, iv, 200)
+    recent = [x for x in sig["items"] if time.time() - x["created"] < 24 * 3600]
+    open_ = [x for x in recent if x["outcome"]["status"] in ("waiting", "open")]
+    st = sig["stats"]
+    row = {"job": "signals", "title": JOBS["signals"][0], "at": int(time.time()), "engine": r["engine"] if r["engine"] == "rules" else f"{r['engine']}:{r.get('model') or ''}",
+           "level": "ok", "bias": "neutral", "error": r.get("error"),
+           "headline": f"코인 {len(coins) + (1 if chart else 0)}개 순환 분석 · 24시간 시그널 {len(recent)}개 (대기·진행 {len(open_)}개)",
+           "points": [f"{x['symbol'].replace('USDT', '')} {x['interval']} {'롱' if x['side'] == 'long' else '숏'} 진입 {x['entry']:.6g} → {x['outcome']['label']}"
+                      for x in reversed(recent[-6:])],
+           "actions": [], "watch": [f"방금 {sym.replace('USDT', '')} {iv} 분석: {r['analysis']['headline'][:70]}"],
+           "stats": st}
+    if st.get("closed"):
+        row["points"].append(f"지금까지 채점된 시그널 {st['closed']}개 · 익절 {st['win_rate']}% · 평균 {st['avg_r']}R")
+    state["insights"]["signals"] = row
+    return row
+
+
+# ---------------------------------------------------------------- 작업: 에이전트 팀 상황 브리핑
+def job_team() -> dict:
+    """부르지 않아도 팀이 모여 상황을 브리핑 (에이전트 팀 채팅방에 남음). 다른 회의 중이면 다음 차례로."""
+    from .team import engine as team
+    if any(r.status == "running" for r in team.runs.values()):
+        return state["insights"].get("team") or {}
+    run = team.run_pipeline("briefing", "AI 자동 모드", extra={"coins": _coins()})
+    t0 = time.time()
+    while run.status == "running" and time.time() - t0 < 900:
+        time.sleep(1)
+    lead, risk = run.results.get("lead") or {}, run.results.get("risk") or {}
+    lvl = {"normal": "ok", "caution": "caution", "danger": "danger"}.get(risk.get("risk_level"), "caution" if run.status != "done" else "ok")
+    summ = lead.get("summary") or []
+    calls = []
+    for m in run.messages:
+        if m["from"] == "chart" and m.get("data"):
+            calls = [f"{c['symbol'].replace('USDT', '')} {({'long': '롱', 'short': '숏', 'neutral': '중립'}).get(c['bias'], c['bias'])}" for c in m["data"].get("calls", [])]
+    row = {"job": "team", "title": JOBS["team"][0], "at": int(time.time()), "level": lvl, "bias": "neutral", "run_id": run.id,
+           "engine": run.engine if run.engine == "rules" else f"{run.engine}:", "error": None if run.status == "done" else f"회의 상태: {run.status}",
+           "headline": (summ[0] if summ else f"{run.title} {'끝' if run.status == 'done' else run.status}")[:90],
+           "points": summ[1:] + ([f"코인별 판단: {' · '.join(calls)}"] if calls else []) + ([f"리스크 수준: {risk['risk_level']}"] if risk.get("risk_level") else []),
+           "actions": (lead.get("human_actions") or [])[:3], "watch": (lead.get("watch_next") or [])[:3]}
+    prev = state["insights"].get("team")
+    state["insights"]["team"] = row
+    if SETTINGS["notify"] and summ:
+        _notify("team", "에이전트 팀 브리핑: " + summ[0][:120], level=row["level"] if row["level"] != "ok" else "caution")
+    elif prev and LEVELS.index(row["level"]) > LEVELS.index(prev.get("level", "ok")):
+        _notify("team", row["headline"], level=row["level"])
     return row
 
 
@@ -453,7 +542,7 @@ def run_job(job: str) -> dict:
             return state["insights"].get(job) or {}
         state["running"][job] = True
     try:
-        row = job_trade() if job == "trade" else job_scanner() if job == "scanner" else job_insight(job)
+        row = {"trade": job_trade, "scanner": job_scanner, "signals": job_signals, "team": job_team}.get(job, lambda: job_insight(job))()
         state["errors"].pop(job, None)
         return row
     except Exception as e:
@@ -489,6 +578,11 @@ def _safe(job: str) -> None:
 def trade_active() -> bool:
     """오토파일럿의 실시간 AI 감시와 겹치지 않게 (이 모드가 켜져 있으면 이쪽이 맡는다)."""
     return bool(SETTINGS["enabled"] and SETTINGS["every_min"].get("trade"))
+
+
+def team_active() -> bool:
+    """오토파일럿의 '에이전트 팀 상시 감시'와 겹치지 않게."""
+    return bool(SETTINGS["enabled"] and SETTINGS["every_min"].get("team"))
 
 
 def status() -> dict:

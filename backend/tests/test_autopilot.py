@@ -100,7 +100,7 @@ def test_endpoints_and_library():
     r = c.post("/api/autopilot/context", json={"symbol": "솔라나", "interval": "15m", "indicators": [{"key": "supertrend", "params": {}}]}).json()
     assert r["context"]["symbol"] == "SOLUSDT" and r["usable"]["usable"] == ["supertrend"]
     s = c.post("/api/autopilot/settings", json={"max_bots": 99, "leverage": 500}).json()
-    assert s["max_bots"] == 10 and s["leverage"] == 50
+    assert s["max_bots"] == 30 and s["leverage"] == 50
     c.post("/api/autopilot/settings", json={"max_bots": 3, "leverage": 3})
     items = c.get("/api/strategy/library", params={"symbol": "ETH", "interval": "4h"}).json()["items"]
     assert len(items) >= 20
@@ -111,3 +111,18 @@ def test_endpoints_and_library():
         assert sp.symbol == "ETHUSDT"
         backtest.run(sp, cs, None)
     assert len(library.LIBRARY) == len(items)
+
+
+def test_scope_all_covers_every_watch_coin():
+    """사용자 요청: 오토파일럿을 관심 종목의 모든 코인으로 — 차트 코인이 먼저, 차트 코인만 바꾸면 다시 찾지 않음."""
+    old = dict(autopilot.SETTINGS), dict(autopilot.context)
+    autopilot.set_settings(scope="all", extra_interval=True)
+    autopilot.set_context("ETHUSDT", "1h", [], ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT"])
+    tg = autopilot.targets()
+    assert tg[0] == ("ETHUSDT", "1h") and {s for s, _ in tg} == {"BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT"}
+    assert {iv for _, iv in tg} == {"1h", "4h"} and len(tg) == 8
+    k = autopilot._context_key()
+    autopilot.set_context("SOLUSDT", "1h", [], ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT"])
+    assert autopilot._context_key() == k and autopilot.targets()[0] == ("SOLUSDT", "1h")
+    autopilot.SETTINGS.update(old[0])
+    autopilot.context.update(old[1])

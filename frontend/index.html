@@ -76,6 +76,7 @@
           <button data-ov="whales" title="고래 체결 버블 + 호가 벽">고래맵</button>
           <button data-ov="sr" title="자동 지지·저항 구간과 추세선">지지·저항</button>
           <button data-ov="bots" title="페이퍼 봇 · 내 모의 매매 진입/청산 기록">매매 기록</button>
+          <button data-ov="ai" title="AI 가 낸 진입 시그널 (보라 화살표) · 아직 유효한 시그널의 진입·손절·익절선 · 결과(익절/손절/미체결)">AI 시그널</button>
           <button data-ov="scenario" title="자동 시나리오 진입/손절/목표선">시나리오선</button>
           <button data-ov="footprint" title="봉 안의 가격대별 매수·매도 체결량 (확대하면 숫자)">풋프린트</button>
           <button data-ov="patterns" title="헤드앤숄더 · 쌍봉/쌍바닥 · 삼각형 · 쐐기 · 깃발 · 채널 등을 자동으로 찾아 선과 목표가 표시">차트 패턴</button>
@@ -246,8 +247,10 @@
         <button class="sm" data-pipe="evening" title="운영 감사관 · 성과 분석가 · 손익 복기 · 가정 분석 → 학습 관리 → 리스크 → 팀장">🌙 저녁 점검</button>
         <button class="sm" data-pipe="weekly" title="성과 · 시너지 · 코드 리뷰 · 테스트 → 연구원 · 자기개선 · 발굴 → 검증관 → 승인관 · CIO → 학습 관리 → 팀장">📅 주간 검토</button>
         <button class="sm" data-pipe="emergency" title="손익 복기 · 가정 분석 → 리스크 → 팀장">🚨 긴급 복기</button>
+        <button class="sm" data-pipe="briefing" title="차트·장세 · 파생·오더플로 · 매크로 · 뉴스 → 리스크 → 팀장 (AI 자동 모드가 정해진 간격마다 스스로 엶)">📢 상황 브리핑</button>
         <button class="flat sm" id="tm-newchat" title="회의 없이 팀에게 바로 질문">💬 새 채팅방</button>
         <div class="grow"></div><button class="flat sm" data-open-ai title="에이전트마다 다른 AI 모델을 배정">🧠 AI 모델</button></div>
+      <div id="aa-team"></div>
       <div class="tm-msgs" id="tm-msgs"><div class="empty">위 버튼으로 회의를 시작하면 에이전트들이 대화하는 과정이 여기에 실시간으로 올라옵니다.</div></div>
       <div class="tm-typing" id="tm-typing"></div>
       <div class="tm-input"><input id="tm-text" placeholder="팀에게 말하기 — @리스크 책임자 처럼 부르면 그 에이전트가, 아니면 팀장이 답합니다"><button class="pri sm" id="tm-send">보내기</button></div>

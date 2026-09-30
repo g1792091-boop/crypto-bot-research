@@ -90,6 +90,8 @@ _locks: dict[tuple[str, str], threading.Lock] = {}
 _paper = None                      # main 에서 bind() 로 PaperManager 를 넘겨준다
 alerts_feed: deque[dict] = deque(maxlen=300)
 _alert_seen: dict[str, float] = {}
+ai_signals: deque[dict] = deque(maxlen=600)      # AI(또는 규칙) 분석이 낸 진입 아이디어 → 차트의 'AI 시그널'
+_sig_loaded = False
 SETTINGS = {"watch": True, "auto_ai": False, "interval": "15m", "every_sec": 30}
 
 
@@ -506,7 +508,113 @@ def _run(key, lt, alerts, prev_st, why, use_ai) -> dict:
           "alert_keys": {a["key"] for a in alerts if a["level"] == "high"}, "result": result, "engine": engine, "model": model,
           "error": err, "why": why, "verdict": verdict, "deriv": ctx.get("derivatives"), "ctx": ctx, "history": hist}
     _state[key] = st
+    try:
+        record_signal(lt, result, engine, model)
+    except Exception:
+        pass
     return st
+
+
+# ---------------------------------------------------------------- AI 진입 시그널 기록 · 결과 채점
+def _sig_path():
+    return config.STATE_DIR / "ai_signals.json"
+
+
+def _load_signals() -> None:
+    global _sig_loaded
+    if _sig_loaded:
+        return
+    _sig_loaded = True
+    try:
+        for x in json.loads(_sig_path().read_text(encoding="utf-8")):
+            ai_signals.append(x)
+    except (OSError, ValueError):
+        pass
+
+
+def _save_signals() -> None:
+    try:
+        config.STATE_DIR.mkdir(parents=True, exist_ok=True)
+        _sig_path().write_text(json.dumps(list(ai_signals), ensure_ascii=False), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def record_signal(lt: dict, result: dict, engine: str, model: str | None) -> dict | None:
+    """분석이 롱/숏 진입 아이디어(진입·손절·익절)를 냈으면 시그널로 남긴다. 같은 방향·비슷한 진입가가 이어지면 하나로."""
+    _load_signals()
+    e = result.get("entry_idea") or {}
+    side = e.get("action")
+    if side not in ("long", "short") or not (e.get("entry") and e.get("stop") and e.get("take")):
+        return None
+    sym, iv = lt["symbol"], lt["interval"]
+    c = lt.get("candles") or []
+    iv_sec = c[-1]["time"] - c[-2]["time"] if len(c) > 1 else 3600
+    prev = next((x for x in reversed(ai_signals) if x["symbol"] == sym and x["interval"] == iv), None)
+    if prev and prev["side"] == side and abs(prev["entry"] - e["entry"]) < 0.5 * (lt.get("atr") or 0) and time.time() - prev["created"] < 4 * iv_sec:
+        return None
+    now = time.time()
+    sig = {"id": f"{sym}:{iv}:{int(now)}", "symbol": sym, "interval": iv, "created": int(now), "bar_time": lt["bar_time"], "iv_sec": iv_sec,
+           "side": side, "entry": e["entry"], "stop": e["stop"], "take": e["take"], "trigger": e.get("trigger", ""), "reason": e.get("reason", ""),
+           "confidence": result.get("confidence"), "headline": result.get("headline", ""), "engine": engine, "model": model,
+           "price": lt["price"]}
+    ai_signals.append(sig)
+    _save_signals()
+    for fn in list(on_signal):
+        try:
+            fn(sig)
+        except Exception:
+            pass
+    return sig
+
+
+on_signal: list = []          # 새 시그널이 생기면 부르는 함수들 (AI 자동 모드의 알림)
+EXPIRE_BARS = 12              # 이 봉 수 안에 진입가에 닿지 않으면 '미체결'
+
+
+def grade(sig: dict, candles: list[dict]) -> dict:
+    """시그널 뒤 봉들로 결과를 매긴다: 대기 · 미체결 · 진행 중 · 익절 · 손절 (한 봉에서 둘 다 닿으면 손절로 봄)."""
+    long = sig["side"] == "long"
+    after = [b for b in candles if b["time"] >= sig["bar_time"]]
+    entered_at = None
+    for i, b in enumerate(after):
+        if entered_at is None:
+            if i >= EXPIRE_BARS:
+                return {"status": "expired", "label": "미체결"}
+            if b["low"] <= sig["entry"] <= b["high"]:
+                entered_at = b["time"]
+            else:
+                continue
+        hit_stop = b["low"] <= sig["stop"] if long else b["high"] >= sig["stop"]
+        hit_take = b["high"] >= sig["take"] if long else b["low"] <= sig["take"]
+        if hit_stop:
+            return {"status": "stop", "label": "손절", "entered_at": entered_at, "closed_at": b["time"], "r": -1.0}
+        if hit_take:
+            risk = abs(sig["entry"] - sig["stop"]) or 1
+            return {"status": "take", "label": "익절", "entered_at": entered_at, "closed_at": b["time"], "r": round(abs(sig["take"] - sig["entry"]) / risk, 2)}
+    if entered_at is None:
+        return {"status": "waiting", "label": "진입 대기"}
+    return {"status": "open", "label": "진행 중", "entered_at": entered_at}
+
+
+def signals_for(symbol: str | None = None, interval: str | None = None, limit: int = 60) -> dict:
+    _load_signals()
+    rows = [x for x in ai_signals if (not symbol or x["symbol"] == symbol) and (not interval or x["interval"] == interval)][-limit:]
+    cache: dict = {}
+    out = []
+    for x in rows:
+        k = (x["symbol"], x["interval"])
+        if k not in cache:
+            try:
+                cache[k] = market.candles(x["symbol"], x["interval"], 1000)[0]
+            except Exception:
+                cache[k] = []
+        out.append({**x, "outcome": grade(x, cache[k]) if cache[k] else {"status": "unknown", "label": "-"}})
+    done = [x for x in out if x["outcome"]["status"] in ("take", "stop")]
+    wins = sum(x["outcome"]["status"] == "take" for x in done)
+    return {"items": out, "stats": {"signals": len(out), "closed": len(done), "wins": wins,
+                                    "win_rate": round(wins / len(done) * 100, 1) if done else None,
+                                    "avg_r": round(sum(x["outcome"]["r"] for x in done) / len(done), 2) if done else None}}
 
 
 def ask(symbol: str, interval: str, question: str, history: list[dict] | None = None) -> dict:

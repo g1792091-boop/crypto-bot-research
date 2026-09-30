@@ -7,7 +7,7 @@ const LV = { ok: ["평소", "up"], caution: ["주의", "accent"], danger: ["위�
 const BIAS = { long: ["롱 우위", "up"], short: ["숏 우위", "down"], neutral: ["중립", "muted"] };
 const PNAME = { nvidia: "NVIDIA", gemini: "Gemini", claude: "Claude" };
 // 화면별로 보여 줄 작업
-const SLOTS = { "aa-market": "market", "aa-risk": "risk", "aa-bots": "bots", "aa-scanner": "scanner" };
+const SLOTS = { "aa-market": "market", "aa-risk": "risk", "aa-bots": "bots", "aa-scanner": "scanner", "aa-team": "team", "aa-signals": "signals" };
 
 export function initAiAuto() {
   $("#v-market .page").insertAdjacentHTML("afterbegin", `<div id="aa-market"></div>`);
@@ -17,6 +17,7 @@ export function initAiAuto() {
   $("#v-autopilot .cols-2 > div").insertAdjacentHTML("afterbegin", `<div class="panel" id="aa-panel"><div class="ph"><span class="t">🤖 AI 자동 모드</span>
     <span class="muted" id="aa-sub"></span><div class="grow"></div><label class="row" style="gap:4px"><input type="checkbox" id="aa-on" style="height:auto"> 켜기</label></div>
     <div class="pb" id="aa-set"><div class="muted">불러오는 중…</div></div></div>`);
+  $("#aa-panel").insertAdjacentHTML("afterend", `<div id="aa-signals"></div>`);
   document.addEventListener("click", onClick);
   $("#aa-on").onchange = (e) => save({ enabled: e.target.checked });
   on("view", (v) => { view = v; load(); });
