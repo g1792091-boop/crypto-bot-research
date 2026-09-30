@@ -1,0 +1,8 @@
+{
+ "script": "research/paper_rules/rules_bt.py run",
+ "signals_dir": "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/binance/signals",
+ "out_dir": "/home/user/crypto-bot-research/research/paper_rules/out_binance",
+ "procs": 3,
+ "signal_lock": "bd23a449bd3fcb54a977c3b0ee97abe9582242c2f6418caa3e20d701c3a3544c",
+ "note": "same rules, windows, random seeds and choice rule as the default run (PREREG_RULES.md); only the signal cache differs"
+}

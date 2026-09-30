@@ -2,7 +2,12 @@
 
     SWEEP_DATA=<sweep data> python3 research/paper_rules/rules_bt.py selftest
     SWEEP_DATA=<sweep data> python3 research/paper_rules/rules_bt.py signals <scratch_dir>
-    SWEEP_DATA=<sweep data> python3 research/paper_rules/rules_bt.py run <scratch_dir>
+    SWEEP_DATA=<sweep data> python3 research/paper_rules/rules_bt.py run <scratch_dir> [--out DIR] [--procs N]
+
+``run`` reads (and, where missing, builds) <scratch_dir>/signals and writes accounts.csv and summary.json to
+research/paper_rules/out/ unless ``--out DIR`` (or $RULES_OUT) names another directory; with another
+directory it also writes run_meta.json there (signal cache used). Robustness re-runs on other bars (e.g. the
+Binance futures cache, <scratch_dir> = <scratchpad>/binance) go to out_binance/ this way.
 
 One account = one strategy on one timeframe, $1,000, six coins, one position at a time.
 Signals come from the locked backtest code (paperbot.sweepsig). Sizing is the paper engine's
@@ -285,7 +290,11 @@ def _tf_job(args):
     return tf, p_rand, rows
 
 
-def run(scratch: str, procs: int = 4) -> None:
+OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "out")
+
+
+def run(scratch: str, procs: int = 4, out_dir: str | None = None) -> None:
+    """Accounts for every strategy x timeframe x window x k. ``out_dir`` None = research/paper_rules/out."""
     sig_dir = os.path.join(scratch, "signals")
     build_signals(sig_dir, procs)
     rows, rates = [], {}
@@ -295,13 +304,19 @@ def run(scratch: str, procs: int = 4) -> None:
             rates[tf] = p_rand
             print(f"accounts {tf}: {len(r)} rows, random rate {p_rand:.5f}", flush=True)
     res = pd.DataFrame(rows)
-    out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "out")
+    out = OUT if out_dir is None else os.path.abspath(out_dir)
     os.makedirs(out, exist_ok=True)
     res.to_csv(os.path.join(out, "accounts.csv"), index=False)
     summary = choose(res)
     summary["random_rate"] = rates
     with open(os.path.join(out, "summary.json"), "w") as fh:
         json.dump(summary, fh, indent=1, default=float)
+    if out != OUT:
+        with open(os.path.join(out, "run_meta.json"), "w") as fh:
+            json.dump(dict(script="research/paper_rules/rules_bt.py run", signals_dir=os.path.abspath(sig_dir),
+                           out_dir=out, procs=procs, signal_lock=sweepsig.verify()["prereg_sha256_file"],
+                           note="same rules, windows, random seeds and choice rule as the default run "
+                                "(PREREG_RULES.md); only the signal cache differs"), fh, indent=1)
     print(json.dumps(summary, indent=1, default=float))
 
 
@@ -423,4 +438,11 @@ if __name__ == "__main__":
     elif cmd == "signals":
         build_signals(os.path.join(sys.argv[2], "signals"))
     elif cmd == "run":
-        run(sys.argv[2])
+        import argparse
+        ap = argparse.ArgumentParser(prog="rules_bt.py run")
+        ap.add_argument("scratch")
+        ap.add_argument("--out", default=os.environ.get("RULES_OUT") or None,
+                        help="output directory (default research/paper_rules/out, or $RULES_OUT)")
+        ap.add_argument("--procs", type=int, default=4)
+        a = ap.parse_args(sys.argv[2:])
+        run(a.scratch, a.procs, a.out)

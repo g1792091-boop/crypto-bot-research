@@ -1,0 +1,645 @@
+{
+ "built_utc": "2026-09-30T17:24:28.822797+00:00",
+ "window": [
+  "2021-08-01",
+  "2026-09-30"
+ ],
+ "binance_cache": "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/binance/signals",
+ "sweep_cache": "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/paper_rules/signals",
+ "notes": [
+  "price/volume stats over all bars both caches hold in the window; signal agreement over those bars past both caches' warm-up (sweep 1d: 200 bars from 2021-05-31 -> 2021-12)",
+  "union_agree = same side on the same bar / bars where either side signals",
+  "binance_signals_within_1bar: Binance signals with a same-side sweep signal on the bar or one either side",
+  "volume ratio = Binance futures volume / sweep (spot aggregate) volume"
+ ],
+ "per_tf": {
+  "5m": {
+   "bars_common": 3254492,
+   "close_absdiff_bp_median_by_coin": {
+    "BTCUSD": 5.468,
+    "ETHUSD": 5.384,
+    "SOLUSD": 5.9,
+    "DOGEUSD": 5.76,
+    "LTCUSD": 6.096,
+    "BCHUSD": 6.814
+   },
+   "close_absdiff_bp_p99_by_coin": {
+    "BTCUSD": 26.03,
+    "ETHUSD": 25.06,
+    "SOLUSD": 31.53,
+    "DOGEUSD": 30.45,
+    "LTCUSD": 25.97,
+    "BCHUSD": 30.78
+   },
+   "high_absdiff_bp_median_by_coin": {
+    "BTCUSD": 8.404,
+    "ETHUSD": 7.683,
+    "SOLUSD": 7.489,
+    "DOGEUSD": 7.053,
+    "LTCUSD": 7.54,
+    "BCHUSD": 6.062
+   },
+   "low_absdiff_bp_median_by_coin": {
+    "BTCUSD": 4.933,
+    "ETHUSD": 5.079,
+    "SOLUSD": 5.725,
+    "DOGEUSD": 5.602,
+    "LTCUSD": 5.71,
+    "BCHUSD": 7.619
+   },
+   "close_diff_bp_mean_by_coin": {
+    "BTCUSD": -2.662,
+    "ETHUSD": -2.509,
+    "SOLUSD": -4.437,
+    "DOGEUSD": -2.885,
+    "LTCUSD": -3.508,
+    "BCHUSD": -5.269
+   },
+   "atr_absdiff_pct_median_by_coin": {
+    "BTCUSD": 25.901,
+    "ETHUSD": 16.407,
+    "SOLUSD": 7.069,
+    "DOGEUSD": 8.637,
+    "LTCUSD": 9.635,
+    "BCHUSD": 7.583
+   },
+   "volume_ratio_median_by_coin": {
+    "BTCUSD": 17.044,
+    "ETHUSD": 20.989,
+    "SOLUSD": 15.38,
+    "DOGEUSD": 18.009,
+    "LTCUSD": 11.063,
+    "BCHUSD": 28.94
+   },
+   "signals": {
+    "union_agree": 0.4922409070810349,
+    "binance_signals_same_bar": 0.6453453009986888,
+    "binance_signals_within_1bar": 0.729019023251433,
+    "opposite_share_of_union": 0.0006135112538633418,
+    "n_sig_binance": 3365513,
+    "n_sig_other": 3221419,
+    "n_union": 4412307,
+    "n_both_same": 2171918
+   },
+   "signals_by_coin": {
+    "BTCUSD": 0.4313,
+    "ETHUSD": 0.4924,
+    "SOLUSD": 0.5344,
+    "DOGEUSD": 0.4992,
+    "LTCUSD": 0.4928,
+    "BCHUSD": 0.5055
+   },
+   "strategy_union_agree_median": 0.3984424125968097,
+   "worst5_strategies": {
+    "N21_ST_RSI_ADX": 0.0,
+    "N14_ICHI_RSI": 0.053,
+    "N04_ST_KLINGER": 0.158,
+    "S5_DONCHIAN_MFI": 0.178,
+    "N05_PSAR_POC": 0.192
+   },
+   "best5_strategies": {
+    "N09_ALLIG_AROON": 0.569,
+    "N22_VORTEX_PSAR": 0.611,
+    "S4_BB_BBP": 0.645,
+    "N18_VWMA_MACD": 0.761,
+    "N17_KC_RSI": 0.817
+   }
+  },
+  "15m": {
+   "bars_common": 1085123,
+   "close_absdiff_bp_median_by_coin": {
+    "BTCUSD": 5.465,
+    "ETHUSD": 5.378,
+    "SOLUSD": 5.894,
+    "DOGEUSD": 5.76,
+    "LTCUSD": 6.108,
+    "BCHUSD": 6.793
+   },
+   "close_absdiff_bp_p99_by_coin": {
+    "BTCUSD": 25.86,
+    "ETHUSD": 24.81,
+    "SOLUSD": 31.64,
+    "DOGEUSD": 30.46,
+    "LTCUSD": 26.04,
+    "BCHUSD": 30.8
+   },
+   "high_absdiff_bp_median_by_coin": {
+    "BTCUSD": 8.278,
+    "ETHUSD": 7.725,
+    "SOLUSD": 7.682,
+    "DOGEUSD": 7.466,
+    "LTCUSD": 7.761,
+    "BCHUSD": 6.073
+   },
+   "low_absdiff_bp_median_by_coin": {
+    "BTCUSD": 5.04,
+    "ETHUSD": 5.183,
+    "SOLUSD": 5.822,
+    "DOGEUSD": 5.695,
+    "LTCUSD": 5.797,
+    "BCHUSD": 7.806
+   },
+   "close_diff_bp_mean_by_coin": {
+    "BTCUSD": -2.642,
+    "ETHUSD": -2.498,
+    "SOLUSD": -4.424,
+    "DOGEUSD": -2.868,
+    "LTCUSD": -3.519,
+    "BCHUSD": -5.249
+   },
+   "atr_absdiff_pct_median_by_coin": {
+    "BTCUSD": 14.966,
+    "ETHUSD": 9.117,
+    "SOLUSD": 4.474,
+    "DOGEUSD": 5.669,
+    "LTCUSD": 5.851,
+    "BCHUSD": 5.009
+   },
+   "volume_ratio_median_by_coin": {
+    "BTCUSD": 16.903,
+    "ETHUSD": 20.863,
+    "SOLUSD": 14.667,
+    "DOGEUSD": 16.75,
+    "LTCUSD": 10.531,
+    "BCHUSD": 25.551
+   },
+   "signals": {
+    "union_agree": 0.5912920192801436,
+    "binance_signals_same_bar": 0.7315562388284443,
+    "binance_signals_within_1bar": 0.7966177992002548,
+    "opposite_share_of_union": 0.00030994050844428307,
+    "n_sig_binance": 1139613,
+    "n_sig_other": 1104463,
+    "n_union": 1409948,
+    "n_both_same": 833691
+   },
+   "signals_by_coin": {
+    "BTCUSD": 0.5355,
+    "ETHUSD": 0.594,
+    "SOLUSD": 0.6277,
+    "DOGEUSD": 0.598,
+    "LTCUSD": 0.5925,
+    "BCHUSD": 0.6025
+   },
+   "strategy_union_agree_median": 0.5459707037021402,
+   "worst5_strategies": {
+    "N04_ST_KLINGER": 0.215,
+    "S5_DONCHIAN_MFI": 0.261,
+    "N05_PSAR_POC": 0.262,
+    "N13_3OUTSIDE": 0.298,
+    "OBV_B": 0.318
+   },
+   "best5_strategies": {
+    "N22_VORTEX_PSAR": 0.692,
+    "S4_BB_BBP": 0.77,
+    "S1_EMA_RSI_CHOP": 0.773,
+    "N18_VWMA_MACD": 0.837,
+    "N17_KC_RSI": 0.889
+   }
+  },
+  "30m": {
+   "bars_common": 542591,
+   "close_absdiff_bp_median_by_coin": {
+    "BTCUSD": 5.457,
+    "ETHUSD": 5.396,
+    "SOLUSD": 5.892,
+    "DOGEUSD": 5.777,
+    "LTCUSD": 6.108,
+    "BCHUSD": 6.792
+   },
+   "close_absdiff_bp_p99_by_coin": {
+    "BTCUSD": 26.13,
+    "ETHUSD": 25.12,
+    "SOLUSD": 31.7,
+    "DOGEUSD": 30.47,
+    "LTCUSD": 26.05,
+    "BCHUSD": 30.74
+   },
+   "high_absdiff_bp_median_by_coin": {
+    "BTCUSD": 8.203,
+    "ETHUSD": 7.691,
+    "SOLUSD": 7.777,
+    "DOGEUSD": 7.723,
+    "LTCUSD": 7.895,
+    "BCHUSD": 6.091
+   },
+   "low_absdiff_bp_median_by_coin": {
+    "BTCUSD": 5.102,
+    "ETHUSD": 5.252,
+    "SOLUSD": 5.889,
+    "DOGEUSD": 5.75,
+    "LTCUSD": 5.865,
+    "BCHUSD": 7.971
+   },
+   "close_diff_bp_mean_by_coin": {
+    "BTCUSD": -2.641,
+    "ETHUSD": -2.507,
+    "SOLUSD": -4.43,
+    "DOGEUSD": -2.863,
+    "LTCUSD": -3.525,
+    "BCHUSD": -5.235
+   },
+   "atr_absdiff_pct_median_by_coin": {
+    "BTCUSD": 10.707,
+    "ETHUSD": 6.296,
+    "SOLUSD": 3.503,
+    "DOGEUSD": 4.459,
+    "LTCUSD": 4.397,
+    "BCHUSD": 3.801
+   },
+   "volume_ratio_median_by_coin": {
+    "BTCUSD": 16.896,
+    "ETHUSD": 20.903,
+    "SOLUSD": 14.417,
+    "DOGEUSD": 16.327,
+    "LTCUSD": 10.363,
+    "BCHUSD": 24.178
+   },
+   "signals": {
+    "union_agree": 0.6443035290495183,
+    "binance_signals_same_bar": 0.7746435094802205,
+    "binance_signals_within_1bar": 0.8298502093716058,
+    "opposite_share_of_union": 0.00019897925096657438,
+    "n_sig_binance": 572666,
+    "n_sig_other": 559597,
+    "n_union": 688514,
+    "n_both_same": 443612
+   },
+   "signals_by_coin": {
+    "BTCUSD": 0.5995,
+    "ETHUSD": 0.6482,
+    "SOLUSD": 0.6715,
+    "DOGEUSD": 0.6471,
+    "LTCUSD": 0.6484,
+    "BCHUSD": 0.6529
+   },
+   "strategy_union_agree_median": 0.6045657656063355,
+   "worst5_strategies": {
+    "N14_ICHI_RSI": 0.111,
+    "N04_ST_KLINGER": 0.252,
+    "N05_PSAR_POC": 0.296,
+    "N03_ADX_GC": 0.323,
+    "N13_3OUTSIDE": 0.342
+   },
+   "best5_strategies": {
+    "N22_VORTEX_PSAR": 0.731,
+    "N25_DST_CCI": 0.734,
+    "S4_BB_BBP": 0.826,
+    "N18_VWMA_MACD": 0.875,
+    "N17_KC_RSI": 0.917
+   }
+  },
+  "1h": {
+   "bars_common": 271295,
+   "close_absdiff_bp_median_by_coin": {
+    "BTCUSD": 5.44,
+    "ETHUSD": 5.415,
+    "SOLUSD": 5.905,
+    "DOGEUSD": 5.75,
+    "LTCUSD": 6.105,
+    "BCHUSD": 6.748
+   },
+   "close_absdiff_bp_p99_by_coin": {
+    "BTCUSD": 25.92,
+    "ETHUSD": 25.19,
+    "SOLUSD": 31.73,
+    "DOGEUSD": 30.46,
+    "LTCUSD": 26.08,
+    "BCHUSD": 31.0
+   },
+   "high_absdiff_bp_median_by_coin": {
+    "BTCUSD": 8.126,
+    "ETHUSD": 7.606,
+    "SOLUSD": 7.911,
+    "DOGEUSD": 7.983,
+    "LTCUSD": 8.042,
+    "BCHUSD": 6.106
+   },
+   "low_absdiff_bp_median_by_coin": {
+    "BTCUSD": 5.18,
+    "ETHUSD": 5.367,
+    "SOLUSD": 5.965,
+    "DOGEUSD": 5.86,
+    "LTCUSD": 5.953,
+    "BCHUSD": 8.216
+   },
+   "close_diff_bp_mean_by_coin": {
+    "BTCUSD": -2.636,
+    "ETHUSD": -2.494,
+    "SOLUSD": -4.365,
+    "DOGEUSD": -2.877,
+    "LTCUSD": -3.534,
+    "BCHUSD": -5.185
+   },
+   "atr_absdiff_pct_median_by_coin": {
+    "BTCUSD": 7.721,
+    "ETHUSD": 4.276,
+    "SOLUSD": 2.702,
+    "DOGEUSD": 3.446,
+    "LTCUSD": 3.388,
+    "BCHUSD": 2.94
+   },
+   "volume_ratio_median_by_coin": {
+    "BTCUSD": 16.946,
+    "ETHUSD": 20.976,
+    "SOLUSD": 14.28,
+    "DOGEUSD": 16.048,
+    "LTCUSD": 10.254,
+    "BCHUSD": 23.266
+   },
+   "signals": {
+    "union_agree": 0.693079556038037,
+    "binance_signals_same_bar": 0.8121741487897451,
+    "binance_signals_within_1bar": 0.8610605196935782,
+    "opposite_share_of_union": 0.00017499836865927522,
+    "n_sig_binance": 287708,
+    "n_sig_other": 283166,
+    "n_union": 337146,
+    "n_both_same": 233669
+   },
+   "signals_by_coin": {
+    "BTCUSD": 0.6563,
+    "ETHUSD": 0.703,
+    "SOLUSD": 0.7182,
+    "DOGEUSD": 0.6953,
+    "LTCUSD": 0.6921,
+    "BCHUSD": 0.6953
+   },
+   "strategy_union_agree_median": 0.6556657153111931,
+   "worst5_strategies": {
+    "N21_ST_RSI_ADX": 0.0,
+    "N15_KC_AO": 0.306,
+    "N04_ST_KLINGER": 0.306,
+    "N05_PSAR_POC": 0.344,
+    "N13_3OUTSIDE": 0.367
+   },
+   "best5_strategies": {
+    "N25_DST_CCI": 0.789,
+    "S1_EMA_RSI_CHOP": 0.855,
+    "S4_BB_BBP": 0.869,
+    "N18_VWMA_MACD": 0.903,
+    "N17_KC_RSI": 0.937
+   }
+  },
+  "4h": {
+   "bars_common": 67824,
+   "close_absdiff_bp_median_by_coin": {
+    "BTCUSD": 5.434,
+    "ETHUSD": 5.42,
+    "SOLUSD": 5.89,
+    "DOGEUSD": 5.758,
+    "LTCUSD": 6.038,
+    "BCHUSD": 6.695
+   },
+   "close_absdiff_bp_p99_by_coin": {
+    "BTCUSD": 26.32,
+    "ETHUSD": 24.82,
+    "SOLUSD": 30.71,
+    "DOGEUSD": 31.05,
+    "LTCUSD": 25.95,
+    "BCHUSD": 31.32
+   },
+   "high_absdiff_bp_median_by_coin": {
+    "BTCUSD": 8.109,
+    "ETHUSD": 7.442,
+    "SOLUSD": 8.079,
+    "DOGEUSD": 8.46,
+    "LTCUSD": 8.309,
+    "BCHUSD": 6.296
+   },
+   "low_absdiff_bp_median_by_coin": {
+    "BTCUSD": 5.432,
+    "ETHUSD": 5.751,
+    "SOLUSD": 6.254,
+    "DOGEUSD": 6.155,
+    "LTCUSD": 6.248,
+    "BCHUSD": 8.904
+   },
+   "close_diff_bp_mean_by_coin": {
+    "BTCUSD": -2.726,
+    "ETHUSD": -2.524,
+    "SOLUSD": -4.184,
+    "DOGEUSD": -2.894,
+    "LTCUSD": -3.575,
+    "BCHUSD": -5.153
+   },
+   "atr_absdiff_pct_median_by_coin": {
+    "BTCUSD": 4.361,
+    "ETHUSD": 2.264,
+    "SOLUSD": 1.8,
+    "DOGEUSD": 2.071,
+    "LTCUSD": 2.241,
+    "BCHUSD": 1.866
+   },
+   "volume_ratio_median_by_coin": {
+    "BTCUSD": 17.105,
+    "ETHUSD": 21.22,
+    "SOLUSD": 14.126,
+    "DOGEUSD": 15.809,
+    "LTCUSD": 10.216,
+    "BCHUSD": 22.155
+   },
+   "signals": {
+    "union_agree": 0.7551781484654538,
+    "binance_signals_same_bar": 0.8562734818074027,
+    "binance_signals_within_1bar": 0.8950729275296068,
+    "opposite_share_of_union": 0.0001259890137580003,
+    "n_sig_binance": 70001,
+    "n_sig_other": 69321,
+    "n_union": 79372,
+    "n_both_same": 59940
+   },
+   "signals_by_coin": {
+    "BTCUSD": 0.7212,
+    "ETHUSD": 0.7671,
+    "SOLUSD": 0.7685,
+    "DOGEUSD": 0.757,
+    "LTCUSD": 0.7558,
+    "BCHUSD": 0.7627
+   },
+   "strategy_union_agree_median": 0.7360557768924303,
+   "worst5_strategies": {
+    "DOGE": 0.0,
+    "N04_ST_KLINGER": 0.39,
+    "N13_3OUTSIDE": 0.404,
+    "S5_DONCHIAN_MFI": 0.415,
+    "N05_PSAR_POC": 0.428
+   },
+   "best5_strategies": {
+    "N06_MACD_ORB": 0.89,
+    "S4_BB_BBP": 0.932,
+    "N18_VWMA_MACD": 0.944,
+    "N17_KC_RSI": 0.967,
+    "N14_ICHI_RSI": 1.0
+   }
+  },
+  "1d": {
+   "bars_common": 11302,
+   "close_absdiff_bp_median_by_coin": {
+    "BTCUSD": 5.495,
+    "ETHUSD": 5.428,
+    "SOLUSD": 5.828,
+    "DOGEUSD": 5.885,
+    "LTCUSD": 6.14,
+    "BCHUSD": 6.862
+   },
+   "close_absdiff_bp_p99_by_coin": {
+    "BTCUSD": 25.58,
+    "ETHUSD": 25.53,
+    "SOLUSD": 30.2,
+    "DOGEUSD": 34.03,
+    "LTCUSD": 25.68,
+    "BCHUSD": 31.45
+   },
+   "high_absdiff_bp_median_by_coin": {
+    "BTCUSD": 8.127,
+    "ETHUSD": 7.244,
+    "SOLUSD": 8.426,
+    "DOGEUSD": 8.916,
+    "LTCUSD": 8.127,
+    "BCHUSD": 6.739
+   },
+   "low_absdiff_bp_median_by_coin": {
+    "BTCUSD": 6.146,
+    "ETHUSD": 6.752,
+    "SOLUSD": 7.518,
+    "DOGEUSD": 7.297,
+    "LTCUSD": 7.386,
+    "BCHUSD": 10.46
+   },
+   "close_diff_bp_mean_by_coin": {
+    "BTCUSD": -3.061,
+    "ETHUSD": -2.731,
+    "SOLUSD": -4.488,
+    "DOGEUSD": -3.472,
+    "LTCUSD": -3.857,
+    "BCHUSD": -5.566
+   },
+   "atr_absdiff_pct_median_by_coin": {
+    "BTCUSD": 2.098,
+    "ETHUSD": 1.099,
+    "SOLUSD": 1.134,
+    "DOGEUSD": 1.4,
+    "LTCUSD": 1.214,
+    "BCHUSD": 1.168
+   },
+   "volume_ratio_median_by_coin": {
+    "BTCUSD": 16.608,
+    "ETHUSD": 21.851,
+    "SOLUSD": 13.977,
+    "DOGEUSD": 15.431,
+    "LTCUSD": 10.195,
+    "BCHUSD": 21.647
+   },
+   "signals": {
+    "union_agree": 0.794383149448345,
+    "binance_signals_same_bar": 0.8830251788534795,
+    "binance_signals_within_1bar": 0.9160085478026573,
+    "opposite_share_of_union": 0.0,
+    "n_sig_binance": 10763,
+    "n_sig_other": 10705,
+    "n_union": 11964,
+    "n_both_same": 9504
+   },
+   "signals_by_coin": {
+    "BTCUSD": 0.8166,
+    "ETHUSD": 0.8122,
+    "SOLUSD": 0.7843,
+    "DOGEUSD": 0.7787,
+    "LTCUSD": 0.7829,
+    "BCHUSD": 0.7927
+   },
+   "strategy_union_agree_median": 0.7538410952352483,
+   "worst5_strategies": {
+    "N15_KC_AO": 0.0,
+    "S5_DONCHIAN_MFI": 0.4,
+    "N13_3OUTSIDE": 0.405,
+    "N08_ICHI_WR": 0.429,
+    "N04_ST_KLINGER": 0.451
+   },
+   "best5_strategies": {
+    "S4_BB_BBP": 0.957,
+    "N18_VWMA_MACD": 0.973,
+    "N17_KC_RSI": 0.975,
+    "N11_BREAKAWAY": 1.0,
+    "S1_EMA_RSI_CHOP": 1.0
+   }
+  }
+ },
+ "all_tfs": {
+  "union_agree": 0.5407404920214012,
+  "binance_signals_same_bar": 0.6889739461766818,
+  "binance_signals_within_1bar": 0.7632452264524819,
+  "opposite_share_of_union": 0.00048276103573714226,
+  "n_sig_binance": 5446264,
+  "n_sig_other": 5248671,
+  "n_union": 6939251,
+  "n_both_same": 3752334
+ },
+ "control_pre2021": {
+  "what": "new Binance cache vs the period-3 Binance cache (data/pre2021, same source) on the bars both hold (2021-01 .. 2021-08); signal differences there come from the series start (2021-01 vs 2020) and from the 2021-03-02 01:05-01:55 halt, whose flat no-trade bars the period-3 cache keeps and this cache drops (bars_only_pre2021_in_2021)",
+  "bars_identical_share_min": {
+   "o": 1.0,
+   "h": 1.0,
+   "l": 1.0,
+   "c": 1.0,
+   "v": 0.8983966389436681
+  },
+  "close_absdiff_bp_max": 0.0,
+  "volume_absdiff_rel_max": 2.2199295470876243e-16,
+  "volume_note": "30m volume = sum of 5m volumes written to CSV and read back (read_ohlcv); the period-3 cache kept the in-memory sum, so ~10% of 30m volumes differ in the last bit",
+  "per_tf": {
+   "5m": {
+    "union_agree": 0.9993666659600178,
+    "binance_signals_same_bar": 0.999716357929784,
+    "binance_signals_within_1bar": 0.999758771697293,
+    "opposite_share_of_union": 0.0,
+    "n_sig_binance": 377236,
+    "n_sig_other": 377261,
+    "n_union": 377368,
+    "n_both_same": 377129
+   },
+   "15m": {
+    "union_agree": 0.9990941746056536,
+    "binance_signals_same_bar": 0.9996093566885947,
+    "binance_signals_within_1bar": 0.9997656140131569,
+    "opposite_share_of_union": 0.0,
+    "n_sig_binance": 127994,
+    "n_sig_other": 128010,
+    "n_union": 128060,
+    "n_both_same": 127944
+   },
+   "30m": {
+    "union_agree": 0.9992006520171781,
+    "binance_signals_same_bar": 0.99965502642184,
+    "binance_signals_within_1bar": 0.9998118325937309,
+    "opposite_share_of_union": 0.0,
+    "n_sig_binance": 63773,
+    "n_sig_other": 63780,
+    "n_union": 63802,
+    "n_both_same": 63751
+   },
+   "1h": {
+    "union_agree": 1.0,
+    "binance_signals_same_bar": 1.0,
+    "binance_signals_within_1bar": 1.0,
+    "opposite_share_of_union": 0.0,
+    "n_sig_binance": 32544,
+    "n_sig_other": 32544,
+    "n_union": 32544,
+    "n_both_same": 32544
+   },
+   "4h": {
+    "union_agree": 0.9995767494356659,
+    "binance_signals_same_bar": 0.9998588766581993,
+    "binance_signals_within_1bar": 0.9998588766581993,
+    "opposite_share_of_union": 0.0,
+    "n_sig_binance": 7086,
+    "n_sig_other": 7087,
+    "n_union": 7088,
+    "n_both_same": 7085
+   }
+  }
+ },
+ "wall_s": 26.9
+}

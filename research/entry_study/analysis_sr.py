@@ -5,6 +5,17 @@ PREREG_ENTRY.sha256).
     python3 research/entry_study/analysis_sr.py stage1 [procs]   # per timeframe x coin tables
     python3 research/entry_study/analysis_sr.py stage2           # tests and outputs from stage 1
 
+Overrides for robustness re-runs (defaults = the pre-registered run; each flag also reads an env var):
+    --sig12 DIR     ($SR_SIG12)    periods 1 / 2 signal cache (default <scratch>/paper_rules/signals)
+    --volume12 SRC  ($SR_VOLUME12) periods 1 / 2 volume: 'sweep_csv' (default: joined by ts from the sweep
+                                   CSV) or 'npz' (the cache's own 'v' key, e.g. the Binance futures cache)
+    --out DIR       ($SR_OUT)      output directory (default research/entry_study/out)
+    --cache DIR     ($SR_CACHE)    stage-1 cache (default <scratch>/entry_study/cache)
+    e.g. the Binance re-run: run 3 --sig12 <scratch>/binance/signals --volume12 npz
+         --out research/entry_study/out_binance --cache <scratch>/entry_study/cache_binance
+A run with any override is a robustness re-run, not the pre-registered result: run_meta.json and
+sr_candidates.json then carry a 'robustness_rerun' block naming the overrides. Period 3 is never overridden.
+
 Stage 1, one job per timeframe x coin (Pool):
   * two bar series: periods 1 and 2 = the paper_rules signal cache (locked code, sweep bars) with
     volume joined by ts from the sweep CSV; period 3 = the pre2021 cache (final_signals.py). Each
@@ -75,11 +86,17 @@ import rules_bt as RB  # noqa: E402
 from paperbot import sweepsig  # noqa: E402
 
 # ------------------------------------------------------------------ fixed by the PREREG / task
-SIG12 = f"{SCR}/paper_rules/signals"
+DEFAULT_SIG12 = f"{SCR}/paper_rules/signals"
+DEFAULT_CACHE = f"{SCR}/entry_study/cache"
+DEFAULT_OUT = os.path.join(HERE, "out")
+VOLUME_SOURCES = ("sweep_csv", "npz")
+# robustness re-runs only (module docstring); unset = the pre-registered run
+SIG12 = os.path.abspath(os.environ.get("SR_SIG12") or DEFAULT_SIG12)
+VOLUME12 = os.environ.get("SR_VOLUME12") or "sweep_csv"
 SIG3 = f"{SCR}/entry_study/signals_pre2021"
 SWEEP = os.environ["SWEEP_DATA"]
-CACHE = f"{SCR}/entry_study/cache"
-OUT = os.path.join(HERE, "out")
+CACHE = os.path.abspath(os.environ.get("SR_CACHE") or DEFAULT_CACHE)
+OUT = os.path.abspath(os.environ.get("SR_OUT") or DEFAULT_OUT)
 PREREG = os.path.join(HERE, "PREREG_ENTRY.md")
 PREREG_SHA = os.path.join(HERE, "PREREG_ENTRY.sha256")
 TFS = ("5m", "15m", "30m", "1h", "4h")
@@ -153,13 +170,23 @@ def strategy_names(L) -> list[str]:
 
 
 # ------------------------------------------------------------------ series and periods
+def overrides() -> dict:
+    """The non-default data / output settings of this process ({} = the pre-registered run)."""
+    if VOLUME12 not in VOLUME_SOURCES:
+        raise ValueError(f"SR_VOLUME12 / --volume12 must be one of {VOLUME_SOURCES}, not {VOLUME12!r}")
+    cur = dict(sig12=SIG12, volume12=VOLUME12, out=OUT, cache=CACHE)
+    dft = dict(sig12=os.path.abspath(DEFAULT_SIG12), volume12="sweep_csv", out=os.path.abspath(DEFAULT_OUT),
+               cache=os.path.abspath(DEFAULT_CACHE))
+    return {k: v for k, v in cur.items() if v != dft[k]}
+
+
 def load_series(tf: str, coin: str, src: str):
     """(df for sr: ts ns, open, high, low, close, volume, atr; bars dict for _scan; signals dict)."""
-    if src == "p12":
+    if src == "p12" and VOLUME12 == "sweep_csv":
         df, z = sr.chart_from_cache(tf, coin, SIG12, SWEEP)
         vol_missing = int(df.attrs["volume_missing"])
-    else:
-        z = dict(np.load(os.path.join(SIG3, f"sig_{tf}_{coin}.npz")))
+    else:                            # period 3, or periods 1 / 2 with the cache's own volume ('v')
+        z = dict(np.load(os.path.join(SIG12 if src == "p12" else SIG3, f"sig_{tf}_{coin}.npz")))
         df = pd.DataFrame({"ts": z["ts"], "open": z["o"], "high": z["h"], "low": z["l"], "close": z["c"],
                            "volume": z["v"], "atr": z["atr"]})
         vol_missing = int((~np.isfinite(z["v"])).sum())
@@ -712,6 +739,13 @@ def stage2(stage1_meta: dict | None = None) -> dict:
         random_null=[{k: _num(v) for k, v in r.items()} for r in rnd[rnd["scope"] == "pooled"][
             ["tf", "period", "n_trades", "P1_diff", "P1_p", "P1_status", "P2_diff", "P2_p", "P2_status"]].to_dict("records")])
 
+    ov = overrides()
+    rr = dict(note="Robustness re-run with non-default data / outputs: NOT the pre-registered result "
+                   "(PREREG_ENTRY.md fixes the default data). Same code, seeds, tests and thresholds.",
+              overrides=ov) if ov else None
+    if rr:
+        cand_doc["robustness_rerun"] = rr
+
     # ---------------- write
     cells["note"] = cells["strategy"].map(STRATEGY_NOTES).fillna("")
     if len(trials):
@@ -759,7 +793,9 @@ def stage2(stage1_meta: dict | None = None) -> dict:
         constants=dict(periods=PERIODS, random_n=RANDOM_N, bootstrap_resamples=BOOT_B, min_signals=MIN_SIGNALS,
                        min_group=MIN_GROUP, fdr_q=FDR_Q, confirm_alpha=CONFIRM_ALPHA, lookahead_passes=PASSES,
                        first_lock_roe=FIRST_LOCK, room_buckets=ROOM_LABELS),
-        data=dict(periods_1_2=SIG12, period_3=SIG3, volume_periods_1_2=os.path.join(SWEEP, "full"), cache=CACHE),
+        data=dict(periods_1_2=SIG12, period_3=SIG3,
+                  volume_periods_1_2=(os.path.join(SWEEP, "full") if VOLUME12 == "sweep_csv"
+                                      else "the periods 1 / 2 cache's own 'v' key"), cache=CACHE),
         timings=dict(stage1=(stage1_meta or {}).get("wall_s", s1info.get("wall_s")),
                      stage2_tests_s=round(t_tests - t0, 1), stage2_total_s=round(time.time() - t0, 1)),
         row_counts=dict(sr_cells=len(cells), sr_trials=len(trials), sr_random=len(rnd),
@@ -769,6 +805,8 @@ def stage2(stage1_meta: dict | None = None) -> dict:
                       bh_survivors_period1=cand_doc["bh_survivors_period1"], passing_period2=cand_doc["passing_period2"],
                       passing_period3=cand_doc["passing_period3"], candidates=len(cand_doc["candidates"])),
         ambiguities=list(AMBIGUITIES), strategy_notes=dict(STRATEGY_NOTES), skipped=skipped, jobs=s1info["jobs"])
+    if rr:
+        meta["robustness_rerun"] = rr
     with open(os.path.join(OUT, "run_meta.json"), "w") as fh:
         json.dump(_clean(meta), fh, indent=1)
     print(f"stage 2 done in {time.time() - t0:.0f}s (tests {t_tests - t0:.0f}s, cells {t_cells - t_tests:.0f}s)",
@@ -777,7 +815,41 @@ def stage2(stage1_meta: dict | None = None) -> dict:
     return meta
 
 
+def _apply_overrides(argv: list[str]) -> list[str]:
+    """Strip --sig12 / --volume12 / --out / --cache from argv, set the module settings and the env vars (so
+    Pool workers see them under any start method). Returns the remaining argv."""
+    global SIG12, VOLUME12, OUT, CACHE
+    flags = {"--sig12": ("SR_SIG12", True), "--volume12": ("SR_VOLUME12", False), "--out": ("SR_OUT", True),
+             "--cache": ("SR_CACHE", True)}
+    rest, i = [], 0
+    while i < len(argv):
+        a = argv[i]
+        key, val = (a.split("=", 1) + [None])[:2] if a.startswith("--") else (a, None)
+        if key in flags:
+            if val is None:
+                if i + 1 >= len(argv):
+                    raise SystemExit(f"{key} needs a value")
+                val, i = argv[i + 1], i + 1
+            env, is_path = flags[key]
+            os.environ[env] = os.path.abspath(val) if is_path else val
+        else:
+            rest.append(a)
+        i += 1
+    SIG12 = os.path.abspath(os.environ.get("SR_SIG12") or DEFAULT_SIG12)
+    VOLUME12 = os.environ.get("SR_VOLUME12") or "sweep_csv"
+    OUT = os.path.abspath(os.environ.get("SR_OUT") or DEFAULT_OUT)
+    CACHE = os.path.abspath(os.environ.get("SR_CACHE") or DEFAULT_CACHE)
+    ov = overrides()
+    if ov:
+        if ({"sig12", "volume12"} & set(ov)) and not {"out", "cache"} <= set(ov):
+            raise SystemExit("a re-run on other data must name its own --out and --cache (the defaults hold the "
+                             "pre-registered run)")
+        print(f"robustness re-run, not the pre-registered result: {json.dumps(ov)}", flush=True)
+    return rest
+
+
 def main(argv: list[str]) -> None:
+    argv = _apply_overrides(list(argv))
     cmd = argv[1] if len(argv) > 1 else ""
     procs = int(argv[2]) if len(argv) > 2 else 4
     sha_file = open(PREREG_SHA).read().split()[0]

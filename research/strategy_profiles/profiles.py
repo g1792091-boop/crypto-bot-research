@@ -1,6 +1,11 @@
 """Strategy profile cards: what kind of strategy each of the 36 is, per timeframe.
 
-    python3 research/strategy_profiles/profiles.py <signals_dir>
+    python3 research/strategy_profiles/profiles.py <signals_dir> [procs] [--out DIR] [--accounts CSV]
+
+Outputs go to research/strategy_profiles/out/ and the account columns come from
+research/paper_rules/out/accounts.csv unless ``--out`` / ``--accounts`` (or $PROFILES_OUT /
+$PROFILES_ACCOUNTS) name others: a re-run on another signal cache (e.g. the Binance futures cache)
+writes beside the original, e.g. out_binance/ with research/paper_rules/out_binance/accounts.csv.
 
 ``signals_dir`` holds the ``sig_<tf>_<coin>.npz`` files written by
 ``research/paper_rules/rules_bt.py signals`` (bars, ATR14 and every strategy's signal
@@ -48,6 +53,8 @@ MOMENTUM_BARS = 20
 HOLD_MORE = (4, 16, 64)
 EQUITY = 1000.0
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "out")
+ACCOUNTS = os.path.join(ROOT, "research", "paper_rules", "out", "accounts.csv")
+SOURCE = None           # set by the command line when --out / --accounts differ: recorded in the meta
 REASONS = ("stop", "lock", "liquidation", "open")
 
 
@@ -261,8 +268,7 @@ def label(p: dict) -> dict:
 
 def main(sig_dir: str, procs: int = 4) -> None:
     L = sweepsig.lib()
-    acc_path = os.path.join(ROOT, "research", "paper_rules", "out", "accounts.csv")
-    acc = pd.read_csv(acc_path)
+    acc = pd.read_csv(ACCOUNTS)
     acc = acc[acc["k"] == K_STOP]
     profiles: dict = {}
     t0 = time.time()
@@ -289,10 +295,28 @@ def main(sig_dir: str, procs: int = 4) -> None:
     meta = {"windows": RB.WINDOWS, "k_stop": K_STOP, "horizons": HORIZONS, "momentum_bars": MOMENTUM_BARS,
             "hold_more_bars": HOLD_MORE, "equity_for_sizing": EQUITY,
             "brackets": "example tiers (as in rules_bt)", "signal_lock": sweepsig.verify()["prereg_sha256_file"]}
+    if SOURCE:
+        meta["source"] = dict(SOURCE, signals_dir=os.path.abspath(sig_dir), accounts=ACCOUNTS, out=OUT)
     with open(os.path.join(OUT, "profiles.json"), "w") as fh:
         json.dump({"meta": meta, "profiles": profiles}, fh, indent=1, default=float)
     print("wrote", os.path.join(OUT, "profiles.json"))
 
 
 if __name__ == "__main__":
-    main(sys.argv[1], int(sys.argv[2]) if len(sys.argv) > 2 else 4)
+    import argparse
+    ap = argparse.ArgumentParser(prog="profiles.py")
+    ap.add_argument("sig_dir")
+    ap.add_argument("procs", nargs="?", type=int, default=4)
+    ap.add_argument("--out", default=os.environ.get("PROFILES_OUT") or None,
+                    help="output directory (default research/strategy_profiles/out, or $PROFILES_OUT)")
+    ap.add_argument("--accounts", default=os.environ.get("PROFILES_ACCOUNTS") or None,
+                    help="rules_bt accounts.csv to join (default research/paper_rules/out/accounts.csv, "
+                         "or $PROFILES_ACCOUNTS)")
+    a = ap.parse_args()
+    if a.out:
+        OUT = os.path.abspath(a.out)
+    if a.accounts:
+        ACCOUNTS = os.path.abspath(a.accounts)
+    if a.out or a.accounts:
+        SOURCE = {"note": "re-run with --out / --accounts (not the default profiles)"}
+    main(a.sig_dir, a.procs)

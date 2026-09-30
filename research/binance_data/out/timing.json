@@ -1,0 +1,85 @@
+{
+ "download": {
+  "wall_s": 11.9,
+  "finished_utc": "2026-09-30T17:36:30.696245+00:00"
+ },
+ "assemble": {
+  "wall_s": 75.5,
+  "finished_utc": "2026-09-30T17:10:22.559333+00:00"
+ },
+ "history": [
+  {
+   "step": "download",
+   "wall_s": 971.1,
+   "finished_utc": "2026-09-30T16:41:23.972135+00:00",
+   "note": "first run: 3318 files downloaded"
+  },
+  {
+   "step": "download",
+   "wall_s": 22.0,
+   "finished_utc": "2026-09-30T16:44:52.426464+00:00"
+  },
+  {
+   "step": "assemble",
+   "wall_s": 54.2,
+   "finished_utc": "2026-09-30T16:45:47.167590+00:00"
+  },
+  {
+   "step": "signals",
+   "wall_s": 606.8,
+   "finished_utc": "2026-09-30T16:55:54.010352+00:00"
+  },
+  {
+   "step": "funding",
+   "wall_s": 0.5,
+   "finished_utc": "2026-09-30T16:55:54.488976+00:00"
+  },
+  {
+   "step": "compare",
+   "wall_s": 26.6,
+   "finished_utc": "2026-09-30T16:56:21.052466+00:00"
+  },
+  {
+   "step": "compare",
+   "wall_s": 18.0,
+   "finished_utc": "2026-09-30T16:57:36.466059+00:00"
+  },
+  {
+   "step": "download",
+   "wall_s": 65.9,
+   "finished_utc": "2026-09-30T17:08:45.640145+00:00"
+  },
+  {
+   "step": "assemble",
+   "wall_s": 75.5,
+   "finished_utc": "2026-09-30T17:10:22.559333+00:00"
+  },
+  {
+   "step": "signals",
+   "wall_s": 652.9,
+   "finished_utc": "2026-09-30T17:23:49.205093+00:00"
+  },
+  {
+   "step": "compare",
+   "wall_s": 26.9,
+   "finished_utc": "2026-09-30T17:24:28.858462+00:00"
+  },
+  {
+   "step": "download",
+   "wall_s": 11.9,
+   "finished_utc": "2026-09-30T17:36:30.696245+00:00"
+  }
+ ],
+ "signals": {
+  "wall_s": 652.9,
+  "finished_utc": "2026-09-30T17:23:49.205093+00:00"
+ },
+ "funding": {
+  "wall_s": 0.5,
+  "finished_utc": "2026-09-30T16:55:54.488976+00:00"
+ },
+ "compare": {
+  "wall_s": 26.9,
+  "finished_utc": "2026-09-30T17:24:28.858462+00:00"
+ }
+}

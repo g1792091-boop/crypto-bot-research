@@ -1,0 +1,3854 @@
+{
+ "built_utc": "2026-09-30T17:10:22.550584+00:00",
+ "bars_dir": "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/binance/bars",
+ "range": [
+  "2021-01-01",
+  "2026-09-30"
+ ],
+ "native_equals_resampled_5m_all": false,
+ "native_differs": [
+  "BTCUSD 15m",
+  "ETHUSD 15m",
+  "SOLUSD 15m",
+  "DOGEUSD 15m",
+  "BCHUSD 15m"
+ ],
+ "wall_s": 75.5,
+ "files": [
+  {
+   "coin": "BTCUSD",
+   "symbol": "BTCUSDT",
+   "tf": "5m",
+   "source": "native 5m klines",
+   "rows": 604177,
+   "first": "2021-01-01 00:00:00+00:00",
+   "last": "2026-09-29 23:55:00+00:00",
+   "gaps": 8,
+   "missing_bars": 47,
+   "nonpositive_steps": 0,
+   "largest": [
+    {
+     "after": "2024-10-28 19:55:00+00:00",
+     "missing_bars": 14
+    },
+    {
+     "after": "2021-03-02 01:00:00+00:00",
+     "missing_bars": 11
+    },
+    {
+     "after": "2022-05-28 16:35:00+00:00",
+     "missing_bars": 7
+    },
+    {
+     "after": "2022-05-01 22:25:00+00:00",
+     "missing_bars": 5
+    },
+    {
+     "after": "2025-08-29 06:15:00+00:00",
+     "missing_bars": 3
+    }
+   ],
+   "zero_volume_bars": 0,
+   "flat_zero_volume_bars": 0,
+   "hl_bad": 0,
+   "nonpos_prices": 0,
+   "dropped_edges": [],
+   "partial_bins": null,
+   "raw": {
+    "months_used": 68,
+    "days_used": 29,
+    "months_missing": [],
+    "days_missing": [],
+    "rows_monthly": 595872,
+    "gapfill_days": [
+     "2021-03-02",
+     "2022-05-01",
+     "2022-05-28",
+     "2023-09-12",
+     "2023-11-10",
+     "2024-10-28",
+     "2025-01-29",
+     "2025-08-29"
+    ],
+    "gapfill_rows_added": 0,
+    "gapfill_rows_replaced": 20,
+    "rows_read": 606528,
+    "duplicate_ts": 2304,
+    "duplicate_ts_conflicting": 20,
+    "rows_outside_range": 0,
+    "misaligned_ts": 0,
+    "no_trade_dropped": {
+     "bars": 47,
+     "not_flat": 0,
+     "runs": [
+      {
+       "first": "2021-03-02 01:05:00+00:00",
+       "last": "2021-03-02 01:55:00+00:00",
+       "bars": 11
+      },
+      {
+       "first": "2022-05-01 22:30:00+00:00",
+       "last": "2022-05-01 22:50:00+00:00",
+       "bars": 5
+      },
+      {
+       "first": "2022-05-28 16:40:00+00:00",
+       "last": "2022-05-28 17:10:00+00:00",
+       "bars": 7
+      },
+      {
+       "first": "2023-09-12 08:35:00+00:00",
+       "last": "2023-09-12 08:45:00+00:00",
+       "bars": 3
+      },
+      {
+       "first": "2024-10-28 16:25:00+00:00",
+       "last": "2024-10-28 16:30:00+00:00",
+       "bars": 2
+      },
+      {
+       "first": "2024-10-28 20:00:00+00:00",
+       "last": "2024-10-28 21:05:00+00:00",
+       "bars": 14
+      },
+      {
+       "first": "2025-01-29 01:25:00+00:00",
+       "last": "2025-01-29 01:30:00+00:00",
+       "bars": 2
+      },
+      {
+       "first": "2025-08-29 06:20:00+00:00",
+       "last": "2025-08-29 06:30:00+00:00",
+       "bars": 3
+      }
+     ]
+    },
+    "gaps_without_gapfill": {
+     "gaps": 9,
+     "missing_bars": 66,
+     "nonpositive_steps": 0,
+     "largest": [
+      {
+       "after": "2023-11-10 15:05:00+00:00",
+       "missing_bars": 19
+      },
+      {
+       "after": "2024-10-28 19:55:00+00:00",
+       "missing_bars": 14
+      },
+      {
+       "after": "2021-03-02 01:00:00+00:00",
+       "missing_bars": 11
+      },
+      {
+       "after": "2022-05-28 16:35:00+00:00",
+       "missing_bars": 7
+      },
+      {
+       "after": "2022-05-01 22:25:00+00:00",
+       "missing_bars": 5
+      }
+     ],
+     "no_trade_bars": 66,
+     "no_trade_runs": [
+      {
+       "first": "2021-03-02 01:05:00+00:00",
+       "last": "2021-03-02 01:55:00+00:00",
+       "bars": 11
+      },
+      {
+       "first": "2022-05-01 22:30:00+00:00",
+       "last": "2022-05-01 22:50:00+00:00",
+       "bars": 5
+      },
+      {
+       "first": "2022-05-28 16:40:00+00:00",
+       "last": "2022-05-28 17:10:00+00:00",
+       "bars": 7
+      },
+      {
+       "first": "2023-09-12 08:35:00+00:00",
+       "last": "2023-09-12 08:45:00+00:00",
+       "bars": 3
+      },
+      {
+       "first": "2023-11-10 15:10:00+00:00",
+       "last": "2023-11-10 16:40:00+00:00",
+       "bars": 19
+      },
+      {
+       "first": "2024-10-28 16:25:00+00:00",
+       "last": "2024-10-28 16:30:00+00:00",
+       "bars": 2
+      },
+      {
+       "first": "2024-10-28 20:00:00+00:00",
+       "last": "2024-10-28 21:05:00+00:00",
+       "bars": 14
+      },
+      {
+       "first": "2025-01-29 01:25:00+00:00",
+       "last": "2025-01-29 01:30:00+00:00",
+       "bars": 2
+      },
+      {
+       "first": "2025-08-29 06:20:00+00:00",
+       "last": "2025-08-29 06:30:00+00:00",
+       "bars": 3
+      }
+     ]
+    }
+   },
+   "native_vs_5m": null,
+   "coin_wall_s": 43.1
+  },
+  {
+   "coin": "BTCUSD",
+   "symbol": "BTCUSDT",
+   "tf": "15m",
+   "source": "native 15m klines (OHLC vs resample_ohlcv(5m): DIFFER)",
+   "rows": 201398,
+   "first": "2021-01-01 00:00:00+00:00",
+   "last": "2026-09-29 23:45:00+00:00",
+   "gaps": 4,
+   "missing_bars": 10,
+   "nonpositive_steps": 0,
+   "largest": [
+    {
+     "after": "2024-10-28 19:45:00+00:00",
+     "missing_bars": 4
+    },
+    {
+     "after": "2021-03-02 01:00:00+00:00",
+     "missing_bars": 3
+    },
+    {
+     "after": "2022-05-28 16:30:00+00:00",
+     "missing_bars": 2
+    },
+    {
+     "after": "2022-05-01 22:15:00+00:00",
+     "missing_bars": 1
+    }
+   ],
+   "zero_volume_bars": 0,
+   "flat_zero_volume_bars": 0,
+   "hl_bad": 0,
+   "nonpos_prices": 0,
+   "dropped_edges": [],
+   "partial_bins": {
+    "bins_with_fewer_5m": 12,
+    "bins_without_5m": 0
+   },
+   "raw": {
+    "months_used": 68,
+    "days_used": 29,
+    "months_missing": [],
+    "days_missing": [],
+    "rows_monthly": 198624,
+    "gapfill_days": [
+     "2021-03-02",
+     "2022-05-01",
+     "2022-05-28",
+     "2023-09-12",
+     "2023-11-10",
+     "2024-10-28",
+     "2025-01-29",
+     "2025-08-29"
+    ],
+    "gapfill_rows_added": 0,
+    "gapfill_rows_replaced": 7,
+    "rows_read": 202176,
+    "duplicate_ts": 768,
+    "duplicate_ts_conflicting": 7,
+    "rows_outside_range": 0,
+    "misaligned_ts": 0,
+    "no_trade_dropped": {
+     "bars": 10,
+     "not_flat": 0,
+     "runs": [
+      {
+       "first": "2021-03-02 01:15:00+00:00",
+       "last": "2021-03-02 01:45:00+00:00",
+       "bars": 3
+      },
+      {
+       "first": "2022-05-01 22:30:00+00:00",
+       "last": "2022-05-01 22:30:00+00:00",
+       "bars": 1
+      },
+      {
+       "first": "2022-05-28 16:45:00+00:00",
+       "last": "2022-05-28 17:00:00+00:00",
+       "bars": 2
+      },
+      {
+       "first": "2024-10-28 20:00:00+00:00",
+       "last": "2024-10-28 20:45:00+00:00",
+       "bars": 4
+      }
+     ]
+    }
+   },
+   "native_vs_5m": {
+    "bars_native": 201398,
+    "bars_resampled": 201398,
+    "bars_common": 201398,
+    "only_native": 0,
+    "only_resampled": 0,
+    "only_native_first": [],
+    "only_resampled_first": [],
+    "ohlc": {
+     "open": {
+      "mismatches": 1,
+      "max_rel": 0.0010579196217493517,
+      "first": [
+       {
+        "ts": "2025-01-29 01:30:00",
+        "native": 101627.4,
+        "resampled": 101520.0
+       }
+      ]
+     },
+     "high": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "low": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "close": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     }
+    },
+    "ohlc_mismatch_bins": 1,
+    "differing_bins": 1,
+    "differing_bins_with_no_trade_5m": 1,
+    "differing_bins_list": [
+     "2025-01-29 01:30:00"
+    ],
+    "volume_vs_5m_sum": {
+     "bins": 3,
+     "bins_5m_sum_zero": 0,
+     "max_rel_where_5m_sum_positive": 0.4773588370097565
+    },
+    "ok": false
+   },
+   "coin_wall_s": 43.1
+  },
+  {
+   "coin": "BTCUSD",
+   "symbol": "BTCUSDT",
+   "tf": "30m",
+   "source": "resample_ohlcv(5m, 30m)",
+   "rows": 100701,
+   "first": "2021-01-01 00:00:00+00:00",
+   "last": "2026-09-29 23:30:00+00:00",
+   "gaps": 2,
+   "missing_bars": 3,
+   "nonpositive_steps": 0,
+   "largest": [
+    {
+     "after": "2024-10-28 19:30:00+00:00",
+     "missing_bars": 2
+    },
+    {
+     "after": "2021-03-02 01:00:00+00:00",
+     "missing_bars": 1
+    }
+   ],
+   "zero_volume_bars": 0,
+   "flat_zero_volume_bars": 0,
+   "hl_bad": 0,
+   "nonpos_prices": 0,
+   "dropped_edges": [],
+   "partial_bins": {
+    "bins_with_fewer_5m": 12,
+    "bins_without_5m": 0
+   },
+   "raw": null,
+   "native_vs_5m": null,
+   "coin_wall_s": 43.1
+  },
+  {
+   "coin": "BTCUSD",
+   "symbol": "BTCUSDT",
+   "tf": "1h",
+   "source": "native 1h klines (OHLC vs resample_ohlcv(5m): equal)",
+   "rows": 50351,
+   "first": "2021-01-01 00:00:00+00:00",
+   "last": "2026-09-29 23:00:00+00:00",
+   "gaps": 1,
+   "missing_bars": 1,
+   "nonpositive_steps": 0,
+   "largest": [
+    {
+     "after": "2024-10-28 19:00:00+00:00",
+     "missing_bars": 1
+    }
+   ],
+   "zero_volume_bars": 0,
+   "flat_zero_volume_bars": 0,
+   "hl_bad": 0,
+   "nonpos_prices": 0,
+   "dropped_edges": [],
+   "partial_bins": {
+    "bins_with_fewer_5m": 9,
+    "bins_without_5m": 0
+   },
+   "raw": {
+    "months_used": 68,
+    "days_used": 29,
+    "months_missing": [],
+    "days_missing": [],
+    "rows_monthly": 49656,
+    "gapfill_days": [
+     "2021-03-02",
+     "2022-05-01",
+     "2022-05-28",
+     "2023-09-12",
+     "2023-11-10",
+     "2024-10-28",
+     "2025-01-29",
+     "2025-08-29"
+    ],
+    "gapfill_rows_added": 0,
+    "gapfill_rows_replaced": 0,
+    "rows_read": 50544,
+    "duplicate_ts": 192,
+    "duplicate_ts_conflicting": 0,
+    "rows_outside_range": 0,
+    "misaligned_ts": 0,
+    "no_trade_dropped": {
+     "bars": 1,
+     "not_flat": 0,
+     "runs": [
+      {
+       "first": "2024-10-28 20:00:00+00:00",
+       "last": "2024-10-28 20:00:00+00:00",
+       "bars": 1
+      }
+     ]
+    }
+   },
+   "native_vs_5m": {
+    "bars_native": 50351,
+    "bars_resampled": 50351,
+    "bars_common": 50351,
+    "only_native": 0,
+    "only_resampled": 0,
+    "only_native_first": [],
+    "only_resampled_first": [],
+    "ohlc": {
+     "open": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "high": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "low": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "close": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     }
+    },
+    "ohlc_mismatch_bins": 0,
+    "volume_vs_5m_sum": {
+     "bins": 4,
+     "bins_5m_sum_zero": 0,
+     "max_rel_where_5m_sum_positive": 0.24090339063479202
+    },
+    "ok": true
+   },
+   "coin_wall_s": 43.1
+  },
+  {
+   "coin": "BTCUSD",
+   "symbol": "BTCUSDT",
+   "tf": "4h",
+   "source": "native 4h klines (OHLC vs resample_ohlcv(5m): equal)",
+   "rows": 12588,
+   "first": "2021-01-01 00:00:00+00:00",
+   "last": "2026-09-29 20:00:00+00:00",
+   "gaps": 0,
+   "missing_bars": 0,
+   "nonpositive_steps": 0,
+   "largest": [],
+   "zero_volume_bars": 0,
+   "flat_zero_volume_bars": 0,
+   "hl_bad": 0,
+   "nonpos_prices": 0,
+   "dropped_edges": [],
+   "partial_bins": {
+    "bins_with_fewer_5m": 8,
+    "bins_without_5m": 0
+   },
+   "raw": {
+    "months_used": 68,
+    "days_used": 29,
+    "months_missing": [],
+    "days_missing": [],
+    "rows_monthly": 12414,
+    "gapfill_days": [
+     "2021-03-02",
+     "2022-05-01",
+     "2022-05-28",
+     "2023-09-12",
+     "2023-11-10",
+     "2024-10-28",
+     "2025-01-29",
+     "2025-08-29"
+    ],
+    "gapfill_rows_added": 0,
+    "gapfill_rows_replaced": 1,
+    "rows_read": 12636,
+    "duplicate_ts": 48,
+    "duplicate_ts_conflicting": 1,
+    "rows_outside_range": 0,
+    "misaligned_ts": 0,
+    "no_trade_dropped": {
+     "bars": 0,
+     "not_flat": 0,
+     "runs": []
+    }
+   },
+   "native_vs_5m": {
+    "bars_native": 12588,
+    "bars_resampled": 12588,
+    "bars_common": 12588,
+    "only_native": 0,
+    "only_resampled": 0,
+    "only_native_first": [],
+    "only_resampled_first": [],
+    "ohlc": {
+     "open": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "high": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "low": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "close": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     }
+    },
+    "ohlc_mismatch_bins": 0,
+    "volume_vs_5m_sum": {
+     "bins": 4,
+     "bins_5m_sum_zero": 0,
+     "max_rel_where_5m_sum_positive": 0.061693444036556085
+    },
+    "ok": true
+   },
+   "coin_wall_s": 43.1
+  },
+  {
+   "coin": "BTCUSD",
+   "symbol": "BTCUSDT",
+   "tf": "1d",
+   "source": "native 1d klines (OHLC vs resample_ohlcv(5m): equal)",
+   "rows": 2098,
+   "first": "2021-01-01 00:00:00+00:00",
+   "last": "2026-09-29 00:00:00+00:00",
+   "gaps": 0,
+   "missing_bars": 0,
+   "nonpositive_steps": 0,
+   "largest": [],
+   "zero_volume_bars": 0,
+   "flat_zero_volume_bars": 0,
+   "hl_bad": 0,
+   "nonpos_prices": 0,
+   "dropped_edges": [],
+   "partial_bins": {
+    "bins_with_fewer_5m": 7,
+    "bins_without_5m": 0
+   },
+   "raw": {
+    "months_used": 68,
+    "days_used": 29,
+    "months_missing": [],
+    "days_missing": [],
+    "rows_monthly": 2069,
+    "gapfill_days": [
+     "2021-03-02",
+     "2022-05-01",
+     "2022-05-28",
+     "2023-09-12",
+     "2023-11-10",
+     "2024-10-28",
+     "2025-01-29",
+     "2025-08-29"
+    ],
+    "gapfill_rows_added": 0,
+    "gapfill_rows_replaced": 0,
+    "rows_read": 2106,
+    "duplicate_ts": 8,
+    "duplicate_ts_conflicting": 0,
+    "rows_outside_range": 0,
+    "misaligned_ts": 0,
+    "no_trade_dropped": {
+     "bars": 0,
+     "not_flat": 0,
+     "runs": []
+    }
+   },
+   "native_vs_5m": {
+    "bars_native": 2098,
+    "bars_resampled": 2098,
+    "bars_common": 2098,
+    "only_native": 0,
+    "only_resampled": 0,
+    "only_native_first": [],
+    "only_resampled_first": [],
+    "ohlc": {
+     "open": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "high": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "low": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "close": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     }
+    },
+    "ohlc_mismatch_bins": 0,
+    "volume_vs_5m_sum": {
+     "bins": 5,
+     "bins_5m_sum_zero": 0,
+     "max_rel_where_5m_sum_positive": 0.030369018145927306
+    },
+    "ok": true
+   },
+   "coin_wall_s": 43.1
+  },
+  {
+   "coin": "ETHUSD",
+   "symbol": "ETHUSDT",
+   "tf": "5m",
+   "source": "native 5m klines",
+   "rows": 604177,
+   "first": "2021-01-01 00:00:00+00:00",
+   "last": "2026-09-29 23:55:00+00:00",
+   "gaps": 8,
+   "missing_bars": 47,
+   "nonpositive_steps": 0,
+   "largest": [
+    {
+     "after": "2024-10-28 19:55:00+00:00",
+     "missing_bars": 14
+    },
+    {
+     "after": "2021-03-02 01:00:00+00:00",
+     "missing_bars": 11
+    },
+    {
+     "after": "2022-05-28 16:35:00+00:00",
+     "missing_bars": 7
+    },
+    {
+     "after": "2022-05-01 22:25:00+00:00",
+     "missing_bars": 5
+    },
+    {
+     "after": "2025-08-29 06:15:00+00:00",
+     "missing_bars": 3
+    }
+   ],
+   "zero_volume_bars": 0,
+   "flat_zero_volume_bars": 0,
+   "hl_bad": 0,
+   "nonpos_prices": 0,
+   "dropped_edges": [],
+   "partial_bins": null,
+   "raw": {
+    "months_used": 68,
+    "days_used": 29,
+    "months_missing": [],
+    "days_missing": [],
+    "rows_monthly": 595872,
+    "gapfill_days": [
+     "2021-03-02",
+     "2022-05-01",
+     "2022-05-28",
+     "2023-09-12",
+     "2024-10-28",
+     "2025-01-29",
+     "2025-08-29"
+    ],
+    "gapfill_rows_added": 0,
+    "gapfill_rows_replaced": 0,
+    "rows_read": 606240,
+    "duplicate_ts": 2016,
+    "duplicate_ts_conflicting": 0,
+    "rows_outside_range": 0,
+    "misaligned_ts": 0,
+    "no_trade_dropped": {
+     "bars": 47,
+     "not_flat": 0,
+     "runs": [
+      {
+       "first": "2021-03-02 01:05:00+00:00",
+       "last": "2021-03-02 01:55:00+00:00",
+       "bars": 11
+      },
+      {
+       "first": "2022-05-01 22:30:00+00:00",
+       "last": "2022-05-01 22:50:00+00:00",
+       "bars": 5
+      },
+      {
+       "first": "2022-05-28 16:40:00+00:00",
+       "last": "2022-05-28 17:10:00+00:00",
+       "bars": 7
+      },
+      {
+       "first": "2023-09-12 08:35:00+00:00",
+       "last": "2023-09-12 08:45:00+00:00",
+       "bars": 3
+      },
+      {
+       "first": "2024-10-28 16:25:00+00:00",
+       "last": "2024-10-28 16:30:00+00:00",
+       "bars": 2
+      },
+      {
+       "first": "2024-10-28 20:00:00+00:00",
+       "last": "2024-10-28 21:05:00+00:00",
+       "bars": 14
+      },
+      {
+       "first": "2025-01-29 01:25:00+00:00",
+       "last": "2025-01-29 01:30:00+00:00",
+       "bars": 2
+      },
+      {
+       "first": "2025-08-29 06:20:00+00:00",
+       "last": "2025-08-29 06:30:00+00:00",
+       "bars": 3
+      }
+     ]
+    },
+    "gaps_without_gapfill": {
+     "gaps": 8,
+     "missing_bars": 47,
+     "nonpositive_steps": 0,
+     "largest": [
+      {
+       "after": "2024-10-28 19:55:00+00:00",
+       "missing_bars": 14
+      },
+      {
+       "after": "2021-03-02 01:00:00+00:00",
+       "missing_bars": 11
+      },
+      {
+       "after": "2022-05-28 16:35:00+00:00",
+       "missing_bars": 7
+      },
+      {
+       "after": "2022-05-01 22:25:00+00:00",
+       "missing_bars": 5
+      },
+      {
+       "after": "2025-08-29 06:15:00+00:00",
+       "missing_bars": 3
+      }
+     ],
+     "no_trade_bars": 47,
+     "no_trade_runs": [
+      {
+       "first": "2021-03-02 01:05:00+00:00",
+       "last": "2021-03-02 01:55:00+00:00",
+       "bars": 11
+      },
+      {
+       "first": "2022-05-01 22:30:00+00:00",
+       "last": "2022-05-01 22:50:00+00:00",
+       "bars": 5
+      },
+      {
+       "first": "2022-05-28 16:40:00+00:00",
+       "last": "2022-05-28 17:10:00+00:00",
+       "bars": 7
+      },
+      {
+       "first": "2023-09-12 08:35:00+00:00",
+       "last": "2023-09-12 08:45:00+00:00",
+       "bars": 3
+      },
+      {
+       "first": "2024-10-28 16:25:00+00:00",
+       "last": "2024-10-28 16:30:00+00:00",
+       "bars": 2
+      },
+      {
+       "first": "2024-10-28 20:00:00+00:00",
+       "last": "2024-10-28 21:05:00+00:00",
+       "bars": 14
+      },
+      {
+       "first": "2025-01-29 01:25:00+00:00",
+       "last": "2025-01-29 01:30:00+00:00",
+       "bars": 2
+      },
+      {
+       "first": "2025-08-29 06:20:00+00:00",
+       "last": "2025-08-29 06:30:00+00:00",
+       "bars": 3
+      }
+     ]
+    }
+   },
+   "native_vs_5m": null,
+   "coin_wall_s": 45.3
+  },
+  {
+   "coin": "ETHUSD",
+   "symbol": "ETHUSDT",
+   "tf": "15m",
+   "source": "native 15m klines (OHLC vs resample_ohlcv(5m): DIFFER)",
+   "rows": 201398,
+   "first": "2021-01-01 00:00:00+00:00",
+   "last": "2026-09-29 23:45:00+00:00",
+   "gaps": 4,
+   "missing_bars": 10,
+   "nonpositive_steps": 0,
+   "largest": [
+    {
+     "after": "2024-10-28 19:45:00+00:00",
+     "missing_bars": 4
+    },
+    {
+     "after": "2021-03-02 01:00:00+00:00",
+     "missing_bars": 3
+    },
+    {
+     "after": "2022-05-28 16:30:00+00:00",
+     "missing_bars": 2
+    },
+    {
+     "after": "2022-05-01 22:15:00+00:00",
+     "missing_bars": 1
+    }
+   ],
+   "zero_volume_bars": 0,
+   "flat_zero_volume_bars": 0,
+   "hl_bad": 0,
+   "nonpos_prices": 0,
+   "dropped_edges": [],
+   "partial_bins": {
+    "bins_with_fewer_5m": 12,
+    "bins_without_5m": 0
+   },
+   "raw": {
+    "months_used": 68,
+    "days_used": 29,
+    "months_missing": [],
+    "days_missing": [],
+    "rows_monthly": 198624,
+    "gapfill_days": [
+     "2021-03-02",
+     "2022-05-01",
+     "2022-05-28",
+     "2023-09-12",
+     "2024-10-28",
+     "2025-01-29",
+     "2025-08-29"
+    ],
+    "gapfill_rows_added": 0,
+    "gapfill_rows_replaced": 0,
+    "rows_read": 202080,
+    "duplicate_ts": 672,
+    "duplicate_ts_conflicting": 0,
+    "rows_outside_range": 0,
+    "misaligned_ts": 0,
+    "no_trade_dropped": {
+     "bars": 10,
+     "not_flat": 0,
+     "runs": [
+      {
+       "first": "2021-03-02 01:15:00+00:00",
+       "last": "2021-03-02 01:45:00+00:00",
+       "bars": 3
+      },
+      {
+       "first": "2022-05-01 22:30:00+00:00",
+       "last": "2022-05-01 22:30:00+00:00",
+       "bars": 1
+      },
+      {
+       "first": "2022-05-28 16:45:00+00:00",
+       "last": "2022-05-28 17:00:00+00:00",
+       "bars": 2
+      },
+      {
+       "first": "2024-10-28 20:00:00+00:00",
+       "last": "2024-10-28 20:45:00+00:00",
+       "bars": 4
+      }
+     ]
+    }
+   },
+   "native_vs_5m": {
+    "bars_native": 201398,
+    "bars_resampled": 201398,
+    "bars_common": 201398,
+    "only_native": 0,
+    "only_resampled": 0,
+    "only_native_first": [],
+    "only_resampled_first": [],
+    "ohlc": {
+     "open": {
+      "mismatches": 1,
+      "max_rel": 0.00017402345449446624,
+      "first": [
+       {
+        "ts": "2025-01-29 01:30:00",
+        "native": 3103.57,
+        "resampled": 3103.03
+       }
+      ]
+     },
+     "high": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "low": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "close": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     }
+    },
+    "ohlc_mismatch_bins": 1,
+    "differing_bins": 1,
+    "differing_bins_with_no_trade_5m": 1,
+    "differing_bins_list": [
+     "2025-01-29 01:30:00"
+    ],
+    "volume_vs_5m_sum": {
+     "bins": 5,
+     "bins_5m_sum_zero": 0,
+     "max_rel_where_5m_sum_positive": 0.3372411619406056
+    },
+    "ok": false
+   },
+   "coin_wall_s": 45.3
+  },
+  {
+   "coin": "ETHUSD",
+   "symbol": "ETHUSDT",
+   "tf": "30m",
+   "source": "resample_ohlcv(5m, 30m)",
+   "rows": 100701,
+   "first": "2021-01-01 00:00:00+00:00",
+   "last": "2026-09-29 23:30:00+00:00",
+   "gaps": 2,
+   "missing_bars": 3,
+   "nonpositive_steps": 0,
+   "largest": [
+    {
+     "after": "2024-10-28 19:30:00+00:00",
+     "missing_bars": 2
+    },
+    {
+     "after": "2021-03-02 01:00:00+00:00",
+     "missing_bars": 1
+    }
+   ],
+   "zero_volume_bars": 0,
+   "flat_zero_volume_bars": 0,
+   "hl_bad": 0,
+   "nonpos_prices": 0,
+   "dropped_edges": [],
+   "partial_bins": {
+    "bins_with_fewer_5m": 12,
+    "bins_without_5m": 0
+   },
+   "raw": null,
+   "native_vs_5m": null,
+   "coin_wall_s": 45.3
+  },
+  {
+   "coin": "ETHUSD",
+   "symbol": "ETHUSDT",
+   "tf": "1h",
+   "source": "native 1h klines (OHLC vs resample_ohlcv(5m): equal)",
+   "rows": 50351,
+   "first": "2021-01-01 00:00:00+00:00",
+   "last": "2026-09-29 23:00:00+00:00",
+   "gaps": 1,
+   "missing_bars": 1,
+   "nonpositive_steps": 0,
+   "largest": [
+    {
+     "after": "2024-10-28 19:00:00+00:00",
+     "missing_bars": 1
+    }
+   ],
+   "zero_volume_bars": 0,
+   "flat_zero_volume_bars": 0,
+   "hl_bad": 0,
+   "nonpos_prices": 0,
+   "dropped_edges": [],
+   "partial_bins": {
+    "bins_with_fewer_5m": 9,
+    "bins_without_5m": 0
+   },
+   "raw": {
+    "months_used": 68,
+    "days_used": 29,
+    "months_missing": [],
+    "days_missing": [],
+    "rows_monthly": 49656,
+    "gapfill_days": [
+     "2021-03-02",
+     "2022-05-01",
+     "2022-05-28",
+     "2023-09-12",
+     "2024-10-28",
+     "2025-01-29",
+     "2025-08-29"
+    ],
+    "gapfill_rows_added": 0,
+    "gapfill_rows_replaced": 0,
+    "rows_read": 50520,
+    "duplicate_ts": 168,
+    "duplicate_ts_conflicting": 0,
+    "rows_outside_range": 0,
+    "misaligned_ts": 0,
+    "no_trade_dropped": {
+     "bars": 1,
+     "not_flat": 0,
+     "runs": [
+      {
+       "first": "2024-10-28 20:00:00+00:00",
+       "last": "2024-10-28 20:00:00+00:00",
+       "bars": 1
+      }
+     ]
+    }
+   },
+   "native_vs_5m": {
+    "bars_native": 50351,
+    "bars_resampled": 50351,
+    "bars_common": 50351,
+    "only_native": 0,
+    "only_resampled": 0,
+    "only_native_first": [],
+    "only_resampled_first": [],
+    "ohlc": {
+     "open": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "high": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "low": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "close": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     }
+    },
+    "ohlc_mismatch_bins": 0,
+    "volume_vs_5m_sum": {
+     "bins": 7,
+     "bins_5m_sum_zero": 0,
+     "max_rel_where_5m_sum_positive": 0.2515873381143719
+    },
+    "ok": true
+   },
+   "coin_wall_s": 45.3
+  },
+  {
+   "coin": "ETHUSD",
+   "symbol": "ETHUSDT",
+   "tf": "4h",
+   "source": "native 4h klines (OHLC vs resample_ohlcv(5m): equal)",
+   "rows": 12588,
+   "first": "2021-01-01 00:00:00+00:00",
+   "last": "2026-09-29 20:00:00+00:00",
+   "gaps": 0,
+   "missing_bars": 0,
+   "nonpositive_steps": 0,
+   "largest": [],
+   "zero_volume_bars": 0,
+   "flat_zero_volume_bars": 0,
+   "hl_bad": 0,
+   "nonpos_prices": 0,
+   "dropped_edges": [],
+   "partial_bins": {
+    "bins_with_fewer_5m": 8,
+    "bins_without_5m": 0
+   },
+   "raw": {
+    "months_used": 68,
+    "days_used": 29,
+    "months_missing": [],
+    "days_missing": [],
+    "rows_monthly": 12414,
+    "gapfill_days": [
+     "2021-03-02",
+     "2022-05-01",
+     "2022-05-28",
+     "2023-09-12",
+     "2024-10-28",
+     "2025-01-29",
+     "2025-08-29"
+    ],
+    "gapfill_rows_added": 0,
+    "gapfill_rows_replaced": 0,
+    "rows_read": 12630,
+    "duplicate_ts": 42,
+    "duplicate_ts_conflicting": 0,
+    "rows_outside_range": 0,
+    "misaligned_ts": 0,
+    "no_trade_dropped": {
+     "bars": 0,
+     "not_flat": 0,
+     "runs": []
+    }
+   },
+   "native_vs_5m": {
+    "bars_native": 12588,
+    "bars_resampled": 12588,
+    "bars_common": 12588,
+    "only_native": 0,
+    "only_resampled": 0,
+    "only_native_first": [],
+    "only_resampled_first": [],
+    "ohlc": {
+     "open": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "high": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "low": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "close": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     }
+    },
+    "ohlc_mismatch_bins": 0,
+    "volume_vs_5m_sum": {
+     "bins": 7,
+     "bins_5m_sum_zero": 0,
+     "max_rel_where_5m_sum_positive": 0.04829714790282573
+    },
+    "ok": true
+   },
+   "coin_wall_s": 45.3
+  },
+  {
+   "coin": "ETHUSD",
+   "symbol": "ETHUSDT",
+   "tf": "1d",
+   "source": "native 1d klines (OHLC vs resample_ohlcv(5m): equal)",
+   "rows": 2098,
+   "first": "2021-01-01 00:00:00+00:00",
+   "last": "2026-09-29 00:00:00+00:00",
+   "gaps": 0,
+   "missing_bars": 0,
+   "nonpositive_steps": 0,
+   "largest": [],
+   "zero_volume_bars": 0,
+   "flat_zero_volume_bars": 0,
+   "hl_bad": 0,
+   "nonpos_prices": 0,
+   "dropped_edges": [],
+   "partial_bins": {
+    "bins_with_fewer_5m": 7,
+    "bins_without_5m": 0
+   },
+   "raw": {
+    "months_used": 68,
+    "days_used": 29,
+    "months_missing": [],
+    "days_missing": [],
+    "rows_monthly": 2069,
+    "gapfill_days": [
+     "2021-03-02",
+     "2022-05-01",
+     "2022-05-28",
+     "2023-09-12",
+     "2024-10-28",
+     "2025-01-29",
+     "2025-08-29"
+    ],
+    "gapfill_rows_added": 0,
+    "gapfill_rows_replaced": 0,
+    "rows_read": 2105,
+    "duplicate_ts": 7,
+    "duplicate_ts_conflicting": 0,
+    "rows_outside_range": 0,
+    "misaligned_ts": 0,
+    "no_trade_dropped": {
+     "bars": 0,
+     "not_flat": 0,
+     "runs": []
+    }
+   },
+   "native_vs_5m": {
+    "bars_native": 2098,
+    "bars_resampled": 2098,
+    "bars_common": 2098,
+    "only_native": 0,
+    "only_resampled": 0,
+    "only_native_first": [],
+    "only_resampled_first": [],
+    "ohlc": {
+     "open": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "high": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "low": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "close": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     }
+    },
+    "ohlc_mismatch_bins": 0,
+    "volume_vs_5m_sum": {
+     "bins": 8,
+     "bins_5m_sum_zero": 0,
+     "max_rel_where_5m_sum_positive": 0.0311191113468194
+    },
+    "ok": true
+   },
+   "coin_wall_s": 45.3
+  },
+  {
+   "coin": "SOLUSD",
+   "symbol": "SOLUSDT",
+   "tf": "5m",
+   "source": "native 5m klines",
+   "rows": 604177,
+   "first": "2021-01-01 00:00:00+00:00",
+   "last": "2026-09-29 23:55:00+00:00",
+   "gaps": 8,
+   "missing_bars": 47,
+   "nonpositive_steps": 0,
+   "largest": [
+    {
+     "after": "2024-10-28 19:55:00+00:00",
+     "missing_bars": 14
+    },
+    {
+     "after": "2021-03-02 01:00:00+00:00",
+     "missing_bars": 11
+    },
+    {
+     "after": "2022-05-28 16:35:00+00:00",
+     "missing_bars": 7
+    },
+    {
+     "after": "2022-05-01 22:25:00+00:00",
+     "missing_bars": 5
+    },
+    {
+     "after": "2025-08-29 06:15:00+00:00",
+     "missing_bars": 3
+    }
+   ],
+   "zero_volume_bars": 0,
+   "flat_zero_volume_bars": 0,
+   "hl_bad": 0,
+   "nonpos_prices": 0,
+   "dropped_edges": [],
+   "partial_bins": null,
+   "raw": {
+    "months_used": 68,
+    "days_used": 29,
+    "months_missing": [],
+    "days_missing": [],
+    "rows_monthly": 594432,
+    "gapfill_days": [
+     "2021-03-02",
+     "2022-02-26",
+     "2022-02-27",
+     "2022-02-28",
+     "2022-04-01",
+     "2022-04-02",
+     "2022-05-01",
+     "2022-05-28",
+     "2023-09-12",
+     "2024-10-28",
+     "2025-01-29",
+     "2025-08-29"
+    ],
+    "gapfill_rows_added": 1440,
+    "gapfill_rows_replaced": 0,
+    "rows_read": 606240,
+    "duplicate_ts": 2016,
+    "duplicate_ts_conflicting": 0,
+    "rows_outside_range": 0,
+    "misaligned_ts": 0,
+    "no_trade_dropped": {
+     "bars": 47,
+     "not_flat": 0,
+     "runs": [
+      {
+       "first": "2021-03-02 01:05:00+00:00",
+       "last": "2021-03-02 01:55:00+00:00",
+       "bars": 11
+      },
+      {
+       "first": "2022-05-01 22:30:00+00:00",
+       "last": "2022-05-01 22:50:00+00:00",
+       "bars": 5
+      },
+      {
+       "first": "2022-05-28 16:40:00+00:00",
+       "last": "2022-05-28 17:10:00+00:00",
+       "bars": 7
+      },
+      {
+       "first": "2023-09-12 08:35:00+00:00",
+       "last": "2023-09-12 08:45:00+00:00",
+       "bars": 3
+      },
+      {
+       "first": "2024-10-28 16:25:00+00:00",
+       "last": "2024-10-28 16:30:00+00:00",
+       "bars": 2
+      },
+      {
+       "first": "2024-10-28 20:00:00+00:00",
+       "last": "2024-10-28 21:05:00+00:00",
+       "bars": 14
+      },
+      {
+       "first": "2025-01-29 01:25:00+00:00",
+       "last": "2025-01-29 01:30:00+00:00",
+       "bars": 2
+      },
+      {
+       "first": "2025-08-29 06:20:00+00:00",
+       "last": "2025-08-29 06:30:00+00:00",
+       "bars": 3
+      }
+     ]
+    },
+    "gaps_without_gapfill": {
+     "gaps": 10,
+     "missing_bars": 1487,
+     "nonpositive_steps": 0,
+     "largest": [
+      {
+       "after": "2022-02-25 23:55:00+00:00",
+       "missing_bars": 864
+      },
+      {
+       "after": "2022-03-31 23:55:00+00:00",
+       "missing_bars": 576
+      },
+      {
+       "after": "2024-10-28 19:55:00+00:00",
+       "missing_bars": 14
+      },
+      {
+       "after": "2021-03-02 01:00:00+00:00",
+       "missing_bars": 11
+      },
+      {
+       "after": "2022-05-28 16:35:00+00:00",
+       "missing_bars": 7
+      }
+     ],
+     "no_trade_bars": 47,
+     "no_trade_runs": [
+      {
+       "first": "2021-03-02 01:05:00+00:00",
+       "last": "2021-03-02 01:55:00+00:00",
+       "bars": 11
+      },
+      {
+       "first": "2022-05-01 22:30:00+00:00",
+       "last": "2022-05-01 22:50:00+00:00",
+       "bars": 5
+      },
+      {
+       "first": "2022-05-28 16:40:00+00:00",
+       "last": "2022-05-28 17:10:00+00:00",
+       "bars": 7
+      },
+      {
+       "first": "2023-09-12 08:35:00+00:00",
+       "last": "2023-09-12 08:45:00+00:00",
+       "bars": 3
+      },
+      {
+       "first": "2024-10-28 16:25:00+00:00",
+       "last": "2024-10-28 16:30:00+00:00",
+       "bars": 2
+      },
+      {
+       "first": "2024-10-28 20:00:00+00:00",
+       "last": "2024-10-28 21:05:00+00:00",
+       "bars": 14
+      },
+      {
+       "first": "2025-01-29 01:25:00+00:00",
+       "last": "2025-01-29 01:30:00+00:00",
+       "bars": 2
+      },
+      {
+       "first": "2025-08-29 06:20:00+00:00",
+       "last": "2025-08-29 06:30:00+00:00",
+       "bars": 3
+      }
+     ]
+    }
+   },
+   "native_vs_5m": null,
+   "coin_wall_s": 43.7
+  },
+  {
+   "coin": "SOLUSD",
+   "symbol": "SOLUSDT",
+   "tf": "15m",
+   "source": "native 15m klines (OHLC vs resample_ohlcv(5m): DIFFER)",
+   "rows": 201398,
+   "first": "2021-01-01 00:00:00+00:00",
+   "last": "2026-09-29 23:45:00+00:00",
+   "gaps": 4,
+   "missing_bars": 10,
+   "nonpositive_steps": 0,
+   "largest": [
+    {
+     "after": "2024-10-28 19:45:00+00:00",
+     "missing_bars": 4
+    },
+    {
+     "after": "2021-03-02 01:00:00+00:00",
+     "missing_bars": 3
+    },
+    {
+     "after": "2022-05-28 16:30:00+00:00",
+     "missing_bars": 2
+    },
+    {
+     "after": "2022-05-01 22:15:00+00:00",
+     "missing_bars": 1
+    }
+   ],
+   "zero_volume_bars": 0,
+   "flat_zero_volume_bars": 0,
+   "hl_bad": 0,
+   "nonpos_prices": 0,
+   "dropped_edges": [],
+   "partial_bins": {
+    "bins_with_fewer_5m": 12,
+    "bins_without_5m": 0
+   },
+   "raw": {
+    "months_used": 68,
+    "days_used": 29,
+    "months_missing": [],
+    "days_missing": [],
+    "rows_monthly": 198144,
+    "gapfill_days": [
+     "2021-03-02",
+     "2022-02-26",
+     "2022-02-27",
+     "2022-02-28",
+     "2022-04-01",
+     "2022-04-02",
+     "2022-05-01",
+     "2022-05-28",
+     "2023-09-12",
+     "2024-10-28",
+     "2025-01-29",
+     "2025-08-29"
+    ],
+    "gapfill_rows_added": 480,
+    "gapfill_rows_replaced": 0,
+    "rows_read": 202080,
+    "duplicate_ts": 672,
+    "duplicate_ts_conflicting": 0,
+    "rows_outside_range": 0,
+    "misaligned_ts": 0,
+    "no_trade_dropped": {
+     "bars": 10,
+     "not_flat": 0,
+     "runs": [
+      {
+       "first": "2021-03-02 01:15:00+00:00",
+       "last": "2021-03-02 01:45:00+00:00",
+       "bars": 3
+      },
+      {
+       "first": "2022-05-01 22:30:00+00:00",
+       "last": "2022-05-01 22:30:00+00:00",
+       "bars": 1
+      },
+      {
+       "first": "2022-05-28 16:45:00+00:00",
+       "last": "2022-05-28 17:00:00+00:00",
+       "bars": 2
+      },
+      {
+       "first": "2024-10-28 20:00:00+00:00",
+       "last": "2024-10-28 20:45:00+00:00",
+       "bars": 4
+      }
+     ]
+    }
+   },
+   "native_vs_5m": {
+    "bars_native": 201398,
+    "bars_resampled": 201398,
+    "bars_common": 201398,
+    "only_native": 0,
+    "only_resampled": 0,
+    "only_native_first": [],
+    "only_resampled_first": [],
+    "ohlc": {
+     "open": {
+      "mismatches": 1,
+      "max_rel": 0.002362721505141072,
+      "first": [
+       {
+        "ts": "2025-01-29 01:30:00",
+        "native": 229.09,
+        "resampled": 228.55
+       }
+      ]
+     },
+     "high": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "low": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "close": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     }
+    },
+    "ohlc_mismatch_bins": 1,
+    "differing_bins": 1,
+    "differing_bins_with_no_trade_5m": 1,
+    "differing_bins_list": [
+     "2025-01-29 01:30:00"
+    ],
+    "volume_vs_5m_sum": {
+     "bins": 4,
+     "bins_5m_sum_zero": 0,
+     "max_rel_where_5m_sum_positive": 0.2849508633612792
+    },
+    "ok": false
+   },
+   "coin_wall_s": 43.7
+  },
+  {
+   "coin": "SOLUSD",
+   "symbol": "SOLUSDT",
+   "tf": "30m",
+   "source": "resample_ohlcv(5m, 30m)",
+   "rows": 100701,
+   "first": "2021-01-01 00:00:00+00:00",
+   "last": "2026-09-29 23:30:00+00:00",
+   "gaps": 2,
+   "missing_bars": 3,
+   "nonpositive_steps": 0,
+   "largest": [
+    {
+     "after": "2024-10-28 19:30:00+00:00",
+     "missing_bars": 2
+    },
+    {
+     "after": "2021-03-02 01:00:00+00:00",
+     "missing_bars": 1
+    }
+   ],
+   "zero_volume_bars": 0,
+   "flat_zero_volume_bars": 0,
+   "hl_bad": 0,
+   "nonpos_prices": 0,
+   "dropped_edges": [],
+   "partial_bins": {
+    "bins_with_fewer_5m": 12,
+    "bins_without_5m": 0
+   },
+   "raw": null,
+   "native_vs_5m": null,
+   "coin_wall_s": 43.7
+  },
+  {
+   "coin": "SOLUSD",
+   "symbol": "SOLUSDT",
+   "tf": "1h",
+   "source": "native 1h klines (OHLC vs resample_ohlcv(5m): equal)",
+   "rows": 50351,
+   "first": "2021-01-01 00:00:00+00:00",
+   "last": "2026-09-29 23:00:00+00:00",
+   "gaps": 1,
+   "missing_bars": 1,
+   "nonpositive_steps": 0,
+   "largest": [
+    {
+     "after": "2024-10-28 19:00:00+00:00",
+     "missing_bars": 1
+    }
+   ],
+   "zero_volume_bars": 0,
+   "flat_zero_volume_bars": 0,
+   "hl_bad": 0,
+   "nonpos_prices": 0,
+   "dropped_edges": [],
+   "partial_bins": {
+    "bins_with_fewer_5m": 9,
+    "bins_without_5m": 0
+   },
+   "raw": {
+    "months_used": 68,
+    "days_used": 29,
+    "months_missing": [],
+    "days_missing": [],
+    "rows_monthly": 49536,
+    "gapfill_days": [
+     "2021-03-02",
+     "2022-02-26",
+     "2022-02-27",
+     "2022-02-28",
+     "2022-04-01",
+     "2022-04-02",
+     "2022-05-01",
+     "2022-05-28",
+     "2023-09-12",
+     "2024-10-28",
+     "2025-01-29",
+     "2025-08-29"
+    ],
+    "gapfill_rows_added": 120,
+    "gapfill_rows_replaced": 0,
+    "rows_read": 50520,
+    "duplicate_ts": 168,
+    "duplicate_ts_conflicting": 0,
+    "rows_outside_range": 0,
+    "misaligned_ts": 0,
+    "no_trade_dropped": {
+     "bars": 1,
+     "not_flat": 0,
+     "runs": [
+      {
+       "first": "2024-10-28 20:00:00+00:00",
+       "last": "2024-10-28 20:00:00+00:00",
+       "bars": 1
+      }
+     ]
+    }
+   },
+   "native_vs_5m": {
+    "bars_native": 50351,
+    "bars_resampled": 50351,
+    "bars_common": 50351,
+    "only_native": 0,
+    "only_resampled": 0,
+    "only_native_first": [],
+    "only_resampled_first": [],
+    "ohlc": {
+     "open": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "high": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "low": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "close": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     }
+    },
+    "ohlc_mismatch_bins": 0,
+    "volume_vs_5m_sum": {
+     "bins": 5,
+     "bins_5m_sum_zero": 0,
+     "max_rel_where_5m_sum_positive": 0.16843210168905728
+    },
+    "ok": true
+   },
+   "coin_wall_s": 43.7
+  },
+  {
+   "coin": "SOLUSD",
+   "symbol": "SOLUSDT",
+   "tf": "4h",
+   "source": "native 4h klines (OHLC vs resample_ohlcv(5m): equal)",
+   "rows": 12588,
+   "first": "2021-01-01 00:00:00+00:00",
+   "last": "2026-09-29 20:00:00+00:00",
+   "gaps": 0,
+   "missing_bars": 0,
+   "nonpositive_steps": 0,
+   "largest": [],
+   "zero_volume_bars": 0,
+   "flat_zero_volume_bars": 0,
+   "hl_bad": 0,
+   "nonpos_prices": 0,
+   "dropped_edges": [],
+   "partial_bins": {
+    "bins_with_fewer_5m": 8,
+    "bins_without_5m": 0
+   },
+   "raw": {
+    "months_used": 68,
+    "days_used": 29,
+    "months_missing": [],
+    "days_missing": [],
+    "rows_monthly": 12384,
+    "gapfill_days": [
+     "2021-03-02",
+     "2022-02-26",
+     "2022-02-27",
+     "2022-02-28",
+     "2022-04-01",
+     "2022-04-02",
+     "2022-05-01",
+     "2022-05-28",
+     "2023-09-12",
+     "2024-10-28",
+     "2025-01-29",
+     "2025-08-29"
+    ],
+    "gapfill_rows_added": 30,
+    "gapfill_rows_replaced": 0,
+    "rows_read": 12630,
+    "duplicate_ts": 42,
+    "duplicate_ts_conflicting": 0,
+    "rows_outside_range": 0,
+    "misaligned_ts": 0,
+    "no_trade_dropped": {
+     "bars": 0,
+     "not_flat": 0,
+     "runs": []
+    }
+   },
+   "native_vs_5m": {
+    "bars_native": 12588,
+    "bars_resampled": 12588,
+    "bars_common": 12588,
+    "only_native": 0,
+    "only_resampled": 0,
+    "only_native_first": [],
+    "only_resampled_first": [],
+    "ohlc": {
+     "open": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "high": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "low": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "close": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     }
+    },
+    "ohlc_mismatch_bins": 0,
+    "volume_vs_5m_sum": {
+     "bins": 5,
+     "bins_5m_sum_zero": 0,
+     "max_rel_where_5m_sum_positive": 0.03797595564101714
+    },
+    "ok": true
+   },
+   "coin_wall_s": 43.7
+  },
+  {
+   "coin": "SOLUSD",
+   "symbol": "SOLUSDT",
+   "tf": "1d",
+   "source": "native 1d klines (OHLC vs resample_ohlcv(5m): equal)",
+   "rows": 2098,
+   "first": "2021-01-01 00:00:00+00:00",
+   "last": "2026-09-29 00:00:00+00:00",
+   "gaps": 0,
+   "missing_bars": 0,
+   "nonpositive_steps": 0,
+   "largest": [],
+   "zero_volume_bars": 0,
+   "flat_zero_volume_bars": 0,
+   "hl_bad": 0,
+   "nonpos_prices": 0,
+   "dropped_edges": [],
+   "partial_bins": {
+    "bins_with_fewer_5m": 7,
+    "bins_without_5m": 0
+   },
+   "raw": {
+    "months_used": 68,
+    "days_used": 29,
+    "months_missing": [],
+    "days_missing": [],
+    "rows_monthly": 2064,
+    "gapfill_days": [
+     "2021-03-02",
+     "2022-02-26",
+     "2022-02-27",
+     "2022-02-28",
+     "2022-04-01",
+     "2022-04-02",
+     "2022-05-01",
+     "2022-05-28",
+     "2023-09-12",
+     "2024-10-28",
+     "2025-01-29",
+     "2025-08-29"
+    ],
+    "gapfill_rows_added": 5,
+    "gapfill_rows_replaced": 0,
+    "rows_read": 2105,
+    "duplicate_ts": 7,
+    "duplicate_ts_conflicting": 0,
+    "rows_outside_range": 0,
+    "misaligned_ts": 0,
+    "no_trade_dropped": {
+     "bars": 0,
+     "not_flat": 0,
+     "runs": []
+    }
+   },
+   "native_vs_5m": {
+    "bars_native": 2098,
+    "bars_resampled": 2098,
+    "bars_common": 2098,
+    "only_native": 0,
+    "only_resampled": 0,
+    "only_native_first": [],
+    "only_resampled_first": [],
+    "ohlc": {
+     "open": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "high": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "low": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "close": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     }
+    },
+    "ohlc_mismatch_bins": 0,
+    "volume_vs_5m_sum": {
+     "bins": 6,
+     "bins_5m_sum_zero": 0,
+     "max_rel_where_5m_sum_positive": 0.028074203004345197
+    },
+    "ok": true
+   },
+   "coin_wall_s": 43.7
+  },
+  {
+   "coin": "DOGEUSD",
+   "symbol": "DOGEUSDT",
+   "tf": "5m",
+   "source": "native 5m klines",
+   "rows": 604177,
+   "first": "2021-01-01 00:00:00+00:00",
+   "last": "2026-09-29 23:55:00+00:00",
+   "gaps": 8,
+   "missing_bars": 47,
+   "nonpositive_steps": 0,
+   "largest": [
+    {
+     "after": "2024-10-28 19:55:00+00:00",
+     "missing_bars": 14
+    },
+    {
+     "after": "2021-03-02 01:00:00+00:00",
+     "missing_bars": 11
+    },
+    {
+     "after": "2022-05-28 16:35:00+00:00",
+     "missing_bars": 7
+    },
+    {
+     "after": "2022-05-01 22:25:00+00:00",
+     "missing_bars": 5
+    },
+    {
+     "after": "2025-08-29 06:15:00+00:00",
+     "missing_bars": 3
+    }
+   ],
+   "zero_volume_bars": 0,
+   "flat_zero_volume_bars": 0,
+   "hl_bad": 0,
+   "nonpos_prices": 0,
+   "dropped_edges": [],
+   "partial_bins": null,
+   "raw": {
+    "months_used": 68,
+    "days_used": 29,
+    "months_missing": [],
+    "days_missing": [],
+    "rows_monthly": 595872,
+    "gapfill_days": [
+     "2021-03-02",
+     "2022-05-01",
+     "2022-05-28",
+     "2023-09-12",
+     "2024-10-28",
+     "2025-01-29",
+     "2025-08-29"
+    ],
+    "gapfill_rows_added": 0,
+    "gapfill_rows_replaced": 0,
+    "rows_read": 606240,
+    "duplicate_ts": 2016,
+    "duplicate_ts_conflicting": 0,
+    "rows_outside_range": 0,
+    "misaligned_ts": 0,
+    "no_trade_dropped": {
+     "bars": 47,
+     "not_flat": 0,
+     "runs": [
+      {
+       "first": "2021-03-02 01:05:00+00:00",
+       "last": "2021-03-02 01:55:00+00:00",
+       "bars": 11
+      },
+      {
+       "first": "2022-05-01 22:30:00+00:00",
+       "last": "2022-05-01 22:50:00+00:00",
+       "bars": 5
+      },
+      {
+       "first": "2022-05-28 16:40:00+00:00",
+       "last": "2022-05-28 17:10:00+00:00",
+       "bars": 7
+      },
+      {
+       "first": "2023-09-12 08:35:00+00:00",
+       "last": "2023-09-12 08:45:00+00:00",
+       "bars": 3
+      },
+      {
+       "first": "2024-10-28 16:25:00+00:00",
+       "last": "2024-10-28 16:30:00+00:00",
+       "bars": 2
+      },
+      {
+       "first": "2024-10-28 20:00:00+00:00",
+       "last": "2024-10-28 21:05:00+00:00",
+       "bars": 14
+      },
+      {
+       "first": "2025-01-29 01:25:00+00:00",
+       "last": "2025-01-29 01:30:00+00:00",
+       "bars": 2
+      },
+      {
+       "first": "2025-08-29 06:20:00+00:00",
+       "last": "2025-08-29 06:30:00+00:00",
+       "bars": 3
+      }
+     ]
+    },
+    "gaps_without_gapfill": {
+     "gaps": 8,
+     "missing_bars": 47,
+     "nonpositive_steps": 0,
+     "largest": [
+      {
+       "after": "2024-10-28 19:55:00+00:00",
+       "missing_bars": 14
+      },
+      {
+       "after": "2021-03-02 01:00:00+00:00",
+       "missing_bars": 11
+      },
+      {
+       "after": "2022-05-28 16:35:00+00:00",
+       "missing_bars": 7
+      },
+      {
+       "after": "2022-05-01 22:25:00+00:00",
+       "missing_bars": 5
+      },
+      {
+       "after": "2025-08-29 06:15:00+00:00",
+       "missing_bars": 3
+      }
+     ],
+     "no_trade_bars": 47,
+     "no_trade_runs": [
+      {
+       "first": "2021-03-02 01:05:00+00:00",
+       "last": "2021-03-02 01:55:00+00:00",
+       "bars": 11
+      },
+      {
+       "first": "2022-05-01 22:30:00+00:00",
+       "last": "2022-05-01 22:50:00+00:00",
+       "bars": 5
+      },
+      {
+       "first": "2022-05-28 16:40:00+00:00",
+       "last": "2022-05-28 17:10:00+00:00",
+       "bars": 7
+      },
+      {
+       "first": "2023-09-12 08:35:00+00:00",
+       "last": "2023-09-12 08:45:00+00:00",
+       "bars": 3
+      },
+      {
+       "first": "2024-10-28 16:25:00+00:00",
+       "last": "2024-10-28 16:30:00+00:00",
+       "bars": 2
+      },
+      {
+       "first": "2024-10-28 20:00:00+00:00",
+       "last": "2024-10-28 21:05:00+00:00",
+       "bars": 14
+      },
+      {
+       "first": "2025-01-29 01:25:00+00:00",
+       "last": "2025-01-29 01:30:00+00:00",
+       "bars": 2
+      },
+      {
+       "first": "2025-08-29 06:20:00+00:00",
+       "last": "2025-08-29 06:30:00+00:00",
+       "bars": 3
+      }
+     ]
+    }
+   },
+   "native_vs_5m": null,
+   "coin_wall_s": 31.1
+  },
+  {
+   "coin": "DOGEUSD",
+   "symbol": "DOGEUSDT",
+   "tf": "15m",
+   "source": "native 15m klines (OHLC vs resample_ohlcv(5m): DIFFER)",
+   "rows": 201398,
+   "first": "2021-01-01 00:00:00+00:00",
+   "last": "2026-09-29 23:45:00+00:00",
+   "gaps": 4,
+   "missing_bars": 10,
+   "nonpositive_steps": 0,
+   "largest": [
+    {
+     "after": "2024-10-28 19:45:00+00:00",
+     "missing_bars": 4
+    },
+    {
+     "after": "2021-03-02 01:00:00+00:00",
+     "missing_bars": 3
+    },
+    {
+     "after": "2022-05-28 16:30:00+00:00",
+     "missing_bars": 2
+    },
+    {
+     "after": "2022-05-01 22:15:00+00:00",
+     "missing_bars": 1
+    }
+   ],
+   "zero_volume_bars": 0,
+   "flat_zero_volume_bars": 0,
+   "hl_bad": 0,
+   "nonpos_prices": 0,
+   "dropped_edges": [],
+   "partial_bins": {
+    "bins_with_fewer_5m": 12,
+    "bins_without_5m": 0
+   },
+   "raw": {
+    "months_used": 68,
+    "days_used": 29,
+    "months_missing": [],
+    "days_missing": [],
+    "rows_monthly": 198624,
+    "gapfill_days": [
+     "2021-03-02",
+     "2022-05-01",
+     "2022-05-28",
+     "2023-09-12",
+     "2024-10-28",
+     "2025-01-29",
+     "2025-08-29"
+    ],
+    "gapfill_rows_added": 0,
+    "gapfill_rows_replaced": 0,
+    "rows_read": 202080,
+    "duplicate_ts": 672,
+    "duplicate_ts_conflicting": 0,
+    "rows_outside_range": 0,
+    "misaligned_ts": 0,
+    "no_trade_dropped": {
+     "bars": 10,
+     "not_flat": 0,
+     "runs": [
+      {
+       "first": "2021-03-02 01:15:00+00:00",
+       "last": "2021-03-02 01:45:00+00:00",
+       "bars": 3
+      },
+      {
+       "first": "2022-05-01 22:30:00+00:00",
+       "last": "2022-05-01 22:30:00+00:00",
+       "bars": 1
+      },
+      {
+       "first": "2022-05-28 16:45:00+00:00",
+       "last": "2022-05-28 17:00:00+00:00",
+       "bars": 2
+      },
+      {
+       "first": "2024-10-28 20:00:00+00:00",
+       "last": "2024-10-28 20:45:00+00:00",
+       "bars": 4
+      }
+     ]
+    }
+   },
+   "native_vs_5m": {
+    "bars_native": 201398,
+    "bars_resampled": 201398,
+    "bars_common": 201398,
+    "only_native": 0,
+    "only_resampled": 0,
+    "only_native_first": [],
+    "only_resampled_first": [],
+    "ohlc": {
+     "open": {
+      "mismatches": 1,
+      "max_rel": 0.0021633649596686294,
+      "first": [
+       {
+        "ts": "2025-01-29 01:30:00",
+        "native": 0.32427,
+        "resampled": 0.32357
+       }
+      ]
+     },
+     "high": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "low": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "close": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     }
+    },
+    "ohlc_mismatch_bins": 1,
+    "differing_bins": 1,
+    "differing_bins_with_no_trade_5m": 1,
+    "differing_bins_list": [
+     "2025-01-29 01:30:00"
+    ],
+    "volume_vs_5m_sum": {
+     "bins": 4,
+     "bins_5m_sum_zero": 0,
+     "max_rel_where_5m_sum_positive": 0.314771495664944
+    },
+    "ok": false
+   },
+   "coin_wall_s": 31.1
+  },
+  {
+   "coin": "DOGEUSD",
+   "symbol": "DOGEUSDT",
+   "tf": "30m",
+   "source": "resample_ohlcv(5m, 30m)",
+   "rows": 100701,
+   "first": "2021-01-01 00:00:00+00:00",
+   "last": "2026-09-29 23:30:00+00:00",
+   "gaps": 2,
+   "missing_bars": 3,
+   "nonpositive_steps": 0,
+   "largest": [
+    {
+     "after": "2024-10-28 19:30:00+00:00",
+     "missing_bars": 2
+    },
+    {
+     "after": "2021-03-02 01:00:00+00:00",
+     "missing_bars": 1
+    }
+   ],
+   "zero_volume_bars": 0,
+   "flat_zero_volume_bars": 0,
+   "hl_bad": 0,
+   "nonpos_prices": 0,
+   "dropped_edges": [],
+   "partial_bins": {
+    "bins_with_fewer_5m": 12,
+    "bins_without_5m": 0
+   },
+   "raw": null,
+   "native_vs_5m": null,
+   "coin_wall_s": 31.1
+  },
+  {
+   "coin": "DOGEUSD",
+   "symbol": "DOGEUSDT",
+   "tf": "1h",
+   "source": "native 1h klines (OHLC vs resample_ohlcv(5m): equal)",
+   "rows": 50351,
+   "first": "2021-01-01 00:00:00+00:00",
+   "last": "2026-09-29 23:00:00+00:00",
+   "gaps": 1,
+   "missing_bars": 1,
+   "nonpositive_steps": 0,
+   "largest": [
+    {
+     "after": "2024-10-28 19:00:00+00:00",
+     "missing_bars": 1
+    }
+   ],
+   "zero_volume_bars": 0,
+   "flat_zero_volume_bars": 0,
+   "hl_bad": 0,
+   "nonpos_prices": 0,
+   "dropped_edges": [],
+   "partial_bins": {
+    "bins_with_fewer_5m": 9,
+    "bins_without_5m": 0
+   },
+   "raw": {
+    "months_used": 68,
+    "days_used": 29,
+    "months_missing": [],
+    "days_missing": [],
+    "rows_monthly": 49656,
+    "gapfill_days": [
+     "2021-03-02",
+     "2022-05-01",
+     "2022-05-28",
+     "2023-09-12",
+     "2024-10-28",
+     "2025-01-29",
+     "2025-08-29"
+    ],
+    "gapfill_rows_added": 0,
+    "gapfill_rows_replaced": 0,
+    "rows_read": 50520,
+    "duplicate_ts": 168,
+    "duplicate_ts_conflicting": 0,
+    "rows_outside_range": 0,
+    "misaligned_ts": 0,
+    "no_trade_dropped": {
+     "bars": 1,
+     "not_flat": 0,
+     "runs": [
+      {
+       "first": "2024-10-28 20:00:00+00:00",
+       "last": "2024-10-28 20:00:00+00:00",
+       "bars": 1
+      }
+     ]
+    }
+   },
+   "native_vs_5m": {
+    "bars_native": 50351,
+    "bars_resampled": 50351,
+    "bars_common": 50351,
+    "only_native": 0,
+    "only_resampled": 0,
+    "only_native_first": [],
+    "only_resampled_first": [],
+    "ohlc": {
+     "open": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "high": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "low": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "close": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     }
+    },
+    "ohlc_mismatch_bins": 0,
+    "volume_vs_5m_sum": {
+     "bins": 5,
+     "bins_5m_sum_zero": 0,
+     "max_rel_where_5m_sum_positive": 0.1957129168575433
+    },
+    "ok": true
+   },
+   "coin_wall_s": 31.1
+  },
+  {
+   "coin": "DOGEUSD",
+   "symbol": "DOGEUSDT",
+   "tf": "4h",
+   "source": "native 4h klines (OHLC vs resample_ohlcv(5m): equal)",
+   "rows": 12588,
+   "first": "2021-01-01 00:00:00+00:00",
+   "last": "2026-09-29 20:00:00+00:00",
+   "gaps": 0,
+   "missing_bars": 0,
+   "nonpositive_steps": 0,
+   "largest": [],
+   "zero_volume_bars": 0,
+   "flat_zero_volume_bars": 0,
+   "hl_bad": 0,
+   "nonpos_prices": 0,
+   "dropped_edges": [],
+   "partial_bins": {
+    "bins_with_fewer_5m": 8,
+    "bins_without_5m": 0
+   },
+   "raw": {
+    "months_used": 68,
+    "days_used": 29,
+    "months_missing": [],
+    "days_missing": [],
+    "rows_monthly": 12414,
+    "gapfill_days": [
+     "2021-03-02",
+     "2022-05-01",
+     "2022-05-28",
+     "2023-09-12",
+     "2024-10-28",
+     "2025-01-29",
+     "2025-08-29"
+    ],
+    "gapfill_rows_added": 0,
+    "gapfill_rows_replaced": 0,
+    "rows_read": 12630,
+    "duplicate_ts": 42,
+    "duplicate_ts_conflicting": 0,
+    "rows_outside_range": 0,
+    "misaligned_ts": 0,
+    "no_trade_dropped": {
+     "bars": 0,
+     "not_flat": 0,
+     "runs": []
+    }
+   },
+   "native_vs_5m": {
+    "bars_native": 12588,
+    "bars_resampled": 12588,
+    "bars_common": 12588,
+    "only_native": 0,
+    "only_resampled": 0,
+    "only_native_first": [],
+    "only_resampled_first": [],
+    "ohlc": {
+     "open": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "high": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "low": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "close": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     }
+    },
+    "ohlc_mismatch_bins": 0,
+    "volume_vs_5m_sum": {
+     "bins": 5,
+     "bins_5m_sum_zero": 0,
+     "max_rel_where_5m_sum_positive": 0.040179328868029406
+    },
+    "ok": true
+   },
+   "coin_wall_s": 31.1
+  },
+  {
+   "coin": "DOGEUSD",
+   "symbol": "DOGEUSDT",
+   "tf": "1d",
+   "source": "native 1d klines (OHLC vs resample_ohlcv(5m): equal)",
+   "rows": 2098,
+   "first": "2021-01-01 00:00:00+00:00",
+   "last": "2026-09-29 00:00:00+00:00",
+   "gaps": 0,
+   "missing_bars": 0,
+   "nonpositive_steps": 0,
+   "largest": [],
+   "zero_volume_bars": 0,
+   "flat_zero_volume_bars": 0,
+   "hl_bad": 0,
+   "nonpos_prices": 0,
+   "dropped_edges": [],
+   "partial_bins": {
+    "bins_with_fewer_5m": 7,
+    "bins_without_5m": 0
+   },
+   "raw": {
+    "months_used": 68,
+    "days_used": 29,
+    "months_missing": [],
+    "days_missing": [],
+    "rows_monthly": 2069,
+    "gapfill_days": [
+     "2021-03-02",
+     "2022-05-01",
+     "2022-05-28",
+     "2023-09-12",
+     "2024-10-28",
+     "2025-01-29",
+     "2025-08-29"
+    ],
+    "gapfill_rows_added": 0,
+    "gapfill_rows_replaced": 0,
+    "rows_read": 2105,
+    "duplicate_ts": 7,
+    "duplicate_ts_conflicting": 0,
+    "rows_outside_range": 0,
+    "misaligned_ts": 0,
+    "no_trade_dropped": {
+     "bars": 0,
+     "not_flat": 0,
+     "runs": []
+    }
+   },
+   "native_vs_5m": {
+    "bars_native": 2098,
+    "bars_resampled": 2098,
+    "bars_common": 2098,
+    "only_native": 0,
+    "only_resampled": 0,
+    "only_native_first": [],
+    "only_resampled_first": [],
+    "ohlc": {
+     "open": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "high": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "low": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "close": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     }
+    },
+    "ohlc_mismatch_bins": 0,
+    "volume_vs_5m_sum": {
+     "bins": 6,
+     "bins_5m_sum_zero": 0,
+     "max_rel_where_5m_sum_positive": 0.02706152219216003
+    },
+    "ok": true
+   },
+   "coin_wall_s": 31.1
+  },
+  {
+   "coin": "LTCUSD",
+   "symbol": "LTCUSDT",
+   "tf": "5m",
+   "source": "native 5m klines",
+   "rows": 604177,
+   "first": "2021-01-01 00:00:00+00:00",
+   "last": "2026-09-29 23:55:00+00:00",
+   "gaps": 8,
+   "missing_bars": 47,
+   "nonpositive_steps": 0,
+   "largest": [
+    {
+     "after": "2024-10-28 19:55:00+00:00",
+     "missing_bars": 14
+    },
+    {
+     "after": "2021-03-02 01:00:00+00:00",
+     "missing_bars": 11
+    },
+    {
+     "after": "2022-05-28 16:35:00+00:00",
+     "missing_bars": 7
+    },
+    {
+     "after": "2022-05-01 22:25:00+00:00",
+     "missing_bars": 5
+    },
+    {
+     "after": "2025-08-29 06:15:00+00:00",
+     "missing_bars": 3
+    }
+   ],
+   "zero_volume_bars": 0,
+   "flat_zero_volume_bars": 0,
+   "hl_bad": 0,
+   "nonpos_prices": 0,
+   "dropped_edges": [],
+   "partial_bins": null,
+   "raw": {
+    "months_used": 68,
+    "days_used": 29,
+    "months_missing": [],
+    "days_missing": [],
+    "rows_monthly": 594432,
+    "gapfill_days": [
+     "2021-03-02",
+     "2022-02-26",
+     "2022-02-27",
+     "2022-02-28",
+     "2022-04-01",
+     "2022-04-02",
+     "2022-05-01",
+     "2022-05-28",
+     "2023-09-12",
+     "2024-10-28",
+     "2025-01-29",
+     "2025-08-29"
+    ],
+    "gapfill_rows_added": 1440,
+    "gapfill_rows_replaced": 0,
+    "rows_read": 606240,
+    "duplicate_ts": 2016,
+    "duplicate_ts_conflicting": 0,
+    "rows_outside_range": 0,
+    "misaligned_ts": 0,
+    "no_trade_dropped": {
+     "bars": 47,
+     "not_flat": 0,
+     "runs": [
+      {
+       "first": "2021-03-02 01:05:00+00:00",
+       "last": "2021-03-02 01:55:00+00:00",
+       "bars": 11
+      },
+      {
+       "first": "2022-05-01 22:30:00+00:00",
+       "last": "2022-05-01 22:50:00+00:00",
+       "bars": 5
+      },
+      {
+       "first": "2022-05-28 16:40:00+00:00",
+       "last": "2022-05-28 17:10:00+00:00",
+       "bars": 7
+      },
+      {
+       "first": "2023-09-12 08:35:00+00:00",
+       "last": "2023-09-12 08:45:00+00:00",
+       "bars": 3
+      },
+      {
+       "first": "2024-10-28 16:25:00+00:00",
+       "last": "2024-10-28 16:30:00+00:00",
+       "bars": 2
+      },
+      {
+       "first": "2024-10-28 20:00:00+00:00",
+       "last": "2024-10-28 21:05:00+00:00",
+       "bars": 14
+      },
+      {
+       "first": "2025-01-29 01:25:00+00:00",
+       "last": "2025-01-29 01:30:00+00:00",
+       "bars": 2
+      },
+      {
+       "first": "2025-08-29 06:20:00+00:00",
+       "last": "2025-08-29 06:30:00+00:00",
+       "bars": 3
+      }
+     ]
+    },
+    "gaps_without_gapfill": {
+     "gaps": 10,
+     "missing_bars": 1487,
+     "nonpositive_steps": 0,
+     "largest": [
+      {
+       "after": "2022-02-25 23:55:00+00:00",
+       "missing_bars": 864
+      },
+      {
+       "after": "2022-03-31 23:55:00+00:00",
+       "missing_bars": 576
+      },
+      {
+       "after": "2024-10-28 19:55:00+00:00",
+       "missing_bars": 14
+      },
+      {
+       "after": "2021-03-02 01:00:00+00:00",
+       "missing_bars": 11
+      },
+      {
+       "after": "2022-05-28 16:35:00+00:00",
+       "missing_bars": 7
+      }
+     ],
+     "no_trade_bars": 47,
+     "no_trade_runs": [
+      {
+       "first": "2021-03-02 01:05:00+00:00",
+       "last": "2021-03-02 01:55:00+00:00",
+       "bars": 11
+      },
+      {
+       "first": "2022-05-01 22:30:00+00:00",
+       "last": "2022-05-01 22:50:00+00:00",
+       "bars": 5
+      },
+      {
+       "first": "2022-05-28 16:40:00+00:00",
+       "last": "2022-05-28 17:10:00+00:00",
+       "bars": 7
+      },
+      {
+       "first": "2023-09-12 08:35:00+00:00",
+       "last": "2023-09-12 08:45:00+00:00",
+       "bars": 3
+      },
+      {
+       "first": "2024-10-28 16:25:00+00:00",
+       "last": "2024-10-28 16:30:00+00:00",
+       "bars": 2
+      },
+      {
+       "first": "2024-10-28 20:00:00+00:00",
+       "last": "2024-10-28 21:05:00+00:00",
+       "bars": 14
+      },
+      {
+       "first": "2025-01-29 01:25:00+00:00",
+       "last": "2025-01-29 01:30:00+00:00",
+       "bars": 2
+      },
+      {
+       "first": "2025-08-29 06:20:00+00:00",
+       "last": "2025-08-29 06:30:00+00:00",
+       "bars": 3
+      }
+     ]
+    }
+   },
+   "native_vs_5m": null,
+   "coin_wall_s": 26.4
+  },
+  {
+   "coin": "LTCUSD",
+   "symbol": "LTCUSDT",
+   "tf": "15m",
+   "source": "native 15m klines (OHLC vs resample_ohlcv(5m): equal)",
+   "rows": 201398,
+   "first": "2021-01-01 00:00:00+00:00",
+   "last": "2026-09-29 23:45:00+00:00",
+   "gaps": 4,
+   "missing_bars": 10,
+   "nonpositive_steps": 0,
+   "largest": [
+    {
+     "after": "2024-10-28 19:45:00+00:00",
+     "missing_bars": 4
+    },
+    {
+     "after": "2021-03-02 01:00:00+00:00",
+     "missing_bars": 3
+    },
+    {
+     "after": "2022-05-28 16:30:00+00:00",
+     "missing_bars": 2
+    },
+    {
+     "after": "2022-05-01 22:15:00+00:00",
+     "missing_bars": 1
+    }
+   ],
+   "zero_volume_bars": 0,
+   "flat_zero_volume_bars": 0,
+   "hl_bad": 0,
+   "nonpos_prices": 0,
+   "dropped_edges": [],
+   "partial_bins": {
+    "bins_with_fewer_5m": 12,
+    "bins_without_5m": 0
+   },
+   "raw": {
+    "months_used": 68,
+    "days_used": 29,
+    "months_missing": [],
+    "days_missing": [],
+    "rows_monthly": 198144,
+    "gapfill_days": [
+     "2021-03-02",
+     "2022-02-26",
+     "2022-02-27",
+     "2022-02-28",
+     "2022-04-01",
+     "2022-04-02",
+     "2022-05-01",
+     "2022-05-28",
+     "2023-09-12",
+     "2024-10-28",
+     "2025-01-29",
+     "2025-08-29"
+    ],
+    "gapfill_rows_added": 480,
+    "gapfill_rows_replaced": 0,
+    "rows_read": 202080,
+    "duplicate_ts": 672,
+    "duplicate_ts_conflicting": 0,
+    "rows_outside_range": 0,
+    "misaligned_ts": 0,
+    "no_trade_dropped": {
+     "bars": 10,
+     "not_flat": 0,
+     "runs": [
+      {
+       "first": "2021-03-02 01:15:00+00:00",
+       "last": "2021-03-02 01:45:00+00:00",
+       "bars": 3
+      },
+      {
+       "first": "2022-05-01 22:30:00+00:00",
+       "last": "2022-05-01 22:30:00+00:00",
+       "bars": 1
+      },
+      {
+       "first": "2022-05-28 16:45:00+00:00",
+       "last": "2022-05-28 17:00:00+00:00",
+       "bars": 2
+      },
+      {
+       "first": "2024-10-28 20:00:00+00:00",
+       "last": "2024-10-28 20:45:00+00:00",
+       "bars": 4
+      }
+     ]
+    }
+   },
+   "native_vs_5m": {
+    "bars_native": 201398,
+    "bars_resampled": 201398,
+    "bars_common": 201398,
+    "only_native": 0,
+    "only_resampled": 0,
+    "only_native_first": [],
+    "only_resampled_first": [],
+    "ohlc": {
+     "open": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "high": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "low": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "close": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     }
+    },
+    "ohlc_mismatch_bins": 0,
+    "volume_vs_5m_sum": {
+     "bins": 5,
+     "bins_5m_sum_zero": 0,
+     "max_rel_where_5m_sum_positive": 0.37371188969071095
+    },
+    "ok": true
+   },
+   "coin_wall_s": 26.4
+  },
+  {
+   "coin": "LTCUSD",
+   "symbol": "LTCUSDT",
+   "tf": "30m",
+   "source": "resample_ohlcv(5m, 30m)",
+   "rows": 100701,
+   "first": "2021-01-01 00:00:00+00:00",
+   "last": "2026-09-29 23:30:00+00:00",
+   "gaps": 2,
+   "missing_bars": 3,
+   "nonpositive_steps": 0,
+   "largest": [
+    {
+     "after": "2024-10-28 19:30:00+00:00",
+     "missing_bars": 2
+    },
+    {
+     "after": "2021-03-02 01:00:00+00:00",
+     "missing_bars": 1
+    }
+   ],
+   "zero_volume_bars": 0,
+   "flat_zero_volume_bars": 0,
+   "hl_bad": 0,
+   "nonpos_prices": 0,
+   "dropped_edges": [],
+   "partial_bins": {
+    "bins_with_fewer_5m": 12,
+    "bins_without_5m": 0
+   },
+   "raw": null,
+   "native_vs_5m": null,
+   "coin_wall_s": 26.4
+  },
+  {
+   "coin": "LTCUSD",
+   "symbol": "LTCUSDT",
+   "tf": "1h",
+   "source": "native 1h klines (OHLC vs resample_ohlcv(5m): equal)",
+   "rows": 50351,
+   "first": "2021-01-01 00:00:00+00:00",
+   "last": "2026-09-29 23:00:00+00:00",
+   "gaps": 1,
+   "missing_bars": 1,
+   "nonpositive_steps": 0,
+   "largest": [
+    {
+     "after": "2024-10-28 19:00:00+00:00",
+     "missing_bars": 1
+    }
+   ],
+   "zero_volume_bars": 0,
+   "flat_zero_volume_bars": 0,
+   "hl_bad": 0,
+   "nonpos_prices": 0,
+   "dropped_edges": [],
+   "partial_bins": {
+    "bins_with_fewer_5m": 9,
+    "bins_without_5m": 0
+   },
+   "raw": {
+    "months_used": 68,
+    "days_used": 29,
+    "months_missing": [],
+    "days_missing": [],
+    "rows_monthly": 49536,
+    "gapfill_days": [
+     "2021-03-02",
+     "2022-02-26",
+     "2022-02-27",
+     "2022-02-28",
+     "2022-04-01",
+     "2022-04-02",
+     "2022-05-01",
+     "2022-05-28",
+     "2023-09-12",
+     "2024-10-28",
+     "2025-01-29",
+     "2025-08-29"
+    ],
+    "gapfill_rows_added": 120,
+    "gapfill_rows_replaced": 0,
+    "rows_read": 50520,
+    "duplicate_ts": 168,
+    "duplicate_ts_conflicting": 0,
+    "rows_outside_range": 0,
+    "misaligned_ts": 0,
+    "no_trade_dropped": {
+     "bars": 1,
+     "not_flat": 0,
+     "runs": [
+      {
+       "first": "2024-10-28 20:00:00+00:00",
+       "last": "2024-10-28 20:00:00+00:00",
+       "bars": 1
+      }
+     ]
+    }
+   },
+   "native_vs_5m": {
+    "bars_native": 50351,
+    "bars_resampled": 50351,
+    "bars_common": 50351,
+    "only_native": 0,
+    "only_resampled": 0,
+    "only_native_first": [],
+    "only_resampled_first": [],
+    "ohlc": {
+     "open": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "high": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "low": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "close": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     }
+    },
+    "ohlc_mismatch_bins": 0,
+    "volume_vs_5m_sum": {
+     "bins": 6,
+     "bins_5m_sum_zero": 0,
+     "max_rel_where_5m_sum_positive": 0.23856094047217308
+    },
+    "ok": true
+   },
+   "coin_wall_s": 26.4
+  },
+  {
+   "coin": "LTCUSD",
+   "symbol": "LTCUSDT",
+   "tf": "4h",
+   "source": "native 4h klines (OHLC vs resample_ohlcv(5m): equal)",
+   "rows": 12588,
+   "first": "2021-01-01 00:00:00+00:00",
+   "last": "2026-09-29 20:00:00+00:00",
+   "gaps": 0,
+   "missing_bars": 0,
+   "nonpositive_steps": 0,
+   "largest": [],
+   "zero_volume_bars": 0,
+   "flat_zero_volume_bars": 0,
+   "hl_bad": 0,
+   "nonpos_prices": 0,
+   "dropped_edges": [],
+   "partial_bins": {
+    "bins_with_fewer_5m": 8,
+    "bins_without_5m": 0
+   },
+   "raw": {
+    "months_used": 68,
+    "days_used": 29,
+    "months_missing": [],
+    "days_missing": [],
+    "rows_monthly": 12384,
+    "gapfill_days": [
+     "2021-03-02",
+     "2022-02-26",
+     "2022-02-27",
+     "2022-02-28",
+     "2022-04-01",
+     "2022-04-02",
+     "2022-05-01",
+     "2022-05-28",
+     "2023-09-12",
+     "2024-10-28",
+     "2025-01-29",
+     "2025-08-29"
+    ],
+    "gapfill_rows_added": 30,
+    "gapfill_rows_replaced": 0,
+    "rows_read": 12630,
+    "duplicate_ts": 42,
+    "duplicate_ts_conflicting": 0,
+    "rows_outside_range": 0,
+    "misaligned_ts": 0,
+    "no_trade_dropped": {
+     "bars": 0,
+     "not_flat": 0,
+     "runs": []
+    }
+   },
+   "native_vs_5m": {
+    "bars_native": 12588,
+    "bars_resampled": 12588,
+    "bars_common": 12588,
+    "only_native": 0,
+    "only_resampled": 0,
+    "only_native_first": [],
+    "only_resampled_first": [],
+    "ohlc": {
+     "open": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "high": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "low": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "close": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     }
+    },
+    "ohlc_mismatch_bins": 0,
+    "volume_vs_5m_sum": {
+     "bins": 6,
+     "bins_5m_sum_zero": 0,
+     "max_rel_where_5m_sum_positive": 0.052600048105694935
+    },
+    "ok": true
+   },
+   "coin_wall_s": 26.4
+  },
+  {
+   "coin": "LTCUSD",
+   "symbol": "LTCUSDT",
+   "tf": "1d",
+   "source": "native 1d klines (OHLC vs resample_ohlcv(5m): equal)",
+   "rows": 2098,
+   "first": "2021-01-01 00:00:00+00:00",
+   "last": "2026-09-29 00:00:00+00:00",
+   "gaps": 0,
+   "missing_bars": 0,
+   "nonpositive_steps": 0,
+   "largest": [],
+   "zero_volume_bars": 0,
+   "flat_zero_volume_bars": 0,
+   "hl_bad": 0,
+   "nonpos_prices": 0,
+   "dropped_edges": [],
+   "partial_bins": {
+    "bins_with_fewer_5m": 7,
+    "bins_without_5m": 0
+   },
+   "raw": {
+    "months_used": 68,
+    "days_used": 29,
+    "months_missing": [],
+    "days_missing": [],
+    "rows_monthly": 2064,
+    "gapfill_days": [
+     "2021-03-02",
+     "2022-02-26",
+     "2022-02-27",
+     "2022-02-28",
+     "2022-04-01",
+     "2022-04-02",
+     "2022-05-01",
+     "2022-05-28",
+     "2023-09-12",
+     "2024-10-28",
+     "2025-01-29",
+     "2025-08-29"
+    ],
+    "gapfill_rows_added": 5,
+    "gapfill_rows_replaced": 0,
+    "rows_read": 2105,
+    "duplicate_ts": 7,
+    "duplicate_ts_conflicting": 0,
+    "rows_outside_range": 0,
+    "misaligned_ts": 0,
+    "no_trade_dropped": {
+     "bars": 0,
+     "not_flat": 0,
+     "runs": []
+    }
+   },
+   "native_vs_5m": {
+    "bars_native": 2098,
+    "bars_resampled": 2098,
+    "bars_common": 2098,
+    "only_native": 0,
+    "only_resampled": 0,
+    "only_native_first": [],
+    "only_resampled_first": [],
+    "ohlc": {
+     "open": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "high": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "low": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "close": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     }
+    },
+    "ohlc_mismatch_bins": 0,
+    "volume_vs_5m_sum": {
+     "bins": 7,
+     "bins_5m_sum_zero": 0,
+     "max_rel_where_5m_sum_positive": 0.0171627922889672
+    },
+    "ok": true
+   },
+   "coin_wall_s": 26.4
+  },
+  {
+   "coin": "BCHUSD",
+   "symbol": "BCHUSDT",
+   "tf": "5m",
+   "source": "native 5m klines",
+   "rows": 604177,
+   "first": "2021-01-01 00:00:00+00:00",
+   "last": "2026-09-29 23:55:00+00:00",
+   "gaps": 8,
+   "missing_bars": 47,
+   "nonpositive_steps": 0,
+   "largest": [
+    {
+     "after": "2024-10-28 19:55:00+00:00",
+     "missing_bars": 14
+    },
+    {
+     "after": "2021-03-02 01:00:00+00:00",
+     "missing_bars": 11
+    },
+    {
+     "after": "2022-05-28 16:35:00+00:00",
+     "missing_bars": 7
+    },
+    {
+     "after": "2022-05-01 22:25:00+00:00",
+     "missing_bars": 5
+    },
+    {
+     "after": "2025-08-29 06:15:00+00:00",
+     "missing_bars": 3
+    }
+   ],
+   "zero_volume_bars": 0,
+   "flat_zero_volume_bars": 0,
+   "hl_bad": 0,
+   "nonpos_prices": 0,
+   "dropped_edges": [],
+   "partial_bins": null,
+   "raw": {
+    "months_used": 68,
+    "days_used": 29,
+    "months_missing": [],
+    "days_missing": [],
+    "rows_monthly": 595872,
+    "gapfill_days": [
+     "2021-03-02",
+     "2022-05-01",
+     "2022-05-28",
+     "2023-09-12",
+     "2024-10-28",
+     "2025-01-29",
+     "2025-08-29"
+    ],
+    "gapfill_rows_added": 0,
+    "gapfill_rows_replaced": 0,
+    "rows_read": 606240,
+    "duplicate_ts": 2016,
+    "duplicate_ts_conflicting": 0,
+    "rows_outside_range": 0,
+    "misaligned_ts": 0,
+    "no_trade_dropped": {
+     "bars": 47,
+     "not_flat": 0,
+     "runs": [
+      {
+       "first": "2021-03-02 01:05:00+00:00",
+       "last": "2021-03-02 01:55:00+00:00",
+       "bars": 11
+      },
+      {
+       "first": "2022-05-01 22:30:00+00:00",
+       "last": "2022-05-01 22:50:00+00:00",
+       "bars": 5
+      },
+      {
+       "first": "2022-05-28 16:40:00+00:00",
+       "last": "2022-05-28 17:10:00+00:00",
+       "bars": 7
+      },
+      {
+       "first": "2023-09-12 08:35:00+00:00",
+       "last": "2023-09-12 08:45:00+00:00",
+       "bars": 3
+      },
+      {
+       "first": "2024-10-28 16:25:00+00:00",
+       "last": "2024-10-28 16:30:00+00:00",
+       "bars": 2
+      },
+      {
+       "first": "2024-10-28 20:00:00+00:00",
+       "last": "2024-10-28 21:05:00+00:00",
+       "bars": 14
+      },
+      {
+       "first": "2025-01-29 01:25:00+00:00",
+       "last": "2025-01-29 01:30:00+00:00",
+       "bars": 2
+      },
+      {
+       "first": "2025-08-29 06:20:00+00:00",
+       "last": "2025-08-29 06:30:00+00:00",
+       "bars": 3
+      }
+     ]
+    },
+    "gaps_without_gapfill": {
+     "gaps": 8,
+     "missing_bars": 47,
+     "nonpositive_steps": 0,
+     "largest": [
+      {
+       "after": "2024-10-28 19:55:00+00:00",
+       "missing_bars": 14
+      },
+      {
+       "after": "2021-03-02 01:00:00+00:00",
+       "missing_bars": 11
+      },
+      {
+       "after": "2022-05-28 16:35:00+00:00",
+       "missing_bars": 7
+      },
+      {
+       "after": "2022-05-01 22:25:00+00:00",
+       "missing_bars": 5
+      },
+      {
+       "after": "2025-08-29 06:15:00+00:00",
+       "missing_bars": 3
+      }
+     ],
+     "no_trade_bars": 47,
+     "no_trade_runs": [
+      {
+       "first": "2021-03-02 01:05:00+00:00",
+       "last": "2021-03-02 01:55:00+00:00",
+       "bars": 11
+      },
+      {
+       "first": "2022-05-01 22:30:00+00:00",
+       "last": "2022-05-01 22:50:00+00:00",
+       "bars": 5
+      },
+      {
+       "first": "2022-05-28 16:40:00+00:00",
+       "last": "2022-05-28 17:10:00+00:00",
+       "bars": 7
+      },
+      {
+       "first": "2023-09-12 08:35:00+00:00",
+       "last": "2023-09-12 08:45:00+00:00",
+       "bars": 3
+      },
+      {
+       "first": "2024-10-28 16:25:00+00:00",
+       "last": "2024-10-28 16:30:00+00:00",
+       "bars": 2
+      },
+      {
+       "first": "2024-10-28 20:00:00+00:00",
+       "last": "2024-10-28 21:05:00+00:00",
+       "bars": 14
+      },
+      {
+       "first": "2025-01-29 01:25:00+00:00",
+       "last": "2025-01-29 01:30:00+00:00",
+       "bars": 2
+      },
+      {
+       "first": "2025-08-29 06:20:00+00:00",
+       "last": "2025-08-29 06:30:00+00:00",
+       "bars": 3
+      }
+     ]
+    }
+   },
+   "native_vs_5m": null,
+   "coin_wall_s": 26.7
+  },
+  {
+   "coin": "BCHUSD",
+   "symbol": "BCHUSDT",
+   "tf": "15m",
+   "source": "native 15m klines (OHLC vs resample_ohlcv(5m): DIFFER)",
+   "rows": 201398,
+   "first": "2021-01-01 00:00:00+00:00",
+   "last": "2026-09-29 23:45:00+00:00",
+   "gaps": 4,
+   "missing_bars": 10,
+   "nonpositive_steps": 0,
+   "largest": [
+    {
+     "after": "2024-10-28 19:45:00+00:00",
+     "missing_bars": 4
+    },
+    {
+     "after": "2021-03-02 01:00:00+00:00",
+     "missing_bars": 3
+    },
+    {
+     "after": "2022-05-28 16:30:00+00:00",
+     "missing_bars": 2
+    },
+    {
+     "after": "2022-05-01 22:15:00+00:00",
+     "missing_bars": 1
+    }
+   ],
+   "zero_volume_bars": 0,
+   "flat_zero_volume_bars": 0,
+   "hl_bad": 0,
+   "nonpos_prices": 0,
+   "dropped_edges": [],
+   "partial_bins": {
+    "bins_with_fewer_5m": 12,
+    "bins_without_5m": 0
+   },
+   "raw": {
+    "months_used": 68,
+    "days_used": 29,
+    "months_missing": [],
+    "days_missing": [],
+    "rows_monthly": 198624,
+    "gapfill_days": [
+     "2021-03-02",
+     "2022-05-01",
+     "2022-05-28",
+     "2023-09-12",
+     "2024-10-28",
+     "2025-01-29",
+     "2025-08-29"
+    ],
+    "gapfill_rows_added": 0,
+    "gapfill_rows_replaced": 0,
+    "rows_read": 202080,
+    "duplicate_ts": 672,
+    "duplicate_ts_conflicting": 0,
+    "rows_outside_range": 0,
+    "misaligned_ts": 0,
+    "no_trade_dropped": {
+     "bars": 10,
+     "not_flat": 0,
+     "runs": [
+      {
+       "first": "2021-03-02 01:15:00+00:00",
+       "last": "2021-03-02 01:45:00+00:00",
+       "bars": 3
+      },
+      {
+       "first": "2022-05-01 22:30:00+00:00",
+       "last": "2022-05-01 22:30:00+00:00",
+       "bars": 1
+      },
+      {
+       "first": "2022-05-28 16:45:00+00:00",
+       "last": "2022-05-28 17:00:00+00:00",
+       "bars": 2
+      },
+      {
+       "first": "2024-10-28 20:00:00+00:00",
+       "last": "2024-10-28 20:45:00+00:00",
+       "bars": 4
+      }
+     ]
+    }
+   },
+   "native_vs_5m": {
+    "bars_native": 201398,
+    "bars_resampled": 201398,
+    "bars_common": 201398,
+    "only_native": 0,
+    "only_resampled": 0,
+    "only_native_first": [],
+    "only_resampled_first": [],
+    "ohlc": {
+     "open": {
+      "mismatches": 1,
+      "max_rel": 0.001111916847957545,
+      "first": [
+       {
+        "ts": "2025-01-29 01:30:00",
+        "native": 414.16,
+        "resampled": 413.7
+       }
+      ]
+     },
+     "high": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "low": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "close": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     }
+    },
+    "ohlc_mismatch_bins": 1,
+    "differing_bins": 1,
+    "differing_bins_with_no_trade_5m": 1,
+    "differing_bins_list": [
+     "2025-01-29 01:30:00"
+    ],
+    "volume_vs_5m_sum": {
+     "bins": 3,
+     "bins_5m_sum_zero": 0,
+     "max_rel_where_5m_sum_positive": 0.3576869898002274
+    },
+    "ok": false
+   },
+   "coin_wall_s": 26.7
+  },
+  {
+   "coin": "BCHUSD",
+   "symbol": "BCHUSDT",
+   "tf": "30m",
+   "source": "resample_ohlcv(5m, 30m)",
+   "rows": 100701,
+   "first": "2021-01-01 00:00:00+00:00",
+   "last": "2026-09-29 23:30:00+00:00",
+   "gaps": 2,
+   "missing_bars": 3,
+   "nonpositive_steps": 0,
+   "largest": [
+    {
+     "after": "2024-10-28 19:30:00+00:00",
+     "missing_bars": 2
+    },
+    {
+     "after": "2021-03-02 01:00:00+00:00",
+     "missing_bars": 1
+    }
+   ],
+   "zero_volume_bars": 0,
+   "flat_zero_volume_bars": 0,
+   "hl_bad": 0,
+   "nonpos_prices": 0,
+   "dropped_edges": [],
+   "partial_bins": {
+    "bins_with_fewer_5m": 12,
+    "bins_without_5m": 0
+   },
+   "raw": null,
+   "native_vs_5m": null,
+   "coin_wall_s": 26.7
+  },
+  {
+   "coin": "BCHUSD",
+   "symbol": "BCHUSDT",
+   "tf": "1h",
+   "source": "native 1h klines (OHLC vs resample_ohlcv(5m): equal)",
+   "rows": 50351,
+   "first": "2021-01-01 00:00:00+00:00",
+   "last": "2026-09-29 23:00:00+00:00",
+   "gaps": 1,
+   "missing_bars": 1,
+   "nonpositive_steps": 0,
+   "largest": [
+    {
+     "after": "2024-10-28 19:00:00+00:00",
+     "missing_bars": 1
+    }
+   ],
+   "zero_volume_bars": 0,
+   "flat_zero_volume_bars": 0,
+   "hl_bad": 0,
+   "nonpos_prices": 0,
+   "dropped_edges": [],
+   "partial_bins": {
+    "bins_with_fewer_5m": 9,
+    "bins_without_5m": 0
+   },
+   "raw": {
+    "months_used": 68,
+    "days_used": 29,
+    "months_missing": [],
+    "days_missing": [],
+    "rows_monthly": 49656,
+    "gapfill_days": [
+     "2021-03-02",
+     "2022-05-01",
+     "2022-05-28",
+     "2023-09-12",
+     "2024-10-28",
+     "2025-01-29",
+     "2025-08-29"
+    ],
+    "gapfill_rows_added": 0,
+    "gapfill_rows_replaced": 0,
+    "rows_read": 50520,
+    "duplicate_ts": 168,
+    "duplicate_ts_conflicting": 0,
+    "rows_outside_range": 0,
+    "misaligned_ts": 0,
+    "no_trade_dropped": {
+     "bars": 1,
+     "not_flat": 0,
+     "runs": [
+      {
+       "first": "2024-10-28 20:00:00+00:00",
+       "last": "2024-10-28 20:00:00+00:00",
+       "bars": 1
+      }
+     ]
+    }
+   },
+   "native_vs_5m": {
+    "bars_native": 50351,
+    "bars_resampled": 50351,
+    "bars_common": 50351,
+    "only_native": 0,
+    "only_resampled": 0,
+    "only_native_first": [],
+    "only_resampled_first": [],
+    "ohlc": {
+     "open": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "high": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "low": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "close": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     }
+    },
+    "ohlc_mismatch_bins": 0,
+    "volume_vs_5m_sum": {
+     "bins": 5,
+     "bins_5m_sum_zero": 0,
+     "max_rel_where_5m_sum_positive": 0.16842042156165898
+    },
+    "ok": true
+   },
+   "coin_wall_s": 26.7
+  },
+  {
+   "coin": "BCHUSD",
+   "symbol": "BCHUSDT",
+   "tf": "4h",
+   "source": "native 4h klines (OHLC vs resample_ohlcv(5m): equal)",
+   "rows": 12588,
+   "first": "2021-01-01 00:00:00+00:00",
+   "last": "2026-09-29 20:00:00+00:00",
+   "gaps": 0,
+   "missing_bars": 0,
+   "nonpositive_steps": 0,
+   "largest": [],
+   "zero_volume_bars": 0,
+   "flat_zero_volume_bars": 0,
+   "hl_bad": 0,
+   "nonpos_prices": 0,
+   "dropped_edges": [],
+   "partial_bins": {
+    "bins_with_fewer_5m": 8,
+    "bins_without_5m": 0
+   },
+   "raw": {
+    "months_used": 68,
+    "days_used": 29,
+    "months_missing": [],
+    "days_missing": [],
+    "rows_monthly": 12414,
+    "gapfill_days": [
+     "2021-03-02",
+     "2022-05-01",
+     "2022-05-28",
+     "2023-09-12",
+     "2024-10-28",
+     "2025-01-29",
+     "2025-08-29"
+    ],
+    "gapfill_rows_added": 0,
+    "gapfill_rows_replaced": 0,
+    "rows_read": 12630,
+    "duplicate_ts": 42,
+    "duplicate_ts_conflicting": 0,
+    "rows_outside_range": 0,
+    "misaligned_ts": 0,
+    "no_trade_dropped": {
+     "bars": 0,
+     "not_flat": 0,
+     "runs": []
+    }
+   },
+   "native_vs_5m": {
+    "bars_native": 12588,
+    "bars_resampled": 12588,
+    "bars_common": 12588,
+    "only_native": 0,
+    "only_resampled": 0,
+    "only_native_first": [],
+    "only_resampled_first": [],
+    "ohlc": {
+     "open": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "high": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "low": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "close": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     }
+    },
+    "ohlc_mismatch_bins": 0,
+    "volume_vs_5m_sum": {
+     "bins": 5,
+     "bins_5m_sum_zero": 0,
+     "max_rel_where_5m_sum_positive": 0.053351943946158956
+    },
+    "ok": true
+   },
+   "coin_wall_s": 26.7
+  },
+  {
+   "coin": "BCHUSD",
+   "symbol": "BCHUSDT",
+   "tf": "1d",
+   "source": "native 1d klines (OHLC vs resample_ohlcv(5m): equal)",
+   "rows": 2098,
+   "first": "2021-01-01 00:00:00+00:00",
+   "last": "2026-09-29 00:00:00+00:00",
+   "gaps": 0,
+   "missing_bars": 0,
+   "nonpositive_steps": 0,
+   "largest": [],
+   "zero_volume_bars": 0,
+   "flat_zero_volume_bars": 0,
+   "hl_bad": 0,
+   "nonpos_prices": 0,
+   "dropped_edges": [],
+   "partial_bins": {
+    "bins_with_fewer_5m": 7,
+    "bins_without_5m": 0
+   },
+   "raw": {
+    "months_used": 68,
+    "days_used": 29,
+    "months_missing": [],
+    "days_missing": [],
+    "rows_monthly": 2069,
+    "gapfill_days": [
+     "2021-03-02",
+     "2022-05-01",
+     "2022-05-28",
+     "2023-09-12",
+     "2024-10-28",
+     "2025-01-29",
+     "2025-08-29"
+    ],
+    "gapfill_rows_added": 0,
+    "gapfill_rows_replaced": 0,
+    "rows_read": 2105,
+    "duplicate_ts": 7,
+    "duplicate_ts_conflicting": 0,
+    "rows_outside_range": 0,
+    "misaligned_ts": 0,
+    "no_trade_dropped": {
+     "bars": 0,
+     "not_flat": 0,
+     "runs": []
+    }
+   },
+   "native_vs_5m": {
+    "bars_native": 2098,
+    "bars_resampled": 2098,
+    "bars_common": 2098,
+    "only_native": 0,
+    "only_resampled": 0,
+    "only_native_first": [],
+    "only_resampled_first": [],
+    "ohlc": {
+     "open": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "high": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "low": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     },
+     "close": {
+      "mismatches": 0,
+      "max_rel": 0.0,
+      "first": []
+     }
+    },
+    "ohlc_mismatch_bins": 0,
+    "volume_vs_5m_sum": {
+     "bins": 6,
+     "bins_5m_sum_zero": 0,
+     "max_rel_where_5m_sum_positive": 0.041707685810924267
+    },
+    "ok": true
+   },
+   "coin_wall_s": 26.7
+  }
+ ]
+}

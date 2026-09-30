@@ -1,0 +1,112 @@
+{
+ "built_utc": "2026-09-30T16:55:54.487617+00:00",
+ "funding_dir": "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/binance/funding",
+ "columns": "fundingTime (ms, Binance calc_time as published), rate, interval_h",
+ "wall_s": 0.5,
+ "symbols": [
+  {
+   "symbol": "BTCUSDT",
+   "rows": 6207,
+   "months_used": 68,
+   "months_missing": [],
+   "first": "2021-01-01 00:00:00.002000",
+   "last": "2026-08-31 16:00:00.001000",
+   "duplicates": 0,
+   "interval_h_counts": {
+    "8": 6207
+   },
+   "gaps_longer_than_interval": 0,
+   "rate_mean": 9.902560012888672e-05,
+   "rate_median": 7.743e-05,
+   "rate_share_positive": 0.8591912357016271,
+   "rate_abs_max": 0.00248993
+  },
+  {
+   "symbol": "ETHUSDT",
+   "rows": 6207,
+   "months_used": 68,
+   "months_missing": [],
+   "first": "2021-01-01 00:00:00.002000",
+   "last": "2026-08-31 16:00:00.001000",
+   "duplicates": 0,
+   "interval_h_counts": {
+    "8": 6207
+   },
+   "gaps_longer_than_interval": 0,
+   "rate_mean": 0.00010561216690832931,
+   "rate_median": 7.641e-05,
+   "rate_share_positive": 0.8419526341227647,
+   "rate_abs_max": 0.00375
+  },
+  {
+   "symbol": "SOLUSDT",
+   "rows": 6282,
+   "months_used": 68,
+   "months_missing": [],
+   "first": "2021-01-01 00:00:00.002000",
+   "last": "2026-08-31 16:00:00.001000",
+   "duplicates": 0,
+   "interval_h_counts": {
+    "8": 6181,
+    "2": 99,
+    "4": 2
+   },
+   "gaps_longer_than_interval": 1,
+   "rate_mean": 7.6229465138491005e-06,
+   "rate_median": 7.945e-05,
+   "rate_share_positive": 0.7118751989812162,
+   "rate_abs_max": 0.02
+  },
+  {
+   "symbol": "DOGEUSDT",
+   "rows": 6207,
+   "months_used": 68,
+   "months_missing": [],
+   "first": "2021-01-01 00:00:00.002000",
+   "last": "2026-08-31 16:00:00.001000",
+   "duplicates": 0,
+   "interval_h_counts": {
+    "8": 6207
+   },
+   "gaps_longer_than_interval": 0,
+   "rate_mean": 0.00011594621234090544,
+   "rate_median": 0.0001,
+   "rate_share_positive": 0.8189141292089577,
+   "rate_abs_max": 0.0075
+  },
+  {
+   "symbol": "LTCUSDT",
+   "rows": 6207,
+   "months_used": 68,
+   "months_missing": [],
+   "first": "2021-01-01 00:00:00.002000",
+   "last": "2026-08-31 16:00:00.001000",
+   "duplicates": 0,
+   "interval_h_counts": {
+    "8": 6207
+   },
+   "gaps_longer_than_interval": 0,
+   "rate_mean": 0.000119159956500725,
+   "rate_median": 0.0001,
+   "rate_share_positive": 0.8398582245851458,
+   "rate_abs_max": 0.004875
+  },
+  {
+   "symbol": "BCHUSDT",
+   "rows": 6207,
+   "months_used": 68,
+   "months_missing": [],
+   "first": "2021-01-01 00:00:00.002000",
+   "last": "2026-08-31 16:00:00.001000",
+   "duplicates": 0,
+   "interval_h_counts": {
+    "8": 6207
+   },
+   "gaps_longer_than_interval": 0,
+   "rate_mean": 2.0001490252940234e-05,
+   "rate_median": 3.701e-05,
+   "rate_share_positive": 0.5775737071048815,
+   "rate_abs_max": 0.004875
+  }
+ ]
+}

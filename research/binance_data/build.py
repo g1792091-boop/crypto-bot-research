@@ -5,7 +5,7 @@
     python3 research/binance_data/build.py signals    # bars -> <BASE>/signals/sig_<tf>_<COIN>.npz (locked code, Pool(3))
     python3 research/binance_data/build.py funding    # fundingRate zips -> <BASE>/funding/<SYMBOL>.csv
     python3 research/binance_data/build.py compare    # vs the sweep (Astral/Polygon spot) cache -> out/compare_*
-    python3 research/binance_data/build.py all        # the five steps in order
+    python3 research/binance_data/build.py all        # the five steps in order (or name several: assemble signals ...)
 Options: --force (redo signals / bars that exist), --refresh-404 (ask the archive again for known 404s).
 <BASE> = $BINANCE_DIR or <scratchpad>/binance; the sweep data is $SWEEP_DATA or <scratchpad>/sweepdata.
 
@@ -16,7 +16,13 @@ signal agreement is 54-76%. This builds the same cache from Binance futures klin
 
 Source: https://data.binance.vision/data/futures/um/{monthly,daily}/klines/<SYMBOL>/<tf>/... for
 5m 15m 1h 4h 1d, monthly 2021-01 .. 2026-08 plus daily 2026-09-01 .. 2026-09-29, and
-monthly fundingRate 2021-01 .. 2026-08. Every zip is checked against its published .CHECKSUM and kept
+monthly fundingRate 2021-01 .. 2026-08. Days of 2021-01 .. 2026-08 whose monthly 5m zip is incomplete
+are repaired from the daily files of the same archive for every timeframe ("gap fill"; the daily file
+wins on a repeated open time; listed in the manifest with the reason and in assemble_report.json with
+the gaps the monthly zips alone leave): days with fewer than 288 bars (SOLUSDT and LTCUSDT
+2022-02-26..28 and 2022-04-01..02) and days with a zero-volume 5m bar (BTCUSDT-5m-2023-11 has 19 flat
+bars on 2023-11-10 15:10-16:40 and a truncated 15:05 bar where the daily file has 288 traded bars; on
+the other such days the daily files are flat too: exchange halts). Every zip is checked against its published .CHECKSUM and kept
 under <BASE>/raw (same path as below /data/ in the URL), so a rerun never downloads again; a 404 is
 recorded in <BASE>/manifest_download.json and not asked again. <= 4 downloads at a time, retries with
 exponential backoff.
@@ -25,6 +31,11 @@ Bars (mirrors research/entry_study/final_signals.py ``load_bars``, which built t
   * ts = kline open time (UTC); columns ts, open, high, low, close, volume; sorted, one row per ts
     (duplicate open times are counted, conflicting ones reported, the last one kept as read_ohlcv does);
     2021-01-01 <= ts < 2026-09-30 (the existing cache ends at ts < 2026-09-30).
+  * bars without trades (volume 0) are dropped in every timeframe (``drop_no_trade``): the archive
+    writes an interval without trades as a flat bar at the last price, which is a fill, not market
+    data. The exchange halts (8 per symbol, 47 5m bars, e.g. 2021-03-02 01:05-01:55, 2024-10-28
+    20:00-21:05) are therefore real gaps, as missing bars are in the sweep data. (The period-3 cache,
+    data/pre2021, still holds the 11 flat 5m bars of 2021-03-02.)
   * 5m, 15m, 1h, 4h, 1d from the native klines; 30m = ``resample_ohlcv(5m, "30m")``. Every timeframe
     goes through ``final_signals.trim_partial_edges`` (first/last bin dropped when the 5m series starts
     after its open / ends before its close; bins partial from data gaps kept).
@@ -222,14 +233,7 @@ def fetch_one(t: dict, known404: set, refresh_404: bool) -> dict:
         return dict(rec, status="failed", error=str(exc)[:300])
 
 
-def download(refresh_404: bool = False) -> dict:
-    t0 = time.time()
-    os.makedirs(RAW, exist_ok=True)
-    known404 = set()
-    if os.path.exists(MANIFEST):
-        with open(MANIFEST) as fh:
-            known404 = {r["rel"] for r in json.load(fh)["files"] if r["status"] == "404"}
-    tl = targets()
+def _fetch_all(tl: list[dict], known404: set, refresh_404: bool, t0: float, label: str) -> list[dict]:
     recs = []
     with ThreadPoolExecutor(MAX_PAR) as ex:
         futs = [ex.submit(fetch_one, t, known404, refresh_404) for t in tl]
@@ -237,7 +241,70 @@ def download(refresh_404: bool = False) -> dict:
             recs.append(f.result())
             if k % 250 == 0 or k == len(futs):
                 st = pd.Series([r["status"] for r in recs]).value_counts().to_dict()
-                _log(f"download {k}/{len(futs)} {st} {time.time() - t0:.0f}s")
+                _log(f"{label} {k}/{len(futs)} {st} {time.time() - t0:.0f}s")
+    return recs
+
+
+def monthly_gap_days(recs: list[dict]) -> tuple[dict, dict]:
+    """({symbol: [day]}, {symbol: {day: reason}}): days of 2021-01 .. 2026-08 whose monthly 5m zip is
+    incomplete, repaired from the daily files of the same archive:
+      * "short": fewer than 288 bars (the SOLUSDT/LTCUSDT 2022-02 and 2022-04 monthly files lack
+        whole days that the daily files hold);
+      * "zero_volume": the day holds a zero-volume 5m bar (or the bar right before one). The archive
+        writes an interval without trades as a flat bar at the last price with volume 0. Some of
+        these are real halts (the daily and 1m files are flat too), others are holes of the monthly
+        file only (BTCUSDT-5m-2023-11: 19 flat bars on 2023-11-10 15:10-16:40 and a truncated 15:05
+        bar, while the daily file has 288 traded bars). Bars still without trades after the repair
+        are dropped in ``assemble`` (real gaps)."""
+    have = {r["rel"] for r in recs if r["status"] in ("cached", "downloaded")}
+    out, why = {}, {}
+    five = pd.Timedelta(minutes=5)
+    for coin in COINS:
+        s = SYMBOLS[coin]
+        cnt, zdays = [], set()
+        for m in MONTHS:
+            rel = f"futures/um/monthly/klines/{s}/5m/{s}-5m-{m}.zip"
+            if rel in have:
+                d = read_kline_zip(os.path.join(RAW, rel))
+                cnt.append(d["ts"].dt.floor("D").value_counts())
+                tz = d.loc[d["volume"] <= 0, "ts"]
+                zdays |= set(tz.dt.floor("D")) | set((tz - five).dt.floor("D"))
+        per_day = pd.concat(cnt).groupby(level=0).sum() if cnt else pd.Series(dtype=int)
+        days = pd.date_range(START, pd.Timestamp(DAYS[0]) - pd.Timedelta(days=1), freq="D", tz="UTC")
+        per_day = per_day.reindex(days, fill_value=0)
+        months_have = {m for m in MONTHS if f"futures/um/monthly/klines/{s}/5m/{s}-5m-{m}.zip" in have}
+        reasons = {}
+        for d, n in per_day.items():
+            if d.strftime("%Y-%m") not in months_have:
+                continue
+            r = (["short"] if n < 288 else []) + (["zero_volume"] if d in zdays else [])
+            if r:
+                reasons[d.strftime("%Y-%m-%d")] = "+".join(r)
+        if reasons:
+            out[s], why[s] = sorted(reasons), reasons
+    return out, why
+
+
+def download(refresh_404: bool = False) -> dict:
+    t0 = time.time()
+    os.makedirs(RAW, exist_ok=True)
+    known404, runs = set(), []
+    if os.path.exists(MANIFEST):
+        with open(MANIFEST) as fh:
+            old = json.load(fh)
+        known404 = {r["rel"] for r in old["files"] if r["status"] == "404"}
+        prev = {k: old.get(k) for k in ("built_utc", "status_counts", "bytes_total", "wall_s", "gapfill_days")}
+        runs = old.get("runs", []) + [dict(prev, files=len(old["files"]))]
+    recs = _fetch_all(targets(), known404, refresh_404, t0, "download")
+    # gap fill: days the monthly 5m zips lack -> daily files of every timeframe (same archive)
+    gap_days, gap_why = monthly_gap_days(recs)
+    gt = [dict(kind="klines_gapfill", symbol=s, tf=tf, period=d,
+               rel=f"futures/um/daily/klines/{s}/{tf}/{s}-{tf}-{d}.zip")
+          for s, days in gap_days.items() for tf in KLINE_TFS for d in days]
+    _log(f"gap fill: {sum(len(v) for v in gap_days.values())} symbol-days short or with zero-volume bars "
+         f"in the monthly 5m zips {gap_why} -> {len(gt)} daily files")
+    if gt:
+        recs += _fetch_all(gt, known404, refresh_404, t0, "gapfill")
     recs.sort(key=lambda r: r["rel"])
     df = pd.DataFrame(recs)
     miss = df[df["status"] == "404"]
@@ -246,11 +313,13 @@ def download(refresh_404: bool = False) -> dict:
         built_utc=pd.Timestamp.now(tz="UTC").isoformat(), source=URL, raw_dir=RAW,
         months=[MONTHS[0], MONTHS[-1]], days=[DAYS[0], DAYS[-1]], symbols=list(SYMBOLS.values()),
         kline_tfs=list(KLINE_TFS), files=len(df), status_counts=df["status"].value_counts().to_dict(),
+        files_by_kind=df["kind"].value_counts().to_dict(),
         checksum_counts=df["checksum"].fillna("n/a").value_counts().to_dict(),
         bytes_total=int(df["bytes"].fillna(0).sum()),
         missing_404=[f"{r.kind} {r.symbol} {r.tf or ''} {r.period}".replace("  ", " ") for r in miss.itertuples()],
         failed=[dict(rel=r.rel, error=r.error) for r in fail.itertuples()],
-        wall_s=round(time.time() - t0, 1))
+        gapfill_days=gap_days, gapfill_reasons=gap_why,
+        wall_s=round(time.time() - t0, 1), runs=runs)
     _dump(MANIFEST, dict(summary, files=recs))
     _dump(os.path.join(OUT, "download_manifest.json"), summary)
     _log(f"download done: {summary['status_counts']}, 404 {len(miss)}, failed {len(fail)}, "
@@ -289,12 +358,28 @@ def read_kline_zip(path: str) -> pd.DataFrame:
     return pd.concat(frames, ignore_index=True)
 
 
-def raw_series(sym: str, tf: str, ok: dict) -> tuple[pd.DataFrame, dict]:
+def raw_series(sym: str, tf: str, ok: dict, gapfill: bool = True) -> tuple[pd.DataFrame, dict]:
+    """Monthly zips, then the gap-fill daily files (days the monthly 5m zips lack), then the
+    2026-09 daily files; on a repeated open time the later file wins (conflicts are counted)."""
     frames, used_m, used_d = [], [], []
     for m in MONTHS:
         rel = f"futures/um/monthly/klines/{sym}/{tf}/{sym}-{tf}-{m}.zip"
         if rel in ok:
             frames.append(read_kline_zip(os.path.join(RAW, rel))); used_m.append(m)
+    n_monthly = sum(len(f) for f in frames)
+    t_monthly = pd.concat(frames, ignore_index=True)["ts"] if frames else pd.Series(dtype="datetime64[ns, UTC]")
+    gdays = sorted(r["period"] for r in ok.values()
+                   if r["kind"] == "klines_gapfill" and r["symbol"] == sym and r["tf"] == tf) if gapfill else []
+    g_frames = [read_kline_zip(os.path.join(RAW, f"futures/um/daily/klines/{sym}/{tf}/{sym}-{tf}-{d}.zip"))
+                for d in gdays]
+    g_new = int((~pd.concat(g_frames)["ts"].isin(t_monthly)).sum()) if g_frames else 0
+    g_repl = 0
+    if g_frames:   # rows of the monthly zips the daily files replace with other values
+        mon = pd.concat(frames[:len(used_m)], ignore_index=True).drop_duplicates("ts", keep="last").set_index("ts")
+        g = pd.concat(g_frames, ignore_index=True).drop_duplicates("ts", keep="last").set_index("ts")
+        both = g.index.intersection(mon.index)
+        g_repl = int((mon.loc[both, KCOLS[1:]] != g.loc[both, KCOLS[1:]]).any(axis=1).sum())
+    frames += g_frames
     for d in DAYS:
         rel = f"futures/um/daily/klines/{sym}/{tf}/{sym}-{tf}-{d}.zip"
         if rel in ok:
@@ -313,9 +398,38 @@ def raw_series(sym: str, tf: str, ok: dict) -> tuple[pd.DataFrame, dict]:
     mis = int(((df["ts"] - pd.Timestamp("1970-01-01", tz="UTC")) % step != pd.Timedelta(0)).sum())
     return df, dict(months_used=len(used_m), days_used=len(used_d),
                     months_missing=[m for m in MONTHS if m not in used_m],
-                    days_missing=[d for d in DAYS if d not in used_d], rows_read=n_read,
+                    days_missing=[d for d in DAYS if d not in used_d], rows_monthly=n_monthly,
+                    gapfill_days=gdays, gapfill_rows_added=g_new, gapfill_rows_replaced=g_repl, rows_read=n_read,
                     duplicate_ts=n_dup, duplicate_ts_conflicting=n_conflict, rows_outside_range=n_out,
                     misaligned_ts=mis)
+
+
+def _ns(ts: pd.Series) -> np.ndarray:
+    """tz-aware UTC timestamps -> int64 ns (as rules_bt._ns)."""
+    return pd.to_datetime(ts, utc=True).dt.tz_localize(None).to_numpy().astype("datetime64[ns]").astype(np.int64)
+
+
+def _runs(ts: pd.Series, tf: str) -> list[dict]:
+    """Consecutive bar times -> [{first, last, bars}]."""
+    t = pd.DatetimeIndex(ts).sort_values()
+    if not len(t):
+        return []
+    step = pd.Timedelta(minutes=sweepsig.lib().tf_minutes(tf))
+    brk = np.flatnonzero(np.diff(t.asi8) != step.value) + 1
+    return [dict(first=str(t[a]), last=str(t[b - 1]), bars=int(b - a))
+            for a, b in zip(np.r_[0, brk], np.r_[brk, len(t)])]
+
+
+def drop_no_trade(df: pd.DataFrame, tf: str) -> tuple[pd.DataFrame, dict]:
+    """Drop bars without trades (volume 0). The archive writes an interval without trades as a flat
+    bar at the last price (O=H=L=C, volume 0): exchange halts, or holes of the kline file. They are
+    not market data, so they become real gaps, as in the sweep data (a bar only where trades are)."""
+    z = df["volume"].to_numpy(float) <= 0
+    flat = (df["open"] == df["high"]) & (df["high"] == df["low"]) & (df["low"] == df["close"])
+    info = dict(bars=int(z.sum()), not_flat=int((z & ~flat.to_numpy()).sum()), runs=_runs(df["ts"][z], tf))
+    out = df.loc[~z].reset_index(drop=True)
+    out.attrs.update(df.attrs)
+    return out, info
 
 
 def gap_stats(ts: pd.Series, tf: str) -> dict:
@@ -328,17 +442,19 @@ def gap_stats(ts: pd.Series, tf: str) -> dict:
                 largest=[dict(after=str(t0), missing_bars=int(n)) for n, t0 in top])
 
 
-def compare_native(nat: pd.DataFrame, ref: pd.DataFrame) -> dict:
-    """Native higher-TF klines vs resample_ohlcv(5m) (both edge-trimmed)."""
-    tn, tr = nat["ts"].to_numpy(), ref["ts"].to_numpy()
+def compare_native(nat: pd.DataFrame, ref: pd.DataFrame, z5: np.ndarray | None = None, tf: str | None = None) -> dict:
+    """Native higher-TF klines vs resample_ohlcv(5m) (both edge-trimmed, no-trade bars dropped).
+    z5: sorted int64 ns times of the 5m no-trade bars that were dropped."""
+    tn, tr = _ns(nat["ts"]), _ns(ref["ts"])
     only_n = np.setdiff1d(tn, tr)
     only_r = np.setdiff1d(tr, tn)
-    common, i_n, i_r = np.intersect1d(tn, tr, return_indices=True)
+    common, i_n, i_r = np.intersect1d(tn, tr, assume_unique=True, return_indices=True)
     res = dict(bars_native=len(nat), bars_resampled=len(ref), bars_common=len(common),
                only_native=len(only_n), only_resampled=len(only_r),
                only_native_first=[str(pd.Timestamp(x)) for x in only_n[:5]],
                only_resampled_first=[str(pd.Timestamp(x)) for x in only_r[:5]], ohlc={})
     ok = len(only_n) == 0 and len(only_r) == 0
+    bad_any = np.zeros(len(common), bool)
     for k in ("open", "high", "low", "close"):
         a, b = nat[k].to_numpy(float)[i_n], ref[k].to_numpy(float)[i_r]
         bad = ~np.isclose(a, b, rtol=1e-12, atol=0)
@@ -347,10 +463,23 @@ def compare_native(nat: pd.DataFrame, ref: pd.DataFrame) -> dict:
                               first=[dict(ts=str(pd.Timestamp(common[j])), native=float(a[j]), resampled=float(b[j]))
                                      for j in np.flatnonzero(bad)[:5]])
         ok &= not bad.any()
+        bad_any |= bad
+    res["ohlc_mismatch_bins"] = int(bad_any.sum())
+    if z5 is not None and tf is not None and (bad_any.any() or len(only_n) or len(only_r)):
+        # bins that hold a dropped no-trade 5m bar (halt, or a hole of the 5m file where the
+        # native kline has trades)
+        w = sweepsig.lib().tf_minutes(tf) * 60_000_000_000
+        tb = np.union1d(common[bad_any], np.union1d(only_n, only_r))
+        has_zero = np.searchsorted(z5, tb + w, side="left") > np.searchsorted(z5, tb, side="left")
+        res["differing_bins"] = int(len(tb))
+        res["differing_bins_with_no_trade_5m"] = int(has_zero.sum())
+        res["differing_bins_list"] = [str(pd.Timestamp(x)) for x in tb[:50]]
     vn, vr = nat["volume"].to_numpy(float)[i_n], ref["volume"].to_numpy(float)[i_r]
     vrel = np.abs(vn - vr) / np.abs(vr).clip(1e-12)
     vbad = (np.abs(vn - vr) > 1e-9) & (vrel > 1e-9)
-    res["volume_vs_5m_sum"] = dict(bins=int(vbad.sum()), max_rel=float(vrel.max()) if len(vrel) else 0.0)
+    pos = vr > 0
+    res["volume_vs_5m_sum"] = dict(bins=int(vbad.sum()), bins_5m_sum_zero=int((vr <= 0).sum()),
+                                   max_rel_where_5m_sum_positive=float(vrel[pos].max()) if pos.any() else 0.0)
     res["ok"] = bool(ok)
     return res
 
@@ -373,7 +502,12 @@ def _assemble_job(args) -> list[dict]:
     L = sweepsig.lib()
     sym = SYMBOLS[coin]
     t0 = time.time()
-    df5, n5 = raw_series(sym, "5m", ok)
+    df5_all, n5 = raw_series(sym, "5m", ok)
+    df5, n5["no_trade_dropped"] = drop_no_trade(df5_all, "5m")
+    z5 = _ns(df5_all["ts"][df5_all["volume"].to_numpy(float) <= 0])
+    if n5["gapfill_days"]:   # for the report: the 5m gaps and no-trade bars the monthly zips alone would leave
+        m5, mz = drop_no_trade(raw_series(sym, "5m", ok, gapfill=False)[0], "5m")
+        n5["gaps_without_gapfill"] = dict(gap_stats(m5["ts"], "5m"), no_trade_bars=mz["bars"], no_trade_runs=mz["runs"])
     rows = []
 
     def _row(tf, df, notes, source, dropped, native_check=None):
@@ -386,6 +520,7 @@ def _assemble_job(args) -> list[dict]:
         _write_bars(df, _bars_path(coin, tf))
         return dict(coin=coin, symbol=sym, tf=tf, source=source, rows=len(df), first=str(df["ts"].iloc[0]),
                     last=str(df["ts"].iloc[-1]), **gap_stats(df["ts"], tf), zero_volume_bars=int((df["volume"] <= 0).sum()),
+                    flat_zero_volume_bars=int(((df["volume"] <= 0) & (df["high"] == df["low"])).sum()),
                     hl_bad=int(((df["high"] < df[["open", "close"]].max(axis=1)) |
                                 (df["low"] > df[["open", "close"]].min(axis=1))).sum()),
                     nonpos_prices=int((df[["open", "high", "low", "close"]] <= 0).to_numpy().sum()),
@@ -394,9 +529,10 @@ def _assemble_job(args) -> list[dict]:
     rows.append(_row("5m", df5, n5, "native 5m klines", []))
     for tf in NATIVE_HTF:
         nat_raw, notes = raw_series(sym, tf, ok)
+        nat_raw, notes["no_trade_dropped"] = drop_no_trade(nat_raw, tf)
         nat, dropped = FS.trim_partial_edges(nat_raw, df5, tf)
         ref, _ = FS.trim_partial_edges(L.resample_ohlcv(df5, tf), df5, tf)
-        chk = compare_native(nat, ref)
+        chk = compare_native(nat, ref, z5, tf)
         rows.append(_row(tf, nat.reset_index(drop=True), notes,
                          f"native {tf} klines (OHLC vs resample_ohlcv(5m): {'equal' if chk['ok'] else 'DIFFER'})",
                          dropped, chk))
@@ -429,8 +565,11 @@ def assemble(force: bool = False) -> dict:
             mm = {k: v["mismatches"] for k, v in nv["ohlc"].items()}
             chk = f"NATIVE != 5m {mm} only_native {nv['only_native']} only_resampled {nv['only_resampled']}"
         dup = r["raw"]["duplicate_ts"] if r["raw"] else "-"
+        gf = (f" gapfill +{r['raw']['gapfill_rows_added']} rows, {r['raw']['gapfill_rows_replaced']} replaced"
+              if r["raw"] and r["raw"]["gapfill_days"] else "")
+        nt = f" no-trade dropped {r['raw']['no_trade_dropped']['bars']}" if r["raw"] else ""
         _log(f"{r['coin']} {r['tf']:>3}: {r['rows']} bars {r['first']} .. {r['last']} gaps {r['gaps']} "
-             f"(missing {r['missing_bars']}) dup {dup} {chk}")
+             f"(missing {r['missing_bars']}) dup {dup}{gf}{nt} {chk}")
     _log(f"assemble done in {rep['wall_s']}s; native==resampled 5m for all: {rep['native_equals_resampled_5m_all']}")
     return rep
 
@@ -629,7 +768,8 @@ def _compare_job(args) -> tuple[dict, list[dict], dict | None, list[dict]]:
                     last=str(pd.Timestamp(A["ts"][ka[-1]])),
                     **{f"{k}_equal_share": float(np.mean(A[k][ka] == P[k][kp])) for k in ("o", "h", "l", "c", "v")},
                     close_absdiff_bp_max=float(np.max(np.abs(_bp(A["c"][ka], P["c"][kp])))),
-                    volume_absdiff_rel_max=float(np.max(np.abs(A["v"][ka] / P["v"][kp] - 1))),
+                    volume_absdiff_rel_max=float(np.max(np.abs(A["v"][ka] - P["v"][kp]) / np.abs(P["v"][kp]).clip(1e-12))),
+                    v_isclose_1e12_share=float(np.mean(np.isclose(A["v"][ka], P["v"][kp], rtol=1e-12, atol=0))),
                     bars_only_pre2021_in_2021=int(((P["ts"] >= pd.Timestamp(START).value) &
                                                   ~np.isin(P["ts"], A["ts"])).sum()))
         mc = (ka >= warm) & (kp >= warm)
@@ -696,9 +836,14 @@ def compare() -> dict:
         csig.to_csv(os.path.join(OUT, "compare_control_pre2021_signals.csv"), index=False)
         summary["control_pre2021"] = dict(
             what="new Binance cache vs the period-3 Binance cache (data/pre2021, same source) on the bars both hold "
-                 "(2021-01 .. 2021-08); signal differences there come only from the series start (2021-01 vs 2020)",
+                 "(2021-01 .. 2021-08); signal differences there come from the series start (2021-01 vs 2020) and from "
+                 "the 2021-03-02 01:05-01:55 halt, whose flat no-trade bars the period-3 cache keeps and this cache drops "
+                 "(bars_only_pre2021_in_2021)",
             bars_identical_share_min={k: float(ctrl[f"{k}_equal_share"].min()) for k in ("o", "h", "l", "c", "v")},
             close_absdiff_bp_max=float(ctrl["close_absdiff_bp_max"].max()),
+            volume_absdiff_rel_max=float(ctrl["volume_absdiff_rel_max"].max()),
+            volume_note="30m volume = sum of 5m volumes written to CSV and read back (read_ohlcv); the period-3 "
+                        "cache kept the in-memory sum, so ~10% of 30m volumes differ in the last bit",
             per_tf={tf: _agg(g) for tf, g in csig.groupby("tf", sort=False)})
     summary["wall_s"] = round(time.time() - t0, 1)
     _dump(os.path.join(OUT, "compare_summary.json"), summary)
@@ -711,12 +856,12 @@ def compare() -> dict:
 
 # =============================================================================================
 def main(argv: list[str]) -> None:
-    cmd = argv[1] if len(argv) > 1 else ""
+    cmds = [a for a in argv[1:] if not a.startswith("--")]
     force, r404 = "--force" in argv, "--refresh-404" in argv
     steps = {"download": lambda: download(r404), "assemble": lambda: assemble(force),
              "signals": lambda: signals(force), "funding": funding, "compare": compare}
-    todo = list(steps) if cmd == "all" else [cmd] if cmd in steps else None
-    if not todo:
+    todo = list(steps) if cmds == ["all"] else cmds
+    if not todo or any(c not in steps for c in todo):
         print(__doc__)
         sys.exit(2)
     timing_path = os.path.join(OUT, "timing.json")
@@ -729,6 +874,7 @@ def main(argv: list[str]) -> None:
         _log(f"=== {s}")
         steps[s]()
         timing[s] = dict(wall_s=round(time.time() - t0, 1), finished_utc=pd.Timestamp.now(tz="UTC").isoformat())
+        timing.setdefault("history", []).append(dict(step=s, **timing[s]))
         _dump(timing_path, timing)
 
 

@@ -1,7 +1,11 @@
 """Korean profile cards from out/profiles.json -> PROFILES.md (and the card data the
 dashboard and the per-strategy specialists read).
 
-    python3 research/strategy_profiles/report.py
+    python3 research/strategy_profiles/report.py [--out DIR]
+
+By default reads out/profiles.json and writes out/cards.json and PROFILES.md here. With ``--out DIR``
+(or $PROFILES_OUT), e.g. the Binance re-run's out_binance/, it reads DIR/profiles.json and writes
+DIR/cards.json and DIR/PROFILES.md, leaving the originals alone.
 """
 
 from __future__ import annotations
@@ -97,6 +101,9 @@ def write_md(cards: list[dict], meta: dict, path: str) -> None:
     L.append("`research/strategy_profiles/profiles.py`로 계산했습니다. 계좌 없이 신호 하나하나를 따로 "
              "paper v3 규칙(다음 봉 시가 진입, 2 ATR 손절, 20~50배 자동 레버리지, 계단 익절, 실제 비용)으로 "
              "끝까지 따라간 결과입니다. 기간: 2021-08-01 ~ 2026-09-30, 코인 6개.\n")
+    if meta.get("source"):              # a re-run on other data (profiles.py --out / --accounts)
+        L.append(f"> **다른 데이터로 다시 계산한 카드입니다.** 신호: `{meta['source'].get('signals_dir')}`, "
+                 f"계좌: `{meta['source'].get('accounts')}`. 기본 카드는 PROFILES.md에 있습니다.\n")
     L.append("## 먼저 알아둘 것 (냉정하게)\n")
     L.append(f"- **거래당 평균 ROE는 거의 모든 칸이 마이너스**입니다(계산된 {len(all_rows)}칸 중 플러스 "
              f"{len(pos)}칸, 대부분 신호가 1년에 몇 번뿐인 칸). 40배 기준 수수료+슬리피지만 한 번 왕복에 약 "
@@ -148,14 +155,22 @@ def write_md(cards: list[dict], meta: dict, path: str) -> None:
         fh.write("\n".join(L))
 
 
-def main() -> None:
-    d = json.load(open(os.path.join(HERE, "out", "profiles.json")))
+def main(out_dir: str | None = None) -> None:
+    """``out_dir`` None: out/profiles.json -> out/cards.json and PROFILES.md (here); else all three in out_dir."""
+    src = os.path.join(HERE, "out") if out_dir is None else os.path.abspath(out_dir)
+    md = os.path.join(HERE, "PROFILES.md") if out_dir is None else os.path.join(src, "PROFILES.md")
+    d = json.load(open(os.path.join(src, "profiles.json")))
     cards = [card(n, d["profiles"][n]) for n in STRATEGY_KO if n in d["profiles"]]
-    with open(os.path.join(HERE, "out", "cards.json"), "w") as fh:
+    with open(os.path.join(src, "cards.json"), "w") as fh:
         json.dump({"meta": d["meta"], "cards": cards}, fh, ensure_ascii=False, indent=1, default=float)
-    write_md(cards, d["meta"], os.path.join(HERE, "PROFILES.md"))
-    print("wrote PROFILES.md and out/cards.json")
+    write_md(cards, d["meta"], md)
+    print(f"wrote {md} and {os.path.join(src, 'cards.json')}")
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+    ap = argparse.ArgumentParser(prog="report.py")
+    ap.add_argument("--out", default=os.environ.get("PROFILES_OUT") or None,
+                    help="directory holding profiles.json; cards.json and PROFILES.md are written there "
+                         "(default: out/ and PROFILES.md here, or $PROFILES_OUT)")
+    main(ap.parse_args().out)
