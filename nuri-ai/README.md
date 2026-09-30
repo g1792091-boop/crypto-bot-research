@@ -34,6 +34,15 @@ Claude, ChatGPT 같은 외부 AI 서비스나 API 키 없이 **브라우저 안�
 
 ## 실행
 
+### 가장 쉬운 방법: 실행 파일 (Windows)
+
+`dist/NuriAI.exe`를 더블클릭하면 끝입니다. 설치도 명령어도 필요 없습니다.
+exe 안에 앱 전체가 들어 있고, 내 컴퓨터 안에서만 동작하는 작은 서버가 앱 창(Edge/Chrome)을 열어 줍니다.
+창을 닫으면 프로그램도 자동으로 꺼집니다. 자세한 내용은 `dist/사용법.txt`를 보세요.
+실행 파일은 `launcher/build.sh`로 다시 만들 수 있습니다(Go 필요).
+
+### 웹으로 열기
+
 1. **GitHub Pages (설치 없음)**: 저장소 Settings → Pages → Source를 "Deploy from a branch"로, 브랜치를 선택하고 `/ (root)` 저장.
    몇 분 뒤 `https://<아이디>.github.io/<저장소>/nuri-ai/` 에서 열립니다. 휴대폰에서 "홈 화면에 추가"하면 앱처럼 쓸 수 있습니다.
 2. 내 컴퓨터: 이 폴더에서 `python -m http.server 8000` 실행 후 `http://localhost:8000` 접속.
