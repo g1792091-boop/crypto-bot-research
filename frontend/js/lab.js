@@ -213,7 +213,7 @@ async function startBot(spec = state.spec) {
 
 // ================================================================ 여러 코인 · 봉 한꺼번에
 const scan = lab.scan ||= { syms: null, ivs: ["15m", "1h", "4h", "1d"] };
-let scanRows = [];
+let scanRows = [], lib = [];
 function renderScanPicker() {
   scan.syms ||= state.watch.slice(0, 6);
   $("#scan-syms").innerHTML = scan.syms.map((s) => `<span class="chk on" data-rm="${s}" title="눌러서 빼기">${s.replace(/USDT$/, "")} ✕</span>`).join("")
@@ -391,6 +391,23 @@ export function initLab() {
   $("#bt-run").onclick = (e) => busy(e.target, async () => { const r = await runBacktest(); addVersion(state.spec, r.metrics, "직접 편집"); });
   $("#bt-improve").onclick = (e) => busy(e.target, runImprove);
   $("#bt-paper").onclick = (e) => busy(e.target, () => startBot());
+
+  // 매매법 라이브러리
+  $("#lib-box").addEventListener("toggle", async (e) => {
+    if (!e.target.open || $("#lib-list").dataset.ready) return;
+    const d = await api(`/api/strategy/library?symbol=${state.spec.symbol}&interval=${state.spec.interval}`);
+    $("#lib-list").dataset.ready = "1";
+    lib = d.items;
+    $("#lib-list").innerHTML = d.items.map((x, i) => `<div class="lib-item"><div class="row"><span class="ai-chip">${esc(x.cat)}</span><b>${esc(x.name)}</b><div class="grow"></div>
+      <button class="sm" data-lib="${i}">불러와서 백테스트</button></div><div class="muted" style="font-size:11.5px">${esc(x.desc)}</div></div>`).join("");
+  });
+  $("#lib-list").onclick = (e) => {
+    const b = e.target.closest("[data-lib]");
+    if (!b) return;
+    const it = lib[+b.dataset.lib];
+    const spec = { ...structuredClone(it.spec), symbol: state.spec.symbol, interval: it.spec.interval === "15m" ? "15m" : state.spec.interval };
+    busy(b, async () => { setSpec(spec); const r = await runBacktest(); addVersion(state.spec, r.metrics, `라이브러리: ${it.name}`); });
+  };
 
   // 대상 코인 · 봉
   $("#lab-iv").innerHTML = LAB_IVS.map(([k, l]) => `<option value="${k}">${l}</option>`).join("");

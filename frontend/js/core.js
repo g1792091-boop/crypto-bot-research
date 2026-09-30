@@ -26,6 +26,18 @@ export const state = {
 export function savePrefs() {
   const { symbol, interval, watch, studies, chartMode, macro, indicators, overlays, layout, multi } = state;
   try { localStorage.setItem("ft.prefs", JSON.stringify({ symbol, interval, watch, studies, chartMode, macro, indicators, overlays, layout, multi })); } catch { /* 저장 불가 환경 */ }
+  clearTimeout(apTimer); apTimer = setTimeout(syncAutopilot, 1500);
+}
+
+// 오토파일럿에게 지금 차트의 코인·봉·보조지표를 알려준다 (그 지표로 매매법을 찾음)
+let apTimer, apLast = "";
+export function syncAutopilot() {
+  const body = { symbol: state.symbol, interval: state.interval, watch: state.watch || [],
+    indicators: (state.indicators || []).map((x) => ({ key: x.key, params: x.params || {} })) };
+  const k = JSON.stringify(body);
+  if (k === apLast) return;
+  apLast = k;
+  api("/api/autopilot/context", { method: "POST", body }).catch(() => { apLast = ""; });
 }
 
 // 간단한 이벤트 버스

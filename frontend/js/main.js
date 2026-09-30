@@ -1,7 +1,8 @@
 // 진입점: 상태 불러오기 → 화면 초기화 → 탭 전환
 import { initAgents } from "./agents.js";
 import { initAlerts } from "./alerts.js";
-import { $, $$, api, emit, esc, on, state, toast } from "./core.js";
+import { initAutopilot } from "./autopilot.js";
+import { $, $$, api, emit, esc, on, state, syncAutopilot, toast } from "./core.js";
 import { initLab } from "./lab.js";
 import { initMarket } from "./market.js";
 import { initQuant } from "./quant.js";
@@ -28,6 +29,8 @@ async function init() {
   state.status = await api("/api/status");
   initAlerts();
   initTrade();
+  syncAutopilot();
+  initAutopilot();
   initLab();
   initAgents();
   initMarket();

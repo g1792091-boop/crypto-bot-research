@@ -15,6 +15,7 @@
   <nav class="nav" id="nav">
     <button data-view="trade" class="on">트레이드</button>
     <button data-view="lab">전략 · 백테스트</button>
+    <button data-view="autopilot">오토파일럿 <i class="ap-dot" id="ap-dot"></i></button>
     <button data-view="agents">에이전트 팀</button>
     <button data-view="quant">퀀트</button>
     <button data-view="market">마켓</button>
@@ -137,6 +138,10 @@
   <div class="page lab">
     <div style="display:grid;gap:12px;align-content:start">
       <div class="panel">
+        <details id="lib-box"><summary class="ph" style="cursor:pointer"><span class="t">매매법 라이브러리</span><span class="muted" style="margin-left:6px">유명 매매법 20종 — 누르면 불러와서 바로 백테스트</span></summary>
+          <div class="pb" id="lib-list" style="max-height:360px;overflow:auto"></div></details>
+      </div>
+      <div class="panel">
         <div class="ph"><span class="t">전략 대화</span><div class="grow"></div><span class="muted" id="chat-engine"></span>
           <button class="flat sm" id="chat-new">새 전략</button></div>
         <div class="chat" id="chat"></div>
@@ -199,6 +204,30 @@
       <div class="panel"><div class="ph"><span class="t">자본 곡선</span></div><div class="pb"><div class="chart" id="bt-equity-chart"></div></div></div>
       <div class="panel"><div class="ph"><span class="t">거래 내역</span></div><div class="pb" style="max-height:340px;padding:0"><table id="bt-trades"></table></div></div>
       <div class="panel"><div class="ph"><span class="t">페이퍼 봇</span></div><div id="bot-list"></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ 오토파일럿 -->
+<section class="view" id="v-autopilot">
+  <div class="page">
+    <div class="panel"><div class="ph"><span class="t">오토파일럿</span><span class="muted" id="ap-sub"></span><div class="grow"></div>
+      <label class="row" style="gap:4px"><input type="checkbox" id="ap-on" style="height:auto"> 켜기</label>
+      <button class="sm" id="ap-search">지금 다시 찾기</button></div>
+      <div class="pb help">앱이 켜져 있는 동안 스스로 돕니다. <b>트레이드 차트에 띄운 보조지표</b>로 매매법 후보를 만들어 과거 데이터 3구간(학습 60% → 검증 20% → 최종 확인 20%)으로 검증하고,
+        통과한 매매법은 페이퍼 봇으로 모의 매매합니다. 봇이 진입·청산하면 알림(종)과 차트(매매 기록)로 알려줍니다. 실시간 AI 와 에이전트 팀도 정해진 간격으로 스스로 감시합니다. 실제 주문은 하지 않습니다.</div></div>
+    <div class="cols-2" style="align-items:start">
+      <div style="display:grid;gap:12px">
+        <div class="panel"><div class="ph"><span class="t">지금 쓰는 차트 지표</span><div class="grow"></div><span class="muted" id="ap-ctx"></span></div><div class="pb" id="ap-inds"></div></div>
+        <div class="panel"><div class="ph"><span class="t">돌고 있는 오토 봇</span></div><div class="pb" style="padding:0" id="ap-bots"></div></div>
+        <div class="panel"><div class="ph"><span class="t">최근 탐색 결과</span><div class="grow"></div><span class="muted" id="ap-when"></span></div><div class="pb" id="ap-results"></div></div>
+      </div>
+      <div style="display:grid;gap:12px">
+        <div class="panel"><div class="ph"><span class="t">시그널 · 감시 기록</span><div class="grow"></div><span class="muted">새 것이 위</span></div>
+          <div class="pb" style="padding:0;max-height:420px;overflow:auto" id="ap-signals"></div></div>
+        <div class="panel"><div class="ph"><span class="t">설정</span></div><div class="pb ap-set" id="ap-set"></div></div>
+        <div class="panel"><div class="ph"><span class="t">작업 로그</span></div><div class="pb" style="max-height:260px;overflow:auto;font-size:11.5px" id="ap-log"></div></div>
+      </div>
     </div>
   </div>
 </section>

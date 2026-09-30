@@ -193,6 +193,10 @@ PIPELINES = {
     "weekly": ("주간 검토", "성과 · 조합 시너지 · 코드 리뷰 · 테스트 → 전략 연구원 · 자기개선 · 발굴 → 전략 검증관 → 자율 승인관 · CIO → 학습 관리 → 팀장",
                [("performance", "synergy", "code_reviewer", "test_writer"), ("researcher", "improver", "miner"), ("validator",),
                 ("approver", "cio"), ("learning",), ("lead",)]),
+    "monitor": ("상시 감시", "오토파일럿이 정해진 간격마다 스스로 여는 회의: 차트·장세 · 파생·오더플로 → 리스크 책임자 → 팀장",
+                [("chart", "flow"), ("risk",), ("lead",)]),
+    "autopilot": ("오토파일럿 검토", "오토파일럿이 찾은 새 매매법(3구간 검증 통과)을 전략 검증관 → 자율 승인관 → 리스크 책임자 → 팀장이 검토. 승인관이 거부하면 배치 안 함",
+                  [("validator",), ("approver",), ("risk",), ("lead",)]),
     "emergency": ("긴급 복기", "큰 손실·위험 경고 때: 손익 복기 · 가정 분석 → 리스크 책임자 → 팀장",
                   [("pnl", "whatif"), ("risk",), ("lead",)]),
 }

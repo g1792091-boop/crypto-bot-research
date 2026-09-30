@@ -27,10 +27,10 @@ _lock = threading.RLock()
 runs: dict[str, "Run"] = {}
 DEFAULT_SETTINGS = {
     "coins": ["BTCUSDT", "ETHUSDT", "SOLUSDT", "LTCUSDT", "BCHUSDT", "DOGEUSDT"],
-    "auto": {"morning": False, "evening": False, "weekly": False, "emergency": True},
+    "auto": {"morning": True, "evening": True, "weekly": True, "emergency": True},
     "times": {"morning": "08:00", "evening": "22:00", "weekly": "SUN 21:00"},
     "bot_gate": False,                       # 켜면 페이퍼 봇이 오늘의 허용범위 밖 방향으로는 진입하지 않음 (코드 관문)
-    "daily_call_limit": 80,                  # 하루 AI 호출 상한 (넘으면 규칙 분석)
+    "daily_call_limit": 150,                  # 하루 AI 호출 상한 (넘으면 규칙 분석)
     "rules": {"leverage": "1~20배 (모의)", "margin_pct": "계좌의 10~40%", "max_loss_per_trade_pct": 15,
               "note": "사람이 정한 한도. 에이전트는 평가만 하고 바꾸지 않음"},
 }
@@ -296,15 +296,18 @@ def _meta(kind: str) -> dict:
             "min_n": packets.MIN_N, "mode": "paper (모의 계좌 · 페이퍼 봇)", "units": {"pct": "%", "roe": "증거금 대비 %"}}
 
 
-def build_packet(kind: str, run: Run) -> dict:
-    coins = settings["coins"]
-    run.post("code", f"데이터 수집 중… ({', '.join(c.replace('USDT', '') for c in coins)})", "system")
+def build_packet(kind: str, run: Run, extra: Optional[dict] = None) -> dict:
+    extra = extra or {}
+    coins = extra.get("coins") or settings["coins"]
+    run.post("code", "데이터 수집 중…" + ("" if kind == "autopilot" else f" ({', '.join(c.replace('USDT', '') for c in coins)})"), "system")
     k = knowledge()
     pk: dict = {"meta": _meta(kind), "knowledge": {"lessons": k["lessons"][-12:], "rejected": k["rejected"][-12:],
                                                   "memos": k["memos"][-20:], "scorecards": scorecards()}}
     t0 = time.time()
-    if kind in ("morning", "emergency", "weekly"):
+    if kind in ("morning", "emergency", "weekly", "monitor"):
         pk["market"] = packets.market_section(coins)
+    if kind == "monitor":
+        pk["flow"] = packets.flow_section(coins)
     if kind == "morning":
         pk["flow"] = packets.flow_section(coins)
         pk["macro"] = packets.macro_section(coins)
@@ -318,6 +321,8 @@ def build_packet(kind: str, run: Run) -> dict:
         if kind == "weekly":
             pk["synergy"] = packets.synergy_section(_paper)
     pk["plan"] = _state.get("plan")
+    if extra.get("candidates"):
+        pk["candidates"] = extra["candidates"]
     src = (pk.get("ops") or {}).get("data_source")
     run.post("code", f"데이터 준비 완료 ({time.time() - t0:.1f}초" + (", ⚠ 가상 데이터" if src == "synthetic" else "") + ")", "system",
              meta={"sections": [k for k in pk if k not in ("meta",)]})
@@ -415,18 +420,34 @@ def _finish_plan(run: Run, strat: dict, risk_out: Optional[dict]):
              "result", data={"plan": plan})
 
 
-def run_pipeline(kind: str, trigger: str = "사람") -> Run:
+def run_pipeline(kind: str, trigger: str = "사람", extra: Optional[dict] = None) -> Run:
     run = Run(kind, trigger)
     runs[run.id] = run
-    threading.Thread(target=_execute, args=(run,), daemon=True).start()
+    threading.Thread(target=_execute, args=(run, extra), daemon=True).start()
     return run
 
 
-def _execute(run: Run):
+def _monitor_coins() -> list[str]:
+    try:
+        from .. import autopilot
+        coins = [autopilot.context["symbol"]] + [m["symbol"] for m in autopilot.state["bots"].values()]
+    except Exception:
+        coins = []
+    if _paper is not None:
+        coins += list(_paper.manual.positions)
+    return list(dict.fromkeys(coins))[:4] or settings["coins"][:2]
+
+
+def _execute(run: Run, extra: Optional[dict] = None):
     kind = run.pipeline
+    extra = dict(extra or {})
+    if kind == "monitor" and not extra.get("coins"):
+        extra["coins"] = _monitor_coins()
     try:
         run.post("code", f"[{run.title}] 시작 — {PIPELINES[kind][1]}" + ("" if llm.provider() else " (AI 키 없음 → 규칙 분석)"), "system")
-        run.packet = build_packet(kind, run)
+        run.packet = build_packet(kind, run, extra)
+        if kind == "autopilot":
+            run.results["candidates"] = [{k: v for k, v in c.items() if k != "spec"} for c in run.packet.get("candidates", [])]
         res: dict = {"analysts": {}}
         stages = PIPELINES[kind][2]
         for rids in stages:
@@ -455,7 +476,7 @@ def _execute(run: Run):
                 if o is None:
                     continue
                 role = BY_ID[rid]
-                if role.kind == "analyst" or role.kind == "learning" or role.kind == "cio":
+                if role.kind in ("analyst", "learning", "cio", "validator", "approver"):
                     res["analysts"][rid] = o
                 if rid in ("strategist", "critic", "risk", "researcher"):
                     res[rid] = o

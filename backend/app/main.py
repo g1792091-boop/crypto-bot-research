@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import agents, analysis, backtest, config, improve, indicators, liquidation, llm, nl_strategy, orderflow
+from . import agents, analysis, autopilot, backtest, config, improve, indicators, library, liquidation, llm, nl_strategy, orderflow
 from .data import coinglass, exchanges, market, news, sentiment, symbols
 from .llm import LLMUnavailable
 from .paper import PaperManager
@@ -23,6 +23,7 @@ from .strategy import StrategySpec, validate
 paper = PaperManager()
 copilot.bind(paper)
 team.bind(paper)
+autopilot.bind(paper)
 
 
 @asynccontextmanager
@@ -32,6 +33,7 @@ async def lifespan(_app: FastAPI):
     scanner.start()
     copilot.start()
     team.start()
+    autopilot.start()
     yield
 
 
@@ -307,6 +309,12 @@ def run_backtest(req: BacktestReq):
         return backtest.run_live_data(_norm(req.spec), min(req.bars, 5000), req.initial_equity)
     except ValueError as e:
         _bad(e)
+
+
+@app.get("/api/strategy/library")
+def strategy_library(symbol: str = "BTCUSDT", interval: str = "1h"):
+    """유명 매매법 모음 (전략 JSON)."""
+    return {"items": library.items(symbols.resolve(symbol), interval)}
 
 
 class ScanReq(BaseModel):
@@ -614,6 +622,76 @@ def get_top_trader_ratios(symbol: str = "BTCUSDT", interval: str = "1h"):
         return toptraders.binance_ratios(symbols.resolve(symbol), interval)
     except Exception as e:
         _bad(ValueError(f"바이낸스 상위 트레이더 비율을 불러오지 못했습니다: {e}"))
+
+
+# ------------------------------------------------------------------ 오토파일럿 (상시: 차트 지표로 매매법 탐색 → 페이퍼 봇 → 시그널)
+@app.get("/api/autopilot")
+def autopilot_status():
+    return autopilot.status()
+
+
+class ApContext(BaseModel):
+    symbol: str
+    interval: str
+    indicators: list[dict] = []
+    watch: list[str] = []
+
+
+@app.post("/api/autopilot/context")
+def autopilot_context(req: ApContext):
+    """화면이 지금 차트의 코인·봉·보조지표를 알려준다 (바뀔 때마다)."""
+    try:
+        sym = symbols.resolve(req.symbol)
+    except ValueError as e:
+        _bad(e)
+    return autopilot.set_context(sym, req.interval, req.indicators, req.watch)
+
+
+class ApSettings(BaseModel):
+    enabled: Optional[bool] = None
+    scope: Optional[Literal["chart", "chart+watch"]] = None
+    extra_interval: Optional[bool] = None
+    max_bots: Optional[int] = None
+    search_every_hours: Optional[float] = None
+    observe_if_none: Optional[bool] = None
+    team_review: Optional[bool] = None
+    team_monitor_min: Optional[int] = None
+    copilot_every_min: Optional[int] = None
+    leverage: Optional[float] = None
+    position_pct: Optional[float] = None
+
+
+@app.post("/api/autopilot/settings")
+def autopilot_settings(req: ApSettings):
+    kw = req.model_dump()
+    if kw.get("max_bots") is not None:
+        kw["max_bots"] = max(0, min(10, kw["max_bots"]))
+    if kw.get("search_every_hours") is not None:
+        kw["search_every_hours"] = max(1, min(72, kw["search_every_hours"]))
+    if kw.get("leverage") is not None:
+        kw["leverage"] = max(1, min(50, kw["leverage"]))
+    if kw.get("position_pct") is not None:
+        kw["position_pct"] = max(1, min(100, kw["position_pct"]))
+    return autopilot.set_settings(**kw)
+
+
+@app.post("/api/autopilot/search")
+def autopilot_search():
+    return autopilot.search_now()
+
+
+@app.get("/api/autopilot/signals")
+def autopilot_signals(since: int = 0):
+    return {"now": int(time.time()), "items": autopilot.recent_signals(since)[:100]}
+
+
+@app.post("/api/autopilot/retire/{bot_id}")
+def autopilot_retire(bot_id: str):
+    if bot_id not in autopilot.state["bots"]:
+        raise HTTPException(404, "오토파일럿 봇이 아닙니다.")
+    autopilot.retire(bot_id, "사람이 정리")
+    autopilot.save()
+    return {"ok": True}
 
 
 # ------------------------------------------------------------------ 에이전트 팀 (23명)

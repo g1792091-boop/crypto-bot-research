@@ -322,7 +322,9 @@ def approver(g):
         A.append({"candidate": c["id"], "decision": "approve" if ok else "reject", "reason": "관문·검증 통과" if ok else "관문 또는 검증 미통과",
                   "evidence": [f"candidates.{i}.gate"]})
     n = sum(a["decision"] == "approve" for a in A)
-    return {"message": f"승인 {n}개 · 거부 {len(A) - n}개. 승인한 것도 사람이 '적용'을 눌러야 반영됩니다.", "headline": f"승인 {n}개", "approvals": A, "data_gaps": []}
+    auto = (g.get("meta") or {}).get("pipeline") == "autopilot"
+    return {"message": f"승인 {n}개 · 거부 {len(A) - n}개. " + ("승인한 매매법은 오토파일럿이 페이퍼 봇으로 돌립니다 (모의 매매)." if auto else "승인한 것도 사람이 '적용'을 눌러야 반영됩니다."),
+            "headline": f"승인 {n}개", "approvals": A, "data_gaps": []}
 
 
 def cio(g):

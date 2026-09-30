@@ -13,10 +13,11 @@ const OPTS = [
   ["scanner", "시그널 스캐너 (관심 코인 자동 분석 신호)"],
   ["scanner_strong", "└ 강한 신호(강도 2 이상)만"],
   ["ai_watch", "AI 포지션 감시 (손절·청산가 근접, 손절 없음, 반대 판단·신호)"],
+  ["autopilot", "오토파일럿 (자동 매매법 진입·청산 시그널, AI 판단 변경)"],
   ["sound", "알림음"],
   ["desktop", "바탕화면 알림 (브라우저 창이 뒤에 있어도)"],
 ];
-const opts = { news_important: true, news_all: false, calendar: true, regime: true, bots: true, scanner: true, scanner_strong: true, ai_watch: true, sound: true, desktop: false,
+const opts = { news_important: true, news_all: false, calendar: true, regime: true, bots: true, scanner: true, scanner_strong: true, ai_watch: true, autopilot: true, sound: true, desktop: false,
   ...load("ft.alertOpts", {}) };
 let log = load("ft.alertLog", []);
 let priceAlerts = load("ft.priceAlerts", []);
@@ -119,6 +120,23 @@ async function pollAiWatch() {
     for (const a of d.items.slice(0, 4).reverse()) {
       notify({ title: `[AI 감시] ${a.text}`, msg: a.ai || "트레이드 오른쪽 '실시간 AI' 탭에서 자세한 분석과 조치 버튼을 볼 수 있습니다", cat: "ai",
         kind: a.level === "high" ? "err" : "" });
+    }
+  } catch { /* 다음 주기에 */ }
+}
+
+// ---------------------------------------------------------------- 오토파일럿 시그널
+let apSince = Math.floor(Date.now() / 1000) - 120;
+async function pollAutopilot() {
+  try {
+    const d = await api(`/api/autopilot/signals?since=${apSince}`);
+    apSince = d.now;
+    emit("apsignals", d.items);
+    if (!opts.autopilot) return;
+    for (const x of d.items.slice(0, 4).reverse()) {
+      const head = { entry: "오토 진입", exit: "오토 청산", deploy: "오토 봇 시작", ai: "AI 판단" }[x.type] || "오토";
+      notify({ title: `[${head}] ${x.symbol.replace(/USDT$/, "")} ${IVK[x.interval] || x.interval || ""} · ${x.text}`,
+        msg: `${x.strategy || ""}${x.status === "observe" ? " · 관찰(검증 미통과) — 참고용" : x.status === "pass" ? " · 검증 통과 매매법 (모의)" : ""}`, cat: "autopilot",
+        kind: x.type === "entry" ? (x.side === "long" ? "up" : "err") : x.type === "exit" ? (x.pnl > 0 ? "up" : "err") : "" });
     }
   } catch { /* 다음 주기에 */ }
 }
@@ -226,6 +244,7 @@ export function initAlerts() {
   pollNews(); setInterval(pollNews, 60_000);
   pollSignals(); setInterval(pollSignals, 20_000);
   pollAiWatch(); setInterval(pollAiWatch, 20_000);
+  pollAutopilot(); setInterval(pollAutopilot, 15_000);
   loadCalendar(); setInterval(loadCalendar, 10 * 60_000);
   setInterval(checkCalendar, 20_000);
 }

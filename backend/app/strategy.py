@@ -24,6 +24,7 @@ from . import indicators as ind
 IndicatorType = Literal[
     "sma", "ema", "rsi", "macd", "bb", "atr", "stoch", "supertrend", "adx",
     "cci", "vwap", "obv", "highest", "lowest", "volume_sma",
+    "wma", "hma", "vwma", "mfi", "willr", "roc", "psar", "donchian", "keltner", "stochrsi", "ichimoku", "cmf", "aroon", "atr_stop",
 ]
 Op = Literal[">", "<", ">=", "<=", "crosses_above", "crosses_below", "rising", "falling"]
 
