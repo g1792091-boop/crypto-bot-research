@@ -1,5 +1,5 @@
 // 전략 대화 · 백테스트 · 복기/자동 개선 · 페이퍼 봇
-import { $, $$, IV_LABEL, api, busy, cls, css, emit, esc, fmt, makeChart, mdhm, pct, px, savePrefs, state, toast, tradeRows } from "./core.js";
+import { $, $$, INTERVALS, IV_LABEL, api, busy, cls, css, emit, esc, fmt, makeChart, mdhm, pct, px, savePrefs, state, toast, tradeRows } from "./core.js";
 import { showOnChart } from "./trade.js";
 
 const AI = { claude: "Claude", gemini: "Gemini" };
@@ -66,7 +66,8 @@ async function send(text) {
   const bars = +$("#bt-bars").value, eq = +$("#bt-equity").value;
   try {
     if (!lab.versions.length || lab.fresh) {   // 첫 문장은 새 전략 작성, 이후는 수정
-      const r = await api("/api/strategy/auto", { method: "POST", body: { text, symbol: state.symbol, bars, initial_equity: eq } });
+      // 문장에 코인·봉이 없으면 위 '대상'의 코인·봉으로 만든다
+      const r = await api("/api/strategy/auto", { method: "POST", body: { text, symbol: state.spec?.symbol || state.symbol, interval: state.spec?.interval || "1h", bars, initial_equity: eq } });
       lab.fresh = false;
       setSpec(r.spec);
       renderBacktest(r);
@@ -163,10 +164,83 @@ function renderBuilder() {
     <label class="f">반대 신호 전환<select data-risk="allow_reverse"><option value="true" ${s.risk.allow_reverse ? "selected" : ""}>예</option><option value="false" ${s.risk.allow_reverse ? "" : "selected"}>아니오</option></select></label></div></div>`;
   $("#builder").innerHTML = html;
   $("#spec-json").value = JSON.stringify(s, null, 2);
+  syncTarget();
+}
+
+// ================================================================ 대상 코인 · 봉
+const LAB_IVS = INTERVALS.filter(([k]) => k !== "1y");
+function syncTarget() {
+  if (!$("#lab-sym")) return;
+  $("#lab-sym").value = (state.spec.symbol || "").replace(/USDT$/, "");
+  $("#lab-iv").value = state.spec.interval;
+}
+async function resolveSym(q) {
+  q = (q || "").trim();
+  if (!q) return null;
+  try { return (await api(`/api/resolve?q=${encodeURIComponent(q)}`)).symbol; } catch { return null; }
+}
+const btBody = (spec) => ({ spec, bars: +$("#bt-bars").value, initial_equity: +$("#bt-equity").value });
+async function runBacktest(spec = state.spec) {
+  const r = await api("/api/backtest", { method: "POST", body: btBody(spec) });
+  renderBacktest(r);
+  return r;
+}
+// 전략은 그대로 두고 코인·봉만 바꿔서 다시 백테스트 (실패하면 원래대로)
+async function setTarget(symbol, interval, why = "대상 변경") {
+  const prev = { symbol: state.spec.symbol, interval: state.spec.interval };
+  if (symbol === prev.symbol && interval === prev.interval && lastResult) return lastResult;
+  state.spec.symbol = symbol; state.spec.interval = interval; renderBuilder();
+  try {
+    const r = await runBacktest();
+    addVersion(state.spec, r.metrics, `${why}: ${symbol.replace(/USDT$/, "")} ${IV_LABEL[interval] || interval}`);
+    return r;
+  } catch (e) {
+    Object.assign(state.spec, prev); renderBuilder();
+    toast("백테스트 실패", e.message, "err");
+    return null;
+  }
+}
+async function runImprove() {
+  renderImprove(await api("/api/strategy/improve", { method: "POST", body: { spec: state.spec, bars: +$("#bt-bars").value, ai: !!state.status?.llm } }));
+  $("#improve-panel").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+async function startBot(spec = state.spec) {
+  const b = await api("/api/paper/bots", { method: "POST", body: { spec, initial_equity: +$("#bt-equity").value } });
+  toast(`페이퍼 봇 시작 · ${b.symbol.replace(/USDT$/, "")} ${IV_LABEL[b.interval] || b.interval}`, `${b.name} — 진입·청산이 '트레이드' 차트에 표시됩니다`);
+  loadBots();
+  return b;
+}
+
+// ================================================================ 여러 코인 · 봉 한꺼번에
+const scan = lab.scan ||= { syms: null, ivs: ["15m", "1h", "4h", "1d"] };
+let scanRows = [];
+function renderScanPicker() {
+  scan.syms ||= state.watch.slice(0, 6);
+  $("#scan-syms").innerHTML = scan.syms.map((s) => `<span class="chk on" data-rm="${s}" title="눌러서 빼기">${s.replace(/USDT$/, "")} ✕</span>`).join("")
+    || '<span class="muted">코인을 추가하세요</span>';
+  $("#scan-ivs").innerHTML = LAB_IVS.map(([k, l]) => `<span class="chk ${scan.ivs.includes(k) ? "on" : ""}" data-iv="${k}">${l}</span>`).join("");
+  const n = scan.syms.length * scan.ivs.length;
+  $("#scan-count").textContent = `${scan.syms.length}개 코인 × ${scan.ivs.length}개 봉 = ${n}개 조합${n > 80 ? " (80개까지 가능)" : ""}`;
+}
+function renderScan() {
+  const ok = scanRows.filter((r) => !r.error);
+  $("#scan-top").hidden = !ok.length;
+  const st = (v, d = 1) => v == null ? "–" : fmt(v, d);
+  $("#scan-out").innerHTML = scanRows.length ? `<table><tr><th>#</th><th>코인</th><th>봉</th><th>수익률</th><th>단순 보유</th><th>최대낙폭</th><th>승률</th><th>손익비</th><th>거래</th><th></th></tr>
+    ${scanRows.map((r, i) => r.error
+      ? `<tr><td></td><td>${r.symbol.replace(/USDT$/, "")}</td><td>${IV_LABEL[r.interval] || r.interval}</td><td colspan="7" class="muted">${esc(r.error)}</td></tr>`
+      : `<tr><td class="muted">${i + 1}</td><td><b>${r.symbol.replace(/USDT$/, "")}</b>${r.data_source === "synthetic" ? ' <span class="accent" title="거래소 연결 안 됨">가상</span>' : ""}</td>
+        <td>${IV_LABEL[r.interval] || r.interval}</td><td class="${cls(r.metrics.total_return_pct)}">${pct(r.metrics.total_return_pct)}</td>
+        <td class="${cls(r.metrics.buy_and_hold_pct)}">${pct(r.metrics.buy_and_hold_pct)}</td><td class="down">-${st(r.metrics.max_drawdown_pct)}%</td>
+        <td>${r.metrics.win_rate_pct == null ? "–" : r.metrics.win_rate_pct + "%"}</td><td>${st(r.metrics.profit_factor, 2)}</td><td>${r.metrics.trades}</td>
+        <td style="white-space:nowrap"><button class="sm" data-scan="view" data-i="${i}">보기</button><button class="sm" data-scan="improve" data-i="${i}">개선</button><button class="sm" data-scan="bot" data-i="${i}">봇 시작</button></td></tr>`).join("")}</table>
+    <div class="help" style="margin-top:6px">같은 기간 수가 아니라 같은 봉 개수(${$("#bt-bars").value}개)로 비교합니다. 과거 성적이 좋다고 앞으로도 좋다는 보장은 없습니다 — '개선'은 학습/검증 구간을 나눠 검증을 통과한 것만 적용합니다.</div>`
+    : "";
 }
 
 function onInput(e) {
   const t = e.target, s = state.spec, num = (v) => (v === "" ? null : Number(v));
+  if (t.dataset.f === "symbol" && e.type === "change") { resolveSym(t.value).then((v) => { if (v) { s.symbol = v; renderBuilder(); } }); return; }
   if (t.dataset.f) s[t.dataset.f] = t.value;
   else if (t.dataset.ind != null) {
     const ind = s.indicators[+t.dataset.ind];
@@ -311,17 +385,61 @@ export function initLab() {
   };
   $("#json-apply").onclick = () => { try { setSpec(JSON.parse($("#spec-json").value)); toast("적용했습니다"); } catch (e) { toast("JSON 오류", e.message, "err"); } };
   $("#spec-to-tv").onclick = (e) => { e.preventDefault(); specToTv(); };
-  $("#bt-run").onclick = (e) => busy(e.target, async () => {
-    const r = await api("/api/backtest", { method: "POST", body: { spec: state.spec, bars: +$("#bt-bars").value, initial_equity: +$("#bt-equity").value } });
-    renderBacktest(r); addVersion(state.spec, r.metrics, "직접 편집");
+  $("#bt-run").onclick = (e) => busy(e.target, async () => { const r = await runBacktest(); addVersion(state.spec, r.metrics, "직접 편집"); });
+  $("#bt-improve").onclick = (e) => busy(e.target, runImprove);
+  $("#bt-paper").onclick = (e) => busy(e.target, () => startBot());
+
+  // 대상 코인 · 봉
+  $("#lab-iv").innerHTML = LAB_IVS.map(([k, l]) => `<option value="${k}">${l}</option>`).join("");
+  syncTarget();
+  $("#lab-sym").onchange = async (e) => {
+    const sym = await resolveSym(e.target.value);
+    if (!sym) { syncTarget(); return; }
+    setTarget(sym, state.spec.interval);
+  };
+  $("#lab-sym").onkeydown = (e) => { if (e.key === "Enter") e.target.blur(); };
+  $("#lab-iv").onchange = (e) => setTarget(state.spec.symbol, e.target.value);
+  $("#lab-sync").onclick = (e) => busy(e.target, () => setTarget(state.symbol, state.interval === "1y" ? "1M" : state.interval, "차트 코인으로"));
+
+  // 여러 코인 · 봉 한꺼번에
+  renderScanPicker();
+  $("#scan-syms").onclick = (e) => { const s = e.target.closest("[data-rm]")?.dataset.rm; if (s) { scan.syms = scan.syms.filter((x) => x !== s); saveLab(); renderScanPicker(); } };
+  $("#scan-ivs").onclick = (e) => {
+    const k = e.target.closest("[data-iv]")?.dataset.iv;
+    if (!k) return;
+    scan.ivs = scan.ivs.includes(k) ? scan.ivs.filter((x) => x !== k) : LAB_IVS.map(([x]) => x).filter((x) => x === k || scan.ivs.includes(x));
+    saveLab(); renderScanPicker();
+  };
+  $("#scan-add").onkeydown = async (e) => {
+    if (e.key !== "Enter" || !e.target.value.trim()) return;
+    const sym = await resolveSym(e.target.value); e.target.value = "";
+    if (sym && !scan.syms.includes(sym)) { scan.syms.push(sym); saveLab(); renderScanPicker(); }
+  };
+  $("#scan-all-watch").onclick = () => { scan.syms = [...new Set([...scan.syms, ...state.watch])]; saveLab(); renderScanPicker(); };
+  $("#scan-clear").onclick = () => { scan.syms = []; saveLab(); renderScanPicker(); };
+  $("#scan-run").onclick = (e) => busy(e.target, async () => {
+    if (!scan.syms.length || !scan.ivs.length) return toast("코인과 봉을 하나 이상 고르세요");
+    $("#scan-out").innerHTML = `<div class="muted">${scan.syms.length * scan.ivs.length}개 조합 백테스트 중…</div>`;
+    try {
+      scanRows = (await api("/api/strategy/scan", { method: "POST", body: { ...btBody(state.spec), symbols: scan.syms, intervals: scan.ivs } })).rows;
+    } catch (err) { $("#scan-out").innerHTML = ""; throw err; }
+    renderScan();
   });
-  $("#bt-improve").onclick = (e) => busy(e.target, async () => {
-    renderImprove(await api("/api/strategy/improve", { method: "POST", body: { spec: state.spec, bars: +$("#bt-bars").value, ai: !!state.status?.llm } }));
-    $("#improve-panel").scrollIntoView({ behavior: "smooth", block: "start" });
-  });
-  $("#bt-paper").onclick = (e) => busy(e.target, async () => {
-    const b = await api("/api/paper/bots", { method: "POST", body: { spec: state.spec, initial_equity: +$("#bt-equity").value } });
-    toast("페이퍼 봇 시작", `${b.name} — 진입·청산이 '트레이드' 차트에 표시됩니다`); loadBots();
+  $("#scan-out").onclick = (e) => {
+    const b = e.target.closest("[data-scan]");
+    if (!b) return;
+    const r = scanRows[+b.dataset.i];
+    busy(b, async () => {
+      if (b.dataset.scan === "bot") return startBot({ ...state.spec, symbol: r.symbol, interval: r.interval });
+      if (!(await setTarget(r.symbol, r.interval, "스캔에서 선택"))) return;
+      if (b.dataset.scan === "improve") await runImprove();
+      else $("#bt-stats").scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  };
+  $("#scan-top").onclick = (e) => busy(e.target, async () => {
+    const top = scanRows.filter((r) => !r.error && r.metrics.trades > 0 && r.metrics.total_return_pct > 0).slice(0, 3);
+    if (!top.length) return toast("수익이 난 조합이 없습니다");
+    for (const r of top) await startBot({ ...state.spec, symbol: r.symbol, interval: r.interval });
   });
   $("#bot-list").onclick = (e) => {
     const c = e.target.dataset.chart;

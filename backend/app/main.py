@@ -279,10 +279,16 @@ class ImproveReq(BaseModel):
     ai: bool = False
 
 
+def _norm(spec: StrategySpec) -> StrategySpec:
+    """'eth', '이더', 'PEPE' 처럼 들어온 심볼을 바이낸스 선물 심볼로."""
+    sym = symbols.resolve(spec.symbol or "BTCUSDT")
+    return spec if sym == spec.symbol else spec.model_copy(update={"symbol": sym})
+
+
 @app.post("/api/strategy/improve")
 def improve_strategy(req: ImproveReq):
     try:
-        return improve.run_for(req.spec, min(req.bars, 5000), with_ai=req.ai)
+        return improve.run_for(_norm(req.spec), min(req.bars, 5000), with_ai=req.ai)
     except (ValueError, LLMUnavailable) as e:
         _bad(e)
 
@@ -290,9 +296,46 @@ def improve_strategy(req: ImproveReq):
 @app.post("/api/backtest")
 def run_backtest(req: BacktestReq):
     try:
-        return backtest.run_live_data(req.spec, min(req.bars, 5000), req.initial_equity)
+        return backtest.run_live_data(_norm(req.spec), min(req.bars, 5000), req.initial_equity)
     except ValueError as e:
         _bad(e)
+
+
+class ScanReq(BaseModel):
+    spec: StrategySpec
+    symbols: list[str]
+    intervals: list[str]
+    bars: int = 1500
+    initial_equity: float = 10_000
+
+
+@app.post("/api/strategy/scan")
+def scan_strategy(req: ScanReq):
+    """같은 전략을 여러 코인 × 여러 봉으로 한꺼번에 백테스트해서 성적순으로."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    from .strategy import INTERVALS as OK_IV
+    syms = list(dict.fromkeys(symbols.resolve(s) for s in req.symbols if s.strip()))
+    ivs = [iv for iv in dict.fromkeys(req.intervals) if iv in OK_IV]
+    combos = [(s, iv) for s in syms for iv in ivs]
+    if not combos:
+        _bad(ValueError("코인과 봉을 하나 이상 고르세요."))
+    if len(combos) > 80:
+        _bad(ValueError(f"조합이 너무 많습니다 ({len(combos)}개). 80개 이하로 줄여 주세요."))
+
+    def one(combo):
+        s, iv = combo
+        spec = req.spec.model_copy(update={"symbol": s, "interval": iv})
+        try:
+            r = backtest.run_live_data(spec, min(req.bars, 5000), req.initial_equity)
+            return {"symbol": s, "interval": iv, "metrics": r["metrics"], "data_source": r["data_source"], "bars": len(r["candles"])}
+        except Exception as e:   # 없는 종목·상장 기간 부족 등은 그 줄만 오류로
+            return {"symbol": s, "interval": iv, "error": str(e)}
+
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        rows = list(ex.map(one, combos))
+    rows.sort(key=lambda r: (r.get("error") is not None, -(r.get("metrics", {}).get("total_return_pct") or -1e9)))
+    return {"rows": rows}
 
 
 @app.post("/api/strategy/auto")
@@ -338,7 +381,9 @@ def list_bots():
 @app.post("/api/paper/bots")
 def create_bot(req: BotReq):
     try:
-        return paper.add_bot(req.spec, req.initial_equity).to_dict()
+        spec = _norm(req.spec)
+        market.candles(spec.symbol, spec.interval, 2)   # 없는 종목이면 여기서 오류 → 봇을 만들지 않는다
+        return paper.add_bot(spec, req.initial_equity).to_dict()
     except ValueError as e:
         _bad(e)
 

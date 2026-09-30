@@ -162,8 +162,31 @@
       <div class="panel">
         <div class="ph"><span class="t">결과</span><div class="grow"></div><span class="muted" id="bt-src"></span>
           <button class="sm" id="bt-improve">복기 · 자동 개선</button><button class="sm pri" id="bt-paper">페이퍼 봇 시작</button></div>
-        <div class="pb"><div class="stats" id="bt-stats"><div class="stat"><div class="k">대기</div><div class="v">–</div></div></div>
+        <div class="pb">
+          <div class="row lab-target">
+            <span class="k">대상</span>
+            <input id="lab-sym" title="코인 (BTC, 이더, 솔라나, pepe 처럼 입력)" style="width:120px">
+            <select id="lab-iv" title="봉"></select>
+            <button class="sm" id="lab-sync" title="트레이드 화면에서 보고 있는 코인·봉으로">지금 차트 코인으로</button>
+            <span class="muted">바꾸면 이 코인·봉으로 다시 백테스트합니다. 자동 개선과 페이퍼 봇도 이 대상으로 돌아갑니다.</span>
+          </div>
+          <div class="stats" id="bt-stats" style="margin-top:8px"><div class="stat"><div class="k">대기</div><div class="v">–</div></div></div>
           <div class="chart tall" id="bt-price" style="margin-top:10px"></div></div>
+      </div>
+      <div class="panel">
+        <details id="scan-box"><summary class="ph" style="cursor:pointer"><span class="t">여러 코인 · 여러 봉 한꺼번에 테스트</span><div class="grow"></div>
+          <span class="muted">같은 전략이 어디서 잘 통하는지 비교</span></summary>
+        <div class="pb">
+          <div class="row" style="flex-wrap:wrap;gap:6px" id="scan-syms"></div>
+          <div class="row" style="margin-top:6px;gap:6px">
+            <input id="scan-add" placeholder="코인 추가 (예: 아발란체, ONDO)" style="width:200px">
+            <button class="sm" id="scan-all-watch">관심 종목 전부</button><button class="sm" id="scan-clear">코인 비우기</button></div>
+          <div class="row" style="flex-wrap:wrap;gap:6px;margin-top:8px" id="scan-ivs"></div>
+          <div class="row" style="margin-top:8px"><button class="pri" id="scan-run">한꺼번에 백테스트</button>
+            <span class="muted" id="scan-count"></span><div class="grow"></div>
+            <button class="sm" id="scan-top" hidden>수익 상위 3개 페이퍼 봇 시작</button></div>
+          <div id="scan-out" style="margin-top:8px;max-height:420px;overflow:auto"></div>
+        </div></details>
       </div>
       <div class="panel" id="improve-panel" hidden><div class="ph"><span class="t">복기 · 자동 개선 결과</span></div><div class="pb" id="improve-out"></div></div>
       <div class="panel"><div class="ph"><span class="t">자본 곡선</span></div><div class="pb"><div class="chart" id="bt-equity-chart"></div></div></div>

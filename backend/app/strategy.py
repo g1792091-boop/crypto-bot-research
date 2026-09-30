@@ -228,6 +228,10 @@ def signals(spec: StrategySpec, candles: list[dict], deriv: dict | None = None) 
     }
 
 
+# 전략(백테스트·페이퍼 봇)에 쓸 수 있는 봉 간격 — 1분봉부터 월봉까지
+INTERVALS = ["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "12h", "1d", "3d", "1w", "1M"]
+
+
 def validate(spec: StrategySpec) -> list[str]:
     """실행 전 정적 검증. 문제 목록 반환 (빈 리스트면 OK)."""
     problems = []
@@ -242,6 +246,8 @@ def validate(spec: StrategySpec) -> list[str]:
     for name in referenced_names(spec):
         if name not in known:
             problems.append(f"조건식이 정의되지 않은 시리즈를 참조합니다: {name}")
+    if spec.interval not in INTERVALS:
+        problems.append(f"지원하지 않는 봉 간격입니다: {spec.interval} (가능: {', '.join(INTERVALS)})")
     r = spec.risk
     if not (0 < r.leverage <= 125):
         problems.append("레버리지는 0~125 사이여야 합니다.")

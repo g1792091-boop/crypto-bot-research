@@ -303,3 +303,9 @@ summary.ph { list-style: none; } summary.ph::-webkit-details-marker { display: n
 
 .edit-sltp { white-space: nowrap; }
 .edit-sltp input { width: 92px; height: 22px; padding: 0 6px; font-family: var(--mono); font-size: 11px; margin-right: 2px; }
+
+/* 전략 대상 코인·봉 */
+.lab-target { gap: 6px; flex-wrap: wrap; }
+.lab-target .k { color: var(--text-2); font-size: 12px; }
+.chk { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border: 1px solid var(--line); border-radius: 3px; cursor: pointer; font-size: 12px; user-select: none; }
+.chk.on { border-color: var(--accent); color: var(--accent); }
