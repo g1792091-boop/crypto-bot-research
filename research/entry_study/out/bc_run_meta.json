@@ -1,0 +1,5602 @@
+{
+ "script": "research/entry_study/analysis_bc.py",
+ "version": "analysis_bc v3",
+ "git_head": "19c9cf75259cf9089e6a1873c1c5e9a511100d50",
+ "run": {
+  "tag": "full",
+  "restricted_to": {
+   "only": null,
+   "tfs": null
+  },
+  "warning": "",
+  "parts_in_outputs": {
+   "B": {
+    "strategies": [
+     "S2_ST_ROC",
+     "S5_DONCHIAN_MFI",
+     "S6_EMA_DMI_ADX",
+     "N01_ST_EMA",
+     "N02_ST_KST",
+     "N03_ADX_GC",
+     "N07_ICHI_CMO",
+     "N08_ICHI_WR",
+     "N09_ALLIG_AROON",
+     "N10_HA_PSAR",
+     "N12_ICHI_AO",
+     "N14_ICHI_RSI",
+     "N17_KC_RSI",
+     "N18_VWMA_MACD",
+     "N21_ST_RSI_ADX",
+     "N22_VORTEX_PSAR",
+     "N23_HA_ST",
+     "N24_DMI",
+     "N25_DST_CCI",
+     "S1_EMA_RSI_CHOP",
+     "S3_CMO_SANDWICH",
+     "S4_BB_BBP",
+     "N04_ST_KLINGER",
+     "N05_PSAR_POC",
+     "N06_MACD_ORB",
+     "N11_BREAKAWAY",
+     "N13_3OUTSIDE",
+     "N15_KC_AO",
+     "N16_BBRSI",
+     "N19_FIB_CHOP",
+     "N20_EMA9_CHOP",
+     "V39_ALL",
+     "OBV_S",
+     "OBV_B",
+     "V45_AMB",
+     "DOGE"
+    ],
+    "tfs": [
+     "5m",
+     "15m",
+     "30m",
+     "1h",
+     "4h"
+    ]
+   },
+   "C": {
+    "strategies": [
+     "S2_ST_ROC",
+     "S5_DONCHIAN_MFI",
+     "S6_EMA_DMI_ADX",
+     "N01_ST_EMA",
+     "N02_ST_KST",
+     "N03_ADX_GC",
+     "N07_ICHI_CMO",
+     "N08_ICHI_WR",
+     "N09_ALLIG_AROON",
+     "N10_HA_PSAR",
+     "N12_ICHI_AO",
+     "N14_ICHI_RSI",
+     "N17_KC_RSI",
+     "N18_VWMA_MACD",
+     "N21_ST_RSI_ADX",
+     "N22_VORTEX_PSAR",
+     "N23_HA_ST",
+     "N24_DMI",
+     "N25_DST_CCI",
+     "S1_EMA_RSI_CHOP",
+     "S3_CMO_SANDWICH",
+     "S4_BB_BBP",
+     "N04_ST_KLINGER",
+     "N05_PSAR_POC",
+     "N06_MACD_ORB",
+     "N11_BREAKAWAY",
+     "N13_3OUTSIDE",
+     "N15_KC_AO",
+     "N16_BBRSI",
+     "N19_FIB_CHOP",
+     "N20_EMA9_CHOP",
+     "V39_ALL",
+     "OBV_S",
+     "OBV_B",
+     "V45_AMB",
+     "DOGE"
+    ],
+    "tfs": [
+     "15m",
+     "1h",
+     "4h"
+    ]
+   }
+  },
+  "parts_provenance": {
+   "B": {
+    "source": "aggregated in this invocation",
+    "code": "8c0a457ec8af38eb1b1d9319c6e95af1392f08108755db3c7bd4094ef20bb292",
+    "selection": {
+     "strategies": [
+      "S2_ST_ROC",
+      "S5_DONCHIAN_MFI",
+      "S6_EMA_DMI_ADX",
+      "N01_ST_EMA",
+      "N02_ST_KST",
+      "N03_ADX_GC",
+      "N07_ICHI_CMO",
+      "N08_ICHI_WR",
+      "N09_ALLIG_AROON",
+      "N10_HA_PSAR",
+      "N12_ICHI_AO",
+      "N14_ICHI_RSI",
+      "N17_KC_RSI",
+      "N18_VWMA_MACD",
+      "N21_ST_RSI_ADX",
+      "N22_VORTEX_PSAR",
+      "N23_HA_ST",
+      "N24_DMI",
+      "N25_DST_CCI",
+      "S1_EMA_RSI_CHOP",
+      "S3_CMO_SANDWICH",
+      "S4_BB_BBP",
+      "N04_ST_KLINGER",
+      "N05_PSAR_POC",
+      "N06_MACD_ORB",
+      "N11_BREAKAWAY",
+      "N13_3OUTSIDE",
+      "N15_KC_AO",
+      "N16_BBRSI",
+      "N19_FIB_CHOP",
+      "N20_EMA9_CHOP",
+      "V39_ALL",
+      "OBV_S",
+      "OBV_B",
+      "V45_AMB",
+      "DOGE"
+     ],
+     "tfs": [
+      "5m",
+      "15m",
+      "30m",
+      "1h",
+      "4h"
+     ]
+    }
+   },
+   "C": {
+    "source": "aggregated in this invocation",
+    "code": "8c0a457ec8af38eb1b1d9319c6e95af1392f08108755db3c7bd4094ef20bb292",
+    "selection": {
+     "strategies": [
+      "S2_ST_ROC",
+      "S5_DONCHIAN_MFI",
+      "S6_EMA_DMI_ADX",
+      "N01_ST_EMA",
+      "N02_ST_KST",
+      "N03_ADX_GC",
+      "N07_ICHI_CMO",
+      "N08_ICHI_WR",
+      "N09_ALLIG_AROON",
+      "N10_HA_PSAR",
+      "N12_ICHI_AO",
+      "N14_ICHI_RSI",
+      "N17_KC_RSI",
+      "N18_VWMA_MACD",
+      "N21_ST_RSI_ADX",
+      "N22_VORTEX_PSAR",
+      "N23_HA_ST",
+      "N24_DMI",
+      "N25_DST_CCI",
+      "S1_EMA_RSI_CHOP",
+      "S3_CMO_SANDWICH",
+      "S4_BB_BBP",
+      "N04_ST_KLINGER",
+      "N05_PSAR_POC",
+      "N06_MACD_ORB",
+      "N11_BREAKAWAY",
+      "N13_3OUTSIDE",
+      "N15_KC_AO",
+      "N16_BBRSI",
+      "N19_FIB_CHOP",
+      "N20_EMA9_CHOP",
+      "V39_ALL",
+      "OBV_S",
+      "OBV_B",
+      "V45_AMB",
+      "DOGE"
+     ],
+     "tfs": [
+      "15m",
+      "1h",
+      "4h"
+     ]
+    }
+   }
+  },
+  "parts_left_out": {}
+ },
+ "prereg_sha256_file": "b945605218cc5df784b3818db9a8d05c23419e46e8029e4f7f26c472147914fa",
+ "prereg_sha256_now": "b945605218cc5df784b3818db9a8d05c23419e46e8029e4f7f26c472147914fa",
+ "prereg_hash_ok": true,
+ "defs_bc": {
+  "manifest": "research/entry_study/DEFS_BC.sha256",
+  "manifest_sha256": "185dbcf858e93f694d0775e12925c1904373d0db002a4df7bf3cfcefa3d56044",
+  "manifest_sha256_pinned": "185dbcf858e93f694d0775e12925c1904373d0db002a4df7bf3cfcefa3d56044",
+  "manifest_ok": true,
+  "files_checked": 72,
+  "ok": true,
+  "mismatched": [],
+  "not_in_manifest": [],
+  "manifest_git": {
+   "commit": "520dad0",
+   "git_sha256": "185dbcf858e93f694d0775e12925c1904373d0db002a4df7bf3cfcefa3d56044",
+   "pinned_sha256": "185dbcf858e93f694d0775e12925c1904373d0db002a4df7bf3cfcefa3d56044",
+   "ok": true
+  }
+ },
+ "signal_lock": "bd23a449bd3fcb54a977c3b0ee97abe9582242c2f6418caa3e20d701c3a3544c",
+ "code": {
+  "code_hash": "8c0a457ec8af38eb1b1d9319c6e95af1392f08108755db3c7bd4094ef20bb292",
+  "code_signature": "8c0a457ec8af38eb",
+  "version": "analysis_bc v3",
+  "base_version": "bc base v3",
+  "files": {
+   "research/entry_study/analysis_bc.py": "748c15ef928c329a315873ef9be8870e9bfdf319c9e955e8e7326fe85df4425b",
+   "research/entry_study/analysis_sr.py": "170a37574bb11e75abe180f3618859dde5eb8f6228ea8e2de252054f9065d620",
+   "research/entry_study/sr.py": "70f14e6db4ae1ee2f1eb1b1d18b00b5b9aa41e8154f0bac3b3b5f887f95b7ebb",
+   "research/strategy_profiles/profiles.py": "273a6428fe768b4734cd250b67a061e77df058b3055c66c6c363e5149e1c2e36",
+   "research/paper_rules/rules_bt.py": "4fdaad2f8ae3fff303e4fe5e564531f016bc42b4ac8c3e34530efbbce9eea06b",
+   "paperbot/sweepsig.py": "422fd374eafb26c621de10019820a73ab538d0a3ec469edcd82fd8971e6fc432",
+   "paperbot/sizing.py": "c8feb0e6610c38a07fba1f97bee80bf8cd40f2ea286e1f8bc499f1e52b877a4a",
+   "paperbot/ladder.py": "6bd368105d1d2b554ee63371dd023213cbcb1ea088e6d5b9acd2c2ff54d223f4",
+   "paperbot/margin.py": "005db5e72d93e57109c68c2b8c8cdaa45a5a4a8679dd0990d50b5e0a51c6f834",
+   "paperbot/config.py": "46a82ddf8e7916c3cecb7179b03e65c5bdb68358ca748c667f83a25eaba88734",
+   "paperbot/sigservice.py": "6f21a6089ae0f9cfb6356561c3382fc420f7c08e883e500fff85b14b7f3baf39",
+   "third_party/sweep/PREREG.sha256": "bd23a449bd3fcb54a977c3b0ee97abe9582242c2f6418caa3e20d701c3a3544c",
+   "research/entry_study/DEFS_BC.sha256": "185dbcf858e93f694d0775e12925c1904373d0db002a4df7bf3cfcefa3d56044"
+  },
+  "changed_on_disk_since_import": [],
+  "libraries": {
+   "numpy": "2.4.6",
+   "pandas": "2.3.3",
+   "python": "3.11.15"
+  }
+ },
+ "seeds": {
+  "random_entries": "analysis_sr.random_bars: np.random.default_rng([20260930, tf_minutes, coin_index (BTC, ETH, SOL, DOGE, LTC, BCH = 0..5), period]); choice(eligible, min(20000, eligible), replace=False), then random(k) < 0.5 -> long",
+  "B_bootstrap": "np.random.default_rng([20260930, 2, unit (strategy index 0..35; its random null 1000 + index), tf_index (5m..4h = 0..4), feature_index, period]); analysis_sr.boot_counts(W, 2000)",
+  "C_se": "np.random.default_rng([20260930, 3, strategy_index, tf_index, param_index + 1 (0 = default), mult_index (0..3; default 0), period]); analysis_sr.boot_counts(W, 2000)",
+  "C_random": "np.random.default_rng([20260930, 4, strategy_index, tf_index, param_index + 1, mult_index]); integers(0, pool, (draws, n_trades)) per period and coin (coins in BTC..BCH order); periods 1, 2, 3 in order, stopping once no draw is left",
+  "C_noedge": "np.random.default_rng([20260930, 5, strategy_index, tf_index, param_index + 1, mult_index, period]); analysis_sr.boot_counts(W, 2000) on the variant's own weeks"
+ },
+ "constants": {
+  "periods": {
+   "1": [
+    "2021-08-01",
+    "2024-07-01"
+   ],
+   "2": [
+    "2024-07-01",
+    "2026-09-30"
+   ],
+   "3": [
+    "2020-01-01",
+    "2021-08-01"
+   ]
+  },
+  "tfs_B": [
+   "5m",
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "tfs_C": [
+   "15m",
+   "1h",
+   "4h"
+  ],
+  "random_n": 20000,
+  "bootstrap_resamples": 2000,
+  "min_signals": 300,
+  "min_trades_for_p": 30,
+  "min_trades_for_p3_verdict": 30,
+  "fdr_q": 0.1,
+  "confirm_alpha": 0.05,
+  "random_alpha": 0.05,
+  "multipliers": [
+   0.5,
+   0.75,
+   1.25,
+   1.5
+  ],
+  "flat_se": 1.0,
+  "spike_se": 2.0,
+  "quintile_quantiles": [
+   0.2,
+   0.4,
+   0.6,
+   0.8
+  ],
+  "lookahead_passes": [
+   64,
+   512,
+   4096,
+   32768
+  ]
+ },
+ "data": {
+  "periods_1_2": "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/paper_rules/signals",
+  "period_3": "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/entry_study/signals_pre2021",
+  "volume_periods_1_2": "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/sweepdata/full",
+  "run_dir": "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/entry_study/bc_run",
+  "out_dir": "/home/user/crypto-bot-research/research/entry_study/out",
+  "source_fingerprints": {
+   "5m BTCUSD p12": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/paper_rules/signals/sig_5m_BTCUSD.npz",
+     14747361,
+     1790784662019011314
+    ],
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/sweepdata/full/btcusd-5m.csv",
+     40436926,
+     1790731141012321993
+    ]
+   ],
+   "5m BTCUSD p3": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/entry_study/signals_pre2021/sig_5m_BTCUSD.npz",
+     5298906,
+     1790784663755011417
+    ]
+   ],
+   "5m ETHUSD p12": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/paper_rules/signals/sig_5m_ETHUSD.npz",
+     13644267,
+     1790784675015012086
+    ],
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/sweepdata/full/ethusd-5m.csv",
+     38389164,
+     1790731162776323287
+    ]
+   ],
+   "5m ETHUSD p3": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/entry_study/signals_pre2021/sig_5m_ETHUSD.npz",
+     4947209,
+     1790784668447011696
+    ]
+   ],
+   "5m SOLUSD p12": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/paper_rules/signals/sig_5m_SOLUSD.npz",
+     12577954,
+     1790784653247010792
+    ],
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/sweepdata/full/solusd-5m.csv",
+     35431830,
+     1790731183740324533
+    ]
+   ],
+   "5m SOLUSD p3": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/entry_study/signals_pre2021/sig_5m_SOLUSD.npz",
+     2901780,
+     1790784661523011284
+    ]
+   ],
+   "5m DOGEUSD p12": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/paper_rules/signals/sig_5m_DOGEUSD.npz",
+     16973628,
+     1790784669187011740
+    ],
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/sweepdata/full/dogeusd-5m.csv",
+     42528032,
+     1790731264564329338
+    ]
+   ],
+   "5m DOGEUSD p3": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/entry_study/signals_pre2021/sig_5m_DOGEUSD.npz",
+     3739085,
+     1790784665367011513
+    ]
+   ],
+   "5m LTCUSD p12": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/paper_rules/signals/sig_5m_LTCUSD.npz",
+     12479539,
+     1790784681147012451
+    ],
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/sweepdata/full/ltcusd-5m.csv",
+     34530615,
+     1790731223888326920
+    ]
+   ],
+   "5m LTCUSD p3": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/entry_study/signals_pre2021/sig_5m_LTCUSD.npz",
+     4555007,
+     1790784670603011824
+    ]
+   ],
+   "5m BCHUSD p12": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/paper_rules/signals/sig_5m_BCHUSD.npz",
+     13049628,
+     1790784652871010770
+    ],
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/sweepdata/full/bchusd-5m.csv",
+     35101013,
+     1790731243760328101
+    ]
+   ],
+   "5m BCHUSD p3": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/entry_study/signals_pre2021/sig_5m_BCHUSD.npz",
+     4872996,
+     1790784661139011261
+    ]
+   ],
+   "15m BTCUSD p12": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/paper_rules/signals/sig_15m_BTCUSD.npz",
+     5117974,
+     1790784645603010338
+    ],
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/sweepdata/full/btcusd-15m.csv",
+     13578781,
+     1790731143488322140
+    ]
+   ],
+   "15m BTCUSD p3": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/entry_study/signals_pre2021/sig_15m_BTCUSD.npz",
+     1844700,
+     1790784656967011013
+    ]
+   ],
+   "15m ETHUSD p12": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/paper_rules/signals/sig_15m_ETHUSD.npz",
+     4711730,
+     1790784650983010658
+    ],
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/sweepdata/full/ethusd-15m.csv",
+     12886827,
+     1790731165160323429
+    ]
+   ],
+   "15m ETHUSD p3": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/entry_study/signals_pre2021/sig_15m_ETHUSD.npz",
+     1730522,
+     1790784660247011208
+    ]
+   ],
+   "15m SOLUSD p12": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/paper_rules/signals/sig_15m_SOLUSD.npz",
+     4453718,
+     1790784642683010164
+    ],
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/sweepdata/full/solusd-15m.csv",
+     11951504,
+     1790731186032324669
+    ]
+   ],
+   "15m SOLUSD p3": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/entry_study/signals_pre2021/sig_15m_SOLUSD.npz",
+     1034344,
+     1790784651723010702
+    ]
+   ],
+   "15m DOGEUSD p12": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/paper_rules/signals/sig_15m_DOGEUSD.npz",
+     6041850,
+     1790784648039010483
+    ],
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/sweepdata/full/dogeusd-15m.csv",
+     14341596,
+     1790731266996329482
+    ]
+   ],
+   "15m DOGEUSD p3": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/entry_study/signals_pre2021/sig_15m_DOGEUSD.npz",
+     1361326,
+     1790784658319011094
+    ]
+   ],
+   "15m LTCUSD p12": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/paper_rules/signals/sig_15m_LTCUSD.npz",
+     4424432,
+     1790784653883010830
+    ],
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/sweepdata/full/ltcusd-15m.csv",
+     11665922,
+     1790731226196327057
+    ]
+   ],
+   "15m LTCUSD p3": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/entry_study/signals_pre2021/sig_15m_LTCUSD.npz",
+     1619470,
+     1790784650535010631
+    ]
+   ],
+   "15m BCHUSD p12": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/paper_rules/signals/sig_15m_BCHUSD.npz",
+     4563053,
+     1790784642731010167
+    ],
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/sweepdata/full/bchusd-15m.csv",
+     11921711,
+     1790731246064328238
+    ]
+   ],
+   "15m BCHUSD p3": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/entry_study/signals_pre2021/sig_15m_BCHUSD.npz",
+     1705560,
+     1790784655187010907
+    ]
+   ],
+   "30m BTCUSD p12": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/paper_rules/signals/sig_30m_BTCUSD.npz",
+     2593819,
+     1790784644431010268
+    ],
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/sweepdata/full/btcusd-30m.csv",
+     6773521,
+     1790731144680322211
+    ]
+   ],
+   "30m BTCUSD p3": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/entry_study/signals_pre2021/sig_30m_BTCUSD.npz",
+     944172,
+     1790784658547011107
+    ]
+   ],
+   "30m ETHUSD p12": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/paper_rules/signals/sig_30m_ETHUSD.npz",
+     2385011,
+     1790784645839010352
+    ],
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/sweepdata/full/ethusd-30m.csv",
+     6435545,
+     1790731166552323511
+    ]
+   ],
+   "30m ETHUSD p3": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/entry_study/signals_pre2021/sig_30m_ETHUSD.npz",
+     889274,
+     1790784655983010955
+    ]
+   ],
+   "30m SOLUSD p12": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/paper_rules/signals/sig_30m_SOLUSD.npz",
+     2283767,
+     1790784648771010526
+    ],
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/sweepdata/full/solusd-30m.csv",
+     5978891,
+     1790731187164324737
+    ]
+   ],
+   "30m SOLUSD p3": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/entry_study/signals_pre2021/sig_30m_SOLUSD.npz",
+     538439,
+     1790784657679011056
+    ]
+   ],
+   "30m DOGEUSD p12": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/paper_rules/signals/sig_30m_DOGEUSD.npz",
+     3106798,
+     1790784644395010266
+    ],
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/sweepdata/full/dogeusd-30m.csv",
+     7186985,
+     1790731268200329554
+    ]
+   ],
+   "30m DOGEUSD p3": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/entry_study/signals_pre2021/sig_30m_DOGEUSD.npz",
+     721844,
+     1790784655067010900
+    ]
+   ],
+   "30m LTCUSD p12": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/paper_rules/signals/sig_30m_LTCUSD.npz",
+     2269309,
+     1790784647219010434
+    ],
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/sweepdata/full/ltcusd-30m.csv",
+     5831360,
+     1790731227340327125
+    ]
+   ],
+   "30m LTCUSD p3": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/entry_study/signals_pre2021/sig_30m_LTCUSD.npz",
+     838497,
+     1790784657051011018
+    ]
+   ],
+   "30m BCHUSD p12": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/paper_rules/signals/sig_30m_BCHUSD.npz",
+     2319894,
+     1790784643071010187
+    ],
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/sweepdata/full/bchusd-30m.csv",
+     5962689,
+     1790731247252328309
+    ]
+   ],
+   "30m BCHUSD p3": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/entry_study/signals_pre2021/sig_30m_BCHUSD.npz",
+     877245,
+     1790784657567011049
+    ]
+   ],
+   "1h BTCUSD p12": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/paper_rules/signals/sig_1h_BTCUSD.npz",
+     1311305,
+     1790784641971010122
+    ],
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/sweepdata/full/btcusd-1h.csv",
+     3378372,
+     1790731145358086748
+    ]
+   ],
+   "1h BTCUSD p3": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/entry_study/signals_pre2021/sig_1h_BTCUSD.npz",
+     482807,
+     1790784653503010807
+    ]
+   ],
+   "1h ETHUSD p12": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/paper_rules/signals/sig_1h_ETHUSD.npz",
+     1207091,
+     1790784640339010025
+    ],
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/sweepdata/full/ethusd-1h.csv",
+     3214389,
+     1790731167164323548
+    ]
+   ],
+   "1h ETHUSD p3": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/entry_study/signals_pre2021/sig_1h_ETHUSD.npz",
+     455374,
+     1790784654735010881
+    ]
+   ],
+   "1h SOLUSD p12": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/paper_rules/signals/sig_1h_SOLUSD.npz",
+     1167341,
+     1790784641731010108
+    ],
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/sweepdata/full/solusd-1h.csv",
+     2988119,
+     1790731187756324772
+    ]
+   ],
+   "1h SOLUSD p3": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/entry_study/signals_pre2021/sig_1h_SOLUSD.npz",
+     284319,
+     1790784656271010972
+    ]
+   ],
+   "1h DOGEUSD p12": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/paper_rules/signals/sig_1h_DOGEUSD.npz",
+     1597467,
+     1790784642655010163
+    ],
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/sweepdata/full/dogeusd-1h.csv",
+     3601652,
+     1790731268828329591
+    ]
+   ],
+   "1h DOGEUSD p3": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/entry_study/signals_pre2021/sig_1h_DOGEUSD.npz",
+     384803,
+     1790784654223010850
+    ]
+   ],
+   "1h LTCUSD p12": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/paper_rules/signals/sig_1h_LTCUSD.npz",
+     1160341,
+     1790784641091010070
+    ],
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/sweepdata/full/ltcusd-1h.csv",
+     2913574,
+     1790731227952327161
+    ]
+   ],
+   "1h LTCUSD p3": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/entry_study/signals_pre2021/sig_1h_LTCUSD.npz",
+     431976,
+     1790784655683010937
+    ]
+   ],
+   "1h BCHUSD p12": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/paper_rules/signals/sig_1h_BCHUSD.npz",
+     1175725,
+     1790784641139010072
+    ],
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/sweepdata/full/bchusd-1h.csv",
+     2983885,
+     1790731247940385987
+    ]
+   ],
+   "1h BCHUSD p3": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/entry_study/signals_pre2021/sig_1h_BCHUSD.npz",
+     448235,
+     1790784652743010762
+    ]
+   ],
+   "4h BTCUSD p12": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/paper_rules/signals/sig_4h_BTCUSD.npz",
+     340369,
+     1790784643371010205
+    ],
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/sweepdata/full/btcusd-4h.csv",
+     843396,
+     1790731145837356199
+    ]
+   ],
+   "4h BTCUSD p3": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/entry_study/signals_pre2021/sig_4h_BTCUSD.npz",
+     131597,
+     1790784658911011129
+    ]
+   ],
+   "4h ETHUSD p12": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/paper_rules/signals/sig_4h_ETHUSD.npz",
+     315542,
+     1790784643695010224
+    ],
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/sweepdata/full/ethusd-4h.csv",
+     804122,
+     1790731167670357715
+    ]
+   ],
+   "4h ETHUSD p3": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/entry_study/signals_pre2021/sig_4h_ETHUSD.npz",
+     125114,
+     1790784659843011184
+    ]
+   ],
+   "4h SOLUSD p12": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/paper_rules/signals/sig_4h_SOLUSD.npz",
+     309695,
+     1790784644167010252
+    ],
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/sweepdata/full/solusd-4h.csv",
+     748692,
+     1790731188212324799
+    ]
+   ],
+   "4h SOLUSD p3": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/entry_study/signals_pre2021/sig_4h_SOLUSD.npz",
+     84326,
+     1790784660931011249
+    ]
+   ],
+   "4h DOGEUSD p12": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/paper_rules/signals/sig_4h_DOGEUSD.npz",
+     430133,
+     1790784643519010214
+    ],
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/sweepdata/full/dogeusd-4h.csv",
+     904994,
+     1790731269340329621
+    ]
+   ],
+   "4h DOGEUSD p3": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/entry_study/signals_pre2021/sig_4h_DOGEUSD.npz",
+     117282,
+     1790784659275011150
+    ]
+   ],
+   "4h LTCUSD p12": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/paper_rules/signals/sig_4h_LTCUSD.npz",
+     306774,
+     1790784643887010236
+    ],
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/sweepdata/full/ltcusd-4h.csv",
+     730255,
+     1790731228392327187
+    ]
+   ],
+   "4h LTCUSD p3": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/entry_study/signals_pre2021/sig_4h_LTCUSD.npz",
+     120028,
+     1790784660383011216
+    ]
+   ],
+   "4h BCHUSD p12": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/paper_rules/signals/sig_4h_BCHUSD.npz",
+     306879,
+     1790784648939010536
+    ],
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/sweepdata/full/bchusd-4h.csv",
+     748793,
+     1790731248444328379
+    ]
+   ],
+   "4h BCHUSD p3": [
+    [
+     "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/entry_study/signals_pre2021/sig_4h_BCHUSD.npz",
+     123024,
+     1790784658375011097
+    ]
+   ]
+  },
+  "data_settings": {
+   "sig12": "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/paper_rules/signals",
+   "volume12": "sweep_csv",
+   "sig3": "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/entry_study/signals_pre2021",
+   "overrides_ignored": {}
+  },
+  "checkpoint_signatures": {
+   "B": {
+    "5m BTCUSD": "8c0a457ec8af38eb:342a8f2c3471",
+    "5m ETHUSD": "8c0a457ec8af38eb:9647b306cc09",
+    "5m SOLUSD": "8c0a457ec8af38eb:d825ba17558f",
+    "5m DOGEUSD": "8c0a457ec8af38eb:6365fb0b5ed5",
+    "5m LTCUSD": "8c0a457ec8af38eb:3693e4791a77",
+    "5m BCHUSD": "8c0a457ec8af38eb:4bad82735ce9",
+    "15m BTCUSD": "8c0a457ec8af38eb:64a6709b6687",
+    "15m ETHUSD": "8c0a457ec8af38eb:0056973fcfc6",
+    "15m SOLUSD": "8c0a457ec8af38eb:785c647c56f5",
+    "15m DOGEUSD": "8c0a457ec8af38eb:176797ae8493",
+    "15m LTCUSD": "8c0a457ec8af38eb:d8115739e8ce",
+    "15m BCHUSD": "8c0a457ec8af38eb:3a70931b2805",
+    "30m BTCUSD": "8c0a457ec8af38eb:70eeea2b2bab",
+    "30m ETHUSD": "8c0a457ec8af38eb:a4421fdfc227",
+    "30m SOLUSD": "8c0a457ec8af38eb:e9f2894bd8a0",
+    "30m DOGEUSD": "8c0a457ec8af38eb:51f20166de66",
+    "30m LTCUSD": "8c0a457ec8af38eb:507a4dc2cb27",
+    "30m BCHUSD": "8c0a457ec8af38eb:966bdbe469ab",
+    "1h BTCUSD": "8c0a457ec8af38eb:3d9512b2ef7a",
+    "1h ETHUSD": "8c0a457ec8af38eb:e57176fa42fb",
+    "1h SOLUSD": "8c0a457ec8af38eb:115949bac8fe",
+    "1h DOGEUSD": "8c0a457ec8af38eb:78d74399b654",
+    "1h LTCUSD": "8c0a457ec8af38eb:0dae02ce7f50",
+    "1h BCHUSD": "8c0a457ec8af38eb:60cf34648426",
+    "4h BTCUSD": "8c0a457ec8af38eb:be00fc8bb0d6",
+    "4h ETHUSD": "8c0a457ec8af38eb:e6337fdc31c4",
+    "4h SOLUSD": "8c0a457ec8af38eb:60962e820cff",
+    "4h DOGEUSD": "8c0a457ec8af38eb:726de88edc75",
+    "4h LTCUSD": "8c0a457ec8af38eb:c100e9f67e1d",
+    "4h BCHUSD": "8c0a457ec8af38eb:d2a3cfdd3c7e"
+   },
+   "C": {
+    "15m BTCUSD": "8c0a457ec8af38eb:64a6709b6687",
+    "15m ETHUSD": "8c0a457ec8af38eb:0056973fcfc6",
+    "15m SOLUSD": "8c0a457ec8af38eb:785c647c56f5",
+    "15m DOGEUSD": "8c0a457ec8af38eb:176797ae8493",
+    "15m LTCUSD": "8c0a457ec8af38eb:d8115739e8ce",
+    "15m BCHUSD": "8c0a457ec8af38eb:3a70931b2805",
+    "1h BTCUSD": "8c0a457ec8af38eb:3d9512b2ef7a",
+    "1h ETHUSD": "8c0a457ec8af38eb:e57176fa42fb",
+    "1h SOLUSD": "8c0a457ec8af38eb:115949bac8fe",
+    "1h DOGEUSD": "8c0a457ec8af38eb:78d74399b654",
+    "1h LTCUSD": "8c0a457ec8af38eb:0dae02ce7f50",
+    "1h BCHUSD": "8c0a457ec8af38eb:60cf34648426",
+    "4h BTCUSD": "8c0a457ec8af38eb:be00fc8bb0d6",
+    "4h ETHUSD": "8c0a457ec8af38eb:e6337fdc31c4",
+    "4h SOLUSD": "8c0a457ec8af38eb:60962e820cff",
+    "4h DOGEUSD": "8c0a457ec8af38eb:726de88edc75",
+    "4h LTCUSD": "8c0a457ec8af38eb:c100e9f67e1d",
+    "4h BCHUSD": "8c0a457ec8af38eb:d2a3cfdd3c7e"
+   }
+  }
+ },
+ "timings": {
+  "stages": {
+   "bases": {
+    "built": 0,
+    "reused": 60,
+    "wall_s": 0.0,
+    "built_seconds": 0
+   },
+   "jobs_B": {
+    "jobs": 1080,
+    "run": 990,
+    "resumed": 90,
+    "wall_s": 345.2,
+    "procs": 3
+   },
+   "bases_before_C": {
+    "built": 0,
+    "reused": 60,
+    "wall_s": 0.0,
+    "built_seconds": 0
+   },
+   "jobs_C": {
+    "jobs": 648,
+    "run": 594,
+    "resumed": 54,
+    "wall_s": 1723.1,
+    "procs": 3
+   },
+   "aggregate_B": {
+    "wall_s": 487.3,
+    "procs": 3
+   },
+   "aggregate_C": {
+    "wall_s": 71.9,
+    "procs": 3
+   }
+  },
+  "per_strategy_tf": [
+   {
+    "strategy": "S2_ST_ROC",
+    "tf": "5m",
+    "part": "B",
+    "jobs_sum": 24.26,
+    "jobs_max": 4.44,
+    "aggregate": 23.36
+   },
+   {
+    "strategy": "S5_DONCHIAN_MFI",
+    "tf": "5m",
+    "part": "B",
+    "jobs_sum": 4.41,
+    "jobs_max": 0.8,
+    "aggregate": 14.55
+   },
+   {
+    "strategy": "S6_EMA_DMI_ADX",
+    "tf": "5m",
+    "part": "B",
+    "jobs_sum": 3.9,
+    "jobs_max": 0.83,
+    "aggregate": 15.27
+   },
+   {
+    "strategy": "N01_ST_EMA",
+    "tf": "5m",
+    "part": "B",
+    "jobs_sum": 26.77,
+    "jobs_max": 5.06,
+    "aggregate": 16.01
+   },
+   {
+    "strategy": "N02_ST_KST",
+    "tf": "5m",
+    "part": "B",
+    "jobs_sum": 26.27,
+    "jobs_max": 4.98,
+    "aggregate": 11.36
+   },
+   {
+    "strategy": "N03_ADX_GC",
+    "tf": "5m",
+    "part": "B",
+    "jobs_sum": 4.39,
+    "jobs_max": 1.05,
+    "aggregate": 9.48
+   },
+   {
+    "strategy": "N07_ICHI_CMO",
+    "tf": "5m",
+    "part": "B",
+    "jobs_sum": 4.13,
+    "jobs_max": 0.79,
+    "aggregate": 14.37
+   },
+   {
+    "strategy": "N08_ICHI_WR",
+    "tf": "5m",
+    "part": "B",
+    "jobs_sum": 4.4,
+    "jobs_max": 0.9,
+    "aggregate": 11.68
+   },
+   {
+    "strategy": "N09_ALLIG_AROON",
+    "tf": "5m",
+    "part": "B",
+    "jobs_sum": 6.46,
+    "jobs_max": 1.28,
+    "aggregate": 14.93
+   },
+   {
+    "strategy": "N10_HA_PSAR",
+    "tf": "5m",
+    "part": "B",
+    "jobs_sum": 8.46,
+    "jobs_max": 1.63,
+    "aggregate": 17.41
+   },
+   {
+    "strategy": "N12_ICHI_AO",
+    "tf": "5m",
+    "part": "B",
+    "jobs_sum": 3.92,
+    "jobs_max": 0.72,
+    "aggregate": 15.43
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "5m",
+    "part": "B",
+    "jobs_sum": 5.22,
+    "jobs_max": 0.99,
+    "aggregate": 0.45
+   },
+   {
+    "strategy": "N17_KC_RSI",
+    "tf": "5m",
+    "part": "B",
+    "jobs_sum": 5.58,
+    "jobs_max": 1.1,
+    "aggregate": 15.6
+   },
+   {
+    "strategy": "N18_VWMA_MACD",
+    "tf": "5m",
+    "part": "B",
+    "jobs_sum": 3.18,
+    "jobs_max": 0.57,
+    "aggregate": 23.86
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "5m",
+    "part": "B",
+    "jobs_sum": 24.03,
+    "jobs_max": 4.26,
+    "aggregate": 0.37
+   },
+   {
+    "strategy": "N22_VORTEX_PSAR",
+    "tf": "5m",
+    "part": "B",
+    "jobs_sum": 7.47,
+    "jobs_max": 1.5,
+    "aggregate": 19.2
+   },
+   {
+    "strategy": "N23_HA_ST",
+    "tf": "5m",
+    "part": "B",
+    "jobs_sum": 22.74,
+    "jobs_max": 4.03,
+    "aggregate": 22.81
+   },
+   {
+    "strategy": "N24_DMI",
+    "tf": "5m",
+    "part": "B",
+    "jobs_sum": 2.9,
+    "jobs_max": 0.51,
+    "aggregate": 11.51
+   },
+   {
+    "strategy": "N25_DST_CCI",
+    "tf": "5m",
+    "part": "B",
+    "jobs_sum": 45.61,
+    "jobs_max": 8.59,
+    "aggregate": 15.3
+   },
+   {
+    "strategy": "S1_EMA_RSI_CHOP",
+    "tf": "5m",
+    "part": "B",
+    "jobs_sum": 4.16,
+    "jobs_max": 0.71,
+    "aggregate": 0.45
+   },
+   {
+    "strategy": "S3_CMO_SANDWICH",
+    "tf": "5m",
+    "part": "B",
+    "jobs_sum": 3.33,
+    "jobs_max": 0.6,
+    "aggregate": 10.74
+   },
+   {
+    "strategy": "S4_BB_BBP",
+    "tf": "5m",
+    "part": "B",
+    "jobs_sum": 5.01,
+    "jobs_max": 0.93,
+    "aggregate": 15.1
+   },
+   {
+    "strategy": "N04_ST_KLINGER",
+    "tf": "5m",
+    "part": "B",
+    "jobs_sum": 21.61,
+    "jobs_max": 3.82,
+    "aggregate": 16.89
+   },
+   {
+    "strategy": "N05_PSAR_POC",
+    "tf": "5m",
+    "part": "B",
+    "jobs_sum": 186.11,
+    "jobs_max": 33.09,
+    "aggregate": 14.21
+   },
+   {
+    "strategy": "N06_MACD_ORB",
+    "tf": "5m",
+    "part": "B",
+    "jobs_sum": 3.48,
+    "jobs_max": 0.69,
+    "aggregate": 16.26
+   },
+   {
+    "strategy": "N11_BREAKAWAY",
+    "tf": "5m",
+    "part": "B",
+    "jobs_sum": 2.77,
+    "jobs_max": 0.51,
+    "aggregate": 9.44
+   },
+   {
+    "strategy": "N13_3OUTSIDE",
+    "tf": "5m",
+    "part": "B",
+    "jobs_sum": 3.53,
+    "jobs_max": 0.75,
+    "aggregate": 8.42
+   },
+   {
+    "strategy": "N15_KC_AO",
+    "tf": "5m",
+    "part": "B",
+    "jobs_sum": 3.54,
+    "jobs_max": 0.72,
+    "aggregate": 0.44
+   },
+   {
+    "strategy": "N16_BBRSI",
+    "tf": "5m",
+    "part": "B",
+    "jobs_sum": 4.4,
+    "jobs_max": 0.83,
+    "aggregate": 9.1
+   },
+   {
+    "strategy": "N19_FIB_CHOP",
+    "tf": "5m",
+    "part": "B",
+    "jobs_sum": 3.01,
+    "jobs_max": 0.54,
+    "aggregate": 15.08
+   },
+   {
+    "strategy": "N20_EMA9_CHOP",
+    "tf": "5m",
+    "part": "B",
+    "jobs_sum": 3.98,
+    "jobs_max": 0.8,
+    "aggregate": 12.44
+   },
+   {
+    "strategy": "V39_ALL",
+    "tf": "5m",
+    "part": "B",
+    "jobs_sum": 49.28,
+    "jobs_max": 8.35,
+    "aggregate": 16.01
+   },
+   {
+    "strategy": "OBV_S",
+    "tf": "5m",
+    "part": "B",
+    "jobs_sum": 28.2,
+    "jobs_max": 4.97,
+    "aggregate": 15.95
+   },
+   {
+    "strategy": "OBV_B",
+    "tf": "5m",
+    "part": "B",
+    "jobs_sum": 28.3,
+    "jobs_max": 4.94,
+    "aggregate": 16.32
+   },
+   {
+    "strategy": "V45_AMB",
+    "tf": "5m",
+    "part": "B",
+    "jobs_sum": 68.76,
+    "jobs_max": 12.32,
+    "aggregate": 15.44
+   },
+   {
+    "strategy": "DOGE",
+    "tf": "5m",
+    "part": "B",
+    "jobs_sum": 13.38,
+    "jobs_max": 2.75,
+    "aggregate": 15.81
+   },
+   {
+    "strategy": "S2_ST_ROC",
+    "tf": "15m",
+    "part": "B",
+    "jobs_sum": 7.07,
+    "jobs_max": 1.27,
+    "aggregate": 15.19
+   },
+   {
+    "strategy": "S5_DONCHIAN_MFI",
+    "tf": "15m",
+    "part": "B",
+    "jobs_sum": 1.3,
+    "jobs_max": 0.25,
+    "aggregate": 9.46
+   },
+   {
+    "strategy": "S6_EMA_DMI_ADX",
+    "tf": "15m",
+    "part": "B",
+    "jobs_sum": 1.33,
+    "jobs_max": 0.31,
+    "aggregate": 12.57
+   },
+   {
+    "strategy": "N01_ST_EMA",
+    "tf": "15m",
+    "part": "B",
+    "jobs_sum": 6.88,
+    "jobs_max": 1.21,
+    "aggregate": 13.17
+   },
+   {
+    "strategy": "N02_ST_KST",
+    "tf": "15m",
+    "part": "B",
+    "jobs_sum": 7.22,
+    "jobs_max": 1.3,
+    "aggregate": 8.79
+   },
+   {
+    "strategy": "N03_ADX_GC",
+    "tf": "15m",
+    "part": "B",
+    "jobs_sum": 1.46,
+    "jobs_max": 0.27,
+    "aggregate": 9.11
+   },
+   {
+    "strategy": "N07_ICHI_CMO",
+    "tf": "15m",
+    "part": "B",
+    "jobs_sum": 1.4,
+    "jobs_max": 0.25,
+    "aggregate": 13.57
+   },
+   {
+    "strategy": "N08_ICHI_WR",
+    "tf": "15m",
+    "part": "B",
+    "jobs_sum": 1.42,
+    "jobs_max": 0.25,
+    "aggregate": 10.1
+   },
+   {
+    "strategy": "N09_ALLIG_AROON",
+    "tf": "15m",
+    "part": "B",
+    "jobs_sum": 1.96,
+    "jobs_max": 0.42,
+    "aggregate": 14.69
+   },
+   {
+    "strategy": "N10_HA_PSAR",
+    "tf": "15m",
+    "part": "B",
+    "jobs_sum": 2.62,
+    "jobs_max": 0.49,
+    "aggregate": 13.52
+   },
+   {
+    "strategy": "N12_ICHI_AO",
+    "tf": "15m",
+    "part": "B",
+    "jobs_sum": 1.42,
+    "jobs_max": 0.29,
+    "aggregate": 14.72
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "15m",
+    "part": "B",
+    "jobs_sum": 1.39,
+    "jobs_max": 0.26,
+    "aggregate": 0.48
+   },
+   {
+    "strategy": "N17_KC_RSI",
+    "tf": "15m",
+    "part": "B",
+    "jobs_sum": 1.37,
+    "jobs_max": 0.25,
+    "aggregate": 11.98
+   },
+   {
+    "strategy": "N18_VWMA_MACD",
+    "tf": "15m",
+    "part": "B",
+    "jobs_sum": 1.14,
+    "jobs_max": 0.21,
+    "aggregate": 16.27
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "15m",
+    "part": "B",
+    "jobs_sum": 7.98,
+    "jobs_max": 1.49,
+    "aggregate": 0.35
+   },
+   {
+    "strategy": "N22_VORTEX_PSAR",
+    "tf": "15m",
+    "part": "B",
+    "jobs_sum": 2.71,
+    "jobs_max": 0.55,
+    "aggregate": 15.26
+   },
+   {
+    "strategy": "N23_HA_ST",
+    "tf": "15m",
+    "part": "B",
+    "jobs_sum": 8.17,
+    "jobs_max": 1.54,
+    "aggregate": 14.83
+   },
+   {
+    "strategy": "N24_DMI",
+    "tf": "15m",
+    "part": "B",
+    "jobs_sum": 1.13,
+    "jobs_max": 0.23,
+    "aggregate": 10.07
+   },
+   {
+    "strategy": "N25_DST_CCI",
+    "tf": "15m",
+    "part": "B",
+    "jobs_sum": 15.73,
+    "jobs_max": 3.13,
+    "aggregate": 14.54
+   },
+   {
+    "strategy": "S1_EMA_RSI_CHOP",
+    "tf": "15m",
+    "part": "B",
+    "jobs_sum": 1.69,
+    "jobs_max": 0.31,
+    "aggregate": 0.42
+   },
+   {
+    "strategy": "S3_CMO_SANDWICH",
+    "tf": "15m",
+    "part": "B",
+    "jobs_sum": 1.25,
+    "jobs_max": 0.24,
+    "aggregate": 11.67
+   },
+   {
+    "strategy": "S4_BB_BBP",
+    "tf": "15m",
+    "part": "B",
+    "jobs_sum": 1.97,
+    "jobs_max": 0.36,
+    "aggregate": 13.68
+   },
+   {
+    "strategy": "N04_ST_KLINGER",
+    "tf": "15m",
+    "part": "B",
+    "jobs_sum": 7.09,
+    "jobs_max": 1.3,
+    "aggregate": 11.34
+   },
+   {
+    "strategy": "N05_PSAR_POC",
+    "tf": "15m",
+    "part": "B",
+    "jobs_sum": 59.98,
+    "jobs_max": 10.27,
+    "aggregate": 12.81
+   },
+   {
+    "strategy": "N06_MACD_ORB",
+    "tf": "15m",
+    "part": "B",
+    "jobs_sum": 1.19,
+    "jobs_max": 0.25,
+    "aggregate": 15.01
+   },
+   {
+    "strategy": "N11_BREAKAWAY",
+    "tf": "15m",
+    "part": "B",
+    "jobs_sum": 1.02,
+    "jobs_max": 0.23,
+    "aggregate": 0.44
+   },
+   {
+    "strategy": "N13_3OUTSIDE",
+    "tf": "15m",
+    "part": "B",
+    "jobs_sum": 1.2,
+    "jobs_max": 0.21,
+    "aggregate": 5.48
+   },
+   {
+    "strategy": "N15_KC_AO",
+    "tf": "15m",
+    "part": "B",
+    "jobs_sum": 1.3,
+    "jobs_max": 0.24,
+    "aggregate": 0.57
+   },
+   {
+    "strategy": "N16_BBRSI",
+    "tf": "15m",
+    "part": "B",
+    "jobs_sum": 1.47,
+    "jobs_max": 0.26,
+    "aggregate": 7.6
+   },
+   {
+    "strategy": "N19_FIB_CHOP",
+    "tf": "15m",
+    "part": "B",
+    "jobs_sum": 1.1,
+    "jobs_max": 0.2,
+    "aggregate": 13.18
+   },
+   {
+    "strategy": "N20_EMA9_CHOP",
+    "tf": "15m",
+    "part": "B",
+    "jobs_sum": 1.41,
+    "jobs_max": 0.27,
+    "aggregate": 8.92
+   },
+   {
+    "strategy": "V39_ALL",
+    "tf": "15m",
+    "part": "B",
+    "jobs_sum": 15.73,
+    "jobs_max": 2.79,
+    "aggregate": 15.74
+   },
+   {
+    "strategy": "OBV_S",
+    "tf": "15m",
+    "part": "B",
+    "jobs_sum": 9.93,
+    "jobs_max": 1.81,
+    "aggregate": 15.36
+   },
+   {
+    "strategy": "OBV_B",
+    "tf": "15m",
+    "part": "B",
+    "jobs_sum": 9.45,
+    "jobs_max": 1.62,
+    "aggregate": 14.91
+   },
+   {
+    "strategy": "V45_AMB",
+    "tf": "15m",
+    "part": "B",
+    "jobs_sum": 21.26,
+    "jobs_max": 3.99,
+    "aggregate": 14.84
+   },
+   {
+    "strategy": "DOGE",
+    "tf": "15m",
+    "part": "B",
+    "jobs_sum": 3.73,
+    "jobs_max": 0.71,
+    "aggregate": 14.13
+   },
+   {
+    "strategy": "S2_ST_ROC",
+    "tf": "30m",
+    "part": "B",
+    "jobs_sum": 3.57,
+    "jobs_max": 0.7,
+    "aggregate": 13.42
+   },
+   {
+    "strategy": "S5_DONCHIAN_MFI",
+    "tf": "30m",
+    "part": "B",
+    "jobs_sum": 0.81,
+    "jobs_max": 0.19,
+    "aggregate": 7.15
+   },
+   {
+    "strategy": "S6_EMA_DMI_ADX",
+    "tf": "30m",
+    "part": "B",
+    "jobs_sum": 0.67,
+    "jobs_max": 0.13,
+    "aggregate": 10.15
+   },
+   {
+    "strategy": "N01_ST_EMA",
+    "tf": "30m",
+    "part": "B",
+    "jobs_sum": 3.53,
+    "jobs_max": 0.64,
+    "aggregate": 11.2
+   },
+   {
+    "strategy": "N02_ST_KST",
+    "tf": "30m",
+    "part": "B",
+    "jobs_sum": 3.61,
+    "jobs_max": 0.67,
+    "aggregate": 8.57
+   },
+   {
+    "strategy": "N03_ADX_GC",
+    "tf": "30m",
+    "part": "B",
+    "jobs_sum": 0.75,
+    "jobs_max": 0.13,
+    "aggregate": 0.38
+   },
+   {
+    "strategy": "N07_ICHI_CMO",
+    "tf": "30m",
+    "part": "B",
+    "jobs_sum": 0.82,
+    "jobs_max": 0.16,
+    "aggregate": 13.0
+   },
+   {
+    "strategy": "N08_ICHI_WR",
+    "tf": "30m",
+    "part": "B",
+    "jobs_sum": 0.75,
+    "jobs_max": 0.14,
+    "aggregate": 7.81
+   },
+   {
+    "strategy": "N09_ALLIG_AROON",
+    "tf": "30m",
+    "part": "B",
+    "jobs_sum": 1.17,
+    "jobs_max": 0.26,
+    "aggregate": 11.53
+   },
+   {
+    "strategy": "N10_HA_PSAR",
+    "tf": "30m",
+    "part": "B",
+    "jobs_sum": 1.37,
+    "jobs_max": 0.25,
+    "aggregate": 14.15
+   },
+   {
+    "strategy": "N12_ICHI_AO",
+    "tf": "30m",
+    "part": "B",
+    "jobs_sum": 0.78,
+    "jobs_max": 0.14,
+    "aggregate": 11.55
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "30m",
+    "part": "B",
+    "jobs_sum": 0.91,
+    "jobs_max": 0.2,
+    "aggregate": 0.37
+   },
+   {
+    "strategy": "N17_KC_RSI",
+    "tf": "30m",
+    "part": "B",
+    "jobs_sum": 0.65,
+    "jobs_max": 0.11,
+    "aggregate": 10.52
+   },
+   {
+    "strategy": "N18_VWMA_MACD",
+    "tf": "30m",
+    "part": "B",
+    "jobs_sum": 0.57,
+    "jobs_max": 0.11,
+    "aggregate": 14.28
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "30m",
+    "part": "B",
+    "jobs_sum": 3.86,
+    "jobs_max": 0.76,
+    "aggregate": 0.31
+   },
+   {
+    "strategy": "N22_VORTEX_PSAR",
+    "tf": "30m",
+    "part": "B",
+    "jobs_sum": 1.28,
+    "jobs_max": 0.24,
+    "aggregate": 13.23
+   },
+   {
+    "strategy": "N23_HA_ST",
+    "tf": "30m",
+    "part": "B",
+    "jobs_sum": 3.77,
+    "jobs_max": 0.68,
+    "aggregate": 12.51
+   },
+   {
+    "strategy": "N24_DMI",
+    "tf": "30m",
+    "part": "B",
+    "jobs_sum": 0.62,
+    "jobs_max": 0.11,
+    "aggregate": 10.91
+   },
+   {
+    "strategy": "N25_DST_CCI",
+    "tf": "30m",
+    "part": "B",
+    "jobs_sum": 6.92,
+    "jobs_max": 1.25,
+    "aggregate": 13.22
+   },
+   {
+    "strategy": "S1_EMA_RSI_CHOP",
+    "tf": "30m",
+    "part": "B",
+    "jobs_sum": 0.85,
+    "jobs_max": 0.15,
+    "aggregate": 0.44
+   },
+   {
+    "strategy": "S3_CMO_SANDWICH",
+    "tf": "30m",
+    "part": "B",
+    "jobs_sum": 0.6,
+    "jobs_max": 0.11,
+    "aggregate": 10.72
+   },
+   {
+    "strategy": "S4_BB_BBP",
+    "tf": "30m",
+    "part": "B",
+    "jobs_sum": 0.91,
+    "jobs_max": 0.16,
+    "aggregate": 12.92
+   },
+   {
+    "strategy": "N04_ST_KLINGER",
+    "tf": "30m",
+    "part": "B",
+    "jobs_sum": 3.63,
+    "jobs_max": 0.69,
+    "aggregate": 8.79
+   },
+   {
+    "strategy": "N05_PSAR_POC",
+    "tf": "30m",
+    "part": "B",
+    "jobs_sum": 29.51,
+    "jobs_max": 5.22,
+    "aggregate": 9.47
+   },
+   {
+    "strategy": "N06_MACD_ORB",
+    "tf": "30m",
+    "part": "B",
+    "jobs_sum": 0.74,
+    "jobs_max": 0.16,
+    "aggregate": 9.81
+   },
+   {
+    "strategy": "N11_BREAKAWAY",
+    "tf": "30m",
+    "part": "B",
+    "jobs_sum": 0.62,
+    "jobs_max": 0.13,
+    "aggregate": 0.38
+   },
+   {
+    "strategy": "N13_3OUTSIDE",
+    "tf": "30m",
+    "part": "B",
+    "jobs_sum": 0.71,
+    "jobs_max": 0.17,
+    "aggregate": 2.99
+   },
+   {
+    "strategy": "N15_KC_AO",
+    "tf": "30m",
+    "part": "B",
+    "jobs_sum": 0.74,
+    "jobs_max": 0.14,
+    "aggregate": 0.37
+   },
+   {
+    "strategy": "N16_BBRSI",
+    "tf": "30m",
+    "part": "B",
+    "jobs_sum": 0.89,
+    "jobs_max": 0.19,
+    "aggregate": 4.96
+   },
+   {
+    "strategy": "N19_FIB_CHOP",
+    "tf": "30m",
+    "part": "B",
+    "jobs_sum": 0.62,
+    "jobs_max": 0.12,
+    "aggregate": 8.72
+   },
+   {
+    "strategy": "N20_EMA9_CHOP",
+    "tf": "30m",
+    "part": "B",
+    "jobs_sum": 0.73,
+    "jobs_max": 0.13,
+    "aggregate": 7.08
+   },
+   {
+    "strategy": "V39_ALL",
+    "tf": "30m",
+    "part": "B",
+    "jobs_sum": 8.16,
+    "jobs_max": 1.49,
+    "aggregate": 11.69
+   },
+   {
+    "strategy": "OBV_S",
+    "tf": "30m",
+    "part": "B",
+    "jobs_sum": 6.12,
+    "jobs_max": 1.41,
+    "aggregate": 11.34
+   },
+   {
+    "strategy": "OBV_B",
+    "tf": "30m",
+    "part": "B",
+    "jobs_sum": 5.94,
+    "jobs_max": 1.28,
+    "aggregate": 11.27
+   },
+   {
+    "strategy": "V45_AMB",
+    "tf": "30m",
+    "part": "B",
+    "jobs_sum": 10.55,
+    "jobs_max": 1.88,
+    "aggregate": 9.82
+   },
+   {
+    "strategy": "DOGE",
+    "tf": "30m",
+    "part": "B",
+    "jobs_sum": 2.01,
+    "jobs_max": 0.38,
+    "aggregate": 11.57
+   },
+   {
+    "strategy": "S2_ST_ROC",
+    "tf": "1h",
+    "part": "B",
+    "jobs_sum": 1.84,
+    "jobs_max": 0.33,
+    "aggregate": 10.26
+   },
+   {
+    "strategy": "S5_DONCHIAN_MFI",
+    "tf": "1h",
+    "part": "B",
+    "jobs_sum": 0.45,
+    "jobs_max": 0.09,
+    "aggregate": 0.27
+   },
+   {
+    "strategy": "S6_EMA_DMI_ADX",
+    "tf": "1h",
+    "part": "B",
+    "jobs_sum": 0.45,
+    "jobs_max": 0.09,
+    "aggregate": 8.03
+   },
+   {
+    "strategy": "N01_ST_EMA",
+    "tf": "1h",
+    "part": "B",
+    "jobs_sum": 1.85,
+    "jobs_max": 0.37,
+    "aggregate": 9.0
+   },
+   {
+    "strategy": "N02_ST_KST",
+    "tf": "1h",
+    "part": "B",
+    "jobs_sum": 1.73,
+    "jobs_max": 0.3,
+    "aggregate": 6.73
+   },
+   {
+    "strategy": "N03_ADX_GC",
+    "tf": "1h",
+    "part": "B",
+    "jobs_sum": 0.47,
+    "jobs_max": 0.1,
+    "aggregate": 0.3
+   },
+   {
+    "strategy": "N07_ICHI_CMO",
+    "tf": "1h",
+    "part": "B",
+    "jobs_sum": 0.53,
+    "jobs_max": 0.15,
+    "aggregate": 8.23
+   },
+   {
+    "strategy": "N08_ICHI_WR",
+    "tf": "1h",
+    "part": "B",
+    "jobs_sum": 0.42,
+    "jobs_max": 0.08,
+    "aggregate": 0.33
+   },
+   {
+    "strategy": "N09_ALLIG_AROON",
+    "tf": "1h",
+    "part": "B",
+    "jobs_sum": 0.56,
+    "jobs_max": 0.11,
+    "aggregate": 7.73
+   },
+   {
+    "strategy": "N10_HA_PSAR",
+    "tf": "1h",
+    "part": "B",
+    "jobs_sum": 0.79,
+    "jobs_max": 0.15,
+    "aggregate": 11.33
+   },
+   {
+    "strategy": "N12_ICHI_AO",
+    "tf": "1h",
+    "part": "B",
+    "jobs_sum": 0.46,
+    "jobs_max": 0.1,
+    "aggregate": 8.56
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "1h",
+    "part": "B",
+    "jobs_sum": 0.45,
+    "jobs_max": 0.1,
+    "aggregate": 0.3
+   },
+   {
+    "strategy": "N17_KC_RSI",
+    "tf": "1h",
+    "part": "B",
+    "jobs_sum": 0.48,
+    "jobs_max": 0.1,
+    "aggregate": 8.11
+   },
+   {
+    "strategy": "N18_VWMA_MACD",
+    "tf": "1h",
+    "part": "B",
+    "jobs_sum": 0.33,
+    "jobs_max": 0.08,
+    "aggregate": 14.41
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "1h",
+    "part": "B",
+    "jobs_sum": 2.05,
+    "jobs_max": 0.42,
+    "aggregate": 0.26
+   },
+   {
+    "strategy": "N22_VORTEX_PSAR",
+    "tf": "1h",
+    "part": "B",
+    "jobs_sum": 0.83,
+    "jobs_max": 0.18,
+    "aggregate": 11.16
+   },
+   {
+    "strategy": "N23_HA_ST",
+    "tf": "1h",
+    "part": "B",
+    "jobs_sum": 2.09,
+    "jobs_max": 0.41,
+    "aggregate": 11.78
+   },
+   {
+    "strategy": "N24_DMI",
+    "tf": "1h",
+    "part": "B",
+    "jobs_sum": 0.37,
+    "jobs_max": 0.07,
+    "aggregate": 7.36
+   },
+   {
+    "strategy": "N25_DST_CCI",
+    "tf": "1h",
+    "part": "B",
+    "jobs_sum": 3.34,
+    "jobs_max": 0.58,
+    "aggregate": 9.95
+   },
+   {
+    "strategy": "S1_EMA_RSI_CHOP",
+    "tf": "1h",
+    "part": "B",
+    "jobs_sum": 0.52,
+    "jobs_max": 0.11,
+    "aggregate": 0.28
+   },
+   {
+    "strategy": "S3_CMO_SANDWICH",
+    "tf": "1h",
+    "part": "B",
+    "jobs_sum": 0.35,
+    "jobs_max": 0.06,
+    "aggregate": 4.63
+   },
+   {
+    "strategy": "S4_BB_BBP",
+    "tf": "1h",
+    "part": "B",
+    "jobs_sum": 0.53,
+    "jobs_max": 0.12,
+    "aggregate": 10.28
+   },
+   {
+    "strategy": "N04_ST_KLINGER",
+    "tf": "1h",
+    "part": "B",
+    "jobs_sum": 1.79,
+    "jobs_max": 0.32,
+    "aggregate": 7.5
+   },
+   {
+    "strategy": "N05_PSAR_POC",
+    "tf": "1h",
+    "part": "B",
+    "jobs_sum": 14.55,
+    "jobs_max": 2.7,
+    "aggregate": 6.51
+   },
+   {
+    "strategy": "N06_MACD_ORB",
+    "tf": "1h",
+    "part": "B",
+    "jobs_sum": 0.47,
+    "jobs_max": 0.11,
+    "aggregate": 7.46
+   },
+   {
+    "strategy": "N11_BREAKAWAY",
+    "tf": "1h",
+    "part": "B",
+    "jobs_sum": 0.37,
+    "jobs_max": 0.11,
+    "aggregate": 0.28
+   },
+   {
+    "strategy": "N13_3OUTSIDE",
+    "tf": "1h",
+    "part": "B",
+    "jobs_sum": 0.39,
+    "jobs_max": 0.08,
+    "aggregate": 1.18
+   },
+   {
+    "strategy": "N15_KC_AO",
+    "tf": "1h",
+    "part": "B",
+    "jobs_sum": 0.47,
+    "jobs_max": 0.15,
+    "aggregate": 0.29
+   },
+   {
+    "strategy": "N16_BBRSI",
+    "tf": "1h",
+    "part": "B",
+    "jobs_sum": 0.5,
+    "jobs_max": 0.09,
+    "aggregate": 3.26
+   },
+   {
+    "strategy": "N19_FIB_CHOP",
+    "tf": "1h",
+    "part": "B",
+    "jobs_sum": 0.37,
+    "jobs_max": 0.07,
+    "aggregate": 7.28
+   },
+   {
+    "strategy": "N20_EMA9_CHOP",
+    "tf": "1h",
+    "part": "B",
+    "jobs_sum": 0.43,
+    "jobs_max": 0.09,
+    "aggregate": 5.77
+   },
+   {
+    "strategy": "V39_ALL",
+    "tf": "1h",
+    "part": "B",
+    "jobs_sum": 3.93,
+    "jobs_max": 0.76,
+    "aggregate": 9.86
+   },
+   {
+    "strategy": "OBV_S",
+    "tf": "1h",
+    "part": "B",
+    "jobs_sum": 2.3,
+    "jobs_max": 0.44,
+    "aggregate": 7.98
+   },
+   {
+    "strategy": "OBV_B",
+    "tf": "1h",
+    "part": "B",
+    "jobs_sum": 2.47,
+    "jobs_max": 0.43,
+    "aggregate": 12.17
+   },
+   {
+    "strategy": "V45_AMB",
+    "tf": "1h",
+    "part": "B",
+    "jobs_sum": 5.2,
+    "jobs_max": 0.94,
+    "aggregate": 9.59
+   },
+   {
+    "strategy": "DOGE",
+    "tf": "1h",
+    "part": "B",
+    "jobs_sum": 1.22,
+    "jobs_max": 0.24,
+    "aggregate": 9.73
+   },
+   {
+    "strategy": "S2_ST_ROC",
+    "tf": "4h",
+    "part": "B",
+    "jobs_sum": 0.51,
+    "jobs_max": 0.09,
+    "aggregate": 1.49
+   },
+   {
+    "strategy": "S5_DONCHIAN_MFI",
+    "tf": "4h",
+    "part": "B",
+    "jobs_sum": 0.18,
+    "jobs_max": 0.03,
+    "aggregate": 0.03
+   },
+   {
+    "strategy": "S6_EMA_DMI_ADX",
+    "tf": "4h",
+    "part": "B",
+    "jobs_sum": 0.19,
+    "jobs_max": 0.04,
+    "aggregate": 1.36
+   },
+   {
+    "strategy": "N01_ST_EMA",
+    "tf": "4h",
+    "part": "B",
+    "jobs_sum": 0.51,
+    "jobs_max": 0.1,
+    "aggregate": 1.2
+   },
+   {
+    "strategy": "N02_ST_KST",
+    "tf": "4h",
+    "part": "B",
+    "jobs_sum": 0.5,
+    "jobs_max": 0.09,
+    "aggregate": 0.96
+   },
+   {
+    "strategy": "N03_ADX_GC",
+    "tf": "4h",
+    "part": "B",
+    "jobs_sum": 0.22,
+    "jobs_max": 0.05,
+    "aggregate": 0.03
+   },
+   {
+    "strategy": "N07_ICHI_CMO",
+    "tf": "4h",
+    "part": "B",
+    "jobs_sum": 0.19,
+    "jobs_max": 0.04,
+    "aggregate": 1.41
+   },
+   {
+    "strategy": "N08_ICHI_WR",
+    "tf": "4h",
+    "part": "B",
+    "jobs_sum": 0.18,
+    "jobs_max": 0.03,
+    "aggregate": 0.03
+   },
+   {
+    "strategy": "N09_ALLIG_AROON",
+    "tf": "4h",
+    "part": "B",
+    "jobs_sum": 0.2,
+    "jobs_max": 0.05,
+    "aggregate": 1.26
+   },
+   {
+    "strategy": "N10_HA_PSAR",
+    "tf": "4h",
+    "part": "B",
+    "jobs_sum": 0.24,
+    "jobs_max": 0.04,
+    "aggregate": 1.29
+   },
+   {
+    "strategy": "N12_ICHI_AO",
+    "tf": "4h",
+    "part": "B",
+    "jobs_sum": 0.2,
+    "jobs_max": 0.04,
+    "aggregate": 1.29
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "4h",
+    "part": "B",
+    "jobs_sum": 0.24,
+    "jobs_max": 0.04,
+    "aggregate": 0.03
+   },
+   {
+    "strategy": "N17_KC_RSI",
+    "tf": "4h",
+    "part": "B",
+    "jobs_sum": 0.2,
+    "jobs_max": 0.05,
+    "aggregate": 1.2
+   },
+   {
+    "strategy": "N18_VWMA_MACD",
+    "tf": "4h",
+    "part": "B",
+    "jobs_sum": 0.15,
+    "jobs_max": 0.03,
+    "aggregate": 1.63
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "4h",
+    "part": "B",
+    "jobs_sum": 0.64,
+    "jobs_max": 0.12,
+    "aggregate": 0.03
+   },
+   {
+    "strategy": "N22_VORTEX_PSAR",
+    "tf": "4h",
+    "part": "B",
+    "jobs_sum": 0.26,
+    "jobs_max": 0.05,
+    "aggregate": 1.37
+   },
+   {
+    "strategy": "N23_HA_ST",
+    "tf": "4h",
+    "part": "B",
+    "jobs_sum": 0.57,
+    "jobs_max": 0.1,
+    "aggregate": 1.73
+   },
+   {
+    "strategy": "N24_DMI",
+    "tf": "4h",
+    "part": "B",
+    "jobs_sum": 0.19,
+    "jobs_max": 0.04,
+    "aggregate": 0.89
+   },
+   {
+    "strategy": "N25_DST_CCI",
+    "tf": "4h",
+    "part": "B",
+    "jobs_sum": 0.95,
+    "jobs_max": 0.19,
+    "aggregate": 1.13
+   },
+   {
+    "strategy": "S1_EMA_RSI_CHOP",
+    "tf": "4h",
+    "part": "B",
+    "jobs_sum": 0.28,
+    "jobs_max": 0.05,
+    "aggregate": 0.04
+   },
+   {
+    "strategy": "S3_CMO_SANDWICH",
+    "tf": "4h",
+    "part": "B",
+    "jobs_sum": 0.23,
+    "jobs_max": 0.05,
+    "aggregate": 0.02
+   },
+   {
+    "strategy": "S4_BB_BBP",
+    "tf": "4h",
+    "part": "B",
+    "jobs_sum": 0.26,
+    "jobs_max": 0.05,
+    "aggregate": 1.3
+   },
+   {
+    "strategy": "N04_ST_KLINGER",
+    "tf": "4h",
+    "part": "B",
+    "jobs_sum": 0.57,
+    "jobs_max": 0.11,
+    "aggregate": 1.16
+   },
+   {
+    "strategy": "N05_PSAR_POC",
+    "tf": "4h",
+    "part": "B",
+    "jobs_sum": 4.08,
+    "jobs_max": 0.83,
+    "aggregate": 0.03
+   },
+   {
+    "strategy": "N06_MACD_ORB",
+    "tf": "4h",
+    "part": "B",
+    "jobs_sum": 0.25,
+    "jobs_max": 0.06,
+    "aggregate": 1.14
+   },
+   {
+    "strategy": "N11_BREAKAWAY",
+    "tf": "4h",
+    "part": "B",
+    "jobs_sum": 0.18,
+    "jobs_max": 0.04,
+    "aggregate": 0.03
+   },
+   {
+    "strategy": "N13_3OUTSIDE",
+    "tf": "4h",
+    "part": "B",
+    "jobs_sum": 0.2,
+    "jobs_max": 0.04,
+    "aggregate": 0.01
+   },
+   {
+    "strategy": "N15_KC_AO",
+    "tf": "4h",
+    "part": "B",
+    "jobs_sum": 0.2,
+    "jobs_max": 0.05,
+    "aggregate": 0.03
+   },
+   {
+    "strategy": "N16_BBRSI",
+    "tf": "4h",
+    "part": "B",
+    "jobs_sum": 0.27,
+    "jobs_max": 0.06,
+    "aggregate": 0.41
+   },
+   {
+    "strategy": "N19_FIB_CHOP",
+    "tf": "4h",
+    "part": "B",
+    "jobs_sum": 0.19,
+    "jobs_max": 0.04,
+    "aggregate": 1.37
+   },
+   {
+    "strategy": "N20_EMA9_CHOP",
+    "tf": "4h",
+    "part": "B",
+    "jobs_sum": 0.21,
+    "jobs_max": 0.04,
+    "aggregate": 1.25
+   },
+   {
+    "strategy": "V39_ALL",
+    "tf": "4h",
+    "part": "B",
+    "jobs_sum": 1.23,
+    "jobs_max": 0.24,
+    "aggregate": 1.19
+   },
+   {
+    "strategy": "OBV_S",
+    "tf": "4h",
+    "part": "B",
+    "jobs_sum": 0.73,
+    "jobs_max": 0.18,
+    "aggregate": 1.21
+   },
+   {
+    "strategy": "OBV_B",
+    "tf": "4h",
+    "part": "B",
+    "jobs_sum": 0.84,
+    "jobs_max": 0.22,
+    "aggregate": 1.38
+   },
+   {
+    "strategy": "V45_AMB",
+    "tf": "4h",
+    "part": "B",
+    "jobs_sum": 1.97,
+    "jobs_max": 0.41,
+    "aggregate": 1.21
+   },
+   {
+    "strategy": "DOGE",
+    "tf": "4h",
+    "part": "B",
+    "jobs_sum": 0.62,
+    "jobs_max": 0.13,
+    "aggregate": 0.03
+   },
+   {
+    "strategy": "S2_ST_ROC",
+    "tf": "15m",
+    "part": "C",
+    "jobs_sum": 86.72,
+    "jobs_max": 14.86,
+    "aggregate": 12.75
+   },
+   {
+    "strategy": "S5_DONCHIAN_MFI",
+    "tf": "15m",
+    "part": "C",
+    "jobs_sum": 7.77,
+    "jobs_max": 1.46,
+    "aggregate": 0.73
+   },
+   {
+    "strategy": "S6_EMA_DMI_ADX",
+    "tf": "15m",
+    "part": "C",
+    "jobs_sum": 11.18,
+    "jobs_max": 1.99,
+    "aggregate": 2.27
+   },
+   {
+    "strategy": "N01_ST_EMA",
+    "tf": "15m",
+    "part": "C",
+    "jobs_sum": 111.77,
+    "jobs_max": 20.21,
+    "aggregate": 5.81
+   },
+   {
+    "strategy": "N02_ST_KST",
+    "tf": "15m",
+    "part": "C",
+    "jobs_sum": 112.46,
+    "jobs_max": 19.94,
+    "aggregate": 5.26
+   },
+   {
+    "strategy": "N03_ADX_GC",
+    "tf": "15m",
+    "part": "C",
+    "jobs_sum": 9.45,
+    "jobs_max": 1.74,
+    "aggregate": 0.32
+   },
+   {
+    "strategy": "N07_ICHI_CMO",
+    "tf": "15m",
+    "part": "C",
+    "jobs_sum": 10.54,
+    "jobs_max": 1.85,
+    "aggregate": 2.23
+   },
+   {
+    "strategy": "N08_ICHI_WR",
+    "tf": "15m",
+    "part": "C",
+    "jobs_sum": 11.12,
+    "jobs_max": 2.0,
+    "aggregate": 0.59
+   },
+   {
+    "strategy": "N09_ALLIG_AROON",
+    "tf": "15m",
+    "part": "C",
+    "jobs_sum": 14.28,
+    "jobs_max": 2.84,
+    "aggregate": 2.59
+   },
+   {
+    "strategy": "N10_HA_PSAR",
+    "tf": "15m",
+    "part": "C",
+    "jobs_sum": 33.19,
+    "jobs_max": 5.83,
+    "aggregate": 6.84
+   },
+   {
+    "strategy": "N12_ICHI_AO",
+    "tf": "15m",
+    "part": "C",
+    "jobs_sum": 10.27,
+    "jobs_max": 1.81,
+    "aggregate": 2.06
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "15m",
+    "part": "C",
+    "jobs_sum": 11.26,
+    "jobs_max": 2.25,
+    "aggregate": 0.05
+   },
+   {
+    "strategy": "N17_KC_RSI",
+    "tf": "15m",
+    "part": "C",
+    "jobs_sum": 11.47,
+    "jobs_max": 1.99,
+    "aggregate": 17.28
+   },
+   {
+    "strategy": "N18_VWMA_MACD",
+    "tf": "15m",
+    "part": "C",
+    "jobs_sum": 8.65,
+    "jobs_max": 1.63,
+    "aggregate": 14.08
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "15m",
+    "part": "C",
+    "jobs_sum": 111.37,
+    "jobs_max": 19.3,
+    "aggregate": 0.02
+   },
+   {
+    "strategy": "N22_VORTEX_PSAR",
+    "tf": "15m",
+    "part": "C",
+    "jobs_sum": 28.52,
+    "jobs_max": 5.32,
+    "aggregate": 13.22
+   },
+   {
+    "strategy": "N23_HA_ST",
+    "tf": "15m",
+    "part": "C",
+    "jobs_sum": 90.84,
+    "jobs_max": 15.73,
+    "aggregate": 11.83
+   },
+   {
+    "strategy": "N24_DMI",
+    "tf": "15m",
+    "part": "C",
+    "jobs_sum": 8.99,
+    "jobs_max": 1.63,
+    "aggregate": 8.76
+   },
+   {
+    "strategy": "N25_DST_CCI",
+    "tf": "15m",
+    "part": "C",
+    "jobs_sum": 219.66,
+    "jobs_max": 37.89,
+    "aggregate": 9.32
+   },
+   {
+    "strategy": "S1_EMA_RSI_CHOP",
+    "tf": "15m",
+    "part": "C",
+    "jobs_sum": 12.45,
+    "jobs_max": 2.2,
+    "aggregate": 0.23
+   },
+   {
+    "strategy": "S3_CMO_SANDWICH",
+    "tf": "15m",
+    "part": "C",
+    "jobs_sum": 10.6,
+    "jobs_max": 1.98,
+    "aggregate": 1.5
+   },
+   {
+    "strategy": "S4_BB_BBP",
+    "tf": "15m",
+    "part": "C",
+    "jobs_sum": 15.07,
+    "jobs_max": 2.69,
+    "aggregate": 5.83
+   },
+   {
+    "strategy": "N04_ST_KLINGER",
+    "tf": "15m",
+    "part": "C",
+    "jobs_sum": 111.42,
+    "jobs_max": 19.49,
+    "aggregate": 14.87
+   },
+   {
+    "strategy": "N05_PSAR_POC",
+    "tf": "15m",
+    "part": "C",
+    "jobs_sum": 1043.37,
+    "jobs_max": 180.34,
+    "aggregate": 1.78
+   },
+   {
+    "strategy": "N06_MACD_ORB",
+    "tf": "15m",
+    "part": "C",
+    "jobs_sum": 11.81,
+    "jobs_max": 2.1,
+    "aggregate": 1.33
+   },
+   {
+    "strategy": "N11_BREAKAWAY",
+    "tf": "15m",
+    "part": "C",
+    "jobs_sum": 6.34,
+    "jobs_max": 1.19,
+    "aggregate": 0.37
+   },
+   {
+    "strategy": "N13_3OUTSIDE",
+    "tf": "15m",
+    "part": "C",
+    "jobs_sum": 5.95,
+    "jobs_max": 1.04,
+    "aggregate": 1.06
+   },
+   {
+    "strategy": "N15_KC_AO",
+    "tf": "15m",
+    "part": "C",
+    "jobs_sum": 6.4,
+    "jobs_max": 1.11,
+    "aggregate": 0.18
+   },
+   {
+    "strategy": "N16_BBRSI",
+    "tf": "15m",
+    "part": "C",
+    "jobs_sum": 10.19,
+    "jobs_max": 1.87,
+    "aggregate": 2.11
+   },
+   {
+    "strategy": "N19_FIB_CHOP",
+    "tf": "15m",
+    "part": "C",
+    "jobs_sum": 8.29,
+    "jobs_max": 1.46,
+    "aggregate": 2.67
+   },
+   {
+    "strategy": "N20_EMA9_CHOP",
+    "tf": "15m",
+    "part": "C",
+    "jobs_sum": 6.8,
+    "jobs_max": 1.25,
+    "aggregate": 6.27
+   },
+   {
+    "strategy": "V39_ALL",
+    "tf": "15m",
+    "part": "C",
+    "jobs_sum": 793.96,
+    "jobs_max": 137.99,
+    "aggregate": 5.82
+   },
+   {
+    "strategy": "OBV_S",
+    "tf": "15m",
+    "part": "C",
+    "jobs_sum": 152.04,
+    "jobs_max": 26.09,
+    "aggregate": 2.2
+   },
+   {
+    "strategy": "OBV_B",
+    "tf": "15m",
+    "part": "C",
+    "jobs_sum": 144.27,
+    "jobs_max": 25.23,
+    "aggregate": 6.64
+   },
+   {
+    "strategy": "V45_AMB",
+    "tf": "15m",
+    "part": "C",
+    "jobs_sum": 703.09,
+    "jobs_max": 121.76,
+    "aggregate": 1.65
+   },
+   {
+    "strategy": "DOGE",
+    "tf": "15m",
+    "part": "C",
+    "jobs_sum": 52.9,
+    "jobs_max": 9.39,
+    "aggregate": 2.12
+   },
+   {
+    "strategy": "S2_ST_ROC",
+    "tf": "1h",
+    "part": "C",
+    "jobs_sum": 20.4,
+    "jobs_max": 3.59,
+    "aggregate": 2.45
+   },
+   {
+    "strategy": "S5_DONCHIAN_MFI",
+    "tf": "1h",
+    "part": "C",
+    "jobs_sum": 2.54,
+    "jobs_max": 0.46,
+    "aggregate": 0.32
+   },
+   {
+    "strategy": "S6_EMA_DMI_ADX",
+    "tf": "1h",
+    "part": "C",
+    "jobs_sum": 3.6,
+    "jobs_max": 0.66,
+    "aggregate": 0.78
+   },
+   {
+    "strategy": "N01_ST_EMA",
+    "tf": "1h",
+    "part": "C",
+    "jobs_sum": 26.32,
+    "jobs_max": 4.84,
+    "aggregate": 0.89
+   },
+   {
+    "strategy": "N02_ST_KST",
+    "tf": "1h",
+    "part": "C",
+    "jobs_sum": 26.92,
+    "jobs_max": 4.89,
+    "aggregate": 0.79
+   },
+   {
+    "strategy": "N03_ADX_GC",
+    "tf": "1h",
+    "part": "C",
+    "jobs_sum": 2.9,
+    "jobs_max": 0.55,
+    "aggregate": 0.18
+   },
+   {
+    "strategy": "N07_ICHI_CMO",
+    "tf": "1h",
+    "part": "C",
+    "jobs_sum": 3.15,
+    "jobs_max": 0.55,
+    "aggregate": 0.56
+   },
+   {
+    "strategy": "N08_ICHI_WR",
+    "tf": "1h",
+    "part": "C",
+    "jobs_sum": 3.04,
+    "jobs_max": 0.54,
+    "aggregate": 0.26
+   },
+   {
+    "strategy": "N09_ALLIG_AROON",
+    "tf": "1h",
+    "part": "C",
+    "jobs_sum": 3.5,
+    "jobs_max": 0.64,
+    "aggregate": 0.52
+   },
+   {
+    "strategy": "N10_HA_PSAR",
+    "tf": "1h",
+    "part": "C",
+    "jobs_sum": 8.98,
+    "jobs_max": 1.58,
+    "aggregate": 0.91
+   },
+   {
+    "strategy": "N12_ICHI_AO",
+    "tf": "1h",
+    "part": "C",
+    "jobs_sum": 3.69,
+    "jobs_max": 0.69,
+    "aggregate": 0.54
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "1h",
+    "part": "C",
+    "jobs_sum": 3.9,
+    "jobs_max": 0.73,
+    "aggregate": 0.02
+   },
+   {
+    "strategy": "N17_KC_RSI",
+    "tf": "1h",
+    "part": "C",
+    "jobs_sum": 3.54,
+    "jobs_max": 0.63,
+    "aggregate": 3.89
+   },
+   {
+    "strategy": "N18_VWMA_MACD",
+    "tf": "1h",
+    "part": "C",
+    "jobs_sum": 2.63,
+    "jobs_max": 0.48,
+    "aggregate": 3.12
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "1h",
+    "part": "C",
+    "jobs_sum": 28.71,
+    "jobs_max": 5.09,
+    "aggregate": 0.02
+   },
+   {
+    "strategy": "N22_VORTEX_PSAR",
+    "tf": "1h",
+    "part": "C",
+    "jobs_sum": 7.24,
+    "jobs_max": 1.35,
+    "aggregate": 2.26
+   },
+   {
+    "strategy": "N23_HA_ST",
+    "tf": "1h",
+    "part": "C",
+    "jobs_sum": 23.14,
+    "jobs_max": 4.24,
+    "aggregate": 2.71
+   },
+   {
+    "strategy": "N24_DMI",
+    "tf": "1h",
+    "part": "C",
+    "jobs_sum": 2.54,
+    "jobs_max": 0.45,
+    "aggregate": 1.26
+   },
+   {
+    "strategy": "N25_DST_CCI",
+    "tf": "1h",
+    "part": "C",
+    "jobs_sum": 52.84,
+    "jobs_max": 9.5,
+    "aggregate": 1.49
+   },
+   {
+    "strategy": "S1_EMA_RSI_CHOP",
+    "tf": "1h",
+    "part": "C",
+    "jobs_sum": 4.24,
+    "jobs_max": 0.77,
+    "aggregate": 0.12
+   },
+   {
+    "strategy": "S3_CMO_SANDWICH",
+    "tf": "1h",
+    "part": "C",
+    "jobs_sum": 4.1,
+    "jobs_max": 0.87,
+    "aggregate": 0.43
+   },
+   {
+    "strategy": "S4_BB_BBP",
+    "tf": "1h",
+    "part": "C",
+    "jobs_sum": 4.26,
+    "jobs_max": 0.85,
+    "aggregate": 1.14
+   },
+   {
+    "strategy": "N04_ST_KLINGER",
+    "tf": "1h",
+    "part": "C",
+    "jobs_sum": 28.55,
+    "jobs_max": 4.9,
+    "aggregate": 2.88
+   },
+   {
+    "strategy": "N05_PSAR_POC",
+    "tf": "1h",
+    "part": "C",
+    "jobs_sum": 249.11,
+    "jobs_max": 43.47,
+    "aggregate": 0.61
+   },
+   {
+    "strategy": "N06_MACD_ORB",
+    "tf": "1h",
+    "part": "C",
+    "jobs_sum": 4.96,
+    "jobs_max": 0.88,
+    "aggregate": 0.6
+   },
+   {
+    "strategy": "N11_BREAKAWAY",
+    "tf": "1h",
+    "part": "C",
+    "jobs_sum": 1.82,
+    "jobs_max": 0.34,
+    "aggregate": 0.15
+   },
+   {
+    "strategy": "N13_3OUTSIDE",
+    "tf": "1h",
+    "part": "C",
+    "jobs_sum": 1.69,
+    "jobs_max": 0.3,
+    "aggregate": 0.37
+   },
+   {
+    "strategy": "N15_KC_AO",
+    "tf": "1h",
+    "part": "C",
+    "jobs_sum": 1.98,
+    "jobs_max": 0.39,
+    "aggregate": 0.08
+   },
+   {
+    "strategy": "N16_BBRSI",
+    "tf": "1h",
+    "part": "C",
+    "jobs_sum": 3.23,
+    "jobs_max": 0.59,
+    "aggregate": 0.73
+   },
+   {
+    "strategy": "N19_FIB_CHOP",
+    "tf": "1h",
+    "part": "C",
+    "jobs_sum": 2.42,
+    "jobs_max": 0.47,
+    "aggregate": 0.63
+   },
+   {
+    "strategy": "N20_EMA9_CHOP",
+    "tf": "1h",
+    "part": "C",
+    "jobs_sum": 2.04,
+    "jobs_max": 0.42,
+    "aggregate": 1.02
+   },
+   {
+    "strategy": "V39_ALL",
+    "tf": "1h",
+    "part": "C",
+    "jobs_sum": 187.17,
+    "jobs_max": 32.32,
+    "aggregate": 1.4
+   },
+   {
+    "strategy": "OBV_S",
+    "tf": "1h",
+    "part": "C",
+    "jobs_sum": 38.58,
+    "jobs_max": 7.28,
+    "aggregate": 0.7
+   },
+   {
+    "strategy": "OBV_B",
+    "tf": "1h",
+    "part": "C",
+    "jobs_sum": 36.23,
+    "jobs_max": 6.54,
+    "aggregate": 1.41
+   },
+   {
+    "strategy": "V45_AMB",
+    "tf": "1h",
+    "part": "C",
+    "jobs_sum": 175.74,
+    "jobs_max": 30.79,
+    "aggregate": 0.54
+   },
+   {
+    "strategy": "DOGE",
+    "tf": "1h",
+    "part": "C",
+    "jobs_sum": 16.53,
+    "jobs_max": 2.9,
+    "aggregate": 0.6
+   },
+   {
+    "strategy": "S2_ST_ROC",
+    "tf": "4h",
+    "part": "C",
+    "jobs_sum": 5.2,
+    "jobs_max": 0.91,
+    "aggregate": 0.3
+   },
+   {
+    "strategy": "S5_DONCHIAN_MFI",
+    "tf": "4h",
+    "part": "C",
+    "jobs_sum": 1.21,
+    "jobs_max": 0.21,
+    "aggregate": 0.05
+   },
+   {
+    "strategy": "S6_EMA_DMI_ADX",
+    "tf": "4h",
+    "part": "C",
+    "jobs_sum": 1.58,
+    "jobs_max": 0.29,
+    "aggregate": 0.15
+   },
+   {
+    "strategy": "N01_ST_EMA",
+    "tf": "4h",
+    "part": "C",
+    "jobs_sum": 7.09,
+    "jobs_max": 1.34,
+    "aggregate": 0.28
+   },
+   {
+    "strategy": "N02_ST_KST",
+    "tf": "4h",
+    "part": "C",
+    "jobs_sum": 7.26,
+    "jobs_max": 1.3,
+    "aggregate": 0.25
+   },
+   {
+    "strategy": "N03_ADX_GC",
+    "tf": "4h",
+    "part": "C",
+    "jobs_sum": 1.44,
+    "jobs_max": 0.28,
+    "aggregate": 0.05
+   },
+   {
+    "strategy": "N07_ICHI_CMO",
+    "tf": "4h",
+    "part": "C",
+    "jobs_sum": 1.45,
+    "jobs_max": 0.25,
+    "aggregate": 0.2
+   },
+   {
+    "strategy": "N08_ICHI_WR",
+    "tf": "4h",
+    "part": "C",
+    "jobs_sum": 1.25,
+    "jobs_max": 0.22,
+    "aggregate": 0.04
+   },
+   {
+    "strategy": "N09_ALLIG_AROON",
+    "tf": "4h",
+    "part": "C",
+    "jobs_sum": 1.14,
+    "jobs_max": 0.21,
+    "aggregate": 0.17
+   },
+   {
+    "strategy": "N10_HA_PSAR",
+    "tf": "4h",
+    "part": "C",
+    "jobs_sum": 2.89,
+    "jobs_max": 0.57,
+    "aggregate": 0.23
+   },
+   {
+    "strategy": "N12_ICHI_AO",
+    "tf": "4h",
+    "part": "C",
+    "jobs_sum": 1.36,
+    "jobs_max": 0.24,
+    "aggregate": 0.19
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "4h",
+    "part": "C",
+    "jobs_sum": 1.57,
+    "jobs_max": 0.28,
+    "aggregate": 0.0
+   },
+   {
+    "strategy": "N17_KC_RSI",
+    "tf": "4h",
+    "part": "C",
+    "jobs_sum": 1.71,
+    "jobs_max": 0.37,
+    "aggregate": 0.27
+   },
+   {
+    "strategy": "N18_VWMA_MACD",
+    "tf": "4h",
+    "part": "C",
+    "jobs_sum": 1.19,
+    "jobs_max": 0.22,
+    "aggregate": 0.29
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "4h",
+    "part": "C",
+    "jobs_sum": 8.93,
+    "jobs_max": 1.67,
+    "aggregate": 0.0
+   },
+   {
+    "strategy": "N22_VORTEX_PSAR",
+    "tf": "4h",
+    "part": "C",
+    "jobs_sum": 2.97,
+    "jobs_max": 0.63,
+    "aggregate": 0.37
+   },
+   {
+    "strategy": "N23_HA_ST",
+    "tf": "4h",
+    "part": "C",
+    "jobs_sum": 6.47,
+    "jobs_max": 1.15,
+    "aggregate": 0.28
+   },
+   {
+    "strategy": "N24_DMI",
+    "tf": "4h",
+    "part": "C",
+    "jobs_sum": 1.19,
+    "jobs_max": 0.23,
+    "aggregate": 0.23
+   },
+   {
+    "strategy": "N25_DST_CCI",
+    "tf": "4h",
+    "part": "C",
+    "jobs_sum": 14.54,
+    "jobs_max": 2.49,
+    "aggregate": 0.28
+   },
+   {
+    "strategy": "S1_EMA_RSI_CHOP",
+    "tf": "4h",
+    "part": "C",
+    "jobs_sum": 2.62,
+    "jobs_max": 0.55,
+    "aggregate": 0.02
+   },
+   {
+    "strategy": "S3_CMO_SANDWICH",
+    "tf": "4h",
+    "part": "C",
+    "jobs_sum": 1.48,
+    "jobs_max": 0.27,
+    "aggregate": 0.12
+   },
+   {
+    "strategy": "S4_BB_BBP",
+    "tf": "4h",
+    "part": "C",
+    "jobs_sum": 1.3,
+    "jobs_max": 0.28,
+    "aggregate": 0.24
+   },
+   {
+    "strategy": "N04_ST_KLINGER",
+    "tf": "4h",
+    "part": "C",
+    "jobs_sum": 7.17,
+    "jobs_max": 1.3,
+    "aggregate": 0.36
+   },
+   {
+    "strategy": "N05_PSAR_POC",
+    "tf": "4h",
+    "part": "C",
+    "jobs_sum": 60.44,
+    "jobs_max": 10.63,
+    "aggregate": 0.1
+   },
+   {
+    "strategy": "N06_MACD_ORB",
+    "tf": "4h",
+    "part": "C",
+    "jobs_sum": 2.68,
+    "jobs_max": 0.5,
+    "aggregate": 0.15
+   },
+   {
+    "strategy": "N11_BREAKAWAY",
+    "tf": "4h",
+    "part": "C",
+    "jobs_sum": 0.69,
+    "jobs_max": 0.13,
+    "aggregate": 0.02
+   },
+   {
+    "strategy": "N13_3OUTSIDE",
+    "tf": "4h",
+    "part": "C",
+    "jobs_sum": 0.64,
+    "jobs_max": 0.13,
+    "aggregate": 0.07
+   },
+   {
+    "strategy": "N15_KC_AO",
+    "tf": "4h",
+    "part": "C",
+    "jobs_sum": 0.85,
+    "jobs_max": 0.16,
+    "aggregate": 0.01
+   },
+   {
+    "strategy": "N16_BBRSI",
+    "tf": "4h",
+    "part": "C",
+    "jobs_sum": 1.57,
+    "jobs_max": 0.27,
+    "aggregate": 0.16
+   },
+   {
+    "strategy": "N19_FIB_CHOP",
+    "tf": "4h",
+    "part": "C",
+    "jobs_sum": 1.03,
+    "jobs_max": 0.2,
+    "aggregate": 0.13
+   },
+   {
+    "strategy": "N20_EMA9_CHOP",
+    "tf": "4h",
+    "part": "C",
+    "jobs_sum": 0.95,
+    "jobs_max": 0.18,
+    "aggregate": 0.22
+   },
+   {
+    "strategy": "V39_ALL",
+    "tf": "4h",
+    "part": "C",
+    "jobs_sum": 52.37,
+    "jobs_max": 9.14,
+    "aggregate": 0.23
+   },
+   {
+    "strategy": "OBV_S",
+    "tf": "4h",
+    "part": "C",
+    "jobs_sum": 9.81,
+    "jobs_max": 1.72,
+    "aggregate": 0.17
+   },
+   {
+    "strategy": "OBV_B",
+    "tf": "4h",
+    "part": "C",
+    "jobs_sum": 9.42,
+    "jobs_max": 1.76,
+    "aggregate": 0.24
+   },
+   {
+    "strategy": "V45_AMB",
+    "tf": "4h",
+    "part": "C",
+    "jobs_sum": 45.14,
+    "jobs_max": 7.83,
+    "aggregate": 0.08
+   },
+   {
+    "strategy": "DOGE",
+    "tf": "4h",
+    "part": "C",
+    "jobs_sum": 7.65,
+    "jobs_max": 1.37,
+    "aggregate": 0.0
+   }
+  ],
+  "this_invocation_s": 2628.6
+ },
+ "skipped": {
+  "B_cells_not_tested": [
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "5m",
+    "feature": "rsi_depth",
+    "n_signals_p1": 3,
+    "not_tested_reason": "period-1 signals 3 < 300"
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "5m",
+    "feature": "tk_gap_atr",
+    "n_signals_p1": 3,
+    "not_tested_reason": "period-1 signals 3 < 300"
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "5m",
+    "feature": "cloud_gap_atr",
+    "n_signals_p1": 3,
+    "not_tested_reason": "period-1 signals 3 < 300"
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "5m",
+    "feature": "rsi_extreme",
+    "n_signals_p1": 0,
+    "not_tested_reason": "period-1 signals 0 < 300"
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "5m",
+    "feature": "adx_cross_size",
+    "n_signals_p1": 0,
+    "not_tested_reason": "period-1 signals 0 < 300"
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "5m",
+    "feature": "st_line_dist_atr",
+    "n_signals_p1": 0,
+    "not_tested_reason": "period-1 signals 0 < 300"
+   },
+   {
+    "strategy": "S1_EMA_RSI_CHOP",
+    "tf": "5m",
+    "feature": "rsi_extreme",
+    "n_signals_p1": 235,
+    "not_tested_reason": "period-1 signals 235 < 300"
+   },
+   {
+    "strategy": "S1_EMA_RSI_CHOP",
+    "tf": "5m",
+    "feature": "ema_gap_atr",
+    "n_signals_p1": 235,
+    "not_tested_reason": "period-1 signals 235 < 300"
+   },
+   {
+    "strategy": "S1_EMA_RSI_CHOP",
+    "tf": "5m",
+    "feature": "chop_angle_deg",
+    "n_signals_p1": 235,
+    "not_tested_reason": "period-1 signals 235 < 300"
+   },
+   {
+    "strategy": "N15_KC_AO",
+    "tf": "5m",
+    "feature": "prev_pierce_atr",
+    "n_signals_p1": 123,
+    "not_tested_reason": "period-1 signals 123 < 300"
+   },
+   {
+    "strategy": "N15_KC_AO",
+    "tf": "5m",
+    "feature": "reentry_atr",
+    "n_signals_p1": 123,
+    "not_tested_reason": "period-1 signals 123 < 300"
+   },
+   {
+    "strategy": "N15_KC_AO",
+    "tf": "5m",
+    "feature": "ao_atr",
+    "n_signals_p1": 123,
+    "not_tested_reason": "period-1 signals 123 < 300"
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "15m",
+    "feature": "rsi_depth",
+    "n_signals_p1": 2,
+    "not_tested_reason": "period-1 signals 2 < 300"
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "15m",
+    "feature": "tk_gap_atr",
+    "n_signals_p1": 2,
+    "not_tested_reason": "period-1 signals 2 < 300"
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "15m",
+    "feature": "cloud_gap_atr",
+    "n_signals_p1": 2,
+    "not_tested_reason": "period-1 signals 2 < 300"
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "15m",
+    "feature": "rsi_extreme",
+    "n_signals_p1": 0,
+    "not_tested_reason": "period-1 signals 0 < 300"
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "15m",
+    "feature": "adx_cross_size",
+    "n_signals_p1": 0,
+    "not_tested_reason": "period-1 signals 0 < 300"
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "15m",
+    "feature": "st_line_dist_atr",
+    "n_signals_p1": 0,
+    "not_tested_reason": "period-1 signals 0 < 300"
+   },
+   {
+    "strategy": "S1_EMA_RSI_CHOP",
+    "tf": "15m",
+    "feature": "rsi_extreme",
+    "n_signals_p1": 103,
+    "not_tested_reason": "period-1 signals 103 < 300"
+   },
+   {
+    "strategy": "S1_EMA_RSI_CHOP",
+    "tf": "15m",
+    "feature": "ema_gap_atr",
+    "n_signals_p1": 103,
+    "not_tested_reason": "period-1 signals 103 < 300"
+   },
+   {
+    "strategy": "S1_EMA_RSI_CHOP",
+    "tf": "15m",
+    "feature": "chop_angle_deg",
+    "n_signals_p1": 103,
+    "not_tested_reason": "period-1 signals 103 < 300"
+   },
+   {
+    "strategy": "N11_BREAKAWAY",
+    "tf": "15m",
+    "feature": "reversal_body_atr",
+    "n_signals_p1": 241,
+    "not_tested_reason": "period-1 signals 241 < 300"
+   },
+   {
+    "strategy": "N11_BREAKAWAY",
+    "tf": "15m",
+    "feature": "first_body_atr",
+    "n_signals_p1": 241,
+    "not_tested_reason": "period-1 signals 241 < 300"
+   },
+   {
+    "strategy": "N11_BREAKAWAY",
+    "tf": "15m",
+    "feature": "pause_body_atr",
+    "n_signals_p1": 241,
+    "not_tested_reason": "period-1 signals 241 < 300"
+   },
+   {
+    "strategy": "N15_KC_AO",
+    "tf": "15m",
+    "feature": "prev_pierce_atr",
+    "n_signals_p1": 63,
+    "not_tested_reason": "period-1 signals 63 < 300"
+   },
+   {
+    "strategy": "N15_KC_AO",
+    "tf": "15m",
+    "feature": "reentry_atr",
+    "n_signals_p1": 63,
+    "not_tested_reason": "period-1 signals 63 < 300"
+   },
+   {
+    "strategy": "N15_KC_AO",
+    "tf": "15m",
+    "feature": "ao_atr",
+    "n_signals_p1": 63,
+    "not_tested_reason": "period-1 signals 63 < 300"
+   },
+   {
+    "strategy": "N03_ADX_GC",
+    "tf": "30m",
+    "feature": "adx_excess",
+    "n_signals_p1": 282,
+    "not_tested_reason": "period-1 signals 282 < 300"
+   },
+   {
+    "strategy": "N03_ADX_GC",
+    "tf": "30m",
+    "feature": "ema_gap_atr",
+    "n_signals_p1": 282,
+    "not_tested_reason": "period-1 signals 282 < 300"
+   },
+   {
+    "strategy": "N03_ADX_GC",
+    "tf": "30m",
+    "feature": "cross_lag_bars",
+    "n_signals_p1": 282,
+    "not_tested_reason": "period-1 signals 282 < 300"
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "30m",
+    "feature": "rsi_depth",
+    "n_signals_p1": 5,
+    "not_tested_reason": "period-1 signals 5 < 300"
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "30m",
+    "feature": "tk_gap_atr",
+    "n_signals_p1": 5,
+    "not_tested_reason": "period-1 signals 5 < 300"
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "30m",
+    "feature": "cloud_gap_atr",
+    "n_signals_p1": 5,
+    "not_tested_reason": "period-1 signals 5 < 300"
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "30m",
+    "feature": "rsi_extreme",
+    "n_signals_p1": 0,
+    "not_tested_reason": "period-1 signals 0 < 300"
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "30m",
+    "feature": "adx_cross_size",
+    "n_signals_p1": 0,
+    "not_tested_reason": "period-1 signals 0 < 300"
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "30m",
+    "feature": "st_line_dist_atr",
+    "n_signals_p1": 0,
+    "not_tested_reason": "period-1 signals 0 < 300"
+   },
+   {
+    "strategy": "S1_EMA_RSI_CHOP",
+    "tf": "30m",
+    "feature": "rsi_extreme",
+    "n_signals_p1": 68,
+    "not_tested_reason": "period-1 signals 68 < 300"
+   },
+   {
+    "strategy": "S1_EMA_RSI_CHOP",
+    "tf": "30m",
+    "feature": "ema_gap_atr",
+    "n_signals_p1": 68,
+    "not_tested_reason": "period-1 signals 68 < 300"
+   },
+   {
+    "strategy": "S1_EMA_RSI_CHOP",
+    "tf": "30m",
+    "feature": "chop_angle_deg",
+    "n_signals_p1": 68,
+    "not_tested_reason": "period-1 signals 68 < 300"
+   },
+   {
+    "strategy": "N11_BREAKAWAY",
+    "tf": "30m",
+    "feature": "reversal_body_atr",
+    "n_signals_p1": 145,
+    "not_tested_reason": "period-1 signals 145 < 300"
+   },
+   {
+    "strategy": "N11_BREAKAWAY",
+    "tf": "30m",
+    "feature": "first_body_atr",
+    "n_signals_p1": 145,
+    "not_tested_reason": "period-1 signals 145 < 300"
+   },
+   {
+    "strategy": "N11_BREAKAWAY",
+    "tf": "30m",
+    "feature": "pause_body_atr",
+    "n_signals_p1": 145,
+    "not_tested_reason": "period-1 signals 145 < 300"
+   },
+   {
+    "strategy": "N15_KC_AO",
+    "tf": "30m",
+    "feature": "prev_pierce_atr",
+    "n_signals_p1": 45,
+    "not_tested_reason": "period-1 signals 45 < 300"
+   },
+   {
+    "strategy": "N15_KC_AO",
+    "tf": "30m",
+    "feature": "reentry_atr",
+    "n_signals_p1": 45,
+    "not_tested_reason": "period-1 signals 45 < 300"
+   },
+   {
+    "strategy": "N15_KC_AO",
+    "tf": "30m",
+    "feature": "ao_atr",
+    "n_signals_p1": 45,
+    "not_tested_reason": "period-1 signals 45 < 300"
+   },
+   {
+    "strategy": "S5_DONCHIAN_MFI",
+    "tf": "1h",
+    "feature": "breakout_atr",
+    "n_signals_p1": 297,
+    "not_tested_reason": "period-1 signals 297 < 300"
+   },
+   {
+    "strategy": "S5_DONCHIAN_MFI",
+    "tf": "1h",
+    "feature": "mfi_past_level",
+    "n_signals_p1": 297,
+    "not_tested_reason": "period-1 signals 297 < 300"
+   },
+   {
+    "strategy": "S5_DONCHIAN_MFI",
+    "tf": "1h",
+    "feature": "sync_gap_bars",
+    "n_signals_p1": 297,
+    "not_tested_reason": "period-1 signals 297 < 300"
+   },
+   {
+    "strategy": "N03_ADX_GC",
+    "tf": "1h",
+    "feature": "adx_excess",
+    "n_signals_p1": 156,
+    "not_tested_reason": "period-1 signals 156 < 300"
+   },
+   {
+    "strategy": "N03_ADX_GC",
+    "tf": "1h",
+    "feature": "ema_gap_atr",
+    "n_signals_p1": 156,
+    "not_tested_reason": "period-1 signals 156 < 300"
+   },
+   {
+    "strategy": "N03_ADX_GC",
+    "tf": "1h",
+    "feature": "cross_lag_bars",
+    "n_signals_p1": 156,
+    "not_tested_reason": "period-1 signals 156 < 300"
+   },
+   {
+    "strategy": "N08_ICHI_WR",
+    "tf": "1h",
+    "feature": "wr_margin",
+    "n_signals_p1": 256,
+    "not_tested_reason": "period-1 signals 256 < 300"
+   },
+   {
+    "strategy": "N08_ICHI_WR",
+    "tf": "1h",
+    "feature": "tk_gap_atr",
+    "n_signals_p1": 256,
+    "not_tested_reason": "period-1 signals 256 < 300"
+   },
+   {
+    "strategy": "N08_ICHI_WR",
+    "tf": "1h",
+    "feature": "cloud_gap_atr",
+    "n_signals_p1": 256,
+    "not_tested_reason": "period-1 signals 256 < 300"
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "1h",
+    "feature": "rsi_depth",
+    "n_signals_p1": 3,
+    "not_tested_reason": "period-1 signals 3 < 300"
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "1h",
+    "feature": "tk_gap_atr",
+    "n_signals_p1": 3,
+    "not_tested_reason": "period-1 signals 3 < 300"
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "1h",
+    "feature": "cloud_gap_atr",
+    "n_signals_p1": 3,
+    "not_tested_reason": "period-1 signals 3 < 300"
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "1h",
+    "feature": "rsi_extreme",
+    "n_signals_p1": 1,
+    "not_tested_reason": "period-1 signals 1 < 300"
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "1h",
+    "feature": "adx_cross_size",
+    "n_signals_p1": 1,
+    "not_tested_reason": "period-1 signals 1 < 300"
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "1h",
+    "feature": "st_line_dist_atr",
+    "n_signals_p1": 1,
+    "not_tested_reason": "period-1 signals 1 < 300"
+   },
+   {
+    "strategy": "S1_EMA_RSI_CHOP",
+    "tf": "1h",
+    "feature": "rsi_extreme",
+    "n_signals_p1": 42,
+    "not_tested_reason": "period-1 signals 42 < 300"
+   },
+   {
+    "strategy": "S1_EMA_RSI_CHOP",
+    "tf": "1h",
+    "feature": "ema_gap_atr",
+    "n_signals_p1": 42,
+    "not_tested_reason": "period-1 signals 42 < 300"
+   },
+   {
+    "strategy": "S1_EMA_RSI_CHOP",
+    "tf": "1h",
+    "feature": "chop_angle_deg",
+    "n_signals_p1": 42,
+    "not_tested_reason": "period-1 signals 42 < 300"
+   },
+   {
+    "strategy": "N11_BREAKAWAY",
+    "tf": "1h",
+    "feature": "reversal_body_atr",
+    "n_signals_p1": 65,
+    "not_tested_reason": "period-1 signals 65 < 300"
+   },
+   {
+    "strategy": "N11_BREAKAWAY",
+    "tf": "1h",
+    "feature": "first_body_atr",
+    "n_signals_p1": 65,
+    "not_tested_reason": "period-1 signals 65 < 300"
+   },
+   {
+    "strategy": "N11_BREAKAWAY",
+    "tf": "1h",
+    "feature": "pause_body_atr",
+    "n_signals_p1": 65,
+    "not_tested_reason": "period-1 signals 65 < 300"
+   },
+   {
+    "strategy": "N15_KC_AO",
+    "tf": "1h",
+    "feature": "prev_pierce_atr",
+    "n_signals_p1": 19,
+    "not_tested_reason": "period-1 signals 19 < 300"
+   },
+   {
+    "strategy": "N15_KC_AO",
+    "tf": "1h",
+    "feature": "reentry_atr",
+    "n_signals_p1": 19,
+    "not_tested_reason": "period-1 signals 19 < 300"
+   },
+   {
+    "strategy": "N15_KC_AO",
+    "tf": "1h",
+    "feature": "ao_atr",
+    "n_signals_p1": 19,
+    "not_tested_reason": "period-1 signals 19 < 300"
+   },
+   {
+    "strategy": "S5_DONCHIAN_MFI",
+    "tf": "4h",
+    "feature": "breakout_atr",
+    "n_signals_p1": 57,
+    "not_tested_reason": "period-1 signals 57 < 300"
+   },
+   {
+    "strategy": "S5_DONCHIAN_MFI",
+    "tf": "4h",
+    "feature": "mfi_past_level",
+    "n_signals_p1": 57,
+    "not_tested_reason": "period-1 signals 57 < 300"
+   },
+   {
+    "strategy": "S5_DONCHIAN_MFI",
+    "tf": "4h",
+    "feature": "sync_gap_bars",
+    "n_signals_p1": 57,
+    "not_tested_reason": "period-1 signals 57 < 300"
+   },
+   {
+    "strategy": "N03_ADX_GC",
+    "tf": "4h",
+    "feature": "adx_excess",
+    "n_signals_p1": 25,
+    "not_tested_reason": "period-1 signals 25 < 300"
+   },
+   {
+    "strategy": "N03_ADX_GC",
+    "tf": "4h",
+    "feature": "ema_gap_atr",
+    "n_signals_p1": 25,
+    "not_tested_reason": "period-1 signals 25 < 300"
+   },
+   {
+    "strategy": "N03_ADX_GC",
+    "tf": "4h",
+    "feature": "cross_lag_bars",
+    "n_signals_p1": 25,
+    "not_tested_reason": "period-1 signals 25 < 300"
+   },
+   {
+    "strategy": "N08_ICHI_WR",
+    "tf": "4h",
+    "feature": "wr_margin",
+    "n_signals_p1": 56,
+    "not_tested_reason": "period-1 signals 56 < 300"
+   },
+   {
+    "strategy": "N08_ICHI_WR",
+    "tf": "4h",
+    "feature": "tk_gap_atr",
+    "n_signals_p1": 56,
+    "not_tested_reason": "period-1 signals 56 < 300"
+   },
+   {
+    "strategy": "N08_ICHI_WR",
+    "tf": "4h",
+    "feature": "cloud_gap_atr",
+    "n_signals_p1": 56,
+    "not_tested_reason": "period-1 signals 56 < 300"
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "4h",
+    "feature": "rsi_depth",
+    "n_signals_p1": 2,
+    "not_tested_reason": "period-1 signals 2 < 300"
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "4h",
+    "feature": "tk_gap_atr",
+    "n_signals_p1": 2,
+    "not_tested_reason": "period-1 signals 2 < 300"
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "4h",
+    "feature": "cloud_gap_atr",
+    "n_signals_p1": 2,
+    "not_tested_reason": "period-1 signals 2 < 300"
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "4h",
+    "feature": "rsi_extreme",
+    "n_signals_p1": 0,
+    "not_tested_reason": "period-1 signals 0 < 300"
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "4h",
+    "feature": "adx_cross_size",
+    "n_signals_p1": 0,
+    "not_tested_reason": "period-1 signals 0 < 300"
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "4h",
+    "feature": "st_line_dist_atr",
+    "n_signals_p1": 0,
+    "not_tested_reason": "period-1 signals 0 < 300"
+   },
+   {
+    "strategy": "S1_EMA_RSI_CHOP",
+    "tf": "4h",
+    "feature": "rsi_extreme",
+    "n_signals_p1": 10,
+    "not_tested_reason": "period-1 signals 10 < 300"
+   },
+   {
+    "strategy": "S1_EMA_RSI_CHOP",
+    "tf": "4h",
+    "feature": "ema_gap_atr",
+    "n_signals_p1": 10,
+    "not_tested_reason": "period-1 signals 10 < 300"
+   },
+   {
+    "strategy": "S1_EMA_RSI_CHOP",
+    "tf": "4h",
+    "feature": "chop_angle_deg",
+    "n_signals_p1": 10,
+    "not_tested_reason": "period-1 signals 10 < 300"
+   },
+   {
+    "strategy": "S3_CMO_SANDWICH",
+    "tf": "4h",
+    "feature": "cmo_level",
+    "n_signals_p1": 239,
+    "not_tested_reason": "period-1 signals 239 < 300"
+   },
+   {
+    "strategy": "S3_CMO_SANDWICH",
+    "tf": "4h",
+    "feature": "sandwich_match_atr",
+    "n_signals_p1": 239,
+    "not_tested_reason": "period-1 signals 239 < 300"
+   },
+   {
+    "strategy": "S3_CMO_SANDWICH",
+    "tf": "4h",
+    "feature": "prior_move_atr",
+    "n_signals_p1": 239,
+    "not_tested_reason": "period-1 signals 239 < 300"
+   },
+   {
+    "strategy": "N05_PSAR_POC",
+    "tf": "4h",
+    "feature": "pierce_depth",
+    "n_signals_p1": 268,
+    "not_tested_reason": "period-1 signals 268 < 300"
+   },
+   {
+    "strategy": "N05_PSAR_POC",
+    "tf": "4h",
+    "feature": "poc_bounce_atr",
+    "n_signals_p1": 268,
+    "not_tested_reason": "period-1 signals 268 < 300"
+   },
+   {
+    "strategy": "N05_PSAR_POC",
+    "tf": "4h",
+    "feature": "sar_gap_atr",
+    "n_signals_p1": 268,
+    "not_tested_reason": "period-1 signals 268 < 300"
+   },
+   {
+    "strategy": "N11_BREAKAWAY",
+    "tf": "4h",
+    "feature": "reversal_body_atr",
+    "n_signals_p1": 19,
+    "not_tested_reason": "period-1 signals 19 < 300"
+   },
+   {
+    "strategy": "N11_BREAKAWAY",
+    "tf": "4h",
+    "feature": "first_body_atr",
+    "n_signals_p1": 19,
+    "not_tested_reason": "period-1 signals 19 < 300"
+   },
+   {
+    "strategy": "N11_BREAKAWAY",
+    "tf": "4h",
+    "feature": "pause_body_atr",
+    "n_signals_p1": 19,
+    "not_tested_reason": "period-1 signals 19 < 300"
+   },
+   {
+    "strategy": "N13_3OUTSIDE",
+    "tf": "4h",
+    "feature": "engulf_body_atr",
+    "n_signals_p1": 226,
+    "not_tested_reason": "period-1 signals 226 < 300"
+   },
+   {
+    "strategy": "N13_3OUTSIDE",
+    "tf": "4h",
+    "feature": "confirm_close_atr",
+    "n_signals_p1": 226,
+    "not_tested_reason": "period-1 signals 226 < 300"
+   },
+   {
+    "strategy": "N13_3OUTSIDE",
+    "tf": "4h",
+    "feature": "breakout_atr",
+    "n_signals_p1": 226,
+    "not_tested_reason": "period-1 signals 226 < 300"
+   },
+   {
+    "strategy": "N15_KC_AO",
+    "tf": "4h",
+    "feature": "prev_pierce_atr",
+    "n_signals_p1": 3,
+    "not_tested_reason": "period-1 signals 3 < 300"
+   },
+   {
+    "strategy": "N15_KC_AO",
+    "tf": "4h",
+    "feature": "reentry_atr",
+    "n_signals_p1": 3,
+    "not_tested_reason": "period-1 signals 3 < 300"
+   },
+   {
+    "strategy": "N15_KC_AO",
+    "tf": "4h",
+    "feature": "ao_atr",
+    "n_signals_p1": 3,
+    "not_tested_reason": "period-1 signals 3 < 300"
+   },
+   {
+    "strategy": "DOGE",
+    "tf": "4h",
+    "feature": "ema_spread_pct",
+    "n_signals_p1": 0,
+    "not_tested_reason": "period-1 signals 0 < 300"
+   },
+   {
+    "strategy": "DOGE",
+    "tf": "4h",
+    "feature": "k_depth",
+    "n_signals_p1": 0,
+    "not_tested_reason": "period-1 signals 0 < 300"
+   },
+   {
+    "strategy": "DOGE",
+    "tf": "4h",
+    "feature": "rsi_margin",
+    "n_signals_p1": 0,
+    "not_tested_reason": "period-1 signals 0 < 300"
+   }
+  ],
+  "B_tests_insufficient": [
+   {
+    "strategy": "S6_EMA_DMI_ADX",
+    "tf": "4h",
+    "feature": "adx_over_25",
+    "period": 3,
+    "n_finite": 7,
+    "reason": "< 30 trades with a finite value"
+   },
+   {
+    "strategy": "S6_EMA_DMI_ADX",
+    "tf": "4h",
+    "feature": "di_spread",
+    "period": 3,
+    "n_finite": 7,
+    "reason": "< 30 trades with a finite value"
+   },
+   {
+    "strategy": "S6_EMA_DMI_ADX",
+    "tf": "4h",
+    "feature": "cross_gap_bars",
+    "period": 3,
+    "n_finite": 7,
+    "reason": "< 30 trades with a finite value"
+   },
+   {
+    "strategy": "N07_ICHI_CMO",
+    "tf": "4h",
+    "feature": "cmo_margin",
+    "period": 3,
+    "n_finite": 17,
+    "reason": "< 30 trades with a finite value"
+   },
+   {
+    "strategy": "N07_ICHI_CMO",
+    "tf": "4h",
+    "feature": "tk_gap_atr",
+    "period": 3,
+    "n_finite": 17,
+    "reason": "< 30 trades with a finite value"
+   },
+   {
+    "strategy": "N07_ICHI_CMO",
+    "tf": "4h",
+    "feature": "cloud_gap_atr",
+    "period": 3,
+    "n_finite": 17,
+    "reason": "< 30 trades with a finite value"
+   },
+   {
+    "strategy": "N09_ALLIG_AROON",
+    "tf": "4h",
+    "feature": "aroon_spread",
+    "period": 3,
+    "n_finite": 25,
+    "reason": "< 30 trades with a finite value"
+   },
+   {
+    "strategy": "N09_ALLIG_AROON",
+    "tf": "4h",
+    "feature": "lips_gap_atr",
+    "period": 3,
+    "n_finite": 25,
+    "reason": "< 30 trades with a finite value"
+   },
+   {
+    "strategy": "N09_ALLIG_AROON",
+    "tf": "4h",
+    "feature": "sync_gap_bars",
+    "period": 3,
+    "n_finite": 25,
+    "reason": "< 30 trades with a finite value"
+   },
+   {
+    "strategy": "N12_ICHI_AO",
+    "tf": "4h",
+    "feature": "ao_atr",
+    "period": 3,
+    "n_finite": 18,
+    "reason": "< 30 trades with a finite value"
+   },
+   {
+    "strategy": "N12_ICHI_AO",
+    "tf": "4h",
+    "feature": "tk_gap_atr",
+    "period": 3,
+    "n_finite": 18,
+    "reason": "< 30 trades with a finite value"
+   },
+   {
+    "strategy": "N12_ICHI_AO",
+    "tf": "4h",
+    "feature": "cloud_gap_atr",
+    "period": 3,
+    "n_finite": 18,
+    "reason": "< 30 trades with a finite value"
+   },
+   {
+    "strategy": "N06_MACD_ORB",
+    "tf": "4h",
+    "feature": "orb_break_atr",
+    "period": 3,
+    "n_finite": 21,
+    "reason": "< 30 trades with a finite value"
+   },
+   {
+    "strategy": "N06_MACD_ORB",
+    "tf": "4h",
+    "feature": "macd_line_atr",
+    "period": 3,
+    "n_finite": 21,
+    "reason": "< 30 trades with a finite value"
+   },
+   {
+    "strategy": "N06_MACD_ORB",
+    "tf": "4h",
+    "feature": "macd_hist_atr",
+    "period": 3,
+    "n_finite": 21,
+    "reason": "< 30 trades with a finite value"
+   },
+   {
+    "strategy": "N16_BBRSI",
+    "tf": "4h",
+    "feature": "reentry_rsi_depth",
+    "period": 1,
+    "n_finite": 14,
+    "reason": "< 30 trades with a finite value"
+   },
+   {
+    "strategy": "N16_BBRSI",
+    "tf": "4h",
+    "feature": "reentry_rsi_depth",
+    "period": 2,
+    "n_finite": 9,
+    "reason": "< 30 trades with a finite value"
+   },
+   {
+    "strategy": "N16_BBRSI",
+    "tf": "4h",
+    "feature": "reentry_rsi_depth",
+    "period": 3,
+    "n_finite": 1,
+    "reason": "< 30 trades with a finite value"
+   },
+   {
+    "strategy": "N16_BBRSI",
+    "tf": "4h",
+    "feature": "div_gap_atr",
+    "period": 3,
+    "n_finite": 12,
+    "reason": "< 30 trades with a finite value"
+   },
+   {
+    "strategy": "N16_BBRSI",
+    "tf": "4h",
+    "feature": "body_atr",
+    "period": 3,
+    "n_finite": 13,
+    "reason": "< 30 trades with a finite value"
+   },
+   {
+    "strategy": "N19_FIB_CHOP",
+    "tf": "4h",
+    "feature": "touch_depth_atr",
+    "period": 2,
+    "n_finite": 25,
+    "reason": "< 30 trades with a finite value"
+   },
+   {
+    "strategy": "N19_FIB_CHOP",
+    "tf": "4h",
+    "feature": "touch_depth_atr",
+    "period": 3,
+    "n_finite": 2,
+    "reason": "< 30 trades with a finite value"
+   },
+   {
+    "strategy": "N19_FIB_CHOP",
+    "tf": "4h",
+    "feature": "close_past_line_atr",
+    "period": 2,
+    "n_finite": 25,
+    "reason": "< 30 trades with a finite value"
+   },
+   {
+    "strategy": "N19_FIB_CHOP",
+    "tf": "4h",
+    "feature": "close_past_line_atr",
+    "period": 3,
+    "n_finite": 2,
+    "reason": "< 30 trades with a finite value"
+   },
+   {
+    "strategy": "N19_FIB_CHOP",
+    "tf": "4h",
+    "feature": "chop_slope",
+    "period": 2,
+    "n_finite": 25,
+    "reason": "< 30 trades with a finite value"
+   },
+   {
+    "strategy": "N19_FIB_CHOP",
+    "tf": "4h",
+    "feature": "chop_slope",
+    "period": 3,
+    "n_finite": 2,
+    "reason": "< 30 trades with a finite value"
+   },
+   {
+    "strategy": "OBV_S",
+    "tf": "4h",
+    "feature": "obv_gap_vol",
+    "period": 3,
+    "n_finite": 14,
+    "reason": "< 30 trades with a finite value"
+   },
+   {
+    "strategy": "OBV_S",
+    "tf": "4h",
+    "feature": "ac_atr",
+    "period": 3,
+    "n_finite": 14,
+    "reason": "< 30 trades with a finite value"
+   },
+   {
+    "strategy": "OBV_S",
+    "tf": "4h",
+    "feature": "stc_room",
+    "period": 3,
+    "n_finite": 14,
+    "reason": "< 30 trades with a finite value"
+   },
+   {
+    "strategy": "V45_AMB",
+    "tf": "4h",
+    "feature": "stc_room",
+    "period": 3,
+    "n_finite": 8,
+    "reason": "< 30 trades with a finite value"
+   },
+   {
+    "strategy": "V45_AMB",
+    "tf": "4h",
+    "feature": "pullback_angle",
+    "period": 3,
+    "n_finite": 8,
+    "reason": "< 30 trades with a finite value"
+   },
+   {
+    "strategy": "V45_AMB",
+    "tf": "4h",
+    "feature": "macd_hist_atr",
+    "period": 3,
+    "n_finite": 8,
+    "reason": "< 30 trades with a finite value"
+   }
+  ],
+  "B_signals_nan_feature": 73528,
+  "C_excluded": [],
+  "C_variants_without_period1_trades": [
+   {
+    "strategy": "N09_ALLIG_AROON",
+    "tf": "15m",
+    "param": "lips_len",
+    "mult": 1.5,
+    "value": 8
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "15m",
+    "param": "kijun_len",
+    "mult": 1.25,
+    "value": 33
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "15m",
+    "param": "kijun_len",
+    "mult": 1.5,
+    "value": 39
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "15m",
+    "param": "rsi_len",
+    "mult": 1.25,
+    "value": 18
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "15m",
+    "param": "rsi_len",
+    "mult": 1.5,
+    "value": 21
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "15m",
+    "param": "rsi_oversold",
+    "mult": 1.25,
+    "value": 25.0
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "15m",
+    "param": "rsi_oversold",
+    "mult": 1.5,
+    "value": 20.0
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "15m",
+    "param": "st_mult",
+    "mult": 0.5,
+    "value": 3.0
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "15m",
+    "param": "st_mult",
+    "mult": 0.75,
+    "value": 4.5
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "15m",
+    "param": "st_mult",
+    "mult": 1.25,
+    "value": 7.5
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "15m",
+    "param": "st_mult",
+    "mult": 1.5,
+    "value": 9.0
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "15m",
+    "param": "adx_len",
+    "mult": 0.5,
+    "value": 7
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "15m",
+    "param": "adx_len",
+    "mult": 0.75,
+    "value": 11
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "15m",
+    "param": "adx_len",
+    "mult": 1.5,
+    "value": 21
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "15m",
+    "param": "adx_level",
+    "mult": 0.5,
+    "value": 12.5
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "15m",
+    "param": "adx_level",
+    "mult": 0.75,
+    "value": 18.75
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "15m",
+    "param": "adx_level",
+    "mult": 1.25,
+    "value": 31.25
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "15m",
+    "param": "rsi_level",
+    "mult": 1.25,
+    "value": 25.0
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "15m",
+    "param": "rsi_level",
+    "mult": 1.5,
+    "value": 20.0
+   },
+   {
+    "strategy": "V45_AMB",
+    "tf": "15m",
+    "param": "st_mult_main",
+    "mult": 0.5,
+    "value": 3.0
+   },
+   {
+    "strategy": "N09_ALLIG_AROON",
+    "tf": "1h",
+    "param": "lips_len",
+    "mult": 1.5,
+    "value": 8
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "1h",
+    "param": "tenkan_len",
+    "mult": 0.75,
+    "value": 7
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "1h",
+    "param": "tenkan_len",
+    "mult": 1.25,
+    "value": 11
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "1h",
+    "param": "tenkan_len",
+    "mult": 1.5,
+    "value": 14
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "1h",
+    "param": "rsi_len",
+    "mult": 1.25,
+    "value": 18
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "1h",
+    "param": "rsi_len",
+    "mult": 1.5,
+    "value": 21
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "1h",
+    "param": "rsi_oversold",
+    "mult": 1.25,
+    "value": 25.0
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "1h",
+    "param": "rsi_oversold",
+    "mult": 1.5,
+    "value": 20.0
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "1h",
+    "param": "st_mult",
+    "mult": 0.5,
+    "value": 3.0
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "1h",
+    "param": "st_mult",
+    "mult": 0.75,
+    "value": 4.5
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "1h",
+    "param": "adx_len",
+    "mult": 0.75,
+    "value": 11
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "1h",
+    "param": "adx_len",
+    "mult": 1.25,
+    "value": 18
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "1h",
+    "param": "adx_len",
+    "mult": 1.5,
+    "value": 21
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "1h",
+    "param": "adx_level",
+    "mult": 0.5,
+    "value": 12.5
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "1h",
+    "param": "adx_level",
+    "mult": 0.75,
+    "value": 18.75
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "1h",
+    "param": "adx_level",
+    "mult": 1.25,
+    "value": 31.25
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "1h",
+    "param": "adx_level",
+    "mult": 1.5,
+    "value": 37.5
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "1h",
+    "param": "rsi_level",
+    "mult": 1.5,
+    "value": 20.0
+   },
+   {
+    "strategy": "V45_AMB",
+    "tf": "1h",
+    "param": "st_mult_main",
+    "mult": 0.5,
+    "value": 3.0
+   },
+   {
+    "strategy": "S5_DONCHIAN_MFI",
+    "tf": "4h",
+    "param": "mfi_level",
+    "mult": 1.5,
+    "value": 20.0
+   },
+   {
+    "strategy": "N03_ADX_GC",
+    "tf": "4h",
+    "param": "adx_level",
+    "mult": 0.5,
+    "value": 12.5
+   },
+   {
+    "strategy": "N08_ICHI_WR",
+    "tf": "4h",
+    "param": "wr_oversold",
+    "mult": 1.5,
+    "value": -95.0
+   },
+   {
+    "strategy": "N09_ALLIG_AROON",
+    "tf": "4h",
+    "param": "lips_len",
+    "mult": 1.5,
+    "value": 8
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "4h",
+    "param": "tenkan_len",
+    "mult": 1.25,
+    "value": 11
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "4h",
+    "param": "tenkan_len",
+    "mult": 1.5,
+    "value": 14
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "4h",
+    "param": "kijun_len",
+    "mult": 1.25,
+    "value": 33
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "4h",
+    "param": "kijun_len",
+    "mult": 1.5,
+    "value": 39
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "4h",
+    "param": "rsi_len",
+    "mult": 1.25,
+    "value": 18
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "4h",
+    "param": "rsi_len",
+    "mult": 1.5,
+    "value": 21
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "4h",
+    "param": "rsi_oversold",
+    "mult": 1.25,
+    "value": 25.0
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "4h",
+    "param": "rsi_oversold",
+    "mult": 1.5,
+    "value": 20.0
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "4h",
+    "param": "st_mult",
+    "mult": 0.5,
+    "value": 3.0
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "4h",
+    "param": "st_mult",
+    "mult": 0.75,
+    "value": 4.5
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "4h",
+    "param": "st_mult",
+    "mult": 1.25,
+    "value": 7.5
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "4h",
+    "param": "st_mult",
+    "mult": 1.5,
+    "value": 9.0
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "4h",
+    "param": "adx_len",
+    "mult": 0.5,
+    "value": 7
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "4h",
+    "param": "adx_len",
+    "mult": 0.75,
+    "value": 11
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "4h",
+    "param": "adx_len",
+    "mult": 1.25,
+    "value": 18
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "4h",
+    "param": "adx_len",
+    "mult": 1.5,
+    "value": 21
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "4h",
+    "param": "adx_level",
+    "mult": 0.5,
+    "value": 12.5
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "4h",
+    "param": "adx_level",
+    "mult": 0.75,
+    "value": 18.75
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "4h",
+    "param": "adx_level",
+    "mult": 1.25,
+    "value": 31.25
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "4h",
+    "param": "adx_level",
+    "mult": 1.5,
+    "value": 37.5
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "4h",
+    "param": "rsi_level",
+    "mult": 0.5,
+    "value": 40.0
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "4h",
+    "param": "rsi_level",
+    "mult": 0.75,
+    "value": 35.0
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "4h",
+    "param": "rsi_level",
+    "mult": 1.25,
+    "value": 25.0
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "4h",
+    "param": "rsi_level",
+    "mult": 1.5,
+    "value": 20.0
+   },
+   {
+    "strategy": "S1_EMA_RSI_CHOP",
+    "tf": "4h",
+    "param": "ema_slow",
+    "mult": 1.25,
+    "value": 25
+   },
+   {
+    "strategy": "S1_EMA_RSI_CHOP",
+    "tf": "4h",
+    "param": "ema_slow",
+    "mult": 1.5,
+    "value": 30
+   },
+   {
+    "strategy": "S1_EMA_RSI_CHOP",
+    "tf": "4h",
+    "param": "rsi_level",
+    "mult": 1.5,
+    "value": 20.0
+   },
+   {
+    "strategy": "N11_BREAKAWAY",
+    "tf": "4h",
+    "param": "big_body",
+    "mult": 1.25,
+    "value": 1.0
+   },
+   {
+    "strategy": "N11_BREAKAWAY",
+    "tf": "4h",
+    "param": "big_body",
+    "mult": 1.5,
+    "value": 1.2
+   },
+   {
+    "strategy": "N11_BREAKAWAY",
+    "tf": "4h",
+    "param": "small_body",
+    "mult": 0.5,
+    "value": 0.2
+   },
+   {
+    "strategy": "N11_BREAKAWAY",
+    "tf": "4h",
+    "param": "small_body",
+    "mult": 0.75,
+    "value": 0.3
+   },
+   {
+    "strategy": "N11_BREAKAWAY",
+    "tf": "4h",
+    "param": "gap_tol",
+    "mult": 0.5,
+    "value": 0.025
+   },
+   {
+    "strategy": "N11_BREAKAWAY",
+    "tf": "4h",
+    "param": "prior_n",
+    "mult": 0.5,
+    "value": 3
+   },
+   {
+    "strategy": "N15_KC_AO",
+    "tf": "4h",
+    "param": "kc_mult",
+    "mult": 1.5,
+    "value": 3.0
+   },
+   {
+    "strategy": "N15_KC_AO",
+    "tf": "4h",
+    "param": "ao_fast",
+    "mult": 0.5,
+    "value": 3
+   },
+   {
+    "strategy": "N15_KC_AO",
+    "tf": "4h",
+    "param": "ao_fast",
+    "mult": 1.25,
+    "value": 6
+   },
+   {
+    "strategy": "N19_FIB_CHOP",
+    "tf": "4h",
+    "param": "fib_level",
+    "mult": 1.5,
+    "value": 0.75
+   },
+   {
+    "strategy": "V45_AMB",
+    "tf": "4h",
+    "param": "st_mult_main",
+    "mult": 0.5,
+    "value": 3.0
+   },
+   {
+    "strategy": "DOGE",
+    "tf": "4h",
+    "param": "ema_slow",
+    "mult": 0.5,
+    "value": 78
+   },
+   {
+    "strategy": "DOGE",
+    "tf": "4h",
+    "param": "ema_slow",
+    "mult": 0.75,
+    "value": 117
+   },
+   {
+    "strategy": "DOGE",
+    "tf": "4h",
+    "param": "ema_slow",
+    "mult": 1.25,
+    "value": 195
+   },
+   {
+    "strategy": "DOGE",
+    "tf": "4h",
+    "param": "ema_slow",
+    "mult": 1.5,
+    "value": 234
+   },
+   {
+    "strategy": "DOGE",
+    "tf": "4h",
+    "param": "stoch_len",
+    "mult": 0.5,
+    "value": 35
+   },
+   {
+    "strategy": "DOGE",
+    "tf": "4h",
+    "param": "stoch_len",
+    "mult": 0.75,
+    "value": 53
+   },
+   {
+    "strategy": "DOGE",
+    "tf": "4h",
+    "param": "stoch_len",
+    "mult": 1.25,
+    "value": 88
+   },
+   {
+    "strategy": "DOGE",
+    "tf": "4h",
+    "param": "stoch_len",
+    "mult": 1.5,
+    "value": 105
+   },
+   {
+    "strategy": "DOGE",
+    "tf": "4h",
+    "param": "spread_min",
+    "mult": 0.5,
+    "value": 0.075
+   },
+   {
+    "strategy": "DOGE",
+    "tf": "4h",
+    "param": "spread_min",
+    "mult": 0.75,
+    "value": 0.11249999999999999
+   },
+   {
+    "strategy": "DOGE",
+    "tf": "4h",
+    "param": "spread_min",
+    "mult": 1.25,
+    "value": 0.1875
+   },
+   {
+    "strategy": "DOGE",
+    "tf": "4h",
+    "param": "spread_min",
+    "mult": 1.5,
+    "value": 0.22499999999999998
+   },
+   {
+    "strategy": "DOGE",
+    "tf": "4h",
+    "param": "chop_max",
+    "mult": 0.5,
+    "value": 30.9
+   },
+   {
+    "strategy": "DOGE",
+    "tf": "4h",
+    "param": "chop_max",
+    "mult": 0.75,
+    "value": 46.349999999999994
+   },
+   {
+    "strategy": "DOGE",
+    "tf": "4h",
+    "param": "chop_max",
+    "mult": 1.25,
+    "value": 77.25
+   },
+   {
+    "strategy": "DOGE",
+    "tf": "4h",
+    "param": "chop_max",
+    "mult": 1.5,
+    "value": 92.69999999999999
+   }
+  ],
+  "C_shapes_insufficient": [
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "15m",
+    "param": "tenkan_len",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "15m",
+    "param": "kijun_len",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "15m",
+    "param": "rsi_len",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "15m",
+    "param": "rsi_oversold",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "15m",
+    "param": "st_mult",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "15m",
+    "param": "adx_len",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "15m",
+    "param": "adx_level",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "15m",
+    "param": "rsi_level",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "S1_EMA_RSI_CHOP",
+    "tf": "15m",
+    "param": "ema_slow",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "S1_EMA_RSI_CHOP",
+    "tf": "15m",
+    "param": "rsi_len",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "S1_EMA_RSI_CHOP",
+    "tf": "15m",
+    "param": "rsi_level",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "S1_EMA_RSI_CHOP",
+    "tf": "15m",
+    "param": "chop_len",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N11_BREAKAWAY",
+    "tf": "15m",
+    "param": "big_body",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N11_BREAKAWAY",
+    "tf": "15m",
+    "param": "small_body",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N11_BREAKAWAY",
+    "tf": "15m",
+    "param": "gap_tol",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N11_BREAKAWAY",
+    "tf": "15m",
+    "param": "prior_n",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N15_KC_AO",
+    "tf": "15m",
+    "param": "kc_len",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N15_KC_AO",
+    "tf": "15m",
+    "param": "kc_mult",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N15_KC_AO",
+    "tf": "15m",
+    "param": "ao_fast",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N15_KC_AO",
+    "tf": "15m",
+    "param": "ao_slow",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "S5_DONCHIAN_MFI",
+    "tf": "1h",
+    "param": "dc_len",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "S5_DONCHIAN_MFI",
+    "tf": "1h",
+    "param": "mfi_len",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "S5_DONCHIAN_MFI",
+    "tf": "1h",
+    "param": "mfi_level",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "S5_DONCHIAN_MFI",
+    "tf": "1h",
+    "param": "sync",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N03_ADX_GC",
+    "tf": "1h",
+    "param": "ema_fast",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N03_ADX_GC",
+    "tf": "1h",
+    "param": "ema_slow",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N03_ADX_GC",
+    "tf": "1h",
+    "param": "adx_len",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N03_ADX_GC",
+    "tf": "1h",
+    "param": "adx_level",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N08_ICHI_WR",
+    "tf": "1h",
+    "param": "tenkan_len",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N08_ICHI_WR",
+    "tf": "1h",
+    "param": "kijun_len",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N08_ICHI_WR",
+    "tf": "1h",
+    "param": "wr_len",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N08_ICHI_WR",
+    "tf": "1h",
+    "param": "wr_oversold",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "1h",
+    "param": "tenkan_len",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "1h",
+    "param": "kijun_len",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "1h",
+    "param": "rsi_len",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "1h",
+    "param": "rsi_oversold",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "1h",
+    "param": "st_mult",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "1h",
+    "param": "adx_len",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "1h",
+    "param": "adx_level",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "1h",
+    "param": "rsi_level",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "S1_EMA_RSI_CHOP",
+    "tf": "1h",
+    "param": "ema_slow",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "S1_EMA_RSI_CHOP",
+    "tf": "1h",
+    "param": "rsi_len",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "S1_EMA_RSI_CHOP",
+    "tf": "1h",
+    "param": "rsi_level",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "S1_EMA_RSI_CHOP",
+    "tf": "1h",
+    "param": "chop_len",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N11_BREAKAWAY",
+    "tf": "1h",
+    "param": "big_body",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N11_BREAKAWAY",
+    "tf": "1h",
+    "param": "small_body",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N11_BREAKAWAY",
+    "tf": "1h",
+    "param": "gap_tol",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N11_BREAKAWAY",
+    "tf": "1h",
+    "param": "prior_n",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N15_KC_AO",
+    "tf": "1h",
+    "param": "kc_len",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N15_KC_AO",
+    "tf": "1h",
+    "param": "kc_mult",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N15_KC_AO",
+    "tf": "1h",
+    "param": "ao_fast",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N15_KC_AO",
+    "tf": "1h",
+    "param": "ao_slow",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "S5_DONCHIAN_MFI",
+    "tf": "4h",
+    "param": "dc_len",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "S5_DONCHIAN_MFI",
+    "tf": "4h",
+    "param": "mfi_len",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "S5_DONCHIAN_MFI",
+    "tf": "4h",
+    "param": "mfi_level",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "S5_DONCHIAN_MFI",
+    "tf": "4h",
+    "param": "sync",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N03_ADX_GC",
+    "tf": "4h",
+    "param": "ema_fast",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N03_ADX_GC",
+    "tf": "4h",
+    "param": "ema_slow",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N03_ADX_GC",
+    "tf": "4h",
+    "param": "adx_len",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N03_ADX_GC",
+    "tf": "4h",
+    "param": "adx_level",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N08_ICHI_WR",
+    "tf": "4h",
+    "param": "tenkan_len",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N08_ICHI_WR",
+    "tf": "4h",
+    "param": "kijun_len",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N08_ICHI_WR",
+    "tf": "4h",
+    "param": "wr_len",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N08_ICHI_WR",
+    "tf": "4h",
+    "param": "wr_oversold",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "4h",
+    "param": "tenkan_len",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "4h",
+    "param": "kijun_len",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "4h",
+    "param": "rsi_len",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "4h",
+    "param": "rsi_oversold",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "4h",
+    "param": "st_mult",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "4h",
+    "param": "adx_len",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "4h",
+    "param": "adx_level",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "4h",
+    "param": "rsi_level",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "S1_EMA_RSI_CHOP",
+    "tf": "4h",
+    "param": "ema_slow",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "S1_EMA_RSI_CHOP",
+    "tf": "4h",
+    "param": "rsi_len",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "S1_EMA_RSI_CHOP",
+    "tf": "4h",
+    "param": "rsi_level",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "S1_EMA_RSI_CHOP",
+    "tf": "4h",
+    "param": "chop_len",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "S3_CMO_SANDWICH",
+    "tf": "4h",
+    "param": "cmo_len",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "S3_CMO_SANDWICH",
+    "tf": "4h",
+    "param": "body_min",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "S3_CMO_SANDWICH",
+    "tf": "4h",
+    "param": "match_tol",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "S3_CMO_SANDWICH",
+    "tf": "4h",
+    "param": "prior_n",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N05_PSAR_POC",
+    "tf": "4h",
+    "param": "poc_lookback",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N05_PSAR_POC",
+    "tf": "4h",
+    "param": "poc_tol",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N05_PSAR_POC",
+    "tf": "4h",
+    "param": "pierce_frac",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N05_PSAR_POC",
+    "tf": "4h",
+    "param": "sar_af",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N11_BREAKAWAY",
+    "tf": "4h",
+    "param": "big_body",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N11_BREAKAWAY",
+    "tf": "4h",
+    "param": "small_body",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N11_BREAKAWAY",
+    "tf": "4h",
+    "param": "gap_tol",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N11_BREAKAWAY",
+    "tf": "4h",
+    "param": "prior_n",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N13_3OUTSIDE",
+    "tf": "4h",
+    "param": "engulf_min",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N13_3OUTSIDE",
+    "tf": "4h",
+    "param": "prior_n",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N13_3OUTSIDE",
+    "tf": "4h",
+    "param": "atr_len",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N15_KC_AO",
+    "tf": "4h",
+    "param": "kc_len",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N15_KC_AO",
+    "tf": "4h",
+    "param": "kc_mult",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N15_KC_AO",
+    "tf": "4h",
+    "param": "ao_fast",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "N15_KC_AO",
+    "tf": "4h",
+    "param": "ao_slow",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "DOGE",
+    "tf": "4h",
+    "param": "ema_slow",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "DOGE",
+    "tf": "4h",
+    "param": "stoch_len",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "DOGE",
+    "tf": "4h",
+    "param": "spread_min",
+    "shape_note": "default period-1 signals < 300"
+   },
+   {
+    "strategy": "DOGE",
+    "tf": "4h",
+    "param": "chop_max",
+    "shape_note": "default period-1 signals < 300"
+   }
+  ],
+  "C_default_mismatches": []
+ },
+ "ambiguities": [
+  "Minimum sample (PREREG 1) as in part A: '>= 300 period-1 signals' = signal bars of the strategy x timeframe pooled over coins, counted before sizing. A p-value in a period needs >= 30 trades with a finite feature value; fewer -> 'insufficient' (a period-1 'insufficient' test enters the BH family with p = 1).",
+  "Spearman rho = Pearson correlation of mid-ranks (ties averaged). The feature is multiplied by -1 when higher_is_stronger is False, so every test is one-sided H1: rho > 0. Bootstrap: the W weeks (Monday 00:00 UTC, sr.period_key of the signal bar) with >= 1 trade with a finite value, pooled over coins, are drawn W times with replacement (analysis_sr.boot_counts); rho is recomputed exactly on the resampled trades (a trade drawn k times counts k times in the ranks); p = (1 + #{rho_b <= 0 or undefined}) / 2001.",
+  "A trade enters B and C only if it was sized and closed before the data end (part A's rule). Signals whose feature value is NaN (indicator warm-up or undefined, as the locked definition returns it) are left out of that feature's test and counted in n_signals_nan.",
+  "Period 3 (PREREG 1: 'same direction'): judged only when >= 30 trades with a finite feature value, pooled over coins, fall in period 3 (part A's period-3 rule of >= 30 trades, and B's own period-2 minimum); fewer, or an undefined rho, is 'no data'. The verdict uses the sign of rho only. (A first draft gated on >= 100 period-3 signal bars, which is not in the PREREG and let 9 tested 4h cells with 2 to 25 period-3 trades get a verdict; replaced before any full-run result was computed.)",
+  "B random null: part A's random entries (same bars and sides, same seed rule) with the value of the random side from the same strength() arrays (for DOGE the locked long array holds the short-rule value on short-rule bars) and the same test pooled over coins. 'Random shows the same effect' = the random period-1 rho has the strategy's period-1 sign with one-sided p < 0.05 in that direction (unadjusted), as part A.",
+  "B quintiles (descriptive): edges = numpy linear 20/40/60/80 % quantiles of the signed feature over period-1 trades pooled over coins (>= 5 trades), applied to all periods; a value equal to an edge goes to the upper quintile, so discrete features can leave quintiles empty. Quintile 5 = strongest.",
+  "B within-coin check (descriptive, pre-specified before the full run; it does not change the PREREG candidate flag): the pooled Spearman of PREREG 1 / 3 mixes coins, and coin-level mean ROE (leverage and cost follow ATR / price) and coin-level feature levels can differ together, so part of a pooled rho can be a between-coin (coin composition) effect that repeats in every period. rho_within_coin_p{1,2,3} = n-weighted mean of the per-coin Spearman rho(signed feature, ROE) over the coins with >= 30 trades with a finite value in that period (weight = those trades; NaN when no coin qualifies; within_coin_n_coins_p* counts them); random_rho_within_coin_p1 is the same for the random null. within_coin_same_sign = within-coin rho > 0 in periods 1 and 2 and not <= 0 in period 3 (NaN in period 3 does not count against it); coin_composition_flag = BH survivor (pass_p1_bh) without within_coin_same_sign. A candidate with the flag keeps candidate = True and its label gets '; pooled effect not seen within coins (coin composition)'. Checkpoints also keep the side of each trade (descriptive per-side reporting).",
+  "C unit = strategy x timeframe x variant pooled over coins (the PREREG's cell 'strategy x timeframe'); mean ROE per trade over sized and closed trades; SE = standard deviation (ddof 1) of 2,000 week-block bootstrap means (weeks with >= 1 trade of that variant and period, pooled over coins).",
+  "C shape: '+-1 SE' and '2 SE' use the default's period-1 SE. 'flat' needs all four variants to have period-1 trades; 'spike' = default mean - mean(x0.75) >= 2 SE and default mean - mean(x1.25) >= 2 SE (PREREG 4: '2 \ud45c\uc900\uc624\ucc28 \uc774\uc0c1', inclusive); a shape is given only when the cell meets the PREREG 1 minimum (>= 300 default period-1 signals) and the default SE is defined, else 'insufficient'.",
+  "C 'variants with mean ROE > 0 in all three periods' counts the 4 variants per parameter (not the default); a period without trades counts as not > 0. The random probability (prob_random_all3) is computed for every variant and default with >= 1 trade in each period, passing or not: each of 2,000 draws takes, per period and coin, as many trades as the variant had, with replacement, from that coin's random-entry trades of the period (same timeframe); probability = share of draws whose pooled mean is > 0 in all three periods (prob_random_all3_k = the number of such draws; when it is 0 the probability is reported as '< 1/2000' with prob_random_all3_upper = 1/2001, the draw resolution, not a confidence bound). The sum of these probabilities over the variants is the expected number of variants positive in all three periods by chance, reported next to the observed count (all cells, and cells meeting the PREREG 1 minimum).",
+  "The random-entry probability treats the trades as independent (random entries have random sides, so random trades are nearly independent; week-matched random draws agree: review check on the pilot with its own seeds, N17_KC_RSI 4h rsi_level x1.5 iid 0.0045, week-matched 0.0035). A strategy's own trades are week-clustered (review check on the pilot: week-block SE 1.4 to 2.6 x the iid SE), so it is a lower bound on the chance that a no-edge variant with the strategy's clustering is positive in all three periods. Descriptive prob_noedge_block_all3 adds that case: per period the variant's own weeks are resampled (analysis_sr.boot_counts, 2,000) on roe - mean(roe) + mu0, mu0 = the random-entry mean of the period weighted by the variant's trades per coin; share of draws with pooled mean > 0 in all three periods (pilot outputs, N17_KC_RSI 4h rsi_level x1.5: prob_noedge_block_all3 0.0265 against prob_random_all3 0.004 = 8/2000; summed over the pilot's 128 variants 0.132 against 0.005). Neither is a test and neither adopts anything.",
+  "C variants use the same warm-up (sweep_lib.warmup_bars) and period windows as the locked signals; a variant with a longer look-back gets no extra warm-up. Variants equal to the default (a length that rounds to the same value) are kept as trials; changed_signal_bars shows it. A variant with no signal is kept with zero trades.",
+  "C default = the cached locked signal. param_defs signals() with no override is compared with it on every series after warm-up; a mismatch on any coin or timeframe excludes the strategy from C on every timeframe, with the reason (PREREG 4: 'that strategy is removed from C'). A restricted run (--tfs) only sees the timeframes it selects, so its exclusions can miss a mismatch on another timeframe; the full run checks all three.",
+  "The PREREG's trial ledger is out/trials.csv; parts B and C write out/bc_trials.csv (one row per B test of a tested cell and per C variant).",
+  "Locks and staleness: DEFS_BC.sha256 must hash to the version committed in 520dad0 (pinned in the code and compared with git when git is available), and every definition file to its manifest line. Bases carry CODE_HASH (the analysis and outcome code, see the module docstring), the source fingerprints (name, size, mtime) they were built from and build_id (sha256 of their arrays). A checkpoint signature = CODE_HASH + the current source fingerprints + the build_id of each base of (tf, coin), defined only while those bases are current; a job checks every base it reads (code, fingerprint), records its build_id, and is saved only when the signature recomputed from those build_ids is the one it is saved under; the aggregation pairs a checkpoint only with random-entry pools of the same build_id. Anything built under another hash, on other data or from another base is recomputed, the bases are re-checked before each part, 'aggregate' refuses stale bases, outputs are not written when a source file changed during the run, and a part not recomputed in this invocation enters the outputs only from a saved aggregation with the same code hash, checkpoint signatures and selection (else its bc_B_* / bc_C_* files are removed and the run meta says so). A refusal inside a Pool worker (SystemExit, e.g. a definition file edited mid-run) is relayed to the parent as RuntimeError."
+ ],
+ "strategy_notes": {
+  "DOGE": "DOGE = doge_join(DOGE_L, DOGE_S): long and short (the first run traded the short rule as long; see AMBIGUITIES and out/before_doge_fix/)."
+ },
+ "removed_stale_outputs": []
+}
