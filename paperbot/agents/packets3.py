@@ -14,6 +14,11 @@ Sections
 - exits           how trades ended: stop / lock level / liquidation, leverage mix
 - today           trades closed in the last 24 hours, busts, alerts
 - nightly         latest nightly report: replay parity, shadows, data quality
+
+``specialist_packet(packet, strategy)`` narrows a packet to one strategy for its specialist
+and adds that strategy's profile card (5-year character under the v3 rules, built by
+research/strategy_profiles/report.py): trend-following or mean-reverting, holding length,
+whether the profit lock cut winners early, per timeframe.
 """
 
 from __future__ import annotations
@@ -28,6 +33,8 @@ from typing import Optional
 
 DAY_MS = 86_400_000
 INITIAL = 1000.0
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+CARDS = os.path.join(ROOT, "research", "strategy_profiles", "out", "cards.json")
 TRADE_TFS = ("5m", "15m", "30m", "1h", "4h")
 
 
@@ -174,3 +181,25 @@ def build(paper_db: str, daily_db: Optional[str], now_ms: int, min_n: int = 30) 
         "league": league, "pass_check": pass_check, "by_strategy": dict(by_strategy), "by_coin": by_coin,
         "execution": execution, "exits": exits, "today": today_sec, "nightly": nightly,
     }
+
+
+def profile_card(strategy: str, path: str = CARDS) -> Optional[dict]:
+    if not os.path.exists(path):
+        return None
+    with open(path) as fh:
+        for c in json.load(fh)["cards"]:
+            if c["strategy"] == strategy:
+                return {**c, "rows": [{k: (_r(v) if isinstance(v, float) else v) for k, v in r.items()}
+                                      for r in c["rows"]],
+                        "trend_share": _r(c["trend_share"], 3),
+                        "note": "5-year backtest character, same rules; describes style, not proven skill"}
+    return None
+
+
+def specialist_packet(packet: dict, strategy: str, cards_path: str = CARDS) -> dict:
+    """What one strategy's specialist sees: its five accounts, their pass status, the
+    coin-flip league of each timeframe, and the strategy's profile card."""
+    pc = {a: v for a, v in (packet.get("pass_check") or {}).items() if a.split("@")[0] == strategy}
+    return {"meta": packet.get("meta"), "strategy": strategy,
+            "by_strategy": (packet.get("by_strategy") or {}).get(strategy), "pass_check": pc,
+            "league": packet.get("league"), "profile": profile_card(strategy, cards_path)}
