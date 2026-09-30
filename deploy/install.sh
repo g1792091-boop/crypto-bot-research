@@ -6,7 +6,9 @@
 # Does: system packages, firewall (SSH only), user "paperbot", Python venv,
 # directories, env-file templates (chmod 600), systemd units (installed, NOT started).
 # Does not: put any key or password anywhere, start trading, or open the dashboard to
-# the internet. Safe to run again.
+# the internet. Safe to run again: to update, `git pull` then run it again. It refuses
+# uncommitted changes, stops the running services only for the swap, and keeps the
+# previous code in /opt/crypto-bot-research.old for a rollback.
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -32,19 +34,47 @@ id paperbot >/dev/null 2>&1 || useradd --system --create-home --home-dir /var/li
 install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot /var/backups/paperbot
 install -d -o root -g paperbot -m 750 /etc/paperbot
 
-echo "== code"
-if [ "$REPO_DIR" != "$APP" ]; then
-  rm -rf "$APP"
-  cp -a "$REPO_DIR" "$APP"
+echo "== code version"
+# Every start of the bot records this commit in the runs table (paperbot/runinfo.py).
+COMMIT="$(git -C "$REPO_DIR" rev-parse HEAD 2>/dev/null || echo unknown)"
+TAG="$(git -C "$REPO_DIR" describe --tags --exact-match 2>/dev/null || true)"
+if [ -n "$(git -C "$REPO_DIR" status --porcelain --untracked-files=no 2>/dev/null)" ]; then
+  if [ "${ALLOW_DIRTY:-0}" != "1" ]; then
+    echo "the repository has uncommitted changes; deploy only committed code (or ALLOW_DIRTY=1)"; exit 1
+  fi
+  DIRTY=true
+else
+  DIRTY=false
 fi
-chown -R root:paperbot "$APP"
-chmod -R g+rX,o-rwx "$APP"
+echo "commit $COMMIT ${TAG:+(tag $TAG)} dirty=$DIRTY"
 
 echo "== python"
 install -d -m 755 /opt/paperbot
 [ -x "$VENV/bin/python" ] || python3 -m venv "$VENV"
 "$VENV/bin/pip" install -q --upgrade pip
-"$VENV/bin/pip" install -q -r "$APP/requirements.txt"
+"$VENV/bin/pip" install -q -r "$REPO_DIR/requirements.txt"
+
+echo "== code"
+# Copy to a staging folder first, then swap while the services are stopped, so a
+# running bot never reads a half-copied tree. The previous code stays in $APP.old.
+UNITS="paperbot-live3 paperbot-dash"
+RUNNING=""
+if [ "$REPO_DIR" != "$APP" ]; then
+  rm -rf "$APP.new"
+  cp -a "$REPO_DIR" "$APP.new"
+  printf '{"commit": "%s", "tag": %s, "dirty": %s, "source": "install.sh", "installed_at": "%s"}\n' \
+    "$COMMIT" "$( [ -n "$TAG" ] && echo "\"$TAG\"" || echo null )" "$DIRTY" "$(date -u +%FT%TZ)" \
+    > "$APP.new/VERSION.json"
+  chown -R root:paperbot "$APP.new"
+  chmod -R g+rX,o-rwx "$APP.new"
+  for u in $UNITS; do
+    systemctl is-active --quiet "$u" 2>/dev/null && RUNNING="$RUNNING $u"
+  done
+  [ -n "$RUNNING" ] && systemctl stop $RUNNING
+  rm -rf "$APP.old"
+  [ -d "$APP" ] && mv "$APP" "$APP.old"
+  mv "$APP.new" "$APP"
+fi
 
 echo "== env files (empty templates; fill them on the server only)"
 for f in live dash agents; do
@@ -60,6 +90,10 @@ for u in paperbot-live3.service paperbot-dash.service paperbot-daily3.service pa
   install -m 644 "$APP/deploy/$u" /etc/systemd/system/$u
 done
 systemctl daemon-reload
+if [ -n "$RUNNING" ]; then
+  systemctl start $RUNNING
+  echo "restarted:$RUNNING (the bot resumes from its saved state; the start is logged in the runs table)"
+fi
 
 cat <<'NEXT'
 

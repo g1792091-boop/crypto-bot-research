@@ -8,6 +8,7 @@ Tables
 - signal_log   every signal computed by the signal service (also record-only 1d)
 - state        latest snapshot of every account engine and of the feed (restart recovery)
 - alerts       notifier messages
+- runs         append-only: code version, settings and hashes of every start (runinfo.py)
 
 WAL mode; the dashboard and the agents open it read-only.
 """
@@ -89,6 +90,15 @@ CREATE TABLE IF NOT EXISTS alerts (
     level TEXT NOT NULL,
     text TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    started_ts INTEGER NOT NULL,
+    data TEXT NOT NULL
+);
+CREATE TRIGGER IF NOT EXISTS runs_append_only_u BEFORE UPDATE ON runs
+BEGIN SELECT RAISE(ABORT, 'runs is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS runs_append_only_d BEFORE DELETE ON runs
+BEGIN SELECT RAISE(ABORT, 'runs is append-only'); END;
 """
 
 
@@ -145,6 +155,14 @@ class Store3:
         self.conn.execute("INSERT INTO alerts VALUES (?,?,?)", (ts, level, text))
 
     # ------------------------------------------------------------ state
+    def add_run(self, ts: int, data: dict) -> int:
+        cur = self.conn.execute("INSERT INTO runs (started_ts, data) VALUES (?, ?)", (ts, json.dumps(data)))
+        return cur.lastrowid
+
+    def last_run(self) -> Optional[dict]:
+        r = self.conn.execute("SELECT data FROM runs ORDER BY id DESC LIMIT 1").fetchone()
+        return None if r is None else json.loads(r[0])
+
     def put_state(self, key: str, ts: int, data: dict) -> None:
         self.conn.execute("INSERT OR REPLACE INTO state VALUES (?,?,?)", (key, ts, json.dumps(data)))
 

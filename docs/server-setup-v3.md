@@ -92,7 +92,7 @@ sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.live3 status --db /va
 | 재시작 | `sudo systemctl restart paperbot-live3`. 계좌 상태는 저장돼 있어 이어서 돕니다. 꺼져 있던 동안의 신호는 "늦음"으로 기록만 됩니다 |
 | 매일 점검 | 09:20(한국 시간)에 자동. paper와 재계산 일치, 지정가·놓친 신호 그림자 기록, 데이터 품질 |
 | 백업 | 매일 08:40(한국 시간) `/var/backups/paperbot/날짜/`, 14일 보관 |
-| 코드 업데이트 | `cd /root/crypto-bot-research && git pull && sudo bash deploy/install.sh && sudo systemctl restart paperbot-live3 paperbot-dash` |
+| 코드 업데이트 | `cd /root/crypto-bot-research && git pull && sudo bash deploy/install.sh`. 배포는 **한 분만** 합니다. 커밋 안 된 수정이 있으면 멈추고, 돌던 서비스는 교체하는 순간만 멈췄다가 다시 켜집니다. 이전 코드는 `/opt/crypto-bot-research.old`에 남습니다. 봇은 켜질 때마다 코드 버전·설정을 기록하고, 체결·청산·사이즈 코드가 바뀌었으면 알림을 보냅니다 (규칙상 그 기간을 다시 셈) |
 | 비밀번호 로그인 끄기 (권장) | SSH 키를 등록한 뒤 `/etc/ssh/sshd_config`에서 `PasswordAuthentication no`. 키 등록 전에 끄면 들어갈 수 없게 되니, Vultr 웹 콘솔이 되는지 먼저 확인 |
 
 ## 실거래 준비: 테스트넷 주문 연습 (가짜 돈)

@@ -31,9 +31,11 @@ from .aggregate import TF_MS, Aggregator
 from .binance import BinanceError, BinanceREST, RegionBlocked
 from .config import V3_SYMBOLS, v3_settings
 from .feed import LiveFeed
+from . import sweepsig
 from .health import DeadMan, sd_notify
 from .live import _notifier, _rest, load_brackets
 from .notify import CRITICAL, INFO, WARN, Digest, Notifier
+from .runinfo import change_text, changes, run_record
 from .sigservice import SignalTimeout
 from .store3 import Store3
 
@@ -185,7 +187,17 @@ def cmd_run(args) -> int:
     for s in service.symbols:
         service.bootstrap(s, fetch_5m(rest, s, hist_from, start))
         sd_notify("WATCHDOG=1")  # bootstrap takes minutes; tell systemd it is progressing
+    rec = run_record(settings, brackets, src, sys.argv, signal_lock=sweepsig.verify())
+    ch = changes(store.last_run(), rec)
+    rec["changes"] = [c["key"] for c in ch]
+    store.add_run(now, rec)
+    text = change_text(ch)
+    if text:
+        level = WARN if any(c["trading"] for c in ch) else INFO
+        store.alert(now, level, text)
+        notifier.send(level, text)
     store.put_state("run", now, {"settings": settings.version, "taker_fee": settings.taker_fee,
+                                 "commit": rec["commit"], "dirty": rec["dirty"],
                                  "brackets": src, "accounts": len(book.engines), "restored": restored,
                                  "resume_from": resume, "feed_start": start})
     store.commit()
