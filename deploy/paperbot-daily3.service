@@ -1,0 +1,11 @@
+# Nightly checks: replay parity, shadows, data quality (paperbot/daily3.py).
+[Unit]
+Description=paperbot v3 nightly checks
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=paperbot
+WorkingDirectory=/opt/crypto-bot-research
+EnvironmentFile=/etc/paperbot/live.env
+ExecStart=/opt/paperbot/venv/bin/python -m paperbot.daily3 run --db /var/lib/paperbot/paper3.db --out /var/lib/paperbot/daily3.db

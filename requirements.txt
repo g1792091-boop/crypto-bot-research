@@ -5,3 +5,8 @@ scipy>=1.11
 pytest>=8
 # Liquidation stream recorder (paperbot/liqstream.py)
 websocket-client>=1.6
+# Paper v3 dashboard (paperbot/dash)
+fastapi>=0.110
+uvicorn>=0.29
+# tests of the dashboard
+httpx>=0.27

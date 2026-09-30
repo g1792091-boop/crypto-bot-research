@@ -1,0 +1,21 @@
+# Paper v3: 195 accounts on live Binance data (docs/server-setup-v3.md).
+# Restart is safe: account states are restored from the store and missed minutes are replayed.
+[Unit]
+Description=paperbot v3 live paper trading
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=paperbot
+WorkingDirectory=/opt/crypto-bot-research
+EnvironmentFile=/etc/paperbot/live.env
+ExecStart=/opt/paperbot/venv/bin/python -m paperbot.live3 run --db /var/lib/paperbot/paper3.db --procs 4
+Restart=always
+RestartSec=15
+TimeoutStopSec=60
+Nice=5
+
+[Install]
+WantedBy=multi-user.target

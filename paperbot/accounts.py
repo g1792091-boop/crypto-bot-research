@@ -49,13 +49,15 @@ class _StoreNotifier:
 class AccountBook:
     def __init__(self, settings: Settings, brackets: dict[str, Brackets], store: Store3,
                  notifier: Optional[Notifier] = None, specs: Optional[dict] = None,
-                 equity_every_ms: int = 300_000):
+                 equity_every_ms: int = 300_000, save_every: int = 1):
         self.s = settings
         self.brackets = brackets
         self.store = store
         self.notifier = notifier or NullNotifier()
         self.specs = specs or {}
         self.equity_every_ms = equity_every_ms
+        self.save_every = save_every  # steps between state snapshots (1 = every step, the live setting)
+        self._steps = 0
         self.engines: dict[str, PaperEngine] = {}
         self.meta: dict[str, dict] = {}
         self.last_ts: Optional[int] = None
@@ -125,7 +127,9 @@ class AccountBook:
                 dd = 1 - eq / e.peak_equity if e.peak_equity > 0 else 0.0
                 self.store.equity(aid, close, eq, dd)
         self.last_ts = ts
-        self.save(ts)
+        self._steps += 1
+        if self._steps % self.save_every == 0:
+            self.save(ts)
 
     def save(self, ts: int) -> None:
         self.store.put_state(STATE_KEY, ts, {

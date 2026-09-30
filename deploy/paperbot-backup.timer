@@ -1,0 +1,9 @@
+[Unit]
+Description=paperbot database backup at 23:40 UTC
+
+[Timer]
+OnCalendar=*-*-* 23:40:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

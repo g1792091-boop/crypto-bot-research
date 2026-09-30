@@ -42,7 +42,7 @@ def main(scratch: str, out: str, days: int = 20) -> None:
         os.remove(out)
     store = Store3(out)
     S = v3_settings()
-    book = AccountBook(S, {s: Brackets.example() for s in V3_SYMBOLS}, store, equity_every_ms=3_600_000)
+    book = AccountBook(S, {s: Brackets.example() for s in V3_SYMBOLS}, store, equity_every_ms=3_600_000, save_every=288)
     book.open_accounts(account_defs(names, TRADE_TFS), start)
     idx5 = {s: {int(t // 1_000_000): i for i, t in enumerate(five[s]["ts"])} for s in COINS}
     t0 = time.time()
@@ -84,7 +84,7 @@ def main(scratch: str, out: str, days: int = 20) -> None:
                     book.submit(aid, Signal(ts=boundary - 1, symbol=s, timeframe=tf, strategy_id=n, side=side,
                                             stop_price=0.0, tier="best", atr=a, meta={"stop_dist": 2 * a}))
         store.log_signals(rows)
-        book.save(ts)
+    book.save(book.last_ts)
     now = int(time.time() * 1000)
     store.put_state("heartbeat", now, {"steps": days * 288, "last_step": book.last_ts})
     store.put_state("run", now, {"settings": S.version, "taker_fee": S.taker_fee, "accounts": len(book.engines),
