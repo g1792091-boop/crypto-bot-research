@@ -21,6 +21,20 @@ AI 에이전트 팀(기술, 파생, 뉴스·매크로 분석가 → 리스크 �
 
 ## 실행
 
+### 파이썬 없이 실행 (추천)
+
+1. [Releases → desktop-latest](https://github.com/g1792091-boop/crypto-bot-research/releases/tag/desktop-latest)에서 운영체제에 맞는 zip을 받는다.
+   - Windows: `CoinFuturesTerminal-windows-x64.zip`
+   - Mac (M1/M2/M3 등 Apple Silicon): `CoinFuturesTerminal-macos-arm64.zip`
+2. 압축을 풀고 `CoinFuturesTerminal.exe`를 더블클릭한다 (Mac은 우클릭 → 열기).
+   Windows에서 "PC 보호" 창이 뜨면 **추가 정보 → 실행**을 누른다.
+3. 브라우저가 자동으로 열린다. API 키는 같은 폴더의 `settings.txt`를 메모장으로 열어 넣는다.
+
+이 실행 파일은 GitHub Actions(`.github/workflows/build-desktop.yml`)가 코드를 푸시할 때마다 자동으로 빌드한다.
+직접 빌드하려면 `pip install -r backend/requirements.txt pyinstaller && python packaging/build.py`를 실행한다.
+
+### 파이썬으로 실행 (개발용)
+
 ```bash
 cd backend
 pip install -r requirements.txt

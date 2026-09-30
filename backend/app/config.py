@@ -1,9 +1,11 @@
 """환경 변수 기반 설정."""
 import os
+import sys
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-ROOT_DIR = BASE_DIR.parent
+# PyInstaller 로 묶은 실행 파일이면 번들 안에 풀린 임시 폴더에서 frontend 를 찾는다
+ROOT_DIR = Path(getattr(sys, "_MEIPASS", BASE_DIR.parent))
 FRONTEND_DIR = ROOT_DIR / "frontend"
 STATE_DIR = Path(os.getenv("STATE_DIR", BASE_DIR / "state"))
 

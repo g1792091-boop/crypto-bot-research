@@ -1,0 +1,102 @@
+name: Build desktop app
+
+# Windows(.exe) / macOS 실행 파일을 빌드해서 'desktop-latest' 릴리스에 올린다.
+# 사용자는 파이썬 없이 릴리스 페이지에서 zip 을 받아 더블클릭으로 실행한다.
+on:
+  push:
+    branches: [main, "claude/**"]
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - "packaging/**"
+      - ".github/workflows/build-desktop.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: python -m pip install -r backend/requirements.txt pyinstaller
+
+      - name: Test
+        working-directory: backend
+        run: python -m pytest -q
+
+      - name: Build
+        run: python packaging/build.py
+
+      - name: Smoke test (start app, call API)
+        shell: bash
+        env:
+          NO_BROWSER: "1"
+          DATA_SOURCE: synthetic
+        run: |
+          dir=$(ls -d dist/CoinFuturesTerminal-*/)
+          exe="${dir}CoinFuturesTerminal"
+          [ -f "${exe}.exe" ] && exe="${exe}.exe"
+          "$exe" > smoke.log 2>&1 &
+          pid=$!
+          ok=""
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:8000/api/status > /dev/null; then ok=1; break; fi
+            sleep 2
+          done
+          cat smoke.log
+          curl -sf http://127.0.0.1:8000/ > /dev/null
+          if [ "$RUNNER_OS" = "Windows" ]; then taskkill //IM CoinFuturesTerminal.exe //F || true; else kill $pid || true; fi
+          [ -n "$ok" ] || { echo "app did not start"; exit 1; }
+          rm -rf "${dir}state"
+
+      - name: Zip (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $d = Get-ChildItem dist -Directory -Filter "CoinFuturesTerminal-*" | Select-Object -First 1
+          Compress-Archive -Path $d.FullName -DestinationPath "$($d.Name).zip"
+
+      - name: Zip (macOS, keeps executable bit)
+        if: runner.os == 'macOS'
+        run: |
+          d=$(ls -d dist/CoinFuturesTerminal-*/ | head -1)
+          ditto -c -k --keepParent "$d" "$(basename "$d").zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CoinFuturesTerminal-${{ runner.os }}
+          path: CoinFuturesTerminal-*.zip
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+
+      - name: Publish 'desktop-latest' release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release delete desktop-latest --cleanup-tag -y || true
+          gh release create desktop-latest out/*.zip \
+            --target "$GITHUB_SHA" --prerelease \
+            --title "코인 선물 터미널 - 최신 빌드" \
+            --notes "파이썬 설치 없이 실행하는 버전입니다.
+          - Windows: CoinFuturesTerminal-windows-x64.zip 압축 해제 → CoinFuturesTerminal.exe 더블클릭
+          - Mac (Apple Silicon): CoinFuturesTerminal-macos-arm64.zip 압축 해제 → 우클릭 → 열기
+          자세한 내용은 zip 안의 HOW-TO-RUN.txt 참고. 빌드 커밋: ${GITHUB_SHA::7} (${GITHUB_REF_NAME})"
