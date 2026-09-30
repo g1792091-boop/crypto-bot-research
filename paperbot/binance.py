@@ -198,5 +198,6 @@ def bars_from_klines(symbol: str, rows: list[list],
         out.append(Bar(
             symbol, ot, int(r[6]), float(r[1]), float(r[2]), float(r[3]), float(r[4]),
             mark_open=float(m[1]) if m else None, mark_high=float(m[2]) if m else None,
-            mark_low=float(m[3]) if m else None, mark_close=float(m[4]) if m else None))
+            mark_low=float(m[3]) if m else None, mark_close=float(m[4]) if m else None,
+            volume=float(r[5])))
     return out

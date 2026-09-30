@@ -25,6 +25,8 @@ class Bar:
     mark_close: Optional[float] = None
     # True when an aggregated bar is missing some of its 1m bars.
     partial: bool = False
+    # Base-asset volume (the signal code needs it for OBV, MFI, VWMA, Klinger).
+    volume: Optional[float] = None
 
     @property
     def m_open(self) -> float:

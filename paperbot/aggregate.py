@@ -13,7 +13,7 @@ TF_MS = {
 
 
 class _Bucket:
-    __slots__ = ("start", "o", "h", "l", "c", "mo", "mh", "ml", "mc", "n", "mark_ok")
+    __slots__ = ("start", "o", "h", "l", "c", "mo", "mh", "ml", "mc", "n", "mark_ok", "v")
 
     def __init__(self, b: Bar, start: int):
         self.start = start
@@ -21,6 +21,7 @@ class _Bucket:
         self.mo, self.mh, self.ml, self.mc = b.m_open, b.m_high, b.m_low, b.m_close
         self.mark_ok = b.mark_open is not None
         self.n = 1
+        self.v = b.volume
 
     def add(self, b: Bar) -> None:
         self.h = max(self.h, b.high)
@@ -31,6 +32,7 @@ class _Bucket:
         self.mc = b.m_close
         self.mark_ok = self.mark_ok and b.mark_open is not None
         self.n += 1
+        self.v = None if self.v is None or b.volume is None else self.v + b.volume
 
 
 class Aggregator:
@@ -52,7 +54,7 @@ class Aggregator:
         return Bar(sym, bk.start, bk.start + ms - 1, bk.o, bk.h, bk.l, bk.c,
                    bk.mo if m else None, bk.mh if m else None,
                    bk.ml if m else None, bk.mc if m else None,
-                   partial=bk.n < expected)
+                   partial=bk.n < expected, volume=bk.v)
 
     def add(self, b: Bar) -> list[tuple[str, Bar]]:
         out: list[tuple[str, Bar]] = []
