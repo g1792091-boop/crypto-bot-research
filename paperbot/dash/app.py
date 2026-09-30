@@ -358,6 +358,9 @@ CLASS_KO = {"incident": "사고 점검", "owner": "두 분 글", "loss": "손실
             # calls that timed out with no model activity (a hung API): counted in the day's and 7-day totals only
             "timeout": "시간 초과(장애, 회의 종류 한도에는 안 셈)"}
 WEEKDAY_KO = "월화수목금토일"
+# proposal statuses as the page names them (rooms.js PSTATUS_KO), for the refusal messages
+PSTATUS_KO = {"awaiting_owner": "두 분 확인 대기", "approved": "승인됨", "rejected": "거절됨",
+              "blocked_gate": "코드 관문에서 막힘", "blocked_cap": "복제 한도로 막힘"}
 
 
 def budget_caps(env_text: Optional[str] = None) -> dict:
@@ -694,6 +697,15 @@ class Rooms:
         return out
 
     @staticmethod
+    def _decision_of(p: dict, decs: dict) -> Optional[dict]:
+        """The owners' latest click on this proposal; a click older than the proposal is not about it (an
+        agents3.db restored from an older backup reuses proposal ids) and is never shown or counted."""
+        dec = decs.get(int(p["id"]))
+        if dec is not None and int(dec.get("ts") or 0) < int(p.get("ts") or 0):
+            return None
+        return dec
+
+    @staticmethod
     def _effective(p: dict, dec: Optional[dict], applied_upto: int) -> tuple[str, bool]:
         """(status the owners should see, whether their latest click is already applied)."""
         if dec is None:
@@ -713,9 +725,7 @@ class Rooms:
             upto = self._cursor(a, "inbox:approvals")
             now = self._gate_now(a)
         for p in rows:
-            dec = decs.get(int(p["id"]))
-            if dec is not None and int(dec.get("ts") or 0) < int(p.get("ts") or 0):
-                dec = None      # a click cannot predate its proposal: it was about an earlier one with this id
+            dec = self._decision_of(p, decs)
             eff, applied = self._effective(p, dec, upto)
             p["gate_now"] = now.get(str(p["id"]))
             p["strategy_ko"] = STRATEGY_KO.get(p.get("strategy") or "", p.get("strategy"))
@@ -823,7 +833,7 @@ class Rooms:
             now = self._gate_now(a).get(str(proposal_id))
         if p is None:
             raise HTTPException(404, "그런 제안이 없습니다")
-        dec = self._decisions().get(int(proposal_id))
+        dec = self._decision_of(p, self._decisions())
         eff, _ = self._effective(p, dec, upto)
         gate_ok = isinstance(p.get("gate"), dict) and p["gate"].get("pass") is True
         if decision == "approve":
@@ -833,9 +843,9 @@ class Rooms:
                 raise HTTPException(409, "이 방에서 시험을 더 해서, 지금 기준으로 다시 판정하면 코드 관문을 "
                                          "통과하지 못합니다. 승인할 수 없습니다")
             if eff != "awaiting_owner" or (dec is not None and dec.get("rejected_before")):
-                raise HTTPException(409, f"이 제안은 지금 승인할 수 없는 상태입니다 ({eff})")
+                raise HTTPException(409, f"이 제안은 지금 승인할 수 없는 상태입니다 ({PSTATUS_KO.get(eff, eff)})")
         elif eff not in ("awaiting_owner", "approved"):
-            raise HTTPException(409, f"이 제안은 지금 거절할 수 없는 상태입니다 ({eff})")
+            raise HTTPException(409, f"이 제안은 지금 거절할 수 없는 상태입니다 ({PSTATUS_KO.get(eff, eff)})")
         c = self._inbox()
         try:
             aid = self.R.add_approval(c, proposal_id, decision, author, note or None)
