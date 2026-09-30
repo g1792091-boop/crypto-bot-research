@@ -21,7 +21,8 @@ a code-path control (this module fed the sweep bars reproduces that cache), (c) 
 rates vs a same-length slice of period 1.
 
 Signals: ``L.compute_signals(strict=True)`` on the whole series (the locked code is causal), DOGE =
-DOGE_L - DOGE_S as in ``rules_bt._signals_job``. The file keeps every bar through 2021-08-31, so a
+``paperbot.sigservice.doge_join(DOGE_L, DOGE_S)`` as in ``rules_bt._signals_job`` (long and short; the
+old DOGE_L - DOGE_S turned shorts into longs and was fixed on 2026-09-30). The file keeps every bar through 2021-08-31, so a
 period-3 trade can be followed past 2021-08-01. Signals on bars from 2021-08-01 on are NOT period 3
 (they belong to period 1, whose signals come from the period-1/2 cache).
 """
