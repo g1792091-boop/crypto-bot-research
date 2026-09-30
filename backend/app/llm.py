@@ -81,3 +81,28 @@ def text(system: str, user: str, effort: str = "medium", max_tokens: int = 16000
     if resp.stop_reason == "refusal":
         raise LLMUnavailable("모델이 요청을 거절했습니다.")
     return "".join(b.text for b in resp.content if b.type == "text")
+
+
+def json_call(system: str, user: str, tier: str = "opus", max_tokens: int = 6000) -> tuple[dict, str, str]:
+    """JSON 객체 하나로 답하게 하고 dict 로 돌려준다 → (data, 원문, 모델 이름).
+    tier: 'opus' = 판단 책임이 큰 역할(CLAUDE_MODEL), 'sonnet' = 반복 분석(CLAUDE_FAST_MODEL). Gemini 는 같은 모델."""
+    import json as _json
+
+    from .gemini import _clean_json
+    if provider() == "gemini":
+        from . import gemini
+        txt = gemini.generate(system, user, None, json_mode=True, max_tokens=max_tokens)
+        model = gemini.last_model or "gemini"
+    else:
+        model = config.CLAUDE_MODEL if tier == "opus" or not config.CLAUDE_FAST_MODEL else config.CLAUDE_FAST_MODEL
+        resp = client().beta.messages.create(
+            model=model, max_tokens=max_tokens, system=system,
+            messages=[{"role": "user", "content": user}], **_FALLBACK)
+        if resp.stop_reason == "refusal":
+            raise LLMUnavailable("모델이 요청을 거절했습니다.")
+        txt = "".join(b.text for b in resp.content if b.type == "text")
+    try:
+        data = _json.loads(_clean_json(txt))
+    except ValueError:
+        data = None
+    return data, txt, model

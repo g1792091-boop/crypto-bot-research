@@ -17,10 +17,12 @@ from .llm import LLMUnavailable
 from .paper import PaperManager
 from .quant import copilot, entry, footprint, forecast, portfolio, risk, toptraders
 from .quant.scanner import scanner
+from .team import engine as team
 from .strategy import StrategySpec, validate
 
 paper = PaperManager()
 copilot.bind(paper)
+team.bind(paper)
 
 
 @asynccontextmanager
@@ -29,6 +31,7 @@ async def lifespan(_app: FastAPI):
     orderflow.tracker.start()
     scanner.start()
     copilot.start()
+    team.start()
     yield
 
 
@@ -611,6 +614,92 @@ def get_top_trader_ratios(symbol: str = "BTCUSDT", interval: str = "1h"):
         return toptraders.binance_ratios(symbols.resolve(symbol), interval)
     except Exception as e:
         _bad(ValueError(f"바이낸스 상위 트레이더 비율을 불러오지 못했습니다: {e}"))
+
+
+# ------------------------------------------------------------------ 에이전트 팀 (23명)
+@app.get("/api/team/roster")
+def team_roster():
+    return {"roster": team.roster(), "teams": {k: {"name": v[0], "color": v[1]} for k, v in team.TEAMS.items()},
+            "pipelines": {k: {"name": v[0], "flow": v[1], "stages": [list(s) for s in v[2]]} for k, v in team.PIPELINES.items()},
+            "engine": llm.provider() or "rules", "settings": team.settings, "plan": team._state.get("plan"),
+            "knowledge": {k: v[-20:] for k, v in team.knowledge().items()}}
+
+
+class TeamRunReq(BaseModel):
+    pipeline: Literal["morning", "evening", "weekly", "emergency"]
+
+
+@app.post("/api/team/run")
+def team_run(req: TeamRunReq):
+    if any(r.status == "running" for r in team.runs.values()):
+        _bad(ValueError("이미 진행 중인 회의가 있습니다. 끝난 뒤에 다시 시작하세요."))
+    return team.run_pipeline(req.pipeline).view()
+
+
+@app.post("/api/team/chat")
+def team_chat():
+    return team.open_chat().view()
+
+
+@app.get("/api/team/runs")
+def team_runs():
+    return {"items": [{"id": r.id, "title": r.title, "pipeline": r.pipeline, "status": r.status, "trigger": r.trigger,
+                       "started": r.started, "messages": len(r.messages)} for r in sorted(team.runs.values(), key=lambda x: -x.started)][:40]}
+
+
+@app.get("/api/team/runs/{run_id}")
+def team_run_view(run_id: str, since: int = 0):
+    r = team.runs.get(run_id)
+    if not r:
+        raise HTTPException(404, "대화방이 없습니다.")
+    return r.view(max(0, since))
+
+
+class SayReq(BaseModel):
+    text: str
+
+
+@app.post("/api/team/runs/{run_id}/say")
+def team_say(run_id: str, req: SayReq):
+    if not req.text.strip():
+        _bad(ValueError("메시지를 입력하세요."))
+    try:
+        return team.human_say(run_id, req.text.strip()[:1000])
+    except ValueError as e:
+        _bad(e)
+
+
+class TeamSettings(BaseModel):
+    coins: Optional[list[str]] = None
+    auto: Optional[dict] = None
+    times: Optional[dict] = None
+    bot_gate: Optional[bool] = None
+    daily_call_limit: Optional[int] = None
+    rules: Optional[dict] = None
+
+
+@app.post("/api/team/settings")
+def team_settings(req: TeamSettings):
+    kw = req.model_dump()
+    if kw.get("coins"):
+        kw["coins"] = list(dict.fromkeys(symbols.resolve(s) for s in kw["coins"] if s.strip()))[:8]
+    return team.save_settings(**kw)
+
+
+class ApplyReq(BaseModel):
+    kind: Literal["pause_all", "pause_bot", "resume_bot", "candidate"]
+    target: Optional[str] = None
+    run_id: Optional[str] = None
+    candidate: Optional[str] = None
+
+
+@app.post("/api/team/apply")
+def team_apply(req: ApplyReq):
+    """사람이 최종 권한으로 적용 (리스크 조치 · 승인된 후보)."""
+    try:
+        return team.apply(req.kind, target=req.target, run_id=req.run_id, candidate=req.candidate)
+    except ValueError as e:
+        _bad(e)
 
 
 # ------------------------------------------------------------------ 실시간 AI 상황 분석

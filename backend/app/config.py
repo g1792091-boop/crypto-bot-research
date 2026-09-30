@@ -11,6 +11,8 @@ STATE_DIR = Path(os.getenv("STATE_DIR", BASE_DIR / "state"))
 
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-opus-5-5")
+# 반복 분석용 가벼운 모델 (에이전트 팀의 Sonnet 역할). 비우면 CLAUDE_MODEL 하나로 모두 실행
+CLAUDE_FAST_MODEL = os.getenv("CLAUDE_FAST_MODEL", "claude-sonnet-5-5")
 
 # Google Gemini (무료 등급 키로도 사용 가능: https://aistudio.google.com/apikey)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "") or os.getenv("GOOGLE_API_KEY", "")

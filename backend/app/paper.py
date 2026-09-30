@@ -114,6 +114,11 @@ class PaperBot:
                 self.sim.decide(sig, i)
                 self.last_bar_time = bar["time"]
                 self.sim.equity_curve.append({"time": bar["time"], "value": self.sim.equity(bar["close"])})
+            if self.sim.pending in ("long", "short"):
+                from .team.engine import gate_allows
+                if not gate_allows(self.spec.symbol, self.sim.pending):   # 에이전트 팀 허용범위 밖 (봇 관문이 켜졌을 때만)
+                    self._log(f"신호 {self.sim.pending} — 에이전트 팀 오늘의 허용범위 밖이라 진입 안 함")
+                    self.sim.pending, self.sim.pending_reason = ("close" if self.sim.position else None), ""
             if self.sim.pending:
                 self._log(f"신호: {self.sim.pending} ({self.sim.pending_reason or 'entry'}) @ {live}")
                 self.sim.execute_pending(live, now, sig["atr"][new_idx[-1]])

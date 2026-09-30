@@ -15,7 +15,7 @@
   <nav class="nav" id="nav">
     <button data-view="trade" class="on">트레이드</button>
     <button data-view="lab">전략 · 백테스트</button>
-    <button data-view="agents">AI 분석팀</button>
+    <button data-view="agents">에이전트 팀</button>
     <button data-view="quant">퀀트</button>
     <button data-view="market">마켓</button>
   </nav>
@@ -203,13 +203,24 @@
   </div>
 </section>
 
-<!-- ============================================================ AI 분석팀 -->
+<!-- ============================================================ 에이전트 팀 -->
 <section class="view" id="v-agents">
-  <div class="page">
-    <div class="panel"><div class="ph"><span class="t">AI 분석팀</span><div class="grow"></div><span class="muted" id="agents-meta"></span>
-      <button class="pri sm" id="agents-run">분석 실행</button></div>
-      <div class="pb help">기술 · 파생 · 뉴스/매크로 분석 → 리스크 한도 → 최종 결정. 결정은 페이퍼 계좌로만 주문됩니다.</div></div>
-    <div id="agents-out"></div>
+  <div class="team-page">
+    <aside class="panel team-roster"><div class="ph"><span class="t">팀원 23명</span><div class="grow"></div><span class="muted" id="tm-engine"></span></div>
+      <div class="pb" id="tm-roster" style="padding:0;overflow:auto"></div></aside>
+    <section class="panel team-chat">
+      <div class="ph" style="gap:6px;flex-wrap:wrap"><span class="t" id="tm-title">에이전트 팀 채팅</span><span class="muted" id="tm-status"></span><div class="grow"></div>
+        <select id="tm-runs" style="height:24px;max-width:240px"></select></div>
+      <div class="row tm-actions"><button class="pri sm" data-pipe="morning" title="시장분석 5명 → 전략가 → 반론 검토관 → 리스크 책임자 → 팀장">☀ 아침 계획</button>
+        <button class="sm" data-pipe="evening" title="운영 감사관 · 성과 분석가 · 손익 복기 · 가정 분석 → 학습 관리 → 리스크 → 팀장">🌙 저녁 점검</button>
+        <button class="sm" data-pipe="weekly" title="성과 · 시너지 · 코드 리뷰 · 테스트 → 연구원 · 자기개선 · 발굴 → 검증관 → 승인관 · CIO → 학습 관리 → 팀장">📅 주간 검토</button>
+        <button class="sm" data-pipe="emergency" title="손익 복기 · 가정 분석 → 리스크 → 팀장">🚨 긴급 복기</button>
+        <button class="flat sm" id="tm-newchat" title="회의 없이 팀에게 바로 질문">💬 새 채팅방</button></div>
+      <div class="tm-msgs" id="tm-msgs"><div class="empty">위 버튼으로 회의를 시작하면 에이전트들이 대화하는 과정이 여기에 실시간으로 올라옵니다.</div></div>
+      <div class="tm-typing" id="tm-typing"></div>
+      <div class="tm-input"><input id="tm-text" placeholder="팀에게 말하기 — @리스크 책임자 처럼 부르면 그 에이전트가, 아니면 팀장이 답합니다"><button class="pri sm" id="tm-send">보내기</button></div>
+    </section>
+    <aside class="team-side" id="tm-side"></aside>
   </div>
 </section>
 
