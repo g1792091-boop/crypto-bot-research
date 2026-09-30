@@ -120,7 +120,8 @@ CHUNK_ELEMS = 4_000_000   # (resamples x trades) per vectorised bootstrap chunk
 VERSION = "analysis_bc v2"
 BASE_VERSION = "bc base v2"
 DEFS_BC_COMMIT = "520dad0"
-DEFS_BC_MANIFEST_SHA256 = "185dbcf858e93f694d0775e12925c1904373d0db002a4df7bf3cfcefa3d56044"  # DEFS_BC.sha256 as committed in 520dad0
+# DEFS_BC.sha256 as committed in 520dad0 (the manifest itself is pinned: re-hashing a line in it is refused)
+DEFS_BC_MANIFEST_SHA256 = "185dbcf858e93f694d0775e12925c1904373d0db002a4df7bf3cfcefa3d56044"
 OC_COLS = ("ok", "lev", "sized", "done", "roe", "held", "reason", "mfe")
 AMBIGUITIES = (
     "Minimum sample (PREREG 1) as in part A: '>= 300 period-1 signals' = signal bars of the strategy x timeframe "
@@ -166,9 +167,10 @@ AMBIGUITIES = (
     "trades are nearly independent; week-matched random draws agree: review check on the pilot with its own seeds, "
     "N17_KC_RSI 4h rsi_level x1.5 iid 0.0045, week-matched 0.0035). A strategy's own trades are week-clustered "
     "(review check on the pilot: week-block SE 1.4 to 2.6 x the iid SE), so it is a lower bound on the chance that a "
-    "no-edge variant with the strategy's clustering is positive in all three periods. Descriptive prob_noedge_block_all3 adds that case: per period the variant's own weeks "
-    "are resampled (analysis_sr.boot_counts, 2,000) on roe - mean(roe) + mu0, mu0 = the random-entry mean of the "
-    "period weighted by the variant's trades per coin; share of draws with pooled mean > 0 in all three periods "
+    "no-edge variant with the strategy's clustering is positive in all three periods. Descriptive "
+    "prob_noedge_block_all3 adds that case: per period the variant's own weeks are resampled "
+    "(analysis_sr.boot_counts, 2,000) on roe - mean(roe) + mu0, mu0 = the random-entry mean of the period weighted "
+    "by the variant's trades per coin; share of draws with pooled mean > 0 in all three periods "
     "(pilot outputs, N17_KC_RSI 4h rsi_level x1.5: prob_noedge_block_all3 0.0265 against prob_random_all3 0.004 = "
     "8/2000; summed over the pilot's 128 variants 0.132 against 0.005). Neither is a test and neither adopts "
     "anything.",
