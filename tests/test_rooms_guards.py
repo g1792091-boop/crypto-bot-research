@@ -2058,3 +2058,59 @@ def test_no_later_call_of_a_slow_meeting_can_outlive_the_pass(world):
     said = [m for m in world.messages() if m["kind"] == "system" and "시간 한도" in m["text"]]
     assert said and (said[0].get("data") or {}).get("reason") == "tick_wall"
     assert out["rounds"][0]["calls"] == 1
+
+
+def test_outage_rows_of_a_reserved_class_do_not_take_the_other_reserved_calls(world):
+    """Outage timeouts moved to the 'timeout' pipeline still counted in the day total, and the reserved
+    classes are held only by their own cap and that total: after a busy day, 20 timed-out retries of the
+    08:00 meeting plus the 22:00 meeting at its cap left a liquidation 0 of its 15 calls. The reserved
+    classes now leave out up to TIMEOUT_EXEMPT_PER_DAY outage rows, so the total is passed by at most that
+    many calls in which the model did nothing."""
+    from paperbot.agents.budget import BudgetExceeded
+    from paperbot.agents.runner import AgentTimeout, CallResult
+    now = kst(2026, 10, 8, 23, 0)
+    P = RM.RoomsPolicy()
+
+    class OK:
+        def call(self, *a):
+            return CallResult("{}", {}, {"usage": {"input_tokens": 8000, "output_tokens": 2000}})
+
+    class Hung:
+        def call(self, *a):
+            raise AgentTimeout("timed out after 900s")
+
+    def budget(cls, runner):
+        c, t = P.budgets[cls]
+        return RM.ClassBudget(runner, world.agents, cls, c, t, P.total_budget[0], P.total_budget[1], lambda: now,
+                              budgets=P.budgets, week=P.week_budget, owner_keep_calls=P.owner_keep_calls,
+                              bust_keep_calls=P.bust_reserve_calls, call_tokens=P.est_call_tokens)
+
+    def run(cls, runner, n):
+        k = 0
+        for _ in range(n):
+            try:
+                budget(cls, runner).call("sonnet", "s", "i", {"role": "x", "pad": "가" * 3000})
+            except AgentTimeout:
+                pass
+            except BudgetExceeded:
+                return k
+            k += 1
+        return k
+
+    for cls in ("owner", "loss", "weekly"):          # a busy day: everything the reserve leaves
+        run(cls, OK(), 100)
+    assert run("scheduled", Hung(), RM.TIMEOUT_EXEMPT_PER_DAY) == RM.TIMEOUT_EXEMPT_PER_DAY
+    assert run("scheduled", OK(), 100) == P.budgets["scheduled"][0]
+    assert budget("incident", OK()).headroom() == P.budgets["incident"][0]
+    assert run("incident", OK(), 100) == P.budgets["incident"][0]
+    u = R.usage_today(world.agents, now)
+    assert u["calls"] <= P.total_budget[0] + RM.TIMEOUT_EXEMPT_PER_DAY
+    sch = budget("scheduled", OK())
+    assert sch.total_for_caps()[0] == u["calls"] - RM.TIMEOUT_EXEMPT_PER_DAY
+    # outage rows past the exemption count again: the total still bounds the reserved classes
+    day = R.kst_day(now)
+    world.agents.executemany("INSERT INTO agent_calls (ts, day, pipeline, role, model, ok, tokens) VALUES (?,?,?,?,?,?,?)",
+                             [(now, day, RM.TIMEOUT_PIPELINE, "x", "sonnet", 0, 20_000)] * 5)
+    assert sch.total_for_caps()[0] == u["calls"] + 5 - RM.TIMEOUT_EXEMPT_PER_DAY
+    # the other classes always count every outage row
+    assert budget("owner", OK()).total_for_caps() == budget("owner", OK()).used_total()

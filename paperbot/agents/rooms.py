@@ -201,6 +201,10 @@ CRITICAL_INCIDENTS = ("liquidation", "engine_halted", "critical")
 # counted in the day's total and the 7-day cap, but under no meeting kind, so an outage never uses up a
 # class's calls or its reserve (a liquidation, the 22:00 meeting)
 TIMEOUT_PIPELINE = "timeout"
+# The reserved classes' total and 7-day checks leave out at most this many outage rows a day (a whole
+# day of a hung API with a pending liquidation makes about 20 with the back-off), so the day total can
+# be passed by at most that many calls in which the model did nothing.
+TIMEOUT_EXEMPT_PER_DAY = 20
 
 
 # ---------------------------------------------------------------- policy and context
@@ -364,6 +368,31 @@ class ClassBudget(BudgetedRunner):
         """Calls and tokens of the last 7 KST days, today included."""
         return self._sum("day >= ?", (R.kst_day(self.clock_ms() - 6 * DAY_MS),))
 
+    def _exempt(self, since_day: str, days: int) -> tuple[int, int]:
+        """Outage rows (``TIMEOUT_PIPELINE``) since ``since_day`` the reserved classes leave out: at most
+        ``TIMEOUT_EXEMPT_PER_DAY`` a day on average, with their tokens pro rata. 0 for the other classes."""
+        if self.pipeline not in RESERVED_CLASSES:
+            return 0, 0
+        c, t = self._sum("day >= ? AND pipeline = ?", (since_day, TIMEOUT_PIPELINE))
+        e = min(c, TIMEOUT_EXEMPT_PER_DAY * days)
+        return (e, t * e // c) if c else (0, 0)
+
+    def total_for_caps(self) -> tuple[int, int]:
+        """``used_total`` as this class's total-cap checks see it. The reserved classes leave out the
+        outage rows (``TIMEOUT_PIPELINE``, up to ``TIMEOUT_EXEMPT_PER_DAY``): those belong to no class,
+        so a hung API that the incident or 08:00/22:00 meetings kept retrying must not take the calls
+        the other reserved class (or a later liquidation) is owed. The other classes count them all
+        (their reserve check keeps the reserved caps free on top)."""
+        tc, tt = self.used_total()
+        ec, et = self._exempt(R.kst_day(self.clock_ms()), 1)
+        return tc - ec, tt - et
+
+    def week_for_caps(self) -> tuple[int, int]:
+        """``used_week`` as this class's 7-day checks see it (outage rows left out for the reserved classes)."""
+        wc, wt = self.used_week()
+        ec, et = self._exempt(R.kst_day(self.clock_ms() - 6 * DAY_MS), 7)
+        return wc - ec, wt - et
+
     def reserve(self) -> tuple[int, int]:
         """Unused calls/tokens of the incident and scheduled caps (0 for those classes themselves)."""
         if self.pipeline in RESERVED_CLASSES:
@@ -418,7 +447,7 @@ class ClassBudget(BudgetedRunner):
         the largest of these. k = 0 is today's plain reserve; the other terms bind only after a light
         day (install day, agents stopped): when it leaves the window, the next day still has its
         liquidation, 08:00 and 22:00 calls. For the reserved classes themselves: the plain window."""
-        wc, wt = self.used_week()
+        wc, wt = self.week_for_caps()
         if self.pipeline in RESERVED_CLASSES:
             return wc, wt
         now = self.clock_ms()
@@ -460,7 +489,7 @@ class ClassBudget(BudgetedRunner):
             raise (SubCapExceeded if self.sub_cap else BudgetExceeded)(
                 f"daily cap of {self.pipeline}{' (without its reserve)' if self.sub_cap else ''}: "
                 f"{calls}/{self.max_calls} calls, {tokens:,}/{self.max_tokens:,} tokens")
-        tc, tt = self.used_total()
+        tc, tt = self.total_for_caps()
         # the call's own size stops every class only for the reserved classes; for the others the
         # reserve check below (which includes it) is stricter and pauses only them
         if tc >= self.total_calls or tt >= self.total_tokens or (reserved and tt + est > self.total_tokens):
@@ -475,7 +504,7 @@ class ClassBudget(BudgetedRunner):
             raise PacedKeepExceeded(f"daily total cap: {tc}/{self.total_calls} calls used, {rc} kept for incidents "
                                     f"and scheduled meetings, {kc} for owner posts and busts")
         if self.week:
-            wc, wt = self.used_week()
+            wc, wt = self.week_for_caps()
             if wc >= self.week[0] or wt >= self.week[1] or (reserved and wt + est > self.week[1]):
                 raise WeekBudgetExceeded(f"7-day cap: {wc}/{self.week[0]} calls, {wt:,}/{self.week[1]:,} tokens")
             # the same reserve inside the 7-day cap, for today AND each of the next six days
@@ -499,7 +528,7 @@ class ClassBudget(BudgetedRunner):
         est = self.call_need()
         reserved = self.pipeline in RESERVED_CLASSES
         calls, tokens = self.used_today()
-        tc, tt = self.used_total()
+        tc, tt = self.total_for_caps()
         rc, rt = self.reserve()
         kc, kt = self.paced_keep()
         if tokens >= self.max_tokens or tokens + est > self.max_tokens or tt >= self.total_tokens:
@@ -508,7 +537,7 @@ class ClassBudget(BudgetedRunner):
             return 0
         room = [self.max_calls - calls, self.total_calls - tc - rc - kc]
         if self.week:
-            wc, wt = self.used_week()
+            wc, wt = self.week_for_caps()
             nc, nt = self.week_need(rc + kc, rt + kt, est)    # the plain window for the reserved classes
             if nt >= self.week[1] or wt >= self.week[1] or (reserved and wt + est > self.week[1]):
                 return 0
