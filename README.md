@@ -190,9 +190,11 @@ EMA 배열·EMA50 기울기·슈퍼트렌드·고점/저점 구조·MACD로 점�
 
 ### AI 공급자
 Claude(`ANTHROPIC_API_KEY`) · NVIDIA(`NVIDIA_API_KEY`, build.nvidia.com 무료 크레딧, OpenAI 호환 `https://integrate.api.nvidia.com/v1`) ·
-Gemini(`GEMINI_API_KEY`, 무료 등급). `LLM_PROVIDER=auto` 면 Claude → NVIDIA → Gemini 순서. NVIDIA 는 `NVIDIA_MODEL`(기본 `meta/llama-3.3-70b-instruct`)·
+Gemini(`GEMINI_API_KEY`, 무료 등급). `LLM_PROVIDER=auto` 면 Claude → NVIDIA → Gemini 순서. NVIDIA 는 `NVIDIA_MODEL`(기본 `auto` — 키로 쓸 수 있는 모델 목록 `/v1/models` 에서 우선순위대로 자동 선택)·
 `NVIDIA_FAST_MODEL`(에이전트 팀 반복 분석용)·`NVIDIA_RPM`(기본 35)·`NVIDIA_BASE_URL`(다른 OpenAI 호환 서비스용). JSON 이 필요한 호출은
 `response_format=json_object` 를 요청하고(거부하는 모델은 빼고 재요청), 추론 모델의 `<think>` 부분은 지운 뒤 JSON 만 골라 검증한다 (`app/nvidia.py`).
+NVIDIA 가 모델을 종료(410 end of life)하거나 내리면(404) 그 모델을 `state/nvidia_models.json` 에 '종료됨'으로 기억하고
+쓸 수 있는 다른 모델로 바꿔 바로 다시 부른다 (등록해 둔 모델 이름이 종료돼도 AI 기능이 멈추지 않음). 'AI 모델' 창의 테스트는 대체 없이 그 모델만 확인한다.
 
 ## 실행
 

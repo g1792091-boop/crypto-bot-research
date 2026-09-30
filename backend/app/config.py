@@ -21,8 +21,8 @@ GEMINI_RPM = int(os.getenv("GEMINI_RPM", "10"))        # 분당 최대 요청 �
 
 # NVIDIA API (build.nvidia.com 무료 개발자 키 nvapi-…, OpenAI 호환)
 NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY", "")
-NVIDIA_MODEL = os.getenv("NVIDIA_MODEL", "") or "meta/llama-3.3-70b-instruct"
-NVIDIA_FAST_MODEL = os.getenv("NVIDIA_FAST_MODEL", "")     # 반복 분석용 (비우면 NVIDIA_MODEL)
+NVIDIA_MODEL = os.getenv("NVIDIA_MODEL", "") or "auto"      # auto = 키로 쓸 수 있는 모델 중 자동 선택 (종료되면 알아서 바꿈)
+NVIDIA_FAST_MODEL = os.getenv("NVIDIA_FAST_MODEL", "")     # 반복 분석용 (비우면 NVIDIA_MODEL, auto-fast = 가벼운 모델 자동)
 NVIDIA_BASE_URL = os.getenv("NVIDIA_BASE_URL", "") or "https://integrate.api.nvidia.com/v1"
 NVIDIA_RPM = int(os.getenv("NVIDIA_RPM", "35"))            # 무료 등급 분당 약 40회
 NVIDIA_MAX_TOKENS = int(os.getenv("NVIDIA_MAX_TOKENS", "4096"))

@@ -209,6 +209,10 @@ def _model_label(tier: str, rid: str | None = None) -> str:
     if not c:
         return "규칙 분석"
     p, m = ai_routes.split(c[0])
+    if p == "nvidia" and m in ("auto", "auto-fast"):
+        from .. import nvidia
+        pick = nvidia.peek_auto(m == "auto-fast")
+        return pick or "NVIDIA 자동"
     return "Gemini" if p == "gemini" and m == "auto" else m
 
 

@@ -31,9 +31,10 @@ GEMINI_API_KEY=
 
 # NVIDIA API 키 — 무료 (https://build.nvidia.com 로그인 → 아무 모델 페이지에서 "Get API Key", nvapi- 로 시작)
 #   가입 크레딧과 분당 약 40회 제한이 있습니다. OpenAI 호환 API 입니다.
-#   NVIDIA_MODEL 에 build.nvidia.com 의 모델 이름을 넣으면 그 모델을 씁니다 (비우면 meta/llama-3.3-70b-instruct)
+#   NVIDIA_MODEL 을 비우면 이 키로 쓸 수 있는 모델 중에서 자동으로 고르고, 모델이 종료되면 알아서 다른 모델로 바꿉니다.
+#   특정 모델을 쓰려면 build.nvidia.com 의 모델 이름을 넣으세요 (그 모델이 종료되면 자동 선택으로 넘어감)
 #   예) deepseek-ai/deepseek-v3.1 · qwen/qwen3-235b-a22b · moonshotai/kimi-k2-instruct · nvidia/llama-3.3-nemotron-super-49b-v1.5
-#   NVIDIA_FAST_MODEL 은 에이전트 팀의 반복 분석용 가벼운 모델 (비우면 같은 모델)
+#   NVIDIA_FAST_MODEL 은 에이전트 팀의 반복 분석용 가벼운 모델 (비우면 같은 모델, auto-fast 면 가벼운 모델 자동 선택)
 NVIDIA_API_KEY=
 NVIDIA_MODEL=
 NVIDIA_FAST_MODEL=
@@ -119,7 +120,7 @@ def main() -> None:
     print(" GH Quant 실행 중")
     print(f" 브라우저 주소: {url}")
     from app import config as _cfg
-    ai = {"claude": "Claude", "nvidia": f"NVIDIA ({_cfg.NVIDIA_MODEL})", "gemini": "Gemini"}.get(_cfg.provider() or "", "미설정 (규칙 기반)")
+    ai = {"claude": "Claude", "nvidia": f"NVIDIA ({'자동 선택' if _cfg.NVIDIA_MODEL == 'auto' else _cfg.NVIDIA_MODEL})", "gemini": "Gemini"}.get(_cfg.provider() or "", "미설정 (규칙 기반)")
     print(f" AI: {ai}"
           f" / CoinGlass: {'연결' if os.environ.get('COINGLASS_API_KEY') else '미설정 (바이낸스 대체)'}")
     print(" 종료하려면 이 창을 닫거나 Ctrl+C 를 누르세요.")

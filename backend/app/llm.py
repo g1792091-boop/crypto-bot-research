@@ -110,6 +110,9 @@ def _run(kind, system, user, max_tokens, effort=None, schema=None, feature=None,
     for r in routes:
         try:
             out = _one(r, kind, system, user, max_tokens, effort, schema)
+            if r.startswith("nvidia:"):                       # auto·종료 모델 대체 → 실제로 답한 모델 이름으로
+                from . import nvidia
+                r = "nvidia:" + (nvidia.used_model() or ai_routes.split(r)[1])
             last_used = r
             return out, r
         except (LLMUnavailable, anthropic.APIError, httpx.HTTPError, ValueError) as e:

@@ -643,7 +643,8 @@ def ai_catalog(provider: Literal["nvidia", "gemini", "claude"] = "nvidia", refre
     try:
         if provider == "nvidia":
             from . import nvidia
-            return {"provider": provider, "models": nvidia.catalog(refresh)}
+            return {"provider": provider, "models": nvidia.catalog(refresh), "suggest": ai_routes.nvidia_suggest(),
+                    "dead": sorted(nvidia.dead()), "auto": {"nvidia": nvidia.peek_auto(False), "nvidia_fast": nvidia.peek_auto(True)}}
         if provider == "gemini":
             from . import gemini
             return {"provider": provider, "models": ["auto", *gemini.models()]}
@@ -660,15 +661,20 @@ class AiTest(BaseModel):
 def ai_test(req: AiTest):
     """모델 하나만 짧게 불러 보기 (대체 순서 없이)."""
     if not ai_routes.valid(req.route):
-        _bad(ValueError("'공급자:모델' 형식이 아닙니다 (예: nvidia:meta/llama-3.3-70b-instruct)."))
+        _bad(ValueError("'공급자:모델' 형식이 아닙니다 (예: nvidia:auto, nvidia:deepseek-ai/deepseek-v3.1)."))
     if not ai_routes.key_ok(req.route.split(":", 1)[0]):
         _bad(ValueError("이 공급자의 API 키가 없습니다."))
+    from . import nvidia
     t0 = time.time()
+    tok = nvidia.strict.set(req.route.split(":", 1)[1] not in nvidia.AUTO)   # 이름을 찍은 모델은 대체 없이 그 모델만
     try:
         ans = llm.text("한국어로 한 문장만 답한다.", "코인 선물에서 높은 레버리지가 위험한 이유를 한 문장으로.", max_tokens=300, route=req.route)
-        return {"ok": True, "route": req.route, "answer": ans.strip()[:400], "seconds": round(time.time() - t0, 1)}
+        return {"ok": True, "route": req.route, "used": llm.last_used, "answer": ans.strip()[:400], "seconds": round(time.time() - t0, 1)}
     except LLMUnavailable as e:
-        return {"ok": False, "route": req.route, "error": str(e)[:400], "seconds": round(time.time() - t0, 1)}
+        return {"ok": False, "route": req.route, "error": str(e)[:400], "seconds": round(time.time() - t0, 1),
+                "dead": req.route.startswith("nvidia:") and nvidia.is_dead(req.route.split(":", 1)[1])}
+    finally:
+        nvidia.strict.reset(tok)
 
 
 class AiKeys(BaseModel):

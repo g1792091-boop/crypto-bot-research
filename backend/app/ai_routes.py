@@ -1,7 +1,7 @@
 """AI 모델 배정 — 여러 모델을 등록하고 기능·에이전트마다 다른 모델을 쓰며, 막히면 다음 모델로 넘어간다.
 
 모델은 '공급자:모델 이름' 으로 적는다.
-  nvidia:meta/llama-3.3-70b-instruct · nvidia:deepseek-ai/deepseek-v3.1 · gemini:auto · gemini:gemini-2.5-flash · claude:claude-opus-5-5
+  nvidia:auto(자동 선택) · nvidia:deepseek-ai/deepseek-v3.1 · gemini:auto · gemini:gemini-2.5-flash · claude:claude-opus-5-5
 설정 (state/ai_routes.json, 화면의 'AI 모델' 창에서 바꿈):
   models   : 내 모델 목록 (고르는 칸에 나옴)
   default  : 기본 모델 (비우면 키가 있는 공급자의 기본 모델)
@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import json
 
-from . import config
+from . import config, nvidia
 
 FEATURES = {
     "copilot": "실시간 AI (트레이드 오른쪽 AI 탭 · 포지션 감시)",
@@ -123,11 +123,20 @@ def primary() -> str | None:
     return c[0] if c else None
 
 
+def nvidia_suggest() -> list[str]:
+    """이미 불러온 모델 목록이 있으면 거기서 우선순위대로, 없으면 잘 알려진 이름들 (종료된 것 제외)."""
+    ranked = nvidia.rank(nvidia._catalog[1]) if nvidia._catalog else nvidia.rank(list(nvidia.STATIC))
+    fast = nvidia.rank(nvidia._catalog[1], fast=True) if nvidia._catalog else []
+    names = list(dict.fromkeys(ranked[:6] + fast[:2]))
+    return ["nvidia:auto", "nvidia:auto-fast"] + ["nvidia:" + m for m in names]
+
+
 def view() -> dict:
     st = load()
     return {**st, "features_desc": FEATURES, "keys": {p: key_ok(p) for p in PROVIDERS}, "primary": primary(),
+            "dead": {"nvidia:" + m: d for m, d in nvidia.dead().items()},
+            "auto": {"nvidia": nvidia.peek_auto(False), "nvidia_fast": nvidia.peek_auto(True)},
             "suggest": {
-                "nvidia": ["nvidia:meta/llama-3.3-70b-instruct", "nvidia:deepseek-ai/deepseek-v3.1", "nvidia:qwen/qwen3-235b-a22b",
-                           "nvidia:moonshotai/kimi-k2-instruct", "nvidia:nvidia/llama-3.3-nemotron-super-49b-v1.5", "nvidia:meta/llama-3.1-8b-instruct"],
+                "nvidia": nvidia_suggest(),
                 "gemini": ["gemini:auto", "gemini:gemini-2.5-flash", "gemini:gemini-2.5-flash-lite"],
                 "claude": [f"claude:{config.CLAUDE_MODEL}"] + ([f"claude:{config.CLAUDE_FAST_MODEL}"] if config.CLAUDE_FAST_MODEL else [])}}
