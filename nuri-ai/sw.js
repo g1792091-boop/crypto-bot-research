@@ -1,11 +1,11 @@
 // 누리 AI 서비스 워커
-// 1) 앱 파일을 저장해 인터넷 없이도 열리게 하고
+// 1) 앱 파일을 저장해 인터넷 없이도 열리게 하고 (항상 최신본 우선, 연결이 없을 때만 저장본)
 // 2) COOP/COEP 헤더를 붙여 멀티스레드(SharedArrayBuffer) CPU 추론을 켠다 (GitHub Pages는 헤더를 직접 설정할 수 없음)
-const CACHE = "nuri-app-v3";
-const ASSETS = ["./", "./index.html", "./vendor/wllama/index.js", "./vendor/wllama/wllama.wasm", "./trade.js", "./manifest.webmanifest", "./icon.svg"];
+const CACHE = "nuri-app-v4";
+const ASSETS = ["./", "./index.html", "./trade.js", "./vendor/wllama/index.js", "./vendor/wllama/wllama.wasm", "./manifest.webmanifest", "./icon.svg"];
 
 self.addEventListener("install", e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS.map(u => new Request(u, {cache: "reload"})))).then(() => self.skipWaiting()));
 });
 self.addEventListener("activate", e => {
   e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k.startsWith("nuri-app-") && k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));
@@ -24,18 +24,16 @@ self.addEventListener("fetch", e => {
   const req = e.request;
   const url = new URL(req.url);
   if (req.method !== "GET" || url.origin !== self.location.origin) return; // 모델 다운로드 등 외부 요청은 건드리지 않음
-  if (url.pathname.startsWith("/__nuri/")) return; // 실행기(exe)의 연결 확인용 경로
-  const isPage = req.mode === "navigate" || url.pathname.endsWith("/") || url.pathname.endsWith(".html");
+  if (url.pathname.startsWith("/__nuri/")) return;                          // 실행기(exe)의 연결 확인·중계 경로
   e.respondWith((async () => {
     const cache = await caches.open(CACHE);
-    if (isPage) {
-      // 페이지는 최신본 우선, 오프라인이면 저장본
-      try { const net = await fetch(req); if (net.ok) cache.put(req, net.clone()); return isolate(net); }
-      catch (err) { const hit = await cache.match(req) || await cache.match("./index.html"); return isolate(hit || Response.error()); }
+    try {
+      const net = await fetch(req, {cache: "no-cache"});
+      if (net.ok) cache.put(req, net.clone());
+      return isolate(net);
+    } catch (err) {
+      const hit = await cache.match(req, {ignoreSearch: true}) || (req.mode === "navigate" ? await cache.match("./index.html") : null);
+      return isolate(hit || Response.error());
     }
-    const hit = await cache.match(req);
-    if (hit) { fetch(req).then(r => { if (r.ok) cache.put(req, r); }).catch(() => {}); return isolate(hit); }
-    try { const net = await fetch(req); if (net.ok) cache.put(req, net.clone()); return isolate(net); }
-    catch (err) { return Response.error(); }
   })());
 });

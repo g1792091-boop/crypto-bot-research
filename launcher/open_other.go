@@ -22,3 +22,5 @@ func openApp(url string) {
 }
 
 func showError(title, msg string) { fmt.Fprintln(os.Stderr, title+": "+msg) }
+
+func killOthers() {}

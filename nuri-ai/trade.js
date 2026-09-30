@@ -238,7 +238,7 @@ export function initTrade(ctx){
       if (S.cs.length < 30) throw new Error("캔들 데이터가 부족합니다");
       recompute(); S.view.off = 0; S.view.count = Math.min(S.cs.length, 120); S.bt = null; S.ai = null; S.aiRaw = "";
       msg(""); S.err = "";
-    } catch (e){ S.cs = []; S.ind = null; msg(netErr(e)); }
+    } catch (e){ S.cs = []; S.ind = null; S.q = null; msg(netErr(e), true); }
     S.loading = false; renderAll();
   }
   function recompute(){
@@ -248,6 +248,8 @@ export function initTrade(ctx){
   }
   async function refresh(){
     if (!S.visible || S.loading) return;
+    if (!S.list.length) await loadList();          // 처음 연결에 실패했으면 다시 시도
+    if (!S.cs.length){ if (S.list.length || !S.err) await loadCandles(); return; }
     try {
       const ids = [S.market, ...S.list.slice(0, 30).map(m => m.id)].filter((v, i, a) => a.indexOf(v) === i).slice(0, 30);
       for (const t of await X().tickers(ids)){ const m = S.list.find(x => x.id === t.id); if (m) Object.assign(m, t); S.tick.set(t.id, {...(S.tick.get(t.id) || {}), ...t}); }
@@ -263,15 +265,19 @@ export function initTrade(ctx){
   function netErr(e){
     if (e instanceof TypeError) return ctx.launcher() ? "거래소에 연결하지 못했습니다. 인터넷 연결을 확인하세요." : "브라우저 보안정책 때문에 거래소 시세를 직접 받을 수 없습니다. NuriAI.exe로 실행하면 됩니다.";
     if (e.status === 429) return "요청이 너무 많습니다. 잠시 뒤 다시 시도하세요.";
+    if (e.status === 502) return `${X().label}에 연결하지 못했습니다. 인터넷 연결이나 방화벽·백신 프로그램이 NuriAI.exe의 인터넷 접속을 막고 있는지 확인하세요.`;
     return "시세를 불러오지 못했습니다: " + (e.message || e);
   }
-  function msg(t){ const m = $("#tr-msg"); m.hidden = !t; m.textContent = t; }
+  function msg(t, retry){
+    const m = $("#tr-msg"); m.hidden = !t;
+    m.innerHTML = t ? `<div class="tr-msg-box"><span>${esc(t)}</span>${retry ? `<button class="btn primary" id="tr-retry">다시 시도</button><span class="small">10초마다 자동으로 다시 시도합니다</span>` : ""}</div>` : "";
+  }
 
   /* ---------- 상단·목록 ---------- */
   function renderHead(){
     const m = {...cur(), ...(S.tick.get(S.market) || {})};
     const px = m.price ?? (S.cs.length ? S.cs[S.cs.length-1].c : null);
-    $("#tr-name").textContent = m.name || S.market; $("#tr-id").textContent = " " + S.market;
+    $("#tr-name").textContent = m.name || S.market; $("#tr-id").textContent = m.name && m.name !== S.market ? " " + S.market : "";
     $("#tr-px").textContent = fmt(px) + (X().quote === "KRW" ? "원" : "");
     const chg = $("#tr-chg"); chg.textContent = m.chg != null ? pct(m.chg) : ""; chg.className = "chg num " + (m.chg > 0 ? "up" : m.chg < 0 ? "down" : "");
     $("#tr-px").className = "num " + (m.chg > 0 ? "up" : m.chg < 0 ? "down" : "");
@@ -285,7 +291,7 @@ export function initTrade(ctx){
   function renderList(){
     const q = S.filter.trim().toLowerCase();
     const rows = S.list.filter(m => !q || m.name.toLowerCase().includes(q) || m.sym.toLowerCase().includes(q)).slice(0, 80);
-    $("#tr-rows").innerHTML = S.err && !S.list.length ? `<p class="err">${esc(S.err)}</p>` : rows.map(m => `<button class="tr-row${m.id === S.market ? " on" : ""}" data-mkt="${esc(m.id)}"><span class="nm"><b>${esc(m.name)}</b><span class="small">${esc(m.sym)}</span></span><span class="num px">${fmt(m.price)}</span><span class="num chg ${m.chg > 0 ? "up" : m.chg < 0 ? "down" : ""}">${pct(m.chg || 0)}</span></button>`).join("") || `<p class="empty">검색 결과가 없습니다.</p>`;
+    $("#tr-rows").innerHTML = S.err && !S.list.length ? `<p class="err">${esc(S.err)}</p><button class="btn" id="tr-retry2">다시 시도</button>` : rows.map(m => `<button class="tr-row${m.id === S.market ? " on" : ""}" data-mkt="${esc(m.id)}"><span class="nm"><b>${esc(m.name)}</b><span class="small">${esc(m.sym)}</span></span><span class="num px">${fmt(m.price)}</span><span class="num chg ${m.chg > 0 ? "up" : m.chg < 0 ? "down" : ""}">${pct(m.chg || 0)}</span></button>`).join("") || `<p class="empty">검색 결과가 없습니다.</p>`;
   }
   $("#tr-rows").addEventListener("click", e => { const b = e.target.closest("[data-mkt]"); if (!b || b.dataset.mkt === S.market) return; S.market = b.dataset.mkt; ls.set("tr:mkt:" + S.ex, S.market); renderList(); renderHead(); loadCandles(); });
   $("#tr-q").addEventListener("input", e => { S.filter = e.target.value; renderList(); });
@@ -513,6 +519,7 @@ export function initTrade(ctx){
   }
   root.addEventListener("click", e => {
     if (e.target.id === "tr-ai-go") runAI();
+    if (e.target.id === "tr-retry" || e.target.id === "tr-retry2"){ (async () => { if (!S.list.length) await loadList(); await loadCandles(); })(); }
     if (e.target.id === "tr-ai-stop") S.aiCtl?.abort();
     const tb = e.target.closest("[data-tab]"); if (tb){ S.tab = tb.dataset.tab; syncTools(); S.tab === "bt" ? renderBT() : renderPaper(); }
   });

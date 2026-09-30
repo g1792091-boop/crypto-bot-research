@@ -4,7 +4,9 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha1"
 	"embed"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"io/fs"
@@ -51,13 +53,19 @@ func main() {
 	idle := envDuration("NURI_IDLE_EXIT", 45*time.Second)      // 창이 모두 닫힌 뒤 종료까지
 	firstWait := envDuration("NURI_FIRST_WAIT", 5*time.Minute) // 창이 한 번도 안 열렸을 때 종료까지
 
-	// 이미 실행 중이면 창만 새로 연다
+	buildID := contentHash()
+
+	// 같은 버전이 이미 실행 중이면 창만 새로 열고, 예전 버전이면 끄고 새로 시작한다
 	for p := basePort; p < basePort+10; p++ {
 		url := fmt.Sprintf("http://127.0.0.1:%d", p)
-		if ping(url) {
+		if !ping(url) {
+			continue
+		}
+		if version(url) == buildID {
 			openApp(url + startPath)
 			return
 		}
+		stopOld(url)
 	}
 
 	var ln net.Listener
@@ -79,6 +87,17 @@ func main() {
 	tr := &tracker{lastZero: time.Now()}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/__nuri/ping", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("nuri")) })
+	mux.HandleFunc("/__nuri/version", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte(buildID)) })
+	quit := make(chan struct{}, 1)
+	mux.HandleFunc("/__nuri/quit", func(w http.ResponseWriter, r *http.Request) {
+		// 새 버전 실행기만 부르도록 사용자 정의 헤더 요구 (다른 웹사이트는 이 헤더를 붙여 보낼 수 없음)
+		if r.Method != http.MethodPost || r.Header.Get("X-Nuri") != "1" {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		w.Write([]byte("bye"))
+		quit <- struct{}{}
+	})
 	mux.HandleFunc("/__nuri/alive", func(w http.ResponseWriter, r *http.Request) {
 		fl, ok := w.(http.Flusher)
 		if !ok {
@@ -113,6 +132,7 @@ func main() {
 	openApp(url + startPath)
 
 	started := time.Now()
+	go func() { <-quit; time.Sleep(200 * time.Millisecond); os.Exit(0) }()
 	for range time.Tick(2 * time.Second) {
 		tr.mu.Lock()
 		active, seen, lastZero := tr.active, tr.seen, tr.lastZero
@@ -269,4 +289,58 @@ func proxyHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+}
+
+// 내장된 앱 파일 전체의 해시: 버전이 바뀌었는지 판단하는 데 쓴다
+func contentHash() string {
+	h := sha1.New()
+	fs.WalkDir(siteFS, "site", func(p string, d fs.DirEntry, err error) error {
+		if err == nil && !d.IsDir() {
+			b, _ := siteFS.ReadFile(p)
+			h.Write([]byte(p))
+			h.Write(b)
+		}
+		return nil
+	})
+	return hex.EncodeToString(h.Sum(nil))[:12]
+}
+
+func version(base string) string {
+	c := http.Client{Timeout: 700 * time.Millisecond}
+	res, err := c.Get(base + "/__nuri/version")
+	if err != nil {
+		return ""
+	}
+	defer res.Body.Close()
+	if res.StatusCode != 200 {
+		return "" // 버전 확인 기능이 없는 예전 실행기
+	}
+	b, _ := io.ReadAll(io.LimitReader(res.Body, 64))
+	return string(b)
+}
+
+// 예전 버전 실행기를 끈다: 먼저 정중하게 요청하고, 안 되면 강제 종료
+func stopOld(base string) {
+	c := http.Client{Timeout: time.Second}
+	req, _ := http.NewRequest(http.MethodPost, base+"/__nuri/quit", nil)
+	req.Header.Set("X-Nuri", "1")
+	if res, err := c.Do(req); err == nil {
+		res.Body.Close()
+	}
+	if waitGone(base, 3*time.Second) {
+		return
+	}
+	killOthers()
+	waitGone(base, 5*time.Second)
+}
+
+func waitGone(base string, d time.Duration) bool {
+	end := time.Now().Add(d)
+	for time.Now().Before(end) {
+		if !ping(base) {
+			return true
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	return false
 }
