@@ -345,7 +345,7 @@ SAY_PER_HOUR = 20            # owner posts per hour, both owners together (count
 AUTHOR_MAX = 20
 BODY_MAX = 16_384            # bytes of one owner write (a 1,000-character post is at most ~4 KB of JSON)
 BUDGET_CLASSES = ("incident", "owner", "loss", "scheduled", "weekly")
-CLASS_KO = {"incident": "긴급 점검", "owner": "두 분 메시지", "loss": "손실·파산 복기", "scheduled": "정기 회의",
+CLASS_KO = {"incident": "사고 점검", "owner": "두 분 글", "loss": "손실·파산 복기", "scheduled": "정기 회의",
             "weekly": "주간 검토"}
 WEEKDAY_KO = "월화수목금토일"
 

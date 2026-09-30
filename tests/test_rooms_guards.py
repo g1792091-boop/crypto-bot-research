@@ -1856,3 +1856,54 @@ def test_the_liquidation_reserve_still_carries_a_whole_meeting_under_the_larger_
         liq.call("sonnet", "", "", packet)
     assert liq.used_today()[1] <= RM.DEFAULT_BUDGETS["incident"][1]
 
+
+
+def test_small_guards_of_round_4(world, tmp_path):
+    # internationalised domains and bare IPv4 addresses are links too (Telegram makes them clickable)
+    for bad in ("see пример.рф now", "visit 네이버.한국 please", "bare 1.2.3.4:8080/x ok", "at 10.0.0.1 now"):
+        assert "(링크 생략)" in A.telegram_safe(bad), bad
+    assert A.telegram_safe("켈트너·RSI 손실 3.5배, 승률 40.2%. 다음 점검") == "켈트너·RSI 손실 3.5배, 승률 40.2%. 다음 점검"
+    # the room the evening Telegram points to is the one the room list calls '총괄'
+    import inspect
+    assert "총괄 방에서 보세요" in inspect.getsource(RM.compose_evening)
+    # one set of class names: the usage panel says what the docs and the owners' hints say
+    from paperbot.dash.app import CLASS_KO
+    assert CLASS_KO["incident"] == RM.TRIGGER_KO["incident"] == "사고 점검"
+    assert CLASS_KO["owner"] == RM.TRIGGER_KO["owner"] == "두 분 글"
+    # token settings that leave a kind of meeting unable to start are warned about, like call settings
+    p = RM.RoomsPolicy(total_budget=(80, 800_000), budgets={**RM.DEFAULT_BUDGETS, "owner": (20, 20_000)})
+    w = " ".join(RM.budget_warnings(p))
+    assert "total tokens 800,000" in w and "owner tokens 20,000" in w and RM.budget_warnings(RM.RoomsPolicy()) == []
+    # a meeting failed because the pass that ran it died says so in its room (not '회의 시작' and silence)
+    world.store.alert(QUIET - 20 * MIN, "WARN", "data gap at 123: no bar for ['BTCUSDT']")
+    world.store.commit()
+    ro = R.open_ro(world.paths["paper"])
+    [due] = TR.find_due(ro, None, world.agents, None, QUIET - 15 * MIN, TR.TriggerPolicy(enabled=("incident",)))
+    ro.close()
+    rid = TR.begin_round(world.agents, due, QUIET - 15 * MIN)
+    world.tick(QueueRunner({"ops_auditor": [team_answer("o")], "data_quality": [team_answer("d")],
+                            "team_lead": [LEAD]}), QUIET)
+    said = [m for m in world.messages("team:ops") if m["kind"] == "system" and m.get("round_id") == rid]
+    assert said and "도중에 끝나" in said[0]["text"]
+
+
+def test_an_unreadable_inbox_never_sets_the_approvals_base_to_zero(tmp_path):
+    """A new agents3.db whose first tick could not open an existing inbox.db (a stale -wal, a bad restore) set
+    the approvals base to 0: the old clicks in that inbox.db were later applied to new proposals reusing ids."""
+    paths = E.build_world(str(tmp_path / "var"))
+    ib = R.open_inbox_rw(paths["inbox"])
+    ib.execute("INSERT INTO approvals (ts, proposal_id, decision, author) VALUES (?, 1, 'approve', '')", (E.T0 - DAY,))
+    ib.commit()
+    ib.close()
+    a = R.open_agents(paths["agents3"])
+    assert RM.apply_approvals(a, None, E.T0, inbox_missing=False) == []
+    assert R.get_cursor(a, RM.APPROVALS_BASE) is None                    # not decided while unreadable
+    ro = R.open_ro(paths["inbox"])
+    RM.apply_approvals(a, ro, E.T0 + 15 * MIN, inbox_missing=False)
+    assert int(R.get_cursor(a, RM.APPROVALS_BASE)) >= 1                  # the old click predates this agents3.db
+    ro.close()
+    a.close()
+    b = R.open_agents(str(tmp_path / "fresh.db"))
+    RM.apply_approvals(b, None, E.T0, inbox_missing=True)                # no inbox.db at all: nothing predates
+    assert int(R.get_cursor(b, RM.APPROVALS_BASE)) == 0
+    b.close()

@@ -429,7 +429,8 @@ function propCard(p) {
     ${ch.approver ? `<div class="ln">자율 승인관: ${ch.approver.approve ? "승인" : "거부"} — ${esc(ch.approver.reason || "")}</div>` : ""}
     <div class="ln">코드 관문${gn ? "(제안 때)" : ""}: ${g.pass === true ? '<span class="up">✓ 통과</span>' : '<span class="down">✕ 불통과</span>'}${p.trial_id ? ` · 시험 #${esc(p.trial_id)}` : ""}${g.n_trials ? ` · 이 방 ${esc(g.n_trials)}번째 시험` : ""}</div>
     ${gn ? `<div class="ln">지금 다시 판정(이 방 시험 ${esc(gn.n_trials)}번 기준): ${gn.pass === true ? '<span class="up">✓ 통과</span>' : '<span class="down">✕ 불통과 · 승인할 수 없음</span>'}</div>` : ""}
-    ${(g.reasons || []).length ? `<ul class="reasons">${g.reasons.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
+    ${stale && gn.n_trials ? `<div class="ln">이 방 시험이 ${esc(gn.n_trials)}번으로 늘어 ① 기준이 p &lt; 0.05 ÷ ${esc(gn.n_trials)}로 엄격해졌습니다. 아래는 제안 때의 판정입니다.</div>` : ""}
+    ${(g.reasons || []).length ? `${stale ? '<div class="ln">제안 때 판정 근거:</div>' : ""}<ul class="reasons">${g.reasons.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
     ${acts}</div>`;
 }
 // One row of the hypothesis ledger. A copy proposal is named by its PROPOSAL number (the one the owners

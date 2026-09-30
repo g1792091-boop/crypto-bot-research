@@ -118,7 +118,7 @@ TELEGRAM_LIMIT = 3900
 # duty: what the role does in the rooms (roster3.ROOM_DUTY), not its wider v3 roster duty
 ROLE_INFO = {r[0]: {"name": r[1], "team": r[2], "model": r[3], "duty": room_duty(r[0])} for r in ROLES + SPECIALISTS}
 TEAM_KO = dict(TEAMS)
-TRIGGER_KO = {"incident": "긴급 점검", "owner": "두 분 메시지", "loss_cluster": "손실 묶음 복기", "bust": "파산 복기",
+TRIGGER_KO = {"incident": "사고 점검", "owner": "두 분 글", "loss_cluster": "손실 묶음 복기", "bust": "파산 복기",
               "checkpoint": "30일 단위 점검", "morning": "아침 회의", "evening": "저녁 점검", "weekly": "주간 검토"}
 VERDICT_KO = {"agree": "동의", "disagree": "반대", "needs_test": "시험 필요"}
 
@@ -704,6 +704,22 @@ def budget_warnings(policy: RoomsPolicy) -> list[str]:
                        f"scheduled caps ({kept}) and the calls kept for owner posts and busts ({keep}): on a day "
                        "without owner posts or busts no review can start")
     kept_t = sum(int(p.budgets.get(k, (0, 0))[1]) for k in RESERVED_CLASSES)
+    if p.total_budget[1] - kept_t < p.est_call_tokens:
+        out.append(f"total tokens {p.total_budget[1]:,} leave less than one call ({p.est_call_tokens:,} tokens charged) "
+                   f"after the incident and scheduled token caps ({kept_t:,}): owner, loss and weekly meetings can "
+                   "never start")
+    for cls, keep_calls, who in (("incident", p.critical_reserve_calls, "non-critical incidents"),
+                                 ("loss", p.bust_reserve_calls, "loss-cluster reviews")):
+        c, t = (int(x) for x in p.budgets.get(cls, (0, 0)))
+        if 0 < keep_calls < c:
+            kept_tok = max(t - t * (c - keep_calls) // c, reserve_meeting_tokens(keep_calls, p.reserve_call_input_tokens))
+            if t - kept_tok < p.est_call_tokens:
+                out.append(f"{cls} tokens {t:,} leave {who} {max(0, t - kept_tok):,} tokens after the {kept_tok:,} kept "
+                           f"for {'liquidations' if cls == 'incident' else 'busts'}: less than one call, they can never start")
+    for cls, (_c, t) in sorted(p.budgets.items()):
+        if int(t) < p.est_call_tokens:
+            out.append(f"{cls} tokens {int(t):,} are less than one call ({p.est_call_tokens:,} tokens charged "
+                       "before a call): that kind of meeting can never start")
     if p.week_budget[0] - 7 * kept < 2 or p.week_budget[1] <= 7 * kept_t:
         # the 7-day cap keeps the incident and scheduled caps for today and the next six days
         out.append(f"week={p.week_budget[0]}:{p.week_budget[1]} is taken by seven days of the incident and scheduled "
@@ -1774,7 +1790,7 @@ def compose_evening(ctx: RoundContext, board: dict, lead: dict, due: Optional[TR
         calls += R.usage_today(ctx.agents_conn, day0)["calls"]
     L.append(f"- {since}AI 호출 {calls}회")
     if lead.get("human_actions"):
-        L += ["", f"[두 분이 할 일] {len(lead['human_actions'])}건 — 대시보드 '에이전트 방'의 팀장 방에서 보세요"]
+        L += ["", f"[두 분이 할 일] {len(lead['human_actions'])}건 — 대시보드 '에이전트 방'의 총괄 방에서 보세요"]
     text = "\n".join(L)
     return text if len(text) <= TELEGRAM_LIMIT else text[:TELEGRAM_LIMIT - 20] + "\n…(잘림)"
 
@@ -1958,21 +1974,31 @@ def store_gate_now(conn: sqlite3.Connection, now_ms: int) -> dict:
     return out
 
 
-def apply_approvals(conn: sqlite3.Connection, inbox_ro: Optional[sqlite3.Connection], now_ms: int) -> list[dict]:
+def apply_approvals(conn: sqlite3.Connection, inbox_ro: Optional[sqlite3.Connection], now_ms: int,
+                    inbox_missing: Optional[bool] = None) -> list[dict]:
     """Apply the owners' approve/reject clicks. The code gate and the copy cap are never
     overturned: a blocked proposal cannot be approved (rooms_db refuses it), and an approve click
     is applied only when the proposal's test still passes the gate judged NOW with the room's
-    current number of tests; otherwise code rejects the proposal (its copy slot is freed)."""
+    current number of tests; otherwise code rejects the proposal (its copy slot is freed).
+    ``inbox_missing``: False when inbox.db exists although ``inbox_ro`` is None (it could not be opened):
+    then this agents3.db's approvals base is not set yet (it would be 0, and the old clicks in that
+    inbox.db would later be applied to new proposals reusing their ids)."""
     if R.get_cursor(conn, APPROVALS_BASE) is None:
         # first tick of this agents3.db: clicks already in inbox.db were about the proposals of an
         # earlier agents3.db (ids restart at 1 in a new one); they are never applied here
         base = bts = 0
+        if inbox_ro is None and inbox_missing is False:
+            return []                           # unreadable for now: the base is set once it can be read
         if inbox_ro is not None:
             try:
                 base, bts = (int(x) for x in inbox_ro.execute(
                     "SELECT COALESCE(MAX(id), 0), COALESCE(MAX(ts), 0) FROM approvals").fetchone())
+            except sqlite3.OperationalError as exc:
+                if "no such table" not in str(exc):
+                    return []                   # a transient read error: try again next tick
+                base = bts = 0                  # an inbox without clicks yet
             except (sqlite3.DatabaseError, TypeError, ValueError):
-                base = bts = 0
+                return []
         R.set_cursor(conn, APPROVALS_BASE, str(base))
         if _int0(R.get_cursor(conn, "inbox:approvals", 0)) < base:
             R.set_cursor(conn, "inbox:approvals", str(base))
@@ -2174,15 +2200,24 @@ def tick(paper_db: Optional[str], daily_db: Optional[str], agents_db: str, inbox
             # this tick holds the lock, so a round still 'running' belongs to a pass that died (reboot,
             # kill, OOM): fail it now (one failed attempt, tried once more) instead of letting it block
             # its room and trigger for 2 hours
-            TR.expire_stale_rounds(conn, now, policy.triggers, stale_ms=0,
-                                   detail="회의 도중 멈춤 (에이전트 실행이 중간에 끝남)")
+            for rid in TR.expire_stale_rounds(conn, now, policy.triggers, stale_ms=0,
+                                              detail="회의 도중 멈춤 (에이전트 실행이 중간에 끝남)"):
+                # the room saw '📣 회의 시작' and then nothing: say what happened to that meeting
+                row = conn.execute("SELECT room_id, trigger FROM rounds WHERE round_id = ?", (rid,)).fetchone()
+                if row is not None:
+                    R.post(conn, row[0], rid, row[1], "code", None, "system",
+                           "이 회의는 에이전트 실행이 도중에 끝나(서버 재시작, 시간 초과 등) 멈췄습니다. "
+                           "실패 한 번으로 셉니다: 처음이면 다음 차례에 같은 내용으로 한 번 더 열고, 두 번째면 같은 "
+                           "계기로는 다시 열지 않습니다(새 일이 생기면 다시 모입니다).",
+                           {"reason": "stale", "round_id": rid}, ts=now)
             reconcile_inbox_cursors(conn, inbox_ro)
             moved = TR.reconcile_paper_cursors(conn, paper_ro)
             if moved:
                 print(f"note: paper3.db was replaced (restore or new run); trigger cursors reset: {sorted(moved)}",
                       file=sys.stderr)
             TR.store_paper_fingerprint(conn, paper_ro)
-            approvals = apply_approvals(conn, inbox_ro, now)
+            approvals = apply_approvals(conn, inbox_ro, now,
+                                        inbox_missing=not inbox_db or not os.path.exists(inbox_db))
             store_gate_now(conn, now)
             ctx = RoundContext(agents_conn=conn, paper_ro=paper_ro, daily_ro=daily_ro, inbox_ro=inbox_ro, runner=runner,
                                lab=lab, now_ms=now, policy=policy, notifier=notifier or NullNotifier(),

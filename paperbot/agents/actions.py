@@ -271,9 +271,11 @@ def hypothesis(env: ActionEnv, a: dict) -> dict:
 
 
 # links and @mentions in model-written words (Telegram makes them clickable): never sent as such. Any
-# scheme (https://, tg://), www., any name.tld (every top-level domain, not a fixed list), @names.
+# scheme (https://, tg://), www., any name.tld (every top-level domain, not a fixed list, internationalised
+# ones such as .рф or .한국 included), IPv4 addresses (with a port or a path), @names.
 _LINK = re.compile(r"(?i)\b[a-z][a-z0-9+.-]*://\S+|\bwww\.\S+"
-                   r"|(?<![\w.])[\w-]+(?:\.[\w-]+)*\.[a-z]{2,24}\b(?:/\S*)?"
+                   r"|(?<![\w.])[\w-]+(?:\.[\w-]+)*\.[^\W\d_]{2,24}\b(?::\d+)?(?:/\S*)?"
+                   r"|(?<![\w.])\d{1,3}(?:\.\d{1,3}){3}\b(?::\d+)?(?:/\S*)?"
                    r"|(?<![\w.])@\w{3,}")
 
 
