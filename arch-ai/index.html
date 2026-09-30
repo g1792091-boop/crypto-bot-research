@@ -958,9 +958,9 @@ async function send(){
       afterDesign(res.target);
     } catch (e){
       turns.pop();
-      if (e && (e.code==="not_granted" || e.code==="unavailable")) { sample = null; setAiState(false); }
+      if (e && e.code==="not_granted") { sample = null; setAiState(false); }
       const local = localDesign(text);
-      bubble.textContent = (e && e.code==="rate_limited" ? "AI 요청이 많아 잠시 뒤 다시 시도하세요. " : e && e.code==="not_granted" ? "AI 사용이 허용되지 않아 " : "AI 응답을 읽지 못해 ") + "내장 규칙 엔진으로 설계했습니다.\n" + local.reply;
+      bubble.textContent = (e && e.code==="rate_limited" ? "AI 요청이 많아 잠시 뒤 다시 시도하세요. " : e && e.code==="not_granted" ? "AI 사용이 허용되지 않아 " : e && e.code==="unavailable" ? "누리 AI 두뇌가 아직 준비되지 않아 " : "AI 응답을 읽지 못해 ") + "내장 규칙 엔진으로 설계했습니다.\n" + local.reply;
     } finally { $("#send").disabled = false; }
   } else {
     const local = localDesign(text);
@@ -1368,6 +1368,19 @@ const hash = location.hash.slice(1); if (["studio","auction","export"].includes(
 if (window.claude && window.claude.use){
   window.claude.use("sample").then(s => { if (s){ sample = s; setAiState(true); } }).catch(() => {});
   window.claude.use("downloads").then(d => { downloads = d; }).catch(() => {});
+}
+// 누리 AI 안에서 열리면 누리의 AI 두뇌(내 기기·고성능 오픈모델·내 PC)를 빌려 쓴다
+const hostBrain = (() => { try { return window.parent !== window && window.parent.NuriBrain ? window.parent.NuriBrain : null; } catch(e){ return null; } })();
+if (hostBrain){
+  const toMsgs = input => typeof input === "string" ? [{role:"user", content:input}] : input.map(t => ({role:t.role, content:t.content}));
+  const hs = async (input, opts = {}) => {
+    if (!hostBrain.ready()) throw {code:"unavailable"};
+    const text = await hostBrain.text(toMsgs(input), {signal: opts.signal, temperature: 0.3, onText: t => opts.onText && t && opts.onText({text: t})});
+    return {text, truncated:false};
+  };
+  hs.json = async (input, opts = {}) => { const {text} = await hs(input, opts); const m = String(text).match(/\{[\s\S]*\}/); if (!m) throw {code:"invalid_json"}; return JSON.parse(m[0]); };
+  sample = hs;
+  $("#aiDot").classList.add("on"); $("#aiState").textContent = "누리 AI 두뇌 연결"; $("#aiMode").textContent = "누리 두뇌가 설계";
 }
 window.__archai = {toIFC, toDXF, toDAE, toOBJ, exportModel, buildFiles, makeZip, localDesign, get spec(){return spec;}, layout: () => layout};
 })();

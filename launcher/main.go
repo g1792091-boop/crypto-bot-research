@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"embed"
 	"fmt"
+	"io"
 	"io/fs"
 	"mime"
 	"net"
@@ -47,7 +48,7 @@ func (t *tracker) add(d int) {
 }
 
 func main() {
-	idle := envDuration("NURI_IDLE_EXIT", 45*time.Second)     // 창이 모두 닫힌 뒤 종료까지
+	idle := envDuration("NURI_IDLE_EXIT", 45*time.Second)      // 창이 모두 닫힌 뒤 종료까지
 	firstWait := envDuration("NURI_FIRST_WAIT", 5*time.Minute) // 창이 한 번도 안 열렸을 때 종료까지
 
 	// 이미 실행 중이면 창만 새로 연다
@@ -102,6 +103,7 @@ func main() {
 			}
 		}
 	})
+	mux.HandleFunc("/__nuri/proxy/", proxyHandler)
 	mux.Handle("/", siteHandler(sub))
 
 	srv := &http.Server{Handler: mux}
@@ -193,4 +195,78 @@ func envDuration(k string, d time.Duration) time.Duration {
 		}
 	}
 	return d
+}
+
+// ---- 외부 API 중계 ----
+// 브라우저는 보안정책(CORS) 때문에 거래소·AI API를 직접 부를 수 없는 경우가 많아,
+// 이 실행기가 정해진 주소로만 요청을 대신 전달한다. (임의 주소 중계는 하지 않음)
+var upstreams = map[string]string{
+	"nvidia":  "https://integrate.api.nvidia.com/v1",
+	"upbit":   "https://api.upbit.com/v1",
+	"binance": "https://api.binance.com/api/v3",
+	"ollama":  "http://127.0.0.1:11434",
+}
+
+var proxyClient = &http.Client{}
+
+func proxyHandler(w http.ResponseWriter, r *http.Request) {
+	// 다른 웹사이트가 이 중계를 쓰지 못하게 같은 출처 요청만 허용
+	if site := r.Header.Get("Sec-Fetch-Site"); site != "" && site != "same-origin" {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	rest := strings.TrimPrefix(r.URL.Path, "/__nuri/proxy/")
+	name, tail, _ := strings.Cut(rest, "/")
+	base, ok := upstreams[name]
+	if env := os.Getenv("NURI_UPSTREAM_" + strings.ToUpper(name)); env != "" && ok {
+		base = env
+	}
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	target := strings.TrimRight(base, "/") + "/" + tail
+	if r.URL.RawQuery != "" {
+		target += "?" + r.URL.RawQuery
+	}
+	req, err := http.NewRequestWithContext(r.Context(), r.Method, target, r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	for _, h := range []string{"Authorization", "Content-Type", "Accept"} {
+		if v := r.Header.Get(h); v != "" {
+			req.Header.Set(h, v)
+		}
+	}
+	req.Header.Set("User-Agent", "NuriAI/1.0")
+	res, err := proxyClient.Do(req)
+	if err != nil {
+		http.Error(w, "upstream: "+err.Error(), http.StatusBadGateway)
+		return
+	}
+	defer res.Body.Close()
+	for _, h := range []string{"Content-Type", "Retry-After", "Remaining-Req"} {
+		if v := res.Header.Get(h); v != "" {
+			w.Header().Set(h, v)
+		}
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(res.StatusCode)
+	fl, _ := w.(http.Flusher)
+	buf := make([]byte, 16*1024)
+	for {
+		n, err := res.Body.Read(buf)
+		if n > 0 {
+			if _, werr := w.Write(buf[:n]); werr != nil {
+				return
+			}
+			if fl != nil {
+				fl.Flush() // 스트리밍 답변이 바로바로 보이도록
+			}
+		}
+		if err == io.EOF || err != nil {
+			return
+		}
+	}
 }

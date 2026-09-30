@@ -1,8 +1,8 @@
 // 누리 AI 서비스 워커
 // 1) 앱 파일을 저장해 인터넷 없이도 열리게 하고
 // 2) COOP/COEP 헤더를 붙여 멀티스레드(SharedArrayBuffer) CPU 추론을 켠다 (GitHub Pages는 헤더를 직접 설정할 수 없음)
-const CACHE = "nuri-app-v2";
-const ASSETS = ["./", "./index.html", "./vendor/wllama/index.js", "./vendor/wllama/wllama.wasm", "./manifest.webmanifest", "./icon.svg"];
+const CACHE = "nuri-app-v3";
+const ASSETS = ["./", "./index.html", "./vendor/wllama/index.js", "./vendor/wllama/wllama.wasm", "./trade.js", "./manifest.webmanifest", "./icon.svg"];
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
