@@ -180,7 +180,7 @@ def _rule_technical(snap) -> AnalystReport:
         if s["rsi14"] and s["rsi14"] < 25:
             score += 0.1 * w * 3
     st, conf = _stance(score)
-    return AnalystReport(stance=st, confidence=conf, key_points=pts, summary=f"추세 점수 {score:+.2f} (규칙 기반)")
+    return AnalystReport(stance=st, confidence=conf, key_points=pts, summary=f"추세 점수 {score:+.2f}")
 
 
 def _rule_derivatives(snap) -> AnalystReport:
@@ -206,7 +206,7 @@ def _rule_derivatives(snap) -> AnalystReport:
     if not pts:
         pts.append("파생 데이터 없음 (네트워크 또는 API 키 확인)")
     st, conf = _stance(score)
-    return AnalystReport(stance=st, confidence=conf, key_points=pts, summary=f"포지셔닝 점수 {score:+.2f} (규칙 기반)")
+    return AnalystReport(stance=st, confidence=conf, key_points=pts, summary=f"포지셔닝 점수 {score:+.2f}")
 
 
 _POS = ("approve", "approval", "inflow", "surge", "rally", "record", "adopt", "bull", "etf", "buy", "high")
@@ -223,7 +223,7 @@ def _rule_news(snap) -> AnalystReport:
     if snap.get("dominance"):
         pts.append(f"BTC 도미넌스 {snap['dominance']['btc_dominance']:.1f}%")
     st, conf = _stance(score)
-    return AnalystReport(stance=st, confidence=min(conf, 60), key_points=pts, summary="키워드 감성 점수 (규칙 기반)")
+    return AnalystReport(stance=st, confidence=min(conf, 60), key_points=pts, summary="키워드 감성 점수")
 
 
 def _rule_risk(snap, reports) -> RiskReview:
@@ -239,7 +239,7 @@ def _rule_risk(snap, reports) -> RiskReview:
     if {"bullish", "bearish"} <= stances:
         warn.append("분석가 의견 충돌")
     return RiskReview(max_leverage=max_lev, position_pct=10 if event else 20, warnings=warn,
-                      event_risk=event, summary=f"최대 레버리지 {max_lev}배 (ATR 기반 규칙)")
+                      event_risk=event, summary=f"최대 레버리지 {max_lev}배 (ATR 기준)")
 
 
 def _rule_trader(snap, reports, risk: RiskReview) -> TradeDecision:
@@ -250,14 +250,14 @@ def _rule_trader(snap, reports, risk: RiskReview) -> TradeDecision:
     px, a = tf["price"], tf["atr14"] or tf["price"] * 0.01
     if abs(score) < 0.25:
         return TradeDecision(action="stay_flat", confidence=int(50 - abs(score) * 100),
-                             rationale=f"종합 점수 {score:+.2f} — 방향성 불충분 (규칙 기반)")
+                             rationale=f"종합 점수 {score:+.2f} — 방향성 불충분")
     side = 1 if score > 0 else -1
     return TradeDecision(
         action="long" if side == 1 else "short", confidence=int(min(90, 50 + abs(score) * 60)),
         entry=px, stop_loss=px - side * 1.5 * a, take_profits=[px + side * 2 * a, px + side * 3.5 * a],
         leverage=min(risk.max_leverage, 5), position_pct=risk.position_pct,
         invalidation=f"1h 종가가 {px - side * 1.5 * a:.2f} {'하회' if side == 1 else '상회'}",
-        rationale=f"종합 점수 {score:+.2f} (기술 50% / 파생 30% / 뉴스 20%, 규칙 기반)")
+        rationale=f"종합 점수 {score:+.2f} (기술 50% / 파생 30% / 뉴스 20%)")
 
 
 # ---------------------------------------------------------------------------

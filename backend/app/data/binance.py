@@ -59,7 +59,10 @@ def premium_index(symbol: str) -> dict:
 
 
 def _period(interval: str) -> str:
-    return interval if interval in _PERIODS else "1h"
+    if interval in _PERIODS:
+        return interval
+    # 1m/3m 은 5m, 일봉 이상은 1d 가 이 엔드포인트의 한계
+    return "5m" if interval in ("1m", "3m") else "1d"
 
 
 def open_interest_history(symbol: str, interval: str, limit: int = 200) -> list[dict]:
@@ -86,5 +89,7 @@ def tickers_24h() -> list[dict]:
         "symbol": r["symbol"],
         "price": float(r["lastPrice"]),
         "change_pct": float(r["priceChangePercent"]),
+        "high": float(r["highPrice"]),
+        "low": float(r["lowPrice"]),
         "quote_volume": float(r["quoteVolume"]),
     } for r in rows if r["symbol"].endswith("USDT")]

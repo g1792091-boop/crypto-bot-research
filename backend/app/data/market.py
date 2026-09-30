@@ -5,6 +5,7 @@
 - 도미넌스/시총: CoinGecko 공개 API
 """
 import time
+from datetime import datetime, timezone
 
 import httpx
 
@@ -24,19 +25,67 @@ def _cached(key: tuple, ttl: float, fn):
     return val
 
 
+INTERVALS = ["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "12h",
+             "1d", "3d", "1w", "1M", "1y"]
+
+
+def _yearly(monthly: list[dict]) -> list[dict]:
+    """월봉 → 연봉 (UTC 달력 연도 기준)."""
+    out: list[dict] = []
+    for b in monthly:
+        year = datetime.fromtimestamp(b["time"], tz=timezone.utc).year
+        if out and out[-1]["_y"] == year:
+            y = out[-1]
+            y["high"] = max(y["high"], b["high"]); y["low"] = min(y["low"], b["low"])
+            y["close"] = b["close"]; y["volume"] += b["volume"]
+        else:
+            out.append({**b, "time": int(datetime(year, 1, 1, tzinfo=timezone.utc).timestamp()), "_y": year})
+    for y in out:
+        y.pop("_y")
+    return out
+
+
+def _binance_candles(symbol: str, interval: str, limit: int) -> list[dict]:
+    if interval == "1y":
+        return _yearly(binance.klines(symbol, "1M", min(limit * 12, 1500)))[-limit:]
+    return binance.klines(symbol, interval, limit)
+
+
 def candles(symbol: str, interval: str, limit: int = 500) -> tuple[list[dict], str]:
     """(캔들, 소스명) 반환."""
+    if interval not in INTERVALS:
+        raise ValueError(f"지원하지 않는 봉 간격: {interval}")
     src = config.DATA_SOURCE
     if src == "synthetic":
         return synthetic.candles(symbol, interval, limit), "synthetic"
     try:
         rows = _cached(("klines", symbol, interval, limit), 5,
-                       lambda: binance.klines(symbol, interval, limit))
+                       lambda: _binance_candles(symbol, interval, limit))
         return rows, "binance"
     except Exception:
         if src == "binance":
             raise
         return synthetic.candles(symbol, interval, limit), "synthetic"
+
+
+def tickers(symbols: list[str]) -> tuple[list[dict], str]:
+    """관심 종목 시세 (24h 등락, 고가/저가)."""
+    if config.DATA_SOURCE != "synthetic":
+        try:
+            rows = _cached(("tickers",), 5, binance.tickers_24h)
+            by = {r["symbol"]: r for r in rows}
+            return [by[s] for s in symbols if s in by], "binance"
+        except Exception:
+            if config.DATA_SOURCE == "binance":
+                raise
+    out = []
+    for s in symbols:
+        c = synthetic.candles(s, "1h", 25)
+        last, prev = c[-1]["close"], c[0]["close"]
+        out.append({"symbol": s, "price": last, "change_pct": (last / prev - 1) * 100,
+                    "high": max(b["high"] for b in c[1:]), "low": min(b["low"] for b in c[1:]),
+                    "quote_volume": sum(b["volume"] * b["close"] for b in c[1:])})
+    return out, "synthetic"
 
 
 def derivatives(symbol: str, interval: str, limit: int = 200) -> dict:

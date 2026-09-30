@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import agents, backtest, config, indicators, nl_strategy
+from . import agents, analysis, backtest, config, indicators, liquidation, llm, nl_strategy
 from .data import coinglass, market, news
 from .llm import LLMUnavailable
 from .paper import PaperManager
@@ -37,6 +37,7 @@ def _bad(e: Exception):
 def status():
     return {
         "llm": config.llm_enabled(), "model": config.CLAUDE_MODEL if config.llm_enabled() else None,
+        "intervals": market.INTERVALS,
         "coinglass": coinglass.enabled(), "data_source_mode": config.DATA_SOURCE,
         "indicators": {k: {"outputs": v["outputs"], "defaults": v["defaults"], "desc": v["desc"], "tv": v["tv"]}
                        for k, v in indicators.REGISTRY.items()},
@@ -46,8 +47,25 @@ def status():
 # ------------------------------------------------------------------ 시장 데이터
 @app.get("/api/candles")
 def candles(symbol: str = "BTCUSDT", interval: str = "1h", limit: int = 500):
-    rows, src = market.candles(symbol, interval, min(limit, 3000))
+    try:
+        rows, src = market.candles(symbol.upper(), interval, min(limit, 3000))
+    except ValueError as e:
+        _bad(e)
     return {"source": src, "candles": rows}
+
+
+@app.get("/api/tickers")
+def tickers(symbols: str = "BTCUSDT,ETHUSDT"):
+    rows, src = market.tickers([s.strip().upper() for s in symbols.split(",") if s.strip()])
+    return {"source": src, "items": rows}
+
+
+@app.get("/api/analysis")
+def get_analysis(symbol: str = "BTCUSDT", interval: str = "1h", ai: bool = False):
+    try:
+        return analysis.analyze(symbol.upper(), interval, with_ai=ai)
+    except (ValueError, LLMUnavailable) as e:
+        _bad(e)
 
 
 @app.get("/api/derivatives")
@@ -55,13 +73,11 @@ def derivatives(symbol: str = "BTCUSDT", interval: str = "1h", limit: int = 200)
     return {**market.derivatives(symbol, interval, limit), "premium": market.funding_now(symbol)}
 
 
-@app.get("/api/liquidation-heatmap")
-def liquidation_heatmap(symbol: str = "BTCUSDT", range: str = "3d"):
-    if not coinglass.enabled():
-        raise HTTPException(400, "청산 히트맵은 COINGLASS_API_KEY 가 필요합니다.")
+@app.get("/api/liq-heatmap")
+def liq_heatmap(symbol: str = "BTCUSDT", interval: str = "1h", limit: int = 400):
     try:
-        return coinglass.liquidation_heatmap(symbol, range)
-    except Exception as e:
+        return liquidation.heatmap(symbol.upper(), interval, min(limit, 1000))
+    except ValueError as e:
         _bad(e)
 
 
@@ -84,6 +100,40 @@ def heatmap(limit: int = 60):
 @app.get("/api/news")
 def get_news(limit: int = 40):
     return news.headlines(limit)
+
+
+class NewsBriefItem(BaseModel):
+    id: str
+    ko_title: str
+    sentiment: Literal["bullish", "bearish", "neutral"]
+    impact: int
+
+
+class NewsBrief(BaseModel):
+    items: list[NewsBriefItem]
+
+
+_brief_cache: dict[tuple, dict] = {}
+
+
+@app.get("/api/news/brief")
+def news_brief(limit: int = 15):
+    """Claude 가 헤드라인을 한국어로 옮기고 호재/악재·영향도(1~3)를 붙인다."""
+    if not config.llm_enabled():
+        raise HTTPException(400, "ANTHROPIC_API_KEY 가 필요합니다.")
+    items = news.headlines(limit)["items"]
+    key = tuple(i["id"] for i in items)
+    if key not in _brief_cache:
+        lines = "\n".join(f"{i['id']}\t{i['title']}" for i in items)
+        try:
+            brief = llm.parse("너는 코인 선물 트레이더를 위한 뉴스 에디터다. 각 헤드라인을 자연스러운 한국어 한 줄로 옮기고 "
+                              "(이미 한국어면 다듬기만), 비트코인·코인 선물 가격에 호재/악재/중립인지와 영향도(1 낮음~3 높음)를 "
+                              "매긴다. id 는 입력 그대로 돌려준다.", lines, NewsBrief, effort="low")
+        except LLMUnavailable as e:
+            _bad(e)
+        _brief_cache.clear()
+        _brief_cache[key] = {b.id: b.model_dump() for b in brief.items}
+    return {"items": _brief_cache[key]}
 
 
 @app.get("/api/calendar")
