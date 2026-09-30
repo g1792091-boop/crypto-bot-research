@@ -85,3 +85,13 @@ sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.live3 status --db /va
 | 백업 | 매일 08:40(한국 시간) `/var/backups/paperbot/날짜/`, 14일 보관 |
 | 코드 업데이트 | `cd /root/crypto-bot-research && git pull && sudo bash deploy/install.sh && sudo systemctl restart paperbot-live3 paperbot-dash` |
 | 비밀번호 로그인 끄기 (권장) | SSH 키를 등록한 뒤 `/etc/ssh/sshd_config`에서 `PasswordAuthentication no`. 키 등록 전에 끄면 들어갈 수 없게 되니, Vultr 웹 콘솔이 되는지 먼저 확인 |
+
+## 실거래 준비: 테스트넷 주문 연습 (가짜 돈)
+실거래 전에 주문 처리가 제대로 되는지 바이낸스 **테스트넷**에서 연습합니다. 코드가 테스트넷 주소만 허용하므로 실제 돈에 주문이 나갈 수 없습니다.
+1. https://testnet.binancefuture.com 에서 테스트넷 계정과 API 키를 만듭니다(실제 계정 키와 별개).
+2. 서버의 `/etc/paperbot/live.env`에 `TESTNET_API_KEY=`, `TESTNET_API_SECRET=`를 넣습니다.
+3. 연습 실행:
+   ```bash
+   sudo -u paperbot bash -c 'set -a; . /etc/paperbot/live.env; /opt/paperbot/venv/bin/python -m paperbot.testnet drill --symbol BTCUSDT'
+   ```
+4. 확인하는 것: 한 방향 모드·격리 마진·레버리지 설정 → 시장가 진입 체결 → **거래소에 걸린 손절**(마크 가격 기준) → 잠금선 올리기(새 손절 먼저, 옛 손절 나중 취소: 보호 공백 없음) → 재시작 점검(손절 없는 포지션 발견·복구) → 청산 → 포지션·주문 0개. 모든 줄이 `[OK]`여야 합니다.
