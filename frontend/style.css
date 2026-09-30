@@ -356,3 +356,6 @@ summary.ph { list-style: none; } summary.ph::-webkit-details-marker { display: n
 .wcell { position: relative; font-family: var(--mono); font-size: 11px; }
 .wcell i { position: absolute; left: 0; top: 3px; bottom: 3px; background: rgba(57,135,229,.28); border-radius: 2px; }
 .wcell span { position: relative; }
+
+.lvt { padding: 5px 0; border-bottom: 1px dashed var(--line); }
+.badge { font-size: 10.5px; padding: 0 5px; border: 1px solid currentColor; border-radius: 2px; }

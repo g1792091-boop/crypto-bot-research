@@ -552,9 +552,11 @@ def execute_decision(req: ExecuteDecisionReq):
 
 # ------------------------------------------------------------------ 퀀트: 패턴 예측 · 순환매 · 스캐너 · 리스크
 @app.get("/api/footprint")
-def get_footprint(symbol: str = "BTCUSDT", interval: str = "1h", bars: int = 60):
-    """봉 볼륨 풋프린트 (작은 봉의 테이커 매수·매도로 근사)."""
+def get_footprint(symbol: str = "BTCUSDT", interval: str = "1h", bars: int = 60, analysis: bool = False):
+    """봉 볼륨 풋프린트 (작은 봉의 테이커 매수·매도로 근사). analysis=true 면 진입 신호 · 지지저항 판정 · 다음 봉까지."""
     try:
+        if analysis:
+            return footprint.analyze(symbols.resolve(symbol), interval, max(20, min(bars, 300)))
         return footprint.footprint(symbols.resolve(symbol), interval, max(5, min(bars, 300)))
     except ValueError as e:
         _bad(e)
@@ -586,6 +588,15 @@ def _syms(csv: str | None) -> list[str] | None:
 def get_rrg(symbols_csv: str | None = None, interval: str = "1d", bench: Literal["btc", "ew"] = "btc", lookback: int = 14):
     try:
         return rotation.rrg(_syms(symbols_csv), interval, bench, lookback=max(3, min(lookback, 200)))
+    except ValueError as e:
+        _bad(e)
+
+
+@app.get("/api/rotation/series")
+def get_rotation_series(symbol: str = "BTCUSDT", interval: str = "1d", bars: int = 500):
+    """한 코인의 순환 구역 흐름과 순환매 진입·이탈 지점 (차트 표시용)."""
+    try:
+        return rotation.series(symbols.resolve(symbol), interval, max(100, min(bars, 1500)))
     except ValueError as e:
         _bad(e)
 

@@ -121,8 +121,91 @@ def rrg(symbols: list[str] | None = None, interval: str = "1d", bench: str = "bt
                      "ret_pct": None if ret is None else round(ret * 100, 2),
                      "rel_pct": None if ret is None or bret is None else round((ret - bret) * 100, 2)})
     rows.sort(key=lambda r: (-(r["rel_pct"] if r["rel_pct"] is not None else -1e9)))
+    for r in rows:   # 최근 궤적으로 순환 자리 판단
+        qs = [_quad(p["ratio"], p["mom"]) for p in r["tail"]]
+        r["was"] = qs[0]
+        r["spot"] = _spot(qs, r["tail"])
+    spots = {k: [r["symbol"] for r in rows if r["spot"]["key"] == k] for k in SPOTS}
     return {"interval": interval, "bench": bench, "lookback": lookback, "data_source": src, "rows": rows,
-            "phase": phase(times, closes, lookback)}
+            "phase": phase(times, closes, lookback), "spots": spots, "spot_names": SPOTS}
+
+
+SPOTS = {"entry": "순환매 진입 자리 (개선 → 주도 전환)", "early": "초기 관심 (소외 → 개선)", "hold": "주도 유지",
+         "exit": "빠질 자리 (주도 → 약화)", "avoid": "소외 (피하기)", "none": "뚜렷한 자리 없음"}
+
+
+def _quad(r: float, m: float) -> str:
+    return "leading" if r >= 100 and m >= 100 else "weakening" if r >= 100 else "lagging" if m < 100 else "improving"
+
+
+def _spot(qs: list[str], tail: list[dict]) -> dict:
+    """최근 궤적(오래된 → 최근)으로 순환매 자리 분류."""
+    now = qs[-1]
+    recent = qs[-4:]
+    rising = len(tail) >= 2 and tail[-1]["ratio"] > tail[-2]["ratio"]
+    if now == "leading" and ("improving" in recent[:-1]):
+        k = "entry"
+    elif now == "improving" and ("lagging" in recent[:-1] or rising):
+        k = "early"
+    elif now == "leading":
+        k = "hold"
+    elif now == "weakening" and ("leading" in recent[:-1]):
+        k = "exit"
+    elif now == "lagging":
+        k = "avoid"
+    else:
+        k = "none"
+    return {"key": k, "name": SPOTS[k]}
+
+
+def series(symbol: str, interval: str = "1d", bars: int = 500, fast: int = 10, slow: int = 40, mom: int = 5) -> dict:
+    """한 코인의 봉마다 순환 구역 (BTC 는 시장 평균 대비, 나머지는 BTC 대비) + 순환매 진입·이탈 지점."""
+    bench = "ew" if symbol == "BTCUSDT" else "btc"
+    universe = DEFAULT_UNIVERSE if bench == "ew" else ["BTCUSDT", symbol]
+    times, closes, src = load(list(dict.fromkeys([*universe, symbol])), interval, bars)
+    if symbol not in closes:
+        raise ValueError(f"{symbol} 데이터를 불러오지 못했습니다")
+    b = _bench(times, closes, bench)
+    x = closes[symbol]
+    rs = [None if v is None or not b[i] else v / b[i] for i, v in enumerate(x)]
+    ef, es = ind.ema(rs, fast), ind.ema(rs, slow)
+    ratio = [None if f is None or e is None or not e else 100 * f / e for f, e in zip(ef, es)]
+    pts, marks, prev, cand = [], [], None, None
+    for i, t in enumerate(times):
+        if i < mom or ratio[i] is None or ratio[i - mom] is None:
+            continue
+        m = 100 + (ratio[i] / ratio[i - mom] - 1) * 400
+        raw = _quad(ratio[i], m)
+        # 경계에서 왔다 갔다 하는 잡음을 줄이려고 새 구역이 2봉 연속일 때만 바뀐 것으로 본다
+        if prev is None:
+            q = raw
+        elif raw != prev:
+            q = raw if cand == raw else prev
+            cand = raw
+        else:
+            q, cand = raw, None
+        pts.append({"time": t, "ratio": round(ratio[i], 3), "mom": round(m, 3), "q": q})
+        if prev and q != prev:
+            kind = {("improving", "leading"): ("entry", "순환 진입"), ("lagging", "improving"): ("early", "관심 시작"),
+                    ("leading", "weakening"): ("exit", "순환 약화"), ("weakening", "lagging"): ("out", "순환 이탈")}.get((prev, q))
+            if kind and (not marks or marks[-1]["kind"] != kind[0]):   # 같은 표시가 연달아 나오면 첫 번째만
+                marks.append({"time": t, "kind": kind[0], "text": kind[1], "price": x[i]})
+        prev = q
+    # 과거 '순환 진입' 뒤 성적 (기준 대비 20봉 초과수익)
+    res = []
+    idx = {t: i for i, t in enumerate(times)}
+    for mk in marks:
+        if mk["kind"] != "entry":
+            continue
+        i = idx[mk["time"]]
+        j = min(len(times) - 1, i + 20)
+        if j - i < 5 or x[i] is None or x[j] is None:
+            continue
+        res.append((x[j] / x[i]) / (b[j] / b[i]) - 1)
+    return {"symbol": symbol, "interval": interval, "bench": "시장 평균" if bench == "ew" else "BTC", "data_source": src,
+            "points": pts, "marks": marks, "now": pts[-1]["q"] if pts else None, "now_name": QUAD.get(pts[-1]["q"]) if pts else None,
+            "entry_stats": {"n": len(res), "avg_excess_pct": round(sum(res) / len(res) * 100, 2) if res else None,
+                            "win_rate": round(100 * sum(1 for r in res if r > 0) / len(res)) if res else None}}
 
 
 def phase(times, closes, lookback: int = 14) -> dict:

@@ -30,6 +30,8 @@ SIGNALS = {
     "sweep": "유동성 스윕 (고점·저점 찍고 복귀)",
     "regime": "시장 판단 전환 (롱·숏·횡보)",
     "pattern": "과거 유사 패턴 강한 예측",
+    "footprint": "풋프린트 진입 신호 (흡수 · 델타 반전 · 스윕)",
+    "rotation": "순환매 자리 (개선→주도 진입 · 주도→약화)",
 }
 DEFAULT = {"enabled": True, "symbols": ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "BNBUSDT", "DOGEUSDT"],
            "intervals": ["15m", "1h", "4h"], "signals": {k: True for k in SIGNALS}, "every_sec": 30}
@@ -223,7 +225,8 @@ class Scanner:
             return []
         self.last_bar[key] = closed[-1]["time"]
         new = []
-        for s in evaluate(symbol, interval, closed, self.cfg["signals"]):
+        extra = self._extra(symbol, interval, closed[-1]["time"], closed[-1]["close"])
+        for s in evaluate(symbol, interval, closed, self.cfg["signals"]) + extra:
             if s["id"] not in self.seen:
                 self.seen.add(s["id"])
                 s["created"] = int(time.time())
@@ -231,6 +234,36 @@ class Scanner:
         with _lock:
             self.signals.extend(new)
         return new
+
+    def _extra(self, symbol: str, interval: str, bar_time: int, price: float) -> list[dict]:
+        """풋프린트 · 순환매 신호 (다른 데이터가 필요해서 따로)."""
+        out = []
+        on = self.cfg["signals"]
+        if on.get("footprint") and interval != "1m":
+            try:
+                from . import footprint
+                from .. import indicators as ind
+                fp = footprint.footprint(symbol, interval, 40)
+                bars = fp["bars"]
+                for sg in footprint.bar_signals(bars, ind.atr(bars, 14), fp["tick"]):
+                    if sg["time"] == bar_time:
+                        out.append({"type": "footprint", "label": SIGNALS["footprint"], "dir": sg["dir"], "strength": 1 + sg["strength"] // 2,
+                                    "text": " / ".join(sg["reasons"]) + f" · 진입 {sg['entry']:.6g} 손절 {sg['stop']:.6g}"})
+            except Exception:
+                pass
+        if on.get("rotation"):
+            try:
+                from . import rotation
+                rs = rotation.series(symbol, interval, 300)
+                for mk in rs["marks"]:
+                    if mk["time"] == bar_time and mk["kind"] in ("entry", "exit"):
+                        out.append({"type": "rotation", "label": SIGNALS["rotation"], "dir": "long" if mk["kind"] == "entry" else "short",
+                                    "strength": 2, "text": f"{rs['bench']} 대비 {mk['text']} — 지금 {rs['now_name']} 구역"})
+            except Exception:
+                pass
+        for sg in out:
+            sg.update({"id": f"{symbol}:{interval}:{sg['type']}:{bar_time}", "symbol": symbol, "interval": interval, "price": price, "bar_time": bar_time})
+        return out
 
     def scan(self) -> int:
         n = 0

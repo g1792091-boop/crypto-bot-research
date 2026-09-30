@@ -93,9 +93,11 @@ export class TermChart {
     this.fcLayer = new Layer((ctx, size) => this._drawForecast(ctx, size), "bottom");
     this.fc = null; this.fcSeries = [];
     this.fpLayer = new Layer((ctx, size) => this._drawFootprint(ctx, size), "top");
-    this.fp = null;
+    this.fp = null; this.fpMarkers = [];
+    this.rot = null; this.rotMarkers = [];
+    this.rotLayer = new Layer((ctx, size) => this._drawRotation(ctx, size), "bottom");
     this.countdown = new Countdown(this);
-    [this.vpLayer, this.boxLayer, this.fcLayer, this.srLayer, this.heatLayer, this.whaleLayer, this.drawLayer, this.fpLayer, this.countdown].forEach((l) => this.candle.attachPrimitive(l));
+    [this.vpLayer, this.boxLayer, this.fcLayer, this.srLayer, this.heatLayer, this.whaleLayer, this.drawLayer, this.fpLayer, this.rotLayer, this.countdown].forEach((l) => this.candle.attachPrimitive(l));
     this.sigMarkers = [];     // 보조지표 신호 (골든크로스·UT Bot·다이버전스 등) — 가격 창 화살표
     this._cdTimer = setInterval(() => !document.hidden && this.countdown.update(), 1000);
     this.editLines = {};
@@ -117,7 +119,7 @@ export class TermChart {
       clearInterval(this._timer);
       this.markers = this.heat = this.whales = this.sr = this.scenario = null;
       this.ext = {}; this.sigMarkers = [];
-      this.setForecast(null); this.fp = null; this.fpLayer.update();
+      this.setForecast(null); this.fp = null; this.fpMarkers = []; this.rot = null; this.rotMarkers = []; this.fpLayer.update(); this.rotLayer.update();
       this._applyMarkers();
       [this.heatLayer, this.whaleLayer, this.srLayer].forEach((l) => l.update());
     }
@@ -394,6 +396,7 @@ export class TermChart {
     jobs.push(api(`/api/paper/markers?symbol=${sym}`).then((m) => (got.markers = { ...m, symbol: sym })).catch(() => {}));
     if (o.sr) jobs.push(api(`/api/levels?symbol=${sym}&interval=${iv}`).then((l) => (got.sr = l)).catch(() => {}));
     if (o.footprint) jobs.push(this.loadFootprint());
+    if (o.rotation) jobs.push(this.loadRotation());
     await Promise.all(jobs);
     if (!this._is(sym, iv)) return;   // 기다리는 동안 코인·봉을 바꿨으면 이전 결과는 버린다
     Object.assign(this, got);
@@ -404,8 +407,9 @@ export class TermChart {
 
   setOverlay(name, on) {
     this.opts.overlays[name] = on;
+    if (name === "rotation" && !on) { this.rot = null; this.rotMarkers = []; this._pushMarkers(); this.rotLayer.update(); this._legend(); return; }
     if (name === "footprint") {
-      if (!on) { this.fp = null; this.fpLayer.update(); this._legend(); return; }
+      if (!on) { this.fp = null; this.fpMarkers = []; this._pushMarkers(); this.fpLayer.update(); this._legend(); return; }
       const n = this.candles.length;   // 숫자가 보이도록 최근 12봉으로 확대
       if (n) this.chart.timeScale().setVisibleLogicalRange({ from: n - 12, to: n + 1 });
     }
@@ -415,12 +419,17 @@ export class TermChart {
   async loadFootprint() {
     const sym = this.symbol, iv = this.interval;
     try {
-      const f = await api(`/api/footprint?symbol=${sym}&interval=${iv}&bars=80`);
+      const f = await api(`/api/footprint?symbol=${sym}&interval=${iv}&bars=80&analysis=true`);
       if (!this._is(sym, iv) || !this.opts.overlays.footprint) return;
       f.byTime = new Map(f.bars.map((b) => [b.time, b]));
       this.fp = f;
-    } catch (e) { if (this._is(sym, iv)) this.fp = { error: e.message }; }
-    this.fpLayer.update(); this._legend();
+      // 풋프린트 진입 신호 → 차트 화살표 (지난 신호는 결과 표시)
+      this.fpMarkers = (f.analysis?.signals || []).map((sg) => ({ time: sg.time, position: sg.dir === "long" ? "belowBar" : "aboveBar",
+        shape: sg.dir === "long" ? "arrowUp" : "arrowDown", color: sg.dir === "long" ? css("--up") : css("--down"),
+        text: `FP ${sg.dir === "long" ? "롱" : "숏"}${sg.outcome === "take" ? " ✓" : sg.outcome === "stop" ? " ✗" : ""}` }));
+      this.opts.onFootprint?.(f);
+    } catch (e) { if (this._is(sym, iv)) { this.fp = { error: e.message }; this.fpMarkers = []; } }
+    this._pushMarkers(); this.fpLayer.update(); this._legend();
   }
 
   // 봉 볼륨 풋프린트: 넓게 확대하면 칸마다 '매도 × 매수' 숫자, 좁으면 색으로
@@ -467,6 +476,67 @@ export class TermChart {
       }
     }
     ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+    this._drawLevels(ctx, size);
+  }
+
+  // 지지·저항 판정 선 + 다음 봉 확률 상자
+  _drawLevels(ctx, size) {
+    const a = this.fp?.analysis;
+    if (!a) return;
+    const font = getComputedStyle(document.body).fontFamily;
+    ctx.font = `10.5px ${font}`;
+    const ST = { holding: "유지", weakening: "흔들림", broken: "이탈", untested: "미테스트" };
+    for (const lv of a.levels.slice(0, 6)) {
+      const y = this.candle.priceToCoordinate(lv.price);
+      if (y == null) continue;
+      const col = lv.status === "holding" ? (lv.role === "support" ? "rgba(34,176,125,.9)" : "rgba(229,72,77,.9)")
+        : lv.status === "weakening" ? "rgba(245,165,36,.9)" : lv.status === "broken" ? "rgba(164,172,182,.7)" : "rgba(164,172,182,.45)";
+      ctx.strokeStyle = col; ctx.lineWidth = lv.status === "holding" ? 1.5 : 1;
+      ctx.setLineDash(lv.status === "holding" ? [] : lv.status === "weakening" ? [6, 3] : [2, 3]);
+      ctx.beginPath(); ctx.moveTo(size.width * 0.35, y); ctx.lineTo(size.width, y); ctx.stroke(); ctx.setLineDash([]);
+      const label = `${lv.role === "support" ? "지지" : "저항"} ${ST[lv.status]} · ${lv.source.split(" · ")[0]}${lv.touches ? ` · ${lv.touches}회` : ""}`;
+      const w = ctx.measureText(label).width + 8;
+      ctx.fillStyle = "rgba(18,22,28,.85)"; ctx.fillRect(size.width * 0.35, y - 13, w, 12);
+      ctx.fillStyle = col; ctx.fillText(label, size.width * 0.35 + 4, y - 4);
+    }
+    const n = a.next?.forming, ts = this.chart.timeScale(), last = this.candles.at(-1);
+    const x = last ? ts.timeToCoordinate(last.time) : null;
+    if (n?.p_up != null && x != null) {
+      const up = n.p_up >= 50, txt = `다음 봉 ${up ? "▲" : "▼"} ${up ? n.p_up : 100 - n.p_up}% (같은 모양 ${n.n}번)`;
+      const w = ctx.measureText(txt).width + 10, bx = Math.min(size.width - w - 4, x + 14), by = 8;
+      ctx.fillStyle = "rgba(18,22,28,.92)"; ctx.fillRect(bx, by, w, 18);
+      ctx.strokeStyle = up ? "rgba(34,176,125,.9)" : "rgba(229,72,77,.9)"; ctx.strokeRect(bx + 0.5, by + 0.5, w - 1, 17);
+      ctx.fillStyle = up ? "#5fe0a8" : "#ff8a8d"; ctx.fillText(txt, bx + 5, by + 13);
+    }
+  }
+
+  // ------------------------------------------------------------ 순환매 자리: 봉마다 구역 띠 + 진입·이탈 표시
+  async loadRotation() {
+    const sym = this.symbol, iv = this.interval === "1y" ? "1M" : this.interval;
+    try {
+      const r = await api(`/api/rotation/series?symbol=${sym}&interval=${iv}&bars=${Math.min(1500, (this.candles.length || 500) + 50)}`);
+      if (!this._is(sym, this.interval) || !this.opts.overlays.rotation) return;
+      r.byTime = new Map(r.points.map((p) => [p.time, p.q]));
+      this.rot = r;
+      const K = { entry: ["arrowUp", "#3987e5", "belowBar"], early: ["circle", "#6da7ec", "belowBar"], exit: ["arrowDown", "#c98500", "aboveBar"], out: ["arrowDown", "#e5484d", "aboveBar"] };
+      this.rotMarkers = r.marks.filter((m) => this.candles.length && m.time >= this.candles[0].time).map((m) => ({ time: this._barTime(m.time) ?? m.time,
+        shape: K[m.kind][0], color: K[m.kind][1], position: K[m.kind][2], text: m.text, size: m.kind === "entry" || m.kind === "out" ? 1 : 0.6 }));
+    } catch (e) { if (this._is(sym, this.interval)) { this.rot = { error: e.message }; this.rotMarkers = []; } }
+    this._pushMarkers(); this.rotLayer.update(); this._legend();
+  }
+
+  _drawRotation(ctx, size) {
+    const r = this.rot;
+    if (!r?.byTime || !this.opts.overlays.rotation) return;
+    const ts = this.chart.timeScale(), bw = Math.max(1, ts.options().barSpacing), range = ts.getVisibleLogicalRange(), c = this.candles;
+    if (!range) return;
+    const COL = { leading: "rgba(34,176,125,.75)", weakening: "rgba(245,165,36,.75)", lagging: "rgba(229,72,77,.7)", improving: "rgba(57,135,229,.75)" };
+    const y = size.height - 7;
+    for (let i = Math.max(0, Math.floor(range.from)); i <= Math.min(c.length - 1, Math.ceil(range.to)); i++) {
+      const q = r.byTime.get(c[i].time), x = ts.logicalToCoordinate(i);
+      if (!q || x == null) continue;
+      ctx.fillStyle = COL[q]; ctx.fillRect(x - bw / 2, y, bw + 0.5, 6);
+    }
   }
 
   setScenario(sc, symbol = this.symbol) {
@@ -529,7 +599,7 @@ export class TermChart {
   }
 
   _pushMarkers() {
-    const mk = [...(this._baseMarkers || []), ...(this.sigMarkers || [])];
+    const mk = [...(this._baseMarkers || []), ...(this.sigMarkers || []), ...(this.fpMarkers || []), ...(this.rotMarkers || [])];
     mk.sort((a, b) => a.time - b.time);
     this.markerApi.setMarkers(mk);
   }
@@ -747,6 +817,7 @@ export class TermChart {
       : it.last.note ? ` <span class="muted">${esc(it.last.note)}</span>` : "";
     if (mainInd.length) html += `<br>` + mainInd.map((it) => `<span style="color:${it.last.plots.find((pl) => pl.color)?.color || "inherit"}">${esc(INDICATORS[it.spec.key].name)}${paramStr(it.params)}</span> ${vals(it)}${extra(it)}`).join(" · ");
     if (this.opts.overlays.footprint && this.fp) html += `<br><span class="muted">풋프린트: ${this.fp.error ? esc(this.fp.error) : `${this.fp.sub_interval} 봉 체결로 근사 · 칸 ${px(this.fp.tick)} · 왼쪽 매도 × 오른쪽 매수 · 주황 테두리 = 봉 POC · 초록/빨강 숫자 = 3배 불균형${ts_hint(this)}`}</span>`;
+    if (this.opts.overlays.rotation && this.rot) html += `<br><span class="muted">순환매 (${this.rot.error ? esc(this.rot.error) : `${this.rot.bench} 대비): 지금 <b>${this.rot.now_name}</b> 구역 · 아래 띠 초록=주도 노랑=약화 빨강=소외 파랑=개선${this.rot.entry_stats?.n ? ` · 과거 '순환 진입' ${this.rot.entry_stats.n}번 뒤 20봉 평균 초과수익 ${this.rot.entry_stats.avg_excess_pct > 0 ? "+" : ""}${this.rot.entry_stats.avg_excess_pct}%` : ""}`}</span>`;
     if (this.heat) html += `<br><span class="muted">청산맵: ${this.heat.model === "coinglass" ? "CoinGlass" : this.heat.model === "estimate_oi" ? "OI 기반 추정" : "거래대금 기반 추정"}</span> <span class="scale"></span>`;
     if (this.whales) html += `<br><span class="muted">고래 체결 ≥ $${big(this.whales.min_usd)} · ${this.whales.trades.length}건${this.whales.source === "binance" && this.whales.collecting_since ? " (프로그램 실행 후 수집분)" : ""} · 호가벽 ${this.whales.walls.length}개</span>`;
     html += `</div>`;

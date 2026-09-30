@@ -87,7 +87,11 @@ function renderPhase(r) {
     <div class="kv" style="display:grid;grid-template-columns:auto 1fr;gap:3px 10px;margin-top:8px">
       <span class="muted">BTC 보다 강한 코인</span><span>${p.breadth_beat_btc_pct ?? "–"}%</span>
       <span class="muted">EMA20 위에 있는 코인</span><span>${p.breadth_above_ema20_pct ?? "–"}%</span>
-      <span class="muted">ETH/BTC 변화</span><span class="${cls(p.ethbtc_change_pct)}">${p.ethbtc_change_pct == null ? "–" : (p.ethbtc_change_pct > 0 ? "+" : "") + p.ethbtc_change_pct + "%"}</span></div>`;
+      <span class="muted">ETH/BTC 변화</span><span class="${cls(p.ethbtc_change_pct)}">${p.ethbtc_change_pct == null ? "–" : (p.ethbtc_change_pct > 0 ? "+" : "") + p.ethbtc_change_pct + "%"}</span></div>
+    <div class="sub" style="padding-left:0;margin-top:10px">순환매 자리 <span class="muted">(최근 궤적 기준 · 누르면 차트)</span></div>
+    ${[["entry", "up"], ["early", "info"], ["hold", ""], ["exit", "accent"], ["avoid", "down"]].map(([k, c]) => r.spots?.[k]?.length
+      ? `<div style="margin:3px 0"><span class="${c}" style="display:inline-block;min-width:170px">${esc(r.spot_names[k])}</span>${r.spots[k].map((s) => `<span class="chk" data-chart="${s}">${base(s)}</span>`).join(" ")}</div>` : "").join("")}
+    <div class="help">순환매 진입 자리 = 개선 구역에서 주도 구역으로 막 넘어온 코인. 빠질 자리 = 주도에서 약화로 꺾인 코인.</div>`;
 }
 
 function renderRank(r) {

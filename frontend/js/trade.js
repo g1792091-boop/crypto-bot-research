@@ -17,6 +17,7 @@ state.overlays.sr ??= true;
 state.overlays.countdown ??= true;
 state.overlays.forecast ??= true;
 state.overlays.footprint ??= false;
+state.overlays.rotation ??= false;
 state.layout ||= 1;
 state.multi ||= [{ symbol: "ETHUSDT", interval: "1h" }, { symbol: "SOLUSDT", interval: "1h" }, { symbol: "BTCUSDT", interval: "4h" }];
 
@@ -246,7 +247,7 @@ export async function loadAnalysis(withAi = false) {
     renderRegime(a); renderScenarios(a);
     charts[0]?.setScenario(state.overlays.scenario ? a.scenarios[0] : null, a.symbol);
     emit("analysis", a);
-    loadForecast();
+    loadForecast(); loadFpPanel();
   } catch (e) {
     $("#regime").innerHTML = `<span class="muted">분석 실패: ${esc(e.message)}</span>`;
   }
@@ -443,6 +444,60 @@ function bookTools(ob) {
     <table style="margin:0 0 8px"><tr><th>규모</th><th>매수</th><th>매도</th></tr>
       ${ob.slippage.map((r) => `<tr><td>$${big(r.usd)}</td>${["buy", "sell"].map((k) => `<td>${r[k] ? `${r[k].slip_pct.toFixed(3)}%` : '<span class="muted">호가 부족</span>'}</td>`).join("")}</tr>`).join("")}</table>
     <div class="help" style="padding:0 12px 10px">스프레드 ${ob.spread_bps?.toFixed(2)}bp. 큰 주문은 여러 번 나눠 넣거나 지정가를 쓰면 슬리피지를 줄일 수 있습니다. 벽은 언제든 취소될 수 있으니 벽만 믿고 진입하지 마세요.</div>`;
+}
+
+// ================================================================ 풋프린트 분석 패널 (다음 봉 · 진입 신호 · 지지저항 판정 · 순환매 자리)
+let fpTimer;
+async function loadFpPanel() {
+  clearTimeout(fpTimer);
+  if ($("#side-fpx").hidden) return;
+  const sym = state.symbol, iv = state.interval, el = $("#side-fpx");
+  if (iv === "1m" || iv === "1y") { el.innerHTML = `<div class="empty">풋프린트는 3분봉 ~ 월봉에서 쓸 수 있습니다.</div>`; return; }
+  if (!el.innerHTML) el.innerHTML = `<div class="empty">분석 중…</div>`;
+  try {
+    const [f, rs] = await Promise.all([api(`/api/footprint?symbol=${sym}&interval=${iv}&bars=80&analysis=true`),
+      api(`/api/rotation/series?symbol=${sym}&interval=${iv}`).catch(() => null)]);
+    if (sym !== state.symbol || iv !== state.interval) return;
+    renderFpPanel(f, rs);
+  } catch (e) { el.innerHTML = `<div class="empty">풋프린트 분석 실패: ${esc(e.message)}</div>`; }
+  fpTimer = setTimeout(loadFpPanel, 30_000);
+}
+
+function renderFpPanel(f, rs) {
+  const a = f.analysis, nx = a.next, st = a.signal_stats;
+  const odds = (o) => o.p_up == null ? `<span class="muted">표본 없음</span>`
+    : `<b class="${o.p_up > 50 ? "up" : o.p_up < 50 ? "down" : "accent"}">${o.p_up === 50 ? "반반 50%" : o.p_up > 50 ? `상승 ${o.p_up}%` : `하락 ${100 - o.p_up}%`}</b> <span class="muted">(같은 모양 ${o.n}번 · 평소 상승 ${nx.baseline_up}%)</span>${o.n < 30 ? ' <span class="accent">표본 적음</span>' : ""}`;
+  const ST = { holding: ["유지", "up"], weakening: ["흔들림", "accent"], broken: ["이탈", "down"], untested: ["미테스트", "muted"] };
+  const sig = (s) => `<div class="plan ${s.dir}"><div class="row"><b class="${s.dir === "long" ? "up" : "down"}">${s.dir === "long" ? "▲ 롱" : "▼ 숏"}</b>
+      <span class="muted">${mdhm(s.time)}</span><span class="${s.outcome === "take" ? "up" : s.outcome === "stop" ? "down" : "accent"}">${s.outcome === "take" ? "익절 도달" : s.outcome === "stop" ? "손절 도달" : "진행 중"}</span>
+      <div class="grow"></div><button class="flat sm" data-plan='${JSON.stringify({ k: s.dir, entry: s.entry, stop: s.stop, take: s.take }).replace(/'/g, "&#39;")}'>차트에</button></div>
+    <ul class="reasons" style="margin:3px 0">${s.reasons.map((r) => `<li>${esc(r)}</li>`).join("")}</ul>
+    <div class="kv2"><span class="k">진입</span><span>${px(s.entry)}</span><span class="k">손절</span><span class="down">${px(s.stop)}</span><span class="k">익절</span><span class="up">${px(s.take)}</span></div></div>`;
+  const quadCls = { "주도": "up", "약화": "accent", "소외": "down", "개선": "info" };
+  const lastMk = rs?.marks?.at(-1);
+  $("#side-fpx").innerHTML = `
+    <div class="fc-sec"><div class="sub" style="padding-left:0">다음 봉 (체결 모양 기준)</div>
+      <div class="kv" style="display:grid;grid-template-columns:auto 1fr;gap:4px 10px">
+        <span class="k">지금 봉이 이대로 끝나면</span><span>${odds(nx.forming)}<div class="muted" style="font-size:11px">${esc(nx.forming.bucket)}</div></span>
+        <span class="k">직전 확정 봉 기준</span><span>${odds(nx.last_closed)}<div class="muted" style="font-size:11px">${esc(nx.last_closed.bucket)}</div></span></div>
+      <div class="help" style="margin-top:4px">${esc(nx.note)} 과거 ${nx.history}봉 기준.</div>
+      ${f.summary?.notes?.length ? `<ul class="reasons">${f.summary.notes.map((n) => `<li>${esc(n)}</li>`).join("")}</ul>` : ""}</div>
+    <div class="fc-sec"><div class="sub" style="padding-left:0">지지 · 저항 하는지 <span class="muted">(최근 40봉 체결)</span></div>
+      ${a.levels.length ? a.levels.map((lv) => `<div class="lvt"><div class="row"><span class="${lv.role === "support" ? "up" : "down"}">${lv.role === "support" ? "지지" : "저항"}</span>
+          <b>${px(lv.price)}</b><span class="badge ${ST[lv.status][1]}">${ST[lv.status][0]}</span><div class="grow"></div><span class="muted">${lv.distance_atr > 0 ? "+" : ""}${lv.distance_atr} ATR</span></div>
+          <div class="muted" style="font-size:11px">${esc(lv.source)}</div><div style="font-size:11.5px">${esc(lv.text)}</div>
+          ${lv.touches ? `<div class="muted" style="font-size:11px">그 가격에서 매수 ${fmt(lv.buy_at, 2)} · 매도 ${fmt(lv.sell_at, 2)} · 닿은 봉 델타 합 ${fmt(lv.delta_on_touch, 2)}</div>` : ""}</div>`).join("")
+        : '<div class="muted">가까운 지지·저항이 없습니다</div>'}
+      <div class="help">차트의 선: 실선 = 유지, 긴 점선 = 흔들림, 짧은 점선 = 이탈·미테스트.</div></div>
+    <div class="fc-sec"><div class="sub" style="padding-left:0">풋프린트 진입 신호 ${st.n ? `<span class="muted">· 지난 신호 ${st.n}개 중 익절 먼저 ${st.win_rate}%</span>` : ""}</div>
+      ${a.signals.slice().reverse().slice(0, 5).map(sig).join("") || '<div class="muted">최근 80봉에 신호가 없습니다</div>'}
+      <div class="help">${esc(st.note)}. 익절은 손절 거리의 2배라 승률 34% 이상이면 본전 이상입니다.</div></div>
+    <div class="fc-sec"><div class="sub" style="padding-left:0">순환매 자리 <span class="muted">(${rs ? esc(rs.bench) + " 대비" : "–"})</span></div>
+      ${rs ? `<div class="row"><span>지금</span><b class="${quadCls[rs.now_name] || ""}" style="font-size:16px">${esc(rs.now_name)}</b> <span class="muted">구역</span></div>
+        ${lastMk ? `<div class="muted">마지막 신호: ${mdhm(lastMk.time)} ${esc(lastMk.text)}</div>` : ""}
+        ${rs.entry_stats.n ? `<div class="muted">과거 '순환 진입' ${rs.entry_stats.n}번 → 20봉 뒤 ${esc(rs.bench)} 대비 평균 ${rs.entry_stats.avg_excess_pct > 0 ? "+" : ""}${rs.entry_stats.avg_excess_pct}% (이긴 비율 ${rs.entry_stats.win_rate}%)</div>` : ""}
+        <div class="help">차트 위 '순환매'를 켜면 아래 띠(초록 주도 · 노랑 약화 · 빨강 소외 · 파랑 개선)와 순환 진입·이탈 화살표가 보입니다. 개선 → 주도로 넘어가는 자리가 순환매 진입 자리입니다.</div>`
+        : '<div class="muted">순환 데이터를 불러오지 못했습니다</div>'}</div>`;
 }
 
 // ================================================================ 주문 · 계좌
@@ -660,7 +715,8 @@ export function initTrade() {
     const t = e.target.dataset.t;
     if (!t) return;
     $$("#side-tabs button").forEach((b) => b.classList.toggle("on", b.dataset.t === t));
-    $("#side-sc").hidden = t !== "sc"; $("#side-order").hidden = t !== "order"; $("#side-book").hidden = t !== "book"; $("#side-fc").hidden = t !== "fc";
+    $("#side-sc").hidden = t !== "sc"; $("#side-order").hidden = t !== "order"; $("#side-book").hidden = t !== "book"; $("#side-fc").hidden = t !== "fc"; $("#side-fpx").hidden = t !== "fpx";
+    if (t === "fpx") loadFpPanel();
     if (t === "book") loadBook();
   };
   $("#side").addEventListener("click", (e) => {

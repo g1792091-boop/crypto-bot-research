@@ -75,6 +75,7 @@
           <button data-ov="bots" title="페이퍼 봇 · 내 모의 매매 진입/청산 기록">매매 기록</button>
           <button data-ov="scenario" title="자동 시나리오 진입/손절/목표선">시나리오선</button>
           <button data-ov="footprint" title="봉 안의 가격대별 매수·매도 체결량 (확대하면 숫자)">풋프린트</button>
+          <button data-ov="rotation" title="이 코인이 BTC 대비 순환 구역(개선·주도·약화·소외) 어디에 있는지 차트 아래 띠로, 순환 진입·이탈 지점은 화살표로">순환매</button>
           <button data-ov="forecast" title="과거 비슷한 차트로 본 앞으로의 예상 범위(부채꼴)와 다음 봉 예측(흐린 캔들)">패턴 예측</button>
           <button data-ov="countdown" title="가격축 현재가 아래에 봉 마감까지 남은 시간">마감 카운트</button>
         </div>
@@ -96,9 +97,10 @@
 
     <aside class="side" id="side">
       <div class="regime" id="regime"><span class="muted">분석 중…</span></div>
-      <div class="ph"><div class="tabs" id="side-tabs"><button data-t="sc" class="on">시나리오</button><button data-t="fc">예측</button><button data-t="book">호가</button><button data-t="order">주문</button></div></div>
+      <div class="ph"><div class="tabs" id="side-tabs"><button data-t="sc" class="on">시나리오</button><button data-t="fc">예측</button><button data-t="fpx">풋프린트</button><button data-t="book">호가</button><button data-t="order">주문</button></div></div>
       <div class="pb" id="side-sc"></div>
       <div class="pb" id="side-fc" hidden></div>
+      <div class="pb" id="side-fpx" hidden></div>
       <div class="pb" id="side-book" hidden></div>
       <div class="pb" id="side-order" hidden>
         <div class="order">
