@@ -376,7 +376,7 @@ def paper_markers(symbol: str = "BTCUSDT"):
     return {
         "bots": [b.markers() for b in paper.bots.values() if b.spec.symbol == sym],
         "manual": {"trades": [asdict(t) for t in manual.trades if getattr(t, "symbol", None) == sym][-300:],
-                   "position": None if not pos else {"side": "long" if pos.side == 1 else "short",
+                   "position": None if not pos else {"side": "long" if pos.side == 1 else "short", "leverage": pos.leverage,
                                                      "entry_price": pos.entry_price, "entry_time": pos.entry_time,
                                                      "stop": pos.stop, "take": pos.take, "liq_price": pos.liq_price}},
     }
@@ -395,6 +395,32 @@ def manual_order(o: ManualOrder):
         _bad(e)
     paper.save()
     return res
+
+
+class ModifyReq(BaseModel):
+    stop: Optional[float] = None
+    take: Optional[float] = None
+
+
+@app.post("/api/paper/position/{symbol}")
+def modify_position(symbol: str, req: ModifyReq):
+    """진입 후 손절·익절 가격 수정. 값을 비우면(null) 해제."""
+    try:
+        res = paper.manual.modify(symbol.upper(), req.stop, req.take)
+    except ValueError as e:
+        _bad(e)
+    paper.save()
+    return res
+
+
+@app.get("/api/levels")
+def get_levels(symbol: str = "BTCUSDT", interval: str = "1h"):
+    """자동 지지·저항 구간과 추세선."""
+    try:
+        c, _ = market.candles(symbol.upper(), interval, 500)
+    except ValueError as e:
+        _bad(e)
+    return analysis.sr_levels(c)
 
 
 @app.post("/api/paper/close/{symbol}")

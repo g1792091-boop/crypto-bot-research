@@ -189,6 +189,23 @@ class ManualAccount:
         self.positions[symbol] = p
         return self.snapshot()
 
+    def modify(self, symbol: str, stop: float | None, take: float | None) -> dict:
+        """열린 포지션의 손절가·익절가 수정 (None 이면 해제)."""
+        p = self.positions.get(symbol)
+        if not p:
+            raise ValueError(f"{symbol} 포지션이 없습니다.")
+        price = self._price(symbol)
+        long_ = p.side == 1
+        if stop is not None:
+            if (long_ and stop >= price) or (not long_ and stop <= price):
+                raise ValueError(f"손절가는 현재가({price:,.2f})보다 {'낮아야' if long_ else '높아야'} 합니다.")
+            if (long_ and stop <= p.liq_price) or (not long_ and stop >= p.liq_price):
+                raise ValueError(f"손절가가 강제청산가({p.liq_price:,.2f})를 넘어갑니다.")
+        if take is not None and ((long_ and take <= price) or (not long_ and take >= price)):
+            raise ValueError(f"익절가는 현재가({price:,.2f})보다 {'높아야' if long_ else '낮아야'} 합니다.")
+        p.stop, p.take = stop, take
+        return self.snapshot()
+
     def close(self, symbol: str, reason: str = "manual", price: float | None = None) -> dict:
         p = self.positions.pop(symbol, None)
         if not p:

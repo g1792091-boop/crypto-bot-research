@@ -12,7 +12,8 @@ const MACRO = [
   ["TVC:US10Y", "미 10년물"], ["TVC:GOLD", "금"], ["CRYPTOCAP:BTC.D", "BTC.D"], ["CRYPTOCAP:USDT.D", "USDT.D"],
 ];
 state.indicators ||= DEFAULT_INDICATORS;
-state.overlays ||= { heat: false, whales: false, bots: true, scenario: true };
+state.overlays ||= { heat: false, whales: false, bots: true, scenario: true, sr: true };
+state.overlays.sr ??= true;
 state.layout ||= 1;
 state.multi ||= [{ symbol: "ETHUSDT", interval: "1h" }, { symbol: "SOLUSDT", interval: "1h" }, { symbol: "BTCUSDT", interval: "4h" }];
 
@@ -137,8 +138,9 @@ function renderChart() {
       charts.push(new TermChart(el, {
         symbol: i ? state.multi[i - 1].symbol : state.symbol, interval: i ? state.multi[i - 1].interval : state.interval,
         indicators: i ? state.indicators.filter((x) => INDICATORS[x.key]?.pane !== "sub").concat(subInd.slice(0, 1)) : state.indicators,
-        overlays: i ? { heat: false, whales: false, bots: true, scenario: false } : { ...state.overlays },
+        overlays: i ? { heat: false, whales: false, bots: true, scenario: false, sr: state.overlays.sr } : { ...state.overlays },
         onDrawDone: () => $$("#draw-tools button").forEach((b) => b.classList.remove("on")),
+        onEditPosition: editPosition,
       }));
     });
   }
@@ -307,7 +309,11 @@ function renderOrderPreview() {
   $("#o-lev-v").textContent = `${lev}x`;
   const p = state.tickers[state.symbol]?.price;
   const liq = p ? p * (1 - (side === "long" ? 1 : -1) * (1 / lev - 0.005)) : null;
-  $("#o-preview").innerHTML = `포지션 규모 <b>${fmt(m * lev, 0)} USDT</b> · 예상 강제청산가 <b class="down">${px(liq)}</b>`;
+  const sgn = side === "long" ? 1 : -1, sl = +$("#o-sl").value, tp = +$("#o-tp").value;
+  $("#o-preview").innerHTML = `포지션 규모 <b>${fmt(m * lev, 0)} USDT</b> · 예상 강제청산가 <b class="down">${px(liq)}</b>` +
+    (p && (sl || tp) ? `<br>${sl ? `손절가 <b class="down">${px(p * (1 - sgn * sl / 100))}</b> (손실 ${fmt(m * lev * sl / 100, 0)} USDT) ` : ""}` +
+      `${tp ? `익절가 <b class="up">${px(p * (1 + sgn * tp / 100))}</b> (수익 ${fmt(m * lev * tp / 100, 0)} USDT)` : ""}` : "") +
+    `<br><span class="muted">진입 후 차트의 손절·익절 선을 끌거나 아래 포지션 표에서 바꿀 수 있습니다</span>`;
   const b = $("#o-submit");
   b.className = side === "long" ? "buy" : "sell";
   b.textContent = `${side === "long" ? "롱" : "숏"} 진입 (모의)`;
@@ -319,7 +325,20 @@ async function loadAccount() {
   $("#acct").innerHTML = [["평가 자산", fmt(account.equity)], ["가용 증거금", fmt(account.free_margin)],
     ["지갑 잔고", fmt(account.cash)], ["미실현 손익", `<span class="${cls(account.equity - account.cash)}">${fmt(account.equity - account.cash)}</span>`]]
     .map(([k, v]) => `<div><div class="k">${k}</div><div class="v">${v}</div></div>`).join("");
-  if (bottomTab === "pos" || bottomTab === "fills") renderBottom();
+  const typing = document.activeElement?.closest?.(".edit-sltp");
+  if ((bottomTab === "pos" && !typing) || bottomTab === "fills") renderBottom();
+}
+
+async function editPosition(symbol, edit) {
+  try {
+    await api(`/api/paper/position/${symbol}`, { method: "POST", body: edit });
+    toast("손절·익절을 바꿨습니다", `${symbol} 손절 ${edit.stop ? px(edit.stop) : "없음"} · 익절 ${edit.take ? px(edit.take) : "없음"}`);
+  } catch (e) {
+    toast("손절·익절 변경 실패", e.message, "err");
+    throw e;
+  } finally {
+    loadAccount(); charts[0]?.refreshOverlays();
+  }
 }
 
 function renderPriceAlerts() {
@@ -336,9 +355,12 @@ function renderBottom() {
     el.innerHTML = ps.length ? `<table><tr><th>종목</th><th>방향</th><th>규모(USDT)</th><th>진입가</th><th>현재가</th><th>강제청산가</th><th>손절/익절</th><th>미실현 손익</th><th></th></tr>
       ${ps.map((p) => `<tr><td>${p.symbol}</td><td class="${p.side === "long" ? "up" : "down"}">${p.side === "long" ? "롱" : "숏"} ${p.leverage}x</td>
         <td>${fmt(p.qty * p.entry_price, 0)}</td><td>${px(p.entry_price)}</td><td>${px(p.mark_price)}</td><td class="down">${px(p.liq_price)}</td>
-        <td class="dim">${p.stop ? px(p.stop) : "–"} / ${p.take ? px(p.take) : "–"}</td>
+        <td class="edit-sltp"><input data-sl="${p.symbol}" type="number" step="any" value="${p.stop ? px(p.stop).replace(/,/g, "") : ""}" placeholder="손절가">
+          <input data-tp="${p.symbol}" type="number" step="any" value="${p.take ? px(p.take).replace(/,/g, "") : ""}" placeholder="익절가">
+          <button class="sm" data-save="${p.symbol}">적용</button></td>
         <td class="${cls(p.unrealized_pnl)}">${fmt(p.unrealized_pnl)} (${pct(p.roe_pct)})</td>
-        <td><button class="sm" data-close="${p.symbol}">시장가 청산</button></td></tr>`).join("")}</table>`
+        <td><button class="sm" data-close="${p.symbol}">시장가 청산</button></td></tr>`).join("")}</table>
+      <div class="help" style="padding:6px 10px">손절·익절은 칸에 가격을 넣고 '적용'을 누르거나, 차트의 손절·익절 선을 마우스로 끌어서 바꿀 수 있습니다. 칸을 비우고 적용하면 해제됩니다.</div>`
       : `<div class="empty">열린 포지션이 없습니다. 오른쪽 '주문' 탭에서 모의 주문을 넣을 수 있습니다.</div>`;
   } else if (bottomTab === "fills") {
     el.innerHTML = `<table>${tradeRows((account?.trades || []).slice().reverse())}</table>`;
@@ -503,7 +525,7 @@ export function initTrade() {
     $$(".sidebtn button").forEach((x) => x.classList.toggle("on", x === b));
     renderOrderPreview();
   }));
-  ["#o-margin", "#o-lev"].forEach((s) => ($(s).oninput = renderOrderPreview));
+  ["#o-margin", "#o-lev", "#o-sl", "#o-tp"].forEach((s) => ($(s).oninput = renderOrderPreview));
   on("tickers", renderOrderPreview);
   $("#o-submit").onclick = (e) => busy(e.target, async () => {
     const num = (id) => { const v = $(id).value; return v === "" ? null : Number(v); };
@@ -523,6 +545,12 @@ export function initTrade() {
     renderBottom();
   };
   $("#bottom-body").onclick = (e) => {
+    const sv = e.target.dataset.save;
+    if (sv) {
+      const num = (sel) => { const v = $(sel).value; return v === "" ? null : Number(v); };
+      busy(e.target, () => editPosition(sv, { stop: num(`[data-sl="${sv}"]`), take: num(`[data-tp="${sv}"]`) }));
+      return;
+    }
     const sym = e.target.dataset.close;
     if (sym) busy(e.target, async () => { await api(`/api/paper/close/${sym}`, { method: "POST" }); loadAccount(); charts[0]?.refreshOverlays(); });
     const bc = e.target.dataset.botchart;

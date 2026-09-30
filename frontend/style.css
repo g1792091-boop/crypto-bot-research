@@ -300,3 +300,6 @@ summary.ph { list-style: none; } summary.ph::-webkit-details-marker { display: n
 .fng .big { font-family: var(--mono); font-size: 40px; font-weight: 700; line-height: 1; }
 .fng-bar { position: relative; height: 6px; border-radius: 3px; background: linear-gradient(90deg, #e5484d, #f5a524 45%, #a4acb6 50%, #22b07d); }
 .fng-bar i { position: absolute; top: -4px; width: 2px; height: 14px; background: var(--text); }
+
+.edit-sltp { white-space: nowrap; }
+.edit-sltp input { width: 92px; height: 22px; padding: 0 6px; font-family: var(--mono); font-size: 11px; margin-right: 2px; }

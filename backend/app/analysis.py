@@ -122,11 +122,60 @@ def regime(c: list[dict]) -> dict:
     }
 
 
+def sr_levels(c: list[dict], lookback: int = 500, per_side: int = 4) -> dict:
+    """자동 지지·저항 구간과 추세선.
+
+    구간: 최근 스윙 고점·저점(좌우 5봉)을 0.6 ATR 안쪽끼리 묶는다. 여러 번 부딪힌 가격대일수록,
+         최근에 부딪혔을수록 강한 구간. 현재가 위는 저항, 아래는 지지.
+    추세선: 마지막 두 스윙 고점이 낮아지면 하락 저항선, 마지막 두 스윙 저점이 높아지면 상승 지지선.
+    """
+    c = c[-lookback:]
+    if len(c) < 30:
+        return {"zones": [], "trendlines": []}
+    px = c[-1]["close"]
+    atr = _last(ind.atr(c)) or px * 0.01
+    ph, pl = pivots(c, 5, 5)
+    pts = sorted([(p, i, "high") for i, p in ph] + [(p, i, "low") for i, p in pl])
+    clusters: list[list] = []
+    for p, i, kind in pts:
+        if clusters and p - clusters[-1][-1][0] <= atr * 0.6:
+            clusters[-1].append((p, i, kind))
+        else:
+            clusters.append([(p, i, kind)])
+    n = len(c)
+    zones = []
+    for cl in clusters:
+        prices = [x[0] for x in cl]
+        last_i = max(x[1] for x in cl)
+        touches = len(cl)
+        mid = sum(prices) / touches
+        strength = touches + 2 * (last_i / n)          # 터치 횟수 + 최근성
+        zones.append({"low": min(prices) - atr * 0.15, "high": max(prices) + atr * 0.15, "price": mid,
+                      "touches": touches, "last_time": c[last_i]["time"], "strength": round(strength, 2),
+                      "side": "resistance" if mid > px else "support"})
+    res = sorted((z for z in zones if z["side"] == "resistance"), key=lambda z: (-z["strength"], z["price"]))[:per_side]
+    sup = sorted((z for z in zones if z["side"] == "support"), key=lambda z: (-z["strength"], -z["price"]))[:per_side]
+    lines = []
+    for piv, kind, falling in ((ph, "resistance", True), (pl, "support", False)):
+        if len(piv) >= 2:
+            (i1, p1), (i2, p2) = piv[-2], piv[-1]
+            if (p2 < p1) if falling else (p2 > p1):
+                slope = (p2 - p1) / (i2 - i1)
+                end = p2 + slope * (n - 1 - i2)
+                lines.append({"kind": kind, "t1": c[i1]["time"], "p1": p1, "t2": c[-1]["time"], "p2": end,
+                              "label": "하락 추세 저항선" if falling else "상승 추세 지지선"})
+    return {"zones": sorted(res + sup, key=lambda z: -z["price"]), "trendlines": lines, "atr": atr, "price": px}
+
+
 def _levels(c: list[dict], reg: dict, liq: dict | None) -> tuple[list[dict], list[dict]]:
     px = reg["price"]
+    sr = sr_levels(c)
+    name = lambda z, kind, swing: f"{kind} 구간 ({z['touches']}회 터치)" if z["touches"] >= 2 else swing
+    res = [{"price": z["price"], "kind": name(z, "저항", "스윙 고점")} for z in sr["zones"] if z["side"] == "resistance"]
+    sup = [{"price": z["price"], "kind": name(z, "지지", "스윙 저점")} for z in sr["zones"] if z["side"] == "support"]
     ph, pl = pivots(c[-300:], 5, 5)
-    res = [{"price": p, "kind": "스윙 고점"} for _, p in ph if p > px]
-    sup = [{"price": p, "kind": "스윙 저점"} for _, p in pl if p < px]
+    res += [{"price": p, "kind": "스윙 고점"} for _, p in ph[-3:] if p > px]
+    sup += [{"price": p, "kind": "스윙 저점"} for _, p in pl[-3:] if p < px]
     for key, kind in (("ema50", "EMA50"), ("ema200", "EMA200")):
         v = reg.get(key)
         if v:

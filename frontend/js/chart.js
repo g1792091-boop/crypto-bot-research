@@ -43,12 +43,17 @@ export class TermChart {
       localization: { locale: "ko-KR", priceFormatter: px },
     });
     this.candle = this.chart.addSeries(LC.CandlestickSeries, { upColor: css("--up"), downColor: css("--down"), borderVisible: false,
-      wickUpColor: css("--up"), wickDownColor: css("--down") });
+      wickUpColor: css("--up"), wickDownColor: css("--down"),
+      // 보이는 캔들 + 내 진입·손절·익절만으로 세로 범위를 잡는다 (멀리 있는 강제청산선 때문에 캔들이 눌리지 않게)
+      autoscaleInfoProvider: (original) => this._autoscale(original) });
     this.markerApi = LC.createSeriesMarkers(this.candle, []);
     this.heatLayer = new Layer((ctx, size, p) => this._drawHeat(ctx, size, p), "bottom");
     this.whaleLayer = new Layer((ctx, size, p) => this._drawWhales(ctx, size, p), "normal");
     this.drawLayer = new Layer((ctx, size, p) => this._drawTrends(ctx, size, p), "top");
-    [this.heatLayer, this.whaleLayer, this.drawLayer].forEach((l) => this.candle.attachPrimitive(l));
+    this.srLayer = new Layer((ctx, size) => this._drawSR(ctx, size), "bottom");
+    [this.srLayer, this.heatLayer, this.whaleLayer, this.drawLayer].forEach((l) => this.candle.attachPrimitive(l));
+    this.editLines = {};
+    this._setupDrag();
     this.chart.subscribeCrosshairMove((p) => this._legend(p));
     this.chart.subscribeClick((p) => this._click(p));
   }
@@ -88,6 +93,7 @@ export class TermChart {
     if (newBar || this._tickN % 5 === 0) this.renderIndicators(true);
     if (newBar) this.refreshOverlays();
     this._legend();
+    this.editLines.entry?.applyOptions({ title: this._entryTitle() });
     this.opts.onTick?.(this.candles.at(-1));
   }
 
@@ -158,12 +164,13 @@ export class TermChart {
     if (o.whales) jobs.push(api(`/api/whales?symbol=${sym}&interval=${iv}&limit=1000${this.opts.whaleMin ? "&min_usd=" + this.opts.whaleMin : ""}`)
       .then((w) => (this.whales = w)).catch(() => (this.whales = null)));
     else this.whales = null;
-    if (o.bots) jobs.push(api(`/api/paper/markers?symbol=${sym}`).then((m) => (this.markers = m)).catch(() => (this.markers = null)));
-    else this.markers = null;
+    jobs.push(api(`/api/paper/markers?symbol=${sym}`).then((m) => (this.markers = m)).catch(() => (this.markers = null)));
+    if (o.sr) jobs.push(api(`/api/levels?symbol=${sym}&interval=${iv}`).then((l) => (this.sr = l)).catch(() => (this.sr = null)));
+    else this.sr = null;
     await Promise.all(jobs);
     if (sym !== this.symbol || iv !== this.interval) return;
     this._applyMarkers();
-    this.heatLayer.update(); this.whaleLayer.update();
+    this.heatLayer.update(); this.whaleLayer.update(); this.srLayer.update();
     this._legend();
   }
 
@@ -201,8 +208,18 @@ export class TermChart {
         }
       });
       m.manual.trades.forEach((t) => add(t, "수동"));
-      const p = m.manual.position;
-      if (p) { line(p.entry_price, "내 포지션", css("--info"), 0); line(p.stop, "내 손절", css("--down")); line(p.take, "내 익절", css("--up")); line(p.liq_price, "내 청산가", "rgba(229,72,77,.5)", 3); }
+    }
+    this.editLines = {};
+    const my = m?.manual?.position;
+    if (my) {
+      const et = this._barTime(my.entry_time);
+      if (et) mk.push({ time: et, position: my.side === "long" ? "belowBar" : "aboveBar", shape: my.side === "long" ? "arrowUp" : "arrowDown", color: css("--info"), text: `내 ${my.side === "long" ? "롱" : "숏"}` });
+      const mk2 = (price, title, color, style, width = 1) => this.candle.createPriceLine({ price, color, lineWidth: width, lineStyle: style, axisLabelVisible: true, title });
+      this.editLines.entry = mk2(my.entry_price, this._entryTitle(), css("--info"), 0, 2);
+      if (my.stop) this.editLines.stop = mk2(my.stop, this._slTitle("stop", my.stop), css("--down"), 2, 2);
+      if (my.take) this.editLines.take = mk2(my.take, this._slTitle("take", my.take), css("--up"), 2, 2);
+      this.editLines.liq = mk2(my.liq_price, "강제청산", "rgba(229,72,77,.55)", 3);
+      Object.values(this.editLines).forEach((l) => this.priceLines.push(l));
     }
     const sc = this.scenario;
     if (this.opts.overlays.scenario && sc) {
@@ -283,10 +300,115 @@ export class TermChart {
     }
   }
 
+  _autoscale(original) {
+    const r = this.chart?.timeScale().getVisibleLogicalRange(), c = this.candles;
+    if (!r || !c?.length) return original();
+    let lo = Infinity, hi = -Infinity;
+    for (let i = Math.max(0, Math.floor(r.from)); i <= Math.min(c.length - 1, Math.ceil(r.to)); i++) { lo = Math.min(lo, c[i].low); hi = Math.max(hi, c[i].high); }
+    if (!Number.isFinite(lo)) return original();
+    const p = this._pos();
+    if (p) [p.entry_price, p.stop, p.take].forEach((v) => { if (v) { lo = Math.min(lo, v); hi = Math.max(hi, v); } });
+    return { priceRange: { minValue: lo, maxValue: hi } };
+  }
+
+  // ------------------------------------------------------------ 내 포지션 선 (끌어서 손절·익절 수정)
+  _pos() { return this.markers?.manual?.position; }
+  _entryTitle() {
+    const p = this._pos(), last = this.candles.at(-1)?.close;
+    if (!p || !last) return "내 포지션";
+    const side = p.side === "long" ? 1 : -1, roe = side * (last / p.entry_price - 1) * (p.leverage || 1) * 100;
+    return `내 ${p.side === "long" ? "롱" : "숏"} ${p.leverage || ""}x ${roe >= 0 ? "+" : ""}${roe.toFixed(2)}%`;
+  }
+  _slTitle(kind, price) {
+    const p = this._pos();
+    const d = p ? (price / p.entry_price - 1) * 100 : 0;
+    return `${kind === "stop" ? "손절" : "익절"} ${d >= 0 ? "+" : ""}${d.toFixed(2)}% (끌어서 수정)`;
+  }
+  _setupDrag() {
+    const box = this.el;
+    const near = (e) => {
+      const p = this._pos();
+      if (!p || !this.opts.onEditPosition) return null;
+      const r = box.getBoundingClientRect(), y = e.clientY - r.top, x = e.clientX - r.left;
+      if (x > r.width - this.chart.priceScale("right").width()) return null;
+      for (const k of ["stop", "take"]) {
+        const v = p[k];
+        if (v == null) continue;
+        const yy = this.candle.priceToCoordinate(v);
+        if (yy != null && Math.abs(yy - y) <= 6) return k;
+      }
+      return null;
+    };
+    box.addEventListener("pointermove", (e) => {
+      if (this._drag) {
+        const r = box.getBoundingClientRect(), price = this.candle.coordinateToPrice(e.clientY - r.top);
+        if (price == null) return;
+        this._drag.price = price;
+        this.editLines[this._drag.kind]?.applyOptions({ price, title: this._slTitle(this._drag.kind, price) });
+        return;
+      }
+      if (!this.drawMode) box.style.cursor = near(e) ? "ns-resize" : "";
+    }, true);
+    const start = (e) => {
+      const k = !this.drawMode && near(e);
+      if (!k) return;
+      e.stopPropagation(); e.preventDefault();
+      this._drag = { kind: k, price: this._pos()[k] };
+      this.chart.applyOptions({ handleScroll: false, handleScale: false });
+    };
+    box.addEventListener("pointerdown", start, true);
+    box.addEventListener("mousedown", (e) => this._drag && e.stopPropagation(), true);
+    window.addEventListener("pointerup", async () => {
+      const d = this._drag;
+      if (!d) return;
+      this._drag = null; this._justDragged = true; setTimeout(() => (this._justDragged = false), 50);
+      this.chart.applyOptions({ handleScroll: true, handleScale: true });
+      const p = this._pos();
+      const edit = { stop: p.stop, take: p.take, [d.kind]: d.price };
+      try { await this.opts.onEditPosition(this.symbol, edit); } catch { /* 콜백에서 알림 */ }
+      this.refreshOverlays();
+    });
+  }
+
+  // ------------------------------------------------------------ 자동 지지·저항
+  _drawSR(ctx, size) {
+    const sr = this.sr;
+    if (!sr) return;
+    const ts = this.chart.timeScale();
+    ctx.font = "10px " + getComputedStyle(document.body).fontFamily;
+    const plotW = size.width, used = [];
+    for (const z of [...sr.zones].sort((a, b) => b.touches - a.touches)) {
+      const y1 = this.candle.priceToCoordinate(z.high), y2 = this.candle.priceToCoordinate(z.low);
+      if (y1 == null || y2 == null) continue;
+      const col = z.side === "resistance" ? "229,72,77" : "34,176,125";
+      const a = Math.min(0.2, 0.05 + z.touches * 0.025);
+      ctx.fillStyle = `rgba(${col},${a})`;
+      ctx.fillRect(0, y1, plotW, Math.max(2, y2 - y1));
+      ctx.strokeStyle = `rgba(${col},.45)`; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(0, (y1 + y2) / 2); ctx.lineTo(plotW, (y1 + y2) / 2); ctx.stroke();
+      const ly = y1 - 3;
+      if (!used.some((u) => Math.abs(u - ly) < 12)) {   // 가까운 구간끼리 글자가 겹치지 않게
+        used.push(ly);
+        ctx.fillStyle = `rgba(${col},.95)`; ctx.textAlign = "left";
+        ctx.fillText(`${z.side === "resistance" ? "저항" : "지지"} ${px(z.price)} · ${z.touches}회`, 6, ly);
+      }
+    }
+    ctx.setLineDash([6, 4]); ctx.lineWidth = 1.5;
+    for (const l of sr.trendlines) {
+      const x1 = ts.timeToCoordinate(l.t1), x2 = ts.timeToCoordinate(l.t2);
+      const y1 = this.candle.priceToCoordinate(l.p1), y2 = this.candle.priceToCoordinate(l.p2);
+      if ([x1, x2, y1, y2].includes(null)) continue;
+      ctx.strokeStyle = l.kind === "resistance" ? "rgba(229,72,77,.8)" : "rgba(34,176,125,.8)";
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+      ctx.fillStyle = ctx.strokeStyle; ctx.textAlign = "right"; ctx.fillText(l.label, x2 - 4, y2 - 6);
+    }
+    ctx.setLineDash([]);
+  }
+
   // ------------------------------------------------------------ 그리기 도구
   setDrawMode(mode) { this.drawMode = mode; this.pending = null; this.el.style.cursor = mode ? "crosshair" : ""; }
   _click(p) {
-    if (!this.drawMode || !p.point) return;
+    if (!this.drawMode || !p.point || this._justDragged) return;
     const price = this.candle.coordinateToPrice(p.point.y);
     if (price == null) return;
     if (this.drawMode === "hline") { this.userLines.push(price); this._saveDrawings(); this._applyMarkers(); this.setDrawMode(null); this.opts.onDrawDone?.(); return; }
