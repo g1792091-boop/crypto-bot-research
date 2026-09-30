@@ -16,7 +16,7 @@ For one UTC day (default: yesterday):
      the same exit rules;
    - skipped: for signals an account skipped (position open, lower priority), the
      net ROE the trade would have had.
-   Each shadow trade runs alone on $1,000 so results are comparable as ROE.
+   Each shadow trade runs alone on a fresh account (the starting equity) so results are comparable as ROE.
 3. Data quality: missing minutes, zero-volume minutes, extreme ranges, last vs
    mark price gaps, extreme funding.
 
@@ -144,7 +144,7 @@ def stored_trades(conn, start: int, end: int) -> dict[str, list[dict]]:
 
 # ---------------------------------------------------------------- 2. shadows
 def _alone(settings: Settings, brackets, specs, sig: Signal, steps, i0: int) -> tuple[Optional[object], bool]:
-    """Run one signal on a fresh $1,000 account from step index i0. Returns (trade or None, resolved)."""
+    """Run one signal on a fresh account (settings.initial_equity) from step index i0. Returns (trade or None, resolved)."""
     e = PaperEngine(settings, brackets, symbol_specs=specs, book="shadow")
     e.submit(sig)
     for ts, bars, funding in steps[i0:]:

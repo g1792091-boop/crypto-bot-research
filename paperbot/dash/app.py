@@ -167,7 +167,15 @@ class Data:
         for r in rows:
             b = best_random.get(r["timeframe"])
             r["beats_random"] = None if b is None or r["wallet"] is None else (r["wallet"] > b and not r["bust"])
-        return {"ts": st[0] if st else None, "accounts": rows, "best_random": best_random}
+        return {"ts": st[0] if st else None, "accounts": rows, "best_random": best_random,
+                "initial": self.initial()}
+
+    def initial(self) -> float:
+        """Starting wallet of every account: what the running bot recorded, else the rule."""
+        from ..config import V3_INITIAL
+        with self.conn() as c:
+            run = self.state(c, "run")
+        return float(run[1].get("initial_equity", 1000.0)) if run else V3_INITIAL
 
     def account(self, aid: str) -> dict:
         with self.conn() as c:

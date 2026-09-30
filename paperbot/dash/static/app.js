@@ -7,7 +7,7 @@ const TF_SEC = {"5m": 300, "15m": 900, "30m": 1800, "1h": 3600, "4h": 14400, "1d
 const TRADE_TFS = ["5m", "15m", "30m", "1h", "4h"];
 const REASON_KO = {SL: "손절", LOCK: "익절 잠금", LIQ: "강제청산", TP: "익절", HALT: "정지", MANUAL: "수동", END: "종료"};
 const STATUS_KO = {SUBMITTED: "진입 요청", RECORD: "기록만", LATE: "늦음(미진입)", NO_PRICE: "가격 없음", NO_ATR: "ATR 없음"};
-const INITIAL = 1000;
+let INITIAL = 5000;   // replaced by the bot's own value from /api/board
 const $ = (id) => document.getElementById(id);
 const state = {
   board: null, mark: {}, fund: {}, tick: {}, sym: "BTCUSDT", tf: "15m", acct: "", markers: true, view: "trade",
@@ -283,6 +283,7 @@ function tfSummary() {
 // ------------------------------------------------------------ board
 async function loadBoard() {
   state.board = await api("/api/board");
+  if (state.board.initial) INITIAL = state.board.initial;
   if (!$("acct-filter").options.length || $("acct-filter").options.length === 1) fillAcctFilter();
   renderTicker();
   if (state.view === "board") renderBoard();
@@ -297,7 +298,7 @@ function renderBoard() {
   $("tiles").innerHTML = [
     ["계좌", all.length, `매매법 ${strat.length} · 동전 봇 ${all.length - strat.length}`],
     ["포지션 중", all.filter((a) => a.position).length, "지금 열린 포지션"],
-    ["$1,000 넘은 매매법", strat.filter((a) => (a.wallet ?? INITIAL) > INITIAL).length, `${strat.length}개 중`],
+    ["$" + fmt(INITIAL, 0) + " 넘은 매매법", strat.filter((a) => (a.wallet ?? INITIAL) > INITIAL).length, `${strat.length}개 중`],
     ["동전 봇보다 나은 매매법", strat.filter((a) => a.beats_random).length, "같은 봉 동전 봇 3개 최고보다 잔고가 큼"],
     ["파산", all.filter((a) => a.bust).length, "잔고 $10 미만으로 정지"],
   ].map(([k, v, s]) => `<div class="tile"><div class="k">${k}</div><div class="v">${v}</div><div class="s">${s}</div></div>`).join("");

@@ -63,8 +63,8 @@ def test_board_account_status(client):
     assert client.post("/api/login", json={"password": "correct horse battery"}).status_code == 200
     b = client.get("/api/board").json()
     by = {a["account_id"]: a for a in b["accounts"]}
-    assert by["A@15m"]["trades"] == 1 and by["A@15m"]["wallet"] < 1000
-    assert by["RANDOM_1@15m"]["wallet"] == 1000
+    assert by["A@15m"]["trades"] == 1 and by["A@15m"]["wallet"] < 5000
+    assert by["RANDOM_1@15m"]["wallet"] == 5000 == b["initial"]
     assert by["A@15m"]["beats_random"] is False
     a = client.get("/api/account/A@15m").json()
     assert a["trades"][0]["exit_reason"] == "SL" and a["signals"]["ENTERED"] == 1

@@ -175,6 +175,12 @@ def cmd_run(args) -> int:
     book = AccountBook(settings, brackets, store, notifier, specs, digest=digest)
     service = SignalService(syms, RECORD_ONLY, random_rates(), procs=args.procs)
     restored = book.load()
+    if restored:
+        prev = store.get_state("run")
+        before = float(prev[1].get("initial_equity", 1000.0)) if prev else 1000.0
+        if before != settings.initial_equity:
+            raise SystemExit(f"this database's accounts started with ${before:,.0f}, the rules now start "
+                             f"them with ${settings.initial_equity:,.0f}. Start with a new --db file.")
     now = rest.server_time()
     if restored and book.last_ts is not None:
         resume = book.last_ts + MIN
@@ -197,7 +203,7 @@ def cmd_run(args) -> int:
         store.alert(now, level, text)
         notifier.send(level, text)
     store.put_state("run", now, {"settings": settings.version, "taker_fee": settings.taker_fee,
-                                 "commit": rec["commit"], "dirty": rec["dirty"],
+                                 "initial_equity": settings.initial_equity, "commit": rec["commit"], "dirty": rec["dirty"],
                                  "brackets": src, "accounts": len(book.engines), "restored": restored,
                                  "resume_from": resume, "feed_start": start})
     store.commit()

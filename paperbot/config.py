@@ -128,10 +128,13 @@ class Settings:
 # stepped profit lock, 2 ATR stop (set by the signal), no drawdown halt.
 V3_SYMBOLS = ("BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "LTCUSDT", "BCHUSDT")
 V3_STOP_ATR = 2.0
+# Each account starts with this many USDT (owners' decision 2026-09-30, was 1,000).
+V3_INITIAL = 5000.0
 
 
 def v3_settings(**over) -> Settings:
     kw = dict(version="paper-v3", symbols=V3_SYMBOLS, symbol_priority=V3_SYMBOLS,
-              tp_mode="ladder", dd_halt=None, bust_below=10.0, liq_buffer_atr_mult=1.0)
+              tp_mode="ladder", dd_halt=None, bust_below=10.0, liq_buffer_atr_mult=1.0,
+              initial_equity=V3_INITIAL)
     kw.update(over)
     return Settings(**kw)
