@@ -395,3 +395,41 @@ class PaperEngine:
             "bust": self.bust,
             "locks": sum(1 for t in self.trades if t.exit_reason == "LOCK"),
         }
+
+
+# ---------------------------------------------------------------- state (restart recovery)
+def _signal_from(d: dict) -> Signal:
+    return Signal(**d)
+
+
+def engine_state(e: PaperEngine) -> dict:
+    """Everything needed to continue after a restart (trades and outcomes are
+    already in the ledger and are not part of the state)."""
+    from dataclasses import asdict
+    return {
+        "wallet": e.wallet, "peak_equity": e.peak_equity, "max_drawdown": e.max_drawdown,
+        "halted": e.halted, "halt_reason": e.halt_reason, "bust": e.bust,
+        "warned": sorted(e._warned), "last_mark": dict(e._last_mark),
+        "position": asdict(e.position) if e.position is not None else None,
+        "pending": [asdict(s) for s in e.pending],
+        "n_trades": len(e.trades),
+    }
+
+
+def restore_engine(e: PaperEngine, st: dict) -> None:
+    e.wallet = float(st["wallet"])
+    e.peak_equity = float(st["peak_equity"])
+    e.max_drawdown = float(st["max_drawdown"])
+    e.halted = bool(st["halted"])
+    e.halt_reason = st["halt_reason"]
+    e.bust = bool(st.get("bust", False))
+    e._warned = set(st.get("warned", []))
+    e._last_mark = {k: float(v) for k, v in st.get("last_mark", {}).items()}
+    p = st.get("position")
+    if p is not None:
+        p = dict(p)
+        p["signal"] = _signal_from(p["signal"])
+        e.position = Position(**p)
+    else:
+        e.position = None
+    e.pending = [_signal_from(s) for s in st.get("pending", [])]
