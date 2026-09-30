@@ -96,11 +96,26 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          gh release delete desktop-latest --cleanup-tag -y || true
-          gh release create desktop-latest out/*.zip \
-            --target "$GITHUB_SHA" --prerelease \
-            --title "코인 선물 터미널 - 최신 빌드" \
-            --notes "파이썬 설치 없이 실행하는 버전입니다.
+          set -e
+          TITLE="코인 선물 터미널 - 최신 빌드"
+          NOTES="파이썬 설치 없이 실행하는 버전입니다.
           - Windows: CoinFuturesTerminal-windows-x64.zip 압축 해제 → CoinFuturesTerminal.exe 더블클릭
           - Mac (Apple Silicon): CoinFuturesTerminal-macos-arm64.zip 압축 해제 → 우클릭 → 열기
           자세한 내용은 zip 안의 HOW-TO-RUN.txt 참고. 빌드 커밋: ${GITHUB_SHA::7} (${GITHUB_REF_NAME})"
+          # 태그를 지웠다 다시 만들면 GitHub 가 릴리스를 '초안'으로 남기는 경우가 있어서,
+          # 태그는 새 커밋으로 옮기고 릴리스 파일만 교체한다.
+          if gh api "repos/$GH_REPO/git/refs/tags/desktop-latest" >/dev/null 2>&1; then
+            gh api -X PATCH "repos/$GH_REPO/git/refs/tags/desktop-latest" -f sha="$GITHUB_SHA" -F force=true >/dev/null
+          else
+            gh api "repos/$GH_REPO/git/refs" -f ref=refs/tags/desktop-latest -f sha="$GITHUB_SHA" >/dev/null
+          fi
+          # 예전 경쟁 상태로 남은 초안 정리
+          gh api "repos/$GH_REPO/releases?per_page=50" --jq ".[] | select(.draft and .name == \"$TITLE\") | .id" \
+            | xargs -r -I{} gh api -X DELETE "repos/$GH_REPO/releases/{}"
+          if gh release view desktop-latest >/dev/null 2>&1; then
+            gh release upload desktop-latest out/*.zip --clobber
+            gh release edit desktop-latest --prerelease --draft=false --title "$TITLE" --notes "$NOTES"
+          else
+            gh release create desktop-latest out/*.zip --verify-tag --prerelease --title "$TITLE" --notes "$NOTES"
+          fi
+          gh release view desktop-latest --json isDraft,assets --jq '"draft=\(.isDraft) assets=\(.assets | length)"'
