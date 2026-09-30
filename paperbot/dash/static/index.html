@@ -8,95 +8,144 @@
 <script src="/static/vendor/lightweight-charts.standalone.production.js"></script>
 </head>
 <body>
-<header>
-  <div class="bar">
-    <span class="brand">Paper v3</span>
-    <span class="live"><span id="hbdot" class="dot"></span><span id="hbtext">연결 중</span></span>
-    <span class="spacer"></span>
-    <button id="theme" title="밝게/어둡게">화면</button>
-    <button id="logout">로그아웃</button>
-  </div>
-  <div class="ticker num" id="ticker"></div>
-  <nav class="tabs" id="tabs">
-    <button data-v="board" class="on">순위표</button>
+<header class="topbar">
+  <span class="brand">PAPER <span>V3</span></span>
+  <nav class="nav" id="nav">
+    <button data-v="trade" class="on">트레이드</button>
+    <button data-v="board">순위표</button>
     <button data-v="account">계좌</button>
-    <button data-v="signals">신호</button>
     <button data-v="agents">에이전트 팀</button>
+    <button data-v="signals">신호</button>
     <button data-v="status">서버 상태</button>
   </nav>
+  <span class="grow"></span>
+  <span class="chips">
+    <span id="chip-bot"><i></i>봇 연결 중</span>
+    <span id="chip-feed" class="opt"><i></i>시세</span>
+    <span id="chip-ai" class="opt"><i></i>에이전트</span>
+  </span>
+  <button id="theme" title="밝게/어둡게">화면</button>
+  <button id="logout">로그아웃</button>
 </header>
-<main>
-  <section class="view on" id="v-board">
-    <div class="tiles" id="tiles"></div>
-    <div class="filters">
-      <div class="seg" id="f-tf">
-        <button data-tf="" class="on">전체</button><button data-tf="5m">5분</button><button data-tf="15m">15분</button>
-        <button data-tf="30m">30분</button><button data-tf="1h">1시간</button><button data-tf="4h">4시간</button>
-      </div>
-      <div class="seg" id="f-kind">
-        <button data-k="" class="on">전체</button><button data-k="strategy">매매법</button><button data-k="random">동전 봇</button>
-      </div>
-      <select id="f-sort" aria-label="정렬">
-        <option value="wallet">잔고순</option><option value="trades">거래 수순</option>
-        <option value="win">승률순</option><option value="dd">낙폭 작은 순</option><option value="name">이름순</option>
-      </select>
-    </div>
-    <div class="scroll">
-      <table class="board num">
-        <thead><tr>
-          <th>#</th><th>계좌</th><th class="r">잔고</th><th class="r">수익률</th><th class="r">거래</th>
-          <th class="r">승률</th><th class="r">최대 낙폭</th><th>상태</th><th>동전 봇 대비</th>
-        </tr></thead>
-        <tbody id="board"></tbody>
-      </table>
-    </div>
-  </section>
 
-  <section class="view" id="v-account">
-    <button class="back" id="back">← 순위표</button>
-    <div id="acct-empty" class="empty">순위표에서 계좌를 누르세요.</div>
-    <div id="acct" hidden>
-      <h2 id="a-title" style="margin:0 0 10px"></h2>
-      <div class="tiles" id="a-tiles"></div>
-      <div class="card" id="a-pos"></div>
-      <div class="card"><h3>자본 곡선</h3><div class="chart" id="a-eq"></div></div>
-      <div class="card">
-        <h3>차트와 진입·청산 <select id="a-sym"></select></h3>
-        <div class="chart tall" id="a-candles"></div>
-      </div>
-      <div class="card"><h3>거래 내역</h3>
-        <div class="scroll"><table class="num"><thead><tr>
-          <th>청산 시각</th><th>코인</th><th>방향</th><th class="r">레버리지</th><th class="r">진입</th>
-          <th class="r">청산</th><th>이유</th><th class="r">ROE</th><th class="r">손익</th><th class="r">잔고</th>
-        </tr></thead><tbody id="a-trades"></tbody></table></div>
-      </div>
+<!-- ========================================================= trade -->
+<section class="view on" id="v-trade">
+  <div class="tickerbar" id="tickerbar">
+    <span class="symname" id="t-sym">BTCUSDT<small>무기한</small></span>
+    <span class="lastpx" id="t-px">—</span>
+    <span class="tk"><span class="k">24시간 변동</span><span class="v" id="t-chg">—</span></span>
+    <span class="tk"><span class="k">24시간 고가</span><span class="v" id="t-hi">—</span></span>
+    <span class="tk"><span class="k">24시간 저가</span><span class="v" id="t-lo">—</span></span>
+    <span class="tk"><span class="k">24시간 거래대금</span><span class="v" id="t-vol">—</span></span>
+    <span class="tk"><span class="k">마크 가격</span><span class="v" id="t-mark">—</span></span>
+    <span class="tk"><span class="k">펀딩비 / 남은 시간</span><span class="v" id="t-fund">—</span></span>
+    <span class="tk"><span class="k">이 코인 포지션</span><span class="v" id="t-pos">—</span></span>
+  </div>
+  <div class="trade">
+    <div class="watch">
+      <div class="ph"><span class="t">관심 종목</span></div>
+      <div class="pb"><table class="wl"><thead><tr><th class="l">종목</th><th>가격</th><th>24시간</th></tr></thead>
+        <tbody id="wl"></tbody></table></div>
     </div>
-  </section>
+    <div class="chartp">
+      <div class="toolbar">
+        <div class="seg" id="tf-seg">
+          <button data-tf="5m">5분</button><button data-tf="15m" class="on">15분</button><button data-tf="30m">30분</button>
+          <button data-tf="1h">1시간</button><button data-tf="4h">4시간</button><button data-tf="1d">일</button>
+        </div>
+        <span class="sep"></span>
+        <select id="acct-filter" aria-label="표시할 계좌"><option value="">계좌를 고르면 진입·청산이 표시됩니다</option></select>
+        <span class="sep"></span>
+        <button id="mk-toggle" class="on">진입·청산 표시</button>
+      </div>
+      <div class="chartwrap"><div class="cw" id="tchart"></div><div class="legend" id="legend"></div></div>
+    </div>
+    <div class="side">
+      <div class="ph tabs" id="side-tabs">
+        <button data-t="pos" class="on">이 코인 포지션</button><button data-t="trades">체결</button><button data-t="sig">신호</button>
+      </div>
+      <div class="pb" id="side-body"></div>
+    </div>
+    <div class="bottom">
+      <div class="ph tabs" id="bot-tabs">
+        <button data-t="allpos" class="on">전체 포지션</button><button data-t="alltrades">최근 체결</button><button data-t="tfsum">봉별 요약</button>
+      </div>
+      <div class="pb" id="bot-body"></div>
+    </div>
+  </div>
+</section>
 
-  <section class="view" id="v-signals">
-    <div class="filters"><div class="seg" id="s-tf">
+<!-- ========================================================= board -->
+<section class="view" id="v-board"><div class="page">
+  <div class="tiles" id="tiles"></div>
+  <div class="filters">
+    <div class="seg" id="f-tf">
       <button data-tf="" class="on">전체</button><button data-tf="5m">5분</button><button data-tf="15m">15분</button>
-      <button data-tf="30m">30분</button><button data-tf="1h">1시간</button><button data-tf="4h">4시간</button><button data-tf="1d">일봉(기록)</button>
-    </div></div>
-    <div class="card scroll"><table class="num"><thead><tr>
-      <th>봉 마감</th><th>봉</th><th>매매법</th><th>코인</th><th>방향</th><th class="r">기준가</th><th class="r">지연</th><th>상태</th>
-    </tr></thead><tbody id="signals"></tbody></table></div>
-  </section>
-
-  <section class="view" id="v-agents">
-    <div class="card"><h3>에이전트 팀</h3>
-      <p class="sec">에이전트 팀 회의 기록은 에이전트 v3 연결 후 여기에 실시간으로 표시됩니다.</p>
+      <button data-tf="30m">30분</button><button data-tf="1h">1시간</button><button data-tf="4h">4시간</button>
     </div>
-  </section>
+    <div class="seg" id="f-kind"><button data-k="" class="on">전체</button><button data-k="strategy">매매법</button><button data-k="random">동전 봇</button></div>
+    <select id="f-sort" aria-label="정렬">
+      <option value="wallet">잔고순</option><option value="trades">거래 수순</option><option value="win">승률순</option>
+      <option value="dd">낙폭 작은 순</option><option value="name">이름순</option>
+    </select>
+  </div>
+  <div class="card scroll"><table class="cards">
+    <thead><tr><th class="l">#</th><th class="l">계좌</th><th>잔고</th><th>수익률</th><th>거래</th><th>승률</th><th>최대 낙폭</th>
+      <th class="l">상태</th><th class="l">동전 봇 대비</th></tr></thead>
+    <tbody id="board"></tbody></table></div>
+</div></section>
 
-  <section class="view" id="v-status">
-    <div class="tiles" id="st-tiles"></div>
-    <div class="card"><h3>최근 24시간 신호</h3><div class="scroll"><table class="num"><thead><tr>
-      <th>봉</th><th>상태</th><th class="r">개수</th><th class="r">평균 지연</th></tr></thead><tbody id="st-sig"></tbody></table></div></div>
-    <div class="card"><h3>경고</h3><div class="scroll"><table><thead><tr><th>시각</th><th>수준</th><th>내용</th></tr></thead>
-      <tbody id="st-alerts"></tbody></table></div></div>
-  </section>
-</main>
+<!-- ========================================================= account -->
+<section class="view" id="v-account"><div class="page">
+  <button class="back" id="back">← 순위표</button>
+  <div id="acct-empty" class="empty">순위표나 포지션 표에서 계좌를 누르세요.</div>
+  <div id="acct" hidden>
+    <h2 id="a-title" style="margin:0 0 10px;font-size:18px"></h2>
+    <div class="tiles" id="a-tiles"></div>
+    <div class="card"><div class="ph"><span class="t">열린 포지션</span></div><div class="body" id="a-pos"></div></div>
+    <div class="card"><div class="ph"><span class="t">자본 곡선</span></div><div class="chart" id="a-eq"></div></div>
+    <div class="card"><div class="ph"><span class="t">차트와 진입·청산</span><select id="a-sym"></select></div><div class="chart tall" id="a-candles"></div></div>
+    <div class="card scroll"><div class="ph"><span class="t">거래 내역</span></div><table>
+      <thead><tr><th class="l">청산 시각</th><th class="l">코인</th><th class="l">방향</th><th>레버리지</th><th>진입</th><th>청산</th>
+        <th class="l">이유</th><th>ROE</th><th>손익</th><th>잔고</th></tr></thead><tbody id="a-trades"></tbody></table></div>
+  </div>
+</div></section>
+
+<!-- ========================================================= agents -->
+<section class="view" id="v-agents">
+  <div class="agents">
+    <div class="roster"><div class="ph"><span class="t" id="ag-count">팀원</span></div><div class="pb" id="roster"></div></div>
+    <div class="chatcol">
+      <div class="ph"><span class="t">에이전트 팀 채팅</span><span class="grow"></span><span class="seg" id="meet-seg"></span></div>
+      <div class="chat" id="chat"></div>
+      <div class="chatin"><input id="chat-in" placeholder="에이전트 팀 연결 후 @이름으로 질문할 수 있습니다" disabled><button disabled>보내기</button></div>
+    </div>
+    <div class="agside">
+      <div class="ph"><span class="t" id="ag-side-title">운영 원칙</span></div>
+      <div class="pb" id="ag-side"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ========================================================= signals -->
+<section class="view" id="v-signals"><div class="page">
+  <div class="filters"><div class="seg" id="s-tf">
+    <button data-tf="" class="on">전체</button><button data-tf="5m">5분</button><button data-tf="15m">15분</button>
+    <button data-tf="30m">30분</button><button data-tf="1h">1시간</button><button data-tf="4h">4시간</button><button data-tf="1d">일봉(기록)</button>
+  </div></div>
+  <div class="card scroll"><table><thead><tr><th class="l">봉 마감</th><th class="l">봉</th><th class="l">매매법</th><th class="l">코인</th>
+    <th class="l">방향</th><th>기준가</th><th>지연</th><th class="l">상태</th></tr></thead><tbody id="signals"></tbody></table></div>
+</div></section>
+
+<!-- ========================================================= status -->
+<section class="view" id="v-status"><div class="page">
+  <div class="tiles" id="st-tiles"></div>
+  <div class="card scroll"><div class="ph"><span class="t">최근 24시간 신호</span></div><table><thead><tr><th class="l">봉</th><th class="l">상태</th>
+    <th>개수</th><th>평균 지연</th></tr></thead><tbody id="st-sig"></tbody></table></div>
+  <div class="card scroll"><div class="ph"><span class="t">경고</span></div><table><thead><tr><th class="l">시각</th><th class="l">수준</th>
+    <th class="l">내용</th></tr></thead><tbody id="st-alerts"></tbody></table></div>
+</div></section>
+
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script src="/static/app.js"></script>
 </body>

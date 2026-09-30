@@ -11,6 +11,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("cmd", nargs="?", default="serve", choices=["serve", "hash"])
     ap.add_argument("--db", default="paper3.db")
+    ap.add_argument("--agents-db", default=None, help="agents3.db written by the v3 agent pipelines")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8080)
     args = ap.parse_args(argv)
@@ -32,7 +33,7 @@ def main(argv=None) -> int:
               file=sys.stderr)
         return 1
     import uvicorn
-    uvicorn.run(create_app(args.db, pw_hash, secret.encode()), host=args.host, port=args.port,
+    uvicorn.run(create_app(args.db, pw_hash, secret.encode(), agents_db=args.agents_db), host=args.host, port=args.port,
                 log_level="warning", proxy_headers=False)
     return 0
 

@@ -156,11 +156,16 @@ class Data:
         return {"now": int(time.time() * 1000), "heartbeat": hb, "run": run, "alerts": alerts,
                 "signals_24h": sig}
 
-    def signals(self, tf: Optional[str], limit: int) -> list[dict]:
-        q, args = "SELECT * FROM signal_log", []
+    def signals(self, tf: Optional[str], limit: int, symbol: Optional[str] = None) -> list[dict]:
+        q, args, where = "SELECT * FROM signal_log", [], []
         if tf:
-            q += " WHERE timeframe = ?"
+            where.append("timeframe = ?")
             args.append(tf)
+        if symbol:
+            where.append("symbol = ?")
+            args.append(symbol)
+        if where:
+            q += " WHERE " + " AND ".join(where)
         q += " ORDER BY id DESC LIMIT ?"
         args.append(min(max(limit, 1), 1000))
         with self.conn() as c:
@@ -171,6 +176,29 @@ class Data:
             t = c.execute("SELECT COALESCE(MAX(id), 0) FROM trades").fetchone()[0]
             a = c.execute("SELECT COALESCE(MAX(rowid), 0) FROM alerts").fetchone()[0]
         return int(t), int(a)
+
+    def trades(self, symbol: Optional[str], timeframe: Optional[str], limit: int) -> list[dict]:
+        q = ("SELECT t.id, t.account_id, t.symbol, t.entry_time, t.exit_time, t.exit_reason, t.leverage, t.pnl, "
+             "t.roe, t.equity_after, t.data, a.strategy, a.timeframe, a.kind FROM trades t "
+             "JOIN accounts a ON a.account_id = t.account_id")
+        where, args = [], []
+        if symbol:
+            where.append("t.symbol = ?")
+            args.append(symbol)
+        if timeframe:
+            where.append("a.timeframe = ?")
+            args.append(timeframe)
+        if where:
+            q += " WHERE " + " AND ".join(where)
+        q += " ORDER BY t.id DESC LIMIT ?"
+        args.append(min(max(limit, 1), 2000))
+        with self.conn() as c:
+            rows = [dict(r) for r in c.execute(q, args)]
+        for r in rows:
+            d = json.loads(r.pop("data"))
+            r.update(side=d["side"], entry_price=d["entry_price"], exit_price=d["exit_price"],
+                     lock_roe=d.get("lock_roe"))
+        return rows
 
     def since(self, trade_id: int, alert_row: int) -> dict:
         with self.conn() as c:
@@ -203,7 +231,23 @@ def fetch_candles(symbol: str, interval: str, limit: int = 300) -> list:
 
 
 # ---------------------------------------------------------------- app
-def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fetch_candles) -> FastAPI:
+def agent_feed(agents_db: Optional[str], limit: int = 200) -> list[dict]:
+    """Meeting messages written by the v3 agent pipelines (their own database)."""
+    if not agents_db or not os.path.exists(agents_db):
+        return []
+    c = sqlite3.connect(f"file:{agents_db}?mode=ro", uri=True, timeout=5)
+    c.row_factory = sqlite3.Row
+    try:
+        return [dict(r) for r in c.execute(
+            "SELECT id, ts, meeting, role, kind, text, data FROM messages ORDER BY id DESC LIMIT ?", (limit,))]
+    except sqlite3.OperationalError:
+        return []
+    finally:
+        c.close()
+
+
+def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fetch_candles,
+               agents_db: Optional[str] = None) -> FastAPI:
     app = FastAPI(title="paper v3", docs_url=None, redoc_url=None, openapi_url=None)
     data = Data(db)
     fails: dict[str, list[float]] = {}
@@ -270,8 +314,21 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
         return data.status()
 
     @app.get("/api/signals")
-    def signals(tf: Optional[str] = None, limit: int = 200):
-        return data.signals(tf, limit)
+    def signals(tf: Optional[str] = None, symbol: Optional[str] = None, limit: int = 200):
+        return data.signals(tf, limit, symbol)
+
+    @app.get("/api/trades")
+    def trades(symbol: Optional[str] = None, tf: Optional[str] = None, limit: int = 200):
+        return data.trades(symbol, tf, limit)
+
+    @app.get("/api/agents/roster")
+    def agents_roster():
+        from ..agents.roster3 import roster
+        return roster()
+
+    @app.get("/api/agents/feed")
+    def agents_feed(limit: int = 200):
+        return agent_feed(agents_db, min(max(limit, 1), 1000))
 
     @app.get("/api/candles")
     def get_candles(symbol: str, interval: str = "15m", limit: int = 300):
