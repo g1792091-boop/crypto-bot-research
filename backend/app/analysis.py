@@ -302,6 +302,6 @@ def analyze(symbol: str, interval: str, with_ai: bool = False) -> dict:
         if key not in _ai_cache:
             import json
             payload = {k: out[k] for k in ("regime", "mtf", "resistance", "support", "scenarios", "liquidation")}
-            _ai_cache[key] = llm.text(AI_PROMPT, json.dumps(payload, ensure_ascii=False, default=float), effort="low")
+            _ai_cache[key] = llm.text(AI_PROMPT, json.dumps(payload, ensure_ascii=False, default=float), effort="low", feature="analysis")
         out["ai_comment"] = _ai_cache[key]
     return out

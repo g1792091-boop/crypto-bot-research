@@ -180,6 +180,14 @@ EMA 배열·EMA50 기울기·슈퍼트렌드·고점/저점 구조·MACD로 점�
 추세장/횡보장을 가른다. 스윙 고저점·박스 상하단·EMA·청산 구간을 레벨로 써서 롱/숏/박스 시나리오를 만들고,
 목표가는 최소 1R 이상 떨어진 레벨로 잡는다 (`backend/app/analysis.py`). Claude 키가 있으면 "AI 코멘트"로 브리핑을 받을 수 있다.
 
+### AI 모델 배정 (`app/ai_routes.py`, 화면: 'AI 모델' 창)
+- 모델을 `공급자:이름`(예: `nvidia:deepseek-ai/deepseek-v3.1`, `gemini:auto`, `claude:claude-opus-5-5`)으로 여러 개 등록.
+- 우선순위: 에이전트별(23명) → 기능별(copilot · autopilot · strategy · news · analysis · team_heavy · team_light) → 기본 모델 → 키가 있는 공급자의 기본값.
+  그다음 대체 순서(fallback)를 차례로 시도 — 한도·오류·형식 오류면 다음 모델. 키가 없는 공급자는 건너뜀. 설정은 `state/ai_routes.json`.
+- 화면에서 키를 넣으면 런타임에 바로 적용하고 `settings.txt`(런처가 `SETTINGS_FILE` 로 알려 줌)에 저장. NVIDIA `/v1/models` 로 모델 이름 추천, 모델별 테스트 호출.
+- 오토파일럿: 탐색마다 AI 가 차트 지표로 매매법 JSON(StrategySpec)을 최대 6개 제안 → 규칙 검사 → 같은 3구간 관문(🤖 표시, 각자 별도 가족).
+  오토 봇 진입 때 AI 가 근거·위험·지켜볼 가격을 2~3문장으로 코멘트해 'AI 코멘트' 시그널로 알림.
+
 ### AI 공급자
 Claude(`ANTHROPIC_API_KEY`) · NVIDIA(`NVIDIA_API_KEY`, build.nvidia.com 무료 크레딧, OpenAI 호환 `https://integrate.api.nvidia.com/v1`) ·
 Gemini(`GEMINI_API_KEY`, 무료 등급). `LLM_PROVIDER=auto` 면 Claude → NVIDIA → Gemini 순서. NVIDIA 는 `NVIDIA_MODEL`(기본 `meta/llama-3.3-70b-instruct`)·

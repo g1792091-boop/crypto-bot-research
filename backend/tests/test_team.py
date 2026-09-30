@@ -91,7 +91,7 @@ def test_ai_mode_thread_checks_and_narrowing(monkeypatch):
     _small()
     seen = {}
 
-    def fake(system, user, tier="opus", max_tokens=6000):
+    def fake(system, user, tier="opus", max_tokens=6000, **kw):
         g = json.loads(user)
         role = g["role"]
         seen.setdefault(role, []).append((tier, g))

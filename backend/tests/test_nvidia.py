@@ -59,7 +59,7 @@ def test_json_call_strips_think_and_fences(nv):
     install, calls = nv
     install([_ok('<think>생각 중…</think>\n```json\n{"message": "안녕", "n": 3}\n```')])
     data, txt, model = llm.json_call("sys", "user", "sonnet")
-    assert data == {"message": "안녕", "n": 3} and model == config.NVIDIA_MODEL
+    assert data == {"message": "안녕", "n": 3} and model == "nvidia:" + config.NVIDIA_MODEL
     c = calls[0]
     assert c["url"].endswith("/v1/chat/completions") and c["headers"]["Authorization"] == "Bearer nvapi-test"
     assert c["json"]["response_format"] == {"type": "json_object"} and c["json"]["messages"][0]["role"] == "system"

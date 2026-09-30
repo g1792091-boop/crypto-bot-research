@@ -11,6 +11,7 @@ const ACT = { keep: "유지", reduce: "축소", pause_strategy: "봇 중지", pa
 const SRC = (s) => !s ? "" : s === "rules" ? "규칙" : /opus/i.test(s) ? "Opus" : /sonnet/i.test(s) ? "Sonnet" : /gemini/i.test(s) ? "Gemini" : s.includes("/") ? s.split("/").pop() : s;
 
 const who = (id) => R?.roster.find((r) => r.id === id);
+const modelShort = (m, tier) => !m || m === "규칙 분석" ? (tier === "opus" ? "판단형" : "반복형") : /opus/i.test(m) ? "Opus" : /sonnet/i.test(m) ? "Sonnet" : m.split("/").pop().slice(0, 16);
 
 export function initAgents() {
   on("view", (v) => { visible = v === "agents"; if (visible) open(); });
@@ -80,7 +81,7 @@ function renderRoster(typing = runInfo?.typing || []) {
       <span class="tm-av" style="background:${r.color}22;border-color:${r.color}">${r.emoji}</span>
       <span class="tm-mn"><b>${esc(r.name)}</b><span class="muted">${esc(r.duty)}</span>
         ${r.scorecard?.n ? `<span class="muted">적중 ${r.scorecard.hit_rate_pct}% (${r.scorecard.n}건${r.scorecard.status === "ok" ? "" : ", 표본 부족"})</span>` : ""}</span>
-      <span class="tm-tier ${r.tier}">${r.tier === "opus" ? "Opus" : "Sonnet"}</span></div>`).join("")}</div>`).join("");
+      <span class="tm-tier ${r.tier}" title="배정된 모델: ${esc(r.model)}">${esc(modelShort(r.model, r.tier))}</span></div>`).join("")}</div>`).join("");
 }
 
 // ---------------------------------------------------------------- 메시지

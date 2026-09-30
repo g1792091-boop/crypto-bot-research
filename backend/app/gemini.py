@@ -117,7 +117,8 @@ def _retry_delay(r: httpx.Response) -> float:
     return 10.0
 
 
-def generate(system: str, user: str, schema: dict | None = None, json_mode: bool = False, max_tokens: int = 16000) -> str:
+def generate(system: str, user: str, schema: dict | None = None, json_mode: bool = False, max_tokens: int = 16000,
+             model: str | None = None) -> str:
     global last_model
     gen: dict = {"maxOutputTokens": max_tokens}
     if schema is not None or json_mode:
@@ -127,7 +128,7 @@ def generate(system: str, user: str, schema: dict | None = None, json_mode: bool
     body = {"systemInstruction": {"parts": [{"text": system}]},
             "contents": [{"role": "user", "parts": [{"text": user}]}], "generationConfig": gen}
     limited = False
-    for model in models():
+    for model in ([model] if model and model != "auto" else models()):
         for attempt in range(3):
             _throttle()
             try:
@@ -200,7 +201,7 @@ def _clean_json(txt: str) -> str:
     return txt
 
 
-def parse(system: str, user: str, schema_cls: type[T], max_tokens: int = 16000) -> T:
+def parse(system: str, user: str, schema_cls: type[T], max_tokens: int = 16000, model: str | None = None) -> T:
     js = inline_refs(schema_cls.model_json_schema())
     sys2 = (f"{system}\n\n출력 형식: 아래 JSON 스키마에 맞는 JSON 객체 하나만 출력한다. 설명이나 코드 블록은 붙이지 않는다.\n"
             f"{json.dumps(js, ensure_ascii=False)}")
@@ -208,10 +209,10 @@ def parse(system: str, user: str, schema_cls: type[T], max_tokens: int = 16000) 
     msg = user
     for attempt in range(2):
         try:
-            txt = generate(sys2, msg, use_schema, json_mode=True, max_tokens=max_tokens)
+            txt = generate(sys2, msg, use_schema, json_mode=True, max_tokens=max_tokens, model=model)
         except _SchemaRejected:
             use_schema = None
-            txt = generate(sys2, msg, None, json_mode=True, max_tokens=max_tokens)
+            txt = generate(sys2, msg, None, json_mode=True, max_tokens=max_tokens, model=model)
         try:
             return schema_cls.model_validate_json(_clean_json(txt))
         except ValidationError as e:
@@ -221,5 +222,5 @@ def parse(system: str, user: str, schema_cls: type[T], max_tokens: int = 16000) 
     raise LLMUnavailable("Gemini 응답 처리 실패")
 
 
-def text(system: str, user: str, max_tokens: int = 16000) -> str:
-    return generate(system, user, None, max_tokens=max_tokens)
+def text(system: str, user: str, max_tokens: int = 16000, model: str | None = None) -> str:
+    return generate(system, user, None, max_tokens=max_tokens, model=model)

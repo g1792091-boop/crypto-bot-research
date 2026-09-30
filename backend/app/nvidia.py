@@ -146,5 +146,24 @@ def parse(system: str, user: str, schema_cls: type[T], max_tokens: int = 4096, m
     raise LLMUnavailable("NVIDIA 응답 처리 실패")
 
 
-def text(system: str, user: str, max_tokens: int = 4096) -> str:
-    return generate(system, user, max_tokens=max_tokens)
+def text(system: str, user: str, max_tokens: int = 4096, model: str | None = None) -> str:
+    return generate(system, user, max_tokens=max_tokens, model=model)
+
+
+_catalog: tuple[float, list[str]] | None = None
+
+
+def catalog(force: bool = False) -> list[str]:
+    """이 키로 쓸 수 있는 모델 이름 목록 (/v1/models). 임베딩·재순위 같은 채팅용이 아닌 모델은 뺀다."""
+    global _catalog
+    if _catalog and not force and time.time() - _catalog[0] < 3600:
+        return _catalog[1]
+    r = httpx.get(config.NVIDIA_BASE_URL.rstrip("/") + "/models", headers=_headers(), timeout=config.HTTP_TIMEOUT * 2)
+    if r.status_code in (401, 403):
+        raise LLMUnavailable(f"NVIDIA API 키를 확인하세요 ({_err(r)})")
+    r.raise_for_status()
+    skip = ("embed", "rerank", "reward", "clip", "parakeet", "whisper", "tts", "asr", "ocr", "retriever", "nemoretriever",
+            "safety", "guard", "detector", "paddle", "stable-diffusion", "flux", "sdxl", "cosmos", "vista", "kosmos", "deplot", "neva", "fuyu")
+    ids = sorted({m.get("id", "") for m in r.json().get("data", []) if m.get("id") and not any(k in m["id"].lower() for k in skip)})
+    _catalog = (time.time(), ids)
+    return ids

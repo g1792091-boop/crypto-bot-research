@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import agents, analysis, autopilot, backtest, config, improve, indicators, library, liquidation, llm, nl_strategy, orderflow
+from . import agents, ai_routes, analysis, autopilot, backtest, config, improve, indicators, library, liquidation, llm, nl_strategy, orderflow
 from .data import coinglass, exchanges, market, news, sentiment, symbols
 from .llm import LLMUnavailable
 from .paper import PaperManager
@@ -198,7 +198,7 @@ def news_brief(limit: int = 15):
         try:
             brief = llm.parse("너는 코인 선물 트레이더를 위한 뉴스 에디터다. 각 헤드라인을 자연스러운 한국어 한 줄로 옮기고 "
                               "(이미 한국어면 다듬기만), 비트코인·코인 선물 가격에 호재/악재/중립인지와 영향도(1 낮음~3 높음)를 "
-                              "매긴다. id 는 입력 그대로 돌려준다.", lines, NewsBrief, effort="low")
+                              "매긴다. id 는 입력 그대로 돌려준다.", lines, NewsBrief, effort="low", feature="news")
         except LLMUnavailable as e:
             _bad(e)
         _brief_cache.clear()
@@ -624,6 +624,101 @@ def get_top_trader_ratios(symbol: str = "BTCUSDT", interval: str = "1h"):
         _bad(ValueError(f"바이낸스 상위 트레이더 비율을 불러오지 못했습니다: {e}"))
 
 
+# ------------------------------------------------------------------ AI 모델 (여러 모델 · 기능별/에이전트별 배정 · 대체 순서)
+@app.get("/api/ai")
+def ai_settings():
+    from .team.roster import ROLES, TEAMS
+    return {**ai_routes.view(), "roles_list": [{"id": r.rid, "name": r.name, "team": TEAMS[r.team][0], "tier": r.tier, "emoji": r.emoji} for r in ROLES],
+            "defaults": {"nvidia": config.NVIDIA_MODEL, "nvidia_fast": config.NVIDIA_FAST_MODEL, "claude": config.CLAUDE_MODEL}}
+
+
+@app.post("/api/ai/routes")
+def ai_save_routes(body: dict):
+    return ai_routes.save(body)
+
+
+@app.get("/api/ai/catalog")
+def ai_catalog(provider: Literal["nvidia", "gemini", "claude"] = "nvidia", refresh: bool = False):
+    """이 키로 쓸 수 있는 모델 목록."""
+    try:
+        if provider == "nvidia":
+            from . import nvidia
+            return {"provider": provider, "models": nvidia.catalog(refresh)}
+        if provider == "gemini":
+            from . import gemini
+            return {"provider": provider, "models": ["auto", *gemini.models()]}
+        return {"provider": provider, "models": [m for m in (config.CLAUDE_MODEL, config.CLAUDE_FAST_MODEL) if m]}
+    except (LLMUnavailable, Exception) as e:
+        _bad(ValueError(f"모델 목록을 불러오지 못했습니다: {str(e)[:200]}"))
+
+
+class AiTest(BaseModel):
+    route: str
+
+
+@app.post("/api/ai/test")
+def ai_test(req: AiTest):
+    """모델 하나만 짧게 불러 보기 (대체 순서 없이)."""
+    if not ai_routes.valid(req.route):
+        _bad(ValueError("'공급자:모델' 형식이 아닙니다 (예: nvidia:meta/llama-3.3-70b-instruct)."))
+    if not ai_routes.key_ok(req.route.split(":", 1)[0]):
+        _bad(ValueError("이 공급자의 API 키가 없습니다."))
+    t0 = time.time()
+    try:
+        ans = llm.text("한국어로 한 문장만 답한다.", "코인 선물에서 높은 레버리지가 위험한 이유를 한 문장으로.", max_tokens=300, route=req.route)
+        return {"ok": True, "route": req.route, "answer": ans.strip()[:400], "seconds": round(time.time() - t0, 1)}
+    except LLMUnavailable as e:
+        return {"ok": False, "route": req.route, "error": str(e)[:400], "seconds": round(time.time() - t0, 1)}
+
+
+class AiKeys(BaseModel):
+    nvidia: Optional[str] = None
+    gemini: Optional[str] = None
+    anthropic: Optional[str] = None
+    provider: Optional[Literal["auto", "claude", "nvidia", "gemini"]] = None
+
+
+@app.post("/api/ai/keys")
+def ai_keys(req: AiKeys):
+    """화면에서 키를 넣으면 바로 적용하고 settings.txt 에도 저장 (빈 값은 그대로 둠, '-' 는 지움)."""
+    import os
+    from pathlib import Path
+    names = {"nvidia": "NVIDIA_API_KEY", "gemini": "GEMINI_API_KEY", "anthropic": "ANTHROPIC_API_KEY"}
+    changed = {}
+    for k, env in names.items():
+        v = getattr(req, k)
+        if v is None or not v.strip():
+            continue
+        v = "" if v.strip() == "-" else v.strip()
+        setattr(config, env, v)
+        os.environ[env] = v
+        changed[env] = v
+    if req.provider:
+        config.LLM_PROVIDER = req.provider
+        changed["LLM_PROVIDER"] = req.provider
+    llm.reset_client()
+    from . import gemini, nvidia
+    nvidia._catalog, gemini._models = None, None
+    saved = False
+    path = os.environ.get("SETTINGS_FILE")
+    if path and changed:
+        p = Path(path)
+        try:
+            lines = p.read_text(encoding="utf-8-sig").splitlines() if p.exists() else []
+            for env, v in changed.items():
+                for i, line in enumerate(lines):
+                    if line.strip().startswith(env + "="):
+                        lines[i] = f"{env}={v}"
+                        break
+                else:
+                    lines.append(f"{env}={v}")
+            p.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            saved = True
+        except OSError:
+            pass
+    return {"ok": True, "saved_to_file": saved, "keys": {p: ai_routes.key_ok(p) for p in ai_routes.PROVIDERS}, "primary": ai_routes.primary()}
+
+
 # ------------------------------------------------------------------ 오토파일럿 (상시: 차트 지표로 매매법 탐색 → 페이퍼 봇 → 시그널)
 @app.get("/api/autopilot")
 def autopilot_status():
@@ -657,6 +752,8 @@ class ApSettings(BaseModel):
     team_review: Optional[bool] = None
     team_monitor_min: Optional[int] = None
     copilot_every_min: Optional[int] = None
+    ai_candidates: Optional[bool] = None
+    ai_signal_comment: Optional[bool] = None
     leverage: Optional[float] = None
     position_pct: Optional[float] = None
 

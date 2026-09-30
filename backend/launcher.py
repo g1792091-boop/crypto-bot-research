@@ -106,6 +106,7 @@ def main() -> None:
             stream.reconfigure(line_buffering=True, errors="replace")
     base = app_dir()
     load_settings(base / "settings.txt")
+    os.environ["SETTINGS_FILE"] = str(base / "settings.txt")   # 화면에서 키를 넣으면 이 파일에 저장
     os.environ.setdefault("STATE_DIR", str(base / "state"))
     port = pick_port(int(os.environ.get("PORT") or 8000))
     url = f"http://127.0.0.1:{port}"

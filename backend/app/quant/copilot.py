@@ -491,8 +491,9 @@ def _run(key, lt, alerts, prev_st, why, use_ai) -> dict:
     if use_ai and config.llm_enabled():
         payload = {**ctx, "alerts": [a["text"] for a in alerts], "previous": prev}
         try:
-            res = _sanitize(llm.parse(SYSTEM, json.dumps(payload, ensure_ascii=False, default=str), LiveAnalysis, effort="low", max_tokens=4000), ctx)
-            engine, model = llm.provider(), llm.model_name()
+            llm.last_used = None
+            res = _sanitize(llm.parse(SYSTEM, json.dumps(payload, ensure_ascii=False, default=str), LiveAnalysis, effort="low", max_tokens=4000, feature="copilot"), ctx)
+            engine, model = (llm.last_used or "").split(":", 1)[0] or llm.provider(), (llm.last_used or "").split(":", 1)[-1] or llm.model_name()
         except Exception as e:                                # 무료 한도 초과 · 네트워크 → 규칙 분석으로
             err = f"AI 분석 실패 → 규칙 분석으로 대체: {str(e)[:160]}"
     if res is None:
@@ -522,7 +523,7 @@ def ask(symbol: str, interval: str, question: str, history: list[dict] | None = 
     user = (f"실시간 데이터:\n{json.dumps(ctx, ensure_ascii=False, default=str)}\n\n최근 분석:\n{json.dumps(st['result'], ensure_ascii=False)}\n\n"
             + (f"이전 대화:\n{convo}\n\n" if convo else "") + f"질문: {question}")
     try:
-        ans = llm.text(ASK_SYSTEM, user, effort="low", max_tokens=1500)
+        ans = llm.text(ASK_SYSTEM, user, effort="low", max_tokens=1500, feature="copilot")
     except Exception as e:
         return {"answer": f"AI 응답 실패: {str(e)[:200]}", "engine": llm.provider(), "error": True}
     return {"answer": ans.strip(), "engine": llm.provider(), "model": llm.model_name()}

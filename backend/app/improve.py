@@ -300,7 +300,7 @@ def improve(spec: StrategySpec, candles: list[dict], deriv: dict | None = None, 
             "한국어로 5~7문장 코멘트를 쓴다. 무엇이 수익을 냈고 무엇이 손실을 냈는지, 적용된 변경이 왜 타당한지(또는 왜 "
             "아무것도 적용되지 않았는지), 다음에 시도할 만한 것을 구체적으로 말한다. 과최적화 위험도 짚는다.",
             json.dumps({k: report[k] for k in ("changes", "baseline", "after", "candidates", "loss_causes", "win_traits")},
-                       ensure_ascii=False, default=str), effort="medium")
+                       ensure_ascii=False, default=str), effort="medium", feature="analysis")
         except llm.LLMUnavailable:
             report["ai_summary"] = None   # AI 코멘트 없이 규칙 기반 결과만
     return report

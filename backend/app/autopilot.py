@@ -23,6 +23,8 @@ from collections import deque
 
 from . import backtest, config
 from .data import market
+from pydantic import BaseModel, Field
+
 from .strategy import INTERVALS, StrategySpec, validate
 
 SETTINGS = {
@@ -35,6 +37,8 @@ SETTINGS = {
     "team_review": True,             # 통과 매매법은 에이전트 팀 검토 뒤 배치 (승인관이 거부하면 배치 안 함)
     "team_monitor_min": 120,         # 에이전트 팀 상시 감시 회의 간격 (0 = 끔)
     "copilot_every_min": 5,          # 실시간 AI 가 차트 코인을 다시 보는 간격 (0 = 끔)
+    "ai_candidates": True,           # AI 가 차트 지표로 매매법 후보를 직접 제안 (같은 관문으로 검증)
+    "ai_signal_comment": True,       # 진입 시그널마다 AI 가 근거·주의점 코멘트
     "leverage": 3, "position_pct": 20, "bars": 3000,
 }
 GATE = {"train": {"trades": 20, "pf": 1.1}, "valid": {"trades": 8, "pf": 1.15}, "hold": {"trades": 8, "pf": 1.1}}
@@ -288,6 +292,66 @@ def candidates(symbol: str, interval: str, indicators: list[dict], limit: int = 
     return out, used_default
 
 
+# ---------------------------------------------------------------- AI 매매법 제안
+class _Ideas(BaseModel):
+    ideas: list[StrategySpec] = Field(description="서로 다른 매매법 3~6개")
+
+
+AI_PROMPT = """너는 코인 무기한 선물 퀀트 연구원이다. 사용자 차트에 띄운 보조지표를 중심으로, 백테스트 가능한 매매법(StrategySpec JSON)을 서로 다르게 {n}개 만든다.
+규칙:
+- indicators 의 type 은 아래 표에 있는 것만. 조건식 피연산자: 가격(open high low close volume hl2 hlc3), 지표 id 또는 'id.출력', 과거 값 'close[1]', 숫자, 배수 'vma*1.5'.
+- op: > < >= <= crosses_above crosses_below rising falling (rising/falling 은 right 에 봉 개수).
+- 추세추종·역추세·돌파처럼 성격이 다른 것을 섞고, 진입 조건은 2~3개로 너무 복잡하지 않게. 과최적화(이상한 숫자 조합)를 피하고 널리 쓰는 값(14, 20, 50, 200, 30/70 등)을 쓴다.
+- risk 에는 atr_stop_mult(1.5~3)와 atr_tp_mult 또는 청산 조건을 넣는다. leverage 와 position_pct 는 넣지 않아도 된다 (코드가 채움).
+- name 은 한국어로 짧게 (예: "EMA50 눌림 + RSI 반등").
+사용 가능한 지표:
+{table}"""
+
+
+def ai_candidates(symbol: str, interval: str, indicators: list[dict], c: list[dict], n: int = 6) -> tuple[list[StrategySpec], str]:
+    """AI 가 차트 지표로 매매법 후보를 제안 → 규칙 후보와 똑같이 3구간 관문을 거친다."""
+    if not config.llm_enabled():
+        return [], "AI 키 없음"
+    from . import analysis, llm
+    from .nl_strategy import _indicator_table
+    try:
+        reg = analysis.regime(c[-400:])
+        user = json.dumps({"symbol": symbol, "interval": interval, "chart_indicators": [x["key"] for x in indicators] or ["(없음 — 널리 쓰는 지표로)"],
+                           "market": {k: reg[k] for k in ("label", "score", "adx", "rsi")}, "reasons": reg["reasons"][:3]}, ensure_ascii=False)
+        out = llm.parse(AI_PROMPT.format(n=n, table=_indicator_table()), user, _Ideas, effort="medium", max_tokens=6000, feature="autopilot")
+    except Exception as e:
+        log(f"AI 매매법 제안 실패 ({symbol} {interval}): {str(e)[:120]}")
+        return [], f"실패: {str(e)[:80]}"
+    specs = []
+    for sp in out.ideas[:n]:
+        sp = sp.model_copy(update={"symbol": symbol, "interval": interval, "name": f"🤖 AI · {sp.name}"[:80],
+                                   "description": "AI 가 차트 지표로 제안한 후보"})
+        sp.risk = sp.risk.model_copy(update={"leverage": SETTINGS["leverage"], "position_pct": SETTINGS["position_pct"]})
+        if not validate(sp):
+            specs.append(sp)
+    log(f"AI 가 매매법 {len(out.ideas)}개 제안 → 규칙 검사 통과 {len(specs)}개 ({symbol} {interval}, {getattr(llm, 'last_used', '') or ''})")
+    return specs, f"{len(specs)}개 제안"
+
+
+def _ai_comment(sig: dict) -> None:
+    """진입 시그널에 AI 코멘트 (근거와 주의점 2~3문장) → 'AI 코멘트' 시그널로 이어 붙임."""
+    from . import analysis, llm
+    try:
+        c, _ = market.candles(sig["symbol"], sig["interval"], 400)
+        reg = analysis.regime(c)
+        sr = analysis.sr_levels(c)
+        user = json.dumps({"signal": {k: sig.get(k) for k in ("symbol", "interval", "side", "entry", "stop", "take", "leverage", "strategy", "status")},
+                           "market": {k: reg[k] for k in ("label", "score", "rsi", "adx", "atr")}, "reasons": reg["reasons"][:3],
+                           "levels": [{"price": z["price"], "side": z["side"], "touches": z["touches"]} for z in sr["zones"][:6]]},
+                          ensure_ascii=False, default=float)
+        txt = llm.text("너는 코인 선물 트레이딩 코치다. 자동 매매 봇이 방금 모의로 진입했다. 주어진 데이터만 근거로 이 진입의 근거 한 가지와 "
+                       "가장 큰 위험 한 가지, 지켜볼 가격을 한국어 2~3문장으로. 숫자를 지어내지 않는다.", user, effort="low", max_tokens=400, feature="autopilot")
+        _signal({"type": "ai_note", "symbol": sig["symbol"], "interval": sig["interval"], "side": sig.get("side"), "strategy": sig.get("strategy"),
+                 "status": sig.get("status"), "text": "AI 코멘트: " + txt.strip()[:300], "ref": sig.get("id")})
+    except Exception as e:
+        log(f"진입 AI 코멘트 실패: {str(e)[:100]}")
+
+
 # ---------------------------------------------------------------- 3구간 검증
 def _seg(trades: list[dict]) -> dict:
     n = len(trades)
@@ -300,7 +364,9 @@ def _seg(trades: list[dict]) -> dict:
 
 
 def _family(name: str) -> str:
-    """진입 규칙 이름 (필터·청산만 다른 후보는 거의 같은 매매라 한 가족으로)."""
+    """진입 규칙 이름 (필터·청산만 다른 후보는 거의 같은 매매라 한 가족으로). AI 제안은 하나하나 따로."""
+    if name.startswith("🤖 AI · "):
+        return name
     return name.split(" · ")[0].split(" + ")[0]
 
 
@@ -315,6 +381,8 @@ def evaluate(symbol: str, interval: str, indicators: list[dict]) -> dict:
         return {"symbol": symbol, "interval": interval, "error": f"봉이 부족합니다 ({len(c)}개)", "tried": 0, "rows": []}
     t1, t2 = c[int(len(c) * 0.6)]["time"], c[int(len(c) * 0.8)]["time"]
     specs, used_default = candidates(symbol, interval, indicators)
+    ai_specs, ai_note = ai_candidates(symbol, interval, indicators, c) if SETTINGS.get("ai_candidates") else ([], "")
+    specs += ai_specs
     rows = []
     for sp in specs:
         try:
@@ -350,6 +418,7 @@ def evaluate(symbol: str, interval: str, indicators: list[dict]) -> dict:
                  key=lambda r: (-(r["seg"]["valid"]["net"] > 0 and r["seg"]["hold"]["net"] > 0), -(r["seg"]["valid"]["t"] + r["seg"]["hold"]["t"])))
     view = lambda r: {"name": r["spec"].name, "seg": r["seg"], "all": r["all"], "stage": r["stage"], "spec": r["spec"].model_dump()}
     return {"symbol": symbol, "interval": interval, "data_source": src, "bars": len(c), "tried": len(rows), "used_default": used_default,
+            "ai": {"proposed": len(ai_specs), "note": ai_note, "passed": sum(1 for r in rows if r["stage"] == "pass" and r["spec"].name.startswith("🤖"))},
             "train_pass": len(train_ok), "finalists": len(finalists), "passed": [view(r) for r in passed[:5]],
             "observe": [view(r) for r in obs[:3]], "top_train": [view(r) for r in train_ok[:10]],
             "stage_counts": {k: sum(r["stage"] == k for r in rows) for k in ("train_fail", "train_pass", "valid_fail", "hold_fail", "pass")},
@@ -428,6 +497,8 @@ def watch_bots() -> int:
                      "stop": p.stop, "take": p.take, "liq": p.liq_price, "leverage": p.leverage, "strategy": m["rule"], "status": m["kind"],
                      "text": f"{'롱' if side == 'long' else '숏'} 진입 {p.entry_price:,.6g}" + (f" · 손절 {p.stop:,.6g}" if p.stop else "") + (f" · 익절 {p.take:,.6g}" if p.take else "")})
             n += 1
+            if SETTINGS.get("ai_signal_comment") and config.llm_enabled():
+                threading.Thread(target=_ai_comment, args=(signals[-1],), daemon=True).start()
         if len(b.sim.trades) > m.get("last_trades", 0):
             for t in b.sim.trades[m.get("last_trades", 0):]:
                 _signal({"type": "exit", "bot_id": bid, "symbol": m["symbol"], "interval": m["interval"], "side": t.side, "pnl": round(t.pnl, 2),

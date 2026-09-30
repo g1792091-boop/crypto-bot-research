@@ -199,19 +199,17 @@ def roster() -> list[dict]:
                 last[m["from"]] = m["ts"]
     sc = scorecards()
     return [{"id": r.rid, "name": r.name, "team": r.team, "team_name": TEAMS[r.team][0], "color": TEAMS[r.team][1], "emoji": r.emoji,
-             "tier": r.tier, "model": _model_label(r.tier), "duty": r.duty, "pipelines": [k for k, v in PIPELINES.items() if any(r.rid in st for st in v[2])],
+             "tier": r.tier, "model": _model_label(r.tier, r.rid), "duty": r.duty, "pipelines": [k for k, v in PIPELINES.items() if any(r.rid in st for st in v[2])],
              "last_active": last.get(r.rid), "scorecard": sc.get(r.rid)} for r in ROLES]
 
 
-def _model_label(tier: str) -> str:
-    p = llm.provider()
-    if p == "claude":
-        return config.CLAUDE_MODEL if tier == "opus" or not config.CLAUDE_FAST_MODEL else config.CLAUDE_FAST_MODEL
-    if p == "gemini":
-        return "Gemini"
-    if p == "nvidia":
-        return (config.NVIDIA_FAST_MODEL if tier != "opus" and config.NVIDIA_FAST_MODEL else config.NVIDIA_MODEL)
-    return "규칙 분석"
+def _model_label(tier: str, rid: str | None = None) -> str:
+    from .. import ai_routes
+    c = ai_routes.chain("team_heavy" if tier == "opus" else "team_light", rid, tier)
+    if not c:
+        return "규칙 분석"
+    p, m = ai_routes.split(c[0])
+    return "Gemini" if p == "gemini" and m == "auto" else m
 
 
 # ---------------------------------------------------------------- 한 명 실행
@@ -247,7 +245,7 @@ def call_role(run: Run, rid: str, extra: dict) -> Optional[dict]:
         for attempt in range(2):
             try:
                 _calls["n"] += 1
-                data, txt, model = llm.json_call(system, json.dumps(given, ensure_ascii=False, default=str), role.tier)
+                data, txt, model = llm.json_call(system, json.dumps(given, ensure_ascii=False, default=str), role.tier, role=rid)
                 clean, problems = checks.check(role.kind, data, given)
                 if clean is not None:
                     source = model
@@ -579,7 +577,7 @@ def _answer(run: Run, role, question: str):
         given["question"] = question
         system = f"{COMMON}\n\n# 당신의 역할: {role.name}\n{role.prompt}\n\n{ASK}"
         _calls["n"] += 1
-        data, txt, model = llm.json_call(system, json.dumps(given, ensure_ascii=False, default=str), role.tier, 2000)
+        data, txt, model = llm.json_call(system, json.dumps(given, ensure_ascii=False, default=str), role.tier, 2000, role=role.rid)
         msg = (data or {}).get("message") if isinstance(data, dict) else None
         ev = [p for p in ((data or {}).get("evidence") or []) if isinstance(p, str)] if isinstance(data, dict) else []
         bad = [p for p in ev if not checks.resolve(given, p)[0]]
