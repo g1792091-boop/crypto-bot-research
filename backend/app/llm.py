@@ -1,4 +1,4 @@
-"""AI 호출 래퍼 — Claude(ANTHROPIC_API_KEY) 또는 Gemini(GEMINI_API_KEY, 무료 등급 가능)."""
+"""AI 호출 래퍼 — Claude(ANTHROPIC_API_KEY) · NVIDIA(NVIDIA_API_KEY, 무료 크레딧) · Gemini(GEMINI_API_KEY, 무료 등급)."""
 from __future__ import annotations
 
 from typing import TypeVar
@@ -29,12 +29,15 @@ def model_name() -> str | None:
     if p == "gemini":
         from . import gemini
         return gemini.last_model or config.GEMINI_MODEL or "Gemini Flash (자동 선택)"
+    if p == "nvidia":
+        from . import nvidia
+        return nvidia.last_model or config.NVIDIA_MODEL
     return config.CLAUDE_MODEL if p == "claude" else None
 
 
 def label() -> str:
     """화면 표시용 이름."""
-    return {"claude": "Claude", "gemini": "Gemini"}.get(provider() or "", "기본 분석기")
+    return {"claude": "Claude", "gemini": "Gemini", "nvidia": "NVIDIA"}.get(provider() or "", "기본 분석기")
 
 
 def client() -> anthropic.Anthropic:
@@ -47,6 +50,9 @@ def client() -> anthropic.Anthropic:
 
 
 def parse(system: str, user: str, schema: type[T], effort: str = "medium", max_tokens: int = 16000) -> T:
+    if provider() == "nvidia":
+        from . import nvidia
+        return nvidia.parse(system, user, schema, max_tokens=min(max_tokens, config.NVIDIA_MAX_TOKENS))
     if provider() == "gemini":
         from . import gemini
         return gemini.parse(system, user, schema, max_tokens=max_tokens)
@@ -67,6 +73,9 @@ def parse(system: str, user: str, schema: type[T], effort: str = "medium", max_t
 
 
 def text(system: str, user: str, effort: str = "medium", max_tokens: int = 16000) -> str:
+    if provider() == "nvidia":
+        from . import nvidia
+        return nvidia.text(system, user, max_tokens=min(max_tokens, config.NVIDIA_MAX_TOKENS))
     if provider() == "gemini":
         from . import gemini
         return gemini.text(system, user, max_tokens=max_tokens)
@@ -89,7 +98,12 @@ def json_call(system: str, user: str, tier: str = "opus", max_tokens: int = 6000
     import json as _json
 
     from .gemini import _clean_json
-    if provider() == "gemini":
+    if provider() == "nvidia":
+        from . import nvidia
+        model = nvidia.model_for(tier)
+        txt = nvidia.generate(system, user, json_mode=True, max_tokens=max_tokens, model=model)
+        txt = nvidia.clean_json(txt)
+    elif provider() == "gemini":
         from . import gemini
         txt = gemini.generate(system, user, None, json_mode=True, max_tokens=max_tokens)
         model = gemini.last_model or "gemini"

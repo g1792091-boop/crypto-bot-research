@@ -209,6 +209,8 @@ def _model_label(tier: str) -> str:
         return config.CLAUDE_MODEL if tier == "opus" or not config.CLAUDE_FAST_MODEL else config.CLAUDE_FAST_MODEL
     if p == "gemini":
         return "Gemini"
+    if p == "nvidia":
+        return (config.NVIDIA_FAST_MODEL if tier != "opus" and config.NVIDIA_FAST_MODEL else config.NVIDIA_MODEL)
     return "규칙 분석"
 
 
@@ -566,7 +568,7 @@ def _answer(run: Run, role, question: str):
     run.typing = [role.rid]
     try:
         if not llm.provider():
-            run.post(role.rid, "AI 키가 없어 자유 질문에는 답할 수 없습니다. 위 대화의 규칙 분석을 참고하시고, 설정에서 Gemini(무료) 또는 Claude 키를 넣어 주세요.",
+            run.post(role.rid, "AI 키가 없어 자유 질문에는 답할 수 없습니다. 위 대화의 규칙 분석을 참고하시고, settings.txt 에 NVIDIA·Gemini(무료) 또는 Claude 키를 넣어 주세요.",
                      "message", meta={"source": "rules"})
             return
         if not run.packet:

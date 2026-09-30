@@ -21,7 +21,7 @@ SETTINGS_TEMPLATE = """\
 # 이 파일을 메모장으로 열어 '=' 뒤에 값을 넣고 저장한 뒤, 프로그램을 다시 실행하세요.
 # 비워 두어도 동작합니다 (AI는 규칙 기반, 파생 데이터는 바이낸스 무료 데이터 사용).
 
-# ── AI 키 (둘 중 하나만 넣어도 됩니다. 둘 다 넣으면 Claude 를 씁니다) ──
+# ── AI 키 (하나만 넣어도 됩니다. 여러 개면 Claude → NVIDIA → Gemini 순서로 씁니다) ──
 # 자연어 전략 변환 · 전략 대화 수정 · AI 에이전트 팀 · 뉴스 한 줄 요약 · 차트 AI 코멘트에 쓰입니다.
 
 # Gemini API 키 — 무료 (구글 계정으로 https://aistudio.google.com/apikey 에서 "Create API key")
@@ -29,10 +29,19 @@ SETTINGS_TEMPLATE = """\
 #   무료 등급에서는 입력한 내용이 구글의 서비스 개선에 쓰일 수 있습니다.
 GEMINI_API_KEY=
 
+# NVIDIA API 키 — 무료 (https://build.nvidia.com 로그인 → 아무 모델 페이지에서 "Get API Key", nvapi- 로 시작)
+#   가입 크레딧과 분당 약 40회 제한이 있습니다. OpenAI 호환 API 입니다.
+#   NVIDIA_MODEL 에 build.nvidia.com 의 모델 이름을 넣으면 그 모델을 씁니다 (비우면 meta/llama-3.3-70b-instruct)
+#   예) deepseek-ai/deepseek-v3.1 · qwen/qwen3-235b-a22b · moonshotai/kimi-k2-instruct · nvidia/llama-3.3-nemotron-super-49b-v1.5
+#   NVIDIA_FAST_MODEL 은 에이전트 팀의 반복 분석용 가벼운 모델 (비우면 같은 모델)
+NVIDIA_API_KEY=
+NVIDIA_MODEL=
+NVIDIA_FAST_MODEL=
+
 # Claude API 키 (유료, https://console.anthropic.com)
 ANTHROPIC_API_KEY=
 
-# 둘 다 넣었을 때 강제로 고르려면: auto / gemini / claude
+# 여러 개 넣었을 때 강제로 고르려면: auto / claude / nvidia / gemini
 LLM_PROVIDER=auto
 
 # CoinGlass API 키 (https://www.coinglass.com/pricing) — OI/펀딩/롱숏/청산 데이터
@@ -62,6 +71,12 @@ def load_settings(path: Path) -> None:
         with path.open("a", encoding="utf-8") as f:
             f.write("\n" + SETTINGS_TEMPLATE[start:SETTINGS_TEMPLATE.index("# Claude API 키")])
         print("설정 파일에 무료 Gemini 키 칸(GEMINI_API_KEY)을 추가했습니다.")
+    if path.exists() and "NVIDIA_API_KEY" not in path.read_text(encoding="utf-8-sig"):
+        # 예전 설정 파일이면 무료 NVIDIA 키 칸을 덧붙인다 (기존 값은 그대로)
+        start = SETTINGS_TEMPLATE.index("# NVIDIA API 키")
+        with path.open("a", encoding="utf-8") as f:
+            f.write("\n" + SETTINGS_TEMPLATE[start:SETTINGS_TEMPLATE.index("# Claude API 키")])
+        print("설정 파일에 무료 NVIDIA 키 칸(NVIDIA_API_KEY)을 추가했습니다.")
     for line in path.read_text(encoding="utf-8-sig").splitlines():
         line = line.strip()
         if not line or line.startswith("#") or "=" not in line:
@@ -102,9 +117,8 @@ def main() -> None:
     print("=" * 56)
     print(" GH Quant 실행 중")
     print(f" 브라우저 주소: {url}")
-    ai = "Claude" if os.environ.get("ANTHROPIC_API_KEY") else "Gemini" if os.environ.get("GEMINI_API_KEY") else "미설정 (규칙 기반)"
-    if os.environ.get("LLM_PROVIDER", "").lower() == "gemini" and os.environ.get("GEMINI_API_KEY"):
-        ai = "Gemini"
+    from app import config as _cfg
+    ai = {"claude": "Claude", "nvidia": f"NVIDIA ({_cfg.NVIDIA_MODEL})", "gemini": "Gemini"}.get(_cfg.provider() or "", "미설정 (규칙 기반)")
     print(f" AI: {ai}"
           f" / CoinGlass: {'연결' if os.environ.get('COINGLASS_API_KEY') else '미설정 (바이낸스 대체)'}")
     print(" 종료하려면 이 창을 닫거나 Ctrl+C 를 누르세요.")

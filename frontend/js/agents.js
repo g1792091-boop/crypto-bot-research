@@ -8,7 +8,7 @@ let msgs = [], total = 0, runInfo = null, timer = null, visible = false;
 const DIR = { long: ["롱", "up"], short: ["숏", "down"], both: ["양방향", "accent"], none: ["쉬기", "muted"], neutral: ["중립", "muted"] };
 const LVL = { normal: ["정상", "up"], caution: ["주의", "accent"], danger: ["위험", "down"] };
 const ACT = { keep: "유지", reduce: "축소", pause_strategy: "봇 중지", pause_all: "전체 중지" };
-const SRC = (s) => !s ? "" : s === "rules" ? "규칙" : /opus/i.test(s) ? "Opus" : /sonnet/i.test(s) ? "Sonnet" : /gemini/i.test(s) ? "Gemini" : s;
+const SRC = (s) => !s ? "" : s === "rules" ? "규칙" : /opus/i.test(s) ? "Opus" : /sonnet/i.test(s) ? "Sonnet" : /gemini/i.test(s) ? "Gemini" : s.includes("/") ? s.split("/").pop() : s;
 
 const who = (id) => R?.roster.find((r) => r.id === id);
 
@@ -23,7 +23,7 @@ export function initAgents() {
 
 async function open() {
   R = await api("/api/team/roster");
-  $("#tm-engine").textContent = R.engine === "rules" ? "AI 키 없음 → 규칙 분석" : R.engine === "claude" ? "Claude (Opus·Sonnet)" : "Gemini";
+  $("#tm-engine").textContent = R.engine === "rules" ? "AI 키 없음 → 규칙 분석" : R.engine === "claude" ? "Claude (Opus·Sonnet)" : R.engine === "nvidia" ? "NVIDIA" : "Gemini";
   renderRoster();
   renderSide();
   await loadRuns(cur);

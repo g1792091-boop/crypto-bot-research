@@ -190,7 +190,7 @@ _brief_cache: dict[tuple, dict] = {}
 def news_brief(limit: int = 15):
     """AI(Claude/Gemini)가 헤드라인을 한국어로 옮기고 호재/악재·영향도(1~3)를 붙인다."""
     if not config.llm_enabled():
-        raise HTTPException(400, "AI 키(ANTHROPIC_API_KEY 또는 무료 GEMINI_API_KEY)가 필요합니다.")
+        raise HTTPException(400, "AI 키(ANTHROPIC_API_KEY, 무료 NVIDIA_API_KEY 또는 무료 GEMINI_API_KEY)가 필요합니다.")
     items = news.headlines(limit)["items"]
     key = tuple(i["id"] for i in items)
     if key not in _brief_cache:

@@ -510,7 +510,7 @@ def _run(key, lt, alerts, prev_st, why, use_ai) -> dict:
 
 def ask(symbol: str, interval: str, question: str, history: list[dict] | None = None) -> dict:
     if not config.llm_enabled():
-        return {"answer": "AI 키가 없어 질문에 답할 수 없습니다. 오른쪽 위 설정에서 Gemini(무료) 또는 Claude 키를 넣으면 "
+        return {"answer": "AI 키가 없어 질문에 답할 수 없습니다. settings.txt 에 NVIDIA·Gemini(무료) 또는 Claude 키를 넣으면 "
                           "지금 차트·포지션을 보고 답합니다. 대신 위의 규칙 분석과 경고를 참고하세요.", "engine": "rules"}
     st = _state.get((symbol, interval))
     if not st or time.time() - st["time"] > 120:

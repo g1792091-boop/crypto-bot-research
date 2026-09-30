@@ -2,7 +2,7 @@
 import { $, $$, INTERVALS, IV_LABEL, api, busy, cls, css, emit, esc, fmt, makeChart, mdhm, pct, px, savePrefs, state, toast, tradeRows } from "./core.js";
 import { showOnChart } from "./trade.js";
 
-const AI = { claude: "Claude", gemini: "Gemini" };
+const AI = { claude: "Claude", gemini: "Gemini", nvidia: "NVIDIA" };
 
 const LC = LightweightCharts;
 const PRICE_REFS = ["close", "open", "high", "low", "volume", "hl2", "hlc3"];

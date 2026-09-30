@@ -180,6 +180,12 @@ EMA 배열·EMA50 기울기·슈퍼트렌드·고점/저점 구조·MACD로 점�
 추세장/횡보장을 가른다. 스윙 고저점·박스 상하단·EMA·청산 구간을 레벨로 써서 롱/숏/박스 시나리오를 만들고,
 목표가는 최소 1R 이상 떨어진 레벨로 잡는다 (`backend/app/analysis.py`). Claude 키가 있으면 "AI 코멘트"로 브리핑을 받을 수 있다.
 
+### AI 공급자
+Claude(`ANTHROPIC_API_KEY`) · NVIDIA(`NVIDIA_API_KEY`, build.nvidia.com 무료 크레딧, OpenAI 호환 `https://integrate.api.nvidia.com/v1`) ·
+Gemini(`GEMINI_API_KEY`, 무료 등급). `LLM_PROVIDER=auto` 면 Claude → NVIDIA → Gemini 순서. NVIDIA 는 `NVIDIA_MODEL`(기본 `meta/llama-3.3-70b-instruct`)·
+`NVIDIA_FAST_MODEL`(에이전트 팀 반복 분석용)·`NVIDIA_RPM`(기본 35)·`NVIDIA_BASE_URL`(다른 OpenAI 호환 서비스용). JSON 이 필요한 호출은
+`response_format=json_object` 를 요청하고(거부하는 모델은 빼고 재요청), 추론 모델의 `<think>` 부분은 지운 뒤 JSON 만 골라 검증한다 (`app/nvidia.py`).
+
 ## 실행
 
 ### 파이썬 없이 실행 (추천)

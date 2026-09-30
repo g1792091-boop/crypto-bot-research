@@ -10,7 +10,7 @@ const prefs = { every: 30, maxAge: 300, ...load("ft.copilot", {}) };
 const ACTION = { hold: "유지", add: "추가 진입", reduce: "일부 청산", close: "전량 청산", move_stop: "손절 이동", take_profit: "익절" };
 const URG = { high: ["긴급", "down"], medium: ["주의", "accent"], low: ["참고", "muted"] };
 const BIAS = { long: ["롱 우위", "up"], short: ["숏 우위", "down"], neutral: ["중립", "accent"] };
-const ENGINE = { claude: "Claude", gemini: "Gemini", rules: "규칙 분석" };
+const ENGINE = { claude: "Claude", gemini: "Gemini", nvidia: "NVIDIA", rules: "규칙 분석" };
 const QUICK = ["지금 포지션 버텨도 될까?", "손절은 어디가 좋아?", "지금 진입해도 돼?", "다음 봉 어떻게 봐?"];
 
 let hooks = {}, last = null, timer = null, loading = false, chats = {};
@@ -92,7 +92,7 @@ function render(fresh) {
   const myPos = r.positions.filter((p) => p.symbol === r.symbol || p.kind === "manual");
   $("#ai-body").innerHTML = `
     ${r.error ? `<div class="ai-alert medium">${esc(r.error)}</div>` : ""}
-    ${!r.llm_available ? `<div class="help" style="margin-bottom:6px">AI 키가 없어 <b>규칙 분석</b>으로 보여줍니다. 오른쪽 위 설정에서 Gemini(무료) 또는 Claude 키를 넣으면 AI 가 직접 판단합니다.</div>` : ""}
+    ${!r.llm_available ? `<div class="help" style="margin-bottom:6px">AI 키가 없어 <b>규칙 분석</b>으로 보여줍니다. settings.txt 에 NVIDIA·Gemini(무료) 또는 Claude 키를 넣으면 AI 가 직접 판단합니다.</div>` : ""}
     ${r.alerts.length ? `<div class="ai-alerts">${r.alerts.map((x) => `<div class="ai-alert ${x.level}">${x.level === "high" ? "⚠ " : ""}${esc(x.text)}</div>`).join("")}</div>` : ""}
     <div class="ai-head ${fresh ? "flash" : ""}"><span class="ai-chip ${bc}">${bl}</span><b>${esc(a.headline)}</b></div>
     <div class="row" style="gap:6px;margin:4px 0"><span class="muted" style="font-size:11px">확신</span><div class="ai-bar" style="flex:1"><i style="width:${a.confidence}%;background:var(--${bc === "accent" ? "accent" : bc})"></i></div><span style="font-size:11px">${a.confidence}%</span></div>
