@@ -12,6 +12,10 @@ on:
       - ".github/workflows/build-desktop.yml"
   workflow_dispatch:
 
+env:
+  # Windows 러너 콘솔 기본 인코딩(cp1252)에서 한글 출력이 깨지지 않게
+  PYTHONUTF8: "1"
+
 jobs:
   build:
     strategy:

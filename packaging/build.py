@@ -50,7 +50,7 @@ def main() -> None:
     sys.path.insert(0, str(ROOT / "backend"))
     from launcher import SETTINGS_TEMPLATE
     (out / "settings.txt").write_text(SETTINGS_TEMPLATE, encoding="utf-8")
-    print(f"\n완료: {out}")
+    print(f"\nDone: {out}")
 
 
 if __name__ == "__main__":
