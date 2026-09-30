@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import warnings
 from collections import deque
-from multiprocessing import Pool
+from multiprocessing import Pool, TimeoutError as PoolTimeout
 from typing import Callable, Iterable, Optional, Sequence
 
 import numpy as np
@@ -92,12 +92,16 @@ def compute_last(job: tuple) -> dict:
     return out
 
 
+class SignalTimeout(RuntimeError):
+    pass
+
+
 class SignalService:
     def __init__(self, trade_symbols: Sequence[str], record_symbols: Sequence[str] = (),
                  random_rates: Optional[dict] = None, seeds: Sequence[int] = (1, 2, 3),
                  stop_atr: float = 2.0, max_delay_ms: int = 180_000, procs: int = 4,
                  trade_tfs: Sequence[str] = TRADE_TFS, record_tfs: Sequence[str] = RECORD_TFS,
-                 lib=None, pool=None):
+                 lib=None, pool=None, timeout_s: float = 120.0):
         self.lib = lib or _lib()
         self.trade_symbols = list(trade_symbols)
         self.symbols = self.trade_symbols + [s for s in record_symbols if s not in trade_symbols]
@@ -113,6 +117,8 @@ class SignalService:
         self.windows = {tf: window_5m(self.lib, tf) for tf in self.trade_tfs + self.record_tfs}
         self._pool = pool
         self._procs = procs
+        self.timeout_s = timeout_s  # a signal later than max_delay_ms is not traded anyway
+        self.pool_restarts = 0
 
     # ------------------------------------------------------------ data
     def add_5m(self, bar: Bar) -> None:
@@ -151,7 +157,16 @@ class SignalService:
             return [compute_last(j) for j in jobs]
         if self._pool is None:
             self._pool = Pool(self._procs)
-        return self._pool.map(compute_last, jobs)
+        try:
+            return self._pool.map_async(compute_last, jobs).get(self.timeout_s)
+        except PoolTimeout:
+            # a hung worker would otherwise block every account forever: kill the
+            # pool (a fresh one is made on the next call) and let the caller skip
+            self._pool.terminate()
+            self._pool.join()
+            self._pool = None
+            self.pool_restarts += 1
+            raise SignalTimeout(f"signal workers did not answer within {self.timeout_s:.0f}s")
 
     def compute(self, boundary: int, tf: str, now_ms: Callable[[], int],
                 book: Callable[[], dict]) -> tuple[list[dict], list[tuple[str, Signal]], list[dict]]:

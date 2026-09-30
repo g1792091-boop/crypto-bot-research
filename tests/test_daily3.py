@@ -91,3 +91,21 @@ def test_data_quality_counts_gaps_and_outliers():
     assert q["ETHUSDT"]["missing"] == 1 and q["BTCUSDT"]["missing"] == 0
     assert q["SOLUSDT"]["extreme_ranges"] == 1 and q["SOLUSDT"]["zero_volume"] == 1
     assert q["SOLUSDT"]["max_last_mark_gap_pct"] > 0.9
+
+
+def test_notify_report_routes_by_severity():
+    from paperbot.daily3 import notify_report
+    from paperbot.notify import ListNotifier
+    out = ListNotifier()
+    rep = {"day": "2026-10-01", "parity": {"accounts": 195, "mismatched_accounts": 2},
+           "shadows": {"limit_signals": 40, "limit_filled": 25, "skipped": 7},
+           "data_quality": {"BTCUSDT": {"missing": 3}, "ETHUSDT": {"missing": 0}, "max_abs_funding_pct": 0.01}}
+    msgs = notify_report(rep, out, trades_day=120)
+    assert [m[0] for m in msgs] == ["CRITICAL", "WARN", "INFO"]
+    assert "계좌 2개" in msgs[0][1] and "BTCUSDT 3" in msgs[1][1]
+    assert msgs[2][1] == ("[2026-10-01] 매일 점검: 재계산 일치 193/195 · 거래 120건 · "
+                          "지정가였다면 체결 25/40 · 포지션 중이라 놓친 신호 7 · 빠진 1분봉 3")
+    assert out.messages == msgs
+
+    clean = notify_report({"day": "d", "parity": "no 00:00 snapshot", "data_quality": {}}, ListNotifier())
+    assert [m[0] for m in clean] == ["WARN", "INFO"]

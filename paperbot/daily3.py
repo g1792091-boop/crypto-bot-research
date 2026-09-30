@@ -42,6 +42,7 @@ from .binance import BinanceREST, bars_from_klines
 from .config import V3_STOP_ATR, V3_SYMBOLS, Settings, v3_settings
 from .engine import PaperEngine, restore_engine
 from .models import Bar, Signal
+from .notify import CRITICAL, INFO, WARN
 
 MIN = 60_000
 LIMIT_ATR = 0.25
@@ -275,8 +276,41 @@ def run_day(conn, out: sqlite3.Connection, rest: BinanceREST, settings: Settings
     return report
 
 
+def notify_report(report: dict, notifier, trades_day: Optional[int] = None) -> list[tuple[str, str]]:
+    """Owner alerts from one nightly report (routing in docs/paper-v3-rules-addendum.md):
+    a parity mismatch or a missing 00:00 snapshot is loud (CRITICAL/WARN), data gaps
+    are WARN, and the one-line summary is a silent INFO message."""
+    day = report["day"]
+    msgs = []
+    par = report.get("parity")
+    if isinstance(par, dict):
+        if par["mismatched_accounts"]:
+            msgs.append((CRITICAL, f"[{day}] 재계산 불일치: 계좌 {par['mismatched_accounts']}개의 거래가 "
+                                   "paper와 다릅니다. 운영 감사관 확인 필요 (daily3.db mismatches)"))
+        par_txt = f"재계산 일치 {par['accounts'] - par['mismatched_accounts']}/{par['accounts']}"
+    else:
+        msgs.append((WARN, f"[{day}] 재계산 못 함: 그날 00:00 상태 저장이 없습니다 (봇이 멈춰 있었음)"))
+        par_txt = "재계산 못 함"
+    dq = report.get("data_quality", {})
+    missing = {s: q["missing"] for s, q in dq.items() if isinstance(q, dict) and q.get("missing")}
+    if missing:
+        msgs.append((WARN, f"[{day}] 빠진 1분봉: " + ", ".join(f"{s} {n}" for s, n in missing.items())))
+    sh = report.get("shadows", {})
+    parts = [par_txt]
+    if trades_day is not None:
+        parts.append(f"거래 {trades_day}건")
+    if sh:
+        parts.append(f"지정가였다면 체결 {sh.get('limit_filled', 0)}/{sh.get('limit_signals', 0)}")
+        parts.append(f"포지션 중이라 놓친 신호 {sh.get('skipped', 0)}")
+    parts.append("빠진 1분봉 " + str(sum(missing.values())))
+    msgs.append((INFO, f"[{day}] 매일 점검: " + " · ".join(parts)))
+    for level, text in msgs:
+        notifier.send(level, text)
+    return msgs
+
+
 def main(argv: Optional[list[str]] = None) -> int:
-    from .live import _rest, load_brackets
+    from .live import _notifier, _rest, load_brackets
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("cmd", choices=["run"])
     ap.add_argument("--db", default="paper3.db")
@@ -296,7 +330,12 @@ def main(argv: Optional[list[str]] = None) -> int:
     out = sqlite3.connect(args.out)
     out.execute("PRAGMA journal_mode=WAL")
     out.executescript(SCHEMA)
-    print(json.dumps(run_day(conn, out, rest, settings, brackets, specs, day), indent=1, default=str))
+    report = run_day(conn, out, rest, settings, brackets, specs, day)
+    start = int(dt.datetime.strptime(day, "%Y-%m-%d").replace(tzinfo=dt.timezone.utc).timestamp() * 1000)
+    n = conn.execute("SELECT COUNT(*) FROM trades WHERE exit_time >= ? AND exit_time < ?",
+                     (start, start + DAY_MS)).fetchone()[0]
+    notify_report(report, _notifier(), n)
+    print(json.dumps(report, indent=1, default=str))
     return 0
 
 

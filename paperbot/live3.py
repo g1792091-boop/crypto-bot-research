@@ -31,8 +31,10 @@ from .aggregate import TF_MS, Aggregator
 from .binance import BinanceError, BinanceREST, RegionBlocked
 from .config import V3_SYMBOLS, v3_settings
 from .feed import LiveFeed
+from .health import DeadMan, sd_notify
 from .live import _notifier, _rest, load_brackets
-from .notify import CRITICAL, INFO, WARN, Notifier
+from .notify import CRITICAL, INFO, WARN, Digest, Notifier
+from .sigservice import SignalTimeout
 from .store3 import Store3
 
 MIN = 60_000
@@ -81,7 +83,8 @@ def fetch_5m(rest: BinanceREST, symbol: str, start: int, end: int, pause: float 
 class Runner3:
     def __init__(self, book: AccountBook, service, store: Store3, notifier: Notifier,
                  trade_symbols, now_ms: Callable[[], int], prices: Callable[[], dict],
-                 skip_before: Optional[int] = None):
+                 skip_before: Optional[int] = None, deadman: Optional[DeadMan] = None,
+                 digest: Optional[Digest] = None):
         self.book = book
         self.service = service
         self.store = store
@@ -92,6 +95,9 @@ class Runner3:
         self.skip_before = skip_before  # minutes already processed before a restart
         self.agg = Aggregator(["5m"])
         self.steps = 0
+        self.deadman = deadman
+        self.digest = digest
+        self.signal_timeouts = 0
 
     def process(self, steps) -> None:
         for ts, bars, funding in steps:
@@ -105,17 +111,40 @@ class Runner3:
             boundary = ts + MIN
             if boundary % FIVE == 0:
                 self._signals(boundary)
+                sd_notify("WATCHDOG=1")  # a long catch-up after a restart is progress, not a hang
             self.steps += 1
-        self.store.put_state("heartbeat", self.now_ms(), {"steps": self.steps,
-                                                           "last_step": self.book.last_ts})
+        now = self.now_ms()
+        self.store.put_state("heartbeat", now, {"steps": self.steps, "last_step": self.book.last_ts})
+        self._health(now)
         self.store.commit()
+
+    def _health(self, now: int) -> None:
+        last = self.book.last_ts
+        ping = self.deadman.beat(now, last) if self.deadman else None
+        if self.digest is not None:
+            self.digest.flush(now)
+        self.store.put_state("health", now, {
+            "last_bar": last, "lag_ms": None if last is None else now - (last + MIN),
+            "signal_timeouts": self.signal_timeouts,
+            "pool_restarts": getattr(self.service, "pool_restarts", 0),
+            "deadman": None if self.deadman is None else {
+                "last_ping": self.deadman.last_ping, "failures": self.deadman.failures, "sent": ping},
+            "digest_pending": 0 if self.digest is None else len(self.digest.items)})
 
     def _signals(self, boundary: int) -> None:
         if not self.service.complete(boundary):
             self.store.alert(self.now_ms(), WARN, f"5m history incomplete at {boundary}; signals skipped")
             return
-        for tf in self.service.due(boundary):
-            rows, subs, reports = self.service.compute(boundary, tf, self.now_ms, self.prices)
+        due = self.service.due(boundary)
+        for k, tf in enumerate(due):
+            try:
+                rows, subs, reports = self.service.compute(boundary, tf, self.now_ms, self.prices)
+            except SignalTimeout as exc:
+                self.signal_timeouts += 1
+                text = f"{exc}; signals skipped at {boundary} for {', '.join(due[k:])}"
+                self.store.alert(self.now_ms(), WARN, text)
+                self.notifier.send(WARN, text)
+                break
             self.store.log_signals(rows)
             for r in reports:
                 for e in r.get("errors", []):
@@ -140,7 +169,8 @@ def cmd_run(args) -> int:
     brackets, src = load_brackets(rest, syms, args.brackets, args.allow_example_brackets)
     specs = rest.exchange_info(syms)
     store = Store3(args.db)
-    book = AccountBook(settings, brackets, store, notifier, specs)
+    digest = Digest(notifier)
+    book = AccountBook(settings, brackets, store, notifier, specs, digest=digest)
     service = SignalService(syms, RECORD_ONLY, random_rates(), procs=args.procs)
     restored = book.load()
     now = rest.server_time()
@@ -154,6 +184,7 @@ def cmd_run(args) -> int:
     hist_from = start - max(service.windows.values()) * FIVE - FIVE
     for s in service.symbols:
         service.bootstrap(s, fetch_5m(rest, s, hist_from, start))
+        sd_notify("WATCHDOG=1")  # bootstrap takes minutes; tell systemd it is progressing
     store.put_state("run", now, {"settings": settings.version, "taker_fee": settings.taker_fee,
                                  "brackets": src, "accounts": len(book.engines), "restored": restored,
                                  "resume_from": resume, "feed_start": start})
@@ -164,9 +195,12 @@ def cmd_run(args) -> int:
                     on_event=lambda lvl, txt: (store.alert(int(time.time() * 1000), lvl, txt),
                                                notifier.send(lvl, txt) if lvl != INFO else None))
     runner = Runner3(book, service, store, notifier, syms, lambda: int(time.time() * 1000) + feed.skew_ms,
-                     lambda: book_prices(rest, syms), skip_before=resume)
+                     lambda: book_prices(rest, syms), skip_before=resume,
+                     deadman=DeadMan(os.environ.get("DEADMAN_URL")), digest=digest)
+    sd_notify("READY=1")
     try:
         while args.max_polls is None or args.max_polls > 0:
+            sd_notify("WATCHDOG=1")
             try:
                 runner.process(feed.poll())
             except RegionBlocked as exc:
@@ -178,6 +212,7 @@ def cmd_run(args) -> int:
                 args.max_polls -= 1
             time.sleep(args.poll)
     finally:
+        digest.flush(int(time.time() * 1000), force=True)
         service.close()
         store.close()
     return 0

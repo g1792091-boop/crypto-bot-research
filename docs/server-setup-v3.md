@@ -49,6 +49,15 @@ sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.live check
   `BINANCE_API_KEY=`, `BINANCE_API_SECRET=` 뒤에 붙여 넣고 저장합니다. 텔레그램도 같은 파일에 넣습니다.
 - 다시 `check`를 돌려 레버리지 구간 줄이 `[OK]`인지 봅니다.
 
+## 4-1. 봇 멈춤 알림 (서버 밖에서 감시)
+서버가 꺼지거나 봇이 멈추면 봇 스스로는 알릴 수 없습니다. 그래서 서버 밖 감시 서비스를 씁니다.
+1. https://healthchecks.io 무료 계정을 만들고 **Add Check**를 누릅니다. Period **1 minute**, Grace **5 minutes**로 설정합니다.
+2. **Integrations**에서 두 분의 폰(텔레그램, 앱 푸시 또는 이메일)을 연결합니다.
+3. 체크 주소(`https://hc-ping.com/...`)를 `/etc/paperbot/live.env`의 `DEADMAN_URL=` 뒤에 넣습니다.
+- 봇은 **새 1분봉을 정상 처리하고 있을 때만** 1분마다 신호를 보냅니다. 서버 꺼짐, 봇 멈춤, 바이낸스 데이터 끊김 중 무엇이든 5분 넘게 이어지면 두 분 폰이 울립니다.
+- 봇이 응답 없이 10분 멈추면 서버가 봇을 자동으로 재시작합니다 (systemd watchdog).
+- 텔레그램: `TELEGRAM_CHAT_WARN`, `TELEGRAM_CHAT_INFO`를 비워두면 CRITICAL 채팅방으로 갑니다. 강제청산·재계산 불일치는 바로 울리고, 파산·낙폭은 1시간에 한 번 묶어서 **무음**으로, 매일 점검 요약도 무음으로 옵니다.
+
 ## 5. 대시보드 비밀번호
 ```bash
 sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.dash hash   # 12자 이상 비밀번호 두 번 입력

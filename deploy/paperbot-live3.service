@@ -14,6 +14,10 @@ EnvironmentFile=/etc/paperbot/live.env
 ExecStart=/opt/paperbot/venv/bin/python -m paperbot.live3 run --db /var/lib/paperbot/paper3.db --procs 4
 Restart=always
 RestartSec=15
+# The runner sends WATCHDOG=1 every poll; if the loop hangs for 10 minutes systemd restarts it.
+# Data outages are reported by the external dead-man check (DEADMAN_URL), not by restarts.
+NotifyAccess=main
+WatchdogSec=600
 TimeoutStopSec=60
 Nice=5
 

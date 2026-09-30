@@ -17,7 +17,7 @@ from .config import Settings
 from .engine import PaperEngine, engine_state, restore_engine
 from .margin import Brackets
 from .models import Bar, Signal
-from .notify import CRITICAL, NullNotifier, Notifier
+from .notify import CRITICAL, WARN, Digest, NullNotifier, Notifier
 from .store3 import Store3
 
 STATE_KEY = "accounts"
@@ -34,23 +34,28 @@ def account_id(strategy: str, timeframe: str) -> str:
 
 
 class _StoreNotifier:
-    """Per-account messages go to the store; only CRITICAL ones (liquidation,
-    operator action) are forwarded, so 195 accounts do not flood Telegram."""
+    """Per-account messages go to the store. CRITICAL ones (liquidation, operator
+    action) are forwarded at once; WARN ones (bust, drawdown levels) go to the
+    digest, which sends them as one silent message per hour, so 195 accounts do
+    not flood Telegram. INFO stays on the dashboard."""
 
-    def __init__(self, store: Store3, forward: Notifier, clock):
-        self.store, self.forward, self.clock = store, forward, clock
+    def __init__(self, store: Store3, forward: Notifier, clock, digest: Optional[Digest] = None):
+        self.store, self.forward, self.clock, self.digest = store, forward, clock, digest
 
     def send(self, level: str, text: str) -> None:
         self.store.alert(self.clock(), level, text)
         if level == CRITICAL:
             self.forward.send(level, text)
+        elif level == WARN and self.digest is not None:
+            self.digest.add(text)
 
 
 class AccountBook:
     def __init__(self, settings: Settings, brackets: dict[str, Brackets], store: Store3,
                  notifier: Optional[Notifier] = None, specs: Optional[dict] = None,
-                 equity_every_ms: int = 300_000, save_every: int = 1):
+                 equity_every_ms: int = 300_000, save_every: int = 1, digest: Optional[Digest] = None):
         self.s = settings
+        self.digest = digest
         self.brackets = brackets
         self.store = store
         self.notifier = notifier or NullNotifier()
@@ -72,7 +77,7 @@ class AccountBook:
             self.store.outcome(aid, out)
 
         return PaperEngine(self.s, self.brackets, notifier=_StoreNotifier(self.store, self.notifier,
-                                                                        lambda: self._now),
+                                                                        lambda: self._now, self.digest),
                            symbol_specs=self.specs, on_trade=on_trade, on_outcome=on_outcome,
                            book=aid)
 
