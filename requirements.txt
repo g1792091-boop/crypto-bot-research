@@ -3,3 +3,5 @@ numpy>=1.26
 pandas>=2,<3
 scipy>=1.11
 pytest>=8
+# Liquidation stream recorder (paperbot/liqstream.py)
+websocket-client>=1.6

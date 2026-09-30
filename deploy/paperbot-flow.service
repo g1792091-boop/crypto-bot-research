@@ -1,0 +1,16 @@
+# Order-flow archive: open interest, long/short ratios, taker flow, premium index.
+# Binance keeps these statistics for 30 days only, so the timer runs every hour.
+# Installed by docs/orderflow-collection.md.
+[Unit]
+Description=paperbot order-flow archive sync
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=paperbot
+WorkingDirectory=/opt/crypto-bot-research
+# Telegram settings for alerts; public market data needs no API key.
+EnvironmentFile=/etc/paperbot/live.env
+ExecStart=/usr/bin/python3 -m paperbot.flow sync --flow /var/lib/paperbot/flow.db
+TimeoutStartSec=1h

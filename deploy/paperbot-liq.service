@@ -1,0 +1,20 @@
+# Liquidation stream recorder (all symbols, public WebSocket, no API key).
+# Installed by docs/orderflow-collection.md.
+[Unit]
+Description=paperbot liquidation stream recorder
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=paperbot
+WorkingDirectory=/opt/crypto-bot-research
+EnvironmentFile=/etc/paperbot/live.env
+ExecStart=/usr/bin/python3 -m paperbot.liqstream run --db /var/lib/paperbot/liq.db
+Restart=always
+RestartSec=10
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

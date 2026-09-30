@@ -147,6 +147,32 @@ class BinanceREST:
             p["startTime"] = start_time
         return self._get("/fapi/v1/fundingRate", p)
 
+    # Order-flow statistics. The exchange keeps only the latest 30 days of these.
+    FLOW_PATHS = {
+        "oi": "/futures/data/openInterestHist",
+        "ls_global": "/futures/data/globalLongShortAccountRatio",
+        "ls_top_account": "/futures/data/topLongShortAccountRatio",
+        "ls_top_position": "/futures/data/topLongShortPositionRatio",
+        "taker": "/futures/data/takerlongshortRatio",
+    }
+
+    def flow_stats(self, dataset: str, symbol: str, period: str = "5m",
+                   start_time: Optional[int] = None, end_time: Optional[int] = None,
+                   limit: int = 500) -> list[dict]:
+        p = {"symbol": symbol, "period": period, "limit": limit}
+        if start_time is not None:
+            p["startTime"] = start_time
+        if end_time is not None:
+            p["endTime"] = end_time
+        return self._get(self.FLOW_PATHS[dataset], p)
+
+    def premium_klines(self, symbol: str, interval: str, start_time: Optional[int] = None,
+                       limit: int = 1500) -> list[list]:
+        p = {"symbol": symbol, "interval": interval, "limit": limit}
+        if start_time is not None:
+            p["startTime"] = start_time
+        return self._get("/fapi/v1/premiumIndexKlines", p)
+
     def book_tickers(self) -> list[dict]:
         """Best bid/ask for every symbol in one request (weight 5)."""
         return self._get("/fapi/v1/ticker/bookTicker")
