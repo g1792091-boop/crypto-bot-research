@@ -34,7 +34,11 @@ from typing import Optional
 DAY_MS = 86_400_000
 INITIAL = 1000.0
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-CARDS = os.path.join(ROOT, "research", "strategy_profiles", "out", "cards.json")
+# Strategy profile cards: built on Binance USDT-M futures bars (the venue the bot trades,
+# research/binance_data/RESULTS_BINANCE.md); the original spot-aggregate cards are the fallback.
+CARDS_BINANCE = os.path.join(ROOT, "research", "strategy_profiles", "out_binance", "cards.json")
+CARDS_SPOT = os.path.join(ROOT, "research", "strategy_profiles", "out", "cards.json")
+CARDS = CARDS_BINANCE if os.path.exists(CARDS_BINANCE) else CARDS_SPOT
 TRADE_TFS = ("5m", "15m", "30m", "1h", "4h")
 
 
@@ -192,6 +196,7 @@ def profile_card(strategy: str, path: str = CARDS) -> Optional[dict]:
                 return {**c, "rows": [{k: (_r(v) if isinstance(v, float) else v) for k, v in r.items()}
                                       for r in c["rows"]],
                         "trend_share": _r(c["trend_share"], 3),
+                        "data_source": "binance_futures" if "out_binance" in path else "spot_aggregate",
                         "note": "5-year backtest character, same rules; describes style, not proven skill"}
     return None
 

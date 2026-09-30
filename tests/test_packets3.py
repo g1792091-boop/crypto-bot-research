@@ -26,3 +26,9 @@ def test_committed_cards_cover_all_36_strategies():
     for name in STRATEGY_KO:
         c = profile_card(name)
         assert c is not None and len(c["rows"]) == 5, name
+
+
+def test_default_cards_are_the_binance_futures_version():
+    from paperbot.agents.packets3 import CARDS, CARDS_BINANCE
+    assert CARDS == CARDS_BINANCE
+    assert profile_card("N17_KC_RSI")["data_source"] == "binance_futures"

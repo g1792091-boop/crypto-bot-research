@@ -185,7 +185,8 @@ function renderProfile() {
       <td>${fmt(r.median_hold_hours, 1)}시간</td><td>${r.lock_share == null ? "—" : Math.round(r.lock_share * 100) + "%"}</td>
       <td class="mono">${more}</td><td class="mono">${acct(r.account_is, r.bust_is)} → ${acct(r.account_cf, r.bust_cf)}</td></tr>`;
   }).join("");
-  el.innerHTML = `<div class="sum">과거 5년, 같은 규칙: <b>${esc(p.style || "신호 부족")}</b> · ${esc(p.hold)}` +
+  const src = p.data_source === "binance_futures" ? "바이낸스 선물 데이터" : "여러 거래소 합산 현물 데이터";
+  el.innerHTML = `<div class="sum">과거 5년(${src}), 같은 규칙: <b>${esc(p.style || "신호 부족")}</b> · ${esc(p.hold)}` +
     `${p.least_bad_tf ? ` · 가장 덜 나쁜 봉 <b>${TF_KO[p.least_bad_tf]}</b>` : ""}${p.rare ? ' · <span class="accent">신호가 너무 드묾</span>' : ""}<br>` +
     `<span class="muted">성격 설명일 뿐 실력 증거가 아닙니다. 평균 ROE가 비용(40배 왕복 약 −5.6%) 근처면 방향을 맞히는 힘이 0에 가깝다는 뜻입니다.</span></div>` +
     `<table><thead><tr><th class="l">봉</th><th>하루 신호</th><th>거래당 ROE</th><th>승률</th><th>보유</th><th>잠금 청산</th>` +

@@ -12771,14 +12771,14 @@
     },
     "account": {
      "is": {
-      "final": 9.368226337514416,
+      "final": 9.724790024493045,
       "bust": true,
-      "trades": 371
+      "trades": 219
      },
      "cf": {
-      "final": 8.867417926142055,
+      "final": 9.994305892261572,
       "bust": true,
-      "trades": 118
+      "trades": 233
      }
     },
     "labels": {
@@ -12841,14 +12841,14 @@
     },
     "account": {
      "is": {
-      "final": 9.499026353459543,
+      "final": 9.422034870318386,
       "bust": true,
-      "trades": 270
+      "trades": 345
      },
      "cf": {
-      "final": 8.841231052998976,
+      "final": 9.888489210948272,
       "bust": true,
-      "trades": 293
+      "trades": 313
      }
     },
     "labels": {
@@ -12911,14 +12911,14 @@
     },
     "account": {
      "is": {
-      "final": 9.790492279943289,
+      "final": 9.497338843350052,
       "bust": true,
-      "trades": 395
+      "trades": 347
      },
      "cf": {
-      "final": 9.451801404709034,
+      "final": 9.94100556661519,
       "bust": true,
-      "trades": 637
+      "trades": 343
      }
     },
     "labels": {
@@ -12981,14 +12981,14 @@
     },
     "account": {
      "is": {
-      "final": 9.89954574233976,
+      "final": 9.455542762851168,
       "bust": true,
-      "trades": 484
+      "trades": 545
      },
      "cf": {
-      "final": 9.728077891004848,
+      "final": 9.39725894313629,
       "bust": true,
-      "trades": 306
+      "trades": 504
      }
     },
     "labels": {

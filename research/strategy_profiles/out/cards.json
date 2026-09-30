@@ -3547,8 +3547,8 @@
      "hold_more_16": -0.010112812742590904,
      "hold_more_16_t": -2.660837805092421,
      "hold_verdict": "빨리 나오는 게 맞음",
-     "account_is": 9.368226337514416,
-     "account_cf": 8.867417926142055,
+     "account_is": 9.724790024493045,
+     "account_cf": 9.994305892261572,
      "bust_is": true,
      "bust_cf": true
     },
@@ -3565,8 +3565,8 @@
      "hold_more_16": 0.0017009649891406298,
      "hold_more_16_t": 0.3073537993291933,
      "hold_verdict": "차이 뚜렷하지 않음",
-     "account_is": 9.499026353459543,
-     "account_cf": 8.841231052998976,
+     "account_is": 9.422034870318386,
+     "account_cf": 9.888489210948272,
      "bust_is": true,
      "bust_cf": true
     },
@@ -3583,8 +3583,8 @@
      "hold_more_16": 0.014863137155771255,
      "hold_more_16_t": 1.9990088979375695,
      "hold_verdict": "차이 뚜렷하지 않음",
-     "account_is": 9.790492279943289,
-     "account_cf": 9.451801404709034,
+     "account_is": 9.497338843350052,
+     "account_cf": 9.94100556661519,
      "bust_is": true,
      "bust_cf": true
     },
@@ -3601,8 +3601,8 @@
      "hold_more_16": 0.02870405837893486,
      "hold_more_16_t": 2.247054735923747,
      "hold_verdict": "더 들고 갔으면 나았음",
-     "account_is": 9.89954574233976,
-     "account_cf": 9.728077891004848,
+     "account_is": 9.455542762851168,
+     "account_cf": 9.39725894313629,
      "bust_is": true,
      "bust_cf": true
     },
