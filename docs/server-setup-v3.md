@@ -79,7 +79,7 @@ sudo ufw allow in on tailscale0
 
 ## 7. 시작
 ```bash
-sudo systemctl enable --now paperbot-live3 paperbot-dash paperbot-daily3.timer paperbot-backup.timer
+sudo systemctl enable --now paperbot-live3 paperbot-dash paperbot-liq paperbot-daily3.timer paperbot-backup.timer
 sudo journalctl -u paperbot-live3 -f          # 첫 몇 분 로그 보기 (Ctrl+C로 나가기)
 sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.live3 status --db /var/lib/paperbot/paper3.db
 ```
@@ -91,6 +91,7 @@ sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.live3 status --db /va
 |---|---|
 | 재시작 | `sudo systemctl restart paperbot-live3`. 계좌 상태는 저장돼 있어 이어서 돕니다. 꺼져 있던 동안의 신호는 "늦음"으로 기록만 됩니다 |
 | 매일 점검 | 09:20(한국 시간)에 자동. paper와 재계산 일치, 지정가·놓친 신호 그림자 기록, 데이터 품질 |
+| 청산 기록 | `paperbot-liq`가 바이낸스 강제청산 흐름을 `liq.db`에 모읍니다(공개 자료, 키 필요 없음). 바이낸스는 청산의 과거 자료를 주지 않아서 첫날부터 켜 둡니다. 확인: `sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.liqstream status --db /var/lib/paperbot/liq.db` |
 | 백업 | 매일 08:40(한국 시간) `/var/backups/paperbot/날짜/`, 14일 보관 |
 | 코드 업데이트 | `cd /root/crypto-bot-research && git pull && sudo bash deploy/install.sh`. 배포는 **한 분만** 합니다. 커밋 안 된 수정이 있으면 멈추고, 돌던 서비스는 교체하는 순간만 멈췄다가 다시 켜집니다. 이전 코드는 `/opt/crypto-bot-research.old`에 남습니다. 봇은 켜질 때마다 코드 버전·설정을 기록하고, 체결·청산·사이즈 코드가 바뀌었으면 알림을 보냅니다 (규칙상 그 기간을 다시 셈) |
 | 비밀번호 로그인 끄기 (권장) | SSH 키를 등록한 뒤 `/etc/ssh/sshd_config`에서 `PasswordAuthentication no`. 키 등록 전에 끄면 들어갈 수 없게 되니, Vultr 웹 콘솔이 되는지 먼저 확인 |

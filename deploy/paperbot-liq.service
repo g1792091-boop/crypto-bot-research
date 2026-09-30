@@ -1,5 +1,6 @@
-# Liquidation stream recorder (all symbols, public WebSocket, no API key).
-# Installed by docs/orderflow-collection.md.
+# Liquidation stream recorder (all symbols, public WebSocket, no API key): liq.db.
+# Binance keeps no public history of liquidations, so what is not recorded here is lost for good.
+# Installed by deploy/install.sh (docs/server-setup-v3.md); one writer: this process.
 [Unit]
 Description=paperbot liquidation stream recorder
 After=network-online.target
@@ -10,11 +11,17 @@ StartLimitIntervalSec=0
 Type=simple
 User=paperbot
 WorkingDirectory=/opt/crypto-bot-research
-EnvironmentFile=/etc/paperbot/live.env
-ExecStart=/usr/bin/python3 -m paperbot.liqstream run --db /var/lib/paperbot/liq.db
+ExecStart=/opt/paperbot/venv/bin/python -m paperbot.liqstream run --db /var/lib/paperbot/liq.db
 Restart=always
 RestartSec=10
 TimeoutStopSec=30
+Nice=10
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/paperbot
+# public data only: no key or token is needed, so none is readable
+InaccessiblePaths=-/etc/paperbot
 
 [Install]
 WantedBy=multi-user.target

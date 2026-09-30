@@ -6,7 +6,8 @@
 # command used before copies 100 pages per step and starts over whenever another process commits
 # between two steps, so on a large paper3.db it never finished and the databases after it were never
 # copied. The small databases go first: agents3.db (the hypothesis ledger behind the gate's test count)
-# and inbox.db (the owners' posts and approvals), then daily3.db and paper3.db. The backup writes none
+# and inbox.db (the owners' posts and approvals), liq.db (liquidations: no public history, a lost day is
+# lost for good), then daily3.db and paper3.db. The backup writes none
 # of them: a read-only connection never checkpoints a left-over WAL into the database file.
 # A copy is written as <name>.db.part and renamed when complete, so a failed copy never looks whole;
 # a second run on the same day keeps that day's good copy until the new one has replaced it (the
@@ -18,7 +19,7 @@ d="$out/$(date -u +%Y%m%d)"
 mkdir -p "$d" || exit 1
 find "$out" -name '*.db.part' -type f -delete
 fail=0
-for f in agents3 inbox daily3 paper3; do
+for f in agents3 inbox liq daily3 paper3; do
   src="$lib/$f.db"
   [ -f "$src" ] || continue
   rm -f "$d/$f.db.part"
