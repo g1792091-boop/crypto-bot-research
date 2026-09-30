@@ -1,0 +1,9261 @@
+{
+ "source": "research/entry_study (PREREG_ENTRY.md; RESULTS_ENTRY.md, RESULTS_ENTRY_A.md, RESULTS_ENTRY_BC.md)",
+ "data": "5-year outcomes, periods 2021-08..2024-06 / 2024-07..2026-09 / 2020-01..2021-07",
+ "totals": {
+  "support_resistance": 290,
+  "entry_strength": 410,
+  "parameters": 1680
+ },
+ "conclusion_ko": "사전 등록한 세 연구(지지·저항 290건, 진입 수치 410건, 파라미터 변형 1,680건)를 같은 5년 자료로 이미 했고, 세 기간을 모두 통과한 효과는 없었다(지지·저항 후보 2건은 무작위 진입에서도 같은 효과: 시장 전체의 성질). 파라미터는 뾰족한 곳이 없고, 세 기간 플러스 변형 수도 '파라미터가 상관없다'는 가정의 기대치와 같다. 그래서 이 숫자들은 설명 자료이고, 같은 것을 다시 시험해도 새 정보가 아니다.",
+ "strategies": {
+  "DOGE": {
+   "strategy": "DOGE",
+   "support_resistance": {
+    "tests": 8,
+    "passed_all3": [],
+    "features": [
+     "level_before_lock",
+     "support_before_stop"
+    ]
+   },
+   "entry_strength": {
+    "tests": 12,
+    "passed_all3": 0,
+    "features": [
+     {
+      "tf": "5m",
+      "feature": "ema_spread_pct",
+      "label_ko": "빠른·느린 EMA 간격",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0167,
+       -0.0041,
+       0.0414
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "5m",
+      "feature": "k_depth",
+      "label_ko": "K가 45/55를 넘은 깊이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0033,
+       0.0274,
+       0.0204
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "5m",
+      "feature": "rsi_margin",
+      "label_ko": "RSI가 52/48을 넘은 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0003,
+       -0.0108,
+       0.018
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "ema_spread_pct",
+      "label_ko": "빠른·느린 EMA 간격",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0043,
+       -0.0018,
+       0.0302
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "k_depth",
+      "label_ko": "K가 45/55를 넘은 깊이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0153,
+       0.0008,
+       0.0019
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "15m",
+      "feature": "rsi_margin",
+      "label_ko": "RSI가 52/48을 넘은 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0341,
+       -0.0141,
+       0.0231
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "ema_spread_pct",
+      "label_ko": "빠른·느린 EMA 간격",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0254,
+       0.0088,
+       0.0064
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "30m",
+      "feature": "k_depth",
+      "label_ko": "K가 45/55를 넘은 깊이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0176,
+       -0.0168,
+       -0.0032
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "rsi_margin",
+      "label_ko": "RSI가 52/48을 넘은 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0047,
+       -0.0124,
+       -0.0279
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "ema_spread_pct",
+      "label_ko": "빠른·느린 EMA 간격",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0016,
+       0.0287,
+       0.0426
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "k_depth",
+      "label_ko": "K가 45/55를 넘은 깊이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0047,
+       -0.0068,
+       -0.0142
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "1h",
+      "feature": "rsi_margin",
+      "label_ko": "RSI가 52/48을 넘은 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.009,
+       -0.0077,
+       -0.0334
+      ],
+      "same_sign_all3": false
+     }
+    ]
+   },
+   "parameters": {
+    "variants": 48,
+    "adopted": 0,
+    "params": [
+     {
+      "tf": "15m",
+      "param": "ema_slow",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "stoch_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "spread_min",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "chop_max",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "ema_slow",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "stoch_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "spread_min",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "chop_max",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "ema_slow",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "stoch_len",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "spread_min",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "chop_max",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     }
+    ]
+   },
+   "watch": []
+  },
+  "N01_ST_EMA": {
+   "strategy": "N01_ST_EMA",
+   "support_resistance": {
+    "tests": 10,
+    "passed_all3": [],
+    "features": [
+     "level_before_lock",
+     "support_before_stop"
+    ]
+   },
+   "entry_strength": {
+    "tests": 15,
+    "passed_all3": 0,
+    "features": [
+     {
+      "tf": "5m",
+      "feature": "ema_gap_atr",
+      "label_ko": "EMA5·20 벌어진 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0049,
+       0.0068,
+       -0.0043
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "5m",
+      "feature": "st_line_dist_atr",
+      "label_ko": "슈퍼트렌드선과의 거리",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0021,
+       -0.0065,
+       -0.0159
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "5m",
+      "feature": "st_age_bars",
+      "label_ko": "슈퍼트렌드 전환 후 봉 수",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0026,
+       -0.0284,
+       0.0216
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "ema_gap_atr",
+      "label_ko": "EMA5·20 벌어진 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.004,
+       0.0068,
+       0.0083
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "15m",
+      "feature": "st_line_dist_atr",
+      "label_ko": "슈퍼트렌드선과의 거리",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0047,
+       -0.0003,
+       -0.0076
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "st_age_bars",
+      "label_ko": "슈퍼트렌드 전환 후 봉 수",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0153,
+       0.0058,
+       0.0211
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "ema_gap_atr",
+      "label_ko": "EMA5·20 벌어진 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0104,
+       0.017,
+       -0.0185
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "st_line_dist_atr",
+      "label_ko": "슈퍼트렌드선과의 거리",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0181,
+       0.0206,
+       -0.0295
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "st_age_bars",
+      "label_ko": "슈퍼트렌드 전환 후 봉 수",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0034,
+       0.004,
+       0.0375
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "ema_gap_atr",
+      "label_ko": "EMA5·20 벌어진 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0186,
+       -0.0119,
+       0.024
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "st_line_dist_atr",
+      "label_ko": "슈퍼트렌드선과의 거리",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0451,
+       0.0087,
+       0.0021
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "st_age_bars",
+      "label_ko": "슈퍼트렌드 전환 후 봉 수",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0012,
+       -0.0418,
+       -0.0096
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "4h",
+      "feature": "ema_gap_atr",
+      "label_ko": "EMA5·20 벌어진 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0451,
+       0.0712,
+       -0.0075
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "4h",
+      "feature": "st_line_dist_atr",
+      "label_ko": "슈퍼트렌드선과의 거리",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0066,
+       -0.0327,
+       0.0373
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "4h",
+      "feature": "st_age_bars",
+      "label_ko": "슈퍼트렌드 전환 후 봉 수",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.1028,
+       0.0161,
+       -0.1309
+      ],
+      "same_sign_all3": false
+     }
+    ]
+   },
+   "parameters": {
+    "variants": 48,
+    "adopted": 0,
+    "params": [
+     {
+      "tf": "15m",
+      "param": "ema_fast",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "ema_slow",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "st_atr_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "st_mult",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "ema_fast",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "ema_slow",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "st_atr_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "st_mult",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "ema_fast",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "ema_slow",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "st_atr_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "st_mult",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     }
+    ]
+   },
+   "watch": []
+  },
+  "N02_ST_KST": {
+   "strategy": "N02_ST_KST",
+   "support_resistance": {
+    "tests": 10,
+    "passed_all3": [],
+    "features": [
+     "level_before_lock",
+     "support_before_stop"
+    ]
+   },
+   "entry_strength": {
+    "tests": 10,
+    "passed_all3": 0,
+    "features": [
+     {
+      "tf": "5m",
+      "feature": "kst_gap_atr",
+      "label_ko": "KST 교차 크기(ATR 대비)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0045,
+       0.021,
+       -0.0008
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "5m",
+      "feature": "st_dist_atr",
+      "label_ko": "슈퍼트렌드선에서 거리(ATR)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0158,
+       -0.0097,
+       -0.0172
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "15m",
+      "feature": "kst_gap_atr",
+      "label_ko": "KST 교차 크기(ATR 대비)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.009,
+       0.0036,
+       -0.0028
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "st_dist_atr",
+      "label_ko": "슈퍼트렌드선에서 거리(ATR)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0054,
+       0.0065,
+       -0.0211
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "kst_gap_atr",
+      "label_ko": "KST 교차 크기(ATR 대비)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0051,
+       0.0084,
+       -0.0196
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "st_dist_atr",
+      "label_ko": "슈퍼트렌드선에서 거리(ATR)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.017,
+       0.01,
+       -0.0143
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "kst_gap_atr",
+      "label_ko": "KST 교차 크기(ATR 대비)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0326,
+       0.0465,
+       0.0617
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "1h",
+      "feature": "st_dist_atr",
+      "label_ko": "슈퍼트렌드선에서 거리(ATR)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0265,
+       -0.0052,
+       -0.0015
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "4h",
+      "feature": "kst_gap_atr",
+      "label_ko": "KST 교차 크기(ATR 대비)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0324,
+       -0.0527,
+       0.0326
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "4h",
+      "feature": "st_dist_atr",
+      "label_ko": "슈퍼트렌드선에서 거리(ATR)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0981,
+       0.0874,
+       0.0678
+      ],
+      "same_sign_all3": true
+     }
+    ]
+   },
+   "parameters": {
+    "variants": 48,
+    "adopted": 0,
+    "params": [
+     {
+      "tf": "15m",
+      "param": "st_atr_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "st_mult",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "kst_roc_lens",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "kst_signal_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "st_atr_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "st_mult",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "kst_roc_lens",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "kst_signal_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "st_atr_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "st_mult",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "kst_roc_lens",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "kst_signal_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     }
+    ]
+   },
+   "watch": []
+  },
+  "N03_ADX_GC": {
+   "strategy": "N03_ADX_GC",
+   "support_resistance": {
+    "tests": 4,
+    "passed_all3": [],
+    "features": [
+     "level_before_lock",
+     "support_before_stop"
+    ]
+   },
+   "entry_strength": {
+    "tests": 6,
+    "passed_all3": 0,
+    "features": [
+     {
+      "tf": "5m",
+      "feature": "adx_excess",
+      "label_ko": "ADX 25 초과분",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0082,
+       -0.0016,
+       -0.0146
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "5m",
+      "feature": "ema_gap_atr",
+      "label_ko": "EMA 50·200 간격(ATR)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0031,
+       0.0099,
+       -0.0245
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "5m",
+      "feature": "cross_lag_bars",
+      "label_ko": "두 교차 사이 봉 수",
+      "higher_is_stronger": false,
+      "spearman_p1_p2_p3": [
+       -0.0219,
+       0.0028,
+       0.0435
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "adx_excess",
+      "label_ko": "ADX 25 초과분",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0049,
+       0.0531,
+       -0.0602
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "ema_gap_atr",
+      "label_ko": "EMA 50·200 간격(ATR)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0029,
+       -0.0554,
+       0.0411
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "cross_lag_bars",
+      "label_ko": "두 교차 사이 봉 수",
+      "higher_is_stronger": false,
+      "spearman_p1_p2_p3": [
+       -0.053,
+       0.0129,
+       0.1219
+      ],
+      "same_sign_all3": false
+     }
+    ]
+   },
+   "parameters": {
+    "variants": 48,
+    "adopted": 0,
+    "params": [
+     {
+      "tf": "15m",
+      "param": "ema_fast",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "ema_slow",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "adx_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "adx_level",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "ema_fast",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "ema_slow",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "adx_len",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "adx_level",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "ema_fast",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "ema_slow",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": [
+       {
+        "mult": 0.5,
+        "value": "100"
+       }
+      ]
+     },
+     {
+      "tf": "4h",
+      "param": "adx_len",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": [
+       {
+        "mult": 0.75,
+        "value": "11"
+       }
+      ]
+     },
+     {
+      "tf": "4h",
+      "param": "adx_level",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": [
+       {
+        "mult": 0.75,
+        "value": "18.75"
+       }
+      ]
+     }
+    ]
+   },
+   "watch": []
+  },
+  "N04_ST_KLINGER": {
+   "strategy": "N04_ST_KLINGER",
+   "support_resistance": {
+    "tests": 10,
+    "passed_all3": [
+     {
+      "tf": "5m",
+      "feature": "level_before_lock",
+      "note": "무작위 진입에서도 같은 효과(시장 전체의 성질)"
+     }
+    ],
+    "features": [
+     "level_before_lock",
+     "support_before_stop"
+    ]
+   },
+   "entry_strength": {
+    "tests": 10,
+    "passed_all3": 0,
+    "features": [
+     {
+      "tf": "5m",
+      "feature": "kvo_gap_vol",
+      "label_ko": "클링어 교차 폭(거래량 대비)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0007,
+       -0.0026,
+       0.0034
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "5m",
+      "feature": "st_dist_atr",
+      "label_ko": "슈퍼트렌드선에서 거리(ATR)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0107,
+       0.0037,
+       -0.0073
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "kvo_gap_vol",
+      "label_ko": "클링어 교차 폭(거래량 대비)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.002,
+       0.0131,
+       0.0088
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "15m",
+      "feature": "st_dist_atr",
+      "label_ko": "슈퍼트렌드선에서 거리(ATR)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0058,
+       0.0065,
+       -0.0134
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "kvo_gap_vol",
+      "label_ko": "클링어 교차 폭(거래량 대비)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0068,
+       0.0124,
+       -0.0018
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "st_dist_atr",
+      "label_ko": "슈퍼트렌드선에서 거리(ATR)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0114,
+       0.004,
+       -0.0091
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "kvo_gap_vol",
+      "label_ko": "클링어 교차 폭(거래량 대비)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.02,
+       0.0083,
+       -0.0004
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "st_dist_atr",
+      "label_ko": "슈퍼트렌드선에서 거리(ATR)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.018,
+       0.0137,
+       -0.0125
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "4h",
+      "feature": "kvo_gap_vol",
+      "label_ko": "클링어 교차 폭(거래량 대비)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0478,
+       -0.0023,
+       0.0057
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "4h",
+      "feature": "st_dist_atr",
+      "label_ko": "슈퍼트렌드선에서 거리(ATR)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0834,
+       -0.0103,
+       0.0008
+      ],
+      "same_sign_all3": false
+     }
+    ]
+   },
+   "parameters": {
+    "variants": 48,
+    "adopted": 0,
+    "params": [
+     {
+      "tf": "15m",
+      "param": "st_atr_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "st_mult",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "kvo_lens",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "kvo_signal_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "st_atr_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "st_mult",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "kvo_lens",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "kvo_signal_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "st_atr_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "st_mult",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "kvo_lens",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "kvo_signal_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     }
+    ]
+   },
+   "watch": []
+  },
+  "N05_PSAR_POC": {
+   "strategy": "N05_PSAR_POC",
+   "support_resistance": {
+    "tests": 8,
+    "passed_all3": [],
+    "features": [
+     "level_before_lock",
+     "support_before_stop"
+    ]
+   },
+   "entry_strength": {
+    "tests": 12,
+    "passed_all3": 0,
+    "features": [
+     {
+      "tf": "5m",
+      "feature": "pierce_depth",
+      "label_ko": "앞 봉 몸통 되돌린 비율",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0034,
+       0.0015,
+       -0.0217
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "5m",
+      "feature": "poc_bounce_atr",
+      "label_ko": "POC에서 튕긴 거리",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0142,
+       0.0117,
+       -0.0052
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "5m",
+      "feature": "sar_gap_atr",
+      "label_ko": "가격과 SAR 점 거리",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0045,
+       0.0294,
+       -0.0259
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "pierce_depth",
+      "label_ko": "앞 봉 몸통 되돌린 비율",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0178,
+       -0.0093,
+       -0.0089
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "15m",
+      "feature": "poc_bounce_atr",
+      "label_ko": "POC에서 튕긴 거리",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0285,
+       0.0055,
+       -0.0037
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "sar_gap_atr",
+      "label_ko": "가격과 SAR 점 거리",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0349,
+       0.0329,
+       0.0249
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "30m",
+      "feature": "pierce_depth",
+      "label_ko": "앞 봉 몸통 되돌린 비율",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.002,
+       -0.0067,
+       -0.0054
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "poc_bounce_atr",
+      "label_ko": "POC에서 튕긴 거리",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0177,
+       -0.0232,
+       -0.0054
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "sar_gap_atr",
+      "label_ko": "가격과 SAR 점 거리",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.014,
+       0.0464,
+       0.0397
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "1h",
+      "feature": "pierce_depth",
+      "label_ko": "앞 봉 몸통 되돌린 비율",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0194,
+       -0.0012,
+       0.009
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "poc_bounce_atr",
+      "label_ko": "POC에서 튕긴 거리",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0231,
+       -0.0423,
+       0.0295
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "sar_gap_atr",
+      "label_ko": "가격과 SAR 점 거리",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0081,
+       -0.0132,
+       0.101
+      ],
+      "same_sign_all3": false
+     }
+    ]
+   },
+   "parameters": {
+    "variants": 48,
+    "adopted": 0,
+    "params": [
+     {
+      "tf": "15m",
+      "param": "poc_lookback",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "poc_tol",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "pierce_frac",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "sar_af",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "poc_lookback",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "poc_tol",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "pierce_frac",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "sar_af",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "poc_lookback",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": [
+       {
+        "mult": 0.75,
+        "value": "75"
+       }
+      ]
+     },
+     {
+      "tf": "4h",
+      "param": "poc_tol",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "pierce_frac",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": [
+       {
+        "mult": 1.5,
+        "value": "0.75"
+       }
+      ]
+     },
+     {
+      "tf": "4h",
+      "param": "sar_af",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     }
+    ]
+   },
+   "watch": []
+  },
+  "N06_MACD_ORB": {
+   "strategy": "N06_MACD_ORB",
+   "support_resistance": {
+    "tests": 10,
+    "passed_all3": [],
+    "features": [
+     "level_before_lock",
+     "support_before_stop"
+    ]
+   },
+   "entry_strength": {
+    "tests": 15,
+    "passed_all3": 0,
+    "features": [
+     {
+      "tf": "5m",
+      "feature": "orb_break_atr",
+      "label_ko": "첫 봉 고저 돌파 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0014,
+       -0.0077,
+       -0.0358
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "5m",
+      "feature": "macd_line_atr",
+      "label_ko": "MACD선이 0에서 먼 정도",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0,
+       0.0091,
+       -0.0525
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "5m",
+      "feature": "macd_hist_atr",
+      "label_ko": "MACD 교차 크기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0082,
+       0.0394,
+       0.0166
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "15m",
+      "feature": "orb_break_atr",
+      "label_ko": "첫 봉 고저 돌파 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0177,
+       -0.0347,
+       -0.0144
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "macd_line_atr",
+      "label_ko": "MACD선이 0에서 먼 정도",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0066,
+       0.0012,
+       -0.0293
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "macd_hist_atr",
+      "label_ko": "MACD 교차 크기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0065,
+       0.0486,
+       0.0258
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "orb_break_atr",
+      "label_ko": "첫 봉 고저 돌파 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0256,
+       0.0256,
+       -0.0022
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "macd_line_atr",
+      "label_ko": "MACD선이 0에서 먼 정도",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0046,
+       -0.0026,
+       -0.0308
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "30m",
+      "feature": "macd_hist_atr",
+      "label_ko": "MACD 교차 크기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0362,
+       -0.0187,
+       0.0283
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "orb_break_atr",
+      "label_ko": "첫 봉 고저 돌파 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0083,
+       0.0219,
+       0.0105
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "macd_line_atr",
+      "label_ko": "MACD선이 0에서 먼 정도",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0546,
+       -0.0233,
+       -0.0208
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "1h",
+      "feature": "macd_hist_atr",
+      "label_ko": "MACD 교차 크기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0018,
+       0.0006,
+       0.0067
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "4h",
+      "feature": "orb_break_atr",
+      "label_ko": "첫 봉 고저 돌파 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0354,
+       -0.0179,
+       0.3481
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "4h",
+      "feature": "macd_line_atr",
+      "label_ko": "MACD선이 0에서 먼 정도",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0203,
+       -0.113,
+       0.0883
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "4h",
+      "feature": "macd_hist_atr",
+      "label_ko": "MACD 교차 크기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.1402,
+       0.1767,
+       0.2455
+      ],
+      "same_sign_all3": true
+     }
+    ]
+   },
+   "parameters": {
+    "variants": 48,
+    "adopted": 0,
+    "params": [
+     {
+      "tf": "15m",
+      "param": "macd_fast",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "macd_slow",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "macd_signal",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "ext_cap",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "macd_fast",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "macd_slow",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "macd_signal",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "ext_cap",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "macd_fast",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "macd_slow",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "macd_signal",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "ext_cap",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     }
+    ]
+   },
+   "watch": []
+  },
+  "N07_ICHI_CMO": {
+   "strategy": "N07_ICHI_CMO",
+   "support_resistance": {
+    "tests": 10,
+    "passed_all3": [],
+    "features": [
+     "level_before_lock",
+     "support_before_stop"
+    ]
+   },
+   "entry_strength": {
+    "tests": 15,
+    "passed_all3": 0,
+    "features": [
+     {
+      "tf": "5m",
+      "feature": "cmo_margin",
+      "label_ko": "CMO가 0을 넘은 정도",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0029,
+       -0.0169,
+       0.0104
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "5m",
+      "feature": "tk_gap_atr",
+      "label_ko": "전환선·기준선 간격(ATR)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0068,
+       0.0237,
+       0.0019
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "5m",
+      "feature": "cloud_gap_atr",
+      "label_ko": "구름 두께(ATR)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.003,
+       0.0256,
+       0.0216
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "15m",
+      "feature": "cmo_margin",
+      "label_ko": "CMO가 0을 넘은 정도",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.002,
+       0.0194,
+       -0.0068
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "tk_gap_atr",
+      "label_ko": "전환선·기준선 간격(ATR)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0019,
+       0.0063,
+       -0.0176
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "cloud_gap_atr",
+      "label_ko": "구름 두께(ATR)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0055,
+       0.0228,
+       -0.0024
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "cmo_margin",
+      "label_ko": "CMO가 0을 넘은 정도",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0024,
+       0.0321,
+       -0.0033
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "tk_gap_atr",
+      "label_ko": "전환선·기준선 간격(ATR)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0095,
+       0.0003,
+       -0.0386
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "cloud_gap_atr",
+      "label_ko": "구름 두께(ATR)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.015,
+       0.0359,
+       0.0554
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "1h",
+      "feature": "cmo_margin",
+      "label_ko": "CMO가 0을 넘은 정도",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0049,
+       -0.0147,
+       -0.0225
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "tk_gap_atr",
+      "label_ko": "전환선·기준선 간격(ATR)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0078,
+       -0.0014,
+       0.0196
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "cloud_gap_atr",
+      "label_ko": "구름 두께(ATR)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0234,
+       0.0638,
+       -0.0653
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "4h",
+      "feature": "cmo_margin",
+      "label_ko": "CMO가 0을 넘은 정도",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.12,
+       -0.0625,
+       0.2108
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "4h",
+      "feature": "tk_gap_atr",
+      "label_ko": "전환선·기준선 간격(ATR)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0308,
+       -0.0234,
+       0.0686
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "4h",
+      "feature": "cloud_gap_atr",
+      "label_ko": "구름 두께(ATR)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0805,
+       0.0864,
+       -0.2917
+      ],
+      "same_sign_all3": false
+     }
+    ]
+   },
+   "parameters": {
+    "variants": 48,
+    "adopted": 0,
+    "params": [
+     {
+      "tf": "15m",
+      "param": "tenkan_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "kijun_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "senkou_b_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "cmo_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "tenkan_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "kijun_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "senkou_b_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "cmo_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "tenkan_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "kijun_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "senkou_b_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "cmo_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     }
+    ]
+   },
+   "watch": []
+  },
+  "N08_ICHI_WR": {
+   "strategy": "N08_ICHI_WR",
+   "support_resistance": {
+    "tests": 6,
+    "passed_all3": [],
+    "features": [
+     "level_before_lock",
+     "support_before_stop"
+    ]
+   },
+   "entry_strength": {
+    "tests": 9,
+    "passed_all3": 0,
+    "features": [
+     {
+      "tf": "5m",
+      "feature": "wr_margin",
+      "label_ko": "%R이 문턱을 넘은 정도",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0056,
+       -0.0036,
+       0.0079
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "5m",
+      "feature": "tk_gap_atr",
+      "label_ko": "전환선·기준선 간격(ATR)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0075,
+       0.0031,
+       0.0429
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "5m",
+      "feature": "cloud_gap_atr",
+      "label_ko": "구름 두께(ATR)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0354,
+       0.0522,
+       0.0879
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "wr_margin",
+      "label_ko": "%R이 문턱을 넘은 정도",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0089,
+       0.0203,
+       0.0169
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "tk_gap_atr",
+      "label_ko": "전환선·기준선 간격(ATR)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0444,
+       -0.0106,
+       -0.0915
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "cloud_gap_atr",
+      "label_ko": "구름 두께(ATR)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0895,
+       0.0136,
+       0.0272
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "30m",
+      "feature": "wr_margin",
+      "label_ko": "%R이 문턱을 넘은 정도",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0078,
+       -0.0322,
+       0.0776
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "tk_gap_atr",
+      "label_ko": "전환선·기준선 간격(ATR)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0112,
+       0.0456,
+       -0.0536
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "cloud_gap_atr",
+      "label_ko": "구름 두께(ATR)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0186,
+       0.011,
+       0.0917
+      ],
+      "same_sign_all3": false
+     }
+    ]
+   },
+   "parameters": {
+    "variants": 48,
+    "adopted": 0,
+    "params": [
+     {
+      "tf": "15m",
+      "param": "tenkan_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "kijun_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "wr_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "wr_oversold",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "tenkan_len",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "kijun_len",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "wr_len",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "wr_oversold",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "tenkan_len",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "kijun_len",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "wr_len",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "wr_oversold",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     }
+    ]
+   },
+   "watch": []
+  },
+  "N09_ALLIG_AROON": {
+   "strategy": "N09_ALLIG_AROON",
+   "support_resistance": {
+    "tests": 10,
+    "passed_all3": [],
+    "features": [
+     "level_before_lock",
+     "support_before_stop"
+    ]
+   },
+   "entry_strength": {
+    "tests": 15,
+    "passed_all3": 0,
+    "features": [
+     {
+      "tf": "5m",
+      "feature": "aroon_spread",
+      "label_ko": "아룬 상승·하락 차이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0177,
+       0.0111,
+       0.0129
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "5m",
+      "feature": "lips_gap_atr",
+      "label_ko": "입술선이 벌어진 폭(ATR)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0032,
+       0.0113,
+       0.0045
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "5m",
+      "feature": "sync_gap_bars",
+      "label_ko": "두 신호 사이 봉 수",
+      "higher_is_stronger": false,
+      "spearman_p1_p2_p3": [
+       -0.0012,
+       -0.0045,
+       -0.0039
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "15m",
+      "feature": "aroon_spread",
+      "label_ko": "아룬 상승·하락 차이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0101,
+       -0.0112,
+       0.0111
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "lips_gap_atr",
+      "label_ko": "입술선이 벌어진 폭(ATR)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0192,
+       -0.0091,
+       -0.0173
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "sync_gap_bars",
+      "label_ko": "두 신호 사이 봉 수",
+      "higher_is_stronger": false,
+      "spearman_p1_p2_p3": [
+       -0.0256,
+       0.0118,
+       -0.0016
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "aroon_spread",
+      "label_ko": "아룬 상승·하락 차이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0155,
+       -0.0059,
+       -0.0498
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "30m",
+      "feature": "lips_gap_atr",
+      "label_ko": "입술선이 벌어진 폭(ATR)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0281,
+       -0.0186,
+       0.0187
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "sync_gap_bars",
+      "label_ko": "두 신호 사이 봉 수",
+      "higher_is_stronger": false,
+      "spearman_p1_p2_p3": [
+       -0.013,
+       0.0004,
+       -0.0011
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "aroon_spread",
+      "label_ko": "아룬 상승·하락 차이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0194,
+       -0.0266,
+       -0.0965
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "lips_gap_atr",
+      "label_ko": "입술선이 벌어진 폭(ATR)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0233,
+       0.0249,
+       0.0944
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "1h",
+      "feature": "sync_gap_bars",
+      "label_ko": "두 신호 사이 봉 수",
+      "higher_is_stronger": false,
+      "spearman_p1_p2_p3": [
+       -0.0268,
+       0.0045,
+       0.0749
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "4h",
+      "feature": "aroon_spread",
+      "label_ko": "아룬 상승·하락 차이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.2537,
+       0.0584,
+       -0.1469
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "4h",
+      "feature": "lips_gap_atr",
+      "label_ko": "입술선이 벌어진 폭(ATR)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.1269,
+       0.0579,
+       0.1662
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "4h",
+      "feature": "sync_gap_bars",
+      "label_ko": "두 신호 사이 봉 수",
+      "higher_is_stronger": false,
+      "spearman_p1_p2_p3": [
+       0.0642,
+       0.0359,
+       0.0
+      ],
+      "same_sign_all3": false
+     }
+    ]
+   },
+   "parameters": {
+    "variants": 48,
+    "adopted": 0,
+    "params": [
+     {
+      "tf": "15m",
+      "param": "lips_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "teeth_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "jaw_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "aroon_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "lips_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "teeth_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "jaw_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "aroon_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "lips_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "teeth_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "jaw_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "aroon_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     }
+    ]
+   },
+   "watch": []
+  },
+  "N10_HA_PSAR": {
+   "strategy": "N10_HA_PSAR",
+   "support_resistance": {
+    "tests": 10,
+    "passed_all3": [],
+    "features": [
+     "level_before_lock",
+     "support_before_stop"
+    ]
+   },
+   "entry_strength": {
+    "tests": 15,
+    "passed_all3": 0,
+    "features": [
+     {
+      "tf": "5m",
+      "feature": "ha_body_atr",
+      "label_ko": "하이킨아시 몸통 크기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0021,
+       0.0118,
+       -0.0033
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "5m",
+      "feature": "sar_gap_atr",
+      "label_ko": "가격과 SAR 점 거리",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0104,
+       0.0227,
+       -0.0104
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "5m",
+      "feature": "sar_age_bars",
+      "label_ko": "SAR 방향 전환 후 봉 수",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0045,
+       0.0051,
+       -0.0065
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "ha_body_atr",
+      "label_ko": "하이킨아시 몸통 크기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.017,
+       0.0003,
+       0.0029
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "sar_gap_atr",
+      "label_ko": "가격과 SAR 점 거리",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0069,
+       0.008,
+       0.0047
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "sar_age_bars",
+      "label_ko": "SAR 방향 전환 후 봉 수",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0098,
+       0.0217,
+       -0.0192
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "ha_body_atr",
+      "label_ko": "하이킨아시 몸통 크기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0026,
+       0.0013,
+       -0.019
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "sar_gap_atr",
+      "label_ko": "가격과 SAR 점 거리",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0087,
+       0.0057,
+       -0.0161
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "sar_age_bars",
+      "label_ko": "SAR 방향 전환 후 봉 수",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0099,
+       0.0076,
+       -0.009
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "ha_body_atr",
+      "label_ko": "하이킨아시 몸통 크기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0106,
+       0.0204,
+       -0.0412
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "sar_gap_atr",
+      "label_ko": "가격과 SAR 점 거리",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0195,
+       0.0231,
+       -0.0385
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "sar_age_bars",
+      "label_ko": "SAR 방향 전환 후 봉 수",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0145,
+       0.0121,
+       0.0124
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "4h",
+      "feature": "ha_body_atr",
+      "label_ko": "하이킨아시 몸통 크기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0743,
+       0.018,
+       0.0418
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "4h",
+      "feature": "sar_gap_atr",
+      "label_ko": "가격과 SAR 점 거리",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0844,
+       -0.0056,
+       0.1467
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "4h",
+      "feature": "sar_age_bars",
+      "label_ko": "SAR 방향 전환 후 봉 수",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.039,
+       -0.1377,
+       0.3529
+      ],
+      "same_sign_all3": false
+     }
+    ]
+   },
+   "parameters": {
+    "variants": 48,
+    "adopted": 0,
+    "params": [
+     {
+      "tf": "15m",
+      "param": "sar_af_start",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "sar_af_step",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "sar_af_max",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "wick_tol",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "sar_af_start",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "sar_af_step",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "sar_af_max",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "wick_tol",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "sar_af_start",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "sar_af_step",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": [
+       {
+        "mult": 1.5,
+        "value": "0.03"
+       }
+      ]
+     },
+     {
+      "tf": "4h",
+      "param": "sar_af_max",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "wick_tol",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     }
+    ]
+   },
+   "watch": [
+    {
+     "tf": "4h",
+     "note": "기본값의 거래당 평균이 세 기간 모두 0 근처(표준오차 0.5배 안). paper 성적을 조금 더 주의해서 봄. 판정 아님"
+    }
+   ]
+  },
+  "N11_BREAKAWAY": {
+   "strategy": "N11_BREAKAWAY",
+   "support_resistance": {
+    "tests": 2,
+    "passed_all3": [],
+    "features": [
+     "level_before_lock",
+     "support_before_stop"
+    ]
+   },
+   "entry_strength": {
+    "tests": 3,
+    "passed_all3": 0,
+    "features": [
+     {
+      "tf": "5m",
+      "feature": "reversal_body_atr",
+      "label_ko": "마지막 반전 봉 몸통",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0311,
+       0.0035,
+       -0.0237
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "5m",
+      "feature": "first_body_atr",
+      "label_ko": "첫 큰 봉 몸통",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0004,
+       -0.0379,
+       0.0535
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "5m",
+      "feature": "pause_body_atr",
+      "label_ko": "가운데 두 봉 몸통",
+      "higher_is_stronger": false,
+      "spearman_p1_p2_p3": [
+       -0.0171,
+       0.043,
+       0.0116
+      ],
+      "same_sign_all3": false
+     }
+    ]
+   },
+   "parameters": {
+    "variants": 48,
+    "adopted": 0,
+    "params": [
+     {
+      "tf": "15m",
+      "param": "big_body",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "small_body",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "gap_tol",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "prior_n",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "big_body",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "small_body",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": [
+       {
+        "mult": 0.5,
+        "value": "0.2"
+       }
+      ]
+     },
+     {
+      "tf": "1h",
+      "param": "gap_tol",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "prior_n",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "big_body",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "small_body",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "gap_tol",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "prior_n",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     }
+    ]
+   },
+   "watch": []
+  },
+  "N12_ICHI_AO": {
+   "strategy": "N12_ICHI_AO",
+   "support_resistance": {
+    "tests": 10,
+    "passed_all3": [],
+    "features": [
+     "level_before_lock",
+     "support_before_stop"
+    ]
+   },
+   "entry_strength": {
+    "tests": 15,
+    "passed_all3": 0,
+    "features": [
+     {
+      "tf": "5m",
+      "feature": "ao_atr",
+      "label_ko": "AO가 0을 넘은 정도(ATR)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0045,
+       0.0244,
+       -0.0087
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "5m",
+      "feature": "tk_gap_atr",
+      "label_ko": "전환선·기준선 간격(ATR)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0,
+       0.0115,
+       -0.0055
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "5m",
+      "feature": "cloud_gap_atr",
+      "label_ko": "구름 두께(ATR)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0052,
+       0.0205,
+       0.0073
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "ao_atr",
+      "label_ko": "AO가 0을 넘은 정도(ATR)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0143,
+       0.0407,
+       -0.0233
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "tk_gap_atr",
+      "label_ko": "전환선·기준선 간격(ATR)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0011,
+       0.0127,
+       0.0097
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "cloud_gap_atr",
+      "label_ko": "구름 두께(ATR)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.004,
+       -0.0,
+       0.0086
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "ao_atr",
+      "label_ko": "AO가 0을 넘은 정도(ATR)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0276,
+       0.0048,
+       0.035
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "30m",
+      "feature": "tk_gap_atr",
+      "label_ko": "전환선·기준선 간격(ATR)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0103,
+       -0.0169,
+       -0.0093
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "30m",
+      "feature": "cloud_gap_atr",
+      "label_ko": "구름 두께(ATR)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0075,
+       0.0082,
+       0.0033
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "1h",
+      "feature": "ao_atr",
+      "label_ko": "AO가 0을 넘은 정도(ATR)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0349,
+       0.0088,
+       0.0765
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "1h",
+      "feature": "tk_gap_atr",
+      "label_ko": "전환선·기준선 간격(ATR)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0132,
+       0.0305,
+       -0.0033
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "cloud_gap_atr",
+      "label_ko": "구름 두께(ATR)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0238,
+       0.0168,
+       -0.0541
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "4h",
+      "feature": "ao_atr",
+      "label_ko": "AO가 0을 넘은 정도(ATR)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0568,
+       -0.142,
+       0.5501
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "4h",
+      "feature": "tk_gap_atr",
+      "label_ko": "전환선·기준선 간격(ATR)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0784,
+       -0.0849,
+       0.162
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "4h",
+      "feature": "cloud_gap_atr",
+      "label_ko": "구름 두께(ATR)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0742,
+       0.0332,
+       0.0712
+      ],
+      "same_sign_all3": false
+     }
+    ]
+   },
+   "parameters": {
+    "variants": 48,
+    "adopted": 0,
+    "params": [
+     {
+      "tf": "15m",
+      "param": "tenkan_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "kijun_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "ao_fast_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "ao_slow_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "tenkan_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "kijun_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "ao_fast_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "ao_slow_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "tenkan_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "kijun_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "ao_fast_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "ao_slow_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     }
+    ]
+   },
+   "watch": []
+  },
+  "N13_3OUTSIDE": {
+   "strategy": "N13_3OUTSIDE",
+   "support_resistance": {
+    "tests": 8,
+    "passed_all3": [],
+    "features": [
+     "level_before_lock",
+     "support_before_stop"
+    ]
+   },
+   "entry_strength": {
+    "tests": 12,
+    "passed_all3": 0,
+    "features": [
+     {
+      "tf": "5m",
+      "feature": "engulf_body_atr",
+      "label_ko": "장악형 봉 몸통 크기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0007,
+       0.0282,
+       -0.0064
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "5m",
+      "feature": "confirm_close_atr",
+      "label_ko": "셋째 봉이 더 나간 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0052,
+       0.0283,
+       0.0242
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "5m",
+      "feature": "breakout_atr",
+      "label_ko": "패턴 고저 돌파 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0032,
+       0.0121,
+       0.0264
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "engulf_body_atr",
+      "label_ko": "장악형 봉 몸통 크기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0231,
+       0.0046,
+       -0.0171
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "confirm_close_atr",
+      "label_ko": "셋째 봉이 더 나간 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0218,
+       0.0177,
+       0.0096
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "15m",
+      "feature": "breakout_atr",
+      "label_ko": "패턴 고저 돌파 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0041,
+       0.0108,
+       0.0161
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "30m",
+      "feature": "engulf_body_atr",
+      "label_ko": "장악형 봉 몸통 크기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0024,
+       0.0027,
+       0.0249
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "30m",
+      "feature": "confirm_close_atr",
+      "label_ko": "셋째 봉이 더 나간 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0433,
+       0.0096,
+       0.028
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "30m",
+      "feature": "breakout_atr",
+      "label_ko": "패턴 고저 돌파 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0001,
+       -0.0057,
+       0.0098
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "engulf_body_atr",
+      "label_ko": "장악형 봉 몸통 크기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0146,
+       0.0535,
+       0.0191
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "1h",
+      "feature": "confirm_close_atr",
+      "label_ko": "셋째 봉이 더 나간 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0113,
+       -0.0486,
+       0.0422
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "breakout_atr",
+      "label_ko": "패턴 고저 돌파 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0093,
+       0.0179,
+       -0.1026
+      ],
+      "same_sign_all3": false
+     }
+    ]
+   },
+   "parameters": {
+    "variants": 36,
+    "adopted": 0,
+    "params": [
+     {
+      "tf": "15m",
+      "param": "engulf_min",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "prior_n",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "atr_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "engulf_min",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "prior_n",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "atr_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "engulf_min",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "prior_n",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "atr_len",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     }
+    ]
+   },
+   "watch": []
+  },
+  "N14_ICHI_RSI": {
+   "strategy": "N14_ICHI_RSI",
+   "support_resistance": {
+    "tests": 0,
+    "passed_all3": [],
+    "features": [
+     "level_before_lock",
+     "support_before_stop"
+    ]
+   },
+   "entry_strength": {
+    "tests": 0,
+    "passed_all3": 0,
+    "features": []
+   },
+   "parameters": {
+    "variants": 48,
+    "adopted": 0,
+    "params": [
+     {
+      "tf": "15m",
+      "param": "tenkan_len",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": [
+       {
+        "mult": 1.25,
+        "value": "11"
+       }
+      ]
+     },
+     {
+      "tf": "15m",
+      "param": "kijun_len",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "rsi_len",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "rsi_oversold",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "tenkan_len",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "kijun_len",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": [
+       {
+        "mult": 0.75,
+        "value": "20"
+       },
+       {
+        "mult": 1.5,
+        "value": "39"
+       }
+      ]
+     },
+     {
+      "tf": "1h",
+      "param": "rsi_len",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "rsi_oversold",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "tenkan_len",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "kijun_len",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "rsi_len",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "rsi_oversold",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     }
+    ]
+   },
+   "watch": []
+  },
+  "N15_KC_AO": {
+   "strategy": "N15_KC_AO",
+   "support_resistance": {
+    "tests": 0,
+    "passed_all3": [],
+    "features": [
+     "level_before_lock",
+     "support_before_stop"
+    ]
+   },
+   "entry_strength": {
+    "tests": 0,
+    "passed_all3": 0,
+    "features": []
+   },
+   "parameters": {
+    "variants": 48,
+    "adopted": 0,
+    "params": [
+     {
+      "tf": "15m",
+      "param": "kc_len",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "kc_mult",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "ao_fast",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "ao_slow",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "kc_len",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "kc_mult",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "ao_fast",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": [
+       {
+        "mult": 1.5,
+        "value": "8"
+       }
+      ]
+     },
+     {
+      "tf": "1h",
+      "param": "ao_slow",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "kc_len",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "kc_mult",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "ao_fast",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "ao_slow",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     }
+    ]
+   },
+   "watch": []
+  },
+  "N16_BBRSI": {
+   "strategy": "N16_BBRSI",
+   "support_resistance": {
+    "tests": 10,
+    "passed_all3": [],
+    "features": [
+     "level_before_lock",
+     "support_before_stop"
+    ]
+   },
+   "entry_strength": {
+    "tests": 15,
+    "passed_all3": 0,
+    "features": [
+     {
+      "tf": "5m",
+      "feature": "reentry_rsi_depth",
+      "label_ko": "RSI가 25/75 밖으로 나간 깊이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0028,
+       0.0175,
+       0.029
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "5m",
+      "feature": "div_gap_atr",
+      "label_ko": "다이버전스 RSI선 차이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0072,
+       0.0132,
+       0.016
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "5m",
+      "feature": "body_atr",
+      "label_ko": "신호 봉 몸통 크기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0122,
+       0.0141,
+       -0.0041
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "reentry_rsi_depth",
+      "label_ko": "RSI가 25/75 밖으로 나간 깊이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0141,
+       -0.0556,
+       -0.103
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "15m",
+      "feature": "div_gap_atr",
+      "label_ko": "다이버전스 RSI선 차이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0083,
+       -0.0101,
+       0.0094
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "body_atr",
+      "label_ko": "신호 봉 몸통 크기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0057,
+       0.012,
+       -0.0288
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "reentry_rsi_depth",
+      "label_ko": "RSI가 25/75 밖으로 나간 깊이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0174,
+       -0.0043,
+       0.071
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "div_gap_atr",
+      "label_ko": "다이버전스 RSI선 차이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0142,
+       -0.0216,
+       -0.0148
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "30m",
+      "feature": "body_atr",
+      "label_ko": "신호 봉 몸통 크기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0288,
+       0.017,
+       0.0082
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "reentry_rsi_depth",
+      "label_ko": "RSI가 25/75 밖으로 나간 깊이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0054,
+       0.0322,
+       0.1122
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "1h",
+      "feature": "div_gap_atr",
+      "label_ko": "다이버전스 RSI선 차이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0747,
+       -0.021,
+       -0.0542
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "body_atr",
+      "label_ko": "신호 봉 몸통 크기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0006,
+       -0.036,
+       -0.0857
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "4h",
+      "feature": "reentry_rsi_depth",
+      "label_ko": "RSI가 25/75 밖으로 나간 깊이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0549,
+       0.3333,
+       null
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "4h",
+      "feature": "div_gap_atr",
+      "label_ko": "다이버전스 RSI선 차이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.1129,
+       0.1214,
+       0.2028
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "4h",
+      "feature": "body_atr",
+      "label_ko": "신호 봉 몸통 크기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.1761,
+       -0.0363,
+       0.1044
+      ],
+      "same_sign_all3": false
+     }
+    ]
+   },
+   "parameters": {
+    "variants": 48,
+    "adopted": 0,
+    "params": [
+     {
+      "tf": "15m",
+      "param": "bb_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "rsi_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "map_scale",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "pivot_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "bb_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "rsi_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "map_scale",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "pivot_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "bb_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "rsi_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "map_scale",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "pivot_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     }
+    ]
+   },
+   "watch": []
+  },
+  "N17_KC_RSI": {
+   "strategy": "N17_KC_RSI",
+   "support_resistance": {
+    "tests": 10,
+    "passed_all3": [
+     {
+      "tf": "5m",
+      "feature": "level_before_lock",
+      "note": "무작위 진입에서도 같은 효과(시장 전체의 성질)"
+     }
+    ],
+    "features": [
+     "level_before_lock",
+     "support_before_stop"
+    ]
+   },
+   "entry_strength": {
+    "tests": 10,
+    "passed_all3": 0,
+    "features": [
+     {
+      "tf": "5m",
+      "feature": "rsi_depth",
+      "label_ko": "RSI가 30/70을 넘은 깊이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0121,
+       -0.0011,
+       -0.0285
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "5m",
+      "feature": "band_pierce_atr",
+      "label_ko": "켈트너 밴드 밖으로 나간 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0091,
+       0.0302,
+       -0.0165
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "rsi_depth",
+      "label_ko": "RSI가 30/70을 넘은 깊이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0288,
+       -0.0228,
+       -0.0438
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "15m",
+      "feature": "band_pierce_atr",
+      "label_ko": "켈트너 밴드 밖으로 나간 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0007,
+       0.0059,
+       -0.039
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "rsi_depth",
+      "label_ko": "RSI가 30/70을 넘은 깊이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0332,
+       -0.0126,
+       -0.0448
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "30m",
+      "feature": "band_pierce_atr",
+      "label_ko": "켈트너 밴드 밖으로 나간 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0079,
+       -0.0039,
+       -0.0428
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "1h",
+      "feature": "rsi_depth",
+      "label_ko": "RSI가 30/70을 넘은 깊이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0494,
+       -0.0185,
+       -0.0901
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "1h",
+      "feature": "band_pierce_atr",
+      "label_ko": "켈트너 밴드 밖으로 나간 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0432,
+       -0.0236,
+       -0.0878
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "4h",
+      "feature": "rsi_depth",
+      "label_ko": "RSI가 30/70을 넘은 깊이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0738,
+       -0.0868,
+       -0.0209
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "4h",
+      "feature": "band_pierce_atr",
+      "label_ko": "켈트너 밴드 밖으로 나간 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0072,
+       -0.0873,
+       -0.0588
+      ],
+      "same_sign_all3": true
+     }
+    ]
+   },
+   "parameters": {
+    "variants": 48,
+    "adopted": 0,
+    "params": [
+     {
+      "tf": "15m",
+      "param": "kc_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "kc_mult",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "rsi_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "rsi_level",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "kc_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "kc_mult",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "rsi_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "rsi_level",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "kc_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "kc_mult",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "rsi_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "rsi_level",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     }
+    ]
+   },
+   "watch": []
+  },
+  "N18_VWMA_MACD": {
+   "strategy": "N18_VWMA_MACD",
+   "support_resistance": {
+    "tests": 10,
+    "passed_all3": [],
+    "features": [
+     "level_before_lock",
+     "support_before_stop"
+    ]
+   },
+   "entry_strength": {
+    "tests": 15,
+    "passed_all3": 0,
+    "features": [
+     {
+      "tf": "5m",
+      "feature": "macd_hist_atr",
+      "label_ko": "MACD 히스토그램 크기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0022,
+       0.0227,
+       0.002
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "5m",
+      "feature": "macd_zero_dist_atr",
+      "label_ko": "MACD선과 0선 거리",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0099,
+       0.0147,
+       -0.0331
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "5m",
+      "feature": "vwma_dist_atr",
+      "label_ko": "종가와 VWMA 거리",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0008,
+       0.0244,
+       -0.0037
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "macd_hist_atr",
+      "label_ko": "MACD 히스토그램 크기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0002,
+       0.0146,
+       0.0104
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "15m",
+      "feature": "macd_zero_dist_atr",
+      "label_ko": "MACD선과 0선 거리",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0138,
+       0.0031,
+       -0.0146
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "vwma_dist_atr",
+      "label_ko": "종가와 VWMA 거리",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0047,
+       0.0133,
+       0.0072
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "macd_hist_atr",
+      "label_ko": "MACD 히스토그램 크기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0061,
+       0.0173,
+       0.0314
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "30m",
+      "feature": "macd_zero_dist_atr",
+      "label_ko": "MACD선과 0선 거리",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0253,
+       0.0127,
+       -0.0058
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "vwma_dist_atr",
+      "label_ko": "종가와 VWMA 거리",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0064,
+       0.0146,
+       0.0461
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "macd_hist_atr",
+      "label_ko": "MACD 히스토그램 크기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0064,
+       -0.0101,
+       0.0314
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "macd_zero_dist_atr",
+      "label_ko": "MACD선과 0선 거리",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.028,
+       0.0085,
+       0.0138
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "vwma_dist_atr",
+      "label_ko": "종가와 VWMA 거리",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0051,
+       0.0082,
+       0.0385
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "4h",
+      "feature": "macd_hist_atr",
+      "label_ko": "MACD 히스토그램 크기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0274,
+       0.0276,
+       0.1854
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "4h",
+      "feature": "macd_zero_dist_atr",
+      "label_ko": "MACD선과 0선 거리",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0206,
+       0.0046,
+       0.1453
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "4h",
+      "feature": "vwma_dist_atr",
+      "label_ko": "종가와 VWMA 거리",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0538,
+       -0.0341,
+       0.3022
+      ],
+      "same_sign_all3": false
+     }
+    ]
+   },
+   "parameters": {
+    "variants": 48,
+    "adopted": 0,
+    "params": [
+     {
+      "tf": "15m",
+      "param": "vwma_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "macd_fast",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "macd_slow",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "macd_signal",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "vwma_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "macd_fast",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "macd_slow",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "macd_signal",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "vwma_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "macd_fast",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "macd_slow",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "macd_signal",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     }
+    ]
+   },
+   "watch": []
+  },
+  "N19_FIB_CHOP": {
+   "strategy": "N19_FIB_CHOP",
+   "support_resistance": {
+    "tests": 10,
+    "passed_all3": [],
+    "features": [
+     "level_before_lock",
+     "support_before_stop"
+    ]
+   },
+   "entry_strength": {
+    "tests": 15,
+    "passed_all3": 0,
+    "features": [
+     {
+      "tf": "5m",
+      "feature": "touch_depth_atr",
+      "label_ko": "50% 선을 파고든 깊이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0031,
+       0.01,
+       -0.0146
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "5m",
+      "feature": "close_past_line_atr",
+      "label_ko": "종가가 50% 선 넘은 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0072,
+       -0.0045,
+       0.0016
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "5m",
+      "feature": "chop_slope",
+      "label_ko": "추세 기울기(EMA34)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0033,
+       0.0146,
+       -0.0319
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "touch_depth_atr",
+      "label_ko": "50% 선을 파고든 깊이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0117,
+       -0.0076,
+       -0.0012
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "close_past_line_atr",
+      "label_ko": "종가가 50% 선 넘은 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0281,
+       0.0039,
+       0.0119
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "15m",
+      "feature": "chop_slope",
+      "label_ko": "추세 기울기(EMA34)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0033,
+       0.0199,
+       -0.0174
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "touch_depth_atr",
+      "label_ko": "50% 선을 파고든 깊이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0049,
+       0.014,
+       0.0239
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "close_past_line_atr",
+      "label_ko": "종가가 50% 선 넘은 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0463,
+       -0.0665,
+       0.0325
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "chop_slope",
+      "label_ko": "추세 기울기(EMA34)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0078,
+       -0.0047,
+       -0.0129
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "touch_depth_atr",
+      "label_ko": "50% 선을 파고든 깊이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0577,
+       -0.0025,
+       0.0265
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "close_past_line_atr",
+      "label_ko": "종가가 50% 선 넘은 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0873,
+       -0.0439,
+       0.0803
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "chop_slope",
+      "label_ko": "추세 기울기(EMA34)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0139,
+       0.0193,
+       -0.0406
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "4h",
+      "feature": "touch_depth_atr",
+      "label_ko": "50% 선을 파고든 깊이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0241,
+       -0.2431,
+       -1.0
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "4h",
+      "feature": "close_past_line_atr",
+      "label_ko": "종가가 50% 선 넘은 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.1089,
+       -0.0931,
+       1.0
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "4h",
+      "feature": "chop_slope",
+      "label_ko": "추세 기울기(EMA34)",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.1094,
+       -0.1223,
+       -1.0
+      ],
+      "same_sign_all3": false
+     }
+    ]
+   },
+   "parameters": {
+    "variants": 48,
+    "adopted": 0,
+    "params": [
+     {
+      "tf": "15m",
+      "param": "range_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "fib_level",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "touch_atr",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "slope_thr",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "range_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "fib_level",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "touch_atr",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "slope_thr",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "range_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "fib_level",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "touch_atr",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "slope_thr",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     }
+    ]
+   },
+   "watch": []
+  },
+  "N20_EMA9_CHOP": {
+   "strategy": "N20_EMA9_CHOP",
+   "support_resistance": {
+    "tests": 10,
+    "passed_all3": [],
+    "features": [
+     "level_before_lock",
+     "support_before_stop"
+    ]
+   },
+   "entry_strength": {
+    "tests": 10,
+    "passed_all3": 0,
+    "features": [
+     {
+      "tf": "5m",
+      "feature": "cross_gap_atr",
+      "label_ko": "종가가 EMA9 아래로 뚫은 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.002,
+       0.0208,
+       0.0081
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "5m",
+      "feature": "adx_room",
+      "label_ko": "ADX가 20보다 낮은 정도",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0042,
+       0.0133,
+       0.0038
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "15m",
+      "feature": "cross_gap_atr",
+      "label_ko": "종가가 EMA9 아래로 뚫은 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0066,
+       0.0176,
+       0.0058
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "adx_room",
+      "label_ko": "ADX가 20보다 낮은 정도",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0011,
+       0.0024,
+       -0.0081
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "cross_gap_atr",
+      "label_ko": "종가가 EMA9 아래로 뚫은 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0025,
+       0.0196,
+       -0.0049
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "adx_room",
+      "label_ko": "ADX가 20보다 낮은 정도",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0187,
+       -0.009,
+       -0.0023
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "cross_gap_atr",
+      "label_ko": "종가가 EMA9 아래로 뚫은 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0395,
+       0.0,
+       0.002
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "adx_room",
+      "label_ko": "ADX가 20보다 낮은 정도",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0185,
+       0.0276,
+       -0.0319
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "4h",
+      "feature": "cross_gap_atr",
+      "label_ko": "종가가 EMA9 아래로 뚫은 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0865,
+       0.068,
+       -0.1478
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "4h",
+      "feature": "adx_room",
+      "label_ko": "ADX가 20보다 낮은 정도",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0073,
+       -0.1394,
+       0.0816
+      ],
+      "same_sign_all3": false
+     }
+    ]
+   },
+   "parameters": {
+    "variants": 36,
+    "adopted": 0,
+    "params": [
+     {
+      "tf": "15m",
+      "param": "ema_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "adx_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "adx_thr",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "ema_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "adx_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "adx_thr",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "ema_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "adx_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "adx_thr",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     }
+    ]
+   },
+   "watch": []
+  },
+  "N21_ST_RSI_ADX": {
+   "strategy": "N21_ST_RSI_ADX",
+   "support_resistance": {
+    "tests": 0,
+    "passed_all3": [],
+    "features": [
+     "level_before_lock",
+     "support_before_stop"
+    ]
+   },
+   "entry_strength": {
+    "tests": 0,
+    "passed_all3": 0,
+    "features": []
+   },
+   "parameters": {
+    "variants": 48,
+    "adopted": 0,
+    "params": [
+     {
+      "tf": "15m",
+      "param": "st_mult",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "adx_len",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "adx_level",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "rsi_level",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "st_mult",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "adx_len",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "adx_level",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "rsi_level",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "st_mult",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "adx_len",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "adx_level",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "rsi_level",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     }
+    ]
+   },
+   "watch": []
+  },
+  "N22_VORTEX_PSAR": {
+   "strategy": "N22_VORTEX_PSAR",
+   "support_resistance": {
+    "tests": 10,
+    "passed_all3": [],
+    "features": [
+     "level_before_lock",
+     "support_before_stop"
+    ]
+   },
+   "entry_strength": {
+    "tests": 15,
+    "passed_all3": 0,
+    "features": [
+     {
+      "tf": "5m",
+      "feature": "vi_spread",
+      "label_ko": "보텍스 VI+와 VI- 차이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0006,
+       0.0162,
+       -0.001
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "5m",
+      "feature": "psar_dist_atr",
+      "label_ko": "종가와 SAR 거리",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0115,
+       0.033,
+       0.0004
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "5m",
+      "feature": "psar_age_bars",
+      "label_ko": "SAR 같은 편 유지 봉 수",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0019,
+       -0.0034,
+       0.0016
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "vi_spread",
+      "label_ko": "보텍스 VI+와 VI- 차이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0085,
+       0.0045,
+       0.001
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "psar_dist_atr",
+      "label_ko": "종가와 SAR 거리",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0047,
+       0.0216,
+       0.0026
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "15m",
+      "feature": "psar_age_bars",
+      "label_ko": "SAR 같은 편 유지 봉 수",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0003,
+       -0.0085,
+       -0.0037
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "vi_spread",
+      "label_ko": "보텍스 VI+와 VI- 차이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0073,
+       0.0046,
+       0.0088
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "psar_dist_atr",
+      "label_ko": "종가와 SAR 거리",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0137,
+       0.0183,
+       0.0122
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "30m",
+      "feature": "psar_age_bars",
+      "label_ko": "SAR 같은 편 유지 봉 수",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0023,
+       0.0081,
+       -0.0172
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "vi_spread",
+      "label_ko": "보텍스 VI+와 VI- 차이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0066,
+       -0.0294,
+       0.0037
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "psar_dist_atr",
+      "label_ko": "종가와 SAR 거리",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0034,
+       -0.0195,
+       0.0184
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "psar_age_bars",
+      "label_ko": "SAR 같은 편 유지 봉 수",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0196,
+       0.0115,
+       -0.0388
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "4h",
+      "feature": "vi_spread",
+      "label_ko": "보텍스 VI+와 VI- 차이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0104,
+       -0.1019,
+       0.0542
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "4h",
+      "feature": "psar_dist_atr",
+      "label_ko": "종가와 SAR 거리",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0633,
+       -0.0916,
+       0.0293
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "4h",
+      "feature": "psar_age_bars",
+      "label_ko": "SAR 같은 편 유지 봉 수",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0217,
+       0.0266,
+       0.2119
+      ],
+      "same_sign_all3": false
+     }
+    ]
+   },
+   "parameters": {
+    "variants": 48,
+    "adopted": 0,
+    "params": [
+     {
+      "tf": "15m",
+      "param": "vi_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "psar_start",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "psar_step",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "psar_max",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "vi_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "psar_start",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "psar_step",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "psar_max",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "vi_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "psar_start",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "psar_step",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "psar_max",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     }
+    ]
+   },
+   "watch": []
+  },
+  "N23_HA_ST": {
+   "strategy": "N23_HA_ST",
+   "support_resistance": {
+    "tests": 10,
+    "passed_all3": [],
+    "features": [
+     "level_before_lock",
+     "support_before_stop"
+    ]
+   },
+   "entry_strength": {
+    "tests": 15,
+    "passed_all3": 0,
+    "features": [
+     {
+      "tf": "5m",
+      "feature": "ha_body_atr",
+      "label_ko": "하이킨아시 몸통 크기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0021,
+       0.0043,
+       -0.0118
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "5m",
+      "feature": "st_line_dist_atr",
+      "label_ko": "슈퍼트렌드선과의 거리",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0101,
+       -0.0082,
+       -0.0109
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "5m",
+      "feature": "st_age_bars",
+      "label_ko": "슈퍼트렌드 전환 후 봉 수",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0006,
+       -0.0082,
+       0.0185
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "ha_body_atr",
+      "label_ko": "하이킨아시 몸통 크기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0051,
+       0.0121,
+       -0.0052
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "st_line_dist_atr",
+      "label_ko": "슈퍼트렌드선과의 거리",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0102,
+       -0.0028,
+       -0.0071
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "15m",
+      "feature": "st_age_bars",
+      "label_ko": "슈퍼트렌드 전환 후 봉 수",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0107,
+       0.0055,
+       0.0029
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "ha_body_atr",
+      "label_ko": "하이킨아시 몸통 크기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0015,
+       0.0092,
+       -0.0286
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "st_line_dist_atr",
+      "label_ko": "슈퍼트렌드선과의 거리",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0018,
+       0.0049,
+       -0.0362
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "st_age_bars",
+      "label_ko": "슈퍼트렌드 전환 후 봉 수",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0019,
+       0.0067,
+       0.0314
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "ha_body_atr",
+      "label_ko": "하이킨아시 몸통 크기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0184,
+       -0.0186,
+       -0.0083
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "1h",
+      "feature": "st_line_dist_atr",
+      "label_ko": "슈퍼트렌드선과의 거리",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0307,
+       0.0163,
+       0.0032
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "st_age_bars",
+      "label_ko": "슈퍼트렌드 전환 후 봉 수",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0129,
+       -0.013,
+       0.0166
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "4h",
+      "feature": "ha_body_atr",
+      "label_ko": "하이킨아시 몸통 크기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0669,
+       -0.0054,
+       0.0311
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "4h",
+      "feature": "st_line_dist_atr",
+      "label_ko": "슈퍼트렌드선과의 거리",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.1164,
+       0.052,
+       0.0422
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "4h",
+      "feature": "st_age_bars",
+      "label_ko": "슈퍼트렌드 전환 후 봉 수",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0012,
+       0.0067,
+       0.1493
+      ],
+      "same_sign_all3": false
+     }
+    ]
+   },
+   "parameters": {
+    "variants": 36,
+    "adopted": 0,
+    "params": [
+     {
+      "tf": "15m",
+      "param": "st_atr_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "st_mult",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "wick_tol",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "st_atr_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "st_mult",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "wick_tol",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "st_atr_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "st_mult",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "wick_tol",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     }
+    ]
+   },
+   "watch": []
+  },
+  "N24_DMI": {
+   "strategy": "N24_DMI",
+   "support_resistance": {
+    "tests": 10,
+    "passed_all3": [],
+    "features": [
+     "level_before_lock",
+     "support_before_stop"
+    ]
+   },
+   "entry_strength": {
+    "tests": 10,
+    "passed_all3": 0,
+    "features": [
+     {
+      "tf": "5m",
+      "feature": "adx_margin",
+      "label_ko": "ADX가 25에서 떨어진 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.016,
+       0.0147,
+       0.0041
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "5m",
+      "feature": "di_spread",
+      "label_ko": "+DI와 -DI 벌어진 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0073,
+       0.0162,
+       -0.007
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "adx_margin",
+      "label_ko": "ADX가 25에서 떨어진 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.005,
+       0.0064,
+       -0.0148
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "di_spread",
+      "label_ko": "+DI와 -DI 벌어진 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0101,
+       0.019,
+       -0.0006
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "adx_margin",
+      "label_ko": "ADX가 25에서 떨어진 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0022,
+       0.0105,
+       0.0014
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "30m",
+      "feature": "di_spread",
+      "label_ko": "+DI와 -DI 벌어진 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0077,
+       0.0235,
+       -0.0043
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "adx_margin",
+      "label_ko": "ADX가 25에서 떨어진 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0166,
+       0.0318,
+       -0.0378
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "di_spread",
+      "label_ko": "+DI와 -DI 벌어진 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0171,
+       -0.024,
+       -0.0098
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "4h",
+      "feature": "adx_margin",
+      "label_ko": "ADX가 25에서 떨어진 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.124,
+       -0.1185,
+       -0.011
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "4h",
+      "feature": "di_spread",
+      "label_ko": "+DI와 -DI 벌어진 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0023,
+       0.0498,
+       0.0658
+      ],
+      "same_sign_all3": false
+     }
+    ]
+   },
+   "parameters": {
+    "variants": 48,
+    "adopted": 0,
+    "params": [
+     {
+      "tf": "15m",
+      "param": "di_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "adx_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "adx_long_min",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "adx_short_max",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "di_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "adx_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "adx_long_min",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "adx_short_max",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "di_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "adx_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "adx_long_min",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "adx_short_max",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     }
+    ]
+   },
+   "watch": []
+  },
+  "N25_DST_CCI": {
+   "strategy": "N25_DST_CCI",
+   "support_resistance": {
+    "tests": 10,
+    "passed_all3": [],
+    "features": [
+     "level_before_lock",
+     "support_before_stop"
+    ]
+   },
+   "entry_strength": {
+    "tests": 15,
+    "passed_all3": 0,
+    "features": [
+     {
+      "tf": "5m",
+      "feature": "cci_cross_size",
+      "label_ko": "CCI가 ±100을 넘어온 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0067,
+       0.0046,
+       0.0122
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "5m",
+      "feature": "cci_dip_depth",
+      "label_ko": "직전 CCI 과매도·과매수 깊이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0019,
+       -0.0084,
+       -0.0033
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "5m",
+      "feature": "st_agree_count",
+      "label_ko": "같은 방향 슈퍼트렌드 수",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0009,
+       0.0019,
+       -0.0056
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "cci_cross_size",
+      "label_ko": "CCI가 ±100을 넘어온 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0028,
+       0.0054,
+       -0.0089
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "cci_dip_depth",
+      "label_ko": "직전 CCI 과매도·과매수 깊이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0029,
+       -0.0059,
+       0.0259
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "st_agree_count",
+      "label_ko": "같은 방향 슈퍼트렌드 수",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0125,
+       -0.0034,
+       -0.0022
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "cci_cross_size",
+      "label_ko": "CCI가 ±100을 넘어온 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0009,
+       0.0004,
+       -0.0081
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "cci_dip_depth",
+      "label_ko": "직전 CCI 과매도·과매수 깊이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0091,
+       0.0002,
+       0.0177
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "30m",
+      "feature": "st_agree_count",
+      "label_ko": "같은 방향 슈퍼트렌드 수",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0028,
+       -0.0153,
+       0.0083
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "cci_cross_size",
+      "label_ko": "CCI가 ±100을 넘어온 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0232,
+       0.0058,
+       -0.0166
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "cci_dip_depth",
+      "label_ko": "직전 CCI 과매도·과매수 깊이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0075,
+       -0.0032,
+       0.022
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "st_agree_count",
+      "label_ko": "같은 방향 슈퍼트렌드 수",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0105,
+       -0.018,
+       0.0046
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "4h",
+      "feature": "cci_cross_size",
+      "label_ko": "CCI가 ±100을 넘어온 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0378,
+       -0.026,
+       0.0157
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "4h",
+      "feature": "cci_dip_depth",
+      "label_ko": "직전 CCI 과매도·과매수 깊이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0481,
+       0.0325,
+       0.11
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "4h",
+      "feature": "st_agree_count",
+      "label_ko": "같은 방향 슈퍼트렌드 수",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0522,
+       -0.0445,
+       0.1059
+      ],
+      "same_sign_all3": false
+     }
+    ]
+   },
+   "parameters": {
+    "variants": 48,
+    "adopted": 0,
+    "params": [
+     {
+      "tf": "15m",
+      "param": "cci_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "cci_level",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "st_fast_mult",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "st_slow_mult",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "cci_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "cci_level",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "st_fast_mult",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "st_slow_mult",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "cci_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "cci_level",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "st_fast_mult",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "st_slow_mult",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     }
+    ]
+   },
+   "watch": []
+  },
+  "OBV_B": {
+   "strategy": "OBV_B",
+   "support_resistance": {
+    "tests": 10,
+    "passed_all3": [],
+    "features": [
+     "level_before_lock",
+     "support_before_stop"
+    ]
+   },
+   "entry_strength": {
+    "tests": 15,
+    "passed_all3": 0,
+    "features": [
+     {
+      "tf": "5m",
+      "feature": "obv_cross_vol",
+      "label_ko": "OBV가 평균선을 넘은 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0039,
+       -0.0029,
+       -0.0065
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "5m",
+      "feature": "ac_atr",
+      "label_ko": "AC 가속도 크기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0114,
+       0.0186,
+       0.0068
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "5m",
+      "feature": "stc_room",
+      "label_ko": "STC 과열·침체선까지 여유",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0052,
+       0.0038,
+       -0.0171
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "obv_cross_vol",
+      "label_ko": "OBV가 평균선을 넘은 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0077,
+       0.0069,
+       0.0107
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "15m",
+      "feature": "ac_atr",
+      "label_ko": "AC 가속도 크기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0087,
+       0.0064,
+       -0.0166
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "stc_room",
+      "label_ko": "STC 과열·침체선까지 여유",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0054,
+       -0.0011,
+       0.0089
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "obv_cross_vol",
+      "label_ko": "OBV가 평균선을 넘은 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0003,
+       0.0025,
+       -0.054
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "ac_atr",
+      "label_ko": "AC 가속도 크기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0098,
+       -0.0169,
+       -0.0182
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "30m",
+      "feature": "stc_room",
+      "label_ko": "STC 과열·침체선까지 여유",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0041,
+       -0.0058,
+       0.002
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "obv_cross_vol",
+      "label_ko": "OBV가 평균선을 넘은 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0016,
+       0.0225,
+       -0.0188
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "ac_atr",
+      "label_ko": "AC 가속도 크기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0021,
+       -0.012,
+       -0.0581
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "1h",
+      "feature": "stc_room",
+      "label_ko": "STC 과열·침체선까지 여유",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0003,
+       0.0027,
+       -0.0106
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "4h",
+      "feature": "obv_cross_vol",
+      "label_ko": "OBV가 평균선을 넘은 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0741,
+       -0.16,
+       -0.0566
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "4h",
+      "feature": "ac_atr",
+      "label_ko": "AC 가속도 크기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0011,
+       0.1021,
+       -0.1196
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "4h",
+      "feature": "stc_room",
+      "label_ko": "STC 과열·침체선까지 여유",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.1209,
+       -0.0082,
+       0.0653
+      ],
+      "same_sign_all3": false
+     }
+    ]
+   },
+   "parameters": {
+    "variants": 48,
+    "adopted": 0,
+    "params": [
+     {
+      "tf": "15m",
+      "param": "break_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "ao_fast",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "ao_slow",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "ac_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "break_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "ao_fast",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "ao_slow",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "ac_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "break_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "ao_fast",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "ao_slow",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "ac_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     }
+    ]
+   },
+   "watch": []
+  },
+  "OBV_S": {
+   "strategy": "OBV_S",
+   "support_resistance": {
+    "tests": 10,
+    "passed_all3": [],
+    "features": [
+     "level_before_lock",
+     "support_before_stop"
+    ]
+   },
+   "entry_strength": {
+    "tests": 15,
+    "passed_all3": 0,
+    "features": [
+     {
+      "tf": "5m",
+      "feature": "obv_gap_vol",
+      "label_ko": "OBV가 30봉 평균 넘은 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0089,
+       0.0075,
+       -0.0019
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "5m",
+      "feature": "ac_atr",
+      "label_ko": "가속도(AC) 크기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0051,
+       0.0299,
+       0.011
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "5m",
+      "feature": "stc_room",
+      "label_ko": "STC 과열·침체선까지 여유",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0013,
+       0.0008,
+       -0.0195
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "obv_gap_vol",
+      "label_ko": "OBV가 30봉 평균 넘은 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0128,
+       0.0173,
+       -0.0068
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "ac_atr",
+      "label_ko": "가속도(AC) 크기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0011,
+       -0.0217,
+       0.0082
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "stc_room",
+      "label_ko": "STC 과열·침체선까지 여유",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0069,
+       0.0108,
+       0.0322
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "obv_gap_vol",
+      "label_ko": "OBV가 30봉 평균 넘은 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0239,
+       0.0175,
+       -0.0152
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "ac_atr",
+      "label_ko": "가속도(AC) 크기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0158,
+       0.017,
+       -0.0412
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "stc_room",
+      "label_ko": "STC 과열·침체선까지 여유",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0208,
+       -0.0076,
+       0.0053
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "obv_gap_vol",
+      "label_ko": "OBV가 30봉 평균 넘은 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0007,
+       -0.0507,
+       -0.056
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "ac_atr",
+      "label_ko": "가속도(AC) 크기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.005,
+       0.0022,
+       -0.0356
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "stc_room",
+      "label_ko": "STC 과열·침체선까지 여유",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0141,
+       0.0006,
+       -0.0231
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "4h",
+      "feature": "obv_gap_vol",
+      "label_ko": "OBV가 30봉 평균 넘은 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0139,
+       -0.0818,
+       0.2615
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "4h",
+      "feature": "ac_atr",
+      "label_ko": "가속도(AC) 크기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.1811,
+       0.0801,
+       -0.222
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "4h",
+      "feature": "stc_room",
+      "label_ko": "STC 과열·침체선까지 여유",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.125,
+       -0.1482,
+       0.2088
+      ],
+      "same_sign_all3": false
+     }
+    ]
+   },
+   "parameters": {
+    "variants": 48,
+    "adopted": 0,
+    "params": [
+     {
+      "tf": "15m",
+      "param": "obv_ma_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "stc_level",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "stoch_k_smooth",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "ao_slow_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "obv_ma_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "stc_level",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "stoch_k_smooth",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "ao_slow_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "obv_ma_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": [
+       {
+        "mult": 0.5,
+        "value": "15"
+       }
+      ]
+     },
+     {
+      "tf": "4h",
+      "param": "stc_level",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "stoch_k_smooth",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "ao_slow_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     }
+    ]
+   },
+   "watch": []
+  },
+  "S1_EMA_RSI_CHOP": {
+   "strategy": "S1_EMA_RSI_CHOP",
+   "support_resistance": {
+    "tests": 0,
+    "passed_all3": [],
+    "features": [
+     "level_before_lock",
+     "support_before_stop"
+    ]
+   },
+   "entry_strength": {
+    "tests": 0,
+    "passed_all3": 0,
+    "features": []
+   },
+   "parameters": {
+    "variants": 48,
+    "adopted": 0,
+    "params": [
+     {
+      "tf": "15m",
+      "param": "ema_slow",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "rsi_len",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "rsi_level",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "chop_len",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "ema_slow",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "rsi_len",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "rsi_level",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "chop_len",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": [
+       {
+        "mult": 0.5,
+        "value": "17"
+       },
+       {
+        "mult": 0.75,
+        "value": "26"
+       }
+      ]
+     },
+     {
+      "tf": "4h",
+      "param": "ema_slow",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "rsi_len",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "rsi_level",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "chop_len",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     }
+    ]
+   },
+   "watch": []
+  },
+  "S2_ST_ROC": {
+   "strategy": "S2_ST_ROC",
+   "support_resistance": {
+    "tests": 10,
+    "passed_all3": [],
+    "features": [
+     "level_before_lock",
+     "support_before_stop"
+    ]
+   },
+   "entry_strength": {
+    "tests": 15,
+    "passed_all3": 0,
+    "features": [
+     {
+      "tf": "5m",
+      "feature": "roc_past_zero",
+      "label_ko": "ROC가 0을 넘은 크기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0034,
+       -0.0057,
+       -0.0003
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "5m",
+      "feature": "st_line_dist_atr",
+      "label_ko": "슈퍼트렌드선과의 거리",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0064,
+       -0.0001,
+       -0.0086
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "5m",
+      "feature": "st_age_bars",
+      "label_ko": "슈퍼트렌드 전환 후 봉 수",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0016,
+       -0.0251,
+       0.0189
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "roc_past_zero",
+      "label_ko": "ROC가 0을 넘은 크기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0126,
+       -0.0001,
+       0.0158
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "st_line_dist_atr",
+      "label_ko": "슈퍼트렌드선과의 거리",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0052,
+       -0.0009,
+       0.0019
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "st_age_bars",
+      "label_ko": "슈퍼트렌드 전환 후 봉 수",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0115,
+       -0.0049,
+       0.0015
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "roc_past_zero",
+      "label_ko": "ROC가 0을 넘은 크기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0118,
+       0.0076,
+       -0.0182
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "st_line_dist_atr",
+      "label_ko": "슈퍼트렌드선과의 거리",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0009,
+       0.0067,
+       -0.0228
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "st_age_bars",
+      "label_ko": "슈퍼트렌드 전환 후 봉 수",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0134,
+       0.0057,
+       0.001
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "roc_past_zero",
+      "label_ko": "ROC가 0을 넘은 크기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0015,
+       -0.0117,
+       0.0006
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "st_line_dist_atr",
+      "label_ko": "슈퍼트렌드선과의 거리",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0133,
+       -0.0016,
+       -0.0023
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "1h",
+      "feature": "st_age_bars",
+      "label_ko": "슈퍼트렌드 전환 후 봉 수",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0063,
+       0.0018,
+       -0.0123
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "4h",
+      "feature": "roc_past_zero",
+      "label_ko": "ROC가 0을 넘은 크기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0427,
+       0.0087,
+       0.037
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "4h",
+      "feature": "st_line_dist_atr",
+      "label_ko": "슈퍼트렌드선과의 거리",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0476,
+       -0.0386,
+       0.0415
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "4h",
+      "feature": "st_age_bars",
+      "label_ko": "슈퍼트렌드 전환 후 봉 수",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.055,
+       -0.0118,
+       0.1091
+      ],
+      "same_sign_all3": false
+     }
+    ]
+   },
+   "parameters": {
+    "variants": 36,
+    "adopted": 0,
+    "params": [
+     {
+      "tf": "15m",
+      "param": "st_atr_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "st_mult",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "roc_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "st_atr_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "st_mult",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "roc_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "st_atr_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "st_mult",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "roc_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     }
+    ]
+   },
+   "watch": []
+  },
+  "S3_CMO_SANDWICH": {
+   "strategy": "S3_CMO_SANDWICH",
+   "support_resistance": {
+    "tests": 8,
+    "passed_all3": [],
+    "features": [
+     "level_before_lock",
+     "support_before_stop"
+    ]
+   },
+   "entry_strength": {
+    "tests": 12,
+    "passed_all3": 0,
+    "features": [
+     {
+      "tf": "5m",
+      "feature": "cmo_level",
+      "label_ko": "CMO가 0에서 먼 정도",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0036,
+       0.0006,
+       0.012
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "5m",
+      "feature": "sandwich_match_atr",
+      "label_ko": "샌드위치 양끝 맞춤 오차",
+      "higher_is_stronger": false,
+      "spearman_p1_p2_p3": [
+       -0.0119,
+       0.0118,
+       0.0069
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "5m",
+      "feature": "prior_move_atr",
+      "label_ko": "패턴 전 하락/상승 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0121,
+       0.0142,
+       -0.0203
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "cmo_level",
+      "label_ko": "CMO가 0에서 먼 정도",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.002,
+       0.0069,
+       0.0365
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "15m",
+      "feature": "sandwich_match_atr",
+      "label_ko": "샌드위치 양끝 맞춤 오차",
+      "higher_is_stronger": false,
+      "spearman_p1_p2_p3": [
+       -0.0322,
+       -0.0227,
+       0.0278
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "prior_move_atr",
+      "label_ko": "패턴 전 하락/상승 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0172,
+       -0.0036,
+       -0.0015
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "30m",
+      "feature": "cmo_level",
+      "label_ko": "CMO가 0에서 먼 정도",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0234,
+       -0.0333,
+       -0.0326
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "sandwich_match_atr",
+      "label_ko": "샌드위치 양끝 맞춤 오차",
+      "higher_is_stronger": false,
+      "spearman_p1_p2_p3": [
+       -0.0065,
+       -0.0213,
+       -0.0211
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "30m",
+      "feature": "prior_move_atr",
+      "label_ko": "패턴 전 하락/상승 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0249,
+       0.0074,
+       -0.0226
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "cmo_level",
+      "label_ko": "CMO가 0에서 먼 정도",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0027,
+       -0.0492,
+       0.0571
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "sandwich_match_atr",
+      "label_ko": "샌드위치 양끝 맞춤 오차",
+      "higher_is_stronger": false,
+      "spearman_p1_p2_p3": [
+       0.0111,
+       -0.0728,
+       0.1127
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "prior_move_atr",
+      "label_ko": "패턴 전 하락/상승 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0151,
+       0.0043,
+       -0.0476
+      ],
+      "same_sign_all3": false
+     }
+    ]
+   },
+   "parameters": {
+    "variants": 48,
+    "adopted": 0,
+    "params": [
+     {
+      "tf": "15m",
+      "param": "cmo_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "body_min",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "match_tol",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "prior_n",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "cmo_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "body_min",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "match_tol",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "prior_n",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "cmo_len",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "body_min",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "match_tol",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "prior_n",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     }
+    ]
+   },
+   "watch": []
+  },
+  "S4_BB_BBP": {
+   "strategy": "S4_BB_BBP",
+   "support_resistance": {
+    "tests": 10,
+    "passed_all3": [],
+    "features": [
+     "level_before_lock",
+     "support_before_stop"
+    ]
+   },
+   "entry_strength": {
+    "tests": 15,
+    "passed_all3": 0,
+    "features": [
+     {
+      "tf": "5m",
+      "feature": "band_break_atr",
+      "label_ko": "볼린저 밴드 돌파 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0049,
+       0.0211,
+       -0.0169
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "5m",
+      "feature": "squeeze_ratio",
+      "label_ko": "직전 밴드 수축 정도",
+      "higher_is_stronger": false,
+      "spearman_p1_p2_p3": [
+       -0.0021,
+       -0.0013,
+       0.0048
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "5m",
+      "feature": "bbp_atr",
+      "label_ko": "불베어 파워 크기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0017,
+       0.0351,
+       -0.0125
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "band_break_atr",
+      "label_ko": "볼린저 밴드 돌파 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0033,
+       0.0169,
+       0.0052
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "squeeze_ratio",
+      "label_ko": "직전 밴드 수축 정도",
+      "higher_is_stronger": false,
+      "spearman_p1_p2_p3": [
+       -0.0066,
+       -0.017,
+       -0.021
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "15m",
+      "feature": "bbp_atr",
+      "label_ko": "불베어 파워 크기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0016,
+       0.0278,
+       0.0057
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "30m",
+      "feature": "band_break_atr",
+      "label_ko": "볼린저 밴드 돌파 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0156,
+       0.0086,
+       0.0077
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "squeeze_ratio",
+      "label_ko": "직전 밴드 수축 정도",
+      "higher_is_stronger": false,
+      "spearman_p1_p2_p3": [
+       -0.0055,
+       -0.0219,
+       -0.0244
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "30m",
+      "feature": "bbp_atr",
+      "label_ko": "불베어 파워 크기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0025,
+       0.0318,
+       0.0128
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "1h",
+      "feature": "band_break_atr",
+      "label_ko": "볼린저 밴드 돌파 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0017,
+       -0.0166,
+       -0.0012
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "squeeze_ratio",
+      "label_ko": "직전 밴드 수축 정도",
+      "higher_is_stronger": false,
+      "spearman_p1_p2_p3": [
+       -0.0176,
+       0.0037,
+       -0.0282
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "bbp_atr",
+      "label_ko": "불베어 파워 크기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0079,
+       -0.032,
+       -0.0015
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "4h",
+      "feature": "band_break_atr",
+      "label_ko": "볼린저 밴드 돌파 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.142,
+       0.0293,
+       0.0387
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "4h",
+      "feature": "squeeze_ratio",
+      "label_ko": "직전 밴드 수축 정도",
+      "higher_is_stronger": false,
+      "spearman_p1_p2_p3": [
+       -0.061,
+       -0.0441,
+       -0.1035
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "4h",
+      "feature": "bbp_atr",
+      "label_ko": "불베어 파워 크기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.052,
+       0.003,
+       -0.0943
+      ],
+      "same_sign_all3": false
+     }
+    ]
+   },
+   "parameters": {
+    "variants": 48,
+    "adopted": 0,
+    "params": [
+     {
+      "tf": "15m",
+      "param": "bb_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "bb_mult",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "sq_lookback",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "sq_pct",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "bb_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "bb_mult",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "sq_lookback",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "sq_pct",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "bb_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "bb_mult",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "sq_lookback",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "sq_pct",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     }
+    ]
+   },
+   "watch": []
+  },
+  "S5_DONCHIAN_MFI": {
+   "strategy": "S5_DONCHIAN_MFI",
+   "support_resistance": {
+    "tests": 6,
+    "passed_all3": [],
+    "features": [
+     "level_before_lock",
+     "support_before_stop"
+    ]
+   },
+   "entry_strength": {
+    "tests": 9,
+    "passed_all3": 0,
+    "features": [
+     {
+      "tf": "5m",
+      "feature": "breakout_atr",
+      "label_ko": "돈치안 돌파 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0189,
+       0.0056,
+       -0.0181
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "5m",
+      "feature": "mfi_past_level",
+      "label_ko": "MFI가 30/70을 넘은 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0074,
+       -0.0298,
+       0.002
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "5m",
+      "feature": "sync_gap_bars",
+      "label_ko": "돌파·MFI 신호 간격",
+      "higher_is_stronger": false,
+      "spearman_p1_p2_p3": [
+       -0.0027,
+       0.0126,
+       -0.0141
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "breakout_atr",
+      "label_ko": "돈치안 돌파 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0064,
+       -0.0118,
+       0.1312
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "mfi_past_level",
+      "label_ko": "MFI가 30/70을 넘은 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0552,
+       0.0014,
+       0.1124
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "sync_gap_bars",
+      "label_ko": "돌파·MFI 신호 간격",
+      "higher_is_stronger": false,
+      "spearman_p1_p2_p3": [
+       0.0657,
+       0.0069,
+       -0.0566
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "breakout_atr",
+      "label_ko": "돈치안 돌파 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0647,
+       0.0449,
+       0.0198
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "mfi_past_level",
+      "label_ko": "MFI가 30/70을 넘은 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0017,
+       0.0258,
+       -0.0173
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "sync_gap_bars",
+      "label_ko": "돌파·MFI 신호 간격",
+      "higher_is_stronger": false,
+      "spearman_p1_p2_p3": [
+       -0.0998,
+       0.0504,
+       -0.0052
+      ],
+      "same_sign_all3": false
+     }
+    ]
+   },
+   "parameters": {
+    "variants": 48,
+    "adopted": 0,
+    "params": [
+     {
+      "tf": "15m",
+      "param": "dc_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "mfi_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "mfi_level",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "sync",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "dc_len",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "mfi_len",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "mfi_level",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "sync",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "dc_len",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "mfi_len",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": [
+       {
+        "mult": 0.75,
+        "value": "11"
+       }
+      ]
+     },
+     {
+      "tf": "4h",
+      "param": "mfi_level",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": [
+       {
+        "mult": 1.25,
+        "value": "25.0"
+       }
+      ]
+     },
+     {
+      "tf": "4h",
+      "param": "sync",
+      "shape": "insufficient",
+      "shape_ko": "표본 부족",
+      "variants": 4,
+      "positive_all3": []
+     }
+    ]
+   },
+   "watch": []
+  },
+  "S6_EMA_DMI_ADX": {
+   "strategy": "S6_EMA_DMI_ADX",
+   "support_resistance": {
+    "tests": 10,
+    "passed_all3": [],
+    "features": [
+     "level_before_lock",
+     "support_before_stop"
+    ]
+   },
+   "entry_strength": {
+    "tests": 15,
+    "passed_all3": 0,
+    "features": [
+     {
+      "tf": "5m",
+      "feature": "adx_over_25",
+      "label_ko": "ADX가 25를 넘은 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0167,
+       0.0004,
+       -0.0451
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "5m",
+      "feature": "di_spread",
+      "label_ko": "+DI와 -DI의 차이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0128,
+       0.0128,
+       -0.0197
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "5m",
+      "feature": "cross_gap_bars",
+      "label_ko": "두 교차 사이 봉 수",
+      "higher_is_stronger": false,
+      "spearman_p1_p2_p3": [
+       0.0052,
+       0.0131,
+       -0.0135
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "adx_over_25",
+      "label_ko": "ADX가 25를 넘은 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0192,
+       -0.0066,
+       -0.0097
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "di_spread",
+      "label_ko": "+DI와 -DI의 차이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0013,
+       0.0408,
+       0.0027
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "cross_gap_bars",
+      "label_ko": "두 교차 사이 봉 수",
+      "higher_is_stronger": false,
+      "spearman_p1_p2_p3": [
+       0.0046,
+       -0.0034,
+       0.0288
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "adx_over_25",
+      "label_ko": "ADX가 25를 넘은 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0198,
+       -0.0069,
+       -0.0918
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "30m",
+      "feature": "di_spread",
+      "label_ko": "+DI와 -DI의 차이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.016,
+       -0.004,
+       -0.0016
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "30m",
+      "feature": "cross_gap_bars",
+      "label_ko": "두 교차 사이 봉 수",
+      "higher_is_stronger": false,
+      "spearman_p1_p2_p3": [
+       -0.0085,
+       0.0292,
+       0.0483
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "adx_over_25",
+      "label_ko": "ADX가 25를 넘은 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0029,
+       0.0648,
+       -0.0592
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "di_spread",
+      "label_ko": "+DI와 -DI의 차이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0478,
+       -0.0455,
+       0.0209
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "cross_gap_bars",
+      "label_ko": "두 교차 사이 봉 수",
+      "higher_is_stronger": false,
+      "spearman_p1_p2_p3": [
+       -0.0201,
+       0.0708,
+       -0.0148
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "4h",
+      "feature": "adx_over_25",
+      "label_ko": "ADX가 25를 넘은 폭",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.1667,
+       0.3283,
+       0.1071
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "4h",
+      "feature": "di_spread",
+      "label_ko": "+DI와 -DI의 차이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.2963,
+       0.0569,
+       0.8214
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "4h",
+      "feature": "cross_gap_bars",
+      "label_ko": "두 교차 사이 봉 수",
+      "higher_is_stronger": false,
+      "spearman_p1_p2_p3": [
+       -0.1891,
+       0.0573,
+       0.1581
+      ],
+      "same_sign_all3": false
+     }
+    ]
+   },
+   "parameters": {
+    "variants": 48,
+    "adopted": 0,
+    "params": [
+     {
+      "tf": "15m",
+      "param": "ema_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "di_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "adx_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "adx_min",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "ema_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "di_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "adx_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "adx_min",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "ema_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "di_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "adx_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "adx_min",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     }
+    ]
+   },
+   "watch": []
+  },
+  "V39_ALL": {
+   "strategy": "V39_ALL",
+   "support_resistance": {
+    "tests": 10,
+    "passed_all3": [],
+    "features": [
+     "level_before_lock",
+     "support_before_stop"
+    ]
+   },
+   "entry_strength": {
+    "tests": 15,
+    "passed_all3": 0,
+    "features": [
+     {
+      "tf": "5m",
+      "feature": "di_gap",
+      "label_ko": "+DI와 -DI의 차이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0115,
+       0.0145,
+       0.0203
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "5m",
+      "feature": "chop_angle",
+      "label_ko": "EMA34 기울기 각도",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0002,
+       0.0134,
+       0.0179
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "5m",
+      "feature": "st_dist_atr",
+      "label_ko": "슈퍼트렌드선과 거리",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0005,
+       0.0078,
+       0.0063
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "di_gap",
+      "label_ko": "+DI와 -DI의 차이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0015,
+       0.017,
+       -0.0016
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "chop_angle",
+      "label_ko": "EMA34 기울기 각도",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0082,
+       0.0146,
+       0.0074
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "st_dist_atr",
+      "label_ko": "슈퍼트렌드선과 거리",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0102,
+       -0.0006,
+       0.0029
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "di_gap",
+      "label_ko": "+DI와 -DI의 차이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0017,
+       0.0558,
+       -0.0128
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "chop_angle",
+      "label_ko": "EMA34 기울기 각도",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.007,
+       0.0323,
+       0.0101
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "30m",
+      "feature": "st_dist_atr",
+      "label_ko": "슈퍼트렌드선과 거리",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0079,
+       0.019,
+       -0.0074
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "di_gap",
+      "label_ko": "+DI와 -DI의 차이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.015,
+       0.0323,
+       0.004
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "chop_angle",
+      "label_ko": "EMA34 기울기 각도",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0124,
+       0.0067,
+       0.0333
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "st_dist_atr",
+      "label_ko": "슈퍼트렌드선과 거리",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0158,
+       0.0227,
+       0.0099
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "4h",
+      "feature": "di_gap",
+      "label_ko": "+DI와 -DI의 차이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0596,
+       0.0233,
+       0.2546
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "4h",
+      "feature": "chop_angle",
+      "label_ko": "EMA34 기울기 각도",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0071,
+       0.0053,
+       0.0416
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "4h",
+      "feature": "st_dist_atr",
+      "label_ko": "슈퍼트렌드선과 거리",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0189,
+       -0.0796,
+       0.0692
+      ],
+      "same_sign_all3": false
+     }
+    ]
+   },
+   "parameters": {
+    "variants": 48,
+    "adopted": 0,
+    "params": [
+     {
+      "tf": "15m",
+      "param": "st_mult",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "dmi_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "dmi_gap",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "stoch_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "st_mult",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "dmi_len",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "dmi_gap",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "stoch_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "st_mult",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "dmi_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": [
+       {
+        "mult": 1.25,
+        "value": "25"
+       },
+       {
+        "mult": 1.5,
+        "value": "30"
+       }
+      ]
+     },
+     {
+      "tf": "4h",
+      "param": "dmi_gap",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "stoch_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     }
+    ]
+   },
+   "watch": [
+    {
+     "tf": "4h",
+     "note": "기본값의 거래당 평균이 세 기간 모두 0 근처(표준오차 0.5배 안). paper 성적을 조금 더 주의해서 봄. 판정 아님"
+    }
+   ]
+  },
+  "V45_AMB": {
+   "strategy": "V45_AMB",
+   "support_resistance": {
+    "tests": 10,
+    "passed_all3": [],
+    "features": [
+     "level_before_lock",
+     "support_before_stop"
+    ]
+   },
+   "entry_strength": {
+    "tests": 15,
+    "passed_all3": 0,
+    "features": [
+     {
+      "tf": "5m",
+      "feature": "stc_room",
+      "label_ko": "STC 과열·침체선까지 여유",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0219,
+       -0.0056,
+       0.017
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "5m",
+      "feature": "pullback_angle",
+      "label_ko": "EMA34 되돌림 기울기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0082,
+       -0.0288,
+       0.0104
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "5m",
+      "feature": "macd_hist_atr",
+      "label_ko": "MACD 히스토그램 깊이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0036,
+       0.0156,
+       -0.0074
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "stc_room",
+      "label_ko": "STC 과열·침체선까지 여유",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0063,
+       -0.0167,
+       0.0204
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "pullback_angle",
+      "label_ko": "EMA34 되돌림 기울기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0201,
+       -0.041,
+       0.0129
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "15m",
+      "feature": "macd_hist_atr",
+      "label_ko": "MACD 히스토그램 깊이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0105,
+       -0.0079,
+       -0.0019
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "stc_room",
+      "label_ko": "STC 과열·침체선까지 여유",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0164,
+       0.0164,
+       -0.0185
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "pullback_angle",
+      "label_ko": "EMA34 되돌림 기울기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0175,
+       -0.0147,
+       0.0453
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "30m",
+      "feature": "macd_hist_atr",
+      "label_ko": "MACD 히스토그램 깊이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0129,
+       0.0051,
+       0.0534
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "1h",
+      "feature": "stc_room",
+      "label_ko": "STC 과열·침체선까지 여유",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0416,
+       0.0069,
+       0.1042
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "1h",
+      "feature": "pullback_angle",
+      "label_ko": "EMA34 되돌림 기울기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       0.0172,
+       0.0546,
+       0.048
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "1h",
+      "feature": "macd_hist_atr",
+      "label_ko": "MACD 히스토그램 깊이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.025,
+       -0.0475,
+       0.0581
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "4h",
+      "feature": "stc_room",
+      "label_ko": "STC 과열·침체선까지 여유",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.0324,
+       -0.0138,
+       -0.1708
+      ],
+      "same_sign_all3": true
+     },
+     {
+      "tf": "4h",
+      "feature": "pullback_angle",
+      "label_ko": "EMA34 되돌림 기울기",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.099,
+       -0.0497,
+       0.0952
+      ],
+      "same_sign_all3": false
+     },
+     {
+      "tf": "4h",
+      "feature": "macd_hist_atr",
+      "label_ko": "MACD 히스토그램 깊이",
+      "higher_is_stronger": true,
+      "spearman_p1_p2_p3": [
+       -0.022,
+       -0.1131,
+       -0.4762
+      ],
+      "same_sign_all3": true
+     }
+    ]
+   },
+   "parameters": {
+    "variants": 48,
+    "adopted": 0,
+    "params": [
+     {
+      "tf": "15m",
+      "param": "st_mult_main",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "st_mult_strict",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "htf_st_mult",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "15m",
+      "param": "stoch_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "st_mult_main",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "st_mult_strict",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "htf_st_mult",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "1h",
+      "param": "stoch_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "st_mult_main",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "st_mult_strict",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "htf_st_mult",
+      "shape": "smooth",
+      "shape_ko": "완만",
+      "variants": 4,
+      "positive_all3": []
+     },
+     {
+      "tf": "4h",
+      "param": "stoch_len",
+      "shape": "flat",
+      "shape_ko": "평평",
+      "variants": 4,
+      "positive_all3": []
+     }
+    ]
+   },
+   "watch": []
+  }
+ }
+}

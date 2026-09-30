@@ -485,6 +485,8 @@ function renderSide() {
       <div class="ledger"><div><b>${esc(c.hypothesis || 0)}</b><span>가설</span></div><div><b>${esc(c.test || 0)}</b><span>5년 시험</span></div>
       <div><b>${esc(c.copy_proposal || 0)}</b><span>복제 제안</span></div></div>
       ${(trials.trials || []).slice(0, 5).map(ledgerRow).join("")}
+      ${trials.research && trials.research.total ? `<div class="hint">연구에서 같은 5년 자료로 이미 한 시험 ${esc(trials.research.total.toLocaleString("ko-KR"))}건
+        (지지·저항 ${esc(trials.research.support_resistance)}, 진입 수치 ${esc(trials.research.entry_strength)}, 파라미터 ${esc(trials.research.parameters)}): 효과가 확인된 것은 없습니다. 직원 자료에 요약이 들어갑니다.</div>` : ""}
       <div class="hint">시험을 많이 할수록 통과 기준이 엄격해집니다(우연 방지).</div></div>`;
   }
   if (usage) {

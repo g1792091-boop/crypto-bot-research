@@ -43,6 +43,9 @@ CARDS_BINANCE = os.path.join(ROOT, "research", "strategy_profiles", "out_binance
 CARDS_SPOT = os.path.join(ROOT, "research", "strategy_profiles", "out", "cards.json")
 CARDS = CARDS_BINANCE if os.path.exists(CARDS_BINANCE) else CARDS_SPOT
 TRADE_TFS = ("5m", "15m", "30m", "1h", "4h")
+# What the entry study already tested on the same five years (research/entry_study/agent_summary.py)
+RESEARCH_PRIOR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "research_prior.json")
+_PRIOR: Optional[dict] = None
 
 
 def _ro(path: str) -> Optional[sqlite3.Connection]:
@@ -205,10 +208,48 @@ def profile_card(strategy: str, path: str = CARDS) -> Optional[dict]:
     return None
 
 
+def research_doc(path: str = RESEARCH_PRIOR) -> Optional[dict]:
+    global _PRIOR
+    if path != RESEARCH_PRIOR:
+        with open(path, encoding="utf-8") as fh:
+            return json.load(fh)
+    if _PRIOR is None and os.path.exists(path):
+        with open(path, encoding="utf-8") as fh:
+            _PRIOR = json.load(fh)
+    return _PRIOR
+
+
+def research_prior(strategy: str, path: str = RESEARCH_PRIOR) -> Optional[dict]:
+    """The entry study's summary for one strategy (support/resistance, its own entry numbers, its
+    parameters): tests already run on the same five years, what passed (no edge), parameter shapes."""
+    doc = research_doc(path)
+    if not doc or strategy not in doc.get("strategies", {}):
+        return None
+    return {**doc["strategies"][strategy], "conclusion_ko": doc.get("conclusion_ko"),
+            "note": "already tested, pre-registered, same 5-year data: descriptive, not a rule; "
+                    "testing the same thing again is not new evidence"}
+
+
+def research_counts(strategy: Optional[str] = None, path: str = RESEARCH_PRIOR) -> dict:
+    """{'support_resistance': n, 'entry_strength': n, 'parameters': n, 'total': n} of the entry study,
+    for one strategy or all. Shown next to the room ledger; not in a room's gate divisor (a separate,
+    pre-registered family that found nothing, docs/agent-rooms.md)."""
+    doc = research_doc(path) or {"strategies": {}}
+    rows = [doc["strategies"][strategy]] if strategy in doc["strategies"] else \
+        ([] if strategy else list(doc["strategies"].values()))
+    out = {"support_resistance": sum(r["support_resistance"]["tests"] for r in rows),
+           "entry_strength": sum(r["entry_strength"]["tests"] for r in rows),
+           "parameters": sum(r["parameters"]["variants"] for r in rows)}
+    out["total"] = sum(out.values())
+    return out
+
+
 def specialist_packet(packet: dict, strategy: str, cards_path: str = CARDS) -> dict:
     """What one strategy's specialist sees: its five accounts, their pass status, the
-    coin-flip league of each timeframe, and the strategy's profile card."""
+    coin-flip league of each timeframe, the strategy's profile card and what the entry study
+    already tested for it."""
     pc = {a: v for a, v in (packet.get("pass_check") or {}).items() if a.split("@")[0] == strategy}
     return {"meta": packet.get("meta"), "strategy": strategy,
             "by_strategy": (packet.get("by_strategy") or {}).get(strategy), "pass_check": pc,
-            "league": packet.get("league"), "profile": profile_card(strategy, cards_path)}
+            "league": packet.get("league"), "profile": profile_card(strategy, cards_path),
+            "research": research_prior(strategy)}

@@ -1292,8 +1292,11 @@ def _trials(ctx: RoundContext, room: str, strategy: Optional[str]) -> dict:
             # re-judged with the room's current number of tests (Bonferroni)
             row["gate_pass_now"] = A.current_gate(env, t)[0].get("pass") is True
         hist.append(row)
+    from . import packets3
     return {"tests_so_far": R.trial_count(ctx.agents_conn, room_id=room, kinds=("test",)),
-            "counts": R.trial_counts(ctx.agents_conn, strategy), "history": hist}
+            "counts": R.trial_counts(ctx.agents_conn, strategy), "history": hist,
+            "research_tests": {**packets3.research_counts(strategy),
+                               "note": "entry study, same 5-year data, nothing passed; not in this room's gate count"}}
 
 
 def owner_ok_required(ctx: RoundContext) -> bool:
