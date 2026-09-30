@@ -280,7 +280,7 @@ def test_checkpoint_on_day_30_60_90(tmp_path):
     w.run(ds[0], START + 30 * DAY)
     assert w.due(START + 45 * DAY, only=only) == []
     ds = w.due(START + 60 * DAY + HOUR, only=only)
-    assert ds[0].data["key"] == "checkpoint:60"
+    assert ds[0].data["key"] == f"checkpoint:{START}:60"     # the run start is part of the key
     (tmp_path / "x").mkdir()
     fresh = World(tmp_path / "x", START)
     ds = fresh.due(START + 95 * DAY, only=only)               # started late: only the latest checkpoint
@@ -295,15 +295,24 @@ def test_weekly_review_on_the_strategy_weekday_after_30_trades(w):
     for k in range(29):
         w.trade(f"{S}@15m" if k % 2 else f"{S}@1h", 5.0, tue - 5 * DAY + k * HOUR)
     for k in range(40):
-        w.trade(f"{S2}@15m", 5.0, tue - 5 * DAY + k * HOUR)    # V45 has trades but it is not its day
+        w.trade(f"{S2}@15m", 5.0, tue - 5 * DAY + k * HOUR)    # V45's day is Friday: 33 trades by its end
+    # V45's Friday review never ran: it is still owed on Tuesday (its own slot key), N17 is not due yet
+    [v45] = w.due(tue, only="weekly")
+    assert (v45.room_id, v45.data["key"]) == (f"strat:{S2}", f"weekly:{S2}:2026-10-02")
+    assert T.kst_weekday(T.weekly_slot(tue, T.STRATEGIES.index(S2))) == T.STRATEGIES.index(S2) % 7 == 4
+    w.run(v45, tue)
     assert w.due(tue, only="weekly") == []
     w.trade(f"{S}@15m", 5.0, tue - HOUR)
-    assert w.due(wed, only="weekly") == []                     # not N17's weekday
+    assert w.due(tue - DAY, only="weekly") == []               # Monday: not N17's weekday
     ds = w.due(tue, only="weekly")
     assert keys(ds) == [(ROOM, "weekly", 4)] and ds[0].data["trades"] == 30
-    assert ds[0].data["evidence_ts"] == tue - 5 * DAY
+    assert ds[0].data["key"] == f"weekly:{S}:2026-10-06" and ds[0].data["evidence_ts"] == T.kst_day_start(tue)
+    # a review that did not run on its day stays due on the next days (same slot), until it has run
+    late = w.due(wed, only="weekly")
+    assert keys(late) == [(ROOM, "weekly", 4)] and late[0].data["key"] == ds[0].data["key"]
+    assert "2026-10-06 검토를 미뤘던 것" in late[0].data["summary_ko"]
     w.run(ds[0], tue)
-    assert w.due(tue + HOUR, only="weekly") == []
+    assert w.due(tue + HOUR, only="weekly") == [] and w.due(wed, only="weekly") == []
     assert w.due(tue + 7 * DAY, only="weekly") == []           # no 30 new trades since the last weekly
     for k in range(30):
         w.trade(f"{S}@1h", 5.0, tue + DAY + k * MIN)
@@ -490,3 +499,120 @@ def test_works_on_the_rooms_db_schema(tmp_path):
     assert keys(ds) == [(ROOM, "owner", 1)]
     w.run(ds[0], QUIET + MIN)
     assert w.due(QUIET + 2 * MIN) == []
+
+
+# ================================================================== review fixes (regression tests)
+def test_a_bust_goes_before_older_loss_clusters(tmp_path):
+    t = QUIET
+    w = World(tmp_path, START)
+    others = [s for s in T.STRATEGIES if s not in (S, S2)][:11]
+    for s in others:
+        w.store.add_account(f"{s}@1h", s, "1h", "strategy", START, "paper-v3")
+        for k in range(3):
+            w.store.trade(f"{s}@1h", rec(s, "1h", -5.0, t - 2 * DAY + k * HOUR))
+    w.store.commit()
+    w.alert(t - 10 * MIN, "WARN", f"[{S2}@1h] BUST: bust: equity 9.00 below 10.00")
+    ds = w.due(t)
+    assert keys(ds)[0] == (ROOM2, "bust", 2) and len(ds) == 4          # first, although its evidence is newest
+    assert all(d.trigger == "loss_cluster" for d in ds[1:])
+
+
+def test_a_bust_seen_only_in_the_saved_state_dates_from_its_last_trade(w):
+    t = QUIET
+    w.trade(f"{S}@15m", -40.0, t - 6 * HOUR)
+    w.store.put_state("accounts", t - MIN, {"engines": {f"{S}@15m": {"bust": True}}})   # saved just now
+    w.store.commit()
+    [d] = w.due(t, only="bust")
+    assert d.data["evidence_ts"] == t - 6 * HOUR
+
+
+def _stopped(w, due, now, stopped, blocks=None):
+    rid = begin_round(w.agents, due, now)
+    dec = {"action": None, "stopped": stopped}
+    if blocks is not None:
+        dec["blocks"] = blocks
+    finish_round(w.agents, rid, "stopped_budget", now + MIN, decision=dec, calls=0)
+
+
+def test_what_a_budget_stop_pauses(w):
+    t = QUIET
+    w.say(ROOM, "질문", t - 10 * MIN)
+    w.alert(t - 5 * MIN, "CRITICAL", f"[{S}@15m] LIQUIDATED BTCUSDT 40x lost margin 1.00")
+    for k in range(3):
+        w.trade(f"{S2}@15m", -10.0, t - 3 * HOUR + k)
+    owner = w.due(t, only="owner")[0]
+    # a class cap pauses that class only
+    _stopped(w, owner, t, "budget_class")
+    assert {d.trigger for d in w.due(t + 2 * MIN)} == {"incident", "loss_cluster"}
+    # the reserve for incidents / scheduled meetings pauses the others, never the incident
+    _stopped(w, w.due(t + 2 * MIN, only="loss_cluster")[0], t + 2 * MIN, "budget_reserve",
+             ["owner", "loss", "weekly"])
+    assert [d.trigger for d in w.due(t + 4 * MIN)] == ["incident"]
+    # the total or the 7-day cap pause everything, until the next KST day
+    _stopped(w, w.due(t + 4 * MIN)[0], t + 4 * MIN, "budget_total")
+    assert w.due(t + 6 * MIN) == []
+    assert {d.trigger for d in w.due(kst(2026, 10, 8, 0, 5))} >= {"owner", "loss_cluster", "incident"}
+
+
+def test_a_plan_usage_limit_pauses_everything_for_an_hour_only(w):
+    t = QUIET
+    w.say(ROOM, "질문", t - 10 * MIN)
+    _stopped(w, w.due(t)[0], t, "usage_limit")
+    assert w.due(t + 30 * MIN) == []
+    ds = w.due(t + HOUR)
+    assert keys(ds) == [(ROOM, "owner", 1)] and ds[0].data["retry_of"] is None
+    assert w.due(t + HOUR, TriggerPolicy(usage_backoff_ms=2 * HOUR)) == []
+
+
+def test_transient_failures_are_retried_with_a_growing_pause(w):
+    t = QUIET
+    w.say(ROOM, "질문", t - 10 * MIN)
+    for k, (at, pause) in enumerate(((t, 10), (t + 10 * MIN, 20), (t + 30 * MIN, 40))):
+        [d] = w.due(at)
+        assert d.data["retry_of"] is None                          # never counted as a failed attempt
+        rid = begin_round(w.agents, d, at)
+        finish_round(w.agents, rid, "failed", at + MIN, decision={"error": "x", "transient": True, "calls_ok": 0},
+                     calls=2)
+        assert w.due(at + (pause - 1) * MIN) == []
+    assert keys(w.due(t + 70 * MIN)) == [(ROOM, "owner", 1)]
+    # transient rounds with no answer do not use the room's daily slots
+    st = T._Rooms(w.agents, t + 70 * MIN, TriggerPolicy())
+    assert st.rounds_today(ROOM) == 0
+
+
+def test_stopped_rounds_do_not_use_the_rooms_daily_slots(w):
+    t = QUIET
+    for k in range(3):
+        w.say(ROOM, f"질문 {k}", t + k * MIN)
+        d = w.due(t + k * MIN + 30, only="owner")[0]
+        rid = begin_round(w.agents, d, t + k * MIN + 30)
+        finish_round(w.agents, rid, "stopped_budget", t + k * MIN + 40,
+                     decision={"stopped": "budget_class", "blocks": []}, calls=2)
+    st = T._Rooms(w.agents, t + HOUR, TriggerPolicy())
+    assert st.rounds_today(ROOM) == 0 and keys(w.due(t + HOUR)) == [(ROOM, "owner", 1)]
+
+
+def test_find_due_leaves_out_what_the_caller_defers(w):
+    t = QUIET
+    w.say(ROOM, "질문", t - 10 * MIN)
+    for k in range(3):
+        w.trade(f"{S2}@15m", -10.0, t - 3 * HOUR + k)
+    assert {d.trigger for d in w.due(t)} == {"owner", "loss_cluster"}
+    ro = {k: sqlite3.connect(f"file:{w.paths[k]}?mode=ro", uri=True) for k in ("paper", "daily", "inbox")}
+    try:
+        got = find_due(ro["paper"], ro["daily"], w.agents, ro["inbox"], t, None, defer_triggers=("loss_cluster",))
+        assert [d.trigger for d in got] == ["owner"]
+        got = find_due(ro["paper"], ro["daily"], w.agents, ro["inbox"], t, None, defer_classes=("owner",),
+                       skip_rooms=(ROOM2,))
+        assert got == []
+    finally:
+        for c in ro.values():
+            c.close()
+
+
+def test_a_file_that_is_not_a_database_reads_as_empty(w):
+    with open(w.paths["daily"], "wb") as fh:
+        fh.write(b"garbage" * 200)
+    bad = sqlite3.connect(w.paths["daily"])
+    assert T._rows(bad, "SELECT * FROM reports") == []
+    bad.close()

@@ -23,7 +23,9 @@ Triggers (defaults in ``TriggerPolicy``; every number is configurable):
     evening       3  team:review   22:00 KST, once per KST day (window 4h),
                      team:lead     then the lead (after the review team has met).
     weekly        4  strat:<S>     on weekday (strategy index mod 7, KST) when the strategy has
-                                   >= 30 closed trades since its last weekly review.
+                                   >= 30 closed trades since its last weekly review; a review
+                                   the budget deferred or stopped stays due on the next days
+                                   until it has run (same slot key).
 
 Limits: at most 3 rounds per room per KST day (incidents exempt; one of the 3 is kept
 for the owners' posts until they have used one that day), one round per room per tick,
@@ -54,6 +56,10 @@ Until then the same evidence is found again, so a crash never loses a trigger:
 - a round that ended ``done`` / ``no_action`` is never repeated for the same
   evidence key, even if its cursors were not written.
 
+Evidence keys carry times (a trade's exit time, an alert's time, the run start), and
+``reconcile_paper_cursors`` pulls the cursors back when paper3.db was replaced (restore from
+a backup, new run): ids restart then, and new evidence must never look like handled evidence.
+
 ``find_due`` never writes anything. All texts for the owners (``summary_ko``)
 are Korean and written by code from the numbers.
 """
@@ -64,7 +70,7 @@ import datetime as dt
 import json
 import sqlite3
 from dataclasses import dataclass, field
-from typing import Any, Iterable, Optional, Union
+from typing import Any, Callable, Iterable, Optional, Union
 
 from .roster3 import STRATEGY_KO
 
@@ -368,10 +374,14 @@ def _incident(paper_ro, daily_ro, st: _Rooms) -> list[Due]:
     p, room = st.p, "team:ops"
     items: list[dict] = []
     cur_a = st.cursor_int("incident:alert_rowid")
-    hwm_a = cur_a
+    top = _one(paper_ro, "SELECT MAX(rowid) FROM alerts")       # read BEFORE the scan (no row is skipped)
+    hwm_a = max(cur_a, _int(top[0]) if top else 0)
     since = st.now - p.incident_lookback_ms if cur_a == 0 else 0
-    for rowid, ts, level, text in _rows(paper_ro, "SELECT rowid, ts, level, text FROM alerts "
-                                                  "WHERE rowid > ? ORDER BY rowid", (cur_a,)):
+    levels = sorted({lvl for _k, lvl, _f in p.incident_alerts})
+    # only the levels an incident can have: the INFO rows (every exit of 195 accounts) are never read
+    for rowid, ts, level, text in _rows(paper_ro, "SELECT rowid, ts, level, text FROM alerts WHERE rowid > ? "
+                                                  f"AND level IN ({','.join('?' * len(levels))}) ORDER BY rowid",
+                                        (cur_a, *levels)):
         hwm_a = max(hwm_a, int(rowid))
         if int(ts) < since:
             continue
@@ -412,7 +422,8 @@ def _incident(paper_ro, daily_ro, st: _Rooms) -> list[Due]:
         counts[it["kind"]] = counts.get(it["kind"], 0) + 1
     a_ids = [it["rowid"] for it in items if it["source"] == "alert"]
     d_ids = [it["day"] for it in items if it["source"] == "nightly"]
-    key = f"incident:a{max(a_ids) if a_ids else cur_a}:d{max(d_ids) if d_ids else '-'}"
+    # the newest item's time is part of the key: after paper3.db is restored alert rowids restart
+    key = f"incident:a{max(a_ids) if a_ids else cur_a}@{max(it['ts'] for it in items)}:d{max(d_ids) if d_ids else '-'}"
     cursors = {"incident:alert_rowid": str(hwm_a), "incident:report_day": hwm_d}
     text = "사고 점검: " + ", ".join(f"{INCIDENT_KO.get(k, k)} {n}건" for k, n in counts.items())
     return [_due(st, room, "incident", key, min(it["ts"] for it in items), cursors, text,
@@ -433,7 +444,9 @@ def _owner(inbox_ro, paper_ro, st: _Rooms) -> list[Due]:
         last = msgs[-1]["id"]
         cursors = {**(_strategy_cursors(st, room, hwm) if room.startswith("strat:") else {}),
                    f"owner:{room}": str(last)}
-        out.append(_due(st, room, "owner", f"owner:{room}:{last}", msgs[0]["ts"], cursors,
+        # the post's time is part of the key: after inbox.db is replaced ids restart, and a new post
+        # with an old id must not look like evidence that was already handled
+        out.append(_due(st, room, "owner", f"owner:{room}:{last}@{msgs[-1]['ts']}", msgs[0]["ts"], cursors,
                         f"두 분이 남긴 새 메시지 {len(msgs)}건", message_ids=[m["id"] for m in msgs],
                         messages=msgs[-10:]))
     return out
@@ -488,7 +501,9 @@ def _loss_cluster(paper_ro, st: _Rooms) -> list[Due]:
                 + ", ".join(f"{tf} {n}건" for tf, n in tfs.items()) + ")")
         if top:
             text += " · 많이 나온 특징: " + ", ".join(f"{t['tag']} {t['losses']}건" for t in top[:3])
-        out.append(_due(st, room, "loss_cluster", f"loss:{s}:{lst[-1][0]}", min(r[2] for r in lst), cursors,
+        # trade id AND its exit time: after paper3.db is restored ids restart, and new trades with old
+        # ids must not look like evidence that was already handled
+        out.append(_due(st, room, "loss_cluster", f"loss:{s}:{lst[-1][0]}@{lst[-1][2]}", min(r[2] for r in lst), cursors,
                         text, strategy=s, losses=len(lst), trade_ids=[r[0] for r in lst][-p.max_items:],
                         by_timeframe=tfs, exit_reasons=reasons, top_tags=top,
                         touched_first_lock=sum(bool(c.get("touched_first_lock")) for c in cards),
@@ -496,12 +511,11 @@ def _loss_cluster(paper_ro, st: _Rooms) -> list[Due]:
     return out
 
 
-def _bust(paper_ro, st: _Rooms) -> list[Due]:
-    accts = {aid: (s, tf) for aid, s, tf in _rows(paper_ro, "SELECT account_id, strategy, timeframe FROM accounts "
-                                                             "WHERE kind = 'strategy'")}
+def busts_of(paper_ro) -> dict[str, int]:
+    """{account_id: bust time} of the accounts paper3.db shows as bust. Evidence time: the first BUST
+    alert; for a bust only seen in the saved state (whose row time changes at every save), the
+    account's last closed trade (the one that emptied it)."""
     busts: dict[str, int] = {}
-    # evidence time: the first BUST alert; for a bust only seen in the saved state (whose row time
-    # changes at every save), the account's last closed trade (the one that emptied it)
     for ts, text in _rows(paper_ro, "SELECT ts, text FROM alerts WHERE level = 'WARN' AND text LIKE '[%] BUST:%'"):
         aid = text[1:text.find("]")]
         busts[aid] = min(int(ts), busts.get(aid, int(ts)))
@@ -511,6 +525,13 @@ def _bust(paper_ro, st: _Rooms) -> list[Due]:
             if isinstance(e, dict) and e.get("bust") and aid not in busts:
                 last = _one(paper_ro, "SELECT MAX(exit_time) FROM trades WHERE account_id = ?", (aid,))
                 busts[aid] = int(last[0]) if last and last[0] is not None else int(r[0])
+    return busts
+
+
+def _bust(paper_ro, st: _Rooms) -> list[Due]:
+    accts = {aid: (s, tf) for aid, s, tf in _rows(paper_ro, "SELECT account_id, strategy, timeframe FROM accounts "
+                                                             "WHERE kind = 'strategy'")}
+    busts = busts_of(paper_ro)
     by_s: dict[str, dict] = {}
     for aid, ts in busts.items():
         if aid in accts and accts[aid][0] in STRATEGY_KO and st.cursor(f"bust:{aid}") is None:
@@ -521,7 +542,9 @@ def _bust(paper_ro, st: _Rooms) -> list[Due]:
         room = strat_room(s)
         aids = sorted(got)
         cursors = {**_strategy_cursors(st, room, hwm), **{f"bust:{a}": str(got[a]) for a in aids}}
-        out.append(_due(st, room, "bust", "bust:" + ",".join(aids), min(got.values()), cursors,
+        # the bust times are part of the key: after paper3.db is restored an account can go bust again,
+        # and that new bust must not look like evidence that was already handled
+        out.append(_due(st, room, "bust", "bust:" + ",".join(f"{a}@{got[a]}" for a in aids), min(got.values()), cursors,
                         f"{STRATEGY_KO[s]}: 계좌 파산 " + ", ".join(aids), strategy=s, accounts=aids))
     return out
 
@@ -535,30 +558,48 @@ def _checkpoint(paper_ro, st: _Rooms) -> list[Due]:
     cp = days // every * every
     if cp < every or cp <= st.cursor_int("checkpoint:day"):
         return []
-    return [_due(st, "team:lead", "checkpoint", f"checkpoint:{cp}", start + cp * DAY_MS,
+    return [_due(st, "team:lead", "checkpoint", f"checkpoint:{start}:{cp}", start + cp * DAY_MS,
                  {"checkpoint:day": str(cp)}, f"{cp}일 점검: 시작 후 {days}일째",
                  day=cp, days_elapsed=int(days), run_start=start)]
 
 
+def weekly_slot(now_ms: int, index: int) -> int:
+    """00:00 KST of the latest weekly-review day of the strategy with this index (index mod 7 =
+    KST weekday, Monday = 0), today included."""
+    return kst_day_start(now_ms) - ((kst_weekday(now_ms) - index % 7) % 7) * DAY_MS
+
+
 def _weekly(paper_ro, st: _Rooms) -> list[Due]:
-    wd, today = kst_weekday(st.now), kst_date(st.now)
-    mine = [s for i, s in enumerate(STRATEGIES) if i % 7 == wd]
-    if not mine:
-        return []
+    """A strategy's weekly review is due on its weekday when it has >= weekly_min_trades closed trades
+    since its last review. The evidence key is that weekday's date: a review that could not run on
+    its day (AI budget used up, or stopped midway) stays due on the following days, until a round
+    for that slot ends done / no_action; the next weekday opens a new slot. A strategy that only
+    reaches the trade count after its day waits for its next weekday (reviews stay spread out)."""
     hwm = _trade_hwm(paper_ro)
     out = []
-    for s in mine:
+    for i, s in enumerate(STRATEGIES):
         room = strat_room(s)
-        cur = st.cursor_int(f"weekly:{room}")
-        r = _one(paper_ro, "SELECT COUNT(*), MIN(t.exit_time), MAX(t.id) FROM trades t JOIN accounts a "
-                           "ON a.account_id = t.account_id WHERE a.kind = 'strategy' AND a.strategy = ? "
-                           "AND t.id > ?", (s, cur))
-        n = 0 if r is None else int(r[0])
-        if n < st.p.weekly_min_trades:
+        slot = weekly_slot(st.now, i)
+        slot_day = kst_date(slot)
+        key = f"weekly:{s}:{slot_day}"
+        if st.handled(room, "weekly", key):
             continue
+        cur = st.cursor_int(f"weekly:{room}")
+        # trades closed by the end of the slot day decide whether the slot was due at all
+        r = _one(paper_ro, "SELECT COUNT(*), MIN(t.exit_time) FROM trades t JOIN accounts a "
+                           "ON a.account_id = t.account_id WHERE a.kind = 'strategy' AND a.strategy = ? "
+                           "AND t.id > ? AND t.exit_time < ?", (s, cur, slot + DAY_MS))
+        n_slot = 0 if r is None else int(r[0])
+        if n_slot < st.p.weekly_min_trades:
+            continue
+        n = _one(paper_ro, "SELECT COUNT(*) FROM trades t JOIN accounts a ON a.account_id = t.account_id "
+                           "WHERE a.kind = 'strategy' AND a.strategy = ? AND t.id > ?", (s, cur))
+        n = n_slot if n is None else int(n[0])
         cursors = {**_strategy_cursors(st, room, hwm), f"weekly:{room}": str(hwm)}
-        out.append(_due(st, room, "weekly", f"weekly:{s}:{today}", int(r[1]), cursors,
-                        f"{STRATEGY_KO[s]} 주간 검토: 지난 검토 뒤 거래 {n}건", strategy=s, trades=n))
+        late = "" if slot_day == kst_date(st.now) else f" ({slot_day} 검토를 미뤘던 것)"
+        out.append(_due(st, room, "weekly", key, slot, cursors,
+                        f"{STRATEGY_KO[s]} 주간 검토: 지난 검토 뒤 거래 {n}건{late}", strategy=s, trades=n,
+                        slot_day=slot_day))
     return out
 
 
@@ -600,10 +641,14 @@ def _due(st: _Rooms, room: str, trigger: str, key: str, evidence_ts: int, cursor
 def find_due(paper_ro: Optional[sqlite3.Connection], daily_ro: Optional[sqlite3.Connection],
              agents_conn: sqlite3.Connection, inbox_ro: Optional[sqlite3.Connection], now_ms: int,
              policy: Optional[TriggerPolicy] = None, *, defer_classes: Iterable[str] = (),
-             defer_triggers: Iterable[str] = (), skip_rooms: Iterable[str] = ()) -> list[Due]:
+             defer_triggers: Iterable[str] = (), skip_rooms: Iterable[str] = (),
+             can_start: Optional[Callable[[Due], bool]] = None) -> list[Due]:
     """Rounds to run now, sorted by (priority, bust before loss_cluster, oldest evidence). Reads only.
     ``defer_classes`` / ``defer_triggers``: what the caller cannot start now (its AI budget is used
     up or paced), left out before the per-tick pick so it never hides other meetings;
+    ``can_start``: the caller's exact check of one meeting (e.g. its AI budget can carry that
+    meeting's shortest form); meetings it refuses are left out BEFORE the per-tick cut, so meetings
+    that cannot start never take the slots of ones that can;
     ``skip_rooms``: rooms that already met in the caller's current tick."""
     p = policy or TriggerPolicy()
     st = _Rooms(agents_conn, now_ms, p)
@@ -638,6 +683,8 @@ def find_due(paper_ro: Optional[sqlite3.Connection], daily_ro: Optional[sqlite3.
         failed = st.failed_attempts(d.room_id, d.trigger, key)
         if len(failed) >= p.max_attempts:
             continue
+        if can_start is not None and not can_start(d):
+            continue            # e.g. its AI budget cannot carry it now: found again on a later tick
         if failed:
             d.data["retry_of"] = failed[-1]["round_id"]
             d.data["summary_ko"] = "(중단된 회의 다시 시작) " + d.data["summary_ko"]
@@ -747,3 +794,140 @@ def finish_round(agents_conn: sqlite3.Connection, round_id: int, status: str, no
     wrote = advance_cursors(agents_conn, _json(r[0]), commit=False) if status in ENDED_OK else {}
     agents_conn.commit()
     return wrote
+
+
+# ---------------------------------------------------------------- paper3.db replaced (restore, new run)
+PAPER_FP = "paper:fingerprint"
+TRADE_CURSOR_PREFIXES = ("loss:", "weekly:")
+ALERT_CURSOR = "incident:alert_rowid"
+
+
+def _q1(paper_ro: sqlite3.Connection, sql: str, args: Iterable = ()) -> Optional[tuple]:
+    """One row; raises LookupError when paper3.db cannot be read (never mistaken for 'empty')."""
+    try:
+        r = paper_ro.execute(sql, tuple(args)).fetchone()
+    except sqlite3.DatabaseError as exc:
+        raise LookupError(str(exc)) from None
+    return tuple(r) if r else None
+
+
+def _paper_cursors(agents_conn: sqlite3.Connection) -> dict[str, str]:
+    return {k: v for k, v in _rows(agents_conn, "SELECT k, v FROM cursors WHERE k LIKE 'loss:%' OR k LIKE 'weekly:%' "
+                                                "OR k LIKE 'bust:%' OR k IN (?, 'checkpoint:day')", (ALERT_CURSOR,))}
+
+
+def paper_fingerprint(paper_ro: Optional[sqlite3.Connection], agents_conn: sqlite3.Connection) -> Optional[dict]:
+    """What the trigger cursors stand on in paper3.db: the run start, the newest trade [id, exit_time]
+    and alert [rowid, ts], and the time of the row each trade / alert cursor points at ("at").
+    None when paper3.db is missing or cannot be read."""
+    if paper_ro is None:
+        return None
+    try:
+        t = _q1(paper_ro, "SELECT id, exit_time FROM trades ORDER BY id DESC LIMIT 1")
+        a = _q1(paper_ro, "SELECT rowid, ts FROM alerts ORDER BY rowid DESC LIMIT 1")
+        at: dict[str, int] = {}
+        for k, v in _paper_cursors(agents_conn).items():
+            n = _int(v)
+            if n <= 0:
+                continue
+            if k.startswith(TRADE_CURSOR_PREFIXES):
+                r = _q1(paper_ro, "SELECT exit_time FROM trades WHERE id = ?", (n,))
+            elif k == ALERT_CURSOR:
+                r = _q1(paper_ro, "SELECT ts FROM alerts WHERE rowid = ?", (n,))
+            else:
+                continue
+            if r is not None and r[0] is not None:
+                at[k] = int(r[0])
+    except LookupError:
+        return None
+    return {"run": run_start(paper_ro), "t": [_int(t[0]), _int(t[1])] if t else [0, 0],
+            "a": [_int(a[0]), _int(a[1])] if a else [0, 0], "at": at}
+
+
+def reconcile_paper_cursors(agents_conn: sqlite3.Connection, paper_ro: Optional[sqlite3.Connection]) -> dict:
+    """paper3.db replaced by an older copy (restore from backup) or by a new run: its trade ids and
+    alert rowids restart, so new losses, busts and incidents could carry ids the cursors already
+    count as seen, and no meeting would open. Detected when the newest trade / alert seen last tick
+    (``PAPER_FP``) is gone or has another time, the run start changed, or the highest id is below a
+    cursor. Then (``set_cursor``-style, backwards too):
+      - every loss:* / weekly:* cursor moves to the last trade not newer (by exit time) than the one
+        it stood on (0 when the run changed): handled trades stay handled, newer ones are read;
+      - incident:alert_rowid likewise by alert time;
+      - bust:<account> cursors whose bust is no longer in paper3.db are dropped (all of them when
+        the run changed), so a new bust opens a meeting; checkpoint:day restarts at 0 for a new run.
+    The evidence keys carry times (triggers above), so new evidence never matches a handled key.
+    An unreadable paper3.db changes nothing. Returns what changed ({key: new value or None})."""
+    if paper_ro is None:
+        return {}
+    row = _one(agents_conn, "SELECT v FROM cursors WHERE k = ?", (PAPER_FP,))
+    fp = _json(row[0]) if row else {}
+    try:
+        top_t = _int(_q1(paper_ro, "SELECT COALESCE(MAX(id), 0) FROM trades")[0])
+        top_a = _int(_q1(paper_ro, "SELECT COALESCE(MAX(rowid), 0) FROM alerts")[0])
+
+        def moved(key: str, sql: str) -> bool:
+            old = fp.get(key)
+            if not (isinstance(old, list) and len(old) == 2 and _int(old[0]) > 0):
+                return False
+            r = _q1(paper_ro, sql, (_int(old[0]),))
+            return r is None or _int(r[0]) != _int(old[1])
+        run = run_start(paper_ro)
+        run_changed = fp.get("run") is not None and run is not None and fp.get("run") != run
+        curs = _paper_cursors(agents_conn)
+        trade_keys = [k for k in curs if k.startswith(TRADE_CURSOR_PREFIXES)]
+        replaced = (run_changed or moved("t", "SELECT exit_time FROM trades WHERE id = ?")
+                    or moved("a", "SELECT ts FROM alerts WHERE rowid = ?")
+                    or any(_int(curs[k]) > top_t for k in trade_keys) or _int(curs.get(ALERT_CURSOR)) > top_a)
+        if not replaced:
+            return {}
+        at = fp.get("at") if isinstance(fp.get("at"), dict) else {}
+        last_t = fp["t"][1] if isinstance(fp.get("t"), list) and len(fp["t"]) == 2 and _int(fp["t"][0]) > 0 else None
+        last_a = fp["a"][1] if isinstance(fp.get("a"), list) and len(fp["a"]) == 2 and _int(fp["a"][0]) > 0 else None
+        changed: dict[str, Optional[str]] = {}
+        for k in trade_keys:
+            ref = None if run_changed else at.get(k, last_t)
+            if run_changed:
+                new = 0
+            elif ref is None:              # nothing known about its time: what is there now counts as seen
+                new = min(_int(curs[k]), top_t)
+            else:
+                new = _int(_q1(paper_ro, "SELECT COALESCE(MAX(id), 0) FROM trades WHERE exit_time <= ?",
+                               (_int(ref),))[0])
+            if str(new) != str(curs[k]):
+                changed[k] = str(new)
+        if ALERT_CURSOR in curs:
+            ref = at.get(ALERT_CURSOR, last_a)
+            new = (min(_int(curs[ALERT_CURSOR]), top_a) if ref is None else
+                   _int(_q1(paper_ro, "SELECT COALESCE(MAX(rowid), 0) FROM alerts WHERE ts <= ?", (_int(ref),))[0]))
+            if str(new) != str(curs[ALERT_CURSOR]):
+                changed[ALERT_CURSOR] = str(new)
+        still = {} if run_changed else busts_of(paper_ro)
+        for k in curs:
+            if k.startswith("bust:") and k[len("bust:"):] not in still:
+                changed[k] = None
+        if run_changed and _int(curs.get("checkpoint:day")) != 0:
+            changed["checkpoint:day"] = "0"
+    except LookupError:
+        return {}
+    for k, v in changed.items():
+        if v is None:
+            agents_conn.execute("DELETE FROM cursors WHERE k = ?", (k,))
+        else:
+            agents_conn.execute("INSERT INTO cursors (k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v",
+                                (k, v))
+    agents_conn.commit()
+    return changed
+
+
+def store_paper_fingerprint(agents_conn: sqlite3.Connection, paper_ro: Optional[sqlite3.Connection]) -> Optional[dict]:
+    """Remember what the cursors stand on now (``paper_fingerprint``), for the next tick's check."""
+    fp = paper_fingerprint(paper_ro, agents_conn)
+    if fp is None:
+        return None
+    text = json.dumps(fp, sort_keys=True)
+    r = _one(agents_conn, "SELECT v FROM cursors WHERE k = ?", (PAPER_FP,))
+    if r is None or r[0] != text:
+        agents_conn.execute("INSERT INTO cursors (k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v",
+                            (PAPER_FP, text))
+        agents_conn.commit()
+    return fp

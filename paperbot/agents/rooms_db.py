@@ -273,6 +273,8 @@ def _safe(conn: Optional[sqlite3.Connection], fn, empty):
         return fn()
     except sqlite3.DatabaseError:        # missing table, or a file that is not a database (bad restore)
         return empty
+    except OverflowError:                # an id beyond SQLite's 64-bit integers (e.g. from a URL): no such row
+        return empty
 
 
 def kst_day_start_ms(now_ms: int) -> int:
@@ -398,9 +400,10 @@ def get_room(conn: Optional[sqlite3.Connection], room_id: str) -> Optional[dict]
 # ---------------------------------------------------------------- messages
 def post(conn: sqlite3.Connection, room_id: str, round_id: Optional[int], meeting: Optional[str], role: str,
          speaker_name: Optional[str], kind: str, text: str, data: Any = None, evidence: Any = None,
-         *, ts: Optional[int] = None) -> int:
+         *, ts: Optional[int] = None, commit: bool = True) -> int:
     """Append one message to a room. ``data``/``evidence`` are stored as JSON (never executed).
-    An empty ``speaker_name`` is filled from the roster. Returns the message id."""
+    An empty ``speaker_name`` is filled from the roster. Returns the message id. ``commit=False``
+    leaves the transaction open, so the caller can commit it together with a cursor."""
     if kind not in MESSAGE_KINDS:
         raise ValueError(f"unknown message kind: {kind!r}")
     if not room_id or not role:
@@ -413,7 +416,8 @@ def post(conn: sqlite3.Connection, room_id: str, round_id: Optional[int], meetin
         "VALUES (?,?,?,?,?,?,?,?,?,?)",
         (_now_ms() if ts is None else ts, room_id, round_id, meeting, role,
          clean_text(speaker_name or role_name(role)), kind, text, _dumps(data), _dumps(evidence)))
-    conn.commit()
+    if commit:
+        conn.commit()
     return int(cur.lastrowid)
 
 
@@ -726,7 +730,7 @@ def add_proposal(conn: sqlite3.Connection, room_id: str, strategy: Optional[str]
 
 
 def set_proposal_status(conn: sqlite3.Connection, proposal_id: int, status: str, decided_by: Optional[str] = None,
-                        *, ts: Optional[int] = None) -> bool:
+                        *, ts: Optional[int] = None, commit: bool = True) -> bool:
     """Move a proposal along the allowed paths (awaiting_owner -> approved|rejected, approved -> rejected).
     Returns False when it already has that status; raises ValueError for any other change."""
     r = conn.execute("SELECT status FROM proposals WHERE id = ?", (proposal_id,)).fetchone()
@@ -739,7 +743,8 @@ def set_proposal_status(conn: sqlite3.Connection, proposal_id: int, status: str,
         raise ValueError(f"proposal {proposal_id}: {old} -> {status} is not allowed")
     conn.execute("UPDATE proposals SET status = ?, decided_ts = ?, decided_by = ? WHERE id = ?",
                  (status, _now_ms() if ts is None else ts, decided_by, proposal_id))
-    conn.commit()
+    if commit:
+        conn.commit()
     return True
 
 

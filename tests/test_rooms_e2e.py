@@ -494,6 +494,18 @@ def test_deploy_units_for_the_agents_tick():
         assert f"{flag} /var/lib/paperbot/{path}" in exec_start
     assert "--dry-run" not in exec_start
     assert "Type=oneshot" in svc and "User=paperbot" in svc and "EnvironmentFile=/etc/paperbot/agents.env" in svc
+    # defence in depth: only /var/lib/paperbot is writable, the other databases are read-only, no secrets
+    for line in ("NoNewPrivileges=yes", "ProtectSystem=strict", "ReadWritePaths=/var/lib/paperbot"):
+        assert line in svc.splitlines()
+    ro = next(line for line in svc.splitlines() if line.startswith("ReadOnlyPaths="))
+    for db in ("paper3.db", "daily3.db", "inbox.db"):
+        assert f"-/var/lib/paperbot/{db} " in ro
+    # never a -wal / -shm file: a listed file is pinned to its inode for the whole pass, and the writers
+    # delete and re-create their WAL (a stale WAL next to the live -shm)
+    assert "-wal" not in ro and "-shm" not in ro
+    assert "agents3" not in ro
+    hidden = next(line for line in svc.splitlines() if line.startswith("InaccessiblePaths="))
+    assert "/etc/paperbot/live.env" in hidden and "/etc/paperbot/dash.env" in hidden
     tim = _read("deploy/paperbot-agents.timer")
     assert "OnCalendar=*:0/15" in tim and "Persistent=true" in tim
     inst = _read("deploy/install.sh")

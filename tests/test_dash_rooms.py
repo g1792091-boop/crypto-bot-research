@@ -178,7 +178,8 @@ def test_say_writes_inbox_only(env):
     assert c.get("/api/rooms/team:ops/messages").json()["pending_owner"] == []
     # once the tick has copied it into the room it is no longer pending
     a = R.open_agents(env["agents"])
-    R.post(a, ROOM, 3, "owner", "owner", None, "owner", "손절을 넓히면 어떨까요?", {"inbox_id": rows[0][0]})
+    R.post(a, ROOM, 3, "owner", "owner", None, "owner", "손절을 넓히면 어떨까요?", {"inbox_id": rows[0][0]},
+           ts=rows[0][1])                                      # the tick copies the post with its own time
     a.close()
     assert c.get(f"/api/rooms/{ROOM}/messages").json()["pending_owner"] == []
     before = _digest(env["agents"])
@@ -300,3 +301,123 @@ def test_budget_caps_and_schedule(monkeypatch):
     assert "월요일" in room_schedule_ko("strat:S1_EMA_RSI_CHOP")
     assert "화요일" in room_schedule_ko("strat:S2_ST_ROC")
     assert json.dumps(room_schedule_ko(ROOM), ensure_ascii=False)
+
+
+# ---------------------------------------------------------------- review fixes (regression tests)
+def test_write_bodies_are_capped_before_parsing(env):
+    c = env["client"]
+    _login(c)
+    r = c.post(f"/api/rooms/{ROOM}/say", json={"text": "hi", "pad": "x" * 20_000_000})
+    assert r.status_code == 413
+    r = c.post(f"/api/proposals/{env['ok_proposal']}/decide", json={"decision": "approve", "pad": "x" * 20_000})
+    assert r.status_code == 413
+    assert not os.path.exists(env["inbox"]) or _inbox_rows(env["inbox"], "owner_messages") == []
+    assert c.post(f"/api/rooms/{ROOM}/say", json={"text": "가" * 1000}).status_code == 200    # a full post fits
+
+
+def test_text_sqlite_cannot_store_is_refused(env):
+    c = env["client"]
+    _login(c)
+    r = c.post(f"/api/rooms/{ROOM}/say", content='{"text": "hi \\ud800"}', headers={"content-type": "application/json"})
+    assert r.status_code == 400
+    r = c.post(f"/api/proposals/{env['ok_proposal']}/decide", content='{"decision": "reject", "note": "\\udfff"}',
+               headers={"content-type": "application/json"})
+    assert r.status_code == 400
+
+
+def test_author_is_one_of_the_configured_owners_or_nobody(tmp_path, monkeypatch):
+    now = int(time.time() * 1000)
+    agents, inbox = str(tmp_path / "agents3.db"), str(tmp_path / "inbox.db")
+    _agents_db(agents, now)
+    monkeypatch.setenv("DASH_OWNERS", "민수, 지영")
+    c = TestClient(create_app(str(tmp_path / "paper3.db"), hash_password(PW), SECRET, agents_db=agents,
+                              inbox_db=inbox))
+    _login(c)
+    assert c.post(f"/api/rooms/{ROOM}/say", json={"text": "a", "author": "코드(자동 계산)"}).status_code == 200
+    assert c.post(f"/api/rooms/{ROOM}/say", json={"text": "b", "author": "지영"}).status_code == 200
+    assert [r[3] for r in _inbox_rows(inbox, "owner_messages")] == ["", "지영"]
+
+
+def test_origin_must_match_the_scheme_too(env):
+    c = env["client"]
+    _login(c)
+    say = f"/api/rooms/{ROOM}/say"
+    assert c.post(say, json={"text": "a"}, headers={"origin": "https://testserver"}).status_code == 403
+    assert c.post(say, json={"text": "a"}, headers={"origin": "http://testserver"}).status_code == 200
+
+
+def test_usage_shows_the_seven_day_cap(env):
+    c = env["client"]
+    _login(c)
+    u = c.get("/api/agents/usage").json()
+    assert u["week"]["calls"] == 3 and u["week"]["cap_calls"] == 420       # the 2000-01-01 row is outside
+    assert budget_caps("week=100:9")["week"] == {"calls": 100, "tokens": 9}
+
+
+def test_decisions_older_than_this_agents_db_are_not_shown(env):
+    c = env["client"]
+    _login(c)
+    ib = R.open_inbox_rw(env["inbox"])
+    R.add_approval(ib, env["ok_proposal"], "reject", "", "옛 agents3.db의 제안에 대한 클릭")
+    ib.close()
+    a = R.open_agents(env["agents"])
+    R.set_cursor(a, "inbox:approvals_base", "1")          # the tick found that click already there
+    a.close()
+    p = next(x for x in c.get("/api/proposals").json() if x["id"] == env["ok_proposal"])
+    assert p["owner_decision"] is None and p["effective_status"] == "awaiting_owner"
+    assert c.post(f"/api/proposals/{env['ok_proposal']}/decide", json={"decision": "approve"}).status_code == 200
+
+
+# ---------------------------------------------------------------- round-2 guards
+def test_huge_ids_are_not_found_not_a_server_error(env):
+    c = env["client"]
+    _login(c)
+    huge = "99999999999999999999999"
+    assert c.post(f"/api/proposals/{huge}/decide", json={"decision": "reject"}).status_code == 404
+    r = c.get(f"/api/rooms/{ROOM}/messages?after_id={huge}")
+    assert r.status_code == 200 and r.json()["messages"] == []           # nothing after it
+    r = c.get(f"/api/rooms/{ROOM}/messages?before_id={huge}")
+    assert r.status_code == 200 and len(r.json()["messages"]) == 4       # everything is before it
+    assert not os.path.exists(env["inbox"])
+
+
+def test_pages_cannot_be_framed(env):
+    c = env["client"]
+    for r in (c.get("/login"), c.get("/api/rooms")):                   # before and after login
+        assert r.headers["X-Frame-Options"] == "DENY"
+        assert r.headers["Content-Security-Policy"] == "frame-ancestors 'none'"
+    _login(c)
+    assert c.get("/api/rooms").headers["X-Frame-Options"] == "DENY"
+
+
+def test_approve_is_refused_when_code_now_judges_the_gate_failed(env):
+    c = env["client"]
+    _login(c)
+    ok = env["ok_proposal"]
+    a = R.open_agents(env["agents"])                                   # what the tick stores after re-judging
+    R.set_cursor(a, "proposals:gate_now", {str(ok): {"pass": False, "n_trials": 4}})
+    a.close()
+    p = next(x for x in c.get("/api/proposals").json() if x["id"] == ok)
+    assert p["gate_now"] == {"pass": False, "n_trials": 4} and p["gate"]["pass"] is True
+    r = c.post(f"/api/proposals/{ok}/decide", json={"decision": "approve"})
+    assert r.status_code == 409 and "다시 판정" in r.json()["detail"]
+    assert c.post(f"/api/proposals/{ok}/decide", json={"decision": "reject"}).status_code == 200   # rejecting is fine
+    blocked = next(x for x in c.get("/api/proposals").json() if x["id"] == env["blocked_proposal"])
+    assert blocked["gate_now"] is None                                 # only open proposals are re-judged
+
+
+def test_inbox_db_must_be_its_own_file(tmp_path):
+    agents = str(tmp_path / "agents3.db")
+    paper = str(tmp_path / "paper3.db")
+    link = str(tmp_path / "link.db")
+    os.symlink(agents, link)
+    for bad in (agents, paper, link):
+        with pytest.raises(ValueError):
+            create_app(paper, hash_password(PW), SECRET, agents_db=agents, inbox_db=bad)
+    assert not os.path.exists(agents)                                  # nothing created in the wrong file
+    from paperbot.dash.__main__ import main
+    os.environ["DASH_PASSWORD_HASH"], os.environ["DASH_SECRET"] = hash_password(PW), "s" * 32
+    try:
+        assert main(["--db", paper, "--agents-db", agents, "--inbox-db", agents]) == 2
+    finally:
+        del os.environ["DASH_PASSWORD_HASH"], os.environ["DASH_SECRET"]

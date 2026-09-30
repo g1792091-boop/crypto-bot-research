@@ -264,7 +264,8 @@ def test_block_bootstrap():
 def _result(d1=0.01, p1=0.001, d2=0.01, p2=0.01, m1=0.02, m2=0.01, n1=500, p3=None, n2=400, dn=(0.0002, 0.0001),
             template="stop_atr"):
     def row(d, p, m, n, dnot):
-        return {"available": True, "baseline": {"trades": n, "mean_roe": m - d}, "variant": {"trades": n, "mean_roe": m},
+        return {"available": True, "baseline": {"trades": n, "mean_roe": m - d},
+                "variant": {"trades": n, "mean_roe": m, "mean_pnl_equity": m * 0.3},
                 "diff": d, "p": p, "diff_notional": dnot, "p_notional": 0.01}
     per = {"1": row(d1, p1, m1, n1, dn[0]), "2": row(d2, p2, m2, n2, dn[1]),
            "3": p3 if p3 is not None else {"available": False}}
@@ -314,6 +315,25 @@ def test_gate_passes_only_when_every_check_passes():
     none = _result()
     none["periods"]["2"]["p"] = None
     assert LT.gate(none, 1)["pass"] is False
+
+
+def test_gate_check_d_needs_the_copy_to_make_money_on_equity():
+    """ROE on margin can be > 0 while the P&L on equity (ROE x margin share: 40% at 50x/40x, 30% at 30x,
+    20% at 20x) is < 0, e.g. many small 20x wins and two big 30x losses: a copy account would lose."""
+    r = _result()
+    r["periods"]["2"]["variant"]["mean_pnl_equity"] = -0.0005
+    g = LT.gate(r, 1)
+    assert g["pass"] is False and g["checks"]["d"] is False and all(g["checks"][k] for k in "abcef")
+    assert "자산 대비 손익" in g["reasons"][3] and "-0.05%" in g["reasons"][3] and "미달" in g["reasons"][3]
+    r = _result()
+    r["periods"]["1"]["variant"]["mean_pnl_equity"] = -0.001
+    assert LT.gate(r, 1)["checks"]["d"] is False
+    # missing values fail closed (an old stored result without the equity column never passes)
+    r = _result()
+    del r["periods"]["1"]["variant"]["mean_pnl_equity"]
+    g = LT.gate(r, 1)
+    assert g["pass"] is False and g["checks"]["d"] is False and "없음" in g["reasons"][3]
+    assert LT.gate(_result(), 1)["checks"]["d"] is True
 
 
 # ------------------------------------------------------------------ requests

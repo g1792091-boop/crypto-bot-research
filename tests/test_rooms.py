@@ -144,10 +144,12 @@ class StubLab:
                "timeframe": sp.get("timeframe"), "description_ko": L.describe_ko(sp), "n_trials": n_trials,
                "periods": {
                    "1": {"start": "2021-08-01", "end": "2024-07-01", "available": True,
-                         "baseline": {"trades": 900, "mean_roe": -0.010}, "variant": {"trades": 880, "mean_roe": v1},
+                         "baseline": {"trades": 900, "mean_roe": -0.010},
+                         "variant": {"trades": 880, "mean_roe": v1, "mean_pnl_equity": v1 * 0.3},
                          "diff": v1 + 0.010, "p": 0.001},
                    "2": {"start": "2024-07-01", "end": "2026-09-30", "available": True,
-                         "baseline": {"trades": 500, "mean_roe": -0.008}, "variant": {"trades": 490, "mean_roe": v2},
+                         "baseline": {"trades": 500, "mean_roe": -0.008},
+                         "variant": {"trades": 490, "mean_roe": v2, "mean_pnl_equity": v2 * 0.3},
                          "diff": v2 + 0.008, "p": 0.01},
                    "3": {"start": "2020-01-01", "end": "2021-08-01", "available": False, "why": "자료 없음"}}}
         if sp["template"] == "skip_tag":
@@ -434,7 +436,9 @@ def test_invalid_action_becomes_no_action_with_a_system_message(world):
     r = out["rounds"][0]
     assert r["status"] == "no_action" and r["action"] == "no_action" and r["calls"] == 2    # early stop
     sysm = [m for m in world.messages() if m["kind"] == "system"]
-    assert any("허용되지 않은 행동" in m["text"] and "place_order" in m["text"] for m in sysm)
+    # the code line says what happened in fixed words; the model's own action name stays in the data
+    [inv] = [m for m in sysm if "허용되지 않은 행동" in m["text"]]
+    assert "place_order" not in inv["text"] and inv["data"]["invalid"]["asked"] == "place_order"
     a = next(m for m in world.messages() if m["kind"] == "analysis")
     assert a["data"]["answer"]["proposal"]["action"] == "no_action" and a["data"]["answer"]["proposal"]["invalid"]
     assert R.room_notes(world.agents, ROOM) == [] and R.trial_history(world.agents) == []
@@ -1052,11 +1056,12 @@ def test_pacing_spreads_the_loss_class_over_the_day(world):
     for k in range(3):
         world.trade(f"V45_AMB@{'15m' if k % 2 == 0 else '1h'}", -10.0 - k, night - (5 - k) * HOUR)
     agree = {SPEC: [analysis(NOTE)], "devils_advocate": [challenge("agree")]}
-    out = world.tick(QueueRunner({**agree, "spec_V45_AMB": [analysis(NOTE)]}), night)
+    pol = RM.RoomsPolicy(triggers=TR.TriggerPolicy(enabled=("loss_cluster",)))      # not last night's 22:00
+    out = world.tick(QueueRunner({**agree, "spec_V45_AMB": [analysis(NOTE)]}), night, policy=pol)
     assert [(r["room_id"], r["status"]) for r in out["rounds"]] == [(ROOM, "done")]
-    assert world.tick(QueueRunner({}), night + HOUR)["rounds"] == []                # 3 allowed, 2 used
+    assert world.tick(QueueRunner({}), night + HOUR, policy=pol)["rounds"] == []    # 3 allowed, 2 used
     runner = QueueRunner({"spec_V45_AMB": [analysis(NOTE)], "devils_advocate": [challenge("agree")]})
-    out = world.tick(runner, night + 2 * HOUR)                                       # 4 allowed
+    out = world.tick(runner, night + 2 * HOUR, policy=pol)                           # 4 allowed
     assert [(r["room_id"], r["status"]) for r in out["rounds"]] == [("strat:V45_AMB", "done")]
 
 
@@ -1185,6 +1190,30 @@ def test_a_replaced_inbox_does_not_hide_new_posts(world):
     out = world.tick(runner, QUIET + 21 * MIN)
     assert [r["trigger"] for r in out["rounds"]] == ["owner"]
     assert [m["text"] for m in runner.calls[0]["packet"]["owner_messages"]] == ["새 질문"]
+    assert world.cursors()[f"owner:{ROOM}"] == "1"
+
+
+def test_an_inbox_restored_from_an_older_backup_keeps_old_posts_handled(world, tmp_path):
+    import shutil
+    world.say(ROOM, "옛 질문", QUIET - 30 * MIN)
+    world.inbox.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    shutil.copy(world.paths["inbox"], tmp_path / "backup.db")               # backup: only the first post
+    world.say(ROOM, "백업 뒤 질문", QUIET - 20 * MIN)
+    world.tick(QueueRunner({SPEC: [analysis(NOTE)], "devils_advocate": [challenge("agree")]}), QUIET)
+    assert world.cursors()[f"owner:{ROOM}"] == "2"
+    world.inbox.close()
+    import os
+    for suffix in ("-wal", "-shm"):
+        if os.path.exists(world.paths["inbox"] + suffix):
+            os.remove(world.paths["inbox"] + suffix)
+    shutil.copy(tmp_path / "backup.db", world.paths["inbox"])
+    world.inbox = R.open_inbox_rw(world.paths["inbox"])
+    world.say(ROOM, "복구 뒤 질문", QUIET + 20 * MIN)                           # gets id 2 again
+    runner = QueueRunner({SPEC: [analysis(NOTE)], "devils_advocate": [challenge("agree")]})
+    out = world.tick(runner, QUIET + 21 * MIN)
+    assert [r["trigger"] for r in out["rounds"]] == ["owner"]
+    assert [(m["text"], m["new"]) for m in runner.calls[0]["packet"]["owner_messages"]] == [
+        ("옛 질문", False), ("복구 뒤 질문", True)]
 
 
 def test_approvals_from_before_this_agents_db_are_never_applied(world, good_lab):
@@ -1244,3 +1273,68 @@ def test_the_tick_refuses_to_run_on_an_api_key(world, monkeypatch, capsys):
                   "--agents-db", world.paths["agents"], "--inbox-db", world.paths["inbox"], "--no-send"])
     assert rc == 2 and "API key" in capsys.readouterr().err
     assert world.rounds() == [] and world.messages("team:lead") == []
+
+
+# ------------------------------------------------------------------ minor review items
+def test_a_timed_out_call_is_counted_with_estimated_tokens(world):
+    from paperbot.agents.runner import AgentTimeout
+
+    class Slow:
+        def call(self, *a):
+            raise AgentTimeout("timed out after 900s")
+    b = RM.ClassBudget(Slow(), world.agents, "loss", 10, 10**9, 80, 10**9, lambda: QUIET)
+    with pytest.raises(AgentTimeout):
+        b.call("sonnet", "시스템 프롬프트" * 100, "i", {"role": "x", "data": "가" * 3000})
+    ok, tokens = world.q("SELECT ok, tokens FROM agent_calls")[0]
+    assert ok == 0 and tokens > 1000
+
+
+def test_an_incident_during_a_tick_goes_before_the_remaining_meetings(world):
+    world.say("team:risk", "질문 1", QUIET - 20 * MIN)
+    world.say("team:ops", "질문 2", QUIET - 10 * MIN)
+    lead = {"summary": ["a", "b", "c"], "human_actions": [], "watch_next": []}
+
+    def risk(packet):
+        world.store.alert(QUIET, "CRITICAL", f"[{S}@15m] LIQUIDATED BTCUSDT 40x lost margin 20.00")
+        world.store.commit()
+        return team_answer("r")
+    runner = QueueRunner({"risk_officer": [risk], "ops_auditor": [team_answer("o"), team_answer("o2")],
+                          "code_reviewer": [team_answer("c")], "team_lead": [lead, lead, lead]})
+    out = world.tick(runner, QUIET)
+    assert [(r["room_id"], r["trigger"]) for r in out["rounds"]][:2] == [("team:risk", "owner"), ("team:ops", "incident")]
+
+
+def test_a_long_tick_starts_no_new_meeting(world):
+    world.say("team:risk", "질문 1", QUIET - 20 * MIN)
+    world.say("team:lead", "질문 2", QUIET - 10 * MIN)
+    lead = {"summary": ["a", "b", "c"], "human_actions": [], "watch_next": []}
+    runner = QueueRunner({"risk_officer": [team_answer("r")], "team_lead": [lead, lead]})
+    out = world.tick(runner, QUIET, policy=RM.RoomsPolicy(tick_wall_s=0))
+    assert [r["room_id"] for r in out["rounds"]] == ["team:risk"]
+
+
+def test_the_lead_does_not_send_the_evening_summary_after_a_failed_review(world):
+    n = ListNotifier()
+    runner = QueueRunner({"pnl_reviewer": ["?", "?"], "whatif": ["?", "?"], "risk_officer": ["?", "?"]})
+    out = world.tick(runner, EVENING, notifier=n)
+    assert [(r["room_id"], r["status"]) for r in out["rounds"]] == [("team:review", "failed")]
+    assert n.messages == []
+    lead = {"summary": ["a", "b", "c"], "human_actions": [], "watch_next": []}
+    runner = QueueRunner({"pnl_reviewer": [team_answer("p")], "whatif": [team_answer("w")],
+                          "risk_officer": [team_answer("r")], "team_lead": [lead]})
+    out = world.tick(runner, EVENING + 15 * MIN, notifier=n)
+    assert [(r["room_id"], r["status"]) for r in out["rounds"]] == [("team:review", "done"), ("team:lead", "done")]
+    assert len(n.messages) == 1
+
+
+def test_a_duplicate_copy_names_the_proposal_that_blocks_it(world):
+    spec = {"template": "stop_atr", "strategy": S, "timeframe": "1h", "k": 2.5}
+    tid = R.add_trial(world.agents, ROOM, S, "test", spec)
+    good = StubLab(good=True).run_test(spec, None, n_trials=1, strategy=S)
+    R.add_trial_result(world.agents, tid, "passed", {"result": good, "gate": good["gate"], "n_trials": 1})
+    first = R.add_proposal(world.agents, ROOM, S, tid, {"x": 1}, PASS, "blocked_cap")
+    second = R.add_proposal(world.agents, ROOM, S, tid, {"x": 1}, PASS, "rejected")
+    R.add_proposal(world.agents, ROOM, S, tid, {"x": 1}, PASS, "blocked_cap")
+    env = A.ActionEnv(conn=world.agents, room_id=ROOM, strategy=S, round_id=None, meeting="t", now_ms=QUIET)
+    chk = A.copy_check(env, tid)
+    assert chk["ok"] is False and f"제안 #{second}" in chk["why"] and f"#{first}," not in chk["why"]

@@ -36,9 +36,13 @@ def main(argv=None) -> int:
               file=sys.stderr)
         return 1
     import uvicorn
-    uvicorn.run(create_app(args.db, pw_hash, secret.encode(), agents_db=args.agents_db,
-                           daily_db=args.daily_db, inbox_db=args.inbox_db), host=args.host, port=args.port,
-                log_level="warning", proxy_headers=False)
+    try:
+        app = create_app(args.db, pw_hash, secret.encode(), agents_db=args.agents_db, daily_db=args.daily_db,
+                         inbox_db=args.inbox_db)
+    except ValueError as exc:            # e.g. --inbox-db pointing at another process's database
+        print(f"refusing to start: {exc}", file=sys.stderr)
+        return 2
+    uvicorn.run(app, host=args.host, port=args.port, log_level="warning", proxy_headers=False)
     return 0
 
 

@@ -362,21 +362,25 @@ function decideButtons(p, label) {
       <div class="pacts"><button class="${ap ? "okb" : "nob"}" data-go="${esc(p.id)}">${ap ? "승인" : "거절"} 확인</button><button data-cancel="1">취소</button></div></div>`;
   }
   if (label === "reject-only") return `<div class="pacts"><button class="nob sm" data-dec="reject" data-p="${esc(p.id)}">거절로 바꾸기</button></div>`;
+  if (label === "stale") return `<div class="pacts"><button class="nob" data-dec="reject" data-p="${esc(p.id)}">거절</button></div>`;
   return `<div class="pacts"><input placeholder="메모(선택)" data-note="${esc(p.id)}" maxlength="1000" aria-label="메모">
     <button class="okb" data-dec="approve" data-p="${esc(p.id)}">승인</button><button class="nob" data-dec="reject" data-p="${esc(p.id)}">거절</button></div>`;
 }
 function propCard(p) {
-  const ch = p.change || {}, g = p.gate || {}, od = p.owner_decision;
+  const ch = p.change || {}, g = p.gate || {}, od = p.owner_decision, gn = p.gate_now;
+  // the tick re-judges open proposals with the room's current number of tests (Bonferroni)
+  const stale = !!(gn && gn.pass === false && (p.status === "awaiting_owner" || p.status === "approved"));
   let acts = "";
   if (od && !od.applied) {
     acts = `<div class="pdone">두 분 결정: <b>${od.decision === "approve" ? "승인" : "거절"}</b> · 직원들이 다음 차례에 반영합니다</div>` +
       (p.effective_status === "approved" ? decideButtons(p, "reject-only") : "");
-  } else if (p.status === "awaiting_owner") acts = decideButtons(p);
+  } else if (p.status === "awaiting_owner") acts = stale ? decideButtons(p, "stale") : decideButtons(p);
   return `<div class="pcard"><div class="ttl">제안 #${esc(p.id)} · ${esc(p.strategy_ko || p.strategy || "")}</div>
     <div class="ln"><b>${esc(testKo(ch.test))}</b></div>
     ${ch.why ? `<div class="ln">이유: ${esc(ch.why)}</div>` : ""}
     ${ch.approver ? `<div class="ln">자율 승인관: ${ch.approver.approve ? "승인" : "거부"} — ${esc(ch.approver.reason || "")}</div>` : ""}
-    <div class="ln">코드 관문: ${g.pass === true ? '<span class="up">✓ 통과</span>' : '<span class="down">✕ 불통과</span>'}${p.trial_id ? ` · 시험 #${esc(p.trial_id)}` : ""}${g.n_trials ? ` · 이 방 ${esc(g.n_trials)}번째 시험` : ""}</div>
+    <div class="ln">코드 관문${gn ? "(제안 때)" : ""}: ${g.pass === true ? '<span class="up">✓ 통과</span>' : '<span class="down">✕ 불통과</span>'}${p.trial_id ? ` · 시험 #${esc(p.trial_id)}` : ""}${g.n_trials ? ` · 이 방 ${esc(g.n_trials)}번째 시험` : ""}</div>
+    ${gn ? `<div class="ln">지금 다시 판정(이 방 시험 ${esc(gn.n_trials)}번 기준): ${gn.pass === true ? '<span class="up">✓ 통과</span>' : '<span class="down">✕ 불통과 · 승인할 수 없음</span>'}</div>` : ""}
     ${(g.reasons || []).length ? `<ul class="reasons">${g.reasons.slice(0, 5).map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
     ${acts}</div>`;
 }

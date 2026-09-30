@@ -10,33 +10,54 @@ dashboard shows the real ones. Owner docs: docs/agent-rooms.md.
 
 Every tick (deploy/paperbot-agents.timer: every 15 minutes) does, in one process that is the only
 writer of agents3.db:
-  1. applies the owners' approve/reject clicks (inbox.db, read-only) to proposals;
-  2. asks ``triggers.find_due`` which rooms should meet now (code only: new losses, busts,
-     incidents, owner posts, 08:00 / 22:00 meetings, 30-day checkpoints, weekly reviews);
-  3. runs up to ``max_rounds_per_tick`` rounds, most urgent first.
+  1. checks whether paper3.db or inbox.db was replaced (restore, new run) and pulls the trigger
+     cursors back if so (``triggers.reconcile_paper_cursors``, ``reconcile_inbox_cursors``);
+  2. applies the owners' approve/reject clicks (inbox.db, read-only) to proposals; an approve click
+     is applied only if the test still passes the gate judged NOW (the room's current number of
+     tests), else code rejects the proposal;
+  3. asks ``triggers.find_due`` which rooms should meet now (code only: new losses, busts,
+     incidents, owner posts, 08:00 / 22:00 meetings, 30-day checkpoints, weekly reviews), leaving
+     out, before the per-tick cut, every meeting the AI budget cannot carry now (``can_start``);
+  4. runs the most urgent one, asks ``find_due`` again (a new incident goes first), and so on, up
+     to ``max_rounds_per_tick`` meetings, ``max_calls_per_tick`` calls or ``tick_wall_s`` seconds.
+Before the first meeting of a real (non dry-run) tick, ``runner.auth_preflight`` checks that Claude
+Code is logged in with the subscription, not an API key; otherwise the tick exits with status 2.
 
 A round is a short meeting moderated by code. Each turn is one model call; the model sees
 ONLY a JSON packet built by code (recent room messages, the strategy's packet and profile
 card, loss cards and tag statistics, notes, trial history, owner messages). Owner text and
 trade data are untrusted DATA: they sit inside the packet, never in the system prompt or
-the instruction. Every answer is checked by code (shape, allowed actions and values,
-evidence paths that exist in the packet the role saw); anything else becomes ``no_action``
-and the room is told why.
+the instruction. An answer is read only when its whole text is one JSON object
+(``strict_json``), so a JSON line it quotes from the packet never becomes its decision. Every
+answer is checked by code (shape, allowed actions and values, evidence paths that exist in the
+packet the role saw); anything else becomes ``no_action`` and the room is told why.
 
 Strategy room (strat:<S>), at most 6 calls:
-    T1 specialist analysis -> T2 devil's advocate challenge -> T3 at most one expert
-    (entry_timing / exit_timing / whatif, picked by code) -> T4 specialist final proposal
-    (skipped when T2 and T3 agree and the action is note / no_action) -> code executes the
-    action (actions.py). request_test: code runs the 5-year test and the gate, T5 validator
-    explains it (cannot change the gate); a copy proposal after a passing gate goes to the
-    T6 approver, whose "yes" code refuses when the gate failed or the copy cap is full.
+    T1 specialist analysis -> T2 devil's advocate challenge. When T2 agrees and T1's action is
+    note / no_action the meeting stops there (2 calls). Otherwise T3 at most one expert
+    (entry_timing / exit_timing / whatif, picked by code) -> T4 specialist final proposal ->
+    code executes the action (actions.py). request_test: code runs the 5-year test and the gate,
+    T5 validator explains it (the message always states the CODE gate; the validator cannot
+    change it); a copy proposal after a passing gate (re-judged with the room's current number of
+    tests) goes to the T6 approver, whose "yes" code refuses when the gate failed or the copy cap
+    is full.
 Team rooms (team:*), at most 5 calls: morning, evening (review team, then the lead's
 three lines to Telegram), incident, checkpoint and owner rounds, with the roster3 roles.
 
 After each round code posts a Korean 'decision' message (numbers from code only), ends the
-round and advances the trigger cursors (only for done / no_action). Rounds that hit the AI
-budget end 'stopped_budget' (room is told '오늘 AI 사용 한도에 도달해 다음으로 미룹니다') and
-their evidence is picked up again on the next KST day.
+round and advances the trigger cursors (only for done / no_action). A model answer that code
+cannot use (bad JSON, odd types or values, a checker error) is retried once and then skipped
+with a system message; a proposal outside the allowed actions and values becomes no_action.
+
+AI budget (``ClassBudget``, agent_calls): a daily cap per trigger class, a daily total and a
+rolling 7-day cap in both of which today's unused part of the incident and scheduled caps is kept
+for them, pacing of loss clusters and weekly reviews over the KST day, a reserve in the loss class
+for busts and in the incident class for liquidations. A meeting starts only when its budget can
+carry its shortest form; one that hits a cap midway ends 'stopped_budget' (room is told '오늘 AI
+사용 한도에 도달해 다음으로 미룹니다') and its evidence runs again on the next KST day (a Claude
+plan usage limit: after an hour; the plan's refusals are not counted as calls). A turn whose calls
+all fail before the model answers (outage, CLI error) ends the round as a 'transient' failure: the
+same evidence runs again after a short, growing pause.
 
 Agents never place orders or call exchange APIs, and cannot change the original 195
 accounts, the rules documents, the pass criteria or code. Copy accounts are not created
@@ -51,6 +72,7 @@ import fcntl
 import json
 import math
 import os
+import re
 import shutil
 import sqlite3
 import sys
@@ -225,6 +247,11 @@ class WeekBudgetExceeded(BudgetExceeded):
     """The rolling 7-day cap is used up."""
 
 
+class WeekReserveExceeded(ReserveExceeded):
+    """What is left of the rolling 7-day cap is kept for today's incidents and scheduled meetings
+    (owner, loss and weekly meetings wait for the next KST day)."""
+
+
 class RoundFailed(RuntimeError):
     pass
 
@@ -245,9 +272,9 @@ def estimate_tokens(packet: dict, system_prompt: str = "") -> int:
 
 class ClassBudget(BudgetedRunner):
     """BudgetedRunner with a sub-budget per trigger class (agent_calls.pipeline = class), a total over
-    all classes (for owner/loss/weekly minus the unused part of the incident and scheduled caps, so
-    those always keep their calls), a rolling 7-day cap, and optional pacing over the KST day, on
-    the tick's own agents3.db connection. ``check`` (hard caps) runs before every call;
+    all classes and a rolling 7-day cap (for owner/loss/weekly both minus today's unused part of the
+    incident and scheduled caps, so those always keep their calls), and optional pacing over the KST
+    day, on the tick's own agents3.db connection. ``check`` (hard caps) runs before every call;
     ``headroom`` (hard caps and pacing) tells the tick whether a new meeting may start."""
 
     def __init__(self, runner: Runner, conn: sqlite3.Connection, cls: str, max_calls: int, max_tokens: int,
@@ -318,6 +345,11 @@ class ClassBudget(BudgetedRunner):
             wc, wt = self.used_week()
             if wc >= self.week[0] or wt >= self.week[1]:
                 raise WeekBudgetExceeded(f"7-day cap: {wc}/{self.week[0]} calls, {wt:,}/{self.week[1]:,} tokens")
+            # the same reserve inside the 7-day cap: a busy week never leaves a liquidation or the
+            # 22:00 summary without calls (rc/rt are 0 for the reserved classes themselves)
+            if (rc or rt) and (wc + rc >= self.week[0] or wt + rt >= self.week[1]):
+                raise WeekReserveExceeded(f"7-day cap: {wc}/{self.week[0]} calls used, {rc} kept for today's "
+                                          f"incidents and scheduled meetings")
 
     def headroom(self) -> int:
         """Calls a NEW meeting of this kind may make now (0 = defer it; nothing is posted)."""
@@ -329,9 +361,9 @@ class ClassBudget(BudgetedRunner):
         room = [self.max_calls - calls, self.total_calls - tc - rc]
         if self.week:
             wc, wt = self.used_week()
-            if wt >= self.week[1]:
+            if wt + rt >= self.week[1]:
                 return 0
-            room.append(self.week[0] - wc)
+            room.append(self.week[0] - wc - rc)
         pa = self.pace_allowance()
         if pa is not None:
             room.append(pa - calls)
@@ -342,6 +374,8 @@ class ClassBudget(BudgetedRunner):
         role = str(packet.get("role", ""))
         try:
             res = self.runner.call(model, system_prompt, instruction, packet)
+        except UsageLimitReached:
+            raise           # the plan refused the call: nothing ran, nothing counts against the caps
         except AgentTimeout:
             self._record(role, model, False, estimate_tokens(packet, system_prompt))   # it ran, unreported
             raise
@@ -431,7 +465,7 @@ ENV_INTS = {
 
 def policy_from_env(environ: Optional[dict] = None) -> RoomsPolicy:
     """The rooms policy with the owners' settings from the environment (/etc/paperbot/agents.env):
-    AGENTS_BUDGET="loss=40:1200000,total=120" (same syntax as --budget), AGENTS_OWNER_OK=auto|yes|no,
+    AGENTS_BUDGET="loss=24:700000,total=80,week=420" (same syntax as --budget), AGENTS_OWNER_OK=auto|yes|no,
     and the integers in ``ENV_INTS``. Unset or empty means the default. A bad value raises
     ValueError (the tick refuses to start rather than run without the intended limit).
     None of these can loosen the code gate: they only set budgets, caps and when owners confirm."""
@@ -483,6 +517,27 @@ def role_ko(role: str) -> str:
 
 
 # ---------------------------------------------------------------- answer checks (code)
+_FENCE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.S)
+
+
+def strict_json(text: Any) -> Optional[dict]:
+    """The model's answer only when its WHOLE text is one JSON object (optionally inside one code
+    fence). Never the first object found inside prose (runner.extract_json): an answer that quotes
+    a packet line (an owner post, a trade, an alert) must not make that line its decision.
+    NaN / Infinity become null. Anything else -> None (unreadable: retried once, then skipped)."""
+    if not isinstance(text, str):
+        return None
+    t = text.strip()
+    m = _FENCE.fullmatch(t)
+    if m:
+        t = m.group(1).strip()
+    try:
+        obj = json.loads(t, parse_constant=lambda _c: None)
+    except (ValueError, RecursionError):
+        return None
+    return obj if isinstance(obj, dict) else None
+
+
 def _s(v: Any, n: int) -> str:
     return R.clean_text(v.strip()[:n]) if isinstance(v, str) else ""
 
@@ -498,8 +553,22 @@ CODE_ROOTS = ("losses", "specialist", "board", "trials", "rules", "meeting", "ro
               "today_rounds", "waiting_for_owners", "expert_reason")
 
 
-def _code_backed(paths: list) -> bool:
-    return any(isinstance(p, str) and p.split(".", 1)[0] in CODE_ROOTS for p in paths)
+def _model_written(path: str, given: Optional[dict]) -> bool:
+    """A path under a code root whose words a model wrote: a hypothesis in the trial ledger
+    (trials.history.<i>.spec: its text and how_to_confirm come from an earlier answer)."""
+    parts = path.split(".")
+    if len(parts) >= 4 and parts[0] == "trials" and parts[1] == "history" and parts[3] == "spec":
+        try:
+            row = (given or {})["trials"]["history"][int(parts[2])]
+        except (KeyError, IndexError, TypeError, ValueError):
+            return True
+        return not isinstance(row, dict) or row.get("kind") != "test"
+    return False
+
+
+def _code_backed(paths: list, given: Optional[dict] = None) -> bool:
+    return any(isinstance(p, str) and p.split(".", 1)[0] in CODE_ROOTS and not _model_written(p, given)
+               for p in paths)
 
 
 def _findings(items: Any, given: dict, where: str, problems: list, n: int = 8) -> list[dict]:
@@ -511,7 +580,7 @@ def _findings(items: Any, given: dict, where: str, problems: list, n: int = 8) -
             continue
         ev = [p for p in it["evidence"]][:6]
         kind = it.get("kind") if it.get("kind") in ("fact", "hypothesis") else "hypothesis"
-        if kind == "fact" and not _code_backed(ev):
+        if kind == "fact" and not _code_backed(ev, given):
             kind = "hypothesis"
             problems.append(f"{where}: 코드가 계산한 자료를 근거로 대지 않은 '사실'을 가설로 표시: {claim[:60]}")
         out.append({"claim": claim, "kind": kind, "evidence": ev})
@@ -1002,7 +1071,8 @@ class _Round:
             self.calls_ok += 1
             self.tokens += tokens_of(res.meta)
             try:
-                clean, problems = check(res.data, given)
+                # the text itself, strictly: never res.data (the first JSON object found in the text)
+                clean, problems = check(strict_json(res.text), given)
             except (TypeError, ValueError, OverflowError, KeyError, AttributeError, IndexError,
                     RecursionError) as exc:             # a checker bug is an unreadable answer, never a crash
                 clean, problems = None, [f"답 검사 실패: {type(exc).__name__}"]
@@ -1030,13 +1100,14 @@ class _Round:
                             {"role": role, "invalid": p})
         if problems:
             self.system(f"{role_ko(role)}의 답에서 코드 검사에 걸린 {len(problems)}곳을 빼거나 고쳤습니다 "
-                        "(근거 경로가 패킷에 없거나 형식이 틀림).", {"role": role, "problems": problems[:8]})
+                        "(근거 경로가 패킷에 없거나, 형식이 틀렸거나, 코드가 계산한 자료 없이 '사실'로 적힘).",
+                        {"role": role, "problems": problems[:8]})
 
     # -- meeting start
     def announce(self) -> None:
         d = self.due.data
         text = f"📣 회의 시작: {TRIGGER_KO.get(self.due.trigger, self.due.trigger)} — {d.get('summary_ko', '')}"
-        self.post("code", "trigger", text, {k: v for k, v in d.items() if k not in ("messages",)}, ts=self.ctx.now_ms)
+        self.post("code", "trigger", text, {k: v for k, v in d.items() if k not in ("messages",)})
 
     def copy_owner_messages(self) -> int:
         """Show the owners' new posts in the room (kind 'owner'); remembered in a cursor so a
@@ -1051,12 +1122,13 @@ class _Round:
         for m in R.pending_inbox(self.ctx.inbox_ro, after, self.room, limit=50):
             if int(m["id"]) > upto:        # posted after this meeting was called: the next one answers it
                 break
-            self.post("owner", "owner", m["text"], {"inbox_id": m["id"], "author": m["author"]},
-                      speaker=f"두 분 ({m['author']})" if m.get("author") else "두 분", ts=m["ts"])
+            # the post and the cursor in one transaction: a crash never shows a post twice
+            R.post(self.ctx.agents_conn, self.room, self.round_id, self.due.meeting, "owner",
+                   f"두 분 ({m['author']})" if m.get("author") else "두 분", "owner", m["text"],
+                   {"inbox_id": m["id"], "author": m["author"]}, ts=m["ts"], commit=False)
             last = max(last, int(m["id"]))
-            n += 1
-        if last > after:
             R.set_cursor(self.ctx.agents_conn, k, last)
+            n += 1
         return n
 
 
@@ -1141,9 +1213,10 @@ def _execute(rnd: _Round, final: dict, proposer: str = "") -> dict:
 
 
 def _gate_view(res: dict) -> dict:
+    """What the validator sees: the gate as code judges it now (a reused test is judged again)."""
     return {"trial_id": res.get("trial_id"), "spec": res.get("spec"), "status": res.get("status"),
             "result": res.get("result"), "gate": res.get("gate"), "n_trials": res.get("n_trials"),
-            "reused": bool(res.get("reused"))}
+            "reused": bool(res.get("reused")), "rejudged": bool(res.get("rejudged"))}
 
 
 def _validate(rnd: _Round, code_result: dict) -> Optional[dict]:
@@ -1181,7 +1254,7 @@ def _do_copy(rnd: _Round, env: A.ActionEnv, trial_id: int, why: str, code_result
                            "reused": True}
             env.post("code_result", "저장된 시험 결과 (코드, 판정은 이 방의 지금 시험 수로 다시 계산):\n"
                      + A.render_result_ko(t.get("spec") or {}, body.get("result"), check.get("gate"),
-                                          check.get("n_trials")), code_result)
+                                          check.get("n_trials"), rejudged=True), code_result)
             validator = _validate(rnd, code_result)
         approver = rnd.ask("approver", "approver", {
             **rnd.base, "code_result": code_result, "validator": validator,
@@ -1201,9 +1274,10 @@ def _strategy_summary(rnd: _Round, final: dict, res: dict, early: bool, verdict:
         if st == "described":
             L.append(f"- 시험 #{res.get('trial_id')}: 설명용 시험이라 관문 판정 없음")
         elif st in ("passed", "failed"):
+            n = res.get("n_trials")
+            where = ((f", 지금 이 방 시험 {n}번 기준" if res.get("rejudged") else f", 이 방 시험 {n}번째") if n else "")
             L.append(f"- 시험 #{res.get('trial_id')}: 코드 관문 {'통과' if st == 'passed' else '불통과'}"
-                     + (" (이전 결과 재사용)" if res.get("reused") else "")
-                     + (f", 이 방 시험 {res.get('n_trials')}번째" if res.get("n_trials") else ""))
+                     + (" (이전 결과 재사용)" if res.get("reused") else "") + where)
         else:
             L.append(f"- 시험 #{res.get('trial_id')}: {res.get('text', '')}")
         cp = res.get("copy")
@@ -1372,12 +1446,14 @@ def _team_summary(rnd: _Round, board: dict, extra: dict) -> str:
 
 
 def compose_evening(ctx: RoundContext, board: dict, lead: dict, due: Optional[TR.Due] = None) -> str:
-    """Evening Telegram: the lead's three lines (AI) + numbers written by code. The day is the
-    meeting's own (22:00 slot), also when the meeting runs after midnight."""
+    """Evening Telegram: the lead's three lines (AI, links and @mentions removed) + numbers written
+    by code. Nothing else the model wrote is sent (its 'what the owners should do' list is only
+    counted here; the full text is in the room). The day is the meeting's own (22:00 slot), also
+    when the meeting runs after midnight."""
     day0 = meeting_day_start(ctx, due)
     day = R.kst_day(day0)
     L = [f"📋 에이전트 저녁 점검 ({day})", "", "[팀장 요약]"]
-    L += [f"{i + 1}. {s}" for i, s in enumerate(lead["summary"][:3])]
+    L += [f"{i + 1}. {A.telegram_safe(s)}" for i, s in enumerate(lead["summary"][:3])]
     L += ["", "[숫자: 코드 계산]"]
     today = board.get("today") or {}
     if today:
@@ -1401,7 +1477,7 @@ def compose_evening(ctx: RoundContext, board: dict, lead: dict, due: Optional[TR
         calls += R.usage_today(ctx.agents_conn, day0)["calls"]
     L.append(f"- {since}AI 호출 {calls}회")
     if lead.get("human_actions"):
-        L += ["", "[두 분이 할 일]"] + [f"- {x}" for x in lead["human_actions"]]
+        L += ["", f"[두 분이 할 일] {len(lead['human_actions'])}건 — 대시보드 '에이전트 방'의 팀장 방에서 보세요"]
     text = "\n".join(L)
     return text if len(text) <= TELEGRAM_LIMIT else text[:TELEGRAM_LIMIT - 20] + "\n…(잘림)"
 
@@ -1442,6 +1518,14 @@ def round_min_calls(due: TR.Due, policy: RoomsPolicy) -> int:
     if is_strategy_room(due.room_id):
         return 2
     return max(1, min(len(team_plan(due)), policy.max_calls_team_round))
+
+
+def round_max_calls(due: TR.Due, policy: RoomsPolicy) -> int:
+    """Most calls a meeting normally makes: a strategy room its cap (T1-T6), a team room its plan.
+    The per-tick cap counts this, so a started meeting never takes the tick past the cap."""
+    if is_strategy_room(due.room_id):
+        return policy.max_calls_strategy_round
+    return round_min_calls(due, policy)
 
 
 def _will_retry(conn: sqlite3.Connection, due: TR.Due, round_id: int, policy: RoomsPolicy) -> bool:
@@ -1523,9 +1607,38 @@ def _safe_system(rnd: _Round, text: str, data: Any = None) -> None:
 # ---------------------------------------------------------------- owner approvals (inbox.db -> proposals)
 APPROVALS_BASE = "inbox:approvals_base"   # inbox.db approvals up to this id predate this agents3.db
 
+def gate_now(conn: sqlite3.Connection, p: dict, now_ms: int) -> tuple[dict, int]:
+    """The code gate of a proposal's test as code judges it NOW (the room's current number of
+    tests, Bonferroni), like every agent path does (actions.copy_check). Fails closed."""
+    t = R.get_trial(conn, int(p["trial_id"])) if _int0(p.get("trial_id")) > 0 else None
+    if t is None or t.get("kind") != "test":
+        return {"pass": False, "reasons": ["제안의 시험 기록을 찾지 못함"]}, 0
+    env = A.ActionEnv(conn=conn, room_id=p["room_id"], strategy=p.get("strategy"), round_id=None,
+                      meeting="owner_decision", now_ms=now_ms)
+    return A.current_gate(env, t)
+
+
+GATE_NOW = "proposals:gate_now"      # {proposal id: {"pass", "n_trials"}} of open proposals, for the dashboard
+
+
+def store_gate_now(conn: sqlite3.Connection, now_ms: int) -> dict:
+    """Re-judge every proposal still waiting for the owners (or approved) and keep the verdicts in a
+    cursor, so the dashboard shows the gate as code judges it now, not as it was stored."""
+    out = {}
+    for st in ("awaiting_owner", "approved"):
+        for p in R.list_proposals(conn, status=st, limit=1000):
+            g, n = gate_now(conn, p, now_ms)
+            out[str(p["id"])] = {"pass": g.get("pass") is True, "n_trials": n}
+    if R.get_cursor(conn, GATE_NOW) != out:
+        R.set_cursor(conn, GATE_NOW, out)
+    return out
+
+
 def apply_approvals(conn: sqlite3.Connection, inbox_ro: Optional[sqlite3.Connection], now_ms: int) -> list[dict]:
     """Apply the owners' approve/reject clicks. The code gate and the copy cap are never
-    overturned: a blocked proposal cannot be approved (rooms_db refuses it)."""
+    overturned: a blocked proposal cannot be approved (rooms_db refuses it), and an approve click
+    is applied only when the proposal's test still passes the gate judged NOW with the room's
+    current number of tests; otherwise code rejects the proposal (its copy slot is freed)."""
     if R.get_cursor(conn, APPROVALS_BASE) is None:
         # first tick of this agents3.db: clicks already in inbox.db were about the proposals of an
         # earlier agents3.db (ids restart at 1 in a new one); they are never applied here
@@ -1545,55 +1658,116 @@ def apply_approvals(conn: sqlite3.Connection, inbox_ro: Optional[sqlite3.Connect
         want = "approved" if a["decision"] == "approve" else "rejected"
         who = f"owner:{a.get('author') or ''}".rstrip(":")
         verb = "승인" if want == "approved" else "거절"
+        ref = {"proposal_id": None if p is None else p["id"], "approval_id": a["id"], "decision": a["decision"]}
+        # each click is one transaction: the proposal, the room line and the cursor land together
         if p is None:
             done.append({"approval_id": a["id"], "ok": False, "why": "no proposal"})
+        elif want == "approved" and p["status"] == "awaiting_owner" and \
+                (gn := gate_now(conn, p, now_ms))[0].get("pass") is not True:
+            # the room ran more tests since: judged now (Bonferroni over its current count) the test
+            # no longer passes, so code closes the proposal instead of approving it (the slot is freed)
+            n_now = gn[1]
+            R.set_proposal_status(conn, p["id"], "rejected", "code", ts=now_ms, commit=False)
+            R.post(conn, p["room_id"], None, "owner_decision", "code", None, "system",
+                   f"제안 #{p['id']}은 지금 이 방 시험 수({n_now}번)로 다시 판정하니 코드 관문을 통과하지 못해 "
+                   "승인할 수 없습니다. 코드가 이 제안을 거절로 닫았습니다 (복제 자리는 비워 둡니다).",
+                   {**ref, "gate_now": {"pass": False, "n_trials": n_now}}, ts=now_ms, commit=False)
+            done.append({"approval_id": a["id"], "ok": False, "proposal_id": p["id"], "status": "rejected",
+                         "why": "gate_now"})
         else:
             try:
-                changed = R.set_proposal_status(conn, p["id"], want, who, ts=now_ms)
+                changed = R.set_proposal_status(conn, p["id"], want, who, ts=now_ms, commit=False)
             except ValueError:
                 changed = None
             if changed is None:
                 R.post(conn, p["room_id"], None, "owner_decision", "code", None, "system",
                        f"제안 #{p['id']}은 지금 '{p['status']}' 상태라 {verb}할 수 없습니다. "
-                       "코드 관문과 복제 한도는 누구도 뒤집을 수 없습니다.",
-                       {"proposal_id": p["id"], "approval_id": a["id"], "decision": a["decision"]}, ts=now_ms)
+                       "코드 관문과 복제 한도는 누구도 뒤집을 수 없습니다.", ref, ts=now_ms, commit=False)
             elif changed:
                 note = (a.get("note") or "").strip()
                 R.post(conn, p["room_id"], None, "owner_decision", "owner",
                        f"두 분 ({a['author']})" if a.get("author") else "두 분", "owner",
                        f"제안 #{p['id']}을 {verb}했습니다." + (f" 메모: {note}" if note else "")
                        + (" 복제 계좌는 live 실행기의 복제 기능이 생기면 만들어집니다." if want == "approved" else ""),
-                       {"proposal_id": p["id"], "approval_id": a["id"], "decision": a["decision"]}, ts=now_ms)
+                       ref, ts=now_ms, commit=False)
             done.append({"approval_id": a["id"], "ok": bool(changed), "proposal_id": p["id"], "status": want})
-        R.set_cursor(conn, "inbox:approvals", int(a["id"]))
+        R.set_cursor(conn, "inbox:approvals", int(a["id"]), commit=False)
+        R.set_cursor(conn, "inbox:approvals_ts", _int0(a.get("ts")), commit=False)
+        conn.commit()
     return done
 
 
 # ---------------------------------------------------------------- tick
+INBOX_FP = "inbox:fingerprint"          # {"m": [id, ts], "a": [id, ts]}: the inbox's newest rows last tick
+
+
+def _inbox_q(inbox_ro: sqlite3.Connection, sql: str, args: tuple = ()) -> Optional[tuple]:
+    try:
+        r = inbox_ro.execute(sql, args).fetchone()
+    except sqlite3.DatabaseError:
+        raise LookupError(sql) from None
+    return tuple(r) if r else None
+
+
+def inbox_fingerprint(inbox_ro: Optional[sqlite3.Connection]) -> Optional[dict]:
+    """(id, ts) of the newest owner post and approval click in inbox.db."""
+    if inbox_ro is None:
+        return None
+    try:
+        m = _inbox_q(inbox_ro, "SELECT id, ts FROM owner_messages ORDER BY id DESC LIMIT 1")
+        a = _inbox_q(inbox_ro, "SELECT id, ts FROM approvals ORDER BY id DESC LIMIT 1")
+    except LookupError:
+        return None
+    return {"m": [_int0(m[0]), _int0(m[1])] if m else [0, 0], "a": [_int0(a[0]), _int0(a[1])] if a else [0, 0]}
+
+
 def reconcile_inbox_cursors(conn: sqlite3.Connection, inbox_ro: Optional[sqlite3.Connection]) -> dict:
-    """inbox.db replaced by an older copy (restore) or recreated: its ids restart below the cursors
-    kept here, and new posts would be ignored until they passed them. Pull such cursors back to
-    the inbox's current highest id (what is there now counts as seen). Returns what changed."""
+    """inbox.db replaced by an older copy (restore) or recreated: its ids restart, so new posts could
+    carry ids this side already counts as handled. Detected when the newest rows seen last tick
+    (``INBOX_FP``) are gone or different, or the inbox's highest id is below a cursor. Then every
+    inbox cursor moves to the last row that is not newer (by time) than what was already handled:
+    handled posts stay handled, everything newer is read. Returns what changed."""
     if inbox_ro is None:
         return {}
-    top = {}
-    for table in ("owner_messages", "approvals"):
-        try:
-            top[table] = int(inbox_ro.execute(f"SELECT COALESCE(MAX(id), 0) FROM {table}").fetchone()[0])
-        except sqlite3.DatabaseError:
-            return {}                      # an inbox without our tables: nothing to compare yet
-    changed = {}
-    for k, v in R.all_cursors(conn, "owner").items():
-        if (k.startswith("owner:") or k.startswith("owner_copied:")) and _int0(v) > top["owner_messages"]:
-            changed[k] = top["owner_messages"]
-    for k in ("inbox:approvals", APPROVALS_BASE):
-        if _int0(R.get_cursor(conn, k, 0)) > top["approvals"]:
-            changed[k] = top["approvals"]
+    fp = R.get_cursor(conn, INBOX_FP)
+    fp = fp if isinstance(fp, dict) else {}
+    changed: dict = {}
+    try:
+        top_m = _int0((_inbox_q(inbox_ro, "SELECT COALESCE(MAX(id), 0) FROM owner_messages") or (0,))[0])
+        top_a = _int0((_inbox_q(inbox_ro, "SELECT COALESCE(MAX(id), 0) FROM approvals") or (0,))[0])
+
+        def moved(table: str, key: str, top: int) -> bool:
+            old = fp.get(key) if isinstance(fp.get(key), list) and len(fp[key]) == 2 else [0, 0]
+            if _int0(old[0]) <= 0:
+                return False
+            r = _inbox_q(inbox_ro, f"SELECT ts FROM {table} WHERE id = ?", (_int0(old[0]),))
+            return r is None or _int0(r[0]) != _int0(old[1])
+        owner_keys = {k: v for k, v in R.all_cursors(conn, "owner").items()
+                      if k.startswith("owner:") or k.startswith("owner_copied:")}
+        if moved("owner_messages", "m", top_m) or any(_int0(v) > top_m for v in owner_keys.values()):
+            for k, v in owner_keys.items():
+                room = k.split(":", 1)[1]
+                r = conn.execute("SELECT MAX(ts) FROM messages WHERE room_id = ? AND kind = 'owner' "
+                                 "AND json_extract(data, '$.inbox_id') IS NOT NULL", (room,)).fetchone()
+                seen = r[0] if r and r[0] is not None else None
+                new = 0 if seen is None else _int0((_inbox_q(
+                    inbox_ro, "SELECT COALESCE(MAX(id), 0) FROM owner_messages WHERE room_id = ? AND ts <= ?",
+                    (room, int(seen))) or (0,))[0])
+                if new != _int0(v):
+                    changed[k] = new
+        if moved("approvals", "a", top_a) or _int0(R.get_cursor(conn, "inbox:approvals", 0)) > top_a:
+            seen = _int0(R.get_cursor(conn, "inbox:approvals_ts", 0))
+            new = _int0((_inbox_q(inbox_ro, "SELECT COALESCE(MAX(id), 0) FROM approvals WHERE ts <= ?",
+                                  (seen,)) or (0,))[0])
+            changed["inbox:approvals"] = new
+            changed[APPROVALS_BASE] = min(new, _int0(R.get_cursor(conn, APPROVALS_BASE, 0)))
+    except LookupError:
+        return {}                          # an inbox without our tables: nothing to compare yet
     for k, v in changed.items():
         R.set_cursor(conn, k, str(v), commit=False)
     if changed:
         conn.commit()
-        print(f"note: inbox.db ids are below the saved cursors (replaced?); reset {sorted(changed)}", file=sys.stderr)
+        print(f"note: inbox.db was replaced (ids restarted); inbox cursors reset: {sorted(changed)}", file=sys.stderr)
     return changed
 
 
@@ -1627,6 +1801,9 @@ def tick(paper_db: Optional[str], daily_db: Optional[str], agents_db: str, inbox
     cannot start now is simply found again on a later tick. ``preflight`` (the real runner's login
     check) runs once, before the first meeting."""
     policy = policy or RoomsPolicy()
+    if any(other and os.path.realpath(other) == os.path.realpath(agents_db) for other in (paper_db, daily_db, inbox_db)):
+        # the tick creates its tables in agents3.db: never in another process's database
+        raise ValueError("--agents-db must be its own file (not paper3.db, daily3.db or inbox.db)")
     now = int(time.time() * 1000) if now_ms is None else int(now_ms)
     t0 = time.monotonic()
     with tick_lock(agents_db) as got:
@@ -1641,7 +1818,13 @@ def tick(paper_db: Optional[str], daily_db: Optional[str], agents_db: str, inbox
                 R.set_cursor(conn, POLICY_CURSOR, caps)
             TR.expire_stale_rounds(conn, now, policy.triggers)
             reconcile_inbox_cursors(conn, inbox_ro)
+            moved = TR.reconcile_paper_cursors(conn, paper_ro)
+            if moved:
+                print(f"note: paper3.db was replaced (restore or new run); trigger cursors reset: {sorted(moved)}",
+                      file=sys.stderr)
+            TR.store_paper_fingerprint(conn, paper_ro)
             approvals = apply_approvals(conn, inbox_ro, now)
+            store_gate_now(conn, now)
             ctx = RoundContext(agents_conn=conn, paper_ro=paper_ro, daily_ro=daily_ro, inbox_ro=inbox_ro, runner=runner,
                                lab=lab, now_ms=now, policy=policy, notifier=notifier or NullNotifier(),
                                clock_ms=clock_ms, cards_path=cards_path)
@@ -1654,15 +1837,16 @@ def tick(paper_db: Optional[str], daily_db: Optional[str], agents_db: str, inbox
                 if results and time.monotonic() - t0 > policy.tick_wall_s:
                     break                                   # a long tick: the rest waits for the next one
                 dues = TR.find_due(paper_ro, daily_ro, conn, inbox_ro, now, policy.triggers,
-                                   defer_triggers=deferred_triggers(ctx), skip_rooms=met)
+                                   defer_triggers=deferred_triggers(ctx), skip_rooms=met,
+                                   can_start=lambda d: can_start(d, ctx))
                 if first is None:
                     first = dues
                 pick = None
                 for d in dues:
-                    need = round_min_calls(d, policy)
-                    if round_budget(d, ctx).headroom() < need:
+                    if not can_start(d, ctx):
                         continue                            # deferred: the budget cannot carry it now
-                    if d.trigger != "incident" and results and tick_calls + need > policy.max_calls_per_tick:
+                    if (d.trigger != "incident" and results
+                            and tick_calls + round_max_calls(d, policy) > policy.max_calls_per_tick):
                         continue
                     pick = d
                     break
@@ -1680,6 +1864,12 @@ def tick(paper_db: Optional[str], daily_db: Optional[str], agents_db: str, inbox
                 tick_calls += res["calls"]
                 if res["stopped"] in ("usage_limit", "budget_total", "budget_week", "runner_error"):
                     break
+            fp = inbox_fingerprint(inbox_ro)
+            if fp is not None and R.get_cursor(conn, INBOX_FP) != fp:
+                R.set_cursor(conn, INBOX_FP, fp)
+            if results:
+                store_gate_now(conn, now)            # this tick's tests may have changed the verdicts
+                TR.store_paper_fingerprint(conn, paper_ro)   # the cursors this tick's meetings advanced
             return {"skipped": "", "approvals": approvals, "due": [(d.room_id, d.trigger) for d in first or []],
                     "rounds": results}
         finally:
@@ -1689,20 +1879,31 @@ def tick(paper_db: Optional[str], daily_db: Optional[str], agents_db: str, inbox
             conn.close()
 
 
-# (trigger, room, minimum calls) of a typical meeting per trigger, for the coarse check below
-_PROBE = {"incident": ("team:ops", 1), "owner": ("team:risk", 1), "loss_cluster": ("strat:", 2), "bust": ("strat:", 2),
-          "checkpoint": ("team:lead", 1), "morning": ("team:market", 1), "evening": ("team:lead", 1),
-          "weekly": ("strat:", 2)}
+def can_start(due: TR.Due, ctx: RoundContext) -> bool:
+    """Can the AI budget carry this meeting's shortest form now (class cap, total and its reserve,
+    7-day cap and its reserve, pacing, the critical and bust reserves)? Exact, per meeting."""
+    return round_budget(due, ctx).headroom() >= round_min_calls(due, ctx.policy)
+
+
+# The room of the cheapest meeting each trigger can open, for the coarse check below (its need is
+# that meeting's own minimum: an owner post in team:lead is a one-call meeting, the 08:00 meeting
+# needs its whole plan). Never more than any real meeting's minimum, so the pre-filter never defers
+# a meeting that could start; ``can_start`` then checks each meeting exactly.
+_PROBE = {"incident": "team:ops", "owner": "team:lead", "loss_cluster": f"strat:{TR.STRATEGIES[0]}",
+          "bust": f"strat:{TR.STRATEGIES[0]}", "checkpoint": "team:lead", "morning": "team:market",
+          "evening": "team:lead", "weekly": f"strat:{TR.STRATEGIES[0]}"}
 
 
 def deferred_triggers(ctx: RoundContext) -> list[str]:
-    """Triggers whose AI budget cannot start a meeting now (class cap, total, reserve, 7-day cap,
-    pacing). find_due leaves them out, so a paced loss cluster never hides the 08:00 meeting.
-    Exact per-meeting checks (its own minimum, the critical reserve) follow in tick."""
+    """Triggers whose AI budget cannot start even their cheapest meeting now (class cap, total,
+    reserve, 7-day cap, pacing): a cheap pre-filter for find_due. The exact per-meeting check
+    (``can_start``: its own minimum, the critical reserve) runs inside find_due before the per-tick
+    cut, so meetings that cannot start never take the slots of those that can."""
     out = []
-    for trig, (room, need) in _PROBE.items():
+    for trig, room in _PROBE.items():
         data = {"class": TR.TRIGGER_CLASS[trig], "counts": {"critical": 1}}
-        if round_budget(TR.Due(room, trig, 0, data, trig), ctx).headroom() < need:
+        probe = TR.Due(room, trig, 0, data, trig)
+        if round_budget(probe, ctx).headroom() < round_min_calls(probe, ctx.policy):
             out.append(trig)
     return out
 
@@ -1793,8 +1994,8 @@ def main(argv: Optional[list[str]] = None) -> int:
                    help="approved copies wait for the owners (auto: first 60 days of the run; "
                         "default: env AGENTS_OWNER_OK, else auto)")
     t.add_argument("--budget", action="append", default=[], metavar="CLASS=CALLS[:TOKENS]",
-                   help="daily AI budget of a trigger class (incident, owner, loss, scheduled, weekly, total); "
-                        "overrides env AGENTS_BUDGET")
+                   help="AI budget of a trigger class per KST day (incident, owner, loss, scheduled, weekly), "
+                        "total (per day) or week (rolling 7 days); overrides env AGENTS_BUDGET")
     args = ap.parse_args(argv)
 
     try:
@@ -1804,6 +2005,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         ap.error(str(exc))
     if args.owner_ok is not None:
         policy.owner_ok_required = OWNER_OK[args.owner_ok]
+    rp = os.path.realpath
+    if rp(args.agents_db) in {rp(args.paper_db), rp(args.daily_db), rp(args.inbox_db)}:
+        ap.error("--agents-db must be its own file (not the paper, daily or inbox database)")
     lab = _load_lab(args.lab_dir)
     agents_db = args.agents_db
     tmp = None
@@ -1824,8 +2028,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         notifier = ConsoleNotifier() if args.no_send else _notifier()
         claude_bin = args.claude_bin
 
-        def preflight() -> tuple:            # subscription login, never an API key (no model call)
+        def login_check() -> tuple:          # subscription login, never an API key (no model call)
             return AUTH_PREFLIGHT(claude_bin)
+        preflight = login_check
     try:
         before = 0
         if args.dry_run and os.path.exists(agents_db):

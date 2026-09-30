@@ -39,7 +39,9 @@ with difference <= 0) / 2,001).
   (b) period 2 improves too, with p < 0.05 and >= 100 variant trades,
   (c) period 3 improves too when it has data (baseline >= 30 trades there); a variant that keeps
       fewer than 30 of them there is "not replicated", not "no data",
-  (d) the variant's own mean ROE per trade > 0 in periods 1 and 2,
+  (d) the variant's own mean ROE per trade > 0 AND its mean P&L on equity per trade (ROE x the
+      tier's margin share, what a copy account really earns) > 0, in periods 1 and 2 (the two can
+      have opposite signs when a few high-leverage trades lose big; a missing value fails),
   (e) >= 300 variant trades in period 1,
   (f) stop_atr only: the improvement is not just the leverage change. ROE on margin is
       leverage x price return, and size_position picks a lower leverage for a wider stop, so a
@@ -426,7 +428,7 @@ def normalize_spec(spec: Any, strategy: Optional[str] = None) -> dict:
         raise SpecError("시험 요청은 JSON 객체여야 합니다.")
     t = spec.get("template")
     if not isinstance(t, str) or t not in TEMPLATES:
-        raise SpecError(f"없는 시험 종류입니다: {str(t)[:40]!r}. 가능한 것: {', '.join(TEMPLATES)}.")
+        raise SpecError(f"없는 시험 종류입니다. 가능한 것: {', '.join(TEMPLATES)}.")
     s = spec.get("strategy")
     if strategy is not None:
         if s not in (None, "", strategy):     # a tuple: == only, never a hash (a list value is fine)
@@ -740,10 +742,14 @@ def gate(result: dict, n_trials_so_far: int) -> dict:
         checks["c"] = True
         why = "자료 없음" if not p3.get("available") else f"지금 규칙 거래 {MIN_TRADES_P3}건 미만"
         reasons.append(f"③ 3기간(2020~2021년 7월): {why}이라 판단에서 뺌")
+    # a copy account's money result is the P&L on its equity (ROE x the tier's margin share), which can
+    # have the other sign than the mean ROE on margin: both must be positive (missing values fail)
     m1, m2 = num(p1, "variant", "mean_roe"), num(p2, "variant", "mean_roe")
-    checks["d"] = m1 is not None and m2 is not None and m1 > 0 and m2 > 0
-    reasons.append(f"④ 바꾼 규칙 자체가 돈을 버는지: 거래당 평균 1기간 {_pct(m1, True)}, 2기간 {_pct(m2, True)} "
-                   f"— 둘 다 0보다 커야 함: {'통과' if checks['d'] else '미달'}")
+    e1, e2 = num(p1, "variant", "mean_pnl_equity"), num(p2, "variant", "mean_pnl_equity")
+    checks["d"] = all(x is not None and x > 0 for x in (m1, m2, e1, e2))
+    reasons.append(f"④ 바꾼 규칙 자체가 돈을 버는지: 거래당 평균 ROE 1기간 {_pct(m1, True)}, 2기간 {_pct(m2, True)}, "
+                   f"자산 대비 손익 1기간 {_pct(e1, True)}, 2기간 {_pct(e2, True)} — 모두 0보다 커야 함: "
+                   f"{'통과' if checks['d'] else '미달'}")
     nv1 = int(num(p1, "variant", "trades") or 0)
     checks["e"] = nv1 >= MIN_TRADES_P1
     reasons.append(f"⑤ 1기간 거래 수 {nv1:,}건 — 기준 {MIN_TRADES_P1}건 이상: {'통과' if checks['e'] else '미달'}")

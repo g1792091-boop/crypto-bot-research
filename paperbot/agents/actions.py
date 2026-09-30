@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import sqlite3
 from dataclasses import dataclass, field
 from typing import Any, Optional
@@ -132,7 +133,7 @@ def _fallback_spec(test: dict, strategy: str) -> tuple[Optional[dict], str]:
     tmpl = templates()
     name = test.get("template")
     if not isinstance(name, str) or name not in tmpl:
-        return None, f"없는 시험 종류: {str(name)[:40]!r}"
+        return None, f"없는 시험 종류 (가능한 것: {', '.join(tmpl)})"
     if test.get("strategy") not in (None, "", strategy):
         return None, "이 방의 전략만 시험할 수 있음"
     spec: dict = {"template": name, "strategy": strategy}
@@ -175,10 +176,11 @@ def validate(prop: Any, *, strategy: Optional[str] = None,
     if not isinstance(prop, dict):
         return {"action": "no_action", "invalid": True, "reason": "제안이 객체가 아님"}, ["제안이 JSON 객체가 아님"]
     a = prop.get("action")
+    # 'reason' is fixed text by code (it is shown in code lines); what the model wrote stays in 'asked'
     if not isinstance(a, str) or a not in allow:
         shown = str(a)[:40]
         return ({"action": "no_action", "invalid": True, "asked": shown,
-                 "reason": f"허용되지 않은 행동 {shown!r}"}, [f"허용되지 않은 행동: {shown!r}"])
+                 "reason": "허용 목록에 없는 행동"}, [f"허용되지 않은 행동: {shown!r}"])
     bad = lambda why: ({"action": "no_action", "invalid": True, "asked": a, "reason": why},  # noqa: E731
                        [f"{a}: {why}"])
     if a == "no_action":
@@ -194,7 +196,9 @@ def validate(prop: Any, *, strategy: Optional[str] = None,
     if a == "request_test":
         spec, why = _test_spec(prop.get("test"), strategy)
         if spec is None:
-            return bad(why)
+            got = bad("허용된 시험 형식이 아님 (시험 종류·시간봉·값은 목록에서만)")
+            got[0]["detail"] = why
+            return got[0], [f"{a}: {why}"]
         return {"action": "request_test", "test": spec,
                 "propose_copy_if_pass": prop.get("propose_copy_if_pass") is True,
                 "why": _text(prop.get("why"), MAX_REASON)}, []
@@ -206,7 +210,9 @@ def validate(prop: Any, *, strategy: Optional[str] = None,
     if a == "flag_owners":
         lvl = prop.get("level", INFO)
         if lvl not in FLAG_LEVELS:
-            return bad(f"알림 수준은 INFO 또는 WARN만 가능 ({str(lvl)[:20]!r})")
+            got = bad("알림 수준은 INFO 또는 WARN만 가능")
+            got[0]["detail"] = str(lvl)[:20]
+            return got[0], got[1]
         t = _text(prop.get("text"), MAX_FLAG)
         return ({"action": "flag_owners", "level": lvl, "text": t}, []) if t else bad("알림 내용이 비어 있음")
     return bad("처리할 수 없음")  # pragma: no cover
@@ -262,6 +268,18 @@ def hypothesis(env: ActionEnv, a: dict) -> dict:
     return _done("hypothesis", True, "가설을 장부에 기록", trial_id=tid)
 
 
+# links and @mentions in model-written words (Telegram makes them clickable): never sent as such
+_LINK = re.compile(r"(?i)(?:https?://|www\.)\S+"
+                   r"|\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|net|org|io|xyz|ru|cn|kr|co|me|app|link|info|biz|top|site"
+                   r"|online|ly|gg|to|tk|ml|cc|us|uk|de|jp|example)\b(?:/\S*)?"
+                   r"|(?<![\w.])@\w{3,}")
+
+
+def telegram_safe(text: str) -> str:
+    """Model-written words bound for Telegram: links and @mentions replaced by '(링크 생략)'."""
+    return _LINK.sub("(링크 생략)", text or "")
+
+
 def flag_owners(env: ActionEnv, a: dict) -> dict:
     key = f"flag_owners:{R.kst_day(env.now_ms)}"
     used = int(R.get_cursor(env.conn, key, 0) or 0)
@@ -270,7 +288,7 @@ def flag_owners(env: ActionEnv, a: dict) -> dict:
                  {"action": "flag_owners", "sent": False, "reason": "daily_limit"})
         return _done("flag_owners", False, "하루 알림 한도", sent=False)
     title = env.room_title or env.room_id
-    text = f"[에이전트 알림] {title}: {a['text']}"
+    text = f"[에이전트 알림] {title}: {telegram_safe(a['text'])}"
     R.set_cursor(env.conn, key, used + 1)
     try:
         env.notifier.send(a["level"], text)
@@ -302,15 +320,33 @@ def _periods(result: Any) -> list[tuple[str, dict]]:
     return []
 
 
-def render_result_ko(spec: dict, result: Any, gate: Optional[dict], n_trials: Optional[int]) -> str:
+def _same_gate(a: Any, b: Any) -> bool:
+    if not (isinstance(a, dict) and isinstance(b, dict)):
+        return False
+    return (a.get("pass") is True) == (b.get("pass") is True) and a.get("n_trials") == b.get("n_trials")
+
+
+def render_result_ko(spec: dict, result: Any, gate: Optional[dict], n_trials: Optional[int],
+                     rejudged: bool = False) -> str:
     """Code-written Korean summary of a test result (numbers only from the result). Uses the
-    lab's own ``summary_ko`` when it has one."""
+    lab's own ``summary_ko`` when it has one; when ``gate`` (the verdict code gives now) differs from
+    the one stored in the result, the summary is written again with ``gate`` (never the old verdict).
+    ``rejudged``: the gate was judged again with the room's current number of tests."""
     if isinstance(result, dict) and isinstance(result.get("summary_ko"), str) and result.get("summary_ko"):
         text = result["summary_ko"]
-        if gate is not None and isinstance(result.get("gate"), dict) and \
-                bool(result["gate"].get("pass")) != bool(gate.get("pass")):
-            text += "\n판정(이 방 시험 횟수로 다시 계산): " + ("통과" if gate.get("pass") else "통과 못함")
-        return text
+        if gate is not None and not _same_gate(result.get("gate"), gate):
+            redo = None
+            fn = getattr(_lab, "summary_ko", None) if _lab is not None else None
+            if fn is not None:
+                try:
+                    redo = fn({**result, "gate": gate})
+                except Exception:  # a stored result the lab cannot render: the plain table below
+                    redo = None
+            if isinstance(redo, str) and redo:
+                return redo
+            result = {k: v for k, v in result.items() if k != "summary_ko"}
+        else:
+            return text
     name = spec.get("template")
     vals = ", ".join(f"{k}={v}" for k, v in spec.items() if k not in ("template", "strategy"))
     lines = [f"[5년 시험] {TEMPLATE_KO.get(name, name)}" + (f" ({vals})" if vals else "")]
@@ -324,8 +360,9 @@ def render_result_ko(spec: dict, result: Any, gate: Optional[dict], n_trials: Op
                      f"{_num(b.get('mean_roe'), '+.2%')} → {_num(v.get('mean_roe'), '+.2%')} "
                      f"(차이 {_num(p.get('diff'), '+.2%')}, p={_num(p.get('p'), '.4f')})")
     if gate is not None:
-        lines.append("판정: " + ("통과" if gate.get("pass") is True else "통과 못함")
-                     + (f" (이 방 시험 {n_trials}번째)" if n_trials else ""))
+        where = ((f" (지금 이 방 시험 {n_trials}번 기준)" if rejudged else f" (이 방 시험 {n_trials}번째)")
+                 if n_trials else "")
+        lines.append("판정: " + ("통과" if gate.get("pass") is True else "통과 못함") + where)
         lines += [f"  {str(r)[:200]}" for r in (gate.get("reasons") or [])[:6]]
     return "\n".join(lines)
 
@@ -349,11 +386,23 @@ def request_test(env: ActionEnv, a: dict) -> dict:
     old = R.find_trial(env.conn, env.strategy, spec, kind="test")
     st, body = _stored(old)
     if old is not None and st in FINAL_TEST_STATUSES:
-        text = (f"같은 시험을 이미 했습니다 (시험 #{old['id']}). 다시 돌리지 않고 저장된 결과를 씁니다.\n"
-                + render_result_ko(spec, body.get("result"), body.get("gate"), body.get("n_trials")))
-        env.post("code_result", text, {"trial_id": old["id"], "spec": spec, "status": st, "reused": True, **body})
-        return _done("request_test", True, "이전 시험 결과 재사용", trial_id=old["id"], status=st, reused=True,
-                     spec=spec, result=body.get("result"), gate=body.get("gate"), n_trials=body.get("n_trials"))
+        # a stored pass is judged again with the room's CURRENT number of tests (Bonferroni), exactly
+        # like the copy step does, so the room, the validator and the summary see one verdict
+        if st == "passed":
+            gate, n_now = current_gate(env, old)
+            st_now = "passed" if gate.get("pass") is True else "failed"
+        else:
+            gate, n_now, st_now = body.get("gate"), body.get("n_trials"), st
+        again = st == "passed"
+        text = (f"같은 시험을 이미 했습니다 (시험 #{old['id']}). 다시 돌리지 않고 저장된 결과를 씁니다"
+                + (" (판정은 이 방의 지금 시험 수로 다시 계산)" if again else "") + ".\n"
+                + render_result_ko(spec, body.get("result"), gate, n_now, rejudged=again))
+        env.post("code_result", text, {"trial_id": old["id"], "spec": spec, "reused": True, **body, "gate": gate,
+                                       "n_trials": n_now, "status": st_now, "stored_status": st,
+                                       "n_trials_at_test": body.get("n_trials"), "rejudged": again})
+        return _done("request_test", True, "이전 시험 결과 재사용", trial_id=old["id"], status=st_now, reused=True,
+                     spec=spec, result=body.get("result"), gate=gate, n_trials=n_now, rejudged=again,
+                     n_trials_at_test=body.get("n_trials"))
     # a trial that could not run (no data / error) keeps its number: asking again runs it then
     tid = old["id"] if old is not None else R.add_trial(env.conn, env.room_id, env.strategy, "test", spec,
                                                          env.round_id, ts=env.now_ms)

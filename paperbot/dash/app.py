@@ -513,13 +513,13 @@ class Rooms:
             return []
         copied: set = set()
         if a is not None:
-            try:
-                copied = {int(r[0]) for r in a.execute(
-                    "SELECT json_extract(data, '$.inbox_id') FROM messages WHERE room_id = ? AND kind = 'owner' "
+            try:        # (inbox id, post time): ids restart if inbox.db is ever replaced
+                copied = {(int(r[0]), int(r[1])) for r in a.execute(
+                    "SELECT json_extract(data, '$.inbox_id'), ts FROM messages WHERE room_id = ? AND kind = 'owner' "
                     "AND json_extract(data, '$.inbox_id') IS NOT NULL", (room_id,))}
             except (sqlite3.Error, TypeError, ValueError):
                 copied = set()
-        return [{**m, "pending": True} for m in got if int(m["id"]) not in copied][-50:]
+        return [{**m, "pending": True} for m in got if (int(m["id"]), int(m["ts"] or 0)) not in copied][-50:]
 
     def messages(self, room_id: str, after_id: int = 0, limit: int = 200, before_id: int = 0) -> dict:
         limit = min(max(int(limit or 1), 1), 500)
@@ -579,14 +579,30 @@ class Rooms:
         with self.ro(self.agents_db) as a:
             rows = self.R.list_proposals(a, status, strategy, room_id, limit)
             upto = self._cursor(a, "inbox:approvals")
+            now = self._gate_now(a)
         for p in rows:
             dec = decs.get(int(p["id"]))
             eff, applied = self._effective(p, dec, upto)
+            p["gate_now"] = now.get(str(p["id"]))
             p["strategy_ko"] = STRATEGY_KO.get(p.get("strategy") or "", p.get("strategy"))
             p["owner_decision"] = None if dec is None else {
                 "decision": dec["decision"], "ts": dec["ts"], "note": dec.get("note"), "applied": applied}
             p["effective_status"] = eff
         return rows
+
+    @staticmethod
+    def _gate_now(a: Optional[sqlite3.Connection]) -> dict:
+        """{proposal id: {pass, n_trials}}: the agents tick re-judges open proposals with the room's
+        current number of tests (cursor 'proposals:gate_now'); an approve click on a proposal that no
+        longer passes is refused here and, in any case, by the tick."""
+        if a is None:
+            return {}
+        try:
+            r = a.execute("SELECT v FROM cursors WHERE k = 'proposals:gate_now'").fetchone()
+            v = json.loads(r[0]) if r and r[0] else None
+        except (sqlite3.Error, TypeError, ValueError):
+            return {}
+        return v if isinstance(v, dict) else {}
 
     def _stored_caps(self, a: Optional[sqlite3.Connection]) -> Optional[dict]:
         """The caps the agents tick really used (it stores them in agents3.db, cursor 'policy:caps')."""
@@ -660,9 +676,12 @@ class Rooms:
                 "pending": True}
 
     def decide(self, proposal_id: int, decision: str, note: str, author: str) -> dict:
+        if not 0 < int(proposal_id) < 2 ** 63:          # beyond SQLite's integers: no such proposal
+            raise HTTPException(404, "그런 제안이 없습니다")
         with self.ro(self.agents_db) as a:
             p = self.R.get_proposal(a, proposal_id)
             upto = self._cursor(a, "inbox:approvals")
+            now = self._gate_now(a).get(str(proposal_id))
         if p is None:
             raise HTTPException(404, "그런 제안이 없습니다")
         dec = self._decisions().get(int(proposal_id))
@@ -671,6 +690,9 @@ class Rooms:
         if decision == "approve":
             if not gate_ok:
                 raise HTTPException(409, "코드 관문을 통과하지 못한 제안은 누구도 승인할 수 없습니다")
+            if isinstance(now, dict) and now.get("pass") is False:
+                raise HTTPException(409, "이 방에서 시험을 더 해서, 지금 기준으로 다시 판정하면 코드 관문을 "
+                                         "통과하지 못합니다. 승인할 수 없습니다")
             if eff != "awaiting_owner" or (dec is not None and dec.get("rejected_before")):
                 raise HTTPException(409, f"이 제안은 지금 승인할 수 없는 상태입니다 ({eff})")
         elif eff not in ("awaiting_owner", "approved"):
@@ -705,6 +727,11 @@ async def _json_object(req: Request, limit: int = BODY_MAX) -> dict:
     return body
 
 
+def same_file(a: str, b: str) -> bool:
+    """Do two database flags name the same file (symlinks and relative spellings resolved)?"""
+    return os.path.realpath(a) == os.path.realpath(b)
+
+
 def _storable(text: str) -> bool:
     """Text SQLite can store as UTF-8 (a lone surrogate like the JSON escape \\ud800 cannot)."""
     try:
@@ -717,6 +744,9 @@ def _storable(text: str) -> bool:
 def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fetch_candles,
                agents_db: Optional[str] = None, daily_db: Optional[str] = None, frames=fetch_frame,
                inbox_db: Optional[str] = None, say_per_hour: int = SAY_PER_HOUR) -> FastAPI:
+    if inbox_db and any(other and same_file(inbox_db, other) for other in (db, daily_db, agents_db)):
+        # the dashboard creates its tables in inbox.db: never in another process's database
+        raise ValueError("--inbox-db must be its own file (not paper3.db, daily3.db or agents3.db)")
     app = FastAPI(title="paper v3", docs_url=None, redoc_url=None, openapi_url=None)
     data = Data(db, daily_db)
     rooms = Rooms(agents_db, inbox_db, os.environ.get("AGENTS_BUDGET"), say_per_hour,
@@ -726,8 +756,7 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
     def authed(req: Request) -> bool:
         return password_hash is None or token_ok(secret, req.cookies.get(COOKIE))
 
-    @app.middleware("http")
-    async def guard(req: Request, call_next):
+    async def _guarded(req: Request, call_next):
         path = req.url.path
         if path in ("/login", "/api/login") or path.startswith("/static/login"):
             return await call_next(req)
@@ -737,6 +766,14 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
             return RedirectResponse("/login")
         resp = await call_next(req)
         resp.headers["Cache-Control"] = "no-store"
+        return resp
+
+    @app.middleware("http")
+    async def guard(req: Request, call_next):
+        resp = await _guarded(req, call_next)
+        # never inside another site's frame (the approve / reject buttons, the login form)
+        resp.headers["X-Frame-Options"] = "DENY"
+        resp.headers["Content-Security-Policy"] = "frame-ancestors 'none'"
         return resp
 
     @app.get("/login")
@@ -868,7 +905,8 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
 
     @app.get("/api/rooms/{room_id}/messages")
     def get_room_messages(room_id: str, after_id: int = 0, limit: int = 200, before_id: int = 0):
-        return rooms.messages(_room(room_id), max(after_id, 0), limit, max(before_id, 0))
+        top = 2 ** 63 - 1                               # SQLite's largest integer
+        return rooms.messages(_room(room_id), min(max(after_id, 0), top), limit, min(max(before_id, 0), top))
 
     @app.get("/api/rooms/{room_id}/notes")
     def get_room_notes(room_id: str, limit: int = 50):

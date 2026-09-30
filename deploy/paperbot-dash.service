@@ -13,6 +13,18 @@ EnvironmentFile=/etc/paperbot/dash.env
 ExecStart=/opt/paperbot/venv/bin/python -m paperbot.dash --db /var/lib/paperbot/paper3.db --daily-db /var/lib/paperbot/daily3.db --agents-db /var/lib/paperbot/agents3.db --inbox-db /var/lib/paperbot/inbox.db --host ${DASH_HOST} --port 8080
 Restart=always
 RestartSec=5
+# The dashboard is a writer (inbox.db) and faces the network: it may write only /var/lib/paperbot
+# (inbox.db, and the -shm files its read-only connections need), cannot replace the Claude Code
+# program the agents run (~/.local) or the 5-year caches, and cannot read the exchange key or the
+# agents' login token. No database FILE is listed read-only here: this service runs for weeks, and a
+# listed file stays pinned to its old inode after a restore (old file + new WAL); the code opens
+# paper3.db, daily3.db and agents3.db read-only (file:...?mode=ro) instead.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/paperbot
+ReadOnlyPaths=-/var/lib/paperbot/.local -/var/lib/paperbot/lab
+InaccessiblePaths=-/etc/paperbot/agents.env -/etc/paperbot/live.env
 
 [Install]
 WantedBy=multi-user.target

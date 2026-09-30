@@ -1,9 +1,12 @@
 # Consistent copies of the paper databases (sqlite online backup), 14 days kept. agents3.db holds the
 # agents' hypothesis ledger (the gate's test count) and inbox.db the owners' posts and approvals.
+# The backup is not a writer of any of them: every source is opened read-only (sqlite3 -readonly, the
+# same as file:...?mode=ro), so closing it never checkpoints a left-over WAL into the database file.
+# A copy that fails makes the unit fail (exit status), after the old copies are pruned.
 [Unit]
 Description=paperbot database backup
 
 [Service]
 Type=oneshot
 User=paperbot
-ExecStart=/bin/sh -c 'd=/var/backups/paperbot/$(date -u +%%Y%%m%%d); mkdir -p "$d" && for f in paper3 daily3 agents3 inbox; do [ -f /var/lib/paperbot/$f.db ] && sqlite3 /var/lib/paperbot/$f.db ".backup $d/$f.db"; done; find /var/backups/paperbot -mindepth 1 -maxdepth 1 -type d -mtime +14 -exec rm -rf {} +'
+ExecStart=/bin/sh -c 'd=/var/backups/paperbot/$(date -u +%%Y%%m%%d); mkdir -p "$d" || exit 1; fail=0; for f in paper3 daily3 agents3 inbox; do [ -f /var/lib/paperbot/$f.db ] && { sqlite3 -readonly /var/lib/paperbot/$f.db ".backup $d/$f.db" || fail=1; }; done; find /var/backups/paperbot -mindepth 1 -maxdepth 1 -type d -mtime +14 -exec rm -rf {} +; exit $fail'

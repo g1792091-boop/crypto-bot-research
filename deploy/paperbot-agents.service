@@ -1,7 +1,10 @@
 # Agent rooms: the staff discuss, decide and resolve by themselves (docs/agent-rooms.md).
 # One short pass, started every 15 minutes by paperbot-agents.timer: apply the owners' approve/reject
 # clicks, find the rooms that are due, run at most 4 meetings, then exit. Two passes never overlap
-# (lock file /var/lib/paperbot/agents3.db.lock).
+# (lock file /var/lib/paperbot/agents3.db.lock). Run a pass by hand only as this user
+# (sudo -u paperbot ...), never as root: a root-owned lock or database would stop the timer's passes.
+# Before its first meeting a pass checks that Claude Code is logged in with the subscription and
+# not an API key (`claude auth status`); otherwise it exits with status 2 and runs nothing.
 # The only writer of agents3.db. Reads paper3.db, daily3.db and inbox.db read-only. Never places an
 # order, never calls an exchange API, never changes the 195 accounts, the rules or the code.
 [Unit]
@@ -30,3 +33,17 @@ IOSchedulingPriority=7
 MemoryHigh=2G
 MemoryMax=3G
 TimeoutStartSec=100min
+# Defence in depth (the model child already has no tools): this pass may write only /var/lib/paperbot
+# (agents3.db and its lock, Claude Code's own files under ~/.claude); the live runner's, the nightly
+# check's and the dashboard's database files and the 5-year caches are read-only here, and the
+# exchange key and the dashboard secret cannot be read at all. A missing file ('-') is skipped.
+# The -wal files are NOT listed: a file listed here is pinned to the inode it had when the pass
+# started, and the writers delete and re-create their -wal (the nightly check at every run), so a
+# pinned one would be a stale WAL next to the live -shm. The code opens those databases read-only
+# (file:...?mode=ro, query_only) in any case. Restore a database only with this timer stopped.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/paperbot
+ReadOnlyPaths=-/var/lib/paperbot/paper3.db -/var/lib/paperbot/daily3.db -/var/lib/paperbot/inbox.db -/var/lib/paperbot/lab
+InaccessiblePaths=-/etc/paperbot/live.env -/etc/paperbot/dash.env
