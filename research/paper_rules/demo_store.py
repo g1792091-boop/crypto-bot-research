@@ -32,9 +32,10 @@ COINS = {"BTCUSDT": "BTCUSD", "ETHUSDT": "ETHUSD", "SOLUSDT": "SOLUSD", "DOGEUSD
 
 def main(scratch: str, out: str, days: int = 20) -> None:
     sig_dir = os.path.join(scratch, "signals")
-    z = {tf: {s: np.load(os.path.join(sig_dir, f"sig_{tf}_{c}.npz")) for s, c in COINS.items()} for tf in TRADE_TFS}
+    z = {tf: {s: dict(np.load(os.path.join(sig_dir, f"sig_{tf}_{c}.npz"))) for s, c in COINS.items()}
+         for tf in TRADE_TFS}
     five = {s: z["5m"][s] for s in COINS}
-    names = [k[3:] for k in five["BTCUSDT"].files if k.startswith("s__")]
+    names = [k[3:] for k in five["BTCUSDT"] if k.startswith("s__")]
     rates = random_rates()
     end = int(five["BTCUSDT"]["ts"][-1] // 1_000_000) + TF_MS["5m"]
     start = end - days * 86_400_000

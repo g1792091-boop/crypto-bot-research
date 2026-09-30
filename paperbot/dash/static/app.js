@@ -21,6 +21,23 @@ async function api(path) {
   if (!r.ok) throw new Error(path + " " + r.status);
   return r.json();
 }
+// Engine and runner messages are in English; show them in Korean.
+function alertKo(text) {
+  const t = String(text);
+  let m;
+  if ((m = t.match(/^\[([^\]]+)\] drawdown ([\d.]+)% \(level (\d+)%\), equity ([\d.]+)/)))
+    return `${m[1]} 낙폭 ${m[2]}% (${m[3]}% 경고선), 잔고 $${m[4]}`;
+  if ((m = t.match(/^\[([^\]]+)\] BUST/))) return `${m[1]} 파산 (잔고 $10 미만, 계좌 정지)`;
+  if ((m = t.match(/^\[([^\]]+)\] LIQUIDATED (\S+) (\d+)x lost margin ([\d.]+)/)))
+    return `${m[1]} 강제청산: ${m[2]} ${m[3]}배, 증거금 $${m[4]} 손실`;
+  if ((m = t.match(/^data gap at (\d+): no bar for (.+)/))) return `데이터 누락 ${tsKo(+m[1])}: ${m[2]}`;
+  if (/^no new closed bars/.test(t)) return "새 1분봉이 들어오지 않음: " + t;
+  if (/^5m history incomplete/.test(t)) return "5분봉 기록 불완전으로 신호 계산 건너뜀";
+  if (/^Binance blocked/.test(t)) return "바이낸스가 서버 접속을 막음: " + t;
+  return t;
+}
+// Per-account drawdown notes stay on the status page; toasts are for events that need attention.
+const toastWorthy = (a) => a.level === "CRITICAL" || /BUST|LIQUIDATED|blocked|gap|no new closed/.test(a.text);
 function toast(text) {
   const t = $("toast"); t.textContent = text; t.classList.add("show");
   clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("show"), 5000);
@@ -196,6 +213,7 @@ async function drawCandles(d) {
     layout: {background: {color: css("--surface-1")}, textColor: css("--text-secondary")},
     grid: {vertLines: {color: css("--line")}, horzLines: {color: css("--line")}},
     timeScale: {timeVisible: true, borderColor: css("--line")}, rightPriceScale: {borderColor: css("--line")},
+    localization: {locale: "ko-KR"},
   });
   charts.push(c);
   const s = c.addCandlestickSeries({upColor: css("--gain"), downColor: css("--loss"), borderVisible: false,
@@ -243,8 +261,8 @@ async function loadStatus() {
   $("st-sig").innerHTML = s.signals_24h.map((r) => `<tr><td>${TF_KO[r.timeframe] || r.timeframe}</td><td>${STATUS_KO[r.status] || r.status}</td>
     <td class="r">${r.n}</td><td class="r">${r.avg_delay == null ? "—" : (r.avg_delay / 1000).toFixed(1) + "초"}</td></tr>`).join("")
     || '<tr><td colspan="4" class="empty">최근 신호 없음</td></tr>';
-  $("st-alerts").innerHTML = s.alerts.map((a) => `<tr><td>${tsKo(a.ts)}</td><td class="${a.level === "CRITICAL" ? "loss" : "warn"}">${a.level}</td>
-    <td style="white-space:normal">${esc(a.text)}</td></tr>`).join("") || '<tr><td colspan="3" class="empty">경고 없음</td></tr>';
+  $("st-alerts").innerHTML = s.alerts.map((a) => `<tr><td>${tsKo(a.ts)}</td><td class="${a.level === "CRITICAL" ? "loss" : "warn"}">${a.level === "CRITICAL" ? "긴급" : "주의"}</td>
+    <td style="white-space:normal">${esc(alertKo(a.text))}</td></tr>`).join("") || '<tr><td colspan="3" class="empty">경고 없음</td></tr>';
 }
 
 // ------------------------------------------------------------ live: server events + Binance prices
@@ -267,7 +285,7 @@ function stream() {
       loadBoard();  // refresh derived columns (win rate, vs coin-flip)
     }
     d.trades.forEach((t) => toast(`${t.account_id} ${t.symbol.replace("USDT", "")} ${REASON_KO[t.exit_reason] || t.exit_reason} ${pct(t.roe)} → $${fmt(t.equity_after)}`));
-    d.alerts.forEach((a) => toast(`⚠ ${a.text}`));
+    d.alerts.filter(toastWorthy).forEach((a) => toast(`⚠ ${alertKo(a.text)}`));
     if (state.view === "account" && state.account && d.trades.some((t) => t.account_id === state.account.account.account_id)) {
       openAccount(state.account.account.account_id);
     }

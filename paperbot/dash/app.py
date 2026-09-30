@@ -166,6 +166,12 @@ class Data:
         with self.conn() as c:
             return [dict(r) for r in c.execute(q, args)]
 
+    def latest_ids(self) -> tuple[int, int]:
+        with self.conn() as c:
+            t = c.execute("SELECT COALESCE(MAX(id), 0) FROM trades").fetchone()[0]
+            a = c.execute("SELECT COALESCE(MAX(rowid), 0) FROM alerts").fetchone()[0]
+        return int(t), int(a)
+
     def since(self, trade_id: int, alert_row: int) -> dict:
         with self.conn() as c:
             trades = [dict(r) for r in c.execute(
@@ -280,6 +286,8 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
         async def gen():
             nonlocal trade_id, alert_row
             last_board = None
+            if not trade_id and not alert_row:   # a new page starts from now, not from the first trade
+                trade_id, alert_row = data.latest_ids()
             while not await req.is_disconnected():
                 d = data.since(trade_id, alert_row)
                 if d["trades"]:
