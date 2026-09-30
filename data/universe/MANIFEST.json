@@ -1,0 +1,5419 @@
+{
+ "num_symbols": 864,
+ "num_symbols_in_listing": 864,
+ "symbols_in_listing_without_data_in_range": [],
+ "total_rows": 637705,
+ "rows_with_duplicate_symbol_open_time": 0,
+ "delisted_or_renamed": [
+  "1000BTTCUSDT",
+  "AERGOUSDT",
+  "AKROUSDT",
+  "ANCUSDT",
+  "ANTUSDT",
+  "AUDIOUSDT",
+  "BDXNUSDT",
+  "BLUEBIRDUSDT",
+  "BTCSTUSDT",
+  "BTSUSDT",
+  "BTTUSDT",
+  "BZRXUSDT",
+  "COCOSUSDT",
+  "DODOUSDT",
+  "DOTECOUSDT",
+  "EOSUSDT",
+  "FOOTBALLUSDT",
+  "FRONTUSDT",
+  "GALUSDT",
+  "HNTUSDT",
+  "KEEPUSDT",
+  "LENDUSDT",
+  "LUNAUSDT",
+  "MATICUSDT",
+  "MBLUSDT",
+  "NUUSDT",
+  "RNDRUSDT",
+  "SRMUSDT",
+  "SXPUSDT",
+  "TOMOUSDT",
+  "YFIIUSDT"
+ ],
+ "files": {
+  "klines_1d.csv.gz": {
+   "sha256": "ef52161f91188f53a39d0642c6857254816264e7cd3ae901e2b15d9730d38eb0",
+   "bytes": 24158251
+  }
+ },
+ "columns": [
+  "symbol",
+  "open_time",
+  "open",
+  "high",
+  "low",
+  "close",
+  "volume",
+  "quote_volume",
+  "count",
+  "taker_buy_quote_volume"
+ ],
+ "url_patterns": {
+  "symbol_listing": "https://s3-ap-northeast-1.amazonaws.com/data.binance.vision?delimiter=/&prefix=data/futures/um/monthly/klines/",
+  "klines": "https://data.binance.vision/data/futures/um/monthly/klines/{SYM}/1d/{SYM}-1d-{YYYY-MM}.zip"
+ },
+ "month_range": [
+  "2019-09",
+  "2026-08"
+ ],
+ "download_date": "2026-09-30",
+ "per_symbol": {
+  "0GUSDT": {
+   "first_date": "2025-09-17",
+   "last_date": "2026-08-31",
+   "rows": 349,
+   "last_traded_date": "2026-08-31"
+  },
+  "1000000BOBUSDT": {
+   "first_date": "2025-06-05",
+   "last_date": "2026-08-31",
+   "rows": 453,
+   "last_traded_date": "2026-08-31"
+  },
+  "1000000MOGUSDT": {
+   "first_date": "2024-11-07",
+   "last_date": "2026-08-31",
+   "rows": 663,
+   "last_traded_date": "2026-08-31"
+  },
+  "1000BONKUSDT": {
+   "first_date": "2023-11-22",
+   "last_date": "2026-08-31",
+   "rows": 1014,
+   "last_traded_date": "2026-08-31"
+  },
+  "1000BTTCUSDT": {
+   "first_date": "2022-01-26",
+   "last_date": "2022-04-11",
+   "rows": 76,
+   "last_traded_date": "2022-04-11"
+  },
+  "1000CATUSDT": {
+   "first_date": "2024-10-21",
+   "last_date": "2026-08-31",
+   "rows": 680,
+   "last_traded_date": "2026-08-31"
+  },
+  "1000CHEEMSUSDT": {
+   "first_date": "2024-11-25",
+   "last_date": "2026-08-31",
+   "rows": 645,
+   "last_traded_date": "2026-08-31"
+  },
+  "1000FLOKIUSDT": {
+   "first_date": "2023-05-06",
+   "last_date": "2026-08-31",
+   "rows": 1214,
+   "last_traded_date": "2026-08-31"
+  },
+  "1000LUNCUSDT": {
+   "first_date": "2022-09-09",
+   "last_date": "2026-08-31",
+   "rows": 1453,
+   "last_traded_date": "2026-08-31"
+  },
+  "1000PEPEUSDT": {
+   "first_date": "2023-05-05",
+   "last_date": "2026-08-31",
+   "rows": 1215,
+   "last_traded_date": "2026-08-31"
+  },
+  "1000RATSUSDT": {
+   "first_date": "2023-12-15",
+   "last_date": "2026-08-31",
+   "rows": 991,
+   "last_traded_date": "2026-08-31"
+  },
+  "1000SATSUSDT": {
+   "first_date": "2023-12-12",
+   "last_date": "2026-08-31",
+   "rows": 994,
+   "last_traded_date": "2026-08-31"
+  },
+  "1000SHIBUSDT": {
+   "first_date": "2021-05-10",
+   "last_date": "2026-08-31",
+   "rows": 1940,
+   "last_traded_date": "2026-08-31"
+  },
+  "1000WHYUSDT": {
+   "first_date": "2024-11-25",
+   "last_date": "2026-08-31",
+   "rows": 645,
+   "last_traded_date": "2026-03-17"
+  },
+  "1000XECUSDT": {
+   "first_date": "2021-09-17",
+   "last_date": "2026-08-31",
+   "rows": 1810,
+   "last_traded_date": "2026-08-31"
+  },
+  "1000XUSDT": {
+   "first_date": "2024-11-13",
+   "last_date": "2026-08-31",
+   "rows": 657,
+   "last_traded_date": "2025-11-14"
+  },
+  "1INCHUSDT": {
+   "first_date": "2020-12-25",
+   "last_date": "2026-08-31",
+   "rows": 2076,
+   "last_traded_date": "2026-08-31"
+  },
+  "1MBABYDOGEUSDT": {
+   "first_date": "2024-09-16",
+   "last_date": "2026-08-31",
+   "rows": 715,
+   "last_traded_date": "2026-08-31"
+  },
+  "2ZUSDT": {
+   "first_date": "2025-10-02",
+   "last_date": "2026-08-31",
+   "rows": 334,
+   "last_traded_date": "2026-08-31"
+  },
+  "42USDT": {
+   "first_date": "2025-10-27",
+   "last_date": "2026-08-31",
+   "rows": 309,
+   "last_traded_date": "2026-01-30"
+  },
+  "4USDT": {
+   "first_date": "2025-10-08",
+   "last_date": "2026-08-31",
+   "rows": 328,
+   "last_traded_date": "2026-08-31"
+  },
+  "A2ZUSDT": {
+   "first_date": "2025-07-30",
+   "last_date": "2026-08-31",
+   "rows": 398,
+   "last_traded_date": "2026-03-24"
+  },
+  "AAOIUSDT": {
+   "first_date": "2026-06-08",
+   "last_date": "2026-08-31",
+   "rows": 85,
+   "last_traded_date": "2026-08-31"
+  },
+  "AAPLUSDT": {
+   "first_date": "2026-04-06",
+   "last_date": "2026-08-31",
+   "rows": 148,
+   "last_traded_date": "2026-08-31"
+  },
+  "AAVEUSDT": {
+   "first_date": "2020-10-16",
+   "last_date": "2026-08-31",
+   "rows": 2146,
+   "last_traded_date": "2026-08-31"
+  },
+  "ACEUSDT": {
+   "first_date": "2023-12-18",
+   "last_date": "2026-08-31",
+   "rows": 988,
+   "last_traded_date": "2026-08-31"
+  },
+  "ACHUSDT": {
+   "first_date": "2023-02-22",
+   "last_date": "2026-08-31",
+   "rows": 1287,
+   "last_traded_date": "2026-08-31"
+  },
+  "ACTUSDT": {
+   "first_date": "2024-11-11",
+   "last_date": "2026-08-31",
+   "rows": 659,
+   "last_traded_date": "2026-08-31"
+  },
+  "ACUUSDT": {
+   "first_date": "2026-01-21",
+   "last_date": "2026-08-31",
+   "rows": 223,
+   "last_traded_date": "2026-08-31"
+  },
+  "ACXUSDT": {
+   "first_date": "2024-12-06",
+   "last_date": "2026-08-31",
+   "rows": 634,
+   "last_traded_date": "2026-08-07"
+  },
+  "ADAUSDT": {
+   "first_date": "2020-01-31",
+   "last_date": "2026-08-31",
+   "rows": 2405,
+   "last_traded_date": "2026-08-31"
+  },
+  "ADBEUSDT": {
+   "first_date": "2026-06-11",
+   "last_date": "2026-08-31",
+   "rows": 82,
+   "last_traded_date": "2026-08-31"
+  },
+  "AERGOUSDT": {
+   "first_date": "2024-09-10",
+   "last_date": "2026-06-30",
+   "rows": 659,
+   "last_traded_date": "2026-06-30"
+  },
+  "AEROUSDT": {
+   "first_date": "2024-12-04",
+   "last_date": "2026-08-31",
+   "rows": 636,
+   "last_traded_date": "2026-08-31"
+  },
+  "AEVOUSDT": {
+   "first_date": "2024-03-13",
+   "last_date": "2026-08-31",
+   "rows": 902,
+   "last_traded_date": "2026-08-31"
+  },
+  "AGIXUSDT": {
+   "first_date": "2023-02-16",
+   "last_date": "2026-08-31",
+   "rows": 1293,
+   "last_traded_date": "2024-06-25"
+  },
+  "AGLDUSDT": {
+   "first_date": "2023-07-29",
+   "last_date": "2026-08-31",
+   "rows": 1130,
+   "last_traded_date": "2026-08-31"
+  },
+  "AGTUSDT": {
+   "first_date": "2025-05-20",
+   "last_date": "2026-08-31",
+   "rows": 469,
+   "last_traded_date": "2026-08-31"
+  },
+  "AI16ZUSDT": {
+   "first_date": "2025-01-02",
+   "last_date": "2026-08-31",
+   "rows": 607,
+   "last_traded_date": "2025-11-06"
+  },
+  "AIAUSDT": {
+   "first_date": "2025-09-18",
+   "last_date": "2026-08-31",
+   "rows": 348,
+   "last_traded_date": "2026-08-31"
+  },
+  "AIGENSYNUSDT": {
+   "first_date": "2026-04-29",
+   "last_date": "2026-08-31",
+   "rows": 125,
+   "last_traded_date": "2026-08-31"
+  },
+  "AINUSDT": {
+   "first_date": "2025-07-10",
+   "last_date": "2026-08-31",
+   "rows": 418,
+   "last_traded_date": "2026-08-31"
+  },
+  "AIOTUSDT": {
+   "first_date": "2025-04-30",
+   "last_date": "2026-08-31",
+   "rows": 489,
+   "last_traded_date": "2026-08-31"
+  },
+  "AIOUSDT": {
+   "first_date": "2025-08-13",
+   "last_date": "2026-08-31",
+   "rows": 384,
+   "last_traded_date": "2026-08-31"
+  },
+  "AIUSDT": {
+   "first_date": "2024-01-08",
+   "last_date": "2026-08-31",
+   "rows": 967,
+   "last_traded_date": "2026-04-28"
+  },
+  "AIXBTUSDT": {
+   "first_date": "2024-12-20",
+   "last_date": "2026-08-31",
+   "rows": 620,
+   "last_traded_date": "2026-08-31"
+  },
+  "AKEUSDT": {
+   "first_date": "2025-09-26",
+   "last_date": "2026-08-31",
+   "rows": 340,
+   "last_traded_date": "2026-08-31"
+  },
+  "AKROUSDT": {
+   "first_date": "2021-01-19",
+   "last_date": "2022-05-27",
+   "rows": 494,
+   "last_traded_date": "2022-05-27"
+  },
+  "AKTUSDT": {
+   "first_date": "2024-11-18",
+   "last_date": "2026-08-31",
+   "rows": 652,
+   "last_traded_date": "2026-08-31"
+  },
+  "ALABUSDT": {
+   "first_date": "2026-06-22",
+   "last_date": "2026-08-31",
+   "rows": 71,
+   "last_traded_date": "2026-08-31"
+  },
+  "ALCHUSDT": {
+   "first_date": "2025-01-07",
+   "last_date": "2026-08-31",
+   "rows": 602,
+   "last_traded_date": "2026-08-31"
+  },
+  "ALGOUSDT": {
+   "first_date": "2020-06-16",
+   "last_date": "2026-08-31",
+   "rows": 2268,
+   "last_traded_date": "2026-08-31"
+  },
+  "ALICEUSDT": {
+   "first_date": "2021-03-16",
+   "last_date": "2026-08-31",
+   "rows": 1995,
+   "last_traded_date": "2026-08-31"
+  },
+  "ALLOUSDT": {
+   "first_date": "2025-11-11",
+   "last_date": "2026-08-31",
+   "rows": 294,
+   "last_traded_date": "2026-08-31"
+  },
+  "ALLUSDT": {
+   "first_date": "2025-08-06",
+   "last_date": "2026-08-31",
+   "rows": 391,
+   "last_traded_date": "2026-08-31"
+  },
+  "ALPACAUSDT": {
+   "first_date": "2024-08-22",
+   "last_date": "2026-08-31",
+   "rows": 740,
+   "last_traded_date": "2025-04-30"
+  },
+  "ALPHAUSDT": {
+   "first_date": "2020-11-23",
+   "last_date": "2026-08-31",
+   "rows": 2108,
+   "last_traded_date": "2025-09-23"
+  },
+  "ALPINEUSDT": {
+   "first_date": "2025-05-06",
+   "last_date": "2026-08-31",
+   "rows": 483,
+   "last_traded_date": "2026-08-31"
+  },
+  "ALTUSDT": {
+   "first_date": "2024-01-25",
+   "last_date": "2026-08-31",
+   "rows": 950,
+   "last_traded_date": "2026-08-31"
+  },
+  "AMATUSDT": {
+   "first_date": "2026-06-08",
+   "last_date": "2026-08-31",
+   "rows": 85,
+   "last_traded_date": "2026-08-31"
+  },
+  "AMBUSDT": {
+   "first_date": "2023-03-30",
+   "last_date": "2026-08-31",
+   "rows": 1251,
+   "last_traded_date": "2025-02-21"
+  },
+  "AMDUSDT": {
+   "first_date": "2026-05-06",
+   "last_date": "2026-08-31",
+   "rows": 118,
+   "last_traded_date": "2026-08-31"
+  },
+  "AMZNUSDT": {
+   "first_date": "2026-02-09",
+   "last_date": "2026-08-31",
+   "rows": 204,
+   "last_traded_date": "2026-08-31"
+  },
+  "ANCUSDT": {
+   "first_date": "2022-03-08",
+   "last_date": "2022-05-13",
+   "rows": 67,
+   "last_traded_date": "2022-05-13"
+  },
+  "ANIMEUSDT": {
+   "first_date": "2025-01-23",
+   "last_date": "2026-08-31",
+   "rows": 586,
+   "last_traded_date": "2026-08-31"
+  },
+  "ANKRUSDT": {
+   "first_date": "2021-01-26",
+   "last_date": "2026-08-31",
+   "rows": 2044,
+   "last_traded_date": "2026-08-31"
+  },
+  "ANTHROPICUSDT": {
+   "first_date": "2026-06-02",
+   "last_date": "2026-08-31",
+   "rows": 91,
+   "last_traded_date": "2026-08-31"
+  },
+  "ANTUSDT": {
+   "first_date": "2021-12-27",
+   "last_date": "2024-05-28",
+   "rows": 884,
+   "last_traded_date": "2024-04-01"
+  },
+  "APEUSDT": {
+   "first_date": "2022-03-17",
+   "last_date": "2026-08-31",
+   "rows": 1629,
+   "last_traded_date": "2026-08-31"
+  },
+  "API3USDT": {
+   "first_date": "2022-02-22",
+   "last_date": "2026-08-31",
+   "rows": 1652,
+   "last_traded_date": "2026-08-31"
+  },
+  "APPUSDT": {
+   "first_date": "2026-07-10",
+   "last_date": "2026-08-31",
+   "rows": 53,
+   "last_traded_date": "2026-08-31"
+  },
+  "APRUSDT": {
+   "first_date": "2025-10-23",
+   "last_date": "2026-08-31",
+   "rows": 313,
+   "last_traded_date": "2026-08-31"
+  },
+  "APTUSDT": {
+   "first_date": "2022-10-19",
+   "last_date": "2026-08-31",
+   "rows": 1413,
+   "last_traded_date": "2026-08-31"
+  },
+  "ARBUSDT": {
+   "first_date": "2023-03-23",
+   "last_date": "2026-08-31",
+   "rows": 1258,
+   "last_traded_date": "2026-08-31"
+  },
+  "ARCUSDT": {
+   "first_date": "2025-01-17",
+   "last_date": "2026-08-31",
+   "rows": 592,
+   "last_traded_date": "2026-08-31"
+  },
+  "ARIAUSDT": {
+   "first_date": "2025-09-03",
+   "last_date": "2026-08-31",
+   "rows": 363,
+   "last_traded_date": "2026-08-31"
+  },
+  "ARKMUSDT": {
+   "first_date": "2023-07-28",
+   "last_date": "2026-08-31",
+   "rows": 1131,
+   "last_traded_date": "2026-08-31"
+  },
+  "ARKUSDT": {
+   "first_date": "2023-09-19",
+   "last_date": "2026-08-31",
+   "rows": 1078,
+   "last_traded_date": "2026-08-31"
+  },
+  "ARMUSDT": {
+   "first_date": "2026-05-26",
+   "last_date": "2026-08-31",
+   "rows": 98,
+   "last_traded_date": "2026-08-31"
+  },
+  "ARPAUSDT": {
+   "first_date": "2021-10-19",
+   "last_date": "2026-08-31",
+   "rows": 1778,
+   "last_traded_date": "2026-08-31"
+  },
+  "ARUSDT": {
+   "first_date": "2021-09-28",
+   "last_date": "2026-08-31",
+   "rows": 1799,
+   "last_traded_date": "2026-08-31"
+  },
+  "ARXUSDT": {
+   "first_date": "2026-06-23",
+   "last_date": "2026-08-31",
+   "rows": 70,
+   "last_traded_date": "2026-08-31"
+  },
+  "ASMLUSDT": {
+   "first_date": "2026-06-11",
+   "last_date": "2026-08-31",
+   "rows": 82,
+   "last_traded_date": "2026-08-31"
+  },
+  "ASRUSDT": {
+   "first_date": "2025-05-06",
+   "last_date": "2026-08-31",
+   "rows": 483,
+   "last_traded_date": "2026-08-31"
+  },
+  "ASTERUSDT": {
+   "first_date": "2025-09-19",
+   "last_date": "2026-08-31",
+   "rows": 347,
+   "last_traded_date": "2026-08-31"
+  },
+  "ASTRUSDT": {
+   "first_date": "2023-02-14",
+   "last_date": "2026-08-31",
+   "rows": 1295,
+   "last_traded_date": "2026-08-31"
+  },
+  "ASTSUSDT": {
+   "first_date": "2026-06-01",
+   "last_date": "2026-08-31",
+   "rows": 92,
+   "last_traded_date": "2026-08-31"
+  },
+  "ATAUSDT": {
+   "first_date": "2021-08-31",
+   "last_date": "2026-08-31",
+   "rows": 1827,
+   "last_traded_date": "2026-05-19"
+  },
+  "ATHUSDT": {
+   "first_date": "2025-04-02",
+   "last_date": "2026-08-31",
+   "rows": 517,
+   "last_traded_date": "2026-08-31"
+  },
+  "ATOMUSDT": {
+   "first_date": "2020-02-07",
+   "last_date": "2026-08-31",
+   "rows": 2398,
+   "last_traded_date": "2026-08-31"
+  },
+  "ATUSDT": {
+   "first_date": "2025-10-29",
+   "last_date": "2026-08-31",
+   "rows": 307,
+   "last_traded_date": "2026-08-31"
+  },
+  "AUCTIONUSDT": {
+   "first_date": "2023-12-15",
+   "last_date": "2026-08-31",
+   "rows": 991,
+   "last_traded_date": "2026-08-31"
+  },
+  "AUDIOUSDT": {
+   "first_date": "2021-08-19",
+   "last_date": "2024-05-28",
+   "rows": 1014,
+   "last_traded_date": "2024-05-16"
+  },
+  "AUSDT": {
+   "first_date": "2025-05-28",
+   "last_date": "2026-08-31",
+   "rows": 461,
+   "last_traded_date": "2026-08-31"
+  },
+  "AVAAIUSDT": {
+   "first_date": "2025-01-17",
+   "last_date": "2026-08-31",
+   "rows": 592,
+   "last_traded_date": "2026-08-31"
+  },
+  "AVAUSDT": {
+   "first_date": "2024-12-13",
+   "last_date": "2026-08-31",
+   "rows": 627,
+   "last_traded_date": "2026-08-31"
+  },
+  "AVAXUSDT": {
+   "first_date": "2020-09-23",
+   "last_date": "2026-08-31",
+   "rows": 2169,
+   "last_traded_date": "2026-08-31"
+  },
+  "AVGOUSDT": {
+   "first_date": "2026-04-20",
+   "last_date": "2026-08-31",
+   "rows": 134,
+   "last_traded_date": "2026-08-31"
+  },
+  "AVNTUSDT": {
+   "first_date": "2025-09-09",
+   "last_date": "2026-08-31",
+   "rows": 357,
+   "last_traded_date": "2026-08-31"
+  },
+  "AWEUSDT": {
+   "first_date": "2025-05-21",
+   "last_date": "2026-08-31",
+   "rows": 468,
+   "last_traded_date": "2026-08-31"
+  },
+  "AXLUSDT": {
+   "first_date": "2024-03-01",
+   "last_date": "2026-08-31",
+   "rows": 914,
+   "last_traded_date": "2026-08-31"
+  },
+  "AXSUSDT": {
+   "first_date": "2020-11-20",
+   "last_date": "2026-08-31",
+   "rows": 2111,
+   "last_traded_date": "2026-08-31"
+  },
+  "AXTIUSDT": {
+   "first_date": "2026-06-08",
+   "last_date": "2026-08-31",
+   "rows": 85,
+   "last_traded_date": "2026-08-31"
+  },
+  "AZTECUSDT": {
+   "first_date": "2026-02-11",
+   "last_date": "2026-08-31",
+   "rows": 202,
+   "last_traded_date": "2026-08-31"
+  },
+  "B2USDT": {
+   "first_date": "2025-05-06",
+   "last_date": "2026-08-31",
+   "rows": 483,
+   "last_traded_date": "2026-08-31"
+  },
+  "B3USDT": {
+   "first_date": "2025-02-13",
+   "last_date": "2026-08-31",
+   "rows": 565,
+   "last_traded_date": "2026-04-28"
+  },
+  "BABAUSDT": {
+   "first_date": "2026-04-20",
+   "last_date": "2026-08-31",
+   "rows": 134,
+   "last_traded_date": "2026-08-31"
+  },
+  "BABYUSDT": {
+   "first_date": "2025-04-05",
+   "last_date": "2026-08-31",
+   "rows": 514,
+   "last_traded_date": "2026-08-31"
+  },
+  "BADGERUSDT": {
+   "first_date": "2023-11-09",
+   "last_date": "2026-08-31",
+   "rows": 1027,
+   "last_traded_date": "2025-04-14"
+  },
+  "BAKEUSDT": {
+   "first_date": "2021-05-19",
+   "last_date": "2026-08-31",
+   "rows": 1931,
+   "last_traded_date": "2025-10-03"
+  },
+  "BALUSDT": {
+   "first_date": "2020-09-01",
+   "last_date": "2026-08-31",
+   "rows": 2191,
+   "last_traded_date": "2025-04-14"
+  },
+  "BANANAS31USDT": {
+   "first_date": "2025-03-22",
+   "last_date": "2026-08-31",
+   "rows": 528,
+   "last_traded_date": "2026-08-31"
+  },
+  "BANANAUSDT": {
+   "first_date": "2024-08-15",
+   "last_date": "2026-08-31",
+   "rows": 747,
+   "last_traded_date": "2026-08-31"
+  },
+  "BANDUSDT": {
+   "first_date": "2020-07-29",
+   "last_date": "2026-08-31",
+   "rows": 2225,
+   "last_traded_date": "2026-08-31"
+  },
+  "BANKUSDT": {
+   "first_date": "2025-04-18",
+   "last_date": "2026-08-31",
+   "rows": 501,
+   "last_traded_date": "2026-08-31"
+  },
+  "BANUSDT": {
+   "first_date": "2024-11-18",
+   "last_date": "2026-08-31",
+   "rows": 652,
+   "last_traded_date": "2026-08-31"
+  },
+  "BARDUSDT": {
+   "first_date": "2025-09-18",
+   "last_date": "2026-08-31",
+   "rows": 348,
+   "last_traded_date": "2026-08-31"
+  },
+  "BASEDUSDT": {
+   "first_date": "2026-03-30",
+   "last_date": "2026-08-31",
+   "rows": 155,
+   "last_traded_date": "2026-08-31"
+  },
+  "BASUSDT": {
+   "first_date": "2025-08-26",
+   "last_date": "2026-08-31",
+   "rows": 371,
+   "last_traded_date": "2026-08-31"
+  },
+  "BATUSDT": {
+   "first_date": "2020-02-13",
+   "last_date": "2026-08-31",
+   "rows": 2392,
+   "last_traded_date": "2026-08-31"
+  },
+  "BBUSDT": {
+   "first_date": "2024-05-13",
+   "last_date": "2026-08-31",
+   "rows": 841,
+   "last_traded_date": "2026-08-31"
+  },
+  "BBXUSDT": {
+   "first_date": "2026-06-01",
+   "last_date": "2026-08-31",
+   "rows": 92,
+   "last_traded_date": "2026-08-31"
+  },
+  "BCHUSDT": {
+   "first_date": "2020-01-01",
+   "last_date": "2026-08-31",
+   "rows": 2435,
+   "last_traded_date": "2026-08-31"
+  },
+  "BDXNUSDT": {
+   "first_date": "2025-06-03",
+   "last_date": "2026-03-31",
+   "rows": 302,
+   "last_traded_date": "2026-03-17"
+  },
+  "BEAMXUSDT": {
+   "first_date": "2023-11-17",
+   "last_date": "2026-08-31",
+   "rows": 1019,
+   "last_traded_date": "2026-08-31"
+  },
+  "BEATUSDT": {
+   "first_date": "2025-11-12",
+   "last_date": "2026-08-31",
+   "rows": 293,
+   "last_traded_date": "2026-08-31"
+  },
+  "BELUSDT": {
+   "first_date": "2020-11-18",
+   "last_date": "2026-08-31",
+   "rows": 2113,
+   "last_traded_date": "2026-08-31"
+  },
+  "BERAUSDT": {
+   "first_date": "2025-02-06",
+   "last_date": "2026-08-31",
+   "rows": 572,
+   "last_traded_date": "2026-08-31"
+  },
+  "BEUSDT": {
+   "first_date": "2026-05-26",
+   "last_date": "2026-08-31",
+   "rows": 98,
+   "last_traded_date": "2026-08-31"
+  },
+  "BICOUSDT": {
+   "first_date": "2023-09-28",
+   "last_date": "2026-08-31",
+   "rows": 1069,
+   "last_traded_date": "2026-08-31"
+  },
+  "BIDUSDT": {
+   "first_date": "2025-03-20",
+   "last_date": "2026-08-31",
+   "rows": 530,
+   "last_traded_date": "2026-01-21"
+  },
+  "BIGTIMEUSDT": {
+   "first_date": "2023-10-12",
+   "last_date": "2026-08-31",
+   "rows": 1055,
+   "last_traded_date": "2026-08-31"
+  },
+  "BILLUSDT": {
+   "first_date": "2026-05-07",
+   "last_date": "2026-08-31",
+   "rows": 117,
+   "last_traded_date": "2026-08-31"
+  },
+  "BIOUSDT": {
+   "first_date": "2025-01-03",
+   "last_date": "2026-08-31",
+   "rows": 606,
+   "last_traded_date": "2026-08-31"
+  },
+  "BIRBUSDT": {
+   "first_date": "2026-01-29",
+   "last_date": "2026-08-31",
+   "rows": 215,
+   "last_traded_date": "2026-08-31"
+  },
+  "BITOUSDT": {
+   "first_date": "2026-07-27",
+   "last_date": "2026-08-31",
+   "rows": 36,
+   "last_traded_date": "2026-08-31"
+  },
+  "BLESSUSDT": {
+   "first_date": "2025-09-23",
+   "last_date": "2026-08-31",
+   "rows": 343,
+   "last_traded_date": "2026-08-31"
+  },
+  "BLUAIUSDT": {
+   "first_date": "2025-10-21",
+   "last_date": "2026-08-31",
+   "rows": 315,
+   "last_traded_date": "2026-08-31"
+  },
+  "BLUEBIRDUSDT": {
+   "first_date": "2022-11-02",
+   "last_date": "2024-05-28",
+   "rows": 574,
+   "last_traded_date": "2024-03-26"
+  },
+  "BLURUSDT": {
+   "first_date": "2023-04-28",
+   "last_date": "2026-08-31",
+   "rows": 1222,
+   "last_traded_date": "2026-08-31"
+  },
+  "BLZUSDT": {
+   "first_date": "2020-09-17",
+   "last_date": "2026-08-31",
+   "rows": 2175,
+   "last_traded_date": "2024-12-23"
+  },
+  "BMNRUSDT": {
+   "first_date": "2026-06-11",
+   "last_date": "2026-08-31",
+   "rows": 82,
+   "last_traded_date": "2026-08-31"
+  },
+  "BMTUSDT": {
+   "first_date": "2025-03-17",
+   "last_date": "2026-08-31",
+   "rows": 533,
+   "last_traded_date": "2026-08-31"
+  },
+  "BNBUSDT": {
+   "first_date": "2020-02-10",
+   "last_date": "2026-08-31",
+   "rows": 2395,
+   "last_traded_date": "2026-08-31"
+  },
+  "BNCUSDT": {
+   "first_date": "2026-07-09",
+   "last_date": "2026-08-31",
+   "rows": 54,
+   "last_traded_date": "2026-08-31"
+  },
+  "BNTUSDT": {
+   "first_date": "2023-08-10",
+   "last_date": "2026-08-31",
+   "rows": 1118,
+   "last_traded_date": "2026-08-31"
+  },
+  "BNXUSDT": {
+   "first_date": "2022-04-01",
+   "last_date": "2026-08-31",
+   "rows": 1588,
+   "last_traded_date": "2025-03-17"
+  },
+  "BOBUSDT": {
+   "first_date": "2025-11-21",
+   "last_date": "2026-08-31",
+   "rows": 284,
+   "last_traded_date": "2026-04-28"
+  },
+  "BOMEUSDT": {
+   "first_date": "2024-03-16",
+   "last_date": "2026-08-31",
+   "rows": 899,
+   "last_traded_date": "2026-08-31"
+  },
+  "BONDUSDT": {
+   "first_date": "2023-10-15",
+   "last_date": "2026-08-31",
+   "rows": 1052,
+   "last_traded_date": "2024-12-16"
+  },
+  "BOTUSDT": {
+   "first_date": "2026-07-09",
+   "last_date": "2026-08-31",
+   "rows": 54,
+   "last_traded_date": "2026-08-31"
+  },
+  "BRETTUSDT": {
+   "first_date": "2024-08-20",
+   "last_date": "2026-08-31",
+   "rows": 742,
+   "last_traded_date": "2026-08-31"
+  },
+  "BREVUSDT": {
+   "first_date": "2025-12-30",
+   "last_date": "2026-08-31",
+   "rows": 245,
+   "last_traded_date": "2026-08-31"
+  },
+  "BRKBUSDT": {
+   "first_date": "2026-05-18",
+   "last_date": "2026-08-31",
+   "rows": 106,
+   "last_traded_date": "2026-08-31"
+  },
+  "BROCCOLI714USDT": {
+   "first_date": "2025-03-21",
+   "last_date": "2026-08-31",
+   "rows": 529,
+   "last_traded_date": "2026-08-31"
+  },
+  "BROCCOLIF3BUSDT": {
+   "first_date": "2025-03-21",
+   "last_date": "2026-08-31",
+   "rows": 529,
+   "last_traded_date": "2026-08-31"
+  },
+  "BRUSDT": {
+   "first_date": "2025-03-21",
+   "last_date": "2026-08-31",
+   "rows": 529,
+   "last_traded_date": "2026-08-31"
+  },
+  "BSBUSDT": {
+   "first_date": "2026-03-25",
+   "last_date": "2026-08-31",
+   "rows": 160,
+   "last_traded_date": "2026-08-31"
+  },
+  "BSPUSDT": {
+   "first_date": "2026-07-02",
+   "last_date": "2026-08-31",
+   "rows": 61,
+   "last_traded_date": "2026-08-31"
+  },
+  "BSVUSDT": {
+   "first_date": "2023-10-20",
+   "last_date": "2026-08-31",
+   "rows": 1047,
+   "last_traded_date": "2026-08-31"
+  },
+  "BSWUSDT": {
+   "first_date": "2024-09-05",
+   "last_date": "2026-08-31",
+   "rows": 726,
+   "last_traded_date": "2025-09-15"
+  },
+  "BTCDOMUSDT": {
+   "first_date": "2021-06-21",
+   "last_date": "2026-08-31",
+   "rows": 1898,
+   "last_traded_date": "2026-08-31"
+  },
+  "BTCSTUSDT": {
+   "first_date": "2021-03-04",
+   "last_date": "2026-06-30",
+   "rows": 1945,
+   "last_traded_date": "2021-03-12"
+  },
+  "BTCUSDT": {
+   "first_date": "2020-01-01",
+   "last_date": "2026-08-31",
+   "rows": 2435,
+   "last_traded_date": "2026-08-31"
+  },
+  "BTRUSDT": {
+   "first_date": "2025-08-27",
+   "last_date": "2026-08-31",
+   "rows": 370,
+   "last_traded_date": "2026-08-31"
+  },
+  "BTSUSDT": {
+   "first_date": "2021-02-01",
+   "last_date": "2024-05-28",
+   "rows": 1213,
+   "last_traded_date": "2022-08-18"
+  },
+  "BTTUSDT": {
+   "first_date": "2021-04-06",
+   "last_date": "2022-01-26",
+   "rows": 296,
+   "last_traded_date": "2022-01-14"
+  },
+  "BTWUSDT": {
+   "first_date": "2026-06-04",
+   "last_date": "2026-08-31",
+   "rows": 89,
+   "last_traded_date": "2026-08-31"
+  },
+  "BULLAUSDT": {
+   "first_date": "2025-07-04",
+   "last_date": "2026-08-31",
+   "rows": 424,
+   "last_traded_date": "2026-08-31"
+  },
+  "BUSDT": {
+   "first_date": "2025-05-22",
+   "last_date": "2026-08-31",
+   "rows": 467,
+   "last_traded_date": "2026-08-31"
+  },
+  "BXUSDT": {
+   "first_date": "2026-06-08",
+   "last_date": "2026-08-31",
+   "rows": 85,
+   "last_traded_date": "2026-08-31"
+  },
+  "BZRXUSDT": {
+   "first_date": "2020-09-05",
+   "last_date": "2021-12-19",
+   "rows": 471,
+   "last_traded_date": "2021-12-19"
+  },
+  "BZUSDT": {
+   "first_date": "2026-04-01",
+   "last_date": "2026-08-31",
+   "rows": 153,
+   "last_traded_date": "2026-08-31"
+  },
+  "C98USDT": {
+   "first_date": "2021-08-24",
+   "last_date": "2026-08-31",
+   "rows": 1834,
+   "last_traded_date": "2026-08-31"
+  },
+  "CAKEUSDT": {
+   "first_date": "2023-11-02",
+   "last_date": "2026-08-31",
+   "rows": 1034,
+   "last_traded_date": "2026-08-31"
+  },
+  "CAPUSDT": {
+   "first_date": "2026-06-27",
+   "last_date": "2026-08-31",
+   "rows": 66,
+   "last_traded_date": "2026-08-31"
+  },
+  "CARVUSDT": {
+   "first_date": "2025-08-07",
+   "last_date": "2026-08-31",
+   "rows": 390,
+   "last_traded_date": "2026-08-31"
+  },
+  "CATIUSDT": {
+   "first_date": "2024-09-20",
+   "last_date": "2026-08-31",
+   "rows": 711,
+   "last_traded_date": "2026-08-31"
+  },
+  "CATUSDT": {
+   "first_date": "2026-07-02",
+   "last_date": "2026-08-31",
+   "rows": 61,
+   "last_traded_date": "2026-08-31"
+  },
+  "CBRSUSDT": {
+   "first_date": "2026-05-19",
+   "last_date": "2026-08-31",
+   "rows": 105,
+   "last_traded_date": "2026-08-31"
+  },
+  "CCUSDT": {
+   "first_date": "2025-10-31",
+   "last_date": "2026-08-31",
+   "rows": 305,
+   "last_traded_date": "2026-08-31"
+  },
+  "CELOUSDT": {
+   "first_date": "2021-09-27",
+   "last_date": "2026-08-31",
+   "rows": 1800,
+   "last_traded_date": "2026-08-31"
+  },
+  "CELRUSDT": {
+   "first_date": "2021-03-29",
+   "last_date": "2026-08-31",
+   "rows": 1982,
+   "last_traded_date": "2026-08-31"
+  },
+  "CETUSUSDT": {
+   "first_date": "2024-11-06",
+   "last_date": "2026-08-31",
+   "rows": 664,
+   "last_traded_date": "2026-08-31"
+  },
+  "CFGUSDT": {
+   "first_date": "2026-03-16",
+   "last_date": "2026-08-31",
+   "rows": 169,
+   "last_traded_date": "2026-08-31"
+  },
+  "CFXUSDT": {
+   "first_date": "2023-02-20",
+   "last_date": "2026-08-31",
+   "rows": 1289,
+   "last_traded_date": "2026-08-31"
+  },
+  "CGPTUSDT": {
+   "first_date": "2024-12-20",
+   "last_date": "2026-08-31",
+   "rows": 620,
+   "last_traded_date": "2026-08-31"
+  },
+  "CHESSUSDT": {
+   "first_date": "2024-08-29",
+   "last_date": "2026-08-31",
+   "rows": 733,
+   "last_traded_date": "2026-02-06"
+  },
+  "CHILLGUYUSDT": {
+   "first_date": "2024-11-27",
+   "last_date": "2026-08-31",
+   "rows": 643,
+   "last_traded_date": "2026-08-31"
+  },
+  "CHIPUSDT": {
+   "first_date": "2026-04-16",
+   "last_date": "2026-08-31",
+   "rows": 138,
+   "last_traded_date": "2026-08-31"
+  },
+  "CHRUSDT": {
+   "first_date": "2021-03-12",
+   "last_date": "2026-08-31",
+   "rows": 1999,
+   "last_traded_date": "2026-08-31"
+  },
+  "CHZUSDT": {
+   "first_date": "2021-01-21",
+   "last_date": "2026-08-31",
+   "rows": 2049,
+   "last_traded_date": "2026-08-31"
+  },
+  "CIENUSDT": {
+   "first_date": "2026-06-22",
+   "last_date": "2026-08-31",
+   "rows": 71,
+   "last_traded_date": "2026-08-31"
+  },
+  "CKBUSDT": {
+   "first_date": "2023-02-28",
+   "last_date": "2026-08-31",
+   "rows": 1281,
+   "last_traded_date": "2026-08-31"
+  },
+  "CLANKERUSDT": {
+   "first_date": "2025-11-12",
+   "last_date": "2026-08-31",
+   "rows": 293,
+   "last_traded_date": "2026-08-31"
+  },
+  "CLOUSDT": {
+   "first_date": "2025-10-14",
+   "last_date": "2026-08-31",
+   "rows": 322,
+   "last_traded_date": "2026-08-31"
+  },
+  "CLUSDT": {
+   "first_date": "2026-04-01",
+   "last_date": "2026-08-31",
+   "rows": 153,
+   "last_traded_date": "2026-08-31"
+  },
+  "COAIUSDT": {
+   "first_date": "2025-09-25",
+   "last_date": "2026-08-31",
+   "rows": 341,
+   "last_traded_date": "2026-08-31"
+  },
+  "COCOSUSDT": {
+   "first_date": "2023-02-21",
+   "last_date": "2024-05-28",
+   "rows": 463,
+   "last_traded_date": "2023-05-25"
+  },
+  "COHRUSDT": {
+   "first_date": "2026-05-26",
+   "last_date": "2026-08-31",
+   "rows": 98,
+   "last_traded_date": "2026-08-31"
+  },
+  "COINUSDT": {
+   "first_date": "2026-02-09",
+   "last_date": "2026-08-31",
+   "rows": 204,
+   "last_traded_date": "2026-08-31"
+  },
+  "COLLECTUSDT": {
+   "first_date": "2025-12-31",
+   "last_date": "2026-08-31",
+   "rows": 244,
+   "last_traded_date": "2026-08-31"
+  },
+  "COMBOUSDT": {
+   "first_date": "2023-06-02",
+   "last_date": "2026-08-31",
+   "rows": 1187,
+   "last_traded_date": "2025-03-27"
+  },
+  "COMMONUSDT": {
+   "first_date": "2025-10-27",
+   "last_date": "2026-08-31",
+   "rows": 309,
+   "last_traded_date": "2026-01-30"
+  },
+  "COMPUSDT": {
+   "first_date": "2020-06-30",
+   "last_date": "2026-08-31",
+   "rows": 2254,
+   "last_traded_date": "2026-08-31"
+  },
+  "COOKIEUSDT": {
+   "first_date": "2025-01-07",
+   "last_date": "2026-08-31",
+   "rows": 602,
+   "last_traded_date": "2026-08-31"
+  },
+  "COPPERUSDT": {
+   "first_date": "2026-03-06",
+   "last_date": "2026-08-31",
+   "rows": 179,
+   "last_traded_date": "2026-08-31"
+  },
+  "COSTUSDT": {
+   "first_date": "2026-06-09",
+   "last_date": "2026-08-31",
+   "rows": 84,
+   "last_traded_date": "2026-08-31"
+  },
+  "COSUSDT": {
+   "first_date": "2024-09-30",
+   "last_date": "2026-08-31",
+   "rows": 701,
+   "last_traded_date": "2026-06-11"
+  },
+  "COTIUSDT": {
+   "first_date": "2021-03-10",
+   "last_date": "2026-08-31",
+   "rows": 2001,
+   "last_traded_date": "2026-08-31"
+  },
+  "COWUSDT": {
+   "first_date": "2024-11-06",
+   "last_date": "2026-08-31",
+   "rows": 664,
+   "last_traded_date": "2026-08-31"
+  },
+  "CRCLUSDT": {
+   "first_date": "2026-02-09",
+   "last_date": "2026-08-31",
+   "rows": 204,
+   "last_traded_date": "2026-08-31"
+  },
+  "CRDOUSDT": {
+   "first_date": "2026-06-08",
+   "last_date": "2026-08-31",
+   "rows": 85,
+   "last_traded_date": "2026-08-31"
+  },
+  "CRMUSDT": {
+   "first_date": "2026-06-03",
+   "last_date": "2026-08-31",
+   "rows": 90,
+   "last_traded_date": "2026-08-31"
+  },
+  "CROSSUSDT": {
+   "first_date": "2025-07-10",
+   "last_date": "2026-08-31",
+   "rows": 418,
+   "last_traded_date": "2026-08-31"
+  },
+  "CRVUSDT": {
+   "first_date": "2020-09-01",
+   "last_date": "2026-08-31",
+   "rows": 2191,
+   "last_traded_date": "2026-08-31"
+  },
+  "CRWDUSDT": {
+   "first_date": "2026-06-08",
+   "last_date": "2026-08-31",
+   "rows": 85,
+   "last_traded_date": "2026-08-31"
+  },
+  "CRWVUSDT": {
+   "first_date": "2026-05-18",
+   "last_date": "2026-08-31",
+   "rows": 106,
+   "last_traded_date": "2026-08-31"
+  },
+  "CSCOUSDT": {
+   "first_date": "2026-05-15",
+   "last_date": "2026-08-31",
+   "rows": 109,
+   "last_traded_date": "2026-08-31"
+  },
+  "CSOPSAMSUNG2LUSDT": {
+   "first_date": "2026-08-11",
+   "last_date": "2026-08-31",
+   "rows": 21,
+   "last_traded_date": "2026-08-31"
+  },
+  "CSOPSKHYNIX2LUSDT": {
+   "first_date": "2026-08-11",
+   "last_date": "2026-08-31",
+   "rows": 21,
+   "last_traded_date": "2026-08-31"
+  },
+  "CTKUSDT": {
+   "first_date": "2020-11-19",
+   "last_date": "2026-08-31",
+   "rows": 2112,
+   "last_traded_date": "2026-08-31"
+  },
+  "CTRUSDT": {
+   "first_date": "2026-05-28",
+   "last_date": "2026-08-31",
+   "rows": 96,
+   "last_traded_date": "2026-08-31"
+  },
+  "CTSIUSDT": {
+   "first_date": "2021-10-26",
+   "last_date": "2026-08-31",
+   "rows": 1771,
+   "last_traded_date": "2026-08-31"
+  },
+  "CUDISUSDT": {
+   "first_date": "2025-08-20",
+   "last_date": "2026-08-31",
+   "rows": 377,
+   "last_traded_date": "2026-01-30"
+  },
+  "CUSDT": {
+   "first_date": "2025-07-15",
+   "last_date": "2026-08-31",
+   "rows": 413,
+   "last_traded_date": "2026-08-31"
+  },
+  "CVCUSDT": {
+   "first_date": "2020-11-11",
+   "last_date": "2026-08-31",
+   "rows": 2120,
+   "last_traded_date": "2026-08-31"
+  },
+  "CVXUSDT": {
+   "first_date": "2022-09-22",
+   "last_date": "2026-08-31",
+   "rows": 1440,
+   "last_traded_date": "2026-08-31"
+  },
+  "CXMTUSDT": {
+   "first_date": "2026-08-18",
+   "last_date": "2026-08-31",
+   "rows": 14,
+   "last_traded_date": "2026-08-31"
+  },
+  "CYBERUSDT": {
+   "first_date": "2023-08-21",
+   "last_date": "2026-08-31",
+   "rows": 1107,
+   "last_traded_date": "2026-08-31"
+  },
+  "CYSUSDT": {
+   "first_date": "2025-12-12",
+   "last_date": "2026-08-31",
+   "rows": 263,
+   "last_traded_date": "2026-08-31"
+  },
+  "DAMUSDT": {
+   "first_date": "2025-08-18",
+   "last_date": "2026-08-31",
+   "rows": 379,
+   "last_traded_date": "2026-04-29"
+  },
+  "DARUSDT": {
+   "first_date": "2022-04-29",
+   "last_date": "2026-08-31",
+   "rows": 1586,
+   "last_traded_date": "2024-12-26"
+  },
+  "DASHUSDT": {
+   "first_date": "2020-02-04",
+   "last_date": "2026-08-31",
+   "rows": 2401,
+   "last_traded_date": "2026-08-31"
+  },
+  "DATAIPUSDT": {
+   "first_date": "2026-07-03",
+   "last_date": "2026-08-31",
+   "rows": 60,
+   "last_traded_date": "2026-08-31"
+  },
+  "DEEPUSDT": {
+   "first_date": "2025-04-22",
+   "last_date": "2026-08-31",
+   "rows": 497,
+   "last_traded_date": "2026-08-31"
+  },
+  "DEFIUSDT": {
+   "first_date": "2020-08-28",
+   "last_date": "2026-08-31",
+   "rows": 2195,
+   "last_traded_date": "2025-08-11"
+  },
+  "DEGENUSDT": {
+   "first_date": "2024-11-15",
+   "last_date": "2026-08-31",
+   "rows": 655,
+   "last_traded_date": "2026-04-28"
+  },
+  "DEGOUSDT": {
+   "first_date": "2024-12-13",
+   "last_date": "2026-08-31",
+   "rows": 627,
+   "last_traded_date": "2026-04-21"
+  },
+  "DELLUSDT": {
+   "first_date": "2026-06-03",
+   "last_date": "2026-08-31",
+   "rows": 90,
+   "last_traded_date": "2026-08-31"
+  },
+  "DENTUSDT": {
+   "first_date": "2021-03-24",
+   "last_date": "2026-08-31",
+   "rows": 1987,
+   "last_traded_date": "2026-04-21"
+  },
+  "DEXEUSDT": {
+   "first_date": "2024-12-24",
+   "last_date": "2026-08-31",
+   "rows": 616,
+   "last_traded_date": "2026-08-31"
+  },
+  "DFUSDT": {
+   "first_date": "2024-12-30",
+   "last_date": "2026-08-31",
+   "rows": 610,
+   "last_traded_date": "2026-02-06"
+  },
+  "DGBUSDT": {
+   "first_date": "2021-04-21",
+   "last_date": "2026-08-31",
+   "rows": 1959,
+   "last_traded_date": "2024-04-01"
+  },
+  "DIAUSDT": {
+   "first_date": "2024-10-02",
+   "last_date": "2026-08-31",
+   "rows": 699,
+   "last_traded_date": "2026-08-31"
+  },
+  "DISUSDT": {
+   "first_date": "2026-05-15",
+   "last_date": "2026-08-31",
+   "rows": 109,
+   "last_traded_date": "2026-08-31"
+  },
+  "DJTUSDT": {
+   "first_date": "2026-08-25",
+   "last_date": "2026-08-31",
+   "rows": 7,
+   "last_traded_date": "2026-08-31"
+  },
+  "DKNGUSDT": {
+   "first_date": "2026-06-10",
+   "last_date": "2026-08-31",
+   "rows": 83,
+   "last_traded_date": "2026-08-31"
+  },
+  "DMCUSDT": {
+   "first_date": "2025-06-24",
+   "last_date": "2026-08-31",
+   "rows": 434,
+   "last_traded_date": "2026-01-21"
+  },
+  "DODOUSDT": {
+   "first_date": "2021-02-19",
+   "last_date": "2022-05-27",
+   "rows": 463,
+   "last_traded_date": "2022-05-27"
+  },
+  "DODOXUSDT": {
+   "first_date": "2023-08-08",
+   "last_date": "2026-08-31",
+   "rows": 1120,
+   "last_traded_date": "2026-08-31"
+  },
+  "DOGEUSDT": {
+   "first_date": "2020-07-10",
+   "last_date": "2026-08-31",
+   "rows": 2244,
+   "last_traded_date": "2026-08-31"
+  },
+  "DOGSUSDT": {
+   "first_date": "2024-08-26",
+   "last_date": "2026-08-31",
+   "rows": 736,
+   "last_traded_date": "2026-08-31"
+  },
+  "DOLOUSDT": {
+   "first_date": "2025-05-01",
+   "last_date": "2026-08-31",
+   "rows": 488,
+   "last_traded_date": "2026-08-31"
+  },
+  "DOODUSDT": {
+   "first_date": "2025-05-09",
+   "last_date": "2026-08-31",
+   "rows": 480,
+   "last_traded_date": "2026-08-31"
+  },
+  "DOSUSDT": {
+   "first_date": "2026-08-11",
+   "last_date": "2026-08-31",
+   "rows": 21,
+   "last_traded_date": "2026-08-31"
+  },
+  "DOTECOUSDT": {
+   "first_date": "2021-01-20",
+   "last_date": "2021-02-19",
+   "rows": 31,
+   "last_traded_date": "2021-02-19"
+  },
+  "DOTUSDT": {
+   "first_date": "2020-08-22",
+   "last_date": "2026-08-31",
+   "rows": 2201,
+   "last_traded_date": "2026-08-31"
+  },
+  "DRAMUSDT": {
+   "first_date": "2026-05-18",
+   "last_date": "2026-08-31",
+   "rows": 106,
+   "last_traded_date": "2026-08-31"
+  },
+  "DRIFTUSDT": {
+   "first_date": "2024-11-08",
+   "last_date": "2026-08-31",
+   "rows": 662,
+   "last_traded_date": "2026-08-31"
+  },
+  "DUSDT": {
+   "first_date": "2025-01-09",
+   "last_date": "2026-08-31",
+   "rows": 600,
+   "last_traded_date": "2026-06-11"
+  },
+  "DUSKUSDT": {
+   "first_date": "2022-01-07",
+   "last_date": "2026-08-31",
+   "rows": 1698,
+   "last_traded_date": "2026-08-31"
+  },
+  "DYDXUSDT": {
+   "first_date": "2021-09-10",
+   "last_date": "2026-08-31",
+   "rows": 1817,
+   "last_traded_date": "2026-08-31"
+  },
+  "DYMUSDT": {
+   "first_date": "2024-02-07",
+   "last_date": "2026-08-31",
+   "rows": 937,
+   "last_traded_date": "2026-08-31"
+  },
+  "EBAYUSDT": {
+   "first_date": "2026-06-09",
+   "last_date": "2026-08-31",
+   "rows": 84,
+   "last_traded_date": "2026-08-31"
+  },
+  "EDENUSDT": {
+   "first_date": "2025-09-30",
+   "last_date": "2026-08-31",
+   "rows": 336,
+   "last_traded_date": "2026-08-31"
+  },
+  "EDGEUSDT": {
+   "first_date": "2026-03-19",
+   "last_date": "2026-08-31",
+   "rows": 166,
+   "last_traded_date": "2026-08-31"
+  },
+  "EDUUSDT": {
+   "first_date": "2023-04-30",
+   "last_date": "2026-08-31",
+   "rows": 1220,
+   "last_traded_date": "2026-08-31"
+  },
+  "EGLDUSDT": {
+   "first_date": "2020-09-14",
+   "last_date": "2026-08-31",
+   "rows": 2178,
+   "last_traded_date": "2026-08-31"
+  },
+  "EIGENUSDT": {
+   "first_date": "2024-10-01",
+   "last_date": "2026-08-31",
+   "rows": 700,
+   "last_traded_date": "2026-08-31"
+  },
+  "ELSAUSDT": {
+   "first_date": "2026-01-22",
+   "last_date": "2026-08-31",
+   "rows": 222,
+   "last_traded_date": "2026-08-31"
+  },
+  "ENAUSDT": {
+   "first_date": "2024-04-02",
+   "last_date": "2026-08-31",
+   "rows": 882,
+   "last_traded_date": "2026-08-31"
+  },
+  "ENJUSDT": {
+   "first_date": "2020-09-29",
+   "last_date": "2026-08-31",
+   "rows": 2163,
+   "last_traded_date": "2026-08-31"
+  },
+  "ENSOUSDT": {
+   "first_date": "2025-10-14",
+   "last_date": "2026-08-31",
+   "rows": 322,
+   "last_traded_date": "2026-08-31"
+  },
+  "ENSUSDT": {
+   "first_date": "2021-11-30",
+   "last_date": "2026-08-31",
+   "rows": 1736,
+   "last_traded_date": "2026-08-31"
+  },
+  "EOSUSDT": {
+   "first_date": "2020-01-08",
+   "last_date": "2025-05-21",
+   "rows": 1961,
+   "last_traded_date": "2025-05-21"
+  },
+  "EPICUSDT": {
+   "first_date": "2025-03-13",
+   "last_date": "2026-08-31",
+   "rows": 537,
+   "last_traded_date": "2026-08-31"
+  },
+  "EPTUSDT": {
+   "first_date": "2025-04-21",
+   "last_date": "2026-08-31",
+   "rows": 498,
+   "last_traded_date": "2026-01-30"
+  },
+  "ERAUSDT": {
+   "first_date": "2025-07-17",
+   "last_date": "2026-08-31",
+   "rows": 411,
+   "last_traded_date": "2026-08-31"
+  },
+  "ESPORTSUSDT": {
+   "first_date": "2025-07-29",
+   "last_date": "2026-08-31",
+   "rows": 399,
+   "last_traded_date": "2026-08-31"
+  },
+  "ESPUSDT": {
+   "first_date": "2026-02-10",
+   "last_date": "2026-08-31",
+   "rows": 203,
+   "last_traded_date": "2026-08-31"
+  },
+  "ETCUSDT": {
+   "first_date": "2020-01-16",
+   "last_date": "2026-08-31",
+   "rows": 2420,
+   "last_traded_date": "2026-08-31"
+  },
+  "ETHFIUSDT": {
+   "first_date": "2024-03-18",
+   "last_date": "2026-08-31",
+   "rows": 897,
+   "last_traded_date": "2026-08-31"
+  },
+  "ETHUSDT": {
+   "first_date": "2020-01-01",
+   "last_date": "2026-08-31",
+   "rows": 2435,
+   "last_traded_date": "2026-08-31"
+  },
+  "ETHWUSDT": {
+   "first_date": "2023-11-28",
+   "last_date": "2026-08-31",
+   "rows": 1008,
+   "last_traded_date": "2026-08-31"
+  },
+  "EULUSDT": {
+   "first_date": "2025-10-13",
+   "last_date": "2026-08-31",
+   "rows": 323,
+   "last_traded_date": "2026-08-31"
+  },
+  "EVAAUSDT": {
+   "first_date": "2025-10-03",
+   "last_date": "2026-08-31",
+   "rows": 333,
+   "last_traded_date": "2026-08-31"
+  },
+  "EWJUSDT": {
+   "first_date": "2026-03-19",
+   "last_date": "2026-08-31",
+   "rows": 166,
+   "last_traded_date": "2026-08-31"
+  },
+  "EWTUSDT": {
+   "first_date": "2026-06-01",
+   "last_date": "2026-08-31",
+   "rows": 92,
+   "last_traded_date": "2026-08-31"
+  },
+  "EWYUSDT": {
+   "first_date": "2026-03-16",
+   "last_date": "2026-08-31",
+   "rows": 169,
+   "last_traded_date": "2026-08-31"
+  },
+  "EWZUSDT": {
+   "first_date": "2026-06-10",
+   "last_date": "2026-08-31",
+   "rows": 83,
+   "last_traded_date": "2026-08-31"
+  },
+  "FARTCOINUSDT": {
+   "first_date": "2024-12-20",
+   "last_date": "2026-08-31",
+   "rows": 620,
+   "last_traded_date": "2026-08-31"
+  },
+  "FETUSDT": {
+   "first_date": "2023-01-17",
+   "last_date": "2026-08-31",
+   "rows": 1323,
+   "last_traded_date": "2026-08-31"
+  },
+  "FFUSDT": {
+   "first_date": "2025-09-29",
+   "last_date": "2026-08-31",
+   "rows": 337,
+   "last_traded_date": "2026-08-31"
+  },
+  "FHEUSDT": {
+   "first_date": "2025-04-12",
+   "last_date": "2026-08-31",
+   "rows": 507,
+   "last_traded_date": "2026-08-31"
+  },
+  "FIDAUSDT": {
+   "first_date": "2024-09-19",
+   "last_date": "2026-08-31",
+   "rows": 712,
+   "last_traded_date": "2026-08-31"
+  },
+  "FIGHTUSDT": {
+   "first_date": "2026-01-23",
+   "last_date": "2026-08-31",
+   "rows": 221,
+   "last_traded_date": "2026-08-31"
+  },
+  "FILUSDT": {
+   "first_date": "2020-10-16",
+   "last_date": "2026-08-31",
+   "rows": 2141,
+   "last_traded_date": "2026-08-31"
+  },
+  "FIOUSDT": {
+   "first_date": "2024-09-20",
+   "last_date": "2026-08-31",
+   "rows": 711,
+   "last_traded_date": "2026-04-15"
+  },
+  "FISUSDT": {
+   "first_date": "2025-04-25",
+   "last_date": "2026-08-31",
+   "rows": 494,
+   "last_traded_date": "2025-12-10"
+  },
+  "FLEXUSDT": {
+   "first_date": "2026-07-02",
+   "last_date": "2026-08-31",
+   "rows": 61,
+   "last_traded_date": "2026-08-31"
+  },
+  "FLMUSDT": {
+   "first_date": "2020-09-29",
+   "last_date": "2026-08-31",
+   "rows": 2158,
+   "last_traded_date": "2025-11-21"
+  },
+  "FLNCUSDT": {
+   "first_date": "2026-05-18",
+   "last_date": "2026-08-31",
+   "rows": 106,
+   "last_traded_date": "2026-08-31"
+  },
+  "FLOCKUSDT": {
+   "first_date": "2025-09-09",
+   "last_date": "2026-08-31",
+   "rows": 357,
+   "last_traded_date": "2026-08-31"
+  },
+  "FLOWUSDT": {
+   "first_date": "2022-02-10",
+   "last_date": "2026-08-31",
+   "rows": 1659,
+   "last_traded_date": "2026-08-31"
+  },
+  "FLUIDUSDT": {
+   "first_date": "2025-09-24",
+   "last_date": "2026-08-31",
+   "rows": 342,
+   "last_traded_date": "2026-08-31"
+  },
+  "FLUXUSDT": {
+   "first_date": "2024-09-03",
+   "last_date": "2026-08-31",
+   "rows": 728,
+   "last_traded_date": "2026-08-31"
+  },
+  "FOGOUSDT": {
+   "first_date": "2026-01-10",
+   "last_date": "2026-08-31",
+   "rows": 234,
+   "last_traded_date": "2026-08-31"
+  },
+  "FOLKSUSDT": {
+   "first_date": "2025-11-06",
+   "last_date": "2026-08-31",
+   "rows": 299,
+   "last_traded_date": "2026-08-31"
+  },
+  "FOOTBALLUSDT": {
+   "first_date": "2022-09-01",
+   "last_date": "2024-05-28",
+   "rows": 636,
+   "last_traded_date": "2024-03-26"
+  },
+  "FORMUSDT": {
+   "first_date": "2025-03-19",
+   "last_date": "2026-08-31",
+   "rows": 531,
+   "last_traded_date": "2026-08-31"
+  },
+  "FORTHUSDT": {
+   "first_date": "2025-04-08",
+   "last_date": "2026-08-31",
+   "rows": 511,
+   "last_traded_date": "2026-03-24"
+  },
+  "FRAXUSDT": {
+   "first_date": "2026-01-15",
+   "last_date": "2026-08-31",
+   "rows": 229,
+   "last_traded_date": "2026-08-31"
+  },
+  "FRONTUSDT": {
+   "first_date": "2023-09-22",
+   "last_date": "2024-09-11",
+   "rows": 356,
+   "last_traded_date": "2024-08-23"
+  },
+  "FTMUSDT": {
+   "first_date": "2020-09-24",
+   "last_date": "2026-08-31",
+   "rows": 2163,
+   "last_traded_date": "2025-01-06"
+  },
+  "FTTUSDT": {
+   "first_date": "2022-04-15",
+   "last_date": "2026-08-31",
+   "rows": 1600,
+   "last_traded_date": "2022-11-14"
+  },
+  "FUNUSDT": {
+   "first_date": "2025-03-31",
+   "last_date": "2026-08-31",
+   "rows": 519,
+   "last_traded_date": "2026-04-15"
+  },
+  "FUSDT": {
+   "first_date": "2025-06-18",
+   "last_date": "2026-08-31",
+   "rows": 440,
+   "last_traded_date": "2026-08-31"
+  },
+  "FWDIUSDT": {
+   "first_date": "2026-07-09",
+   "last_date": "2026-08-31",
+   "rows": 54,
+   "last_traded_date": "2026-08-31"
+  },
+  "FXSUSDT": {
+   "first_date": "2023-01-20",
+   "last_date": "2026-08-31",
+   "rows": 1320,
+   "last_traded_date": "2026-01-06"
+  },
+  "GALAUSDT": {
+   "first_date": "2021-09-18",
+   "last_date": "2026-08-31",
+   "rows": 1809,
+   "last_traded_date": "2026-08-31"
+  },
+  "GALUSDT": {
+   "first_date": "2022-05-05",
+   "last_date": "2024-07-30",
+   "rows": 818,
+   "last_traded_date": "2024-07-11"
+  },
+  "GASUSDT": {
+   "first_date": "2023-10-25",
+   "last_date": "2026-08-31",
+   "rows": 1042,
+   "last_traded_date": "2026-08-31"
+  },
+  "GDXUSDT": {
+   "first_date": "2026-08-17",
+   "last_date": "2026-08-31",
+   "rows": 15,
+   "last_traded_date": "2026-08-31"
+  },
+  "GENIUSUSDT": {
+   "first_date": "2026-04-16",
+   "last_date": "2026-08-31",
+   "rows": 138,
+   "last_traded_date": "2026-08-31"
+  },
+  "GEVUSDT": {
+   "first_date": "2026-07-10",
+   "last_date": "2026-08-31",
+   "rows": 53,
+   "last_traded_date": "2026-08-31"
+  },
+  "GHSTUSDT": {
+   "first_date": "2024-09-23",
+   "last_date": "2026-08-31",
+   "rows": 708,
+   "last_traded_date": "2026-02-06"
+  },
+  "GIGADEVUSDT": {
+   "first_date": "2026-08-03",
+   "last_date": "2026-08-31",
+   "rows": 29,
+   "last_traded_date": "2026-08-31"
+  },
+  "GIGGLEUSDT": {
+   "first_date": "2025-10-09",
+   "last_date": "2026-08-31",
+   "rows": 327,
+   "last_traded_date": "2026-08-31"
+  },
+  "GLMRUSDT": {
+   "first_date": "2023-09-26",
+   "last_date": "2026-08-31",
+   "rows": 1071,
+   "last_traded_date": "2024-05-15"
+  },
+  "GLMUSDT": {
+   "first_date": "2024-02-22",
+   "last_date": "2026-08-31",
+   "rows": 922,
+   "last_traded_date": "2026-08-31"
+  },
+  "GLWUSDT": {
+   "first_date": "2026-06-11",
+   "last_date": "2026-08-31",
+   "rows": 82,
+   "last_traded_date": "2026-08-31"
+  },
+  "GMEUSDT": {
+   "first_date": "2026-06-10",
+   "last_date": "2026-08-31",
+   "rows": 83,
+   "last_traded_date": "2026-08-31"
+  },
+  "GMTUSDT": {
+   "first_date": "2022-03-15",
+   "last_date": "2026-08-31",
+   "rows": 1629,
+   "last_traded_date": "2026-08-31"
+  },
+  "GMXUSDT": {
+   "first_date": "2023-02-17",
+   "last_date": "2026-08-31",
+   "rows": 1292,
+   "last_traded_date": "2026-08-31"
+  },
+  "GOATUSDT": {
+   "first_date": "2024-10-24",
+   "last_date": "2026-08-31",
+   "rows": 677,
+   "last_traded_date": "2026-08-31"
+  },
+  "GOOGLUSDT": {
+   "first_date": "2026-03-26",
+   "last_date": "2026-08-31",
+   "rows": 159,
+   "last_traded_date": "2026-08-31"
+  },
+  "GPSUSDT": {
+   "first_date": "2025-02-17",
+   "last_date": "2026-08-31",
+   "rows": 561,
+   "last_traded_date": "2026-08-31"
+  },
+  "GRAMUSDT": {
+   "first_date": "2026-07-02",
+   "last_date": "2026-08-31",
+   "rows": 61,
+   "last_traded_date": "2026-08-31"
+  },
+  "GRASSUSDT": {
+   "first_date": "2024-11-08",
+   "last_date": "2026-08-31",
+   "rows": 662,
+   "last_traded_date": "2026-08-31"
+  },
+  "GRIFFAINUSDT": {
+   "first_date": "2025-01-02",
+   "last_date": "2026-08-31",
+   "rows": 607,
+   "last_traded_date": "2026-08-31"
+  },
+  "GRTUSDT": {
+   "first_date": "2020-12-19",
+   "last_date": "2026-08-31",
+   "rows": 2077,
+   "last_traded_date": "2026-08-31"
+  },
+  "GRVTUSDT": {
+   "first_date": "2026-07-31",
+   "last_date": "2026-08-31",
+   "rows": 32,
+   "last_traded_date": "2026-08-31"
+  },
+  "GSUSDT": {
+   "first_date": "2026-07-29",
+   "last_date": "2026-08-31",
+   "rows": 34,
+   "last_traded_date": "2026-08-31"
+  },
+  "GTCUSDT": {
+   "first_date": "2021-06-11",
+   "last_date": "2026-08-31",
+   "rows": 1903,
+   "last_traded_date": "2026-08-31"
+  },
+  "GUAUSDT": {
+   "first_date": "2025-12-21",
+   "last_date": "2026-08-31",
+   "rows": 254,
+   "last_traded_date": "2026-08-31"
+  },
+  "GUNUSDT": {
+   "first_date": "2025-03-31",
+   "last_date": "2026-08-31",
+   "rows": 519,
+   "last_traded_date": "2026-08-31"
+  },
+  "GUSDT": {
+   "first_date": "2024-08-15",
+   "last_date": "2026-08-31",
+   "rows": 747,
+   "last_traded_date": "2026-08-31"
+  },
+  "GWEIUSDT": {
+   "first_date": "2026-01-29",
+   "last_date": "2026-08-31",
+   "rows": 215,
+   "last_traded_date": "2026-08-31"
+  },
+  "HAEDALUSDT": {
+   "first_date": "2025-05-01",
+   "last_date": "2026-08-31",
+   "rows": 488,
+   "last_traded_date": "2026-08-31"
+  },
+  "HANAUSDT": {
+   "first_date": "2025-09-26",
+   "last_date": "2026-08-31",
+   "rows": 340,
+   "last_traded_date": "2026-08-31"
+  },
+  "HANMIUSDT": {
+   "first_date": "2026-08-14",
+   "last_date": "2026-08-31",
+   "rows": 18,
+   "last_traded_date": "2026-08-31"
+  },
+  "HBARUSDT": {
+   "first_date": "2021-03-17",
+   "last_date": "2026-08-31",
+   "rows": 1989,
+   "last_traded_date": "2026-08-31"
+  },
+  "HDUSDT": {
+   "first_date": "2026-05-15",
+   "last_date": "2026-08-31",
+   "rows": 109,
+   "last_traded_date": "2026-08-31"
+  },
+  "HEIUSDT": {
+   "first_date": "2025-02-13",
+   "last_date": "2026-08-31",
+   "rows": 565,
+   "last_traded_date": "2026-08-31"
+  },
+  "HEMIUSDT": {
+   "first_date": "2025-08-29",
+   "last_date": "2026-08-31",
+   "rows": 368,
+   "last_traded_date": "2026-08-31"
+  },
+  "HFTUSDT": {
+   "first_date": "2023-04-06",
+   "last_date": "2026-08-31",
+   "rows": 1244,
+   "last_traded_date": "2026-08-07"
+  },
+  "HIFIUSDT": {
+   "first_date": "2023-09-16",
+   "last_date": "2026-08-31",
+   "rows": 1081,
+   "last_traded_date": "2025-10-03"
+  },
+  "HIGHUSDT": {
+   "first_date": "2023-02-07",
+   "last_date": "2026-08-31",
+   "rows": 1302,
+   "last_traded_date": "2026-06-11"
+  },
+  "HIMSUSDT": {
+   "first_date": "2026-06-09",
+   "last_date": "2026-08-31",
+   "rows": 84,
+   "last_traded_date": "2026-08-31"
+  },
+  "HIPPOUSDT": {
+   "first_date": "2024-11-13",
+   "last_date": "2026-08-31",
+   "rows": 657,
+   "last_traded_date": "2026-04-08"
+  },
+  "HIVEUSDT": {
+   "first_date": "2024-12-23",
+   "last_date": "2026-08-31",
+   "rows": 617,
+   "last_traded_date": "2026-08-31"
+  },
+  "HK0700USDT": {
+   "first_date": "2026-07-22",
+   "last_date": "2026-08-31",
+   "rows": 41,
+   "last_traded_date": "2026-08-31"
+  },
+  "HK1810USDT": {
+   "first_date": "2026-07-22",
+   "last_date": "2026-08-31",
+   "rows": 41,
+   "last_traded_date": "2026-08-31"
+  },
+  "HMSTRUSDT": {
+   "first_date": "2024-09-26",
+   "last_date": "2026-08-31",
+   "rows": 705,
+   "last_traded_date": "2026-08-31"
+  },
+  "HNTUSDT": {
+   "first_date": "2020-09-28",
+   "last_date": "2024-05-28",
+   "rows": 1339,
+   "last_traded_date": "2023-03-20"
+  },
+  "HOLOUSDT": {
+   "first_date": "2025-09-11",
+   "last_date": "2026-08-31",
+   "rows": 355,
+   "last_traded_date": "2026-08-31"
+  },
+  "HOMEUSDT": {
+   "first_date": "2025-06-10",
+   "last_date": "2026-08-31",
+   "rows": 448,
+   "last_traded_date": "2026-08-31"
+  },
+  "HOODUSDT": {
+   "first_date": "2026-02-02",
+   "last_date": "2026-08-31",
+   "rows": 211,
+   "last_traded_date": "2026-08-31"
+  },
+  "HOOKUSDT": {
+   "first_date": "2023-01-23",
+   "last_date": "2026-08-31",
+   "rows": 1317,
+   "last_traded_date": "2026-03-24"
+  },
+  "HOTUSDT": {
+   "first_date": "2021-03-30",
+   "last_date": "2026-08-31",
+   "rows": 1976,
+   "last_traded_date": "2026-08-31"
+  },
+  "HPEUSDT": {
+   "first_date": "2026-06-08",
+   "last_date": "2026-08-31",
+   "rows": 85,
+   "last_traded_date": "2026-08-31"
+  },
+  "HUMAUSDT": {
+   "first_date": "2025-05-26",
+   "last_date": "2026-08-31",
+   "rows": 463,
+   "last_traded_date": "2026-08-31"
+  },
+  "HUSDT": {
+   "first_date": "2025-06-25",
+   "last_date": "2026-08-31",
+   "rows": 433,
+   "last_traded_date": "2026-08-31"
+  },
+  "HYPERUSDT": {
+   "first_date": "2025-04-22",
+   "last_date": "2026-08-31",
+   "rows": 497,
+   "last_traded_date": "2026-08-31"
+  },
+  "HYPEUSDT": {
+   "first_date": "2025-05-30",
+   "last_date": "2026-08-31",
+   "rows": 459,
+   "last_traded_date": "2026-08-31"
+  },
+  "HYUNDAIUSDT": {
+   "first_date": "2026-06-02",
+   "last_date": "2026-08-31",
+   "rows": 91,
+   "last_traded_date": "2026-08-31"
+  },
+  "IBMUSDT": {
+   "first_date": "2026-06-03",
+   "last_date": "2026-08-31",
+   "rows": 90,
+   "last_traded_date": "2026-08-31"
+  },
+  "ICNTUSDT": {
+   "first_date": "2025-07-03",
+   "last_date": "2026-08-31",
+   "rows": 425,
+   "last_traded_date": "2026-08-31"
+  },
+  "ICPUSDT": {
+   "first_date": "2021-05-11",
+   "last_date": "2026-08-31",
+   "rows": 1913,
+   "last_traded_date": "2026-08-31"
+  },
+  "ICXUSDT": {
+   "first_date": "2020-09-15",
+   "last_date": "2026-08-31",
+   "rows": 2177,
+   "last_traded_date": "2026-08-26"
+  },
+  "IDEXUSDT": {
+   "first_date": "2023-05-03",
+   "last_date": "2026-08-31",
+   "rows": 1217,
+   "last_traded_date": "2024-05-15"
+  },
+  "IDOLUSDT": {
+   "first_date": "2025-07-04",
+   "last_date": "2026-08-31",
+   "rows": 424,
+   "last_traded_date": "2026-08-31"
+  },
+  "IDUSDT": {
+   "first_date": "2023-03-23",
+   "last_date": "2026-08-31",
+   "rows": 1258,
+   "last_traded_date": "2026-08-31"
+  },
+  "ILVUSDT": {
+   "first_date": "2023-11-10",
+   "last_date": "2026-08-31",
+   "rows": 1026,
+   "last_traded_date": "2026-08-31"
+  },
+  "IMXUSDT": {
+   "first_date": "2022-02-11",
+   "last_date": "2026-08-31",
+   "rows": 1658,
+   "last_traded_date": "2026-08-31"
+  },
+  "INITUSDT": {
+   "first_date": "2025-04-16",
+   "last_date": "2026-08-31",
+   "rows": 503,
+   "last_traded_date": "2026-08-31"
+  },
+  "INJUSDT": {
+   "first_date": "2022-08-17",
+   "last_date": "2026-08-31",
+   "rows": 1476,
+   "last_traded_date": "2026-08-31"
+  },
+  "INTCUSDT": {
+   "first_date": "2026-02-02",
+   "last_date": "2026-08-31",
+   "rows": 211,
+   "last_traded_date": "2026-08-31"
+  },
+  "INTWUSDT": {
+   "first_date": "2026-07-09",
+   "last_date": "2026-08-31",
+   "rows": 54,
+   "last_traded_date": "2026-08-31"
+  },
+  "INUSDT": {
+   "first_date": "2025-08-07",
+   "last_date": "2026-08-31",
+   "rows": 390,
+   "last_traded_date": "2026-08-31"
+  },
+  "INXUSDT": {
+   "first_date": "2026-01-30",
+   "last_date": "2026-08-31",
+   "rows": 214,
+   "last_traded_date": "2026-08-31"
+  },
+  "IONQUSDT": {
+   "first_date": "2026-08-28",
+   "last_date": "2026-08-31",
+   "rows": 4,
+   "last_traded_date": "2026-08-31"
+  },
+  "IOSTUSDT": {
+   "first_date": "2020-02-21",
+   "last_date": "2026-08-31",
+   "rows": 2384,
+   "last_traded_date": "2026-08-31"
+  },
+  "IOTAUSDT": {
+   "first_date": "2020-02-12",
+   "last_date": "2026-08-31",
+   "rows": 2388,
+   "last_traded_date": "2026-08-31"
+  },
+  "IOTXUSDT": {
+   "first_date": "2021-08-12",
+   "last_date": "2026-08-31",
+   "rows": 1846,
+   "last_traded_date": "2026-08-31"
+  },
+  "IOUSDT": {
+   "first_date": "2024-06-11",
+   "last_date": "2026-08-31",
+   "rows": 812,
+   "last_traded_date": "2026-08-31"
+  },
+  "IPUSDT": {
+   "first_date": "2025-02-13",
+   "last_date": "2026-08-31",
+   "rows": 565,
+   "last_traded_date": "2026-06-28"
+  },
+  "IRENUSDT": {
+   "first_date": "2026-06-03",
+   "last_date": "2026-08-31",
+   "rows": 90,
+   "last_traded_date": "2026-08-31"
+  },
+  "IRUSDT": {
+   "first_date": "2025-12-21",
+   "last_date": "2026-08-31",
+   "rows": 254,
+   "last_traded_date": "2026-04-29"
+  },
+  "IRYSUSDT": {
+   "first_date": "2025-11-26",
+   "last_date": "2026-08-31",
+   "rows": 279,
+   "last_traded_date": "2026-08-31"
+  },
+  "IWMUSDT": {
+   "first_date": "2026-06-08",
+   "last_date": "2026-08-31",
+   "rows": 85,
+   "last_traded_date": "2026-08-31"
+  },
+  "JASMYUSDT": {
+   "first_date": "2022-04-20",
+   "last_date": "2026-08-31",
+   "rows": 1595,
+   "last_traded_date": "2026-08-31"
+  },
+  "JCTUSDT": {
+   "first_date": "2025-11-10",
+   "last_date": "2026-08-31",
+   "rows": 295,
+   "last_traded_date": "2026-08-31"
+  },
+  "JELLYJELLYUSDT": {
+   "first_date": "2025-03-26",
+   "last_date": "2026-08-31",
+   "rows": 524,
+   "last_traded_date": "2026-08-31"
+  },
+  "JOEUSDT": {
+   "first_date": "2023-03-29",
+   "last_date": "2026-08-31",
+   "rows": 1252,
+   "last_traded_date": "2026-08-31"
+  },
+  "JPMUSDT": {
+   "first_date": "2026-05-18",
+   "last_date": "2026-08-31",
+   "rows": 106,
+   "last_traded_date": "2026-08-31"
+  },
+  "JSTUSDT": {
+   "first_date": "2025-04-28",
+   "last_date": "2026-08-31",
+   "rows": 491,
+   "last_traded_date": "2026-08-31"
+  },
+  "JTOUSDT": {
+   "first_date": "2023-12-08",
+   "last_date": "2026-08-31",
+   "rows": 998,
+   "last_traded_date": "2026-08-31"
+  },
+  "JUPUSDT": {
+   "first_date": "2024-01-31",
+   "last_date": "2026-08-31",
+   "rows": 944,
+   "last_traded_date": "2026-08-31"
+  },
+  "KAIAUSDT": {
+   "first_date": "2024-12-04",
+   "last_date": "2026-08-31",
+   "rows": 636,
+   "last_traded_date": "2026-08-31"
+  },
+  "KAITOUSDT": {
+   "first_date": "2025-02-20",
+   "last_date": "2026-08-31",
+   "rows": 558,
+   "last_traded_date": "2026-08-31"
+  },
+  "KASUSDT": {
+   "first_date": "2023-11-17",
+   "last_date": "2026-08-31",
+   "rows": 1019,
+   "last_traded_date": "2026-08-31"
+  },
+  "KATUSDT": {
+   "first_date": "2026-03-02",
+   "last_date": "2026-08-31",
+   "rows": 183,
+   "last_traded_date": "2026-08-31"
+  },
+  "KAVAUSDT": {
+   "first_date": "2020-07-28",
+   "last_date": "2026-08-31",
+   "rows": 2226,
+   "last_traded_date": "2026-08-31"
+  },
+  "KDAUSDT": {
+   "first_date": "2024-09-18",
+   "last_date": "2026-08-31",
+   "rows": 713,
+   "last_traded_date": "2025-11-06"
+  },
+  "KEEPUSDT": {
+   "first_date": "2021-06-22",
+   "last_date": "2022-02-15",
+   "rows": 239,
+   "last_traded_date": "2022-02-15"
+  },
+  "KERNELUSDT": {
+   "first_date": "2025-04-14",
+   "last_date": "2026-08-31",
+   "rows": 505,
+   "last_traded_date": "2026-08-31"
+  },
+  "KEYUSDT": {
+   "first_date": "2023-05-24",
+   "last_date": "2026-08-31",
+   "rows": 1196,
+   "last_traded_date": "2024-12-03"
+  },
+  "KGENUSDT": {
+   "first_date": "2025-10-07",
+   "last_date": "2026-08-31",
+   "rows": 329,
+   "last_traded_date": "2026-08-31"
+  },
+  "KITEUSDT": {
+   "first_date": "2025-10-29",
+   "last_date": "2026-08-31",
+   "rows": 307,
+   "last_traded_date": "2026-08-31"
+  },
+  "KLACUSDT": {
+   "first_date": "2026-06-22",
+   "last_date": "2026-08-31",
+   "rows": 71,
+   "last_traded_date": "2026-08-31"
+  },
+  "KLAYUSDT": {
+   "first_date": "2021-10-12",
+   "last_date": "2026-08-31",
+   "rows": 1785,
+   "last_traded_date": "2024-10-22"
+  },
+  "KMNOUSDT": {
+   "first_date": "2024-12-20",
+   "last_date": "2026-08-31",
+   "rows": 620,
+   "last_traded_date": "2026-08-31"
+  },
+  "KNCUSDT": {
+   "first_date": "2020-06-22",
+   "last_date": "2026-08-31",
+   "rows": 2257,
+   "last_traded_date": "2026-08-31"
+  },
+  "KODEX200USDT": {
+   "first_date": "2026-08-14",
+   "last_date": "2026-08-31",
+   "rows": 18,
+   "last_traded_date": "2026-08-31"
+  },
+  "KOMAUSDT": {
+   "first_date": "2024-12-10",
+   "last_date": "2026-08-31",
+   "rows": 630,
+   "last_traded_date": "2026-08-31"
+  },
+  "KORUUSDT": {
+   "first_date": "2026-06-22",
+   "last_date": "2026-08-31",
+   "rows": 71,
+   "last_traded_date": "2026-08-31"
+  },
+  "KOUSDT": {
+   "first_date": "2026-08-06",
+   "last_date": "2026-08-31",
+   "rows": 26,
+   "last_traded_date": "2026-08-31"
+  },
+  "KSMUSDT": {
+   "first_date": "2020-10-14",
+   "last_date": "2026-08-31",
+   "rows": 2143,
+   "last_traded_date": "2026-08-31"
+  },
+  "KSTRUSDT": {
+   "first_date": "2026-07-02",
+   "last_date": "2026-08-31",
+   "rows": 61,
+   "last_traded_date": "2026-08-31"
+  },
+  "KUAISHOUUSDT": {
+   "first_date": "2026-08-11",
+   "last_date": "2026-08-31",
+   "rows": 21,
+   "last_traded_date": "2026-08-31"
+  },
+  "LABUSDT": {
+   "first_date": "2025-10-17",
+   "last_date": "2026-08-31",
+   "rows": 319,
+   "last_traded_date": "2026-08-31"
+  },
+  "LAUSDT": {
+   "first_date": "2025-06-05",
+   "last_date": "2026-08-31",
+   "rows": 453,
+   "last_traded_date": "2026-08-31"
+  },
+  "LAYERUSDT": {
+   "first_date": "2025-02-11",
+   "last_date": "2026-08-31",
+   "rows": 567,
+   "last_traded_date": "2026-08-31"
+  },
+  "LDOUSDT": {
+   "first_date": "2022-09-22",
+   "last_date": "2026-08-31",
+   "rows": 1440,
+   "last_traded_date": "2026-08-31"
+  },
+  "LENDUSDT": {
+   "first_date": "2020-07-23",
+   "last_date": "2020-11-10",
+   "rows": 111,
+   "last_traded_date": "2020-10-09"
+  },
+  "LEVERUSDT": {
+   "first_date": "2023-03-30",
+   "last_date": "2026-08-31",
+   "rows": 1251,
+   "last_traded_date": "2025-09-03"
+  },
+  "LGELECTRONICSUSDT": {
+   "first_date": "2026-08-14",
+   "last_date": "2026-08-31",
+   "rows": 18,
+   "last_traded_date": "2026-08-31"
+  },
+  "LIGHTUSDT": {
+   "first_date": "2025-09-27",
+   "last_date": "2026-08-31",
+   "rows": 339,
+   "last_traded_date": "2026-08-31"
+  },
+  "LINAUSDT": {
+   "first_date": "2021-03-19",
+   "last_date": "2026-08-31",
+   "rows": 1987,
+   "last_traded_date": "2025-03-27"
+  },
+  "LINEAUSDT": {
+   "first_date": "2025-09-01",
+   "last_date": "2026-08-31",
+   "rows": 365,
+   "last_traded_date": "2026-08-31"
+  },
+  "LINKUSDT": {
+   "first_date": "2020-01-17",
+   "last_date": "2026-08-31",
+   "rows": 2419,
+   "last_traded_date": "2026-08-31"
+  },
+  "LISTAUSDT": {
+   "first_date": "2024-06-20",
+   "last_date": "2026-08-31",
+   "rows": 803,
+   "last_traded_date": "2026-08-31"
+  },
+  "LITEUSDT": {
+   "first_date": "2026-05-15",
+   "last_date": "2026-08-31",
+   "rows": 109,
+   "last_traded_date": "2026-08-31"
+  },
+  "LITUSDT": {
+   "first_date": "2021-02-18",
+   "last_date": "2026-08-31",
+   "rows": 2016,
+   "last_traded_date": "2026-08-31"
+  },
+  "LLYUSDT": {
+   "first_date": "2026-06-01",
+   "last_date": "2026-08-31",
+   "rows": 92,
+   "last_traded_date": "2026-08-31"
+  },
+  "LOKAUSDT": {
+   "first_date": "2024-09-24",
+   "last_date": "2026-08-31",
+   "rows": 707,
+   "last_traded_date": "2025-07-21"
+  },
+  "LOOMUSDT": {
+   "first_date": "2023-10-11",
+   "last_date": "2026-08-31",
+   "rows": 1056,
+   "last_traded_date": "2024-12-09"
+  },
+  "LPTUSDT": {
+   "first_date": "2021-11-11",
+   "last_date": "2026-08-31",
+   "rows": 1755,
+   "last_traded_date": "2026-08-31"
+  },
+  "LQTYUSDT": {
+   "first_date": "2023-03-10",
+   "last_date": "2026-08-31",
+   "rows": 1271,
+   "last_traded_date": "2026-08-31"
+  },
+  "LRCUSDT": {
+   "first_date": "2020-10-19",
+   "last_date": "2026-08-31",
+   "rows": 2138,
+   "last_traded_date": "2026-03-24"
+  },
+  "LRCXUSDT": {
+   "first_date": "2026-06-22",
+   "last_date": "2026-08-31",
+   "rows": 71,
+   "last_traded_date": "2026-08-31"
+  },
+  "LSKUSDT": {
+   "first_date": "2024-01-25",
+   "last_date": "2026-08-31",
+   "rows": 950,
+   "last_traded_date": "2026-08-31"
+  },
+  "LTCUSDT": {
+   "first_date": "2020-01-09",
+   "last_date": "2026-08-31",
+   "rows": 2422,
+   "last_traded_date": "2026-08-31"
+  },
+  "LUMIAUSDT": {
+   "first_date": "2024-12-18",
+   "last_date": "2026-08-31",
+   "rows": 622,
+   "last_traded_date": "2026-08-31"
+  },
+  "LUNA2USDT": {
+   "first_date": "2022-09-10",
+   "last_date": "2026-08-31",
+   "rows": 1452,
+   "last_traded_date": "2026-08-31"
+  },
+  "LUNAUSDT": {
+   "first_date": "2021-01-28",
+   "last_date": "2022-05-13",
+   "rows": 466,
+   "last_traded_date": "2022-05-12"
+  },
+  "LYNUSDT": {
+   "first_date": "2025-10-06",
+   "last_date": "2026-08-31",
+   "rows": 330,
+   "last_traded_date": "2026-08-31"
+  },
+  "LYTEUSDT": {
+   "first_date": "2026-08-17",
+   "last_date": "2026-08-31",
+   "rows": 15,
+   "last_traded_date": "2026-08-31"
+  },
+  "MAGICUSDT": {
+   "first_date": "2023-01-25",
+   "last_date": "2026-08-31",
+   "rows": 1315,
+   "last_traded_date": "2026-08-31"
+  },
+  "MAGMAUSDT": {
+   "first_date": "2025-12-31",
+   "last_date": "2026-08-31",
+   "rows": 244,
+   "last_traded_date": "2026-08-31"
+  },
+  "MANAUSDT": {
+   "first_date": "2021-03-15",
+   "last_date": "2026-08-31",
+   "rows": 1991,
+   "last_traded_date": "2026-08-31"
+  },
+  "MANTAUSDT": {
+   "first_date": "2024-01-18",
+   "last_date": "2026-08-31",
+   "rows": 957,
+   "last_traded_date": "2026-08-31"
+  },
+  "MANTRAUSDT": {
+   "first_date": "2026-03-04",
+   "last_date": "2026-08-31",
+   "rows": 181,
+   "last_traded_date": "2026-08-31"
+  },
+  "MARAUSDT": {
+   "first_date": "2026-08-28",
+   "last_date": "2026-08-31",
+   "rows": 4,
+   "last_traded_date": "2026-08-31"
+  },
+  "MASKUSDT": {
+   "first_date": "2021-08-27",
+   "last_date": "2026-08-31",
+   "rows": 1826,
+   "last_traded_date": "2026-08-31"
+  },
+  "MATICUSDT": {
+   "first_date": "2020-10-22",
+   "last_date": "2024-09-11",
+   "rows": 1421,
+   "last_traded_date": "2024-09-04"
+  },
+  "MAVIAUSDT": {
+   "first_date": "2024-02-21",
+   "last_date": "2026-08-31",
+   "rows": 923,
+   "last_traded_date": "2026-08-31"
+  },
+  "MAVUSDT": {
+   "first_date": "2023-06-29",
+   "last_date": "2026-08-31",
+   "rows": 1160,
+   "last_traded_date": "2026-08-31"
+  },
+  "MBLUSDT": {
+   "first_date": "2023-11-14",
+   "last_date": "2024-05-28",
+   "rows": 197,
+   "last_traded_date": "2024-05-13"
+  },
+  "MBOXUSDT": {
+   "first_date": "2024-08-28",
+   "last_date": "2026-08-31",
+   "rows": 734,
+   "last_traded_date": "2026-06-11"
+  },
+  "MDTUSDT": {
+   "first_date": "2023-06-30",
+   "last_date": "2026-08-31",
+   "rows": 1159,
+   "last_traded_date": "2024-05-16"
+  },
+  "MEGAUSDT": {
+   "first_date": "2026-01-30",
+   "last_date": "2026-08-31",
+   "rows": 214,
+   "last_traded_date": "2026-08-31"
+  },
+  "MEITUANUSDT": {
+   "first_date": "2026-08-11",
+   "last_date": "2026-08-31",
+   "rows": 21,
+   "last_traded_date": "2026-08-31"
+  },
+  "MELANIAUSDT": {
+   "first_date": "2025-01-20",
+   "last_date": "2026-08-31",
+   "rows": 589,
+   "last_traded_date": "2026-08-31"
+  },
+  "MEMEFIUSDT": {
+   "first_date": "2025-04-25",
+   "last_date": "2026-08-31",
+   "rows": 494,
+   "last_traded_date": "2025-08-11"
+  },
+  "MEMEUSDT": {
+   "first_date": "2023-11-03",
+   "last_date": "2026-08-31",
+   "rows": 1033,
+   "last_traded_date": "2026-08-31"
+  },
+  "MERLUSDT": {
+   "first_date": "2025-05-29",
+   "last_date": "2026-08-31",
+   "rows": 460,
+   "last_traded_date": "2026-08-31"
+  },
+  "METAUSDT": {
+   "first_date": "2026-03-26",
+   "last_date": "2026-08-31",
+   "rows": 159,
+   "last_traded_date": "2026-08-31"
+  },
+  "METISUSDT": {
+   "first_date": "2024-03-12",
+   "last_date": "2026-08-31",
+   "rows": 903,
+   "last_traded_date": "2026-08-31"
+  },
+  "METUSDT": {
+   "first_date": "2025-10-11",
+   "last_date": "2026-08-31",
+   "rows": 325,
+   "last_traded_date": "2026-08-31"
+  },
+  "MEUSDT": {
+   "first_date": "2024-12-10",
+   "last_date": "2026-08-31",
+   "rows": 630,
+   "last_traded_date": "2026-08-31"
+  },
+  "MEWUSDT": {
+   "first_date": "2024-06-17",
+   "last_date": "2026-08-31",
+   "rows": 806,
+   "last_traded_date": "2026-08-31"
+  },
+  "MILKUSDT": {
+   "first_date": "2025-05-06",
+   "last_date": "2026-08-31",
+   "rows": 483,
+   "last_traded_date": "2025-12-05"
+  },
+  "MINAUSDT": {
+   "first_date": "2023-02-07",
+   "last_date": "2026-08-31",
+   "rows": 1302,
+   "last_traded_date": "2026-08-31"
+  },
+  "MINIMAXUSDT": {
+   "first_date": "2026-07-17",
+   "last_date": "2026-08-31",
+   "rows": 46,
+   "last_traded_date": "2026-08-31"
+  },
+  "MIRAUSDT": {
+   "first_date": "2025-09-26",
+   "last_date": "2026-08-31",
+   "rows": 340,
+   "last_traded_date": "2026-08-31"
+  },
+  "MITOUSDT": {
+   "first_date": "2025-08-28",
+   "last_date": "2026-08-31",
+   "rows": 369,
+   "last_traded_date": "2026-08-31"
+  },
+  "MKRUSDT": {
+   "first_date": "2020-08-13",
+   "last_date": "2026-08-31",
+   "rows": 2205,
+   "last_traded_date": "2025-09-08"
+  },
+  "MLNUSDT": {
+   "first_date": "2025-03-31",
+   "last_date": "2026-08-31",
+   "rows": 519,
+   "last_traded_date": "2026-05-19"
+  },
+  "MMTUSDT": {
+   "first_date": "2025-11-04",
+   "last_date": "2026-08-31",
+   "rows": 301,
+   "last_traded_date": "2026-08-31"
+  },
+  "MOCAUSDT": {
+   "first_date": "2024-12-16",
+   "last_date": "2026-08-31",
+   "rows": 624,
+   "last_traded_date": "2026-08-31"
+  },
+  "MONUSDT": {
+   "first_date": "2025-10-10",
+   "last_date": "2026-08-31",
+   "rows": 326,
+   "last_traded_date": "2026-08-31"
+  },
+  "MOODENGUSDT": {
+   "first_date": "2024-10-25",
+   "last_date": "2026-08-31",
+   "rows": 676,
+   "last_traded_date": "2026-08-31"
+  },
+  "MORPHOUSDT": {
+   "first_date": "2024-11-27",
+   "last_date": "2026-08-31",
+   "rows": 643,
+   "last_traded_date": "2026-08-31"
+  },
+  "MOVEUSDT": {
+   "first_date": "2024-12-09",
+   "last_date": "2026-08-31",
+   "rows": 631,
+   "last_traded_date": "2026-08-31"
+  },
+  "MOVRUSDT": {
+   "first_date": "2023-12-26",
+   "last_date": "2026-08-31",
+   "rows": 980,
+   "last_traded_date": "2026-08-31"
+  },
+  "MRKUSDT": {
+   "first_date": "2026-08-28",
+   "last_date": "2026-08-31",
+   "rows": 4,
+   "last_traded_date": "2026-08-31"
+  },
+  "MRNAUSDT": {
+   "first_date": "2026-08-25",
+   "last_date": "2026-08-31",
+   "rows": 7,
+   "last_traded_date": "2026-08-31"
+  },
+  "MRVLUSDT": {
+   "first_date": "2026-05-15",
+   "last_date": "2026-08-31",
+   "rows": 109,
+   "last_traded_date": "2026-08-31"
+  },
+  "MSFTUSDT": {
+   "first_date": "2026-04-20",
+   "last_date": "2026-08-31",
+   "rows": 134,
+   "last_traded_date": "2026-08-31"
+  },
+  "MSTRUSDT": {
+   "first_date": "2026-02-09",
+   "last_date": "2026-08-31",
+   "rows": 204,
+   "last_traded_date": "2026-08-31"
+  },
+  "MTLUSDT": {
+   "first_date": "2021-03-31",
+   "last_date": "2026-08-31",
+   "rows": 1980,
+   "last_traded_date": "2026-08-31"
+  },
+  "MUBARAKUSDT": {
+   "first_date": "2025-03-17",
+   "last_date": "2026-08-31",
+   "rows": 533,
+   "last_traded_date": "2026-08-31"
+  },
+  "MUSDT": {
+   "first_date": "2025-07-07",
+   "last_date": "2026-08-31",
+   "rows": 421,
+   "last_traded_date": "2026-08-31"
+  },
+  "MUUSDT": {
+   "first_date": "2026-04-07",
+   "last_date": "2026-08-31",
+   "rows": 147,
+   "last_traded_date": "2026-08-31"
+  },
+  "MUUUSDT": {
+   "first_date": "2026-07-16",
+   "last_date": "2026-08-31",
+   "rows": 47,
+   "last_traded_date": "2026-08-31"
+  },
+  "MVLLUSDT": {
+   "first_date": "2026-06-29",
+   "last_date": "2026-08-31",
+   "rows": 64,
+   "last_traded_date": "2026-08-31"
+  },
+  "MYROUSDT": {
+   "first_date": "2024-03-05",
+   "last_date": "2026-08-31",
+   "rows": 910,
+   "last_traded_date": "2025-11-14"
+  },
+  "MYXUSDT": {
+   "first_date": "2025-06-18",
+   "last_date": "2026-08-31",
+   "rows": 440,
+   "last_traded_date": "2026-08-31"
+  },
+  "NAORISUSDT": {
+   "first_date": "2025-07-31",
+   "last_date": "2026-08-31",
+   "rows": 397,
+   "last_traded_date": "2026-08-31"
+  },
+  "NATGASUSDT": {
+   "first_date": "2026-04-01",
+   "last_date": "2026-08-31",
+   "rows": 153,
+   "last_traded_date": "2026-08-31"
+  },
+  "NAVERUSDT": {
+   "first_date": "2026-08-14",
+   "last_date": "2026-08-31",
+   "rows": 18,
+   "last_traded_date": "2026-08-31"
+  },
+  "NBISUSDT": {
+   "first_date": "2026-05-26",
+   "last_date": "2026-08-31",
+   "rows": 98,
+   "last_traded_date": "2026-08-31"
+  },
+  "NEARUSDT": {
+   "first_date": "2020-10-15",
+   "last_date": "2026-08-31",
+   "rows": 2142,
+   "last_traded_date": "2026-08-31"
+  },
+  "NEIROETHUSDT": {
+   "first_date": "2024-09-06",
+   "last_date": "2026-08-31",
+   "rows": 725,
+   "last_traded_date": "2025-09-26"
+  },
+  "NEIROUSDT": {
+   "first_date": "2024-09-16",
+   "last_date": "2026-08-31",
+   "rows": 715,
+   "last_traded_date": "2026-08-31"
+  },
+  "NEOUSDT": {
+   "first_date": "2020-02-17",
+   "last_date": "2026-08-31",
+   "rows": 2388,
+   "last_traded_date": "2026-08-31"
+  },
+  "NETUSDT": {
+   "first_date": "2026-08-17",
+   "last_date": "2026-08-31",
+   "rows": 15,
+   "last_traded_date": "2026-08-31"
+  },
+  "NEWTUSDT": {
+   "first_date": "2025-06-19",
+   "last_date": "2026-08-31",
+   "rows": 439,
+   "last_traded_date": "2026-08-31"
+  },
+  "NFLXUSDT": {
+   "first_date": "2026-06-09",
+   "last_date": "2026-08-31",
+   "rows": 84,
+   "last_traded_date": "2026-08-31"
+  },
+  "NFPUSDT": {
+   "first_date": "2023-12-27",
+   "last_date": "2026-08-31",
+   "rows": 979,
+   "last_traded_date": "2026-07-02"
+  },
+  "NIGHTUSDT": {
+   "first_date": "2025-12-10",
+   "last_date": "2026-08-31",
+   "rows": 265,
+   "last_traded_date": "2026-08-31"
+  },
+  "NILUSDT": {
+   "first_date": "2025-03-24",
+   "last_date": "2026-08-31",
+   "rows": 526,
+   "last_traded_date": "2026-08-31"
+  },
+  "NKNUSDT": {
+   "first_date": "2021-04-09",
+   "last_date": "2026-08-31",
+   "rows": 1971,
+   "last_traded_date": "2026-02-06"
+  },
+  "NMRUSDT": {
+   "first_date": "2023-06-22",
+   "last_date": "2026-08-31",
+   "rows": 1167,
+   "last_traded_date": "2026-08-31"
+  },
+  "NOKUSDT": {
+   "first_date": "2026-06-01",
+   "last_date": "2026-08-31",
+   "rows": 92,
+   "last_traded_date": "2026-08-31"
+  },
+  "NOMUSDT": {
+   "first_date": "2025-10-01",
+   "last_date": "2026-08-31",
+   "rows": 335,
+   "last_traded_date": "2026-08-31"
+  },
+  "NOTUSDT": {
+   "first_date": "2024-05-16",
+   "last_date": "2026-08-31",
+   "rows": 838,
+   "last_traded_date": "2026-08-31"
+  },
+  "NOWUSDT": {
+   "first_date": "2026-06-03",
+   "last_date": "2026-08-31",
+   "rows": 90,
+   "last_traded_date": "2026-08-31"
+  },
+  "NTRNUSDT": {
+   "first_date": "2023-11-14",
+   "last_date": "2026-08-31",
+   "rows": 1022,
+   "last_traded_date": "2026-03-24"
+  },
+  "NULSUSDT": {
+   "first_date": "2024-08-26",
+   "last_date": "2026-08-31",
+   "rows": 736,
+   "last_traded_date": "2025-04-14"
+  },
+  "NUUSDT": {
+   "first_date": "2021-10-21",
+   "last_date": "2022-02-15",
+   "rows": 118,
+   "last_traded_date": "2022-02-15"
+  },
+  "NVDAUSDT": {
+   "first_date": "2026-03-26",
+   "last_date": "2026-08-31",
+   "rows": 159,
+   "last_traded_date": "2026-08-31"
+  },
+  "NVOUSDT": {
+   "first_date": "2026-06-01",
+   "last_date": "2026-08-31",
+   "rows": 92,
+   "last_traded_date": "2026-08-31"
+  },
+  "NXPCUSDT": {
+   "first_date": "2025-05-15",
+   "last_date": "2026-08-31",
+   "rows": 474,
+   "last_traded_date": "2026-08-31"
+  },
+  "OBOLUSDT": {
+   "first_date": "2025-05-07",
+   "last_date": "2026-08-31",
+   "rows": 482,
+   "last_traded_date": "2025-12-05"
+  },
+  "OCEANUSDT": {
+   "first_date": "2020-11-03",
+   "last_date": "2026-08-31",
+   "rows": 2123,
+   "last_traded_date": "2024-06-25"
+  },
+  "OGNUSDT": {
+   "first_date": "2021-04-01",
+   "last_date": "2026-08-31",
+   "rows": 1974,
+   "last_traded_date": "2026-08-31"
+  },
+  "OGUSDT": {
+   "first_date": "2025-05-12",
+   "last_date": "2026-08-31",
+   "rows": 477,
+   "last_traded_date": "2026-08-31"
+  },
+  "OLUSDT": {
+   "first_date": "2025-06-25",
+   "last_date": "2026-08-31",
+   "rows": 433,
+   "last_traded_date": "2026-04-08"
+  },
+  "OMGUSDT": {
+   "first_date": "2020-07-02",
+   "last_date": "2026-08-31",
+   "rows": 2247,
+   "last_traded_date": "2025-01-31"
+  },
+  "OMNIUSDT": {
+   "first_date": "2024-04-17",
+   "last_date": "2026-08-31",
+   "rows": 867,
+   "last_traded_date": "2025-09-22"
+  },
+  "OMUSDT": {
+   "first_date": "2024-02-13",
+   "last_date": "2026-08-31",
+   "rows": 931,
+   "last_traded_date": "2026-02-23"
+  },
+  "ONDOUSDT": {
+   "first_date": "2024-01-20",
+   "last_date": "2026-08-31",
+   "rows": 955,
+   "last_traded_date": "2026-08-31"
+  },
+  "ONDSUSDT": {
+   "first_date": "2026-06-03",
+   "last_date": "2026-08-31",
+   "rows": 90,
+   "last_traded_date": "2026-08-31"
+  },
+  "ONEUSDT": {
+   "first_date": "2021-03-18",
+   "last_date": "2026-08-31",
+   "rows": 1988,
+   "last_traded_date": "2026-08-31"
+  },
+  "ONGUSDT": {
+   "first_date": "2023-11-27",
+   "last_date": "2026-08-31",
+   "rows": 1009,
+   "last_traded_date": "2026-08-31"
+  },
+  "ONTUSDT": {
+   "first_date": "2020-02-11",
+   "last_date": "2026-08-31",
+   "rows": 2394,
+   "last_traded_date": "2026-08-31"
+  },
+  "ONUSDT": {
+   "first_date": "2025-10-24",
+   "last_date": "2026-08-31",
+   "rows": 312,
+   "last_traded_date": "2026-08-31"
+  },
+  "OPENAIUSDT": {
+   "first_date": "2026-05-26",
+   "last_date": "2026-08-31",
+   "rows": 98,
+   "last_traded_date": "2026-08-31"
+  },
+  "OPENUSDT": {
+   "first_date": "2025-09-08",
+   "last_date": "2026-08-31",
+   "rows": 358,
+   "last_traded_date": "2026-08-31"
+  },
+  "OPGUSDT": {
+   "first_date": "2026-04-22",
+   "last_date": "2026-08-31",
+   "rows": 132,
+   "last_traded_date": "2026-08-31"
+  },
+  "OPNUSDT": {
+   "first_date": "2026-02-21",
+   "last_date": "2026-08-31",
+   "rows": 192,
+   "last_traded_date": "2026-08-31"
+  },
+  "OPUSDT": {
+   "first_date": "2022-06-01",
+   "last_date": "2026-08-31",
+   "rows": 1553,
+   "last_traded_date": "2026-08-31"
+  },
+  "ORBSUSDT": {
+   "first_date": "2023-10-17",
+   "last_date": "2026-08-31",
+   "rows": 1050,
+   "last_traded_date": "2024-12-09"
+  },
+  "ORCAUSDT": {
+   "first_date": "2024-12-06",
+   "last_date": "2026-08-31",
+   "rows": 634,
+   "last_traded_date": "2026-08-31"
+  },
+  "ORCLUSDT": {
+   "first_date": "2026-05-15",
+   "last_date": "2026-08-31",
+   "rows": 109,
+   "last_traded_date": "2026-08-31"
+  },
+  "ORDERUSDT": {
+   "first_date": "2025-09-26",
+   "last_date": "2026-08-31",
+   "rows": 340,
+   "last_traded_date": "2026-08-31"
+  },
+  "ORDIUSDT": {
+   "first_date": "2023-11-07",
+   "last_date": "2026-08-31",
+   "rows": 1029,
+   "last_traded_date": "2026-08-31"
+  },
+  "OUSDT": {
+   "first_date": "2026-06-24",
+   "last_date": "2026-08-31",
+   "rows": 69,
+   "last_traded_date": "2026-08-31"
+  },
+  "OXTUSDT": {
+   "first_date": "2023-08-11",
+   "last_date": "2026-08-31",
+   "rows": 1117,
+   "last_traded_date": "2026-04-15"
+  },
+  "PANWUSDT": {
+   "first_date": "2026-07-21",
+   "last_date": "2026-08-31",
+   "rows": 42,
+   "last_traded_date": "2026-08-31"
+  },
+  "PARTIUSDT": {
+   "first_date": "2025-03-25",
+   "last_date": "2026-08-31",
+   "rows": 525,
+   "last_traded_date": "2026-08-31"
+  },
+  "PAXGUSDT": {
+   "first_date": "2025-03-27",
+   "last_date": "2026-08-31",
+   "rows": 523,
+   "last_traded_date": "2026-08-31"
+  },
+  "PAYPUSDT": {
+   "first_date": "2026-03-23",
+   "last_date": "2026-08-31",
+   "rows": 162,
+   "last_traded_date": "2026-08-31"
+  },
+  "PDDUSDT": {
+   "first_date": "2026-08-28",
+   "last_date": "2026-08-31",
+   "rows": 4,
+   "last_traded_date": "2026-08-31"
+  },
+  "PENDLEUSDT": {
+   "first_date": "2023-07-28",
+   "last_date": "2026-08-31",
+   "rows": 1131,
+   "last_traded_date": "2026-08-31"
+  },
+  "PENGUSDT": {
+   "first_date": "2026-07-21",
+   "last_date": "2026-08-31",
+   "rows": 42,
+   "last_traded_date": "2026-08-31"
+  },
+  "PENGUUSDT": {
+   "first_date": "2024-12-17",
+   "last_date": "2026-08-31",
+   "rows": 623,
+   "last_traded_date": "2026-08-31"
+  },
+  "PEOPLEUSDT": {
+   "first_date": "2021-12-24",
+   "last_date": "2026-08-31",
+   "rows": 1707,
+   "last_traded_date": "2026-08-31"
+  },
+  "PERPUSDT": {
+   "first_date": "2023-03-06",
+   "last_date": "2026-08-31",
+   "rows": 1275,
+   "last_traded_date": "2025-11-21"
+  },
+  "PHAROSUSDT": {
+   "first_date": "2026-05-14",
+   "last_date": "2026-08-31",
+   "rows": 110,
+   "last_traded_date": "2026-08-31"
+  },
+  "PHAUSDT": {
+   "first_date": "2024-12-30",
+   "last_date": "2026-08-31",
+   "rows": 610,
+   "last_traded_date": "2026-08-31"
+  },
+  "PHBUSDT": {
+   "first_date": "2023-02-16",
+   "last_date": "2026-08-31",
+   "rows": 1293,
+   "last_traded_date": "2026-05-19"
+  },
+  "PIEVERSEUSDT": {
+   "first_date": "2025-11-14",
+   "last_date": "2026-08-31",
+   "rows": 291,
+   "last_traded_date": "2026-08-31"
+  },
+  "PIPPINUSDT": {
+   "first_date": "2025-01-24",
+   "last_date": "2026-08-31",
+   "rows": 585,
+   "last_traded_date": "2026-08-31"
+  },
+  "PIXELUSDT": {
+   "first_date": "2024-02-19",
+   "last_date": "2026-08-31",
+   "rows": 925,
+   "last_traded_date": "2026-08-31"
+  },
+  "PLAYUSDT": {
+   "first_date": "2025-07-31",
+   "last_date": "2026-08-31",
+   "rows": 397,
+   "last_traded_date": "2026-08-31"
+  },
+  "PLTRUSDT": {
+   "first_date": "2026-02-09",
+   "last_date": "2026-08-31",
+   "rows": 204,
+   "last_traded_date": "2026-08-31"
+  },
+  "PLUMEUSDT": {
+   "first_date": "2025-03-21",
+   "last_date": "2026-08-31",
+   "rows": 529,
+   "last_traded_date": "2026-08-31"
+  },
+  "PNUTUSDT": {
+   "first_date": "2024-11-11",
+   "last_date": "2026-08-31",
+   "rows": 659,
+   "last_traded_date": "2026-08-31"
+  },
+  "POLUSDT": {
+   "first_date": "2024-09-13",
+   "last_date": "2026-08-31",
+   "rows": 718,
+   "last_traded_date": "2026-08-31"
+  },
+  "POLYXUSDT": {
+   "first_date": "2023-10-25",
+   "last_date": "2026-08-31",
+   "rows": 1042,
+   "last_traded_date": "2026-08-31"
+  },
+  "PONKEUSDT": {
+   "first_date": "2024-11-04",
+   "last_date": "2026-08-31",
+   "rows": 666,
+   "last_traded_date": "2025-11-28"
+  },
+  "POPCATUSDT": {
+   "first_date": "2024-08-22",
+   "last_date": "2026-08-31",
+   "rows": 740,
+   "last_traded_date": "2026-08-31"
+  },
+  "POPMARTUSDT": {
+   "first_date": "2026-07-23",
+   "last_date": "2026-08-31",
+   "rows": 40,
+   "last_traded_date": "2026-08-31"
+  },
+  "PORT3USDT": {
+   "first_date": "2025-06-04",
+   "last_date": "2026-08-31",
+   "rows": 454,
+   "last_traded_date": "2025-11-23"
+  },
+  "PORTALUSDT": {
+   "first_date": "2024-02-29",
+   "last_date": "2026-08-31",
+   "rows": 915,
+   "last_traded_date": "2026-08-31"
+  },
+  "POWERUSDT": {
+   "first_date": "2025-12-06",
+   "last_date": "2026-08-31",
+   "rows": 269,
+   "last_traded_date": "2026-08-31"
+  },
+  "POWRUSDT": {
+   "first_date": "2023-10-27",
+   "last_date": "2026-08-31",
+   "rows": 1040,
+   "last_traded_date": "2026-08-31"
+  },
+  "PRLUSDT": {
+   "first_date": "2026-04-01",
+   "last_date": "2026-08-31",
+   "rows": 153,
+   "last_traded_date": "2026-08-31"
+  },
+  "PROMPTUSDT": {
+   "first_date": "2025-04-11",
+   "last_date": "2026-08-31",
+   "rows": 508,
+   "last_traded_date": "2026-08-31"
+  },
+  "PROMUSDT": {
+   "first_date": "2025-01-15",
+   "last_date": "2026-08-31",
+   "rows": 594,
+   "last_traded_date": "2026-08-31"
+  },
+  "PROVEUSDT": {
+   "first_date": "2025-08-05",
+   "last_date": "2026-08-31",
+   "rows": 392,
+   "last_traded_date": "2026-08-31"
+  },
+  "PTBUSDT": {
+   "first_date": "2025-09-03",
+   "last_date": "2026-08-31",
+   "rows": 363,
+   "last_traded_date": "2026-08-31"
+  },
+  "PUFFERUSDT": {
+   "first_date": "2025-06-04",
+   "last_date": "2026-08-31",
+   "rows": 454,
+   "last_traded_date": "2026-04-08"
+  },
+  "PUMPBTCUSDT": {
+   "first_date": "2025-06-13",
+   "last_date": "2026-08-31",
+   "rows": 445,
+   "last_traded_date": "2026-08-31"
+  },
+  "PUMPUSDT": {
+   "first_date": "2025-04-12",
+   "last_date": "2026-08-31",
+   "rows": 507,
+   "last_traded_date": "2026-08-31"
+  },
+  "PUNDIXUSDT": {
+   "first_date": "2025-04-30",
+   "last_date": "2026-08-31",
+   "rows": 489,
+   "last_traded_date": "2026-08-31"
+  },
+  "PYPLUSDT": {
+   "first_date": "2026-07-29",
+   "last_date": "2026-08-31",
+   "rows": 34,
+   "last_traded_date": "2026-08-31"
+  },
+  "PYTHUSDT": {
+   "first_date": "2023-11-22",
+   "last_date": "2026-08-31",
+   "rows": 1014,
+   "last_traded_date": "2026-08-31"
+  },
+  "QCOMUSDT": {
+   "first_date": "2026-05-06",
+   "last_date": "2026-08-31",
+   "rows": 118,
+   "last_traded_date": "2026-08-31"
+  },
+  "QNTUSDT": {
+   "first_date": "2022-10-20",
+   "last_date": "2026-08-31",
+   "rows": 1412,
+   "last_traded_date": "2026-08-31"
+  },
+  "QNTXUSDT": {
+   "first_date": "2026-05-29",
+   "last_date": "2026-08-31",
+   "rows": 95,
+   "last_traded_date": "2026-08-31"
+  },
+  "QQQUSDT": {
+   "first_date": "2026-04-06",
+   "last_date": "2026-08-31",
+   "rows": 148,
+   "last_traded_date": "2026-08-31"
+  },
+  "QTUMUSDT": {
+   "first_date": "2020-02-20",
+   "last_date": "2026-08-31",
+   "rows": 2385,
+   "last_traded_date": "2026-08-31"
+  },
+  "QUICKUSDT": {
+   "first_date": "2024-09-06",
+   "last_date": "2026-08-31",
+   "rows": 725,
+   "last_traded_date": "2025-11-28"
+  },
+  "QUSDT": {
+   "first_date": "2025-09-02",
+   "last_date": "2026-08-31",
+   "rows": 364,
+   "last_traded_date": "2026-08-31"
+  },
+  "RADUSDT": {
+   "first_date": "2023-05-10",
+   "last_date": "2026-08-31",
+   "rows": 1210,
+   "last_traded_date": "2024-05-14"
+  },
+  "RAMUSDT": {
+   "first_date": "2026-08-25",
+   "last_date": "2026-08-31",
+   "rows": 7,
+   "last_traded_date": "2026-08-31"
+  },
+  "RAREUSDT": {
+   "first_date": "2024-08-15",
+   "last_date": "2026-08-31",
+   "rows": 747,
+   "last_traded_date": "2026-08-31"
+  },
+  "RAVEUSDT": {
+   "first_date": "2025-12-14",
+   "last_date": "2026-08-31",
+   "rows": 261,
+   "last_traded_date": "2026-08-31"
+  },
+  "RAYSOLUSDT": {
+   "first_date": "2024-12-10",
+   "last_date": "2026-08-31",
+   "rows": 630,
+   "last_traded_date": "2026-08-31"
+  },
+  "RAYUSDT": {
+   "first_date": "2021-08-20",
+   "last_date": "2026-08-31",
+   "rows": 1838,
+   "last_traded_date": "2022-11-15"
+  },
+  "RDDTUSDT": {
+   "first_date": "2026-08-06",
+   "last_date": "2026-08-31",
+   "rows": 26,
+   "last_traded_date": "2026-08-31"
+  },
+  "RDNTUSDT": {
+   "first_date": "2023-04-05",
+   "last_date": "2026-08-31",
+   "rows": 1245,
+   "last_traded_date": "2026-03-24"
+  },
+  "RECALLUSDT": {
+   "first_date": "2025-10-15",
+   "last_date": "2026-08-31",
+   "rows": 321,
+   "last_traded_date": "2026-08-31"
+  },
+  "REDUSDT": {
+   "first_date": "2025-03-06",
+   "last_date": "2026-08-31",
+   "rows": 544,
+   "last_traded_date": "2026-08-31"
+  },
+  "REEFUSDT": {
+   "first_date": "2021-02-22",
+   "last_date": "2026-08-31",
+   "rows": 2017,
+   "last_traded_date": "2025-01-22"
+  },
+  "REIUSDT": {
+   "first_date": "2024-09-27",
+   "last_date": "2026-08-31",
+   "rows": 704,
+   "last_traded_date": "2025-12-10"
+  },
+  "RENDERUSDT": {
+   "first_date": "2024-07-26",
+   "last_date": "2026-08-31",
+   "rows": 767,
+   "last_traded_date": "2026-08-31"
+  },
+  "RENUSDT": {
+   "first_date": "2020-10-13",
+   "last_date": "2026-08-31",
+   "rows": 2149,
+   "last_traded_date": "2024-12-03"
+  },
+  "RESOLVUSDT": {
+   "first_date": "2025-06-10",
+   "last_date": "2026-08-31",
+   "rows": 448,
+   "last_traded_date": "2026-08-31"
+  },
+  "REUSDT": {
+   "first_date": "2026-06-18",
+   "last_date": "2026-08-31",
+   "rows": 75,
+   "last_traded_date": "2026-08-31"
+  },
+  "REZUSDT": {
+   "first_date": "2024-04-30",
+   "last_date": "2026-08-31",
+   "rows": 854,
+   "last_traded_date": "2026-08-31"
+  },
+  "RIFUSDT": {
+   "first_date": "2023-10-21",
+   "last_date": "2026-08-31",
+   "rows": 1046,
+   "last_traded_date": "2026-08-31"
+  },
+  "RIVERUSDT": {
+   "first_date": "2025-10-17",
+   "last_date": "2026-08-31",
+   "rows": 319,
+   "last_traded_date": "2026-08-31"
+  },
+  "RIVNUSDT": {
+   "first_date": "2026-06-10",
+   "last_date": "2026-08-31",
+   "rows": 83,
+   "last_traded_date": "2026-08-31"
+  },
+  "RKLBUSDT": {
+   "first_date": "2026-05-18",
+   "last_date": "2026-08-31",
+   "rows": 106,
+   "last_traded_date": "2026-08-31"
+  },
+  "RLCUSDT": {
+   "first_date": "2020-07-31",
+   "last_date": "2026-08-31",
+   "rows": 2218,
+   "last_traded_date": "2026-08-31"
+  },
+  "RLSUSDT": {
+   "first_date": "2025-12-02",
+   "last_date": "2026-08-31",
+   "rows": 273,
+   "last_traded_date": "2026-04-08"
+  },
+  "RNDRUSDT": {
+   "first_date": "2023-02-03",
+   "last_date": "2024-07-30",
+   "rows": 544,
+   "last_traded_date": "2024-07-16"
+  },
+  "ROBOUSDT": {
+   "first_date": "2026-02-27",
+   "last_date": "2026-08-31",
+   "rows": 186,
+   "last_traded_date": "2026-08-31"
+  },
+  "RONINUSDT": {
+   "first_date": "2024-02-06",
+   "last_date": "2026-08-31",
+   "rows": 938,
+   "last_traded_date": "2026-08-31"
+  },
+  "ROSEUSDT": {
+   "first_date": "2021-12-31",
+   "last_date": "2026-08-31",
+   "rows": 1700,
+   "last_traded_date": "2026-08-31"
+  },
+  "RPLUSDT": {
+   "first_date": "2024-09-09",
+   "last_date": "2026-08-31",
+   "rows": 722,
+   "last_traded_date": "2026-08-31"
+  },
+  "RSRUSDT": {
+   "first_date": "2020-10-19",
+   "last_date": "2026-08-31",
+   "rows": 2138,
+   "last_traded_date": "2026-08-31"
+  },
+  "RUNEUSDT": {
+   "first_date": "2020-09-04",
+   "last_date": "2026-08-31",
+   "rows": 2188,
+   "last_traded_date": "2026-08-31"
+  },
+  "RVNUSDT": {
+   "first_date": "2021-02-23",
+   "last_date": "2026-08-31",
+   "rows": 2011,
+   "last_traded_date": "2026-08-31"
+  },
+  "RVVUSDT": {
+   "first_date": "2025-10-18",
+   "last_date": "2026-08-31",
+   "rows": 318,
+   "last_traded_date": "2026-02-10"
+  },
+  "SAFEUSDT": {
+   "first_date": "2024-10-25",
+   "last_date": "2026-08-31",
+   "rows": 676,
+   "last_traded_date": "2026-08-31"
+  },
+  "SAGAUSDT": {
+   "first_date": "2024-04-09",
+   "last_date": "2026-08-31",
+   "rows": 875,
+   "last_traded_date": "2026-08-31"
+  },
+  "SAHARAUSDT": {
+   "first_date": "2025-06-26",
+   "last_date": "2026-08-31",
+   "rows": 432,
+   "last_traded_date": "2026-08-31"
+  },
+  "SAMSUNGEMUSDT": {
+   "first_date": "2026-08-14",
+   "last_date": "2026-08-31",
+   "rows": 18,
+   "last_traded_date": "2026-08-31"
+  },
+  "SAMSUNGUSDT": {
+   "first_date": "2026-06-02",
+   "last_date": "2026-08-31",
+   "rows": 91,
+   "last_traded_date": "2026-08-31"
+  },
+  "SANDUSDT": {
+   "first_date": "2021-01-25",
+   "last_date": "2026-08-31",
+   "rows": 2040,
+   "last_traded_date": "2026-08-31"
+  },
+  "SANTOSUSDT": {
+   "first_date": "2024-10-28",
+   "last_date": "2026-08-31",
+   "rows": 673,
+   "last_traded_date": "2026-08-31"
+  },
+  "SAPIENUSDT": {
+   "first_date": "2025-08-20",
+   "last_date": "2026-08-31",
+   "rows": 377,
+   "last_traded_date": "2026-08-31"
+  },
+  "SCRTUSDT": {
+   "first_date": "2024-11-21",
+   "last_date": "2026-08-31",
+   "rows": 649,
+   "last_traded_date": "2026-08-26"
+  },
+  "SCRUSDT": {
+   "first_date": "2024-10-22",
+   "last_date": "2026-08-31",
+   "rows": 679,
+   "last_traded_date": "2026-08-31"
+  },
+  "SCUSDT": {
+   "first_date": "2021-04-12",
+   "last_date": "2026-08-31",
+   "rows": 1968,
+   "last_traded_date": "2022-06-17"
+  },
+  "SEIUSDT": {
+   "first_date": "2023-08-17",
+   "last_date": "2026-08-31",
+   "rows": 1111,
+   "last_traded_date": "2026-08-31"
+  },
+  "SENTUSDT": {
+   "first_date": "2025-11-14",
+   "last_date": "2026-08-31",
+   "rows": 291,
+   "last_traded_date": "2026-08-31"
+  },
+  "SFPUSDT": {
+   "first_date": "2021-02-24",
+   "last_date": "2026-08-31",
+   "rows": 2015,
+   "last_traded_date": "2026-08-31"
+  },
+  "SHAZUSDT": {
+   "first_date": "2026-07-21",
+   "last_date": "2026-08-31",
+   "rows": 42,
+   "last_traded_date": "2026-08-31"
+  },
+  "SHELLUSDT": {
+   "first_date": "2025-02-17",
+   "last_date": "2026-08-31",
+   "rows": 561,
+   "last_traded_date": "2026-08-31"
+  },
+  "SHOPUSDT": {
+   "first_date": "2026-08-17",
+   "last_date": "2026-08-31",
+   "rows": 15,
+   "last_traded_date": "2026-08-31"
+  },
+  "SIGNUSDT": {
+   "first_date": "2025-04-28",
+   "last_date": "2026-08-31",
+   "rows": 491,
+   "last_traded_date": "2026-08-31"
+  },
+  "SIRENUSDT": {
+   "first_date": "2025-03-22",
+   "last_date": "2026-08-31",
+   "rows": 528,
+   "last_traded_date": "2026-08-31"
+  },
+  "SKATEUSDT": {
+   "first_date": "2025-06-09",
+   "last_date": "2026-08-31",
+   "rows": 449,
+   "last_traded_date": "2025-12-10"
+  },
+  "SKDDUSDT": {
+   "first_date": "2026-08-25",
+   "last_date": "2026-08-31",
+   "rows": 7,
+   "last_traded_date": "2026-08-31"
+  },
+  "SKHYNIXUSDT": {
+   "first_date": "2026-06-02",
+   "last_date": "2026-08-31",
+   "rows": 91,
+   "last_traded_date": "2026-08-31"
+  },
+  "SKHYUSDT": {
+   "first_date": "2026-07-10",
+   "last_date": "2026-08-31",
+   "rows": 53,
+   "last_traded_date": "2026-08-31"
+  },
+  "SKLUSDT": {
+   "first_date": "2020-12-08",
+   "last_date": "2026-08-31",
+   "rows": 2088,
+   "last_traded_date": "2026-08-31"
+  },
+  "SKRUSDT": {
+   "first_date": "2026-01-22",
+   "last_date": "2026-08-31",
+   "rows": 222,
+   "last_traded_date": "2026-08-31"
+  },
+  "SKUUUSDT": {
+   "first_date": "2026-08-25",
+   "last_date": "2026-08-31",
+   "rows": 7,
+   "last_traded_date": "2026-08-31"
+  },
+  "SKYAIUSDT": {
+   "first_date": "2025-05-13",
+   "last_date": "2026-08-31",
+   "rows": 476,
+   "last_traded_date": "2026-08-31"
+  },
+  "SKYUSDT": {
+   "first_date": "2025-09-09",
+   "last_date": "2026-08-31",
+   "rows": 357,
+   "last_traded_date": "2026-08-31"
+  },
+  "SLERFUSDT": {
+   "first_date": "2024-11-21",
+   "last_date": "2026-08-31",
+   "rows": 649,
+   "last_traded_date": "2025-10-20"
+  },
+  "SLPUSDT": {
+   "first_date": "2023-10-31",
+   "last_date": "2026-08-31",
+   "rows": 1036,
+   "last_traded_date": "2026-08-31"
+  },
+  "SLXUSDT": {
+   "first_date": "2026-06-01",
+   "last_date": "2026-08-31",
+   "rows": 92,
+   "last_traded_date": "2026-08-31"
+  },
+  "SMCIUSDT": {
+   "first_date": "2026-06-22",
+   "last_date": "2026-08-31",
+   "rows": 71,
+   "last_traded_date": "2026-08-31"
+  },
+  "SMHUSDT": {
+   "first_date": "2026-07-29",
+   "last_date": "2026-08-31",
+   "rows": 34,
+   "last_traded_date": "2026-08-31"
+  },
+  "SNDKUSDT": {
+   "first_date": "2026-04-07",
+   "last_date": "2026-08-31",
+   "rows": 147,
+   "last_traded_date": "2026-08-31"
+  },
+  "SNOWUSDT": {
+   "first_date": "2026-07-10",
+   "last_date": "2026-08-31",
+   "rows": 53,
+   "last_traded_date": "2026-08-31"
+  },
+  "SNTUSDT": {
+   "first_date": "2023-11-02",
+   "last_date": "2026-08-31",
+   "rows": 1034,
+   "last_traded_date": "2024-05-13"
+  },
+  "SNXUSDT": {
+   "first_date": "2020-08-14",
+   "last_date": "2026-08-31",
+   "rows": 2209,
+   "last_traded_date": "2026-08-31"
+  },
+  "SNXXUSDT": {
+   "first_date": "2026-07-09",
+   "last_date": "2026-08-31",
+   "rows": 54,
+   "last_traded_date": "2026-08-31"
+  },
+  "SOFIUSDT": {
+   "first_date": "2026-07-21",
+   "last_date": "2026-08-31",
+   "rows": 42,
+   "last_traded_date": "2026-08-31"
+  },
+  "SOLUSDT": {
+   "first_date": "2020-09-14",
+   "last_date": "2026-08-31",
+   "rows": 2173,
+   "last_traded_date": "2026-08-31"
+  },
+  "SOLVUSDT": {
+   "first_date": "2025-01-17",
+   "last_date": "2026-08-31",
+   "rows": 592,
+   "last_traded_date": "2026-08-31"
+  },
+  "SOMIUSDT": {
+   "first_date": "2025-08-25",
+   "last_date": "2026-08-31",
+   "rows": 372,
+   "last_traded_date": "2026-08-31"
+  },
+  "SONICUSDT": {
+   "first_date": "2025-01-08",
+   "last_date": "2026-08-31",
+   "rows": 601,
+   "last_traded_date": "2026-08-31"
+  },
+  "SONYUSDT": {
+   "first_date": "2026-06-22",
+   "last_date": "2026-08-31",
+   "rows": 71,
+   "last_traded_date": "2026-08-31"
+  },
+  "SOONUSDT": {
+   "first_date": "2025-05-23",
+   "last_date": "2026-08-31",
+   "rows": 466,
+   "last_traded_date": "2026-08-31"
+  },
+  "SOPHUSDT": {
+   "first_date": "2025-05-28",
+   "last_date": "2026-08-31",
+   "rows": 461,
+   "last_traded_date": "2026-08-31"
+  },
+  "SOXLUSDT": {
+   "first_date": "2026-05-15",
+   "last_date": "2026-08-31",
+   "rows": 109,
+   "last_traded_date": "2026-08-31"
+  },
+  "SOXSUSDT": {
+   "first_date": "2026-07-16",
+   "last_date": "2026-08-31",
+   "rows": 47,
+   "last_traded_date": "2026-08-31"
+  },
+  "SPACEUSDT": {
+   "first_date": "2026-01-23",
+   "last_date": "2026-08-31",
+   "rows": 221,
+   "last_traded_date": "2026-08-31"
+  },
+  "SPCXUSDT": {
+   "first_date": "2026-05-21",
+   "last_date": "2026-08-31",
+   "rows": 103,
+   "last_traded_date": "2026-08-31"
+  },
+  "SPELLUSDT": {
+   "first_date": "2022-09-06",
+   "last_date": "2026-08-31",
+   "rows": 1456,
+   "last_traded_date": "2026-08-31"
+  },
+  "SPKUSDT": {
+   "first_date": "2025-06-17",
+   "last_date": "2026-08-31",
+   "rows": 441,
+   "last_traded_date": "2026-08-31"
+  },
+  "SPORTFUNUSDT": {
+   "first_date": "2026-01-16",
+   "last_date": "2026-08-31",
+   "rows": 228,
+   "last_traded_date": "2026-08-31"
+  },
+  "SPXUSDT": {
+   "first_date": "2024-12-10",
+   "last_date": "2026-08-31",
+   "rows": 630,
+   "last_traded_date": "2026-08-31"
+  },
+  "SPYUSDT": {
+   "first_date": "2026-04-06",
+   "last_date": "2026-08-31",
+   "rows": 148,
+   "last_traded_date": "2026-08-31"
+  },
+  "SQDUSDT": {
+   "first_date": "2025-06-11",
+   "last_date": "2026-08-31",
+   "rows": 447,
+   "last_traded_date": "2026-08-31"
+  },
+  "SQQQUSDT": {
+   "first_date": "2026-06-29",
+   "last_date": "2026-08-31",
+   "rows": 64,
+   "last_traded_date": "2026-08-31"
+  },
+  "SRMUSDT": {
+   "first_date": "2020-09-05",
+   "last_date": "2024-05-28",
+   "rows": 1362,
+   "last_traded_date": "2022-11-15"
+  },
+  "SSVUSDT": {
+   "first_date": "2023-02-24",
+   "last_date": "2026-08-31",
+   "rows": 1285,
+   "last_traded_date": "2026-08-31"
+  },
+  "STABLEUSDT": {
+   "first_date": "2025-11-06",
+   "last_date": "2026-08-31",
+   "rows": 299,
+   "last_traded_date": "2026-08-31"
+  },
+  "STARUSDT": {
+   "first_date": "2026-05-14",
+   "last_date": "2026-08-31",
+   "rows": 110,
+   "last_traded_date": "2026-08-31"
+  },
+  "STBLUSDT": {
+   "first_date": "2025-09-17",
+   "last_date": "2026-08-31",
+   "rows": 349,
+   "last_traded_date": "2026-08-31"
+  },
+  "STEEMUSDT": {
+   "first_date": "2023-11-08",
+   "last_date": "2026-08-31",
+   "rows": 1028,
+   "last_traded_date": "2026-08-31"
+  },
+  "STGUSDT": {
+   "first_date": "2022-08-25",
+   "last_date": "2026-08-31",
+   "rows": 1468,
+   "last_traded_date": "2026-08-31"
+  },
+  "STMXUSDT": {
+   "first_date": "2021-03-22",
+   "last_date": "2026-08-31",
+   "rows": 1989,
+   "last_traded_date": "2025-02-21"
+  },
+  "STORJUSDT": {
+   "first_date": "2020-09-16",
+   "last_date": "2026-08-31",
+   "rows": 2171,
+   "last_traded_date": "2026-08-26"
+  },
+  "STOUSDT": {
+   "first_date": "2025-04-12",
+   "last_date": "2026-08-31",
+   "rows": 507,
+   "last_traded_date": "2026-08-31"
+  },
+  "STPTUSDT": {
+   "first_date": "2023-10-18",
+   "last_date": "2026-08-31",
+   "rows": 1049,
+   "last_traded_date": "2024-05-13"
+  },
+  "STRAXUSDT": {
+   "first_date": "2023-10-11",
+   "last_date": "2026-08-31",
+   "rows": 1056,
+   "last_traded_date": "2024-03-15"
+  },
+  "STRCUSDT": {
+   "first_date": "2026-07-02",
+   "last_date": "2026-08-31",
+   "rows": 61,
+   "last_traded_date": "2026-08-31"
+  },
+  "STRKUSDT": {
+   "first_date": "2024-02-20",
+   "last_date": "2026-08-31",
+   "rows": 924,
+   "last_traded_date": "2026-08-31"
+  },
+  "STXUSDT": {
+   "first_date": "2023-02-21",
+   "last_date": "2026-08-31",
+   "rows": 1288,
+   "last_traded_date": "2026-08-31"
+  },
+  "STXXUSDT": {
+   "first_date": "2026-06-11",
+   "last_date": "2026-08-31",
+   "rows": 82,
+   "last_traded_date": "2026-08-31"
+  },
+  "SUIUSDT": {
+   "first_date": "2023-05-03",
+   "last_date": "2026-08-31",
+   "rows": 1217,
+   "last_traded_date": "2026-08-31"
+  },
+  "SUNUSDT": {
+   "first_date": "2024-08-22",
+   "last_date": "2026-08-31",
+   "rows": 740,
+   "last_traded_date": "2026-08-31"
+  },
+  "SUPERUSDT": {
+   "first_date": "2023-11-26",
+   "last_date": "2026-08-31",
+   "rows": 1010,
+   "last_traded_date": "2026-08-31"
+  },
+  "SUSDT": {
+   "first_date": "2025-01-16",
+   "last_date": "2026-08-31",
+   "rows": 593,
+   "last_traded_date": "2026-08-31"
+  },
+  "SUSHIUSDT": {
+   "first_date": "2020-09-04",
+   "last_date": "2026-08-31",
+   "rows": 2183,
+   "last_traded_date": "2026-08-31"
+  },
+  "SWARMSUSDT": {
+   "first_date": "2025-01-07",
+   "last_date": "2026-08-31",
+   "rows": 602,
+   "last_traded_date": "2026-08-31"
+  },
+  "SWELLUSDT": {
+   "first_date": "2024-11-08",
+   "last_date": "2026-08-31",
+   "rows": 662,
+   "last_traded_date": "2025-11-28"
+  },
+  "SXPUSDT": {
+   "first_date": "2020-07-21",
+   "last_date": "2026-05-31",
+   "rows": 2141,
+   "last_traded_date": "2025-12-05"
+  },
+  "SXTUSDT": {
+   "first_date": "2025-05-02",
+   "last_date": "2026-08-31",
+   "rows": 487,
+   "last_traded_date": "2026-08-31"
+  },
+  "SYNUSDT": {
+   "first_date": "2024-08-16",
+   "last_date": "2026-08-31",
+   "rows": 746,
+   "last_traded_date": "2026-08-31"
+  },
+  "SYRUPUSDT": {
+   "first_date": "2025-05-07",
+   "last_date": "2026-08-31",
+   "rows": 482,
+   "last_traded_date": "2026-08-31"
+  },
+  "SYSUSDT": {
+   "first_date": "2024-08-19",
+   "last_date": "2026-08-31",
+   "rows": 743,
+   "last_traded_date": "2026-05-19"
+  },
+  "TACUSDT": {
+   "first_date": "2025-07-15",
+   "last_date": "2026-08-31",
+   "rows": 413,
+   "last_traded_date": "2026-08-31"
+  },
+  "TAGUSDT": {
+   "first_date": "2025-07-25",
+   "last_date": "2026-08-31",
+   "rows": 403,
+   "last_traded_date": "2026-08-31"
+  },
+  "TAIKOUSDT": {
+   "first_date": "2025-06-11",
+   "last_date": "2026-08-31",
+   "rows": 447,
+   "last_traded_date": "2026-08-31"
+  },
+  "TAKEUSDT": {
+   "first_date": "2025-09-03",
+   "last_date": "2026-08-31",
+   "rows": 363,
+   "last_traded_date": "2026-08-31"
+  },
+  "TANSSIUSDT": {
+   "first_date": "2025-07-09",
+   "last_date": "2026-08-31",
+   "rows": 419,
+   "last_traded_date": "2026-01-21"
+  },
+  "TAOUSDT": {
+   "first_date": "2024-04-11",
+   "last_date": "2026-08-31",
+   "rows": 873,
+   "last_traded_date": "2026-08-31"
+  },
+  "TAUSDT": {
+   "first_date": "2025-07-21",
+   "last_date": "2026-08-31",
+   "rows": 407,
+   "last_traded_date": "2026-08-31"
+  },
+  "TBTUSDT": {
+   "first_date": "2026-07-27",
+   "last_date": "2026-08-31",
+   "rows": 36,
+   "last_traded_date": "2026-08-31"
+  },
+  "TEMUSDT": {
+   "first_date": "2026-08-28",
+   "last_date": "2026-08-31",
+   "rows": 4,
+   "last_traded_date": "2026-08-31"
+  },
+  "TENCENTUSDT": {
+   "first_date": "2026-07-22",
+   "last_date": "2026-08-31",
+   "rows": 41,
+   "last_traded_date": "2026-08-31"
+  },
+  "TERUSDT": {
+   "first_date": "2026-07-02",
+   "last_date": "2026-08-31",
+   "rows": 61,
+   "last_traded_date": "2026-08-31"
+  },
+  "THETAUSDT": {
+   "first_date": "2020-05-27",
+   "last_date": "2026-08-31",
+   "rows": 2288,
+   "last_traded_date": "2026-08-31"
+  },
+  "THEUSDT": {
+   "first_date": "2024-11-27",
+   "last_date": "2026-08-31",
+   "rows": 643,
+   "last_traded_date": "2026-08-31"
+  },
+  "TIAUSDT": {
+   "first_date": "2023-10-31",
+   "last_date": "2026-08-31",
+   "rows": 1036,
+   "last_traded_date": "2026-08-31"
+  },
+  "TLMUSDT": {
+   "first_date": "2021-07-16",
+   "last_date": "2026-08-31",
+   "rows": 1844,
+   "last_traded_date": "2026-08-31"
+  },
+  "TMFUSDT": {
+   "first_date": "2026-07-27",
+   "last_date": "2026-08-31",
+   "rows": 36,
+   "last_traded_date": "2026-08-31"
+  },
+  "TNSRUSDT": {
+   "first_date": "2024-04-08",
+   "last_date": "2026-08-31",
+   "rows": 876,
+   "last_traded_date": "2026-08-31"
+  },
+  "TOKENUSDT": {
+   "first_date": "2023-11-03",
+   "last_date": "2026-08-31",
+   "rows": 1033,
+   "last_traded_date": "2025-12-05"
+  },
+  "TOMOUSDT": {
+   "first_date": "2020-10-12",
+   "last_date": "2024-05-28",
+   "rows": 1325,
+   "last_traded_date": "2023-11-14"
+  },
+  "TONUSDT": {
+   "first_date": "2024-03-01",
+   "last_date": "2026-08-31",
+   "rows": 914,
+   "last_traded_date": "2026-06-23"
+  },
+  "TOSHIUSDT": {
+   "first_date": "2025-09-17",
+   "last_date": "2026-08-31",
+   "rows": 349,
+   "last_traded_date": "2026-08-31"
+  },
+  "TOWNSUSDT": {
+   "first_date": "2025-08-05",
+   "last_date": "2026-08-31",
+   "rows": 392,
+   "last_traded_date": "2026-08-31"
+  },
+  "TQQQUSDT": {
+   "first_date": "2026-06-29",
+   "last_date": "2026-08-31",
+   "rows": 64,
+   "last_traded_date": "2026-08-31"
+  },
+  "TRADOORUSDT": {
+   "first_date": "2025-09-19",
+   "last_date": "2026-08-31",
+   "rows": 347,
+   "last_traded_date": "2026-08-31"
+  },
+  "TRBUSDT": {
+   "first_date": "2020-09-03",
+   "last_date": "2026-08-31",
+   "rows": 2184,
+   "last_traded_date": "2026-08-31"
+  },
+  "TREEUSDT": {
+   "first_date": "2025-07-29",
+   "last_date": "2026-08-31",
+   "rows": 399,
+   "last_traded_date": "2026-08-31"
+  },
+  "TRIAUSDT": {
+   "first_date": "2026-02-06",
+   "last_date": "2026-08-31",
+   "rows": 207,
+   "last_traded_date": "2026-08-31"
+  },
+  "TROYUSDT": {
+   "first_date": "2024-10-31",
+   "last_date": "2026-08-31",
+   "rows": 670,
+   "last_traded_date": "2025-04-14"
+  },
+  "TRUMPUSDT": {
+   "first_date": "2025-01-18",
+   "last_date": "2026-08-31",
+   "rows": 591,
+   "last_traded_date": "2026-08-31"
+  },
+  "TRUSTUSDT": {
+   "first_date": "2025-11-05",
+   "last_date": "2026-08-31",
+   "rows": 300,
+   "last_traded_date": "2026-08-31"
+  },
+  "TRUTHUSDT": {
+   "first_date": "2025-10-01",
+   "last_date": "2026-08-31",
+   "rows": 335,
+   "last_traded_date": "2026-08-31"
+  },
+  "TRUUSDT": {
+   "first_date": "2023-03-07",
+   "last_date": "2026-08-31",
+   "rows": 1274,
+   "last_traded_date": "2026-04-21"
+  },
+  "TRXUSDT": {
+   "first_date": "2020-01-15",
+   "last_date": "2026-08-31",
+   "rows": 2416,
+   "last_traded_date": "2026-08-31"
+  },
+  "TSLAUSDT": {
+   "first_date": "2026-01-28",
+   "last_date": "2026-08-31",
+   "rows": 216,
+   "last_traded_date": "2026-08-31"
+  },
+  "TSMUSDT": {
+   "first_date": "2026-04-06",
+   "last_date": "2026-08-31",
+   "rows": 148,
+   "last_traded_date": "2026-08-31"
+  },
+  "TSTUSDT": {
+   "first_date": "2025-02-09",
+   "last_date": "2026-08-31",
+   "rows": 569,
+   "last_traded_date": "2026-08-31"
+  },
+  "TTWOUSDT": {
+   "first_date": "2026-07-02",
+   "last_date": "2026-08-31",
+   "rows": 61,
+   "last_traded_date": "2026-08-31"
+  },
+  "TURBOUSDT": {
+   "first_date": "2024-05-30",
+   "last_date": "2026-08-31",
+   "rows": 824,
+   "last_traded_date": "2026-08-31"
+  },
+  "TURTLEUSDT": {
+   "first_date": "2025-10-22",
+   "last_date": "2026-08-31",
+   "rows": 314,
+   "last_traded_date": "2026-08-31"
+  },
+  "TUSDT": {
+   "first_date": "2023-02-01",
+   "last_date": "2026-08-31",
+   "rows": 1308,
+   "last_traded_date": "2026-08-31"
+  },
+  "TUTUSDT": {
+   "first_date": "2025-03-20",
+   "last_date": "2026-08-31",
+   "rows": 530,
+   "last_traded_date": "2026-08-31"
+  },
+  "TWTUSDT": {
+   "first_date": "2023-11-03",
+   "last_date": "2026-08-31",
+   "rows": 1033,
+   "last_traded_date": "2026-08-31"
+  },
+  "TXNUSDT": {
+   "first_date": "2026-07-02",
+   "last_date": "2026-08-31",
+   "rows": 61,
+   "last_traded_date": "2026-08-31"
+  },
+  "TZAUSDT": {
+   "first_date": "2026-07-16",
+   "last_date": "2026-08-31",
+   "rows": 47,
+   "last_traded_date": "2026-08-31"
+  },
+  "UAIUSDT": {
+   "first_date": "2025-11-06",
+   "last_date": "2026-08-31",
+   "rows": 299,
+   "last_traded_date": "2026-08-31"
+  },
+  "UBERUSDT": {
+   "first_date": "2026-05-15",
+   "last_date": "2026-08-31",
+   "rows": 109,
+   "last_traded_date": "2026-08-31"
+  },
+  "UBUSDT": {
+   "first_date": "2025-09-12",
+   "last_date": "2026-08-31",
+   "rows": 354,
+   "last_traded_date": "2026-08-31"
+  },
+  "UMAUSDT": {
+   "first_date": "2023-05-10",
+   "last_date": "2026-08-31",
+   "rows": 1210,
+   "last_traded_date": "2026-08-31"
+  },
+  "UNFIUSDT": {
+   "first_date": "2021-02-19",
+   "last_date": "2026-08-31",
+   "rows": 2015,
+   "last_traded_date": "2024-10-30"
+  },
+  "UNITREEUSDT": {
+   "first_date": "2026-08-19",
+   "last_date": "2026-08-31",
+   "rows": 13,
+   "last_traded_date": "2026-08-31"
+  },
+  "UNIUSDT": {
+   "first_date": "2020-09-18",
+   "last_date": "2026-08-31",
+   "rows": 2174,
+   "last_traded_date": "2026-08-31"
+  },
+  "URNMUSDT": {
+   "first_date": "2026-06-09",
+   "last_date": "2026-08-31",
+   "rows": 84,
+   "last_traded_date": "2026-08-31"
+  },
+  "USARUSDT": {
+   "first_date": "2026-05-06",
+   "last_date": "2026-08-31",
+   "rows": 118,
+   "last_traded_date": "2026-08-31"
+  },
+  "USDCUSDT": {
+   "first_date": "2023-03-12",
+   "last_date": "2026-08-31",
+   "rows": 1269,
+   "last_traded_date": "2026-08-31"
+  },
+  "USELESSUSDT": {
+   "first_date": "2025-08-15",
+   "last_date": "2026-08-31",
+   "rows": 382,
+   "last_traded_date": "2026-08-31"
+  },
+  "USTCUSDT": {
+   "first_date": "2023-11-27",
+   "last_date": "2026-08-31",
+   "rows": 1009,
+   "last_traded_date": "2026-08-31"
+  },
+  "USUALUSDT": {
+   "first_date": "2024-12-18",
+   "last_date": "2026-08-31",
+   "rows": 622,
+   "last_traded_date": "2026-08-31"
+  },
+  "USUSDT": {
+   "first_date": "2025-12-12",
+   "last_date": "2026-08-31",
+   "rows": 263,
+   "last_traded_date": "2026-08-31"
+  },
+  "UVXYUSDT": {
+   "first_date": "2026-06-11",
+   "last_date": "2026-08-31",
+   "rows": 82,
+   "last_traded_date": "2026-08-31"
+  },
+  "UXLINKUSDT": {
+   "first_date": "2024-09-15",
+   "last_date": "2026-08-31",
+   "rows": 716,
+   "last_traded_date": "2025-09-26"
+  },
+  "VANAUSDT": {
+   "first_date": "2024-12-16",
+   "last_date": "2026-08-31",
+   "rows": 624,
+   "last_traded_date": "2026-08-31"
+  },
+  "VANRYUSDT": {
+   "first_date": "2024-03-13",
+   "last_date": "2026-08-31",
+   "rows": 902,
+   "last_traded_date": "2026-08-07"
+  },
+  "VELODROMEUSDT": {
+   "first_date": "2024-12-13",
+   "last_date": "2026-08-31",
+   "rows": 627,
+   "last_traded_date": "2026-08-31"
+  },
+  "VELVETUSDT": {
+   "first_date": "2025-07-15",
+   "last_date": "2026-08-31",
+   "rows": 413,
+   "last_traded_date": "2026-08-31"
+  },
+  "VETUSDT": {
+   "first_date": "2020-02-14",
+   "last_date": "2026-08-31",
+   "rows": 2386,
+   "last_traded_date": "2026-08-31"
+  },
+  "VFYUSDT": {
+   "first_date": "2025-09-30",
+   "last_date": "2026-08-31",
+   "rows": 336,
+   "last_traded_date": "2026-03-17"
+  },
+  "VICUSDT": {
+   "first_date": "2025-03-12",
+   "last_date": "2026-08-31",
+   "rows": 538,
+   "last_traded_date": "2026-08-07"
+  },
+  "VIDTUSDT": {
+   "first_date": "2024-08-23",
+   "last_date": "2026-08-31",
+   "rows": 739,
+   "last_traded_date": "2025-04-14"
+  },
+  "VINEUSDT": {
+   "first_date": "2025-01-24",
+   "last_date": "2026-08-31",
+   "rows": 585,
+   "last_traded_date": "2026-04-28"
+  },
+  "VIRTUALUSDT": {
+   "first_date": "2024-12-10",
+   "last_date": "2026-08-31",
+   "rows": 630,
+   "last_traded_date": "2026-08-31"
+  },
+  "VOXELUSDT": {
+   "first_date": "2024-08-20",
+   "last_date": "2026-08-31",
+   "rows": 742,
+   "last_traded_date": "2025-12-10"
+  },
+  "VRTUSDT": {
+   "first_date": "2026-07-10",
+   "last_date": "2026-08-31",
+   "rows": 53,
+   "last_traded_date": "2026-08-31"
+  },
+  "VSTUSDT": {
+   "first_date": "2026-08-17",
+   "last_date": "2026-08-31",
+   "rows": 15,
+   "last_traded_date": "2026-08-31"
+  },
+  "VTHOUSDT": {
+   "first_date": "2025-01-22",
+   "last_date": "2026-08-31",
+   "rows": 587,
+   "last_traded_date": "2026-08-31"
+  },
+  "VUSDT": {
+   "first_date": "2026-05-18",
+   "last_date": "2026-08-31",
+   "rows": 106,
+   "last_traded_date": "2026-08-31"
+  },
+  "VVVUSDT": {
+   "first_date": "2025-01-29",
+   "last_date": "2026-08-31",
+   "rows": 580,
+   "last_traded_date": "2026-08-31"
+  },
+  "WALUSDT": {
+   "first_date": "2025-03-27",
+   "last_date": "2026-08-31",
+   "rows": 523,
+   "last_traded_date": "2026-08-31"
+  },
+  "WAVESUSDT": {
+   "first_date": "2020-08-12",
+   "last_date": "2026-08-31",
+   "rows": 2206,
+   "last_traded_date": "2024-06-11"
+  },
+  "WAXPUSDT": {
+   "first_date": "2023-10-18",
+   "last_date": "2026-08-31",
+   "rows": 1049,
+   "last_traded_date": "2026-08-31"
+  },
+  "WCTUSDT": {
+   "first_date": "2025-04-15",
+   "last_date": "2026-08-31",
+   "rows": 504,
+   "last_traded_date": "2026-08-31"
+  },
+  "WDCUSDT": {
+   "first_date": "2026-05-26",
+   "last_date": "2026-08-31",
+   "rows": 98,
+   "last_traded_date": "2026-08-31"
+  },
+  "WENUSDT": {
+   "first_date": "2026-07-09",
+   "last_date": "2026-08-31",
+   "rows": 54,
+   "last_traded_date": "2026-08-31"
+  },
+  "WETUSDT": {
+   "first_date": "2025-12-10",
+   "last_date": "2026-08-31",
+   "rows": 265,
+   "last_traded_date": "2026-08-31"
+  },
+  "WIFUSDT": {
+   "first_date": "2024-01-18",
+   "last_date": "2026-08-31",
+   "rows": 957,
+   "last_traded_date": "2026-08-31"
+  },
+  "WLDUSDT": {
+   "first_date": "2023-07-24",
+   "last_date": "2026-08-31",
+   "rows": 1135,
+   "last_traded_date": "2026-08-31"
+  },
+  "WLFIUSDT": {
+   "first_date": "2025-08-23",
+   "last_date": "2026-08-31",
+   "rows": 374,
+   "last_traded_date": "2026-08-31"
+  },
+  "WMTUSDT": {
+   "first_date": "2026-05-18",
+   "last_date": "2026-08-31",
+   "rows": 106,
+   "last_traded_date": "2026-08-31"
+  },
+  "WOOUSDT": {
+   "first_date": "2022-04-08",
+   "last_date": "2026-08-31",
+   "rows": 1607,
+   "last_traded_date": "2026-08-31"
+  },
+  "WUSDT": {
+   "first_date": "2024-04-03",
+   "last_date": "2026-08-31",
+   "rows": 881,
+   "last_traded_date": "2026-08-31"
+  },
+  "XAGUSDT": {
+   "first_date": "2026-01-07",
+   "last_date": "2026-08-31",
+   "rows": 237,
+   "last_traded_date": "2026-08-31"
+  },
+  "XAIUSDT": {
+   "first_date": "2024-01-09",
+   "last_date": "2026-08-31",
+   "rows": 966,
+   "last_traded_date": "2026-08-31"
+  },
+  "XANUSDT": {
+   "first_date": "2025-09-29",
+   "last_date": "2026-08-31",
+   "rows": 337,
+   "last_traded_date": "2026-08-31"
+  },
+  "XAUTUSDT": {
+   "first_date": "2026-03-26",
+   "last_date": "2026-08-31",
+   "rows": 159,
+   "last_traded_date": "2026-08-31"
+  },
+  "XAUUSDT": {
+   "first_date": "2025-12-11",
+   "last_date": "2026-08-31",
+   "rows": 264,
+   "last_traded_date": "2026-08-31"
+  },
+  "XBIUSDT": {
+   "first_date": "2026-07-09",
+   "last_date": "2026-08-31",
+   "rows": 54,
+   "last_traded_date": "2026-08-31"
+  },
+  "XCNUSDT": {
+   "first_date": "2025-04-11",
+   "last_date": "2026-08-31",
+   "rows": 508,
+   "last_traded_date": "2025-11-21"
+  },
+  "XEMUSDT": {
+   "first_date": "2021-03-03",
+   "last_date": "2026-08-31",
+   "rows": 2003,
+   "last_traded_date": "2024-12-09"
+  },
+  "XLEUSDT": {
+   "first_date": "2026-06-10",
+   "last_date": "2026-08-31",
+   "rows": 83,
+   "last_traded_date": "2026-08-31"
+  },
+  "XLMUSDT": {
+   "first_date": "2020-01-20",
+   "last_date": "2026-08-31",
+   "rows": 2411,
+   "last_traded_date": "2026-08-31"
+  },
+  "XMRUSDT": {
+   "first_date": "2020-02-03",
+   "last_date": "2026-08-31",
+   "rows": 2402,
+   "last_traded_date": "2026-08-31"
+  },
+  "XNYUSDT": {
+   "first_date": "2025-08-13",
+   "last_date": "2026-08-31",
+   "rows": 384,
+   "last_traded_date": "2026-08-31"
+  },
+  "XPDUSDT": {
+   "first_date": "2026-01-30",
+   "last_date": "2026-08-31",
+   "rows": 214,
+   "last_traded_date": "2026-08-31"
+  },
+  "XPINUSDT": {
+   "first_date": "2025-09-12",
+   "last_date": "2026-08-31",
+   "rows": 354,
+   "last_traded_date": "2026-08-31"
+  },
+  "XPLUSDT": {
+   "first_date": "2025-08-22",
+   "last_date": "2026-08-31",
+   "rows": 375,
+   "last_traded_date": "2026-08-31"
+  },
+  "XPTUSDT": {
+   "first_date": "2026-01-30",
+   "last_date": "2026-08-31",
+   "rows": 214,
+   "last_traded_date": "2026-08-31"
+  },
+  "XRPUSDT": {
+   "first_date": "2020-01-06",
+   "last_date": "2026-08-31",
+   "rows": 2425,
+   "last_traded_date": "2026-08-31"
+  },
+  "XTZUSDT": {
+   "first_date": "2020-02-06",
+   "last_date": "2026-08-31",
+   "rows": 2399,
+   "last_traded_date": "2026-08-31"
+  },
+  "XVGUSDT": {
+   "first_date": "2023-07-05",
+   "last_date": "2026-08-31",
+   "rows": 1154,
+   "last_traded_date": "2026-08-31"
+  },
+  "XVSUSDT": {
+   "first_date": "2023-04-13",
+   "last_date": "2026-08-31",
+   "rows": 1237,
+   "last_traded_date": "2026-08-31"
+  },
+  "YALAUSDT": {
+   "first_date": "2025-08-07",
+   "last_date": "2026-08-31",
+   "rows": 390,
+   "last_traded_date": "2026-02-10"
+  },
+  "YBUSDT": {
+   "first_date": "2025-10-10",
+   "last_date": "2026-08-31",
+   "rows": 326,
+   "last_traded_date": "2026-08-31"
+  },
+  "YFIIUSDT": {
+   "first_date": "2020-09-03",
+   "last_date": "2022-04-12",
+   "rows": 582,
+   "last_traded_date": "2022-04-12"
+  },
+  "YFIUSDT": {
+   "first_date": "2020-08-31",
+   "last_date": "2026-08-31",
+   "rows": 2187,
+   "last_traded_date": "2026-08-31"
+  },
+  "YGGUSDT": {
+   "first_date": "2023-08-05",
+   "last_date": "2026-08-31",
+   "rows": 1123,
+   "last_traded_date": "2026-08-31"
+  },
+  "ZAMAUSDT": {
+   "first_date": "2026-01-09",
+   "last_date": "2026-08-31",
+   "rows": 235,
+   "last_traded_date": "2026-08-31"
+  },
+  "ZBTUSDT": {
+   "first_date": "2025-10-17",
+   "last_date": "2026-08-31",
+   "rows": 319,
+   "last_traded_date": "2026-08-31"
+  },
+  "ZECUSDT": {
+   "first_date": "2020-02-05",
+   "last_date": "2026-08-31",
+   "rows": 2395,
+   "last_traded_date": "2026-08-31"
+  },
+  "ZENUSDT": {
+   "first_date": "2020-11-24",
+   "last_date": "2026-08-31",
+   "rows": 2102,
+   "last_traded_date": "2026-08-31"
+  },
+  "ZEREBROUSDT": {
+   "first_date": "2025-01-02",
+   "last_date": "2026-08-31",
+   "rows": 607,
+   "last_traded_date": "2026-08-31"
+  },
+  "ZESTUSDT": {
+   "first_date": "2026-06-04",
+   "last_date": "2026-08-31",
+   "rows": 89,
+   "last_traded_date": "2026-08-31"
+  },
+  "ZETAUSDT": {
+   "first_date": "2024-02-02",
+   "last_date": "2026-08-31",
+   "rows": 942,
+   "last_traded_date": "2026-08-31"
+  },
+  "ZHIPUUSDT": {
+   "first_date": "2026-07-17",
+   "last_date": "2026-08-31",
+   "rows": 46,
+   "last_traded_date": "2026-08-31"
+  },
+  "ZHONGJIUSDT": {
+   "first_date": "2026-08-14",
+   "last_date": "2026-08-31",
+   "rows": 18,
+   "last_traded_date": "2026-08-31"
+  },
+  "ZILUSDT": {
+   "first_date": "2020-06-18",
+   "last_date": "2026-08-31",
+   "rows": 2261,
+   "last_traded_date": "2026-08-31"
+  },
+  "ZKCUSDT": {
+   "first_date": "2025-09-15",
+   "last_date": "2026-08-31",
+   "rows": 351,
+   "last_traded_date": "2026-08-31"
+  },
+  "ZKJUSDT": {
+   "first_date": "2025-05-13",
+   "last_date": "2026-08-31",
+   "rows": 476,
+   "last_traded_date": "2026-04-29"
+  },
+  "ZKPUSDT": {
+   "first_date": "2025-12-21",
+   "last_date": "2026-08-31",
+   "rows": 254,
+   "last_traded_date": "2026-08-31"
+  },
+  "ZKUSDT": {
+   "first_date": "2024-06-17",
+   "last_date": "2026-08-31",
+   "rows": 806,
+   "last_traded_date": "2026-08-31"
+  },
+  "ZMUSDT": {
+   "first_date": "2026-06-10",
+   "last_date": "2026-08-31",
+   "rows": 83,
+   "last_traded_date": "2026-08-31"
+  },
+  "ZORAUSDT": {
+   "first_date": "2025-07-25",
+   "last_date": "2026-08-31",
+   "rows": 403,
+   "last_traded_date": "2026-08-31"
+  },
+  "ZRCUSDT": {
+   "first_date": "2025-07-29",
+   "last_date": "2026-08-31",
+   "rows": 399,
+   "last_traded_date": "2026-01-21"
+  },
+  "ZROUSDT": {
+   "first_date": "2024-06-20",
+   "last_date": "2026-08-31",
+   "rows": 803,
+   "last_traded_date": "2026-08-31"
+  },
+  "ZRXUSDT": {
+   "first_date": "2020-06-24",
+   "last_date": "2026-08-31",
+   "rows": 2260,
+   "last_traded_date": "2026-08-31"
+  },
+  "\u5e01\u5b89\u4eba\u751fUSDT": {
+   "first_date": "2025-10-20",
+   "last_date": "2026-08-31",
+   "rows": 316,
+   "last_traded_date": "2026-08-31"
+  },
+  "\u6211\u8e0f\u9a6c\u6765\u4e86USDT": {
+   "first_date": "2026-01-21",
+   "last_date": "2026-08-31",
+   "rows": 223,
+   "last_traded_date": "2026-08-31"
+  },
+  "\u725b\u6765USDT": {
+   "first_date": "2026-08-30",
+   "last_date": "2026-08-31",
+   "rows": 2,
+   "last_traded_date": "2026-08-31"
+  },
+  "\u9f99\u867eUSDT": {
+   "first_date": "2026-03-11",
+   "last_date": "2026-08-31",
+   "rows": 174,
+   "last_traded_date": "2026-08-31"
+  }
+ },
+ "num_delisted_or_renamed": 31,
+ "no_trading_at_end": [
+  "1000BTTCUSDT",
+  "1000WHYUSDT",
+  "1000XUSDT",
+  "42USDT",
+  "A2ZUSDT",
+  "ACXUSDT",
+  "AERGOUSDT",
+  "AGIXUSDT",
+  "AI16ZUSDT",
+  "AIUSDT",
+  "AKROUSDT",
+  "ALPACAUSDT",
+  "ALPHAUSDT",
+  "AMBUSDT",
+  "ANCUSDT",
+  "ANTUSDT",
+  "ATAUSDT",
+  "AUDIOUSDT",
+  "B3USDT",
+  "BADGERUSDT",
+  "BAKEUSDT",
+  "BALUSDT",
+  "BDXNUSDT",
+  "BIDUSDT",
+  "BLUEBIRDUSDT",
+  "BLZUSDT",
+  "BNXUSDT",
+  "BOBUSDT",
+  "BONDUSDT",
+  "BSWUSDT",
+  "BTCSTUSDT",
+  "BTSUSDT",
+  "BTTUSDT",
+  "BZRXUSDT",
+  "CHESSUSDT",
+  "COCOSUSDT",
+  "COMBOUSDT",
+  "COMMONUSDT",
+  "COSUSDT",
+  "CUDISUSDT",
+  "DAMUSDT",
+  "DARUSDT",
+  "DEFIUSDT",
+  "DEGENUSDT",
+  "DEGOUSDT",
+  "DENTUSDT",
+  "DFUSDT",
+  "DGBUSDT",
+  "DMCUSDT",
+  "DODOUSDT",
+  "DOTECOUSDT",
+  "DUSDT",
+  "EOSUSDT",
+  "EPTUSDT",
+  "FIOUSDT",
+  "FISUSDT",
+  "FLMUSDT",
+  "FOOTBALLUSDT",
+  "FORTHUSDT",
+  "FRONTUSDT",
+  "FTMUSDT",
+  "FTTUSDT",
+  "FUNUSDT",
+  "FXSUSDT",
+  "GALUSDT",
+  "GHSTUSDT",
+  "GLMRUSDT",
+  "HFTUSDT",
+  "HIFIUSDT",
+  "HIGHUSDT",
+  "HIPPOUSDT",
+  "HNTUSDT",
+  "HOOKUSDT",
+  "ICXUSDT",
+  "IDEXUSDT",
+  "IPUSDT",
+  "IRUSDT",
+  "KDAUSDT",
+  "KEEPUSDT",
+  "KEYUSDT",
+  "KLAYUSDT",
+  "LENDUSDT",
+  "LEVERUSDT",
+  "LINAUSDT",
+  "LOKAUSDT",
+  "LOOMUSDT",
+  "LRCUSDT",
+  "LUNAUSDT",
+  "MATICUSDT",
+  "MBLUSDT",
+  "MBOXUSDT",
+  "MDTUSDT",
+  "MEMEFIUSDT",
+  "MILKUSDT",
+  "MKRUSDT",
+  "MLNUSDT",
+  "MYROUSDT",
+  "NEIROETHUSDT",
+  "NFPUSDT",
+  "NKNUSDT",
+  "NTRNUSDT",
+  "NULSUSDT",
+  "NUUSDT",
+  "OBOLUSDT",
+  "OCEANUSDT",
+  "OLUSDT",
+  "OMGUSDT",
+  "OMNIUSDT",
+  "OMUSDT",
+  "ORBSUSDT",
+  "OXTUSDT",
+  "PERPUSDT",
+  "PHBUSDT",
+  "PONKEUSDT",
+  "PORT3USDT",
+  "PUFFERUSDT",
+  "QUICKUSDT",
+  "RADUSDT",
+  "RAYUSDT",
+  "RDNTUSDT",
+  "REEFUSDT",
+  "REIUSDT",
+  "RENUSDT",
+  "RLSUSDT",
+  "RNDRUSDT",
+  "RVVUSDT",
+  "SCRTUSDT",
+  "SCUSDT",
+  "SKATEUSDT",
+  "SLERFUSDT",
+  "SNTUSDT",
+  "SRMUSDT",
+  "STMXUSDT",
+  "STORJUSDT",
+  "STPTUSDT",
+  "STRAXUSDT",
+  "SWELLUSDT",
+  "SXPUSDT",
+  "SYSUSDT",
+  "TANSSIUSDT",
+  "TOKENUSDT",
+  "TOMOUSDT",
+  "TONUSDT",
+  "TROYUSDT",
+  "TRUUSDT",
+  "UNFIUSDT",
+  "UXLINKUSDT",
+  "VANRYUSDT",
+  "VFYUSDT",
+  "VICUSDT",
+  "VIDTUSDT",
+  "VINEUSDT",
+  "VOXELUSDT",
+  "WAVESUSDT",
+  "XCNUSDT",
+  "XEMUSDT",
+  "YALAUSDT",
+  "YFIIUSDT",
+  "ZKJUSDT",
+  "ZRCUSDT"
+ ],
+ "num_no_trading_at_end": 160,
+ "zero_volume_rows": 52713,
+ "notes": "The archive keeps publishing zero-volume rows (open=high=low=close, volume=count=0) for many delisted symbols up to the end of the range, so last_date overstates the listing life. Use last_traded_date / no_trading_at_end to detect delistings."
+}
