@@ -160,6 +160,10 @@ class _Stream:
         self.active = False                  # the model streamed something (thinking or an answer block)
         self.more = False                    # another request was started or is about to be
         self.lines: list[str] = []
+        # what a failure without a 'result' event is judged on (a plan limit or not): text the CLI wrote
+        # outside JSON and its API error events. Never the model's own text or usage numbers (a usage of
+        # 429 tokens, or an answer that mentions a "usage limit", is not the plan limit).
+        self.error_lines: list[str] = []
 
     def feed(self, line: str) -> bool:
         line = (line or "").strip()
@@ -169,10 +173,14 @@ class _Stream:
         try:
             ev = json.loads(line)
         except (ValueError, RecursionError):
+            self.error_lines.append(line)
             return False
         if not isinstance(ev, dict):
             return False
         t = ev.get("type")
+        if (ev.get("error") or ev.get("is_api_error_message") or ev.get("api_error")
+                or (t == "system" and ev.get("subtype") == "api_retry")):
+            self.error_lines.append(line)
         if t == "result" or (t is None and ("result" in ev or "is_error" in ev)):
             self.result = ev
             return False
@@ -429,7 +437,9 @@ class ClaudeCodeRunner:
         text = text if isinstance(text, str) else json.dumps(text, ensure_ascii=False, default=str)
         failed = code != 0 or (isinstance(envelope, dict) and envelope.get("is_error"))
         if failed:
-            blob = f"{text}\n{err}"
+            # judged on the CLI's error text only: the 'result' event, or without one its non-JSON output and
+            # API error events (``_Stream.error_lines``), never the model's text or usage numbers
+            blob = f"{text if isinstance(envelope, dict) else chr(10).join(st.error_lines)}\n{err}"
             exc = (UsageLimitReached(blob.strip()[:300]) if LIMIT_RE.search(blob)
                    else AgentCallError(f"exit {code}: {blob.strip()[:300]}"))
             # the CLI can die after the model streamed (an OOM kill, a crash: no 'result' event, no usage):

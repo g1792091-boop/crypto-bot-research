@@ -2114,3 +2114,17 @@ def test_outage_rows_of_a_reserved_class_do_not_take_the_other_reserved_calls(wo
     assert sch.total_for_caps()[0] == u["calls"] + 5 - RM.TIMEOUT_EXEMPT_PER_DAY
     # the other classes always count every outage row
     assert budget("owner", OK()).total_for_caps() == budget("owner", OK()).used_total()
+
+
+def test_a_crash_is_not_taken_for_the_plan_limit_because_of_the_models_text():
+    """Without a 'result' event the limit check read every stream line: a usage of 429 tokens or an answer
+    saying "usage limit" made a crashed call a UsageLimitReached (all rooms paused for an hour)."""
+    from paperbot.agents import runner as RN
+    st = RN._Stream()
+    st.feed(json.dumps({"type": "assistant", "message": {"id": "m1", "usage": {"input_tokens": 429},
+                                                         "content": [{"type": "text", "text": "the usage limit rule"}]}}))
+    assert st.error_lines == []
+    st.feed("API Error: 429 rate_limit_error")
+    st.feed(json.dumps({"type": "assistant", "is_api_error_message": True,
+                        "message": {"content": [{"type": "text", "text": "You've hit your limit"}]}}))
+    assert len(st.error_lines) == 2 and all(RN.LIMIT_RE.search(x) for x in st.error_lines)
