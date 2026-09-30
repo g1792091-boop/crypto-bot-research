@@ -1,0 +1,331 @@
+{
+  "url_pattern": "https://data.binance.vision/data/futures/um/daily/bookDepth/{SYM}/{SYM}-bookDepth-{DATE}.zip",
+  "listing": "https://s3-ap-northeast-1.amazonaws.com/data.binance.vision?delimiter=/&prefix=data/futures/um/daily/bookDepth/{SYM}/",
+  "download_date": "2026-09-30",
+  "end_date_cap": "2026-09-29",
+  "symbols": {
+    "BTCUSDT": {
+      "first_date": "2023-01-01",
+      "last_date": "2026-09-28",
+      "listed_daily_files": 1364,
+      "daily_files": 1364,
+      "404_dates": [
+        "2023-02-08..2023-02-09",
+        "2024-04-18"
+      ],
+      "error_dates": {},
+      "rows": 390190,
+      "typical_snapshots_per_day": 2880,
+      "percentage_bands_seen": [
+        "-5",
+        "-5.00",
+        "-4",
+        "-4.00",
+        "-3",
+        "-3.00",
+        "-2",
+        "-2.00",
+        "-1.00",
+        "-1",
+        "-0.20",
+        "0.20",
+        "1",
+        "1.00",
+        "2.00",
+        "2",
+        "3.00",
+        "3",
+        "4.00",
+        "4",
+        "5",
+        "5.00"
+      ],
+      "header_detected": [
+        true
+      ],
+      "outputs": {
+        "btc_depth_5m.csv.gz": {
+          "bytes": 33230684,
+          "sha256": "0e7aaebd33871e1b45b4dd53be09769860923e73f03f376d35481fb6c3fd66cf"
+        }
+      }
+    },
+    "ETHUSDT": {
+      "first_date": "2023-01-01",
+      "last_date": "2026-09-28",
+      "listed_daily_files": 1365,
+      "daily_files": 1365,
+      "404_dates": [
+        "2023-02-08..2023-02-09"
+      ],
+      "error_dates": {},
+      "rows": 390478,
+      "typical_snapshots_per_day": 2880,
+      "percentage_bands_seen": [
+        "-5",
+        "-5.00",
+        "-4",
+        "-4.00",
+        "-3",
+        "-3.00",
+        "-2",
+        "-2.00",
+        "-1.00",
+        "-1",
+        "-0.20",
+        "0.20",
+        "1",
+        "1.00",
+        "2.00",
+        "2",
+        "3.00",
+        "3",
+        "4.00",
+        "4",
+        "5",
+        "5.00"
+      ],
+      "header_detected": [
+        true
+      ],
+      "outputs": {
+        "eth_depth_5m.csv.gz": {
+          "bytes": 33652816,
+          "sha256": "316d086c621b4f966955b321e461970496c4eaf6887b64a55633237614285071"
+        }
+      }
+    },
+    "SOLUSDT": {
+      "first_date": "2023-01-01",
+      "last_date": "2026-09-28",
+      "listed_daily_files": 1362,
+      "daily_files": 1362,
+      "404_dates": [
+        "2023-02-08..2023-02-09",
+        "2023-11-13",
+        "2024-04-18",
+        "2026-01-14"
+      ],
+      "error_dates": {},
+      "rows": 389614,
+      "typical_snapshots_per_day": 2880,
+      "percentage_bands_seen": [
+        "-5",
+        "-5.00",
+        "-4",
+        "-4.00",
+        "-3",
+        "-3.00",
+        "-2",
+        "-2.00",
+        "-1.00",
+        "-1",
+        "-0.20",
+        "0.20",
+        "1",
+        "1.00",
+        "2.00",
+        "2",
+        "3.00",
+        "3",
+        "4.00",
+        "4",
+        "5",
+        "5.00"
+      ],
+      "header_detected": [
+        true
+      ],
+      "outputs": {
+        "sol_depth_5m.csv.gz": {
+          "bytes": 29173890,
+          "sha256": "e9dc822453942646a7eaa16ebc22f34ad52f8ad6fa1b3f97865ee255aebb23e1"
+        }
+      }
+    },
+    "LTCUSDT": {
+      "first_date": "2023-01-01",
+      "last_date": "2026-09-28",
+      "listed_daily_files": 1364,
+      "daily_files": 1364,
+      "404_dates": [
+        "2023-02-08..2023-02-09",
+        "2023-11-16"
+      ],
+      "error_dates": {},
+      "rows": 390190,
+      "typical_snapshots_per_day": 2880,
+      "percentage_bands_seen": [
+        "-5",
+        "-5.00",
+        "-4",
+        "-4.00",
+        "-3",
+        "-3.00",
+        "-2",
+        "-2.00",
+        "-1.00",
+        "-1",
+        "-0.20",
+        "0.20",
+        "1",
+        "1.00",
+        "2.00",
+        "2",
+        "3.00",
+        "3",
+        "4.00",
+        "4",
+        "5",
+        "5.00"
+      ],
+      "header_detected": [
+        true
+      ],
+      "outputs": {
+        "ltc_depth_5m.csv.gz": {
+          "bytes": 31054250,
+          "sha256": "6e29643dd834518c73d734aa6f7f37d9535a7e541d34abefecce44e7797559af"
+        }
+      }
+    },
+    "BCHUSDT": {
+      "first_date": "2023-01-01",
+      "last_date": "2026-09-28",
+      "listed_daily_files": 1365,
+      "daily_files": 1365,
+      "404_dates": [
+        "2023-02-08..2023-02-09"
+      ],
+      "error_dates": {},
+      "rows": 390478,
+      "typical_snapshots_per_day": 2880,
+      "percentage_bands_seen": [
+        "-5",
+        "-5.00",
+        "-4",
+        "-4.00",
+        "-3",
+        "-3.00",
+        "-2",
+        "-2.00",
+        "-1.00",
+        "-1",
+        "-0.20",
+        "0.20",
+        "1",
+        "1.00",
+        "2.00",
+        "2",
+        "3.00",
+        "3",
+        "4.00",
+        "4",
+        "5",
+        "5.00"
+      ],
+      "header_detected": [
+        true
+      ],
+      "outputs": {
+        "bch_depth_5m.csv.gz": {
+          "bytes": 30844682,
+          "sha256": "e8ed2d14f64b3141f8e0096f2a2c2837c886d37c52d7adc0ff8f8975758a543c"
+        }
+      }
+    },
+    "DOGEUSDT": {
+      "first_date": "2023-01-01",
+      "last_date": "2026-09-28",
+      "listed_daily_files": 1364,
+      "daily_files": 1364,
+      "404_dates": [
+        "2023-02-08..2023-02-09",
+        "2024-04-18"
+      ],
+      "error_dates": {},
+      "rows": 390156,
+      "typical_snapshots_per_day": 2880,
+      "percentage_bands_seen": [
+        "-5",
+        "-5.00",
+        "-4",
+        "-4.00",
+        "-3",
+        "-3.00",
+        "-2",
+        "-2.00",
+        "-1.00",
+        "-1",
+        "-0.20",
+        "0.20",
+        "1",
+        "1.00",
+        "2.00",
+        "2",
+        "3.00",
+        "3",
+        "4.00",
+        "4",
+        "5",
+        "5.00"
+      ],
+      "header_detected": [
+        true
+      ],
+      "outputs": {
+        "doge_depth_5m.csv.gz": {
+          "bytes": 31685761,
+          "sha256": "2ea7d69f794421607883436b66034c989f6187711ae25f616a0caa0e4933d596"
+        }
+      }
+    },
+    "XRPUSDT": {
+      "first_date": "2023-01-01",
+      "last_date": "2026-09-28",
+      "listed_daily_files": 1363,
+      "daily_files": 1363,
+      "404_dates": [
+        "2023-02-08..2023-02-09",
+        "2023-11-01",
+        "2026-01-14"
+      ],
+      "error_dates": {},
+      "rows": 389901,
+      "typical_snapshots_per_day": 2880,
+      "percentage_bands_seen": [
+        "-5",
+        "-5.00",
+        "-4",
+        "-4.00",
+        "-3",
+        "-3.00",
+        "-2",
+        "-2.00",
+        "-1.00",
+        "-1",
+        "-0.20",
+        "0.20",
+        "1",
+        "1.00",
+        "2.00",
+        "2",
+        "3.00",
+        "3",
+        "4.00",
+        "4",
+        "5",
+        "5.00"
+      ],
+      "header_detected": [
+        true
+      ],
+      "outputs": {
+        "xrp_depth_5m.csv.gz": {
+          "bytes": 31830000,
+          "sha256": "12decb038d66122ae3bc3b03430d61c85daf97da6c82c079b0273f85f2261044"
+        }
+      }
+    }
+  }
+}
