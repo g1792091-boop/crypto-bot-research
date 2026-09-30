@@ -1,15 +1,22 @@
-<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style></head><body><title>누리 AI</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800&family=JetBrains+Mono:wght@400;500&display=swap">
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>누리 AI</title>
+<meta name="description" content="내 기기에서 돌아가는 나만의 AI 챗봇. 외부 AI 서비스 없이 동작합니다.">
+<meta name="theme-color" content="#0E7A63">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
 <style>
-/* Layout: conversation rail left, single reading column center (max 760px), composer docked at bottom; drawer rail on phones */
+/* Layout: conversation rail left, single reading column center (max 780px), composer docked at bottom; drawer rail on phones */
 :root{
   --bg:#F4F5F3; --panel:#FFFFFF; --panel-2:#ECEEEB; --line:#D9DDD8; --ink:#171A1C; --muted:#606A66;
   --accent:#0E7A63; --accent-soft:#DCEFE9; --accent-ink:#FFFFFF; --user:#1E2427; --user-ink:#F3F5F4;
   --ok:#2F7D4B; --warn:#A8691A; --bad:#B53A2F; --code-bg:#1B1F22; --code-ink:#E3E7E5;
-  --f-body:"Noto Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
-  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
-  --r:8px;
+  --f-body:"Pretendard","Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR","Noto Sans CJK KR",system-ui,sans-serif;
+  --f-mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"D2Coding",monospace;
+  --r:8px; color-scheme:light;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#101315; --panel:#171B1D; --panel-2:#1F2427; --line:#2E3538; --ink:#E6EAE8; --muted:#97A29D;
@@ -19,28 +26,28 @@
   --bg:#101315; --panel:#171B1D; --panel-2:#1F2427; --line:#2E3538; --ink:#E6EAE8; --muted:#97A29D;
   --accent:#3FC4A2; --accent-soft:#16332C; --accent-ink:#0B1412; --user:#2A3236; --user-ink:#EEF2F0;
   --ok:#5DBE80; --warn:#E0A64E; --bad:#E57B6E; --code-bg:#0B0D0F; --code-ink:#DCE2DF; color-scheme:dark}
-html,body{height:100%}
-body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.6}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.6;padding-top:env(safe-area-inset-top,0px);box-sizing:border-box}
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 button,input,select,textarea{font:inherit;color:inherit}
 button{cursor:pointer}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
 
 .app{display:grid;grid-template-columns:272px minmax(0,1fr);height:100%}
-/* rail */
 .rail{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
 .rail-top{padding:16px 14px 10px;display:flex;flex-direction:column;gap:10px}
 .brand{display:flex;align-items:center;gap:10px}
 .logo{width:30px;height:30px;border-radius:8px;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font-weight:800;font-size:15px}
 .brand b{font-size:17px;font-weight:800;letter-spacing:-.02em}
 .brand small{display:block;font-size:11px;color:var(--muted);letter-spacing:.04em}
-.newchat{display:flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--line);background:var(--bg);border-radius:var(--r);padding:9px;font-weight:500}
+.newchat{display:flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--line);background:var(--bg);border-radius:var(--r);padding:9px;font-weight:600}
 .newchat:hover{border-color:var(--accent)}
 .search{width:100%;border:1px solid var(--line);background:var(--bg);border-radius:var(--r);padding:7px 10px;font-size:13px}
 .chatlist{flex:1;overflow:auto;padding:4px 8px 8px;display:flex;flex-direction:column;gap:2px;min-height:0}
 .grp{font-size:11px;color:var(--muted);letter-spacing:.06em;padding:10px 8px 4px}
-.ci{display:flex;align-items:center;gap:6px;border-radius:6px;padding:7px 8px;cursor:pointer;color:var(--ink);border:0;background:transparent;text-align:left;width:100%}
+.ci{display:flex;align-items:center;gap:6px;border-radius:6px;padding:7px 8px;cursor:pointer}
 .ci:hover{background:var(--panel-2)}
 .ci[aria-current="true"]{background:var(--accent-soft)}
 .ci span{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13.5px}
@@ -50,23 +57,22 @@ button{cursor:pointer}
 .rail-nav button{display:flex;justify-content:space-between;align-items:center;border:0;background:transparent;border-radius:6px;padding:8px 10px;color:var(--muted);font-weight:500;text-align:left}
 .rail-nav button:hover{background:var(--panel-2);color:var(--ink)}
 .rail-nav button[aria-current="page"]{color:var(--ink);background:var(--panel-2)}
-.store-pill{font-size:11px;color:var(--muted);padding:6px 10px}
+.rail-foot{font-size:11px;color:var(--muted);padding:6px 10px}
 
-/* main */
 main{display:flex;flex-direction:column;min-width:0;min-height:0;height:100%}
 .topbar{display:flex;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--bg);flex-wrap:wrap}
 .menu-btn{display:none;border:1px solid var(--line);background:var(--panel);border-radius:6px;padding:4px 9px}
 .topbar h1{font-size:15px;margin:0;font-weight:700;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sel{border:1px solid var(--line);background:var(--panel);border-radius:6px;padding:5px 8px;font-size:13px;max-width:220px}
-.pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:3px 9px;border-radius:12px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
-.dot{width:7px;height:7px;border-radius:50%;background:var(--muted)}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:3px 10px;border-radius:12px;border:1px solid var(--line);color:var(--muted);white-space:nowrap;background:var(--panel)}
+button.pill:hover{border-color:var(--accent);color:var(--ink)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex:none}
 .dot.ok{background:var(--ok)} .dot.warn{background:var(--warn)} .dot.bad{background:var(--bad)}
 
 .view{flex:1;min-height:0;display:flex;flex-direction:column}
 .scroll{flex:1;overflow:auto;min-height:0}
 .col{max-width:780px;margin:0 auto;padding-block:20px 28px;padding-inline:20px;display:flex;flex-direction:column;gap:22px}
 
-/* messages */
 .m{display:flex;flex-direction:column;gap:6px;min-width:0}
 .m.user{align-items:flex-end}
 .m.user .bubble{background:var(--user);color:var(--user-ink);border-radius:14px 14px 4px 14px;padding:9px 14px;max-width:85%;white-space:pre-wrap;word-break:break-word}
@@ -99,6 +105,7 @@ details.think div{white-space:pre-wrap;margin-top:6px;max-height:260px;overflow:
 .tools button{border:0;background:transparent;color:var(--muted);font-size:12px;padding:2px 6px;border-radius:4px}
 .tools button:hover{background:var(--panel-2);color:var(--ink)}
 .tools .meta{font-size:11.5px;color:var(--muted);margin-left:4px}
+.srcs{display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:12px;color:var(--muted)}
 .err{border:1px solid color-mix(in srgb,var(--bad) 45%,transparent);background:color-mix(in srgb,var(--bad) 8%,transparent);border-radius:8px;padding:8px 12px;font-size:13.5px}
 .files{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 .fchip{font-size:12px;border:1px solid var(--line);border-radius:6px;padding:2px 8px;color:var(--muted);background:var(--panel);display:inline-flex;gap:6px;align-items:center}
@@ -106,31 +113,30 @@ details.think div{white-space:pre-wrap;margin-top:6px;max-height:260px;overflow:
 .cursor::after{content:"▍";color:var(--accent);animation:blink 1s steps(2) infinite}
 @keyframes blink{50%{opacity:0}}
 
-/* empty */
-.hello{display:flex;flex-direction:column;gap:18px;padding-top:6vh}
+.hello{display:flex;flex-direction:column;gap:18px;padding-top:5vh}
 .hello h2{font-size:26px;margin:0;letter-spacing:-.02em;font-weight:800;text-wrap:balance}
 .hello p{margin:0;color:var(--muted)}
 .starters{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
 .starter{border:1px solid var(--line);background:var(--panel);border-radius:var(--r);padding:12px 14px;text-align:left;font-size:14px}
 .starter:hover{border-color:var(--accent)}
-.notice{border:1px dashed var(--line);border-radius:var(--r);padding:12px 14px;font-size:13.5px;color:var(--muted);display:flex;flex-direction:column;gap:8px;background:var(--panel)}
+.notice{border:1px dashed var(--line);border-radius:var(--r);padding:14px;font-size:13.5px;color:var(--muted);display:flex;flex-direction:column;gap:10px;background:var(--panel)}
 .notice b{color:var(--ink)}
+.notice .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 
-/* composer */
 .composer{border-top:1px solid var(--line);background:var(--bg);padding:10px 16px calc(12px + env(safe-area-inset-bottom,0px))}
 .cbox{max-width:780px;margin:0 auto;border:1px solid var(--line);background:var(--panel);border-radius:14px;padding:8px;display:flex;flex-direction:column;gap:6px}
 .cbox:focus-within{border-color:var(--accent)}
 .cbox textarea{border:0;background:transparent;resize:none;outline:none;min-height:44px;max-height:220px;padding:4px 6px;width:100%}
 .crow{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .crow .sp{flex:1}
-.icon-btn{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:5px 10px;font-size:13px;color:var(--muted)}
+.icon-btn{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:5px 10px;font-size:13px;color:var(--muted);cursor:pointer}
 .icon-btn:hover{color:var(--ink);border-color:var(--ink)}
+.icon-btn[aria-pressed="true"]{color:var(--accent);border-color:var(--accent);background:var(--accent-soft)}
 .send{border:0;background:var(--accent);color:var(--accent-ink);border-radius:8px;padding:7px 16px;font-weight:700}
 .send:disabled{opacity:.45;cursor:default}
 .send.stop{background:var(--ink);color:var(--bg)}
 .hint{max-width:780px;margin:6px auto 0;font-size:11.5px;color:var(--muted);text-align:center}
 
-/* panels (dashboard, bots, settings) */
 .page{max-width:1080px;margin:0 auto;padding-block:22px 40px;padding-inline:20px;display:flex;flex-direction:column;gap:18px}
 .page h2{font-size:20px;margin:0;letter-spacing:-.01em}
 .page .sub{color:var(--muted);margin:2px 0 0;font-size:13.5px}
@@ -140,33 +146,37 @@ details.think div{white-space:pre-wrap;margin-top:6px;max-height:260px;overflow:
 .kpi .v{font-family:var(--f-mono);font-size:22px;font-weight:500}
 .kpi .s{font-size:11.5px;color:var(--muted)}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);display:flex;flex-direction:column;min-width:0}
-.card h3{font-size:14px;margin:0;padding:12px 14px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.card h3{font-size:14px;margin:0;padding:12px 14px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap}
 .card h3 small{font-weight:400;color:var(--muted);font-size:12px}
 .card .body{padding:14px;display:flex;flex-direction:column;gap:12px;min-width:0}
-.grid2{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px}
+.grid2{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px;align-items:start}
 .chart{position:relative;width:100%}
 .chart svg{display:block;width:100%;height:auto;overflow:visible}
-.tip{position:absolute;pointer-events:none;background:var(--ink);color:var(--bg);font-size:12px;padding:4px 8px;border-radius:6px;white-space:nowrap;transform:translate(-50%,-110%)}
-.hbar{display:grid;grid-template-columns:120px minmax(0,1fr) 48px;gap:8px;align-items:center;font-size:13px}
+.tip{position:absolute;pointer-events:none;background:var(--ink);color:var(--bg);font-size:12px;padding:4px 8px;border-radius:6px;white-space:nowrap;transform:translate(-50%,-115%)}
+.hbar{display:grid;grid-template-columns:130px minmax(0,1fr) 48px;gap:8px;align-items:center;font-size:13px}
 .hbar .track{height:10px;background:var(--panel-2);border-radius:3px;overflow:hidden}
 .hbar .track i{display:block;height:100%;background:var(--accent);border-radius:0 3px 3px 0}
 .hbar span:first-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hbar .num{text-align:right;color:var(--muted)}
-.recent{display:flex;flex-direction:column}
-.recent button{display:flex;justify-content:space-between;gap:10px;border:0;border-bottom:1px solid var(--line);background:transparent;padding:9px 2px;text-align:left}
-.recent button:last-child{border-bottom:0}
-.recent button span:first-child{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;min-width:0}
-.recent .num{color:var(--muted);font-size:12px;white-space:nowrap}
-.empty{color:var(--muted);font-size:13.5px}
+.list{display:flex;flex-direction:column}
+.list>div,.list>button{display:flex;justify-content:space-between;align-items:center;gap:10px;border:0;border-bottom:1px solid var(--line);background:transparent;padding:9px 2px;text-align:left;min-width:0}
+.list>:last-child{border-bottom:0}
+.list .t{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;min-width:0;flex:1}
+.list .num{color:var(--muted);font-size:12px;white-space:nowrap}
+.empty{color:var(--muted);font-size:13.5px;margin:0}
 
-.bots{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
-.bot{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:8px}
-.bot .hd{display:flex;align-items:center;gap:10px}
-.bot .ini{width:34px;height:34px;border-radius:9px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;font-weight:800}
-.bot b{font-size:15px}
-.bot p{margin:0;font-size:13px;color:var(--muted);flex:1}
-.bot .row{display:flex;gap:6px;flex-wrap:wrap}
-.btn{border:1px solid var(--line);background:var(--panel);border-radius:7px;padding:6px 12px;font-size:13px;font-weight:500}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:8px}
+.tile.active{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.tile .hd{display:flex;align-items:center;gap:10px;justify-content:space-between}
+.tile .ini{width:34px;height:34px;border-radius:9px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;font-weight:800;flex:none}
+.tile b{font-size:15px}
+.tile p{margin:0;font-size:13px;color:var(--muted);flex:1}
+.tile .meta{display:flex;gap:6px;flex-wrap:wrap}
+.tag{font-size:11px;padding:1px 8px;border-radius:9px;background:var(--panel-2);color:var(--muted);white-space:nowrap}
+.tag.good{background:var(--accent-soft);color:var(--accent)}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.btn{border:1px solid var(--line);background:var(--panel);border-radius:7px;padding:6px 12px;font-size:13px;font-weight:500;cursor:pointer;display:inline-block}
 .btn:hover{border-color:var(--ink)}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .btn.danger{color:var(--bad)}
@@ -176,15 +186,14 @@ details.think div{white-space:pre-wrap;margin-top:6px;max-height:260px;overflow:
 .form .wide{grid-column:1/-1}
 .form input,.form select,.form textarea{border:1px solid var(--line);background:var(--bg);border-radius:7px;padding:8px 10px;color:var(--ink);font-size:14px;width:100%}
 .form textarea{resize:vertical;min-height:90px}
-.engines{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
-.eng{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:10px}
-.eng.active{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
-.eng .hd{display:flex;justify-content:space-between;align-items:center;gap:8px}
-.eng b{font-size:15px}
-.eng p{margin:0;font-size:13px;color:var(--muted)}
 .progress{height:8px;background:var(--panel-2);border-radius:4px;overflow:hidden}
-.progress i{display:block;height:100%;background:var(--accent);width:0}
+.progress i{display:block;height:100%;background:var(--accent);width:0;transition:width .2s}
 .small{font-size:12px;color:var(--muted)}
+.status{display:flex;flex-direction:column;gap:8px}
+.status .line{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.status b{font-size:16px}
+.hit{border-left:3px solid var(--accent);padding:6px 10px;background:var(--bg);border-radius:0 6px 6px 0;font-size:13px}
+.hit .small{display:block;margin-bottom:2px}
 
 .toast{position:fixed;left:50%;bottom:calc(90px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:8px;font-size:13px;z-index:30;max-width:calc(100% - 32px)}
 .scrim{display:none}
@@ -196,29 +205,32 @@ details.think div{white-space:pre-wrap;margin-top:6px;max-height:260px;overflow:
   .app.open .rail{transform:none}
   .app.open .scrim{display:block;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:15}
   .menu-btn{display:inline-block}
+  .topbar h1{flex:1 1 calc(100% - 56px)}
+  .sel{max-width:none;flex:1 1 0;min-width:0}
   .form{grid-template-columns:1fr}
   .col,.page{padding-inline:16px}
   .composer{padding-inline:12px}
-  .topbar h1{flex:1 1 calc(100% - 56px)}
-  .sel{max-width:none;flex:1 1 0;min-width:0}
+  .hbar{grid-template-columns:96px minmax(0,1fr) 40px}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
-
+</head>
+<body>
 <div class="app" id="app">
   <aside class="rail" aria-label="대화 목록">
     <div class="rail-top">
-      <div class="brand"><span class="logo">누</span><div><b>누리 AI</b><small>나만의 AI 챗봇</small></div></div>
+      <div class="brand"><span class="logo">누</span><div><b>누리 AI</b><small>내 기기에서 도는 AI</small></div></div>
       <button class="newchat" id="newChat">+ 새 대화</button>
       <input class="search" id="search" type="search" placeholder="대화 검색" aria-label="대화 검색">
     </div>
     <div class="chatlist" id="chatList"></div>
     <nav class="rail-nav" aria-label="메뉴">
       <button data-go="chat" aria-current="page">채팅</button>
-      <button data-go="dash">대시보드</button>
+      <button data-go="models">AI 모델 <span class="dot" id="navDot"></span></button>
+      <button data-go="know">내 지식</button>
       <button data-go="bots">내 봇 만들기</button>
-      <button data-go="settings">AI 엔진 설정 <span class="dot" id="engDot"></span></button>
-      <span class="store-pill" id="storePill">이 브라우저에 저장</span>
+      <button data-go="dash">대시보드</button>
+      <span class="rail-foot" id="railFoot">모든 데이터는 이 기기에만 저장됩니다</span>
     </nav>
   </aside>
   <div class="scrim" id="scrim"></div>
@@ -228,8 +240,7 @@ details.think div{white-space:pre-wrap;margin-top:6px;max-height:260px;overflow:
       <button class="menu-btn" id="menuBtn" aria-label="메뉴 열기">☰</button>
       <h1 id="title">새 대화</h1>
       <select class="sel" id="botSel" aria-label="봇 선택"></select>
-      <select class="sel" id="engSel" aria-label="AI 엔진 선택"></select>
-      <span class="pill" id="engPill"><i class="dot"></i><span>확인 중</span></span>
+      <button class="pill" id="modelPill" data-go="models"><i class="dot"></i><span>모델 없음</span></button>
     </header>
 
     <section class="view" id="v-chat">
@@ -239,163 +250,196 @@ details.think div{white-space:pre-wrap;margin-top:6px;max-height:260px;overflow:
           <div class="files" id="pending" style="justify-content:flex-start"></div>
           <textarea id="input" rows="1" placeholder="무엇이든 물어보세요" aria-label="메시지 입력"></textarea>
           <div class="crow">
-            <label class="icon-btn" for="fileIn" id="attachBtn">파일 첨부</label>
-            <input type="file" id="fileIn" multiple hidden>
-            <span class="small" id="modelNote"></span>
+            <label class="icon-btn" for="fileIn">파일 첨부</label>
+            <input type="file" id="fileIn" multiple hidden accept=".txt,.md,.csv,.tsv,.json,.html,.htm,.xml,.log,.js,.ts,.py,.java,.c,.cpp,.cs,.go,.rs,.rb,.php,.sql,.yaml,.yml,.ini,.css,text/*">
+            <button class="icon-btn" id="ragBtn" aria-pressed="true" title="내 지식에 올린 문서를 찾아 답변에 활용합니다">내 지식 사용</button>
+            <button class="icon-btn" id="thinkBtn" aria-pressed="false" title="지원하는 모델(Qwen3 등)에서 답하기 전에 먼저 생각합니다. 느려지지만 어려운 문제에 강합니다">깊게 생각</button>
             <span class="sp"></span>
             <button class="send" id="send" disabled>보내기</button>
           </div>
         </div>
-        <div class="hint">Enter 보내기 · Shift+Enter 줄바꿈 · AI는 틀릴 수 있으니 중요한 정보는 확인하세요.</div>
+        <div class="hint">Enter 보내기 · Shift+Enter 줄바꿈 · 작은 AI는 틀릴 수 있으니 중요한 정보는 확인하세요.</div>
       </div>
     </section>
 
-    <section class="view" id="v-dash" hidden><div class="scroll"><div class="page" id="dash"></div></div></section>
+    <section class="view" id="v-models" hidden><div class="scroll"><div class="page" id="modelsPage"></div></div></section>
+    <section class="view" id="v-know" hidden><div class="scroll"><div class="page" id="knowPage"></div></div></section>
     <section class="view" id="v-bots" hidden><div class="scroll"><div class="page" id="botsPage"></div></div></section>
-    <section class="view" id="v-settings" hidden><div class="scroll"><div class="page" id="setPage"></div></div></section>
+    <section class="view" id="v-dash" hidden><div class="scroll"><div class="page" id="dash"></div></div></section>
   </main>
 </div>
 <div class="toast" id="toast" hidden></div>
 
-<script>
-(() => {
-"use strict";
+<script type="module">
+import { Wllama } from "./vendor/wllama/index.js";
+
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
-const IN_ARTIFACT = !!(window.claude && window.claude.use);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-const ls = {
-  get(k, d){ try{ const v = localStorage.getItem("nuri:"+k); return v ? JSON.parse(v) : d; }catch(e){ return d; } },
-  set(k, v){ try{ localStorage.setItem("nuri:"+k, JSON.stringify(v)); return true; }catch(e){ return false; } }
-};
-const toast = m => { const t = $("#toast"); t.textContent = m; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, 2600); };
 const fmtN = n => Number(n).toLocaleString("ko-KR");
+const fmtGB = b => b >= 1e9 ? (b/1e9).toFixed(2) + "GB" : Math.max(1, Math.round(b/1e6)) + "MB";
+const ls = {
+  get(k, d){ try { const v = localStorage.getItem("nuri:"+k); return v ? JSON.parse(v) : d; } catch(e){ return d; } },
+  set(k, v){ try { localStorage.setItem("nuri:"+k, JSON.stringify(v)); } catch(e){} }
+};
+const toast = m => { const t = $("#toast"); t.textContent = m; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, 2800); };
 
-/* ================= 봇(페르소나) ================= */
-const BASE_RULES = "답변은 한국어로 한다(사용자가 다른 언어를 쓰면 그 언어로). 핵심부터 말하고, 필요하면 목록·표·코드블록(마크다운)을 쓴다. 모르는 것은 모른다고 말하고 지어내지 않는다. 최신 사건·가격·법령처럼 바뀌는 정보는 학습 시점 이후 달라졌을 수 있다고 알린다.";
+/* ============ 저장소 (IndexedDB, 실패 시 메모리) ============ */
+const idb = (() => {
+  let dbp = null; const mem = new Map();
+  const open = () => dbp || (dbp = new Promise((res, rej) => {
+    try { const r = indexedDB.open("nuri-ai", 1); r.onupgradeneeded = () => r.result.createObjectStore("kv"); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }
+    catch(e){ rej(e); }
+  }));
+  const tx = async (mode, fn) => { const db = await open(); return new Promise((res, rej) => { const t = db.transaction("kv", mode); const st = t.objectStore("kv"); const out = fn(st); t.oncomplete = () => res(out && out.result); t.onerror = () => rej(t.error); }); };
+  return {
+    async put(k, v){ try { await tx("readwrite", s => s.put(v, k)); } catch(e){ mem.set(k, v); } },
+    async del(k){ try { await tx("readwrite", s => s.delete(k)); } catch(e){ mem.delete(k); } },
+    async all(prefix){
+      try {
+        const db = await open();
+        return await new Promise((res, rej) => { const out = []; const t = db.transaction("kv"); const c = t.objectStore("kv").openCursor(IDBKeyRange.bound(prefix, prefix + "￿")); c.onsuccess = () => { const cur = c.result; if (cur){ out.push(cur.value); cur.continue(); } else res(out); }; c.onerror = () => rej(c.error); });
+      } catch(e){ return [...mem].filter(([k]) => k.startsWith(prefix)).map(([,v]) => v); }
+    }
+  };
+})();
+
+/* ============ 봇 ============ */
+const BASE_RULES = "답변은 한국어로 한다(사용자가 다른 언어를 쓰면 그 언어로). 핵심부터 간결하게 말하고, 필요하면 목록·표·코드블록(마크다운)을 쓴다. 모르는 것은 모른다고 말하고 지어내지 않는다. 너는 인터넷에 연결되어 있지 않으므로 최신 정보는 확인할 수 없다고 알린다.";
 const PRESET_BOTS = [
-  {id:"general", name:"만능 비서", desc:"일상 질문, 정보 검색, 아이디어, 계획까지 무엇이든 답합니다.", system:"너는 '누리'라는 이름의 친절하고 정확한 AI 비서다.", starters:["주말에 서울 근교 1박 2일 여행 코스 짜줘","전세와 월세 중 뭐가 유리한지 기준을 알려줘","블랙홀이 뭔지 중학생 눈높이로 설명해줘","하루 30분 운동 루틴 만들어줘"], preset:true},
-  {id:"coder", name:"코딩 도우미", desc:"코드 작성, 디버깅, 리뷰, 설명. 언어 가리지 않습니다.", system:"너는 숙련된 소프트웨어 엔지니어다. 동작하는 코드를 코드블록으로 주고, 핵심 이유를 짧게 설명한다. 버그를 찾을 때는 원인과 수정안을 분명히 구분한다.", starters:["파이썬으로 폴더 안 엑셀 파일을 하나로 합치는 코드","이 에러가 왜 나는지 설명해줘: TypeError: undefined is not a function","React에서 useEffect 무한 루프 막는 법","SQL로 월별 매출 합계와 전월 대비 증감률 구하기"], preset:true},
-  {id:"translator", name:"번역가", desc:"한국어·영어·일본어·중국어 번역과 자연스러운 다듬기.", system:"너는 전문 번역가다. 원문의 뜻과 어조를 살려 자연스럽게 번역한다. 입력 언어를 감지해 한국어면 영어로, 그 외 언어면 한국어로 옮긴다(사용자가 지정하면 그 언어로). 번역문을 먼저 주고, 필요할 때만 짧은 역주를 단다.", starters:["이 메일을 정중한 비즈니스 영어로: 회의 일정을 다음 주로 미룰 수 있을까요?","今日はいい天気ですね を자연스럽게 번역","'눈치'를 영어로 어떻게 설명하면 좋을까","이 문장을 더 자연스러운 한국어로 다듬어줘"], preset:true},
-  {id:"writer", name:"글쓰기 코치", desc:"보고서, 자기소개서, 블로그, 이메일 초안과 퇴고.", system:"너는 글쓰기 코치다. 목적과 독자를 먼저 파악하고, 간결하고 구체적인 문장으로 초안을 쓴다. 과장된 표현과 상투어를 피한다.", starters:["신입 개발자 자기소개서 첫 문단 써줘","회의록을 5줄 요약 형식으로 바꿔줘","블로그 글 제목 10개 추천: 제주 한 달 살기","사과 이메일을 부드럽게 다듬어줘"], preset:true},
-  {id:"tutor", name:"공부 튜터", desc:"수학·과학·역사·영어를 단계별로 이해시켜 줍니다.", system:"너는 인내심 있는 튜터다. 답만 주지 않고 단계별로 풀이하며, 마지막에 이해를 확인하는 짧은 질문을 하나 던진다. 수식은 읽기 쉽게 쓴다.", starters:["이차방정식 근의 공식을 유도해줘","광합성과 호흡의 차이를 표로 정리","임진왜란의 원인과 결과를 요약해줘","현재완료와 과거시제 차이를 예문으로"], preset:true},
-  {id:"summary", name:"요약 전문가", desc:"긴 글, 문서, 파일을 핵심만 정리합니다. 파일 첨부 추천.", system:"너는 요약 전문가다. 첨부 문서나 긴 글을 받으면 ① 한 줄 요약 ② 핵심 3~5개 ③ 할 일/결정 사항 순으로 정리한다. 원문에 없는 내용은 추가하지 않는다.", starters:["아래 글을 3줄로 요약해줘","첨부한 회의록에서 결정 사항만 뽑아줘","이 기사의 주장과 근거를 구분해줘","논문 초록을 쉬운 말로 풀어줘"], preset:true},
-  {id:"architect", name:"건축 설계 상담", desc:"건폐율·용적률, 평면 구성, 인테리어, 공사비를 상담합니다.", system:"너는 한국 건축 설계 상담가다. 국토계획법·건축법 기준으로 건폐율·용적률, 일조·주차 등 체크포인트를 설명하고, 평면 구성과 인테리어를 구체적으로 제안한다. 법규는 지자체 조례로 달라질 수 있음을 알린다.", starters:["대지 60평 제2종일반주거에 몇 층까지 지을 수 있어?","30평 아파트 거실 인테리어 스칸디 스타일 제안","단독주택 공사비 평당 얼마 잡아야 해?","경매로 땅 살 때 확인할 것 체크리스트"], preset:true}
+  {id:"general", name:"만능 비서", desc:"일상 질문, 설명, 아이디어, 계획을 돕습니다.", system:"너는 '누리'라는 이름의 친절하고 정확한 AI 비서다.", starters:["주말 1박 2일 여행 준비물 목록 만들어줘","전세와 월세를 비교하는 기준을 알려줘","블랙홀을 중학생 눈높이로 설명해줘","하루 30분 운동 루틴 짜줘"], preset:true},
+  {id:"coder", name:"코딩 도우미", desc:"코드 작성, 디버깅, 설명.", system:"너는 숙련된 소프트웨어 엔지니어다. 동작하는 코드를 코드블록으로 주고 핵심 이유를 짧게 설명한다.", starters:["파이썬으로 CSV 파일 합치는 코드","자바스크립트 배열에서 중복 제거하는 법","SQL로 월별 합계 구하기","이 에러 원인 알려줘: IndexError: list index out of range"], preset:true},
+  {id:"translator", name:"번역가", desc:"한국어·영어·일본어·중국어 번역.", system:"너는 전문 번역가다. 입력이 한국어면 영어로, 다른 언어면 한국어로 자연스럽게 번역한다(사용자가 지정하면 그 언어로). 번역문을 먼저 준다.", starters:["회의를 다음 주로 미룰 수 있을까요? 를 정중한 영어로","Thank you for your patience 를 자연스럽게","'수고하셨습니다'를 영어로 상황별로","이 문장을 매끄럽게 다듬어줘"], preset:true},
+  {id:"writer", name:"글쓰기 코치", desc:"이메일, 보고서, 자기소개서 초안과 퇴고.", system:"너는 글쓰기 코치다. 목적과 독자에 맞게 간결하고 구체적인 문장으로 쓴다.", starters:["사과 이메일 초안 써줘","블로그 제목 10개 추천: 제주 한 달 살기","이 글을 5줄로 요약해줘","자기소개서 첫 문단 써줘"], preset:true},
+  {id:"tutor", name:"공부 튜터", desc:"단계별 풀이와 개념 설명.", system:"너는 인내심 있는 튜터다. 답만 주지 않고 단계별로 설명하고, 끝에 이해를 확인하는 질문을 하나 한다.", starters:["이차방정식 근의 공식 유도","광합성과 호흡 차이를 표로","임진왜란 원인과 결과 요약","현재완료와 과거시제 차이"], preset:true},
+  {id:"docs", name:"내 문서 도우미", desc:"'내 지식'에 올린 문서를 근거로 답합니다.", system:"너는 사용자가 올린 문서를 근거로 답하는 도우미다. 참고 자료에 있는 내용만 근거로 삼고, 문서 이름을 밝힌다. 자료에 없으면 없다고 말한다.", starters:["내 문서에서 핵심 내용 요약해줘","문서에 나온 일정만 정리해줘","이 규정에서 휴가 관련 내용 찾아줘","문서끼리 다른 내용이 있는지 찾아줘"], preset:true, rag:true}
 ];
 let customBots = ls.get("bots", []);
 const allBots = () => [...PRESET_BOTS, ...customBots];
 const botById = id => allBots().find(b => b.id === id) || PRESET_BOTS[0];
 
-/* ================= 엔진 ================= */
-const LOCAL_MODELS = [
-  {id:"Qwen3.5-0.8B-q4f16_1-MLC", label:"Qwen3.5 0.8B · 가벼움", gb:1.6},
-  {id:"Qwen3.5-2B-q4f16_1-MLC", label:"Qwen3.5 2B · 균형", gb:2.2},
-  {id:"Qwen3.5-4B-q4f16_1-MLC", label:"Qwen3.5 4B · 추천", gb:3.9},
-  {id:"Qwen3-8B-q4f16_1-MLC", label:"Qwen3 8B · 고성능", gb:5.7},
-  {id:"DeepSeek-R1-Distill-Qwen-7B-q4f16_1-MLC", label:"DeepSeek-R1 7B · 추론", gb:5.1},
-  {id:"Llama-3.2-3B-Instruct-q4f16_1-MLC", label:"Llama 3.2 3B", gb:2.3},
-  {id:"gemma-2-2b-it-q4f16_1-MLC", label:"Gemma 2 2B", gb:1.9}
+/* ============ 모델 카탈로그 ============ */
+const CATALOG = [
+  {id:"qwen3-1.7b", name:"Qwen3 1.7B", repo:"unsloth/Qwen3-1.7B-GGUF", quant:"Q4_K_M", gb:1.1, tags:["추천","다국어","깊게 생각 지원"], lic:"Apache-2.0", desc:"성능과 크기의 균형이 좋습니다. 한국어도 무난합니다."},
+  {id:"exaone-2.4b", name:"EXAONE 3.5 2.4B", repo:"LGAI-EXAONE/EXAONE-3.5-2.4B-Instruct-GGUF", quant:"Q4_K_M", gb:1.6, tags:["한국어 특화"], lic:"EXAONE 라이선스(비상업)", desc:"LG AI연구원 모델. 한국어가 가장 자연스럽습니다. 상업적 사용은 제한됩니다."},
+  {id:"qwen2.5-0.5b", name:"Qwen2.5 0.5B", repo:"Qwen/Qwen2.5-0.5B-Instruct-GGUF", quant:"Q4_K_M", gb:0.4, tags:["가장 가벼움","휴대폰"], lic:"Apache-2.0", desc:"저사양 기기와 휴대폰용. 빠르지만 답이 단순합니다."},
+  {id:"qwen2.5-1.5b", name:"Qwen2.5 1.5B", repo:"Qwen/Qwen2.5-1.5B-Instruct-GGUF", quant:"Q4_K_M", gb:1.1, tags:["다국어"], lic:"Apache-2.0", desc:"생각 모드 없이 바로 답하는 안정적인 모델입니다."},
+  {id:"r1-1.5b", name:"DeepSeek-R1 Distill 1.5B", repo:"unsloth/DeepSeek-R1-Distill-Qwen-1.5B-GGUF", quant:"Q4_K_M", gb:1.1, tags:["추론","수학"], lic:"MIT", desc:"항상 먼저 생각하고 답합니다. 수학·논리 문제용. 한국어는 약합니다."},
+  {id:"gemma3-1b", name:"Gemma 3 1B", repo:"unsloth/gemma-3-1b-it-GGUF", quant:"Q4_K_M", gb:0.8, tags:["가벼움"], lic:"Gemma 약관", desc:"Google의 소형 모델입니다."},
+  {id:"llama3.2-1b", name:"Llama 3.2 1B", repo:"bartowski/Llama-3.2-1B-Instruct-GGUF", quant:"Q4_K_M", gb:0.8, tags:["영어 강함"], lic:"Llama 3.2 커뮤니티", desc:"Meta의 소형 모델. 영어 대화에 강합니다."}
 ];
-const ENGINES = {
-  claude:   {label:"Claude (내장)", short:"Claude", desc:"claude.ai에서 열면 설정 없이 바로 쓰는 엔진입니다. 사용량은 내 Claude 계정에서 차감됩니다.", models:[["default","기본"],["quick","빠름"],["complex","깊은 사고"]]},
-  local:    {label:"누리 자체 엔진 (오프라인)", short:"자체 엔진", desc:"오픈소스 AI 모델을 내 컴퓨터 GPU에서 직접 돌립니다. 처음 한 번 모델을 내려받으면 인터넷 없이도 답하고, 대화가 밖으로 나가지 않습니다.", models:LOCAL_MODELS.map(m => [m.id, m.label])},
-  openai:   {label:"ChatGPT (OpenAI API)", short:"GPT", key:true, base:"https://api.openai.com/v1", def:"gpt-4o-mini", desc:"OpenAI API 키로 GPT 모델을 씁니다.", keyUrl:"https://platform.openai.com/api-keys"},
-  anthropic:{label:"Claude (Anthropic API)", short:"Claude API", key:true, def:"claude-opus-5-5", desc:"Anthropic API 키로 Claude 모델을 씁니다.", keyUrl:"https://console.anthropic.com/settings/keys"},
-  gemini:   {label:"Gemini (Google API)", short:"Gemini", key:true, def:"gemini-2.5-flash", desc:"Google AI Studio API 키로 Gemini 모델을 씁니다.", keyUrl:"https://aistudio.google.com/apikey"},
-  deepseek: {label:"DeepSeek API", short:"DeepSeek", key:true, base:"https://api.deepseek.com", def:"deepseek-chat", desc:"DeepSeek API 키로 deepseek-chat / deepseek-reasoner를 씁니다.", keyUrl:"https://platform.deepseek.com/api_keys"},
-  custom:   {label:"OpenAI 호환 서버 (Ollama 등)", short:"사용자 서버", key:false, base:"http://localhost:11434/v1", def:"llama3.2", desc:"Ollama, LM Studio, vLLM처럼 OpenAI 형식을 지원하는 서버 주소로 연결합니다."}
-};
-let settings = Object.assign({engine:"", models:{}, bases:{}, temp:0.7}, ls.get("settings", {}));
-let keys = ls.get("keys", {});
+
+/* ============ 설정 ============ */
+let settings = Object.assign({device:"auto", ctx:4096, maxTokens:1024, temp:0.7, think:false, rag:true, last:null, autoload:true}, ls.get("settings", {}));
 const saveSettings = () => ls.set("settings", settings);
 
-let sample = null, sampleImages = null, downloads = null;
-let gpuOk = null, local = {engine:null, model:null, loading:false, progress:0, text:""};
+/* ============ 엔진 ============ */
+const WASM = {default: new URL("./vendor/wllama/wllama.wasm", location.href).href};
+const eng = {w:null, loaded:null, loading:false, progress:0, phase:"", error:"", gpu:false, threads:0, stats:null};
+let probe = null;
+function newWllama(){ return new Wllama(WASM, {suppressNativeLog:true, allowOffline:true, parallelDownloads:3}); }
+function getProbe(){ return probe || (probe = newWllama()); }
+const gpuSupported = () => { try { return getProbe().isSupportWebGPU(); } catch(e){ return false; } };
 
-function engineStatus(id){
-  if (id === "claude") return sample ? {ok:true, text:"사용 가능"} : {ok:false, text: IN_ARTIFACT ? "연결 확인 중" : "claude.ai에서만"};
-  if (id === "local"){
-    if (IN_ARTIFACT) return {ok:false, text:"독립 실행 버전에서"};
-    if (gpuOk === false) return {ok:false, text:"WebGPU 미지원 브라우저"};
-    if (local.engine) return {ok:true, text:"실행 중"};
-    if (local.loading) return {ok:false, warn:true, text:"불러오는 중 " + Math.round(local.progress*100) + "%"};
-    return {ok:false, warn:true, text:"모델 불러오기 필요"};
+async function loadModel(src){
+  if (eng.loading) return;
+  eng.loading = true; eng.progress = 0; eng.error = ""; eng.phase = "준비 중"; refreshModelUI();
+  try {
+    if (eng.w){ try { await eng.w.exit(); } catch(e){} eng.w = null; eng.loaded = null; }
+    const useGpu = settings.device === "gpu" || (settings.device === "auto" && gpuSupported());
+    const attempt = async gpu => {
+      const w = newWllama();
+      const params = {n_ctx: settings.ctx, progressCallback: ({loaded, total}) => { eng.progress = total ? loaded/total : 0; eng.phase = `내려받는 중 ${fmtGB(loaded)} / ${total ? fmtGB(total) : "?"}`; refreshModelUI(); }};
+      if (!gpu) params.n_gpu_layers = 0;
+      eng.phase = src.kind === "file" ? "파일 읽는 중" : "모델 확인 중"; refreshModelUI();
+      if (src.kind === "hf") await w.loadModelFromHF({repo: src.repo, quant: src.quant, file: src.file}, params);
+      else if (src.kind === "url") await w.loadModelFromUrl(src.url, params);
+      else await w.loadModel(src.files, params);
+      return w;
+    };
+    let w;
+    try { w = await attempt(useGpu); eng.gpu = useGpu; }
+    catch (e){ if (!useGpu || e?.name === "AbortError") throw e; eng.phase = "GPU로 실행하지 못해 CPU로 다시 시도합니다"; refreshModelUI(); w = await attempt(false); eng.gpu = false; }
+    eng.w = w;
+    try { eng.ctx = w.getLoadedContextInfo()?.n_ctx || settings.ctx; } catch(e){ eng.ctx = settings.ctx; }
+    eng.loaded = {name: src.name, kind: src.kind, id: src.id || null};
+    eng.threads = self.crossOriginIsolated ? (navigator.hardwareConcurrency || 1) : 1;
+    if (src.kind !== "file"){ settings.last = {...src, files: undefined}; saveSettings(); }
+    toast(`${src.name} 준비 완료 · ${eng.gpu ? "GPU" : "CPU"}`);
+  } catch (e){
+    eng.error = explainLoadError(e); toast("모델을 불러오지 못했습니다");
+  } finally { eng.loading = false; eng.phase = ""; await refreshCache(); refreshModelUI(); }
+}
+function explainLoadError(e){
+  const m = String(e && (e.message || e)) || "";
+  if (/Failed to fetch|NetworkError|network/i.test(m)) return "모델 파일을 내려받지 못했습니다. 인터넷 연결을 확인하세요. (처음 한 번은 인터넷이 필요합니다)";
+  if (/No GGUF/i.test(m)) return "저장소에서 GGUF 파일을 찾지 못했습니다. 저장소 이름과 양자화(예: Q4_K_M)를 확인하세요.";
+  if (/memory|OOM|allocate|RangeError/i.test(m)) return "메모리가 부족합니다. 더 작은 모델을 고르거나 '대화 기억 길이'를 줄이세요.";
+  if (/2GB|too large|ArrayBuffer/i.test(m)) return "2GB가 넘는 파일은 한 번에 읽을 수 없습니다. 더 작은 양자화나 분할(split) 파일을 쓰세요.";
+  return "불러오기 실패: " + m.slice(0, 200);
+}
+async function unloadModel(){ if (eng.w){ try { await eng.w.exit(); } catch(e){} } eng.w = null; eng.loaded = null; refreshModelUI(); toast("모델을 메모리에서 내렸습니다"); }
+
+/* ============ 내 지식 (문서 검색, BM25) ============ */
+let docs = [];
+const idx = {chunks:[], df:new Map(), avg:1};
+function tokenize(s){
+  const out = []; const t = String(s).toLowerCase();
+  for (const m of t.matchAll(/[가-힣]+|[a-z0-9]+|[぀-ヿ一-鿿]+/g)){
+    const w = m[0];
+    if (/^[a-z0-9]+$/.test(w)){ if (w.length >= 2) out.push(w); continue; }
+    if (w.length === 1){ out.push(w); continue; }
+    for (let i = 0; i < w.length - 1; i++) out.push(w.slice(i, i+2)); // 한글·한자는 두 글자 조각으로
   }
-  if (IN_ARTIFACT) return {ok:false, text:"독립 실행 버전에서"};
-  if (ENGINES[id].key && !keys[id]) return {ok:false, warn:true, text:"API 키 필요"};
-  return {ok:true, text:"사용 가능"};
+  return out;
 }
-const modelOf = id => settings.models[id] || (ENGINES[id].models ? ENGINES[id].models[id==="local" ? 2 : 0][0] : ENGINES[id].def);
-const baseOf = id => settings.bases[id] || ENGINES[id].base;
-function pickEngine(){
-  if (settings.engine && engineStatus(settings.engine).ok) return settings.engine;
-  for (const id of ["claude","local","anthropic","openai","gemini","deepseek"]) if (engineStatus(id).ok) return id;
-  return settings.engine || (IN_ARTIFACT ? "claude" : "local");
+function chunkText(text, size = 700, overlap = 120){
+  const clean = text.replace(/\r/g, "").replace(/\n{3,}/g, "\n\n").trim();
+  const paras = clean.split(/\n\s*\n/); const chunks = []; let cur = "";
+  for (const p of paras){
+    if ((cur + "\n\n" + p).length > size && cur){ chunks.push(cur); cur = cur.slice(-overlap) + "\n\n" + p; }
+    else cur = cur ? cur + "\n\n" + p : p;
+    while (cur.length > size * 1.6){ chunks.push(cur.slice(0, size)); cur = cur.slice(size - overlap); }
+  }
+  if (cur.trim()) chunks.push(cur);
+  return chunks;
 }
+function rebuildIndex(){
+  idx.chunks = []; idx.df = new Map(); let total = 0;
+  for (const d of docs) d.chunks.forEach((text, i) => {
+    const tf = new Map(); const toks = tokenize(d.name + " " + text);
+    for (const t of toks) tf.set(t, (tf.get(t) || 0) + 1);
+    for (const t of tf.keys()) idx.df.set(t, (idx.df.get(t) || 0) + 1);
+    idx.chunks.push({doc:d.id, name:d.name, i, text, tf, len:toks.length}); total += toks.length;
+  });
+  idx.avg = idx.chunks.length ? total / idx.chunks.length : 1;
+}
+function search(q, k = 4){
+  const qt = [...new Set(tokenize(q))]; if (!qt.length || !idx.chunks.length) return [];
+  const N = idx.chunks.length, k1 = 1.2, b = 0.75;
+  const scored = idx.chunks.map(c => {
+    let s = 0;
+    for (const t of qt){ const f = c.tf.get(t); if (!f) continue; const df = idx.df.get(t) || 0; const idf = Math.log(1 + (N - df + .5)/(df + .5)); s += idf * f * (k1+1) / (f + k1*(1 - b + b*c.len/idx.avg)); }
+    return {c, s};
+  }).filter(x => x.s > 0).sort((a,b) => b.s - a.s);
+  if (!scored.length) return [];
+  const top = scored[0].s;
+  return scored.filter(x => x.s >= top * 0.35).slice(0, k).map(x => ({...x.c, score:x.s}));
+}
+async function addDoc(name, text){
+  const d = {id: uid(), name: name.slice(0, 80), size: text.length, added: Date.now(), chunks: chunkText(text)};
+  if (!d.chunks.length) return null;
+  docs.push(d); await idb.put("doc:" + d.id, d); rebuildIndex(); return d;
+}
+async function removeDoc(id){ docs = docs.filter(d => d.id !== id); await idb.del("doc:" + id); rebuildIndex(); }
+function htmlToText(s){ const d = new DOMParser().parseFromString(s, "text/html"); d.querySelectorAll("script,style,noscript").forEach(n => n.remove()); return d.body ? d.body.innerText || d.body.textContent : s; }
 
-/* ================= 대화 저장 ================= */
-let chats = ls.get("chats", []);
-let current = null;
+/* ============ 대화 ============ */
+let chats = [], current = null;
 const byUpdated = () => chats.slice().sort((a,b) => b.updated - a.updated);
-function persistLocal(){
-  if (!ls.set("chats", chats)){
-    // 용량 초과 시 오래된 대화의 첨부 본문부터 줄임
-    for (const c of byUpdated().reverse()) for (const m of c.messages) if (m.attach) m.attach = m.attach.map(a => ({...a, text: a.text.slice(0, 2000)}));
-    ls.set("chats", chats);
-  }
-}
-const cloud = {
-  coll:null, pending:new Map(), chain:new Map(),
-  async init(){
-    try {
-      const [db, user] = await Promise.all([claude.use("db"), claude.use("user")]);
-      if (!db || !user) return;
-      const id = await user.id(); if (!id) return;
-      this.coll = db.collection("data/users/" + id);
-      const snap = await this.coll.get();
-      let changed = false;
-      const seen = new Set();
-      for (const d of snap.docs){
-        const body = d.data(); if (!body) continue;
-        if (body.kind === "chat" && body.chat){
-          seen.add(body.chat.id);
-          const loc = chats.find(c => c.id === body.chat.id);
-          if (!loc){ chats.push(structuredClone(body.chat)); changed = true; }
-          else if (body.chat.updated > loc.updated){ Object.assign(loc, structuredClone(body.chat)); changed = true; }
-          else if (loc.updated > body.chat.updated) this.save(loc);
-        } else if (body.kind === "bots" && Array.isArray(body.bots) && (body.updated||0) > (ls.get("botsUpdated",0))){
-          customBots = structuredClone(body.bots); ls.set("bots", customBots); ls.set("botsUpdated", body.updated); changed = true;
-        } else if (body.kind === "deleted" && Array.isArray(body.ids)){
-          const before = chats.length; chats = chats.filter(c => !body.ids.includes(c.id)); if (chats.length !== before) changed = true;
-        }
-      }
-      for (const c of chats) if (!seen.has(c.id)) this.save(c);
-      $("#storePill").textContent = "내 계정에 동기화됨";
-      if (changed){ persistLocal(); renderList(); renderBotSel(); if (current) openChat(current.id); }
-    } catch(e){ this.coll = null; }
-  },
-  write(docId, body){
-    if (!this.coll) return;
-    const prev = this.chain.get(docId) || Promise.resolve();
-    const next = prev.then(() => this.coll.doc(docId).set(body)).catch(e => { if (e && (e.code === "invalid_argument" || e.code === "not_granted")) { this.coll = null; $("#storePill").textContent = "이 브라우저에 저장"; } });
-    this.chain.set(docId, next);
-  },
-  save(chat){
-    if (!this.coll) return;
-    clearTimeout(this.pending.get(chat.id));
-    this.pending.set(chat.id, setTimeout(() => {
-      let c = structuredClone(chat);
-      c.messages = c.messages.map(m => m.attach ? {...m, attach: m.attach.map(a => ({name:a.name, size:a.size, text:a.text.slice(0, 4000)}))} : m);
-      while (JSON.stringify(c).length > 230000 && c.messages.length > 2) c.messages.shift();
-      this.write("c_" + chat.id, {kind:"chat", chat:c});
-    }, 900));
-  },
-  remove(id){ if (this.coll){ clearTimeout(this.pending.get(id)); const p = this.chain.get("c_"+id) || Promise.resolve(); this.chain.set("c_"+id, p.then(() => this.coll.doc("c_"+id).delete()).catch(() => {})); } },
-  saveBots(){ const t = Date.now(); ls.set("botsUpdated", t); this.write("bots", {kind:"bots", bots: customBots, updated: t}); }
-};
-function saveChat(c){ c.updated = Date.now(); persistLocal(); cloud.save(c); }
+function saveChat(c){ c.updated = Date.now(); if (!chats.includes(c)) chats.push(c); idb.put("chat:" + c.id, c); }
 
-/* ================= 마크다운 ================= */
+/* ============ 마크다운 ============ */
 function inline(s){
   const codes = [];
   s = s.replace(/`([^`\n]+)`/g, (_, c) => { codes.push(c); return "\u0000" + (codes.length-1) + "\u0000"; });
@@ -409,8 +453,9 @@ function inline(s){
 function md(src){
   const lines = String(src).replace(/\r/g, "").split("\n"), out = [];
   let i = 0;
-  const isTableSep = l => /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(l);
+  const isSep = l => /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(l);
   const cells = l => l.trim().replace(/^\||\|$/g, "").split("|").map(c => c.trim());
+  const blockStart = /^(#{1,6}\s|\s*```|\s*~~~|\s*>|\s*([-*+]|\d+[.)])\s)/;
   while (i < lines.length){
     const l = lines[i];
     const fence = l.match(/^\s*(```|~~~)\s*([\w+#.-]*)/);
@@ -424,8 +469,8 @@ function md(src){
     if (/^\s*$/.test(l)){ i++; continue; }
     const h = l.match(/^(#{1,6})\s+(.*)$/);
     if (h){ const n = Math.min(4, h[1].length); out.push(`<h${n}>${inline(h[2])}</h${n}>`); i++; continue; }
-    if (/^\s*([-*_])\s*\1\s*\1[\s\1]*$/.test(l)){ out.push("<hr>"); i++; continue; }
-    if (l.includes("|") && i+1 < lines.length && isTableSep(lines[i+1])){
+    if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(l)){ out.push("<hr>"); i++; continue; }
+    if (l.includes("|") && i+1 < lines.length && isSep(lines[i+1])){
       const head = cells(l); i += 2; const rows = [];
       while (i < lines.length && lines[i].includes("|") && lines[i].trim()) rows.push(cells(lines[i++]));
       out.push(`<div class="tbl"><table><thead><tr>${head.map(c => `<th>${inline(c)}</th>`).join("")}</tr></thead><tbody>${rows.map(r => `<tr>${r.map(c => `<td>${inline(c)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`);
@@ -445,22 +490,21 @@ function md(src){
       continue;
     }
     const buf = [];
-    while (i < lines.length && lines[i].trim() && !/^(#{1,6}\s|\s*```|\s*~~~|\s*>|\s*([-*+]|\d+[.)])\s)/.test(lines[i]) && !(lines[i].includes("|") && i+1 < lines.length && isTableSep(lines[i+1]))) buf.push(lines[i++]);
-    if (!buf.length){ buf.push(lines[i++]); }
+    while (i < lines.length && lines[i].trim() && !blockStart.test(lines[i]) && !(lines[i].includes("|") && i+1 < lines.length && isSep(lines[i+1]))) buf.push(lines[i++]);
+    if (!buf.length) buf.push(lines[i++]);
     out.push(`<p>${buf.map(inline).join("<br>")}</p>`);
   }
   return out.join("");
 }
 function splitThink(text){
-  const t = String(text || "");
-  const s = t.indexOf("<think>");
-  if (s === -1) return {think:"", body:t};
+  const t = String(text || ""), s = t.indexOf("<think>");
+  if (s === -1){ const e0 = t.indexOf("</think>"); return e0 === -1 ? {think:"", body:t} : {think:t.slice(0, e0).trim(), body:t.slice(e0+8).trim()}; }
   const e = t.indexOf("</think>", s);
   if (e === -1) return {think:t.slice(s+7), body:t.slice(0, s), open:true};
   return {think:t.slice(s+7, e).trim(), body:(t.slice(0, s) + t.slice(e+8)).trim()};
 }
 
-/* ================= 화면: 대화 목록 ================= */
+/* ============ 대화 목록 ============ */
 function renderList(){
   const q = $("#search").value.trim().toLowerCase();
   const list = byUpdated().filter(c => !q || c.title.toLowerCase().includes(q) || c.messages.some(m => (m.content||"").toLowerCase().includes(q)));
@@ -475,37 +519,35 @@ function renderList(){
   $("#chatList").innerHTML = html || `<div class="grp">${q ? "검색 결과가 없습니다" : "아직 대화가 없습니다"}</div>`;
 }
 $("#chatList").addEventListener("click", e => {
-  const d = e.target.closest("[data-del]");
-  if (d){ e.stopPropagation(); deleteChat(d.dataset.del); return; }
-  const it = e.target.closest(".ci"); if (it){ openChat(it.dataset.id); go("chat"); closeRail(); }
+  const d = e.target.closest("[data-del]"); if (d){ e.stopPropagation(); deleteChat(d.dataset.del); return; }
+  const it = e.target.closest(".ci"); if (it){ openChat(it.dataset.id); go("chat"); }
 });
 $("#chatList").addEventListener("keydown", e => { if (e.key === "Enter" && e.target.classList.contains("ci")) e.target.click(); });
 $("#search").addEventListener("input", renderList);
-let pendingDelete = null;
+let pendingDel = null;
 function deleteChat(id){
-  if (pendingDelete !== id){ pendingDelete = id; toast("한 번 더 누르면 삭제합니다"); setTimeout(() => { if (pendingDelete === id) pendingDelete = null; }, 3000); return; }
-  pendingDelete = null;
-  chats = chats.filter(c => c.id !== id); persistLocal(); cloud.remove(id);
+  if (pendingDel !== id){ pendingDel = id; toast("한 번 더 누르면 삭제합니다"); setTimeout(() => { if (pendingDel === id) pendingDel = null; }, 3000); return; }
+  pendingDel = null; chats = chats.filter(c => c.id !== id); idb.del("chat:" + id);
   if (current && current.id === id) newChat();
   renderList(); toast("대화를 삭제했습니다");
 }
 
-/* ================= 화면: 채팅 ================= */
+/* ============ 채팅 화면 ============ */
 function newChat(botId){
-  current = {id: uid(), title:"새 대화", botId: botId || ($("#botSel").value || "general"), created: Date.now(), updated: Date.now(), messages: []};
-  renderChat(); renderList(); $("#botSel").value = current.botId; $("#input").focus();
+  current = {id: uid(), title:"새 대화", botId: botId || $("#botSel").value || "general", created: Date.now(), updated: Date.now(), messages: []};
+  $("#botSel").value = current.botId; syncBotToggles(); renderChat(); renderList();
 }
-function openChat(id){ const c = chats.find(x => x.id === id); if (!c) return newChat(); current = c; $("#botSel").value = c.botId; renderChat(); renderList(); }
-$("#newChat").onclick = () => { newChat(); go("chat"); closeRail(); };
+function openChat(id){ const c = chats.find(x => x.id === id); if (!c) return newChat(); current = c; $("#botSel").value = c.botId; syncBotToggles(); renderChat(); renderList(); }
+$("#newChat").onclick = () => { newChat(); go("chat"); };
+function syncBotToggles(){ if (botById(current.botId).rag){ settings.rag = true; saveSettings(); } $("#ragBtn").setAttribute("aria-pressed", settings.rag); $("#thinkBtn").setAttribute("aria-pressed", settings.think); }
 
 function renderChat(){
+  if ($("#v-chat").hidden) return;
   $("#title").textContent = current.title;
-  const bot = botById(current.botId);
-  const box = $("#msgs");
+  const bot = botById(current.botId), box = $("#msgs");
   if (!current.messages.length){
-    const st = engineStatus(activeEngine());
-    box.innerHTML = `<div class="hello"><div><h2>${esc(bot.name)}에게 무엇이든 물어보세요</h2><p>${esc(bot.desc)}</p></div>
-      ${st.ok ? "" : setupNotice()}
+    box.innerHTML = `<div class="hello"><div><h2>${esc(bot.name)}에게 물어보세요</h2><p>${esc(bot.desc)}</p></div>
+      ${eng.w ? "" : setupNotice()}
       <div class="starters">${(bot.starters||[]).slice(0,4).map(s => `<button class="starter">${esc(s)}</button>`).join("")}</div></div>`;
     return;
   }
@@ -513,297 +555,349 @@ function renderChat(){
   scrollDown(true);
 }
 function setupNotice(){
-  if (IN_ARTIFACT) return `<div class="notice"><b>AI 연결을 확인하고 있습니다.</b><span>잠시 뒤에도 연결되지 않으면 claude.ai에 로그인했는지 확인하세요. 첫 질문을 보내면 사용 허용 창이 뜹니다.</span></div>`;
-  return `<div class="notice"><b>AI 엔진을 먼저 켜 주세요.</b><span>인터넷 없이 내 컴퓨터에서 도는 <b>누리 자체 엔진</b>을 내려받거나, 가지고 있는 GPT·Claude·Gemini·DeepSeek API 키를 넣으면 바로 대화할 수 있습니다.</span><div><button class="btn primary" data-go="settings">AI 엔진 설정 열기</button></div></div>`;
+  if (eng.loading) return `<div class="notice"><b>AI 모델을 준비하고 있습니다</b><div class="progress"><i style="width:${Math.round(eng.progress*100)}%"></i></div><span>${esc(eng.phase || "")}</span></div>`;
+  const rec = CATALOG[0];
+  return `<div class="notice"><b>먼저 AI 모델을 내 기기로 가져오세요.</b>
+    <span>누리는 외부 AI 서비스를 쓰지 않고 이 기기에서 직접 답합니다. 처음 한 번 모델 파일을 내려받으면 브라우저에 저장되어 다음부터는 인터넷 없이도 바로 켜집니다.</span>
+    <div class="row"><button class="btn primary" data-load="${rec.id}">추천 모델 받기 · ${esc(rec.name)} (${rec.gb}GB)</button><button class="btn" data-go="models">다른 모델 고르기</button></div>
+    ${eng.error ? `<span class="err">${esc(eng.error)}</span>` : ""}</div>`;
 }
 function msgHTML(m, i){
   if (m.role === "user"){
-    const files = (m.attach||[]).map(a => `<span class="fchip">${esc(a.name)}</span>`).concat((m.images||[]).map(n => `<span class="fchip">이미지 · ${esc(n)}</span>`)).join("");
+    const files = (m.attach||[]).map(a => `<span class="fchip">${esc(a.name)}</span>`).join("");
     return `<div class="m user" data-i="${i}">${files ? `<div class="files">${files}</div>` : ""}<div class="bubble">${esc(m.content)}</div><div class="tools"><button data-act="copy">복사</button><button data-act="edit">수정</button></div></div>`;
   }
   const {think, body, open} = splitThink(m.content);
-  const thinkAll = (m.think || "") + (think ? (m.think ? "\n" : "") + think : "");
-  const eng = ENGINES[m.engine];
-  return `<div class="m ai" data-i="${i}"><div class="who"><span class="avatar">누</span><span>${esc(botById(current.botId).name)}${eng ? " · " + esc(eng.short) : ""}</span></div>
-    ${thinkAll ? `<details class="think"${m.streaming && (open || !body) ? " open" : ""}><summary>${m.streaming && (open || !body) ? "생각하는 중…" : "생각 과정 보기"}</summary><div>${esc(thinkAll)}</div></details>` : ""}
-    <div class="md${m.streaming ? " cursor" : ""}">${body ? md(body) : (m.streaming && !thinkAll ? '<p style="color:var(--muted)">' + (m.waiting || "답변을 준비하는 중…") + "</p>" : "")}</div>
+  const thinkAll = [m.think, think].filter(Boolean).join("\n");
+  const thinking = m.streaming && (open || !body);
+  const speed = m.tps ? `${m.tps.toFixed(1)} 토큰/초` : (m.ms && body ? `${Math.round(body.length / (m.ms/1000))} 글자/초` : "");
+  return `<div class="m ai" data-i="${i}"><div class="who"><span class="avatar">누</span><span>${esc(botById(current.botId).name)}${m.model ? " · " + esc(m.model) : ""}</span></div>
+    ${thinkAll ? `<details class="think"${thinking ? " open" : ""}><summary>${thinking ? "생각하는 중…" : "생각 과정 보기"}</summary><div>${esc(thinkAll)}</div></details>` : ""}
+    <div class="md${m.streaming ? " cursor" : ""}">${body ? md(body) : (m.streaming && !thinkAll ? `<p style="color:var(--muted)">${esc(m.phase || "질문을 읽는 중…")}</p>` : "")}</div>
+    ${m.sources && m.sources.length ? `<div class="srcs">참고한 문서 ${m.sources.map(s => `<span class="fchip">${esc(s)}</span>`).join("")}</div>` : ""}
     ${m.error ? `<div class="err">${esc(m.error)}</div>` : ""}
-    ${m.streaming ? "" : `<div class="tools"><button data-act="copy">복사</button><button data-act="regen">다시 생성</button><span class="meta">${m.ms ? (m.ms/1000).toFixed(1) + "초" : ""}${m.model ? " · " + esc(shortModel(m.model)) : ""}</span></div>`}</div>`;
+    ${m.streaming ? "" : `<div class="tools"><button data-act="copy">복사</button><button data-act="regen">다시 생성</button><span class="meta">${m.ms ? (m.ms/1000).toFixed(1) + "초" : ""}${speed ? " · " + speed : ""}</span></div>`}</div>`;
 }
-const shortModel = s => String(s).replace(/-q4f16_1-MLC|-MLC/g, "");
 let stick = true;
 $("#scroll").addEventListener("scroll", () => { const s = $("#scroll"); stick = s.scrollHeight - s.scrollTop - s.clientHeight < 80; });
 function scrollDown(force){ const s = $("#scroll"); if (force || stick) s.scrollTop = s.scrollHeight; }
 $("#msgs").addEventListener("click", e => {
   const st = e.target.closest(".starter"); if (st){ $("#input").value = st.textContent; autoGrow(); updateSend(); send(); return; }
   const cp = e.target.closest("[data-copy]"); if (cp){ copy(cp.closest(".codebox").querySelector("code").textContent); return; }
-  const g = e.target.closest("[data-go]"); if (g){ go(g.dataset.go); return; }
   const a = e.target.closest("[data-act]"); if (!a) return;
   const i = +a.closest(".m").dataset.i, m = current.messages[i];
   if (a.dataset.act === "copy") copy(splitThink(m.content).body || m.content);
-  if (a.dataset.act === "regen" && !busy){ current.messages.splice(i); run(); }
+  if (a.dataset.act === "regen" && !busy){ if (!eng.w){ toast("먼저 AI 모델을 불러오세요"); return; } current.messages.splice(i); run(); }
   if (a.dataset.act === "edit" && !busy){ $("#input").value = m.content; current.messages.splice(i); saveChat(current); renderChat(); autoGrow(); updateSend(); $("#input").focus(); }
+});
+document.addEventListener("click", e => {
+  const g = e.target.closest("[data-go]"); if (g && !g.closest(".rail-nav")) { go(g.dataset.go); return; }
+  const l = e.target.closest("[data-load]"); if (l){ const c = CATALOG.find(x => x.id === l.dataset.load); if (c) loadModel({kind:"hf", id:c.id, name:c.name, repo:c.repo, quant:c.quant}); }
 });
 async function copy(t){ try { await navigator.clipboard.writeText(t); toast("복사했습니다"); } catch(e){ toast("복사가 막혀 있습니다. 텍스트를 드래그해 복사하세요"); } }
 
 /* ---------- 입력 ---------- */
-let attach = [], images = [];
+let attach = [];
 const input = $("#input");
 function autoGrow(){ input.style.height = "auto"; input.style.height = Math.min(220, input.scrollHeight) + "px"; }
-function updateSend(){ const s = $("#send"); if (busy){ s.disabled = false; s.textContent = "멈추기"; s.classList.add("stop"); } else { s.classList.remove("stop"); s.textContent = "보내기"; s.disabled = !input.value.trim() && !attach.length && !images.length; } }
+function updateSend(){ const s = $("#send"); if (busy){ s.disabled = false; s.textContent = "멈추기"; s.classList.add("stop"); } else { s.classList.remove("stop"); s.textContent = "보내기"; s.disabled = !input.value.trim() && !attach.length; } }
 input.addEventListener("input", () => { autoGrow(); updateSend(); });
 input.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing && e.keyCode !== 229){ e.preventDefault(); if (!busy) send(); } });
-$("#send").onclick = () => busy ? stop() : send();
+$("#send").onclick = () => busy ? ctl?.abort() : send();
+$("#ragBtn").onclick = e => { settings.rag = !settings.rag; saveSettings(); e.currentTarget.setAttribute("aria-pressed", settings.rag); if (settings.rag && !docs.length) toast("'내 지식'에 문서를 올리면 답변에 활용합니다"); };
+$("#thinkBtn").onclick = e => { settings.think = !settings.think; saveSettings(); e.currentTarget.setAttribute("aria-pressed", settings.think); };
+async function readTextFile(f){
+  if (f.size > 5e6) throw new Error(f.name + ": 5MB 이하 텍스트 파일만 읽을 수 있습니다");
+  let text = await f.text();
+  if (/\u0000/.test(text.slice(0, 2000))) throw new Error(f.name + ": 텍스트 형식이 아닙니다(.txt .md .csv .json 코드 등)");
+  if (/\.html?$/i.test(f.name)) text = htmlToText(text);
+  return text;
+}
 $("#fileIn").addEventListener("change", async e => {
-  for (const f of e.target.files){
-    if (f.type.startsWith("image/")){
-      if (activeEngine() === "claude" && sampleImages){ if (images.length < (sampleImages.maxCount || 4)) images.push(f); else toast("이미지는 한 번에 " + sampleImages.maxCount + "개까지 보낼 수 있습니다"); }
-      else toast("이미지는 Claude(내장) 엔진에서만 읽을 수 있습니다");
-      continue;
-    }
-    if (f.size > 2e6){ toast(f.name + ": 2MB 이하 텍스트 파일만 첨부할 수 있습니다"); continue; }
-    const text = await f.text();
-    if (/\u0000/.test(text.slice(0, 1000))){ toast(f.name + ": 텍스트 파일(.txt .md .csv .json 코드 등)만 읽을 수 있습니다"); continue; }
-    attach.push({name:f.name, size:f.size, text});
-  }
+  for (const f of e.target.files){ try { attach.push({name:f.name, size:f.size, text: await readTextFile(f)}); } catch(err){ toast(err.message); } }
   e.target.value = ""; renderPending(); updateSend();
 });
-function renderPending(){
-  $("#pending").innerHTML = attach.map((a,i) => `<span class="fchip">${esc(a.name)} <button data-rm="a${i}" aria-label="첨부 삭제">✕</button></span>`).join("") + images.map((f,i) => `<span class="fchip">이미지 · ${esc(f.name)} <button data-rm="i${i}" aria-label="첨부 삭제">✕</button></span>`).join("");
-}
-$("#pending").addEventListener("click", e => { const r = e.target.dataset.rm; if (!r) return; (r[0]==="a" ? attach : images).splice(+r.slice(1), 1); renderPending(); updateSend(); });
+function renderPending(){ $("#pending").innerHTML = attach.map((a,i) => `<span class="fchip">${esc(a.name)} <button data-rm="${i}" aria-label="첨부 삭제">✕</button></span>`).join(""); }
+$("#pending").addEventListener("click", e => { const r = e.target.dataset.rm; if (r == null) return; attach.splice(+r, 1); renderPending(); updateSend(); });
 
-/* ---------- 보내기 / 실행 ---------- */
+/* ---------- 실행 ---------- */
 let busy = false, ctl = null;
-function activeEngine(){ return $("#engSel").value || pickEngine(); }
 function send(){
-  const text = input.value.trim(); if (!text && !attach.length && !images.length) return;
-  const eng = activeEngine();
-  if (!engineStatus(eng).ok){ toast(ENGINES[eng].label + ": " + engineStatus(eng).text); go("settings"); return; }
-  if (!chats.includes(current)) chats.push(current);
-  current.messages.push({role:"user", content: text || "첨부한 파일을 살펴봐줘", attach: attach.length ? attach : undefined, images: images.length ? images.map(f => f.name) : undefined, ts: Date.now()});
-  if (current.title === "새 대화") current.title = (text || attach[0]?.name || "이미지 질문").replace(/\s+/g, " ").slice(0, 32);
-  const imgs = images;
-  input.value = ""; attach = []; images = []; renderPending(); autoGrow();
+  const text = input.value.trim(); if (!text && !attach.length) return;
+  if (!eng.w){ toast(eng.loading ? "모델을 준비하는 중입니다. 잠시만 기다리세요" : "먼저 AI 모델을 불러오세요"); if (!eng.loading) go("models"); return; }
+  current.messages.push({role:"user", content: text || "첨부한 파일을 살펴봐줘", attach: attach.length ? attach : undefined, ts: Date.now()});
+  if (current.title === "새 대화") current.title = (text || attach[0].name).replace(/\s+/g, " ").slice(0, 32);
+  input.value = ""; attach = []; renderPending(); autoGrow();
   saveChat(current); renderList(); $("#title").textContent = current.title;
-  run(imgs);
+  run();
 }
-function stop(){ ctl?.abort(); if (local.engine && local.generating) try { local.engine.interruptGenerate(); } catch(e){} }
-
-function buildTurns(){
-  // 긴 대화는 최근 내용만 보냄 (약 12만 자)
+const approxTokens = s => Math.ceil(s.length / 1.6);   // 한국어 기준 대략 추정
+const ctxSize = () => eng.ctx || settings.ctx;                 // 모델이 실제로 잡은 기억 길이
+const answerLen = () => Math.min(settings.maxTokens, Math.floor(ctxSize() / 3));
+function buildMessages(){
+  const bot = botById(current.botId), d = new Date();
+  const lastUser = [...current.messages].reverse().find(m => m.role === "user");
+  let system = `${bot.system}\n\n${BASE_RULES}\n오늘 날짜: ${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일.`;
+  let sources = [];
+  if ((settings.rag || bot.rag) && docs.length && lastUser){
+    const hits = search(lastUser.content + " " + (lastUser.attach||[]).map(a => a.name).join(" "), 4);
+    if (hits.length){
+      let budget = Math.max(300, Math.floor(ctxSize() * 0.3 * 1.6));
+      const parts = [];
+      for (const h of hits){ const t = h.text.slice(0, budget); if (t.length < 80 && parts.length) break; parts.push(`[${parts.length+1}] 문서: ${h.name}\n${t}`); budget -= t.length; if (budget <= 0) break; }
+      system += `\n\n다음은 사용자가 올린 문서에서 찾은 참고 자료다. 질문과 관련 있으면 이 자료를 근거로 답하고 "(문서: 이름)" 형식으로 출처를 밝혀라. 관련이 없으면 무시하라.\n\n${parts.join("\n\n")}`;
+      sources = [...new Set(hits.slice(0, parts.length).map(h => h.name))];
+    }
+  }
+  // 대화 기억 길이(n_ctx) 안에 들어가도록 최근 대화부터 채움
+  let budget = ctxSize() - answerLen() - approxTokens(system) - 64;
   const msgs = [];
-  let budget = 120000;
   for (let i = current.messages.length - 1; i >= 0; i--){
     const m = current.messages[i];
     let c = m.role === "assistant" ? splitThink(m.content).body : m.content;
-    if (m.attach) c += m.attach.map(a => `\n\n[첨부 파일: ${a.name}]\n\`\`\`\n${a.text.slice(0, 60000)}\n\`\`\``).join("");
     if (!c) continue;
-    budget -= c.length; if (budget < 0 && msgs.length) break;
+    if (m.attach){
+      const room = Math.max(400, Math.floor(budget * 1.6) - c.length - 200);
+      c += m.attach.map(a => { const t = a.text.slice(0, Math.floor(room / m.attach.length)); return `\n\n[첨부 파일: ${a.name}${t.length < a.text.length ? ` · 앞부분 ${fmtN(t.length)}자만 포함` : ""}]\n${t}`; }).join("");
+    }
+    const cost = approxTokens(c) + 8;
+    if (cost > budget){ if (!msgs.length){ c = c.slice(0, Math.max(200, Math.floor(budget * 1.6))); msgs.unshift({role: m.role === "assistant" ? "assistant" : "user", content: c}); } break; }
+    budget -= cost;
     msgs.unshift({role: m.role === "assistant" ? "assistant" : "user", content: c});
   }
   while (msgs.length && msgs[0].role !== "user") msgs.shift();
-  // 같은 역할이 연속되면 하나로 합침 (오류로 답이 빠진 경우)
-  return msgs.reduce((acc, m) => { const last = acc[acc.length-1]; if (last && last.role === m.role) last.content += "\n\n" + m.content; else acc.push({...m}); return acc; }, []);
+  const merged = msgs.reduce((acc, m) => { const last = acc[acc.length-1]; if (last && last.role === m.role) last.content += "\n\n" + m.content; else acc.push({...m}); return acc; }, []);
+  return {messages: [{role:"system", content: system}, ...merged], sources};
 }
-function systemPrompt(){
-  const bot = botById(current.botId);
-  const d = new Date();
-  return `${bot.system}\n\n${BASE_RULES}\n오늘 날짜: ${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일.`;
-}
-async function run(imgs){
-  const eng = activeEngine(), model = modelOf(eng);
-  const out = {role:"assistant", content:"", engine: eng, model: eng === "claude" ? "Claude " + ENGINES.claude.models.find(x => x[0]===model)?.[1] : model, ts: Date.now(), streaming: true};
+async function run(){
+  const out = {role:"assistant", content:"", model: eng.loaded?.name || "", ts: Date.now(), streaming: true, phase: "질문을 읽는 중…"};
   current.messages.push(out);
-  const idx = current.messages.length - 1;
+  const i = current.messages.length - 1;
   busy = true; updateSend(); renderChat(); scrollDown(true);
   ctl = new AbortController();
-  const t0 = performance.now();
-  let raf = 0;
-  const paint = () => { raf = 0; const el = $(`#msgs .m[data-i="${idx}"]`); if (el){ el.outerHTML = msgHTML(out, idx); scrollDown(); } };
-  const onText = text => { out.content = text; if (!raf) raf = requestAnimationFrame(paint); };
-  const onThink = t => { out.think = t; if (!raf) raf = requestAnimationFrame(paint); };
+  const t0 = performance.now(); let raf = 0;
+  const paint = () => { raf = 0; const el = $(`#msgs .m[data-i="${i}"]`); if (el){ el.outerHTML = msgHTML(out, i); scrollDown(); } };
+  const bump = () => { if (!raf) raf = requestAnimationFrame(paint); };
   try {
-    const turns = buildTurns();
-    await ENGINE_RUN[eng]({turns, system: systemPrompt(), model, onText, onThink, signal: ctl.signal, images: imgs, temp: botById(current.botId).temp ?? settings.temp});
-    if (!out.content.trim() && !out.think) out.error = "빈 답변이 돌아왔습니다. 다시 생성해 보세요.";
+    const {messages, sources} = buildMessages();
+    out.sources = sources;
+    const params = {messages, stream: true, max_tokens: answerLen(), temperature: botById(current.botId).temp ?? settings.temp, abortSignal: ctl.signal, chat_template_kwargs: {enable_thinking: !!settings.think}};
+    if (window.__nuriGenExtra) Object.assign(params, window.__nuriGenExtra);
+    const stream = await eng.w.createChatCompletion(params);
+    for await (const ch of stream){
+      const d = ch.choices?.[0]?.delta || {};
+      if (d.reasoning_content){ out.think = (out.think || "") + d.reasoning_content; bump(); }
+      if (d.content){ out.content += d.content; bump(); }
+      if (ch.timings?.predicted_per_second) out.tps = ch.timings.predicted_per_second;
+      if (ch.choices?.[0]?.finish_reason === "length") out.content += "\n\n*(답변 길이 한도에 닿아 끊겼습니다. '계속'이라고 보내면 이어서 씁니다.)*";
+    }
+    if (!out.content.trim() && !out.think) out.error = "빈 답변이 나왔습니다. 다시 생성해 보세요.";
   } catch (e){
-    if (e && (e.name === "AbortError" || e.code === "cancelled")) { if (!out.content) out.error = "답변을 멈췄습니다."; }
-    else out.error = friendlyError(eng, e);
-    if (e && e.text && !out.content) out.content = e.text;
+    if (e && (e.name === "AbortError" || e.name === "WllamaAbortError" || ctl.signal.aborted)){ if (!out.content) out.error = "답변을 멈췄습니다."; }
+    else { const msg = String(e && e.message || e); out.error = /context|n_ctx|exceed/i.test(msg) ? "대화가 너무 길어 기억 한도를 넘었습니다. 새 대화를 시작하거나 'AI 모델 > 대화 기억 길이'를 늘리세요." : "답변 중 오류: " + msg.slice(0, 200); }
   } finally {
     cancelAnimationFrame(raf);
-    out.streaming = false; out.ms = Math.round(performance.now() - t0);
-    busy = false; ctl = null; local.generating = false;
+    out.streaming = false; out.ms = Math.round(performance.now() - t0); delete out.phase;
+    busy = false; ctl = null;
     saveChat(current); renderList(); updateSend(); paint(); scrollDown();
   }
 }
-function friendlyError(eng, e){
-  const code = e && (e.code || e.status);
-  if (eng === "claude"){
-    return ({not_granted:"Claude 사용이 허용되지 않았습니다. 다시 보내면 허용 창이 다시 뜹니다.", rate_limited:"요청이 몰려 잠시 쉬어야 합니다. 1분쯤 뒤에 다시 보내세요.", prompt_too_large:"대화나 첨부가 너무 깁니다. 새 대화를 시작하거나 첨부를 줄이세요."})[code] || "Claude 응답을 받지 못했습니다" + (e && e.message ? ": " + e.message : ".");
-  }
-  if (code === 401 || code === 403) return "API 키가 올바르지 않거나 권한이 없습니다. 설정에서 키를 확인하세요.";
-  if (code === 404) return "모델 이름을 찾을 수 없습니다. 설정에서 '모델 목록 불러오기'로 이름을 고르세요.";
-  if (code === 429) return "사용 한도나 요청 속도 제한에 걸렸습니다. 잠시 뒤 다시 시도하거나 요금제를 확인하세요.";
-  if (e instanceof TypeError) return "서버에 연결하지 못했습니다. 인터넷 연결, 서버 주소, 브라우저 접근(CORS) 허용 여부를 확인하세요.";
-  return (e && e.message) || "알 수 없는 오류가 났습니다.";
-}
 
-/* ---------- 엔진별 호출 ---------- */
-async function* sse(res){
-  const reader = res.body.getReader(), dec = new TextDecoder(); let buf = "";
-  for (;;){
-    const {value, done} = await reader.read(); if (done) break;
-    buf += dec.decode(value, {stream:true});
-    let n;
-    while ((n = buf.indexOf("\n")) >= 0){
-      const line = buf.slice(0, n).replace(/\r$/, ""); buf = buf.slice(n+1);
-      if (line.startsWith("data:")){ const d = line.slice(5).trim(); if (d && d !== "[DONE]") { try { yield JSON.parse(d); } catch(e){} } }
-    }
-  }
-}
-async function httpFail(res){
-  let msg = ""; try { const j = await res.json(); msg = j.error?.message || j.message || JSON.stringify(j).slice(0, 200); } catch(e){}
-  const err = new Error(`${res.status} ${msg}`); err.status = res.status; throw err;
-}
-const ENGINE_RUN = {
-  async claude({turns, system, model, onText, signal, images}){
-    const input = [{role:"user", content: "[대화 지침]\n" + system + "\n\n이 지침에 따라 아래 대화를 이어가라."}, ...turns];
-    const opts = {onText: ({text}) => onText(text), signal, modelTier: model, cache: false};
-    if (images && images.length) opts.images = images;
-    const r = await sample(input, opts);
-    onText(r.text + (r.truncated ? "\n\n*(답변이 길어 중간에 끊겼습니다. '계속'이라고 보내면 이어서 씁니다.)*" : ""));
-  },
-  async local({turns, system, onText, onThink, signal, temp}){
-    if (!local.engine) throw new Error("자체 엔진 모델을 먼저 불러오세요.");
-    local.generating = true;
-    const stream = await local.engine.chat.completions.create({messages:[{role:"system", content:system}, ...turns], stream:true, temperature: temp});
-    let text = "";
-    for await (const ch of stream){
-      if (signal.aborted){ try { local.engine.interruptGenerate(); } catch(e){} break; }
-      const d = ch.choices?.[0]?.delta?.content; if (d){ text += d; onText(text); }
-    }
-  },
-  async openai(a){ return openaiCompat("openai", a); },
-  async deepseek(a){ return openaiCompat("deepseek", a); },
-  async custom(a){ return openaiCompat("custom", a); },
-  async anthropic({turns, system, model, onText, signal}){
-    const res = await fetch("https://api.anthropic.com/v1/messages", {method:"POST", signal, headers:{"content-type":"application/json", "x-api-key": keys.anthropic, "anthropic-version":"2023-06-01", "anthropic-dangerous-direct-browser-access":"true"},
-      body: JSON.stringify({model, max_tokens: 16000, system, messages: turns, stream: true})});
-    if (!res.ok) await httpFail(res);
-    let text = "";
-    for await (const ev of sse(res)){
-      if (ev.type === "content_block_delta" && ev.delta?.type === "text_delta"){ text += ev.delta.text; onText(text); }
-      if (ev.type === "message_delta" && ev.delta?.stop_reason === "refusal"){ text += "\n\n*(안전 정책에 따라 이 요청에는 답하지 않았습니다.)*"; onText(text); }
-      if (ev.type === "message_delta" && ev.delta?.stop_reason === "max_tokens"){ text += "\n\n*(길이 제한으로 끊겼습니다. '계속'이라고 보내세요.)*"; onText(text); }
-      if (ev.type === "error") throw new Error(ev.error?.message || "Anthropic 오류");
-    }
-  },
-  async gemini({turns, system, model, onText, onThink, signal, temp}){
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`;
-    const res = await fetch(url, {method:"POST", signal, headers:{"content-type":"application/json", "x-goog-api-key": keys.gemini},
-      body: JSON.stringify({systemInstruction:{parts:[{text:system}]}, contents: turns.map(t => ({role: t.role === "assistant" ? "model" : "user", parts:[{text:t.content}]})), generationConfig:{temperature: temp}})});
-    if (!res.ok) await httpFail(res);
-    let text = "", think = "";
-    for await (const ev of sse(res)){
-      for (const p of ev.candidates?.[0]?.content?.parts || []){ if (!p.text) continue; if (p.thought){ think += p.text; onThink(think); } else { text += p.text; onText(text); } }
-      if (ev.error) throw new Error(ev.error.message);
-    }
-  }
-};
-async function openaiCompat(id, {turns, system, model, onText, onThink, signal, temp}){
-  const headers = {"content-type":"application/json"}; if (keys[id]) headers.authorization = "Bearer " + keys[id];
-  const body = {model, messages:[{role:"system", content:system}, ...turns], stream:true};
-  if (!(id === "deepseek" && /reasoner/.test(model))) body.temperature = temp;
-  const res = await fetch(baseOf(id).replace(/\/$/, "") + "/chat/completions", {method:"POST", signal, headers, body: JSON.stringify(body)});
-  if (!res.ok) await httpFail(res);
-  let text = "", think = "";
-  for await (const ev of sse(res)){
-    const d = ev.choices?.[0]?.delta || {};
-    if (d.reasoning_content){ think += d.reasoning_content; onThink(think); }
-    if (d.content){ text += d.content; onText(text); }
-  }
-}
+/* ============ 봇 선택 ============ */
+function renderBotSel(){ $("#botSel").innerHTML = allBots().map(b => `<option value="${esc(b.id)}">${esc(b.name)}</option>`).join(""); if (current) $("#botSel").value = botById(current.botId).id; }
+$("#botSel").addEventListener("change", e => { current.botId = e.target.value; if (current.messages.length) saveChat(current); syncBotToggles(); renderChat(); });
 
-/* ---------- 자체 엔진 (WebLLM) ---------- */
-async function checkGpu(){
-  if (IN_ARTIFACT){ gpuOk = false; return; }
-  try { gpuOk = !!(navigator.gpu && await navigator.gpu.requestAdapter()); } catch(e){ gpuOk = false; }
-  refreshEngineUI();
+/* ============ 모델 화면 ============ */
+function refreshModelUI(){
+  const pill = $("#modelPill");
+  const state = eng.w ? "ok" : eng.loading ? "warn" : "bad";
+  pill.innerHTML = `<i class="dot ${state}"></i><span>${esc(eng.w ? `${eng.loaded.name} · ${eng.gpu ? "GPU" : "CPU"}` : eng.loading ? `준비 중 ${Math.round(eng.progress*100)}%` : "모델 없음")}</span>`;
+  $("#navDot").className = "dot " + state;
+  if (!$("#v-models").hidden) renderModels();
+  if (!$("#v-chat").hidden && current && !current.messages.length) renderChat();
 }
-async function loadLocal(modelId){
-  if (local.loading) return;
-  local.loading = true; local.progress = 0; local.text = "라이브러리를 불러오는 중…"; refreshEngineUI();
-  try {
-    const webllm = await import("https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.85/+esm");
-    if (local.engine){ try { await local.engine.unload(); } catch(e){} local.engine = null; }
-    local.engine = await webllm.CreateMLCEngine(modelId, {initProgressCallback: p => { local.progress = p.progress || 0; local.text = p.text || ""; refreshEngineUI(); }});
-    local.model = modelId; settings.models.local = modelId; settings.engine = "local"; saveSettings();
-    toast("자체 엔진 준비 완료: " + shortModel(modelId));
-  } catch (e){
-    local.engine = null; local.text = "불러오지 못했습니다: " + (e && e.message ? e.message : e); toast("모델을 불러오지 못했습니다");
-  } finally { local.loading = false; refreshEngineUI(); }
+let cacheList = [];
+async function refreshCache(){ try { cacheList = await getProbe().cacheManager.list(); } catch(e){ cacheList = []; } }
+const cachedMatch = c => cacheList.find(x => x.name.toLowerCase().includes(c.quant.toLowerCase()) && x.name.toLowerCase().includes(c.name.split(" ")[0].toLowerCase().replace("-r1","")));
+async function renderModels(){
+  const gpu = gpuSupported(), iso = self.crossOriginIsolated;
+  let est = null; try { est = await navigator.storage.estimate(); } catch(e){}
+  const act = eng.loaded;
+  $("#modelsPage").innerHTML = `
+    <div><h2>AI 모델</h2><p class="sub">오픈소스 AI 모델을 이 기기로 내려받아 직접 실행합니다. 대화 내용은 기기 밖으로 나가지 않습니다.</p></div>
+    <div class="card"><h3>지금 상태</h3><div class="body status">
+      <div class="line"><span class="pill"><i class="dot ${eng.w ? "ok" : eng.loading ? "warn" : "bad"}"></i>${eng.w ? "실행 중" : eng.loading ? "준비 중" : "모델 없음"}</span><b>${esc(act ? act.name : "—")}</b>${eng.w ? `<button class="btn" id="unload">메모리에서 내리기</button>` : ""}</div>
+      ${eng.loading ? `<div class="progress"><i style="width:${Math.round(eng.progress*100)}%"></i></div><span class="small">${esc(eng.phase)}</span>` : ""}
+      ${eng.error ? `<div class="err">${esc(eng.error)}</div>` : ""}
+      <span class="small">가속: ${gpu ? "WebGPU 사용 가능" : "WebGPU 없음 → CPU로 실행 (느림)"} · CPU 스레드: ${iso ? (navigator.hardwareConcurrency || 1) + "개" : "1개 (페이지를 새로고침하면 늘어날 수 있음)"}${est ? ` · 브라우저 저장공간 ${fmtGB(est.usage||0)} 사용 / ${fmtGB(est.quota||0)}` : ""}</span>
+    </div></div>
+    <div class="cards">${CATALOG.map(c => { const cached = cachedMatch(c); const on = act && act.id === c.id; return `<div class="tile${on ? " active" : ""}">
+      <div class="hd"><b>${esc(c.name)}</b><span class="tag${cached ? " good" : ""}">${cached ? "기기에 저장됨" : "약 " + c.gb + "GB"}</span></div>
+      <div class="meta">${c.tags.map(t => `<span class="tag">${esc(t)}</span>`).join("")}</div>
+      <p>${esc(c.desc)}</p><span class="small">라이선스: ${esc(c.lic)}</span>
+      <div class="row"><button class="btn${on ? "" : " primary"}" data-load="${c.id}" ${eng.loading || on ? "disabled" : ""}>${on ? "사용 중" : cached ? "바로 실행" : "내려받고 실행"}</button></div></div>`; }).join("")}</div>
+    <div class="grid2">
+      <div class="card"><h3>직접 불러오기 <small>인터넷 연결 없이도 가능</small></h3><div class="body">
+        <div class="form" style="grid-template-columns:1fr">
+          <label>내 컴퓨터의 GGUF 파일 (2GB 이하, 분할 파일은 모두 선택)<input type="file" id="ggufFile" accept=".gguf" multiple></label>
+        </div>
+        <div class="form">
+          <label class="wide">GGUF 파일 주소(URL) · 내 서버에 올린 모델<input type="text" id="ggufUrl" placeholder="https://내서버/models/my-model.gguf"></label>
+          <label>Hugging Face 저장소<input type="text" id="hfRepo" placeholder="예: Qwen/Qwen2.5-0.5B-Instruct-GGUF"></label>
+          <label>양자화<input type="text" id="hfQuant" value="Q4_K_M"></label>
+        </div>
+        <div class="row"><button class="btn" id="loadUrl" ${eng.loading ? "disabled" : ""}>주소에서 불러오기</button><button class="btn" id="loadHf" ${eng.loading ? "disabled" : ""}>저장소에서 불러오기</button></div>
+      </div></div>
+      <div class="card"><h3>실행 설정</h3><div class="body">
+        <div class="form" style="grid-template-columns:1fr 1fr">
+          <label>계산 장치<select id="s-device"><option value="auto">자동 (GPU 우선)</option><option value="gpu">GPU</option><option value="cpu">CPU만</option></select></label>
+          <label>대화 기억 길이<select id="s-ctx"><option value="2048">2,048 토큰 · 가벼움</option><option value="4096">4,096 토큰 · 기본</option><option value="8192">8,192 토큰 · 긴 문서</option><option value="16384">16,384 토큰 · 메모리 많이 씀</option></select></label>
+          <label>최대 답변 길이<select id="s-max"><option value="512">짧게 (512)</option><option value="1024">보통 (1,024)</option><option value="2048">길게 (2,048)</option></select></label>
+          <label>창의성 (${settings.temp.toFixed(1)})<input type="range" id="s-temp" min="0" max="1.5" step="0.1" value="${settings.temp}"></label>
+          <label class="wide" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="s-auto" style="width:auto" ${settings.autoload ? "checked" : ""}>다음에 열 때 마지막 모델 자동 실행</label>
+        </div>
+        <span class="small">계산 장치와 기억 길이는 모델을 다시 불러와야 적용됩니다.</span>
+      </div></div>
+    </div>
+    <div class="card"><h3>기기에 저장된 모델 파일 <small>${cacheList.length}개 · ${fmtGB(cacheList.reduce((a,c) => a + (c.size||0), 0))}</small></h3><div class="body"><div class="list">
+      ${cacheList.length ? cacheList.map(c => `<div><span class="t">${esc(c.name.replace(/^[0-9a-f]{40}_/, ""))}</span><span class="num">${fmtGB(c.size||0)}</span><button class="btn danger" data-rmcache="${esc(c.name)}">삭제</button></div>`).join("") : `<p class="empty">아직 내려받은 모델이 없습니다.</p>`}
+    </div></div></div>`;
+  $("#s-device").value = settings.device; $("#s-ctx").value = settings.ctx; $("#s-max").value = settings.maxTokens;
 }
+$("#modelsPage").addEventListener("change", async e => {
+  const t = e.target;
+  if (t.id === "s-device"){ settings.device = t.value; saveSettings(); }
+  if (t.id === "s-ctx"){ settings.ctx = +t.value; saveSettings(); }
+  if (t.id === "s-max"){ settings.maxTokens = +t.value; saveSettings(); }
+  if (t.id === "s-auto"){ settings.autoload = t.checked; saveSettings(); }
+  if (t.id === "s-temp"){ settings.temp = +t.value; saveSettings(); renderModels(); }
+  if (t.id === "ggufFile" && t.files.length){
+    const files = [...t.files].sort((a,b) => a.name.localeCompare(b.name));
+    if (files.some(f => f.size > 2147483647)){ toast("2GB가 넘는 파일은 분할(split)해서 올려야 합니다"); return; }
+    await loadModel({kind:"file", name: files[0].name.replace(/(-\d{5}-of-\d{5})?\.gguf$/i, ""), files});
+  }
+});
+$("#modelsPage").addEventListener("click", async e => {
+  const t = e.target;
+  if (t.id === "unload") unloadModel();
+  if (t.id === "loadUrl"){ const url = $("#ggufUrl").value.trim(); if (!/^https?:\/\/.+\.gguf(\?.*)?$/i.test(url)){ toast(".gguf로 끝나는 주소를 넣으세요"); return; } loadModel({kind:"url", name: decodeURIComponent(url.split("/").pop().split("?")[0]).replace(/\.gguf$/i, ""), url}); }
+  if (t.id === "loadHf"){ const repo = $("#hfRepo").value.trim(); if (!/^[\w.-]+\/[\w.-]+$/.test(repo)){ toast("저장소는 '사용자/이름' 형식으로 넣으세요"); return; } loadModel({kind:"hf", name: repo.split("/")[1].replace(/-GGUF$/i, ""), repo, quant: $("#hfQuant").value.trim() || "Q4_K_M"}); }
+  if (t.dataset.rmcache){
+    if (t.dataset.confirm !== "1"){ t.dataset.confirm = "1"; t.textContent = "정말 삭제"; return; }
+    try { await getProbe().cacheManager.delete(t.dataset.rmcache); } catch(err){}
+    await refreshCache(); renderModels(); toast("모델 파일을 지웠습니다");
+  }
+});
 
-/* ================= 봇 선택 / 엔진 선택 ================= */
-function renderBotSel(){
-  $("#botSel").innerHTML = allBots().map(b => `<option value="${esc(b.id)}">${esc(b.name)}</option>`).join("");
-  if (current) $("#botSel").value = botById(current.botId).id;
+/* ============ 내 지식 화면 ============ */
+function renderKnow(){
+  const totalChunks = docs.reduce((a,d) => a + d.chunks.length, 0);
+  $("#knowPage").innerHTML = `
+    <div><h2>내 지식</h2><p class="sub">문서를 올리면 누리가 질문과 관련된 부분을 찾아 답변에 씁니다. 문서는 이 기기에만 저장됩니다.</p></div>
+    <div class="grid2">
+      <div class="card"><h3>문서 추가</h3><div class="body">
+        <div class="form" style="grid-template-columns:1fr">
+          <label>파일 올리기 (.txt .md .csv .json .html 코드 등, 여러 개 가능)<input type="file" id="docFiles" multiple accept=".txt,.md,.csv,.tsv,.json,.html,.htm,.xml,.log,.js,.ts,.py,.java,.c,.cpp,.cs,.go,.sql,.yaml,.yml,text/*"></label>
+          <label>또는 직접 붙여넣기 · 제목<input type="text" id="docTitle" placeholder="예: 우리 회사 휴가 규정"></label>
+          <label>내용<textarea id="docText" placeholder="문서 내용을 붙여넣으세요"></textarea></label>
+        </div>
+        <div class="row"><button class="btn primary" id="docAdd">붙여넣은 내용 저장</button></div>
+      </div></div>
+      <div class="card"><h3>검색 미리보기 <small>질문하면 어떤 부분을 찾는지 확인</small></h3><div class="body">
+        <div class="form" style="grid-template-columns:1fr"><label>질문<input type="text" id="docQ" placeholder="예: 연차는 며칠이야?"></label></div>
+        <div id="docHits" class="status"><p class="empty">${docs.length ? "질문을 입력하세요." : "먼저 문서를 추가하세요."}</p></div>
+      </div></div>
+    </div>
+    <div class="card"><h3>저장된 문서 <small>${docs.length}개 · 조각 ${fmtN(totalChunks)}개</small></h3><div class="body"><div class="list">
+      ${docs.length ? docs.slice().sort((a,b) => b.added - a.added).map(d => `<div><span class="t">${esc(d.name)}</span><span class="num">${fmtN(d.size)}자 · ${d.chunks.length}조각</span><button class="btn danger" data-rmdoc="${d.id}">삭제</button></div>`).join("") : `<p class="empty">아직 문서가 없습니다. 회사 규정, 제품 설명서, 공부 노트처럼 자주 묻는 자료를 올려 보세요.</p>`}
+    </div></div></div>`;
 }
-$("#botSel").addEventListener("change", e => { current.botId = e.target.value; if (current.messages.length) saveChat(current); renderChat(); });
-function renderEngSel(){
-  const sel = $("#engSel"), cur = pickEngine();
-  sel.innerHTML = Object.entries(ENGINES).map(([id, e]) => { const s = engineStatus(id); return `<option value="${id}">${esc(e.short)}${s.ok ? "" : " (" + esc(s.text) + ")"}</option>`; }).join("");
-  sel.value = cur;
-}
-$("#engSel").addEventListener("change", e => { settings.engine = e.target.value; saveSettings(); refreshEngineUI(); if (!engineStatus(settings.engine).ok) go("settings"); });
-function refreshEngineUI(){
-  const id = pickEngine(), st = engineStatus($("#engSel").value || id);
-  renderEngSel();
-  const eid = $("#engSel").value, s = engineStatus(eid);
-  $("#engPill").innerHTML = `<i class="dot ${s.ok ? "ok" : s.warn ? "warn" : "bad"}"></i><span>${esc(s.ok ? shortModel(eid==="claude" ? "Claude " + (ENGINES.claude.models.find(x=>x[0]===modelOf("claude"))||[])[1] : modelOf(eid)) : s.text)}</span>`;
-  $("#engDot").className = "dot " + (s.ok ? "ok" : s.warn ? "warn" : "bad");
-  $("#attachBtn").title = eid === "claude" && sampleImages ? "텍스트 파일과 이미지를 첨부할 수 있습니다" : "텍스트 파일(.txt .md .csv .json 코드)을 첨부할 수 있습니다";
-  if (!$("#v-settings").hidden) renderSettings();
-  if (current && !current.messages.length && !$("#v-chat").hidden) renderChat();
-}
+$("#knowPage").addEventListener("change", async e => {
+  if (e.target.id !== "docFiles") return;
+  let n = 0;
+  for (const f of e.target.files){ try { const d = await addDoc(f.name, await readTextFile(f)); if (d) n++; } catch(err){ toast(err.message); } }
+  if (n) toast(`문서 ${n}개를 추가했습니다`); renderKnow();
+});
+$("#knowPage").addEventListener("click", async e => {
+  const t = e.target;
+  if (t.id === "docAdd"){ const title = $("#docTitle").value.trim(), text = $("#docText").value.trim(); if (!title || text.length < 20){ toast("제목과 20자 이상의 내용을 넣으세요"); return; } await addDoc(title, text); toast("저장했습니다"); renderKnow(); }
+  if (t.dataset.rmdoc){ if (t.dataset.confirm !== "1"){ t.dataset.confirm = "1"; t.textContent = "정말 삭제"; return; } await removeDoc(t.dataset.rmdoc); renderKnow(); toast("문서를 삭제했습니다"); }
+});
+$("#knowPage").addEventListener("input", e => {
+  if (e.target.id !== "docQ") return;
+  const hits = search(e.target.value, 4);
+  $("#docHits").innerHTML = hits.length ? hits.map(h => `<div class="hit"><span class="small">${esc(h.name)} · 조각 ${h.i+1} · 점수 ${h.score.toFixed(1)}</span>${esc(h.text.slice(0, 220))}${h.text.length > 220 ? "…" : ""}</div>`).join("") : `<p class="empty">${e.target.value.trim() ? "관련된 부분을 찾지 못했습니다." : "질문을 입력하세요."}</p>`;
+});
 
-/* ================= 대시보드 ================= */
+/* ============ 봇 만들기 ============ */
+let editingBot = null;
+function renderBots(){
+  const b = editingBot;
+  $("#botsPage").innerHTML = `
+    <div><h2>내 봇 만들기</h2><p class="sub">역할과 말투, 규칙을 정해 나만의 챗봇을 만듭니다. 만든 봇은 상단 봇 선택에 나타납니다.</p></div>
+    <div class="card"><h3>${b && b.id ? "봇 수정" : "새 봇"}</h3><div class="body">
+      <div class="form">
+        <label>이름<input id="b-name" type="text" maxlength="24" value="${esc(b?.name || "")}" placeholder="예: 우리 가게 상담원"></label>
+        <label>창의성 (<span id="b-tv">${(b?.temp ?? 0.7).toFixed(1)}</span>)<input id="b-temp" type="range" min="0" max="1.5" step="0.1" value="${b?.temp ?? 0.7}"></label>
+        <label class="wide">한 줄 소개<input id="b-desc" type="text" maxlength="80" value="${esc(b?.desc || "")}" placeholder="예: 메뉴와 영업시간, 예약을 안내합니다"></label>
+        <label class="wide">역할과 규칙<textarea id="b-sys" placeholder="예: 너는 '한빛 베이커리' 상담원이다. 영업시간은 매일 8시~21시, 월요일 휴무. 모르는 것은 전화로 문의하라고 안내한다.">${esc(b?.system || "")}</textarea></label>
+        <label class="wide">추천 질문 (한 줄에 하나)<textarea id="b-starters" style="min-height:70px" placeholder="오늘 영업하나요?&#10;케이크 예약은 어떻게 해요?">${esc((b?.starters || []).join("\n"))}</textarea></label>
+        <label class="wide" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="b-rag" style="width:auto" ${b?.rag ? "checked" : ""}>항상 '내 지식' 문서를 찾아서 답하기</label>
+      </div>
+      <div class="row"><button class="btn primary" id="b-save">${b && b.id ? "수정 저장" : "봇 만들기"}</button>${b && b.id ? `<button class="btn" id="b-cancel">취소</button><button class="btn danger" id="b-del">삭제</button>` : ""}</div>
+    </div></div>
+    <div class="cards">${allBots().map(x => `<div class="tile"><div class="hd" style="justify-content:flex-start"><span class="ini">${esc(x.name.slice(0,1))}</span><div><b>${esc(x.name)}</b><div class="small">${x.preset ? "기본 봇" : "내가 만든 봇"}${x.rag ? " · 내 지식 사용" : ""}</div></div></div><p>${esc(x.desc || "")}</p><div class="row"><button class="btn primary" data-chat="${esc(x.id)}">대화하기</button>${x.preset ? `<button class="btn" data-copybot="${esc(x.id)}">복제해서 수정</button>` : `<button class="btn" data-edit="${esc(x.id)}">수정</button>`}</div></div>`).join("")}</div>`;
+}
+$("#botsPage").addEventListener("input", e => { if (e.target.id === "b-temp") $("#b-tv").textContent = (+e.target.value).toFixed(1); });
+$("#botsPage").addEventListener("click", e => {
+  const t = e.target, b = editingBot;
+  if (t.id === "b-save"){
+    const nb = {id: b?.id || "u_" + uid(), name: $("#b-name").value.trim(), desc: $("#b-desc").value.trim(), system: $("#b-sys").value.trim(), temp: +$("#b-temp").value, rag: $("#b-rag").checked, starters: $("#b-starters").value.split("\n").map(s => s.trim()).filter(Boolean).slice(0, 6)};
+    if (!nb.name || !nb.system){ toast("이름과 역할·규칙을 입력하세요"); return; }
+    const i = customBots.findIndex(x => x.id === nb.id); if (i >= 0) customBots[i] = nb; else customBots.push(nb);
+    ls.set("bots", customBots); editingBot = null; renderBotSel(); renderBots(); toast(`'${nb.name}' 봇을 저장했습니다`);
+  }
+  if (t.id === "b-cancel"){ editingBot = null; renderBots(); }
+  if (t.id === "b-del"){ if (t.dataset.confirm !== "1"){ t.dataset.confirm = "1"; t.textContent = "정말 삭제"; return; } customBots = customBots.filter(x => x.id !== b.id); ls.set("bots", customBots); editingBot = null; renderBotSel(); renderBots(); toast("봇을 삭제했습니다"); }
+  if (t.dataset.chat){ go("chat"); newChat(t.dataset.chat); }
+  if (t.dataset.edit){ editingBot = structuredClone(customBots.find(x => x.id === t.dataset.edit)); renderBots(); t.closest(".scroll").scrollTop = 0; }
+  if (t.dataset.copybot){ const p = botById(t.dataset.copybot); editingBot = {name: p.name + " (내 버전)", desc: p.desc, system: p.system, starters: p.starters, temp: 0.7, rag: !!p.rag}; renderBots(); t.closest(".scroll").scrollTop = 0; }
+});
+
+/* ============ 대시보드 ============ */
 function renderDash(){
   const msgs = chats.flatMap(c => c.messages.map(m => ({...m, botId:c.botId})));
-  const users = msgs.filter(m => m.role === "user"), ais = msgs.filter(m => m.role === "assistant" && !m.error);
+  const users = msgs.filter(m => m.role === "user"), ais = msgs.filter(m => m.role === "assistant" && !m.error && m.ms);
   const today = new Date(); today.setHours(0,0,0,0);
-  const todayN = users.filter(m => m.ts >= +today).length;
-  const chars = msgs.reduce((a,m) => a + (m.content||"").length, 0);
-  const avgMs = ais.filter(m => m.ms).reduce((a,m,_,arr) => a + m.ms/arr.length, 0);
+  const avgMs = ais.length ? ais.reduce((a,m) => a + m.ms, 0) / ais.length : 0;
+  const tpsList = ais.filter(m => m.tps).map(m => m.tps);
+  const cps = ais.filter(m => m.content).map(m => splitThink(m.content).body.length / (m.ms/1000));
   const days = [...Array(14)].map((_, i) => { const d = new Date(+today - (13-i)*864e5); return {d, n: users.filter(m => m.ts >= +d && m.ts < +d + 864e5).length}; });
-  const engCount = {}; ais.forEach(m => engCount[m.engine] = (engCount[m.engine]||0) + 1);
-  const botCount = {}; users.forEach(m => botCount[m.botId] = (botCount[m.botId]||0) + 1);
-  const hb = (obj, labelFn) => { const e = Object.entries(obj).sort((a,b) => b[1]-a[1]); const mx = Math.max(1, ...e.map(x => x[1])); return e.length ? e.map(([k,v]) => `<div class="hbar"><span title="${esc(labelFn(k))}">${esc(labelFn(k))}</span><span class="track"><i style="width:${v/mx*100}%"></i></span><span class="num">${fmtN(v)}</span></div>`).join("") : `<p class="empty">아직 기록이 없습니다.</p>`; };
+  const cnt = (arr, f) => arr.reduce((o, m) => { const k = f(m); if (k) o[k] = (o[k]||0) + 1; return o; }, {});
+  const hb = (obj, lab) => { const e = Object.entries(obj).sort((a,b) => b[1]-a[1]).slice(0, 8); const mx = Math.max(1, ...e.map(x => x[1])); return e.length ? e.map(([k,v]) => `<div class="hbar"><span title="${esc(lab(k))}">${esc(lab(k))}</span><span class="track"><i style="width:${v/mx*100}%"></i></span><span class="num">${fmtN(v)}</span></div>`).join("") : `<p class="empty">아직 기록이 없습니다.</p>`; };
   $("#dash").innerHTML = `
-    <div><h2>대시보드</h2><p class="sub">내 대화 기록으로 계산한 사용 현황입니다.</p></div>
+    <div><h2>대시보드</h2><p class="sub">이 기기에 저장된 대화로 계산한 사용 현황입니다.</p></div>
     <div class="kpis">
-      <div class="kpi"><label>전체 대화</label><span class="v">${fmtN(chats.length)}</span><span class="s">저장된 대화 수</span></div>
-      <div class="kpi"><label>보낸 질문</label><span class="v">${fmtN(users.length)}</span><span class="s">오늘 ${fmtN(todayN)}개</span></div>
-      <div class="kpi"><label>받은 답변</label><span class="v">${fmtN(ais.length)}</span><span class="s">오류 제외</span></div>
+      <div class="kpi"><label>보낸 질문</label><span class="v">${fmtN(users.length)}</span><span class="s">오늘 ${fmtN(users.filter(m => m.ts >= +today).length)}개 · 대화 ${fmtN(chats.length)}개</span></div>
       <div class="kpi"><label>평균 응답 시간</label><span class="v">${ais.length ? (avgMs/1000).toFixed(1) + "초" : "–"}</span><span class="s">답변 완료까지</span></div>
-      <div class="kpi"><label>주고받은 글자</label><span class="v">${chars > 9999 ? fmtN(Math.round(chars/1000)) + "천" : fmtN(chars)}</span><span class="s">질문과 답변 합계</span></div>
+      <div class="kpi"><label>생성 속도</label><span class="v">${tpsList.length ? (tpsList.reduce((a,b)=>a+b,0)/tpsList.length).toFixed(1) : cps.length ? Math.round(cps.reduce((a,b)=>a+b,0)/cps.length) : "–"}</span><span class="s">${tpsList.length ? "토큰/초 평균" : "글자/초 평균"}</span></div>
+      <div class="kpi"><label>내 지식</label><span class="v">${fmtN(docs.length)}</span><span class="s">문서 · 조각 ${fmtN(docs.reduce((a,d) => a + d.chunks.length, 0))}개</span></div>
+      <div class="kpi"><label>현재 모델</label><span class="v" style="font-size:16px;font-family:var(--f-body);font-weight:700">${esc(eng.loaded ? eng.loaded.name : "없음")}</span><span class="s">${eng.w ? (eng.gpu ? "GPU 실행" : "CPU 실행") : "AI 모델 메뉴에서 실행"}</span></div>
     </div>
     <div class="grid2">
       <div class="card"><h3>최근 14일 질문 수 <small>하루 단위</small></h3><div class="body"><div class="chart" id="dayChart"></div></div></div>
-      <div class="card"><h3>엔진별 답변</h3><div class="body">${hb(engCount, k => ENGINES[k]?.short || k)}</div></div>
+      <div class="card"><h3>모델별 답변</h3><div class="body">${hb(cnt(ais, m => m.model), k => k)}</div></div>
     </div>
     <div class="grid2">
-      <div class="card"><h3>최근 대화</h3><div class="body"><div class="recent">${byUpdated().slice(0,8).map(c => `<button data-open="${c.id}"><span>${esc(c.title)}</span><span class="num">${new Date(c.updated).toLocaleDateString("ko-KR",{month:"short",day:"numeric"})} · ${c.messages.length}개</span></button>`).join("") || `<p class="empty">첫 대화를 시작해 보세요.</p>`}</div></div></div>
-      <div class="card"><h3>봇별 질문</h3><div class="body">${hb(botCount, k => botById(k).name)}</div></div>
+      <div class="card"><h3>최근 대화</h3><div class="body"><div class="list">${byUpdated().slice(0,8).map(c => `<button data-open="${c.id}"><span class="t">${esc(c.title)}</span><span class="num">${new Date(c.updated).toLocaleDateString("ko-KR",{month:"short",day:"numeric"})} · ${c.messages.length}개</span></button>`).join("") || `<p class="empty">첫 대화를 시작해 보세요.</p>`}</div></div></div>
+      <div class="card"><h3>봇별 질문</h3><div class="body">${hb(cnt(users, m => m.botId), k => botById(k).name)}</div></div>
     </div>`;
   drawBars($("#dayChart"), days);
 }
 function drawBars(el, days){
   const W = 560, H = 200, pl = 30, pr = 8, pt = 12, pb = 26;
   const mx = Math.max(...days.map(d => d.n));
-  const step = mx <= 4 ? 1 : mx <= 10 ? 2 : mx <= 25 ? 5 : Math.ceil(mx/5/5)*5;
+  const step = mx <= 4 ? 1 : mx <= 10 ? 2 : mx <= 25 ? 5 : Math.ceil(mx/25)*5;
   const top = Math.max(step, Math.ceil(mx/step)*step);
   const y = v => pt + (H - pt - pb) * (1 - v/top), bw = (W - pl - pr) / days.length;
   let g = "";
@@ -815,181 +909,53 @@ function drawBars(el, days){
     if (i % 2 === 1 || last) g += `<text x="${x + w/2}" y="${H-8}" text-anchor="middle" font-size="11" fill="var(--muted)">${d.d.getMonth()+1}/${d.d.getDate()}</text>`;
   });
   el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="최근 14일 하루 질문 수">${g}</svg><div class="tip" hidden></div>`;
-  const tip = el.querySelector(".tip");
-  el.querySelector("svg").addEventListener("pointermove", e => {
+  const tip = el.querySelector(".tip"), svg = el.querySelector("svg");
+  svg.addEventListener("pointermove", e => {
     const r = e.target.closest("rect[data-i]"); if (!r){ tip.hidden = true; return; }
     const d = days[+r.dataset.i], box = el.getBoundingClientRect(), rb = r.getBoundingClientRect();
     tip.hidden = false; tip.textContent = `${d.d.getMonth()+1}월 ${d.d.getDate()}일 · 질문 ${d.n}개`;
     tip.style.left = (rb.left - box.left + rb.width/2) + "px"; tip.style.top = (y(d.n)/H*box.height) + "px";
   });
-  el.querySelector("svg").addEventListener("pointerleave", () => tip.hidden = true);
+  svg.addEventListener("pointerleave", () => tip.hidden = true);
 }
 $("#dash").addEventListener("click", e => { const b = e.target.closest("[data-open]"); if (b){ openChat(b.dataset.open); go("chat"); } });
 
-/* ================= 봇 만들기 ================= */
-let editingBot = null;
-function renderBots(){
-  const b = editingBot;
-  $("#botsPage").innerHTML = `
-    <div><h2>내 봇 만들기</h2><p class="sub">역할과 말투를 정해 나만의 챗봇을 만듭니다. 만든 봇은 상단 봇 선택에 나타납니다.</p></div>
-    <div class="card"><h3>${b && b.id ? "봇 수정" : "새 봇"}</h3><div class="body">
-      <div class="form">
-        <label>이름<input id="b-name" type="text" maxlength="24" value="${esc(b?.name || "")}" placeholder="예: 우리 가게 상담원"></label>
-        <label>창의성 (온도 ${(b?.temp ?? 0.7).toFixed(1)})<input id="b-temp" type="range" min="0" max="1.5" step="0.1" value="${b?.temp ?? 0.7}"></label>
-        <label class="wide">한 줄 소개<input id="b-desc" type="text" maxlength="80" value="${esc(b?.desc || "")}" placeholder="예: 메뉴와 영업시간, 예약을 안내합니다"></label>
-        <label class="wide">역할과 규칙 (시스템 프롬프트)<textarea id="b-sys" placeholder="예: 너는 '한빛 베이커리' 상담원이다. 영업시간은 매일 8시~21시, 월요일 휴무. 메뉴 가격은 아래 표를 기준으로 안내하고, 모르는 것은 전화(02-000-0000)로 문의하라고 안내한다.">${esc(b?.system || "")}</textarea></label>
-        <label class="wide">추천 질문 (한 줄에 하나)<textarea id="b-starters" style="min-height:70px" placeholder="오늘 영업하나요?&#10;케이크 예약은 어떻게 해요?">${esc((b?.starters || []).join("\n"))}</textarea></label>
-      </div>
-      <div class="bot row" style="flex-direction:row;padding:0;border:0;background:transparent">
-        <button class="btn primary" id="b-save">${b && b.id ? "수정 저장" : "봇 만들기"}</button>
-        ${b && b.id ? `<button class="btn" id="b-cancel">취소</button><button class="btn danger" id="b-del">삭제</button>` : ""}
-      </div>
-    </div></div>
-    <div class="bots">${allBots().map(x => `<div class="bot"><div class="hd"><span class="ini">${esc(x.name.slice(0,1))}</span><div><b>${esc(x.name)}</b><div class="small">${x.preset ? "기본 봇" : "내가 만든 봇"}</div></div></div><p>${esc(x.desc || "")}</p><div class="row"><button class="btn primary" data-chat="${esc(x.id)}">대화하기</button>${x.preset ? `<button class="btn" data-copybot="${esc(x.id)}">복제해서 수정</button>` : `<button class="btn" data-edit="${esc(x.id)}">수정</button>`}</div></div>`).join("")}</div>`;
-  $("#b-temp").oninput = e => { e.target.parentElement.firstChild.textContent = `창의성 (온도 ${(+e.target.value).toFixed(1)})`; };
-  $("#b-save").onclick = () => {
-    const nb = {id: b?.id || "u_" + uid(), name: $("#b-name").value.trim(), desc: $("#b-desc").value.trim(), system: $("#b-sys").value.trim(), temp: +$("#b-temp").value, starters: $("#b-starters").value.split("\n").map(s => s.trim()).filter(Boolean).slice(0, 6)};
-    if (!nb.name || !nb.system){ toast("이름과 역할·규칙을 입력하세요"); return; }
-    const i = customBots.findIndex(x => x.id === nb.id);
-    if (i >= 0) customBots[i] = nb; else customBots.push(nb);
-    ls.set("bots", customBots); cloud.saveBots(); editingBot = null; renderBotSel(); renderBots(); toast(`'${nb.name}' 봇을 저장했습니다`);
-  };
-  if ($("#b-cancel")) $("#b-cancel").onclick = () => { editingBot = null; renderBots(); };
-  if ($("#b-del")) $("#b-del").onclick = e => {
-    if (e.target.dataset.confirm !== "1"){ e.target.dataset.confirm = "1"; e.target.textContent = "정말 삭제"; return; }
-    customBots = customBots.filter(x => x.id !== b.id); ls.set("bots", customBots); cloud.saveBots(); editingBot = null; renderBotSel(); renderBots(); toast("봇을 삭제했습니다");
-  };
-}
-$("#botsPage").addEventListener("click", e => {
-  const t = e.target;
-  if (t.dataset.chat){ go("chat"); newChat(t.dataset.chat); }
-  if (t.dataset.edit){ editingBot = structuredClone(customBots.find(x => x.id === t.dataset.edit)); renderBots(); $("#botsPage").closest(".scroll").scrollTop = 0; }
-  if (t.dataset.copybot){ const p = botById(t.dataset.copybot); editingBot = {name: p.name + " (내 버전)", desc: p.desc, system: p.system, starters: p.starters, temp: 0.7}; renderBots(); $("#botsPage").closest(".scroll").scrollTop = 0; }
-});
-
-/* ================= 설정 ================= */
-function renderSettings(){
-  const act = $("#engSel").value || pickEngine();
-  const card = (id, inner) => { const e = ENGINES[id], s = engineStatus(id); return `<div class="eng${act===id ? " active" : ""}" data-eng="${id}"><div class="hd"><b>${esc(e.label)}</b><span class="pill"><i class="dot ${s.ok ? "ok" : s.warn ? "warn" : "bad"}"></i>${esc(s.text)}</span></div><p>${esc(e.desc)}</p>${inner}<div><button class="btn${act===id ? "" : " primary"}" data-use="${id}" ${s.ok ? "" : "disabled"}>${act===id ? "사용 중" : "이 엔진 사용"}</button></div></div>`; };
-  const opt = (id) => `<label class="small">모델<select class="sel" style="max-width:100%;width:100%" data-model="${id}">${ENGINES[id].models.map(([v,l]) => `<option value="${esc(v)}"${modelOf(id)===v ? " selected" : ""}>${esc(l)}${id==="local" ? " · 약 " + LOCAL_MODELS.find(m=>m.id===v).gb + "GB" : ""}</option>`).join("")}</select></label>`;
-  const apiInner = id => `<div class="form" style="grid-template-columns:1fr">
-      ${ENGINES[id].key ? `<label>API 키<input type="password" data-key="${id}" value="${esc(keys[id] || "")}" placeholder="키를 붙여넣으세요" autocomplete="off"></label>` : ""}
-      ${ENGINES[id].base ? `<label>서버 주소<input type="text" data-base="${id}" value="${esc(baseOf(id))}"></label>` : ""}
-      <label>모델<input type="text" data-modeltxt="${id}" list="dl-${id}" value="${esc(modelOf(id))}"><datalist id="dl-${id}"></datalist></label>
-    </div>
-    <div class="bot row" style="padding:0;border:0;background:transparent;flex-direction:row">
-      <button class="btn" data-list="${id}">모델 목록 불러오기</button>
-      ${ENGINES[id].keyUrl ? `<a class="small" href="${ENGINES[id].keyUrl}" target="_blank" rel="noopener" style="align-self:center;color:var(--accent)">API 키 발급 페이지</a>` : ""}
-    </div>`;
-  const localInner = IN_ARTIFACT
-    ? `<p class="small">claude.ai 안에서는 모델 파일을 내려받을 수 없습니다. 저장소의 <b>nuri-ai/index.html</b>을 GitHub Pages나 내 컴퓨터에서 열면 쓸 수 있습니다.</p>`
-    : `${opt("local")}<div class="progress"><i style="width:${local.engine ? 100 : Math.round(local.progress*100)}%"></i></div><p class="small">${esc(local.engine ? "실행 중: " + shortModel(local.model) : local.text || (gpuOk === false ? "이 브라우저는 WebGPU를 지원하지 않습니다. 최신 Chrome이나 Edge를 쓰세요." : "처음 한 번 모델을 내려받습니다(와이파이 권장). 이후에는 브라우저에 저장돼 인터넷 없이 실행됩니다."))}</p>
-       <div><button class="btn primary" id="loadLocal" ${local.loading || gpuOk === false ? "disabled" : ""}>${local.engine ? "선택한 모델로 바꾸기" : "모델 내려받고 실행"}</button></div>`;
-  $("#setPage").innerHTML = `
-    <div><h2>AI 엔진 설정</h2><p class="sub">같은 대화 화면에서 원하는 AI를 골라 씁니다. API 키는 이 브라우저에만 저장되고 누리 서버로 보내지지 않습니다.</p></div>
-    ${IN_ARTIFACT ? `<div class="notice"><b>지금은 claude.ai 안에서 열려 있습니다.</b><span>이 화면에서는 보안 정책상 외부 서버 연결이 막혀 있어 Claude(내장) 엔진만 쓸 수 있습니다. GPT·Gemini·DeepSeek API와 자체 오프라인 엔진은 저장소의 독립 실행 버전(nuri-ai/index.html)에서 쓸 수 있습니다.</span></div>` : ""}
-    <div class="engines">
-      ${card("claude", opt("claude"))}
-      ${card("local", localInner)}
-      ${card("openai", apiInner("openai"))}
-      ${card("anthropic", apiInner("anthropic"))}
-      ${card("gemini", apiInner("gemini"))}
-      ${card("deepseek", apiInner("deepseek"))}
-      ${card("custom", apiInner("custom"))}
-    </div>
-    <div class="card"><h3>데이터</h3><div class="body">
-      <p class="small">대화 ${fmtN(chats.length)}개, 내가 만든 봇 ${fmtN(customBots.length)}개. ${cloud.coll ? "내 claude.ai 계정에 동기화됩니다(나만 볼 수 있음)." : "이 브라우저에 저장됩니다."}</p>
-      <div class="bot row" style="padding:0;border:0;background:transparent;flex-direction:row">
-        <button class="btn" id="exportAll">대화 내보내기 (JSON)</button>
-        <label class="btn" for="importAll">불러오기</label><input type="file" id="importAll" accept=".json,application/json" hidden>
-        <button class="btn danger" id="wipe">모든 대화 삭제</button>
-      </div>
-    </div></div>`;
-}
-$("#setPage").addEventListener("change", e => {
-  const t = e.target;
-  if (t.dataset.model){ settings.models[t.dataset.model] = t.value; saveSettings(); refreshEngineUI(); }
-  if (t.dataset.key !== undefined && t.dataset.key){ keys[t.dataset.key] = t.value.trim(); ls.set("keys", keys); refreshEngineUI(); }
-  if (t.dataset.base){ settings.bases[t.dataset.base] = t.value.trim(); saveSettings(); }
-  if (t.dataset.modeltxt){ settings.models[t.dataset.modeltxt] = t.value.trim(); saveSettings(); refreshEngineUI(); }
-  if (t.id === "importAll") importData(t);
-});
-$("#setPage").addEventListener("click", async e => {
-  const t = e.target;
-  if (t.dataset.use){ settings.engine = t.dataset.use; saveSettings(); refreshEngineUI(); toast(ENGINES[t.dataset.use].label + " 엔진으로 바꿨습니다"); }
-  if (t.id === "loadLocal") loadLocal(modelOf("local"));
-  if (t.dataset.list) listModels(t.dataset.list, t);
-  if (t.id === "exportAll") exportData();
-  if (t.id === "wipe"){
-    if (t.dataset.confirm !== "1"){ t.dataset.confirm = "1"; t.textContent = "한 번 더 누르면 모두 삭제"; return; }
-    for (const c of chats) cloud.remove(c.id);
-    chats = []; persistLocal(); newChat(); renderSettings(); toast("모든 대화를 삭제했습니다");
-  }
-});
-async function listModels(id, btn){
-  btn.disabled = true; btn.textContent = "불러오는 중…";
-  try {
-    let names = [];
-    if (id === "gemini"){
-      const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models?pageSize=200", {headers:{"x-goog-api-key": keys.gemini || ""}}); if (!r.ok) await httpFail(r);
-      names = (await r.json()).models.filter(m => (m.supportedGenerationMethods||[]).includes("generateContent")).map(m => m.name.replace(/^models\//, ""));
-    } else if (id === "anthropic"){
-      const r = await fetch("https://api.anthropic.com/v1/models?limit=100", {headers:{"x-api-key": keys.anthropic || "", "anthropic-version":"2023-06-01", "anthropic-dangerous-direct-browser-access":"true"}}); if (!r.ok) await httpFail(r);
-      names = (await r.json()).data.map(m => m.id);
-    } else {
-      const h = {}; if (keys[id]) h.authorization = "Bearer " + keys[id];
-      const r = await fetch(baseOf(id).replace(/\/$/, "") + "/models", {headers:h}); if (!r.ok) await httpFail(r);
-      names = (await r.json()).data.map(m => m.id).sort();
-    }
-    $("#dl-" + id).innerHTML = names.map(n => `<option value="${esc(n)}">`).join("");
-    toast(`모델 ${names.length}개를 불러왔습니다. 모델 칸을 눌러 고르세요`);
-  } catch (err){ toast(friendlyError(id, err)); }
-  finally { btn.disabled = false; btn.textContent = "모델 목록 불러오기"; }
-}
-async function exportData(){
-  const data = JSON.stringify({app:"nuri-ai", version:1, exported:new Date().toISOString(), chats, bots: customBots}, null, 2);
-  const filename = "누리AI_대화_" + new Date().toISOString().slice(0,10) + ".json";
-  if (downloads){ try { await downloads.save({filename, data}); toast("저장했습니다"); } catch(e){ toast(e && e.code === "declined" ? "저장을 취소했습니다" : "이 화면에서는 파일 저장을 쓸 수 없습니다"); } return; }
-  if (IN_ARTIFACT){ toast("이 화면에서는 파일 저장을 쓸 수 없습니다"); return; }
-  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([data], {type:"application/json"})); a.download = filename; document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
-}
-async function importData(inp){
-  const f = inp.files[0]; if (!f) return;
-  try {
-    const d = JSON.parse(await f.text());
-    let n = 0;
-    for (const c of d.chats || []){ if (!c.id || !Array.isArray(c.messages)) continue; const i = chats.findIndex(x => x.id === c.id); if (i >= 0) chats[i] = c; else chats.push(c); cloud.save(c); n++; }
-    for (const b of d.bots || []) if (b.id && b.name && !customBots.some(x => x.id === b.id)) customBots.push(b);
-    persistLocal(); ls.set("bots", customBots); cloud.saveBots(); renderList(); renderBotSel(); renderSettings(); toast(`대화 ${n}개를 불러왔습니다`);
-  } catch(e){ toast("누리 AI에서 내보낸 JSON 파일이 아닙니다"); }
-  inp.value = "";
-}
-
-/* ================= 화면 전환 ================= */
-function go(v){
-  for (const s of ["chat","dash","bots","settings"]) $("#v-" + s).hidden = s !== v;
+/* ============ 화면 전환 ============ */
+async function go(v){
+  for (const s of ["chat","models","know","bots","dash"]) $("#v-" + s).hidden = s !== v;
   $$(".rail-nav [data-go]").forEach(b => b.dataset.go === v ? b.setAttribute("aria-current","page") : b.removeAttribute("aria-current"));
-  $("#title").textContent = v === "chat" ? current.title : {dash:"대시보드", bots:"내 봇 만들기", settings:"AI 엔진 설정"}[v];
+  $("#title").textContent = v === "chat" ? current.title : {models:"AI 모델", know:"내 지식", bots:"내 봇 만들기", dash:"대시보드"}[v];
   $("#botSel").hidden = v !== "chat";
-  if (v === "dash") renderDash(); if (v === "bots") renderBots(); if (v === "settings") renderSettings();
+  $("#app").classList.remove("open");
   if (v === "chat") renderChat();
-  closeRail();
+  if (v === "models"){ await refreshCache(); renderModels(); }
+  if (v === "know") renderKnow();
+  if (v === "bots") renderBots();
+  if (v === "dash") renderDash();
 }
 $$(".rail-nav [data-go]").forEach(b => b.onclick = () => go(b.dataset.go));
-$("#setPage").addEventListener("click", e => { const g = e.target.closest("[data-go]"); if (g) go(g.dataset.go); });
-const closeRail = () => $("#app").classList.remove("open");
 $("#menuBtn").onclick = () => $("#app").classList.toggle("open");
-$("#scrim").onclick = closeRail;
+$("#scrim").onclick = () => $("#app").classList.remove("open");
 
-/* ================= 시작 ================= */
-renderBotSel(); newChat("general"); renderList(); refreshEngineUI(); checkGpu();
-const h = location.hash.slice(1); if (["dash","bots","settings"].includes(h)) go(h);
-if (IN_ARTIFACT){
-  claude.use("sample").then(async s => { sample = s; if (s){ try { const lim = await s.limits(); sampleImages = lim.images || null; if (sampleImages) $("#fileIn").accept = ""; } catch(e){} } refreshEngineUI(); });
-  claude.use("downloads").then(d => downloads = d).catch(() => {});
-  cloud.init();
-}
-window.__nuri = {md, splitThink, engineStatus, get chats(){ return chats; }};
+/* ============ 시작 ============ */
+(async () => {
+  renderBotSel(); newChat("general"); refreshModelUI();
+  const [c, d] = await Promise.all([idb.all("chat:"), idb.all("doc:")]);
+  chats = c; docs = d; rebuildIndex(); renderList();
+  const h = location.hash.slice(1); if (["models","know","bots","dash"].includes(h)) go(h);
+  if (settings.autoload && settings.last && !window.__nuriNoAutoload) loadModel(settings.last);
 })();
+
+// 서비스 워커: 오프라인 실행 + 멀티스레드용 격리 헤더
+if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol) && !window.__nuriNoSW){
+  navigator.serviceWorker.register("./sw.js").then(() => {
+    const flag = "nuri:coi-reload";
+    const maybeReload = () => { if (!self.crossOriginIsolated && !sessionStorage.getItem(flag) && !eng.loading && !busy){ sessionStorage.setItem(flag, "1"); location.reload(); } };
+    if (navigator.serviceWorker.controller) maybeReload();
+    else navigator.serviceWorker.addEventListener("controllerchange", maybeReload, {once:true});
+  }).catch(() => {});
+}
+window.__nuri = {md, splitThink, search, tokenize, chunkText, eng, get chats(){ return chats; }, get docs(){ return docs; }};
 </script>
-</body></html>
+</body>
+</html>

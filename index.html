@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>내 AI 앱</title>
+<style>
+:root{--bg:#F4F5F3;--panel:#fff;--line:#D9DDD8;--ink:#171A1C;--muted:#606A66;--accent:#0E7A63;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#101315;--panel:#171B1D;--line:#2E3538;--ink:#E6EAE8;--muted:#97A29D;--accent:#3FC4A2;color-scheme:dark}}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",system-ui,sans-serif;line-height:1.6}
+main{max-width:720px;margin:0 auto;padding:48px 16px;display:flex;flex-direction:column;gap:16px}
+h1{margin:0;font-size:26px}
+p{margin:0;color:var(--muted)}
+a.card{display:flex;flex-direction:column;gap:4px;padding:18px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:inherit;text-decoration:none}
+a.card:hover{border-color:var(--accent)}
+a.card b{font-size:17px;color:var(--accent)}
+</style>
+</head>
+<body>
+<main>
+  <h1>내 AI 앱</h1>
+  <p>설치 없이 브라우저에서 실행됩니다.</p>
+  <a class="card" href="nuri-ai/"><b>누리 AI</b><span>내 기기에서 도는 나만의 AI 챗봇. 외부 AI 서비스 없이 오프라인으로 답합니다.</span></a>
+  <a class="card" href="arch-ai/"><b>건축설계 AI 스튜디오</b><span>조건을 말하면 건물 3D·평면·인테리어를 만들고 Revit·AutoCAD·SketchUp 파일로 내보냅니다.</span></a>
+</main>
+</body>
+</html>
