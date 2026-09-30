@@ -75,7 +75,7 @@ function render() {
       <div class="chips" id="aim-models">${st.models.map((r, i) => `<span class="aim-chip ${D.keys[r.split(":")[0]] ? "" : "off"} ${isDead(r) ? "dead" : ""}" title="${isDead(r) ? "NVIDIA 에서 종료된 모델 — 다른 모델이 자동으로 대신 답함" : ""}">${esc(short(r))}${isDead(r) ? ' <b class="down">종료됨</b>' : ""}
         <button class="flat sm" data-test="${esc(r)}" title="이 모델만 짧게 불러보기">테스트</button><button class="flat sm" data-rm="${i}" title="목록에서 빼기">✕</button></span>`).join("") || '<span class="muted">아직 없음 — 아래에서 추가하세요</span>'}</div>
       <div class="row" style="gap:6px;margin-top:6px;flex-wrap:wrap"><select id="aim-prov">${["nvidia", "gemini", "claude"].map((p) => `<option value="${p}">${PNAME[p]}</option>`).join("")}</select>
-        <input id="aim-name" list="aim-dl" placeholder="모델 이름 (예: deepseek-ai/deepseek-v3.1)" style="flex:1;min-width:240px"><datalist id="aim-dl"></datalist>
+        <input id="aim-name" list="aim-dl" placeholder="모델 이름 (예: deepseek-ai/deepseek-v3.1 — 여러 개는 쉼표로)" style="flex:1;min-width:240px"><datalist id="aim-dl"></datalist>
         <button class="sm" id="aim-add">추가</button><button class="flat sm" id="aim-cat" title="이 키로 쓸 수 있는 모델 이름을 불러와 입력칸 추천에 넣음">모델 목록 불러오기</button></div>
       ${sugg.length ? `<div class="chips" style="margin-top:6px"><span class="muted" style="font-size:11px">추천:</span>${sugg.map((r) => `<button class="flat sm" data-addsug="${esc(r)}">+ ${esc(short(r))}</button>`).join("")}</div>` : ""}
       <div id="aim-test" class="muted" style="font-size:11.5px;margin-top:4px"></div></div>
@@ -110,9 +110,15 @@ async function onClick(e) {
   }
   if (t.id === "aim-dropdead") { dropDead(); return; }
   if (t.id === "aim-add") {
-    const name = $("#aim-name").value.trim();
-    if (!name) return;
-    collect(); st.models.push(`${$("#aim-prov").value}:${name}`); st.models = [...new Set(st.models)]; render(); return;
+    // 여러 개를 한 번에 넣어도(공백 · 쉼표 · · 로 구분) 모델 하나씩 따로 등록
+    const names = $("#aim-name").value.split(/[\s,;|·•、]+/).map((x) => x.trim()).filter(Boolean);
+    if (!names.length) return;
+    const prov = $("#aim-prov").value;
+    collect();
+    st.models = [...new Set([...st.models, ...names.map((n) => (/^(nvidia|gemini|claude):/.test(n) ? n : `${prov}:${n}`))])];
+    render();
+    if (names.length > 1) toast(`모델 ${names.length}개를 따로 등록했습니다`, "'모델 배정 저장'을 눌러야 저장됩니다");
+    return;
   }
   if (t.dataset.addsug) { collect(); st.models = [...new Set([...st.models, t.dataset.addsug])]; render(); return; }
   if (t.dataset.rm != null) { collect(); const r = st.models.splice(+t.dataset.rm, 1)[0]; st.fallback = st.fallback.filter((x) => x !== r); render(); return; }

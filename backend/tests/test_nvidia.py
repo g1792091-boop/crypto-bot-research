@@ -163,3 +163,15 @@ def test_all_candidates_retired(nv, monkeypatch):
     with pytest.raises(llm.LLMUnavailable) as e:
         nvidia.generate("s", "u", model="auto")
     assert "종료" in str(e.value)
+
+
+def test_unknown_model_400_switches_and_new_families_rank(nv, monkeypatch):
+    install, calls = nv
+    install([Resp(400, {"detail": "Model 'foo/bar' not found for account"}), _ok("다른 모델 답")])
+    assert nvidia.generate("s", "u", model="foo/bar") == "다른 모델 답" and nvidia.is_dead("foo/bar")
+    cat = ["google/diffusiongemma-26b-a4b-it", "deepseek-ai/deepseek-v4.1-flash", "deepseek-ai/deepseek-v4.1", "openai/gpt-oss-20b",
+           "deepseek-ai/deepseek-v3.1", "some/new-model-2027"]
+    r = nvidia.rank(cat)
+    assert r[0] == "deepseek-ai/deepseek-v4.1" and r.index("deepseek-ai/deepseek-v4.1-flash") > 0 and r[-1] == "google/diffusiongemma-26b-a4b-it"
+    assert "some/new-model-2027" in r                                   # 모르는 새 모델도 뒤에는 넣는다
+    assert nvidia.rank(cat, fast=True)[0] == "openai/gpt-oss-20b"

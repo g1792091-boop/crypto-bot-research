@@ -680,6 +680,8 @@ class AiTest(BaseModel):
 @app.post("/api/ai/test")
 def ai_test(req: AiTest):
     """모델 하나만 짧게 불러 보기 (대체 순서 없이)."""
+    if len(ai_routes.split_routes(req.route)) > 1:
+        _bad(ValueError("모델 이름 여러 개가 한 칸에 붙어 있습니다 — 'AI 모델' 창을 다시 열면 따로 나뉩니다. 하나씩 테스트하세요."))
     if not ai_routes.valid(req.route):
         _bad(ValueError("'공급자:모델' 형식이 아닙니다 (예: nvidia:auto, nvidia:deepseek-ai/deepseek-v3.1)."))
     if not ai_routes.key_ok(req.route.split(":", 1)[0]):

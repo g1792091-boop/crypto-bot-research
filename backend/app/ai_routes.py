@@ -14,8 +14,11 @@
 from __future__ import annotations
 
 import json
+import re
 
 from . import config, nvidia
+
+_SEP = re.compile(r"[\s,;|·•、]+")
 
 FEATURES = {
     "copilot": "실시간 AI (트레이드 오른쪽 AI 탭 · 포지션 감시)",
@@ -47,27 +50,86 @@ def load() -> dict:
         _state.setdefault("features", {})
         _state.setdefault("roles", {})
         _state.setdefault("fallback", [])
+        if _clean(_state):                        # 예전에 한 칸에 여러 모델을 붙여 넣은 설정 → 나눠서 다시 저장
+            _write(_state)
     return _state
+
+
+def split_routes(text: str, provider: str | None = None) -> list[str]:
+    """'a/b · c/d, gemini:auto' 처럼 여러 개가 한 칸에 들어와도 '공급자:모델' 여러 개로 나눈다."""
+    out = []
+    head, _, rest = (text or "").strip().partition(":")
+    if head in PROVIDERS:                          # 'nvidia:a/b · c/d' → 공급자는 앞의 것을 따름
+        provider, text = head, rest
+    for tok in _SEP.split(text or ""):
+        tok = tok.strip().strip("'\"")
+        if not tok:
+            continue
+        p, _, m = tok.partition(":")
+        r = tok if p in PROVIDERS and m else f"{provider}:{tok}" if provider else ""
+        if r and valid(r):
+            out.append(r)
+    return list(dict.fromkeys(out))
+
+
+def _clean(st: dict) -> bool:
+    """잘못 저장된 모델 칸(여러 이름이 붙은 것)을 고친다. 바뀌었으면 True."""
+    changed = False
+    for k in ("models", "fallback"):
+        fixed = []
+        for r in st.get(k) or []:
+            parts = split_routes(r) if isinstance(r, str) else []
+            changed |= parts != [r]
+            fixed += parts
+        st[k] = list(dict.fromkeys(fixed))
+    extra = []
+    for key in ("default",):
+        r = st.get(key) or ""
+        if r and not valid(r):
+            parts = split_routes(r)
+            st[key] = parts[0] if parts else ""
+            extra += parts[1:]
+            changed = True
+    for k in ("features", "roles"):
+        for a, r in list((st.get(k) or {}).items()):
+            if not valid(r):
+                parts = split_routes(r)
+                if parts:
+                    st[k][a] = parts[0]
+                    extra += parts[1:]
+                else:
+                    st[k].pop(a)
+                changed = True
+    for r in extra:                                   # 뒤에 붙어 있던 모델은 대체 순서로
+        if r not in st["fallback"]:
+            st["fallback"].append(r)
+    for r in [st.get("default"), *st["features"].values(), *st["roles"].values(), *st["fallback"]]:
+        if r and r not in st["models"]:
+            st["models"].append(r)
+            changed = True
+    return changed
+
+
+def _write(st: dict) -> None:
+    try:
+        config.STATE_DIR.mkdir(parents=True, exist_ok=True)
+        _path().write_text(json.dumps(st, ensure_ascii=False, indent=1), encoding="utf-8")
+    except OSError:
+        pass
 
 
 def save(new: dict) -> dict:
     st = load()
     for k in ("models", "fallback"):
         if isinstance(new.get(k), list):
-            st[k] = [r for r in dict.fromkeys(x.strip() for x in new[k] if isinstance(x, str)) if valid(r)][:40]
+            st[k] = list(dict.fromkeys(r for x in new[k] if isinstance(x, str) for r in split_routes(x)))[:40]
     if isinstance(new.get("default"), str):
-        st["default"] = new["default"].strip() if valid(new["default"].strip()) else ""
+        st["default"] = new["default"].strip()
     for k in ("features", "roles"):
         if isinstance(new.get(k), dict):
-            st[k] = {a: b.strip() for a, b in new[k].items() if isinstance(b, str) and b.strip() and valid(b.strip())}
-    for r in [st["default"], *st["features"].values(), *st["roles"].values(), *st["fallback"]]:
-        if r and r not in st["models"]:
-            st["models"].append(r)
-    try:
-        config.STATE_DIR.mkdir(parents=True, exist_ok=True)
-        _path().write_text(json.dumps(st, ensure_ascii=False, indent=1), encoding="utf-8")
-    except OSError:
-        pass
+            st[k] = {a: b.strip() for a, b in new[k].items() if isinstance(b, str) and b.strip()}
+    _clean(st)
+    _write(st)
     return st
 
 
@@ -77,8 +139,9 @@ def reset_cache() -> None:
 
 
 def valid(route: str) -> bool:
+    """'공급자:모델' 한 개. 모델 이름에 공백·구분 기호가 있으면(여러 개가 붙은 것) 안 됨."""
     p, _, m = (route or "").partition(":")
-    return p in PROVIDERS and bool(m.strip())
+    return p in PROVIDERS and bool(m.strip()) and not _SEP.search(m.strip())
 
 
 def key_ok(provider: str) -> bool:
@@ -113,11 +176,13 @@ def chain(feature: str | None = None, role: str | None = None, tier: str = "opus
     if not first and feature in ("team_heavy", "team_light") and st["default"]:
         first = st["default"]
     first = first or st["default"] or legacy(tier)
-    out = [r for r in dict.fromkeys([first, *([] if route else st["fallback"])]) if r and available(r)]
-    if not out and not route:
-        lg = legacy(tier)
-        out = [lg] if lg else []
+    last = [] if route else [legacy(tier), *_auto_routes()]           # 마지막 수단: 키가 있는 공급자의 자동 선택
+    out = [r for r in dict.fromkeys([first, *([] if route else st["fallback"]), *last]) if r and available(r)]
     return out
+
+
+def _auto_routes() -> list[str]:
+    return [r for r in ("nvidia:auto", "gemini:auto") if key_ok(r.split(":")[0])]
 
 
 def primary() -> str | None:

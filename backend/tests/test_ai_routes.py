@@ -33,7 +33,7 @@ def test_chain_order_and_availability(routes):
     assert ai_routes.chain() == ["nvidia:" + config.NVIDIA_MODEL]                      # 배정 없으면 예전과 같음
     ai_routes.save({"default": "nvidia:big/model", "fallback": ["gemini:auto", "nvidia:small/model"],
                     "features": {"copilot": "nvidia:fast/model"}, "roles": {"strategist": "nvidia:judge/model"}})
-    assert ai_routes.chain() == ["nvidia:big/model", "nvidia:small/model"]            # 키 없는 gemini 는 건너뜀
+    assert ai_routes.chain() == ["nvidia:big/model", "nvidia:small/model", "nvidia:auto"]   # 키 없는 gemini 는 건너뜀 · 마지막은 자동 선택
     assert ai_routes.chain(feature="copilot")[0] == "nvidia:fast/model"
     assert ai_routes.chain(feature="team_heavy", role="strategist")[0] == "nvidia:judge/model"
     assert ai_routes.chain(feature="team_light", role="chart")[0] == "nvidia:big/model"
@@ -47,9 +47,32 @@ def test_fallback_to_next_model(routes):
     assert llm.text("s", "u") == "답:good/two" and routes == ["bad/one", "good/two"]
     assert llm.last_used == "nvidia:good/two"
     ai_routes.save({"default": "nvidia:bad/one", "fallback": []})
+    assert llm.text("s", "u") == "답:auto" and llm.last_used == "nvidia:auto"          # 다 실패해도 마지막에 자동 선택 모델로
     with pytest.raises(llm.LLMUnavailable) as e:
-        llm.text("s", "u")
+        llm.text("s", "u", route="nvidia:bad/one")                                     # 모델 테스트(대체 없음)는 실패를 그대로
     assert "모든 모델이 실패" in str(e.value)
+
+
+def test_glued_model_names_are_split(routes, monkeypatch):
+    """사용자 보고: 'nvidia:openai/gpt-oss-20b ·google/diffusiongemma-26b-a4b-it ·deepseek-ai/deepseek-v4.1-flash' 가 한 모델로 저장돼 전부 실패."""
+    import json
+    glued = "nvidia:openai/gpt-oss-20b ·google/diffusiongemma-26b-a4b-it ·deepseek-ai/deepseek-v4.1-flash"
+    assert not ai_routes.valid(glued)
+    assert ai_routes.split_routes(glued) == ["nvidia:openai/gpt-oss-20b", "nvidia:google/diffusiongemma-26b-a4b-it", "nvidia:deepseek-ai/deepseek-v4.1-flash"]
+    # 예전에 저장된 잘못된 설정 파일도 불러올 때 고친다
+    (config.STATE_DIR / "ai_routes.json").write_text(json.dumps({"models": [glued], "default": glued, "features": {"copilot": glued},
+                                                                 "roles": {}, "fallback": []}), encoding="utf-8")
+    ai_routes.reset_cache()
+    st = ai_routes.load()
+    assert st["default"] == "nvidia:openai/gpt-oss-20b" and st["features"]["copilot"] == "nvidia:openai/gpt-oss-20b"
+    assert st["fallback"] == ["nvidia:google/diffusiongemma-26b-a4b-it", "nvidia:deepseek-ai/deepseek-v4.1-flash"]
+    assert glued not in st["models"] and "nvidia:deepseek-ai/deepseek-v4.1-flash" in st["models"]
+    assert ai_routes.chain(feature="copilot")[:3] == ["nvidia:openai/gpt-oss-20b", "nvidia:google/diffusiongemma-26b-a4b-it",
+                                                      "nvidia:deepseek-ai/deepseek-v4.1-flash"]
+    s = ai_routes.save({"models": [glued, "gemini:auto, nvidia:x/y"], "fallback": [], "default": glued, "features": {}, "roles": {}})
+    assert s["models"][:5] == ["nvidia:openai/gpt-oss-20b", "nvidia:google/diffusiongemma-26b-a4b-it",
+                               "nvidia:deepseek-ai/deepseek-v4.1-flash", "gemini:auto", "nvidia:x/y"]
+    assert nvidia.resolve("openai/gpt-oss-20b ·google/diffusiongemma-26b-a4b-it") == "openai/gpt-oss-20b"
 
 
 def test_team_role_gets_its_model(routes):

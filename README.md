@@ -223,6 +223,9 @@ Gemini(`GEMINI_API_KEY`, 무료 등급). `LLM_PROVIDER=auto` 면 Claude → NVID
 `response_format=json_object` 를 요청하고(거부하는 모델은 빼고 재요청), 추론 모델의 `<think>` 부분은 지운 뒤 JSON 만 골라 검증한다 (`app/nvidia.py`).
 NVIDIA 가 모델을 종료(410 end of life)하거나 내리면(404) 그 모델을 `state/nvidia_models.json` 에 '종료됨'으로 기억하고
 쓸 수 있는 다른 모델로 바꿔 바로 다시 부른다 (등록해 둔 모델 이름이 종료돼도 AI 기능이 멈추지 않음). 'AI 모델' 창의 테스트는 대체 없이 그 모델만 확인한다.
+없는 모델 이름(400/422 "model … not found" 등)도 같은 방식으로 바꾼다. 한 칸에 여러 모델 이름이 붙어 저장된 설정(`a/b ·c/d`)은 불러올 때 따로 나눠
+첫 번째를 쓰고 나머지는 대체 순서로 옮긴다. 배정된 모델과 대체 순서가 모두 실패하면 마지막으로 키가 있는 공급자의 자동 선택(`nvidia:auto`·`gemini:auto`)을 시도한다.
+자동 선택 순위는 계열 이름(deepseek-v · qwen3 · kimi-k · gpt-oss · llama-4 · nemotron · glm …)으로 잡아 새 버전도 고르고, flash·mini 같은 작은 모델은 뒤로.
 
 ## 실행
 

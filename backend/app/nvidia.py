@@ -36,8 +36,9 @@ strict = contextvars.ContextVar("nvidia_strict", default=False)   # True 면 종
 
 AUTO = ("", "auto", "auto-fast")
 # 자동 선택 우선순위 (이름에 들어 있는 글자). 같은 계열이 여러 개면 이름이 뒤인 것(보통 최신)을 먼저.
-PREF_MAIN = ("deepseek-v3", "qwen3-235b", "kimi-k2", "gpt-oss-120b", "llama-4-maverick", "qwen3-next", "nemotron-super",
-             "nemotron-ultra", "glm-4", "mistral-large", "mistral-medium", "llama-3.1-405b", "qwen2.5-72b", "llama-3.3-70b", "llama-3.1-70b")
+# 계열 이름으로 적어서 새 버전(deepseek-v4 · qwen3.5 · kimi-k3 …)도 잡히게 한다
+PREF_MAIN = ("deepseek-v", "qwen3-235b", "kimi-k", "gpt-oss-120b", "qwen3", "llama-4-maverick", "nemotron-super",
+             "nemotron-ultra", "glm-", "mistral-large", "mistral-medium", "llama-3.1-405b", "qwen2.5-72b", "llama-3.3-70b", "llama-3.1-70b")
 PREF_FAST = ("gpt-oss-20b", "llama-4-scout", "qwen3-30b", "qwen3-32b", "nemotron-nano", "mistral-small", "llama-3.1-8b",
              "gemma-3", "phi-4", "llama-3.2-3b")
 # 목록을 못 불러올 때 시도할 이름들
@@ -45,6 +46,8 @@ STATIC = ("deepseek-ai/deepseek-v3.1", "qwen/qwen3-235b-a22b", "moonshotai/kimi-
           "meta/llama-4-maverick-17b-128e-instruct", "nvidia/llama-3.3-nemotron-super-49b-v1.5", "openai/gpt-oss-20b",
           "meta/llama-4-scout-17b-16e-instruct", "meta/llama-3.1-8b-instruct")
 _NOT_CHAT = ("vision", "-vl", "vlm", "coder", "code", "math", "-base", "guard", "embed", "translate", "reward", "audio")
+_SMALL = ("flash", "lite", "mini", "nano", "-8b", "-3b", "-1b", "tiny", "small")      # 본 분석에는 뒤로
+_ODD = ("diffusion",)                                                                  # 채팅 API 가 잘 안 맞는 계열 — 맨 뒤
 _dead: dict[str, dict] | None = None      # 종료·삭제된 모델 → {code, msg, at}
 
 
@@ -116,9 +119,14 @@ def rank(models: list[str], fast: bool = False) -> list[str]:
     gone = dead()
     ok = [m for m in models if m not in gone and not any(k in m.lower() for k in _NOT_CHAT)]
     out: list[str] = []
+    small = lambda m: any(k in m.lower() for k in _SMALL)
+    odd = lambda m: any(k in m.lower() for k in _ODD)
     for pref in (PREF_FAST + PREF_MAIN) if fast else PREF_MAIN:
-        out += sorted((m for m in ok if pref in m.lower() and m not in out), reverse=True)
-    out += [m for m in ok if m not in out and ("instruct" in m.lower() or "chat" in m.lower())]
+        fam = sorted((m for m in ok if pref in m.lower() and m not in out and not odd(m)), reverse=True)   # 같은 계열은 새 버전 먼저
+        out += fam if fast else sorted(fam, key=small)                                                   # 본 분석은 큰 모델 먼저
+    rest = [m for m in ok if m not in out and not odd(m)]
+    out += sorted(rest, key=lambda m: not ("instruct" in m.lower() or "chat" in m.lower()))
+    out += [m for m in ok if m not in out]
     return out
 
 
@@ -142,6 +150,9 @@ def peek_auto(fast: bool = False) -> str | None:
 def resolve(model: str | None) -> str:
     """'auto'·'auto-fast'·종료된 모델 → 지금 쓸 수 있는 모델 이름."""
     want = (model if model is not None else config.NVIDIA_MODEL or "auto").strip()
+    if re.search(r"[\s,;|·•]", want):                  # 여러 모델 이름이 한 칸에 붙은 것 → 앞에서부터 쓸 수 있는 것
+        parts = [x[7:] if x.startswith("nvidia:") else x for x in re.split(r"[\s,;|·•]+", want) if x]
+        want = next((x for x in parts if not is_dead(x)), "auto")
     if want in AUTO:
         m = auto_model(fast=want == "auto-fast")
         if not m:
@@ -230,6 +241,11 @@ def _generate(system: str, user: str, json_mode: bool, max_tokens: int, model: s
         if r.status_code in (401, 403):
             raise LLMUnavailable(f"NVIDIA API 키를 확인하세요 ({r.status_code}: {_err(r)}). 키가 맞는데도 안 되면 build.nvidia.com 계정의 "
                                  "API 사용 권한(Public API Endpoints)이 켜져 있는지 확인하세요.")
+        low = r.text.lower()
+        unknown = r.status_code in (400, 422) and "model" in low and any(k in low for k in (
+            "not found", "does not exist", "unknown model", "invalid model", "no such model", "not available", "unsupported model", "is not supported"))
+        if unknown:                                  # 없는 모델 이름 (오타 · 여러 이름이 붙은 것 등) → 다른 모델로
+            raise _Gone(404, _err(r))
         if r.status_code in (404, 410) or (r.status_code >= 400 and "end of life" in r.text.lower()):
             raise _Gone(410 if r.status_code == 410 or "end of life" in r.text.lower() else 404, _err(r))
         if r.status_code >= 500 or r.status_code == 408:
