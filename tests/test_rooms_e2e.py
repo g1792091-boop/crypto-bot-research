@@ -492,10 +492,10 @@ def test_a_post_the_budget_defers_is_not_promised_the_next_turn(world, dash):
 
 
 def test_owner_settings_from_env_reach_the_tick_and_the_dashboard(world, dash):
-    env = {"AGENTS_BUDGET": "loss=14:90000, total=60", "AGENTS_OWNER_OK": "no", "AGENTS_COPY_CAP_TOTAL": "4",
+    env = {"AGENTS_BUDGET": "loss=14:400000, total=60", "AGENTS_OWNER_OK": "no", "AGENTS_COPY_CAP_TOTAL": "4",
            "AGENTS_MAX_ROUNDS_PER_TICK": "2", "AGENTS_FLAG_MAX_PER_DAY": "1"}
     pol = RM.policy_from_env(env)
-    assert pol.budgets["loss"] == (14, 90000) and pol.budgets["owner"] == RM.DEFAULT_BUDGETS["owner"]
+    assert pol.budgets["loss"] == (14, 400000) and pol.budgets["owner"] == RM.DEFAULT_BUDGETS["owner"]
     assert pol.total_budget == (60, RM.DEFAULT_TOTAL[1]) and pol.owner_ok_required is False
     assert pol.copy_cap_total == 4 and pol.max_rounds_per_tick == 2 and pol.flag_max_per_day == 1
     assert RM.policy_from_env({}) == RM.RoomsPolicy()

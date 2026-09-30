@@ -526,7 +526,9 @@ class Rooms:
         ``ClassBudget.headroom``): 'room_full' when the room had its meetings today, 'budget' when the
         AI budget cannot carry an owner meeting now (the owner cap, the day's total or the 7-day cap after
         what is kept for incidents and the 08:00 / 22:00 meetings, or a stop today), 'paused' while the
-        meetings are paused after a Claude plan limit or a runner outage."""
+        meetings are paused after a Claude plan limit or a runner outage, 'given_up' when the owner meeting
+        the tick would open for the room was given up after its failed attempts (it opens again on a new
+        post), 'retrying' while that one meeting keeps failing by itself and waits its own pause."""
         caps = self._stored_caps(a) or {}
         lim = caps.get("rooms") if isinstance(caps.get("rooms"), dict) else {}
         try:
@@ -545,6 +547,16 @@ class Rooms:
                 if st.room_full(rid, "owner"):
                     out[rid] = "room_full"
             blocked = st.class_blocked("owner")
+            # the tick's own per-meeting checks (find_due) on the owner meeting it would open for each room:
+            # one given up after its failed attempts opens again only when the owners write again; one that
+            # keeps failing by itself waits its own growing pause (key_waiting)
+            with self.ro(self.inbox_db) as ib:
+                for d in TR._owner(ib, None, st):
+                    k = d.data["key"]
+                    if len(st.failed_attempts(d.room_id, "owner", k)) >= pol.max_attempts:
+                        out[d.room_id] = "given_up"
+                    elif st.key_waiting(d.room_id, "owner", k):
+                        out.setdefault(d.room_id, "retrying")
         except (sqlite3.Error, TypeError, ValueError):
             return {}, pol.max_rounds_per_room_day
         if not caps and self._caps is None:
@@ -554,7 +566,7 @@ class Rooms:
         used = self.R.usage_today(a, now_ms)["by_class"].get("owner") or {}
         if blocked or any(isinstance(cap.get(k), int) and int(used.get(k) or 0) >= cap[k] for k in ("calls", "tokens")):
             out["*"] = "budget"
-            out = {k: ("budget" if v != "room_full" else v) for k, v in out.items()}
+            out = {k: ("budget" if v not in ("room_full", "given_up") else v) for k, v in out.items()}
             return out, pol.max_rounds_per_room_day
         try:
             # the tick's own test before it opens an owner meeting (rooms.can_start): the owner cap, the
@@ -573,7 +585,7 @@ class Rooms:
             pol_r = RM.RoomsPolicy()
             for rid in list(self.specs) + sorted(st.rooms - set(self.specs)):
                 need = RM.round_min_calls(TR.Due(rid, "owner", 0, {"class": "owner"}, "owner"), pol_r)
-                if out.get(rid) != "room_full" and head < need:
+                if out.get(rid) not in ("room_full", "given_up") and head < need:
                     out[rid] = "budget"
             if st.usage_paused() or st.transient_paused():
                 for rid in list(self.specs) + sorted(st.rooms - set(self.specs)):

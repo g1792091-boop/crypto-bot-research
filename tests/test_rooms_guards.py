@@ -1113,13 +1113,19 @@ def test_calls_that_ran_are_counted_with_their_tokens(world):
     size, never 0; a failed call whose text only looks like a limit but that reported usage is kept."""
     import json as _json
     from paperbot.agents.runner import ClaudeCodeRunner
-    env = {"answer": _json.dumps({"type": "result", "is_error": False, "result": "{}",
-                                  "usage": {"input_tokens": 30_000}})}
+    env = {"answer": _json.dumps({"type": "result", "is_error": False, "result": "{}"})}
     packet = {"role": "x", "blob": "가" * 30_000}                     # about 30k tokens estimated
     b = RM.ClassBudget(ClaudeCodeRunner(env={}, run=_proc("warning: something\n" + env["answer"])), world.agents,
                        "owner", 20, 10**9, 80, 10**9, lambda: QUIET)
     b.call("sonnet", "s", "i", packet)
     assert world.q("SELECT ok, tokens FROM agent_calls") == [(1, RM.estimate_tokens(packet, "s"))]
+    world.agents.execute("DELETE FROM agent_calls")
+    world.agents.commit()
+    # a warning line before the result no longer hides the usage the CLI reported
+    used = _json.dumps({"type": "result", "is_error": False, "result": "{}", "usage": {"input_tokens": 12_345}})
+    RM.ClassBudget(ClaudeCodeRunner(env={}, run=_proc("warning: something\n" + used)), world.agents,
+                   "owner", 20, 10**9, 80, 10**9, lambda: QUIET).call("sonnet", "s", "i", packet)
+    assert world.q("SELECT ok, tokens FROM agent_calls") == [(1, 12_345)]
     world.agents.execute("DELETE FROM agent_calls")
     world.agents.commit()
     ran = _json.dumps({"is_error": True, "result": "the tag limit reached 3 of 3", "usage": {"input_tokens": 30_000}})
@@ -1215,20 +1221,22 @@ def test_each_call_has_a_bounded_output_that_the_pre_call_check_charges(world):
     got = {}
     RN.auth_preflight(env={"PATH": "/usr/bin"}, run=lambda cmd, **kw: got.update(kw) or _proc("{}")(cmd))
     assert got["env"]["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] == str(RN.MAX_OUTPUT_TOKENS)
-    # the check charges the ceiling: 20k used + a tiny packet + the ceiling would pass a 30k cap
+    # the check charges the most one call can use (runner.call_charge: the answer up to the ceiling and one
+    # more request the CLI may have started, re-sending the input and that answer, before it was stopped)
     prefill(world, QUIET, owner=1)
     runner = QueueRunner({"x": [{}]})
-    b = RM.ClassBudget(runner, world.agents, "owner", 20, 20_000 + RN.MAX_OUTPUT_TOKENS, 80, 10**9, lambda: QUIET)
+    need = RN.call_charge(RM.estimate_tokens({"role": "x"}))
+    assert need == 2 * RM.estimate_tokens({"role": "x"}) + 3 * RN.MAX_OUTPUT_TOKENS
+    b = RM.ClassBudget(runner, world.agents, "owner", 20, 20_000 + need - 1, 80, 10**9, lambda: QUIET)
     with pytest.raises(RM.BudgetExceeded):
         b.call("sonnet", "", "", {"role": "x"})
     assert runner.calls == [] and world.q("SELECT COUNT(*) FROM agent_calls") == [(1,)]
     b = RM.ClassBudget(runner, world.agents, "owner", 20, 10**9, 80, 10**9, lambda: QUIET,
-                       week=(420, 20_000 + RN.MAX_OUTPUT_TOKENS))
+                       week=(420, 20_000 + need - 1))
     with pytest.raises(RM.BudgetExceeded):
         b.call("sonnet", "", "", {"role": "x"})
-    b = RM.ClassBudget(runner, world.agents, "owner", 20, 20_000 + RN.MAX_OUTPUT_TOKENS + 1_000, 80, 10**9,
-                       lambda: QUIET)
-    b.call("sonnet", "", "", {"role": "x"})                   # room for the packet and the whole ceiling
+    b = RM.ClassBudget(runner, world.agents, "owner", 20, 20_000 + need, 80, 10**9, lambda: QUIET)
+    b.call("sonnet", "", "", {"role": "x"})                   # room for the most the call can use
     assert [c["role"] for c in runner.calls] == ["x"]
 
 
@@ -1330,8 +1338,9 @@ def test_an_outage_does_not_use_up_the_incident_calls(world):
     ctx = _ctx(world, QUIET + 4 * HOUR)
     gap = TR.Due("team:ops", "incident", 0, {"class": "incident", "counts": {"data_gap": 1}}, "incident")
     assert RM.round_budget(gap, ctx).headroom() == 10 and RM.can_start(gap, ctx)
-    # a failure that still reported usage ran, and is counted; a timeout is counted at its estimate
-    from paperbot.agents.runner import AgentCallError, AgentTimeout
+    # a failure that still reported usage ran, and is counted; a timeout is counted at its input estimate
+    # and a full answer (the output ceiling)
+    from paperbot.agents.runner import MAX_OUTPUT_TOKENS, AgentCallError, AgentTimeout
     ran = AgentCallError("exit 1: overloaded")
     ran.tokens = 5_000
     for exc, want in ((ran, (0, 5_000)), (AgentTimeout("timed out"), None)):
@@ -1339,7 +1348,7 @@ def test_an_outage_does_not_use_up_the_incident_calls(world):
         with pytest.raises(AgentCallError):
             b.call("sonnet", "s", "i", {"role": "x"})
         got = world.q("SELECT ok, tokens FROM agent_calls ORDER BY rowid DESC LIMIT 1")[0]
-        assert got == (want or (0, RM.estimate_tokens({"role": "x"}, "s")))
+        assert got == (want or (0, RM.estimate_tokens({"role": "x"}, "s") + MAX_OUTPUT_TOKENS))
 
 
 class _Flaky:
@@ -1477,3 +1486,120 @@ def test_the_morning_meeting_can_ask_again_and_still_reach_the_leads_summary(wor
     assert [(r["room_id"], r["status"], r["calls"]) for r in out["rounds"]] == [("team:market", "done", 6)]
     assert runner.roles()[-1] == "team_lead"
     assert any(m["role"] == "team_lead" for m in world.messages("team:market"))
+
+
+# ================================================================ confirmation review, round 4
+class _Unreadable:
+    """Every answer is prose, never one JSON object: the meeting fails (a counted attempt)."""
+    def call(self, model, system_prompt, instruction, packet):
+        from paperbot.agents.runner import CallResult
+        return CallResult("분석 결과는 다음과 같습니다 (JSON 아님)", None,
+                          {"usage": {"input_tokens": 100, "output_tokens": 10}})
+
+
+def _owner_tick(paths, runner, now):
+    pol = RM.RoomsPolicy(triggers=TR.TriggerPolicy(enabled=("owner",)))
+    return RM.tick(paths["paper3"], paths["daily3"], paths["agents3"], paths["inbox"], runner, policy=pol,
+                   now_ms=now, clock_ms=lambda: now)
+
+
+def _owner_posts(paths, room, n, t0, prefix="질문"):
+    ib = R.open_inbox_rw(paths["inbox"])
+    ids = [R.add_owner_message(ib, room, "", f"{prefix} {k}", ts=t0 - (100 - k) * MIN) for k in range(n)]
+    ib.close()
+    return ids
+
+
+def _give_up_owner_batch(paths, room, t0):
+    for i in range(2):                                   # unreadable twice: the batch meeting is given up
+        out = _owner_tick(paths, _Unreadable(), t0 + i * 20 * MIN)
+        assert [(r["room_id"], r["trigger"], r["status"]) for r in out["rounds"]] == [(room, "owner", "failed")]
+
+
+def test_posts_after_a_given_up_owner_batch_are_answered_without_a_new_post(tmp_path):
+    """A full batch (10 posts) whose meeting was given up kept the same key for every later post: the room's
+    owner channel was dead for good while the page promised the next turn."""
+    paths = E.build_world(str(tmp_path / "var"))
+    ids = _owner_posts(paths, "team:risk", 11, E.T0)
+    _give_up_owner_batch(paths, "team:risk", E.T0)
+    now = E.T0 + 45 * MIN
+    out = _owner_tick(paths, RM.DryRunRunner(), now)
+    assert [(r["room_id"], r["trigger"], r["status"]) for r in out["rounds"]] == [("team:risk", "owner", "done")]
+    a = R.open_ro(paths["agents3"])
+    assert int(R.get_cursor(a, "owner:team:risk")) == ids[-1]
+    a.close()
+
+
+@pytest.mark.parametrize("backlog", [3, 10])
+def test_a_new_post_after_a_given_up_owner_meeting_is_answered(tmp_path, backlog):
+    paths = E.build_world(str(tmp_path / "var"))
+    _owner_posts(paths, ROOM, backlog, E.T0)
+    _give_up_owner_batch(paths, ROOM, E.T0)
+    assert _owner_tick(paths, RM.DryRunRunner(), E.T0 + 40 * MIN)["rounds"] == []     # given up: stays so
+    ib = R.open_inbox_rw(paths["inbox"])
+    new_id = R.add_owner_message(ib, ROOM, "", "아직 답이 없네요. 확인 부탁합니다.", ts=E.T0 + 50 * MIN)
+    ib.close()
+    from paperbot.dash.app import Rooms
+    ov = {r["room_id"]: r for r in Rooms(paths["agents3"], paths["inbox"]).overview(now_ms=E.T0 + 55 * MIN)["rooms"]}
+    assert ov[ROOM]["owner_wait"] is None                                          # "the next turn": true
+    out = _owner_tick(paths, RM.DryRunRunner(), E.T0 + 60 * MIN)
+    assert [(r["room_id"], r["trigger"], r["status"]) for r in out["rounds"]] == [(ROOM, "owner", "done")]
+    a = R.open_ro(paths["agents3"])
+    assert int(R.get_cursor(a, f"owner:{ROOM}")) == new_id
+    a.close()
+
+
+def test_the_page_says_when_the_owner_meeting_was_given_up_or_waits_alone(tmp_path):
+    """The page promised '직원들이 다음 차례에 읽고 답합니다' for posts whose meeting the tick had given up (it opens
+    again only on a new post) or that waited its own growing pause after failing by itself again and again."""
+    from paperbot.dash.app import Rooms
+    paths = E.build_world(str(tmp_path / "var"))
+    assert _owner_tick(paths, RM.DryRunRunner(), E.T0 - 30 * MIN)["rounds"] == []    # agents3.db and its caps
+    _owner_posts(paths, "team:risk", 2, E.T0)
+    a = R.open_agents(paths["agents3"])
+    ib = R.open_ro(paths["inbox"])
+    pol = TR.TriggerPolicy(enabled=("owner",))
+    [due] = TR.find_due(None, None, a, ib, E.T0, pol)
+    for k in range(2):          # e.g. two passes killed before the posts were shown (never copied: still pending)
+        rid = TR.begin_round(a, due, E.T0 + k * MIN)
+        TR.finish_round(a, rid, "failed", E.T0 + k * MIN + 1, {"error": "killed"})
+    wait = lambda now: {r["room_id"]: r for r in Rooms(paths["agents3"], paths["inbox"]).overview(
+        now_ms=now)["rooms"]}["team:risk"]["owner_wait"]
+    assert TR.find_due(None, None, a, ib, E.T0 + 20 * MIN, pol) == []
+    assert wait(E.T0 + 20 * MIN) == "given_up"
+    ib.close()
+    js = _js_hint("given_up")
+    assert "다음 차례" not in js and "글을 하나 더" in js
+    # a new post changes the meeting: promised, and it opens
+    ib = R.open_inbox_rw(paths["inbox"])
+    R.add_owner_message(ib, "team:risk", "", "다시 묻습니다", ts=E.T0 + 25 * MIN)
+    ib.close()
+    assert wait(E.T0 + 26 * MIN) is None
+    ib = R.open_ro(paths["inbox"])
+    [due] = TR.find_due(None, None, a, ib, E.T0 + 26 * MIN, pol)
+    for k in range(3):          # its first speaker's calls keep failing (transient), other rooms are fine
+        rid = TR.begin_round(a, due, E.T0 + (30 + k) * MIN)
+        TR.finish_round(a, rid, "failed", E.T0 + (30 + k) * MIN + 1, {"error": "x", "transient": True, "calls_ok": 0})
+    assert TR.find_due(None, None, a, ib, E.T0 + 40 * MIN, pol) == []
+    ib.close()
+    a.close()
+    assert wait(E.T0 + 40 * MIN) == "retrying"
+    js = _js_hint("retrying")
+    assert "다음 차례" not in js and "4시간" in js
+
+
+def _js_hint(wait):
+    """rooms.js pendingHint('ok', wait) run in node (skipped without node)."""
+    import json as _json
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("needs node")
+    js = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "paperbot", "dash", "static",
+                      "rooms.js")
+    src = open(js, encoding="utf-8").read()
+    start = src.index("function pendingHint(")
+    body = src[start:src.index("\n}\n", start) + 3]
+    out = subprocess.run([node, "-e", body + f"\nconsole.log(JSON.stringify(pendingHint('ok', {_json.dumps(wait)}, 3)));"],
+                         capture_output=True, text=True, timeout=30)
+    assert out.returncode == 0, out.stderr
+    return _json.loads(out.stdout)

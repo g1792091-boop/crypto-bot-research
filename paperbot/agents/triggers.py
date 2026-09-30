@@ -482,7 +482,16 @@ def _owner(inbox_ro, paper_ro, st: _Rooms) -> list[Due]:
     for room, msgs in by_room.items():
         # one meeting answers the oldest posts it can show the staff (the packet holds the last 10, the
         # room shows at most 50 copied posts); the rest open the next owner meeting of that room
-        msgs = msgs[:max(1, st.p.owner_batch)]
+        batch = max(1, st.p.owner_batch)
+        # a batch given up after max_attempts failed meetings stays given up (like any evidence), but the
+        # posts after it are new evidence: they get their own meeting instead of waiting behind it forever
+        # (the batch's key never changes while it has a full batch in front of the newer posts)
+        while len(msgs) > batch:
+            head = msgs[batch - 1]
+            if len(st.failed_attempts(room, "owner", f"owner:{room}:{head['id']}@{head['ts']}")) < st.p.max_attempts:
+                break
+            msgs = msgs[batch:]
+        msgs = msgs[:batch]
         last = msgs[-1]["id"]
         cursors = {**(_strategy_cursors(st, room, hwm) if room.startswith("strat:") else {}),
                    f"owner:{room}": str(last)}
