@@ -1,6 +1,7 @@
 // 트레이드 화면
 import { addPriceAlert, getPriceAlerts, removePriceAlert } from "./alerts.js";
 import { TermChart } from "./chart.js";
+import { copilotSymbolChanged, initCopilot, showCopilot } from "./copilot.js";
 import {
   $, $$, INTERVALS, IV_LABEL, TV_INTERVAL, api, big, busy, cls, css, emit, esc, fmt, hhmm, mdhm, on, pct,
   px, savePrefs, state, toast, tradeRows,
@@ -130,7 +131,7 @@ function setSymbol(sym) {
   premium = null; state.exchanges = null; bookStep = null;
   renderWatchlist();
   pollTickers(); pollDerivatives(); pollSentiment(); loadBook();
-  renderChart(); loadAnalysis();
+  renderChart(); loadAnalysis(); copilotSymbolChanged();
   emit("symbol", sym);
 }
 export { setSymbol };
@@ -573,7 +574,7 @@ function renderBottom() {
           <input data-tp="${p.symbol}" type="number" step="any" value="${p.take ? px(p.take).replace(/,/g, "") : ""}" placeholder="익절가">
           <button class="sm" data-save="${p.symbol}">적용</button></td>
         <td class="${cls(p.unrealized_pnl)}">${fmt(p.unrealized_pnl)} (${pct(p.roe_pct)})</td>
-        <td><button class="sm" data-close="${p.symbol}">시장가 청산</button></td></tr>`).join("")}</table>
+        <td><button class="sm" data-aipos="${p.symbol}" title="이 포지션을 실시간 AI 로 분석">AI 분석</button> <button class="sm" data-close="${p.symbol}">시장가 청산</button></td></tr>`).join("")}</table>
       <div class="help" style="padding:6px 10px">손절·익절은 칸에 가격을 넣고 '적용'을 누르거나, 차트의 손절·익절 선을 마우스로 끌어서 바꿀 수 있습니다. 칸을 비우고 적용하면 해제됩니다.</div>`
       : `<div class="empty">열린 포지션이 없습니다. 오른쪽 '주문' 탭에서 모의 주문을 넣을 수 있습니다.</div>`;
   } else if (bottomTab === "fills") {
@@ -646,7 +647,7 @@ export function initTrade() {
   $("#tfs").onclick = (e) => {
     const iv = e.target.dataset.iv;
     if (!iv) return;
-    state.interval = iv; savePrefs(); renderTimeframes(); renderChart(); loadAnalysis();
+    state.interval = iv; savePrefs(); renderTimeframes(); renderChart(); loadAnalysis(); copilotSymbolChanged();
   };
   $("#macro-syms").onclick = (e) => {
     const s = e.target.dataset.macro;
@@ -745,10 +746,12 @@ export function initTrade() {
   $("#symbtn").onclick = () => $("#wl-search").focus();
 
   $("#side-tabs").onclick = (e) => {
-    const t = e.target.dataset.t;
+    const t = e.target.closest("[data-t]")?.dataset.t;
     if (!t) return;
     $$("#side-tabs button").forEach((b) => b.classList.toggle("on", b.dataset.t === t));
     $("#side-sc").hidden = t !== "sc"; $("#side-order").hidden = t !== "order"; $("#side-book").hidden = t !== "book"; $("#side-fc").hidden = t !== "fc"; $("#side-fpx").hidden = t !== "fpx";
+    $("#side-ai").hidden = t !== "ai";
+    if (t === "ai") showCopilot();
     if (t === "fpx") loadFpPanel();
     if (t === "book") loadBook();
   };
@@ -806,6 +809,8 @@ export function initTrade() {
     if (sym) busy(e.target, async () => { await api(`/api/paper/close/${sym}`, { method: "POST" }); loadAccount(); charts[0]?.refreshOverlays(); });
     const bc = e.target.dataset.botchart;
     if (bc) { const [s, iv] = bc.split("|"); showOnChart(s, iv); }
+    const ap = e.target.dataset.aipos;
+    if (ap) { if (ap !== state.symbol) setSymbol(ap); $('#side-tabs [data-t="ai"]').click(); }
   };
   on("rechart", renderChart);
 
@@ -813,6 +818,7 @@ export function initTrade() {
   pollDerivatives(); setInterval(pollDerivatives, 30_000); setInterval(tickFunding, 1000);
   pollSentiment(); setInterval(pollSentiment, 60_000);
   loadAnalysis();
+  initCopilot({ afterTrade: () => { loadAccount(); charts[0]?.refreshOverlays(); } });
   loadAccount(); setInterval(loadAccount, 5000);
   loadBots(); setInterval(loadBots, 15_000);
   renderBottom();

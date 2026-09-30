@@ -15,11 +15,12 @@ from . import agents, analysis, backtest, config, improve, indicators, liquidati
 from .data import coinglass, exchanges, market, news, sentiment, symbols
 from .llm import LLMUnavailable
 from .paper import PaperManager
-from .quant import entry, footprint, forecast, portfolio, risk, toptraders
+from .quant import copilot, entry, footprint, forecast, portfolio, risk, toptraders
 from .quant.scanner import scanner
 from .strategy import StrategySpec, validate
 
 paper = PaperManager()
+copilot.bind(paper)
 
 
 @asynccontextmanager
@@ -27,6 +28,7 @@ async def lifespan(_app: FastAPI):
     paper.start()
     orderflow.tracker.start()
     scanner.start()
+    copilot.start()
     yield
 
 
@@ -505,6 +507,21 @@ def manual_close(symbol: str):
     return res
 
 
+class ReduceReq(BaseModel):
+    fraction: float = 0.5
+
+
+@app.post("/api/paper/reduce/{symbol}")
+def manual_reduce(symbol: str, req: ReduceReq):
+    """포지션 일부 청산 (fraction 0~1)."""
+    try:
+        res = paper.manual.reduce(symbol.upper(), req.fraction)
+    except ValueError as e:
+        _bad(e)
+    paper.save()
+    return res
+
+
 @app.post("/api/paper/reset")
 def manual_reset(req: ResetReq):
     paper.reset_manual(req.initial_equity, req.fee_pct)
@@ -594,6 +611,56 @@ def get_top_trader_ratios(symbol: str = "BTCUSDT", interval: str = "1h"):
         return toptraders.binance_ratios(symbols.resolve(symbol), interval)
     except Exception as e:
         _bad(ValueError(f"바이낸스 상위 트레이더 비율을 불러오지 못했습니다: {e}"))
+
+
+# ------------------------------------------------------------------ 실시간 AI 상황 분석
+@app.get("/api/copilot")
+def copilot_live(symbol: str = "BTCUSDT", interval: str = "15m", force: bool = False, max_age: int = 300, ai: bool = True):
+    """지금 시장 상황 + 내 포지션을 AI(키 없으면 규칙)가 분석. 새 봉·가격 급변·포지션 변경·새 경고·max_age 초 경과 때만 다시 분석."""
+    try:
+        return copilot.live(symbols.resolve(symbol), interval, force, max(60, min(max_age, 3600)), ai)
+    except ValueError as e:
+        _bad(e)
+
+
+class AskReq(BaseModel):
+    symbol: str = "BTCUSDT"
+    interval: str = "15m"
+    question: str
+    history: list[dict] = []
+
+
+@app.post("/api/copilot/ask")
+def copilot_ask(req: AskReq):
+    """지금 상황에 대해 AI 에게 질문."""
+    if not req.question.strip():
+        _bad(ValueError("질문을 입력하세요."))
+    try:
+        return copilot.ask(symbols.resolve(req.symbol), req.interval, req.question.strip()[:1000], req.history)
+    except ValueError as e:
+        _bad(e)
+
+
+@app.get("/api/copilot/alerts")
+def copilot_alerts(since: int = 0):
+    """포지션 감시 경고 (손절·청산가 근접, 손절 미설정, 반대 판단·신호 …)."""
+    return {"now": int(time.time()), "items": copilot.recent_alerts(since), "settings": copilot.SETTINGS}
+
+
+class CopilotCfg(BaseModel):
+    watch: Optional[bool] = None
+    auto_ai: Optional[bool] = None
+    interval: Optional[str] = None
+
+
+@app.post("/api/copilot/config")
+def copilot_config(cfg: CopilotCfg):
+    return copilot.set_settings(**cfg.model_dump())
+
+
+@app.post("/api/copilot/watch")
+def copilot_watch_now():
+    return {"new": copilot.watch_once(), "items": copilot.recent_alerts(0)[:20]}
 
 
 @app.get("/api/scanner")

@@ -16,6 +16,7 @@ from ..data import binance, hyperliquid, market, synthetic
 
 _lb: tuple[float, list] | None = None
 _acc: dict[str, tuple[float, dict]] = {}
+last_result: dict | None = None   # 마지막으로 불러온 결과 (AI 상황 분석이 재사용)
 WINDOWS = {"day": "24시간", "week": "7일", "month": "30일", "allTime": "전체 기간"}
 
 
@@ -140,11 +141,13 @@ def top_traders(window: str = "month", n: int = 30, sort: str = "pnl", min_accou
         pass
     for c in coins.values():
         c["price"] = prices.get(c["symbol"])
-    return {"source": src, "window": window, "window_name": WINDOWS[window], "sort": sort, "error": err,
+    global last_result
+    last_result = {"source": src, "window": window, "window_name": WINDOWS[window], "sort": sort, "error": err,
             "traders": sorted(traders, key=lambda t: -t["pnl"]) if sort == "pnl" else sorted(traders, key=lambda t: -t["roi_pct"]),
             "by_coin": sorted(coins.values(), key=lambda c: -c["total"]), "time": int(time.time()),
             "note": "Hyperliquid(온체인 선물 거래소)의 기간 수익 상위 계정이 지금 실제로 들고 있는 포지션입니다. "
                     "바이낸스는 개인 포지션을 공개하지 않아 '상위 트레이더 롱/숏 비율'만 볼 수 있습니다."}
+    return last_result
 
 
 def _side() -> dict:

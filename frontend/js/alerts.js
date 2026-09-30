@@ -12,10 +12,11 @@ const OPTS = [
   ["bots", "페이퍼 봇 체결"],
   ["scanner", "시그널 스캐너 (관심 코인 자동 분석 신호)"],
   ["scanner_strong", "└ 강한 신호(강도 2 이상)만"],
+  ["ai_watch", "AI 포지션 감시 (손절·청산가 근접, 손절 없음, 반대 판단·신호)"],
   ["sound", "알림음"],
   ["desktop", "바탕화면 알림 (브라우저 창이 뒤에 있어도)"],
 ];
-const opts = { news_important: true, news_all: false, calendar: true, regime: true, bots: true, scanner: true, scanner_strong: true, sound: true, desktop: false,
+const opts = { news_important: true, news_all: false, calendar: true, regime: true, bots: true, scanner: true, scanner_strong: true, ai_watch: true, sound: true, desktop: false,
   ...load("ft.alertOpts", {}) };
 let log = load("ft.alertLog", []);
 let priceAlerts = load("ft.priceAlerts", []);
@@ -105,6 +106,20 @@ async function pollSignals() {
         msg: `${s.text} · 강도 ${"●".repeat(s.strength)}${s.confluence ? ` (${s.confluence}개 겹침)` : ""}`, cat: "signal", kind: s.dir === "long" ? "up" : s.dir === "short" ? "err" : "" });
     }
     if (show.length > 5) notify({ title: `[시그널] 새 신호 ${show.length - 5}개 더`, msg: "'퀀트 → 시그널 스캐너'에서 전체를 볼 수 있습니다", cat: "signal" });
+  } catch { /* 다음 주기에 */ }
+}
+
+// ---------------------------------------------------------------- AI 포지션 감시 (서버가 30초마다 계산)
+let aiSince = Math.floor(Date.now() / 1000) - 120;
+async function pollAiWatch() {
+  try {
+    const d = await api(`/api/copilot/alerts?since=${aiSince}`);
+    aiSince = d.now;
+    if (!opts.ai_watch) return;
+    for (const a of d.items.slice(0, 4).reverse()) {
+      notify({ title: `[AI 감시] ${a.text}`, msg: a.ai || "트레이드 오른쪽 '실시간 AI' 탭에서 자세한 분석과 조치 버튼을 볼 수 있습니다", cat: "ai",
+        kind: a.level === "high" ? "err" : "" });
+    }
   } catch { /* 다음 주기에 */ }
 }
 
@@ -210,6 +225,7 @@ export function initAlerts() {
   };
   pollNews(); setInterval(pollNews, 60_000);
   pollSignals(); setInterval(pollSignals, 20_000);
+  pollAiWatch(); setInterval(pollAiWatch, 20_000);
   loadCalendar(); setInterval(loadCalendar, 10 * 60_000);
   setInterval(checkCalendar, 20_000);
 }

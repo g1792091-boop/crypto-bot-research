@@ -222,6 +222,30 @@ class ManualAccount:
                                  funding=0.0, entry_reason="manual", exit_reason=reason, symbol=symbol))
         return self.snapshot()
 
+    def reduce(self, symbol: str, fraction: float) -> dict:
+        """포지션 일부만 청산 (fraction = 0~1). 1 이상이면 전부 청산."""
+        p = self.positions.get(symbol)
+        if not p:
+            raise ValueError(f"{symbol} 포지션이 없습니다.")
+        if fraction >= 0.999:
+            return self.close(symbol)
+        if fraction <= 0:
+            raise ValueError("청산 비율은 0보다 커야 합니다.")
+        price = self._price(symbol)
+        q = p.qty * fraction
+        gross = p.side * q * (price - p.entry_price)
+        fee, efee, m = q * price * self.fee_pct / 100, p.entry_fee * fraction, p.margin * fraction
+        self.cash += gross - fee
+        net = gross - fee - efee
+        self.trades.append(Trade(side="long" if p.side == 1 else "short", entry_time=p.entry_time, exit_time=int(time.time()),
+                                 entry_price=p.entry_price, exit_price=price, qty=q, leverage=p.leverage, pnl=net,
+                                 pnl_pct_on_margin=net / m * 100, fees=fee + efee, funding=0.0, entry_reason="manual",
+                                 exit_reason=f"partial_{round(fraction * 100)}", symbol=symbol))
+        p.qty -= q
+        p.margin -= m
+        p.entry_fee -= efee
+        return self.snapshot()
+
     def tick(self):
         for sym, p in list(self.positions.items()):
             price = self._price(sym)
