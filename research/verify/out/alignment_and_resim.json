@@ -1,0 +1,26 @@
+{
+ "alignment": {
+  "taker_z_vs_same_hour_return": {
+   "ic": 0.4394865183863121,
+   "p": 9.656091073401557e-63,
+   "months": 58
+  },
+  "oi_change_z_vs_same_hour_abs_return": {
+   "ic": -0.020242695616470577,
+   "p": 7.608669213735001e-06,
+   "months": 62
+  }
+ },
+ "resim": {
+  "independent": {
+   "n": 1944,
+   "mean_pct": 0.022827613218868455,
+   "win_pct": 37.705761316872426
+  },
+  "engine": {
+   "n": 1896,
+   "mean_pct": 0.0368513848169382,
+   "win_pct": 37.76371308016878
+  }
+ }
+}
