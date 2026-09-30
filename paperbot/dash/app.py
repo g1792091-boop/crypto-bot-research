@@ -119,7 +119,7 @@ class Data:
                 best_random[r["timeframe"]] = max(best_random.get(r["timeframe"], 0.0), r["wallet"])
         for r in rows:
             b = best_random.get(r["timeframe"])
-            r["beats_random"] = None if b is None or r["wallet"] is None else r["wallet"] > b
+            r["beats_random"] = None if b is None or r["wallet"] is None else (r["wallet"] > b and not r["bust"])
         return {"ts": st[0] if st else None, "accounts": rows, "best_random": best_random}
 
     def account(self, aid: str) -> dict:
