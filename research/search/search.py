@@ -36,7 +36,7 @@ EXITS = [("X1_SL1_TP2", "FIXED", 1.0, 2.0, 0.0), ("X2_SL15_TP3", "FIXED", 1.5, 3
          ("X3_SL1_TP3", "FIXED", 1.0, 3.0, 0.0), ("X4_SL2_TP1", "FIXED", 2.0, 1.0, 0.0),
          ("X5_TRAIL2", "TRAIL", 2.0, 0.0, 2.0)]
 # Owners' base tier: 20% margin x 20x = 4x account exposure; isolated margin loss capped at 20%.
-OWN_EXPO, OWN_MARGIN = 4.0, 0.20
+OWN_EXPO, OWN_MARGIN, OWN_LIQ = 4.0, 0.20, 1 / 20 - 0.005
 
 
 def lib():
@@ -175,10 +175,14 @@ def owners_book(t: pd.DataFrame) -> dict:
     capped at the 20% margin. Returns final multiple and max drawdown of the account."""
     t = t.sort_values(["entry_ts", "symbol"])
     eq, peak, mdd, last_exit, k = 1.0, 1.0, 0.0, None, 0
-    for et, xt, net in zip(t["entry_ts"].to_numpy(), t["exit_ts"].to_numpy(), t["net"].to_numpy()):
+    for et, xt, net, mae in zip(t["entry_ts"].to_numpy(), t["exit_ts"].to_numpy(), t["net"].to_numpy(),
+                                t["mae"].to_numpy()):
         if last_exit is not None and et < last_exit:
             continue
-        eq *= 1 + max(OWN_EXPO * net, -OWN_MARGIN)
+        # 20x isolated: an adverse move of 1/20 - 0.5% liquidates the margin before any later
+        # recovery (correction made after the first run; see RESULTS_SEARCH.md).
+        liquidated = -mae >= OWN_LIQ
+        eq *= 1 - OWN_MARGIN if liquidated else 1 + max(OWN_EXPO * net, -OWN_MARGIN)
         peak = max(peak, eq)
         mdd = min(mdd, eq / peak - 1)
         last_exit, k = xt, k + 1
