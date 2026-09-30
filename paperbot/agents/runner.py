@@ -2,8 +2,8 @@
 
 Command (one call per role):
     claude -p "<instruction>" --model <sonnet|opus> --output-format stream-json --verbose
-           --tools "" --safe-mode --strict-mcp-config --no-session-persistence
-           --system-prompt-file <role prompt>
+           --safe-mode --strict-mcp-config --no-session-persistence --setting-sources ""
+           --system-prompt-file <role prompt> --tools ""
 with the data packet on stdin.
 
 Why these flags:
@@ -262,6 +262,15 @@ def escape_mentions(payload: str) -> str:
     return payload.replace("@", "\\u0040")
 
 
+def packet_payload(packet: dict) -> str:
+    """The stdin payload ``ClaudeCodeRunner.call`` sends for a packet: its JSON, any lone surrogate replaced
+    (it never breaks stdin) and every '@' escaped (``escape_mentions``). The rooms' pre-call budget
+    estimate (``rooms.estimate_tokens``) is computed on this same payload."""
+    payload = json.dumps(packet, ensure_ascii=False, default=str)
+    payload = payload.encode("utf-8", "replace").decode("utf-8")
+    return escape_mentions(payload)
+
+
 def billing_warnings(parent: Optional[dict] = None) -> list[str]:
     parent = os.environ if parent is None else parent
     return [k for k in ENV_BILLING if parent.get(k)]
@@ -390,9 +399,7 @@ class ClaudeCodeRunner:
             prompt_file = fh.name
         st = _Stream()
         try:
-            payload = json.dumps(packet, ensure_ascii=False, default=str)
-            payload = payload.encode("utf-8", "replace").decode("utf-8")    # a lone surrogate never breaks stdin
-            payload = escape_mentions(payload)       # no packet text can make the CLI attach a local file
+            payload = packet_payload(packet)        # no packet text can make the CLI attach a local file
             est = input_estimate(payload, system_prompt, instruction)
             cmd = self.command(model, prompt_file, instruction)
             if self._run is not None:
@@ -425,7 +432,10 @@ class ClaudeCodeRunner:
             blob = f"{text}\n{err}"
             exc = (UsageLimitReached(blob.strip()[:300]) if LIMIT_RE.search(blob)
                    else AgentCallError(f"exit {code}: {blob.strip()[:300]}"))
-            exc.tokens = _usage_tokens(envelope)
+            # the CLI can die after the model streamed (an OOM kill, a crash: no 'result' event, no usage):
+            # that call ran and is counted at its worst case, never taken for an outage and retried for free.
+            # A plan refusal or a connection failure never streams and still counts 0.
+            exc.tokens = max(_usage_tokens(envelope), st.worst(est) if (st.active or st.inputs) else 0)
             raise exc
         meta = {}
         if isinstance(envelope, dict):

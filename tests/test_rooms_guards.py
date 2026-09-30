@@ -1043,7 +1043,8 @@ def test_a_call_cut_off_by_a_killed_pass_is_still_counted(world):
     with pytest.raises(Killed):
         world.tick(Dies(), QUIET)
     u = R.usage_today(world.agents, QUIET)
-    assert u["calls"] == 1 and u["tokens"] > 1000             # counted, at the estimated size of the call
+    from paperbot.agents.runner import call_charge
+    assert u["calls"] == 1 and u["tokens"] >= call_charge(1000)   # counted at the charge the check made
     [r] = world.rounds()
     assert r["status"] == "running"
     world.tick(QueueRunner({SPEC: [analysis(NOTE)], "devils_advocate": [challenge("agree")]}), QUIET + 15 * MIN)
@@ -1122,7 +1123,7 @@ def test_calls_that_ran_are_counted_with_their_tokens(world):
     b = RM.ClassBudget(ClaudeCodeRunner(env={}, run=_proc("warning: something\n" + env["answer"])), world.agents,
                        "owner", 20, 10**9, 80, 10**9, lambda: QUIET)
     b.call("sonnet", "s", "i", packet)
-    assert world.q("SELECT ok, tokens FROM agent_calls") == [(1, RM.estimate_tokens(packet, "s"))]
+    assert world.q("SELECT ok, tokens FROM agent_calls") == [(1, RM.estimate_tokens(packet, "s", "i"))]
     world.agents.execute("DELETE FROM agent_calls")
     world.agents.commit()
     # a warning line before the result no longer hides the usage the CLI reported
@@ -1352,7 +1353,7 @@ def test_an_outage_does_not_use_up_the_incident_calls(world):
         with pytest.raises(AgentCallError):
             b.call("sonnet", "s", "i", {"role": "x"})
         got = world.q("SELECT ok, tokens FROM agent_calls ORDER BY rowid DESC LIMIT 1")[0]
-        assert got == (want or (0, RM.estimate_tokens({"role": "x"}, "s") + MAX_OUTPUT_TOKENS))
+        assert got == (want or (0, RM.estimate_tokens({"role": "x"}, "s", "i") + MAX_OUTPUT_TOKENS))
 
 
 class _Flaky:
@@ -1679,7 +1680,7 @@ def test_a_call_that_reaches_the_output_ceiling_is_stopped_and_stays_inside_the_
                    [_ev_assistant("msg_2", "more"), _EV_RESUME, _ev_assistant("msg_3", "more"), _EV_RESUME,
                     _ev_assistant("msg_4", "more"), four])
     packet = {"role": "x", "blob": "가" * 20_000}                     # about 21k tokens estimated
-    est = RM.estimate_tokens(packet, "s")
+    est = RM.estimate_tokens(packet, "s", "i")
     prefill(world, QUIET, owner=1)                                  # 20k used
     cap = 20_000 + RN.call_charge(est)
     b = RM.ClassBudget(RN.ClaudeCodeRunner(env={}, popen=cli), world.agents, "owner", 20, cap, 80, 10**9,
@@ -1771,7 +1772,7 @@ def test_a_timeout_is_stopped_and_counted_at_least_at_the_input_and_a_full_answe
     with pytest.raises(RN.AgentTimeout) as got:
         b.call("sonnet", "s", "i", packet)
     assert hang.killed.is_set() and got.value.tokens == 0              # the model never showed activity
-    assert world.q("SELECT ok, tokens FROM agent_calls") == [(0, RM.estimate_tokens(packet, "s") + RN.MAX_OUTPUT_TOKENS)]
+    assert world.q("SELECT ok, tokens FROM agent_calls") == [(0, RM.estimate_tokens(packet, "s", "i") + RN.MAX_OUTPUT_TOKENS)]
 
 
 def test_usage_in_an_error_envelope_is_read_from_model_usage_too():
@@ -1907,3 +1908,107 @@ def test_an_unreadable_inbox_never_sets_the_approvals_base_to_zero(tmp_path):
     RM.apply_approvals(b, None, E.T0, inbox_missing=True)                # no inbox.db at all: nothing predates
     assert int(R.get_cursor(b, RM.APPROVALS_BASE)) == 0
     b.close()
+
+
+# ================================================================ confirmation review, round 5
+def _streamed_then_killed():
+    """The model streamed (an assistant event with its input) and then the CLI died with no 'result' event
+    (an OOM kill inside MemoryMax, a node crash): exit -9 and no envelope."""
+    ev = {"type": "assistant", "message": {"id": "msg_1", "usage": {"input_tokens": 40_000},
+                                           "content": [{"type": "text", "text": '{"he'}]}}
+    return _proc(json.dumps(ev) + "\n", -9)
+
+
+def test_a_cli_that_dies_after_the_model_streamed_is_counted(world):
+    """The failed branch counted only the (missing) envelope's usage: 0, so the pre-written row was deleted,
+    the turn was taken for an outage and the meeting was retried on back-off forever, never counted."""
+    from paperbot.agents import runner as RN
+    with pytest.raises(RN.AgentCallError) as got:
+        RN.ClaudeCodeRunner(env={}, run=_streamed_then_killed()).call("sonnet", "s", "i", {"role": "x"})
+    assert got.value.tokens >= 40_000 + RN.MAX_OUTPUT_TOKENS
+    b = RM.ClassBudget(RN.ClaudeCodeRunner(env={}, run=_streamed_then_killed()), world.agents, "incident", 15,
+                       10**9, 80, 10**9, lambda: QUIET)
+    with pytest.raises(RN.AgentCallError):
+        b.call("sonnet", "s", "i", {"role": "x"})
+    [(ok, tokens)] = world.q("SELECT ok, tokens FROM agent_calls")
+    assert ok == 0 and tokens >= 40_000 + RN.MAX_OUTPUT_TOKENS
+    # a failure before the model ran (nothing streamed) still counts nothing: an outage keeps the incident calls
+    world.agents.execute("DELETE FROM agent_calls")
+    world.agents.commit()
+    dead = RM.ClassBudget(RN.ClaudeCodeRunner(env={}, run=_proc(json.dumps(_EV_INIT) + "\n", 1)), world.agents,
+                          "incident", 15, 10**9, 80, 10**9, lambda: QUIET)
+    with pytest.raises(RN.AgentCallError) as got:
+        dead.call("sonnet", "s", "i", {"role": "x"})
+    assert got.value.tokens == 0 and world.q("SELECT COUNT(*) FROM agent_calls") == [(0,)]
+    # at tick level: the incident meeting is a failed attempt (counted), never 'transient' (retried for free)
+    world.store.alert(QUIET - 20 * MIN, "WARN", "data gap at 123: no bar for ['BTCUSDT']")
+    world.store.commit()
+    out = world.tick(RN.ClaudeCodeRunner(env={}, run=_streamed_then_killed()), QUIET)
+    assert [r["trigger"] for r in out["rounds"]] == ["incident"]
+    assert out["rounds"][0]["status"] in ("failed", "stopped_budget")     # its turns were skipped, then a cap
+    n, tokens = world.q("SELECT COUNT(*), COALESCE(SUM(tokens), 0) FROM agent_calls")[0]
+    assert n >= 2 and tokens >= n * (40_000 + RN.MAX_OUTPUT_TOKENS)
+    dec = json.loads(world.q("SELECT decision FROM rounds ORDER BY round_id DESC LIMIT 1")[0][0])
+    assert not dec.get("transient")
+
+
+def test_an_at_heavy_packet_stays_inside_the_token_cap(world):
+    """The runner sends every '@' as its 6-byte JSON escape, but the pre-call check estimated the unescaped
+    packet: a packet full of '@' (owner posts allow 1,000 of them) was recorded above the cap it was checked
+    against."""
+    from paperbot.agents import runner as RN
+    packet = {"role": "x", "owner_messages": [{"id": i, "text": "@" * 1000} for i in range(6)],
+              "blob": "가" * 5_000}
+    est = RM.estimate_tokens(packet, "s", RM.INSTRUCTION)
+    sent = RN.escape_mentions(json.dumps(packet, ensure_ascii=False))
+    cap = RN.call_charge(est)                                         # exactly one call's charge left
+    nudge = {"type": "user", "isSynthetic": True, "message": {"role": "user", "content": [
+        {"type": "text", "text": "[Your previous response had no visible output. Please continue.]"}]}}
+    cli = _FakeCli([_EV_INIT, {"type": "system", "subtype": "thinking_tokens", "estimated_tokens": 900}, nudge], [])
+    b = RM.ClassBudget(RN.ClaudeCodeRunner(env={}, popen=cli), world.agents, "owner", 20, cap, 80, 10**9,
+                       lambda: QUIET)
+    with pytest.raises(RN.AgentCallError):
+        b.call("sonnet", "s", RM.INSTRUCTION, packet)
+    tokens = b.used_today()[1]
+    assert 0 < tokens <= cap, f"{tokens:,} tokens recorded against a cap of {cap:,}"
+    assert est == RN.input_estimate(sent, "s", RM.INSTRUCTION)        # the payload the runner really sends
+
+
+def test_a_hung_api_does_not_use_up_the_liquidation_calls(world):
+    """A runner outage where the API hangs (only init / api_retry events until the timeout) was counted at
+    est + 16k under the retried meeting's class: a liquidation's meeting retrying through a long outage used
+    up the whole incident class, so after the outage the liquidation waited until midnight."""
+    from paperbot.agents.runner import AgentTimeout
+
+    class Hung:
+        n = 0
+
+        def call(self, model, system_prompt, instruction, packet):
+            Hung.n += 1
+            raise AgentTimeout("timed out after 900s")             # tokens 0: no model activity
+    start = kst(2026, 10, 7, 0, 30)
+    world.store.alert(start - MIN, "CRITICAL", f"[{S}@15m] LIQUIDATED BTCUSDT 40x lost margin 20.00")
+    world.store.commit()
+    t = start
+    while t < kst(2026, 10, 7, 14, 0):                                # 13.5 hours of ticks while the API hangs
+        world.tick(Hung(), t)
+        t += 15 * MIN
+    assert Hung.n >= 6
+    u = R.usage_today(world.agents, t)
+    assert u["calls"] == Hung.n and u["tokens"] > 0                  # still counted in the day and 7-day totals
+    assert (u["by_class"].get("incident") or {}).get("calls", 0) == 0
+    ctx = RM.RoundContext(world.agents, None, None, None, None, None, t, clock_ms=lambda: t)
+    liq = TR.Due("team:ops", "incident", 0, {"class": "incident", "counts": {"liquidation": 1}}, "incident")
+    assert RM.round_budget(liq, ctx).headroom() == RM.DEFAULT_BUDGETS["incident"][0]
+    assert RM.can_start(liq, ctx)
+    # a timeout after the model showed activity is still counted under its meeting's class
+    b = RM.ClassBudget(Hung(), world.agents, "incident", 15, 10**9, 80, 10**9, lambda: t)
+
+    def streamed(*a):
+        e = AgentTimeout("timed out after 900s")
+        e.tokens = 50_000
+        raise e
+    b.runner.call = streamed
+    with pytest.raises(AgentTimeout):
+        b.call("sonnet", "s", "i", {"role": "x"})
+    assert b.used_class("incident") == (1, 50_000)

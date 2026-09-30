@@ -463,7 +463,7 @@ function renderSide() {
   const open = waiting.filter((p) => p.effective_status === "awaiting_owner").length;
   if (waiting.length) h += `<div class="rsec2 hl" id="r-props"><h4>두 분 확인이 필요한 제안
     ${open ? `<span class="pill acc">${open}</span>` : '<span class="pill">결정함 · 반영 대기</span>'}</h4>
-    ${waiting.map(propCard).join("")}<div class="hint">승인해도 지금은 계좌가 만들어지지 않습니다. 복제 계좌 기능이 생기면 새 $1,000 계좌로 따로 시작하고,
+    ${waiting.map(propCard).join("")}<div class="hint">승인해도 지금은 계좌가 만들어지지 않습니다. 복제 계좌 기능이 생기면 원본 계좌와 같은 시작 자금의 새 paper 계좌로 따로 시작하고,
     원본 195개 계좌와 규칙은 그대로입니다. 코드 관문을 통과하지 못한 제안은 누구도 승인할 수 없습니다.</div></div>`;
   h += `<div class="rsec2"><h4>이 방은 언제 회의하나요</h4><div class="dim">${esc((info && info.schedule_ko) || (r && r.schedule_ko) || "")}</div>
     <div class="hint">직원들이 스스로 회의를 열고 결정합니다. 두 분이 글을 남기면 다음 차례에 그 이야기도 다룹니다.</div></div>`;

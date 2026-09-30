@@ -354,7 +354,9 @@ AUTHOR_MAX = 20
 BODY_MAX = 16_384            # bytes of one owner write (a 1,000-character post is at most ~4 KB of JSON)
 BUDGET_CLASSES = ("incident", "owner", "loss", "scheduled", "weekly")
 CLASS_KO = {"incident": "사고 점검", "owner": "두 분 글", "loss": "손실·파산 복기", "scheduled": "정기 회의",
-            "weekly": "주간 검토"}
+            "weekly": "주간 검토",
+            # calls that timed out with no model activity (a hung API): counted in the day's and 7-day totals only
+            "timeout": "시간 초과(장애, 회의 종류 한도에는 안 셈)"}
 WEEKDAY_KO = "월화수목금토일"
 
 
@@ -712,6 +714,8 @@ class Rooms:
             now = self._gate_now(a)
         for p in rows:
             dec = decs.get(int(p["id"]))
+            if dec is not None and int(dec.get("ts") or 0) < int(p.get("ts") or 0):
+                dec = None      # a click cannot predate its proposal: it was about an earlier one with this id
             eff, applied = self._effective(p, dec, upto)
             p["gate_now"] = now.get(str(p["id"]))
             p["strategy_ko"] = STRATEGY_KO.get(p.get("strategy") or "", p.get("strategy"))

@@ -653,3 +653,27 @@ def test_the_newest_owner_decisions_are_read_after_a_thousand_older_ones(env):
     ib.close()
     decs = Rooms(env["agents"], env["inbox"])._decisions()
     assert len(decs) == 1_006 and decs[77_777]["decision"] == "approve"
+
+
+def test_the_proposal_hint_names_no_fixed_starting_amount():
+    """The hint under every approve/reject card said a copy starts as a new $1,000 account after paper v3
+    accounts moved to $5,000: it names no amount now (a copy starts like its original)."""
+    with open(ROOMS_JS, encoding="utf-8") as fh:
+        src = fh.read()
+    assert "$1,000" not in src and "$1000" not in src
+    assert "원본 계좌와 같은 시작 자금" in src
+
+
+def test_timeouts_of_an_outage_are_labelled_in_the_usage_panel(env):
+    """Calls that timed out with no model activity are counted under no meeting kind ('timeout'): the usage
+    panel names them in Korean."""
+    from paperbot.agents.rooms import TIMEOUT_PIPELINE
+    a = sqlite3.connect(env["agents"])
+    a.execute("INSERT INTO agent_calls (ts, day, pipeline, role, model, ok, tokens) VALUES (?,?,?,?,?,0,?)",
+              (env["now"], R.kst_day(env["now"]), TIMEOUT_PIPELINE, "ops_auditor", "sonnet", 17_000))
+    a.commit()
+    a.close()
+    c = env["client"]
+    _login(c)
+    got = {x["class"]: x for x in c.get("/api/agents/usage").json()["classes"]}
+    assert got["timeout"]["calls"] == 1 and "시간 초과" in got["timeout"]["name_ko"]

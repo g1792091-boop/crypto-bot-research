@@ -57,8 +57,9 @@ over the KST day (which also leave an owner-post share and the bust reserve insi
 7-day caps, ``paced_keep``), a reserve in the loss class for busts and in the incident class for
 liquidations. Every call is checked before it is made with the most it can use
 (``runner.call_charge``: its input estimate and the runner's output ceiling, and one more request the
-CLI may have started before the runner stopped it); a failed call the CLI reported no usage for is not
-counted. A meeting starts only when its budget can carry its shortest form (with a typical call's
+CLI may have started before the runner stopped it); a failed call in which the model never ran (no usage
+reported, no model activity streamed) is not counted, and a timeout with no model activity counts in the
+day's and 7-day totals only (``TIMEOUT_PIPELINE``), never against a meeting kind. A meeting starts only when its budget can carry its shortest form (with a typical call's
 tokens, ``ClassBudget.call_need``); one that hits a cap midway ends
 'stopped_budget' (room is told '오늘 AI 사용 한도에 도달해 다음으로 미룹니다', ``limit_text``) and
 its evidence runs again on the next KST day (a Claude plan usage limit: after an hour, and the room
@@ -101,8 +102,8 @@ from . import triggers as TR
 from .budget import BudgetedRunner, BudgetExceeded, tokens_of
 from .roles import _check_evidence
 from .roster3 import ROLES, SPECIALISTS, STRATEGY_KO, TEAMS, room_duty
-from .runner import (CLI_OVERHEAD_TOKENS, MAX_OUTPUT_TOKENS, AgentCallError, AgentTimeout, CallResult, Runner,
-                     UsageLimitReached, auth_preflight, billing_warnings, call_charge)
+from .runner import (MAX_OUTPUT_TOKENS, AgentCallError, AgentTimeout, CallResult, Runner, UsageLimitReached,
+                     auth_preflight, billing_warnings, call_charge, input_estimate, packet_payload)
 
 PROMPT_DIR = os.path.join(os.path.dirname(__file__), "prompts3")
 DAY_MS = 86_400_000
@@ -196,6 +197,10 @@ DEFAULT_WEEK = (420, 10_000_000)
 # a busy day never leaves a liquidation or the 22:00 summary without calls.
 RESERVED_CLASSES = ("incident", "scheduled")
 CRITICAL_INCIDENTS = ("liquidation", "engine_halted", "critical")
+# agent_calls.pipeline of a call that timed out with no model activity (a hung API, a blackholed network):
+# counted in the day's total and the 7-day cap, but under no meeting kind, so an outage never uses up a
+# class's calls or its reserve (a liquidation, the 22:00 meeting)
+TIMEOUT_PIPELINE = "timeout"
 
 
 # ---------------------------------------------------------------- policy and context
@@ -301,16 +306,16 @@ class RunnerUnavailable(RuntimeError):
     evidence is not at fault, so the round is 'transient' and the trigger fires again."""
 
 
-def estimate_tokens(packet: dict, system_prompt: str = "") -> int:
-    """Rough input tokens of one call (its real usage is known only after it): UTF-8 bytes / 3, so a
-    Korean-heavy packet (about one token per Hangul character, three bytes each) is not undercounted,
-    plus Claude Code's own part of the request (``runner.CLI_OVERHEAD_TOKENS``)."""
+def estimate_tokens(packet: dict, system_prompt: str = "", instruction: str = "") -> int:
+    """Rough input tokens of one call (its real usage is known only after it), on the payload exactly as
+    the runner sends it (``runner.packet_payload``: every '@' goes out as its 6-byte JSON escape) with the
+    runner's own estimator (``runner.input_estimate``: UTF-8 bytes / 3, so a Korean-heavy packet is not
+    undercounted, plus Claude Code's own part of the request)."""
     try:
-        n = len((json.dumps(packet, ensure_ascii=False, default=str) + (system_prompt or ""))
-                .encode("utf-8", "replace"))
+        payload = packet_payload(packet)
     except (TypeError, ValueError, RecursionError):
-        n = 0
-    return n // 3 + CLI_OVERHEAD_TOKENS
+        payload = ""
+    return input_estimate(payload, system_prompt, instruction)
 
 
 class ClassBudget(BudgetedRunner):
@@ -511,19 +516,19 @@ class ClassBudget(BudgetedRunner):
         return max(0, min(room))
 
     def call(self, model: str, system_prompt: str, instruction: str, packet: dict) -> CallResult:
-        est = estimate_tokens(packet, system_prompt)
+        est = estimate_tokens(packet, system_prompt, instruction)
         # the most one call can use (``runner.call_charge``): the answer up to the output ceiling and, at
         # worst, one more request Claude Code started (to resume an answer cut at the ceiling) before the
         # runner stopped it. The check charges all of it, so no cap (or the reserve) is passed by one call
         self.check(call_charge(est))
         role = str(packet.get("role", ""))
-        # the row is written BEFORE the call (not ok, the input estimate and the output ceiling) and settled
-        # after it: a pass that is killed during the call (TimeoutStartSec, MemoryMax, reboot) still has it
-        # counted
+        # the row is written BEFORE the call (not ok, at the charge the check made) and settled after it: a
+        # pass that is killed during the call (TimeoutStartSec, MemoryMax, reboot, a deploy) still has it
+        # counted at its worst case
         now = self.clock_ms()
         rid = self.conn.execute("INSERT INTO agent_calls (ts, day, pipeline, role, model, ok, tokens) "
                                 "VALUES (?,?,?,?,?,0,?)", (now, R.kst_day(now), self.pipeline, role, model,
-                                                            est + MAX_OUTPUT_TOKENS)).lastrowid
+                                                            call_charge(est))).lastrowid
         self.conn.commit()
         try:
             res = self.runner.call(model, system_prompt, instruction, packet)
@@ -534,9 +539,16 @@ class ClassBudget(BudgetedRunner):
             self._settle(rid, False if used > 0 else None, used)
             raise
         except AgentTimeout as exc:
+            used = _int0(getattr(exc, "tokens", 0))
             # its real usage is never reported: at least the input and a full answer (what the runner saw
             # the model use, when more)
-            self._settle(rid, False, max(_int0(getattr(exc, "tokens", 0)), est + MAX_OUTPUT_TOKENS))
+            self._settle(rid, False, max(used, est + MAX_OUTPUT_TOKENS))
+            if used <= 0:
+                # no model activity before the timeout (a hung or overloaded API, a blackholed network): still
+                # counted in the day's total and the 7-day cap, but under no meeting kind, so an outage whose
+                # meeting is retried on back-off never uses up a class's calls (the liquidation reserve)
+                self.conn.execute("UPDATE agent_calls SET pipeline = ? WHERE rowid = ?", (TIMEOUT_PIPELINE, rid))
+                self.conn.commit()
             raise
         except Exception as exc:
             used = _int0(getattr(exc, "tokens", 0))
@@ -2018,6 +2030,14 @@ def apply_approvals(conn: sqlite3.Connection, inbox_ro: Optional[sqlite3.Connect
         # each click is one transaction: the proposal, the room line and the cursor land together
         if p is None:
             done.append({"approval_id": a["id"], "ok": False, "why": "no proposal"})
+        elif _int0(a.get("ts")) < _int0(p.get("ts")):
+            # a click cannot predate its proposal: it was about an earlier proposal with the same id (an
+            # agents3.db restored from an older backup reuses ids); never applied to this one
+            R.post(conn, p["room_id"], None, "owner_decision", "code", None, "system",
+                   f"제안 #{p['id']}이 만들어지기 전에 누른 {verb} 클릭이 있어 반영하지 않았습니다 "
+                   "(같은 번호의 예전 제안에 대한 클릭입니다). 이 제안은 다시 눌러 주세요.",
+                   {**ref, "predates_proposal": True}, ts=now_ms, commit=False)
+            done.append({"approval_id": a["id"], "ok": False, "proposal_id": p["id"], "why": "predates"})
         elif want == "approved" and p["status"] == "awaiting_owner" and \
                 (gn := gate_now(conn, p, now_ms))[0].get("pass") is not True:
             # the room ran more tests since: judged now (Bonferroni over its current count) the test
