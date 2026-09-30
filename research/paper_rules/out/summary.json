@@ -1,0 +1,74 @@
+{
+ "by_k": {
+  "1.0": {
+   "is": {
+    "accounts": 216,
+    "median_final": 9.869164041522362,
+    "mean_final": 292.61026982114606,
+    "above_start": 14,
+    "bust": 132,
+    "trades": 36452,
+    "pooled_mean_R": -0.04401099151113354
+   },
+   "cf": {
+    "accounts": 216,
+    "median_final": 9.853866163950059,
+    "mean_final": 285.12546427628416,
+    "above_start": 13,
+    "bust": 135,
+    "trades": 29078,
+    "pooled_mean_R": -0.057085476472027975
+   }
+  },
+  "1.5": {
+   "is": {
+    "accounts": 216,
+    "median_final": 9.889842952342388,
+    "mean_final": 315.04679394365223,
+    "above_start": 8,
+    "bust": 124,
+    "trades": 44176,
+    "pooled_mean_R": -0.0379885061788456
+   },
+   "cf": {
+    "accounts": 216,
+    "median_final": 9.859466525672076,
+    "mean_final": 313.65435518716,
+    "above_start": 5,
+    "bust": 122,
+    "trades": 35859,
+    "pooled_mean_R": -0.04686485957137877
+   }
+  },
+  "2.0": {
+   "is": {
+    "accounts": 216,
+    "median_final": 9.917574586523,
+    "mean_final": 365.8753866084462,
+    "above_start": 11,
+    "bust": 120,
+    "trades": 48590,
+    "pooled_mean_R": -0.03622403083505727
+   },
+   "cf": {
+    "accounts": 216,
+    "median_final": 9.927029784220686,
+    "mean_final": 360.72682074377485,
+    "above_start": 10,
+    "bust": 117,
+    "trades": 42829,
+    "pooled_mean_R": -0.04007431955470715
+   }
+  }
+ },
+ "rule_used": "tie within $50 -> pooled mean R",
+ "chosen_k": 2.0,
+ "random_rate": {
+  "15m": 0.012977824726823392,
+  "30m": 0.013201223289448803,
+  "5m": 0.012621837204790837,
+  "1d": 0.013338013338013339,
+  "1h": 0.0134818785294156,
+  "4h": 0.013108467678822976
+ }
+}
