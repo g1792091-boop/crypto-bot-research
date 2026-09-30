@@ -86,6 +86,9 @@ class Position:
     funding_paid: float = 0.0
     mae_price: float = 0.0
     mfe_price: float = 0.0
+    # Stepped profit lock (paper v3): the stop at entry and the locked net ROE.
+    stop_initial: float = 0.0
+    lock_roe: Optional[float] = None
 
     @property
     def notional_entry(self) -> float:
@@ -103,7 +106,7 @@ class TradeRecord:
     entry_price: float
     exit_time: int
     exit_price: float
-    exit_reason: str  # TP / SL / LIQ / HALT / MANUAL
+    exit_reason: str  # TP / SL / LOCK / LIQ / HALT / MANUAL / END
     qty: float
     leverage: int
     tier: str
@@ -123,6 +126,8 @@ class TradeRecord:
     # Chart situation at the signal (confirmed bars only), see context.py.
     context: dict[str, Any] = field(default_factory=dict)
     strategy_style: str = ""
+    stop_initial: Optional[float] = None
+    lock_roe: Optional[float] = None
 
 
 @dataclass

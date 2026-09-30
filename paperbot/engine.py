@@ -7,7 +7,12 @@ Execution rules (fixed, from the handover document):
   the bar open if the bar gaps through the stop.
 - Take-profit is a resting limit: fills only when price trades through it
   (touching is not enough), at the limit price or a better gapped open,
-  with maker fee.
+  with maker fee. With ``tp_mode="ladder"`` (paper v3) there is no
+  take-profit: after each bar the stop steps up to lock net ROE (ladder.py),
+  effective from the next bar, and exits there as a stop-market ("LOCK").
+- A signal may carry ``meta["stop_dist"]`` (stop distance from the actual
+  entry price) and ``meta["ref_price"]`` (the price when the signal was ready,
+  used instead of the bar open).
 - Isolated margin; liquidation triggers on mark price and costs the whole
   isolated margin.
 - One position at a time. Signals that arrive while a position is open are
@@ -20,9 +25,12 @@ submitting the signals produced by the previous closed bar.
 
 from __future__ import annotations
 
+import math
+from dataclasses import replace
 from typing import Callable, Optional
 
 from .config import Settings
+from .ladder import net_roe, roe_price, tighten
 from .margin import Brackets, liquidation_price
 from .models import Bar, Position, Signal, SignalOutcome, TradeRecord
 from .notify import CRITICAL, INFO, WARN, NullNotifier, Notifier
@@ -56,6 +64,7 @@ class PaperEngine:
         self.pending: list[Signal] = []
         self.halted = False
         self.halt_reason = ""
+        self.bust = False
         self._warned: set[float] = set()
         self._last_mark: dict[str, float] = {}
 
@@ -171,7 +180,10 @@ class PaperEngine:
 
     def _try_enter(self, sig: Signal, bar: Bar) -> bool:
         side = sig.side
-        fill = bar.open * (1 + side * self.s.slippage_frac)
+        raw = float(sig.meta.get("ref_price", bar.open))
+        fill = raw * (1 + side * self.s.slippage_frac)
+        if "stop_dist" in sig.meta:
+            sig = replace(sig, stop_price=raw - side * float(sig.meta["stop_dist"]))
         spec = self.specs.get(sig.symbol, {})
         dec = self.policy.size(self.wallet, sig, fill, self.brackets[sig.symbol], spec)
         if not dec.ok:
@@ -181,20 +193,20 @@ class PaperEngine:
         notional = dec.qty * fill
         fee = notional * self.s.taker_fee
         self.wallet -= fee
-        tp = self.policy.take_profit(sig, fill, dec)
+        tp = math.nan if self.s.tp_mode == "ladder" else self.policy.take_profit(sig, fill, dec)
         self.position = Position(
             signal=sig, symbol=sig.symbol, side=side, qty=dec.qty,
             entry_price=fill, entry_time=bar.open_time, leverage=dec.leverage,
             tier=dec.tier, margin=dec.margin, margin_initial=dec.margin,
             stop_price=sig.stop_price, tp_price=tp, liq_price=dec.liq_price,
-            entry_fee=fee, mae_price=fill, mfe_price=fill)
+            entry_fee=fee, mae_price=fill, mfe_price=fill, stop_initial=sig.stop_price)
         self._record(sig, "ENTERED", "ok", bar.open_time, tier=dec.tier,
                      leverage=dec.leverage, margin=dec.margin, fill=fill,
                      downgrades=dec.reasons)
         self.notifier.send(INFO, (
             f"[{self.book}] ENTRY {sig.symbol} {'LONG' if side > 0 else 'SHORT'} {sig.strategy_id} "
             f"{dec.tier} {dec.leverage}x margin {dec.margin:.2f} @ {fill:.6g} "
-            f"SL {sig.stop_price:.6g} TP {tp:.6g} LIQ {dec.liq_price:.6g}"))
+            f"SL {sig.stop_price:.6g} TP {'ladder' if math.isnan(tp) else f'{tp:.6g}'} LIQ {dec.liq_price:.6g}"))
         return True
 
     # ------------------------------------------------------------ exits
@@ -202,6 +214,7 @@ class PaperEngine:
         p = self.position
         assert p is not None
         side = p.side
+        has_tp = not math.isnan(p.tp_price)
         if side > 0:
             p.mae_price = min(p.mae_price, bar.low)
             p.mfe_price = max(p.mfe_price, bar.high)
@@ -215,15 +228,15 @@ class PaperEngine:
                 return
             if (bar.open - p.stop_price) * side <= 0:
                 self._close(bar.open * (1 - side * self.s.slippage_frac),
-                            bar.open_time, "SL", maker=False)
+                            bar.open_time, self._stop_reason(p), maker=False)
                 return
-            if (bar.open - p.tp_price) * side > 0:
+            if has_tp and (bar.open - p.tp_price) * side > 0:
                 self._close(bar.open, bar.open_time, "TP", maker=True)
                 return
 
         low, high = bar.low, bar.high
         hit_stop = (low <= p.stop_price) if side > 0 else (high >= p.stop_price)
-        hit_tp = (high > p.tp_price) if side > 0 else (low < p.tp_price)
+        hit_tp = has_tp and ((high > p.tp_price) if side > 0 else (low < p.tp_price))
         m_low, m_high = bar.m_low, bar.m_high
         hit_liq = (m_low <= p.liq_price) if side > 0 else (m_high >= p.liq_price)
 
@@ -231,12 +244,34 @@ class PaperEngine:
             self._close(p.tp_price, bar.close_time, "TP", maker=True)
         elif hit_stop:
             self._close(p.stop_price * (1 - side * self.s.slippage_frac),
-                        bar.close_time, "SL", maker=False)
+                        bar.close_time, self._stop_reason(p), maker=False)
         elif hit_liq:
             # Mark price reached liquidation without last price hitting the stop.
             self._liquidate(bar.close_time)
         elif hit_tp:
             self._close(p.tp_price, bar.close_time, "TP", maker=True)
+        elif self.s.tp_mode == "ladder" and not (entry_bar and "ref_price" in p.signal.meta):
+            self._raise_lock(p)
+
+    @staticmethod
+    def _stop_reason(p: Position) -> str:
+        return "LOCK" if p.lock_roe is not None else "SL"
+
+    def _raise_lock(self, p: Position) -> None:
+        """Step the stop up to the highest lock armed by the best price so far.
+        Called after the bar's exit checks, so the new stop applies from the
+        next bar. Skipped on an entry bar filled at ``ref_price`` (part of that
+        bar's range may predate the fill); an entry at the bar open counts the
+        whole bar, as the backtest does."""
+        fund = p.funding_paid / p.notional_entry if p.notional_entry else 0.0
+        rt = self.s.round_trip_cost
+        best = net_roe(p.side, p.entry_price, p.mfe_price, p.leverage, rt, fund)
+        lock = self.s.ladder.lock_for(best)
+        if lock is None or (p.lock_roe is not None and lock <= p.lock_roe + 1e-12):
+            return
+        p.stop_price = tighten(p.side, p.stop_price,
+                               roe_price(p.side, p.entry_price, p.leverage, lock, rt, fund))
+        p.lock_roe = lock
 
     def _close_market(self, price: float, ts: int, reason: str) -> None:
         p = self.position
@@ -283,7 +318,8 @@ class PaperEngine:
             mae_price=p.mae_price, mfe_price=p.mfe_price,
             equity_after=self.wallet, score=p.signal.score,
             context=dict(p.signal.meta.get("ctx", {})),
-            strategy_style=str(p.signal.meta.get("style", "")))
+            strategy_style=str(p.signal.meta.get("style", "")),
+            stop_initial=p.stop_initial, lock_roe=p.lock_roe)
         self.trades.append(rec)
         self.position = None
         if self.guards is not None:
@@ -293,6 +329,11 @@ class PaperEngine:
         self.notifier.send(INFO, (
             f"[{self.book}] EXIT {rec.symbol} {reason} pnl {rec.pnl:+.2f} ROE {rec.roe:+.1%} "
             f"equity {self.wallet:.2f}"))
+        if self.s.bust_below > 0 and not self.bust and self.wallet < self.s.bust_below:
+            self.bust = True
+            self.halted = True
+            self.halt_reason = f"bust: equity {self.wallet:.2f} below {self.s.bust_below:.2f}"
+            self.notifier.send(WARN, f"[{self.book}] BUST: {self.halt_reason}")
 
     # ------------------------------------------------------------ funding
     def _apply_funding(self, rate: float, mark: float) -> None:
@@ -321,7 +362,7 @@ class PaperEngine:
             if dd >= lvl and lvl not in self._warned:
                 self._warned.add(lvl)
                 self.notifier.send(WARN, f"[{self.book}] drawdown {dd:.1%} (level {lvl:.0%}), equity {eq:.2f}")
-        if dd >= self.s.dd_halt:
+        if self.s.dd_halt is not None and dd >= self.s.dd_halt:
             if self.position is not None and self.position.symbol in bars:
                 self._close_market(bars[self.position.symbol].close, ts, "HALT")
             self._halt(f"drawdown {dd:.1%} reached halt level {self.s.dd_halt:.0%}")
@@ -351,4 +392,6 @@ class PaperEngine:
             "skipped": sum(1 for o in self.outcomes if o.status == "SKIPPED"),
             "rejected": sum(1 for o in self.outcomes if o.status == "REJECTED"),
             "halted": self.halted,
+            "bust": self.bust,
+            "locks": sum(1 for t in self.trades if t.exit_reason == "LOCK"),
         }

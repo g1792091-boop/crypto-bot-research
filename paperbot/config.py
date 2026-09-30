@@ -7,6 +7,9 @@ means bumping ``version`` so ledgers record which rule set produced them.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Optional
+
+from .ladder import LadderSpec
 
 
 @dataclass(frozen=True)
@@ -74,9 +77,20 @@ class Settings:
     # broken by this symbol order.
     symbol_priority: tuple[str, ...] = field(default=None)  # type: ignore[assignment]
 
-    # Drawdown from peak equity: warn at each level, halt at dd_halt.
+    # Drawdown from peak equity: warn at each level, halt at dd_halt
+    # (None = warnings only, the owners' paper v3 rule).
     dd_warn_levels: tuple[float, ...] = (0.20, 0.30, 0.40)
-    dd_halt: float = 0.50
+    dd_halt: Optional[float] = 0.50
+
+    # "fixed": one take-profit at default_tp_roe (paper v2).
+    # "ladder": no take-profit; the stop steps up to lock net ROE (ladder.py).
+    tp_mode: str = "fixed"
+    ladder_first_lock: float = 0.10
+    ladder_step: float = 0.05
+    ladder_trigger_gap: float = 0.02
+
+    # The account stops for good when its wallet falls below this (0 = never).
+    bust_below: float = 0.0
 
     # When a bar touches both stop and take-profit, assume the stop filled
     # first (conservative). Set False only for sensitivity runs.
@@ -91,6 +105,12 @@ class Settings:
             for lev in t.leverages:
                 if not (self.min_leverage <= lev <= self.max_leverage):
                     raise ValueError(f"tier {t.name} leverage outside owner range")
+        if self.tp_mode not in ("fixed", "ladder"):
+            raise ValueError(f"unknown tp_mode {self.tp_mode!r}")
+
+    @property
+    def ladder(self) -> LadderSpec:
+        return LadderSpec(self.ladder_first_lock, self.ladder_step, self.ladder_trigger_gap)
 
     def tier_chain(self, requested: str) -> list[tuple[Tier, int]]:
         """Candidates from the requested tier down to the lowest tier."""
@@ -102,3 +122,16 @@ class Settings:
             for lev in t.leverages:
                 chain.append((t, lev))
         return chain
+
+
+# Paper v3 (docs/paper-v3-rules.md): six coins, entry priority by traded value,
+# stepped profit lock, 2 ATR stop (set by the signal), no drawdown halt.
+V3_SYMBOLS = ("BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "LTCUSDT", "BCHUSDT")
+V3_STOP_ATR = 2.0
+
+
+def v3_settings(**over) -> Settings:
+    kw = dict(version="paper-v3", symbols=V3_SYMBOLS, symbol_priority=V3_SYMBOLS,
+              tp_mode="ladder", dd_halt=None, bust_below=10.0, liq_buffer_atr_mult=1.0)
+    kw.update(over)
+    return Settings(**kw)
