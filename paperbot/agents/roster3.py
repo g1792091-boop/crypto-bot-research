@@ -21,6 +21,7 @@ TEAMS = (
     ("compare", "⑨ 비교분석팀"),
     ("timing", "⑩ 타점분석팀"),
     ("safety", "⑪ 안전·실거래 준비팀"),
+    ("specialist", "⑫ 매매법 전담팀"),
 )
 
 # (id, name, team, model, when, duty, start)
@@ -92,8 +93,34 @@ ROLES = (
     ("security", "보안 책임자", "safety", "opus", "주 1회",
      "API 키 권한, 서버 접속 기록, 대시보드 로그인 시도, 비밀 정보 노출, 부품 취약점", "now"),
     ("live_readiness", "실거래 준비관", "safety", "opus", "주간",
-     "테스트넷 주문 연습, 거래소 규칙 변경 추적, 실거래 전환 체크리스트", "now"),
+     "테스트넷 주문 연습 결과 읽기(연습은 코드와 두 분이 실행, 에이전트는 주문 불가), 거래소 규칙 변경 추적, 실거래 전환 체크리스트",
+     "테스트넷 연습 시작 후"),
 )
+
+# Strategy specialists (added 2026-09-30 at the owners' request): one per strategy, covering its five
+# timeframe accounts. Same template, different dossier. Loss cards are written by code the moment a
+# trade closes; the specialist reads them in real time only for urgent triggers (within the daily AI
+# budget) and weekly once the strategy has 30 new trades. Proposals go to the hypothesis ledger,
+# then a 5-year backtest by code, then validator -> approver -> a new copy account.
+STRATEGY_KO = {
+    "S1_EMA_RSI_CHOP": "EMA·RSI·초피", "S2_ST_ROC": "슈퍼트렌드·ROC", "S3_CMO_SANDWICH": "CMO·샌드위치 캔들",
+    "S4_BB_BBP": "볼린저 스퀴즈·BBP", "S5_DONCHIAN_MFI": "돈치안·MFI", "S6_EMA_DMI_ADX": "EMA·DMI·ADX",
+    "N01_ST_EMA": "슈퍼트렌드·EMA", "N02_ST_KST": "슈퍼트렌드·KST", "N03_ADX_GC": "ADX·골든크로스",
+    "N04_ST_KLINGER": "슈퍼트렌드·클링거", "N05_PSAR_POC": "PSAR·POC 캔들", "N06_MACD_ORB": "MACD·시가범위 돌파",
+    "N07_ICHI_CMO": "일목·CMO", "N08_ICHI_WR": "일목·윌리엄스%R", "N09_ALLIG_AROON": "앨리게이터·아룬",
+    "N10_HA_PSAR": "하이킨아시·PSAR", "N11_BREAKAWAY": "브레이크어웨이 패턴", "N12_ICHI_AO": "일목·AO",
+    "N13_3OUTSIDE": "쓰리 아웃사이드", "N14_ICHI_RSI": "일목·RSI", "N15_KC_AO": "켈트너·AO",
+    "N16_BBRSI": "볼린저 RSI", "N17_KC_RSI": "켈트너·RSI", "N18_VWMA_MACD": "VWMA·MACD",
+    "N19_FIB_CHOP": "피보나치·초피", "N20_EMA9_CHOP": "EMA9·초피(숏)", "N21_ST_RSI_ADX": "슈퍼트렌드·RSI·ADX",
+    "N22_VORTEX_PSAR": "볼텍스·PSAR", "N23_HA_ST": "하이킨아시·슈퍼트렌드", "N24_DMI": "DMI",
+    "N25_DST_CCI": "더블 슈퍼트렌드·CCI", "V39_ALL": "V3.9", "V45_AMB": "V4.5", "OBV_S": "OBV 추세형",
+    "OBV_B": "OBV 돌파형", "DOGE": "도지 봇(친구분)",
+}
+SPECIALISTS = tuple(
+    (f"spec_{k}", f"{v} 전담", "specialist", "sonnet", "손절 즉시(긴급만), 주 1회",
+     f"{v} 매매법({k})의 5개 봉 계좌만 담당. 손절 카드로 원인 분석, 개선 가설 작성(5년 백테스트 통과 후 새 계좌)",
+     "now")
+    for k, v in STRATEGY_KO.items())
 
 MEETINGS = (
     ("morning", "아침 계획", "매일 08:00 (한국 시간)"),
@@ -107,9 +134,10 @@ def roster() -> dict:
     return {
         "teams": [{"id": t, "name": n} for t, n in TEAMS],
         "roles": [{"id": r[0], "name": r[1], "team": r[2], "model": r[3], "when": r[4], "duty": r[5],
-                   "start": r[6]} for r in ROLES],
+                   "start": r[6]} for r in ROLES + SPECIALISTS],
         "meetings": [{"id": m[0], "name": m[1], "when": m[2]} for m in MEETINGS],
     }
 
 
 assert len(ROLES) == 34 and len({r[0] for r in ROLES}) == 34
+assert len(SPECIALISTS) == 36
