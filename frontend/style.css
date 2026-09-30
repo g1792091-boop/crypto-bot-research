@@ -493,3 +493,20 @@ summary.ph { list-style: none; } summary.ph::-webkit-details-marker { display: n
 .aim-roles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 16px; }
 .aim-fb { margin: 4px 0; padding-left: 20px; font-size: 12px; }
 @media (max-width: 800px) { .aim-roles { grid-template-columns: 1fr; } .aim-key { grid-template-columns: 1fr; } }
+
+/* ---------------------------------------------------------------- AI 자동 모드 */
+.ai-badge { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; max-width: 440px; min-width: 0; height: 26px; padding: 0 10px;
+  border: 1px solid var(--line-2); border-radius: 13px; background: transparent; color: var(--text); font-size: 11.5px; cursor: pointer; flex-shrink: 1; }
+.ai-badge:hover { border-color: var(--accent); }
+.ai-badge.hot { border-color: var(--down); box-shadow: 0 0 0 1px var(--down-bg) inset; }
+.ai-badge .k { color: var(--muted); white-space: nowrap; }
+.ai-badge .ai-bh { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.aa-card { margin-bottom: 12px; }
+.aa-card.lvl-caution { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.aa-card.lvl-danger { border-color: var(--down); }
+.aa-card .ph .t { white-space: nowrap; }
+.aa-head { font-size: 13px; margin-bottom: 4px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.aa-acts { margin-top: 6px; padding: 6px 8px; border-radius: 6px; background: var(--down-bg); font-size: 12px; line-height: 1.6; }
+.aa-sc { margin-top: 3px; padding: 3px 6px; border-left: 2px solid var(--accent); font-size: 11.5px; color: var(--text-2); }
+.aa-jobs td, .aa-jobs th { padding: 4px 6px; }
+@media (max-width: 760px) { .ai-badge { order: -1; margin-left: 0; flex-shrink: 0; } .tickerbar > .symbtn, .tickerbar > .lastpx { order: -2; } .ai-badge .ai-bh { display: none; } }

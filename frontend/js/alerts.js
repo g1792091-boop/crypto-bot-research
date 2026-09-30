@@ -133,8 +133,8 @@ async function pollAutopilot() {
     emit("apsignals", d.items);
     if (!opts.autopilot) return;
     for (const x of d.items.slice(0, 4).reverse()) {
-      const head = { entry: "오토 진입", exit: "오토 청산", deploy: "오토 봇 시작", ai: "AI 판단", ai_note: "오토 진입 · AI 코멘트" }[x.type] || "오토";
-      notify({ title: `[${head}] ${x.symbol.replace(/USDT$/, "")} ${IVK[x.interval] || x.interval || ""} · ${x.text}`,
+      const head = { entry: "오토 진입", exit: "오토 청산", deploy: "오토 봇 시작", ai: "AI 판단", ai_note: "오토 진입 · AI 코멘트", ai_auto: "AI 자동" }[x.type] || "오토";
+      notify({ title: `[${head}] ${(x.symbol || "").replace(/USDT$/, "")} ${IVK[x.interval] || x.interval || ""} · ${x.text}`.replace(/\s+·/, " ·"),
         msg: `${x.strategy || ""}${x.status === "observe" ? " · 관찰(검증 미통과) — 참고용" : x.status === "pass" ? " · 검증 통과 매매법 (모의)" : ""}`, cat: "autopilot",
         kind: x.type === "entry" ? (x.side === "long" ? "up" : "err") : x.type === "exit" ? (x.pnl > 0 ? "up" : "err") : "" });
     }

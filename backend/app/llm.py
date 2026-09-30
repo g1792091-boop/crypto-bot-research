@@ -116,6 +116,11 @@ def _run(kind, system, user, max_tokens, effort=None, schema=None, feature=None,
             last_used = r
             return out, r
         except (LLMUnavailable, anthropic.APIError, httpx.HTTPError, ValueError) as e:
+            if r.startswith("nvidia:"):
+                from . import nvidia
+                m = nvidia.used_model()
+                if m and m != ai_routes.split(r)[1]:
+                    r = f"{r} → {m}"
             errors.append(f"{r}: {str(e)[:120]}")
     raise LLMUnavailable("모든 모델이 실패했습니다 — " + " / ".join(errors))
 

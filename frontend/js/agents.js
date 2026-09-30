@@ -104,7 +104,8 @@ function detail(d) {
     ${(d.decisions || []).map((a) => `<div class="tm-f"><span class="ai-chip ${DIR[a.direction][1]}">${a.symbol.replace("USDT", "")} ${DIR[a.direction][0]}</span> ${esc(a.reason || "")}</div>`).join("")}
     ${(d.actions || []).map((a) => `<div class="tm-f ${a.action === "keep" ? "" : "warn"}"><b>${ACT[a.action]}</b> ${esc(a.target || "")} — ${esc(a.reason || "")}<div class="tm-ev">${ev(a.evidence)}</div></div>`).join("")}`);
   if (d.proposals?.length) parts.push(`<div class="tm-sec">제안 (가설)</div>${d.proposals.map((p) => `<div class="tm-f"><b>${esc(p.change)}</b> — ${esc(p.reason || "")}${p.how_to_confirm ? `<div class="muted">확인 방법: ${esc(p.how_to_confirm)}</div>` : ""}<div class="tm-ev">${ev(p.evidence)}</div></div>`).join("")}`);
-  if (d.hypotheses?.length) parts.push(`<div class="tm-sec">새 매매법 가설</div>${d.hypotheses.map((h) => `<div class="tm-f"><b>${esc(h.name)}</b> (${esc(h.symbol || "")} ${esc(h.interval || "")})<div>${esc(h.rule)}</div><div class="muted">${esc(h.why || "")}</div></div>`).join("")}`);
+  if (d.hypotheses?.length) parts.push(`<div class="tm-sec">새 매매법 가설</div>${d.hypotheses.map((h) => `<div class="tm-f"><b>${esc(h.name)}</b> (${esc(h.symbol || "")} ${esc(h.interval || "")})<div>${esc(h.rule)}</div><div class="muted">${esc(h.why || "")}</div>
+    <button class="flat sm" data-apply="hypothesis" data-rule="${esc(h.rule || "")}" data-sym="${esc(h.symbol || "")}" data-iv="${esc(h.interval || "")}" data-name="${esc(h.name || "")}" title="규칙 문장을 전략으로 바꿔 모의 매매 봇으로 시험 (관문 검증 전)">🧪 페이퍼 봇으로 시험</button></div>`).join("")}`);
   if (d.verdicts?.length) parts.push(`<div class="tm-sec">판정</div>${d.verdicts.map((v) => `<div class="tm-f"><span class="ai-chip ${v.verdict === "pass" ? "up" : v.verdict === "fail" ? "down" : "accent"}">${{ pass: "통과", fail: "탈락", need_more_data: "데이터 더" }[v.verdict]}</span> ${esc(v.candidate)} — ${esc(v.reason || "")}</div>`).join("")}`);
   if (d.approvals?.length) parts.push(`<div class="tm-sec">승인</div>${d.approvals.map((a) => `<div class="tm-f"><span class="ai-chip ${a.decision === "approve" ? "up" : "down"}">${a.decision === "approve" ? "승인" : "거부"}</span> ${esc(a.candidate)} — ${esc(a.reason || "")}</div>`).join("")}`);
   if (d.weights?.length) parts.push(`<div class="tm-sec">자본 배분안</div>${d.weights.map((w) => `<div class="tm-f"><b>${esc(w.bot)}</b> ${w.weight_pct}% — ${esc(w.reason || "")}</div>`).join("")}`);
@@ -171,7 +172,8 @@ function renderSide(v = runInfo) {
         return `<div class="tm-f ${c.gate?.passed ? "" : "muted"}"><b>${esc(c.target)}</b> <span class="muted">${c.kind === "improve" ? "봇 수정안" : "새 가설"}</span>
           <div>관문 ${c.gate?.passed ? '<span class="up">통과</span>' : `<span class="down">탈락</span> — ${esc(c.gate?.reason || "")}`}${a ? ` · 승인관 ${a.decision === "approve" ? '<span class="up">승인</span>' : '<span class="down">거부</span>'}` : ""}</div>
           ${c.rule ? `<div class="muted" style="font-size:11px">${esc(c.rule)}</div>` : ""}
-          ${ok ? `<button class="pri sm" data-apply="candidate" data-cand="${esc(c.id)}">${c.kind === "improve" ? "봇에 적용" : "페이퍼 봇으로 시작"}</button>` : ""}</div>`; }).join("")}</div></div>` : ""}
+          ${ok ? `<button class="pri sm" data-apply="candidate" data-cand="${esc(c.id)}">${c.kind === "improve" ? "봇에 적용" : "페이퍼 봇으로 시작"}</button>`
+            : c.kind === "hypothesis" && c.rule ? `<button class="flat sm" data-apply="candidate" data-force="1" data-cand="${esc(c.id)}" title="승인·관문 통과 전이지만 모의 매매로 시험">🧪 관찰 봇으로 시험 (미검증)</button>` : ""}</div>`; }).join("")}</div></div>` : ""}
     <div class="panel"><div class="ph"><span class="t">설정</span></div><div class="pb tm-set">
       <div class="tm-sec">자동 회의 (프로그램이 켜져 있을 때, 한국 시간)</div>
       ${[["morning", "아침 계획"], ["evening", "저녁 점검"], ["weekly", "주간 검토"]].map(([k, l]) => `<label><input type="checkbox" data-auto="${k}" ${S.auto[k] ? "checked" : ""}> ${l} <input class="tm-time" data-time="${k}" value="${esc(S.times[k])}"></label>`).join("")}
@@ -197,8 +199,15 @@ async function onClick(e) {
   const a = e.target.closest("[data-apply]");
   if (a) {
     const k = a.dataset.apply;
-    if (!confirm({ pause_all: "모든 페이퍼 봇을 멈출까요?", pause_bot: `봇 '${a.dataset.target}' 을 멈출까요?`, candidate: "승인된 후보를 적용할까요? (페이퍼 봇)" }[k])) return;
-    await busy(a, async () => { const r = await api("/api/team/apply", { method: "POST", body: { kind: k, target: a.dataset.target, run_id: cur, candidate: a.dataset.cand } }); toast("적용했습니다", r.msg); });
+    const force = !!a.dataset.force;
+    if (!confirm({ pause_all: "모든 페이퍼 봇을 멈출까요?", pause_bot: `봇 '${a.dataset.target}' 을 멈출까요?`,
+      candidate: force ? "검증을 통과하지 않은 가설입니다. 관찰용 페이퍼 봇(모의 매매)으로 시험할까요?" : "승인된 후보를 적용할까요? (페이퍼 봇)",
+      hypothesis: `이 가설을 페이퍼 봇(모의 매매)으로 시험할까요?\n${a.dataset.rule}\n(규칙 문장을 전략으로 바꾸는 데 AI 가 10~30초 걸릴 수 있음)` }[k])) return;
+    await busy(a, async () => {
+      const r = await api("/api/team/apply", { method: "POST", body: { kind: k, target: a.dataset.target, run_id: runInfo?.id || cur, candidate: a.dataset.cand, force,
+        rule: a.dataset.rule, symbol: a.dataset.sym, interval: a.dataset.iv, name: a.dataset.name } });
+      toast("적용했습니다", r.msg);
+    });
     return;
   }
   if (e.target.id === "tm-save") {

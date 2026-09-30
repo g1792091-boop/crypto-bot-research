@@ -146,7 +146,7 @@ def test_human_mention_and_apply_rules():
     assert v["messages"][-1]["from"] == "risk" and "키" in v["messages"][-1]["text"]
     assert c.post(f"/api/team/runs/{ch['id']}/say", json={"text": "요약해줘"}).json()["to"] == "lead"
     bad = c.post("/api/team/apply", json={"kind": "candidate", "run_id": ch["id"], "candidate": "hyp:0"})
-    assert bad.status_code == 400 and "승인" in bad.json()["detail"]
+    assert bad.status_code == 400 and "찾지 못" in bad.json()["detail"]
 
 
 def test_learning_promotion_needs_sample():
@@ -158,3 +158,49 @@ def test_learning_promotion_needs_sample():
     k = team.knowledge()
     assert [x["text"] for x in k["lessons"]] == ["큰 표본"] and [x["id"] for x in k["memos"]] == ["m1"]
     assert any("승격 거부" in m["text"] for m in run.messages)
+
+
+def test_hypothesis_to_paper_bot_after_restart(monkeypatch):
+    """사용자 보고: 가설 매매법을 페이퍼 봇으로 돌리려는데 오류 → 앱을 다시 켜도 · 승인 전이어도(관찰 봇) · 채팅 가설도 시작된다."""
+    from app.main import paper
+    _small()
+    monkeypatch.setattr(team, "_gate_from_backtest", lambda spec, bars=1500: {"passed": True, "test_trades": 30, "reason": "통과"})
+    monkeypatch.setattr(team, "improve_candidates", lambda run: [])
+    monkeypatch.setattr(team, "scan_bots", lambda run: {"tried": 0, "top": []})
+    v = _wait(c.post("/api/team/run", json={"pipeline": "weekly"}).json()["id"], 300)
+    hyps = [x for x in v["results"]["candidates"] if x["kind"] == "hypothesis"]
+    assert hyps and "spec" not in hyps[0]
+    saved = json.loads((team._dir() / f"run_{v['id']}.json").read_text(encoding="utf-8"))
+    assert set(saved["results"]["cand_specs"]) >= {h["id"] for h in hyps}           # 전략도 저장됨
+    team.runs[v["id"]] = team.Run.from_dict(saved)                                    # 앱을 다시 켠 상태 (packet 없음)
+    appr = {a["candidate"]: a["decision"] for a in v["results"].get("approvals") or []}
+    before = len(paper.bots)
+    for h in hyps:
+        r = c.post("/api/team/apply", json={"kind": "candidate", "run_id": v["id"], "candidate": h["id"]})
+        if appr.get(h["id"]) == "approve":
+            assert r.status_code == 200 and "시작" in r.json()["msg"]
+        else:
+            assert r.status_code == 400 and "관찰 봇" in r.json()["detail"]
+            r = c.post("/api/team/apply", json={"kind": "candidate", "run_id": v["id"], "candidate": h["id"], "force": True})
+            assert r.status_code == 200 and "미검증" in r.json()["msg"]
+    r = c.post("/api/team/apply", json={"kind": "hypothesis", "rule": "4시간봉 RSI 14 가 30 아래에서 위로 돌파하면 롱, 손절 2%, 익절 4%",
+                                        "symbol": "eth", "interval": "4h", "name": "과매도"})
+    assert r.status_code == 200 and "ETHUSDT 4h" in r.json()["msg"]
+    bad = c.post("/api/team/apply", json={"kind": "hypothesis", "rule": "아무 뜻 없는 문장", "symbol": "BTCUSDT"})
+    assert bad.status_code == 400 and "읽지 못했습니다" in bad.json()["detail"]
+    new = [b for b in list(paper.bots.values())[before:]]
+    assert len(new) == len(hyps) + 1 and all(b.spec.name.startswith("팀 가설") for b in new)
+    for b in new:
+        paper.bots.pop(b.id, None)
+
+
+def test_empty_ai_answer_falls_back_to_rules(monkeypatch):
+    """약한 모델이 형식만 맞춘 빈 답({})을 주면 그 에이전트는 규칙 분석으로 대신한다 (가설이 사라지지 않게)."""
+    monkeypatch.setattr(config, "provider", lambda: "nvidia")
+    calls = []
+    monkeypatch.setattr(llm, "json_call", lambda *a, **k: calls.append(1) or ({}, "{}", "nvidia:x"))
+    run = team.Run("weekly")
+    run.packet = {"meta": team._meta("weekly"), "market": {"BTCUSDT": {"regime": {"1h": {"score": 50}, "4h": {"score": 50}, "1d": {"score": 50}}}}}
+    out = team.call_role(run, "researcher", {})
+    assert len(calls) == 2 and out and out["hypotheses"]
+    assert any("내용 없는 답" in m["text"] for m in run.messages)

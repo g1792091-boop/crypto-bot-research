@@ -7,6 +7,7 @@
   default  : 기본 모델 (비우면 키가 있는 공급자의 기본 모델)
   features : 기능별 모델 — copilot(실시간 AI) · autopilot(AI 매매법 제안·시그널 코멘트) · strategy(전략 대화·자연어 변환)
              · news(뉴스 요약) · analysis(차트 AI 코멘트·복기) · team_heavy(에이전트 팀 판단형) · team_light(에이전트 팀 반복 분석형)
+             · auto(AI 자동 모드: 마켓 브리핑·리스크·봇 코치·스캐너 코멘트)
   roles    : 에이전트별 모델 (23명, 비우면 팀 등급 설정을 따름)
   fallback : 앞 모델이 한도·오류로 실패하면 차례로 시도할 모델들
 """
@@ -24,6 +25,7 @@ FEATURES = {
     "analysis": "차트 AI 코멘트 · 복기 요약",
     "team_heavy": "에이전트 팀 — 판단형 (전략가·리스크·검증관·승인관 등 Opus 급)",
     "team_light": "에이전트 팀 — 반복 분석형 (시장분석·복기 등 Sonnet 급)",
+    "auto": "AI 자동 모드 (마켓 브리핑 · 포트폴리오 리스크 · 봇 코치 · 스캐너 코멘트)",
 }
 PROVIDERS = ("claude", "nvidia", "gemini")
 _state: dict | None = None

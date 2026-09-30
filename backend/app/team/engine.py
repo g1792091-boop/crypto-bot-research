@@ -240,6 +240,11 @@ def _given(run: Run, role, extra: dict) -> dict:
     return g
 
 
+def _empty(clean: dict) -> bool:
+    body = {k: v for k, v in clean.items() if k not in ("message", "headline", "data_gaps", "questions_for_humans")}
+    return not (clean.get("message") or clean.get("headline")) and not any(body.values())
+
+
 def call_role(run: Run, rid: str, extra: dict) -> Optional[dict]:
     role = BY_ID[rid]
     given = _given(run, role, extra)
@@ -251,6 +256,9 @@ def call_role(run: Run, rid: str, extra: dict) -> Optional[dict]:
                 _calls["n"] += 1
                 data, txt, model = llm.json_call(system, json.dumps(given, ensure_ascii=False, default=str), role.tier, role=rid)
                 clean, problems = checks.check(role.kind, data, given)
+                if clean is not None and _empty(clean):          # 형식만 맞고 내용이 없는 답 (약한 모델에서 흔함) → 다시 / 규칙으로
+                    clean, err = None, "내용 없는 답"
+                    continue
                 if clean is not None:
                     source = model
                     break
@@ -371,11 +379,11 @@ def improve_candidates(run: Run) -> list[dict]:
 
 
 def hypothesis_candidates(run: Run, hyps: list[dict]) -> list[dict]:
-    from ..nl_strategy import from_text
+    from ..nl_strategy import from_text_safe
     out = []
     for i, h in enumerate(hyps[:3]):
         try:
-            spec, how = from_text(h["rule"], h.get("symbol") or "BTCUSDT", h.get("interval") or "1h")
+            spec, how, _ = from_text_safe(h["rule"], h.get("symbol") or "BTCUSDT", h.get("interval") or "1h")
             gate = _gate_from_backtest(spec)
             out.append({"id": f"hyp:{i}", "kind": "hypothesis", "target": h.get("name") or f"가설 {i + 1}", "rule": h["rule"],
                         "symbol": spec.symbol, "interval": spec.interval, "gate": gate, "spec": spec.model_dump(), "parsed_by": how})
@@ -451,7 +459,7 @@ def _execute(run: Run, extra: Optional[dict] = None):
         run.post("code", f"[{run.title}] 시작 — {PIPELINES[kind][1]}" + ("" if llm.provider() else " (AI 키 없음 → 규칙 분석)"), "system")
         run.packet = build_packet(kind, run, extra)
         if kind == "autopilot":
-            run.results["candidates"] = [{k: v for k, v in c.items() if k != "spec"} for c in run.packet.get("candidates", [])]
+            _keep_candidates(run, run.packet.get("candidates", []))
         res: dict = {"analysts": {}}
         stages = PIPELINES[kind][2]
         for rids in stages:
@@ -465,7 +473,7 @@ def _execute(run: Run, extra: Optional[dict] = None):
                     run.post("code", f"전략 연구원 가설 {len(hyps)}개를 파서로 읽고 70/30 백테스트 중…", "system")
                     run.packet["candidates"] = run.packet.get("candidates", []) + hypothesis_candidates(run, hyps)
                 cands = run.packet.get("candidates", [])
-                run.results["candidates"] = [{k: v for k, v in c.items() if k != "spec"} for c in cands]
+                _keep_candidates(run, cands)
                 run.post("code", f"코드 관문: 후보 {len(cands)}개 중 통과 {sum((c.get('gate') or {}).get('passed', False) for c in cands)}개 "
                                  f"({GATE['min_test_trades']}건·손익비 {GATE['min_test_pf']} 기준). 관문 탈락은 에이전트가 뒤집을 수 없습니다.", "system")
 
@@ -512,6 +520,12 @@ def _execute(run: Run, extra: Optional[dict] = None):
         run.typing = []
         run.ended = time.time()
         run.save()
+
+
+def _keep_candidates(run: Run, cands: list[dict]) -> None:
+    """후보를 결과에 남긴다. 전략(spec)도 따로 저장해서 앱을 다시 켜도 '페이퍼 봇으로 시작'이 된다."""
+    run.results["candidates"] = [{k: v for k, v in c.items() if k != "spec"} for c in cands]
+    run.results["cand_specs"] = {c["id"]: c["spec"] for c in cands if c.get("spec")}
 
 
 def _apply_learning(run: Run, o: dict):
@@ -624,26 +638,66 @@ def apply(kind: str, **kw) -> dict:
         return {"ok": True, "msg": f"봇 {b.spec.name} 을 다시 켰습니다."}
     if kind == "candidate":
         run = runs.get(kw.get("run_id") or "")
-        c = next((x for x in (run.packet.get("candidates", []) if run and run.packet else []) if x["id"] == kw.get("candidate")), None)
-        appr = next((a for a in (run.results.get("approvals") or []) if a["candidate"] == kw.get("candidate")), None) if run else None
-        if not c or not appr or appr["decision"] != "approve" or not (c.get("gate") or {}).get("passed"):
-            raise ValueError("승인관이 승인하고 코드 관문을 통과한 후보만 적용할 수 있습니다 (앱을 다시 켜면 후보 정보가 사라집니다).")
+        if not run:
+            raise ValueError("이 회의 기록을 찾지 못했습니다. 에이전트 팀 화면을 새로고침한 뒤 다시 눌러 주세요.")
+        cid = kw.get("candidate")
+        c = next((x for x in (run.packet or {}).get("candidates", []) if x["id"] == cid), None) \
+            or next((x for x in run.results.get("candidates") or [] if x["id"] == cid), None)
+        if not c:
+            raise ValueError(f"후보 {cid} 를 이 회의 기록에서 찾지 못했습니다.")
+        spec_d = c.get("spec") or (run.results.get("cand_specs") or {}).get(cid)
+        appr = next((a for a in (run.results.get("approvals") or []) if a["candidate"] == cid), None)
+        approved = bool(appr and appr["decision"] == "approve" and (c.get("gate") or {}).get("passed"))
         from ..strategy import StrategySpec
         if c["kind"] == "improve":
+            if not approved:
+                raise ValueError("봇 수정안은 승인관이 승인하고 코드 관문을 통과한 것만 적용할 수 있습니다.")
             b = _paper.bots.get(c["bot_id"])
             if not b:
                 raise ValueError("봇이 없습니다.")
-            new = StrategySpec(**c["spec"])
+            if not spec_d:
+                raise ValueError("이 수정안의 전략 정보가 저장돼 있지 않습니다 (예전 버전 기록). 주간 검토를 다시 돌려 주세요.")
+            new = StrategySpec(**spec_d)
             new.name = b.spec.name
             b.spec, b.sim.risk = new, new.risk
             b.versions.append({"time": int(time.time()), "reason": "에이전트 팀 승인: " + " / ".join(c.get("changes") or []), "spec": new.model_dump()})
             _paper.save()
             return {"ok": True, "msg": f"봇 {b.spec.name} 에 수정안을 적용했습니다."}
-        spec = StrategySpec(**c["spec"])
-        spec.name = f"팀 가설 · {c['target']}"[:40]
+        if not approved and not kw.get("force"):
+            raise ValueError("승인관이 승인하고 코드 관문을 통과한 가설이 아닙니다. 그래도 시험하려면 '관찰 봇으로 시험'을 누르세요 (모의 매매).")
+        if spec_d:
+            spec = StrategySpec(**spec_d)
+        elif c.get("rule"):                         # 예전 기록 · 규칙을 못 읽었던 가설 → 규칙 문장을 다시 읽는다
+            spec = _spec_from_rule(c["rule"], c.get("symbol"), c.get("interval"))
+        else:
+            raise ValueError("이 가설에는 매매 규칙이 없습니다.")
+        spec.name = (f"팀 가설 · {c['target']}" if approved else f"팀 가설(미검증) · {c['target']}")[:40]
         b = _paper.add_bot(spec)
-        return {"ok": True, "msg": f"새 페이퍼 봇 '{b.spec.name}' 을 시작했습니다."}
+        return {"ok": True, "msg": f"새 페이퍼 봇 '{b.spec.name}' 을 시작했습니다." + ("" if approved else " 검증을 통과하지 않은 관찰용입니다 (모의 매매).")}
+    if kind == "hypothesis":                        # 채팅에 올라온 가설 문장을 바로 시험
+        rule = (kw.get("rule") or "").strip()
+        if not rule:
+            raise ValueError("가설 규칙이 비어 있습니다.")
+        spec = _spec_from_rule(rule, kw.get("symbol"), kw.get("interval"))
+        spec.name = f"팀 가설(미검증) · {kw.get('name') or rule[:20]}"[:40]
+        b = _paper.add_bot(spec)
+        return {"ok": True, "msg": f"새 페이퍼 봇 '{b.spec.name}' 을 시작했습니다 ({spec.symbol} {spec.interval}). 관문 검증 전인 관찰용입니다 (모의 매매)."}
     raise ValueError("알 수 없는 적용 종류")
+
+
+def _spec_from_rule(rule: str, symbol: str | None, interval: str | None):
+    from ..data import symbols
+    from ..nl_strategy import from_text_safe
+    from ..strategy import INTERVALS
+    sym = symbols.resolve(symbol or "BTCUSDT")
+    iv = interval if interval in INTERVALS else "1h"
+    try:
+        spec, _, _ = from_text_safe(rule, sym, iv)
+    except Exception as e:
+        raise ValueError(f"가설 규칙을 전략으로 읽지 못했습니다: {str(e)[:160]}") from e
+    spec = spec.model_copy(update={"symbol": symbols.resolve(spec.symbol or sym)})
+    market.candles(spec.symbol, spec.interval, 2)      # 없는 종목이면 여기서 오류
+    return spec
 
 
 def _find_bot(target):

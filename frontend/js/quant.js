@@ -127,7 +127,7 @@ function renderSignals() {
   $("#sc-list").innerHTML = xs.length ? xs.map((s) => `<div class="sig">
       <div><div class="d ${s.dir === "long" ? "up" : s.dir === "short" ? "down" : "accent"}">${s.dir === "long" ? "▲ 롱" : s.dir === "short" ? "▼ 숏" : "● 중립"}</div><div class="st" title="강도">${STRENGTH(s.strength)}</div></div>
       <div><div><b>${base(s.symbol)}</b> <span class="muted">${IV_LABEL[s.interval]}</span> · ${esc(s.label)}${s.confluence ? ` <span class="accent">(${s.confluence}개 겹침)</span>` : ""}</div>
-        <div class="dim">${esc(s.text)}</div><div class="muted" style="font-size:11px">${mdhm(s.bar_time)} 봉 · ${px(s.price)}</div></div>
+        <div class="dim">${esc(s.text)}</div>${s.ai ? `<div class="aa-sc">🤖 ${esc(s.ai)}</div>` : ""}<div class="muted" style="font-size:11px">${mdhm(s.bar_time)} 봉 · ${px(s.price)}</div></div>
       <button class="sm" data-chart="${s.symbol}|${s.interval}">차트</button></div>`).join("")
     : `<div class="empty">아직 신호가 없습니다. 조건이 맞는 봉이 끝나면 여기에 쌓입니다.</div>`;
 }

@@ -650,7 +650,8 @@ def tick():
     if (due or changed) and not state["searching"]:
         state["searching"] = True
         threading.Thread(target=_search, args=("차트 지표 변경" if changed and not due else "정기 탐색",), daemon=True).start()
-    if SETTINGS["copilot_every_min"] and now - state["last_copilot"] >= SETTINGS["copilot_every_min"] * 60:
+    from . import ai_auto
+    if SETTINGS["copilot_every_min"] and not ai_auto.trade_active() and now - state["last_copilot"] >= SETTINGS["copilot_every_min"] * 60:
         state["last_copilot"] = now
         try:
             _copilot_watch()

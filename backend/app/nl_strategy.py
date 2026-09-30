@@ -11,6 +11,7 @@ import re
 from pydantic import BaseModel, Field
 
 from . import config, indicators, llm
+from .llm import LLMUnavailable
 from .data.symbols import find_in_text
 from .strategy import Condition, ConditionGroup, IndicatorSpec, RiskSpec, StrategySpec, validate
 
@@ -62,6 +63,23 @@ def from_text(text: str, symbol: str | None = None, interval: str | None = None)
         return spec, llm.provider() or "claude"
     spec = rule_parse(text, symbol, interval)
     return spec, "rules"
+
+
+def from_text_safe(text: str, symbol: str | None = None, interval: str | None = None) -> tuple[StrategySpec, str, str | None]:
+    """from_text + 대체: AI 가 실패하거나(한도·모델 종료 등) AI 결과가 검증을 못 넘으면 기본 변환기로.
+    (spec, engine, ai_error) 반환 — ai_error 는 AI 를 못 쓴 이유 (썼으면 None)."""
+    try:
+        spec, engine = from_text(text, symbol, interval)
+        problems = validate(spec)
+        if not problems:
+            return spec, engine, None
+        err = "AI 가 만든 전략이 검증을 통과하지 못함: " + "; ".join(problems)[:200]
+    except LLMUnavailable as e:
+        err = str(e)
+    try:
+        return rule_parse(text, symbol, interval), "rules", err
+    except ValueError as e2:
+        raise ValueError(f"AI 를 쓸 수 없어({err[:200]}) 기본 변환기로 시도했지만 이해하지 못했습니다. {e2}") from e2
 
 
 # ---------------------------------------------------------------------------

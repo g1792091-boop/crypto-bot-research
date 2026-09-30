@@ -164,7 +164,7 @@ def _dead_msg(model: str) -> str:
 
 
 def used_model() -> str | None:
-    """이 스레드에서 방금 실제로 답한 모델."""
+    """이 스레드에서 방금 실제로 답한(또는 마지막으로 시도한) 모델."""
     return getattr(_tl, "model", None)
 
 
@@ -178,8 +178,10 @@ def strip_think(txt: str) -> str:
 def generate(system: str, user: str, json_mode: bool = False, max_tokens: int = 4096, model: str | None = None) -> str:
     """모델이 종료·삭제됐으면 기억해 두고 쓸 수 있는 다른 모델로 바꿔 다시 부른다 (최대 3번)."""
     tried: list[str] = []
+    _tl.model = None
     m = resolve(model)
     for _ in range(4):
+        _tl.model = m                                   # 실패해도 어느 모델이었는지 남긴다
         try:
             return _generate(system, user, json_mode, max_tokens, m)
         except _Gone as g:

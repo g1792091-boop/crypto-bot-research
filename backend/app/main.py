@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import agents, ai_routes, analysis, autopilot, backtest, config, improve, indicators, library, liquidation, llm, nl_strategy, orderflow
+from . import agents, ai_auto, ai_routes, analysis, autopilot, backtest, config, improve, indicators, library, liquidation, llm, nl_strategy, orderflow
 from .data import coinglass, exchanges, market, news, sentiment, symbols
 from .llm import LLMUnavailable
 from .paper import PaperManager
@@ -24,6 +24,7 @@ paper = PaperManager()
 copilot.bind(paper)
 team.bind(paper)
 autopilot.bind(paper)
+ai_auto.bind(paper)
 
 
 @asynccontextmanager
@@ -34,6 +35,7 @@ async def lifespan(_app: FastAPI):
     copilot.start()
     team.start()
     autopilot.start()
+    ai_auto.start()
     yield
 
 
@@ -232,14 +234,7 @@ class AutoReq(TextStrategyReq):
 
 def _from_text(text: str, symbol: str | None, interval: str | None) -> tuple[StrategySpec, str, str | None]:
     """AI 로 변환. AI 가 실패하면(무료 한도 초과·키 오류 등) 기본 변환기로 대신하고 이유를 함께 돌려준다."""
-    try:
-        spec, engine = nl_strategy.from_text(text, symbol, interval)
-        return spec, engine, None
-    except LLMUnavailable as e:
-        try:
-            return nl_strategy.rule_parse(text, symbol, interval), "rules", str(e)
-        except ValueError as e2:
-            raise ValueError(f"AI 를 쓸 수 없어({e}) 기본 변환기로 시도했지만 이해하지 못했습니다. {e2}") from e2
+    return nl_strategy.from_text_safe(text, symbol, interval)
 
 
 @app.post("/api/strategy/parse")
@@ -632,6 +627,31 @@ def ai_settings():
             "defaults": {"nvidia": config.NVIDIA_MODEL, "nvidia_fast": config.NVIDIA_FAST_MODEL, "claude": config.CLAUDE_MODEL}}
 
 
+@app.get("/api/ai/auto")
+def ai_auto_status():
+    """AI 자동 모드: 작업별 최근 결과 · 다음 실행 · 설정."""
+    return ai_auto.status()
+
+
+@app.post("/api/ai/auto/settings")
+def ai_auto_settings(body: dict):
+    try:
+        return ai_auto.set_settings(body)
+    except (TypeError, ValueError) as e:
+        _bad(ValueError(f"설정 값이 잘못됐습니다: {e}"))
+
+
+@app.post("/api/ai/auto/run/{job}")
+def ai_auto_run(job: str):
+    """작업 하나를 지금 바로 (결과가 나올 때까지 기다림)."""
+    try:
+        return ai_auto.run_job(job)
+    except ValueError as e:
+        _bad(e)
+    except Exception as e:
+        _bad(ValueError(f"{ai_auto.JOBS.get(job, (job,))[0]} 실패: {str(e)[:200]}"))
+
+
 @app.post("/api/ai/routes")
 def ai_save_routes(body: dict):
     return ai_routes.save(body)
@@ -868,19 +888,27 @@ def team_settings(req: TeamSettings):
 
 
 class ApplyReq(BaseModel):
-    kind: Literal["pause_all", "pause_bot", "resume_bot", "candidate"]
+    kind: Literal["pause_all", "pause_bot", "resume_bot", "candidate", "hypothesis"]
     target: Optional[str] = None
     run_id: Optional[str] = None
     candidate: Optional[str] = None
+    force: bool = False                 # 승인 안 된 가설도 관찰 봇으로 시험
+    rule: Optional[str] = None
+    symbol: Optional[str] = None
+    interval: Optional[str] = None
+    name: Optional[str] = None
 
 
 @app.post("/api/team/apply")
 def team_apply(req: ApplyReq):
     """사람이 최종 권한으로 적용 (리스크 조치 · 승인된 후보)."""
     try:
-        return team.apply(req.kind, target=req.target, run_id=req.run_id, candidate=req.candidate)
-    except ValueError as e:
+        return team.apply(req.kind, target=req.target, run_id=req.run_id, candidate=req.candidate, force=req.force,
+                          rule=req.rule, symbol=req.symbol, interval=req.interval, name=req.name)
+    except (ValueError, LLMUnavailable) as e:
         _bad(e)
+    except Exception as e:                  # 예상 못 한 오류도 이유를 보여 준다
+        _bad(ValueError(f"적용 실패: {type(e).__name__}: {str(e)[:200]}"))
 
 
 # ------------------------------------------------------------------ 실시간 AI 상황 분석
@@ -925,7 +953,11 @@ class CopilotCfg(BaseModel):
 
 @app.post("/api/copilot/config")
 def copilot_config(cfg: CopilotCfg):
-    return copilot.set_settings(**cfg.model_dump())
+    out = copilot.set_settings(**cfg.model_dump())
+    if cfg.auto_ai is not None:                  # 'AI 자동 모드'의 포지션 위험 AI 설정과 같은 것
+        ai_auto.SETTINGS["positions"] = bool(cfg.auto_ai)
+        ai_auto.save()
+    return out
 
 
 @app.post("/api/copilot/watch")

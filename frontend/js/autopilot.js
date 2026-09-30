@@ -5,7 +5,7 @@ import { showOnChart } from "./trade.js";
 let S = null, timer = null, visible = false;
 const STAGE = { pass: ["3구간 통과", "up"], hold_fail: ["최종 확인 탈락", "down"], valid_fail: ["검증 탈락", "down"], train_pass: ["학습만 통과", "muted"], train_fail: ["학습 탈락", "muted"] };
 const KIND = { pass: ["✅ 검증 통과", "up"], observe: ["👀 관찰(미통과)", "accent"] };
-const SIGT = { entry: "진입", exit: "청산", deploy: "봇 시작", ai: "AI", ai_note: "AI 코멘트" };
+const SIGT = { entry: "진입", exit: "청산", deploy: "봇 시작", ai: "AI", ai_note: "AI 코멘트", ai_auto: "AI 자동" };
 
 export function initAutopilot() {
   on("view", (v) => { visible = v === "autopilot"; if (visible) load(); });
@@ -71,7 +71,7 @@ function render() {
     <label><input type="checkbox" data-set="observe_if_none" ${s.observe_if_none ? "checked" : ""}> 통과가 없으면 가장 나은 후보를 관찰 봇으로</label>
     <label><input type="checkbox" data-set="team_review" ${s.team_review ? "checked" : ""}> 에이전트 팀 검토 뒤 배치 (승인관이 거부하면 안 함)</label>
     <label>에이전트 팀 상시 감시 회의 <input type="number" data-set="team_monitor_min" value="${s.team_monitor_min}" min="0" style="width:64px">분마다 (0=끔)</label>
-    <label>실시간 AI 감시 <input type="number" data-set="copilot_every_min" value="${s.copilot_every_min}" min="0" style="width:56px">분마다 (0=끔)</label>
+    <label title="AI 자동 모드의 '차트 실시간 AI'가 켜져 있으면 그쪽이 맡습니다">실시간 AI 감시 <input type="number" data-set="copilot_every_min" value="${s.copilot_every_min}" min="0" style="width:56px">분마다 (0=끔 · AI 자동 모드가 켜져 있으면 그쪽 간격)</label>
     <label><input type="checkbox" data-set="ai_candidates" ${s.ai_candidates ? "checked" : ""}> AI 가 차트 지표로 매매법 후보 제안 (같은 관문으로 검증)</label>
     <label><input type="checkbox" data-set="ai_signal_comment" ${s.ai_signal_comment ? "checked" : ""}> 진입 시그널마다 AI 코멘트</label>
     <label>봇 레버리지 <input type="number" data-set="leverage" value="${s.leverage}" min="1" max="50" style="width:56px">배 · 증거금 <input type="number" data-set="position_pct" value="${s.position_pct}" min="1" max="100" style="width:56px">%</label>
@@ -79,7 +79,7 @@ function render() {
   api("/api/autopilot/signals?since=0").then((d) => {
     $("#ap-signals").innerHTML = d.items.length ? d.items.map((x) => `<div class="ap-sig ${x.type}"><span class="muted">${hhmm(x.created)}</span>
       <span class="ai-chip ${x.type === "entry" ? (x.side === "long" ? "up" : "down") : x.type === "exit" ? (x.pnl > 0 ? "up" : "down") : "accent"}">${SIGT[x.type] || x.type}</span>
-      <b>${x.symbol.replace("USDT", "")} ${IV_LABEL[x.interval] || x.interval || ""}</b> ${esc(x.text)}
+      <b>${(x.symbol || "").replace("USDT", "")} ${IV_LABEL[x.interval] || x.interval || ""}</b> ${esc(x.text)}
       <div class="muted">${esc(x.strategy || "")}${x.status === "observe" ? " · 관찰(검증 미통과) — 참고용" : ""}</div></div>`).join("") : `<div class="empty">아직 시그널이 없습니다.</div>`;
   }).catch(() => {});
   $("#ap-log").innerHTML = S.log.map((l) => `<div><span class="muted">${hhmm(l.time)}</span> ${esc(l.msg)}</div>`).join("") || '<div class="muted">기록 없음</div>';

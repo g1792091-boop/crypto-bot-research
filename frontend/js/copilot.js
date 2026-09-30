@@ -1,6 +1,6 @@
 // 실시간 AI 상황 분석 (트레이드 오른쪽 '실시간 AI' 탭)
 // 몇 초마다 /api/copilot 을 읽는다. 경고 · 포지션은 매번 새로, AI 분석은 서버가 필요할 때만(새 봉 · 가격 급변 · 포지션 변경 ·
-// 새 위험 경고 · 최대 간격 경과) 다시 만든다.
+// 새 위험 경고 · 최대 간격 경과) 다시 만든다. 탭을 열지 않아도 1분마다 스스로 분석하고 차트 위 'AI 배지'에 결과를 띄운다.
 import { addPriceAlert } from "./alerts.js";
 import { $, IV_LABEL, api, busy, cls, esc, hhmm, pct, px, state, toast } from "./core.js";
 
@@ -13,7 +13,8 @@ const BIAS = { long: ["롱 우위", "up"], short: ["숏 우위", "down"], neutra
 const ENGINE = { claude: "Claude", gemini: "Gemini", nvidia: "NVIDIA", rules: "규칙 분석" };
 const QUICK = ["지금 포지션 버텨도 될까?", "손절은 어디가 좋아?", "지금 진입해도 돼?", "다음 봉 어떻게 봐?"];
 
-let hooks = {}, last = null, timer = null, loading = false, chats = {};
+let hooks = {}, last = null, timer = null, loading = false, chats = {}, lastLoad = 0;
+const BG_SEC = 60;                  // 탭이 닫혀 있을 때 스스로 다시 보는 간격
 
 const visible = () => !$("#side-ai").hidden && !document.hidden;
 
@@ -23,6 +24,7 @@ export function initCopilot(h) {
   el.innerHTML = `<div class="row" style="gap:6px;flex-wrap:wrap">
       <b style="font-size:13px">실시간 AI 상황 분석</b><span class="ai-eng" id="ai-eng"></span><div class="grow"></div>
       <button class="pri sm" id="ai-now" title="지금 바로 다시 분석">지금 분석</button></div>
+    <div class="help" style="margin:2px 0 4px">🤖 자동 분석 켜짐 — 이 탭을 열지 않아도 AI 가 차트·포지션을 계속 보고 판단이 바뀌면 알림으로 알려줍니다.</div>
     <div class="row ai-ctl">
       <label>화면 갱신<select id="ai-every">${[[0, "끄기"], [15, "15초"], [30, "30초"], [60, "1분"], [180, "3분"]].map(([v, l]) => `<option value="${v}" ${+prefs.every === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
       <label title="변화가 없어도 이 시간이 지나면 AI 가 다시 분석">AI 재분석 최대<select id="ai-maxage">${[[180, "3분"], [300, "5분"], [600, "10분"], [900, "15분"], [1800, "30분"]].map(([v, l]) => `<option value="${v}" ${+prefs.maxAge === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
@@ -42,17 +44,25 @@ export function initCopilot(h) {
   $("#ai-q").onkeydown = (e) => { if (e.key === "Enter" && !e.isComposing) $("#ai-send").click(); };
   $("#ai-quick").onclick = (e) => { const q = e.target.dataset.q; if (q) busy(e.target, () => ask(q)); };
   el.addEventListener("click", onAction);
-  document.addEventListener("visibilitychange", () => visible() && refresh());
+  document.addEventListener("visibilitychange", () => !document.hidden && refresh());
   setInterval(tickStatus, 1000);
+  $("#ai-badge").onclick = () => document.querySelector('#side-tabs [data-t="ai"]')?.click();
+  schedule();
+  setTimeout(() => refresh(), 1500);          // 앱을 켜면 바로 한 번
 }
 
 // 탭을 열거나 코인·봉이 바뀌면 부른다
 export function showCopilot() { renderChat(); refresh(); schedule(); }
-export function copilotSymbolChanged() { last = null; renderChat(); if (visible()) { $("#ai-body").innerHTML = `<div class="muted">분석 중…</div>`; refresh(); } }
+export function copilotSymbolChanged() { last = null; renderChat(); $("#ai-body").innerHTML = `<div class="muted">분석 중…</div>`; badge(); refresh(); }
 
+// 탭이 보이면 '화면 갱신' 간격, 안 보여도 1분마다 (서버는 바뀐 게 있을 때만 AI 를 부름)
 function schedule() {
   clearInterval(timer);
-  if (prefs.every) timer = setInterval(() => visible() && refresh(), prefs.every * 1000);
+  timer = setInterval(() => {
+    if (document.hidden) return;
+    const gap = (Date.now() - lastLoad) / 1000;
+    if (visible() ? (prefs.every && gap >= prefs.every) : gap >= BG_SEC) refresh();
+  }, 5000);
 }
 
 async function refresh(force = false) {
@@ -61,6 +71,7 @@ async function refresh(force = false) {
   loading = true;
   if (force) $("#ai-status").textContent = "AI 가 분석 중… (AI 는 10~30초 걸릴 수 있음)";
   try {
+    lastLoad = Date.now();
     const r = await api(`/api/copilot?symbol=${sym}&interval=${iv}&max_age=${prefs.maxAge}${force ? "&force=true" : ""}`);
     if (sym !== state.symbol || iv !== state.interval) return;
     const fresh = !last || last.analyzed_at !== r.analyzed_at;
@@ -69,6 +80,17 @@ async function refresh(force = false) {
   } catch (e) {
     $("#ai-status").textContent = "실패: " + e.message;
   } finally { loading = false; }
+}
+
+// 차트 위 AI 배지 (시세 줄 끝) — 누르면 AI 탭
+function badge() {
+  const el = $("#ai-badge");
+  if (!el) return;
+  if (!last) { el.innerHTML = `<span class="muted">🤖 AI 분석 중…</span>`; el.className = "ai-badge"; return; }
+  const a = last.analysis, [bl, bc] = BIAS[a.bias], urgent = a.position_advice.some((x) => x.urgency === "high") || last.alerts.some((x) => x.level === "high");
+  el.className = `ai-badge ${urgent ? "hot" : ""}`;
+  el.title = `${a.headline}\n${a.situation}\n(${ENGINE[last.engine] || last.engine}${last.model ? ` · ${last.model}` : ""} · 누르면 실시간 AI 탭)`;
+  el.innerHTML = `<span class="k">🤖 AI${last.updating ? " …" : ""}</span><span class="ai-chip ${bc}">${bl} ${a.confidence}%</span>${urgent ? '<span class="ai-chip down">⚠ 포지션</span>' : ""}<span class="ai-bh">${esc(a.headline)}</span>`;
 }
 
 function tickStatus() {
@@ -87,6 +109,7 @@ function posLine(p) {
 }
 
 function render(fresh) {
+  badge();
   const r = last, a = r.analysis, [bl, bc] = BIAS[a.bias];
   $("#ai-eng").innerHTML = `<span class="${r.engine === "rules" ? "muted" : "accent"}">${ENGINE[r.engine] || r.engine}${r.model ? ` · ${esc(r.model)}` : ""}</span>`;
   const myPos = r.positions.filter((p) => p.symbol === r.symbol || p.kind === "manual");
