@@ -12,7 +12,8 @@ Triggers (defaults in ``TriggerPolicy``; every number is configurable):
                                    timeout or data-gap WARN in paper3.db alerts (by alert
                                    rowid); nightly parity mismatch, missing 00:00 snapshot or
                                    missing 1m bars in daily3.db reports (by report day).
-    owner         1  <room>        new owner_messages in that room (inbox.db) since the cursor.
+    owner         1  <room>        new owner_messages in that room (inbox.db) since the cursor (the
+                                   oldest ``owner_batch`` (10) per meeting; the rest open the next one).
     loss_cluster  2  strat:<S>     since the room's last round: >= 3 new losing trades of the
                                    strategy (any timeframe), or one loss-card tag
                                    (cards.tag_stats) in >= 3 of them; >= 4h between
@@ -167,6 +168,7 @@ class TriggerPolicy:
     any_round_resets_losses: bool = True     # "since the room's last round" (any trigger)
     # weekly / checkpoint / scheduled meetings
     weekly_min_trades: int = 30
+    owner_batch: int = 10                    # owner posts one owner meeting answers (oldest first)
     checkpoint_every_days: int = 30
     morning_hour_kst: int = 8
     evening_hour_kst: int = 22
@@ -372,16 +374,20 @@ class _Rooms:
 
 
 # ---------------------------------------------------------------- paper3.db helpers
-def run_start(paper_ro: Optional[sqlite3.Connection]) -> Optional[int]:
+def run_start(paper_ro: Optional[sqlite3.Connection], strict: bool = False) -> Optional[int]:
     """When the paper run started: the creation time of its original accounts (the state
-    'run' row is rewritten at every restart), else the first ``runs`` row, else state 'run'."""
-    r = _one(paper_ro, "SELECT MIN(created_ts) FROM accounts WHERE kind IN ('strategy', 'random')")
+    'run' row is rewritten at every restart), else the first ``runs`` row, else state 'run'.
+    ``strict``: a read error (e.g. 'database is locked') raises LookupError instead of reading as
+    'no rows' and falling back to a restart time (the cursor reconciliation would take that for a
+    new run and reset every trigger cursor); only a missing table reads as empty."""
+    one = _q1_tables if strict else _one
+    r = one(paper_ro, "SELECT MIN(created_ts) FROM accounts WHERE kind IN ('strategy', 'random')")
     if r and r[0] is not None:
         return int(r[0])
-    r = _one(paper_ro, "SELECT MIN(started_ts) FROM runs")
+    r = one(paper_ro, "SELECT MIN(started_ts) FROM runs")
     if r and r[0] is not None:
         return int(r[0])
-    r = _one(paper_ro, "SELECT ts FROM state WHERE k = 'run'")
+    r = one(paper_ro, "SELECT ts FROM state WHERE k = 'run'")
     return None if r is None else int(r[0])
 
 
@@ -474,6 +480,9 @@ def _owner(inbox_ro, paper_ro, st: _Rooms) -> list[Due]:
     hwm = _trade_hwm(paper_ro) if any(r.startswith("strat:") for r in by_room) else 0
     out = []
     for room, msgs in by_room.items():
+        # one meeting answers the oldest posts it can show the staff (the packet holds the last 10, the
+        # room shows at most 50 copied posts); the rest open the next owner meeting of that room
+        msgs = msgs[:max(1, st.p.owner_batch)]
         last = msgs[-1]["id"]
         cursors = {**(_strategy_cursors(st, room, hwm) if room.startswith("strat:") else {}),
                    f"owner:{room}": str(last)}
@@ -485,27 +494,35 @@ def _owner(inbox_ro, paper_ro, st: _Rooms) -> list[Due]:
     return out
 
 
-def _strategy_trades(paper_ro, since_id: int, losses_only: bool, since_ms: int = 0) -> list[tuple]:
+def _strategy_trades(paper_ro, since_id: int, losses_only: bool, since_ms: int = 0,
+                     upto_id: Optional[int] = None) -> list[tuple]:
     q = ("SELECT t.id, t.account_id, t.exit_time, t.pnl, t.data, a.strategy, a.timeframe FROM trades t "
          "JOIN accounts a ON a.account_id = t.account_id WHERE a.kind = 'strategy' AND t.id > ? "
          "AND t.exit_time >= ?")
+    args: tuple = (since_id, since_ms)
+    if upto_id is not None:
+        q += " AND t.id <= ?"
+        args += (int(upto_id),)
     if losses_only:
         q += " AND t.pnl < 0"
-    return _rows(paper_ro, q + " ORDER BY t.id", (since_id, since_ms))
+    return _rows(paper_ro, q + " ORDER BY t.id", args)
 
 
 def _loss_cluster(paper_ro, st: _Rooms) -> list[Due]:
     from ..cards import card, tag_stats
     p = st.p
     cur = {s: st.cursor_int(f"loss:{strat_room(s)}") for s in STRATEGIES}
-    rows = _strategy_trades(paper_ro, min(cur.values(), default=0), True, st.now - p.loss_lookback_ms)
+    # the high-water mark is read BEFORE the scan and bounds it: a loss the live runner commits in
+    # between is neither in this cluster nor behind the cursor this meeting writes (it counts next time)
+    hwm = _trade_hwm(paper_ro)
+    rows = _strategy_trades(paper_ro, min(cur.values(), default=0), True, st.now - p.loss_lookback_ms, upto_id=hwm)
     by_s: dict[str, list] = {}
     for r in rows:
         if r[5] in cur and r[0] > cur[r[5]]:
             by_s.setdefault(r[5], []).append(r)
     if not by_s:
         return []
-    hwm, rt = _trade_hwm(paper_ro), _round_trip(paper_ro)
+    rt = _round_trip(paper_ro)
     out = []
     for s, lst in by_s.items():
         room = strat_room(s)
@@ -849,6 +866,18 @@ def _q1(paper_ro: sqlite3.Connection, sql: str, args: Iterable = ()) -> Optional
     return tuple(r) if r else None
 
 
+def _q1_tables(paper_ro: Optional[sqlite3.Connection], sql: str, args: Iterable = ()) -> Optional[tuple]:
+    """``_q1`` where a missing table (an older or brand-new paper3.db) reads as no row."""
+    if paper_ro is None:
+        return None
+    try:
+        return _q1(paper_ro, sql, args)
+    except LookupError as exc:
+        if "no such table" in str(exc):
+            return None
+        raise
+
+
 def _paper_cursors(agents_conn: sqlite3.Connection) -> dict[str, str]:
     return {k: v for k, v in _rows(agents_conn, "SELECT k, v FROM cursors WHERE k LIKE 'loss:%' OR k LIKE 'weekly:%' "
                                                 "OR k LIKE 'bust:%' OR k IN (?, 'checkpoint:day')", (ALERT_CURSOR,))}
@@ -876,9 +905,10 @@ def paper_fingerprint(paper_ro: Optional[sqlite3.Connection], agents_conn: sqlit
                 continue
             if r is not None and r[0] is not None:
                 at[k] = int(r[0])
+        run = run_start(paper_ro, strict=True)
     except LookupError:
         return None
-    return {"run": run_start(paper_ro), "t": [_int(t[0]), _int(t[1])] if t else [0, 0],
+    return {"run": run, "t": [_int(t[0]), _int(t[1])] if t else [0, 0],
             "a": [_int(a[0]), _int(a[1])] if a else [0, 0], "at": at}
 
 
@@ -909,7 +939,7 @@ def reconcile_paper_cursors(agents_conn: sqlite3.Connection, paper_ro: Optional[
                 return False
             r = _q1(paper_ro, sql, (_int(old[0]),))
             return r is None or _int(r[0]) != _int(old[1])
-        run = run_start(paper_ro)
+        run = run_start(paper_ro, strict=True)          # unreadable: change nothing (LookupError)
         run_changed = fp.get("run") is not None and run is not None and fp.get("run") != run
         curs = _paper_cursors(agents_conn)
         trade_keys = [k for k in curs if k.startswith(TRADE_CURSOR_PREFIXES)]

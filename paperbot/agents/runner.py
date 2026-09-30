@@ -44,8 +44,10 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 import tempfile
+import weakref
 from dataclasses import dataclass
 from typing import Callable, Optional, Protocol
 
@@ -169,6 +171,8 @@ class ClaudeCodeRunner:
         self.bin = claude_bin
         self.timeout = timeout
         self.workdir = workdir or tempfile.mkdtemp(prefix="paperbot-agent-")
+        if workdir is None:             # our own scratch folder: removed with the runner (or at exit)
+            weakref.finalize(self, shutil.rmtree, self.workdir, True)
         self.env = call_env(env)
         self._run = run
 

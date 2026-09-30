@@ -8,17 +8,20 @@
 # copied. The small databases go first: agents3.db (the hypothesis ledger behind the gate's test count)
 # and inbox.db (the owners' posts and approvals), then daily3.db and paper3.db. The backup writes none
 # of them: a read-only connection never checkpoints a left-over WAL into the database file.
-# A copy is written as <name>.db.part and renamed when complete, so a failed copy never looks whole.
+# A copy is written as <name>.db.part and renamed when complete, so a failed copy never looks whole;
+# a second run on the same day keeps that day's good copy until the new one has replaced it (the
+# rename is atomic). Parts left by a copy the unit's timeout killed are removed first.
 # Exit status 1 when any copy failed (after the old copies are pruned), so the unit fails visibly.
 lib=${PAPERBOT_LIB:-/var/lib/paperbot}
 out=${PAPERBOT_BACKUPS:-/var/backups/paperbot}
 d="$out/$(date -u +%Y%m%d)"
 mkdir -p "$d" || exit 1
+find "$out" -name '*.db.part' -type f -delete
 fail=0
 for f in agents3 inbox daily3 paper3; do
   src="$lib/$f.db"
   [ -f "$src" ] || continue
-  rm -f "$d/$f.db" "$d/$f.db.part"
+  rm -f "$d/$f.db.part"
   if printf "VACUUM INTO '%s';\n" "$d/$f.db.part" | sqlite3 -bail -readonly "$src" \
       && mv "$d/$f.db.part" "$d/$f.db"; then
     :

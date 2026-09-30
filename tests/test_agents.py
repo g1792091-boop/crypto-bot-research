@@ -173,7 +173,7 @@ def test_runner_command_env_and_parsing():
     cmd = seen["cmd"]
     assert "--bare" not in cmd and cmd[cmd.index("--tools") + 1] == ""
     assert cmd[cmd.index("--model") + 1] == "sonnet" and "--safe-mode" in cmd
-    assert set(seen["env"]) == {"PATH", "HOME", "CLAUDE_CODE_OAUTH_TOKEN"}
+    assert set(seen["env"]) == {"PATH", "HOME", "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CODE_MAX_OUTPUT_TOKENS"}
     assert json.loads(seen["input"])["n"] == 1
     assert child_env({"ANTHROPIC_AUTH_TOKEN": "z"}) == {}
 

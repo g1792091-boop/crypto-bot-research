@@ -661,11 +661,20 @@ def test_backup_unit_copies_every_database_read_only_and_fails_on_a_failed_copy(
     assert c.execute("SELECT COUNT(*) FROM messages WHERE text = ?", ("y" * 5000,)).fetchone()[0] == 1
     assert c.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     c.close()
-    # a copy that fails makes the unit fail; the others are still copied, and no partial copy is left
+    # a copy that fails makes the unit fail; the others are still copied, and no partial copy is left.
+    # A second run on the same day keeps that day's good copy of the failed database (the new copy
+    # replaces it only once complete), and parts a killed copy left in any day's folder are removed.
     (lib / "inbox.db").write_bytes(b"not a database " * 500)
+    old_day = bk / "20000101"                                  # a recent folder (not pruned) ...
+    old_day.mkdir()
+    (old_day / "paper3.db.part").write_bytes(b"x" * 1000)     # ... with a copy the unit's timeout killed
     r = subprocess.run(["/bin/sh", BACKUP_SH], env=env, capture_output=True, text=True, timeout=120)
     assert r.returncode == 1 and "inbox.db" in r.stderr
-    assert sorted(os.listdir(bk / day)) == ["agents3.db", "daily3.db", "paper3.db"]
+    assert sorted(os.listdir(bk / day)) == ["agents3.db", "daily3.db", "inbox.db", "paper3.db"]
+    c = sqlite3.connect(str(bk / day / "inbox.db"))
+    assert c.execute("SELECT COUNT(*) FROM t").fetchone()[0] == 3    # this morning's good copy
+    c.close()
+    assert not any(p.name.endswith(".part") for p in bk.rglob("*")) and old_day.is_dir()
 
 
 WRITER = """
@@ -1043,7 +1052,11 @@ def test_one_large_call_cannot_eat_into_the_token_reserve(world):
                          (QUIET - HOUR, R.kst_day(QUIET), "weekly", "x", "sonnet", 1, 1_149_000))
     world.agents.commit()
     ctx = RM.RoundContext(world.agents, None, None, None, QueueRunner({}), None, QUIET, clock_ms=lambda: QUIET)
-    loss = RM.round_budget(TR.Due(ROOM, "loss_cluster", 2, {"class": "loss"}, "loss_cluster"), ctx)
+    due = TR.Due(ROOM, "loss_cluster", 2, {"class": "loss"}, "loss_cluster")
+    with pytest.raises(RM.PacedKeepExceeded):
+        RM.round_budget(due, ctx).check(0)                    # by default a paced call also leaves the owners' share
+    ctx.policy = RM.RoomsPolicy(owner_keep_calls=0, bust_reserve_calls=0)
+    loss = RM.round_budget(due, ctx)
     loss.check(0)
     with pytest.raises(RM.ReserveExceeded):
         loss.check(5_000)                                     # a 5,000-token call would reach into the reserve
@@ -1158,3 +1171,309 @@ def test_the_decision_line_and_the_end_of_the_meeting_are_one_transaction(world,
     kinds = [r[0] for r in ro.execute("SELECT kind FROM messages WHERE room_id = ?", (ROOM,))]
     ro.close()
     assert "analysis" in kinds and "decision" not in kinds
+
+
+# ================================================================ confirmation review, round 3
+def _capture_call(packet, env=None):
+    """What ClaudeCodeRunner hands the CLI for one call (no process is started)."""
+    import json as _json
+    import subprocess as _sp
+    from paperbot.agents.runner import ClaudeCodeRunner
+    seen = {}
+
+    def run(cmd, input=None, **kw):
+        seen["cmd"], seen["stdin"], seen["env"] = cmd, input, kw.get("env")
+        out = _json.dumps({"type": "result", "is_error": False, "result": "{}", "usage": {"input_tokens": 1}})
+        return _sp.CompletedProcess(cmd, 0, stdout=out, stderr="")
+
+    ClaudeCodeRunner("claude", run=run, env=env or {"PATH": "/usr/bin", "HOME": "/tmp"}).call("sonnet", "sys", "i", packet)
+    return seen
+
+
+def test_packet_text_can_never_name_a_file_for_claude_code_to_attach():
+    """Claude Code expands '@/abs/path' anywhere in the -p prompt (stdin included) into a file read sent to
+    the model, even with --tools "" (it would read /etc/paperbot/agents.env: the login and Telegram tokens).
+    An owner post or a model's earlier line in the packet must never name a file: '@' goes as its JSON
+    escape, and the model still reads the same JSON."""
+    import json as _json
+    packet = {"owner_messages": [{"id": 1, "text": "봐 주세요 @/etc/paperbot/agents.env"}],
+              "this_round": {"specialist": {"headline": "@/var/lib/paperbot/.claude/.credentials.json",
+                                            "findings": [{"evidence": ["losses.by_tf.N17_KC_RSI@15m"]}]}},
+              "room_messages": [{"text": "@~/.claude.json @./secret @agents.env"}]}
+    seen = _capture_call(packet)
+    assert "@" not in seen["stdin"], "a packet text makes the CLI read a local file"
+    assert _json.loads(seen["stdin"]) == packet              # lossless: evidence paths such as 'X@15m' still match
+
+
+def test_each_call_has_a_bounded_output_that_the_pre_call_check_charges(world):
+    """Without CLAUDE_CODE_MAX_OUTPUT_TOKENS the CLI asks for max_tokens=128000 per call, which the pre-call
+    check never saw: one call could run that far past a token cap or into the reserve."""
+    from paperbot.agents import runner as RN
+    seen = _capture_call({"role": "validator"},
+                         env={"PATH": "/usr/bin", "HOME": "/tmp", "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "128000"})
+    assert seen["env"]["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] == str(RN.MAX_OUTPUT_TOKENS)      # never the parent's
+    got = {}
+    RN.auth_preflight(env={"PATH": "/usr/bin"}, run=lambda cmd, **kw: got.update(kw) or _proc("{}")(cmd))
+    assert got["env"]["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] == str(RN.MAX_OUTPUT_TOKENS)
+    # the check charges the ceiling: 20k used + a tiny packet + the ceiling would pass a 30k cap
+    prefill(world, QUIET, owner=1)
+    runner = QueueRunner({"x": [{}]})
+    b = RM.ClassBudget(runner, world.agents, "owner", 20, 20_000 + RN.MAX_OUTPUT_TOKENS, 80, 10**9, lambda: QUIET)
+    with pytest.raises(RM.BudgetExceeded):
+        b.call("sonnet", "", "", {"role": "x"})
+    assert runner.calls == [] and world.q("SELECT COUNT(*) FROM agent_calls") == [(1,)]
+    b = RM.ClassBudget(runner, world.agents, "owner", 20, 10**9, 80, 10**9, lambda: QUIET,
+                       week=(420, 20_000 + RN.MAX_OUTPUT_TOKENS))
+    with pytest.raises(RM.BudgetExceeded):
+        b.call("sonnet", "", "", {"role": "x"})
+    b = RM.ClassBudget(runner, world.agents, "owner", 20, 20_000 + RN.MAX_OUTPUT_TOKENS + 1_000, 80, 10**9,
+                       lambda: QUIET)
+    b.call("sonnet", "", "", {"role": "x"})                   # room for the packet and the whole ceiling
+    assert [c["role"] for c in runner.calls] == ["x"]
+
+
+def _busy_week(world, now, per_day=62):
+    """Six earlier KST days of a busy week (8k tokens a call): 21 incident / scheduled + 41 other calls."""
+    rows = []
+    for k in range(1, 7):
+        ts = R.kst_day_start_ms(now) - k * DAY + 12 * HOUR
+        day = R.kst_day(ts)
+        mix = {"scheduled": 9, "incident": 12, "loss": 16, "weekly": 14, "owner": per_day - 51}
+        for cls, n in mix.items():
+            rows += [(ts, day, cls, "x", "sonnet", 1, 8_000)] * n
+    world.agents.executemany("INSERT INTO agent_calls VALUES (?,?,?,?,?,?,?)", rows)
+    world.agents.commit()
+
+
+class _Answers:
+    """Every call answers, reporting 8k tokens (the budget code only looks at the usage)."""
+
+    def call(self, model, system_prompt, instruction, packet):
+        from paperbot.agents.runner import CallResult
+        return CallResult("{}", {}, {"usage": {"input_tokens": 7_000, "output_tokens": 1_000}})
+
+
+def _ctx(world, t):
+    return RM.RoundContext(world.agents, None, None, None, _Answers(), None, t, clock_ms=lambda: t)
+
+
+def test_paced_reviews_leave_the_owners_share_in_a_busy_week(world):
+    """Busy week, 7-day cap binding: from 00:00 KST the paced loss-cluster and weekly reviews ran whenever
+    the tick's test let them (each meeting up to 6 calls). An owner post at 07:14 must still find an owner
+    meeting's calls, and so must a bust; before, the reviews had used the day's whole shared allowance by
+    05:30 and the post waited until midnight."""
+    day0 = kst(2026, 10, 11)
+    _busy_week(world, day0)
+    rooms = [f"strat:{s}" for s in TR.STRATEGIES]
+    used = {"loss_cluster": 0, "weekly": 0}
+    for step in range(0, 7 * 4 + 1):                          # 00:00 .. 07:00, every 15 minutes
+        t = day0 + step * 15 * MIN
+        ctx = _ctx(world, t)
+        for trig, cls in (("loss_cluster", "loss"), ("weekly", "weekly")):
+            due = TR.Due(rooms[step % len(rooms)], trig, 2, {"class": cls}, trig)
+            if not RM.can_start(due, ctx):
+                continue
+            b = RM.round_budget(due, ctx)
+            for _ in range(6):                                # a whole strategy meeting
+                try:
+                    b.call("sonnet", "", "", {"role": "x"})
+                except RM.BudgetExceeded as exc:
+                    assert RM.stop_blocks(RM.stop_kind(exc), cls) == []     # stopping pauses nothing else
+                    break
+                used[trig] += 1
+    assert used["loss_cluster"] + used["weekly"] > 0           # the reviews did run
+    t = day0 + 7 * HOUR + 15 * MIN
+    ctx = _ctx(world, t)
+    post = TR.Due("strat:N19_FIB_CHOP", "owner", 1, {"class": "owner"}, "owner")
+    assert RM.can_start(post, ctx)
+    assert "owner" not in RM.deferred_triggers(ctx) and "bust" not in RM.deferred_triggers(ctx)
+    assert RM.can_start(TR.Due(rooms[0], "bust", 2, {"class": "loss"}, "bust"), ctx)
+    # the owners' share is only for them (and busts): the reviews themselves still wait
+    assert not RM.can_start(TR.Due(rooms[1], "loss_cluster", 2, {"class": "loss"}, "loss_cluster"), ctx)
+
+
+def test_a_meeting_whose_first_call_the_check_would_refuse_never_starts(world):
+    """headroom() compared tokens without the call's own size while check() includes it: a meeting could
+    start (announce, copy the owners' posts) and stop on its first call, pausing its classes for the day."""
+    from paperbot.agents import runner as RN
+    cap = RM.DEFAULT_BUDGETS["owner"][1]
+    world.agents.execute("INSERT INTO agent_calls VALUES (?,?,?,?,?,?,?)",
+                         (QUIET - HOUR, R.kst_day(QUIET), "owner", "x", "sonnet", 1, cap - RN.MAX_OUTPUT_TOKENS))
+    world.agents.commit()
+    ctx = _ctx(world, QUIET)
+    post = TR.Due("team:risk", "owner", 1, {"class": "owner"}, "owner")
+    b = RM.round_budget(post, ctx)
+    assert b.used_today()[0] == 1 and b.headroom() == 0 and not RM.can_start(post, ctx)
+    with pytest.raises(RM.BudgetExceeded):
+        b.check(RM.estimate_tokens({"role": "x"}) + RN.MAX_OUTPUT_TOKENS)   # what its first call would meet
+    world.say("team:risk", "질문", QUIET - MIN)
+    assert world.tick(QueueRunner({}), QUIET)["rounds"] == [] and world.rounds() == []   # nothing posted
+
+
+class _Down:
+    def call(self, model, system_prompt, instruction, packet):
+        from paperbot.agents.runner import AgentCallError
+        raise AgentCallError("exit 1: API Error: Connection error. (ECONNREFUSED)")
+
+
+def test_an_outage_does_not_use_up_the_incident_calls(world):
+    """A network outage logs a data-gap WARN while the CLI cannot connect: every retry of the incident
+    meeting failed before the model ran (no usage reported). Those must not count, or a few hours of
+    outage use up the non-critical incident calls for the rest of the KST day."""
+    world.store.alert(QUIET - MIN, "WARN", "data gap at 15:00 BTCUSDT 5m")
+    world.store.commit()
+    for k in range(16):                                        # 4 hours of 15-minute ticks while down
+        world.tick(_Down(), QUIET + k * 15 * MIN)
+    assert any(r["status"] == "failed" for r in world.rounds())
+    assert all(r["decision"].get("transient") for r in world.rounds())
+    assert world.q("SELECT COUNT(*) FROM agent_calls") == [(0,)]
+    ctx = _ctx(world, QUIET + 4 * HOUR)
+    gap = TR.Due("team:ops", "incident", 0, {"class": "incident", "counts": {"data_gap": 1}}, "incident")
+    assert RM.round_budget(gap, ctx).headroom() == 10 and RM.can_start(gap, ctx)
+    # a failure that still reported usage ran, and is counted; a timeout is counted at its estimate
+    from paperbot.agents.runner import AgentCallError, AgentTimeout
+    ran = AgentCallError("exit 1: overloaded")
+    ran.tokens = 5_000
+    for exc, want in ((ran, (0, 5_000)), (AgentTimeout("timed out"), None)):
+        b = RM.ClassBudget(QueueRunner({"x": [exc]}), world.agents, "owner", 20, 10**9, 80, 10**9, lambda: QUIET)
+        with pytest.raises(AgentCallError):
+            b.call("sonnet", "s", "i", {"role": "x"})
+        got = world.q("SELECT ok, tokens FROM agent_calls ORDER BY rowid DESC LIMIT 1")[0]
+        assert got == (want or (0, RM.estimate_tokens({"role": "x"}, "s")))
+
+
+class _Flaky:
+    """A paper3.db read-only connection whose first query matching ``frag`` hits a transient error."""
+
+    def __init__(self, conn, frag):
+        self.c, self.frag, self.hit = conn, frag, False
+
+    def execute(self, sql, args=()):
+        if self.frag in sql and not self.hit:
+            self.hit = True
+            raise sqlite3.OperationalError("database is locked")
+        return self.c.execute(sql, args)
+
+
+def test_a_transient_read_error_is_never_taken_for_a_new_paper_run(tmp_path):
+    """run_start read 'database is locked' on the accounts query as 'no accounts' and fell back to the
+    restart time: the reconciliation took that for a new run and reset every loss / weekly / checkpoint
+    cursor (handled busts and losses would open meetings again)."""
+    paths = E.build_world(str(tmp_path / "var"))
+    st = Store3(paths["paper3"])
+    st.put_state("run", E.T0 - HOUR, {"taker_fee": 0.0005})     # rewritten at every restart
+    st.add_run(E.T0 - HOUR, {"x": 1})
+    st.commit()
+    st.conn.close()
+    a = R.open_agents(paths["agents3"])
+    want = {f"loss:{E.ROOM}": "9", f"weekly:{E.ROOM}": "9", "checkpoint:day": "30"}
+    for k, v in want.items():
+        R.set_cursor(a, k, v)
+    ro = R.open_ro(paths["paper3"])
+    TR.store_paper_fingerprint(a, ro)
+    assert TR.reconcile_paper_cursors(a, _Flaky(ro, "FROM accounts")) == {}
+    assert TR.paper_fingerprint(_Flaky(ro, "FROM accounts"), a) is None     # unreadable: nothing stored
+    assert {k: R.get_cursor(a, k) for k in want} == {k: int(v) for k, v in want.items()}
+    assert TR.reconcile_paper_cursors(a, ro) == {}                            # the same run, read cleanly
+    ro.close()
+    a.close()
+
+
+def test_a_loss_committed_during_the_scan_is_counted_later(tmp_path):
+    """The loss scan and the cursor's high-water mark were two reads: a loss committed in between was in
+    neither the cluster nor any later one (the cursor moved past it)."""
+    paths = E.build_world(str(tmp_path / "var"))
+    a = R.open_agents(paths["agents3"])
+    R.ensure_rooms(a)
+    writer = Store3(paths["paper3"])
+
+    class Racy:
+        def __init__(self, c):
+            self.c, self.done = c, False
+
+        def execute(self, sql, args=()):
+            cur = self.c.execute(sql, args)
+            if "t.pnl < 0" in sql and not self.done:
+                rows = cur.fetchall()
+                self.done = True
+                writer.trade(f"{E.S}@15m", E._rec(E.S, "15m", -7.0, E.T0 - MIN, context=E.AGAINST))
+                writer.commit()
+                return type("C", (), {"fetchall": lambda s: rows})()
+            return cur
+    ro = R.open_ro(paths["paper3"])
+    [d] = TR.find_due(Racy(ro), None, a, None, E.T0, TR.TriggerPolicy(enabled=("loss_cluster",)))
+    new_id = ro.execute("SELECT MAX(id) FROM trades").fetchone()[0]
+    assert new_id not in d.data["trade_ids"]
+    assert int(d.data["cursors"][f"loss:{E.ROOM}"]) < new_id               # the cursor stops before it
+    TR.advance_cursors(a, d)
+    ro.close()
+    writer.conn.close()
+    a.close()
+
+
+def test_a_large_owner_backlog_is_answered_in_batches(tmp_path):
+    """60 posts in one room while the agents were stopped: one meeting showed 50 and marked all 60 as
+    answered (the packet held 10); posts 51-60 then stayed 'pending' until another post arrived."""
+    paths = E.build_world(str(tmp_path / "var"))
+    ib = R.open_inbox_rw(paths["inbox"])
+    for k in range(25):
+        R.add_owner_message(ib, "team:risk", "", f"질문 {k + 1}", ts=E.T0 - (25 - k) * 3 * MIN)
+    ib.close()
+    pol = RM.RoomsPolicy(triggers=TR.TriggerPolicy(enabled=("owner",)))
+    answered = []
+    for k in range(3):
+        t = E.T0 + k * 15 * MIN
+        out = RM.tick(paths["paper3"], paths["daily3"], paths["agents3"], paths["inbox"], RM.DryRunRunner(),
+                      policy=pol, now_ms=t, clock_ms=lambda t=t: t)
+        assert [(r["room_id"], r["trigger"]) for r in out["rounds"]] == [("team:risk", "owner")]
+        a = R.open_ro(paths["agents3"])
+        answered.append(R.get_cursor(a, "owner:team:risk"))
+        shown = [m["text"] for m in R.room_messages(a, "team:risk", limit=500) if m["kind"] == "owner"]
+        a.close()
+        assert shown == [f"질문 {i + 1}" for i in range(answered[-1])]      # every answered post was shown
+    assert answered == [10, 20, 25]
+    out = RM.tick(paths["paper3"], paths["daily3"], paths["agents3"], paths["inbox"], RM.DryRunRunner(),
+                  policy=pol, now_ms=E.T0 + HOUR, clock_ms=lambda: E.T0 + HOUR)
+    assert out["rounds"] == []
+
+
+def test_a_retried_meeting_never_sends_its_telegram_flag_twice(world):
+    """A pass killed after flag_owners (or a meeting that fails or stops later) runs the meeting again for
+    the same evidence: the owners must not get the same alert twice."""
+    note = ListNotifier()
+    env = A.ActionEnv(conn=world.agents, room_id=ROOM, strategy=S, round_id=1, meeting="loss_cluster",
+                      now_ms=QUIET, notifier=note, evidence_key="loss:N17_KC_RSI:5@123")
+    flag = {"action": "flag_owners", "level": "WARN", "text": "손실이 이어집니다"}
+    assert A.flag_owners(env, flag)["sent"] is True
+    env.round_id = 2                                                    # the retried meeting
+    res = A.flag_owners(env, flag)
+    assert res["sent"] is False and res.get("duplicate") is True and len(note.messages) == 1
+    env.evidence_key = "loss:N17_KC_RSI:9@456"                          # new evidence: sent
+    assert A.flag_owners(env, flag)["sent"] is True and len(note.messages) == 2
+
+
+def test_small_guards_of_round_3(tmp_path):
+    # a hard link to another process's database is that database
+    paths = E.build_world(str(tmp_path / "var"))
+    link = str(tmp_path / "var" / "agents-link.db")
+    os.link(paths["paper3"], link)
+    assert R.same_file(link, paths["paper3"]) and not R.same_file(paths["daily3"], paths["paper3"])
+    with pytest.raises(ValueError):
+        RM.tick(paths["paper3"], paths["daily3"], link, paths["inbox"], RM.DryRunRunner(), now_ms=E.T0)
+    from paperbot.dash.app import same_file
+    assert same_file(link, paths["paper3"])
+    # the ideographic full stop (NFKC keeps it) never hides a link from the Telegram filter
+    assert "evil" not in A.telegram_safe("보세요 evil。com 과 evil｡com") and "켈트너·RSI" in A.telegram_safe("켈트너·RSI")
+
+
+def test_the_morning_meeting_can_ask_again_and_still_reach_the_leads_summary(world):
+    """The team cap was 5 calls, the morning plan's 5 turns: one unreadable answer asked again used the
+    lead's call, and the meeting ended without its summary."""
+    morning = kst(2026, 10, 7, 8, 3)
+    runner = QueueRunner({"chart_regime": ["읽을 수 없는 답", team_answer("c")], "derivs_flow": [team_answer("d")],
+                          "strategist": [team_answer("s")], "devils_advocate": [challenge("agree")],
+                          "team_lead": [LEAD]})
+    out = world.tick(runner, morning)
+    assert [(r["room_id"], r["status"], r["calls"]) for r in out["rounds"]] == [("team:market", "done", 6)]
+    assert runner.roles()[-1] == "team_lead"
+    assert any(m["role"] == "team_lead" for m in world.messages("team:market"))

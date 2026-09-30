@@ -576,6 +576,36 @@ console.log(JSON.stringify({ok: pendingHint("ok"), full: pendingHint("ok", "room
     assert got["stopped"] == "에이전트가 멈춰 있어 아직 전달되지 않습니다"
 
 
+def test_every_gate_reason_and_whole_member_duties_are_shown():
+    """Check 6 (the leverage-adjusted check of stop tests) was cut from the proposal card, and the member
+    duties were cut with an ellipsis, hiding what a member cannot do."""
+    got = _js(("agentsState", "decisionWhen", "decideButtons", "testKo", "propCard"), """
+const now = 1e12;
+const reasons = ["r1", "r2", "r3", "r4", "r5", "r6 레버리지 차이를 뺀 수익률"];
+const prop = {id: 2, status: "awaiting_owner", effective_status: "awaiting_owner", change: {test: {template: "stop_atr", k: 3}},
+  gate: {pass: false, n_trials: 2, reasons}, gate_now: {pass: false, n_trials: 2}, owner_decision: null, trial_id: 3,
+  strategy_ko: "켈트너·RSI"};
+var rs = {confirm: null, ov: {ready: true, now, tick_every_ms: 900000, last_tick: {ts: now, ok: true}, rooms: []}};
+console.log(JSON.stringify({card: propCard(prop)}));
+""")
+    assert "r6 레버리지 차이를 뺀 수익률" in got["card"]
+    with open(os.path.join(os.path.dirname(ROOMS_JS), "style.css"), encoding="utf-8") as fh:
+        rule = next(line for line in fh if line.startswith(".mem .du"))
+    assert "ellipsis" not in rule and "nowrap" not in rule
+
+
+def test_a_post_the_budget_or_a_pause_defers_is_told_so():
+    """/api/rooms owner_wait 'budget' (the day's or the 7-day AI allowance left after the kept shares) and
+    'paused' (a Claude plan limit or an outage): never the next-turn promise."""
+    got = _js(("pendingHint",), """
+console.log(JSON.stringify({budget: pendingHint("ok", "budget", 3), paused: pendingHint("ok", "paused", 3),
+  stopped: pendingHint("stopped", "paused", 3)}));
+""")
+    assert "다음 차례" not in got["budget"] and "7일" in got["budget"] and "08:00·22:00" in got["budget"]
+    assert "다음 차례" not in got["paused"] and "멈췄습니다" in got["paused"] and "1시간" in got["paused"]
+    assert got["stopped"] == "에이전트가 멈춰 있어 아직 전달되지 않습니다"
+
+
 def test_the_owner_post_ai_budget_used_up_is_shown_for_every_room(env):
     a = R.open_agents(env["agents"])
     day = R.kst_day(env["now"])
@@ -611,3 +641,15 @@ console.log(JSON.stringify({stopped, ok, login}));
     with open(ROOMS_JS, encoding="utf-8") as fh:
         src = fh.read()
     assert "직원들이 다음 차례에 반영합니다" not in src
+
+
+def test_the_newest_owner_decisions_are_read_after_a_thousand_older_ones(env):
+    """_decisions read at most 1,000 clicks, oldest first: after years of clicks the page missed the newest."""
+    ib = R.open_inbox_rw(env["inbox"])
+    ib.executemany("INSERT INTO approvals (ts, proposal_id, decision, author, note) VALUES (?,?,?,?,?)",
+                   [(env["now"] - 10_000 + k, 10_000 + k, "reject", "", None) for k in range(1_005)])
+    ib.commit()
+    R.add_approval(ib, 77_777, "approve", "", ts=env["now"])
+    ib.close()
+    decs = Rooms(env["agents"], env["inbox"])._decisions()
+    assert len(decs) == 1_006 and decs[77_777]["decision"] == "approve"

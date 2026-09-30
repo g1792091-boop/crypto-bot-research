@@ -521,9 +521,12 @@ class Rooms:
 
     def _owner_waits(self, a: Optional[sqlite3.Connection], now_ms: int) -> tuple[dict, int]:
         """({room_id: why, '*': why for every room}, the room's daily meeting cap): the owners' posts that
-        the agents tick answers only after 00:00 KST, judged with the tick's own rules (triggers._Rooms
-        on agents3.db, the limits it stored in 'policy:caps'): 'room_full' when the room had its meetings
-        today, 'budget' when today's owner-post AI budget is used up or paused."""
+        the agents tick does not answer on its next turn, judged with the tick's own rules (triggers._Rooms
+        on agents3.db, the limits it stored in 'policy:caps', and the tick's own budget test
+        ``ClassBudget.headroom``): 'room_full' when the room had its meetings today, 'budget' when the
+        AI budget cannot carry an owner meeting now (the owner cap, the day's total or the 7-day cap after
+        what is kept for incidents and the 08:00 / 22:00 meetings, or a stop today), 'paused' while the
+        meetings are paused after a Claude plan limit or a runner outage."""
         caps = self._stored_caps(a) or {}
         lim = caps.get("rooms") if isinstance(caps.get("rooms"), dict) else {}
         try:
@@ -546,11 +549,37 @@ class Rooms:
             return {}, pol.max_rounds_per_room_day
         if not caps and self._caps is None:
             self._caps = budget_caps(self.budget_env)
-        cap = (caps or self._caps or {}).get("owner") or {}
+        allc = caps or self._caps or {}
+        cap = allc.get("owner") or {}
         used = self.R.usage_today(a, now_ms)["by_class"].get("owner") or {}
         if blocked or any(isinstance(cap.get(k), int) and int(used.get(k) or 0) >= cap[k] for k in ("calls", "tokens")):
             out["*"] = "budget"
             out = {k: ("budget" if v != "room_full" else v) for k, v in out.items()}
+            return out, pol.max_rounds_per_room_day
+        try:
+            # the tick's own test before it opens an owner meeting (rooms.can_start): the owner cap, the
+            # day's total and the 7-day cap, both minus what is kept for incidents and the 08:00 / 22:00
+            # meetings, and a typical call's tokens. Read-only: headroom() only SELECTs agent_calls.
+            from ..agents import rooms as RM
+            budgets = {k: (int(v["calls"]), int(v["tokens"])) for k, v in allc.items()
+                       if k in BUDGET_CLASSES and isinstance(v, dict)}
+            tot, wk = allc.get("total") or {}, allc.get("week") or {}
+            est = (allc.get("rooms") or {}).get("est_call_tokens") if isinstance(allc.get("rooms"), dict) else None
+            head = RM.ClassBudget(None, a, "owner", *budgets["owner"], int(tot["calls"]), int(tot["tokens"]),
+                                  lambda: now_ms, budgets=budgets,
+                                  week=(int(wk["calls"]), int(wk["tokens"])) if wk.get("calls") is not None else None,
+                                  call_tokens=int(est) if isinstance(est, int) else RM.RoomsPolicy().est_call_tokens
+                                  ).headroom()
+            pol_r = RM.RoomsPolicy()
+            for rid in list(self.specs) + sorted(st.rooms - set(self.specs)):
+                need = RM.round_min_calls(TR.Due(rid, "owner", 0, {"class": "owner"}, "owner"), pol_r)
+                if out.get(rid) != "room_full" and head < need:
+                    out[rid] = "budget"
+            if st.usage_paused() or st.transient_paused():
+                for rid in list(self.specs) + sorted(st.rooms - set(self.specs)):
+                    out.setdefault(rid, "paused")
+        except (KeyError, TypeError, ValueError, AttributeError, ImportError, sqlite3.Error):
+            pass
         return out, pol.max_rounds_per_room_day
 
     def room_info(self, room_id: str) -> dict:
@@ -629,8 +658,13 @@ class Rooms:
         (cursor 'inbox:approvals_base': proposal ids restart at 1 in a new one) are not shown."""
         with self.ro(self.agents_db) as a:
             base = self._cursor(a, "inbox:approvals_base")
+        rows: list = []
         with self.ro(self.inbox_db) as ib:
-            rows = self.R.pending_approvals(ib, base, limit=1000)
+            while True:                 # every click after the base (oldest first), 1000 at a time
+                got = self.R.pending_approvals(ib, rows[-1]["id"] if rows else base, limit=1000)
+                rows += got
+                if len(got) < 1000:
+                    break
         out: dict = {}
         for r in rows:
             out[int(r["proposal_id"])] = {**r, "rejected_before": out.get(int(r["proposal_id"]), {}).get(
@@ -809,8 +843,13 @@ async def _json_object(req: Request, limit: int = BODY_MAX) -> dict:
 
 
 def same_file(a: str, b: str) -> bool:
-    """Do two database flags name the same file (symlinks and relative spellings resolved)?"""
-    return os.path.realpath(a) == os.path.realpath(b)
+    """Do two database flags name the same file (symlinks, relative spellings and hard links)?"""
+    if os.path.realpath(a) == os.path.realpath(b):
+        return True
+    try:
+        return os.path.samefile(a, b)
+    except OSError:                 # one of them does not exist (yet)
+        return False
 
 
 def _storable(text: str) -> bool:

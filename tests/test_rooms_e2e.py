@@ -441,12 +441,62 @@ def test_a_post_that_waits_for_midnight_is_not_promised_the_next_turn(world, das
     assert [(r["room_id"], r["trigger"], r["status"]) for r in out["rounds"]] == [(ROOM, "owner", "no_action")]
 
 
+def test_a_post_the_budget_defers_is_not_promised_the_next_turn(world, dash):
+    """The owner class is under its own cap (13 of 20), but the day's total after what is kept for incidents
+    and the 08:00 / 22:00 meetings leaves one call (loss 16 + weekly 20 + owner 13 of 80, 30 kept): the
+    tick skips a strategy room's owner meeting (two calls at least) on every turn, although no meeting
+    stopped (nothing is 'blocked'). The page must say why instead of promising the next turn; a one-call
+    owner meeting (team:lead) still starts, so that room is promised it."""
+    from paperbot.agents import triggers as TR
+    from paperbot.agents.runner import UsageLimitReached
+    from paperbot.dash.app import Rooms
+    p, lab = world["paths"], world["lab"]
+    only = RM.RoomsPolicy(triggers=TR.TriggerPolicy(enabled=("owner",)))
+    assert _tick(p, Staff({}), T0, lab, policy=only)["rounds"] == []      # creates agents3.db, stores the caps
+    a = R.open_agents(p["agents3"])
+    for cls, n in (("loss", 16), ("weekly", 20), ("owner", 13)):
+        a.executemany("INSERT INTO agent_calls (ts, day, pipeline, role, model, ok, tokens) VALUES (?,?,?,?,?,1,?)",
+                      [(T0, R.kst_day(T0), cls, "x", "sonnet", 20_000)] * n)
+    a.commit()
+    a.close()
+    ib = R.open_inbox_rw(p["inbox"])
+    R.add_owner_message(ib, ROOM, "", "질문 하나", ts=T0 + 60_000)
+    ib.close()
+    for k in range(1, 5):                                  # the next hour of turns: never answered
+        assert _tick(p, _owner_round_staff(), T0 + k * 15 * 60_000, lab, policy=only)["rounds"] == []
+    ov = Rooms(p["agents3"], p["inbox"]).overview(now_ms=T0 + 61 * 60_000)
+    by = {r["room_id"]: r for r in ov["rooms"]}
+    assert ov["last_tick"]["ok"] is True
+    assert by[ROOM]["owner_wait"] == "budget" and by["strat:V45_AMB"]["owner_wait"] == "budget"
+    assert by["team:lead"]["owner_wait"] is None
+    # the next KST day the budget is free again: promised, and answered
+    nxt = T0 + 10 * HOUR
+    assert {r["room_id"]: r for r in Rooms(p["agents3"], p["inbox"]).overview(now_ms=nxt)["rooms"]}[ROOM][
+        "owner_wait"] is None
+    out = _tick(p, _owner_round_staff(), nxt, lab, policy=only)
+    assert [(r["room_id"], r["trigger"]) for r in out["rounds"]] == [(ROOM, "owner")]
+
+    class Limited:
+        def call(self, *a, **k):
+            raise UsageLimitReached("You've hit your limit · resets 5pm")
+    # a Claude plan limit in one room pauses every meeting for an hour: posts elsewhere are told so
+    ib = R.open_inbox_rw(p["inbox"])
+    R.add_owner_message(ib, "team:risk", "", "질문 A", ts=nxt + 60_000)
+    ib.close()
+    out = _tick(p, Limited(), nxt + 15 * 60_000, lab, policy=only)
+    assert [r["stopped"] for r in out["rounds"]] == ["usage_limit"]
+    by = {r["room_id"]: r for r in Rooms(p["agents3"], p["inbox"]).overview(now_ms=nxt + 20 * 60_000)["rooms"]}
+    assert by[ROOM]["owner_wait"] == "paused" and by["team:risk"]["owner_wait"] == "paused"
+    by = {r["room_id"]: r for r in Rooms(p["agents3"], p["inbox"]).overview(now_ms=nxt + 90 * 60_000)["rooms"]}
+    assert by[ROOM]["owner_wait"] is None
+
+
 def test_owner_settings_from_env_reach_the_tick_and_the_dashboard(world, dash):
-    env = {"AGENTS_BUDGET": "loss=14:90000, total=40", "AGENTS_OWNER_OK": "no", "AGENTS_COPY_CAP_TOTAL": "4",
+    env = {"AGENTS_BUDGET": "loss=14:90000, total=60", "AGENTS_OWNER_OK": "no", "AGENTS_COPY_CAP_TOTAL": "4",
            "AGENTS_MAX_ROUNDS_PER_TICK": "2", "AGENTS_FLAG_MAX_PER_DAY": "1"}
     pol = RM.policy_from_env(env)
     assert pol.budgets["loss"] == (14, 90000) and pol.budgets["owner"] == RM.DEFAULT_BUDGETS["owner"]
-    assert pol.total_budget == (40, RM.DEFAULT_TOTAL[1]) and pol.owner_ok_required is False
+    assert pol.total_budget == (60, RM.DEFAULT_TOTAL[1]) and pol.owner_ok_required is False
     assert pol.copy_cap_total == 4 and pol.max_rounds_per_tick == 2 and pol.flag_max_per_day == 1
     assert RM.policy_from_env({}) == RM.RoomsPolicy()
     for bad in ({"AGENTS_BUDGET": "lose=3"}, {"AGENTS_BUDGET": "loss=x"}, {"AGENTS_OWNER_OK": "maybe"},
@@ -463,7 +513,7 @@ def test_owner_settings_from_env_reach_the_tick_and_the_dashboard(world, dash):
                    "approver": [{"approve": True, "reason": "통과"}]})
     _tick(p := world["paths"], staff, T0, world["lab"], policy=pol)
     u = dash.get("/api/agents/usage").json()
-    assert u["caps_source"] == "tick" and u["cap_calls"] == 40
+    assert u["caps_source"] == "tick" and u["cap_calls"] == 60
     assert {c["class"]: c["cap_calls"] for c in u["classes"]}["loss"] == 14
     # owner confirmation off: an approved copy is 'approved' at once (still no account is created)
     a = _ro(p["agents3"])
@@ -544,6 +594,9 @@ def test_deploy_units_for_the_agents_tick():
     assert "agents3" not in ro
     hidden = next(line for line in svc.splitlines() if line.startswith("InaccessiblePaths="))
     assert "/etc/paperbot/live.env" in hidden and "/etc/paperbot/dash.env" in hidden
+    # its own env file too (the login and Telegram tokens): systemd reads EnvironmentFile= before the
+    # sandbox applies, so the pass keeps its variables and its children cannot open the file
+    assert "-/etc/paperbot/agents.env" in hidden.split()
     tim = _read("deploy/paperbot-agents.timer")
     assert "OnCalendar=*:0/15" in tim and "Persistent=true" in tim
     inst = _read("deploy/install.sh")

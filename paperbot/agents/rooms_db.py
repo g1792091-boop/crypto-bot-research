@@ -315,6 +315,19 @@ def room_strategy(room_id: str) -> Optional[str]:
 
 
 # ---------------------------------------------------------------- openers
+def same_file(a: Optional[str], b: Optional[str]) -> bool:
+    """Do two database paths name the same file: symlinks and relative spellings resolved, and a hard
+    link (same device and inode) too."""
+    if not a or not b:
+        return False
+    if os.path.realpath(a) == os.path.realpath(b):
+        return True
+    try:
+        return os.path.samefile(a, b)
+    except OSError:                 # one of them does not exist (yet): not the same file
+        return False
+
+
 def stale_wal(path: Optional[str]) -> bool:
     """A restored backup copy (``VACUUM INTO`` writes a rollback-journal header: byte 18 == 1) with the
     replaced file's non-empty -wal still next to it. SQLite would replay that old WAL onto the restored

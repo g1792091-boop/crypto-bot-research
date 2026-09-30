@@ -236,6 +236,7 @@ class ActionEnv:
     copy_cap_total: int = 10
     flag_max_per_day: int = 3
     proposer: str = ""                  # role id whose proposal is being carried out (named, never quoted)
+    evidence_key: str = ""              # the meeting's trigger key: a retried meeting never re-sends its flag
 
     def post(self, kind: str, text: str, data: Any = None, role: str = "code") -> int:
         return R.post(self.conn, self.room_id, self.round_id, self.meeting, role, None, kind, text, data,
@@ -278,12 +279,21 @@ _LINK = re.compile(r"(?i)\b[a-z][a-z0-9+.-]*://\S+|\bwww\.\S+"
 
 def telegram_safe(text: str) -> str:
     """Model-written words bound for Telegram: links and @mentions replaced by '(링크 생략)'.
-    Full-width and other look-alike forms are normalised first (NFKC), so 'ｅｖｉｌ．ｃｏｍ' is a link too."""
-    return _LINK.sub("(링크 생략)", unicodedata.normalize("NFKC", text or ""))
+    Full-width and other look-alike forms are normalised first (NFKC), so 'ｅｖｉｌ．ｃｏｍ' is a link too;
+    NFKC keeps the ideographic full stop (and maps the half-width one to it), so 'evil。com' becomes
+    'evil.com' before the check."""
+    return _LINK.sub("(링크 생략)", unicodedata.normalize("NFKC", text or "").replace("\u3002", "."))
 
 
 def flag_owners(env: ActionEnv, a: dict) -> dict:
     key = f"flag_owners:{R.kst_day(env.now_ms)}"
+    # a meeting run again for the same evidence (the pass was killed after the flag, or the meeting failed
+    # or stopped later) sends no second Telegram
+    sent_key = f"flag_sent:{env.room_id}:{env.evidence_key}" if env.evidence_key else ""
+    if sent_key and R.get_cursor(env.conn, sent_key) is not None:
+        env.post("system", "이 회의 계기로 이미 두 분께 알림을 보냈습니다(다시 연 회의). 다시 보내지 않았습니다.",
+                 {"action": "flag_owners", "sent": False, "reason": "already_sent"})
+        return _done("flag_owners", False, "이미 보낸 알림", sent=False, duplicate=True)
     used = int(R.get_cursor(env.conn, key, 0) or 0)
     if used >= env.flag_max_per_day:
         env.post("system", f"오늘 두 분께 보낼 수 있는 알림 {env.flag_max_per_day}번을 다 써서 보내지 않았습니다.",
@@ -291,6 +301,8 @@ def flag_owners(env: ActionEnv, a: dict) -> dict:
         return _done("flag_owners", False, "하루 알림 한도", sent=False)
     title = env.room_title or env.room_id
     text = f"[에이전트 알림] {title}: {telegram_safe(a['text'])}"
+    if sent_key:                        # before the send, like the day's count: a kill after it still counts
+        R.set_cursor(env.conn, sent_key, env.now_ms, commit=False)
     R.set_cursor(env.conn, key, used + 1)
     try:
         ok = env.notifier.send(a["level"], text)

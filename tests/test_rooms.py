@@ -589,7 +589,8 @@ def test_total_budget_over_all_classes_stops_the_tick(world):
     lead = {"summary": ["a", "b", "c"], "human_actions": [], "watch_next": []}
     runner = QueueRunner({"team_lead": [lead], SPEC: [analysis(NOTE)], "devils_advocate": [challenge("disagree")],
                           "entry_timing": [expert("disagree")]})
-    policy = RM.RoomsPolicy(budgets=NO_RESERVE, total_budget=(4, 10**9))
+    # nothing kept for owner posts and busts: the loss meeting may start with the 3 calls left of the total
+    policy = RM.RoomsPolicy(budgets=NO_RESERVE, total_budget=(4, 10**9), owner_keep_calls=0, bust_reserve_calls=0)
     out = world.tick(runner, QUIET, policy=policy)
     assert [(r["trigger"], r["status"], r["stopped"]) for r in out["rounds"]] == [
         ("owner", "done", None), ("loss_cluster", "stopped_budget", "budget_total")]

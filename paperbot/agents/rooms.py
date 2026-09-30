@@ -41,8 +41,9 @@ Strategy room (strat:<S>), at most 6 calls:
     change it); a copy proposal after a passing gate (re-judged with the room's current number of
     tests) goes to the T6 approver, whose "yes" code refuses when the gate failed or the copy cap
     is full.
-Team rooms (team:*), at most 5 calls: morning, evening (review team, then the lead's
-three lines to Telegram), incident, checkpoint and owner rounds, with the roster3 roles.
+Team rooms (team:*), at most 6 calls (the longest plan, 5 turns, plus one retry): morning, evening
+(review team, then the lead's three lines to Telegram), incident, checkpoint and owner rounds, with
+the roster3 roles.
 
 After each round code posts a Korean 'decision' message (numbers from code only), ends the
 round and advances the trigger cursors (only for done / no_action). A model answer that code
@@ -52,8 +53,12 @@ with a system message; a proposal outside the allowed actions and values becomes
 AI budget (``ClassBudget``, agent_calls): a daily cap per trigger class, a daily total and a
 rolling 7-day cap in both of which the unused part of the incident and scheduled caps is kept for
 them (in the 7-day cap for the next six days as well), pacing of loss clusters and weekly reviews
-over the KST day, a reserve in the loss class for busts and in the incident class for liquidations.
-A meeting starts only when its budget can carry its shortest form; one that hits a cap midway ends
+over the KST day (which also leave an owner-post share and the bust reserve inside the total and
+7-day caps, ``paced_keep``), a reserve in the loss class for busts and in the incident class for
+liquidations. Every call is checked before it is made with its input estimate plus the runner's
+output ceiling (``runner.MAX_OUTPUT_TOKENS``); a failed call the CLI reported no usage for is not
+counted. A meeting starts only when its budget can carry its shortest form (with a typical call's
+tokens, ``ClassBudget.call_need``); one that hits a cap midway ends
 'stopped_budget' (room is told '오늘 AI 사용 한도에 도달해 다음으로 미룹니다', ``limit_text``) and
 its evidence runs again on the next KST day (a Claude plan usage limit: after an hour, and the room
 is told it is the subscription's limit, not ours; the plan's refusals are not counted as calls).
@@ -95,8 +100,8 @@ from . import triggers as TR
 from .budget import BudgetedRunner, BudgetExceeded, tokens_of
 from .roles import _check_evidence
 from .roster3 import ROLES, SPECIALISTS, STRATEGY_KO, TEAMS, room_duty
-from .runner import (AgentCallError, AgentTimeout, CallResult, Runner, UsageLimitReached, auth_preflight,
-                     billing_warnings)
+from .runner import (MAX_OUTPUT_TOKENS, AgentCallError, AgentTimeout, CallResult, Runner, UsageLimitReached,
+                     auth_preflight, billing_warnings)
 
 PROMPT_DIR = os.path.join(os.path.dirname(__file__), "prompts3")
 DAY_MS = 86_400_000
@@ -199,7 +204,7 @@ class RoomsPolicy:
     budgets: dict = field(default_factory=lambda: dict(DEFAULT_BUDGETS))
     total_budget: tuple = DEFAULT_TOTAL
     max_calls_strategy_round: int = 6
-    max_calls_team_round: int = 5
+    max_calls_team_round: int = 6            # the longest plan (the 08:00 meeting, 5 turns) plus one retry
     retries: int = 1                        # one more try when an answer is unreadable
     owner_ok_required: Optional[bool] = None  # None: required for the first ``owner_ok_days`` of the run
     owner_ok_days: int = 60
@@ -207,6 +212,13 @@ class RoomsPolicy:
     bust_reserve_calls: int = 8             # of the loss class: loss_cluster rounds leave these for busts
     critical_reserve_calls: int = 5         # of the incident class: kept for CRITICAL alerts (liquidations)
     paced_triggers: tuple = ("loss_cluster", "weekly")   # spread over the KST day, not all at 00:00
+    # paced (loss_cluster / weekly) calls also leave, inside the total and 7-day caps, the unused part of
+    # this many owner-post calls (and of the bust reserve): a busy night of reviews never leaves the
+    # owners' posts or a bust waiting for midnight
+    owner_keep_calls: int = 6
+    # tokens of a typical call for ``ClassBudget.headroom`` (at least; the recent calls' median plus the
+    # output ceiling when larger): a meeting whose first call the pre-call check would refuse never starts
+    est_call_tokens: int = MAX_OUTPUT_TOKENS + 8_000
     pace_lead_hours: float = 3.0
     max_calls_per_tick: int = 12            # no new meeting once a tick has used this many (incidents exempt)
     tick_wall_s: float = 45 * 60            # no new meeting after this many seconds of one tick
@@ -268,6 +280,12 @@ class SubCapExceeded(BudgetExceeded):
     and liquidations keep the reserved rest of the class."""
 
 
+class PacedKeepExceeded(SubCapExceeded):
+    """A paced (loss_cluster / weekly) round reached what the total or 7-day cap keeps for the owners'
+    posts and busts (``ClassBudget.paced_keep``). Like a sub-cap it pauses nothing else: owner posts
+    and busts still use the kept part."""
+
+
 class RoundFailed(RuntimeError):
     pass
 
@@ -299,7 +317,8 @@ class ClassBudget(BudgetedRunner):
     def __init__(self, runner: Runner, conn: sqlite3.Connection, cls: str, max_calls: int, max_tokens: int,
                  total_calls: int, total_tokens: int, clock_ms: Callable[[], int], budgets: Optional[dict] = None,
                  week: Optional[tuple] = None, paced: bool = False, pace_lead_hours: float = 3.0,
-                 sub_cap: bool = False):
+                 sub_cap: bool = False, owner_keep_calls: int = 0, bust_keep_calls: int = 0,
+                 call_tokens: int = 0):
         # BudgetedRunner.__init__ is not called: it opens a second connection and a v2 schema.
         self.runner, self.conn, self.pipeline = runner, conn, cls
         self.sub_cap = sub_cap              # max_calls/max_tokens are a reduced part of the class cap
@@ -309,6 +328,8 @@ class ClassBudget(BudgetedRunner):
         self.budgets = dict(budgets or {})
         self.week = tuple(week) if week else None
         self.paced, self.pace_lead_hours = paced, pace_lead_hours
+        self.owner_keep_calls, self.bust_keep_calls = max(0, int(owner_keep_calls)), max(0, int(bust_keep_calls))
+        self.call_tokens = max(0, int(call_tokens))    # headroom's floor for one call's tokens
 
     def _sum(self, where: str, args: tuple) -> tuple[int, int]:
         r = self.conn.execute(f"SELECT COUNT(*), COALESCE(SUM(tokens), 0) FROM agent_calls WHERE {where}",
@@ -339,6 +360,40 @@ class ClassBudget(BudgetedRunner):
                 rc += max(0, int(self.budgets[k][0]) - c)
                 rt += max(0, int(self.budgets[k][1]) - t)
         return rc, rt
+
+    def paced_keep(self) -> tuple[int, int]:
+        """What a PACED call (loss_cluster, weekly) leaves inside the total and 7-day caps besides the
+        plain reserve: the unused part of an owner share (``owner_keep_calls`` of the owner cap, its
+        tokens pro rata) and of the bust reserve (``bust_keep_calls``, bounded by what the loss class
+        has left). Without it the paced reviews use the whole shared allowance of a busy-week day in
+        its first hours, and owner posts and busts wait until midnight. (0, 0) for other classes."""
+        if not self.paced:
+            return 0, 0
+        kc = kt = 0
+        for cls, n in (("owner", self.owner_keep_calls), ("loss", self.bust_keep_calls)):
+            cap_c, cap_t = (int(x) for x in self.budgets.get(cls, (0, 0)))
+            keep = min(n, cap_c)
+            if keep <= 0:
+                continue
+            c, t = self.used_class(cls)
+            share_t = cap_t * keep // cap_c
+            if cls == "owner":
+                kc += max(0, keep - c)
+                kt += max(0, share_t - t)
+            else:                                   # the bust reserve: what the loss class still has, at most
+                kc += max(0, min(keep, cap_c - c))
+                kt += max(0, min(share_t, cap_t - t))
+        return kc, kt
+
+    def call_need(self) -> int:
+        """Tokens the pre-call check will charge a typical call (for ``headroom``): the output ceiling
+        plus the median of the last settled calls, at least ``call_tokens``."""
+        if not self.call_tokens:
+            return 0
+        got = sorted(int(r[0] or 0) for r in self.conn.execute(
+            "SELECT tokens FROM agent_calls WHERE ok = 1 ORDER BY rowid DESC LIMIT 21").fetchall())
+        med = got[len(got) // 2] + MAX_OUTPUT_TOKENS if got else 0
+        return max(self.call_tokens, med)
 
     def week_need(self, rc: int, rt: int, est: int = 0) -> tuple[int, int]:
         """What the rolling 7-day cap must not reach for an owner/loss/weekly call, so the incident and
@@ -400,6 +455,10 @@ class ClassBudget(BudgetedRunner):
         if not reserved and (tc + rc >= self.total_calls or tt + rt + est >= self.total_tokens):
             raise ReserveExceeded(f"daily total cap: {tc}/{self.total_calls} calls used, {rc} kept for incidents "
                                   f"and scheduled meetings")
+        kc, kt = self.paced_keep()
+        if (kc or kt) and (tc + rc + kc >= self.total_calls or tt + rt + kt + est >= self.total_tokens):
+            raise PacedKeepExceeded(f"daily total cap: {tc}/{self.total_calls} calls used, {rc} kept for incidents "
+                                    f"and scheduled meetings, {kc} for owner posts and busts")
         if self.week:
             wc, wt = self.used_week()
             if wc >= self.week[0] or wt >= self.week[1] or (reserved and wt + est > self.week[1]):
@@ -412,19 +471,31 @@ class ClassBudget(BudgetedRunner):
                 if nc >= self.week[0] or nt >= self.week[1]:
                     raise WeekReserveExceeded(f"7-day cap: {wc}/{self.week[0]} calls used, the rest is kept for "
                                               "incidents and scheduled meetings (today and the next days)")
+                if kc or kt:
+                    nc, nt = self.week_need(rc + kc, rt + kt, est)
+                    if nc >= self.week[0] or nt >= self.week[1]:
+                        raise PacedKeepExceeded(f"7-day cap: {wc}/{self.week[0]} calls used, the rest is kept for "
+                                                "incidents, scheduled meetings, owner posts and busts")
 
     def headroom(self) -> int:
-        """Calls a NEW meeting of this kind may make now (0 = defer it; nothing is posted)."""
+        """Calls a NEW meeting of this kind may make now (0 = defer it; nothing is posted). Judged like
+        ``check`` with a typical call's tokens (``call_need``), so a meeting whose first call the
+        check would refuse never starts; paced classes also leave ``paced_keep``."""
+        est = self.call_need()
+        reserved = self.pipeline in RESERVED_CLASSES
         calls, tokens = self.used_today()
         tc, tt = self.used_total()
         rc, rt = self.reserve()
-        if tokens >= self.max_tokens or tt + rt >= self.total_tokens:
+        kc, kt = self.paced_keep()
+        if tokens >= self.max_tokens or tokens + est > self.max_tokens or tt >= self.total_tokens:
             return 0
-        room = [self.max_calls - calls, self.total_calls - tc - rc]
+        if (reserved and tt + est > self.total_tokens) or (not reserved and tt + rt + kt + est >= self.total_tokens):
+            return 0
+        room = [self.max_calls - calls, self.total_calls - tc - rc - kc]
         if self.week:
             wc, wt = self.used_week()
-            nc, nt = self.week_need(rc, rt)          # the plain window for the reserved classes
-            if nt >= self.week[1] or wt >= self.week[1]:
+            nc, nt = self.week_need(rc + kc, rt + kt, est)    # the plain window for the reserved classes
+            if nt >= self.week[1] or wt >= self.week[1] or (reserved and wt + est > self.week[1]):
                 return 0
             room.append(self.week[0] - max(nc, wc))
         pa = self.pace_allowance()
@@ -434,7 +505,9 @@ class ClassBudget(BudgetedRunner):
 
     def call(self, model: str, system_prompt: str, instruction: str, packet: dict) -> CallResult:
         est = estimate_tokens(packet, system_prompt)
-        self.check(est)
+        # the call may also write up to the runner's output ceiling (CLAUDE_CODE_MAX_OUTPUT_TOKENS): the
+        # check charges it, so no cap (or the reserve) is passed by one call's answer
+        self.check(est + MAX_OUTPUT_TOKENS)
         role = str(packet.get("role", ""))
         # the row is written BEFORE the call (not ok, estimated tokens) and settled after it: a pass that
         # is killed during the call (TimeoutStartSec, MemoryMax, reboot) still has it counted
@@ -454,7 +527,11 @@ class ClassBudget(BudgetedRunner):
             self._settle(rid, False, est)   # it ran; its real usage is never reported
             raise
         except Exception as exc:
-            self._settle(rid, False, _int0(getattr(exc, "tokens", 0)))
+            used = _int0(getattr(exc, "tokens", 0))
+            # the CLI reported no usage (it could not connect, the binary is missing, it failed before
+            # the model answered): like a plan refusal nothing ran, and an outage must not use up the
+            # day's incident calls; a failure that reported usage ran and is counted
+            self._settle(rid, False if used > 0 else None, used)
             raise
         # an answer without a readable 'usage' (an extra line before the JSON envelope) still used about
         # its estimated size: never 0, or the token caps would silently stop binding
@@ -518,7 +595,8 @@ def budget_caps(policy: Optional[RoomsPolicy] = None) -> dict:
     out["total"] = {"calls": p.total_budget[0], "tokens": p.total_budget[1]}
     out["week"] = {"calls": p.week_budget[0], "tokens": p.week_budget[1]}
     out["rooms"] = {"max_rounds_per_room_day": p.triggers.max_rounds_per_room_day,
-                    "owner_reserved_per_room_day": p.triggers.owner_reserved_per_room_day}
+                    "owner_reserved_per_room_day": p.triggers.owner_reserved_per_room_day,
+                    "est_call_tokens": p.est_call_tokens}
     return out
 
 
@@ -606,6 +684,13 @@ def budget_warnings(policy: RoomsPolicy) -> list[str]:
     if p.total_budget[0] - kept < 2:
         out.append(f"total={p.total_budget[0]} is taken by the incident and scheduled caps ({kept}): owner, loss and "
                    "weekly meetings can never start")
+    else:
+        keep = (min(p.owner_keep_calls, int(p.budgets.get("owner", (0, 0))[0]))
+                + min(p.bust_reserve_calls, loss))
+        if p.total_budget[0] - kept - keep < 2:
+            out.append(f"total={p.total_budget[0]} leaves loss-cluster and weekly reviews nothing after the incident and "
+                       f"scheduled caps ({kept}) and the calls kept for owner posts and busts ({keep}): on a day "
+                       "without owner posts or busts no review can start")
     kept_t = sum(int(p.budgets.get(k, (0, 0))[1]) for k in RESERVED_CLASSES)
     if p.week_budget[0] - 7 * kept < 2 or p.week_budget[1] <= 7 * kept_t:
         # the 7-day cap keeps the incident and scheduled caps for today and the next six days
@@ -1207,7 +1292,8 @@ class _Round:
                            room_title=self.title, notifier=self.ctx.notifier, lab=self.ctx.lab,
                            owner_ok_required=owner_ok_required(self.ctx),
                            copy_cap_per_strategy=p.copy_cap_per_strategy, copy_cap_total=p.copy_cap_total,
-                           flag_max_per_day=p.flag_max_per_day, proposer=proposer)
+                           flag_max_per_day=p.flag_max_per_day, proposer=proposer,
+                           evidence_key=str(self.due.data.get("key") or ""))
 
     # -- one model turn
     def ask(self, role: str, turn: str, packet: dict) -> Optional[dict]:
@@ -1706,7 +1792,8 @@ def round_budget(due: TR.Due, ctx: RoundContext) -> ClassBudget:
         cap_tokens = cap_tokens * cap_calls // full if full else 0
     return ClassBudget(ctx.runner, ctx.agents_conn, cls, cap_calls, cap_tokens, p.total_budget[0], p.total_budget[1],
                        ctx.clock, budgets=p.budgets, week=p.week_budget, paced=due.trigger in p.paced_triggers,
-                       pace_lead_hours=p.pace_lead_hours, sub_cap=sub)
+                       pace_lead_hours=p.pace_lead_hours, sub_cap=sub, owner_keep_calls=p.owner_keep_calls,
+                       bust_keep_calls=p.bust_reserve_calls, call_tokens=p.est_call_tokens)
 
 
 def round_min_calls(due: TR.Due, policy: RoomsPolicy) -> int:
@@ -2034,7 +2121,7 @@ def tick(paper_db: Optional[str], daily_db: Optional[str], agents_db: str, inbox
     cannot start now is simply found again on a later tick. ``preflight`` (the real runner's login
     check) runs once, before the first meeting."""
     policy = policy or RoomsPolicy()
-    if any(other and os.path.realpath(other) == os.path.realpath(agents_db) for other in (paper_db, daily_db, inbox_db)):
+    if any(R.same_file(other, agents_db) for other in (paper_db, daily_db, inbox_db)):
         # the tick creates its tables in agents3.db: never in another process's database
         raise ValueError("--agents-db must be its own file (not paper3.db, daily3.db or inbox.db)")
     now = int(time.time() * 1000) if now_ms is None else int(now_ms)
@@ -2124,7 +2211,8 @@ def tick(paper_db: Optional[str], daily_db: Optional[str], agents_db: str, inbox
 
 def can_start(due: TR.Due, ctx: RoundContext) -> bool:
     """Can the AI budget carry this meeting's shortest form now (class cap, total and its reserve,
-    7-day cap and its reserve, pacing, the critical and bust reserves)? Exact, per meeting."""
+    7-day cap and its reserve, pacing, the critical and bust reserves, what paced reviews keep for
+    owner posts and busts, a typical call's tokens)? Exact, per meeting."""
     return round_budget(due, ctx).headroom() >= round_min_calls(due, ctx.policy)
 
 
@@ -2146,7 +2234,7 @@ def deferred_triggers(ctx: RoundContext) -> list[str]:
     for trig, room in _PROBE.items():
         data = {"class": TR.TRIGGER_CLASS[trig], "counts": {"critical": 1}}
         probe = TR.Due(room, trig, 0, data, trig)
-        if round_budget(probe, ctx).headroom() < round_min_calls(probe, ctx.policy):
+        if not can_start(probe, ctx):
             out.append(trig)
     return out
 
@@ -2266,8 +2354,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         policy.owner_ok_required = OWNER_OK[args.owner_ok]
     for w in budget_warnings(policy):
         print(f"warning: AGENTS_BUDGET: {w}", file=sys.stderr)
-    rp = os.path.realpath
-    if rp(args.agents_db) in {rp(args.paper_db), rp(args.daily_db), rp(args.inbox_db)}:
+    if any(R.same_file(args.agents_db, other) for other in (args.paper_db, args.daily_db, args.inbox_db)):
         ap.error("--agents-db must be its own file (not the paper, daily or inbox database)")
     lab = _load_lab(args.lab_dir)
     agents_db = args.agents_db
