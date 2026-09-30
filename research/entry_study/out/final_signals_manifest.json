@@ -1,0 +1,494 @@
+{
+ "built_utc": "2026-09-30T14:10:30.276501+00:00",
+ "data_dir": "data/pre2021",
+ "locked_code": "bd23a449bd3fcb54a977c3b0ee97abe9582242c2f6418caa3e20d701c3a3544c",
+ "wall_s": 198.4,
+ "files": [
+  {
+   "tf": "5m",
+   "coin": "BTCUSD",
+   "bars": 175392,
+   "first": "2020-01-01 00:00:00+00:00",
+   "last": "2021-08-31 23:55:00+00:00",
+   "source": "native btcusd-5m.csv.gz",
+   "dropped_edges": [],
+   "volume_vs_5m": null,
+   "load_s": 0.4,
+   "signals_s": 77.5,
+   "total_s": 79.2,
+   "digest": "2d1d59f1b61bdc153da6f6d2cd1f0b0c5703540580f9240cc2ce3d8385f50300"
+  },
+  {
+   "tf": "5m",
+   "coin": "ETHUSD",
+   "bars": 175392,
+   "first": "2020-01-01 00:00:00+00:00",
+   "last": "2021-08-31 23:55:00+00:00",
+   "source": "native ethusd-5m.csv.gz",
+   "dropped_edges": [],
+   "volume_vs_5m": null,
+   "load_s": 0.6,
+   "signals_s": 77.2,
+   "total_s": 78.9,
+   "digest": "5d99f86ca1521007e0b1c9efa2e66b3ad3f8d50f2c48c0636cabe6200893d779"
+  },
+  {
+   "tf": "5m",
+   "coin": "SOLUSD",
+   "bars": 101292,
+   "first": "2020-09-14 07:00:00+00:00",
+   "last": "2021-08-31 23:55:00+00:00",
+   "source": "native solusd-5m.csv.gz",
+   "dropped_edges": [],
+   "volume_vs_5m": null,
+   "load_s": 0.4,
+   "signals_s": 47.5,
+   "total_s": 48.4,
+   "digest": "bd1b067b1f139e0ab632c0b71ca3ec97f1687a4f882179e6e923638f9aeb4781"
+  },
+  {
+   "tf": "5m",
+   "coin": "DOGEUSD",
+   "bars": 120276,
+   "first": "2020-07-10 09:00:00+00:00",
+   "last": "2021-08-31 23:55:00+00:00",
+   "source": "native dogeusd-5m.csv.gz",
+   "dropped_edges": [],
+   "volume_vs_5m": null,
+   "load_s": 0.6,
+   "signals_s": 54.4,
+   "total_s": 55.6,
+   "digest": "4cd7b2769d35bdc61a432e6059f022179359db3f65730aca7b48836fa3f7c9a8"
+  },
+  {
+   "tf": "5m",
+   "coin": "LTCUSD",
+   "bars": 172991,
+   "first": "2020-01-09 08:05:00+00:00",
+   "last": "2021-08-31 23:55:00+00:00",
+   "source": "native ltcusd-5m.csv.gz",
+   "dropped_edges": [],
+   "volume_vs_5m": null,
+   "load_s": 0.6,
+   "signals_s": 95.3,
+   "total_s": 97.2,
+   "digest": "5dff6a82c2f92588047bcf6b9716bcee2a33bf6aa228cfff84f6f0fbea6562be"
+  },
+  {
+   "tf": "5m",
+   "coin": "BCHUSD",
+   "bars": 175392,
+   "first": "2020-01-01 00:00:00+00:00",
+   "last": "2021-08-31 23:55:00+00:00",
+   "source": "native bchusd-5m.csv.gz",
+   "dropped_edges": [],
+   "volume_vs_5m": null,
+   "load_s": 0.4,
+   "signals_s": 93.5,
+   "total_s": 95.0,
+   "digest": "aff97bffbdc198d49f7ba4b71234fcda94ff1861e1eebfa5b1c7ee0619f8e1b2"
+  },
+  {
+   "tf": "15m",
+   "coin": "BTCUSD",
+   "bars": 58464,
+   "first": "2020-01-01 00:00:00+00:00",
+   "last": "2021-08-31 23:45:00+00:00",
+   "source": "native btcusd-15m.csv.gz (OHLC == resampled 5m)",
+   "dropped_edges": [],
+   "volume_vs_5m": {
+    "bins": 0,
+    "max_rel": 2.2202975234882442e-16
+   },
+   "load_s": 1.0,
+   "signals_s": 43.1,
+   "total_s": 44.8,
+   "digest": "999b830e92cf6717e686c92641ff4d2eea8d7d55adc09bf362d5cc3dadbb56be"
+  },
+  {
+   "tf": "15m",
+   "coin": "ETHUSD",
+   "bars": 58464,
+   "first": "2020-01-01 00:00:00+00:00",
+   "last": "2021-08-31 23:45:00+00:00",
+   "source": "native ethusd-15m.csv.gz (OHLC == resampled 5m)",
+   "dropped_edges": [],
+   "volume_vs_5m": {
+    "bins": 1,
+    "max_rel": 0.00019159477426070816
+   },
+   "load_s": 0.8,
+   "signals_s": 43.1,
+   "total_s": 44.2,
+   "digest": "7fb2b8543bef82a21bb89dfe76934455b69911ee49ea269a254c1791453b7929"
+  },
+  {
+   "tf": "15m",
+   "coin": "SOLUSD",
+   "bars": 33764,
+   "first": "2020-09-14 07:00:00+00:00",
+   "last": "2021-08-31 23:45:00+00:00",
+   "source": "native solusd-15m.csv.gz (OHLC == resampled 5m)",
+   "dropped_edges": [],
+   "volume_vs_5m": {
+    "bins": 0,
+    "max_rel": 0.0
+   },
+   "load_s": 0.6,
+   "signals_s": 19.7,
+   "total_s": 20.5,
+   "digest": "19da39207dd1ea2c5b5c3f41260dbbdd7da345195c0503f5a51d901b96b39ca0"
+  },
+  {
+   "tf": "15m",
+   "coin": "DOGEUSD",
+   "bars": 40092,
+   "first": "2020-07-10 09:00:00+00:00",
+   "last": "2021-08-31 23:45:00+00:00",
+   "source": "native dogeusd-15m.csv.gz (OHLC == resampled 5m)",
+   "dropped_edges": [],
+   "volume_vs_5m": {
+    "bins": 0,
+    "max_rel": 0.0
+   },
+   "load_s": 1.0,
+   "signals_s": 21.9,
+   "total_s": 23.2,
+   "digest": "89304e6eb610dc5d187fe17807c3ba755ab4b7cfdc5b92fdedda56cd5d8891fc"
+  },
+  {
+   "tf": "15m",
+   "coin": "LTCUSD",
+   "bars": 57663,
+   "first": "2020-01-09 08:15:00+00:00",
+   "last": "2021-08-31 23:45:00+00:00",
+   "source": "native ltcusd-15m.csv.gz (OHLC == resampled 5m)",
+   "dropped_edges": [
+    "2020-01-09T08:00:00+00:00 (2/3 5m bars)"
+   ],
+   "volume_vs_5m": {
+    "bins": 1,
+    "max_rel": 3.030544864550393e-05
+   },
+   "load_s": 0.8,
+   "signals_s": 26.9,
+   "total_s": 28.3,
+   "digest": "eeefd1c05dba4b4cdd89b7faabe432eecdbe55e937920eec4e9d89dd691eb231"
+  },
+  {
+   "tf": "15m",
+   "coin": "BCHUSD",
+   "bars": 58464,
+   "first": "2020-01-01 00:00:00+00:00",
+   "last": "2021-08-31 23:45:00+00:00",
+   "source": "native bchusd-15m.csv.gz (OHLC == resampled 5m)",
+   "dropped_edges": [],
+   "volume_vs_5m": {
+    "bins": 0,
+    "max_rel": 2.452471001681627e-16
+   },
+   "load_s": 0.9,
+   "signals_s": 26.2,
+   "total_s": 27.5,
+   "digest": "b10ac93046031a619ab9e8b28b6d7bc0ac641ffbc38646564c213465cd005b0a"
+  },
+  {
+   "tf": "30m",
+   "coin": "BTCUSD",
+   "bars": 29232,
+   "first": "2020-01-01 00:00:00+00:00",
+   "last": "2021-08-31 23:30:00+00:00",
+   "source": "resample_ohlcv(btcusd-5m.csv.gz, 30m)",
+   "dropped_edges": [],
+   "volume_vs_5m": null,
+   "load_s": 0.5,
+   "signals_s": 12.7,
+   "total_s": 13.7,
+   "digest": "eecc7599e10dcfb0d3d8e07b5add9db5bf932aa64926efd1117f88d0d8549d61"
+  },
+  {
+   "tf": "30m",
+   "coin": "ETHUSD",
+   "bars": 29232,
+   "first": "2020-01-01 00:00:00+00:00",
+   "last": "2021-08-31 23:30:00+00:00",
+   "source": "resample_ohlcv(ethusd-5m.csv.gz, 30m)",
+   "dropped_edges": [],
+   "volume_vs_5m": null,
+   "load_s": 0.7,
+   "signals_s": 12.9,
+   "total_s": 13.7,
+   "digest": "3ec9629e7cd37779081c08ee74b36a8f8699c06f23dc2a5da6c385184d820d3c"
+  },
+  {
+   "tf": "30m",
+   "coin": "SOLUSD",
+   "bars": 16882,
+   "first": "2020-09-14 07:00:00+00:00",
+   "last": "2021-08-31 23:30:00+00:00",
+   "source": "resample_ohlcv(solusd-5m.csv.gz, 30m)",
+   "dropped_edges": [],
+   "volume_vs_5m": null,
+   "load_s": 0.5,
+   "signals_s": 7.5,
+   "total_s": 8.0,
+   "digest": "4fdc65c8bbca1b98566ed66f98cc8db2e08eaf743aa79d5776ea8b8a8e1e8647"
+  },
+  {
+   "tf": "30m",
+   "coin": "DOGEUSD",
+   "bars": 20046,
+   "first": "2020-07-10 09:00:00+00:00",
+   "last": "2021-08-31 23:30:00+00:00",
+   "source": "resample_ohlcv(dogeusd-5m.csv.gz, 30m)",
+   "dropped_edges": [],
+   "volume_vs_5m": null,
+   "load_s": 0.3,
+   "signals_s": 10.9,
+   "total_s": 11.4,
+   "digest": "0a0a9c287d6018e8f5538f2496a1d66bc6fcdb556cfc1b17c10a334f3d054041"
+  },
+  {
+   "tf": "30m",
+   "coin": "LTCUSD",
+   "bars": 28831,
+   "first": "2020-01-09 08:30:00+00:00",
+   "last": "2021-08-31 23:30:00+00:00",
+   "source": "resample_ohlcv(ltcusd-5m.csv.gz, 30m)",
+   "dropped_edges": [
+    "2020-01-09T08:00:00+00:00 (5/6 5m bars)"
+   ],
+   "volume_vs_5m": null,
+   "load_s": 1.0,
+   "signals_s": 17.0,
+   "total_s": 18.1,
+   "digest": "f9084f6e67c5c94a60d5b80a8ccb2bc01da4943d1d4f3861adecebfcc4deba93"
+  },
+  {
+   "tf": "30m",
+   "coin": "BCHUSD",
+   "bars": 29232,
+   "first": "2020-01-01 00:00:00+00:00",
+   "last": "2021-08-31 23:30:00+00:00",
+   "source": "resample_ohlcv(bchusd-5m.csv.gz, 30m)",
+   "dropped_edges": [],
+   "volume_vs_5m": null,
+   "load_s": 1.0,
+   "signals_s": 15.4,
+   "total_s": 16.5,
+   "digest": "430111c129ca7452225590ac86f416bc8141e74f977c1fbf3a570864815b0b81"
+  },
+  {
+   "tf": "1h",
+   "coin": "BTCUSD",
+   "bars": 14616,
+   "first": "2020-01-01 00:00:00+00:00",
+   "last": "2021-08-31 23:00:00+00:00",
+   "source": "native btcusd-1h.csv.gz (OHLC == resampled 5m)",
+   "dropped_edges": [],
+   "volume_vs_5m": {
+    "bins": 0,
+    "max_rel": 2.2194749442959334e-16
+   },
+   "load_s": 1.1,
+   "signals_s": 9.3,
+   "total_s": 10.5,
+   "digest": "1232f821e35f8aac65855065b7a5fa062ae9a5f9533276e81e0d35cd646038f6"
+  },
+  {
+   "tf": "1h",
+   "coin": "ETHUSD",
+   "bars": 14616,
+   "first": "2020-01-01 00:00:00+00:00",
+   "last": "2021-08-31 23:00:00+00:00",
+   "source": "native ethusd-1h.csv.gz (OHLC == resampled 5m)",
+   "dropped_edges": [],
+   "volume_vs_5m": {
+    "bins": 2,
+    "max_rel": 0.00011598727868931375
+   },
+   "load_s": 1.1,
+   "signals_s": 9.1,
+   "total_s": 10.3,
+   "digest": "3b733be0ef2d58dda841053fb48471a655160fb24880d1f45222776d5e7c6add"
+  },
+  {
+   "tf": "1h",
+   "coin": "SOLUSD",
+   "bars": 8441,
+   "first": "2020-09-14 07:00:00+00:00",
+   "last": "2021-08-31 23:00:00+00:00",
+   "source": "native solusd-1h.csv.gz (OHLC == resampled 5m)",
+   "dropped_edges": [],
+   "volume_vs_5m": {
+    "bins": 0,
+    "max_rel": 0.0
+   },
+   "load_s": 0.6,
+   "signals_s": 3.7,
+   "total_s": 4.3,
+   "digest": "a0a0c2accd6a9beb1ed2f594500346134b17ba23a4649efa74f71ca52c3f6e54"
+  },
+  {
+   "tf": "1h",
+   "coin": "DOGEUSD",
+   "bars": 10023,
+   "first": "2020-07-10 09:00:00+00:00",
+   "last": "2021-08-31 23:00:00+00:00",
+   "source": "native dogeusd-1h.csv.gz (OHLC == resampled 5m)",
+   "dropped_edges": [],
+   "volume_vs_5m": {
+    "bins": 0,
+    "max_rel": 0.0
+   },
+   "load_s": 0.5,
+   "signals_s": 5.1,
+   "total_s": 5.6,
+   "digest": "15ae2b8d3ccc953159b1bce31c868c62197042fe03c3b99083ee8bd8952dba09"
+  },
+  {
+   "tf": "1h",
+   "coin": "LTCUSD",
+   "bars": 14415,
+   "first": "2020-01-09 09:00:00+00:00",
+   "last": "2021-08-31 23:00:00+00:00",
+   "source": "native ltcusd-1h.csv.gz (OHLC == resampled 5m)",
+   "dropped_edges": [
+    "2020-01-09T08:00:00+00:00 (11/12 5m bars)"
+   ],
+   "volume_vs_5m": {
+    "bins": 1,
+    "max_rel": 5.442257488964151e-06
+   },
+   "load_s": 0.6,
+   "signals_s": 8.6,
+   "total_s": 9.4,
+   "digest": "10cd9ed1729fdfe30fb1b99944a114a37a6c79b5674d8988bf58767169e969ab"
+  },
+  {
+   "tf": "1h",
+   "coin": "BCHUSD",
+   "bars": 14616,
+   "first": "2020-01-01 00:00:00+00:00",
+   "last": "2021-08-31 23:00:00+00:00",
+   "source": "native bchusd-1h.csv.gz (OHLC == resampled 5m)",
+   "dropped_edges": [],
+   "volume_vs_5m": {
+    "bins": 1,
+    "max_rel": 4.136223162623162e-05
+   },
+   "load_s": 0.8,
+   "signals_s": 7.9,
+   "total_s": 8.8,
+   "digest": "675a80cc8249c1fe4cbf0dc4cd20756d2614eaa2777e0eea159c460bd9a982b7"
+  },
+  {
+   "tf": "4h",
+   "coin": "BTCUSD",
+   "bars": 3654,
+   "first": "2020-01-01 00:00:00+00:00",
+   "last": "2021-08-31 20:00:00+00:00",
+   "source": "native btcusd-4h.csv.gz (OHLC == resampled 5m)",
+   "dropped_edges": [],
+   "volume_vs_5m": {
+    "bins": 0,
+    "max_rel": 2.2001943972531964e-16
+   },
+   "load_s": 0.7,
+   "signals_s": 1.8,
+   "total_s": 2.5,
+   "digest": "7e6e1779108759372fa7a2871a8faa6d61b21bfa03a10266806f781875f293ca"
+  },
+  {
+   "tf": "4h",
+   "coin": "ETHUSD",
+   "bars": 3654,
+   "first": "2020-01-01 00:00:00+00:00",
+   "last": "2021-08-31 20:00:00+00:00",
+   "source": "native ethusd-4h.csv.gz (OHLC == resampled 5m)",
+   "dropped_edges": [],
+   "volume_vs_5m": {
+    "bins": 2,
+    "max_rel": 2.8645700753180435e-05
+   },
+   "load_s": 0.9,
+   "signals_s": 2.1,
+   "total_s": 3.1,
+   "digest": "987a9a284fd3a879208bd834ce21fe23fdf483b71035646841066329aa242902"
+  },
+  {
+   "tf": "4h",
+   "coin": "SOLUSD",
+   "bars": 2110,
+   "first": "2020-09-14 08:00:00+00:00",
+   "last": "2021-08-31 20:00:00+00:00",
+   "source": "native solusd-4h.csv.gz (OHLC == resampled 5m)",
+   "dropped_edges": [
+    "2020-09-14T04:00:00+00:00 (12/48 5m bars)"
+   ],
+   "volume_vs_5m": {
+    "bins": 0,
+    "max_rel": 0.0
+   },
+   "load_s": 0.3,
+   "signals_s": 1.9,
+   "total_s": 2.3,
+   "digest": "f6fb739359ce7e9eb622feddc6c887445a1c4f69b83ecefe188d2c9c302842b6"
+  },
+  {
+   "tf": "4h",
+   "coin": "DOGEUSD",
+   "bars": 2505,
+   "first": "2020-07-10 12:00:00+00:00",
+   "last": "2021-08-31 20:00:00+00:00",
+   "source": "native dogeusd-4h.csv.gz (OHLC == resampled 5m)",
+   "dropped_edges": [
+    "2020-07-10T08:00:00+00:00 (36/48 5m bars)"
+   ],
+   "volume_vs_5m": {
+    "bins": 0,
+    "max_rel": 0.0
+   },
+   "load_s": 0.5,
+   "signals_s": 1.6,
+   "total_s": 2.2,
+   "digest": "7471ad609d130004e254dde1e74da86ddcbd5fe91287c65fbdd41bb34076c0d5"
+  },
+  {
+   "tf": "4h",
+   "coin": "LTCUSD",
+   "bars": 3603,
+   "first": "2020-01-09 12:00:00+00:00",
+   "last": "2021-08-31 20:00:00+00:00",
+   "source": "native ltcusd-4h.csv.gz (OHLC == resampled 5m)",
+   "dropped_edges": [
+    "2020-01-09T08:00:00+00:00 (47/48 5m bars)"
+   ],
+   "volume_vs_5m": {
+    "bins": 1,
+    "max_rel": 1.1957327725493457e-06
+   },
+   "load_s": 0.8,
+   "signals_s": 1.9,
+   "total_s": 2.7,
+   "digest": "ba224917b3bca5f4ab3e64fe0c6dfc0bd908fd2770e718a1f1d4ddc87f6ba30a"
+  },
+  {
+   "tf": "4h",
+   "coin": "BCHUSD",
+   "bars": 3654,
+   "first": "2020-01-01 00:00:00+00:00",
+   "last": "2021-08-31 20:00:00+00:00",
+   "source": "native bchusd-4h.csv.gz (OHLC == resampled 5m)",
+   "dropped_edges": [],
+   "volume_vs_5m": {
+    "bins": 1,
+    "max_rel": 7.486429669658314e-06
+   },
+   "load_s": 0.7,
+   "signals_s": 1.5,
+   "total_s": 2.2,
+   "digest": "353a152d8d38c853379e6d04121bf8e4fb9ee8467095861ce031eae20536716a"
+  }
+ ]
+}

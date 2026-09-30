@@ -9,12 +9,17 @@ of the bar), s__<NAME> (int8 +1/-1/0 on the signal bar; entry is the next bar's 
 (volume). Bars come from ``data/pre2021`` (Binance USDT-M monthly klines, 2020-01 .. 2021-08).
 
 How the bars are built, mirroring the sweep data (checked in ``check``):
-  * sweepdata 15m/30m/1h/4h == ``resample_ohlcv(5m)`` exactly, interior partial bins kept, and the
-    first / last bin dropped when it holds fewer 5m bars than a full bin (series start or end
-    inside a bin). The same edge rule is applied here to every timeframe.
+  * sweepdata 15m/30m/1h/4h == ``resample_ohlcv(5m)`` exactly, partial bins from data gaps kept,
+    and the first / last bin dropped when the 5m series starts after its open / ends before its
+    close. The same edge rule is applied here to every timeframe (``trim_partial_edges``).
   * 5m, 15m, 1h, 4h are read from the native files; each native higher-TF file is asserted to have
     the same bar times and OHLC as the resampled 5m file (native volume kept; the few bins where it
     differs from the 5m sum are recorded). 30m has no native file and is ``resample_ohlcv(5m, "30m")``.
+``check`` writes out/final_signals_{check.json,overlap.csv,counts.csv}: (a) bars and warm-up per
+file, (b) agreement with the period-1/2 cache on the bars both hold (2021-05/06 .. 2021-08-31) plus
+a code-path control (this module fed the sweep bars reproduces that cache), (c) period-3 signal
+rates vs a same-length slice of period 1.
+
 Signals: ``L.compute_signals(strict=True)`` on the whole series (the locked code is causal), DOGE =
 DOGE_L - DOGE_S as in ``rules_bt._signals_job``. The file keeps every bar through 2021-08-31, so a
 period-3 trade can be followed past 2021-08-01. Signals on bars from 2021-08-01 on are NOT period 3
@@ -49,6 +54,7 @@ TFS = ("5m", "15m", "30m", "1h", "4h")
 COINS = RB.COINS
 NATIVE = ("5m", "15m", "1h", "4h")
 PERIODS = {1: ("2021-08-01", "2024-07-01"), 2: ("2024-07-01", "2026-09-30"), 3: ("2020-01-01", "2021-08-01")}
+CLEAN_FROM = "2021-07-01"   # overlap check: the period-1/2 DOGE bars before this are corrupted
 
 
 # ---------------------------------------------------------------------------------------------
@@ -59,18 +65,21 @@ def _path(data_dir: str, tf: str, coin: str) -> str:
 
 
 def trim_partial_edges(df: pd.DataFrame, df5: pd.DataFrame, tf: str) -> tuple[pd.DataFrame, list[str]]:
-    """Drop the first and/or last bin of ``df`` when it holds fewer 5m bars than a full bin.
-    Interior partial bins (data gaps) are kept, as in the sweep data."""
+    """Drop the first bin when the 5m series starts after its open, and the last bin when the 5m
+    series ends before its close (the series starts / ends inside the bin). Bins that are partial
+    only because of missing 5m bars (data gaps, also at the edges) are kept, as in the sweep data
+    (sweep DOGE 30m keeps 2021-01-01 00:00 with 5 of 6 5m bars: 00:20 missing, series starts 00:00)."""
     if tf == "5m" or df.empty:
         return df, []
     width = pd.Timedelta(minutes=sweepsig.lib().tf_minutes(tf))
     full = int(width / pd.Timedelta(minutes=5))
     t5 = df5["ts"]
+    first5, end5 = t5.iloc[0], t5.iloc[-1] + pd.Timedelta(minutes=5)
     dropped, keep = [], np.ones(len(df), bool)
     for pos in sorted({0, len(df) - 1}):
         t0 = df["ts"].iloc[pos]
-        n5 = int(((t5 >= t0) & (t5 < t0 + width)).sum())
-        if n5 < full:
+        if t0 < first5 or t0 + width > end5:
+            n5 = int(((t5 >= t0) & (t5 < t0 + width)).sum())
             keep[pos] = False
             dropped.append(f"{t0.isoformat()} ({n5}/{full} 5m bars)")
     out = df.loc[keep].reset_index(drop=True)
@@ -198,7 +207,105 @@ def check_sweep_30m(L, sweep_full: str) -> list[dict]:
     return out
 
 
-def check(out_dir: str, ref_dir: str, report_dir: str = OUT) -> dict:
+def _sweep_volume(tf: str, coin: str, ts_b: np.ndarray):
+    """Volume of the period-1/2 bars (not in that cache) from the sweep CSV, aligned to ts_b."""
+    sw = os.environ.get("SWEEP_DATA")
+    p = os.path.join(sw or "", "full", f"{coin.lower()}-{tf}.csv")
+    if not sw or not os.path.exists(p):
+        return None
+    d = pd.read_csv(p, usecols=["ts", "volume"])
+    t = pd.to_datetime(d["ts"], utc=True).dt.tz_localize(None).to_numpy().astype("datetime64[ns]").astype(np.int64)
+    v = pd.Series(d["volume"].to_numpy(float), index=t)
+    v = v[~v.index.duplicated(keep="last")]
+    return v.reindex(ts_b).to_numpy(float)
+
+
+def _pm1_match(sa: np.ndarray, sb: np.ndarray) -> int:
+    """Signals of sa with a same-sign signal of sb on the same bar or one bar either side."""
+    n = 0
+    for k in np.flatnonzero(sa):
+        if (sb[max(0, k - 1):k + 2] == sa[k]).any():
+            n += 1
+    return n
+
+
+def _overlap_rows(A, B, ia, ib, vol_b, names, **key) -> list[dict]:
+    rel = A["c"][ia] / B["c"][ib] - 1.0
+    hrel = A["h"][ia] / B["h"][ib] - 1.0
+    lrel = A["l"][ia] / B["l"][ib] - 1.0
+    arel = A["atr"][ia] / B["atr"][ib] - 1.0
+    base = dict(key, n_bars=len(ia), first=str(pd.Timestamp(A["ts"][ia[0]])), last=str(pd.Timestamp(A["ts"][ia[-1]])),
+                close_equal_share=float(np.mean(A["c"][ia] == B["c"][ib])),
+                close_absrel_bp_median=float(np.median(np.abs(rel)) * 1e4),
+                close_absrel_bp_p99=float(np.quantile(np.abs(rel), 0.99) * 1e4),
+                close_absrel_bp_max=float(np.max(np.abs(rel)) * 1e4),
+                close_rel_bp_mean=float(np.mean(rel) * 1e4),
+                high_absrel_bp_median=float(np.median(np.abs(hrel)) * 1e4),
+                low_absrel_bp_median=float(np.median(np.abs(lrel)) * 1e4),
+                atr_absrel_pct_median=float(np.nanmedian(np.abs(arel)) * 100))
+    if vol_b is not None:
+        va, vb = A["v"][ia], vol_b[ib]
+        ok = np.isfinite(vb) & (vb > 0) & (va > 0)
+        base.update(volume_ratio_median=float(np.median(va[ok] / vb[ok])) if ok.any() else None,
+                    logvolume_corr=float(np.corrcoef(np.log(va[ok]), np.log(vb[ok]))[0, 1]) if ok.sum() > 2 else None)
+    rows = []
+    for n in names:
+        sa, sb = A[f"s__{n}"][ia], B[f"s__{n}"][ib]
+        u = (sa != 0) | (sb != 0)
+        rows.append(dict(base, strategy=n, bar_agree=float(np.mean(sa == sb)),
+                         n_sig_pre2021=int(np.count_nonzero(sa)), n_sig_cache=int(np.count_nonzero(sb)),
+                         n_union=int(u.sum()), n_both_same=int(((sa == sb) & u).sum()),
+                         n_pre2021_matched_pm1=_pm1_match(sa, sb)))
+    return rows
+
+
+def _repro_job(args):
+    """Control for the code path: this module's bar building + signal_arrays, fed the sweep bars,
+    must reproduce the period-1/2 cache (built by rules_bt._signals_job) bit for bit."""
+    tf, coin, ref_dir = args
+    L = sweepsig.lib()
+    full = os.path.join(os.environ["SWEEP_DATA"], "full")
+    d5 = L.read_ohlcv(os.path.join(full, f"{coin.lower()}-5m.csv"))
+    if tf == "30m":
+        df, _ = trim_partial_edges(L.resample_ohlcv(d5, tf), d5, tf)
+    else:
+        df = L.read_ohlcv(os.path.join(full, f"{coin.lower()}-{tf}.csv"))
+    df = df[df["ts"] < pd.Timestamp(RB.WINDOWS["cf"][1], tz="UTC")].reset_index(drop=True)
+    df.attrs["tf"] = tf
+    arr = signal_arrays(L, df, tf, coin)
+    B = _load(ref_dir, tf, coin)
+    same_len = len(arr["ts"]) == len(B["ts"])
+    diff = [k for k in B if not (same_len and np.array_equal(arr[k], B[k], equal_nan=k in ("atr", "o", "h", "l", "c")))]
+    return dict(tf=tf, coin=coin, bars=len(B["ts"]), identical_keys=len(B) - len(diff), keys=len(B), differing=diff)
+
+
+def _split_job(args):
+    """Split the (b) disagreement: signals on the Binance bars cut to start where the period-1/2
+    cache starts (T) vs (i) the full Binance history = start-date effect only, and (ii) the cache =
+    data-source effect only. Compared on bars >= CLEAN_FROM, past the warm-up of both series."""
+    tf, coin, out_dir, ref_dir = args
+    L = sweepsig.lib()
+    A, B = _load(out_dir, tf, coin), _load(ref_dir, tf, coin)
+    df = load_bars(L, tf, coin)
+    df = df[RB._ns(df["ts"]) >= B["ts"][0]].reset_index(drop=True)
+    df.attrs["tf"] = tf
+    T = signal_arrays(L, df, tf, coin)
+    warm = L.warmup_bars(tf)
+    rows = []
+    for other, lab in ((A, "start_effect"), (B, "data_effect")):
+        _, it, io = np.intersect1d(T["ts"], other["ts"], assume_unique=True, return_indices=True)
+        m = (it >= warm) & (io >= warm) & (T["ts"][it] >= pd.Timestamp(CLEAN_FROM).value)
+        it, io = it[m], io[m]
+        for n in _names(B):
+            st, so = T[f"s__{n}"][it], other[f"s__{n}"][io]
+            u = (st != 0) | (so != 0)
+            rows.append(dict(tf=tf, coin=coin, effect=lab, strategy=n, n_bars=len(it), n_union=int(u.sum()),
+                             n_both_same=int(((st == so) & u).sum()), n_sig_T=int(np.count_nonzero(st)),
+                             n_T_matched_pm1=_pm1_match(st, so)))
+    return rows
+
+
+def check(out_dir: str, ref_dir: str, report_dir: str = OUT, repro_tfs=("30m", "4h"), procs: int = 4) -> dict:
     L = sweepsig.lib()
     os.makedirs(report_dir, exist_ok=True)
     res: dict = {"a_bars": [], "b_overlap_tf": {}, "c_counts_flags": {}}
@@ -228,27 +335,16 @@ def check(out_dir: str, ref_dir: str, report_dir: str = OUT) -> dict:
                 hl_bad=int(((A["h"] < np.maximum(A["o"], A["c"])) | (A["l"] > np.minimum(A["o"], A["c"]))).sum()),
                 zero_volume_bars=int((A["v"] <= 0).sum()),
                 p3_signals=int(sum(np.count_nonzero(A[f"s__{n}"][lo3:hi3]) for n in names))))
-            # (b) overlap past both warm-ups
-            _, ia, ib = np.intersect1d(ts, B["ts"], assume_unique=True, return_indices=True)
-            m = (ia >= warm) & (ib >= warm)
-            ia, ib = ia[m], ib[m]
-            if len(ia):
-                rel = A["c"][ia] / B["c"][ib] - 1.0
-                arel = A["atr"][ia] / B["atr"][ib] - 1.0
-                base = dict(tf=tf, coin=coin, n_bars=len(ia), first=str(pd.Timestamp(ts[ia[0]])),
-                            last=str(pd.Timestamp(ts[ia[-1]])),
-                            close_equal_share=float(np.mean(A["c"][ia] == B["c"][ib])),
-                            close_absrel_bp_median=float(np.median(np.abs(rel)) * 1e4),
-                            close_absrel_bp_p99=float(np.quantile(np.abs(rel), 0.99) * 1e4),
-                            close_absrel_bp_max=float(np.max(np.abs(rel)) * 1e4),
-                            close_rel_bp_mean=float(np.mean(rel) * 1e4),
-                            atr_absrel_pct_median=float(np.nanmedian(np.abs(arel)) * 100))
-                for n in names:
-                    sa, sb = A[f"s__{n}"][ia], B[f"s__{n}"][ib]
-                    u = (sa != 0) | (sb != 0)
-                    ov_rows.append(dict(base, strategy=n, bar_agree=float(np.mean(sa == sb)),
-                                        n_sig_pre2021=int(np.count_nonzero(sa)), n_sig_cache=int(np.count_nonzero(sb)),
-                                        n_union=int(u.sum()), n_both_same=int(((sa == sb) & u).sum())))
+            # (b) overlap past both warm-ups; "all" and "clean" (from 2021-07-01: the cache's DOGE
+            # bars before 2021-07 contain cross-venue corruption, up to +-200% off Binance)
+            _, ia0, ib0 = np.intersect1d(ts, B["ts"], assume_unique=True, return_indices=True)
+            m0 = (ia0 >= warm) & (ib0 >= warm)
+            vol_b = _sweep_volume(tf, coin, B["ts"])
+            for win, t_from in (("all", None), ("clean", CLEAN_FROM)):
+                m = m0 if t_from is None else m0 & (ts[ia0] >= pd.Timestamp(t_from).value)
+                ia, ib = ia0[m], ib0[m]
+                if len(ia):
+                    ov_rows += _overlap_rows(A, B, ia, ib, vol_b, names, tf=tf, coin=coin, window=win)
             # (c) counts: period 3 (this cache) vs same-length slice of period 1 (period-1/2 cache)
             lo1, hi1 = _bounds(B["ts"], p1_slice, warm)
             for n in names:
@@ -268,18 +364,21 @@ def check(out_dir: str, ref_dir: str, report_dir: str = OUT) -> dict:
     cn = pd.DataFrame(cnt_rows)
     ov.to_csv(os.path.join(report_dir, "final_signals_overlap.csv"), index=False)
     cn.to_csv(os.path.join(report_dir, "final_signals_counts.csv"), index=False)
-    for tf, g in ov.groupby("tf", sort=False):
+    bar_cols = ["coin", "n_bars", "first", "last", "close_equal_share", "close_absrel_bp_median",
+                "close_absrel_bp_p99", "close_absrel_bp_max", "close_rel_bp_mean", "high_absrel_bp_median",
+                "low_absrel_bp_median", "atr_absrel_pct_median", "volume_ratio_median", "logvolume_corr"]
+    for (win, tf), g in ov.groupby(["window", "tf"], sort=False):
         bars = g.drop_duplicates("coin")
         by_s = g.groupby("strategy")[["n_union", "n_both_same"]].sum()
         by_s = (by_s["n_both_same"] / by_s["n_union"].replace(0, np.nan)).sort_values()
-        res["b_overlap_tf"][tf] = dict(
-            coins=bars[["coin", "n_bars", "first", "last", "close_equal_share", "close_absrel_bp_median",
-                        "close_absrel_bp_p99", "close_absrel_bp_max", "close_rel_bp_mean",
-                        "atr_absrel_pct_median"]].round(4).to_dict("records"),
+        res["b_overlap_tf"].setdefault(win, {})[tf] = dict(
+            coins=bars[[c for c in bar_cols if c in bars]].round(4).to_dict("records"),
             bar_agree_all=float((g["bar_agree"] * g["n_bars"]).sum() / g["n_bars"].sum()),
             signal_agree_union=float(g["n_both_same"].sum() / max(1, g["n_union"].sum())),
+            pre2021_signals_same_bar=float(g["n_both_same"].sum() / max(1, g["n_sig_pre2021"].sum())),
+            pre2021_signals_within_1bar=float(g["n_pre2021_matched_pm1"].sum() / max(1, g["n_sig_pre2021"].sum())),
             n_sig_pre2021=int(g["n_sig_pre2021"].sum()), n_sig_cache=int(g["n_sig_cache"].sum()),
-            worst5_strategies_union_agree=by_s.head(5).round(3).to_dict(),
+            worst5_strategies_union_agree=by_s.dropna().head(5).round(3).to_dict(),
             best5_strategies_union_agree=by_s.dropna().tail(5).round(3).to_dict())
     for tf, g in cn.groupby("tf", sort=False):
         f = g[(g["p3_signals"] + g["p1slice_signals"] >= 50) & ((g["ratio"] < 0.5) | (g["ratio"] > 2.0))]
@@ -291,6 +390,25 @@ def check(out_dir: str, ref_dir: str, report_dir: str = OUT) -> dict:
     sw = os.environ.get("SWEEP_DATA")
     if sw and os.path.isdir(os.path.join(sw, "full")):
         res["sweep_30m_rule"] = check_sweep_30m(L, os.path.join(sw, "full"))
+        if repro_tfs:
+            t0 = time.time()
+            with Pool(procs) as p:
+                rows = list(p.imap_unordered(_repro_job, [(tf, c, ref_dir) for tf in repro_tfs for c in COINS]))
+            rows.sort(key=lambda r: (TFS.index(r["tf"]), COINS.index(r["coin"])))
+            res["code_path_reproduces_period12_cache"] = dict(wall_s=round(time.time() - t0, 1), files=rows)
+    with Pool(procs) as p:
+        sp = pd.DataFrame([r for rows in p.imap_unordered(_split_job, [(tf, c, out_dir, ref_dir) for tf in TFS
+                                                                         for c in COINS]) for r in rows])
+    sp.to_csv(os.path.join(report_dir, "final_signals_overlap_split.csv"), index=False)
+    res["b_split"] = {}
+    for (tf, eff), g in sp.groupby(["tf", "effect"], sort=False):
+        by_s = g.groupby("strategy")[["n_union", "n_both_same"]].sum()
+        by_s = (by_s["n_both_same"] / by_s["n_union"].replace(0, np.nan)).dropna().sort_values()
+        res["b_split"].setdefault(tf, {})[eff] = dict(
+            union_agree=float(g["n_both_same"].sum() / max(1, g["n_union"].sum())),
+            same_bar=float(g["n_both_same"].sum() / max(1, g["n_sig_T"].sum())),
+            within_1bar=float(g["n_T_matched_pm1"].sum() / max(1, g["n_sig_T"].sum())),
+            worst3=by_s.head(3).round(3).to_dict())
     with open(os.path.join(report_dir, "final_signals_check.json"), "w") as fh:
         json.dump(res, fh, indent=1, default=float)
     return res

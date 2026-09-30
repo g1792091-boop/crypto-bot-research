@@ -52,7 +52,9 @@ REASONS = ("stop", "lock", "liquidation", "open")
 
 
 # ------------------------------------------------------------------ sizing lookup
-def _sizer():
+def _sizer(k_stop: float = K_STOP):
+    """Leverage and liquidation distance by (side, ATR / price) for a k_stop x ATR stop.
+    The default is the paper v3 stop; paperbot/agents/labtests.py passes the stop_atr variants."""
     cache = {}
 
     def lev_liq(side: int, atr_frac: float):
@@ -61,7 +63,7 @@ def _sizer():
             raw = 100.0
             a = key[1] * raw
             fill = raw * (1 + side * RB.SETTINGS.slippage_frac)
-            d = size_position(RB.SETTINGS, EQUITY, side, fill, raw - side * K_STOP * a, "best", RB.BRACKETS,
+            d = size_position(RB.SETTINGS, EQUITY, side, fill, raw - side * k_stop * a, "best", RB.BRACKETS,
                               atr=a, min_notional=RB.MIN_NOTIONAL)
             cache[key] = (d.leverage, side * (fill - d.liq_price) / fill) if d.ok else (0, np.nan)
         return cache[key]
@@ -69,9 +71,12 @@ def _sizer():
 
 
 # ------------------------------------------------------------------ exits, vectorised over signals
-def _scan(b, idx, side, lev, liq_frac, H, n, f_bar):
+def _scan(b, idx, side, lev, liq_frac, H, n, f_bar, k_stop=K_STOP, ladder=None):
     """Ladder exit for signals entering at idx+1, looking at most H bars ahead.
-    Returns dict of arrays; ``done`` is False where no exit happened inside H bars."""
+    Returns dict of arrays; ``done`` is False where no exit happened inside H bars.
+    ``k_stop`` (initial stop, x ATR) and ``ladder`` (a paperbot.ladder.LadderSpec; None = the
+    paper v3 ladder) default to the paper v3 rules; paperbot/agents/labtests.py varies them."""
+    lad = RB.LADDER if ladder is None else ladder
     rt, fee, slip = RB.SETTINGS.round_trip_cost, RB.SETTINGS.taker_fee, RB.SETTINGS.slippage_frac
     m = len(idx)
     off = np.arange(1, H + 1)
@@ -82,16 +87,16 @@ def _scan(b, idx, side, lev, liq_frac, H, n, f_bar):
     raw = b["o"][idx + 1]
     a = b["atr"][idx]
     fill = raw * (1 + side * slip)
-    stop0 = raw - side * K_STOP * a
+    stop0 = raw - side * k_stop * a
     liq = fill * (1 - side * liq_frac)
     s = side[:, None]
     fund = f_bar * off[None, :]
     fav = np.where(s == 1, h, -lo)                        # favourable extreme, sign-adjusted
     best_px = s * np.maximum.accumulate(np.concatenate([(side * fill)[:, None], fav], axis=1), axis=1)[:, 1:]
     roe_best = lev[:, None] * (s * (best_px / fill[:, None] - 1) - rt - fund)
-    first = RB.LADDER.first_lock + RB.LADDER.trigger_gap
-    nstep = np.floor((roe_best - first) / RB.LADDER.step + 1e-9)
-    lock_roe = np.where(roe_best >= first - 1e-12, RB.LADDER.first_lock + RB.LADDER.step * nstep, np.nan)
+    first = lad.first_lock + lad.trigger_gap
+    nstep = np.floor((roe_best - first) / lad.step + 1e-9)
+    lock_roe = np.where(roe_best >= first - 1e-12, lad.first_lock + lad.step * nstep, np.nan)
     lock_px = fill[:, None] * (1 + s * (lock_roe / lev[:, None] + rt + fund))
     lp = np.where(np.isnan(lock_px), -np.inf, s * lock_px)       # sign-adjusted: higher = tighter
     lock_cum = np.maximum.accumulate(np.concatenate([np.full((m, 1), -np.inf), lp], axis=1), axis=1)[:, :-1]
