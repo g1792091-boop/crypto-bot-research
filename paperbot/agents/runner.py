@@ -7,8 +7,17 @@ Command (one call per role):
 with the data packet on stdin.
 
 Why these flags:
-- ``--tools ""`` removes every tool: the agent cannot read files, run
-  commands or reach the network. It only sees its packet.
+- ``--tools ""`` removes every tool: the agent cannot run commands or reach
+  the network, and it cannot read files ITSELF. Claude Code still expands an
+  ``@<path>`` mention anywhere in the -p prompt (stdin included) into a file
+  read that is sent to the model, whatever the flags: ``call`` therefore
+  sends every '@' of the packet as its JSON escape (``\\u0040``), so no packet
+  text (an owner post, a model's earlier line) can name a file to attach.
+  The agent only sees its packet.
+- ``CLAUDE_CODE_MAX_OUTPUT_TOKENS`` (``MAX_OUTPUT_TOKENS``) bounds each call's
+  output (thinking included); without it the CLI asks for 128k. The rooms'
+  pre-call budget check charges this ceiling with the input estimate, so one
+  call can never run far past a token cap.
 - ``--safe-mode`` skips CLAUDE.md, skills, plugins, hooks and MCP servers;
   login works normally. ``--bare`` is NOT used: in bare mode Claude Code
   ignores the subscription login and only accepts ANTHROPIC_API_KEY.
@@ -44,6 +53,10 @@ from typing import Callable, Optional, Protocol
 ENV_ALLOW = ("PATH", "HOME", "LANG", "LC_ALL", "TZ", "USER", "TMPDIR",
              "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CONFIG_DIR", "HTTPS_PROXY", "HTTP_PROXY",
              "NO_PROXY", "NODE_EXTRA_CA_CERTS", "SSL_CERT_FILE")
+# Output ceiling of every call (thinking plus the small JSON answer), set in the child's environment:
+# the CLI otherwise asks for max_tokens=128000. ClassBudget.call charges it before the call.
+MAX_OUTPUT_TOKENS = 16_000
+MAX_OUTPUT_ENV = "CLAUDE_CODE_MAX_OUTPUT_TOKENS"
 # Present in the parent -> warn: would switch billing or leak secrets if passed.
 ENV_BILLING = ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_USE_BEDROCK",
                "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY")
@@ -95,6 +108,18 @@ def child_env(parent: Optional[dict] = None) -> dict:
     return {k: v for k, v in parent.items() if k in ENV_ALLOW}
 
 
+def call_env(parent: Optional[dict] = None) -> dict:
+    """The child's environment: the allowlisted variables plus the fixed output ceiling."""
+    return {**child_env(parent), MAX_OUTPUT_ENV: str(MAX_OUTPUT_TOKENS)}
+
+
+def escape_mentions(payload: str) -> str:
+    """Claude Code expands '@<path>' anywhere in the -p prompt (stdin included) into a file read sent to
+    the model, even with --tools "": send '@' as its JSON escape. '@' only ever occurs inside JSON
+    strings of the packet, so this is lossless (json.loads gives back the same packet)."""
+    return payload.replace("@", "\\u0040")
+
+
 def billing_warnings(parent: Optional[dict] = None) -> list[str]:
     parent = os.environ if parent is None else parent
     return [k for k in ENV_BILLING if parent.get(k)]
@@ -144,7 +169,7 @@ class ClaudeCodeRunner:
         self.bin = claude_bin
         self.timeout = timeout
         self.workdir = workdir or tempfile.mkdtemp(prefix="paperbot-agent-")
-        self.env = child_env(env)
+        self.env = call_env(env)
         self._run = run
 
     def command(self, model: str, prompt_file: str, instruction: str) -> list[str]:
@@ -160,6 +185,7 @@ class ClaudeCodeRunner:
         try:
             payload = json.dumps(packet, ensure_ascii=False, default=str)
             payload = payload.encode("utf-8", "replace").decode("utf-8")    # a lone surrogate never breaks stdin
+            payload = escape_mentions(payload)       # no packet text can make the CLI attach a local file
             proc = self._run(self.command(model, prompt_file, instruction), input=payload,
                              capture_output=True, text=True, timeout=self.timeout,
                              cwd=self.workdir, env=self.env)
@@ -202,7 +228,7 @@ def auth_preflight(claude_bin: str = "claude", env: Optional[dict] = None, run: 
     Returns (ok, reason)."""
     cmd = [claude_bin, "--setting-sources", "", "auth", "status", "--json"]
     try:
-        proc = run(cmd, capture_output=True, text=True, timeout=timeout, env=child_env(env))
+        proc = run(cmd, capture_output=True, text=True, timeout=timeout, env=call_env(env))
     except (OSError, subprocess.SubprocessError) as exc:
         return False, f"claude auth status failed: {type(exc).__name__}: {str(exc)[:200]}"
     try:

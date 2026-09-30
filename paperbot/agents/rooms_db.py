@@ -325,7 +325,8 @@ def stale_wal(path: Optional[str]) -> bool:
     try:
         with open(path, "rb") as fh:
             h = fh.read(20)
-        return len(h) == 20 and h[:16] == b"SQLite format 3\x00" and h[18] == 1 and os.path.getsize(path + "-wal") > 0
+        return (len(h) == 20 and h[:16] == b"SQLite format 3\x00" and h[18] == 1
+                and os.path.getsize(path + "-wal") > 0)
     except OSError:
         return False
 
