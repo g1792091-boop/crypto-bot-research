@@ -263,6 +263,29 @@ def fetch_candles(symbol: str, interval: str, limit: int = 300) -> list:
     return out
 
 
+_FRAME_CACHE: dict = {}
+
+
+def fetch_frame(symbol: str, interval: str, limit: int = 1500):
+    """Closed bars with volume (for the strategy views), oldest first; the forming bar is dropped."""
+    import pandas as pd
+    key = (symbol, interval, limit)
+    hit = _FRAME_CACHE.get(key)
+    if hit and time.time() - hit[0] < 30:
+        return hit[1]
+    url = f"https://fapi.binance.com/fapi/v1/klines?symbol={symbol}&interval={interval}&limit={limit}"
+    with urllib.request.urlopen(url, timeout=10) as r:
+        rows = json.loads(r.read())
+    now = time.time() * 1000
+    rows = [k for k in rows if int(k[6]) < now]
+    df = pd.DataFrame({"ts": pd.to_datetime([int(k[0]) for k in rows], unit="ms", utc=True),
+                       "open": [float(k[1]) for k in rows], "high": [float(k[2]) for k in rows],
+                       "low": [float(k[3]) for k in rows], "close": [float(k[4]) for k in rows],
+                       "volume": [float(k[5]) for k in rows]})
+    _FRAME_CACHE[key] = (time.time(), df)
+    return df
+
+
 # ---------------------------------------------------------------- app
 def agent_feed(agents_db: Optional[str], limit: int = 200) -> list[dict]:
     """Meeting messages written by the v3 agent pipelines (their own database)."""
@@ -280,7 +303,7 @@ def agent_feed(agents_db: Optional[str], limit: int = 200) -> list[dict]:
 
 
 def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fetch_candles,
-               agents_db: Optional[str] = None, daily_db: Optional[str] = None) -> FastAPI:
+               agents_db: Optional[str] = None, daily_db: Optional[str] = None, frames=fetch_frame) -> FastAPI:
     app = FastAPI(title="paper v3", docs_url=None, redoc_url=None, openapi_url=None)
     data = Data(db, daily_db)
     fails: dict[str, list[float]] = {}
@@ -367,6 +390,32 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
     @app.get("/api/cards/stats")
     def get_card_stats(strategy: Optional[str] = None, tf: Optional[str] = None, days: float = 30):
         return data.card_stats(strategy, tf, days if days > 0 else None)
+
+    view_cache: dict = {}
+
+    @app.get("/api/strategy/{strategy}")
+    def get_strategy_view(strategy: str, tf: str = "1h", symbol: str = "BTCUSDT"):
+        """The strategy's own indicator lines and its entry conditions on the last closed bar."""
+        from ..strategy_views import render, views
+        if symbol not in ("BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "LTCUSDT", "BCHUSDT", "XRPUSDT"):
+            raise HTTPException(400, "unknown symbol")
+        if tf not in TRADE_TFS:
+            raise HTTPException(400, "unknown timeframe")
+        try:
+            known = strategy in views()
+        except ImportError:
+            known = False
+        if not known:
+            raise HTTPException(404, "no chart view for this strategy yet")
+        df = frames(symbol, tf, 1500)
+        if df is None or len(df) < 50:
+            raise HTTPException(503, "no price data")
+        key = (strategy, tf, symbol, str(df["ts"].iloc[-1]))
+        if key not in view_cache:
+            if len(view_cache) > 256:
+                view_cache.clear()
+            view_cache[key] = render(strategy, df, tf)
+        return view_cache[key]
 
     @app.get("/api/strategies")
     def get_strategies():

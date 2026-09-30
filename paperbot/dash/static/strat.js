@@ -107,9 +107,15 @@ async function drawStratChart() {
   if (view && view.panes) view.panes.forEach((p, k) => {
     const scale = `pane${k}`;
     p.series.forEach((ln, i) => {
-      const s = ss.chart.addLineSeries({color: palette[(i + 1) % palette.length], lineWidth: 1.5, priceScaleId: scale,
-        priceLineVisible: false, lastValueVisible: true, title: `${p.name} ${ln.name}`});
-      s.setData(ln.data); ss.extra.push(s);
+      const hist = /히스토그램/.test(ln.name);
+      const s = hist
+        ? ss.chart.addHistogramSeries({priceScaleId: scale, priceLineVisible: false, lastValueVisible: false})
+        : ss.chart.addLineSeries({color: palette[(i + 1) % palette.length], lineWidth: 1.5, priceScaleId: scale,
+          priceLineVisible: false, lastValueVisible: i === 0, crosshairMarkerVisible: false, title: i === 0 ? p.name : ""});
+      s.setData(hist ? ln.data.map((d) => ({...d, color: d.value >= 0 ? css("--up-bg") : css("--down-bg")})) : ln.data);
+      if (i === 0) (p.levels || []).forEach((lv) => s.createPriceLine({price: lv, color: css("--line-2"), lineWidth: 1,
+        lineStyle: 2, axisLabelVisible: false}));
+      ss.extra.push(s);
     });
     ss.chart.priceScale(scale).applyOptions({scaleMargins: {top: 0.78 - 0.2 * k, bottom: 0.02 + 0.2 * k}});
   });
@@ -118,10 +124,11 @@ async function drawStratChart() {
   const step = TF_SEC[ss.tf], t0 = bars.length ? bars[0].time : 0, marks = [];
   trades.filter((t) => t.account_id === aid && t.entry_time / 1000 >= t0).forEach((t) => {
     const e = Math.floor(t.entry_time / 1000), x = Math.floor(t.exit_time / 1000);
+    // arrows for entries, dots with the ROE for exits: details are in the loss cards, not on the candles
     marks.push({time: e - (e % step), position: t.side > 0 ? "belowBar" : "aboveBar", color: css("--series"),
-      shape: t.side > 0 ? "arrowUp" : "arrowDown", text: `${t.side > 0 ? "롱" : "숏"} ${t.leverage}배`});
+      shape: t.side > 0 ? "arrowUp" : "arrowDown", text: ""});
     marks.push({time: x - (x % step), position: t.side > 0 ? "aboveBar" : "belowBar", color: t.pnl > 0 ? css("--up") : css("--down"),
-      shape: "circle", text: `${REASON_KO[t.exit_reason] || t.exit_reason} ${pct(t.roe, 0)}`});
+      shape: "circle", text: pct(t.roe, 0)});
   });
   marks.sort((a, b) => a.time - b.time);
   ss.series.setMarkers(marks);
@@ -146,8 +153,8 @@ function renderConds(view) {
   const part = (side, list) => {
     if (!list || !list.length) return "";
     const on = list.filter((c) => c.on).length;
-    return `<div style="margin-bottom:4px"><b>${side} 조건</b> <span class="muted">${on}/${list.length} 켜짐</span></div>` +
-      list.map((c) => `<div class="cond"><span>${esc(c.name)}</span><span class="${c.on ? "ok" : "no"}">${c.on ? "✓" : "✕"}</span></div>`).join("");
+    return `<div><div style="margin-bottom:4px"><b>${side} 조건</b> <span class="muted">${on}/${list.length} 켜짐</span></div>` +
+      list.map((c) => `<div class="cond"><span>${esc(c.name)}</span><span class="${c.on ? "ok" : "no"}">${c.on ? "✓" : "✕"}</span></div>`).join("") + "</div>";
   };
   const c = view.conditions;
   const left = (l) => l && l.length ? l.length - l.filter((x) => x.on).length : null;
