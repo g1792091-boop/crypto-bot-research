@@ -116,6 +116,7 @@ async function pollAiWatch() {
   try {
     const d = await api(`/api/copilot/alerts?since=${aiSince}`);
     aiSince = d.now;
+    emit("aiwatch", d.items);
     if (!opts.ai_watch) return;
     for (const a of d.items.slice(0, 4).reverse()) {
       notify({ title: `[AI 감시] ${a.text}`, msg: a.ai || "트레이드 오른쪽 '실시간 AI' 탭에서 자세한 분석과 조치 버튼을 볼 수 있습니다", cat: "ai",
@@ -133,10 +134,11 @@ async function pollAutopilot() {
     emit("apsignals", d.items);
     if (!opts.autopilot) return;
     for (const x of d.items.slice(0, 4).reverse()) {
-      const head = { entry: "오토 진입", exit: "오토 청산", deploy: "오토 봇 시작", ai: "AI 판단", ai_note: "오토 진입 · AI 코멘트", ai_auto: "AI 자동", ai_entry: "AI 진입 시그널" }[x.type] || "오토";
+      const head = { entry: "오토 진입", exit: "오토 청산", deploy: "오토 봇 시작", ai: "AI 판단", ai_note: "오토 진입 · AI 코멘트", ai_auto: "AI 자동", ai_entry: "AI 진입 시그널", aibot: x.event === "exit" ? "AI 봇 청산" : "AI 봇 진입" }[x.type] || "오토";
       notify({ title: `[${head}] ${(x.symbol || "").replace(/USDT$/, "")} ${IVK[x.interval] || x.interval || ""} · ${x.text}`.replace(/\s+·/, " ·"),
         msg: `${x.strategy || ""}${x.status === "observe" ? " · 관찰(검증 미통과) — 참고용" : x.status === "pass" ? " · 검증 통과 매매법 (모의)" : ""}`, cat: "autopilot",
-        kind: x.type === "entry" || x.type === "ai_entry" ? (x.side === "long" ? "up" : "err") : x.type === "exit" ? (x.pnl > 0 ? "up" : "err") : "" });
+        kind: x.type === "entry" || x.type === "ai_entry" || (x.type === "aibot" && x.event === "entry") ? (x.side === "long" ? "up" : "err")
+          : x.type === "exit" || x.type === "aibot" ? (x.pnl > 0 ? "up" : "err") : "" });
     }
   } catch { /* 다음 주기에 */ }
 }

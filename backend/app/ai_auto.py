@@ -565,7 +565,30 @@ def tick() -> list[str]:
     started = due()
     for j in started:
         threading.Thread(target=_safe, args=(j,), daemon=True).start()
+    if SETTINGS["enabled"] and time.time() - state.get("last_aibot", 0) >= 45:
+        state["last_aibot"] = time.time()
+        try:
+            aibot_notify()
+        except Exception as e:
+            state["errors"]["aibot"] = str(e)[:160]
     return started
+
+
+def aibot_notify() -> int:
+    """AI 봇의 새 진입·청산을 알림(오토파일럿 시그널 → 종 · 차트 옆 AI 패널)으로."""
+    from . import aibot, autopilot
+    n = 0
+    for e in aibot.events():
+        side = "롱" if e["side"] == "long" else "숏"
+        if e["kind"] == "entry":
+            text = f"AI 봇 {side} 진입 {e['entry']:.6g} · 손절 {e['stop']:.6g} · 익절 {e['take']:.6g}"
+        else:
+            text = f"AI 봇 {side} 청산 — {e['label']} {e['exit']:.6g} · 증거금 대비 {e['roe_pct']:+.1f}% ({e['pnl']:+.0f}) · {e['r']:+.2f}R"
+        autopilot._signal({"type": "aibot", "symbol": e["symbol"], "interval": e["interval"], "side": e["side"], "status": "ai",
+                           "strategy": (e.get("reason") or "")[:80], "text": text, "pnl": e["pnl"] if e["kind"] == "exit" else None,
+                           "event": e["kind"], "entry": e["entry"], "stop": e["stop"], "take": e["take"]})
+        n += 1
+    return n
 
 
 def _safe(job: str) -> None:

@@ -962,6 +962,26 @@ def copilot_signals(symbol: Optional[str] = None, interval: Optional[str] = None
     return copilot.signals_for(sym, interval, max(1, min(limit, 300)))
 
 
+@app.get("/api/aibot")
+def aibot_view(symbol: Optional[str] = None, interval: Optional[str] = None):
+    """AI 봇: AI 진입 시그널을 따라 모의 매매한 거래·포지션·수익률 (symbol 을 주면 그 코인만)."""
+    from . import aibot
+    try:
+        sym = symbols.resolve(symbol) if symbol else None
+    except ValueError as e:
+        _bad(e)
+    return aibot.view(sym, interval)
+
+
+@app.post("/api/aibot/settings")
+def aibot_settings(body: dict):
+    from . import aibot
+    try:
+        return aibot.set_settings(body)
+    except (TypeError, ValueError) as e:
+        _bad(ValueError(f"설정 값이 잘못됐습니다: {e}"))
+
+
 @app.post("/api/copilot/config")
 def copilot_config(cfg: CopilotCfg):
     out = copilot.set_settings(**cfg.model_dump())

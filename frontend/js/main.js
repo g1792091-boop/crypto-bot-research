@@ -1,6 +1,7 @@
 // 진입점: 상태 불러오기 → 화면 초기화 → 탭 전환
 import { initAgents } from "./agents.js";
 import { initAiAuto } from "./aiauto.js";
+import { initAiDock } from "./aidock.js";
 import { initAiModels } from "./aimodels.js";
 import { initAlerts } from "./alerts.js";
 import { initAutopilot } from "./autopilot.js";
@@ -32,6 +33,7 @@ async function init() {
   initAlerts();
   initAiModels();
   initTrade();
+  initAiDock();
   syncAutopilot();
   initAutopilot();
   initLab();

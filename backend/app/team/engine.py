@@ -606,7 +606,13 @@ def _answer(run: Run, role, question: str):
         msg = (data or {}).get("message") if isinstance(data, dict) else None
         ev = [p for p in ((data or {}).get("evidence") or []) if isinstance(p, str)] if isinstance(data, dict) else []
         bad = [p for p in ev if not checks.resolve(given, p)[0]]
-        run.post(role.rid, msg or txt.strip()[:1500], "message", meta={"source": model, "reply_to": "human", "evidence": ev, "bad_evidence": bad})
+        if not (msg or "").strip() and len((txt or "").strip()) < 5:      # 형식만 맞춘 빈 답 → 한 번 더 (JSON 없이 그냥 답하게)
+            _calls["n"] += 1
+            txt = llm.text(f"{COMMON}\n\n# 당신의 역할: {role.name}\n{role.prompt}\n\n사람의 질문에 입력 데이터만 근거로 한국어 3~6문장으로 답한다.",
+                           json.dumps(given, ensure_ascii=False, default=str)[:20000], effort="low", max_tokens=1200, role=role.rid)
+            model = llm.last_used or model
+        run.post(role.rid, (msg or txt.strip()[:1500]) or "답을 만들지 못했습니다. 잠시 뒤 다시 물어봐 주세요.", "message",
+                 meta={"source": model, "reply_to": "human", "evidence": ev, "bad_evidence": bad})
     except Exception as e:
         run.post("code", f"{role.name} 답변 실패: {str(e)[:160]}", "system")
     finally:

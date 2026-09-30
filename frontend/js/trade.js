@@ -563,7 +563,50 @@ function renderPriceAlerts() {
 }
 
 // ================================================================ 하단 탭
-let bottomTab = "pos", bots = [];
+let bottomTab = "pos", bots = [], aibot = null, fillsMode = "all";
+
+// AI 봇 (AI 진입 시그널을 따라 모의 매매) — 체결 내역 · 차트 옆 AI 패널에서 씀
+export async function loadAiBot() {
+  try { aibot = await api("/api/aibot"); } catch { return; }
+  emit("aibot", aibot);
+  if (bottomTab === "fills") renderBottom();
+}
+const sg = (v) => (v > 0 ? "+" : "");
+const AIOUT = { take: "익절", stop: "손절", expired: "미체결", open: "진행 중", waiting: "진입 대기", unknown: "-" };
+
+function aibotHtml() {
+  if (!aibot) return `<div class="muted" style="padding:8px">AI 봇 불러오는 중…</div>`;
+  const s = aibot.stats, set = aibot.settings;
+  const st = (k, v, c = "") => `<div class="stat"><div class="k">${k}</div><div class="v ${c}">${v}</div></div>`;
+  const who = (e) => (e && e !== "rules" ? "AI" : "규칙");
+  const openRows = aibot.open.map((t) => `<tr><td>${mdhm(t.entry_time)} 진입</td><td>${t.symbol.replace("USDT", "")} <span class="muted">${IV_LABEL[t.interval] || t.interval}</span></td>
+    <td class="${t.side === "long" ? "up" : "down"}">${t.side === "long" ? "롱" : "숏"} ${fmt(set.leverage, 0)}x</td><td>${px(t.entry)} → <span class="muted">지금</span> ${px(t.mark)}</td>
+    <td class="accent">보유 중</td><td class="${cls(t.roe_pct)}">${pct(t.roe_pct)}</td><td class="${cls(t.pnl)}">${fmt(t.pnl)}</td><td class="${cls(t.r)}">${sg(t.r)}${t.r}R</td>
+    <td>${t.held_min != null ? `${Math.round(t.held_min / 60 * 10) / 10}시간` : "–"}</td><td>${t.confidence ?? "–"}% · ${who(t.engine)}</td>
+    <td class="muted" style="font-size:11px">손절 ${px(t.stop)} · 익절 ${px(t.take)}</td><td><button class="sm" data-botchart="${t.symbol}|${t.interval}">차트</button></td></tr>`).join("");
+  const rows = aibot.trades.slice().reverse().map((t) => `<tr><td>${mdhm(t.exit_time)}</td><td>${t.symbol.replace("USDT", "")} <span class="muted">${IV_LABEL[t.interval] || t.interval}</span></td>
+    <td class="${t.side === "long" ? "up" : "down"}">${t.side === "long" ? "롱" : "숏"} ${fmt(set.leverage, 0)}x</td><td>${px(t.entry)} → ${px(t.exit)}</td>
+    <td class="${t.pnl > 0 ? "up" : "down"}">${t.label}</td><td class="${cls(t.roe_pct)}">${pct(t.roe_pct)}</td><td class="${cls(t.pnl)}">${fmt(t.pnl)}</td><td class="${cls(t.r)}">${sg(t.r)}${t.r}R</td>
+    <td>${t.held_min != null ? (t.held_min < 120 ? `${t.held_min}분` : `${Math.round(t.held_min / 60 * 10) / 10}시간`) : "–"}</td><td>${t.confidence ?? "–"}% · ${who(t.engine)}</td>
+    <td class="muted" style="font-size:11px">${esc((t.reason || "").slice(0, 60))}</td><td><button class="sm" data-botchart="${t.symbol}|${t.interval}">차트</button></td></tr>`).join("");
+  const sigs = aibot.signals.slice(-40).reverse().map((x) => `<tr><td>${mdhm(x.created)}</td><td>${x.symbol.replace("USDT", "")} <span class="muted">${IV_LABEL[x.interval] || x.interval}</span></td>
+    <td class="${x.side === "long" ? "up" : "down"}">${x.side === "long" ? "롱" : "숏"}</td><td>진입 ${px(x.entry)} · 손절 ${px(x.stop)} · 익절 ${px(x.take)}</td>
+    <td>${x.skip ? `<span class="muted" title="${esc(x.skip)}">건너뜀</span>` : x.taken ? `<span class="accent">🤖 체결</span>` : ""} ${AIOUT[x.outcome?.status] || ""}</td>
+    <td>${x.confidence ?? "–"}% · ${who(x.engine)}</td><td class="muted" style="font-size:11px">${esc((x.trigger || x.headline || "").slice(0, 70))}</td></tr>`).join("");
+  return `<div class="stats aib-stats">
+      ${st("AI 봇 수익률", pct(s.return_pct), cls(s.return_pct))}${st("순손익", fmt(s.net_pnl), cls(s.net_pnl))}${st("평가 자산", fmt(s.equity))}
+      ${st("승률", s.win_rate != null ? `${s.win_rate}% <small class="muted">${s.wins}승 ${s.losses}패</small>` : "–")}${st("손익비", s.profit_factor ?? "–")}
+      ${st("평균 R", s.avg_r != null ? `${sg(s.avg_r)}${s.avg_r}R` : "–", cls(s.avg_r))}${st("평균 수익(증거금)", s.avg_roe_pct != null ? pct(s.avg_roe_pct) : "–", cls(s.avg_roe_pct))}
+      ${st("최대 낙폭", s.max_drawdown_pct ? `-${s.max_drawdown_pct}%` : "0%", s.max_drawdown_pct ? "down" : "")}${st("최고 / 최저", s.best != null ? `${pct(s.best, 1)} / ${pct(s.worst, 1)}` : "–")}
+      ${st("평균 보유", s.avg_hold_min != null ? (s.avg_hold_min < 120 ? `${s.avg_hold_min}분` : `${Math.round(s.avg_hold_min / 6) / 10}시간`) : "–")}${st("보유 중", `${s.open}개 <small class="${cls(s.unrealized)}">${fmt(s.unrealized)}</small>`)}
+      ${st("수수료", fmt(s.fees))}</div>
+    <div class="help" style="padding:4px 10px">🤖 AI 봇 = AI 진입 시그널(차트의 보라 표시)을 그대로 따라 한 모의 매매. 진입가에 닿으면 체결, 손절·익절에 닿으면 청산(한 봉에 둘 다면 손절), 12봉 안에 안 닿으면 미체결.
+      거래마다 증거금 = 시작 자산 ${fmt(set.initial, 0)} × ${set.position_pct}% · ${set.leverage}배 · 수수료 ${set.fee_pct}%×2. 설정은 오토파일럿 화면 'AI 자동 모드'.</div>
+    <table><tr><th>시각</th><th>코인</th><th>방향</th><th>진입 → 청산</th><th>결과</th><th>수익률</th><th>손익</th><th>R</th><th>보유</th><th>확신·엔진</th><th>근거</th><th></th></tr>
+      ${openRows}${rows || (openRows ? "" : `<tr><td colspan="12" class="muted">아직 AI 봇 체결이 없습니다. AI 진입 시그널이 나오고 진입가에 닿으면 여기에 쌓입니다.</td></tr>`)}</table>
+    ${sigs ? `<div class="sub" style="padding:8px 10px 2px">AI 진입 시그널 기록 <span class="muted">(최근 40개 · 결과는 뒤 봉으로 자동 채점)</span></div>
+      <table><tr><th>시각</th><th>코인</th><th>방향</th><th>진입 · 손절 · 익절</th><th>결과</th><th>확신·엔진</th><th>조건</th></tr>${sigs}</table>` : ""}`;
+}
 function renderBottom() {
   const el = $("#bottom-body");
   if (bottomTab === "pos") {
@@ -579,7 +622,9 @@ function renderBottom() {
       <div class="help" style="padding:6px 10px">손절·익절은 칸에 가격을 넣고 '적용'을 누르거나, 차트의 손절·익절 선을 마우스로 끌어서 바꿀 수 있습니다. 칸을 비우고 적용하면 해제됩니다.</div>`
       : `<div class="empty">열린 포지션이 없습니다. 오른쪽 '주문' 탭에서 모의 주문을 넣을 수 있습니다.</div>`;
   } else if (bottomTab === "fills") {
-    el.innerHTML = `<table>${tradeRows((account?.trades || []).slice().reverse())}</table>`;
+    const seg = `<div class="row fills-seg">${[["all", "전체"], ["ai", "🤖 AI 봇 · 시그널"], ["me", "내 계좌"]].map(([k, l]) => `<button class="flat sm ${fillsMode === k ? "on" : ""}" data-fills="${k}">${l}</button>`).join("")}</div>`;
+    const mine = `<div class="sub" style="padding:8px 10px 2px">내 계좌 체결</div><table>${tradeRows((account?.trades || []).slice().reverse())}</table>`;
+    el.innerHTML = seg + (fillsMode === "me" ? mine : fillsMode === "ai" ? aibotHtml() : aibotHtml() + mine);
   } else if (bottomTab === "bots") {
     el.innerHTML = bots.length ? `<table><tr><th>봇</th><th>종목</th><th>상태</th><th>평가 자산</th><th>수익률</th><th>포지션</th><th>거래</th><th>자동 개선</th><th></th></tr>
       ${bots.map((b) => { const a = b.account, p = a.position, r = (a.equity / b.initial_equity - 1) * 100;
@@ -625,7 +670,8 @@ on("pricealerts", renderPriceAlerts);
 // 새 AI 분석 · 새 AI 진입 시그널이 나오면 차트의 'AI 시그널'을 다시 그린다
 on("copilot", () => charts.forEach((c) => c.refreshAi?.()));
 on("apsignals", (items) => {
-  const syms = new Set((items || []).filter((x) => x.type === "ai_entry").map((x) => x.symbol));
+  const syms = new Set((items || []).filter((x) => x.type === "ai_entry" || x.type === "aibot").map((x) => x.symbol));
+  if (syms.size) loadAiBot();
   charts.forEach((c) => syms.has(c.symbol) && c.refreshAi?.());
 });
 
@@ -814,6 +860,8 @@ export function initTrade() {
     }
     const sym = e.target.dataset.close;
     if (sym) busy(e.target, async () => { await api(`/api/paper/close/${sym}`, { method: "POST" }); loadAccount(); charts[0]?.refreshOverlays(); });
+    const fm = e.target.dataset.fills;
+    if (fm) { fillsMode = fm; renderBottom(); return; }
     const bc = e.target.dataset.botchart;
     if (bc) { const [s, iv] = bc.split("|"); showOnChart(s, iv); }
     const ap = e.target.dataset.aipos;
@@ -828,5 +876,6 @@ export function initTrade() {
   initCopilot({ afterTrade: () => { loadAccount(); charts[0]?.refreshOverlays(); } });
   loadAccount(); setInterval(loadAccount, 5000);
   loadBots(); setInterval(loadBots, 15_000);
+  loadAiBot(); setInterval(() => !document.hidden && loadAiBot(), 20_000);
   renderBottom();
 }

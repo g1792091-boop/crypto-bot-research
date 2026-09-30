@@ -629,7 +629,7 @@ export class TermChart {
       .then((w) => (got.whales = w)).catch(() => {}));
     jobs.push(api(`/api/paper/markers?symbol=${sym}`).then((m) => (got.markers = { ...m, symbol: sym })).catch(() => {}));
     if (o.sr) jobs.push(api(`/api/levels?symbol=${sym}&interval=${iv}`).then((l) => (got.sr = l)).catch(() => {}));
-    if (o.ai) jobs.push(api(`/api/copilot/signals?symbol=${sym}&interval=${iv}&limit=40`).then((d) => (got.ai = d)).catch(() => {}));
+    if (o.ai) jobs.push(api(`/api/aibot?symbol=${sym}&interval=${iv}`).then((d) => (got.ai = d)).catch(() => {}));
     if (o.footprint) jobs.push(this.loadFootprint());
     await Promise.all(jobs);
     if (!this._is(sym, iv)) return;   // 기다리는 동안 코인·봉을 바꿨으면 이전 결과는 버린다
@@ -644,7 +644,7 @@ export class TermChart {
     if (!this.opts.overlays.ai || !this.candles.length) return;
     const sym = this.symbol, iv = this.interval;
     let d;
-    try { d = await api(`/api/copilot/signals?symbol=${sym}&interval=${iv}&limit=40`); } catch { return; }
+    try { d = await api(`/api/aibot?symbol=${sym}&interval=${iv}`); } catch { return; }
     if (!this._is(sym, iv)) return;
     this.ai = d; this._applyMarkers(); this._legend();
   }
@@ -789,20 +789,31 @@ export class TermChart {
       });
       m.manual.trades.forEach((t) => add(t, "수동"));
     }
-    if (this.opts.overlays.ai && this.ai?.items?.length) {
-      // AI 진입 시그널: 화살표(보라) + 결과, 아직 유효한 마지막 시그널은 진입·손절·익절선
-      const OUT = { take: "익절✓", stop: "손절✗", expired: "미체결", open: "진행 중", waiting: "대기" }, AIC = "#9d7bff";
-      for (const x of this.ai.items) {
-        const t = this._barTime(x.bar_time);
-        if (!t) continue;
-        const long = x.side === "long", who = x.engine === "rules" ? "규칙" : "AI";
-        mk.push({ time: t, position: long ? "belowBar" : "aboveBar", shape: long ? "arrowUp" : "arrowDown", color: AIC,
-          text: `${who} ${long ? "롱" : "숏"}${x.confidence != null ? ` ${x.confidence}%` : ""} · ${OUT[x.outcome?.status] || ""}` });
-      }
-      const live = [...this.ai.items].reverse().find((x) => ["waiting", "open"].includes(x.outcome?.status));
-      if (live) {
-        const who = live.engine === "rules" ? "규칙" : "AI";
-        line(live.entry, `${who} ${live.side === "long" ? "롱" : "숏"} 진입`, AIC, 0); line(live.stop, `${who} 손절`, css("--down")); line(live.take, `${who} 익절`, css("--up"));
+    if (this.opts.overlays.ai && this.ai?.signals?.length) {
+      // AI 시그널(보라 점) → AI 봇 진입(🤖 화살표) → 청산(익절·손절 수익률). 보유 중이면 AI 봇 진입·손절·익절선, 대기 중이면 대기 진입선
+      const AIC = "#9d7bff", sgn = (v) => (v > 0 ? "+" : "");
+      const n = this.ai.signals.length;
+      this.ai.signals.forEach((x, i) => {
+        const long = x.side === "long", who = x.engine === "rules" ? "규칙" : "AI", t0 = this._barTime(x.bar_time), tr = x.trade, recent = i >= n - 3;
+        if (t0 && !tr) mk.push({ time: t0, position: long ? "belowBar" : "aboveBar", shape: "circle", size: 0.6, color: AIC,
+          text: recent ? `${who} ${long ? "롱" : "숏"} 신호 · ${x.skip ? "건너뜀" : x.outcome?.label || ""}` : "" });
+        if (!tr) return;
+        const te = this._barTime(tr.entry_time), tx = tr.exit_time && this._barTime(tr.exit_time);
+        if (te) mk.push({ time: te, position: long ? "belowBar" : "aboveBar", shape: long ? "arrowUp" : "arrowDown", color: AIC,
+          text: `🤖${long ? "롱" : "숏"}${recent && x.confidence != null ? ` ${x.confidence}%` : ""}` });
+        if (tx) mk.push({ time: tx, position: long ? "aboveBar" : "belowBar", shape: "circle", color: tr.pnl > 0 ? css("--up") : css("--down"),
+          text: `${tr.label} ${sgn(tr.roe_pct)}${tr.roe_pct.toFixed(1)}%` });
+      });
+      const open = this.ai.open?.[this.ai.open.length - 1];
+      if (open) {
+        line(open.entry, `🤖 AI봇 ${open.side === "long" ? "롱" : "숏"} 보유 ${open.roe_pct >= 0 ? "+" : ""}${open.roe_pct.toFixed(1)}%`, AIC, 0);
+        line(open.stop, "🤖 AI봇 손절", css("--down")); line(open.take, "🤖 AI봇 익절", css("--up"));
+      } else {
+        const wait = [...this.ai.signals].reverse().find((x) => x.outcome?.status === "waiting" && !x.skip);
+        if (wait) {
+          const who = wait.engine === "rules" ? "규칙" : "AI";
+          line(wait.entry, `${who} ${wait.side === "long" ? "롱" : "숏"} 진입 대기`, AIC, 2); line(wait.stop, `${who} 손절`, css("--down"), 3); line(wait.take, `${who} 익절`, css("--up"), 3);
+        }
       }
     }
     this.editLines = {};

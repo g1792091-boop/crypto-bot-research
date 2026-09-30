@@ -163,3 +163,45 @@ def test_team_briefing_job(monkeypatch):
     assert {"chart", "flow", "macro", "news", "risk", "lead"} <= senders
     assert len(autopilot.signals) == n + 1 and "브리핑" in autopilot.signals[-1]["text"]
     assert ai_auto.team_active()
+
+
+def test_aibot_follows_signals_and_reports(monkeypatch):
+    """사용자 요청: AI 봇이 AI 진입 시그널로 모의 매매 — 체결 내역에 수익률·승률 등, 새 진입·청산은 알림."""
+    from app import aibot
+    from app.quant import copilot
+    bar = lambda t, lo, hi, cl=None: {"time": t, "open": lo, "high": hi, "low": lo, "close": cl or hi, "volume": 1}
+    B = int(time.time()) - 5 * 3600                                          # 알림은 최근 6시간 안의 진입·청산만
+    cs = [bar(B + 1000, 99.5, 100.5), bar(B + 2000, 100, 104.5), bar(B + 3000, 101, 102), bar(B + 4000, 99, 101), bar(B + 5000, 97.5, 99, 98)]
+    monkeypatch.setattr(aibot.market, "candles", lambda s, iv, n: (cs, "test"))
+    saved = list(copilot.ai_signals)
+    copilot.ai_signals.clear()
+    mk = lambda i, side, e, st, tk, t, eng="nvidia": {"id": f"T:{i}", "symbol": "TESTUSDT", "interval": "1h", "created": B + t + 10, "bar_time": B + t, "side": side,
+                                                    "entry": e, "stop": st, "take": tk, "confidence": 70, "engine": eng, "trigger": "조건"}
+    copilot.ai_signals.extend([mk(1, "long", 100, 98, 104, 1000),            # 1000 봉에서 진입 → 2000 봉 익절
+                               mk(2, "short", 101.5, 105, 97.6, 3000),       # 3000 봉 진입 → 5000 봉 익절
+                               mk(3, "long", 100.5, 99.8, 105, 4000)])       # 4000 봉 진입가 닿음 — 같은 코인 포지션 보유 중 → 건너뜀
+    aibot._seen.update(entries=set(), exits=set(), loaded=True, init=True)
+    aibot.set_settings({"leverage": 5, "position_pct": 10, "initial": 10000, "fee_pct": 0.04, "include_rules": True, "min_confidence": 0})
+    d = aibot.compute(force=True)
+    assert [t["id"] for t in d["trades"]] == ["T:1", "T:2"] and d["open"] == []
+    t1 = d["trades"][0]
+    assert t1["status"] == "take" and t1["r"] == 2.0 and round(t1["roe_pct"], 1) == round((4 * 5 - 0.04 * 2 * 5), 1)
+    skip = next(x for x in d["signals"] if x["id"] == "T:3")
+    assert not skip["taken"] and "보유" in skip["skip"]
+    s = d["stats"]
+    assert s["trades"] == 2 and s["wins"] == 2 and s["win_rate"] == 100 and s["return_pct"] > 0 and s["by_symbol"]["TESTUSDT"]["trades"] == 2
+    # 알림: 진입·청산 각각 한 번씩만
+    n = len(autopilot.signals)
+    assert ai_auto.aibot_notify() == 4 and ai_auto.aibot_notify() == 0
+    texts = [x["text"] for x in list(autopilot.signals)[n:]]
+    assert any("AI 봇 롱 진입" in t for t in texts) and any("청산 — 익절" in t for t in texts)
+    # 규칙 분석 시그널 제외 · 확신 기준
+    aibot.set_settings({"include_rules": False, "min_confidence": 80})
+    d = aibot.compute(force=True)
+    assert d["stats"]["trades"] == 0 and all(x["skip"] for x in d["signals"])
+    r = c.get("/api/aibot?symbol=BTCUSDT&interval=1h").json()
+    assert {"signals", "trades", "open", "stats"} <= set(r)
+    assert c.post("/api/aibot/settings", json={"leverage": 999}).json()["leverage"] == 50
+    aibot.set_settings({"include_rules": True, "min_confidence": 0, "leverage": 3, "position_pct": 20})
+    copilot.ai_signals.clear()
+    copilot.ai_signals.extend(saved)

@@ -627,14 +627,26 @@ def ask(symbol: str, interval: str, question: str, history: list[dict] | None = 
         st = _state[(symbol, interval)]
     lt = light(symbol, interval)
     ctx = {**st["ctx"], "price": _r(lt["price"]), "positions": lt["positions"], "bar_left_sec": lt["bar_left_sec"]}
+    try:
+        from .. import aibot
+        ab = aibot.view(symbol)
+        ctx["ai_bot"] = {"stats": {k: ab["stats"][k] for k in ("trades", "win_rate", "return_pct", "avg_r", "open")},
+                         "open_here": ab["open"], "recent_trades_here": ab["trades"][-5:],
+                         "latest_signals_here": [{k: x.get(k) for k in ("side", "entry", "stop", "take", "confidence", "created")} | {"outcome": x["outcome"]["label"]}
+                                                 for x in ab["signals"][-3:]]}
+    except Exception:
+        pass
     convo = "\n".join(f"{'사용자' if h.get('role') == 'user' else 'AI'}: {h.get('text', '')[:600]}" for h in (history or [])[-6:])
     user = (f"실시간 데이터:\n{json.dumps(ctx, ensure_ascii=False, default=str)}\n\n최근 분석:\n{json.dumps(st['result'], ensure_ascii=False)}\n\n"
             + (f"이전 대화:\n{convo}\n\n" if convo else "") + f"질문: {question}")
     try:
+        llm.last_used = None
         ans = llm.text(ASK_SYSTEM, user, effort="low", max_tokens=1500, feature="copilot")
     except Exception as e:
         return {"answer": f"AI 응답 실패: {str(e)[:200]}", "engine": llm.provider(), "error": True}
-    return {"answer": ans.strip(), "engine": llm.provider(), "model": llm.model_name()}
+    used = llm.last_used or ""
+    return {"answer": ans.strip() or "답을 만들지 못했습니다. 잠시 뒤 다시 물어봐 주세요.", "engine": used.split(":", 1)[0] or llm.provider(),
+            "model": used.split(":", 1)[-1] if used else llm.model_name()}
 
 
 # ---------------------------------------------------------------- 포지션 감시 (백그라운드)

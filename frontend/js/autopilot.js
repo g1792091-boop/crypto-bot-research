@@ -5,7 +5,7 @@ import { showOnChart } from "./trade.js";
 let S = null, timer = null, visible = false;
 const STAGE = { pass: ["3구간 통과", "up"], hold_fail: ["최종 확인 탈락", "down"], valid_fail: ["검증 탈락", "down"], train_pass: ["학습만 통과", "muted"], train_fail: ["학습 탈락", "muted"] };
 const KIND = { pass: ["✅ 검증 통과", "up"], observe: ["👀 관찰(미통과)", "accent"] };
-const SIGT = { entry: "진입", exit: "청산", deploy: "봇 시작", ai: "AI", ai_note: "AI 코멘트", ai_auto: "AI 자동", ai_entry: "AI 진입" };
+const SIGT = { entry: "진입", exit: "청산", deploy: "봇 시작", ai: "AI", ai_note: "AI 코멘트", ai_auto: "AI 자동", ai_entry: "AI 진입", aibot: "AI 봇" };
 
 export function initAutopilot() {
   on("view", (v) => { visible = v === "autopilot"; if (visible) load(); });
