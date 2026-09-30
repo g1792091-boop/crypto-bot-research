@@ -1,7 +1,7 @@
 """Call Claude Code in print mode, on the owners' subscription login.
 
 Command (one call per role):
-    claude -p "<instruction>" --model <sonnet|opus> --output-format json
+    claude -p "<instruction>" --model <sonnet|opus> --output-format stream-json --verbose
            --tools "" --safe-mode --strict-mcp-config --no-session-persistence
            --system-prompt-file <role prompt>
 with the data packet on stdin.
@@ -14,10 +14,20 @@ Why these flags:
   sends every '@' of the packet as its JSON escape (``\\u0040``), so no packet
   text (an owner post, a model's earlier line) can name a file to attach.
   The agent only sees its packet.
-- ``CLAUDE_CODE_MAX_OUTPUT_TOKENS`` (``MAX_OUTPUT_TOKENS``) bounds each call's
-  output (thinking included); without it the CLI asks for 128k. The rooms'
-  pre-call budget check charges this ceiling with the input estimate, so one
-  call can never run far past a token cap.
+- ``CLAUDE_CODE_MAX_OUTPUT_TOKENS`` (``MAX_OUTPUT_TOKENS``) bounds the output
+  of each model request (thinking included); without it the CLI asks for 128k.
+  It does NOT bound a call by itself: when an answer reaches that ceiling,
+  Claude Code asks the model again ("Output token limit hit. Resume
+  directly…", up to 3 more times, each re-sending the whole input), and once
+  more when an answer shows no text. ``call`` therefore reads the CLI's
+  stream-json events and kills the CLI (its whole process group) at the first
+  sign of such a further request (``_Stream``): a synthetic 'user' event
+  (written just before it) or an answer with a new message id. At most one
+  more request can have started, so one call uses at most
+  ``call_charge(input)`` tokens (2 x input + 3 x the ceiling), which the rooms'
+  pre-call budget check charges: no call runs past a token cap. A call stopped
+  this way raises AgentCallError with the tokens it may have used (the model
+  ran: its turn is skipped, never taken for an outage).
 - ``--safe-mode`` skips CLAUDE.md, skills, plugins, hooks and MCP servers;
   login works normally. ``--bare`` is NOT used: in bare mode Claude Code
   ignores the subscription login and only accepts ANTHROPIC_API_KEY.
@@ -43,10 +53,14 @@ from __future__ import annotations
 
 import json
 import os
+import queue
 import re
 import shutil
+import signal
 import subprocess
 import tempfile
+import threading
+import time
 import weakref
 from dataclasses import dataclass
 from typing import Callable, Optional, Protocol
@@ -55,10 +69,23 @@ from typing import Callable, Optional, Protocol
 ENV_ALLOW = ("PATH", "HOME", "LANG", "LC_ALL", "TZ", "USER", "TMPDIR",
              "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CONFIG_DIR", "HTTPS_PROXY", "HTTP_PROXY",
              "NO_PROXY", "NODE_EXTRA_CA_CERTS", "SSL_CERT_FILE")
-# Output ceiling of every call (thinking plus the small JSON answer), set in the child's environment:
-# the CLI otherwise asks for max_tokens=128000. ClassBudget.call charges it before the call.
+# Output ceiling of every model request (thinking plus the small JSON answer), set in the child's
+# environment: the CLI otherwise asks for max_tokens=128000.
 MAX_OUTPUT_TOKENS = 16_000
 MAX_OUTPUT_ENV = "CLAUDE_CODE_MAX_OUTPUT_TOKENS"
+# Model requests one call can make: the answer and, at worst, one more that the CLI started (to resume an
+# answer cut at the ceiling, or one with no text) before ``call`` stopped it.
+MAX_REQUESTS_PER_CALL = 2
+
+
+def call_charge(est_input: int) -> int:
+    """Most tokens one call can use, for the pre-call budget check (``ClassBudget.call``). Request k re-sends
+    the input and the k-1 answers before it (each at most the ceiling) and writes at most the ceiling:
+    for MAX_REQUESTS_PER_CALL = 2 that is 2 x input + 3 x MAX_OUTPUT_TOKENS."""
+    n, est = MAX_REQUESTS_PER_CALL, max(0, int(est_input))
+    return n * est + MAX_OUTPUT_TOKENS * n * (n + 1) // 2
+
+
 # Present in the parent -> warn: would switch billing or leak secrets if passed.
 ENV_BILLING = ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_USE_BEDROCK",
                "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY")
@@ -78,20 +105,121 @@ class AgentCallError(RuntimeError):
     tokens = 0          # usage the CLI still reported for the failed call
 
 
-def _usage_tokens(envelope) -> int:
-    """Tokens in the CLI envelope's ``usage`` (same fields as budget.tokens_of), 0 when absent."""
-    u = envelope.get("usage") if isinstance(envelope, dict) else None
-    if not isinstance(u, dict):
+USAGE_KEYS = ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens", "output_tokens")
+MODEL_USAGE_KEYS = ("inputTokens", "cacheCreationInputTokens", "cacheReadInputTokens", "outputTokens")
+
+
+def _sum(d, keys) -> int:
+    if not isinstance(d, dict):
         return 0
     try:
-        return sum(int(u.get(k) or 0) for k in ("input_tokens", "cache_creation_input_tokens",
-                                                 "cache_read_input_tokens", "output_tokens"))
+        return sum(max(0, int(d.get(k) or 0)) for k in keys)
     except (TypeError, ValueError):
         return 0
 
 
+def _usage_dict(envelope) -> dict:
+    """The envelope's ``usage`` (budget.tokens_of's fields); when its ``modelUsage`` (every model request of
+    the call, per model) adds up to more, as in an error envelope whose ``usage`` is empty or covers only
+    the first request, that total in the same fields. {} when neither is there."""
+    if not isinstance(envelope, dict):
+        return {}
+    u = envelope.get("usage") if isinstance(envelope.get("usage"), dict) else {}
+    per = envelope.get("modelUsage") if isinstance(envelope.get("modelUsage"), dict) else {}
+    tot = {k: sum(_sum(m, (mk,)) for m in per.values()) for k, mk in zip(USAGE_KEYS, MODEL_USAGE_KEYS)}
+    if sum(tot.values()) > _sum(u, USAGE_KEYS):
+        return tot
+    return {k: u[k] for k in USAGE_KEYS if k in u}
+
+
+def _usage_tokens(envelope) -> int:
+    """Tokens the CLI envelope reports for the whole call (``usage`` or, when larger, ``modelUsage``), 0 when
+    absent."""
+    return _sum(_usage_dict(envelope), USAGE_KEYS)
+
+
 class AgentTimeout(AgentCallError):
-    """The call ran out of time; it probably used tokens that are never reported."""
+    """The call ran out of time (the CLI was stopped); it probably used tokens that are never reported.
+    ``tokens``: what the events show the model may have used (0 when it never showed any activity)."""
+
+
+class _Stream:
+    """Claude Code's stream-json events of one call (``--output-format stream-json --verbose``; a single
+    JSON envelope of ``--output-format json`` reads as the result too). ``feed`` returns True when the CLI
+    has started, or is about to start, another model request for this call:
+    - a 'user' event: the CLI's own "Output token limit hit. Resume directly…" (after an answer cut at the
+      output ceiling) or "no visible output" nudge; with no tools there is no other user turn, and it is
+      written just before the request;
+    - an answer (assistant event) with a new message id: a further request already streaming;
+    - an API retry after the model already streamed (the request is sent again).
+    API error messages (a plan limit, 'response exceeded the output token maximum') are not answers."""
+
+    def __init__(self) -> None:
+        self.result: Optional[dict] = None   # the 'result' event (or the whole JSON envelope)
+        self.inputs: dict = {}               # message id -> input tokens of that model request
+        self.active = False                  # the model streamed something (thinking or an answer block)
+        self.more = False                    # another request was started or is about to be
+        self.lines: list[str] = []
+
+    def feed(self, line: str) -> bool:
+        line = (line or "").strip()
+        if not line:
+            return False
+        self.lines.append(line)
+        try:
+            ev = json.loads(line)
+        except (ValueError, RecursionError):
+            return False
+        if not isinstance(ev, dict):
+            return False
+        t = ev.get("type")
+        if t == "result" or (t is None and ("result" in ev or "is_error" in ev)):
+            self.result = ev
+            return False
+        if t == "user":
+            if ev.get("isSynthetic") or self.inputs or self.active:
+                self.more = True
+        elif t == "system":
+            sub = ev.get("subtype")
+            if sub == "thinking_tokens":
+                self.active = True
+            elif sub == "api_retry" and (self.inputs or self.active):
+                self.more = True
+        elif t == "assistant" and not (ev.get("error") or ev.get("is_api_error_message") or ev.get("api_error")):
+            msg = ev.get("message") if isinstance(ev.get("message"), dict) else {}
+            self.active = True
+            mid = msg.get("id")
+            if isinstance(mid, str) and mid not in self.inputs:
+                if self.inputs:
+                    self.more = True
+                self.inputs[mid] = _sum(msg.get("usage"), USAGE_KEYS[:3])
+        return self.more
+
+    def worst(self, est: int) -> int:
+        """Most tokens the requests seen so far can have used: each at its input plus the output ceiling
+        (the first at the estimate when its input was never shown, once the model showed activity) and,
+        when a further request may have been sent before the CLI was stopped, one more at the input
+        (the estimate, or the largest input seen) plus the ceiling (the first answer, re-sent)."""
+        c, est = MAX_OUTPUT_TOKENS, max(0, int(est))
+        spent = sum(i + c for i in self.inputs.values())
+        if not self.inputs and (self.active or self.more):
+            spent = est + c
+        if self.more and len(self.inputs) < MAX_REQUESTS_PER_CALL:
+            spent += max([est, *self.inputs.values()]) + c
+        return spent
+
+
+def _kill(proc) -> None:
+    """Stop the CLI and anything it started (its own process group, ``start_new_session``) at once."""
+    if isinstance(proc, subprocess.Popen):
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError, OSError):
+            pass
+    try:
+        proc.kill()
+    except (ProcessLookupError, OSError):
+        pass
 
 
 @dataclass
@@ -113,6 +241,18 @@ def child_env(parent: Optional[dict] = None) -> dict:
 def call_env(parent: Optional[dict] = None) -> dict:
     """The child's environment: the allowlisted variables plus the fixed output ceiling."""
     return {**child_env(parent), MAX_OUTPUT_ENV: str(MAX_OUTPUT_TOKENS)}
+
+
+# Claude Code's own part of every request (its short system preamble, the environment block, the
+# instruction): counted with the packet in every input estimate.
+CLI_OVERHEAD_TOKENS = 1_000
+
+
+def input_estimate(payload: str, system_prompt: str = "", instruction: str = "") -> int:
+    """Rough input tokens of one request: UTF-8 bytes / 3 (a Korean-heavy packet, about one token per Hangul
+    character of three bytes, is not undercounted) plus the CLI's own part."""
+    n = sum(len((x or "").encode("utf-8", "replace")) for x in (payload, system_prompt, instruction))
+    return n // 3 + CLI_OVERHEAD_TOKENS
 
 
 def escape_mentions(payload: str) -> str:
