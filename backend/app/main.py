@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import time
+from dataclasses import asdict
 from contextlib import asynccontextmanager
 from typing import Literal, Optional
 
@@ -10,8 +11,8 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import agents, analysis, backtest, config, indicators, liquidation, llm, nl_strategy
-from .data import coinglass, market, news
+from . import agents, analysis, backtest, config, improve, indicators, liquidation, llm, nl_strategy, orderflow
+from .data import coinglass, exchanges, market, news, sentiment
 from .llm import LLMUnavailable
 from .paper import PaperManager
 from .strategy import StrategySpec, validate
@@ -22,6 +23,7 @@ paper = PaperManager()
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     paper.start()
+    orderflow.tracker.start()
     yield
 
 
@@ -58,6 +60,58 @@ def candles(symbol: str = "BTCUSDT", interval: str = "1h", limit: int = 500):
 def tickers(symbols: str = "BTCUSDT,ETHUSDT"):
     rows, src = market.tickers([s.strip().upper() for s in symbols.split(",") if s.strip()])
     return {"source": src, "items": rows}
+
+
+@app.get("/api/orderbook")
+def get_orderbook(symbol: str = "BTCUSDT", step: Optional[float] = None, rows: int = 20):
+    try:
+        return orderflow.orderbook(symbol.upper(), step, min(rows, 100))
+    except Exception as e:
+        raise HTTPException(502, f"호가창 요청 실패: {e}")
+
+
+@app.get("/api/whales")
+def get_whales(symbol: str = "BTCUSDT", interval: str = "1h", limit: int = 500, min_usd: Optional[float] = None):
+    try:
+        return orderflow.whales(symbol.upper(), interval, min(limit, 1500), min_usd)
+    except ValueError as e:
+        _bad(e)
+
+
+@app.get("/api/exchanges")
+def get_exchanges(symbol: str = "BTCUSDT"):
+    return exchanges.compare(symbol.upper())
+
+
+@app.get("/api/fear-greed")
+def get_fear_greed(days: int = 90):
+    try:
+        return sentiment.fear_greed(min(days, 365))
+    except Exception as e:
+        raise HTTPException(502, f"공포·탐욕 지수 요청 실패: {e}")
+
+
+@app.get("/api/coinbase-premium")
+def get_coinbase_premium(symbol: str = "BTCUSDT", interval: str = "1h"):
+    try:
+        return sentiment.coinbase_premium(symbol.upper(), interval)
+    except Exception as e:
+        raise HTTPException(502, f"코인베이스 프리미엄 계산 실패: {e}")
+
+
+@app.get("/api/cg-index")
+def list_cg_index():
+    return {"enabled": coinglass.enabled(), "items": [{"name": k, "title": v[0]} for k, v in sentiment.CG_INDEX.items()]}
+
+
+@app.get("/api/cg-index/{name}")
+def get_cg_index(name: str):
+    try:
+        return sentiment.coinglass_index(name)
+    except ValueError as e:
+        _bad(e)
+    except Exception as e:
+        raise HTTPException(502, f"CoinGlass 요청 실패: {e}")
 
 
 @app.get("/api/analysis")
@@ -169,6 +223,47 @@ def parse_strategy(req: TextStrategyReq):
     return {"spec": spec.model_dump(), "engine": engine, "problems": validate(spec)}
 
 
+class RefineReq(BaseModel):
+    spec: StrategySpec
+    message: str
+    history: list[dict] = []
+    metrics: Optional[dict] = None
+    bars: int = 1500
+
+
+@app.post("/api/strategy/refine")
+def refine_strategy(req: RefineReq):
+    """대화로 전략 수정 → 바로 백테스트. '알아서 개선' 류 요청은 자동 개선을 돌린다."""
+    try:
+        if nl_strategy.wants_improve(req.message):
+            rep = improve.run_for(req.spec, min(req.bars, 5000), with_ai=config.llm_enabled())
+            spec = StrategySpec(**rep["spec"])
+            reply = ("검증을 통과한 개선을 적용했습니다: " + " / ".join(rep["changes"])) if rep["applied"] else \
+                "여러 개선안을 시험했지만 검증 구간(최근 30%)에서 나아지는 것이 없어 전략을 그대로 두었습니다."
+            result = backtest.run_live_data(spec, min(req.bars, 5000))
+            return {"spec": spec.model_dump(), "changes": rep["changes"], "reply": rep.get("ai_summary") or reply,
+                    "engine": "improve", "improve": rep, "backtest": result}
+        spec, changes, reply, engine = nl_strategy.refine(req.spec, req.message, req.history, req.metrics)
+        result = backtest.run_live_data(spec, min(req.bars, 5000)) if changes or engine == "claude" else None
+    except (ValueError, LLMUnavailable) as e:
+        _bad(e)
+    return {"spec": spec.model_dump(), "changes": changes, "reply": reply, "engine": engine, "backtest": result}
+
+
+class ImproveReq(BaseModel):
+    spec: StrategySpec
+    bars: int = 1500
+    ai: bool = False
+
+
+@app.post("/api/strategy/improve")
+def improve_strategy(req: ImproveReq):
+    try:
+        return improve.run_for(req.spec, min(req.bars, 5000), with_ai=req.ai)
+    except (ValueError, LLMUnavailable) as e:
+        _bad(e)
+
+
 @app.post("/api/backtest")
 def run_backtest(req: BacktestReq):
     try:
@@ -224,6 +319,34 @@ def create_bot(req: BotReq):
         _bad(e)
 
 
+class BotConfig(BaseModel):
+    auto_improve: Optional[bool] = None
+    improve_every: Optional[int] = None
+
+
+@app.post("/api/paper/bots/{bot_id}/config")
+def bot_config(bot_id: str, cfg: BotConfig):
+    bot = paper.bots.get(bot_id)
+    if not bot:
+        raise HTTPException(404, "봇이 없습니다.")
+    if cfg.auto_improve is not None:
+        bot.auto_improve = cfg.auto_improve
+    if cfg.improve_every:
+        bot.improve_every = max(3, cfg.improve_every)
+    paper.save()
+    return bot.to_dict()
+
+
+@app.post("/api/paper/bots/{bot_id}/improve")
+def bot_improve(bot_id: str):
+    bot = paper.bots.get(bot_id)
+    if not bot:
+        raise HTTPException(404, "봇이 없습니다.")
+    rep = bot.maybe_improve(force=True)
+    paper.save()
+    return rep
+
+
 @app.post("/api/paper/bots/{bot_id}/{action}")
 def bot_action(bot_id: str, action: Literal["pause", "resume", "close", "delete"]):
     bot = paper.bots.get(bot_id)
@@ -240,6 +363,23 @@ def bot_action(bot_id: str, action: Literal["pause", "resume", "close", "delete"
         paper.bots.pop(bot_id)
     paper.save()
     return {"ok": True}
+
+
+
+
+@app.get("/api/paper/markers")
+def paper_markers(symbol: str = "BTCUSDT"):
+    """차트에 표시할 페이퍼 봇·수동 계좌의 진입/청산 기록."""
+    sym = symbol.upper()
+    manual = paper.manual
+    pos = manual.positions.get(sym)
+    return {
+        "bots": [b.markers() for b in paper.bots.values() if b.spec.symbol == sym],
+        "manual": {"trades": [asdict(t) for t in manual.trades if getattr(t, "symbol", None) == sym][-300:],
+                   "position": None if not pos else {"side": "long" if pos.side == 1 else "short",
+                                                     "entry_price": pos.entry_price, "entry_time": pos.entry_time,
+                                                     "stop": pos.stop, "take": pos.take, "liq_price": pos.liq_price}},
+    }
 
 
 @app.get("/api/paper/account")

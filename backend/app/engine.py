@@ -56,6 +56,7 @@ class Trade:
     funding: float
     entry_reason: str
     exit_reason: str
+    symbol: str | None = None
 
 
 @dataclass

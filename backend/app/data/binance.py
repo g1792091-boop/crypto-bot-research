@@ -34,6 +34,7 @@ def klines(symbol: str, interval: str, limit: int = 500, end_time: int | None = 
             "time": int(k[0]) // 1000,
             "open": float(k[1]), "high": float(k[2]), "low": float(k[3]),
             "close": float(k[4]), "volume": float(k[5]),
+            "taker_buy": float(k[9]),   # 테이커 매수 체결량 (CVD 계산용)
         } for k in rows]
         out = batch + out
         remaining -= len(batch)
@@ -93,3 +94,18 @@ def tickers_24h() -> list[dict]:
         "low": float(r["lowPrice"]),
         "quote_volume": float(r["quoteVolume"]),
     } for r in rows if r["symbol"].endswith("USDT")]
+
+
+def depth(symbol: str, limit: int = 1000) -> dict:
+    """호가창. limit: 5, 10, 20, 50, 100, 500, 1000."""
+    r = _get("/fapi/v1/depth", {"symbol": symbol, "limit": limit})
+    return {"bids": [[float(p), float(q)] for p, q in r["bids"]],
+            "asks": [[float(p), float(q)] for p, q in r["asks"]],
+            "time": int(r.get("T") or r.get("E") or 0) // 1000}
+
+
+def agg_trades(symbol: str, limit: int = 1000) -> list[dict]:
+    """최근 체결 (같은 가격·방향 체결을 묶은 aggTrade). side 는 테이커 기준."""
+    rows = _get("/fapi/v1/aggTrades", {"symbol": symbol, "limit": limit})
+    return [{"id": int(r["a"]), "time": int(r["T"]) // 1000, "price": float(r["p"]), "qty": float(r["q"]),
+             "usd": float(r["p"]) * float(r["q"]), "side": "sell" if r["m"] else "buy"} for r in rows]

@@ -34,11 +34,52 @@ class PaperBot:
     last_price: float | None = None
     data_source: str | None = None
     log: list[dict] = field(default_factory=list)
+    auto_improve: bool = False          # 거래가 쌓이면 스스로 복기·개선
+    improve_every: int = 10             # 새 거래 N건마다 개선 시도
+    improved_at_trades: int = 0
+    journal: list[dict] = field(default_factory=list)    # 거래별 복기 노트
+    versions: list[dict] = field(default_factory=list)   # 전략 변경 이력
     sim: Simulator = field(init=False)
 
     def __post_init__(self):
         self.sim = Simulator(risk=self.spec.risk, initial_equity=self.initial_equity,
                              bar_seconds=INTERVAL_SECONDS.get(self.spec.interval, 3600))
+        self.versions.append({"time": int(time.time()), "reason": "시작", "spec": self.spec.model_dump()})
+
+    def __setstate__(self, state):
+        # 예전 버전에서 저장한 봇도 새 필드 기본값으로 불러온다
+        defaults = {"auto_improve": False, "improve_every": 10, "improved_at_trades": 0, "journal": [], "versions": []}
+        self.__dict__.update({**defaults, **state})
+
+    def _review(self, trades: list[Trade], candles: list[dict]):
+        """새로 끝난 거래를 복기 노트에 남긴다."""
+        from . import improve
+        fs = improve.feature_series(candles)
+        for t in trades:
+            td = asdict(t)
+            note = improve.explain(td, improve.trade_features(candles, fs, td))
+            self.journal.append(note)
+            self._log(("익절 복기: " if note["win"] else "손실 복기: ") + note["note"])
+        self.journal = self.journal[-300:]
+
+    def maybe_improve(self, force: bool = False) -> dict | None:
+        from . import improve
+        n = len(self.sim.trades)
+        if not force and (not self.auto_improve or n - self.improved_at_trades < self.improve_every):
+            return None
+        self.improved_at_trades = n
+        rep = improve.run_for(self.spec, 1500)
+        if rep["applied"]:
+            new = StrategySpec(**rep["spec"])
+            new.name = self.spec.name
+            self.spec = new
+            self.sim.risk = new.risk
+            self.versions.append({"time": int(time.time()), "reason": " / ".join(rep["changes"]), "spec": new.model_dump(),
+                                  "before": rep["baseline"], "after": rep["after"]})
+            self._log("자동 개선 적용: " + " / ".join(rep["changes"]))
+        else:
+            self._log("자동 개선 검토: 검증 구간에서 나아지는 변경이 없어 전략 유지")
+        return rep
 
     def _log(self, msg: str):
         self.log.append({"time": int(time.time()), "msg": msg})
@@ -78,6 +119,12 @@ class PaperBot:
                 self.sim.execute_pending(live, now, sig["atr"][new_idx[-1]])
         # 실시간 가격으로 손절/익절/청산 체크
         self.sim.check_stops({"time": now, "open": live, "high": live, "low": live, "close": live})
+        if len(self.sim.trades) > n_trades:
+            try:
+                self._review(self.sim.trades[n_trades:], candles)
+                self.maybe_improve()
+            except Exception as e:
+                self._log(f"복기/개선 오류: {e}")
         for t in self.sim.trades[n_trades:]:
             self._log(f"청산 {t.side} {t.exit_reason}: PnL {t.pnl:+.2f}")
 
@@ -87,7 +134,18 @@ class PaperBot:
                 "interval": self.spec.interval, "running": self.running, "created": self.created,
                 "data_source": self.data_source, "last_price": self.last_price,
                 "account": self.sim.snapshot(self.last_price), "log": self.log[-50:],
-                "equity_curve": self.sim.equity_curve[-500:], "spec": self.spec.model_dump()}
+                "equity_curve": self.sim.equity_curve[-500:], "spec": self.spec.model_dump(),
+                "auto_improve": self.auto_improve, "improve_every": self.improve_every,
+                "journal": self.journal[-30:], "versions": [{k: v for k, v in x.items() if k != "spec"} for x in self.versions[-20:]]}
+
+    def markers(self) -> dict:
+        """차트 표시용: 진입·청산 지점과 현재 포지션."""
+        p = self.sim.position
+        return {"id": self.id, "name": self.spec.name, "interval": self.spec.interval,
+                "trades": [asdict(t) for t in self.sim.trades[-300:]],
+                "position": None if not p else {"side": "long" if p.side == 1 else "short", "entry_price": p.entry_price,
+                                                "entry_time": p.entry_time, "stop": p.stop, "take": p.take,
+                                                "liq_price": p.liq_price}}
 
 
 @dataclass
@@ -144,7 +202,7 @@ class ManualAccount:
                                  exit_time=int(time.time()), entry_price=p.entry_price, exit_price=price,
                                  qty=p.qty, leverage=p.leverage, pnl=net,
                                  pnl_pct_on_margin=net / p.margin * 100, fees=fee + p.entry_fee,
-                                 funding=0.0, entry_reason="manual", exit_reason=reason))
+                                 funding=0.0, entry_reason="manual", exit_reason=reason, symbol=symbol))
         return self.snapshot()
 
     def tick(self):

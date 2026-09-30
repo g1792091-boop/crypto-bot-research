@@ -12,17 +12,20 @@ export const state = {
   interval: saved.interval || "1h",
   watch: saved.watch || ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "BNBUSDT", "DOGEUSDT", "ADAUSDT", "AVAXUSDT", "LINKUSDT", "SUIUSDT"],
   studies: saved.studies || ["MAExp@tv-basicstudies", "RSI@tv-basicstudies"],
-  chartMode: saved.chartMode || "tv",
+  chartMode: saved.chartMode || "term",
+  indicators: saved.indicators,
+  overlays: saved.overlays,
+  layout: saved.layout,
+  multi: saved.multi,
   macro: saved.macro || "NASDAQ:NDX",
-  showScenario: saved.showScenario ?? true,
   spec: null,
   analysis: null,
   tickers: {},
 };
 
 export function savePrefs() {
-  const { symbol, interval, watch, studies, chartMode, macro, showScenario } = state;
-  try { localStorage.setItem("ft.prefs", JSON.stringify({ symbol, interval, watch, studies, chartMode, macro, showScenario })); } catch { /* 저장 불가 환경 */ }
+  const { symbol, interval, watch, studies, chartMode, macro, indicators, overlays, layout, multi } = state;
+  try { localStorage.setItem("ft.prefs", JSON.stringify({ symbol, interval, watch, studies, chartMode, macro, indicators, overlays, layout, multi })); } catch { /* 저장 불가 환경 */ }
 }
 
 // 간단한 이벤트 버스

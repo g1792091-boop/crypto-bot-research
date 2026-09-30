@@ -103,12 +103,14 @@ def derivatives(symbol: str, interval: str, limit: int = 200) -> dict:
             except Exception as e:  # 하나가 실패해도 나머지는 표시
                 out["errors"][name] = str(e)
 
-    missing = [k for k in ("open_interest", "funding", "long_short") if not out[k]]
+    out["taker"] = []
+    missing = [k for k in ("open_interest", "funding", "long_short", "taker") if not out[k]]
     if missing and config.DATA_SOURCE != "synthetic":
         fallback = {
             "open_interest": lambda: binance.open_interest_history(symbol, interval, limit),
             "funding": lambda: binance.funding_history(symbol, min(limit, 1000)),
             "long_short": lambda: binance.long_short_ratio(symbol, interval, limit),
+            "taker": lambda: binance.taker_buy_sell_ratio(symbol, interval, limit),
         }
         for name in missing:
             try:
@@ -116,6 +118,10 @@ def derivatives(symbol: str, interval: str, limit: int = 200) -> dict:
                 out["source"] = out["source"] or "binance"
             except Exception as e:
                 out["errors"][name] = str(e)
+    if not any(out[k] for k in ("open_interest", "funding", "long_short")):
+        c, src = candles(symbol, interval, limit)
+        if src == "synthetic":
+            out.update(synthetic.derivatives(c), source="synthetic", errors={})
     return out
 
 

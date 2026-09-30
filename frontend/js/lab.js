@@ -1,6 +1,8 @@
-// 전략 · 백테스트 · 페이퍼 봇
-import { $, IV_LABEL, api, busy, cls, css, emit, esc, fmt, makeChart, pct, px, savePrefs, state, toast, tradeRows } from "./core.js";
+// 전략 대화 · 백테스트 · 복기/자동 개선 · 페이퍼 봇
+import { $, $$, IV_LABEL, api, busy, cls, css, emit, esc, fmt, makeChart, mdhm, pct, px, savePrefs, state, toast, tradeRows } from "./core.js";
+import { showOnChart } from "./trade.js";
 
+const LC = LightweightCharts;
 const PRICE_REFS = ["close", "open", "high", "low", "volume", "hl2", "hlc3"];
 const DERIV_REFS = ["funding", "oi", "oi_change_pct", "long_short"];
 const OPS = [">", "<", ">=", "<=", "crosses_above", "crosses_below", "rising", "falling"];
@@ -14,6 +16,90 @@ const RISK_FIELDS = [
 const PARAM_KEYS = ["length", "fast", "slow", "signal", "mult", "k_smooth", "d_smooth"];
 const charts = {};
 
+// 대화 · 버전은 브라우저에 저장 (새로고침해도 유지)
+const lab = (() => { try { return JSON.parse(localStorage.getItem("ft.lab") || "null"); } catch { return null; } })() || { chat: [], versions: [], cur: -1 };
+const saveLab = () => { try { localStorage.setItem("ft.lab", JSON.stringify({ ...lab, chat: lab.chat.slice(-80), versions: lab.versions.slice(-40) })); } catch { /* 무시 */ } };
+let lastResult = null;
+
+// ================================================================ 대화
+function renderChat() {
+  const el = $("#chat");
+  el.innerHTML = lab.chat.length ? lab.chat.map((m) => `<div class="msg ${m.role === "user" ? "me" : "bot"}">${esc(m.text)}${
+    m.changes?.length ? `<ul>${m.changes.map((c) => `<li>${esc(c)}</li>`).join("")}</ul>` : ""}${m.delta ? `<div class="delta">${m.delta}</div>` : ""}</div>`).join("")
+    : `<div class="msg bot">원하는 진입 기준을 말로 설명해 주세요. 전략으로 만들어 바로 백테스트합니다.
+그다음엔 고칠 점이나 부족한 점을 계속 말하면 그때마다 수정하고 다시 백테스트해서 전·후를 비교해 드립니다.
+"알아서 개선해줘"라고 하면 손실 거래를 분석해 검증을 통과한 개선만 적용합니다.</div>`;
+  el.scrollTop = el.scrollHeight;
+}
+
+const M = (m) => m && { ret: m.total_return_pct, mdd: m.max_drawdown_pct, win: m.win_rate_pct, pf: m.profit_factor, n: m.trades };
+function delta(a, b) {
+  if (!b) return "";
+  const f = (v, s = "%") => v == null ? "–" : `${fmt(v, 1)}${s}`;
+  const arrow = (x, y, good) => `${x} → <span class="${good ? "up" : "down"}">${y}</span>`;
+  if (!a) return `수익률 ${f(b.ret)} · 최대낙폭 ${f(b.mdd)} · 승률 ${f(b.win)} · 손익비 ${fmt(b.pf)} · 거래 ${b.n}`;
+  return [`수익률 ${arrow(f(a.ret), f(b.ret), (b.ret ?? 0) >= (a.ret ?? 0))}`, `최대낙폭 ${arrow(f(a.mdd), f(b.mdd), (b.mdd ?? 0) <= (a.mdd ?? 0))}`,
+    `승률 ${arrow(f(a.win), f(b.win), (b.win ?? 0) >= (a.win ?? 0))}`, `손익비 ${arrow(fmt(a.pf), fmt(b.pf), (b.pf ?? 0) >= (a.pf ?? 0))}`, `거래 ${a.n} → ${b.n}`].join(" · ");
+}
+
+function addVersion(spec, metrics, label) {
+  lab.versions = lab.versions.slice(0, lab.cur + 1);
+  lab.versions.push({ spec, metrics: M(metrics), label, time: Math.floor(Date.now() / 1000) });
+  lab.cur = lab.versions.length - 1;
+  saveLab(); renderVersions();
+}
+
+function renderVersions() {
+  $("#versions").innerHTML = lab.versions.length ? lab.versions.map((v, i) => `<div class="ver ${i === lab.cur ? "cur" : ""}" data-ver="${i}">
+      <span class="v">v${i + 1}</span><span>${esc(v.label)}</span><span class="${cls(v.metrics?.ret)}">${v.metrics ? pct(v.metrics.ret, 1) : ""}</span></div>`).reverse().join("")
+    : `<div class="empty">아직 없습니다.</div>`;
+}
+
+async function send(text) {
+  text = text.trim();
+  if (!text) return;
+  lab.chat.push({ role: "user", text });
+  renderChat();
+  $("#chat-text").value = "";
+  const bars = +$("#bt-bars").value, eq = +$("#bt-equity").value;
+  try {
+    if (!lab.versions.length || lab.fresh) {   // 첫 문장은 새 전략 작성, 이후는 수정
+      const r = await api("/api/strategy/auto", { method: "POST", body: { text, symbol: state.symbol, bars, initial_equity: eq } });
+      lab.fresh = false;
+      setSpec(r.spec);
+      renderBacktest(r);
+      addVersion(r.spec, r.metrics, "처음 작성");
+      lab.chat.push({ role: "bot", text: `'${r.spec.name}' 전략을 만들어 ${r.candles.length}봉으로 백테스트했습니다.${r.engine === "claude" ? "" : " (기본 변환기 사용)"}\n고칠 점을 말해 주세요.`,
+        delta: delta(null, M(r.metrics)) });
+    } else {
+      const before = lab.versions[lab.cur]?.metrics;
+      const history = lab.chat.slice(-10).map((m) => ({ role: m.role, text: m.text }));
+      const r = await api("/api/strategy/refine", { method: "POST", body: { spec: state.spec, message: text, history, metrics: lastResult?.metrics, bars } });
+      if (r.backtest) {
+        setSpec(r.spec);
+        renderBacktest(r.backtest);
+        addVersion(r.spec, r.backtest.metrics, (r.changes || []).join(", ").slice(0, 60) || text.slice(0, 40));
+      }
+      if (r.improve) renderImprove(r.improve, false);
+      let reply = r.reply;
+      const after = r.backtest && M(r.backtest.metrics);
+      if (before && after && r.engine !== "improve") {
+        const warn = [];
+        if (after.n < before.n * 0.4) warn.push(`거래 수가 ${before.n} → ${after.n}건으로 크게 줄었습니다. 조건이 같은 봉에 동시에 맞기 어려운 조합일 수 있습니다 (예: 크로스 조건 두 개). 둘 중 하나를 '>' / '<' 같은 상태 조건으로 바꾸는 것을 고려하세요.`);
+        if ((after.ret ?? 0) < (before.ret ?? 0) - 5) warn.push(`수익률이 나빠졌습니다. 버전 기록에서 v${lab.cur} 을 누르면 이전 버전으로 되돌릴 수 있습니다.`);
+        if (after.n < 10) warn.push("거래가 10건 미만이라 결과를 믿기 어렵습니다. 봉 개수를 늘리거나 조건을 완화해 보세요.");
+        if (warn.length) reply += "\n\n주의: " + warn.join("\n");
+      }
+      lab.chat.push({ role: "bot", text: reply, changes: r.changes, delta: r.backtest ? delta(before, after) : "" });
+      $("#chat-engine").textContent = r.engine === "claude" ? "Claude" : r.engine === "improve" ? "자동 개선" : "기본 편집기";
+    }
+  } catch (e) {
+    lab.chat.push({ role: "bot", text: "처리하지 못했습니다: " + e.message });
+  }
+  saveLab(); renderChat();
+}
+
+// ================================================================ 편집기
 function defaultSpec() {
   return {
     name: "EMA 20/50 크로스", description: "", symbol: state.symbol, interval: "1h",
@@ -40,14 +126,13 @@ function refOptions() {
 function renderBuilder() {
   const s = state.spec;
   const reg = state.status?.indicators || {};
-  const typeOpts = (sel) => Object.entries(reg).map(([k, v]) => `<option value="${k}" ${k === sel ? "selected" : ""}>${k}</option>`).join("");
+  const typeOpts = (sel) => Object.keys(reg).map((k) => `<option value="${k}" ${k === sel ? "selected" : ""}>${k}</option>`).join("");
   let html = `<datalist id="refs">${refOptions().map((r) => `<option value="${r}">`).join("")}</datalist>
     <div class="row"><label class="f grow">이름<input data-f="name" value="${esc(s.name)}"></label>
     <label class="f" style="width:110px">심볼<input data-f="symbol" value="${esc(s.symbol)}"></label>
     <label class="f" style="width:80px">봉<select data-f="interval">${Object.entries(IV_LABEL).filter(([k]) => k !== "1y")
       .map(([k, l]) => `<option value="${k}" ${k === s.interval ? "selected" : ""}>${l}</option>`).join("")}</select></label></div>`;
   if (s.description) html += `<div class="help" style="margin-top:6px">${esc(s.description)}</div>`;
-
   html += `<div class="bsec" style="margin-top:8px"><h4>지표 <button class="flat sm" data-act="add-ind">+ 추가</button></h4>`;
   s.indicators.forEach((ind, i) => {
     const keys = Object.keys(reg[ind.type]?.defaults || {}).filter((k) => PARAM_KEYS.includes(k));
@@ -57,7 +142,6 @@ function renderBuilder() {
       <button class="x" data-act="del-ind" data-i="${i}">✕</button></div>`;
   });
   html += `</div>`;
-
   for (const [g, label] of GROUPS) {
     const grp = s[g];
     html += `<div class="bsec"><h4>${label}
@@ -73,16 +157,13 @@ function renderBuilder() {
   }
   html += `<div class="bsec"><h4>리스크 · 비용</h4><div class="risk">${RISK_FIELDS.map(([k, l]) =>
     `<label class="f">${l}<input data-risk="${k}" type="number" step="any" value="${s.risk[k] ?? ""}" placeholder="—"></label>`).join("")}
-    <label class="f">반대 신호 전환<select data-risk="allow_reverse"><option value="true" ${s.risk.allow_reverse ? "selected" : ""}>예</option><option value="false" ${s.risk.allow_reverse ? "" : "selected"}>아니오</option></select></label></div>
-    <div class="help" style="margin-top:6px">조건에 쓸 수 있는 값: close 등 가격, 지표 이름, <code>macd.hist</code>·<code>bb.lower</code> 같은 세부값,
-      <code>funding</code>·<code>oi_change_pct</code>·<code>long_short</code>, 이전 봉 <code>close[1]</code>, 배수 <code>vol_ma*2</code>, 숫자</div></div>`;
+    <label class="f">반대 신호 전환<select data-risk="allow_reverse"><option value="true" ${s.risk.allow_reverse ? "selected" : ""}>예</option><option value="false" ${s.risk.allow_reverse ? "" : "selected"}>아니오</option></select></label></div></div>`;
   $("#builder").innerHTML = html;
   $("#spec-json").value = JSON.stringify(s, null, 2);
 }
 
 function onInput(e) {
-  const t = e.target, s = state.spec;
-  const num = (v) => (v === "" ? null : Number(v));
+  const t = e.target, s = state.spec, num = (v) => (v === "" ? null : Number(v));
   if (t.dataset.f) s[t.dataset.f] = t.value;
   else if (t.dataset.ind != null) {
     const ind = s.indicators[+t.dataset.ind];
@@ -99,41 +180,26 @@ function onClick(e) {
   const b = e.target.closest("[data-act]");
   if (!b) return;
   const s = state.spec, act = b.dataset.act;
-  if (act === "add-ind") {
-    let n = s.indicators.length + 1;
-    while (s.indicators.some((i) => i.id === `ind${n}`)) n++;
-    s.indicators.push({ id: `ind${n}`, type: "sma", length: 20 });
-  } else if (act === "del-ind") s.indicators.splice(+b.dataset.i, 1);
-  else if (act === "add-cond") {
-    s[b.dataset.g] = s[b.dataset.g] || { logic: "all", conditions: [] };
-    s[b.dataset.g].conditions.push({ left: "close", op: ">", right: s.indicators[0]?.id || "0" });
-  } else if (act === "del-cond") {
-    const g = s[b.dataset.g];
-    g.conditions.splice(+b.dataset.i, 1);
-    if (!g.conditions.length) s[b.dataset.g] = null;
-  }
+  if (act === "add-ind") { let n = s.indicators.length + 1; while (s.indicators.some((i) => i.id === `ind${n}`)) n++; s.indicators.push({ id: `ind${n}`, type: "sma", length: 20 }); }
+  else if (act === "del-ind") s.indicators.splice(+b.dataset.i, 1);
+  else if (act === "add-cond") { s[b.dataset.g] = s[b.dataset.g] || { logic: "all", conditions: [] }; s[b.dataset.g].conditions.push({ left: "close", op: ">", right: s.indicators[0]?.id || "0" }); }
+  else if (act === "del-cond") { const g = s[b.dataset.g]; g.conditions.splice(+b.dataset.i, 1); if (!g.conditions.length) s[b.dataset.g] = null; }
   renderBuilder();
 }
 
-function setSpec(spec, note) {
-  state.spec = spec;
-  renderBuilder();
-  if (note != null) $("#nl-engine").innerHTML = note;
-}
-const engineNote = (engine) => engine === "claude" ? "Claude가 변환했습니다. 아래에서 조건을 확인하세요."
-  : "기본 변환기로 변환했습니다. 복잡한 문장은 settings.txt 에 ANTHROPIC_API_KEY 를 넣으면 Claude가 처리합니다.";
+function setSpec(spec) { state.spec = structuredClone(spec); renderBuilder(); }
 
 function specToTv() {
   const reg = state.status?.indicators || {};
   state.studies = [...new Set(state.spec.indicators.filter((i) => reg[i.type]?.tv).map((i) => reg[i.type].tv))];
   state.chartMode = "tv";
-  savePrefs();
-  emit("goto", "trade");
-  emit("rechart");
+  savePrefs(); emit("goto", "trade"); emit("rechart");
   toast("트레이딩뷰 차트에 전략 지표를 표시했습니다", "트레이딩뷰에 없는 지표(슈퍼트렌드 등)는 제외됩니다.");
 }
 
+// ================================================================ 결과
 function renderBacktest(r) {
+  lastResult = r;
   if (r.warnings?.length) toast("데이터 경고", r.warnings.join(" / "), "err");
   const m = r.metrics;
   $("#bt-src").textContent = `${r.data_source === "synthetic" ? "가상 데이터 (거래소 연결 안 됨)" : "바이낸스 선물"}${r.derivatives_source ? " · 파생: " + r.derivatives_source : ""}`;
@@ -143,73 +209,136 @@ function renderBacktest(r) {
     st("손익비", fmt(m.profit_factor)) + st("거래", `${m.trades} <span class="muted" style="font-size:11px">L${m.long_trades} S${m.short_trades}</span>`) +
     st("강제청산", m.liquidations, m.liquidations ? "down" : "") + st("수수료", fmt(m.fees_paid)) + st("펀딩 비용", fmt(m.funding_paid)) +
     st("보유 시간", `${m.exposure_pct}%`) + st("최종 자본", fmt(m.final_equity));
-
   charts.p?.remove();
   const pc = (charts.p = makeChart($("#bt-price")));
-  const cs = pc.addCandlestickSeries({ upColor: css("--up"), downColor: css("--down"), borderVisible: false, wickUpColor: css("--up"), wickDownColor: css("--down") });
+  const cs = pc.addSeries(LC.CandlestickSeries, { upColor: css("--up"), downColor: css("--down"), borderVisible: false, wickUpColor: css("--up"), wickDownColor: css("--down") });
   cs.setData(r.candles);
-  cs.setMarkers(r.markers.map((mk) => mk.shape === "circle"
-    ? { ...mk, text: "", color: css("--muted") }
-    : { ...mk, text: mk.text.split(" ")[0], color: mk.position === "belowBar" ? css("--up") : css("--down") }));
+  LC.createSeriesMarkers(cs, r.markers.map((mk) => mk.shape === "circle"
+    ? { ...mk, text: mk.text.includes("-") ? "손절" : "익절", color: mk.text.includes("-") ? css("--down") : css("--up") }
+    : { ...mk, text: mk.text.startsWith("L") ? "롱" : "숏", color: mk.position === "belowBar" ? css("--up") : css("--down") }));
   pc.timeScale().fitContent();
   charts.e?.remove();
   const ec = (charts.e = makeChart($("#bt-equity-chart")));
-  const es = ec.addAreaSeries({ lineColor: css("--s1"), topColor: "rgba(57,135,229,.22)", bottomColor: "rgba(57,135,229,0)", lineWidth: 2 });
+  const es = ec.addSeries(LC.AreaSeries, { lineColor: css("--s1"), topColor: "rgba(57,135,229,.22)", bottomColor: "rgba(57,135,229,0)", lineWidth: 2 });
   es.setData(r.equity_curve);
   es.createPriceLine({ price: m.initial_equity, color: css("--muted"), lineStyle: 2, lineWidth: 1, title: "시작" });
   ec.timeScale().fitContent();
   $("#bt-trades").innerHTML = tradeRows(r.trades.slice().reverse());
 }
 
-async function nlAuto(startPaper) {
-  const r = await api("/api/strategy/auto", { method: "POST", body: { text: $("#nl-text").value, symbol: state.symbol,
-    bars: +$("#bt-bars").value, initial_equity: +$("#bt-equity").value, start_paper: startPaper } });
-  setSpec(r.spec, engineNote(r.engine));
-  renderBacktest(r);
-  if (startPaper) { toast("페이퍼 봇 시작", r.paper_bot.name); loadBots(); }
+// ================================================================ 복기 · 자동 개선
+let lastImprove = null;
+function renderImprove(rep, offerApply = true) {
+  lastImprove = rep;
+  $("#improve-panel").hidden = false;
+  const sc = (x) => `${x.net_pnl >= 0 ? "+" : ""}${fmt(x.net_pnl, 0)} · 승률 ${x.win_rate ?? "–"}% · PF ${x.profit_factor ?? "–"} · ${x.trades}건`;
+  const row = (label, a) => `<tr><td>${label}</td><td class="${cls(a.train.net_pnl)}">${sc(a.train)}</td><td class="${cls(a.test.net_pnl)}">${sc(a.test)}</td></tr>`;
+  $("#improve-out").innerHTML = `
+    <div style="margin-bottom:8px">${rep.applied ? `<b class="up">검증을 통과한 개선</b>: ${rep.changes.map(esc).join(" / ")}`
+      : `<b class="accent">적용할 개선 없음</b> — 여러 개선안이 검증 구간(최근 30%)에서 성과를 떨어뜨려 전략을 그대로 두는 것이 낫습니다.`}</div>
+    <table><tr><th>구분</th><th>학습 구간 (앞 70%)</th><th>검증 구간 (뒤 30%, 개선에 안 쓴 데이터)</th></tr>
+      ${row("현재 전략", rep.baseline)}${rep.applied ? row("개선 후", rep.after) : ""}</table>
+    ${rep.applied && offerApply ? `<div class="row" style="margin:8px 0"><button class="pri sm" id="imp-apply">개선안 적용</button><span class="muted">적용하면 새 버전으로 저장되고 다시 백테스트합니다</span></div>` : ""}
+    ${rep.ai_summary ? `<div class="ai" style="padding:8px 0">${esc(rep.ai_summary)}</div>` : ""}
+    <div class="cols-2" style="margin-top:10px">
+      <div><div class="sub" style="padding-left:0">손실 원인 (많이 나온 순)</div>${rep.loss_causes.map((c) => `<div class="lv" style="padding:3px 0"><span>${esc(c.cause)} <span class="muted">${c.count}건</span></span><span class="px down">${fmt(c.pnl, 0)}</span></div>`).join("") || '<div class="muted">없음</div>'}</div>
+      <div><div class="sub" style="padding-left:0">익절 거래의 공통점</div>${rep.win_traits.map((c) => `<div class="lv" style="padding:3px 0"><span>${esc(c.cause)} <span class="muted">${c.count}건</span></span><span class="px up">+${fmt(c.pnl, 0)}</span></div>`).join("") || '<div class="muted">없음</div>'}</div>
+    </div>
+    <div class="sub" style="padding-left:0;margin-top:8px">시험한 개선안</div>
+    <table><tr><th>변경</th><th>학습 손익</th><th>검증 손익</th><th>결과</th></tr>${rep.candidates.map((c) => `<tr><td>${esc(c.change)}</td>
+      <td class="${cls(c.train.net_pnl)}">${fmt(c.train.net_pnl, 0)}</td><td class="${cls(c.test.net_pnl)}">${fmt(c.test.net_pnl, 0)}</td>
+      <td class="${c.passed ? "up" : "muted"}">${c.passed ? "통과" : "탈락"}</td></tr>`).join("") || '<tr><td class="muted">개선 후보가 없습니다</td></tr>'}</table>
+    <div class="sub" style="padding-left:0;margin-top:8px">거래 복기 (최근)</div>
+    ${rep.journal.slice(-15).reverse().map((n) => `<div class="note ${n.win ? "win" : "loss"}"><span class="muted">${mdhm(n.entry_time)}</span> ${esc(n.note)}</div>`).join("")}`;
+  const ap = $("#imp-apply");
+  if (ap) ap.onclick = () => busy(ap, async () => {
+    const r = await api("/api/backtest", { method: "POST", body: { spec: rep.spec, bars: +$("#bt-bars").value, initial_equity: +$("#bt-equity").value } });
+    const before = lab.versions[lab.cur]?.metrics;
+    setSpec(rep.spec); renderBacktest(r); addVersion(rep.spec, r.metrics, "자동 개선: " + rep.changes.join(", ").slice(0, 50));
+    lab.chat.push({ role: "bot", text: "자동 개선안을 적용했습니다.", changes: rep.changes, delta: delta(before, M(r.metrics)) });
+    saveLab(); renderChat(); ap.remove();
+  });
 }
 
+// ================================================================ 페이퍼 봇
 async function loadBots() {
   let bots;
   try { bots = await api("/api/paper/bots"); } catch { return; }
   const el = $("#bot-list");
-  if (!bots.length) { el.innerHTML = `<div class="empty">실행 중인 봇이 없습니다.</div>`; return; }
+  if (!bots.length) { el.innerHTML = `<div class="empty">실행 중인 봇이 없습니다. 위에서 '페이퍼 봇 시작'을 누르세요.</div>`; return; }
+  const open = new Set($$("#bot-list details[open]").map((d) => d.dataset.id));
   el.innerHTML = bots.map((b) => {
     const a = b.account, p = a.position, ret = (a.equity / b.initial_equity - 1) * 100;
     return `<div style="padding:10px 12px;border-bottom:1px solid var(--line)">
       <div class="row"><b class="grow">${esc(b.name)}</b><span class="muted">${b.symbol} · ${IV_LABEL[b.interval] || b.interval}</span>
         <span class="${b.running ? "up" : "muted"}">${b.running ? "실행 중" : "정지"}</span>
+        <button class="sm" data-chart="${b.symbol}|${b.interval}">차트에서 보기</button>
         <button class="sm" data-bot="${b.id}" data-a="${b.running ? "pause" : "resume"}">${b.running ? "정지" : "재개"}</button>
         <button class="sm" data-bot="${b.id}" data-a="close">청산</button><button class="sm" data-bot="${b.id}" data-a="delete">삭제</button></div>
       <div class="row dim" style="margin-top:4px;gap:14px"><span>자산 <b>${fmt(a.equity)}</b></span><span class="${cls(ret)}">${pct(ret)}</span>
         <span>거래 ${a.trades.length}</span><span>${p ? `<span class="${p.side === "long" ? "up" : "down"}">${p.side === "long" ? "롱" : "숏"} ${p.leverage}x</span> ${px(p.entry_price)} · ROE ${pct(p.roe_pct)}` : "포지션 없음"}</span></div>
-      ${b.log.length ? `<div class="log" style="margin-top:6px">${b.log.slice(-5).reverse().map((l) => esc(l.msg)).join("\n")}</div>` : ""}</div>`;
+      <div class="row" style="margin-top:6px;gap:8px">
+        <label class="row" style="gap:4px"><input type="checkbox" data-auto="${b.id}" ${b.auto_improve ? "checked" : ""} style="height:auto"> 자동 개선</label>
+        <span class="muted">새 거래</span><input type="number" data-every="${b.id}" value="${b.improve_every}" min="3" style="width:52px;height:22px"><span class="muted">건마다</span>
+        <button class="sm" data-improve="${b.id}">지금 복기·개선</button><span class="muted">전략 버전 ${b.versions.length}</span></div>
+      <details data-id="${b.id}" ${open.has(b.id) ? "open" : ""}><summary class="muted" style="margin-top:6px;cursor:pointer">복기 노트 · 변경 기록 · 로그</summary>
+        ${b.versions.slice(1).reverse().map((v) => `<div class="note"><span class="accent">${mdhm(v.time)} 전략 변경</span> ${esc(v.reason)}</div>`).join("")}
+        ${b.journal.slice().reverse().slice(0, 10).map((n) => `<div class="note ${n.win ? "win" : "loss"}"><span class="muted">${mdhm(n.exit_time)}</span> ${esc(n.note)}</div>`).join("") || '<div class="muted" style="padding:4px 0">아직 끝난 거래가 없습니다.</div>'}
+        <div class="log" style="margin-top:6px">${b.log.slice(-8).reverse().map((l) => `${mdhm(l.time)}  ${esc(l.msg)}`).join("\n")}</div></details></div>`;
   }).join("");
 }
 
 export function initLab() {
-  setSpec(defaultSpec());
+  const cur = lab.versions[lab.cur];
+  setSpec(cur ? cur.spec : defaultSpec());
+  renderChat(); renderVersions();
   $("#builder").addEventListener("input", onInput);
   $("#builder").addEventListener("change", onInput);
   $("#builder").addEventListener("click", onClick);
+  $("#chat-send").onclick = (e) => busy(e.target, () => send($("#chat-text").value));
+  $("#chat-text").onkeydown = (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("#chat-send").click(); } };
+  $("#chat-chips").onclick = (e) => { const q = e.target.dataset.q; if (q) busy(e.target, () => send(q)); };
+  $("#chat-new").onclick = () => { lab.chat = []; lab.fresh = true; saveLab(); renderChat(); $("#chat-text").focus(); };
+  $("#versions").onclick = (e) => {
+    const v = e.target.closest("[data-ver]");
+    if (!v) return;
+    lab.cur = +v.dataset.ver; saveLab(); renderVersions();
+    setSpec(lab.versions[lab.cur].spec);
+    busy(v, async () => renderBacktest(await api("/api/backtest", { method: "POST", body: { spec: state.spec, bars: +$("#bt-bars").value, initial_equity: +$("#bt-equity").value } })));
+  };
   $("#json-apply").onclick = () => { try { setSpec(JSON.parse($("#spec-json").value)); toast("적용했습니다"); } catch (e) { toast("JSON 오류", e.message, "err"); } };
-  $("#spec-to-tv").onclick = specToTv;
-  $("#nl-parse").onclick = (e) => busy(e.target, async () => {
-    const r = await api("/api/strategy/parse", { method: "POST", body: { text: $("#nl-text").value, symbol: state.symbol } });
-    setSpec(r.spec, engineNote(r.engine) + (r.problems.length ? `<br><span class="down">${esc(r.problems.join(" / "))}</span>` : ""));
+  $("#spec-to-tv").onclick = (e) => { e.preventDefault(); specToTv(); };
+  $("#bt-run").onclick = (e) => busy(e.target, async () => {
+    const r = await api("/api/backtest", { method: "POST", body: { spec: state.spec, bars: +$("#bt-bars").value, initial_equity: +$("#bt-equity").value } });
+    renderBacktest(r); addVersion(state.spec, r.metrics, "직접 편집");
   });
-  $("#nl-auto").onclick = (e) => busy(e.target, () => nlAuto(false));
-  $("#nl-auto-paper").onclick = (e) => busy(e.target, () => nlAuto(true));
-  $("#bt-run").onclick = (e) => busy(e.target, async () => renderBacktest(await api("/api/backtest", { method: "POST",
-    body: { spec: state.spec, bars: +$("#bt-bars").value, initial_equity: +$("#bt-equity").value } })));
+  $("#bt-improve").onclick = (e) => busy(e.target, async () => {
+    renderImprove(await api("/api/strategy/improve", { method: "POST", body: { spec: state.spec, bars: +$("#bt-bars").value, ai: !!state.status?.llm } }));
+    $("#improve-panel").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
   $("#bt-paper").onclick = (e) => busy(e.target, async () => {
     const b = await api("/api/paper/bots", { method: "POST", body: { spec: state.spec, initial_equity: +$("#bt-equity").value } });
-    toast("페이퍼 봇 시작", b.name); loadBots();
+    toast("페이퍼 봇 시작", `${b.name} — 진입·청산이 '트레이드' 차트에 표시됩니다`); loadBots();
   });
   $("#bot-list").onclick = (e) => {
+    const c = e.target.dataset.chart;
+    if (c) { const [s, iv] = c.split("|"); showOnChart(s, iv); return; }
+    const imp = e.target.dataset.improve;
+    if (imp) return busy(e.target, async () => {
+      const rep = await api(`/api/paper/bots/${imp}/improve`, { method: "POST" });
+      toast(rep?.applied ? "봇 전략을 개선했습니다" : "검증을 통과한 개선이 없어 그대로 둡니다", rep?.changes?.join(" / ") || "");
+      if (rep) renderImprove(rep, false);
+      loadBots();
+    });
     const b = e.target.closest("[data-bot]");
     if (!b || (b.dataset.a === "delete" && !confirm("봇을 삭제할까요?"))) return;
     busy(b, async () => { await api(`/api/paper/bots/${b.dataset.bot}/${b.dataset.a}`, { method: "POST" }); loadBots(); });
+  };
+  $("#bot-list").onchange = (e) => {
+    const id = e.target.dataset.auto || e.target.dataset.every;
+    if (!id) return;
+    const body = e.target.dataset.auto ? { auto_improve: e.target.checked } : { improve_every: +e.target.value };
+    api(`/api/paper/bots/${id}/config`, { method: "POST", body }).then(() => toast(e.target.dataset.auto ? (e.target.checked ? "자동 개선 켬" : "자동 개선 끔") : "개선 주기 변경")).catch((err) => toast("오류", err.message, "err"));
   };
   loadBots(); setInterval(loadBots, 15_000);
 }

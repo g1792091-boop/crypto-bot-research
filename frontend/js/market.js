@@ -1,5 +1,5 @@
 // 마켓: 도미넌스 · 매크로(나스닥 등) · 뉴스 · 경제지표 · 히트맵
-import { $, api, big, busy, css, embedTvWidget, esc, fmt, on, pct, state, tvTheme } from "./core.js";
+import { $, api, big, busy, css, embedTvWidget, esc, fmt, makeChart, on, pct, state, tvTheme } from "./core.js";
 import { newsRows } from "./trade.js";
 
 const MACRO_MINI = [
@@ -54,7 +54,65 @@ async function load() {
   }
 }
 
+let fngChart, cgChart;
+function renderFng(f) {
+  const c = f.value < 45 ? "down" : f.value > 55 ? "up" : "accent";
+  const prev = f.previous || {};
+  $("#fng-now").innerHTML = `<div class="fng"><div class="big ${c}">${f.value}</div><div>
+      <div class="${c}" style="font-weight:600;font-size:14px">${f.label}</div>
+      <div class="fng-bar" style="margin:8px 0 4px"><i style="left:calc(${f.value}% - 1px)"></i></div>
+      <div class="row muted" style="justify-content:space-between;font-size:10.5px"><span>극단적 공포</span><span>중립</span><span>극단적 탐욕</span></div>
+      <div class="dim" style="margin-top:6px">어제 ${prev.yesterday ?? "–"} · 1주 전 ${prev.week ?? "–"} · 1달 전 ${prev.month ?? "–"}</div></div></div>`;
+  fngChart?.remove();
+  fngChart = makeChart($("#fng-chart"), { timeScale: { timeVisible: false } });
+  const s = fngChart.addSeries(LightweightCharts.LineSeries, { color: css("--accent"), lineWidth: 2, priceFormat: { type: "price", precision: 0, minMove: 1 } });
+  s.setData(f.history);
+  [25, 50, 75].forEach((p) => s.createPriceLine({ price: p, color: "rgba(164,172,182,.3)", lineStyle: 2, lineWidth: 1, axisLabelVisible: false }));
+  fngChart.timeScale().fitContent();
+}
+
+// CoinGlass 응답은 지표마다 형식이 달라서, 시간 + 숫자 필드를 찾아 선으로 그린다
+function toSeries(data) {
+  const rows = Array.isArray(data) ? data : Array.isArray(data?.data_list) ? data.data_list.map((v, i) => ({ time: data.time_list?.[i], value: v })) : [];
+  const tkey = rows[0] && ["time", "timestamp", "date", "t"].find((k) => k in rows[0]);
+  if (!tkey) return {};
+  const keys = Object.keys(rows[0]).filter((k) => k !== tkey && typeof rows[0][k] !== "object" && !Number.isNaN(parseFloat(rows[0][k]))).slice(0, 3);
+  const out = {};
+  keys.forEach((k) => (out[k] = rows.map((r) => ({ time: Math.floor(+r[tkey] > 1e11 ? +r[tkey] / 1000 : +r[tkey]), value: parseFloat(r[k]) }))
+    .filter((p) => p.time && Number.isFinite(p.value)).sort((a, b) => a.time - b.time)
+    .filter((p, i, arr) => i === 0 || p.time > arr[i - 1].time)));
+  return out;
+}
+async function loadCg(list) {
+  const name = $("#cg-sel").value;
+  cgChart?.remove(); cgChart = null;
+  if (!list.enabled) {
+    $("#cg-note").innerHTML = "코인글라스 지표(AHR999, 강세장 고점 지표, 퓨엘 멀티플, ETF 순유입 등)는 CoinGlass API 키가 필요합니다. settings.txt 의 COINGLASS_API_KEY 에 넣으세요.<br>키 없이도 차트의 '지표 +' 에서 OI · 펀딩 · 롱숏 · 테이커 · 코인베이스 프리미엄은 바로 쓸 수 있습니다.";
+    return;
+  }
+  $("#cg-note").textContent = "불러오는 중…";
+  try {
+    const d = await api(`/api/cg-index/${name}`);
+    const ser = toSeries(d.data);
+    const keys = Object.keys(ser);
+    if (!keys.length) { $("#cg-note").textContent = "그릴 수 있는 데이터 형식이 아닙니다."; return; }
+    $("#cg-note").textContent = keys.join(" · ");
+    cgChart = makeChart($("#cg-chart"), { timeScale: { timeVisible: false } });
+    const colors = [css("--accent"), css("--s1"), css("--s3")];
+    keys.forEach((k, i) => cgChart.addSeries(LightweightCharts.LineSeries, { color: colors[i], lineWidth: 2, priceScaleId: i ? "s" + i : "right" }).setData(ser[k]));
+    cgChart.timeScale().fitContent();
+  } catch (e) { $("#cg-note").textContent = "CoinGlass 요청 실패: " + e.message; }
+}
+
 export function initMarket() {
+  // 숨겨진 탭에서는 차트 크기가 0이라, 마켓 탭을 열 때 그린다
+  on("fng", (f) => $("#v-market").classList.contains("on") && renderFng(f));
+  on("view", (v) => v === "market" && state.fng && renderFng(state.fng));
+  api("/api/cg-index").then((list) => {
+    $("#cg-sel").innerHTML = list.items.map((x) => `<option value="${x.name}">${esc(x.title)}</option>`).join("");
+    $("#cg-sel").onchange = () => loadCg(list);
+    on("view", (v) => v === "market" && !cgChart && loadCg(list));
+  });
   $("#news-imp").onchange = renderNews;
   on("news", () => { if ($("#v-market").classList.contains("on")) renderNews(); });
   on("calendar", renderCalendar);

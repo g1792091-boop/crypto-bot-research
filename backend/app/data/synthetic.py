@@ -53,6 +53,60 @@ def candles(symbol: str, interval: str, limit: int = 500, seed: int | None = Non
         hi = max(prev, c) * (1 + abs(r.gauss(0, wick)))
         lo = min(prev, c) * (1 - abs(r.gauss(0, wick)))
         vol = abs(r.gauss(1000, 300)) * (step / 3600) * (1 + abs(c / prev - 1) * 80)
-        out.append({"time": t, "open": prev, "high": hi, "low": lo, "close": c, "volume": vol})
+        buy_share = min(0.9, max(0.1, 0.5 + (c / prev - 1) * 40 + r.gauss(0, 0.05)))
+        out.append({"time": t, "open": prev, "high": hi, "low": lo, "close": c, "volume": vol,
+                    "taker_buy": vol * buy_share})
         prev = c
     return out
+
+
+def depth(symbol: str, price: float, levels: int = 400) -> dict:
+    """합성 호가창: 가격에서 멀어질수록 물량이 늘고, 몇몇 가격대에 큰 벽을 둔다."""
+    rng = random.Random(zlib.crc32(symbol.encode()) + int(time.time()) // 10)
+    tick = max(_tick(price), price * 0.00012)   # 400단계로 ±5% 정도를 덮도록
+    base = 2e5 / price
+    bids, asks = [], []
+    for i in range(1, levels + 1):
+        for book, sign in ((bids, -1), (asks, 1)):
+            q = base * (0.3 + rng.random()) * (1 + i / 80)
+            if rng.random() < 0.012:
+                q *= rng.uniform(15, 40)   # 벽
+            book.append([price + sign * i * tick, q])
+    return {"bids": bids, "asks": asks, "time": int(time.time())}
+
+
+def trades(symbol: str, candles: list[dict], min_usd: float) -> list[dict]:
+    """합성 고래 체결: 캔들마다 거래량에 비례한 확률로 큰 체결을 만든다."""
+    out = []
+    for b in candles:
+        r = random.Random(zlib.crc32(symbol.encode()) * 31 + b["time"])
+        n = 1 if r.random() < 0.08 else 0
+        for k in range(n):
+            px = r.uniform(b["low"], b["high"])
+            usd = min_usd * (1 + r.expovariate(1.2) * 3)
+            side = "buy" if (b["close"] >= b["open"]) == (r.random() < 0.7) else "sell"
+            out.append({"id": b["time"] * 10 + k, "time": b["time"], "price": px, "qty": usd / px, "usd": usd, "side": side})
+    return out
+
+
+def _tick(price: float) -> float:
+    for p, t in ((10000, 0.1), (1000, 0.01), (100, 0.01), (10, 0.001), (1, 0.0001)):
+        if price >= p:
+            return t
+    return 0.00001
+
+
+def derivatives(candles: list[dict]) -> dict:
+    """합성 파생 데이터 (오프라인 데모용): 가격을 따라 움직이는 OI, 펀딩, 롱숏, 테이커 비율."""
+    oi, fr, ls, tk = [], [], [], []
+    level = 8e9
+    for i, b in enumerate(candles):
+        r = random.Random(b["time"] * 7 + 3)
+        ret = b["close"] / b["open"] - 1
+        level *= 1 + ret * 1.5 + r.gauss(0, 0.004)
+        oi.append({"time": b["time"], "value": level})
+        fr.append({"time": b["time"], "value": 0.01 + ret * 2 + r.gauss(0, 0.004)})
+        ls.append({"time": b["time"], "value": max(0.5, 1.6 - ret * 30 + r.gauss(0, 0.05))})
+        buy = b.get("taker_buy", b["volume"] / 2)
+        tk.append({"time": b["time"], "value": buy / max(1e-9, b["volume"] - buy)})
+    return {"open_interest": oi, "funding": fr, "long_short": ls, "taker": tk}

@@ -1,14 +1,20 @@
 // 트레이드 화면
 import { addPriceAlert, getPriceAlerts, removePriceAlert } from "./alerts.js";
+import { TermChart } from "./chart.js";
 import {
-  $, $$, INTERVALS, IV_LABEL, TV_INTERVAL, api, big, busy, cls, css, emit, esc, fmt, hhmm, makeChart, mdhm, on, pct,
+  $, $$, INTERVALS, IV_LABEL, TV_INTERVAL, api, big, busy, cls, css, emit, esc, fmt, hhmm, on, pct,
   px, savePrefs, state, toast, tradeRows,
 } from "./core.js";
+import { DEFAULT_INDICATORS, INDICATORS } from "./ind.js";
 
 const MACRO = [
   ["NASDAQ:NDX", "나스닥100"], ["CAPITALCOM:US100", "나스닥 CFD"], ["SP:SPX", "S&P500"], ["TVC:DXY", "달러인덱스"],
   ["TVC:US10Y", "미 10년물"], ["TVC:GOLD", "금"], ["CRYPTOCAP:BTC.D", "BTC.D"], ["CRYPTOCAP:USDT.D", "USDT.D"],
 ];
+state.indicators ||= DEFAULT_INDICATORS;
+state.overlays ||= { heat: false, whales: false, bots: true, scenario: true };
+state.layout ||= 1;
+state.multi ||= [{ symbol: "ETHUSDT", interval: "1h" }, { symbol: "SOLUSDT", interval: "1h" }, { symbol: "BTCUSDT", interval: "4h" }];
 
 // ================================================================ 시세 · 관심종목
 async function pollTickers() {
@@ -18,8 +24,7 @@ async function pollTickers() {
     d.items.forEach((t) => (state.tickers[t.symbol] = t));
     state.tickerSource = d.source;
     emit("tickers", state.tickers);
-    renderWatchlist();
-    renderTickerBar();
+    renderWatchlist(); renderTickerBar();
   } catch { /* 다음 주기 */ }
 }
 
@@ -35,15 +40,12 @@ function renderTickerBar() {
   const t = state.tickers[state.symbol];
   $("#symbtn").innerHTML = `${state.symbol}<small>무기한</small>`;
   if (!t) return;
-  const last = $("#t-last");
-  const prev = +last.dataset.v || t.price;
+  const last = $("#t-last"), prev = +last.dataset.v || t.price;
   last.dataset.v = t.price;
   last.textContent = px(t.price);
   last.className = `lastpx ${t.price > prev ? "up" : t.price < prev ? "down" : cls(t.change_pct)}`;
   $("#t-chg").innerHTML = `<span class="${cls(t.change_pct)}">${pct(t.change_pct)}</span>`;
-  $("#t-high").textContent = px(t.high);
-  $("#t-low").textContent = px(t.low);
-  $("#t-vol").textContent = big(t.quote_volume);
+  $("#t-high").textContent = px(t.high); $("#t-low").textContent = px(t.low); $("#t-vol").textContent = big(t.quote_volume);
   document.title = `${px(t.price)} ${state.symbol.replace("USDT", "")} · 선물 터미널`;
 }
 
@@ -52,8 +54,7 @@ async function pollDerivatives() {
   try {
     const d = await api(`/api/derivatives?symbol=${state.symbol}&interval=1h&limit=48`);
     premium = d.premium;
-    const oi = d.open_interest.at(-1)?.value;
-    const oi24 = d.open_interest.at(-25)?.value;
+    const oi = d.open_interest.at(-1)?.value, oi24 = d.open_interest.at(-25)?.value;
     $("#t-oi").innerHTML = oi ? `${big(oi)} <span class="${cls(oi - oi24)}">${oi24 ? pct((oi / oi24 - 1) * 100, 1) : ""}</span>` : "–";
     const ls = d.long_short.at(-1)?.value;
     $("#t-ls").innerHTML = ls ? `<span class="${ls >= 1 ? "up" : "down"}">${ls.toFixed(2)}</span>` : "–";
@@ -67,6 +68,20 @@ function tickFunding() {
   $("#t-fund").innerHTML = `<span class="${cls(premium.funding_rate_pct)}">${premium.funding_rate_pct.toFixed(4)}%</span> <span class="muted">${hms}</span>`;
 }
 
+async function pollSentiment() {
+  api("/api/fear-greed?days=30").then((f) => {
+    state.fng = f;
+    const c = f.value < 45 ? "down" : f.value > 55 ? "up" : "accent";
+    $("#t-fng").innerHTML = `<span class="${c}">${f.value}</span> <span class="muted">${f.label}</span>`;
+    emit("fng", f);
+  }).catch(() => ($("#t-fng").textContent = "–"));
+  api(`/api/exchanges?symbol=${state.symbol}`).then((e) => {
+    state.exchanges = e;
+    $("#t-kimp").innerHTML = e.kimchi_pct == null ? "–" : `<span class="${cls(e.kimchi_pct)}">${pct(e.kimchi_pct)}</span>`;
+    if (bottomTab === "ex") renderBottom();
+  }).catch(() => ($("#t-kimp").textContent = "–"));
+}
+
 function setSymbol(sym) {
   sym = sym.toUpperCase();
   if (!sym.endsWith("USDT")) sym += "USDT";
@@ -75,29 +90,61 @@ function setSymbol(sym) {
   savePrefs();
   $("#t-last").dataset.v = "";
   renderWatchlist();
-  pollTickers(); pollDerivatives();
+  pollTickers(); pollDerivatives(); pollSentiment(); loadBook();
   renderChart(); loadAnalysis();
   emit("symbol", sym);
 }
+export { setSymbol };
 
 // ================================================================ 차트
-let lw = null, lwCandles = null, lwVolume = null, heat = null, heatNorm = 1, scLines = [];
+let charts = [];   // TermChart 들 (0번 = 메인)
 
 function renderTimeframes() {
   $("#tfs").innerHTML = INTERVALS.map(([k, l]) => `<button data-iv="${k}" class="${k === state.interval ? "on" : ""}">${l}</button>`).join("");
 }
 
-function renderChart() {
-  const mode = state.chartMode;
+function renderToolbar() {
+  const mode = state.chartMode, term = mode === "term";
   $$("#chart-mode button").forEach((b) => b.classList.toggle("on", b.dataset.mode === mode));
   $("#macro-syms").hidden = mode !== "macro";
-  $("#studies-btn").hidden = mode !== "tv";
-  $("#toggle-sc").hidden = mode !== "liq";
-  $("#tv-main").hidden = mode === "liq";
-  $("#lw-main").hidden = $("#heat").hidden = $("#legend").hidden = mode !== "liq";
-  if (mode === "liq") return renderLiqChart();
-  if (lw) { lw.remove(); lw = lwCandles = lwVolume = null; scLines = []; heat = null; drawHeat(); }
-  renderTv(mode === "macro" ? state.macro : `BINANCE:${state.symbol}.P`, mode === "tv" ? state.studies : []);
+  $$(".term-only").forEach((e) => (e.hidden = !term));
+  $("#ind-btn").hidden = mode === "macro";
+  $$("#overlays button").forEach((b) => b.classList.toggle("on", !!state.overlays[b.dataset.ov]));
+  $$("#layouts button").forEach((b) => b.classList.toggle("on", +b.dataset.layout === state.layout));
+}
+
+function renderChart() {
+  renderToolbar();
+  const mode = state.chartMode;
+  $("#tv-main").hidden = mode === "term";
+  $("#term-grid").hidden = mode !== "term";
+  if (mode !== "term") {
+    charts.forEach((c) => c.destroy()); charts = [];
+    return renderTv(mode === "macro" ? state.macro : `BINANCE:${state.symbol}.P`, mode === "tv" ? state.studies : []);
+  }
+  $("#tv-main").innerHTML = "";
+  const grid = $("#term-grid");
+  const n = state.layout;
+  if (charts.length !== n) {
+    charts.forEach((c) => c.destroy()); charts = [];
+    grid.className = `term-grid l${n}`;
+    grid.innerHTML = Array.from({ length: n }, (_, i) => `<div class="cell">${i ? `<div class="cell-h">
+        <input data-cell="${i}" data-k="symbol" value="${state.multi[i - 1].symbol.replace("USDT", "")}">
+        <select data-cell="${i}" data-k="interval">${INTERVALS.map(([k, l]) => `<option value="${k}" ${k === state.multi[i - 1].interval ? "selected" : ""}>${l}</option>`).join("")}</select></div>` : ""}
+        <div class="cell-b"></div></div>`).join("");
+    $$(".cell-b", grid).forEach((el, i) => {
+      const subInd = state.indicators.filter((x) => INDICATORS[x.key]?.pane === "sub");
+      charts.push(new TermChart(el, {
+        symbol: i ? state.multi[i - 1].symbol : state.symbol, interval: i ? state.multi[i - 1].interval : state.interval,
+        indicators: i ? state.indicators.filter((x) => INDICATORS[x.key]?.pane !== "sub").concat(subInd.slice(0, 1)) : state.indicators,
+        overlays: i ? { heat: false, whales: false, bots: true, scenario: false } : { ...state.overlays },
+        onDrawDone: () => $$("#draw-tools button").forEach((b) => b.classList.remove("on")),
+      }));
+    });
+  }
+  charts.forEach((c, i) => c.load(i ? state.multi[i - 1].symbol : state.symbol, i ? state.multi[i - 1].interval : state.interval)
+    .catch((e) => toast("차트 오류", e.message, "err")));
+  if (state.analysis?.symbol === state.symbol) charts[0]?.setScenario(state.overlays.scenario ? state.analysis.scenarios[0] : null);
 }
 
 function renderTv(symbol, studies) {
@@ -115,127 +162,50 @@ function renderTv(symbol, studies) {
   });
 }
 
-async function renderLiqChart() {
-  const wrap = $("#chartwrap");
-  if (!lw) {
-    lw = makeChart($("#lw-main"), { layout: { background: { type: "solid", color: "transparent" }, textColor: css("--text-2"), fontSize: 11 } });
-    lwCandles = lw.addCandlestickSeries({ upColor: css("--up"), downColor: css("--down"), borderVisible: false,
-      wickUpColor: css("--up"), wickDownColor: css("--down") });
-    lwVolume = lw.addHistogramSeries({ priceScaleId: "vol", priceFormat: { type: "volume" }, lastValueVisible: false, priceLineVisible: false });
-    lw.priceScale("vol").applyOptions({ scaleMargins: { top: 0.86, bottom: 0 } });
-    lw.timeScale().subscribeVisibleLogicalRangeChange(drawHeat);
-    lw.subscribeCrosshairMove(onCross);
-    if (!wrap.dataset.heatHooks) {
-      wrap.dataset.heatHooks = "1";
-      new ResizeObserver(() => requestAnimationFrame(drawHeat)).observe(wrap);
-      wrap.addEventListener("wheel", () => requestAnimationFrame(drawHeat), { passive: true });
-      wrap.addEventListener("pointermove", (e) => e.buttons && requestAnimationFrame(drawHeat));
-    }
-  }
-  $("#legend").innerHTML = `<b>${state.symbol}</b> · ${IV_LABEL[state.interval]} · 청산맵 불러오는 중…`;
-  try {
-    heat = await api(`/api/liq-heatmap?symbol=${state.symbol}&interval=${state.interval}&limit=500`);
-  } catch (e) {
-    $("#legend").textContent = "청산맵 오류: " + e.message;
-    return;
-  }
-  const vals = heat.columns.flatMap(([, col]) => col.map(([, v]) => v)).sort((a, b) => a - b);
-  heatNorm = vals[Math.floor(vals.length * 0.995)] || 1;
-  lwCandles.setData(heat.candles);
-  lwVolume.setData(heat.candles.map((b) => ({ time: b.time, value: b.volume || 0,
-    color: b.close >= b.open ? "rgba(34,176,125,.35)" : "rgba(229,72,77,.35)" })));
-  lw.timeScale().fitContent();
-  legendBase();
-  drawScenarioLines();
-  requestAnimationFrame(drawHeat);
+// 지표 선택 패널
+function indicatorPanel(e) {
+  const m = $("#ind-menu");
+  if (!m.hidden && !e.refresh) { m.hidden = true; return; }
+  if (state.chartMode === "tv") return tvStudiesMenu(e);
+  const groups = {};
+  Object.entries(INDICATORS).forEach(([k, d]) => (groups[d.group] ||= []).push([k, d]));
+  m.innerHTML = `<div class="ind-panel">
+    <div class="ind-list"><input id="ind-q" placeholder="지표 검색">${Object.entries(groups).map(([g, xs]) => `<div class="sub">${g}</div>` +
+      xs.map(([k, d]) => `<div class="ind-item" data-add="${k}">${esc(d.name)}</div>`).join("")).join("")}</div>
+    <div class="ind-active"><div class="sub">적용된 지표 ${state.indicators.length}개 · 제한 없음</div>${state.indicators.map((s, i) => {
+      const d = INDICATORS[s.key]; if (!d) return "";
+      return `<div class="ind-row"><span class="grow">${esc(d.name)}</span>${Object.entries({ ...d.params, ...s.params }).map(([k, v]) =>
+        `<input data-i="${i}" data-p="${k}" value="${v}" title="${k}" style="width:46px">`).join("")}<button class="x" data-del="${i}">✕</button></div>`;
+    }).join("")}<div class="row" style="margin-top:8px"><button class="sm" id="ind-reset">기본값으로</button></div></div></div>`;
+  const r = $("#ind-btn").getBoundingClientRect();
+  m.style.left = `${Math.max(8, Math.min(r.left, innerWidth - 640))}px`; m.style.top = `${r.bottom + 4}px`;
+  m.hidden = false;
+  e.stopPropagation?.();
+  $("#ind-q").oninput = (ev) => $$(".ind-item", m).forEach((it) => (it.hidden = !it.textContent.toLowerCase().includes(ev.target.value.toLowerCase())));
+  if (!e.refresh) $("#ind-q").focus();
 }
-
-const MODEL = { coinglass: "CoinGlass 청산맵", estimate_oi: "추정 청산맵 (미결제약정 기반)", estimate_volume: "추정 청산맵 (거래대금 기반 · 상대 강도)" };
-function legendBase(extra = "") {
-  if (!heat) return;
-  $("#legend").innerHTML = `<b>${state.symbol}</b> · ${IV_LABEL[state.interval]} · ${MODEL[heat.model] || heat.model}
-    <span class="scale"></span><span class="muted">적음 → 많음</span>${heat.data_source === "synthetic" ? ' · <span class="accent">가상 데이터</span>' : ""}
-    ${extra ? `<br>${extra}` : ""}`;
+function applyIndicators() {
+  savePrefs();
+  charts[0]?.setIndicators(state.indicators);
+  indicatorPanel({ refresh: true });
 }
-
-function onCross(p) {
-  if (!heat || !p.point || p.time == null) return legendBase();
-  const col = heat.columns.find(([t]) => t === p.time);
-  const price = lwCandles.coordinateToPrice(p.point.y);
-  if (!col || price == null) return legendBase();
-  const bi = Math.floor((price - heat.price_min) / heat.price_step);
-  const cell = col[1].find(([i]) => i === bi);
-  const v = cell ? cell[1] : 0;
-  legendBase(`${px(price)} 부근 예상 청산 물량 <b>${heat.unit === "usd" ? "$" + big(v) : fmt(v / heatNorm * 100, 0) + " (상대)"}</b>`);
-}
-
-function drawHeat() {
-  const cv = $("#heat"), wrap = $("#chartwrap");
-  const w = wrap.clientWidth, h = wrap.clientHeight, dpr = window.devicePixelRatio || 1;
-  if (cv.width !== w * dpr || cv.height !== h * dpr) { cv.width = w * dpr; cv.height = h * dpr; }
-  const ctx = cv.getContext("2d");
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, w, h);
-  if (!lw || !heat || state.chartMode !== "liq") return;
-  const ts = lw.timeScale();
-  const plotW = w - lw.priceScale("right").width();
-  const range = ts.getVisibleLogicalRange();
-  if (!range) return;
-  const n = heat.columns.length;
-  const x0 = ts.logicalToCoordinate(0), x1 = ts.logicalToCoordinate(1);
-  const bw = Math.max(1, (x1 ?? 0) - (x0 ?? 0));
-  const rgb = css("--heat");
-  ctx.save();
-  ctx.beginPath(); ctx.rect(0, 0, plotW, h); ctx.clip();
-  for (let i = Math.max(0, Math.floor(range.from) - 1); i <= Math.min(n - 1, Math.ceil(range.to) + 1); i++) {
-    const x = ts.logicalToCoordinate(i);
-    if (x == null) continue;
-    for (const [bi, v] of heat.columns[i][1]) {
-      const a = Math.min(1, (v / heatNorm) ** 1.6);   // 큰 물량만 밝게 → 배경은 어둡게 유지
-      if (a < 0.1) continue;
-      const lo = heat.price_min + bi * heat.price_step;
-      const yTop = lwCandles.priceToCoordinate(lo + heat.price_step), yBot = lwCandles.priceToCoordinate(lo);
-      if (yTop == null || yBot == null) continue;
-      ctx.fillStyle = `rgba(${rgb}, ${(0.9 * a).toFixed(3)})`;
-      ctx.fillRect(x - bw / 2, yTop, bw + 0.5, Math.max(1, yBot - yTop));
-    }
-  }
-  ctx.restore();
-}
-
-function drawScenarioLines(sc) {
-  if (!lwCandles) return;
-  scLines.forEach((l) => lwCandles.removePriceLine(l));
-  scLines = [];
-  sc = sc || state.analysis?.scenarios?.[0];
-  if (!state.showScenario || !sc || state.analysis?.symbol !== state.symbol) return;
-  const add = (price, title, color, style = 2) => price && scLines.push(lwCandles.createPriceLine({ price, color, lineWidth: 1, lineStyle: style, axisLabelVisible: true, title }));
-  add(sc.entry, `${sc.title} 진입`, css("--accent"), 0);
-  add(sc.stop, "손절", css("--down"));
-  sc.targets.forEach((t, i) => add(t, `목표${i + 1}`, css("--up")));
-  if (sc.alt) {
-    add(sc.alt.entry, "박스 상단 숏", css("--accent"), 0);
-    add(sc.alt.stop, "숏 손절", css("--down"));
-  }
+function tvStudiesMenu(e) {
+  const m = $("#ind-menu");
+  const reg = state.status?.indicators || {};
+  const list = Object.values(reg).filter((v) => v.tv).map((v) => [v.tv, v.desc]);
+  list.push(["Volume@tv-basicstudies", "거래량"]);
+  m.innerHTML = `<div style="padding:6px 8px;max-width:320px" class="muted">트레이딩뷰 무료 위젯은 지표 수가 제한됩니다. 제한 없이 쓰려면 '터미널 차트'를 쓰세요.</div>` +
+    list.map(([id, l]) => `<label class="ind-item"><input type="checkbox" data-study="${id}" ${state.studies.includes(id) ? "checked" : ""} style="height:auto"> ${esc(l)}</label>`).join("");
+  const r = $("#ind-btn").getBoundingClientRect();
+  m.style.left = `${r.left}px`; m.style.top = `${r.bottom + 4}px`;
+  m.hidden = false;
+  e.stopPropagation?.();
 }
 
 function toggleFullscreen() {
   const el = $("#chartp");
   if (document.fullscreenElement) document.exitFullscreen();
   else el.requestFullscreen?.().catch(() => toast("전체 화면을 지원하지 않는 브라우저입니다"));
-}
-
-function studiesMenu(e) {
-  const m = $("#studies-menu");
-  if (!m.hidden) { m.hidden = true; return; }
-  const reg = state.status?.indicators || {};
-  const list = Object.values(reg).filter((v) => v.tv).map((v) => [v.tv, v.desc]);
-  list.push(["Volume@tv-basicstudies", "거래량"]);
-  m.innerHTML = list.map(([id, l]) => `<label><input type="checkbox" data-study="${id}" ${state.studies.includes(id) ? "checked" : ""} style="height:auto"> ${esc(l)}</label>`).join("");
-  const r = e.currentTarget.getBoundingClientRect();
-  m.style.left = `${r.left}px`; m.style.top = `${r.bottom + 4}px`;
-  m.hidden = false;
-  e.stopPropagation();
 }
 
 // ================================================================ 시장 판단 · 시나리오
@@ -248,7 +218,8 @@ export async function loadAnalysis(withAi = false) {
     if (sym !== state.symbol || iv !== state.interval) return;
     if (!withAi && state.analysis?.ai_comment && state.analysis.bar_time === a.bar_time && state.analysis.symbol === sym) a.ai_comment = state.analysis.ai_comment;
     state.analysis = a;
-    renderRegime(a); renderScenarios(a); drawScenarioLines();
+    renderRegime(a); renderScenarios(a);
+    charts[0]?.setScenario(state.overlays.scenario ? a.scenarios[0] : null);
     emit("analysis", a);
   } catch (e) {
     $("#regime").innerHTML = `<span class="muted">분석 실패: ${esc(e.message)}</span>`;
@@ -298,6 +269,37 @@ function renderScenarios(a) {
     <div class="help" style="padding:10px 12px">자동 계산된 참고용 시나리오입니다. 투자 판단의 책임은 본인에게 있습니다.</div>`;
 }
 
+// ================================================================ 호가창
+let bookStep = null, bookTimer;
+async function loadBook() {
+  clearTimeout(bookTimer);
+  if ($("#side-book").hidden) return;
+  try {
+    const ob = await api(`/api/orderbook?symbol=${state.symbol}&rows=18${bookStep ? "&step=" + bookStep : ""}`);
+    const max = Math.max(...ob.asks.map((x) => x.cum), ...ob.bids.map((x) => x.cum));
+    const row = (x, sd) => `<div class="ob-row ${sd}"><i style="width:${(x.cum / max * 100).toFixed(1)}%"></i>
+      <span class="${sd === "ask" ? "down" : "up"}">${px(x.price)}</span><span>${fmt(x.qty, x.qty >= 100 ? 0 : 3)}</span><span class="dim">${big(x.usd)}</span></div>`;
+    const imb = ob.imbalance * 100;
+    $("#side-book").innerHTML = `
+      <div class="ph" style="gap:4px"><span class="t">호가</span><span class="muted">${ob.source === "synthetic" ? "가상" : "바이낸스 선물"}</span><div class="grow"></div>
+        <span class="muted">묶음</span><select id="ob-step" style="height:22px">${ob.steps.map((s) => `<option ${s === ob.step ? "selected" : ""}>${s}</option>`).join("")}</select></div>
+      <div class="ob-head"><span>가격</span><span>수량</span><span>금액($)</span></div>
+      ${ob.asks.slice().reverse().map((x) => row(x, "ask")).join("")}
+      <div class="ob-mid"><b>${px(ob.mid)}</b> <span class="muted">스프레드 ${px(ob.spread)}</span></div>
+      ${ob.bids.map((x) => row(x, "bid")).join("")}
+      <div style="padding:8px 12px">
+        <div class="row muted" style="justify-content:space-between"><span>±1% 매수 $${big(ob.bid_usd_1pct)}</span><span>매도 $${big(ob.ask_usd_1pct)}</span></div>
+        <div class="imb"><i style="width:${(50 + imb / 2).toFixed(1)}%"></i></div>
+        <div class="${imb >= 0 ? "up" : "down"}" style="text-align:center">${imb >= 0 ? "매수 우위" : "매도 우위"} ${Math.abs(imb).toFixed(1)}%</div></div>
+      <div class="sub">호가 벽 (±5%)</div>
+      ${ob.walls.map((w) => `<div class="lv"><span class="${w.side === "bid" ? "up" : "down"}">${w.side === "bid" ? "매수벽" : "매도벽"} ${px(w.price)}</span><span class="px">$${big(w.usd)}</span></div>`).join("") || '<div class="empty">눈에 띄는 벽 없음</div>'}`;
+    $("#ob-step").onchange = (e) => { bookStep = +e.target.value; loadBook(); };
+  } catch (e) {
+    $("#side-book").innerHTML = `<div class="empty">호가창을 불러오지 못했습니다: ${esc(e.message)}</div>`;
+  }
+  bookTimer = setTimeout(loadBook, 2000);
+}
+
 // ================================================================ 주문 · 계좌
 let side = "long";
 function renderOrderPreview() {
@@ -341,12 +343,24 @@ function renderBottom() {
   } else if (bottomTab === "fills") {
     el.innerHTML = `<table>${tradeRows((account?.trades || []).slice().reverse())}</table>`;
   } else if (bottomTab === "bots") {
-    el.innerHTML = bots.length ? `<table><tr><th>봇</th><th>종목</th><th>상태</th><th>평가 자산</th><th>수익률</th><th>포지션</th><th>거래</th></tr>
+    el.innerHTML = bots.length ? `<table><tr><th>봇</th><th>종목</th><th>상태</th><th>평가 자산</th><th>수익률</th><th>포지션</th><th>거래</th><th>자동 개선</th><th></th></tr>
       ${bots.map((b) => { const a = b.account, p = a.position, r = (a.equity / b.initial_equity - 1) * 100;
         return `<tr><td>${esc(b.name)}</td><td>${b.symbol} ${IV_LABEL[b.interval] || b.interval}</td><td class="${b.running ? "up" : "muted"}">${b.running ? "실행" : "정지"}</td>
         <td>${fmt(a.equity)}</td><td class="${cls(r)}">${pct(r)}</td>
-        <td>${p ? `<span class="${p.side === "long" ? "up" : "down"}">${p.side === "long" ? "롱" : "숏"}</span> ${px(p.entry_price)}` : "–"}</td><td>${a.trades.length}</td></tr>`; }).join("")}</table>`
+        <td>${p ? `<span class="${p.side === "long" ? "up" : "down"}">${p.side === "long" ? "롱" : "숏"}</span> ${px(p.entry_price)}` : "–"}</td><td>${a.trades.length}</td>
+        <td class="${b.auto_improve ? "accent" : "muted"}">${b.auto_improve ? `켜짐 (${b.improve_every}건마다)` : "꺼짐"}</td>
+        <td><button class="sm" data-botchart="${b.symbol}|${b.interval}">차트에서 보기</button></td></tr>`; }).join("")}</table>`
       : `<div class="empty">실행 중인 페이퍼 봇이 없습니다. '전략 · 백테스트'에서 만들 수 있습니다.</div>`;
+  } else if (bottomTab === "ex") {
+    const e = state.exchanges;
+    if (!e) { el.innerHTML = `<div class="empty">불러오는 중…</div>`; return; }
+    el.innerHTML = `<table><tr><th>거래소</th><th>시장</th><th>가격 ($)</th><th>원화 가격</th><th>바이낸스 선물 대비</th><th>김치 프리미엄</th><th>24h</th><th>펀딩비</th><th>24h 거래대금</th></tr>
+      ${e.rows.map((r) => r.error ? `<tr><td>${r.exchange}</td><td>${r.market}</td><td colspan="7" class="muted" style="text-align:left">연결 실패</td></tr>` :
+        `<tr><td>${r.exchange}</td><td class="dim">${r.market}</td><td>${px(r.price)}</td><td>${r.price_krw ? fmt(r.price_krw, 0) + "원" : "–"}</td>
+        <td class="${cls(r.diff_pct)}">${r.diff_pct == null ? "–" : pct(r.diff_pct, 3)}</td><td class="${cls(r.kimchi_pct)}">${r.kimchi_pct == null ? "–" : pct(r.kimchi_pct)}</td>
+        <td class="${cls(r.change_pct)}">${pct(r.change_pct)}</td><td class="${cls(r.funding_pct)}">${r.funding_pct == null ? "–" : r.funding_pct.toFixed(4) + "%"}</td>
+        <td>$${big(r.volume_usd)}</td></tr>`).join("")}</table>
+      <div class="help" style="padding:6px 10px">환율 ${e.fx_usdkrw ? fmt(e.fx_usdkrw, 1) + "원" : "–"} · 업비트 USDT ${e.usdt_krw ? fmt(e.usdt_krw, 0) + "원" : "–"} (테더 프리미엄 ${e.tether_premium_pct == null ? "–" : pct(e.tether_premium_pct)})${e.source === "synthetic" ? ' · <span class="accent">가상 데이터</span>' : ""}</div>`;
   } else if (bottomTab === "news") {
     el.innerHTML = newsRows(state.news || [], 40);
   } else if (bottomTab === "alerts") {
@@ -375,13 +389,21 @@ async function loadBots() {
   try { bots = await api("/api/paper/bots"); } catch { return; }
   emit("bots", bots);
   if (bottomTab === "bots") renderBottom();
+  if (charts[0]?.opts.overlays.bots) charts[0].refreshOverlays();
+}
+
+export function showOnChart(symbol, interval) {
+  state.chartMode = "term"; state.interval = interval; state.overlays.bots = true;
+  savePrefs(); renderTimeframes();
+  emit("goto", "trade");
+  setSymbol(symbol);
 }
 
 // ================================================================ 초기화
 export function initTrade() {
+  if (!["term", "tv", "macro"].includes(state.chartMode)) state.chartMode = "term";
   renderTimeframes();
   $("#macro-syms").innerHTML = MACRO.map(([s, l]) => `<button data-macro="${s}" class="${s === state.macro ? "on" : ""}">${l}</button>`).join("");
-  $("#toggle-sc").classList.toggle("on", state.showScenario);
   renderWatchlist(); renderChart(); renderOrderPreview(); renderPriceAlerts();
 
   $("#chart-mode").onclick = (e) => { const m = e.target.dataset.mode; if (m) { state.chartMode = m; savePrefs(); renderChart(); } };
@@ -397,20 +419,58 @@ export function initTrade() {
     $$("#macro-syms button").forEach((b) => b.classList.toggle("on", b.dataset.macro === s));
     renderChart();
   };
-  $("#studies-btn").onclick = studiesMenu;
-  $("#studies-menu").onchange = (e) => {
-    const id = e.target.dataset.study;
-    state.studies = e.target.checked ? [...state.studies, id] : state.studies.filter((s) => s !== id);
-    savePrefs(); renderChart();
+  $("#overlays").onclick = (e) => {
+    const k = e.target.dataset.ov;
+    if (!k) return;
+    state.overlays[k] = !state.overlays[k];
+    savePrefs(); renderToolbar();
+    charts[0]?.setOverlay(k, state.overlays[k]);
+    if (k === "scenario") charts[0]?.setScenario(state.overlays.scenario ? state.analysis?.scenarios?.[0] : null);
   };
-  document.addEventListener("click", (e) => { if (!e.target.closest("#studies-menu")) $("#studies-menu").hidden = true; });
-  $("#toggle-sc").onclick = (e) => { state.showScenario = !state.showScenario; e.currentTarget.classList.toggle("on", state.showScenario); savePrefs(); drawScenarioLines(); };
+  $("#layouts").onclick = (e) => { const n = +e.target.dataset.layout; if (n) { state.layout = n; savePrefs(); renderChart(); } };
+  $("#term-grid").onchange = (e) => {
+    const i = +e.target.dataset.cell;
+    if (!i) return;
+    let v = e.target.value.trim().toUpperCase();
+    if (e.target.dataset.k === "symbol" && !v.endsWith("USDT")) v += "USDT";
+    state.multi[i - 1][e.target.dataset.k] = e.target.dataset.k === "interval" ? e.target.value : v; savePrefs();
+    charts[i]?.load(state.multi[i - 1].symbol, state.multi[i - 1].interval).catch((err) => toast("차트 오류", err.message, "err"));
+  };
+  $("#draw-tools").onclick = (e) => {
+    const t = e.target.dataset.draw;
+    if (!t || !charts[0]) return;
+    if (t === "clear") { charts[0].clearDrawings(); return; }
+    const on_ = !e.target.classList.contains("on");
+    $$("#draw-tools button").forEach((b) => b.classList.remove("on"));
+    e.target.classList.toggle("on", on_);
+    charts[0].setDrawMode(on_ ? t : null);
+  };
+  $("#ind-btn").onclick = indicatorPanel;
+  $("#ind-menu").onclick = (e) => {
+    e.stopPropagation();
+    const add = e.target.closest("[data-add]")?.dataset.add, del = e.target.dataset.del;
+    if (add) { state.indicators = [...state.indicators, { key: add, params: {} }]; applyIndicators(); }
+    if (del != null) { state.indicators = state.indicators.filter((_, i) => i !== +del); applyIndicators(); }
+    if (e.target.id === "ind-reset") { state.indicators = DEFAULT_INDICATORS; applyIndicators(); }
+  };
+  $("#ind-menu").onchange = (e) => {
+    if (e.target.dataset.study) {
+      const id = e.target.dataset.study;
+      state.studies = e.target.checked ? [...state.studies, id] : state.studies.filter((s) => s !== id);
+      savePrefs(); renderChart(); return;
+    }
+    const i = e.target.dataset.i, k = e.target.dataset.p;
+    if (i == null) return;
+    const v = Number(e.target.value);
+    state.indicators = state.indicators.map((s, j) => j === +i ? { ...s, params: { ...s.params, [k]: Number.isNaN(v) ? e.target.value : v } } : s);
+    savePrefs(); charts[0]?.setIndicators(state.indicators);
+  };
+  document.addEventListener("click", (e) => { if (!e.target.closest("#ind-menu")) $("#ind-menu").hidden = true; });
   $("#fs-btn").onclick = toggleFullscreen;
   document.addEventListener("keydown", (e) => {
     if (e.key.toLowerCase() === "f" && !e.target.closest("input, textarea, select") && $("#v-trade").classList.contains("on")) toggleFullscreen();
+    if (e.key === "Escape") { charts[0]?.setDrawMode(null); $$("#draw-tools button").forEach((b) => b.classList.remove("on")); }
   });
-  document.addEventListener("fullscreenchange", () => setTimeout(() => { lw?.timeScale().fitContent(); drawHeat(); }, 150));
-  on("tickers", renderOrderPreview);
 
   $("#watchlist").onclick = (e) => { const r = e.target.closest("[data-sym]"); if (r) setSymbol(r.dataset.sym); };
   $("#watchlist").ondblclick = (e) => {
@@ -425,14 +485,16 @@ export function initTrade() {
     const t = e.target.dataset.t;
     if (!t) return;
     $$("#side-tabs button").forEach((b) => b.classList.toggle("on", b.dataset.t === t));
-    $("#side-sc").hidden = t !== "sc"; $("#side-order").hidden = t !== "order";
+    $("#side-sc").hidden = t !== "sc"; $("#side-order").hidden = t !== "order"; $("#side-book").hidden = t !== "book";
+    if (t === "book") loadBook();
   };
   $("#side-sc").onclick = (e) => {
     const b = e.target.closest("[data-sc]");
     if (b) {
-      state.showScenario = true; $("#toggle-sc").classList.add("on");
-      if (state.chartMode !== "liq") { state.chartMode = "liq"; renderChart(); }
-      drawScenarioLines(state.analysis.scenarios[+b.dataset.sc]);
+      state.overlays.scenario = true; savePrefs();
+      if (state.chartMode !== "term") { state.chartMode = "term"; renderChart(); }
+      renderToolbar();
+      charts[0]?.setScenario(state.analysis.scenarios[+b.dataset.sc]);
     }
     if (e.target.id === "ai-comment") busy(e.target, () => loadAnalysis(true));
   };
@@ -442,12 +504,13 @@ export function initTrade() {
     renderOrderPreview();
   }));
   ["#o-margin", "#o-lev"].forEach((s) => ($(s).oninput = renderOrderPreview));
+  on("tickers", renderOrderPreview);
   $("#o-submit").onclick = (e) => busy(e.target, async () => {
     const num = (id) => { const v = $(id).value; return v === "" ? null : Number(v); };
     await api("/api/paper/order", { method: "POST", body: { symbol: state.symbol, side, margin: num("#o-margin"),
       leverage: num("#o-lev"), stop_loss_pct: num("#o-sl"), take_profit_pct: num("#o-tp") } });
     toast(`${state.symbol} ${side === "long" ? "롱" : "숏"} 체결 (모의)`, "", side === "long" ? "up" : "err");
-    loadAccount();
+    loadAccount(); charts[0]?.refreshOverlays();
   });
   $("#pa-add").onclick = () => { addPriceAlert(state.symbol, +$("#pa-price").value); $("#pa-price").value = ""; };
   $("#pa-list").onclick = (e) => { const i = e.target.dataset.pa; if (i != null) removePriceAlert(+i); };
@@ -461,12 +524,15 @@ export function initTrade() {
   };
   $("#bottom-body").onclick = (e) => {
     const sym = e.target.dataset.close;
-    if (sym) busy(e.target, async () => { await api(`/api/paper/close/${sym}`, { method: "POST" }); loadAccount(); });
+    if (sym) busy(e.target, async () => { await api(`/api/paper/close/${sym}`, { method: "POST" }); loadAccount(); charts[0]?.refreshOverlays(); });
+    const bc = e.target.dataset.botchart;
+    if (bc) { const [s, iv] = bc.split("|"); showOnChart(s, iv); }
   };
-
   on("rechart", renderChart);
+
   pollTickers(); setInterval(pollTickers, 5000);
   pollDerivatives(); setInterval(pollDerivatives, 30_000); setInterval(tickFunding, 1000);
+  pollSentiment(); setInterval(pollSentiment, 60_000);
   loadAnalysis();
   loadAccount(); setInterval(loadAccount, 5000);
   loadBots(); setInterval(loadBots, 15_000);

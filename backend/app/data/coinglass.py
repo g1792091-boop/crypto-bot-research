@@ -35,7 +35,11 @@ def enabled() -> bool:
 
 
 def _get(key: str, params: dict):
-    r = httpx.get(BASE + ENDPOINTS[key], params=params,
+    return get_path(ENDPOINTS[key], params)
+
+
+def get_path(path: str, params: dict):
+    r = httpx.get(BASE + path, params=params,
                   headers={"CG-API-KEY": config.COINGLASS_API_KEY, "accept": "application/json"},
                   timeout=config.HTTP_TIMEOUT)
     r.raise_for_status()
