@@ -92,6 +92,7 @@ import time
 import traceback
 import urllib.parse
 from dataclasses import dataclass, field
+from datetime import datetime
 from functools import lru_cache
 from typing import Any, Callable, Iterator, Optional
 
@@ -218,6 +219,12 @@ class RoomsPolicy:
     retries: int = 1                        # one more try when an answer is unreadable
     owner_ok_required: Optional[bool] = None  # None: required for the first ``owner_ok_days`` of the run
     owner_ok_days: int = 60
+    # the owners' observation period at the start (2026-09-30: "2~3주정도만 일단 지켜보고 싶은데"): until
+    # ``observe_days`` after the run's start, or through the KST date ``observe_until`` when set, the staff
+    # record and analyse only; no copy proposal is made (tests still run and stay in the ledger).
+    # The server's policy (``policy_from_env``) starts at OBSERVE_DAYS_DEFAULT; 0 here = off
+    observe_days: int = 0
+    observe_until: Optional[str] = None
     week_budget: tuple = DEFAULT_WEEK       # rolling 7 KST days (calls, tokens), all classes
     bust_reserve_calls: int = 8             # of the loss class: loss_cluster rounds leave these for busts
     critical_reserve_calls: int = 5         # of the incident class: kept for CRITICAL alerts (liquidations)
@@ -685,9 +692,11 @@ def apply_budget_specs(policy: RoomsPolicy, specs: list[str]) -> None:
 
 
 OWNER_OK = {"auto": None, "yes": True, "no": False}
+OBSERVE_DAYS_DEFAULT = 21
 # env name -> (where in the policy, minimum). All optional; see deploy/agents.env.example.
 ENV_INTS = {
     "AGENTS_OWNER_OK_DAYS": ("owner_ok_days", 0),
+    "AGENTS_OBSERVE_DAYS": ("observe_days", 0),
     "AGENTS_COPY_CAP_PER_STRATEGY": ("copy_cap_per_strategy", 0),
     "AGENTS_COPY_CAP_TOTAL": ("copy_cap_total", 0),
     "AGENTS_FLAG_MAX_PER_DAY": ("flag_max_per_day", 0),
@@ -704,7 +713,7 @@ def policy_from_env(environ: Optional[dict] = None) -> RoomsPolicy:
     ValueError (the tick refuses to start rather than run without the intended limit).
     None of these can loosen the code gate: they only set budgets, caps and when owners confirm."""
     env = os.environ if environ is None else environ
-    p = RoomsPolicy()
+    p = RoomsPolicy(observe_days=OBSERVE_DAYS_DEFAULT)
     b = (env.get("AGENTS_BUDGET") or "").strip()
     if b:
         apply_budget_specs(p, b.replace(";", ",").split(","))
@@ -713,6 +722,13 @@ def policy_from_env(environ: Optional[dict] = None) -> RoomsPolicy:
         if ok not in OWNER_OK:
             raise ValueError(f"AGENTS_OWNER_OK={ok!r}: use auto, yes or no")
         p.owner_ok_required = OWNER_OK[ok]
+    until = (env.get("AGENTS_OBSERVE_UNTIL") or "").strip()
+    if until:
+        try:
+            datetime.strptime(until, "%Y-%m-%d")
+        except ValueError:
+            raise ValueError(f"AGENTS_OBSERVE_UNTIL={until!r}: use a date like 2026-10-21 (KST, inclusive)") from None
+        p.observe_until = until
     for name, (attr, lo) in ENV_INTS.items():
         raw = (env.get(name) or "").strip()
         if not raw:
@@ -1299,6 +1315,21 @@ def _trials(ctx: RoundContext, room: str, strategy: Optional[str]) -> dict:
                                "note": "entry study, same 5-year data, nothing passed; not in this room's gate count"}}
 
 
+def observing(ctx: RoundContext) -> Optional[str]:
+    """The last KST day of the observation period while it lasts, else None. Before the paper bot
+    has started, the period has not begun either: observing."""
+    p = ctx.policy
+    if p.observe_until:
+        return p.observe_until if R.kst_day(ctx.now_ms) <= p.observe_until else None
+    if p.observe_days <= 0:
+        return None
+    start = TR.run_start(ctx.paper_ro)
+    if start is None:
+        return "봇 시작 뒤 %d일" % p.observe_days
+    end = start + p.observe_days * DAY_MS
+    return R.kst_day(end - 1) if ctx.now_ms < end else None
+
+
 def owner_ok_required(ctx: RoundContext) -> bool:
     p = ctx.policy.owner_ok_required
     if p is not None:
@@ -1334,6 +1365,9 @@ def _rules(ctx: RoundContext, room: str, strategy: Optional[str]) -> dict:
                            "strategy_cap": ctx.policy.copy_cap_per_strategy,
                            "total_active": R.active_proposals(ctx.agents_conn), "total_cap": ctx.policy.copy_cap_total},
             "owner_ok_required": owner_ok_required(ctx),
+            "observation": ({"until": obs, "copy_proposals": False,
+                             "note": "관찰 기간: 두 분이 처음 몇 주는 지켜보기만 합니다. 기록·분석·5년 시험은 하고, 복제 제안은 하지 않음"}
+                            if (obs := observing(ctx)) else None),
             "passed_trials": _passed_unproposed(ctx, room, strategy) if strategy else [],
             "note": "행동 실행과 관문 판정은 코드가 합니다. 원본 계좌·규칙·합격 기준은 바꿀 수 없습니다"}
 
@@ -1378,7 +1412,7 @@ class _Round:
         return A.ActionEnv(conn=self.ctx.agents_conn, room_id=self.room, strategy=self.strategy,
                            round_id=self.round_id, meeting=self.due.meeting, now_ms=self.ctx.clock(),
                            room_title=self.title, notifier=self.ctx.notifier, lab=self.ctx.lab,
-                           owner_ok_required=owner_ok_required(self.ctx),
+                           owner_ok_required=owner_ok_required(self.ctx), observing=observing(self.ctx) or "",
                            copy_cap_per_strategy=p.copy_cap_per_strategy, copy_cap_total=p.copy_cap_total,
                            flag_max_per_day=p.flag_max_per_day, proposer=proposer,
                            evidence_key=str(self.due.data.get("key") or ""))
@@ -1613,6 +1647,8 @@ def _do_test(rnd: _Round, env: A.ActionEnv, final: dict) -> dict:
 
 def _do_copy(rnd: _Round, env: A.ActionEnv, trial_id: int, why: str, code_result: Optional[dict] = None,
              validator: Optional[dict] = None, validated: bool = False) -> dict:
+    if env.observing:                                   # no approver call during the observation period
+        return A.propose_copy(env, trial_id, why, {"ok": True}, None)
     check = A.copy_check(env, trial_id)
     approver = None
     if check.get("ok") and check.get("gate_pass") and not check.get("cap"):

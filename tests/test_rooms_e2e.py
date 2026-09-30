@@ -493,12 +493,12 @@ def test_a_post_the_budget_defers_is_not_promised_the_next_turn(world, dash):
 
 def test_owner_settings_from_env_reach_the_tick_and_the_dashboard(world, dash):
     env = {"AGENTS_BUDGET": "loss=14:400000, total=60", "AGENTS_OWNER_OK": "no", "AGENTS_COPY_CAP_TOTAL": "4",
-           "AGENTS_MAX_ROUNDS_PER_TICK": "2", "AGENTS_FLAG_MAX_PER_DAY": "1"}
+           "AGENTS_MAX_ROUNDS_PER_TICK": "2", "AGENTS_FLAG_MAX_PER_DAY": "1", "AGENTS_OBSERVE_DAYS": "0"}
     pol = RM.policy_from_env(env)
     assert pol.budgets["loss"] == (14, 400000) and pol.budgets["owner"] == RM.DEFAULT_BUDGETS["owner"]
     assert pol.total_budget == (60, RM.DEFAULT_TOTAL[1]) and pol.owner_ok_required is False
     assert pol.copy_cap_total == 4 and pol.max_rounds_per_tick == 2 and pol.flag_max_per_day == 1
-    assert RM.policy_from_env({}) == RM.RoomsPolicy()
+    assert RM.policy_from_env({}) == RM.RoomsPolicy(observe_days=RM.OBSERVE_DAYS_DEFAULT)
     for bad in ({"AGENTS_BUDGET": "lose=3"}, {"AGENTS_BUDGET": "loss=x"}, {"AGENTS_OWNER_OK": "maybe"},
                 {"AGENTS_COPY_CAP_TOTAL": "-1"}, {"AGENTS_MAX_ROUNDS_PER_TICK": "0"}):
         with pytest.raises(ValueError):
@@ -519,6 +519,30 @@ def test_owner_settings_from_env_reach_the_tick_and_the_dashboard(world, dash):
     a = _ro(p["agents3"])
     assert R.list_proposals(a)[0]["status"] == "approved"
     a.close()
+
+
+def test_the_observation_period_keeps_proposals_back(world):
+    """The owners watch the first weeks: by default (policy_from_env) no copy proposal is made for
+    AGENTS_OBSERVE_DAYS after the bot's start; tests still run and stay in the ledger."""
+    pol = RM.policy_from_env({"AGENTS_OWNER_OK": "no"})
+    assert pol.observe_days == RM.OBSERVE_DAYS_DEFAULT == 21
+    staff = Staff({**lab_round_answers(WIDER), "validator": [{"pass_gate": True, "explanation": "통과"}],
+                   "approver": [{"approve": True, "reason": "통과"}]})
+    _tick(p := world["paths"], staff, T0, world["lab"], policy=pol)
+    a = _ro(p["agents3"])
+    assert R.list_proposals(a) == []
+    assert R.trial_count(a, kinds=("test",)) == 1                       # the test itself ran
+    msgs = [r[0] for r in a.execute("SELECT text FROM messages").fetchall()]
+    assert any("관찰 기간" in t and "복제 제안을 만들지 않습니다" in t for t in msgs)
+    assert "approver" not in staff.roles()                               # no call spent on the approver
+    rules = next(c["packet"]["rules"] for c in staff.calls if "rules" in c["packet"])
+    assert rules["observation"]["copy_proposals"] is False
+    a.close()
+    until = RM.policy_from_env({"AGENTS_OBSERVE_UNTIL": "2026-10-21"})
+    assert until.observe_until == "2026-10-21"
+    for bad in ({"AGENTS_OBSERVE_UNTIL": "21/10/2026"}, {"AGENTS_OBSERVE_DAYS": "-1"}):
+        with pytest.raises(ValueError):
+            RM.policy_from_env(bad)
 
 
 def test_cli_reads_the_env_and_the_flags_win(world, monkeypatch, capsys):

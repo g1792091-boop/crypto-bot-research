@@ -232,6 +232,7 @@ class ActionEnv:
     notifier: Notifier = field(default_factory=NullNotifier)
     lab: Any = None                     # labtests.LabData or None
     owner_ok_required: bool = True
+    observing: str = ""                 # the observation period's last day while it lasts: no copy proposals
     copy_cap_per_strategy: int = 1
     copy_cap_total: int = 10
     flag_max_per_day: int = 3
@@ -520,7 +521,13 @@ def propose_copy(env: ActionEnv, trial_id: int, why: str, check: dict, approver:
     """Record the proposal. Status is decided by code in this order: gate failed ->
     blocked_gate; copy cap full -> blocked_cap; approver said no -> rejected; approver said
     yes -> awaiting_owner (owners' OK required) or approved. ``approver`` is the checked
-    answer {approve: bool, reason} or None when it was not asked (gate/cap already block)."""
+    answer {approve: bool, reason} or None when it was not asked (gate/cap already block).
+    During the owners' observation period nothing is recorded (the test stays in the ledger)."""
+    if env.observing:
+        why_not = f"관찰 기간({env.observing}까지)이라 복제 제안을 만들지 않습니다. 시험 결과는 장부에 남고, 기간이 끝나면 제안할 수 있습니다"
+        env.post("system", why_not + ".", {"action": "propose_copy", "trial_id": trial_id, "created": False,
+                                           "observing": env.observing})
+        return _done("propose_copy", False, why_not, created=False)
     if not check.get("ok"):
         env.post("system", f"복제 제안을 만들지 않았습니다: {check.get('why')}",
                  {"action": "propose_copy", "trial_id": trial_id, "created": False})
