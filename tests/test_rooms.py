@@ -150,6 +150,9 @@ class StubLab:
                          "baseline": {"trades": 500, "mean_roe": -0.008}, "variant": {"trades": 490, "mean_roe": v2},
                          "diff": v2 + 0.008, "p": 0.01},
                    "3": {"start": "2020-01-01", "end": "2021-08-01", "available": False, "why": "자료 없음"}}}
+        if sp["template"] == "skip_tag":
+            for pid in ("1", "2"):
+                res["periods"][pid]["skipped"] = 40
         res["gate"] = L.gate(res, n_trials)
         res["summary_ko"] = L.summary_ko(res)
         return res
@@ -277,7 +280,7 @@ def test_request_test_gate_fails_and_copy_is_blocked(world, bad_lab):
     kinds = world.kinds()
     assert kinds.index("code_result") < kinds.index("verdict") < kinds.index("action") < kinds.index("decision")
     cr = next(m for m in world.messages() if m["kind"] == "code_result")
-    assert "-1.00%" in cr["text"] and "+0.40%" not in cr["text"] and "통과 못함" in cr["text"]
+    assert "-1.00%" in cr["text"] and "-0.60%" in cr["text"] and "통과 못함" in cr["text"]
     assert cr["data"]["gate"]["pass"] is False and cr["data"]["n_trials"] == 1
     trials = R.trial_history(world.agents, strategy=S)
     assert [t["kind"] for t in trials] == ["copy_proposal", "test"]
