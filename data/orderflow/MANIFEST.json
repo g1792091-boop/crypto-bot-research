@@ -1,0 +1,634 @@
+{
+ "source": "https://data.binance.vision (public Binance USD-M futures archive)",
+ "download_date": "2026-09-30",
+ "url_patterns": {
+  "funding": "https://data.binance.vision/data/futures/um/monthly/fundingRate/{SYM}/{SYM}-fundingRate-{P}.zip",
+  "metrics": "https://data.binance.vision/data/futures/um/daily/metrics/{SYM}/{SYM}-metrics-{P}.zip",
+  "liq": "https://data.binance.vision/data/futures/um/daily/liquidationSnapshot/{SYM}/{SYM}-liquidationSnapshot-{P}.zip",
+  "premium": "https://data.binance.vision/data/futures/um/monthly/premiumIndexKlines/{SYM}/1h/{SYM}-1h-{P}.zip"
+ },
+ "symbols": {
+  "BTCUSDT": {
+   "funding": {
+    "files_downloaded": 80,
+    "not_available_404": [
+     "2026-09"
+    ],
+    "errors": [],
+    "rows": 7305,
+    "columns": [
+     "calc_time",
+     "funding_interval_hours",
+     "last_funding_rate"
+    ],
+    "first": "2020-01-01T00:00:00Z",
+    "last": "2026-08-31T16:00:00.001000Z",
+    "files": {
+     "btc_funding.csv.gz": {
+      "sha256": "aaa0b02d8428ef0ece02de4618ab321f1368bb77282016b38052ff7354d9edd9",
+      "bytes": 46347
+     }
+    }
+   },
+   "premium_1h": {
+    "files_downloaded": 80,
+    "not_available_404": [],
+    "errors": [],
+    "rows": 58247,
+    "columns": [
+     "open_time",
+     "open",
+     "high",
+     "low",
+     "close",
+     "volume",
+     "close_time",
+     "quote_volume",
+     "count",
+     "taker_buy_volume",
+     "taker_buy_quote_volume",
+     "ignore"
+    ],
+    "first": "2020-01-01T00:00:00Z",
+    "last": "2026-08-31T23:00:00Z",
+    "files": {
+     "btc_premium_1h.csv.gz": {
+      "sha256": "51e770a02bb32a2bc6036aeb1e869e1c5622be8e44d1bc17c38434763e0c64f9",
+      "bytes": 1240409
+     }
+    }
+   },
+   "metrics_5m": {
+    "files_downloaded": 2219,
+    "not_available_404": [
+     "2026-09-29"
+    ],
+    "errors": [],
+    "rows": 638438,
+    "columns": [
+     "create_time",
+     "symbol",
+     "sum_open_interest",
+     "sum_open_interest_value",
+     "count_toptrader_long_short_ratio",
+     "sum_toptrader_long_short_ratio",
+     "count_long_short_ratio",
+     "sum_taker_long_short_vol_ratio"
+    ],
+    "first": "2020-09-01 00:00:00",
+    "last": "2026-09-28 23:55:00",
+    "files": {
+     "btc_metrics_5m.csv.gz": {
+      "sha256": "82166a1705b1986c06d00cd8e9407abc8a0ec517d2cb8e0bab4d31ef53d94f22",
+      "bytes": 23733555
+     }
+    }
+   },
+   "liquidation_snapshot": {
+    "files_downloaded": 0,
+    "rows": 0,
+    "probe_months_with_data": [],
+    "probe_dates": "15th of each month 2020-01..2026-09",
+    "not_available_404": [
+     "2020-01-15..2026-09-15 (all 81 monthly probes returned 404)"
+    ],
+    "output_file": null
+   }
+  },
+  "ETHUSDT": {
+   "funding": {
+    "files_downloaded": 80,
+    "not_available_404": [
+     "2026-09"
+    ],
+    "errors": [],
+    "rows": 7305,
+    "columns": [
+     "calc_time",
+     "funding_interval_hours",
+     "last_funding_rate"
+    ],
+    "first": "2020-01-01T00:00:00Z",
+    "last": "2026-08-31T16:00:00.001000Z",
+    "files": {
+     "eth_funding.csv.gz": {
+      "sha256": "2e86a012818711d6c361b1803b3b1b62dca6884d8c689b3f17ff52d0172b2abd",
+      "bytes": 46326
+     }
+    }
+   },
+   "premium_1h": {
+    "files_downloaded": 80,
+    "not_available_404": [],
+    "errors": [],
+    "rows": 58247,
+    "columns": [
+     "open_time",
+     "open",
+     "high",
+     "low",
+     "close",
+     "volume",
+     "close_time",
+     "quote_volume",
+     "count",
+     "taker_buy_volume",
+     "taker_buy_quote_volume",
+     "ignore"
+    ],
+    "first": "2020-01-01T00:00:00Z",
+    "last": "2026-08-31T23:00:00Z",
+    "files": {
+     "eth_premium_1h.csv.gz": {
+      "sha256": "ad5f556403d1c0feabb269d5e203f1aeb1aa95152f015e07606f4386e179beac",
+      "bytes": 1245864
+     }
+    }
+   },
+   "metrics_5m": {
+    "files_downloaded": 1763,
+    "not_available_404": [
+     "2020-09-01..2021-11-30",
+     "2026-09-29"
+    ],
+    "errors": [],
+    "rows": 507604,
+    "columns": [
+     "create_time",
+     "symbol",
+     "sum_open_interest",
+     "sum_open_interest_value",
+     "count_toptrader_long_short_ratio",
+     "sum_toptrader_long_short_ratio",
+     "count_long_short_ratio",
+     "sum_taker_long_short_vol_ratio"
+    ],
+    "first": "2021-12-01 00:00:00",
+    "last": "2026-09-28 23:55:00",
+    "files": {
+     "eth_metrics_5m.csv.gz": {
+      "sha256": "f3070eb104c590c07ac1973b0fa08f4e88260dc1a909a11a35609ade54157d58",
+      "bytes": 19344686
+     }
+    }
+   },
+   "liquidation_snapshot": {
+    "files_downloaded": 0,
+    "rows": 0,
+    "probe_months_with_data": [],
+    "probe_dates": "15th of each month 2020-01..2026-09",
+    "not_available_404": [
+     "2020-01-15..2026-09-15 (all 81 monthly probes returned 404)"
+    ],
+    "output_file": null
+   }
+  },
+  "SOLUSDT": {
+   "funding": {
+    "files_downloaded": 72,
+    "not_available_404": [
+     "2020-01..2020-08",
+     "2026-09"
+    ],
+    "errors": [],
+    "rows": 6610,
+    "columns": [
+     "calc_time",
+     "funding_interval_hours",
+     "last_funding_rate"
+    ],
+    "first": "2020-09-13T16:00:00.004000Z",
+    "last": "2026-08-31T16:00:00.001000Z",
+    "files": {
+     "sol_funding.csv.gz": {
+      "sha256": "2fece574a0358f7f340c45bfa0b04bf8f6bf248b1d8c38ac5e824567d5b0d329",
+      "bytes": 42888
+     }
+    }
+   },
+   "premium_1h": {
+    "files_downloaded": 72,
+    "not_available_404": [
+     "2020-01..2020-08"
+    ],
+    "errors": [],
+    "rows": 52096,
+    "columns": [
+     "open_time",
+     "open",
+     "high",
+     "low",
+     "close",
+     "volume",
+     "close_time",
+     "quote_volume",
+     "count",
+     "taker_buy_volume",
+     "taker_buy_quote_volume",
+     "ignore"
+    ],
+    "first": "2020-09-14T07:00:00Z",
+    "last": "2026-08-31T23:00:00Z",
+    "files": {
+     "sol_premium_1h.csv.gz": {
+      "sha256": "bb6307de16e36e66c705155ab6e69881aaee17b0574d9ec99770c75ff1f35c40",
+      "bytes": 1089546
+     }
+    }
+   },
+   "metrics_5m": {
+    "files_downloaded": 1763,
+    "not_available_404": [
+     "2020-09-01..2021-11-30",
+     "2026-09-29"
+    ],
+    "errors": [],
+    "rows": 507587,
+    "columns": [
+     "create_time",
+     "symbol",
+     "sum_open_interest",
+     "sum_open_interest_value",
+     "count_toptrader_long_short_ratio",
+     "sum_toptrader_long_short_ratio",
+     "count_long_short_ratio",
+     "sum_taker_long_short_vol_ratio"
+    ],
+    "first": "2021-12-01 00:00:00",
+    "last": "2026-09-28 23:55:00",
+    "files": {
+     "sol_metrics_5m.csv.gz": {
+      "sha256": "1954b5c6275d5a127268ba75c9d4266e6cff962e13f6f98c64e7df2cb3265e6f",
+      "bytes": 18362624
+     }
+    }
+   },
+   "liquidation_snapshot": {
+    "files_downloaded": 0,
+    "rows": 0,
+    "probe_months_with_data": [],
+    "probe_dates": "15th of each month 2020-01..2026-09",
+    "not_available_404": [
+     "2020-01-15..2026-09-15 (all 81 monthly probes returned 404)"
+    ],
+    "output_file": null
+   }
+  },
+  "LTCUSDT": {
+   "funding": {
+    "files_downloaded": 80,
+    "not_available_404": [
+     "2026-09"
+    ],
+    "errors": [],
+    "rows": 7280,
+    "columns": [
+     "calc_time",
+     "funding_interval_hours",
+     "last_funding_rate"
+    ],
+    "first": "2020-01-09T08:00:00Z",
+    "last": "2026-08-31T16:00:00.001000Z",
+    "files": {
+     "ltc_funding.csv.gz": {
+      "sha256": "db78a4d539ab3a8d435608e14ac3ded435ed19cd23fb5b526d948ed36c45cd85",
+      "bytes": 45208
+     }
+    }
+   },
+   "premium_1h": {
+    "files_downloaded": 80,
+    "not_available_404": [],
+    "errors": [],
+    "rows": 58071,
+    "columns": [
+     "open_time",
+     "open",
+     "high",
+     "low",
+     "close",
+     "volume",
+     "close_time",
+     "quote_volume",
+     "count",
+     "taker_buy_volume",
+     "taker_buy_quote_volume",
+     "ignore"
+    ],
+    "first": "2020-01-09T08:00:00Z",
+    "last": "2026-08-31T23:00:00Z",
+    "files": {
+     "ltc_premium_1h.csv.gz": {
+      "sha256": "7a78ccc9ebe09f418f07aba4e1fd7f49805ea1b442c8b0c7b2bf50f55dcda938",
+      "bytes": 1178834
+     }
+    }
+   },
+   "metrics_5m": {
+    "files_downloaded": 1763,
+    "not_available_404": [
+     "2020-09-01..2021-11-30",
+     "2026-09-29"
+    ],
+    "errors": [],
+    "rows": 507561,
+    "columns": [
+     "create_time",
+     "symbol",
+     "sum_open_interest",
+     "sum_open_interest_value",
+     "count_toptrader_long_short_ratio",
+     "sum_toptrader_long_short_ratio",
+     "count_long_short_ratio",
+     "sum_taker_long_short_vol_ratio"
+    ],
+    "first": "2021-12-01 00:00:00",
+    "last": "2026-09-28 23:55:00",
+    "files": {
+     "ltc_metrics_5m.csv.gz": {
+      "sha256": "82416c857620dbf701deb019eefa3fa4fa50e2d7b1860c20152838fc124d445c",
+      "bytes": 19112139
+     }
+    }
+   },
+   "liquidation_snapshot": {
+    "files_downloaded": 0,
+    "rows": 0,
+    "probe_months_with_data": [],
+    "probe_dates": "15th of each month 2020-01..2026-09",
+    "not_available_404": [
+     "2020-01-15..2026-09-15 (all 81 monthly probes returned 404)"
+    ],
+    "output_file": null
+   }
+  },
+  "BCHUSDT": {
+   "funding": {
+    "files_downloaded": 80,
+    "not_available_404": [
+     "2026-09"
+    ],
+    "errors": [],
+    "rows": 7305,
+    "columns": [
+     "calc_time",
+     "funding_interval_hours",
+     "last_funding_rate"
+    ],
+    "first": "2020-01-01T00:00:00Z",
+    "last": "2026-08-31T16:00:00.001000Z",
+    "files": {
+     "bch_funding.csv.gz": {
+      "sha256": "67385d618992b5a0bf02194f8ebf5c0a701ec4f95748f40be15063c05b150319",
+      "bytes": 46901
+     }
+    }
+   },
+   "premium_1h": {
+    "files_downloaded": 80,
+    "not_available_404": [],
+    "errors": [],
+    "rows": 58247,
+    "columns": [
+     "open_time",
+     "open",
+     "high",
+     "low",
+     "close",
+     "volume",
+     "close_time",
+     "quote_volume",
+     "count",
+     "taker_buy_volume",
+     "taker_buy_quote_volume",
+     "ignore"
+    ],
+    "first": "2020-01-01T00:00:00Z",
+    "last": "2026-08-31T23:00:00Z",
+    "files": {
+     "bch_premium_1h.csv.gz": {
+      "sha256": "b82819d6fe7319effd63ec8d40c8204036298367122da207d3c3b8a31ae8b7f7",
+      "bytes": 1191471
+     }
+    }
+   },
+   "metrics_5m": {
+    "files_downloaded": 1763,
+    "not_available_404": [
+     "2020-09-01..2021-11-30",
+     "2026-09-29"
+    ],
+    "errors": [],
+    "rows": 507567,
+    "columns": [
+     "create_time",
+     "symbol",
+     "sum_open_interest",
+     "sum_open_interest_value",
+     "count_toptrader_long_short_ratio",
+     "sum_toptrader_long_short_ratio",
+     "count_long_short_ratio",
+     "sum_taker_long_short_vol_ratio"
+    ],
+    "first": "2021-12-01 00:00:00",
+    "last": "2026-09-28 23:55:00",
+    "files": {
+     "bch_metrics_5m.csv.gz": {
+      "sha256": "8d9de6d0478162a77a152225077b49b40fd7ec1350ca9a5d680507d27d0a086e",
+      "bytes": 18741731
+     }
+    }
+   },
+   "liquidation_snapshot": {
+    "files_downloaded": 0,
+    "rows": 0,
+    "probe_months_with_data": [],
+    "probe_dates": "15th of each month 2020-01..2026-09",
+    "not_available_404": [
+     "2020-01-15..2026-09-15 (all 81 monthly probes returned 404)"
+    ],
+    "output_file": null
+   }
+  },
+  "DOGEUSDT": {
+   "funding": {
+    "files_downloaded": 74,
+    "not_available_404": [
+     "2020-01..2020-06",
+     "2026-09"
+    ],
+    "errors": [],
+    "rows": 6731,
+    "columns": [
+     "calc_time",
+     "funding_interval_hours",
+     "last_funding_rate"
+    ],
+    "first": "2020-07-10T08:00:00.001000Z",
+    "last": "2026-08-31T16:00:00.001000Z",
+    "files": {
+     "doge_funding.csv.gz": {
+      "sha256": "ae0ea264d81722758f182a95859557e226035e02837c5f4bd8d122707954041d",
+      "bytes": 41972
+     }
+    }
+   },
+   "premium_1h": {
+    "files_downloaded": 74,
+    "not_available_404": [
+     "2020-01..2020-06"
+    ],
+    "errors": [],
+    "rows": 53654,
+    "columns": [
+     "open_time",
+     "open",
+     "high",
+     "low",
+     "close",
+     "volume",
+     "close_time",
+     "quote_volume",
+     "count",
+     "taker_buy_volume",
+     "taker_buy_quote_volume",
+     "ignore"
+    ],
+    "first": "2020-07-10T09:00:00Z",
+    "last": "2026-08-31T23:00:00Z",
+    "files": {
+     "doge_premium_1h.csv.gz": {
+      "sha256": "e93f5fb1882f3ef6c2e3480e36d448b6f1a22eb818442900da1fa42b8fdb0a56",
+      "bytes": 1118554
+     }
+    }
+   },
+   "metrics_5m": {
+    "files_downloaded": 1763,
+    "not_available_404": [
+     "2020-09-01..2021-11-30",
+     "2026-09-29"
+    ],
+    "errors": [],
+    "rows": 507604,
+    "columns": [
+     "create_time",
+     "symbol",
+     "sum_open_interest",
+     "sum_open_interest_value",
+     "count_toptrader_long_short_ratio",
+     "sum_toptrader_long_short_ratio",
+     "count_long_short_ratio",
+     "sum_taker_long_short_vol_ratio"
+    ],
+    "first": "2021-12-01 00:00:00",
+    "last": "2026-09-28 23:55:00",
+    "files": {
+     "doge_metrics_5m.csv.gz": {
+      "sha256": "d50135e935cacb01ae5772829ff43c4688458b808a2b7f40f1710039ed747c91",
+      "bytes": 19159573
+     }
+    }
+   },
+   "liquidation_snapshot": {
+    "files_downloaded": 0,
+    "rows": 0,
+    "probe_months_with_data": [],
+    "probe_dates": "15th of each month 2020-01..2026-09",
+    "not_available_404": [
+     "2020-01-15..2026-09-15 (all 81 monthly probes returned 404)"
+    ],
+    "output_file": null
+   }
+  },
+  "XRPUSDT": {
+   "funding": {
+    "files_downloaded": 80,
+    "not_available_404": [
+     "2026-09"
+    ],
+    "errors": [],
+    "rows": 7289,
+    "columns": [
+     "calc_time",
+     "funding_interval_hours",
+     "last_funding_rate"
+    ],
+    "first": "2020-01-06T08:00:00Z",
+    "last": "2026-08-31T16:00:00.001000Z",
+    "files": {
+     "xrp_funding.csv.gz": {
+      "sha256": "0ba3966e0149854c4e2b8494f12568bf4b055b2bf4c36361d771094b99f07a3f",
+      "bytes": 45583
+     }
+    }
+   },
+   "premium_1h": {
+    "files_downloaded": 80,
+    "not_available_404": [],
+    "errors": [],
+    "rows": 58143,
+    "columns": [
+     "open_time",
+     "open",
+     "high",
+     "low",
+     "close",
+     "volume",
+     "close_time",
+     "quote_volume",
+     "count",
+     "taker_buy_volume",
+     "taker_buy_quote_volume",
+     "ignore"
+    ],
+    "first": "2020-01-06T08:00:00Z",
+    "last": "2026-08-31T23:00:00Z",
+    "files": {
+     "xrp_premium_1h.csv.gz": {
+      "sha256": "ca2f65830619eb1fe3787929dd94415b344022dd356c2046bd0fcf9bc865fb5f",
+      "bytes": 1200216
+     }
+    }
+   },
+   "metrics_5m": {
+    "files_downloaded": 1763,
+    "not_available_404": [
+     "2020-09-01..2021-11-30",
+     "2026-09-29"
+    ],
+    "errors": [],
+    "rows": 507603,
+    "columns": [
+     "create_time",
+     "symbol",
+     "sum_open_interest",
+     "sum_open_interest_value",
+     "count_toptrader_long_short_ratio",
+     "sum_toptrader_long_short_ratio",
+     "count_long_short_ratio",
+     "sum_taker_long_short_vol_ratio"
+    ],
+    "first": "2021-12-01 00:00:00",
+    "last": "2026-09-28 23:55:00",
+    "files": {
+     "xrp_metrics_5m.csv.gz": {
+      "sha256": "721d43347db4c8200bcf7dfe0736f89581c93e4ba6f4fbec259fea9d0380e667",
+      "bytes": 19134616
+     }
+    }
+   },
+   "liquidation_snapshot": {
+    "files_downloaded": 0,
+    "rows": 0,
+    "probe_months_with_data": [],
+    "probe_dates": "15th of each month 2020-01..2026-09",
+    "not_available_404": [
+     "2020-01-15..2026-09-15 (all 81 monthly probes returned 404)"
+    ],
+    "output_file": null
+   }
+  }
+ },
+ "failed_urls": []
+}
