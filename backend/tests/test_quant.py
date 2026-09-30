@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from app import nl_strategy
 from app.main import app
-from app.quant import forecast, risk, rotation
+from app.quant import forecast, risk, universe
 from app.quant.scanner import Scanner, evaluate
 
 c = TestClient(app)
@@ -61,18 +61,11 @@ def test_forecast_endpoint():
     assert r["symbol"] == "ETHUSDT" and len(r["analog"]["times"]) == 24 and r["next_bar"]["time"] > r["bar_time"]
 
 
-def test_rotation_tiers_rrg_and_backtest():
-    assert [rotation.tier(s) for s in ("BTCUSDT", "ETHUSDT", "SOLUSDT", "INJUSDT", "1000PEPEUSDT")] == ["btc", "eth", "large", "mid", "meme"]
-    r = c.get("/api/rotation/rrg", params={"interval": "1d"}).json()
-    assert r["phase"]["key"] in ("btc", "eth", "large", "mid", "meme", "off") and r["rows"]
-    for row in r["rows"]:
-        want = ("leading" if row["mom"] >= 100 else "weakening") if row["ratio"] >= 100 else ("improving" if row["mom"] >= 100 else "lagging")
-        assert row["quadrant"] == want
-    # 전부 들고 매 봉 교체 없이 = 동일 비중과 거의 같아야 함 (계산 검증)
-    b = rotation.backtest(interval="1d", top=50, abs_filter=False, rebalance=1, fee_pct=0)
-    assert abs(b["strategy"]["return_pct"] - b["equal_weight"]["return_pct"]) < 1.0
-    r = c.post("/api/rotation/backtest", json={"interval": "4h", "mode": "long_short", "top": 2, "bars": 600}).json()
-    assert len(r["curve"]) == len(r["btc_curve"]) and r["params"]["mode"] == "long_short"
+def test_universe_tiers_and_rotation_removed():
+    assert [universe.tier(s) for s in ("BTCUSDT", "ETHUSDT", "SOLUSDT", "INJUSDT", "1000PEPEUSDT")] == ["btc", "eth", "large", "mid", "meme"]
+    times, closes, _ = universe.load(["ETHUSDT", "SOLUSDT"], "1d", 100)
+    assert set(closes) == {"BTCUSDT", "ETHUSDT", "SOLUSDT"} and len(closes["ETHUSDT"]) == len(times)
+    assert c.get("/api/rotation/rrg").status_code == 404                     # 순환매는 제거됨
 
 
 def test_scanner_signals_confluence_and_dedupe(tmp_path, monkeypatch):

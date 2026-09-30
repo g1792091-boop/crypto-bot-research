@@ -17,7 +17,7 @@ import webbrowser
 from pathlib import Path
 
 SETTINGS_TEMPLATE = """\
-# 코인 선물 터미널 설정 파일
+# GH Quant 설정 파일
 # 이 파일을 메모장으로 열어 '=' 뒤에 값을 넣고 저장한 뒤, 프로그램을 다시 실행하세요.
 # 비워 두어도 동작합니다 (AI는 규칙 기반, 파생 데이터는 바이낸스 무료 데이터 사용).
 
@@ -100,7 +100,7 @@ def main() -> None:
     from app.main import app
 
     print("=" * 56)
-    print(" 코인 선물 터미널 실행 중")
+    print(" GH Quant 실행 중")
     print(f" 브라우저 주소: {url}")
     ai = "Claude" if os.environ.get("ANTHROPIC_API_KEY") else "Gemini" if os.environ.get("GEMINI_API_KEY") else "미설정 (규칙 기반)"
     if os.environ.get("LLM_PROVIDER", "").lower() == "gemini" and os.environ.get("GEMINI_API_KEY"):

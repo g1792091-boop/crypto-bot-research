@@ -31,7 +31,6 @@ SIGNALS = {
     "regime": "시장 판단 전환 (롱·숏·횡보)",
     "pattern": "과거 유사 패턴 강한 예측",
     "footprint": "풋프린트 진입 신호 (흡수 · 델타 반전 · 스윕)",
-    "rotation": "순환매 자리 (개선→주도 진입 · 주도→약화)",
 }
 DEFAULT = {"enabled": True, "symbols": ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "BNBUSDT", "DOGEUSDT"],
            "intervals": ["15m", "1h", "4h"], "signals": {k: True for k in SIGNALS}, "every_sec": 30}
@@ -192,7 +191,8 @@ class Scanner:
     def _load(self):
         try:
             self.cfg.update(json.loads(self.path.read_text(encoding="utf-8")))
-            self.cfg["signals"] = {**DEFAULT["signals"], **self.cfg.get("signals", {})}
+            saved = self.cfg.get("signals", {})
+            self.cfg["signals"] = {k: bool(saved.get(k, v)) for k, v in DEFAULT["signals"].items()}   # 없어진 신호 종류는 버림
         except (OSError, ValueError):
             pass
 
@@ -236,7 +236,7 @@ class Scanner:
         return new
 
     def _extra(self, symbol: str, interval: str, bar_time: int, price: float) -> list[dict]:
-        """풋프린트 · 순환매 신호 (다른 데이터가 필요해서 따로)."""
+        """풋프린트 신호 (다른 데이터가 필요해서 따로)."""
         out = []
         on = self.cfg["signals"]
         if on.get("footprint") and interval != "1m":
@@ -249,16 +249,6 @@ class Scanner:
                     if sg["time"] == bar_time:
                         out.append({"type": "footprint", "label": SIGNALS["footprint"], "dir": sg["dir"], "strength": 1 + sg["strength"] // 2,
                                     "text": " / ".join(sg["reasons"]) + f" · 진입 {sg['entry']:.6g} 손절 {sg['stop']:.6g}"})
-            except Exception:
-                pass
-        if on.get("rotation"):
-            try:
-                from . import rotation
-                rs = rotation.series(symbol, interval, 300)
-                for mk in rs["marks"]:
-                    if mk["time"] == bar_time and mk["kind"] in ("entry", "exit"):
-                        out.append({"type": "rotation", "label": SIGNALS["rotation"], "dir": "long" if mk["kind"] == "entry" else "short",
-                                    "strength": 2, "text": f"{rs['bench']} 대비 {mk['text']} — 지금 {rs['now_name']} 구역"})
             except Exception:
                 pass
         for sg in out:

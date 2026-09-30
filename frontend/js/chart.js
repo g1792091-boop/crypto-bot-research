@@ -67,8 +67,9 @@ export class TermChart {
     this.priceLines = []; this.userLines = []; this.trends = [];
     this.drawMode = null; this.pending = null;
 
-    el.innerHTML = `<div class="tc-chart"></div><div class="tc-legend"></div>`;
+    el.innerHTML = `<div class="tc-chart"></div><div class="tc-legend"></div><div class="tc-ladder" hidden><canvas></canvas><div class="tc-ltip" hidden></div></div>`;
     this.legendEl = el.querySelector(".tc-legend");
+    this.ladderEl = el.querySelector(".tc-ladder");
     this.chart = LC.createChart(el.querySelector(".tc-chart"), {
       autoSize: true,
       layout: { background: { type: "solid", color: css("--panel") }, textColor: css("--text-2"), fontSize: 11,
@@ -94,19 +95,22 @@ export class TermChart {
     this.fc = null; this.fcSeries = [];
     this.fpLayer = new Layer((ctx, size) => this._drawFootprint(ctx, size), "top");
     this.fp = null; this.fpMarkers = [];
-    this.rot = null; this.rotMarkers = [];
-    this.rotLayer = new Layer((ctx, size) => this._drawRotation(ctx, size), "bottom");
     this.countdown = new Countdown(this);
-    [this.vpLayer, this.boxLayer, this.fcLayer, this.srLayer, this.heatLayer, this.whaleLayer, this.drawLayer, this.fpLayer, this.rotLayer, this.countdown].forEach((l) => this.candle.attachPrimitive(l));
+    // 가격 사다리: 차트가 다시 그려질 때마다(확대·이동·가격축 드래그) 옆 사다리도 같은 높이로 맞춘다
+    this.ladderHook = new Layer((ctx, size) => { this._paneH = size.height; this._paneW = size.width; this._scheduleLadder(); }, "bottom");
+    this.candle.attachPrimitive(this.ladderHook);
+    this.book = null;
+    this._setupLadder();
+    [this.vpLayer, this.boxLayer, this.fcLayer, this.srLayer, this.heatLayer, this.whaleLayer, this.drawLayer, this.fpLayer, this.countdown].forEach((l) => this.candle.attachPrimitive(l));
     this.sigMarkers = [];     // 보조지표 신호 (골든크로스·UT Bot·다이버전스 등) — 가격 창 화살표
     this._cdTimer = setInterval(() => !document.hidden && this.countdown.update(), 1000);
     this.editLines = {};
     this._setupDrag();
-    this.chart.subscribeCrosshairMove((p) => this._legend(p));
+    this.chart.subscribeCrosshairMove((p) => { this._legend(p); this._crossY = p.point?.y ?? null; if (!this.ladderEl.hidden) this._scheduleLadder(); });
     this.chart.subscribeClick((p) => this._click(p));
   }
 
-  destroy() { clearInterval(this._timer); clearInterval(this._cdTimer); this.chart.remove(); this.el.innerHTML = ""; }
+  destroy() { this._ro?.disconnect(); clearInterval(this._timer); clearInterval(this._cdTimer); clearInterval(this._bookTimer); this.chart.remove(); this.el.innerHTML = ""; }
 
   // 지금 보고 있는 코인·봉인지 확인 (늦게 도착한 이전 코인의 응답을 버리기 위함)
   _is(sym, iv) { return sym === this.symbol && iv === this.interval; }
@@ -119,7 +123,8 @@ export class TermChart {
       clearInterval(this._timer);
       this.markers = this.heat = this.whales = this.sr = this.scenario = null;
       this.ext = {}; this.sigMarkers = [];
-      this.setForecast(null); this.fp = null; this.fpMarkers = []; this.rot = null; this.rotMarkers = []; this.fpLayer.update(); this.rotLayer.update();
+      this.setForecast(null); this.fp = null; this.fpMarkers = []; this.fpLayer.update();
+      this.book = null; if (this.opts.overlays.ladder) this._loadBook();
       this._applyMarkers();
       [this.heatLayer, this.whaleLayer, this.srLayer].forEach((l) => l.update());
     }
@@ -207,7 +212,7 @@ export class TermChart {
       const r = def.compute(c, params, this.ext);
       const pane = def.pane === "sub" ? ++paneNo : 0;
       const series = r.plots.map((pl) => {
-        if (["signals", "boxes", "profiles"].includes(pl.type)) return null;   // 화살표·상자는 따로 그림
+        if (["signals", "boxes", "profiles", "patterns"].includes(pl.type)) return null;   // 화살표·상자는 따로 그림
         const common = { priceLineVisible: false, lastValueVisible: def.pane === "sub" && pl.legend !== false, title: "" };
         let s;
         if (pl.type === "hist") {
@@ -269,6 +274,7 @@ export class TermChart {
       if (it.pane !== 0) continue;
       for (const pl of it.last.plots) {
         if (pl.type === "profiles") { this._drawProfiles(ctx, size, pl.sessions); continue; }
+        if (pl.type === "patterns") { this._drawPatterns(ctx, size, pl.patterns); continue; }
         if (pl.type !== "boxes") continue;
         for (const b of pl.boxes) {
           const x0 = ts.logicalToCoordinate(b.i0), x1 = b.i1 == null ? size.width : ts.logicalToCoordinate(b.i1);
@@ -279,6 +285,57 @@ export class TermChart {
         }
       }
     }
+  }
+
+  // 차트 패턴: 스윙 점을 잇는 선 + 경계선/넥라인 + 이름·상태 + 목표가(측정 이동)
+  _drawPatterns(ctx, size, pats) {
+    const ts = this.chart.timeScale(), s = this.candle, X = (i) => ts.logicalToCoordinate(i), Y = (v) => s.priceToCoordinate(v);
+    const font = getComputedStyle(document.body).fontFamily, used = [];
+    // 글자끼리 겹치면 건너뛴다 (최근 패턴 우선)
+    const free = (x, y, w, h) => { if (used.some((r) => x < r.x + r.w && x + w > r.x && y < r.y + r.h && y + h > r.y)) return false; used.push({ x, y, w, h }); return true; };
+    [...pats].reverse().forEach((pt, rank) => {
+      const xa = X(pt.i0), xb = X(pt.j);
+      if (xa == null || xb == null || xb < -80 || xa > size.width + 80) return;
+      const small = xb - xa < 36;   // 너무 작게 보이면 선만
+      const col = pt.st === "forming" ? "245,165,36" : !pt.ok ? "164,172,182" : pt.st === "up" ? "34,176,125" : "229,72,77";
+      // 삼각형·깃발·채널: 두 경계선 사이를 옅게 칠함
+      if (pt.poly && pt.lines.length === 2) {
+        const [u, d] = pt.lines, q = [[u[0], u[1]], [u[2], u[3]], [d[2], d[3]], [d[0], d[1]]].map(([i, v]) => [X(i), Y(v)]);
+        if (q.every(([x, y]) => x != null && y != null)) { ctx.fillStyle = `rgba(${col},.07)`; ctx.beginPath(); q.forEach(([x, y], k) => (k ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath(); ctx.fill(); }
+      }
+      // 스윙 점 연결선
+      ctx.strokeStyle = `rgba(${col},.85)`; ctx.lineWidth = 1.5; ctx.setLineDash([]); ctx.beginPath();
+      let ok = true;
+      pt.pts.forEach(([i, v], k) => { const x = X(i), y = Y(v); if (x == null || y == null) { ok = false; return; } k ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+      if (ok && !pt.poly) ctx.stroke();
+      // 경계선 · 넥라인 (마지막 점 이후 부분은 점선)
+      ctx.font = `10px ${font}`;
+      for (const [i0, v0, i1, v1, label] of pt.lines) {
+        const x0 = X(i0), y0 = Y(v0), x1 = X(i1), y1 = Y(v1);
+        if ([x0, y0, x1, y1].includes(null)) continue;
+        ctx.strokeStyle = `rgba(${col},.9)`; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+        if (label && !small) { ctx.fillStyle = `rgba(${col},.95)`; ctx.textAlign = "left"; ctx.fillText(label, x0 + 3, y0 + (pt.dir < 0 ? 12 : -4)); }
+      }
+      // 이름 · 상태
+      const vs = pt.pts.map(([, v]) => v), yTop = Y(Math.max(...vs)), yBot = Y(Math.min(...vs)), bull = pt.dir > 0 || (pt.dir === 0 && pt.st === "up");
+      const ly = bull ? (yBot ?? 0) + 16 : (yTop ?? 0) - 8, txt = `${pt.name} · ${pt.status}`;
+      ctx.font = `600 10.5px ${font}`;
+      const w = ctx.measureText(txt).width + 10, lx = Math.max(2, Math.min(size.width - w - 2, (xa + X(pt.i1)) / 2 - w / 2));
+      if (yTop != null && yBot != null && !small && free(lx, ly - 11, w, 15)) {
+        ctx.fillStyle = `rgba(${col},.18)`; ctx.fillRect(lx, ly - 11, w, 15);
+        ctx.fillStyle = `rgb(${col})`; ctx.textAlign = "left"; ctx.fillText(txt, lx + 5, ly);
+      }
+      // 목표가 (지난 패턴 중 이미 도달한 것은 최근 2개만)
+      if (pt.target != null && (rank < 2 || !pt.reached) && !small) {
+        const yt = Y(pt.target), x1 = X(pt.j + Math.max(8, Math.round((pt.i1 - pt.i0) / 2)));
+        if (yt != null && x1 != null) {
+          ctx.strokeStyle = `rgba(${col},.8)`; ctx.setLineDash([4, 3]); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(xb, yt); ctx.lineTo(x1, yt); ctx.stroke(); ctx.setLineDash([]);
+          ctx.font = `10px ${font}`; ctx.fillStyle = `rgb(${col})`; ctx.textAlign = "left";
+          const t = `목표 ${px(pt.target)}${pt.reached ? " ✓ 도달" : ""}`;
+          if (free(x1 + 3, yt - 8, ctx.measureText(t).width, 12)) ctx.fillText(t, x1 + 3, yt + 3);
+        }
+      }
+    });
   }
 
   // 세션 볼륨 프로파일: 세션 왼쪽 끝에서 오른쪽으로 자라는 막대 + POC · 가치영역 · nPOC
@@ -380,6 +437,183 @@ export class TermChart {
     if (py != null) { ctx.strokeStyle = "rgba(245,165,36,.85)"; ctx.setLineDash([4, 3]); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(0, py); ctx.lineTo(size.width, py); ctx.stroke(); ctx.setLineDash([]); }
   }
 
+  // ------------------------------------------------------------ 가격 사다리 (차트 옆 가격대 전부)
+  // 가격축과 같은 높이에 칸마다: 가격 · 보이는 구간 거래량(매수/매도) · 호가 잔량 · 표시(지지·저항·POC·내 포지션·호가벽 …)
+  _setupLadder() {
+    const cv = this.ladderEl.querySelector("canvas"), tipEl = this.ladderEl.querySelector(".tc-ltip");
+    cv.onmousemove = (e) => {
+      const r = cv.getBoundingClientRect(), y = e.clientY - r.top, row = this._ladRows?.find((x) => y >= x.y1 && y < x.y2);
+      if (!row) { tipEl.hidden = true; return; }
+      const last = this.candles.at(-1)?.close, d = last ? (row.price / last - 1) * 100 : 0;
+      tipEl.innerHTML = `<b>${px(row.price)}</b> <span class="muted">(현재가 대비 ${d >= 0 ? "+" : ""}${d.toFixed(2)}%)</span><br>`
+        + `거래량 ${big(row.vol)} <span class="up">매수 ${big(row.buy)}</span> · <span class="down">매도 ${big(row.vol - row.buy)}</span><br>`
+        + (row.bid || row.ask ? `호가 ${row.bid ? `<span class="up">매수 잔량 ${fmt(row.bid, 3)} ($${big(row.bidUsd)})</span>` : ""}${row.ask ? `<span class="down">매도 잔량 ${fmt(row.ask, 3)} ($${big(row.askUsd)})</span>` : ""}<br>` : "")
+        + (row.tags.length ? row.tags.map((t) => `<span style="color:${t.color}">■</span> ${esc(t.full)}`).join("<br>") : "");
+      tipEl.hidden = false;
+      tipEl.style.top = `${Math.max(0, Math.min(this.ladderEl.clientHeight - tipEl.offsetHeight - 4, y + 12))}px`;
+    };
+    cv.onmouseleave = () => (tipEl.hidden = true);
+    // 사다리 위에서 휠 = 차트 가격 확대/축소 대신 시간축 확대 (차트와 같은 동작)
+    cv.onwheel = (e) => { e.preventDefault(); const ts = this.chart.timeScale(), r = ts.getVisibleLogicalRange(); if (!r) return;
+      const k = e.deltaY > 0 ? 1.1 : 0.9, w = (r.to - r.from) * k; ts.setVisibleLogicalRange({ from: r.to - w, to: r.to }); };
+  }
+
+  setLadder(on) {
+    this.opts.overlays.ladder = on;
+    this.ladderEl.hidden = !on;
+    this.el.classList.toggle("with-ladder", on);
+    // 칸이 좁으면(분할 화면) 사다리를 좁게
+    if (!this._ro) { this._ro = new ResizeObserver(() => { const w = this.el.clientWidth;
+      this.el.classList.toggle("ladder-compact", w < 760); this.el.classList.toggle("ladder-tiny", w < 520); this._scheduleLadder(); }); this._ro.observe(this.el); }
+    clearInterval(this._bookTimer);
+    if (on) { this._loadBook(); this._bookTimer = setInterval(() => !document.hidden && this._loadBook(), 3000); }
+    this._scheduleLadder();
+  }
+
+  async _loadBook() {
+    const sym = this.symbol;
+    try {
+      const b = await api(`/api/orderbook?symbol=${sym}&rows=100`);
+      if (sym !== this.symbol) return;
+      this.book = b; this._scheduleLadder();
+    } catch { /* 호가 없으면 거래량·레벨만 */ }
+  }
+
+  _scheduleLadder() {
+    if (this._ladRaf || this.ladderEl.hidden) return;
+    this._ladRaf = requestAnimationFrame(() => { this._ladRaf = 0; this._drawLadder(); });
+  }
+
+  // 사다리에 표시할 주요 가격
+  _ladderTags(vis, rowsVP) {
+    const tags = [], add = (price, short, full, color) => price && isFinite(price) && tags.push({ price, short, full, color });
+    const up = css("--up"), down = css("--down"), acc = css("--accent"), info = css("--info");
+    const last = this.candles.at(-1);
+    if (rowsVP) { add(rowsVP.poc, "POC", "화면 구간 최다 거래 가격 (POC)", acc); add(rowsVP.vah, "VAH", "가치 영역 상단 (거래 70% 구간 위)", "#c98500"); add(rowsVP.val, "VAL", "가치 영역 하단", "#c98500"); }
+    for (const z of this.sr?.zones || []) add(z.price, z.side === "resistance" ? "저항" : "지지", `${z.side === "resistance" ? "저항" : "지지"} 구간 · ${z.touches}회 닿음`, z.side === "resistance" ? down : up);
+    const my = this._pos();
+    if (my) { add(my.entry_price, "진입", `내 ${my.side === "long" ? "롱" : "숏"} 진입가`, info); add(my.stop, "손절", "내 손절가", down); add(my.take, "익절", "내 익절가", up); add(my.liq_price, "청산", "내 강제청산가", down); }
+    const sc = this.opts.overlays.scenario && this.scenario;
+    if (sc) { add(sc.entry, "계획진입", `시나리오 진입 (${sc.title})`, acc); add(sc.stop, "계획손절", "시나리오 손절", down); sc.targets?.forEach((t, i) => add(t, `목표${i + 1}`, `시나리오 목표 ${i + 1}`, up)); }
+    this.userLines.forEach((u) => add(u, "선", "내가 그린 수평선", "#a4acb6"));
+    // 전일 · 전주 고가/저가 (일봉보다 짧은 봉일 때)
+    const sec = { "1m": 60, "3m": 180, "5m": 300, "15m": 900, "30m": 1800, "1h": 3600, "2h": 7200, "4h": 14400, "6h": 21600, "8h": 28800, "12h": 43200 }[this.interval];
+    if (sec && last) {
+      const day = Math.floor(last.time / 86400) * 86400, prev = this.candles.filter((b) => b.time >= day - 86400 && b.time < day);
+      if (prev.length) { add(Math.max(...prev.map((b) => b.high)), "전일고", "전일 고가", "#d55181"); add(Math.min(...prev.map((b) => b.low)), "전일저", "전일 저가", "#d55181"); }
+      const wk = Math.floor((last.time - 345600) / 604800) * 604800 + 345600, pw = this.candles.filter((b) => b.time >= wk - 604800 && b.time < wk);
+      if (pw.length && sec <= 14400) { add(Math.max(...pw.map((b) => b.high)), "전주고", "전주 고가", "#3987e5"); add(Math.min(...pw.map((b) => b.low)), "전주저", "전주 저가", "#3987e5"); }
+    }
+    if (vis.length) { add(Math.max(...vis.map((b) => b.high)), "화면고", "화면 구간 최고가", "#8a919c"); add(Math.min(...vis.map((b) => b.low)), "화면저", "화면 구간 최저가", "#8a919c"); }
+    // 호가벽: 잔량이 중앙값의 4배 이상
+    const bk = this.book?.symbol === this.symbol ? this.book : null;
+    if (bk) {
+      const all = [...bk.bids, ...bk.asks].map((x) => x.qty).sort((a, b) => a - b), med = all[all.length >> 1] || 0;
+      bk.bids.filter((x) => x.qty > med * 4).forEach((x) => add(x.price, "매수벽", `매수 호가벽 ${fmt(x.qty, 3)} ($${big(x.usd)})`, up));
+      bk.asks.filter((x) => x.qty > med * 4).forEach((x) => add(x.price, "매도벽", `매도 호가벽 ${fmt(x.qty, 3)} ($${big(x.usd)})`, down));
+    }
+    return tags;
+  }
+
+  _drawLadder() {
+    const box = this.ladderEl, cv = box.querySelector("canvas");
+    if (!box.offsetParent) return;   // 칸이 너무 좁아 숨겨진 상태
+    const W = box.clientWidth, Hb = box.clientHeight, H = Math.min(this._paneH || Hb, Hb), dpr = window.devicePixelRatio || 1;
+    if (!W || !Hb) return;
+    if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(Hb * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(Hb * dpr); cv.style.width = W + "px"; cv.style.height = Hb + "px"; }
+    const ctx = cv.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, Hb);
+    this._ladRows = [];
+    const s = this.candle, top = s.coordinateToPrice(0), bot = s.coordinateToPrice(H), last = this.candles.at(-1);
+    if (top == null || bot == null || !last || !(top > bot)) return;
+    // 칸 간격: 한 칸이 16px 이상 되도록 1·2·2.5·5 ×10ⁿ 중 고른다
+    const raw = (top - bot) * 16 / H, e10 = 10 ** Math.floor(Math.log10(raw));
+    const step = [1, 2, 2.5, 5, 10].map((m) => m * e10).find((v) => v >= raw);
+    const dec = Math.max(0, -Math.floor(Math.log10(step)) + (step / 10 ** Math.floor(Math.log10(step)) === 2.5 ? 1 : 0));
+    const key = (p) => Math.round(p / step);
+    // 보이는 봉의 가격대별 거래량
+    const r = this.chart.timeScale().getVisibleLogicalRange();
+    const vis = r ? this.candles.slice(Math.max(0, Math.floor(r.from)), Math.min(this.candles.length, Math.ceil(r.to) + 1)) : [];
+    const vol = new Map();
+    for (const b of vis) {
+      const a = key(b.low), z = key(b.high), n = z - a + 1, buy = b.taker_buy ?? b.volume / 2;
+      if (n > 4000) continue;
+      for (let k = a; k <= z; k++) { const v = vol.get(k) || { v: 0, b: 0 }; v.v += b.volume / n; v.b += buy / n; vol.set(k, v); }
+    }
+    // POC · 가치 영역 (이 칸 간격 기준)
+    let vp = null;
+    if (vol.size) {
+      const ks = [...vol.keys()].sort((a, b) => a - b), tot = ks.map((k) => vol.get(k).v), all = tot.reduce((p, q) => p + q, 0);
+      let pi = tot.indexOf(Math.max(...tot)), a = pi, z = pi, accv = tot[pi];
+      while (accv < all * 0.7 && (a > 0 || z < ks.length - 1)) { const u = z < ks.length - 1 ? tot[z + 1] : -1, d = a > 0 ? tot[a - 1] : -1; if (u >= d) accv += tot[++z]; else accv += tot[--a]; }
+      vp = { poc: ks[pi] * step, vah: ks[z] * step, val: ks[a] * step, va: [ks[a], ks[z]] };
+    }
+    // 호가 잔량
+    const bk = this.book?.symbol === this.symbol ? this.book : null, bids = new Map(), asks = new Map();
+    if (bk) {
+      for (const x of bk.bids) { const k = key(x.price), o = bids.get(k) || { q: 0, u: 0 }; o.q += x.qty; o.u += x.usd; bids.set(k, o); }
+      for (const x of bk.asks) { const k = key(x.price), o = asks.get(k) || { q: 0, u: 0 }; o.q += x.qty; o.u += x.usd; asks.set(k, o); }
+    }
+    const tags = new Map();
+    for (const t of this._ladderTags(vis, vp)) { const k = key(t.price); if (!tags.has(k)) tags.set(k, []); if (!tags.get(k).some((x) => x.short === t.short)) tags.get(k).push(t); }
+    const k0 = Math.floor(bot / step), k1 = Math.ceil(top / step);
+    let vmax = 0, bmax = 0;
+    for (let k = k0; k <= k1; k++) { vmax = Math.max(vmax, vol.get(k)?.v || 0); bmax = Math.max(bmax, bids.get(k)?.q || 0, asks.get(k)?.q || 0); }
+    const font = getComputedStyle(document.body).fontFamily, mono = css("--mono");
+    const up = css("--up"), down = css("--down"), cur = key(last.close), cross = this._crossY != null ? key(s.coordinateToPrice(this._crossY) ?? NaN) : null;
+    // 열 경계: 가격 | 거래량 | 호가 | 표시 (좁은 칸이면 호가 열은 빼고 툴팁으로)
+    const compact = W < 200, C1 = 62, C2 = compact ? 104 : 118, C3 = compact ? 104 : 164;
+    ctx.textBaseline = "middle";
+    for (let k = k0; k <= k1; k++) {
+      const p = k * step, y = s.priceToCoordinate(p);
+      if (y == null) continue;
+      const y1 = s.priceToCoordinate(p + step / 2), y2 = s.priceToCoordinate(p - step / 2), h = Math.max(1, y2 - y1);
+      if (y2 < 0 || y1 > H) continue;
+      const v = vol.get(k), bd = bids.get(k), ak = asks.get(k), tg = tags.get(k) || [];
+      this._ladRows.push({ price: p, y1, y2, vol: v?.v || 0, buy: v?.b || 0, bid: bd?.q, bidUsd: bd?.u, ask: ak?.q, askUsd: ak?.u, tags: tg });
+      // 배경: 현재가 칸 / 십자선 칸 / 가치 영역
+      if (k === cur) { ctx.fillStyle = last.close >= last.open ? "rgba(34,176,125,.28)" : "rgba(229,72,77,.28)"; ctx.fillRect(0, y1, W, h); }
+      else if (k === cross) { ctx.fillStyle = "rgba(255,255,255,.08)"; ctx.fillRect(0, y1, W, h); }
+      else if (vp && k >= vp.va[0] && k <= vp.va[1]) { ctx.fillStyle = "rgba(245,165,36,.04)"; ctx.fillRect(C1, y1, C2 - C1, h); }
+      // 거래량 막대 (매수 초록 | 매도 빨강)
+      if (v && vmax) {
+        const w = (C2 - C1 - 4) * v.v / vmax, wb = w * (v.b / v.v || 0);
+        ctx.fillStyle = "rgba(34,176,125,.55)"; ctx.fillRect(C1 + 2, y1 + 1, wb, h - 2);
+        ctx.fillStyle = "rgba(229,72,77,.55)"; ctx.fillRect(C1 + 2 + wb, y1 + 1, w - wb, h - 2);
+        if (vp && k === key(vp.poc)) { ctx.strokeStyle = "rgba(245,165,36,.9)"; ctx.strokeRect(C1 + 1.5, y1 + .5, C2 - C1 - 3, h - 1); }
+      }
+      // 호가 잔량 (현재가 아래 = 매수, 위 = 매도)
+      const q = bd?.q || ak?.q;
+      if (q && bmax && !compact) {
+        const w = (C3 - C2 - 4) * q / bmax;
+        ctx.fillStyle = bd ? "rgba(34,176,125,.3)" : "rgba(229,72,77,.3)"; ctx.fillRect(C3 - 2 - w, y1 + 1, w, h - 2);
+        if (h >= 11) { ctx.font = `10px ${mono}`; ctx.fillStyle = bd ? up : down; ctx.textAlign = "right"; ctx.fillText(big(q), C3 - 3, y); }
+      }
+      // 가격
+      if ((h >= 10 || tg.length || k === cur) && y > 20) {
+        const round = Math.abs(p / (step * 10) - Math.round(p / (step * 10))) < 1e-6;
+        ctx.font = `${round || k === cur ? "600 " : ""}10.5px ${mono}`; ctx.textAlign = "left";
+        ctx.fillStyle = k === cur ? "#fff" : round ? css("--text") : css("--text-2");
+        ctx.fillText(p.toLocaleString("en-US", { minimumFractionDigits: dec, maximumFractionDigits: dec }), 4, y);
+      }
+      // 표시
+      if (tg.length) {
+        ctx.fillStyle = tg[0].color; ctx.fillRect(0, y1, 2, h);
+        ctx.font = `600 9.5px ${font}`; ctx.textAlign = "left"; ctx.fillStyle = tg[0].color;
+        ctx.fillText(tg[0].short + (tg.length > 1 ? "+" : ""), C3 + 3, y);
+      }
+    }
+    // 열 구분선 · 머리글
+    ctx.strokeStyle = "rgba(255,255,255,.06)"; ctx.beginPath();
+    (compact ? [C1, C2] : [C1, C2, C3]).forEach((x) => { ctx.moveTo(x + .5, 0); ctx.lineTo(x + .5, H); }); ctx.stroke();
+    ctx.fillStyle = css("--panel"); ctx.fillRect(0, 0, W, 15);
+    ctx.font = `10px ${font}`; ctx.fillStyle = css("--muted"); ctx.textAlign = "center";
+    [["가격", C1 / 2], ["거래량", (C1 + C2) / 2], ...(compact ? [] : [["호가", (C2 + C3) / 2]]), ["표시", (C3 + W) / 2]].forEach(([t, x]) => ctx.fillText(t, x, 8));
+    ctx.fillStyle = css("--muted"); ctx.textAlign = "left"; ctx.fillRect(0, 15, W, .5);
+    if (Hb > H) { ctx.font = `10px ${font}`; ctx.fillStyle = css("--muted"); ctx.fillText(`칸 ${step.toLocaleString("en-US", { maximumFractionDigits: 8 })}`, 4, H + 12); }
+  }
+
   // ------------------------------------------------------------ 오버레이
   async refreshOverlays() {
     const o = this.opts.overlays, sym = this.symbol, iv = this.interval;
@@ -396,7 +630,6 @@ export class TermChart {
     jobs.push(api(`/api/paper/markers?symbol=${sym}`).then((m) => (got.markers = { ...m, symbol: sym })).catch(() => {}));
     if (o.sr) jobs.push(api(`/api/levels?symbol=${sym}&interval=${iv}`).then((l) => (got.sr = l)).catch(() => {}));
     if (o.footprint) jobs.push(this.loadFootprint());
-    if (o.rotation) jobs.push(this.loadRotation());
     await Promise.all(jobs);
     if (!this._is(sym, iv)) return;   // 기다리는 동안 코인·봉을 바꿨으면 이전 결과는 버린다
     Object.assign(this, got);
@@ -407,7 +640,6 @@ export class TermChart {
 
   setOverlay(name, on) {
     this.opts.overlays[name] = on;
-    if (name === "rotation" && !on) { this.rot = null; this.rotMarkers = []; this._pushMarkers(); this.rotLayer.update(); this._legend(); return; }
     if (name === "footprint") {
       if (!on) { this.fp = null; this.fpMarkers = []; this._pushMarkers(); this.fpLayer.update(); this._legend(); return; }
       const n = this.candles.length;   // 숫자가 보이도록 최근 12봉으로 확대
@@ -510,35 +742,6 @@ export class TermChart {
     }
   }
 
-  // ------------------------------------------------------------ 순환매 자리: 봉마다 구역 띠 + 진입·이탈 표시
-  async loadRotation() {
-    const sym = this.symbol, iv = this.interval === "1y" ? "1M" : this.interval;
-    try {
-      const r = await api(`/api/rotation/series?symbol=${sym}&interval=${iv}&bars=${Math.min(1500, (this.candles.length || 500) + 50)}`);
-      if (!this._is(sym, this.interval) || !this.opts.overlays.rotation) return;
-      r.byTime = new Map(r.points.map((p) => [p.time, p.q]));
-      this.rot = r;
-      const K = { entry: ["arrowUp", "#3987e5", "belowBar"], early: ["circle", "#6da7ec", "belowBar"], exit: ["arrowDown", "#c98500", "aboveBar"], out: ["arrowDown", "#e5484d", "aboveBar"] };
-      this.rotMarkers = r.marks.filter((m) => this.candles.length && m.time >= this.candles[0].time).map((m) => ({ time: this._barTime(m.time) ?? m.time,
-        shape: K[m.kind][0], color: K[m.kind][1], position: K[m.kind][2], text: m.text, size: m.kind === "entry" || m.kind === "out" ? 1 : 0.6 }));
-    } catch (e) { if (this._is(sym, this.interval)) { this.rot = { error: e.message }; this.rotMarkers = []; } }
-    this._pushMarkers(); this.rotLayer.update(); this._legend();
-  }
-
-  _drawRotation(ctx, size) {
-    const r = this.rot;
-    if (!r?.byTime || !this.opts.overlays.rotation) return;
-    const ts = this.chart.timeScale(), bw = Math.max(1, ts.options().barSpacing), range = ts.getVisibleLogicalRange(), c = this.candles;
-    if (!range) return;
-    const COL = { leading: "rgba(34,176,125,.75)", weakening: "rgba(245,165,36,.75)", lagging: "rgba(229,72,77,.7)", improving: "rgba(57,135,229,.75)" };
-    const y = size.height - 7;
-    for (let i = Math.max(0, Math.floor(range.from)); i <= Math.min(c.length - 1, Math.ceil(range.to)); i++) {
-      const q = r.byTime.get(c[i].time), x = ts.logicalToCoordinate(i);
-      if (!q || x == null) continue;
-      ctx.fillStyle = COL[q]; ctx.fillRect(x - bw / 2, y, bw + 0.5, 6);
-    }
-  }
-
   setScenario(sc, symbol = this.symbol) {
     this.scenario = symbol === this.symbol ? sc : null;
     this._applyMarkers();
@@ -599,7 +802,7 @@ export class TermChart {
   }
 
   _pushMarkers() {
-    const mk = [...(this._baseMarkers || []), ...(this.sigMarkers || []), ...(this.fpMarkers || []), ...(this.rotMarkers || [])];
+    const mk = [...(this._baseMarkers || []), ...(this.sigMarkers || []), ...(this.fpMarkers || [])];
     mk.sort((a, b) => a.time - b.time);
     this.markerApi.setMarkers(mk);
   }
@@ -812,19 +1015,18 @@ export class TermChart {
       <span class="muted">시</span> ${px(b.open)} <span class="muted">고</span> ${px(b.high)} <span class="muted">저</span> ${px(b.low)} <span class="muted">종</span> ${px(b.close)}
       <span class="${chg >= 0 ? "up" : "down"}">${chg >= 0 ? "+" : ""}${chg.toFixed(2)}%</span>`;
     const mainInd = this.ind.filter((it) => it.pane === 0);
-    const vals = (it) => it.last.plots.filter((pl) => !["signals", "boxes", "profiles"].includes(pl.type) && pl.legend !== false).map((pl) => val(pl.data[idx])).join(" ");
+    const vals = (it) => it.last.plots.filter((pl) => !["signals", "boxes", "profiles", "patterns"].includes(pl.type) && pl.legend !== false).map((pl) => val(pl.data[idx])).join(" ");
     const extra = (it) => it.profile && this.vp ? ` <span class="muted">POC</span> ${px(this.vp.poc)} <span class="muted">가치영역</span> ${px(this.vp.val)}~${px(this.vp.vah)}`
       : it.last.note ? ` <span class="muted">${esc(it.last.note)}</span>` : "";
     if (mainInd.length) html += `<br>` + mainInd.map((it) => `<span style="color:${it.last.plots.find((pl) => pl.color)?.color || "inherit"}">${esc(INDICATORS[it.spec.key].name)}${paramStr(it.params)}</span> ${vals(it)}${extra(it)}`).join(" · ");
     if (this.opts.overlays.footprint && this.fp) html += `<br><span class="muted">풋프린트: ${this.fp.error ? esc(this.fp.error) : `${this.fp.sub_interval} 봉 체결로 근사 · 칸 ${px(this.fp.tick)} · 왼쪽 매도 × 오른쪽 매수 · 주황 테두리 = 봉 POC · 초록/빨강 숫자 = 3배 불균형${ts_hint(this)}`}</span>`;
-    if (this.opts.overlays.rotation && this.rot) html += `<br><span class="muted">순환매 (${this.rot.error ? esc(this.rot.error) : `${this.rot.bench} 대비): 지금 <b>${this.rot.now_name}</b> 구역 · 아래 띠 초록=주도 노랑=약화 빨강=소외 파랑=개선${this.rot.entry_stats?.n ? ` · 과거 '순환 진입' ${this.rot.entry_stats.n}번 뒤 20봉 평균 초과수익 ${this.rot.entry_stats.avg_excess_pct > 0 ? "+" : ""}${this.rot.entry_stats.avg_excess_pct}%` : ""}`}</span>`;
     if (this.heat) html += `<br><span class="muted">청산맵: ${this.heat.model === "coinglass" ? "CoinGlass" : this.heat.model === "estimate_oi" ? "OI 기반 추정" : "거래대금 기반 추정"}</span> <span class="scale"></span>`;
     if (this.whales) html += `<br><span class="muted">고래 체결 ≥ $${big(this.whales.min_usd)} · ${this.whales.trades.length}건${this.whales.source === "binance" && this.whales.collecting_since ? " (프로그램 실행 후 수집분)" : ""} · 호가벽 ${this.whales.walls.length}개</span>`;
     html += `</div>`;
     for (const it of this.ind.filter((x) => x.pane > 0)) {
       const top = tops[it.pane];
       if (top == null) continue;
-      html += `<div style="top:${top + 3}px"><span class="dim">${esc(INDICATORS[it.spec.key].name)}${paramStr(it.params)}</span> ${it.last.plots.filter((pl) => !["signals", "boxes", "profiles"].includes(pl.type) && pl.legend !== false).map((pl) => `<span style="color:${pl.color || "inherit"}">${val(pl.data[idx])}</span>`).join(" ")}${it.last.note ? ` <span class="accent">${esc(it.last.note)}</span>` : ""}</div>`;
+      html += `<div style="top:${top + 3}px"><span class="dim">${esc(INDICATORS[it.spec.key].name)}${paramStr(it.params)}</span> ${it.last.plots.filter((pl) => !["signals", "boxes", "profiles", "patterns"].includes(pl.type) && pl.legend !== false).map((pl) => `<span style="color:${pl.color || "inherit"}">${val(pl.data[idx])}</span>`).join(" ")}${it.last.note ? ` <span class="accent">${esc(it.last.note)}</span>` : ""}</div>`;
     }
     this.legendEl.innerHTML = html;
   }

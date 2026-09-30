@@ -1,12 +1,9 @@
-// 퀀트: 순환매(RRG) · 시그널 스캐너 · 리스크(상관·VaR·몬테카를로·민감도·포지션 크기)
+// 퀀트: 고수 포지션 · 시그널 스캐너 · 리스크(상관·VaR·몬테카를로·민감도·포지션 크기) · 기관식 포트폴리오
 import { $, $$, IV_LABEL, api, busy, cls, css, esc, fmt, makeChart, mdhm, on, pct, px, state, toast } from "./core.js";
 import { showOnChart } from "./trade.js";
 
 const LC = LightweightCharts;
 const base = (s) => s.replace(/USDT$/, "");
-const TIER_COLOR = { btc: "#3987e5", eth: "#d95926", large: "#199e70", mid: "#c98500", meme: "#d55181" };   // 검증된 범주 팔레트 순서
-const TIER_NAME = { btc: "비트코인", eth: "이더리움", large: "대형 알트", mid: "중소형 알트", meme: "밈코인" };
-const QUAD_CLS = { leading: "up", weakening: "accent", lagging: "down", improving: "info" };
 
 // ---------------------------------------------------------------- 툴팁
 const tip = {
@@ -26,105 +23,81 @@ function diverge(v, neg = "#3987e5", pos = "#e66767", mid = "#383835") {
   return `rgb(${a.map((x, i) => Math.round(x + (b[i] - x) * k)).join(",")})`;
 }
 
-// ================================================================ 순환매
-let rot = null;
-function universe() { return $("#rot-univ").value === "watch" ? state.watch.join(",") : ""; }
-
-async function runRotation() {
-  const q = new URLSearchParams({ interval: $("#rot-iv").value, bench: $("#rot-bench").value, lookback: $("#rot-lb").value });
-  if (universe()) q.set("symbols_csv", universe());
-  rot = await api(`/api/rotation/rrg?${q}`);
-  renderRRG(rot); renderPhase(rot); renderRank(rot);
-  $("#q-meta").textContent = `${IV_LABEL[rot.interval]} · ${rot.rows.length}개 코인${rot.data_source === "synthetic" ? " · 가상 데이터" : ""}`;
-}
-
-function renderRRG(r) {
-  const W = 620, H = 460, P = { l: 44, r: 16, t: 14, b: 34 };
-  const all = r.rows.flatMap((x) => x.tail);
-  const span = (k) => { const v = all.map((p) => p[k]); const d = Math.max(...v.map((x) => Math.abs(x - 100)), 1) * 1.12; return [100 - d, 100 + d]; };
-  const [x0, x1] = span("ratio"), [y0, y1] = span("mom");
-  const X = (v) => P.l + (v - x0) / (x1 - x0) * (W - P.l - P.r), Y = (v) => H - P.b - (v - y0) / (y1 - y0) * (H - P.t - P.b);
-  const cx = X(100), cy = Y(100);
-  const quad = (x, y, w, h, fill) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${fill}"/>`;
-  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="상대강도 회전 그래프">
-    ${quad(cx, P.t, W - P.r - cx, cy - P.t, "rgba(34,176,125,.07)")}${quad(cx, cy, W - P.r - cx, H - P.b - cy, "rgba(245,165,36,.06)")}
-    ${quad(P.l, cy, cx - P.l, H - P.b - cy, "rgba(229,72,77,.07)")}${quad(P.l, P.t, cx - P.l, cy - P.t, "rgba(57,135,229,.07)")}
-    <line x1="${cx}" x2="${cx}" y1="${P.t}" y2="${H - P.b}" stroke="var(--line-2)"/><line x1="${P.l}" x2="${W - P.r}" y1="${cy}" y2="${cy}" stroke="var(--line-2)"/>
-    <text class="ql" x="${W - P.r - 6}" y="${P.t + 14}" text-anchor="end">주도</text><text class="ql" x="${W - P.r - 6}" y="${H - P.b - 6}" text-anchor="end">약화</text>
-    <text class="ql" x="${P.l + 6}" y="${H - P.b - 6}">소외</text><text class="ql" x="${P.l + 6}" y="${P.t + 14}">개선</text>
-    <text x="${(W + P.l) / 2}" y="${H - 6}" text-anchor="middle">상대강도 수준 (RS-Ratio) →</text>
-    <text x="12" y="${(H - P.b + P.t) / 2}" text-anchor="middle" transform="rotate(-90 12 ${(H - P.b + P.t) / 2})">상대강도 변화 (RS-Momentum) →</text>`;
-  const placed = [];
-  const labelY = (x, y) => {   // 이미 놓인 이름표와 겹치면 위아래로 비켜 놓는다
-    for (const dy of [0, -12, 12, -24, 24, -36, 36]) {
-      const ty = y - 6 + dy;
-      if (!placed.some((p) => Math.abs(p.x - x) < 46 && Math.abs(p.y - ty) < 11)) { placed.push({ x, y: ty }); return ty; }
-    }
-    return y - 6;
-  };
-  for (const row of r.rows) {
-    const col = TIER_COLOR[row.tier], pts = row.tail.map((p) => `${X(p.ratio).toFixed(1)},${Y(p.mom).toFixed(1)}`).join(" "), h = row.tail.at(-1);
-    const t = `<b>${base(row.symbol)}</b> · ${esc(row.tier_name)}<br>구역 <b>${row.quadrant_name}</b><br>RS-Ratio ${fmt(row.ratio, 2)} · RS-Mom ${fmt(row.mom, 2)}<br>${r.lookback}봉 수익률 ${row.ret_pct ?? "–"}% · 기준 대비 ${row.rel_pct ?? "–"}%p`;
-    svg += `<polyline points="${pts}" fill="none" stroke="${col}" stroke-opacity=".45" stroke-width="2"/>
-      <circle cx="${X(h.ratio)}" cy="${Y(h.mom)}" r="5" fill="${col}" stroke="var(--panel)" stroke-width="2" data-tip="${esc(t)}" style="cursor:pointer" data-sym="${row.symbol}"/>
-      <circle cx="${X(h.ratio)}" cy="${Y(h.mom)}" r="12" fill="transparent" data-tip="${esc(t)}" data-sym="${row.symbol}" style="cursor:pointer"/>
-      <text class="lbl" x="${X(h.ratio) + 7}" y="${labelY(X(h.ratio) + 7, Y(h.mom))}">${base(row.symbol)}</text>`;
+// ================================================================ 고수 포지션
+let topBusy = false;
+async function loadTop() {
+  if (topBusy) return;
+  const el = $("#q-top");
+  if (!el.dataset.ready) {
+    el.dataset.ready = "1";
+    el.innerHTML = `<div class="panel"><div class="pb row" style="flex-wrap:wrap;gap:8px">
+        <label class="f">수익 기간<select id="tt-win"><option value="day">24시간</option><option value="week">7일</option><option value="month" selected>30일</option><option value="allTime">전체</option></select></label>
+        <label class="f">인원<select id="tt-n"><option>20</option><option selected>30</option><option>50</option></select></label>
+        <label class="f">정렬<select id="tt-sort"><option value="pnl">수익금</option><option value="roi">수익률</option></select></label>
+        <label class="f">최소 계좌 ($)<input id="tt-min" type="number" value="100000" step="50000" style="width:100px"></label>
+        <button class="pri" id="tt-run" style="align-self:flex-end">불러오기</button>
+        <span class="muted" id="tt-meta" style="align-self:flex-end"></span></div></div>
+      <div class="cols-2" style="margin-top:12px;align-items:start">
+        <div class="panel"><div class="ph"><span class="t">코인별 고수 포지션</span><div class="grow"></div><span class="muted">금액 큰 순 · 누르면 차트</span></div>
+          <div class="pb" style="padding:0;max-height:560px;overflow:auto" id="tt-coins"></div></div>
+        <div style="display:grid;gap:12px">
+          <div class="panel"><div class="ph"><span class="t">바이낸스 상위 트레이더 롱/숏</span><div class="grow"></div><span class="muted" id="tt-bsym"></span></div>
+            <div class="pb" id="tt-binance"></div></div>
+          <div class="panel"><div class="ph"><span class="t">트레이더별 포지션</span></div><div class="pb" style="padding:0;max-height:560px;overflow:auto" id="tt-list"></div></div>
+        </div></div>`;
+    $("#tt-run").onclick = (e) => busy(e.target, fetchTop);
   }
-  $("#rrg").innerHTML = svg + "</svg>";
-  bindTips($("#rrg"));
-  $("#rrg").onclick = (e) => { const s = e.target.closest("[data-sym]")?.dataset.sym; if (s) showOnChart(s, r.interval); };
-  const tiers = [...new Set(r.rows.map((x) => x.tier))];
-  $("#rrg-legend").innerHTML = ["btc", "eth", "large", "mid", "meme"].filter((t) => tiers.includes(t)).map((t) => `<span><i style="background:${TIER_COLOR[t]}"></i>${TIER_NAME[t]}</span>`).join("");
+  await fetchTop();
 }
 
-function renderPhase(r) {
-  const p = r.phase, tr = Object.entries(p.tier_ret_pct), mx = Math.max(...tr.map(([, v]) => Math.abs(v)), 1);
-  $("#rot-phase").innerHTML = `<div style="font-size:14px;font-weight:600;margin-bottom:8px" class="${p.key === "off" ? "down" : "accent"}">${esc(p.text)}</div>
-    <div class="sub" style="padding-left:0">그룹별 ${r.lookback}봉 수익률</div>
-    ${tr.map(([k, v]) => `<div class="hbar"><span class="dim">${esc(k)}</span><div class="track"><b></b>
-      <i style="${v >= 0 ? `left:50%;width:${v / mx * 50}%` : `right:50%;width:${-v / mx * 50}%`};background:${v >= 0 ? "var(--up)" : "var(--down)"}"></i></div>
-      <span class="${cls(v)}" style="text-align:right">${v > 0 ? "+" : ""}${fmt(v, 2)}%</span></div>`).join("")}
-    <div class="kv" style="display:grid;grid-template-columns:auto 1fr;gap:3px 10px;margin-top:8px">
-      <span class="muted">BTC 보다 강한 코인</span><span>${p.breadth_beat_btc_pct ?? "–"}%</span>
-      <span class="muted">EMA20 위에 있는 코인</span><span>${p.breadth_above_ema20_pct ?? "–"}%</span>
-      <span class="muted">ETH/BTC 변화</span><span class="${cls(p.ethbtc_change_pct)}">${p.ethbtc_change_pct == null ? "–" : (p.ethbtc_change_pct > 0 ? "+" : "") + p.ethbtc_change_pct + "%"}</span></div>
-    <div class="sub" style="padding-left:0;margin-top:10px">순환매 자리 <span class="muted">(최근 궤적 기준 · 누르면 차트)</span></div>
-    ${[["entry", "up"], ["early", "info"], ["hold", ""], ["exit", "accent"], ["avoid", "down"]].map(([k, c]) => r.spots?.[k]?.length
-      ? `<div style="margin:3px 0"><span class="${c}" style="display:inline-block;min-width:170px">${esc(r.spot_names[k])}</span>${r.spots[k].map((s) => `<span class="chk" data-chart="${s}">${base(s)}</span>`).join(" ")}</div>` : "").join("")}
-    <div class="help">순환매 진입 자리 = 개선 구역에서 주도 구역으로 막 넘어온 코인. 빠질 자리 = 주도에서 약화로 꺾인 코인.</div>`;
+async function fetchTop() {
+  topBusy = true;
+  try {
+    const q = new URLSearchParams({ window: $("#tt-win").value, n: $("#tt-n").value, sort: $("#tt-sort").value, min_account: $("#tt-min").value || 0 });
+    $("#tt-meta").textContent = "불러오는 중… (처음엔 10~30초 걸릴 수 있음)";
+    const [r, b] = await Promise.all([api(`/api/toptraders?${q}`), api(`/api/toptraders/binance?symbol=${state.symbol}&interval=1h`).catch((e) => ({ error: e.message }))]);
+    renderTop(r); renderBinanceRatio(b);
+  } catch (e) { $("#tt-meta").textContent = "실패: " + e.message; }
+  finally { topBusy = false; }
 }
 
-function renderRank(r) {
-  $("#rot-rank").innerHTML = `<tr><th>코인</th><th>그룹</th><th>구역</th><th>${r.lookback}봉</th><th>기준 대비</th><th></th></tr>` +
-    r.rows.map((x) => `<tr><td><b>${base(x.symbol)}</b></td><td class="dim">${esc(x.tier_name)}</td><td class="${QUAD_CLS[x.quadrant]}">${x.quadrant_name}</td>
-      <td class="${cls(x.ret_pct)}">${x.ret_pct == null ? "–" : pct(x.ret_pct)}</td><td class="${cls(x.rel_pct)}">${x.rel_pct == null ? "–" : (x.rel_pct > 0 ? "+" : "") + fmt(x.rel_pct, 2) + "%p"}</td>
-      <td><button class="sm" data-chart="${x.symbol}">차트</button></td></tr>`).join("");
+function renderTop(r) {
+  const $m = (v) => v == null ? "–" : "$" + (Math.abs(v) >= 1e6 ? (v / 1e6).toFixed(2) + "M" : Math.abs(v) >= 1e3 ? (v / 1e3).toFixed(1) + "K" : v.toFixed(0));
+  $("#tt-meta").innerHTML = r.error ? `<span class="down">${esc(r.error)}</span>` : `${r.window_name} 수익 상위 ${r.traders.length}명 · ${r.source === "synthetic" ? '<span class="accent">가상 데이터</span>' : "Hyperliquid"} · ${mdhm(r.time)}`;
+  $("#tt-coins").innerHTML = r.by_coin.length ? `<table><tr><th>코인</th><th>롱 · 숏 인원</th><th>롱 비중 (금액)</th><th>평균 레버리지</th><th>평균 진입가</th><th>현재가</th></tr>
+    ${r.by_coin.map((c) => `<tr data-chart="${c.symbol}" style="cursor:pointer" data-tip="${esc(`<b>${base(c.symbol)}</b><br>롱 ${c.long.traders}명 ${$m(c.long.notional)} · 미실현 ${$m(c.long.upnl)}<br>숏 ${c.short.traders}명 ${$m(c.short.notional)} · 미실현 ${$m(c.short.upnl)}`)}">
+      <td><b>${base(c.symbol)}</b> <span class="${c.bias === "long" ? "up" : c.bias === "short" ? "down" : "muted"}" style="font-size:11px">${c.bias === "long" ? "롱 쏠림" : c.bias === "short" ? "숏 쏠림" : "엇갈림"}</span></td>
+      <td><span class="up">${c.long.traders}</span> · <span class="down">${c.short.traders}</span></td>
+      <td><div class="lsbar"><i style="width:${c.long_share ?? 50}%"></i></div><span class="muted" style="font-size:11px">${c.long_share ?? "–"}% · ${$m(c.total)}</span></td>
+      <td><span class="up">${c.long.avg_leverage ?? "–"}x</span> / <span class="down">${c.short.avg_leverage ?? "–"}x</span></td>
+      <td><span class="up">${c.long.avg_entry ? px(c.long.avg_entry) : "–"}</span><br><span class="down">${c.short.avg_entry ? px(c.short.avg_entry) : "–"}</span></td>
+      <td>${c.price ? px(c.price) : "–"}</td></tr>`).join("")}</table>
+    <div class="help" style="padding:6px 10px">${esc(r.note)} 평균 레버리지·진입가는 금액 가중 평균. 고수들이 한쪽으로 쏠렸다고 그쪽이 맞는다는 보장은 없습니다 — 청산가가 몰린 곳은 오히려 사냥감이 되기도 합니다.</div>`
+    : `<div class="empty">${r.error ? esc(r.error) : "열린 포지션이 없습니다"}</div>`;
+  $("#tt-list").innerHTML = r.traders.map((t, i) => `<div class="trader"><div class="row"><span class="muted">#${i + 1}</span>
+      <a href="https://app.hyperliquid.xyz/explorer/address/${esc(t.address)}" target="_blank" rel="noopener">${esc(t.name || t.address.slice(0, 6) + "…" + t.address.slice(-4))}</a>
+      <div class="grow"></div><span class="muted">계좌 ${$m(t.account_value)}</span><span class="up">${$m(t.pnl)} (${t.roi_pct >= 0 ? "+" : ""}${fmt(t.roi_pct, 1)}%)</span>
+      <span class="muted">총 레버리지 ${t.gross_leverage ?? "–"}x</span></div>
+    <div style="margin-top:3px">${t.positions.length ? t.positions.map((p) => `<span class="pos ${p.side}" data-chart="${p.symbol}" title="${esc(`진입 ${px(p.entry)} · 청산가 ${p.liq ? px(p.liq) : "없음"} · 미실현 ${$m(p.upnl)} (${fmt(p.roe_pct, 1)}%) · ${p.margin_type === "isolated" ? "격리" : "교차"}`)}">
+        ${base(p.symbol)} ${p.side === "long" ? "롱" : "숏"} <b>${p.leverage ?? "?"}x</b> ${$m(p.notional)} <span class="muted">@${px(p.entry)}${p.liq ? ` · 청산 ${px(p.liq)}` : ""}</span></span>`).join("")
+      : '<span class="muted">포지션 없음 (관망 중)</span>'}</div></div>`).join("") || '<div class="empty">트레이더가 없습니다</div>';
+  bindTips($("#tt-coins"));
 }
 
-let rbChart = null;
-async function runRotBacktest() {
-  const body = { interval: $("#rot-iv").value, lookback: +$("#rb-lb").value, top: +$("#rb-top").value, rebalance: +$("#rb-reb").value,
-    mode: $("#rb-mode").value, score: $("#rb-score").value, abs_filter: $("#rb-abs").checked, bars: +$("#rb-bars").value };
-  if (universe()) body.symbols = state.watch;
-  const r = await api("/api/rotation/backtest", { method: "POST", body });
-  const row = (l, s) => `<tr><td>${l}</td><td class="${cls(s.return_pct)}">${pct(s.return_pct)}</td><td class="down">-${fmt(s.max_drawdown_pct, 1)}%</td><td>${s.sharpe ?? "–"}</td></tr>`;
-  $("#rb-out").innerHTML = `<div class="cols-2" style="align-items:start"><div>
-      <table><tr><th></th><th>수익률</th><th>최대 낙폭</th><th>샤프</th></tr>${row("<b>순환매 전략</b>", r.strategy)}${row("BTC 보유", r.btc)}${row("동일 비중 보유", r.equal_weight)}</table>
-      <div class="help" style="margin-top:4px">${r.rebalances}번 교체 · 수수료 ${r.params.fee_pct}% 반영${r.data_source === "synthetic" ? " · <span class='accent'>가상 데이터</span>" : ""}</div></div>
-    <div><div class="sub" style="padding-left:0">지금 기준 ${r.params.mode === "long_short" ? "매수 · 숏" : "매수"} 후보</div>
-      <div>${r.now.long.map((s) => `<span class="chk on up" data-chart="${s}">${base(s)} 롱</span>`).join(" ") || '<span class="muted">모멘텀이 모두 음수 → 현금</span>'}
-        ${r.now.short.map((s) => `<span class="chk on down" data-chart="${s}">${base(s)} 숏</span>`).join(" ")}</div>
-      <div class="sub" style="padding-left:0;margin-top:8px">최근 교체 기록</div>
-      <div style="max-height:120px;overflow:auto">${r.history.slice().reverse().slice(0, 12).map((h) => `<div class="dim" style="font-size:11px">${mdhm(h.time)} · ${h.long.map(base).join(", ") || "현금"}${h.short.length ? " / 숏 " + h.short.map(base).join(", ") : ""}</div>`).join("")}</div></div></div>
-    <div class="legend-row" style="margin-top:8px"><span><i style="background:var(--s1)"></i>순환매 전략</span><span><i style="background:var(--s2)"></i>BTC 보유</span><span><i style="background:var(--s3)"></i>동일 비중 보유</span></div>`;
-  $("#rb-chart").hidden = false;
-  rbChart?.remove();
-  rbChart = makeChart($("#rb-chart"));
-  [["curve", "--s1", "전략"], ["btc_curve", "--s2", "BTC"], ["ew_curve", "--s3", "동일비중"]].forEach(([k, c, t]) => {
-    const s = rbChart.addSeries(LC.LineSeries, { color: css(c), lineWidth: 2, title: t, priceLineVisible: false });
-    s.setData(r[k]);
-  });
-  rbChart.timeScale().fitContent();
+function renderBinanceRatio(b) {
+  $("#tt-bsym").textContent = `${base(state.symbol)} · 1시간 단위`;
+  if (b.error) { $("#tt-binance").innerHTML = `<div class="muted">${esc(b.error)}</div>`; return; }
+  const line = (rows, k) => {
+    const W = 260, H = 40, v = rows.map((r) => r.long * 100), lo = Math.min(...v, 45), hi = Math.max(...v, 55);
+    const y = (x) => H - 2 - (x - lo) / (hi - lo) * (H - 4), mid = y(50);
+    return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${k} 롱 비율 추이"><line x1="0" x2="${W}" y1="${mid}" y2="${mid}" stroke="var(--line-2)" stroke-dasharray="3 3"/>
+      <polyline points="${v.map((x, i) => `${(i / (v.length - 1) * W).toFixed(1)},${y(x).toFixed(1)}`).join(" ")}" fill="none" stroke="var(--accent)" stroke-width="1.5"/></svg>`;
+  };
+  const row = (k, name, desc) => { const r = b[k].at(-1);
+    return `<div style="margin-bottom:8px"><div class="row"><b>${name}</b><div class="grow"></div><span class="up">롱 ${(r.long * 100).toFixed(1)}%</span> · <span class="down">숏 ${(r.short * 100).toFixed(1)}%</span>
+      <span class="muted">(비율 ${r.ratio})</span></div><div class="lsbar"><i style="width:${r.long * 100}%"></i></div>${line(b[k], name)}<div class="muted" style="font-size:11px">${desc}</div></div>`; };
+  $("#tt-binance").innerHTML = row("position", "포지션 규모 기준", "상위 20% 트레이더가 가진 롱 포지션 금액 비중") + row("account", "계정 수 기준", "상위 20% 트레이더 중 롱을 가진 계정 비중") +
+    `<div class="help">${b.source === "synthetic" ? '<span class="accent">가상 데이터</span> · ' : ""}바이낸스는 개인별 포지션·레버리지를 공개하지 않아 이 비율만 볼 수 있습니다. 코인을 바꾸려면 트레이드 화면에서 코인을 고른 뒤 '불러오기'.</div>`;
 }
 
 // ================================================================ 시그널 스캐너
@@ -409,16 +382,15 @@ export function initQuant() {
     if (!q) return;
     $$("#q-tabs button").forEach((b) => b.classList.toggle("on", b.dataset.q === q));
     $$(".qpane").forEach((p) => (p.hidden = p.id !== `q-${q}`));
+    if (q === "top") loadTop();
     if (q === "scan") loadScanner().catch((err) => toast("스캐너 오류", err.message, "err"));
     if (q === "risk") { renderSizer(); loadSweepForm().catch(() => {}); }
   };
-  $("#rot-run").onclick = (e) => busy(e.target, runRotation);
-  $("#rb-run").onclick = (e) => busy(e.target, runRotBacktest);
   $("#v-quant").addEventListener("click", (e) => {
     const c = e.target.closest("[data-chart]")?.dataset.chart;
     if (!c) return;
     const [s, iv] = c.split("|");
-    showOnChart(s, iv || (rot?.interval ?? state.interval));
+    showOnChart(s, iv || state.interval);
   });
   // 스캐너
   $("#sc-on").onchange = (e) => saveScan({ enabled: e.target.checked });
@@ -437,7 +409,7 @@ export function initQuant() {
   $("#mc-run").onclick = (e) => busy(e.target, runMonteCarlo);
   $("#sw-run").onclick = (e) => busy(e.target, runSweep);
   on("backtest", () => { if (!$("#q-risk").hidden) { renderSizer(); loadSweepForm().catch(() => {}); } });
-  on("view", (v) => { if (v === "quant" && !rot) busy($("#rot-run"), runRotation); });
+  on("view", (v) => { if (v === "quant" && !$("#q-top").hidden) loadTop(); });
   // 기관식 포트폴리오
   $("#po-run").onclick = (e) => busy(e.target, runOptimize);
   $("#st-run").onclick = (e) => busy(e.target, () => runStress(null));

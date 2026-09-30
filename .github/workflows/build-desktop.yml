@@ -46,8 +46,8 @@ jobs:
           NO_BROWSER: "1"
           DATA_SOURCE: synthetic
         run: |
-          dir=$(ls -d dist/CoinFuturesTerminal-*/)
-          exe="${dir}CoinFuturesTerminal"
+          dir=$(ls -d dist/GHQuant-*/)
+          exe="${dir}GHQuant"
           [ -f "${exe}.exe" ] && exe="${exe}.exe"
           "$exe" > smoke.log 2>&1 &
           pid=$!
@@ -58,7 +58,7 @@ jobs:
           done
           cat smoke.log
           curl -sf http://127.0.0.1:8000/ > /dev/null
-          if [ "$RUNNER_OS" = "Windows" ]; then taskkill //IM CoinFuturesTerminal.exe //F || true; else kill $pid || true; fi
+          if [ "$RUNNER_OS" = "Windows" ]; then taskkill //IM GHQuant.exe //F || true; else kill $pid || true; fi
           [ -n "$ok" ] || { echo "app did not start"; exit 1; }
           rm -rf "${dir}state"
 
@@ -66,19 +66,19 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $d = Get-ChildItem dist -Directory -Filter "CoinFuturesTerminal-*" | Select-Object -First 1
+          $d = Get-ChildItem dist -Directory -Filter "GHQuant-*" | Select-Object -First 1
           Compress-Archive -Path $d.FullName -DestinationPath "$($d.Name).zip"
 
       - name: Zip (macOS, keeps executable bit)
         if: runner.os == 'macOS'
         run: |
-          d=$(ls -d dist/CoinFuturesTerminal-*/ | head -1)
+          d=$(ls -d dist/GHQuant-*/ | head -1)
           ditto -c -k --keepParent "$d" "$(basename "$d").zip"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: CoinFuturesTerminal-${{ runner.os }}
-          path: CoinFuturesTerminal-*.zip
+          name: GHQuant-${{ runner.os }}
+          path: GHQuant-*.zip
 
   release:
     needs: build
@@ -97,10 +97,10 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           set -e
-          TITLE="코인 선물 터미널 - 최신 빌드"
+          TITLE="GH Quant - 최신 빌드"
           NOTES="파이썬 설치 없이 실행하는 버전입니다.
-          - Windows: CoinFuturesTerminal-windows-x64.zip 압축 해제 → CoinFuturesTerminal.exe 더블클릭
-          - Mac (Apple Silicon): CoinFuturesTerminal-macos-arm64.zip 압축 해제 → 우클릭 → 열기
+          - Windows: GHQuant-windows-x64.zip 압축 해제 → GHQuant.exe 더블클릭
+          - Mac (Apple Silicon): GHQuant-macos-arm64.zip 압축 해제 → 우클릭 → 열기
           자세한 내용은 zip 안의 HOW-TO-RUN.txt 참고. 빌드 커밋: ${GITHUB_SHA::7} (${GITHUB_REF_NAME})"
           # 태그를 지웠다 다시 만들면 GitHub 가 릴리스를 '초안'으로 남기는 경우가 있어서,
           # 태그는 새 커밋으로 옮기고 릴리스 파일만 교체한다.
@@ -113,6 +113,10 @@ jobs:
           gh api "repos/$GH_REPO/releases?per_page=50" --jq ".[] | select(.draft and .name == \"$TITLE\") | .id" \
             | xargs -r -I{} gh api -X DELETE "repos/$GH_REPO/releases/{}"
           if gh release view desktop-latest >/dev/null 2>&1; then
+            # 이번 빌드에 없는 예전 파일(이름이 바뀐 이전 버전 등)은 지운다
+            for a in $(gh release view desktop-latest --json assets --jq '.assets[].name'); do
+              [ -f "out/$a" ] || gh release delete-asset desktop-latest "$a" -y
+            done
             gh release upload desktop-latest out/*.zip --clobber
             gh release edit desktop-latest --prerelease --draft=false --title "$TITLE" --notes "$NOTES"
           else

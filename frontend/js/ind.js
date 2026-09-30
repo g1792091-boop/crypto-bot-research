@@ -912,6 +912,313 @@ Object.assign(INDICATORS, {
     } },
 });
 
+// ---------------------------------------------------------------- 추가 지표 3: 빌 윌리엄스 · 변동성 · 레벨 · 세션
+const shiftR = (x, n) => x.map((_, i) => i - n >= 0 ? x[i - n] : null);          // 오른쪽으로 n봉 밀기
+const sumN = (x, n) => x.map((_, i) => { if (i < n - 1) return null; let s = 0; for (let j = i - n + 1; j <= i; j++) { if (x[j] == null) return null; s += x[j]; } return s; });
+const growColors = (x, up = "rgba(34,176,125,.85)", dn = "rgba(229,72,77,.85)") => x.map((v, i) => v == null ? null : Math.abs(v) >= Math.abs(x[i - 1] ?? 0) ? up : dn);
+const intraday = (c) => c.length > 1 && c.at(-1).time - c.at(-2).time < 14400;
+function prevPeriodHLC(c, key) {   // 봉마다 '직전 기간'의 고가·저가·종가
+  let cur = null, h, l, cl, ph = null, pl = null, pc = null; const H = [], L = [], Cc = [];
+  c.forEach((b) => { const k = key(b.time); if (k !== cur) { if (cur != null) { ph = h; pl = l; pc = cl; } cur = k; h = b.high; l = b.low; } else { h = Math.max(h, b.high); l = Math.min(l, b.low); } cl = b.close; H.push(ph); L.push(pl); Cc.push(pc); });
+  return [H, L, Cc];
+}
+const monthKey = (t) => { const d = new Date(t * 1000); return d.getUTCFullYear() * 12 + d.getUTCMonth(); };
+const periodKey = (n) => n === 30 ? monthKey : n === 7 ? (t) => Math.floor((t / 86400 + 3) / 7) : (t) => Math.floor(t / 86400);
+
+Object.assign(INDICATORS, {
+  alligator: { name: "윌리엄스 앨리게이터", group: "추세", pane: "main", desc: "턱(파랑)·이빨(빨강)·입술(초록) 세 이평이 벌어지면 추세, 엉켜 있으면 잠자는 구간",
+    params: { jaw: 13, teeth: 8, lips: 5 }, compute: (c, p) => {
+      const x = src(c, "hl2");
+      return { plots: [line("턱", shiftR(rma(x, p.jaw), 8), C.b, { lineWidth: 1 }), line("이빨", shiftR(rma(x, p.teeth), 5), C.f, { lineWidth: 1 }), line("입술", shiftR(rma(x, p.lips), 3), C.up, { lineWidth: 1 })] };
+    } },
+  gator: { name: "게이터 오실레이터", group: "오실레이터", pane: "sub", desc: "앨리게이터 선들의 벌어짐. 위아래 막대가 모두 커지면(초록) 추세가 먹는 중", params: {}, compute: (c) => {
+    const x = src(c, "hl2"), jaw = shiftR(rma(x, 13), 8), teeth = shiftR(rma(x, 8), 5), lips = shiftR(rma(x, 5), 3);
+    const u = jaw.map((v, i) => v == null || teeth[i] == null ? null : Math.abs(v - teeth[i])), d = teeth.map((v, i) => v == null || lips[i] == null ? null : -Math.abs(v - lips[i]));
+    return { plots: [hist("위", u, growColors(u)), hist("아래", d, growColors(d))], levels: [0] };
+  } },
+  ewo: { name: "엘리엇 웨이브 오실레이터", group: "오실레이터", pane: "sub", desc: "SMA5 − SMA35 (가격 대비 %). 파동 3에서 가장 크게 튐", params: { fast: 5, slow: 35 }, compute: (c, p) => {
+    const x = src(c, "hl2"), f = sma(x, p.fast), s = sma(x, p.slow), v = f.map((a, i) => a == null || s[i] == null ? null : (a - s[i]) / c[i].close * 100);
+    return { plots: [hist("EWO %", v, signColors(v))], levels: [0] };
+  } },
+  vix_fix: { name: "윌리엄스 VIX 픽스 (바닥 탐지)", group: "변동성", pane: "sub", desc: "공포 지수를 가격으로 흉내. 초록 막대 = 공포가 극단 → 바닥권일 가능성", params: { length: 22, bb: 20, mult: 2, lookback: 50 }, compute: (c, p) => {
+    const cl = c.map((b) => b.close), hc = highest(cl, p.length), w = c.map((b, i) => hc[i] == null ? null : (hc[i] - b.low) / hc[i] * 100);
+    const m = sma(w, p.bb), sd = stdev(w, p.bb), rh = highest(w.map((v) => v ?? 0), p.lookback);
+    const col = w.map((v, i) => v == null ? null : (m[i] != null && v >= m[i] + p.mult * sd[i]) || (rh[i] != null && v >= rh[i] * 0.85) ? "rgba(34,176,125,.9)" : "rgba(164,172,182,.35)");
+    return { plots: [hist("WVF", w, col)] };
+  } },
+  ulcer: { name: "얼서 인덱스 (낙폭 고통)", group: "변동성", pane: "sub", desc: "최근 고점 대비 낙폭의 깊이·기간. 높을수록 보유가 괴로운 구간", params: { length: 14 }, compute: (c, p) => {
+    const cl = c.map((b) => b.close), hc = highest(cl, p.length), dd2 = cl.map((v, i) => hc[i] == null ? null : (100 * (v - hc[i]) / hc[i]) ** 2);
+    return { plots: [line("Ulcer", sma(dd2, p.length).map((v) => v == null ? null : Math.sqrt(v)), C.f)] };
+  } },
+  rvix: { name: "상대 변동성 지수 (도시 RVI)", group: "변동성", pane: "sub", desc: "오르는 날의 변동성 비중. 50 위 = 상승 쪽 변동성 우세 (다른 지표 확인용)", params: { length: 10, smooth: 14 }, compute: (c, p) => {
+    const cl = c.map((b) => b.close), sd = stdev(cl, p.length);
+    const u = cl.map((v, i) => sd[i] == null || !i ? null : v > cl[i - 1] ? sd[i] : 0), d = cl.map((v, i) => sd[i] == null || !i ? null : v < cl[i - 1] ? sd[i] : 0);
+    const eu = ema(u, p.smooth), ed = ema(d, p.smooth);
+    return { plots: [line("RVI", eu.map((v, i) => v == null || ed[i] == null || v + ed[i] === 0 ? null : 100 * v / (v + ed[i])), C.e)], levels: [30, 50, 70] };
+  } },
+  chaikin_vol: { name: "차이킨 변동성", group: "변동성", pane: "sub", desc: "고가−저가 폭의 EMA 가 n봉 전보다 몇 % 커졌나. 급등 = 변동성 폭발", params: { length: 10, roc: 10 }, compute: (c, p) => {
+    const e = ema(c.map((b) => b.high - b.low), p.length), v = e.map((x, i) => x == null || e[i - p.roc] == null || !e[i - p.roc] ? null : (x / e[i - p.roc] - 1) * 100);
+    return { plots: [line("CV %", v, C.a)], levels: [0] };
+  } },
+  vhf: { name: "VHF (추세/횡보 판별)", group: "변동성", pane: "sub", desc: "값이 높으면 추세장, 낮으면 횡보장 (0.35 부근이 경계인 경우가 많음)", params: { length: 28 }, compute: (c, p) => {
+    const cl = c.map((b) => b.close), h = highest(cl, p.length), l = lowest(cl, p.length), s = sumN(cl.map((v, i) => i ? Math.abs(v - cl[i - 1]) : null), p.length);
+    return { plots: [line("VHF", h.map((v, i) => v == null || !s[i] ? null : (v - l[i]) / s[i]), C.b)], levels: [0.35] };
+  } },
+  qstick: { name: "Q스틱 (몸통 평균)", group: "오실레이터", pane: "sub", desc: "최근 캔들 몸통(종가−시가)의 평균. 0 위 = 양봉 우세", params: { length: 8 }, compute: (c, p) => {
+    const v = sma(c.map((b) => b.close - b.open), p.length); return { plots: [hist("Qstick", v, signColors(v))], levels: [0] };
+  } },
+  nvi_pvi: { name: "NVI · PVI (스마트/대중 자금)", group: "거래량", pane: "sub", desc: "NVI = 거래량이 줄어든 날의 움직임(조용한 스마트머니), PVI = 거래량이 늘어난 날(대중). 선이 자기 EMA 위면 그쪽이 강세", params: { signal: 255 }, compute: (c, p) => {
+    let n = 1000, q = 1000; const N1 = [], P1 = [];
+    c.forEach((b, i) => { if (i) { const r = b.close / c[i - 1].close - 1; if (b.volume < c[i - 1].volume) n *= 1 + r; else if (b.volume > c[i - 1].volume) q *= 1 + r; } N1.push(n); P1.push(q); });
+    return { plots: [line("NVI", N1, C.a), line("NVI EMA", ema(N1, Math.min(p.signal, Math.max(2, c.length - 1))), "rgba(245,165,36,.45)", { lineWidth: 1 }),
+      line("PVI", P1, C.b), line("PVI EMA", ema(P1, Math.min(p.signal, Math.max(2, c.length - 1))), "rgba(57,135,229,.45)", { lineWidth: 1 })] };
+  } },
+  cog: { name: "무게중심 오실레이터 (COG)", group: "오실레이터", pane: "sub", desc: "Ehlers. 선이 신호선을 위로 뚫으면 단기 반등", params: { length: 10 }, compute: (c, p) => {
+    const x = src(c, "hl2"), v = x.map((_, i) => { if (i < p.length - 1) return null; let num = 0, den = 0; for (let k = 0; k < p.length; k++) { num += (k + 1) * x[i - k]; den += x[i - k]; } return den ? -num / den + (p.length + 1) / 2 : null; });
+    const s = shiftR(v, 1);
+    return { plots: [line("COG", v, C.c), line("신호", s, C.g, { lineWidth: 1 }), { name: "교차", type: "signals", data: crossSignals(v, s, "", "").map((x) => x && { ...x, size: 0.4 }) }] };
+  } },
+  linreg_slope: { name: "선형회귀 기울기 (%)", group: "통계 · 퀀트", pane: "sub", desc: "최근 n봉 회귀선이 n봉 동안 몇 % 오르내리는 기울기인가", params: { length: 50 }, compute: (c, p) => {
+    const x = src(c), v = x.map((_, i) => { if (i < p.length - 1) return null; let sx = 0, sy = 0, sxy = 0, sxx = 0; const n = p.length;
+      for (let j = 0; j < n; j++) { const y = x[i - n + 1 + j]; sx += j; sy += y; sxy += j * y; sxx += j * j; }
+      const b = (n * sxy - sx * sy) / (n * sxx - sx * sx); return b * n / (sy / n) * 100; });
+    return { plots: [hist("기울기 %", v, signColors(v))], levels: [0] };
+  } },
+  r2: { name: "결정계수 R² (추세 신뢰도)", group: "통계 · 퀀트", pane: "sub", desc: "가격이 직선 추세에 얼마나 잘 맞나 (0~1). 0.7 이상이면 깔끔한 추세", params: { length: 50 }, compute: (c, p) => {
+    const x = src(c), n = p.length, idx = Array.from({ length: n }, (_, j) => j);
+    const v = x.map((_, i) => { if (i < n - 1) return null; const y = x.slice(i - n + 1, i + 1), my = y.reduce((a, b) => a + b, 0) / n, mx = (n - 1) / 2;
+      let sxy = 0, sxx = 0, syy = 0; idx.forEach((j) => { sxy += (j - mx) * (y[j] - my); sxx += (j - mx) ** 2; syy += (y[j] - my) ** 2; }); return syy ? sxy * sxy / (sxx * syy) : null; });
+    return { plots: [line("R²", v, C.d)], levels: [0.3, 0.7] };
+  } },
+  atr_stop: { name: "ATR 트레일링 스톱", group: "신호 · 패턴", pane: "main", desc: "종가에서 ATR×배수 만큼 떨어져 따라오는 손절선. 뚫리면 방향 전환", params: { length: 14, mult: 3 }, compute: (c, p) => {
+    const a = atr(c, p.length), st = Array(c.length).fill(null), s = sig(c.length); let dir = 1, prev = null;
+    c.forEach((b, i) => {
+      if (a[i] == null) return;
+      const lo = b.close - p.mult * a[i], hi = b.close + p.mult * a[i];
+      if (prev == null) prev = lo;
+      else if (dir === 1) { if (b.close < prev) { dir = -1; prev = hi; s[i] = { dir: -1, text: "ATR 숏" }; } else prev = Math.max(prev, lo); }
+      else if (b.close > prev) { dir = 1; prev = lo; s[i] = { dir: 1, text: "ATR 롱" }; } else prev = Math.min(prev, hi);
+      st[i] = prev * dir;
+    });
+    return { plots: [line("롱 스톱", st.map((v) => v != null && v > 0 ? v : null), C.up, { lineWidth: 1 }), line("숏 스톱", st.map((v) => v != null && v < 0 ? -v : null), C.dn, { lineWidth: 1 }), { name: "전환", type: "signals", data: s }] };
+  } },
+  ha_trend: { name: "하이킨아시 추세 전환", group: "신호 · 패턴", pane: "main", desc: "하이킨아시 캔들 색이 min 봉 이상 이어지다 바뀌면 표시 (노이즈를 줄인 추세 전환)", params: { min: 4 }, compute: (c, p) => {
+    const s = sig(c.length); let ho = null, hc = null, run = 0, prevUp = null;
+    c.forEach((b, i) => {
+      const nc = (b.open + b.high + b.low + b.close) / 4, no = ho == null ? (b.open + b.close) / 2 : (ho + hc) / 2; ho = no; hc = nc;
+      const up = nc >= no;
+      if (prevUp != null && up !== prevUp) { if (run >= p.min) s[i] = { dir: up ? 1 : -1, text: up ? "HA 상승" : "HA 하락", size: 0.6 }; run = 1; } else run++;
+      prevUp = up;
+    });
+    return { plots: [{ name: "HA", type: "signals", data: s }] };
+  } },
+  camarilla: { name: "카마릴라 피봇", group: "레벨 · 프로파일", pane: "main", desc: "전일 범위로 만든 단타 레벨. R3/S3 = 되돌림(역추세) 자리, R4/S4 돌파 = 추세 추종", params: { period: 1 }, compute: (c, p) => {
+    const [H, L, Cc] = prevPeriodHLC(c, periodKey(p.period)), f = (k) => H.map((h, i) => h == null ? null : Cc[i] + k * (h - L[i]) * 1.1);
+    return { plots: [line("R4", f(1 / 2), C.dn, { lineWidth: 1 }), line("R3", f(1 / 4), "rgba(229,72,77,.6)", { lineWidth: 1, lineStyle: 2 }),
+      line("S3", f(-1 / 4), "rgba(34,176,125,.6)", { lineWidth: 1, lineStyle: 2 }), line("S4", f(-1 / 2), C.up, { lineWidth: 1 })], note: p.period === 7 ? "전주 기준" : p.period === 30 ? "전월 기준" : "전일 기준" };
+  } },
+  fib_pivots: { name: "피보나치 피봇", group: "레벨 · 프로파일", pane: "main", desc: "P ± 전일 범위 × 0.382 / 0.618 / 1. period 1=일 7=주 30=월", params: { period: 1 }, compute: (c, p) => {
+    const [H, L, Cc] = prevPeriodHLC(c, periodKey(p.period)), P = H.map((h, i) => h == null ? null : (h + L[i] + Cc[i]) / 3), f = (k) => P.map((v, i) => v == null ? null : v + k * (H[i] - L[i]));
+    return { plots: [line("P", P, C.a, { lineWidth: 1 }), ...[[1, "R3"], [0.618, "R2"], [0.382, "R1"]].map(([k, n]) => line(n, f(k), k === 1 ? C.dn : "rgba(229,72,77,.6)", { lineWidth: 1, lineStyle: k === 1 ? 0 : 2 })),
+      ...[[-0.382, "S1"], [-0.618, "S2"], [-1, "S3"]].map(([k, n]) => line(n, f(k), k === -1 ? C.up : "rgba(34,176,125,.6)", { lineWidth: 1, lineStyle: k === -1 ? 0 : 2 }))] };
+  } },
+  pmhl: { name: "전월 고가/저가 · 월 시가", group: "레벨 · 프로파일", pane: "main", desc: "PMH/PML 과 이번 달 시가 (UTC)", params: {}, compute: (c) => {
+    const [H, L] = prevPeriodHLC(c, monthKey); let k = null, o = null;
+    const mo = c.map((b) => { const m = monthKey(b.time); if (m !== k) { k = m; o = b.open; } return o; });
+    return { plots: [line("전월 고가", H, C.dn, { lineWidth: 2 }), line("전월 저가", L, C.up, { lineWidth: 2 }), line("월 시가", mo, C.a, { lineWidth: 1, lineStyle: 1 })] };
+  } },
+  round_numbers: { name: "라운드 넘버 (심리 가격)", group: "레벨 · 프로파일", pane: "main", desc: "60,000 · 3,000 · 1.00 처럼 딱 떨어지는 가격. 주문이 몰려 지지·저항이 되기 쉬움", params: { lines: 10 }, compute: (c, p) => {
+    if (!c.length) return { plots: [] };
+    const last = c.at(-1).close, rng = c.slice(-300), hi = Math.max(...rng.map((b) => b.high)), lo = Math.min(...rng.map((b) => b.low));
+    let step = 10 ** Math.floor(Math.log10(last));
+    for (const m of [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1]) { step = 10 ** Math.floor(Math.log10(last)) * m; if ((hi - lo) / step <= p.lines) break; }
+    const out = [];
+    for (let v = Math.ceil(lo / step) * step; v <= hi && out.length < 16; v += step) out.push(+v.toPrecision(12));
+    const major = (v) => Math.abs(v / (step * 10) - Math.round(v / (step * 10))) < 1e-9 || step >= 10 ** Math.floor(Math.log10(last));
+    return { plots: out.map((v) => line(px0(v), c.map(() => v), major(v) ? "rgba(245,165,36,.75)" : "rgba(164,172,182,.4)", { lineWidth: 1, lineStyle: major(v) ? 0 : 2, legend: false })), note: `간격 ${step}` };
+  } },
+  sessions_hl: { name: "세션 고저 (아시아·런던·뉴욕)", group: "레벨 · 프로파일", pane: "main", desc: "UTC 아시아 00–08 · 런던 07–16 · 뉴욕 13–21 구간의 고가·저가 상자. 세션 고저 사냥(스윕) 후 되돌림을 볼 때 사용 (일광절약시간 미반영)", params: { days: 5 }, compute: (c, p) => {
+    if (!intraday(c)) return { plots: [boxesPlot("세션", { n: c.length, list: [] })], note: "4시간봉 미만에서만" };
+    const S = [["아시아", 0, 8, "57,135,229"], ["런던", 7, 16, "201,133,0"], ["뉴욕", 13, 21, "213,81,129"]], list = [], lastDay = Math.floor(c.at(-1).time / 86400);
+    for (let d = lastDay - p.days + 1; d <= lastDay; d++) for (const [nm, h0, h1, rgb] of S) {
+      let i0 = -1, i1 = -1, hi = -Infinity, lo = Infinity;
+      c.forEach((b, i) => { const h = (b.time - d * 86400) / 3600; if (h >= h0 && h < h1) { if (i0 < 0) i0 = i; i1 = i; hi = Math.max(hi, b.high); lo = Math.min(lo, b.low); } });
+      if (i0 >= 0) list.push({ i0, i1, top: hi, bottom: lo, color: `rgba(${rgb},.1)`, label: nm });
+    }
+    return { plots: [boxesPlot("세션", { n: c.length, list })] };
+  } },
+  orb: { name: "오프닝 레인지 돌파 (ORB)", group: "신호 · 패턴", pane: "main", desc: "하루 시작 후 minutes 분의 고가·저가. 종가가 그 밖으로 나가면 돌파 신호. session 0=UTC 0시 1=뉴욕 개장 13:30", params: { minutes: 60, session: 0 }, compute: (c, p) => {
+    const H = Array(c.length).fill(null), L = [...H], s = sig(c.length);
+    if (!intraday(c)) return { plots: [line("OR 고가", H, C.dn), line("OR 저가", L, C.up)], note: "4시간봉 미만에서만" };
+    const off = p.session ? 13.5 * 3600 : 0; let key = null, hi, lo, done, fired;
+    c.forEach((b, i) => {
+      const t = b.time - off, k = Math.floor(t / 86400), m = (t - k * 86400) / 60;
+      if (k !== key) { key = k; hi = -Infinity; lo = Infinity; done = false; fired = 0; }
+      if (m < p.minutes) { hi = Math.max(hi, b.high); lo = Math.min(lo, b.low); return; }
+      done = hi > -Infinity; if (!done) return;
+      H[i] = hi; L[i] = lo;
+      if (!fired && b.close > hi) { s[i] = { dir: 1, text: "ORB 롱" }; fired = 1; } else if (!fired && b.close < lo) { s[i] = { dir: -1, text: "ORB 숏" }; fired = 1; }
+    });
+    return { plots: [line("OR 고가", H, C.dn, { lineWidth: 1 }), line("OR 저가", L, C.up, { lineWidth: 1 }), { name: "돌파", type: "signals", data: s }] };
+  } },
+  adr: { name: "ADR 목표 (평균 일간 범위)", group: "레벨 · 프로파일", pane: "main", desc: "오늘 저가 + 평균 하루 변동폭 = 위쪽 도달 예상, 오늘 고가 − 평균폭 = 아래쪽. 이미 평균폭을 다 썼으면 추가 확장이 어렵다는 참고", params: { days: 14 }, compute: (c, p) => {
+    const days = []; let k = null;
+    c.forEach((b) => { const d = Math.floor(b.time / 86400); if (d !== k) { k = d; days.push({ d, h: b.high, l: b.low }); } else { const x = days.at(-1); x.h = Math.max(x.h, b.high); x.l = Math.min(x.l, b.low); } });
+    const adr = new Map(); days.forEach((x, j) => { if (j >= p.days) adr.set(x.d, days.slice(j - p.days, j).reduce((s, y) => s + y.h - y.l, 0) / p.days); });
+    const U = [], D = []; let dh = null, dl = null; k = null;
+    c.forEach((b) => { const d = Math.floor(b.time / 86400); if (d !== k) { k = d; dh = b.high; dl = b.low; } else { dh = Math.max(dh, b.high); dl = Math.min(dl, b.low); } const a = adr.get(d); U.push(a ? dl + a : null); D.push(a ? dh - a : null); });
+    const a = adr.get(k), used = a ? (dh - dl) / a * 100 : null;
+    return { plots: [line("ADR 상단", U, "rgba(229,72,77,.7)", { lineWidth: 1, lineStyle: 2 }), line("ADR 하단", D, "rgba(34,176,125,.7)", { lineWidth: 1, lineStyle: 2 })], note: used != null ? `오늘 평균폭의 ${used.toFixed(0)}% 사용` : "" };
+  } },
+});
+const px0 = (v) => v.toLocaleString("en-US", { maximumFractionDigits: 8 });
+
+// ---------------------------------------------------------------- 차트 패턴 자동 인식
+// 스윙 고점·저점(좌우 len 봉)을 번갈아 이어 놓고, 최근 3~5개 점의 모양으로 패턴을 판정한다.
+// 헤드앤숄더 · 역헤드앤숄더 · 쌍봉/쌍바닥 · 삼중천정/삼중바닥 · 깃발 · 삼각형(상승/하락/대칭) · 쐐기 · 채널 · 박스권 · 확장형
+// type "patterns": 차트가 선·이름·목표가를 직접 그림
+function swingSeq(c, len) {
+  const hs = pivots(c.map((b) => b.high), len, len, true).map((i) => ({ i, p: c[i].high, h: true }));
+  const ls = pivots(c.map((b) => b.low), len, len, false).map((i) => ({ i, p: c[i].low, h: false }));
+  const seq = [];
+  for (const x of [...hs, ...ls].sort((a, b) => a.i - b.i || (a.h ? -1 : 1))) {
+    const l = seq.at(-1);
+    if (l && l.h === x.h) { if (x.h ? x.p > l.p : x.p < l.p) seq[seq.length - 1] = x; } else seq.push(x);
+  }
+  return seq;
+}
+function fitLn(pts) {   // 최소제곱 직선 + 최대 잔차
+  const n = pts.length, mx = pts.reduce((s, q) => s + q.i, 0) / n, my = pts.reduce((s, q) => s + q.p, 0) / n;
+  let sxy = 0, sxx = 0; pts.forEach((q) => { sxy += (q.i - mx) * (q.p - my); sxx += (q.i - mx) ** 2; });
+  const b = sxx ? sxy / sxx : 0, a = my - b * mx;
+  return { a, b, at: (i) => a + b * i, err: Math.max(...pts.map((q) => Math.abs(q.p - (a + b * q.i)))) };
+}
+export function detectPatterns(c, p = {}) {
+  const len = p.len ?? 5, tolK = p.tol ?? 0.6, out = [];
+  if (c.length < len * 6) return out;
+  const A = atr(c, 14), atrAt = (i) => A[i] ?? (c[i].high - c[i].low), tol = (i) => atrAt(i) * tolK;
+  const seq = swingSeq(c, len), last = c.length - 1;
+  // 마지막 점 이후 봉을 따라가며 돌파/실패를 판정
+  const follow = (e, wait, upAt, dnAt) => {
+    for (let j = e + 1; j <= Math.min(last, e + wait); j++) {
+      const cl = c[j].close;
+      if (upAt && cl > upAt(j)) return { st: "up", j };
+      if (dnAt && cl < dnAt(j)) return { st: "down", j };
+    }
+    return e + wait < last ? { st: "expired" } : { st: "forming", j: last };
+  };
+  let from = 0;
+  for (let k = 2; k < seq.length; k++) {
+    if (k - 3 < from) continue;
+    const q = (o) => seq[k - o], e = q(0).i, found = [];
+    // --- 5점 패턴
+    if (k - 4 >= from) {
+      const [a1, b1, a2, b2, a3] = [q(4), q(3), q(2), q(1), q(0)], T = tol(a2.i), top = a3.h;
+      const sgn = top ? 1 : -1, hi = (x) => sgn * x.p;   // 천정형은 그대로, 바닥형은 뒤집어서 같은 규칙
+      const span = a3.i - a1.i;
+      if (span >= len * 4 && span <= 250) {
+        const neck = fitLn([b1, b2]), neckAt = (i) => neck.at(i);
+        const shoulders = Math.abs(a1.p - a3.p) <= 1.5 * T && Math.min(hi(a1), hi(a3)) > Math.max(hi(b1), hi(b2)) + T;
+        const ratio = (a2.i - a1.i) / Math.max(1, a3.i - a2.i);
+        if (shoulders && hi(a2) > Math.max(hi(a1), hi(a3)) + T && ratio > 0.33 && ratio < 3 && Math.abs(b1.p - b2.p) <= 3 * T) {
+          const r = top ? follow(e, span, (j) => a2.p, neckAt) : follow(e, span, neckAt, (j) => a2.p), brk = top ? "down" : "up";
+          const height = Math.abs(a2.p - neckAt(a2.i));
+          found.push({ key: top ? "hs" : "ihs", name: top ? "헤드앤숄더" : "역헤드앤숄더", dir: top ? -1 : 1, pts: [a1, b1, a2, b2, a3], r, brk,
+            lines: [[a1.i, neckAt(a1.i), (r.j ?? last), neckAt(r.j ?? last), "넥라인"]], height, level: neckAt });
+        } else if ([a1, a2, a3].every((x) => Math.abs(x.p - (a1.p + a2.p + a3.p) / 3) <= T) && Math.min(hi(a1), hi(a2), hi(a3)) > Math.max(hi(b1), hi(b2)) + 2 * T) {
+          const nk = top ? Math.min(b1.p, b2.p) : Math.max(b1.p, b2.p), ext = top ? Math.max(a1.p, a2.p, a3.p) : Math.min(a1.p, a2.p, a3.p);
+          const r = top ? follow(e, span, () => ext + T * 0.5, () => nk) : follow(e, span, () => nk, () => ext - T * 0.5);
+          found.push({ key: top ? "tt" : "tb", name: top ? "삼중천정" : "삼중바닥", dir: top ? -1 : 1, pts: [a1, b1, a2, b2, a3], r, brk: top ? "down" : "up",
+            lines: [[a1.i, nk, r.j ?? last, nk, "넥라인"]], height: Math.abs(ext - nk), level: () => nk });
+        }
+      }
+      // 깃발: 짧고 강한 깃대(b1→a2 가 아니라 q4→q3) 뒤 작은 역방향 조정
+      if (!found.length) {
+        const [p0, p1, f1, f2, f3] = [q(4), q(3), q(2), q(1), q(0)], pole = p1.p - p0.p, bull = pole > 0, P = Math.abs(pole);
+        const poleBars = p1.i - p0.i, flagBars = f3.i - p1.i;
+        if (P >= 4 * atrAt(p1.i) && poleBars <= 15 && flagBars <= poleBars * 3 + 10 && flagBars >= len * 2) {
+          const pts = [p1, f1, f2, f3], hiPts = pts.filter((x) => x.h), loPts = pts.filter((x) => !x.h);
+          const inRange = pts.every((x) => bull ? x.p >= p1.p - 0.5 * P && x.p <= p1.p + tol(p1.i) : x.p <= p1.p + 0.5 * P && x.p >= p1.p - tol(p1.i));
+          if (inRange && hiPts.length >= 2 && loPts.length >= 2) {
+            const U = fitLn(hiPts), D = fitLn(loPts), counter = bull ? U.b <= 0.1 * atrAt(e) / len : U.b >= -0.1 * atrAt(e) / len;
+            if (counter) {
+              const r = bull ? follow(e, flagBars + 10, U.at, (j) => Math.min(...loPts.map((x) => x.p)) - tol(e)) : follow(e, flagBars + 10, (j) => Math.max(...hiPts.map((x) => x.p)) + tol(e), D.at);
+              found.push({ key: bull ? "bflag" : "sflag", name: bull ? "상승 깃발" : "하락 깃발", dir: bull ? 1 : -1, pts: [p0, p1], r, brk: bull ? "up" : "down",
+                lines: [[hiPts[0].i, U.at(hiPts[0].i), r.j ?? last, U.at(r.j ?? last), ""], [loPts[0].i, D.at(loPts[0].i), r.j ?? last, D.at(r.j ?? last), ""]],
+                height: P, level: (i, d) => d === "up" ? U.at(i) : D.at(i), poly: true });
+            }
+          }
+        }
+      }
+      // 삼각형 · 쐐기 · 채널 · 박스권 · 확장형 (마지막 5점)
+      if (!found.length) {
+        const pts = [q(4), q(3), q(2), q(1), q(0)], U = fitLn(pts.filter((x) => x.h)), D = fitLn(pts.filter((x) => !x.h)), s = pts[0].i, span = e - s, T = tol(e);
+        const w0 = U.at(s) - D.at(s), w1 = U.at(e) - D.at(e);
+        if (span >= len * 4 && span <= 250 && w0 > 2 * T && w1 > T && U.err <= T && D.err <= T) {
+          const su = (U.at(e) - U.at(s)) / w0, sl = (D.at(e) - D.at(s)) / w0, flat = 0.2, conv = w1 / w0;
+          let key = null, name = "", dir = 0;
+          if (conv < 0.75) {
+            if (Math.abs(su) < flat && sl > flat) [key, name, dir] = ["asc", "상승 삼각형", 1];
+            else if (su < -flat && Math.abs(sl) < flat) [key, name, dir] = ["desc", "하락 삼각형", -1];
+            else if (su < -flat && sl > flat) [key, name, dir] = ["sym", "대칭 삼각형", 0];
+            else if (su > flat && sl > flat) [key, name, dir] = ["rwedge", "상승 쐐기", -1];
+            else if (su < -flat && sl < -flat) [key, name, dir] = ["fwedge", "하락 쐐기", 1];
+          } else if (conv <= 1.33) {
+            if (Math.abs(su) < flat && Math.abs(sl) < flat) [key, name, dir] = ["rect", "박스권 (직사각형)", 0];
+            else if (su > flat && sl > flat) [key, name, dir] = ["upch", "상승 채널", 0];
+            else if (su < -flat && sl < -flat) [key, name, dir] = ["dnch", "하락 채널", 0];
+          } else if (su > flat && sl < -flat) [key, name, dir] = ["broad", "확장형 (메가폰)", 0];
+          if (key) {
+            // 삼각형·쐐기는 두 선이 만나는 곳(꼭짓점)까지, 나머지는 패턴 길이만큼 기다린다
+            const apex = U.b !== D.b ? (D.a - U.a) / (U.b - D.b) : Infinity, wait = conv < 0.75 && apex > e ? Math.min(span, Math.round(apex - e)) : span;
+            const r = follow(e, Math.max(len, wait), U.at, D.at), j = r.j ?? last;
+            found.push({ key, name, dir, pts, r, brk: dir > 0 ? "up" : dir < 0 ? "down" : null, lines: [[s, U.at(s), j, U.at(j), ""], [s, D.at(s), j, D.at(j), ""]], height: w0, level: (i, d) => d === "up" ? U.at(i) : D.at(i), poly: true });
+          }
+        }
+      }
+    }
+    // --- 3점: 쌍봉 · 쌍바닥
+    if (!found.length && k - 3 >= from) {
+      const [p0, a1, b, a2] = [q(3), q(2), q(1), q(0)], T = tol(a2.i), top = a2.h, span = a2.i - a1.i;
+      const depth = top ? Math.min(a1.p, a2.p) - b.p : b.p - Math.max(a1.p, a2.p);
+      const trendIn = top ? p0.p < b.p : p0.p > b.p;   // 쌍봉은 오르막 끝, 쌍바닥은 내리막 끝에서
+      if (span >= len * 2 && span <= 150 && Math.abs(a1.p - a2.p) <= T && depth >= 3 * T && trendIn) {
+        const ext = top ? Math.max(a1.p, a2.p) : Math.min(a1.p, a2.p);
+        const r = top ? follow(e, span, () => ext + T * 0.5, () => b.p) : follow(e, span, () => b.p, () => ext - T * 0.5);
+        found.push({ key: top ? "dt" : "db", name: top ? "쌍봉 (M)" : "쌍바닥 (W)", dir: top ? -1 : 1, pts: [p0, a1, b, a2], r, brk: top ? "down" : "up",
+          lines: [[a1.i, b.p, r.j ?? last, b.p, "넥라인"]], height: Math.abs(ext - b.p), level: () => b.p });
+      }
+    }
+    const f = found.find((x) => x.r.st !== "expired");
+    if (!f) continue;
+    const { st, j } = f.r, broke = st === "up" || st === "down";
+    const ok = broke && (!f.brk || st === f.brk);
+    const status = st === "forming" ? "형성 중" : ok ? `돌파 ${st === "up" ? "↑" : "↓"}` : `실패 (반대 ${st === "up" ? "↑" : "↓"})`;
+    let target = null;
+    if (broke) { const lv = f.level(j, st); target = st === "up" ? lv + f.height : lv - f.height; }
+    else if (f.brk || f.dir) { const d = f.brk === "up" || f.dir > 0 ? 1 : -1, lv = f.level(last, d > 0 ? "up" : "down"); target = lv + d * f.height; }
+    // 직전 패턴이 실패로 끝났고 이번 패턴이 그 점들을 다시 쓰면(예: 실패한 쌍봉 → 상승 삼각형) 직전 것을 버린다
+    const k0 = k - (f.pts.length === 2 ? 4 : f.pts.length - 1), prev = out.at(-1);
+    if (prev && !prev.ok && prev.st !== "forming" && k0 < prev.k) out.pop();
+    out.push({ key: f.key, name: f.name, dir: f.dir, status, st, ok, k, i0: f.pts[0].i, i1: e, j: j ?? last, target, pts: f.pts.map((x) => [x.i, x.p]), lines: f.lines, poly: !!f.poly,
+      reached: broke && target != null ? c.slice(j + 1).some((b) => st === "up" ? b.high >= target : b.low <= target) : false });
+    if (ok || st === "forming") from = k;   // 겹치지 않게 다음 패턴은 이 패턴의 끝 점부터 (실패한 패턴의 점은 다시 쓸 수 있음)
+  }
+  return out;
+}
+
+Object.assign(INDICATORS, {
+  chartpat: { name: "차트 패턴 자동 인식", group: "신호 · 패턴", pane: "main",
+    desc: "헤드앤숄더 · 쌍봉/쌍바닥 · 삼중천정/바닥 · 삼각형 · 쐐기 · 깃발 · 채널 · 박스권 · 확장형을 스윙 고점·저점으로 자동으로 찾아 선과 목표가(측정 이동)를 그림. len = 스윙 판정 봉 수(클수록 큰 패턴), tol = 허용 오차(ATR 배수), show = 표시할 최근 패턴 수",
+    params: { len: 5, tol: 0.6, show: 6 }, compute: (c, p) => {
+      const all = detectPatterns(c, p), shown = all.slice(-Math.max(1, p.show)), s = sig(c.length);
+      shown.forEach((x) => { if (x.st === "up" || x.st === "down") s[x.j] = { dir: x.st === "up" ? 1 : -1, text: `${x.name.split(" (")[0]} ${x.ok ? "돌파" : "실패"}`, color: x.ok ? undefined : "rgba(164,172,182,.8)" }; });
+      const cur = shown.filter((x) => x.st === "forming" || x.j >= c.length - 30).at(-1);
+      return { plots: [{ name: "패턴", type: "patterns", data: Array(c.length).fill(null), patterns: shown }, { name: "돌파", type: "signals", data: s }],
+        note: cur ? `${cur.name} ${cur.status}${cur.target ? ` · 목표 ${px0(+cur.target.toPrecision(6))}` : ""}` : all.length ? `최근 패턴 ${all.length}개` : "패턴 없음" };
+    } },
+});
+
 // 선택 창에 보이는 그룹 순서
 export const GROUPS = ["추세", "신호 · 패턴", "스마트머니 (SMC)", "레벨 · 프로파일", "변동성", "오실레이터", "통계 · 퀀트", "거래량", "파생 · 코인글라스"];
 

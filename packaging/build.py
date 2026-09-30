@@ -3,7 +3,7 @@
     pip install -r backend/requirements.txt pyinstaller
     python packaging/build.py
 
-결과: dist/CoinFuturesTerminal-<os>/  (실행 파일 + settings.txt + HOW-TO-RUN.txt)
+결과: dist/GHQuant-<os>/  (실행 파일 + settings.txt + HOW-TO-RUN.txt)
 Windows 용 .exe 는 Windows 에서, Mac 용은 Mac 에서 빌드해야 한다 (GitHub Actions 가 자동 처리).
 """
 from __future__ import annotations
@@ -17,7 +17,7 @@ from pathlib import Path
 import PyInstaller.__main__
 
 ROOT = Path(__file__).resolve().parent.parent
-NAME = "CoinFuturesTerminal"
+NAME = "GHQuant"
 
 
 def main() -> None:

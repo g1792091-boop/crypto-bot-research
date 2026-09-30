@@ -78,6 +78,16 @@ def long_short_ratio(symbol: str, interval: str, limit: int = 200) -> list[dict]
     return [{"time": int(r["timestamp"]) // 1000, "value": float(r["longShortRatio"])} for r in rows]
 
 
+def top_trader_ratios(symbol: str, interval: str, limit: int = 100) -> dict:
+    """바이낸스 상위 20% 트레이더(증거금 기준)의 롱/숏 비율 — 포지션 규모 기준 · 계정 수 기준."""
+    out = {}
+    for key, path in (("position", "/futures/data/topLongShortPositionRatio"), ("account", "/futures/data/topLongShortAccountRatio")):
+        rows = _get(path, {"symbol": symbol, "period": _period(interval), "limit": min(limit, 500)})
+        out[key] = [{"time": int(r["timestamp"]) // 1000, "ratio": float(r["longShortRatio"]),
+                     "long": float(r["longAccount"]), "short": float(r["shortAccount"])} for r in rows]
+    return out
+
+
 def taker_buy_sell_ratio(symbol: str, interval: str, limit: int = 200) -> list[dict]:
     rows = _get("/futures/data/takerlongshortRatio",
                 {"symbol": symbol, "period": _period(interval), "limit": min(limit, 500)})

@@ -15,7 +15,7 @@ from . import agents, analysis, backtest, config, improve, indicators, liquidati
 from .data import coinglass, exchanges, market, news, sentiment, symbols
 from .llm import LLMUnavailable
 from .paper import PaperManager
-from .quant import entry, footprint, forecast, portfolio, risk, rotation
+from .quant import entry, footprint, forecast, portfolio, risk, toptraders
 from .quant.scanner import scanner
 from .strategy import StrategySpec, validate
 
@@ -30,7 +30,7 @@ async def lifespan(_app: FastAPI):
     yield
 
 
-app = FastAPI(title="Coin Futures Terminal", lifespan=lifespan)
+app = FastAPI(title="GH Quant", lifespan=lifespan)
 
 
 def _bad(e: Exception):
@@ -580,48 +580,20 @@ def get_forecast(symbol: str = "BTCUSDT", interval: str = "1h", window: int = 48
         _bad(e)
 
 
-def _syms(csv: str | None) -> list[str] | None:
-    return [symbols.resolve(s) for s in csv.split(",") if s.strip()] if csv else None
+@app.get("/api/toptraders")
+def get_top_traders(window: Literal["day", "week", "month", "allTime"] = "month", n: int = 30, sort: Literal["pnl", "roi"] = "pnl",
+                    min_account: float = 100_000):
+    """잘하는 트레이더(Hyperliquid 수익 상위)가 지금 들고 있는 포지션 · 레버리지 · 진입가, 코인별 집계."""
+    return toptraders.top_traders(window, max(5, min(n, 60)), sort, max(0.0, min_account))
 
 
-@app.get("/api/rotation/rrg")
-def get_rrg(symbols_csv: str | None = None, interval: str = "1d", bench: Literal["btc", "ew"] = "btc", lookback: int = 14):
+@app.get("/api/toptraders/binance")
+def get_top_trader_ratios(symbol: str = "BTCUSDT", interval: str = "1h"):
+    """바이낸스 상위 트레이더 롱/숏 비율."""
     try:
-        return rotation.rrg(_syms(symbols_csv), interval, bench, lookback=max(3, min(lookback, 200)))
-    except ValueError as e:
-        _bad(e)
-
-
-@app.get("/api/rotation/series")
-def get_rotation_series(symbol: str = "BTCUSDT", interval: str = "1d", bars: int = 500):
-    """한 코인의 순환 구역 흐름과 순환매 진입·이탈 지점 (차트 표시용)."""
-    try:
-        return rotation.series(symbols.resolve(symbol), interval, max(100, min(bars, 1500)))
-    except ValueError as e:
-        _bad(e)
-
-
-class RotationReq(BaseModel):
-    symbols: Optional[list[str]] = None
-    interval: str = "1d"
-    lookback: int = 20
-    top: int = 3
-    rebalance: int = 7
-    mode: Literal["long", "long_short"] = "long"
-    abs_filter: bool = True
-    score: Literal["momentum", "risk_adj"] = "momentum"
-    fee_pct: float = 0.04
-    bars: int = 1000
-
-
-@app.post("/api/rotation/backtest")
-def rotation_backtest(req: RotationReq):
-    try:
-        return rotation.backtest([symbols.resolve(s) for s in req.symbols] if req.symbols else None, req.interval,
-                                 max(2, req.lookback), max(1, req.top), max(1, req.rebalance), req.mode, req.abs_filter,
-                                 req.score, req.fee_pct, min(req.bars, 3000))
-    except ValueError as e:
-        _bad(e)
+        return toptraders.binance_ratios(symbols.resolve(symbol), interval)
+    except Exception as e:
+        _bad(ValueError(f"바이낸스 상위 트레이더 비율을 불러오지 못했습니다: {e}"))
 
 
 @app.get("/api/scanner")

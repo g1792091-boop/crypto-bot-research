@@ -130,14 +130,33 @@ tr.sel td { background: var(--accent-bg); }
 .chartwrap > div { position: absolute; inset: 0; }
 .toolbar2 { height: 30px; }
 .term-grid { display: grid; gap: 1px; background: var(--line); }
-.term-grid.l1 { grid-template: 1fr / 1fr; }
-.term-grid.l2 { grid-template: 1fr / 1fr 1fr; }
-.term-grid.l4 { grid-template: 1fr 1fr / 1fr 1fr; }
+.term-grid.dense .cell-h input { width: 64px; }
+.lay-pick { position: relative; }
+#lay-btn { display: flex; align-items: center; gap: 6px; }
+.lay-menu { position: fixed; z-index: 60; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 8px; width: 440px;
+  background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,.5); }
+.lay-menu button { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid transparent; border-radius: 6px; background: none; color: var(--text-2); font-size: 11.5px; text-align: left; cursor: pointer; }
+.lay-menu button:hover { background: var(--hover); color: var(--text); }
+.lay-menu button.on { border-color: var(--accent); color: var(--accent); }
+.lay-menu .lico { width: 26px; height: 18px; flex: none; }
+.lico { display: grid; gap: 1px; width: 18px; height: 13px; }
+.lico i { background: currentColor; opacity: .55; border-radius: 1px; }
+#layouts button.on .lico i { opacity: 1; }
 .cell { position: relative; background: var(--panel); display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .cell-h { display: flex; gap: 4px; padding: 3px 4px; border-bottom: 1px solid var(--line); flex: none; }
 .cell-h input { width: 90px; height: 22px; } .cell-h select { height: 22px; }
 .cell-b { position: relative; flex: 1; min-height: 0; }
 .tc-chart { position: absolute; inset: 0; }
+.with-ladder > .tc-chart { right: 212px; }
+.tc-ladder { position: absolute; top: 0; bottom: 0; right: 0; width: 212px; border-left: 1px solid var(--line); background: var(--panel); z-index: 2; }
+.with-ladder.ladder-compact > .tc-chart { right: 152px; }
+.ladder-compact > .tc-ladder { width: 152px; }
+.ladder-compact .tc-ltip { right: 154px; }
+.with-ladder.ladder-tiny > .tc-chart { right: 0; }
+.ladder-tiny > .tc-ladder { display: none; }
+.tc-ladder canvas { display: block; cursor: default; }
+.tc-ltip { position: absolute; right: 214px; top: 0; width: 230px; padding: 6px 8px; background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 6px;
+  font-size: 11px; line-height: 1.55; pointer-events: none; box-shadow: 0 6px 20px rgba(0,0,0,.45); z-index: 5; }
 .tc-legend { position: absolute; inset: 0; pointer-events: none; z-index: 3; font-size: 11px; color: var(--text-2); }
 .tc-legend > div { position: absolute; left: 8px; line-height: 1.6; text-shadow: 0 0 3px var(--panel), 0 0 3px var(--panel); }
 .tc-legend b { color: var(--text); font-weight: 600; }
@@ -321,11 +340,6 @@ summary.ph { list-style: none; } summary.ph::-webkit-details-marker { display: n
 
 /* 퀀트 */
 .qpane { margin-top: 12px; }
-.rrg { position: relative; width: 100%; }
-.rrg svg { display: block; width: 100%; height: auto; }
-.rrg text { font-size: 10.5px; fill: var(--text-2); }
-.rrg .lbl { fill: var(--text); font-size: 10.5px; }
-.rrg .ql { fill: var(--muted); font-size: 11px; }
 .legend-row { display: flex; gap: 12px; flex-wrap: wrap; margin: 6px 0; color: var(--text-2); font-size: 11px; }
 .legend-row i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 4px; vertical-align: -1px; }
 .qtip { position: fixed; z-index: 50; pointer-events: none; background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 3px; padding: 6px 8px; font-size: 11px; color: var(--text); max-width: 260px; box-shadow: 0 4px 14px rgba(0,0,0,.4); }
@@ -359,3 +373,11 @@ summary.ph { list-style: none; } summary.ph::-webkit-details-marker { display: n
 
 .lvt { padding: 5px 0; border-bottom: 1px dashed var(--line); }
 .badge { font-size: 10.5px; padding: 0 5px; border: 1px solid currentColor; border-radius: 2px; }
+
+/* 고수 포지션 */
+.lsbar { height: 6px; border-radius: 3px; background: var(--down); overflow: hidden; margin: 3px 0; }
+.lsbar i { display: block; height: 100%; background: var(--up); }
+.trader { padding: 8px 10px; border-bottom: 1px solid var(--line); }
+.pos { display: inline-block; margin: 2px 4px 2px 0; padding: 1px 6px; border-radius: 3px; border: 1px solid var(--line-2); font-size: 11.5px; cursor: pointer; }
+.pos.long { border-color: rgba(34,176,125,.5); } .pos.short { border-color: rgba(229,72,77,.5); }
+.pos.long b { color: var(--up); } .pos.short b { color: var(--down); }

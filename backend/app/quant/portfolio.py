@@ -19,7 +19,7 @@ from datetime import datetime, timedelta, timezone
 from .. import orderflow
 from ..data import market
 from ..data.synthetic import INTERVAL_SECONDS
-from . import rotation
+from . import universe
 
 KST = timezone(timedelta(hours=9))
 
@@ -73,7 +73,7 @@ METHODS = {"equal": "동일 비중", "inv_vol": "변동성 역가중", "risk_par
 
 
 def optimize(symbols: list[str], interval: str = "1d", bars: int = 365, max_weight: float = 0.4) -> dict:
-    times, closes, src = rotation.load(symbols, interval, bars)
+    times, closes, src = universe.load(symbols, interval, bars)
     syms = [s for s in dict.fromkeys(symbols) if s in closes]
     rets = {s: [(closes[s][t] / closes[s][t - 1] - 1) if closes[s][t] and closes[s][t - 1] else None for t in range(1, len(times))] for s in syms}
     syms = [s for s in syms if sum(r is None for r in rets[s]) <= len(times) * 0.1]   # 기간 대부분 데이터가 있는 코인만
@@ -165,7 +165,7 @@ def _ts(d: str) -> int:
 
 
 def _betas(symbols: list[str]) -> dict[str, float]:
-    times, closes, _ = rotation.load(symbols, "1d", 180)
+    times, closes, _ = universe.load(symbols, "1d", 180)
     b = [(closes["BTCUSDT"][t] / closes["BTCUSDT"][t - 1] - 1) for t in range(1, len(times))]
     out = {}
     for s in symbols:
@@ -238,8 +238,8 @@ def exposures(positions: list[dict]) -> dict:
     if not positions:
         raise ValueError("포지션이 없습니다.")
     syms = list(dict.fromkeys(p["symbol"] for p in positions))
-    uni = list(dict.fromkeys(rotation.DEFAULT_UNIVERSE + syms))
-    times, closes, src = rotation.load(uni, "1d", 120)
+    uni = list(dict.fromkeys(universe.DEFAULT_UNIVERSE + syms))
+    times, closes, src = universe.load(uni, "1d", 120)
     n = len(times)
 
     def stat(s):
@@ -269,14 +269,14 @@ def exposures(positions: list[dict]) -> dict:
             sl = None
         rows.append({"symbol": s, "side": p["side"], "notional": round(nt, 2), "who": p.get("who"), "beta": round(beta[s], 2),
                      "mom_z": round((z["mom"] - mm) / sm, 2), "vol_z": round((z["vol"] - mv) / sv, 2), "vol_ann_pct": round(z["vol"] * 100, 1),
-                     "tier": rotation.TIER_NAME[rotation.tier(s)], "adv_usd": round(adv), "pct_adv": round(nt / adv * 100, 4) if adv else None,
+                     "tier": universe.TIER_NAME[universe.tier(s)], "adv_usd": round(adv), "pct_adv": round(nt / adv * 100, 4) if adv else None,
                      "days_to_exit_10pct": round(nt / (adv * 0.1), 3) if adv else None,
                      "exit_slip_pct": None if not sl else round(sl["slip_pct"], 4)})
         agg["beta_dollars"] += sg * nt * beta[s]
         agg["mom"] += sg * nt * (z["mom"] - mm) / sm
         agg["vol"] += sg * nt * (z["vol"] - mv) / sv
         agg["net"] += sg * nt
-        t = rotation.TIER_NAME[rotation.tier(s)]
+        t = universe.TIER_NAME[universe.tier(s)]
         tiers[t] = tiers.get(t, 0) + sg * nt
     return {"data_source": src, "rows": rows, "gross": round(gross, 2), "net": round(agg["net"], 2),
             "beta_dollars": round(agg["beta_dollars"], 2), "mom_tilt": round(agg["mom"] / gross, 2) if gross else 0,

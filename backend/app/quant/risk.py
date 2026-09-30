@@ -7,7 +7,7 @@ import random
 from concurrent.futures import ThreadPoolExecutor
 
 from ..data.synthetic import INTERVAL_SECONDS
-from . import rotation
+from . import universe
 
 
 def _q(xs: list[float], p: float) -> float:
@@ -44,7 +44,7 @@ def _corr(a: list[float], b: list[float]) -> float | None:
 
 def matrix(symbols: list[str], interval: str = "1d", bars: int = 120) -> dict:
     """수익률 상관 행렬 + 코인별 연 변동성·BTC 베타·VaR/CVaR(95%, 한 봉)·최대낙폭."""
-    times, closes, src = rotation.load(symbols, interval, bars)
+    times, closes, src = universe.load(symbols, interval, bars)
     syms = [s for s in dict.fromkeys(symbols) if s in closes]
     R = {s: _rets(closes[s]) for s in closes}
     per_year = 365 * 86400 / INTERVAL_SECONDS.get(interval, 86400)
@@ -87,7 +87,7 @@ def portfolio(positions: list[dict], interval: str = "1d", bars: int = 250, shoc
     if not positions:
         return {"positions": 0}
     syms = list(dict.fromkeys(p["symbol"] for p in positions))
-    times, closes, src = rotation.load(syms, interval, bars)
+    times, closes, src = universe.load(syms, interval, bars)
     R = {s: _rets(closes[s]) for s in closes}
     pnl = []
     for t in range(1, len(times)):

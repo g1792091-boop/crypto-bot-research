@@ -1,8 +1,8 @@
-"""풋프린트 분석(진입 신호 · 지지저항 판정 · 다음 봉)과 순환매 자리."""
+"""풋프린트 분석(진입 신호 · 지지저항 판정 · 다음 봉)."""
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.quant import footprint, rotation
+from app.quant import footprint
 from app.quant.scanner import SIGNALS, Scanner
 
 c = TestClient(app)
@@ -55,22 +55,10 @@ def test_footprint_analysis_endpoint():
     assert all(lv["status"] in ("holding", "weakening", "broken", "untested") for lv in a["levels"])
 
 
-def test_rotation_series_and_spots():
-    r = c.get("/api/rotation/series", params={"symbol": "sol", "interval": "4h"}).json()
-    assert r["bench"] == "BTC" and r["points"] and r["now"] in ("leading", "weakening", "lagging", "improving")
-    kinds = [m["kind"] for m in r["marks"]]
-    assert all(a != b for a, b in zip(kinds, kinds[1:]))          # 같은 표시 연속 없음
-    assert c.get("/api/rotation/series", params={"symbol": "btc"}).json()["bench"] == "시장 평균"
-    rrg = rotation.rrg(interval="1d")
-    assert set(rrg["spots"]) == set(rotation.SPOTS) and sum(len(v) for v in rrg["spots"].values()) == len(rrg["rows"])
-    assert rotation._spot(["lagging", "improving", "improving", "leading"], [{"ratio": 99}, {"ratio": 100}])["key"] == "entry"
-    assert rotation._spot(["leading", "leading", "weakening"], [{"ratio": 102}, {"ratio": 101}])["key"] == "exit"
-
-
-def test_scanner_has_footprint_and_rotation(tmp_path, monkeypatch):
+def test_scanner_has_footprint_not_rotation(tmp_path, monkeypatch):
     from app import config
     monkeypatch.setattr(config, "STATE_DIR", tmp_path)
-    assert {"footprint", "rotation"} <= set(SIGNALS)
+    assert "footprint" in SIGNALS and "rotation" not in SIGNALS
     sc = Scanner()
     sc.set_config(symbols=["eth"], intervals=["1h"])
     sc.scan()

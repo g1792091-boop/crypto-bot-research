@@ -17,9 +17,29 @@ state.overlays.sr ??= true;
 state.overlays.countdown ??= true;
 state.overlays.forecast ??= true;
 state.overlays.footprint ??= false;
-state.overlays.rotation ??= false;
-state.layout ||= 1;
-state.multi ||= [{ symbol: "ETHUSDT", interval: "1h" }, { symbol: "SOLUSDT", interval: "1h" }, { symbol: "BTCUSDT", interval: "4h" }];
+delete state.overlays.rotation;
+state.overlays.ladder ??= true;
+// 차트 분할: 칸 수 · 열/행 비율 · (큰 칸이 있으면) 영역 배치
+const LAYOUT_LIST = [
+  ["1", { n: 1, cols: "1fr", rows: "1fr", name: "차트 1개" }],
+  ["2", { n: 2, cols: "1fr 1fr", rows: "1fr", name: "2개 · 좌우" }],
+  ["2v", { n: 2, cols: "1fr", rows: "1fr 1fr", name: "2개 · 위아래" }],
+  ["3", { n: 3, cols: "2fr 1fr", rows: "1fr 1fr", areas: ["a b", "a c"], name: "3개 · 큰 차트 + 오른쪽 2개" }],
+  ["3b", { n: 3, cols: "1fr 1fr", rows: "3fr 2fr", areas: ["a a", "b c"], name: "3개 · 큰 차트 + 아래 2개" }],
+  ["3c", { n: 3, cols: "1fr 1fr 1fr", rows: "1fr", name: "3개 · 가로" }],
+  ["4", { n: 4, cols: "1fr 1fr", rows: "1fr 1fr", name: "4개 · 2×2" }],
+  ["4b", { n: 4, cols: "3fr 1fr", rows: "1fr 1fr 1fr", areas: ["a b", "a c", "a d"], name: "4개 · 큰 차트 + 오른쪽 3개" }],
+  ["5", { n: 5, cols: "2fr 1fr 1fr", rows: "1fr 1fr", areas: ["a b c", "a d e"], name: "5개 · 큰 차트 + 4개" }],
+  ["6", { n: 6, cols: "1fr 1fr 1fr", rows: "1fr 1fr", name: "6개 · 3×2" }],
+  ["8", { n: 8, cols: "1fr 1fr 1fr 1fr", rows: "1fr 1fr", name: "8개 · 4×2" }],
+  ["9", { n: 9, cols: "1fr 1fr 1fr", rows: "1fr 1fr 1fr", name: "9개 · 3×3" }],
+];
+const LAYOUTS = Object.fromEntries(LAYOUT_LIST);   // (숫자 이름은 객체에서 순서가 바뀌므로 메뉴는 LAYOUT_LIST 순서로)
+const layIcon = (L) => `<span class="lico" style="grid-template-columns:${L.cols};grid-template-rows:${L.rows};${L.areas ? `grid-template-areas:${L.areas.map((r) => `'${r}'`).join(" ")}` : ""}">${Array.from({ length: L.n }, (_, i) => `<i${L.areas ? ` style="grid-area:${"abcde"[i]}"` : ""}></i>`).join("")}</span>`;
+state.layout = LAYOUTS[String(state.layout)] ? String(state.layout) : "1";
+const MULTI_DEFAULT = [["ETHUSDT", "1h"], ["SOLUSDT", "1h"], ["BTCUSDT", "4h"], ["XRPUSDT", "1h"], ["BNBUSDT", "1h"], ["DOGEUSDT", "1h"], ["BTCUSDT", "15m"], ["ETHUSDT", "4h"]];
+state.multi ||= [];
+while (state.multi.length < 8) { const [symbol, interval] = MULTI_DEFAULT[state.multi.length]; state.multi.push({ symbol, interval }); }
 
 // ================================================================ 시세 · 관심종목
 async function pollTickers() {
@@ -51,7 +71,7 @@ function renderTickerBar() {
   last.className = `lastpx ${t.price > prev ? "up" : t.price < prev ? "down" : cls(t.change_pct)}`;
   $("#t-chg").innerHTML = `<span class="${cls(t.change_pct)}">${pct(t.change_pct)}</span>`;
   $("#t-high").textContent = px(t.high); $("#t-low").textContent = px(t.low); $("#t-vol").textContent = big(t.quote_volume);
-  document.title = `${px(t.price)} ${state.symbol.replace("USDT", "")} · 선물 터미널`;
+  document.title = `${px(t.price)} ${state.symbol.replace("USDT", "")} · GH Quant`;
 }
 
 let premium = null;
@@ -128,8 +148,9 @@ function renderToolbar() {
   $("#macro-syms").hidden = mode !== "macro";
   $$(".term-only").forEach((e) => (e.hidden = !term));
   $("#ind-btn").hidden = mode === "macro";
-  $$("#overlays button").forEach((b) => b.classList.toggle("on", !!state.overlays[b.dataset.ov]));
-  $$("#layouts button").forEach((b) => b.classList.toggle("on", +b.dataset.layout === state.layout));
+  $$("#overlays button").forEach((b) => b.classList.toggle("on", b.dataset.ov === "patterns" ? state.indicators.some((x) => x.key === "chartpat") : !!state.overlays[b.dataset.ov]));
+  $$("#layouts button").forEach((b) => b.classList.toggle("on", b.dataset.layout === state.layout));
+  $("#lay-btn").innerHTML = `${layIcon(LAYOUTS[state.layout])}<span>분할</span>`;
 }
 
 function renderChart() {
@@ -143,11 +164,13 @@ function renderChart() {
   }
   $("#tv-main").innerHTML = "";
   const grid = $("#term-grid");
-  const n = state.layout;
-  if (charts.length !== n) {
+  const L = LAYOUTS[state.layout], n = L.n;
+  if (charts.length !== n || grid.dataset.layout !== state.layout) {
     charts.forEach((c) => c.destroy()); charts = [];
-    grid.className = `term-grid l${n}`;
-    grid.innerHTML = Array.from({ length: n }, (_, i) => `<div class="cell">${i ? `<div class="cell-h">
+    grid.dataset.layout = state.layout;
+    grid.className = `term-grid${n >= 6 ? " dense" : ""}`;
+    Object.assign(grid.style, { gridTemplateColumns: L.cols, gridTemplateRows: L.rows, gridTemplateAreas: L.areas ? L.areas.map((r) => `"${r}"`).join(" ") : "none" });
+    grid.innerHTML = Array.from({ length: n }, (_, i) => `<div class="cell"${L.areas ? ` style="grid-area:${"abcde"[i]}"` : ""}>${i ? `<div class="cell-h">
         <input data-cell="${i}" data-k="symbol" value="${state.multi[i - 1].symbol.replace("USDT", "")}">
         <select data-cell="${i}" data-k="interval">${INTERVALS.map(([k, l]) => `<option value="${k}" ${k === state.multi[i - 1].interval ? "selected" : ""}>${l}</option>`).join("")}</select></div>` : ""}
         <div class="cell-b"></div></div>`).join("");
@@ -155,13 +178,15 @@ function renderChart() {
       const subInd = state.indicators.filter((x) => INDICATORS[x.key]?.pane === "sub");
       charts.push(new TermChart(el, {
         symbol: i ? state.multi[i - 1].symbol : state.symbol, interval: i ? state.multi[i - 1].interval : state.interval,
-        indicators: i ? state.indicators.filter((x) => INDICATORS[x.key]?.pane !== "sub").concat(subInd.slice(0, 1)) : state.indicators,
+        // 작은 칸에는 보조지표 창을 줄인다 (6칸 이상이면 가격 위 지표만)
+        indicators: i ? state.indicators.filter((x) => INDICATORS[x.key]?.pane !== "sub").concat(n >= 6 ? [] : subInd.slice(0, 1)) : state.indicators,
         overlays: i ? { heat: false, whales: false, bots: true, scenario: false, sr: state.overlays.sr, countdown: state.overlays.countdown } : { ...state.overlays },
         onDrawDone: () => $$("#draw-tools button").forEach((b) => b.classList.remove("on")),
         onEditPosition: editPosition,
       }));
     });
   }
+  charts[0]?.setLadder(!!state.overlays.ladder);
   charts.forEach((c, i) => c.load(i ? state.multi[i - 1].symbol : state.symbol, i ? state.multi[i - 1].interval : state.interval)
     .then(() => { if (!i && state.overlays.forecast && state.forecast) c.setForecast(state.forecast); })
     .catch((e) => toast("차트 오류", e.message, "err")));
@@ -446,7 +471,7 @@ function bookTools(ob) {
     <div class="help" style="padding:0 12px 10px">스프레드 ${ob.spread_bps?.toFixed(2)}bp. 큰 주문은 여러 번 나눠 넣거나 지정가를 쓰면 슬리피지를 줄일 수 있습니다. 벽은 언제든 취소될 수 있으니 벽만 믿고 진입하지 마세요.</div>`;
 }
 
-// ================================================================ 풋프린트 분석 패널 (다음 봉 · 진입 신호 · 지지저항 판정 · 순환매 자리)
+// ================================================================ 풋프린트 분석 패널 (다음 봉 · 진입 신호 · 지지저항 판정)
 let fpTimer;
 async function loadFpPanel() {
   clearTimeout(fpTimer);
@@ -455,15 +480,14 @@ async function loadFpPanel() {
   if (iv === "1m" || iv === "1y") { el.innerHTML = `<div class="empty">풋프린트는 3분봉 ~ 월봉에서 쓸 수 있습니다.</div>`; return; }
   if (!el.innerHTML) el.innerHTML = `<div class="empty">분석 중…</div>`;
   try {
-    const [f, rs] = await Promise.all([api(`/api/footprint?symbol=${sym}&interval=${iv}&bars=80&analysis=true`),
-      api(`/api/rotation/series?symbol=${sym}&interval=${iv}`).catch(() => null)]);
+    const f = await api(`/api/footprint?symbol=${sym}&interval=${iv}&bars=80&analysis=true`);
     if (sym !== state.symbol || iv !== state.interval) return;
-    renderFpPanel(f, rs);
+    renderFpPanel(f);
   } catch (e) { el.innerHTML = `<div class="empty">풋프린트 분석 실패: ${esc(e.message)}</div>`; }
   fpTimer = setTimeout(loadFpPanel, 30_000);
 }
 
-function renderFpPanel(f, rs) {
+function renderFpPanel(f) {
   const a = f.analysis, nx = a.next, st = a.signal_stats;
   const odds = (o) => o.p_up == null ? `<span class="muted">표본 없음</span>`
     : `<b class="${o.p_up > 50 ? "up" : o.p_up < 50 ? "down" : "accent"}">${o.p_up === 50 ? "반반 50%" : o.p_up > 50 ? `상승 ${o.p_up}%` : `하락 ${100 - o.p_up}%`}</b> <span class="muted">(같은 모양 ${o.n}번 · 평소 상승 ${nx.baseline_up}%)</span>${o.n < 30 ? ' <span class="accent">표본 적음</span>' : ""}`;
@@ -473,8 +497,6 @@ function renderFpPanel(f, rs) {
       <div class="grow"></div><button class="flat sm" data-plan='${JSON.stringify({ k: s.dir, entry: s.entry, stop: s.stop, take: s.take }).replace(/'/g, "&#39;")}'>차트에</button></div>
     <ul class="reasons" style="margin:3px 0">${s.reasons.map((r) => `<li>${esc(r)}</li>`).join("")}</ul>
     <div class="kv2"><span class="k">진입</span><span>${px(s.entry)}</span><span class="k">손절</span><span class="down">${px(s.stop)}</span><span class="k">익절</span><span class="up">${px(s.take)}</span></div></div>`;
-  const quadCls = { "주도": "up", "약화": "accent", "소외": "down", "개선": "info" };
-  const lastMk = rs?.marks?.at(-1);
   $("#side-fpx").innerHTML = `
     <div class="fc-sec"><div class="sub" style="padding-left:0">다음 봉 (체결 모양 기준)</div>
       <div class="kv" style="display:grid;grid-template-columns:auto 1fr;gap:4px 10px">
@@ -491,13 +513,7 @@ function renderFpPanel(f, rs) {
       <div class="help">차트의 선: 실선 = 유지, 긴 점선 = 흔들림, 짧은 점선 = 이탈·미테스트.</div></div>
     <div class="fc-sec"><div class="sub" style="padding-left:0">풋프린트 진입 신호 ${st.n ? `<span class="muted">· 지난 신호 ${st.n}개 중 익절 먼저 ${st.win_rate}%</span>` : ""}</div>
       ${a.signals.slice().reverse().slice(0, 5).map(sig).join("") || '<div class="muted">최근 80봉에 신호가 없습니다</div>'}
-      <div class="help">${esc(st.note)}. 익절은 손절 거리의 2배라 승률 34% 이상이면 본전 이상입니다.</div></div>
-    <div class="fc-sec"><div class="sub" style="padding-left:0">순환매 자리 <span class="muted">(${rs ? esc(rs.bench) + " 대비" : "–"})</span></div>
-      ${rs ? `<div class="row"><span>지금</span><b class="${quadCls[rs.now_name] || ""}" style="font-size:16px">${esc(rs.now_name)}</b> <span class="muted">구역</span></div>
-        ${lastMk ? `<div class="muted">마지막 신호: ${mdhm(lastMk.time)} ${esc(lastMk.text)}</div>` : ""}
-        ${rs.entry_stats.n ? `<div class="muted">과거 '순환 진입' ${rs.entry_stats.n}번 → 20봉 뒤 ${esc(rs.bench)} 대비 평균 ${rs.entry_stats.avg_excess_pct > 0 ? "+" : ""}${rs.entry_stats.avg_excess_pct}% (이긴 비율 ${rs.entry_stats.win_rate}%)</div>` : ""}
-        <div class="help">차트 위 '순환매'를 켜면 아래 띠(초록 주도 · 노랑 약화 · 빨강 소외 · 파랑 개선)와 순환 진입·이탈 화살표가 보입니다. 개선 → 주도로 넘어가는 자리가 순환매 진입 자리입니다.</div>`
-        : '<div class="muted">순환 데이터를 불러오지 못했습니다</div>'}</div>`;
+      <div class="help">${esc(st.note)}. 익절은 손절 거리의 2배라 승률 34% 이상이면 본전 이상입니다.</div></div>`;
 }
 
 // ================================================================ 주문 · 계좌
@@ -642,14 +658,31 @@ export function initTrade() {
   $("#overlays").onclick = (e) => {
     const k = e.target.dataset.ov;
     if (!k) return;
+    if (k === "patterns") {   // 차트 패턴 = 지표 하나를 켜고 끄는 단축 버튼
+      const has = state.indicators.some((x) => x.key === "chartpat");
+      state.indicators = has ? state.indicators.filter((x) => x.key !== "chartpat") : [...state.indicators, { key: "chartpat", params: {} }];
+      savePrefs(); renderToolbar(); charts[0]?.setIndicators(state.indicators);
+      if (!$("#ind-menu").hidden) indicatorPanel({ refresh: true });
+      return;
+    }
     state.overlays[k] = !state.overlays[k];
     savePrefs(); renderToolbar();
     if (k === "forecast") charts[0]?.setForecast(state.overlays.forecast ? state.forecast : null);
+    else if (k === "ladder") charts[0]?.setLadder(state.overlays.ladder);
     else if (k === "countdown") charts.forEach((c) => { c.opts.overlays.countdown = state.overlays.countdown; c.countdown.update(); });
     else charts[0]?.setOverlay(k, state.overlays[k]);
     if (k === "scenario") charts[0]?.setScenario(state.overlays.scenario ? state.analysis?.scenarios?.[0] : null, state.analysis?.symbol);
   };
-  $("#layouts").onclick = (e) => { const n = +e.target.dataset.layout; if (n) { state.layout = n; savePrefs(); renderChart(); } };
+  $("#layouts").innerHTML = LAYOUT_LIST.map(([k, L]) => `<button data-layout="${k}" title="${L.name}">${layIcon(L)}<span>${L.name}</span></button>`).join("");
+  renderToolbar();
+  $("#lay-btn").onclick = (e) => {
+    e.stopPropagation();
+    const m = $("#layouts"), r = e.currentTarget.getBoundingClientRect();   // 툴바가 가로 스크롤이라 fixed 로 띄운다
+    m.hidden = !m.hidden;
+    Object.assign(m.style, { top: `${r.bottom + 4}px`, left: `${Math.max(8, r.right - 440)}px` });
+  };
+  document.addEventListener("click", (e) => { if (!e.target.closest(".lay-pick")) $("#layouts").hidden = true; });
+  $("#layouts").onclick = (e) => { const k = e.target.closest("[data-layout]")?.dataset.layout; if (k) { state.layout = k; $("#layouts").hidden = true; savePrefs(); renderChart(); } };
   $("#term-grid").onchange = async (e) => {
     const i = +e.target.dataset.cell;
     if (!i) return;
