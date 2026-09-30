@@ -52,3 +52,25 @@ def test_endpoint(monkeypatch, tmp_path):
     assert c.get("/api/strategy/NOPE").status_code == 404
     assert c.get("/api/strategy/X", params={"tf": "2h"}).status_code == 400
     assert c.get("/api/strategy/X", params={"symbol": "PEPEUSDT"}).status_code == 400
+
+
+def test_all_36_views_load_and_run_on_synthetic_bars():
+    from paperbot.agents.roster3 import STRATEGY_KO
+    monkey = sv._VIEWS
+    sv._VIEWS = None
+    vs = sv.views()
+    assert set(vs) == set(STRATEGY_KO)
+    rng = np.random.default_rng(3)
+    n = 700
+    c = 100 * np.exp(np.cumsum(rng.normal(0, 0.004, n)))
+    o = np.r_[c[0], c[:-1]]
+    df = pd.DataFrame({"ts": pd.date_range("2026-01-01", periods=n, freq="1h", tz="UTC"), "open": o,
+                       "high": np.maximum(o, c) * 1.002, "low": np.minimum(o, c) * 0.998, "close": c,
+                       "volume": rng.uniform(1, 10, n)})
+    for name in vs:
+        r = sv.render(name, df, "1h", tail=100)
+        # candle-pattern strategies (e.g. N11 breakaway) have conditions but no indicator lines
+        assert r["conditions"]["long"] or r["conditions"]["short"], name
+        for o in r["overlays"]:
+            assert all(np.isfinite(p["value"]) for p in o["data"]), name
+    sv._VIEWS = monkey

@@ -89,11 +89,13 @@ async function drawStratChart() {
   if (!ss.chart) { $("schart").innerHTML = '<p class="empty">차트 부품을 불러오지 못했습니다</p>'; return; }
   const id = ++ss.chartReq;
   const aid = `${ss.name}@${ss.tf}`;
-  const [bars, trades, view] = await Promise.all([
+  const [bars, trades, view, sigs] = await Promise.all([
     api(`/api/candles?symbol=${ss.sym}&interval=${ss.tf}&limit=500`).catch(() => []),
     ss.markers ? api(`/api/trades?symbol=${ss.sym}&tf=${ss.tf}&limit=600`).catch(() => []) : Promise.resolve([]),
     api(`/api/strategy/${encodeURIComponent(ss.name)}?tf=${ss.tf}&symbol=${ss.sym}`).catch(() => null),
+    api(`/api/signals?symbol=${ss.sym}&tf=${ss.tf}&limit=500`).catch(() => []),
   ]);
+  ss.sigs = sigs.filter((r) => r.strategy === ss.name);
   if (id !== ss.chartReq) return;
   ss.series.setData(bars);
   // indicator lines exactly as the strategy's locked code uses them (when the view is available)
@@ -160,7 +162,11 @@ function renderConds(view) {
   const left = (l) => l && l.length ? l.length - l.filter((x) => x.on).length : null;
   const nl = left(c.long), ns = left(c.short);
   const near = [nl, ns].filter((x) => x != null).length ? Math.min(...[nl, ns].filter((x) => x != null)) : null;
-  el.innerHTML = `<div class="muted" style="margin-bottom:6px">방금 마감한 ${TF_KO[ss.tf]}봉 기준 · ${tsKo(view.bar_close)}</div>` +
+  // what the bot itself signalled on that bar (signal log = the exact source; the checklist explains it)
+  const bot = (ss.sigs || []).find((r) => r.bar_close === view.bar_close);
+  const botTxt = bot ? `봇 신호: <b class="${bot.side > 0 ? "up" : "down"}">${bot.side > 0 ? "롱" : "숏"}</b> (${STATUS_KO[bot.status] || bot.status})`
+    : '봇 신호: <span class="muted">없음</span>';
+  el.innerHTML = `<div class="muted" style="margin-bottom:6px">방금 마감한 ${TF_KO[ss.tf]}봉 기준 · ${tsKo(view.bar_close)} · ${botTxt}</div>` +
     `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:4px 18px">${part("롱", c.long)}${part("숏", c.short)}</div>` +
     (near === 0 ? '<div class="near">이 봉에서 신호 조건이 모두 켜졌습니다</div>'
       : near != null ? `<div class="near">신호까지 조건 ${near}개 남음</div>` : "");

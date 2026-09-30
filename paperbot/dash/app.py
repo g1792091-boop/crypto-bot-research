@@ -267,15 +267,28 @@ _FRAME_CACHE: dict = {}
 
 
 def fetch_frame(symbol: str, interval: str, limit: int = 1500):
-    """Closed bars with volume (for the strategy views), oldest first; the forming bar is dropped."""
+    """Closed bars with volume (for the strategy views), oldest first; the forming bar is dropped.
+    More than 1,500 bars are fetched in pages (Binance returns at most 1,500 per request)."""
     import pandas as pd
     key = (symbol, interval, limit)
     hit = _FRAME_CACHE.get(key)
-    if hit and time.time() - hit[0] < 30:
+    if hit and time.time() - hit[0] < 60:
         return hit[1]
-    url = f"https://fapi.binance.com/fapi/v1/klines?symbol={symbol}&interval={interval}&limit={limit}"
-    with urllib.request.urlopen(url, timeout=10) as r:
-        rows = json.loads(r.read())
+    rows: list = []
+    end = None
+    while len(rows) < limit:
+        n = min(1500, limit - len(rows))
+        url = f"https://fapi.binance.com/fapi/v1/klines?symbol={symbol}&interval={interval}&limit={n}"
+        if end is not None:
+            url += f"&endTime={end}"
+        with urllib.request.urlopen(url, timeout=10) as r:
+            page = json.loads(r.read())
+        if not page:
+            break
+        rows = page + rows
+        end = int(page[0][0]) - 1
+        if len(page) < n:
+            break
     now = time.time() * 1000
     rows = [k for k in rows if int(k[6]) < now]
     df = pd.DataFrame({"ts": pd.to_datetime([int(k[0]) for k in rows], unit="ms", utc=True),
@@ -284,6 +297,14 @@ def fetch_frame(symbol: str, interval: str, limit: int = 1500):
                        "volume": [float(k[5]) for k in rows]})
     _FRAME_CACHE[key] = (time.time(), df)
     return df
+
+
+def view_bars(tf: str) -> int:
+    """History for a strategy view: the live signal service's window (two warm-ups), at most 6,000
+    bars (four requests), so indicators that depend on their start match the bot's."""
+    from .. import sweepsig
+    lib = sweepsig.lib()
+    return int(min(6000, max(1500, 2 * lib.warmup_bars(tf) + 3)))
 
 
 # ---------------------------------------------------------------- app
@@ -407,7 +428,7 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
             known = False
         if not known:
             raise HTTPException(404, "no chart view for this strategy yet")
-        df = frames(symbol, tf, 1500)
+        df = frames(symbol, tf, view_bars(tf))
         if df is None or len(df) < 50:
             raise HTTPException(503, "no price data")
         key = (strategy, tf, symbol, str(df["ts"].iloc[-1]))

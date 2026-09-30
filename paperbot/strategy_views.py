@@ -1,6 +1,6 @@
 """Chart views of the 36 strategies for the dashboard's strategy tab.
 
-Each ``view_<NAME>(df, tf)`` in ``strategy_view_defs.py`` returns the indicator lines the
+Each ``view_<NAME>(df, tf)`` in ``strategy_view_defs/<NAME>.py`` returns the indicator lines the
 strategy's locked code uses (same parameters) and its entry conditions as boolean arrays,
 with plain Korean names. They were written and checked against the locked signals
 (recall and precision of AND(conditions) vs the signal, see docs/strategy-views.md).
@@ -29,8 +29,10 @@ def views() -> dict[str, Callable]:
     global _VIEWS
     if _VIEWS is None:
         sweepsig.lib()
-        from . import strategy_view_defs as d
-        _VIEWS = {n[5:]: getattr(d, n) for n in dir(d) if n.startswith("view_")}
+        import importlib
+        from .strategy_view_defs import NAMES
+        _VIEWS = {n: getattr(importlib.import_module(f"{__package__}.strategy_view_defs.{n}"), f"view_{n}")
+                  for n in NAMES}
     return _VIEWS
 
 
