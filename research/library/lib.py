@@ -193,15 +193,23 @@ def run_window(L, fg, pi, tf: str, split: str) -> pd.DataFrame:
         if hi_ <= lo_:
             continue
         atr = fg.atr(df, 14).to_numpy(float)
-        ts = pd.to_datetime(df["ts"], utc=True).to_numpy()
+        ts = pd.to_datetime(df["ts"], utc=True).dt.tz_localize(None).to_numpy()  # datetime64[ns], UTC
         for ename, (lg, sh) in entries(df, fg, pi).items():
             for xname, cfg, mh in exits:
                 t = L.run_backtest(df, atr, lg, sh, cfg, L._cost(tf, mh), lo_, hi_)
                 if len(t):
-                    parts.append(t.assign(symbol=coin, entry=ename, exit=xname, tf=tf, split=split,
-                                          entry_ts=ts[t["entry_idx"].to_numpy(int)],
-                                          exit_ts=ts[t["exit_idx"].to_numpy(int)]))
-    return pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
+                    parts.append(pd.DataFrame({
+                        "net": t["net"].to_numpy(np.float64), "mae": t["mae"].to_numpy(np.float32),
+                        "sl_dist": t["sl_dist"].to_numpy(np.float32),
+                        "entry_ts": ts[t["entry_idx"].to_numpy(int)], "exit_ts": ts[t["exit_idx"].to_numpy(int)],
+                        "symbol": coin, "entry": ename, "exit": xname, "split": split}))
+    if not parts:
+        return pd.DataFrame()
+    out = pd.concat(parts, ignore_index=True)
+    for col in ("symbol", "entry", "exit", "split"):
+        out[col] = out[col].astype("category")
+    out["tf"] = tf
+    return out
 
 
 # ------------------------------------------------------------------ gauntlet
@@ -216,10 +224,10 @@ def stats_block(g: pd.DataFrame, pre: str) -> dict:
     return d
 
 
-def gauntlet(all_t: pd.DataFrame) -> pd.DataFrame:
+def config_rows(all_t: pd.DataFrame) -> list[dict]:
     rows = []
     half = pd.Timestamp("2023-01-01", tz="UTC")
-    for (tf, e, x), g in all_t.groupby(["tf", "entry", "exit"]):
+    for (tf, e, x), g in all_t.groupby(["tf", "entry", "exit"], observed=True):
         gi = g[g["split"] == "is"]
         gc = g[g["split"].isin(["oos", "final"])]
         gp = g[g["split"] == "pre"]
@@ -230,7 +238,15 @@ def gauntlet(all_t: pd.DataFrame) -> pd.DataFrame:
         sl = g["sl_dist"].median()
         r["max_lev"] = int(min(125, np.floor(1 / (sl + max(1.5 * sl, 0.002) + 0.005)))) if sl > 0 else 0
         rows.append(r)
-    t = pd.DataFrame(rows)
+    return rows
+
+
+def gauntlet(all_t: pd.DataFrame) -> pd.DataFrame:
+    return select(pd.DataFrame(config_rows(all_t)))
+
+
+def select(t: pd.DataFrame) -> pd.DataFrame:
+    t = t.reset_index(drop=True)
     t["stage1"] = ((t["is_n"] >= 100) & (t["is_mean_pct"] > 0) & (t["is_coins_pos"] >= 4)
                    & (t["is_coins_pos"] > t["is_coins_n"] / 2) & (t["is_half1_mean_pct"] > 0)
                    & (t["is_half2_mean_pct"] > 0))
@@ -252,16 +268,23 @@ def run(scratch: str) -> None:
     import fg_indicators as fg
     import pine_indicators as pi
     os.makedirs(scratch, exist_ok=True)
-    parts = []
+    rows = []
     for tf in TFS:
+        parts = []
         for split in ("is", "oos", "final", "pre"):
             t0 = time.time()
             t = run_window(L, fg, pi, tf, split)
             parts.append(t)
             print(f"{tf} {split}: {len(t)} trades, {time.time() - t0:.0f}s", flush=True)
-    all_t = pd.concat(parts, ignore_index=True)
-    all_t.to_pickle(os.path.join(scratch, "library_trades.pkl"))
-    res = gauntlet(all_t)
+        tt = pd.concat(parts, ignore_index=True)
+        for col in ("symbol", "entry", "exit", "split", "tf"):
+            tt[col] = tt[col].astype("category")
+        del parts
+        t0 = time.time()
+        rows.extend(config_rows(tt))
+        print(f"{tf}: {len(rows)} configs evaluated so far, {time.time() - t0:.0f}s", flush=True)
+        del tt
+    res = select(pd.DataFrame(rows))
     out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "out")
     os.makedirs(out, exist_ok=True)
     res.to_csv(os.path.join(out, "results.csv"), index=False)
