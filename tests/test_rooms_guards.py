@@ -5,6 +5,7 @@ weekly reviews), restores of paper3.db, the backup unit, and the smaller guards 
 quote model text, Telegram never carries model links, hypotheses are never 'facts').
 """
 
+import json
 import os
 import shutil
 import sqlite3
@@ -1603,3 +1604,222 @@ def _js_hint(wait):
                          capture_output=True, text=True, timeout=30)
     assert out.returncode == 0, out.stderr
     return _json.loads(out.stdout)
+
+
+# --- one call is one model request (at most one more that was stopped), and the check charges that
+def _ev_assistant(mid, text, input_tokens=20_000):
+    return {"type": "assistant", "message": {"id": mid, "type": "message", "role": "assistant",
+                                             "content": [{"type": "text", "text": text}], "stop_reason": None,
+                                             "usage": {"input_tokens": input_tokens, "output_tokens": 1,
+                                                       "cache_creation_input_tokens": 0,
+                                                       "cache_read_input_tokens": 0}}}
+
+
+_EV_INIT = {"type": "system", "subtype": "init", "model": "claude-sonnet"}
+_EV_RESUME = {"type": "user", "isSynthetic": True, "message": {"role": "user", "content": [
+    {"type": "text", "text": "Output token limit hit. Resume directly — no apology, no recap."}]}}
+
+
+class _FakeCli:
+    """Popen stand-in for `claude -p --output-format stream-json`: its first answer reaches the output ceiling,
+    it announces that it resumes (the synthetic user turn) and, unless it is killed first, streams a second
+    answer and ends reporting four ceilings, as the real CLI does (up to 3 more requests per call)."""
+
+    def __init__(self, before, after):
+        import threading
+        self.before, self.after = before, after
+        self.killed = threading.Event()
+        self.after_sent = False
+        self.stdin_data = []
+        self.cmd = None
+
+    def __call__(self, cmd, **kw):
+        self.cmd, self.kw = cmd, kw
+        fake = self
+
+        class _In:
+            def write(self, s):
+                fake.stdin_data.append(s)
+
+            def close(self):
+                pass
+        self.stdin, self.stdout, self.pid = _In(), self._lines(), None
+        return self
+
+    def _lines(self):
+        import json as _json
+        for ev in self.before:
+            yield _json.dumps(ev) + "\n"
+        if self.killed.wait(5):
+            return
+        self.after_sent = True
+        for ev in self.after:
+            yield _json.dumps(ev) + "\n"
+
+    def kill(self):
+        self.killed.set()
+
+    def wait(self, timeout=None):
+        return -9 if self.killed.is_set() else (1 if self.after else 0)
+
+
+def test_a_call_that_reaches_the_output_ceiling_is_stopped_and_stays_inside_the_cap(world):
+    """Claude Code resumes an answer cut at CLAUDE_CODE_MAX_OUTPUT_TOKENS up to 3 more times, each request
+    re-sending the whole input and writing another ceiling: one call used 4 x (input + 16k) against a check
+    that charged input + 16k. The runner now stops the CLI at the first sign of another request and the
+    check charges the most a call can then use."""
+    import time as _time
+    from paperbot.agents import runner as RN
+    four = {"type": "result", "subtype": "success", "is_error": True, "result": "API Error: response exceeded the "
+            "16000 output token maximum", "usage": {"input_tokens": 80_000, "output_tokens": 64_000}}
+    cli = _FakeCli([_EV_INIT, _ev_assistant("msg_1", '{"headline": "cut'), _EV_RESUME],
+                   [_ev_assistant("msg_2", "more"), _EV_RESUME, _ev_assistant("msg_3", "more"), _EV_RESUME,
+                    _ev_assistant("msg_4", "more"), four])
+    packet = {"role": "x", "blob": "가" * 20_000}                     # about 21k tokens estimated
+    est = RM.estimate_tokens(packet, "s")
+    prefill(world, QUIET, owner=1)                                  # 20k used
+    cap = 20_000 + RN.call_charge(est)
+    b = RM.ClassBudget(RN.ClaudeCodeRunner(env={}, popen=cli), world.agents, "owner", 20, cap, 80, 10**9,
+                       lambda: QUIET)
+    t0 = _time.monotonic()
+    with pytest.raises(RN.AgentCallError) as got:
+        b.call("sonnet", "s", "i", packet)
+    assert _time.monotonic() - t0 < 4 and cli.killed.is_set() and not cli.after_sent
+    assert cli.cmd[cli.cmd.index("--output-format") + 1] == "stream-json" and "--verbose" in cli.cmd
+    assert cli.kw.get("start_new_session") is True
+    assert got.value.tokens > 20_000 + RN.MAX_OUTPUT_TOKENS                 # the stopped call is counted
+    calls, tokens = b.used_today()
+    assert calls == 2 and tokens <= cap, f"{tokens:,} tokens used against a cap of {cap:,}"
+    # the check charges that worst case: one token less of room and the call is not made
+    world.agents.execute("DELETE FROM agent_calls WHERE rowid = (SELECT MAX(rowid) FROM agent_calls)")
+    world.agents.commit()
+    cli2 = _FakeCli([_EV_INIT], [])
+    b = RM.ClassBudget(RN.ClaudeCodeRunner(env={}, popen=cli2), world.agents, "owner", 20, cap - 1, 80, 10**9,
+                       lambda: QUIET)
+    with pytest.raises(RM.BudgetExceeded):
+        b.call("sonnet", "s", "i", packet)
+    assert cli2.cmd is None
+
+
+def test_an_answer_with_no_text_is_stopped_before_the_cli_nudges_the_model_again():
+    from paperbot.agents import runner as RN
+    nudge = {"type": "user", "isSynthetic": True, "message": {"role": "user", "content": [
+        {"type": "text", "text": "[Your previous response had no visible output. Please continue.]"}]}}
+    cli = _FakeCli([_EV_INIT, {"type": "system", "subtype": "thinking_tokens", "estimated_tokens": 900}, nudge],
+                   [_ev_assistant("msg_2", "{}"), {"type": "result", "is_error": False, "result": "{}"}])
+    with pytest.raises(RN.AgentCallError) as got:
+        RN.ClaudeCodeRunner(env={}, popen=cli).call("sonnet", "s", "i", {"role": "x"})
+    assert cli.killed.is_set() and not cli.after_sent
+    est = RN.input_estimate(json.dumps({"role": "x"}), "s", "i")
+    assert got.value.tokens == 2 * (est + RN.MAX_OUTPUT_TOKENS) <= RN.call_charge(est)
+    # a normal answer: the result event ends the call, nothing is stopped
+    ok = _FakeCli([_EV_INIT, _ev_assistant("msg_1", '{"a": 1}', 900),
+                   {"type": "system", "subtype": "informational", "content": "note"},
+                   {"type": "result", "subtype": "success", "is_error": False, "result": '{"a": 1}',
+                    "usage": {"input_tokens": 900, "output_tokens": 20}}], [])
+    res = RN.ClaudeCodeRunner(env={}, popen=ok).call("sonnet", "s", "i", {"role": "x"})
+    assert res.data == {"a": 1} and res.meta["usage"]["input_tokens"] == 900 and not ok.killed.is_set()
+
+
+def test_the_real_process_is_stopped_with_everything_it_started(tmp_path):
+    """A stub `claude` that announces another request and then keeps running: the call returns at once and
+    the stub (and its child) are gone."""
+    import stat as _stat
+    import time as _time
+    from paperbot.agents import runner as RN
+    pidfile = tmp_path / "child.pid"
+    stub = tmp_path / "claude"
+    stub.write_text("#!/bin/sh\ncat > /dev/null\n"
+                    f"sleep 60 & echo $! > {pidfile}\n"
+                    "echo '{\"type\":\"assistant\",\"message\":{\"id\":\"msg_1\",\"usage\":{\"input_tokens\":500},"
+                    "\"content\":[{\"type\":\"text\",\"text\":\"cut\"}]}}'\n"
+                    "echo '{\"type\":\"user\",\"isSynthetic\":true,\"message\":{\"role\":\"user\",\"content\":\"Output "
+                    "token limit hit. Resume directly\"}}'\n"
+                    "sleep 60\necho '{\"type\":\"result\",\"is_error\":false,\"result\":\"late\"}'\n")
+    stub.chmod(stub.stat().st_mode | _stat.S_IEXEC)
+    t0 = _time.monotonic()
+    with pytest.raises(RN.AgentCallError) as got:
+        RN.ClaudeCodeRunner(str(stub), timeout=30, env={"PATH": os.environ["PATH"]}).call("sonnet", "s", "i", {"x": 1})
+    assert _time.monotonic() - t0 < 10 and got.value.tokens > 0
+    child = int(pidfile.read_text())
+    for _ in range(50):
+        try:
+            os.kill(child, 0)
+        except ProcessLookupError:
+            break
+        _time.sleep(0.1)
+    else:
+        pytest.fail("the CLI's child process was left running")
+
+
+def test_a_timeout_is_stopped_and_counted_at_least_at_the_input_and_a_full_answer(world):
+    from paperbot.agents import runner as RN
+    cli = _FakeCli([_EV_INIT], [])
+    cli._lines = lambda: iter(())                                   # never used: replaced below
+
+    class Hang(_FakeCli):
+        def _lines(self):
+            yield '{"type": "system", "subtype": "init"}\n'
+            self.killed.wait(10)
+    hang = Hang([], [])
+    runner = RN.ClaudeCodeRunner(env={}, popen=hang, timeout=0.5)
+    packet = {"role": "x"}
+    b = RM.ClassBudget(runner, world.agents, "owner", 20, 10**9, 80, 10**9, lambda: QUIET)
+    with pytest.raises(RN.AgentTimeout) as got:
+        b.call("sonnet", "s", "i", packet)
+    assert hang.killed.is_set() and got.value.tokens == 0              # the model never showed activity
+    assert world.q("SELECT ok, tokens FROM agent_calls") == [(0, RM.estimate_tokens(packet, "s") + RN.MAX_OUTPUT_TOKENS)]
+
+
+def test_usage_in_an_error_envelope_is_read_from_model_usage_too():
+    """The CLI's error envelopes can carry an empty `usage` (or the first request's only) while modelUsage
+    has the whole call: counted from modelUsage, never 0 (the row would be deleted as 'nothing ran')."""
+    from paperbot.agents import runner as RN
+    env = {"type": "result", "is_error": True, "result": "boom", "usage": {"input_tokens": 0, "output_tokens": 0},
+           "modelUsage": {"claude-sonnet": {"inputTokens": 40_000, "outputTokens": 32_000},
+                          "claude-haiku": {"inputTokens": 1_000, "outputTokens": 10}}}
+    assert RN._usage_tokens(env) == 73_010
+    r = RN.ClaudeCodeRunner(env={}, run=_proc(json.dumps(env), 1))
+    with pytest.raises(RN.AgentCallError) as got:
+        r.call("sonnet", "s", "i", {"role": "x"})
+    assert got.value.tokens == 73_010
+
+
+def test_a_runaway_first_speaker_is_a_failed_attempt_not_an_outage(world):
+    """A call that ran and used tokens but ended in a CLI error (an answer stopped at the output ceiling)
+    was taken for an outage: the meeting was retried forever with backoff, burning its class every day."""
+    from paperbot.agents.runner import AgentCallError
+
+    def runaway():
+        e = AgentCallError("Claude Code started another model request for this call: stopped")
+        e.tokens = 60_000
+        return e
+    world.losses()
+    out = world.tick(QueueRunner({SPEC: [runaway(), runaway()]}), QUIET)
+    [r] = out["rounds"]
+    assert r["status"] == "failed" and not world.rounds()[-1]["decision"].get("transient")
+    out = world.tick(QueueRunner({SPEC: [runaway(), runaway()]}), QUIET + 15 * MIN)
+    assert [x["status"] for x in out["rounds"]] == ["failed"]
+    assert world.tick(QueueRunner({}), QUIET + 30 * MIN)["rounds"] == []            # given up after 2 attempts
+    assert R.usage_today(world.agents, QUIET)["tokens"] == 4 * 60_000
+
+
+def test_a_runaway_turn_is_skipped_and_a_later_liquidation_is_still_met(world):
+    from paperbot.agents.runner import AgentCallError
+
+    def runaway():
+        e = AgentCallError("Claude Code started another model request for this call: stopped")
+        e.tokens = 70_000
+        return e
+    world.store.alert(QUIET - MIN, "WARN", "data gap at 15:00 BTCUSDT 5m")
+    world.store.commit()
+    out = world.tick(QueueRunner({"ops_auditor": [runaway(), runaway()], "data_quality": [team_answer("d")],
+                                  "team_lead": [LEAD]}), QUIET)
+    assert [(r["trigger"], r["status"]) for r in out["rounds"]] == [("incident", "done")]
+    assert any("읽을 수 없어" in m["text"] for m in world.messages("team:ops") if m["kind"] == "system")
+    world.store.alert(QUIET + 3 * HOUR, "CRITICAL", f"[{S}@15m] LIQUIDATED BTCUSDT 40x lost margin 20.00")
+    world.store.commit()
+    out = world.tick(QueueRunner({"ops_auditor": [team_answer("o")], "code_reviewer": [team_answer("c")],
+                                  "team_lead": [LEAD]}), QUIET + 3 * HOUR + 5 * MIN)
+    assert [(r["trigger"], r["status"]) for r in out["rounds"]] == [("incident", "done")]
+    assert R.usage_today(world.agents, QUIET)["by_class"]["incident"]["tokens"] <= RM.DEFAULT_BUDGETS["incident"][1]

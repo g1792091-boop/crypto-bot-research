@@ -100,8 +100,8 @@ from . import triggers as TR
 from .budget import BudgetedRunner, BudgetExceeded, tokens_of
 from .roles import _check_evidence
 from .roster3 import ROLES, SPECIALISTS, STRATEGY_KO, TEAMS, room_duty
-from .runner import (CLI_OVERHEAD_TOKENS, MAX_OUTPUT_TOKENS, AgentCallError, AgentTimeout, CallResult, Runner,
-                     UsageLimitReached, auth_preflight, billing_warnings, call_charge)
+from .runner import (MAX_OUTPUT_TOKENS, AgentCallError, AgentTimeout, CallResult, Runner, UsageLimitReached,
+                     auth_preflight, billing_warnings)
 
 PROMPT_DIR = os.path.join(os.path.dirname(__file__), "prompts3")
 DAY_MS = 86_400_000
@@ -216,10 +216,9 @@ class RoomsPolicy:
     # this many owner-post calls (and of the bust reserve): a busy night of reviews never leaves the
     # owners' posts or a bust waiting for midnight
     owner_keep_calls: int = 6
-    # tokens the pre-call check charges a typical call, for ``ClassBudget.headroom`` (at least; the charge
-    # of a call the size of the recent calls' median when larger): a meeting whose first call the pre-call
-    # check would refuse never starts. ``runner.call_charge``: 2 x input + 3 x the output ceiling.
-    est_call_tokens: int = call_charge(8_000)
+    # tokens of a typical call for ``ClassBudget.headroom`` (at least; the recent calls' median plus the
+    # output ceiling when larger): a meeting whose first call the pre-call check would refuse never starts
+    est_call_tokens: int = MAX_OUTPUT_TOKENS + 8_000
     pace_lead_hours: float = 3.0
     max_calls_per_tick: int = 12            # no new meeting once a tick has used this many (incidents exempt)
     tick_wall_s: float = 45 * 60            # no new meeting after this many seconds of one tick
@@ -297,15 +296,14 @@ class RunnerUnavailable(RuntimeError):
 
 
 def estimate_tokens(packet: dict, system_prompt: str = "") -> int:
-    """Rough input tokens of one call (its real usage is known only after it): UTF-8 bytes / 3, so a
-    Korean-heavy packet (about one token per Hangul character, three bytes each) is not undercounted,
-    plus Claude Code's own part of the request (``runner.CLI_OVERHEAD_TOKENS``)."""
+    """Rough tokens of a call that timed out (its real usage is never reported): UTF-8 bytes / 3, so
+    a Korean-heavy packet (about one token per Hangul character, three bytes each) is not undercounted."""
     try:
         n = len((json.dumps(packet, ensure_ascii=False, default=str) + (system_prompt or ""))
                 .encode("utf-8", "replace"))
     except (TypeError, ValueError, RecursionError):
         n = 0
-    return n // 3 + CLI_OVERHEAD_TOKENS
+    return n // 3
 
 
 class ClassBudget(BudgetedRunner):
@@ -388,13 +386,13 @@ class ClassBudget(BudgetedRunner):
         return kc, kt
 
     def call_need(self) -> int:
-        """Tokens the pre-call check will charge a typical call (for ``headroom``): ``call_charge`` of the
-        median of the last settled calls, at least ``call_tokens``."""
+        """Tokens the pre-call check will charge a typical call (for ``headroom``): the output ceiling
+        plus the median of the last settled calls, at least ``call_tokens``."""
         if not self.call_tokens:
             return 0
         got = sorted(int(r[0] or 0) for r in self.conn.execute(
             "SELECT tokens FROM agent_calls WHERE ok = 1 ORDER BY rowid DESC LIMIT 21").fetchall())
-        med = call_charge(got[len(got) // 2]) if got else 0
+        med = got[len(got) // 2] + MAX_OUTPUT_TOKENS if got else 0
         return max(self.call_tokens, med)
 
     def week_need(self, rc: int, rt: int, est: int = 0) -> tuple[int, int]:
@@ -507,18 +505,15 @@ class ClassBudget(BudgetedRunner):
 
     def call(self, model: str, system_prompt: str, instruction: str, packet: dict) -> CallResult:
         est = estimate_tokens(packet, system_prompt)
-        # the most one call can use (``runner.call_charge``): the answer up to the output ceiling and, at
-        # worst, one more request Claude Code started (to resume an answer cut at the ceiling) before the
-        # runner stopped it. The check charges all of it, so no cap (or the reserve) is passed by one call
-        self.check(call_charge(est))
+        # the call may also write up to the runner's output ceiling (CLAUDE_CODE_MAX_OUTPUT_TOKENS): the
+        # check charges it, so no cap (or the reserve) is passed by one call's answer
+        self.check(est + MAX_OUTPUT_TOKENS)
         role = str(packet.get("role", ""))
-        # the row is written BEFORE the call (not ok, the input estimate and the output ceiling) and settled
-        # after it: a pass that is killed during the call (TimeoutStartSec, MemoryMax, reboot) still has it
-        # counted
+        # the row is written BEFORE the call (not ok, estimated tokens) and settled after it: a pass that
+        # is killed during the call (TimeoutStartSec, MemoryMax, reboot) still has it counted
         now = self.clock_ms()
         rid = self.conn.execute("INSERT INTO agent_calls (ts, day, pipeline, role, model, ok, tokens) "
-                                "VALUES (?,?,?,?,?,0,?)", (now, R.kst_day(now), self.pipeline, role, model,
-                                                            est + MAX_OUTPUT_TOKENS)).lastrowid
+                                "VALUES (?,?,?,?,?,0,?)", (now, R.kst_day(now), self.pipeline, role, model, est)).lastrowid
         self.conn.commit()
         try:
             res = self.runner.call(model, system_prompt, instruction, packet)
@@ -528,10 +523,8 @@ class ClassBudget(BudgetedRunner):
             # usage (its text only looked like a limit) did run, and is counted
             self._settle(rid, False if used > 0 else None, used)
             raise
-        except AgentTimeout as exc:
-            # its real usage is never reported: at least the input and a full answer (what the runner saw
-            # the model use, when more)
-            self._settle(rid, False, max(_int0(getattr(exc, "tokens", 0)), est + MAX_OUTPUT_TOKENS))
+        except AgentTimeout:
+            self._settle(rid, False, est)   # it ran; its real usage is never reported
             raise
         except Exception as exc:
             used = _int0(getattr(exc, "tokens", 0))
@@ -1308,14 +1301,12 @@ class _Round:
         usage-limit errors propagate (the round stops); when no attempt got an answer at all
         (outage, CLI error) RunnerUnavailable propagates (the round is transient), unless another
         model answered in this meeting and this role's model never did (one model refused): then
-        the turn is skipped and the room is told. A failed call that used tokens (the model ran: an
-        answer cut at the output ceiling and stopped, a timeout while it streamed) is an unreadable
-        answer, never an outage: retrying that evidence forever would burn its class every day."""
+        the turn is skipped and the room is told."""
         given = {**packet, "role": role, "turn": turn, "this_round": json.loads(json.dumps(self.this_round,
                                                                                             default=str))}
         check = CHECKS[turn]
         problems: list[str] = []
-        answered = ran = False
+        answered = False
         for _ in range(self.ctx.policy.retries + 1):
             if self.calls >= self.max_calls:
                 where = "이번 차례(15분)의 AI 호출 한도" if self.tick_capped else "이번 회의의 AI 호출 한도"
@@ -1330,11 +1321,6 @@ class _Round:
                 raise
             except AgentCallError as exc:
                 problems = [f"호출 실패: {str(exc)[:200]}"]
-                used = _int0(getattr(exc, "tokens", 0))
-                if used > 0:                             # the model ran and used tokens: not an outage
-                    ran = True
-                    self.tokens += used
-                    self.models_ok.add(role_model(role))
                 continue
             answered = True
             self.calls_ok += 1
@@ -1349,7 +1335,7 @@ class _Round:
             if clean is not None:
                 self._say(role, turn, clean, problems)
                 return clean
-        if not answered and not ran:
+        if not answered:
             if not self.models_ok or role_model(role) in self.models_ok:
                 # nothing answered yet in this meeting, or this very model did earlier: the runner is down
                 raise RunnerUnavailable(f"{role_ko(role)}: {problems[0] if problems else '호출 실패'}")
