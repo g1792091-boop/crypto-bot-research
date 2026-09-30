@@ -41,24 +41,35 @@ Stage 2, aggregation (pooled over coins, per strategy x timeframe):
      'no data' (part A's period-3 rule: >= 30 trades).
      Candidate = passes all three. Random null: the same test on the random entries; 'random shows the same
      effect' when its period-1 rho has the strategy's sign with one-sided p < 0.05 in that direction.
-     Descriptive: quintiles of the signed feature with period-1 edges applied to all periods.
+     Descriptive: quintiles of the signed feature with period-1 edges applied to all periods; the within-coin rho
+     per period (n-weighted mean of the per-coin Spearman rho over coins with >= 30 finite trades; the same for
+     the random null in period 1) and a 'coin composition' flag on BH survivors whose within-coin rho does not
+     share the pooled sign (> 0 in periods 1 and 2, not <= 0 in period 3), pre-specified before the full run,
+     label only: the PREREG candidate flag is unchanged.
   C  per variant and period: signals, trades, mean ROE per trade, week-block bootstrap SE (2,000); per parameter
      the period-1 shape ('flat': all four variants within +-1 SE of the default; 'spike': the default beats both
-     neighbours x0.75 and x1.25 by > 2 SE; else 'smooth'); variants with mean ROE > 0 in all three periods and,
-     for every variant with trades in all three periods, the probability that random entries with the same trade
-     counts (per period and coin) show mean ROE > 0 in all three periods (2,000 draws from the random-entry
-     trades), their sum (expected number by chance) next to the count, and a descriptive no-edge probability with
-     the variant's own week clustering (its weeks resampled, centred on the random-entry mean). No variant is
-     adopted.
+     neighbours x0.75 and x1.25 by >= 2 SE (PREREG: 2 표준오차 이상); else 'smooth'); variants with mean ROE > 0
+     in all three periods and, for every variant with trades in all three periods, the probability that random
+     entries with the same trade counts (per period and coin) show mean ROE > 0 in all three periods (2,000 draws
+     from the random-entry trades), their sum (expected number by chance) next to the count, and a descriptive
+     no-edge probability with the variant's own week clustering (its weeks resampled, centred on the random-entry
+     mean). No variant is adopted.
 Outputs (out/): bc_B_cells.csv, bc_B_quintiles.csv, bc_B_random.csv, bc_C_variants.csv, bc_C_shapes.csv,
 bc_candidates.json, bc_trials.csv (one row per B test and per C variant), bc_run_meta.json.
 
 Staleness guards: CODE_HASH (sha256 of this file, analysis_sr, sr, profiles, rules_bt, the paperbot modules they run,
 the sweep lock manifest and DEFS_BC.sha256, plus numpy / pandas versions; taken once at import, inherited by the
-forked workers) is stored in every base and enters every checkpoint signature together with the current source-file
-fingerprints, so a code or data change recomputes what it touches. DEFS_BC.sha256 itself is pinned to the version
-committed in 520dad0. 'aggregate' refuses when a base is stale, and the other part's saved aggregation is merged
-into the outputs only when its code hash, checkpoint signatures and selection match this invocation.
+forked workers) is stored in every base. Each base also stores build_id, a sha256 over its arrays (the content it
+holds). A checkpoint signature is CODE_HASH + the current source-file fingerprints + the build_id of each base of
+(tf, coin), and it is only defined while those bases are current (built by this code from the current source
+files). Every job checks the bases it reads (code and source fingerprint), records their build_ids, and its
+checkpoint is written only when the signature recomputed from those build_ids equals the one it is saved under; the
+aggregation reads the random-entry pools only from bases whose build_id equals the checkpoint's. So a checkpoint is
+reused only on the base content it was computed from. The bases are re-checked before each part. DEFS_BC.sha256
+itself is pinned to the version committed in 520dad0. 'aggregate' refuses when a base is stale, and the other
+part's saved aggregation is merged into the outputs only when its code hash, checkpoint signatures and selection
+match this invocation. A refusal (SystemExit) inside a Pool worker is relayed to the parent as RuntimeError
+(multiprocessing only relays Exception; a SystemExit would kill the worker and leave the run waiting forever).
 """
 
 from __future__ import annotations
@@ -117,8 +128,8 @@ MIN_QUINTILE_TRADES = 5
 RANDOM_CODE = 1000        # bootstrap unit code of a strategy's random null = 1000 + strategy index
 SEED_PART = {"B": 2, "C_se": 3, "C_random": 4, "C_noedge": 5}
 CHUNK_ELEMS = 4_000_000   # (resamples x trades) per vectorised bootstrap chunk
-VERSION = "analysis_bc v2"
-BASE_VERSION = "bc base v2"
+VERSION = "analysis_bc v3"
+BASE_VERSION = "bc base v3"            # v3: meta carries build_id (sha256 of the stored arrays)
 DEFS_BC_COMMIT = "520dad0"
 # DEFS_BC.sha256 as committed in 520dad0 (the manifest itself is pinned: re-hashing a line in it is refused)
 DEFS_BC_MANIFEST_SHA256 = "185dbcf858e93f694d0775e12925c1904373d0db002a4df7bf3cfcefa3d56044"
@@ -147,11 +158,23 @@ AMBIGUITIES = (
     "B quintiles (descriptive): edges = numpy linear 20/40/60/80 % quantiles of the signed feature over period-1 "
     "trades pooled over coins (>= 5 trades), applied to all periods; a value equal to an edge goes to the upper "
     "quintile, so discrete features can leave quintiles empty. Quintile 5 = strongest.",
+    "B within-coin check (descriptive, pre-specified before the full run; it does not change the PREREG candidate "
+    "flag): the pooled Spearman of PREREG 1 / 3 mixes coins, and coin-level mean ROE (leverage and cost follow "
+    "ATR / price) and coin-level feature levels can differ together, so part of a pooled rho can be a between-coin "
+    "(coin composition) effect that repeats in every period. rho_within_coin_p{1,2,3} = n-weighted mean of the "
+    "per-coin Spearman rho(signed feature, ROE) over the coins with >= 30 trades with a finite value in that period "
+    "(weight = those trades; NaN when no coin qualifies; within_coin_n_coins_p* counts them); "
+    "random_rho_within_coin_p1 is the same for the random null. within_coin_same_sign = within-coin rho > 0 in "
+    "periods 1 and 2 and not <= 0 in period 3 (NaN in period 3 does not count against it); coin_composition_flag = "
+    "BH survivor (pass_p1_bh) without within_coin_same_sign. A candidate with the flag keeps candidate = True and "
+    "its label gets '; pooled effect not seen within coins (coin composition)'. Checkpoints also keep the side of "
+    "each trade (descriptive per-side reporting).",
     "C unit = strategy x timeframe x variant pooled over coins (the PREREG's cell 'strategy x timeframe'); mean ROE "
     "per trade over sized and closed trades; SE = standard deviation (ddof 1) of 2,000 week-block bootstrap means "
     "(weeks with >= 1 trade of that variant and period, pooled over coins).",
     "C shape: '+-1 SE' and '2 SE' use the default's period-1 SE. 'flat' needs all four variants to have period-1 "
-    "trades; 'spike' = default mean - mean(x0.75) > 2 SE and default mean - mean(x1.25) > 2 SE; a shape is given only "
+    "trades; 'spike' = default mean - mean(x0.75) >= 2 SE and default mean - mean(x1.25) >= 2 SE (PREREG 4: '2 "
+    "표준오차 이상', inclusive); a shape is given only "
     "when the cell meets the PREREG 1 minimum (>= 300 default period-1 signals) and the default SE is defined, "
     "else 'insufficient'.",
     "C 'variants with mean ROE > 0 in all three periods' counts the 4 variants per parameter (not the default); a "
@@ -185,12 +208,18 @@ AMBIGUITIES = (
     "The PREREG's trial ledger is out/trials.csv; parts B and C write out/bc_trials.csv (one row per B test of a "
     "tested cell and per C variant).",
     "Locks and staleness: DEFS_BC.sha256 must hash to the version committed in 520dad0 (pinned in the code and "
-    "compared with git when git is available), and every definition file to its manifest line. Bases and "
-    "checkpoints carry CODE_HASH (the analysis and outcome code, see the module docstring) and the current source "
-    "fingerprints (name, size, mtime); anything built under another hash or on other data is recomputed, "
-    "'aggregate' refuses stale bases, outputs are not written when a source file changed during the run, and a part "
-    "not recomputed in this invocation enters the outputs only from a saved aggregation with the same code hash, "
-    "checkpoint signatures and selection (else its bc_B_* / bc_C_* files are removed and the run meta says so).",
+    "compared with git when git is available), and every definition file to its manifest line. Bases carry "
+    "CODE_HASH (the analysis and outcome code, see the module docstring), the source fingerprints (name, size, "
+    "mtime) they were built from and build_id (sha256 of their arrays). A checkpoint signature = CODE_HASH + the "
+    "current source fingerprints + the build_id of each base of (tf, coin), defined only while those bases are "
+    "current; a job checks every base it reads (code, fingerprint), records its build_id, and is saved only when "
+    "the signature recomputed from those build_ids is the one it is saved under; the aggregation pairs a "
+    "checkpoint only with random-entry pools of the same build_id. Anything built under another hash, on other "
+    "data or from another base is recomputed, the bases are re-checked before each part, 'aggregate' refuses stale "
+    "bases, outputs are not written when a source file changed during the run, and a part not recomputed in this "
+    "invocation enters the outputs only from a saved aggregation with the same code hash, checkpoint signatures and "
+    "selection (else its bc_B_* / bc_C_* files are removed and the run meta says so). A refusal inside a Pool "
+    "worker (SystemExit, e.g. a definition file edited mid-run) is relayed to the parent as RuntimeError.",
 )
 
 # ------------------------------------------------------------------ the code that runs (staleness guard)
@@ -417,6 +446,23 @@ def spearman(x, y) -> float:
     return float(_wspearman(np.ones((1, len(x))), _ties(x), _ties(y))[0])
 
 
+def within_coin_rho(pairs, min_n: int = MIN_TRADES) -> tuple[float, int, int]:
+    """Descriptive within-coin Spearman: pairs = [(signed feature, ROE) per coin]; the n-weighted mean of the
+    per-coin rho over the coins with >= min_n finite feature values (weight = those trades). Returns (rho, coins
+    used, trades used); rho is NaN when no coin qualifies. Unlike the pooled rho it has no between-coin part."""
+    wn, wd, k = 0.0, 0, 0
+    for x, y in pairs:
+        x, y = np.asarray(x, float), np.asarray(y, float)
+        f = np.isfinite(x)
+        n = int(f.sum())
+        if n < min_n:
+            continue
+        rc = spearman(x[f], y[f])
+        if np.isfinite(rc):
+            wn, wd, k = wn + n * rc, wd + n, k + 1
+    return (wn / wd if wd else np.nan), k, wd
+
+
 def _week_D(v: np.ndarray, inv: np.ndarray, W: int, order: np.ndarray) -> np.ndarray:
     """(n, W), rows in week order: D[i, w] = (#{j in week w: v_j < v_i} - #{j in week w: v_j > v_i}) / 2.
     With week multiplicities c, the centred mid-rank of trade i in the resampled sample is D[i] @ c."""
@@ -528,7 +574,8 @@ def mean_se_boot(roe, week, seed, B: int = BOOT_B) -> dict:
 
 def classify_shape(d_mean: float, d_se: float, var_means: dict, min_ok: bool = True) -> tuple[str, str]:
     """PREREG 4 shape of one parameter from period 1: 'flat' if every variant is within +-1 SE of the default,
-    'spike' if the default beats both neighbours (x0.75, x1.25) by > 2 SE, else 'smooth'."""
+    'spike' if the default beats both neighbours (x0.75, x1.25) by >= 2 SE (PREREG 4: '2 표준오차 이상',
+    inclusive), else 'smooth'."""
     if not min_ok:
         return "insufficient", f"default period-1 signals < {MIN_SIGNALS}"
     if not (np.isfinite(d_mean) and np.isfinite(d_se) and d_se > 0):
@@ -538,7 +585,7 @@ def classify_shape(d_mean: float, d_se: float, var_means: dict, min_ok: bool = T
     if all(fin) and all(abs(v - d_mean) <= FLAT_SE * d_se for v in vals):
         return "flat", ""
     nb = [var_means.get(m, np.nan) for m in NEIGHBOURS]
-    if all(np.isfinite(v) for v in nb) and all(d_mean - v > SPIKE_SE * d_se for v in nb):
+    if all(np.isfinite(v) for v in nb) and all(d_mean - v >= SPIKE_SE * d_se for v in nb):
         return "spike", ""
     missing = [f"x{m}" for m, f in zip(MULTS, fin) if not f]
     return "smooth", (f"no period-1 trades: {', '.join(missing)}" if missing else "")
@@ -642,11 +689,43 @@ def read_base_meta(path: str) -> dict | None:
         return None
 
 
+class StaleBase(RuntimeError):
+    """A base is missing, was built by other code or from other source files, or is not the base a checkpoint was
+    computed from."""
+
+
+def base_problem(m: dict | None, tf: str, coin: str, src: str) -> str:
+    """'' when the base meta m is current (this base version and code, built from the current source files, with a
+    build_id), else why not."""
+    if not m:
+        return "missing or unreadable"
+    if m.get("version") != BASE_VERSION:
+        return f"version {m.get('version')!r} != {BASE_VERSION!r}"
+    if m.get("code") != CODE_HASH:
+        return f"built by other code ({str(m.get('code'))[:16]} != {CODE_HASH[:16]})"
+    if m.get("fingerprint") != source_fingerprint(tf, coin, src):
+        return "built from other source files than those on disk now"
+    if not m.get("build_id"):
+        return "no build_id"
+    return ""
+
+
 def base_ok(tf: str, coin: str, src: str) -> bool:
     """The base exists, was built by this code (CODE_HASH) and from the current source files."""
-    m = read_base_meta(base_path(tf, coin, src))
-    return (bool(m) and m.get("version") == BASE_VERSION and m.get("code") == CODE_HASH
-            and m.get("fingerprint") == source_fingerprint(tf, coin, src))
+    return not base_problem(read_base_meta(base_path(tf, coin, src)), tf, coin, src)
+
+
+def content_id(store: dict) -> str:
+    """sha256 over the arrays of a base (name, dtype, shape and bytes of each; 'meta' excluded): an id of what the
+    base holds. A rebuild from the same source files by the same code gives the same id, any other content another."""
+    h = hashlib.sha256()
+    for k in sorted(store):
+        if k == "meta":
+            continue
+        a = np.ascontiguousarray(np.asarray(store[k]))
+        h.update(f"{k}\0{a.dtype.str}\0{a.shape}\0".encode())
+        h.update(a.tobytes())
+    return h.hexdigest()
 
 
 def stale_bases(tfs) -> list:
@@ -665,6 +744,7 @@ def build_base(args) -> dict:
     L = _lib()
     names = strategy_names(L)
     periods = dict(SOURCES)[src]
+    fp = source_fingerprint(tf, coin, src)          # taken before reading: the base claims only what it read
     df, b, sigs, vol_missing = A.load_series(tf, coin, src)
     missing = [nm for nm in names if nm not in sigs]
     if missing:
@@ -699,10 +779,10 @@ def build_base(args) -> dict:
         store[f"r_valid_p{p}"] = r["valid"]
         store[f"r_roe_p{p}"] = np.where(r["valid"], r["roe"], np.nan)
         store[f"r_week_p{p}"] = week[store[f"r_idx_p{p}"]]
-    meta = dict(version=BASE_VERSION, code=CODE_HASH, tf=tf, coin=coin, src=src, periods=list(periods),
-                bars=int(len(store["ts"])),
+    meta = dict(version=BASE_VERSION, code=CODE_HASH, build_id=content_id(store), tf=tf, coin=coin, src=src,
+                periods=list(periods), bars=int(len(store["ts"])),
                 first=str(pd.Timestamp(int(store["ts"][0]))), last=str(pd.Timestamp(int(store["ts"][-1]))),
-                warmup_bars=warm, volume_missing=int(vol_missing), fingerprint=source_fingerprint(tf, coin, src),
+                warmup_bars=warm, volume_missing=int(vol_missing), fingerprint=fp,
                 pairs=int(len(keys)), pairs_sized=int(np.asarray(oc["sized"]).sum()),
                 pairs_open_at_end=int((np.asarray(oc["sized"]) & ~np.asarray(oc["done"])).sum()),
                 random={str(p): dict(sampled=int(len(store[f"r_idx_p{p}"])), trades=int(store[f"r_valid_p{p}"].sum()),
@@ -710,6 +790,8 @@ def build_base(args) -> dict:
                         for p in periods},
                 seconds=dict(load=round(t1 - t0, 2), outcomes=round(t2 - t1, 2), total=round(time.time() - t0, 2)))
     store["meta"] = np.array(json.dumps(meta))
+    if source_fingerprint(tf, coin, src) != fp:
+        raise StaleBase(f"base {tf} {coin} {src}: a source file changed while the base was built; not saved")
     _atomic_write(base_path(tf, coin, src), lambda fh: np.savez(fh, **store))
     return meta
 
@@ -720,6 +802,27 @@ def load_base(tf: str, coin: str, src: str, keys=None) -> dict:
     if "meta" in out:
         out["meta"] = json.loads(str(out["meta"]))
     return out
+
+
+def load_current_base(tf: str, coin: str, src: str) -> dict:
+    """load_base, refusing (StaleBase) a base that is not current: built by other code (e.g. rebuilt by another
+    process) or from other source files than those on disk now. The file is read in one piece (np.load of an
+    atomically replaced file), so the checked meta and the arrays belong together."""
+    base = load_base(tf, coin, src)
+    why = base_problem(base.get("meta"), tf, coin, src)
+    if why:
+        raise StaleBase(f"base {tf} {coin} {src} is not current: {why}")
+    return base
+
+
+def check_same_base(meta: dict | None, ckpt: dict, tf: str, coin: str, src: str) -> None:
+    """The aggregation pairs a checkpoint with data read again from a base (the random-entry pools): refuse unless
+    that base is the one the checkpoint was computed from (same build_id)."""
+    want = (ckpt.get("base_ids") or {}).get(src)
+    got = (meta or {}).get("build_id")
+    if not want or got != want:
+        raise StaleBase(f"{ckpt.get('part')} {ckpt.get('name')} {tf} {coin}: base {src} build_id {got} is not the "
+                        f"one the checkpoint was computed from ({want}); rerun 'jobs'")
 
 
 def frame(base: dict, tf: str) -> pd.DataFrame:
@@ -785,13 +888,34 @@ def ensure_bases(tfs, procs: int, log=print) -> dict:
                 built_seconds=sum(m["seconds"]["total"] for m in metas))
 
 
+class _Relay:
+    """Calls fn(item) in a Pool worker and turns a SystemExit (a refusal: load_def on a changed definition, ...)
+    into RuntimeError. multiprocessing.pool.worker relays only Exception: a SystemExit ends the worker process, its
+    task result never arrives and imap_unordered waits forever."""
+
+    def __init__(self, fn):
+        self.fn = fn
+
+    def __call__(self, item):
+        try:
+            return self.fn(item)
+        except SystemExit as e:
+            raise RuntimeError(f"{_task_label(item)}: {e}") from None
+
+
+def _task_label(item) -> str:
+    if isinstance(item, tuple) and len(item) >= 2 and callable(item[0]):    # a _run_one task: (fn, job, ...)
+        return repr(item[1])
+    return repr(item)[:200]
+
+
 def _map(fn, items, procs: int):
     if procs <= 1 or len(items) <= 1:
         for it in items:
             yield fn(it)
         return
     with Pool(min(procs, len(items)), maxtasksperchild=20) as pool:
-        yield from pool.imap_unordered(fn, items)
+        yield from pool.imap_unordered(_Relay(fn), items)
 
 
 # ------------------------------------------------------------------ stage 1: jobs + checkpoints
@@ -805,12 +929,36 @@ def code_signature() -> str:
     return CODE_HASH[:16]
 
 
-def job_signature(tf: str, coin: str) -> str:
-    """Code signature + the CURRENT source-file fingerprints of (tf, coin) + the code hash stored in each base, so
-    a checkpoint made on other data, by other code or from a base built by other code is not reused."""
+def current_base_ids(tf: str, coin: str) -> dict:
+    """{src: build_id} of the bases of (tf, coin); StaleBase when one is not current (a signature is defined only on
+    current bases)."""
+    out = {}
+    for src, _ in SOURCES:
+        m = read_base_meta(base_path(tf, coin, src))
+        why = base_problem(m, tf, coin, src)
+        if why:
+            raise StaleBase(f"base {tf} {coin} {src} is not current: {why}; rerun 'jobs' (or 'run')")
+        out[src] = m["build_id"]
+    return out
+
+
+def sig_for(tf: str, coin: str, base_ids: dict) -> str:
+    """Code signature + the CURRENT source-file fingerprints of (tf, coin) + the build_id of each base."""
     fps = [source_fingerprint(tf, coin, src) for src, _ in SOURCES]
-    codes = [(read_base_meta(base_path(tf, coin, src)) or {}).get("code") for src, _ in SOURCES]
-    return code_signature() + ":" + hashlib.sha256(json.dumps([fps, codes]).encode()).hexdigest()[:12]
+    ids = [[src, (base_ids or {}).get(src)] for src, _ in SOURCES]
+    return code_signature() + ":" + hashlib.sha256(json.dumps([fps, ids]).encode()).hexdigest()[:12]
+
+
+def job_signature(tf: str, coin: str) -> str:
+    """Signature of a checkpoint computed now: code, current source files and the content (build_id) of the current
+    bases, so a checkpoint made by other code, on other data or from another base is not reused."""
+    return sig_for(tf, coin, current_base_ids(tf, coin))
+
+
+def job_data_signature(job, data: dict) -> str:
+    """Signature of the bases a B / C job actually read (the build_ids it recorded), checked before it is saved."""
+    _, tf, coin = job
+    return sig_for(tf, coin, data.get("base_ids") or {})
 
 
 def load_ckpt(path: str, sig: str | None = None):
@@ -830,17 +978,23 @@ def save_ckpt(path: str, data, sig: str) -> None:
 
 
 def _run_one(task):
-    fn, job, path, sig = task
+    fn, job, path, sig, data_sig = task
     t0 = time.time()
     data = fn(job)
+    if data_sig is not None:
+        got = data_sig(job, data)
+        if got != sig:
+            raise StaleBase(f"{job}: computed on bases / source files with signature {got}, not {sig} (a base was "
+                            f"rebuilt or a source file changed during the job); not saved")
     save_ckpt(path, data, sig)
     return job, round(time.time() - t0, 2)
 
 
-def run_jobs(jobs: list, fn, path_of, sig_of, procs: int, log=print) -> dict:
+def run_jobs(jobs: list, fn, path_of, sig_of, procs: int, log=print, data_sig=None) -> dict:
     """Run fn(job) for every job without a valid checkpoint (path_of(job), sig_of(job)); each finished job is
-    written at once (atomic), so a killed run resumes with the remaining ones."""
-    todo = [(fn, j, path_of(j), sig_of(j)) for j in jobs if load_ckpt(path_of(j), sig_of(j)) is None]
+    written at once (atomic), so a killed run resumes with the remaining ones. data_sig(job, data), when given, is
+    the signature of what the job actually read; a job whose data_sig differs from sig_of(job) is not saved (raises)."""
+    todo = [(fn, j, path_of(j), sig_of(j), data_sig) for j in jobs if load_ckpt(path_of(j), sig_of(j)) is None]
     t0 = time.time()
     done = []
     for i, (job, sec) in enumerate(_map(_run_one, todo, procs)):
@@ -858,10 +1012,11 @@ def job_B(job) -> dict:
     S = load_def("strength_defs", name)
     feats = [f["name"] for f in S.FEATURES]
     res = dict(part="B", name=name, tf=tf, coin=coin, features=[dict(f) for f in S.FEATURES], periods={},
-               seconds={})
+               base_ids={}, seconds={})
     for src, periods in SOURCES:
         ts0 = time.time()
-        base = load_base(tf, coin, src)
+        base = load_current_base(tf, coin, src)
+        res["base_ids"][src] = base["meta"]["build_id"]
         tab = OutcomeTable.from_base(base)
         df = frame(base, tf)
         t1 = time.time()
@@ -889,6 +1044,7 @@ def job_B(job) -> dict:
                 n_long_trades=int((side[v] > 0).sum()), n_signals_nan=[int((~np.isfinite(X[:, j])).sum())
                                                                         for j in range(len(feats))],
                 week=week_all[idx[v]].astype(np.int64), roe=oc["roe"][v].astype(float), X=X[v],
+                side=side[v].astype(np.int8),
                 r_sampled=int(len(ridx)), r_trades=int(rv.sum()), RX=RX)
         res["seconds"][src] = dict(load=round(t1 - ts0, 2), strength=round(t2 - t1, 2),
                                    rest=round(time.time() - t2, 2))
@@ -921,8 +1077,9 @@ def job_C(job) -> dict:
     t0 = time.time()
     P = load_def("param_defs", name)
     res = dict(part="C", name=name, tf=tf, coin=coin, excluded=getattr(P, "EXCLUDED_REASON", None), variants=[],
-               periods={}, default_check={}, seconds={})
-    if res["excluded"]:
+               periods={}, default_check={}, base_ids={}, seconds={})
+    if res["excluded"]:                    # nothing read: bound to the current bases
+        res["base_ids"] = current_base_ids(tf, coin)
         res["seconds"]["total"] = round(time.time() - t0, 2)
         return res
     variants = variant_list(P)
@@ -930,7 +1087,8 @@ def job_C(job) -> dict:
     sizer = PR._sizer()
     for src, periods in SOURCES:
         ts0 = time.time()
-        base = load_base(tf, coin, src)
+        base = load_current_base(tf, coin, src)
+        res["base_ids"][src] = base["meta"]["build_id"]
         tab = OutcomeTable.from_base(base)
         df = frame(base, tf)
         b = {k: base[k] for k in ("ts", "o", "h", "l", "c", "atr")}
@@ -999,9 +1157,11 @@ def agg_B_cell(args) -> dict:
         cps.append(d)
     feats = cps[0]["features"]
     rnd = {}
-    for c in COINS:
+    for c, d in zip(COINS, cps):
         for src, periods in SOURCES:
-            z = load_base(tf, c, src, keys=[f"r_{k}_p{p}" for p in periods for k in ("valid", "roe", "week")])
+            z = load_base(tf, c, src,
+                          keys=["meta"] + [f"r_{k}_p{p}" for p in periods for k in ("valid", "roe", "week")])
+            check_same_base(z["meta"], d, tf, c, src)       # the random outcomes of the base the RX came from
             for p in periods:
                 v = z[f"r_valid_p{p}"]
                 rnd[(c, p)] = (z[f"r_roe_p{p}"][v], z[f"r_week_p{p}"][v])
@@ -1031,12 +1191,16 @@ def agg_B_cell(args) -> dict:
                       f"rho_p{p}": t["rho"], f"rho_raw_p{p}": t["rho"] * (1 if hs else -1), f"p_p{p}": t["p_pos"],
                       f"status_p{p}": "ok" if enough else ("not tested" if not tested else "insufficient"),
                       f"weeks_p{p}": t["weeks"], f"undefined_resamples_p{p}": t["undefined_resamples"]})
+            # descriptive within-coin rho (no between-coin part; pre-specified, not a test)
+            wr, wk, _ = within_coin_rho([(signed(q["X"][:, j], hs), q["roe"]) for q in P_])
+            r[f"rho_within_coin_p{p}"], r[f"within_coin_n_coins_p{p}"] = wr, wk
             # random-entry null: the same feature at the random entries (value of the random side)
-            rx = signed(np.concatenate([d["periods"][p]["RX"][:, j] for d in cps]), hs)
-            ry = np.concatenate([rnd[(c, p)][0] for c in COINS])
-            rw = np.concatenate([rnd[(c, p)][1] for c in COINS])
-            if len(rx) != len(ry):
+            rxc = [signed(d["periods"][p]["RX"][:, j], hs) for d in cps]
+            ryc = [rnd[(c, p)][0] for c in COINS]
+            if any(len(a) != len(b) for a, b in zip(rxc, ryc)):
                 raise ValueError(f"{name} {tf} p{p}: random features / outcomes misaligned")
+            rx, ry = np.concatenate(rxc), np.concatenate(ryc)
+            rw = np.concatenate([rnd[(c, p)][1] for c in COINS])
             rf = np.isfinite(rx)
             renough = tested and p == 1 and int(rf.sum()) >= MIN_TRADES
             rt = spearman_boot(rx[rf], ry[rf], rw[rf],
@@ -1050,6 +1214,8 @@ def agg_B_cell(args) -> dict:
             r[f"random_rho_p{p}"] = rt["rho"]
             if p == 1:
                 r["random_p_pos_p1"], r["random_p_neg_p1"] = rt["p_pos"], rt["p_neg"]
+                wr, wk, _ = within_coin_rho(zip(rxc, ryc))
+                r["random_rho_within_coin_p1"], r["random_within_coin_n_coins_p1"] = wr, wk
         # quintiles: period-1 edges of the signed feature, applied to every period
         x1 = xs[1][0]
         if len(x1) >= MIN_QUINTILE_TRADES:
@@ -1123,9 +1289,10 @@ def agg_C_cell(args) -> dict:
     need = [r for r in rows if all(r[f"n_trades_p{p}"] > 0 for p in PERIODS)]
     if need:
         pools = {p: {} for p in PERIODS}
-        for c in COINS:
+        for c, d in zip(COINS, cps):
             for src, periods in SOURCES:
-                z = load_base(tf, c, src, keys=[f"r_{k}_p{p}" for p in periods for k in ("valid", "roe")])
+                z = load_base(tf, c, src, keys=["meta"] + [f"r_{k}_p{p}" for p in periods for k in ("valid", "roe")])
+                check_same_base(z["meta"], d, tf, c, src)
                 for p in periods:
                     pools[p][c] = z[f"r_roe_p{p}"][z[f"r_valid_p{p}"]]
         pool_mean = {p: {c: float(x.mean()) if len(x) else np.nan for c, x in pools[p].items()} for p in PERIODS}
@@ -1200,7 +1367,9 @@ def aggregate_B(names, tfs, procs: int, log=print) -> dict:
 
 
 B_DECISION_COLS = ("p_for_bh", "bh_rank", "bh_threshold", "bh_qvalue", "pass_p1_bh", "pass_p2", "verdict_p3",
-                   "pass_p3", "candidate", "random_p_same_dir_p1", "random_same_effect_p1", "label")
+                   "pass_p3", "candidate", "random_p_same_dir_p1", "random_same_effect_p1", "within_coin_same_sign",
+                   "coin_composition_flag", "label")
+COIN_COMPOSITION_LABEL = "; pooled effect not seen within coins (coin composition)"
 
 
 def decide_B(cells: pd.DataFrame) -> pd.DataFrame:
@@ -1223,9 +1392,14 @@ def decide_B(cells: pd.DataFrame) -> pd.DataFrame:
         p_dir = np.where(sgn > 0, t["random_p_pos_p1"], np.where(sgn < 0, t["random_p_neg_p1"], np.nan))
         t["random_p_same_dir_p1"] = p_dir
         t["random_same_effect_p1"] = (sgn != 0) & (rs == sgn) & (p_dir < RANDOM_ALPHA)
-        t["label"] = np.where(t["candidate"] & t["random_same_effect_p1"],
-                              "candidate, but the random null shows the same effect: market-wide, not the strategy",
-                              np.where(t["candidate"], "candidate", ""))
+        # descriptive, pre-specified: does the pooled effect hold within coins (not a between-coin composition)?
+        wc = {p: t[f"rho_within_coin_p{p}"].astype(float) for p in PERIODS}
+        t["within_coin_same_sign"] = (wc[1] > 0) & (wc[2] > 0) & ~(wc[3] <= 0)
+        t["coin_composition_flag"] = t["pass_p1_bh"] & ~t["within_coin_same_sign"]
+        label = pd.Series(np.where(t["candidate"] & t["random_same_effect_p1"],
+                                   "candidate, but the random null shows the same effect: market-wide, not the "
+                                   "strategy", np.where(t["candidate"], "candidate", "")), index=t.index)
+        t["label"] = label.where(~(t["candidate"] & t["coin_composition_flag"]), label + COIN_COMPOSITION_LABEL)
         cells = cells.merge(t[["strategy", "tf", "feature"] + list(B_DECISION_COLS)],
                             on=["strategy", "tf", "feature"], how="left")
     else:
@@ -1292,10 +1466,12 @@ def trials_table(agg: dict) -> pd.DataFrame:
                 feature=r["feature"], higher_is_stronger=r["higher_is_stronger"],
                 hypothesis=f"Spearman rho({'' if r['higher_is_stronger'] else '-'}{r['feature']}, ROE) > 0",
                 **{f"{k}_p{p}": r[f"{s}_p{p}"] for p in PERIODS
-                   for k, s in (("n", "n_finite"), ("stat", "rho"), ("p", "p"), ("status", "status"))},
+                   for k, s in (("n", "n_finite"), ("stat", "rho"), ("p", "p"), ("status", "status"),
+                                ("stat_within_coin", "rho_within_coin"))},
                 bh_rank=r["bh_rank"], bh_qvalue=r["bh_qvalue"], pass_p1_bh=r["pass_p1_bh"], pass_p2=r["pass_p2"],
                 verdict_p3=r["verdict_p3"], candidate=r["candidate"],
-                random_same_effect_p1=r["random_same_effect_p1"], label=r["label"], note=r["note"]))
+                random_same_effect_p1=r["random_same_effect_p1"], coin_composition_flag=r["coin_composition_flag"],
+                label=r["label"], note=r["note"]))
     C = agg.get("C")
     if C is not None and len(C["variants"]):
         for r in C["variants"][~C["variants"]["is_default"]].to_dict("records"):
@@ -1334,6 +1510,16 @@ def candidates_doc(agg: dict) -> dict:
             random_same_effect_among_bh_survivors=int((t["pass_p1_bh"].fillna(False).astype(bool)
                                                        & t["random_same_effect_p1"].fillna(False).astype(bool)).sum())
             if len(t) else 0,
+            bh_survivors_coin_composition_flag=int((t["pass_p1_bh"].fillna(False).astype(bool)
+                                                    & t["coin_composition_flag"].fillna(False).astype(bool)).sum())
+            if len(t) else 0,
+            candidates_coin_composition_flag=int((t["candidate"].fillna(False).astype(bool)
+                                                  & t["coin_composition_flag"].fillna(False).astype(bool)).sum())
+            if len(t) else 0,
+            coin_composition_note="descriptive, pre-specified before the full run: coin_composition_flag = BH survivor "
+                                  "whose within-coin rho (n-weighted mean of per-coin Spearman, coins with >= 30 "
+                                  "finite trades) is not > 0 in periods 1 and 2 or is <= 0 in period 3; the "
+                                  "candidate flag (PREREG) is unchanged, the label says so.",
             candidates=_records(t[t["candidate"].fillna(False).astype(bool)]) if len(t) else [],
             bh_survivors=_records(t[t["pass_p1_bh"].fillna(False).astype(bool)]) if len(t) else [])
     C = agg.get("C")
@@ -1441,7 +1627,10 @@ def load_agg_compatible(path: str, part: str, names, tfs) -> tuple:
     need = {f"{tf} {c}" for tf in want["tfs"] for c in COINS}
     if set(sigs) != need:
         return None, "checkpoint signatures missing"
-    changed = [k for k, v in sigs.items() if job_signature(*k.split(" ")) != v]
+    try:
+        changed = [k for k, v in sigs.items() if job_signature(*k.split(" ")) != v]
+    except StaleBase as e:
+        return None, f"bases not current: {e}"
     if changed:
         return None, f"checkpoints or data changed since it was made: {changed}"
     return rec["res"], None
@@ -1530,13 +1719,15 @@ def main(argv: list[str]) -> None:
 
     if a["cmd"] in ("run", "jobs"):
         timings["bases"] = ensure_bases(need_tfs, a["procs"])
-        for part in parts:
+        for k, part in enumerate(parts):
+            if k:                                 # the bases again right before this part's signatures: a source
+                timings[f"bases_before_{part}"] = ensure_bases(need_tfs, a["procs"])   # file may have changed
             jobs = part_jobs(part, names, tfs)
             jobs.sort(key=lambda j: TFS.index(j[1]))
             sigs = {(tf, c): job_signature(tf, c) for tf in need_tfs for c in COINS}
             print(f"part {part}: {len(jobs)} jobs", flush=True)
             r = run_jobs(jobs, JOB_FN[part], lambda j, part=part: ckpt_path(part, *j),
-                         lambda j: sigs[(j[1], j[2])], a["procs"])
+                         lambda j: sigs[(j[1], j[2])], a["procs"], data_sig=job_data_signature)
             timings[f"jobs_{part}"] = dict(jobs=r["jobs"], run=r["run"], resumed=r["resumed"], wall_s=r["wall_s"],
                                            procs=a["procs"])
             os.makedirs(RUN_DIR, exist_ok=True)
