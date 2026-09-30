@@ -97,3 +97,10 @@ def test_loss_cards_and_profile(client):
     p = client.get("/api/profile/N17_KC_RSI").json()
     assert p["name_ko"] == "켈트너·RSI" and len(p["rows"]) == 5
     assert client.get("/api/profile/NOPE").status_code == 404
+
+
+def test_strategy_list(client):
+    client.post("/api/login", json={"password": "correct horse battery"})
+    lst = client.get("/api/strategies").json()
+    assert len(lst) == 36 and {"strategy", "name_ko", "style", "hold", "rare"} <= set(lst[0])
+    assert next(x for x in lst if x["strategy"] == "N17_KC_RSI")["style"] == "되돌림 노리기"

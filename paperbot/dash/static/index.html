@@ -12,6 +12,7 @@
   <span class="brand">PAPER <span>V3</span></span>
   <nav class="nav" id="nav">
     <button data-v="trade" class="on">트레이드</button>
+    <button data-v="strat">매매법</button>
     <button data-v="board">순위표</button>
     <button data-v="account">계좌</button>
     <button data-v="agents">에이전트 팀</button>
@@ -71,6 +72,39 @@
         <button data-t="allpos" class="on">전체 포지션</button><button data-t="alltrades">최근 체결</button><button data-t="tfsum">봉별 요약</button>
       </div>
       <div class="pb" id="bot-body"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ========================================================= strategy -->
+<section class="view" id="v-strat">
+  <div class="strat">
+    <div class="slist">
+      <div class="ph"><span class="t">매매법 36개</span><span class="grow"></span>
+        <div class="seg" id="sl-filter"><button data-f="" class="on">전체</button><button data-f="추세 따라가기">추세</button><button data-f="되돌림 노리기">되돌림</button></div>
+      </div>
+      <div class="pb" id="slist"></div>
+    </div>
+    <div class="smain">
+      <div class="toolbar">
+        <select id="s-pick" aria-label="매매법"></select>
+        <div class="seg" id="s-tf">
+          <button data-tf="5m">5분</button><button data-tf="15m">15분</button><button data-tf="30m">30분</button>
+          <button data-tf="1h" class="on">1시간</button><button data-tf="4h">4시간</button>
+        </div>
+        <select id="s-sym" aria-label="코인"></select>
+        <span class="sep"></span>
+        <button id="s-mk" class="on">이 계좌 진입·청산</button>
+      </div>
+      <div class="chartwrap"><div class="cw" id="schart"></div><div class="legend" id="slegend"></div></div>
+      <div class="sconds" id="s-conds"></div>
+      <div class="sprof" id="s-profile"></div>
+    </div>
+    <div class="sside">
+      <div class="ph"><span class="t">5개 봉 계좌</span></div>
+      <div id="s-accts" class="saccts"></div>
+      <div class="ph tabs" id="s-tabs"><button data-t="cards" class="on">손실 카드</button><button data-t="tags">손실 패턴</button></div>
+      <div class="pb" id="s-side"></div>
     </div>
   </div>
 </section>
@@ -148,5 +182,6 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script src="/static/app.js"></script>
+<script src="/static/strat.js"></script>
 </body>
 </html>

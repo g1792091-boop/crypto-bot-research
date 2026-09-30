@@ -1,0 +1,214 @@
+"use strict";
+// 매매법 tab: one strategy at a time. Its five timeframe accounts, its entries on the chart,
+// its 5-year character (same rules), and the loss cards built by code at every losing close.
+// Uses helpers and state from app.js ($, api, esc, fmt, pct, px, cls, coin, css, tsKo, state, openAccount).
+const ss = {list: null, name: null, tf: "1h", sym: "BTCUSDT", filter: "", tab: "cards", markers: true,
+  chart: null, series: null, lines: [], extra: [], profile: null, pageReq: 0, chartReq: 0};
+const STYLE_TAG = {"추세 따라가기": "long", "되돌림 노리기": "short"};
+
+async function loadStrat() {
+  if (!ss.list) {
+    try { ss.list = await api("/api/strategies"); } catch (e) { ss.list = []; }
+    if (!ss.name && ss.list.length) ss.name = ss.list[0].strategy;
+    $("s-sym").innerHTML = TRADE_SYMS.map((s) => `<option value="${s}">${coin(s)}</option>`).join("");
+    $("s-pick").innerHTML = ss.list.map((x) => `<option value="${esc(x.strategy)}">${esc(x.name_ko)}</option>`).join("");
+  }
+  renderSList();
+  await renderStrat();
+}
+
+// ------------------------------------------------------------ list
+function bestWallet(name) {
+  if (!state.board) return null;
+  const ws = state.board.accounts.filter((a) => a.strategy === name).map((a) => a.wallet ?? INITIAL);
+  return ws.length ? Math.max(...ws) : null;
+}
+function renderSList() {
+  const rows = (ss.list || []).filter((x) => !ss.filter || x.style === ss.filter);
+  $("slist").innerHTML = rows.map((x) => {
+    const w = bestWallet(x.strategy);
+    return `<div class="srow ${x.strategy === ss.name ? "sel" : ""}" data-n="${esc(x.strategy)}">
+      <div style="min-width:0"><div class="nm">${esc(x.name_ko)}</div>
+      <div class="st">${esc(x.style || "신호 부족")}${x.rare ? " · 신호 드묾" : ""}</div></div>
+      <span class="w ${w == null ? "" : cls(w - INITIAL)}">${w == null ? "" : "$" + fmt(w, 0)}</span></div>`;
+  }).join("") || '<p class="empty">없음</p>';
+  document.querySelectorAll("#slist .srow").forEach((r) => r.onclick = () => pickStrat(r.dataset.n));
+  $("s-pick").value = ss.name || "";
+}
+function pickStrat(n) { ss.name = n; renderSList(); renderStrat(); }
+$("s-pick").onchange = (e) => pickStrat(e.target.value);
+$("s-sym").onchange = (e) => { ss.sym = e.target.value; drawStratChart(); };
+$("s-mk").onclick = (e) => { ss.markers = !ss.markers; e.target.classList.toggle("on", ss.markers); drawStratChart(); };
+seg("sl-filter", "f", (f) => { ss.filter = f; renderSList(); });
+function setStratTf(tf) { ss.tf = tf; renderAccts(); renderProfile(); drawStratChart(); }
+seg("s-tf", "tf", setStratTf);
+seg("s-tabs", "t", (t) => { ss.tab = t; renderSSide(); });
+
+// ------------------------------------------------------------ page
+async function renderStrat() {
+  if (!ss.name) return;
+  const id = ++ss.pageReq;
+  renderAccts();
+  drawStratChart();
+  ss.profile = await api(`/api/profile/${encodeURIComponent(ss.name)}`).catch(() => null);
+  if (id !== ss.pageReq) return;
+  renderProfile();
+  renderSSide();
+}
+
+function renderAccts() {
+  document.querySelectorAll("#s-tf button").forEach((b) => b.classList.toggle("on", b.dataset.tf === ss.tf));
+  $("s-accts").innerHTML = TRADE_TFS.map((tf) => {
+    const a = state.board && state.board.accounts.find((x) => x.account_id === `${ss.name}@${tf}`);
+    const w = a ? (a.wallet ?? INITIAL) : null;
+    let s = a ? `${a.trades}건` : "—";
+    if (a && a.bust) s = '<span class="down">파산</span>';
+    else if (a && a.position) s = `<span class="accent">● ${coin(a.position.symbol)} ${a.position.side > 0 ? "롱" : "숏"}</span>`;
+    const vs = !a || a.beats_random == null ? "" : a.beats_random ? '<span class="up">동전 봇보다 ✓</span>' : '<span class="muted">동전 봇보다 ✕</span>';
+    return `<div class="acard ${tf === ss.tf ? "sel" : ""}" data-tf="${tf}" title="누르면 이 봉으로 차트를 봅니다. 두 번 누르면 계좌 화면">
+      <div class="k">${TF_KO[tf]}</div><div class="v ${w == null ? "" : cls(w - INITIAL)}">${w == null ? "—" : "$" + fmt(w, 0)}</div>
+      <div class="s">${s}</div><div class="s">${vs}</div></div>`;
+  }).join("");
+  document.querySelectorAll("#s-accts .acard").forEach((c) => {
+    c.onclick = () => setStratTf(c.dataset.tf);
+    c.ondblclick = () => openAccount(`${ss.name}@${c.dataset.tf}`);
+  });
+}
+
+// ------------------------------------------------------------ chart
+function ensureStratChart() {
+  if (ss.chart || !window.LightweightCharts) return;
+  const el = $("schart");
+  ss.chart = LightweightCharts.createChart(el, chartOpts(el));
+  ss.series = ss.chart.addCandlestickSeries({upColor: css("--up"), downColor: css("--down"), borderVisible: false,
+    wickUpColor: css("--up"), wickDownColor: css("--down")});
+  new ResizeObserver(() => ss.chart.resize(el.clientWidth, el.clientHeight)).observe(el);
+}
+async function drawStratChart() {
+  ensureStratChart();
+  if (!ss.chart) { $("schart").innerHTML = '<p class="empty">차트 부품을 불러오지 못했습니다</p>'; return; }
+  const id = ++ss.chartReq;
+  const aid = `${ss.name}@${ss.tf}`;
+  const [bars, trades, view] = await Promise.all([
+    api(`/api/candles?symbol=${ss.sym}&interval=${ss.tf}&limit=500`).catch(() => []),
+    ss.markers ? api(`/api/trades?symbol=${ss.sym}&tf=${ss.tf}&limit=600`).catch(() => []) : Promise.resolve([]),
+    api(`/api/strategy/${encodeURIComponent(ss.name)}?tf=${ss.tf}&symbol=${ss.sym}`).catch(() => null),
+  ]);
+  if (id !== ss.chartReq) return;
+  ss.series.setData(bars);
+  // indicator lines exactly as the strategy's locked code uses them (when the view is available)
+  ss.extra.forEach((x) => ss.chart.removeSeries(x)); ss.extra = [];
+  const palette = [css("--series"), css("--text-2"), css("--accent"), "#b38cf0"];
+  if (view && view.overlays) view.overlays.forEach((o, i) => {
+    const s = ss.chart.addLineSeries({color: palette[i % palette.length], lineWidth: 1.5, priceLineVisible: false,
+      lastValueVisible: false, crosshairMarkerVisible: false, title: o.name});
+    s.setData(o.data); ss.extra.push(s);
+  });
+  if (view && view.panes) view.panes.forEach((p, k) => {
+    const scale = `pane${k}`;
+    p.series.forEach((ln, i) => {
+      const s = ss.chart.addLineSeries({color: palette[(i + 1) % palette.length], lineWidth: 1.5, priceScaleId: scale,
+        priceLineVisible: false, lastValueVisible: true, title: `${p.name} ${ln.name}`});
+      s.setData(ln.data); ss.extra.push(s);
+    });
+    ss.chart.priceScale(scale).applyOptions({scaleMargins: {top: 0.78 - 0.2 * k, bottom: 0.02 + 0.2 * k}});
+  });
+  ss.chart.priceScale("right").applyOptions({scaleMargins: {top: 0.05, bottom: view && view.panes && view.panes.length ? 0.28 : 0.05}});
+  // this account's entries and exits
+  const step = TF_SEC[ss.tf], t0 = bars.length ? bars[0].time : 0, marks = [];
+  trades.filter((t) => t.account_id === aid && t.entry_time / 1000 >= t0).forEach((t) => {
+    const e = Math.floor(t.entry_time / 1000), x = Math.floor(t.exit_time / 1000);
+    marks.push({time: e - (e % step), position: t.side > 0 ? "belowBar" : "aboveBar", color: css("--series"),
+      shape: t.side > 0 ? "arrowUp" : "arrowDown", text: `${t.side > 0 ? "롱" : "숏"} ${t.leverage}배`});
+    marks.push({time: x - (x % step), position: t.side > 0 ? "aboveBar" : "belowBar", color: t.pnl > 0 ? css("--up") : css("--down"),
+      shape: "circle", text: `${REASON_KO[t.exit_reason] || t.exit_reason} ${pct(t.roe, 0)}`});
+  });
+  marks.sort((a, b) => a.time - b.time);
+  ss.series.setMarkers(marks);
+  ss.lines.forEach((l) => ss.series.removePriceLine(l)); ss.lines = [];
+  const a = state.board && state.board.accounts.find((x) => x.account_id === aid);
+  const p = a && a.position;
+  if (p && p.symbol === ss.sym) {
+    ss.lines.push(ss.series.createPriceLine({price: p.entry, color: css("--series"), lineWidth: 1, title: "진입"}));
+    ss.lines.push(ss.series.createPriceLine({price: p.stop, color: p.lock_roe ? css("--up") : css("--down"), lineWidth: 1, lineStyle: 2,
+      title: p.lock_roe ? `잠금 +${Math.round(p.lock_roe * 100)}%` : "손절"}));
+  }
+  ss.chart.timeScale().fitContent();
+  const last = bars[bars.length - 1];
+  $("slegend").innerHTML = `<b>${esc(nameKo(ss.name))}</b> · ${coin(ss.sym)} ${TF_KO[ss.tf]}` +
+    (last ? ` · 종 <b>${px(last.close)}</b>` : "") + (view ? "" : ' <span class="muted">· 지표선은 준비 중</span>');
+  renderConds(view);
+}
+function nameKo(n) { const x = (ss.list || []).find((y) => y.strategy === n); return x ? x.name_ko : n; }
+function renderConds(view) {
+  const el = $("s-conds");
+  if (!view || !view.conditions) { el.innerHTML = ""; return; }
+  const part = (side, list) => {
+    if (!list || !list.length) return "";
+    const on = list.filter((c) => c.on).length;
+    return `<div style="margin-bottom:4px"><b>${side} 조건</b> <span class="muted">${on}/${list.length} 켜짐</span></div>` +
+      list.map((c) => `<div class="cond"><span>${esc(c.name)}</span><span class="${c.on ? "ok" : "no"}">${c.on ? "✓" : "✕"}</span></div>`).join("");
+  };
+  const c = view.conditions;
+  const left = (l) => l && l.length ? l.length - l.filter((x) => x.on).length : null;
+  const nl = left(c.long), ns = left(c.short);
+  const near = [nl, ns].filter((x) => x != null).length ? Math.min(...[nl, ns].filter((x) => x != null)) : null;
+  el.innerHTML = `<div class="muted" style="margin-bottom:6px">방금 마감한 ${TF_KO[ss.tf]}봉 기준 · ${tsKo(view.bar_close)}</div>` +
+    `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:4px 18px">${part("롱", c.long)}${part("숏", c.short)}</div>` +
+    (near === 0 ? '<div class="near">이 봉에서 신호 조건이 모두 켜졌습니다</div>'
+      : near != null ? `<div class="near">신호까지 조건 ${near}개 남음</div>` : "");
+}
+
+// ------------------------------------------------------------ 5-year character
+function renderProfile() {
+  const p = ss.profile, el = $("s-profile");
+  if (!p) { el.innerHTML = '<p class="empty">과거 성격 자료가 없습니다</p>'; return; }
+  const rows = p.rows.map((r) => {
+    if (r.mean_roe == null) return `<tr><td class="l">${TF_KO[r.tf]}</td><td>${fmt(r.signals_per_day, 2)}</td><td colspan="6" class="l muted">신호가 너무 적음</td></tr>`;
+    const more = r.hold_more_16 == null ? "—" : `<span class="${r.hold_verdict === "더 들고 갔으면 나았음" ? "up" : r.hold_verdict === "빨리 나오는 게 맞음" ? "down" : "muted"}">${(r.hold_more_16 * 100 > 0 ? "+" : "") + (r.hold_more_16 * 100).toFixed(1)}%p</span>`;
+    const acct = (w, b) => w == null ? "—" : `<span class="${b ? "down" : cls(w - INITIAL)}">$${fmt(w, 0)}</span>`;
+    return `<tr class="${r.tf === ss.tf ? "sel" : ""}"><td class="l">${TF_KO[r.tf]}</td><td>${fmt(r.signals_per_day, 1)}</td>
+      <td class="mono ${cls(r.mean_roe)}">${pct(r.mean_roe)}</td><td>${r.win_rate == null ? "—" : Math.round(r.win_rate * 100) + "%"}</td>
+      <td>${fmt(r.median_hold_hours, 1)}시간</td><td>${r.lock_share == null ? "—" : Math.round(r.lock_share * 100) + "%"}</td>
+      <td class="mono">${more}</td><td class="mono">${acct(r.account_is, r.bust_is)} → ${acct(r.account_cf, r.bust_cf)}</td></tr>`;
+  }).join("");
+  el.innerHTML = `<div class="sum">과거 5년, 같은 규칙: <b>${esc(p.style || "신호 부족")}</b> · ${esc(p.hold)}` +
+    `${p.least_bad_tf ? ` · 가장 덜 나쁜 봉 <b>${TF_KO[p.least_bad_tf]}</b>` : ""}${p.rare ? ' · <span class="accent">신호가 너무 드묾</span>' : ""}<br>` +
+    `<span class="muted">성격 설명일 뿐 실력 증거가 아닙니다. 평균 ROE가 비용(40배 왕복 약 −5.6%) 근처면 방향을 맞히는 힘이 0에 가깝다는 뜻입니다.</span></div>` +
+    `<table><thead><tr><th class="l">봉</th><th>하루 신호</th><th>거래당 ROE</th><th>승률</th><th>보유</th><th>잠금 청산</th>` +
+    `<th title="익절 잠금으로 나간 거래를 16봉 더 들고 있었다면">16봉 더</th><th>5년 계좌</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+// ------------------------------------------------------------ loss cards and patterns
+async function renderSSide() {
+  const el = $("s-side"), id = ss.pageReq, n = encodeURIComponent(ss.name);
+  if (ss.tab === "cards") {
+    const cards = await api(`/api/cards?strategy=${n}&days=30&limit=40`).catch(() => []);
+    if (id !== ss.pageReq) return;
+    el.innerHTML = cards.length ? cards.map(lossCard).join("") : '<p class="empty">최근 30일 손실 거래가 없습니다</p>';
+  } else {
+    const st = await api(`/api/cards/stats?strategy=${n}&days=30`).catch(() => null);
+    if (id !== ss.pageReq) return;
+    if (!st || !st.trades) { el.innerHTML = '<p class="empty">최근 30일 거래가 없습니다</p>'; return; }
+    el.innerHTML = `<div class="sum" style="padding:8px 12px;color:var(--text-2)">최근 30일 거래 ${st.trades}건 (손실 ${st.losses} · 이익 ${st.wins}).
+      손실에서 이익보다 훨씬 자주 보이는 상황이 전담 직원이 먼저 볼 곳입니다. 건수가 적으면 우연일 수 있습니다.</div>` +
+      st.tags.map((t) => `<div class="tagrow"><div>${esc(t.tag)}</div><div class="bars">
+        <span>손실</span><div class="bar"><i style="width:${Math.round((t.loss_share || 0) * 100)}%;background:var(--down)"></i></div><span>${t.loss_share == null ? "—" : Math.round(t.loss_share * 100) + "%"}</span>
+        <span>이익</span><div class="bar"><i style="width:${Math.round((t.win_share || 0) * 100)}%;background:var(--up)"></i></div><span>${t.win_share == null ? "—" : Math.round(t.win_share * 100) + "%"}</span>
+      </div></div>`).join("");
+  }
+}
+function lossCard(c) {
+  const ctx = [c.regime_ko && `이 봉 ${c.regime_ko}`, c.htf_regime_ko && `상위 봉 ${c.htf_regime_ko}`,
+    c.ctx && c.ctx.adx != null && `ADX ${c.ctx.adx.toFixed(0)}`].filter(Boolean).join(" · ");
+  const ifs = Object.keys(c.if_stop || {}).length
+    ? Object.entries(c.if_stop).map(([k, v]) => `${k} ATR: <span class="${cls(v.roe)}">${v.roe == null ? "진입 안 됨" : pct(v.roe, 0)}</span>`).join(" · ")
+    : '<span class="muted">밤 점검 후 표시</span>';
+  return `<div class="lcard"><div class="hd"><span>${coin(c.symbol)} ${TF_KO[c.timeframe] || c.timeframe} ${c.side_ko} ${c.leverage}배</span>
+    <span class="down">${esc(c.reason_ko)} ${pct(c.roe, 0)}</span></div>
+    <div class="ln">${tsKo(c.entry_time)} 진입 · ${c.hold_min < 120 ? Math.round(c.hold_min) + "분" : (c.hold_min / 60).toFixed(1) + "시간"} 보유 ·
+      진입 후 최고 <span class="${cls(c.best_roe)}">${pct(c.best_roe, 0)}</span>${c.touched_first_lock ? " (잠금선 닿음)" : ""}</div>
+    ${ctx ? `<div class="ln">${esc(ctx)}</div>` : ""}
+    <div class="ln">손절 거리를 바꿨다면: ${ifs}</div>
+    ${c.tags.length ? `<div class="chips2">${c.tags.map((t) => `<span class="tag">${esc(t)}</span>`).join("")}</div>` : ""}</div>`;
+}

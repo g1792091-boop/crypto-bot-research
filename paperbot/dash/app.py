@@ -368,6 +368,18 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
     def get_card_stats(strategy: Optional[str] = None, tf: Optional[str] = None, days: float = 30):
         return data.card_stats(strategy, tf, days if days > 0 else None)
 
+    @app.get("/api/strategies")
+    def get_strategies():
+        from ..agents.packets3 import CARDS
+        from ..agents.roster3 import STRATEGY_KO
+        prof = {}
+        if os.path.exists(CARDS):
+            with open(CARDS) as fh:
+                prof = {c["strategy"]: c for c in json.load(fh)["cards"]}
+        return [{"strategy": k, "name_ko": v, "style": prof.get(k, {}).get("style"),
+                 "hold": prof.get(k, {}).get("hold"), "rare": prof.get(k, {}).get("rare")}
+                for k, v in STRATEGY_KO.items()]
+
     @app.get("/api/profile/{strategy}")
     def get_profile(strategy: str):
         from ..agents.packets3 import profile_card

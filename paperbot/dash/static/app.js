@@ -82,6 +82,7 @@ function show(v) {
   if (v === "signals") loadSignals();
   if (v === "status") loadStatus();
   if (v === "agents") loadAgents();
+  if (v === "strat" && typeof loadStrat === "function") loadStrat();
   if (v === "trade" && tchart) tchart.timeScale().scrollToRealTime();
 }
 document.querySelectorAll("#nav button").forEach((b) => b.onclick = () => show(b.dataset.v));

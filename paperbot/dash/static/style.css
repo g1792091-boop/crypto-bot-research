@@ -186,6 +186,42 @@ td.mono { font-family: var(--mono); font-size: 11.5px; }
 .note ul { margin: 0; padding-left: 16px; color: var(--text-2); }
 .note li { margin: 2px 0; }
 
+/* ------------------------------------------------------------ strategy tab */
+.strat { display: grid; gap: 1px; background: var(--line); grid-template-columns: 230px minmax(0, 1fr) 390px;
+  height: calc(100vh - 43px); min-height: 640px; }
+.strat > * { background: var(--panel); min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.smain .chartwrap { flex: 1 1 52%; min-height: 260px; }
+#s-pick { display: none; }
+.srow { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-bottom: 1px solid var(--line); cursor: pointer; }
+.srow:hover { background: var(--hover); }
+.srow.sel { background: var(--accent-bg); }
+.srow .nm { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.srow .st { color: var(--muted); font-size: 11px; }
+.srow .w { margin-left: auto; font-family: var(--mono); font-size: 11.5px; flex: none; }
+.sconds { flex: none; border-top: 1px solid var(--line); padding: 8px 12px; color: var(--text-2); }
+.sconds:empty { display: none; }
+.cond { display: flex; justify-content: space-between; gap: 10px; padding: 2px 0; }
+.cond .ok { color: var(--up); font-weight: 700; } .cond .no { color: var(--muted); font-weight: 700; }
+.near { margin-top: 6px; padding: 6px 9px; border-radius: 6px; background: var(--accent-bg); color: var(--accent); }
+.sprof { flex: 0 1 auto; max-height: 42%; overflow: auto; border-top: 1px solid var(--line); }
+.sprof .sum { padding: 8px 12px; color: var(--text-2); line-height: 1.6; }
+.sprof .sum b { color: var(--text); }
+.saccts { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1px; background: var(--line); flex: none; }
+.acard { background: var(--panel-2); padding: 7px 6px; cursor: pointer; text-align: center; }
+.acard:hover { background: var(--hover); }
+.acard.sel { box-shadow: inset 0 -2px 0 var(--accent); }
+.acard .k { color: var(--muted); font-size: 11px; }
+.acard .v { font-family: var(--mono); font-size: 12.5px; font-weight: 700; }
+.acard .s { font-size: 10.5px; color: var(--text-2); }
+.lcard { margin: 8px; padding: 9px 11px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; }
+.lcard .hd { display: flex; justify-content: space-between; gap: 8px; font-weight: 700; }
+.lcard .ln { color: var(--text-2); font-size: 12px; margin-top: 3px; line-height: 1.6; }
+.lcard .chips2 { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+.tagrow { padding: 7px 12px; border-bottom: 1px solid var(--line); }
+.tagrow .bars { display: grid; grid-template-columns: 38px minmax(0, 1fr) 38px; gap: 6px; align-items: center; font-size: 11px; color: var(--muted); margin-top: 3px; }
+.bar { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.bar i { display: block; height: 100%; }
+
 /* ------------------------------------------------------------ toast */
 .toast { position: fixed; right: 14px; bottom: 14px; max-width: 380px; z-index: 30; background: var(--panel-2); border: 1px solid var(--line-2);
   border-left: 3px solid var(--accent); border-radius: 6px; padding: 9px 12px; box-shadow: 0 8px 26px rgba(0,0,0,.45); font-size: 12.5px;
@@ -205,6 +241,14 @@ td.mono { font-family: var(--mono); font-size: 11.5px; }
   .side { height: 360px; }
   .bottom { height: 380px; }
   .agents { grid-template-columns: minmax(0, 1fr); height: auto; }
+  .strat { grid-template-columns: minmax(0, 1fr); height: auto; }
+  .strat .slist { display: none; }
+  #s-pick { display: inline-block; min-width: 150px; max-width: 60vw; }
+  .smain .toolbar { flex-wrap: wrap; padding: 6px 8px; gap: 6px; }
+  #s-sym { min-width: 70px; }
+  .smain .chartwrap { flex: none; height: 50vh; }
+  .sprof { max-height: none; }
+  .sside .pb { max-height: 70vh; }
   .agents .roster { max-height: 320px; }
   .agents .chatcol { height: 60vh; }
 }
