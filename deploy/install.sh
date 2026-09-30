@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # GH Quant — 리눅스 서버(오라클 클라우드 무료 서버 등)에 설치해서 24시간 돌리기
 #
-#   curl -fsSL https://raw.githubusercontent.com/g1792091-boop/crypto-bot-research/claude/sweet-pascal-t82h6j/deploy/install.sh | sudo bash
+#   공개 저장소:  curl -fsSL https://raw.githubusercontent.com/g1792091-boop/crypto-bot-research/claude/sweet-pascal-t82h6j/deploy/install.sh | sudo bash
+#   비공개 저장소: export GH_TOKEN=github_pat_...   (GitHub 읽기 전용 토큰)
+#                 curl -fsSL -H "Authorization: token $GH_TOKEN" https://raw.githubusercontent.com/g1792091-boop/crypto-bot-research/claude/sweet-pascal-t82h6j/deploy/install.sh | sudo -E bash
 #
 # 하는 일: 파이썬 설치 → 코드 받기 → 설정(접속 비밀번호 · AI 키) → 서비스 등록(꺼져도 자동 재시작 · 서버 재부팅 때 자동 시작)
 #          → (선택) Tailscale 로 안전하게 접속 또는 방화벽 포트 열기
@@ -10,6 +12,9 @@
 set -euo pipefail
 
 REPO="${REPO:-https://github.com/g1792091-boop/crypto-bot-research.git}"
+if [ -n "${GH_TOKEN:-}" ]; then                 # 비공개 저장소: 읽기 전용 토큰으로 받기 (이 서버의 코드 폴더 설정에만 저장)
+  REPO="https://x-access-token:${GH_TOKEN}@${REPO#https://}"
+fi
 BRANCH="${BRANCH:-claude/sweet-pascal-t82h6j}"
 APP_DIR="${APP_DIR:-/opt/gh-quant}"          # 코드
 DATA_DIR="${DATA_DIR:-/opt/gh-quant-data}"   # 설정 파일 · 기록 (업데이트해도 남음)
@@ -38,11 +43,14 @@ fi
 say "2/6 코드 받기 ($BRANCH)"
 if [ -d "$APP_DIR/.git" ]; then
   chown -R "$RUN_USER":"$RUN_USER" "$APP_DIR"
+  [ -n "${GH_TOKEN:-}" ] && sudo -u "$RUN_USER" git -C "$APP_DIR" remote set-url origin "$REPO"
   sudo -u "$RUN_USER" git -C "$APP_DIR" fetch -q origin "$BRANCH"
   sudo -u "$RUN_USER" git -C "$APP_DIR" checkout -q -B "$BRANCH" "origin/$BRANCH"
 else
-  git clone -q -b "$BRANCH" --depth 50 "$REPO" "$APP_DIR"
+  git clone -q -b "$BRANCH" --depth 50 "$REPO" "$APP_DIR" || {
+    echo "코드를 받지 못했습니다. 저장소가 비공개면 GH_TOKEN(읽기 전용 GitHub 토큰)을 넣고 sudo -E 로 실행하세요 (deploy/SERVER-GUIDE-KO.md 4번)."; exit 1; }
 fi
+chmod 700 "$APP_DIR/.git"
 mkdir -p "$DATA_DIR/state"
 chown -R "$RUN_USER":"$RUN_USER" "$APP_DIR" "$DATA_DIR"
 

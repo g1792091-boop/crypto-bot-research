@@ -32,9 +32,21 @@
 - Mac: 터미널에서 `chmod 600 받은키파일.key` 후 `ssh -i 받은키파일.key ubuntu@공인IP`
 
 ## 4. 한 줄 설치
+지금 GitHub 저장소가 **비공개** 라서, 서버가 코드를 받으려면 **읽기 전용 토큰** 이 필요합니다 (1번만).
+
+**4-1. 토큰 만들기 (2분)** — GitHub → 오른쪽 위 프로필 → Settings → Developer settings → Personal access tokens →
+**Fine-grained tokens → Generate new token**
+- Repository access: **Only select repositories → crypto-bot-research**
+- Permissions → Repository permissions → **Contents: Read-only** (나머지는 그대로)
+- 만든 토큰(`github_pat_…`)을 복사
+
+**4-2. 서버에서 실행**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/g1792091-boop/crypto-bot-research/claude/sweet-pascal-t82h6j/deploy/install.sh | sudo bash
+export GH_TOKEN=github_pat_여기에_붙여넣기
+curl -fsSL -H "Authorization: token $GH_TOKEN" https://raw.githubusercontent.com/g1792091-boop/crypto-bot-research/claude/sweet-pascal-t82h6j/deploy/install.sh | sudo -E bash
 ```
+(저장소를 공개로 바꿨다면 토큰 없이 `curl -fsSL https://raw.githubusercontent.com/.../deploy/install.sh | sudo bash` 만 해도 됩니다.
+ 설정 파일 · API 키는 저장소에 올라가지 않지만, 공개하면 코드는 누구나 볼 수 있습니다.)
 물어보는 것:
 - **접속 비밀번호** — 브라우저로 들어갈 때 쓸 비밀번호 (다른 사람이 못 들어오게)
 - **NVIDIA / Gemini 키** — 무료 AI 키 (없으면 Enter, 나중에 화면의 'AI 모델' 창에서 넣어도 됨)
@@ -59,7 +71,7 @@ curl -fsSL https://raw.githubusercontent.com/g1792091-boop/crypto-bot-research/c
 | 돌고 있는지 보기 | `sudo systemctl status gh-quant` |
 | 실시간 로그 | `journalctl -u gh-quant -f` |
 | 설정 바꾸기 (비밀번호 · 키) | `sudo nano /opt/gh-quant-data/settings.txt` → 저장 후 `sudo systemctl restart gh-quant` |
-| 새 버전으로 업데이트 | `sudo bash /opt/gh-quant/deploy/update.sh` |
+| 새 버전으로 업데이트 | `sudo bash /opt/gh-quant/deploy/update.sh` (토큰은 설치 때 저장돼서 다시 안 넣어도 됨) |
 | 멈추기 / 다시 켜기 | `sudo systemctl stop gh-quant` / `sudo systemctl start gh-quant` |
 
 기록(모의 계좌 · 봇 · AI 시그널 · 에이전트 팀 회의)은 `/opt/gh-quant-data/state` 에 남아서 업데이트해도 그대로입니다.

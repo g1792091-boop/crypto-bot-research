@@ -232,7 +232,8 @@ NVIDIA 가 모델을 종료(410 end of life)하거나 내리면(404) 그 모델�
 ### 서버에서 24시간 (무료) — `deploy/`
 오라클 클라우드 Always Free(한국 리전) 같은 리눅스 서버에 한 줄로 설치: 자세한 순서는 [deploy/SERVER-GUIDE-KO.md](deploy/SERVER-GUIDE-KO.md).
 ```bash
-curl -fsSL https://raw.githubusercontent.com/g1792091-boop/crypto-bot-research/claude/sweet-pascal-t82h6j/deploy/install.sh | sudo bash
+export GH_TOKEN=github_pat_...    # 비공개 저장소면 읽기 전용 토큰 (Contents: Read-only)
+curl -fsSL -H "Authorization: token $GH_TOKEN" https://raw.githubusercontent.com/g1792091-boop/crypto-bot-research/claude/sweet-pascal-t82h6j/deploy/install.sh | sudo -E bash
 ```
 - `launcher.py --server`: 창 없이 `HOST`(기본 0.0.0.0)·`PORT` 로 받는다. **`APP_PASSWORD` 가 없으면 시작하지 않는다**
   (`app/auth.py`: 모든 요청에 HTTP Basic 비밀번호 · 아이디는 아무거나 · 같은 IP 10분에 10번 틀리면 10분 차단 · `/healthz` 만 예외).
