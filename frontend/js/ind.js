@@ -871,6 +871,47 @@ Object.assign(INDICATORS, {
   } },
 });
 
+// ---------------------------------------------------------------- 세션 볼륨 프로파일
+// type: "profiles" = 세션마다 가격대별 거래량 막대 (차트가 직접 그림)
+function sessionKey(t, mode, step) {
+  if (step >= 14400) return Math.floor((t / 86400 + 3) / 7);            // 4시간봉 이상은 주 단위
+  const d = Math.floor(t / 86400);
+  if (mode !== 2) return d;
+  const h = (t % 86400) / 3600;
+  return d * 3 + (h < 8 ? 0 : h < 13.5 ? 1 : 2);                        // 아시아 · 유럽 · 미국 (UTC)
+}
+const SESSION_NAME = ["아시아", "유럽", "미국"];
+Object.assign(INDICATORS, {
+  session_vp: { name: "세션 볼륨 프로파일", group: "레벨 · 프로파일", pane: "main",
+    desc: "하루(또는 아시아·유럽·미국 세션)마다 가격대별 거래량. 주황 = POC(가장 많이 거래된 가격), 점선 = 가치영역(70%). 아직 다시 안 닿은 POC(nPOC)는 오른쪽으로 이어 그림 — 가격이 되돌아와 닿는 경우가 많음. mode 1=일별 2=세션별",
+    params: { mode: 1, sessions: 8, rows: 24, va: 70 }, compute: (c, p) => {
+      if (c.length < 2) return { plots: [] };
+      const step = c.at(-1).time - c.at(-2).time, groups = [];
+      c.forEach((b, i) => { const k = sessionKey(b.time, p.mode, step); if (!groups.length || groups.at(-1).k !== k) groups.push({ k, i0: i, i1: i }); else groups.at(-1).i1 = i; });
+      const shown = groups.slice(-Math.max(1, p.sessions));
+      const sessions = shown.map((g) => {
+        const vp = volumeProfile(c.slice(g.i0, g.i1 + 1), Math.max(6, p.rows), p.va);
+        if (!vp) return null;
+        let naked = true;
+        for (let j = g.i1 + 1; j < c.length && naked; j++) if (c[j].low <= vp.poc && c[j].high >= vp.poc) naked = false;
+        const t0 = c[g.i0].time, name = p.mode === 2 && step < 14400 ? SESSION_NAME[((g.k % 3) + 3) % 3] : "";
+        return { i0: g.i0, i1: g.i1, ...vp, naked: naked && g !== groups.at(-1), current: g === groups.at(-1), name, t0 };
+      }).filter(Boolean);
+      // 현재 세션의 진행 중 POC · 직전 세션 POC/VAH/VAL 을 선으로 (값 확인용)
+      const cur = groups.at(-1), prev = groups.length > 1 ? groups.at(-2) : null;
+      const dpoc = Array(c.length).fill(null), pp = [...dpoc], pvah = [...dpoc], pval = [...dpoc];
+      for (let i = cur.i0; i < c.length; i++) dpoc[i] = volumeProfile(c.slice(cur.i0, i + 1), Math.max(6, p.rows), p.va)?.poc ?? null;
+      if (prev) { const v = volumeProfile(c.slice(prev.i0, prev.i1 + 1), Math.max(6, p.rows), p.va); if (v) for (let i = cur.i0; i < c.length; i++) { pp[i] = v.poc; pvah[i] = v.vah; pval[i] = v.val; } }
+      return { plots: [
+        line("진행 중 POC", dpoc, "rgba(245,165,36,.9)", { lineWidth: 1, lineStyle: 1 }),
+        line("직전 POC", pp, "rgba(245,165,36,.5)", { lineWidth: 1, lineStyle: 2 }),
+        line("직전 VAH", pvah, "rgba(164,172,182,.45)", { lineWidth: 1, lineStyle: 2 }),
+        line("직전 VAL", pval, "rgba(164,172,182,.45)", { lineWidth: 1, lineStyle: 2 }),
+        { name: "세션", type: "profiles", data: Array(c.length).fill(null), sessions },
+      ], note: step >= 14400 ? "4시간봉 이상은 주 단위" : p.mode === 2 ? "아시아 00–08 · 유럽 08–13:30 · 미국 13:30–24 (UTC)" : "하루 = UTC 0시 기준" };
+    } },
+});
+
 // 선택 창에 보이는 그룹 순서
 export const GROUPS = ["추세", "신호 · 패턴", "스마트머니 (SMC)", "레벨 · 프로파일", "변동성", "오실레이터", "통계 · 퀀트", "거래량", "파생 · 코인글라스"];
 

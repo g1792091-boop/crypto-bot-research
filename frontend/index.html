@@ -74,6 +74,7 @@
           <button data-ov="sr" title="자동 지지·저항 구간과 추세선">지지·저항</button>
           <button data-ov="bots" title="페이퍼 봇 · 내 모의 매매 진입/청산 기록">매매 기록</button>
           <button data-ov="scenario" title="자동 시나리오 진입/손절/목표선">시나리오선</button>
+          <button data-ov="footprint" title="봉 안의 가격대별 매수·매도 체결량 (확대하면 숫자)">풋프린트</button>
           <button data-ov="forecast" title="과거 비슷한 차트로 본 앞으로의 예상 범위(부채꼴)와 다음 봉 예측(흐린 캔들)">패턴 예측</button>
           <button data-ov="countdown" title="가격축 현재가 아래에 봉 마감까지 남은 시간">마감 카운트</button>
         </div>
@@ -93,7 +94,7 @@
       </div>
     </section>
 
-    <aside class="side">
+    <aside class="side" id="side">
       <div class="regime" id="regime"><span class="muted">분석 중…</span></div>
       <div class="ph"><div class="tabs" id="side-tabs"><button data-t="sc" class="on">시나리오</button><button data-t="fc">예측</button><button data-t="book">호가</button><button data-t="order">주문</button></div></div>
       <div class="pb" id="side-sc"></div>
@@ -213,7 +214,7 @@
 <section class="view" id="v-quant">
   <div class="page">
     <div class="panel"><div class="ph"><div class="tabs" id="q-tabs">
-      <button data-q="rot" class="on">순환매</button><button data-q="scan">시그널 스캐너</button><button data-q="risk">리스크 · 포트폴리오</button></div>
+      <button data-q="rot" class="on">순환매</button><button data-q="scan">시그널 스캐너</button><button data-q="risk">리스크</button><button data-q="pf">포트폴리오 (기관용)</button></div>
       <div class="grow"></div><span class="muted" id="q-meta"></span></div></div>
 
     <!-- 순환매 -->
@@ -294,6 +295,27 @@
       </div>
     </div>
   </div>
+    <!-- 기관식 포트폴리오 -->
+    <div id="q-pf" class="qpane" hidden>
+      <div class="panel"><div class="ph"><span class="t">최적 자산 배분</span><div class="grow"></div><span class="muted">앞 70% 기간으로 비중 결정 → 뒤 30% 기간에서 검증</span></div>
+        <div class="pb">
+          <div class="row" style="flex-wrap:wrap;gap:8px">
+            <label class="f grow">코인 (쉼표로 구분)<input id="po-syms" placeholder="비우면 관심 종목"></label>
+            <label class="f">봉<select id="po-iv"><option value="4h">4시간</option><option value="1d" selected>일</option></select></label>
+            <label class="f">기간(봉)<input id="po-bars" type="number" value="365" min="60" max="1500" style="width:70px"></label>
+            <label class="f">한 코인 최대 비중 %<input id="po-cap" type="number" value="40" min="5" max="100" style="width:60px"></label>
+            <button class="pri" id="po-run" style="align-self:flex-end">계산</button></div>
+          <div id="po-out" style="margin-top:10px"></div></div></div>
+      <div class="cols-2" style="margin-top:12px;align-items:start">
+        <div class="panel"><div class="ph"><span class="t">스트레스 테스트 (실제 위기 재현)</span><div class="grow"></div><button class="sm" id="st-run">지금 포지션으로</button></div>
+          <div class="pb" id="st-out"><div class="empty">지금 모의 포지션(또는 위 배분 결과의 '스트레스' 버튼)으로 코로나·루나·FTX 같은 실제 폭락장이 오면 얼마나 잃는지 봅니다.</div></div></div>
+        <div class="panel"><div class="ph"><span class="t">팩터 노출 · 유동성</span><div class="grow"></div><button class="sm" id="ex-run">계산</button></div>
+          <div class="pb" id="ex-out"><div class="empty">지금 포지션이 BTC·모멘텀·변동성에 얼마나 기울어 있는지, 정리하는 데 얼마나 걸리는지 봅니다.</div></div></div>
+      </div>
+      <div class="panel" style="margin-top:12px"><div class="ph"><span class="t">성과 분석 (티어시트)</span><div class="grow"></div>
+        <select id="ts-src" style="height:22px"><option value="paper">모의 계좌 + 봇</option><option value="bt">최근 백테스트</option></select><button class="sm" id="ts-run">분석</button></div>
+        <div class="pb" id="ts-out"><div class="empty">샤프·소르티노·칼마, 월별 수익률, 코인·시간대별 손익을 봅니다.</div></div></div>
+    </div>
   <div class="qtip" id="q-tip" hidden></div>
 </section>
 

@@ -92,8 +92,10 @@ export class TermChart {
     this.boxLayer = new Layer((ctx, size) => this._drawBoxes(ctx, size), "bottom");
     this.fcLayer = new Layer((ctx, size) => this._drawForecast(ctx, size), "bottom");
     this.fc = null; this.fcSeries = [];
+    this.fpLayer = new Layer((ctx, size) => this._drawFootprint(ctx, size), "top");
+    this.fp = null;
     this.countdown = new Countdown(this);
-    [this.vpLayer, this.boxLayer, this.fcLayer, this.srLayer, this.heatLayer, this.whaleLayer, this.drawLayer, this.countdown].forEach((l) => this.candle.attachPrimitive(l));
+    [this.vpLayer, this.boxLayer, this.fcLayer, this.srLayer, this.heatLayer, this.whaleLayer, this.drawLayer, this.fpLayer, this.countdown].forEach((l) => this.candle.attachPrimitive(l));
     this.sigMarkers = [];     // 보조지표 신호 (골든크로스·UT Bot·다이버전스 등) — 가격 창 화살표
     this._cdTimer = setInterval(() => !document.hidden && this.countdown.update(), 1000);
     this.editLines = {};
@@ -115,7 +117,7 @@ export class TermChart {
       clearInterval(this._timer);
       this.markers = this.heat = this.whales = this.sr = this.scenario = null;
       this.ext = {}; this.sigMarkers = [];
-      this.setForecast(null);
+      this.setForecast(null); this.fp = null; this.fpLayer.update();
       this._applyMarkers();
       [this.heatLayer, this.whaleLayer, this.srLayer].forEach((l) => l.update());
     }
@@ -162,6 +164,7 @@ export class TermChart {
     this._tickN = (this._tickN || 0) + 1;
     if (newBar || this._tickN % 5 === 0) this.renderIndicators(true);
     if (newBar) this.refreshOverlays();
+    else if (this.opts.overlays.footprint && this._tickN % 10 === 0) this.loadFootprint();
     this._legend();
     this.editLines.entry?.applyOptions({ title: this._entryTitle() });
     this.opts.onTick?.(this.candles.at(-1));
@@ -202,7 +205,7 @@ export class TermChart {
       const r = def.compute(c, params, this.ext);
       const pane = def.pane === "sub" ? ++paneNo : 0;
       const series = r.plots.map((pl) => {
-        if (pl.type === "signals" || pl.type === "boxes") return null;   // 화살표·상자는 따로 그림
+        if (["signals", "boxes", "profiles"].includes(pl.type)) return null;   // 화살표·상자는 따로 그림
         const common = { priceLineVisible: false, lastValueVisible: def.pane === "sub" && pl.legend !== false, title: "" };
         let s;
         if (pl.type === "hist") {
@@ -263,6 +266,7 @@ export class TermChart {
     for (const it of this.ind) {
       if (it.pane !== 0) continue;
       for (const pl of it.last.plots) {
+        if (pl.type === "profiles") { this._drawProfiles(ctx, size, pl.sessions); continue; }
         if (pl.type !== "boxes") continue;
         for (const b of pl.boxes) {
           const x0 = ts.logicalToCoordinate(b.i0), x1 = b.i1 == null ? size.width : ts.logicalToCoordinate(b.i1);
@@ -272,6 +276,34 @@ export class TermChart {
           if (b.label && x1 - x0 > 34 && y1 - y0 > 9) { ctx.fillStyle = "rgba(230,232,234,.55)"; ctx.fillText(b.label, Math.max(2, x0 + 3), y0 + 10); }
         }
       }
+    }
+  }
+
+  // 세션 볼륨 프로파일: 세션 왼쪽 끝에서 오른쪽으로 자라는 막대 + POC · 가치영역 · nPOC
+  _drawProfiles(ctx, size, sessions) {
+    const ts = this.chart.timeScale(), bw = ts.options().barSpacing;
+    for (const s of sessions) {
+      const xa = ts.logicalToCoordinate(s.i0), xb = ts.logicalToCoordinate(s.i1);
+      if (xa == null || xb == null || xb < -50 || xa > size.width) continue;
+      const x0 = xa - bw / 2, w = Math.max(4, (xb - xa + bw) * 0.9);
+      for (const b of s.bins) {
+        const y1 = this.candle.priceToCoordinate(b.hi), y2 = this.candle.priceToCoordinate(b.lo);
+        if (y1 == null || y2 == null) continue;
+        const h = Math.max(1, y2 - y1 - 1), wb = w * b.buy / s.max, wsl = w * b.sell / s.max, a = b.va ? 0.32 : 0.13;
+        ctx.fillStyle = `rgba(229,72,77,${a})`; ctx.fillRect(x0, y1, wsl, h);
+        ctx.fillStyle = `rgba(34,176,125,${a})`; ctx.fillRect(x0 + wsl, y1, wb, h);
+      }
+      const line = (price, color, dash, x1 = x0 + w) => {
+        const y = this.candle.priceToCoordinate(price);
+        if (y == null) return null;
+        ctx.strokeStyle = color; ctx.setLineDash(dash); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke(); ctx.setLineDash([]);
+        return y;
+      };
+      line(s.vah, "rgba(164,172,182,.45)", [3, 3]); line(s.val, "rgba(164,172,182,.45)", [3, 3]);
+      const y = line(s.poc, "rgba(245,165,36,.95)", [], s.naked ? size.width : x0 + w);
+      ctx.font = "10px " + getComputedStyle(document.body).fontFamily; ctx.fillStyle = "rgba(230,232,234,.6)";
+      if (s.name && w > 40) ctx.fillText(s.name, x0 + 2, (this.candle.priceToCoordinate(s.bins.at(-1).hi) ?? 12) - 3);
+      if (s.naked && y != null) { ctx.fillStyle = "rgba(245,165,36,.9)"; ctx.fillText("nPOC", Math.min(size.width - 34, x0 + w + 4), y - 3); }
     }
   }
 
@@ -361,6 +393,7 @@ export class TermChart {
       .then((w) => (got.whales = w)).catch(() => {}));
     jobs.push(api(`/api/paper/markers?symbol=${sym}`).then((m) => (got.markers = { ...m, symbol: sym })).catch(() => {}));
     if (o.sr) jobs.push(api(`/api/levels?symbol=${sym}&interval=${iv}`).then((l) => (got.sr = l)).catch(() => {}));
+    if (o.footprint) jobs.push(this.loadFootprint());
     await Promise.all(jobs);
     if (!this._is(sym, iv)) return;   // 기다리는 동안 코인·봉을 바꿨으면 이전 결과는 버린다
     Object.assign(this, got);
@@ -369,7 +402,72 @@ export class TermChart {
     this._legend();
   }
 
-  setOverlay(name, on) { this.opts.overlays[name] = on; this.refreshOverlays(); }
+  setOverlay(name, on) {
+    this.opts.overlays[name] = on;
+    if (name === "footprint") {
+      if (!on) { this.fp = null; this.fpLayer.update(); this._legend(); return; }
+      const n = this.candles.length;   // 숫자가 보이도록 최근 12봉으로 확대
+      if (n) this.chart.timeScale().setVisibleLogicalRange({ from: n - 12, to: n + 1 });
+    }
+    this.refreshOverlays();
+  }
+
+  async loadFootprint() {
+    const sym = this.symbol, iv = this.interval;
+    try {
+      const f = await api(`/api/footprint?symbol=${sym}&interval=${iv}&bars=80`);
+      if (!this._is(sym, iv) || !this.opts.overlays.footprint) return;
+      f.byTime = new Map(f.bars.map((b) => [b.time, b]));
+      this.fp = f;
+    } catch (e) { if (this._is(sym, iv)) this.fp = { error: e.message }; }
+    this.fpLayer.update(); this._legend();
+  }
+
+  // 봉 볼륨 풋프린트: 넓게 확대하면 칸마다 '매도 × 매수' 숫자, 좁으면 색으로
+  _drawFootprint(ctx, size) {
+    const f = this.fp;
+    if (!f?.byTime) return;
+    const ts = this.chart.timeScale(), bw = ts.options().barSpacing, range = ts.getVisibleLogicalRange();
+    if (!range || bw < 5) return;
+    const c = this.candles, font = getComputedStyle(document.body).fontFamily;
+    const k = (v) => v >= 1e6 ? (v / 1e6).toFixed(1) + "M" : v >= 1e3 ? (v / 1e3).toFixed(1) + "k" : v >= 10 ? v.toFixed(0) : v >= 1 ? v.toFixed(1) : v.toFixed(2);
+    const numbers = bw >= 48;
+    ctx.font = `${Math.min(11, Math.max(9, bw / 9))}px ${font}`; ctx.textBaseline = "middle";
+    for (let i = Math.max(0, Math.floor(range.from)); i <= Math.min(c.length - 1, Math.ceil(range.to)); i++) {
+      const b = f.byTime.get(c[i].time), x = ts.logicalToCoordinate(i);
+      if (!b || x == null) continue;
+      const half = bw * 0.46, mx = Math.max(...b.levels.map((l) => l[1] + l[2])) || 1;
+      const ib = new Set(b.imb_buy), is = new Set(b.imb_sell);
+      for (const [p, sell, buy] of b.levels) {
+        const y1 = this.candle.priceToCoordinate(p + f.tick), y2 = this.candle.priceToCoordinate(p);
+        if (y1 == null || y2 == null) continue;
+        const h = Math.max(1, y2 - y1 - (numbers ? 1 : 0)), tot = sell + buy, d = tot ? (buy - sell) / tot : 0;
+        if (numbers) {
+          ctx.fillStyle = "rgba(18,22,28,.9)"; ctx.fillRect(x - half, y1, half * 2, h);
+          ctx.fillStyle = d >= 0 ? `rgba(34,176,125,${0.12 + 0.5 * tot / mx})` : `rgba(229,72,77,${0.12 + 0.5 * tot / mx})`; ctx.fillRect(x - half, y1, half * 2, h);
+          if (h >= 9) {
+            ctx.textAlign = "right"; ctx.fillStyle = is.has(p) ? "#ff8a8d" : "rgba(230,232,234,.85)"; ctx.fillText(k(sell), x - 3, y1 + h / 2);
+            ctx.textAlign = "left"; ctx.fillStyle = ib.has(p) ? "#5fe0a8" : "rgba(230,232,234,.85)"; ctx.fillText(k(buy), x + 3, y1 + h / 2);
+            ctx.fillStyle = "rgba(164,172,182,.5)"; ctx.fillRect(x, y1 + 2, 1, h - 4);
+          }
+        } else {
+          ctx.fillStyle = d >= 0 ? `rgba(34,176,125,${0.1 + 0.55 * tot / mx})` : `rgba(229,72,77,${0.1 + 0.55 * tot / mx})`;
+          ctx.fillRect(x - half, y1, half * 2, h);
+        }
+        if (p === b.poc) { ctx.strokeStyle = "rgba(245,165,36,.95)"; ctx.lineWidth = 1; ctx.strokeRect(x - half + 0.5, y1 + 0.5, half * 2 - 1, h - 1); }
+      }
+      for (const z of b.stacked) {   // 연속 불균형 구간: 봉 옆 굵은 막대
+        const ya = this.candle.priceToCoordinate(z.high), yb = this.candle.priceToCoordinate(z.low);
+        if (ya == null || yb == null) continue;
+        ctx.fillStyle = z.side === "buy" ? "#22b07d" : "#e5484d"; ctx.fillRect(z.side === "buy" ? x - half - 3 : x + half + 1, ya, 2, yb - ya);
+      }
+      if (bw >= 30) {   // 봉 아래 델타
+        const y = this.candle.priceToCoordinate(b.low);
+        if (y != null) { ctx.textAlign = "center"; ctx.fillStyle = b.delta >= 0 ? "#22b07d" : "#e5484d"; ctx.fillText(`Δ${b.delta >= 0 ? "+" : ""}${k(Math.abs(b.delta)).replace(/^/, b.delta < 0 ? "-" : "")}`, x, y + 10); }
+      }
+    }
+    ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+  }
 
   setScenario(sc, symbol = this.symbol) {
     this.scenario = symbol === this.symbol ? sc : null;
@@ -644,22 +742,24 @@ export class TermChart {
       <span class="muted">시</span> ${px(b.open)} <span class="muted">고</span> ${px(b.high)} <span class="muted">저</span> ${px(b.low)} <span class="muted">종</span> ${px(b.close)}
       <span class="${chg >= 0 ? "up" : "down"}">${chg >= 0 ? "+" : ""}${chg.toFixed(2)}%</span>`;
     const mainInd = this.ind.filter((it) => it.pane === 0);
-    const vals = (it) => it.last.plots.filter((pl) => pl.type !== "signals" && pl.type !== "boxes" && pl.legend !== false).map((pl) => val(pl.data[idx])).join(" ");
+    const vals = (it) => it.last.plots.filter((pl) => !["signals", "boxes", "profiles"].includes(pl.type) && pl.legend !== false).map((pl) => val(pl.data[idx])).join(" ");
     const extra = (it) => it.profile && this.vp ? ` <span class="muted">POC</span> ${px(this.vp.poc)} <span class="muted">가치영역</span> ${px(this.vp.val)}~${px(this.vp.vah)}`
       : it.last.note ? ` <span class="muted">${esc(it.last.note)}</span>` : "";
     if (mainInd.length) html += `<br>` + mainInd.map((it) => `<span style="color:${it.last.plots.find((pl) => pl.color)?.color || "inherit"}">${esc(INDICATORS[it.spec.key].name)}${paramStr(it.params)}</span> ${vals(it)}${extra(it)}`).join(" · ");
+    if (this.opts.overlays.footprint && this.fp) html += `<br><span class="muted">풋프린트: ${this.fp.error ? esc(this.fp.error) : `${this.fp.sub_interval} 봉 체결로 근사 · 칸 ${px(this.fp.tick)} · 왼쪽 매도 × 오른쪽 매수 · 주황 테두리 = 봉 POC · 초록/빨강 숫자 = 3배 불균형${ts_hint(this)}`}</span>`;
     if (this.heat) html += `<br><span class="muted">청산맵: ${this.heat.model === "coinglass" ? "CoinGlass" : this.heat.model === "estimate_oi" ? "OI 기반 추정" : "거래대금 기반 추정"}</span> <span class="scale"></span>`;
     if (this.whales) html += `<br><span class="muted">고래 체결 ≥ $${big(this.whales.min_usd)} · ${this.whales.trades.length}건${this.whales.source === "binance" && this.whales.collecting_since ? " (프로그램 실행 후 수집분)" : ""} · 호가벽 ${this.whales.walls.length}개</span>`;
     html += `</div>`;
     for (const it of this.ind.filter((x) => x.pane > 0)) {
       const top = tops[it.pane];
       if (top == null) continue;
-      html += `<div style="top:${top + 3}px"><span class="dim">${esc(INDICATORS[it.spec.key].name)}${paramStr(it.params)}</span> ${it.last.plots.filter((pl) => pl.type !== "signals" && pl.type !== "boxes" && pl.legend !== false).map((pl) => `<span style="color:${pl.color || "inherit"}">${val(pl.data[idx])}</span>`).join(" ")}${it.last.note ? ` <span class="accent">${esc(it.last.note)}</span>` : ""}</div>`;
+      html += `<div style="top:${top + 3}px"><span class="dim">${esc(INDICATORS[it.spec.key].name)}${paramStr(it.params)}</span> ${it.last.plots.filter((pl) => !["signals", "boxes", "profiles"].includes(pl.type) && pl.legend !== false).map((pl) => `<span style="color:${pl.color || "inherit"}">${val(pl.data[idx])}</span>`).join(" ")}${it.last.note ? ` <span class="accent">${esc(it.last.note)}</span>` : ""}</div>`;
     }
     this.legendEl.innerHTML = html;
   }
 }
 
+const ts_hint = (tc) => tc.chart.timeScale().options().barSpacing < 48 ? " · 더 확대하면 숫자가 보입니다" : "";
 const paramStr = (p) => { const v = Object.values(p || {}); return v.length ? ` <span class="muted">${v.join(",")}</span>` : ""; };
 
 function toData(c, pl) {

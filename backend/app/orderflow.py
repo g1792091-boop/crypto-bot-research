@@ -84,6 +84,106 @@ def find_walls(book: dict, mid: float, span: float = 0.05, n: int = 8) -> list[d
     return [{"price": w["price"], "usd": w["usd"], "side": w["side"]} for w in walls[:n]]
 
 
+# ---------------------------------------------------------------- 진입 도구: 깊이 불균형 · 슬리피지 · 벽 추적 · 진입 계획
+DEPTHS = (0.25, 0.5, 1.0, 2.0)
+SIZES = (10_000, 100_000, 1_000_000, 5_000_000)
+
+
+def depth_stats(book: dict, mid: float) -> list[dict]:
+    out = []
+    for pct in DEPTHS:
+        lo, hi = mid * (1 - pct / 100), mid * (1 + pct / 100)
+        b = sum(p * q for p, q in book["bids"] if p >= lo)
+        a = sum(p * q for p, q in book["asks"] if p <= hi)
+        out.append({"pct": pct, "bid_usd": b, "ask_usd": a, "imbalance": (b - a) / (b + a) if b + a else 0.0})
+    return out
+
+
+def slippage(book: dict, mid: float, sizes=SIZES) -> list[dict]:
+    """시장가로 usd 만큼 사면(팔면) 호가를 먹어 들어가며 평균 체결가가 얼마나 밀리는지."""
+    out = []
+    for usd in sizes:
+        row = {"usd": usd}
+        for side, levels in (("buy", book["asks"]), ("sell", book["bids"])):
+            left, cost, qty, last = usd, 0.0, 0.0, None
+            for p, q in levels:
+                take = min(left, p * q)
+                cost += take
+                qty += take / p
+                left -= take
+                last = p
+                if left <= 1e-9:
+                    break
+            if left > 1e-9 or not qty:
+                row[side] = None                        # 받아온 호가(±수 %) 안에 물량이 모자람
+            else:
+                avg = cost / qty
+                row[side] = {"avg": avg, "slip_pct": abs(avg / mid - 1) * 100, "worst": last}
+        out.append(row)
+    return out
+
+
+class WallTracker:
+    """보고 있는 동안 호가 벽이 얼마나 오래 있었는지, 가격이 닿기 전에 사라진 벽(허수 의심)은 무엇인지 기록."""
+
+    def __init__(self):
+        self.seen: dict[str, dict[tuple, dict]] = {}
+        self.pulled: dict[str, deque] = {}
+        self.history: dict[str, deque] = {}
+
+    def update(self, symbol: str, walls: list[dict], mid: float, imbalance: float) -> list[dict]:
+        now = time.time()
+        with _lock:
+            prev = self.seen.get(symbol, {})
+            cur: dict[tuple, dict] = {}
+            for w in walls:
+                key = (w["side"], w["price"])
+                first = prev.get(key, {}).get("first", now)
+                cur[key] = {**w, "first": first, "last": now, "peak": max(w["usd"], prev.get(key, {}).get("peak", 0))}
+            pulled = self.pulled.setdefault(symbol, deque(maxlen=30))
+            for key, w in prev.items():
+                if key in cur or now - w["last"] > 60:
+                    continue
+                reached = mid <= w["price"] * 1.0005 if w["side"] == "bid" else mid >= w["price"] * 0.9995
+                if not reached and w["last"] - w["first"] >= 5:    # 가격이 닿지 않았는데 사라짐
+                    pulled.append({"side": w["side"], "price": w["price"], "usd": w["peak"], "lived_sec": round(w["last"] - w["first"]),
+                                   "time": int(now)})
+            self.seen[symbol] = cur
+            h = self.history.setdefault(symbol, deque(maxlen=240))
+            h.append({"time": int(now), "imbalance": round(imbalance, 4), "mid": mid})
+            return [{**w, "age_sec": round(now - w["first"])} for w in cur.values()]
+
+
+walls_tracker = WallTracker()
+
+
+def entry_plan(mid: float, walls: list[dict], depth: list[dict], tick: float) -> dict:
+    """벽을 근거로 한 롱·숏 진입 계획. 벽 바로 앞에 지정가, 벽 너머에 손절, 반대편 벽 앞에서 익절."""
+    bids = sorted([w for w in walls if w["side"] == "bid" and w["price"] < mid and mid / w["price"] - 1 <= 0.02], key=lambda w: -w["usd"])
+    asks = sorted([w for w in walls if w["side"] == "ask" and w["price"] > mid and w["price"] / mid - 1 <= 0.02], key=lambda w: -w["usd"])
+    plans = {}
+    if bids:
+        b = bids[0]
+        entry = b["price"] + tick
+        stop = b["price"] * 0.997
+        tp = (asks[0]["price"] - tick) if asks else entry + 2 * (entry - stop)
+        plans["long"] = {"entry": entry, "stop": stop, "take": tp, "rr": round((tp - entry) / (entry - stop), 2) if entry > stop else None,
+                         "why": f"매수 벽 {b['price']:.6g} (${b['usd'] / 1e6:.2f}M) 바로 위에 지정가 — 벽이 받쳐 주는 동안만 유효, 벽이 사라지면 취소"}
+    if asks:
+        a = asks[0]
+        entry = a["price"] - tick
+        stop = a["price"] * 1.003
+        tp = (bids[0]["price"] + tick) if bids else entry - 2 * (stop - entry)
+        plans["short"] = {"entry": entry, "stop": stop, "take": tp, "rr": round((entry - tp) / (stop - entry), 2) if stop > entry else None,
+                          "why": f"매도 벽 {a['price']:.6g} (${a['usd'] / 1e6:.2f}M) 바로 아래 지정가 — 벽이 누르는 동안만 유효"}
+    near = depth[1]["imbalance"] if len(depth) > 1 else 0
+    bias = "long" if near >= 0.2 else "short" if near <= -0.2 else "neutral"
+    return {"bias": bias, "plans": plans,
+            "note": {"long": "현재가 ±0.5% 안 매수 호가가 두껍습니다 (아래가 단단함)",
+                     "short": "현재가 ±0.5% 안 매도 호가가 두껍습니다 (위가 무거움)",
+                     "neutral": "가까운 호가는 균형 — 호가만으로는 방향 우위 없음"}[bias]}
+
+
 def orderbook(symbol: str, step: float | None = None, rows: int = 20) -> dict:
     book, src = _raw_book(symbol)
     best_bid, best_ask = book["bids"][0][0], book["asks"][0][0]
@@ -92,15 +192,21 @@ def orderbook(symbol: str, step: float | None = None, rows: int = 20) -> dict:
     near = lambda lv: abs(lv[0] - mid) / mid <= 0.01
     bid_usd = sum(p * q for p, q in book["bids"] if near((p, q)))
     ask_usd = sum(p * q for p, q in book["asks"] if near((p, q)))
+    imb = (bid_usd - ask_usd) / (bid_usd + ask_usd) if bid_usd + ask_usd else 0.0
+    walls = find_walls(book, mid)
+    tracked = walls_tracker.update(symbol, walls, mid, imb)
+    depth = depth_stats(book, mid)
     return {
         "symbol": symbol, "source": src, "time": book["time"], "step": step,
         "steps": [nice_step(mid * f) for f in (0.00001, 0.00005, 0.0001, 0.0005, 0.001)],
-        "mid": mid, "spread": best_ask - best_bid,
+        "mid": mid, "spread": best_ask - best_bid, "spread_bps": (best_ask - best_bid) / mid * 1e4,
         "bids": _group(book["bids"], step, "bid")[:rows],
         "asks": _group(book["asks"], step, "ask")[:rows],
-        "imbalance": (bid_usd - ask_usd) / (bid_usd + ask_usd) if bid_usd + ask_usd else 0.0,
-        "bid_usd_1pct": bid_usd, "ask_usd_1pct": ask_usd,
-        "walls": find_walls(book, mid),
+        "imbalance": imb, "bid_usd_1pct": bid_usd, "ask_usd_1pct": ask_usd,
+        "walls": tracked, "depth": depth, "slippage": slippage(book, mid),
+        "pulled": list(walls_tracker.pulled.get(symbol, []))[-8:],
+        "imbalance_history": list(walls_tracker.history.get(symbol, []))[-120:],
+        "plan": entry_plan(mid, find_walls(book, mid, span=0.02, n=10), depth, nice_step(mid * 0.0001)),
     }
 
 

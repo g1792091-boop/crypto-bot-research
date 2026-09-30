@@ -46,9 +46,9 @@ def _close(t: int, base: float, phases: list[float], seed: int) -> float:
     return base * math.exp(lp)
 
 
-def candles(symbol: str, interval: str, limit: int = 500, seed: int | None = None) -> list[dict]:
+def candles(symbol: str, interval: str, limit: int = 500, seed: int | None = None, end_time: int | None = None) -> list[dict]:
     step = INTERVAL_SECONDS.get(interval, 3600)
-    end = int(time.time()) // step * step
+    end = int(end_time if end_time is not None else time.time()) // step * step
     seed = seed if seed is not None else zlib.crc32(symbol.upper().encode())
     phase_rng = random.Random(seed)
     phases = [phase_rng.uniform(0, 2 * math.pi) for _ in _WAVES]

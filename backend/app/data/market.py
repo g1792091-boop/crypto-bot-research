@@ -75,6 +75,27 @@ def candles(symbol: str, interval: str, limit: int = 500) -> tuple[list[dict], s
         return synthetic.candles(symbol, interval, limit), "synthetic"
 
 
+def candles_range(symbol: str, interval: str, start: int, end: int) -> tuple[list[dict], str]:
+    """start~end(유닉스 초) 사이 봉 — 과거 특정 시기(위기 구간 등) 조회용."""
+    step = synthetic.INTERVAL_SECONDS.get(interval, 86400)
+    n = max(2, (end - start) // step + 2)
+    if config.DATA_SOURCE != "synthetic":
+        try:
+            rows = _cached(("range", symbol, interval, start, end), 3600,
+                           lambda: binance.klines(symbol, interval, min(n, 1500), end_time=end))
+            return [b for b in rows if start <= b["time"] <= end], "binance"
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 400:
+                return [], "binance"              # 그 시기에 상장 전
+            if config.DATA_SOURCE == "binance":
+                raise
+        except Exception:
+            if config.DATA_SOURCE == "binance":
+                raise
+    rows = synthetic.candles(symbol, interval, n, end_time=end)
+    return [b for b in rows if start <= b["time"] <= end], "synthetic"
+
+
 def tickers(symbols: list[str]) -> tuple[list[dict], str]:
     """관심 종목 시세 (24h 등락, 고가/저가)."""
     if config.DATA_SOURCE != "synthetic":

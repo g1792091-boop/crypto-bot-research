@@ -288,6 +288,116 @@ function renderSizer() {
   el.oninput = calc; calc();
 }
 
+// ================================================================ 기관식 포트폴리오
+const M_COLOR = { equal: "#3987e5", inv_vol: "#d95926", risk_parity: "#199e70", min_var: "#c98500", max_sharpe: "#d55181" };   // 검증된 범주 순서
+let opt = null;
+async function runOptimize() {
+  const typed = $("#po-syms").value.split(/[,\s]+/).filter(Boolean);
+  opt = await api("/api/portfolio/optimize", { method: "POST", body: { symbols: typed.length ? typed : state.watch, interval: $("#po-iv").value,
+    bars: +$("#po-bars").value, max_weight: (+$("#po-cap").value || 40) / 100 } });
+  const R = opt.results, st = (x, k, unit = "") => x?.[k] == null ? "–" : `${x[k]}${unit}`;
+  // 효율적 투자선 산점도
+  const W = 720, H = 440, P = { l: 52, r: 90, t: 14, b: 40 }, pts = [...opt.cloud, ...R.map((r) => r.point)];
+  const [vx0, vx1] = [Math.min(...pts.map((p) => p.vol)) * 0.95, Math.max(...pts.map((p) => p.vol)) * 1.03];
+  const [ry0, ry1] = [Math.min(...pts.map((p) => p.ret)), Math.max(...pts.map((p) => p.ret))].map((v, i) => v + (i ? 1 : -1) * Math.abs(v) * 0.08 + (i ? 0.5 : -0.5));
+  const X = (v) => P.l + (v - vx0) / (vx1 - vx0) * (W - P.l - P.r), Y = (v) => H - P.b - (v - ry0) / (ry1 - ry0) * (H - P.t - P.b);
+  const placed = [];
+  const ly = (x, y) => { for (const dy of [0, -13, 13, -26, 26, -39, 39]) { const t = y + 4 + dy; if (!placed.some((q) => Math.abs(q.x - x) < 90 && Math.abs(q.y - t) < 12)) { placed.push({ x, y: t }); return t; } } return y + 4; };
+  const tk = (v) => fmt(v, 0);
+  const svg = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:640px;height:auto" role="img" aria-label="효율적 투자선">
+    <line x1="${P.l}" x2="${W - P.r}" y1="${H - P.b}" y2="${H - P.b}" stroke="var(--line-2)"/><line x1="${P.l}" x2="${P.l}" y1="${P.t}" y2="${H - P.b}" stroke="var(--line-2)"/>
+    <text x="${P.l}" y="${H - P.b + 14}" style="font-size:11px;fill:var(--muted)">${tk(vx0)}%</text><text x="${W - P.r}" y="${H - P.b + 14}" text-anchor="end" style="font-size:11px;fill:var(--muted)">${tk(vx1)}%</text>
+    <text x="${P.l - 4}" y="${H - P.b}" text-anchor="end" style="font-size:11px;fill:var(--muted)">${tk(ry0)}%</text><text x="${P.l - 4}" y="${P.t + 10}" text-anchor="end" style="font-size:11px;fill:var(--muted)">${tk(ry1)}%</text>
+    ${opt.cloud.map((p) => `<circle cx="${X(p.vol).toFixed(1)}" cy="${Y(p.ret).toFixed(1)}" r="1.6" fill="var(--muted)" fill-opacity=".35"/>`).join("")}
+    ${R.map((r) => `<circle cx="${X(r.point.vol)}" cy="${Y(r.point.ret)}" r="6" fill="${M_COLOR[r.method]}" stroke="var(--panel)" stroke-width="2"
+      data-tip="${esc(`<b>${r.name}</b><br>연 변동성 ${r.point.vol}% · 연 기대수익 ${r.point.ret}% (학습 구간)`)}"/>
+      <text x="${X(r.point.vol) + 9}" y="${ly(X(r.point.vol) + 9, Y(r.point.ret))}" style="font-size:12px;fill:var(--text)">${r.name}</text>`).join("")}
+    <text x="${(W + P.l - P.r) / 2}" y="${H - 8}" text-anchor="middle" style="font-size:12px;fill:var(--text-2)">연 변동성 % (위험) →</text>
+    <text x="14" y="${(H - P.b) / 2}" text-anchor="middle" transform="rotate(-90 14 ${(H - P.b) / 2})" style="font-size:12px;fill:var(--text-2)">연 기대수익 % →</text></svg>`;
+  $("#po-out").innerHTML = `<div class="cols-2" style="align-items:start"><div>
+      <table><tr><th>방법</th><th>학습 샤프</th><th>검증 수익</th><th>검증 샤프</th><th>검증 낙폭</th><th></th></tr>
+        ${R.map((r) => `<tr><td><i style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${M_COLOR[r.method]};margin-right:5px"></i>${r.name}</td>
+          <td>${st(r.train, "sharpe")}</td><td class="${cls(r.test.return_pct)}">${pct(r.test.return_pct)}</td><td><b>${st(r.test, "sharpe")}</b></td>
+          <td class="down">-${st(r.test, "max_dd_pct", "%")}</td><td><button class="sm" data-stress="${r.method}">스트레스</button></td></tr>`).join("")}</table>
+      <div class="sub" style="padding-left:0;margin-top:8px">코인별 비중 <span class="muted">(마우스를 올리면 위험 기여도)</span></div>
+      <div style="overflow:auto"><table><tr><th>코인</th>${R.map((r) => `<th>${r.name}</th>`).join("")}</tr>
+        ${opt.symbols.map((sym) => `<tr><td><b>${base(sym)}</b></td>${R.map((r) => `<td class="wcell" data-tip="${esc(`${base(sym)} · ${r.name}<br>비중 ${(r.weights[sym] * 100).toFixed(1)}% · 위험 기여 ${(r.risk_contrib[sym] * 100).toFixed(1)}%`)}"><i style="width:${(r.weights[sym] * 100).toFixed(1)}%"></i><span>${(r.weights[sym] * 100).toFixed(1)}%</span></td>`).join("")}</tr>`).join("")}</table></div>
+    </div><div>${svg}<div class="legend-row"><span><i style="background:var(--muted)"></i>무작위 배분 ${opt.cloud.length}개</span>${R.map((r) => `<span><i style="background:${M_COLOR[r.method]}"></i>${r.name}</span>`).join("")}</div>
+      <div class="help">${esc(opt.note)} 학습 ${opt.train_bars}봉 · 검증 ${opt.test_bars}봉 (${mdhm(opt.test_from)}부터)${opt.data_source === "synthetic" ? " · <span class='accent'>가상 데이터</span>" : ""}</div></div></div>`;
+  bindTips($("#po-out"));
+}
+
+async function runStress(weights) {
+  const r = await api("/api/portfolio/stress", { method: "POST", body: weights ? { weights, equity: 10_000 } : {} });
+  $("#st-out").innerHTML = `<div class="muted" style="margin-bottom:6px">${weights ? "배분 결과 (자본 10,000 USDT 가정)" : "지금 모의 포지션"} · 총 노출 ${fmt(r.gross, 0)} USDT</div>
+    <table><tr><th>시나리오</th><th>BTC</th><th>예상 손익</th><th>노출 대비</th><th></th></tr>
+      ${r.scenarios.map((s) => `<tr data-tip="${esc(`<b>${s.name}</b> (${s.period})<br>` + s.detail.map((d) => `${base(d.symbol)} ${d.ret_pct > 0 ? "+" : ""}${d.ret_pct}%${d.low_pct != null ? ` (구간 최저 ${d.low_pct}%)` : ""}${d.estimated ? " · 추정" : ""}`).join("<br>"))}">
+        <td>${esc(s.name)}<div class="muted" style="font-size:10.5px">${esc(s.period)}</div></td><td class="${cls(s.btc_ret_pct)}">${s.btc_ret_pct == null ? "–" : pct(s.btc_ret_pct)}</td>
+        <td class="${cls(s.pnl)}"><b>${s.pnl > 0 ? "+" : ""}${fmt(s.pnl, 0)}</b></td><td class="${cls(s.pnl_pct_gross)}">${pct(s.pnl_pct_gross)}</td>
+        <td>${s.liquidation.length ? `<span class="down">청산 위험: ${s.liquidation.map(base).join(", ")}</span>` : ""}</td></tr>`).join("")}</table>
+    <div class="help">${esc(r.note)} 줄에 마우스를 올리면 코인별 등락을 볼 수 있습니다.</div>`;
+  bindTips($("#st-out"));
+}
+
+async function runExposure() {
+  const r = await api("/api/portfolio/exposure");
+  const tile = (k, v, c = "") => `<div class="tile"><div class="k">${k}</div><div class="v ${c}">${v}</div></div>`;
+  $("#ex-out").innerHTML = `<div class="tiles">${tile("총 노출", fmt(r.gross, 0))}${tile("순 노출", fmt(r.net, 0), cls(r.net))}
+      ${tile("BTC 1% 움직일 때", `${r.beta_dollars >= 0 ? "+" : ""}${fmt(r.beta_dollars / 100, 1)}`, cls(r.beta_dollars))}
+      ${tile("모멘텀 기울기", r.mom_tilt, cls(r.mom_tilt))}${tile("변동성 기울기", r.vol_tilt)}</div>
+    <div class="muted" style="margin:6px 0">그룹별 순노출: ${Object.entries(r.tiers).map(([k, v]) => `${esc(k)} <span class="${cls(v)}">${fmt(v, 0)}</span>`).join(" · ")}</div>
+    <div style="overflow:auto"><table><tr><th>코인</th><th>방향</th><th>금액</th><th>BTC 베타</th><th>모멘텀 z</th><th>연 변동성</th><th>거래대금 대비</th><th>정리 일수*</th><th>한 번에 정리 시 슬리피지</th></tr>
+      ${r.rows.map((x) => `<tr><td><b>${base(x.symbol)}</b> <span class="muted">${esc(x.who || "")}</span></td><td class="${x.side === "long" ? "up" : "down"}">${x.side === "long" ? "롱" : "숏"}</td>
+        <td>${fmt(x.notional, 0)}</td><td>${x.beta}</td><td class="${cls(x.mom_z)}">${x.mom_z}</td><td>${x.vol_ann_pct}%</td>
+        <td>${x.pct_adv == null ? "–" : x.pct_adv + "%"}</td><td>${x.days_to_exit_10pct ?? "–"}</td><td>${x.exit_slip_pct == null ? "–" : x.exit_slip_pct + "%"}</td></tr>`).join("")}</table></div>
+    <div class="help">${esc(r.note)} *하루 거래대금의 10%씩만 팔 때 걸리는 날 수.</div>`;
+}
+
+let tsChart = null;
+async function runTearsheet() {
+  const src = $("#ts-src").value, b = state.lastBacktest;
+  if (src === "bt" && !b) return toast("먼저 '전략 · 백테스트'에서 백테스트를 실행하세요");
+  let r;
+  try {
+    r = await api("/api/portfolio/tearsheet", { method: "POST", body: src === "paper" ? { source: "paper" }
+      : { source: "custom", trades: b.trades, equity_curve: b.equity_curve, initial: b.initial } });
+  } catch (err) {
+    $("#ts-out").innerHTML = `<div class="empty">${esc(err.message)} ${src === "paper" ? "모의 거래를 청산하거나 봇이 거래를 마치면 분석할 수 있습니다. 백테스트 결과로 보려면 위에서 '최근 백테스트'를 고르세요." : ""}</div>`;
+    return;
+  }
+  const s = r.stats, tile = (k, v, c = "") => `<div class="tile"><div class="k">${k}</div><div class="v ${c}">${v ?? "–"}</div></div>`;
+  const months = Object.entries(r.monthly), mx = Math.max(1, ...months.flatMap(([, m]) => Object.values(m).map(Math.abs)));
+  const bar = (rows, label) => { const m = Math.max(1, ...rows.map((x) => Math.abs(x.pnl)));
+    return rows.map((x) => `<div class="hbar" style="grid-template-columns:60px 1fr 70px"><span class="dim">${label(x.key)}</span><div class="track"><b></b>
+      <i style="${x.pnl >= 0 ? `left:50%;width:${x.pnl / m * 50}%` : `right:50%;width:${-x.pnl / m * 50}%`};background:${x.pnl >= 0 ? "var(--up)" : "var(--down)"}"
+        data-tip="${esc(`${label(x.key)} · ${x.trades}건 · 승률 ${x.win_rate}%<br>손익 ${fmt(x.pnl, 2)}`)}"></i></div>
+      <span class="${cls(x.pnl)}" style="text-align:right">${fmt(x.pnl, 0)}</span></div>`).join(""); };
+  $("#ts-out").innerHTML = `<div class="tiles">
+      ${tile("총 수익률", pct(s.total_return_pct), cls(s.total_return_pct))}${tile("연 환산 (CAGR)", s.cagr_pct == null ? "30일 이상 필요" : pct(s.cagr_pct), cls(s.cagr_pct))}
+      ${tile("샤프", s.sharpe)}${tile("소르티노", s.sortino)}${tile("칼마", s.calmar)}${tile("최대 낙폭", `-${s.max_dd_pct}%`, "down")}
+      ${tile("낙폭 최장 기간", `${s.max_dd_days}일`)}${tile("연 변동성", `${s.ann_vol_pct}%`)}${tile("거래", s.trades)}${tile("승률", `${s.win_rate_pct}%`)}
+      ${tile("손익비", s.payoff)}${tile("거래당 기대값", fmt(s.expectancy, 2), cls(s.expectancy))}${tile("수익 팩터", s.profit_factor)}
+      ${tile("평균 보유", `${s.avg_hold_h}시간`)}${tile("최고 / 최악", `<span class="up">${fmt(s.best_trade, 0)}</span> / <span class="down">${fmt(s.worst_trade, 0)}</span>`)}
+      ${tile("연승 / 연패", `${s.win_streak} / ${s.loss_streak}`)}</div>
+    <div class="cols-2" style="margin-top:10px;align-items:start"><div>
+      <div class="sub" style="padding-left:0">월별 수익률</div>
+      <table class="heat"><tr><th></th>${Array.from({ length: 12 }, (_, i) => `<th>${i + 1}월</th>`).join("")}</tr>
+        ${months.map(([y, m]) => `<tr><th>${y}</th>${Array.from({ length: 12 }, (_, i) => { const v = m[i + 1];
+          return v == null ? "<td style='background:var(--panel-2)'></td>" : `<td style="background:${diverge(v / mx, "#e5484d", "#22b07d")}">${v > 0 ? "+" : ""}${fmt(v, 1)}</td>`; }).join("")}</tr>`).join("")}</table>
+      <div class="sub" style="padding-left:0;margin-top:8px">낙폭 (고점 대비 %)</div><div class="chart" id="ts-dd" style="height:150px"></div></div>
+    <div>
+      <div class="sub" style="padding-left:0">코인별 손익</div>${bar(r.by_symbol, base)}
+      <div class="sub" style="padding-left:0;margin-top:6px">방향별</div>${bar(r.by_side, (k) => k)}
+      <div class="sub" style="padding-left:0;margin-top:6px">진입 시간대별 (한국 시간)</div>${bar(r.by_hour, (k) => `${k}시`)}
+      <div class="sub" style="padding-left:0;margin-top:6px">요일별</div>${bar(r.by_weekday, (k) => r.weekday_names[k] + "요일")}</div></div>`;
+  bindTips($("#ts-out"));
+  tsChart?.remove();
+  tsChart = makeChart($("#ts-dd"));
+  const a = tsChart.addSeries(LC.AreaSeries, { lineColor: css("--down"), topColor: "rgba(229,72,77,0)", bottomColor: "rgba(229,72,77,.35)", lineWidth: 1, priceLineVisible: false });
+  a.setData(r.underwater);
+  tsChart.timeScale().fitContent();
+}
+
 // ================================================================ 초기화
 export function initQuant() {
   $("#q-tabs").onclick = (e) => {
@@ -324,4 +434,15 @@ export function initQuant() {
   $("#sw-run").onclick = (e) => busy(e.target, runSweep);
   on("backtest", () => { if (!$("#q-risk").hidden) { renderSizer(); loadSweepForm().catch(() => {}); } });
   on("view", (v) => { if (v === "quant" && !rot) busy($("#rot-run"), runRotation); });
+  // 기관식 포트폴리오
+  $("#po-run").onclick = (e) => busy(e.target, runOptimize);
+  $("#st-run").onclick = (e) => busy(e.target, () => runStress(null));
+  $("#ex-run").onclick = (e) => busy(e.target, runExposure);
+  $("#ts-run").onclick = (e) => busy(e.target, runTearsheet);
+  $("#po-out").addEventListener("click", (e) => {
+    const m = e.target.closest("[data-stress]")?.dataset.stress;
+    if (!m || !opt) return;
+    busy(e.target, () => runStress(opt.results.find((r) => r.method === m).weights));
+    $("#st-out").scrollIntoView({ behavior: "smooth", block: "center" });
+  });
 }

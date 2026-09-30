@@ -15,7 +15,7 @@ from . import agents, analysis, backtest, config, improve, indicators, liquidati
 from .data import coinglass, exchanges, market, news, sentiment, symbols
 from .llm import LLMUnavailable
 from .paper import PaperManager
-from .quant import forecast, risk, rotation
+from .quant import entry, footprint, forecast, portfolio, risk, rotation
 from .quant.scanner import scanner
 from .strategy import StrategySpec, validate
 
@@ -551,6 +551,24 @@ def execute_decision(req: ExecuteDecisionReq):
 
 
 # ------------------------------------------------------------------ 퀀트: 패턴 예측 · 순환매 · 스캐너 · 리스크
+@app.get("/api/footprint")
+def get_footprint(symbol: str = "BTCUSDT", interval: str = "1h", bars: int = 60):
+    """봉 볼륨 풋프린트 (작은 봉의 테이커 매수·매도로 근사)."""
+    try:
+        return footprint.footprint(symbols.resolve(symbol), interval, max(5, min(bars, 300)))
+    except ValueError as e:
+        _bad(e)
+
+
+@app.get("/api/entry")
+def get_entry(symbol: str = "BTCUSDT", interval: str = "1h"):
+    """종합 진입 판단: 시장 판단 · 다음 봉 · 유사 패턴 · 풋프린트 · 호가."""
+    try:
+        return entry.entry(symbols.resolve(symbol), interval)
+    except ValueError as e:
+        _bad(e)
+
+
 @app.get("/api/forecast")
 def get_forecast(symbol: str = "BTCUSDT", interval: str = "1h", window: int = 48, horizon: int = 24):
     """과거 비슷한 차트의 이후 흐름(예상 시나리오 범위) + 다음 봉 예측."""
@@ -637,16 +655,21 @@ def risk_matrix(req: RiskMatrixReq):
         _bad(e)
 
 
-@app.get("/api/risk/portfolio")
-def risk_portfolio(interval: str = "1d", shock_pct: float = -10.0):
-    """모의 계좌 + 실행 중인 봇 포지션을 합친 위험 (VaR · BTC 급락 스트레스)."""
-    pos = [{"symbol": p["symbol"], "side": p["side"], "notional": p["qty"] * p["mark_price"], "who": "수동"}
+def _paper_positions() -> list[dict]:
+    pos = [{"symbol": p["symbol"], "side": p["side"], "notional": p["qty"] * p["mark_price"], "leverage": p["leverage"], "who": "수동"}
            for p in paper.manual.snapshot()["positions"]]
     for b in paper.bots.values():
         p = b.sim.position
         if p is not None:
-            pos.append({"symbol": b.spec.symbol, "side": "long" if p.side == 1 else "short",
+            pos.append({"symbol": b.spec.symbol, "side": "long" if p.side == 1 else "short", "leverage": p.leverage,
                         "notional": p.qty * (b.last_price or p.entry_price), "who": f"봇 {b.spec.name}"})
+    return pos
+
+
+@app.get("/api/risk/portfolio")
+def risk_portfolio(interval: str = "1d", shock_pct: float = -10.0):
+    """모의 계좌 + 실행 중인 봇 포지션을 합친 위험 (VaR · BTC 급락 스트레스)."""
+    pos = _paper_positions()
     if not pos:
         return {"positions": 0, "items": []}
     try:
@@ -689,6 +712,71 @@ def risk_sweep(req: SweepReq):
         return risk.sweep(_norm(req.spec).model_dump(), req.p1, req.v1, req.p2, req.v2, min(req.bars, 5000))
     except (ValueError, KeyError, IndexError) as e:
         _bad(ValueError(f"스윕 실패: {e}"))
+
+
+# ------------------------------------------------------------------ 기관식 포트폴리오
+class OptimizeReq(BaseModel):
+    symbols: list[str]
+    interval: str = "1d"
+    bars: int = 365
+    max_weight: float = 0.4
+
+
+@app.post("/api/portfolio/optimize")
+def portfolio_optimize(req: OptimizeReq):
+    try:
+        return portfolio.optimize([symbols.resolve(s) for s in req.symbols][:25], req.interval, max(60, min(req.bars, 1500)),
+                                  max(0.05, min(req.max_weight, 1.0)))
+    except ValueError as e:
+        _bad(e)
+
+
+class StressReq(BaseModel):
+    weights: Optional[dict[str, float]] = None      # 없으면 지금 모의 포지션
+    equity: float = 10_000
+
+
+@app.post("/api/portfolio/stress")
+def portfolio_stress(req: StressReq):
+    pos = ([{"symbol": symbols.resolve(s), "side": "long" if w >= 0 else "short", "notional": abs(w) * req.equity, "leverage": 1}
+            for s, w in req.weights.items() if w] if req.weights else _paper_positions())
+    try:
+        return portfolio.stress(pos)
+    except ValueError as e:
+        _bad(e)
+
+
+@app.get("/api/portfolio/exposure")
+def portfolio_exposure():
+    try:
+        return portfolio.exposures(_paper_positions())
+    except ValueError as e:
+        _bad(e)
+
+
+class TearReq(BaseModel):
+    source: Literal["paper", "custom"] = "paper"
+    trades: Optional[list[dict]] = None
+    equity_curve: Optional[list[dict]] = None
+    initial: float = 10_000
+
+
+@app.post("/api/portfolio/tearsheet")
+def portfolio_tearsheet(req: TearReq):
+    """성과 분석. paper = 모의 계좌 + 모든 봇 거래, custom = 넘겨준 거래(백테스트 등)."""
+    if req.source == "paper":
+        trades = [dict(t) for t in paper.manual.snapshot()["trades"]]
+        initial = paper.manual.initial_equity if hasattr(paper.manual, "initial_equity") else 10_000
+        for b in paper.bots.values():
+            trades += [{**asdict(t), "symbol": b.spec.symbol} for t in b.sim.trades]
+            initial += b.initial_equity
+        curve = None
+    else:
+        trades, curve, initial = req.trades or [], req.equity_curve, req.initial
+    try:
+        return portfolio.tearsheet(trades, initial, curve)
+    except ValueError as e:
+        _bad(e)
 
 
 # ------------------------------------------------------------------ 프론트엔드

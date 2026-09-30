@@ -16,6 +16,7 @@ state.overlays ||= { heat: false, whales: false, bots: true, scenario: true, sr:
 state.overlays.sr ??= true;
 state.overlays.countdown ??= true;
 state.overlays.forecast ??= true;
+state.overlays.footprint ??= false;
 state.layout ||= 1;
 state.multi ||= [{ symbol: "ETHUSDT", interval: "1h" }, { symbol: "SOLUSDT", interval: "1h" }, { symbol: "BTCUSDT", interval: "4h" }];
 
@@ -265,6 +266,7 @@ async function loadForecast() {
     const changed = state.forecast?.bar_time !== f.bar_time || state.forecast?.symbol !== f.symbol || state.forecast?.interval !== f.interval;
     state.forecast = f;
     renderForecast(f);
+    loadEntry();
     if (changed) charts[0]?.setForecast(state.overlays.forecast ? f : null);
     emit("forecast", f);
   } catch (e) {
@@ -281,11 +283,39 @@ function spark(shape, split, ret) {
     <polyline points="${pts(split, shape.length - 1)}" fill="none" stroke="${ret >= 0 ? "var(--up)" : "var(--down)"}" stroke-width="2"/></svg>`;
 }
 
+async function loadEntry() {
+  const sym = state.symbol, iv = state.interval;
+  try {
+    const e = await api(`/api/entry?symbol=${sym}&interval=${iv}`);
+    if (sym !== state.symbol || iv !== state.interval) return;
+    state.entry = e;
+    const el = $("#side-entry");
+    if (!el) return;
+    const cls2 = { long: "up", short: "down", wait: "accent" }[e.verdict];
+    el.innerHTML = `<div class="sub" style="padding-left:0">종합 진입 판단 <span class="muted">(${e.agree}/${e.total}개 근거가 같은 방향)</span></div>
+      <div class="row"><b class="${cls2}" style="font-size:20px">${e.label}</b><span class="muted">점수 ${e.score > 0 ? "+" : ""}${e.score}</span></div>
+      <div class="gauge" style="margin:6px 0"><i style="left:calc(${(e.score + 100) / 2}% - 1px)"></i></div>
+      ${e.parts.map((p) => `<div class="hbar"><span class="dim">${esc(p.name)}</span><div class="track"><b></b>
+        <i style="${p.contrib >= 0 ? `left:50%;width:${Math.min(50, Math.abs(p.contrib) * 2)}%` : `right:50%;width:${Math.min(50, Math.abs(p.contrib) * 2)}%`};background:${p.contrib >= 0 ? "var(--up)" : "var(--down)"}"></i></div>
+        <span class="${cls(p.contrib)}" style="text-align:right">${p.contrib > 0 ? "+" : ""}${p.contrib}</span></div><div class="muted" style="font-size:11px;margin:-1px 0 4px">${esc(p.text)}</div>`).join("")}
+      ${e.plan ? `<div class="plan ${e.verdict}" style="margin-top:6px"><div class="row"><b>${e.verdict === "long" ? "롱" : "숏"} 계획</b><span class="muted">${esc(e.plan.source)} · RR ${e.plan.rr ?? "–"}</span><div class="grow"></div>
+        <button class="flat sm" data-plan='${JSON.stringify({ k: e.verdict, ...e.plan }).replace(/'/g, "&#39;")}'>차트에</button></div>
+        <div class="kv2"><span class="k">진입</span><span>${px(e.plan.entry)}</span><span class="k">손절</span><span class="down">${px(e.plan.stop)}</span><span class="k">익절</span><span class="up">${px(e.plan.take)}</span></div>
+        <div class="help">${esc(e.plan.why)}</div></div>` : ""}
+      ${e.evidence.length || e.footprint_notes.length ? `<div class="sub" style="padding-left:0;margin-top:6px">근거</div><ul class="reasons">${[...e.evidence, ...e.footprint_notes].map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
+      <div class="help">${esc(e.note)}</div>`;
+  } catch (err) {
+    const el = $("#side-entry");
+    if (el) el.innerHTML = `<div class="muted">종합 판단 실패: ${esc(err.message)}</div>`;
+  }
+}
+
 function renderForecast(f) {
   const a = f.analog, nb = f.next_bar;
   const bar = (p) => `<div class="bar"><i style="width:${p}%;background:${p >= 50 ? "var(--up)" : "var(--down)"}"></i></div>`;
   const pctS = (v) => `<span class="${cls(v)}">${v > 0 ? "+" : ""}${fmt(v, 2)}%</span>`;
   $("#side-fc").innerHTML = `
+    <div class="fc-sec" id="side-entry">${$("#side-entry")?.innerHTML || '<div class="muted">종합 판단 계산 중…</div>'}</div>
     <div class="fc-sec"><div class="sub" style="padding-left:0">다음 봉 예측 <span class="muted">(${IV_LABEL[f.interval]} 1개)</span></div>
       ${nb ? `<div class="row"><b class="${nb.p_up > 50 ? "up" : nb.p_up < 50 ? "down" : "accent"}" style="font-size:18px">${nb.p_up === 50 ? "방향 불분명 50%" : `${nb.p_up > 50 ? "상승" : "하락"} ${Math.max(nb.p_up, 100 - nb.p_up)}%`}</b>
           <span class="muted">예상 ${pctS(nb.median_ret_pct)} · 범위 ${px(nb.range.low)} ~ ${px(nb.range.high)}</span></div>${bar(nb.p_up)}
@@ -373,13 +403,46 @@ async function loadBook() {
         <div class="row muted" style="justify-content:space-between"><span>±1% 매수 $${big(ob.bid_usd_1pct)}</span><span>매도 $${big(ob.ask_usd_1pct)}</span></div>
         <div class="imb"><i style="width:${(50 + imb / 2).toFixed(1)}%"></i></div>
         <div class="${imb >= 0 ? "up" : "down"}" style="text-align:center">${imb >= 0 ? "매수 우위" : "매도 우위"} ${Math.abs(imb).toFixed(1)}%</div></div>
-      <div class="sub">호가 벽 (±5%)</div>
-      ${ob.walls.map((w) => `<div class="lv"><span class="${w.side === "bid" ? "up" : "down"}">${w.side === "bid" ? "매수벽" : "매도벽"} ${px(w.price)}</span><span class="px">$${big(w.usd)}</span></div>`).join("") || '<div class="empty">눈에 띄는 벽 없음</div>'}`;
+      ${bookTools(ob)}`;
     $("#ob-step").onchange = (e) => { bookStep = +e.target.value; loadBook(); };
   } catch (e) {
     $("#side-book").innerHTML = `<div class="empty">호가창을 불러오지 못했습니다: ${esc(e.message)}</div>`;
   }
   bookTimer = setTimeout(loadBook, 2000);
+}
+
+// 호가 기반 진입 도구: 깊이별 불균형 · 추이 · 벽 유지 시간 · 사라진 벽 · 슬리피지 · 진입 계획
+function bookTools(ob) {
+  const age = (s) => s >= 3600 ? `${Math.floor(s / 3600)}시간` : s >= 60 ? `${Math.floor(s / 60)}분` : `${s}초`;
+  const h = ob.imbalance_history || [];
+  let spark = "";
+  if (h.length > 2) {
+    const W = 236, H = 34, x = (i) => i / (h.length - 1) * W, y = (v) => H / 2 - v * (H / 2 - 2);
+    spark = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="±1% 호가 불균형 추이"><line x1="0" x2="${W}" y1="${H / 2}" y2="${H / 2}" stroke="var(--line-2)"/>
+      <polyline points="${h.map((p, i) => `${x(i).toFixed(1)},${y(p.imbalance).toFixed(1)}`).join(" ")}" fill="none" stroke="var(--accent)" stroke-width="1.5"/></svg>`;
+  }
+  const plan = (k, p) => p ? `<div class="plan ${k}"><div class="row"><b class="${k === "long" ? "up" : "down"}">${k === "long" ? "롱 계획" : "숏 계획"}</b><span class="muted">RR ${p.rr ?? "–"}</span><div class="grow"></div>
+      <button class="flat sm" data-plan='${JSON.stringify({ k, ...p }).replace(/'/g, "&#39;")}'>차트에</button></div>
+      <div class="kv2"><span class="k">지정가</span><span>${px(p.entry)}</span><span class="k">손절</span><span class="down">${px(p.stop)}</span><span class="k">익절</span><span class="up">${px(p.take)}</span></div>
+      <div class="help">${esc(p.why)}</div></div>` : "";
+  return `
+    <div class="sub">깊이별 매수·매도 불균형</div>
+    ${ob.depth.map((d) => `<div class="hbar" style="padding:2px 12px"><span class="dim">±${d.pct}%</span><div class="track"><b></b>
+      <i style="${d.imbalance >= 0 ? `left:50%;width:${d.imbalance * 50}%` : `right:50%;width:${-d.imbalance * 50}%`};background:${d.imbalance >= 0 ? "var(--up)" : "var(--down)"}"></i></div>
+      <span class="${d.imbalance >= 0 ? "up" : "down"}" style="text-align:right">${(d.imbalance * 100).toFixed(0)}%</span></div>`).join("")}
+    ${spark ? `<div style="padding:4px 12px"><div class="muted" style="font-size:11px">±1% 불균형 추이 (보고 있는 동안, 위 = 매수 우위)</div>${spark}</div>` : ""}
+    <div class="sub">진입 계획 (호가 벽 기준)</div>
+    <div style="padding:0 12px"><div class="help" style="margin-bottom:4px">${esc(ob.plan.note)}</div>
+      ${plan("long", ob.plan.plans.long)}${plan("short", ob.plan.plans.short)}
+      ${!ob.plan.plans.long && !ob.plan.plans.short ? '<div class="muted">±2% 안에 뚜렷한 벽이 없습니다</div>' : ""}</div>
+    <div class="sub">호가 벽 (±5%) <span class="muted">· 유지 시간</span></div>
+    ${ob.walls.map((w) => `<div class="lv"><span class="${w.side === "bid" ? "up" : "down"}">${w.side === "bid" ? "매수벽" : "매도벽"} ${px(w.price)}</span><span class="px">$${big(w.usd)} <span class="muted">${age(w.age_sec)}</span></span></div>`).join("") || '<div class="empty">눈에 띄는 벽 없음</div>'}
+    ${ob.pulled?.length ? `<div class="sub">가격이 닿기 전에 사라진 벽 <span class="muted">(허수 주문 의심)</span></div>
+      ${ob.pulled.slice().reverse().map((w) => `<div class="lv"><span class="dim">${hhmm(w.time)} ${w.side === "bid" ? "매수벽" : "매도벽"} ${px(w.price)}</span><span class="px">$${big(w.usd)} <span class="muted">${age(w.lived_sec)} 유지</span></span></div>`).join("")}` : ""}
+    <div class="sub">시장가 주문 시 예상 슬리피지</div>
+    <table style="margin:0 0 8px"><tr><th>규모</th><th>매수</th><th>매도</th></tr>
+      ${ob.slippage.map((r) => `<tr><td>$${big(r.usd)}</td>${["buy", "sell"].map((k) => `<td>${r[k] ? `${r[k].slip_pct.toFixed(3)}%` : '<span class="muted">호가 부족</span>'}</td>`).join("")}</tr>`).join("")}</table>
+    <div class="help" style="padding:0 12px 10px">스프레드 ${ob.spread_bps?.toFixed(2)}bp. 큰 주문은 여러 번 나눠 넣거나 지정가를 쓰면 슬리피지를 줄일 수 있습니다. 벽은 언제든 취소될 수 있으니 벽만 믿고 진입하지 마세요.</div>`;
 }
 
 // ================================================================ 주문 · 계좌
@@ -600,6 +663,15 @@ export function initTrade() {
     $("#side-sc").hidden = t !== "sc"; $("#side-order").hidden = t !== "order"; $("#side-book").hidden = t !== "book"; $("#side-fc").hidden = t !== "fc";
     if (t === "book") loadBook();
   };
+  $("#side").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-plan]");
+    if (!b) return;
+    const p = JSON.parse(b.dataset.plan);
+    state.overlays.scenario = true; savePrefs(); renderToolbar();
+    if (state.chartMode !== "term") { state.chartMode = "term"; renderChart(); }
+    charts[0]?.setScenario({ title: p.k === "long" ? "롱 계획" : "숏 계획", entry: p.entry, stop: p.stop, targets: [p.take] }, state.symbol);
+    toast("차트에 진입 계획을 표시했습니다", `${p.k === "long" ? "롱" : "숏"} ${px(p.entry)} · 손절 ${px(p.stop)} · 익절 ${px(p.take)}`);
+  });
   $("#side-sc").onclick = (e) => {
     const b = e.target.closest("[data-sc]");
     if (b) {

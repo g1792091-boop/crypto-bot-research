@@ -278,7 +278,7 @@ function specToTv() {
 function renderBacktest(r) {
   lastResult = r;
   // 퀀트 화면(몬테카를로 · 포지션 크기 계산기)이 쓰도록
-  state.lastBacktest = { name: state.spec?.name, symbol: state.spec?.symbol, interval: state.spec?.interval, trades: r.trades, initial: r.metrics.initial_equity, metrics: r.metrics };
+  state.lastBacktest = { name: state.spec?.name, symbol: state.spec?.symbol, interval: state.spec?.interval, trades: r.trades, initial: r.metrics.initial_equity, metrics: r.metrics, equity_curve: r.equity_curve };
   emit("backtest", state.lastBacktest);
   if (r.warnings?.length) toast("데이터 경고", r.warnings.join(" / "), "err");
   const m = r.metrics;
