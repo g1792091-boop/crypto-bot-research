@@ -1,0 +1,12 @@
+# The off-site copy runs 35 minutes after the nightly backup (paperbot-backup.timer, 23:40 UTC). If the
+# backup is still running then, the copy waits for it (After=paperbot-backup.service). Persistent: a run
+# missed while the server was off happens at the next boot, after the backup's own catch-up run.
+[Unit]
+Description=paperbot off-site backup copy at 00:15 UTC (09:15 KST)
+
+[Timer]
+OnCalendar=*-*-* 00:15:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

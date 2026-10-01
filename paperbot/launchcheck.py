@@ -96,6 +96,7 @@ ENV_SPECS = {"live": ("root", USER, 0o640), "dash": ("root", USER, 0o640),
 LIVE_REQUIRED = ("BINANCE_API_KEY", "BINANCE_API_SECRET", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_CRITICAL",
                  "DEADMAN_URL")
 LIVE_OPTIONAL = ("TELEGRAM_CHAT_WARN", "TELEGRAM_CHAT_INFO")
+CHAT_KEYS = ("TELEGRAM_CHAT_CRITICAL",) + LIVE_OPTIONAL + ("TELEGRAM_CHAT_BACKUP",)   # BACKUP: offsite copy
 DASH_REQUIRED = ("DASH_PASSWORD_HASH", "DASH_SECRET", "DASH_HOST")
 AGENTS_REQUIRED = ("CLAUDE_CODE_OAUTH_TOKEN", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_CRITICAL")
 ORDER_KEYS = ("TESTNET_API_KEY", "TESTNET_API_SECRET", "LIVE_API_KEY", "LIVE_API_SECRET", "PAPERBOT_LIVE_MAINNET")
@@ -103,9 +104,12 @@ EXCHANGE_KEYS = ("BINANCE_API_KEY", "BINANCE_API_SECRET") + ORDER_KEYS
 # same names as paperbot/agents/runner.ENV_BILLING (a test keeps them equal): per-token billing outside the plan
 ENV_BILLING = ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_USE_BEDROCK",
                "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY")
+CLAUDE_KEY = "CLAUDE_CODE_OAUTH_TOKEN"
 FORBIDDEN = {
-    "live": {k: "주문용 키·스위치는 executor.env(root만 읽음)에만 둡니다" for k in ORDER_KEYS},
-    "dash": {k: "대시보드에는 거래소 키가 필요 없습니다" for k in EXCHANGE_KEYS},
+    "live": {**{k: "주문용 키·스위치는 executor.env(root만 읽음)에만 둡니다" for k in ORDER_KEYS},
+             CLAUDE_KEY: "Claude 토큰은 agents.env에만 둡니다"},
+    "dash": {**{k: "대시보드에는 거래소 키가 필요 없습니다" for k in EXCHANGE_KEYS},
+             CLAUDE_KEY: "대시보드에는 Claude 토큰이 필요 없습니다"},
     "agents": {**{k: "AI 회의가 Claude 구독이 아니라 사용량 과금으로 바뀝니다" for k in ENV_BILLING},
                **{k: "에이전트는 거래소 키를 갖지 않습니다" for k in EXCHANGE_KEYS}},
 }
@@ -123,8 +127,11 @@ LEGACY = ("paperbot-live.service", "paperbot-evening.service", "paperbot-evening
           "paperbot-record.service", "paperbot-record.timer")
 SYSTEM = ("fail2ban.service", "chrony.service")
 LABBUILD = "paperbot-labbuild.service"
+# required once installed: the off-site copy of the nightly backup (paperbot/offsite.py), added after the
+# first install.sh; a server whose install.sh does not install it yet is not asked for it
+EXTRA_TIMERS = ("paperbot-offsite.timer",)
 INSTALLED = SERVICES + TIMERS + AGENT_TIMERS + JOBS + (EXECUTOR,)
-ALL_UNITS = INSTALLED + LEGACY + SYSTEM + (LABBUILD,)
+ALL_UNITS = INSTALLED + LEGACY + SYSTEM + (LABBUILD,) + EXTRA_TIMERS + ("paperbot-offsite.service",)
 UNIT_PROPS = ("Id,LoadState,UnitFileState,ActiveState,SubState,Result,NRestarts,ExecMainStatus,"
               "NextElapseUSecRealtime,ExecStart")
 RULES_SUMS = ("docs/paper-v3-rules.sha256", "docs/paper-v3-rules-addendum.sha256")
@@ -372,7 +379,7 @@ def _telegram_format(ef: EnvFile) -> list[Line]:
     if tok and not re.fullmatch(r"\d{5,}:[A-Za-z0-9_-]{30,}", tok):
         out.append(fix(f"{ef.name}.env의 TELEGRAM_BOT_TOKEN 모양이 텔레그램 토큰(숫자:영문 35자 정도)이 아닙니다: "
                        "BotFather가 준 토큰을 공백 없이 그대로 넣으세요"))
-    for k in ("TELEGRAM_CHAT_CRITICAL",) + LIVE_OPTIONAL:
+    for k in CHAT_KEYS:
         v = ef.get(k)
         if v and not re.fullmatch(r"-?\d{3,}|@[A-Za-z0-9_]{5,}", v):
             out.append(fix(f"{ef.name}.env의 {k} 모양이 채팅 ID(숫자, 그룹은 -100으로 시작)가 아닙니다"))
@@ -434,7 +441,7 @@ def check_env_files(ctx: Ctx, envs: dict[str, EnvFile], agents_wanted: bool) -> 
                             "(맨 아래 줄 값이 쓰입니다. 하나만 남기세요)"))
         for key, why in FORBIDDEN.get(name, {}).items():
             if ef.get(key):
-                out.append(fix(f"{name}.env에 {key}가 들어 있습니다: {why}. 그 줄을 지우세요"))
+                out.append(fix(f"{name}.env에 {key} 줄이 들어 있습니다: {why}. 그 줄을 지우세요"))
     live, dash, agents = envs["live"], envs["dash"], envs["agents"]
     out += _values_line(live, LIVE_REQUIRED, fix)
     out += _values_line(live, LIVE_OPTIONAL, note, "비어 있으면 CRITICAL 방으로 갑니다")
@@ -593,7 +600,7 @@ def telegram_chats(envs: dict[str, EnvFile], agents_wanted: bool) -> list[tuple[
         crit = ef.get("TELEGRAM_CHAT_CRITICAL")
         if not (tok and crit):
             continue
-        for level in ("CRITICAL", "WARN", "INFO"):
+        for level in ("CRITICAL", "WARN", "INFO", "BACKUP"):
             chat = ef.get(f"TELEGRAM_CHAT_{level}") or crit
             if (tok, chat) in seen:
                 continue
@@ -692,22 +699,26 @@ def _host_ip(host: str):
         return None
 
 
+def _tailnet(ip) -> bool:
+    return ip is not None and any(ip.version == net.version and ip in net for net in TAILNET)
+
+
 def dash_host_lines(host: str) -> list[Line]:
     if not host:
         return []
     ip = _host_ip(host)
     if ip is None:
-        return [fix(f"DASH_HOST={host}는 IP 주소가 아닙니다: Tailscale 주소(`tailscale ip -4`의 100.x.y.z)나 "
+        return [fix(f"DASH_HOST({host})는 IP 주소가 아닙니다: Tailscale 주소(`tailscale ip -4`의 100.x.y.z)나 "
                     "127.0.0.1을 넣으세요")]
     if ip.is_loopback:
         return [ok(f"DASH_HOST={host}: 인터넷에 열리지 않음"),
                 note("이 주소면 대시보드는 SSH 터널로만 봅니다. 폰에서 보려면 Tailscale 주소(100.x.y.z)를 넣으세요")]
     if ip.is_unspecified:
-        return [fix(f"DASH_HOST={host}는 모든 주소입니다: 대시보드가 인터넷 쪽에도 열립니다. Tailscale 주소(100.x.y.z)를 "
+        return [fix(f"DASH_HOST({host})는 모든 주소라서 대시보드가 인터넷 쪽에도 열립니다: Tailscale 주소(100.x.y.z)를 "
                     "넣으세요")]
-    if any(ip.version == net.version and ip in net for net in TAILNET):
+    if _tailnet(ip):
         return [ok(f"DASH_HOST={host}: Tailscale 주소 (인터넷에 열리지 않음)")]
-    return [fix(f"DASH_HOST={host}는 Tailscale 주소(100.64.0.0/10)도 127.0.0.1도 아닙니다: 대시보드는 Tailscale이나 "
+    return [fix(f"DASH_HOST({host})는 Tailscale 주소(100.64.0.0/10)도 127.0.0.1도 아닙니다: 대시보드는 Tailscale이나 "
                 "SSH 터널로만 엽니다")]
 
 
@@ -754,10 +765,11 @@ def check_dash(ctx: Ctx, dash: EnvFile, stage: str) -> list[Line]:
     if s:
         out.append(ok("DASH_SECRET 길이 충분 (32자 이상)") if len(s) >= 32 else
                    fix("DASH_SECRET이 32자보다 짧아 대시보드가 시작하지 않습니다: `openssl rand -hex 32` 결과를 넣으세요"))
-    out += dash_host_lines(dash.get("DASH_HOST"))
+    host_lines = dash_host_lines(dash.get("DASH_HOST"))
+    out += host_lines
     if dash.get("DASH_SECURE_COOKIE"):
         out.append(fix("DASH_SECURE_COOKIE가 켜져 있습니다: Tailscale(http)에서는 로그인이 막힙니다. 그 줄을 지우세요"))
-    if stage == "after" and dash.get("DASH_HOST"):
+    if stage == "after" and dash.get("DASH_HOST") and FIX not in (s for s, _ in host_lines):
         out += dash_listen_lines(ctx, dash.get("DASH_HOST"))
     return out
 
@@ -785,7 +797,7 @@ def check_tailscale(ctx: Ctx, dash: EnvFile) -> list[Line]:
         ips = [str(a) for a in me.get("TailscaleIPs") or []]
         if state == "Running":
             out.append(ok(f"Tailscale 연결됨: 이 서버 {', '.join(a for a in ips if '.' in a) or '?'}"))
-            if ip is not None and not loop and str(ip) not in ips:
+            if _tailnet(ip) and str(ip) not in ips:
                 out.append(fix(f"DASH_HOST({host})가 이 서버의 Tailscale 주소({', '.join(ips)})와 다릅니다: "
                                "DASH_HOST를 고친 뒤 sudo systemctl restart paperbot-dash"))
             exp = me.get("KeyExpiry")
@@ -906,15 +918,17 @@ def _active(d: dict) -> bool:
 def service_line(unit: str, d: dict) -> Line:
     name = _short(unit)
     restarts = int(d.get("NRestarts") or 0) if (d.get("NRestarts") or "0").isdigit() else 0
+    running = (d.get("ActiveState"), d.get("SubState")) == ("active", "running")
     problems = []
     if not _enabled(d):
         problems.append(f"부팅 때 자동으로 켜지지 않음 (sudo systemctl enable {name})")
-    if (d.get("ActiveState"), d.get("SubState")) != ("active", "running"):
-        problems.append(f"실행 중이 아님({d.get('ActiveState')}/{d.get('SubState')}): journalctl -u {name} -n 50")
+    if not running:
+        problems.append(f"실행 중이 아님({d.get('ActiveState')}/{d.get('SubState')})")
     if restarts > MAX_RESTARTS:
-        problems.append(f"{restarts}번 다시 시작함(계속 죽는 중): journalctl -u {name} -n 50")
+        problems.append(f"{restarts}번 다시 시작함(계속 죽는 중)")
     if problems:
-        return fix(f"{name}: " + "; ".join(problems))
+        logs = f". 원인: journalctl -u {name} -n 50" if not running or restarts > MAX_RESTARTS else ""
+        return fix(f"{name}: " + "; ".join(problems) + logs)
     return ok(f"{name}: 켜짐·실행 중 (자동 재시작 {restarts}번)")
 
 
@@ -961,18 +975,25 @@ def check_units(states: Optional[dict], stage: str, agents_wanted: bool) -> list
             if st(job).get("Result") not in (None, "", "success"):
                 out.append(fix(f"{_short(job)}의 지난 실행이 실패했습니다({st(job).get('Result')}): "
                                f"journalctl -u {_short(job)} -n 50"))
+        for u in EXTRA_TIMERS:
+            if st(u).get("LoadState") == "loaded":
+                out.append(timer_line(u, st(u), True))
+                job = u.replace(".timer", ".service")
+                if st(job).get("Result") not in (None, "", "success"):
+                    out.append(fix(f"{_short(job)}의 지난 실행이 실패했습니다({st(job).get('Result')}): "
+                                   f"journalctl -u {_short(job)} -n 50"))
         cp = st("paperbot-checkpoint.service")
         if cp.get("Result") not in (None, "", "success"):
             out.append(note("paperbot-checkpoint의 지난 실행이 실패했습니다: 봇이 paper3.db를 만들기 전 한 번은 괜찮습니다. "
                             "계속되면 journalctl -u paperbot-checkpoint -n 50"))
-    for u in AGENT_TIMERS:
-        if stage == "after" and agents_wanted:
-            out.append(timer_line(u, st(u), True))
-        elif _enabled(st(u)):
-            out.append(ok(f"{u}: 켜짐"))
-        else:
-            out.append(note(f"{u}: 꺼져 있음 (에이전트 방: Claude 로그인·5년 자료·드라이런을 마친 뒤 "
-                            "sudo systemctl enable --now paperbot-agents.timer paperbot-labmonthly.timer)"))
+    off = [u for u in AGENT_TIMERS if not (_enabled(st(u)) and st(u).get("ActiveState") == "active")]
+    if stage == "after" and agents_wanted:
+        out += [timer_line(u, st(u), True) for u in AGENT_TIMERS]
+    elif off:
+        out.append(note(f"에이전트 방 타이머 꺼져 있음: {', '.join(off)} (Claude 로그인·5년 자료·드라이런을 마친 뒤 "
+                        "sudo systemctl enable --now paperbot-agents.timer paperbot-labmonthly.timer)"))
+    else:
+        out.append(ok("에이전트 방 타이머 켜짐 (paperbot-agents, paperbot-labmonthly)"))
     ag = st("paperbot-agents.service")
     if agents_wanted and ag.get("Result") not in (None, "", "success"):
         if ag.get("ExecMainStatus") == "2":
@@ -1045,8 +1066,8 @@ def check_code(ctx: Ctx) -> list[Line]:
         if rc == 0 and head and head != commit:
             out.append(note(f"{ctx.repo}의 코드({head[:10]})가 설치된 코드({commit[:10]})와 다릅니다: git pull 뒤 "
                             "sudo bash deploy/install.sh 를 다시 실행했나요?"))
-    rc, _, _ = ctx.run([ctx.venv_python, "-c", "import paperbot"], None, 30.0, "/")
-    if rc != 0:
+    rc, _, err = ctx.run([ctx.venv_python, "-c", "import paperbot"], None, 30.0, "/")
+    if rc != 0 and "No module named" in err:
         out.append(note("`python -m paperbot…` 명령은 다른 폴더에서는 안 됩니다(No module named 'paperbot'): "
                         "문서의 명령 앞에 `cd /opt/crypto-bot-research &&`를 붙이세요"))
     return out
@@ -1076,7 +1097,7 @@ def check_data_dir(ctx: Ctx) -> list[Line]:
     if foreign:
         more = f" 외 {len(foreign) - 5}개" if len(foreign) > 5 else ""
         out.append(fix(f"{ctx.user}가 아닌 사용자 소유 파일이 있어 서비스가 쓰지 못합니다: {', '.join(foreign[:5])}{more} → "
-                       f"sudo chown -R {ctx.user}:{ctx.user} <그 파일>"))
+                       f"sudo chown -R {ctx.user}:{ctx.user} {ctx.lib}"))
     elif not out:
         out.append(ok(f"데이터 폴더 주인 {ctx.user} (다른 사용자 소유 파일 없음)"))
     return out
@@ -1126,6 +1147,8 @@ def check_paper_db(ctx: Ctx, stage: str) -> list[Line]:
         return [fix(f"paper3.db를 읽지 못했습니다: {exc}")]
     start = db["start"]
     if stage == "before":
+        old = os.path.join(ctx.backups, "old")
+        moved = " ".join(os.path.join(ctx.lib, f"{n}.db*") for n in ("paper3", "daily3", "checkpoint"))
         if start is None:
             return [ok("paper3.db가 있지만 아직 계좌가 없습니다 (새로 시작하는 것과 같음)")]
         age = now - start
@@ -1134,9 +1157,7 @@ def check_paper_db(ctx: Ctx, stage: str) -> list[Line]:
                          "30일 판정과 관찰 기간은 이때부터 셉니다. 시작한 뒤의 점검은 --stage after")]
         return [fix(f"{age // DAY_MS}일 전({kst_day(start)})에 시작한 기록이 paper3.db에 남아 있습니다: 30일 판정과 "
                     "관찰 기간이 그날부터 셉니다. 시험으로 돌린 것이면 새로 시작하기 전에 옮기세요: "
-                    "sudo systemctl stop paperbot-live3 && sudo mkdir -p /var/backups/paperbot/old && "
-                    "sudo mv /var/lib/paperbot/paper3.db* /var/lib/paperbot/daily3.db* "
-                    "/var/lib/paperbot/checkpoint.db* /var/backups/paperbot/old/ . "
+                    f"sudo systemctl stop paperbot-live3 && sudo mkdir -p {old} && sudo mv {moved} {old}/ . "
                     "이어서 돌리는 것이면 --stage after로 확인하세요")]
     out: list[Line] = []
     hb = db["heartbeat"]
@@ -1187,7 +1208,7 @@ def check_lab(ctx: Ctx, states: Optional[dict], agents_wanted: bool, ref: Option
         return [level(f"5년 시험 자료 폴더가 없습니다(에이전트 방에 필요). 30~60분 걸립니다: {LAB_BUILD}")]
     out: list[Line] = []
     if info.owner != ctx.user:
-        out.append(fix(f"{lab} 주인이 {info.owner}입니다: sudo chown -R {ctx.user}:{ctx.user} {lab}"))
+        out.append(level(f"{lab} 주인이 {info.owner}입니다: sudo chown -R {ctx.user}:{ctx.user} {lab}"))
     import numpy as np
 
     from .agents import labdata
@@ -1232,14 +1253,14 @@ def check_claude(ctx: Ctx, agents: EnvFile, agents_wanted: bool) -> list[Line]:
     the agents tick's own preflight (paperbot/agents/runner.auth_preflight): logged in, no apiKeySource."""
     level = fix if agents_wanted else note
     claude = ctx.claude_bin
-    if ctx.stat(claude) is None:
-        return [level(f"Claude Code가 {ctx.user} 사용자에게 설치되지 않았습니다(에이전트 방에 필요): {CLAUDE_INSTALL}")]
     if ctx.euid == 0:
         prefix = [RUNUSER, "-u", ctx.user, "--"]     # keeps the environment below; HOME becomes paperbot's
     elif ctx.username == ctx.user:
         prefix = []
     else:
         return [note(f"Claude Code 로그인은 root나 {ctx.user}로 실행할 때만 확인합니다")]
+    if ctx.stat(claude) is None:
+        return [level(f"Claude Code가 {ctx.user} 사용자에게 설치되지 않았습니다(에이전트 방에 필요): {CLAUDE_INSTALL}")]
     home = ctx.lib
     # what paperbot-agents.service gives the pass: HOME/USER from User=, PATH from Environment=, then the env file
     parent = {"HOME": home, "USER": ctx.user, "LANG": "C.UTF-8",
@@ -1260,6 +1281,8 @@ def check_agents_policy(ctx: Ctx, agents: EnvFile, agents_wanted: bool, run_star
     """agents.env's AGENTS_* settings through the tick's own parser, its budget warnings, and the
     observation period (no copy proposals) they give."""
     level = fix if agents_wanted else note
+    if not agents.exists or agents.error:
+        return [level(f"{agents.path}를 읽지 못해 에이전트 설정(AI 예산·관찰 기간)을 확인하지 못했습니다")]
     from .agents.rooms import OBSERVE_DAYS_DEFAULT, budget_warnings, policy_from_env
     try:
         p = policy_from_env(dict(agents.values))
@@ -1270,8 +1293,8 @@ def check_agents_policy(ctx: Ctx, agents: EnvFile, agents_wanted: bool, run_star
     out += [note(f"예산 경고(그 회의는 열리지 못함): {w}") for w in budget_warnings(p)]
     if p.observe_until:
         if p.observe_until < kst_day(ctx.now_ms()):
-            out.append(note(f"관찰 기간: AGENTS_OBSERVE_UNTIL={p.observe_until}가 이미 지났습니다 → 관찰 기간 없이 복사 "
-                            "제안이 나올 수 있습니다"))
+            out.append(note(f"관찰 기간: AGENTS_OBSERVE_UNTIL({p.observe_until}) 날짜가 이미 지났습니다 → 관찰 기간 없이 "
+                            "복사 제안이 나올 수 있습니다"))
         else:
             out.append(ok(f"관찰 기간: {p.observe_until}(한국 날짜)까지 복사 제안 없음"))
     elif p.observe_days <= 0:
@@ -1286,21 +1309,31 @@ def check_agents_policy(ctx: Ctx, agents: EnvFile, agents_wanted: bool, run_star
 
 
 # ---------------------------------------------------------------- run and report
-def guard(fn: Callable[..., list], *args, **kw) -> list[Line]:
-    """A check that breaks is reported as one [고칠 것] line; the other checks still run."""
+def guard(fn: Callable[..., list], *args, level: Callable[[str], Line] = fix) -> list[Line]:
+    """A check that breaks is reported as one line (``level``: [고칠 것], or [참고] for an optional part);
+    the other checks still run."""
     try:
-        return list(fn(*args, **kw))
+        return list(fn(*args))
     except Exception as exc:  # noqa: BLE001
-        return [fix(f"이 점검이 오류로 멈췄습니다: {type(exc).__name__}: {exc}"[:300])]
+        return [level(f"이 점검이 오류로 멈췄습니다: {type(exc).__name__}: {exc}"[:300])]
+
+
+def start_command(states: Optional[dict]) -> str:
+    """The start command for this server: the base units, plus the extra timers its install.sh installed."""
+    extra = [u for u in EXTRA_TIMERS if ((states or {}).get(u) or {}).get("LoadState") == "loaded"]
+    return " ".join([START_CMD] + extra)
 
 
 def run_checks(ctx: Ctx, stage: str = "before", send_test: bool = False, ping: bool = False,
-               agents: str = "auto", skip_lab: bool = False) -> tuple[list[tuple[str, list[Line]]], list[str]]:
-    """[(section title, lines)] and the secret values to scrub from them."""
+               agents: str = "auto", skip_lab: bool = False) -> tuple[list[tuple[str, list[Line]]], list[str], str]:
+    """[(section title, lines)], the secret values to scrub from them, and this server's start command."""
     envs = read_envs(ctx)
-    states = guard(lambda: [unit_states(ctx)])[0]
-    states = states if isinstance(states, dict) or states is None else None
+    try:
+        states = unit_states(ctx)
+    except Exception:  # noqa: BLE001  (check_units then reports that systemctl cannot be used)
+        states = None
     wanted = agents == "yes" or (agents == "auto" and agents_configured(envs["agents"], states))
+    opt = fix if wanted else note
     live, dash, ag = envs["live"], envs["dash"], envs["agents"]
     sections = [
         ("코드", guard(check_code, ctx)),
@@ -1320,17 +1353,20 @@ def run_checks(ctx: Ctx, stage: str = "before", send_test: bool = False, ping: b
     else:
         head = [] if wanted else [note("에이전트 방은 아직 설정하지 않았습니다(선택). 아래 줄은 참고만 합니다: 켤 때는 "
                                        "--agents yes로 다시 확인하세요")]
-        lab = ([note("5년 시험 자료 확인 건너뜀 (--skip-lab)")] if skip_lab else guard(check_lab, ctx, states, wanted))
-        sections.append(("에이전트 방", head + guard(check_claude, ctx, ag, wanted)
-                         + guard(check_agents_policy, ctx, ag, wanted, paper_start(ctx)) + lab))
-    return sections, secret_values(envs)
+        lab = ([note("5년 시험 자료 확인 건너뜀 (--skip-lab)")] if skip_lab else
+               guard(check_lab, ctx, states, wanted, level=opt))
+        sections.append(("에이전트 방", head + guard(check_claude, ctx, ag, wanted, level=opt)
+                         + guard(check_agents_policy, ctx, ag, wanted, paper_start(ctx), level=opt) + lab))
+    return sections, secret_values(envs), start_command(states)
 
 
 def report(sections: list[tuple[str, list[Line]]], stage: str, secrets: Sequence[str] = (),
-           out: Callable[[str], None] = print) -> int:
+           out: Callable[[str], None] = print, start_cmd: str = START_CMD) -> int:
     """Prints every line (scrubbed) and the verdict; returns the exit code (0 = nothing to fix)."""
     n_fix = n_note = 0
     for title, lines in sections:
+        if not lines:              # e.g. the dead-man section while DEADMAN_URL is empty (the env line says so)
+            continue
         out(f"== {title}")
         for status, text in lines:
             out(f"[{status}] {scrub(text, secrets)}")
@@ -1342,7 +1378,7 @@ def report(sections: list[tuple[str, list[Line]]], stage: str, secrets: Sequence
             + (" 아직 시작하지 마세요." if stage == "before" else ""))
         return 1
     if stage == "before":
-        out(f"[{OK}] 시작 준비가 끝났습니다 (참고 {n_note}개). 시작: {START_CMD}")
+        out(f"[{OK}] 시작 준비가 끝났습니다 (참고 {n_note}개). 시작: {start_cmd}")
         out(f"     시작하고 5분쯤 뒤 확인: {AFTER_CMD}")
     else:
         out(f"[{OK}] 봇이 정상으로 돌고 있습니다 (참고 {n_note}개). healthchecks.io가 'up'인지, 텔레그램에 "
@@ -1363,8 +1399,8 @@ def main(argv: Optional[list[str]] = None, ctx: Optional[Ctx] = None,
     ctx = ctx or Ctx()
     out(f"paperbot 시작 점검 ({'시작 전' if args.stage == 'before' else '시작 후'}): "
         f"{kst_text(ctx.now_ms())} 한국 시간, 실행 사용자 {ctx.username}")
-    sections, secrets = run_checks(ctx, args.stage, args.send_test, args.ping, args.agents, args.skip_lab)
-    return report(sections, args.stage, secrets, out)
+    sections, secrets, start_cmd = run_checks(ctx, args.stage, args.send_test, args.ping, args.agents, args.skip_lab)
+    return report(sections, args.stage, secrets, out, start_cmd)
 
 
 if __name__ == "__main__":
