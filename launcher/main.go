@@ -30,7 +30,9 @@ var (
 
 const basePort = 17860 // 고정 포트여야 브라우저에 저장된 대화·모델이 유지됨
 
-const keepAlive = `<script>(function(){try{var s=new EventSource("/__nuri/alive");s.onerror=function(){};}catch(e){}})();</script>`
+func keepAlive() string {
+	return `<script>window.__NURI_TOKEN="` + sessionToken + `";(function(){try{var s=new EventSource("/__nuri/alive");s.onerror=function(){};}catch(e){}})();</script>`
+}
 
 type tracker struct {
 	mu       sync.Mutex
@@ -123,6 +125,7 @@ func main() {
 		}
 	})
 	mux.HandleFunc("/__nuri/proxy/", proxyHandler)
+	mux.HandleFunc("/__nuri/code/", codeHandler)
 	mux.Handle("/", siteHandler(sub))
 
 	srv := &http.Server{Handler: mux}
@@ -182,9 +185,9 @@ func siteHandler(root fs.FS) http.Handler {
 		if ext == ".html" {
 			h.Set("Cache-Control", "no-cache")
 			if i := bytes.LastIndex(data, []byte("</body>")); i >= 0 {
-				data = append(append(append([]byte{}, data[:i]...), keepAlive...), data[i:]...)
+				data = append(append(append([]byte{}, data[:i]...), keepAlive()...), data[i:]...)
 			} else {
-				data = append(append([]byte{}, data...), keepAlive...)
+				data = append(append([]byte{}, data...), keepAlive()...)
 			}
 		} else {
 			h.Set("Cache-Control", "public, max-age=3600")

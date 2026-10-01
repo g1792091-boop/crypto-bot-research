@@ -3,12 +3,18 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"syscall"
+	"unicode/utf8"
 	"unsafe"
+
+	"golang.org/x/text/encoding/korean"
 )
 
 // 앱처럼 보이도록 Edge/Chrome의 앱 창(--app)으로 열고, 없으면 기본 브라우저로 연다.
@@ -54,4 +60,40 @@ func killOthers() {
 		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 		cmd.Run()
 	}
+}
+
+// 코드 모드: cmd로 명령 실행 (UTF-8 코드페이지, 콘솔 창 숨김)
+func shellCmd(ctx context.Context, command string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, "cmd", "/C", "chcp 65001>nul & "+command)
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000}
+	return cmd
+}
+
+// 한글 윈도우 프로그램이 CP949로 출력해도 깨지지 않게 변환
+func decodeOutput(b []byte) string {
+	if utf8.Valid(b) {
+		return string(b)
+	}
+	if s, err := korean.EUCKR.NewDecoder().Bytes(b); err == nil {
+		return string(s)
+	}
+	return strings.ToValidUTF8(string(b), "?")
+}
+
+// 윈도우 폴더 선택 창을 띄워 경로를 받는다
+func pickFolder() (string, error) {
+	script := `[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; Add-Type -AssemblyName System.Windows.Forms; ` +
+		`$o=New-Object System.Windows.Forms.Form -Property @{TopMost=$true}; $f=New-Object System.Windows.Forms.FolderBrowserDialog; ` +
+		`$f.Description='누리 AI 코드 모드에서 작업할 폴더를 고르세요'; if($f.ShowDialog($o) -eq 'OK'){ $f.SelectedPath }`
+	cmd := exec.Command("powershell", "-NoProfile", "-STA", "-Command", script)
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000}
+	out, err := cmd.Output()
+	if err != nil {
+		return "", errors.New("폴더 선택 창을 열지 못했습니다. 경로를 직접 입력하세요")
+	}
+	p := strings.TrimSpace(string(out))
+	if p == "" {
+		return "", errors.New("폴더를 고르지 않았습니다")
+	}
+	return p, nil
 }

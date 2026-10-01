@@ -370,7 +370,7 @@ tr:last-child td{border-bottom:0}
 </div>
 <div class="toast" id="toast" hidden></div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="vendor/three.min.js"></script>
 <script>
 (() => {
 "use strict";
@@ -1382,7 +1382,18 @@ if (hostBrain){
   sample = hs;
   $("#aiDot").classList.add("on"); $("#aiState").textContent = "누리 AI 두뇌 연결"; $("#aiMode").textContent = "누리 두뇌가 설계";
 }
-window.__archai = {toIFC, toDXF, toDAE, toOBJ, exportModel, buildFiles, makeZip, localDesign, get spec(){return spec;}, layout: () => layout};
+window.__archai = {
+  // 누리 채팅이 설계안을 넘겨 그리고, 법규·면적 수치를 돌려받는다
+  load(input){
+    setSpec(Object.assign({}, spec, input || {}), "누리가 설계안을 불러왔습니다");
+    showView("studio");
+    const m = metrics(spec, layout);
+    return {이름: spec.name, 용도: USE_LABEL[spec.use], 용도지역: spec.zone, "대지_㎡": +m.siteA.toFixed(1), "건축면적_㎡": +m.fp.toFixed(1), "연면적_㎡": +m.gfa.toFixed(1), 층수: spec.floors,
+      "건폐율%": +m.bcr.toFixed(1), "건폐율한도%": m.z.bcr, "용적률%": +m.far.toFixed(1), "용적률한도%": m.z.far, 법규적합: m.bcrOk && m.farOk, 높이_m: +m.height.toFixed(1),
+      추정공사비_억원: +(m.cost / 1e8).toFixed(2), 외관: FACADES[spec.style].label, 인테리어: INTERIORS[spec.interior].label,
+      층별실: layout.map((fl, f) => `${f+1}층: ` + fl.map(r => `${r.name} ${r.area.toFixed(1)}㎡`).join(", "))};
+  },
+  toIFC, toDXF, toDAE, toOBJ, exportModel, buildFiles, makeZip, localDesign, get spec(){return spec;}, layout: () => layout};
 })();
 </script>
 </body></html>

@@ -126,19 +126,14 @@ const bigUSD = v => v >= 1e9 ? (v/1e9).toFixed(2) + "B" : v >= 1e6 ? (v/1e6).toF
 const TFS = [["1","1분"],["5","5분"],["15","15분"],["60","1시간"],["240","4시간"],["D","일"],["W","주"]];
 const TF_MS = {"1":6e4,"5":3e5,"15":9e5,"60":36e5,"240":144e5,"D":864e5,"W":6048e5};
 
-/* ================= 트레이딩 룸 ================= */
-export function initTrade(ctx){
-  const {root, brain, apiBase, toast, md, esc, ls} = ctx;
-  const S = {
-    ex: ls.get("tr:ex", "upbit"), market: null, tf: ls.get("tr:tf", "60"), total: ls.get("tr:total", 200),
-    cs: [], ind: null, q: null, lv: null, list: [], tick: new Map(), filter: "",
-    view: {count: 120, off: 0}, show: Object.assign({ma:true, bb:true, lv:true}, ls.get("tr:show", {})),
-    hover: -1, bt: null, btKey: ls.get("tr:bt", "ma"), btP: ls.get("tr:btp", {}), btOpt: Object.assign({fee:0.05, sl:0, tp:0}, ls.get("tr:bto", {})),
-    tab: "bt", side: "buy", timers: [], visible: false, loading: false, err: "", aiCtl: null, ai: null, aiRaw: ""
-  };
-  S.market = ls.get("tr:mkt:" + S.ex, S.ex === "upbit" ? "KRW-BTC" : "BTCUSDT");
 
-  const EX = {
+/* ================= 거래소 시세 (채팅 도구와 트레이딩 룸이 함께 씀) ================= */
+export function exchanges(apiBase){
+  async function get(ex, path){
+    const r = await fetch(apiBase(ex) + path, {headers: {accept: "application/json"}});
+    if (!r.ok){ const e = new Error(`${(EX[ex] || {}).label || ex} ${r.status}`); e.status = r.status; throw e; }
+    return r.json();
+  }  const EX = {
     upbit: {
       label: "업비트", quote: "KRW", fee: 0.05,
       async list(){
@@ -180,12 +175,24 @@ export function initTrade(ctx){
       }
     }
   };
+  return EX;
+}
+
+/* ================= 트레이딩 룸 ================= */
+export function initTrade(ctx){
+  const {root, brain, apiBase, toast, md, esc, ls} = ctx;
+  const S = {
+    ex: ls.get("tr:ex", "upbit"), market: null, tf: ls.get("tr:tf", "60"), total: ls.get("tr:total", 200),
+    cs: [], ind: null, q: null, lv: null, list: [], tick: new Map(), filter: "",
+    view: {count: 120, off: 0}, show: Object.assign({ma:true, bb:true, lv:true}, ls.get("tr:show", {})),
+    hover: -1, bt: null, btKey: ls.get("tr:bt", "ma"), btP: ls.get("tr:btp", {}), btOpt: Object.assign({fee:0.05, sl:0, tp:0}, ls.get("tr:bto", {})),
+    tab: "bt", side: "buy", timers: [], visible: false, loading: false, err: "", aiCtl: null, ai: null, aiRaw: ""
+  };
+  S.market = ls.get("tr:mkt:" + S.ex, S.ex === "upbit" ? "KRW-BTC" : "BTCUSDT");
+
+  const EX = exchanges(apiBase);
   const X = () => EX[S.ex];
-  async function get(ex, path){
-    const r = await fetch(apiBase(ex) + path, {headers: {accept: "application/json"}});
-    if (!r.ok){ const e = new Error(`${EX[ex].label} ${r.status}`); e.status = r.status; throw e; }
-    return r.json();
-  }
+
   const fmt = v => fmtNum(v, X().quote);
   const big = v => X().quote === "KRW" ? bigKRW(v) : bigUSD(v);
   const cur = () => S.list.find(m => m.id === S.market) || {id: S.market, sym: S.market, name: S.market};
@@ -232,13 +239,16 @@ export function initTrade(ctx){
     renderList(); renderHead();
   }
   async function loadCandles(){
+    const req = S.req = (S.req || 0) + 1;       // 늦게 도착한 이전 요청 결과는 버림
     S.loading = true; msg("차트를 불러오는 중…");
     try {
-      S.cs = await X().candles(S.market, S.tf, S.total);
+      const cs = await X().candles(S.market, S.tf, S.total);
+      if (req !== S.req) return;
+      S.cs = cs;
       if (S.cs.length < 30) throw new Error("캔들 데이터가 부족합니다");
       recompute(); S.view.off = 0; S.view.count = Math.min(S.cs.length, 120); S.bt = null; S.ai = null; S.aiRaw = "";
       msg(""); S.err = "";
-    } catch (e){ S.cs = []; S.ind = null; S.q = null; msg(netErr(e), true); }
+    } catch (e){ if (req !== S.req) return; S.cs = []; S.ind = null; S.q = null; msg(netErr(e), true); }
     S.loading = false; renderAll();
   }
   function recompute(){
@@ -657,6 +667,16 @@ export function initTrade(ctx){
       clearInterval(S.t1); S.t1 = setInterval(refresh, 10000);
     },
     hide(){ S.visible = false; clearInterval(S.t1); },
+    async goto(ex, market, tf){
+      const exChanged = ex && EX[ex] && ex !== S.ex;
+      if (exChanged){ S.ex = ex; ls.set("tr:ex", ex); $("#tr-ex").value = ex; S.list = []; S.tick.clear(); }
+      if (tf && TF_MS[tf]){ S.tf = tf; ls.set("tr:tf", tf); }
+      if (market){ S.market = market; ls.set("tr:mkt:" + S.ex, market); }
+      if (!booted) return;                  // 아직 안 열렸으면 show()가 이 설정으로 불러온다
+      syncTools(); renderList(); renderHead();
+      if (exChanged) await loadList();
+      await loadCandles();
+    },
     summary(){ const out = {}; for (const ex of Object.keys(EX)){ const a = ls.get("tr:acct:" + ex, null); if (a){ let v = a.cash; for (const [id, p] of Object.entries(a.pos)) v += p.qty * p.avg; out[ex] = {quote: EX[ex].quote, start: a.start, total: v, trades: a.hist.length}; } } return out; },
     state: S
   };
