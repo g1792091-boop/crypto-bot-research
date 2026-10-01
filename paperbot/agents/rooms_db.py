@@ -16,6 +16,13 @@ What can change after it is written:
   (awaiting_owner -> approved|rejected, approved -> rejected), and a proposal can never be
   'awaiting_owner' or 'approved' unless its code gate passed (a trigger checks the stored gate JSON,
   so neither the approver agent nor an owner can overturn it). Rows are never deleted.
+  ``change`` is fixed once written (a trigger refuses any update of it). Two kinds of proposal share the
+  table (the extra paper accounts, docs/agent-rooms.md): a copy account (``change.kind`` 'copy', or no kind
+  in rows written before it existed) and a new-strategy account from the lab (``change.kind`` 'newlab',
+  room 'team:lab', no strategy). Rows written since carry ``change.account``: the account's definition,
+  built by code from the trial row only (agents/extra_accounts.py). The live runner reads approved rows
+  read-only, through a fixed list of columns and JSON paths (never the model's words), re-checks
+  everything itself and starts the account; nothing in agents3.db is ever changed by it.
 - rounds and cursors: bookkeeping of the tick, written by triggers.begin_round / triggers.finish_round
   (rounds are never deleted; cursors hold plain text).
 - rooms: configuration derived from the roster (``ensure_rooms`` keeps them in sync).
@@ -676,12 +683,15 @@ def add_trial(conn: sqlite3.Connection, room_id: str, strategy: Optional[str], k
 
 
 def add_trial_result(conn: sqlite3.Connection, trial_id: int, status: str, result: Any,
-                     *, ts: Optional[int] = None) -> int:
+                     *, ts: Optional[int] = None, commit: bool = True) -> int:
+    """Append a result to a trial. ``commit=False`` leaves the transaction open, so the caller can commit it
+    together with another write (a new-strategy proposal and its trial's 'proposed' result: one transaction)."""
     if conn.execute("SELECT 1 FROM trials WHERE id = ?", (trial_id,)).fetchone() is None:
         raise ValueError(f"no trial {trial_id}")
     cur = conn.execute("INSERT INTO trial_results (trial_id, ts, status, result) VALUES (?,?,?,?)",
                        (trial_id, _now_ms() if ts is None else ts, str(status), _dumps(result)))
-    conn.commit()
+    if commit:
+        conn.commit()
     return int(cur.lastrowid)
 
 
@@ -832,9 +842,11 @@ def _gate_passed(gate: Any) -> bool:
 
 def add_proposal(conn: sqlite3.Connection, room_id: str, strategy: Optional[str], trial_id: Optional[int],
                  change: Any, gate: dict, status: str, decided_by: Optional[str] = None,
-                 *, ts: Optional[int] = None) -> int:
-    """Record a copy proposal. ``gate`` is the code gate JSON copied from the trial result; a proposal
-    whose gate did not pass can only be 'blocked_gate' (or 'rejected'/'blocked_cap')."""
+                 *, ts: Optional[int] = None, commit: bool = True) -> int:
+    """Record a proposal (a copy account, or a new-strategy account from the lab: ``change.kind``). ``gate`` is
+    the code gate JSON copied from the trial result; a proposal whose gate did not pass can only be
+    'blocked_gate' (or 'rejected'/'blocked_cap'). ``commit=False`` leaves the transaction open (the caller
+    commits it together with the trial's result)."""
     if status not in PROPOSAL_STATUSES:
         raise ValueError(f"unknown proposal status: {status!r}")
     if status in ACTIVE_PROPOSAL_STATUSES and not _gate_passed(gate):
@@ -851,7 +863,8 @@ def add_proposal(conn: sqlite3.Connection, room_id: str, strategy: Optional[str]
         "INSERT INTO proposals (ts, room_id, strategy, trial_id, change, gate, status, decided_ts, decided_by) "
         "VALUES (?,?,?,?,?,?,?,?,?)",
         (ts, room_id, strategy, trial_id, _dumps(change), _dumps(gate), status, decided_ts, decided_by))
-    conn.commit()
+    if commit:
+        conn.commit()
     return int(cur.lastrowid)
 
 
@@ -901,12 +914,20 @@ def list_proposals(conn_ro: Optional[sqlite3.Connection], status: Optional[str] 
         sql + " ORDER BY id DESC LIMIT ?", (*args, min(max(int(limit), 1), 1000)))), [])
 
 
-def active_proposals(conn: Optional[sqlite3.Connection], strategy: Optional[str] = None) -> int:
-    """Proposals holding a copy slot ('awaiting_owner' or 'approved'); per strategy or in total."""
+PROPOSAL_KINDS = ("copy", "newlab")        # change.kind (a row without one is a copy proposal)
+
+
+def active_proposals(conn: Optional[sqlite3.Connection], strategy: Optional[str] = None,
+                     kind: Optional[str] = "copy") -> int:
+    """Proposals holding a slot ('awaiting_owner' or 'approved') of one kind (``change.kind``; rows without it
+    are copies; None = every kind); per strategy or in total. The slot caps also count running extra accounts
+    whose proposal is not among these (agents/extra_accounts.py ``slots``)."""
     sql = f"SELECT COUNT(*) FROM proposals WHERE status IN {_in(ACTIVE_PROPOSAL_STATUSES)}"
     args: tuple = ()
     if strategy is not None:
         sql, args = sql + " AND strategy = ?", (strategy,)
+    if kind is not None:
+        sql, args = sql + " AND COALESCE(json_extract(change, '$.kind'), 'copy') = ?", (*args, kind)
     return _safe(conn, lambda: int(conn.execute(sql, args).fetchone()[0]), 0)
 
 
