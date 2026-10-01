@@ -395,9 +395,10 @@ def combined(w: Window, cols: list[int]) -> Optional[dict]:
     e = e[idx, np.arange(e.shape[1])]
     tot = e.sum(1)
     ts = w.ts[i0:i1 + 1]
-    day = ts // DAY_MS
+    day = (ts - 1) // DAY_MS             # equity ts is a close time: 00:00 closes the day before
     last_of_day = np.r_[day[1:] != day[:-1], True]
-    closes = np.vstack([e[:1], e[last_of_day]])             # start, then each day's last point
+    ends = np.flatnonzero(last_of_day)
+    closes = np.vstack([e[:1], e[ends[ends > 0]]])          # start, then each day's last point
     dp = np.diff(closes, axis=0)                            # (days, members)
     member_dd = [_max_dd(e[:, k]) for k in range(e.shape[1])]
     comb_dd = _max_dd(tot)
