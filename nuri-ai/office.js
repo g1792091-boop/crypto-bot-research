@@ -676,7 +676,7 @@ async function research(){
   fire({kind: "busy", agent: a, text: `🧪 ${mk.name} ${TF_KO[tf]}봉 매매법 구상 중 (가장 오래된 과거부터)`});
   // ① 가능한 가장 긴 과거 캔들 (없으면 최근 1,500봉)
   let cs = null, hist = "";
-  try { const H = await import("./history.js"); const h = await H.historyCandles({market: mk.market, exchange: mk.exchange, interval: iv, maxBars: tf === "D" ? 30000 : 20000}); cs = h.candles; hist = `${fmtDay(h.from)}~${fmtDay(h.to)} · ${cs.length.toLocaleString()}봉${h.note ? " · " + h.note : ""}`; } catch(e){ hist = ""; }
+  try { const H = await import("./history.js"); const h = await H.historyCandles({market: mk.market, exchange: mk.exchange, interval: iv, maxBars: tf === "D" ? 30000 : 20000}); cs = h.candles; hist = h.note && /\d{4}-\d{2}-\d{2}/.test(h.note) ? h.note : `${fmtDay(h.from)}~${fmtDay(h.to)} · ${cs.length.toLocaleString()}봉${h.note ? " · " + h.note : ""}`; } catch(e){ hist = ""; }
   if (!cs || cs.length < 300){ cs = (await candlesFor({market: mk.market, exchange: mk.exchange, timeframe: tf}, 1500)).cs; hist = `최근 ${cs.length.toLocaleString()}봉 (${fmtDay(cs[0]?.t)}~)`; }
   // ② 코인이면 호가·고래·선물 흐름과 펀딩 이력도 함께
   let flowText = "", deriv = null;

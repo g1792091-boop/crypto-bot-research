@@ -271,7 +271,7 @@ export async function futuresFlow({symbol = "BTCUSDT", period = "1h", limit = 48
     `[선물 흐름] 바이낸스 ${sym} · ${period}×${limit} (${d.windowH.toFixed(0)}시간)`,
     d.oi ? `미결제약정 ${money(d.oi.latestValue)} · ${sp(d.oi.changePct)} (수량 ${sp(d.oi.qtyChangePct)}) · 같은 기간 가격 ${sp(d.oi.priceChangePct)}` : "",
     d.funding ? `펀딩 최근 ${d.funding.latestPct.toFixed(4)}%/${d.funding.intervalH}h (연 ${d.funding.latestAnnPct.toFixed(1)}%) · 평균 연 ${d.funding.avgAnnPct.toFixed(1)}%` : "",
-    d.premium ? `마크 ${px(d.premium.markPrice)} · 베이시스 ${d.premium.basisBps?.toFixed(1)}bp · 다음 펀딩 예상 ${d.premium.nextFundingPct?.toFixed(4)}%${d.premium.nextFundingTime ? ` (${kst(d.premium.nextFundingTime, 1)} KST)` : ""}` : "",
+    d.premium ? `마크 ${px(d.premium.markPrice)}${Number.isFinite(d.premium.basisBps) ? ` · 베이시스 ${d.premium.basisBps.toFixed(1)}bp` : ""}${Number.isFinite(d.premium.nextFundingPct) ? ` · 다음 펀딩 예상 ${d.premium.nextFundingPct.toFixed(4)}%` : ""}${d.premium.nextFundingTime ? ` (${kst(d.premium.nextFundingTime, 1)} KST)` : ""}` : "",
     [rs(d.topPosition, "상위 포지션"), rs(d.topAccount, "상위 계정"), rs(d.global, "전체 계정")].filter(Boolean).join(" · "),
     d.taker ? `시장가 매수/매도 최근 ${d.taker.latest.toFixed(2)} · 최근 6봉 ${d.taker.recentAvg.toFixed(2)} · 기간 ${d.taker.windowRatio?.toFixed(2)}` : "",
     `해석: ${d.interpretation}`,

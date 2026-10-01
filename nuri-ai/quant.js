@@ -28,18 +28,23 @@ export const INTERVAL_SECONDS = {"1m":60,"3m":180,"5m":300,"15m":900,"30m":1800,
 // 전략에 쓸 수 있는 봉 간격 (strategy.py INTERVALS)
 export const INTERVALS = ["1m","3m","5m","15m","30m","1h","2h","4h","6h","12h","1d","3d","1w","1M"];
 
-const toMs = t => {
+// 초/밀리초 판단: secs를 주면 그대로 따르고, 아니면 값 크기로 (|t| < 1e11 이면 초 — 2001년 이전 ms 값을 초로 오해하지 않게 배열 단위로 판단)
+const toMs = (t, secs) => {
   if (typeof t === "string" && !/^\s*-?\d+(\.\d+)?\s*$/.test(t)) return Date.parse(t);
-  t = +t; return t < 1e12 ? t * 1000 : t;           // 초 단위면 ms 로
+  t = +t; return (secs ?? Math.abs(t) < 1e11) ? t * 1000 : t;
 };
+const rawT = b => Array.isArray(b) ? b[0] : (b?.t ?? b?.time);
+// 배열의 가장 최근 시각으로 단위를 정한다 (지금 시각은 초 ≈ 1.8e9, ms ≈ 1.8e12)
+const secsOf = arr => { const last = arr.length ? rawT(arr[arr.length - 1]) : null; if (last == null || (typeof last === "string" && !/^\s*-?\d+(\.\d+)?\s*$/.test(last))) return undefined; return Math.abs(+last) < 1e11; };
 const _prepped = new WeakSet();
 // 캔들 정규화 (숫자 변환·형식 통일). 이미 정규화한 배열은 그대로.
 function prep(cs){
   if (!Array.isArray(cs)) throw new Error("캔들 배열이 필요합니다 ([{t,o,h,l,c,v}, ...])");
   if (_prepped.has(cs)) return cs;
+  const secs = secsOf(cs);
   const out = cs.map(b => Array.isArray(b)
-    ? {t: toMs(b[0]), o: +b[1], h: +b[2], l: +b[3], c: +b[4], v: +(b[5] ?? 0)}
-    : {t: toMs(b.t ?? b.time), o: +(b.o ?? b.open), h: +(b.h ?? b.high), l: +(b.l ?? b.low), c: +(b.c ?? b.close), v: +(b.v ?? b.volume ?? 0)});
+    ? {t: toMs(b[0], secs), o: +b[1], h: +b[2], l: +b[3], c: +b[4], v: +(b[5] ?? 0)}
+    : {t: toMs(b.t ?? b.time, secs), o: +(b.o ?? b.open), h: +(b.h ?? b.high), l: +(b.l ?? b.low), c: +(b.c ?? b.close), v: +(b.v ?? b.volume ?? 0)});
   _prepped.add(out);
   return out;
 }
