@@ -95,7 +95,7 @@ function render(){
   $("#title").textContent = empty ? "" : current.title;
   if (empty){
     const note = !brainReady() ? `<div class="hero-note"><b>먼저 AI 두뇌를 준비하세요.</b> 입력창의 모델 버튼에서 고르거나 <a href="#" data-open="brain" style="color:var(--accent)">설정</a>을 여세요.</div>`
-      : mode === "code" && !LAUNCHER.on ? `<div class="hero-note"><b>코드 모드는 NuriAI.exe로 실행해야 쓸 수 있습니다.</b></div>`
+      : mode === "code" && !LAUNCHER.on ? `<div class="hero-note"><b>코드 모드는 GHNano.exe로 실행해야 쓸 수 있습니다.</b></div>`
       : mode === "code" && !current.workspace ? `<div class="hero-note">입력창의 <b>폴더 열기</b>로 작업할 폴더를 고르세요.</div>`
       : mode === "code" ? `<div class="hero-note">작업 폴더: <b>${esc(current.workspace)}</b></div>` : "";
     th.innerHTML = `<div class="hero"><h1><span class="logo">${esc([...AI()][0].toUpperCase())}</span>${mode === "code" ? "무엇을 만들어 볼까요?" : GREET}</h1><div class="hero-slot" id="heroSlot"></div>
@@ -302,7 +302,7 @@ async function send(){
   const text = input.value.trim(); if (!text && !attach.length) return;
   if (!brainReady()){ toast("먼저 AI 두뇌를 준비하세요"); openSheet(settings.brain === "local" ? "local" : "brain"); return; }
   if (mode === "code"){
-    if (!LAUNCHER.on){ toast("코드 모드는 NuriAI.exe로 실행해야 쓸 수 있습니다"); return; }
+    if (!LAUNCHER.on){ toast("코드 모드는 GHNano.exe로 실행해야 쓸 수 있습니다"); return; }
     if (!current.workspace){ toast("먼저 작업 폴더를 여세요"); $("#wsBtn").click(); return; }
   }
   current.mode = mode;
@@ -664,7 +664,7 @@ async function nvCard(){
     <input class="search" id="nvQ" type="search" placeholder="스킬 검색 (예: 젯슨, 파인튜닝, cuopt, 의료영상, 음성인식, RAG)" value="${esc(nvQ)}">
     <div class="list mlist" id="nvList">${await nvListHTML()}</div>
     <pre class="skp" id="nvView" hidden></pre>
-    <div class="row wrap"><button class="btn primary" id="nvInstall" ${LAUNCHER.on && ws ? "" : "disabled"}>작업 폴더에 전체 설치 (.claude/skills)</button><span class="small">${LAUNCHER.on ? (ws ? `작업 폴더: ${esc(ws)} · <code>npx skills add NVIDIA/skills</code>와 같은 결과라 Claude Code·Codex에서도 바로 쓰고, 코드 모드에서 스크립트를 실행할 수 있습니다.` : "코드 모드에서 작업 폴더를 먼저 여세요.") : "NuriAI.exe로 실행해야 설치할 수 있습니다."}</span></div>
+    <div class="row wrap"><button class="btn primary" id="nvInstall" ${LAUNCHER.on && ws ? "" : "disabled"}>작업 폴더에 전체 설치 (.claude/skills)</button><span class="small">${LAUNCHER.on ? (ws ? `작업 폴더: ${esc(ws)} · <code>npx skills add NVIDIA/skills</code>와 같은 결과라 Claude Code·Codex에서도 바로 쓰고, 코드 모드에서 스크립트를 실행할 수 있습니다.` : "코드 모드에서 작업 폴더를 먼저 여세요.") : "GHNano.exe로 실행해야 설치할 수 있습니다."}</span></div>
     <span class="small">라이선스: Apache-2.0 / CC-BY-4.0 (NVIDIA). 대부분 NVIDIA GPU·서버용 작업 지침이라, 채팅에서는 절차 안내로, 코드 모드에서는 실제 실행에 쓰입니다.</span></div>`;
 }
 /* ---- 기억 ---- */
@@ -676,7 +676,7 @@ function memTab(){
 }
 bus.addEventListener("engine", () => { renderModelBtn(); if ($("#sheet").open && (sheetTab === "brain" || sheetTab === "local")) renderSheet(); if (current && !current.messages.length) render(); });
 function brainTab(){
-  const conn = connectedAI(), exeNote = LAUNCHER.on ? "" : `<p class="err small">웹 버전에서는 외부 AI 연결이 막힐 수 있습니다. NuriAI.exe로 실행하세요.</p>`;
+  const conn = connectedAI(), exeNote = LAUNCHER.on ? "" : `<p class="err small">웹 버전에서는 외부 AI 연결이 막힐 수 있습니다. GHNano.exe로 실행하세요.</p>`;
   const opts = (list, cur) => list.map(([v, l]) => `<option value="${esc(v)}"${v === cur ? " selected" : ""}>${esc(l)}</option>`).join("") + (list.some(x => x[0] === cur) ? "" : `<option value="${esc(cur)}" selected>${esc(cur)}</option>`);
   const pickName = c => c ? `${c.id === "local" ? "내 기기" : c.id === "ollama" ? "Ollama" : PROVIDERS[c.id].name} · ${shortModel(c.model)}` : "—";
   const IMG = [["black-forest-labs/flux.1-dev", "FLUX.1 dev · 고품질"], ["black-forest-labs/flux.1-schnell", "FLUX.1 schnell · 빠름"], ["stabilityai/stable-diffusion-3-medium", "Stable Diffusion 3 Medium"]];
@@ -740,7 +740,7 @@ function aboutTab(){
     <div class="kpi"><label>내 지식</label><span class="v">${fmtN(docs.length)}</span><span class="s">문서</span></div>
     ${tot != null ? `<div class="kpi"><label>모의투자 (업비트)</label><span class="v" style="color:${tot >= acct.start ? "var(--up)" : "var(--down)"}">${((tot / acct.start - 1) * 100).toFixed(2)}%</span><span class="s">매수가 기준</span></div>` : ""}</div>
     <div class="card"><h3>자주 쓴 도구</h3><div class="body"><div class="list">${Object.entries(by).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<div><span class="t">${esc(k)}</span><span class="small">${v}회</span></div>`).join("") || `<p class="empty">아직 없습니다.</p>`}</div></div></div>
-    <p class="small">${AI()} · 오픈소스 모델과 llama.cpp(wllama)로 동작합니다. ${LAUNCHER.on ? "실행기(NuriAI.exe) 연결됨." : "웹 버전으로 실행 중입니다."}</p>`;
+    <p class="small">${AI()} · 오픈소스 모델과 llama.cpp(wllama)로 동작합니다. ${LAUNCHER.on ? "실행기(GHNano.exe) 연결됨." : "웹 버전으로 실행 중입니다."}</p>`;
 }
 $("#sheetBody").addEventListener("change", async e => {
   const t = e.target;
@@ -853,13 +853,13 @@ $("#sheetBody").addEventListener("click", async e => {
     }
     t.disabled = true;
     try { await ollamaImportGGUF(f, name, ph => $("#trMsg").textContent = ph); settings.olModel = name; settings.olOk = true; settings.brain = "ollama"; settings.myModel = name; saveSettings(); toast("등록 완료! 이제 내 모델(" + name + ")이 답합니다"); renderSheet(); }
-    catch(err){ $("#trMsg").textContent = (err instanceof TypeError ? "Ollama에 연결하지 못했습니다. Ollama 앱을 켜고 NuriAI.exe로 실행하세요." : err.message) + " · 직접 하려면 명령창에서: ollama create " + name + " -f Modelfile"; }
+    catch(err){ $("#trMsg").textContent = (err instanceof TypeError ? "Ollama에 연결하지 못했습니다. Ollama 앱을 켜고 GHNano.exe로 실행하세요." : err.message) + " · 직접 하려면 명령창에서: ollama create " + name + " -f Modelfile"; }
     finally { t.disabled = false; }
   }
   if (t.dataset.olpull){
     const sel = $("#ol-model"), model = sel.value; t.disabled = true; const lab = t.textContent;
     try { await ollamaPull(model, p => { t.textContent = p.total ? `받는 중 ${Math.round((p.completed || 0) / p.total * 100)}%` : (p.status || "받는 중").slice(0, 18); }); settings.olModel = model; settings.olOk = true; saveSettings(); toast("받기 완료: " + model); renderSheet(); }
-    catch(err){ toast(err instanceof TypeError ? (LAUNCHER.on ? "Ollama에 연결하지 못했습니다. Ollama 앱을 켜세요" : "NuriAI.exe로 실행해야 연결됩니다") : err.message); }
+    catch(err){ toast(err instanceof TypeError ? (LAUNCHER.on ? "Ollama에 연결하지 못했습니다. Ollama 앱을 켜세요" : "GHNano.exe로 실행해야 연결됩니다") : err.message); }
     finally { t.disabled = false; t.textContent = lab; }
   }
   if (t.id === "skUrlAdd"){
@@ -895,7 +895,7 @@ $("#sheetBody").addEventListener("click", async e => {
       if (!names.length) toast("받은 모델이 없습니다. Ollama 앱에서 모델을 먼저 받으세요.");
       else { sel.innerHTML = names.map(n => `<option${n === cur ? " selected" : ""}>${esc(n)}</option>`).join(""); if (!names.includes(cur)){ sel.value = names[0]; sel.dispatchEvent(new Event("change", {bubbles: true})); } toast(`모델 ${names.length}개`); }
       saveSettings();
-    } catch(err){ toast(err instanceof TypeError ? (LAUNCHER.on ? "연결 실패" : "NuriAI.exe로 실행해야 연결됩니다") : err.message); }
+    } catch(err){ toast(err instanceof TypeError ? (LAUNCHER.on ? "연결 실패" : "GHNano.exe로 실행해야 연결됩니다") : err.message); }
     finally { t.disabled = false; }
   }
 });

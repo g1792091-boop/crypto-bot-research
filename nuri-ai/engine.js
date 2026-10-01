@@ -127,9 +127,9 @@ export async function detectLauncher(){ try { const r = await fetch("/__nuri/pin
 const DIRECT = {nvidia:"https://integrate.api.nvidia.com/v1", nvgenai:"https://ai.api.nvidia.com/v1/genai", ollama:"http://127.0.0.1:11434", upbit:"https://api.upbit.com/v1", binance:"https://api.binance.com/api/v3", binancef:"https://fapi.binance.com", tavily:"https://api.tavily.com", brave:"https://api.search.brave.com/res/v1"};
 export const apiBase = name => LAUNCHER.on ? `/__nuri/proxy/${name}` : DIRECT[name];
 export async function codeCall(action, body = {}){
-  if (!LAUNCHER.on) throw new Error("코드 모드는 NuriAI.exe로 실행했을 때만 쓸 수 있습니다.");
+  if (!LAUNCHER.on) throw new Error("코드 모드는 GHNano.exe로 실행했을 때만 쓸 수 있습니다.");
   const r = await fetch("/__nuri/code/" + action, {method:"POST", headers:{"content-type":"application/json", "X-Nuri-Token": window.__NURI_TOKEN || ""}, body: JSON.stringify(body)});
-  if (r.status === 403) throw new Error("권한이 없습니다. NuriAI.exe를 다시 실행하세요.");
+  if (r.status === 403) throw new Error("권한이 없습니다. GHNano.exe를 다시 실행하세요.");
   const j = await r.json();
   if (!j.ok) throw new Error(j.error || "실패");
   return j;
@@ -344,7 +344,7 @@ async function streamOAI(target, {messages, maxTokens, temperature, signal, onCo
   try { res = await fetch(url, {method: "POST", headers, signal, body: JSON.stringify(body)}); }
   catch (e){
     if (signal?.aborted) throw e;
-    const err = new Error(!LAUNCHER.on ? "웹 버전에서는 브라우저 보안정책 때문에 외부 AI에 바로 연결할 수 없습니다. NuriAI.exe로 실행하세요." : isOl ? "Ollama에 연결하지 못했습니다." : `${PROVIDERS[target.id].name}에 연결하지 못했습니다.`);
+    const err = new Error(!LAUNCHER.on ? "웹 버전에서는 브라우저 보안정책 때문에 외부 AI에 바로 연결할 수 없습니다. GHNano.exe로 실행하세요." : isOl ? "Ollama에 연결하지 못했습니다." : `${PROVIDERS[target.id].name}에 연결하지 못했습니다.`);
     err.retry = true; throw err;
   }
   if (!res.ok){
@@ -544,7 +544,7 @@ export function md(src){
 export async function webGet(url, as = "text"){
   let r;
   if (LAUNCHER.on) r = await fetch("/__nuri/fetch?url=" + encodeURIComponent(url), {headers: {"X-Nuri-Token": window.__NURI_TOKEN || ""}});
-  else r = await fetch(url).catch(() => { throw new Error("웹 버전에서는 인터넷 자료를 직접 가져올 수 없습니다. NuriAI.exe로 실행하세요."); });
+  else r = await fetch(url).catch(() => { throw new Error("웹 버전에서는 인터넷 자료를 직접 가져올 수 없습니다. GHNano.exe로 실행하세요."); });
   const status = +(r.headers.get("X-Upstream-Status") || r.status);
   if (!r.ok || status >= 400){ const e = new Error(`가져오기 실패 (${status}) ${url.slice(0, 80)}`); e.status = status; throw e; }
   return as === "json" ? r.json() : r.text();

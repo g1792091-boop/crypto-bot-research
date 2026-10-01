@@ -312,9 +312,9 @@ export function initTrade(ctx){
     } catch (e){ $("#tr-upd").textContent = "갱신 실패 · 잠시 뒤 다시 시도"; }
   }
   function netErr(e){
-    if (e instanceof TypeError) return ctx.launcher() ? "거래소에 연결하지 못했습니다. 인터넷 연결을 확인하세요." : "브라우저 보안정책 때문에 거래소 시세를 직접 받을 수 없습니다. NuriAI.exe로 실행하면 됩니다.";
+    if (e instanceof TypeError) return ctx.launcher() ? "거래소에 연결하지 못했습니다. 인터넷 연결을 확인하세요." : "브라우저 보안정책 때문에 거래소 시세를 직접 받을 수 없습니다. GHNano.exe로 실행하면 됩니다.";
     if (e.status === 429) return "요청이 너무 많습니다. 잠시 뒤 다시 시도하세요.";
-    if (e.status === 502) return `${X().label}에 연결하지 못했습니다. 인터넷 연결이나 방화벽·백신 프로그램이 NuriAI.exe의 인터넷 접속을 막고 있는지 확인하세요.`;
+    if (e.status === 502) return `${X().label}에 연결하지 못했습니다. 인터넷 연결이나 방화벽·백신 프로그램이 GHNano.exe의 인터넷 접속을 막고 있는지 확인하세요.`;
     return "시세를 불러오지 못했습니다: " + (e.message || e);
   }
   function msg(t, retry){

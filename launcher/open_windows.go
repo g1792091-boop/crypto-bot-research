@@ -54,7 +54,7 @@ func showError(title, msg string) {
 // 예전 실행기(버전 확인 기능이 없는 것 포함)를 강제로 끈다. 자기 자신은 제외.
 func killOthers() {
 	self, _ := os.Executable()
-	names := map[string]bool{"NuriAI.exe": true, "ArchAI.exe": true, filepath.Base(self): true}
+	names := map[string]bool{"NuriAI.exe": true, "GHNano.exe": true, "ArchAI.exe": true, filepath.Base(self): true}
 	for name := range names {
 		cmd := exec.Command("taskkill", "/F", "/IM", name, "/FI", fmt.Sprintf("PID ne %d", os.Getpid()))
 		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
