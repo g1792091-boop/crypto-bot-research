@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>차트 터미널</title>
+<meta name="description" content="트레이딩뷰 방식 차트 분석 터미널 (분석 전용)">
+<meta name="theme-color" content="#0f1218">
+<link rel="icon" href="../icon.svg" type="image/svg+xml">
+<style>
+@font-face{font-family:"Pretendard Variable";font-weight:45 920;font-style:normal;font-display:swap;src:url(../vendor/fonts/PretendardVariable.woff2) format("woff2-variations")}
+html,body{margin:0;height:100%;background:#0f1218;color:#d1d4dc;font:13px/1.5 "Pretendard Variable",Pretendard,system-ui,sans-serif;color-scheme:dark}
+.boot{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px;text-align:center}
+.boot button{font:inherit;color:#fff;background:#2962ff;border:0;border-radius:6px;padding:8px 16px;cursor:pointer}
+.boot .muted{color:#787b86;font-size:12px}
+</style>
+</head>
+<body>
+<div class="boot" id="boot"><div id="msg">차트 터미널을 여는 중…</div></div>
+<script type="module">
+// 새 탭용: terminal/index.html?market=BTCUSDT&exchange=binancef&interval=1h
+import { openTerminal } from "./terminal.js";
+const q = new URLSearchParams(location.search), boot = document.getElementById("boot"), msg = document.getElementById("msg");
+const opts = { market: q.get("market") || q.get("symbol") || undefined, exchange: q.get("exchange") || undefined, interval: q.get("interval") || undefined };
+Object.keys(opts).forEach((k) => opts[k] === undefined && delete opts[k]);
+const open = async () => {
+  boot.hidden = true;
+  try { await openTerminal(opts, { onClose: closed }); }
+  catch (e) { boot.hidden = false; msg.textContent = "터미널을 열지 못했습니다: " + (e.message || e); }
+};
+function closed() {
+  boot.hidden = false;
+  boot.innerHTML = `<div>차트 터미널을 닫았습니다.</div><button id="re">다시 열기</button><div class="muted">이 탭은 닫아도 됩니다. 그린 선·지표 배치는 이 브라우저에 저장됩니다.</div>`;
+  document.getElementById("re").onclick = open;
+}
+open();
+</script>
+</body>
+</html>

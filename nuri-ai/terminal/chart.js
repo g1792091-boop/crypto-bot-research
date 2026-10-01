@@ -65,6 +65,7 @@ export class TermChart {
     el.innerHTML = `<div class="nt-chart"></div><div class="nt-legend"></div><div class="nt-msg" hidden></div>`;
     this.legendEl = el.querySelector(".nt-legend"); this.msgEl = el.querySelector(".nt-msg");
     this.legendEl.addEventListener("click", (e) => {      // 범례의 지표 숨기기 · 설정 · 지우기 (트레이딩뷰 방식)
+      if (e.target.closest(".lg-head")) { this.legendEl.classList.toggle("open"); return; }   // 휴대폰: 지표 줄 펼치기/접기
       const b = e.target.closest("[data-lg]");
       if (b) { e.stopPropagation(); this.opts.onLegend?.(b.dataset.lg, b.dataset.id, this); }
     });
@@ -607,7 +608,8 @@ export class TermChart {
     try { heights = this.chart.panes().map((pn) => pn.getHeight()); } catch (e) { heights = [0]; }
     const tops = heights.map((_, i) => heights.slice(0, i).reduce((s, h) => s + h + 1, 0));
     const val = (v) => v == null ? "–" : this.px(v);
-    let html = `<div class="lg-main" style="top:${(tops[0] || 0) + 4}px"><div class="lg-head">${head}</div>
+    const nMain = this.ind.filter((x) => x.pane === 0).length;
+    let html = `<div class="lg-main" style="top:${(tops[0] || 0) + 4}px"><div class="lg-head">${head}${nMain ? `<span class="lg-more">지표 ${nMain} ▾</span>` : ""}</div>
       <div class="lg-ohlc"><span class="muted">시</span><span class="${cls}">${this.px(b.open)}</span> <span class="muted">고</span><span class="${cls}">${this.px(b.high)}</span> <span class="muted">저</span><span class="${cls}">${this.px(b.low)}</span> <span class="muted">종</span><span class="${cls}">${this.px(b.close)}</span>
       <span class="${chg >= 0 ? "up" : "down"}">${chg >= 0 ? "+" : ""}${chg.toFixed(2)}%</span> <span class="muted">거래량</span> ${big(b.volume || 0)}</div>`;
     const vals = (it) => it.last.plots.filter((pl) => !SKIP.includes(pl.type) && pl.legend !== false).map((pl) => `<span style="color:${pl.color || it.spec.color || "inherit"}">${pl.type === "hist" && it.pane === 0 ? big(pl.data[idx] ?? 0) : val(pl.data[idx])}</span>`).join(" ");

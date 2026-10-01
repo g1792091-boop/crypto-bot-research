@@ -79,6 +79,7 @@ button.busy span { color: #5b8cff; }
 .nt-legend .lg-row { pointer-events: auto; }
 .lg-note { font-size: 10.5px; color: var(--muted); margin-top: 2px; white-space: normal; max-width: 520px; }
 .lg-sub { position: absolute; }
+.lg-more { display: none; }
 
 /* 오른쪽 패널 */
 .nt-side { width: 320px; flex: none; background: var(--panel); border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
@@ -195,7 +196,11 @@ button.busy span { color: #5b8cff; }
   .nt-side { position: absolute; left: 0; right: 0; top: auto; bottom: 42px; width: auto; height: 62%; border-left: 0; border-top: 1px solid var(--line-2); border-radius: 10px 10px 0 0; }
   .nt-legend { right: 56px; left: 6px; }
   .lg-note { display: none; }
-  .lg-main .lg-head { font-size: 12px; }
+  .lg-main { background: rgba(19,23,34,.72); border-radius: 4px; padding: 1px 4px 2px; margin-left: -4px; }
+  .lg-main .lg-head { font-size: 12px; pointer-events: auto; cursor: pointer; }
+  .nt-srch select { max-width: 112px; }
+  .lg-more { display: inline-block !important; margin-left: 6px; font-size: 10.5px; color: #5b8cff; border: 1px solid var(--line-2); border-radius: 8px; padding: 0 6px; background: rgba(19,23,34,.8); }
+  .nt-legend:not(.open) .lg-main .lg-row { display: none; }
   .lg-ohlc { font-size: 10px; white-space: normal; }
   .lg-row { font-size: 10px; line-height: 15px; }
   .nt-status { gap: 8px; padding: 2px 8px; }
@@ -213,3 +218,6 @@ button.busy span { color: #5b8cff; }
 /* 2×2 에서는 가격 위 지표 줄을 접고, 마우스를 올린 칸만 펼친다 */
 .nt-grid.g4 .lg-main .lg-row, .nt-grid.g4 .lg-note { display: none; }
 .nt-grid.g4 .nt-cell:hover .lg-main .lg-row { display: flex; }
+.nt-toast { position: absolute; left: 50%; bottom: 40px; transform: translateX(-50%); z-index: 50; background: #e0e3eb; color: #131722; padding: 7px 14px; border-radius: 8px; font-size: 12.5px; max-width: calc(100% - 32px); box-shadow: 0 8px 24px rgba(0,0,0,.45); pointer-events: none; }
+.nt-toast.err { background: #f23645; color: #fff; }
+@media (max-width: 760px) { .nt-toast { bottom: 72px; } }

@@ -117,9 +117,11 @@ export async function latestBars({ exchange, symbol, interval }) {
 }
 
 // 바이낸스 실시간 kline 웹소켓. onBar(bar) · onFail(reason). 반환: close()
+// 한 번도 열리지 못하면(방화벽·프록시) 10분 동안은 다시 시도하지 않고 바로 폴링
+let wsBlockedUntil = 0;
 export function klineSocket({ exchange, symbol, interval }, onBar, onFail) {
   if (exchange !== "binancef" && exchange !== "binance") return null;
-  if (typeof WebSocket !== "function") return null;
+  if (typeof WebSocket !== "function" || Date.now() < wsBlockedUntil) return null;
   const s = symbol.toLowerCase(), url = exchange === "binancef" ? `wss://fstream.binance.com/ws/${s}@kline_${interval}` : `wss://stream.binance.com:9443/ws/${s}@kline_${interval}`;
   let ws, closed = false, opened = false;
   try { ws = new WebSocket(url); } catch (e) { onFail?.("웹소켓 열기 실패"); return null; }
@@ -132,7 +134,7 @@ export function klineSocket({ exchange, symbol, interval }, onBar, onFail) {
     } catch (err) { /* 무시 */ }
   };
   ws.onerror = () => {};
-  ws.onclose = () => { clearTimeout(timer); if (!closed) { closed = true; onFail?.(opened ? "웹소켓 끊김" : "웹소켓 연결 안 됨"); } };
+  ws.onclose = () => { clearTimeout(timer); if (!closed) { closed = true; if (!opened) wsBlockedUntil = Date.now() + 600000; onFail?.(opened ? "웹소켓 끊김" : "웹소켓 연결 안 됨"); } };
   return { close() { closed = true; clearTimeout(timer); try { ws.close(); } catch (e) { /* 무시 */ } }, get open() { return opened && !closed; } };
 }
 

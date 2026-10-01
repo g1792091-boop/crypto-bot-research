@@ -84,7 +84,7 @@ body.lv-open{overflow:hidden}
 .lv-log tr.k-order .lv-tag,.lv-log tr.k-response .lv-tag{background:color-mix(in srgb,var(--lv-ok) 25%,transparent)}
 .lv-log tr.k-approval .lv-tag,.lv-log tr.k-warn .lv-tag{background:color-mix(in srgb,var(--lv-warn) 25%,transparent)}
 /* 승인 창 */
-.lv-modal{position:fixed;inset:0;z-index:90;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.6);box-sizing:border-box}
+.lv-modal{position:fixed;inset:0;z-index:2147483600;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.6);box-sizing:border-box}
 .lv-dlg{width:min(460px,100%);max-height:calc(100vh - 32px);overflow:auto;background:var(--lv-panel);border:1px solid var(--lv-line);border-radius:16px;box-shadow:var(--shadow,0 10px 40px rgba(0,0,0,.45));padding:16px}
 .lv-dlg.real{border:2px solid var(--lv-bad)}
 .lv-dlg-h{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:15px;margin-bottom:10px}

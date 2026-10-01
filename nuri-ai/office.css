@@ -263,3 +263,9 @@ body.office-open{overflow:hidden}
   .of-presview{padding:12px}
   .of-top select.of-cl{max-width:150px}
 }
+/* 상단 바는 한 줄 유지 (좁으면 옆으로 스크롤) */
+.of-top{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:thin}
+.of-top>*{flex:none}
+.of-top select.of-cl{max-width:150px}.of-top #ofSpeed{max-width:120px}
+/* 재개발 후보 표: 좁은 기록 칸에서도 구역 이름이 한 줄로 */
+.of-kt td,.of-kt th{word-break:keep-all}.of-kt td:first-child b,.of-kt td:nth-child(2),.of-kt td:nth-child(3){white-space:nowrap}.of-kt td small{display:block}

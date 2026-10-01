@@ -216,7 +216,7 @@ document.addEventListener("click", e => {
   const cp = t.closest("[data-copy]"); if (cp){ copy(cp.closest(".codebox").querySelector("code").textContent); return; }
   const art = t.closest("[data-art]"); if (art){ openArtKey(art.dataset.art); return; }
   const pm = t.closest("[data-perm]"); if (pm){ const r = pendingPerm.get(pm.dataset.perm); if (r){ pendingPerm.delete(pm.dataset.perm); if (pm.dataset.v === "always") current.allowAll = true; r.res(pm.dataset.v !== "no"); } return; }
-  const a = t.closest("[data-act]"); if (a && !isBusy()){
+  const a = t.closest(".msg [data-act]"); if (a && !isBusy()){   // 대화 말풍선의 버튼만 (다른 화면의 data-act 는 무시)
     const i = +a.closest(".msg").dataset.i, m = current.messages[i];
     if (a.dataset.act === "copy") copy(m.role === "user" ? m.content : aiParts(m).filter(p => p.type === "text").map(p => splitThink(p.text).body).join("\n\n"));
     if (a.dataset.act === "good" || a.dataset.act === "bad"){ const v = a.dataset.act === "good" ? 1 : -1; m.rating = m.rating === v ? 0 : v; saveChat(current); const el = $(`#thread .msg[data-i="${i}"]`); if (el) el.outerHTML = msgHTML(m, i); if (m.rating) toast(v > 0 ? "좋은 답으로 표시했습니다 · 학습 데이터에 들어갑니다" : "학습 데이터에서 뺍니다"); }
@@ -530,7 +530,8 @@ $("#openKnow").onclick = () => openSheet("know");
 // AI 팀 사무실 (에이전트 팀 대시보드)
 // 사무실에서 여는 것들: 건축팀 설계안(3D), 차트 터미널, 실거래 콘솔
 const openBuilding = spec => openArtifact({type: "building", title: spec?.name || "설계안", spec});
-const openTerminal = (opts = {}) => { const q = new URLSearchParams(opts).toString(); window.open("terminal/index.html" + (q ? "?" + q : ""), "_blank"); };
+// 차트 터미널은 앱 안의 전체 화면으로 연다 (새 창이 필요하면 terminal/index.html)
+const openTerminal = async (opts = {}) => { try { const T = await import("./terminal/terminal.js"); T.openTerminal({market: opts.market || "BTCUSDT", exchange: opts.exchange, interval: opts.interval || "1h"}, {esc}); } catch(e){ toast("차트 터미널을 열 수 없습니다: " + e.message); } };
 import("./live-ui.js").then(L => L.initLive({toast, esc, md})).catch(e => console.warn("실거래 모듈", e));   // 승인 창은 패널을 안 열어도 등록해 둔다
 const openLive = async () => { try { const L = await import("./live-ui.js"); L.openLive({md, esc, toast}); } catch(e){ toast("실거래 콘솔을 열 수 없습니다: " + e.message); } };
 window.__ghnano = Object.assign(window.__ghnano || {}, {openBuilding, openTerminal, openLive});

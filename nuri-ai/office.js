@@ -1116,7 +1116,7 @@ async function mlJob(){
   const mk = [{market: "BTCUSDT", exchange: "binancef", tf: "60"}, {market: "ETHUSDT", exchange: "binancef", tf: "60"}, {market: "NVDA", exchange: "yahoo", tf: "D"}, {market: "^KS11", exchange: "yahoo", tf: "D"}][i % 4];
   const model = ["mlp", "logreg", "gbs"][i % 3], a = agentById("ml");
   fire({kind: "busy", agent: a, text: `🧠 ${mk.market} ${{mlp: "신경망", logreg: "로지스틱 회귀", gbs: "부스팅 트리"}[model]} 학습 중`});
-  let cs; try { const H = await import("./history.js"); cs = (await H.historyCandles({market: mk.market, exchange: mk.exchange, interval: IV_NAME[mk.tf], maxBars: 6000})).candles; } catch(e){ cs = (await candlesFor({market: mk.market, exchange: mk.exchange, timeframe: mk.tf}, 1500)).cs; }
+  let cs; try { const H = await import("./history.js"); cs = (await Promise.race([H.historyCandles({market: mk.market, exchange: mk.exchange, interval: IV_NAME[mk.tf], maxBars: 6000}), new Promise((_, rej) => setTimeout(() => rej(new Error("긴 과거 받기 30초 초과")), 30e3))])).candles; if (!(cs?.length > 300)) throw new Error("과거 데이터 부족"); } catch(e){ cs = (await candlesFor({market: mk.market, exchange: mk.exchange, timeframe: mk.tf}, 1500)).cs; }
   const res = ML.walkForwardML(cs, {model, horizon: 1, seed: 7 + i}), mt = res.metrics || {};
   const acc = +((mt.accuracy ?? 0) * 100).toFixed(1), base = +((mt.baseline ?? 0.5) * 100).toFixed(1);
   post({ch: "quant", kind: "ml", agent: a.id, market: mk.market, tf: TF_KO[mk.tf], model: {mlp: "신경망(MLP)", logreg: "로지스틱 회귀", gbs: "부스팅 트리"}[model], acc, base, auc: mt.auc ?? null, edge: res.edge, text: ML.mlText(res)});

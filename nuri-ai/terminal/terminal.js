@@ -1,6 +1,8 @@
 // 누리 차트 터미널 — 트레이딩뷰 방식 분석 화면 (분석 전용: 주문 버튼 없음)
 // 사용: import { openTerminal, closeTerminal } from "./terminal/terminal.js";
-//       openTerminal({market: "BTCUSDT", exchange: "binancef", interval: "1h"}, {toast, esc});
+//       openTerminal({market: "BTCUSDT", exchange: "binancef", interval: "1h"}, {esc, onClose, ws});
+//       (ctx.toast 는 쓰지 않는다 — 앱 알림이 전체 화면 아래에 가려지므로 터미널 안에 따로 띄움 · ws:false 면 웹소켓 끔)
+//       새 탭으로 열 때는 terminal/index.html?market=NVDA&exchange=yahoo&interval=1d
 // 전체 화면 오버레이 · 종목 검색 · 거래소 · 봉 간격 · 차트 종류 · 로그 · 지표(편집) · 그리기 도구 · 흐름 오버레이(호가 벽 · 고래 · 청산 추정) ·
 // 흐름 패널 · 전략 신호/백테스트 · 1×1 / 1×2 / 2×2 · 스크린샷 · 전체 과거
 import * as D from "./data.js";
@@ -64,9 +66,9 @@ function loadCss(href) {
 
 export function terminalOpen() { return !!T; }
 
-export async function openTerminal({ market = "BTCUSDT", exchange = "binancef", interval = "1h" } = {}, ctx = {}) {
-  exchange = exchange || D.guessExchange(market);
-  if (!D.EX_SHORT[exchange]) exchange = D.guessExchange(market);
+export async function openTerminal({ market = "BTCUSDT", exchange, interval = "1h" } = {}, ctx = {}) {
+  // 거래소를 안 주면 종목으로 짐작 (BTCUSDT → 바이낸스 선물 · KRW-BTC → 업비트 · NVDA/005930/^KS11/ES=F → 야후)
+  if (!D.EX_SHORT[exchange]) exchange = D.guessExchange(market, "binancef");
   const want = { exchange, symbol: D.normSymbol(exchange, market), interval: D.normIv(interval) };
   if (T) { T.setCell(T.S.active, want); T.root.focus(); return T; }
   await loadCss(CSS_URL);
@@ -78,7 +80,7 @@ export async function openTerminal({ market = "BTCUSDT", exchange = "binancef", 
   return T;
 }
 
-export function closeTerminal() { if (T) { const t = T; T = null; t.destroy(); } }
+export function closeTerminal() { if (T) { const t = T; T = null; t.destroy(); try { t.ctx.onClose?.(); } catch (e) { /* 무시 */ } } }
 
 class Terminal {
   constructor(ctx, lib, want) {
@@ -88,7 +90,8 @@ class Terminal {
       inds: Array.isArray(saved.inds) ? saved.inds.filter((s) => s && DEFS[s.key]).map((s) => ({ ...s, id: s.id || uid() })) : DEFAULT_INDS(),
       ctype: saved.ctype || "candles", log: !!saved.log, overlays: { walls: false, whales: false, liq: false, ...(saved.overlays || {}) },
       layout: LAYOUTS[saved.layout] ? +saved.layout : 1, cells: Array.isArray(saved.cells) ? saved.cells.filter((c) => c && D.EX_SHORT[c.exchange] && c.symbol) : [],
-      active: 0, side: innerWidth < 760 ? false : saved.side ?? (innerWidth > 1100),   // 휴대폰은 차트부터 tab: saved.tab || "flow", magnet: !!saved.magnet, stay: !!saved.stay, stratMode: saved.stratMode || "signals",
+      // 휴대폰은 차트부터 (패널 닫힘)
+      active: 0, side: innerWidth < 760 ? false : saved.side ?? (innerWidth > 1100), tab: saved.tab || "flow", magnet: !!saved.magnet, stay: !!saved.stay, stratMode: saved.stratMode || "signals",
     };
     this.S.cells[0] = want;
     this.cells = [];
@@ -99,7 +102,13 @@ class Terminal {
     this.root.focus();
   }
 
-  toast(msg, kind) { if (this.ctx.toast) this.ctx.toast(msg, kind); else { this.statusEl.querySelector(".nt-st-msg").textContent = msg; } }
+  // 앱의 알림(ctx.toast)은 이 전체 화면 아래에 가려지므로 터미널 안에 직접 띄운다
+  toast(msg, kind) {
+    const el = this.root.querySelector(".nt-toast");
+    el.textContent = msg; el.className = "nt-toast" + (kind === "err" ? " err" : ""); el.hidden = false;
+    this.statusEl.querySelector(".nt-st-msg").textContent = msg;
+    clearTimeout(this._toastT); this._toastT = setTimeout(() => (el.hidden = true), kind === "err" ? 5000 : 2600);
+  }
   _save() {
     const S = this.S;
     lsSet(KEY, { inds: S.inds, ctype: S.ctype, log: S.log, overlays: S.overlays, layout: S.layout, cells: S.cells, side: S.side, tab: S.tab, magnet: S.magnet, stay: S.stay, stratMode: S.stratMode });
@@ -149,7 +158,8 @@ class Terminal {
         </aside>
       </div>
       <div class="nt-status"><span class="nt-st-src"></span><span class="nt-st-live"></span><span class="nt-st-cd"></span><span class="nt-st-msg"></span></div>
-      <div class="nt-modal" hidden><div class="nt-dlg" role="dialog"></div></div>`;
+      <div class="nt-modal" hidden><div class="nt-dlg" role="dialog"></div></div>
+      <div class="nt-toast" role="status" hidden></div>`;
     document.body.append(r);
     this.root = r;
     this.grid = r.querySelector(".nt-grid"); this.sideEl = r.querySelector(".nt-side"); this.statusEl = r.querySelector(".nt-status");
@@ -266,7 +276,7 @@ class Terminal {
     if (b.dataset.iv) { const c = S.cells[S.active]; this.setCell(S.active, { ...c, interval: b.dataset.iv }); return; }
     if (b.dataset.draw) { this.cur?.dr.setTool(b.dataset.draw); this._syncTools(); return; }
     if (b.dataset.dt) { this._drawToggle(b.dataset.dt); return; }
-    if (b.dataset.tab) { S.tab = b.dataset.tab; this._save(); this._syncSide(); return; }
+    if (b.dataset.tab) { S.tab = b.dataset.tab; this._save(); this._syncSide(); if (S.tab === "flow") this.cur?.tc.refreshFlow(); return; }
     if (act) e.preventDefault();
     switch (act) {
       case "close": closeTerminal(); break;
@@ -375,8 +385,8 @@ class Terminal {
       if (e.key !== "Enter") return;
       const q = inp.value.trim();
       if (!q) return;
-      const first = list._rows?.[0];
-      if (first && first.s.toUpperCase() === q.toUpperCase()) return pick(first);
+      const rows = list._rows || [], exact = rows.find((x) => x.s.toUpperCase() === q.toUpperCase());
+      if (exact || rows[0]) return pick(exact || rows[0]);   // 목록 첫 줄 (트레이딩뷰처럼)
       const ex = sel.value === "auto" ? D.guessExchange(q, cfg.exchange) : sel.value;
       pick({ s: q, ex });
     });
@@ -393,7 +403,7 @@ class Terminal {
       } catch (e) { /* 목록 실패는 무시 (직접 입력 가능) */ }
     };
     sel.value = "auto"; render(); loadRemote();
-    setTimeout(() => inp.focus(), 30);
+    if (!matchMedia("(pointer: coarse)").matches) setTimeout(() => inp.focus(), 30);
   }
 
   // ------------------------------------------------------------ 지표 선택 · 설정
@@ -425,7 +435,7 @@ class Terminal {
       curEl.innerHTML = cur();
     };
     q.addEventListener("input", render);
-    this.dlg.addEventListener("click", (e) => {
+    this.dlg.onclick = (e) => {
       const a = e.target.closest("[data-add]"), st = e.target.closest("[data-set]"), dl = e.target.closest("[data-del]");
       if (a) { this.addInd(a.dataset.add); render(); this.toast(`${DEFS[a.dataset.add].name} 추가`); }
       else if (st) this._openSettings(st.dataset.set);
@@ -438,8 +448,8 @@ class Terminal {
         this.addInd("c:expr", { expr, overlay: ov });
         ta.value = ""; render();
       }
-    });
-    render(); setTimeout(() => q.focus(), 30);
+    };
+    render(); if (!matchMedia("(pointer: coarse)").matches) setTimeout(() => q.focus(), 30);   // 휴대폰은 키보드가 화면을 가리지 않게
     // 커스텀 지표 (customind.js 가 있을 때만)
     loadCustom().then((m) => {
       const box = this.dlg.querySelector(".nt-cust");
@@ -490,13 +500,13 @@ class Terminal {
     this.dlg.querySelector("[data-ok]").onclick = () => {
       const f = this.dlg.querySelector("form"), np = {};
       for (const [k, v0] of Object.entries(p)) {
-        const el = f.elements[k];
+        const el = f.querySelector(`[name="${k}"]`);   // f.elements.length 처럼 이름이 겹치는 속성을 피한다
         if (!el) continue;
         if (k === "overlay") np[k] = el.checked ? 1 : 0;
         else if (typeof v0 === "number") { const x = parseFloat(el.value); np[k] = Number.isFinite(x) ? x : v0; }
         else np[k] = el.value;
       }
-      s.params = np; s.color = f.elements.__color.value;
+      s.params = np; s.color = f.querySelector('[name="__color"]').value;
       this._indsChanged(); done();
     };
   }
@@ -504,6 +514,7 @@ class Terminal {
   // ------------------------------------------------------------ 대화상자
   _openModal(html, kind) {
     this._modalKind = kind;
+    this.dlg.onclick = null;
     this.dlg.className = `nt-dlg nt-dlg-${kind}`;
     this.dlg.innerHTML = html;
     this.modal.hidden = false;
