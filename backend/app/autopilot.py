@@ -348,7 +348,7 @@ def _ai_comment(sig: dict) -> None:
                            "market": {k: reg[k] for k in ("label", "score", "rsi", "adx", "atr")}, "reasons": reg["reasons"][:3],
                            "levels": [{"price": z["price"], "side": z["side"], "touches": z["touches"]} for z in sr["zones"][:6]]},
                           ensure_ascii=False, default=float)
-        txt = llm.text("너는 코인 선물 트레이딩 코치다. 자동 매매 봇이 방금 모의로 진입했다. 주어진 데이터만 근거로 이 진입의 근거 한 가지와 "
+        txt = llm.text("너는 코인 선물 트레이딩 코치다. 전략 시그널이 방금 가상 진입했다. 주어진 데이터만 근거로 이 진입의 근거 한 가지와 "
                        "가장 큰 위험 한 가지, 지켜볼 가격을 한국어 2~3문장으로. 숫자를 지어내지 않는다.", user, effort="low", max_tokens=400, feature="autopilot")
         _signal({"type": "ai_note", "symbol": sig["symbol"], "interval": sig["interval"], "side": sig.get("side"), "strategy": sig.get("strategy"),
                  "status": sig.get("status"), "text": "AI 코멘트: " + txt.strip()[:300], "ref": sig.get("id")})
