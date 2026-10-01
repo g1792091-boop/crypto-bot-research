@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>누리 AI</title>
+<title>GH Nano</title>
 <meta name="description" content="채팅과 코드, 두 가지 모드로 무엇이든 하는 나만의 AI">
 <meta name="theme-color" content="#FAF9F6">
 <link rel="manifest" href="manifest.webmanifest">
@@ -484,6 +484,13 @@ dialog.sheet::backdrop{background:rgba(20,18,15,.45)}
 .trlog:empty{display:none}
 .tile ol{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:3px}.tile ol a{color:var(--accent)}
 .acts button[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent)}
+
+/* ---- 이미지 첨부 · 모델 탐색기 ---- */
+.fchip .thumb{width:22px;height:22px;object-fit:cover;border-radius:4px;margin-right:2px}
+.uimg{max-width:220px;max-height:180px;border-radius:10px;border:1px solid var(--line);object-fit:cover}
+.mlist{max-height:420px;overflow:auto}
+.mlist .t{display:flex;flex-direction:column;min-width:0}.mlist .t b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mlist .t .small{overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;white-space:normal}
 </style>
 </head>
 <body>
@@ -515,7 +522,7 @@ dialog.sheet::backdrop{background:rgba(20,18,15,.45)}
 <div class="app" id="app">
   <aside class="side" aria-label="대화 목록">
     <div class="side-top">
-      <span class="brand"><span class="logo">누</span>누리</span><span style="flex:1"></span>
+      <span class="brand"><span class="logo">G</span><span class="brand-name">GH Nano</span></span><span style="flex:1"></span>
       <button class="ib" id="sideClose" title="사이드바 접기" aria-label="사이드바 접기"><svg class="i"><use href="#i-side"/></svg></button>
     </div>
     <button class="new" id="newChat"><span class="plus"><svg class="i" style="width:16px;height:16px"><use href="#i-plus"/></svg></span>새 대화</button>
@@ -548,10 +555,10 @@ dialog.sheet::backdrop{background:rgba(20,18,15,.45)}
         <div class="dock" id="dock">
           <div class="composer" id="composer">
             <div class="files" id="pending"></div>
-            <textarea id="input" rows="1" placeholder="누리에게 무엇이든 물어보세요" aria-label="메시지 입력"></textarea>
+            <textarea id="input" rows="1" placeholder="GH Nano에게 무엇이든 물어보세요" aria-label="메시지 입력"></textarea>
             <div class="crow">
-              <label class="cbtn icon" for="fileIn" title="파일 첨부" aria-label="파일 첨부"><svg class="i"><use href="#i-plus"/></svg></label>
-              <input type="file" id="fileIn" multiple hidden>
+              <label class="cbtn icon" for="fileIn" title="파일·이미지 첨부 (이미지는 붙여넣기도 됨)" aria-label="파일 첨부"><svg class="i"><use href="#i-plus"/></svg></label>
+              <input type="file" id="fileIn" multiple hidden accept="image/*,.txt,.md,.csv,.json,.html,.htm,.xml,.js,.ts,.py,.java,.c,.cpp,.go,.rs,.sql,.css,.yaml,.yml,.toml,.log,.pdf,.ipynb,.sh,.bat,.ps1,*/*">
               <button class="cbtn" id="thinkBtn" aria-pressed="false" title="답하기 전에 더 깊게 생각합니다 (지원하는 모델)"><svg class="i" style="width:16px;height:16px"><use href="#i-bulb"/></svg><span class="lbl">깊게 생각</span></button>
               <span class="pick code-only" hidden><button class="cbtn" id="wsBtn" title="작업 폴더"><svg class="i" style="width:16px;height:16px"><use href="#i-folder"/></svg><span class="lbl" id="wsLabel">폴더 열기</span></button><div class="menu left" id="wsMenu" hidden></div></span>
               <select class="cbtn code-only" id="permSel" title="권한" aria-label="권한" hidden><option value="ask">매번 묻기</option><option value="edits">편집 자동 허용</option><option value="auto">모두 자동 허용</option></select>
@@ -560,7 +567,7 @@ dialog.sheet::backdrop{background:rgba(20,18,15,.45)}
               <button class="send" id="send" aria-label="보내기" disabled><svg class="i"><use href="#i-up"/></svg></button>
             </div>
           </div>
-          <div class="dock-note" id="dockNote">누리는 실수할 수 있습니다. 중요한 정보는 확인하세요.</div>
+          <div class="dock-note" id="dockNote">GH Nano는 실수할 수 있습니다. 중요한 정보는 확인하세요.</div>
         </div>
       </section>
       <aside class="panel" id="panel" hidden aria-label="결과물">
@@ -587,8 +594,9 @@ dialog.sheet::backdrop{background:rgba(20,18,15,.45)}
 <dialog class="sheet" id="sheet">
   <div class="sheet-in">
     <nav class="sheet-nav" id="sheetNav">
-      <h2>누리</h2>
+      <h2 class="brand-name">GH Nano</h2>
       <button data-tab="brain">AI 두뇌 · API 키</button>
+      <button data-tab="models">모델</button>
       <button data-tab="tpl">템플릿</button>
       <button data-tab="skills">스킬</button>
       <button data-tab="mem">기억</button>

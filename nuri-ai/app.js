@@ -2,13 +2,17 @@
 import { esc, uid, fmtN, ls, idb, bus, settings, saveSettings, CATALOG, eng, loadModel, unloadModel, gpuSupported, refreshCache, cacheList,
   LAUNCHER, detectLauncher, apiBase, codeCall, OL_MODELS, BRAINS, brainReady, brainLabel, brainStream, splitThink,
   PROVIDERS, SEARCH_KEYS, addApiKey, removeApiKey, routeCandidates, shortModel, webGet, ollamaPull, ollamaImportGGUF,
+  modelKind, KIND_KO, VISION_RE, rankModel, opfsSave, opfsList, opfsRemove,
   docs, loadDocs, addDoc, removeDoc, readTextFile, md, highlight } from "./engine.js";
 import { runAgent, BUILTIN_SKILLS, TOOLS } from "./agent.js";
+import { nvIndex, nvSkill, nvSearch, GROUP_KO } from "./nvskills.js";
 import { TEMPLATES } from "./templates.js";
 import { BASES, TOPICS, samplesFromChats, loadSynth, removeSynth, clearSynth, toJSONL, generateSynth, notebookJSON, localScript } from "./train.js";
 import { initTrade } from "./trade.js";
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
+const AI = () => settings.aiName || "GH Nano";
+function applyBrand(){ const n = AI(); document.title = n; $$(".brand-name").forEach(e => e.textContent = n); $$(".logo").forEach(e => e.textContent = [...n][0].toUpperCase()); }
 const ico = (id, st = "") => `<svg class="i" style="${st}"><use href="#i-${id}"/></svg>`;
 const toast = m => { const t = $("#toast"); t.textContent = m; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, 2800); };
 
@@ -23,8 +27,8 @@ function setMode(m, keepChat){
   mode = m; ls.set("mode", m);
   $$(".modes [data-mode]").forEach(b => b.setAttribute("aria-selected", b.dataset.mode === m));
   $$(".code-only").forEach(e => e.hidden = m !== "code");
-  $("#input").placeholder = m === "code" ? "무엇을 만들거나 고칠까요?" : "누리에게 무엇이든 물어보세요";
-  $("#dockNote").textContent = m === "code" ? "누리 코드는 작업 폴더의 파일을 읽고 고치며 명령을 실행합니다. 바꾸기 전에 허락을 구합니다." : "누리는 실수할 수 있습니다. 중요한 정보는 확인하세요.";
+  $("#input").placeholder = m === "code" ? "무엇을 만들거나 고칠까요?" : `${AI()}에게 무엇이든 물어보세요`;
+  $("#dockNote").textContent = m === "code" ? `${AI()} 코드는 작업 폴더의 파일을 읽고 고치며 명령을 실행합니다. 바꾸기 전에 허락을 구합니다.` : `${AI()}는 실수할 수 있습니다. 중요한 정보는 확인하세요.`;
   $("#permSel").value = settings.permission;
   if (!keepChat && current && (current.mode || "chat") !== m) newChat();
   renderWs();
@@ -94,7 +98,7 @@ function render(){
       : mode === "code" && !LAUNCHER.on ? `<div class="hero-note"><b>코드 모드는 NuriAI.exe로 실행해야 쓸 수 있습니다.</b></div>`
       : mode === "code" && !current.workspace ? `<div class="hero-note">입력창의 <b>폴더 열기</b>로 작업할 폴더를 고르세요.</div>`
       : mode === "code" ? `<div class="hero-note">작업 폴더: <b>${esc(current.workspace)}</b></div>` : "";
-    th.innerHTML = `<div class="hero"><h1><span class="logo">누</span>${mode === "code" ? "무엇을 만들어 볼까요?" : GREET}</h1><div class="hero-slot" id="heroSlot"></div>
+    th.innerHTML = `<div class="hero"><h1><span class="logo">${esc([...AI()][0].toUpperCase())}</span>${mode === "code" ? "무엇을 만들어 볼까요?" : GREET}</h1><div class="hero-slot" id="heroSlot"></div>
       <div class="chips">${CHIPS[mode].map(([i, t]) => `<button class="chip" data-chip>${ico(i)}${esc(t)}</button>`).join("")}<button class="chip more" data-open="tpl">${ico("grid")}템플릿 더 보기</button></div>${note}</div>`;
     $("#heroSlot").appendChild($("#composer"));
     $("#dock").hidden = true;
@@ -108,7 +112,7 @@ function render(){
 const aiParts = m => m.parts || [{type: "text", text: m.content || ""}];
 function msgHTML(m, i){
   if (m.role === "user"){
-    const files = (m.attach || []).map(a => `<span class="fchip">${ico("doc", "width:14px;height:14px")}${esc(a.name)}</span>`).join("");
+    const files = (m.images || []).map(u => `<img class="uimg" alt="첨부 이미지" src="${u}">`).join("") + (m.attach || []).map(a => `<span class="fchip">${ico("doc", "width:14px;height:14px")}${esc(a.name)}</span>`).join("");
     return `<div class="msg user" data-i="${i}">${files ? `<div class="files" style="justify-content:flex-end">${files}</div>` : ""}<div class="bubble">${esc(m.content)}</div>${busy ? "" : `<div class="acts"><button data-act="copy">${ico("copy","width:14px;height:14px")}복사</button><button data-act="edit">${ico("pen","width:14px;height:14px")}수정</button></div>`}</div>`;
   }
   const code = (m.mode || current.mode) === "code";
@@ -224,11 +228,31 @@ $("#send").onclick = () => busy ? stop() : send();
 $("#thinkBtn").onclick = e => { settings.think = !settings.think; saveSettings(); e.currentTarget.setAttribute("aria-pressed", settings.think); };
 $("#thinkBtn").setAttribute("aria-pressed", settings.think);
 $("#permSel").onchange = e => { settings.permission = e.target.value; saveSettings(); };
-$("#fileIn").addEventListener("change", async e => {
-  for (const f of e.target.files){ try { attach.push({name: f.name, size: f.size, text: await readTextFile(f)}); } catch(err){ toast(err.message); } }
-  e.target.value = ""; renderPending(); updateSend();
-});
-function renderPending(){ $("#pending").innerHTML = attach.map((a, i) => `<span class="fchip">${esc(a.name)} <button data-rm="${i}" aria-label="첨부 삭제">✕</button></span>`).join(""); }
+// 이미지는 AI에 보낼 수 있게 줄여서(최대 약 170KB JPEG) 넣는다
+async function shrinkImage(f){
+  const img = await createImageBitmap(f);
+  let w = img.width, h = img.height, max = 1280, q = 0.82, url = "";
+  for (let k = 0; k < 6; k++){
+    const sc = Math.min(1, max / Math.max(w, h)), c = document.createElement("canvas"); c.width = Math.round(w * sc); c.height = Math.round(h * sc);
+    const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height);
+    url = c.toDataURL("image/jpeg", q); if (url.length * 0.75 < 170e3) break; max = Math.round(max * 0.8); q = Math.max(0.5, q - 0.08);
+  }
+  return url;
+}
+let attachBusy = Promise.resolve();
+function addFiles(list){ return attachBusy = attachBusy.then(() => addFilesNow(list)); }
+async function addFilesNow(list){
+  for (const f of list){
+    try {
+      if (/^image\//.test(f.type)) attach.push({name: f.name || "이미지.png", size: f.size, image: await shrinkImage(f)});
+      else attach.push({name: f.name, size: f.size, text: await readTextFile(f)});
+    } catch(err){ toast(err.message || "파일을 읽지 못했습니다"); }
+  }
+  renderPending(); updateSend();
+}
+$("#fileIn").addEventListener("change", async e => { await addFiles([...e.target.files]); e.target.value = ""; });
+input.addEventListener("paste", e => { const imgs = [...(e.clipboardData?.files || [])].filter(f => /^image\//.test(f.type)); if (imgs.length){ e.preventDefault(); addFiles(imgs); } });
+function renderPending(){ $("#pending").innerHTML = attach.map((a, i) => `<span class="fchip">${a.image ? `<img class="thumb" alt="" src="${a.image}">` : ""}${esc(a.name)} <button data-rm="${i}" aria-label="첨부 삭제">✕</button></span>`).join(""); }
 $("#pending").addEventListener("click", e => { const r = e.target.dataset.rm; if (r == null) return; attach.splice(+r, 1); renderPending(); updateSend(); });
 
 /* ============ 모델 고르기 ============ */
@@ -273,7 +297,8 @@ $("#wsMenu").addEventListener("click", async e => {
 $("#wsMenu").addEventListener("keydown", e => { if (e.target.id === "wsPath" && e.key === "Enter"){ e.preventDefault(); openWs(e.target.value.trim()); } });
 
 /* ============ 보내기 · 실행 ============ */
-function send(){
+async function send(){
+  await attachBusy;
   const text = input.value.trim(); if (!text && !attach.length) return;
   if (!brainReady()){ toast("먼저 AI 두뇌를 준비하세요"); openSheet(settings.brain === "local" ? "local" : "brain"); return; }
   if (mode === "code"){
@@ -281,7 +306,8 @@ function send(){
     if (!current.workspace){ toast("먼저 작업 폴더를 여세요"); $("#wsBtn").click(); return; }
   }
   current.mode = mode;
-  current.messages.push({role: "user", content: text || "첨부한 파일을 살펴봐줘", attach: attach.length ? attach : undefined, ts: Date.now()});
+  const imgs = attach.filter(a => a.image), docsA = attach.filter(a => !a.image);
+  current.messages.push({role: "user", content: text || (imgs.length ? "이 이미지를 보고 설명해줘" : "첨부한 파일을 살펴봐줘"), attach: docsA.length ? docsA : undefined, images: imgs.length ? imgs.map(a => a.image) : undefined, ts: Date.now()});
   if (current.title === "새 대화") current.title = (text || attach[0].name).replace(/\s+/g, " ").slice(0, 34);
   input.value = ""; attach = []; renderPending(); autoGrow();
   saveChat(current); renderList();
@@ -401,7 +427,7 @@ function closePanel(){ $("#panel").hidden = true; trade?.hide(); panelArt = null
 /* ============ 진행 상황 (지금 무엇을 하는지 실시간으로) ============ */
 function openActivity(){
   $("#panel").hidden = false; setTabs("act"); trade?.hide();
-  $("#pTitle").textContent = "진행 상황"; $("#pType").textContent = "누리가 지금 하는 일 · 쓴 AI · 스킬 · 도구 · 출처";
+  $("#pTitle").textContent = "진행 상황"; $("#pType").textContent = `${AI()}가 지금 하는 일 · 쓴 AI · 스킬 · 도구 · 출처`;
   $("#pView").hidden = $("#pCopy").hidden = $("#pSave").hidden = true;
   $("#pContent").hidden = $("#tradeHost").hidden = $("#archHost").hidden = true;
   renderActivity();
@@ -482,14 +508,43 @@ async function renderSheet(){
   if (sheetTab === "brain") B.innerHTML = brainTab();
   if (sheetTab === "local"){ await refreshCache(); B.innerHTML = localTab(); $("#s-device").value = settings.device; $("#s-ctx").value = settings.ctx; }
   if (sheetTab === "know") B.innerHTML = knowTab();
-  if (sheetTab === "instr") B.innerHTML = `<h3 class="h">맞춤 지침</h3><p class="sub">누리가 모든 대화에서 기억할 내용입니다. 하는 일, 관심사, 원하는 답변 스타일을 적어 두세요.</p>
+  if (sheetTab === "instr") B.innerHTML = `<h3 class="h">내 AI 이름</h3><div class="card"><div class="body"><div class="keyrow"><input id="aiName" value="${esc(AI())}" maxlength="24" aria-label="AI 이름"><button class="btn primary" id="aiNameSave">저장</button></div><span class="small">모든 모델·스킬을 하나로 묶은 내 AI의 이름입니다. 화면과 대화에서 이 이름을 씁니다.</span></div></div><h3 class="h">맞춤 지침</h3><p class="sub">${AI()}가 모든 대화에서 기억할 내용입니다. 하는 일, 관심사, 원하는 답변 스타일을 적어 두세요.</p>
     <div class="form" style="grid-template-columns:1fr"><label>지침<textarea id="instr" style="min-height:220px" placeholder="예: 나는 건축사무소를 운영하고 코인 단타를 한다. 답은 짧게 핵심만, 숫자는 표로 정리해줘.">${esc(settings.instructions)}</textarea></label></div><div class="row"><button class="btn primary" id="instrSave">저장</button></div>`;
   if (sheetTab === "about") B.innerHTML = aboutTab();
   if (sheetTab === "tpl") B.innerHTML = tplTab();
-  if (sheetTab === "skills") B.innerHTML = skillsTab();
+  if (sheetTab === "skills"){ B.innerHTML = skillsTab(); nvCard().then(h => { const el = $("#nvCard"); if (el) el.innerHTML = h; }).catch(err => { const el = $("#nvCard"); if (el) el.innerHTML = `<div class="body"><p class="err">${esc(err.message)}</p></div>`; }); }
   if (sheetTab === "mem") B.innerHTML = memTab();
   if (sheetTab === "train"){ B.innerHTML = await trainTab(); }
+  if (sheetTab === "models"){ B.innerHTML = await modelsTab(); }
 }
+/* ---- 모델 탐색기: 연결된 모든 회사의 모든 모델 + Hugging Face GGUF + 내가 만든 모델 ---- */
+let mdlQ = "", mdlKind = "all", hfQ = "", hfRes = null, hfFiles = null, hfBusy = false;
+function allCloudModels(){
+  const out = [];
+  for (const id of connectedAI()) for (const m of (settings.provModels[id]?.length ? settings.provModels[id] : PROVIDERS[id].defaults)) out.push({prov: id, id: m, kind: modelKind(m)});
+  return out;
+}
+async function modelsTab(){
+  const all = allCloudModels(), mine = await opfsList();
+  const counts = all.reduce((o, m) => (o[m.kind] = (o[m.kind] || 0) + 1, o), {});
+  const q = mdlQ.toLowerCase(), list = all.filter(m => (mdlKind === "all" || m.kind === mdlKind) && (!q || m.id.toLowerCase().includes(q))).slice(0, 300);
+  const usable = k => ["chat", "code", "reason", "vision"].includes(k);
+  const fmtSize = b => b >= 1e9 ? (b / 1e9).toFixed(2) + "GB" : Math.round(b / 1e6) + "MB";
+  return `<h3 class="h">모델</h3><p class="sub">${esc(AI())}는 아래의 모든 모델을 하나의 AI처럼 씁니다. 질문마다 알맞은 모델을 고르고(자동), 원하면 특정 모델을 고정할 수 있습니다. 클라우드 모델은 API 키를 넣은 회사의 전체 목록이 자동으로 들어오고, Hugging Face의 GGUF 모델은 Ollama 없이 이 앱 안에서 바로 내려받아 실행합니다.</p>
+  <div class="card"><h3>클라우드 모델 <small>${all.length}개 · ${connectedAI().map(id => PROVIDERS[id].name).join(", ") || "API 키 없음"}</small></h3><div class="body">
+    ${all.length ? `<div class="seg wrap" id="mdlKinds">${[["all", "전체 " + all.length], ...Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([k, n]) => [k, (KIND_KO[k] || k) + " " + n])].map(([k, l]) => `<button data-mkind="${k}" aria-pressed="${mdlKind === k}">${esc(l)}</button>`).join("")}</div>
+    <input class="search" id="mdlQ" type="search" placeholder="모델 이름 검색 (예: nemotron, qwen, vision)" value="${esc(mdlQ)}">
+    <div class="list mlist">${list.map(m => { const pinned = settings.pinModel[m.prov] === m.id; return `<div><span class="t"><b>${esc(m.id)}</b><span class="small">${esc(PROVIDERS[m.prov].name)} · ${esc(KIND_KO[m.kind] || m.kind)}${m.kind === "image" ? " · 렌더링에 사용" : ""}</span></span>
+      ${usable(m.kind) ? `<button class="btn${pinned ? " primary" : ""}" data-usemodel="${esc(m.prov)}|${esc(m.id)}">${pinned ? "고정됨" : "이 모델 쓰기"}</button>` : m.kind === "image" && m.prov === "nvidia" ? `<button class="btn" data-imgmodel="${esc(m.id)}">${settings.imageModel === m.id ? "렌더링 모델 ✓" : "렌더링에 쓰기"}</button>` : ""}</div>`; }).join("") || `<p class="empty">찾는 모델이 없습니다.</p>`}</div>
+    ${Object.values(settings.pinModel).length ? `<div class="row"><button class="btn" id="unpinAll">고정 모두 풀고 자동 선택으로</button></div>` : ""}` : `<p class="empty">설정 → AI 두뇌에서 NVIDIA(build.nvidia.com)·Hugging Face 등의 무료 API 키를 넣으면 그 회사의 모델 전체가 여기에 들어옵니다.</p><button class="btn primary" data-open="brain">API 키 넣기</button>`}</div></div>
+  <div class="card"><h3>Hugging Face 모델을 이 앱에서 실행 <small>GGUF · Ollama 없이</small></h3><div class="body">
+    <div class="keyrow"><input id="hfQ" placeholder="모델 검색 (예: qwen3.5, gemma-4, exaone, kanana, llama)" value="${esc(hfQ)}"><button class="btn primary" id="hfGo" ${hfBusy ? "disabled" : ""}>검색</button></div>
+    ${hfFiles ? `<div class="row"><button class="btn" id="hfBack">← 검색 결과</button><b>${esc(hfFiles.repo)}</b></div><div class="list mlist">${hfFiles.files.map(f => `<div><span class="t">${esc(f.label)}<span class="small">${fmtSize(f.size)}${f.parts > 1 ? ` · ${f.parts}개로 나뉨` : ""}</span></span>${f.size > 3.6e9 ? `<span class="small">너무 큼</span>` : f.parts === 1 && f.size > 2.1e9 ? `<span class="small">2GB 초과(분할본 필요)</span>` : `<button class="btn primary" data-hfrun="${esc(f.path)}">내려받고 실행</button>`}</div>`).join("") || `<p class="empty">GGUF 파일이 없습니다.</p>`}</div>`
+      : hfRes ? `<div class="list mlist">${hfRes.map(r => `<div><span class="t"><b>${esc(r.id)}</b><span class="small">내려받기 ${fmtN(r.downloads || 0)} · ♥ ${fmtN(r.likes || 0)}</span></span><button class="btn" data-hfrepo="${esc(r.id)}">파일 보기</button></div>`).join("") || `<p class="empty">결과가 없습니다.</p>`}</div>` : ""}
+    <span class="small">Hugging Face의 무료 모델 중 GGUF 형식이면 무엇이든 검색해서 이 컴퓨터에서 바로 돌립니다(인터넷 없이 재실행 가능). 4GB 그래픽카드에는 1~4B 모델의 Q4 파일을 권합니다. API로 쓰는 Hugging Face 모델(수천 개)은 hf_ 키를 넣으면 위 클라우드 목록에 들어옵니다.</span></div></div>
+  <div class="card"><h3>내가 만든 모델 <small>${mine.length}개 · 앱 안에 저장됨</small></h3><div class="body"><div class="list">${mine.map(m => `<div><span class="t"><b>${esc(m.name)}</b><span class="small">${fmtSize(m.size)}</span></span><button class="btn primary" data-opfsrun="${esc(m.name)}">실행</button><button class="btn danger" data-opfsrm="${esc(m.name)}">삭제</button></div>`).join("") || `<p class="empty">학습 탭에서 만든 모델을 등록하면 여기에 저장됩니다.</p>`}</div></div></div>`;
+}
+async function hfApi(path){ return webGet("https://huggingface.co/api/" + path, "json"); }
 /* ---- 학습 (내 모델 만들기) ---- */
 let synthCtl = null, synthLog = [], trainOpt = Object.assign({good: true, tools: true, synth: true, topics: ["market", "arch", "land"], count: 30, judge: true, base: BASES[0].id, epochs: 3}, ls.get("trainOpt", {}));
 const saveTrainOpt = () => ls.set("trainOpt", trainOpt);
@@ -507,7 +562,7 @@ async function trainTab(){
   const base = BASES.find(b => b.id === trainOpt.base) || BASES[0];
   const teacher = routeCandidates("general")[0];
   const ck = (k, label) => `<label class="chk"><input type="checkbox" data-topt="${k}"${trainOpt[k] ? " checked" : ""}> ${label}</label>`;
-  return `<h3 class="h">학습 · 내 모델 만들기</h3><p class="sub">누리와 나눈 대화와 큰 AI가 만든 문제·모범답안으로 작은 오픈모델을 직접 미세조정(LoRA)해, 내 노트북에서 인터넷 없이 도는 나만의 누리를 만듭니다. NVIDIA 스킬(data-designer, tao-finetune-huggingface-model)과 같은 방식입니다.</p>
+  return `<h3 class="h">학습 · 내 모델 만들기</h3><p class="sub">${AI()}와 나눈 대화와 큰 AI가 만든 문제·모범답안으로 작은 오픈모델을 직접 미세조정(LoRA)해, 내 노트북에서 인터넷 없이 도는 나만의 AI를 만듭니다. NVIDIA 스킬(data-designer, tao-finetune-huggingface-model)과 같은 방식입니다.</p>
   <ol class="steps"><li><b>데이터 모으기</b><span>👍 받은 답변</span></li><li><b>합성 데이터</b><span>큰 AI가 문제·답 생성</span></li><li><b>학습</b><span>Colab 무료 GPU</span></li><li><b>내 모델 등록</b><span>Ollama · 내 기기</span></li></ol>
   <div class="card"><h3>① 학습 데이터 <small>총 ${all.length}개</small></h3><div class="body">
     <div class="kpis"><div class="kpi"><label>👍 받은 답</label><span class="v">${rated}</span></div><div class="kpi"><label>대화에서 뽑은 예시</label><span class="v">${chatS.length}</span></div><div class="kpi"><label>합성 예시</label><span class="v">${syn.length}</span></div></div>
@@ -531,9 +586,9 @@ async function trainTab(){
       <div class="tile${base.local ? "" : " dim"}"><div class="hd"><b>내 노트북에서 (RTX 3050)</b><span class="tag">고급</span></div><p>${base.local ? "4GB 그래픽카드용 설정(짧은 길이·작은 배치)으로 만든 스크립트입니다. WSL2 또는 Python 3.11 + NVIDIA 드라이버가 필요합니다." : "이 바탕 모델은 4GB 그래픽카드로 학습하기 어렵습니다. Qwen3.5 0.8B·2B 또는 EXAONE 1.2B를 고르세요."}</p>
         <div class="row"><button class="btn" id="trPy" ${base.local ? "" : "disabled"}>로컬 학습 스크립트 받기</button></div></div></div></div></div>
   <div class="card"><h3>④ 내 모델 등록</h3><div class="body">
-    <div class="form"><label>모델 이름<input id="trName" value="${esc(ls.get("myModelName", "nuri-mine"))}"></label><label>학습 결과 GGUF 파일<input type="file" id="trGguf" accept=".gguf"></label></div>
-    <div class="row"><button class="btn primary" id="trOl">Ollama에 등록 (추천 · 그래픽카드 사용)</button><button class="btn" id="trLocal">내 기기 AI로 바로 실행</button></div>
-    <span class="small" id="trMsg">Ollama(<a href="https://ollama.com/download" target="_blank" rel="noopener">설치</a>)에 등록하면 RTX 3050 그래픽카드로 빠르게 돌고, 누리의 두뇌로 바로 선택됩니다. 내 기기 AI(브라우저)는 2GB 이하 파일만 됩니다.</span>
+    <div class="form"><label>모델 이름<input id="trName" value="${esc(ls.get("myModelName", "gh-nano"))}"></label><label>학습 결과 GGUF 파일 (분할본이면 모두 선택)<input type="file" id="trGguf" accept=".gguf" multiple></label></div>
+    <div class="row"><button class="btn primary" id="trLocal">${esc(AI())}에 등록 (앱 안에 저장·실행)</button><button class="btn" id="trOl">Ollama에 등록 (선택)</button></div>
+    <span class="small" id="trMsg">다른 프로그램 없이 이 앱 안(브라우저 저장소)에 저장해 그래픽카드(WebGPU)로 돌리고, 다음 실행 때도 자동으로 켭니다. 파일 하나가 2GB를 넘으면 노트북이 만든 분할 파일을 함께 고르세요. Ollama 등록은 원할 때만 쓰세요.</span>
     ${settings.myModel ? `<p class="small">등록된 내 모델: <b>${esc(settings.myModel)}</b></p>` : ""}</div></div>`;
 }
 /* ---- 템플릿 ---- */
@@ -554,17 +609,18 @@ function useTemplate(key){
 /* ---- 스킬 ---- */
 function skillsTab(){
   const off = settings.skillsOff || [], mine = settings.skills || [];
-  return `<h3 class="h">스킬</h3><p class="sub">스킬은 분야별 전문가의 일하는 방식(지침)과 도구 묶음입니다. 질문 내용에 맞는 스킬이 자동으로 켜지고, '진행 상황'에서 어떤 스킬을 썼는지 보입니다. 나만의 스킬을 만들어 누리에게 일하는 방식을 가르칠 수 있습니다.</p>
+  return `<h3 class="h">스킬</h3><p class="sub">스킬은 분야별 전문가의 일하는 방식(지침)과 도구 묶음입니다. 질문 내용에 맞는 스킬이 자동으로 켜지고, '진행 상황'에서 어떤 스킬을 썼는지 보입니다. 나만의 스킬을 만들어 ${AI()}에게 일하는 방식을 가르칠 수 있습니다.</p>
+    <div class="card" id="nvCard"><div class="body"><p class="empty">NVIDIA 스킬 목록을 읽는 중…</p></div></div>
     <div class="tiles">${BUILTIN_SKILLS.map(sk => { const on = !off.includes(sk.id); return `<div class="tile${on ? "" : " dim"}"><div class="hd"><b>${esc(sk.icon)} ${esc(sk.name)}</b><button class="btn" data-skoff="${sk.id}">${on ? "켜짐" : "꺼짐"}</button></div>
       <div class="meta">${(sk.tools || []).map(t => `<span class="tag">${esc(TOOLS[t]?.label || t)}</span>`).join("")}</div><details><summary class="small">지침 보기</summary><pre class="skp">${esc(sk.prompt)}</pre></details></div>`; }).join("")}</div>
     <div class="card"><h3>엔비디아·외부 스킬 가져오기 <small>SKILL.md 형식</small></h3><div class="body">
       <div class="keyrow"><input id="skUrl" placeholder="GitHub 주소 또는 NVIDIA 스킬 이름 (예: portfolio-optimization, data-designer)"><button class="btn primary" id="skUrlAdd">가져오기</button></div>
       <label class="small">또는 SKILL.md 파일 <input type="file" id="skFile" accept=".md" multiple></label>
-      <span class="small"><a href="https://github.com/NVIDIA/skills/tree/main/skills" target="_blank" rel="noopener">NVIDIA 스킬 목록</a>의 지침을 누리가 그대로 참고합니다. 단, 대부분은 GPU 서버·전용 프로그램을 다루는 지침이라 누리 채팅 안에서는 '방법 안내'로만 쓰입니다.</span></div></div>
+      <span class="small"><a href="https://github.com/NVIDIA/skills/tree/main/skills" target="_blank" rel="noopener">NVIDIA 스킬 목록</a>의 지침을 ${AI()}가 그대로 참고합니다. 단, 대부분은 GPU 서버·전용 프로그램을 다루는 지침이라 ${AI()} 채팅 안에서는 '방법 안내'로만 쓰입니다.</span></div></div>
     <div class="card"><h3>새 스킬 만들기</h3><div class="body"><div class="form" style="grid-template-columns:1fr">
       <label>이름<input id="skName" placeholder="예: 우리 회사 주간보고 양식"></label>
       <label>켜지는 단어 (쉼표로 구분)<input id="skKeys" placeholder="예: 주간보고, 보고서"></label>
-      <label>지침 (누리가 이 일을 할 때 따를 방법)<textarea id="skPrompt" placeholder="예: 보고서는 ①요약 3줄 ②진행 현황 표 ③이슈 ④다음 주 계획 순서로 쓴다. 금액은 만원 단위."></textarea></label>
+      <label>지침 (${AI()}가 이 일을 할 때 따를 방법)<textarea id="skPrompt" placeholder="예: 보고서는 ①요약 3줄 ②진행 현황 표 ③이슈 ④다음 주 계획 순서로 쓴다. 금액은 만원 단위."></textarea></label>
       <label class="chk"><input type="checkbox" id="skAlways"> 모든 대화에서 항상 켜기</label></div>
       <div class="row"><button class="btn primary" id="skAdd">스킬 추가</button></div></div></div>
     <div class="card"><h3>내 스킬 <small>${mine.length}개</small></h3><div class="body"><div class="list">${mine.length ? mine.map(sk => `<div><span class="t"><b>${esc(sk.name)}</b> <span class="small">${sk.always ? "항상" : esc(sk.keys || "")}</span></span><button class="btn" data-sktoggle="${sk.id}">${sk.off ? "꺼짐" : "켜짐"}</button><button class="btn danger" data-skrm="${sk.id}">삭제</button></div>`).join("") : `<p class="empty">아직 없습니다.</p>`}</div></div></div>`;
@@ -588,10 +644,33 @@ function importSkill(text, src){
   settings.skills.push({id: uid(), name, keys, prompt, src, imported: true});
   saveSettings(); toast(`스킬 '${name}'을 가져왔습니다`);
 }
+/* ---- NVIDIA 공식 스킬 라이브러리 ---- */
+let nvQ = "", nvGroup = "all";
+async function nvListHTML(){
+  const idx = await nvIndex();
+  let list;
+  if (nvQ.trim()) list = (await nvSearch(nvQ, 40)).map(x => idx.skills.find(s => s.n === x.name)).filter(Boolean);
+  else list = idx.skills;
+  if (nvGroup !== "all") list = list.filter(s => s.g === nvGroup);
+  return list.slice(0, 60).map(s => `<div><span class="t"><b>${esc(s.n)}</b><span class="small">${esc(GROUP_KO[s.g] || s.g)} · ${esc(s.d.slice(0, 140))}</span></span><button class="btn" data-nvview="${esc(s.n)}">지침 보기</button></div>`).join("") + (list.length > 60 ? `<p class="small">… ${list.length - 60}개 더 (검색으로 좁히세요)</p>` : "") || `<p class="empty">맞는 스킬이 없습니다.</p>`;
+}
+async function nvCard(){
+  const idx = await nvIndex();
+  const groups = idx.skills.reduce((o, s) => (o[s.g] = (o[s.g] || 0) + 1, o), {});
+  const ws = current?.workspace || ls.get("lastWs", "");
+  return `<h3>NVIDIA 공식 스킬 <small>${idx.count}개 전부 내장 · NVIDIA/skills ${esc(idx.commit)}</small></h3><div class="body">
+    <div class="row wrap"><label class="chk"><input type="checkbox" data-nvopt="nvSkills"${settings.nvSkills !== false ? " checked" : ""}> 사용 (필요할 때 ${esc(AI())}가 찾아 읽음)</label><label class="chk"><input type="checkbox" data-nvopt="nvAuto"${settings.nvAuto !== false ? " checked" : ""}> 질문과 딱 맞으면 자동 적용</label></div>
+    <div class="seg wrap" id="nvGroups">${[["all", "전체 " + idx.count], ...Object.entries(groups).sort((a, b) => b[1] - a[1]).map(([g, n]) => [g, (GROUP_KO[g] || g) + " " + n])].map(([g, l]) => `<button data-nvgroup="${esc(g)}" aria-pressed="${nvGroup === g}">${esc(l)}</button>`).join("")}</div>
+    <input class="search" id="nvQ" type="search" placeholder="스킬 검색 (예: 젯슨, 파인튜닝, cuopt, 의료영상, 음성인식, RAG)" value="${esc(nvQ)}">
+    <div class="list mlist" id="nvList">${await nvListHTML()}</div>
+    <pre class="skp" id="nvView" hidden></pre>
+    <div class="row wrap"><button class="btn primary" id="nvInstall" ${LAUNCHER.on && ws ? "" : "disabled"}>작업 폴더에 전체 설치 (.claude/skills)</button><span class="small">${LAUNCHER.on ? (ws ? `작업 폴더: ${esc(ws)} · <code>npx skills add NVIDIA/skills</code>와 같은 결과라 Claude Code·Codex에서도 바로 쓰고, 코드 모드에서 스크립트를 실행할 수 있습니다.` : "코드 모드에서 작업 폴더를 먼저 여세요.") : "NuriAI.exe로 실행해야 설치할 수 있습니다."}</span></div>
+    <span class="small">라이선스: Apache-2.0 / CC-BY-4.0 (NVIDIA). 대부분 NVIDIA GPU·서버용 작업 지침이라, 채팅에서는 절차 안내로, 코드 모드에서는 실제 실행에 쓰입니다.</span></div>`;
+}
 /* ---- 기억 ---- */
 function memTab(){
   const mem = settings.memory || [];
-  return `<h3 class="h">기억</h3><p class="sub">대화 중에 "기억해줘"라고 하거나 누리가 앞으로 도움이 될 정보라고 판단하면 여기에 저장되고, 이후 모든 대화에서 참고합니다. 이 컴퓨터에만 저장됩니다.</p>
+  return `<h3 class="h">기억</h3><p class="sub">대화 중에 "기억해줘"라고 하거나 ${AI()}가 앞으로 도움이 될 정보라고 판단하면 여기에 저장되고, 이후 모든 대화에서 참고합니다. 이 컴퓨터에만 저장됩니다.</p>
     <div class="card"><div class="body"><div class="keyrow"><input id="memIn" placeholder="직접 추가: 예) 나는 경기도에서 건축사무소를 운영한다"><button class="btn primary" id="memAdd">추가</button></div></div></div>
     <div class="card"><h3>기억한 것 <small>${mem.length}개</small></h3><div class="body"><div class="list">${mem.length ? mem.map((m, k) => `<div><span class="t">${esc(m.text)}</span><span class="small">${new Date(m.t).toLocaleDateString("ko-KR")}</span><button class="btn danger" data-memrm="${k}">삭제</button></div>`).reverse().join("") : `<p class="empty">아직 없습니다.</p>`}</div></div></div>`;
 }
@@ -620,7 +699,7 @@ function brainTab(){
       <label class="small">모델<select class="sel" id="ol-model">${opts(OL_MODELS, settings.olModel)}</select></label><div class="row"><button class="btn primary" data-olpull="1">이 모델 받기</button><button class="btn" id="ol-list">받은 모델 보기</button><button class="btn" data-btest="ollama">연결 테스트</button></div></div>
     <div class="tile${settings.brain === "local" ? " active" : ""}"><div class="hd"><b>내 기기 AI</b><span class="pill"><i class="dot ${eng.w ? "ok" : "bad"}"></i>${eng.w ? "실행 중" : "모델 없음"}</span></div><p>인터넷 없이 이 컴퓨터에서 도는 소형 모델. 현재: ${esc(eng.loaded ? eng.loaded.name : "없음")}</p><div class="row"><button class="btn" data-open="local">내 기기 모델 고르기</button></div></div>
   </div>
-  <div class="card"><h3>누리는 어떻게 배우나요?</h3><div class="body"><p class="small" style="margin:0">무료 API(NVIDIA 등)는 이미 학습된 모델을 '빌려 쓰는' 방식이라 모델 자체를 다시 학습시킬 수는 없습니다. 대신 누리는 <b>스킬</b>(분야별 일하는 방식), <b>기억</b>(나에 대한 정보), <b>내 지식</b>(올린 문서), <b>맞춤 지침</b>으로 매번 그것을 참고해 답하므로, 쓰면 쓸수록 나에게 맞춰집니다. 모델 자체를 미세조정하려면 GPU와 별도 학습 환경(NVIDIA NeMo, Unsloth 등)이 필요합니다.</p></div></div>`;
+  <div class="card"><h3>${AI()}는 어떻게 배우나요?</h3><div class="body"><p class="small" style="margin:0">무료 API(NVIDIA 등)는 이미 학습된 모델을 '빌려 쓰는' 방식이라 모델 자체를 다시 학습시킬 수는 없습니다. 대신 ${AI()}는 <b>스킬</b>(분야별 일하는 방식), <b>기억</b>(나에 대한 정보), <b>내 지식</b>(올린 문서), <b>맞춤 지침</b>으로 매번 그것을 참고해 답하므로, 쓰면 쓸수록 나에게 맞춰집니다. 모델 자체를 미세조정하려면 GPU와 별도 학습 환경(NVIDIA NeMo, Unsloth 등)이 필요합니다.</p></div></div>`;
 }
 function localTab(){
   const act = eng.loaded;
@@ -641,7 +720,7 @@ function localTab(){
     </div><div class="row"><button class="btn" id="loadUrl">주소에서 불러오기</button><span class="small">장치와 기억 길이는 모델을 다시 불러오면 적용됩니다.</span></div></div></div>`;
 }
 function knowTab(){
-  return `<h3 class="h">내 지식</h3><p class="sub">문서를 올려 두면 "내 문서에서 … 찾아줘"처럼 물었을 때 누리가 관련 부분을 찾아 답합니다. 문서는 이 컴퓨터에만 저장됩니다.</p>
+  return `<h3 class="h">내 지식</h3><p class="sub">문서를 올려 두면 "내 문서에서 … 찾아줘"처럼 물었을 때 ${AI()}가 관련 부분을 찾아 답합니다. 문서는 이 컴퓨터에만 저장됩니다.</p>
     <div class="card"><div class="body"><div class="form" style="grid-template-columns:1fr">
       <label>파일 올리기 (.txt .md .csv .json .html 코드 등)<input type="file" id="docFiles" multiple></label>
       <label>또는 붙여넣기 · 제목<input type="text" id="docTitle" placeholder="예: 우리 회사 휴가 규정"></label>
@@ -661,16 +740,17 @@ function aboutTab(){
     <div class="kpi"><label>내 지식</label><span class="v">${fmtN(docs.length)}</span><span class="s">문서</span></div>
     ${tot != null ? `<div class="kpi"><label>모의투자 (업비트)</label><span class="v" style="color:${tot >= acct.start ? "var(--up)" : "var(--down)"}">${((tot / acct.start - 1) * 100).toFixed(2)}%</span><span class="s">매수가 기준</span></div>` : ""}</div>
     <div class="card"><h3>자주 쓴 도구</h3><div class="body"><div class="list">${Object.entries(by).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<div><span class="t">${esc(k)}</span><span class="small">${v}회</span></div>`).join("") || `<p class="empty">아직 없습니다.</p>`}</div></div></div>
-    <p class="small">누리 AI · 오픈소스 모델과 llama.cpp(wllama)로 동작합니다. ${LAUNCHER.on ? "실행기(NuriAI.exe) 연결됨." : "웹 버전으로 실행 중입니다."}</p>`;
+    <p class="small">${AI()} · 오픈소스 모델과 llama.cpp(wllama)로 동작합니다. ${LAUNCHER.on ? "실행기(NuriAI.exe) 연결됨." : "웹 버전으로 실행 중입니다."}</p>`;
 }
 $("#sheetBody").addEventListener("change", async e => {
   const t = e.target;
+  if (t.dataset.nvopt){ settings[t.dataset.nvopt] = t.checked; saveSettings(); }
   if (t.dataset.topt){ trainOpt[t.dataset.topt] = t.checked; saveTrainOpt(); if (t.dataset.topt !== "judge") renderSheet(); }
   if (t.dataset.topic){ const o = new Set(trainOpt.topics); t.checked ? o.add(t.dataset.topic) : o.delete(t.dataset.topic); trainOpt.topics = [...o]; saveTrainOpt(); }
   if (t.id === "trCount"){ trainOpt.count = +t.value; saveTrainOpt(); }
   if (t.id === "trBase"){ trainOpt.base = t.value; saveTrainOpt(); renderSheet(); }
   if (t.id === "trEpochs"){ trainOpt.epochs = +t.value; saveTrainOpt(); }
-  if (t.id === "trName") ls.set("myModelName", t.value.trim() || "nuri-mine");
+  if (t.id === "trName") ls.set("myModelName", t.value.trim() || "gh-nano");
   if (t.id === "skFile" && t.files.length){ for (const f of t.files){ try { importSkill(await f.text(), f.name); } catch(err){ toast(err.message); } } renderSheet(); }
   if (t.dataset.pin){ if (t.value) settings.pinModel[t.dataset.pin] = t.value; else delete settings.pinModel[t.dataset.pin]; saveSettings(); }
   if (t.id === "img-model"){ settings.imageModel = t.value; saveSettings(); }
@@ -680,7 +760,12 @@ $("#sheetBody").addEventListener("change", async e => {
   if (t.id === "ggufFile" && t.files.length){ const files = [...t.files].sort((a, b) => a.name.localeCompare(b.name)); settings.brain = "local"; await loadModel({kind: "file", name: files[0].name.replace(/(-\d{5}-of-\d{5})?\.gguf$/i, ""), files}); }
   if (t.id === "docFiles"){ let n = 0; for (const f of t.files){ try { if (await addDoc(f.name, await readTextFile(f))) n++; } catch(err){ toast(err.message); } } if (n) toast(`문서 ${n}개를 추가했습니다`); renderSheet(); }
 });
-$("#sheetBody").addEventListener("keydown", e => { if (e.key !== "Enter" || e.isComposing) return; if (e.target.id === "apiKey") $("#apiAdd").click(); if (e.target.id === "memIn") $("#memAdd").click(); });
+let nvT = 0;
+$("#sheetBody").addEventListener("input", e => {
+  if (e.target.id === "nvQ"){ nvQ = e.target.value; clearTimeout(nvT); nvT = setTimeout(async () => { const L = $("#nvList"); if (L) L.innerHTML = await nvListHTML(); }, 200); }
+  if (e.target.id === "mdlQ"){ mdlQ = e.target.value; clearTimeout(nvT); nvT = setTimeout(async () => { const pos = e.target.selectionStart; await renderSheet(); const q = $("#mdlQ"); if (q){ q.focus(); q.setSelectionRange(pos, pos); } }, 250); }
+});
+$("#sheetBody").addEventListener("keydown", e => { if (e.key !== "Enter" || e.isComposing) return; if (e.target.id === "apiKey") $("#apiAdd").click(); if (e.target.id === "memIn") $("#memAdd").click(); if (e.target.id === "hfQ") $("#hfGo").click(); if (e.target.id === "aiName") $("#aiNameSave").click(); });
 $("#sheetBody").addEventListener("click", async e => {
   const t = e.target;
   if (t.dataset.usebrain){ settings.brain = t.dataset.usebrain; saveSettings(); toast(brainName(t.dataset.usebrain) + (brainReady() ? "" : " · 설정이 더 필요합니다")); }
@@ -702,9 +787,42 @@ $("#sheetBody").addEventListener("click", async e => {
   }
   if (t.dataset.sktoggle){ const sk = settings.skills.find(x => x.id === t.dataset.sktoggle); if (sk){ sk.off = !sk.off; saveSettings(); renderSheet(); } }
   if (t.dataset.skrm){ settings.skills = settings.skills.filter(x => x.id !== t.dataset.skrm); saveSettings(); renderSheet(); }
+  const ng = t.closest("[data-nvgroup]"); if (ng){ nvGroup = ng.dataset.nvgroup; $$("#nvGroups [data-nvgroup]").forEach(b => b.setAttribute("aria-pressed", b.dataset.nvgroup === nvGroup)); $("#nvList").innerHTML = await nvListHTML(); return; }
+  if (t.dataset.nvview){ const v = $("#nvView"); try { const sk = await nvSkill(t.dataset.nvview); v.textContent = `${sk.name} · 파일 ${Object.keys(sk.files).length}개\n\n` + sk.files["SKILL.md"]; v.hidden = false; v.scrollIntoView({block: "nearest"}); } catch(err){ toast(err.message); } return; }
+  if (t.id === "nvInstall"){
+    const ws = current?.workspace || ls.get("lastWs", ""); if (!ws) return;
+    t.disabled = true;
+    try {
+      await codeCall("open", {path: ws});
+      const idx = await nvIndex(); let nf = 0, i = 0;
+      for (const s of idx.skills){ i++; t.textContent = `설치 중 ${i}/${idx.count}`; const sk = await nvSkill(s.n); for (const [f, c] of Object.entries(sk.files)){ await codeCall("write", {path: `.claude/skills/${sk.name}/${f}`, content: c}); nf++; } }
+      toast(`NVIDIA 스킬 ${idx.count}개 (파일 ${nf}개)를 설치했습니다`); t.textContent = "설치 완료 ✓";
+    } catch(err){ toast("설치 실패: " + err.message); t.textContent = "다시 설치"; t.disabled = false; }
+  }
+  const mk = t.closest("[data-mkind]"); if (mk){ mdlKind = mk.dataset.mkind; renderSheet(); return; }
+  if (t.dataset.usemodel){ const [prov, id] = t.dataset.usemodel.split("|"); if (settings.pinModel[prov] === id){ delete settings.pinModel[prov]; settings.brain = "auto"; } else { settings.pinModel[prov] = id; settings.brain = prov; } saveSettings(); renderModelBtn(); toast(settings.brain === "auto" ? AI() + " 자동 선택으로 돌아갑니다" : shortModel(id) + " 모델로 답합니다"); renderSheet(); }
+  if (t.dataset.imgmodel){ settings.imageModel = t.dataset.imgmodel; saveSettings(); toast("렌더링 모델: " + shortModel(t.dataset.imgmodel)); renderSheet(); }
+  if (t.id === "unpinAll"){ settings.pinModel = {}; settings.brain = "auto"; saveSettings(); renderModelBtn(); renderSheet(); }
+  if (t.id === "hfGo"){ hfQ = $("#hfQ").value.trim(); if (!hfQ) return; hfBusy = true; hfFiles = null; t.disabled = true;
+    try { hfRes = await hfApi(`models?search=${encodeURIComponent(hfQ)}&filter=gguf&sort=downloads&direction=-1&limit=25`); } catch(err){ toast("Hugging Face 검색 실패: " + err.message); hfRes = []; } finally { hfBusy = false; renderSheet(); } }
+  if (t.dataset.hfrepo || t.id === "hfBack"){
+    if (t.id === "hfBack"){ hfFiles = null; renderSheet(); return; }
+    const repo = t.dataset.hfrepo; t.disabled = true;
+    try {
+      const tree = await hfApi(`models/${repo}/tree/main?recursive=true`);
+      const ggufs = tree.filter(f => f.type === "file" && /\.gguf$/i.test(f.path) && !/mmproj/i.test(f.path)).map(f => ({path: f.path, size: f.lfs?.size || f.size || 0}));
+      const groups = new Map();
+      for (const f of ggufs){ const m = f.path.match(/^(.*)-(\d{5})-of-(\d{5})\.gguf$/i); const key = m ? m[1] : f.path; const g = groups.get(key) || {path: m ? `${m[1]}-00001-of-${m[3]}.gguf` : f.path, label: (m ? m[1] : f.path.replace(/\.gguf$/i, "")).split("/").pop(), size: 0, parts: 0}; g.size += f.size; g.parts++; groups.set(key, g); }
+      hfFiles = {repo, files: [...groups.values()].sort((a, b) => a.size - b.size)};
+    } catch(err){ toast("파일 목록을 받지 못했습니다: " + err.message); }
+    renderSheet();
+  }
+  if (t.dataset.hfrun){ const file = t.dataset.hfrun, repo = hfFiles.repo; $("#sheet").close(); settings.brain = "local"; saveSettings(); toast("내려받는 중… 입력창 모델 버튼에 진행률이 보입니다"); await loadModel({kind: "hf", id: repo + "/" + file, name: repo.split("/").pop() + " · " + file.split("/").pop().replace(/(-\d{5}-of-\d{5})?\.gguf$/i, ""), repo, file}); if (eng.error) toast(eng.error); }
+  if (t.dataset.opfsrun){ $("#sheet").close(); settings.brain = "local"; saveSettings(); await loadModel({kind: "opfs", dir: t.dataset.opfsrun, name: t.dataset.opfsrun}); toast(eng.w ? t.dataset.opfsrun + " 모델로 대화합니다" : eng.error); }
+  if (t.dataset.opfsrm){ if (t.dataset.c !== "1"){ t.dataset.c = "1"; t.textContent = "정말 삭제"; return; } await opfsRemove(t.dataset.opfsrm); renderSheet(); }
   if (t.id === "trDl"){ const {all} = await trainData(); download("nuri-train.jsonl", toJSONL(all), "application/jsonl"); toast(`학습 예시 ${all.length}개를 내보냈습니다`); }
   if (t.id === "trNb" || t.id === "trPy"){
-    const b = BASES.find(x => x.id === trainOpt.base) || BASES[0], name = ls.get("myModelName", "nuri-mine"), local = t.id === "trPy";
+    const b = BASES.find(x => x.id === trainOpt.base) || BASES[0], name = ls.get("myModelName", "gh-nano"), local = t.id === "trPy";
     const o = {base: b.id, baseName: b.name, lic: b.lic, epochs: trainOpt.epochs, name, maxLen: local ? 1024 : 2048, batch: local ? 1 : 2, accum: local ? 8 : 4};
     if (local) download("nuri_train_local.py", localScript(o), "text/x-python"); else download("nuri_train_colab.ipynb", notebookJSON(o));
     const {all} = await trainData(); if (all.length) setTimeout(() => download("nuri-train.jsonl", toJSONL(all), "application/jsonl"), 400);
@@ -722,11 +840,16 @@ $("#sheetBody").addEventListener("click", async e => {
   if (t.id === "trClear"){ if (t.dataset.c !== "1"){ t.dataset.c = "1"; t.textContent = "정말 모두 지우기"; return; } await clearSynth(); renderSheet(); }
   if (t.dataset.synrm){ await removeSynth(t.dataset.synrm); renderSheet(); }
   if (t.id === "trOl" || t.id === "trLocal"){
-    const f = $("#trGguf").files[0]; if (!f){ toast("학습 결과 .gguf 파일을 먼저 고르세요"); return; }
-    const name = ($("#trName").value.trim() || "nuri-mine").toLowerCase().replace(/[^a-z0-9._:-]+/g, "-");
+    const fs = [...$("#trGguf").files].sort((a, b) => a.name.localeCompare(b.name)), f = fs[0]; if (!f){ toast("학습 결과 .gguf 파일을 먼저 고르세요"); return; }
+    const name = ($("#trName").value.trim() || "gh-nano").toLowerCase().replace(/[^a-z0-9._:-]+/g, "-");
     if (t.id === "trLocal"){
-      if (f.size > 2.1e9){ toast("내 기기 AI는 2GB 이하 파일만 됩니다. Ollama에 등록하세요"); return; }
-      $("#sheet").close(); settings.brain = "local"; saveSettings(); await loadModel({kind: "file", name: name, files: [f]}); if (eng.w){ settings.myModel = name + " (내 기기)"; saveSettings(); toast("내 모델로 대화합니다: " + name); } return;
+      if (fs.some(x => x.size > 2.1e9)){ toast("한 파일이 2GB를 넘습니다. 노트북의 '나눠 저장' 단계로 만든 분할 파일들을 함께 고르세요"); return; }
+      t.disabled = true;
+      try { await opfsSave(name, fs, ph => $("#trMsg").textContent = ph); }
+      catch(err){ $("#trMsg").textContent = "앱 저장소에 저장하지 못했습니다: " + err.message; t.disabled = false; return; }
+      $("#sheet").close(); settings.brain = "local"; saveSettings(); await loadModel({kind: "opfs", dir: name, name});
+      if (eng.w){ settings.myModel = name; settings.autoload = true; saveSettings(); toast(`등록 완료! 이제 내가 학습한 ${name} 모델이 답합니다 (다음 실행 때도 자동으로 켜짐)`); } else toast(eng.error || "불러오기 실패");
+      return;
     }
     t.disabled = true;
     try { await ollamaImportGGUF(f, name, ph => $("#trMsg").textContent = ph); settings.olModel = name; settings.olOk = true; settings.brain = "ollama"; settings.myModel = name; saveSettings(); toast("등록 완료! 이제 내 모델(" + name + ")이 답합니다"); renderSheet(); }
@@ -752,6 +875,7 @@ $("#sheetBody").addEventListener("click", async e => {
   const ld = t.closest("[data-load]"); if (ld){ const c = CATALOG.find(x => x.id === ld.dataset.load); settings.brain = "local"; saveSettings(); loadModel({kind: "hf", id: c.id, name: c.name, repo: c.repo, quant: c.quant}); }
   if (t.id === "unload") unloadModel();
   if (t.id === "loadUrl"){ const url = $("#ggufUrl").value.trim(); if (!/^https?:\/\/.+\.gguf(\?.*)?$/i.test(url)){ toast(".gguf로 끝나는 주소를 넣으세요"); return; } settings.brain = "local"; loadModel({kind: "url", name: decodeURIComponent(url.split("/").pop().split("?")[0]).replace(/\.gguf$/i, ""), url}); }
+  if (t.id === "aiNameSave"){ settings.aiName = $("#aiName").value.trim() || "GH Nano"; saveSettings(); applyBrand(); setMode(mode, true); renderModelBtn(); toast("이제 " + AI() + "입니다"); }
   if (t.id === "instrSave"){ settings.instructions = $("#instr").value.trim(); saveSettings(); toast("지침을 저장했습니다"); }
   if (t.id === "docAdd"){ const title = $("#docTitle").value.trim(), text = $("#docText").value.trim(); if (!title || text.length < 20){ toast("제목과 20자 이상의 내용을 넣으세요"); return; } await addDoc(title, text); toast("저장했습니다"); renderSheet(); }
   if (t.dataset.rmdoc){ if (t.dataset.c !== "1"){ t.dataset.c = "1"; t.textContent = "정말 삭제"; return; } await removeDoc(t.dataset.rmdoc); renderSheet(); }
@@ -781,7 +905,7 @@ $("#sheetBody").addEventListener("click", async e => {
   await detectLauncher();
   chats = (await idb.all("chat:")).map(c => ({...c, mode: c.mode || "chat"}));
   await loadDocs();
-  setMode(mode, true); newChat(); renderList(); renderModelBtn(); syncSideBtn(); updateSend();
+  applyBrand(); setMode(mode, true); newChat(); renderList(); renderModelBtn(); syncSideBtn(); updateSend();
   refreshCache();
   if (settings.autoload && settings.last && settings.brain === "local" && !window.__nuriNoAutoload) loadModel(settings.last);
 })();

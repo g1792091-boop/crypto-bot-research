@@ -36,7 +36,7 @@ export const idb = (() => {
 export const settings = Object.assign({
   device:"auto", ctx:4096, maxTokens:1024, temp:0.7, think:false, rag:true, last:null, autoload:true,
   brain:"auto", nvKey:"", nvModel:"qwen/qwen3-235b-a22b", olModel:"hf.co/unsloth/Qwen3.5-4B-GGUF:Q4_K_M", olOk:false,
-  instructions:"", permission:"ask", keys:{}, provModels:{}, pinModel:{}, memory:[], skills:[]
+  instructions:"", permission:"ask", keys:{}, provModels:{}, pinModel:{}, memory:[], skills:[], aiName:"GH Nano", nvSkills:true, nvAuto:true
 }, ls.get("settings", {}));
 if (settings.nvKey && !settings.keys.nvidia) settings.keys.nvidia = settings.nvKey;   // 예전 설정 옮기기
 if (!settings.keys) settings.keys = {};
@@ -77,6 +77,7 @@ export async function loadModel(src){
       eng.phase = src.kind === "file" ? "파일 읽는 중" : "모델 확인 중"; emit("engine");
       if (src.kind === "hf") await w.loadModelFromHF({repo: src.repo, quant: src.quant, file: src.file}, params);
       else if (src.kind === "url") await w.loadModelFromUrl(src.url, params);
+      else if (src.kind === "opfs") await w.loadModel(await opfsFiles(src.dir), params);
       else await w.loadModel(src.files, params);
       return w;
     };
@@ -95,6 +96,29 @@ export async function loadModel(src){
       : "불러오기 실패: " + m.slice(0, 200);
   } finally { eng.loading = false; eng.phase = ""; await refreshCache(); emit("engine"); }
 }
+// 내가 학습한 모델: 브라우저 저장소(OPFS)에 보관해 다음 실행 때 자동으로 켠다 (Ollama 없이)
+const opfsRoot = async () => (await navigator.storage.getDirectory()).getDirectoryHandle("models", {create: true});
+export async function opfsSave(name, files, onPhase){
+  try { await navigator.storage.persist?.(); } catch(e){}
+  const dir = await (await opfsRoot()).getDirectoryHandle(name, {create: true});
+  for (const f of files){
+    onPhase?.(`${f.name} 저장 중…`);
+    const h = await dir.getFileHandle(f.name, {create: true}), w = await h.createWritable();
+    await f.stream().pipeTo(w);
+  }
+  return name;
+}
+export async function opfsFiles(name){
+  const dir = await (await opfsRoot()).getDirectoryHandle(name);
+  const out = []; for await (const [n, h] of dir.entries()) if (h.kind === "file" && /\.gguf$/i.test(n)) out.push(await h.getFile());
+  if (!out.length) throw new Error("저장된 모델 파일이 없습니다: " + name);
+  return out.sort((a, b) => a.name.localeCompare(b.name));
+}
+export async function opfsList(){
+  try { const root = await opfsRoot(), out = []; for await (const [n, h] of root.entries()) if (h.kind === "directory"){ let size = 0; for await (const [, f] of h.entries()) if (f.kind === "file") size += (await f.getFile()).size; out.push({name: n, size}); } return out; }
+  catch(e){ return []; }
+}
+export async function opfsRemove(name){ await (await opfsRoot()).removeEntry(name, {recursive: true}); }
 export async function unloadModel(){ if (eng.w){ try { await eng.w.exit(); } catch(e){} } eng.w = null; eng.loaded = null; emit("engine"); }
 
 /* ============ 실행기(exe) 연결 ============ */
@@ -115,7 +139,9 @@ export async function codeCall(action, body = {}){
 // 키만 넣으면 회사를 알아보고, 질문 종류에 맞는 모델을 고르며, 막히면 다른 곳으로 바꾼다
 export const PROVIDERS = {
   nvidia:     {name:"NVIDIA", proxy:"nvidia", base:"https://integrate.api.nvidia.com/v1", key:/^nvapi-/, url:"https://build.nvidia.com", note:"대형 오픈모델 다수 · 무료 한도", bias:0,
-               defaults:["qwen/qwen3-235b-a22b","deepseek-ai/deepseek-r1","openai/gpt-oss-120b","meta/llama-3.3-70b-instruct","moonshotai/kimi-k2-instruct","qwen/qwen3-coder-480b-a35b-instruct"]},
+               defaults:["qwen/qwen3-235b-a22b","deepseek-ai/deepseek-v3.1","deepseek-ai/deepseek-r1","openai/gpt-oss-120b","openai/gpt-oss-20b","moonshotai/kimi-k2-instruct","qwen/qwen3-coder-480b-a35b-instruct",
+                 "nvidia/llama-3.3-nemotron-super-49b-v1.5","nvidia/nvidia-nemotron-nano-9b-v2","meta/llama-4-maverick-17b-128e-instruct","meta/llama-3.3-70b-instruct","meta/llama-3.2-90b-vision-instruct",
+                 "google/gemma-3-27b-it","mistralai/mistral-medium-3-instruct","microsoft/phi-4-multimodal-instruct","nvidia/llama-3.2-nv-embedqa-1b-v2","nvidia/llama-3.2-nv-rerankqa-1b-v2"]},
   groq:       {name:"Groq", proxy:"groq", base:"https://api.groq.com/openai/v1", key:/^gsk_/, url:"https://console.groq.com/keys", note:"매우 빠름 · 무료 한도", bias:1,
                defaults:["openai/gpt-oss-120b","llama-3.3-70b-versatile","qwen/qwen3-32b","moonshotai/kimi-k2-instruct","llama-3.1-8b-instant"]},
   cerebras:   {name:"Cerebras", proxy:"cerebras", base:"https://api.cerebras.ai/v1", key:/^csk-/, url:"https://cloud.cerebras.ai", note:"매우 빠름 · 무료 한도", bias:1,
@@ -133,13 +159,31 @@ export const PROVIDERS = {
 };
 export const SEARCH_KEYS = {tavily:{name:"Tavily 검색", key:/^tvly-/, url:"https://app.tavily.com"}, brave:{name:"Brave 검색", key:/^BSA/, url:"https://brave.com/search/api/"}};
 const NOT_CHAT = /embed|rerank|guard|safety|reward|whisper|tts|speech|audio|vision-?only|clip|parse|retriever|ocr|flux|sdxl|stable-diffusion|image|moderation|nemoretriever|nv-embed|paligemma|kosmos|deplot|fuyu|neva|vila|cosmos/i;
+// 이미지를 볼 수 있는 모델
+export const VISION_RE = /llama-4|vision|[-_.]vl\b|-vl-|qwen\d?(\.\d)?-?vl|gemma-3-(4|12|27)b|gemma-4|gemini|phi-4-multimodal|phi-3\.5-vision|kimi-vl|pixtral|mistral-small-3|mistral-medium-3|nemotron.*vl|cosmos-reason|qwen3\.5/i;
+// 모델 종류 (모델 탐색기에 표시)
+export function modelKind(id){
+  id = String(id);
+  if (/embed|retriever|nv-embed|arctic-embed|bge-|e5-/i.test(id)) return "embed";
+  if (/rerank/i.test(id)) return "rerank";
+  if (/flux|stable-diffusion|sdxl|sd3|sana|consistory|edify|image-gen|kandinsky/i.test(id)) return "image";
+  if (/whisper|asr|parakeet|canary|tts|speech|audio|fastpitch|riva/i.test(id)) return "speech";
+  if (/guard|safety|shield|nemoguard|content-safety|jailbreak/i.test(id)) return "safety";
+  if (/reward/i.test(id)) return "reward";
+  if (VISION_RE.test(id)) return "vision";
+  if (/coder|codestral|starcoder|codellama|deepseek-coder|devstral/i.test(id)) return "code";
+  if (/r1|reason|think|qwq|o1|o3|magistral/i.test(id)) return "reason";
+  return "chat";
+}
+export const KIND_KO = {chat: "대화", code: "코딩", reason: "추론", vision: "이미지 이해", image: "이미지 생성", embed: "임베딩", rerank: "재정렬", speech: "음성", safety: "안전 필터", reward: "보상 모델"};
 const ROLE_RANK = {
+  vision:  [/llama-4-maverick/i, /qwen3\.5|qwen3-vl/i, /gemini-2\.5-pro/i, /llama-4-scout/i, /qwen2\.5-vl-72b|qwen2\.5-vl/i, /gemma-4|gemma-3-27b/i, /llama-3\.2-90b-vision/i, /mistral-medium-3|pixtral/i, /gemini/i, /phi-4-multimodal/i, /kimi-vl/i, /./],
   general: [/qwen3-235b|qwen-3-235b/i, /deepseek-(v3|chat)/i, /kimi-k2/i, /gpt-oss-120b/i, /gemini-2\.5-pro/i, /llama-?4|llama-3\.3-70b|llama-3\.1-405b/i, /gemini-2\.5-flash/i, /mistral-large/i, /qwen3-32b|qwen-?2\.5-72b/i, /nemotron.*(super|ultra)/i, /gemini/i, /qwen/i, /llama/i, /./],
   code:    [/qwen3-coder|qwen-3-coder/i, /kimi-k2/i, /deepseek-(v3|chat)/i, /gpt-oss-120b/i, /codestral/i, /qwen2\.5-coder/i, /qwen3-235b|qwen-3-235b/i, /gemini-2\.5-pro/i, /llama-3\.3-70b/i, /./],
   reason:  [/deepseek-r1|deepseek-reasoner/i, /gpt-oss-120b/i, /qwen3-235b|qwen-3-235b/i, /gemini-2\.5-pro/i, /qwq/i, /kimi-k2/i, /deepseek-(v3|chat)/i, /./],
   fast:    [/gpt-oss-120b/i, /llama-3\.3-70b/i, /qwen3-32b/i, /gemini-2\.5-flash|gemini-2\.0-flash/i, /llama-3\.1-8b/i, /./]
 };
-export function rankModel(id, role = "general"){ if (NOT_CHAT.test(id)) return 999; const r = ROLE_RANK[role] || ROLE_RANK.general; const k = r.findIndex(re => re.test(id)); return k < 0 ? 900 : k; }
+export function rankModel(id, role = "general"){ if (role === "vision"){ if (!VISION_RE.test(id) || /embed|rerank|guard|safety|reward/i.test(id)) return 999; } else if (NOT_CHAT.test(id)) return 999; const r = ROLE_RANK[role] || ROLE_RANK.general; const k = r.findIndex(re => re.test(id)); return k < 0 ? 900 : k; }
 export function detectKeyKind(key){
   key = String(key || "").trim();
   for (const [id, p] of Object.entries(SEARCH_KEYS)) if (p.key.test(key)) return {kind:"search", id};
@@ -151,7 +195,7 @@ export async function listProviderModels(id, key = settings.keys[id]){
   const r = await fetch(provBase(id) + "/models", {headers: {authorization: "Bearer " + key}});
   if (!r.ok){ const e = new Error(`${PROVIDERS[id].name} ${r.status}`); e.status = r.status; throw e; }
   const j = await r.json();
-  return (j.data || j.models || []).map(m => String(m.id || m.name || "").replace(/^models\//, "")).filter(x => x && !NOT_CHAT.test(x));
+  return (j.data || j.models || []).map(m => String(m.id || m.name || "").replace(/^models\//, "")).filter(Boolean);   // 모든 모델 (종류는 modelKind로 구분)
 }
 // 키를 붙여넣으면 어느 회사 것인지 알아내고 모델 목록을 받아 둔다
 export async function addApiKey(raw){
@@ -193,7 +237,7 @@ export function routeCandidates(role = "general"){
   return out;
 }
 export const BRAINS = {
-  auto:   {name:"자동 선택", where:"여러 AI", desc:"질문에 맞는 모델을 고르고 막히면 바꿈"},
+  auto:   {get name(){ return settings.aiName || "GH Nano"; }, where:"여러 AI", desc:"모든 모델·스킬을 하나로 묶은 내 AI · 질문마다 알맞은 모델을 고르고 막히면 바꿈"},
   local:  {name:"내 기기 AI", where:"이 기기", desc:"오프라인 · 소형 모델"},
   ollama: {name:"내 PC 대형 모델", where:"Ollama", desc:"오프라인 · 고사양 PC"}
 };
@@ -245,7 +289,7 @@ export function brainReady(b = settings.brain){
 export function brainLabel(b = settings.brain){
   if (b === "local") return eng.loaded ? eng.loaded.name : "내 기기 AI";
   if (b === "ollama") return settings.olModel || "Ollama";
-  if (b === "auto"){ const c = routeCandidates(); return c.length ? "자동 · " + shortModel(c[0].model) : "자동 선택"; }
+  if (b === "auto"){ const c = routeCandidates(); return (settings.aiName || "GH Nano") + (c.length ? " · " + shortModel(c[0].model) : ""); }
   if (PROVIDERS[b]) return shortModel(settings.pinModel[b] || routeCandidates().find(c => c.id === b)?.model || PROVIDERS[b].name);
   return b;
 }
@@ -265,10 +309,12 @@ async function* sse(res){
     }
   }
 }
+function stripImages(messages, why){ return messages.map(m => m.images?.length ? {role: m.role, content: m.content + `\n[이미지 ${m.images.length}장이 첨부됐지만 ${why}]`} : {role: m.role, content: m.content}); }
 let localLock = Promise.resolve();
 async function streamLocal({messages, maxTokens, temperature, signal, onContent, onThink, onStats, think, stop}){
   if (!eng.w) throw new Error("내 기기 AI 모델을 먼저 불러오세요. (설정 → AI 두뇌)");
   const go1 = async () => {
+    messages = stripImages(messages, "이 모델은 이미지를 볼 수 없습니다");
     const params = {messages, stream: true, max_tokens: Math.min(maxTokens, Math.floor((eng.ctx || settings.ctx) / 3)), temperature, abortSignal: signal, chat_template_kwargs: {enable_thinking: !!think}};
     if (stop) params.stop = stop;
     if (window.__nuriGenExtra) Object.assign(params, window.__nuriGenExtra);
@@ -290,7 +336,9 @@ async function streamOAI(target, {messages, maxTokens, temperature, signal, onCo
   const headers = {"content-type": "application/json", accept: "text/event-stream"};
   if (!isOl) headers.authorization = "Bearer " + settings.keys[target.id];
   if (target.id === "openrouter"){ headers["HTTP-Referer"] = "https://nuri.local"; headers["X-Title"] = "Nuri AI"; }
-  const body = {model: target.model, messages, stream: true, max_tokens: maxTokens, temperature};
+  const canSee = VISION_RE.test(target.model);
+  const msgs = canSee ? messages.map(m => m.images?.length ? {role: m.role, content: [{type: "text", text: m.content}, ...m.images.map(url => ({type: "image_url", image_url: {url}}))]} : {role: m.role, content: m.content}) : stripImages(messages, `${shortModel(target.model)}는 이미지를 볼 수 없습니다`);
+  const body = {model: target.model, messages: msgs, stream: true, max_tokens: maxTokens, temperature};
   if (stop && target.id !== "gemini") body.stop = stop;
   let res;
   try { res = await fetch(url, {method: "POST", headers, signal, body: JSON.stringify(body)}); }
@@ -323,6 +371,7 @@ export async function brainStream(opts){
   else if (PROVIDERS[b]) cands = routeCandidates(role).filter(c => c.id === b).concat(routeCandidates(role).filter(c => c.id !== b));
   else cands = [];
   if (opts.only) cands = (opts.only === "ollama" ? [{id:"ollama", model: settings.olModel}] : routeCandidates(role)).filter(c => c.id === opts.only);
+  if (!cands.length && role === "vision"){ cands = routeCandidates("general"); emit("activity", {kind: "fallback", text: "이미지를 볼 수 있는 모델이 연결되어 있지 않아 글로만 답합니다 (NVIDIA·Gemini 키를 넣으면 이미지 이해 가능)"}); if (b === "local") return streamLocal(opts); }
   if (!cands.length) throw new Error("연결된 AI가 없습니다. 설정 → AI 두뇌에서 API 키를 넣거나 모델을 내려받으세요.");
   let lastErr = null;
   for (let i = 0; i < cands.length; i++){

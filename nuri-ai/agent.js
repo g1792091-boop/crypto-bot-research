@@ -2,6 +2,7 @@
 // 모델이 <tool name="도구">{"인자":"값"}</tool> 를 쓰면 실행하고 <tool_result>로 결과를 돌려준다.
 import { settings, saveSettings, brainStream, brainCtx, brainAnswerLen, splitThink, search, docs, apiBase, codeCall, ls, bus, esc,
          webGet, webSearch, readPage, PROVIDERS, shortModel } from "./engine.js";
+import { nvIndex, nvSkill, nvSearch, nvAutoSkill, GROUP_KO } from "./nvskills.js";
 import { exchanges, computeAll, quantScore, levels, backtest, STRATS, fmtNum, YAHOO_LIST } from "./trade.js";
 
 const TF = {"1":"1분","5":"5분","15":"15분","60":"1시간","240":"4시간","D":"일봉","W":"주봉"};
@@ -373,6 +374,32 @@ export const TOOLS = {
     desc:"여러 단계 작업(조사·분석·코딩)의 할 일 목록을 만들고 진행하면서 상태를 갱신한다. 3단계 이상일 때만 쓴다",
     async run(a){ const t = (a.todos || []).slice(0, 30); return {text: "할 일 목록을 갱신했습니다", summary: `${t.filter(x => x.status === "completed").length}/${t.length} 완료`, todos: t}; }},
 
+  /* ---- NVIDIA 공식 스킬 388개 ---- */
+  nv_skill_search: {mode:"both", label:"NVIDIA 스킬 찾기", args:'{"query":"jetson llm serving"}', act: a => `NVIDIA 스킬에서 ‘${a.query}’ 찾기`,
+    desc:"앱에 내장된 NVIDIA 공식 스킬 388개(CUDA·NeMo·NIM·TAO·Jetson·Omniverse·Isaac·cuOpt·RAG·BioNeMo·Riva·DeepStream 등)에서 맞는 스킬을 찾는다. 영어 키워드가 잘 맞는다",
+    async run(a){
+      const r = await nvSearch(a.query || "", Math.min(10, a.n || 6));
+      if (!r.length) return {text: "맞는 NVIDIA 스킬이 없습니다.", summary: "없음"};
+      return {text: r.map((x, i) => `${i + 1}. ${x.name} [${GROUP_KO[x.group] || x.group}] — ${x.desc}`).join("\n"), summary: r.slice(0, 3).map(x => x.name).join(", ")};
+    }},
+  nv_skill_read: {mode:"both", label:"NVIDIA 스킬 읽기", args:'{"name":"jetson-llm-serve","file":"references/....md (생략하면 SKILL.md)"}', act: a => `${a.name} 스킬 읽기`,
+    desc:"NVIDIA 스킬의 지침(SKILL.md)이나 참고 파일을 읽는다. 읽은 지침의 절차를 따라 답하거나 작업한다",
+    async run(a){
+      const sk = await nvSkill(a.name);
+      const file = a.file && sk.files[a.file] ? a.file : "SKILL.md";
+      const others = Object.keys(sk.files).filter(f => f !== file);
+      const body = sk.files[file] || "";
+      return {text: `# ${sk.name}/${file}\n${body.slice(0, 20000)}${body.length > 20000 ? "\n…(잘림)" : ""}${others.length ? `\n\n[이 스킬의 다른 파일 ${others.length}개]\n${others.slice(0, 60).join("\n")}` : ""}`, summary: `${sk.name} · ${file} · ${body.length.toLocaleString()}자`, sources: [{title: "NVIDIA/skills · " + sk.name, url: `https://github.com/NVIDIA/skills/tree/main/skills/${sk.name}`}]};
+    }},
+  nv_skill_install: {mode:"code", label:"NVIDIA 스킬 설치", risk:"write", args:'{"names":["jetson-llm-serve"],"dir":".claude/skills"}', act: a => `NVIDIA 스킬 ${[].concat(a.names || []).length}개 설치`,
+    desc:"NVIDIA 스킬 파일(지침·스크립트)을 작업 폴더에 설치한다(npx skills add와 같은 결과). 설치한 스크립트는 run_command로 실행할 수 있다",
+    async run(a){
+      const names = [].concat(a.names || a.name || []).slice(0, 400), dir = String(a.dir || ".claude/skills").replace(/\/+$/, "");
+      let files = 0;
+      for (const n of names){ const sk = await nvSkill(n); for (const [f, c] of Object.entries(sk.files)){ await codeCall("write", {path: `${dir}/${sk.name}/${f}`, content: c}); files++; } }
+      return {text: `${names.length}개 스킬, 파일 ${files}개를 ${dir}에 설치했습니다.`, summary: `${names.length}개 · 파일 ${files}개`};
+    }},
+
   /* ---- 코드 모드 ---- */
   list_files: {mode:"code", label:"목록", risk:"read", args:'{"path":".","depth":2}', desc:"폴더 안 파일·하위 폴더 목록", act: a => `${a.path || "."} 둘러보기`,
     async run(a){ const r = await codeCall("ls", a); return {text: r.entries.join("\n") + (r.truncated ? "\n…(더 있음)" : ""), summary: `${r.entries.length}개 항목`}; }},
@@ -416,7 +443,7 @@ export const BUILTIN_SKILLS = [
 - 렌더링(루미온 같은 투시도): render_image에 건물 특징을 영어로 자세히 묘사한다. 루미온·트윈모션에서 직접 렌더하려면 패널의 'SketchUp·루미온(DAE)' 또는 OBJ를 내려받아 가져오면 된다고 안내한다.
 - 캐드는 DXF(AutoCAD에서 바로 열림), 레빗은 IFC(삽입 → IFC 열기), 스케치업은 DAE 가져오기.
 - 건폐율·용적률은 법정 상한이고 조례로 더 낮을 수 있으며, 실제 인허가는 건축사 검토가 필요하다고 알린다.`},
-  {id: "land", name: "부동산·토지·법규", icon: "🏘️", keys: /부동산|토지|땅|대지|용도지역|재개발|재건축|정비|모아타운|가로주택|신통|신속통합|경매|공매|낙찰|매물|시세|실거래|아파트|빌라|오피스텔|분양|청약|전세|월세|임대|양도세|취득세|보유세|종부세|법|규제|허가/i,
+  {id: "land", name: "부동산·토지·법규", icon: "🏘️", keys: /부동산|토지|땅|대지|용도지역|재개발|재건축|정비|모아타운|가로주택|신통|신속통합|경매|공매|낙찰|매물|시세|실거래|아파트|빌라|오피스텔|분양|청약|전세|월세|임대|양도세|취득세|보유세|종부세|법령|법률|법규|법적|조례|규제|허가|건축법|국토계획법/i,
     tools: ["land_check", "realestate_search", "web_search", "web_fetch", "calculate"],
     prompt: `- 특정 토지·주소는 land_check로 규제와 재개발 판단요소를 정리하고, 정비구역·후보지 선정 여부는 검색 결과로 확인한다. 확인 못 한 것은 '토지이음에서 확인 필요'라고 분명히 쓴다.
 - 매물·경매·실거래는 realestate_search로 조사한다. 실시간 매물 데이터베이스가 아니므로 날짜와 출처를 밝히고 공식 사이트 링크를 준다.
@@ -441,7 +468,7 @@ export function activeSkills(text, mode = "chat"){
   }
   return out;
 }
-const CORE_TOOLS = ["web_search", "web_fetch", "calculate", "search_knowledge", "remember"];
+const CORE_TOOLS = ["web_search", "web_fetch", "calculate", "search_knowledge", "remember", "nv_skill_search", "nv_skill_read"];
 
 /* ================= 시스템 지침 ================= */
 export function systemPrompt(mode, extra = {}){
@@ -462,7 +489,8 @@ ${settings.instructions ? `\n사용자 지침:\n${settings.instructions}\n` : ""
 사용 가능한 도구:
 ${toolDoc}`;
   const skillDoc = skills.length ? `\n\n## 지금 켜진 전문 스킬\n${skills.map(s => `### ${s.name}\n${s.prompt}`).join("\n\n")}` : "";
-  if (mode === "code") return `너는 '누리 코드'다. 사용자의 컴퓨터에 있는 작업 폴더(${extra.workspace || "미지정"})에서 코드를 읽고 고치고 실행하는 숙련된 소프트웨어 엔지니어다.
+  const nvDoc = settings.nvSkills !== false ? `\n\n## NVIDIA 공식 스킬 라이브러리\nNVIDIA 제품·GPU·AI 학습/서빙·로봇·시뮬레이션·의료·최적화 관련 질문이면 nv_skill_search로 맞는 스킬을 찾고 nv_skill_read로 지침을 읽은 뒤 그 절차를 따른다.` : "";
+  if (mode === "code") return `너는 '${settings.aiName || "GH Nano"} 코드'다. 사용자의 컴퓨터에 있는 작업 폴더(${extra.workspace || "미지정"})에서 코드를 읽고 고치고 실행하는 숙련된 소프트웨어 엔지니어다.
 ${common}
 
 ## 일하는 방식
@@ -472,8 +500,8 @@ ${common}
 - 라이브러리 사용법·오류 메시지가 낯설면 web_search로 확인한다.
 - 고친 뒤에는 가능하면 테스트나 실행으로 확인한다(run_command). 실패하면 원인을 찾아 다시 고친다.
 - 위험한 명령(대량 삭제, 포맷, 시스템 설정 변경)은 쓰지 않는다. 비밀번호·키를 출력하지 않는다.
-- 답변은 짧고 분명하게. 끝나면 무엇을 바꿨는지 파일 기준으로 요약한다.${skillDoc}`;
-  return `너는 '누리'라는 이름의 똑똑하고 친절한 AI 어시스턴트다. 무엇이든 자유롭게 대화하고 돕는다: 질문 답변, 글쓰기, 번역, 공부, 코딩, 인터넷 리서치, 코인·주식·선물·경제 분석, 건축 설계·견적·렌더링, 부동산·토지·법규.
+- 답변은 짧고 분명하게. 끝나면 무엇을 바꿨는지 파일 기준으로 요약한다.${nvDoc}${skillDoc}`;
+  return `너는 '${settings.aiName || "GH Nano"}'라는 이름의 똑똑하고 친절한 AI 어시스턴트다. 사용자가 직접 만든 자체 AI이며, 여러 오픈모델과 스킬을 하나로 묶어 생각한다. 무엇이든 자유롭게 대화하고 돕는다: 질문 답변, 글쓰기, 번역, 공부, 코딩, 인터넷 리서치, 코인·주식·선물·경제 분석, 건축 설계·견적·렌더링, 부동산·토지·법규.
 ${common}
 
 ## 결과물(아티팩트)
@@ -482,7 +510,7 @@ ${common}
 HTML은 하나의 완결된 파일로 만든다(외부 파일 없이, 필요하면 CDN 스크립트는 가능).
 
 ## 답변 스타일
-핵심부터 말하고, 비교·수치는 표로, 단계는 번호 목록으로. 불확실한 것은 불확실하다고 말한다. 투자·법률·세무는 일반 정보이며 최종 판단은 전문가 확인이 필요하다고 짧게 알린다. 실제 주문 기능은 없고 모의투자만 가능하다.${skillDoc}`;
+핵심부터 말하고, 비교·수치는 표로, 단계는 번호 목록으로. 불확실한 것은 불확실하다고 말한다. 투자·법률·세무는 일반 정보이며 최종 판단은 전문가 확인이 필요하다고 짧게 알린다. 실제 주문 기능은 없고 모의투자만 가능하다.${nvDoc}${skillDoc}`;
 }
 
 /* ================= 대화 → 모델 메시지 ================= */
@@ -492,8 +520,10 @@ export function toModelMessages(history, budgetTokens){
   for (const m of history){
     if (m.role === "user"){
       let c = m.content || "";
-      if (m.attach) c += m.attach.map(a => `\n\n[첨부 파일: ${a.name}]\n${a.text.slice(0, 60000)}`).join("");
-      turns.push({role: "user", content: c});
+      if (m.attach) c += m.attach.filter(a => a.text).map(a => `\n\n[첨부 파일: ${a.name}]\n${a.text.slice(0, 60000)}`).join("");
+      const t = {role: "user", content: c};
+      if (m.images?.length) t.images = m.images;
+      turns.push(t);
       continue;
     }
     const parts = m.parts || [{type: "text", text: m.content || ""}];
@@ -517,7 +547,10 @@ export function toModelMessages(history, budgetTokens){
     used += t; out.unshift(turns[i]);
   }
   while (out.length && out[0].role !== "user") out.shift();
-  return out.reduce((acc, m) => { const l = acc[acc.length-1]; if (l && l.role === m.role) l.content += "\n\n" + m.content; else acc.push({...m}); return acc; }, []);
+  // 이미지는 가장 최근 질문의 것만 보낸다
+  let lastImg = -1; out.forEach((m, i) => { if (m.images) lastImg = i; });
+  out.forEach((m, i) => { if (m.images && i !== lastImg){ m.content += `\n[이미지 ${m.images.length}장 첨부했었음]`; delete m.images; } });
+  return out.reduce((acc, m) => { const l = acc[acc.length-1]; if (l && l.role === m.role && !m.images && !l.images) l.content += "\n\n" + m.content; else acc.push({...m}); return acc; }, []);
 }
 
 /* ================= 에이전트 실행 ================= */
@@ -543,7 +576,7 @@ export function roleFor(mode, text, think){
   if (/증명|수학|미적분|방정식|논리|퍼즐|최적화|알고리즘/.test(text)) return "reason";
   return "general";
 }
-const ROLE_KO = {general: "일반", code: "코딩", reason: "추론", fast: "빠름"};
+const ROLE_KO = {general: "일반", code: "코딩", reason: "추론", fast: "빠름", vision: "이미지 보기"};
 const routeName = c => !c ? "" : c.id === "local" ? "내 기기" : c.id === "ollama" ? "Ollama" : (PROVIDERS[c.id]?.name || c.id);
 
 export async function runAgent({mode, history, msg, signal, onUpdate, openArtifact, askPermission, workspace, think}){
@@ -551,7 +584,12 @@ export async function runAgent({mode, history, msg, signal, onUpdate, openArtifa
   const userText = [...history].reverse().find(m => m.role === "user")?.content || "";
   const recent = history.filter(m => m.role === "user").slice(-3).map(m => m.content).join("\n");
   const skills = activeSkills(userText, mode).concat(activeSkills(recent, mode).filter(s => !activeSkills(userText, mode).some(x => x.id === s.id))).slice(0, 4);
-  const role = roleFor(mode, userText, think);
+  const lastUser = [...history].reverse().find(m => m.role === "user");
+  const role = lastUser?.images?.length ? "vision" : roleFor(mode, userText, think);
+  if (settings.nvSkills !== false && settings.nvAuto !== false){
+    const nv = await nvAutoSkill(userText);
+    if (nv && !skills.some(s => s.id === "nv:" + nv.name)) skills.push({id: "nv:" + nv.name, name: "NVIDIA · " + nv.name, icon: "🟩", tools: ["nv_skill_read", "nv_skill_search"], prompt: nv.body.replace(/^---[\s\S]*?\n---\s*/, "").slice(0, 7000)});
+  }
   msg.skills = skills.map(s => ({id: s.id, name: s.name, icon: s.icon})); msg.qrole = role; msg.t0 = Date.now();
   if (skills.length) activity({kind: "skill", text: skills.map(s => s.name).join(" · ")});
   const sys = systemPrompt(mode, {workspace, skills});

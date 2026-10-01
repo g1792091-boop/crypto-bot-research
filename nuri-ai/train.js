@@ -1,4 +1,4 @@
-// 학습: 대화·합성 데이터를 모아 작은 오픈모델을 직접 미세조정(LoRA)하고, 결과 모델을 누리에 다시 넣는다
+// 학습: 대화·합성 데이터를 모아 작은 오픈모델을 직접 미세조정(LoRA)하고, 결과 모델을 앱에 다시 넣는다
 // 합성 데이터는 NVIDIA data-designer 스킬과 같은 방식(조건 샘플링 → 질문 생성 → 모범 답안 → AI 채점)으로 만든다.
 import { idb, uid, brainStream, splitThink, settings } from "./engine.js";
 import { toModelMessages, BUILTIN_SKILLS } from "./agent.js";
@@ -13,9 +13,10 @@ export const BASES = [
 ];
 
 /* ============ 학습 데이터 ============ */
+const NAME = () => settings.aiName || "GH Nano";
 export const TRAIN_SYS = mode => mode === "code"
-  ? "너는 '누리 코드'다. 사용자의 작업 폴더에서 코드를 읽고 고치고 실행하는 숙련된 엔지니어다. 도구는 <tool name=\"도구\">{json}</tool> 형식으로 하나씩 쓰고 <tool_result>를 받아 이어서 일한다."
-  : "너는 '누리'라는 이름의 한국어 AI 어시스턴트다. 핵심부터 정확하고 친절하게 답하고, 비교·수치는 표로 정리한다. 필요하면 <tool name=\"도구\">{json}</tool> 형식으로 도구를 하나씩 쓰고 <tool_result>를 받아 이어서 답한다. 모르는 것은 지어내지 않는다.";
+  ? `너는 '${NAME()} 코드'다. 사용자의 작업 폴더에서 코드를 읽고 고치고 실행하는 숙련된 엔지니어다. 도구는 <tool name="도구">{json}</tool> 형식으로 하나씩 쓰고 <tool_result>를 받아 이어서 일한다.`
+  : `너는 '${NAME()}'라는 이름의 한국어 AI 어시스턴트다. 사용자가 직접 만든 자체 AI다. 핵심부터 정확하고 친절하게 답하고, 비교·수치는 표로 정리한다. 필요하면 <tool name=\"도구\">{json}</tool> 형식으로 도구를 하나씩 쓰고 <tool_result>를 받아 이어서 답한다. 모르는 것은 지어내지 않는다.`;
 const visibleOf = m => (m.parts || [{type: "text", text: m.content || ""}]).filter(p => p.type === "text").map(p => splitThink(p.text).body).join("\n\n").trim();
 function shrink(msgs){ return msgs.map(m => m.role === "user" && m.content.startsWith("<tool_result") && m.content.length > 3000 ? {...m, content: m.content.slice(0, 2980) + "…</tool_result>"} : m); }
 // 대화 → 학습 예시. onlyGood: 👍 받은 답만, tools: 도구 사용 과정까지 가르칠지
@@ -85,7 +86,7 @@ export async function generateSynth({topics, count, judge = true, signal, onEven
       if (made >= count || signal?.aborted) break;
       onEvent?.({kind: "log", text: `답안 작성: ${q.slice(0, 60)}`});
       // 2) 모범 답안
-      const sys = `너는 '누리'라는 한국어 AI 어시스턴트다. 이 답은 학습 데이터용 모범 답안이므로 정확하고 구체적이며 친절해야 한다.
+      const sys = `너는 '${NAME()}'라는 한국어 AI 어시스턴트다. 이 답은 학습 데이터용 모범 답안이므로 정확하고 구체적이며 친절해야 한다.
 핵심부터 말하고, 비교·수치는 표로, 단계는 번호 목록으로 정리한다. 실시간 가격·시세·최신 법령 개정처럼 지금 확인해야 하는 수치는 지어내지 말고 '확인 방법'과 '해석하는 법'을 알려준다. 투자·법률·세무는 일반 정보이며 전문가 확인이 필요하다고 짧게 덧붙인다.${skill ? "\n\n참고할 전문가 지침(지금은 도구를 쓸 수 없으니 도구 이름은 언급하지 말고 원칙과 방법으로 답한다):\n" + skill.prompt : ""}`;
       const a = await ask([{role: "system", content: sys}, {role: "user", content: q}], {signal, maxTokens: 1800, temperature: 0.5});
       if (!a.text || a.text.length < 40) continue;
@@ -151,28 +152,40 @@ ids = tok.apply_chat_template(msgs, add_generation_prompt=True, return_tensors="
 out = model.generate(input_ids=ids, max_new_tokens=300, temperature=0.7, do_sample=True)
 print(tok.decode(out[0][ids.shape[-1]:], skip_special_tokens=True))`;
 const pyGGUF = `import glob, os
-model.save_pretrained_gguf(OUT, tokenizer, quantization_method="q4_k_m")   # 누리·Ollama가 읽는 GGUF로 변환
+model.save_pretrained_gguf(OUT, tokenizer, quantization_method="q4_k_m")   # 앱·llama.cpp가 읽는 GGUF로 변환
 files = sorted(glob.glob(OUT + "*/*.gguf") + glob.glob(OUT + "*.gguf") + glob.glob("*.gguf"), key=os.path.getsize)
 files = [f for f in files if "q4" in f.lower()] or files
 print("만든 파일:", files)
-GGUF = files[-1] if files else None`;
+GGUF = files[-1] if files else None
+# 앱(브라우저) 안에서 돌리려면 파일 하나가 2GB 이하여야 해서, 크면 1.9GB씩 나눈다
+PARTS = [GGUF] if GGUF else []
+if GGUF and os.path.getsize(GGUF) > 1.95e9:
+    import subprocess
+    tool = (glob.glob("llama.cpp/**/llama-gguf-split", recursive=True) + glob.glob(os.path.expanduser("~/.unsloth/llama.cpp/**/llama-gguf-split"), recursive=True) + glob.glob("/root/.unsloth/**/llama-gguf-split", recursive=True))
+    if tool:
+        prefix = GGUF[:-5] + "-split"
+        subprocess.run([tool[0], "--split", "--split-max-size", "1900M", GGUF, prefix], check=True)
+        PARTS = sorted(glob.glob(prefix + "-*-of-*.gguf"))
+        print("2GB가 넘어 나눴습니다:", PARTS)
+    else:
+        print("나누기 도구를 찾지 못했습니다. 이 파일은 Ollama로 쓰거나 더 작은 바탕 모델을 고르세요.")`;
 export function notebookJSON(o){
   const md = s => ({cell_type: "markdown", metadata: {}, source: s.split(/(?<=\n)/)});
   const code = s => ({cell_type: "code", metadata: {}, execution_count: null, outputs: [], source: s.split(/(?<=\n)/)});
   const cells = [
-    md(`# 누리 AI 직접 학습 (LoRA 미세조정)\n\n**순서**: 위쪽 메뉴 **런타임 → 런타임 유형 변경 → T4 GPU** 를 고른 뒤 **런타임 → 모두 실행**.\n두 번째 칸에서 누리가 내보낸 \`nuri-train.jsonl\` 파일을 올리라고 나오면 올리세요.\n\n- 바탕 모델: **${o.baseName}** (\`${o.base}\`, 라이선스 ${o.lic})\n- 끝나면 \`${o.name}\`…\`.gguf\` 파일이 내려받아집니다. 누리 → 설정 → 학습 → **내 모델 등록**에서 그 파일을 고르세요.\n- 무료 Colab은 하루 사용 시간이 정해져 있습니다. 예시 수백 개는 보통 10~30분이면 끝납니다.`),
+    md(`# 내 AI 직접 학습 (LoRA 미세조정)\n\n**순서**: 위쪽 메뉴 **런타임 → 런타임 유형 변경 → T4 GPU** 를 고른 뒤 **런타임 → 모두 실행**.\n두 번째 칸에서 앱이 내보낸 \`nuri-train.jsonl\` 파일을 올리라고 나오면 올리세요.\n\n- 바탕 모델: **${o.baseName}** (\`${o.base}\`, 라이선스 ${o.lic})\n- 끝나면 \`${o.name}\`…\`.gguf\` 파일이 내려받아집니다. 앱 → 설정 → 학습 · 내 모델 → **내 모델 등록**에서 그 파일(나뉘었으면 모두)을 고르세요.\n- 무료 Colab은 하루 사용 시간이 정해져 있습니다. 예시 수백 개는 보통 10~30분이면 끝납니다.`),
     code(`%%capture\n!pip install -q unsloth\n!pip install -q --upgrade datasets trl`),
     code(`${pyHeader(o)}\nfrom google.colab import files\nimport os\nif not os.path.exists(DATA):\n    up = files.upload()            # nuri-train.jsonl 올리기\n    DATA = list(up.keys())[0]`),
     md("## 1. 바탕 모델 불러오기 (4비트 QLoRA)"), code(pyLoad),
     md("## 2. 학습 데이터 준비"), code(pyData),
     md("## 3. 학습"), code(pyTrain),
     md("## 4. 시험해 보기"), code(pyTest),
-    md("## 5. GGUF로 변환해서 내려받기"), code(`${pyGGUF}\nif GGUF:\n    files.download(GGUF)`)
+    md("## 5. GGUF로 변환해서 내려받기"), code(`${pyGGUF}\nfor f in PARTS:\n    files.download(f)`)
   ];
   return JSON.stringify({nbformat: 4, nbformat_minor: 5, metadata: {accelerator: "GPU", colab: {provenance: [], gpuType: "T4"}, kernelspec: {name: "python3", display_name: "Python 3"}, language_info: {name: "python"}}, cells}, null, 1);
 }
 export function localScript(o){
-  return `# 누리 AI 직접 학습 - 내 노트북(RTX 3050) 버전
+  return `# 내 AI 직접 학습 - 내 노트북(RTX 3050) 버전
 # 준비(한 번만): WSL2 Ubuntu 또는 Windows에 Python 3.11과 NVIDIA 드라이버를 설치한 뒤
 #   pip install unsloth
 #   pip install --upgrade datasets trl
@@ -191,6 +204,6 @@ ${pyTrain}
 ${pyTest}
 
 ${pyGGUF}
-print("완료! 누리 → 설정 → 학습 → 내 모델 등록에서", GGUF, "파일을 고르세요.")
+print("완료! 앱 → 설정 → 학습 · 내 모델 → 내 모델 등록에서 다음 파일을 고르세요:", PARTS)
 `;
 }
