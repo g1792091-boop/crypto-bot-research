@@ -174,7 +174,7 @@ def test_zero_volume_rules_match_lab_cache():
     from paperbot.agents.newlab_signals import signals_for_frame
     lib = sweepsig.lib()
     n = 6_000
-    df5 = _df5(n, seed=9, halt=(n - 400, n - 388))           # a one-hour flat zero-volume halt (12 5m bars)
+    df5 = _df5(n, seed=9, halt=(5_604, 5_616))               # a one-hour flat zero-volume halt (12 5m bars, on the hour)
     for tf in ("5m", "30m"):                                 # the lab: resample of the DROPPED 5m
         want = build_frames(lib, _lab_drop(df5), [tf])[tf]
         got = NLL.lab_frame(lib, df5, tf)
@@ -184,7 +184,7 @@ def test_zero_volume_rules_match_lab_cache():
         want = _lab_drop(native)
         got = NLL.lab_frame(lib, df5, tf)
         pd.testing.assert_frame_equal(got.reset_index(drop=True), want.reset_index(drop=True))
-        assert len(got) < len(native) if tf != "4h" else len(got) <= len(native)
+        assert len(native) - len(got) == {"15m": 4, "1h": 1, "4h": 0}[tf]
     # the halt bars are gone from 5m and the volume families see the same series as the lab
     got5 = NLL.lab_frame(lib, df5, "5m")
     assert len(got5) == n - 12 and (got5["volume"] > 0).all()
@@ -219,8 +219,8 @@ def test_rows_and_submit_shape(tmp_path, monkeypatch):
     w.run(T0 + 5 * MIN, b)
     row = w.store.conn.execute("SELECT bar_close, timeframe, strategy, symbol, side, atr, ref_price, ref_time, "
                                "delay_ms, status, data FROM signal_log WHERE strategy = 'NL1'").fetchall()
-    assert len(row) == 2                                        # boundaries T0+5m was the creation (no rows), 10m ...
-    r = [x for x in row if x[0] == b][0]
+    assert len(row) == 1                                        # T0+5m was the creation (no rows): only b
+    r = row[0]
     ask = w.prices()["BTCUSDT"][1]
     assert r[:10] == (b, "5m", "NL1", "BTCUSDT", 1, 0.3, ask, b + 1500, 1500, "SUBMITTED")
     d = json.loads(r[10])
@@ -267,7 +267,7 @@ def test_late_no_price_no_atr_statuses(tmp_path, monkeypatch):
     assert st == {"ETHUSDT": "NO_PRICE", "BTCUSDT": "SUBMITTED"}
     monkeypatch.setattr(w.runner, "prices", lambda: {"BTCUSDT": (99.0, 101.0), "ETHUSDT": (99.0, 101.0)})
     w.process(b)
-    w.process(b + 3 * MIN)
+    w.process(b + 4 * MIN)
     st = dict(w.store.conn.execute("SELECT symbol, status FROM signal_log WHERE strategy = 'NL1' AND bar_close = ?",
                                    (b + 5 * MIN,)).fetchall())
     assert st == {"ETHUSDT": "NO_ATR", "BTCUSDT": "SUBMITTED"}
@@ -278,7 +278,7 @@ def test_late_no_price_no_atr_statuses(tmp_path, monkeypatch):
         w.now += 200_000
         return [_fake_result(w, aid, B)], []
     monkeypatch.setattr(w.ext.newlab, "compute", slow)
-    w.process(b + 8 * MIN)
+    w.process(b + 9 * MIN)
     assert w.store.conn.execute("SELECT status FROM signal_log WHERE strategy = 'NL1' AND bar_close = ?",
                                 (b + 10 * MIN,)).fetchone()[0] == "LATE"
     assert real is not None
@@ -349,18 +349,21 @@ def test_pin_mismatch_suspends(tmp_path):
 
 
 def test_lazy_import(tmp_path):
+    """newlab_signals (and scipy) are imported only when a new-strategy account exists: not at load, not at bind,
+    not for a copy (whose activation imports only the agents' gate code)."""
     code = f"""
 import sys, json
 from tests.extras_world import World, T0, MIN
-w = World({str(tmp_path)!r})
+w = World({str(tmp_path)!r}, observe_days=30)
 w.process(T0)
-w.copy_proposal()
 w.run(T0 + MIN, T0 + 10 * MIN)
+before = sorted(m for m in ("paperbot.agents.newlab_signals", "scipy") if m in sys.modules)
+w.ext.cfg.observe_days = 0
+w.copy_proposal()
+w.run(T0 + 10 * MIN, T0 + 20 * MIN)
 assert len(w.extras_rows()) == 1
-print(json.dumps(sorted(m for m in ("paperbot.agents.newlab_signals", "scipy", "paperbot.newlab_live")
-                        if m in sys.modules)))
+print(json.dumps([before, w.ext.newlab is None]))
 """
     r = subprocess.run([sys.executable, "-c", code], cwd=ROOT, capture_output=True, text=True, timeout=300)
     assert r.returncode == 0, r.stderr
-    # newlab_live itself is imported by bind (a light module); newlab_signals and scipy are not
-    assert json.loads(r.stdout.strip().splitlines()[-1]) == ["paperbot.newlab_live"]
+    assert json.loads(r.stdout.strip().splitlines()[-1]) == [[], True]
