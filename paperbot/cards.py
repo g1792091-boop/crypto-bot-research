@@ -8,6 +8,12 @@ the trade, fixed descriptive tags, and, once the nightly check has run, what a 1
 ``tag_stats`` compares how often each tag appears in a strategy's losses and in its
 winning trades; a tag much more common in losses is what the strategy's specialist
 looks at first. The tags are fixed here and are descriptions, not rules to trade on.
+
+The last three tags read the entry marks of the signal (``ctx["sr"]``, entry_marks.py:
+research/entry_study/sr.py on the signal bar). The pre-registered entry study measured
+exactly these on five years of signals and found no effect on the outcome
+(RESULTS_ENTRY_A.md); TAG_NOTES says so wherever the tags are explained. The card also
+carries the strategy's entry-strength numbers (``ctx["strength"]``), equally descriptive.
 """
 
 from __future__ import annotations
@@ -41,7 +47,24 @@ TAGS = (
      and c["ctx"]["ema20_dist_atr"] * c["side"] >= 2.0),
     ("최근 범위 끝에서 진입", lambda c: c["ctx"].get("range_pct") is not None
      and ((c["side"] > 0 and c["ctx"]["range_pct"] >= 0.9) or (c["side"] < 0 and c["ctx"]["range_pct"] <= 0.1))),
+    # entry study marks (sr.py; "resistance" / "support" as seen from the trade side: for a short
+    # the level ahead is below the price and the one behind is above)
+    ("저항 바로 앞 진입", lambda c: _sr(c).get("level_before_lock") == 1),
+    ("지지선 뒤 손절", lambda c: _sr(c).get("support_before_stop") == 1),
+    ("돌파 진입", lambda c: _sr(c).get("breakout") == 1),
 )
+SR_NOTE = "진입 연구에서 수익과 관계없다고 나온 설명용 표시"
+TAG_NOTES = {
+    "저항 바로 앞 진입": "진입 방향으로 가장 가까운 가격선이 첫 익절 잠금 가격(+12%)보다 가까움. " + SR_NOTE,
+    "지지선 뒤 손절": "반대쪽 가장 가까운 가격선이 손절 가격(2 ATR)보다 가까움: 손절이 그 선 너머. " + SR_NOTE,
+    "돌파 진입": "신호 봉 종가가 가격선 하나를 진입 방향으로 넘어섬. " + SR_NOTE,
+}
+
+
+def _sr(c: dict) -> dict:
+    """The signal side's support / resistance marks ({} when not recorded or failed)."""
+    sr = c["ctx"].get("sr")
+    return sr if isinstance(sr, dict) else {}
 
 
 def _against(side: int, regime: Optional[str]) -> bool:
@@ -73,6 +96,9 @@ def card(account_id: str, t: dict, round_trip: float, variants: Optional[dict] =
         "signal_bar_close": t["signal_ts"] + 1,
     }
     c["touched_first_lock"] = c["best_roe"] is not None and c["best_roe"] >= FIRST_LOCK
+    sr, st = ctx.get("sr"), ctx.get("strength")
+    c["sr"] = sr if isinstance(sr, dict) and "error" not in sr else None
+    c["strength"] = st.get("features") if isinstance(st, dict) else None
     c["tags"] = [name for name, test in TAGS if _safe(test, c)]
     c["if_stop"] = variants or {}
     return c
@@ -95,7 +121,7 @@ def tag_stats(cards: Iterable[dict]) -> list[dict]:
         nl = sum(name in c["tags"] for c in losses)
         nw = sum(name in c["tags"] for c in wins)
         out.append({"tag": name, "losses": nl, "loss_share": nl / len(losses) if losses else None,
-                    "wins": nw, "win_share": nw / len(wins) if wins else None})
+                    "wins": nw, "win_share": nw / len(wins) if wins else None, "note": TAG_NOTES.get(name)})
     out.sort(key=lambda r: -((r["loss_share"] or 0) - (r["win_share"] or 0)))
     return out
 

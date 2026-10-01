@@ -169,7 +169,33 @@ function renderConds(view) {
   el.innerHTML = `<div class="muted" style="margin-bottom:6px">방금 마감한 ${TF_KO[ss.tf]}봉 기준 · ${tsKo(view.bar_close)} · ${botTxt}</div>` +
     `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:4px 18px">${part("롱", c.long)}${part("숏", c.short)}</div>` +
     (near === 0 ? '<div class="near">이 봉에서 신호 조건이 모두 켜졌습니다</div>'
-      : near != null ? `<div class="near">신호까지 조건 ${near}개 남음</div>` : "");
+      : near != null ? `<div class="near">신호까지 조건 ${near}개 남음</div>` : "") + lastMarks(view.last_signal);
+}
+
+// ------------------------------------------------------------ entry marks (paperbot/entry_marks.py)
+// Support / resistance and the strategy's own entry-strength numbers, recorded with every signal.
+// Descriptive only: the pre-registered entry study (research/entry_study) found no effect on outcomes.
+const MARKS_NOTE = "가격선·강도 숫자는 진입 연구에서 수익과 관계없다고 나온 설명용 표시입니다.";
+function srLine(sr) {
+  if (!sr) return "";
+  const d = (v, ko) => v == null ? "—" : `${v >= 10 ? "10+" : fmt(v, 1)} ATR${ko ? ` (${esc(ko)})` : ""}`;
+  return `가는 쪽 가장 가까운 선 ${d(sr.room, sr.room_ko)} · 뒤쪽 가장 가까운 선 ${d(sr.floor, sr.floor_ko)}`;
+}
+function strengthLine(fs) {
+  if (!fs || !fs.length) return "";
+  return fs.map((f) => `${esc(f.label_ko)} <b>${fmt(f.value, f.value != null && Math.abs(f.value) >= 100 ? 0 : 2)}</b> ` +
+    `${esc(f.unit_ko || f.unit)}${f.higher_is_stronger ? "" : " (작을수록 강함)"}`).join(" · ");
+}
+function lastMarks(ls) {
+  if (!ls) return `<div class="muted" style="margin-top:8px">최근 30일 이 코인·봉에서 이 매매법의 신호가 없습니다.</div>`;
+  const st = ls.strength && ls.strength.features ? strengthLine(ls.strength.features)
+    : ls.strength && ls.strength.error ? '<span class="muted">강도 계산 실패</span>' : "";
+  const sr = ls.sr && !ls.sr.error ? srLine(ls.sr) : ls.sr && ls.sr.error ? '<span class="muted">가격선 계산 실패</span>' : "";
+  const body = [st && `<div>진입 강도: ${st}</div>`, sr && `<div>${sr}</div>`].filter(Boolean).join("")
+    || `<div class="muted">${ls.error ? "표시 계산 실패" : "이 신호에는 기록이 없습니다 (기능 추가 전 신호)"}</div>`;
+  return `<div style="margin-top:8px;line-height:1.6;overflow-wrap:anywhere"><div class="muted">최근 신호 ${tsKo(ls.bar_close)} · ` +
+    `<b class="${ls.side > 0 ? "up" : "down"}">${ls.side > 0 ? "롱" : "숏"}</b> (${STATUS_KO[ls.status] || esc(ls.status)})</div>${body}` +
+    `<div class="muted" style="font-size:11px">${MARKS_NOTE}</div></div>`;
 }
 
 // ------------------------------------------------------------ 5-year character
@@ -205,8 +231,9 @@ async function renderSSide() {
     if (id !== ss.pageReq) return;
     if (!st || !st.trades) { el.innerHTML = '<p class="empty">최근 30일 거래가 없습니다</p>'; return; }
     el.innerHTML = `<div class="sum" style="padding:8px 12px;color:var(--text-2)">최근 30일 거래 ${st.trades}건 (손실 ${st.losses} · 이익 ${st.wins}).
-      손실에서 이익보다 훨씬 자주 보이는 상황이 전담 직원이 먼저 볼 곳입니다. 건수가 적으면 우연일 수 있습니다.</div>` +
-      st.tags.map((t) => `<div class="tagrow"><div>${esc(t.tag)}</div><div class="bars">
+      손실에서 이익보다 훨씬 자주 보이는 상황이 전담 직원이 먼저 볼 곳입니다. 건수가 적으면 우연일 수 있습니다.
+      ${MARKS_NOTE}</div>` +
+      st.tags.map((t) => `<div class="tagrow"><div>${esc(t.tag)}</div>${t.note ? `<div class="muted" style="font-size:11px">${esc(t.note)}</div>` : ""}<div class="bars">
         <span>손실</span><div class="bar"><i style="width:${Math.round((t.loss_share || 0) * 100)}%;background:var(--down)"></i></div><span>${t.loss_share == null ? "—" : Math.round(t.loss_share * 100) + "%"}</span>
         <span>이익</span><div class="bar"><i style="width:${Math.round((t.win_share || 0) * 100)}%;background:var(--up)"></i></div><span>${t.win_share == null ? "—" : Math.round(t.win_share * 100) + "%"}</span>
       </div></div>`).join("");
@@ -223,6 +250,8 @@ function lossCard(c) {
     <div class="ln">${tsKo(c.entry_time)} 진입 · ${c.hold_min < 120 ? Math.round(c.hold_min) + "분" : (c.hold_min / 60).toFixed(1) + "시간"} 보유 ·
       진입 후 최고 <span class="${cls(c.best_roe)}">${pct(c.best_roe, 0)}</span>${c.touched_first_lock ? " (잠금선 닿음)" : ""}</div>
     ${ctx ? `<div class="ln">${esc(ctx)}</div>` : ""}
+    ${c.strength && c.strength.length ? `<div class="ln">진입 강도: ${strengthLine(c.strength)}</div>` : ""}
+    ${c.sr ? `<div class="ln">${srLine(c.sr)}</div>` : ""}
     <div class="ln">손절 거리를 바꿨다면: ${ifs}</div>
     ${c.tags.length ? `<div class="chips2">${c.tags.map((t) => `<span class="tag">${esc(t)}</span>`).join("")}</div>` : ""}</div>`;
 }

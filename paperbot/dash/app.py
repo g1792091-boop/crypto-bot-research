@@ -122,6 +122,23 @@ class Data:
         return {"trades": len(cs), "losses": sum(c["pnl"] < 0 for c in cs), "wins": sum(c["pnl"] > 0 for c in cs),
                 "tags": tag_stats(cs)}
 
+    def last_marks(self, strategy: str, tf: str, symbol: str, days: float = 30) -> Optional[dict]:
+        """Entry marks (support / resistance, entry strength) of the strategy's latest logged signal
+        on this timeframe and coin in the last ``days`` days; None when there is none."""
+        since = int(time.time() * 1000 - days * 86_400_000)
+        with self.conn() as c:
+            r = c.execute("SELECT bar_close, side, status, data FROM signal_log WHERE timeframe = ? AND bar_close >= ? "
+                          "AND strategy = ? AND symbol = ? ORDER BY bar_close DESC, id DESC LIMIT 1",
+                          (tf, since, strategy, symbol)).fetchone()
+        if r is None:
+            return None
+        try:
+            ctx = (json.loads(r["data"]) or {}).get("ctx") or {}
+        except (TypeError, ValueError, AttributeError):
+            ctx = {}
+        return {"bar_close": r["bar_close"], "side": r["side"], "status": r["status"], "sr": ctx.get("sr"),
+                "strength": ctx.get("strength"), "error": ctx.get("marks_error")}
+
     def conn(self) -> sqlite3.Connection:
         c = sqlite3.connect(_ro_uri(self.db), uri=True, timeout=5)
         c.row_factory = sqlite3.Row
@@ -993,7 +1010,8 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
 
     @app.get("/api/strategy/{strategy}")
     def get_strategy_view(strategy: str, tf: str = "1h", symbol: str = "BTCUSDT"):
-        """The strategy's own indicator lines and its entry conditions on the last closed bar."""
+        """The strategy's own indicator lines and its entry conditions on the last closed bar, plus the
+        entry marks of its latest signal on this timeframe and coin (descriptive, see entry_marks.py)."""
         from ..strategy_views import render, views
         if symbol not in ("BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "LTCUSDT", "BCHUSDT", "XRPUSDT"):
             raise HTTPException(400, "unknown symbol")
@@ -1013,7 +1031,11 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
             if len(view_cache) > 256:
                 view_cache.clear()
             view_cache[key] = render(strategy, df, tf)
-        return view_cache[key]
+        try:  # read fresh on every call: the signal is logged a few seconds after the bar closes
+            last = data.last_marks(strategy, tf, symbol)
+        except sqlite3.Error:
+            last = None
+        return {**view_cache[key], "last_signal": last}
 
     @app.get("/api/strategies")
     def get_strategies():

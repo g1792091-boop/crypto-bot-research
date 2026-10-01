@@ -18,6 +18,13 @@ the bar that just closed.
 Indicators run on a trailing window of 2 x warm-up bars per timeframe; the
 replay check in research/paper_rules/parity_live.py compares this with the
 full-history backtest signals.
+
+When a strategy signals, the worker also records descriptive entry marks
+(entry_marks.py: support / resistance and the strategy's entry strength, as
+measured by research/entry_study, which found no edge in them) into each
+signal's ``ctx``. Where the levels need more history than the signal window
+(4h), the job carries the older 5m bars separately; the signal frame is the
+same either way.
 """
 
 from __future__ import annotations
@@ -73,8 +80,9 @@ def window_5m(lib, tf: str) -> int:
 
 
 def compute_last(job: tuple) -> dict:
-    """Worker: signals of the TF bar that closes at ``boundary`` for one coin."""
-    symbol, tf, boundary, ts, o, h, l, c, v = job
+    """Worker: signals of the TF bar that closes at ``boundary`` for one coin.
+    ``job[9]``, when present, holds older 5m bars (ts, o, h, l, c, v) for the entry marks only."""
+    symbol, tf, boundary, ts, o, h, l, c, v = job[:9]
     from .recorder import build_frames
     lib = _lib()
     df5 = pd.DataFrame({"ts": pd.to_datetime(ts, unit="ms", utc=True), "open": o, "high": h,
@@ -106,7 +114,27 @@ def compute_last(job: tuple) -> dict:
             out["ctx"] = chart_context(lib, symbol, df5, df, tf)
         except Exception as exc:  # the chart description must never block a signal
             out["ctx_error"] = f"{type(exc).__name__}: {exc}"[:300]
+        try:
+            from .entry_marks import marks
+            pre = job[9] if len(job) > 9 else None
+            out["marks"] = marks(df, tf, sides, _marks_frame(lib, pre, df5, df, tf) if pre is not None else None)
+        except Exception as exc:  # descriptions only: never block a signal
+            out["marks"] = {"error": f"{type(exc).__name__}: {exc}"[:300]}
     return out
+
+
+def _marks_frame(lib, pre: tuple, df5: pd.DataFrame, df: pd.DataFrame, tf: str) -> Optional[pd.DataFrame]:
+    """The chart bars of the older 5m bars plus the signal window, ending at the same bar as
+    ``df`` (None when they do not, so the marks fall back to ``df``)."""
+    from .recorder import build_frames
+    pts = np.asarray(pre[0], dtype=np.int64)
+    keep = pts < int(df5["ts"].iloc[0].value // 1_000_000)
+    old = pd.DataFrame({"ts": pd.to_datetime(pts[keep], unit="ms", utc=True), "open": pre[1][keep],
+                        "high": pre[2][keep], "low": pre[3][keep], "close": pre[4][keep], "volume": pre[5][keep]})
+    if not len(old):
+        return None
+    long = build_frames(lib, pd.concat([old, df5], ignore_index=True), [tf])[tf]
+    return long if len(long) and long["ts"].iloc[-1] == df["ts"].iloc[-1] else None
 
 
 def _bars(df: pd.DataFrame, symbol: str, tf: str) -> list[Bar]:
@@ -137,6 +165,24 @@ def chart_context(lib, symbol: str, df5: pd.DataFrame, df: pd.DataFrame, tf: str
     return {k: (round(v, 6) if isinstance(v, float) else v) for k, v in ctx.items()}
 
 
+def _marks_window(lib, tf: str) -> int:
+    """5m bars the entry marks want (entry_marks.marks_window_5m); 0 when unavailable."""
+    try:
+        from .entry_marks import marks_window_5m
+        return marks_window_5m(lib, tf)
+    except Exception:  # descriptions only: the service runs without them
+        return 0
+
+
+def attach(ctx: Optional[dict], m: Optional[dict], name: str, side: int) -> Optional[dict]:
+    """The signal's ctx with its entry marks (entry_marks.attach); the bar's ctx if that fails."""
+    try:
+        from .entry_marks import attach as _attach
+        return _attach(ctx, m, name, side)
+    except Exception as exc:  # descriptions only: never block a signal
+        return {**(ctx or {}), "marks_error": f"{type(exc).__name__}: {exc}"[:300]}
+
+
 class SignalTimeout(RuntimeError):
     pass
 
@@ -160,6 +206,7 @@ class SignalService:
         keep = max(window_5m(self.lib, tf) for tf in self.trade_tfs + self.record_tfs)
         self.hist = {s: deque(maxlen=keep) for s in self.symbols}
         self.windows = {tf: window_5m(self.lib, tf) for tf in self.trade_tfs + self.record_tfs}
+        self.mark_windows = {tf: _marks_window(self.lib, tf) for tf in self.trade_tfs + self.record_tfs}
         self._pool = pool
         self._procs = procs
         self.timeout_s = timeout_s  # a signal later than max_delay_ms is not traded anyway
@@ -191,10 +238,16 @@ class SignalService:
     # ------------------------------------------------------------ compute
     def _jobs(self, boundary: int, tf: str) -> list[tuple]:
         n = self.windows[tf]
+        m = self.mark_windows.get(tf, 0)
         jobs = []
         for s in self.symbols:
-            a = np.array(list(self.hist[s])[-n:], dtype=float)
-            jobs.append((s, tf, boundary, a[:, 0].astype(np.int64), a[:, 1], a[:, 2], a[:, 3], a[:, 4], a[:, 5]))
+            rows = list(self.hist[s])
+            a = np.array(rows[-n:], dtype=float)
+            job = (s, tf, boundary, a[:, 0].astype(np.int64), a[:, 1], a[:, 2], a[:, 3], a[:, 4], a[:, 5])
+            if m > n and len(rows) > n:   # older bars for the entry marks only (the signal window is above)
+                p = np.array(rows[-m:-n], dtype=float)
+                job += ((p[:, 0].astype(np.int64), p[:, 1], p[:, 2], p[:, 3], p[:, 4], p[:, 5]),)
+            jobs.append(job)
         return jobs
 
     def _map(self, jobs):
@@ -243,10 +296,11 @@ class SignalService:
                     status = "NO_PRICE" if ref is None else "NO_ATR"
                 else:
                     status = "SUBMITTED"
+                ctx = attach(r.get("ctx"), r.get("marks"), name, side)   # + this signal's entry marks
                 rows.append({"bar_close": boundary, "timeframe": tf, "strategy": name, "symbol": sym,
                              "side": int(side), "atr": r["atr"], "ref_price": ref, "ref_time": ready_at,
                              "delay_ms": delay, "status": status,
-                             "data": {"close": r["close"], "bid": bid, "ask": ask, "ctx": r.get("ctx")}})
+                             "data": {"close": r["close"], "bid": bid, "ask": ask, "ctx": ctx}})
                 if status == "SUBMITTED":
                     aid = f"{name}@{tf}"
                     subs.append((aid, Signal(
@@ -254,7 +308,7 @@ class SignalService:
                         stop_price=0.0, tier="best", atr=r["atr"],
                         meta={"stop_dist": self.stop_atr * r["atr"], "ref_price": ref,
                               "ref_time": ready_at, "delay_ms": delay, "account": aid,
-                              "ctx": r.get("ctx") or {}})))
+                              "ctx": ctx or {}})))
         return rows, subs, results
 
     def _random(self, boundary: int, tf: str, sym: str) -> dict:
