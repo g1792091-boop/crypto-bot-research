@@ -304,10 +304,11 @@ sudo tailscale up
 ```bash
 tailscale ip -4
 sudo ufw allow in on tailscale0
-sudo sed -i "s|^DASH_HOST=.*|DASH_HOST=$(tailscale ip -4)|" /etc/paperbot/dash.env
+IP=$(tailscale ip -4) && [ -n "$IP" ] && sudo sed -i "s|^DASH_HOST=.*|DASH_HOST=$IP|" /etc/paperbot/dash.env
 sudo grep '^DASH_HOST=' /etc/paperbot/dash.env
 ```
 - 첫 줄의 `100.x.y.z`가 대시보드 주소입니다. 마지막 줄에 같은 주소가 보이면 됩니다.
+- 첫 줄이 `no current Tailscale IPs; state: NeedsLogin`이면 로그인이 끝나지 않은 것입니다(승인을 기다리는 `tailscale up`을 Ctrl+C로 끊으면 이렇게 됩니다). `sudo tailscale up`을 다시 실행해 `Success.`가 나올 때까지 기다린 뒤 이 상자를 다시 붙여 넣습니다. 그 전에는 `DASH_HOST`를 바꾸지 않습니다.
 - 대시보드 주소(12번부터): 폰의 Tailscale 앱을 켠 상태로 브라우저에서 `http://100.x.y.z:8080`. `https`가 아니라 `http`입니다.
 
 **꼭 할 것: 서버의 키 만료 끄기.** Tailscale은 기본으로 180일마다 서버 연결을 끊습니다.
