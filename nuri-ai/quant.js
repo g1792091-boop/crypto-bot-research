@@ -4,6 +4,9 @@
 // - 지표 공식은 TradingView(Pine ta.*)와 같다. 워밍업 구간은 null.
 //   ta.ema / ta.rma: 첫 값은 SMA 시드 · ta.rsi / ta.atr: RMA(Wilder) · BB 표준편차: 모집단
 // - 백엔드와 같은 캔들이면 지표·신호·거래·통계가 같게 나온다 (Python round 도 똑같이 흉내 냄).
+// - type "custom" (사용자 수식 지표)은 customind.js 가 계산한다. customind.js 는 이 파일을 import 하지 않고,
+//   아래 setIndProvider 로 computeInd 를 넘겨받는다 (한쪽 방향 import → 순환 없음).
+import { parseExpr, evalExpr, setIndProvider } from "./customind.js";
 
 /* ============ 공용 ============ */
 const isNil = v => v === null || v === undefined;
@@ -353,7 +356,11 @@ export const IND_REGISTRY = {
   cmf: {outputs: ["value"], defaults: {length: 20}, desc: "차이킨 자금 흐름"},
   aroon: {outputs: ["up", "down"], defaults: {length: 25}, desc: "아룬 (0~100)"},
   atr_stop: {outputs: ["line", "trend"], defaults: {length: 14, mult: 3.0}, desc: "ATR 추적 손절선 (UT Bot 계열, trend ±1)"},
+  // 사용자 수식 지표 (customind.js): {"id":"x","type":"custom","expr":"(close - ema(close,20)) / ind(\"atr\",{length:14})"}
+  custom: {outputs: ["value"], defaults: {}, desc: "사용자 수식 지표 (expr 에 수식 — 문법은 customind.js CUSTOM_DOC)"},
 };
+// custom 수식에서 데이터가 없어도 되는 외부 시리즈 이름 (없으면 null 시리즈): 파생 필드 · ml_* · ext_*
+const EXT_NAME = name => DERIV_FIELDS.includes(name) || /^(?:ml|ext)_\w+$/.test(name);
 
 // 지표 계산. 항상 {출력이름: 시리즈} 형태 (indicators.compute)
 export function computeInd(candles, type, params = {}){
@@ -394,8 +401,10 @@ export function computeInd(candles, type, params = {}){
     case "cmf": return {value: cmf(c, n)};
     case "aroon": return aroon(c, n);
     case "atr_stop": return atrStop(c, n, F("mult"));
+    case "custom": return {value: evalExpr(String(p.expr ?? ""), c, p.extra || {}, {allow: EXT_NAME, computeInd})};   // p.extra: {이름: 시리즈}
   }
 }
+setIndProvider({computeInd, registry: IND_REGISTRY});   // customind.js 의 ind() 가 쓰는 연결
 
 /* ============ 전략 DSL (strategy.py) ============ */
 // 피연산자(left/right) 문법:
@@ -531,6 +540,14 @@ export function normalizeSpec(spec){
       const s = String(r.source).toLowerCase();
       if (!SOURCES.includes(s)) problems.push(`${id}.source 는 ${SOURCES.join("/")} 중 하나 (${r.source})`); else o.source = s;
     }
+    if (type === "custom"){   // 수식 검사: 가격 · 앞에서 선언한 지표 · 파생/외부(ml_*, ext_*) 시리즈만 참조 가능
+      const expr = typeof r.expr === "string" ? r.expr.trim() : "";
+      if (!expr) problems.push(`${id}: custom 지표에는 expr(수식 문자열)이 필요합니다`);
+      else {
+        const known = seriesNames({indicators: out.indicators});
+        try { parseExpr(expr, {vars: nm => known.has(nm) || EXT_NAME(nm)}); o.expr = expr; } catch(e){ problems.push(`${id}.expr ${e.message}`); }
+      }
+    }
     out.indicators.push(o);
   });
   for (const g of ["long_entry", "short_entry", "long_exit", "short_exit"]) out[g] = normGroup(spec[g], g, problems);
@@ -576,13 +593,21 @@ export function buildSeries(spec, candles, deriv = null){
   for (const f of PRICE_FIELDS) s[f] = srcOf(c, f);
   for (const ind of spec.indicators){
     const {id, type, ...params} = ind;
-    const res = computeInd(c, type, params), keys = Object.keys(res);
+    const res = type === "custom" ? computeInd(c, type, {...params, extra: customExtra(c, s, deriv)}) : computeInd(c, type, params), keys = Object.keys(res);
     for (const k of keys) s[`${id}.${k}`] = res[k];
     if (keys.length === 1 || "value" in res) s[id] = res.value ?? res[keys[0]];
     else if ("line" in res) s[id] = res.line;
   }
   s.__atr14 = atr(c, 14);
+  Object.assign(s, derivAligned(c, deriv));
+  // 파생 데이터가 없으면 null 시리즈 → 해당 조건은 항상 거짓
+  for (const f of DERIV_FIELDS) if (!s[f]) s[f] = nulls(c.length);
+  return s;
+}
+// 파생 데이터를 캔들 시간축에 맞춘 것 {funding, long_short, oi, oi_change_pct} (있는 것만)
+function derivAligned(c, deriv){
   deriv = deriv || {};
+  const s = {};
   if (deriv.funding?.length) s.funding = align(c, deriv.funding);
   if (deriv.long_short?.length) s.long_short = align(c, deriv.long_short);
   const oiPts = deriv.open_interest || deriv.oi;
@@ -591,10 +616,16 @@ export function buildSeries(spec, candles, deriv = null){
     s.oi = oi;
     s.oi_change_pct = oi.map((v, i) => i && v !== null && truthy(oi[i - 1]) ? (v - oi[i - 1]) / oi[i - 1] * 100 : null);
   }
-  // 파생 데이터가 없으면 null 시리즈 → 해당 조건은 항상 거짓
-  for (const f of DERIV_FIELDS) if (!s[f]) s[f] = nulls(c.length);
   return s;
 }
+// custom 수식이 이름으로 쓸 수 있는 시리즈: 파생 · deriv.extra (예: {ml_prob: [...]}) · 앞서 계산한 지표
+function customExtra(c, s, deriv){
+  const ex = {...derivAligned(c, deriv), ...(deriv?.extra || {})};
+  for (const [k, v] of Object.entries(s)) if (!PRICE_FIELDS.includes(k) && !k.startsWith("__")) ex[k] = v;
+  return ex;
+}
+// opts.extra 를 deriv.extra 에 합친다 (custom 지표용 외부 시리즈)
+const withExtra = (deriv, extra) => extra ? {...(deriv || {}), extra: {...(deriv?.extra || {}), ...extra}} : deriv;
 
 function operand(series, tok, n){
   tok = String(tok).trim();
@@ -820,14 +851,14 @@ function metrics(sim, barSeconds){
 
 const barSecondsOf = (spec, opts) => opts.barSeconds || INTERVAL_SECONDS[spec.interval] || 3600;
 
-// 백테스트 (backtest.run). opts: {deriv, initialEquity=10000, barSeconds(기본: spec.interval)}
+// 백테스트 (backtest.run). opts: {deriv, extra({이름: 시리즈}, custom 지표용), initialEquity=10000, barSeconds(기본: spec.interval)}
 // 캔들 간격과 spec.interval 이 같아야 펀딩·샤프가 맞다.
 export function backtest(spec, candles, opts = {}){
   spec = normalizeSpec(spec);
   const c = prep(candles);
   if (!c.length) throw new Error("캔들이 없습니다");
   const bs = barSecondsOf(spec, opts);
-  const sig = signals(spec, c, opts.deriv);
+  const sig = signals(spec, c, withExtra(opts.deriv, opts.extra));
   const sim = new Simulator(spec.risk, opts.initialEquity ?? 10000, bs);
   for (let i = 0; i < c.length; i++){ sim.step(c[i], sig, i); if (sim.blown) break; }
   if (sim.position){   // 마지막 봉 종가로 정리
@@ -934,7 +965,7 @@ export function liveSignal(spec, candles, opts = {}){
   const all = prep(candles), step = barSecondsOf(spec, opts) * 1000, now = opts.now ?? Date.now();
   const c = opts.assumeClosed ? all : all.filter(b => b.t + step <= now);
   if (!c.length) return {action: "hold", price: all.at(-1)?.c ?? null, t: all.at(-1)?.t ?? null, why: "마감된 봉이 없습니다"};
-  const n = c.length, i = n - 1, series = buildSeries(spec, c, opts.deriv);
+  const n = c.length, i = n - 1, series = buildSeries(spec, c, withExtra(opts.deriv, opts.extra));
   const fired = {}, detail = {};
   for (const g of ["long_entry", "short_entry", "long_exit", "short_exit"]){
     const grp = spec[g];
@@ -983,6 +1014,7 @@ export function snapshot(candles){
   if (!n) return {bars: 0, ind: {}, text: {}};
   const i = n - 1, b = c[i], ind = {}, full = {};
   for (const type of Object.keys(IND_REGISTRY)){
+    if (type === "custom") continue;   // 수식이 없으면 계산할 것이 없다
     const res = computeInd(c, type, {});
     full[type] = res; ind[type] = {};
     for (const [k, arr] of Object.entries(res)) ind[type][k] = r6(arr[i]);
@@ -1085,6 +1117,9 @@ export const STRATEGY_PROMPT = `당신은 코인 선물 퀀트 전략 엔지니�
 - symbol 은 바이낸스 USDT 무기한 심볼(BTCUSDT 등), interval 은 ${INTERVALS.join(",")} 중 하나.
 - 모호한 부분은 가장 일반적인 트레이더 해석을 택하고 description 에 가정을 한국어로 적는다.
 - MACD 골든크로스 = macd.line crosses_above macd.signal. 슈퍼트렌드 상승전환 = st.trend crosses_above 0.
+- 표에 없는 지표·복합 공식은 type "custom" 으로 직접 만든다: {"id": "vmom", "type": "custom", "expr": "(close - close[20]) / ind(\"atr\",{length:14})"}
+  수식에는 가격, 앞서 선언한 지표 id, sma/ema/zscore/slope/corr/crossover/barssince 등 함수, ind("지표",{파라미터},"출력"),
+  외부 시리즈(ml_prob 등)를 쓸 수 있다 (전체 문법: CUSTOM_DOC). 결과는 시리즈 하나 → 조건식에서 "vmom" 으로 참조, 참/거짓 수식은 1/0.
 
 엔진 동작 (조건을 짤 때 참고)
 - 신호는 봉 마감에 판단 → 다음 봉 시가에 체결. 손절·익절·추적손절·강제청산은 봉 고가·저가로 판정, 같은 봉에서 둘 다 닿으면 손절 먼저.

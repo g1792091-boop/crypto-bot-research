@@ -254,6 +254,8 @@ var upstreams = map[string]string{
 	"upbit":    "https://api.upbit.com/v1",
 	"binance":  "https://api.binance.com/api/v3",
 	"binancef": "https://fapi.binance.com",
+	// 실거래 모듈(live.js): 바이낸스 선물 테스트넷 (가짜 돈으로 먼저 시험). 서명은 브라우저에서 하고 여기서는 그대로 전달만 한다.
+	"binancef_test": "https://testnet.binancefuture.com",
 }
 
 var proxyClient = &http.Client{}
@@ -283,7 +285,9 @@ func proxyHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	for _, h := range []string{"Authorization", "Content-Type", "Accept", "X-Subscription-Token", "HTTP-Referer", "X-Title"} {
+	// X-MBX-APIKEY: 실거래 모듈(live.js)이 바이낸스 서명 요청에 붙이는 API 키 헤더 (비밀키는 보내지 않음, 서명은 브라우저에서).
+	// 메서드(GET/POST/DELETE)와 쿼리 문자열은 아래에서 그대로 전달된다.
+	for _, h := range []string{"Authorization", "Content-Type", "Accept", "X-Subscription-Token", "HTTP-Referer", "X-Title", "X-MBX-APIKEY"} {
 		if v := r.Header.Get(h); v != "" {
 			req.Header.Set(h, v)
 		}
