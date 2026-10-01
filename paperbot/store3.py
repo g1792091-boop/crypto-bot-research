@@ -33,6 +33,18 @@ CREATE TABLE IF NOT EXISTS accounts (
     parent TEXT,
     data TEXT NOT NULL DEFAULT '{}'
 );
+CREATE TABLE IF NOT EXISTS fill_costs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts INTEGER NOT NULL,
+    account_id TEXT NOT NULL,
+    symbol TEXT NOT NULL,
+    event TEXT NOT NULL,
+    status TEXT NOT NULL,
+    notional REAL NOT NULL,
+    slip_best REAL,
+    data TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS fill_costs_ts ON fill_costs (ts);
 CREATE TABLE IF NOT EXISTS trades (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     account_id TEXT NOT NULL,
@@ -150,6 +162,14 @@ class Store3:
             "(:bar_close, :timeframe, :strategy, :symbol, :side, :atr, :ref_price, :ref_time, "
             ":delay_ms, :status, :data)",
             [{**r, "data": json.dumps(r.get("data", {}), default=str)} for r in rows])
+
+    def fill_costs(self, rows: Iterable[dict]) -> None:
+        """Order-book cost of the step's paper entries and exits (paperbot/fillcost.py; records only)."""
+        self.conn.executemany(
+            "INSERT INTO fill_costs (ts, account_id, symbol, event, status, notional, slip_best, data) "
+            "VALUES (?,?,?,?,?,?,?,?)",
+            [(r["ts"], r["account_id"], r["symbol"], r["event"], r.get("status", ""), float(r["notional"]),
+              r.get("slip_best"), json.dumps(r, default=str)) for r in rows])
 
     def alert(self, ts: int, level: str, text: str) -> None:
         self.conn.execute("INSERT INTO alerts VALUES (?,?,?)", (ts, level, text))

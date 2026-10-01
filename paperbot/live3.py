@@ -31,6 +31,7 @@ from .aggregate import TF_MS, Aggregator
 from .binance import BinanceError, BinanceREST, RegionBlocked
 from .config import V3_SYMBOLS, v3_settings
 from .feed import LiveFeed
+from .fillcost import LIMIT as FILL_DEPTH, FillProbe
 from . import sweepsig
 from .health import DeadMan, sd_notify
 from .live import _notifier, _rest, load_brackets
@@ -86,7 +87,7 @@ class Runner3:
     def __init__(self, book: AccountBook, service, store: Store3, notifier: Notifier,
                  trade_symbols, now_ms: Callable[[], int], prices: Callable[[], dict],
                  skip_before: Optional[int] = None, deadman: Optional[DeadMan] = None,
-                 digest: Optional[Digest] = None):
+                 digest: Optional[Digest] = None, fills: Optional[FillProbe] = None):
         self.book = book
         self.service = service
         self.store = store
@@ -100,13 +101,17 @@ class Runner3:
         self.deadman = deadman
         self.digest = digest
         self.signal_timeouts = 0
+        self.fills = fills  # order-book cost of each entry / exit (records only, never a fill)
 
     def process(self, steps) -> None:
         for ts, bars, funding in steps:
             if self.skip_before is None or ts >= self.skip_before:
                 tb = {s: bars[s] for s in self.trade_symbols if s in bars}
                 if tb:
+                    snap = self.fills.before(self.book.engines) if self.fills else None
                     self.book.step(ts, tb, funding)
+                    if snap is not None:
+                        self._fill_costs(ts, snap, tb)
             for b in bars.values():
                 for tf, b5 in self.agg.add(b):
                     self.service.add_5m(b5)
@@ -120,6 +125,15 @@ class Runner3:
         self._health(now)
         self.store.commit()
 
+    def _fill_costs(self, ts: int, snap: dict, bars: dict) -> None:
+        try:
+            rows = self.fills.after(ts, self.book.engines, snap, bars, self.now_ms())
+            if rows:
+                self.store.fill_costs(rows)
+        except Exception as exc:  # noqa: BLE001  (a record only: the bot goes on)
+            self.fills.errors += 1
+            self.store.alert(self.now_ms(), WARN, f"fill cost record failed: {type(exc).__name__}: {exc}"[:300])
+
     def _health(self, now: int) -> None:
         last = self.book.last_ts
         ping = self.deadman.beat(now, last) if self.deadman else None
@@ -129,6 +143,7 @@ class Runner3:
             "last_bar": last, "lag_ms": None if last is None else now - (last + MIN),
             "signal_timeouts": self.signal_timeouts,
             "pool_restarts": getattr(self.service, "pool_restarts", 0),
+            "fill_cost_errors": None if self.fills is None else self.fills.errors,
             "deadman": None if self.deadman is None else {
                 "last_ping": self.deadman.last_ping, "failures": self.deadman.failures, "sent": ping},
             "digest_pending": 0 if self.digest is None else len(self.digest.items)})
@@ -214,7 +229,8 @@ def cmd_run(args) -> int:
                                                notifier.send(lvl, txt) if lvl != INFO else None))
     runner = Runner3(book, service, store, notifier, syms, lambda: int(time.time() * 1000) + feed.skew_ms,
                      lambda: book_prices(rest, syms), skip_before=resume,
-                     deadman=DeadMan(os.environ.get("DEADMAN_URL")), digest=digest)
+                     deadman=DeadMan(os.environ.get("DEADMAN_URL")), digest=digest,
+                     fills=FillProbe(lambda s: rest.depth(s, FILL_DEPTH), settings.slippage_frac, FILL_DEPTH))
     sd_notify("READY=1")
     try:
         while args.max_polls is None or args.max_polls > 0:

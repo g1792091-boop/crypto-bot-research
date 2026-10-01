@@ -91,6 +91,7 @@ sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.live3 status --db /va
 |---|---|
 | 재시작 | `sudo systemctl restart paperbot-live3`. 계좌 상태는 저장돼 있어 이어서 돕니다. 꺼져 있던 동안의 신호는 "늦음"으로 기록만 됩니다 |
 | 매일 점검 | 09:20(한국 시간)에 자동. paper와 재계산 일치, 지정가·놓친 신호 그림자 기록, 데이터 품질 |
+| 체결 비용 기록 | 모의 거래가 진입·청산할 때마다 그 코인의 호가창(양쪽 100칸)을 받아, 같은 크기의 시장가 주문이 실제로 얼마에 체결됐을지 `paper3.db`의 `fill_costs`에 적습니다(`paperbot/fillcost.py`). 모의 체결 자체는 바꾸지 않습니다(엔진은 늘 0.02%로 계산). 매일 점검 보고서의 `fill_costs`에 코인별 중간값·상위 10%·0.02%를 넘은 횟수가 나옵니다 |
 | 청산 기록 | `paperbot-liq`가 바이낸스 강제청산 흐름을 `liq.db`에 모읍니다(공개 자료, 키 필요 없음). 바이낸스는 청산의 과거 자료를 주지 않아서 첫날부터 켜 둡니다. 확인: `sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.liqstream status --db /var/lib/paperbot/liq.db` |
 | 백업 | 매일 08:40(한국 시간) `/var/backups/paperbot/날짜/`, 14일 보관 |
 | 코드 업데이트 | `cd /root/crypto-bot-research && git pull && sudo bash deploy/install.sh`. 배포는 **한 분만** 합니다. 커밋 안 된 수정이 있으면 멈추고, 돌던 서비스는 교체하는 순간만 멈췄다가 다시 켜집니다. 이전 코드는 `/opt/crypto-bot-research.old`에 남습니다. 봇은 켜질 때마다 코드 버전·설정을 기록하고, 체결·청산·사이즈 코드가 바뀌었으면 알림을 보냅니다 (규칙상 그 기간을 다시 셈) |

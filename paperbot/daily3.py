@@ -272,6 +272,20 @@ def data_quality(steps, symbols, start: int, end: int) -> dict:
 
 
 # ---------------------------------------------------------------- run
+def fill_cost_report(conn, start: int, end: int) -> Optional[dict]:
+    """The day's order-book cost records (paperbot/fillcost.py); None for a database without them."""
+    from .fillcost import summary
+    try:
+        rows = [json.loads(r[0]) for r in conn.execute(
+            "SELECT data FROM fill_costs WHERE ts >= ? AND ts < ?", (start, end))]
+    except sqlite3.OperationalError:
+        return None
+    rep = summary(rows)
+    rep["recorded"] = len(rows)
+    rep["without_book"] = sum(1 for r in rows if r.get("status") != "ok")
+    return rep
+
+
 def run_day(conn, out: sqlite3.Connection, rest: BinanceREST, settings: Settings, brackets, specs,
             day: str, horizon_days: int = 3) -> dict:
     start = int(dt.datetime.strptime(day, "%Y-%m-%d").replace(tzinfo=dt.timezone.utc).timestamp() * 1000)
@@ -309,6 +323,7 @@ def run_day(conn, out: sqlite3.Connection, rest: BinanceREST, settings: Settings
             "better_than_actual": sum(1 for r in v if r["roe"] > json.loads(r["data"])["actual_roe"]),
         }
     report["data_quality"] = data_quality(day_steps, symbols, start, end)
+    report["fill_costs"] = fill_cost_report(conn, start, end)
     out.execute("DELETE FROM mismatches WHERE day = ?", (day,))
     out.executemany("INSERT INTO mismatches VALUES (?,?,?)", [(day, m["account_id"], json.dumps(m)) for m in mism])
     out.executemany("INSERT OR REPLACE INTO shadows VALUES (:key,:day,:kind,:account_id,:symbol,:timeframe,:side,"
