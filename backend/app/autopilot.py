@@ -447,9 +447,9 @@ def deploy(res: dict, row: dict, kind: str, team_note: str = "") -> str | None:
     bot = _paper.add_bot(spec, 10_000.0)
     state["bots"][bot.id] = {"kind": kind, "rule": row["name"], "symbol": res["symbol"], "interval": res["interval"], "created": time.time(),
                              "backtest": row["seg"], "team": team_note, "last_pos": None, "last_trades": 0}
-    log(f"{'검증 통과' if kind == 'pass' else '관찰(미통과)'} 페이퍼 봇 시작: {res['symbol']} {res['interval']} — {row['name']}")
+    log(f"{'검증 통과' if kind == 'pass' else '관찰(미통과)'} 시그널 추적 시작: {res['symbol']} {res['interval']} — {row['name']}")
     _signal({"type": "deploy", "symbol": res["symbol"], "interval": res["interval"], "strategy": row["name"], "status": kind,
-             "text": f"{'검증 통과' if kind == 'pass' else '관찰(미통과)'} 매매법을 페이퍼 봇으로 시작했습니다"})
+             "text": f"{'검증 통과' if kind == 'pass' else '관찰(미통과)'} 매매법의 시그널 추적(가상 체결)을 시작했습니다"})
     return bot.id
 
 

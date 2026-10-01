@@ -105,7 +105,7 @@ function tickStatus() {
 
 function posLine(p) {
   const L = p.side === "long";
-  return `<div class="ai-pos"><b class="${L ? "up" : "down"}">${esc(p.kind === "manual" ? "내" : p.target)} ${p.symbol.replace("USDT", "")} ${L ? "롱" : "숏"} ${p.leverage}x</b>
+  return `<div class="ai-pos"><b class="${L ? "up" : "down"}">${esc(p.target)} ${p.symbol.replace("USDT", "")} ${L ? "롱" : "숏"} ${p.leverage}x</b>
     <span class="${cls(p.upnl)}">${p.upnl >= 0 ? "+" : ""}${p.upnl.toFixed(2)} (${pct(p.roe_pct, 1)})</span>
     <span class="muted">진입 ${px(p.entry)} · 손절 ${p.stop ? `${px(p.stop)} (${pct(p.to_stop_pct)})` : '<span class="down">없음</span>'} · 청산 ${px(p.liq)} (${pct(p.to_liq_pct)})</span></div>`;
 }
@@ -114,7 +114,7 @@ function render(fresh) {
   badge();
   const r = last, a = r.analysis, [bl, bc] = BIAS[a.bias];
   $("#ai-eng").innerHTML = `<span class="${r.engine === "rules" ? "muted" : "accent"}">${ENGINE[r.engine] || r.engine}${r.model ? ` · ${esc(r.model)}` : ""}</span>`;
-  const myPos = r.positions.filter((p) => p.symbol === r.symbol || p.kind === "manual");
+  const myPos = r.positions.filter((p) => p.symbol === r.symbol);
   $("#ai-body").innerHTML = `
     ${r.error ? `<div class="ai-alert medium">${esc(r.error)}</div>` : ""}
     ${!r.llm_available ? `<div class="help" style="margin-bottom:6px">AI 키가 없어 <b>규칙 분석</b>으로 보여줍니다. settings.txt 에 NVIDIA·Gemini(무료) 또는 Claude 키를 넣으면 AI 가 직접 판단합니다.</div>` : ""}
@@ -123,7 +123,7 @@ function render(fresh) {
     <div class="row" style="gap:6px;margin:4px 0"><span class="muted" style="font-size:11px">확신</span><div class="ai-bar" style="flex:1"><i style="width:${a.confidence}%;background:var(--${bc === "accent" ? "accent" : bc})"></i></div><span style="font-size:11px">${a.confidence}%</span></div>
     <div class="ai-text">${esc(a.situation)}</div>
     ${a.changes ? `<div class="ai-text muted" style="margin-top:4px">변화: ${esc(a.changes)}</div>` : ""}
-    ${myPos.length || a.position_advice.length ? `<div class="sub" style="padding-left:0;margin-top:8px">포지션 관리</div>${myPos.map(posLine).join("")}
+    ${myPos.length || a.position_advice.length ? `<div class="sub" style="padding-left:0;margin-top:8px">전략 시그널 가상 포지션</div>${myPos.map(posLine).join("")}
       ${a.position_advice.map(advCard).join("")}` : ""}
     ${a.entry_idea ? ideaCard(a.entry_idea) : ""}
     ${a.key_levels.length ? `<div class="sub" style="padding-left:0;margin-top:8px">핵심 가격 <span class="muted">(🔔 = 가격 알림 등록)</span></div>
@@ -134,22 +134,15 @@ function render(fresh) {
     ${r.history.length > 1 ? `<div class="sub" style="padding-left:0;margin-top:8px">분석 기록</div>
       ${r.history.slice().reverse().map((h) => `<div class="ai-hist"><span class="muted">${hhmm(h.time)}</span><span class="${BIAS[h.bias][1]}">${BIAS[h.bias][0]} ${h.confidence}%</span>
         <span class="muted">${px(h.price)} · ${esc(h.why)}</span></div>`).join("")}` : ""}
-    <div class="help" style="margin-top:8px">투자 조언이 아닙니다. AI 는 틀릴 수 있으니 손절 위치를 먼저 정하고, 버튼은 모의(페이퍼) 계좌에만 적용됩니다.</div>`;
+    <div class="help" style="margin-top:8px">투자 조언이 아닙니다. 분석 전용 — 주문 기능은 없습니다. AI 판단에는 백테스트 연구 카드와 지난 시그널 성적이 함께 들어갑니다 (오른쪽 '연구' 탭).</div>`;
   tickStatus();
 }
 
 function advCard(v) {
-  const [ul, uc] = URG[v.urgency], manual = v.target.startsWith("내 포지션");
-  let btn = "";
-  if (manual) {
-    if (v.action === "move_stop" && v.new_stop) btn = `<button class="sm" data-act="stop" data-sym="${v.symbol}" data-v="${v.new_stop}">손절 ${px(v.new_stop)} 적용</button>`;
-    if (v.new_take) btn += `<button class="sm" data-act="take" data-sym="${v.symbol}" data-v="${v.new_take}">익절 ${px(v.new_take)} 적용</button>`;
-    if (["reduce", "take_profit"].includes(v.action)) btn += `<button class="sm" data-act="reduce" data-sym="${v.symbol}" data-v="${v.fraction || 0.5}">${Math.round((v.fraction || 0.5) * 100)}% 청산</button>`;
-    if (v.action === "close") btn += `<button class="sm" data-act="close" data-sym="${v.symbol}">전량 청산</button>`;
-  }
+  const [ul, uc] = URG[v.urgency];
   return `<div class="ai-adv ${v.urgency}"><div class="row"><b>${esc(v.target)}</b><div class="grow"></div><span class="ai-chip ${uc}">${ul}</span><span class="ai-chip">${ACTION[v.action] || v.action}</span></div>
     <div class="ai-text">${esc(v.reason)}</div>
-    ${btn ? `<div class="row" style="gap:4px;margin-top:4px;flex-wrap:wrap">${btn}</div>` : !manual ? `<div class="muted" style="font-size:11px">봇이 자동으로 관리하는 포지션 — 참고 의견</div>` : ""}</div>`;
+    <div class="muted" style="font-size:11px">전략 시그널의 가상 포지션 — 참고 의견</div></div>`;
 }
 
 function ideaCard(e) {
@@ -163,19 +156,6 @@ function ideaCard(e) {
 async function onAction(e) {
   const al = e.target.closest("[data-alert]");
   if (al) { addPriceAlert(state.symbol, +al.dataset.alert); toast("가격 알림 등록", `${state.symbol} ${px(+al.dataset.alert)}`); return; }
-  const b = e.target.closest("[data-act]");
-  if (!b) return;
-  const { act, sym } = b.dataset, v = +b.dataset.v, pos = last?.positions.find((p) => p.symbol === sym && p.kind === "manual");
-  const what = { stop: `손절을 ${px(v)}로 옮길까요?`, take: `익절을 ${px(v)}로 바꿀까요?`, reduce: `${sym} 포지션의 ${Math.round(v * 100)}%를 시장가로 청산할까요?`, close: `${sym} 포지션을 전부 시장가로 청산할까요?` }[act];
-  if (!confirm(`${what}\n(모의 계좌)`)) return;
-  await busy(b, async () => {
-    if (act === "stop" || act === "take") await api(`/api/paper/position/${sym}`, { method: "POST", body: { stop: act === "stop" ? v : pos?.stop ?? null, take: act === "take" ? v : pos?.take ?? null } });
-    else if (act === "reduce") await api(`/api/paper/reduce/${sym}`, { method: "POST", body: { fraction: v } });
-    else await api(`/api/paper/close/${sym}`, { method: "POST" });
-    toast("적용했습니다", what.replace(/할까요\?|길까요\?|꿀까요\?/, "").trim());
-    hooks.afterTrade?.();
-    await refresh();
-  });
 }
 
 function renderChat() {

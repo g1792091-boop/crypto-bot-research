@@ -92,3 +92,49 @@ def coinglass_index(name: str) -> dict:
 
 def taker_ratio(symbol: str, interval: str, limit: int = 200) -> list[dict]:
     return binance.taker_buy_sell_ratio(symbol, interval, limit)
+
+
+MACRO = [("^NDX", "나스닥100"), ("^GSPC", "S&P500"), ("DX-Y.NYB", "달러인덱스"),
+         ("^TNX", "미 10년물 금리"), ("GC=F", "금"), ("CL=F", "WTI 원유")]
+
+
+def _yahoo(sym: str) -> list[dict]:
+    last = None
+    for host in ("query1", "query2"):
+        try:
+            r = httpx.get(f"https://{host}.finance.yahoo.com/v8/finance/chart/{sym}", params={"range": "6mo", "interval": "1d"},
+                          headers={"User-Agent": "Mozilla/5.0"}, timeout=config.HTTP_TIMEOUT)
+            r.raise_for_status()
+            res = r.json()["chart"]["result"][0]
+            q = res["indicators"]["quote"][0]
+            return [{"time": int(t), "value": round(float(c), 4)} for t, c in zip(res["timestamp"], q["close"]) if c is not None]
+        except Exception as e:  # noqa: BLE001
+            last = e
+    raise RuntimeError(f"{sym}: {last}")
+
+
+def macro() -> dict:
+    """나스닥·S&P·달러·금리·금·유가 일봉 (Yahoo Finance 공개 차트)."""
+    def fetch():
+        out = []
+        for sym, name in MACRO:
+            try:
+                rows = _yahoo(sym)
+            except Exception as e:  # noqa: BLE001
+                out.append({"symbol": sym, "name": name, "error": str(e)[:160], "history": []})
+                continue
+            last, prev = rows[-1]["value"], rows[-2]["value"] if len(rows) > 1 else rows[-1]["value"]
+            m1 = rows[-22]["value"] if len(rows) > 22 else rows[0]["value"]
+            out.append({"symbol": sym, "name": name, "last": last, "change_pct": (last / prev - 1) * 100 if prev else 0,
+                        "change_1m_pct": (last / m1 - 1) * 100 if m1 else 0, "history": rows})
+        return out
+    if config.DATA_SOURCE == "synthetic":
+        import math
+        now = int(time.time()) // 86400 * 86400
+        items = []
+        for k, (sym, name) in enumerate(MACRO):
+            rows = [{"time": now - (120 - i) * 86400, "value": round(100 * (1 + .05 * math.sin((i + k * 7) / 11)), 2)} for i in range(121)]
+            items.append({"symbol": sym, "name": name, "last": rows[-1]["value"], "change_pct": (rows[-1]["value"] / rows[-2]["value"] - 1) * 100,
+                          "change_1m_pct": (rows[-1]["value"] / rows[-22]["value"] - 1) * 100, "history": rows})
+        return {"items": items, "source": "synthetic"}
+    return {"items": _ttl(("macro",), 600, fetch), "source": "Yahoo Finance"}

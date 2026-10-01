@@ -30,6 +30,9 @@ def main() -> None:
         "--clean",
         "--paths", str(ROOT / "backend"),
         "--add-data", f"{ROOT / 'frontend'}{os.pathsep}frontend",
+        # 연구 지식 카드 (app/knowledge/__init__.py 가 자기 폴더에서 읽는다)
+        "--add-data", f"{ROOT / 'backend' / 'app' / 'knowledge' / 'cards.json'}{os.pathsep}app/knowledge",
+        "--add-data", f"{ROOT / 'backend' / 'app' / 'knowledge' / 'research-summary.md'}{os.pathsep}app/knowledge",
         # uvicorn 은 루프/프로토콜 구현을 문자열로 동적 import 한다
         "--collect-submodules", "uvicorn",
         # 함수 안에서 불러오는 모듈 (Gemini 등)도 빠짐없이 넣는다

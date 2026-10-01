@@ -10,29 +10,25 @@ const TAG = {
   me: ["나", ""], ai: ["AI", "accent"], team: ["팀", "accent"],
 };
 const FILTERS = [["all", "전체"], ["trade", "시그널·봇"], ["watch", "경고·브리핑"], ["chat", "채팅"]];
-const QUICK = ["지금 들어가도 돼?", "AI 봇 성적 어때?", "@팀장 지금 상황 브리핑해줘", "@리스크 책임자 내 포지션 위험해?"];
+const QUICK = ["지금 이 차트 어떻게 봐?", "AI 시그널 적중률 어때?", "@팀장 지금 상황 브리핑해줘", "@리스크 책임자 지금 시장 위험해?"];
 
 let items = [], seen = new Set(), filter = load("ft.dock.filter", "all"), onlyHere = load("ft.dock.here", false);
 let chat = load("ft.dock.chat", []), unread = 0, names = null, lastBias = {};
-const open = () => !document.querySelector(".trade")?.classList.contains("dock-off");
+const open = () => !$("#side-dock")?.hidden && !$("#tv")?.classList.contains("right-off");
 
 export function initAiDock() {
-  const trade = document.querySelector(".trade");
-  $("#chartp").insertAdjacentHTML("afterend", `<aside class="aidock" id="aidock">
-    <button class="dk-strip" id="dk-open" title="AI 상시 알림 · 채팅 펼치기"><span>🤖</span><b>AI</b><i id="dk-unread" hidden></i></button>
-    <div class="dk-main">
-      <div class="ph"><span class="t">🤖 AI 상시 알림 · 채팅</span><div class="grow"></div><button class="flat sm" id="dk-fold" title="접기 (차트를 넓게)">⟩</button></div>
+  // 오른쪽 위젯 'AI 알림' 칸에 그린다 (오른쪽 아이콘 줄에서 열고 닫음 · 닫혀 있으면 아이콘에 새 알림 수)
+  $("#side-dock").innerHTML = `<div class="aidock" id="aidock"><div class="dk-main">
+      <div class="ph"><span class="t">🤖 AI 상시 알림 · 채팅</span></div>
       <div class="dk-bot" id="dk-bot"></div>
       <div class="dk-chips">${FILTERS.map(([k, l]) => `<button class="flat sm ${filter === k ? "on" : ""}" data-dkf="${k}">${l}</button>`).join("")}
         <label title="지금 차트 코인만"><input type="checkbox" id="dk-here" ${onlyHere ? "checked" : ""}> 이 코인만</label></div>
       <div class="dk-stream" id="dk-stream"><div class="muted" style="padding:8px">불러오는 중…</div></div>
       <div class="dk-quick">${QUICK.map((q) => `<button class="flat sm" data-dkq="${esc(q)}">${esc(q)}</button>`).join("")}</div>
-      <div class="dk-input"><textarea id="dk-text" rows="2" placeholder="AI 에게 질문 (지금 차트·포지션·AI 봇을 보고 답함) · @팀장 @리스크 책임자 처럼 부르면 에이전트 팀이 답함"></textarea>
+      <div class="dk-input"><textarea id="dk-text" rows="2" placeholder="AI 에게 질문 (지금 차트 · AI 시그널 성과를 보고 답함) · @팀장 @리스크 책임자 처럼 부르면 에이전트 팀이 답함"></textarea>
         <button class="pri sm" id="dk-send">보내기</button></div>
-    </div></aside>`);
-  if (load("ft.dock.off", innerWidth < 1450)) trade.classList.add("dock-off");     // 처음엔 넓은 화면에서만 펼침 (접어도 알림 수가 보임)
-  $("#dk-fold").onclick = () => { trade.classList.add("dock-off"); store("ft.dock.off", true); window.dispatchEvent(new Event("resize")); };
-  $("#dk-open").onclick = () => { trade.classList.remove("dock-off"); store("ft.dock.off", false); unread = 0; badge(); render(true); window.dispatchEvent(new Event("resize")); };
+    </div></div>`;
+  on("dockshown", () => { unread = 0; badge(); render(true); });
   $("#aidock").addEventListener("click", onClick);
   $("#dk-here").onchange = (e) => { onlyHere = e.target.checked; store("ft.dock.here", onlyHere); render(true); };
   $("#dk-send").onclick = () => send($("#dk-text").value);
@@ -84,9 +80,9 @@ function botLine(d) {
   const el = $("#dk-bot");
   if (!el || !d) return;
   const s = d.stats, o = d.open.find((t) => t.symbol === state.symbol) || d.open[0];
-  el.innerHTML = `<span title="AI 진입 시그널을 따라 한 모의 매매 (아래 '체결 내역' → AI 봇)">🤖 AI 봇 <b class="${s.return_pct > 0 ? "up" : s.return_pct < 0 ? "down" : ""}">${pct(s.return_pct)}</b></span>
-    <span class="muted">${s.trades}건${s.win_rate != null ? ` · 승률 ${s.win_rate}%` : ""}${s.avg_r != null ? ` · 평균 ${s.avg_r > 0 ? "+" : ""}${s.avg_r}R` : ""}</span>
-    ${o ? `<span class="${o.side === "long" ? "up" : "down"}" data-dkchart="${o.symbol}|${o.interval}" style="cursor:pointer">보유 ${o.symbol.replace("USDT", "")} ${o.side === "long" ? "롱" : "숏"} ${pct(o.roe_pct, 1)}</span>` : ""}`;
+  el.innerHTML = `<span title="AI 진입 시그널을 그대로 따랐다면 (가상 채점 · 아래 'AI 시그널 성과')">🎯 AI 시그널 <b class="${s.return_pct > 0 ? "up" : s.return_pct < 0 ? "down" : ""}">${pct(s.return_pct)}</b></span>
+    <span class="muted">${s.trades}건${s.win_rate != null ? ` · 적중 ${s.win_rate}%` : ""}${s.avg_r != null ? ` · 평균 ${s.avg_r > 0 ? "+" : ""}${s.avg_r}R` : ""}</span>
+    ${o ? `<span class="${o.side === "long" ? "up" : "down"}" data-dkchart="${o.symbol}|${o.interval}" style="cursor:pointer">진행 중 ${o.symbol.replace("USDT", "")} ${o.side === "long" ? "롱" : "숏"} ${pct(o.roe_pct, 1)}</span>` : ""}`;
 }
 
 async function history() {

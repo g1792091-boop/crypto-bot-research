@@ -83,8 +83,8 @@ function renderSet() {
       <td><button class="flat sm" data-aarun="${j}">지금</button></td></tr>`).join("")}</table>
     <div class="ap-set" style="margin-top:6px">
       <label><input type="checkbox" data-aaflag="positions" ${s.positions ? "checked" : ""}> 내 포지션에 위험 경고가 뜨면 AI 가 바로 분석해 알림에 붙이기</label>
-      <label><input type="checkbox" data-aaflag="bots_auto_improve" ${s.bots_auto_improve ? "checked" : ""}> 성과 나쁜 페이퍼 봇(10건 이상) 스스로 개선 — 검증 구간에서 나아질 때만 적용 (하루 한 번)</label>
-      <label><input type="checkbox" data-aaflag="bots_auto_pause" ${s.bots_auto_pause ? "checked" : ""}> 낙폭 35% 넘는 페이퍼 봇 자동 멈춤</label>
+      <label><input type="checkbox" data-aaflag="bots_auto_improve" ${s.bots_auto_improve ? "checked" : ""}> 성과 나쁜 전략 시그널(10건 이상) 스스로 개선 — 검증 구간에서 나아질 때만 적용 (하루 한 번)</label>
+      <label><input type="checkbox" data-aaflag="bots_auto_pause" ${s.bots_auto_pause ? "checked" : ""}> 가상 낙폭 35% 넘는 전략 시그널 자동 멈춤</label>
       <label><input type="checkbox" data-aaflag="notify" ${s.notify ? "checked" : ""}> 판단 변경 · 위험 상승 알림</label>
       <label>하루 AI 호출 상한 <input type="number" data-aalimit value="${s.daily_limit}" min="0" max="5000" style="width:70px">회</label>
       <button class="sm" id="aa-save">자동 모드 설정 저장</button>

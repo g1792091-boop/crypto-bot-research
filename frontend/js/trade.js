@@ -1,17 +1,16 @@
-// 트레이드 화면
+// 트레이드 화면 — 트레이딩뷰 방식 UI (자체 제작: 위 툴바 · 왼쪽 그리기 도구 · 오른쪽 위젯 패널 · 아래 패널 · 기간 바)
+// 분석 전용: 모의 주문 · 포지션 · 계좌는 없다. AI 시그널 · 전략 시그널은 '가상 체결'로 성과만 잰다.
 import { addPriceAlert, getPriceAlerts, removePriceAlert } from "./alerts.js";
 import { TermChart } from "./chart.js";
 import { copilotSymbolChanged, initCopilot, showCopilot } from "./copilot.js";
 import {
-  $, $$, INTERVALS, IV_LABEL, TV_INTERVAL, api, big, busy, cls, css, emit, esc, fmt, hhmm, mdhm, on, pct,
-  px, savePrefs, state, toast, tradeRows,
+  $, $$, INTERVALS, IV_LABEL, api, big, busy, cls, css, emit, esc, fmt, hhmm, mdhm, on, pct,
+  px, savePrefs, state, toast,
 } from "./core.js";
+import { COLORS, Drawings, TOOLS } from "./draw.js";
+import { renderKb } from "./kb.js";
 import { DEFAULT_INDICATORS, GROUPS, INDICATORS } from "./ind.js";
 
-const MACRO = [
-  ["NASDAQ:NDX", "나스닥100"], ["CAPITALCOM:US100", "나스닥 CFD"], ["SP:SPX", "S&P500"], ["TVC:DXY", "달러인덱스"],
-  ["TVC:US10Y", "미 10년물"], ["TVC:GOLD", "금"], ["CRYPTOCAP:BTC.D", "BTC.D"], ["CRYPTOCAP:USDT.D", "USDT.D"],
-];
 state.indicators ||= DEFAULT_INDICATORS;
 state.overlays ||= { heat: false, whales: false, bots: true, scenario: true, sr: true };
 state.overlays.sr ??= true;
@@ -21,6 +20,15 @@ state.overlays.footprint ??= false;
 delete state.overlays.rotation;
 state.overlays.ladder ??= true;
 state.overlays.ai ??= true;           // AI 진입 시그널
+state.ctype ||= "candles";            // 차트 종류
+state.scale ||= { mode: "normal", auto: true };
+state.rightTab ||= "dock";            // 오른쪽 위젯 (기본: AI 상시 알림 · 채팅)
+state.favIv ||= ["1m", "5m", "15m", "1h", "4h", "1d", "1w"];
+const CTYPES = [["candles", "캔들", "▮"], ["hollow", "속 빈 캔들", "▯"], ["ha", "하이킨 아시", "◧"], ["bars", "바", "┤"],
+  ["line", "라인", "∿"], ["area", "영역", "◭"], ["baseline", "베이스라인", "≋"]];
+// 기간 버튼 (트레이딩뷰처럼 기간에 맞는 봉으로 바꾼 뒤 그 기간만 보여 줌)
+const RANGES = [["1D", "1일", "5m", 86400], ["5D", "5일", "15m", 5 * 86400], ["1M", "1개월", "1h", 30 * 86400], ["3M", "3개월", "4h", 91 * 86400],
+  ["6M", "6개월", "4h", 182 * 86400], ["YTD", "올해", "1d", null], ["1Y", "1년", "1d", 365 * 86400], ["5Y", "5년", "1w", 5 * 365 * 86400], ["ALL", "전체", "1M", 0]];
 // 차트 분할: 칸 수 · 열/행 비율 · (큰 칸이 있으면) 영역 배치
 const LAYOUT_LIST = [
   ["1", { n: 1, cols: "1fr", rows: "1fr", name: "차트 1개" }],
@@ -65,7 +73,7 @@ function renderWatchlist() {
 
 function renderTickerBar() {
   const t = state.tickers[state.symbol];
-  $("#symbtn").innerHTML = `${state.symbol}<small>무기한</small>`;
+  $("#sym-name").textContent = state.symbol; $("#si-name").textContent = state.symbol;
   if (!t) return;
   const last = $("#t-last"), prev = +last.dataset.v || t.price;
   last.dataset.v = t.price;
@@ -140,31 +148,31 @@ export { setSymbol };
 // ================================================================ 차트
 let charts = [];   // TermChart 들 (0번 = 메인)
 
+// 위 툴바: 자주 쓰는 봉 + 나머지는 펼침 메뉴 (★ 로 자주 쓰는 봉 고르기)
 function renderTimeframes() {
-  $("#tfs").innerHTML = INTERVALS.map(([k, l]) => `<button data-iv="${k}" class="${k === state.interval ? "on" : ""}">${l}</button>`).join("");
+  const fav = state.favIv.filter((k) => IV_LABEL[k]);
+  const cur = fav.includes(state.interval) ? "" : `<button data-iv="${state.interval}" class="on">${IV_LABEL[state.interval] || state.interval}</button>`;
+  $("#tfs").innerHTML = fav.map((k) => `<button data-iv="${k}" class="${k === state.interval ? "on" : ""}">${shortIv(k)}</button>`).join("") + cur +
+    `<div class="dd"><button class="tv-more" id="iv-more" title="다른 봉">▾</button><div class="dd-menu iv-menu" id="iv-menu" hidden>
+      ${INTERVALS.map(([k, l]) => `<div class="dd-item ${k === state.interval ? "on" : ""}" data-iv="${k}"><span>${l}</span><button class="star ${fav.includes(k) ? "on" : ""}" data-fav="${k}" title="자주 쓰는 봉">★</button></div>`).join("")}</div></div>`;
 }
+const shortIv = (k) => ({ "1m": "1분", "3m": "3분", "5m": "5분", "15m": "15분", "30m": "30분", "1h": "1시", "2h": "2시", "4h": "4시", "6h": "6시", "12h": "12시", "1d": "일", "3d": "3일", "1w": "주", "1M": "월", "1y": "년" }[k] || k);
 
 function renderToolbar() {
-  const mode = state.chartMode, term = mode === "term";
-  $$("#chart-mode button").forEach((b) => b.classList.toggle("on", b.dataset.mode === mode));
-  $("#macro-syms").hidden = mode !== "macro";
-  $$(".term-only").forEach((e) => (e.hidden = !term));
-  $("#ind-btn").hidden = mode === "macro";
   $$("#overlays button").forEach((b) => b.classList.toggle("on", b.dataset.ov === "patterns" ? state.indicators.some((x) => x.key === "chartpat") : !!state.overlays[b.dataset.ov]));
   $$("#layouts button").forEach((b) => b.classList.toggle("on", b.dataset.layout === state.layout));
-  $("#lay-btn").innerHTML = `${layIcon(LAYOUTS[state.layout])}<span>분할</span>`;
+  $("#lay-btn").innerHTML = `${layIcon(LAYOUTS[state.layout])}`;
+  const ct = CTYPES.find((c) => c[0] === state.ctype) || CTYPES[0];
+  $("#ctype-btn").innerHTML = `<span class="ct-ico">${ct[2]}</span><span>${ct[1]}</span>`;
+  $("#ctype-menu").innerHTML = CTYPES.map(([k, l, ic]) => `<div class="dd-item ${k === state.ctype ? "on" : ""}" data-ctype="${k}"><span class="ct-ico">${ic}</span>${l}</div>`).join("");
+  $$("#tv-foot [data-scale]").forEach((b) => b.classList.toggle("on", b.dataset.scale === "auto" ? state.scale.auto : state.scale.mode === b.dataset.scale));
+  $$("#draw-tools [data-dt]").forEach((b) => b.classList.toggle("on", !!draw?.[{ magnet: "magnet", stay: "stay", lock: "locked", hide: "hidden" }[b.dataset.dt]]));
+  $$("#draw-tools [data-draw]").forEach((b) => b.classList.toggle("on", (draw?.tool || "cursor") === b.dataset.draw));
 }
 
+let draw = null;   // 메인 차트의 그리기 도구
 function renderChart() {
   renderToolbar();
-  const mode = state.chartMode;
-  $("#tv-main").hidden = mode === "term";
-  $("#term-grid").hidden = mode !== "term";
-  if (mode !== "term") {
-    charts.forEach((c) => c.destroy()); charts = [];
-    return renderTv(mode === "macro" ? state.macro : `BINANCE:${state.symbol}.P`, mode === "tv" ? state.studies : []);
-  }
-  $("#tv-main").innerHTML = "";
   const grid = $("#term-grid");
   const L = LAYOUTS[state.layout], n = L.n;
   if (charts.length !== n || grid.dataset.layout !== state.layout) {
@@ -183,38 +191,61 @@ function renderChart() {
         // 작은 칸에는 보조지표 창을 줄인다 (6칸 이상이면 가격 위 지표만)
         indicators: i ? state.indicators.filter((x) => INDICATORS[x.key]?.pane !== "sub").concat(n >= 6 ? [] : subInd.slice(0, 1)) : state.indicators,
         overlays: i ? { heat: false, whales: false, bots: true, scenario: false, sr: state.overlays.sr, countdown: state.overlays.countdown, ai: state.overlays.ai } : { ...state.overlays },
-        onDrawDone: () => $$("#draw-tools button").forEach((b) => b.classList.remove("on")),
-        onEditPosition: editPosition,
+        onLoad: i ? null : () => { draw?.load(); renderTree(); },
+        onLegend: i ? null : legendAction,
       }));
     });
+    draw = new Drawings(charts[0], { onChange: () => { renderStyler(); renderTree(); renderToolbar(); } });
   }
+  charts.forEach((c) => { c.ctype = state.ctype; c.setScale(state.scale); });
   charts[0]?.setLadder(!!state.overlays.ladder);
   charts.forEach((c, i) => c.load(i ? state.multi[i - 1].symbol : state.symbol, i ? state.multi[i - 1].interval : state.interval)
-    .then(() => { if (!i && state.overlays.forecast && state.forecast) c.setForecast(state.forecast); })
+    .then(() => { if (!i && state.overlays.forecast && state.forecast) c.setForecast(state.forecast); if (!i && pendingRange != null) { c.showSeconds(pendingRange); pendingRange = null; } })
     .catch((e) => toast("차트 오류", e.message, "err")));
   if (state.analysis?.symbol === state.symbol) charts[0]?.setScenario(state.overlays.scenario ? state.analysis.scenarios[0] : null, state.analysis.symbol);
 }
+let pendingRange = null;
 
-function renderTv(symbol, studies) {
-  const el = $("#tv-main");
-  if (typeof TradingView === "undefined") {
-    el.innerHTML = `<div class="empty">트레이딩뷰 스크립트를 불러오지 못했습니다. 인터넷 연결이나 광고 차단 확장 프로그램을 확인하세요.</div>`;
-    return;
-  }
-  el.innerHTML = "";
-  new TradingView.widget({
-    container_id: "tv-main", autosize: true, symbol, interval: TV_INTERVAL[state.interval] || "60",
-    timezone: "Asia/Seoul", theme: "dark", style: "1", locale: "kr",
-    backgroundColor: css("--panel"), gridColor: "rgba(255,255,255,0.04)",
-    allow_symbol_change: true, hide_side_toolbar: false, withdateranges: true, details: false, studies,
-  });
+// 범례의 지표 버튼 (숨기기 · 설정 · 지우기)
+function legendAction(act, i, btn) {
+  if (!(i >= 0)) return;
+  if (act === "hide") state.indicators = state.indicators.map((s, j) => j === i ? { ...s, hidden: !s.hidden } : s);
+  else if (act === "del") state.indicators = state.indicators.filter((_, j) => j !== i);
+  else if (act === "set") { indicatorPanel({ stopPropagation() {}, anchor: btn, focus: i }); return; }
+  savePrefs(); charts[0]?.setIndicators(state.indicators); renderTree();
+}
+
+// 선택한 그림의 모양 바 (색 · 굵기 · 점선 · 잠금 · 삭제)
+function renderStyler() {
+  const d = draw?.selected(), el = $("#draw-style");
+  if (!d) { el.hidden = true; return; }
+  el.hidden = false;
+  el.innerHTML = `<span class="muted">${esc(TOOLS[d.type]?.name || d.type)}</span>
+    ${COLORS.map((c) => `<button class="sw ${d.color === c ? "on" : ""}" data-col="${c}" style="background:${c}" title="${c}"></button>`).join("")}
+    <span class="tv-sep"></span>${[1, 2, 3, 4].map((w) => `<button class="${(d.width || 2) === w ? "on" : ""}" data-w="${w}" title="굵기 ${w}"><i style="height:${w}px"></i></button>`).join("")}
+    <button class="${d.dash ? "on" : ""}" data-dash title="점선">┄</button>
+    ${d.type === "text" ? `<button data-edit title="글자 바꾸기">✎</button>` : ""}
+    <button class="${d.locked ? "on" : ""}" data-lk title="잠금">🔒</button><button data-rm title="삭제 (Delete)">🗑</button>`;
+}
+
+// 객체 트리: 그림 목록 + 지표 목록
+function renderTree() {
+  const el = $("#side-tree");
+  if (!el || el.hidden) return;
+  const ds = draw?.list() || [];
+  el.innerHTML = `<div class="sub">그림 ${ds.length}개 <span class="muted">· ${esc(state.symbol)} (모든 봉에서 같이 보임)</span></div>
+    ${ds.map((d) => `<div class="tree-row ${d.id === draw.sel ? "sel" : ""}" data-did="${d.id}"><span class="grow">${esc(d.name)}${d.text ? ` <span class="muted">${esc(d.text)}</span>` : ""}</span>
+      <button class="flat sm" data-dhide="${d.id}" title="숨기기">${d.hidden ? "◌" : "◉"}</button><button class="flat sm" data-dlock="${d.id}" title="잠금">${d.locked ? "🔒" : "🔓"}</button><button class="flat sm" data-ddel="${d.id}" title="삭제">✕</button></div>`).join("") || '<div class="empty">왼쪽 도구로 그린 선 · 도형이 여기에 나옵니다.</div>'}
+    <div class="sub">지표 ${state.indicators.length}개</div>
+    ${state.indicators.map((s, i) => `<div class="tree-row"><span class="grow">${esc(INDICATORS[s.key]?.name || s.key)}</span>
+      <button class="flat sm" data-ihide="${i}" title="숨기기">${s.hidden ? "◌" : "◉"}</button><button class="flat sm" data-idel="${i}" title="삭제">✕</button></div>`).join("")}
+    <div class="help" style="padding:8px 10px">그림을 고르면 끌어서 옮기고 점을 끌어 모양을 바꿀 수 있습니다. Delete 삭제 · Ctrl+Z 되돌리기 · Esc 커서.</div>`;
 }
 
 // 지표 선택 패널
 function indicatorPanel(e) {
   const m = $("#ind-menu");
-  if (!m.hidden && !e.refresh) { m.hidden = true; return; }
-  if (state.chartMode === "tv") return tvStudiesMenu(e);
+  if (!m.hidden && !e.refresh && e.focus == null) { m.hidden = true; return; }
   const groups = Object.fromEntries(GROUPS.map((g) => [g, []]));
   Object.entries(INDICATORS).forEach(([k, d]) => (groups[d.group] ||= []).push([k, d]));
   const used = new Set(state.indicators.map((x) => x.key));
@@ -223,11 +254,11 @@ function indicatorPanel(e) {
       xs.map(([k, d]) => `<div class="ind-item" data-add="${k}" data-g="${esc(g)}" data-q="${esc(`${d.name} ${k} ${d.desc || ""}`.toLowerCase())}" title="${esc(d.desc || d.name)}">${esc(d.name)}${used.has(k) ? ' <span class="accent">✓</span>' : ""}</div>`).join("")).join("")}</div>
     <div class="ind-active"><div class="sub">적용된 지표 ${state.indicators.length}개 · 제한 없음</div>${state.indicators.map((s, i) => {
       const d = INDICATORS[s.key]; if (!d) return "";
-      return `<div class="ind-row"><span class="grow">${esc(d.name)}</span>${Object.entries({ ...d.params, ...s.params }).map(([k, v]) =>
+      return `<div class="ind-row ${e.focus === i ? "focus" : ""}"><span class="grow">${esc(d.name)}</span>${Object.entries({ ...d.params, ...s.params }).map(([k, v]) =>
         `<input data-i="${i}" data-p="${k}" value="${v}" title="${k}" style="width:46px">`).join("")}<button class="x" data-del="${i}">✕</button></div>`;
     }).join("")}<div class="row" style="margin-top:8px"><button class="sm" id="ind-reset">기본값으로</button></div></div></div>`;
-  const r = $("#ind-btn").getBoundingClientRect();
-  m.style.left = `${Math.max(8, Math.min(r.left, innerWidth - 640))}px`; m.style.top = `${r.bottom + 4}px`;
+  const r = (e.anchor || $("#ind-btn")).getBoundingClientRect();
+  m.style.left = `${Math.max(8, Math.min(r.left, innerWidth - 640))}px`; m.style.top = `${Math.min(r.bottom + 4, innerHeight - 420)}px`;
   m.hidden = false;
   e.stopPropagation?.();
   $("#ind-q").oninput = (ev) => {
@@ -235,31 +266,59 @@ function indicatorPanel(e) {
     $$(".ind-item", m).forEach((it) => (it.hidden = !!q && !it.dataset.q.replace(/\s+/g, "").includes(q)));
     $$(".ind-list .sub", m).forEach((h) => (h.hidden = !$$(`.ind-item[data-g="${h.dataset.g}"]`, m).some((it) => !it.hidden)));
   };
-  if (!e.refresh) $("#ind-q").focus();
+  if (!e.refresh && e.focus == null) $("#ind-q").focus();
+  if (e.focus != null) m.querySelector(".ind-row.focus input")?.focus();
 }
 function applyIndicators() {
   savePrefs();
   charts[0]?.setIndicators(state.indicators);
   indicatorPanel({ refresh: true });
-}
-function tvStudiesMenu(e) {
-  const m = $("#ind-menu");
-  const reg = state.status?.indicators || {};
-  const list = Object.values(reg).filter((v) => v.tv).map((v) => [v.tv, v.desc]);
-  list.push(["Volume@tv-basicstudies", "거래량"]);
-  m.innerHTML = `<div style="padding:6px 8px;max-width:320px" class="muted">트레이딩뷰 무료 위젯은 지표 수가 제한됩니다. 제한 없이 쓰려면 '터미널 차트'를 쓰세요.</div>` +
-    list.map(([id, l]) => `<label class="ind-item"><input type="checkbox" data-study="${id}" ${state.studies.includes(id) ? "checked" : ""} style="height:auto"> ${esc(l)}</label>`).join("");
-  const r = $("#ind-btn").getBoundingClientRect();
-  m.style.left = `${r.left}px`; m.style.top = `${r.bottom + 4}px`;
-  m.hidden = false;
-  e.stopPropagation?.();
+  renderTree();
 }
 
 function toggleFullscreen() {
-  const el = $("#chartp");
+  const el = $("#tv");
   if (document.fullscreenElement) document.exitFullscreen();
   else el.requestFullscreen?.().catch(() => toast("전체 화면을 지원하지 않는 브라우저입니다"));
 }
+
+// 오른쪽 위젯 패널 (트레이딩뷰의 오른쪽 아이콘 줄)
+const PANELS = ["watch", "dock", "ai", "sc", "fc", "fpx", "book", "alerts", "kb", "tree"];
+function showPanel(t, toggle = false) {
+  const tv = $("#tv");
+  if (toggle && state.rightTab === t && !tv.classList.contains("right-off")) { tv.classList.add("right-off"); state.rightOff = true; savePrefs(); setTimeout(() => window.dispatchEvent(new Event("resize")), 0); return; }
+  tv.classList.remove("right-off"); state.rightOff = false;
+  state.rightTab = t; savePrefs();
+  $$("#side-tabs button").forEach((b) => b.classList.toggle("on", b.dataset.t === t));
+  PANELS.forEach((k) => { const el = $(`#side-${k}`); if (el) el.hidden = k !== t; });
+  if (t === "ai") showCopilot();
+  if (t === "fpx") loadFpPanel();
+  if (t === "book") loadBook();
+  if (t === "tree") renderTree();
+  if (t === "kb") renderKb($("#side-kb"), state.symbol, state.interval);
+  if (t === "dock") emit("dockshown");
+  setTimeout(() => window.dispatchEvent(new Event("resize")), 0);
+}
+
+// 심볼 검색 창
+let symList = null;
+async function openSymbols(q = "") {
+  $("#sym-modal").hidden = false;
+  const inp = $("#sym-q");
+  inp.value = q; inp.focus();
+  if (!symList) {
+    try { symList = (await api("/api/market/heatmap?limit=400")).items; } catch { symList = []; }
+  }
+  renderSymbols();
+}
+function renderSymbols() {
+  const q = $("#sym-q").value.trim().toUpperCase();
+  const rows = (symList || []).filter((x) => !q || x.symbol.includes(q)).slice(0, 80);
+  $("#sym-list").innerHTML = rows.map((x) => `<div class="sym-row" data-pick="${x.symbol}"><b>${x.symbol.replace(/USDT$/, "")}</b><span class="muted">${x.symbol} · 무기한</span><div class="grow"></div>
+    <span>${px(x.price)}</span><span class="${cls(x.change_pct)}" style="width:64px;text-align:right">${pct(x.change_pct)}</span><span class="muted" style="width:70px;text-align:right">$${big(x.quote_volume)}</span></div>`).join("")
+    || `<div class="empty">목록에 없으면 Enter — '이더', '페페' 같은 한글 이름도 찾아 줍니다.</div>`;
+}
+function closeSymbols() { $("#sym-modal").hidden = true; }
 
 // ================================================================ 시장 판단 · 시나리오
 let analysisTimer;
@@ -396,7 +455,7 @@ function renderScenarios(a) {
   const lv = (xs, c) => xs.map((x) => `<div class="lv"><span class="dim">${esc(x.kind)}</span><span class="px ${c}">${px(x.price)}</span></div>`).join("");
   const liq = a.liquidation;
   const zone = (z) => `<div class="lv"><span class="dim">${px(z.low)} ~ ${px(z.high)}</span><span class="px">${liq.unit === "usd" ? "$" + big(z.value) : "상대 " + big(z.value)}</span></div>`;
-  $("#side-sc").innerHTML = `
+  $("#side-sc-body").innerHTML = `
     ${a.ai_comment ? `<div class="ai">${esc(a.ai_comment)}</div>` : ""}
     ${state.status?.llm ? `<div style="padding:8px 12px;border-bottom:1px solid var(--line)"><button class="sm" id="ai-comment">${a.ai_comment ? "AI 코멘트 새로고침" : "AI 코멘트 받기"}</button></div>` : ""}
     ${scs}
@@ -518,123 +577,91 @@ function renderFpPanel(f) {
       <div class="help">${esc(st.note)}. 익절은 손절 거리의 2배라 승률 34% 이상이면 본전 이상입니다.</div></div>`;
 }
 
-// ================================================================ 주문 · 계좌
-let side = "long";
-function renderOrderPreview() {
-  const m = +$("#o-margin").value || 0, lev = +$("#o-lev").value;
-  $("#o-lev-v").textContent = `${lev}x`;
-  const p = state.tickers[state.symbol]?.price;
-  const liq = p ? p * (1 - (side === "long" ? 1 : -1) * (1 / lev - 0.005)) : null;
-  const sgn = side === "long" ? 1 : -1, sl = +$("#o-sl").value, tp = +$("#o-tp").value;
-  $("#o-preview").innerHTML = `포지션 규모 <b>${fmt(m * lev, 0)} USDT</b> · 예상 강제청산가 <b class="down">${px(liq)}</b>` +
-    (p && (sl || tp) ? `<br>${sl ? `손절가 <b class="down">${px(p * (1 - sgn * sl / 100))}</b> (손실 ${fmt(m * lev * sl / 100, 0)} USDT) ` : ""}` +
-      `${tp ? `익절가 <b class="up">${px(p * (1 + sgn * tp / 100))}</b> (수익 ${fmt(m * lev * tp / 100, 0)} USDT)` : ""}` : "") +
-    `<br><span class="muted">진입 후 차트의 손절·익절 선을 끌거나 아래 포지션 표에서 바꿀 수 있습니다</span>`;
-  const b = $("#o-submit");
-  b.className = side === "long" ? "buy" : "sell";
-  b.textContent = `${side === "long" ? "롱" : "숏"} 진입 (모의)`;
-}
-
-let account = null;
-async function loadAccount() {
-  try { account = await api("/api/paper/account"); } catch { return; }
-  $("#acct").innerHTML = [["평가 자산", fmt(account.equity)], ["가용 증거금", fmt(account.free_margin)],
-    ["지갑 잔고", fmt(account.cash)], ["미실현 손익", `<span class="${cls(account.equity - account.cash)}">${fmt(account.equity - account.cash)}</span>`]]
-    .map(([k, v]) => `<div><div class="k">${k}</div><div class="v">${v}</div></div>`).join("");
-  const typing = document.activeElement?.closest?.(".edit-sltp");
-  if ((bottomTab === "pos" && !typing) || bottomTab === "fills") renderBottom();
-}
-
-async function editPosition(symbol, edit) {
-  try {
-    await api(`/api/paper/position/${symbol}`, { method: "POST", body: edit });
-    toast("손절·익절을 바꿨습니다", `${symbol} 손절 ${edit.stop ? px(edit.stop) : "없음"} · 익절 ${edit.take ? px(edit.take) : "없음"}`);
-  } catch (e) {
-    toast("손절·익절 변경 실패", e.message, "err");
-    throw e;
-  } finally {
-    loadAccount(); charts[0]?.refreshOverlays();
-  }
-}
-
 function renderPriceAlerts() {
   $("#pa-list").innerHTML = getPriceAlerts().map((a, i) => `<div class="lv" style="padding:3px 0"><span>${a.symbol.replace("USDT", "")} ${a.dir === "up" ? "≥" : "≤"} <span class="px">${px(a.price)}</span></span>
     <button class="x" data-pa="${i}">✕</button></div>`).join("") || `<div class="muted">등록된 알림 없음</div>`;
 }
 
-// ================================================================ 하단 탭
-let bottomTab = "pos", bots = [], aibot = null, fillsMode = "all";
+// ================================================================ 아래 패널
+let bottomTab = state.bottomTab && ["aisig", "bots", "scan", "ex", "news", "alerts"].includes(state.bottomTab) ? state.bottomTab : "aisig";
+let bots = [], aibot = null, scanItems = null;
 
-// AI 봇 (AI 진입 시그널을 따라 모의 매매) — 체결 내역 · 차트 옆 AI 패널에서 씀
+// AI 시그널 성과 (AI 진입 시그널을 그대로 따랐다면 — 가상 체결로 계산) — 아래 패널 · 차트 옆 AI 패널에서 씀
 export async function loadAiBot() {
   try { aibot = await api("/api/aibot"); } catch { return; }
   emit("aibot", aibot);
-  if (bottomTab === "fills") renderBottom();
+  if (bottomTab === "aisig") renderBottom();
 }
 const sg = (v) => (v > 0 ? "+" : "");
 const AIOUT = { take: "익절", stop: "손절", expired: "미체결", open: "진행 중", waiting: "진입 대기", unknown: "-" };
+const hold = (m) => m == null ? "–" : m < 120 ? `${m}분` : `${Math.round(m / 60 * 10) / 10}시간`;
 
 function aibotHtml() {
-  if (!aibot) return `<div class="muted" style="padding:8px">AI 봇 불러오는 중…</div>`;
+  if (!aibot) return `<div class="muted" style="padding:8px">불러오는 중…</div>`;
   const s = aibot.stats, set = aibot.settings;
   const st = (k, v, c = "") => `<div class="stat"><div class="k">${k}</div><div class="v ${c}">${v}</div></div>`;
   const who = (e) => (e && e !== "rules" ? "AI" : "규칙");
   const openRows = aibot.open.map((t) => `<tr><td>${mdhm(t.entry_time)} 진입</td><td>${t.symbol.replace("USDT", "")} <span class="muted">${IV_LABEL[t.interval] || t.interval}</span></td>
-    <td class="${t.side === "long" ? "up" : "down"}">${t.side === "long" ? "롱" : "숏"} ${fmt(set.leverage, 0)}x</td><td>${px(t.entry)} → <span class="muted">지금</span> ${px(t.mark)}</td>
-    <td class="accent">보유 중</td><td class="${cls(t.roe_pct)}">${pct(t.roe_pct)}</td><td class="${cls(t.pnl)}">${fmt(t.pnl)}</td><td class="${cls(t.r)}">${sg(t.r)}${t.r}R</td>
-    <td>${t.held_min != null ? `${Math.round(t.held_min / 60 * 10) / 10}시간` : "–"}</td><td>${t.confidence ?? "–"}% · ${who(t.engine)}</td>
+    <td class="${t.side === "long" ? "up" : "down"}">${t.side === "long" ? "롱" : "숏"}</td><td>${px(t.entry)} → <span class="muted">지금</span> ${px(t.mark)}</td>
+    <td class="accent">진행 중</td><td class="${cls(t.roe_pct)}">${pct(t.roe_pct)}</td><td class="${cls(t.r)}">${sg(t.r)}${t.r}R</td>
+    <td>${hold(t.held_min)}</td><td>${t.confidence ?? "–"}% · ${who(t.engine)}</td>
     <td class="muted" style="font-size:11px">손절 ${px(t.stop)} · 익절 ${px(t.take)}</td><td><button class="sm" data-botchart="${t.symbol}|${t.interval}">차트</button></td></tr>`).join("");
   const rows = aibot.trades.slice().reverse().map((t) => `<tr><td>${mdhm(t.exit_time)}</td><td>${t.symbol.replace("USDT", "")} <span class="muted">${IV_LABEL[t.interval] || t.interval}</span></td>
-    <td class="${t.side === "long" ? "up" : "down"}">${t.side === "long" ? "롱" : "숏"} ${fmt(set.leverage, 0)}x</td><td>${px(t.entry)} → ${px(t.exit)}</td>
-    <td class="${t.pnl > 0 ? "up" : "down"}">${t.label}</td><td class="${cls(t.roe_pct)}">${pct(t.roe_pct)}</td><td class="${cls(t.pnl)}">${fmt(t.pnl)}</td><td class="${cls(t.r)}">${sg(t.r)}${t.r}R</td>
-    <td>${t.held_min != null ? (t.held_min < 120 ? `${t.held_min}분` : `${Math.round(t.held_min / 60 * 10) / 10}시간`) : "–"}</td><td>${t.confidence ?? "–"}% · ${who(t.engine)}</td>
+    <td class="${t.side === "long" ? "up" : "down"}">${t.side === "long" ? "롱" : "숏"}</td><td>${px(t.entry)} → ${px(t.exit)}</td>
+    <td class="${t.pnl > 0 ? "up" : "down"}">${t.label}</td><td class="${cls(t.roe_pct)}">${pct(t.roe_pct)}</td><td class="${cls(t.r)}">${sg(t.r)}${t.r}R</td>
+    <td>${hold(t.held_min)}</td><td>${t.confidence ?? "–"}% · ${who(t.engine)}</td>
     <td class="muted" style="font-size:11px">${esc((t.reason || "").slice(0, 60))}</td><td><button class="sm" data-botchart="${t.symbol}|${t.interval}">차트</button></td></tr>`).join("");
   const sigs = aibot.signals.slice(-40).reverse().map((x) => `<tr><td>${mdhm(x.created)}</td><td>${x.symbol.replace("USDT", "")} <span class="muted">${IV_LABEL[x.interval] || x.interval}</span></td>
     <td class="${x.side === "long" ? "up" : "down"}">${x.side === "long" ? "롱" : "숏"}</td><td>진입 ${px(x.entry)} · 손절 ${px(x.stop)} · 익절 ${px(x.take)}</td>
-    <td>${x.skip ? `<span class="muted" title="${esc(x.skip)}">건너뜀</span>` : x.taken ? `<span class="accent">🤖 체결</span>` : ""} ${AIOUT[x.outcome?.status] || ""}</td>
-    <td>${x.confidence ?? "–"}% · ${who(x.engine)}</td><td class="muted" style="font-size:11px">${esc((x.trigger || x.headline || "").slice(0, 70))}</td></tr>`).join("");
+    <td>${x.skip ? `<span class="muted" title="${esc(x.skip)}">건너뜀</span> ` : ""}${AIOUT[x.outcome?.status] || ""}</td>
+    <td>${x.confidence ?? "–"}% · ${who(x.engine)}</td><td class="muted" style="font-size:11px">${esc((x.trigger || x.headline || "").slice(0, 70))}</td>
+    <td><button class="sm" data-botchart="${x.symbol}|${x.interval}">차트</button></td></tr>`).join("");
   return `<div class="stats aib-stats">
-      ${st("AI 봇 수익률", pct(s.return_pct), cls(s.return_pct))}${st("순손익", fmt(s.net_pnl), cls(s.net_pnl))}${st("평가 자산", fmt(s.equity))}
-      ${st("승률", s.win_rate != null ? `${s.win_rate}% <small class="muted">${s.wins}승 ${s.losses}패</small>` : "–")}${st("손익비", s.profit_factor ?? "–")}
-      ${st("평균 R", s.avg_r != null ? `${sg(s.avg_r)}${s.avg_r}R` : "–", cls(s.avg_r))}${st("평균 수익(증거금)", s.avg_roe_pct != null ? pct(s.avg_roe_pct) : "–", cls(s.avg_roe_pct))}
-      ${st("최대 낙폭", s.max_drawdown_pct ? `-${s.max_drawdown_pct}%` : "0%", s.max_drawdown_pct ? "down" : "")}${st("최고 / 최저", s.best != null ? `${pct(s.best, 1)} / ${pct(s.worst, 1)}` : "–")}
-      ${st("평균 보유", s.avg_hold_min != null ? (s.avg_hold_min < 120 ? `${s.avg_hold_min}분` : `${Math.round(s.avg_hold_min / 6) / 10}시간`) : "–")}${st("보유 중", `${s.open}개 <small class="${cls(s.unrealized)}">${fmt(s.unrealized)}</small>`)}
-      ${st("수수료", fmt(s.fees))}</div>
-    <div class="help" style="padding:4px 10px">🤖 AI 봇 = AI 진입 시그널(차트의 보라 표시)을 그대로 따라 한 모의 매매. 진입가에 닿으면 체결, 손절·익절에 닿으면 청산(한 봉에 둘 다면 손절), 12봉 안에 안 닿으면 미체결.
-      거래마다 증거금 = 시작 자산 ${fmt(set.initial, 0)} × ${set.position_pct}% · ${set.leverage}배 · 수수료 ${set.fee_pct}%×2. 설정은 오토파일럿 화면 'AI 자동 모드'.</div>
-    <table><tr><th>시각</th><th>코인</th><th>방향</th><th>진입 → 청산</th><th>결과</th><th>수익률</th><th>손익</th><th>R</th><th>보유</th><th>확신·엔진</th><th>근거</th><th></th></tr>
-      ${openRows}${rows || (openRows ? "" : `<tr><td colspan="12" class="muted">아직 AI 봇 체결이 없습니다. AI 진입 시그널이 나오고 진입가에 닿으면 여기에 쌓입니다.</td></tr>`)}</table>
-    ${sigs ? `<div class="sub" style="padding:8px 10px 2px">AI 진입 시그널 기록 <span class="muted">(최근 40개 · 결과는 뒤 봉으로 자동 채점)</span></div>
-      <table><tr><th>시각</th><th>코인</th><th>방향</th><th>진입 · 손절 · 익절</th><th>결과</th><th>확신·엔진</th><th>조건</th></tr>${sigs}</table>` : ""}`;
+      ${st("가상 누적 수익률", pct(s.return_pct), cls(s.return_pct))}${st("적중률", s.win_rate != null ? `${s.win_rate}% <small class="muted">${s.wins}익절 ${s.losses}손절</small>` : "–")}
+      ${st("평균 R", s.avg_r != null ? `${sg(s.avg_r)}${s.avg_r}R` : "–", cls(s.avg_r))}${st("손익비", s.profit_factor ?? "–")}
+      ${st("거래당 평균", s.avg_roe_pct != null ? pct(s.avg_roe_pct) : "–", cls(s.avg_roe_pct))}${st("최대 낙폭", s.max_drawdown_pct ? `-${s.max_drawdown_pct}%` : "0%", s.max_drawdown_pct ? "down" : "")}
+      ${st("최고 / 최저", s.best != null ? `${pct(s.best, 1)} / ${pct(s.worst, 1)}` : "–")}${st("평균 보유", hold(s.avg_hold_min))}
+      ${st("진행 중", `${s.open}개`)}${st("채점된 시그널", `${s.trades}개`)}</div>
+    <div class="help" style="padding:4px 10px">AI 진입 시그널(차트의 보라 표시)을 그대로 따랐다면 어땠는지 <b>가상으로</b> 채점합니다 — 진입가에 닿으면 체결, 손절·익절 중 먼저 닿는 쪽(한 봉에 둘 다면 손절), 12봉 안에 안 닿으면 미체결.
+      수익률은 거래당 증거금 ${set.position_pct}% · ${set.leverage}배 · 수수료 ${set.fee_pct}%×2 를 가정한 값입니다. 실제 주문은 하지 않습니다.</div>
+    <table><tr><th>시각</th><th>코인</th><th>방향</th><th>진입 → 청산</th><th>결과</th><th>수익률</th><th>R</th><th>보유</th><th>확신·엔진</th><th>근거</th><th></th></tr>
+      ${openRows}${rows || (openRows ? "" : `<tr><td colspan="11" class="muted">아직 채점된 시그널이 없습니다. AI 진입 시그널이 나오고 진입가에 닿으면 여기에 쌓입니다.</td></tr>`)}</table>
+    ${sigs ? `<div class="sub" style="padding:8px 10px 2px">AI 진입 시그널 기록 <span class="muted">(최근 40개)</span></div>
+      <table><tr><th>시각</th><th>코인</th><th>방향</th><th>진입 · 손절 · 익절</th><th>결과</th><th>확신·엔진</th><th>조건</th><th></th></tr>${sigs}</table>` : ""}`;
 }
+
+function strategyHtml() {
+  return bots.length ? `<table><tr><th>전략</th><th>종목</th><th>상태</th><th>가상 누적</th><th>지금 신호</th><th>신호 수</th><th>자동 개선</th><th></th></tr>
+      ${bots.map((b) => { const a = b.account, p = a.position, r = (a.equity / b.initial_equity - 1) * 100;
+        return `<tr><td style="text-align:left">${esc(b.name)}</td><td>${b.symbol.replace("USDT", "")} ${IV_LABEL[b.interval] || b.interval}</td><td class="${b.running ? "up" : "muted"}">${b.running ? "추적 중" : "멈춤"}</td>
+        <td class="${cls(r)}">${pct(r)}</td>
+        <td>${p ? `<span class="${p.side === "long" ? "up" : "down"}">${p.side === "long" ? "롱" : "숏"} 신호</span> ${px(p.entry_price)}` : '<span class="muted">대기</span>'}</td><td>${a.trades.length}</td>
+        <td class="${b.auto_improve ? "accent" : "muted"}">${b.auto_improve ? `켜짐 (${b.improve_every}건마다)` : "꺼짐"}</td>
+        <td><button class="sm" data-botchart="${b.symbol}|${b.interval}">차트에서 보기</button></td></tr>`; }).join("")}</table>
+      <div class="help" style="padding:6px 10px">오토파일럿이 과거 3구간 검증을 통과한 매매법과 직접 추가한 매매법을 실시간 봉으로 계속 추적합니다(포워드 테스트 · 가상). 실제 주문은 하지 않습니다.</div>`
+    : `<div class="empty">추적 중인 전략 시그널이 없습니다. 오토파일럿이 검증된 매매법을 찾으면 여기에 추가됩니다.</div>`;
+}
+
+async function loadScan() {
+  try { scanItems = (await api("/api/scanner/signals?limit=150")).items; } catch { scanItems = []; }
+  if (bottomTab === "scan") renderBottom();
+}
+function scanHtml() {
+  if (!scanItems) { loadScan(); return `<div class="muted" style="padding:8px">불러오는 중…</div>`; }
+  return scanItems.length ? `<table><tr><th>시각</th><th>코인</th><th>봉</th><th>신호</th><th>방향</th><th>강도</th><th style="text-align:left">내용</th><th></th></tr>
+    ${scanItems.map((x) => `<tr><td>${hhmm(x.created)}</td><td><b>${x.symbol.replace("USDT", "")}</b></td><td>${IV_LABEL[x.interval] || x.interval}</td><td>${esc(x.label)}</td>
+      <td class="${x.dir === "long" ? "up" : x.dir === "short" ? "down" : ""}">${x.dir === "long" ? "롱" : x.dir === "short" ? "숏" : "–"}</td><td>${"●".repeat(x.strength || 1)}</td>
+      <td style="text-align:left">${esc(x.text)}${x.ai ? `<div class="aa-sc">🤖 ${esc(x.ai)}</div>` : ""}</td><td><button class="sm" data-botchart="${x.symbol}|${x.interval}">차트</button></td></tr>`).join("")}</table>`
+    : `<div class="empty">최근 신호가 없습니다. 퀀트 → 시그널 스캐너에서 코인 · 봉 · 신호 종류를 고를 수 있습니다.</div>`;
+}
+
 function renderBottom() {
   const el = $("#bottom-body");
-  if (bottomTab === "pos") {
-    const ps = account?.positions || [];
-    el.innerHTML = ps.length ? `<table><tr><th>종목</th><th>방향</th><th>규모(USDT)</th><th>진입가</th><th>현재가</th><th>강제청산가</th><th>손절/익절</th><th>미실현 손익</th><th></th></tr>
-      ${ps.map((p) => `<tr><td>${p.symbol}</td><td class="${p.side === "long" ? "up" : "down"}">${p.side === "long" ? "롱" : "숏"} ${p.leverage}x</td>
-        <td>${fmt(p.qty * p.entry_price, 0)}</td><td>${px(p.entry_price)}</td><td>${px(p.mark_price)}</td><td class="down">${px(p.liq_price)}</td>
-        <td class="edit-sltp"><input data-sl="${p.symbol}" type="number" step="any" value="${p.stop ? px(p.stop).replace(/,/g, "") : ""}" placeholder="손절가">
-          <input data-tp="${p.symbol}" type="number" step="any" value="${p.take ? px(p.take).replace(/,/g, "") : ""}" placeholder="익절가">
-          <button class="sm" data-save="${p.symbol}">적용</button></td>
-        <td class="${cls(p.unrealized_pnl)}">${fmt(p.unrealized_pnl)} (${pct(p.roe_pct)})</td>
-        <td><button class="sm" data-aipos="${p.symbol}" title="이 포지션을 실시간 AI 로 분석">AI 분석</button> <button class="sm" data-close="${p.symbol}">시장가 청산</button></td></tr>`).join("")}</table>
-      <div class="help" style="padding:6px 10px">손절·익절은 칸에 가격을 넣고 '적용'을 누르거나, 차트의 손절·익절 선을 마우스로 끌어서 바꿀 수 있습니다. 칸을 비우고 적용하면 해제됩니다.</div>`
-      : `<div class="empty">열린 포지션이 없습니다. 오른쪽 '주문' 탭에서 모의 주문을 넣을 수 있습니다.</div>`;
-  } else if (bottomTab === "fills") {
-    const seg = `<div class="row fills-seg">${[["all", "전체"], ["ai", "🤖 AI 봇 · 시그널"], ["me", "내 계좌"]].map(([k, l]) => `<button class="flat sm ${fillsMode === k ? "on" : ""}" data-fills="${k}">${l}</button>`).join("")}</div>`;
-    const mine = `<div class="sub" style="padding:8px 10px 2px">내 계좌 체결</div><table>${tradeRows((account?.trades || []).slice().reverse())}</table>`;
-    el.innerHTML = seg + (fillsMode === "me" ? mine : fillsMode === "ai" ? aibotHtml() : aibotHtml() + mine);
-  } else if (bottomTab === "bots") {
-    el.innerHTML = bots.length ? `<table><tr><th>봇</th><th>종목</th><th>상태</th><th>평가 자산</th><th>수익률</th><th>포지션</th><th>거래</th><th>자동 개선</th><th></th></tr>
-      ${bots.map((b) => { const a = b.account, p = a.position, r = (a.equity / b.initial_equity - 1) * 100;
-        return `<tr><td>${esc(b.name)}</td><td>${b.symbol} ${IV_LABEL[b.interval] || b.interval}</td><td class="${b.running ? "up" : "muted"}">${b.running ? "실행" : "정지"}</td>
-        <td>${fmt(a.equity)}</td><td class="${cls(r)}">${pct(r)}</td>
-        <td>${p ? `<span class="${p.side === "long" ? "up" : "down"}">${p.side === "long" ? "롱" : "숏"}</span> ${px(p.entry_price)}` : "–"}</td><td>${a.trades.length}</td>
-        <td class="${b.auto_improve ? "accent" : "muted"}">${b.auto_improve ? `켜짐 (${b.improve_every}건마다)` : "꺼짐"}</td>
-        <td><button class="sm" data-botchart="${b.symbol}|${b.interval}">차트에서 보기</button></td></tr>`; }).join("")}</table>`
-      : `<div class="empty">실행 중인 페이퍼 봇이 없습니다. '전략 · 백테스트'에서 만들 수 있습니다.</div>`;
-  } else if (bottomTab === "ex") {
+  $$("#bot-tabs button").forEach((b) => b.classList.toggle("on", b.dataset.t === bottomTab));
+  if (bottomTab === "aisig") el.innerHTML = aibotHtml();
+  else if (bottomTab === "bots") el.innerHTML = strategyHtml();
+  else if (bottomTab === "scan") el.innerHTML = scanHtml();
+  else if (bottomTab === "ex") {
     const e = state.exchanges;
     if (!e) { el.innerHTML = `<div class="empty">불러오는 중…</div>`; return; }
     el.innerHTML = `<table><tr><th>거래소</th><th>시장</th><th>가격 ($)</th><th>원화 가격</th><th>바이낸스 선물 대비</th><th>김치 프리미엄</th><th>24h</th><th>펀딩비</th><th>24h 거래대금</th></tr>
@@ -643,7 +670,7 @@ function renderBottom() {
         <td class="${cls(r.diff_pct)}">${r.diff_pct == null ? "–" : pct(r.diff_pct, 3)}</td><td class="${cls(r.kimchi_pct)}">${r.kimchi_pct == null ? "–" : pct(r.kimchi_pct)}</td>
         <td class="${cls(r.change_pct)}">${pct(r.change_pct)}</td><td class="${cls(r.funding_pct)}">${r.funding_pct == null ? "–" : r.funding_pct.toFixed(4) + "%"}</td>
         <td>$${big(r.volume_usd)}</td></tr>`).join("")}</table>
-      <div class="help" style="padding:6px 10px">환율 ${e.fx_usdkrw ? fmt(e.fx_usdkrw, 1) + "원" : "–"} · 업비트 USDT ${e.usdt_krw ? fmt(e.usdt_krw, 0) + "원" : "–"} (테더 프리미엄 ${e.tether_premium_pct == null ? "–" : pct(e.tether_premium_pct)})${e.source === "synthetic" ? ' · <span class="accent">가상 데이터</span>' : ""}</div>`;
+      <div class="help" style="padding:6px 10px">환율 ${e.fx_usdkrw ? fmt(e.fx_usdkrw, 1) + "원" : "–"} · 업비트 USDT ${e.usdt_krw ? fmt(e.usdt_krw, 0) + "원" : "–"} (테더 프리미엄 ${e.tether_premium_pct == null ? "–" : pct(e.tether_premium_pct)})</div>`;
   } else if (bottomTab === "news") {
     el.innerHTML = newsRows(state.news || [], 40);
   } else if (bottomTab === "alerts") {
@@ -651,6 +678,7 @@ function renderBottom() {
       <span class="ttl">${esc(a.title)}${a.msg ? ` <span class="muted">${esc(a.msg)}</span>` : ""}</span></div>`).join("") : `<div class="empty">알림 기록이 없습니다.</div>`);
   }
 }
+
 
 export function newsRows(items, limit = 60, brief = null) {
   if (!items.length) return `<div class="empty">뉴스를 불러오지 못했습니다. 인터넷 연결을 확인하세요.</div>`;
@@ -683,40 +711,60 @@ async function loadBots() {
 }
 
 export function showOnChart(symbol, interval) {
-  state.chartMode = "term"; state.interval = interval; state.overlays.bots = true;
+  if (interval) state.interval = interval;
+  state.overlays.bots = true; state.overlays.ai = true;
   savePrefs(); renderTimeframes();
   emit("goto", "trade");
   setSymbol(symbol);
 }
 
 // ================================================================ 초기화
-export function initTrade() {
-  if (!["term", "tv", "macro"].includes(state.chartMode)) state.chartMode = "term";
-  renderTimeframes();
-  $("#macro-syms").innerHTML = MACRO.map(([s, l]) => `<button data-macro="${s}" class="${s === state.macro ? "on" : ""}">${l}</button>`).join("");
-  renderWatchlist(); renderChart(); renderOrderPreview(); renderPriceAlerts();
+function tickClock() {
+  const d = new Date(), z = (n) => String(n).padStart(2, "0"), off = -d.getTimezoneOffset() / 60;
+  $("#tv-clock").textContent = `${z(d.getHours())}:${z(d.getMinutes())}:${z(d.getSeconds())} (UTC${off >= 0 ? "+" : ""}${off})`;
+}
 
-  $("#chart-mode").onclick = (e) => { const m = e.target.dataset.mode; if (m) { state.chartMode = m; savePrefs(); renderChart(); } };
+export function initTrade() {
+  renderTimeframes();
+  $("#tv-ranges").innerHTML = RANGES.map(([k, l]) => `<button data-rng="${k}" title="${l}">${k}</button>`).join("");
+  renderWatchlist(); renderChart(); renderPriceAlerts();
+  if (state.rightOff) $("#tv").classList.add("right-off");
+  if (state.botOff) $("#tv").classList.add("bot-off");
+  showPanel(PANELS.includes(state.rightTab) ? state.rightTab : "dock");
+  if (state.rightOff) $("#tv").classList.add("right-off");
+
+  // 봉 (자주 쓰는 봉 + 펼침 메뉴 + ★)
   $("#tfs").onclick = (e) => {
-    const iv = e.target.dataset.iv;
+    const fav = e.target.closest("[data-fav]");
+    if (fav) {
+      e.stopPropagation();
+      const k = fav.dataset.fav;
+      state.favIv = state.favIv.includes(k) ? state.favIv.filter((x) => x !== k) : INTERVALS.map(([x]) => x).filter((x) => x === k || state.favIv.includes(x));
+      savePrefs(); renderTimeframes(); $("#iv-menu").hidden = false; return;
+    }
+    if (e.target.id === "iv-more") { e.stopPropagation(); $("#iv-menu").hidden = !$("#iv-menu").hidden; return; }
+    const iv = e.target.closest("[data-iv]")?.dataset.iv;
     if (!iv) return;
     state.interval = iv; savePrefs(); renderTimeframes(); renderChart(); loadAnalysis(); copilotSymbolChanged();
   };
-  $("#macro-syms").onclick = (e) => {
-    const s = e.target.dataset.macro;
-    if (!s) return;
-    state.macro = s; savePrefs();
-    $$("#macro-syms button").forEach((b) => b.classList.toggle("on", b.dataset.macro === s));
-    renderChart();
+  // 차트 종류
+  $("#ctype-btn").onclick = (e) => { e.stopPropagation(); $("#ctype-menu").hidden = !$("#ctype-menu").hidden; };
+  $("#ctype-menu").onclick = (e) => {
+    const k = e.target.closest("[data-ctype]")?.dataset.ctype;
+    if (!k) return;
+    state.ctype = k; savePrefs(); $("#ctype-menu").hidden = true;
+    charts.forEach((c) => c.setChartType(k)); renderToolbar();
   };
+  // 오버레이 메뉴
+  $("#ov-btn").onclick = (e) => { e.stopPropagation(); $("#overlays").hidden = !$("#overlays").hidden; };
   $("#overlays").onclick = (e) => {
+    e.stopPropagation();
     const k = e.target.dataset.ov;
     if (!k) return;
     if (k === "patterns") {   // 차트 패턴 = 지표 하나를 켜고 끄는 단축 버튼
       const has = state.indicators.some((x) => x.key === "chartpat");
       state.indicators = has ? state.indicators.filter((x) => x.key !== "chartpat") : [...state.indicators, { key: "chartpat", params: {} }];
       savePrefs(); renderToolbar(); charts[0]?.setIndicators(state.indicators);
-      if (!$("#ind-menu").hidden) indicatorPanel({ refresh: true });
       return;
     }
     state.overlays[k] = !state.overlays[k];
@@ -727,15 +775,20 @@ export function initTrade() {
     else charts[0]?.setOverlay(k, state.overlays[k]);
     if (k === "scenario") charts[0]?.setScenario(state.overlays.scenario ? state.analysis?.scenarios?.[0] : null, state.analysis?.symbol);
   };
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest(".dd")) $$(".dd-menu").forEach((m) => (m.hidden = true));
+    if (!e.target.closest(".lay-pick")) $("#layouts").hidden = true;
+    if (!e.target.closest("#ind-menu")) $("#ind-menu").hidden = true;
+  });
+  // 분할
   $("#layouts").innerHTML = LAYOUT_LIST.map(([k, L]) => `<button data-layout="${k}" title="${L.name}">${layIcon(L)}<span>${L.name}</span></button>`).join("");
   renderToolbar();
   $("#lay-btn").onclick = (e) => {
     e.stopPropagation();
-    const m = $("#layouts"), r = e.currentTarget.getBoundingClientRect();   // 툴바가 가로 스크롤이라 fixed 로 띄운다
+    const m = $("#layouts"), r = e.currentTarget.getBoundingClientRect();
     m.hidden = !m.hidden;
-    Object.assign(m.style, { top: `${r.bottom + 4}px`, left: `${Math.max(8, r.right - 440)}px` });
+    Object.assign(m.style, { top: `${r.bottom + 4}px`, left: `${Math.max(8, Math.min(r.left, innerWidth - 450))}px` });
   };
-  document.addEventListener("click", (e) => { if (!e.target.closest(".lay-pick")) $("#layouts").hidden = true; });
   $("#layouts").onclick = (e) => { const k = e.target.closest("[data-layout]")?.dataset.layout; if (k) { state.layout = k; $("#layouts").hidden = true; savePrefs(); renderChart(); } };
   $("#term-grid").onchange = async (e) => {
     const i = +e.target.dataset.cell;
@@ -749,15 +802,58 @@ export function initTrade() {
     savePrefs();
     charts[i]?.load(state.multi[i - 1].symbol, state.multi[i - 1].interval).catch((err) => toast("차트 오류", err.message, "err"));
   };
+  // 왼쪽 그리기 도구
   $("#draw-tools").onclick = (e) => {
-    const t = e.target.dataset.draw;
-    if (!t || !charts[0]) return;
-    if (t === "clear") { charts[0].clearDrawings(); return; }
-    const on_ = !e.target.classList.contains("on");
-    $$("#draw-tools button").forEach((b) => b.classList.remove("on"));
-    e.target.classList.toggle("on", on_);
-    charts[0].setDrawMode(on_ ? t : null);
+    const b = e.target.closest("button");
+    if (!b || !draw) return;
+    if (b.dataset.draw) { draw.setTool(draw.tool === b.dataset.draw && b.dataset.draw !== "cursor" ? "cursor" : b.dataset.draw); renderToolbar(); return; }
+    const t = b.dataset.dt;
+    if (t === "magnet") draw.magnet = !draw.magnet;
+    else if (t === "stay") draw.stay = !draw.stay;
+    else if (t === "lock") draw.locked = !draw.locked;
+    else if (t === "hide") { draw.hidden = !draw.hidden; draw.layer.update(); }
+    else if (t === "clear" && confirm(`${state.symbol} 에 그린 그림을 모두 지울까요? (Ctrl+Z 로 되돌릴 수 있음)`)) draw.clear();
+    renderToolbar();
   };
+  $("#undo-btn").onclick = () => draw?.doUndo();
+  $("#redo-btn").onclick = () => draw?.doRedo();
+  $("#draw-style").onclick = (e) => {
+    const b = e.target.closest("button");
+    if (!b || !draw) return;
+    if (b.dataset.col) draw.style({ color: b.dataset.col });
+    else if (b.dataset.w) draw.style({ width: +b.dataset.w });
+    else if ("dash" in b.dataset) draw.style({ dash: !draw.selected()?.dash });
+    else if ("lk" in b.dataset) draw.style({ locked: !draw.selected()?.locked });
+    else if ("rm" in b.dataset) draw.remove(draw.sel);
+    else if ("edit" in b.dataset) { const s = prompt("텍스트", draw.selected()?.text || ""); if (s != null) draw.style({ text: s }); }
+    renderStyler();
+  };
+  $("#side-tree").onclick = (e) => {
+    const b = e.target.closest("button"), row = e.target.closest("[data-did]");
+    if (b?.dataset.dhide) draw.toggle(b.dataset.dhide, "hidden");
+    else if (b?.dataset.dlock) draw.toggle(b.dataset.dlock, "locked");
+    else if (b?.dataset.ddel) draw.remove(b.dataset.ddel);
+    else if (b?.dataset.ihide != null) legendAction("hide", +b.dataset.ihide);
+    else if (b?.dataset.idel != null) legendAction("del", +b.dataset.idel);
+    else if (row) draw.select(row.dataset.did);
+    renderTree();
+  };
+  // 아래 기간 바 · 가격축
+  $("#tv-foot").onclick = (e) => {
+    const r = e.target.closest("[data-rng]")?.dataset.rng, sc = e.target.closest("[data-scale]")?.dataset.scale;
+    if (r) {
+      const [, , iv, sec] = RANGES.find((x) => x[0] === r);
+      const secs = r === "YTD" ? Math.floor(Date.now() / 1000 - new Date(new Date().getFullYear(), 0, 1).getTime() / 1000) : sec;
+      if (iv !== state.interval) { state.interval = iv; savePrefs(); renderTimeframes(); pendingRange = secs; renderChart(); loadAnalysis(); copilotSymbolChanged(); }
+      else charts[0]?.showSeconds(secs);
+      return;
+    }
+    if (sc === "auto") state.scale.auto = !state.scale.auto;
+    else if (sc) state.scale.mode = state.scale.mode === sc ? "normal" : sc;
+    if (sc) { savePrefs(); charts.forEach((c) => c.setScale(state.scale)); renderToolbar(); }
+  };
+  tickClock(); setInterval(tickClock, 1000);
+  // 지표
   $("#ind-btn").onclick = indicatorPanel;
   $("#ind-menu").onclick = (e) => {
     e.stopPropagation();
@@ -767,24 +863,57 @@ export function initTrade() {
     if (e.target.id === "ind-reset") { state.indicators = DEFAULT_INDICATORS; applyIndicators(); }
   };
   $("#ind-menu").onchange = (e) => {
-    if (e.target.dataset.study) {
-      const id = e.target.dataset.study;
-      state.studies = e.target.checked ? [...state.studies, id] : state.studies.filter((s) => s !== id);
-      savePrefs(); renderChart(); return;
-    }
     const i = e.target.dataset.i, k = e.target.dataset.p;
     if (i == null) return;
     const v = Number(e.target.value);
     state.indicators = state.indicators.map((s, j) => j === +i ? { ...s, params: { ...s.params, [k]: Number.isNaN(v) ? e.target.value : v } } : s);
     savePrefs(); charts[0]?.setIndicators(state.indicators);
   };
-  document.addEventListener("click", (e) => { if (!e.target.closest("#ind-menu")) $("#ind-menu").hidden = true; });
   $("#fs-btn").onclick = toggleFullscreen;
+  $("#shot-btn").onclick = () => {
+    const cv = charts[0]?.screenshot();
+    if (!cv) return;
+    const a = document.createElement("a");
+    a.href = cv.toDataURL("image/png");
+    a.download = `${state.symbol}_${state.interval}_${new Date().toISOString().slice(0, 16).replace(/[:T]/g, "")}.png`;
+    a.click();
+    toast("스크린샷을 저장했습니다", a.download);
+  };
+  $("#alert-btn").onclick = () => {
+    const p = state.tickers[state.symbol]?.price;
+    if (!p) return toast("가격을 아직 받지 못했습니다");
+    showPanel("alerts");
+    $("#pa-price").value = p; $("#pa-price").focus(); $("#pa-price").select();
+  };
+  // 심볼 검색
+  $("#symbtn").onclick = () => openSymbols();
+  $("#sym-close").onclick = closeSymbols;
+  $("#sym-modal").onclick = (e) => { if (e.target.id === "sym-modal") closeSymbols(); };
+  $("#sym-q").oninput = renderSymbols;
+  $("#sym-q").onkeydown = async (e) => {
+    if (e.key === "Escape") closeSymbols();
+    if (e.key !== "Enter" || e.isComposing) return;
+    const first = $("#sym-list [data-pick]");
+    const q = e.target.value.trim();
+    closeSymbols();
+    setSymbol(first && q && first.dataset.pick.startsWith(q.toUpperCase()) ? first.dataset.pick : await lookup(q || state.symbol));
+  };
+  $("#sym-list").onclick = (e) => { const r = e.target.closest("[data-pick]"); if (r) { closeSymbols(); setSymbol(r.dataset.pick); } };
+  // 단축키 (트레이딩뷰처럼)
   document.addEventListener("keydown", (e) => {
-    if (e.key.toLowerCase() === "f" && !e.target.closest("input, textarea, select") && $("#v-trade").classList.contains("on")) toggleFullscreen();
-    if (e.key === "Escape") { charts[0]?.setDrawMode(null); $$("#draw-tools button").forEach((b) => b.classList.remove("on")); }
+    if (!$("#v-trade").classList.contains("on") || e.target.closest("input, textarea, select") || !$("#sym-modal").hidden) return;
+    const k = e.key;
+    if (k.toLowerCase() === "f" && !e.ctrlKey && !e.metaKey && !e.altKey) { toggleFullscreen(); return; }
+    if (k === "/") { e.preventDefault(); indicatorPanel({ stopPropagation() {} }); return; }
+    if (e.altKey) {
+      const t = { t: "trend", h: "hline", v: "vline", f: "fib", r: "rect", l: "long", s: "short" }[k.toLowerCase()];
+      if (t && draw) { e.preventDefault(); draw.setTool(t); renderToolbar(); }
+      return;
+    }
+    if (!e.ctrlKey && !e.metaKey && /^[a-zA-Z0-9가-힣]$/.test(k)) { e.preventDefault(); openSymbols(k); }   // 아무 글자나 → 심볼 검색
   });
 
+  // 관심 종목
   $("#watchlist").onclick = (e) => { const r = e.target.closest("[data-sym]"); if (r) setSymbol(r.dataset.sym); };
   $("#watchlist").ondblclick = (e) => {
     const r = e.target.closest("[data-sym]");
@@ -796,76 +925,47 @@ export function initTrade() {
     const q = e.target.value; e.target.value = "";
     setSymbol(await lookup(q));
   };
-  $("#symbtn").onclick = () => $("#wl-search").focus();
 
-  $("#side-tabs").onclick = (e) => {
-    const t = e.target.closest("[data-t]")?.dataset.t;
-    if (!t) return;
-    $$("#side-tabs button").forEach((b) => b.classList.toggle("on", b.dataset.t === t));
-    $("#side-sc").hidden = t !== "sc"; $("#side-order").hidden = t !== "order"; $("#side-book").hidden = t !== "book"; $("#side-fc").hidden = t !== "fc"; $("#side-fpx").hidden = t !== "fpx";
-    $("#side-ai").hidden = t !== "ai";
-    if (t === "ai") showCopilot();
-    if (t === "fpx") loadFpPanel();
-    if (t === "book") loadBook();
-  };
+  // 오른쪽 위젯
+  $("#side-tabs").onclick = (e) => { const t = e.target.closest("[data-t]")?.dataset.t; if (t) showPanel(t, true); };
   $("#side").addEventListener("click", (e) => {
     const b = e.target.closest("[data-plan]");
     if (!b) return;
     const p = JSON.parse(b.dataset.plan);
     state.overlays.scenario = true; savePrefs(); renderToolbar();
-    if (state.chartMode !== "term") { state.chartMode = "term"; renderChart(); }
     charts[0]?.setScenario({ title: p.k === "long" ? "롱 계획" : "숏 계획", entry: p.entry, stop: p.stop, targets: [p.take] }, state.symbol);
     toast("차트에 진입 계획을 표시했습니다", `${p.k === "long" ? "롱" : "숏"} ${px(p.entry)} · 손절 ${px(p.stop)} · 익절 ${px(p.take)}`);
   });
   $("#side-sc").onclick = (e) => {
     const b = e.target.closest("[data-sc]");
     if (b) {
-      state.overlays.scenario = true; savePrefs();
-      if (state.chartMode !== "term") { state.chartMode = "term"; renderChart(); }
-      renderToolbar();
+      state.overlays.scenario = true; savePrefs(); renderToolbar();
       charts[0]?.setScenario(state.analysis.scenarios[+b.dataset.sc], state.analysis.symbol);
     }
     if (e.target.id === "ai-comment") busy(e.target, () => loadAnalysis(true));
   };
-  $$(".sidebtn button").forEach((b) => (b.onclick = () => {
-    side = b.dataset.side;
-    $$(".sidebtn button").forEach((x) => x.classList.toggle("on", x === b));
-    renderOrderPreview();
-  }));
-  ["#o-margin", "#o-lev", "#o-sl", "#o-tp"].forEach((s) => ($(s).oninput = renderOrderPreview));
-  on("tickers", renderOrderPreview);
-  $("#o-submit").onclick = (e) => busy(e.target, async () => {
-    const num = (id) => { const v = $(id).value; return v === "" ? null : Number(v); };
-    await api("/api/paper/order", { method: "POST", body: { symbol: state.symbol, side, margin: num("#o-margin"),
-      leverage: num("#o-lev"), stop_loss_pct: num("#o-sl"), take_profit_pct: num("#o-tp") } });
-    toast(`${state.symbol} ${side === "long" ? "롱" : "숏"} 체결 (모의)`, "", side === "long" ? "up" : "err");
-    loadAccount(); charts[0]?.refreshOverlays();
-  });
   $("#pa-add").onclick = () => { addPriceAlert(state.symbol, +$("#pa-price").value); $("#pa-price").value = ""; };
   $("#pa-list").onclick = (e) => { const i = e.target.dataset.pa; if (i != null) removePriceAlert(+i); };
 
+  // 아래 패널
   $("#bot-tabs").onclick = (e) => {
     const t = e.target.dataset.t;
     if (!t) return;
-    bottomTab = t;
-    $$("#bot-tabs button").forEach((b) => b.classList.toggle("on", b.dataset.t === t));
+    bottomTab = t; state.bottomTab = t; savePrefs();
+    if ($("#tv").classList.contains("bot-off")) { $("#tv").classList.remove("bot-off"); state.botOff = false; savePrefs(); }
+    if (t === "scan") loadScan();
     renderBottom();
   };
+  $("#bot-fold").onclick = () => {
+    const off = $("#tv").classList.toggle("bot-off");
+    state.botOff = off; savePrefs();
+    $("#bot-fold").textContent = off ? "▴" : "▾";
+    setTimeout(() => window.dispatchEvent(new Event("resize")), 0);
+  };
+  $("#bot-fold").textContent = state.botOff ? "▴" : "▾";
   $("#bottom-body").onclick = (e) => {
-    const sv = e.target.dataset.save;
-    if (sv) {
-      const num = (sel) => { const v = $(sel).value; return v === "" ? null : Number(v); };
-      busy(e.target, () => editPosition(sv, { stop: num(`[data-sl="${sv}"]`), take: num(`[data-tp="${sv}"]`) }));
-      return;
-    }
-    const sym = e.target.dataset.close;
-    if (sym) busy(e.target, async () => { await api(`/api/paper/close/${sym}`, { method: "POST" }); loadAccount(); charts[0]?.refreshOverlays(); });
-    const fm = e.target.dataset.fills;
-    if (fm) { fillsMode = fm; renderBottom(); return; }
     const bc = e.target.dataset.botchart;
     if (bc) { const [s, iv] = bc.split("|"); showOnChart(s, iv); }
-    const ap = e.target.dataset.aipos;
-    if (ap) { if (ap !== state.symbol) setSymbol(ap); $('#side-tabs [data-t="ai"]').click(); }
   };
   on("rechart", renderChart);
 
@@ -873,9 +973,9 @@ export function initTrade() {
   pollDerivatives(); setInterval(pollDerivatives, 30_000); setInterval(tickFunding, 1000);
   pollSentiment(); setInterval(pollSentiment, 60_000);
   loadAnalysis();
-  initCopilot({ afterTrade: () => { loadAccount(); charts[0]?.refreshOverlays(); } });
-  loadAccount(); setInterval(loadAccount, 5000);
+  initCopilot({});
   loadBots(); setInterval(loadBots, 15_000);
   loadAiBot(); setInterval(() => !document.hidden && loadAiBot(), 20_000);
+  setInterval(() => bottomTab === "scan" && !document.hidden && loadScan(), 30_000);
   renderBottom();
 }

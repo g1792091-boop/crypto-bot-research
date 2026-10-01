@@ -36,6 +36,8 @@ COINGLASS_API_KEY = os.getenv("COINGLASS_API_KEY", "")
 # binance: 바이낸스만 사용 (실패 시 에러)
 # synthetic: 오프라인 데모용 합성 캔들
 DATA_SOURCE = os.getenv("DATA_SOURCE", "auto")
+KNOWLEDGE = os.getenv("KNOWLEDGE", "1").lower() not in ("0", "false", "off", "no")   # 연구 지식 카드를 AI 프롬프트에 붙일지
+MANUAL_PAPER = os.getenv("MANUAL_PAPER", "0").lower() in ("1", "true", "on", "yes")   # 분석 전용 앱: 수동 모의 주문은 기본으로 꺼짐
 
 HTTP_TIMEOUT = float(os.getenv("HTTP_TIMEOUT", "10"))
 PAPER_POLL_SECONDS = float(os.getenv("PAPER_POLL_SECONDS", "15"))

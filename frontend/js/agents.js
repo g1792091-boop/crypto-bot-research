@@ -105,7 +105,7 @@ function detail(d) {
     ${(d.actions || []).map((a) => `<div class="tm-f ${a.action === "keep" ? "" : "warn"}"><b>${ACT[a.action]}</b> ${esc(a.target || "")} — ${esc(a.reason || "")}<div class="tm-ev">${ev(a.evidence)}</div></div>`).join("")}`);
   if (d.proposals?.length) parts.push(`<div class="tm-sec">제안 (가설)</div>${d.proposals.map((p) => `<div class="tm-f"><b>${esc(p.change)}</b> — ${esc(p.reason || "")}${p.how_to_confirm ? `<div class="muted">확인 방법: ${esc(p.how_to_confirm)}</div>` : ""}<div class="tm-ev">${ev(p.evidence)}</div></div>`).join("")}`);
   if (d.hypotheses?.length) parts.push(`<div class="tm-sec">새 매매법 가설</div>${d.hypotheses.map((h) => `<div class="tm-f"><b>${esc(h.name)}</b> (${esc(h.symbol || "")} ${esc(h.interval || "")})<div>${esc(h.rule)}</div><div class="muted">${esc(h.why || "")}</div>
-    <button class="flat sm" data-apply="hypothesis" data-rule="${esc(h.rule || "")}" data-sym="${esc(h.symbol || "")}" data-iv="${esc(h.interval || "")}" data-name="${esc(h.name || "")}" title="규칙 문장을 전략으로 바꿔 모의 매매 봇으로 시험 (관문 검증 전)">🧪 페이퍼 봇으로 시험</button></div>`).join("")}`);
+    <button class="flat sm" data-apply="hypothesis" data-rule="${esc(h.rule || "")}" data-sym="${esc(h.symbol || "")}" data-iv="${esc(h.interval || "")}" data-name="${esc(h.name || "")}" title="규칙 문장을 전략으로 바꿔 실제 시세에서 가상 체결로 추적 (관문 검증 전)">🧪 시그널로 추적</button></div>`).join("")}`);
   if (d.verdicts?.length) parts.push(`<div class="tm-sec">판정</div>${d.verdicts.map((v) => `<div class="tm-f"><span class="ai-chip ${v.verdict === "pass" ? "up" : v.verdict === "fail" ? "down" : "accent"}">${{ pass: "통과", fail: "탈락", need_more_data: "데이터 더" }[v.verdict]}</span> ${esc(v.candidate)} — ${esc(v.reason || "")}</div>`).join("")}`);
   if (d.approvals?.length) parts.push(`<div class="tm-sec">승인</div>${d.approvals.map((a) => `<div class="tm-f"><span class="ai-chip ${a.decision === "approve" ? "up" : "down"}">${a.decision === "approve" ? "승인" : "거부"}</span> ${esc(a.candidate)} — ${esc(a.reason || "")}</div>`).join("")}`);
   if (d.weights?.length) parts.push(`<div class="tm-sec">자본 배분안</div>${d.weights.map((w) => `<div class="tm-f"><b>${esc(w.bot)}</b> ${w.weight_pct}% — ${esc(w.reason || "")}</div>`).join("")}`);
@@ -160,7 +160,7 @@ function renderSide(v = runInfo) {
     <div class="panel"><div class="ph"><span class="t">오늘의 허용범위</span><div class="grow"></div>${plan ? `<span class="ai-chip ${LVL[plan.risk_level]?.[1] || ""}">위험 ${LVL[plan.risk_level]?.[0] || "-"}</span>` : ""}</div>
       <div class="pb">${plan ? `<div class="muted" style="font-size:11px;margin-bottom:4px">${esc(plan.date)} 아침 계획${today ? "" : " (오래됨 — 봇 관문에 쓰지 않음)"}</div>
         <table class="tm-tbl">${Object.entries(plan.allowed).map(([s, a]) => `<tr><td>${s.replace("USDT", "")}</td><td><span class="ai-chip ${DIR[a.direction][1]}">${DIR[a.direction][0]}</span></td><td class="muted">${a.strategist !== a.direction ? `전략가 ${DIR[a.strategist][0]} → 좁힘` : ""}</td></tr>`).join("")}</table>
-        <div class="help">전략가 초안을 리스크 책임자가 승인하거나 좁힌 결과입니다 (넓히기는 코드가 거부). 봇 관문이 켜져 있으면 페이퍼 봇이 이 방향으로만 진입합니다.</div>`
+        <div class="help">전략가 초안을 리스크 책임자가 승인하거나 좁힌 결과입니다 (넓히기는 코드가 거부). 관문이 켜져 있으면 전략 시그널이 이 방향으로만 진입합니다.</div>`
         : `<div class="muted">아직 없음 — '아침 계획'을 실행하세요.</div>`}</div></div>
     ${lead ? `<div class="panel"><div class="ph"><span class="t">팀장 요약</span></div><div class="pb"><ol class="tm-ol">${lead.summary.map((x) => `<li>${esc(x)}</li>`).join("")}</ol>
       ${lead.human_actions.length ? `<div class="tm-sec">사람이 할 일</div><ul class="reasons">${lead.human_actions.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}</div></div>` : ""}
@@ -172,13 +172,13 @@ function renderSide(v = runInfo) {
         return `<div class="tm-f ${c.gate?.passed ? "" : "muted"}"><b>${esc(c.target)}</b> <span class="muted">${c.kind === "improve" ? "봇 수정안" : "새 가설"}</span>
           <div>관문 ${c.gate?.passed ? '<span class="up">통과</span>' : `<span class="down">탈락</span> — ${esc(c.gate?.reason || "")}`}${a ? ` · 승인관 ${a.decision === "approve" ? '<span class="up">승인</span>' : '<span class="down">거부</span>'}` : ""}</div>
           ${c.rule ? `<div class="muted" style="font-size:11px">${esc(c.rule)}</div>` : ""}
-          ${ok ? `<button class="pri sm" data-apply="candidate" data-cand="${esc(c.id)}">${c.kind === "improve" ? "봇에 적용" : "페이퍼 봇으로 시작"}</button>`
-            : c.kind === "hypothesis" && c.rule ? `<button class="flat sm" data-apply="candidate" data-force="1" data-cand="${esc(c.id)}" title="승인·관문 통과 전이지만 모의 매매로 시험">🧪 관찰 봇으로 시험 (미검증)</button>` : ""}</div>`; }).join("")}</div></div>` : ""}
+          ${ok ? `<button class="pri sm" data-apply="candidate" data-cand="${esc(c.id)}">${c.kind === "improve" ? "봇에 적용" : "시그널 추적 시작"}</button>`
+            : c.kind === "hypothesis" && c.rule ? `<button class="flat sm" data-apply="candidate" data-force="1" data-cand="${esc(c.id)}" title="승인·관문 통과 전이지만 가상 체결로 추적">🧪 관찰 시그널로 추적 (미검증)</button>` : ""}</div>`; }).join("")}</div></div>` : ""}
     <div class="panel"><div class="ph"><span class="t">설정</span></div><div class="pb tm-set">
       <div class="tm-sec">자동 회의 (프로그램이 켜져 있을 때, 한국 시간)</div>
       ${[["morning", "아침 계획"], ["evening", "저녁 점검"], ["weekly", "주간 검토"]].map(([k, l]) => `<label><input type="checkbox" data-auto="${k}" ${S.auto[k] ? "checked" : ""}> ${l} <input class="tm-time" data-time="${k}" value="${esc(S.times[k])}"></label>`).join("")}
       <label title="AI 포지션 감시의 위험 경고나 큰 손실(ROE -30% 이하·강제청산)이 나면 긴급 복기 (1시간에 한 번)"><input type="checkbox" data-auto="emergency" ${S.auto.emergency ? "checked" : ""}> 긴급 복기 자동</label>
-      <label title="켜면 페이퍼 봇이 오늘의 허용범위 밖 방향으로는 진입하지 않습니다 (코드 관문)"><input type="checkbox" id="tm-gate" ${S.bot_gate ? "checked" : ""}> 봇 관문 (허용범위를 봇에 적용)</label>
+      <label title="켜면 전략 시그널이 오늘의 허용범위 밖 방향으로는 진입하지 않습니다 (코드 관문)"><input type="checkbox" id="tm-gate" ${S.bot_gate ? "checked" : ""}> 봇 관문 (허용범위를 봇에 적용)</label>
       <label>분석 코인 <input id="tm-coins" value="${esc(S.coins.map((c) => c.replace("USDT", "")).join(", "))}"></label>
       <label>하루 AI 호출 상한 <input id="tm-limit" type="number" value="${S.daily_call_limit}" style="width:70px"></label>
       <button class="sm" id="tm-save">설정 저장</button></div></div>
@@ -200,9 +200,9 @@ async function onClick(e) {
   if (a) {
     const k = a.dataset.apply;
     const force = !!a.dataset.force;
-    if (!confirm({ pause_all: "모든 페이퍼 봇을 멈출까요?", pause_bot: `봇 '${a.dataset.target}' 을 멈출까요?`,
-      candidate: force ? "검증을 통과하지 않은 가설입니다. 관찰용 페이퍼 봇(모의 매매)으로 시험할까요?" : "승인된 후보를 적용할까요? (페이퍼 봇)",
-      hypothesis: `이 가설을 페이퍼 봇(모의 매매)으로 시험할까요?\n${a.dataset.rule}\n(규칙 문장을 전략으로 바꾸는 데 AI 가 10~30초 걸릴 수 있음)` }[k])) return;
+    if (!confirm({ pause_all: "모든 전략 시그널 추적을 멈출까요?", pause_bot: `봇 '${a.dataset.target}' 을 멈출까요?`,
+      candidate: force ? "검증을 통과하지 않은 가설입니다. 관찰용 전략 시그널(가상 체결)로 추적할까요?" : "승인된 후보를 적용할까요? (전략 시그널 · 가상 체결)",
+      hypothesis: `이 가설을 전략 시그널(가상 체결)로 추적할까요?\n${a.dataset.rule}\n(규칙 문장을 전략으로 바꾸는 데 AI 가 10~30초 걸릴 수 있음)` }[k])) return;
     await busy(a, async () => {
       const r = await api("/api/team/apply", { method: "POST", body: { kind: k, target: a.dataset.target, run_id: runInfo?.id || cur, candidate: a.dataset.cand, force,
         rule: a.dataset.rule, symbol: a.dataset.sym, interval: a.dataset.iv, name: a.dataset.name } });

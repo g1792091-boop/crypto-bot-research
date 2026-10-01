@@ -11,21 +11,20 @@ export const state = {
   symbol: saved.symbol || "BTCUSDT",
   interval: saved.interval || "1h",
   watch: saved.watch || ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "BNBUSDT", "DOGEUSDT", "ADAUSDT", "AVAXUSDT", "LINKUSDT", "SUIUSDT"],
-  studies: saved.studies || ["MAExp@tv-basicstudies", "RSI@tv-basicstudies"],
-  chartMode: saved.chartMode || "term",
   indicators: saved.indicators,
   overlays: saved.overlays,
   layout: saved.layout,
   multi: saved.multi,
-  macro: saved.macro || "NASDAQ:NDX",
+  ctype: saved.ctype, scale: saved.scale, favIv: saved.favIv,          // 차트 종류 · 가격축 · 자주 쓰는 봉
+  rightTab: saved.rightTab, rightOff: saved.rightOff, botOff: saved.botOff, bottomTab: saved.bottomTab,   // 패널 배치
   spec: null,
   analysis: null,
   tickers: {},
 };
 
 export function savePrefs() {
-  const { symbol, interval, watch, studies, chartMode, macro, indicators, overlays, layout, multi } = state;
-  try { localStorage.setItem("ft.prefs", JSON.stringify({ symbol, interval, watch, studies, chartMode, macro, indicators, overlays, layout, multi })); } catch { /* 저장 불가 환경 */ }
+  const { symbol, interval, watch, indicators, overlays, layout, multi, ctype, scale, favIv, rightTab, rightOff, botOff, bottomTab } = state;
+  try { localStorage.setItem("ft.prefs", JSON.stringify({ symbol, interval, watch, indicators, overlays, layout, multi, ctype, scale, favIv, rightTab, rightOff, botOff, bottomTab })); } catch { /* 저장 불가 환경 */ }
   clearTimeout(apTimer); apTimer = setTimeout(syncAutopilot, 1500);
 }
 
@@ -109,7 +108,7 @@ export function makeChart(el, extra = {}) {
   return LightweightCharts.createChart(el, {
     autoSize: true,
     layout: { background: { type: "solid", color: css("--panel") }, textColor: css("--text-2"), fontSize: 11,
-      fontFamily: getComputedStyle(document.body).fontFamily },
+      fontFamily: getComputedStyle(document.body).fontFamily, attributionLogo: false },
     grid: { vertLines: { color: "rgba(255,255,255,.035)" }, horzLines: { color: "rgba(255,255,255,.035)" } },
     rightPriceScale: { borderColor: css("--line") },
     timeScale: { borderColor: css("--line"), timeVisible: true, secondsVisible: false },
@@ -117,19 +116,6 @@ export function makeChart(el, extra = {}) {
     localization: { locale: "ko-KR", priceFormatter: px },
     ...extra,
   });
-}
-
-export function tvTheme() {
-  return { colorTheme: "dark", isTransparent: false, backgroundColor: css("--panel"), locale: "kr", width: "100%", height: "100%" };
-}
-
-export function embedTvWidget(el, script, config) {
-  el.innerHTML = `<div class="tradingview-widget-container" style="height:100%"><div class="tradingview-widget-container__widget" style="height:100%"></div></div>`;
-  const s = document.createElement("script");
-  s.src = `https://s3.tradingview.com/external-embedding/${script}`;
-  s.async = true;
-  s.text = JSON.stringify(config);
-  el.firstChild.appendChild(s);
 }
 
 export function tradeRows(trades) {

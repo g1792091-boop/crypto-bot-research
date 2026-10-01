@@ -34,8 +34,8 @@ JOBS = {
     "signals": ("AI 진입 시그널 (모든 코인)", "관심 종목 코인을 차례로 분석해 진입 시그널을 차트에 표시 · 알림"),
     "team": ("에이전트 팀 상황 브리핑", "부르지 않아도 팀이 모여 지금 상황 브리핑 (채팅방에 남음)"),
     "market": ("마켓 브리핑", "장세·심리·펀딩·호가·뉴스·일정으로 지금 시장 요약"),
-    "risk": ("포트폴리오 리스크", "모의 계좌 + 봇 포지션의 위험 점검과 할 일"),
-    "bots": ("봇 코치", "페이퍼 봇 성과 점검 · 성과 나쁜 봇 코드 관문 개선"),
+    "risk": ("시그널 리스크", "전략 시그널 가상 포지션의 위험 점검"),
+    "bots": ("시그널 코치", "전략 시그널 성과 점검 · 성과 나쁜 매매법 코드 관문 개선"),
     "scanner": ("스캐너 시그널 코멘트", "강한 시그널마다 AI 근거·주의점 한 줄"),
 }
 SETTINGS = {
@@ -71,10 +71,10 @@ COMMON = ("너는 코인 선물 트레이더를 돕는 분석가다. 입력 JSON
 PROMPTS = {
     "market": COMMON + " 지금 코인 시장을 한 장으로 요약한다: 코인별 장세(1h·4h·1d), 공포·탐욕, 도미넌스, 펀딩비·미결제약정·"
               "호가 쏠림, 뉴스 헤드라인, 가까운 경제 일정. bias 는 BTC 기준 방향. 큰 일정 직전·펀딩 과열·급변은 caution/danger.",
-    "risk": COMMON + " 모의 계좌와 페이퍼 봇들의 포지션 위험을 점검한다: 청산가까지 거리, 손절 없는 포지션, 레버리지, 같은 방향 쏠림, "
+    "risk": COMMON + " 전략 시그널(가상 체결)들의 포지션 위험을 점검한다: 청산가까지 거리, 손절 없는 포지션, 레버리지, 같은 방향 쏠림, "
             "VaR·BTC 급락 스트레스 손실, 계좌 낙폭. actions 에는 줄일 것·손절 둘 곳처럼 구체적인 조치를 쓴다. "
             "포지션이 없으면 level=ok 로 짧게.",
-    "bots": COMMON + " 페이퍼 봇들의 성과(거래 수·승률·손익비·수익률·낙폭·최근 로그)를 보고 어떤 봇을 유지·주의·멈춤 할지 권고한다. "
+    "bots": COMMON + " 전략 시그널(가상 체결)들의 성과(거래 수·승률·손익비·수익률·낙폭·최근 로그)를 보고 어떤 봇을 유지·주의·멈춤 할지 권고한다. "
             "거래가 20건 미만이면 판단을 미룬다(표본 부족). auto_actions 는 코드가 이미 한 일이니 그대로 요약에 포함한다.",
 }
 
@@ -403,7 +403,7 @@ def ctx_risk() -> dict:
 def rules_risk(ctx: dict) -> Insight:
     det = ctx.get("positions_detail") if isinstance(ctx.get("positions_detail"), list) else []
     if not det:
-        return Insight(headline="열린 포지션 없음 — 위험 노출 없음", level="ok", points=["모의 계좌와 봇에 열린 포지션이 없습니다."])
+        return Insight(headline="열린 시그널 포지션 없음", level="ok", points=["전략 시그널에 진행 중인 가상 포지션이 없습니다."])
     pts, acts, lvl = [], [], "ok"
     for p in det:
         who = "내" if p.get("kind") == "manual" else p.get("target", "봇")
@@ -474,7 +474,7 @@ def ctx_bots() -> dict:
 def rules_bots(ctx: dict) -> Insight:
     bots = ctx.get("bots") or {}
     if not bots:
-        return Insight(headline="돌고 있는 페이퍼 봇 없음", level="ok", points=["전략 · 백테스트나 오토파일럿에서 봇을 시작하면 여기서 점검합니다."],
+        return Insight(headline="추적 중인 전략 시그널 없음", level="ok", points=["전략 · 백테스트나 오토파일럿에서 봇을 시작하면 여기서 점검합니다."],
                        actions=list(ctx.get("auto_actions") or []))
     pts, acts, lvl = [], list(ctx.get("auto_actions") or []), "ok"
     for n, b in sorted(bots.items(), key=lambda kv: -(kv[1].get("return_pct") or 0)):
@@ -581,9 +581,9 @@ def aibot_notify() -> int:
     for e in aibot.events():
         side = "롱" if e["side"] == "long" else "숏"
         if e["kind"] == "entry":
-            text = f"AI 봇 {side} 진입 {e['entry']:.6g} · 손절 {e['stop']:.6g} · 익절 {e['take']:.6g}"
+            text = f"AI 시그널 {side} 가상 진입 {e['entry']:.6g} · 손절 {e['stop']:.6g} · 익절 {e['take']:.6g}"
         else:
-            text = f"AI 봇 {side} 청산 — {e['label']} {e['exit']:.6g} · 증거금 대비 {e['roe_pct']:+.1f}% ({e['pnl']:+.0f}) · {e['r']:+.2f}R"
+            text = f"AI 시그널 {side} 결과 — {e['label']} {e['exit']:.6g} · {e['r']:+.2f}R (가상 증거금 대비 {e['roe_pct']:+.1f}%)"
         autopilot._signal({"type": "aibot", "symbol": e["symbol"], "interval": e["interval"], "side": e["side"], "status": "ai",
                            "strategy": (e.get("reason") or "")[:80], "text": text, "pnl": e["pnl"] if e["kind"] == "exit" else None,
                            "event": e["kind"], "entry": e["entry"], "stop": e["stop"], "take": e["take"]})

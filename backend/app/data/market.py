@@ -222,8 +222,16 @@ def global_dominance() -> dict:
 
 def heatmap(limit: int = 60) -> list[dict]:
     """선물 거래대금 상위 코인의 24h 등락률 (히트맵용)."""
-    def fetch():
-        rows = binance.tickers_24h()
-        rows.sort(key=lambda r: -r["quote_volume"])
-        return rows[:limit]
-    return _cached(("heatmap", limit), 30, fetch)
+    if config.DATA_SOURCE == "synthetic":
+        rows = tickers(["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "BNBUSDT", "DOGEUSDT", "ADAUSDT", "LINKUSDT", "AVAXUSDT", "SUIUSDT"])[0]
+        return sorted(rows, key=lambda r: -r["quote_volume"])[:limit]
+    fns = {"binance": binance.tickers_24h, "bybit": altex.bybit_tickers, "okx": altex.okx_tickers}
+    err = {}
+    for src in sources():
+        try:
+            rows = list(_cached(("tickers", src), 30, fns[src]))
+            rows.sort(key=lambda r: -(r.get("quote_volume") or 0))
+            return rows[:limit]
+        except Exception as e:
+            err[src] = str(e)[:100]
+    raise RuntimeError("거래소 시세를 받지 못했습니다: " + " / ".join(f"{NAMES[k]}: {v}" for k, v in err.items()))

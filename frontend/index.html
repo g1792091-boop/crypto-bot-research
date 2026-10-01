@@ -7,7 +7,6 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
   <link rel="stylesheet" href="/static/style.css">
   <script src="/static/vendor/lightweight-charts.standalone.production.js"></script>
-  <script src="https://s3.tradingview.com/tv.js"></script>
 </head>
 <body>
 <header class="topbar">
@@ -28,112 +27,96 @@
   </button>
 </header>
 
-<!-- ============================================================ 트레이드 -->
+<!-- ============================================================ 트레이드 (트레이딩뷰 방식 · 자체 제작) -->
 <section class="view on" id="v-trade">
-  <div class="tickerbar" id="tickerbar">
-    <button class="symbtn" id="symbtn">BTCUSDT<small>무기한</small></button>
-    <div class="lastpx" id="t-last">–</div>
-    <div class="tk"><span class="k">24h 변동</span><span class="v" id="t-chg">–</span></div>
-    <div class="tk"><span class="k">24h 고가</span><span class="v" id="t-high">–</span></div>
-    <div class="tk"><span class="k">24h 저가</span><span class="v" id="t-low">–</span></div>
-    <div class="tk"><span class="k">24h 거래대금</span><span class="v" id="t-vol">–</span></div>
-    <div class="tk"><span class="k">펀딩비 / 남은 시간</span><span class="v" id="t-fund">–</span></div>
-    <div class="tk"><span class="k">미결제약정</span><span class="v" id="t-oi">–</span></div>
-    <div class="tk"><span class="k">롱/숏 비율</span><span class="v" id="t-ls">–</span></div>
-    <div class="tk"><span class="k">김치 프리미엄</span><span class="v" id="t-kimp">–</span></div>
-    <div class="tk"><span class="k">공포·탐욕</span><span class="v" id="t-fng">–</span></div>
-    <button class="ai-badge" id="ai-badge" title="실시간 AI 판단 — 누르면 AI 탭"><span class="muted">🤖 AI 분석 중…</span></button>
-  </div>
-
-  <div class="trade">
-    <aside class="watch">
-      <div class="ph"><span class="t">관심 종목</span></div>
-      <input id="wl-search" placeholder="심볼 검색 / 추가 (예: PEPE)">
-      <div class="pb"><table class="wl" id="watchlist"></table></div>
-    </aside>
-
-    <section class="chartp" id="chartp">
-      <div class="toolbar">
-        <div class="seg" id="chart-mode">
-          <button data-mode="term">터미널 차트</button>
-          <button data-mode="tv">트레이딩뷰</button>
-          <button data-mode="macro">나스닥 · 매크로</button>
-        </div>
-        <span class="sep"></span>
-        <div class="seg" id="tfs"></div>
-        <div class="grow"></div>
-        <div class="lay-pick term-only"><button class="flat sm" id="lay-btn" title="차트 분할 (한 화면에 여러 차트)"></button><div class="lay-menu" id="layouts" hidden></div></div>
-        <button class="flat sm" id="fs-btn" title="전체 화면 (F)">
-          <svg class="i" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
-        </button>
-      </div>
-      <div class="toolbar toolbar2">
-        <button class="flat sm" id="ind-btn">지표 +</button>
-        <div class="seg" id="macro-syms" hidden></div>
-        <span class="sep term-only"></span>
-        <div class="seg term-only" id="overlays">
+  <div class="tv" id="tv">
+    <header class="tv-top" id="tv-top">
+      <button class="tv-sym" id="symbtn" title="심볼 검색 (차트에서 아무 글자나 입력해도 열림)"><svg class="ti" viewBox="0 0 28 28"><circle cx="12" cy="12" r="7"/><path d="M17 17l6 6"/></svg><b id="sym-name">BTCUSDT</b><small>무기한</small></button>
+      <span class="tv-sep"></span>
+      <div class="tv-ivs" id="tfs"></div>
+      <span class="tv-sep"></span>
+      <div class="dd"><button class="tv-btn" id="ctype-btn" title="차트 종류"></button><div class="dd-menu" id="ctype-menu" hidden></div></div>
+      <span class="tv-sep"></span>
+      <button class="tv-btn" id="ind-btn" title="지표 (/)"><svg class="ti" viewBox="0 0 28 28"><path d="M9 21c2 0 2-3 3-7s1-7 4-7M8 13h7M17 15l5 6M22 15l-5 6"/></svg><span>지표</span></button>
+      <div class="dd"><button class="tv-btn" id="ov-btn" title="분석 오버레이"><svg class="ti" viewBox="0 0 28 28"><path d="M4 10l10-5 10 5-10 5zM4 15l10 5 10-5M4 19l10 5 10-5"/></svg><span>오버레이</span></button>
+        <div class="dd-menu ov-menu" id="overlays" hidden>
+          <button data-ov="ai" title="AI 진입 시그널과 AI 시그널 성과(가상 체결 · 익절/손절)">AI 시그널</button>
+          <button data-ov="bots" title="검증된 전략 시그널의 포워드 테스트 기록">전략 시그널</button>
+          <button data-ov="sr" title="자동 지지·저항 구간과 추세선">지지·저항</button>
+          <button data-ov="scenario" title="자동 시나리오 진입/손절/목표선">시나리오선</button>
+          <button data-ov="patterns" title="헤드앤숄더 · 쌍봉/쌍바닥 · 삼각형 · 쐐기 · 깃발 · 채널 자동 인식">차트 패턴</button>
+          <button data-ov="forecast" title="과거 비슷한 차트로 본 예상 범위와 다음 봉 예측">패턴 예측</button>
           <button data-ov="heat" title="청산이 몰린 가격대">청산맵</button>
           <button data-ov="whales" title="고래 체결 버블 + 호가 벽">고래맵</button>
-          <button data-ov="sr" title="자동 지지·저항 구간과 추세선">지지·저항</button>
-          <button data-ov="bots" title="페이퍼 봇 · 내 모의 매매 진입/청산 기록">매매 기록</button>
-          <button data-ov="ai" title="AI 진입 시그널(보라 점) · 🤖 AI 봇 진입(보라 화살표) · 청산(익절/손절 수익률) · 보유 중인 AI 봇의 진입·손절·익절선">AI 봇 · 시그널</button>
-          <button data-ov="scenario" title="자동 시나리오 진입/손절/목표선">시나리오선</button>
-          <button data-ov="footprint" title="봉 안의 가격대별 매수·매도 체결량 (확대하면 숫자)">풋프린트</button>
-          <button data-ov="patterns" title="헤드앤숄더 · 쌍봉/쌍바닥 · 삼각형 · 쐐기 · 깃발 · 채널 등을 자동으로 찾아 선과 목표가 표시">차트 패턴</button>
-          <button data-ov="forecast" title="과거 비슷한 차트로 본 앞으로의 예상 범위(부채꼴)와 다음 봉 예측(흐린 캔들)">패턴 예측</button>
-          <button data-ov="ladder" title="차트 옆에 가격대마다 거래량 · 호가 잔량 · 지지저항 · POC · 내 포지션 · 전일/전주 고저를 전부 표시">가격 사다리</button>
-          <button data-ov="countdown" title="가격축 현재가 아래에 봉 마감까지 남은 시간">마감 카운트</button>
-        </div>
-        <span class="sep term-only"></span>
-        <div class="seg term-only" id="draw-tools">
-          <button data-draw="hline" title="수평선 (클릭)">수평선</button>
-          <button data-draw="trend" title="추세선 (두 번 클릭)">추세선</button>
-          <button data-draw="clear" title="그린 선 모두 지우기">지우기</button>
-        </div>
-        <div class="grow"></div>
-      </div>
-      <div class="chartwrap" id="chartwrap">
-        <div id="tv-main"></div>
-        <div id="term-grid" class="term-grid l1"></div>
+          <button data-ov="footprint" title="봉 안의 가격대별 매수·매도 체결량">풋프린트</button>
+          <button data-ov="ladder" title="차트 옆 가격 사다리 (거래량 · 호가 · 지지저항 · POC)">가격 사다리</button>
+          <button data-ov="countdown" title="가격축에 봉 마감까지 남은 시간">마감 카운트</button>
+        </div></div>
+      <button class="tv-btn" id="alert-btn" title="지금 가격에 알림 추가"><svg class="ti" viewBox="0 0 28 28"><circle cx="14" cy="15" r="8"/><path d="M14 11v4l3 2M6 6l3-2M22 6l-3-2"/></svg><span>알림</span></button>
+      <span class="tv-sep"></span>
+      <div class="lay-pick"><button class="tv-btn" id="lay-btn" title="차트 분할"></button><div class="lay-menu" id="layouts" hidden></div></div>
+      <button class="tv-btn" id="undo-btn" title="되돌리기 (Ctrl+Z)"><svg class="ti" viewBox="0 0 28 28"><path d="M9 10H18a5 5 0 0 1 0 10h-6M9 10l4-4M9 10l4 4"/></svg></button>
+      <button class="tv-btn" id="redo-btn" title="다시 하기 (Ctrl+Y)"><svg class="ti" viewBox="0 0 28 28"><path d="M19 10H10a5 5 0 0 0 0 10h6M19 10l-4-4M19 10l-4 4"/></svg></button>
+      <div class="grow"></div>
+      <button class="ai-badge" id="ai-badge" title="실시간 AI 판단 — 누르면 AI 분석"><span class="muted">🤖 AI 분석 중…</span></button>
+      <button class="tv-btn" id="shot-btn" title="스크린샷 (PNG 저장)"><svg class="ti" viewBox="0 0 28 28"><rect x="4" y="8" width="20" height="14" rx="2"/><circle cx="14" cy="15" r="4"/><path d="M10 8l2-3h4l2 3"/></svg></button>
+      <button class="tv-btn" id="fs-btn" title="전체 화면 (F)"><svg class="ti" viewBox="0 0 28 28"><path d="M5 11V5h6M23 11V5h-6M5 17v6h6M23 17v6h-6"/></svg></button>
+    </header>
+    <nav class="tv-left" id="draw-tools"><button data-draw="cursor" title="커서 (Esc)"><svg class="ti" viewBox="0 0 28 28"><path d="M8 5l12 9-5.5 1.2L18 21l-2.4 1.1-2.6-5.6L8.5 20z"/></svg></button><span class="tv-lsep"></span><button data-draw="trend" title="추세선"><svg class="ti" viewBox="0 0 28 28"><path d="M5 22L23 6"/><circle cx="5" cy="22" r="2"/><circle cx="23" cy="6" r="2"/></svg></button><button data-draw="ray" title="레이"><svg class="ti" viewBox="0 0 28 28"><path d="M5 20L25 8"/><circle cx="5" cy="20" r="2"/><circle cx="13" cy="15" r="2"/></svg></button><button data-draw="extended" title="연장선"><svg class="ti" viewBox="0 0 28 28"><path d="M2 21L26 7"/><circle cx="9" cy="17" r="2"/><circle cx="19" cy="11" r="2"/></svg></button><button data-draw="hline" title="수평선"><svg class="ti" viewBox="0 0 28 28"><path d="M3 14h22"/><circle cx="14" cy="14" r="2"/></svg></button><button data-draw="hray" title="수평 레이"><svg class="ti" viewBox="0 0 28 28"><path d="M10 14h16"/><circle cx="10" cy="14" r="2"/></svg></button><button data-draw="vline" title="수직선"><svg class="ti" viewBox="0 0 28 28"><path d="M14 3v22"/><circle cx="14" cy="14" r="2"/></svg></button><button data-draw="channel" title="평행 채널 (3점)"><svg class="ti" viewBox="0 0 28 28"><path d="M4 18L20 6M8 24L24 12"/><circle cx="4" cy="18" r="1.6"/><circle cx="20" cy="6" r="1.6"/></svg></button><span class="tv-lsep"></span><button data-draw="fib" title="피보나치 되돌림"><svg class="ti" viewBox="0 0 28 28"><path d="M4 6h20M4 11h20M4 15h20M4 19h20M4 23h20" stroke-width="1.2"/><circle cx="4" cy="23" r="1.6"/><circle cx="24" cy="6" r="1.6"/></svg></button><button data-draw="fibext" title="피보나치 확장 (3점)"><svg class="ti" viewBox="0 0 28 28"><path d="M4 8h20M4 14h20M4 20h20" stroke-width="1.2"/><path d="M5 22l6-12 6 6"/><circle cx="5" cy="22" r="1.5"/></svg></button><span class="tv-lsep"></span><button data-draw="long" title="롱 포지션 (진입·손절·목표 · RR)"><svg class="ti" viewBox="0 0 28 28"><rect x="5" y="5" width="18" height="8" fill="rgba(8,153,129,.35)" stroke="#089981"/><rect x="5" y="13" width="18" height="7" fill="rgba(242,54,69,.3)" stroke="#f23645"/></svg></button><button data-draw="short" title="숏 포지션"><svg class="ti" viewBox="0 0 28 28"><rect x="5" y="5" width="18" height="7" fill="rgba(242,54,69,.3)" stroke="#f23645"/><rect x="5" y="12" width="18" height="8" fill="rgba(8,153,129,.35)" stroke="#089981"/></svg></button><button data-draw="range" title="가격 범위 (변동폭 · %)"><svg class="ti" viewBox="0 0 28 28"><path d="M14 4v20M9 9l5-5 5 5M9 19l5 5 5-5"/></svg></button><button data-draw="daterange" title="날짜·가격 범위"><svg class="ti" viewBox="0 0 28 28"><rect x="5" y="6" width="18" height="16"/><path d="M14 6v16M5 14h18" stroke-dasharray="2 2"/></svg></button><span class="tv-lsep"></span><button data-draw="rect" title="사각형"><svg class="ti" viewBox="0 0 28 28"><rect x="5" y="7" width="18" height="14"/></svg></button><button data-draw="arrow" title="화살표"><svg class="ti" viewBox="0 0 28 28"><path d="M5 22L22 6M22 6h-7M22 6v7"/></svg></button><button data-draw="text" title="텍스트 (더블클릭으로 수정)"><svg class="ti" viewBox="0 0 28 28"><path d="M7 7h14M14 7v15"/></svg></button><button data-draw="brush" title="브러시"><svg class="ti" viewBox="0 0 28 28"><path d="M5 20c3-6 6 2 9-4s5-6 9-8"/></svg></button><span class="tv-lsep"></span><button data-dt="magnet" title="자석 (봉의 시가·고가·저가·종가에 붙기 · Ctrl 누른 채로도)"><svg class="ti" viewBox="0 0 28 28"><path d="M8 5v9a6 6 0 0 0 12 0V5M8 9h4M16 9h4"/></svg></button><button data-dt="stay" title="계속 그리기 (도구 유지)"><svg class="ti" viewBox="0 0 28 28"><path d="M6 20l10-10 3 3-10 10H6z"/><path d="M18 6l4 4"/></svg></button><button data-dt="lock" title="모든 그림 잠그기"><svg class="ti" viewBox="0 0 28 28"><rect x="7" y="13" width="14" height="10" rx="2"/><path d="M10 13V9a4 4 0 0 1 8 0v4"/></svg></button><button data-dt="hide" title="모든 그림 숨기기"><svg class="ti" viewBox="0 0 28 28"><path d="M3 14s4-7 11-7 11 7 11 7-4 7-11 7S3 14 3 14z"/><circle cx="14" cy="14" r="3"/></svg></button><button data-dt="clear" title="모든 그림 지우기 (이 코인)"><svg class="ti" viewBox="0 0 28 28"><path d="M6 8h16M11 8V5h6v3M8 8l1 15h10l1-15"/></svg></button></nav>
+    <section class="tv-center chartp" id="chartp">
+      <div class="chartwrap" id="chartwrap"><div id="term-grid" class="term-grid l1"></div></div>
+      <div class="tv-styler" id="draw-style" hidden></div>
+      <div class="tv-foot" id="tv-foot">
+        <div class="tv-ranges" id="tv-ranges"></div><div class="grow"></div>
+        <span class="tv-clock" id="tv-clock"></span><span class="tv-sep"></span>
+        <button data-scale="pct" title="퍼센트 눈금">%</button><button data-scale="log" title="로그 눈금">log</button><button data-scale="auto" title="자동 맞춤" class="on">자동</button>
       </div>
     </section>
-
-    <aside class="side" id="side">
-      <div class="regime" id="regime"><span class="muted">분석 중…</span></div>
-      <div class="ph"><div class="tabs" id="side-tabs"><button data-t="sc" class="on">시나리오</button><button data-t="ai" title="실시간 AI 상황 분석 (포지션 · 시장)"><b class="accent">AI</b></button><button data-t="fc">예측</button><button data-t="fpx">풋프린트</button><button data-t="book">호가</button><button data-t="order">주문</button></div></div>
-      <div class="pb" id="side-sc"></div>
+    <section class="tv-bottom bottom" id="tv-bottom">
+      <div class="ph"><div class="tabs" id="bot-tabs">
+        <button data-t="aisig" class="on">AI 시그널 성과</button><button data-t="bots">전략 시그널</button><button data-t="scan">스크리너</button>
+        <button data-t="ex">거래소 시세</button><button data-t="news">실시간 뉴스</button><button data-t="alerts">알림 기록</button>
+      </div><div class="grow"></div><button class="flat sm" id="bot-fold" title="접기 / 펼치기">▾</button></div>
+      <div class="pb" id="bottom-body"></div>
+    </section>
+    <aside class="tv-right side" id="side">
+      <div class="pb" id="side-watch">
+        <input id="wl-search" placeholder="심볼 추가 (예: PEPE, 도지)" style="margin:6px 8px;width:calc(100% - 16px)">
+        <table class="wl" id="watchlist"></table>
+        <div class="sym-info" id="sym-info">
+          <div class="si-top"><b id="si-name">BTCUSDT</b><span class="muted">무기한 선물</span></div>
+          <div class="si-px"><span class="lastpx" id="t-last">–</span> <span id="t-chg"></span></div>
+          <div class="si-grid">
+            <span class="k">24h 고가</span><span id="t-high">–</span><span class="k">24h 저가</span><span id="t-low">–</span>
+            <span class="k">24h 거래대금</span><span id="t-vol">–</span><span class="k">펀딩비 · 남은 시간</span><span id="t-fund">–</span>
+            <span class="k">미결제약정</span><span id="t-oi">–</span><span class="k">롱/숏 비율</span><span id="t-ls">–</span>
+            <span class="k">김치 프리미엄</span><span id="t-kimp">–</span><span class="k">공포·탐욕</span><span id="t-fng">–</span>
+          </div>
+        </div>
+      </div>
+      <div class="pb" id="side-dock" hidden></div>
       <div class="pb" id="side-ai" hidden></div>
+      <div class="pb" id="side-sc" hidden><div class="regime" id="regime"><span class="muted">분석 중…</span></div><div id="side-sc-body"></div></div>
       <div class="pb" id="side-fc" hidden></div>
       <div class="pb" id="side-fpx" hidden></div>
       <div class="pb" id="side-book" hidden></div>
-      <div class="pb" id="side-order" hidden>
-        <div class="order">
-          <div class="sidebtn"><button class="on l" data-side="long">롱</button><button class="s" data-side="short">숏</button></div>
-          <label class="f">증거금 (USDT)<input id="o-margin" type="number" value="1000" min="1"></label>
-          <label class="f">레버리지 <span id="o-lev-v" class="accent">5x</span><input id="o-lev" type="range" min="1" max="100" value="5"></label>
-          <div class="row"><label class="f grow">손절 %<input id="o-sl" type="number" step="0.1" placeholder="—"></label>
-            <label class="f grow">익절 %<input id="o-tp" type="number" step="0.1" placeholder="—"></label></div>
-          <div class="dim" id="o-preview"></div>
-          <button class="buy" id="o-submit">롱 진입</button>
-        </div>
-        <div class="acct" id="acct"></div>
-        <div class="order" style="border-top:1px solid var(--line)">
-          <div class="sub" style="padding:0">가격 알림</div>
+      <div class="pb" id="side-alerts" hidden>
+        <div class="order"><div class="sub" style="padding:0">가격 알림</div>
           <div class="row"><input id="pa-price" type="number" step="any" placeholder="가격" class="grow"><button id="pa-add">추가</button></div>
           <div id="pa-list"></div>
-        </div>
+          <div class="help">가격이 닿으면 알림(종)과 소리로 알려줍니다. 위 '알림' 버튼은 지금 가격으로 바로 추가합니다.</div></div>
       </div>
+      <div class="pb" id="side-tree" hidden></div>
+      <div class="pb" id="side-kb" hidden></div>
     </aside>
-
-    <section class="bottom">
-      <div class="ph"><div class="tabs" id="bot-tabs">
-        <button data-t="pos" class="on">포지션</button><button data-t="fills">체결 내역</button>
-        <button data-t="bots">페이퍼 봇</button><button data-t="ex">거래소 시세</button><button data-t="news">실시간 뉴스</button><button data-t="alerts">알림 기록</button>
-      </div></div>
-      <div class="pb" id="bottom-body"></div>
-    </section>
+    <nav class="tv-rail" id="side-tabs"><button data-t="watch" title="관심 종목 · 시세 정보"><svg class="ti" viewBox="0 0 28 28"><path d="M5 8h18M5 14h18M5 20h12"/></svg><span>관심종목</span></button><button data-t="dock" title="AI 상시 알림 · 채팅"><svg class="ti" viewBox="0 0 28 28"><path d="M5 6h18v12H11l-6 5z"/><path d="M10 11h8M10 14h5"/></svg><span>AI 알림</span><i class="rail-badge" id="dk-unread" hidden></i></button><button data-t="ai" title="실시간 AI 분석"><svg class="ti" viewBox="0 0 28 28"><rect x="6" y="8" width="16" height="13" rx="3"/><path d="M14 4v4M10 14h.01M18 14h.01M11 18h6"/></svg><span>AI 분석</span></button><button data-t="sc" title="시장 판단 · 시나리오"><svg class="ti" viewBox="0 0 28 28"><path d="M4 22l6-8 5 4 9-12"/></svg><span>시나리오</span></button><button data-t="fc" title="예측 · 종합 판단"><svg class="ti" viewBox="0 0 28 28"><path d="M4 20c4-1 6-10 10-10s6 6 10 4"/><path d="M14 10v14" stroke-dasharray="2 2"/></svg><span>예측</span></button><button data-t="fpx" title="풋프린트 분석"><svg class="ti" viewBox="0 0 28 28"><rect x="6" y="5" width="7" height="18"/><rect x="15" y="9" width="7" height="12"/></svg><span>풋프린트</span></button><button data-t="book" title="호가창"><svg class="ti" viewBox="0 0 28 28"><path d="M5 7h10M5 11h14M5 15h8M5 19h16"/></svg><span>호가</span></button><button data-t="alerts" title="가격 알림"><svg class="ti" viewBox="0 0 28 28"><path d="M8 12a6 6 0 1 1 12 0c0 6 3 8 3 8H5s3-2 3-8"/><path d="M12 23h4"/></svg><span>알림</span></button><button data-t="kb" title="연구 지식 · AI 학습 메모리"><svg class="ti" viewBox="0 0 28 28"><path d="M6 6h7a3 3 0 0 1 3 3v14a2 2 0 0 0-2-2H6zM22 6h-4a2 2 0 0 0-2 2"/><path d="M22 6v15h-6"/></svg><span>연구</span></button><button data-t="tree" title="객체 트리 (그림 · 지표 목록)"><svg class="ti" viewBox="0 0 28 28"><path d="M6 6h6v5H6zM16 12h6v5h-6zM16 20h6v4h-6zM9 11v11h7M9 14h7"/></svg><span>객체</span></button></nav>
   </div>
 </section>
+
+<div class="modal-bg" id="sym-modal" hidden><div class="modal sym-modal">
+  <div class="ph"><span class="t">심볼 검색</span><div class="grow"></div><button class="flat sm" id="sym-close">✕</button></div>
+  <div class="pb"><input id="sym-q" placeholder="코인 이름 · 심볼 (예: BTC, 이더, PEPE) — Enter" autocomplete="off" style="width:100%;height:34px;font-size:14px">
+    <div class="sym-list" id="sym-list"></div></div></div></div>
 
 <!-- ============================================================ 전략 · 백테스트 -->
 <section class="view" id="v-lab">
@@ -158,7 +141,7 @@
       </div>
       <div class="panel"><div class="ph"><span class="t">버전 기록</span><div class="grow"></div><span class="muted">클릭하면 그 버전으로 되돌림</span></div><div id="versions"></div></div>
       <div class="panel">
-        <details><summary class="ph" style="cursor:pointer"><span class="t">전략 직접 편집</span><div class="grow"></div><button class="flat sm" id="spec-to-tv">트레이딩뷰에 지표 표시</button></summary>
+        <details><summary class="ph" style="cursor:pointer"><span class="t">전략 직접 편집</span><div class="grow"></div><button class="flat sm" id="spec-to-tv">차트에서 보기</button></summary>
         <div class="pb">
           <div id="builder"></div>
           <details style="margin-top:6px"><summary class="muted">JSON</summary>
@@ -175,14 +158,14 @@
     <div style="display:grid;gap:12px;align-content:start">
       <div class="panel">
         <div class="ph"><span class="t">결과</span><div class="grow"></div><span class="muted" id="bt-src"></span>
-          <button class="sm" id="bt-improve">복기 · 자동 개선</button><button class="sm pri" id="bt-paper">페이퍼 봇 시작</button></div>
+          <button class="sm" id="bt-improve">복기 · 자동 개선</button><button class="sm pri" id="bt-paper">시그널 추적 시작</button></div>
         <div class="pb">
           <div class="row lab-target">
             <span class="k">대상</span>
             <input id="lab-sym" title="코인 (BTC, 이더, 솔라나, pepe 처럼 입력)" style="width:120px">
             <select id="lab-iv" title="봉"></select>
             <button class="sm" id="lab-sync" title="트레이드 화면에서 보고 있는 코인·봉으로">지금 차트 코인으로</button>
-            <span class="muted">바꾸면 이 코인·봉으로 다시 백테스트합니다. 자동 개선과 페이퍼 봇도 이 대상으로 돌아갑니다.</span>
+            <span class="muted">바꾸면 이 코인·봉으로 다시 백테스트합니다. 자동 개선과 시그널 추적도 이 대상으로 돌아갑니다.</span>
           </div>
           <div class="stats" id="bt-stats" style="margin-top:8px"><div class="stat"><div class="k">대기</div><div class="v">–</div></div></div>
           <div class="chart tall" id="bt-price" style="margin-top:10px"></div></div>
@@ -198,14 +181,14 @@
           <div class="row" style="flex-wrap:wrap;gap:6px;margin-top:8px" id="scan-ivs"></div>
           <div class="row" style="margin-top:8px"><button class="pri" id="scan-run">한꺼번에 백테스트</button>
             <span class="muted" id="scan-count"></span><div class="grow"></div>
-            <button class="sm" id="scan-top" hidden>수익 상위 3개 페이퍼 봇 시작</button></div>
+            <button class="sm" id="scan-top" hidden>수익 상위 3개 시그널 추적</button></div>
           <div id="scan-out" style="margin-top:8px;max-height:420px;overflow:auto"></div>
         </div></details>
       </div>
       <div class="panel" id="improve-panel" hidden><div class="ph"><span class="t">복기 · 자동 개선 결과</span></div><div class="pb" id="improve-out"></div></div>
       <div class="panel"><div class="ph"><span class="t">자본 곡선</span></div><div class="pb"><div class="chart" id="bt-equity-chart"></div></div></div>
       <div class="panel"><div class="ph"><span class="t">거래 내역</span></div><div class="pb" style="max-height:340px;padding:0"><table id="bt-trades"></table></div></div>
-      <div class="panel"><div class="ph"><span class="t">페이퍼 봇</span></div><div id="bot-list"></div></div>
+      <div class="panel"><div class="ph"><span class="t">전략 시그널 추적 (가상 체결)</span></div><div id="bot-list"></div></div>
     </div>
   </div>
 </section>
@@ -218,7 +201,7 @@
       <label class="row" style="gap:4px"><input type="checkbox" id="ap-on" style="height:auto"> 켜기</label>
       <button class="sm" id="ap-search">지금 다시 찾기</button></div>
       <div class="pb help">앱이 켜져 있는 동안 스스로 돕니다. <b>트레이드 차트에 띄운 보조지표</b>로 매매법 후보를 만들어 과거 데이터 3구간(학습 60% → 검증 20% → 최종 확인 20%)으로 검증하고,
-        통과한 매매법은 페이퍼 봇으로 모의 매매합니다. 봇이 진입·청산하면 알림(종)과 차트(매매 기록)로 알려줍니다. 실시간 AI 와 에이전트 팀도 정해진 간격으로 스스로 감시합니다. 실제 주문은 하지 않습니다.</div></div>
+        통과한 매매법은 전략 시그널로 실제 시세에서 가상 체결해 성과를 잽니다. 시그널이 진입·청산하면 알림(종)과 차트(매매 기록)로 알려줍니다. 실시간 AI 와 에이전트 팀도 정해진 간격으로 스스로 감시합니다. 실제 주문은 하지 않습니다.</div></div>
     <div class="cols-2" style="align-items:start">
       <div style="display:grid;gap:12px">
         <div class="panel"><div class="ph"><span class="t">지금 쓰는 차트 지표</span><div class="grow"></div><span class="muted" id="ap-ctx"></span></div><div class="pb" id="ap-inds"></div></div>
@@ -298,7 +281,7 @@
           <button class="sm" id="rk-run">계산</button></div>
           <div class="pb"><div id="rk-matrix"><div class="empty">관심 종목으로 계산합니다. '계산'을 누르세요.</div></div></div></div>
         <div style="display:grid;gap:12px">
-          <div class="panel"><div class="ph"><span class="t">내 포지션 위험 (모의 계좌 + 봇)</span><div class="grow"></div>
+          <div class="panel"><div class="ph"><span class="t">전략 시그널 가상 포지션 위험</span><div class="grow"></div>
             <label class="row" style="gap:4px">BTC<input id="pf-shock" type="number" value="-10" style="width:56px;height:22px">%</label><button class="sm" id="pf-run">계산</button></div>
             <div class="pb" id="pf-out"><div class="empty">열린 포지션의 하루 최대 예상 손실(VaR)과 BTC 급락 시 손익을 계산합니다.</div></div></div>
           <div class="panel"><div class="ph"><span class="t">포지션 크기 계산기</span></div><div class="pb" id="sz"></div></div>
@@ -324,13 +307,13 @@
             <button class="pri" id="po-run" style="align-self:flex-end">계산</button></div>
           <div id="po-out" style="margin-top:10px"></div></div></div>
       <div class="cols-2" style="margin-top:12px;align-items:start">
-        <div class="panel"><div class="ph"><span class="t">스트레스 테스트 (실제 위기 재현)</span><div class="grow"></div><button class="sm" id="st-run">지금 포지션으로</button></div>
-          <div class="pb" id="st-out"><div class="empty">지금 모의 포지션(또는 위 배분 결과의 '스트레스' 버튼)으로 코로나·루나·FTX 같은 실제 폭락장이 오면 얼마나 잃는지 봅니다.</div></div></div>
+        <div class="panel"><div class="ph"><span class="t">스트레스 테스트 (실제 위기 재현)</span><div class="grow"></div><button class="sm" id="st-run">시그널 포지션으로</button></div>
+          <div class="pb" id="st-out"><div class="empty">전략 시그널 가상 포지션(또는 위 배분 결과의 '스트레스' 버튼)으로 코로나·루나·FTX 같은 실제 폭락장이 오면 얼마나 잃는지 봅니다.</div></div></div>
         <div class="panel"><div class="ph"><span class="t">팩터 노출 · 유동성</span><div class="grow"></div><button class="sm" id="ex-run">계산</button></div>
           <div class="pb" id="ex-out"><div class="empty">지금 포지션이 BTC·모멘텀·변동성에 얼마나 기울어 있는지, 정리하는 데 얼마나 걸리는지 봅니다.</div></div></div>
       </div>
       <div class="panel" style="margin-top:12px"><div class="ph"><span class="t">성과 분석 (티어시트)</span><div class="grow"></div>
-        <select id="ts-src" style="height:22px"><option value="paper">모의 계좌 + 봇</option><option value="bt">최근 백테스트</option></select><button class="sm" id="ts-run">분석</button></div>
+        <select id="ts-src" style="height:22px"><option value="paper">전략 시그널 가상 체결</option><option value="bt">최근 백테스트</option></select><button class="sm" id="ts-run">분석</button></div>
         <div class="pb" id="ts-out"><div class="empty">샤프·소르티노·칼마, 월별 수익률, 코인·시간대별 손익을 봅니다.</div></div></div>
     </div>
   <div class="qtip" id="q-tip" hidden></div>
@@ -353,10 +336,9 @@
         <button class="flat sm" id="news-ai" hidden>AI 번역·분류</button></div>
         <div class="pb" style="max-height:520px;padding:0" id="news-full"></div></div>
       <div class="panel"><div class="ph"><span class="t">미국 주요 경제지표 (이번 주)</span></div>
-        <div class="pb" style="max-height:220px;padding:0"><table id="cal-table"></table></div>
-        <div class="tv-embed" id="tv-calendar" style="height:300px"></div></div>
+        <div class="pb" style="max-height:520px;padding:0"><table id="cal-table"></table></div></div>
       <div class="panel"><div class="ph"><span class="t">선물 거래대금 상위 24h</span></div><div class="pb"><div class="heatmap" id="heatmap"></div></div></div>
-      <div class="panel"><div class="ph"><span class="t">코인 히트맵</span></div><div class="tv-embed" id="tv-heatmap"></div></div>
+      <div class="panel"><div class="ph"><span class="t">코인 히트맵</span><div class="grow"></div><span class="muted">크기 ∝ 24h 거래대금(제곱근) · 클릭하면 차트</span></div><div class="treemap" id="treemap"></div></div>
     </div>
   </div>
 </section>

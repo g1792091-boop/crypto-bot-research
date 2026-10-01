@@ -135,7 +135,7 @@ def positions(symbol: str | None = None, price: dict[str, float] | None = None, 
     for b in _paper.bots.values():
         p = b.sim.position
         if p:
-            items.append(("bot", f"봇 {b.spec.name}", b.spec.symbol, p, b))
+            items.append(("bot", f"전략 시그널 {b.spec.name}", b.spec.symbol, p, b))
     for kind, name, sym, p, bot in items:
         if symbol and sym != symbol:
             continue

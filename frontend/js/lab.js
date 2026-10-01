@@ -1,4 +1,4 @@
-// 전략 대화 · 백테스트 · 복기/자동 개선 · 페이퍼 봇
+// 전략 대화 · 백테스트 · 복기/자동 개선 · 전략 시그널 추적(가상 체결)
 import { $, $$, INTERVALS, IV_LABEL, api, busy, cls, css, emit, esc, fmt, makeChart, mdhm, pct, px, savePrefs, state, toast, tradeRows } from "./core.js";
 import { showOnChart } from "./trade.js";
 
@@ -206,7 +206,7 @@ async function runImprove() {
 }
 async function startBot(spec = state.spec) {
   const b = await api("/api/paper/bots", { method: "POST", body: { spec, initial_equity: +$("#bt-equity").value } });
-  toast(`페이퍼 봇 시작 · ${b.symbol.replace(/USDT$/, "")} ${IV_LABEL[b.interval] || b.interval}`, `${b.name} — 진입·청산이 '트레이드' 차트에 표시됩니다`);
+  toast(`시그널 추적 시작 · ${b.symbol.replace(/USDT$/, "")} ${IV_LABEL[b.interval] || b.interval}`, `${b.name} — 진입·청산이 '트레이드' 차트에 표시됩니다`);
   loadBots();
   return b;
 }
@@ -266,12 +266,8 @@ function onClick(e) {
 
 function setSpec(spec) { state.spec = structuredClone(spec); renderBuilder(); }
 
-function specToTv() {
-  const reg = state.status?.indicators || {};
-  state.studies = [...new Set(state.spec.indicators.filter((i) => reg[i.type]?.tv).map((i) => reg[i.type].tv))];
-  state.chartMode = "tv";
-  savePrefs(); emit("goto", "trade"); emit("rechart");
-  toast("트레이딩뷰 차트에 전략 지표를 표시했습니다", "트레이딩뷰에 없는 지표(슈퍼트렌드 등)는 제외됩니다.");
+function specToTv() {   // 이 전략의 코인 · 봉을 트레이드 차트로 (전략 시그널 기록이 차트에 보임)
+  showOnChart(state.spec.symbol || "BTCUSDT", state.spec.interval || "1h");
 }
 
 // ================================================================ 결과
@@ -340,12 +336,12 @@ function renderImprove(rep, offerApply = true) {
   });
 }
 
-// ================================================================ 페이퍼 봇
+// ================================================================ 전략 시그널 추적
 async function loadBots() {
   let bots;
   try { bots = await api("/api/paper/bots"); } catch { return; }
   const el = $("#bot-list");
-  if (!bots.length) { el.innerHTML = `<div class="empty">실행 중인 봇이 없습니다. 위에서 '페이퍼 봇 시작'을 누르세요.</div>`; return; }
+  if (!bots.length) { el.innerHTML = `<div class="empty">추적 중인 전략 시그널이 없습니다. 위에서 '시그널 추적 시작'을 누르세요.</div>`; return; }
   const open = new Set($$("#bot-list details[open]").map((d) => d.dataset.id));
   el.innerHTML = bots.map((b) => {
     const a = b.account, p = a.position, ret = (a.equity / b.initial_equity - 1) * 100;

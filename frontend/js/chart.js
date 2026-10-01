@@ -5,7 +5,7 @@ import { IV_LABEL, api, big, css, esc, fmt, px } from "./core.js";
 const LC = LightweightCharts;
 
 // 캔버스에 직접 그리는 레이어 (청산맵 · 고래 · 호가벽 · 추세선). 차트와 함께 확대/이동된다.
-class Layer {
+export class Layer {
   constructor(draw, z = "bottom") {
     this.draw = draw;
     this._z = z;
@@ -69,15 +69,21 @@ export class TermChart {
 
     el.innerHTML = `<div class="tc-chart"></div><div class="tc-legend"></div><div class="tc-ladder" hidden><canvas></canvas><div class="tc-ltip" hidden></div></div>`;
     this.legendEl = el.querySelector(".tc-legend");
+    this.legendEl.addEventListener("click", (e) => {      // 범례의 지표 숨기기 · 설정 · 지우기 (트레이딩뷰 방식)
+      const b = e.target.closest("[data-lg]");
+      if (b) { e.stopPropagation(); this.opts.onLegend?.(b.dataset.lg, +b.dataset.ii, b); }
+    });
     this.ladderEl = el.querySelector(".tc-ladder");
     this.chart = LC.createChart(el.querySelector(".tc-chart"), {
       autoSize: true,
-      layout: { background: { type: "solid", color: css("--panel") }, textColor: css("--text-2"), fontSize: 11,
-        fontFamily: getComputedStyle(document.body).fontFamily, panes: { separatorColor: css("--line"), separatorHoverColor: "rgba(245,165,36,.25)" } },
-      grid: { vertLines: { color: "rgba(255,255,255,.035)" }, horzLines: { color: "rgba(255,255,255,.035)" } },
-      rightPriceScale: { borderColor: css("--line") },
-      timeScale: { borderColor: css("--line"), timeVisible: true, secondsVisible: false, rightOffset: 8 },
-      crosshair: { mode: LC.CrosshairMode.Normal },
+      layout: { background: { type: "solid", color: css("--chart-bg") || css("--panel") }, textColor: css("--text-2"), fontSize: 11, attributionLogo: false,
+        fontFamily: getComputedStyle(document.body).fontFamily, panes: { separatorColor: css("--line"), separatorHoverColor: "rgba(41,98,255,.35)" } },
+      grid: { vertLines: { color: "rgba(42,46,57,.55)" }, horzLines: { color: "rgba(42,46,57,.55)" } },
+      rightPriceScale: { borderColor: css("--line"), scaleMargins: { top: 0.08, bottom: 0.08 } },
+      timeScale: { borderColor: css("--line"), timeVisible: true, secondsVisible: false, rightOffset: 10 },
+      crosshair: { mode: LC.CrosshairMode.Normal,
+        vertLine: { color: "#787b86", width: 1, style: 3, labelBackgroundColor: "#363a45" },
+        horzLine: { color: "#787b86", width: 1, style: 3, labelBackgroundColor: "#363a45" } },
       localization: { locale: "ko-KR", priceFormatter: px },
     });
     this.candle = this.chart.addSeries(LC.CandlestickSeries, { upColor: css("--up"), downColor: css("--down"), borderVisible: false,
@@ -143,8 +149,8 @@ export class TermChart {
     if (!this._is(symbol, interval)) return;
     this.source = d.source;
     this.candles = d.candles;
-    this.candle.setData(this.candles);
-    if (changed) { this.chart.timeScale().fitContent(); this.chart.timeScale().scrollToRealTime(); this._loadDrawings(); }
+    this._display();
+    if (changed) { this.chart.timeScale().fitContent(); this.chart.timeScale().scrollToRealTime(); this.opts.onLoad?.(this); }
     await this._loadExt();
     if (!this._is(symbol, interval)) return;
     this.renderIndicators();
@@ -166,8 +172,9 @@ export class TermChart {
       if (b.time === last.time) this.candles[this.candles.length - 1] = b;
       else if (b.time > last.time) { this.candles.push(b); newBar = true; }
       else continue;
-      this.candle.update(b);
+      if (!this.ctype || this.ctype === "candles" || this.ctype === "hollow") this.candle.update(b);
     }
+    if (this.ctype && this.ctype !== "candles" && this.ctype !== "hollow") this._display();
     this._tickN = (this._tickN || 0) + 1;
     if (newBar || this._tickN % 5 === 0) this.renderIndicators(true);
     if (newBar) this.refreshOverlays();
@@ -223,6 +230,7 @@ export class TermChart {
             ...(def.pane === "volume" ? { priceScaleId: "vol" } : {}) }, pane);
         }
         s.setData(toData(c, pl));
+        if (spec.hidden) s.applyOptions({ visible: false });
         return s;
       });
       if (def.pane === "volume") this.chart.priceScale("vol").applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
@@ -925,7 +933,7 @@ export class TermChart {
   }
 
   // ------------------------------------------------------------ 내 포지션 선 (끌어서 손절·익절 수정)
-  _pos() { return this.markers?.symbol === this.symbol ? this.markers.manual?.position : null; }
+  _pos() { return null; }      // 분석 전용 — 모의 주문 포지션 없음
   _entryTitle() {
     const p = this._pos(), last = this.candles.at(-1)?.close;
     if (!p || !last) return "내 포지션";
@@ -1039,6 +1047,46 @@ export class TermChart {
     this.drawLayer.update();
   }
 
+  // ------------------------------------------------------------ 차트 종류 · 가격축 · 기간 · 스크린샷 (트레이딩뷰 방식)
+  setChartType(t) { this.ctype = t; this._display(); }
+  _display() {
+    const t = this.ctype || "candles", c = this.candles, up = css("--up"), dn = css("--down"), clear = "rgba(0,0,0,0)";
+    const own = ["candles", "hollow", "ha"].includes(t);
+    if (t === "hollow") this.candle.applyOptions({ upColor: clear, downColor: dn, borderVisible: true, borderUpColor: up, borderDownColor: dn, wickUpColor: up, wickDownColor: dn, lastValueVisible: true, priceLineVisible: true });
+    else if (own) this.candle.applyOptions({ upColor: up, downColor: dn, borderVisible: false, wickUpColor: up, wickDownColor: dn, lastValueVisible: true, priceLineVisible: true });
+    else this.candle.applyOptions({ upColor: clear, downColor: clear, borderVisible: false, wickUpColor: clear, wickDownColor: clear, lastValueVisible: false, priceLineVisible: false });
+    this.candle.setData(t === "ha" ? heikinAshi(c) : c);
+    if (this.dispType !== t) {
+      if (this.disp) { try { this.chart.removeSeries(this.disp); } catch { /* 무시 */ } this.disp = null; }
+      this.dispType = t;
+      const blue = "#2962ff";
+      if (t === "bars") this.disp = this.chart.addSeries(LC.BarSeries, { upColor: up, downColor: dn, thinBars: false }, 0);
+      else if (t === "line") this.disp = this.chart.addSeries(LC.LineSeries, { color: blue, lineWidth: 2 }, 0);
+      else if (t === "area") this.disp = this.chart.addSeries(LC.AreaSeries, { lineColor: blue, topColor: "rgba(41,98,255,.35)", bottomColor: "rgba(41,98,255,0)", lineWidth: 2 }, 0);
+      else if (t === "baseline") this.disp = this.chart.addSeries(LC.BaselineSeries, { baseValue: { type: "price", price: c[Math.floor(c.length / 2)]?.close || 0 },
+        topLineColor: up, bottomLineColor: dn, topFillColor1: "rgba(8,153,129,.28)", topFillColor2: "rgba(8,153,129,.05)", bottomFillColor1: "rgba(242,54,69,.05)", bottomFillColor2: "rgba(242,54,69,.28)" }, 0);
+    }
+    if (this.disp) this.disp.setData(t === "bars" ? c : c.map((b) => ({ time: b.time, value: b.close })));
+  }
+  setScale({ mode, auto }) {
+    const M = { normal: 0, log: 1, pct: 2, idx: 3 };
+    this.chart.priceScale("right").applyOptions({ ...(mode ? { mode: M[mode] ?? 0 } : {}), ...(auto != null ? { autoScale: auto } : {}) });
+  }
+  showSeconds(sec) {
+    const c = this.candles;
+    if (!c.length) return;
+    const to = c.at(-1).time, from = sec ? Math.max(c[0].time, to - sec) : c[0].time;
+    try { this.chart.timeScale().setVisibleRange({ from, to }); } catch { this.chart.timeScale().fitContent(); }
+  }
+  screenshot() {
+    const cv = this.chart.takeScreenshot(), ctx = cv.getContext("2d");
+    const b = this.candles.at(-1);
+    ctx.font = "bold 14px " + getComputedStyle(document.body).fontFamily;
+    ctx.fillStyle = "#d1d4dc";
+    ctx.fillText(`${this.symbol} · ${IV_LABEL[this.interval] || this.interval} · ${b ? px(b.close) : ""} · GH Quant · ${new Date().toLocaleString("ko-KR")}`, 10, 20);
+    return cv;
+  }
+
   // ------------------------------------------------------------ 범례
   _legend(p) {
     const c = this.candles;
@@ -1056,7 +1104,8 @@ export class TermChart {
     const vals = (it) => it.last.plots.filter((pl) => !["signals", "boxes", "profiles", "patterns"].includes(pl.type) && pl.legend !== false).map((pl) => val(pl.data[idx])).join(" ");
     const extra = (it) => it.profile && this.vp ? ` <span class="muted">POC</span> ${px(this.vp.poc)} <span class="muted">가치영역</span> ${px(this.vp.val)}~${px(this.vp.vah)}`
       : it.last.note ? ` <span class="muted">${esc(it.last.note)}</span>` : "";
-    if (mainInd.length) html += `<br>` + mainInd.map((it) => `<span style="color:${it.last.plots.find((pl) => pl.color)?.color || "inherit"}">${esc(INDICATORS[it.spec.key].name)}${paramStr(it.params)}</span> ${vals(it)}${extra(it)}`).join(" · ");
+    const acts = (it) => `<span class="lg-act"><button data-lg="hide" data-ii="${this.indicators.indexOf(it.spec)}" title="${it.spec.hidden ? "보이기" : "숨기기"}">${it.spec.hidden ? "◌" : "◉"}</button><button data-lg="set" data-ii="${this.indicators.indexOf(it.spec)}" title="설정">⚙</button><button data-lg="del" data-ii="${this.indicators.indexOf(it.spec)}" title="지우기">✕</button></span>`;
+    if (mainInd.length) html += mainInd.map((it) => `<div class="lg-row ${it.spec.hidden ? "off" : ""}"><span style="color:${it.last.plots.find((pl) => pl.color)?.color || "inherit"}">${esc(INDICATORS[it.spec.key].name)}${paramStr(it.params)}</span> ${it.spec.hidden ? "" : vals(it) + extra(it)}${acts(it)}</div>`).join("");
     if (this.opts.overlays.footprint && this.fp) html += `<br><span class="muted">풋프린트: ${this.fp.error ? esc(this.fp.error) : `${this.fp.sub_interval} 봉 체결로 근사 · 칸 ${px(this.fp.tick)} · 왼쪽 매도 × 오른쪽 매수 · 주황 테두리 = 봉 POC · 초록/빨강 숫자 = 3배 불균형${ts_hint(this)}`}</span>`;
     if (this.heat) html += `<br><span class="muted">청산맵: ${this.heat.model === "coinglass" ? "CoinGlass" : this.heat.model === "estimate_oi" ? "OI 기반 추정" : "거래대금 기반 추정"}</span> <span class="scale"></span>`;
     if (this.whales) html += `<br><span class="muted">고래 체결 ≥ $${big(this.whales.min_usd)} · ${this.whales.trades.length}건${this.whales.source === "binance" && this.whales.collecting_since ? " (프로그램 실행 후 수집분)" : ""} · 호가벽 ${this.whales.walls.length}개</span>`;
@@ -1064,10 +1113,21 @@ export class TermChart {
     for (const it of this.ind.filter((x) => x.pane > 0)) {
       const top = tops[it.pane];
       if (top == null) continue;
-      html += `<div style="top:${top + 3}px"><span class="dim">${esc(INDICATORS[it.spec.key].name)}${paramStr(it.params)}</span> ${it.last.plots.filter((pl) => !["signals", "boxes", "profiles", "patterns"].includes(pl.type) && pl.legend !== false).map((pl) => `<span style="color:${pl.color || "inherit"}">${val(pl.data[idx])}</span>`).join(" ")}${it.last.note ? ` <span class="accent">${esc(it.last.note)}</span>` : ""}</div>`;
+      html += `<div class="lg-row lg-sub" style="top:${top + 3}px"><span class="dim">${esc(INDICATORS[it.spec.key].name)}${paramStr(it.params)}</span>${acts(it)} ${it.last.plots.filter((pl) => !["signals", "boxes", "profiles", "patterns"].includes(pl.type) && pl.legend !== false).map((pl) => `<span style="color:${pl.color || "inherit"}">${val(pl.data[idx])}</span>`).join(" ")}${it.last.note ? ` <span class="accent">${esc(it.last.note)}</span>` : ""}</div>`;
     }
     this.legendEl.innerHTML = html;
   }
+}
+
+// 하이킨 아시 캔들 (차트 표시용 — 지표 계산은 실제 캔들로)
+function heikinAshi(c) {
+  const out = [];
+  c.forEach((b, i) => {
+    const close = (b.open + b.high + b.low + b.close) / 4;
+    const open = i ? (out[i - 1].open + out[i - 1].close) / 2 : (b.open + b.close) / 2;
+    out.push({ time: b.time, open, high: Math.max(b.high, open, close), low: Math.min(b.low, open, close), close });
+  });
+  return out;
 }
 
 const ts_hint = (tc) => tc.chart.timeScale().options().barSpacing < 48 ? " · 더 확대하면 숫자가 보입니다" : "";

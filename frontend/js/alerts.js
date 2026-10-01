@@ -9,7 +9,7 @@ const OPTS = [
   ["news_all", "모든 새 뉴스"],
   ["calendar", "경제지표 발표 (30분 전 · 5분 전 · 발표)"],
   ["regime", "시장 판단 변화 (롱/숏/횡보 전환)"],
-  ["bots", "페이퍼 봇 체결"],
+  ["bots", "전략 시그널 (가상 체결)"],
   ["scanner", "시그널 스캐너 (관심 코인 자동 분석 신호)"],
   ["scanner_strong", "└ 강한 신호(강도 2 이상)만"],
   ["ai_watch", "AI 포지션 감시 (손절·청산가 근접, 손절 없음, 반대 판단·신호)"],
@@ -134,7 +134,7 @@ async function pollAutopilot() {
     emit("apsignals", d.items);
     if (!opts.autopilot) return;
     for (const x of d.items.slice(0, 4).reverse()) {
-      const head = { entry: "오토 진입", exit: "오토 청산", deploy: "오토 봇 시작", ai: "AI 판단", ai_note: "오토 진입 · AI 코멘트", ai_auto: "AI 자동", ai_entry: "AI 진입 시그널", aibot: x.event === "exit" ? "AI 봇 청산" : "AI 봇 진입" }[x.type] || "오토";
+      const head = { entry: "전략 시그널 진입", exit: "전략 시그널 결과", deploy: "시그널 추적 시작", ai: "AI 판단", ai_note: "오토 진입 · AI 코멘트", ai_auto: "AI 자동", ai_entry: "AI 진입 시그널", aibot: x.event === "exit" ? "AI 시그널 결과" : "AI 시그널 가상 진입" }[x.type] || "오토";
       notify({ title: `[${head}] ${(x.symbol || "").replace(/USDT$/, "")} ${IVK[x.interval] || x.interval || ""} · ${x.text}`.replace(/\s+·/, " ·"),
         msg: `${x.strategy || ""}${x.status === "observe" ? " · 관찰(검증 미통과) — 참고용" : x.status === "pass" ? " · 검증 통과 매매법 (모의)" : ""}`, cat: "autopilot",
         kind: x.type === "entry" || x.type === "ai_entry" || (x.type === "aibot" && x.event === "entry") ? (x.side === "long" ? "up" : "err")
@@ -190,7 +190,7 @@ on("bots", (bots) => {
     if (b.id in botTrades && botTrades[b.id] !== n && opts.bots) {
       const p = b.account.position;
       const t = b.account.trades[b.account.trades.length - 1];
-      notify({ title: `페이퍼 봇 ${b.name}`, cat: "bot",
+      notify({ title: `전략 시그널 ${b.name}`, cat: "bot",
         msg: p ? `${p.side === "long" ? "롱" : "숏"} 진입 ${px(p.entry_price)} (${b.symbol})`
           : t ? `${t.side === "long" ? "롱" : "숏"} 청산 ${px(t.exit_price)} · 손익 ${t.pnl.toFixed(2)}` : "상태 변경" });
     }

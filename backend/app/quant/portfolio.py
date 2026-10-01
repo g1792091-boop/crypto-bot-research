@@ -195,7 +195,7 @@ def _window(symbol: str, start: str, end: str) -> tuple[float, float] | None:
 def stress(positions: list[dict]) -> dict:
     """positions: [{symbol, side, notional, leverage?}]"""
     if not positions:
-        raise ValueError("포지션이 없습니다. 모의 주문을 넣거나 '최적 배분' 결과로 테스트하세요.")
+        raise ValueError("포지션이 없습니다. 전략 시그널이 진입하거나 '최적 배분' 결과로 테스트하세요.")
     syms = list(dict.fromkeys(p["symbol"] for p in positions))
     beta = _betas(syms)
     gross = sum(abs(p["notional"]) for p in positions)

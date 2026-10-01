@@ -194,7 +194,7 @@ def test_aibot_follows_signals_and_reports(monkeypatch):
     n = len(autopilot.signals)
     assert ai_auto.aibot_notify() == 4 and ai_auto.aibot_notify() == 0
     texts = [x["text"] for x in list(autopilot.signals)[n:]]
-    assert any("AI 봇 롱 진입" in t for t in texts) and any("청산 — 익절" in t for t in texts)
+    assert any("AI 시그널 롱 가상 진입" in t for t in texts) and any("결과 — 익절" in t for t in texts)
     # 규칙 분석 시그널 제외 · 확신 기준
     aibot.set_settings({"include_rules": False, "min_confidence": 80})
     d = aibot.compute(force=True)

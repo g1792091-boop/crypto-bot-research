@@ -180,7 +180,7 @@ def heatmap(limit: int = 60):
     try:
         return {"items": market.heatmap(limit)}
     except Exception as e:
-        raise HTTPException(502, f"바이낸스 요청 실패: {e}")
+        raise HTTPException(502, f"시세 요청 실패: {e}")
 
 
 @app.get("/api/news")
@@ -220,6 +220,21 @@ def news_brief(limit: int = 15):
         _brief_cache.clear()
         _brief_cache[key] = {b.id: b.model_dump() for b in brief.items}
     return {"items": _brief_cache[key]}
+
+
+@app.get("/api/knowledge")
+def knowledge_view(symbol: Optional[str] = None, interval: Optional[str] = None):
+    """연구 카드(다른 세션 백테스트 결과) + 이 앱 AI 시그널 성적 학습 메모리."""
+    from . import knowledge
+    sym = symbol.upper() if symbol else None
+    return {"enabled": knowledge.enabled(), "headline": knowledge.HEADLINE, "cards": knowledge.cards(),
+            "relevant": [c["id"] for c in knowledge.relevant(sym, interval)], "lessons": knowledge.lessons(wait=True),
+            "warnings": knowledge.warnings(interval), "prompt": knowledge.block(sym, interval)}
+
+
+@app.get("/api/macro")
+def macro():
+    return sentiment.macro()
 
 
 @app.get("/api/calendar")
@@ -476,6 +491,12 @@ def paper_markers(symbol: str = "BTCUSDT"):
     }
 
 
+def _manual_off():
+    """분석 전용: 수동 모의 주문은 꺼져 있다 (개발·테스트용으로만 MANUAL_PAPER=1)."""
+    if not config.MANUAL_PAPER:
+        raise HTTPException(410, "분석 전용 앱입니다 — 모의 주문 기능은 없습니다.")
+
+
 @app.get("/api/paper/account")
 def manual_account():
     return paper.manual.snapshot()
@@ -483,6 +504,7 @@ def manual_account():
 
 @app.post("/api/paper/order")
 def manual_order(o: ManualOrder):
+    _manual_off()
     try:
         res = paper.manual.open(o.symbol, o.side, o.margin, o.leverage, o.stop_loss_pct, o.take_profit_pct)
     except Exception as e:
@@ -499,6 +521,7 @@ class ModifyReq(BaseModel):
 @app.post("/api/paper/position/{symbol}")
 def modify_position(symbol: str, req: ModifyReq):
     """진입 후 손절·익절 가격 수정. 값을 비우면(null) 해제."""
+    _manual_off()
     try:
         res = paper.manual.modify(symbol.upper(), req.stop, req.take)
     except ValueError as e:
@@ -519,6 +542,7 @@ def get_levels(symbol: str = "BTCUSDT", interval: str = "1h"):
 
 @app.post("/api/paper/close/{symbol}")
 def manual_close(symbol: str):
+    _manual_off()
     try:
         res = paper.manual.close(symbol)
     except Exception as e:
@@ -534,6 +558,7 @@ class ReduceReq(BaseModel):
 @app.post("/api/paper/reduce/{symbol}")
 def manual_reduce(symbol: str, req: ReduceReq):
     """포지션 일부 청산 (fraction 0~1)."""
+    _manual_off()
     try:
         res = paper.manual.reduce(symbol.upper(), req.fraction)
     except ValueError as e:
@@ -544,6 +569,7 @@ def manual_reduce(symbol: str, req: ReduceReq):
 
 @app.post("/api/paper/reset")
 def manual_reset(req: ResetReq):
+    _manual_off()
     paper.reset_manual(req.initial_equity, req.fee_pct)
     return paper.manual.snapshot()
 
@@ -570,6 +596,7 @@ def run_agents(req: AgentReq):
 @app.post("/api/agents/execute")
 def execute_decision(req: ExecuteDecisionReq):
     """에이전트 결정을 페이퍼 계좌에 주문으로 넣는다 (실거래 아님)."""
+    _manual_off()
     d = req.decision
     if d.action == "stay_flat":
         raise HTTPException(400, "관망 결정은 주문할 수 없습니다.")

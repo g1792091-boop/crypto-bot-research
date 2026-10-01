@@ -104,6 +104,9 @@ def _run(kind, system, user, max_tokens, effort=None, schema=None, feature=None,
     global last_used
     from . import ai_routes
     routes = ai_routes.chain(feature, role, tier, route)
+    if routes:
+        from . import knowledge                       # 연구 카드 + 시그널 성적을 모든 매매 판단 호출에 붙인다
+        system = knowledge.inject(system, user, feature)
     if not routes:
         raise LLMUnavailable("AI 키가 없습니다 (settings.txt 또는 'AI 모델' 창에서 키를 넣으세요).")
     errors = []

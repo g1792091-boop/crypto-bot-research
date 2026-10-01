@@ -686,7 +686,7 @@ def apply(kind: str, **kw) -> dict:
             raise ValueError("이 가설에는 매매 규칙이 없습니다.")
         spec.name = (f"팀 가설 · {c['target']}" if approved else f"팀 가설(미검증) · {c['target']}")[:40]
         b = _paper.add_bot(spec)
-        return {"ok": True, "msg": f"새 페이퍼 봇 '{b.spec.name}' 을 시작했습니다." + ("" if approved else " 검증을 통과하지 않은 관찰용입니다 (모의 매매).")}
+        return {"ok": True, "msg": f"새 전략 시그널 '{b.spec.name}' 추적을 시작했습니다." + ("" if approved else " 검증을 통과하지 않은 관찰용입니다 (모의 매매).")}
     if kind == "hypothesis":                        # 채팅에 올라온 가설 문장을 바로 시험
         rule = (kw.get("rule") or "").strip()
         if not rule:
@@ -694,7 +694,7 @@ def apply(kind: str, **kw) -> dict:
         spec = _spec_from_rule(rule, kw.get("symbol"), kw.get("interval"))
         spec.name = f"팀 가설(미검증) · {kw.get('name') or rule[:20]}"[:40]
         b = _paper.add_bot(spec)
-        return {"ok": True, "msg": f"새 페이퍼 봇 '{b.spec.name}' 을 시작했습니다 ({spec.symbol} {spec.interval}). 관문 검증 전인 관찰용입니다 (모의 매매)."}
+        return {"ok": True, "msg": f"새 전략 시그널 '{b.spec.name}' 추적을 시작했습니다 ({spec.symbol} {spec.interval}). 관문 검증 전인 관찰용입니다 (모의 매매)."}
     raise ValueError("알 수 없는 적용 종류")
 
 

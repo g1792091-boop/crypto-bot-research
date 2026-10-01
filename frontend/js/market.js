@@ -1,11 +1,7 @@
 // 마켓: 도미넌스 · 매크로(나스닥 등) · 뉴스 · 경제지표 · 히트맵
-import { $, api, big, busy, css, embedTvWidget, esc, fmt, makeChart, on, pct, state, tvTheme } from "./core.js";
-import { newsRows } from "./trade.js";
+import { $, api, big, busy, css, esc, fmt, makeChart, on, pct, state } from "./core.js";
+import { newsRows, showOnChart } from "./trade.js";
 
-const MACRO_MINI = [
-  ["NASDAQ:NDX", "나스닥100"], ["SP:SPX", "S&P500"], ["TVC:DXY", "달러인덱스"],
-  ["TVC:US10Y", "미 10년물 금리"], ["TVC:GOLD", "금"], ["CRYPTOCAP:BTC.D", "BTC 도미넌스"],
-];
 let loaded = false, brief = null;
 
 function heatColor(p) {
@@ -38,20 +34,65 @@ async function load() {
       st("BTC", `${fmt(d.btc_dominance)}%`) + st("ETH", `${fmt(d.eth_dominance)}%`) + st("스테이블코인", `${fmt(d.stablecoin_dominance)}%`) + st("알트 (기타)", `${fmt(d.others_dominance)}%`);
   }).catch((e) => ($("#dom-stats").innerHTML = `<div class="stat" style="grid-column:1/-1"><div class="k">도미넌스를 불러오지 못했습니다</div><div class="muted">${esc(e.message)}</div></div>`));
   api("/api/market/heatmap?limit=60").then((d) => {
-    $("#heatmap").innerHTML = d.items.map((x) => `<div class="tile" style="background:${heatColor(x.change_pct)}" title="거래대금 $${big(x.quote_volume)}">
+    $("#heatmap").innerHTML = d.items.map((x) => `<div class="tile" data-sym="${x.symbol}" style="background:${heatColor(x.change_pct)}" title="거래대금 $${big(x.quote_volume)}">
       <div class="s">${x.symbol.replace("USDT", "")}</div><div class="c">${pct(x.change_pct)}</div></div>`).join("");
   }).catch((e) => ($("#heatmap").innerHTML = `<div class="empty" style="grid-column:1/-1">${esc(e.message)}</div>`));
   renderNews();
-  if (!loaded) {
-    loaded = true;
-    const th = tvTheme();
-    $("#macro-grid").innerHTML = MACRO_MINI.map(([s, l], i) => `<div class="panel"><div class="ph"><span class="t">${l}</span></div><div class="tv-embed sm" id="mini-${i}"></div></div>`).join("");
-    MACRO_MINI.forEach(([s], i) => embedTvWidget($(`#mini-${i}`), "embed-widget-mini-symbol-overview.js",
-      { ...th, symbol: s, dateRange: "3M", chartOnly: false, trendLineColor: css("--s1"), underLineColor: "rgba(57,135,229,.15)" }));
-    embedTvWidget($("#tv-heatmap"), "embed-widget-crypto-coins-heatmap.js", { ...th, dataSource: "Crypto", blockSize: "market_cap_calc",
-      blockColor: "24h_close_change|5", hasTopBar: false, isDataSetEnabled: false, isZoomEnabled: true, hasSymbolTooltip: true });
-    embedTvWidget($("#tv-calendar"), "embed-widget-events.js", { ...th, importanceFilter: "0,1", countryFilter: "us,eu,cn,jp,kr" });
+  if (!loaded) { loaded = true; loadMacro(); }
+  api("/api/market/heatmap?limit=120").then((d) => treemap($("#treemap"), d.items))
+    .catch((e) => ($("#treemap").innerHTML = `<div class="empty">${esc(e.message)}</div>`));
+}
+
+// 매크로: 자체 라인차트 (외부 위젯 없음)
+const macroCharts = [];
+async function loadMacro() {
+  const grid = $("#macro-grid");
+  grid.innerHTML = `<div class="panel"><div class="pb muted">매크로 지표 불러오는 중…</div></div>`;
+  let d;
+  try { d = await api("/api/macro"); } catch (e) { grid.innerHTML = `<div class="panel"><div class="pb muted">매크로 지표를 불러오지 못했습니다: ${esc(e.message)}</div></div>`; return; }
+  macroCharts.splice(0).forEach((c) => c.remove());
+  grid.innerHTML = d.items.map((x, i) => `<div class="panel"><div class="ph"><span class="t">${esc(x.name)}</span><div class="grow"></div>
+      ${x.error ? `<span class="muted">불러오기 실패</span>` : `<b class="num">${fmt(x.last)}</b>
+      <span class="${x.change_pct >= 0 ? "up" : "down"}" style="margin-left:6px">${pct(x.change_pct)}</span>
+      <span class="muted" style="margin-left:6px">1M ${pct(x.change_1m_pct)}</span>`}</div>
+      <div class="chart" id="macro-${i}" style="height:130px"></div></div>`).join("");
+  d.items.forEach((x, i) => {
+    if (!x.history.length) return;
+    const ch = makeChart($(`#macro-${i}`), { timeScale: { timeVisible: false }, rightPriceScale: { borderVisible: false } });
+    const up = x.history.at(-1).value >= x.history[0].value;
+    const s = ch.addSeries(LightweightCharts.AreaSeries, { lineColor: css(up ? "--up" : "--down"), lineWidth: 2,
+      topColor: up ? "rgba(8,153,129,.25)" : "rgba(242,54,69,.25)", bottomColor: "rgba(0,0,0,0)", priceLineVisible: false });
+    s.setData(x.history);
+    ch.timeScale().fitContent();
+    macroCharts.push(ch);
+  });
+}
+
+// 히트맵: 거래대금 크기의 사각형 트리맵 (squarify)
+function treemap(el, items) {
+  const W = el.clientWidth || 600, H = el.clientHeight || 360;
+  const data = items.filter((x) => x.quote_volume > 0).slice(0, 100);
+  const wt = (x) => Math.sqrt(x.quote_volume);          // 제곱근 — BTC 하나가 화면을 다 덮지 않게
+  const total = data.reduce((a, x) => a + wt(x), 0) || 1;
+  const nodes = data.map((x) => ({ x, a: (wt(x) / total) * W * H }));
+  const out = [];
+  const worst = (row, w) => { const s = row.reduce((a, n) => a + n.a, 0); const mx = Math.max(...row.map((n) => n.a)), mn = Math.min(...row.map((n) => n.a));
+    return Math.max((w * w * mx) / (s * s), (s * s) / (w * w * mn)); };
+  let rect = { x: 0, y: 0, w: W, h: H }, row = [], rest = nodes.slice();
+  const layout = (row) => {
+    const s = row.reduce((a, n) => a + n.a, 0);
+    if (rect.w >= rect.h) { const cw = s / rect.h; let y = rect.y; row.forEach((n) => { const h = n.a / cw; out.push({ ...n, l: rect.x, t: y, w: cw, h }); y += h; }); rect = { x: rect.x + cw, y: rect.y, w: rect.w - cw, h: rect.h }; }
+    else { const rh = s / rect.w; let x = rect.x; row.forEach((n) => { const w = n.a / rh; out.push({ ...n, l: x, t: rect.y, w, h: rh }); x += w; }); rect = { x: rect.x, y: rect.y + rh, w: rect.w, h: rect.h - rh }; }
+  };
+  while (rest.length) {
+    const n = rest[0], side = Math.min(rect.w, rect.h);
+    if (!row.length || worst([...row, n], side) <= worst(row, side)) { row.push(n); rest.shift(); }
+    else { layout(row); row = []; }
   }
+  if (row.length) layout(row);
+  el.innerHTML = out.map(({ x, l, t, w, h }) => `<div class="tm" data-sym="${x.symbol}" title="${x.symbol} · 거래대금 $${big(x.quote_volume)}"
+    style="left:${l}px;top:${t}px;width:${w}px;height:${h}px;background:${heatColor(x.change_pct)};font-size:${Math.max(9, Math.min(22, Math.sqrt(w * h) / 6))}px">
+    ${w > 34 && h > 22 ? `<b>${x.symbol.replace("USDT", "")}</b>${h > 38 ? `<span>${pct(x.change_pct)}</span>` : ""}` : ""}</div>`).join("");
 }
 
 let fngChart, cgChart;
@@ -114,6 +155,10 @@ export function initMarket() {
     on("view", (v) => v === "market" && !cgChart && loadCg(list));
   });
   $("#news-imp").onchange = renderNews;
+  ["#heatmap", "#treemap"].forEach((q) => $(q).addEventListener("click", (e) => {
+    const t = e.target.closest("[data-sym]");
+    if (t) showOnChart(t.dataset.sym);
+  }));
   on("news", () => { if ($("#v-market").classList.contains("on")) renderNews(); });
   on("calendar", renderCalendar);
   on("view", (v) => v === "market" && load());
