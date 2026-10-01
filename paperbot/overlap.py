@@ -221,23 +221,28 @@ def exposure(w: Window, top: int = TOP_MOMENTS, gap_ms: int = MOMENT_GAP_MS) -> 
     # top moments: highest counts, at most one per coin+side within gap_ms
     cl = counts.copy()
     cl[~live] = 0
-    cand: list[tuple[int, int, int]] = []                  # (count, t, k)
+    cand: list[tuple[int, int, int, int]] = []             # (count, t, k, episode minutes)
     for k in range(1, K):
         col = cl[:, k].copy()
         for _ in range(top):
             t = int(len(col) - 1 - np.argmax(col[::-1]))   # highest count, the latest such point
             if col[t] <= 0:
                 break
-            cand.append((int(col[t]), t, k))
+            # the episode: the run around t while at least half that many accounts held it
+            low = np.flatnonzero(cl[:, k] < max(1, -(-int(col[t]) // 2)))
+            a = int(low[low < t].max()) + 1 if (low < t).any() else 0
+            b = int(low[low > t].min()) if (low > t).any() else T
+            cand.append((int(col[t]), t, k, (b - a) * STEP_MS // 60_000))
+            col[a:b] = 0
             col[np.abs(w.ts - w.ts[t]) < gap_ms] = 0
     cand.sort(key=lambda c: (-c[0], -c[1]))
     sid = np.flatnonzero(S)
-    for _, t, k in cand[:top]:
+    for _, t, k, minutes in cand[:top]:
         sym, side = w.decode(k)
         members = [w.ids[j] for j in sid[w.pos[t, sid] == k]]
         strategies = sorted({w.meta[w.ids.index(a)]["strategy"] for a in members})
         out["top"].append({"ts": int(w.ts[t]), "symbol": sym, "side": side, "count": int(counts[t, k]),
-                           "strategies": len(strategies), "accounts": members})
+                           "strategies": len(strategies), "minutes": int(minutes), "accounts": members})
     if out["top"]:
         m = out["top"][0]
         out["max"] = {k: m[k] for k in ("ts", "symbol", "side", "count")}

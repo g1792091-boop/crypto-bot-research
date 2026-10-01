@@ -144,7 +144,7 @@ def test_exposure_counts_at_a_known_moment(db, rep):
     assert ex["max"]["count"] == 4 and ex["max"]["symbol"] == "BTCUSDT" and ex["max"]["side"] == 1
     m = rep["exposure"]["top"][0]
     assert m["count"] == 4 and set(m["accounts"]) == {"A@15m", "B@15m", "D@15m", "E@15m"}
-    assert m["strategies"] == 4 and tk
+    assert m["strategies"] == 4 and tk and m["minutes"] == 60            # D's 1-hour trade
     assert ex["holding_max"] == 4
     # open position from the state snapshot: C's SOL short counts at the last point
     assert w.pos[-1, w.ids.index("C@15m")] == w.code("SOLUSDT", -1)

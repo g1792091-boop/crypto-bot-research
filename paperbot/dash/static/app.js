@@ -331,6 +331,7 @@ function renderBoard() {
 let ovAt = 0;
 const idName = (id) => { const i = String(id).lastIndexOf("@"); return i < 0 ? String(id) : name({strategy: id.slice(0, i), timeframe: id.slice(i + 1)}); };
 const usd = (x) => x == null ? "—" : (x < 0 ? "-$" : "+$") + fmt(Math.abs(x), 0);
+const mins = (m) => m >= 60 ? `${Math.floor(m / 60)}시간${m % 60 ? ` ${m % 60}분` : ""}` : `${m}분`;
 async function loadOverlap(force) {
   if (!force && Date.now() - ovAt < 600000) return;     // the server caches ~10 min too
   ovAt = Date.now();
@@ -367,11 +368,12 @@ function renderOverlap(d) {
   if (!ex || !ex.top.length) h += '<p class="muted">겹친 포지션 기록이 없습니다.</p>';
   else {
     const ge5 = ex.share_ge5 != null ? Math.round(ex.share_ge5 * 100) : null;
-    h += `<p class="ovsub">5분마다 같은 코인·같은 방향에 들어가 있던 매매법 계좌 수. 가장 많이 몰린 때 <b>${ex.max.count}개</b>
-      (${coin(ex.max.symbol)} ${ex.max.side > 0 ? "롱" : "숏"}, ${tsKo(ex.max.ts)}), 보통은 ${ex.percentiles.p50}개${ge5 != null ? `, 시간의 ${ge5}%는 5개 이상` : ""}. 이 계좌들이 한 계정에 있었다면 같이 벌고 같이 잃습니다.</p>`;
-    h += `<table class="cards ovt"><thead><tr><th class="l">시각</th><th class="l">코인·방향</th><th>계좌 수</th><th>매매법 수</th><th class="l">계좌</th></tr></thead><tbody>` +
+    h += `<p class="ovsub">5분마다 같은 코인·같은 방향에 들어가 있던 매매법 계좌 수(지속 = 그 절반 이상이 함께 들고 있던 시간). 가장 많이 몰린 때 <b>${ex.max.count}개</b>
+      (${coin(ex.max.symbol)} ${ex.max.side > 0 ? "롱" : "숏"}, ${tsKo(ex.max.ts)}), 보통은 ${ex.percentiles.p50}개${ge5 ? `, 시간의 ${ge5}%는 5개 이상` : ""}. 이 계좌들이 한 계정에 있었다면 같이 벌고 같이 잃습니다.</p>`;
+    h += `<table class="cards ovt"><thead><tr><th class="l">시각</th><th class="l">코인·방향</th><th>계좌 수</th><th>매매법 수</th><th>지속</th><th class="l">계좌</th></tr></thead><tbody>` +
       ex.top.map((m) => `<tr><td class="l" data-k="시각">${tsKo(m.ts)}</td><td class="l" data-k="코인">${coin(m.symbol)} ${sideTag(m.side)}</td>
         <td class="mono" data-k="계좌 수">${m.count}</td><td class="mono" data-k="매매법 수">${m.strategies}</td>
+        <td data-k="절반 이상 유지">${m.minutes != null ? mins(m.minutes) : "—"}</td>
         <td class="l ovlist">${m.accounts.slice(0, 6).map((a) => esc(idName(a))).join(", ")}${m.accounts.length > 6 ? ` 외 ${m.accounts.length - 6}` : ""}</td></tr>`).join("") +
       "</tbody></table>";
   }
