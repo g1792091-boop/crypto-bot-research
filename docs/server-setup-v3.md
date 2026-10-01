@@ -30,7 +30,7 @@
 | 1 | 서버 만들기 (Vultr) | 10분 |
 | 2 | 코드 받기 | 5분 |
 | 3 | 설치 스크립트 | 5~10분 |
-| 4 | 바이낸스 키·텔레그램 넣기 | 15분 |
+| 4 | 바이낸스 키·텔레그램·백업 방 넣기 | 20분 |
 | 5 | 봇 멈춤 알림 (healthchecks) | 5분 |
 | 6 | 대시보드 비밀번호 | 5분 |
 | 7 | Tailscale | 10분 |
@@ -65,7 +65,8 @@
 2. Repository access: **Only select repositories** → `crypto-bot-research` 하나만.
 3. Permissions → Repository permissions → **Contents: Read-only**. 다른 권한은 주지 않습니다.
 4. 만료일을 정하고(예: 90일) 만듭니다. 토큰은 2번 단계에서 서버에만 입력합니다.
-- 만료되면 다음 `git pull` 때 비밀번호를 다시 묻습니다. 그때 새 토큰을 만들어 넣으면 됩니다.
+- GitHub는 토큰을 만들 때 **한 번만** 보여 줍니다. 서버가 2번에서 처음 넣은 토큰을 root만 읽을 수 있는 파일(`/root/.git-credentials`)에 저장해 두고, 코드 업데이트(13-5) 때 그것을 씁니다. 다른 곳(채팅·메모 앱)에는 적어 두지 않습니다.
+- 만료되면 `git pull`이 `Authentication failed`로 멈춥니다(그때 저장된 옛 토큰은 지워집니다). 위 1~4로 새 토큰을 만들고 **같은 명령을 한 번 더** 실행하면 사용자명과 비밀번호를 다시 묻습니다. 비밀번호 자리에 새 토큰을 넣습니다.
 
 ### 0-4. 바이낸스 (키는 아직 만들지 않음)
 1. 바이낸스 계정에 2단계 인증(인증 앱 또는 패스키)이 켜져 있는지 확인합니다. 키를 만들 때 필요합니다.
@@ -110,12 +111,12 @@
 2. 지역(Location): **Seoul**, **Tokyo**, **Singapore** 중 하나. 미국 지역은 바이낸스가 막습니다.
 3. OS(Image): **Ubuntu 24.04 LTS x64**.
 4. 크기(Plan): **4 vCPU / 8 GB**. 195개 계좌와 36개 매매법 신호를 코어 4개로 계산합니다. 더 작게 하면 신호가 늦어지고 이 안내서의 설정과 맞지 않습니다.
-5. **Automatic Backups(자동 백업): 켭니다.** 보충 규칙 Q10입니다. 서버 요금에 조금 더 붙습니다.
+5. **Automatic Backups(자동 백업): 끕니다**(켜져 있으면 체크를 풉니다). 두 분은 비용 때문에 Vultr 자동 백업 대신 매일 DB 백업을 텔레그램 비공개 단체방으로 보내기로 했습니다(4-3, `docs/offsite-backup.md`). 보충 규칙 Q10의 "Vultr 자동 백업" 권장은 이 결정으로 바뀌었습니다.
 6. Hostname/Label에 `paperbot`이라고 적고 **Deploy**를 누릅니다.
 7. 몇 분 뒤 서버가 **Running**이 되면 서버 화면에서 두 가지를 확인합니다.
    - **IP Address**(IPv4, 예: `141.164.x.x`). 적어 둡니다. 바이낸스 키를 이 주소로 묶습니다.
    - **Password**(root 비밀번호, 눈 모양 아이콘). 아래 Termius에만 넣습니다(채팅·메모 앱 금지).
-8. 자동 백업을 깜빡했다면: 서버 화면 → **Backups** 탭 → **Enable**. 일정은 매일(Daily)을 권장합니다.
+8. 자동 백업이 켜진 채로 만들었다면(요금이 더 나감): 서버 화면 → **Backups** 탭에서 끕니다(Disable).
 
 ### 서버에 접속하기 (Termius)
 1. Termius → **New Host**.
@@ -127,13 +128,18 @@
 
 ## 2. 코드 받기
 
+**개발자가 "시작용 코드 완료"라고 알려 준 뒤에** 받습니다. 시작한 뒤에 체결·청산·사이즈 코드가 바뀌면 그 배포일부터 30일 기간을 다시 셉니다(13-5, 보충 규칙 Q5). 그래서 그런 수정은 시작 전에 모두 들어가 있어야 합니다.
+
 ```bash
-apt-get update && apt-get install -y git
+apt-get update && apt-get install -y git tmux
+git config --global credential.helper store
 git clone -b claude/keen-pasteur-wav02u https://github.com/g1792091-boop/crypto-bot-research.git /root/crypto-bot-research
 ```
 - 사용자명을 물으면: GitHub 아이디.
 - 비밀번호를 물으면: 0-3에서 만든 **토큰**을 붙여 넣습니다(화면에 안 보이는 게 정상).
+- 둘째 줄 덕분에 토큰이 root만 읽는 `/root/.git-credentials`에 저장되어, 업데이트(13-5) 때 다시 묻지 않습니다. 설치 스크립트는 코드 폴더만 복사하므로 이 파일은 다른 곳으로 가지 않습니다.
 - 토큰을 주소 안에 넣지 마세요. 설치 스크립트가 코드 폴더를 통째로 복사하므로 주소에 넣으면 서버의 다른 곳에 남습니다.
+- `Could not get lock …`(뒤에 `unattended-upgr`나 `apt-get`)가 나오면 새 서버가 처음 몇 분 동안 자동 업데이트를 하는 중입니다. 5~10분 기다렸다가 같은 상자를 다시 붙여 넣습니다.
 
 ---
 
@@ -143,6 +149,8 @@ git clone -b claude/keen-pasteur-wav02u https://github.com/g1792091-boop/crypto-
 cd /root/crypto-bot-research
 sudo bash deploy/install.sh
 ```
+- 여기서도 `Could not get lock`이 나오면(`== packages`에서 멈춤) 5~10분 뒤 같은 명령을 다시 실행합니다. 다시 실행해도 안전합니다.
+
 이 스크립트가 하는 일:
 - 방화벽: SSH만 열고 나머지는 모두 닫음
 - fail2ban(무차별 로그인 차단), 자동 보안 업데이트, 시계 동기화(chrony)
@@ -150,7 +158,7 @@ sudo bash deploy/install.sh
 - 빈 설정 파일 `/etc/paperbot/live.env`, `dash.env`, `agents.env`, `executor.env`
 - 서비스 등록 (아직 아무것도 켜지 않음)
 
-끝나면 바이낸스에 닿는지 확인합니다(키 필요 없음). 스크립트 끝에 나오는 영어 'Next' 안내 대신 이 문서를 따릅니다.
+끝나면 바이낸스에 닿는지 확인합니다(키 필요 없음). 스크립트 끝에 나오는 영어 'Next' 안내는 **따르지 않습니다**(순서와 명령이 이 문서와 다름). 이 문서를 따릅니다.
 ```bash
 cd /opt/crypto-bot-research
 sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.live check
@@ -162,6 +170,15 @@ sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.live check
 ---
 
 ## 4. 바이낸스 키와 텔레그램 넣기
+
+### 4-0. 접속이 끊겨도 이어서 하기 (휴대폰이면 꼭)
+4~8번은 서버 화면과 바이낸스·브라우저 앱을 오가며 합니다. 휴대폰은 다른 앱으로 가 있는 동안 Termius 접속을 끊을 수 있습니다. 그래서 먼저 아래를 붙여 넣습니다.
+```bash
+tmux new -A -s setup
+```
+- 화면 맨 아래에 초록 줄이 생기면 됩니다. 4~8번은 이 화면 안에서 합니다.
+- 접속이 끊기면: Termius로 다시 접속한 뒤 **같은 명령**(`tmux new -A -s setup`)을 붙여 넣습니다. 하던 화면(열어 둔 nano 포함)이 그대로 돌아옵니다.
+- PC 터미널이라면 없어도 됩니다.
 
 ### 설정 파일 고치는 법 (nano)
 ```bash
@@ -177,21 +194,30 @@ sudo nano /etc/paperbot/live.env
 2. **API Key**와 **Secret Key**가 나옵니다. **Secret Key는 이때 한 번만 보입니다.** 바로 서버의 `live.env`에 붙여 넣습니다.
    - `BINANCE_API_KEY=` 뒤에 API Key
    - `BINANCE_API_SECRET=` 뒤에 Secret Key
+   - 붙여 넣자마자 **저장합니다(Ctrl+O, Enter).** 다음 단계로 바이낸스에 갔다 오는 사이 접속이 끊겨도 키가 남습니다.
 3. 바이낸스에서 그 키의 **Edit restrictions(제한 편집)**:
    - **Enable Reading(읽기)만** 체크된 상태로 둡니다.
    - Enable Spot & Margin Trading, **Enable Futures**, **Enable Withdrawals**, 그 밖의 권한은 모두 **끔**.
    - IP 접근 제한: **Restrict access to trusted IPs only (Recommended)** → 1번에서 적은 **서버 IPv4**를 넣고 **Confirm**.
    - **Save** → 보안 인증.
-4. 서버에서 `live.env`를 저장(Ctrl+O, Enter)합니다. 텔레그램 칸은 다음 단계에서 채우므로 nano는 열어 둬도 됩니다.
+4. 서버에서 `live.env`를 한 번 더 저장(Ctrl+O, Enter)합니다. 텔레그램 칸은 다음 단계에서 채우므로 nano는 열어 둬도 됩니다.
+
+**nano를 연 채 접속이 끊겼고 tmux로도 화면이 돌아오지 않을 때:** nano는 끊기기 직전 내용을 `이름.save` 파일로 남깁니다(키가 들어 있음).
+```bash
+sudo ls /etc/paperbot/
+```
+- `live.env.save`가 보이면 그 안에 붙여 넣었던 키가 있습니다. 그 내용을 쓰려면 `sudo cp /etc/paperbot/live.env.save /etc/paperbot/live.env`(권한은 live.env 것이 그대로 남음), 그다음 **꼭** `sudo rm -f /etc/paperbot/*.save*`로 지웁니다. 지우지 않으면 10번 점검이 `[고칠 것]`으로 알려 줍니다.
+- Secret Key가 어디에도 없으면 바이낸스에서 그 키를 지우고(Delete) 1번부터 새로 만듭니다.
 
 ### 4-2. 텔레그램 토큰과 방 번호
 1. `live.env`의 `TELEGRAM_BOT_TOKEN=` 뒤에 0-5의 봇 토큰을 붙여 넣고 저장 → 나가기.
-2. 방 번호(chat id)를 찾습니다. 토큰을 다시 치지 않도록 파일에서 읽어 씁니다.
+2. 방 번호(chat id)를 찾습니다. 토큰을 화면에 띄우지 않고, 봇이 최근에 본 방의 번호와 이름만 보여 주는 명령입니다.
    ```bash
-   sudo bash -c 'set -a; . /etc/paperbot/live.env; curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getUpdates"'
+   sudo -u paperbot bash -c 'set -a; . /etc/paperbot/live.env; cd /opt/crypto-bot-research && /opt/paperbot/venv/bin/python -m paperbot.offsite chats'
    ```
-   - 결과에서 `"chat":{"id":-` 뒤의 숫자를 찾습니다. 단체방 번호는 **빼기(-)로 시작**합니다(예: `-1001234567890` 또는 `-4123456789`). 빼기 기호까지 그대로 씁니다.
-   - `"result":[]`처럼 비어 있으면 단체방에 `/start@<봇 아이디>`를 다시 보내고 위 명령을 다시 실행합니다.
+   - 결과 예: `방 번호 -1001234567890   이름 우리 알림방   (supergroup)`. 0-5에서 만든 단체방 이름의 줄을 봅니다.
+   - 단체방 번호는 **빼기(-)로 시작**합니다(예: `-1001234567890` 또는 `-4123456789`). 빼기 기호까지 그대로 씁니다.
+   - "최근 메시지가 없습니다"가 나오면 단체방에 `/start@<봇 아이디>`를 다시 보내고 위 명령을 다시 실행합니다.
 3. `sudo nano /etc/paperbot/live.env` → `TELEGRAM_CHAT_CRITICAL=` 뒤에 방 번호 → 저장.
    - `TELEGRAM_CHAT_WARN`, `TELEGRAM_CHAT_INFO`는 비워 둡니다. 비어 있으면 같은 단체방으로 갑니다. INFO(요약)는 무음으로 옵니다.
 4. 에이전트 방도 같은 텔레그램을 씁니다. 아래 상자는 `live.env`의 텔레그램 네 줄을 `agents.env`에 그대로 옮깁니다(손으로 다시 칠 필요 없음).
@@ -200,11 +226,25 @@ sudo nano /etc/paperbot/live.env
      v=$(sudo grep "^$k=" /etc/paperbot/live.env | cut -d= -f2-)
      sudo sed -i "s|^$k=.*|$k=$v|" /etc/paperbot/agents.env
    done
-   sudo grep -c '^TELEGRAM_' /etc/paperbot/agents.env
+   sudo grep -cE '^TELEGRAM_(BOT_TOKEN|CHAT_CRITICAL)=.+' /etc/paperbot/agents.env
    ```
-   - 마지막 줄이 `4`면 됩니다.
+   - 마지막 줄이 `2`면 됩니다(봇 토큰과 CRITICAL 방이 옮겨짐. WARN·INFO는 비어 있는 것이 맞음). `0`이면 1~3을 다시 확인하고 이 상자를 다시 붙여 넣습니다.
 
 시험 메시지는 10번 최종 점검이 보냅니다.
+
+### 4-3. 서버 밖 백업 방 (텔레그램 'paperbot 백업')
+서버 안의 매일 백업은 서버가 사라지면 같이 사라집니다. Vultr 자동 백업 대신(1-5), 매일 09:15에 그 백업을 텔레그램 비공개 단체방으로 한 부 더 보냅니다. 자세한 설명과 되살리는 법은 `docs/offsite-backup.md`에 있습니다.
+1. 텔레그램 → 새 그룹 → 다른 한 분과 우리 봇만 넣고 이름을 `paperbot 백업`으로 만듭니다(알림 단체방과 **따로**). 공개 링크는 만들지 않습니다.
+2. 그 방에 `/start@<봇 아이디>`를 한 번 보냅니다.
+3. 4-2의 2번 명령(`... paperbot.offsite chats`)을 다시 실행해 이름이 **paperbot 백업**인 줄의 번호를 찾습니다. 알림 단체방 번호와 달라야 합니다.
+4. 번호를 넣습니다.
+   ```bash
+   sudo nano /etc/paperbot/live.env
+   ```
+   맨 아래에 `TELEGRAM_CHAT_BACKUP=<방 번호>` 한 줄을 넣고 저장합니다(이미 `TELEGRAM_CHAT_BACKUP=` 줄이 있으면 그 뒤에 적습니다).
+- 폰 저장 공간을 아끼려면 이 방을 알림 끄기(Mute)하고, 텔레그램의 파일 자동 다운로드를 끕니다(`docs/offsite-backup.md` 3번).
+- 암호를 걸고 싶을 때만 `docs/offsite-backup.md` 7번을 봅니다(선택). 암호를 잃으면 백업을 되살릴 수 없습니다.
+- 켜는 것은 11번에서, 첫 시험과 되살리기 연습은 12번에서 합니다.
 
 ---
 
@@ -233,9 +273,9 @@ H=$(sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.dash hash) && \
   sudo sed -i "s|^DASH_PASSWORD_HASH=.*|DASH_PASSWORD_HASH='$H'|" /etc/paperbot/dash.env && echo 비밀번호 저장됨
 S=$(openssl rand -hex 32) && \
   sudo sed -i "s|^DASH_SECRET=.*|DASH_SECRET=$S|" /etc/paperbot/dash.env && echo 비밀값 저장됨
-sudo grep -E '^DASH_(PASSWORD_HASH|SECRET)=' /etc/paperbot/dash.env | cut -c1-32
+sudo awk -F= '/^DASH_(PASSWORD_HASH|SECRET)=/{print $1": "(length($2)>2?"set":"EMPTY")}' /etc/paperbot/dash.env
 ```
-- 마지막 줄에 `DASH_PASSWORD_HASH='pbkdf2$200000$...`와 `DASH_SECRET=...` 두 줄이 보이면 됩니다.
+- 마지막에 `DASH_PASSWORD_HASH: set`과 `DASH_SECRET: set` 두 줄이 보이면 됩니다(값 자체는 화면에 내지 않습니다). `EMPTY`가 있으면 상자를 다시 붙여 넣습니다. 해시 모양은 10번 점검이 다시 확인합니다.
 - `use at least 12 characters`나 `passwords differ`가 나오면 저장되지 않은 것입니다. 상자를 다시 붙여 넣습니다.
 - 손으로 넣을 때: 해시는 `$` 기호가 들어 있으므로 **작은따옴표로 감쌉니다**(`DASH_PASSWORD_HASH='pbkdf2$...'`).
 - (선택) 대시보드 글·승인에 이름을 남기려면 `sudo nano /etc/paperbot/dash.env`에서 `#DASH_OWNERS=` 줄의 `#`을 지우고 두 분 이름을 쉼표로 적습니다.
@@ -249,6 +289,7 @@ curl -fsSL https://tailscale.com/install.sh | sh
 sudo tailscale up
 ```
 - `To authenticate, visit:` 뒤의 주소를 폰 브라우저에서 열고, 0-7의 계정으로 로그인해 서버를 승인합니다.
+- 브라우저에 다녀오는 사이 접속이 끊겼으면 다시 접속해 `sudo tailscale up`을 한 번 더 실행합니다. 주소가 다시 나오거나, 이미 승인됐으면 바로 끝납니다.
 
 ```bash
 tailscale ip -4
@@ -281,13 +322,15 @@ sudo -u paperbot -H /var/lib/paperbot/.local/bin/claude setup-token
 ```
 1. 화면에 나온 주소를 폰 브라우저에서 열고, **Claude Max 계정**으로 로그인해 승인합니다.
    - "Anthropic Console account"(API 키 계정)는 **절대 고르지 않습니다.**
+   - 주소가 길어 여러 줄로 나뉘어 보여도 한 주소입니다. 끝까지 통째로 복사합니다.
+   - 브라우저에 다녀오는 사이 접속이 끊겨 서버 화면이 사라졌으면(4-0의 tmux로도 안 돌아옴) 이 명령을 처음부터 다시 실행합니다.
 2. 브라우저에 코드가 나오면 복사해 서버 화면에 붙여 넣고 Enter.
 3. 서버 화면에 긴 토큰(`sk-ant-oat01-...`)이 나옵니다. 복사합니다(채팅·메모 앱 금지).
 4. 토큰을 넣습니다.
    ```bash
    sudo nano /etc/paperbot/agents.env
    ```
-   `CLAUDE_CODE_OAUTH_TOKEN=` 뒤에 붙여 넣고 저장합니다.
+   `CLAUDE_CODE_OAUTH_TOKEN=` 뒤에 붙여 넣고 저장합니다. 화면에서 여러 줄로 나뉘어 보여도 한 줄입니다. 중간에 빈칸이나 줄바꿈이 끼지 않게 붙여 넣습니다(10번 점검이 토큰 모양을 확인합니다).
 - 이 토큰은 약 1년 동안 씁니다. 휴대폰 달력에 **11개월 뒤 "Claude 토큰 갱신"** 알림을 넣어 두세요(8-2를 다시 하면 됩니다).
 
 ### 8-3. agents.env의 나머지
@@ -303,6 +346,7 @@ sudo -u paperbot -H bash -c 'set -a; . /etc/paperbot/agents.env; set +a; ~/.loca
 - `"loggedIn": true`가 있어야 합니다.
 - `"apiKeySource"`라는 글자가 **없어야** 합니다. 있으면 API 키로 잡힌 것이니 8-2를 다시 합니다.
 - 이 확인을 통과하지 못하면 에이전트는 회의를 열지 않고 멈춥니다(대시보드에 "에이전트 멈춤 (로그인 확인)").
+- 이 확인은 토큰이 **들어 있는지만** 봅니다. 토큰이 실제로 되는지는 시작 뒤 첫 회의에서 알 수 있어서, 12번에서 꼭 확인합니다.
 
 ---
 
@@ -327,7 +371,13 @@ sudo journalctl -u paperbot-labbuild -f
   sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.agents.labdata check --out /var/lib/paperbot/lab
   ```
   `60/60 files identical`이면 끝입니다.
-- `download failed ... run the same command again`이 나왔거나 60/60이 아니면, 첫 상자(systemd-run)를 **다시 붙여 넣습니다.** 받은 것은 두고 이어서 합니다.
+- 60/60이 아니면 먼저 아직 만드는 중인지 봅니다.
+  ```bash
+  systemctl is-active paperbot-labbuild
+  ```
+  - `active`: 아직 만드는 중입니다. 다시 붙여 넣지 말고 기다립니다(진행은 위의 `journalctl` 상자로 봄). 다 만들기 전에는 `check`가 60/60보다 적게 나오고 "개발자에게 보내라"는 영어 줄이 나와도 신경 쓰지 않습니다.
+  - `inactive`(끝났는데 60/60이 아님, 또는 `download failed ... run the same command again`이 나옴): 첫 상자(systemd-run)를 **다시 붙여 넣습니다.** 받은 것은 두고 이어서 합니다.
+  - `failed`: 먼저 `sudo systemctl reset-failed paperbot-labbuild`, 그다음 첫 상자를 다시 붙여 넣습니다.
 
 자료가 다 되면 에이전트 배관 점검(AI 호출 없음, 실제 기록은 건드리지 않음)을 한 번 합니다.
 ```bash
@@ -337,7 +387,8 @@ sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.agents.rooms tick \
   --agents-db /var/lib/paperbot/agents3.db --inbox-db /var/lib/paperbot/inbox.db \
   --lab-dir /var/lib/paperbot/lab --dry-run
 ```
-- 봇이 아직 시작 전이라 `nothing due`가 나오면 정상입니다. 오류 글이 나오면 그 화면을 개발자에게 보여 줍니다(키·토큰이 안 보이는지 확인 후).
+- 정상인 결과는 두 가지입니다. ① `team:lab research: ... (3 calls)`처럼 회의 이름 줄과 그 아래 `(dry-run)` 줄이 이어지는 회의 기록(새 매매법 연구 회의, 한국 시간 08~12시면 아침 회의, 22~02시면 저녁 점검도), ② `nothing due`. AI를 부르지 않고 연습한 것이라 실제 기록은 바뀌지 않습니다. 기록 안에 "자료가 없습니다" 같은 말이 있어도 연습이라 괜찮습니다.
+- `Traceback`이나 `Error`가 들어 있는 줄이 나올 때만 그 화면을 개발자에게 보여 줍니다(키·토큰이 안 보이는지 확인 후).
 - 에이전트 명령은 꼭 `sudo -u paperbot`으로 실행합니다. root로 실행하면 root 소유 파일이 생겨 자동 실행이 막힐 수 있습니다.
 
 ---

@@ -688,6 +688,7 @@ class Extra:
     status: str = "active"           # active / suspended / held
     code: Optional[str] = None
     since: Optional[int] = None
+    detail: str = ""
 
     @property
     def source(self) -> dict:
@@ -707,11 +708,11 @@ def _new_state(now: int) -> dict:
 class Journal:
     """What a hook phase changed in memory, to undo it when the phase's transaction is rolled back."""
 
-    def __init__(self, ext: "Extras"):
+    def __init__(self, ext: "Extras", snapshot: bool = True):
         self.ext = ext
-        self.state = copy.deepcopy(ext.state)
-        self.registry = dict(ext.extras)
-        self.ready = dict(ext.ready)
+        self.state = copy.deepcopy(ext.state) if snapshot else None
+        self.registry = dict(ext.extras) if snapshot else None
+        self.ready = dict(ext.ready) if snapshot else None
         self.submits: list[tuple[str, Signal]] = []
         self.added_ids: list[str] = []
         self.registered_ids: list[str] = []
@@ -737,9 +738,10 @@ class Journal:
                 x.newlab.unregister(aid)
         for aid in reversed(self.added_ids):
             x.book.remove(aid)
-        x.state = self.state
-        x.extras = self.registry
-        x.ready = self.ready
+        if self.state is not None:
+            x.state = self.state
+            x.extras = self.registry
+            x.ready = self.ready
 
 
 class Extras:
@@ -847,27 +849,38 @@ class Extras:
             self.state["events"] = self.state["events"][-MAX_EVENTS:]
 
     def _set_status(self, x: Extra, status: str, code: Optional[str] = None, detail: str = "") -> None:
-        """Record an account's safety state; a change from what was recorded before is an event and a
-        CRITICAL alert naming the account."""
-        prev = self.prev_accounts.get(x.aid) if not self.bound else None
-        before = (prev or {}).get("status", "active") if prev is not None or not self.bound else x.status
-        before_code = (prev or {}).get("code") if not self.bound else x.code
-        if not self.bound and prev is None:
-            before, before_code = "active", None
-        x.status, x.code = status, code
-        if status != "active":
-            x.since = (prev or {}).get("since") if (before == status and before_code == code and prev) else self.clock()
-        else:
-            x.since = None
-        if (status, code) == (before, before_code):
+        """Record an account's safety state. Before ``bind`` the states are only collected (``_settle``
+        compares them with the ones recorded by the previous run); afterwards a change is an event and a
+        CRITICAL alert naming the account at once."""
+        if not self.bound:
+            x.status, x.code, x.detail = status, code, str(detail)[:300]
             return
-        if status == "active":
-            self._event(x.aid, "resumed", before_code, detail)
-            self._alert(CRITICAL, f"[extra] {x.aid}: 다시 정상 운영 ({CODES_KO.get(before_code or '', before_code)} 해소)")
+        before = (x.status, x.code)
+        x.status, x.code, x.detail = status, code, str(detail)[:300]
+        x.since = self.clock() if status != "active" else None
+        if (status, code) != before:
+            self._transition(x, before)
+
+    def _transition(self, x: Extra, before: tuple) -> None:
+        if x.status == "active":
+            self._event(x.aid, "resumed", before[1], x.detail)
+            self._alert(CRITICAL, f"[extra] {x.aid}: 다시 정상 운영 ({CODES_KO.get(before[1] or '', before[1])} 해소)")
         else:
-            self._event(x.aid, status, code, detail)
-            what = "정지(동결: 저장된 상태 그대로)" if status == "held" else "멈춤(새 진입 없음, 열린 포지션은 규칙대로 관리)"
-            self._alert(CRITICAL, f"[extra] {x.aid}: {what} — {code}: {detail}"[:300])
+            self._event(x.aid, x.status, x.code, x.detail)
+            what = "정지(동결: 저장된 상태 그대로)" if x.status == "held" else "멈춤(새 진입 없음, 열린 포지션은 규칙대로 관리)"
+            self._alert(CRITICAL, f"[extra] {x.aid}: {what} — {x.code}: {x.detail}"[:300])
+
+    def _settle(self) -> None:
+        """At start: every account whose state differs from the previous run's record is an event."""
+        now = self.clock()
+        for aid, x in self.extras.items():
+            prev = self.prev_accounts.get(aid)
+            before = (prev.get("status", "active"), prev.get("code")) if isinstance(prev, dict) else ("active", None)
+            cur = (x.status, x.code)
+            if x.status != "active":
+                x.since = prev.get("since") if isinstance(prev, dict) and before == cur and prev.get("since") else now
+            if cur != before:
+                self._transition(x, before)
 
     def _on_fault(self, aid: str, why: str) -> None:
         x = self.extras.get(aid)
@@ -967,6 +980,7 @@ class Extras:
                         continue
                 why = src.register(x.aid, x.strategy, x.timeframe, x.spec)
                 self._readiness(x.aid, why)
+        self._settle()
         self.bound = True
         runner.post_boundary = self.post_boundary
         self._write_state(self.clock())
@@ -993,7 +1007,8 @@ class Extras:
         t0 = time.monotonic()
         sd_notify("WATCHDOG=1")
         live = self.live(boundary)
-        self._phase(1, boundary, lambda j: self._phase1(boundary, submitted, j))
+        if submitted and self._copies_of({aid for aid, _ in submitted}, boundary):
+            self._phase(1, boundary, lambda j: self._phase1(boundary, submitted, j), snapshot=False)
         if not live or timed_out:
             self._count_skipped(boundary)
             self.state["health"]["hook_ms"] = int((time.monotonic() - t0) * 1000)
@@ -1009,8 +1024,8 @@ class Extras:
                 pass
         self.digest.flush(self.clock())
 
-    def _phase(self, n: int, boundary: int, fn) -> Optional[list]:
-        j = Journal(self)
+    def _phase(self, n: int, boundary: int, fn, snapshot: bool = True) -> Optional[list]:
+        j = Journal(self, snapshot)
         try:
             wrote = fn(j)
             if wrote:
@@ -1054,12 +1069,18 @@ class Extras:
             sk[tf] = int(sk.get(tf, 0)) + 1
 
     # ------------------------------------------------------------ phase 1: copies
-    def _phase1(self, boundary: int, submitted: list, j: Journal) -> bool:
-        copies: dict[str, list[Extra]] = {}
+    def _copies_of(self, parents: set, boundary: int) -> dict:
+        """{parent: [active copies started before ``boundary``]} for these parents."""
+        out: dict[str, list[Extra]] = {}
         for x in self.extras.values():
-            if x.kind == "copy" and x.status == "active" and x.created_ts < boundary and x.rule:
-                copies.setdefault(x.parent, []).append(x)
-        if not copies or not submitted:
+            if x.kind == "copy" and x.parent in parents and x.status == "active" and x.created_ts < boundary \
+                    and x.rule:
+                out.setdefault(x.parent, []).append(x)
+        return out
+
+    def _phase1(self, boundary: int, submitted: list, j: Journal) -> bool:
+        copies = self._copies_of({aid for aid, _ in submitted}, boundary)
+        if not copies:
             return False
         wrote = False
         for aid, sig in submitted:
@@ -1120,20 +1141,23 @@ class Extras:
         delay = ready_at - boundary
         max_delay = getattr(self.service, "max_delay_ms", 180_000)
         rows, subs = [], []
-        seen = set()
+        ready_tf: dict = {}
         for res in results:
-            for aid in res.get("sides", {}) or {}:
-                seen.add(aid)
+            tf = res["tf"]
+            if res.get("ready"):
+                ready_tf[tf] = None
+            else:
+                ready_tf.setdefault(tf, res.get("why") or "not ready")
             for e in res.get("errors") or []:
                 self._alert(WARN, f"[extra] 새 매매법 신호 오류 {res['tf']} {res['symbol']}: {e}"[:300])
+        for aid, (_n, tf, _s) in list(src.specs.items()):
+            if tf in ready_tf:
+                self._readiness(aid, ready_tf[tf])
+        for res in results:
             if not res.get("ready"):
-                for aid, (_n, tf, _s) in list(src.specs.items()):
-                    if tf == res["tf"]:
-                        self._readiness(aid, res.get("why") or "not ready")
                 continue
             sym, tf = res["symbol"], res["tf"]
             for aid, side in res["sides"].items():
-                self._readiness(aid, None)
                 if not side:
                     continue
                 x = self.extras.get(aid)

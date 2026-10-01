@@ -1555,7 +1555,10 @@ def check_claude(ctx: Ctx, agents: EnvFile, agents_wanted: bool) -> list[Line]:
     from .agents.runner import auth_preflight
     good, why = auth_preflight(claude, env=parent, run=run, timeout=60.0)
     if good:
-        return [ok(f"Claude Code 로그인: 구독으로 로그인됨 ({why or '?'}), API 키 아님")]
+        # auth status only sees that a token is set (no call to the server): the first real meeting is the
+        # real test (docs/server-setup-v3.md 12)
+        return [ok(f"Claude Code 로그인 설정 확인됨: 구독 토큰 ({why or '?'}), API 키 아님 "
+                   "(토큰이 실제로 되는지는 시작 뒤 첫 회의에서 확인)")]
     return [level(f"Claude Code 로그인 확인 실패: {why}. {claude_hint(why)}")]
 
 
@@ -1593,17 +1596,19 @@ def check_agents_policy(ctx: Ctx, agents: EnvFile, agents_wanted: bool, run_star
 # ---------------------------------------------------------------- run and report
 def guard(fn: Callable[..., list], *args, level: Callable[[str], Line] = fix) -> list[Line]:
     """A check that breaks is reported as one line (``level``: [고칠 것], or [참고] for an optional part);
-    the other checks still run."""
+    the other checks still run. The message is kept whole here: report() scrubs it, then cuts it (a cut
+    made first could split a secret so that the scrub misses the rest)."""
     try:
         return list(fn(*args))
     except Exception as exc:  # noqa: BLE001
-        return [level(f"이 점검이 오류로 멈췄습니다: {type(exc).__name__}: {exc}"[:300])]
+        return [level(f"{ERROR_PREFIX}{type(exc).__name__}: {exc}")]
 
 
-def start_command(states: Optional[dict]) -> str:
-    """The start command for this server: the base units, plus the extra timers its install.sh installed."""
+def start_command(states: Optional[dict], agents_wanted: bool = False) -> str:
+    """The start command for this server: the base units, the agent rooms' timers when they are wanted
+    (docs/server-setup-v3.md 11 starts everything at once), and the extra timers its install.sh installed."""
     extra = [u for u in EXTRA_TIMERS if ((states or {}).get(u) or {}).get("LoadState") == "loaded"]
-    return " ".join([START_CMD] + extra)
+    return " ".join([START_CMD] + (list(AGENT_TIMERS) if agents_wanted else []) + extra)
 
 
 def run_checks(ctx: Ctx, stage: str = "before", send_test: bool = False, ping: bool = False,
@@ -1627,8 +1632,10 @@ def run_checks(ctx: Ctx, stage: str = "before", send_test: bool = False, ping: b
         ("Tailscale·방화벽", guard(check_tailscale, ctx, dash)),
         ("서버 사양", guard(check_resources, ctx, states)),
         ("시계", guard(check_clock, ctx)),
-        ("서비스", guard(check_units, states, stage, wanted)),
-        ("데이터", guard(check_data_dir, ctx) + guard(check_paper_db, ctx, stage)),
+        ("서비스", guard(check_units, states, stage, wanted, ctx.mono_us())),
+        ("서버 밖 백업 (텔레그램)", guard(check_offsite, live, states, level=note)),
+        ("데이터", guard(check_data_dir, ctx) + guard(check_paper_db, ctx, stage, bool(live.get("DEADMAN_URL")))
+         + (guard(check_liq, ctx) if stage == "after" else [])),
     ]
     if agents == "no":
         sections.append(("에이전트 방", [note("점검 건너뜀 (--agents no)")]))
@@ -1637,9 +1644,16 @@ def run_checks(ctx: Ctx, stage: str = "before", send_test: bool = False, ping: b
                                        "--agents yes로 다시 확인하세요")]
         lab = ([note("5년 시험 자료 확인 건너뜀 (--skip-lab)")] if skip_lab else
                guard(check_lab, ctx, states, wanted, level=opt))
-        sections.append(("에이전트 방", head + guard(check_claude, ctx, ag, wanted, level=opt)
-                         + guard(check_agents_policy, ctx, ag, wanted, paper_start(ctx), level=opt) + lab))
-    return sections, secret_values(envs), start_command(states)
+        lines = (head + guard(check_claude, ctx, ag, wanted, level=opt)
+                 + guard(check_agents_policy, ctx, ag, wanted, paper_start(ctx), level=opt) + lab)
+        timer_on = _enabled(((states or {}).get("paperbot-agents.timer") or {}))
+        if agents == "auto" and wanted and not timer_on and any(s == FIX for s, _ in lines):
+            # only the Claude token made them "wanted": the paper bot need not wait for the agent rooms
+            lines.append(note("에이전트 방을 나중에 켤 거면 `--agents no`를 붙여 점검하고 봇을 먼저 시작해도 됩니다. "
+                              "그때 결론 줄의 시작 명령에는 에이전트 타이머가 빠져 있고, 8~9번을 마친 뒤 "
+                              "sudo systemctl enable --now paperbot-agents.timer paperbot-labmonthly.timer 로 켭니다"))
+        sections.append(("에이전트 방", lines))
+    return sections, secret_values(envs), start_command(states, wanted)
 
 
 def report(sections: list[tuple[str, list[Line]]], stage: str, secrets: Sequence[str] = (),
@@ -1651,7 +1665,10 @@ def report(sections: list[tuple[str, list[Line]]], stage: str, secrets: Sequence
             continue
         out(f"== {title}")
         for status, text in lines:
-            out(f"[{status}] {scrub(text, secrets)}")
+            text = scrub(text, secrets)
+            if text.startswith(ERROR_PREFIX) and len(text) > ERROR_MAX:
+                text = text[:ERROR_MAX] + "…"
+            out(f"[{status}] {text}")
             n_fix += status == FIX
             n_note += status == NOTE
     out("== 결론")
@@ -1660,10 +1677,10 @@ def report(sections: list[tuple[str, list[Line]]], stage: str, secrets: Sequence
             + (" 아직 시작하지 마세요." if stage == "before" else ""))
         return 1
     if stage == "before":
-        out(f"[{OK}] 시작 준비가 끝났습니다 (참고 {n_note}개). 시작: {start_cmd}")
-        out(f"     시작하고 5분쯤 뒤 확인: {AFTER_CMD}")
+        out(f"[{OK}] 시작 준비가 끝났습니다 (참고 {n_note}개: 읽어만 보세요). 시작: {start_cmd}")
+        out(f"     시작하고 10~15분 뒤 확인: {AFTER_CMD}")
     else:
-        out(f"[{OK}] 봇이 정상으로 돌고 있습니다 (참고 {n_note}개). healthchecks.io가 'up'인지, 텔레그램에 "
+        out(f"[{OK}] 봇이 정상으로 돌고 있습니다 (참고 {n_note}개: 읽어만 보세요). healthchecks.io가 'up'인지, 텔레그램에 "
             "'paper v3 started'가 왔는지 눈으로도 보세요.")
     return 0
 
@@ -1686,4 +1703,5 @@ def main(argv: Optional[list[str]] = None, ctx: Optional[Ctx] = None,
 
 
 if __name__ == "__main__":
+    sys.dont_write_bytecode = True       # no root-owned __pycache__ for the modules imported from here on
     sys.exit(main())

@@ -6,7 +6,10 @@ connections raise if anything tries."""
 import hashlib
 import io
 import json
+import os
+import re
 import shutil
+import signal
 import socket
 import sqlite3
 import tarfile
@@ -20,6 +23,7 @@ import pytest
 from paperbot import offsite as off
 from paperbot.notify import WARN, ListNotifier
 
+REPO = Path(__file__).resolve().parents[1]
 TOKEN = "123456789:AAFakeTokenForTestsOnly_abcdefghijklmn"
 CHAT_BACKUP = "-1009999"
 CHAT_CRITICAL = "-1001111"
@@ -34,6 +38,15 @@ def no_network(monkeypatch):
         raise AssertionError("a test tried to use the network")
     monkeypatch.setattr(urllib.request, "urlopen", refuse)
     monkeypatch.setattr(socket, "create_connection", refuse)
+
+
+REAL_FREE_FLOOR = off.free_floor
+
+
+@pytest.fixture(autouse=True)
+def no_free_floor(monkeypatch):
+    """The disk this test runs on is not the server's: the free-space floor is tested on its own."""
+    monkeypatch.setattr(off, "free_floor", lambda total: 0)
 
 
 def parse_multipart(body: bytes, ctype: str) -> tuple[dict, dict]:
@@ -217,8 +230,13 @@ def test_backup_chat_falls_back_to_critical_with_a_note(tmp_path):
 def test_dry_run_needs_no_token_and_sends_nothing(tmp_path):
     root, lib, _ = make_backup(tmp_path, rows=5)
     fake = FakeTelegram()
-    m = send(tmp_path, root, lib, fake, env={}, dry_run=True)
+    outs = []
+    m = off.send_backup(root, lib=lib, part_size=16 * 1024, env={}, sender=fake, now=NOW, which=no_zstd,
+                        work=tmp_path, log=lambda s: None, out=outs.append, wait_s=0, dry_run=True)
     assert fake.calls == [] and m["parts"]
+    text = "\n".join(outs)
+    assert "완료" not in text and "보낸 파일" not in text          # nothing was sent: no success line
+    assert "dry run" in text and "아무것도 보내지 않음" in text and "보낼 파일" in text
 
 
 def test_yesterdays_folder_is_taken_after_midnight_utc(tmp_path):
@@ -245,36 +263,63 @@ def test_missing_folder_fails_with_warn_and_exit_1(tmp_path, capsys):
     assert "paperbot-backup" in capsys.readouterr().err
 
 
-def test_incomplete_folder_is_refused(tmp_path):
+def test_folder_problems_are_listed_and_the_good_copies_kept(tmp_path):
     root, lib, folder = make_backup(tmp_path, rows=5)
-    (folder / "paper3.db.part").write_bytes(b"half")
-    with pytest.raises(off.OffsiteError, match="끝나지 않았습니다"):
-        off.check_complete(folder, lib)
+    assert off.check_folder(folder, lib) == ({p.name: p.stat().st_size for p in sorted(folder.iterdir())}, [])
+    (folder / "paper3.db").rename(folder / "paper3.db.part")    # the copy killed half-way (no paper3.db)
     waits = []
-    with pytest.raises(off.OffsiteError, match="paper3.db.part"):
-        off.check_complete(folder, lib, wait_s=90, sleep=waits.append, poll_s=30, log=lambda s: None)
-    assert waits == [30, 30, 30]
+    files, problems = off.check_folder(folder, lib, wait_s=90, sleep=waits.append, poll_s=30, log=lambda s: None)
+    assert waits == [30, 30, 30]                                   # waited for the writer, then went on
+    assert set(files) == {"agents3.db", "inbox.db", "executor.db"}
+    assert problems == [(off.UNFINISHED, "paper3.db.part"), (off.MISSING, "paper3.db")]
     (folder / "paper3.db.part").unlink()
-    (folder / "inbox.db").unlink()                             # exists on the server, no copy
-    with pytest.raises(off.OffsiteError, match="inbox.db"):
-        off.check_complete(folder, lib)
     (folder / "inbox.db").write_bytes(b"not a database at all")
-    with pytest.raises(off.OffsiteError, match="SQLite"):
-        off.check_complete(folder, lib)
+    files, problems = off.check_folder(folder, lib)
+    assert set(files) == {"agents3.db", "executor.db"}
+    assert problems == [(off.NOT_SQLITE, "inbox.db"), (off.MISSING, "inbox.db"), (off.MISSING, "paper3.db")]
+    assert off.problems_text(problems) == (f"{off.NOT_SQLITE}: inbox.db; {off.MISSING}: inbox.db, paper3.db")
+
+
+def test_a_failed_paper3_copy_still_sends_the_others_then_warns(tmp_path):
+    # paper3's copy failed (the largest, copied last); agents3/inbox/executor still go off-site that day
+    root, lib, folder = make_backup(tmp_path, rows=5)
+    (folder / "paper3.db").unlink()
+    notes, fake = ListNotifier(), FakeTelegram()
+    rc = off.main(["send", "--from", str(root), "--lib", str(lib), "--wait-min", "0"], env=ENV, sender=fake,
+                  sleep=lambda s: None, notifier=notes, now=NOW, which=no_zstd)
+    assert rc == 1
+    docs = fake.documents()
+    manifest = json.loads(docs[-1]["files"]["document"][1])
+    assert set(manifest["databases"]) == {"agents3.db", "inbox.db", "executor.db"}
+    assert manifest["problems"] == [f"{off.MISSING}: paper3.db"]
+    summary = docs[-1]["fields"]["caption"]
+    assert "일부만" in summary and "완료" not in summary and "paper3.db" in summary
+    (level, text), = notes.messages
+    assert level == WARN and "서버 밖 백업 실패" in text and f"{off.MISSING}: paper3.db" in text
+    assert "나머지 DB 3개" in text and "다음 날" in text                  # a new DB: included from tomorrow
+    files = save_downloads(fake, tmp_path / "dl")
+    out = tmp_path / "o"
+    assert off.restore_backup(files, out, which=no_zstd, log=lambda s: None) == 0
+    assert sorted(p.name for p in (out / DATE).iterdir()) == ["agents3.db", "executor.db", "inbox.db"]
 
 
 def test_a_copy_finished_while_waiting_is_accepted(tmp_path):
     root, lib, folder = make_backup(tmp_path, rows=5)
     part = folder / "paper3.db.part"
     part.write_bytes(b"x")
-    files = off.check_complete(folder, lib, wait_s=300, sleep=lambda s: part.unlink(), log=lambda s: None)
-    assert "paper3.db" in files
+    files, problems = off.check_folder(folder, lib, wait_s=300, sleep=lambda s: part.unlink(),
+                                       log=lambda s: None)
+    assert "paper3.db" in files and problems == []
 
 
 def test_empty_folder_is_refused(tmp_path):
     (tmp_path / "b" / DATE).mkdir(parents=True)
     with pytest.raises(off.OffsiteError, match="비어"):
-        off.check_complete(tmp_path / "b" / DATE, tmp_path / "lib")
+        off.check_folder(tmp_path / "b" / DATE, tmp_path / "lib")
+    root, lib, folder = make_backup(tmp_path, names=("inbox",), rows=5)
+    (folder / "inbox.db").write_bytes(b"junk")
+    with pytest.raises(off.OffsiteError, match="보낼 만한 DB"):
+        off.check_folder(folder, lib)
 
 
 # ---------------------------------------------------------------- retries, 429, refusals
@@ -595,3 +640,275 @@ def test_chats_lists_ids_and_titles(capsys):
     out = capsys.readouterr().out
     assert "-4567" in out and "paperbot 백업" in out and "-4123" in out and TOKEN not in out
     assert fake.calls[0]["method"] == "getUpdates"
+
+
+# ---------------------------------------------------------------- a run that systemd stops
+def test_sigterm_during_an_upload_sends_one_warn_and_exits_1(tmp_path):
+    # TimeoutStartSec, a reboot or `systemctl stop`: Python's default would end the run silently
+    root, lib, _ = make_backup(tmp_path, rows=5)
+    before = signal.getsignal(signal.SIGTERM)
+    calls = []
+
+    def stalled(url, body, headers, timeout):
+        calls.append(url)
+        os.kill(os.getpid(), signal.SIGTERM)
+        raise AssertionError("SIGTERM did not interrupt the upload")
+
+    notes = ListNotifier()
+    rc = off.main(["send", "--from", str(root), "--lib", str(lib), "--work", str(tmp_path)], env=ENV,
+                  sender=stalled, sleep=lambda s: None, notifier=notes, now=NOW, which=no_zstd)
+    assert rc == 1 and len(calls) == 1                       # no retry after the stop
+    (level, text), = notes.messages
+    assert level == WARN and "SIGTERM" in text and "시간 제한" in text and DATE in text
+    assert signal.getsignal(signal.SIGTERM) == before        # the previous handler is back
+    assert not list(tmp_path.glob("paperbot-offsite-*"))
+
+
+def test_the_retries_stop_inside_the_time_limit():
+    # 6 attempts x 300 s + 485 s of backoff would be 2285 s: the run limit stops it in time instead
+    t = [0.0]
+    timeouts = []
+
+    def slow(url, body, headers, timeout):
+        timeouts.append(timeout)
+        t[0] += timeout                                       # every attempt runs into its timeout
+        raise TimeoutError("timed out")
+
+    def sleep(s):
+        t[0] += s
+
+    tg = off.Telegram(TOKEN, slow, sleep, log=lambda s: None, deadline=1500.0, clock=lambda: t[0])
+    with pytest.raises(off.TelegramError, match="시간 제한") as e:
+        tg.call("sendDocument", {"chat_id": "1"}, ("document", "a", b"x"))
+    assert t[0] <= 1500 and "TimeoutError" in str(e.value) and TOKEN not in str(e.value)
+    assert timeouts[0] == off.UPLOAD_TIMEOUT and all(x >= off.MIN_ATTEMPT_S for x in timeouts)
+    assert timeouts[-1] < off.UPLOAD_TIMEOUT                 # the last attempt was shortened to fit
+    t[0] = 0.0                                                # a 429 wait that does not fit is not slept
+    fake = FakeTelegram([(429, {"ok": False, "description": "Too Many Requests",
+                                "parameters": {"retry_after": 600}})])
+    slept = []
+    tg = off.Telegram(TOKEN, fake, slept.append, log=lambda s: None, deadline=300.0, clock=lambda: t[0])
+    with pytest.raises(off.TelegramError, match="시간 제한"):
+        tg.call("sendDocument", {})
+    assert slept == [] and len(fake.calls) == 1
+
+
+def test_a_send_past_its_time_limit_warns(tmp_path):
+    root, lib, _ = make_backup(tmp_path, rows=5)
+    t = [0.0]
+
+    def slow(url, body, headers, timeout):
+        t[0] += timeout
+        raise TimeoutError("timed out")
+
+    with pytest.raises(off.TelegramError, match="시간 제한"):
+        send(tmp_path, root, lib, slow, clock=lambda: t[0], max_s=600)
+    assert t[0] <= 600
+    assert off.RUN_LIMIT_S < 60 * 60                          # below the unit's TimeoutStartSec=60min
+
+
+def test_stopped_hook_warns_only_when_systemd_killed_the_run():
+    for env in ({"SERVICE_RESULT": "success", "EXIT_CODE": "exited", "EXIT_STATUS": "0"},
+                {"SERVICE_RESULT": "exit-code", "EXIT_CODE": "exited", "EXIT_STATUS": "1"},   # main warned
+                {"SERVICE_RESULT": "timeout", "EXIT_CODE": "exited", "EXIT_STATUS": "1"},     # SIGTERM path
+                {}):
+        notes = ListNotifier()
+        assert off.main(["stopped"], env={**ENV, **env}, notifier=notes) == 0 and notes.messages == []
+    notes = ListNotifier()
+    env = {**ENV, "SERVICE_RESULT": "oom-kill", "EXIT_CODE": "killed", "EXIT_STATUS": "KILL"}
+    assert off.main(["stopped"], env=env, notifier=notes) == 0
+    (level, text), = notes.messages
+    assert level == WARN and "메모리" in text and "oom-kill" in text and "journalctl -u paperbot-offsite" in text
+    notes = ListNotifier()
+    off.main(["stopped"], env={**ENV, "SERVICE_RESULT": "timeout", "EXIT_CODE": "killed", "EXIT_STATUS": "KILL"},
+             notifier=notes)
+    assert len(notes.messages) == 1 and "강제로 멈춰졌습니다" in notes.messages[0][1]
+
+
+# ---------------------------------------------------------------- restore: folders, wrong passphrase
+def test_restore_takes_a_folder_with_subfolders_and_strays(tmp_path):
+    # Telegram Desktop saves a clicked file into Downloads/Telegram Desktop; scp -r copies folders
+    root, lib, folder = make_backup(tmp_path)
+    fake = FakeTelegram()
+    m = send(tmp_path, root, lib, fake)
+    dl = tmp_path / "restore-in"
+    files = save_downloads(fake, dl / "Telegram Desktop")
+    (dl / "desktop.ini").write_text("[.ShellClassInfo]")
+    (dl / ".DS_Store").write_bytes(b"\0" * 10)
+    out = tmp_path / "o"
+    logs = []
+    assert off.restore_backup([dl], out, which=no_zstd, log=logs.append) == 0
+    assert (out / DATE / "paper3.db").read_bytes() == (folder / "paper3.db").read_bytes()
+    assert any("desktop.ini" in s and "참고" in s for s in logs)
+    for f in files:                                          # without the manifest: by name, strays skipped
+        if f.name.endswith(".json"):
+            f.unlink()
+    logs = []
+    assert off.restore_backup([dl], tmp_path / "o2", sha256=m["sha256"][:16], which=no_zstd,
+                              log=logs.append) == 0
+    assert any("desktop.ini" in s for s in logs)
+    rc = off.main(["restore", "--parts", str(dl), "--out", str(tmp_path / "o3"), "--sha256", m["sha256"]],
+                  env={}, which=no_zstd)
+    assert rc == 0
+    with pytest.raises(off.OffsiteError, match="폴더 이름만"):    # a glob the shell could not expand
+        off.restore_backup([dl / "*"], tmp_path / "o4", which=no_zstd, log=lambda s: None)
+    (tmp_path / "empty").mkdir()
+    with pytest.raises(off.OffsiteError, match="비어"):
+        off.restore_backup([tmp_path / "empty"], tmp_path / "o5", which=no_zstd, log=lambda s: None)
+
+
+@needs_openssl
+def test_a_wrong_passphrase_that_passes_openssl_is_named(tmp_path, monkeypatch):
+    # about 1 wrong passphrase in 256 passes openssl's padding check and "decrypts" to noise
+    root, lib, _ = make_backup(tmp_path, rows=5)
+    fake = FakeTelegram()
+    send(tmp_path, root, lib, fake, env={**ENV, "BACKUP_PASSPHRASE": "the-right-passphrase-123"})
+    files = save_downloads(fake, tmp_path / "dl")
+
+    def lucky_wrong(args, passphrase, which, what):
+        Path(args[args.index("-out") + 1]).write_bytes(os.urandom(4096))
+
+    monkeypatch.setattr(off, "openssl_run", lucky_wrong)
+    with pytest.raises(off.OffsiteError, match="암호") as e:
+        off.restore_backup(files, tmp_path / "o", env={"BACKUP_PASSPHRASE": "wrong-139-passphrase"},
+                           which=no_zstd, log=lambda s: None)
+    assert "압축 풀기 실패" in str(e.value) and "sha256" in str(e.value)
+    assert not (tmp_path / "o" / DATE).exists()
+
+
+def test_an_unreadable_unencrypted_archive_does_not_blame_a_passphrase(tmp_path):
+    db = b"SQLite format 3\x00" + b"\x00" * 100
+    files = _hand_made_backup(tmp_path, [(f"{DATE}/inbox.db", db)])
+    noise = os.urandom(2048)
+    files[0].write_bytes(noise)
+    m = json.loads(files[1].read_text())
+    sha = hashlib.sha256(noise).hexdigest()
+    m.update(size=len(noise), sha256=sha)
+    m["parts"][0].update(size=len(noise), sha256=sha)
+    files[1].write_text(json.dumps(m))
+    with pytest.raises(off.UnpackError) as e:
+        off.restore_backup(files, tmp_path / "o", which=no_zstd, log=lambda s: None)
+    assert "암호" not in str(e.value)
+
+
+# ---------------------------------------------------------------- secrets stay out of child processes
+@pytest.mark.skipif(shutil.which("zstd") is None, reason="zstd not installed")
+def test_zstd_gets_no_token_passphrase_or_exchange_key(tmp_path, monkeypatch):
+    dump = tmp_path / "zstd-env.txt"
+    wrapper = tmp_path / "zstd"
+    wrapper.write_text(f"#!/bin/sh\nenv >> {dump}\nexec {shutil.which('zstd')} \"$@\"\n")
+    wrapper.chmod(0o755)
+    secret = "binance-secret-value-0123456789"
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", TOKEN)
+    monkeypatch.setenv("BACKUP_PASSPHRASE", "passphrase-for-the-env-test")
+    monkeypatch.setenv("BINANCE_API_SECRET", secret)
+
+    def which(name):
+        return str(wrapper) if name == "zstd" else shutil.which(name)
+
+    root, lib, folder = make_backup(tmp_path, rows=5)
+    fake = FakeTelegram()
+    m = send(tmp_path, root, lib, fake, env=dict(os.environ, **ENV), which=which)
+    assert m["compression"] == "zstd"
+    files = save_downloads(fake, tmp_path / "dl")
+    assert off.restore_backup(files, tmp_path / "o", env=os.environ, which=which, log=lambda s: None) == 0
+    seen = dump.read_text()
+    assert seen.count("PATH=") >= 2                          # both the pack and the unpack ran the wrapper
+    for value in (TOKEN, "passphrase-for-the-env-test", secret):
+        assert value not in seen
+
+
+def test_redact_also_hides_the_passphrase():
+    text = off.redact(f"failed with long-passphrase-value and {TOKEN}", TOKEN, "long-passphrase-value")
+    assert "long-passphrase-value" not in text and TOKEN not in text and "<secret>" in text
+    assert off.redact("short", TOKEN, "") == "short"
+
+
+# ---------------------------------------------------------------- copies replaced while packing, disk
+def test_a_copy_replaced_while_packing_is_archived_whole(tmp_path, monkeypatch):
+    # paperbot-backup.sh renames a new copy over the old one (a manual run): the archive must hold one
+    # whole file, never the old size cut from the new file
+    root, lib, folder = make_backup(tmp_path, names=("paper3",), rows=50)
+    old = (folder / "paper3.db").read_bytes()
+    bigger = tmp_path / "bigger.db"
+    make_db(bigger, 2000, seed=9)
+    real = tarfile.TarFile.gettarinfo
+
+    def gettarinfo(self, *a, **k):
+        ti = real(self, *a, **k)
+        os.replace(bigger, folder / "paper3.db")             # the atomic rename, between stat and read
+        return ti
+
+    monkeypatch.setattr(tarfile.TarFile, "gettarinfo", gettarinfo)
+    fake = FakeTelegram()
+    m = send(tmp_path, root, lib, fake)
+    monkeypatch.setattr(tarfile.TarFile, "gettarinfo", real)
+    assert m["databases"] == {"paper3.db": len(old)}
+    files = save_downloads(fake, tmp_path / "dl")
+    assert off.restore_backup(files, tmp_path / "o", which=no_zstd, log=lambda s: None) == 0
+    assert (tmp_path / "o" / DATE / "paper3.db").read_bytes() == old
+
+
+def test_disk_space_floor_protects_the_live_databases(tmp_path, monkeypatch):
+    monkeypatch.setattr(off, "free_floor", REAL_FREE_FLOOR)
+    G = 1024 ** 3
+    assert off.free_floor(160 * G) == 16 * G and off.free_floor(10 * G) == 2 * G
+    root, lib, folder = make_backup(tmp_path, rows=5)
+    raw = sum(p.stat().st_size for p in folder.iterdir())
+    usage = shutil._ntuple_diskusage if hasattr(shutil, "_ntuple_diskusage") else None
+
+    def disk(free, total=160 * G):
+        def du(path):
+            return usage(total, total - free, free) if usage else type("U", (), {"total": total, "free": free})()
+        return du
+
+    # the old check (free >= raw + 64 MB) passed here and could fill the disk under paperbot-live3
+    monkeypatch.setattr(off.shutil, "disk_usage", disk(raw + 64 * 1024 * 1024 + 1))
+    fake = FakeTelegram()
+    with pytest.raises(off.OffsiteError, match="디스크 여유"):
+        send(tmp_path, root, lib, fake)
+    assert fake.calls == []
+    monkeypatch.setattr(off.shutil, "disk_usage", disk(16 * G + raw + 2 * 1024 * 1024))
+    send(tmp_path, root, lib, fake)
+    files = save_downloads(fake, tmp_path / "dl")
+    monkeypatch.setattr(off.shutil, "disk_usage", disk(16 * G))     # a practice restore on the live server
+    with pytest.raises(off.OffsiteError, match="디스크 여유"):
+        off.restore_backup(files, tmp_path / "o", which=no_zstd, log=lambda s: None)
+    assert not (tmp_path / "o" / DATE).exists()
+
+
+# ---------------------------------------------------------------- the deploy files
+def test_db_list_matches_the_backup_script():
+    sh = (REPO / "deploy" / "paperbot-backup.sh").read_text(encoding="utf-8")
+    loop, = re.findall(r"^for f in (.+); do$", sh, re.M)
+    assert tuple(loop.split()) == off.DB_NAMES
+
+
+def test_offsite_unit_is_read_only_and_keeps_secrets_out():
+    unit = (REPO / "deploy" / "paperbot-offsite.service").read_text(encoding="utf-8")
+    lines = [ln.strip() for ln in unit.splitlines() if ln.strip() and not ln.lstrip().startswith("#")]
+    kv = {}
+    for ln in lines:
+        if "=" in ln:
+            k, v = ln.split("=", 1)
+            kv.setdefault(k, []).append(v)
+    assert kv["User"] == ["paperbot"] and kv["ProtectSystem"] == ["strict"] and "ReadWritePaths" not in kv
+    assert kv["EnvironmentFile"] == ["/etc/paperbot/live.env"]
+    hidden = " ".join(kv["InaccessiblePaths"]).split()
+    assert "-/etc/paperbot" in hidden and "-/var/lib/paperbot/.claude" in hidden
+    assert {"BINANCE_API_KEY", "BINANCE_API_SECRET", "DEADMAN_URL"} <= set(" ".join(kv["UnsetEnvironment"]).split())
+    assert kv["ExecStart"][0].endswith("-m paperbot.offsite send --from /var/backups/paperbot "
+                                       "--chat-env TELEGRAM_CHAT_BACKUP --lib /var/lib/paperbot")
+    stop_post, = kv["ExecStopPost"]
+    assert stop_post.startswith("-") and stop_post.endswith("-m paperbot.offsite stopped")
+    limit, = kv["TimeoutStartSec"]
+    assert limit == "60min" and off.RUN_LIMIT_S + 5 * 60 <= 60 * 60
+    assert kv["LimitCORE"] == ["0"] and kv["UMask"] == ["0077"] and kv["NoNewPrivileges"] == ["yes"]
+    timer = (REPO / "deploy" / "paperbot-offsite.timer").read_text(encoding="utf-8")
+    assert "OnCalendar=*-*-* 00:15:00 UTC" in timer and "Persistent=true" in timer
+
+
+def test_next_steps_check_after_the_start_not_before():
+    text = off.next_steps(Path("/root/restore-out/20261001"), ["paper3.db", "executor.db"])
+    assert "--stage after" in text and "paperbot-offsite.timer" in text
+    assert "10번(--stage before)은 하지 않습니다" in text

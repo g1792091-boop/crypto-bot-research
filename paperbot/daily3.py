@@ -10,6 +10,13 @@ For one UTC day (default: yesterday):
    fetched again from Binance) and the day's submitted signals from signal_log,
    and compare the trades with the ones the live run recorded. Any difference is
    a mismatch (engine bug, restart problem or revised exchange data).
+   Extra accounts (paperbot/extras.py) are replayed with their own rules: a copy's
+   settings (first lock) and stop distance, its parent's signals of bars closing
+   after its start (minus the ones its skip tag drops), an account started during
+   the day from its start, and no signals while suspended / no steps while held
+   (state ``extras`` events). A copy that lost one boundary's signal in a restart
+   (killed between the 195's commit and the copy's) is reported for that copy
+   only, as "추가 계좌 재시작 틈".
 2. Shadows (no accounts): for every submitted signal of the day
    - limit: would a limit order 0.25 ATR better than the reference price have
      filled within one bar of the signal's timeframe, and with what net ROE under
@@ -89,14 +96,17 @@ def fetch_steps(rest: BinanceREST, symbols, start: int, end: int) -> list[tuple[
     return [(t, bars[t], fund.get(t, {})) for t in sorted(bars)]
 
 
-def day_signals(conn, start: int, end: int) -> dict[int, list[dict]]:
-    """Submitted signals whose bar closed in [start, end], by bar close."""
+def day_signals(conn, start: int, end: int, with_data: bool = False) -> dict[int, list[dict]]:
+    """Submitted signals whose bar closed in [start, end], by bar close (``with_data``: also the row's data
+    JSON text, for the copies' skip tags)."""
     out: dict[int, list[dict]] = {}
-    q = ("SELECT bar_close, timeframe, strategy, symbol, side, atr, ref_price, ref_time, delay_ms "
+    cols = ("bar_close", "timeframe", "strategy", "symbol", "side", "atr", "ref_price", "ref_time", "delay_ms")
+    if with_data:
+        cols += ("data",)
+    q = (f"SELECT {', '.join(cols)} "
          "FROM signal_log WHERE status = 'SUBMITTED' AND bar_close > ? AND bar_close <= ? ORDER BY id")
     for r in conn.execute(q, (start, end)):
-        d = dict(zip(("bar_close", "timeframe", "strategy", "symbol", "side", "atr", "ref_price", "ref_time",
-                      "delay_ms"), r))
+        d = dict(zip(cols, r))
         out.setdefault(d["bar_close"], []).append(d)
     return out
 
@@ -110,22 +120,126 @@ def make_signal(d: dict, stop_atr: float = V3_STOP_ATR, ref: Optional[float] = N
 
 
 # ---------------------------------------------------------------- 1. replay parity
-def replay(settings: Settings, brackets, specs, snapshot: dict, signals: dict, steps) -> dict[str, list]:
+EXTRA_STATUS = {"created": "active", "resumed": "active", "suspended": "suspended", "held": "held"}
+
+
+def extras_of(conn) -> dict:
+    """The extra accounts of a paper3.db as the replay needs them: {aid: {kind, parent, created_ts, rule,
+    stop_atr, skip_tag, timeline [(effective ms, status)]}} (``{}`` for a database without extras)."""
+    from .extras import parse_rule, rule_fields
+    rows = conn.execute("SELECT account_id, kind, parent, created_ts, data FROM accounts "
+                        "WHERE kind NOT IN ('strategy', 'random') ORDER BY rowid").fetchall()
+    if not rows:
+        return {}
+    st = conn.execute("SELECT data FROM state WHERE k = 'extras'").fetchone()
+    events = (json.loads(st[0]).get("events") or []) if st else []
+    out = {}
+    for aid, kind, parent, created, data in rows:
+        try:
+            d = json.loads(data or "{}")
+        except ValueError:
+            d = {}
+        rule = parse_rule(d.get("rule")) if kind == "copy" else None
+        f = rule_fields(rule)
+        tl = [(int(created), "active")]
+        for ev in events:
+            if ev.get("account_id") == aid and ev.get("event") in EXTRA_STATUS and ev.get("event") != "created":
+                tl.append((int(ev.get("effective", ev.get("ts", 0)) or 0), EXTRA_STATUS[ev["event"]]))
+        tl.sort(key=lambda x: x[0])
+        out[aid] = {"kind": kind, "parent": parent, "created_ts": int(created), "rule": rule,
+                    "stop_atr": f["stop_atr"], "skip_tag": f["skip_tag"], "timeline": tl}
+    return out
+
+
+def extra_status(x: dict, ts: int) -> str:
+    """An extra's state at time ``ts`` (the last timeline entry at or before it)."""
+    cur = "active"
+    for t, status in x["timeline"]:
+        if t <= ts:
+            cur = status
+        else:
+            break
+    return cur
+
+
+def _ctx_of(d: dict) -> dict:
+    try:
+        data = json.loads(d.get("data") or "{}")
+    except (TypeError, ValueError):
+        return {}
+    ctx = data.get("ctx") if isinstance(data, dict) else None
+    return ctx if isinstance(ctx, dict) else {}
+
+
+def replay(settings: Settings, brackets, specs, snapshot: dict, signals: dict, steps,
+           extras: Optional[dict] = None) -> dict[str, list]:
+    """Replay the day from the 00:00 snapshot. ``extras`` (``extras_of``): the extra accounts' own rules,
+    starts during the day and suspended / held intervals; the original accounts use ``settings`` unchanged."""
+    from .extras import settings_for, skip_hit
+    extras = extras or {}
     engines = {}
+
+    def make(aid):
+        x = extras.get(aid)
+        return PaperEngine(settings if x is None else settings_for(settings, x["rule"]), brackets,
+                           symbol_specs=specs, book=aid)
     for aid, st in snapshot["engines"].items():
-        e = PaperEngine(settings, brackets, symbol_specs=specs, book=aid)
+        e = make(aid)
         restore_engine(e, st)
         engines[aid] = e
+    later = sorted((x["created_ts"], aid) for aid, x in extras.items() if aid not in engines)
+    copies: dict[str, list[str]] = {}
+    for aid, x in extras.items():
+        if x["kind"] == "copy" and x["parent"] and x["rule"] is not None:
+            copies.setdefault(x["parent"], []).append(aid)
     for ts, bars, funding in steps:
+        while later and later[0][0] <= ts:              # started during the day: fresh at the initial equity
+            aid = later.pop(0)[1]
+            engines[aid] = make(aid)
         tb = {s: b for s, b in bars.items() if s in brackets}
-        for e in engines.values():
+        for aid, e in engines.items():
+            if aid in extras and extra_status(extras[aid], ts) == "held":
+                continue
             e.step(tb, funding)
             e.outcomes.clear()
-        for d in signals.get(ts + MIN, []):
+        bc = ts + MIN
+        for d in signals.get(bc, []):
             aid = f"{d['strategy']}@{d['timeframe']}"
-            if aid in engines:
+            if aid in engines and not (aid in extras and extra_status(extras[aid], ts) != "active"):
                 engines[aid].submit(make_signal(d))
+            for c in copies.get(aid, ()):
+                x = extras[c]
+                if c not in engines or x["created_ts"] >= bc or extra_status(x, ts) != "active":
+                    continue
+                if x["skip_tag"] and skip_hit(x["skip_tag"], int(d["side"]), _ctx_of(d)):
+                    continue
+                sig = make_signal(d, stop_atr=x["stop_atr"])
+                sig.meta["account"] = c
+                engines[c].submit(sig)
     return {aid: e.trades for aid, e in engines.items()}
+
+
+CRASH_GAP_KO = "추가 계좌 재시작 틈"
+
+
+def label_crash_gaps(mism: list[dict], extras: dict, conn, gap_ms: int = 10 * MIN) -> list[dict]:
+    """Mark an extra's mismatch as a restart gap when its first replayed trade the live run does not have
+    came from a signal bar followed by a runner start within ``gap_ms`` (the copy lost that boundary's
+    signal in a restart; never a mismatch of the 195)."""
+    starts = [int(r[0]) for r in conn.execute("SELECT started_ts FROM runs")]
+    for m in mism:
+        x = extras.get(m["account_id"])
+        if x is None:
+            continue
+        stored = {tuple(t) for t in m.get("stored", [])}
+        first = next((t for t in m.get("replayed", []) if tuple(t) not in stored), None)
+        if first is None:
+            continue
+        bc = m.get("signal_bars", {}).get(str(first[1]))
+        if bc is not None and any(bc <= s <= bc + gap_ms for s in starts):
+            m["label"] = CRASH_GAP_KO
+            m["crash_gap"] = True
+    return mism
 
 
 def compare(replayed: dict[str, list], stored: dict[str, list[dict]]) -> list[dict]:
@@ -136,7 +250,8 @@ def compare(replayed: dict[str, list], stored: dict[str, list[dict]]) -> list[di
         b = [(t["symbol"], t["entry_time"], t["exit_time"], t["exit_reason"], round(t["exit_price"], 10),
               round(t["pnl"], 6)) for t in stored.get(aid, [])]
         if a != b:
-            out.append({"account_id": aid, "replayed": a[:20], "stored": b[:20]})
+            out.append({"account_id": aid, "replayed": a[:20], "stored": b[:20],
+                        "signal_bars": {str(t.entry_time): t.signal_ts + 1 for t in replayed.get(aid, [])[:20]}})
     return out
 
 
@@ -307,10 +422,17 @@ def run_day(conn, out: sqlite3.Connection, rest: BinanceREST, settings: Settings
         report["parity"] = "no 00:00 snapshot for this day (runner not running then)"
         mism = []
     else:
-        rep = replay(settings, brackets, specs, json.loads(snap[0]), day_signals(conn, start, end), day_steps)
+        ext = extras_of(conn)
+        rep = replay(settings, brackets, specs, json.loads(snap[0]), day_signals(conn, start, end, with_data=bool(ext)),
+                     day_steps, extras=ext)
         mism = compare({a: [t for t in ts if t.exit_time < end] for a, ts in rep.items()},
                        stored_trades(conn, start, end))
-        report["parity"] = {"accounts": len(rep), "mismatched_accounts": len(mism)}
+        if ext:
+            label_crash_gaps(mism, ext, conn)
+        gaps = sum(1 for m in mism if m.get("crash_gap"))
+        report["parity"] = {"accounts": len(rep), "mismatched_accounts": len(mism) - gaps}
+        if ext:
+            report["parity"].update(extra_accounts=sum(1 for a in rep if a in ext), crash_gaps=gaps)
     sh = shadows(settings, brackets, specs, conn, day, start, end, steps)
     # trades that closed today but were entered earlier need the steps from their signal on
     first = first_signal(conn, start, end)
@@ -357,7 +479,10 @@ def notify_report(report: dict, notifier, trades_day: Optional[int] = None) -> l
         if par["mismatched_accounts"]:
             msgs.append((CRITICAL, f"[{day}] 재계산 불일치: 계좌 {par['mismatched_accounts']}개의 거래가 "
                                    "paper와 다릅니다. 운영 감사관 확인 필요 (daily3.db mismatches)"))
-        par_txt = f"재계산 일치 {par['accounts'] - par['mismatched_accounts']}/{par['accounts']}"
+        if par.get("crash_gaps"):
+            msgs.append((WARN, f"[{day}] {CRASH_GAP_KO}: 추가 계좌 {par['crash_gaps']}개가 재시작 때 신호 하나를 놓쳤습니다 "
+                               "(원래 195개 계좌와는 무관, daily3.db mismatches)"))
+        par_txt = f"재계산 일치 {par['accounts'] - par['mismatched_accounts'] - par.get('crash_gaps', 0)}/{par['accounts']}"
     else:
         msgs.append((WARN, f"[{day}] 재계산 못 함: 그날 00:00 상태 저장이 없습니다 (봇이 멈춰 있었음)"))
         par_txt = "재계산 못 함"

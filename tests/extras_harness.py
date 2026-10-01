@@ -91,7 +91,7 @@ POLL_COST = 5_000
 LIVE_EDGE = 61_500                      # now = last step of the batch + 1 minute + 1.5 s
 SPECS = {s: {"qty_step": 0.0, "min_notional": 5.0} for s in V3_SYMBOLS}
 RESTART_R = 901                         # logical restart: after this many steps, no outage
-RESTART_T = (900, 25)                   # timed restart: after 900 steps, a 25-minute outage, then a burst
+RESTART_T = (900, 30)                   # timed restart: after 900 steps, a 30-minute outage, then a burst
 GOLDEN = os.path.join(ROOT, "tests", "data", "extras_parity_golden.json")
 NL_RE = re.compile(r"^NL[0-9]+$")
 
@@ -317,6 +317,7 @@ class Session:
         self.lib = install_fakes()
         self.feed, self.clock, self.rec = feed, clock, rec
         self.settings = v3_settings()
+        self.store_path = db
         self.store = Store3(db)
         self.notifier = ListNotifier()
         self.digest = Digest(_RecNotifier(rec))
@@ -400,6 +401,195 @@ def extras_bind(sess: Session, opts: dict) -> None:
 
 def extras_hour(sess: Session, opts: dict, t: int) -> None:
     """Called before each single step at time t (approvals at feed hour 6 in the new tree)."""
+
+
+# ---------------------------------------------------------------------- the new tree's scenario
+APPROVE_AT = 358          # minute after T0: three copies and nine new strategies approved (created at 360)
+LATE_APPROVE_AT = 476     # one more new strategy (created at minute 480, the crash runs' boundary)
+COPIES = (("V45_AMB", "15m", {"template": "stop_atr", "k": 2.5}),
+          ("N23_HA_ST", "5m", {"template": "lock_start", "first_lock": 0.2}),
+          ("N12_ICHI_AO", "1h", {"template": "skip_tag", "tag": "추세 반대 진입"}))
+NEWLAB_SPECS = (
+    ("5m", {"family": "ema_cross", "params": {"fast": 9, "slow": 21}}, [], "both"),
+    ("1h", {"family": "rsi_reversal", "params": {"length": 14, "low": 30, "high": 70}},
+     [{"kind": "session", "window": "us"}], "long"),
+    ("15m", {"family": "macd_cross", "params": {"fast": 12, "slow": 26, "signal": 9}}, [], "both"),
+    ("15m", {"family": "supertrend_flip", "params": {"length": 10, "mult": 3.0}},
+     [{"kind": "trend_ema", "length": 50}], "both"),
+    ("30m", {"family": "donchian_break", "params": {"length": 20}}, [], "both"),
+    ("30m", {"family": "bb_break", "params": {}}, [{"kind": "adx", "mode": "above", "level": 20}], "both"),
+    ("4h", {"family": "ema_cross", "params": {"fast": 9, "slow": 21}}, [], "both"),
+    ("4h", {"family": "psar_flip", "params": {}}, [], "both"),
+    ("15m", {"family": "obv_cross", "params": {}}, [{"kind": "vol_regime", "mode": "high", "lookback": 100}], "both"),
+    ("30m", {"family": "stoch_zone", "params": {}}, [], "both"),          # the late one
+)
+NL_WINDOWS = {"5m": 600, "15m": 900, "30m": 1200, "1h": 1440, "4h": 1440}
+NL_MIN_BARS = {"5m": 300, "15m": 150, "30m": 100, "1h": 60, "4h": 20}
+COPY_RESULT = {"ok": True, "template": None, "periods": {
+    "1": {"diff": 0.02, "p": 1e-4, "diff_notional": 0.001,
+          "variant": {"trades": 600, "mean_roe": 0.05, "mean_pnl_equity": 0.01}},
+    "2": {"diff": 0.02, "p": 1e-3, "diff_notional": 0.001,
+          "variant": {"trades": 300, "mean_roe": 0.05, "mean_pnl_equity": 0.01}},
+    "3": {"available": False}}}
+NL_GATE_INPUT = {
+    "1": {"available": True, "trades": 900, "mean_roe": 0.04, "p": 1e-5, "coins_pos": 5, "coins_n": 6,
+          "mean_pnl_equity": 0.01, "coinflip": {"mean_roe": -0.01, "trades": 9000, "diff": 0.05, "p": 0.001}},
+    "2": {"available": True, "trades": 400, "mean_roe": 0.03, "p": 0.001, "coins_pos": 5, "coins_n": 6,
+          "mean_pnl_equity": 0.01, "coinflip": {"mean_roe": -0.01, "trades": 4000, "diff": 0.04, "p": 0.001}},
+    "3": {"available": False}}
+
+
+def newlab_spec(i: int) -> dict:
+    tf, entry, filters, direction = NEWLAB_SPECS[i]
+    return {"v": "newlab-v1", "timeframe": tf, "entry": entry, "filters": filters, "direction": direction}
+
+
+def copy_account(trial_id: int, strategy: str, tf: str, rule: dict) -> dict:
+    """change.account of a copy proposal (the contract literal)."""
+    return {"v": 1, "kind": "copy", "trial_id": trial_id, "strategy": strategy, "timeframe": tf,
+            "parent": f"{strategy}@{tf}", "rule": rule}
+
+
+def newlab_account(trial_id: int, spec: dict, h: str) -> dict:
+    return {"v": 1, "kind": "newlab", "trial_id": trial_id, "timeframe": spec["timeframe"], "spec": spec,
+            "spec_hash": h}
+
+
+def add_copy_proposal(conn, inbox, strategy: str, tf: str, rule: dict, ts: int, author: str = "A",
+                      approve: bool = True, click: bool = True, decided_by: Optional[str] = None) -> tuple[int, int]:
+    """A passed copy test, its proposal and (by default) the owners' approve click and the tick's approval,
+    written with the agents' and the dashboard's own functions. Returns (proposal id, trial id)."""
+    from paperbot.agents import rooms_db as R
+    param = [k for k in rule if k != "template"][0]
+    spec = {"template": rule["template"], "strategy": strategy, "timeframe": tf, param: rule[param]}
+    result = dict(COPY_RESULT, template=rule["template"])
+    tid = R.add_trial_with_result(conn, f"strat:{strategy}", strategy, "test", spec, "passed",
+                                  {"result": result, "gate": {"pass": True, "n_trials": 1}, "n_trials": 1}, ts=ts)
+    change = {"kind": "copy", "account": copy_account(tid, strategy, tf, rule), "strategy": strategy, "test": spec,
+              "why": "model text that the runner never reads", "approver": {"approve": True, "reason": "ok"}}
+    pid = R.add_proposal(conn, f"strat:{strategy}", strategy, tid, change, {"pass": True, "trial_id": tid,
+                                                                             "n_trials": 1}, "awaiting_owner", ts=ts)
+    if click:
+        R.add_approval(inbox, pid, "approve", author, "note the runner never reads", ts=ts)
+    if approve:
+        R.set_proposal_status(conn, pid, "approved", decided_by or f"owner:{author}".rstrip(":"), ts=ts)
+    return pid, tid
+
+
+def add_newlab_proposal(conn, inbox, spec: dict, ts: int, author: str = "A", approve: bool = True,
+                        click: bool = True, n_then: int = 0, decided_by: Optional[str] = None) -> tuple[int, int]:
+    from paperbot.agents import rooms_db as R
+    from paperbot.agents import newlab as NL
+    h = NL.spec_hash(spec)
+    body = {"ledger": {}, "gate": {"pass": True}, "gate_input": NL_GATE_INPUT, "description_ko": "desc",
+            "summary_ko": "summary", "notes": {"idea": "model text"}, "test_number": n_then + 1,
+            "n_tests_so_far": n_then, "runtime_s": 1.0, "proposal": None}
+    tid = R.add_trial_with_result(conn, "team:lab", None, "newlab", spec, "passed", body, ts=ts)
+    R.add_trial_result(conn, tid, "proposed", {**body, "proposal": {"kind": "new_paper_account"}}, ts=ts)
+    change = {"kind": "newlab", "account": newlab_account(tid, spec, h),
+              "proposal": {"description_ko": "desc", "summary_ko": "s", "spec": spec, "gate": {"pass": True}}}
+    pid = R.add_proposal(conn, "team:lab", None, tid, change, {"pass": True, "trial_id": tid, "n_tests": 1},
+                         "awaiting_owner", ts=ts)
+    if click:
+        R.add_approval(inbox, pid, "approve", author, None, ts=ts)
+    if approve:
+        R.set_proposal_status(conn, pid, "approved", decided_by or f"owner:{author}".rstrip(":"), ts=ts)
+    return pid, tid
+
+
+def scenario_paths(db: str) -> tuple[str, str]:
+    return db + ".agents3.db", db + ".inbox.db"
+
+
+if X is not None:
+    from paperbot import newlab_live as NLL  # noqa: E402
+
+    def extras_start(sess: Session, opts: dict):   # noqa: F811  (the new tree)
+        a, i = scenario_paths(sess.store_path)
+        cfg = X.Config(agents_db=a, inbox_db=i, observe_days=0, owner_ok_days=60,
+                       budget_s=float(opts.get("budget_s", 20.0)))
+
+        def factory(service):
+            src = NLL.NewlabSignals(service, windows=NL_WINDOWS, min_bars=NL_MIN_BARS)
+            orig = src.compute
+
+            def compute(boundary, due, deadline, _orig=orig):
+                sess.clock.charge(NEWLAB_COST)
+                return _orig(boundary, due, deadline)
+            src.compute = compute
+            return src
+        ext = X.Extras.start(sess.store, sess.notifier, sess.store_path, sess.settings, config=cfg,
+                             now_ms=sess.clock.now, newlab_factory=factory)
+        ext.activator.min_parent_trades = 0
+        ext.live_gate = bool(opts.get("live_gate", True))
+        orig = ext.activator.poll
+
+        def poll(boundary, j, _orig=orig):
+            sess.clock.charge(POLL_COST)
+            return _orig(boundary, j)
+        ext.activator.poll = poll
+        return ext
+
+    def extras_bind(sess: Session, opts: dict) -> None:   # noqa: F811
+        sess.ext.bind(sess.runner)
+
+    def extras_hour(sess: Session, opts: Optional[dict], t: int) -> None:   # noqa: F811
+        if opts is None or sess.ext is None:
+            return
+        if t not in (T0 + APPROVE_AT * MIN, T0 + LATE_APPROVE_AT * MIN):
+            return
+        from paperbot.agents import rooms_db as R
+        a, i = scenario_paths(sess.store_path)
+        conn, inbox = R.open_agents(a), R.open_inbox_rw(i)
+        try:
+            if t == T0 + APPROVE_AT * MIN:
+                for strategy, tf, rule in COPIES:
+                    add_copy_proposal(conn, inbox, strategy, tf, rule, t)
+                for k in range(len(NEWLAB_SPECS) - 1):
+                    add_newlab_proposal(conn, inbox, newlab_spec(k), t)
+            else:
+                add_newlab_proposal(conn, inbox, newlab_spec(len(NEWLAB_SPECS) - 1), t)
+        finally:
+            conn.close()
+            inbox.close()
+
+    def extras_crash(sess: Session, crash: dict) -> None:   # noqa: F811
+        """K3 phase 1 written, before its save; K4 inside the newlab compute after the first job; K5 after the
+        creation and its alert, before the phase-2 save; K6 right after the phase-2 save."""
+        point, at = crash["point"], int(crash["at"])
+        ext = sess.ext
+        cur = {"b": None}
+        hook = sess.runner.post_boundary
+
+        def post_boundary(boundary, submitted, timed_out, _hook=hook):
+            cur["b"] = boundary
+            try:
+                return _hook(boundary, submitted, timed_out)
+            finally:
+                cur["b"] = None
+        sess.runner.post_boundary = post_boundary
+        commit = ext._commit
+
+        def _commit(phase, _orig=commit):
+            if cur["b"] == at:
+                if point == "K3" and phase == 1:
+                    os._exit(137)
+                if point == "K5" and phase == 2 and any(v.get("boundary") == at
+                                                        for v in ext.state["created"].values()):
+                    os._exit(137)
+            _orig(phase)
+            if cur["b"] == at and point == "K6" and phase == 2:
+                os._exit(137)
+        ext._commit = _commit
+        if point == "K4":
+            orig = NLL.compute_newlab
+
+            def compute_newlab(*a, _orig=orig, **k):
+                out = _orig(*a, **k)
+                if cur["b"] == at:
+                    os._exit(137)
+                return out
+            NLL.compute_newlab = compute_newlab
 
 
 # ====================================================================== runs
@@ -584,6 +774,38 @@ def base_runs(workdir: str, log=print) -> dict:
     return out
 
 
+SCENARIO = {"scenario": "approve", "budget_s": 20.0}
+
+
+def new_run(name: str, workdir: str) -> dict:
+    """One named run of the new tree (design 11.3 / 11.4). Returns {"name", "golden", "dump", "db"}: the dump
+    of the 195 and the name of the golden run it must equal."""
+    at = crash_boundary()
+    if name in ("R1", "R1r", "R2", "R2r", "T2", "T2x"):
+        kw = {"R1": {}, "R1r": {"restart": (RESTART_R, 0)},
+              "R2": {"extras": SCENARIO}, "R2r": {"extras": SCENARIO, "restart": (RESTART_R, 0)},
+              "T2": {"extras": SCENARIO, "timed": True, "restart": RESTART_T},
+              "T2x": {"extras": dict(SCENARIO, live_gate=False), "timed": True, "restart": RESTART_T}}[name]
+        db = _p(workdir, name)
+        for q in scenario_paths(db):
+            for r in (q, q + "-wal", q + "-shm"):
+                if os.path.exists(r):
+                    os.remove(r)
+        rec = run(db, **kw)
+        golden = {"R1": "R0", "R1r": "R0r", "R2": "R0", "R2r": "R0r", "T2": "T0", "T2x": "T0"}[name]
+        return {"name": name, "golden": golden, "dump": dump195(db, rec), "db": db}
+    point = name[:2]
+    extras = None if name in ("K1", "K2") else SCENARIO
+    golden = f"{'K1' if point == 'K1' else 'K2'}@{at}"
+    sub = os.path.join(workdir, name)
+    os.makedirs(sub, exist_ok=True)
+    d, _rec = crash_run(sub, point, at, extras=extras)
+    return {"name": name, "golden": golden, "dump": d, "db": os.path.join(sub, f"crash_{point}_{at}.db")}
+
+
+NEW_RUNS = ("R1", "R1r", "R2", "R2r", "T2", "T2x", "K1", "K2", "K1x", "K2x", "K3", "K4", "K5", "K6")
+
+
 def _p(workdir: str, name: str) -> str:
     p = os.path.join(workdir, f"{name}.db")
     for q in (p, p + "-wal", p + "-shm"):
@@ -628,6 +850,9 @@ def main(argv=None) -> int:
     ap.add_argument("--out", default=GOLDEN)
     ap.add_argument("--base", help="the base commit id to record (default: git HEAD of this tree)")
     ap.add_argument("--run", help="one named run: R0, R0r, T0")
+    ap.add_argument("--new-run", help="one named run of the new tree: " + ", ".join(NEW_RUNS))
+    ap.add_argument("--work", help="work directory of --new-run (databases are kept there)")
+    ap.add_argument("--json", help="write the --new-run result here")
     ap.add_argument("--child", help=argparse.SUPPRESS)
     ap.add_argument("--point", help=argparse.SUPPRESS)
     ap.add_argument("--at", type=int, help=argparse.SUPPRESS)
@@ -640,6 +865,15 @@ def main(argv=None) -> int:
         run(args.child, hours=args.hours, extras=extras, rec_path=args.rec,
             crash={"point": args.point, "at": args.at})
         return 3                              # the kill point was never reached
+    if args.new_run:
+        work = args.work or tempfile.mkdtemp(prefix="extras_new_")
+        os.makedirs(work, exist_ok=True)
+        res = new_run(args.new_run, work)
+        if args.json:
+            with open(args.json, "w") as fh:
+                json.dump(res, fh)
+        print(json.dumps({"name": res["name"], "total": res["dump"]["total"], "counts": res["dump"]["counts"]}))
+        return 0
     if args.write_golden:
         doc = write_golden(args.out, args.base, log=lambda s: print(s, file=sys.stderr))
         print(json.dumps({k: v["total"] for k, v in doc["runs"].items()}, indent=1))

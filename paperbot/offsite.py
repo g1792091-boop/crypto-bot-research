@@ -1,36 +1,44 @@
 """Off-site copy of the nightly database backup to a private Telegram chat (docs/offsite-backup.md).
 
     python -m paperbot.offsite send    --from /var/backups/paperbot --chat-env TELEGRAM_CHAT_BACKUP
-    python -m paperbot.offsite restore --parts DOWNLOADS/paperbot-20261001.* --out DIR
+    python -m paperbot.offsite restore --parts DOWNLOADS/restore-in --out DIR   # a folder, or the files
     python -m paperbot.offsite chats   # chat ids the bot has seen (to find the backup group's id)
+    python -m paperbot.offsite stopped # ExecStopPost: WARN when systemd killed a send before it could alert
 
 The owners run one Vultr server without Vultr's automatic backups. deploy/paperbot-backup.sh writes
 consistent copies of the databases into /var/backups/paperbot/<YYYYMMDD>/ every night (23:40 UTC,
 08:40 KST; the folder is named by the UTC date); if the server is lost, those copies are lost with it.
 
 send: takes the newest backup folder (today's UTC date, else yesterday's: the 23:40 UTC run's folder
-is "yesterday" once the clock has passed midnight UTC), refuses one that is incomplete (a copy still
-being written, or a database that exists on the server without a copy), packs it as tar + zstd (gzip
-when the zstd program is missing), encrypts it with the openssl program when BACKUP_PASSPHRASE is set
-(no homemade cryptography: without openssl it refuses and sends nothing), splits it into parts below
-Telegram's 50 MB document limit and uploads each part with sendDocument (urllib, multipart/form-data),
-then a manifest (part names, sizes, sha256s) with a short Korean summary as its caption. Network errors,
-5xx and 429 (retry_after) are retried with backoff. Any failure sends a Korean WARN through the normal
-notifier and exits 1, so paperbot-offsite.service fails visibly.
+is "yesterday" once the clock has passed midnight UTC) and checks it: a copy still being written, a
+database that exists on the server without a copy, or a copy that is not an SQLite file is a problem.
+Every good copy is still sent (the small databases are the most valuable), then the problems fail the
+run. It packs the copies as tar + zstd (gzip when the zstd program is missing), encrypts the stream
+with the openssl program when BACKUP_PASSPHRASE is set (no homemade cryptography: without openssl it
+refuses and sends nothing; only one archive is ever on disk), splits it into parts below Telegram's
+50 MB document limit and uploads each part with sendDocument (urllib, multipart/form-data), then a
+manifest (part names, sizes, sha256s) with a short Korean summary as its caption. Network errors, 5xx
+and 429 (retry_after) are retried with backoff, within one time limit for the whole run (RUN_LIMIT_S,
+below the unit's TimeoutStartSec). Any failure sends a Korean WARN through the normal notifier and
+exits 1, so paperbot-offsite.service fails visibly; so does a SIGTERM (unit timeout, reboot, stop).
+A run that systemd kills outright (memory limit, SIGKILL) is reported by `stopped` (ExecStopPost).
 
-restore: matches the downloaded parts to the manifest by sha256 (file names may change on download),
-joins them, checks the whole archive's sha256, decrypts, unpacks (plain files only, no paths outside
-the output folder) and runs PRAGMA integrity_check on every database; prints the next steps in Korean.
+restore: takes the downloaded files or a folder holding them, matches the parts to the manifest by
+sha256 (file names may change on download), joins them, checks the whole archive's sha256, decrypts,
+unpacks (plain files only, no paths outside the output folder) and runs PRAGMA integrity_check on
+every database; prints the next steps in Korean.
 
 Reads only the backup folder, and the live database paths (existence only, for the completeness
 check); writes only its temporary folder (send) or --out (restore). It is not a writer of any database.
-The bot token is in every request URL: every error and log line goes through redact().
+The bot token is in every request URL: every error and log line goes through redact(). The zstd and
+openssl programs get a minimal environment (PATH; openssl also the passphrase), never the token.
 """
 
 from __future__ import annotations
 
 import argparse
 import getpass
+import gzip
 import hashlib
 import http.client
 import json
@@ -38,6 +46,7 @@ import os
 import re
 import secrets
 import shutil
+import signal
 import sqlite3
 import subprocess
 import sys
@@ -52,12 +61,13 @@ import zlib
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path, PurePosixPath
-from typing import Callable, Mapping, Optional, Sequence
+from typing import IO, Callable, Mapping, Optional, Sequence
 
 from .notify import WARN, ConsoleNotifier, Notifier, TelegramNotifier
 
 API = "https://api.telegram.org"
-# the databases deploy/paperbot-backup.sh copies (keep the two lists the same); a copy is <basename>.db
+# the databases deploy/paperbot-backup.sh copies (keep the two lists the same: tests/test_offsite.py
+# compares them); a copy is <basename>.db
 DB_NAMES = ("agents3", "inbox", "liq", "checkpoint", "exec/executor", "exec/executor-testnet", "daily3", "paper3")
 TELEGRAM_UPLOAD_LIMIT = 50_000_000      # Bot API: documents up to 50 MB (read as decimal MB, the stricter)
 MULTIPART_ROOM = 1_000_000              # form fields, caption and boundaries around the file
@@ -67,8 +77,15 @@ CAPTION_LIMIT = 1024
 SQLITE_HEADER = b"SQLite format 3\x00"
 MANIFEST_FORMAT = "paperbot-offsite/1"
 BACKOFF = (5, 15, 45, 120, 300)         # seconds before retry 1..5 (6 attempts in all)
-MAX_RETRY_AFTER = 900                   # a longer 429 wait fails the run instead of sleeping past the unit timeout
-UPLOAD_TIMEOUT = 300.0
+MAX_RETRY_AFTER = 900                   # a longer 429 wait fails at once (any wait also has to fit RUN_LIMIT_S)
+UPLOAD_TIMEOUT = 300.0                  # urllib: each of connect, send and the answer (an attempt: up to 3x)
+# One send stops itself (Korean WARN, exit 1) after this long: deploy/paperbot-offsite.service gives it
+# TimeoutStartSec=60min, so the retries never run into systemd's SIGTERM (which also ends in a WARN).
+RUN_LIMIT_S = 50 * 60
+MIN_ATTEMPT_S = 30.0                    # an upload attempt with less time than this left is not started
+# Free space the job always leaves on the disk it shares with the live databases (live3 commits every 5 s)
+FREE_FLOOR = 2 * 1024 ** 3
+FREE_FLOOR_SHARE = 10                   # ... or 1/10 of the disk, whichever is larger
 OPENSSL_ENC = ("enc", "-aes-256-cbc", "-pbkdf2", "-iter", "200000", "-md", "sha256", "-salt")
 CIPHER = "openssl " + " ".join(OPENSSL_ENC)
 KST = timezone(timedelta(hours=9))
@@ -86,14 +103,39 @@ class TelegramError(OffsiteError):
     pass
 
 
-def redact(text, token: Optional[str] = None) -> str:
-    """The text with the bot token (exact value, and anything shaped like a bot token) replaced."""
+class UnpackError(OffsiteError):
+    """The archive could not be decompressed or read as tar (after its sha256 matched)."""
+
+
+def redact(text, token: Optional[str] = None, *others: str) -> str:
+    """The text with the bot token (exact value, and anything shaped like a bot token) and any other
+    secret given (the backup passphrase) replaced."""
     s = str(text)
-    for t in {token or "", (token or "").strip()}:
-        if len(t) >= 8:
-            s = s.replace(t, "<token>")
-            s = s.replace(urllib.parse.quote(t, safe=""), "<token>")
+    for secret, label in [(token, "<token>")] + [(o, "<secret>") for o in others]:
+        for t in {secret or "", (secret or "").strip()}:
+            if len(t) >= 8:
+                s = s.replace(t, label)
+                s = s.replace(urllib.parse.quote(t, safe=""), label)
     return _TOKEN_RE.sub("<token>", s)
+
+
+def _child_env(**extra: str) -> dict:
+    """The environment of a zstd/openssl child: PATH only (plus ``extra``), never the token or other keys."""
+    return {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), **extra}
+
+
+def free_floor(total: int) -> int:
+    return max(FREE_FLOOR, total // FREE_FLOOR_SHARE)
+
+
+def check_space(where: Path, need: int, what: str) -> None:
+    """OffsiteError unless ``need`` bytes fit on ``where``'s disk with free_floor() still left over."""
+    du = shutil.disk_usage(where)
+    floor = free_floor(du.total)
+    if du.free - need < floor:
+        raise OffsiteError(f"디스크 여유가 모자랍니다: {where}에 {fmt_size(du.free)} 남음. {what}에 최대 "
+                           f"{fmt_size(need)}가 필요하고, 돌고 있는 봇을 위해 {fmt_size(floor)}는 늘 남겨 둡니다 "
+                           "(df -h 로 확인, 오래된 파일 정리)")
 
 
 def _stderr(text: str) -> None:
@@ -169,23 +211,42 @@ class Telegram:
 
     def __init__(self, token: str, sender: Optional[Sender] = None, sleep: Callable[[float], None] = time.sleep,
                  timeout: float = UPLOAD_TIMEOUT, backoff: Sequence[float] = BACKOFF,
-                 log: Callable[[str], None] = _stderr):
+                 log: Callable[[str], None] = _stderr, deadline: Optional[float] = None,
+                 clock: Callable[[], float] = time.monotonic):
         self.token = token
         self.sender = sender or urllib_sender
         self.sleep = sleep
         self.timeout = timeout
         self.backoff = tuple(backoff)
         self.log = log
+        self.deadline = deadline        # clock() value after which nothing new is started (None: no limit)
+        self.clock = clock
+
+    def _left(self) -> Optional[float]:
+        return None if self.deadline is None else self.deadline - self.clock()
+
+    def _out_of_time(self, method: str, problem: str) -> TelegramError:
+        last = f"; 마지막 문제: {problem}" if problem else ""
+        return TelegramError(redact(f"텔레그램 {method}: 이번 실행의 시간 제한에 걸려 그만둡니다 "
+                                    f"(업로드가 너무 느리거나 조각이 너무 많음{last})", self.token))
 
     def call(self, method: str, fields: Mapping[str, str], file: Optional[tuple] = None):
         body, ctype = multipart(fields, file)
         url = f"{API}/bot{self.token}/{method}"
         headers = {"Content-Type": ctype, "Content-Length": str(len(body))}
         attempts = len(self.backoff) + 1
+        problem = ""
         for attempt in range(1, attempts + 1):
             wait = float(self.backoff[attempt - 1]) if attempt <= len(self.backoff) else 0.0
+            timeout = self.timeout
+            left = self._left()
+            if left is not None:
+                # urllib's timeout bounds connect, the upload and the answer one by one: 3 of them must fit
+                timeout = min(timeout, left / 3)
+                if timeout < MIN_ATTEMPT_S:
+                    raise self._out_of_time(method, problem)
             try:
-                status, raw = self.sender(url, body, headers, self.timeout)
+                status, raw = self.sender(url, body, headers, timeout)
             except (OSError, http.client.HTTPException) as exc:     # timeouts, resets, DNS, TLS
                 problem = f"network {type(exc).__name__}: {exc}"
             else:
@@ -211,6 +272,9 @@ class Telegram:
                                                f"{_hint(status, desc, params)}", self.token))
             if attempt == attempts:
                 raise TelegramError(redact(f"텔레그램 {method}: {attempts}번 모두 실패 ({problem})", self.token))
+            left = self._left()
+            if left is not None and wait + 3 * MIN_ATTEMPT_S > left:
+                raise self._out_of_time(method, problem)
             self.log(redact(f"telegram {method}: {problem}; retry {attempt}/{attempts - 1} in {wait:.0f} s",
                             self.token))
             self.sleep(wait)
@@ -237,45 +301,58 @@ def find_folder(root: Path, date: Optional[str], now: datetime) -> Path:
                        "systemctl status paperbot-backup")
 
 
-def check_complete(folder: Path, lib: Optional[Path], wait_s: float = 0.0,
-                   sleep: Callable[[float], None] = time.sleep, poll_s: float = 30.0,
-                   log: Callable[[str], None] = _stderr) -> dict[str, int]:
-    """{file name: bytes} of the folder's database copies; OffsiteError when the folder is incomplete:
-    a copy still being written (<name>.db.part; waited for up to ``wait_s``), no copy at all, a copy
-    that is not an SQLite file, or a database that exists in ``lib`` without a copy."""
+UNFINISHED = "백업이 끝나지 않았습니다"
+MISSING = "백업이 빠졌습니다"
+NOT_SQLITE = "백업 파일이 SQLite 파일이 아닙니다"
+
+
+def problems_text(problems: Sequence[tuple[str, str]]) -> str:
+    """'백업이 빠졌습니다: paper3.db; …' from check_folder's (kind, file name) list."""
+    kinds: dict[str, list[str]] = {}
+    for kind, name in problems:
+        kinds.setdefault(kind, []).append(name)
+    return "; ".join(f"{k}: {', '.join(v)}" for k, v in kinds.items())
+
+
+def check_folder(folder: Path, lib: Optional[Path], wait_s: float = 0.0,
+                 sleep: Callable[[float], None] = time.sleep, poll_s: float = 30.0,
+                 log: Callable[[str], None] = _stderr) -> tuple[dict[str, int], list[tuple[str, str]]]:
+    """({file name: bytes} of the folder's good database copies, [(problem, file name)]).
+
+    Problems: a copy still being written after ``wait_s`` (<name>.db.part: the backup is running or
+    was killed), a copy that is not an SQLite file (left out), a database that exists in ``lib``
+    without a good copy. The good copies are still sent: one failed paper3 copy must not keep the
+    small, most valuable databases off-site. OffsiteError only when there is no good copy at all."""
     waited = 0.0
     while True:
         parts = sorted(p.name for p in folder.glob("*.part"))
-        if not parts:
+        if not parts or waited >= wait_s:
             break
-        if waited >= wait_s:
-            raise OffsiteError(f"백업이 끝나지 않았습니다: {folder.name}에 쓰는 중인 파일 {', '.join(parts)} "
-                               "(서버 안 백업이 아직 돌거나 중간에 끊김)")
         log(f"backup still writing {', '.join(parts)}; waiting")
         sleep(poll_s)
         waited += poll_s
-    files = {p.name: p.stat().st_size for p in sorted(folder.iterdir()) if p.is_file() and p.name.endswith(".db")}
-    if not files:
-        raise OffsiteError(f"백업 폴더({folder})가 비어 있습니다 (봇을 켜기 전이거나 복사가 모두 실패)")
-    bad = []
-    for name in files:
-        with open(folder / name, "rb") as fh:
-            if fh.read(len(SQLITE_HEADER)) != SQLITE_HEADER:
-                bad.append(name)
-    if bad:
-        raise OffsiteError(f"백업 파일이 SQLite 파일이 아닙니다: {', '.join(bad)}")
-    missing = []
+    problems = [(UNFINISHED, p) for p in parts]
+    files = {}
+    for p in sorted(folder.iterdir()):
+        if p.is_file() and p.name.endswith(".db"):
+            with open(p, "rb") as fh:
+                if fh.read(len(SQLITE_HEADER)) != SQLITE_HEADER:
+                    problems.append((NOT_SQLITE, p.name))
+                    continue
+            files[p.name] = p.stat().st_size
     if lib is not None and lib.is_dir():
         for f in DB_NAMES:
             base = f.rsplit("/", 1)[-1] + ".db"
             if (lib / f"{f}.db").exists() and base not in files:
-                missing.append(base)
+                problems.append((MISSING, base))
     elif lib is not None:
         log(f"note: {lib} not found; checked the folder only")
-    if missing:
-        raise OffsiteError(f"백업이 빠졌습니다: {', '.join(missing)} (서버에는 있는데 {folder.name} 폴더에 복사본이 "
-                           "없음; systemctl status paperbot-backup)")
-    return files
+    if not files and not problems:
+        raise OffsiteError(f"백업 폴더({folder})가 비어 있습니다 (봇을 켜기 전이거나 복사가 모두 실패)")
+    if not files:
+        raise OffsiteError(f"백업 폴더({folder})에 보낼 만한 DB 복사본이 없습니다: {problems_text(problems)} "
+                           "(systemctl status paperbot-backup --no-pager)")
+    return files, problems
 
 
 # ---------------------------------------------------------------- pack, encrypt, split
@@ -287,6 +364,8 @@ class Archive:
     sha256: str
     compression: str
     encrypted: bool
+    members: dict           # {file name: bytes archived}
+    newest_mtime: float     # of the archived copies
 
 
 def _tar_clean(ti: tarfile.TarInfo) -> tarfile.TarInfo:
@@ -310,42 +389,85 @@ def choose_compression(compression: str, which: Callable[[str], Optional[str]],
 
 def pack(folder: Path, files: Sequence[str], work: Path, compression: str, passphrase: str = "",
          which: Callable[[str], Optional[str]] = shutil.which, log: Callable[[str], None] = _stderr) -> Archive:
+    """tar of the copies -> zstd (or gzip) -> openssl (with a passphrase) -> one file in ``work``.
+
+    The stages are one pipe, so only the final archive is ever on disk (the disk is shared with the
+    live databases). Each copy is opened once and archived from that open file with its own fstat
+    size: a copy that paperbot-backup.sh replaces meanwhile (atomic rename) is archived whole (the old
+    one), never cut to a stale size."""
     date = folder.name
     comp = choose_compression(compression, which, log)
-    name = f"paperbot-{date}.tar." + ("zst" if comp == "zstd" else "gz")
+    name = f"paperbot-{date}.tar." + ("zst" if comp == "zstd" else "gz") + (".enc" if passphrase else "")
     path = work / name
-    members = [(folder / f, f"{date}/{f}") for f in files]
-    if comp == "zstd":
-        proc = subprocess.Popen([which("zstd") or "zstd", "-q", "-T2", "-10", "-f", "-o", str(path)],
-                                stdin=subprocess.PIPE, stderr=subprocess.PIPE)
+    members: dict[str, int] = {}
+    newest = 0.0
+    stages: list[tuple[str, subprocess.Popen, IO[bytes]]] = []
+
+    def spawn(what: str, argv: list, stdout, env: dict) -> IO[bytes]:
+        err = tempfile.TemporaryFile(dir=str(work))          # a file, not a pipe: no deadlock on stderr
+        try:
+            p = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=stdout, stderr=err, env=env)
+        except BaseException:
+            err.close()
+            raise
+        stages.append((what, p, err))
+        return p.stdin
+
+    final = open(path, "wb")
+    try:
+        sink: IO[bytes] = final
+        if passphrase:
+            exe = which("openssl")
+            if not exe:
+                raise OffsiteError("openssl 프로그램이 없어 암호화할 수 없습니다 (sudo apt install openssl)")
+            # the passphrase reaches openssl through its environment, never its command line (ps shows that)
+            sink = spawn("openssl 암호화", [exe, *OPENSSL_ENC, "-pass", "env:BACKUP_PASSPHRASE"], final,
+                         _child_env(BACKUP_PASSPHRASE=passphrase))
+        if comp == "zstd":
+            upstream = sink
+            sink = spawn("zstd 압축", [which("zstd") or "zstd", "-q", "-T2", "-10", "-c"], upstream, _child_env())
+            if upstream is not final:
+                upstream.close()          # zstd holds openssl's input now; openssl ends when zstd does
         broken = False
         try:
-            with tarfile.open(fileobj=proc.stdin, mode="w|", format=tarfile.PAX_FORMAT) as tar:
-                for src, arc in members:
-                    tar.add(src, arcname=arc, recursive=False, filter=_tar_clean)
-        except BrokenPipeError:                       # zstd stopped reading: never a whole archive
+            gz = gzip.GzipFile(filename="", fileobj=sink, mode="wb", compresslevel=6, mtime=0) \
+                if comp == "gzip" else None
+            with tarfile.open(fileobj=gz or sink, mode="w|", format=tarfile.PAX_FORMAT) as tar:
+                for f in files:
+                    with open(folder / f, "rb") as fh:
+                        ti = _tar_clean(tar.gettarinfo(arcname=f"{date}/{f}", fileobj=fh))
+                        tar.addfile(ti, fh)
+                    members[f] = ti.size
+                    newest = max(newest, float(ti.mtime))
+            if gz is not None:
+                gz.close()                # the gzip trailer; the sink itself stays open
+        except BrokenPipeError:           # a stage stopped reading: never a whole archive
             broken = True
         finally:
-            try:
-                proc.stdin.close()
-            except BrokenPipeError:
-                broken = True
-            err = proc.stderr.read()
-            rc = proc.wait()
-        if rc != 0 or broken:
-            raise OffsiteError(f"zstd 압축 실패 (exit {rc}): {err.decode(errors='replace')[-300:]}")
-    else:
-        with tarfile.open(path, mode="w:gz", compresslevel=6, format=tarfile.PAX_FORMAT) as tar:
-            for src, arc in members:
-                tar.add(src, arcname=arc, recursive=False, filter=_tar_clean)
-    encrypted = False
-    if passphrase:
-        enc = path.with_name(name + ".enc")
-        openssl_run([*OPENSSL_ENC, "-in", str(path), "-out", str(enc), "-pass", "env:BACKUP_PASSPHRASE"],
-                    passphrase, which, "암호화")
-        path.unlink()
-        path, name, encrypted = enc, enc.name, True
-    return Archive(path, name, path.stat().st_size, sha256_file(path), comp, encrypted)
+            if sink is not final:
+                try:
+                    sink.close()
+                except BrokenPipeError:
+                    broken = True
+        failures = []
+        for what, p, err in reversed(stages):             # the stage next to tar first
+            rc = p.wait()
+            if rc != 0:
+                err.seek(0)
+                failures.append(f"{what} 실패 (exit {rc}): {err.read().decode(errors='replace').strip()[-300:]}")
+        if failures or broken:
+            raise OffsiteError("; ".join(failures) or "압축 중 파이프가 끊겼습니다")
+    except BaseException:
+        for _, p, _ in stages:
+            if p.poll() is None:
+                p.kill()
+                p.wait()
+        raise
+    finally:
+        final.close()
+        for _, _, err in stages:
+            err.close()
+    return Archive(path, name, path.stat().st_size, sha256_file(path), comp, bool(passphrase), members, newest)
 
 
 def openssl_run(args: Sequence[str], passphrase: str, which: Callable[[str], Optional[str]], what: str) -> None:
@@ -353,7 +475,7 @@ def openssl_run(args: Sequence[str], passphrase: str, which: Callable[[str], Opt
     if not exe:
         raise OffsiteError(f"openssl 프로그램이 없어 {what}할 수 없습니다 (sudo apt install openssl)")
     # the passphrase reaches openssl through its environment, never its command line (ps shows that)
-    env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "BACKUP_PASSPHRASE": passphrase}
+    env = _child_env(BACKUP_PASSPHRASE=passphrase)
     r = subprocess.run([exe, *args], env=env, capture_output=True)
     if r.returncode != 0:
         tail = r.stderr.decode(errors="replace").strip()[-300:]
@@ -390,14 +512,25 @@ def part_caption(m: dict, p: dict) -> str:
     ])[:CAPTION_LIMIT]
 
 
-def summary_text(m: dict, note: str = "") -> str:
+def summary_text(m: dict, note: str = "", dry_run: bool = False) -> str:
     dbs = " · ".join(f"{k.removesuffix('.db')} {fmt_size(v)}" for k, v in m["databases"].items())
     enc = "암호화함" if m["encrypted"] else "암호화 없음"
+    problems = m.get("problems") or []
+    if dry_run:
+        head = f"paperbot 서버 밖 백업 시험(dry run): 아무것도 보내지 않음 — {m['date']} 폴더"
+    elif problems:
+        head = f"paperbot 서버 밖 백업 일부만 보냄: {m['date']} 폴더"
+    else:
+        head = f"paperbot 서버 밖 백업 완료: {m['date']} 폴더"
     lines = [
-        f"paperbot 서버 밖 백업 완료: {m['date']} 폴더 (백업 시각 {m['backup_kst']} 한국)",
-        f"DB {len(m['databases'])}개 {fmt_size(sum(m['databases'].values()))} → 보낸 파일 {fmt_size(m['size'])} "
-        f"({m['compression']}, {enc}), 조각 {len(m['parts'])}개",
+        f"{head} (백업 시각 {m['backup_kst']} 한국)",
+        f"DB {len(m['databases'])}개 {fmt_size(sum(m['databases'].values()))} → {'보낼' if dry_run else '보낸'} 파일 "
+        f"{fmt_size(m['size'])} ({m['compression']}, {enc}), 조각 {len(m['parts'])}개",
         f"DB: {dbs}",
+    ]
+    if problems:
+        lines.append(f"빠진 것: {'; '.join(problems)} (알림방 경고 참고)")
+    lines += [
         f"전체 sha256 {m['sha256'][:16]}…",
         f"되살릴 때: 이 목록 파일과 조각 {len(m['parts'])}개를 모두 내려받습니다 (docs/offsite-backup.md)",
     ]
@@ -432,10 +565,13 @@ def send_backup(root: Path, chat_env: str = "TELEGRAM_CHAT_BACKUP", *, date: Opt
                 sleep: Callable[[float], None] = time.sleep, now: Optional[datetime] = None,
                 which: Callable[[str], Optional[str]] = shutil.which,
                 log: Callable[[str], None] = _stderr, out: Callable[[str], None] = print,
-                info: Optional[dict] = None) -> dict:
-    """Pack, split and upload one backup folder; returns the manifest. Raises OffsiteError."""
+                info: Optional[dict] = None, max_s: float = RUN_LIMIT_S,
+                clock: Callable[[], float] = time.monotonic) -> dict:
+    """Pack, split and upload one backup folder; returns the manifest. Raises OffsiteError, also after
+    the upload when the folder had problems (check_folder): the good copies are sent, the run fails."""
     env = os.environ if env is None else env
     info = {} if info is None else info
+    deadline = clock() + max_s
     if not 0 < part_size <= MAX_PART:
         raise OffsiteError(f"조각 크기 {part_size} B는 텔레그램 한도 안이어야 합니다 (최대 {MAX_PART} B, 기본 45 MB)")
     token = (env.get("TELEGRAM_BOT_TOKEN") or "").strip()
@@ -452,24 +588,26 @@ def send_backup(root: Path, chat_env: str = "TELEGRAM_CHAT_BACKUP", *, date: Opt
                            "BACKUP_PASSPHRASE를 비움)")
     folder = find_folder(Path(root), date, now or datetime.now(timezone.utc))
     info["date"] = folder.name
-    files = check_complete(folder, lib, wait_s, sleep, log=log)
+    files, problems = check_folder(folder, lib, wait_s, sleep, log=log)
+    if problems:
+        log(f"problems in {folder.name}: {problems_text(problems)}; sending the good copies")
     raw = sum(files.values())
     workdir = Path(tempfile.mkdtemp(prefix="paperbot-offsite-", dir=str(work) if work else None))
     try:
-        free = shutil.disk_usage(workdir).free
-        if free < raw + 64 * 1024 * 1024:
-            raise OffsiteError(f"임시 공간이 모자랍니다: {workdir}에 {fmt_size(free)} 남음, 약 {fmt_size(raw)} 필요")
+        # worst case: the copies do not compress at all (only one archive is ever on disk: see pack)
+        check_space(workdir, raw + 1024 * 1024, "압축 파일")
         arc = pack(folder, list(files), workdir, compression, passphrase, which, log)
-        made = max((folder / f).stat().st_mtime for f in files)
         plan = plan_parts(arc.size, part_size)
         manifest = {
-            "format": MANIFEST_FORMAT, "date": folder.name, "backup_kst": _kst(made),
+            "format": MANIFEST_FORMAT, "date": folder.name, "backup_kst": _kst(arc.newest_mtime),
             "archive": arc.name, "compression": arc.compression, "encrypted": arc.encrypted,
             "cipher": CIPHER if arc.encrypted else None, "size": arc.size, "sha256": arc.sha256,
-            "part_size": part_size, "parts": [], "databases": dict(files),
+            "part_size": part_size, "parts": [], "databases": dict(arc.members),
             "created_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         }
-        tg = None if dry_run else Telegram(token, sender, sleep, log=log)
+        if problems:
+            manifest["problems"] = [f"{k}: {n}" for k, n in problems]
+        tg = None if dry_run else Telegram(token, sender, sleep, log=log, deadline=deadline, clock=clock)
         parts = []
         with open(arc.path, "rb") as fh:
             for i, (off, length) in enumerate(plan, 1):
@@ -486,16 +624,22 @@ def send_backup(root: Path, chat_env: str = "TELEGRAM_CHAT_BACKUP", *, date: Opt
                     + (" (dry run: not sent)" if tg is None else " sent"))
                 parts.append({k: p[k] for k in ("index", "name", "offset", "size", "sha256")})
         manifest["parts"] = parts
-        summary = summary_text(manifest, note)
+        summary = summary_text(manifest, note, dry_run=dry_run)
         if tg is not None:
             tg.call("sendDocument", {"chat_id": chat, "caption": summary, "disable_notification": "true",
                                      "disable_content_type_detection": "true"},
                     ("document", f"paperbot-{folder.name}.manifest.json",
                      (json.dumps(manifest, ensure_ascii=False, indent=1) + "\n").encode()))
         out(summary)
-        return manifest
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
+    if problems:
+        sent = "dry run이라 보내지 않았습니다" if dry_run else "'paperbot 백업' 방에 보냈습니다"
+        hint = (" (서버에는 있는데 폴더에 온전한 복사본이 없음. 오늘 새로 생긴 DB라면 다음 날 백업부터 들어갑니다)"
+                if any(k == MISSING for k, _ in problems) else "")
+        raise OffsiteError(f"{problems_text(problems)}{hint}. 나머지 DB {len(files)}개는 {sent}. "
+                           "서버 안 백업을 확인합니다: systemctl status paperbot-backup --no-pager")
+    return manifest
 
 
 # ---------------------------------------------------------------- restore
@@ -580,7 +724,7 @@ def unpack(archive: Path, compression: str, dest: Path, which: Callable[[str], O
             if not exe:
                 raise OffsiteError("zstd 프로그램이 없어 풀 수 없습니다 (sudo apt install zstd)")
             proc = subprocess.Popen([exe, "-d", "-c", "-q", str(archive)], stdout=subprocess.PIPE,
-                                    stderr=subprocess.PIPE)
+                                    stderr=subprocess.PIPE, env=_child_env())
             try:
                 with tarfile.open(fileobj=proc.stdout, mode="r|") as tar:
                     extract(tar)
@@ -589,12 +733,12 @@ def unpack(archive: Path, compression: str, dest: Path, which: Callable[[str], O
                 err = proc.stderr.read()
                 rc = proc.wait()
             if rc != 0:
-                raise OffsiteError(f"zstd 풀기 실패 (exit {rc}): {err.decode(errors='replace')[-300:]}")
+                raise UnpackError(f"zstd 풀기 실패 (exit {rc}): {err.decode(errors='replace')[-300:]}")
         else:
             with tarfile.open(archive, mode="r|gz") as tar:
                 extract(tar)
-    except (tarfile.TarError, EOFError, zlib.error) as exc:
-        raise OffsiteError(f"압축 풀기 실패: {type(exc).__name__}: {exc}")
+    except (tarfile.TarError, EOFError, zlib.error, gzip.BadGzipFile) as exc:
+        raise UnpackError(f"압축 풀기 실패: {type(exc).__name__}: {exc}")
     if not names:
         raise OffsiteError("압축 파일 안에 데이터베이스가 없습니다")
     return names
@@ -637,7 +781,9 @@ def next_steps(dest: Path, names: Sequence[str]) -> str:
     lines += [
         "3) 그날은 에이전트를 쉬게 합니다 (AI 사용 기록이 백업 시점으로 돌아감): 켤 때 paperbot-agents.timer만 빼고,",
         "   다음 날 sudo systemctl start paperbot-agents.timer",
-        "4) docs/server-setup-v3.md 11번(시작)대로 켜고 12번(첫 1시간 확인)을 합니다.",
+        "4) docs/server-setup-v3.md 11번(시작)대로 켜고 (paperbot-offsite.timer도 함께), 12번(첫 1시간 확인)을 합니다.",
+        "   확인은 12번의 launchcheck --stage after로 합니다. 10번(--stage before)은 하지 않습니다: 되살린 paper3.db를",
+        "   옮기라는 줄이 나오는데, 따르면 되살린 기록이 빠집니다.",
         "   주문 실행기(paperbot-executor)는 켜지 않습니다 (docs/live-safety.md).",
     ]
     return "\n".join(lines)
@@ -646,16 +792,33 @@ def next_steps(dest: Path, names: Sequence[str]) -> str:
 def restore_backup(files: Sequence[Path], out: Path, *, sha256: Optional[str] = None,
                    env: Optional[Mapping[str, str]] = None, which: Callable[[str], Optional[str]] = shutil.which,
                    ask: Optional[Callable[[str], str]] = None, log: Callable[[str], None] = print) -> int:
-    """Verify, join, decrypt, unpack and integrity-check; 0 when every database is ok, else 1."""
+    """Verify, join, decrypt, unpack and integrity-check; 0 when every database is ok, else 1.
+    ``files``: the downloaded files, or folders holding them (searched with their subfolders; hidden
+    files skipped), e.g. Telegram Desktop's own download folder."""
     env = os.environ if env is None else env
-    paths = [Path(f) for f in files]
-    for p in paths:
-        if not p.is_file():
-            raise OffsiteError(f"파일이 없습니다: {p}")
+    paths: list[Path] = []
+    from_folder: set[Path] = set()
+    for p in map(Path, files):
+        if p.is_dir():
+            found = sorted(x for x in p.rglob("*") if x.is_file()
+                           and not any(s.startswith(".") for s in x.relative_to(p).parts))
+            if not found:
+                raise OffsiteError(f"폴더가 비어 있습니다: {p}")
+            from_folder.update(found)
+            paths += found
+        elif p.is_file():
+            paths.append(p)
+        else:
+            glob_hint = (" (폴더 이름만 주면 됩니다: --parts /root/restore-in)"
+                         if any(c in str(p) for c in "*?[") else "")
+            raise OffsiteError(f"파일이 없습니다: {p}{glob_hint}")
+    seen: set[Path] = set()
+    paths = [p for p in paths if not (p.resolve() in seen or seen.add(p.resolve()))]
     manifests = [p for p in paths if p.name.endswith(".manifest.json")]
     parts = [p for p in paths if p not in manifests]
     if len(manifests) > 1:
-        raise OffsiteError("목록 파일(.manifest.json)이 여러 개입니다. 한 날짜의 것만 넣으세요")
+        raise OffsiteError("목록 파일(.manifest.json)이 여러 개입니다. 한 날짜의 것만 넣으세요 (폴더에는 그 날짜의 "
+                           f"파일만): {', '.join(p.name for p in manifests)}")
     if not parts:
         raise OffsiteError("조각 파일이 없습니다")
     m = _load_manifest(manifests[0]) if manifests else None
@@ -666,8 +829,16 @@ def restore_backup(files: Sequence[Path], out: Path, *, sha256: Optional[str] = 
         if not re.fullmatch(r"\d{8}", date) or "/" in archive_name or compression not in ("zstd", "gzip"):
             raise OffsiteError(f"목록 파일 내용이 이상합니다: {manifests[0]}")
         log(f"조각 {len(ordered)}개의 sha256이 목록과 맞습니다")
+        raw_size = sum(v for v in (m.get("databases") or {}).values() if isinstance(v, int))
     else:
+        stray = [p for p in parts if p in from_folder and not PART_RE.match(p.name)]
+        for p in stray:                       # e.g. desktop.ini, another download in the same folder
+            log(f"참고: 조각 이름이 아닌 파일은 쓰지 않습니다: {p}")
+        parts = [p for p in parts if p not in stray]
+        if not parts:
+            raise OffsiteError("조각 파일이 없습니다")
         ordered, archive_name = _order_by_name(parts)
+        raw_size = 0
         if not sha256 or not re.fullmatch(r"[0-9a-fA-F]{12,64}", sha256):
             raise OffsiteError("목록 파일(paperbot-<날짜>.manifest.json)을 함께 넣거나, 조각 설명에 적힌 전체 sha256을 "
                                "--sha256으로 주세요")
@@ -680,6 +851,10 @@ def restore_backup(files: Sequence[Path], out: Path, *, sha256: Optional[str] = 
     if dest.exists() and any(dest.iterdir()):
         raise OffsiteError(f"폴더({dest})가 이미 있고 비어 있지 않습니다. 다른 --out 폴더를 고르세요")
     out.mkdir(parents=True, exist_ok=True)
+    # joined archive (+ its decrypted copy) + the databases; without the manifest assume 6x compression.
+    # A practice restore runs on the live server: the bot's disk keeps free_floor() free.
+    arc_size = sum(f.stat().st_size for f in ordered)
+    check_space(out, arc_size + max(arc_size if encrypted else 0, raw_size or 6 * arc_size), "되살리기")
     tmp = Path(tempfile.mkdtemp(prefix=".offsite-restore-", dir=str(out)))
     try:
         joined = tmp / re.sub(r"[^A-Za-z0-9._-]", "_", archive_name)
@@ -709,13 +884,17 @@ def restore_backup(files: Sequence[Path], out: Path, *, sha256: Optional[str] = 
         created = not dest.exists()
         try:
             names = unpack(archive, compression, dest, which)
-        except BaseException:
+        except BaseException as exc:
             # nothing half-unpacked is left behind to be mistaken for a good restore (dest was empty)
             if created:
                 shutil.rmtree(dest, ignore_errors=True)
             else:
                 for f in dest.iterdir():
                     f.unlink()
+            if encrypted and isinstance(exc, UnpackError):
+                # openssl's padding check lets about 1 wrong passphrase in 256 through: the result is noise
+                raise OffsiteError(f"{exc} — 전체 확인값(sha256)은 맞았으므로 암호(BACKUP_PASSPHRASE)가 틀렸을 가능성이 "
+                                   "큽니다. 암호를 다시 확인하세요") from None
             raise
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
@@ -763,6 +942,33 @@ def default_notifier(env: Mapping[str, str]) -> Notifier:
     return ConsoleNotifier()
 
 
+SIGTERM_REASON = ("중간에 멈춰졌습니다(SIGTERM): 한 번 실행 시간 제한(1시간)을 넘겼거나, 서버가 다시 시작되었거나, "
+                  "누가 멈췄습니다")
+
+
+def _on_sigterm(signum, frame):
+    # systemd's TimeoutStartSec, a reboot or `systemctl stop`: become an ordinary failure, so main()'s
+    # WARN goes out (Python's default would end the process silently). Once: the alert is not interrupted.
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    raise OffsiteError(SIGTERM_REASON)
+
+
+def stopped_alert(env: Mapping[str, str]) -> Optional[str]:
+    """For ExecStopPost=: the WARN text when systemd ended the send before it could alert by itself
+    (killed by a signal: the memory limit, SIGKILL after the stop timeout; or a core dump), else None.
+    A run that exited by itself already alerted when it failed (main) and is left alone."""
+    code = (env.get("EXIT_CODE") or "").strip()
+    if code not in ("killed", "dumped"):
+        return None
+    result = (env.get("SERVICE_RESULT") or "?").strip()
+    status = (env.get("EXIT_STATUS") or "?").strip()
+    why = "메모리 한도(1 GB)를 넘었습니다" if result == "oom-kill" else "강제로 멈춰졌습니다"
+    return (f"서버 밖 백업이 비정상으로 끝났습니다: {why} (systemd {result}, {code} {status}). "
+            "이날 백업은 텔레그램에 다 가지 못했을 수 있습니다.\n"
+            "서버 안 백업(/var/backups/paperbot)은 그대로 있습니다. 내일 같은 시각에 다시 시도합니다.\n"
+            "확인: sudo journalctl -u paperbot-offsite -n 50 --no-pager")
+
+
 def main(argv: Optional[list[str]] = None, *, env: Optional[Mapping[str, str]] = None,
          sender: Optional[Sender] = None, sleep: Optional[Callable[[float], None]] = None,
          notifier: Optional[Notifier] = None, now: Optional[datetime] = None,
@@ -782,43 +988,68 @@ def main(argv: Optional[list[str]] = None, *, env: Optional[Mapping[str, str]] =
     s.add_argument("--compress", choices=("auto", "zstd", "gzip"), default="auto")
     s.add_argument("--work", type=Path, default=None, help="temporary folder (default: $TMPDIR or /tmp)")
     s.add_argument("--wait-min", type=float, default=5.0, help="wait this long for a backup still being written")
+    s.add_argument("--max-min", type=float, default=RUN_LIMIT_S / 60,
+                   help="stop (WARN, exit 1) after this many minutes; keep it below the unit's TimeoutStartSec")
     s.add_argument("--dry-run", action="store_true", help="pack and split, print the parts, upload nothing")
     r = sub.add_parser("restore", help="verify, join, decrypt, unpack and integrity-check downloaded parts")
-    r.add_argument("--parts", nargs="+", type=Path, required=True, help="the parts and the .manifest.json")
+    r.add_argument("--parts", nargs="+", type=Path, required=True,
+                   help="the parts and the .manifest.json, or a folder holding them")
     r.add_argument("--out", type=Path, required=True)
     r.add_argument("--sha256", help="whole-archive sha256 from a part's caption (only without the manifest)")
     sub.add_parser("chats", help="list the chat ids the bot has seen recently (getUpdates)")
+    sub.add_parser("stopped", help="ExecStopPost: WARN when systemd killed a send before it could alert")
     a = ap.parse_args(argv)
 
     env = os.environ if env is None else env
     token = (env.get("TELEGRAM_BOT_TOKEN") or "").strip()
+    passphrase = env.get("BACKUP_PASSPHRASE") or ""
     which = which or shutil.which
     sleep = sleep or time.sleep
     info: dict = {}
+    if a.cmd == "stopped":
+        text = stopped_alert(env)
+        if text:
+            _stderr(text)
+            (notifier or default_notifier(env)).send(WARN, redact(text, token, passphrase))
+        return 0
+    alerting = a.cmd == "send" and not a.dry_run
+    armed, previous = False, None
+    if alerting:
+        try:
+            previous = signal.signal(signal.SIGTERM, _on_sigterm)
+            armed = True
+        except ValueError:                    # not the main thread: no handler (systemd runs it in the main one)
+            pass
     try:
         if a.cmd == "send":
             lib = a.lib or Path(env.get("PAPERBOT_LIB") or "/var/lib/paperbot")
             send_backup(a.root, a.chat_env, date=a.date, lib=lib, part_size=int(a.part_mb * 1024 * 1024),
                         compression=a.compress, work=a.work, dry_run=a.dry_run, wait_s=a.wait_min * 60,
-                        env=env, sender=sender, sleep=sleep, now=now, which=which, info=info)
+                        env=env, sender=sender, sleep=sleep, now=now, which=which, info=info,
+                        max_s=a.max_min * 60)
             return 0
         if a.cmd == "restore":
             asker = ask if ask is not None else (getpass.getpass if sys.stdin.isatty() else None)
             return restore_backup(a.parts, a.out, sha256=a.sha256, env=env, which=which, ask=asker)
         return list_chats(env, sender, sleep)
     except Exception as exc:
+        if armed:
+            signal.signal(signal.SIGTERM, signal.SIG_IGN)     # the WARN below is not interrupted
         if isinstance(exc, OffsiteError):
-            reason = redact(exc, token)
+            reason = redact(exc, token, passphrase)
         else:
-            _stderr(redact(traceback.format_exc(), token))
-            reason = redact(f"{type(exc).__name__}: {exc}", token)
+            _stderr(redact(traceback.format_exc(), token, passphrase))
+            reason = redact(f"{type(exc).__name__}: {exc}", token, passphrase)
         _stderr(f"offsite {a.cmd} failed: {reason}")
-        if a.cmd == "send" and not a.dry_run:
+        if alerting:
             text = (f"서버 밖 백업 실패 ({info.get('date', '날짜 모름')}): {reason}\n"
                     "서버 안 백업(/var/backups/paperbot)은 그대로 있습니다. 내일 같은 시각에 다시 시도합니다.\n"
                     "확인: sudo journalctl -u paperbot-offsite -n 50 --no-pager")
-            (notifier or default_notifier(env)).send(WARN, redact(text, token))
+            (notifier or default_notifier(env)).send(WARN, redact(text, token, passphrase))
         return 1
+    finally:
+        if armed:
+            signal.signal(signal.SIGTERM, previous if previous is not None else signal.SIG_DFL)
 
 
 if __name__ == "__main__":

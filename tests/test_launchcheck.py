@@ -3,8 +3,11 @@ tmp_path, every command, HTTP answer, file owner and the clock are fakes. Nothin
 the real system (the autouse fixture makes any real command or connection fail the test)."""
 
 import base64
+import hashlib
+import hmac
 import json
 import os
+import shutil
 import re
 import socket
 import sqlite3
@@ -22,6 +25,7 @@ from paperbot.config import V3_SYMBOLS
 
 NOW = int(datetime(2026, 10, 1, 12, 0, tzinfo=timezone.utc).timestamp() * 1000)
 MIN, DAY = 60_000, 86_400_000
+MONO = 30 * DAY * 1000                 # CLOCK_MONOTONIC (microseconds): the server has been up 30 days
 KEY = "a1B2" * 16
 SECRET = "s9T8" * 16
 TOKEN = "123456789:AAH" + "x" * 32
@@ -30,18 +34,22 @@ CHAT_INFO = "-1009876543210"
 DEADMAN = "https://hc-ping.com/0f3c1d2e-aaaa-bbbb-cccc-1234567890ab"
 PW_HASH = "pbkdf2$200000${}${}".format(base64.b64encode(b"s" * 16).decode(), base64.b64encode(b"k" * 32).decode())
 DASH_SECRET = "f0" * 32
-CLAUDE = "sk-ant-oat01-" + "z" * 40
+CLAUDE = "sk-ant-oat01-" + "z" * 95           # setup-token's length
 TS_IP = "100.101.102.103"
 COMMIT = "d86c085" + "0" * 33
 SECRETS = (KEY, SECRET, TOKEN, DEADMAN, PW_HASH, DASH_SECRET, CLAUDE, "0f3c1d2e-aaaa-bbbb-cccc-1234567890ab")
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 VENV = "/opt/paperbot/venv/bin/python"
+REAL_URLOPEN = urllib.request.urlopen
+LIVE_BRACKETS = "Binance leverageBracket (live)"
 
 
 @pytest.fixture(autouse=True)
 def offline(monkeypatch):
     def refuse(*a, **k):
-        raise AssertionError("launchcheck tests must not use the network or run real commands")
+        # pytest.fail raises a BaseException: launchcheck's guard() (except Exception) cannot turn it into
+        # an ordinary [고칠 것] line, so a check that reaches the real system fails the test outright
+        pytest.fail("launchcheck tests must not use the network or run real commands")
     monkeypatch.setattr(subprocess, "run", refuse)
     monkeypatch.setattr(subprocess, "Popen", refuse)
     monkeypatch.setattr(urllib.request, "urlopen", refuse)
@@ -83,9 +91,11 @@ READ_ONLY = {"ipRestrict": True, "enableReading": True, "enableWithdrawals": Fal
              "permitsUniversalTransfer": False, "enableVanillaOptions": False, "enablePortfolioMarginTrading": False}
 CHRONY_OK = ("Reference ID    : A9FEA97B (169.254.169.123)\nSystem time     : 0.000012345 seconds fast of NTP time\n"
              "Leap status     : Normal\n")
-UFW_OK = ("Status: active\n\nTo                         Action      From\n--                         ------      ----\n"
-          "OpenSSH                    ALLOW       Anywhere\nAnywhere on tailscale0     ALLOW       Anywhere\n"
-          "OpenSSH (v6)               ALLOW       Anywhere (v6)\n")
+UFW_OK = ("Status: active\nLogging: on (low)\nDefault: deny (incoming), allow (outgoing), disabled (routed)\n"
+          "New profiles: skip\n\nTo                         Action      From\n--                         ------      ----\n"
+          "22/tcp (OpenSSH)           ALLOW IN    Anywhere\nAnywhere on tailscale0     ALLOW IN    Anywhere\n"
+          "22/tcp (OpenSSH (v6))      ALLOW IN    Anywhere (v6)\n"
+          "Anywhere (v6) on tailscale0 ALLOW IN    Anywhere (v6)\n")
 SS_OK = (f"LISTEN 0      2048   {TS_IP}:8080      0.0.0.0:*\nLISTEN 0      4096   0.0.0.0:22      0.0.0.0:*\n")
 
 
@@ -115,7 +125,6 @@ class Server:
             data = f"rules {name}\n".encode()
             with open(os.path.join(self.app, "docs", f"{name}.md"), "wb") as fh:
                 fh.write(data)
-            import hashlib
             with open(os.path.join(self.app, "docs", f"{name}.sha256"), "w") as fh:
                 fh.write(f"{hashlib.sha256(data).hexdigest()}  docs/{name}.md\n")
         self.meminfo = str(tmp_path / "meminfo")
@@ -135,6 +144,7 @@ class Server:
         self.routes = {}
         if stage == "after":
             self.make_db(start=NOW - 2 * 3_600_000, heartbeat=NOW - 20_000)
+            self.make_liq([(NOW - 2 * 3_600_000, "connected")])
 
     # ------------------------------------------------------------ files
     def write_env(self, name, text):
@@ -153,20 +163,35 @@ class Server:
             ref[src]["5m_BTCUSD"] = {"digest": LD.content_digest(arrs), "bars": 10}
         return ref
 
-    def make_db(self, start, heartbeat=None, brackets="Binance leverageBracket (live)", commit=COMMIT):
-        conn = sqlite3.connect(os.path.join(self.lib, "paper3.db"))
-        conn.executescript("CREATE TABLE accounts (account_id TEXT, kind TEXT, created_ts INTEGER);"
-                           "CREATE TABLE runs (id INTEGER PRIMARY KEY, started_ts INTEGER, data TEXT);"
-                           "CREATE TABLE state (k TEXT PRIMARY KEY, ts INTEGER, data TEXT);")
+    def make_db(self, start, heartbeat=None, brackets=LIVE_BRACKETS, commit=COMMIT, health="fresh"):
+        """paper3.db written by the bot's own store (WAL, like the server's), then closed: the bot stopped.
+        ``health``: the bot's 'health' row ("fresh": 1m bars 30 s behind, last dead-man ping 30 s ago)."""
+        from paperbot.store3 import Store3
+        s = Store3(os.path.join(self.lib, "paper3.db"))
         if start is not None:
-            conn.execute("INSERT INTO accounts VALUES ('S1_15m', 'strategy', ?)", (start,))
-            conn.execute("INSERT INTO runs (started_ts, data) VALUES (?, '{}')", (start,))
-            conn.execute("INSERT INTO state VALUES ('run', ?, ?)", (start, json.dumps(
-                {"accounts": 195, "brackets": brackets, "taker_fee": 0.0005, "commit": commit, "restored": False})))
+            s.add_account("S1_15m", "S1", "15m", "strategy", start, "v3")
+            s.add_run(start, {})
+            s.put_state("run", start, {"accounts": 195, "brackets": brackets, "taker_fee": 0.0005, "commit": commit,
+                                       "restored": False})
         if heartbeat is not None:
-            conn.execute("INSERT INTO state VALUES ('heartbeat', ?, '{}')", (heartbeat,))
-        conn.commit()
-        conn.close()
+            s.put_state("heartbeat", heartbeat, {"steps": 100, "last_step": heartbeat - 90_000})
+            if health == "fresh":
+                health = {"last_bar": heartbeat - 90_000, "lag_ms": 30_000,
+                          "deadman": {"last_ping": heartbeat - 30_000, "failures": 0, "sent": None}}
+            if health is not None:
+                s.put_state("health", heartbeat, health)
+        s.close()
+        return os.path.join(self.lib, "paper3.db")
+
+    def make_liq(self, events):
+        """liq.db written by the recorder's own store, with these (ts, event) connection log rows."""
+        from paperbot.liqstream import LiqStore
+        path = os.path.join(self.lib, "liq.db")
+        for ts, event in events:
+            store = LiqStore(path, clock_ms=lambda ts=ts: ts)
+            store.log(event, {})
+            store.close()
+        return path
 
     # ------------------------------------------------------------ units
     @staticmethod
@@ -180,7 +205,7 @@ class Server:
             "--db /var/lib/paperbot/paper3.db --procs 4 ; ignore_errors=no }")
         for u in L.LEGACY + (L.LABBUILD,):
             t[u] = {"LoadState": "not-found", "UnitFileState": "", "ActiveState": "inactive", "SubState": "dead"}
-        for u in L.SYSTEM:
+        for u in L.SYSTEM + (L.AUTO_UPDATES,):
             t[u] = {"LoadState": "loaded", "UnitFileState": "enabled", "ActiveState": "active", "SubState": "running"}
         if stage == "after":
             for u in L.SERVICES:
@@ -224,6 +249,10 @@ class Server:
         if signed and (headers or {}).get("X-MBX-APIKEY") != KEY:
             return jbody({"code": -2015, "msg": "Invalid API-key, IP, or permissions for action, "
                                                 "request ip: 203.0.113.7"}, 401)
+        if signed:          # Binance checks the HMAC-SHA256 of the query with the key's secret
+            query, _, sig = u.query.rpartition("&signature=")
+            if sig != hmac.new(SECRET.encode(), query.encode(), hashlib.sha256).hexdigest():
+                return jbody({"code": -1022, "msg": "Signature for this request is not valid."}, 400)
         if u.hostname == "fapi.binance.com":
             if u.path == "/fapi/v1/time":
                 return jbody({"serverTime": self.server_ms})
@@ -243,6 +272,9 @@ class Server:
                 return jbody({"ok": True, "result": {"username": "paper_bot"}})
             if u.path == f"/bot{TOKEN}/sendMessage":
                 return jbody({"ok": True, "result": {}})
+            if u.path == f"/bot{TOKEN}/getChat":
+                chat = dict(urllib.parse.parse_qsl((data or b"").decode())).get("chat_id")
+                return jbody({"ok": True, "result": {"id": int(chat), "type": "supergroup"}})
             return jbody({"ok": False, "error_code": 401, "description": "Unauthorized"}, 401)
         if u.hostname == "hc-ping.com":
             return 200, b"OK", {}
@@ -258,7 +290,8 @@ class Server:
         return L.FileInfo(mode, owner, group, is_dir)
 
     def ctx(self, **over):
-        kw = dict(run=self.run, fetch=self.fetch, stat=self.stat, now_ms=lambda: NOW, sleep=lambda s: None,
+        kw = dict(run=self.run, fetch=self.fetch, stat=self.stat, now_ms=lambda: NOW, mono_us=lambda: MONO,
+                  sleep=lambda s: None,
                   cpu_count=lambda: 4, disk_free=lambda p: 120e9, euid=0, username="root", etc=self.etc,
                   app=self.app, lib=self.lib, backups=self.backups, repo=self.repo, meminfo=self.meminfo,
                   venv_python=VENV)
@@ -305,6 +338,10 @@ def test_healthy_server_before_the_start_passes_and_prints_no_secret(tmp_path, l
     assert code == 0, out
     assert "[고칠 것]" not in out
     assert "시작 준비가 끝났습니다" in out and L.START_CMD in out
+    # the agent rooms are set up: the printed start command turns their timers on too (as step 11 does)
+    verdict = [r for r in out.splitlines() if "시작 준비가 끝났습니다" in r][0]
+    assert verdict.endswith(L.START_CMD + " paperbot-agents.timer paperbot-labmonthly.timer")
+    assert "시작하고 10~15분 뒤 확인" in out
     for s in SECRETS:
         assert s not in out
     assert "BINANCE_API_KEY=set" in out and "DEADMAN_URL=set" in out
@@ -497,11 +534,35 @@ def test_binance_hint_codes():
 
 
 # ---------------------------------------------------------------- Telegram
-def test_telegram_without_send_test_only_checks_the_token(tmp_path):
+def test_telegram_without_send_test_checks_the_token_and_each_chat_silently(tmp_path):
     srv = Server(tmp_path)
     lines = L.check_telegram(srv.ctx(), srv.envs(), True, False)
-    assert st(lines) == [L.OK, L.NOTE] and "@paper_bot" in txt(lines) and "방 2곳" in txt(lines)
+    assert st(lines) == [L.OK, L.OK] and "@paper_bot" in txt(lines) and "텔레그램 방 2곳 확인됨" in txt(lines)
     assert not srv.sent("sendMessage") and len(srv.sent("getMe")) == 1
+    chats = [dict(urllib.parse.parse_qsl(h[3].decode()))["chat_id"] for h in srv.sent("getChat")]
+    assert chats == [CHAT, CHAT_INFO]
+
+
+def test_telegram_a_chat_the_bot_is_not_in_fails_without_send_test(tmp_path):
+    srv = Server(tmp_path)
+    srv.routes["getChat"] = lambda m, url, h, data: (
+        jbody({"ok": False, "description": "Bad Request: chat not found"}, 400)
+        if dict(urllib.parse.parse_qsl(data.decode()))["chat_id"] == CHAT_INFO else jbody({"ok": True, "result": {}}))
+    lines = L.check_telegram(srv.ctx(), srv.envs(), True, False)
+    assert st(lines) == [L.OK, L.FIX, L.OK] and not srv.sent("sendMessage")
+    assert "live.env INFO 방을 찾지 못했습니다(HTTP 400 Bad Request: chat not found)" in lines[1][1]
+    assert "-100으로 시작" in lines[1][1] and "방 1곳 확인됨" in lines[2][1]
+
+
+def test_telegram_agents_token_of_its_own_is_checked(tmp_path):
+    srv = Server(tmp_path)
+    other = "987654321:BBH" + "y" * 32
+    srv.write_env("agents", agents_env().replace(f"TELEGRAM_BOT_TOKEN={TOKEN}", f"TELEGRAM_BOT_TOKEN={other}"))
+    lines = L.check_telegram(srv.ctx(), srv.envs(), True, False)
+    f = fixes(lines)
+    assert len(f) == 1 and "agents.env의 봇 토큰을 받지 않습니다" in f[0] and "BotFather" in f[0]
+    assert len(srv.sent("getMe")) == 2 and other not in txt(lines)
+    assert all(other not in h[1] for h in srv.sent("getChat"))       # its chats are not tried with a refused token
 
 
 def test_telegram_send_test_reports_each_chat(tmp_path):
@@ -617,9 +678,12 @@ def test_tailscale_and_firewall(tmp_path):
     srv.tailscale["Self"]["TailscaleIPs"] = ["100.64.0.9"]
     lines = L.check_tailscale(srv.ctx(), dash)
     assert st(lines) == [L.OK, L.FIX, L.NOTE, L.OK] and "2027-03-30" in lines[2][1]
-    srv.cmd_out[("ufw", "status")] = (0, UFW_OK.replace("Anywhere on tailscale0", "8080/tcp") + "", "")
+    no_ts = "".join(r + "\n" for r in UFW_OK.splitlines() if "tailscale0" not in r)
+    srv.cmd_out[("ufw", "status")] = (0, no_ts + "8080/tcp                   ALLOW IN    Anywhere\n", "")
     f = fixes(L.check_tailscale(srv.ctx(), dash))
-    assert any("8080 포트가 인터넷에 열려" in t for t in f) and any("ufw allow in on tailscale0" in t for t in f)
+    assert any("8080 포트가 인터넷에 열려" in t and "sudo ufw status numbered" in t for t in f)
+    assert any("ufw allow in on tailscale0" in t for t in f)
+    assert ["ufw", "status", "verbose"] in [c[0] for c in srv.calls]
     srv.cmd_out[("ufw", "status")] = (0, "Status: inactive\n", "")
     assert any("방화벽(ufw)이 꺼져" in t for t in fixes(L.check_tailscale(srv.ctx(), dash)))
     # not root: the firewall is not looked at
@@ -634,7 +698,7 @@ def test_tailscale_missing_is_fine_only_with_an_ssh_tunnel(tmp_path):
     srv.tailscale = None
     assert st(L.check_tailscale(srv.ctx(), srv.envs()["dash"]))[0] == L.FIX
     srv.write_env("dash", dash_env(DASH_HOST="127.0.0.1"))
-    srv.cmd_out[("ufw", "status")] = (0, UFW_OK.replace("Anywhere on tailscale0     ALLOW       Anywhere\n", ""), "")
+    srv.cmd_out[("ufw", "status")] = (0, "".join(r + "\n" for r in UFW_OK.splitlines() if "tailscale0" not in r), "")
     lines = L.check_tailscale(srv.ctx(), srv.envs()["dash"])
     assert st(lines) == [L.NOTE, L.OK] and "SSH 터널" in lines[0][1]
 
@@ -788,14 +852,19 @@ def test_paper_db_before_the_start(tmp_path):
     srv.make_db(start=NOW - 9 * DAY)
     lines = L.check_paper_db(srv.ctx(), "before")
     assert st(lines) == [L.FIX] and "9일 전(2026-09-22)" in lines[0][1] and "--stage after" in lines[0][1]
-    moved = f"{srv.lib}/paper3.db* {srv.lib}/daily3.db* {srv.lib}/checkpoint.db*"
-    assert f"sudo mv {moved} {srv.backups}/old/" in lines[0][1]
+    moved = f"mv {srv.lib}/paper3.db* {srv.lib}/daily3.db* {srv.lib}/checkpoint.db* \"$d\"/"
+    cmd = L.move_old_db_command(srv.ctx())
+    assert lines[0][1].endswith(cmd) and moved in cmd and "shopt -s nullglob" in cmd
+    assert f"d={srv.backups}/old-$(date -u +%Y%m%d%H%M)" in cmd and "chown -R paperbot:paperbot" in cmd
 
 
 def test_paper_db_after_the_start(tmp_path):
     srv = Server(tmp_path, "after")
     lines = L.check_paper_db(srv.ctx(), "after")
-    assert st(lines) == [L.OK, L.OK, L.OK] and "계좌 195개" in lines[1][1] and "0.0500%" in lines[1][1]
+    assert st(lines) == [L.OK, L.OK, L.OK, L.OK] and "1분봉 정상" in lines[1][1]
+    assert "계좌 195개" in lines[2][1] and "0.0500%" in lines[2][1] and "거래소 실제 값" in lines[2][1]
+    lines = L.check_paper_db(srv.ctx(), "after", True)
+    assert st(lines) == [L.OK] * 5 and "healthchecks.io에 핑을 보내고 있음: 마지막 50초 전" in lines[2][1]
     stale = L.check_paper_db(srv.ctx(now_ms=lambda: NOW + 10 * MIN), "after")
     assert stale[0][0] == L.FIX and "620초 전" in stale[0][1]
     os.remove(os.path.join(srv.lib, "paper3.db"))
@@ -821,13 +890,24 @@ def test_lab_files_against_the_reference(tmp_path):
     building = {L.LABBUILD: {"ActiveState": "active"}}
     assert "만드는 중" in L.check_lab(srv.ctx(), building, True, ref=srv.ref)[0][1]
     lines = L.check_lab(srv.ctx(lib=str(tmp_path / "nowhere")), None, True, ref=srv.ref)
-    assert st(lines) == [L.FIX] and "systemd-run" in lines[0][1]
+    assert st(lines) == [L.FIX] and "systemd-run" in lines[0][1] and "--unit=paperbot-labbuild --collect" in lines[0][1]
+
+
+def test_a_failed_lab_build_unit_says_reset_failed(tmp_path):
+    srv = Server(tmp_path)
+    failed = {L.LABBUILD: {"LoadState": "loaded", "ActiveState": "failed"}}
+    lines = L.check_lab(srv.ctx(), failed, True, ref=srv.ref)
+    assert st(lines) == [L.FIX]
+    assert "sudo systemctl reset-failed paperbot-labbuild" in lines[0][1] and lines[0][1].endswith(L.LAB_BUILD)
+    assert "journalctl -u paperbot-labbuild" in lines[0][1]
+    assert st(L.check_lab(srv.ctx(), failed, False, ref=srv.ref)) == [L.NOTE]
 
 
 def test_claude_login_runs_as_paperbot_with_the_token_in_the_environment(tmp_path):
     srv = Server(tmp_path)
     lines = L.check_claude(srv.ctx(), srv.envs()["agents"], True)
-    assert lines == [(L.OK, "Claude Code 로그인: 구독으로 로그인됨 (oauth_token), API 키 아님")]
+    assert lines == [(L.OK, "Claude Code 로그인 설정 확인됨: 구독 토큰 (oauth_token), API 키 아님 "
+                            "(토큰이 실제로 되는지는 시작 뒤 첫 회의에서 확인)")]
     cmd, env, _ = [c for c in srv.calls if c[0][0] == L.RUNUSER][0]
     claude = os.path.join(srv.lib, ".local", "bin", "claude")
     assert cmd == [L.RUNUSER, "-u", "paperbot", "--", claude, "--setting-sources", "", "auth", "status", "--json"]
@@ -884,3 +964,263 @@ def test_secret_values_and_scrub():
     assert TS_IP not in secrets and "total=80:2000000" not in secrets
     text = L.scrub(f"{KEY} {DEADMAN} /0f3c1d2e-aaaa-bbbb-cccc-1234567890ab {DASH_SECRET} {TS_IP}", secrets)
     assert text == f"*** *** /*** *** {TS_IP}"
+
+
+# ---------------------------------------------------------------- what the owner guide promises
+def install_offsite(srv, stage):
+    on = stage == "after"
+    srv.units[L.OFFSITE_TIMER] = {"LoadState": "loaded", "UnitFileState": "enabled" if on else "disabled",
+                                  "ActiveState": "active" if on else "inactive"}
+    srv.units["paperbot-offsite.service"] = {"LoadState": "loaded", "Result": "success"}
+    srv.write_env("live", live_env(TELEGRAM_CHAT_BACKUP="-1007777777777"))
+
+
+def notes(out):
+    return [r for r in out.splitlines() if r.startswith("[참고] ")]
+
+
+def test_a_healthy_server_shows_only_the_notes_the_guide_names(tmp_path, lab_ref):
+    """docs/server-setup-v3.md 10 and 12 name the [참고] lines a correctly set-up server shows: keep them
+    in step with the guide."""
+    srv = Server(tmp_path / "b", "before")
+    install_offsite(srv, "before")
+    code, out = run_main(srv, lab_ref, ["--stage", "before", "--send-test", "--ping"])
+    assert code == 0, out
+    assert len(notes(out)) == 1 and notes(out)[0].startswith("[참고] 이제 체크가 켜졌습니다: 약 6분"), out
+    assert out.splitlines()[-2].startswith("[OK] 시작 준비가 끝났습니다")
+    assert out.splitlines()[-2].endswith("paperbot-labmonthly.timer paperbot-offsite.timer")
+    srv = Server(tmp_path / "a", "after")
+    install_offsite(srv, "after")
+    code, out = run_main(srv, lab_ref, ["--stage", "after"])
+    assert code == 0 and notes(out) == [], out
+    assert out.splitlines()[-1].startswith("[OK] 봇이 정상으로 돌고 있습니다")
+    # the server's install.sh does not install the off-site copy yet: one more note, with its install command
+    srv = Server(tmp_path / "a2", "after")
+    code, out = run_main(srv, lab_ref, ["--stage", "after"])
+    assert code == 0 and len(notes(out)) == 1 and L.OFFSITE_INSTALL in notes(out)[0]
+
+
+def test_start_command_follows_the_agent_rooms(tmp_path, lab_ref):
+    srv = Server(tmp_path)
+    states = L.unit_states(srv.ctx())
+    assert L.start_command(states, True) == L.START_CMD + " paperbot-agents.timer paperbot-labmonthly.timer"
+    srv = Server(tmp_path / "n", "before", agents=False)
+    code, out = run_main(srv, lab_ref, ["--stage", "before"])
+    assert code == 0 and out.splitlines()[-2].endswith(L.START_CMD)
+    assert "에이전트 방 타이머 꺼져 있음" in out                     # not wanted: a note, as before
+
+
+def test_agents_wanted_only_by_the_token_says_how_to_start_without_them(tmp_path, lab_ref):
+    srv = Server(tmp_path)
+    shutil.rmtree(os.path.join(srv.lib, "lab"))
+    code, out = run_main(srv, lab_ref, ["--stage", "before"])
+    assert code == 1 and "5년 시험 자료 폴더가 없습니다" in out and "`--agents no`를 붙여 점검하고 봇을 먼저" in out
+    code, out = run_main(srv, lab_ref, ["--stage", "before", "--agents", "no"])
+    assert code == 0 and out.splitlines()[-2].endswith(L.START_CMD)
+    code, out = run_main(srv, lab_ref, ["--stage", "before", "--agents", "yes"])
+    assert code == 1 and "--agents no" not in out                  # asked for explicitly: no way around
+
+
+# ---------------------------------------------------------------- secrets in error messages
+def test_a_token_with_a_tab_never_reaches_the_screen(tmp_path, lab_ref, monkeypatch):
+    """http.client refuses a URL with a control character (InvalidURL, not an OSError) before it connects,
+    and its message quotes the URL with the tab escaped: only the error's type may be shown."""
+    tok = "123456789:AAH\t" + "x" * 32
+    srv = Server(tmp_path)
+    srv.write_env("live", live_env(TELEGRAM_BOT_TOKEN=tok))
+    srv.write_env("agents", agents_env().replace(f"TELEGRAM_BOT_TOKEN={TOKEN}", f"TELEGRAM_BOT_TOKEN={tok}"))
+    for var in ("HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setattr(urllib.request, "urlopen", REAL_URLOPEN)      # sockets stay refused (pytest.fail)
+    srv.routes["api.telegram.org"] = lambda m, url, h, data: L.http_fetch(m, url, h, data, 1.0)
+    code, out = run_main(srv, lab_ref, ["--stage", "before", "--send-test"])
+    assert code == 1 and "api.telegram.org에 연결하지 못함: InvalidURL" in out
+    flat = tok.replace("\t", "")
+    assert not any(flat[i:i + 10] in out for i in range(len(flat) - 9)), out
+    assert "\\t" + "x" * 8 not in out
+
+
+def test_scrub_covers_escaped_and_quoted_forms_and_cuts_errors_after_scrubbing():
+    tok = "123456789:AAH\t" + "x" * 32
+    assert L.scrub(f"bad url {tok!r} and {urllib.parse.quote(tok)}", [tok]) == "bad url '***' and ***"
+    # a secret across the cut (300th character) is scrubbed whole before the error line is cut
+    pad = "x" * (L.ERROR_MAX - 10 - len(L.ERROR_PREFIX) - len("RuntimeError: "))
+    line = L.guard(lambda: (_ for _ in ()).throw(RuntimeError(pad + SECRET)))[0]
+    assert line[1].endswith(SECRET)                                  # guard keeps it whole
+    out = []
+    L.report([("t", [line])], "before", [SECRET], out.append)
+    assert out[1].endswith(pad + "***") and SECRET[:4] not in out[1]
+    out = []
+    L.report([("t", L.guard(lambda: (_ for _ in ()).throw(RuntimeError("y" * 900))))], "before", [], out.append)
+    assert len(out[1]) == len("[고칠 것] ") + L.ERROR_MAX + 1 and out[1].endswith("y…")
+
+
+def test_binance_wrong_secret_is_refused_by_the_signature(tmp_path):
+    srv = Server(tmp_path)
+    srv.write_env("live", live_env(BINANCE_API_SECRET="w" * 64))
+    lines = binance(srv)
+    assert st(lines)[-1] == L.FIX and "-1022" in lines[-1][1] and "Secret Key" in lines[-1][1]
+
+
+def test_binance_key_with_a_space_sends_no_signed_request(tmp_path):
+    srv = Server(tmp_path)
+    srv.write_env("live", live_env(BINANCE_API_KEY=KEY[:30] + " " + KEY[30:]))
+    lines = binance(srv)
+    assert "공백이 있어 서명한 요청은 보내지 않았습니다" in lines[-1][1]
+    assert not [h for h in srv.http if "signature=" in h[1]]
+
+
+# ---------------------------------------------------------------- env files
+@pytest.mark.parametrize("token, expect", [
+    (CLAUDE[:50] + " " + CLAUDE[50:], "공백·줄바꿈"),
+    ("sk-ant-api03-" + "k" * 95, "API 키"),
+    ("my-claude-token-" + "q" * 60, "모양이 구독 토큰"),
+    ("sk-ant-oat01-" + "z" * 30, "너무 짧습니다(sk-ant-oat01- 뒤 30자"),
+])
+def test_claude_token_shape(tmp_path, token, expect):
+    srv = Server(tmp_path)
+    srv.write_env("agents", agents_env(token=token))
+    lines = L.check_env_files(srv.ctx(), srv.envs(), True)
+    f = [t for t in fixes(lines) if "CLAUDE_CODE_OAUTH_TOKEN" in t]
+    assert len(f) == 1 and expect in f[0] and token not in txt(lines)
+    assert not [t for t in fixes(L.check_env_files(srv.ctx(), srv.envs(), False)) if "CLAUDE" in t]
+
+
+def test_good_claude_token_and_empty_optional_chats_are_ok(tmp_path):
+    srv = Server(tmp_path)
+    srv.write_env("live", live_env(TELEGRAM_CHAT_INFO=""))
+    lines = L.check_env_files(srv.ctx(), srv.envs(), True)
+    assert set(st(lines)) == {L.OK}, lines
+    assert "TELEGRAM_CHAT_WARN=empty, TELEGRAM_CHAT_INFO=empty (비어 있는 방은 CRITICAL 방으로 갑니다)" in txt(lines)
+
+
+def test_nano_leftover_with_keys_must_be_removed(tmp_path):
+    srv = Server(tmp_path)
+    with open(os.path.join(srv.etc, "live.env.save"), "w") as fh:
+        fh.write(live_env())
+    f = fixes(L.check_env_files(srv.ctx(), srv.envs(), True))
+    assert len(f) == 1 and "live.env.save" in f[0] and f"sudo rm -f {srv.etc}/*.save*" in f[0]
+    assert KEY not in f[0]
+
+
+# ---------------------------------------------------------------- firewall
+def test_firewall_default_policy_and_other_open_rules(tmp_path):
+    srv = Server(tmp_path)
+    dash = srv.envs()["dash"]
+    srv.cmd_out[("ufw", "status")] = (0, UFW_OK.replace("Default: deny (incoming)", "Default: allow (incoming)"), "")
+    lines = L.check_tailscale(srv.ctx(), dash)
+    assert st(lines) == [L.OK, L.FIX] and "sudo ufw default deny incoming" in lines[1][1]
+    srv.cmd_out[("ufw", "status")] = (0, UFW_OK + "5432/tcp                   ALLOW IN    Anywhere\n"
+                                            "Anywhere                   ALLOW IN    203.0.113.5\n", "")
+    lines = L.check_tailscale(srv.ctx(), dash)
+    assert st(lines) == [L.OK, L.OK, L.NOTE]
+    assert "5432/tcp ALLOW IN Anywhere" in lines[2][1] and "203.0.113.5" in lines[2][1]
+    srv.cmd_out[("ufw", "status")] = (0, UFW_OK + "22/tcp                     LIMIT IN    Anywhere\n", "")
+    assert st(L.check_tailscale(srv.ctx(), dash)) == [L.OK, L.OK]
+
+
+# ---------------------------------------------------------------- services
+def test_old_restarts_of_a_service_running_fine_now_are_only_a_note(tmp_path):
+    srv = Server(tmp_path, "after")
+    states = L.unit_states(srv.ctx())
+    d = states["paperbot-dash.service"]
+    d.update(NRestarts="7", ActiveEnterTimestampMonotonic=str(MONO - 2 * DAY * 1000))
+    line = L.service_line("paperbot-dash.service", d, MONO)
+    assert line[0] == L.NOTE and "2일째 정상" in line[1] and "자동 재시작 7번" in line[1]
+    d["ActiveEnterTimestampMonotonic"] = str(MONO - 120 * 1_000_000)          # restarted 2 minutes ago
+    assert L.service_line("paperbot-dash.service", d, MONO)[0] == L.FIX
+    d["ActiveEnterTimestampMonotonic"] = "0"                                  # unknown: still crashing
+    assert "계속 죽는 중" in L.service_line("paperbot-dash.service", d, MONO)[1]
+    lines = L.check_units(states, "after", True, MONO)
+    assert L.FIX in st(lines)
+    d["ActiveEnterTimestampMonotonic"] = str(MONO - 3 * 3600 * 1_000_000)
+    lines = L.check_units(states, "after", True, MONO)
+    assert L.FIX not in st(lines) and "3시간째 정상" in txt(lines)
+
+
+def test_automatic_security_updates_off_is_a_note(tmp_path):
+    srv = Server(tmp_path)
+    srv.units[L.AUTO_UPDATES]["ActiveState"] = "inactive"
+    lines = L.check_units(L.unit_states(srv.ctx()), "before", True)
+    assert L.FIX not in st(lines) and "enable --now unattended-upgrades" in txt(lines)
+
+
+# ---------------------------------------------------------------- off-site copy
+def test_offsite_copy_section(tmp_path):
+    srv = Server(tmp_path)
+    states = L.unit_states(srv.ctx())
+    lines = L.check_offsite(srv.envs()["live"], states)
+    assert st(lines) == [L.NOTE] and L.OFFSITE_INSTALL in lines[0][1]
+    install_offsite(srv, "before")
+    srv.write_env("live", live_env())
+    lines = L.check_offsite(srv.envs()["live"], L.unit_states(srv.ctx()))
+    assert st(lines) == [L.NOTE] and "TELEGRAM_CHAT_BACKUP이 비어 있어" in lines[0][1]
+    install_offsite(srv, "before")
+    assert st(L.check_offsite(srv.envs()["live"], L.unit_states(srv.ctx()))) == [L.OK]
+    assert L.check_offsite(srv.envs()["live"], None) == []
+
+
+# ---------------------------------------------------------------- paper3.db, liq.db
+def test_reading_the_wal_databases_leaves_no_file_behind(tmp_path):
+    srv = Server(tmp_path, "after")
+    lib = sorted(os.listdir(srv.lib))
+    assert "paper3.db" in lib and "liq.db" in lib and not [n for n in lib if n.endswith(("-wal", "-shm"))]
+    db = L.read_paper_db(os.path.join(srv.lib, "paper3.db"))
+    assert db["heartbeat"] == NOW - 20_000 and db["run_ts"] == NOW - 2 * 3_600_000 and db["health"]["deadman"]
+    assert L.check_liq(srv.ctx())[0][0] == L.OK
+    assert sorted(os.listdir(srv.lib)) == lib
+    # the bot running (its connection open, -wal/-shm present): read through them, change nothing
+    writer = sqlite3.connect(os.path.join(srv.lib, "paper3.db"))
+    writer.execute("UPDATE state SET ts = ? WHERE k = 'heartbeat'", (NOW - 5_000,))
+    writer.commit()
+    assert L.read_paper_db(os.path.join(srv.lib, "paper3.db"))["heartbeat"] == NOW - 5_000
+    writer.close()
+
+
+def test_bar_lag_and_dead_man_pings_from_the_bots_health_row(tmp_path):
+    srv = Server(tmp_path, "after")
+    path = os.path.join(srv.lib, "paper3.db")
+    start, hb = NOW - 2 * 3_600_000, NOW - 20_000
+
+    def lines(health, start=start, deadman=True):
+        os.remove(path)
+        srv.make_db(start=start, heartbeat=hb, health=health)
+        return L.check_paper_db(srv.ctx(), "after", deadman)
+
+    f = fixes(lines({"last_bar": NOW - 20 * MIN, "deadman": {"last_ping": NOW - 18 * MIN, "failures": 0}}))
+    assert len(f) == 1 and "1분봉이 19분째 들어오지 않습니다" in f[0]          # no second line about the pings
+    f = fixes(lines({"last_bar": NOW - 90_000, "deadman": {"last_ping": None, "failures": 0}}))
+    assert len(f) == 1 and "핑을 보내지 못하고 있습니다(마지막 핑: 없음)" in f[0] and "restart paperbot-live3" in f[0]
+    out = lines({"last_bar": NOW - 90_000, "deadman": {"last_ping": NOW - 40_000, "failures": 3}})
+    assert L.FIX not in st(out) and "그동안 실패 3번" in txt(out)
+    # within ten minutes of the start nothing is judged yet
+    out = lines({"last_bar": None, "deadman": {"last_ping": None, "failures": 0}}, start=NOW - 3 * MIN)
+    assert L.FIX not in st(out) and "아직 준비 중" in txt(out)
+    out = lines({"last_bar": NOW - 90_000, "deadman": {"last_ping": None, "failures": 0}}, start=NOW - 3 * MIN)
+    assert L.FIX not in st(out) and "첫 healthchecks.io 핑을 기다리는 중" in txt(out)
+    # no DEADMAN_URL: the pings are not asked about; no health row: a note
+    assert "핑" not in txt(lines({"last_bar": NOW - 90_000, "deadman": {}}, deadman=False))
+    assert "health" in txt([x for x in lines(None) if x[0] == L.NOTE])
+
+
+def test_brackets_from_a_file_are_not_called_the_exchanges(tmp_path):
+    srv = Server(tmp_path, "after")
+    os.remove(os.path.join(srv.lib, "paper3.db"))
+    srv.make_db(start=NOW - 2 * 3_600_000, heartbeat=NOW - 20_000, brackets="file /etc/paperbot/brackets.json")
+    lines = L.check_paper_db(srv.ctx(), "after")
+    row = [x for x in lines if "레버리지 구간" in x[1]][0]
+    assert row[0] == L.NOTE and "file /etc/paperbot/brackets.json" in row[1] and "거래소 실제 값" not in row[1]
+
+
+def test_liquidation_recorder_connection(tmp_path):
+    srv = Server(tmp_path, "after")
+    assert "연결됨" in L.check_liq(srv.ctx())[0][1]
+    srv.make_liq([(NOW - 20 * MIN, "disconnected")])
+    line = L.check_liq(srv.ctx())[0]
+    assert line[0] == L.FIX and "20분째" in line[1] and "journalctl -u paperbot-liq" in line[1]
+    srv.make_liq([(NOW - 19 * MIN, "connected")])
+    assert L.check_liq(srv.ctx())[0][0] == L.OK
+    srv.make_liq([(NOW - 60_000, "disconnected")])
+    assert L.check_liq(srv.ctx())[0][0] == L.NOTE
+    os.remove(os.path.join(srv.lib, "liq.db"))
+    assert "liq.db가 없습니다" in fixes(L.check_liq(srv.ctx()))[0]
