@@ -19,6 +19,7 @@ from .quant import copilot, entry, footprint, forecast, portfolio, risk, toptrad
 from .quant.scanner import scanner
 from .auth import PasswordMiddleware
 from .team import engine as team
+from .office import engine as office
 from .strategy import StrategySpec, validate
 
 paper = PaperManager()
@@ -26,6 +27,7 @@ copilot.bind(paper)
 team.bind(paper)
 autopilot.bind(paper)
 ai_auto.bind(paper)
+office.bind(paper)
 
 
 @asynccontextmanager
@@ -37,6 +39,7 @@ async def lifespan(_app: FastAPI):
     team.start()
     autopilot.start()
     ai_auto.start()
+    office.start()
     yield
 
 
@@ -220,6 +223,97 @@ def news_brief(limit: int = 15):
         _brief_cache.clear()
         _brief_cache[key] = {b.id: b.model_dump() for b in brief.items}
     return {"items": _brief_cache[key]}
+
+
+# ------------------------------------------------------------------ AI 사무실 (코인팀 · 퀀트 연구소 · 전략·리스크팀 · 데이터·미디어팀)
+@app.get("/api/office/state")
+def office_state(since: int = 0, visible: bool = True):
+    if visible:
+        office.RT["visible"] = time.time()
+    return office.snapshot_state(since)
+
+
+@app.get("/api/office/roster")
+def office_roster():
+    return office.roster_view()
+
+
+class OfficeAsk(BaseModel):
+    text: str
+    room: str = "hq"
+
+
+@app.post("/api/office/ask")
+def office_ask(req: OfficeAsk):
+    try:
+        return office.ask(req.text, req.room)
+    except ValueError as e:
+        _bad(e)
+
+
+@app.post("/api/office/agenda/{agenda_id}")
+def office_agenda(agenda_id: str):
+    try:
+        return office.run_agenda(agenda_id)
+    except ValueError as e:
+        _bad(e)
+
+
+@app.post("/api/office/job")
+def office_job(job: Optional[str] = None):
+    """지금 일 시키기 (job 을 비우면 다음 차례 업무)."""
+    import threading
+    if office.RT["job"]:
+        _bad(ValueError(f"지금 '{office.JOB_KO.get(office.RT['job'])}' 중입니다. 끝나면 다시 눌러 주세요."))
+    if job and job not in office.JOB_FN:
+        _bad(ValueError("없는 업무입니다"))
+    threading.Thread(target=(lambda: office._safe_job(job)) if job else office.cycle, daemon=True).start()
+    return {"ok": True}
+
+
+@app.post("/api/office/report")
+def office_report():
+    import threading
+    threading.Thread(target=office.report, kwargs={"manual": True}, daemon=True).start()
+    return {"ok": True}
+
+
+@app.get("/api/office/reports")
+def office_reports():
+    return {"items": office.reports()}
+
+
+@app.get("/api/office/backlog")
+def office_backlog():
+    return {"items": office.backlog()}
+
+
+@app.get("/api/office/forecasts")
+def office_forecasts():
+    return {"items": [office._fc_view(f) for f in reversed(office.ST["forecasts"][-100:])], "score": office.forecast_score()}
+
+
+@app.post("/api/office/cfg")
+def office_cfg(body: dict):
+    return office.set_cfg(body)
+
+
+@app.post("/api/office/stop")
+def office_stop():
+    office.RT["stop_meeting"] = True
+    return {"ok": True}
+
+
+@app.post("/api/office/rate/{entry_id}")
+def office_rate(entry_id: int, v: int = 1):
+    office.rate(entry_id, v)
+    return {"ok": True}
+
+
+@app.post("/api/office/clear")
+def office_clear():
+    office.clear_log()
+    return {"ok": True}
 
 
 class MLReq(BaseModel):

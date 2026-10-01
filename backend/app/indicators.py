@@ -426,6 +426,8 @@ REGISTRY: dict[str, dict] = {
     "cmf": {"outputs": ["value"], "defaults": {"length": 20}, "desc": "차이킨 자금 흐름", "tv": None},
     "aroon": {"outputs": ["up", "down"], "defaults": {"length": 25}, "desc": "아룬 (0~100)", "tv": None},
     "atr_stop": {"outputs": ["line", "trend"], "defaults": {"length": 14, "mult": 3.0}, "desc": "ATR 추적 손절선 (UT Bot 계열, trend ±1)", "tv": None},
+    "custom": {"outputs": ["value"], "defaults": {},
+               "desc": "사용자 수식 지표 — expr 에 수식 (예: zscore(close, 50), (close - close[20]) / ind(\"atr\",{length:14})). 문법은 CUSTOM_DOC", "tv": None},
     "ml": {"outputs": ["prob", "signal"], "defaults": {"model": "logreg", "horizon": 1},
            "desc": "머신러닝·딥러닝 방향 예측 (롤링 재학습 표본 외 확률). model: logreg·mlp·gbs·dnn(딥 3층)·cnn(1D 합성곱). "
                    "prob = horizon 봉 뒤 상승 확률(0~1), signal = +1(prob>0.55)/-1(prob<0.45)/0. 예: ml.prob > 0.6", "tv": None},
@@ -498,6 +500,10 @@ def compute(c: list[dict], type_: str, params: dict | None = None) -> dict[str, 
         return aroon(c, n)
     if type_ == "atr_stop":
         return atr_stop(c, n, float(p["mult"]))
+    if type_ == "custom":                 # 문맥 없이 부르면 가격 변수만 (전략 안에서는 strategy.build_series 가 계산)
+        from .quant import customind
+        expr = p.get("expr") or ""
+        return {"value": customind.evaluate(expr, c, {f: _src(c, f) for f in ("open", "high", "low", "close", "volume", "hl2", "hlc3", "ohlc4")}) if expr else [None] * len(c)}
     if type_ == "ml":
         from .quant import ml
         try:

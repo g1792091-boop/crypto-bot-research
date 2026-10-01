@@ -24,7 +24,7 @@ from . import indicators as ind
 IndicatorType = Literal[
     "sma", "ema", "rsi", "macd", "bb", "atr", "stoch", "supertrend", "adx",
     "cci", "vwap", "obv", "highest", "lowest", "volume_sma",
-    "wma", "hma", "vwma", "mfi", "willr", "roc", "psar", "donchian", "keltner", "stochrsi", "ichimoku", "cmf", "aroon", "atr_stop", "ml",
+    "wma", "hma", "vwma", "mfi", "willr", "roc", "psar", "donchian", "keltner", "stochrsi", "ichimoku", "cmf", "aroon", "atr_stop", "ml", "custom",
 ]
 Op = Literal[">", "<", ">=", "<=", "crosses_above", "crosses_below", "rising", "falling"]
 
@@ -42,6 +42,7 @@ class IndicatorSpec(BaseModel):
     source: Optional[Literal["close", "open", "high", "low", "hl2", "hlc3", "ohlc4"]] = None
     model: Optional[Literal["logreg", "mlp", "gbs", "dnn", "cnn"]] = Field(None, description="type=ml 일 때 모델")
     horizon: Optional[int] = Field(None, description="type=ml 일 때 몇 봉 뒤 방향을 예측할지")
+    expr: Optional[str] = Field(None, description="type=custom 일 때 수식 (예: (close - close[20]) / ind(\"atr\",{length:14}))")
 
     def params(self) -> dict:
         return self.model_dump(exclude={"id", "type"}, exclude_none=True)
@@ -105,19 +106,11 @@ def _align(candles: list[dict], points: list[dict]) -> list:
     return out
 
 
-def build_series(spec: StrategySpec, candles: list[dict], deriv: dict | None = None) -> dict[str, list]:
+def build_series(spec: StrategySpec, candles: list[dict], deriv: dict | None = None,
+                 extra: dict[str, list] | None = None) -> dict[str, list]:
     s: dict[str, list] = {}
     for f in PRICE_FIELDS:
         s[f] = ind._src(candles, f)
-    for spec_i in spec.indicators:
-        res = ind.compute(candles, spec_i.type, spec_i.params())
-        for out_name, series in res.items():
-            s[f"{spec_i.id}.{out_name}"] = series
-        if len(res) == 1 or "value" in res:
-            s[spec_i.id] = res.get("value", next(iter(res.values())))
-        elif "line" in res:
-            s[spec_i.id] = res["line"]
-    s["__atr14"] = ind.atr(candles, 14)
     deriv = deriv or {}
     if deriv.get("funding"):
         s["funding"] = _align(candles, deriv["funding"])
@@ -133,6 +126,21 @@ def build_series(spec: StrategySpec, candles: list[dict], deriv: dict | None = N
     # 파생 데이터가 없으면 None 시리즈 → 해당 조건은 항상 거짓 (백테스트가 경고로 알려 줌)
     for f in DERIV_FIELDS:
         s.setdefault(f, [None] * len(candles))
+    for k, v in (extra or {}).items():          # 외부 시리즈 (ml_prob 등) — 수식 지표에서 쓴다
+        s[k] = v
+    for spec_i in spec.indicators:
+        if spec_i.type == "custom":             # 수식 지표: 앞에서 만든 시리즈를 변수로 쓴다
+            from .quant import customind
+            res = {"value": customind.evaluate(spec_i.expr or "", candles, s)}
+        else:
+            res = ind.compute(candles, spec_i.type, spec_i.params())
+        for out_name, series in res.items():
+            s[f"{spec_i.id}.{out_name}"] = series
+        if len(res) == 1 or "value" in res:
+            s[spec_i.id] = res.get("value", next(iter(res.values())))
+        elif "line" in res:
+            s[spec_i.id] = res["line"]
+    s["__atr14"] = ind.atr(candles, 14)
     return s
 
 
@@ -218,9 +226,9 @@ def eval_group(series: dict[str, list], g: ConditionGroup | None, n: int) -> lis
     return [all(p[i] for p in parts) for i in range(n)]
 
 
-def signals(spec: StrategySpec, candles: list[dict], deriv: dict | None = None) -> dict:
+def signals(spec: StrategySpec, candles: list[dict], deriv: dict | None = None, extra: dict | None = None) -> dict:
     n = len(candles)
-    series = build_series(spec, candles, deriv)
+    series = build_series(spec, candles, deriv, extra)
     return {
         "long_entry": eval_group(series, spec.long_entry, n),
         "short_entry": eval_group(series, spec.short_entry, n),
@@ -246,6 +254,11 @@ def validate(spec: StrategySpec) -> list[str]:
     known = set(PRICE_FIELDS) | DERIV_FIELDS | ids
     for i in spec.indicators:
         known |= {f"{i.id}.{o}" for o in ind.REGISTRY[i.type]["outputs"]}
+        if i.type == "custom":
+            from .quant import customind
+            err = customind.check(i.expr or "") if i.expr else "수식(expr)이 비어 있습니다"
+            if err:
+                problems.append(f"수식 지표 '{i.id}': {err}")
     for name in referenced_names(spec):
         if name not in known:
             problems.append(f"조건식이 정의되지 않은 시리즈를 참조합니다: {name}")
