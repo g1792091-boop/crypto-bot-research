@@ -105,7 +105,7 @@ def test_overview(env):
     c = env["client"]
     _login(c)
     ov = c.get("/api/rooms").json()
-    assert ov["ready"] is True and len(ov["rooms"]) == 41
+    assert ov["ready"] is True and len(ov["rooms"]) == 42
     by = {r["room_id"]: r for r in ov["rooms"]}
     assert [r["room_id"] for r in ov["rooms"][:5]] == ["team:market", "team:risk", "team:ops", "team:review", "team:lead"]
     r = by[ROOM]
@@ -278,7 +278,7 @@ def test_without_agents_db(tmp_path):
     c = TestClient(app)
     _login(c)
     ov = c.get("/api/rooms").json()
-    assert ov["ready"] is False and len(ov["rooms"]) == 41 and all(r["last_id"] == 0 for r in ov["rooms"])
+    assert ov["ready"] is False and len(ov["rooms"]) == 42 and all(r["last_id"] == 0 for r in ov["rooms"])
     assert c.get(f"/api/rooms/{ROOM}/messages").json()["messages"] == []
     assert c.get("/api/proposals").json() == [] and c.get("/api/trials").json()["counts"]["total"] == 0
     assert c.get("/api/agents/usage").json()["calls"] == 0
@@ -289,7 +289,7 @@ def test_without_agents_db(tmp_path):
     # no inbox configured: owner writes are refused, reads still work
     c2 = TestClient(create_app(str(tmp_path / "paper3.db"), None, SECRET))
     assert c2.post(f"/api/rooms/{ROOM}/say", json={"text": "hi"}).status_code == 503
-    assert len(c2.get("/api/rooms").json()["rooms"]) == 41
+    assert len(c2.get("/api/rooms").json()["rooms"]) == 42
 
 
 def test_budget_caps_and_schedule(monkeypatch):

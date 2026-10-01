@@ -16,6 +16,11 @@ the fixed lists, becomes ``no_action`` (the room is told why).
     flag_owners    a short Telegram message to the owners (INFO or WARN, 3 per KST day)
     no_action      nothing
 
+The new-strategy lab (team:lab, rooms._lab_round) has no model action: code checks each spec the
+researcher wrote (``newlab.normalize_spec``, a repeat by hash is shown, never re-run), runs it
+(``newlab_test``), stores every counted test as an append-only 'newlab' trial, and for a pass posts the
+proposal, tells the owners once by Telegram (``newlab_propose``) and creates nothing.
+
 Copy accounts are NOT created here. An 'approved' proposal only waits for the future
 copy-account feature of the live runner (paper3.db has one writer: the live runner).
 All texts for the owners are Korean and written by code from stored numbers. A line posted
@@ -40,6 +45,10 @@ try:  # the lab stream (5-year tests); the engine works without it (tests are th
     from . import labtests as _lab
 except ImportError:  # pragma: no cover - only while the lab module is missing
     _lab = None
+try:  # the new-strategy lab (newlab.py); without it the lab room cannot test
+    from . import newlab as _nl
+except ImportError:  # pragma: no cover
+    _nl = None
 
 ALLOWED_ACTIONS = ("note", "hypothesis", "request_test", "propose_copy", "flag_owners", "no_action")
 ACTION_KO = {"note": "메모 남기기", "hypothesis": "가설 기록", "request_test": "5년 시험 요청",
@@ -591,3 +600,183 @@ def summary_numbers(res: dict) -> dict:
     """Numbers for the round summary, from code results only."""
     return json.loads(json.dumps({k: res.get(k) for k in ("trial_id", "status", "proposal_id", "n_trials")
                                   if res.get(k) is not None}, default=str))
+
+
+# ---------------------------------------------------------------- the new-strategy lab (team:lab)
+NEWLAB = "newlab"                       # trial kind (rooms_db.TRIAL_KINDS)
+
+
+def newlab_module():
+    return _nl
+
+
+def newlab_count(conn: Optional[sqlite3.Connection]) -> int:
+    """Counted new-strategy tests in ALL rooms: the ``n`` of the lab's gate (docs/newlab-prereg.md 5)."""
+    return R.trial_count(conn, kinds=(NEWLAB,))
+
+
+def newlab_exhausted(conn: Optional[sqlite3.Connection]) -> bool:
+    """No further test can pass gate (a) any more (``newlab.gate``'s can_pass_at_this_n is n <= max_passable_n):
+    the lab stops testing."""
+    return _nl is None or newlab_count(conn) > _nl.max_passable_n()
+
+
+def newlab_hashes(conn: sqlite3.Connection) -> dict:
+    """{spec hash: latest trial id} of every counted test (the stored spec is newlab's canonical form, so the
+    ledger's spec_hash is newlab.spec_hash)."""
+    return {h: int(i) for h, i in conn.execute("SELECT spec_hash, MAX(id) FROM trials WHERE kind = ? "
+                                               "GROUP BY spec_hash", (NEWLAB,)).fetchall()}
+
+
+_GATE_KEYS = ("start", "end", "cache", "available", "why", "trades", "mean_roe", "win_rate", "mean_pnl_equity", "p",
+              "coins_pos", "coins_n", "signals", "long_trades")
+
+
+def _gate_input(result: dict) -> dict:
+    """The periods as ``newlab.gate`` reads them (no per-coin arrays): enough to judge the stored test
+    again with a later count."""
+    out = {}
+    for pid, row in (result.get("periods") or {}).items():
+        if not isinstance(row, dict):
+            continue
+        r = {k: row[k] for k in _GATE_KEYS if k in row}
+        cf = row.get("coinflip") if isinstance(row.get("coinflip"), dict) else None
+        if cf is not None:
+            r["coinflip"] = {k: cf.get(k) for k in ("mean_roe", "trades", "diff", "p")}
+        out[str(pid)] = r
+    return out
+
+
+def _newlab_body(result: dict, idea: str = "") -> dict:
+    return {"ledger": _nl.ledger_row(result), "gate": result.get("gate"), "gate_input": _gate_input(result),
+            "description_ko": result.get("description_ko"), "summary_ko": result.get("summary_ko"),
+            "notes": result.get("notes") or ({"idea": idea} if idea else {}),
+            "test_number": result.get("test_number"), "n_tests_so_far": result.get("n_tests_so_far"),
+            "runtime_s": result.get("runtime_s"), "proposal": None}
+
+
+def newlab_stored(trial: Optional[dict]) -> tuple[Optional[str], dict]:
+    """(latest status, body) of a stored 'newlab' trial."""
+    return _stored(trial)
+
+
+def newlab_gate_now(conn: sqlite3.Connection, trial: dict) -> tuple[dict, int]:
+    """The gate of a stored test judged with the count NOW: n = every other counted test (at least the n it
+    was run with). Fails closed."""
+    st, body = _stored(trial)
+    n_then = _row_id(body.get("n_tests_so_far")) or 0
+    n_now = max(n_then, newlab_count(conn) - 1)
+    gi = body.get("gate_input")
+    if _nl is None or not isinstance(gi, dict) or not gi:
+        return {"pass": False, "reasons": ["저장된 결과를 다시 판정할 수 없어 통과로 보지 않습니다."]}, n_now
+    try:
+        g = _nl.gate({"ok": True, "status": "done", "periods": gi}, n_now)
+    except Exception as exc:  # a broken stored result never passes
+        return {"pass": False, "reasons": [f"다시 판정하지 못함: {type(exc).__name__}"]}, n_now
+    return {**g, "pass": g.get("pass") is True}, n_now
+
+
+def newlab_test(env: ActionEnv, spec: dict, *, idea: str = "") -> dict:
+    """Run one canonical spec (already checked and not in the ledger) on the lab cache, with n = the global
+    count. A counted test is stored as a 'newlab' trial with its result in one transaction and posted as a
+    code result; a run that did not count (no data, a repeat, an error) is posted and stored nowhere.
+    Never raises. Returns {status: passed|failed|not_counted|error, trial_id?, result?, ...}."""
+    if _nl is None:
+        env.post("system", "새 매매법 시험 엔진(newlab.py)이 없어 시험하지 못했습니다.", {"newlab": True, "status": "error"})
+        return {"status": "error", "counted": False}
+    n = newlab_count(env.conn)
+    run = {**spec, **({"idea": idea[:500]} if idea else {})}
+    try:
+        result = _nl.run_new_strategy(run, env.lab, n, tested_hashes=newlab_hashes(env.conn))
+    except Exception as exc:  # a bug or a bad cache: told, not counted, the tick goes on
+        why = f"{type(exc).__name__}: {str(exc)[:200]}"
+        env.post("system", f"🔬 새 매매법 시험 중 오류가 나서 멈췄습니다({why}). 결과를 보지 못했으므로 시험 수에 넣지 "
+                           "않습니다.", {"newlab": True, "status": "error", "spec": spec, "error": why})
+        return {"status": "error", "counted": False, "error": why, "spec": spec}
+    if not _nl.counts_as_test(result):
+        env.post("system", f"🔬 {result.get('summary_ko') or '시험하지 못했습니다'} (시험 수에 넣지 않음)",
+                 {"newlab": True, "status": result.get("status"), "spec": spec, "error": result.get("error")})
+        return {"status": "not_counted", "counted": False, "why": result.get("status"), "spec": spec,
+                "error": result.get("error")}
+    gate = result.get("gate") or {}
+    status = "passed" if gate.get("pass") is True else "failed"
+    body = _newlab_body(result, idea)
+    try:
+        tid = R.add_trial_with_result(env.conn, env.room_id, None, NEWLAB, result["spec"], status, body,
+                                      env.round_id, ts=env.now_ms)
+    except sqlite3.Error as exc:     # e.g. an agents3.db made before the 'newlab' kind: told, not counted
+        env.post("system", f"🔬 새 매매법 시험 결과를 장부에 적지 못했습니다({type(exc).__name__}). 이 서버의 agents3.db가 "
+                           "새 매매법 장부보다 오래된 것일 수 있습니다(docs/agent-rooms.md).",
+                 {"newlab": True, "status": "error", "spec": spec})
+        return {"status": "error", "counted": False, "spec": spec}
+    env.post("code_result", f"🔬 새 매매법 시험 결과 (장부 #{tid}, 코드 계산)\n{result.get('summary_ko', '')}",
+             {"newlab": True, "trial_id": tid, "status": status, "spec": result["spec"], "spec_hash": result.get("spec_hash"),
+              "gate": gate, "ledger": body["ledger"], "test_number": result.get("test_number")})
+    return {"status": status, "counted": True, "trial_id": tid, "spec": result["spec"], "gate": gate,
+            "test_number": result.get("test_number"), "description_ko": result.get("description_ko"),
+            "ledger": body["ledger"]}
+
+
+def newlab_pending(conn: sqlite3.Connection) -> list[dict]:
+    """Counted tests that passed when they ran and were never proposed (oldest first)."""
+    return R.trials_by_status(conn, NEWLAB, ("passed",), limit=200)[::-1]
+
+
+def newlab_propose(env: ActionEnv, trial: dict) -> dict:
+    """A stored pass: judged again with the count NOW (newlab_gate_now); still passing -> post the proposal
+    (newlab.proposal_of: a new paper account with the same paper v3 rules, the owners' OK needed), append a
+    'proposed' result to the ledger and tell the owners once by Telegram. Creates nothing. Failing now ->
+    a 'lapsed' result. During the observation period: nothing (the pass waits in the ledger)."""
+    tid = int(trial["id"])
+    st, body = _stored(trial)
+    if st != "passed":
+        return {"proposed": False, "why": st}
+    if env.observing:
+        return {"proposed": False, "why": "observing"}
+    gate, n_now = newlab_gate_now(env.conn, trial)
+    desc = body.get("description_ko") or ""
+    if gate.get("pass") is not True:
+        R.add_trial_result(env.conn, tid, "lapsed", {**body, "gate_now": gate, "n_tests_now": n_now}, ts=env.now_ms)
+        env.post("system", f"새 매매법 장부 #{tid}({desc})는 시험 때 관문을 통과했지만, 지금까지의 새 매매법 시험 수({n_now:,}개 "
+                           f"뒤)로 다시 판정하면 통과하지 못해 제안하지 않습니다(기준 p < {0.05 / (n_now + 1):.3g}).",
+                 {"newlab": True, "trial_id": tid, "status": "lapsed", "gate": gate, "n_tests_now": n_now})
+        return {"proposed": False, "why": "lapsed", "gate": gate}
+    like = {"ok": True, "status": "done", "spec": trial["spec"], "spec_hash": trial.get("spec_hash"),
+            "description_ko": desc, "summary_ko": body.get("summary_ko") or "", "periods": body.get("gate_input")}
+    prop = _nl.proposal_of(like, n_tests_now=n_now)
+    if prop is None:                                         # cannot happen when gate passed; fail closed
+        return {"proposed": False, "why": "no_proposal"}
+    R.add_trial_result(env.conn, tid, "proposed", {**body, "proposal": prop, "n_tests_now": n_now,
+                                                   "proposed_ts": env.now_ms}, ts=env.now_ms)
+    env.post("action", f"📄 새 매매법 제안 (장부 #{tid}): {desc}\n5년 시험 관문을 통과했습니다(새 매매법 시험 {n_now + 1:,}번 기준으로 "
+                       "다시 판정해도 통과). 같은 규칙(paper v3: 청산·크기·비용 그대로)의 새 paper 계좌로 새 자료에서 확인하자는 "
+                       "제안이며, 두 분 OK가 있어야 시작합니다. 지금은 아무것도 자동으로 만들지 않습니다(새 paper 계좌로 돌리는 "
+                       "기능은 다음 단계).",
+             {"newlab": True, "action": "newlab_proposal", "trial_id": tid, "proposal": prop})
+    sent = newlab_alert(env, tid, prop, body.get("test_number"))
+    return {"proposed": True, "trial_id": tid, "proposal": prop, "telegram": sent}
+
+
+def newlab_alert(env: ActionEnv, trial_id: int, proposal: dict, test_number: Any = None) -> bool:
+    """One Telegram message per pass (never twice for the same strategy: the mark is written before the send).
+    Code-written text only (the spec's Korean description from code); not counted in the daily flag limit."""
+    key = f"newlab_alert:{proposal.get('spec_hash') or trial_id}"
+    if R.get_cursor(env.conn, key) is not None:
+        return False
+    R.set_cursor(env.conn, key, env.now_ms)
+    num = f", 새 매매법 시험 {int(test_number):,}번째" if _row_id(test_number) else ""
+    text = (f"[에이전트 알림] {env.room_title or env.room_id}: 새 매매법이 5년 시험 관문을 통과했습니다 (장부 #{trial_id}{num}). "
+            f"{telegram_safe(str(proposal.get('description_ko') or ''))}. 새 paper 계좌로 새 자료에서 확인하자는 제안이며 "
+            "두 분 OK가 있어야 시작합니다(자동으로 만드는 것은 없음). 대시보드 '에이전트 방'의 새 매매법 연구실에서 보세요.")
+    try:
+        ok = env.notifier.send(WARN, text)
+    except Exception as exc:  # delivery must not break the round
+        ok, why = False, type(exc).__name__
+    else:
+        why = "텔레그램이 받지 않음"
+    if ok is False:
+        env.post("system", f"새 매매법 통과 알림 전송 실패: {why}", {"newlab": True, "trial_id": trial_id, "sent": False})
+        return False
+    env.post("action", f"📣 두 분께 새 매매법 통과 알림(텔레그램, {WARN})을 보냈습니다 (장부 #{trial_id}).",
+             {"action": "newlab_alert", "trial_id": trial_id, "sent": True, "level": WARN})
+    return True

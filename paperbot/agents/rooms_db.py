@@ -746,6 +746,30 @@ def trial_history(conn: Optional[sqlite3.Connection], strategy: Optional[str] = 
     return _safe(conn, lambda: _trial_rows(conn, " AND ".join(where), tuple(args), limit), [])
 
 
+def trials_by_status(conn: Optional[sqlite3.Connection], kind: str, statuses: Iterable[str],
+                     limit: int = 200) -> list[dict]:
+    """Trials of one kind whose LATEST result has one of these statuses, newest first."""
+    st = list(statuses)
+    if not st:
+        return []
+    return _safe(conn, lambda: _trial_rows(conn, f"t.kind = ? AND r.status IN ({','.join('?' * len(st))})",
+                                           (kind, *st), limit), [])
+
+
+def trial_index(conn: Optional[sqlite3.Connection], kind: str) -> list[dict]:
+    """Every trial of one kind, oldest first: id, spec, spec_hash and its latest result status (no result
+    bodies, so it stays cheap for thousands of rows)."""
+    def q():
+        rows = _dicts(conn.execute(
+            "SELECT t.id, t.spec, t.spec_hash, (SELECT status FROM trial_results WHERE id = "
+            "(SELECT MAX(id) FROM trial_results WHERE trial_id = t.id)) AS status FROM trials t WHERE t.kind = ? "
+            "ORDER BY t.id", (kind,)))
+        for r in rows:
+            r["spec"] = _loads(r["spec"])
+        return rows
+    return _safe(conn, q, [])
+
+
 def trial_count(conn: Optional[sqlite3.Connection], room_id: Optional[str] = None, strategy: Optional[str] = None,
                 kinds: Iterable[str] = ("test",)) -> int:
     """How many trials of these kinds a room (or strategy) has made -- the Bonferroni divisor."""
