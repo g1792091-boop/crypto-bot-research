@@ -1,17 +1,23 @@
 """All paper v3 accounts in one process: one ``PaperEngine`` per account.
 
 An account is one strategy on one timeframe (``"V45_AMB@15m"``), a coin-flip
-account (``"RANDOM_1@15m"``), or later an improved copy approved by the agent
-team (its own id, ``parent`` set). Every engine sees the same 1m bars; each
-receives only its own signals.
+account (``"RANDOM_1@15m"``), or an extra account started by the runtime from an
+approved proposal (paperbot/extras.py: a copy ``"S@15m~c1"`` with ``parent`` set, or
+a new strategy ``"NL1@1h"``). Every engine sees the same 1m bars; each receives
+only its own signals.
 
 After every step the book writes each engine's state to the store, so a
 restart continues exactly where it stopped (``AccountBook.load``).
+
+The original accounts (kinds in ``ORIGINAL_KINDS``) always get the book's own
+settings object, ``PaperEngine`` and the book's digest. Only an extra account may
+be built differently: ``load(make_of)`` and ``add_extra`` take per-account
+settings / engine class / digest, and ``HeldEngine`` keeps an account frozen.
 """
 
 from __future__ import annotations
 
-from typing import Iterable, Optional
+from typing import Callable, Iterable, Optional
 
 from .config import Settings
 from .engine import PaperEngine, engine_state, restore_engine
@@ -22,6 +28,7 @@ from .store3 import Store3
 
 STATE_KEY = "accounts"
 DAY_MS = 86_400_000
+ORIGINAL_KINDS = ("strategy", "random")
 
 
 def day_key(ts: int) -> str:
@@ -50,6 +57,23 @@ class _StoreNotifier:
             self.digest.add(text)
 
 
+class HeldEngine(PaperEngine):
+    """An account kept exactly as saved: ``step`` and ``submit`` do nothing (no stop checks, no fills,
+    equity flat at the saved state). Used for an extra account whose rules cannot be known."""
+
+    def step(self, bars, funding=None) -> None:
+        return None
+
+    def submit(self, signal: Signal) -> None:
+        return None
+
+
+def hold_others(row: dict) -> Optional[dict]:
+    """``load(make_of=...)`` when the extras code is unavailable: the originals as always, every other
+    account held at its saved state."""
+    return None if row.get("kind") in ORIGINAL_KINDS else {"cls": HeldEngine}
+
+
 class AccountBook:
     def __init__(self, settings: Settings, brackets: dict[str, Brackets], store: Store3,
                  notifier: Optional[Notifier] = None, specs: Optional[dict] = None,
@@ -69,17 +93,23 @@ class AccountBook:
         self._now = 0
 
     # ------------------------------------------------------------ setup
-    def _make(self, aid: str) -> PaperEngine:
+    def _make(self, aid: str, settings: Optional[Settings] = None, cls=None,
+              digest: Optional[Digest] = None) -> PaperEngine:
+        """One engine. The defaults (the book's settings object, PaperEngine, the book's digest) are
+        what every original account gets; an extra account may pass its own."""
         def on_trade(rec, aid=aid):
             self.store.trade(aid, rec)
 
         def on_outcome(out, aid=aid):
             self.store.outcome(aid, out)
 
-        return PaperEngine(self.s, self.brackets, notifier=_StoreNotifier(self.store, self.notifier,
-                                                                        lambda: self._now, self.digest),
-                           symbol_specs=self.specs, on_trade=on_trade, on_outcome=on_outcome,
-                           book=aid)
+        settings = self.s if settings is None else settings
+        cls = PaperEngine if cls is None else cls
+        digest = self.digest if digest is None else digest
+        return cls(settings, self.brackets, notifier=_StoreNotifier(self.store, self.notifier,
+                                                                   lambda: self._now, digest),
+                   symbol_specs=self.specs, on_trade=on_trade, on_outcome=on_outcome,
+                   book=aid)
 
     def open_accounts(self, defs: Iterable[dict], now_ms: int) -> None:
         """defs: dicts with strategy, timeframe, kind and optional account_id / parent / data.
@@ -93,12 +123,21 @@ class AccountBook:
                 self.meta[aid] = {"strategy": d["strategy"], "timeframe": d["timeframe"], "kind": d["kind"]}
         self.store.commit()
 
-    def load(self) -> bool:
+    def load(self, make_of: Optional[Callable[[dict], Optional[dict]]] = None) -> bool:
         """Rebuild every account listed in the store and restore its state.
-        Returns False when the store holds no saved state (a fresh start)."""
+        Returns False when the store holds no saved state (a fresh start).
+        ``make_of(row)``: how to build an account (None = the defaults; else keyword arguments of
+        ``_make``: settings, cls, digest). It is asked for every row; an exception holds that account
+        (``HeldEngine``) instead of stopping the load."""
         for a in self.store.accounts():
             if a["account_id"] not in self.engines:
-                self.engines[a["account_id"]] = self._make(a["account_id"])
+                how = None
+                if make_of is not None:
+                    try:
+                        how = make_of(a)
+                    except Exception:  # noqa: BLE001  an extra the runtime cannot build is held, never fatal
+                        how = {"cls": HeldEngine}
+                self.engines[a["account_id"]] = self._make(a["account_id"], **(how or {}))
                 self.meta[a["account_id"]] = {k: a[k] for k in ("strategy", "timeframe", "kind")}
         got = self.store.get_state(STATE_KEY)
         if got is None:
@@ -109,6 +148,28 @@ class AccountBook:
                 restore_engine(self.engines[aid], st)
         self.last_ts = data.get("last_ts")
         return True
+
+    def add_extra(self, d: dict, created_ts: int, settings: Optional[Settings] = None, cls=None,
+                  digest: Optional[Digest] = None) -> PaperEngine:
+        """Add one extra account (accounts row + a fresh engine at the initial equity) inside the
+        caller's transaction (no commit). ``d``: account_id, strategy, timeframe, kind, parent, data.
+        Raises ValueError when the id is already a running engine or an accounts row."""
+        aid = d["account_id"]
+        if aid in self.engines:
+            raise ValueError(f"account {aid} is already running")
+        if self.store.conn.execute("SELECT 1 FROM accounts WHERE account_id = ?", (aid,)).fetchone():
+            raise ValueError(f"account {aid} already exists")
+        self.store.add_account(aid, d["strategy"], d["timeframe"], d["kind"], created_ts, self.s.version,
+                               d.get("parent"), d.get("data"))
+        e = self._make(aid, settings=settings, cls=cls, digest=digest)
+        self.engines[aid] = e
+        self.meta[aid] = {"strategy": d["strategy"], "timeframe": d["timeframe"], "kind": d["kind"]}
+        return e
+
+    def remove(self, aid: str) -> None:
+        """Forget an engine (only to undo an extra whose creation was rolled back)."""
+        self.engines.pop(aid, None)
+        self.meta.pop(aid, None)
 
     # ------------------------------------------------------------ run
     def submit(self, aid: str, sig: Signal) -> None:

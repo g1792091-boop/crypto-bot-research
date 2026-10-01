@@ -14,19 +14,27 @@ are in the store. On start the runner reloads them, rebuilds the 5m history
 from Binance and replays the minutes it missed. Signals from those minutes are
 logged as LATE and not traded (a live bot would have missed them too).
 
+Extra accounts (copies and new strategies started from approved proposals,
+paperbot/extras.py and docs/extra-accounts.md) run in the same book. The only
+hook is ``post_boundary(boundary, submitted, timed_out)``, called after the 195's
+work at a boundary has been committed; it guards itself, and a last fence here
+rolls back its writes and keeps the 195 running. Only one runner may write a
+database at a time (a lock file next to it).
+
 No orders are ever sent; the Binance key, if set, must be read-only.
 """
 
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
 import os
 import sys
 import time
 from typing import Callable, Optional
 
-from .accounts import AccountBook
+from .accounts import AccountBook, hold_others
 from .aggregate import TF_MS, Aggregator
 from .binance import BinanceError, BinanceREST, RegionBlocked
 from .config import V3_SYMBOLS, v3_settings
@@ -102,6 +110,10 @@ class Runner3:
         self.digest = digest
         self.signal_timeouts = 0
         self.fills = fills  # order-book cost of each entry / exit (records only, never a fill)
+        # extras (paperbot/extras.py): called after the 195's boundary commit as
+        # post_boundary(boundary: int, submitted: list[tuple[str, Signal]], timed_out: bool)
+        self.post_boundary = None
+        self.post_boundary_errors = 0
 
     def process(self, steps) -> None:
         for ts, bars, funding in steps:
@@ -153,11 +165,13 @@ class Runner3:
             self.store.alert(self.now_ms(), WARN, f"5m history incomplete at {boundary}; signals skipped")
             return
         due = self.service.due(boundary)
+        submitted, timed_out = [], False
         for k, tf in enumerate(due):
             try:
                 rows, subs, reports = self.service.compute(boundary, tf, self.now_ms, self.prices)
             except SignalTimeout as exc:
                 self.signal_timeouts += 1
+                timed_out = True
                 text = f"{exc}; signals skipped at {boundary} for {', '.join(due[k:])}"
                 self.store.alert(self.now_ms(), WARN, text)
                 self.notifier.send(WARN, text)
@@ -169,8 +183,33 @@ class Runner3:
             for aid, sig in subs:
                 if aid in self.book.engines and (self.skip_before is None or boundary >= self.skip_before):
                     self.book.submit(aid, sig)
+                    submitted.append((aid, sig))
         if self.book.last_ts is not None:
             self.book.save(self.book.last_ts)
+        if self.post_boundary is not None:
+            try:
+                self.post_boundary(boundary, submitted, timed_out)
+            except Exception as exc:  # noqa: BLE001  the hook guards itself; this is the last fence for the 195
+                self.store.conn.rollback()          # the 195's boundary was committed just before: only hook writes go
+                self.post_boundary_errors += 1
+                if self.post_boundary_errors >= 3:
+                    self.post_boundary = None       # stop calling a hook that keeps failing
+                text = f"[extra] boundary hook failed ({type(exc).__name__}: {exc})"[:300]
+                self.store.alert(self.now_ms(), CRITICAL, text)
+                self.store.commit()
+                self.notifier.send(CRITICAL, text)
+
+
+def single_runner_lock(db: str):
+    """Hold an exclusive lock on ``<db>.lock`` for this process's life, so two runners never write the same
+    paper3.db. Exits with a clear message when another runner holds it."""
+    fh = open(db + ".lock", "a+")
+    try:
+        fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        fh.close()
+        raise SystemExit(f"another live runner already holds {db}.lock; only one runner may write {db}")
+    return fh
 
 
 def cmd_run(args) -> int:
@@ -186,10 +225,20 @@ def cmd_run(args) -> int:
     brackets, src = load_brackets(rest, syms, args.brackets, args.allow_example_brackets)
     specs = rest.exchange_info(syms)
     store = Store3(args.db)
+    lock = single_runner_lock(args.db)  # noqa: F841  (held until the process ends)
     digest = Digest(notifier)
     book = AccountBook(settings, brackets, store, notifier, specs, digest=digest)
     service = SignalService(syms, RECORD_ONLY, random_rates(), procs=args.procs)
-    restored = book.load()
+    ext, make_of = None, hold_others          # hold_others: extras held at their saved state, the 195 normal
+    try:
+        from .extras import Extras
+        ext = Extras.start(store, notifier, args.db, settings)
+        make_of = ext.make_of
+    except Exception as exc:  # noqa: BLE001  extras code broken: the 195 run, every extra is held
+        text = f"[extra] extras code failed to load: {type(exc).__name__}: {exc}"[:300]
+        store.alert(int(time.time() * 1000), CRITICAL, text)
+        notifier.send(CRITICAL, text)
+    restored = book.load(make_of=make_of)
     if restored:
         prev = store.get_state("run")
         before = float(prev[1].get("initial_equity", 1000.0)) if prev else 1000.0
@@ -231,6 +280,14 @@ def cmd_run(args) -> int:
                      lambda: book_prices(rest, syms), skip_before=resume,
                      deadman=DeadMan(os.environ.get("DEADMAN_URL")), digest=digest,
                      fills=FillProbe(lambda s: rest.depth(s, FILL_DEPTH), settings.slippage_frac, FILL_DEPTH))
+    if ext is not None:
+        try:
+            ext.bind(runner)                  # new-strategy sources, code pins, post_boundary
+        except Exception as exc:  # noqa: BLE001  extras stay without signals (their engines still step)
+            text = f"[extra] extras could not start: {type(exc).__name__}: {exc}"[:300]
+            store.alert(int(time.time() * 1000), CRITICAL, text)
+            store.commit()
+            notifier.send(CRITICAL, text)
     sd_notify("READY=1")
     try:
         while args.max_polls is None or args.max_polls > 0:

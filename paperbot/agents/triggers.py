@@ -34,6 +34,14 @@ Triggers (defaults in ``TriggerPolicy``; every number is configurable):
                                    paced over the day, so it only uses spare calls; exempt from the
                                    room's daily cap (the budget bounds it).
 
+Extra paper accounts (agents/extra_accounts.py): a copy account's losses, bust and trades count in its
+parent strategy's room (loss_cluster, bust, weekly: accounts of kind 'strategy' or 'copy'); the
+new-strategy accounts (kind 'newlab') have the same three triggers in team:lab (``_lab_accounts``: cursors
+``loss:team:lab``, ``bust:<account>``, ``weekly:team:lab``, the weekly review on Sunday KST). A meeting that
+only extras' trades open (the originals alone would not) is marked ``extras`` in its data: it never uses
+the room's daily slots (those stay for the 195) and is bounded instead by its own line,
+``extras_meetings_per_day`` (6) a KST day over all rooms; when the line is full it waits for the next day.
+
 Limits: at most 3 rounds per room per KST day (incidents and research exempt; one of the 3 is kept
 for the owners' posts until they have used one that day), one round per room per tick,
 at most 4 rounds per tick. Output order: (priority, bust before loss_cluster, oldest
@@ -92,6 +100,7 @@ KST_OFFSET_MS = 9 * HOUR_MS          # Korea has no daylight saving time
 STRATEGIES = tuple(STRATEGY_KO)       # fixed order: the index decides the weekly weekday
 TEAM_ROOMS = ("team:market", "team:risk", "team:ops", "team:review", "team:lead")
 LAB_ROOM = "team:lab"                 # the new-strategy lab (rooms_db.LAB_ROOM)
+LAB_WEEKDAY = 6                       # the new-strategy accounts' weekly review: Sunday (KST)
 
 TRIGGERS = ("incident", "owner", "loss_cluster", "bust", "checkpoint", "morning", "evening", "weekly", "research")
 PRIORITY = {"incident": 0, "owner": 1, "loss_cluster": 2, "bust": 2, "checkpoint": 3, "morning": 3,
@@ -183,6 +192,9 @@ class TriggerPolicy:
     # new-strategy lab: one meeting slot per this period of the KST day; 0 = off (rooms.policy_from_env
     # turns it on for the server, RESEARCH_EVERY_MIN_DEFAULT)
     research_every_ms: int = 0
+    # meetings opened only by extra accounts' trades (copies, new-strategy accounts) per KST day, all rooms
+    # together: their own line, never the 195's room slots (env AGENTS_EXTRAS_MEETINGS_PER_DAY)
+    extras_meetings_per_day: int = 6
     max_items: int = 30                      # evidence rows copied into Due.data
 
 
@@ -255,6 +267,7 @@ class _Rooms:
             d, dec = _json(tdata), _json(decision)
             blocks = dec.get("blocks")
             self.rounds.append({"round_id": rid, "room_id": room, "trigger": trig, "key": d.get("key"),
+                                "extras": d.get("extras") is True,
                                 "class": d.get("class") or TRIGGER_CLASS.get(trig),
                                 "started_ts": _int(started), "ended_ts": _int(ended, _int(started)),
                                 "status": status, "calls": _int(calls),
@@ -368,9 +381,14 @@ class _Rooms:
         return not (r["transient"] and r["calls_ok"] == 0)
 
     def rounds_today(self, room: str, trigger: Optional[str] = None) -> int:
+        """The room's meetings today that use its daily slots (not the extras' own meetings)."""
         return sum(1 for r in self.rounds if r["room_id"] == room and r["started_ts"] >= self.day_start
                    and r["trigger"] not in self.p.cap_exempt and (trigger is None or r["trigger"] == trigger)
-                   and self._counted(r))
+                   and not r["extras"] and self._counted(r))
+
+    def extras_today(self) -> int:
+        """Meetings opened only by extra accounts' trades today, in every room (their own daily line)."""
+        return sum(1 for r in self.rounds if r["extras"] and r["started_ts"] >= self.day_start and self._counted(r))
 
     def room_full(self, room: str, trigger: str, extra: int = 0) -> bool:
         """The room's daily cap. Until an owner round has run today, ``owner_reserved_per_room_day``
@@ -515,8 +533,10 @@ def _owner(inbox_ro, paper_ro, st: _Rooms) -> list[Due]:
 
 def _strategy_trades(paper_ro, since_id: int, losses_only: bool, since_ms: int = 0,
                      upto_id: Optional[int] = None) -> list[tuple]:
-    q = ("SELECT t.id, t.account_id, t.exit_time, t.pnl, t.data, a.strategy, a.timeframe FROM trades t "
-         "JOIN accounts a ON a.account_id = t.account_id WHERE a.kind = 'strategy' AND t.id > ? "
+    """(id, account_id, exit_time, pnl, data, strategy, timeframe, kind) of the strategy accounts' and their
+    copies' closed trades (a copy's strategy column is its parent's)."""
+    q = ("SELECT t.id, t.account_id, t.exit_time, t.pnl, t.data, a.strategy, a.timeframe, a.kind FROM trades t "
+         "JOIN accounts a ON a.account_id = t.account_id WHERE a.kind IN ('strategy', 'copy') AND t.id > ? "
          "AND t.exit_time >= ?")
     args: tuple = (since_id, since_ms)
     if upto_id is not None:
@@ -548,10 +568,11 @@ def _loss_cluster(paper_ro, st: _Rooms) -> list[Due]:
         last = st.last_ok_start(room, "loss_cluster")
         if last is not None and st.now - last < p.loss_min_gap_ms:
             continue
-        cards = []
+        cards, kinds = [], []
         for r in lst:
             try:
                 cards.append(card(r[1], json.loads(r[4]), rt))
+                kinds.append(r[7])
             except (KeyError, TypeError, ValueError):
                 pass                                  # an odd row still counts as a loss
         top = [{"tag": r["tag"], "losses": r["losses"]} for r in tag_stats(cards)
@@ -559,6 +580,12 @@ def _loss_cluster(paper_ro, st: _Rooms) -> list[Due]:
         top.sort(key=lambda r: -r["losses"])
         if len(lst) < p.loss_min_count and not top:
             continue
+        # would the strategy's own accounts alone open it? If not, only its copies' losses do: an extras meeting
+        orig = [r for r in lst if r[7] == "strategy"]
+        orig_top = [r for r in tag_stats([c for c, k in zip(cards, kinds) if k == "strategy"])
+                    if r["losses"] >= p.loss_tag_min_count]
+        extras_only = len(orig) < p.loss_min_count and not orig_top
+        copies = sorted({r[1] for r in lst if r[7] == "copy"})
         tfs: dict[str, int] = {}
         for r in lst:
             tfs[r[6]] = tfs.get(r[6], 0) + 1
@@ -572,11 +599,16 @@ def _loss_cluster(paper_ro, st: _Rooms) -> list[Due]:
             text += " · 많이 나온 특징: " + ", ".join(f"{t['tag']} {t['losses']}건" for t in top[:3])
         # trade id AND its exit time: after paper3.db is restored ids restart, and new trades with old
         # ids must not look like evidence that was already handled
+        if copies:
+            text += f" · 그중 복제 계좌 손실 {len(lst) - len(orig)}건"
+        extra = {"extras": True} if extras_only else {}
+        if copies:
+            extra["extra_accounts"] = copies
         out.append(_due(st, room, "loss_cluster", f"loss:{s}:{lst[-1][0]}@{lst[-1][2]}", min(r[2] for r in lst), cursors,
                         text, strategy=s, losses=len(lst), trade_ids=[r[0] for r in lst][-p.max_items:],
                         by_timeframe=tfs, exit_reasons=reasons, top_tags=top,
                         touched_first_lock=sum(bool(c.get("touched_first_lock")) for c in cards),
-                        oldest_exit=min(r[2] for r in lst), newest_exit=max(r[2] for r in lst)))
+                        oldest_exit=min(r[2] for r in lst), newest_exit=max(r[2] for r in lst), **extra))
     return out
 
 
@@ -598,8 +630,9 @@ def busts_of(paper_ro) -> dict[str, int]:
 
 
 def _bust(paper_ro, st: _Rooms) -> list[Due]:
-    accts = {aid: (s, tf) for aid, s, tf in _rows(paper_ro, "SELECT account_id, strategy, timeframe FROM accounts "
-                                                             "WHERE kind = 'strategy'")}
+    """A strategy account or one of its copies went bust (in the strategy's room)."""
+    accts = {aid: (s, tf, k) for aid, s, tf, k in _rows(paper_ro, "SELECT account_id, strategy, timeframe, kind "
+                                                                  "FROM accounts WHERE kind IN ('strategy', 'copy')")}
     busts = busts_of(paper_ro)
     by_s: dict[str, dict] = {}
     for aid, ts in busts.items():
@@ -613,8 +646,13 @@ def _bust(paper_ro, st: _Rooms) -> list[Due]:
         cursors = {**_strategy_cursors(st, room, hwm), **{f"bust:{a}": str(got[a]) for a in aids}}
         # the bust times are part of the key: after paper3.db is restored an account can go bust again,
         # and that new bust must not look like evidence that was already handled
+        extra = {"extras": True} if all(accts[a][2] == "copy" for a in aids) else {}
+        copies = [a for a in aids if accts[a][2] == "copy"]
+        if copies:
+            extra["extra_accounts"] = copies
         out.append(_due(st, room, "bust", "bust:" + ",".join(f"{a}@{got[a]}" for a in aids), min(got.values()), cursors,
-                        f"{STRATEGY_KO[s]}: 계좌 파산 " + ", ".join(aids), strategy=s, accounts=aids))
+                        f"{STRATEGY_KO[s]}: 계좌 파산 " + ", ".join(aids)
+                        + (" (복제 계좌)" if extra.get("extras") else ""), strategy=s, accounts=aids, **extra))
     return out
 
 
@@ -654,21 +692,88 @@ def _weekly(paper_ro, st: _Rooms) -> list[Due]:
         if st.handled(room, "weekly", key):
             continue
         cur = st.cursor_int(f"weekly:{room}")
-        # trades closed by the end of the slot day decide whether the slot was due at all
-        r = _one(paper_ro, "SELECT COUNT(*), MIN(t.exit_time) FROM trades t JOIN accounts a "
-                           "ON a.account_id = t.account_id WHERE a.kind = 'strategy' AND a.strategy = ? "
+        # trades closed by the end of the slot day decide whether the slot was due at all (the strategy's own
+        # accounts and its copies; a review only the copies' trades open is an extras meeting)
+        r = _one(paper_ro, "SELECT COUNT(*), SUM(a.kind = 'strategy') FROM trades t JOIN accounts a "
+                           "ON a.account_id = t.account_id WHERE a.kind IN ('strategy', 'copy') AND a.strategy = ? "
                            "AND t.id > ? AND t.exit_time < ?", (s, cur, slot + DAY_MS))
         n_slot = 0 if r is None else int(r[0])
+        n_orig = 0 if r is None else int(r[1] or 0)
         if n_slot < st.p.weekly_min_trades:
             continue
         n = _one(paper_ro, "SELECT COUNT(*) FROM trades t JOIN accounts a ON a.account_id = t.account_id "
-                           "WHERE a.kind = 'strategy' AND a.strategy = ? AND t.id > ?", (s, cur))
+                           "WHERE a.kind IN ('strategy', 'copy') AND a.strategy = ? AND t.id > ?", (s, cur))
         n = n_slot if n is None else int(n[0])
         cursors = {**_strategy_cursors(st, room, hwm), f"weekly:{room}": str(hwm)}
         late = "" if slot_day == kst_date(st.now) else f" ({slot_day} 검토를 미뤘던 것)"
+        extra = {"extras": True} if n_orig < st.p.weekly_min_trades else {}
         out.append(_due(st, room, "weekly", key, slot, cursors,
                         f"{STRATEGY_KO[s]} 주간 검토: 지난 검토 뒤 거래 {n}건{late}", strategy=s, trades=n,
-                        slot_day=slot_day))
+                        slot_day=slot_day, **extra))
+    return out
+
+
+def _lab_accounts(paper_ro, st: _Rooms) -> list[Due]:
+    """The new-strategy accounts (kind 'newlab') in team:lab: a loss cluster (same thresholds as a strategy
+    room, cursor ``loss:team:lab``), a bust (cursor ``bust:<account>``) and a weekly review on Sunday KST
+    (cursor ``weekly:team:lab``). Every one is an extras meeting (their own daily line)."""
+    p, room = st.p, LAB_ROOM
+    accts = {aid: tf for aid, tf in _rows(paper_ro, "SELECT account_id, timeframe FROM accounts WHERE kind = 'newlab'")}
+    if not accts:
+        return []
+    from ..cards import card, tag_stats
+    hwm = _trade_hwm(paper_ro)
+    out: list[Due] = []
+    sel = ("SELECT t.id, t.account_id, t.exit_time, t.pnl, t.data, a.strategy, a.timeframe FROM trades t "
+           "JOIN accounts a ON a.account_id = t.account_id WHERE a.kind = 'newlab' AND t.id > ? AND t.id <= ? ")
+    if "loss_cluster" in p.enabled:
+        rows = _rows(paper_ro, sel + "AND t.exit_time >= ? AND t.pnl < 0 ORDER BY t.id",
+                     (st.cursor_int(f"loss:{room}"), hwm, st.now - p.loss_lookback_ms))
+        last = st.last_ok_start(room, "loss_cluster")
+        if rows and (last is None or st.now - last >= p.loss_min_gap_ms):
+            rt = _round_trip(paper_ro)
+            cards = []
+            for r in rows:
+                try:
+                    cards.append(card(r[1], json.loads(r[4]), rt))
+                except (KeyError, TypeError, ValueError):
+                    pass
+            top = sorted(({"tag": r["tag"], "losses": r["losses"]} for r in tag_stats(cards)
+                          if r["losses"] >= p.loss_tag_min_count), key=lambda r: -r["losses"])
+            if len(rows) >= p.loss_min_count or top:
+                by_acct: dict[str, int] = {}
+                for r in rows:
+                    by_acct[r[1]] = by_acct.get(r[1], 0) + 1
+                text = "새 매매법 계좌: 새 손실 " + f"{len(rows)}건 (" + ", ".join(f"{a} {n}건" for a, n in by_acct.items()) + ")"
+                if top:
+                    text += " · 많이 나온 특징: " + ", ".join(f"{t['tag']} {t['losses']}건" for t in top[:3])
+                out.append(_due(st, room, "loss_cluster", f"loss:lab:{rows[-1][0]}@{rows[-1][2]}", min(r[2] for r in rows),
+                                {f"loss:{room}": str(hwm)}, text, extras=True, losses=len(rows),
+                                trade_ids=[r[0] for r in rows][-p.max_items:], accounts=sorted(by_acct), top_tags=top,
+                                oldest_exit=min(r[2] for r in rows), newest_exit=max(r[2] for r in rows)))
+    if "bust" in p.enabled:
+        got = {aid: ts for aid, ts in busts_of(paper_ro).items() if aid in accts and st.cursor(f"bust:{aid}") is None}
+        if got:
+            aids = sorted(got)
+            out.append(_due(st, room, "bust", "bust:" + ",".join(f"{a}@{got[a]}" for a in aids), min(got.values()),
+                            {f"loss:{room}": str(hwm), **{f"bust:{a}": str(got[a]) for a in aids}},
+                            "새 매매법 계좌 파산: " + ", ".join(aids), extras=True, accounts=aids))
+    if "weekly" in p.enabled:
+        slot = weekly_slot(st.now, LAB_WEEKDAY)
+        slot_day = kst_date(slot)
+        key = f"weekly:lab:{slot_day}"
+        if not st.handled(room, "weekly", key):
+            cur = st.cursor_int(f"weekly:{room}")
+            r = _one(paper_ro, "SELECT COUNT(*) FROM trades t JOIN accounts a ON a.account_id = t.account_id "
+                               "WHERE a.kind = 'newlab' AND t.id > ? AND t.exit_time < ?", (cur, slot + DAY_MS))
+            if r is not None and int(r[0]) >= p.weekly_min_trades:
+                n = _one(paper_ro, "SELECT COUNT(*) FROM trades t JOIN accounts a ON a.account_id = t.account_id "
+                                   "WHERE a.kind = 'newlab' AND t.id > ?", (cur,))
+                n = int(r[0]) if n is None else int(n[0])
+                late = "" if slot_day == kst_date(st.now) else f" ({slot_day} 검토를 미뤘던 것)"
+                out.append(_due(st, room, "weekly", key, slot, {f"loss:{room}": str(hwm), f"weekly:{room}": str(hwm)},
+                                f"새 매매법 계좌 주간 검토: 지난 검토 뒤 거래 {n}건{late}", extras=True, trades=n,
+                                slot_day=slot_day))
     return out
 
 
@@ -759,6 +864,7 @@ def find_due(paper_ro: Optional[sqlite3.Connection], daily_ro: Optional[sqlite3.
     found += _scheduled(st)
     if "research" in p.enabled:
         found += _research(st)
+    found += _lab_accounts(paper_ro, st)
 
     ok: list[Due] = []
     for d in found:
@@ -786,13 +892,18 @@ def find_due(paper_ro: Optional[sqlite3.Connection], daily_ro: Optional[sqlite3.
 
     picked: list[Due] = []
     per_room: dict[str, int] = {}
+    extras_used = st.extras_today()
     for d in ok:
         if len(picked) >= p.max_rounds_per_tick:
             break
         room = d.room_id
         if per_room.get(room, 0) >= p.max_per_room_per_tick:
             continue
-        if st.room_full(room, d.trigger, per_room.get(room, 0)):
+        if d.data.get("extras"):
+            # opened only by extra accounts' trades: their own daily line, never the room's slots
+            if extras_used >= p.extras_meetings_per_day:
+                continue
+        elif st.room_full(room, d.trigger, per_room.get(room, 0)):
             continue
         after = d.data.get("after")
         if after and not (st.settled(after["room_id"], d.trigger, after["key"])
@@ -802,6 +913,7 @@ def find_due(paper_ro: Optional[sqlite3.Connection], daily_ro: Optional[sqlite3.
             continue            # the lead meets after the review team
         picked.append(d)
         per_room[room] = per_room.get(room, 0) + 1
+        extras_used += 1 if d.data.get("extras") else 0
     return picked
 
 
