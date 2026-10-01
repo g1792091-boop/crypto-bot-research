@@ -325,7 +325,7 @@ function entryHTML(e){
   const a = agentById(e.agent) || {name: "?", title: "", team: "hq", look: ["#999", "#999"]};
   if (e.kind === "trade") return `<div class="of-work of-trade"><b style="color:${TEAM_COLOR.quant}">현우</b> <span>${ctx.esc(e.text)}</span><time>${time}</time></div>`;
   if (e.kind === "bt"){
-    const row = (k, x) => `<tr><th>${k}</th><td class="${x.ret >= 0 ? "up" : "dn"}">${x.ret >= 0 ? "+" : ""}${x.ret.toFixed(1)}%</td><td>${x.dd.toFixed(1)}%</td><td>${x.win.toFixed(0)}%</td><td>${x.pf.toFixed(2)}</td><td>${x.n}</td></tr>`;
+    const row = (k, x) => `<tr><th>${k}</th><td class="${x.ret >= 0 ? "up" : "dn"}">${x.ret >= 0 ? "+" : ""}${x.ret.toFixed(1)}%</td><td>${x.dd.toFixed(1)}%</td><td>${x.win.toFixed(0)}%</td><td>${x.pf == null ? "—" : x.pf.toFixed(2)}</td><td>${x.n}</td></tr>`;
     return `<div class="of-bt ${e.pass ? "pass" : "fail"}"><div class="of-bth"><b>${e.pass ? "✅ 검증 통과" : "❌ 불통과"} · ${ctx.esc(e.name)}</b><span>${ctx.esc(e.market)} ${e.tf === "60" ? "1시간" : e.tf === "240" ? "4시간" : e.tf}봉 · 개발 ${ctx.esc(e.author || "")} · 검증 다온 · ${time}</span></div>
       <table><tr><th></th><th>수익</th><th>최대낙폭</th><th>승률</th><th>손익비</th><th>거래</th></tr>${row("전체", e.all)}${row("개발 70%", e.is)}${row("검증 30%", e.oos)}</table>
       <div class="of-btr">${(e.reasons || []).map(r => "· " + ctx.esc(r)).join("<br>")}</div>

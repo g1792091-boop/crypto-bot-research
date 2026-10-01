@@ -3,7 +3,7 @@
 //   흐름: 담당 분석가 → (투자·실행 판단이면) 전략가 → 반론 검토관 → 리스크 책임자 → 팀장 정리
 // - 사용자가 아무것도 치지 않아도 정해진 안건과 급변동 감시로 스스로 회의를 연다(자동 회의).
 import { settings, saveSettings, idb, uid, brainStream, splitThink, overCap, provUse, LAUNCHER } from "./engine.js";
-import { runAgent, activeSkills, TOOLS, marketNews, candlesFor, visibleText } from "./agent.js";
+import { runAgent, activeSkills, TOOLS, marketNews, candlesFor, visibleText, snapText } from "./agent.js";
 import { fusionSources } from "./train.js";
 
 /* ============ 팀과 직원 ============ */
@@ -522,6 +522,7 @@ async function solo(a, {room, sys, user, maxTokens = 900, temperature = 0.6, ext
   const alt = fusionSources().find(t => t.model !== target?.model && !badModels()[t.model] && !/r1|reason|think|gpt-oss|qwq/i.test(t.model));
   const entry = post({ch: room || a.team, kind: "agent", agent: a.id, text: "", think: "", steps: [], live: true, model: target?.model || "", ...extra});
   fire({kind: "solo", agent: a, entry});
+  let finalRaw = "";
   for (const tg of [target, alt, null].filter((t, i, arr) => i === arr.length - 1 || (t && arr.findIndex(x => x && x.model === t.model) === i))){
     let raw = "", think = "", last = 0;
     const show = () => { const mm = raw.match(/^💭\s*([^\n]*)\n?/); entry.think = (think + (mm ? "\n" + mm[1] : "")).trim(); entry.text = visibleText((mm ? raw.slice(mm[0].length) : raw).replace(/<think>[\s\S]*?(<\/think>|$)/g, "")).replace(/^\s*💭[^\n]*\n?/gm, "").trim();
@@ -530,15 +531,16 @@ async function solo(a, {room, sys, user, maxTokens = 900, temperature = 0.6, ext
       bump("calls");
       const route = await brainStream({messages: [{role: "system", content: sys}, {role: "user", content: user}], role: a.role === "code" ? "code" : a.role === "reason" ? "reason" : "general",
         maxTokens, temperature, target: tg || undefined, fallback: true, onContent: d => { raw += d; show(); }, onThink: d => { think += d; show(); }});
-      raw = splitThink(raw).body; show();
+      raw = splitThink(raw).body; show(); finalRaw = raw;
       entry.model = route?.model || tg?.model || entry.model;
     } catch(e){ entry.notes = [...(entry.notes || []), `${shortName(tg?.model)}: ${String(e.message || e).slice(0, 60)} → 다른 모델로`]; }
-    if (entry.text) break;
+    if (entry.text || /```json|\{\s*"name"/.test(finalRaw)) break;
     markBad(tg?.model);
   }
-  if (!entry.text) entry.text = `(${a.name}: 이번에는 답하지 못했습니다)`;
+  if (!entry.text && !finalRaw) entry.text = `(${a.name}: 이번에는 답하지 못했습니다)`;
+  if (!entry.text && finalRaw) entry.text = (finalRaw.replace(/^\s*💭[^\n]*\n?/gm, "").replace(/```(?:json)?[\s\S]*?(```|$)/g, "").trim() || "전략을 만들었습니다") + "\n\n*(전략 JSON은 아래 백테스트 카드에 있습니다)*";
   entry.live = false; saveLog(); fire({kind: "said", agent: a, entry});
-  return entry;
+  return {...entry, raw: finalRaw};
 }
 const personaOf = (a, extra = "") => `너는 GH Nano 사무실 ${teamById(a.team).name}의 '${a.name}'(${a.title})다. 역할: ${a.duty}
 이번 일에서는 도구를 부를 수 없으니 주어진 자료로만 말한다. 첫 줄은 '💭 '로 시작하는 한 문장 속마음(무엇을 보고 어떻게 판단하는지)이다. 그다음 동료에게 말하듯 자연스러운 한국어로 말한다. 데이터에 없는 숫자는 지어내지 않는다. ${extra}`;
@@ -583,16 +585,16 @@ async function research(){
   const snap = Q.snapshot(cs), cards = await Q.loadCards().catch(() => []);
   const tried = researchLog().slice(-8).map(r => `- ${r.name} (${r.market} ${r.tf}): ${r.pass ? "통과" : "불통과"}, 검증 구간 ${r.oos?.toFixed?.(1)}%`).join("\n");
   const sys = personaOf(a, "이번 일은 새 매매법 개발이다. 아래 형식 설명을 따라 전략 JSON 하나를 ```json 블록으로 쓰고, 블록 뒤에 왜 이 전략인지 2~3문장으로 말한다.") + "\n\n" + Q.STRATEGY_PROMPT + (cards.length ? "\n\n## 지금까지의 백테스트 연구 카드(참고)\n" + Q.cardsText(cards, 14) : "");
-  const user = `시장: ${mk.market} (${mk.exchange === "binancef" ? "바이낸스 선물" : mk.exchange}) · ${tf === "60" ? "1시간" : "4시간"}봉 · 캔들 ${cs.length}개\n지금 차트(보조지표 29종):\n${String(snap.text || "").slice(0, 3500)}\n\n최근 우리 팀이 시험한 전략(겹치지 않게):\n${tried || "(아직 없음)"}\n\n${a.id === "qa" ? "추세추종" : "역추세·변동성"} 계열로 새 전략 하나를 만들어 주세요. symbol은 ${mk.market}, interval은 ${tf === "60" ? "1h" : "4h"}.`;
+  const user = `시장: ${mk.market} (${mk.exchange === "binancef" ? "바이낸스 선물" : mk.exchange}) · ${tf === "60" ? "1시간" : "4시간"}봉 · 캔들 ${cs.length}개\n지금 차트(보조지표 29종):\n${snapText(snap)}\n${JSON.stringify(snap.ind || {}).slice(0, 2500)}\n\n최근 우리 팀이 시험한 전략(겹치지 않게):\n${tried || "(아직 없음)"}\n\n${a.id === "qa" ? "추세추종" : "역추세·변동성"} 계열로 새 전략 하나를 만들어 주세요. symbol은 ${mk.market}, interval은 ${tf === "60" ? "1h" : "4h"}.`;
   const e = await solo(a, {room: "quant", sys, user, maxTokens: 1600, temperature: 0.8});
-  let spec = pickJSON(e.text);
+  let spec = pickJSON(e.raw || e.text);
   if (!spec){ post({ch: "quant", kind: "system", text: `${a.name}의 답에서 전략 JSON을 찾지 못했습니다`}); addResearch({name: "(형식 오류)", market: mk.market, tf, pass: false, t: Date.now()}); return; }
   try { spec = Q.normalizeSpec({...spec, symbol: mk.market, interval: tf === "60" ? "1h" : "4h"}); }
   catch(err){ post({ch: "quant", kind: "system", text: `전략 형식 오류(${a.name}): ${err.message}`}); addResearch({name: spec.name || "(형식 오류)", market: mk.market, tf, pass: false, t: Date.now()}); return; }
   const v = agentById("val");
   fire({kind: "busy", agent: v, text: `🧮 ${spec.name} 백테스트 · 과최적화 검사 중`});
   const bt = Q.backtest(spec, cs), wf = Q.walkForward(spec, cs);
-  const st = x => ({ret: +(x?.return_pct ?? 0), dd: +(x?.max_dd_pct ?? 0), win: +(x?.win_rate ?? 0), pf: +(x?.profit_factor ?? 0), n: x?.n_trades ?? 0});
+  const st = x => ({ret: +(x?.return_pct ?? 0), dd: +(x?.max_dd_pct ?? 0), win: +(x?.win_rate ?? 0), pf: x?.profit_factor == null ? null : +x.profit_factor, n: x?.n_trades ?? 0});
   post({ch: "quant", kind: "bt", agent: "val", name: spec.name, market: mk.market, tf, all: st(bt.stats), is: st(wf.is), oos: st(wf.oos), pass: wf.pass, reasons: wf.reasons, author: a.name, spec});
   addResearch({name: spec.name, market: mk.market, tf, pass: wf.pass, oos: +(wf.oos?.return_pct ?? 0), t: Date.now()});
   fire({kind: "bubble", agent: v, text: `${wf.pass ? "✅ 통과" : "❌ 불통과"}: ${spec.name} — ${wf.reasons.slice(0, 2).join(", ")}`});

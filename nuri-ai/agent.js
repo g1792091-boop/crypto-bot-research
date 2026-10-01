@@ -61,6 +61,8 @@ export function resolveMarket(input, exHint = ""){
   if (exn === "upbit" || CRYPTO.has(sym) || coinKo) return {exn: "upbit", market: "KRW-" + sym};
   return {exn: "yahoo", market: sym};
 }
+const IV_OF = {"1": "1m", "5": "5m", "15": "15m", "60": "1h", "240": "4h", "D": "1d", "W": "1w"};
+export const snapText = snap => { const t = snap?.text || {}; return typeof t === "string" ? t : [["trend", "추세"], ["momentum", "모멘텀"], ["volatility", "변동성"], ["volume", "거래량"]].map(([k, ko]) => t[k] ? (String(t[k]).startsWith(ko) ? t[k] : `${ko}: ${t[k]}`) : "").filter(Boolean).join("\n"); };
 const tfOf = iv => ({"1m": "1", "5m": "5", "15m": "15", "30m": "15", "1h": "60", "2h": "60", "4h": "240", "1d": "D", "1w": "W"})[String(iv || "1h")] || "60";
 export async function candlesFor(a, total){
   const {exn, market} = resolveMarket(a.market || a.symbol, a.exchange);
@@ -244,16 +246,18 @@ export const TOOLS = {
     async run(a){
       const Q = await import("./quant.js"); const {market, tf, cs} = await candlesFor(a, 400);
       const snap = Q.snapshot(cs);
-      return {text: `${cs.name || market} ${TF[tf] || tf} 최근 봉 기준\n` + (snap.text || JSON.stringify(snap).slice(0, 4000)), summary: `${cs.name || market} ${TF[tf] || tf} · 지표 29종`};
+      return {text: `${cs.name || market} ${TF[tf] || tf} 최근 봉 기준\n` + snapText(snap) + "\n\n[지표 값]\n" + JSON.stringify(snap.ind).slice(0, 3500), summary: `${cs.name || market} ${TF[tf] || tf} · 지표 29종`};
     }},
   strategy_backtest: {mode:"both", label:"전략 백테스트", args:'{"spec":{"name":"EMA 교차","indicators":[{"id":"f","type":"ema","length":20},{"id":"s","type":"ema","length":50}],"long_entry":{"logic":"all","conditions":[{"left":"f","op":"crosses_above","right":"s"}]},"long_exit":{"logic":"all","conditions":[{"left":"f","op":"crosses_below","right":"s"}]},"risk":{"leverage":3,"position_pct":20,"atr_stop_mult":2}},"market":"BTCUSDT","exchange":"binancef","timeframe":"60"}', act: a => `${a.spec?.name || "전략"} 백테스트`,
     desc:"전략(JSON: 지표·진입/청산 조건·리스크)을 실제 과거 캔들로 백테스트하고 과최적화 검사(앞 70% 개발·뒤 30% 검증)까지 한다. 수익률·최대낙폭·승률·손익비·거래 수와 통과 여부를 준다",
     async run(a){
       const Q = await import("./quant.js");
-      const spec = Q.normalizeSpec(typeof a.spec === "string" ? JSON.parse(a.spec) : a.spec);
-      const {market, tf, cs} = await candlesFor({market: a.market || spec.symbol || "BTCUSDT", exchange: a.exchange || "binancef", timeframe: a.timeframe || tfOf(spec.interval)}, 1500);
+      const raw = typeof a.spec === "string" ? JSON.parse(a.spec) : a.spec;
+      const want = a.timeframe ? String(a.timeframe) : tfOf(raw?.interval);
+      const spec = Q.normalizeSpec({...raw, interval: IV_OF[want] || raw?.interval || "1h"});   // 봉 길이를 실제 캔들과 맞춘다
+      const {market, tf, cs} = await candlesFor({market: a.market || spec.symbol || "BTCUSDT", exchange: a.exchange || "binancef", timeframe: want}, 1500);
       const bt = Q.backtest(spec, cs), wf = Q.walkForward(spec, cs);
-      const f = s => `수익 ${s.return_pct?.toFixed?.(1)}% · 최대낙폭 ${s.max_dd_pct?.toFixed?.(1)}% · 승률 ${s.win_rate?.toFixed?.(0)}% · 손익비 ${s.profit_factor?.toFixed?.(2)} · 거래 ${s.n_trades}회`;
+      const f = s => `수익 ${s.return_pct?.toFixed?.(1)}% · 최대낙폭 ${s.max_dd_pct?.toFixed?.(1)}% · 승률 ${s.win_rate?.toFixed?.(0)}% · 손익비 ${s.profit_factor == null ? "없음(손실 거래 없음)" : s.profit_factor.toFixed(2)} · 거래 ${s.n_trades}회`;
       return {text: `[${spec.name}] ${market} ${TF[tf] || tf} · 캔들 ${cs.length}개\n전체: ${f(bt.stats)}\n개발 구간: ${f(wf.is)}\n검증 구간: ${f(wf.oos)}\n판정: ${wf.pass ? "통과" : "불통과"} — ${wf.reasons.join(", ")}`, summary: `${wf.pass ? "통과" : "불통과"} · 검증 ${wf.oos.return_pct?.toFixed?.(1)}%`, spec, wf};
     }},
   paper_status: {mode:"both", label:"모의투자 현황", args:'{}', act: () => "모의투자 장부 확인",

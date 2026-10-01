@@ -1,0 +1,911 @@
+[
+ {
+  "id": "k01",
+  "topic": "비용",
+  "rule": "5분~1시간봉 시장가 진입은 비용 전 기대값이 0에 가까워 비용 후 거래당 약 −0.14%이므로, 단기 진입 제안에는 왕복 0.14%를 넘는 근거를 요구한다.",
+  "evidence": "research/library/RESULTS_LIBRARY_B.md: 5분 −0.14%, 30분 −0.16~−0.18% (세 기간); research/library/RESULTS_LIBRARY.md: 15분 −0.15%, 1시간 −0.16% (2,000조합 통과 0)",
+  "status": "validated",
+  "applies": {
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "DOGE",
+    "LTC",
+    "BCH",
+    "XRP"
+   ],
+   "timeframes": [
+    "5m",
+    "15m",
+    "30m",
+    "1h"
+   ]
+  }
+ },
+ {
+  "id": "k02",
+  "topic": "과최적화",
+  "rule": "과거 기간 1등 성적은 다음 기간을 예측하지 못하므로 단일 백테스트 1등을 진입 근거로 쓰지 않는다.",
+  "evidence": "research/verify/RANDOM_1000.md: 동전 던지기 1,000개 중 1등 +0.05%/거래 → 확인 구간 −0.20% (합계 −249%), 두 구간 상관 −0.03",
+  "status": "validated",
+  "applies": {
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "DOGE",
+    "LTC",
+    "BCH",
+    "XRP"
+   ],
+   "timeframes": [
+    "1h"
+   ]
+  }
+ },
+ {
+  "id": "k03",
+  "topic": "예측력",
+  "rule": "시장가·20~50배로 이익을 내려면 4시간 방향을 약 65% 맞혀야 하며 60% 적중 신호도 기준에 못 미친다.",
+  "evidence": "research/verify/RESULTS_VERIFY.md: 가짜 신호 q=60% 거래당 +0.04%(고르기)/+0.06%(확인), 비용 전 +0.20%/+0.24%",
+  "status": "validated",
+  "applies": {
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "DOGE",
+    "LTC",
+    "BCH",
+    "XRP"
+   ],
+   "timeframes": [
+    "1h",
+    "4h"
+   ]
+  }
+ },
+ {
+  "id": "k04",
+  "topic": "청산구조",
+  "rule": "익절·손절 비율은 승률만 25~65%로 바꿀 뿐 기대값은 −0.15~−0.21%로 같으므로 승률만으로 셋업을 평가하지 않는다.",
+  "evidence": "research/search/RESULTS_SEARCH.md 3절: 190조합 평균, 손절1/익절2 승률 32%, 손절2/익절1 65%, 손절1/익절3 25%, 기대값 모두 −0.15~−0.21%",
+  "status": "validated",
+  "applies": {
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "DOGE",
+    "LTC",
+    "BCH",
+    "XRP"
+   ],
+   "timeframes": [
+    "15m",
+    "1h",
+    "4h"
+   ]
+  }
+ },
+ {
+  "id": "k05",
+  "topic": "승률착시",
+  "rule": "계단 잠금 구조에서는 승률 62%여도 평균 R이 음수일 수 있으므로 승률과 평균 R을 함께 제시한다.",
+  "evidence": "research/paper_rules/RESULTS_RULES.md: 손절 2ATR, 승률 약 62%, 잠금 청산 70%, 평균 R −3.6%(고르기)/−4.0%(확인)",
+  "status": "validated",
+  "applies": {
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "DOGE",
+    "LTC",
+    "BCH"
+   ],
+   "timeframes": [
+    "5m",
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ]
+  }
+ },
+ {
+  "id": "k06",
+  "topic": "손익비수학",
+  "rule": "증거금 20%×20배, 익절 순ROE 10%, 손실 한도 15% 구조는 이기면 계좌 +2%, 지면 −15%라 본전 승률 약 88%가 필요하다.",
+  "evidence": "research/famous/RESULTS_FAMOUS.md 3절: 11개 매매법 실제 승률 60~75%, 거래당 계좌 −0.7~−5%",
+  "status": "validated",
+  "applies": {
+   "symbols": "all",
+   "timeframes": "all"
+  }
+ },
+ {
+  "id": "k07",
+  "topic": "손절거리",
+  "rule": "손절 거리별 필요 승률은 3.75%→88%, 1%→70%, 0.5%→56%이며 15분 기존 매매법 승률은 37~39%였다.",
+  "evidence": "research/famous/RESULTS_FAMOUS.md 3절 (비용 0.14% 포함, 이기면 계좌 +2%)",
+  "status": "validated",
+  "applies": {
+   "symbols": "all",
+   "timeframes": [
+    "15m"
+   ]
+  }
+ },
+ {
+  "id": "k08",
+  "topic": "손절배수",
+  "rule": "ATR 1·1.5·2배 손절 중 2배가 가장 덜 나빴고(평균 R −4.4/−3.8/−3.6%) 선물 데이터로도 순서가 같았지만 모두 손실이다.",
+  "evidence": "research/paper_rules/RESULTS_RULES.md 216계좌×2기간; research/binance_data/RESULTS_BINANCE.md −4.4/−3.9/−3.5%",
+  "status": "validated",
+  "applies": {
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "DOGE",
+    "LTC",
+    "BCH"
+   ],
+   "timeframes": [
+    "5m",
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ]
+  }
+ },
+ {
+  "id": "k09",
+  "topic": "손절착시",
+  "rule": "손절 후 64봉 안에 익절가 도달 비율이 매매법 33%, 무작위 33%로 같으므로 '손절이 좁았다'는 판단의 근거가 되지 않는다.",
+  "evidence": "research/diagnosis/RESULTS_DIAG.md 4절: 15분~4시간 32~34% vs 33~34%; 손절로 끝난 비율 58% vs 57~58%",
+  "status": "validated",
+  "applies": {
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "DOGE",
+    "LTC",
+    "BCH",
+    "XRP"
+   ],
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ]
+  }
+ },
+ {
+  "id": "k10",
+  "topic": "레버리지·보유",
+  "rule": "며칠 이상 보유하는 추세·모멘텀 셋업은 20배에서 포지션의 71~77%가 청산되고 3배에서 5~6%이므로 스윙 셋업에는 저레버리지만 쓴다.",
+  "evidence": "research/famous/RESULTS_FAMOUS.md 2절: 터틀55/20 20배 77%, 28일 모멘텀 71%, 강한 코인 72%; 3배 5~6%",
+  "status": "validated",
+  "applies": {
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "DOGE",
+    "LTC",
+    "BCH",
+    "XRP"
+   ],
+   "timeframes": [
+    "1d"
+   ]
+  }
+ },
+ {
+  "id": "k11",
+  "topic": "폭락",
+  "rule": "대형 폭락(2022-11 FTX, 2025-10-10) 때 ATR 1.5배 손절 거리가 10~17%까지 벌어져 20배 격리는 손절 전에 청산되므로 고변동 구간은 레버리지를 낮춘다.",
+  "evidence": "research/maker/RESULTS_ROUND2.md A-2",
+  "status": "validated",
+  "applies": {
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "DOGE",
+    "LTC",
+    "BCH",
+    "XRP"
+   ],
+   "timeframes": [
+    "1h"
+   ]
+  }
+ },
+ {
+  "id": "k12",
+  "topic": "4시간·일봉 크기",
+  "rule": "4시간 ATR2 손절은 2~5%, 일봉은 8~15%라 손실 15% 한도에서 20배 이상이 불가능하다(4시간 신호 63~72%, 일봉 100% 진입 거절).",
+  "evidence": "research/paper_rules/RESULTS_RULES.md 손절 2배 봉별 표; research/library/RESULTS_LIBRARY.md 4시간 최대 레버리지 7~16배",
+  "status": "validated",
+  "applies": {
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "DOGE",
+    "LTC",
+    "BCH"
+   ],
+   "timeframes": [
+    "4h",
+    "1d"
+   ]
+  }
+ },
+ {
+  "id": "k13",
+  "topic": "봉길이",
+  "rule": "봉이 길수록 비용 부담이 작아 덜 나쁘므로(ROE 중앙값 5분 −6.1%, 15분 −4.8%, 30분 −4.1%, 1시간 −3.3%, 4시간 −2.2%) 5분봉 제안을 가장 엄격하게 본다.",
+  "evidence": "research/binance_data/RESULTS_BINANCE.md 3-1, 36개 매매법 바이낸스 선물 2021-08~2026-09",
+  "status": "validated",
+  "applies": {
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "DOGE",
+    "LTC",
+    "BCH"
+   ],
+   "timeframes": [
+    "5m",
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ]
+  }
+ },
+ {
+  "id": "k14",
+  "topic": "파산속도",
+  "rule": "20~50배·ATR2·계단 잠금 규칙의 계좌는 중앙값 5분 18일, 15분 75일, 30분 154일, 1시간 340일에 파산했다.",
+  "evidence": "docs/paper-v3-rules.md 4절; research/paper_rules/RESULTS_RULES.md (5분 36계좌 중 33/32 파산)",
+  "status": "validated",
+  "applies": {
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "DOGE",
+    "LTC",
+    "BCH"
+   ],
+   "timeframes": [
+    "5m",
+    "15m",
+    "30m",
+    "1h"
+   ]
+  }
+ },
+ {
+  "id": "k15",
+  "topic": "진입타이밍",
+  "rule": "추세 초입(EMA20 돌파 1~3봉) 진입 비중이 38~41%(무작위 13~16%)여도 손실이었으므로 '초입이면 이긴다'를 근거로 쓰지 않는다.",
+  "evidence": "research/diagnosis/RESULTS_DIAG.md 4절, 고르기 구간 15분 324,687건 등",
+  "status": "validated",
+  "applies": {
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "DOGE",
+    "LTC",
+    "BCH",
+    "XRP"
+   ],
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ]
+  }
+ },
+ {
+  "id": "k16",
+  "topic": "이격·추격",
+  "rule": "EMA20에서 2.5 ATR 이상 이격된 진입은 나머지와 비슷하거나 더 나았으므로 '과열이라 진입 금지'를 사실처럼 말하지 않는다.",
+  "evidence": "research/diagnosis/RESULTS_DIAG.md 4절 (비중 4~5%, 무작위 2~3%)",
+  "status": "validated",
+  "applies": {
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "DOGE",
+    "LTC",
+    "BCH",
+    "XRP"
+   ],
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ]
+  }
+ },
+ {
+  "id": "k17",
+  "topic": "상위봉",
+  "rule": "상위 봉 추세 반대 진입이 나머지보다 나쁘지 않았으므로(30분~4시간은 오히려 덜 나쁨) 상위봉 정렬을 검증된 엣지로 제시하지 않는다.",
+  "evidence": "research/diagnosis/RESULTS_DIAG.md 4절 (매매법 38~41% vs 무작위 50%)",
+  "status": "validated",
+  "applies": {
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "DOGE",
+    "LTC",
+    "BCH",
+    "XRP"
+   ],
+   "timeframes": [
+    "30m",
+    "1h",
+    "4h"
+   ]
+  }
+ },
+ {
+  "id": "k18",
+  "topic": "진입강도",
+  "rule": "지표 조건이 더 강하게 맞아도 결과가 좋아지지 않았으므로 신호 강도를 근거로 레버리지·확신도를 올리지 않는다.",
+  "evidence": "research/entry_study/RESULTS_ENTRY_BC.md B: 410검정 통과 0, |ρ| 중앙값 0.010, ρ>0 50.5%, 최강 20%도 −5~−7% ROE",
+  "status": "validated",
+  "applies": {
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "DOGE",
+    "LTC",
+    "BCH"
+   ],
+   "timeframes": [
+    "5m",
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ]
+  }
+ },
+ {
+  "id": "k19",
+  "topic": "지지저항",
+  "rule": "5분봉에서 첫 익절 전 앞쪽 레벨이 없는 진입이 0.5~1.2%p 덜 나쁘지만 무작위 진입도 같아 시장 성질일 뿐이며 여전히 손실이다.",
+  "evidence": "research/entry_study/RESULTS_ENTRY_A.md: N17 5분 +1.37/+1.29/+1.21%p, 무작위 +0.48/+1.24/+0.90%p, 좋은 쪽 ROE −4.4~−5.5%",
+  "status": "validated",
+  "applies": {
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "DOGE",
+    "LTC",
+    "BCH"
+   ],
+   "timeframes": [
+    "5m",
+    "15m"
+   ]
+  }
+ },
+ {
+  "id": "k20",
+  "topic": "지지저항",
+  "rule": "'손절 뒤에 지지선이 있으면 더 안전하다'는 가설은 기각됐다.",
+  "evidence": "research/entry_study/RESULTS_ENTRY_A.md P2: 후보 0개, 가설 방향 비율 30%/33%/27%",
+  "status": "rejected",
+  "applies": {
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "DOGE",
+    "LTC",
+    "BCH"
+   ],
+   "timeframes": [
+    "5m",
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ]
+  }
+ },
+ {
+  "id": "k21",
+  "topic": "레벨밀도",
+  "rule": "거래의 79~90%는 첫 익절 전에, 96% 이상은 손절 전에 레벨이 있으므로 '레벨 근처'라는 말만으로는 판별력이 없다.",
+  "evidence": "research/entry_study/RESULTS_ENTRY_A.md 결론·4-1 (L1~L6 레벨 6종)",
+  "status": "validated",
+  "applies": {
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "DOGE",
+    "LTC",
+    "BCH"
+   ],
+   "timeframes": [
+    "5m",
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ]
+  }
+ },
+ {
+  "id": "k22",
+  "topic": "파라미터",
+  "rule": "기본 파라미터는 우연한 뾰족점이 아니고 변형으로 좋아진다는 근거가 없으므로 파라미터 미세조정을 제안하지 않는다.",
+  "evidence": "research/entry_study/RESULTS_ENTRY_BC.md C: 평평 180, 완만 141, 뾰족 0; 1,680변형 중 3기간 플러스 18개 < '영향 없음' 기대 21.7개; 기본값 3기간 플러스 0/108칸",
+  "status": "validated",
+  "applies": {
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "DOGE",
+    "LTC",
+    "BCH"
+   ],
+   "timeframes": [
+    "5m",
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ]
+  }
+ },
+ {
+  "id": "k23",
+  "topic": "작은표본",
+  "rule": "차트 60건에서 80~83% 이기던 패턴이 전체 약 2만 건에서 효과가 없거나 반대였으므로 30건 미만은 패턴이라 부르지 않는다.",
+  "evidence": "research/chart_review/RESULTS_CHART.md: V3.9 좁은 횡보 60건 83% → 전체 d −0.03%p, p 0.44; 13규칙 통과 0",
+  "status": "validated",
+  "applies": {
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "DOGE",
+    "LTC",
+    "BCH"
+   ],
+   "timeframes": [
+    "15m"
+   ]
+  }
+ },
+ {
+  "id": "k24",
+  "topic": "단기되돌림",
+  "rule": "직전 1시간 상승 코인은 다음 1시간 조금 약한 경향이 있으나 크기가 거래당 0.02~0.04%로 비용 이하다.",
+  "evidence": "research/verify/RESULTS_VERIFY.md V3: 1시간 IC −0.064(고르기)/−0.046(확인)",
+  "status": "validated",
+  "applies": {
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "DOGE",
+    "LTC",
+    "BCH",
+    "XRP"
+   ],
+   "timeframes": [
+    "1h"
+   ]
+  }
+ },
+ {
+  "id": "k25",
+  "topic": "펀딩",
+  "rule": "펀딩이 높으면 이후 24시간 조금 약하지만, 펀딩 극단 반대 매매 자체는 손실이었다.",
+  "evidence": "research/verify/RESULTS_VERIFY.md 24시간 IC −0.098/−0.072; research/orderflow/RESULTS_ORDERFLOW.md 펀딩 극단 반대 평균 −0.18%/−0.20%",
+  "status": "validated",
+  "applies": {
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "DOGE",
+    "LTC",
+    "BCH",
+    "XRP"
+   ],
+   "timeframes": [
+    "15m",
+    "1h"
+   ]
+  }
+ },
+ {
+  "id": "k26",
+  "topic": "펀딩꼬리",
+  "rule": "평균 펀딩은 8시간당 0.0113%지만 SOL은 한 번에 최대 2%였고 간격이 2~4시간으로 줄기도 했으므로 고레버리지 보유 중 정산 시각·비율을 확인한다.",
+  "evidence": "research/binance_data/RESULTS_BINANCE.md 4절 (40배면 증거금 80%; 다른 코인 최대 0.25~0.75%)",
+  "status": "validated",
+  "applies": {
+   "symbols": [
+    "SOL",
+    "BTC",
+    "ETH",
+    "DOGE",
+    "LTC",
+    "BCH"
+   ],
+   "timeframes": "all"
+  }
+ },
+ {
+  "id": "k27",
+  "topic": "펀딩구조",
+  "rule": "BTC 펀딩 정산의 86%, ETH 83%, DOGE 81%를 롱이 냈으므로 롱 장기 보유에는 구조적 비용이 있다.",
+  "evidence": "research/binance_data/RESULTS_BINANCE.md 4절 (2021-08~2026-08; SOL 69%, BCH 53%)",
+  "status": "validated",
+  "applies": {
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "DOGE",
+    "LTC",
+    "BCH"
+   ],
+   "timeframes": "all"
+  }
+ },
+ {
+  "id": "k28",
+  "topic": "주문흐름",
+  "rule": "OI 급증·급감, 테이커 쏠림, 프리미엄 과열, 상위 vs 일반 계정 괴리는 단독 진입 근거로 비용을 넘지 못했다.",
+  "evidence": "research/orderflow/RESULTS_ORDERFLOW.md: 70조합 후보 0, 최소 p 0.33",
+  "status": "rejected",
+  "applies": {
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "DOGE",
+    "LTC",
+    "BCH",
+    "XRP"
+   ],
+   "timeframes": [
+    "15m",
+    "1h"
+   ]
+  }
+ },
+ {
+  "id": "k29",
+  "topic": "호가",
+  "rule": "호가 불균형(±1%, ±5%) 진입은 15·30분 모두 거래당 −0.11~−0.14%, 승률 32~39%로 기각됐다.",
+  "evidence": "research/round3/RESULTS_ROUND3.md (2023-01~2026-09, 최대 28,751건)",
+  "status": "rejected",
+  "applies": {
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "DOGE",
+    "LTC",
+    "BCH"
+   ],
+   "timeframes": [
+    "15m",
+    "30m"
+   ]
+  }
+ },
+ {
+  "id": "k30",
+  "topic": "시간대",
+  "rule": "코인×시간 168칸에서 찾은 좋은 시간대(XRP 6칸)는 확인 구간에서 사라졌으므로 시간대 주장은 세션 8칸·칸당 30건·연도별 반복으로만 한다.",
+  "evidence": "research/round3/RESULTS_ROUND3.md: 확인 비용 전 +0.008%, 4,909건; docs/reference-analysis-and-org-v3.md 4-3",
+  "status": "rejected",
+  "applies": {
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "DOGE",
+    "LTC",
+    "BCH",
+    "XRP"
+   ],
+   "timeframes": [
+    "1h"
+   ]
+  }
+ },
+ {
+  "id": "k31",
+  "topic": "BTC선행",
+  "rule": "BTC가 먼저 움직인 뒤 알트를 따라가는 매매는 손실이었다.",
+  "evidence": "research/round3/RESULTS_ROUND3.md: 15분 4,653건 −0.15%/−0.13% 승률 36%, 30분 −0.13%/−0.15%",
+  "status": "rejected",
+  "applies": {
+   "symbols": [
+    "ETH",
+    "SOL",
+    "DOGE",
+    "LTC",
+    "BCH"
+   ],
+   "timeframes": [
+    "15m",
+    "30m"
+   ]
+  }
+ },
+ {
+  "id": "k32",
+  "topic": "펀딩시각",
+  "rule": "펀딩 정산 전후 1시간 매매는 손실이었다.",
+  "evidence": "research/round3/RESULTS_ROUND3.md: 3,190건, 전 −0.10%/−0.13%, 후 −0.12%/−0.14%",
+  "status": "rejected",
+  "applies": {
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "DOGE",
+    "LTC",
+    "BCH",
+    "XRP"
+   ],
+   "timeframes": [
+    "1h"
+   ]
+  }
+ },
+ {
+  "id": "k33",
+  "topic": "복리",
+  "rule": "하루 평균 수익이 플러스여도 하루 −90% 같은 꼬리로 계좌가 0이 될 수 있으므로 기대값은 복리·최대 낙폭과 함께 본다.",
+  "evidence": "research/maker/RESULTS_ROUND2.md B: 가장 강한 코인 1개 롱(28일) 확인 연 −92%, 낙폭 −100%",
+  "status": "validated",
+  "applies": {
+   "symbols": "all",
+   "timeframes": [
+    "1d"
+   ]
+  }
+ },
+ {
+  "id": "k34",
+  "topic": "지정가",
+  "rule": "신호가에서 0.25 ATR 유리한 지정가는 체결률 76~77%로 거래당 0.03~0.08%p를 개선하므로 진입 방식으로 지정가를 우선 검토한다.",
+  "evidence": "research/maker/RESULTS_ROUND2.md A-1: 15분 76%, 1시간 77%; 시장가 −0.15%→지정가 −0.07%(고르기)",
+  "status": "validated",
+  "applies": {
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "DOGE",
+    "LTC",
+    "BCH",
+    "XRP"
+   ],
+   "timeframes": [
+    "15m",
+    "1h"
+   ]
+  }
+ },
+ {
+  "id": "k35",
+  "topic": "유명매매법",
+  "rule": "터틀·모멘텀·강한 코인 로테이션·코인 간 롱숏·변동성 돌파 11개 유명 매매법은 모두 탈락했다.",
+  "evidence": "research/famous/RESULTS_FAMOUS.md: 최소 p 0.067, BH 기준 0.009; 변동성 돌파 하루 −0.02~−0.10%",
+  "status": "rejected",
+  "applies": {
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "DOGE",
+    "LTC",
+    "BCH",
+    "XRP"
+   ],
+   "timeframes": [
+    "1d"
+   ]
+  }
+ },
+ {
+  "id": "k36",
+  "topic": "보유길이",
+  "rule": "추세 따라가기형은 익절 잠금 후 더 들고 가는 편이, 되돌림형은 빨리 나오는 편이 나았던 경향이 있다.",
+  "evidence": "research/strategy_profiles/PROFILES.md 24 vs 7칸(추세), 2 vs 6칸(되돌림); RESULTS_BINANCE.md 25 vs 10, 1 vs 8 (같은 데이터, 복사 계좌로 미확인)",
+  "status": "hypothesis",
+  "applies": {
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "DOGE",
+    "LTC",
+    "BCH"
+   ],
+   "timeframes": [
+    "5m",
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ]
+  }
+ },
+ {
+  "id": "k37",
+  "topic": "데이터",
+  "rule": "현물 합산과 바이낸스 선물은 5분봉 신호 일치 49%, ATR 차이 7~26%이므로 분석 근거 데이터의 거래소·상품을 명시한다.",
+  "evidence": "research/binance_data/RESULTS_BINANCE.md 2장 (거래량 10~29배 차이)",
+  "status": "validated",
+  "applies": {
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "DOGE",
+    "LTC",
+    "BCH"
+   ],
+   "timeframes": [
+    "5m",
+    "15m",
+    "30m",
+    "1h",
+    "4h",
+    "1d"
+   ]
+  }
+ },
+ {
+  "id": "k38",
+  "topic": "역발상롱숏",
+  "rule": "일반 계정 롱숏 비율이 30일 상위/하위 5% 극단일 때 반대 방향 + 지정가 0.25 ATR(1시간, 손절1.5/익절3)은 두 구간 모두 플러스였지만 보정 기준 미달이다.",
+  "evidence": "research/maker/RESULTS_ROUND2.md 2절: 1,563건 PF 1.19 +0.228% p 0.010 / 1,450건 PF 1.16 +0.183%; 20배 계좌 −100%/−96%; BTC 2024-07~ −0.02%",
+  "status": "hypothesis",
+  "applies": {
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "DOGE",
+    "LTC",
+    "BCH",
+    "XRP"
+   ],
+   "timeframes": [
+    "1h"
+   ]
+  }
+ },
+ {
+  "id": "k39",
+  "topic": "모멘텀",
+  "rule": "28일 시계열 모멘텀은 1배 연 +34%였지만 확인 구간 +1%, 낙폭 −54%로 1~2배에서만 약한 가설이다.",
+  "evidence": "research/famous/RESULTS_FAMOUS.md: 샤프 0.81, p 0.075, 6/7코인",
+  "status": "hypothesis",
+  "applies": {
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "DOGE",
+    "LTC",
+    "BCH",
+    "XRP"
+   ],
+   "timeframes": [
+    "1d"
+   ]
+  }
+ },
+ {
+  "id": "k40",
+  "topic": "거래량급증",
+  "rule": "4시간 거래량 3배 급증 봉의 방향으로 진입하면 세 기간 모두 플러스였지만 방향 효과가 국면에 따라 뒤집혔다.",
+  "evidence": "research/library/RESULTS_LIBRARY.md: EMA200 필터 +0.27%(737건)/+0.54%(594)/+1.00%(226); 고르기 롱 −0.03% 숏 +0.20%; 1배 낙폭 −71~−94%",
+  "status": "hypothesis",
+  "applies": {
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "DOGE",
+    "LTC",
+    "BCH",
+    "XRP"
+   ],
+   "timeframes": [
+    "4h"
+   ]
+  }
+ },
+ {
+  "id": "k41",
+  "topic": "저변동",
+  "rule": "N09 앨리게이터·아룬 1시간은 ATR이 평소 0.8배 미만일 때 덜 나빴다.",
+  "evidence": "research/diagnosis/RESULTS_DIAG.md 3절: 554건 +0.18% vs 나머지 −0.40%, 7코인·앞뒤 절반 일관, 결과 본 뒤 가설",
+  "status": "hypothesis",
+  "applies": {
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "DOGE",
+    "LTC",
+    "BCH",
+    "XRP"
+   ],
+   "timeframes": [
+    "1h"
+   ]
+  }
+ },
+ {
+  "id": "k42",
+  "topic": "미국세션",
+  "rule": "S4 볼린저·BBP 30분은 미국 시간(KST 22~05) 진입이 덜 나빴다.",
+  "evidence": "research/diagnosis/RESULTS_DIAG.md 3절: 2,219건 +0.03% vs −0.28%, 결과 본 뒤 가설",
+  "status": "hypothesis",
+  "applies": {
+   "symbols": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "DOGE",
+    "LTC",
+    "BCH",
+    "XRP"
+   ],
+   "timeframes": [
+    "30m"
+   ]
+  }
+ },
+ {
+  "id": "k43",
+  "topic": "매크로",
+  "rule": "CPI·FOMC·NFP·PCE 전후 효과는 이 저장소에 실증 결과가 없으며 손실 카드 태그(발표 30분 전~2시간 후)로만 표시한다.",
+  "evidence": "docs/macro-events.md: data/macro_events.csv 일정 0건",
+  "status": "hypothesis",
+  "applies": {
+   "symbols": "all",
+   "timeframes": "all"
+  }
+ }
+]

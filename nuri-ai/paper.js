@@ -42,7 +42,7 @@ function closePos(s, price, t, reason){
   return ret;
 }
 function openPos(s, side, price, t, atr){
-  const r = s.spec.risk || {}, lev = Math.max(1, Math.min(20, +r.leverage || 3)), pct = Math.max(1, Math.min(100, +r.position_pct || 20));
+  const r = s.spec.risk || {}, lev = Math.max(1, Math.min(125, +r.leverage || 3)), pct = Math.max(1, Math.min(100, +r.position_pct || 20));
   const margin = s.cash * pct / 100, notional = margin * lev, dir = side === "long" ? 1 : -1;
   const sl = r.stop_loss_pct ? price * (1 - dir * r.stop_loss_pct / 100) : r.atr_stop_mult && atr ? price - dir * atr * r.atr_stop_mult : null;
   const tp = r.take_profit_pct ? price * (1 + dir * r.take_profit_pct / 100) : r.atr_tp_mult && atr ? price + dir * atr * r.atr_tp_mult : null;
@@ -80,7 +80,7 @@ export async function step(onEvent){
         else if (hitTp) ev = closePos(s, p.tp, last.t, "익절");
         if (ev) events.push({kind: "close", s, trade: ev});
       }
-      const sig = Q.liveSignal(s.spec, cs);
+      const sig = Q.liveSignal(s.spec, cs, {position: s.pos?.side || null});
       s.lastSignal = sig ? {action: sig.action, why: sig.why, t: Date.now()} : null;
       if (sig && sig.t && sig.t !== s.lastBar){
         s.lastBar = sig.t;
