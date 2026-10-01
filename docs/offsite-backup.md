@@ -219,7 +219,7 @@ sudo /opt/paperbot/venv/bin/python -m paperbot.offsite restore --parts /root/res
    - **10번 점검(`launchcheck --stage before`)은 하지 않습니다.** 되살린 paper3.db를 보고 "옮기라"는 줄이 나오는데, 따르면 되살린 기록이 빠집니다. 점검은 다음 5번의 `--stage after`로 합니다.
 3. **그날은 에이전트를 쉬게 합니다.** AI 사용 기록도 백업 시점으로 돌아가서 하루 한도를 한 번 더 쓸 수 있기 때문입니다: `sudo systemctl stop paperbot-agents.timer`, 다음 날 `sudo systemctl start paperbot-agents.timer` (`docs/agent-rooms.md`).
 4. **주문 실행기(`paperbot-executor`)는 켜지 않습니다** (`docs/live-safety.md`).
-5. `docs/server-setup-v3.md` 12번(첫 1시간 확인)을 합니다. 10~15분 뒤 `launchcheck --stage after`의 모든 줄이 OK여야 합니다. 그리고 개발자에게 알립니다.
+5. `docs/server-setup-v3.md` 12번(첫 1시간 확인)을 합니다. 10~15분 뒤 `launchcheck --stage after`의 줄이 모두 OK여야 합니다. 단, 3번에서 쉬게 한 `paperbot-agents.timer: 꺼져 있음` 줄은 그날은 따르지 않습니다(다음 날 켬). 그리고 개발자에게 알립니다.
 6. 며칠 뒤 잘 돌면 임시 파일을 지웁니다: `sudo rm -rf /root/restore-in /root/restore-out`
 
 무엇을 잃나:

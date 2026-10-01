@@ -782,8 +782,8 @@ def next_steps(dest: Path, names: Sequence[str]) -> str:
         "3) 그날은 에이전트를 쉬게 합니다 (AI 사용 기록이 백업 시점으로 돌아감): 켤 때 paperbot-agents.timer만 빼고,",
         "   다음 날 sudo systemctl start paperbot-agents.timer",
         "4) docs/server-setup-v3.md 11번(시작)대로 켜고 (paperbot-offsite.timer도 함께), 12번(첫 1시간 확인)을 합니다.",
-        "   확인은 12번의 launchcheck --stage after로 합니다. 10번(--stage before)은 하지 않습니다: 되살린 paper3.db를",
-        "   옮기라는 줄이 나오는데, 따르면 되살린 기록이 빠집니다.",
+        "   확인은 12번의 launchcheck --stage after로 합니다(그날 쉬게 한 paperbot-agents.timer 줄은 따르지 않음).",
+        "   10번(--stage before)은 하지 않습니다: 되살린 paper3.db를 옮기라는 줄을 따르면 되살린 기록이 빠집니다.",
         "   주문 실행기(paperbot-executor)는 켜지 않습니다 (docs/live-safety.md).",
     ]
     return "\n".join(lines)
