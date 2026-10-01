@@ -1072,19 +1072,20 @@ async function ventureJob(){
 /* ============ 부동산팀: 재개발 후보 발굴 → 자체 지수로 점수 → 추천 ============ */
 async function realestateJob(){
   const R = await import("./realestate.js");
-  const regions = R.REGIONS.map(x => typeof x === "string" ? x : x.name || x.region || x.ko).filter(Boolean);
+  const regions = R.REGIONS.filter(x => !x.sub).map(x => x.full);   // 서울 25개 구 → 경기 → 인천 순으로 돈다
   const i = +localStorage.getItem("officeRE") || 0, region = regions[i % regions.length]; localStorage.setItem("officeRE", String(i + 1));
   const a = agentById("redev");
   fire({kind: "busy", agent: a, text: `🏘 ${region} 재개발·재건축 자료 찾는 중`});
   const ev = await R.gatherRedev({region});
-  const evText = ev.text || (ev.items || ev).map?.((x, k) => `[${k + 1}] ${x.title} (${x.date || ""})\n${x.url}\n${x.snippet || ""}`).join("\n\n") || "";
+  const evText = ev.text || "";
+  if (!ev.items?.length){ addNote("realestate", `${region}: 검색 근거를 못 모음(검색 차단 가능)`, "발굴"); return; }
   for (const x of (ev.items || []).slice(0, 3)) post({ch: "realestate", kind: "work", agent: a.id, icon: "📰", text: x.title, url: x.url});
   const e = await solo(a, {room: "realestate", sys: personaOf(a, R.EXTRACT_PROMPT), user: `지역: ${region}\n\n근거 자료:\n${String(evText).slice(0, 7000)}`, maxTokens: 1800, train: `아래 ${region} 부동산 기사에서 재개발·재건축 후보 구역을 근거와 함께 정리해 줘.`});
-  const cands = R.parseCandidates(e.raw || e.text);
+  const cands = R.parseCandidates(e.raw || e.text, {evidence: ev.items});
   if (!cands.length){ addNote("realestate", `${region}: 이번 자료로는 후보를 못 찾음 → 검색어 보완 필요`, "발굴"); return; }
-  await R.saveCandidates(cands);
+  await R.saveCandidates(cands, {evidence: ev.items});
   const ranked = R.rankCandidates(await R.loadCandidates());
-  const here = ranked.filter(c => (c.region || "").includes(region) || region.includes(c.region || "@")).slice(0, 6);
+  const here = ranked.filter(c => (c.region || "").includes(region.split(" ").pop()) || region.includes(c.region || "@")).slice(0, 6);
   post({ch: "realestate", kind: "re", agent: a.id, region, items: (here.length ? here : ranked.slice(0, 6)).map(c => ({area: c.area, region: c.region, project_type: c.project_type, stage: c.stage, score: c.score ?? c.index?.score, certainty: c.certainty ?? c.index?.certainty, upside: c.upside ?? c.index?.upside, sources: (c.evidence_urls || c.sources || []).slice(0, 2).map(u => typeof u === "string" ? {title: u.replace(/^https?:\/\/(www\.)?/, "").slice(0, 40), url: u} : u)}))});
   // 세 번에 한 번은 팀장이 전체 순위로 추천
   if (i % 3 === 2){ const lead = agentById("land"); await solo(lead, {room: "realestate", sys: personaOf(lead, "지금까지 발굴한 재개발·재건축 후보 순위와 자체 '재개발 잠재력 지수'를 보고 대표에게 추천 3곳과 이유·위험·확인할 것(토지이음·정비몽땅 등)을 말한다. 투자 권유가 아니라 조사 결과임을 밝힌다."), user: R.candidateText(ranked, 12) + "\n\n" + (R.customIndicatorText?.() || ""), maxTokens: 1400}); }
@@ -1097,10 +1098,10 @@ async function mediaJob(){
   const i = +localStorage.getItem("officeMedia") || 0, q = MEDIA_Q[i % MEDIA_Q.length]; localStorage.setItem("officeMedia", String(i + 1));
   const yt = i % 3 !== 2, a = agentById(yt ? "yt" : "insta");
   fire({kind: "busy", agent: a, text: `${yt ? "▶️ 유튜브" : "📸 인스타·커뮤니티"}에서 '${q}' 보는 중`});
-  const items = yt ? await M.youtubeSearch({query: q, n: 10}) : [...(await M.instagramSearch({query: q, n: 6}).catch(() => [])), ...(await M.communitySearch({query: q}).catch(() => []))];
-  const list = Array.isArray(items) ? items : items.items || [];
+  const res = yt ? [await M.youtubeSearch({query: q, n: 10})] : [await M.instagramSearch({query: q, n: 6}).catch(() => ({items: []})), await M.communitySearch({query: q}).catch(() => ({items: []}))];
+  const list = res.flatMap(r => r?.items || []);
   for (const x of list.slice(0, 4)) post({ch: "data", kind: "work", agent: a.id, icon: yt ? "▶️" : "📸", text: `${x.title}${x.views ? " · " + x.views : ""}`, url: x.url});
-  await solo(a, {room: "data", sys: personaOf(a, "본 영상·게시물 제목과 조회수로 지금 대중이 무엇에 관심 있고 어떤 분위기인지 3~5문장으로 해설한다. 의견·인기일 뿐 사실이 아님을 짚고, 역발상 신호인지도 말한다."), user: M.mediaText(list, yt ? "youtube" : "instagram"), train: "아래 유튜브·SNS 인기 콘텐츠 목록을 보고 대중의 관심과 분위기를 해설해 줘."});
+  await solo(a, {room: "data", sys: personaOf(a, "본 영상·게시물 제목과 조회수로 지금 대중이 무엇에 관심 있고 어떤 분위기인지 3~5문장으로 해설한다. 의견·인기일 뿐 사실이 아님을 짚고, 역발상 신호인지도 말한다."), user: M.mediaText(list, yt ? "youtube" : "community", res.map(r => r?.note).filter(Boolean).join(" ")), train: "아래 유튜브·SNS 인기 콘텐츠 목록을 보고 대중의 관심과 분위기를 해설해 줘."});
 }
 
 /* ============ 머신러닝·딥러닝 연구 ============ */

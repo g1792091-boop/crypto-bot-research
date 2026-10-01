@@ -2,6 +2,8 @@
 // 모델이 <tool name="도구">{"인자":"값"}</tool> 를 쓰면 실행하고 <tool_result>로 결과를 돌려준다.
 import { settings, saveSettings, brainStream, brainCtx, brainAnswerLen, estTokens, splitThink, search, docs, apiBase, codeCall, ls, bus, esc,
          webGet, webSearch, readPage, PROVIDERS, shortModel } from "./engine.js";
+import { REALESTATE_TOOLS, setRealestateSettings } from "./realestate.js";
+import { MEDIA_TOOLS, setMediaSettings } from "./media.js";
 import { nvIndex, nvSkill, nvSearch, nvAutoSkill, GROUP_KO } from "./nvskills.js";
 import { exchanges, computeAll, quantScore, levels, backtest, STRATS, fmtNum, YAHOO_LIST } from "./trade.js";
 
@@ -627,8 +629,12 @@ export const BUILTIN_SKILLS = [
 - 사용자 컴퓨터의 파일을 직접 고치려면 '코드' 모드를 쓰라고 안내한다.`}
 ];
 // 퀀트·SNS 도구를 분야 스킬에 붙인다
-const EXTRA_TOOLS = {crypto_spot: ["indicator_all", "sns_buzz", "orderbook", "whale_trades"], crypto_futures: ["indicator_all", "sns_buzz", "strategy_backtest", "orderbook", "whale_trades", "futures_flow"], us_stocks: ["indicator_all", "sns_buzz"], kr_stocks: ["indicator_all"],
-  global_futures: ["indicator_all"], kr_futures: ["indicator_all"], news: ["sns_buzz"], macro: ["sns_buzz"], backtest: ["strategy_backtest", "history_backtest", "indicator_all", "paper_status"], research: ["sns_buzz"]};
+// 부동산 재개발·실거래가, 유튜브·인스타·커뮤니티 도구 (realestate.js · media.js)
+Object.assign(TOOLS, REALESTATE_TOOLS, MEDIA_TOOLS);
+setRealestateSettings(settings); setMediaSettings(settings);
+const EXTRA_TOOLS = {land: ["redev_scan", "redev_rank", "apt_trades", "youtube_search"], arch: ["apt_trades"],
+  crypto_spot: ["indicator_all", "sns_buzz", "orderbook", "whale_trades", "youtube_search"], crypto_futures: ["indicator_all", "sns_buzz", "strategy_backtest", "orderbook", "whale_trades", "futures_flow"], us_stocks: ["indicator_all", "sns_buzz"], kr_stocks: ["indicator_all"],
+  global_futures: ["indicator_all"], kr_futures: ["indicator_all"], news: ["sns_buzz", "youtube_search", "community_search"], macro: ["sns_buzz", "youtube_search"], backtest: ["strategy_backtest", "history_backtest", "indicator_all", "paper_status"], research: ["sns_buzz", "youtube_search", "youtube_transcript", "instagram_search", "community_search"]};
 for (const sk of BUILTIN_SKILLS) sk.tools = [...new Set([...(sk.tools || []), ...(EXTRA_TOOLS[sk.id] || [])])];
 
 export function activeSkills(text, mode = "chat"){

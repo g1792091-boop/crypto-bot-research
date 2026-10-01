@@ -160,7 +160,10 @@ export const PROVIDERS = {
                defaults:["claude-opus-5-5","claude-sonnet-5-5","claude-haiku-4-5-20251001"]},
   sambanova:  {name:"SambaNova", proxy:"sambanova", base:"https://api.sambanova.ai/v1", key:null, url:"https://cloud.sambanova.ai/apis", note:"무료 한도", bias:3, defaults:["DeepSeek-V3-0324","Meta-Llama-3.3-70B-Instruct","DeepSeek-R1"]}
 };
-export const SEARCH_KEYS = {tavily:{name:"Tavily 검색", key:/^tvly-/, url:"https://app.tavily.com"}, brave:{name:"Brave 검색", key:/^BSA/, url:"https://brave.com/search/api/"}};
+export const SEARCH_KEYS = {tavily:{name:"Tavily 검색", key:/^tvly-/, url:"https://app.tavily.com"}, brave:{name:"Brave 검색", key:/^BSA/, url:"https://brave.com/search/api/"},
+  // 앞에 이름을 붙여 넣는다: "youtube: AIza…" · "공공데이터: 인증키"
+  youtube:{name:"유튜브 Data API", key:/^(youtube|유튜브)\s*[:=]/i, strip:true, sub:"유튜브 조회수·채널 (붙여넣기: youtube: 키)", url:"https://console.cloud.google.com/apis/library/youtube.googleapis.com"},
+  datagokr:{name:"공공데이터포털 실거래가", key:/^(datagokr|data\.go\.kr|공공데이터)\s*[:=]/i, strip:true, sub:"아파트 실거래가 (붙여넣기: 공공데이터: 키)", url:"https://www.data.go.kr"}};
 const NOT_CHAT = /embed|rerank|guard|safety|reward|whisper|tts|speech|audio|vision-?only|clip|parse|retriever|ocr|flux|sdxl|stable-diffusion|image|moderation|nemoretriever|nv-embed|paligemma|kosmos|deplot|fuyu|neva|vila|cosmos/i;
 // 이미지를 볼 수 있는 모델
 export const VISION_RE = /claude|llama-4|vision|[-_.]vl\b|-vl-|qwen\d?(\.\d)?-?vl|gemma-3-(4|12|27)b|gemma-4|gemini|phi-4-multimodal|phi-3\.5-vision|kimi-vl|pixtral|mistral-small-3|mistral-medium-3|nemotron.*vl|cosmos-reason|qwen3\.5/i;
@@ -204,7 +207,7 @@ export async function listProviderModels(id, key = settings.keys[id]){
 export async function addApiKey(raw){
   const key = String(raw || "").trim(); if (!key) throw new Error("키를 붙여넣으세요");
   const d = detectKeyKind(key);
-  if (d && d.kind === "search"){ settings.keys[d.id] = key; saveSettings(); return {kind:"search", id:d.id, name:SEARCH_KEYS[d.id].name}; }
+  if (d && d.kind === "search"){ settings.keys[d.id] = SEARCH_KEYS[d.id].strip ? key.replace(/^[^:=]+[:=]\s*/, "") : key; saveSettings(); return {kind:"search", id:d.id, name:SEARCH_KEYS[d.id].name}; }
   const order = d ? [d.id] : Object.keys(PROVIDERS).filter(id => !PROVIDERS[id].key || id === "deepseek");
   let lastErr = null;
   for (const id of order){

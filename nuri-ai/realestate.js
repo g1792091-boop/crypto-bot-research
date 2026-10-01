@@ -207,7 +207,8 @@ export const REDEV_INDEX = {
     {k: "거래 규제", re: /토지\s*거래\s*허가|규제\s*지역|투기\s*과열|조정\s*대상|실거주\s*의무/, cert: 0, up: -5},
     {k: "지분 쪼개기·권리산정", re: /지분\s*쪼개기|권리\s*산정|현금\s*청산/, cert: 0, up: -4}
   ],
-  riskCap: {cert: -40, up: -25}
+  riskCap: {cert: -40, up: -25},
+  notRisk: /(토지\s*거래\s*허가|허가|규제|조정\s*대상|투기\s*과열)\s*(지역|구역)?\s*(지정\s*)?(해제|취소|철회)/g
 };
 // 후보 하나 → {score, certainty, upside, breakdown:[{factor, points, cert, up, why}]} (breakdown 의 points 합 = score)
 export function scoreCandidate(c, {now = Date.now(), index = REDEV_INDEX} = {}){
@@ -233,8 +234,9 @@ export function scoreCandidate(c, {now = Date.now(), index = REDEV_INDEX} = {}){
   for (const t of index.transport) if (t.re.test(good)){ tu += t.up; tr.push(t.k); }
   if (tr.length) add("교통 호재", 0, Math.min(tu, index.transportCap), tr.join(", "));
   let rc = 0, ru = 0; const rk = [];
-  // 위험은 risks 글에서 찾고, 해제·무산처럼 치명적인 것은 signals 에 적혀 있어도 잡는다 ('토지거래허가 해제' 같은 호재는 제외)
-  for (const r of index.risks) if (r.re.test(bad) || (r.sig && r.sig.test((c.signals || []).join(" · ")))){ rc += r.cert; ru += r.up; rk.push(r.k); }
+  // 위험은 risks 글에서 찾고, 해제·무산처럼 치명적인 것은 signals 에 적혀 있어도 잡는다 ('토지거래허가구역 해제' 같은 규제 해제는 호재라 뺀다)
+  const notRisk = s => s.replace(index.notRisk || /$^/g, " ");
+  for (const r of index.risks) if (r.re.test(notRisk(bad)) || (r.sig && r.sig.test(notRisk((c.signals || []).join(" · "))))){ rc += r.cert; ru += r.up; rk.push(r.k); }
   if (rk.length) add("위험 감점", Math.max(rc, index.riskCap.cert), Math.max(ru, index.riskCap.up), rk.join(", "));
   // 확실성·상승여력은 0~100으로 자르고, 자른 만큼은 '범위 보정'으로 적어 합이 맞게 한다
   const rawC = rows.reduce((a, r) => a + r.cert, 0), rawU = rows.reduce((a, r) => a + r.up, 0);
@@ -383,7 +385,7 @@ export function tradesText(r, mo, label = ""){
 /* ============ 6. 도구 (agent.js 모양) ============ */
 // 이번 세션에서 모은 근거: 날짜 붙이기에 쓰고, [번호]→주소 변환은 마지막 탐색 목록 기준(AI가 본 번호)
 const SESSION_EV = new Map(); let LAST_SCAN = [];
-const coerceList = v => { if (Array.isArray(v)) return v; if (typeof v === "string") return parseCandidates(v); return []; };
+const coerceList = (v, opts) => Array.isArray(v) || typeof v === "string" ? parseCandidates(v, opts) : [];
 export const REALESTATE_TOOLS = {
   redev_scan: {mode: "both", label: "재개발 후보지 탐색", args: '{"region":"성북구","signals":["신통","모아타운","해제","교통"]}', act: a => `${a.region || "서울"} 재개발·재건축 근거 수집`,
     desc: "지역(서울 25개 구·경기·인천 주요 도시)의 정비구역 지정·해제, 신속통합기획·모아타운·공공재개발 선정, 안전진단, 조합설립, 관리처분, 역세권·GTX 소식을 검색해 근거 목록을 준다. 이 근거에서 후보지를 JSON으로 뽑아 redev_rank 의 candidates 로 넘기면 저장·점수화된다",
@@ -396,7 +398,7 @@ export const REALESTATE_TOOLS = {
   redev_rank: {mode: "both", label: "재개발 잠재력 순위", args: '{"candidates":[{"area":"장위15구역","region":"서울 성북구","project_type":"재개발","stage":"구역지정","signals":["신속통합기획"],"positives":[],"risks":[],"evidence_urls":["https://..."]}],"n":10,"explain":false}', act: () => "재개발 잠재력 지수 계산",
     desc: "연구 노트에 쌓인 재개발·재건축 후보지를 '재개발 잠재력 지수'(확실성·상승여력, 0~100)로 순위를 매긴다. candidates 를 주면 먼저 저장(같은 구역은 합치고 단계 변화 기록)한다. explain:true 면 지수 계산법과 1위의 점수표도 준다",
     async run(a, ctx = {}){
-      const o = ctx.io || {}, ev = [...SESSION_EV.values()], add = parseCandidates(coerceList(a.candidates), {evidence: LAST_SCAN, strict: false});
+      const o = ctx.io || {}, ev = [...SESSION_EV.values()], add = coerceList(a.candidates, {evidence: LAST_SCAN, strict: false});
       if (add.length) await saveCandidates(add, {evidence: ev, ...o});
       const ranked = rankCandidates(await loadCandidates(o));
       let text = candidateText(ranked, Math.min(20, a.n || 10));
