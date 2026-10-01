@@ -290,8 +290,11 @@ export const TOOLS = {
     async run(a){ const r = await codeCall("ls", {...a, ws: "office"}); return {text: r.entries.join("\n") || "(비어 있음)", summary: `${r.entries.length}개 항목`}; }},
   office_read: {mode:"office", label:"사무실 파일 읽기", args:'{"path":"reports/today.md"}', act: a => `${a.path} 읽기`, desc:"사무실 폴더의 파일 읽기",
     async run(a){ const r = await codeCall("read", {...a, ws: "office"}); return {text: r.content, summary: `${r.to - r.from + 1}줄`}; }},
-  office_write: {mode:"office", label:"사무실 파일 쓰기", risk:"write", args:'{"path":"reports/2026-10-01.md","content":"..."}', act: a => `${a.path} 저장`, desc:"사무실 폴더에 보고서·데이터·스크립트 파일 저장",
-    async run(a){ const r = await codeCall("write", {...a, ws: "office"}); return {text: `저장: 문서/GHNano 사무실/${r.path} (${r.bytes}바이트)`, summary: r.path}; }},
+  office_write: {mode:"office", label:"사무실 파일 쓰기", risk:"write", args:'{"path":"reports/2026-10-01.md","append":false} 다음 줄에 ```(파일 내용 그대로)``` 블록', act: a => `${a.path} ${a.append ? "이어 쓰기" : "저장"}`, desc:"사무실 폴더에 보고서·데이터·스크립트 파일 저장. 내용은 JSON 안에 넣지 말고 JSON 다음 줄의 ``` 블록에 그대로 쓴다(따옴표·줄바꿈 신경 쓸 필요 없음). 길면 나눠서: 첫 부분은 append:false, 다음 부분부터 append:true",
+    async run(a){
+      if (a.__truncated) throw new Error("내용이 중간에 끊겼습니다(답 길이 한도). 파일을 두세 조각으로 나눠 append:true 로 이어 쓰세요");
+      const {__truncated, ...args} = a;
+      const r = await codeCall("write", {...args, ws: "office"}); return {text: `${a.append ? "이어 씀" : "저장"}: 문서/GHNano 사무실/${r.path} (${r.bytes}바이트)`, summary: r.path}; }},
   office_run: {mode:"office", label:"사무실 명령 실행", risk:"exec", args:'{"command":"python analysis.py","timeout":120}', act: a => `명령 실행: ${String(a.command || "").slice(0, 40)}`, desc:"사무실 폴더 안에서 python·node 같은 명령을 실행(지우기·시스템 변경 명령은 막힘)",
     async run(a){ const r = await codeCall("exec", {...a, ws: "office", timeout: Math.min(180, a.timeout || 120)}); return {text: `종료 코드 ${r.exit_code}\n${r.output}`, summary: `종료 코드 ${r.exit_code}`, output: r.output, code: r.exit_code}; }},
   /* ---- 인터넷 ---- */
@@ -553,9 +556,9 @@ export const TOOLS = {
     async run(a){ const r = await codeCall("glob", a); return {text: r.files.join("\n") || "없음", summary: `${r.files.length}개 파일`}; }},
   search_code: {mode:"code", label:"검색", risk:"read", args:'{"pattern":"정규식","glob":"*.js"}', desc:"파일 내용에서 정규식을 찾는다", act: a => `‘${a.pattern}’ 코드 검색`,
     async run(a){ const r = await codeCall("grep", a); return {text: r.matches.join("\n") || "일치하는 줄이 없습니다", summary: `${r.matches.length}곳`}; }},
-  write_file: {mode:"code", label:"쓰기", risk:"write", args:'{"path":"src/new.js","content":"전체 내용"}', desc:"파일을 새로 만들거나 전체를 덮어쓴다. 기존 파일은 가능하면 edit_file을 쓴다", act: a => `${a.path} 쓰기`,
+  write_file: {mode:"code", label:"쓰기", risk:"write", args:'{"path":"src/new.js"} 다음 줄에 ```(전체 내용)``` 블록', desc:"파일을 새로 만들거나 전체를 덮어쓴다. 내용은 JSON 다음 줄의 ``` 블록에 그대로 쓴다. 기존 파일은 가능하면 edit_file을 쓴다", act: a => `${a.path} 쓰기`,
     async before(a){ const r = await codeCall("raw", {path: a.path}); return {old: r.content || "", exists: r.exists}; },
-    async run(a, ctx, pre){ const r = await codeCall("write", a); return {text: `${r.created ? "생성" : "저장"}: ${r.path} (${r.bytes}바이트)`, summary: r.created ? "새 파일" : "덮어씀", diff: {path: r.path, old: pre?.old ?? r.old ?? "", new: a.content || ""}}; }},
+    async run(a, ctx, pre){ if (a.__truncated) throw new Error("내용이 중간에 끊겼습니다(답 길이 한도). 파일을 나눠 쓰거나 edit_file로 부분만 고치세요"); delete a.__truncated; const r = await codeCall("write", a); return {text: `${r.created ? "생성" : "저장"}: ${r.path} (${r.bytes}바이트)`, summary: r.created ? "새 파일" : "덮어씀", diff: {path: r.path, old: pre?.old ?? r.old ?? "", new: a.content || ""}}; }},
   edit_file: {mode:"code", label:"수정", risk:"write", args:'{"path":"src/app.js","old_string":"바꿀 부분(정확히)","new_string":"새 내용","replace_all":false}', desc:"파일의 일부를 정확히 찾아 바꾼다. 먼저 read_file로 내용을 확인한다", act: a => `${a.path} 수정`,
     async before(a){ const r = await codeCall("raw", {path: a.path}); return {old: r.content || ""}; },
     async run(a, ctx, pre){ const r = await codeCall("edit", a); const old = pre?.old || ""; const nw = a.replace_all ? old.split(a.old_string).join(a.new_string) : old.replace(a.old_string, a.new_string); return {text: `수정: ${r.path} ${r.line}번째 줄 부근 (${r.replaced}곳)`, summary: `${r.replaced}곳 수정`, diff: {path: r.path, old, new: nw}}; }},
@@ -675,6 +678,12 @@ ${settings.instructions ? `\n사용자 지침:\n${settings.instructions}\n` : ""
 ## 도구
 필요할 때 도구를 쓸 수 있다. 도구를 쓰려면 답변 중에 아래 형식으로 **한 번에 하나만** 쓰고, 바로 멈춘다.
 <tool name="도구이름">{"인자":"값"}</tool>
+파일 내용처럼 긴 글은 JSON 안에 넣지 말고 이렇게 쓴다 (따옴표·줄바꿈 이스케이프 불필요):
+<tool name="office_write">{"path":"a.html"}
+\`\`\`
+파일 내용 그대로
+\`\`\`
+</tool>
 그러면 <tool_result name="도구이름">결과</tool_result>가 돌아온다. 결과를 보고 이어서 답하거나 다른 도구를 쓴다. 도구 결과는 사용자에게 보이지 않으므로 중요한 내용은 답변에서 해설한다.
 도구는 반드시 위의 <tool name="…"> 형식으로만 부른다. 모델 고유의 다른 도구 호출 형식(DSML, tool_call, function 등)은 쓰지 않는다.
 도구 없이 답할 수 있으면 도구를 쓰지 않는다. 도구 결과를 지어내지 않는다. 모르는 최신 정보는 추측하지 말고 web_search를 쓴다.
@@ -751,14 +760,57 @@ export function toModelMessages(history, budgetTokens, maxTool = 24000){
 }
 
 /* ================= 에이전트 실행 ================= */
+// 모델이 쓴 JSON 고치기: 문자열 안의 실제 줄바꿈·탭, 따옴표를 안 바꾼 " , 끊긴 끝(닫는 " } ])
+export function repairJSON(src){
+  const s = String(src); let out = "", inStr = false, esc = false; const stack = [];
+  for (let i = 0; i < s.length; i++){
+    const c = s[i];
+    if (inStr){
+      if (esc){ out += c; esc = false; continue; }
+      if (c === "\\"){ out += c; esc = true; continue; }
+      if (c === "\n"){ out += "\\n"; continue; }
+      if (c === "\r"){ out += "\\r"; continue; }
+      if (c === "\t"){ out += "\\t"; continue; }
+      if (c === '"'){
+        // 닫는 따옴표인지: 뒤에 , } ] : 나 끝이 오면 닫는 것, 아니면 글 속 따옴표
+        const rest = s.slice(i + 1).match(/^\s*(.)/);
+        if (!rest || /[,}\]:]/.test(rest[1])){ inStr = false; out += c; } else out += '\\"';
+        continue;
+      }
+      out += c; continue;
+    }
+    if (c === '"'){ inStr = true; out += c; continue; }
+    if (c === "{" || c === "[") stack.push(c === "{" ? "}" : "]");
+    else if (c === "}" || c === "]") stack.pop();
+    out += c;
+  }
+  if (esc) out = out.slice(0, -1);
+  if (inStr) out += '"';
+  out = out.replace(/,\s*$/, "");
+  while (stack.length) out += stack.pop();
+  return out.replace(/,\s*([}\]])/g, "$1");
+}
 function parseArgs(s){
   if (s && typeof s === "object") return s;
-  s = String(s || "").trim().replace(/^```(?:json)?|```$/g, "").trim();
+  s = String(s || "").trim();
+  // 긴 파일 내용: {"path":"..."} 다음에 ``` 블록 (또는 <content>…</content>) — JSON 안에 넣지 않아도 된다
+  const fence = s.match(/^(\{[\s\S]*?\})\s*(?:```[\w.+-]*[ \t]*\n([\s\S]*?)(```\s*$|$)|<content>\n?([\s\S]*?)(<\/content>\s*$|$))/);
+  if (fence){
+    let o = null; try { o = JSON.parse(fence[1]); } catch(e){ try { o = JSON.parse(repairJSON(fence[1])); } catch(e2){} }
+    if (o && typeof o === "object"){
+      const body = fence[2] ?? fence[4] ?? "", closed = fence[2] != null ? !!fence[3] : !!fence[5];
+      if (body && o.content == null) o.content = body.replace(/\n$/, "");
+      if (body && !closed) o.__truncated = true;
+      return o;
+    }
+  }
+  s = s.replace(/^```(?:json)?|```$/g, "").trim();
   if (!s) return {};
   try { return JSON.parse(s); } catch(e){}
   for (let k = 1; k <= 3; k++){ try { return JSON.parse(s + "}".repeat(k)); } catch(e){} }
   const m = s.match(/\{[\s\S]*\}/); if (m){ try { return JSON.parse(m[0]); } catch(e){} }
-  throw new Error("도구 인자를 해석하지 못했습니다");
+  try { const o = JSON.parse(repairJSON(s.slice(s.indexOf("{") >= 0 ? s.indexOf("{") : 0))); if (o && typeof o === "object"){ if (!/\}\s*$/.test(s)) o.__truncated = true; return o; } } catch(e){}
+  throw new Error("도구 인자를 해석하지 못했습니다 — 파일 내용은 JSON 안에 넣지 말고 {\"path\":\"…\"} 다음 줄에 ``` 블록으로 쓰세요");
 }
 /* 모델마다 도구를 부르는 고유 형식이 다르다. 누리 형식(<tool>)뿐 아니라
    DeepSeek(DSML·｜tool▁call｜), Qwen/Hermes(<tool_call>), Llama(<function=>, python_tag), Mistral([TOOL_CALLS])도 알아듣는다. */

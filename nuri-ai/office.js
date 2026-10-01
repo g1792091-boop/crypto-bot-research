@@ -1216,7 +1216,7 @@ const VENTURE_TASKS = [
 async function ventureJob(){
   const i = +localStorage.getItem("officeVenture") || 0; localStorage.setItem("officeVenture", String(i + 1));
   const t = VENTURE_TASKS[i % VENTURE_TASKS.length], a = agentById(t.owner);
-  const m = {id: uid(), room: "venture", name: t.title.slice(0, 16), trigger: "auto", topic: t.topic + (computerOn() ? "\n사무실 폴더 도구(office_write, office_read, office_ls, office_run)로 실제 파일을 만들고, 만든 파일 경로와 핵심 내용을 보고하세요." : "\n(지금은 웹 버전이라 파일 저장이 안 됩니다. 내용을 답에 직접 쓰세요.)"), order: [a.id], done: [], ctl: new AbortController(), t: Date.now(), models: assignModels(), place: "venture"};
+  const m = {id: uid(), room: "venture", name: t.title.slice(0, 16), trigger: "auto", topic: t.topic + (computerOn() ? "\n사무실 폴더 도구(office_write, office_read, office_ls, office_run)로 실제 파일을 만들고, 만든 파일 경로와 핵심 내용을 보고하세요. office_write 는 {\"path\":\"…\"} 다음 줄에 ``` 블록으로 내용을 그대로 쓰고(JSON 안에 넣지 않음), 150줄이 넘으면 나눠서 두 번째부터 {\"path\":\"…\",\"append\":true} 로 이어 쓰세요." : "\n(지금은 웹 버전이라 파일 저장이 안 됩니다. 내용을 답에 직접 쓰세요.)"), order: [a.id], done: [], ctl: new AbortController(), t: Date.now(), models: assignModels(), place: "venture"};
   a.computer = true;   // 신사업 개발자는 사무실 폴더에서 일한다
   const turn = await speak(a, m, [], m.models[a.id], m.ctl.signal);
   const files = (turn?.entry?.steps || []).filter(s => s.name === "office_write" && s.status === "done").map(s => s.summary);

@@ -296,6 +296,9 @@ func runCode(ctx context.Context, action string, in obj) (obj, error) {
 			}
 			data = b
 		}
+		if b, _ := in["append"].(bool); b && rerr == nil { // 긴 파일을 나눠 쓰기: 기존 내용 뒤에 붙인다
+			data = append(append([]byte{}, old...), data...)
+		}
 		if err := os.WriteFile(p, data, 0o644); err != nil {
 			return nil, err
 		}
