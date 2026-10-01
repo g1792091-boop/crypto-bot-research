@@ -56,7 +56,6 @@ import contextlib
 import datetime as _dt
 import hashlib
 import json
-import math
 import os
 import signal
 import sqlite3
@@ -886,8 +885,8 @@ class Executor:
         if problems:
             self._event(CRITICAL, "mainnet_refused", "실거래를 시작하지 않습니다: " + "; ".join(problems) + held)
             raise Refused("; ".join(problems))
-        self._event(INFO, "mainnet_gates", f"실거래 관문 통과: 출금 꺼짐, 선물 켜짐, IP 제한 있음, "
-                    f"지갑 ${wallet:,.2f} ≤ ${self.cfg.budget_usd * 1.2:,.2f}")
+        self._event(INFO, "mainnet_gates", f"실거래 관문 통과: 출금 꺼짐, 선물 켜짐, IP 제한 있음, 필요 없는 권한 꺼짐, "
+                    f"지갑 ${wallet:,.2f} ≤ ${self.cfg.budget_usd * 1.2:,.2f}(USDT만)")
 
     def _signal_mode_setup(self) -> None:
         """Signal mode needs the exchange's leverage brackets to size like the paper rules; without them it
@@ -1885,11 +1884,13 @@ def preflight(cfg: ExecConfig, client, keycheck, out=print) -> bool:
         return False
     if cfg.mode == MODE_MAINNET:
         keycheck.offset_ms = client.offset_ms
-        problems, warnings = online_gates(keycheck.api_restrictions, wallet, float(cfg.budget_usd or 0))
+        problems, warnings = online_gates(keycheck.api_restrictions, wallet, float(cfg.budget_usd or 0),
+                                          acct.get("assets"))
         for p in problems:
             line(False, p)
         if not problems:
-            line(True, "키 권한: 출금 꺼짐, 선물 켜짐, IP 제한 있음; 지갑이 정한 금액의 1.2배 이하")
+            line(True, "키 권한: 출금 꺼짐, 선물 켜짐, IP 제한 있음, 필요 없는 권한 꺼짐; "
+                       "지갑이 정한 금액의 1.2배 이하, USDT만")
         for w in warnings:
             out("[주의] " + w)
     try:

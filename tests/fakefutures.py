@@ -8,6 +8,8 @@ headers.
 Failures are injected per request with ``fail(method, path, kind, ...)``:
 - "drop_before": the request never reaches the exchange (TimeoutError)
 - "drop_after":  the exchange executes it, the answer is lost (TimeoutError)
+- "cut_after":   the exchange executes it, the connection is cut in the middle of the answer
+                 (http.client.IncompleteRead: not an OSError)
 - "503_before" / "503_after": HTTP 503, not executed / executed
 - "429":         HTTP 429 with Retry-After
 - "418":         HTTP 418 (IP ban)
@@ -17,13 +19,16 @@ After every request the fake records, per open position, whether a live stop cov
 (``timeline``), so tests can assert a position was never left unprotected.
 
 Also: account fills (GET /fapi/v1/userTrades, with realizedPnl and commission), funding (``add_funding``,
-GET /fapi/v1/income), leverage brackets, adverse fill slippage (``slip``, ``stop_slip``), and the mainnet
+GET /fapi/v1/income), other income and wallet transfers (``add_income``, ``add_transfer``), fees paid in another
+asset (``fee_asset``, e.g. "BNB", valued at ``last["BNBUSDT"]``), other assets in the futures wallet
+(``other_assets``), leverage brackets, adverse fill slippage (``slip``, ``stop_slip``), and the mainnet
 hosts (``FakeFutures(host="fapi.binance.com")``, which also answers GET /sapi/v1/account/apiRestrictions on
 api.binance.com from ``restrictions``).
 """
 
 from __future__ import annotations
 
+import http.client
 import json
 import urllib.parse
 
@@ -64,6 +69,8 @@ class FakeFutures:
         self.timeline = []         # (call index, method, path, {symbol: (amt, covered)})
         self.partial = None        # next market order fills this fraction
         self.weight = 0
+        self.fee_asset = "USDT"    # "BNB": fees are charged in BNB (BNB fee discount), not from the USDT wallet
+        self.other_assets = {}     # asset -> balance shown in GET /fapi/v2/account "assets" besides USDT
 
     # ------------------------------------------------------------ test controls
     def fail(self, method, path, kind, times=1, extra=None):
@@ -71,10 +78,18 @@ class FakeFutures:
 
     def add_funding(self, symbol, amount, time=None):
         """A funding settlement on the open position (+ received, - paid)."""
+        self.add_income(symbol, "FUNDING_FEE", amount, time)
+
+    def add_income(self, symbol, kind, amount, time=None):
+        """An income row that moves the USDT wallet (FUNDING_FEE, INSURANCE_CLEAR, TRANSFER, ...)."""
         self.wallet += amount
-        self.income.append({"symbol": symbol, "incomeType": "FUNDING_FEE", "income": str(amount), "asset": "USDT",
+        self.income.append({"symbol": symbol, "incomeType": kind, "income": str(amount), "asset": "USDT",
                             "info": "", "time": self.clock() if time is None else time,
                             "tranId": 900_000 + len(self.income), "tradeId": ""})
+
+    def add_transfer(self, amount, time=None):
+        """A deposit (+) to or a withdrawal (-) from the futures wallet."""
+        self.add_income("", "TRANSFER", amount, time)
 
     def set_price(self, symbol, price):
         self.last[symbol] = price
@@ -133,6 +148,8 @@ class FakeFutures:
         self._snap(method, u.path)
         if kind == "drop_after":
             raise TimeoutError("timed out after sending")
+        if kind == "cut_after":
+            raise http.client.IncompleteRead(b"")
         if kind == "503_after":
             return 503, json.dumps({"code": -1007, "msg": "Timeout waiting for response from backend server."}).encode()
         return status, json.dumps(data).encode(), {"X-MBX-USED-WEIGHT-1M": str(self.weight)}
@@ -167,15 +184,19 @@ class FakeFutures:
             tot = abs(amt) + abs(signed_qty)
             self.entry[symbol] = (abs(amt) * self.entry[symbol] + abs(signed_qty) * price) / tot
         fee = abs(signed_qty) * price * self.fee
-        self.wallet -= fee
+        asset, commission = "USDT", fee
+        if self.fee_asset != "USDT":
+            asset, commission = self.fee_asset, fee / self.last[self.fee_asset + "USDT"]
+        else:
+            self.wallet -= fee
         self.pos[symbol] = new
         if new == 0:
             self.entry[symbol] = 0.0
         self.fills.append({"symbol": symbol, "id": len(self.fills) + 1, "orderId": order_id or 0,
                            "side": "BUY" if signed_qty > 0 else "SELL", "price": str(price),
                            "qty": str(abs(signed_qty)), "realizedPnl": str(realized),
-                           "quoteQty": str(abs(signed_qty) * price), "commission": str(fee),
-                           "commissionAsset": "USDT", "time": self.clock(), "buyer": signed_qty > 0,
+                           "quoteQty": str(abs(signed_qty) * price), "commission": str(commission),
+                           "commissionAsset": asset, "time": self.clock(), "buyer": signed_qty > 0,
                            "maker": False, "positionSide": "BOTH", "marginAsset": "USDT"})
         return abs(signed_qty)
 
@@ -287,7 +308,9 @@ class FakeFutures:
         if path == "/fapi/v2/account":
             up = self.upnl()
             return ok({"totalWalletBalance": str(self.wallet), "totalUnrealizedProfit": str(up),
-                       "totalMarginBalance": str(self.wallet + up)})
+                       "totalMarginBalance": str(self.wallet + up),
+                       "assets": [{"asset": "USDT", "walletBalance": str(self.wallet)}]
+                       + [{"asset": a, "walletBalance": str(v)} for a, v in self.other_assets.items()]})
         if path == "/fapi/v1/order" and m == "DELETE":
             return self.err(-2011, "Unknown order sent.")
         raise AssertionError(f"unexpected {m} {path}")

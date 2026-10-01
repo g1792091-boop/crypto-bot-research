@@ -97,16 +97,35 @@ def test_halt_persists_until_a_person_clears_it():
     assert st2.day_start_equity == 890.0 and R.check_loop(cfg(), st2, 890.0).action == R.ALLOW
 
 
-def test_clear_resets_peak_and_streak():
-    st = R.RiskState()
-    R.observe_equity(st, T0, 1_000.0)
-    for _ in range(3):
-        R.record_trade(st, -10)
-    R.observe_equity(st, T0 + DAY, 700.0)
-    R.halt(st, T0, "x")
+def test_clear_resets_only_the_limit_that_halted():
+    def state():
+        st = R.RiskState()
+        R.observe_equity(st, T0, 1_000.0)
+        for _ in range(3):
+            R.record_trade(st, -10)
+        R.observe_equity(st, T0 + DAY, 700.0)
+        return st
+    # a drawdown + streak halt: both restart from here
+    st = state()
+    d = R.check_loop(cfg(max_drawdown_pct=0.3), st, 700.0)
+    R.halt(st, T0, d.text(), d.kinds)
     R.clear_halt(st)
     assert st.peak_equity == 700.0 and st.consecutive_losses == 0
     assert R.check_loop(cfg(), st, 700.0).action == R.ALLOW
+    # a routine kill-file stop: the drawdown peak and the loss streak are kept (the limits do not loosen)
+    st = state()
+    st.consecutive_losses = 2
+    d = R.check_loop(cfg(max_drawdown_pct=0.5), st, 700.0, "비상 정지 파일이 있습니다(/k)")
+    assert d.kinds == ["kill"]
+    R.halt(st, T0, d.text(), d.kinds)
+    R.clear_halt(st)
+    assert st.peak_equity == 1_000.0 and st.consecutive_losses == 2
+    # a halt saved before the kinds were recorded: read from its reason
+    st = state()
+    R.halt(st, T0, "최고점 $1,000.00 대비 낙폭 30.0%가 멈춤 기준 20%에 닿았습니다")
+    st.halt_kinds = None
+    R.clear_halt(st)
+    assert st.peak_equity == 700.0 and st.consecutive_losses == 3
     assert R.utc_day(T0) == R.utc_day(T0 + 3_600_000) != R.utc_day(T0 + DAY)
 
 

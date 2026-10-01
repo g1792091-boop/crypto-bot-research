@@ -8,7 +8,7 @@ from fakefutures import FakeFutures
 from paperbot import risk as R
 from paperbot.executor import (ExecConfig, ExecStore, Executor, Guarded, Intent, Paper3Source, Refused, main)
 from paperbot.notify import CRITICAL, ListNotifier
-from paperbot.testnet import RateLimited, TestnetClient, TestnetError
+from paperbot.testnet import RateLimited, TestnetClient, TestnetError, UnknownOutcome
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 T0 = 1_800_000_000_000
@@ -199,7 +199,7 @@ def test_stop_distance_follows_the_actual_fill(tmp_path):
     w.store.close()
     (tmp_path / "p").mkdir()
     w2 = World(tmp_path / "p", fake=FakeFutures(prices={BTC: 200.0, "ETHUSDT": 50.0, "SOLUSDT": 10.0}),
-               max_notional_usd=5_000.0)
+               max_notional_usd=5_000.0, daily_max_loss_usd=1_000.0)      # a far stop: room for its loss
     w2.store.close()
     w2.cfg = ExecConfig(**{**w2.cfg.__dict__, "stop_from": "price"})
     w2.open()
@@ -280,6 +280,7 @@ def test_restart_while_entry_outcome_unknown(w):
     assert w.ex.trade["status"] == "entering" and w.events("entry_unknown")
     w.fake.failures.clear()
     w.restart()
+    w.clock.t += 61_000                                               # the entry never showed up (entry_unknown_s)
     w.loop()
     assert w.ex.trade is None and w.fake.pos[BTC] == 0 and w.events("recover")
     # a lost answer after the order was executed: looked up by client id, never sent twice
@@ -336,10 +337,12 @@ def test_kill_switch_flattens_halts_and_needs_a_person(w, tmp_path, capsys):
 
 
 def test_daily_loss_halt_survives_restart(tmp_path):
-    w = World(tmp_path, daily_max_loss_usd=20.0)
-    w.paper(stop=90.0)
+    w = World(tmp_path, daily_max_loss_usd=60.0)
+    w.paper(stop=90.0)                                        # loss at the stop ~$51: fits the daily limit
     w.loop()
+    assert w.fake.pos[BTC] == 5.0
     w.fake.set_price(BTC, 95.5)                               # -22.5 unrealised
+    w.fake.add_funding(BTC, -40.0)                            # and a funding payment: -62.5 today
     w.loop()
     assert w.fake.pos[BTC] == 0 and w.ex.risk.halted and "하루 한도" in w.ex.risk.halt_reason
     w.restart()
@@ -413,15 +416,19 @@ def test_retry_policy(tmp_path):
         c.leverage(BTC, 200)
     assert len(fake.calls) == n                                  # a 4xx is not retried
     fake.fail("POST", "/fapi/v1/order", "drop_after")
-    c.market(BTC, "BUY", 1.0, client_id="pbtest1")
+    c.market(BTC, "BUY", 1.0, client_id="pbtest1")               # executed, answer lost: found by its client id
     fake.fail("POST", "/fapi/v1/order", "drop_before")
-    c.market(BTC, "BUY", 1.0, client_id="pbtest2")
-    assert fake.pos[BTC] == 2.0 and len([x for x in fake.calls if x[:2] == ("POST", "/fapi/v1/order")]) == 2
+    with pytest.raises(UnknownOutcome):                          # an opening order is never sent a second time
+        c.market(BTC, "BUY", 1.0, client_id="pbtest2")
+    assert fake.pos[BTC] == 1.0 and len([x for x in fake.calls if x[:2] == ("POST", "/fapi/v1/order")]) == 1
+    fake.fail("POST", "/fapi/v1/order", "drop_before")
+    c.market(BTC, "SELL", 0.5, reduce_only=True, client_id="pbtest2x")    # a reduce-only close is sent again
+    assert fake.pos[BTC] == 0.5 and len([x for x in fake.calls if x[:2] == ("POST", "/fapi/v1/order")]) == 2
     fake.fail("POST", "/fapi/v1/order", "503_before", times=9)
     with pytest.raises(TestnetError):
         c.market(BTC, "BUY", 1.0, client_id="pbtest3")
-    assert fake.pos[BTC] == 2.0
-    a = c.stop_close(BTC, "SELL", 90.0, qty=2.0, client_id="pbs1")
+    assert fake.pos[BTC] == 0.5
+    a = c.stop_close(BTC, "SELL", 90.0, qty=0.5, client_id="pbs1")
     fake.fail("DELETE", "/fapi/v1/algoOrder", "503_after")
     assert c.cancel_algo(algo_id=a["algoId"])["gone"] and not fake.live_stops()
 

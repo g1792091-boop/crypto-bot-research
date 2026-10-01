@@ -16,7 +16,7 @@ from paperbot.executor import (ExecConfig, ExecStore, Executor, Paper3Source, Re
 from paperbot.mainnet import FLAG, FLAG_VALUE, KeyCheckClient, MainnetClient, trading_keys
 from paperbot.notify import CRITICAL, INFO, ListNotifier
 from paperbot.store3 import Store3
-from paperbot.testnet import TestnetClient
+from paperbot.testnet import TestnetClient, TransientError
 
 T0 = 1_800_000_000_000
 BTC = "BTCUSDT"
@@ -212,14 +212,17 @@ def test_mainnet_refuses_a_key_with_the_wrong_permissions(tmp_path, change, need
         lv.close()
 
 
-def test_mainnet_refuses_when_the_permission_check_cannot_be_reached(tmp_path):
+def test_mainnet_does_not_start_while_the_permission_check_cannot_be_reached(tmp_path):
+    """Unreachable after the retries: no order, a CRITICAL alert, and an error that is NOT a refusal (exit 1, so
+    systemd tries again in 30 s; a refusal, exit 2, would leave an open position unattended until a person acts)."""
     Paper(str(tmp_path / "paper3.db"))
     lv = Live(tmp_path)
     lv.fake.fail("GET", "/sapi/v1/account/apiRestrictions", "drop_before", times=5)
     try:
-        with pytest.raises(Refused) as e:
+        with pytest.raises(TransientError):
             lv.executor().start()
-        assert "확인하지 못했습니다" in str(e.value)
+        assert not [c for c in lv.fake.calls if c[0] != "GET"]
+        assert any(lvl == CRITICAL and "키 권한 확인이 안 됩니다" in txt for lvl, txt in lv.note.messages)
     finally:
         lv.close()
 
@@ -238,9 +241,13 @@ def test_mainnet_balance_guard_and_a_full_cycle_on_the_same_code_path(tmp_path):
               paper_db=str(tmp_path / "paper3.db"))
     lv.fake.restrictions["enableInternalTransfer"] = True
     try:
+        with pytest.raises(Refused) as e:                         # a permission the executor never needs
+            lv.executor().start()
+        assert "계정 간 이체" in str(e.value)
+        lv.fake.restrictions["enableInternalTransfer"] = False
         ex = lv.executor()
         ex.start()
-        assert lv.events("mainnet_gates") and "계정 간 이체" in lv.events("key_permission")[0][1]
+        assert lv.events("mainnet_gates") and not lv.events("key_permission")
         # the paper account enters: the same mirroring as on the testnet, on fapi.binance.com
         paper.enter(T0, qty=5.0, leverage=20)
         lv.clock.t = T0 + 70_000
