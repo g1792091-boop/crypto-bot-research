@@ -11,11 +11,13 @@ Gates (all must hold; any failure refuses the start with a Korean reason):
    read-only key (BINANCE_API_KEY / BINANCE_API_SECRET, also read from its env file) nor a testnet key;
 4. the host is fapi.binance.com (class-level allowlist, checked again by the executor);
 5. the key's permissions (GET /sapi/v1/account/apiRestrictions on api.binance.com) show
-   enableWithdrawals = false, enableFutures = true, ipRestrict = true. If api.binance.com cannot be
-   reached, nothing can be verified and the start is refused;
+   enableWithdrawals = false, enableFutures = true, ipRestrict = true, and none of the permissions the
+   executor does not need (transfers, spot/margin, options, portfolio margin). An answer that is not a
+   permission record (empty, ``null``, not JSON) is refused. If api.binance.com cannot be reached even after
+   retries, nothing can be verified: the executor stops with an error that systemd retries (exit 1);
 6. the risk config is complete (risk.problems() empty) and ``budget_usd`` is set;
-7. the futures wallet holds at most budget_usd x 1.2 (a main account by mistake is never traded;
-   use a sub-account that holds only the budget).
+7. the futures wallet holds at most budget_usd x 1.2 and no asset other than USDT (a main account by
+   mistake is never traded; use a sub-account that holds only the budget; BNB there would pay the fees).
 
 AI agents never import this module (tests/test_executor.py checks it).
 """
@@ -117,6 +119,11 @@ def trading_keys(mode: str, env: Mapping, paper_env: Optional[Mapping] = None) -
 
 
 # ---------------------------------------------------------------- online checks
+UNNEEDED = {"enableInternalTransfer": "계정 간 이체", "permitsUniversalTransfer": "통합 이체",
+            "enableMargin": "마진", "enableSpotAndMarginTrading": "현물·마진 거래",
+            "enableVanillaOptions": "옵션", "enablePortfolioMarginTrading": "포트폴리오 마진"}
+
+
 def check_permissions(perm: dict) -> list[str]:
     """Korean problems with the key's permissions; empty = acceptable."""
     out = []
@@ -127,15 +134,15 @@ def check_permissions(perm: dict) -> list[str]:
         out.append(f"선물 거래 권한이 없습니다(enableFutures={perm.get('enableFutures')!r})")
     if perm.get("ipRestrict") is not True:
         out.append(f"키에 서버 IP 제한이 없습니다(ipRestrict={perm.get('ipRestrict')!r}). 서버 IP만 허용하세요")
+    # permissions the executor never uses: a leaked key could move or trade money outside the futures budget
+    out += [f"{label} 권한({k})이 켜져 있습니다. 실행기에는 필요 없으니 끄세요" for k, label in UNNEEDED.items()
+            if perm.get(k)]
     return out
 
 
 def permission_warnings(perm: dict) -> list[str]:
-    """Permissions the executor does not need (not refused; the owners should turn them off)."""
-    names = {"enableInternalTransfer": "계정 간 이체", "permitsUniversalTransfer": "통합 이체",
-             "enableMargin": "마진", "enableSpotAndMarginTrading": "현물·마진 거래",
-             "enableVanillaOptions": "옵션", "enablePortfolioMarginTrading": "포트폴리오 마진"}
-    return [f"{label} 권한({k})이 켜져 있습니다. 실행기에는 필요 없습니다" for k, label in names.items() if perm.get(k)]
+    """Kept for callers of the first version: the unneeded permissions are problems now (check_permissions)."""
+    return []
 
 
 def check_balance(wallet: float, budget: float) -> Optional[str]:
@@ -145,24 +152,45 @@ def check_balance(wallet: float, budget: float) -> Optional[str]:
     return None
 
 
-def online_gates(perm_reader: Callable[[], dict], wallet: float, budget: float) -> tuple[list[str], list[str]]:
-    """(problems, warnings). ``perm_reader`` fetches apiRestrictions; an unreachable or refused check is a problem."""
+def check_assets(assets) -> Optional[str]:
+    """The futures wallet's other assets (GET /fapi/v2/account ``assets``). totalWalletBalance counts USDT only, so
+    a wallet that also holds USDC, BNB, ... is not the budget-only sub-account (and BNB there pays the fees)."""
+    other = []
+    for a in assets or []:
+        try:
+            bal = float(a.get("walletBalance") or 0)
+        except (TypeError, ValueError, AttributeError):
+            continue
+        if a.get("asset") != "USDT" and bal > 0:
+            other.append(f"{a.get('asset')} {bal:g}")
+    if other:
+        return (f"선물 지갑에 USDT 말고 다른 자산이 있습니다({', '.join(other)}). 실행기 전용 하위 계정에는 "
+                "정한 금액의 USDT만 넣으세요(BNB가 있으면 수수료가 BNB로 나가 손익 계산이 틀어집니다)")
+    return None
+
+
+def online_gates(perm_reader: Callable[[], dict], wallet: float, budget: float,
+                 assets=None) -> tuple[list[str], list[str]]:
+    """(problems, warnings). ``perm_reader`` fetches apiRestrictions; an unreachable or refused check is a problem,
+    and so is an answer that is not a permission record (None, a list, ...: nothing was verified)."""
     problems: list[str] = []
     warnings: list[str] = []
     try:
         perm = perm_reader()
     except (TestnetError, OSError, ValueError) as e:
         problems.append(f"api.binance.com에서 키 권한을 확인하지 못했습니다({e}). 확인 못 하면 시작하지 않습니다")
-        perm = None
-    if perm is not None:
+    else:
         if not isinstance(perm, dict):
-            problems.append(f"키 권한 응답이 이상합니다: {perm!r}"[:200])
+            problems.append(f"키 권한 응답이 이상합니다(확인 안 됨): {perm!r}"[:200])
         else:
             problems += check_permissions(perm)
             warnings += permission_warnings(perm)
     bal = check_balance(wallet, budget)
     if bal:
         problems.append(bal)
+    other = check_assets(assets)
+    if other:
+        problems.append(other)
     return problems, warnings
 
 

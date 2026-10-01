@@ -89,6 +89,7 @@ class Decision:
     reasons: list = field(default_factory=list)
     qty: Optional[float] = None
     leverage: Optional[int] = None
+    kinds: list = field(default_factory=list)     # check_loop: "kill", "halted", "daily", "drawdown", "streak"
 
     @property
     def ok(self) -> bool:
@@ -109,6 +110,12 @@ class RiskState:
     consecutive_losses: int = 0
     trades: int = 0
     last_equity: Optional[float] = None
+    halt_kinds: Optional[list] = None             # which limits the halt came from (clear_halt resets only those)
+    day_start_ts: Optional[int] = None            # when day_start_equity was observed
+    peak_ts: Optional[int] = None                 # when peak_equity was observed
+    transfers: float = 0.0                        # net deposits (+) / withdrawals (-) applied since tracking began
+    transfer_ids: list = field(default_factory=list)   # tranIds already applied (recent)
+    transfers_checked: Optional[int] = None       # exchange time up to which transfers were read
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -137,10 +144,21 @@ def observe_equity(st: RiskState, now_ms: int, equity: float) -> None:
     """Track the peak and the equity at the start of the UTC day."""
     day = utc_day(now_ms)
     if st.day != day:
-        st.day, st.day_start_equity = day, equity
+        st.day, st.day_start_equity, st.day_start_ts = day, equity, now_ms
     if st.peak_equity is None or equity > st.peak_equity:
-        st.peak_equity = equity
+        st.peak_equity, st.peak_ts = equity, now_ms
     st.last_equity = equity
+
+
+def apply_transfer(st: RiskState, amount: float, ts_ms: int) -> None:
+    """A deposit (+) or withdrawal (-) at ``ts_ms`` is not trading P&L: move the day's starting equity and the
+    drawdown peak by the same amount when they were observed before it (an observation after it already
+    includes it). Without this a withdrawal of profit reads as a loss (false halt) and a deposit hides one."""
+    if st.day_start_equity is not None and (st.day_start_ts is None or ts_ms >= st.day_start_ts):
+        st.day_start_equity += amount
+    if st.peak_equity is not None and (st.peak_ts is None or ts_ms >= st.peak_ts):
+        st.peak_equity += amount
+    st.transfers += amount
 
 
 def record_trade(st: RiskState, pnl: float) -> None:
@@ -148,54 +166,83 @@ def record_trade(st: RiskState, pnl: float) -> None:
     st.consecutive_losses = st.consecutive_losses + 1 if pnl < 0 else 0
 
 
-def halt(st: RiskState, now_ms: int, reason: str) -> bool:
+def halt(st: RiskState, now_ms: int, reason: str, kinds: Optional[list] = None) -> bool:
     """Set the halt (keeps the first reason). True when it was not halted before."""
     if st.halted:
         return False
     st.halted, st.halt_reason, st.halted_ts = True, reason, now_ms
+    st.halt_kinds = list(kinds or [])
     return True
 
 
+def _halt_kinds(st: RiskState) -> set:
+    if st.halt_kinds is not None:
+        return set(st.halt_kinds)
+    kinds = set()                                   # a halt saved before the kinds were recorded: read the reason
+    if "낙폭" in st.halt_reason:
+        kinds.add("drawdown")
+    if "연속 손실" in st.halt_reason:
+        kinds.add("streak")
+    return kinds
+
+
 def clear_halt(st: RiskState, equity: Optional[float] = None) -> str:
-    """A person lifts the halt. The drawdown peak and the loss streak restart from here; the day's
-    starting equity does not (a daily-loss halt cleared on the same day halts again)."""
-    reason = st.halt_reason
-    st.halted, st.halt_reason, st.halted_ts = False, "", None
-    st.consecutive_losses = 0
-    if equity is not None:
-        st.peak_equity = equity
-    elif st.last_equity is not None:
-        st.peak_equity = st.last_equity
+    """A person lifts the halt. Only the limit that caused it restarts from here: a drawdown halt moves the
+    drawdown peak to the current equity, a loss-streak halt sets the streak to 0. Any other halt (the kill file,
+    a daily loss, a wrong-side position) keeps both, so a routine stop does not loosen the drawdown or streak
+    limits. The day's starting equity never changes (a daily-loss halt cleared on the same day halts again)."""
+    reason, kinds = st.halt_reason, _halt_kinds(st)
+    st.halted, st.halt_reason, st.halted_ts, st.halt_kinds = False, "", None, None
+    if "streak" in kinds:
+        st.consecutive_losses = 0
+    if "drawdown" in kinds:
+        if equity is not None:
+            st.peak_equity = equity
+        elif st.last_equity is not None:
+            st.peak_equity = st.last_equity
     return reason
 
 
 # ---------------------------------------------------------------- decisions
-def check_loop(cfg: RiskConfig, st: RiskState, equity: float, kill_reason: Optional[str] = None) -> Decision:
-    """Checked every loop, before following the paper account. ``observe_equity`` first."""
-    reasons = []
+def check_loop(cfg: RiskConfig, st: RiskState, equity: Optional[float], kill_reason: Optional[str] = None) -> Decision:
+    """Checked every loop, before following the paper account. ``observe_equity`` first. ``equity`` None: only the
+    kill file, the persisted halt and the loss streak (the executor checks those before reading the account)."""
+    reasons, kinds = [], []
     if kill_reason:
         reasons.append(kill_reason)
+        kinds.append("kill")
     if st.halted:
         reasons.append(f"멈춤 상태입니다(사람이 풀어야 함): {st.halt_reason}")
-    if cfg.daily_max_loss_usd is not None and st.day_start_equity is not None:
+        kinds.append("halted")
+    if equity is not None and cfg.daily_max_loss_usd is not None and st.day_start_equity is not None:
         loss = st.day_start_equity - equity
         if loss >= cfg.daily_max_loss_usd - 1e-9:
             reasons.append(f"오늘 손실 ${loss:,.2f}가 하루 한도 ${cfg.daily_max_loss_usd:,.2f}에 닿았습니다")
-    if cfg.max_drawdown_pct is not None and st.peak_equity:
+            kinds.append("daily")
+    if equity is not None and cfg.max_drawdown_pct is not None and st.peak_equity:
         dd = 1 - equity / st.peak_equity
         if dd >= cfg.max_drawdown_pct - 1e-12:
             reasons.append(f"최고점 ${st.peak_equity:,.2f} 대비 낙폭 {dd:.1%}가 멈춤 기준 "
                            f"{cfg.max_drawdown_pct:.0%}에 닿았습니다")
+            kinds.append("drawdown")
     if cfg.max_consecutive_losses is not None and st.consecutive_losses >= cfg.max_consecutive_losses:
         reasons.append(f"연속 손실 {st.consecutive_losses}번이 멈춤 기준 {cfg.max_consecutive_losses}번에 닿았습니다")
+        kinds.append("streak")
     if reasons:
-        return Decision(FLATTEN_HALT, reasons)
+        return Decision(FLATTEN_HALT, reasons, kinds=kinds)
     return Decision(ALLOW, ["위험 한도 안입니다"])
 
 
 def check_entry(cfg: RiskConfig, st: RiskState, symbol: str, qty: float, price: float, leverage: int,
-                qty_step: float, min_qty: float = 0.0, min_notional: float = 0.0) -> Decision:
-    """Before a new position: may cut the size or the leverage, or block it."""
+                qty_step: float, min_qty: float = 0.0, min_notional: float = 0.0, stop: Optional[float] = None,
+                equity: Optional[float] = None, max_loss_frac: Optional[float] = None,
+                cost_frac: float = 0.0) -> Decision:
+    """Before a new position: may cut the size or the leverage, or block it.
+
+    With ``stop``: the loss if the stop is hit (price distance plus ``cost_frac`` of the entry and the exit
+    notional for fees and slippage) must fit what is left of today's loss limit (``daily_max_loss_usd`` minus
+    today's loss so far, from ``st``) and, with ``max_loss_frac`` (the paper rules' own share, passed by the
+    executor), that share of the live ``equity``; a larger quantity is cut to fit."""
     if st.halted:
         return Decision(BLOCK, [f"멈춤 상태라 새 진입을 하지 않습니다: {st.halt_reason}"])
     if symbol.upper() not in cfg.allowed_symbols:
@@ -213,6 +260,21 @@ def check_entry(cfg: RiskConfig, st: RiskState, symbol: str, qty: float, price: 
         q = round(q, 12)
         reasons.append(f"크기 ${qty * price:,.2f}를 상한 ${cfg.max_notional_usd:,.2f}에 맞춰 줄입니다")
         action = REDUCE
+    if stop is not None and stop > 0 and abs(price - stop) > 0:
+        per = abs(price - stop) + (price + stop) * cost_frac         # loss per unit if the stop is hit
+        caps = []
+        if cfg.daily_max_loss_usd is not None:
+            lost = 0.0
+            if st.day_start_equity is not None and equity is not None:
+                lost = max(0.0, st.day_start_equity - equity)
+            caps.append((cfg.daily_max_loss_usd - lost, f"오늘 남은 손실 한도 ${cfg.daily_max_loss_usd - lost:,.2f}"))
+        if max_loss_frac is not None and equity is not None and equity > 0:
+            caps.append((max_loss_frac * equity, f"계좌 ${equity:,.2f}의 {max_loss_frac:.0%}"))
+        for cap, why in caps:
+            if q * per > cap + 1e-9:
+                q2 = round(math.floor(max(cap, 0.0) / per / qty_step + 1e-9) * qty_step, 12)
+                reasons.append(f"손절 때 손실 ${q * per:,.2f}가 {why}를 넘어 수량을 {q:g} → {q2:g}로 줄입니다")
+                q, action = q2, REDUCE
     if q < min_qty - 1e-12 or q <= 0:
         return Decision(BLOCK, reasons + [f"줄인 수량 {q}이 거래소 최소 수량 {min_qty}보다 작아 진입하지 않습니다"])
     if min_notional and q * price < min_notional - 1e-9:
