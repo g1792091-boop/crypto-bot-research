@@ -79,7 +79,7 @@ sudo ufw allow in on tailscale0
 
 ## 7. 시작
 ```bash
-sudo systemctl enable --now paperbot-live3 paperbot-dash paperbot-liq paperbot-daily3.timer paperbot-backup.timer
+sudo systemctl enable --now paperbot-live3 paperbot-dash paperbot-liq paperbot-daily3.timer paperbot-backup.timer paperbot-checkpoint.timer
 sudo journalctl -u paperbot-live3 -f          # 첫 몇 분 로그 보기 (Ctrl+C로 나가기)
 sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.live3 status --db /var/lib/paperbot/paper3.db
 ```
@@ -91,11 +91,23 @@ sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.live3 status --db /va
 |---|---|
 | 재시작 | `sudo systemctl restart paperbot-live3`. 계좌 상태는 저장돼 있어 이어서 돕니다. 꺼져 있던 동안의 신호는 "늦음"으로 기록만 됩니다 |
 | 매일 점검 | 09:20(한국 시간)에 자동. paper와 재계산 일치, 지정가·놓친 신호 그림자 기록, 데이터 품질 |
+| 체크포인트 판정 | 시작 후 30·60·90…일째 09:00(한국 시간) 기준. 매시 35분에 확인하고, 판정할 날이면 약 10분 계산한 뒤 텔레그램(무음)과 대시보드 순위표에 결과. 아래 "체크포인트 판정" 참고 |
 | 체결 비용 기록 | 모의 거래가 진입·청산할 때마다 그 코인의 호가창(양쪽 100칸)을 받아, 같은 크기의 시장가 주문이 실제로 얼마에 체결됐을지 `paper3.db`의 `fill_costs`에 적습니다(`paperbot/fillcost.py`). 모의 체결 자체는 바꾸지 않습니다(엔진은 늘 0.02%로 계산). 매일 점검 보고서의 `fill_costs`에 코인별 중간값·상위 10%·0.02%를 넘은 횟수가 나옵니다 |
 | 청산 기록 | `paperbot-liq`가 바이낸스 강제청산 흐름을 `liq.db`에 모읍니다(공개 자료, 키 필요 없음). 바이낸스는 청산의 과거 자료를 주지 않아서 첫날부터 켜 둡니다. 확인: `sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.liqstream status --db /var/lib/paperbot/liq.db` |
 | 백업 | 매일 08:40(한국 시간) `/var/backups/paperbot/날짜/`, 14일 보관 |
 | 코드 업데이트 | `cd /root/crypto-bot-research && git pull && sudo bash deploy/install.sh`. 배포는 **한 분만** 합니다. 커밋 안 된 수정이 있으면 멈추고, 돌던 서비스는 교체하는 순간만 멈췄다가 다시 켜집니다. 이전 코드는 `/opt/crypto-bot-research.old`에 남습니다. 봇은 켜질 때마다 코드 버전·설정을 기록하고, 체결·청산·사이즈 코드가 바뀌었으면 알림을 보냅니다 (규칙상 그 기간을 다시 셈) |
 | 비밀번호 로그인 끄기 (권장) | SSH 키를 등록한 뒤 `/etc/ssh/sshd_config`에서 `PasswordAuthentication no`. 키 등록 전에 끄면 들어갈 수 없게 되니, Vultr 웹 콘솔이 되는지 먼저 확인 |
+
+## 체크포인트 판정 (30일마다, `paperbot/checkpoint.py`)
+규칙은 `docs/paper-v3-rules.md` 4장과 보충 규칙(확정) Q1·Q2·Q3 그대로입니다. 코드가 계산하고, 사람이 말로 판단하지 않습니다.
+
+- **언제:** 시작일(첫 계좌가 만들어진 UTC 날짜)부터 30·60·90…일째 00:00 UTC(한국 09:00). `paperbot-checkpoint.timer`가 매시 35분에 돌고, 판정할 날이 아니면 바로 끝납니다.
+- **스냅샷(Q2):** 봇이 그 시각에 저장한 상태(`paper3.db`의 `day:<날짜>`)를 그대로 옮겨 고정합니다. 평가금 = 지갑 + 열린 포지션의 마크 가격 기준 미실현 손익 − 예상 청산 수수료·슬리피지. 열린 거래는 진입한 기간의 거래로 셉니다. 스냅샷은 해시(sha256)와 함께 `checkpoint.db`에 한 번만 쓰이고 고칠 수 없으며(표가 수정·삭제를 거부), 판정은 해시를 확인한 스냅샷만 씁니다. `paper3.db`는 읽기만 합니다(봇이 유일한 작성자).
+- **판정 순서(Q3):** 계좌(매매법 × 봉)마다 거래 30건을 넘긴 첫 판정일에 1차 판정. 1차 합격 = 거래 30건 이상 + 평가금 > 시작 금액($5,000) + 파산 아님 + 우연 기준 통과. 1차 합격 계좌는 그다음 30일만으로 2차 확인(그 기간 거래 30건 이상, 그 기간 손익 플러스(시작 금액 기준으로 환산), 우연 기준 다시 통과) → "2차 통과" = 실거래 검토 대상. 4시간봉과 동전 봇 계좌 15개는 "관찰용"(판정 안 함). 180일까지 30건이 안 되면 "보류 · 판정 불가".
+- **우연 기준(Q1):** 판정하는 계좌마다 동전 봇 2,000개를 **같은 기간의 실제 1분봉**(바이낸스 공개 API에서 받은 마지막 체결가·마크 가격·실제 펀딩, `/var/lib/paperbot/checkpoint_bars`에 하루 단위로 보관)으로 같은 규칙(2 ATR 손절, 레버리지 단계와 거래소 구간, 코인 순서, 계단식 잠금, 마크 가격 강제청산, $10 파산)과 같은 시작 금액으로 돌립니다. 동전 봇의 신호 빈도는 그 계좌가 그 기간에 실제로 낸 신호 수 ÷ (6코인 × 봉 수)와 같습니다. p = (계좌 이상인 동전 봇 수 + 1) / 2,001. 그날 판정하는 모든 계좌(개선 복사 계좌 포함)를 모아 FDR 10%(Benjamini–Hochberg)로 보정해 q ≤ 0.10이어야 통과입니다. "우연으로 기대되는 합격 수"는 통과 수 × 10%(상한)로 함께 보고합니다.
+- **동전 봇 엔진:** paper 엔진과 같은 규칙을 2,000 × 계좌 수만큼 한꺼번에 계산하는 벡터 버전입니다. 테스트가 같은 신호를 진짜 `PaperEngine`에 넣어 거래 하나하나(손절·잠금·강제청산·펀딩·파산) 같은 결과인지 확인합니다. 시간: 30일 창에서 한 봉의 36계좌 × 2,000개가 약 2~3분, 첫 판정(4개 봉 전부)이 약 10분(코어 1개, 낮은 우선순위). 그래서 계좌끼리 동전 봇을 나눠 쓰지 않고 계좌마다 따로 2,000개를 돌립니다.
+- **결과 보기:** 대시보드 순위표의 "체크포인트 판정", 텔레그램 무음 요약, 서버에서 `sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.checkpoint show --out /var/lib/paperbot/checkpoint.db`. 에이전트는 `paperbot.checkpoint.latest_verdict` / `account_status` / `statuses`로 읽습니다.
+- **주의:** 기간 중에 체결·청산·사이즈 코드가 바뀐 재시작이 있으면 판정 결과에 "주의"로 표시합니다. Q5(그 계좌의 기간을 배포일부터 다시 셈)는 아직 코드가 자동으로 적용하지 않으므로 규칙 관리자가 확인합니다.
 
 ## 실거래 준비: 테스트넷 주문 연습 (가짜 돈)
 실거래 전에 주문 처리가 제대로 되는지 바이낸스 **테스트넷**에서 연습합니다. 코드가 테스트넷 주소만 허용하므로 실제 돈에 주문이 나갈 수 없습니다.
