@@ -285,9 +285,27 @@ export function planMeeting(text, room = "hq", fixed){
 const queue = [];
 let running = null;          // 지금 회의
 export const officeState = () => ({running, queued: queue.length});
+// 말로 시킨 '일'은 회의만 하지 않고 실제 업무를 바로 돌린다 (결과 카드는 그 팀 방에)
+const ACTIONS = [
+  {job: "research", re: /(매매법|전략|지표).*(만들|찾|개발|짜|연구|발굴|백테스트)|(만들|찾|개발|짜).*(매매법|전략)|백테스트\s*(해|돌려)/, say: "퀀트 연구소가 지금 바로 매매법을 만들어 가장 오래된 과거부터 백테스트합니다"},
+  {job: "realestate", re: /(재개발|재건축|정비구역).*(조사|찾|추천|알아)/, say: "부동산팀이 지금 바로 재개발 후보지를 조사합니다"},
+  {job: "arch", re: /(설계|도면|렌더링).*(해|만들|그려)/, say: "건축팀이 지금 바로 설계안을 만들고 렌더링합니다"},
+  {job: "biz", re: /(사업|창업).*(구상|아이디어|만들|찾|계획)/, say: "신사업팀이 지금 바로 사업을 구상해 모의 사업을 돌립니다"},
+  {job: "forecast", re: /(방향|예측|전망).*(토론|예측해|맞춰)/, say: "전략팀이 지금 바로 방향 예측 토론을 엽니다"},
+  {job: "selfdev", re: /(코드|오류|버그|에러).*(고쳐|수정|찾)/, say: "AI·개발팀이 지금 바로 오류를 찾아 코드 수정안을 만듭니다"},
+];
+let userNote = "";
+async function runJobNow(job, note){
+  userNote = note;
+  try { await (JOB_FN()[job] || research)(); }
+  catch(e){ post({ch: JOB_TEAM[job] || "hq", kind: "system", text: `${JOB_KO[job]} 중 문제: ${String(e.message || e).slice(0, 120)}`}); }
+  finally { userNote = ""; }
+}
 export async function ask(text, {room = "hq"} = {}){
   await loadLog();
   post({ch: room, kind: "user", text});
+  const act = ACTIONS.find(x => x.re.test(text));
+  if (act){ post({ch: JOB_TEAM[act.job] || room, kind: "system", text: `▶ ${act.say} (결과는 #${teamById(JOB_TEAM[act.job])?.name || "업무"} 방 카드로)`}); fire({kind: "cycle", job: act.job, label: JOB_KO[act.job]}); runJobNow(act.job, text).finally(() => fire({kind: "cycle-end"})); }
   // 대표님(사용자) 질문이 먼저: 진행 중인 자동 회의는 잠시 멈췄다가 답한 뒤 다시 하고, 질문은 대기열 맨 앞에 넣는다
   if (running && running.trigger !== "user"){
     const r = running; r.preempted = true;
@@ -305,21 +323,30 @@ async function pump(){
   if (chatting && queue[0].trigger !== "user"){ setTimeout(pump, 1500); return; }
   const job = queue.shift();
   const ctl = new AbortController();
-  const order = planMeeting(job.topic, job.room, job.agents);
+  let order = planMeeting(job.topic, job.room, job.agents);
+  // 대표님 질문은 빨리: 분석가 최대 2명 + (리스크) + 팀장 정리
+  if (job.trigger === "user" && order.length > 4){
+    const rest = order.filter(x => x !== "lead"), keep = [...new Set([...rest.filter(x => !["devil", "risk", "val"].includes(x)).slice(0, 2), ...(rest.includes("risk") ? ["risk"] : [])])];
+    order = keep.length > 1 || order.includes("lead") ? [...keep, "lead"] : keep;
+  }
   const models = assignModels();
   const room = teamById(job.room) || TEAMS[0];
   const name = job.title || (job.trigger === "user" ? "질문 · " + job.topic.replace(/\s+/g, " ").slice(0, 18) : job.topic.slice(0, 20));
   // 회의 장소: 한 팀끼리면 그 팀 자리에서, 여러 팀이면 대회의실, CEO가 부른 전사 회의도 대회의실
   const teamsIn = [...new Set(order.map(id => agentById(id)?.team).filter(Boolean))];
   const place = job.place || (teamsIn.length === 1 ? teamsIn[0] : teamsIn.length === 2 && teamsIn.includes(job.room) && !order.includes("lead") ? job.room : "meet");
-  const m = running = {id: uid(), room: job.room, name, trigger: job.trigger, topic: job.topic, order, done: [], ctl, t: Date.now(), models, place};
+  const m = running = {id: uid(), room: job.room, name, trigger: job.trigger, topic: job.topic, order, done: [], ctl, t: Date.now(), models, place, deadline: Date.now() + (job.trigger === "user" ? 6 * 60e3 : 10 * 60e3)};
   bump("meetings"); if (job.trigger !== "user") bump("auto");
   post({ch: job.room, kind: "divider", text: `회의 · #${name} · ${new Set(order).size}명 참석`, meeting: m.id});
+  if (job.trigger === "user") post({ch: job.room, kind: "system", text: `${[...new Set(order)].map(id => agentById(id)?.name).filter(Boolean).join(" → ")} 순서로 답합니다 · 보통 1~3분 (최대 6분)`, meeting: m.id});
   fire({kind: "start", meeting: m});
   const turns = [];
   try {
     for (let i = 0; i < m.order.length && i < 8; i++){
       if (ctl.signal.aborted) break;
+      // 회의 시간 한도를 넘기면 남은 사람은 건너뛰고 팀장이 지금까지 내용으로 정리
+      if (Date.now() > m.deadline && m.order[i] !== "lead" && m.order.includes("lead") && turns.length){ if (!m.cut){ m.cut = true; post({ch: m.room, kind: "system", text: "시간이 길어져 팀장이 지금까지 내용으로 정리합니다", meeting: m.id}); } continue; }
+      if (Date.now() > m.deadline + 120e3) break;
       if (officePaused() && job.trigger !== "user" && turns.length){ post({ch: m.room, kind: "system", text: "AI 한도 때문에 이 회의는 여기서 줄입니다", meeting: m.id}); break; }
       const a = agentById(m.order[i]);
       const turn = await speak(a, m, turns, models[a.id], ctl.signal);
@@ -398,7 +425,9 @@ ${notesText(a.team)}- ${isLead ? "너는 마지막 정리 담당이다. 사용�
   const alt = cm && target?.model !== cm.sonnet ? {id: "anthropic", model: cm.sonnet} : fusionSources().filter(t => t.model !== target?.model && !badModels()[t.model]).sort((x, y) => modelScore(y.model) - modelScore(x.model))[0];
   const tries = [target, alt, null].filter((t, i, arr) => i === arr.length - 1 || (t && arr.findIndex(x => x && x.model === t.model) === i));
   let lastMsg = null;
+  const turnEnd = Math.min(m.deadline || Infinity, Date.now() + (m.trigger === "user" ? 200e3 : 360e3));   // 한 사람 차례 전체 시간 한도 (모델을 바꿔 다시 해도)
   for (const tg of tries){
+    if (Date.now() > turnEnd - 15e3) break;
     const msg = lastMsg = {role: "assistant", parts: [], mode: "chat", ts: Date.now()};
     let last = 0, lastTool = "";
     const onUpdate = () => {
@@ -411,12 +440,16 @@ ${notesText(a.team)}- ${isLead ? "너는 마지막 정리 담당이다. 사용�
     // 느린 모델은 끊고 다음 모델로: 도구도 안 쓰고 75초 동안 말이 없거나, 전체 4분을 넘기면
     const tctl = new AbortController(), t0 = Date.now(); let slow = false;
     const relay = () => tctl.abort(); signal.addEventListener("abort", relay, {once: true});
-    const watch = setInterval(() => { const el = Date.now() - t0; if ((!entry.text && !entry.steps.length && el > 75e3) || el > 240e3){ slow = true; tctl.abort(); } }, 2000);
+    const userQ = m.trigger === "user", firstMs = userQ ? 60e3 : 75e3, totalMs = userQ ? 150e3 : 240e3;
+    const watch = setInterval(() => { const el = Date.now() - t0; if ((!entry.text && !entry.steps.length && el > firstMs) || el > totalMs || Date.now() > turnEnd){ slow = true; tctl.abort(); } }, 2000);
+    // 도구(백테스트 등)가 중단 신호를 무시해도 시간이 되면 무조건 다음으로 넘어간다
+    const hardStop = new Promise((_, rej) => tctl.signal.addEventListener("abort", () => rej(Object.assign(new Error("중단"), {name: "AbortError"})), {once: true}));
+    hardStop.catch(() => {});
     try {
       bump("calls");
-      await runAgent({mode: "chat", history: [{role: "user", content: ask}], msg, signal: tctl.signal, onUpdate, think: false, workspace: "", persona, forceSkills: a.skills, target: tg || undefined,
-        maxSteps: isLead || a.id === "devil" ? 2 : m.trigger === "user" ? 4 : 5, openArtifact: async () => null, askPermission: officePermission,
-        office: true, officeTools: a.computer && computerOn() ? ["office_ls", "office_read", "office_write", "office_run"] : []});
+      await Promise.race([runAgent({mode: "chat", history: [{role: "user", content: ask}], msg, signal: tctl.signal, onUpdate, think: false, workspace: "", persona, forceSkills: a.skills, target: tg || undefined,
+        maxSteps: isLead || a.id === "devil" ? 2 : m.trigger === "user" ? 3 : 5, openArtifact: async () => null, askPermission: officePermission,
+        office: true, officeTools: a.computer && computerOn() ? ["office_ls", "office_read", "office_write", "office_run"] : []}), hardStop]);
     } catch (e){ if (signal.aborted) throw e; err = slow ? new Error("응답이 너무 느림") : e; }
     finally { clearInterval(watch); signal.removeEventListener("abort", relay); }
     entry.thinking = false;
@@ -879,6 +912,7 @@ async function research(){
     + `\n\n## 레버리지\n레버리지는 1~200배 중 자유롭게 정한다(${levHint}가 일반적). 정한 뒤 코드가 모든 레버리지(1~200배)·상승장·하락장·횡보·폭락·수수료 2~3배·진입 지연 시나리오로 다시 시험한다.`
     + (researchLog().length % 2 ? "\n\n## 이번 과제: 커스텀 지표\n거래소 기본 보조지표만 쓰지 말고 {\"type\":\"custom\",\"expr\":\"수식\"} 지표를 최소 1개 직접 발명해서 조건에 쓴다(예: 거래량 가중 모멘텀, 변동성 대비 이격, 여러 지표의 합성 점수). 수식 문법은 위 설명의 custom 항목을 따른다. 수식 안에서 ind(\"tv_이름\", {파라미터}, \"value|p1~p4\")로 아래 차트 터미널 지표도 쓸 수 있다." : "")
     + "\n\n## 더 쓸 수 있는 지표\n" + Q.tvCatalogText()
+    + (userNote ? `\n\n## 대표님 지시 (최우선)\n${userNote}\n지시에 맞춰 만든다. 커스텀 수식 지표를 반드시 1개 이상 쓰고, 여러 보조지표(기본 29종 + tv_ 지표)를 조합한다.` : "")
     + (cards.length ? "\n\n## 지금까지의 백테스트 연구 카드(참고)\n" + Q.cardsText(cards, 14) : "");
   const user = `시장: ${mk.name} (${mk.market}, ${mk.exchange === "binancef" ? "바이낸스 선물" : mk.exchange === "yahoo" ? "야후 파이낸스" : mk.exchange}) · ${TF_KO[tf]}봉\n시험할 과거: ${hist}\n지금 차트(보조지표 29종):\n${snapText(snap)}\n${JSON.stringify(snap.ind || {}).slice(0, 2200)}${flowText ? "\n\n호가·고래·선물 흐름(지금):\n" + flowText.slice(0, 1500) : ""}\n\n최근 우리 팀이 시험한 전략(겹치지 않게):\n${tried || "(아직 없음)"}\n\n${a.id === "qa" ? "추세추종" : "역추세·변동성"} 계열로 새 전략 하나를 만들어 주세요. symbol은 ${mk.market}, interval은 ${iv}.${deriv ? " funding·oi·oi_change_pct·long_short 피연산자도 쓸 수 있습니다." : ""}`;
   const e = await solo(a, {room: "quant", sys, user, maxTokens: 1600, temperature: 0.8});
