@@ -106,7 +106,8 @@ class World:
 
     def __init__(self, tmp, *, observe_days: float = 0, owner_ok_days: float = 60, start_at: int = T0,
                  config_path: Optional[str] = None, strategies=STRATS, tfs=TFS, min_parent_trades: Optional[int] = 0,
-                 hist: bool = False, skip_before: Optional[int] = None, reopen: bool = False, extras: bool = True):
+                 hist: bool = False, skip_before: Optional[int] = None, reopen: bool = False, extras: bool = True,
+                 maxlen: int = 1500):
         from paperbot import extras as X
         from paperbot.agents import rooms_db as R
         self.X, self.R = X, R
@@ -119,7 +120,7 @@ class World:
         self.notifier = ListNotifier()
         self.digest = Digest(ListNotifier())
         self.book = AccountBook(S, BR, self.store, self.notifier, digest=self.digest)
-        self.service = FakeService(names36())
+        self.service = FakeService(names36(), maxlen=maxlen)
         if hist:
             bootstrap(self.service, start_at)
         self.ext = None

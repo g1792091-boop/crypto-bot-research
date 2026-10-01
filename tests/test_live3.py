@@ -83,3 +83,91 @@ def test_restart_replays_missed_minutes_without_trading_them(tmp_path):
 def test_account_defs_count():
     defs = account_defs([f"s{k}" for k in range(36)], ("5m", "15m", "30m", "1h", "4h"))
     assert len(defs) == 195 and sum(d["kind"] == "random" for d in defs) == 15
+
+
+# ---------------------------------------------------------------------------- the extras hook (paperbot/extras.py)
+def test_runner_without_hook_identical(tmp_path):
+    store, book, svc, run = make(tmp_path, "n.db", fire_at=10 * MIN)
+    assert run.post_boundary is None and run.post_boundary_errors == 0
+    run.process(steps(0, 12))
+    calls = []
+    store2, book2, svc2, run2 = make(tmp_path, "m.db", fire_at=10 * MIN)
+    run2.post_boundary = lambda b, sub, to: calls.append((b, [a for a, _ in sub], to))
+    run2.process(steps(0, 12))
+    q = "SELECT account_id, status, step_ts FROM outcomes ORDER BY id"
+    assert store.conn.execute(q).fetchall() == store2.conn.execute(q).fetchall()
+    assert book.engines["S@5m"].position.entry_price == book2.engines["S@5m"].position.entry_price
+    assert calls == [(5 * MIN, [], False), (10 * MIN, ["S@5m"], False)]
+
+
+def test_hook_after_save_and_signature(tmp_path):
+    import inspect
+    from paperbot.extras import Extras
+    assert list(inspect.signature(Extras.post_boundary).parameters) == ["self", "boundary", "submitted", "timed_out"]
+    store, book, svc, run = make(tmp_path, "h.db", fire_at=10 * MIN)
+    seen = []
+
+    def hook(boundary, submitted, timed_out):
+        # the 195's boundary is already committed: their pending submits are in the saved state
+        assert not store.conn.in_transaction
+        st = store.get_state("accounts")[1]["engines"]["S@5m"]
+        seen.append((boundary, len(st["pending"]), [type(s).__name__ for _, s in submitted], timed_out))
+    run.post_boundary = hook
+    run.process(steps(0, 12))
+    assert seen == [(5 * MIN, 0, [], False), (10 * MIN, 1, ["Signal"], False)]
+
+
+def test_fence_rolls_back_and_disables(tmp_path):
+    from paperbot.notify import ListNotifier
+    store, book, svc, run = make(tmp_path, "f.db", fire_at=10 * MIN)
+    run.notifier = ListNotifier()
+    calls = []
+
+    def bad(boundary, submitted, timed_out):
+        calls.append(boundary)
+        store.alert(1, "INFO", "[extra] written by the hook before it failed")
+        raise RuntimeError("hook bug")
+    run.post_boundary = bad
+    run.process(steps(0, 21))
+    texts = [r[0] for r in store.conn.execute("SELECT text FROM alerts")]
+    assert "[extra] written by the hook before it failed" not in texts            # rolled back
+    assert sum(t.startswith("[extra] boundary hook failed (RuntimeError: hook bug)") for t in texts) == 3
+    assert calls == [5 * MIN, 10 * MIN, 15 * MIN] and run.post_boundary is None   # disabled after 3 failures
+    assert [m[0] for m in run.notifier.messages] == ["CRITICAL"] * 3
+    p = book.engines["S@5m"].position                                            # the 195 went on
+    assert p is not None and p.entry_time == 10 * MIN
+    assert store.conn.execute("SELECT COUNT(*) FROM signal_log").fetchone()[0] == 1
+
+
+def test_single_runner_lock(tmp_path):
+    import pytest
+    from paperbot.live3 import single_runner_lock
+    db = str(tmp_path / "p.db")
+    fh = single_runner_lock(db)
+    with pytest.raises(SystemExit, match="another live runner"):
+        single_runner_lock(db)
+    fh.close()
+    single_runner_lock(db).close()                             # free again once the first runner is gone
+
+
+def test_extras_import_failure_holds_extras(tmp_path, monkeypatch):
+    import sys
+    from paperbot.accounts import HeldEngine, hold_others
+    from paperbot.live3 import start_extras
+    from paperbot.notify import ListNotifier
+    store = Store3(str(tmp_path / "e.db"))
+    book = AccountBook(S, {s: Brackets.example() for s in V3_SYMBOLS}, store)
+    book.open_accounts([{"strategy": "S", "timeframe": "5m", "kind": "strategy"},
+                        {"strategy": "S", "timeframe": "5m", "kind": "copy", "account_id": "S@5m~c1",
+                         "parent": "S@5m", "data": {"v": 1}}], 0)
+    book.save(0)
+    store.close()
+    monkeypatch.setitem(sys.modules, "paperbot.extras", None)                      # import paperbot.extras raises
+    store = Store3(str(tmp_path / "e.db"))
+    note = ListNotifier()
+    ext, make_of = start_extras(store, note, str(tmp_path / "e.db"), S)
+    assert ext is None and make_of is hold_others
+    book = AccountBook(S, {s: Brackets.example() for s in V3_SYMBOLS}, store)
+    assert book.load(make_of=make_of)
+    assert type(book.engines["S@5m~c1"]) is HeldEngine and type(book.engines["S@5m"]).__name__ == "PaperEngine"
+    assert note.messages[0][0] == "CRITICAL" and "extras code failed to load" in note.messages[0][1]

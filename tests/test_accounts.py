@@ -95,3 +95,103 @@ def test_accounts_are_independent(tmp_path):
     board = {r["account_id"]: r for r in book.board()}
     assert board["A@15m"]["position"] is not None
     assert board["B@15m"]["position"] is None and board["C@15m"]["position"] is None
+
+
+# ---------------------------------------------------------------------------- extras (paperbot/extras.py)
+def test_make_default_settings_identity(tmp_path):
+    from paperbot.engine import PaperEngine
+    store = Store3(str(tmp_path / "d.db"))
+    book = AccountBook(S, {s: Brackets.example() for s in S.symbols}, store)
+    book.open_accounts(DEFS, 0)
+    for aid, e in book.engines.items():
+        assert type(e) is PaperEngine and e.s is book.s
+    store.close()
+    store = Store3(str(tmp_path / "d.db"))
+    book = AccountBook(S, {s: Brackets.example() for s in S.symbols}, store)
+    calls = []
+    book.load(make_of=lambda row: calls.append(row["account_id"]))    # None for every row: the defaults
+    assert calls == ["A@15m", "B@15m", "C@15m"]
+    assert all(type(e) is PaperEngine and e.s is book.s for e in book.engines.values())
+
+
+def test_add_extra_appends_and_refuses_existing(tmp_path):
+    import dataclasses
+    import pytest
+    from paperbot.accounts import HeldEngine
+    store = Store3(str(tmp_path / "x.db"))
+    book = AccountBook(S, {s: Brackets.example() for s in S.symbols}, store)
+    book.open_accounts(DEFS, 0)
+    s2 = dataclasses.replace(S, ladder_first_lock=0.2)
+    e = book.add_extra({"account_id": "A@15m~c1", "strategy": "A", "timeframe": "15m", "kind": "copy",
+                        "parent": "A@15m", "data": {"v": 1}}, created_ts=300_000, settings=s2)
+    assert list(book.engines)[-1] == "A@15m~c1" and e.s is s2 and e.wallet == S.initial_equity
+    assert book.meta["A@15m~c1"] == {"strategy": "A", "timeframe": "15m", "kind": "copy"}
+    row = [a for a in store.accounts() if a["account_id"] == "A@15m~c1"][0]
+    assert (row["created_ts"], row["parent"], row["kind"]) == (300_000, "A@15m", "copy")
+    with pytest.raises(ValueError):
+        book.add_extra({"account_id": "A@15m~c1", "strategy": "A", "timeframe": "15m", "kind": "copy"}, 1)
+    book.remove("A@15m~c1")
+    with pytest.raises(ValueError):                           # the row is still there (same transaction)
+        book.add_extra({"account_id": "A@15m~c1", "strategy": "A", "timeframe": "15m", "kind": "copy"}, 1)
+    store.conn.rollback()                                     # nothing was committed by add_extra
+    assert [a["account_id"] for a in store.accounts()] == ["A@15m", "B@15m", "C@15m"]
+    assert book.add_extra({"account_id": "N@15m~c2", "strategy": "N", "timeframe": "15m", "kind": "copy"}, 1,
+                          cls=HeldEngine).__class__ is HeldEngine
+
+
+def test_load_make_of_and_exception_holds(tmp_path):
+    import dataclasses
+    from paperbot.accounts import HeldEngine, hold_others
+    from paperbot.engine import PaperEngine
+    store = Store3(str(tmp_path / "l.db"))
+    book = AccountBook(S, {s: Brackets.example() for s in S.symbols}, store)
+    book.open_accounts(DEFS + [{"strategy": "A", "timeframe": "15m", "kind": "copy", "account_id": "A@15m~c1",
+                                "parent": "A@15m"},
+                               {"strategy": "NL1", "timeframe": "15m", "kind": "newlab"}], 0)
+    book.save(0)
+    store.close()
+    s2 = dataclasses.replace(S, ladder_first_lock=0.3)
+
+    def make_of(row):
+        if row["kind"] == "copy":
+            return {"settings": s2}
+        if row["kind"] == "newlab":
+            raise RuntimeError("broken")
+        return None
+    store = Store3(str(tmp_path / "l.db"))
+    book = AccountBook(S, {s: Brackets.example() for s in S.symbols}, store)
+    assert book.load(make_of=make_of)
+    assert book.engines["A@15m~c1"].s is s2 and type(book.engines["NL1@15m"]) is HeldEngine
+    assert all(type(book.engines[a]) is PaperEngine and book.engines[a].s is book.s for a in ("A@15m", "B@15m"))
+    assert hold_others({"kind": "strategy"}) is None and hold_others({"kind": "random"}) is None
+    assert hold_others({"kind": "copy"}) == {"cls": HeldEngine}
+
+
+def test_held_engine_keeps_state(tmp_path):
+    from paperbot.accounts import HeldEngine
+    from paperbot.engine import engine_state
+    store = Store3(str(tmp_path / "h.db"))
+    br = {s: Brackets.example() for s in S.symbols}
+    book = AccountBook(S, br, store)
+    book.open_accounts([{"strategy": "A", "timeframe": "15m", "kind": "strategy"}], 0)
+    data = _bars(50, 4)
+    book.step(0, _step_bars(data, 0))
+    book.submit("A@15m", Signal(ts=MIN - 1, symbol="BTCUSDT", timeframe="15m", strategy_id="A", side=1,
+                                stop_price=0.0, tier="best", atr=0.2, meta={"stop_dist": 0.4}))
+    book.step(MIN, _step_bars(data, 1))
+    book.save(MIN)
+    saved = store.get_state("accounts")[1]["engines"]["A@15m"]
+    assert saved["position"] is not None
+    store.close()
+    store = Store3(str(tmp_path / "h.db"))
+    book = AccountBook(S, br, store)
+    book.load(make_of=lambda row: {"cls": HeldEngine})
+    e = book.engines["A@15m"]
+    for i in range(2, 40):
+        book.step(i * MIN, _step_bars(data, i))
+        book.submit("A@15m", Signal(ts=i * MIN + MIN - 1, symbol="ETHUSDT", timeframe="15m", strategy_id="A",
+                                    side=-1, stop_price=0.0, tier="best", atr=0.2, meta={"stop_dist": 0.4}))
+    st = engine_state(e)
+    assert {k: v for k, v in st.items() if k != "n_trades"} == {k: v for k, v in saved.items() if k != "n_trades"}
+    assert store.get_state("accounts")[1]["engines"]["A@15m"]["position"] == saved["position"]
+    assert e.pending == [] and not e.trades

@@ -200,6 +200,34 @@ class Runner3:
                 self.notifier.send(CRITICAL, text)
 
 
+def start_extras(store: Store3, notifier: Notifier, db: str, settings):
+    """(extras runtime or None, make_of for book.load). The extras code is imported inside a guard: if it is
+    broken the 195 run as always and every extra is held at its saved state (``hold_others``)."""
+    try:
+        from .extras import Extras
+        ext = Extras.start(store, notifier, db, settings)
+        return ext, ext.make_of
+    except Exception as exc:  # noqa: BLE001  extras code broken: the 195 run, every extra is held
+        text = f"[extra] extras code failed to load: {type(exc).__name__}: {exc}"[:300]
+        store.alert(int(time.time() * 1000), CRITICAL, text)
+        notifier.send(CRITICAL, text)
+        return None, hold_others
+
+
+def bind_extras(ext, runner: "Runner3", store: Store3, notifier: Notifier) -> None:
+    """Attach the extras to the runner (new-strategy sources, code pins, the hook); a failure leaves the extras
+    without signals (their engines still step) and never stops the 195."""
+    if ext is None:
+        return
+    try:
+        ext.bind(runner)
+    except Exception as exc:  # noqa: BLE001
+        text = f"[extra] extras could not start: {type(exc).__name__}: {exc}"[:300]
+        store.alert(int(time.time() * 1000), CRITICAL, text)
+        store.commit()
+        notifier.send(CRITICAL, text)
+
+
 def single_runner_lock(db: str):
     """Hold an exclusive lock on ``<db>.lock`` for this process's life, so two runners never write the same
     paper3.db. Exits with a clear message when another runner holds it."""
@@ -229,15 +257,7 @@ def cmd_run(args) -> int:
     digest = Digest(notifier)
     book = AccountBook(settings, brackets, store, notifier, specs, digest=digest)
     service = SignalService(syms, RECORD_ONLY, random_rates(), procs=args.procs)
-    ext, make_of = None, hold_others          # hold_others: extras held at their saved state, the 195 normal
-    try:
-        from .extras import Extras
-        ext = Extras.start(store, notifier, args.db, settings)
-        make_of = ext.make_of
-    except Exception as exc:  # noqa: BLE001  extras code broken: the 195 run, every extra is held
-        text = f"[extra] extras code failed to load: {type(exc).__name__}: {exc}"[:300]
-        store.alert(int(time.time() * 1000), CRITICAL, text)
-        notifier.send(CRITICAL, text)
+    ext, make_of = start_extras(store, notifier, args.db, settings)
     restored = book.load(make_of=make_of)
     if restored:
         prev = store.get_state("run")
@@ -280,14 +300,7 @@ def cmd_run(args) -> int:
                      lambda: book_prices(rest, syms), skip_before=resume,
                      deadman=DeadMan(os.environ.get("DEADMAN_URL")), digest=digest,
                      fills=FillProbe(lambda s: rest.depth(s, FILL_DEPTH), settings.slippage_frac, FILL_DEPTH))
-    if ext is not None:
-        try:
-            ext.bind(runner)                  # new-strategy sources, code pins, post_boundary
-        except Exception as exc:  # noqa: BLE001  extras stay without signals (their engines still step)
-            text = f"[extra] extras could not start: {type(exc).__name__}: {exc}"[:300]
-            store.alert(int(time.time() * 1000), CRITICAL, text)
-            store.commit()
-            notifier.send(CRITICAL, text)
+    bind_extras(ext, runner, store, notifier)
     sd_notify("READY=1")
     try:
         while args.max_polls is None or args.max_polls > 0:
