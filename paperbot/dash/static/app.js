@@ -7,6 +7,11 @@ const TF_SEC = {"5m": 300, "15m": 900, "30m": 1800, "1h": 3600, "4h": 14400, "1d
 const TRADE_TFS = ["5m", "15m", "30m", "1h", "4h"];
 const REASON_KO = {SL: "손절", LOCK: "익절 잠금", LIQ: "강제청산", TP: "익절", HALT: "정지", MANUAL: "수동", END: "종료"};
 const STATUS_KO = {SUBMITTED: "진입 요청", RECORD: "기록만", LATE: "늦음(미진입)", NO_PRICE: "가격 없음", NO_ATR: "ATR 없음"};
+// engine outcomes of a signal (outcomes.status); FILTERED: a copy account's own rule skipped the entry
+const OUTCOME_KO = {ENTERED: "진입", SKIPPED: "건너뜀", REJECTED: "거절", FILTERED: "규칙으로 건너뜀"};
+// extra paper accounts (copies of a strategy with one rule changed, new strategies from the lab)
+const EXTRA_KINDS = ["copy", "newlab"];
+const EXTRA_ST_KO = {active: "도는 중", suspended: "멈춤(보류)", held: "정지(동결)"};
 let INITIAL = 5000;   // replaced by the bot's own value from /api/board
 const $ = (id) => document.getElementById(id);
 const state = {
@@ -24,7 +29,23 @@ const cls = (x) => x > 0 ? "up" : x < 0 ? "down" : "";
 const tsKo = (ms) => ms ? new Date(ms).toLocaleString("ko-KR", {month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit"}) : "—";
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
 const coin = (s) => String(s).replace("USDT", "");
-const name = (a) => `${a.strategy.replace("RANDOM_", "동전 봇 ")} · ${TF_KO[a.timeframe] || a.timeframe}`;
+// an extra account's own label (the runner's label_ko); a trade row of one is named from the board
+const extraLabel = (aid) => {
+  const a = state.board && state.board.accounts.find((x) => x.account_id === aid);
+  return a ? a.label_ko : null;
+};
+const name = (a) => a.label_ko || (EXTRA_KINDS.includes(a.kind) && a.account_id && extraLabel(a.account_id))
+  || `${a.strategy.replace("RANDOM_", "동전 봇 ")} · ${TF_KO[a.timeframe] || a.timeframe}`;
+// pills of an extra account: what it is (copy / new) and the runner's status when it is not running normally
+function extraPills(a) {
+  if (!EXTRA_KINDS.includes(a.kind)) return "";
+  let h = a.kind === "copy" ? ' <span class="tag xcopy" title="원본과 같고 한 가지만 바꾼 새 paper 계좌">복제</span>'
+    : ' <span class="tag xnew" title="새 매매법 연구실에서 통과한 새 매매법의 paper 계좌">새</span>';
+  if (a.extra_status === "suspended") h += ' <span class="tag xsus" title="새 진입 없음, 열린 포지션은 규칙대로 관리">멈춤(보류)</span>';
+  if (a.extra_status === "held") h += ' <span class="tag bust" title="저장된 상태 그대로 동결">정지(동결)</span>';
+  if (a.orphan) h += ' <span class="tag bust" title="에이전트 쪽 제안이 없거나 승인 상태가 아님">제안 상태와 달리 실행 중</span>';
+  return h;
+}
 const sideTag = (s) => s > 0 ? '<span class="tag long">롱</span>' : '<span class="tag short">숏</span>';
 const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 async function api(path) {
@@ -265,6 +286,7 @@ async function renderBottom() {
 function median(xs) { if (!xs.length) return null; const s = [...xs].sort((a, b) => a - b); const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; }
 function tfSummary() {
   if (!state.board) return "";
+  const extras = state.board.accounts.filter((a) => EXTRA_KINDS.includes(a.kind));
   const rows = TRADE_TFS.map((tf) => {
     const all = state.board.accounts.filter((a) => a.timeframe === tf);
     const st = all.filter((a) => a.kind === "strategy"), rnd = all.filter((a) => a.kind === "random");
@@ -276,8 +298,14 @@ function tfSummary() {
       <td class="mono">$${fmt(Math.max(...rnd.map((a) => a.wallet ?? INITIAL), 0))}</td>
       <td>${st.filter((a) => a.beats_random).length}</td></tr>`;
   }).join("");
+  // the extra accounts in one line of their own (never inside the strategy accounts' numbers)
+  const xbest = extras.reduce((b, a) => (!b || (a.wallet ?? INITIAL) > (b.wallet ?? INITIAL)) ? a : b, null);
+  const xrow = extras.length ? `<tr><td class="l">추가 계좌</td><td>${extras.length}</td><td>${extras.filter((a) => a.position).length}</td>
+      <td>${extras.filter((a) => a.bust).length}</td><td class="mono">$${fmt(median(extras.map((a) => a.wallet ?? INITIAL)))}</td>
+      <td class="l">${xbest ? esc(name(xbest)) + ` <span class="mono ${cls((xbest.wallet ?? INITIAL) - INITIAL)}">$${fmt(xbest.wallet ?? INITIAL)}</span>` : "—"}</td>
+      <td class="mono">—</td><td>${extras.filter((a) => a.beats_random).length}</td></tr>` : "";
   return `<table><thead><tr><th class="l">봉</th><th>매매법 계좌</th><th>포지션</th><th>파산</th><th>잔고 중앙값</th>
-    <th class="l">최고 계좌</th><th>동전 봇 최고</th><th>동전 봇보다 나음</th></tr></thead><tbody>${rows}</tbody></table>`;
+    <th class="l">최고 계좌</th><th>동전 봇 최고</th><th>동전 봇보다 나음</th></tr></thead><tbody>${rows}${xrow}</tbody></table>`;
 }
 
 // ------------------------------------------------------------ board
@@ -295,8 +323,11 @@ $("f-sort").onchange = (e) => { state.bf.sort = e.target.value; renderBoard(); }
 function renderBoard() {
   const b = state.board; if (!b) return;
   const all = b.accounts, strat = all.filter((a) => a.kind === "strategy");
+  const extras = all.filter((a) => EXTRA_KINDS.includes(a.kind)), orig = all.length - extras.length;
+  const nc = extras.filter((a) => a.kind === "copy").length;
   $("tiles").innerHTML = [
-    ["계좌", all.length, `매매법 ${strat.length} · 동전 봇 ${all.length - strat.length}`],
+    ["계좌", extras.length ? `${orig} + 추가 ${extras.length}` : all.length,
+      `매매법 ${strat.length} · 동전 봇 ${orig - strat.length}` + (extras.length ? ` · 복제 ${nc} · 새 매매법 ${extras.length - nc}` : "")],
     ["포지션 중", all.filter((a) => a.position).length, "지금 열린 포지션"],
     ["$" + fmt(INITIAL, 0) + " 넘은 매매법", strat.filter((a) => (a.wallet ?? INITIAL) > INITIAL).length, `${strat.length}개 중`],
     ["동전 봇보다 나은 매매법", strat.filter((a) => a.beats_random).length, "같은 봉 동전 봇 3개 최고보다 잔고가 큼"],
@@ -317,7 +348,7 @@ function renderBoard() {
     }
     const vs = a.kind === "random" ? '<span class="muted">기준</span>'
       : a.beats_random == null ? "—" : a.beats_random ? '<span class="up">✓ 나음</span>' : '<span class="down">✕ 못함</span>';
-    return `<tr class="click" data-id="${esc(a.account_id)}"><td class="l muted" data-k="순위">${i + 1}</td><td class="l name">${esc(name(a))}</td>
+    return `<tr class="click" data-id="${esc(a.account_id)}"><td class="l muted" data-k="순위">${i + 1}</td><td class="l name">${esc(name(a))}${extraPills(a)}</td>
       <td class="mono" data-k="잔고">$${fmt(w)}</td><td class="mono ${cls(ret)}" data-k="수익률">${pct(ret)}</td><td data-k="거래">${a.trades}</td>
       <td data-k="승률">${a.win_rate == null ? "—" : Math.round(a.win_rate * 100) + "%"}</td>
       <td class="mono" data-k="최대 낙폭">${a.max_drawdown ? "-" + (a.max_drawdown * 100).toFixed(1) + "%" : "—"}</td>
@@ -329,7 +360,12 @@ function renderBoard() {
 // ------------------------------------------------------------ overlap (순위표 아래, /api/overlap)
 // Descriptive only: which accounts moved together and when many piled into one coin+side.
 let ovAt = 0;
-const idName = (id) => { const i = String(id).lastIndexOf("@"); return i < 0 ? String(id) : name({strategy: id.slice(0, i), timeframe: id.slice(i + 1)}); };
+const idName = (id) => {
+  const x = extraLabel(id);
+  if (x) return x;
+  const i = String(id).lastIndexOf("@");
+  return i < 0 ? String(id) : name({strategy: id.slice(0, i), timeframe: id.slice(i + 1)});
+};
 const usd = (x) => x == null ? "—" : (x < 0 ? "-$" : "+$") + fmt(Math.abs(x), 0);
 const mins = (m) => m >= 60 ? `${Math.floor(m / 60)}시간${m % 60 ? ` ${m % 60}분` : ""}` : `${m}분`;
 async function loadOverlap(force) {
@@ -393,15 +429,17 @@ function renderAccount(d) {
   const a = d.account, st = d.state || {}, trades = d.trades;
   const w = st.wallet ?? INITIAL, n = trades.length, wins = trades.filter((t) => t.pnl > 0).length;
   const locks = trades.filter((t) => t.exit_reason === "LOCK").length;
-  $("a-title").textContent = name(a);
+  $("a-title").innerHTML = esc(name({...a, label_ko: d.extra ? d.extra.label_ko : null})) + (d.extra ? extraPills({...a, ...d.extra}) : "");
   $("a-tiles").innerHTML = [
     ["잔고", "$" + fmt(w), pct(w / INITIAL - 1)],
     ["거래", n, `승률 ${n ? Math.round(wins / n * 100) + "%" : "—"}`],
     ["익절 잠금 청산", locks, n ? Math.round(locks / n * 100) + "%" : ""],
     ["최대 낙폭", st.max_drawdown ? "-" + (st.max_drawdown * 100).toFixed(1) + "%" : "—", st.bust ? "파산" : ""],
     ["신호", Object.values(d.signals).reduce((s, x) => s + x, 0),
-      `진입 ${d.signals.ENTERED || 0} · 건너뜀 ${d.signals.SKIPPED || 0} · 거절 ${d.signals.REJECTED || 0}`],
+      `${OUTCOME_KO.ENTERED} ${d.signals.ENTERED || 0} · ${OUTCOME_KO.SKIPPED} ${d.signals.SKIPPED || 0} · ${OUTCOME_KO.REJECTED} ${d.signals.REJECTED || 0}`
+        + (d.signals.FILTERED ? ` · ${OUTCOME_KO.FILTERED} ${d.signals.FILTERED}` : "")],
   ].map(([k, v, s]) => `<div class="tile"><div class="k">${k}</div><div class="v">${v}</div><div class="s">${s}</div></div>`).join("");
+  renderExtraInfo(d.extra);
   renderAcctPos(st.position);
   acharts.forEach((c) => c.remove()); acharts = [];
   if (window.LightweightCharts) {
@@ -423,6 +461,23 @@ function renderAccount(d) {
     <td class="l">${REASON_KO[t.exit_reason] || t.exit_reason}${t.lock_roe ? ` (+${Math.round(t.lock_roe * 100)}%)` : ""}</td>
     <td class="mono ${cls(t.roe)}">${pct(t.roe)}</td><td class="mono ${cls(t.pnl)}">${t.pnl > 0 ? "+" : ""}${fmt(t.pnl)}</td>
     <td class="mono">$${fmt(t.equity_after)}</td></tr>`).join("") || '<tr><td colspan="10" class="empty">아직 거래가 없습니다</td></tr>';
+}
+// an extra account: what it is (rule or new strategy), where it came from, when it started, the runner's events
+const EVENT_KO = {created: "시작", suspended: "멈춤(보류)", resumed: "다시 돎", held: "정지(동결)", code_accepted: "새 코드 받아들임"};
+function renderExtraInfo(x) {
+  const el = $("a-extra");
+  if (!el) return;
+  if (!x) { el.hidden = true; el.innerHTML = ""; return; }
+  el.hidden = false;
+  const what = x.kind === "copy" ? `복제 계좌 · 원본 ${esc(x.parent || "")} · 바꾼 규칙: <b>${esc(x.rule_ko || "")}</b>`
+    : `새 매매법 계좌 · ${esc(x.description_ko || "")}`;
+  const ev = (x.events || []).slice(-8).reverse().map((e) => `<li>${tsKo(e.ts)} ${esc(EVENT_KO[e.event] || e.event)}${e.code ? ` (${esc(e.code)})` : ""}</li>`).join("");
+  el.innerHTML = `<div class="ph"><span class="t">추가 계좌</span></div><div class="body"><div>${what}</div>
+    <div class="muted">제안 #${esc(x.proposal_id ?? "—")}${x.trial_id != null ? ` · 시험·장부 #${esc(x.trial_id)}` : ""} · 시작 ${tsKo(x.created_ts)} ·
+    상태 ${esc(EXTRA_ST_KO[x.extra_status] || x.extra_status || "—")}</div>
+    ${x.kind === "newlab" && x.spec ? `<div class="muted mono">${esc(JSON.stringify(x.spec))}</div>` : ""}
+    ${ev ? `<ul class="reasons">${ev}</ul>` : ""}
+    <div class="muted">원본 195개 계좌와 따로 셉니다. 시작된 계좌는 규칙대로 돌고, 거절로 멈출 수 없습니다.</div></div>`;
 }
 function renderAcctPos(p) {
   const el = $("a-pos");

@@ -12,20 +12,26 @@
     --skip-lab             do not re-hash the 5-year lab files (a minute or so of disk reads)
 
 Prints one Korean line per check: [OK], [고칠 것] (fix it before going on; the exit code is 1 while one is
-left) or [참고] (worth knowing; optional), then a verdict. Exit code 0 only when nothing is left to fix.
+left) or [참고] (worth knowing; read it, usually nothing to do), then a verdict. Exit code 0 only when
+nothing is left to fix: the owners' pass condition is "no [고칠 것] line and the last line is [OK]"
+(docs/server-setup-v3.md 10 and 12), not "every line is [OK]".
 
 Run it as root (sees everything; the Claude Code check then runs as user paperbot through runuser) or as
 user paperbot (``sudo -u paperbot``: the env files are group-readable; the firewall is then not checked).
 
 Safe at any time, also while the bot runs:
-- secrets are never printed: values show only as "set" / "empty", and every line is scrubbed of the env
-  files' values before it is printed;
+- secrets are never printed: values show only as "set" / "empty", every line is scrubbed of the env
+  files' values (also in their escaped and URL-quoted forms) before it is printed, and a failed network
+  call is reported by its error type only (its message may hold a URL with the bot token);
 - nothing is written, started, enabled or changed: the env files are parsed the way systemd reads them
-  (never ``source``d), paper3.db is opened read-only, and the lab files are hashed in memory
-  (``labdata check`` itself writes its manifest, so it is not called);
+  (never ``source``d), paper3.db and liq.db are opened read-only (``immutable`` while their writer is
+  stopped, so SQLite leaves no -wal/-shm files behind), and the lab files are hashed in memory
+  (``labdata check`` itself writes its manifest, so it is not called). Python may still write its
+  byte-code cache (__pycache__) for the code it imports, as for any program run by root;
 - outbound calls: Binance public data and the read-only key's signed GETs (fapi.binance.com,
-  api.binance.com), Telegram getMe; with --send-test one message per chat, with --ping one GET of
-  DEADMAN_URL. Nothing here can place an order.
+  api.binance.com), Telegram getMe and getChat (read-only: is the bot in each alert chat); with
+  --send-test one message per chat instead of getChat, with --ping one GET of DEADMAN_URL. Nothing here
+  can place an order.
 
 Each check is a small function of a ``Ctx`` whose command runner, HTTP fetcher, file-info lookup, clock
 and paths are injectable: tests/test_launchcheck.py fakes all of them (no network, no real system).
@@ -38,6 +44,7 @@ import base64
 import binascii
 import grp
 import hashlib
+import http.client
 import ipaddress
 import json
 import os
@@ -77,7 +84,14 @@ DAY_MS = 86_400_000
 HEARTBEAT_MAX_S = 90                        # the dashboard's "봇 생존 신호: 정상" threshold
 FRESH_RUN_MS = DAY_MS                       # before the start: a paper3.db younger than this is "just started"
 MAX_RESTARTS = 3
+RESTART_RECENT_S = 600                      # restarts count as "keeps crashing" while the current run is younger
+SETTLE_MS = 10 * 60_000                     # after a start: bars, dead-man pings and the liq stream are judged
+BAR_LAG_MAX_MS = 3 * 60_000                 # health.DeadMan withholds its ping past this lag
+PING_MAX_MS = 3 * 60_000                    # the bot pings every minute: older than this is not pinging
+LIQ_DOWN_MAX_MS = 10 * 60_000
 TAILNET = (ipaddress.ip_network("100.64.0.0/10"), ipaddress.ip_network("fd7a:115c:a1e0::/48"))
+ERROR_PREFIX = "이 점검이 오류로 멈췄습니다: "
+ERROR_MAX = 300                             # an error line is cut after it is scrubbed, never before
 
 INSTALL = "cd /root/crypto-bot-research && sudo bash deploy/install.sh"
 START_CMD = ("sudo systemctl enable --now paperbot-live3 paperbot-dash paperbot-liq paperbot-daily3.timer "
@@ -86,9 +100,17 @@ AFTER_CMD = ("cd /opt/crypto-bot-research && sudo /opt/paperbot/venv/bin/python 
              "--stage after")
 CLAUDE_INSTALL = "sudo -u paperbot -H bash -c 'cd ~ && curl -fsSL https://claude.ai/install.sh | bash'"
 CLAUDE_TOKEN = "sudo -u paperbot -H /var/lib/paperbot/.local/bin/claude setup-token"
-LAB_BUILD = ("sudo systemd-run --uid=paperbot --gid=paperbot --unit=paperbot-labbuild "
+# --collect: a build that fails (e.g. "download failed ... run the same command again") leaves no failed
+# transient unit behind, so the same command can be pasted again (docs/server-setup-v3.md 9)
+LAB_BUILD = ("sudo systemd-run --uid=paperbot --gid=paperbot --unit=paperbot-labbuild --collect "
              "-p WorkingDirectory=/opt/crypto-bot-research -p Nice=10 /opt/paperbot/venv/bin/python "
              "-m paperbot.agents.labdata build --out /var/lib/paperbot/lab --procs 2")
+OFFSITE_INSTALL = ("sudo install -m 644 /opt/crypto-bot-research/deploy/paperbot-offsite.service "
+                   "/opt/crypto-bot-research/deploy/paperbot-offsite.timer /etc/systemd/system/ && "
+                   "sudo systemctl daemon-reload")
+# `claude setup-token` prints sk-ant-oat01- and about 95 more characters; an API key starts sk-ant-api
+CLAUDE_TOKEN_RE = re.compile(r"sk-ant-oat\d\d-[A-Za-z0-9_-]+")
+CLAUDE_TOKEN_MIN_TAIL = 60
 
 # env file -> (owner, group, mode) as deploy/install.sh makes them
 ENV_SPECS = {"live": ("root", USER, 0o640), "dash": ("root", USER, 0o640),
@@ -126,14 +148,17 @@ EXECUTOR = "paperbot-executor.service"
 LEGACY = ("paperbot-live.service", "paperbot-evening.service", "paperbot-evening.timer",
           "paperbot-record.service", "paperbot-record.timer")
 SYSTEM = ("fail2ban.service", "chrony.service")
+AUTO_UPDATES = "unattended-upgrades.service"    # installed and enabled by install.sh's package list
 LABBUILD = "paperbot-labbuild.service"
 # required once installed: the off-site copy of the nightly backup (paperbot/offsite.py), added after the
-# first install.sh; a server whose install.sh does not install it yet is not asked for it
+# first install.sh; a server whose install.sh does not install it yet is not asked for it (a [참고] says so)
 EXTRA_TIMERS = ("paperbot-offsite.timer",)
+OFFSITE_TIMER = "paperbot-offsite.timer"
 INSTALLED = SERVICES + TIMERS + AGENT_TIMERS + JOBS + (EXECUTOR,)
-ALL_UNITS = INSTALLED + LEGACY + SYSTEM + (LABBUILD,) + EXTRA_TIMERS + ("paperbot-offsite.service",)
+ALL_UNITS = (INSTALLED + LEGACY + SYSTEM + (AUTO_UPDATES, LABBUILD) + EXTRA_TIMERS
+             + ("paperbot-offsite.service",))
 UNIT_PROPS = ("Id,LoadState,UnitFileState,ActiveState,SubState,Result,NRestarts,ExecMainStatus,"
-              "NextElapseUSecRealtime,ExecStart")
+              "NextElapseUSecRealtime,ExecStart,ActiveEnterTimestampMonotonic")
 RULES_SUMS = ("docs/paper-v3-rules.sha256", "docs/paper-v3-rules-addendum.sha256")
 
 # the paper key must be read-only: any of these on is a problem (Binance apiRestrictions fields)
@@ -228,6 +253,8 @@ class Ctx:
     fetch: Callable[..., tuple[int, bytes, dict]] = http_fetch
     stat: Callable[[str], Optional[FileInfo]] = file_info
     now_ms: Callable[[], int] = lambda: int(time.time() * 1000)
+    # CLOCK_MONOTONIC in microseconds, the clock of systemd's ActiveEnterTimestampMonotonic
+    mono_us: Callable[[], int] = lambda: int(time.monotonic() * 1_000_000)
     sleep: Callable[[float], None] = time.sleep
     cpu_count: Callable[[], Optional[int]] = os.cpu_count
     disk_free: Callable[[str], int] = _disk_free
@@ -356,10 +383,18 @@ def secret_values(envs: dict[str, EnvFile]) -> list[str]:
     return sorted(out, key=len, reverse=True)
 
 
+def _secret_forms(s: str) -> list[str]:
+    """The value as it may appear in an error message: as is, escaped the way repr() shows it (a tab as
+    backslash-t), and URL-quoted (as in a request URL)."""
+    forms = {s, repr(s)[1:-1], urllib.parse.quote(s), urllib.parse.quote(s, safe="")}
+    return [f for f in forms if len(f) >= 8]
+
+
 def scrub(text: str, secrets: Iterable[str]) -> str:
-    for s in secrets:
-        if s and s in text:
-            text = text.replace(s, "***")
+    forms = sorted({f for s in secrets if s for f in _secret_forms(s)}, key=len, reverse=True)
+    for f in forms:
+        if f in text:
+            text = text.replace(f, "***")
     return text
 
 
@@ -403,6 +438,40 @@ def _binance_key_format(ef: EnvFile) -> list[Line]:
     return out
 
 
+def _claude_token_format(ef: EnvFile, level: Callable[[str], Line] = fix) -> list[Line]:
+    """`claude auth status` only sees that a token is set (no call to the server), so a token damaged
+    while copying would pass it: its shape is checked here. The value is never shown."""
+    tok = ef.get(CLAUDE_KEY)
+    if not tok:
+        return []
+    where = f"{ef.name}.env의 {CLAUDE_KEY}"
+    redo = "docs/server-setup-v3.md 8-2의 setup-token 토큰을 다시 붙여 넣으세요"
+    if re.search(r"\s", tok):
+        return [level(f"{where} 값 안에 공백·줄바꿈이 끼어 있습니다: {redo}")]
+    if tok.startswith("sk-ant-api"):
+        return [level(f"{where}에 API 키(sk-ant-api…)가 들어 있습니다: 사용량 과금이 됩니다. {redo}")]
+    if not CLAUDE_TOKEN_RE.fullmatch(tok):
+        return [level(f"{where} 모양이 구독 토큰(sk-ant-oat01-로 시작, 영문·숫자·-·_만)이 아닙니다: {redo}")]
+    tail = len(tok) - len("sk-ant-oat01-")
+    if tail < CLAUDE_TOKEN_MIN_TAIL:
+        return [level(f"{where}이 너무 짧습니다(sk-ant-oat01- 뒤 {tail}자, 보통 90자 넘음): 끝까지 복사되지 않은 것 "
+                    f"같습니다. {redo}")]
+    return []
+
+
+def _nano_leftovers(ctx: Ctx) -> list[Line]:
+    """nano writes NAME.save (NAME.save.1, ...) with the whole unsaved text when its SSH session drops:
+    a copy of the keys that nothing else reads or removes."""
+    try:
+        names = sorted(n for n in os.listdir(ctx.etc) if re.search(r"\.save(\.\d+)?$", n))
+    except OSError:
+        return []
+    if not names:
+        return []
+    return [fix(f"{ctx.etc}에 nano가 접속이 끊길 때 남긴 파일이 있습니다(키가 들어 있을 수 있음): {', '.join(names)}. "
+                f"필요한 값을 원래 파일로 옮긴 뒤 지우세요: sudo rm -f {ctx.etc}/*.save*")]
+
+
 def check_env_files(ctx: Ctx, envs: dict[str, EnvFile], agents_wanted: bool) -> list[Line]:
     out: list[Line] = []
     try:
@@ -442,14 +511,16 @@ def check_env_files(ctx: Ctx, envs: dict[str, EnvFile], agents_wanted: bool) -> 
         for key, why in FORBIDDEN.get(name, {}).items():
             if ef.get(key):
                 out.append(fix(f"{name}.env에 {key} 줄이 들어 있습니다: {why}. 그 줄을 지우세요"))
+    out += _nano_leftovers(ctx)
     live, dash, agents = envs["live"], envs["dash"], envs["agents"]
     out += _values_line(live, LIVE_REQUIRED, fix)
-    out += _values_line(live, LIVE_OPTIONAL, note, "비어 있으면 CRITICAL 방으로 갑니다")
+    # empty is the documented setting (docs/server-setup-v3.md 4-2): not something to look at
+    out += _values_line(live, LIVE_OPTIONAL, ok, "비어 있는 방은 CRITICAL 방으로 갑니다")
     out += _binance_key_format(live) + _telegram_format(live)
     out += _values_line(dash, DASH_REQUIRED, fix)
     out += _values_line(agents, AGENTS_REQUIRED, fix if agents_wanted else note,
                         "" if agents_wanted else "에이전트 방을 켤 때 채웁니다")
-    out += _telegram_format(agents)
+    out += _telegram_format(agents) + _claude_token_format(agents, fix if agents_wanted else note)
     return out
 
 
@@ -528,6 +599,10 @@ def check_binance(ctx: Ctx, live: EnvFile) -> list[Line]:
         out.append(fix("읽기 전용 키가 비어 있어 레버리지 구간·수수료를 확인하지 못했습니다. 봇은 이 키 없이는 시작하지 "
                        f"못합니다 (sudo nano {live.path})"))
         return out
+    if re.search(r"\s", key + secret):
+        # a key with a space or tab in it cannot go into a request header (and the error would quote it)
+        out.append(fix("키 값 안에 공백이 있어 서명한 요청은 보내지 않았습니다: 위 '설정 파일' 줄대로 먼저 고치세요"))
+        return out
     signed = _rest(ctx, key=key, secret=secret)
     try:
         rates = [float(signed.commission_rate(s)["takerCommissionRate"]) for s in V3_SYMBOLS]
@@ -566,7 +641,8 @@ def _telegram(ctx: Ctx, token: str, method: str, params: Optional[dict] = None) 
     headers = {"Content-Type": "application/x-www-form-urlencoded"} if data else {}
     try:
         status, body, _ = ctx.fetch("POST" if data else "GET", url, headers, data, 15.0)
-    except OSError as exc:
+    except (OSError, ValueError, http.client.HTTPException) as exc:
+        # only the type: the message may quote the URL (e.g. InvalidURL for a token with a tab in it)
         return False, f"api.telegram.org에 연결하지 못함: {type(exc).__name__}"
     try:
         j = json.loads(body or b"null")
@@ -619,13 +695,29 @@ def check_telegram(ctx: Ctx, envs: dict[str, EnvFile], agents_wanted: bool, send
         return [fix(f"텔레그램이 봇 토큰을 받지 않습니다({res}): {telegram_hint(str(res))}")]
     name = res.get("username") if isinstance(res, dict) else None
     out = [ok(f"텔레그램 봇 @{name or '?'} 연결됨")]
-    if agents_wanted and agents.get("TELEGRAM_BOT_TOKEN") and (
-            agents.get("TELEGRAM_BOT_TOKEN") != token
-            or agents.get("TELEGRAM_CHAT_CRITICAL") != live.get("TELEGRAM_CHAT_CRITICAL")):
+    ag_token = agents.get("TELEGRAM_BOT_TOKEN")
+    refused: set = set()                     # tokens Telegram did not take: their chats are not tried
+    if agents_wanted and ag_token and (
+            ag_token != token or agents.get("TELEGRAM_CHAT_CRITICAL") != live.get("TELEGRAM_CHAT_CRITICAL")):
         out.append(note("agents.env의 텔레그램 봇·CRITICAL 방이 live.env와 다릅니다 (보통 같은 값을 넣습니다)"))
-    chats = telegram_chats(envs, agents_wanted)
+        if ag_token != token:
+            good, res = _telegram(ctx, ag_token, "getMe")
+            if not good:
+                refused.add(ag_token)
+                out.append(fix(f"텔레그램이 agents.env의 봇 토큰을 받지 않습니다({res}): {telegram_hint(str(res))}"))
+    chats = [c for c in telegram_chats(envs, agents_wanted) if c[1] not in refused]
     if not send_test:
-        out.append(note(f"시험 메시지는 보내지 않았습니다: --send-test를 붙이면 설정된 방 {len(chats)}곳에 하나씩 보냅니다"))
+        # getChat sends nothing: it only says whether this bot is in that chat (a wrong id, a bot that is not
+        # in the group, or a group whose id changed to a supergroup's -100… id all fail here)
+        seen = 0
+        for label, tok, chat, _silent in chats:
+            good, res = _telegram(ctx, tok, "getChat", {"chat_id": chat})
+            if good:
+                seen += 1
+            else:
+                out.append(fix(f"{label} 방을 찾지 못했습니다({res}): {telegram_hint(str(res))}"))
+        if seen:
+            out.append(ok(f"텔레그램 방 {seen}곳 확인됨: 봇이 들어가 있음 (메시지는 보내지 않음, --send-test로 시험 메시지)"))
         return out
     for label, tok, chat, silent in chats:
         text = f"[시험] paperbot 시작 점검: {label} 알림이 이 방으로 옵니다. 답장하지 않아도 됩니다."
@@ -653,15 +745,15 @@ def check_deadman(ctx: Ctx, live: EnvFile, ping: bool, stage: str) -> list[Line]
         out.append(note(f"DEADMAN_URL이 healthchecks.io(hc-ping.com) 주소가 아닙니다({parts.hostname}): "
                         "다른 감시 서비스라면 괜찮습니다"))
     if not ping:
-        out.append(note("핑은 보내지 않았습니다(--ping으로 한 번 보냄). 새 체크는 첫 핑 전('new')에는 알림을 보내지 "
-                        "않습니다: 봇을 시작한 뒤 healthchecks.io에서 'up'(초록)이 되는지 꼭 보세요"
-                        if stage == "before" else
-                        "healthchecks.io 화면에서 이 체크가 'up'(초록)인지 눈으로 보세요: 봇이 1분마다 핑을 보냅니다"))
+        # after the start, the bot's own pings are checked from paper3.db (the '데이터' section)
+        if stage == "before":
+            out.append(note("핑은 보내지 않았습니다(--ping으로 한 번 보냄). 새 체크는 첫 핑 전('new')에는 알림을 보내지 "
+                            "않습니다: 봇을 시작한 뒤 healthchecks.io에서 'up'(초록)이 되는지 꼭 보세요"))
         return out
     try:
         status, _, _ = ctx.fetch("GET", url, {"User-Agent": "paperbot-launchcheck"}, None, 10.0)
         why = f"HTTP {status}"
-    except OSError as exc:
+    except (OSError, ValueError, http.client.HTTPException) as exc:      # the message may quote the URL
         status, why = None, type(exc).__name__
     if status == 200:
         out.append(ok("DEADMAN_URL로 핑 보냄: healthchecks.io 화면에서 'up'이 됐는지 보세요"))
@@ -745,7 +837,7 @@ def dash_listen_lines(ctx: Ctx, host: str) -> list[Line]:
     netloc = f"[{want}]" if ":" in want else want
     try:
         status, _, _ = ctx.fetch("GET", f"http://{netloc}:8080/", {}, None, 5.0)
-    except OSError as exc:
+    except (OSError, ValueError, http.client.HTTPException) as exc:
         return out + [fix(f"대시보드 주소에 접속하지 못했습니다({type(exc).__name__}): journalctl -u paperbot-dash -n 30")]
     if status >= 500:
         return out + [fix(f"대시보드가 오류로 답합니다(HTTP {status}): journalctl -u paperbot-dash -n 30")]
@@ -788,7 +880,7 @@ def check_tailscale(ctx: Ctx, dash: EnvFile) -> list[Line]:
         st = None
     if rc == 127:
         out.append(level("Tailscale이 설치되지 않았습니다" + (": 대시보드는 SSH 터널로만 봅니다" if loop else
-                                                         ": docs/server-setup-v3.md 6번대로 설치하세요")))
+                                                         ": docs/server-setup-v3.md 7번(Tailscale)대로 설치하세요")))
     elif not isinstance(st, dict):
         out.append(level("Tailscale 상태를 읽지 못했습니다: sudo systemctl enable --now tailscaled && sudo tailscale up"))
     else:
@@ -809,19 +901,50 @@ def check_tailscale(ctx: Ctx, dash: EnvFile) -> list[Line]:
                              "폰에서 승인하세요"))
     if ctx.euid != 0:
         return out + [note("방화벽(ufw) 규칙은 sudo(root)로 실행할 때만 확인합니다")]
-    rc, text, _ = ctx.run(["ufw", "status"])
+    return out + firewall_lines(ctx, loop)
+
+
+def _ufw_rules(text: str) -> list[tuple[str, str]]:
+    """(the 'To' part, the whole row) of each rule that lets traffic in (ALLOW or LIMIT), from
+    `ufw status verbose`."""
+    rules = []
+    for row in text.splitlines():
+        m = re.match(r"(.+?)\s{2,}(ALLOW|LIMIT)\b(?!\s+OUT)", row)
+        if m:
+            rules.append((m.group(1).strip(), " ".join(row.split())))
+    return rules
+
+
+def _ssh_rule(to: str) -> bool:
+    return bool(re.match(r"(22(/tcp)?|OpenSSH)(\s|\(|$)", to)) or "(OpenSSH" in to
+
+
+def firewall_lines(ctx: Ctx, loop: bool) -> list[Line]:
+    """`ufw status verbose`: on, incoming denied by default, and nothing let in but SSH and (with a
+    Tailscale DASH_HOST) the tailscale0 interface."""
+    rc, text, _ = ctx.run(["ufw", "status", "verbose"])
     if rc != 0:
-        return out + [fix(f"방화벽(ufw) 상태를 읽지 못했습니다: 설치 스크립트를 다시 실행하세요 ({INSTALL})")]
+        return [fix(f"방화벽(ufw) 상태를 읽지 못했습니다: 설치 스크립트를 다시 실행하세요 ({INSTALL})")]
     if not re.search(r"^Status:\s*active", text, re.M):
-        return out + [fix("방화벽(ufw)이 꺼져 있습니다: sudo ufw enable (설치 스크립트는 SSH만 열고 켭니다)")]
-    rules = [r for r in text.splitlines() if "ALLOW" in r]
+        return [fix("방화벽(ufw)이 꺼져 있습니다: sudo ufw enable (설치 스크립트는 SSH만 열고 켭니다)")]
     fw: list[Line] = []
+    if not re.search(r"^Default:\s*deny \(incoming\)", text, re.M):
+        fw.append(fix("방화벽 기본값이 '들어오는 연결 막기'가 아닙니다: sudo ufw default deny incoming"))
+    rows = _ufw_rules(text)
+    rules = [to for to, _ in rows]
     if any(re.match(r"8080(/tcp)?\b", r) and "tailscale0" not in r for r in rules):
-        fw.append(fix("방화벽에서 8080 포트가 인터넷에 열려 있습니다: sudo ufw delete allow 8080 "
-                      "(대시보드는 Tailscale로만 봅니다)"))
+        fw.append(fix("방화벽에서 8080 포트가 인터넷에 열려 있습니다(대시보드는 Tailscale로만 봅니다): "
+                      "`sudo ufw status numbered`로 8080 줄의 번호를 보고 `sudo ufw delete <번호>` "
+                      "(줄마다 한 번, 번호가 바뀌므로 지울 때마다 다시 확인)"))
     if not loop and not any("tailscale0" in r for r in rules):
         fw.append(fix("방화벽에 Tailscale 허용 규칙이 없습니다: sudo ufw allow in on tailscale0"))
-    return out + (fw or [ok("방화벽 켜짐 (SSH" + ("" if loop else "와 Tailscale") + "만 허용)")])
+    other = [row for to, row in rows if not _ssh_rule(to) and "tailscale0" not in to and not to.startswith("8080")]
+    if other:
+        fw.append(note(f"방화벽이 SSH·Tailscale 말고도 들여보내는 규칙: {' / '.join(other)}. 직접 연 것이 아니면 "
+                       "`sudo ufw status numbered` 후 `sudo ufw delete <번호>`"))
+    if any(s == FIX for s, _ in fw):
+        return fw
+    return [ok("방화벽 켜짐: 들어오는 연결은 기본으로 막고 SSH" + ("" if loop else "와 Tailscale") + "만 허용")] + fw
 
 
 # ---------------------------------------------------------------- server size, clock
@@ -915,20 +1038,41 @@ def _active(d: dict) -> bool:
     return d.get("ActiveState") in ("active", "activating", "reloading")
 
 
-def service_line(unit: str, d: dict) -> Line:
+def _run_age_s(d: dict, mono_us: Optional[int]) -> Optional[float]:
+    """Seconds since the unit last became active (an automatic restart resets it); None when unknown."""
+    raw = d.get("ActiveEnterTimestampMonotonic") or ""
+    if mono_us is None or not raw.isdigit() or int(raw) <= 0:
+        return None
+    return max(0.0, (mono_us - int(raw)) / 1e6)
+
+
+def _age_text(s: float) -> str:
+    return f"{s / 86400:.0f}일" if s >= 2 * 86400 else f"{s / 3600:.0f}시간" if s >= 7200 else f"{s / 60:.0f}분"
+
+
+def service_line(unit: str, d: dict, mono_us: Optional[int] = None) -> Line:
+    """systemd's NRestarts counts every automatic restart since the last manual start, so a service that
+    restarted a few times weeks ago (a Binance outage, a reboot before Tailscale was up) and has run
+    fine since is a [참고]; it is [고칠 것] while it is down or its current run is younger than ten
+    minutes (still crashing)."""
     name = _short(unit)
     restarts = int(d.get("NRestarts") or 0) if (d.get("NRestarts") or "0").isdigit() else 0
     running = (d.get("ActiveState"), d.get("SubState")) == ("active", "running")
+    age = _run_age_s(d, mono_us) if running else None
+    crashing = restarts > MAX_RESTARTS and (not running or age is None or age < RESTART_RECENT_S)
     problems = []
     if not _enabled(d):
         problems.append(f"부팅 때 자동으로 켜지지 않음 (sudo systemctl enable {name})")
     if not running:
         problems.append(f"실행 중이 아님({d.get('ActiveState')}/{d.get('SubState')})")
-    if restarts > MAX_RESTARTS:
+    if crashing:
         problems.append(f"{restarts}번 다시 시작함(계속 죽는 중)")
     if problems:
-        logs = f". 원인: journalctl -u {name} -n 50" if not running or restarts > MAX_RESTARTS else ""
+        logs = f". 원인: journalctl -u {name} -n 50" if not running or crashing else ""
         return fix(f"{name}: " + "; ".join(problems) + logs)
+    if restarts > MAX_RESTARTS:
+        return note(f"{name}: 켜짐·실행 중, 지금은 {_age_text(age)}째 정상. 그동안 자동 재시작 {restarts}번 "
+                    f"(이유 보기: journalctl -u {name} -n 100 --no-pager)")
     return ok(f"{name}: 켜짐·실행 중 (자동 재시작 {restarts}번)")
 
 
@@ -939,7 +1083,8 @@ def timer_line(unit: str, d: dict, required: bool) -> Line:
     return (fix if required else note)(f"{unit}: 꺼져 있음 → sudo systemctl enable --now {unit}")
 
 
-def check_units(states: Optional[dict], stage: str, agents_wanted: bool) -> list[Line]:
+def check_units(states: Optional[dict], stage: str, agents_wanted: bool,
+                mono_us: Optional[int] = None) -> list[Line]:
     if states is None:
         return [fix("systemctl을 쓸 수 없습니다: 이 점검은 설치한 서버(Ubuntu 24.04)에서 돌립니다")]
     st = lambda u: states.get(u) or {}          # noqa: E731
@@ -950,6 +1095,9 @@ def check_units(states: Optional[dict], stage: str, agents_wanted: bool) -> list
     down = [_short(u) for u in SYSTEM if st(u).get("ActiveState") != "active"]
     out.append(fix(f"꺼져 있음: {', '.join(down)} → sudo systemctl enable --now {' '.join(down)}") if down else
                ok("fail2ban(로그인 공격 차단)·chrony(시계) 켜짐"))
+    if st(AUTO_UPDATES).get("ActiveState") != "active":
+        out.append(note("자동 보안 업데이트(unattended-upgrades)가 꺼져 있습니다: "
+                        "sudo systemctl enable --now unattended-upgrades"))
     legacy = [u for u in LEGACY if _enabled(st(u)) or _active(st(u))]
     if legacy:
         out.append(fix(f"옛 버전(v1/v2) 서비스가 켜져 있습니다: {', '.join(legacy)} → "
@@ -969,7 +1117,7 @@ def check_units(states: Optional[dict], stage: str, agents_wanted: bool) -> list
         out.append(note(f"이미 켜져 있음: {', '.join(on)}. 시작한 뒤의 점검은 --stage after") if on else
                    ok("봇·대시보드·기록기·타이머는 아직 꺼져 있음 (시작 전 상태 그대로)"))
     else:
-        out += [service_line(u, st(u)) for u in SERVICES]
+        out += [service_line(u, st(u), mono_us) for u in SERVICES]
         out += [timer_line(u, st(u), True) for u in TIMERS]
         for job in ("paperbot-daily3.service", "paperbot-backup.service"):
             if st(job).get("Result") not in (None, "", "success"):
@@ -989,6 +1137,9 @@ def check_units(states: Optional[dict], stage: str, agents_wanted: bool) -> list
     off = [u for u in AGENT_TIMERS if not (_enabled(st(u)) and st(u).get("ActiveState") == "active")]
     if stage == "after" and agents_wanted:
         out += [timer_line(u, st(u), True) for u in AGENT_TIMERS]
+    elif off and stage == "before" and agents_wanted:
+        # the expected state before the start: the verdict's start command turns them on with the rest
+        out.append(ok(f"에이전트 방 타이머는 아직 꺼져 있음: {', '.join(_short(u) for u in off)} (시작 명령이 함께 켭니다)"))
     elif off:
         out.append(note(f"에이전트 방 타이머 꺼져 있음: {', '.join(off)} (Claude 로그인·5년 자료·드라이런을 마친 뒤 "
                         "sudo systemctl enable --now paperbot-agents.timer paperbot-labmonthly.timer)"))
@@ -1103,11 +1254,23 @@ def check_data_dir(ctx: Ctx) -> list[Line]:
     return out
 
 
+def open_ro(path: str) -> sqlite3.Connection:
+    """A read-only connection that leaves nothing behind. paper3.db and liq.db are WAL databases: a
+    read-only open of one whose writer is stopped (no -wal/-shm next to it) would create those two files
+    (root-owned when run as root), so it is then opened ``immutable`` (nothing can change it meanwhile).
+    While the writer runs, its -wal/-shm exist and a plain read-only open uses them."""
+    immutable = not (os.path.exists(path + "-wal") or os.path.exists(path + "-shm"))
+    uri = f"file:{urllib.parse.quote(path)}?mode=ro" + ("&immutable=1" if immutable else "")
+    conn = sqlite3.connect(uri, uri=True, timeout=5.0)
+    conn.execute("PRAGMA query_only = 1")
+    return conn
+
+
 def read_paper_db(path: str) -> dict:
-    """Run start, heartbeat and the last start's record from paper3.db, opened read-only."""
-    conn = sqlite3.connect(f"file:{urllib.parse.quote(path)}?mode=ro", uri=True, timeout=5.0)
+    """Run start, heartbeat, this start's record and the bot's health row (bar lag, dead-man pings) from
+    paper3.db, opened read-only."""
+    conn = open_ro(path)
     try:
-        conn.execute("PRAGMA query_only = 1")
         tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
         one = lambda q: (conn.execute(q).fetchone() or (None,))[0]          # noqa: E731
         start = None
@@ -1115,13 +1278,19 @@ def read_paper_db(path: str) -> dict:
             start = one("SELECT MIN(created_ts) FROM accounts WHERE kind IN ('strategy', 'random')")
         if start is None and "runs" in tables:
             start = one("SELECT MIN(started_ts) FROM runs")
-        hb = run = None
+        hb = run = run_ts = health = health_ts = None
         if "state" in tables:
             hb = one("SELECT ts FROM state WHERE k = 'heartbeat'")
-            raw = one("SELECT data FROM state WHERE k = 'run'")
-            run = json.loads(raw) if raw else None
+            row = conn.execute("SELECT ts, data FROM state WHERE k = 'run'").fetchone()
+            if row and row[1]:
+                run_ts, run = row[0], json.loads(row[1])
+            row = conn.execute("SELECT ts, data FROM state WHERE k = 'health'").fetchone()
+            if row and row[1]:
+                health_ts, health = row[0], json.loads(row[1])
         return {"start": None if start is None else int(start), "heartbeat": None if hb is None else int(hb),
-                "run": run if isinstance(run, dict) else None}
+                "run": run if isinstance(run, dict) else None, "run_ts": None if run_ts is None else int(run_ts),
+                "health": health if isinstance(health, dict) else None,
+                "health_ts": None if health_ts is None else int(health_ts)}
     finally:
         conn.close()
 
@@ -1134,7 +1303,61 @@ def paper_start(ctx: Ctx) -> Optional[int]:
         return None
 
 
-def check_paper_db(ctx: Ctx, stage: str) -> list[Line]:
+LIVE_BRACKETS = "Binance leverageBracket (live)"      # paperbot/live.load_brackets' source for the exchange's
+
+
+def move_old_db_command(ctx: Ctx) -> str:
+    """Moves a test run's databases into a new dated folder among the backups (pruned after 14 days like
+    them), in one root shell: nullglob skips a database the test run never made, so nothing reads as an
+    error. Ends without punctuation: it is copied as a whole."""
+    names = " ".join(os.path.join(ctx.lib, f"{n}.db*") for n in ("paper3", "daily3", "checkpoint"))
+    return (f"sudo systemctl stop paperbot-live3 && sudo bash -c 'shopt -s nullglob; "
+            f"d={ctx.backups}/old-$(date -u +%Y%m%d%H%M); mkdir -p \"$d\" && mv {names} \"$d\"/ && "
+            f"chown -R {ctx.user}:{ctx.user} \"$d\" && echo \"옮김: $d\"'")
+
+
+def bot_health_lines(db: dict, now: int, deadman_set: bool) -> list[Line]:
+    """The bot writes its heartbeat on every poll, also when no new bar came in: the 'health' row says
+    whether 1m bars are fresh and whether its own dead-man pings get through (a DEADMAN_URL added after
+    the start is not used until a restart, and healthchecks.io never alerts on a check that was never
+    pinged)."""
+    health, run_ts = db.get("health"), db.get("run_ts")
+    settled = run_ts is not None and now - run_ts >= SETTLE_MS
+    if health is None:
+        return [note("봇의 상태 기록(health)이 없어 1분봉과 healthchecks.io 핑을 확인하지 못했습니다: healthchecks.io 화면이 "
+                     "'up'(초록)인지 눈으로 보세요")]
+    out: list[Line] = []
+    last_bar = health.get("last_bar")
+    lag = None if not isinstance(last_bar, (int, float)) else now - (int(last_bar) + 60_000)
+    if lag is None or lag > BAR_LAG_MAX_MS:
+        if not settled:
+            return [note("봇이 아직 준비 중입니다(시작 10분 안): 1분봉·healthchecks.io 핑은 10분쯤 뒤 다시 확인하세요")]
+        out.append(fix(("바이낸스 1분봉이 아직 한 번도 처리되지 않았습니다" if lag is None else
+                        f"바이낸스 1분봉이 {lag // 60_000}분째 들어오지 않습니다")
+                       + ": journalctl -u paperbot-live3 -n 50 (이대로면 healthchecks.io가 'down' 알림을 보냅니다)"))
+        return out                          # stale bars also hold back the pings: nothing more to say about them
+    out.append(ok(f"바이낸스 1분봉 정상: 마지막 봉 {max(0, lag) // 1000}초 지연"))
+    if not deadman_set:
+        return out
+    dm = health.get("deadman") if isinstance(health.get("deadman"), dict) else {}
+    last_ping, failures = dm.get("last_ping"), dm.get("failures") or 0
+    ping_age = None if not isinstance(last_ping, (int, float)) else now - int(last_ping)
+    if ping_age is not None and ping_age <= PING_MAX_MS:
+        out.append(ok(f"봇이 healthchecks.io에 핑을 보내고 있음: 마지막 {ping_age // 1000}초 전")
+                   if not failures else
+                   note(f"봇이 healthchecks.io에 핑을 보내고 있음(마지막 {ping_age // 1000}초 전). 그동안 실패 "
+                        f"{failures}번: 잠깐 끊긴 것이면 괜찮습니다"))
+    elif not settled:
+        out.append(note("봇의 첫 healthchecks.io 핑을 기다리는 중입니다(시작 10분 안): 10분쯤 뒤 다시 확인하세요"))
+    else:
+        out.append(fix("봇이 healthchecks.io에 핑을 보내지 못하고 있습니다(마지막 핑: "
+                       + ("없음" if ping_age is None else f"{ping_age // 60_000}분 전")
+                       + "): DEADMAN_URL을 봇 시작 뒤에 넣었거나 고쳤다면 sudo systemctl restart paperbot-live3. "
+                       "그래도 같으면 journalctl -u paperbot-live3 -n 50 에서 'dead-man ping failed'를 보세요"))
+    return out
+
+
+def check_paper_db(ctx: Ctx, stage: str, deadman_set: bool = False) -> list[Line]:
     path = os.path.join(ctx.lib, "paper3.db")
     now = ctx.now_ms()
     if ctx.stat(path) is None:
@@ -1147,8 +1370,6 @@ def check_paper_db(ctx: Ctx, stage: str) -> list[Line]:
         return [fix(f"paper3.db를 읽지 못했습니다: {exc}")]
     start = db["start"]
     if stage == "before":
-        old = os.path.join(ctx.backups, "old")
-        moved = " ".join(os.path.join(ctx.lib, f"{n}.db*") for n in ("paper3", "daily3", "checkpoint"))
         if start is None:
             return [ok("paper3.db가 있지만 아직 계좌가 없습니다 (새로 시작하는 것과 같음)")]
         age = now - start
@@ -1156,9 +1377,9 @@ def check_paper_db(ctx: Ctx, stage: str) -> list[Line]:
             return [note(f"이미 {kst_text(start)}(한국 시간)에 시작한 기록이 있습니다({age // 3_600_000}시간 전): "
                          "30일 판정과 관찰 기간은 이때부터 셉니다. 시작한 뒤의 점검은 --stage after")]
         return [fix(f"{age // DAY_MS}일 전({kst_day(start)})에 시작한 기록이 paper3.db에 남아 있습니다: 30일 판정과 "
-                    "관찰 기간이 그날부터 셉니다. 시험으로 돌린 것이면 새로 시작하기 전에 옮기세요: "
-                    f"sudo systemctl stop paperbot-live3 && sudo mkdir -p {old} && sudo mv {moved} {old}/ . "
-                    "이어서 돌리는 것이면 --stage after로 확인하세요")]
+                    "관찰 기간이 그날부터 셉니다. 이어서 돌리는 것이면 --stage after로 확인하세요. 시험으로 돌린 것이면 "
+                    "새로 시작하기 전에 아래 명령으로 옮기세요(백업 폴더 안 old-날짜 폴더로, 14일 뒤 저절로 지워짐): "
+                    + move_old_db_command(ctx))]
     out: list[Line] = []
     hb = db["heartbeat"]
     if hb is None:
@@ -1169,17 +1390,22 @@ def check_paper_db(ctx: Ctx, stage: str) -> list[Line]:
         out.append(ok(f"봇 생존 신호 정상: {age_s:.0f}초 전") if age_s < HEARTBEAT_MAX_S else
                    fix(f"봇 생존 신호가 {age_s:.0f}초 전입니다({HEARTBEAT_MAX_S}초 넘음): systemctl status paperbot-live3, "
                        "journalctl -u paperbot-live3 -n 50"))
+        if age_s < HEARTBEAT_MAX_S:
+            out += bot_health_lines(db, now, deadman_set)
     run = db["run"]
     if run:
         src = str(run.get("brackets") or "")
         fee = run.get("taker_fee")
+        rest = ((f", taker 수수료 {float(fee):.4%}" if fee is not None else "")
+                + (", 재시작 뒤 이어서 돌림" if run.get("restored") else ""))
         if "EXAMPLE" in src:
             out.append(fix("봇이 예시 레버리지 구간으로 돌고 있습니다(거래소 값 아님): 읽기 전용 키를 넣고 "
                            "sudo systemctl restart paperbot-live3"))
+        elif src == LIVE_BRACKETS:
+            out.append(ok(f"계좌 {run.get('accounts', '?')}개, 레버리지 구간: 거래소 실제 값{rest}"))
         else:
-            out.append(ok(f"계좌 {run.get('accounts', '?')}개, 레버리지 구간: 거래소 실제 값"
-                          + (f", taker 수수료 {float(fee):.4%}" if fee is not None else "")
-                          + (", 재시작 뒤 이어서 돌림" if run.get("restored") else "")))
+            out.append(note(f"계좌 {run.get('accounts', '?')}개, 레버리지 구간: {src or '?'} (거래소에서 지금 받은 값이 "
+                            f"아님. --brackets 파일을 따로 준 것이 아니면 개발자에게){rest}"))
         ver = installed_version(ctx) or {}
         if run.get("commit") and ver.get("commit") and run["commit"] != ver["commit"]:
             out.append(note(f"봇이 설치된 코드({str(ver['commit'])[:10]})가 아닌 {str(run['commit'])[:10]}로 돌고 있습니다: "
@@ -1187,6 +1413,55 @@ def check_paper_db(ctx: Ctx, stage: str) -> list[Line]:
     if start is not None:
         out.append(ok(f"첫 시작 {kst_text(start)}(한국 시간)"))
     return out
+
+
+def check_liq(ctx: Ctx) -> list[Line]:
+    """After the start: the liquidation recorder (paperbot-liq) keeps reconnecting on its own and stays
+    'active' while the stream is down, and Binance keeps no history of liquidations: its connection log
+    in liq.db says whether data is being recorded now."""
+    path = os.path.join(ctx.lib, "liq.db")
+    now = ctx.now_ms()
+    if ctx.stat(path) is None:
+        return [fix("liq.db가 없습니다: 강제청산 기록기(paperbot-liq)가 기록하지 못하고 있습니다. "
+                    "journalctl -u paperbot-liq -n 30")]
+    try:
+        conn = open_ro(path)
+        try:
+            tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+            if "conn_log" not in tables:
+                return [note("liq.db에 연결 기록이 아직 없습니다: 몇 분 뒤 다시 확인하세요")]
+            up = conn.execute("SELECT MAX(ts) FROM conn_log WHERE event = 'connected'").fetchone()[0]
+            down = conn.execute("SELECT MIN(ts) FROM conn_log WHERE event IN ('disconnected', 'stopped') "
+                                "AND ts >= ?", (up or 0,)).fetchone()[0]
+            last = conn.execute("SELECT MAX(received_ts) FROM liq").fetchone()[0] if "liq" in tables else None
+        finally:
+            conn.close()
+    except (sqlite3.Error, ValueError) as exc:
+        return [fix(f"liq.db를 읽지 못했습니다: {exc}")]
+    if up is None and down is None:
+        return [note("강제청산 기록기가 아직 연결 기록을 남기지 않았습니다: 몇 분 뒤 다시 확인하세요")]
+    if down is None:
+        seen = f", 마지막 청산 기록 {max(0, now - int(last)) // 60_000}분 전" if last is not None else ", 청산 기록은 아직 없음"
+        return [ok(f"강제청산 기록기 연결됨: {kst_text(int(up))}(한국 시간)부터{seen}")]
+    gone = max(0, now - int(down))
+    if gone <= LIQ_DOWN_MAX_MS:
+        return [note(f"강제청산 기록기가 {gone // 1000}초 전에 끊겨 다시 연결하는 중입니다: 몇 분 뒤 다시 확인하세요")]
+    return [fix(f"강제청산 기록기가 {gone // 60_000}분째 바이낸스에 연결돼 있지 않습니다(이 동안의 청산 기록은 되살릴 수 "
+                "없음): systemctl status paperbot-liq, journalctl -u paperbot-liq -n 30")]
+
+
+def check_offsite(live: EnvFile, states: Optional[dict]) -> list[Line]:
+    """The off-site copy of the nightly backup (paperbot/offsite.py): the only copy outside the server, as
+    the owners keep Vultr's automatic backups off. Its timer itself is checked with the other units."""
+    if states is None:
+        return []
+    if ((states.get(OFFSITE_TIMER) or {}).get("LoadState")) != "loaded":
+        return [note("서버 밖 백업(paperbot-offsite)이 이 서버에 설치되지 않았습니다: 서버를 잃으면 기록도 함께 "
+                     f"사라집니다. 설치: {OFFSITE_INSTALL} (docs/server-setup-v3.md 4-3, 11)")]
+    if not live.get("TELEGRAM_CHAT_BACKUP"):
+        return [note("live.env의 TELEGRAM_CHAT_BACKUP이 비어 있어 매일 백업 파일이 알림 단체방(CRITICAL)으로 갑니다: "
+                     "docs/server-setup-v3.md 4-3대로 'paperbot 백업' 방 번호를 넣으세요")]
+    return [ok("서버 밖 백업: 설치됨, 'paperbot 백업' 방 번호 있음 (매일 09:15 한국 시간)")]
 
 
 # ---------------------------------------------------------------- agent rooms
@@ -1200,9 +1475,16 @@ def check_lab(ctx: Ctx, states: Optional[dict], agents_wanted: bool, ref: Option
     its manifest (this check may run as root and must not leave a root-owned file in the lab folder)."""
     level = fix if agents_wanted else note
     lab = os.path.join(ctx.lib, "lab")
-    if ((states or {}).get(LABBUILD) or {}).get("ActiveState") in ("active", "activating"):
+    build = (states or {}).get(LABBUILD) or {}
+    if build.get("ActiveState") in ("active", "activating"):
         return [note("5년 시험 자료를 지금 만드는 중입니다(paperbot-labbuild): journalctl -fu paperbot-labbuild, "
                      "끝난 뒤 다시 확인하세요")]
+    if build.get("ActiveState") == "failed":
+        # a build started without --collect stays loaded as failed: the same systemd-run is then refused
+        # ("Unit paperbot-labbuild.service was already loaded") until reset-failed
+        return [level("5년 시험 자료 만들기가 실패한 채 남아 있습니다: 이유 보기 sudo journalctl -u paperbot-labbuild -n 30 "
+                      "--no-pager → sudo systemctl reset-failed paperbot-labbuild → 다시 만들기(받은 것은 두고 이어서 "
+                      f"합니다): {LAB_BUILD}")]
     info = ctx.stat(lab)
     if info is None:
         return [level(f"5년 시험 자료 폴더가 없습니다(에이전트 방에 필요). 30~60분 걸립니다: {LAB_BUILD}")]

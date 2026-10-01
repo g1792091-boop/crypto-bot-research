@@ -116,13 +116,17 @@ def test_lab_meeting_tests_new_specs_handles_bad_and_duplicate_and_counts_global
     assert body["n_tests_so_far"] == 1 and body["test_number"] == 2
     assert body["gate"]["pass"] is True and body["gate"]["alpha_period1"] == pytest.approx(0.05 / 2)
     assert body["ledger"]["pass"] and body["notes"]["idea"] == "아이디어 1"
-    # a pass: proposal posted, the owners told once, nothing created
+    # a pass: one proposal row of kind 'newlab' for the owners (written with the ledger's 'proposed' result in one
+    # transaction), the owners told once, no account created here
     assert t["result"]["status"] == "proposed" and body["proposal"]["kind"] == "new_paper_account"
-    assert body["proposal"]["needs_owner_ok"] is True and R.list_proposals(world.agents) == []
+    [prop] = R.list_proposals(world.agents)
+    assert body["proposal"]["needs_owner_ok"] is True and prop["status"] == "awaiting_owner" and prop["room_id"] == LAB
+    assert prop["strategy"] is None and prop["trial_id"] == t["id"] and body["proposal_id"] == prop["id"]
+    assert prop["change"]["kind"] == "newlab" and prop["change"]["account"]["spec_hash"] == t["spec_hash"]
     assert [lvl for lvl, _ in note.messages] == [WARN] and "새 매매법" in note.messages[0][1]
     assert "OK" in note.messages[0][1] and "volume_spike" in note.messages[0][1]
     act = next(m for m in msgs if m["kind"] == "action" and (m["data"] or {}).get("action") == "newlab_proposal")
-    assert "두 분 OK" in act["text"] and "다음 단계" in act["text"]
+    assert "두 분 OK" in act["text"] and "승인/거절" in act["text"] and f"제안 #{prop['id']}" in act["text"]
     res = next(m for m in msgs if m["kind"] == "code_result" and (m["data"] or {}).get("trial_id") == t["id"]
                and not m["data"].get("duplicate"))
     assert res["data"]["gate"]["pass"] is True and "[새 매매법 시험 #2]" in res["text"]

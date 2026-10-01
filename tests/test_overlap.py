@@ -116,7 +116,8 @@ def test_identical_accounts_form_a_group_independent_does_not(rep):
 def test_insufficient_data_is_marked_and_never_grouped(rep):
     bad = {r["account_id"]: r["missing"] for r in rep["insufficient"]}
     assert bad == {"D@15m": ["trades"], "E@15m": ["days"]}
-    assert rep["accounts"] == {"strategy": 5, "random": 1, "strategy_enough_data": 3}
+    assert rep["accounts"] == {"strategy": 5, "random": 1, "copy": 0, "strategy_enough_data": 3}
+    assert rep["copies"] == []
     assert rep["pairs"]["strategy_pairs"] == 10 and rep["pairs"]["sufficient"] == 3
     assert rep["pairs"]["insufficient"] == 7
     assert rep["rules"]["min_days"] == 7 and rep["rules"]["min_trades"] == 20 and rep["rules"]["group_corr"] == 0.7

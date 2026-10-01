@@ -72,10 +72,21 @@ class World:
         self.store.trade(aid, rec(strat, tf, pnl, exit_time, **kw))
         self.store.commit()
 
+    def parent_trades(self, aid=f"{S}@15m", n=30, day=QUIET):
+        """``n`` winning trades of a copy's parent account (copy_check needs >= 30 closed trades), closed early on
+        ``day``'s KST date: after N17's weekly slot (Tuesday), so no weekly review, and wins, so no loss meeting."""
+        t0 = kst(*[int(x) for x in R.kst_day(day).split("-")], 0, 30)
+        for k in range(n):
+            self.trade(aid, 5.0, t0 + k * 10 * MIN)
+
     def losses(self, n=3, t=QUIET, context=None):
         for k in range(n):
             self.trade(f"{S}@{'15m' if k % 2 == 0 else '1h'}", -10.0 - k, t - (5 - k) * HOUR,
                        context=context if context is not None else {"regime": "trend_down"})
+
+    def paper(self):
+        """paper3.db read-only (what the tick gives the agents: ActionEnv.paper_ro)."""
+        return R.open_ro(self.paths["paper"])
 
     def say(self, room, text, ts, author="owner1"):
         return R.add_owner_message(self.inbox, room, author, text, ts=ts)
@@ -194,6 +205,7 @@ def run_test_round(world, lab, validator, approver=None, policy=None):
     if approver is not None:
         answers["approver"] = [approver]
     runner = QueueRunner(answers)
+    world.parent_trades()                 # the copy's parent (N17@15m) has its 30 closed trades
     world.losses()
     out = world.tick(runner, QUIET, policy=policy, lab=lab)
     return runner, out
@@ -397,9 +409,12 @@ def test_copy_cap_total(world, good_lab):
 
 def test_code_refuses_an_approval_when_gate_failed_or_cap_full(world):
     conn = world.agents
+    world.parent_trades(f"{S}@1h")
+    world.parent_trades(f"{S}@15m")
     tid = R.add_trial(conn, ROOM, S, "test", {"template": "stop_atr", "strategy": S, "timeframe": "1h", "k": 1.5})
     R.add_trial_result(conn, tid, "failed", {"result": {}, "gate": {"pass": False, "reasons": ["미달"]}, "n_trials": 1})
-    env = A.ActionEnv(conn=conn, room_id=ROOM, strategy=S, round_id=None, meeting="t", now_ms=QUIET)
+    env = A.ActionEnv(conn=conn, room_id=ROOM, strategy=S, round_id=None, meeting="t", now_ms=QUIET,
+                      paper_ro=world.paper())
     chk = A.copy_check(env, tid)
     res = A.propose_copy(env, tid, "why", chk, {"approve": True, "reason": "무조건 승인"})
     assert res["status"] == "blocked_gate"
@@ -408,7 +423,7 @@ def test_code_refuses_an_approval_when_gate_failed_or_cap_full(world):
     good = StubLab(good=True).run_test(spec2, None, n_trials=2, strategy=S)
     R.add_trial_result(conn, tid2, "passed", {"result": good, "gate": good["gate"], "n_trials": 2})
     # a stored 'pass' that code cannot re-judge (no result) never counts as a pass
-    tid3 = R.add_trial(conn, ROOM, S, "test", {"template": "stop_atr", "strategy": S, "timeframe": "4h", "k": 2.5})
+    tid3 = R.add_trial(conn, ROOM, S, "test", {"template": "stop_atr", "strategy": S, "timeframe": "15m", "k": 2.5})
     R.add_trial_result(conn, tid3, "passed", {"result": {}, "gate": PASS, "n_trials": 3})
     assert A.copy_check(env, tid3)["gate_pass"] is False
     R.add_proposal(conn, ROOM, S, None, {"x": 1}, PASS, "awaiting_owner")
@@ -418,7 +433,7 @@ def test_code_refuses_an_approval_when_gate_failed_or_cap_full(world):
     assert A.copy_check(env, tid)["ok"] is False and A.copy_check(env, tid2)["ok"] is True
     # another room's trial cannot be proposed here
     other = A.ActionEnv(conn=conn, room_id="strat:V45_AMB", strategy="V45_AMB", round_id=None, meeting="t",
-                        now_ms=QUIET)
+                        now_ms=QUIET, paper_ro=world.paper())
     assert A.copy_check(other, tid2)["ok"] is False
 
 
@@ -427,6 +442,7 @@ def test_propose_copy_of_a_passed_trial_asks_validator_and_approver(world, good_
     tid = R.add_trial(world.agents, ROOM, S, "test", spec, ts=QUIET - DAY)
     res = good_lab.run_test(spec, None, n_trials=1, strategy=S)
     R.add_trial_result(world.agents, tid, "passed", {"result": res, "gate": res["gate"], "n_trials": 1})
+    world.parent_trades(f"{S}@1h")
     world.losses(context={})
     runner = QueueRunner({SPEC: [analysis(NOTE), analysis({"action": "propose_copy", "trial_id": tid, "why": "통과"})],
                           "devils_advocate": [challenge("disagree")],
@@ -952,7 +968,9 @@ def test_a_stored_pass_is_rejudged_with_the_rooms_current_test_count(world, monk
     assert g1["pass"] is True
     tid = R.add_trial(world.agents, ROOM, S, "test", spec)
     R.add_trial_result(world.agents, tid, "passed", {"result": res, "gate": g1, "n_trials": 1})
-    env = A.ActionEnv(conn=world.agents, room_id=ROOM, strategy=S, round_id=None, meeting="t", now_ms=QUIET)
+    world.parent_trades(f"{S}@1h")
+    env = A.ActionEnv(conn=world.agents, room_id=ROOM, strategy=S, round_id=None, meeting="t", now_ms=QUIET,
+                      paper_ro=world.paper())
     assert A.copy_check(env, tid)["gate_pass"] is True
     for k, tf in enumerate(("5m", "15m", "30m", "4h") * 3):  # 12 more tests in the room
         R.add_trial(world.agents, ROOM, S, "test", {"template": "stop_atr", "strategy": S, "timeframe": tf,
@@ -986,8 +1004,9 @@ def test_a_failed_lab_run_never_stores_a_passing_gate(world, monkeypatch):
         def gate(result, n):
             return {"pass": True, "reasons": ["lab says yes"]}
     monkeypatch.setattr(A, "_lab", Liar)
+    world.parent_trades(f"{S}@1h")
     env = A.ActionEnv(conn=world.agents, room_id=ROOM, strategy=S, round_id=None, meeting="t", now_ms=QUIET,
-                      lab=object())
+                      lab=object(), paper_ro=world.paper())
     res = A.request_test(env, {"action": "request_test", "test": {"template": "stop_atr", "timeframe": "1h", "k": 2.5}})
     assert res["status"] == "error" and res["gate"]["pass"] is False
     chk = A.copy_check(env, res["trial_id"])

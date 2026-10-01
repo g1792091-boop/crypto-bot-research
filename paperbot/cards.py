@@ -166,10 +166,67 @@ def stop_variants(daily_conn: Optional[sqlite3.Connection], account_id: str, sym
     return out
 
 
+EXTRA_KINDS = ("copy", "newlab")
+
+
 def cards_from_db(conn: sqlite3.Connection, round_trip: float, strategy: Optional[str] = None,
                   timeframe: Optional[str] = None, losses_only: bool = True, since_ms: int = 0,
                   limit: int = 200, daily_conn: Optional[sqlite3.Connection] = None,
-                  names_ko: Optional[dict] = None) -> list[dict]:
+                  names_ko: Optional[dict] = None, kinds: Optional[Iterable[str]] = None,
+                  account_id: Optional[str] = None) -> list[dict]:
+    """Cards of the latest closed trades, newest first. Filters: ``strategy`` and ``timeframe`` (the account's own
+    columns: a copy account 'S@15m~c1' is strategy S on 15m), ``kinds`` (accounts.kind: 'strategy', 'random',
+    'copy', 'newlab'), one ``account_id``. An extra account's card carries ``kind``, ``parent`` and its
+    ``label_ko`` (also as ``name_ko``); a copy's stop what-ifs are its parent's (the nightly shadows are
+    computed per signal of the parent, the copy repeats them)."""
+    ks = [k for k in (kinds or ())]
+    q = ("SELECT t.account_id, t.data, a.kind, a.parent, a.data FROM trades t "
+         "LEFT JOIN accounts a ON a.account_id = t.account_id WHERE t.exit_time >= ?")
+    args: list = [since_ms]
+    if losses_only:
+        q += " AND t.pnl < 0"
+    if strategy:
+        q += " AND a.strategy = ?"
+        args.append(strategy)
+    if timeframe:
+        q += " AND a.timeframe = ?"
+        args.append(timeframe)
+    if ks:
+        q += f" AND a.kind IN ({','.join('?' * len(ks))})"
+        args.extend(ks)
+    if account_id:
+        q += " AND t.account_id = ?"
+        args.append(account_id)
+    q += " ORDER BY t.id DESC LIMIT ?"
+    args.append(min(max(limit, 1), 2000))
+    try:
+        rows = [tuple(r) for r in conn.execute(q, args)]
+    except sqlite3.OperationalError as exc:
+        if "no such table" not in str(exc):
+            raise
+        rows = _rows_without_accounts(conn, strategy, timeframe, losses_only, since_ms, limit, account_id)
+    out = []
+    for aid, data, kind, parent, adata in rows:
+        t = json.loads(data)
+        shadow = parent if kind == "copy" and parent else aid
+        v = stop_variants(daily_conn, shadow, t["symbol"], t["signal_ts"] + 1)
+        c = card(aid, t, round_trip, v, names_ko)
+        if kind in EXTRA_KINDS:
+            try:
+                d = json.loads(adata) if adata else {}
+            except (TypeError, ValueError):
+                d = {}
+            label = d.get("label_ko") if isinstance(d, dict) and isinstance(d.get("label_ko"), str) else None
+            c.update(kind=kind, parent=parent, label_ko=label)
+            if label:
+                c["name_ko"] = label
+        out.append(c)
+    return out
+
+
+def _rows_without_accounts(conn: sqlite3.Connection, strategy: Optional[str], timeframe: Optional[str],
+                           losses_only: bool, since_ms: int, limit: int, account_id: Optional[str]) -> list[tuple]:
+    """A trades table without an accounts table (a bare test database): filter by the account id's spelling."""
     q = "SELECT account_id, data FROM trades WHERE exit_time >= ?"
     args: list = [since_ms]
     if losses_only:
@@ -181,11 +238,9 @@ def cards_from_db(conn: sqlite3.Connection, round_trip: float, strategy: Optiona
     if timeframe:
         q += " AND account_id LIKE ? ESCAPE '\\'"
         args.append(f"%@{esc(timeframe)}")
+    if account_id:
+        q += " AND account_id = ?"
+        args.append(account_id)
     q += " ORDER BY id DESC LIMIT ?"
     args.append(min(max(limit, 1), 2000))
-    out = []
-    for aid, data in conn.execute(q, args):
-        t = json.loads(data)
-        v = stop_variants(daily_conn, aid, t["symbol"], t["signal_ts"] + 1)
-        out.append(card(aid, t, round_trip, v, names_ko))
-    return out
+    return [(r[0], r[1], None, None, None) for r in conn.execute(q, args)]

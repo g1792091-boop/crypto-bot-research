@@ -4,6 +4,10 @@
 // by the agents tick and only read here. The owners may join in (optional) and approve or reject copy
 // proposals; both go to inbox.db (this dashboard is its only writer) and the staff pick them up on
 // their next turn. Everything shown here is text written by code or by the staff: always escaped.
+// A proposal is a copy account (change.kind 'copy') or a new-strategy account from the lab ('newlab'); once the
+// owners approve it, the live runner checks it again itself and starts the account at its next 5-minute
+// boundary (runtime_ready: the runner's extra-account feature is deployed). An account that started can no
+// longer be rejected.
 // Uses helpers and state from app.js ($, api, esc, toast, chip, state, seg).
 const KIND_KO = {analysis: "분석", challenge: "반론", expert: "전문가 의견", revision: "최종안", verdict: "판정",
   summary: "요약", action: "실행", code_result: "코드 계산", decision: "결정", owner: "두 분", system: "알림", trigger: "회의 시작"};
@@ -423,10 +427,15 @@ async function loadSide() {
 function decideButtons(p, label) {
   if (rs.confirm && rs.confirm.id === p.id) {
     const ap = rs.confirm.dec === "approve";
-    return `<div class="pconfirm">${ap ? "정말 승인할까요? 계좌는 지금 만들어지지 않고, 복제 계좌 기능이 생기면 시작됩니다."
-      : "정말 거절할까요? 거절한 제안은 다시 승인할 수 없습니다."}
+    const amount = typeof INITIAL !== "undefined" ? `$${Number(INITIAL).toLocaleString("en-US")} ` : "";
+    const apText = p.runtime_ready
+      ? `정말 승인할까요? 승인하면 코드가 다시 확인한 뒤 다음 5분 봉 경계에 새 ${amount}paper 계좌가 시작됩니다(원본 계좌와 같은 시작 자금). 시작된 계좌는 거절로 멈출 수 없습니다.`
+      : "정말 승인할까요? 계좌는 아직 만들어지지 않습니다(live 실행기의 추가 계좌 기능이 켜지기 전). 기능이 켜진 뒤 한 번 더 승인을 눌러야 시작합니다.";
+    return `<div class="pconfirm">${ap ? apText : "정말 거절할까요? 거절한 제안은 다시 승인할 수 없습니다."}
       <div class="pacts"><button class="${ap ? "okb" : "nob"}" data-go="${esc(p.id)}">${ap ? "승인" : "거절"} 확인</button><button data-cancel="1">취소</button></div></div>`;
   }
+  if (label === "again") return `<div class="pacts"><button class="okb sm" data-dec="approve" data-p="${esc(p.id)}">다시 승인</button>
+    <button class="nob sm" data-dec="reject" data-p="${esc(p.id)}">거절로 바꾸기</button></div>`;
   if (label === "reject-only") return `<div class="pacts"><button class="nob sm" data-dec="reject" data-p="${esc(p.id)}">거절로 바꾸기</button></div>`;
   if (label === "stale") return `<div class="pacts"><button class="nob" data-dec="reject" data-p="${esc(p.id)}">거절</button></div>`;
   return `<div class="pacts"><input placeholder="메모(선택)" data-note="${esc(p.id)}" maxlength="1000" aria-label="메모">
@@ -434,22 +443,38 @@ function decideButtons(p, label) {
 }
 function propCard(p) {
   const ch = p.change || {}, g = p.gate || {}, od = p.owner_decision, gn = p.gate_now;
-  // the tick re-judges open proposals with the room's current number of tests (Bonferroni)
+  const lab = p.kind === "newlab", run = p.account_running, ref = p.runtime_refusal;
+  // the tick re-judges open proposals with the room's current number of tests (Bonferroni; the lab: every room's)
   const stale = !!(gn && gn.pass === false && (p.status === "awaiting_owner" || p.status === "approved"));
   let acts = "";
   if (od && !od.applied) {
     acts = `<div class="pdone">두 분 결정: <b>${od.decision === "approve" ? "승인" : "거절"}</b> · ${esc(decisionWhen(agentsState(rs.ov).st))}</div>` +
-      (p.effective_status === "approved" ? decideButtons(p, "reject-only") : "");
+      (p.effective_status === "approved" && !run ? decideButtons(p, "reject-only") : "");
   } else if (p.status === "awaiting_owner") acts = stale ? decideButtons(p, "stale") : decideButtons(p);
-  return `<div class="pcard"><div class="ttl">제안 #${esc(p.id)} · ${esc(p.strategy_ko || p.strategy || "")}</div>
-    <div class="ln"><b>${esc(testKo(ch.test))}</b></div>
+  else if (p.status === "approved" && !run && ref && ref.code === "stale_ok") acts = decideButtons(p, "again");
+  const prop = (lab && ch.proposal) || {};
+  const n = lab ? (g.n_tests != null ? g.n_tests + 1 : null) : g.n_trials;
+  const nowN = gn && gn.n_trials != null ? (lab ? gn.n_trials + 1 : gn.n_trials) : null;
+  const st = {active: "도는 중", suspended: "멈춤(보류)", held: "정지(동결)"};
+  return `<div class="pcard"><div class="ttl">${lab ? `새 매매법 제안 #${esc(p.id)}${p.trial_id ? ` · 장부 #${esc(p.trial_id)}` : ""}`
+      : `제안 #${esc(p.id)} · ${esc(p.strategy_ko || p.strategy || "")}`}</div>
+    <div class="ln"><b>${esc(lab ? (prop.description_ko || (ch.account && ch.account.spec ? testKo(ch.account.spec) : "새 매매법")) : testKo(ch.test))}</b></div>
+    ${lab ? `<div class="ln">같은 규칙(paper v3: 청산·크기·비용 그대로)의 새 paper 계좌로 새 자료에서 확인하자는 제안</div>` : ""}
+    ${!lab && ch.account && ch.account.parent ? `<div class="ln">원본 계좌 ${esc(ch.account.parent)}와 같고 이 규칙 하나만 바꾼 새 paper 계좌</div>` : ""}
     ${ch.why ? `<div class="ln">이유: ${esc(ch.why)}</div>` : ""}
     ${ch.approver ? `<div class="ln">자율 승인관: ${ch.approver.approve ? "승인" : "거부"} — ${esc(ch.approver.reason || "")}</div>` : ""}
-    <div class="ln">코드 관문${gn ? "(제안 때)" : ""}: ${g.pass === true ? '<span class="up">✓ 통과</span>' : '<span class="down">✕ 불통과</span>'}${p.trial_id ? ` · 시험 #${esc(p.trial_id)}` : ""}${g.n_trials ? ` · 이 방 ${esc(g.n_trials)}번째 시험` : ""}</div>
-    ${gn ? `<div class="ln">지금 다시 판정(이 방 시험 ${esc(gn.n_trials)}번 기준): ${gn.pass === true ? '<span class="up">✓ 통과</span>' : '<span class="down">✕ 불통과 · 승인할 수 없음</span>'}</div>` : ""}
-    ${stale && gn.n_trials ? `<div class="ln">이 방 시험이 ${esc(gn.n_trials)}번으로 늘어 ① 기준이 p &lt; 0.05 ÷ ${esc(gn.n_trials)}로 엄격해졌습니다. 아래는 제안 때의 판정입니다.</div>` : ""}
+    <div class="ln">코드 관문${gn ? "(제안 때)" : ""}: ${g.pass === true ? '<span class="up">✓ 통과</span>' : '<span class="down">✕ 불통과</span>'}${p.trial_id && !lab ? ` · 시험 #${esc(p.trial_id)}` : ""}${n ? (lab ? ` · 새 매매법 시험 ${esc(n)}번 기준` : ` · 이 방 ${esc(n)}번째 시험`) : ""}</div>
+    ${gn ? `<div class="ln">지금 다시 판정(${lab ? `새 매매법 시험 ${esc(nowN)}번 기준` : `이 방 시험 ${esc(gn.n_trials)}번 기준`}): ${gn.pass === true ? '<span class="up">✓ 통과</span>' : '<span class="down">✕ 불통과 · 승인할 수 없음</span>'}</div>` : ""}
+    ${stale && gn.n_trials && !lab ? `<div class="ln">이 방 시험이 ${esc(gn.n_trials)}번으로 늘어 ① 기준이 p &lt; 0.05 ÷ ${esc(gn.n_trials)}로 엄격해졌습니다. 아래는 제안 때의 판정입니다.</div>` : ""}
     ${(g.reasons || []).length ? `${stale ? '<div class="ln">제안 때 판정 근거:</div>' : ""}<ul class="reasons">${g.reasons.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
+    ${run ? `<div class="ln"><span class="pill ok">계좌 시작됨</span> ${esc(run.label_ko || run.account_id)} (${esc(run.account_id)})${run.extra_status && run.extra_status !== "active" ? ` · ${esc(st[run.extra_status] || run.extra_status)}` : ""} · 거절로 멈출 수 없음</div>` : ""}
+    ${!run && ref ? `<div class="ln">실행기: ${esc(ref.text_ko || ref.code)}${ref.code === "stale_ok" ? " (아래 '다시 승인')" : ""}</div>` : ""}
     ${acts}</div>`;
+}
+function propTitle(p) {   // one short line for the list of past proposals
+  const ch = p.change || {};
+  if (p.kind === "newlab") return `새 매매법 ${(ch.proposal && ch.proposal.description_ko) || (ch.account && ch.account.spec ? testKo(ch.account.spec) : "")}`;
+  return testKo(ch.test);
 }
 // One row of the hypothesis ledger. A copy proposal is named by its PROPOSAL number (the one the owners
 // approve or reject, "제안 #N") with its status; the test it came from is "시험 #M"; other rows are "기록 #K".
@@ -490,17 +515,23 @@ function renderSide() {
   const past = props.filter((p) => p.status !== "awaiting_owner").slice(0, 5);
   let h = "";
   const open = waiting.filter((p) => p.effective_status === "awaiting_owner").length;
+  const ready = props.some((p) => p.runtime_ready);
   if (waiting.length) h += `<div class="rsec2 hl" id="r-props"><h4>두 분 확인이 필요한 제안
     ${open ? `<span class="pill acc">${open}</span>` : '<span class="pill">결정함 · 반영 대기</span>'}</h4>
-    ${waiting.map(propCard).join("")}<div class="hint">승인해도 지금은 계좌가 만들어지지 않습니다. 복제 계좌 기능이 생기면 원본 계좌와 같은 시작 자금의 새 paper 계좌로 따로 시작하고,
+    ${waiting.map(propCard).join("")}<div class="hint">${ready
+      ? "승인하면 live 실행기가 코드로 다시 확인한 뒤 다음 5분 봉 경계에 원본 계좌와 같은 시작 자금의 새 paper 계좌로 따로 시작합니다. 시작된 계좌는 거절로 멈출 수 없습니다."
+      : "승인해도 아직 계좌가 만들어지지 않습니다(live 실행기의 추가 계좌 기능이 켜지기 전). 기능이 켜지면 원본 계좌와 같은 시작 자금의 새 paper 계좌로 따로 시작하고, 그 전에 한 승인은 한 번 더 눌러야 합니다."}
     원본 195개 계좌와 규칙은 그대로입니다. 코드 관문을 통과하지 못한 제안은 누구도 승인할 수 없습니다.</div></div>`;
   h += `<div class="rsec2"><h4>이 방은 언제 회의하나요</h4><div class="dim">${esc((info && info.schedule_ko) || (r && r.schedule_ko) || ROOM_SCHEDULE[rs.cur] || "")}</div>
     <div class="hint">직원들이 스스로 회의를 열고 결정합니다. 두 분이 글을 남기면 다음 차례에 그 이야기도 다룹니다.</div></div>`;
   if (info && info.members_info) h += `<div class="rsec2"><h4>멤버 <small>${info.members_info.length}명</small></h4>${info.members_info.map((m) =>
     `<div class="mem">${roleAv(m.id, m.name)}<div class="mb"><div class="nm">${esc(m.name)}</div><div class="du">${esc(m.duty)}</div></div></div>`).join("")}</div>`;
-  if (past.length) h += `<div class="rsec2"><h4>지난 제안</h4>${past.map((p) => `<div class="prow"><span>제안 #${esc(p.id)} ${esc(testKo((p.change || {}).test))}</span>
+  if (past.length) h += `<div class="rsec2"><h4>지난 제안</h4>${past.map((p) => `<div class="prow"><span>제안 #${esc(p.id)} ${esc(propTitle(p))}</span>
     <span class="pill ${p.effective_status === "approved" ? "ok" : p.effective_status.startsWith("blocked") ? "bad" : ""}">${esc(PSTATUS_KO[p.effective_status] || p.effective_status)}</span>
-    ${p.status === "approved" && !(p.owner_decision && !p.owner_decision.applied) ? decideButtons(p, "reject-only") : ""}</div>`).join("")}</div>`;
+    ${p.account_running ? `<span class="pill ok" title="${esc(p.account_running.account_id)}">계좌 시작됨</span>` : ""}
+    ${p.status === "approved" && !p.account_running && p.runtime_refusal ? `<div class="dim">실행기: ${esc(p.runtime_refusal.text_ko || p.runtime_refusal.code)}</div>` : ""}
+    ${p.status === "approved" && !p.account_running && !(p.owner_decision && !p.owner_decision.applied)
+      ? decideButtons(p, p.runtime_refusal && p.runtime_refusal.code === "stale_ok" ? "again" : "reject-only") : ""}</div>`).join("")}</div>`;
   h += `<div class="rsec2"><h4>메모 <small>${notes.length}</small></h4>${notes.length ? notes.slice(0, 8).map((n) =>
     `<div class="nrow"><div>${esc(n.text)}</div><time>${hm(n.ts)}</time></div>`).join("") : '<div class="muted">아직 메모가 없습니다</div>'}</div>`;
   if (trials) {
@@ -517,8 +548,8 @@ function renderSide() {
       ${passes.length ? `<div class="hint">관문을 통과한 새 매매법</div>${passes.map(ledgerRow).join("")}<div class="hint">최근 시험</div>` : ""}
       ${rows.filter((t) => !passes.includes(t)).slice(0, 5).map(ledgerRow).join("")}
       ${lab ? `<div class="hint">새 매매법 시험은 모든 방을 합쳐 셉니다(통과·실패 모두). 시험이 늘수록 통과 기준이 엄격해지고(p &lt; 0.05 ÷ 시험 번호),
-        ${esc(NEWLAB_MAX_TESTS.toLocaleString("ko-KR"))}번째 시험 뒤에는 어떤 시험도 통과할 수 없어 연구실이 시험을 멈춥니다. 통과해도 자동으로 만들어지는 것은 없고,
-        새 paper 계좌는 두 분 OK 뒤의 다음 단계입니다. 관찰 기간에는 제안하지 않습니다.</div>` : ""}
+        ${esc(NEWLAB_MAX_TESTS.toLocaleString("ko-KR"))}번째 시험 뒤에는 어떤 시험도 통과할 수 없어 연구실이 시험을 멈춥니다. 통과하면 코드가 새 paper 계좌를 제안하고
+        (위 '두 분 확인이 필요한 제안'), 두 분이 승인해야 시작합니다(동시에 10개까지). 관찰 기간에는 제안하지 않습니다.</div>` : ""}
       ${trials.research && trials.research.total ? `<div class="hint">연구에서 같은 5년 자료로 이미 한 시험 ${esc(trials.research.total.toLocaleString("ko-KR"))}건
         (지지·저항 ${esc(trials.research.support_resistance)}, 진입 수치 ${esc(trials.research.entry_strength)}, 파라미터 ${esc(trials.research.parameters)}): 효과가 확인된 것은 없습니다. 직원 자료에 요약이 들어갑니다.</div>` : ""}
       ${trials.scorecard && trials.scorecard.total ? `<div class="hint">가설 채점: 맞음 ${esc(trials.scorecard.total.correct)} / 채점 ${esc(trials.scorecard.total.graded)}

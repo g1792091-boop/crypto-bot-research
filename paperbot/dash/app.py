@@ -5,10 +5,13 @@
 
 - Opens the store read-only; the live runner stays the only writer.
 - Agent rooms ('에이전트 방'): the staff discuss, decide and resolve by themselves (the agents tick
-  writes agents3.db; opened read-only here). The owners may join in and approve/reject copy
-  proposals: those two things are written to inbox.db, whose only writer is this dashboard. The
-  agents tick reads inbox.db read-only on its next turn. Nothing here touches paper3.db or
-  agents3.db for writing, calls a model, or places an order.
+  writes agents3.db; opened read-only here). The owners may join in and approve/reject proposals
+  (copy accounts and new-strategy accounts from the lab): those two things are written to inbox.db,
+  whose only writer is this dashboard. The agents tick reads inbox.db read-only on its next turn, and
+  the live runner starts an approved account after checking it again itself. Nothing here touches
+  paper3.db or agents3.db for writing, calls a model, or places an order.
+- Extra paper accounts (copies, new strategies) are on the leaderboard with their own marks, their
+  rule or strategy, their proposal number and the runner's status for them (state 'extras').
 - Login: one password (PBKDF2 hash in DASH_PASSWORD_HASH, make one with
   ``python -m paperbot.dash hash``) and a signed session cookie (DASH_SECRET).
 - Live updates: /api/stream (server-sent events) sends changed accounts, new
@@ -149,12 +152,38 @@ class Data:
         r = c.execute("SELECT ts, data FROM state WHERE k = ?", (key,)).fetchone()
         return None if r is None else (int(r["ts"]), json.loads(r["data"]))
 
+    @staticmethod
+    def _extra_fields(a: dict, xstate: Optional[dict]) -> dict:
+        """label_ko, rule, description_ko, proposal_id and the runner's status of an extra account (None for the
+        195): from accounts.data (written once by the runner) and state 'extras'."""
+        from ..agents.extra_accounts import KINDS, extra_status, label_of, rule_ko
+        raw = a.pop("data", None)
+        if a.get("kind") not in KINDS:
+            return {"label_ko": None, "rule": None, "description_ko": None, "proposal_id": None, "extra_status": None}
+        try:
+            d = json.loads(raw) if raw else {}
+        except (TypeError, ValueError):
+            d = {}
+        d = d if isinstance(d, dict) else {}
+        src = d.get("source") if isinstance(d.get("source"), dict) else {}
+        return {"label_ko": label_of({**a, "data": d}), "rule": d.get("rule"),
+                "rule_ko": rule_ko(d.get("rule")) if d.get("rule") else None, "spec": d.get("spec"),
+                "description_ko": d.get("description_ko"), "proposal_id": src.get("proposal_id"),
+                "extra_status": extra_status(xstate, a["account_id"])}
+
+    def extras_state(self, c) -> Optional[dict]:
+        st = self.state(c, "extras")
+        return st[1] if st and isinstance(st[1], dict) and st[1].get("v") == 1 else None
+
     def board(self) -> dict:
         with self.conn() as c:
             accts = [dict(r) for r in c.execute(
-                "SELECT account_id, strategy, timeframe, kind, created_ts, parent FROM accounts ORDER BY rowid")]
+                "SELECT account_id, strategy, timeframe, kind, created_ts, parent, data FROM accounts ORDER BY rowid")]
             st = self.state(c, "accounts")
             eng = st[1]["engines"] if st else {}
+            xstate = self.extras_state(c)
+        for a in accts:
+            a.update(self._extra_fields(a, xstate))         # (drops the raw data column)
             stats = {r["account_id"]: dict(r) for r in c.execute(
                 "SELECT account_id, COUNT(*) AS trades, SUM(pnl > 0) AS wins, SUM(pnl) AS pnl, "
                 "SUM(exit_reason = 'LOCK') AS locks, MAX(exit_time) AS last_exit, "
@@ -186,7 +215,7 @@ class Data:
             b = best_random.get(r["timeframe"])
             r["beats_random"] = None if b is None or r["wallet"] is None else (r["wallet"] > b and not r["bust"])
         return {"ts": st[0] if st else None, "accounts": rows, "best_random": best_random,
-                "initial": self.initial()}
+                "initial": self.initial(), "extras_runtime": xstate}
 
     def initial(self) -> float:
         """Starting wallet of every account: what the running bot recorded, else the rule."""
@@ -213,8 +242,21 @@ class Data:
             counts = {r["status"]: r["n"] for r in c.execute(
                 "SELECT status, COUNT(*) AS n FROM outcomes WHERE account_id = ? GROUP BY status", (aid,))}
             st = self.state(c, "accounts")
+            xstate = self.extras_state(c)
         e = (st[1]["engines"].get(aid) if st else None) or {}
-        return {"account": dict(a), "state": e, "trades": trades, "equity": eq, "signals": counts}
+        acc = dict(a)
+        extra = None
+        if acc.get("kind") in ("copy", "newlab"):
+            extra = {**self._extra_fields(dict(acc), xstate), "kind": acc["kind"], "parent": acc.get("parent"),
+                     "created_ts": acc.get("created_ts"),
+                     "events": [ev for ev in (xstate or {}).get("events") or []
+                                if isinstance(ev, dict) and ev.get("account_id") == aid][-50:]}
+            try:
+                src = (json.loads(acc.get("data") or "{}") or {}).get("source") or {}
+            except (TypeError, ValueError, AttributeError):
+                src = {}
+            extra["trial_id"] = src.get("trial_id") if isinstance(src, dict) else None
+        return {"account": acc, "state": e, "trades": trades, "equity": eq, "signals": counts, "extra": extra}
 
     def status(self) -> dict:
         with self.conn() as c:
@@ -467,11 +509,13 @@ class Rooms:
     read-only here; inbox.db (owner posts and approve/reject clicks) is written only here."""
 
     def __init__(self, agents_db: Optional[str], inbox_db: Optional[str], budget_env: Optional[str] = None,
-                 say_per_hour: int = SAY_PER_HOUR, owners: tuple = ()):
-        from ..agents import rooms_db
+                 say_per_hour: int = SAY_PER_HOUR, owners: tuple = (), paper_db: Optional[str] = None):
+        from ..agents import extra_accounts, rooms_db
         self.R = rooms_db
+        self.X = extra_accounts
         self.agents_db = agents_db
         self.inbox_db = inbox_db
+        self.paper_db = paper_db            # read-only: the running extra accounts and the runner's state 'extras' 
         self.budget_env = budget_env
         self.say_per_hour = say_per_hour
         self.owners = tuple(owners)
@@ -728,14 +772,40 @@ class Rooms:
             return p["status"], applied
         return ("approved" if dec["decision"] == "approve" else "rejected"), False
 
+    def runtime(self) -> tuple[Optional[list], Optional[dict]]:
+        """(running extras, the runner's state 'extras') from paper3.db read-only, in one read; (None, None)
+        when it cannot be read."""
+        with self.ro(self.paper_db) as pc:
+            return self.X.snapshot(pc)
+
+    def _running(self, a: Optional[sqlite3.Connection], p: dict, extras: Optional[list],
+                 xstate: Optional[dict]) -> Optional[dict]:
+        """{account_id, created_ts, extra_status} of the account this proposal row started (exact source match)."""
+        if extras is None or a is None:
+            return None
+        t = self.R.get_trial(a, int(p["trial_id"])) if p.get("trial_id") else None
+        e = self.X.account_of_proposal(None, p, t, extras)
+        if e is None:
+            return None
+        return {"account_id": e["account_id"], "created_ts": e["created_ts"], "label_ko": self.X.label_of(e),
+                "extra_status": self.X.extra_status(xstate, e["account_id"])}
+
+    def orphans(self) -> dict:
+        """{account id: {...}}: running extras whose proposal is missing or not approved (the tick's cursor)."""
+        with self.ro(self.agents_db) as a:
+            return self._cursor_obj(a, self.X.ORPHANS) or {}
+
     def proposals(self, status: Optional[str] = None, strategy: Optional[str] = None,
                   room_id: Optional[str] = None, limit: int = 100) -> list[dict]:
         from ..agents.roster3 import STRATEGY_KO
         decs = self._decisions()
+        extras, xstate = self.runtime()
         with self.ro(self.agents_db) as a:
             rows = self.R.list_proposals(a, status, strategy, room_id, limit)
             upto = self._cursor(a, "inbox:approvals")
             now = self._gate_now(a)
+            for p in rows:
+                p["account_running"] = self._running(a, p, extras, xstate)
         for p in rows:
             dec = decs.get(int(p["id"]))
             eff, applied = self._effective(p, dec, upto)
@@ -744,6 +814,10 @@ class Rooms:
             p["owner_decision"] = None if dec is None else {
                 "decision": dec["decision"], "ts": dec["ts"], "note": dec.get("note"), "applied": applied}
             p["effective_status"] = eff
+            p["kind"] = self.X.proposal_kind(p)
+            p["account"] = self.X.proposal_account(p)
+            p["runtime_refusal"] = self.X.refusal_of(xstate, p)
+            p["runtime_ready"] = xstate is not None
         return rows
 
     @staticmethod
@@ -839,25 +913,36 @@ class Rooms:
     def decide(self, proposal_id: int, decision: str, note: str, author: str) -> dict:
         if not 0 < int(proposal_id) < 2 ** 63:          # beyond SQLite's integers: no such proposal
             raise HTTPException(404, "그런 제안이 없습니다")
+        extras, xstate = self.runtime()
         with self.ro(self.agents_db) as a:
             p = self.R.get_proposal(a, proposal_id)
             upto = self._cursor(a, "inbox:approvals")
             now = self._gate_now(a).get(str(proposal_id))
+            running = self._running(a, p, extras, xstate) if p is not None else None
         if p is None:
             raise HTTPException(404, "그런 제안이 없습니다")
         dec = self._decisions().get(int(proposal_id))
         eff, _ = self._effective(p, dec, upto)
         gate_ok = isinstance(p.get("gate"), dict) and p["gate"].get("pass") is True
+        refusal = self.X.refusal_of(xstate, p)
         if decision == "approve":
             if not gate_ok:
                 raise HTTPException(409, "코드 관문을 통과하지 못한 제안은 누구도 승인할 수 없습니다")
             if isinstance(now, dict) and now.get("pass") is False:
-                raise HTTPException(409, "이 방에서 시험을 더 해서, 지금 기준으로 다시 판정하면 코드 관문을 "
+                raise HTTPException(409, "시험을 더 해서, 지금 기준으로 다시 판정하면 코드 관문을 "
                                          "통과하지 못합니다. 승인할 수 없습니다")
-            if eff != "awaiting_owner" or (dec is not None and dec.get("rejected_before")):
+            # an approval given before the runner's extra-account feature started needs one more click
+            again = (p["status"] == "approved" and running is None and isinstance(refusal, dict)
+                     and refusal.get("code") == "stale_ok")
+            if dec is not None and dec.get("rejected_before"):
+                raise HTTPException(409, f"이 제안은 지금 승인할 수 없는 상태입니다 ({PSTATUS_KO.get(eff, eff)})")
+            if eff != "awaiting_owner" and not again:
                 raise HTTPException(409, f"이 제안은 지금 승인할 수 없는 상태입니다 ({PSTATUS_KO.get(eff, eff)})")
         elif eff not in ("awaiting_owner", "approved"):
             raise HTTPException(409, f"이 제안은 지금 거절할 수 없는 상태입니다 ({PSTATUS_KO.get(eff, eff)})")
+        elif running is not None:
+            raise HTTPException(409, f"이미 시작된 계좌입니다 ({running['account_id']}). 시작된 계좌는 거절로 멈출 수 "
+                                     "없습니다(계좌는 규칙대로 계속 돕니다)")
         c = self._inbox()
         try:
             aid = self.R.add_approval(c, proposal_id, decision, author, note or None)
@@ -919,7 +1004,7 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
     app = FastAPI(title="paper v3", docs_url=None, redoc_url=None, openapi_url=None)
     data = Data(db, daily_db)
     rooms = Rooms(agents_db, inbox_db, os.environ.get("AGENTS_BUDGET"), say_per_hour,
-                  owner_names(os.environ.get("DASH_OWNERS")))
+                  owner_names(os.environ.get("DASH_OWNERS")), paper_db=db)
     fails: dict[str, list[float]] = {}
 
     def authed(req: Request) -> bool:
@@ -977,7 +1062,12 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
 
     @app.get("/api/board")
     def board():
-        return data.board()
+        b = data.board()
+        # running extras whose proposal is missing or no longer approved (the agents tick flags them)
+        orph = rooms.orphans() if any(r.get("kind") in ("copy", "newlab") for r in b["accounts"]) else {}
+        for r in b["accounts"]:
+            r["orphan"] = r["account_id"] in orph if r.get("kind") in ("copy", "newlab") else None
+        return b
 
     @app.get("/api/account/{aid}")
     def account(aid: str):

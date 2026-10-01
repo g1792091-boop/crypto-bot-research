@@ -137,6 +137,7 @@ def test_a_json_object_quoted_from_the_packet_never_becomes_the_approver_decisio
                                       "devils_advocate": [challenge("needs_test")],
                                       "validator": [{"pass_gate": True, "explanation": "ok"}],
                                       "approver": [text, text]}))
+    world.parent_trades()
     world.losses()
     # one call more than the usual 6, so the approver gets its retry
     world.tick(runner, QUIET, policy=RM.RoomsPolicy(owner_ok_required=False, max_calls_strategy_round=7), lab=object())
@@ -250,6 +251,7 @@ def test_a_reused_pass_is_judged_again_everywhere(world, monkeypatch):
     runner = QueueRunner(all_roles(**{
         SPEC: [analysis(TEST), analysis(TEST)], "devils_advocate": [challenge("needs_test")],
         "validator": [lambda pk: {"pass_gate": pk["code_result"]["gate"]["pass"], "explanation": "e"}]}))
+    world.parent_trades()
     world.losses()
     world.tick(runner, QUIET, lab=object())
     assert len(lab.runs) == 1                                 # reused, not run again

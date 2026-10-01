@@ -117,7 +117,7 @@
       <button data-tf="" class="on">전체</button><button data-tf="5m">5분</button><button data-tf="15m">15분</button>
       <button data-tf="30m">30분</button><button data-tf="1h">1시간</button><button data-tf="4h">4시간</button>
     </div>
-    <div class="seg" id="f-kind"><button data-k="" class="on">전체</button><button data-k="strategy">매매법</button><button data-k="random">동전 봇</button></div>
+    <div class="seg" id="f-kind"><button data-k="" class="on">전체</button><button data-k="strategy">매매법</button><button data-k="random">동전 봇</button><button data-k="copy">복제</button><button data-k="newlab">새 매매법</button></div>
     <select id="f-sort" aria-label="정렬">
       <option value="wallet">잔고순</option><option value="trades">거래 수순</option><option value="win">승률순</option>
       <option value="dd">낙폭 작은 순</option><option value="name">이름순</option>
@@ -144,6 +144,7 @@
   <div id="acct" hidden>
     <h2 id="a-title" style="margin:0 0 10px;font-size:18px"></h2>
     <div class="tiles" id="a-tiles"></div>
+    <div class="card" id="a-extra" hidden></div>
     <div class="card"><div class="ph"><span class="t">열린 포지션</span></div><div class="body" id="a-pos"></div></div>
     <div class="card"><div class="ph"><span class="t">자본 곡선</span></div><div class="chart" id="a-eq"></div></div>
     <div class="card"><div class="ph"><span class="t">차트와 진입·청산</span><select id="a-sym"></select></div><div class="chart tall" id="a-candles"></div></div>

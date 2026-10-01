@@ -69,7 +69,8 @@ AGAINST = {"regime": "trend_down", "htf_regime": "trend_down", "adx": 26.0}   # 
 def build_world(root: str, now: int = T0, start: int = START) -> dict:
     """paper3.db, daily3.db (empty inbox.db and agents3.db paths) under ``root``.
     S: 1 winning trade two days ago, then 5 losing longs against the trend in the last 6 hours
-    (15m and 1h accounts). RANDOM_1 (coin flip): 3 losses, which must not open any room."""
+    (15m and 1h accounts), and 30 small wins of S@1h early today (a copy's parent needs 30 closed trades).
+    RANDOM_1 (coin flip): 3 losses, which must not open any room."""
     os.makedirs(root, exist_ok=True)
     paths = {k: os.path.join(root, f"{k}.db") for k in ("paper3", "daily3", "inbox", "agents3")}
     st = Store3(paths["paper3"])
@@ -87,6 +88,10 @@ def build_world(root: str, now: int = T0, start: int = START) -> dict:
         losses.append((f"{S}@{tf}", r))
     for k in range(3):
         st.trade("RANDOM_1@15m", _rec("RANDOM_1", "15m", -5.0, now - (4 - k) * HOUR))
+    # S@1h, the copy's parent, has its 30 closed trades (wins, early today KST: after S's weekly slot day)
+    day0 = now - (now + 9 * HOUR) % DAY
+    for k in range(30):
+        st.trade(f"{S}@1h", _rec(S, "1h", 3.0, day0 + 30 * 60_000 + k * 10 * 60_000, context={"regime": "trend_up"}))
     st.commit()
     st.conn.close()
     d = sqlite3.connect(paths["daily3"])
@@ -342,7 +347,7 @@ def test_staff_meet_decide_and_owners_only_confirm(world, dash):
     assert done["status"] == "approved" and done["decided_by"] == "owner"
     last = R.room_messages(a, ROOM, limit=1)[0]
     assert last["kind"] == "owner" and last["meeting"] == "owner_decision" and "승인" in last["text"]
-    assert "복제 기능이 생기면" in last["text"]                            # approved = waits for copy accounts
+    assert "추가 계좌 기능이 아직 켜지지 않아" in last["text"]                # approved = waits for the runtime feature
     a.close()
     shown = dash.get("/api/proposals").json()[0]
     assert shown["status"] == "approved" and shown["owner_decision"]["applied"] is True

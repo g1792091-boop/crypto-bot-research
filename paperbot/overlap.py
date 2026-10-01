@@ -14,7 +14,9 @@ Definitions (all over one time window, ``days`` back from the last equity sample
   entry_time <= t < exit_time (closed trades from ``trades``; the position still
   open is taken from the latest ``state['accounts']`` snapshot).
 - Same-time exposure: at each point, per (symbol, side), the number of strategy
-  accounts holding it. Coin-flip accounts (kind 'random') are not counted.
+  accounts holding it. Coin-flip accounts (kind 'random') are not counted, nor are copy
+  accounts (kind 'copy': one strategy with one rule changed, it repeats its parent's
+  entries); new-strategy accounts (kind 'newlab') count as strategy accounts.
   "Crowding" at a point = the largest of those counts.
 - Pair similarity (every pair of accounts):
   * ``corr``: Pearson correlation of hourly equity returns (equity at each full
@@ -28,7 +30,8 @@ Definitions (all over one time window, ``days`` back from the last equity sample
   reported as insufficient and never used for groups.
 - Groups: complete-linkage clusters of strategy accounts: every pair inside a
   group is sufficient and has corr >= GROUP_CORR. Coin-flip accounts are left out
-  of the clustering; their pair correlations are reported as a chance baseline.
+  of the clustering; their pair correlations are reported as a chance baseline. Copy
+  accounts are left out too; ``copies`` gives each one's correlation with its parent.
 - Combined what-if (per group, descriptive): every member keeps its own wallet and
   the equity curves are added up (equal weight). Max drawdown of that sum vs the
   members' average max drawdown (5-minute points), and the worst UTC day of the
@@ -69,7 +72,8 @@ RULES = {
     "min_trades": MIN_TRADES,
     "group_corr": GROUP_CORR,
     "group_rule": "complete linkage: every pair in a group is sufficient and has corr >= group_corr",
-    "exposure_counts": "strategy accounts only (coin-flip accounts excluded)",
+    "exposure_counts": "strategy and new-strategy accounts only (coin-flip accounts excluded; copy accounts "
+                       "excluded too: a copy repeats its parent's entries)",
     "descriptive": True,
 }
 
@@ -88,6 +92,11 @@ class Window:
     is_random: np.ndarray            # (N,) bool
     first: np.ndarray = field(default=None)   # (N,) first / last grid index with data (-1 when none)
     last: np.ndarray = field(default=None)
+    is_copy: np.ndarray = field(default=None)  # (N,) bool: copy accounts (kind 'copy'); None = none
+
+    def excluded(self) -> np.ndarray:
+        """Accounts left out of exposure and clustering: coin-flip and copy accounts."""
+        return self.is_random | (self.is_copy if self.is_copy is not None else np.zeros_like(self.is_random))
 
     def code(self, symbol: str, side: int) -> int:
         return 1 + 2 * self.symbols.index(symbol) + (1 if side > 0 else 0)
@@ -122,10 +131,10 @@ def load_window(conn: sqlite3.Connection, days: float = 7, end: Optional[int] = 
     ts = np.arange(start, end + 1, STEP_MS, dtype=np.int64)
     T = len(ts)
 
-    accts = _q(conn, "SELECT account_id, strategy, timeframe, kind FROM accounts ORDER BY rowid").fetchall()
+    accts = _q(conn, "SELECT account_id, strategy, timeframe, kind, parent FROM accounts ORDER BY rowid").fetchall()
     ids = [a[0] for a in accts]
     col = {a: j for j, a in enumerate(ids)}
-    meta = [{"strategy": a[1], "timeframe": a[2], "kind": a[3]} for a in accts]
+    meta = [{"strategy": a[1], "timeframe": a[2], "kind": a[3], "parent": a[4]} for a in accts]
     N = len(ids)
 
     eq = np.full((T, N), np.nan)
@@ -179,7 +188,8 @@ def load_window(conn: sqlite3.Connection, days: float = 7, end: Optional[int] = 
     first = np.where(anyd, has.argmax(0), -1)
     last = np.where(anyd, T - 1 - has[::-1].argmax(0), -1)
     is_random = np.array([m["kind"] == "random" for m in meta], dtype=bool)
-    return Window(start, end, ts, ids, meta, eq, pos, symbols, trades, is_random, first, last)
+    is_copy = np.array([m["kind"] == "copy" for m in meta], dtype=bool)
+    return Window(start, end, ts, ids, meta, eq, pos, symbols, trades, is_random, first, last, is_copy)
 
 
 # ---------------------------------------------------------------- same-time exposure
@@ -188,9 +198,10 @@ def _bucket_label(lo: int, hi: Optional[int]) -> str:
 
 
 def exposure(w: Window, top: int = TOP_MOMENTS, gap_ms: int = MOMENT_GAP_MS) -> dict:
-    """Per 5-minute point and (symbol, side): how many strategy accounts hold it."""
+    """Per 5-minute point and (symbol, side): how many strategy accounts hold it (coin-flip and copy accounts
+    are not counted)."""
     K = 1 + 2 * len(w.symbols)
-    S = ~w.is_random
+    S = ~w.excluded()
     P = w.pos[:, S].astype(np.int64)
     T = len(w.ts)
     live = ~np.isnan(w.equity[:, S]).all(1) if S.any() else np.zeros(T, bool)   # bot was writing then
@@ -457,7 +468,8 @@ def report(conn: sqlite3.Connection, days: float = 7, end: Optional[int] = None,
         return {"window": None, "rules": rules, "exposure": None, "pairs": None, "groups": [],
                 "insufficient": [], "note": "no equity data"}
     sim = similarity(w, min_days, min_trades)
-    S = np.flatnonzero(~w.is_random)
+    excl = w.excluded()
+    S = np.flatnonzero(~excl)
     R = np.flatnonzero(w.is_random)
     corr, ok = sim["corr"], sim["sufficient"]
 
@@ -492,11 +504,19 @@ def report(conn: sqlite3.Connection, days: float = 7, end: Optional[int] = None,
     groups.sort(key=lambda g: (-g["size"], -g["mean_corr"]))
 
     suff = account_sufficiency(w, min_days, min_trades)
-    strat_ok = [s for j, s in enumerate(suff) if not w.is_random[j] and not s["missing"]]
+    strat_ok = [s for j, s in enumerate(suff) if not excl[j] and not s["missing"]]
+    copies = []
+    for j in np.flatnonzero(excl & ~w.is_random):               # copy accounts: how close to their parent
+        par = w.meta[j].get("parent")
+        k = w.ids.index(par) if par in w.ids else None
+        copies.append({"account_id": w.ids[j], "parent": par,
+                       "corr_with_parent": None if k is None else corr[j, k],
+                       "sufficient": None if k is None else bool(ok[j, k])})
     out = {
         "window": {"start": int(w.start), "end": int(w.end), "days": days, "points": int(len(w.ts))},
         "rules": rules,
-        "accounts": {"strategy": int(len(S)), "random": int(len(R)), "strategy_enough_data": len(strat_ok)},
+        "accounts": {"strategy": int(len(S)), "random": int(len(R)), "copy": len(copies),
+                     "strategy_enough_data": len(strat_ok)},
         "exposure": exposure(w),
         "pairs": {"strategy_pairs": int(len(ss_ok)), "sufficient": int(ss_ok.sum()),
                   "insufficient": int(len(ss_ok) - ss_ok.sum()),
@@ -505,7 +525,8 @@ def report(conn: sqlite3.Connection, days: float = 7, end: Optional[int] = None,
                   "top": top},
         "groups": groups,
         "grouped_accounts": int(sum(g["size"] for g in groups)),
-        "insufficient": [s for j, s in enumerate(suff) if not w.is_random[j] and s["missing"]],
+        "insufficient": [s for j, s in enumerate(suff) if not excl[j] and s["missing"]],
+        "copies": copies,
     }
     return _clean(out)
 

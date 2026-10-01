@@ -114,6 +114,11 @@ td.mono { font-family: var(--mono); font-size: 11.5px; }
 .tag.short { color: var(--down); background: var(--down-bg); border-color: transparent; }
 .tag.acc { color: var(--accent); background: var(--accent-bg); border-color: transparent; }
 .tag.bust { color: var(--down); border-color: var(--down); }
+/* extra paper accounts: a copy of a strategy (one rule changed), a new strategy from the lab, the runner's status */
+.tag.xcopy { color: var(--accent); border-color: var(--accent); }
+.tag.xnew { color: var(--series); border-color: var(--series); }
+.tag.xsus { color: var(--accent); background: var(--accent-bg); border-color: transparent; }
+#a-extra .body > div { margin-bottom: 6px; }
 
 /* ------------------------------------------------------------ trade layout */
 .trade {

@@ -14,9 +14,13 @@ Sections
 - exits           how trades ended: stop / lock level / liquidation, leverage mix
 - today           trades closed in the last 24 hours, busts, alerts
 - nightly         latest nightly report: replay parity, shadows, data quality
+- extras          the extra paper accounts (copies of a strategy with one rule changed, new strategies
+                  from the lab): label, rule or spec, start, the runner's status, wallet, trades. Their
+                  trades are kept OUT of every section above (the 195's numbers never include them);
+                  a copy's trades are labelled ``copy: <account>, rule ...`` in its parent's packet.
 
 ``specialist_packet(packet, strategy)`` narrows a packet to one strategy for its specialist
-and adds that strategy's profile card (5-year character under the v3 rules, built by
+(with its copy accounts, apart from its own) and adds that strategy's profile card (5-year character under the v3 rules, built by
 research/strategy_profiles/report.py): trend-following or mean-reverting, holding length,
 whether the profit lock cut winners early, per timeframe.
 """
@@ -69,18 +73,28 @@ def build(paper_db: str, daily_db: Optional[str], now_ms: int, min_n: int = 30) 
     c = _ro(paper_db)
     if c is None:
         raise FileNotFoundError(paper_db)
-    accts = {r["account_id"]: dict(r) for r in c.execute("SELECT * FROM accounts")}
+    allaccts = {r["account_id"]: dict(r) for r in c.execute("SELECT * FROM accounts")}
+    # the extra accounts (copies, new strategies) are reported apart: every section below is the 195's own
+    extra_ids = {a for a, v in allaccts.items() if v.get("kind") in EXTRA_KINDS}
+    accts = {a: v for a, v in allaccts.items() if a not in extra_ids}
     st = c.execute("SELECT data FROM state WHERE k = 'accounts'").fetchone()
-    eng = json.loads(st["data"])["engines"] if st else {}
+    alleng = json.loads(st["data"])["engines"] if st else {}
+    eng = {a: e for a, e in alleng.items() if a not in extra_ids}
     run = c.execute("SELECT data FROM state WHERE k = 'run'").fetchone()
     run = json.loads(run["data"]) if run else {}
-    trades = [dict(r) for r in c.execute(
+    xstate = c.execute("SELECT data FROM state WHERE k = 'extras'").fetchone()
+    try:
+        xstate = json.loads(xstate["data"]) if xstate else None
+    except (TypeError, ValueError):
+        xstate = None
+    alltrades = [dict(r) for r in c.execute(
         "SELECT account_id, symbol, entry_time, exit_time, exit_reason, leverage, pnl, roe, equity_after, data "
         "FROM trades ORDER BY id")]
-    for t in trades:
+    for t in alltrades:
         d = json.loads(t.pop("data"))
         t.update(side=d["side"], fees=d["fees"], funding=d["funding"], lock_roe=d.get("lock_roe"),
                  margin=d["margin"], price_move=d["price_move"])
+    trades = [t for t in alltrades if t["account_id"] not in extra_ids]
     start = min((a["created_ts"] for a in accts.values()), default=now_ms)
     days = (now_ms - start) / DAY_MS
 
@@ -137,8 +151,10 @@ def build(paper_db: str, daily_db: Optional[str], now_ms: int, min_n: int = 30) 
                         "coin_flip_trades": len(rs), "coin_flip_mean_roe": _r(statistics.fmean([t["roe"] for t in rs])) if rs else None}
 
     # ------------------------------------------------ execution and costs
+    # the new strategies' own signal rows (strategy 'NL<n>') are not the 195's
     sig = [dict(r) for r in c.execute("SELECT timeframe, status, COUNT(*) AS n, AVG(delay_ms) AS avg_delay, "
-                                      "MAX(delay_ms) AS max_delay FROM signal_log GROUP BY timeframe, status")]
+                                      "MAX(delay_ms) AS max_delay FROM signal_log WHERE strategy NOT GLOB 'NL[0-9]*' "
+                                      "GROUP BY timeframe, status")]
     losses = [t for t in trades if t["pnl"] < 0]
     execution = {
         "signals": [{k: (_r(v, 1) if k.endswith("delay") else v) for k, v in s.items()} for s in sig],
@@ -148,7 +164,8 @@ def build(paper_db: str, daily_db: Optional[str], now_ms: int, min_n: int = 30) 
         if losses and sum(t["pnl"] for t in losses) else None,
     }
     outcomes = Counter()
-    for r in c.execute("SELECT status, reason, COUNT(*) AS n FROM outcomes GROUP BY status, reason"):
+    for r in c.execute("SELECT status, reason, COUNT(*) AS n FROM outcomes WHERE account_id NOT IN "
+                       "(SELECT account_id FROM accounts WHERE kind IN ('copy', 'newlab')) GROUP BY status, reason"):
         outcomes[f"{r['status']}:{re.sub(r'[-+]?[0-9][0-9.]*', '#', r['reason'])[:40]}"] += r["n"]
     execution["signal_outcomes"] = dict(outcomes.most_common(12))
 
@@ -173,6 +190,9 @@ def build(paper_db: str, daily_db: Optional[str], now_ms: int, min_n: int = 30) 
                  "alerts": alerts}
     c.close()
 
+    # ------------------------------------------------ extra accounts (apart from everything above)
+    extras = _extras(allaccts, extra_ids, alleng, alltrades, xstate, since)
+
     # ------------------------------------------------ nightly checks
     nightly = None
     d = _ro(daily_db)
@@ -188,10 +208,51 @@ def build(paper_db: str, daily_db: Optional[str], now_ms: int, min_n: int = 30) 
         "meta": {"rules": "docs/paper-v3-rules.md", "settings_version": run.get("settings"), "min_n": min_n,
                  "days_running": _r(days, 2), "units": {"roe": "net return on isolated margin (0.10 = +10%)",
                                                         "wallet": f"USDT, each account starts at {INITIAL:,.0f}"},
-                 "accounts": len(accts)},
+                 "accounts": len(accts), "extra_accounts": len(extra_ids)},
         "league": league, "pass_check": pass_check, "by_strategy": dict(by_strategy), "by_coin": by_coin,
-        "execution": execution, "exits": exits, "today": today_sec, "nightly": nightly,
+        "execution": execution, "exits": exits, "today": today_sec, "nightly": nightly, "extras": extras,
     }
+
+
+EXTRA_KINDS = ("copy", "newlab")
+
+
+def _extras(accts: dict, ids: set, eng: dict, trades: list, xstate, since: int) -> list[dict]:
+    """One row per extra account (code only): kind, label, parent and rule (copy) or spec (new strategy),
+    start, the runner's status, wallet and its own trade numbers. A copy's rows carry ``label``
+    'copy: <account>, rule ...' (how its trades are named in its parent's packet)."""
+    from .extra_accounts import copy_label, extra_status, label_of, rule_ko
+    state = xstate if isinstance(xstate, dict) and xstate.get("v") == 1 else None
+    by = defaultdict(list)
+    for t in trades:
+        if t["account_id"] in ids:
+            by[t["account_id"]].append(t)
+    out = []
+    for aid in [a for a in accts if a in ids]:
+        v = accts[aid]
+        try:
+            d = json.loads(v.get("data") or "{}")
+        except (TypeError, ValueError):
+            d = {}
+        d = d if isinstance(d, dict) else {}
+        e = {"account_id": aid, "kind": v["kind"], "strategy": v["strategy"], "timeframe": v["timeframe"],
+             "parent": v.get("parent"), "data": d}
+        ts = by[aid]
+        src = d.get("source") if isinstance(d.get("source"), dict) else {}
+        row = {"account_id": aid, "kind": v["kind"], "strategy": v["strategy"], "timeframe": v["timeframe"],
+               "parent": v.get("parent"), "created_ts": v.get("created_ts"), "label_ko": label_of(e),
+               "proposal_id": src.get("proposal_id"), "status": extra_status(state, aid),
+               "wallet": _r(float(eng.get(aid, {}).get("wallet", INITIAL)), 2), "bust": bool(eng.get(aid, {}).get("bust")),
+               "trades": len(ts), "mean_roe": _r(statistics.fmean([t["roe"] for t in ts])) if ts else None,
+               "win_rate": _r(sum(t["pnl"] > 0 for t in ts) / len(ts)) if ts else None,
+               "trades_24h": sum(t["exit_time"] >= since for t in ts),
+               "net_pnl_24h": _r(sum(t["pnl"] for t in ts if t["exit_time"] >= since), 2)}
+        if v["kind"] == "copy":
+            row.update(rule=d.get("rule"), rule_ko=rule_ko(d.get("rule")), label=copy_label(e))
+        else:
+            row.update(spec=d.get("spec"), description_ko=d.get("description_ko"))
+        out.append(row)
+    return out
 
 
 def profile_card(strategy: str, path: str = CARDS) -> Optional[dict]:
@@ -249,7 +310,10 @@ def specialist_packet(packet: dict, strategy: str, cards_path: str = CARDS) -> d
     coin-flip league of each timeframe, the strategy's profile card and what the entry study
     already tested for it."""
     pc = {a: v for a, v in (packet.get("pass_check") or {}).items() if a.split("@")[0] == strategy}
+    copies = [e for e in packet.get("extras") or [] if e.get("kind") == "copy" and e.get("strategy") == strategy]
     return {"meta": packet.get("meta"), "strategy": strategy,
             "by_strategy": (packet.get("by_strategy") or {}).get(strategy), "pass_check": pc,
             "league": packet.get("league"), "profile": profile_card(strategy, cards_path),
-            "research": research_prior(strategy)}
+            "research": research_prior(strategy),
+            # its copy accounts, labelled 'copy: <account>, rule ...': never part of the numbers above
+            "copies": copies}
