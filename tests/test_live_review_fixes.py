@@ -16,7 +16,6 @@ import urllib.response
 import pytest
 
 from fakefutures import FakeFutures
-from paperbot import livepnl as P
 from paperbot import risk as R
 from paperbot import testnet as TN
 from paperbot.executor import ExecConfig, ExecStore, Refused, stage_review, stage_text
@@ -540,6 +539,19 @@ def test_a_deposit_does_not_hide_a_daily_loss(tmp_path):
     w.clock.t += 61_000                                        # the transfers are read once a minute
     w.loop()
     assert w.ex.risk.halted and w.fake.pos[BTC] == 0 and "하루 한도" in w.ex.risk.halt_reason
+    w.store.close()
+
+
+def test_an_unreadable_transfer_history_never_holds_back_a_daily_loss_halt(tmp_path):
+    w = World(tmp_path, daily_max_loss_usd=100.0)
+    w.paper(stop=90.0)
+    w.loop()
+    w.fake.fail("GET", "/fapi/v1/income", "503_before", times=10_000)
+    w.fake.set_price(BTC, 91.0)
+    w.fake.add_funding(BTC, -60.0)                             # $105 lost today
+    w.clock.t += 61_000
+    loops(w, 1)
+    assert w.ex.risk.halted and w.fake.pos[BTC] == 0
     w.store.close()
 
 
