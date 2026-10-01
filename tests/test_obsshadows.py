@@ -293,3 +293,30 @@ def test_runtime_300_trades(tmp_path):
     print(f"\n300 trades x {len(VARIANTS)} variants: {dt:.1f}s, rows {len(rows)}")
     assert len(rows) == 300 * len(VARIANTS)
     assert dt < 300
+
+
+def test_copy_trades_skipped_newlab_kept(tmp_path):
+    """A copy account's trades repeat its parent's signal (no shadow of their own); a new-strategy account's
+    trades are shadowed from its own signal rows."""
+    from paperbot.obsshadows import copy_accounts, trade_shadows
+    from paperbot.daily3 import make_signal
+    st = Store3(str(tmp_path / "p.db"))
+    st.add_account("A@15m", "A", "15m", "strategy", 0, "paper-v3")
+    st.add_account("A@15m~c1", "A", "15m", "copy", 0, "paper-v3", "A@15m", {"v": 1})
+    st.add_account("NL1@15m", "NL1", "15m", "newlab", 0, "paper-v3", None, {"v": 1})
+    steps = _flat(200)
+    for aid, strat in (("A@15m", "A"), ("A@15m~c1", "A"), ("NL1@15m", "NL1")):
+        row = {"bar_close": 15 * MIN, "timeframe": "15m", "strategy": strat, "symbol": "BTCUSDT", "side": 1,
+               "atr": 0.2, "ref_price": 100.0, "ref_time": 15 * MIN, "delay_ms": 0, "status": "SUBMITTED"}
+        if aid != "A@15m~c1":                                   # copies get no signal_log rows of their own
+            st.log_signals([row])
+        t = {"strategy_id": strat, "symbol": "BTCUSDT", "timeframe": "15m", "side": 1, "signal_ts": 15 * MIN - 1,
+             "entry_time": 15 * MIN, "exit_time": 30 * MIN, "roe": -0.1, "leverage": 20, "exit_reason": "SL"}
+        st.conn.execute("INSERT INTO trades (account_id, symbol, entry_time, exit_time, exit_reason, leverage, pnl, "
+                        "roe, equity_after, data) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                        (aid, "BTCUSDT", 15 * MIN, 30 * MIN, "SL", 20, -1.0, -0.1, 4999.0, json.dumps(t)))
+    st.commit()
+    assert copy_accounts(st.conn) == {"A@15m~c1"}
+    rows, info = trade_shadows(S, BR, {}, st.conn, "d", 0, 200 * MIN, steps, make_signal)
+    assert {r["account_id"] for r in rows} == {"A@15m", "NL1@15m"}
+    assert info["copy_trades"] == 1 and info["closed"] == 2 and info["no_signal"] == 0

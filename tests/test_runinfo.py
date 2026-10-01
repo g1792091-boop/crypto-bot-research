@@ -55,3 +55,24 @@ def test_runs_table_is_append_only(tmp_path):
         st.conn.execute("UPDATE runs SET data = '{}'")
     with pytest.raises(sqlite3.DatabaseError):
         st.conn.execute("DELETE FROM runs")
+
+
+def test_extra_watched_keys_and_text(tmp_path):
+    from paperbot.runinfo import EXTRA_FILES, EXTRA_GATE_FILES, EXTRA_WATCHED, WATCHED
+    a = run_record(v3_settings(), BR, "exchange", ["x"], signal_lock={"prereg_sha256_file": "L"})
+    assert a["extra_code"] == files_hash(EXTRA_FILES) and a["extra_gate_code"] == files_hash(EXTRA_GATE_FILES)
+    assert [k for k, _, _ in EXTRA_WATCHED] == ["extra_code", "extra_gate_code"]
+    assert not {k for k, _, _ in WATCHED} & {"extra_code", "extra_gate_code"}      # WATCHED applies to every account
+    assert all(len(w) == 3 for w in WATCHED)                                          # checkpoint unpacks 3-tuples
+    assert "paperbot/accounts.py" in TRADING_FILES and "paperbot/live3.py" in TRADING_FILES
+    assert set(EXTRA_FILES) == {"paperbot/extras.py", "paperbot/newlab_live.py", "paperbot/agents/newlab_signals.py",
+                                "paperbot/context.py", "paperbot/recorder.py"}
+    b = dict(a, extra_code="other")
+    ch = changes(a, b)
+    assert [(c["key"], c["trading"], c.get("extras_only")) for c in ch] == [("extra_code", True, True)]
+    txt = change_text(ch)
+    assert "추가 계좌만 해당" in txt and "원래 195개 계좌는 그대로" in txt
+    g = changes(a, dict(a, extra_gate_code="other"))
+    assert [(c["key"], c["trading"]) for c in g] == [("extra_gate_code", False)] and "영향 없음" in change_text(g)
+    both = changes(a, dict(a, extra_code="o", settings="o"))
+    assert "다시 셉니다" in change_text(both) and "원래 195개" not in change_text(both)
