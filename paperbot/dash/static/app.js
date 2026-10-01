@@ -78,7 +78,7 @@ function show(v) {
   state.view = v;
   document.querySelectorAll("#nav button").forEach((b) => b.classList.toggle("on", b.dataset.v === v));
   document.querySelectorAll("section.view").forEach((s) => s.classList.toggle("on", s.id === "v-" + v));
-  if (v === "board") renderBoard();
+  if (v === "board") { renderBoard(); loadOverlap(); }
   if (v === "signals") loadSignals();
   if (v === "status") loadStatus();
   if (v === "rooms" && typeof loadRooms === "function") loadRooms();
@@ -324,6 +324,59 @@ function renderBoard() {
       <td class="l">${st}</td><td class="l" data-k="동전 봇 대비">${vs}</td></tr>`;
   }).join("") || '<tr><td colspan="9" class="empty">계좌가 없습니다</td></tr>';
   bindAccountClicks($("board"));
+}
+
+// ------------------------------------------------------------ overlap (순위표 아래, /api/overlap)
+// Descriptive only: which accounts moved together and when many piled into one coin+side.
+let ovAt = 0;
+const idName = (id) => { const i = String(id).lastIndexOf("@"); return i < 0 ? String(id) : name({strategy: id.slice(0, i), timeframe: id.slice(i + 1)}); };
+const usd = (x) => x == null ? "—" : (x < 0 ? "-$" : "+$") + fmt(Math.abs(x), 0);
+async function loadOverlap(force) {
+  if (!force && Date.now() - ovAt < 600000) return;     // the server caches ~10 min too
+  ovAt = Date.now();
+  try { renderOverlap(await api("/api/overlap?days=7")); }
+  catch (e) { ovAt = 0; $("ov-body").innerHTML = '<p class="muted">겹침 분석을 불러오지 못했습니다.</p>'; }
+}
+function renderOverlap(d) {
+  const el = $("ov-body");
+  $("ov-at").textContent = d.computed_at ? tsKo(d.computed_at) + " 계산" : "";
+  if (!d.window) { el.innerHTML = '<p class="muted">아직 자본 기록이 없습니다.</p>'; return; }
+  const r = d.rules, ac = d.accounts, ex = d.exposure, pr = d.pairs;
+  const chip = (a) => `<button class="ovchip" data-id="${esc(a.account_id)}">${esc(name(a))}</button>`;
+  let h = `<p class="ovnote">지난 ${d.window.days}일 기록을 그대로 정리한 것입니다(설명용, 앞으로도 그렇다는 예측이 아님).
+    계좌끼리 비교는 기록이 충분할 때만 합니다: 같이 쌓인 기록 ${r.min_days}일 이상, 계좌마다 거래 ${r.min_trades}번 이상.
+    지금 비교 가능한 매매법 계좌 <b>${ac.strategy_enough_data}/${ac.strategy}</b>개. 동전 봇은 묶지 않고 기준으로만 봅니다.</p>`;
+  // groups
+  h += `<h3 class="ovh">같이 움직이는 계좌</h3><p class="ovsub">1시간 수익률이 서로 ${r.group_corr} 이상 같이 움직인 계좌 묶음(묶음 안 모든 쌍이 그 이상). 한 묶음은 사실상 같은 베팅입니다.</p>`;
+  if (!d.groups.length) {
+    h += `<p class="muted">${ac.strategy_enough_data < 2 ? "아직 데이터가 충분한 계좌가 적어 묶음을 만들 수 없습니다." : `상관 ${r.group_corr} 이상으로 묶인 계좌가 없습니다.`}</p>`;
+  } else {
+    h += d.groups.slice(0, 8).map((g) => {
+      const c = g.combined;
+      const comb = c ? `<div class="ovc">모두 같이 돌렸다면: 최대 낙폭 <b class="down">-${(c.max_dd * 100).toFixed(1)}%</b>
+        (계좌 평균 -${(c.avg_member_max_dd * 100).toFixed(1)}%) · 최악의 날 <span class="mono ${cls(c.worst_day)}">${usd(c.worst_day)}</span>
+        (각자 최악의 날 합 <span class="mono">${usd(c.members_worst_days_sum)}</span>)${c.dd_ratio != null && c.dd_ratio > 0.8 ? " · 합쳐도 낙폭이 거의 줄지 않음" : ""}</div>` : "";
+      return `<div class="ovg"><div class="ovgh"><b>${g.size}개 계좌</b> <span class="muted">매매법 ${g.strategies}개 · 상관 최소 ${g.min_corr.toFixed(2)} / 평균 ${g.mean_corr.toFixed(2)}${g.same_of_busy_mean != null ? ` · 포지션 있을 때 같은 코인·방향 ${Math.round(g.same_of_busy_mean * 100)}%` : ""}</span></div>
+        <div class="ovchips">${g.accounts.map(chip).join("")}</div>${comb}</div>`;
+    }).join("") + (d.groups.length > 8 ? `<p class="muted">외 ${d.groups.length - 8}개 묶음</p>` : "");
+  }
+  const rs = pr && pr.random_reference && pr.random_reference.random_pairs;
+  if (pr && pr.corr && pr.corr.pairs) h += `<p class="ovsub">비교한 매매법 계좌 쌍 ${pr.corr.pairs}개: 상관 중앙값 ${pr.corr.median.toFixed(2)}, ${r.group_corr} 이상 ${Math.round(pr.corr.share_ge_group * 100)}%${rs && rs.pairs ? ` · 동전 봇끼리(우연의 기준) 중앙값 ${rs.median.toFixed(2)}` : ""}. 데이터 부족으로 뺀 쌍 ${pr.insufficient}개.</p>`;
+  // crowded moments
+  h += `<h3 class="ovh">한 코인에 몰린 순간</h3>`;
+  if (!ex || !ex.top.length) h += '<p class="muted">겹친 포지션 기록이 없습니다.</p>';
+  else {
+    const ge5 = ex.share_ge5 != null ? Math.round(ex.share_ge5 * 100) : null;
+    h += `<p class="ovsub">5분마다 같은 코인·같은 방향에 들어가 있던 매매법 계좌 수. 가장 많이 몰린 때 <b>${ex.max.count}개</b>
+      (${coin(ex.max.symbol)} ${ex.max.side > 0 ? "롱" : "숏"}, ${tsKo(ex.max.ts)}), 보통은 ${ex.percentiles.p50}개${ge5 != null ? `, 시간의 ${ge5}%는 5개 이상` : ""}. 이 계좌들이 한 계정에 있었다면 같이 벌고 같이 잃습니다.</p>`;
+    h += `<table class="cards ovt"><thead><tr><th class="l">시각</th><th class="l">코인·방향</th><th>계좌 수</th><th>매매법 수</th><th class="l">계좌</th></tr></thead><tbody>` +
+      ex.top.map((m) => `<tr><td class="l" data-k="시각">${tsKo(m.ts)}</td><td class="l" data-k="코인">${coin(m.symbol)} ${sideTag(m.side)}</td>
+        <td class="mono" data-k="계좌 수">${m.count}</td><td class="mono" data-k="매매법 수">${m.strategies}</td>
+        <td class="l ovlist">${m.accounts.slice(0, 6).map((a) => esc(idName(a))).join(", ")}${m.accounts.length > 6 ? ` 외 ${m.accounts.length - 6}` : ""}</td></tr>`).join("") +
+      "</tbody></table>";
+  }
+  el.innerHTML = h;
+  el.querySelectorAll(".ovchip[data-id]").forEach((b) => b.onclick = () => openAccount(b.dataset.id));
 }
 
 // ------------------------------------------------------------ account

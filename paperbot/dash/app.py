@@ -43,6 +43,7 @@ STATIC = os.path.join(HERE, "static")
 COOKIE = "pb_session"
 SESSION_S = 7 * 86400
 TRADE_TFS = ("5m", "15m", "30m", "1h", "4h")
+OVERLAP_TTL_S = 600          # /api/overlap result reused this long (the analysis reads weeks of 5-minute equity)
 
 
 # ---------------------------------------------------------------- auth
@@ -1007,6 +1008,25 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
     @app.get("/api/cards/stats")
     def get_card_stats(strategy: Optional[str] = None, tf: Optional[str] = None, days: float = 30):
         return data.card_stats(strategy, tf, days if days > 0 else None)
+
+    overlap_cache: dict = {}
+
+    @app.get("/api/overlap")
+    def get_overlap(days: float = 7):
+        """How much the accounts overlap (paperbot/overlap.py): read-only, descriptive, cached ~10 min."""
+        from ..overlap import report
+        d = min(max(float(days), 1.0), 30.0) if days == days else 7.0
+        key = round(d, 2)
+        hit = overlap_cache.get(key)
+        if hit is None or time.time() - hit[0] > OVERLAP_TTL_S:
+            if len(overlap_cache) > 16:
+                overlap_cache.clear()
+            c = data.conn()
+            try:
+                overlap_cache[key] = hit = (time.time(), report(c, d))
+            finally:
+                c.close()
+        return {**hit[1], "computed_at": int(hit[0] * 1000)}
 
     view_cache: dict = {}
 

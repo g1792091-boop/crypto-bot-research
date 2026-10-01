@@ -14,6 +14,10 @@ research/entry_study/sr.py on the signal bar). The pre-registered entry study me
 exactly these on five years of signals and found no effect on the outcome
 (RESULTS_ENTRY_A.md); TAG_NOTES says so wherever the tags are explained. The card also
 carries the strategy's entry-strength numbers (``ctx["strength"]``), equally descriptive.
+
+"경제지표 발표 전후" marks a trade whose entry or exit lies from 30 minutes before to 2 hours
+after a US macro release in data/macro_events.csv (events.py: CPI, FOMC, NFP, PCE); the
+releases it matched are in ``card["macro"]``. No file or no events there: the tag is never set.
 """
 
 from __future__ import annotations
@@ -22,6 +26,7 @@ import json
 import sqlite3
 from typing import Iterable, Optional
 
+from . import events
 from .aggregate import TF_MS
 from .ladder import net_roe
 
@@ -30,6 +35,9 @@ REGIME_KO = {"trend_up": "상승 추세", "trend_down": "하락 추세", "box": 
 REASON_KO = {"SL": "손절", "LIQ": "강제청산", "LOCK": "익절 잠금", "TP": "익절", "HALT": "정지", "END": "종료"}
 FIRST_LOCK = 0.12
 STOP_VARIANTS = (1.5, 2.5, 3.0)
+MACRO_BEFORE_MS = 30 * 60_000      # entry or exit from 30 min before a release ...
+MACRO_AFTER_MS = 2 * 3_600_000     # ... to 2 h after it (both edges included)
+MACRO_TAG = "경제지표 발표 전후"
 
 # (tag, test on the card fields). Descriptions only; fixed before any paper result.
 TAGS = (
@@ -52,12 +60,16 @@ TAGS = (
     ("저항 바로 앞 진입", lambda c: _sr(c).get("level_before_lock") == 1),
     ("지지선 뒤 손절", lambda c: _sr(c).get("support_before_stop") == 1),
     ("돌파 진입", lambda c: _sr(c).get("breakout") == 1),
+    # US macro release calendar (events.py, data/macro_events.csv)
+    (MACRO_TAG, lambda c: bool(c.get("macro"))),
 )
 SR_NOTE = "진입 연구에서 수익과 관계없다고 나온 설명용 표시"
 TAG_NOTES = {
     "저항 바로 앞 진입": "진입 방향으로 가장 가까운 가격선이 첫 익절 잠금 가격(+12%)보다 가까움. " + SR_NOTE,
     "지지선 뒤 손절": "반대쪽 가장 가까운 가격선이 손절 가격(2 ATR)보다 가까움: 손절이 그 선 너머. " + SR_NOTE,
     "돌파 진입": "신호 봉 종가가 가격선 하나를 진입 방향으로 넘어섬. " + SR_NOTE,
+    MACRO_TAG: "진입 또는 청산 시각이 미국 경제지표 발표(CPI, FOMC, 고용보고서, PCE) 30분 전부터 2시간 후 사이. "
+               "발표 일정 파일(data/macro_events.csv)에 등록된 일정만 봄. 설명용 표시이며 매매 규칙 아님",
 }
 
 
@@ -69,6 +81,19 @@ def _sr(c: dict) -> dict:
 
 def _against(side: int, regime: Optional[str]) -> bool:
     return (side > 0 and regime == "trend_down") or (side < 0 and regime == "trend_up")
+
+
+def macro_near(entry_ms: int, exit_ms: int) -> list[dict]:
+    """Releases within the window of the entry or the exit, oldest first, each with
+    ``entry`` / ``exit`` saying which end of the trade was near it."""
+    ends = {"entry": events.near(entry_ms, MACRO_BEFORE_MS, MACRO_AFTER_MS),
+            "exit": events.near(exit_ms, MACRO_BEFORE_MS, MACRO_AFTER_MS)}
+    out = {}
+    for end, evs in ends.items():
+        for e in evs:
+            d = out.setdefault((e.ts_ms, e.kind), {**e.as_dict(), "entry": False, "exit": False})
+            d[end] = True
+    return [out[k] for k in sorted(out)]
 
 
 def card(account_id: str, t: dict, round_trip: float, variants: Optional[dict] = None,
@@ -99,6 +124,7 @@ def card(account_id: str, t: dict, round_trip: float, variants: Optional[dict] =
     sr, st = ctx.get("sr"), ctx.get("strength")
     c["sr"] = sr if isinstance(sr, dict) and "error" not in sr else None
     c["strength"] = st.get("features") if isinstance(st, dict) else None
+    c["macro"] = macro_near(t["entry_time"], t["exit_time"])
     c["tags"] = [name for name, test in TAGS if _safe(test, c)]
     c["if_stop"] = variants or {}
     return c

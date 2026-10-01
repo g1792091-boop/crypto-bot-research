@@ -15,7 +15,11 @@ For one UTC day (default: yesterday):
      filled within one bar of the signal's timeframe, and with what net ROE under
      the same exit rules;
    - skipped: for signals an account skipped (position open, lower priority), the
-     net ROE the trade would have had.
+     net ROE the trade would have had;
+   - stop1.5/2.5/3.0: each losing trade with a different initial stop;
+   - trade variants (paperbot/obsshadows.py, pre-registered in docs/observation-shadows.md):
+     every trade that closed in the day re-run with first lock 0.15/0.20/0.30, a time
+     stop, and fixed 10x/20x leverage, plus the unchanged rules as a control.
    Each shadow trade runs alone on a fresh account (the starting equity) so results are comparable as ROE.
 3. Data quality: missing minutes, zero-volume minutes, extreme ranges, last vs
    mark price gaps, extreme funding.
@@ -44,6 +48,7 @@ from .engine import PaperEngine, restore_engine
 from .models import Bar, Signal
 from .cards import STOP_VARIANTS
 from .notify import CRITICAL, INFO, WARN
+from .obsshadows import LOOKBACK_MS, first_signal, summarize, trade_shadows
 
 MIN = 60_000
 LIMIT_ATR = 0.25
@@ -306,6 +311,10 @@ def run_day(conn, out: sqlite3.Connection, rest: BinanceREST, settings: Settings
                        stored_trades(conn, start, end))
         report["parity"] = {"accounts": len(rep), "mismatched_accounts": len(mism)}
     sh = shadows(settings, brackets, specs, conn, day, start, end, steps)
+    # trades that closed today but were entered earlier need the steps from their signal on
+    first = first_signal(conn, start, end)
+    pre = fetch_steps(rest, symbols, max(first, start - LOOKBACK_MS), start) if first is not None else []
+    tv, tv_info = trade_shadows(settings, brackets, specs, conn, day, start, end, pre + steps, make_signal)
     lim = [r for r in sh if r["kind"] == "limit"]
     report["shadows"] = {
         "limit_signals": len(lim), "limit_filled": sum(r["filled"] for r in lim),
@@ -322,6 +331,8 @@ def run_day(conn, out: sqlite3.Connection, rest: BinanceREST, settings: Settings
             "turned_positive": sum(1 for r in v if r["roe"] > 0),
             "better_than_actual": sum(1 for r in v if r["roe"] > json.loads(r["data"])["actual_roe"]),
         }
+    report["shadows"]["trade_variants"] = summarize(tv, tv_info)
+    sh += tv
     report["data_quality"] = data_quality(day_steps, symbols, start, end)
     report["fill_costs"] = fill_cost_report(conn, start, end)
     out.execute("DELETE FROM mismatches WHERE day = ?", (day,))
