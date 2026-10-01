@@ -174,7 +174,8 @@ export const NEWS_CAT = {
   us: {name: "해외주식", q: ["미국 증시 마감 시황 뉴스", "US stock market news today"]},
   kr: {name: "국내주식", q: ["코스피 코스닥 마감 시황", "국내 증시 외국인 수급 뉴스"]},
   global_futures: {name: "해외선물", q: ["국제유가 금값 원자재 선물 뉴스", "oil gold commodity futures news"]},
-  macro: {name: "거시경제", q: ["미국 경제지표 연준 금리 뉴스", "Fed rates inflation economy news"]}
+  macro: {name: "거시경제", q: ["미국 경제지표 연준 금리 뉴스", "Fed rates inflation economy news"]},
+  realestate: {name: "부동산·건축", q: ["부동산 정책 아파트 시장 뉴스", "건축 공사비 착공 재개발 뉴스"]}
 };
 export function newsCat(c){
   c = String(c || "").toLowerCase();
@@ -184,6 +185,7 @@ export function newsCat(c){
   if (/crypto|coin|코인|비트/.test(c)) return "crypto";
   if (/kr|korea|국내|코스피|코스닥/.test(c)) return "kr";
   if (/us|미국|해외주식|stock|nasdaq|나스닥/.test(c)) return "us";
+  if (/real|부동산|건축|아파트|재개발/.test(c)) return "realestate";
   if (/macro|경제|금리|연준|fed/.test(c)) return "macro";
   return NEWS_CAT[c] ? c : "macro";
 }

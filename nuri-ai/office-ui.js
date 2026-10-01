@@ -1,7 +1,7 @@
 // GH Nano 사무실 대시보드: 픽셀아트 사무실 + 회의 기록 패널
 // 직원들이 자리에서 일하다가 회의가 열리면 회의실로 걸어가 말풍선으로 대화하고, 오른쪽 패널에 회의록이 쌓인다.
 import { TEAMS, AGENTS, AGENDA, agentById, teamById, ask, stopMeeting, onOffice, loadLog, officeCfg, setOffice, officeUsage, officeState,
-  startAutopilot, nextAutoIn, runAgendaNow, assignModels, clearLog } from "./office.js";
+  startAutopilot, nextAutoIn, runAgendaNow, assignModels, clearLog, work, chatter, startChatter, setOfficeVisible, seen, nextChatIn, isChatting } from "./office.js";
 import { shortModel } from "./engine.js";
 import { BUILTIN_SKILLS } from "./agent.js";
 
@@ -67,6 +67,9 @@ export function openOffice(opts){
   root.hidden = false; document.body.classList.add("office-open");
   fit(); loadLog().then(renderLog);
   startAutopilot(); try { localStorage.setItem("officeUsed", "1"); } catch(e){}
+  setOfficeVisible(true); startChatter();
+  // 사무실을 열면 30초 안에 첫 수다가 시작되게
+  if (nextChatIn() === 0 || nextChatIn() > 30e3) localStorage.setItem("officeLastChat", String(Date.now() - officeCfg().chatEvery * 60e3 + 30e3));
   if (!unsub) unsub = onOffice(onEvent);
   clearInterval(idleT); idleT = setInterval(idle, 7000);
   clearInterval(statusT); statusT = setInterval(renderStatus, 5000); renderStatus();
@@ -74,7 +77,7 @@ export function openOffice(opts){
   setTimeout(() => root.querySelector("#ofIn")?.focus(), 50);
 }
 export function closeOffice(){
-  if (!root) return; root.hidden = true; document.body.classList.remove("office-open"); clearInterval(idleT); clearInterval(statusT);
+  if (!root) return; root.hidden = true; document.body.classList.remove("office-open"); clearInterval(idleT); clearInterval(statusT); setOfficeVisible(false);
   if (location.hash === "#office") history.replaceState(null, "", location.pathname + location.search);
 }
 export const officeOpen = () => root && !root.hidden;
@@ -101,6 +104,7 @@ function build(){
     <span class="of-path">~/gh-nano/우리-사무실 · <b id="ofMode">대기</b></span>
     <span class="of-sp"></span>
     <label class="of-tg" title="사용자가 아무것도 하지 않아도 정해진 간격과 급변동 때 스스로 회의합니다"><input type="checkbox" id="ofAuto"> 자동 회의</label>
+    <label class="of-tg" title="직원들이 수시로 본 차트·뉴스를 두고 잡담합니다 (한 번에 AI 1번)"><input type="checkbox" id="ofChat"> 수시 대화</label>
     <select id="ofEvery" title="자동 회의 간격"><option value="15">15분마다</option><option value="30">30분마다</option><option value="60">1시간마다</option><option value="180">3시간마다</option></select>
     <span class="of-pick"><button class="of-btn" id="ofAgendaBtn">안건 열기 ▾</button><div class="of-menu" id="ofAgenda" hidden>${agendaOpts}</div></span>
     <button class="of-btn" id="ofTeam">팀 구성</button>
@@ -114,7 +118,7 @@ function build(){
       <div class="of-head">
         <div class="of-h1"><i class="of-led" id="ofLed"></i><b id="ofTitle">대기 중</b><span class="of-sp"></span><span class="of-recl" id="ofRecL">녹화 중</span></div>
         <div class="of-h2" id="ofStatus"></div>
-        <div class="of-chans" id="ofChans"><button data-ch="all" aria-pressed="true">#전체</button>${TEAMS.map(t => `<button data-ch="${t.id}" aria-pressed="false" style="--tc:${TEAM_COLOR[t.id]}">#${t.name}</button>`).join("")}</div>
+        <div class="of-chans" id="ofChans"><button data-ch="all" aria-pressed="true">#전체</button><button data-ch="work" aria-pressed="false" style="--tc:#c9a227">#업무(차트·뉴스)</button>${TEAMS.map(t => `<button data-ch="${t.id}" aria-pressed="false" style="--tc:${TEAM_COLOR[t.id]}">#${t.name}</button>`).join("")}</div>
       </div>
       <div class="of-log" id="ofLog" aria-live="polite"></div>
       <form class="of-form" id="ofForm"><input id="ofIn" placeholder="사무실에 메시지 보내기 (예: 비트코인 지금 롱 어때? / 60평 대지에 3층 주택 설계)" autocomplete="off"><button type="submit" aria-label="보내기">↵</button></form>
@@ -143,6 +147,8 @@ function wire(el){
   el.querySelector("#ofEvery").value = String(c.every);
   el.querySelector("#ofAuto").onchange = e => { setOffice({auto: e.target.checked}); ctx.toast(e.target.checked ? "자동 회의를 켰습니다. 팀이 스스로 시장을 점검합니다" : "자동 회의를 껐습니다"); renderStatus(); };
   el.querySelector("#ofEvery").onchange = e => { setOffice({every: +e.target.value}); renderStatus(); };
+  el.querySelector("#ofChat").checked = c.chat !== false;
+  el.querySelector("#ofChat").onchange = e => { setOffice({chat: e.target.checked}); if (e.target.checked){ localStorage.setItem("officeLastChat", "0"); } renderStatus(); };
   el.querySelector("#ofClose").onclick = closeOffice;
   el.querySelector("#ofStop").onclick = () => { stopMeeting(); ctx.toast("회의를 멈췄습니다"); };
   el.querySelector("#ofAgendaBtn").onclick = e => { e.stopPropagation(); const m = $o("#ofAgenda"); m.hidden = !m.hidden; };
@@ -151,7 +157,7 @@ function wire(el){
     if (ag){ $o("#ofAgenda").hidden = true; runAgendaNow(ag.dataset.agenda); ctx.toast("회의를 엽니다"); return; }
     if (!e.target.closest(".of-pick")) $o("#ofAgenda").hidden = true;
     const ch = e.target.closest("[data-ch]");
-    if (ch){ chan = ch.dataset.ch; el.querySelectorAll("[data-ch]").forEach(b => b.setAttribute("aria-pressed", b === ch)); renderLog(); $o("#ofIn").placeholder = chan === "all" || chan === "hq" ? "사무실에 메시지 보내기 (팀장이 담당자를 부릅니다)" : `#${teamById(chan).name}에 메시지 보내기`; return; }
+    if (ch){ chan = ch.dataset.ch; el.querySelectorAll("[data-ch]").forEach(b => b.setAttribute("aria-pressed", b === ch)); renderLog(); $o("#ofIn").placeholder = !teamById(chan) || chan === "hq" ? "사무실에 메시지 보내기 (팀장이 담당자를 부릅니다)" : `#${teamById(chan).name}에 메시지 보내기`; return; }
     const a = e.target.closest("[data-ag]");
     if (a){ showCard(a.dataset.ag); return; }
     if (e.target.closest("#ofTeam")){ showTeam(); return; }
@@ -165,7 +171,7 @@ function wire(el){
     e.preventDefault();
     const inp = $o("#ofIn"), text = inp.value.trim(); if (!text) return;
     inp.value = "";
-    ask(text, {room: chan === "all" ? "hq" : chan}).then(r => { if (r?.error) ctx.toast(r.error); });
+    ask(text, {room: teamById(chan) ? chan : "hq"}).then(r => { if (r?.error) ctx.toast(r.error); });
   };
 }
 /* ============ 캐릭터 움직임 ============ */
@@ -188,25 +194,32 @@ function bubble(id, text, ms){
 }
 const tail = (s, n = 120) => { const t = String(s).replace(/[#*_`>|]/g, "").replace(/\s+/g, " ").trim(); return t.length > n ? "…" + t.slice(-n) : t; };
 const head = (s, n = 110) => { const t = String(s).replace(/[#*_`>|]/g, "").replace(/\s+/g, " ").trim(); const first = t.split(/(?<=[.!?。다요])\s/)[0]; return (first.length > n ? first.slice(0, n) + "…" : first) || t.slice(0, n); };
-function idle(){
-  if (!root || root.hidden || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  const busy = new Set(Object.keys(seatOf));
-  // 쉬러 간 직원은 돌아오고, 다른 한 명이 잠깐 움직인다
+let huddle = new Set();
+async function idle(){
+  if (!root || root.hidden) return;
+  const busy = new Set([...Object.keys(seatOf), ...huddle]);
   for (const id of Object.keys(away)) if (Date.now() > away[id]){ delete away[id]; if (!busy.has(id)) place(id, HOME[id]); }
   const free = AGENTS.filter(a => !busy.has(a.id) && !away[a.id]);
   if (!free.length) return;
   const a = free[Math.floor(Math.random() * free.length)];
-  if (Math.random() < 0.45){
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (!still && Math.random() < 0.18){
     const spot = LOUNGE[Math.floor(Math.random() * LOUNGE.length)];
-    place(a.id, {x: spot.x + (Math.random() * 30 - 15), y: spot.y}); bubble(a.id, spot.say, 3500); away[a.id] = Date.now() + 14000;
-  } else bubble(a.id, IDLE[Math.floor(Math.random() * IDLE.length)], 3000);
+    place(a.id, {x: spot.x + (Math.random() * 30 - 15), y: spot.y}); bubble(a.id, "☕ " + spot.say, 3500); away[a.id] = Date.now() + 14000;
+    return;
+  }
+  // 실제로 차트·뉴스를 확인하고 본 것을 말풍선으로
+  bubble(a.id, "🔎 확인하는 중…", 0);
+  const o = await work(a.id).catch(() => null);
+  if (seatOf[a.id] !== undefined || huddle.has(a.id)) return;
+  bubble(a.id, o ? `${o.icon} ${o.text}`.trim() : "", o ? 7000 : 1);
 }
 /* ============ 회의 이벤트 ============ */
 let speaking = null;
 function onEvent(ev){
   if (!root) return;
   const m = ev.meeting;
-  if (ev.kind === "log"){ if (chan === "all" || ev.entry.ch === chan) appendEntry(ev.entry); return; }
+  if (ev.kind === "log"){ if (inChan(ev.entry)) appendEntry(ev.entry); return; }
   if (ev.kind === "cleared"){ renderLog(); return; }
   if (ev.kind === "cfg" || ev.kind === "usage"){ renderStatus(); return; }
   if (ev.kind === "start"){
@@ -215,9 +228,14 @@ function onEvent(ev){
     $o("#ofBoard").textContent = "#" + m.name;
   }
   if (ev.kind === "join"){ const i = Object.keys(seatOf).length; seatOf[ev.agent.id] = i; place(ev.agent.id, SEATS[i % SEATS.length]); bubble(ev.agent.id, "부르셨어요? 갑니다", 2500); }
-  if (ev.kind === "turn"){ clearBubbles(ev.agent.id); speaking = ev.agent.id; if (!(ev.agent.id in seatOf)){ const i = Object.keys(seatOf).length; seatOf[ev.agent.id] = i; place(ev.agent.id, SEATS[i % SEATS.length]); } bubble(ev.agent.id, "…", 0); highlight(ev.agent.id); }
-  if (ev.kind === "tool") bubble(ev.agent.id, "🔧 " + ev.text, 0);
-  if (ev.kind === "delta"){ bubble(ev.agent.id, tail(ev.entry.text), 0); updateEntry(ev.entry); }
+  if (ev.kind === "turn"){ clearBubbles(ev.agent.id); speaking = ev.agent.id; if (!(ev.agent.id in seatOf)){ const i = Object.keys(seatOf).length; seatOf[ev.agent.id] = i; place(ev.agent.id, SEATS[i % SEATS.length]); } bubble(ev.agent.id, "💭 생각 정리하는 중…", 0); highlight(ev.agent.id); }
+  if (ev.kind === "tool" || ev.kind === "delta"){ bubble(ev.agent.id, liveBubble(ev.entry), 0); updateEntry(ev.entry); }
+  if (ev.kind === "huddle"){
+    clearBubbles(); const host = HOME[ev.host] || pos[ev.host];
+    ev.ids.forEach((id, i) => { huddle.add(id); delete away[id]; if (id !== ev.host) place(id, {x: host.x + (i % 2 ? 58 : -58) * Math.ceil(i / 2), y: host.y + 6}); else place(id, HOME[id]); });
+  }
+  if (ev.kind === "line"){ bubble(ev.agent.id, ev.entry.text.length > 150 ? ev.entry.text.slice(0, 150) + "…" : ev.entry.text, Math.min(9000, 2500 + ev.entry.text.length * 50)); highlight(ev.agent.id); setTimeout(() => highlight(null), 1800); }
+  if (ev.kind === "huddle-end"){ ev.ids.forEach((id, i) => setTimeout(() => { huddle.delete(id); if (seatOf[id] === undefined) place(id, HOME[id]); }, 3000 + i * 300)); }
   if (ev.kind === "said"){ bubble(ev.agent.id, head(ev.entry.text), 6000); updateEntry(ev.entry); highlight(null); }
   if (ev.kind === "end"){
     const ids = Object.keys(seatOf); seatOf = {}; speaking = null; highlight(null);
@@ -226,6 +244,16 @@ function onEvent(ev){
   }
   if (ev.kind === "alert"){ ctx.toast(`팀 회의 결과 · #${m.name}: ${head(ev.text, 60)}`); if (document.hidden && "Notification" in window && Notification.permission === "granted") new Notification("GH Nano 팀 회의 · #" + m.name, {body: head(ev.text, 120)}); }
   renderStatus();
+}
+const TOOL_ICON = {market_analyze: "📈", market_quote: "💹", market_news: "📰", web_search: "🔎", web_fetch: "📄", econ_calendar: "🗓", calculate: "🧮", backtest: "🧪", nv_skill_search: "🟩", nv_skill_read: "🟩"};
+// 말풍선: 말하는 중이면 말, 도구를 쓰는 중이면 무엇을 보는지, 아니면 속마음
+function liveBubble(e){
+  const st = e.steps?.at(-1);
+  if (e.text) return "🗣 " + tail(e.text, 140);
+  if (st && st.status === "running") return `${TOOL_ICON[st.name] || "🔧"} ${st.act} 하는 중…`;
+  if (st && st.status === "done") return `${TOOL_ICON[st.name] || "✅"} ${st.act}${st.summary ? " → " + st.summary : ""}${st.sources?.[0] ? " · " + st.sources[0].title : ""}`.slice(0, 170);
+  if (e.think) return "💭 " + tail(e.think, 130);
+  return "💭 생각 정리하는 중…";
 }
 function clearBubbles(except){ root.querySelectorAll(".of-ag").forEach(el => { if (el.dataset.ag !== except) bubble(el.dataset.ag, ""); }); }
 function highlight(id){ root.querySelectorAll(".of-ag.talk").forEach(e => e.classList.remove("talk")); if (id) root.querySelector(`[data-ag="${id}"]`)?.classList.add("talk"); }
@@ -237,27 +265,41 @@ function renderStatus(){
   $o("#ofTitle").textContent = m ? `회의 · #${m.name}` : "대기 중";
   $o("#ofRec").classList.toggle("on", !!m); $o("#ofRecL").textContent = m ? "녹화 중" : "기록됨";
   $o("#ofMode").textContent = m ? "회의 중" : c.auto ? "자동 운영" : "대기";
-  $o("#ofStop").hidden = !m; $o("#ofAuto").checked = !!c.auto; $o("#ofEvery").value = String(c.every);
+  $o("#ofStop").hidden = !m; $o("#ofAuto").checked = !!c.auto; $o("#ofEvery").value = String(c.every); $o("#ofChat").checked = c.chat !== false;
   const next = nextAutoIn();
   $o("#ofStatus").innerHTML = m ? `<b class="ok">진행 중</b> · ${m.done.length}/${m.order.length} 발언${s.queued ? ` · 대기 회의 ${s.queued}개` : ""}`
     : c.auto ? (u.auto >= c.dailyMax ? `오늘 자동 회의 ${c.dailyMax}번을 다 했습니다 · 메시지를 보내면 바로 회의합니다` : `다음 자동 회의 ${next > 60e3 ? Math.round(next / 60e3) + "분 뒤" : "곧"} · 급변동 감시 중`) : "자동 회의 꺼짐 · 메시지를 보내면 바로 회의합니다";
-  $o("#ofFoot").innerHTML = `오늘 회의 ${u.meetings || 0}번 (자동 ${u.auto || 0}/${c.dailyMax}) · AI 호출 ${u.calls || 0}번 · <button id="ofClear" class="of-link">기록 지우기</button>`;
+  const nc = nextChatIn();
+  $o("#ofFoot").innerHTML = `오늘 회의 ${u.meetings || 0}번 (자동 ${u.auto || 0}/${c.dailyMax}) · 수다 ${u.chats || 0}/${c.chatMax}${c.chat ? (isChatting() ? " (지금 대화 중)" : ` (다음 ${nc > 60e3 ? Math.round(nc / 60e3) + "분" : "곧"})`) : ""} · AI 호출 ${u.calls || 0}번 · <button id="ofClear" class="of-link">기록 지우기</button>`;
 }
 /* ============ 회의록 패널 ============ */
+// #전체: 회의·수다·내 메시지 / #업무: 직원들이 본 차트·뉴스 / 팀 방: 그 팀의 모든 것
+const inChan = e => chan === "all" ? e.kind !== "work" : chan === "work" ? e.kind === "work" : e.ch === chan;
 async function renderLog(){
   const log = await loadLog(), box = $o("#ofLog");
-  const list = log.filter(e => chan === "all" || e.ch === chan).slice(-150);
+  const list = log.filter(inChan).slice(-160);
   box.innerHTML = list.length ? "" : `<div class="of-empty"><b>아직 회의가 없습니다</b><p>아래에 무엇이든 보내면 팀장이 담당자를 불러 회의를 엽니다. 코인·코인 선물·해외주식·국내주식·해외선물·국내선물·건축·부동산·뉴스·코딩·일상 대화 모두 됩니다.</p><p>자동 회의를 켜 두면 팀이 정해진 간격과 급변동 때 스스로 회의합니다.</p></div>`;
   list.forEach(appendEntry);
 }
+const link = (url, label) => url ? `<a href="${ctx.esc(url)}" target="_blank" rel="noopener noreferrer">${ctx.esc(label)}</a>` : ctx.esc(label);
+function stepsHTML(e){
+  if (!e.steps?.length) return "";
+  return `<ul class="of-steps">${e.steps.map(st => `<li class="${st.status}"><span>${TOOL_ICON[st.name] || "🔧"} ${ctx.esc(st.act || "")}</span>${st.status === "running" ? ` <em>하는 중…</em>` : st.status === "error" ? ` <em class="bad">실패: ${ctx.esc(st.err.slice(0, 60))}</em>` : st.summary ? ` <em>→ ${ctx.esc(st.summary)}</em>` : ""}${st.sources?.length ? `<div class="of-src">${st.sources.slice(0, 4).map(x => "📰 " + link(x.url, String(x.title || x.url).slice(0, 70))).join("<br>")}</div>` : ""}</li>`).join("")}</ul>`;
+}
 function entryHTML(e){
-  if (e.kind === "divider") return `<div class="of-div">— ${ctx.esc(e.text)} —</div>`;
+  if (e.kind === "divider") return `<div class="of-div${e.chat ? " chat" : ""}">— ${ctx.esc(e.text)} —</div>`;
   if (e.kind === "system") return `<div class="of-sys">${ctx.esc(e.text)}</div>`;
   const time = new Date(e.t).toLocaleTimeString("ko-KR", {hour: "2-digit", minute: "2-digit"});
   if (e.kind === "user") return `<div class="of-msg me"><div class="of-av me">나</div><div class="of-mb"><div class="of-who"><b>나</b><span>#${ctx.esc(teamById(e.ch)?.name || "")} · ${time}</span></div><div class="of-tx">${ctx.esc(e.text)}</div></div></div>`;
   const a = agentById(e.agent) || {name: "?", title: "", team: "hq", look: ["#999", "#999"]};
-  const body = e.text ? ctx.md(e.text) : `<span class="of-typing">${e.tool ? "🔧 " + ctx.esc(e.tool) : "생각하는 중"}<i>.</i><i>.</i><i>.</i></span>`;
-  return `<div class="of-msg${e.live ? " of-live" : ""}" data-e="${e.id}"><div class="of-av">${sprite(a)}</div><div class="of-mb"><div class="of-who"><b style="color:${TEAM_COLOR[a.team]}">${a.name}</b><span>${a.title}${e.model ? " · " + ctx.esc(shortModel(e.model)) : ""} · ${time}</span></div><div class="of-tx md">${body}</div>${e.tools?.length ? `<div class="of-tools">🔧 ${ctx.esc([...new Set(e.tools)].join(" · "))}</div>` : ""}<button class="of-link" data-more>펼치기 · 접기</button></div></div>`;
+  if (e.kind === "work") return `<div class="of-work"><b style="color:${TEAM_COLOR[a.team]}">${a.name}</b> <span>${ctx.esc(e.icon || "")} ${e.url ? link(e.url, e.text) : ctx.esc(e.text)}${e.src ? ` <small>· ${ctx.esc(e.src)}</small>` : ""}</span><time>${time}</time></div>`;
+  if (e.chat) return `<div class="of-msg chat"><div class="of-av sm">${sprite(a)}</div><div class="of-mb"><div class="of-who"><b style="color:${TEAM_COLOR[a.team]}">${a.name}</b><span>${a.title}</span></div><div class="of-tx">${ctx.esc(e.text)}</div></div></div>`;
+  const body = e.text ? ctx.md(e.text) : e.steps?.length || e.think ? "" : `<span class="of-typing">생각 정리하는 중<i>.</i><i>.</i><i>.</i></span>`;
+  return `<div class="of-msg${e.live ? " of-live" : ""}" data-e="${e.id}"><div class="of-av">${sprite(a)}</div><div class="of-mb"><div class="of-who"><b style="color:${TEAM_COLOR[a.team]}">${a.name}</b><span>${a.title}${e.model ? " · " + ctx.esc(shortModel(e.model)) : ""} · ${time}</span></div>
+    ${e.notes?.length ? `<div class="of-note">${e.notes.map(n => "↻ " + ctx.esc(n)).join("<br>")}</div>` : ""}
+    ${e.think ? `<div class="of-think">💭 ${ctx.esc(e.think.length > 600 && !e.live ? e.think.slice(0, 600) + "…" : e.think)}</div>` : ""}
+    ${stepsHTML(e)}
+    ${body ? `<div class="of-tx md">${body}</div>` : ""}<button class="of-link" data-more>펼치기 · 접기</button></div></div>`;
 }
 function appendEntry(e){
   const box = $o("#ofLog"); if (!box) return;
@@ -268,7 +310,7 @@ function appendEntry(e){
 }
 function updateEntry(e){
   const box = $o("#ofLog"), el = box?.querySelector(`[data-e="${e.id}"]`);
-  if (!el){ if (chan === "all" || e.ch === chan) appendEntry(e); return; }
+  if (!el){ if (inChan(e)) appendEntry(e); return; }
   const near = box.scrollHeight - box.scrollTop - box.clientHeight < 160;
   el.outerHTML = entryHTML(e);
   if (near) box.scrollTop = box.scrollHeight;
@@ -280,7 +322,8 @@ function showCard(id){
   const c = $o("#ofCard");
   c.innerHTML = `<div class="of-cardh"><div class="of-av big">${sprite(a)}</div><div><b>${a.name}</b><span>${t.name} · ${a.title}</span></div><button class="of-x" aria-label="닫기">✕</button></div>
     <p>${ctx.esc(a.duty)}</p>
-    <dl><dt>스킬</dt><dd>${sk.length ? sk.map(ctx.esc).join(", ") : "공통 도구(검색·계산·NVIDIA 스킬)"}</dd><dt>배정된 AI 모델</dt><dd>${mdl ? ctx.esc(mdl.model) + " · 막히면 다른 모델로 자동 전환" : "API 키를 넣으면 배정됩니다"}</dd><dt>부르는 법</dt><dd>메시지에 <code>@${a.name}</code></dd></dl>`;
+    <dl><dt>스킬</dt><dd>${sk.length ? sk.map(ctx.esc).join(", ") : "공통 도구(검색·계산·NVIDIA 스킬)"}</dd><dt>배정된 AI 모델</dt><dd>${mdl ? ctx.esc(mdl.model) + " · 막히면 다른 모델로 자동 전환" : "API 키를 넣으면 배정됩니다"}</dd><dt>부르는 법</dt><dd>메시지에 <code>@${a.name}</code></dd></dl>
+    ${seen[id]?.length ? `<h4 class="of-h4">최근에 본 것</h4><ul class="of-seen">${seen[id].map(o => `<li>${ctx.esc(o.icon || "")} ${o.url ? link(o.url, o.text) : ctx.esc(o.text)} <small>${new Date(o.t).toLocaleTimeString("ko-KR", {hour: "2-digit", minute: "2-digit"})}</small></li>`).join("")}</ul>` : ""}`;
   c.hidden = false;
 }
 function showTeam(){
