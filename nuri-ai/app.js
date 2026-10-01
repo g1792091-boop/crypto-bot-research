@@ -528,7 +528,12 @@ function openSheet(tab){ sheetTab = tab || sheetTab; if (tab === "tpl"){ const k
 $("#openSettings").onclick = () => openSheet("brain");
 $("#openKnow").onclick = () => openSheet("know");
 // AI 팀 사무실 (에이전트 팀 대시보드)
-const goOffice = () => { openOffice({md, esc, toast}); if (location.hash !== "#office") history.replaceState(null, "", "#office"); };
+// 사무실에서 여는 것들: 건축팀 설계안(3D), 차트 터미널, 실거래 콘솔
+const openBuilding = spec => openArtifact({type: "building", title: spec?.name || "설계안", spec});
+const openTerminal = (opts = {}) => { const q = new URLSearchParams(opts).toString(); window.open("terminal/index.html" + (q ? "?" + q : ""), "_blank"); };
+const openLive = async () => { try { const L = await import("./live-ui.js"); L.openLive({md, esc, toast}); } catch(e){ toast("실거래 콘솔을 열 수 없습니다: " + e.message); } };
+window.__ghnano = Object.assign(window.__ghnano || {}, {openBuilding, openTerminal, openLive});
+const goOffice = () => { openOffice({md, esc, toast, openBuilding, openTerminal, openLive}); if (location.hash !== "#office") history.replaceState(null, "", "#office"); };
 $("#openOffice").onclick = goOffice; $("#officeTop").onclick = goOffice;
 window.addEventListener("hashchange", () => { if (location.hash === "#office" && !officeOpen()) goOffice(); });
 if (location.hash === "#office") setTimeout(goOffice, 0);
@@ -1028,3 +1033,5 @@ if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol) && !wind
 addEventListener("error", e => { if (e.message && !/ResizeObserver/.test(e.message)) toast("오류: " + e.message.slice(0, 120)); });
 addEventListener("unhandledrejection", e => { const m = String(e.reason?.message || e.reason || ""); if (m && !/abort/i.test(m)) toast("오류: " + m.slice(0, 120)); });
 window.__nuri = {get chats(){ return chats; }, get current(){ return current; }, settings, eng, LAUNCHER, openArtifact, get trade(){ return trade; }};
+$("#openTerminal") && ($("#openTerminal").onclick = () => openTerminal());
+$("#openLive") && ($("#openLive").onclick = () => openLive());

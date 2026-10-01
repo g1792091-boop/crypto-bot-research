@@ -149,12 +149,14 @@ export function assignModels(){
   // Claude 모드: 키가 있고 오늘 한도가 남아 있으면 직원 전원을 Claude로 (무료 API 한도 문제 해결)
   // 판단 책임이 큰 자리는 Opus, 반복 분석은 Sonnet, 가벼운 일은 Haiku (에이전트팀 세션과 같은 기준). 한도를 넘으면 무료 모델로 돌아간다.
   const cm = claudeModels();
-  if (cm) for (const a of AGENTS){ const m = cm[CLAUDE_TIER[a.id] || "sonnet"]; if (m && !bad[m]) out[a.id] = {id: "anthropic", model: m}; }
+  // '핵심 자리만' 모드: 판단 책임이 큰 자리와 팀장만 Claude, 나머지는 무료 모델 → 그 대화는 GH Nano 학습에 쓸 수 있다
+  if (cm) for (const a of AGENTS){ if (claudeMode() === "key" && !(CLAUDE_TIER[a.id] === "opus" || a.lead)) continue; const m = cm[CLAUDE_TIER[a.id] || "sonnet"]; if (m && !bad[m]) out[a.id] = {id: "anthropic", model: m}; }
   return out;
 }
+export const claudeMode = () => officeCfg().claudeMode || (officeCfg().claude === false ? "off" : "all");
 export const CLAUDE_TIER = {strat: "opus", risk: "opus", val: "opus", qa: "opus", qb: "opus", lead: "sonnet", devil: "sonnet", aide: "haiku", dev: "sonnet", eng: "sonnet"};
 export function claudeModels(){
-  if (!settings.keys.anthropic || overCap("anthropic") || officeCfg().claude === false) return null;
+  if (!settings.keys.anthropic || overCap("anthropic") || claudeMode() === "off") return null;
   const ms = settings.provModels.anthropic?.length ? settings.provModels.anthropic : [];
   const pick = (want, re) => ms.includes(want) ? want : ms.filter(m => re.test(m)).sort().reverse()[0] || want;
   return {opus: pick("claude-opus-5-5", /opus/), sonnet: pick("claude-sonnet-5-5", /sonnet/), haiku: pick("claude-haiku-4-5-20251001", /haiku/)};
@@ -278,7 +280,10 @@ async function pump(){
   const models = assignModels();
   const room = teamById(job.room) || TEAMS[0];
   const name = job.title || (job.trigger === "user" ? "질문 · " + job.topic.replace(/\s+/g, " ").slice(0, 18) : job.topic.slice(0, 20));
-  const m = running = {id: uid(), room: job.room, name, trigger: job.trigger, topic: job.topic, order, done: [], ctl, t: Date.now(), models};
+  // 회의 장소: 한 팀끼리면 그 팀 자리에서, 여러 팀이면 대회의실, CEO가 부른 전사 회의도 대회의실
+  const teamsIn = [...new Set(order.map(id => agentById(id)?.team).filter(Boolean))];
+  const place = job.place || (teamsIn.length === 1 ? teamsIn[0] : teamsIn.length === 2 && teamsIn.includes(job.room) && !order.includes("lead") ? job.room : "meet");
+  const m = running = {id: uid(), room: job.room, name, trigger: job.trigger, topic: job.topic, order, done: [], ctl, t: Date.now(), models, place};
   bump("meetings"); if (job.trigger !== "user") bump("auto");
   post({ch: job.room, kind: "divider", text: `회의 · #${name} · ${new Set(order).size}명 참석`, meeting: m.id});
   fire({kind: "start", meeting: m});
@@ -327,7 +332,7 @@ function transcript(m, turns){
 }
 async function speak(a, m, turns, target, signal){
   const team = teamById(a.team);
-  const mates = AGENTS.filter(x => x.id !== a.id && x.id !== "lead").map(x => `@${x.name}(${x.title})`).join(", ");
+  const mates = AGENTS.filter(x => x.id !== a.id && x.id !== "lead" && (x.team === a.team || x.lead)).map(x => `@${x.name}(${x.title})`).join(", ");
   const isLead = a.id === "lead";
   const prev = turns.at(-1)?.agent;
   const persona = `[GH Nano 사무실 · 에이전트 팀 회의]
@@ -336,7 +341,7 @@ async function speak(a, m, turns, target, signal){
 - 답의 첫 줄은 반드시 '💭 '로 시작하는 한 문장 속마음이다(무엇을 확인하고 어떻게 판단하려는지). 그다음 줄부터 말한다.
 - ${prev ? `앞사람(${prev.name})의 말에 이름을 불러 반응하며 시작한다(동의·보충·반박). ` : ""}같은 말은 반복하지 말고 네 전문 분야 관점을 더한다. 다른 전문가가 꼭 필요하면 @이름 으로 한 명만 부른다(동료: ${mates}).
 - 회사 동료와 대화하듯 자연스러운 한국어로 말한다. 숫자 나열이 아니라 해설로 말한다. 수치는 도구로 확인한 것만 쓰고 지어내지 않는다. 차트·뉴스를 봤다면 무엇을 봤는지 말한다.
-- ${isLead ? "너는 마지막 정리 담당이다. 사용자에게 주는 최종 답을 완결된 글로 쓴다(필요하면 소제목·표)." : "길이는 5~10문장 정도. 사용자에게 주는 최종 답은 팀장이 정리하니, 너는 네 판단과 근거에 집중한다."}`;
+${notesText(a.team)}- ${isLead ? "너는 마지막 정리 담당이다. 사용자에게 주는 최종 답을 완결된 글로 쓴다(필요하면 소제목·표)." : "길이는 5~10문장 정도. 사용자에게 주는 최종 답은 팀장이 정리하니, 너는 네 판단과 근거에 집중한다."}`;
   const ask = `${m.trigger === "user" ? "사용자 질문" : "회의 안건"}: ${m.topic}\n\n${turns.length ? "지금까지 회의 내용:\n" + transcript(m, turns) + "\n\n" : ""}이제 ${a.name}(${a.title}) 차례입니다.`;
   const entry = post({ch: m.room, kind: "agent", agent: a.id, text: "", think: "", steps: [], meeting: m.id, live: true, model: target?.model || ""});
   fire({kind: "turn", meeting: m, agent: a, entry});
@@ -600,12 +605,18 @@ export function startChatter(){
 /* ============ 3분 주기: 사람처럼 알아서 일하기 ============ */
 // 매 주기 ① 모의투자 장부를 실제 시세로 갱신(코드, AI 없음) ② 그때그때 한 가지 일을 고른다:
 // 매매법 연구 · SNS 여론 · 경제 리서치 · 동료 수다 · 컴퓨터 작업 · 모의투자 보고 (하루 AI 호출 한도 안에서)
-const JOBS = ["research", "sns", "economy", "research", "paper", "chat", "computer", "economy", "research", "sns"];
-const JOB_KO = {research: "매매법 연구", sns: "SNS 여론 확인", economy: "경제 리서치", paper: "모의투자 점검", chat: "동료 수다", computer: "컴퓨터 작업"};
+// 쉬지 않고 돌아가는 업무 순환표: 팀마다 고르게 돌아가도록 섞어 두었다 (모듈이 없으면 경제 리서치로 대신)
+const JOBS = ["research", "realestate", "arch", "forecast", "sns", "ml", "task", "biz", "macro", "media", "research", "venture", "paper", "chat", "computer", "retro", "economy", "realestate", "arch", "research", "forecast", "task", "media", "ml"];
+const JOB_KO = {research: "매매법 연구", sns: "SNS 여론 확인", economy: "경제 리서치", paper: "모의투자 점검", chat: "동료 수다", computer: "컴퓨터 작업",
+  realestate: "재개발 후보지 조사", arch: "설계·3D 렌더링", forecast: "차트 방향 토론·예측", ml: "머신러닝 실험", task: "개선 과제 수행", biz: "사업 구상·시뮬레이션",
+  macro: "경제지표 예측", media: "유튜브·인스타 조사", venture: "자체 코인·터미널·AI 개발", retro: "팀 회고·부족한 점 찾기"};
+const JOB_FN = () => ({research, sns: snsCheck, economy: economyCheck, paper: paperReport, chat: () => chatter(true), computer: computerWork,
+  realestate: realestateJob, arch: archJob, forecast: forecastJob, ml: mlJob, task: doTask, biz: bizJob, macro: macroJob, media: mediaJob, venture: ventureJob, retro});
 let cycleTimer = 0, cycling = false, lastJob = "";
 export const cycleState = () => ({cycling, lastJob});
 export function nextCycleIn(){ const c = officeCfg(), last = +localStorage.getItem("officeLastCycle") || 0; return Math.max(0, last + c.cycleMin * 60e3 - Date.now()); }
 export function startCycle(){
+  startReports();
   if (cycleTimer) return;
   if (!localStorage.getItem("officeLastCycle")) localStorage.setItem("officeLastCycle", String(Date.now() - officeCfg().cycleMin * 60e3 + 45e3));
   cycleTimer = setInterval(() => cycle().catch(e => console.warn(e)), 20e3);
@@ -624,13 +635,17 @@ export async function cycle(force, onlyJob){
     if (!job){ const i = +localStorage.getItem("officeJob") || 0; job = JOBS[i % JOBS.length]; localStorage.setItem("officeJob", String(i + 1)); }
     if (job === "paper" && !(await paperActive())) job = "research";
     if (job === "computer" && !computerOn()) job = "economy";
+    if (job === "task" && !backlog().some(t => t.status !== "done")) job = "retro";
     lastJob = job; fire({kind: "cycle", job, label: JOB_KO[job]});
-    if (job === "research") await research();
-    else if (job === "sns") await snsCheck();
-    else if (job === "economy") await economyCheck();
-    else if (job === "paper") await paperReport();
-    else if (job === "chat") await chatter(true);
-    else if (job === "computer") await computerWork();
+    const fn = JOB_FN()[job] || research;
+    try { await fn(); }
+    catch(e){
+      // 새 모듈(부동산·ML·매크로 등)을 못 불러오면 그 주기는 경제 리서치로 대신한다
+      if (/import|module|fetch dynamically|Failed to fetch|is not a function|Cannot find/i.test(String(e.message || e)) && job !== "economy"){
+        post({ch: "hq", kind: "system", text: `${JOB_KO[job]} 모듈을 못 불러와 경제 리서치로 대신합니다 (${String(e.message || e).slice(0, 80)})`});
+        lastJob = "economy"; await economyCheck();
+      } else throw e;
+    }
     return true;
   } catch(e){ post({ch: "hq", kind: "system", text: `${JOB_KO[lastJob] || "일"} 중 문제: ${String(e.message || e).slice(0, 120)}`}); return false; }
   finally { cycling = false; fire({kind: "cycle-end"}); setTimeout(pump, 200); }
@@ -669,7 +684,8 @@ async function solo(a, {room, sys, user, maxTokens = 900, temperature = 0.6, ext
   entry.live = false; saveLog(); fire({kind: "said", agent: a, entry});
   return {...entry, raw: finalRaw};
 }
-const personaOf = (a, extra = "") => `너는 GH Nano 사무실 ${teamById(a.team).name}의 '${a.name}'(${a.title})다. 역할: ${a.duty}
+const personaOf = (a, extra = "") => `너는 세계적인 기업 수준의 GH Nano 사무실 ${teamById(a.team).name}의 '${a.name}'(${a.title})다. 역할: ${a.duty}
+${notesText(a.team)}
 이번 일에서는 도구를 부를 수 없으니 주어진 자료로만 말한다. 첫 줄은 '💭 '로 시작하는 한 문장 속마음(무엇을 보고 어떻게 판단하는지)이다. 그다음 동료에게 말하듯 자연스러운 한국어로 말한다. 데이터에 없는 숫자는 지어내지 않는다. ${extra}`;
 
 /* ---- 모의투자 (코드) ---- */
@@ -818,4 +834,312 @@ async function computerWork(){
   if (k % 3 !== 2 || !book.strategies.some(s => s.trades.length)) return;
   const m = {id: uid(), room: "data", name: "데이터-분석", trigger: "auto", topic: "data/trades.csv(모의투자 거래 기록)를 분석하는 파이썬 스크립트 analysis/summary.py를 사무실 폴더에 만들고 실행해서, 전략별 승률·평균 손익·최대 연속 손실을 보고해 주세요. 파이썬이 없으면 그 사실만 보고합니다.", order: ["eng"], done: [], ctl: new AbortController(), t: Date.now(), models: assignModels()};
   await speak(a, m, [], m.models.eng, m.ctl.signal);
+}
+
+/* ============ 스스로 성장: 팀 노트(배운 것) · 성장 과제 · 회고 ============ */
+// 팀마다 배운 것을 쌓아 두고 다음 일할 때 지시문에 넣는다. 회고에서 부족한 점을 찾아 과제를 만들고, 다음 주기에 담당자가 직접 해낸다.
+const NOTES_KEY = "officeNotes", BL_KEY = "officeBacklog";
+const readJ = (k, d) => { try { return JSON.parse(localStorage.getItem(k) || "") ?? d; } catch(e){ return d; } };
+const writeJ = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} };
+export function teamNotes(team){ return (readJ(NOTES_KEY, {})[team] || []); }
+export function addNote(team, text, src = ""){
+  const all = readJ(NOTES_KEY, {}), list = all[team] || [];
+  const t = String(text || "").replace(/\s+/g, " ").trim().slice(0, 240); if (!t || list.some(n => n.text === t)) return;
+  list.push({t: Date.now(), text: t, src}); all[team] = list.slice(-40); writeJ(NOTES_KEY, all);
+}
+function notesText(team){
+  const n = teamNotes(team).slice(-6);
+  return n.length ? `- 우리 팀이 지금까지 배운 것(반영할 것): ${n.map(x => x.text).join(" / ")}\n` : "";
+}
+export function backlog(){ return readJ(BL_KEY, []); }
+function saveBacklog(list){ writeJ(BL_KEY, list.slice(-200)); fire({kind: "growth"}); }
+export function addTask({team, title, why = "", owner = ""}){
+  const list = backlog(); const t = String(title || "").trim().slice(0, 160);
+  if (!t || list.some(x => x.title === t && x.status !== "done")) return null;
+  const own = AGENTS.find(a => a.team === team && (a.name === owner || a.id === owner)) || AGENTS.find(a => a.team === team && !a.lead) || agentById(TEAM_LEAD[team]);
+  const item = {id: uid(), team, title: t, why: String(why).slice(0, 200), status: "todo", owner: own?.id || "", t: Date.now(), result: ""};
+  list.push(item); saveBacklog(list);
+  post({ch: team, kind: "task", agent: item.owner, title: item.title, status: "todo", result: item.why});
+  return item;
+}
+function updateTask(id, patch){ const list = backlog(), it = list.find(x => x.id === id); if (!it) return null; Object.assign(it, patch); saveBacklog(list); return it; }
+
+// 회고: 팀장이 최근 기록·실패·과제를 보고 '배운 것'과 '부족한 점 → 새 과제'를 정한다 (팀 자리에서 짧은 팀 회의)
+const RETRO_ORDER = ["coin", "stock", "fut", "realestate", "arch", "quant", "strat", "data", "lab", "venture"];
+async function retro(){
+  const i = +localStorage.getItem("officeRetro") || 0, team = RETRO_ORDER[i % RETRO_ORDER.length]; localStorage.setItem("officeRetro", String(i + 1));
+  const lead = agentById(TEAM_LEAD[team]), mem = AGENTS.filter(a => a.team === team);
+  fire({kind: "huddle", ids: mem.map(a => a.id), host: lead.id});
+  const recent = (await loadLog()).filter(e => e.ch === team && Date.now() - e.t < 6 * 3600e3).slice(-25)
+    .map(e => `- [${e.kind}] ${agentById(e.agent)?.name || ""}: ${String(e.text || e.title || e.name || "").replace(/\s+/g, " ").slice(0, 160)}${e.kind === "bt" ? ` (${e.pass ? "통과" : "불통과"})` : ""}`).join("\n");
+  const open = backlog().filter(x => x.team === team && x.status !== "done").map(x => `- ${x.title}`).join("\n");
+  const e = await solo(lead, {room: team, sys: personaOf(lead, `지금은 ${teamById(team).name} 회고·성장 회의다. 최근 기록을 보고 ① 배운 것(다음에 반드시 반영할 교훈) 2~4개 ② 우리 팀에 부족한 점을 메울 구체적인 새 과제 1~3개(누가 맡을지 팀원 이름 포함)를 정한다. 세계적인 기업 수준의 기준으로 냉정하게. 답 마지막에 \`\`\`json {"lessons":["..."],"tasks":[{"title":"...","why":"...","owner":"팀원 이름"}]}\`\`\` 를 붙인다.`),
+    user: `팀원: ${mem.map(a => `${a.name}(${a.title})`).join(", ")}\n최근 기록:\n${recent || "(기록 없음 — 첫 회고)"}\n\n아직 안 끝난 과제:\n${open || "(없음)"}`, maxTokens: 1200});
+  fire({kind: "huddle-end", ids: mem.map(a => a.id)});
+  const j = pickJSON(e.raw || e.text) || {};
+  for (const l of (j.lessons || []).slice(0, 4)) addNote(team, l, "회고");
+  for (const t of (j.tasks || []).slice(0, 3)) addTask({team, title: t.title, why: t.why, owner: t.owner});
+}
+// 과제 실행: 가장 오래된 과제를 담당자가 도구를 써서 직접 해낸다
+async function doTask(){
+  const it = backlog().find(x => x.status === "todo"); if (!it) return retro();
+  const a = agentById(it.owner) || agentById(TEAM_LEAD[it.team]);
+  updateTask(it.id, {status: "doing"}); post({ch: it.team, kind: "task", agent: a.id, title: it.title, status: "doing", result: ""});
+  const m = {id: uid(), room: it.team, name: "과제-" + it.title.slice(0, 12), trigger: "auto", topic: `성장 과제: ${it.title}\n왜: ${it.why}\n도구(검색·차트·백테스트·사무실 파일 등)를 써서 실제로 해내고, 결과물과 배운 점을 보고해 주세요. 못 한 부분은 솔직히 말합니다.`, order: [a.id], done: [], ctl: new AbortController(), t: Date.now(), models: assignModels(), place: it.team};
+  const turn = await speak(a, m, [], m.models[a.id], m.ctl.signal);
+  const res = String(turn?.text || "").replace(/\s+/g, " ").slice(0, 300);
+  updateTask(it.id, {status: "done", result: res, done: Date.now()});
+  post({ch: it.team, kind: "task", agent: a.id, title: it.title, status: "done", result: res});
+  addNote(it.team, `과제 '${it.title.slice(0, 50)}' 결과: ${res.slice(0, 140)}`, "과제");
+}
+
+/* ============ 1시간마다 성과 발표 ============ */
+export async function listReports(){ const v = await idb.all("report:").catch(() => []); return v.sort((a, b) => b.t - a.t); }
+let reportTimer = 0, reporting = false;
+export function startReports(){ if (!reportTimer) reportTimer = setInterval(() => maybeReport().catch(e => console.warn(e)), 60e3); }
+async function maybeReport(force){
+  const last = +localStorage.getItem("officeLastReport") || 0;
+  if (reporting || (!force && Date.now() - last < 3600e3)) return null;
+  if (!last && !force){ localStorage.setItem("officeLastReport", String(Date.now())); return null; }   // 처음 켰을 때부터 1시간 뒤 첫 발표
+  reporting = true;
+  try { return await makeReport(last || Date.now() - 3600e3); } finally { reporting = false; }
+}
+export const presentNow = () => maybeReport(true);
+async function makeReport(since){
+  await loadLog();
+  const ents = LOG.filter(e => e.t >= since);
+  const sections = [];
+  for (const t of TEAMS.filter(x => x.id !== "hq")){
+    const es = ents.filter(e => e.ch === t.id), items = [];
+    const said = es.filter(e => e.kind === "agent" && !e.chat).length; if (said) items.push(`발언·분석 ${said}건`);
+    const bts = es.filter(e => e.kind === "bt"); if (bts.length) items.push(`매매법 ${bts.length}개 검증 (통과 ${bts.filter(b => b.pass).length}: ${bts.filter(b => b.pass).map(b => b.name).join(", ") || "-"})`);
+    const tr = es.filter(e => e.kind === "trade"); if (tr.length) items.push(`모의 거래 ${tr.length}건`);
+    for (const e of es.filter(e => e.kind === "re")) items.push(`재개발 후보 ${e.items?.length || 0}곳 발굴 (${e.region}) · 1위 ${e.items?.[0]?.area || "-"} ${e.items?.[0]?.score ?? ""}점`);
+    for (const e of es.filter(e => e.kind === "arch")) items.push(`설계안 '${e.name}' 연면적 ${e.metrics?.["연면적_㎡"] ?? "?"}㎡${e.image ? " · 렌더링 완료" : ""}`);
+    for (const e of es.filter(e => e.kind === "ml")) items.push(`머신러닝 ${e.market} 정확도 ${e.acc}% (기준 ${e.base}%)`);
+    for (const e of es.filter(e => e.kind === "macro")) items.push(`경제지표 ${e.rows?.length || 0}개 예측`);
+    for (const e of es.filter(e => e.kind === "forecast")) items.push(`방향 예측 ${e.items?.length || 0}건${e.score ? ` · 적중 ${e.score.hit}/${e.score.n}` : ""}`);
+    for (const e of es.filter(e => e.kind === "biz")) items.push(`사업 시뮬레이션 '${e.name}' — ${e.verdict}`);
+    for (const e of es.filter(e => e.kind === "files")) items.push(`파일 저장: ${e.title}`);
+    for (const e of es.filter(e => e.kind === "task" && e.status === "done")) items.push(`성장 과제 완료: ${e.title}`);
+    const next = backlog().filter(x => x.team === t.id && x.status !== "done").slice(0, 2).map(x => x.title);
+    if (items.length || next.length) sections.push({team: t.id, name: t.name, lead: agentById(TEAM_LEAD[t.id])?.name, items, next});
+  }
+  const P = await import("./paper.js"); const book = await P.bookText().catch(() => "");
+  const ceo = agentById("lead"), hour = new Date().getHours();
+  const facts = sections.map(s => `## ${s.name} (팀장 ${s.lead})\n${s.items.map(x => "- " + x).join("\n") || "- (이번 시간 기록 없음)"}${s.next.length ? "\n다음: " + s.next.join(" / ") : ""}`).join("\n\n");
+  const e = await solo(ceo, {room: "hq", sys: personaOf(ceo, "지금은 매시간 하는 전사 성과 발표다. 아래 사실만으로 대표(사용자)에게 발표한다: 맨 앞에 핵심 성과 3줄, 그다음 팀별로 해낸 것과 다음 계획, 마지막에 위험·도움이 필요한 것. 마크다운. 지어내지 않는다."),
+    user: `${hour}시 발표 · 지난 ${Math.round((Date.now() - since) / 60e3)}분\n\n${facts || "(이번 시간 기록 없음)"}\n\n모의투자:\n${book.slice(0, 1500)}`, maxTokens: 1600});
+  const report = {id: uid(), t: Date.now(), since, title: `${hour}시 성과 발표`, text: noMind(e.text), sections};
+  await idb.put("report:" + report.id, report);
+  localStorage.setItem("officeLastReport", String(Date.now()));
+  post({ch: "hq", kind: "report", title: report.title, text: report.text, reportId: report.id});
+  fire({kind: "present", report});
+  if (computerOn()){ try { const {codeCall} = await import("./engine.js"); const d = new Date(), stamp = `${d.toISOString().slice(0, 10)}-${String(hour).padStart(2, "0")}`; await codeCall("write", {ws: "office", path: `reports/hourly/${stamp}.md`, content: `# ${report.title}\n\n${report.text}\n\n---\n${facts}\n`}); } catch(err){} }
+  try { if (typeof document !== "undefined" && document.hidden && "Notification" in window && Notification.permission === "granted") new Notification("GH Nano · " + report.title, {body: report.text.replace(/[#*]/g, "").slice(0, 140)}); } catch(err){}
+  return report;
+}
+
+/* ============ 건축팀: 직접 설계 → 법규 검토(코드) → AI 렌더링 → 다음 안에서 개선 ============ */
+const ZONE_LIMIT = {"제1종전용주거": [50, 100], "제2종전용주거": [50, 150], "제1종일반주거": [60, 200], "제2종일반주거": [60, 250], "제3종일반주거": [50, 300], "준주거": [70, 500], "근린상업": [70, 900], "일반상업": [80, 1300], "준공업": [70, 400], "자연녹지": [20, 100]};
+const BRIEFS = [
+  {use: "house", zone: "제1종일반주거", site: {w: 18, d: 22}, req: "4인 가족 단독주택, 마당과 테라스, 2~3층"},
+  {use: "mixed", zone: "제2종일반주거", site: {w: 20, d: 25}, req: "1층 상가 + 2~4층 임대 원룸, 수익형 상가주택"},
+  {use: "cafe", zone: "제2종일반주거", site: {w: 15, d: 20}, req: "대형 통창 베이커리 카페, 루프탑"},
+  {use: "office", zone: "준주거", site: {w: 25, d: 30}, req: "스타트업 사옥 6층, 1층 라운지"},
+  {use: "multi", zone: "제2종일반주거", site: {w: 22, d: 24}, req: "다세대주택 8세대, 주차 확보"},
+  {use: "house", zone: "자연녹지", site: {w: 30, d: 30}, req: "전원주택, 목조, 박공지붕"}
+];
+const USE_EN = {house: "single-family house", mixed: "mixed-use retail and residential building", cafe: "bakery cafe", office: "office building", multi: "multi-family residential building"};
+async function thumb(dataUrl, w = 520){
+  try { const img = new Image(); img.src = dataUrl; await img.decode(); const c = document.createElement("canvas"); c.width = w; c.height = Math.round(img.height * w / img.width); c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); return c.toDataURL("image/jpeg", 0.78); } catch(e){ return null; }
+}
+async function archJob(){
+  const i = +localStorage.getItem("officeArch") || 0; localStorage.setItem("officeArch", String(i + 1));
+  const brief = BRIEFS[i % BRIEFS.length], d = agentById("designer"), lim = ZONE_LIMIT[brief.zone] || [60, 200];
+  const prev = readJ("officeDesigns", []).filter(x => x.use === brief.use).slice(-2);
+  fire({kind: "busy", agent: d, text: `📐 ${brief.req} 설계 중`});
+  const e = await solo(d, {room: "arch", sys: personaOf(d, `이번 일은 직접 설계다. 대지 ${brief.site.w}×${brief.site.d}m, ${brief.zone}(건폐율 ${lim[0]}% · 용적률 ${lim[1]}% 이하). 요구: ${brief.req}. 이전 안의 지적 사항을 반드시 고친다. 설계 의도 3~4문장 뒤에 \`\`\`json {"name":"...","use":"${brief.use}","zone":"${brief.zone}","site":{"w":${brief.site.w},"d":${brief.site.d}},"building":{"w":가로m,"d":세로m},"floors":층수,"floorH":층고m,"style":"modern|concrete|brick|wood|glass","roof":"flat|gable","interior":"modern|scandi|industrial|natural","materials":"외장재 설명","features":["특징"]}\`\`\` 를 쓴다.`),
+    user: `이전 설계안과 지적 사항:\n${prev.map(p => `- ${p.name}: 건폐율 ${p.metrics["건폐율%"]}%, 용적률 ${p.metrics["용적률%"]}% · 지적: ${p.critique || "없음"}`).join("\n") || "(첫 설계)"}`, maxTokens: 1400});
+  const spec = pickJSON(e.raw || e.text); if (!spec?.building) { post({ch: "arch", kind: "system", text: "설계안 JSON을 받지 못했습니다"}); return; }
+  spec.site = spec.site || brief.site; spec.floors = Math.max(1, Math.min(30, +spec.floors || 3));
+  const siteA = spec.site.w * spec.site.d, ba = spec.building.w * spec.building.d, gfa = ba * spec.floors;
+  const metrics = {"대지_㎡": +siteA.toFixed(1), "건축면적_㎡": +ba.toFixed(1), "연면적_㎡": +gfa.toFixed(1), "건폐율%": +(ba / siteA * 100).toFixed(1), "용적률%": +(gfa / siteA * 100).toFixed(1), 층수: spec.floors};
+  const over = [metrics["건폐율%"] > lim[0] ? `건폐율 초과(${metrics["건폐율%"]}% > ${lim[0]}%)` : "", metrics["용적률%"] > lim[1] ? `용적률 초과(${metrics["용적률%"]}% > ${lim[1]}%)` : ""].filter(Boolean);
+  // 렌더링 (NVIDIA 키가 있으면 무료 이미지 AI)
+  let image = null, full = null;
+  if (settings.keys.nvidia){
+    const r = agentById("render"); fire({kind: "busy", agent: r, text: "🎨 3D 투시도 렌더링 중"});
+    const prompt = `photorealistic architectural exterior rendering of a ${spec.floors}-story ${spec.style || "modern"} ${USE_EN[spec.use] || "building"}, ${spec.roof === "gable" ? "gable roof" : "flat roof with terrace"}, ${String(spec.materials || "white concrete and glass").slice(0, 80)}, ${(spec.features || []).slice(0, 3).join(", ")}, Korean residential street, golden hour, eye-level 35mm, high detail`;
+    try { const res = await TOOLS.render_image.run({prompt, width: 1024, height: 768}, {openArtifact: null, signal: new AbortController().signal}); full = res.image; image = full ? await thumb(full) : null; bump("renders"); } catch(err){ post({ch: "arch", kind: "system", text: "렌더링 실패: " + String(err.message || err).slice(0, 100)}); }
+  }
+  // 구조·견적 엔지니어가 짧게 지적 → 다음 설계에 반영 (계속 발전)
+  const s = agentById("struct");
+  const c = await solo(s, {room: "arch", sys: personaOf(s, "방금 나온 설계안을 법규·구조·공사비·사용성 관점에서 2~3문장으로 냉정하게 지적하고, 다음 안에서 고칠 점 하나를 명확히 말한다."), user: `${spec.name}: ${JSON.stringify(metrics)}${over.length ? " · " + over.join(", ") : ""}\n특징: ${(spec.features || []).join(", ")}`, maxTokens: 500});
+  const designs = readJ("officeDesigns", []); designs.push({t: Date.now(), name: spec.name, use: spec.use, metrics, critique: noMind(c.text).slice(0, 200)}); writeJ("officeDesigns", designs.slice(-30));
+  const files = [];
+  if (computerOn()){
+    try { const {codeCall} = await import("./engine.js"), base = `designs/${new Date().toISOString().slice(0, 10)}-${String(spec.name).replace(/[\\/:*?"<>|\s]+/g, "_").slice(0, 40)}`;
+      await codeCall("write", {ws: "office", path: base + "/spec.json", content: JSON.stringify({spec, metrics, critique: c.text}, null, 2)}); files.push(base + "/spec.json");
+      if (full){ await codeCall("write", {ws: "office", path: base + "/render.jpg", content: full.split(",")[1], encoding: "base64"}); files.push(base + "/render.jpg"); }
+    } catch(err){}
+  }
+  post({ch: "arch", kind: "arch", agent: d.id, name: spec.name, metrics, image, spec, files, over});
+  if (over.length) addNote("arch", `${spec.name}: ${over.join(", ")} → 다음엔 한도 안으로`, "설계");
+}
+
+/* ============ 방향 예측 토론 → 예측 장부 → 시간이 지나면 코드가 채점 (모의 검증) ============ */
+const FC_KEY = "officeForecasts";
+const FC_ASSETS = [{asset: "비트코인", q: "BTCUSDT", ex: "binancef", team: "coin"}, {asset: "나스닥100 선물", q: "NQ=F", ex: "yahoo", team: "stock"}, {asset: "코스피", q: "^KS11", ex: "yahoo", team: "fut"}, {asset: "금 선물", q: "GC=F", ex: "yahoo", team: "fut"}];
+async function priceOf(a){ const r = await TOOLS.market_quote.run({symbols: [a.q], exchange: a.ex === "binancef" ? "binancef" : ""}); const row = JSON.parse(r.text || "[]").find(x => x.현재가 != null); return row ? +row.현재가 : null; }
+async function scoreForecasts(){
+  const list = readJ(FC_KEY, []), due = list.filter(f => !f.result && Date.now() >= f.due);
+  if (!due.length) return;
+  for (const f of due){
+    const now = await priceOf(FC_ASSETS.find(x => x.asset === f.asset) || {q: f.q, ex: f.ex}).catch(() => null); if (now == null) continue;
+    const ret = (now / f.p0 - 1) * 100, dir = Math.abs(ret) < 0.2 ? "flat" : ret > 0 ? "up" : "down";
+    f.result = f.dir === dir || (f.dir === "flat" && Math.abs(ret) < 0.5) ? "hit" : "miss"; f.ret = +ret.toFixed(2); f.p1 = now;
+    f.paper = +((f.dir === "up" ? 1 : f.dir === "down" ? -1 : 0) * ret).toFixed(2);   // 예측대로 1배 모의 매매했다면 수익률
+  }
+  writeJ(FC_KEY, list.slice(-300));
+  const done = list.filter(f => f.result), n = done.length, hit = done.filter(f => f.result === "hit").length;
+  const brier = n ? done.reduce((s, f) => s + Math.pow(f.prob / 100 - (f.result === "hit" ? 1 : 0), 2), 0) / n : null;
+  post({ch: "strat", kind: "forecast", agent: "scen", items: due.map(f => ({asset: f.asset, dir: f.dir, prob: f.prob, horizon: f.horizon, due: f.due, result: f.result, ret: f.ret, by: f.by})), score: {n, hit, brier: brier == null ? null : +brier.toFixed(3), paper: +done.reduce((s, f) => s + (f.paper || 0), 0).toFixed(2)}});
+  for (const f of due) addNote(agentById(f.by)?.team || "strat", `${f.asset} ${f.horizon} 예측(${f.dir} ${f.prob}%) → ${f.result === "hit" ? "적중" : "빗나감"}(${f.ret}%)`, "예측");
+}
+async function forecastJob(){
+  await scoreForecasts();
+  const r = await enqueue({topic: `향후 24시간 방향 예측 토론: ${FC_ASSETS.map(a => a.asset).join(", ")}. 각자 차트·호가·뉴스를 확인하고 반드시 '예측: 자산이름 상승|하락|횡보 확률%' 형식의 줄을 남겨 주세요. 반대 의견도 환영합니다. 팀장이 최종 예측을 정리합니다.`, room: "strat", trigger: "auto", title: "24시간-방향-예측", agents: ["coin_fut", "techus", "macro", "devil"]});
+  const list = readJ(FC_KEY, []), now = Date.now(), seen = new Set();
+  for (const t of r?.turns || []){
+    for (const mm of String(t.text).matchAll(/예측\s*[:：]\s*([^\n:：]+?)\s+(상승|하락|횡보)\s*(?:확률)?\s*(\d{1,3})\s*%/g)){
+      const a = FC_ASSETS.find(x => mm[1].includes(x.asset) || x.asset.includes(mm[1].trim())); if (!a || seen.has(t.agent.id + a.asset)) continue;
+      seen.add(t.agent.id + a.asset);
+      const p0 = await priceOf(a).catch(() => null); if (p0 == null) continue;
+      list.push({id: uid(), t: now, due: now + 24 * 3600e3, horizon: "24시간", asset: a.asset, q: a.q, ex: a.ex, dir: {상승: "up", 하락: "down", 횡보: "flat"}[mm[2]], prob: Math.min(99, +mm[3]), p0, by: t.agent.id});
+    }
+  }
+  writeJ(FC_KEY, list.slice(-300));
+  const mine = list.filter(f => f.t === now);
+  if (mine.length) post({ch: "strat", kind: "forecast", agent: "scen", items: mine.map(f => ({asset: f.asset, dir: f.dir, prob: f.prob, horizon: f.horizon, due: f.due, by: agentById(f.by)?.name}))});
+}
+
+/* ============ 신사업팀: 사업 구상 → 모의 사업(36개월 시뮬레이션) → 유망하면 사업계획서 ============ */
+async function bizJob(){
+  const B = await import("./biz.js"), b = agentById("biz"), lead = agentById("vlead");
+  const past = readJ("officeBiz", []).slice(-8).map(x => `- ${x.name}: ${x.verdict}`).join("\n");
+  const e = await solo(b, {room: "venture", sys: personaOf(b, "이번 일은 돈을 벌 수 있는 사업 구상이다. 우리 회사의 강점(AI 에이전트 팀, 퀀트·코인·부동산·건축 전문성, GH Nano 자체 AI)을 살리는 사업이면 좋다. 이유 2~3문장 뒤에 아래 JSON을 쓴다.\n" + B.IDEA_PROMPT),
+    user: `지금까지 검토한 사업:\n${past || "(없음)"}\n겹치지 않는 새 사업 하나를 제안해 주세요.`, maxTokens: 1200});
+  const idea = pickJSON(e.raw || e.text); if (!idea?.name){ post({ch: "venture", kind: "system", text: "사업 아이디어 JSON을 받지 못했습니다"}); return; }
+  const sim = B.simulate(idea);
+  const list = readJ("officeBiz", []); list.push({t: Date.now(), name: sim.idea.name, verdict: sim.verdict, p24: sim.pBreakeven24, cum: sim.cumProfit.p50, idea: sim.idea}); writeJ("officeBiz", list.slice(-50));
+  const files = [];
+  let plan = false;
+  if (sim.promising){
+    // 컴플라이언스 점검 + 사업계획서
+    const comp = agentById("comp");
+    const c = await solo(comp, {room: "venture", sys: personaOf(comp, "이 사업의 법·규제·인허가·개인정보·금융 규제 위험을 3~4문장으로 짚는다(투자자문업·가상자산사업자 신고·전자금융 등 해당되면)."), user: B.bizText(sim), maxTokens: 600});
+    const p = await solo(lead, {room: "venture", sys: personaOf(lead, "유망 판정을 받은 사업의 사업계획서를 마크다운으로 쓴다: 1.요약 2.문제와 고객 3.해결책·제품 4.시장 규모 5.경쟁 6.수익 모델 7.시뮬레이션 결과(아래 숫자 그대로) 8.실행 계획(0~3·3~6·6~12개월) 9.필요 자금·인력 10.위험과 대응(아래 컴플라이언스 의견 반영) 11.검증해야 할 가정. 과장하지 않는다."),
+      user: `${B.bizText(sim)}\n\n아이디어: ${sim.idea.desc}\n고객: ${sim.idea.customer}\n\n컴플라이언스 의견: ${noMind(c.text)}`, maxTokens: 3000});
+    plan = true;
+    if (computerOn()){ try { const {codeCall} = await import("./engine.js"), base = `business/${String(sim.idea.name).replace(/[\\/:*?"<>|\s]+/g, "_").slice(0, 40)}`;
+      await codeCall("write", {ws: "office", path: base + "/사업계획서.md", content: `# ${sim.idea.name} 사업계획서\n\n${noMind(p.text)}\n\n---\n## 시뮬레이션\n${B.bizText(sim)}\n`}); files.push(base + "/사업계획서.md");
+      await codeCall("write", {ws: "office", path: base + "/financials.csv", content: B.financialsCSV(sim)}); files.push(base + "/financials.csv"); } catch(err){} }
+    addNote("venture", `유망 사업: ${sim.idea.name} (24개월 흑자 확률 ${(sim.pBreakeven24 * 100).toFixed(0)}%)`, "사업");
+  } else addNote("venture", `${sim.idea.name}: ${sim.verdict.split(" — ")[0]} — 가정 재검토 필요`, "사업");
+  post({ch: "venture", kind: "biz", agent: b.id, name: sim.idea.name, sim: {months: sim.months, p24: sim.pBreakeven24, breakeven_month: sim.breakevenMedian, cum: sim.cumProfit, bust: sim.pBust, rev12: sim.revenueMonth12}, verdict: sim.verdict, plan, files, text: B.bizText(sim)});
+}
+
+// 신사업 개발: 자체 코인(모의 발행·토큰 이코노미·컨트랙트), 코인 터미널, 자체 AI(GH Nano) — 사무실 폴더에 실제 파일로 만든다
+const VENTURE_TASKS = [
+  {owner: "token", title: "GHN 코인 토큰 이코노미 설계", topic: "자체 코인 'GHN'의 토큰 이코노미를 설계해 ventures/coin/tokenomics.md 에 저장하세요: 총발행량, 분배(팀·생태계·유동성·커뮤니티), 락업·베스팅 일정, 소각·스테이킹, 5년 유통량 표. 실제 발행이 아니라 모의 설계입니다. 국내 가상자산 규제(가상자산이용자보호법, 증권형 토큰 여부)도 짚으세요."},
+  {owner: "solidity", title: "GHN ERC-20 컨트랙트 작성", topic: "ventures/coin/GHN.sol 에 OpenZeppelin 없이 동작하는 최소 ERC-20(이름 GH Nano Token, 심볼 GHN, 소각·소유자 민팅 한도 포함) 컨트랙트와 ventures/coin/README.md(테스트넷 배포 절차, 감사 체크리스트)를 작성하세요. 실제 배포는 하지 마세요."},
+  {owner: "terminal", title: "GHN 코인 터미널 시제품", topic: "ventures/terminal/index.html 한 파일로 코인 터미널 시제품을 만드세요: 바이낸스 공개 API로 BTCUSDT 캔들(차트는 캔버스로 직접 그림), 호가, 최근 체결, 그리고 GHN 모의 시세 패널. 브라우저에서 바로 열리게."},
+  {owner: "nano", title: "자체 AI(GH Nano) 개발 계획 갱신", topic: "ai/gh-nano-plan.md 에 GH Nano 자체 AI 개발 계획을 갱신하세요: 지금 모인 학습 데이터 종류, 다음 학습 목표, 평가 방법(사무실 업무별 벤치마크), 일정. Claude가 쓴 글은 학습에 쓰지 않는다는 원칙을 명시."},
+  {owner: "fe", title: "사무실 대시보드 개선안", topic: "ventures/dashboard-ideas.md 에 우리 사무실 대시보드·차트 터미널 개선 아이디어 10개와 우선순위를 정리하세요."}
+];
+async function ventureJob(){
+  const i = +localStorage.getItem("officeVenture") || 0; localStorage.setItem("officeVenture", String(i + 1));
+  const t = VENTURE_TASKS[i % VENTURE_TASKS.length], a = agentById(t.owner);
+  const m = {id: uid(), room: "venture", name: t.title.slice(0, 16), trigger: "auto", topic: t.topic + (computerOn() ? "\n사무실 폴더 도구(office_write, office_read, office_ls, office_run)로 실제 파일을 만들고, 만든 파일 경로와 핵심 내용을 보고하세요." : "\n(지금은 웹 버전이라 파일 저장이 안 됩니다. 내용을 답에 직접 쓰세요.)"), order: [a.id], done: [], ctl: new AbortController(), t: Date.now(), models: assignModels(), place: "venture"};
+  a.computer = true;   // 신사업 개발자는 사무실 폴더에서 일한다
+  const turn = await speak(a, m, [], m.models[a.id], m.ctl.signal);
+  const files = (turn?.entry?.steps || []).filter(s => s.name === "office_write" && s.status === "done").map(s => s.summary);
+  if (files.length) post({ch: "venture", kind: "files", agent: a.id, title: t.title, files});
+  addNote("venture", `${t.title} — ${files.length ? "파일 " + files.length + "개" : "보고만"} 완료`, "신사업");
+}
+
+/* ============ 부동산팀: 재개발 후보 발굴 → 자체 지수로 점수 → 추천 ============ */
+async function realestateJob(){
+  const R = await import("./realestate.js");
+  const regions = R.REGIONS.map(x => typeof x === "string" ? x : x.name || x.region || x.ko).filter(Boolean);
+  const i = +localStorage.getItem("officeRE") || 0, region = regions[i % regions.length]; localStorage.setItem("officeRE", String(i + 1));
+  const a = agentById("redev");
+  fire({kind: "busy", agent: a, text: `🏘 ${region} 재개발·재건축 자료 찾는 중`});
+  const ev = await R.gatherRedev({region});
+  const evText = ev.text || (ev.items || ev).map?.((x, k) => `[${k + 1}] ${x.title} (${x.date || ""})\n${x.url}\n${x.snippet || ""}`).join("\n\n") || "";
+  for (const x of (ev.items || []).slice(0, 3)) post({ch: "realestate", kind: "work", agent: a.id, icon: "📰", text: x.title, url: x.url});
+  const e = await solo(a, {room: "realestate", sys: personaOf(a, R.EXTRACT_PROMPT), user: `지역: ${region}\n\n근거 자료:\n${String(evText).slice(0, 7000)}`, maxTokens: 1800, train: `아래 ${region} 부동산 기사에서 재개발·재건축 후보 구역을 근거와 함께 정리해 줘.`});
+  const cands = R.parseCandidates(e.raw || e.text);
+  if (!cands.length){ addNote("realestate", `${region}: 이번 자료로는 후보를 못 찾음 → 검색어 보완 필요`, "발굴"); return; }
+  await R.saveCandidates(cands);
+  const ranked = R.rankCandidates(await R.loadCandidates());
+  const here = ranked.filter(c => (c.region || "").includes(region) || region.includes(c.region || "@")).slice(0, 6);
+  post({ch: "realestate", kind: "re", agent: a.id, region, items: (here.length ? here : ranked.slice(0, 6)).map(c => ({area: c.area, region: c.region, project_type: c.project_type, stage: c.stage, score: c.score ?? c.index?.score, certainty: c.certainty ?? c.index?.certainty, upside: c.upside ?? c.index?.upside, sources: (c.evidence_urls || c.sources || []).slice(0, 2).map(u => typeof u === "string" ? {title: u.replace(/^https?:\/\/(www\.)?/, "").slice(0, 40), url: u} : u)}))});
+  // 세 번에 한 번은 팀장이 전체 순위로 추천
+  if (i % 3 === 2){ const lead = agentById("land"); await solo(lead, {room: "realestate", sys: personaOf(lead, "지금까지 발굴한 재개발·재건축 후보 순위와 자체 '재개발 잠재력 지수'를 보고 대표에게 추천 3곳과 이유·위험·확인할 것(토지이음·정비몽땅 등)을 말한다. 투자 권유가 아니라 조사 결과임을 밝힌다."), user: R.candidateText(ranked, 12) + "\n\n" + (R.customIndicatorText?.() || ""), maxTokens: 1400}); }
+}
+
+/* ============ 데이터·미디어팀: 유튜브·인스타·커뮤니티 ============ */
+const MEDIA_Q = ["비트코인 전망", "미국 증시 전망", "서울 재개발 투자", "경제 위기 금리", "코스피 전망", "부동산 하락 상승", "AI 반도체 주식", "건축 트렌드 주택 설계"];
+async function mediaJob(){
+  const M = await import("./media.js");
+  const i = +localStorage.getItem("officeMedia") || 0, q = MEDIA_Q[i % MEDIA_Q.length]; localStorage.setItem("officeMedia", String(i + 1));
+  const yt = i % 3 !== 2, a = agentById(yt ? "yt" : "insta");
+  fire({kind: "busy", agent: a, text: `${yt ? "▶️ 유튜브" : "📸 인스타·커뮤니티"}에서 '${q}' 보는 중`});
+  const items = yt ? await M.youtubeSearch({query: q, n: 10}) : [...(await M.instagramSearch({query: q, n: 6}).catch(() => [])), ...(await M.communitySearch({query: q}).catch(() => []))];
+  const list = Array.isArray(items) ? items : items.items || [];
+  for (const x of list.slice(0, 4)) post({ch: "data", kind: "work", agent: a.id, icon: yt ? "▶️" : "📸", text: `${x.title}${x.views ? " · " + x.views : ""}`, url: x.url});
+  await solo(a, {room: "data", sys: personaOf(a, "본 영상·게시물 제목과 조회수로 지금 대중이 무엇에 관심 있고 어떤 분위기인지 3~5문장으로 해설한다. 의견·인기일 뿐 사실이 아님을 짚고, 역발상 신호인지도 말한다."), user: M.mediaText(list, yt ? "youtube" : "instagram"), train: "아래 유튜브·SNS 인기 콘텐츠 목록을 보고 대중의 관심과 분위기를 해설해 줘."});
+}
+
+/* ============ 머신러닝·딥러닝 연구 ============ */
+async function mlJob(){
+  const ML = await import("./ml.js"), Q = await import("./quant.js");
+  const i = +localStorage.getItem("officeML") || 0; localStorage.setItem("officeML", String(i + 1));
+  const mk = [{market: "BTCUSDT", exchange: "binancef", tf: "60"}, {market: "ETHUSDT", exchange: "binancef", tf: "60"}, {market: "NVDA", exchange: "yahoo", tf: "D"}, {market: "^KS11", exchange: "yahoo", tf: "D"}][i % 4];
+  const model = i % 2 ? "logreg" : "mlp", a = agentById("ml");
+  fire({kind: "busy", agent: a, text: `🧠 ${mk.market} ${model === "mlp" ? "신경망" : "로지스틱 회귀"} 학습 중`});
+  let cs; try { const H = await import("./history.js"); cs = (await H.historyCandles({market: mk.market, exchange: mk.exchange, interval: IV_NAME[mk.tf], maxBars: 6000})).candles; } catch(e){ cs = (await candlesFor({market: mk.market, exchange: mk.exchange, timeframe: mk.tf}, 1500)).cs; }
+  const res = ML.walkForwardML(cs, {model, horizon: 1, seed: 7 + i});
+  const acc = +(res.accuracy * (res.accuracy <= 1 ? 100 : 1)).toFixed(1), base = +((res.baseline ?? res.baseAccuracy ?? 0.5) * ((res.baseline ?? 0.5) <= 1 ? 100 : 1)).toFixed(1);
+  post({ch: "quant", kind: "ml", agent: a.id, market: mk.market, tf: TF_KO[mk.tf], model: model === "mlp" ? "신경망(MLP)" : "로지스틱 회귀", acc, base, auc: res.auc != null ? +(+res.auc).toFixed(3) : null, text: ML.mlText(res)});
+  const edge = acc - base >= 2 && (res.auc ?? 0) >= 0.53;
+  addNote("quant", `${mk.market} ${model}: 정확도 ${acc}% vs 기준 ${base}% → ${edge ? "작은 우위" : "우위 없음"}`, "머신러닝");
+  if (!edge) return;
+  // 우위가 보이면 예측 확률을 커스텀 지표로 써서 전략을 만들고 그대로 백테스트·검증
+  const extra = ML.mlSeries(res);
+  const spec = Q.normalizeSpec({name: `ML ${model} ${mk.market}`, symbol: mk.market, interval: IV_NAME[mk.tf], indicators: [{id: "mlp", type: "custom", expr: "ml_prob"}],
+    long_entry: {logic: "all", conditions: [{left: "mlp", op: ">", right: "0.58"}]}, long_exit: {logic: "any", conditions: [{left: "mlp", op: "<", right: "0.5"}]},
+    short_entry: {logic: "all", conditions: [{left: "mlp", op: "<", right: "0.42"}]}, short_exit: {logic: "any", conditions: [{left: "mlp", op: ">", right: "0.5"}]},
+    risk: {leverage: 2, position_pct: 20, atr_stop_mult: 2, ...COSTS[mk.exchange === "binancef" ? "crypto" : "us_stock"]}});
+  const deriv = {extra};
+  const bt = Q.backtest(spec, cs, {deriv}), wf = Q.walkForward(spec, cs, {deriv});
+  const st = x => ({ret: +(x?.return_pct ?? 0), dd: +(x?.max_dd_pct ?? 0), win: +(x?.win_rate ?? 0), pf: x?.profit_factor == null ? null : +x.profit_factor, n: x?.n_trades ?? 0});
+  post({ch: "quant", kind: "bt", agent: "val", name: spec.name, market: mk.market, mname: mk.market, tf: mk.tf, hist: `머신러닝 예측 확률 전략 · ${cs.length}봉`, all: st(bt.stats), is: st(wf.is), oos: st(wf.oos), pass: wf.pass, reasons: wf.reasons, author: a.name, spec, lev: 2});
+}
+
+/* ============ 경제지표 예측 ============ */
+async function macroJob(){
+  const MA = await import("./macro.js"), a = agentById("econfc");
+  fire({kind: "busy", agent: a, text: "📊 FRED 경제지표 받아서 다음 발표 예측 중"});
+  const dash = await MA.macroDashboard({});
+  const rows = (dash.rows || dash.items || []).map(r => ({name: r.name, latest: r.latest, change: r.change, forecast: r.forecast, lo: r.lo, hi: r.hi, unit: r.unit, date: r.date, id: r.id}));
+  post({ch: "fut", kind: "macro", agent: a.id, rows});
+  // 예측 장부: 다음에 새 값이 나오면 채점
+  const led = readJ("officeMacroFc", []), now = Date.now();
+  for (const r of rows) if (r.forecast != null && !led.some(x => x.id === r.id && x.date === r.date)) led.push({id: r.id, name: r.name, date: r.date, forecast: r.forecast, lo: r.lo, hi: r.hi, t: now});
+  for (const x of led.filter(x => x.result == null)){ const r = rows.find(y => y.id === x.id); if (r && r.date && r.date !== x.date){ const s = MA.scoreForecast({value: x.forecast, lo: x.lo, hi: x.hi}, r.latest); x.result = s; addNote("fut", `${x.name} 예측 ${x.forecast} → 실제 ${r.latest} (${s.hit || s.inInterval ? "구간 안" : "구간 밖"})`, "경제지표"); } }
+  writeJ("officeMacroFc", led.slice(-200));
+  await solo(a, {room: "fut", sys: personaOf(a, "경제지표 최신값과 모델 예측(80% 구간)을 보고 다음 발표가 어떻게 나올지, 시장(금리·주식·코인)에 어떤 의미인지 4~6문장으로 해설한다. 모델 예측의 한계도 짚는다."), user: MA.macroText(dash), train: "아래 경제지표와 예측을 보고 다음 발표 전망과 시장에 주는 의미를 해설해 줘."});
 }

@@ -480,8 +480,8 @@ export const TOOLS = {
       const b64 = j.artifacts?.[0]?.base64 || j.image || j.data?.[0]?.b64_json;
       if (!b64) throw new Error("이미지를 받지 못했습니다" + (j.artifacts?.[0]?.finishReason ? " (" + j.artifacts[0].finishReason + ")" : ""));
       const src = b64.startsWith("data:") ? b64 : `data:image/${b64.startsWith("iVBOR") ? "png" : "jpeg"};base64,${b64}`;
-      ctx.openArtifact({type: "image", title: a.title || "AI 렌더링", src, prompt: a.prompt});
-      return {text: "이미지를 만들어 오른쪽 패널에 표시했습니다.", summary: `${shortModel(model)} · ${W}×${H}`};
+      ctx.openArtifact?.({type: "image", title: a.title || "AI 렌더링", src, prompt: a.prompt});
+      return {text: "이미지를 만들어 오른쪽 패널에 표시했습니다.", summary: `${shortModel(model)} · ${W}×${H}`, image: src};
     }},
 
   /* ---- 공용 ---- */
