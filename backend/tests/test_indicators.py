@@ -32,6 +32,9 @@ def test_all_registry_indicators_compute_full_length():
         res = ind.compute(c, name, {})
         for series in res.values():
             assert len(series) == len(c)
+            if name == "ml":                       # 학습 창이 필요해서 300봉으로는 예측이 없다 (test_ml.py 에서 따로 확인)
+                assert series[-1] is None
+                continue
             assert series[-1] is not None, name
 
 
