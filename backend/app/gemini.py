@@ -37,9 +37,11 @@ class _SchemaRejected(Exception):
 
 
 def _headers() -> dict:
-    if not config.GEMINI_API_KEY:
+    from . import keyring
+    k = keyring.active("gemini")
+    if not k:
         raise LLMUnavailable("GEMINI_API_KEY 가 설정되지 않았습니다.")
-    return {"x-goog-api-key": config.GEMINI_API_KEY, "Content-Type": "application/json"}
+    return {"x-goog-api-key": k, "Content-Type": "application/json"}
 
 
 def _rank(name: str) -> tuple:
@@ -90,14 +92,21 @@ def models() -> list[str]:
     return (flash + lite) or out[:3]
 
 
+_slot_calls: dict = {}
+
+
 def _throttle() -> None:
+    from collections import deque
+    from . import keyring
+    n = keyring.active_slot("gemini")
     with _lock:
+        calls = _calls if n == 1 else _slot_calls.setdefault(n, deque())
         now = time.monotonic()
-        while _calls and now - _calls[0] > 60:
-            _calls.popleft()
-        if len(_calls) >= max(1, config.GEMINI_RPM):
-            time.sleep(max(0.0, 60 - (now - _calls[0])) + 0.3)
-        _calls.append(time.monotonic())
+        while calls and now - calls[0] > 60:
+            calls.popleft()
+        if len(calls) >= max(1, config.GEMINI_RPM):
+            time.sleep(max(0.0, 60 - (now - calls[0])) + 0.3)
+        calls.append(time.monotonic())
 
 
 def _err(r: httpx.Response) -> str:

@@ -24,14 +24,16 @@ from pathlib import Path
 from .. import config, llm
 from ..data import market
 from ..llm import LLMUnavailable
-from . import flow, media, quantlab, roster, tools as T
+from . import flow, media, org, quantlab, roster, tools as T  # noqa: F401  (org: 확장 조직을 roster 에 붙인다)
 
 _paper = None
 _lock = threading.RLock()
 LOG: list[dict] = []
 _next = {"id": 1}
 DEFAULT_CFG = {"enabled": True, "auto": True, "every": 30, "daily_max": 12, "chat": True, "chat_every": 3, "chat_max": 80,
-               "cycle": True, "cycle_min": 3, "call_max": 600, "files": True, "alert": True}
+               "cycle": True, "cycle_min": 3, "call_max": 1500, "files": True, "alert": True,
+               "team_cycle": True, "team_cycle_min": 4, "team_meet_max": 30,
+               "models": {}}          # 직원·팀별 AI 모델: {"team:팀id": "nvidia#2:auto", "직원id": "gemini:auto"} — 비우면 기본 배정
 CFG: dict = dict(DEFAULT_CFG)
 ST: dict = {}
 RT = {"queue": deque(), "meeting": None, "agents": {}, "huddle": None, "presenting": None, "job": None, "paused_until": 0.0,
@@ -194,13 +196,49 @@ def _ai(system: str, user: str, aid: str, max_tokens: int = 1400) -> tuple[str |
     ST["usage"]["calls"] += 1
     a = roster.BY_ID.get(aid) or {}
     tier = "opus" if a.get("role") == "reason" else "sonnet"
+    feature = "team_heavy" if tier == "opus" else "team_light"
+    from .. import ai_routes
+    errs = []
+    for r in assigned_routes(aid):                       # 이 직원·팀에 배정한 모델(키)부터
+        if not ai_routes.available(r):
+            continue
+        try:
+            out, route = llm._run("text", system, user, max_tokens, None, None, feature, None, tier, r)
+            return out, route, None
+        except Exception as e:  # noqa: BLE001
+            errs.append(f"{r}: {str(e)[:120]}")
+            _limit_hit(str(e))
     try:
-        out, route = llm._run("text", system, user, max_tokens, None, None, "team_heavy" if tier == "opus" else "team_light", None, tier)
+        out, route = llm._run("text", system, user, max_tokens, None, None, feature, None, tier)
         return out, route, None
     except (LLMUnavailable, Exception) as e:  # noqa: BLE001
-        msg = str(e)
+        msg = " / ".join(errs + [str(e)])
         _limit_hit(msg)
         return None, None, msg[:300]
+
+
+def assigned_routes(aid: str) -> list[str]:
+    a = roster.BY_ID.get(aid) or {}
+    m = CFG.get("models") or {}
+    return [r for r in (m.get(aid), m.get(f"team:{a.get('team')}")) if r]
+
+
+def assign_keys_evenly() -> dict:
+    """넣어 둔 키들을 팀마다 골고루 나눠 배정 (무료 키 한도를 나눠 쓰게)."""
+    from .. import keyring
+    pool = []
+    for prov in ("nvidia", "gemini", "claude"):
+        for n in keyring.slots(prov):
+            model = "auto" if prov != "claude" else config.CLAUDE_MODEL
+            pool.append(f"{prov}{'' if n == 1 else '#' + str(n)}:{model}")
+    if not pool:
+        raise ValueError("AI 키가 없습니다. 먼저 키를 넣어 주세요.")
+    m = dict(CFG.get("models") or {})
+    for i, t in enumerate(roster.TEAMS):
+        m[f"team:{t['id']}"] = pool[i % len(pool)]
+    CFG["models"] = m
+    save(True)
+    return m
 
 
 # ------------------------------------------------------------------ 한국어 정리 · 속마음
@@ -811,6 +849,9 @@ def job_research(note_: str | None = None, author: str | None = None) -> None:
     if g["pass"] and sc.get("grade") != "취약":
         bid = _add_bot(spec, a, "research", {"is": g["is"], "oos": g["oos"]})
         if bid:
+            from . import teamjobs
+            teamjobs.pipe_add(spec, a, any(i.type == "custom" for i in spec.indicators), "demo",
+                              {"pass": True, "grade": sc.get("grade"), "oos": g["oos"], "is": g["is"], "all": g["all"], "reasons": g["reasons"], "hist": hist}, bid, "quant")
             post("quant", "trade", agent="trader", text=f"📈 시그널 추적 시작: {spec.name} ({mname} {iv}봉 · 레버리지 {spec.risk.leverage:g}배 · {roster.BY_ID[a]['name']} 개발 · 다온 검증 통과 · 시나리오 {sc.get('grade')}) · 가상 10,000")
             bubble("trader", f"📈 {spec.name} 추적 시작합니다", 9)
             note("quant", f"통과: {spec.name} ({sym} {iv}) — 검증 구간 {g['oos'].get('ret')}%, 시나리오 {sc.get('grade')}")
@@ -854,7 +895,10 @@ def job_ml() -> None:
             g = quantlab.gate(spec, c[-3000:])
             _bt_card(spec, "ml", g, None, f"머신러닝 예측 확률 전략 · {min(len(c), 3000):,}봉", f"{sym} {iv}", "ml")
             if g["pass"]:
-                if _add_bot(spec, "ml", "ml", {"is": g["is"], "oos": g["oos"]}):
+                bid = _add_bot(spec, "ml", "ml", {"is": g["is"], "oos": g["oos"]})
+                if bid:
+                    from . import teamjobs
+                    teamjobs.pipe_add(spec, "ml", False, "demo", {"pass": True, "oos": g["oos"], "is": g["is"], "all": g["all"], "reasons": g["reasons"]}, bid, "ml")
                     post("quant", "trade", agent="trader", text=f"📈 시그널 추적 시작: {spec.name} (머신러닝 확률 전략 · 다온 검증 통과) · 가상 10,000")
         except Exception as e:  # noqa: BLE001
             post("quant", "system", text=f"ML 전략 백테스트 실패: {str(e)[:160]}")
@@ -1448,6 +1492,18 @@ def _tick() -> None:
     if CFG["cycle"] and not RT["job"] and now - ST["last_cycle"] >= CFG["cycle_min"] * 60 and now - RT["started"] > 45:
         ST["last_cycle"] = now
         threading.Thread(target=cycle, daemon=True).start()
+    if CFG.get("team_cycle") and not RT.get("team_job") and now - ST.get("last_team", 0) >= CFG.get("team_cycle_min", 4) * 60 and now - RT["started"] > 60:
+        ST["last_team"] = now
+        from . import teamjobs
+        threading.Thread(target=teamjobs.team_cycle, daemon=True).start()
+    if now - RT.get("last_live", 0) > 30:
+        RT["last_live"] = now
+        from .. import live as livex
+        if livex.S.get("enabled"):
+            from . import teamjobs
+            ready = [x for x in teamjobs.live_items() if x["approved"] and x["price"]]
+            if ready:
+                threading.Thread(target=livex.sync, args=(ready,), daemon=True).start()
     if ai_ok() and now - (ST["last_report"] or ST["first_start"]) >= 3600:
         threading.Thread(target=report, daemon=True).start()
         ST["last_report"] = now
@@ -1494,11 +1550,23 @@ def snapshot_state(since: int = 0) -> dict:
                                            "done": m["done"], "speaking": m.get("speaking"), "trigger": m["trigger"]},
             "queue": len(RT["queue"]), "agents": agents, "huddle": RT["huddle"] if RT["huddle"] and RT["huddle"]["until"] > now else None,
             "presenting": RT["presenting"] if RT["presenting"] and RT["presenting"]["until"] > now else None,
-            "board": board(), "forecast": forecast_score(), "backlog_open": sum(1 for b in ST["backlog"] if b["status"] != "done")}
+            "board": board(), "forecast": forecast_score(), "backlog_open": sum(1 for b in ST["backlog"] if b["status"] != "done"),
+            "team_job": RT.get("team_job"), "pipe": _pipe_counts()}
+
+
+def _pipe_counts() -> dict:
+    out: dict = {}
+    for p in ST.get("pipeline", []):
+        k = ("c_" if p["custom"] else "") + p["stage"]
+        out[k] = out.get(k, 0) + 1
+    return out
 
 
 def roster_view() -> dict:
-    return {"teams": roster.TEAMS, "agents": [{**a, "tools": roster.tools_for(a["id"]), "seen": RT["seen"].get(a["id"], [])[-6:]} for a in roster.AGENTS],
+    from .. import ai_routes, keyring
+    return {"teams": roster.TEAMS, "agents": [{**a, "tools": roster.tools_for(a["id"]), "seen": RT["seen"].get(a["id"], [])[-6:],
+                                               "model": (assigned_routes(a["id"]) or [None])[0]} for a in roster.AGENTS],
+            "models": CFG.get("models") or {}, "key_slots": keyring.view(), "suggest": ai_routes.view().get("suggest"),
             "agenda": [{"id": g["id"], "title": g["title"], "room": g["room"]} for g in roster.AGENDA], "jobs": JOB_KO, "closer": roster.CLOSER}
 
 
@@ -1513,8 +1581,14 @@ def run_agenda(aid: str) -> dict:
 
 
 def set_cfg(body: dict) -> dict:
+    from .. import ai_routes
     for k, v in body.items():
-        if k in DEFAULT_CFG:
+        if k == "models":
+            bad = [r for r in (v or {}).values() if r and not ai_routes.valid(r)]
+            if bad:
+                raise ValueError(f"모델 형식이 틀렸습니다: {', '.join(bad[:3])} ('공급자#키번호:모델' 예: nvidia#2:auto)")
+            CFG["models"] = {kk: vv for kk, vv in (v or {}).items() if vv}
+        elif k in DEFAULT_CFG:
             CFG[k] = type(DEFAULT_CFG[k])(v)
     if body.get("chat"):
         ST["last_chat"] = 0.0

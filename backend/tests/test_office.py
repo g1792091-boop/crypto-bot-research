@@ -49,9 +49,10 @@ _runner = {"on": False}
 
 
 def test_roster_four_teams_24_staff():
-    assert [t["id"] for t in roster.TEAMS] == ["coin", "quant", "strat", "data"]
-    assert len(roster.AGENTS) == 24 and all(len(v) == 6 for v in roster.MEMBERS.values())
-    assert {a["id"] for a in roster.AGENTS if a["lead"]} == {"coin_fut", "qa", "strat", "sns"}
+    assert [t["id"] for t in roster.TEAMS][:4] == ["coin", "quant", "strat", "data"]
+    base = [a for a in roster.AGENTS if not a.get("ext")]
+    assert len(base) == 24 and all(len(roster.MEMBERS[t]) == 6 for t in ("coin", "quant", "strat", "data"))
+    assert {a["id"] for a in base if a["lead"]} == {"coin_fut", "qa", "strat", "sns"}
     assert all(roster.WATCH.get(a["id"]) for a in roster.AGENTS)            # 원본에서 놀던 9명도 볼 것이 있다
     assert "ml_predict" in roster.tools_for("ml") and "futures_flow" in roster.tools_for("deriv")
 
@@ -151,7 +152,7 @@ def test_api_state_and_ask(fake_ai):
     from app.main import app
     c = TestClient(app)
     r = c.get("/api/office/roster").json()
-    assert len(r["agents"]) == 24 and len(r["teams"]) == 4
+    assert len(r["agents"]) == 266 and len(r["teams"]) == 26
     office.RT["queue"].clear()
     c.post("/api/office/ask", json={"text": "비트코인 지금 롱 어때?", "room": "coin"})
     st = c.get("/api/office/state?since=0").json()

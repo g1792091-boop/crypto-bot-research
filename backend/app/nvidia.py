@@ -52,19 +52,29 @@ _dead: dict[str, dict] | None = None      # 종료·삭제된 모델 → {code, 
 
 
 def _headers() -> dict:
-    if not config.NVIDIA_API_KEY:
+    from . import keyring
+    k = keyring.active("nvidia")
+    if not k:
         raise LLMUnavailable("NVIDIA_API_KEY 가 설정되지 않았습니다.")
-    return {"Authorization": f"Bearer {config.NVIDIA_API_KEY}", "Content-Type": "application/json", "Accept": "application/json"}
+    return {"Authorization": f"Bearer {k}", "Content-Type": "application/json", "Accept": "application/json"}
+
+
+_slot_calls: dict = {}
 
 
 def _throttle() -> None:
+    """분당 호출 한도는 키마다 따로 센다 (키를 여러 개 넣으면 그만큼 더 많이 부를 수 있다)."""
+    from collections import deque
+    from . import keyring
+    n = keyring.active_slot("nvidia")
     with _lock:
+        calls = _calls if n == 1 else _slot_calls.setdefault(n, deque())
         now = time.monotonic()
-        while _calls and now - _calls[0] > 60:
-            _calls.popleft()
-        if len(_calls) >= max(1, config.NVIDIA_RPM):
-            time.sleep(max(0.0, 60 - (now - _calls[0])) + 0.3)
-        _calls.append(time.monotonic())
+        while calls and now - calls[0] > 60:
+            calls.popleft()
+        if len(calls) >= max(1, config.NVIDIA_RPM):
+            time.sleep(max(0.0, 60 - (now - calls[0])) + 0.3)
+        calls.append(time.monotonic())
 
 
 def _err(r: httpx.Response) -> str:

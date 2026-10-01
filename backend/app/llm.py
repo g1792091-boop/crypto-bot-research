@@ -45,18 +45,23 @@ def label() -> str:
     return {"claude": "Claude", "gemini": "Gemini", "nvidia": "NVIDIA"}.get(provider() or "", "기본 분석기")
 
 
+_clients: dict = {}
+
+
 def client() -> anthropic.Anthropic:
-    global _client
-    if not config.ANTHROPIC_API_KEY:
+    from . import keyring
+    k = keyring.active("claude")
+    if not k:
         raise LLMUnavailable("ANTHROPIC_API_KEY 가 설정되지 않았습니다.")
-    if _client is None:
-        _client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
-    return _client
+    if k not in _clients:
+        _clients[k] = anthropic.Anthropic(api_key=k)
+    return _clients[k]
 
 
 def reset_client() -> None:
     global _client
     _client = None
+    _clients.clear()
 
 
 # ---------------------------------------------------------------- 모델 하나 호출
@@ -78,8 +83,13 @@ def _claude(model, system, user, max_tokens, effort=None, schema=None):
 
 
 def _one(route: str, kind: str, system: str, user: str, max_tokens: int, effort=None, schema=None):
-    from . import ai_routes
+    from . import ai_routes, keyring
     p, m = ai_routes.split(route)
+    with keyring.use(p, ai_routes.slot_of(route)):
+        return _call(p, m, kind, system, user, max_tokens, effort, schema)
+
+
+def _call(p, m, kind, system, user, max_tokens, effort=None, schema=None):
     if p == "nvidia":
         from . import nvidia
         mt = min(max_tokens, config.NVIDIA_MAX_TOKENS)
@@ -113,13 +123,13 @@ def _run(kind, system, user, max_tokens, effort=None, schema=None, feature=None,
     for r in routes:
         try:
             out = _one(r, kind, system, user, max_tokens, effort, schema)
-            if r.startswith("nvidia:"):                       # auto·종료 모델 대체 → 실제로 답한 모델 이름으로
+            if r.startswith("nvidia"):                        # auto·종료 모델 대체 → 실제로 답한 모델 이름으로
                 from . import nvidia
-                r = "nvidia:" + (nvidia.used_model() or ai_routes.split(r)[1])
+                r = r.split(":", 1)[0] + ":" + (nvidia.used_model() or ai_routes.split(r)[1])
             last_used = r
             return out, r
         except (LLMUnavailable, anthropic.APIError, httpx.HTTPError, ValueError) as e:
-            if r.startswith("nvidia:"):
+            if r.startswith("nvidia"):
                 from . import nvidia
                 m = nvidia.used_model()
                 if m and m != ai_routes.split(r)[1]:

@@ -295,7 +295,10 @@ def office_forecasts():
 
 @app.post("/api/office/cfg")
 def office_cfg(body: dict):
-    return office.set_cfg(body)
+    try:
+        return office.set_cfg(body)
+    except ValueError as e:
+        _bad(e)
 
 
 @app.post("/api/office/stop")
@@ -314,6 +317,124 @@ def office_rate(entry_id: int, v: int = 1):
 def office_clear():
     office.clear_log()
     return {"ok": True}
+
+
+@app.get("/api/office/pipeline")
+def office_pipeline():
+    from .office import teamjobs
+    return {"items": list(reversed(teamjobs.pipeline())), "live": teamjobs.live_items(),
+            "rules": {"promote": teamjobs.PROMOTE, "retire": teamjobs.RETIRE, "demo_max": teamjobs.DEMO_MAX}}
+
+
+@app.post("/api/office/team/{team_id}")
+def office_team_run(team_id: str):
+    """이 팀 업무를 지금 시킨다."""
+    import threading
+    from .office import roster as oro, teamjobs
+    if team_id not in oro.TEAM_BY:
+        _bad(ValueError("없는 팀입니다"))
+    if team_id in teamjobs.ext_teams():
+        threading.Thread(target=teamjobs.run_team, args=(team_id,), daemon=True).start()
+    else:
+        job = {"coin": "flowscan", "quant": "research", "strat": "forecast", "data": "sns"}[team_id]
+        threading.Thread(target=office._safe_job, args=(job,), daemon=True).start()
+    return {"ok": True}
+
+
+@app.post("/api/office/models/even")
+def office_models_even():
+    try:
+        return {"models": office.assign_keys_evenly()}
+    except ValueError as e:
+        _bad(e)
+
+
+@app.get("/api/office/results")
+def office_results():
+    from .office import results
+    return results.listing()
+
+
+@app.get("/api/office/results/file")
+def office_result_file(path: str):
+    from .office import results
+    try:
+        p = results.safe_path(path)
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+    return FileResponse(p, filename=p.name)
+
+
+@app.get("/api/office/results/zip")
+def office_results_zip():
+    from .office import results
+    p = results.zip_all()
+    return FileResponse(p, filename=p.name, media_type="application/zip")
+
+
+@app.post("/api/office/results/open")
+def office_results_open():
+    from .office import results
+    try:
+        return {"path": results.open_folder()}
+    except (ValueError, OSError) as e:
+        _bad(e)
+
+
+# ------------------------------------------------------------------ 실거래 (기본 꺼짐 · 테스트넷 · 사람 승인)
+@app.get("/api/live")
+def live_view():
+    from . import live
+    from .office import teamjobs
+    return {**live.view(), "items": teamjobs.live_items()}
+
+
+class LiveSettings(BaseModel):
+    enabled: Optional[bool] = None
+    testnet: Optional[bool] = None
+    max_order_usdt: Optional[float] = None
+    max_total_usdt: Optional[float] = None
+    max_leverage: Optional[int] = None
+    daily_loss_usdt: Optional[float] = None
+    confirm: str = ""
+
+
+@app.post("/api/live/settings")
+def live_settings(req: LiveSettings):
+    from . import live
+    body = {k: v for k, v in req.model_dump().items() if v is not None and k != "confirm"}
+    if body.get("enabled") and req.confirm != "실거래 켜기":
+        _bad(ValueError("실거래를 켜려면 확인 문구 '실거래 켜기' 를 입력해야 합니다"))
+    if body.get("testnet") is False and req.confirm != "실제 돈":
+        _bad(ValueError("테스트넷을 끄려면(실제 돈) 확인 문구 '실제 돈' 을 입력해야 합니다"))
+    if body.get("enabled") and not all(live.keys()):
+        _bad(ValueError("settings.txt 에 BINANCE_API_KEY / BINANCE_API_SECRET 를 넣어야 합니다 (선물 권한만, 출금 권한 금지)"))
+    return live.set_settings(body)
+
+
+@app.post("/api/live/approve/{pid}")
+def live_approve(pid: str, ok: bool = True):
+    from . import live
+    from .office import teamjobs
+    p = next((x for x in teamjobs.pipeline() if x["id"] == pid), None)
+    if not p or p["stage"] not in ("candidate", "live"):
+        _bad(ValueError("데모를 통과한(승인 대기) 매매법만 승인할 수 있습니다"))
+    live.approve(pid, ok)
+    if not ok and p["stage"] == "live":
+        teamjobs._move(p, "candidate", "승인 취소")
+        if pid in live._state["positions"] and live.S.get("enabled"):
+            try:
+                live.close_position(pid, live._state["positions"][pid]["entry"], "승인 취소")
+            except Exception as e:  # noqa: BLE001
+                live.log(f"⚠ 승인 취소 청산 실패: {e}")
+    return live.view()
+
+
+@app.post("/api/live/kill")
+def live_kill():
+    from . import live
+    live.kill("사용자 비상 정지")
+    return live.view()
 
 
 class MLReq(BaseModel):
@@ -865,6 +986,7 @@ class AiKeys(BaseModel):
     gemini: Optional[str] = None
     anthropic: Optional[str] = None
     provider: Optional[Literal["auto", "claude", "nvidia", "gemini"]] = None
+    slot: int = 1                       # 2~9 = 추가 키 (팀·직원마다 다른 키를 쓸 때)
 
 
 @app.post("/api/ai/keys")
@@ -872,16 +994,16 @@ def ai_keys(req: AiKeys):
     """화면에서 키를 넣으면 바로 적용하고 settings.txt 에도 저장 (빈 값은 그대로 둠, '-' 는 지움)."""
     import os
     from pathlib import Path
-    names = {"nvidia": "NVIDIA_API_KEY", "gemini": "GEMINI_API_KEY", "anthropic": "ANTHROPIC_API_KEY"}
+    from . import keyring
+    if not 1 <= req.slot <= keyring.MAX_SLOTS:
+        _bad(ValueError("키 번호는 1~9 입니다"))
     changed = {}
-    for k, env in names.items():
+    for k, prov in (("nvidia", "nvidia"), ("gemini", "gemini"), ("anthropic", "claude")):
         v = getattr(req, k)
         if v is None or not v.strip():
             continue
         v = "" if v.strip() == "-" else v.strip()
-        setattr(config, env, v)
-        os.environ[env] = v
-        changed[env] = v
+        changed[keyring.set_key(prov, req.slot, v)] = v
     if req.provider:
         config.LLM_PROVIDER = req.provider
         changed["LLM_PROVIDER"] = req.provider
@@ -905,7 +1027,8 @@ def ai_keys(req: AiKeys):
             saved = True
         except OSError:
             pass
-    return {"ok": True, "saved_to_file": saved, "keys": {p: ai_routes.key_ok(p) for p in ai_routes.PROVIDERS}, "primary": ai_routes.primary()}
+    return {"ok": True, "saved_to_file": saved, "keys": {p: ai_routes.key_ok(p) for p in ai_routes.PROVIDERS}, "primary": ai_routes.primary(),
+            "key_slots": keyring.view()}
 
 
 # ------------------------------------------------------------------ 오토파일럿 (상시: 차트 지표로 매매법 탐색 → 페이퍼 봇 → 시그널)

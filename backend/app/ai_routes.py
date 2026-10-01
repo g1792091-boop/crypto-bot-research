@@ -55,18 +55,23 @@ def load() -> dict:
     return _state
 
 
+def _prov_ok(p: str) -> bool:
+    from . import keyring
+    return keyring.parse(p) is not None
+
+
 def split_routes(text: str, provider: str | None = None) -> list[str]:
     """'a/b · c/d, gemini:auto' 처럼 여러 개가 한 칸에 들어와도 '공급자:모델' 여러 개로 나눈다."""
     out = []
     head, _, rest = (text or "").strip().partition(":")
-    if head in PROVIDERS:                          # 'nvidia:a/b · c/d' → 공급자는 앞의 것을 따름
+    if _prov_ok(head):                          # 'nvidia:a/b · c/d' → 공급자는 앞의 것을 따름
         provider, text = head, rest
     for tok in _SEP.split(text or ""):
         tok = tok.strip().strip("'\"")
         if not tok:
             continue
         p, _, m = tok.partition(":")
-        r = tok if p in PROVIDERS and m else f"{provider}:{tok}" if provider else ""
+        r = tok if _prov_ok(p) and m else f"{provider}:{tok}" if provider else ""
         if r and valid(r):
             out.append(r)
     return list(dict.fromkeys(out))
@@ -139,13 +144,17 @@ def reset_cache() -> None:
 
 
 def valid(route: str) -> bool:
-    """'공급자:모델' 한 개. 모델 이름에 공백·구분 기호가 있으면(여러 개가 붙은 것) 안 됨."""
+    """'공급자:모델' 또는 '공급자#키번호:모델' 한 개. 모델 이름에 공백·구분 기호가 있으면(여러 개가 붙은 것) 안 됨."""
+    from . import keyring
     p, _, m = (route or "").partition(":")
-    return p in PROVIDERS and bool(m.strip()) and not _SEP.search(m.strip())
+    return keyring.parse(p) is not None and bool(m.strip()) and not _SEP.search(m.strip())
 
 
 def key_ok(provider: str) -> bool:
-    return bool({"claude": config.ANTHROPIC_API_KEY, "nvidia": config.NVIDIA_API_KEY, "gemini": config.GEMINI_API_KEY}.get(provider))
+    """'nvidia' 또는 'nvidia#2' — 그 키가 들어 있나."""
+    from . import keyring
+    ps = keyring.parse(provider)
+    return bool(ps and keyring.key(*ps))
 
 
 def available(route: str) -> bool:
@@ -153,8 +162,15 @@ def available(route: str) -> bool:
 
 
 def split(route: str) -> tuple[str, str]:
+    """('nvidia', '모델') — 키 번호는 slot_of() 로."""
     p, _, m = route.partition(":")
-    return p, m
+    return p.split("#", 1)[0], m
+
+
+def slot_of(route: str) -> int:
+    from . import keyring
+    ps = keyring.parse(route.partition(":")[0])
+    return ps[1] if ps else 1
 
 
 def legacy(tier: str = "opus") -> str | None:
@@ -200,7 +216,8 @@ def nvidia_suggest() -> list[str]:
 
 def view() -> dict:
     st = load()
-    return {**st, "features_desc": FEATURES, "keys": {p: key_ok(p) for p in PROVIDERS}, "primary": primary(),
+    from . import keyring
+    return {**st, "features_desc": FEATURES, "keys": {p: key_ok(p) for p in PROVIDERS}, "key_slots": keyring.view(), "primary": primary(),
             "dead": {"nvidia:" + m: d for m, d in nvidia.dead().items()},
             "auto": {"nvidia": nvidia.peek_auto(False), "nvidia_fast": nvidia.peek_auto(True)},
             "suggest": {
