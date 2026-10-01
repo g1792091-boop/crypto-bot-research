@@ -32,11 +32,12 @@ If the new stop is refused with -2021 ("Order would immediately trigger": the pr
 past it), close the position with a reduce-only market order.
 
 Safety:
-- The client refuses any host except the futures testnet. There is no mainnet code path.
+- ``TestnetClient`` refuses any host except the futures testnet (a class-level allowlist).
+  paperbot/mainnet.py subclasses it for fapi.binance.com behind its own gates (env flag, separate
+  key variables, key-permission check, balance guard); the order code here is shared.
 - Testnet keys live in their own variables (TESTNET_API_KEY / TESTNET_API_SECRET), never the
   read-only mainnet key used by the paper runner.
-- AI agents do not call this module; people run it by hand, and paperbot/executor.py (also
-  testnet only) uses it.
+- AI agents do not call this module; people run it by hand, and paperbot/executor.py uses it.
 """
 
 from __future__ import annotations
@@ -59,6 +60,7 @@ TESTNET = "https://testnet.binancefuture.com"
 ALLOWED_HOSTS = ("testnet.binancefuture.com",)
 
 WOULD_TRIGGER = -2021          # "Order would immediately trigger."
+BAD_TIMESTAMP = -1021          # "Timestamp for this request is outside of the recvWindow." (clock drift)
 NOT_FOUND = (-2013, -2011)     # "Order does not exist." / "Unknown order sent."
 _TRANSIENT_CODES = (-1001, -1007, -1008)   # disconnected / backend timeout (status unknown) / overloaded
 _RATE_CODES = (-1003,)                     # too many requests
@@ -141,16 +143,26 @@ def covers(stop: dict, amt: float, eps: float = 1e-12) -> bool:
 
 
 class TestnetClient:
-    __test__ = False
+    """Signed REST client for Binance USD-M futures. This class talks to the TESTNET only.
 
-    def __init__(self, api_key: str, api_secret: str, base: str = TESTNET, send: Optional[Send] = None,
+    The host allowlist is a CLASS attribute (``HOSTS``), checked at construction; the executor checks the
+    host again before it starts. paperbot/mainnet.py subclasses it for fapi.binance.com (the same code
+    path, another allowlist, other key variables, more guards)."""
+    __test__ = False
+    HOSTS: tuple = ALLOWED_HOSTS
+    DEFAULT_BASE = TESTNET
+    KEY_NAMES = ("TESTNET_API_KEY", "TESTNET_API_SECRET")
+    AGENT = "paperbot-testnet/0.3"
+
+    def __init__(self, api_key: str, api_secret: str, base: Optional[str] = None, send: Optional[Send] = None,
                  clock_ms: Callable[[], int] = lambda: int(time.time() * 1000),
                  on_request: Optional[Callable[[dict], None]] = None):
+        base = base or self.DEFAULT_BASE
         host = urllib.parse.urlparse(base).hostname or ""
-        if host not in ALLOWED_HOSTS:
-            raise ValueError(f"refusing host {host!r}: this module only talks to the futures testnet")
+        if host not in type(self).HOSTS:
+            raise ValueError(f"refusing host {host!r}: {type(self).__name__} only talks to {type(self).HOSTS}")
         if not (api_key and api_secret):
-            raise ValueError("TESTNET_API_KEY and TESTNET_API_SECRET are required")
+            raise ValueError(f"{self.KEY_NAMES[0]} and {self.KEY_NAMES[1]} are required")
         self.base, self.key, self.secret = base.rstrip("/"), api_key, api_secret
         self.host = host
         self.send = send or urllib_send
@@ -185,7 +197,7 @@ class TestnetClient:
     def req(self, method: str, path: str, params: Optional[dict] = None, signed: bool = True):
         p = {k: v for k, v in (params or {}).items() if v is not None}
         audit = {"method": method, "path": path, "params": dict(p)}
-        headers = {"User-Agent": "paperbot-testnet/0.2", "X-MBX-APIKEY": self.key}
+        headers = {"User-Agent": self.AGENT, "X-MBX-APIKEY": self.key}
         if signed:
             p["timestamp"] = self.clock_ms() + self.offset_ms
             p["recvWindow"] = 5000
@@ -341,6 +353,24 @@ class TestnetClient:
     def positions(self) -> list:
         """Every symbol with a non-zero position."""
         return [r for r in self.req("GET", "/fapi/v2/positionRisk") if float(r.get("positionAmt") or 0) != 0]
+
+    # ------------------------------------------------------------ fills, income, brackets (USER_DATA reads)
+    def user_trades(self, symbol: str, start_ms: int, end_ms: int, limit: int = 1000) -> list:
+        """Account fills: price, qty, realizedPnl, commission, commissionAsset, orderId, side, time.
+        startTime..endTime may span at most 7 days (Binance)."""
+        return self.req("GET", "/fapi/v1/userTrades", {"symbol": symbol, "startTime": int(start_ms),
+                                                       "endTime": int(end_ms), "limit": limit})
+
+    def income(self, symbol: Optional[str], income_type: Optional[str], start_ms: int, end_ms: int,
+               limit: int = 1000) -> list:
+        """Income history (FUNDING_FEE, COMMISSION, REALIZED_PNL, ...): symbol, incomeType, income, asset, time,
+        tranId."""
+        return self.req("GET", "/fapi/v1/income", {"symbol": symbol, "incomeType": income_type,
+                                                   "startTime": int(start_ms), "endTime": int(end_ms),
+                                                   "limit": limit})
+
+    def leverage_brackets(self) -> list:
+        return self.req("GET", "/fapi/v1/leverageBracket")
 
 
 # ---------------------------------------------------------------- stop protocol (drill and executor)
@@ -523,7 +553,13 @@ def main(argv: Optional[list[str]] = None) -> int:
     ap.add_argument("--notional", type=float, default=200.0)
     ap.add_argument("--leverage", type=int, default=20)
     args = ap.parse_args(argv)
-    c = TestnetClient(os.environ.get("TESTNET_API_KEY", ""), os.environ.get("TESTNET_API_SECRET", ""))
+    from .mainnet import PAPER_ENV_FILE, Refused, read_env_file, trading_keys
+    try:          # never the paper runner's read-only key, never a mainnet key
+        key, secret = trading_keys("testnet", os.environ, read_env_file(PAPER_ENV_FILE))
+    except Refused as e:
+        print(f"시작하지 않습니다: {e}", file=sys.stderr)
+        return 2
+    c = TestnetClient(key, secret)
     c.sync_time()
     if args.cmd == "reconcile":
         print(json.dumps(reconcile(c, args.symbol), indent=1))

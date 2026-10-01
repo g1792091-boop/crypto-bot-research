@@ -634,7 +634,8 @@ def test_backup_unit_copies_every_database_read_only_and_fails_on_a_failed_copy(
         assert line in unit                                   # a copy that hangs cannot hold the unit forever
     with open(BACKUP_SH, encoding="utf-8") as fh:
         script = fh.read()
-    assert "for f in agents3 inbox liq daily3 paper3; do" in script    # the small databases first
+    # the small databases first; the order executor's records (mainnet and testnet) are in exec/
+    assert "for f in agents3 inbox liq exec/executor exec/executor-testnet daily3 paper3; do" in script
     assert "VACUUM INTO" in script and "sqlite3 -bail -readonly" in script and ".backup" not in script.split(
         "\nlib=")[1]
     lib, bk = tmp_path / "lib", tmp_path / "bk"
@@ -642,6 +643,9 @@ def test_backup_unit_copies_every_database_read_only_and_fails_on_a_failed_copy(
     env = _backup_env(tmp_path, lib, bk)
     for name in ("paper3", "daily3", "inbox", "liq"):
         _small_db(str(lib / f"{name}.db"))
+    (lib / "exec").mkdir()
+    for name in ("executor", "executor-testnet"):
+        _small_db(str(lib / "exec" / f"{name}.db"))
     db = str(lib / "agents3.db")
     # a tick that was killed (MemoryMax / TimeoutStartSec) leaves its WAL behind, not checkpointed
     code = ("import os, sys; sys.path.insert(0, %r); from paperbot.agents import rooms_db as R; "
@@ -657,7 +661,8 @@ def test_backup_unit_copies_every_database_read_only_and_fails_on_a_failed_copy(
         assert fh.read() == before                            # the backup never wrote agents3.db
     assert os.path.getsize(db + "-wal") > 0                   # nor checkpointed or removed its WAL
     [day] = os.listdir(bk)
-    assert sorted(os.listdir(bk / day)) == ["agents3.db", "daily3.db", "inbox.db", "liq.db", "paper3.db"]
+    assert sorted(os.listdir(bk / day)) == ["agents3.db", "daily3.db", "executor-testnet.db", "executor.db",
+                                            "inbox.db", "liq.db", "paper3.db"]
     c = sqlite3.connect(str(bk / day / "agents3.db"))
     assert c.execute("SELECT COUNT(*) FROM messages WHERE text = ?", ("y" * 5000,)).fetchone()[0] == 1
     assert c.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
@@ -671,7 +676,8 @@ def test_backup_unit_copies_every_database_read_only_and_fails_on_a_failed_copy(
     (old_day / "paper3.db.part").write_bytes(b"x" * 1000)     # ... with a copy the unit's timeout killed
     r = subprocess.run(["/bin/sh", BACKUP_SH], env=env, capture_output=True, text=True, timeout=120)
     assert r.returncode == 1 and "inbox.db" in r.stderr
-    assert sorted(os.listdir(bk / day)) == ["agents3.db", "daily3.db", "inbox.db", "liq.db", "paper3.db"]
+    assert sorted(os.listdir(bk / day)) == ["agents3.db", "daily3.db", "executor-testnet.db", "executor.db",
+                                            "inbox.db", "liq.db", "paper3.db"]
     c = sqlite3.connect(str(bk / day / "inbox.db"))
     assert c.execute("SELECT COUNT(*) FROM t").fetchone()[0] == 3    # this morning's good copy
     c.close()

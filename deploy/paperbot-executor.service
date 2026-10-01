@@ -1,0 +1,39 @@
+# Order executor: mirrors ONE paper account into orders on Binance futures (docs/live-safety.md).
+# TESTNET by default. Mainnet only with mode "mainnet" in /etc/paperbot/executor.json AND
+# PAPERBOT_LIVE_MAINNET=I_UNDERSTAND and LIVE_API_KEY/LIVE_API_SECRET in /etc/paperbot/executor.env AND
+# every start-up gate (key cannot withdraw, futures on, IP restricted, wallet <= budget x 1.2).
+#
+# install.sh installs this unit but NEVER enables or starts it. A person starts it:
+#   sudo systemctl start paperbot-executor        (and `enable` only once the testnet soak is done)
+#
+# The key file is root-only (chmod 600 root:root): systemd reads EnvironmentFile= as root before it
+# drops to the paperbot user, so the keys reach this process only; the agents and the dashboard cannot
+# read the file (and their units hide it and /var/lib/paperbot/exec as well).
+# Exit status 2 = a gate refused the start: not restarted (fix the cause, then start it by hand).
+# Any other failure restarts after 30 s: open positions keep their exchange stop meanwhile, and the
+# executor resumes from its database (a halt stays a halt).
+[Unit]
+Description=paperbot order executor (testnet unless every mainnet gate passes)
+After=network-online.target paperbot-live3.service
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=paperbot
+WorkingDirectory=/opt/crypto-bot-research
+EnvironmentFile=/etc/paperbot/executor.env
+ExecStart=/opt/paperbot/venv/bin/python -m paperbot.executor run --config /etc/paperbot/executor.json
+Restart=on-failure
+RestartSec=30
+RestartPreventExitStatus=2
+TimeoutStopSec=60
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/paperbot
+InaccessiblePaths=-/etc/paperbot/agents.env -/etc/paperbot/dash.env
+
+[Install]
+WantedBy=multi-user.target

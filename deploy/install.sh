@@ -35,6 +35,8 @@ install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot /var/backups/paperbo
 # 5-year test caches for the agent rooms (python -m paperbot.agents.labdata build --out /var/lib/paperbot/lab;
 # same build as the research, checked file by file against paperbot/agents/labdata_reference.json)
 install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot/lab
+# the order executor's databases (testnet and, later, mainnet); hidden from the agents and the dashboard
+install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot/exec
 install -d -o root -g paperbot -m 750 /etc/paperbot
 
 echo "== code version"
@@ -93,14 +95,26 @@ for f in live dash agents; do
   fi
   [ -f /etc/paperbot/$f.env ] && chmod 640 /etc/paperbot/$f.env && chown root:paperbot /etc/paperbot/$f.env
 done
+# The executor's order keys: root only. systemd reads the file for paperbot-executor.service before it drops
+# to the paperbot user, so nothing else running as paperbot (agents, dashboard) can read the keys.
+if [ ! -f /etc/paperbot/executor.env ] && [ -f "$APP/deploy/executor.env.example" ]; then
+  install -o root -g root -m 600 "$APP/deploy/executor.env.example" /etc/paperbot/executor.env
+fi
+[ -f /etc/paperbot/executor.env ] && chmod 600 /etc/paperbot/executor.env && chown root:root /etc/paperbot/executor.env
 
 echo "== systemd units (installed, not started)"
 for u in paperbot-live3.service paperbot-dash.service paperbot-daily3.service paperbot-daily3.timer \
          paperbot-backup.service paperbot-backup.timer paperbot-agents.service paperbot-agents.timer \
-         paperbot-liq.service paperbot-labmonthly.service paperbot-labmonthly.timer; do
+         paperbot-liq.service paperbot-labmonthly.service paperbot-labmonthly.timer \
+         paperbot-executor.service; do
   install -m 644 "$APP/deploy/$u" /etc/systemd/system/$u
 done
 systemctl daemon-reload
+# The order executor is installed only: never enabled, started or restarted here (docs/live-safety.md).
+if systemctl is-active --quiet paperbot-executor 2>/dev/null; then
+  echo "paperbot-executor is running the previous code; restart it yourself when ready:"
+  echo "  sudo systemctl restart paperbot-executor"
+fi
 if [ -n "$RUNNING" ]; then
   systemctl start $RUNNING
   echo "restarted:$RUNNING (the bot resumes from its saved state; the start is logged in the runs table)"
@@ -116,4 +130,6 @@ Done. Next (docs/server-setup-v3.md):
   5. agent rooms (optional, docs/agent-rooms.md): install Claude Code for the paperbot user, fill
      /etc/paperbot/agents.env, try one pass with --dry-run, then
      sudo systemctl enable --now paperbot-agents.timer paperbot-labmonthly.timer
+  6. order executor (optional, docs/live-safety.md): testnet drill first; the unit paperbot-executor is
+     installed but stays off until you start it.
 NEXT

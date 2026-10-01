@@ -7,7 +7,9 @@
 # between two steps, so on a large paper3.db it never finished and the databases after it were never
 # copied. The small databases go first: agents3.db (the hypothesis ledger behind the gate's test count)
 # and inbox.db (the owners' posts and approvals), liq.db (liquidations: no public history, a lost day is
-# lost for good), then daily3.db and paper3.db. The backup writes none
+# lost for good), the order executor's records (exec/executor.db for mainnet, exec/executor-testnet.db: its
+# trades, fills, halts and open-position state; copied as executor.db / executor-testnet.db), then daily3.db
+# and paper3.db. The backup writes none
 # of them: a read-only connection never checkpoints a left-over WAL into the database file.
 # A copy is written as <name>.db.part and renamed when complete, so a failed copy never looks whole;
 # a second run on the same day keeps that day's good copy until the new one has replaced it (the
@@ -19,16 +21,17 @@ d="$out/$(date -u +%Y%m%d)"
 mkdir -p "$d" || exit 1
 find "$out" -name '*.db.part' -type f -delete
 fail=0
-for f in agents3 inbox liq daily3 paper3; do
+for f in agents3 inbox liq exec/executor exec/executor-testnet daily3 paper3; do
   src="$lib/$f.db"
   [ -f "$src" ] || continue
-  rm -f "$d/$f.db.part"
-  if printf "VACUUM INTO '%s';\n" "$d/$f.db.part" | sqlite3 -bail -readonly "$src" \
-      && mv "$d/$f.db.part" "$d/$f.db"; then
+  n=$(basename "$f")
+  rm -f "$d/$n.db.part"
+  if printf "VACUUM INTO '%s';\n" "$d/$n.db.part" | sqlite3 -bail -readonly "$src" \
+      && mv "$d/$n.db.part" "$d/$n.db"; then
     :
   else
-    rm -f "$d/$f.db.part"
-    echo "backup of $f.db failed" >&2
+    rm -f "$d/$n.db.part"
+    echo "backup of $n.db failed" >&2
     fail=1
   fi
 done

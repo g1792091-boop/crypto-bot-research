@@ -15,6 +15,11 @@ Failures are injected per request with ``fail(method, path, kind, ...)``:
 
 After every request the fake records, per open position, whether a live stop covers it
 (``timeline``), so tests can assert a position was never left unprotected.
+
+Also: account fills (GET /fapi/v1/userTrades, with realizedPnl and commission), funding (``add_funding``,
+GET /fapi/v1/income), leverage brackets, adverse fill slippage (``slip``, ``stop_slip``), and the mainnet
+hosts (``FakeFutures(host="fapi.binance.com")``, which also answers GET /sapi/v1/account/apiRestrictions on
+api.binance.com from ``restrictions``).
 """
 
 from __future__ import annotations
@@ -30,7 +35,18 @@ SPECS = {
 
 
 class FakeFutures:
-    def __init__(self, prices=None, wallet=10_000.0, fee=0.0005):
+    def __init__(self, prices=None, wallet=10_000.0, fee=0.0005, host="testnet.binancefuture.com", api_key="k"):
+        self.host, self.api_key = host, api_key
+        self.hosts = {host} | ({"api.binance.com"} if host == "fapi.binance.com" else set())
+        self.clock = lambda: 0     # exchange time of fills and income (tests bind it to their clock)
+        self.server_time = None    # /fapi/v1/time answer (None: 1000, as before)
+        self.slip = 0.0            # market orders fill this fraction worse than the last price
+        self.stop_slip = 0.0       # triggered stops fill this fraction worse than the trigger price
+        self.fills = []            # userTrades rows
+        self.income = []           # income rows (FUNDING_FEE)
+        self.restrictions = {"ipRestrict": True, "enableReading": True, "enableWithdrawals": False,
+                             "enableInternalTransfer": False, "enableMargin": False, "enableFutures": True,
+                             "permitsUniversalTransfer": False, "enableSpotAndMarginTrading": False}
         self.last = dict(prices or {"BTCUSDT": 100.0, "ETHUSDT": 50.0, "SOLUSDT": 10.0})
         self.pos = {s: 0.0 for s in self.last}
         self.entry = {s: 0.0 for s in self.last}
@@ -52,6 +68,13 @@ class FakeFutures:
     # ------------------------------------------------------------ test controls
     def fail(self, method, path, kind, times=1, extra=None):
         self.failures.append([method, path, kind, extra, times])
+
+    def add_funding(self, symbol, amount, time=None):
+        """A funding settlement on the open position (+ received, - paid)."""
+        self.wallet += amount
+        self.income.append({"symbol": symbol, "incomeType": "FUNDING_FEE", "income": str(amount), "asset": "USDT",
+                            "info": "", "time": self.clock() if time is None else time,
+                            "tranId": 900_000 + len(self.income), "tradeId": ""})
 
     def set_price(self, symbol, price):
         self.last[symbol] = price
@@ -83,11 +106,12 @@ class FakeFutures:
     # ------------------------------------------------------------ transport
     def __call__(self, method, url, headers, body):
         u = urllib.parse.urlparse(url)
-        assert u.hostname == "testnet.binancefuture.com", u.hostname
+        assert u.hostname in self.hosts, u.hostname
+        assert (u.hostname == "api.binance.com") == u.path.startswith("/sapi/"), (u.hostname, u.path)
         q = dict(urllib.parse.parse_qsl(u.query if body is None else body.decode()))
         public = u.path in ("/fapi/v1/exchangeInfo", "/fapi/v1/premiumIndex", "/fapi/v1/ticker/price", "/fapi/v1/time")
         if not public:
-            assert "signature" in q and headers["X-MBX-APIKEY"] == "k"
+            assert "signature" in q and headers["X-MBX-APIKEY"] == self.api_key
         q.pop("signature", None)
         q.pop("timestamp", None)
         q.pop("recvWindow", None)
@@ -125,25 +149,34 @@ class FakeFutures:
         return status, {"code": code, "msg": msg}
 
     # ------------------------------------------------------------ exchange logic
-    def _fill(self, symbol, signed_qty, price, reduce_only=False):
+    def _fill(self, symbol, signed_qty, price, reduce_only=False, order_id=None):
         amt = self.pos[symbol]
         if reduce_only:
             if amt == 0 or (amt > 0) == (signed_qty > 0):
                 return 0.0
             signed_qty = max(-abs(amt), min(abs(amt), signed_qty))
         new = round(amt + signed_qty, 9)
+        realized = 0.0
         if amt != 0 and (amt > 0) != (signed_qty > 0):      # closing (part of) a position
             closed = min(abs(signed_qty), abs(amt))
-            self.wallet += closed * (price - self.entry[symbol]) * (1 if amt > 0 else -1)
+            realized = closed * (price - self.entry[symbol]) * (1 if amt > 0 else -1)
+            self.wallet += realized
             if abs(signed_qty) > abs(amt):
                 self.entry[symbol] = price
         else:
             tot = abs(amt) + abs(signed_qty)
             self.entry[symbol] = (abs(amt) * self.entry[symbol] + abs(signed_qty) * price) / tot
-        self.wallet -= abs(signed_qty) * price * self.fee
+        fee = abs(signed_qty) * price * self.fee
+        self.wallet -= fee
         self.pos[symbol] = new
         if new == 0:
             self.entry[symbol] = 0.0
+        self.fills.append({"symbol": symbol, "id": len(self.fills) + 1, "orderId": order_id or 0,
+                           "side": "BUY" if signed_qty > 0 else "SELL", "price": str(price),
+                           "qty": str(abs(signed_qty)), "realizedPnl": str(realized),
+                           "quoteQty": str(abs(signed_qty) * price), "commission": str(fee),
+                           "commissionAsset": "USDT", "time": self.clock(), "buyer": signed_qty > 0,
+                           "maker": False, "positionSide": "BOTH", "marginAsset": "USDT"})
         return abs(signed_qty)
 
     def _trigger(self, symbol):
@@ -154,10 +187,14 @@ class FakeFutures:
                 continue
             amt = self.pos[symbol]
             q = abs(amt) if o["closePosition"] else float(o["quantity"])
-            done = self._fill(symbol, -q if o["side"] == "SELL" else q, p, reduce_only=True)
+            px = p * (1 - self.stop_slip) if o["side"] == "SELL" else p * (1 + self.stop_slip)
+            oid = self.next_id
+            self.next_id += 1
+            done = self._fill(symbol, -q if o["side"] == "SELL" else q, px, reduce_only=True, order_id=oid)
             o["algoStatus"] = "FINISHED"
             o["actualQty"] = str(done)
-            o["actualPrice"] = str(p)
+            o["actualPrice"] = str(px)
+            o["actualOrderId"] = str(oid)
 
     def upnl(self):
         return sum(self.pos[s] * (self.last[s] - self.entry[s]) for s in self.pos if self.pos[s])
@@ -165,7 +202,25 @@ class FakeFutures:
     def route(self, m, path, q):
         ok = lambda d: (200, d)  # noqa: E731
         if path == "/fapi/v1/time":
-            return ok({"serverTime": 1_000})
+            return ok({"serverTime": 1_000 if self.server_time is None else self.server_time})
+        if path == "/sapi/v1/account/apiRestrictions":
+            return ok(dict(self.restrictions))
+        if path == "/fapi/v1/userTrades":
+            lo, hi = int(q.get("startTime", 0)), int(q.get("endTime", 2**62))
+            assert hi - lo <= 7 * 86_400_000, "userTrades: at most 7 days per request"
+            return ok([dict(f) for f in self.fills if f["symbol"] == q["symbol"] and lo <= f["time"] <= hi])
+        if path == "/fapi/v1/income":
+            lo, hi = int(q.get("startTime", 0)), int(q.get("endTime", 2**62))
+            return ok([dict(r) for r in self.income if (not q.get("symbol") or r["symbol"] == q["symbol"])
+                       and (not q.get("incomeType") or r["incomeType"] == q["incomeType"]) and lo <= r["time"] <= hi])
+        if path == "/fapi/v1/leverageBracket":
+            return ok([{"symbol": s, "brackets": [
+                {"bracket": 1, "initialLeverage": 125, "notionalCap": 50_000, "notionalFloor": 0,
+                 "maintMarginRatio": 0.004, "cum": 0.0},
+                {"bracket": 2, "initialLeverage": 100, "notionalCap": 250_000, "notionalFloor": 50_000,
+                 "maintMarginRatio": 0.005, "cum": 50.0},
+                {"bracket": 3, "initialLeverage": 50, "notionalCap": 3_000_000, "notionalFloor": 250_000,
+                 "maintMarginRatio": 0.01, "cum": 1_300.0}]} for s in self.last])
         if path == "/fapi/v1/exchangeInfo":
             return ok({"rateLimits": [{"rateLimitType": "REQUEST_WEIGHT", "interval": "MINUTE", "intervalNum": 1,
                                        "limit": 2400}],
@@ -253,11 +308,12 @@ class FakeFutures:
             frac, self.partial = self.partial, None
         step = float(SPECS[s]["step"])
         want = round(int(qty * frac / step + 1e-9) * step, 9)
-        filled = self._fill(s, want if signed > 0 else -want, self.last[s], reduce_only) if want > 0 else 0.0
         oid = self.next_id
         self.next_id += 1
+        px = self.last[s] * (1 + self.slip if signed > 0 else 1 - self.slip)
+        filled = self._fill(s, want if signed > 0 else -want, px, reduce_only, order_id=oid) if want > 0 else 0.0
         o = {"orderId": oid, "clientOrderId": cid, "symbol": s, "side": q["side"], "type": "MARKET",
-             "origQty": str(qty), "executedQty": str(filled), "avgPrice": str(self.last[s] if filled else 0),
+             "origQty": str(qty), "executedQty": str(filled), "avgPrice": str(px if filled else 0),
              "status": "FILLED" if filled >= qty - 1e-12 else ("EXPIRED" if filled == 0 else "PARTIALLY_FILLED"),
              "reduceOnly": reduce_only}
         if o["status"] == "PARTIALLY_FILLED":

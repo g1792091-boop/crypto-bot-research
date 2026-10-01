@@ -51,4 +51,5 @@ PrivateTmp=yes
 ProtectSystem=strict
 ReadWritePaths=/var/lib/paperbot
 ReadOnlyPaths=-/var/lib/paperbot/paper3.db -/var/lib/paperbot/daily3.db -/var/lib/paperbot/inbox.db -/var/lib/paperbot/lab
-InaccessiblePaths=-/etc/paperbot/live.env -/etc/paperbot/dash.env -/etc/paperbot/agents.env
+# The order executor's keys and its databases (directory: a stable inode) are never visible here.
+InaccessiblePaths=-/etc/paperbot/live.env -/etc/paperbot/dash.env -/etc/paperbot/agents.env -/etc/paperbot/executor.env -/var/lib/paperbot/exec

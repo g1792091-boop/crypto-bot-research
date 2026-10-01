@@ -45,6 +45,7 @@ class World:
         self.tmp = tmp_path
         self.clock = Clock()
         self.fake = fake or FakeFutures()
+        self.fake.clock = self.clock                       # fills and funding carry the test's time
         self.src = Source(self.clock)
         self.note = ListNotifier()
         self.sleeps = []
@@ -498,9 +499,10 @@ def test_paper3_source(tmp_path):
 
 def test_agents_and_paper_runner_never_reach_order_code():
     """AI agents never place orders: nothing under paperbot/agents (nor the paper runner, the
-    dashboard or the nightly check) imports the executor, the testnet client or the risk layer."""
-    pat = re.compile(r"^\s*(from\s+\S*\b(executor|testnet|risk)\b\s+import|import\s+\S*\b(executor|testnet)\b|"
-                     r"from\s+\.+\s+import\s+.*\b(executor|testnet)\b)", re.M)
+    dashboard or the nightly check) imports the executor, the testnet or mainnet client or the risk layer."""
+    pat = re.compile(r"^\s*(from\s+\S*\b(executor|testnet|mainnet|risk)\b\s+import|"
+                     r"import\s+\S*\b(executor|testnet|mainnet)\b|"
+                     r"from\s+\.+\s+import\s+.*\b(executor|testnet|mainnet)\b)", re.M)
     roots = [os.path.join(REPO, "paperbot", "agents"), os.path.join(REPO, "paperbot", "dash")]
     files = [os.path.join(r, f) for root in roots for r, _, fs in os.walk(root) for f in fs if f.endswith(".py")]
     files += [os.path.join(REPO, "paperbot", f) for f in ("live3.py", "live.py", "daily3.py", "store3.py")]

@@ -1,4 +1,4 @@
-"""Risk rules for a live (for now: testnet) account. Pure functions, no I/O except the kill file.
+"""Risk rules for a live account (testnet or mainnet). Pure functions, no I/O except the kill file.
 
 Every threshold comes from the owners' config (paper v3.1 addendum Q6); nothing has a built-in
 default. ``RiskConfig.problems()`` lists what is missing or wrong, and the executor refuses to
