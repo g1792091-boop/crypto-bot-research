@@ -343,7 +343,7 @@ def test_gives_up_after_the_last_attempt():
     fake = FakeTelegram([(500, {"ok": False, "description": "Internal"})] * 10)
     sleeps = []
     with pytest.raises(off.TelegramError, match="6번 모두 실패"):
-        off.Telegram(TOKEN, fake, sleeps.append, log=lambda s: None).call("sendDocument", {})
+        off.Telegram(TOKEN, fake, sleeps.append, log=lambda s: None).call("sendDocument", {"chat_id": "1"})
     assert len(fake.calls) == 6 and sleeps == list(off.BACKOFF)
 
 
@@ -363,7 +363,7 @@ def test_a_very_long_retry_after_fails_instead_of_sleeping():
                                 "parameters": {"retry_after": 3600}})])
     sleeps = []
     with pytest.raises(off.TelegramError, match="3600"):
-        off.Telegram(TOKEN, fake, sleeps.append).call("sendDocument", {})
+        off.Telegram(TOKEN, fake, sleeps.append).call("sendDocument", {"chat_id": "1"})
     assert sleeps == []
 
 
@@ -680,6 +680,12 @@ def test_chats_lists_ids_and_titles(capsys):
     out = capsys.readouterr().out
     assert "-4567" in out and "paperbot 백업" in out and "-4123" in out and TOKEN not in out
     assert fake.calls[0]["method"] == "getUpdates"
+    assert fake.calls[0]["fields"]                    # never an empty form: Telegram answers HTTP 400 to that
+
+
+def test_an_empty_multipart_form_is_refused():
+    with pytest.raises(ValueError):
+        off.multipart({})
 
 
 # ---------------------------------------------------------------- a run that systemd stops
@@ -729,7 +735,7 @@ def test_the_retries_stop_inside_the_time_limit():
     slept = []
     tg = off.Telegram(TOKEN, fake, slept.append, log=lambda s: None, deadline=300.0, clock=lambda: t[0])
     with pytest.raises(off.TelegramError, match="시간 제한"):
-        tg.call("sendDocument", {})
+        tg.call("sendDocument", {"chat_id": "1"})
     assert slept == [] and len(fake.calls) == 1
 
 

@@ -175,6 +175,8 @@ def urllib_sender(url: str, body: bytes, headers: dict, timeout: float) -> tuple
 
 def multipart(fields: Mapping[str, str], file: Optional[tuple] = None) -> tuple[bytes, str]:
     """multipart/form-data body and its Content-Type. ``file`` = (field, filename, bytes)."""
+    if not fields and file is None:
+        raise ValueError("an empty multipart form is refused by Telegram (HTTP 400): send at least one field")
     boundary = "paperbot-" + secrets.token_hex(16)
     out: list[bytes] = []
     for k, v in fields.items():
@@ -916,7 +918,8 @@ def list_chats(env: Mapping[str, str], sender: Optional[Sender] = None, sleep=ti
                out: Callable[[str], None] = print) -> int:
     token = (env.get("TELEGRAM_BOT_TOKEN") or "").strip()
     check_token(token)
-    updates = Telegram(token, sender, sleep, timeout=30.0).call("getUpdates", {}) or []
+    # a form with no part at all (only the closing boundary) gets "HTTP 400" with an empty body from Telegram
+    updates = Telegram(token, sender, sleep, timeout=30.0).call("getUpdates", {"limit": "100", "timeout": "0"}) or []
     seen: dict[int, tuple[str, str]] = {}
     for u in updates:
         for key in ("message", "edited_message", "channel_post", "my_chat_member", "chat_member"):
