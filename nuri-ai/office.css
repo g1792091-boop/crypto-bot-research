@@ -156,3 +156,4 @@ body.office-open{overflow:hidden}
 .of-rate{font:inherit;font-size:12px;background:none;border:1px solid transparent;cursor:pointer;opacity:.45;padding:0 3px}
 .of-rate:hover{opacity:1}.of-rate.on{opacity:1;border-color:#3d4a63}
 .of-trn{font-size:11px;color:#8fd3a8}
+.of-bth span{display:block}

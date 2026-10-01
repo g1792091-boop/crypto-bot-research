@@ -240,6 +240,26 @@ export const TOOLS = {
       if (!out.length) return {text: "SNS 데이터를 가져오지 못했습니다(접속 제한일 수 있음). web_search로 대신 찾아보세요.", summary: "가져오지 못함"};
       return {text: "[SNS 글은 개인 의견이다. 분위기·쏠림을 해설하되 사실처럼 단정하지 말 것]\n" + out.join("\n\n"), summary: out.map(x => x.slice(0, x.indexOf("]") + 1)).join(" "), sources};
     }},
+  /* ---- 호가·고래·선물 흐름 (바이낸스 공개 API) ---- */
+  orderbook: {mode:"both", label:"호가창", args:'{"symbol":"BTCUSDT","exchange":"binancef|binance|upbit"}', act: a => `${a.symbol || "BTCUSDT"} 호가창 보기`,
+    desc:"호가창 깊이: 매수·매도 벽(큰 주문이 쌓인 가격), 구간별 매수/매도 잔량과 불균형, 스프레드",
+    async run(a){ const F = await import("./flow.js"); const r = await F.orderBook({symbol: a.symbol || "BTCUSDT", exchange: a.exchange || "binancef"}); return {text: r.text, summary: r.summary}; }},
+  whale_trades: {mode:"both", label:"고래 체결", args:'{"symbol":"BTCUSDT","minUsd":500000}', act: a => `${a.symbol || "BTCUSDT"} 고래 체결 보기`,
+    desc:"최근 대형 체결(고래 진입): 50만 달러 이상 체결의 매수·매도 합계와 가장 큰 체결들, 시장가 매수/매도 비율",
+    async run(a){ const F = await import("./flow.js"); const r = await F.whaleTrades({symbol: a.symbol || "BTCUSDT", exchange: a.exchange || "binancef", minUsd: a.minUsd || 500000}); return {text: r.text, summary: r.summary}; }},
+  futures_flow: {mode:"both", label:"선물 수급", args:'{"symbol":"BTCUSDT","period":"1h"}', act: a => `${a.symbol || "BTCUSDT"} 선물 수급 보기`,
+    desc:"코인 선물 수급: 상위 트레이더·전체 롱숏비율, 시장가 매수/매도, 미결제약정 변화, 펀딩비 흐름, 예상 청산 가격대",
+    async run(a){ const F = await import("./flow.js"); const [r, l] = await Promise.all([F.futuresFlow({symbol: a.symbol || "BTCUSDT", period: a.period || "1h"}), F.liquidationEstimate({symbol: a.symbol || "BTCUSDT"}).catch(() => null)]); return {text: r.text + (l ? "\n\n" + l.text : ""), summary: r.summary}; }},
+  history_backtest: {mode:"both", label:"전체 과거 백테스트", args:'{"spec":{"name":"...","indicators":[],"long_entry":{},"risk":{"leverage":10}},"market":"BTCUSDT|NVDA|^GSPC|CL=F","exchange":"binancef|binance|yahoo","interval":"1d|4h|1h"}', act: a => `${a.market || "BTCUSDT"} 전체 과거 백테스트`,
+    desc:"가능한 가장 오래된 과거(코인 2017~, S&P500 1927~, 주식·선물 상장 이후 전부)부터 백테스트하고, 레버리지 1~200배·상승/하락/횡보/폭락 장세·연도별·수수료 2~3배·진입 지연 시나리오까지 한 번에 검사한다",
+    async run(a){
+      const Q = await import("./quant.js"), H = await import("./history.js"), S = await import("./scenarios.js");
+      const raw = typeof a.spec === "string" ? JSON.parse(a.spec) : a.spec, iv = a.interval || raw?.interval || "1d";
+      const spec = Q.normalizeSpec({...raw, interval: iv, symbol: a.market || raw?.symbol || "BTCUSDT"});
+      const h = await H.historyCandles({market: spec.symbol, exchange: a.exchange || "binancef", interval: iv, maxBars: 30000});
+      const wf = Q.walkForward(spec, h.candles), sc = S.runScenarios(spec, h.candles);
+      return {text: `[${spec.name}] ${spec.symbol} ${iv} · ${new Date(h.from).toISOString().slice(0, 10)}~${new Date(h.to).toISOString().slice(0, 10)} (${h.candles.length}봉)\n판정: ${wf.pass ? "통과" : "불통과"} — ${wf.reasons.join(", ")}\n\n${S.scenarioText(sc)}`, summary: `${wf.pass ? "통과" : "불통과"} · ${h.candles.length}봉`};
+    }},
   /* ---- 퀀트: 보조지표 29종 · 전략 백테스트 · 모의투자 ---- */
   indicator_all: {mode:"both", label:"보조지표 전체", args:'{"market":"BTCUSDT","exchange":"binancef|upbit|binance|yahoo","timeframe":"60"}', act: a => `${a.market || ""} 보조지표 29종 계산`,
     desc:"이동평균·RSI·MACD·볼린저·스토캐스틱·슈퍼트렌드·ADX·CCI·VWAP·OBV·MFI·윌리엄스R·ROC·파라볼릭SAR·돈치안·켈트너·스토캐스틱RSI·일목·CMF·아룬·ATR추적손절 등 29종을 한 번에 계산해 추세·모멘텀·변동성·거래량으로 정리한다",
@@ -607,8 +627,8 @@ export const BUILTIN_SKILLS = [
 - 사용자 컴퓨터의 파일을 직접 고치려면 '코드' 모드를 쓰라고 안내한다.`}
 ];
 // 퀀트·SNS 도구를 분야 스킬에 붙인다
-const EXTRA_TOOLS = {crypto_spot: ["indicator_all", "sns_buzz"], crypto_futures: ["indicator_all", "sns_buzz", "strategy_backtest"], us_stocks: ["indicator_all", "sns_buzz"], kr_stocks: ["indicator_all"],
-  global_futures: ["indicator_all"], kr_futures: ["indicator_all"], news: ["sns_buzz"], macro: ["sns_buzz"], backtest: ["strategy_backtest", "indicator_all", "paper_status"], research: ["sns_buzz"]};
+const EXTRA_TOOLS = {crypto_spot: ["indicator_all", "sns_buzz", "orderbook", "whale_trades"], crypto_futures: ["indicator_all", "sns_buzz", "strategy_backtest", "orderbook", "whale_trades", "futures_flow"], us_stocks: ["indicator_all", "sns_buzz"], kr_stocks: ["indicator_all"],
+  global_futures: ["indicator_all"], kr_futures: ["indicator_all"], news: ["sns_buzz"], macro: ["sns_buzz"], backtest: ["strategy_backtest", "history_backtest", "indicator_all", "paper_status"], research: ["sns_buzz"]};
 for (const sk of BUILTIN_SKILLS) sk.tools = [...new Set([...(sk.tools || []), ...(EXTRA_TOOLS[sk.id] || [])])];
 
 export function activeSkills(text, mode = "chat"){

@@ -224,7 +224,8 @@ const connected = () => Object.keys(PROVIDERS).filter(id => settings.keys[id]);
 // 후보 목록: 회사마다 그 역할에 가장 맞는 모델 하나씩, 순위 순
 // 유료 회사(Claude 등)는 하루 호출 한도 안에서만 쓴다
 export const provUse = () => { try { const u = JSON.parse(localStorage.getItem("provUse") || "{}"); return u.day === new Date().toLocaleDateString("sv-SE") ? u : {day: new Date().toLocaleDateString("sv-SE"), n: {}}; } catch(e){ return {day: "", n: {}}; } };
-const provCap = id => (settings.provCap || {anthropic: 300})[id] ?? (id === "anthropic" ? 300 : 0);
+const provCap = id => (settings.provCap || {})[id] ?? (id === "anthropic" ? 1000 : 0);
+export const provCapOf = provCap;
 export const overCap = id => { const cap = provCap(id); return cap > 0 && (provUse().n[id] || 0) >= cap; };
 function countUse(id){ const u = provUse(); u.n[id] = (u.n[id] || 0) + 1; try { localStorage.setItem("provUse", JSON.stringify(u)); } catch(e){} }
 export function routeCandidates(role = "general"){

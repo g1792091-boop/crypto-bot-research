@@ -14,9 +14,9 @@ export const TFS = {"1m": "1", "5m": "5", "15m": "15", "1h": "60", "4h": "240", 
 const tfOf = iv => TFS[iv] || (Object.values(TFS).includes(String(iv)) ? String(iv) : "60");
 
 // 새 전략을 모의투자에 올린다 (활성 전략이 많으면 성과가 가장 나쁜 것을 내린다)
-export async function addStrategy({spec, market, exchange = "binancef", tf, author = "", wf = null}){
+export async function addStrategy({spec, market, exchange = "binancef", tf, author = "", wf = null, cls = "crypto", mname = ""}){
   await loadBook();
-  const s = {id: uid(), name: spec.name || "이름 없는 전략", spec, market: market || spec.symbol || "BTCUSDT", exchange, tf: tfOf(tf || spec.interval), author, wf,
+  const s = {id: uid(), name: spec.name || "이름 없는 전략", spec, market: market || spec.symbol || "BTCUSDT", mname: mname || market, cls, exchange, tf: tfOf(tf || spec.interval), author, wf,
     status: "active", created: Date.now(), cash: START, pos: null, trades: [], equity: [{t: Date.now(), v: START}], lastBar: 0, lastSignal: null};
   BOOK.strategies.push(s);
   const active = BOOK.strategies.filter(x => x.status === "active");
@@ -42,7 +42,7 @@ function closePos(s, price, t, reason){
   return ret;
 }
 function openPos(s, side, price, t, atr){
-  const r = s.spec.risk || {}, lev = Math.max(1, Math.min(125, +r.leverage || 3)), pct = Math.max(1, Math.min(100, +r.position_pct || 20));
+  const r = s.spec.risk || {}, lev = Math.max(1, Math.min(200, +r.leverage || 3)), pct = Math.max(1, Math.min(100, +r.position_pct || 20));
   const margin = s.cash * pct / 100, notional = margin * lev, dir = side === "long" ? 1 : -1;
   const sl = r.stop_loss_pct ? price * (1 - dir * r.stop_loss_pct / 100) : r.atr_stop_mult && atr ? price - dir * atr * r.atr_stop_mult : null;
   const tp = r.take_profit_pct ? price * (1 + dir * r.take_profit_pct / 100) : r.atr_tp_mult && atr ? price + dir * atr * r.atr_tp_mult : null;
@@ -111,7 +111,7 @@ export async function bookText(){
   const act = BOOK.strategies.filter(s => s.status === "active"), old = BOOK.strategies.filter(s => s.status !== "active");
   if (!BOOK.strategies.length) return "아직 모의투자 중인 전략이 없습니다. 퀀트 연구소가 검증을 통과한 전략을 올리면 여기서 운용합니다.";
   const line = s => { const eq = equityOf(s), r = (eq / START - 1) * 100, w = s.trades.filter(t => t.pnl > 0).length;
-    return `- ${s.name} (${s.market} ${s.tf}, ${s.author}) · 평가 ${fmt(eq)} USDT (${r >= 0 ? "+" : ""}${r.toFixed(2)}%) · 거래 ${s.trades.length}회 승 ${w}${s.pos ? ` · 보유 ${s.pos.side === "long" ? "롱" : "숏"} ${fmt(s.pos.entry)} (x${s.pos.lev})` : " · 무포지션"}${s.status !== "active" ? ` · ${s.retiredWhy || "중지"}` : ""}`; };
+    return `- ${s.name} (${s.mname || s.market} ${s.tf}, 레버리지 ${s.spec?.risk?.leverage ?? "?"}배, ${s.author}) · 평가 ${fmt(eq)} (${r >= 0 ? "+" : ""}${r.toFixed(2)}%) · 거래 ${s.trades.length}회 승 ${w}${s.pos ? ` · 보유 ${s.pos.side === "long" ? "롱" : "숏"} ${fmt(s.pos.entry)} (x${s.pos.lev})` : " · 무포지션"}${s.status !== "active" ? ` · ${s.retiredWhy || "중지"}` : ""}`; };
   const tot = act.reduce((a, s) => a + equityOf(s), 0), base = act.length * START;
-  return `운용 중 ${act.length}개 · 합계 ${fmt(tot)} USDT (${base ? ((tot / base - 1) * 100).toFixed(2) : 0}%)\n${act.map(line).join("\n")}${old.length ? "\n\n내린 전략:\n" + old.slice(-5).map(line).join("\n") : ""}`;
+  return `운용 중 ${act.length}개 (코인·주식·선물, 전략마다 가상 10,000) · 합계 ${fmt(tot)} (${base ? ((tot / base - 1) * 100).toFixed(2) : 0}%)\n${act.map(line).join("\n")}${old.length ? "\n\n내린 전략:\n" + old.slice(-5).map(line).join("\n") : ""}`;
 }

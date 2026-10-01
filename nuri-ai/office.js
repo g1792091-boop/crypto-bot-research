@@ -53,13 +53,13 @@ export const AGENTS = [
   {id: "aide", name: "하루", team: "lab", title: "비서(일상·글쓰기·번역)", role: "general", skills: [], look: ["#6d4c41", "#ef6c9a"],
     duty: "일상 대화, 글쓰기, 번역, 요약, 계획 세우기를 친절하게 돕는다."},
   {id: "qa", name: "준호", team: "quant", title: "퀀트 연구원(추세)", role: "reason", skills: ["backtest", "crypto_futures"], look: ["#1d1d2b", "#2f9e6b"],
-    duty: "보조지표 29종(indicator_all)과 연구 카드를 보고 추세추종 매매법을 만들고 strategy_backtest로 직접 시험한다."},
+    duty: "보조지표 29종(indicator_all)·호가·고래·선물 수급과 연구 카드를 보고 추세추종 매매법을 만들고, history_backtest로 가장 오래된 과거부터 모든 레버리지·장세 시나리오까지 직접 시험한다."},
   {id: "qb", name: "세라", team: "quant", title: "퀀트 연구원(역추세·변동성)", role: "reason", skills: ["backtest", "crypto_spot"], look: ["#a0522d", "#c2185b"],
-    duty: "과매수·과매도, 밴드 이탈, 변동성 수축·확장을 노리는 매매법을 만들고 직접 백테스트한다."},
+    duty: "과매수·과매도, 밴드 이탈, 변동성 수축·확장, 고래 체결·호가 불균형을 노리는 매매법을 만들고 history_backtest로 전체 과거·모든 레버리지 시나리오를 시험한다."},
   {id: "val", name: "다온", team: "quant", title: "백테스트 검증관", role: "reason", skills: ["backtest"], look: ["#444", "#607d8b"],
     duty: "백테스트 결과의 과최적화 위험을 따진다(검증 구간 성과, 거래 수, 낙폭, 수수료). 코드 판정을 쉬운 말로 설명하고 통과·불통과를 뒤집지 않는다."},
   {id: "trader", name: "현우", team: "quant", title: "모의투자 트레이더", role: "general", skills: ["crypto_futures"], look: ["#2e2e2e", "#f57c00"],
-    duty: "모의투자 장부(paper_status)를 보고 운용 중인 전략의 포지션·손익과 다음 대응을 보고한다. 실제 주문은 하지 않는다."},
+    duty: "코인·주식·선물 모의투자 장부(paper_status)와 호가·고래 체결(orderbook, whale_trades)을 보고 포지션·손익과 다음 대응을 보고한다. 실제 주문은 하지 않는다."},
   {id: "sns", name: "유나", team: "data", title: "SNS·여론 분석가", role: "general", skills: ["news"], look: ["#d4a017", "#8e24aa"],
     duty: "레딧·스톡트윗·공포탐욕지수(sns_buzz)로 사람들의 분위기와 쏠림을 읽고, 뉴스와 비교해 과열·공포를 해설한다."},
   {id: "eng", name: "태민", team: "data", title: "데이터 엔지니어(컴퓨터 작업)", role: "code", skills: ["coding"], look: ["#3e2723", "#455a64"], computer: true,
@@ -91,16 +91,19 @@ export function assignModels(){
     const pick = list[0];
     if (pick){ out[a.id] = pick; used.set(pick.model, (used.get(pick.model) || 0) + 1); }
   }
-  // Claude가 연결돼 있고 오늘 한도가 남아 있으면 판단이 중요한 자리에 쓴다 (팀장은 Opus, 전략·검증·리스크는 Sonnet)
-  if (settings.keys.anthropic && !overCap("anthropic") && officeCfg().claude !== false){
-    const ms = settings.provModels.anthropic?.length ? settings.provModels.anthropic : ["claude-opus-5-5", "claude-sonnet-5-5"];
-    const opus = ms.find(m => /opus/.test(m)), sonnet = ms.find(m => /sonnet/.test(m)) || opus;
-    if (opus && !bad[opus]) out.lead = {id: "anthropic", model: opus};
-    for (const id of CLAUDE_ROLES) if (sonnet && !bad[sonnet]) out[id] = {id: "anthropic", model: sonnet};
-  }
+  // Claude 모드: 키가 있고 오늘 한도가 남아 있으면 직원 전원을 Claude로 (무료 API 한도 문제 해결)
+  // 판단 책임이 큰 자리는 Opus, 반복 분석은 Sonnet, 가벼운 일은 Haiku (에이전트팀 세션과 같은 기준). 한도를 넘으면 무료 모델로 돌아간다.
+  const cm = claudeModels();
+  if (cm) for (const a of AGENTS){ const m = cm[CLAUDE_TIER[a.id] || "sonnet"]; if (m && !bad[m]) out[a.id] = {id: "anthropic", model: m}; }
   return out;
 }
-const CLAUDE_ROLES = ["strat", "risk", "devil", "qa", "qb", "val"];
+export const CLAUDE_TIER = {strat: "opus", risk: "opus", val: "opus", qa: "opus", qb: "opus", lead: "sonnet", devil: "sonnet", aide: "haiku", dev: "sonnet", eng: "sonnet"};
+export function claudeModels(){
+  if (!settings.keys.anthropic || overCap("anthropic") || officeCfg().claude === false) return null;
+  const ms = settings.provModels.anthropic?.length ? settings.provModels.anthropic : [];
+  const pick = (want, re) => ms.includes(want) ? want : ms.filter(m => re.test(m)).sort().reverse()[0] || want;
+  return {opus: pick("claude-opus-5-5", /opus/), sonnet: pick("claude-sonnet-5-5", /sonnet/), haiku: pick("claude-haiku-4-5-20251001", /haiku/)};
+}
 
 /* ============ 기록 (방 대화) ============ */
 let LOG = null;
@@ -283,7 +286,8 @@ async function speak(a, m, turns, target, signal){
   const entry = post({ch: m.room, kind: "agent", agent: a.id, text: "", think: "", steps: [], meeting: m.id, live: true, model: target?.model || ""});
   fire({kind: "turn", meeting: m, agent: a, entry});
   // 배정 모델 → (빈 답이면) 다른 모델 → 자동 선택 순서로 다시 시도
-  const alt = fusionSources().find(t => t.model !== target?.model && !badModels()[t.model] && !/r1|reason|think|gpt-oss|qwq/i.test(t.model));
+  const cm = claudeModels();
+  const alt = cm && target?.model !== cm.sonnet ? {id: "anthropic", model: cm.sonnet} : fusionSources().find(t => t.model !== target?.model && !badModels()[t.model] && !/r1|reason|think|gpt-oss|qwq/i.test(t.model));
   const tries = [target, alt, null].filter((t, i, arr) => i === arr.length - 1 || (t && arr.findIndex(x => x && x.model === t.model) === i));
   let lastMsg = null;
   for (const tg of tries){
@@ -405,14 +409,15 @@ export async function runAgendaNow(id){
 /* ============ 업무: 직원이 실제로 보는 차트·뉴스 (코드만 씀, AI 호출 없음) ============ */
 const WATCH_OF = {
   coin_spot: [{q: "비트코인"}, {q: "이더리움"}, {q: "리플"}, {q: "솔라나"}, {news: "crypto"}],
-  coin_fut: [{q: "BTCUSDT", ex: "binancef"}, {q: "ETHUSDT", ex: "binancef"}, {q: "SOLUSDT", ex: "binancef"}, {news: "futures"}],
+  coin_fut: [{q: "BTCUSDT", ex: "binancef"}, {flow: "whale", sym: "BTCUSDT"}, {flow: "book", sym: "BTCUSDT"}, {flow: "whale", sym: "ETHUSDT"}, {news: "futures"}],
   us: [{q: "NVDA"}, {q: "AAPL"}, {q: "TSLA"}, {q: "^IXIC"}, {q: "^GSPC"}, {news: "us"}],
   kr: [{q: "삼성전자"}, {q: "SK하이닉스"}, {q: "^KS11"}, {q: "^KQ11"}, {news: "kr"}],
   gfut: [{q: "CL=F"}, {q: "GC=F"}, {q: "NQ=F"}, {q: "SI=F"}, {news: "global_futures"}],
   kfut: [{q: "^KS200"}, {q: "KRW=X"}, {q: "^KS11"}, {news: "kr"}],
   macro: [{news: "macro"}, {q: "DX-Y.NYB"}, {q: "^TNX"}, {news: "macro"}],
   arch: [{news: "realestate"}], land: [{news: "realestate"}, {news: "realestate"}],
-  strat: [{q: "비트코인"}, {q: "^IXIC"}, {q: "^VIX"}], risk: [{q: "^VIX"}, {q: "비트코인"}], devil: [{news: "macro"}, {q: "^VIX"}],
+  strat: [{q: "비트코인"}, {q: "^IXIC"}, {flow: "flow", sym: "BTCUSDT"}], risk: [{q: "^VIX"}, {flow: "book", sym: "BTCUSDT"}],
+  trader: [{flow: "whale", sym: "BTCUSDT"}, {flow: "book", sym: "ETHUSDT"}, {q: "NVDA"}, {q: "ES=F"}], devil: [{news: "macro"}, {q: "^VIX"}],
   research: [{news: "macro"}, {news: "us"}, {news: "crypto"}], lead: [{q: "비트코인"}, {q: "^KS11"}, {q: "^IXIC"}]
 };
 const IDLE_WORK = {dev: ["💻 코드 리뷰 중", "🧪 테스트 돌리는 중", "🛠 대시보드 고치는 중"], aide: ["📝 오늘 일정 정리 중", "✉️ 메일 정리 중", "🗂 회의록 정리 중"]};
@@ -424,7 +429,11 @@ export async function observe(id){
   const pick = list[Math.floor(Math.random() * list.length)];
   let o = null;
   try {
-    if (pick.news){
+    if (pick.flow){
+      const F = await import("./flow.js");
+      const r = pick.flow === "whale" ? await F.whaleTrades({symbol: pick.sym}) : pick.flow === "book" ? await F.orderBook({symbol: pick.sym}) : await F.futuresFlow({symbol: pick.sym});
+      if (r?.summary) o = {icon: pick.flow === "whale" ? "🐋" : pick.flow === "book" ? "📚" : "🌊", kind: "flow", text: `${pick.sym.replace("USDT", "")} ${r.summary}`.slice(0, 120)};
+    } else if (pick.news){
       const c = newsCache[pick.news];
       const items = c && Date.now() - c.t < 15 * 60e3 ? c.items : (newsCache[pick.news] = {t: Date.now(), items: await marketNews(pick.news)}).items;
       const it = items[Math.floor(Math.random() * Math.min(6, items.length))];
@@ -488,7 +497,9 @@ export async function chatter(force){
     const user = `${starter.name}가 방금 본 것: ${obs.icon} ${obs.text}${obs.src ? ` (출처: ${obs.src})` : ""}`;
     let out = "";
     bump("calls"); bump("chats");
-    const route = await brainStream({messages: [{role: "system", content: sys}, {role: "user", content: user}], role: "general", maxTokens: 600, temperature: 0.9, exclude: fusionSources().length ? ["anthropic"] : [], onContent: d => out += d});
+    const cmods = claudeModels();
+    const route = await brainStream({messages: [{role: "system", content: sys}, {role: "user", content: user}], role: "general", maxTokens: 600, temperature: 0.9,
+      ...(cmods ? {target: {id: "anthropic", model: cmods.haiku}, fallback: true} : {exclude: fusionSources().length ? ["anthropic"] : []}), onContent: d => out += d});
     const body = splitThink(out).body;
     const lines = body.split(/\n+/).map(l => l.replace(/^[\s*\-•]+/, "").replace(/\*\*/g, "").trim()).map(l => {
       const mm = l.match(/^([^:：]{1,12})\s*[:：]\s*(.+)$/); if (!mm) return null;
@@ -574,7 +585,8 @@ export async function cycle(force, onlyJob){
 async function solo(a, {room, sys, user, maxTokens = 900, temperature = 0.6, extra = {}, train = ""}){
   const models = assignModels();
   const target = models[a.id];
-  const alt = fusionSources().find(t => t.model !== target?.model && !badModels()[t.model] && !/r1|reason|think|gpt-oss|qwq/i.test(t.model));
+  const cm = claudeModels();
+  const alt = cm && target?.model !== cm.sonnet ? {id: "anthropic", model: cm.sonnet} : fusionSources().find(t => t.model !== target?.model && !badModels()[t.model] && !/r1|reason|think|gpt-oss|qwq/i.test(t.model));
   const entry = post({ch: room || a.team, kind: "agent", agent: a.id, text: "", think: "", steps: [], live: true, model: target?.model || "", ...extra});
   fire({kind: "solo", agent: a, entry});
   let finalRaw = "";
@@ -614,7 +626,7 @@ async function paperStep(){
     const s = ev.s, side = k => k === "long" ? "롱" : "숏";
     let text = "";
     if (ev.kind === "open") text = `📗 [${s.name}] ${s.market} ${side(ev.pos.side)} 진입 ${fmt(ev.pos.entry)} (x${ev.pos.lev}${ev.pos.sl ? `, 손절 ${fmt(ev.pos.sl)}` : ""}${ev.pos.tp ? `, 익절 ${fmt(ev.pos.tp)}` : ""})${ev.why ? " — " + ev.why : ""}`;
-    else if (ev.kind === "close") text = `${ev.trade.pnl >= 0 ? "💰" : "📕"} [${s.name}] ${s.market} ${side(ev.trade.side)} 청산 ${fmt(ev.trade.exitP)} · ${ev.trade.pnl >= 0 ? "+" : ""}${fmt(ev.trade.pnl)} USDT (ROE ${ev.trade.roe.toFixed(1)}%) · ${ev.trade.reason}`;
+    else if (ev.kind === "close") text = `${ev.trade.pnl >= 0 ? "💰" : "📕"} [${s.name}] ${s.market} ${side(ev.trade.side)} 청산 ${fmt(ev.trade.exitP)} · ${ev.trade.pnl >= 0 ? "+" : ""}${fmt(ev.trade.pnl)} (ROE ${ev.trade.roe.toFixed(1)}%) · ${ev.trade.reason}`;
     else if (ev.kind === "bust") text = `💥 [${s.name}] 가상 계좌가 파산해 운용을 멈췄습니다`;
     else return;
     post({ch: "quant", kind: "trade", agent: "trader", text});
@@ -629,7 +641,27 @@ async function paperReport(){
 }
 
 /* ---- 매매법 연구: 지표 29종 + 연구 카드 → 전략 JSON → 백테스트 · 과최적화 검사 → 통과하면 모의투자 ---- */
-const MARKETS = [{market: "BTCUSDT", exchange: "binancef"}, {market: "ETHUSDT", exchange: "binancef"}, {market: "SOLUSDT", exchange: "binancef"}, {market: "XRPUSDT", exchange: "binancef"}];
+// 코인 선물 · 미국 주식 · 국내 주식 · 해외선물 · 국내 지수(국내선물 기초)를 돌아가며 연구한다
+export const MARKETS = [
+  {market: "BTCUSDT", exchange: "binancef", tf: "240", cls: "crypto", name: "비트코인 선물"},
+  {market: "NVDA", exchange: "yahoo", tf: "D", cls: "us_stock", name: "엔비디아"},
+  {market: "ES=F", exchange: "yahoo", tf: "D", cls: "futures", name: "S&P500 선물"},
+  {market: "ETHUSDT", exchange: "binancef", tf: "60", cls: "crypto", name: "이더리움 선물"},
+  {market: "005930", exchange: "yahoo", tf: "D", cls: "kr_stock", name: "삼성전자"},
+  {market: "CL=F", exchange: "yahoo", tf: "D", cls: "futures", name: "WTI 원유 선물"},
+  {market: "SOLUSDT", exchange: "binancef", tf: "240", cls: "crypto", name: "솔라나 선물"},
+  {market: "QQQ", exchange: "yahoo", tf: "D", cls: "us_stock", name: "나스닥100 ETF"},
+  {market: "^KS200", exchange: "yahoo", tf: "D", cls: "index", name: "코스피200 (국내선물 기초)"},
+  {market: "GC=F", exchange: "yahoo", tf: "D", cls: "futures", name: "금 선물"},
+  {market: "BTCUSDT", exchange: "binancef", tf: "D", cls: "crypto", name: "비트코인 선물 일봉"},
+  {market: "NQ=F", exchange: "yahoo", tf: "D", cls: "futures", name: "나스닥100 선물"},
+  {market: "TSLA", exchange: "yahoo", tf: "D", cls: "us_stock", name: "테슬라"},
+  {market: "000660", exchange: "yahoo", tf: "D", cls: "kr_stock", name: "SK하이닉스"}
+];
+// 자산마다 수수료·슬리피지·펀딩 (주식·선물은 펀딩 없음)
+export const COSTS = {crypto: {fee_pct: 0.04, slippage_pct: 0.01, funding_rate_8h_pct: 0.01}, us_stock: {fee_pct: 0.015, slippage_pct: 0.02, funding_rate_8h_pct: 0},
+  kr_stock: {fee_pct: 0.1, slippage_pct: 0.03, funding_rate_8h_pct: 0}, futures: {fee_pct: 0.01, slippage_pct: 0.01, funding_rate_8h_pct: 0}, index: {fee_pct: 0.01, slippage_pct: 0.01, funding_rate_8h_pct: 0}};
+const IV_NAME = {"60": "1h", "240": "4h", "D": "1d"}, TF_KO = {"60": "1시간", "240": "4시간", "D": "일"};
 function researchLog(){ try { return JSON.parse(localStorage.getItem("officeResearch") || "[]"); } catch(e){ return []; } }
 function addResearch(r){ const l = researchLog(); l.push(r); try { localStorage.setItem("officeResearch", JSON.stringify(l.slice(-60))); } catch(e){} }
 export const researchHistory = researchLog;
@@ -637,35 +669,52 @@ function pickJSON(t){
   const m = t.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, (t.match(/\{[\s\S]*\}/) || [""])[0]];
   try { return JSON.parse(m[1]); } catch(e){ return null; }
 }
+const fmtDay = t => t ? new Date(t).toISOString().slice(0, 10) : "?";
 async function research(){
   const Q = await import("./quant.js"), P = await import("./paper.js");
-  const n = researchLog().length, a = agentById(n % 2 ? "qb" : "qa"), mk = MARKETS[Math.floor(n / 2) % MARKETS.length], tf = n % 3 === 2 ? "240" : "60";
-  fire({kind: "busy", agent: a, text: `🧪 ${mk.market} ${tf === "60" ? "1시간" : "4시간"}봉 매매법 구상 중`});
-  const {cs} = await candlesFor({market: mk.market, exchange: mk.exchange, timeframe: tf}, 1500);
+  const n = researchLog().length, a = agentById(n % 2 ? "qb" : "qa"), mk = MARKETS[n % MARKETS.length], tf = mk.tf, iv = IV_NAME[tf];
+  fire({kind: "busy", agent: a, text: `🧪 ${mk.name} ${TF_KO[tf]}봉 매매법 구상 중 (가장 오래된 과거부터)`});
+  // ① 가능한 가장 긴 과거 캔들 (없으면 최근 1,500봉)
+  let cs = null, hist = "";
+  try { const H = await import("./history.js"); const h = await H.historyCandles({market: mk.market, exchange: mk.exchange, interval: iv, maxBars: tf === "D" ? 30000 : 20000}); cs = h.candles; hist = `${fmtDay(h.from)}~${fmtDay(h.to)} · ${cs.length.toLocaleString()}봉${h.note ? " · " + h.note : ""}`; } catch(e){ hist = ""; }
+  if (!cs || cs.length < 300){ cs = (await candlesFor({market: mk.market, exchange: mk.exchange, timeframe: tf}, 1500)).cs; hist = `최근 ${cs.length.toLocaleString()}봉 (${fmtDay(cs[0]?.t)}~)`; }
+  // ② 코인이면 호가·고래·선물 흐름과 펀딩 이력도 함께
+  let flowText = "", deriv = null;
+  if (mk.cls === "crypto"){
+    try { const F = await import("./flow.js"); const [fs, dh] = await Promise.all([F.flowSnapshot({symbol: mk.market}).catch(() => null), F.derivHistory({symbol: mk.market, days: 30}).catch(() => null)]); flowText = fs?.text || ""; deriv = dh?.deriv || null; } catch(e){}
+  }
   const snap = Q.snapshot(cs), cards = await Q.loadCards().catch(() => []);
   const tried = researchLog().slice(-8).map(r => `- ${r.name} (${r.market} ${r.tf}): ${r.pass ? "통과" : "불통과"}, 검증 구간 ${r.oos?.toFixed?.(1)}%`).join("\n");
-  const sys = personaOf(a, "이번 일은 새 매매법 개발이다. 아래 형식 설명을 따라 전략 JSON 하나를 ```json 블록으로 쓰고, 블록 뒤에 왜 이 전략인지 2~3문장으로 말한다.") + "\n\n" + Q.STRATEGY_PROMPT + (cards.length ? "\n\n## 지금까지의 백테스트 연구 카드(참고)\n" + Q.cardsText(cards, 14) : "");
-  const user = `시장: ${mk.market} (${mk.exchange === "binancef" ? "바이낸스 선물" : mk.exchange}) · ${tf === "60" ? "1시간" : "4시간"}봉 · 캔들 ${cs.length}개\n지금 차트(보조지표 29종):\n${snapText(snap)}\n${JSON.stringify(snap.ind || {}).slice(0, 2500)}\n\n최근 우리 팀이 시험한 전략(겹치지 않게):\n${tried || "(아직 없음)"}\n\n${a.id === "qa" ? "추세추종" : "역추세·변동성"} 계열로 새 전략 하나를 만들어 주세요. symbol은 ${mk.market}, interval은 ${tf === "60" ? "1h" : "4h"}.`;
+  const levHint = {crypto: "코인 선물은 1~125배", us_stock: "주식은 보통 1~4배", kr_stock: "주식은 보통 1~2.5배", futures: "선물은 보통 5~20배", index: "지수 선물은 보통 5~20배"}[mk.cls];
+  const sys = personaOf(a, "이번 일은 새 매매법 개발이다. 아래 형식 설명을 따라 전략 JSON 하나를 ```json 블록으로 쓰고, 블록 뒤에 왜 이 전략인지 2~3문장으로 말한다.") + "\n\n" + Q.STRATEGY_PROMPT
+    + `\n\n## 레버리지\n레버리지는 1~200배 중 자유롭게 정한다(${levHint}가 일반적). 정한 뒤 코드가 모든 레버리지(1~200배)·상승장·하락장·횡보·폭락·수수료 2~3배·진입 지연 시나리오로 다시 시험한다.`
+    + (cards.length ? "\n\n## 지금까지의 백테스트 연구 카드(참고)\n" + Q.cardsText(cards, 14) : "");
+  const user = `시장: ${mk.name} (${mk.market}, ${mk.exchange === "binancef" ? "바이낸스 선물" : mk.exchange === "yahoo" ? "야후 파이낸스" : mk.exchange}) · ${TF_KO[tf]}봉\n시험할 과거: ${hist}\n지금 차트(보조지표 29종):\n${snapText(snap)}\n${JSON.stringify(snap.ind || {}).slice(0, 2200)}${flowText ? "\n\n호가·고래·선물 흐름(지금):\n" + flowText.slice(0, 1500) : ""}\n\n최근 우리 팀이 시험한 전략(겹치지 않게):\n${tried || "(아직 없음)"}\n\n${a.id === "qa" ? "추세추종" : "역추세·변동성"} 계열로 새 전략 하나를 만들어 주세요. symbol은 ${mk.market}, interval은 ${iv}.${deriv ? " funding·oi·oi_change_pct·long_short 피연산자도 쓸 수 있습니다." : ""}`;
   const e = await solo(a, {room: "quant", sys, user, maxTokens: 1600, temperature: 0.8});
   let spec = pickJSON(e.raw || e.text);
   if (!spec){ post({ch: "quant", kind: "system", text: `${a.name}의 답에서 전략 JSON을 찾지 못했습니다`}); addResearch({name: "(형식 오류)", market: mk.market, tf, pass: false, t: Date.now()}); return; }
-  try { spec = Q.normalizeSpec({...spec, symbol: mk.market, interval: tf === "60" ? "1h" : "4h"}); }
+  try { spec = Q.normalizeSpec({...spec, symbol: mk.market, interval: iv, risk: {...(spec.risk || {}), ...COSTS[mk.cls]}}); }
   catch(err){ post({ch: "quant", kind: "system", text: `전략 형식 오류(${a.name}): ${err.message}`}); addResearch({name: spec.name || "(형식 오류)", market: mk.market, tf, pass: false, t: Date.now()}); return; }
   const v = agentById("val");
-  fire({kind: "busy", agent: v, text: `🧮 ${spec.name} 백테스트 · 과최적화 검사 중`});
-  const bt = Q.backtest(spec, cs), wf = Q.walkForward(spec, cs);
+  fire({kind: "busy", agent: v, text: `🧮 ${spec.name} · ${cs.length.toLocaleString()}봉 백테스트 · 시나리오 검사 중`});
+  const bt = Q.backtest(spec, cs, {deriv}), wf = Q.walkForward(spec, cs, {deriv});
+  let scen = "", scenObj = null;
+  try { const S = await import("./scenarios.js"); scenObj = S.runScenarios(spec, cs, {deriv}); scen = S.scenarioText(scenObj); } catch(err){ scen = ""; }
   const st = x => ({ret: +(x?.return_pct ?? 0), dd: +(x?.max_dd_pct ?? 0), win: +(x?.win_rate ?? 0), pf: x?.profit_factor == null ? null : +x.profit_factor, n: x?.n_trades ?? 0});
-  post({ch: "quant", kind: "bt", agent: "val", name: spec.name, market: mk.market, tf, all: st(bt.stats), is: st(wf.is), oos: st(wf.oos), pass: wf.pass, reasons: wf.reasons, author: a.name, spec});
+  post({ch: "quant", kind: "bt", agent: "val", name: spec.name, market: mk.market, mname: mk.name, tf, hist, all: st(bt.stats), is: st(wf.is), oos: st(wf.oos), pass: wf.pass, reasons: wf.reasons, author: a.name, spec, scen, lev: spec.risk?.leverage});
   addResearch({name: spec.name, market: mk.market, tf, pass: wf.pass, oos: +(wf.oos?.return_pct ?? 0), t: Date.now()});
   fire({kind: "bubble", agent: v, text: `${wf.pass ? "✅ 통과" : "❌ 불통과"}: ${spec.name} — ${wf.reasons.slice(0, 2).join(", ")}`});
+  // 검증관이 시나리오 결과를 말로 설명 (통과했거나 시나리오가 있을 때)
+  if (scen) await solo(v, {room: "quant", sys: personaOf(v, "코드가 낸 백테스트·시나리오 결과를 3~5문장으로 설명한다. 어느 레버리지까지 견디는지, 어떤 장세에서 약한지, 최악의 해와 낙폭을 짚고, 통과·불통과 판정은 코드 판정을 따른다."),
+    user: `전략: ${spec.name} (${mk.name} ${TF_KO[tf]}봉, 레버리지 ${spec.risk?.leverage}배)\n과거: ${hist}\n판정: ${wf.pass ? "통과" : "불통과"} — ${wf.reasons.join(", ")}\n\n시나리오:\n${scen}`,
+    train: "아래 백테스트·시나리오 결과를 보고 이 전략이 어느 레버리지까지 견디는지, 어떤 장세에서 약한지, 최악의 구간을 쉬운 말로 설명해 줘."});
   if (wf.pass && !isClaude(e.model)){
-    // 검증을 통과한 매매법은 '전략 설계' 학습 예시로 (결과 숫자를 함께 적어 둔다)
     const ans = `${noMind(e.raw || "").replace(/```(?:json)?[\s\S]*?```/, "```json\n" + JSON.stringify(spec, null, 1) + "\n```")}\n\n백테스트(검증 구간): 수익 ${st(wf.oos).ret}% · 손익비 ${st(wf.oos).pf ?? "-"} · 거래 ${st(wf.oos).n}회`;
     await keep("office-strategy", [{role: "user", content: clip(user, 3000)}, {role: "assistant", content: ans}], {agent: a.id, model: e.model}).catch(() => null);
   }
   if (wf.pass){
-    const s = await P.addStrategy({spec, market: mk.market, exchange: mk.exchange, tf, author: a.name, wf: {is: st(wf.is), oos: st(wf.oos)}});
-    post({ch: "quant", kind: "system", text: `📈 모의투자 시작: ${s.name} (${mk.market} ${tf === "60" ? "1시간" : "4시간"}봉, ${a.name} 개발 · 다온 검증 통과) · 가상 10,000 USDT`});
+    const s = await P.addStrategy({spec, market: mk.market, exchange: mk.exchange, tf, author: a.name, wf: {is: st(wf.is), oos: st(wf.oos)}, cls: mk.cls, mname: mk.name});
+    post({ch: "quant", kind: "system", text: `📈 모의투자 시작: ${s.name} (${mk.name} ${TF_KO[tf]}봉 · 레버리지 ${spec.risk?.leverage}배 · ${a.name} 개발 · 다온 검증 통과) · 가상 10,000`});
     fire({kind: "trade", agent: agentById("trader"), text: `📈 ${s.name} 모의투자 시작합니다`});
   }
 }

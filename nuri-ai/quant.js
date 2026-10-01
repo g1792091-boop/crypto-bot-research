@@ -546,7 +546,7 @@ export function normalizeSpec(spec){
     const x = Number(v);
     if (!Number.isFinite(x)) problems.push(`risk.${k} 는 숫자여야 합니다 (${v})`); else r[k] = x;
   }
-  if (!(r.leverage > 0 && r.leverage <= 125)) problems.push("레버리지는 0~125 사이여야 합니다.");
+  if (!(r.leverage > 0 && r.leverage <= 200)) problems.push("레버리지는 0~200 사이여야 합니다.");
   if (!(r.position_pct > 0 && r.position_pct <= 100)) problems.push("position_pct 는 0~100 사이여야 합니다.");
   out.risk = r;
   if (problems.length){ const e = new Error("전략 오류: " + problems.join("; ")); e.problems = problems; throw e; }
@@ -1028,7 +1028,7 @@ export function snapshot(candles){
 const IND_TABLE = Object.entries(IND_REGISTRY)
   .map(([k, v]) => `- ${k}: ${v.outputs.join(", ")} / ${JSON.stringify(v.defaults)} — ${v.desc}`).join("\n");
 const RISK_TABLE = [
-  ["leverage", "레버리지 배수 (0~125)"], ["position_pct", "진입 시 증거금으로 쓰는 자본 비율 % (0~100)"],
+  ["leverage", "레버리지 배수 (1~200, 제한 없이 시험 가능 · 높을수록 강제청산 위험)"], ["position_pct", "진입 시 증거금으로 쓰는 자본 비율 % (0~100)"],
   ["stop_loss_pct", "진입가 대비 손절 % (가격 기준)"], ["take_profit_pct", "진입가 대비 익절 % (가격 기준)"],
   ["atr_stop_mult", "ATR(14) x 배수 손절"], ["atr_tp_mult", "ATR(14) x 배수 익절"],
   ["trailing_stop_pct", "고점(저점) 대비 추적 손절 %"], ["fee_pct", "편도 수수료 % (바이낸스 테이커 0.04)"],

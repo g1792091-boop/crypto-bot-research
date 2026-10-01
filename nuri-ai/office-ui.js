@@ -3,7 +3,7 @@
 import { TEAMS, AGENTS, AGENDA, agentById, teamById, ask, stopMeeting, onOffice, loadLog, officeCfg, setOffice, officeUsage, officeState,
   startAutopilot, nextAutoIn, runAgendaNow, assignModels, clearLog, work, chatter, startChatter, setOfficeVisible, seen, nextChatIn, isChatting,
   startCycle, nextCycleIn, cycle, cycleState, computerOn, rateEntry } from "./office.js";
-import { shortModel, provUse, settings, LAUNCHER } from "./engine.js";
+import { shortModel, provUse, settings, saveSettings, LAUNCHER, provCapOf } from "./engine.js";
 import { BUILTIN_SKILLS } from "./agent.js";
 
 /* ============ 사무실 배치 (가로 1000 × 세로 700 좌표) ============ */
@@ -113,7 +113,7 @@ function build(){
     <label class="of-tg" title="3분마다 사람처럼 한 가지 일(매매법 연구·SNS·경제 리서치·모의투자·컴퓨터 작업)을 스스로 합니다"><input type="checkbox" id="ofCycle"> 3분 주기 업무</label>
     <label class="of-tg" title="직원들이 수시로 본 차트·뉴스를 두고 잡담합니다 (한 번에 AI 1번)"><input type="checkbox" id="ofChat"> 수시 대화</label>
     <label class="of-tg" title="태민이 문서/GHNano 사무실 폴더 안에서만 파일을 만들고 스크립트를 실행합니다 (GHNano.exe에서만)"><input type="checkbox" id="ofComp"> 컴퓨터 작업</label>
-    <label class="of-tg" title="Claude API 키가 있으면 팀장·전략·검증·리스크 자리에 Claude를 하루 한도 안에서 씁니다"><input type="checkbox" id="ofClaude"> Claude</label>
+    <label class="of-tg" title="Claude API 키가 있으면 직원 전원이 Claude로 일합니다 (전략·리스크·검증·퀀트 연구는 Opus, 분석은 Sonnet, 가벼운 일은 Haiku). 하루 한도를 넘으면 무료 모델로 돌아갑니다"><input type="checkbox" id="ofClaude"> Claude로 일하기</label>
     <label class="of-tg" title="직원들의 회의·분석·수다를 GH Nano 학습 데이터로 남깁니다 (Claude가 쓴 글은 제외)"><input type="checkbox" id="ofTrain"> 학습에 쓰기</label>
     <button class="of-btn" id="ofNow" title="다음 주기를 기다리지 않고 지금 한 가지 일을 시킵니다">지금 일 시키기</button>
     <select id="ofEvery" title="자동 회의 간격"><option value="15">15분마다</option><option value="30">30분마다</option><option value="60">1시간마다</option><option value="180">3시간마다</option></select>
@@ -181,6 +181,12 @@ function wire(el){
     if (rb){ const id = rb.closest("[data-e]")?.dataset.e; if (id) rateEntry(id, +rb.dataset.rate).then(en => { if (en){ updateEntry(en); ctx.toast(en.rating < 0 ? "이 발언은 GH Nano 학습 데이터에서 뺐습니다" : en.rating > 0 ? "좋은 발언으로 표시했습니다 (학습에 우선 사용)" : "표시를 지웠습니다"); } }); return; }
     if (e.target.closest("[data-more]")){ const m = e.target.closest(".of-msg"); m.classList.toggle("open"); return; }
     if (e.target.closest("#ofClear")){ clearLog(); return; }
+    if (e.target.closest("#ofCap")){
+      const v = prompt("Claude 하루 호출 한도 (번). 직원 22명이 3분마다 일하면 하루 수백~수천 번이 쓰일 수 있습니다.", String(provCapOf("anthropic")));
+      if (v != null && +v >= 0){ settings.provCap = {...(settings.provCap || {}), anthropic: Math.round(+v)}; saveSettings(); renderStatus(); ctx.toast(`Claude 하루 한도: ${Math.round(+v)}번`); }
+      return;
+    }
+    if (e.target.closest("#ofCapKey")){ ctx.toast("설정 → AI 두뇌 · API 키에 Claude 키(sk-ant-…)를 붙여 넣으세요"); return; }
     if (e.target.closest(".of-card .of-x")){ $o("#ofCard").hidden = true; return; }
     if (!e.target.closest(".of-card")) $o("#ofCard").hidden = true;
   });
@@ -288,7 +294,7 @@ async function refreshBoard(){
   const pct = s => (P.equityOf(s) / 10000 - 1) * 100;
   const sum = act.reduce((a, s) => a + P.equityOf(s), 0) / (act.length * 10000) * 100 - 100;
   tot.innerHTML = `<i class="${sum >= 0 ? "up" : "dn"}">${sum >= 0 ? "+" : ""}${sum.toFixed(2)}%</i>`;
-  list.innerHTML = act.sort((x, y) => pct(y) - pct(x)).slice(0, 6).map(s => `<div><span>${ctx.esc(s.name).slice(0, 18)}</span><small>${ctx.esc(s.market.replace("USDT", ""))} ${s.pos ? (s.pos.side === "long" ? "롱" : "숏") : "대기"}</small><i class="${pct(s) >= 0 ? "up" : "dn"}">${pct(s) >= 0 ? "+" : ""}${pct(s).toFixed(2)}%</i></div>`).join("");
+  list.innerHTML = act.sort((x, y) => pct(y) - pct(x)).slice(0, 6).map(s => `<div><span>${ctx.esc(s.name).slice(0, 18)}</span><small>${ctx.esc((s.mname || s.market).replace("USDT", "").slice(0, 10))} x${s.spec?.risk?.leverage ?? "?"} ${s.pos ? (s.pos.side === "long" ? "롱" : "숏") : "대기"}</small><i class="${pct(s) >= 0 ? "up" : "dn"}">${pct(s) >= 0 ? "+" : ""}${pct(s).toFixed(2)}%</i></div>`).join("");
 }
 function highlight(id){ root.querySelectorAll(".of-ag.talk").forEach(e => e.classList.remove("talk")); if (id) root.querySelector(`[data-ag="${id}"]`)?.classList.add("talk"); }
 function renderStatus(){
@@ -304,8 +310,8 @@ function renderStatus(){
   $o("#ofStatus").innerHTML = m ? `<b class="ok">진행 중</b> · ${m.done.length}/${m.order.length} 발언${s.queued ? ` · 대기 회의 ${s.queued}개` : ""}`
     : c.auto ? (u.auto >= c.dailyMax ? `오늘 자동 회의 ${c.dailyMax}번을 다 했습니다 · 메시지를 보내면 바로 회의합니다` : `다음 자동 회의 ${next > 60e3 ? Math.round(next / 60e3) + "분 뒤" : "곧"} · 급변동 감시 중`) : "자동 회의 꺼짐 · 메시지를 보내면 바로 회의합니다";
   const nc = nextChatIn();
-  const nx = nextCycleIn(), cs = cycleState(), cu = provUse().n.anthropic || 0, cap = (settings.provCap || {}).anthropic ?? 300;
-  $o("#ofFoot").innerHTML = `${c.cycle !== false ? `3분 주기 ${cs.cycling ? "일하는 중" : `다음 ${nx > 60e3 ? Math.ceil(nx / 60e3) + "분" : "곧"}`} · ` : ""}${settings.keys.anthropic ? `Claude 오늘 ${cu}/${cap} · ` : ""}${c.train !== false ? `오늘 학습 예시 +${u.trained || 0} · ` : ""}오늘 회의 ${u.meetings || 0}번 (자동 ${u.auto || 0}/${c.dailyMax}) · 수다 ${u.chats || 0}/${c.chatMax}${c.chat ? (isChatting() ? " (지금 대화 중)" : ` (다음 ${nc > 60e3 ? Math.round(nc / 60e3) + "분" : "곧"})`) : ""} · AI 호출 ${u.calls || 0}번 · <button id="ofClear" class="of-link">기록 지우기</button>`;
+  const nx = nextCycleIn(), cs = cycleState(), cu = provUse().n.anthropic || 0, cap = provCapOf("anthropic");
+  $o("#ofFoot").innerHTML = `${c.cycle !== false ? `3분 주기 ${cs.cycling ? "일하는 중" : `다음 ${nx > 60e3 ? Math.ceil(nx / 60e3) + "분" : "곧"}`} · ` : ""}${settings.keys.anthropic ? `Claude 오늘 ${cu}/${cap}번 <button id="ofCap" class="of-link">한도 바꾸기</button> · ` : `<button id="ofCapKey" class="of-link">Claude 키 넣기</button> · `}${c.train !== false ? `오늘 학습 예시 +${u.trained || 0} · ` : ""}오늘 회의 ${u.meetings || 0}번 (자동 ${u.auto || 0}/${c.dailyMax}) · 수다 ${u.chats || 0}/${c.chatMax}${c.chat ? (isChatting() ? " (지금 대화 중)" : ` (다음 ${nc > 60e3 ? Math.round(nc / 60e3) + "분" : "곧"})`) : ""} · AI 호출 ${u.calls || 0}번 · <button id="ofClear" class="of-link">기록 지우기</button>`;
 }
 /* ============ 회의록 패널 ============ */
 // #전체: 회의·수다·내 메시지 / #업무: 직원들이 본 차트·뉴스 / 팀 방: 그 팀의 모든 것
@@ -330,9 +336,10 @@ function entryHTML(e){
   if (e.kind === "trade") return `<div class="of-work of-trade"><b style="color:${TEAM_COLOR.quant}">현우</b> <span>${ctx.esc(e.text)}</span><time>${time}</time></div>`;
   if (e.kind === "bt"){
     const row = (k, x) => `<tr><th>${k}</th><td class="${x.ret >= 0 ? "up" : "dn"}">${x.ret >= 0 ? "+" : ""}${x.ret.toFixed(1)}%</td><td>${x.dd.toFixed(1)}%</td><td>${x.win.toFixed(0)}%</td><td>${x.pf == null ? "—" : x.pf.toFixed(2)}</td><td>${x.n}</td></tr>`;
-    return `<div class="of-bt ${e.pass ? "pass" : "fail"}"><div class="of-bth"><b>${e.pass ? "✅ 검증 통과" : "❌ 불통과"} · ${ctx.esc(e.name)}</b><span>${ctx.esc(e.market)} ${e.tf === "60" ? "1시간" : e.tf === "240" ? "4시간" : e.tf}봉 · 개발 ${ctx.esc(e.author || "")} · 검증 다온 · ${time}</span></div>
+    return `<div class="of-bt ${e.pass ? "pass" : "fail"}"><div class="of-bth"><b>${e.pass ? "✅ 검증 통과" : "❌ 불통과"} · ${ctx.esc(e.name)}</b><span>${ctx.esc(e.mname || e.market)} ${e.tf === "60" ? "1시간" : e.tf === "240" ? "4시간" : e.tf === "D" ? "일" : e.tf}봉${e.lev ? ` · 레버리지 ${e.lev}배` : ""} · 개발 ${ctx.esc(e.author || "")} · 검증 다온 · ${time}</span>${e.hist ? `<span>과거 데이터: ${ctx.esc(e.hist)}</span>` : ""}</div>
       <table><tr><th></th><th>수익</th><th>최대낙폭</th><th>승률</th><th>손익비</th><th>거래</th></tr>${row("전체", e.all)}${row("개발 70%", e.is)}${row("검증 30%", e.oos)}</table>
       <div class="of-btr">${(e.reasons || []).map(r => "· " + ctx.esc(r)).join("<br>")}</div>
+      ${e.scen ? `<details open><summary>시나리오 (모든 레버리지 · 장세 · 연도 · 스트레스)</summary><pre>${ctx.esc(e.scen)}</pre></details>` : ""}
       <details><summary>전략 JSON</summary><pre>${ctx.esc(JSON.stringify(e.spec, null, 1)).slice(0, 4000)}</pre></details></div>`;
   }
   if (e.kind === "work") return `<div class="of-work"><b style="color:${TEAM_COLOR[a.team]}">${a.name}</b> <span>${ctx.esc(e.icon || "")} ${e.url ? link(e.url, e.text) : ctx.esc(e.text)}${e.src ? ` <small>· ${ctx.esc(e.src)}</small>` : ""}</span><time>${time}</time></div>`;
