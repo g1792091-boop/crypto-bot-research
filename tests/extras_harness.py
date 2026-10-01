@@ -37,6 +37,11 @@ Runs (the golden file holds the base commit's R0, R0r, T0, K1, K2; tests/test_ex
 - R: 26 hours, logical clock; R*r restart after 901 steps (no outage, a fresh process from the file).
 - T: timed clock, restart after 900 steps with a 30-minute outage, then one catch-up burst (its last boundary
   is live and has signals) and single steps.
+- T1c / T2c / T2cx (the step loop, charged): a 10-hour timed feed with a restart after 450 steps and a 25-minute
+  outage, where the runner also has a FillProbe whose order-book fetch costs DEPTH_COST and a notifier whose
+  every send costs NOTIFY_COST (as a REST call and a Telegram send do). T1c has no extras, T2c the extras
+  scenario: the 195 must be equal (the extras fetch no book and send nothing before a 195 compute). T2cx is T2c
+  with the step loop before that fix (every engine's fill may fetch a book; negative control, must differ).
 - K1..K6: a 10-hour feed in a subprocess killed with os._exit(137) at one boundary (minute 480), then a
   restart from the file to the end. K1 instead of the 195's boundary save, K2 right after it; in the new
   tree K3 phase 1 written before its save, K4 inside the newlab compute after the first job, K5 after a
@@ -103,6 +108,10 @@ WARMUP = {"5m": 20, "15m": 12, "30m": 10, "1h": 8, "4h": 6, "1d": 1}
 COSTS = {"5m": 6_000, "15m": 7_000, "30m": 8_000, "1h": 9_000, "4h": 12_000, "1d": 15_000}
 NEWLAB_COST = 40_000
 POLL_COST = 5_000
+DEPTH_COST = 300                        # one order-book REST call (charged runs)
+NOTIFY_COST = 2_000                     # one Telegram send (charged runs)
+CHARGED_HOURS = 10
+RESTART_C = (450, 25)                   # charged runs: restart after 450 steps, a 25-minute outage, then a burst
 LIVE_EDGE = 61_500                      # now = last step of the batch + 1 minute + 1.5 s
 SPECS = {s: {"qty_step": 0.0, "min_notional": 5.0} for s in V3_SYMBOLS}
 RESTART_R = 901                         # logical restart: after this many steps, no outage
@@ -290,6 +299,7 @@ class Recorder:
         self.items: list[str] = []
         self.sent: list[str] = []
         self.restore: list[str] = []          # new tree: extras whose restored engine differs from the saved state
+        self.depth_calls = 0                  # charged runs: order-book fetches (FillProbe)
         self.path = path
 
     def _write(self, kind: str, value: str) -> None:
@@ -333,6 +343,40 @@ class _RecNotifier:
         self.rec.send(text)
 
 
+class _ChargedNotifier(ListNotifier):
+    """Every send costs ``ms`` of the clock (a Telegram round trip)."""
+
+    def __init__(self, clock: "Clock", ms: int):
+        super().__init__()
+        self.clock, self.ms = clock, ms
+
+    def send(self, level: str, text: str) -> None:
+        self.clock.charge(self.ms)
+        super().send(level, text)
+
+
+def charged_fills(sess: "Session", ms: int):
+    """A FillProbe whose order-book fetch costs ``ms`` of the clock; the book is built from the batch's closes."""
+    from paperbot.fillcost import FillProbe
+
+    def depth(sym):
+        sess.clock.charge(ms)
+        sess.rec.depth_calls += 1
+        c = sess.feed.closes(sess.clock.batch_last)[sym]
+        return {"bids": [[c * 0.9999, 1e9]], "asks": [[c * 1.0001, 1e9]], "T": sess.clock.now()}
+    return FillProbe(depth, sess.settings.slippage_frac, 100)
+
+
+def leaky_fill_costs(runner) -> None:
+    """Negative control (T2cx): the step loop before the fix, where every engine's entry or exit, the extras'
+    included, may fetch an order book before the boundary's 195 compute."""
+    def _fill_costs(ts, snap, bars):
+        rows = runner.fills.after(ts, runner.book.engines, snap, bars, runner.now_ms())
+        if rows:
+            runner.store.fill_costs(rows)
+    runner._fill_costs = _fill_costs
+
+
 def originals(lib=None) -> list[str]:
     lib = lib or signal_lib()
     return [f"{d['strategy']}@{d['timeframe']}" for d in account_defs(sigservice.strategy_names(lib),
@@ -342,13 +386,14 @@ def originals(lib=None) -> list[str]:
 class Session:
     """One process lifetime of the live runner on ``db`` (as live3.cmd_run builds it, without the network)."""
 
-    def __init__(self, db: str, feed: Feed, clock: Clock, rec: Recorder, extras: Optional[dict] = None):
+    def __init__(self, db: str, feed: Feed, clock: Clock, rec: Recorder, extras: Optional[dict] = None,
+                 charge: Optional[dict] = None):
         self.lib = install_fakes()
         self.feed, self.clock, self.rec = feed, clock, rec
         self.settings = v3_settings()
         self.store_path = db
         self.store = Store3(db)
-        self.notifier = ListNotifier()
+        self.notifier = _ChargedNotifier(clock, int(charge["notify_ms"])) if charge else ListNotifier()
         self.digest = Digest(_RecNotifier(rec))
         add = self.digest.add
 
@@ -400,8 +445,11 @@ class Session:
         self.store.commit()
         self.resume, self.start = resume, start
         self.originals = originals(self.lib)
+        fills = charged_fills(self, int(charge["depth_ms"])) if charge else None
         self.runner = Runner3(self.book, self.service, self.store, self.notifier, V3_SYMBOLS, self.clock.now,
-                              self._prices, skip_before=resume, deadman=None, digest=self.digest, fills=None)
+                              self._prices, skip_before=resume, deadman=None, digest=self.digest, fills=fills)
+        if charge and charge.get("leaky"):
+            leaky_fill_costs(self.runner)
         if self.ext is not None:
             extras_bind(self, extras)
 
@@ -635,18 +683,19 @@ if X is not None:
 # ====================================================================== runs
 def run(db: str, *, hours: int = HOURS, timed: bool = False, restart: Optional[tuple] = None,
         extras: Optional[dict] = None, rec_path: Optional[str] = None, crash: Optional[dict] = None,
-        stop_after: Optional[int] = None, resume_only: bool = False) -> Recorder:
+        stop_after: Optional[int] = None, resume_only: bool = False, charge: Optional[dict] = None) -> Recorder:
     """Run the feed through the runner. ``restart`` = (steps before the restart, outage minutes): the first
     process stops there and a fresh one continues from the file (catch-up burst, then single steps).
     ``crash``: {"point", "at"} installs a kill point (os._exit) in this process (subprocess use only).
     ``stop_after``: return after that many single steps without closing (crash runs). ``resume_only``:
-    skip the first process (it ran in another process) and continue from the file."""
+    skip the first process (it ran in another process) and continue from the file. ``charge``: the charged step
+    loop ({"depth_ms", "notify_ms", "leaky"}: an order-book FillProbe and a notifier that cost clock time)."""
     feed = Feed(hours)
     clock = Clock(timed)
     rec = Recorder(rec_path)
     end = feed.end
     if not resume_only:
-        sess = Session(db, feed, clock, rec, extras)
+        sess = Session(db, feed, clock, rec, extras, charge)
         if crash is not None:
             install_crash(sess, crash)
         n_first = restart[0] if restart else (end - T0) // MIN
@@ -662,7 +711,7 @@ def run(db: str, *, hours: int = HOURS, timed: bool = False, restart: Optional[t
         outage = restart[1]
     else:
         outage = 0
-    sess = Session(db, feed, clock, rec, extras)
+    sess = Session(db, feed, clock, rec, extras, charge)
     t = sess.resume + outage * MIN
     burst = feed.steps(sess.start, t)       # every minute missed, in one poll (steps < resume only feed history)
     if burst:
@@ -817,6 +866,17 @@ def new_run(name: str, workdir: str, hours: int = HOURS, crash_hours: int = CRAS
     """One named run of the new tree (design 11.3 / 11.4). Returns {"name", "golden", "dump", "db"}: the dump
     of the 195 and the name of the golden run it must equal."""
     at = crash_boundary()
+    if name in ("T1c", "T2c", "T2cx"):
+        charge = {"depth_ms": DEPTH_COST, "notify_ms": NOTIFY_COST, "leaky": name == "T2cx"}
+        db = _p(workdir, name)
+        for q in scenario_paths(db):
+            for r in (q, q + "-wal", q + "-shm"):
+                if os.path.exists(r):
+                    os.remove(r)
+        rec = run(db, hours=min(hours, CHARGED_HOURS), timed=True, restart=RESTART_C, charge=charge,
+                  extras=None if name == "T1c" else SCENARIO)
+        return {"name": name, "golden": "T1c", "dump": dump195(db, rec), "db": db, "restore": rec.restore,
+                "depth_calls": rec.depth_calls}
     if name in ("R1", "R1r", "R2", "R2r", "T2", "T2x"):
         kw = {"R1": {}, "R1r": {"restart": (RESTART_R, 0)},
               "R2": {"extras": SCENARIO}, "R2r": {"extras": SCENARIO, "restart": (RESTART_R, 0)},
@@ -841,6 +901,7 @@ def new_run(name: str, workdir: str, hours: int = HOURS, crash_hours: int = CRAS
 
 
 NEW_RUNS = ("R1", "R1r", "R2", "R2r", "T2", "T2x", "K1", "K2", "K1x", "K2x", "K3", "K4", "K5", "K6")
+CHARGED_RUNS = ("T1c", "T2c", "T2cx")     # compared with each other (T2c == T1c, T2cx != T1c), not with the golden
 
 
 def _p(workdir: str, name: str) -> str:
@@ -924,7 +985,7 @@ def main(argv=None) -> int:
     ap.add_argument("--out", default=GOLDEN)
     ap.add_argument("--base", help="the base commit id to record (default: git HEAD of this tree)")
     ap.add_argument("--run", help="one named run: R0, R0r, T0")
-    ap.add_argument("--new-run", help="one named run of the new tree: " + ", ".join(NEW_RUNS))
+    ap.add_argument("--new-run", help="one named run of the new tree: " + ", ".join(NEW_RUNS + CHARGED_RUNS))
     ap.add_argument("--work", help="work directory of --new-run (databases are kept there)")
     ap.add_argument("--json", help="write the --new-run result here")
     ap.add_argument("--child", help=argparse.SUPPRESS)

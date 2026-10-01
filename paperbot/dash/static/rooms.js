@@ -24,6 +24,8 @@ const TRIAL_KIND_KO = {hypothesis: "가설", test: "5년 시험", copy_proposal:
 const TRIAL_ST_KO = {passed: "통과", failed: "불통과", described: "설명용", no_data: "자료 없음", error: "오류"};
 // the new-strategy lab (team:lab): its ledger rows ('newlab' trials), statuses and the meeting kind's name
 const LAB_ROOM = "team:lab";
+// the runner's refusals the owners resolve with one more approve click (agents/extra_accounts.RE_APPROVE)
+const RE_APPROVE = ["stale_ok", "owner_click_missing"];
 const NL_ST_KO = {passed: "통과 · 제안 대기", proposed: "통과 · 두 분께 제안함", lapsed: "통과했다가 기준 미달", failed: "불통과"};
 // tests that can still pass the lab's gate: newlab.max_passable_n() + 1 (docs/newlab-prereg.md 5; a test checks it)
 const NEWLAB_MAX_TESTS = 5000;
@@ -451,7 +453,7 @@ function propCard(p) {
     acts = `<div class="pdone">두 분 결정: <b>${od.decision === "approve" ? "승인" : "거절"}</b> · ${esc(decisionWhen(agentsState(rs.ov).st))}</div>` +
       (p.effective_status === "approved" && !run ? decideButtons(p, "reject-only") : "");
   } else if (p.status === "awaiting_owner") acts = stale ? decideButtons(p, "stale") : decideButtons(p);
-  else if (p.status === "approved" && !run && ref && ref.code === "stale_ok") acts = decideButtons(p, "again");
+  else if (p.status === "approved" && !run && ref && RE_APPROVE.includes(ref.code)) acts = decideButtons(p, "again");
   const prop = (lab && ch.proposal) || {};
   const n = lab ? (g.n_tests != null ? g.n_tests + 1 : null) : g.n_trials;
   const nowN = gn && gn.n_trials != null ? (lab ? gn.n_trials + 1 : gn.n_trials) : null;
@@ -468,7 +470,7 @@ function propCard(p) {
     ${stale && gn.n_trials && !lab ? `<div class="ln">이 방 시험이 ${esc(gn.n_trials)}번으로 늘어 ① 기준이 p &lt; 0.05 ÷ ${esc(gn.n_trials)}로 엄격해졌습니다. 아래는 제안 때의 판정입니다.</div>` : ""}
     ${(g.reasons || []).length ? `${stale ? '<div class="ln">제안 때 판정 근거:</div>' : ""}<ul class="reasons">${g.reasons.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
     ${run ? `<div class="ln"><span class="pill ok">계좌 시작됨</span> ${esc(run.label_ko || run.account_id)} (${esc(run.account_id)})${run.extra_status && run.extra_status !== "active" ? ` · ${esc(st[run.extra_status] || run.extra_status)}` : ""} · 거절로 멈출 수 없음</div>` : ""}
-    ${!run && ref ? `<div class="ln">실행기: ${esc(ref.text_ko || ref.code)}${ref.code === "stale_ok" ? " (아래 '다시 승인')" : ""}</div>` : ""}
+    ${!run && ref ? `<div class="ln">실행기: ${esc(ref.text_ko || ref.code)}${RE_APPROVE.includes(ref.code) ? " (아래 '다시 승인')" : ""}</div>` : ""}
     ${acts}</div>`;
 }
 function propTitle(p) {   // one short line for the list of past proposals
@@ -531,7 +533,7 @@ function renderSide() {
     ${p.account_running ? `<span class="pill ok" title="${esc(p.account_running.account_id)}">계좌 시작됨</span>` : ""}
     ${p.status === "approved" && !p.account_running && p.runtime_refusal ? `<div class="dim">실행기: ${esc(p.runtime_refusal.text_ko || p.runtime_refusal.code)}</div>` : ""}
     ${p.status === "approved" && !p.account_running && !(p.owner_decision && !p.owner_decision.applied)
-      ? decideButtons(p, p.runtime_refusal && p.runtime_refusal.code === "stale_ok" ? "again" : "reject-only") : ""}</div>`).join("")}</div>`;
+      ? decideButtons(p, p.runtime_refusal && RE_APPROVE.includes(p.runtime_refusal.code) ? "again" : "reject-only") : ""}</div>`).join("")}</div>`;
   h += `<div class="rsec2"><h4>메모 <small>${notes.length}</small></h4>${notes.length ? notes.slice(0, 8).map((n) =>
     `<div class="nrow"><div>${esc(n.text)}</div><time>${hm(n.ts)}</time></div>`).join("") : '<div class="muted">아직 메모가 없습니다</div>'}</div>`;
   if (trials) {

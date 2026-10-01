@@ -97,7 +97,8 @@ def test_rooms_need_login(env):
         assert c.get(path).status_code == 401, path
     assert c.post(f"/api/rooms/{ROOM}/say", json={"text": "hi"}).status_code == 401
     assert c.post(f"/api/proposals/{env['ok_proposal']}/decide", json={"decision": "approve"}).status_code == 401
-    assert not os.path.exists(env["inbox"])            # nothing written without a login
+    # nothing written without a login (the dashboard's start only creates the empty inbox.db)
+    assert _inbox_rows(env["inbox"], "owner_messages") == [] and _inbox_rows(env["inbox"], "approvals") == []
 
 
 # ---------------------------------------------------------------- reads
@@ -379,7 +380,7 @@ def test_huge_ids_are_not_found_not_a_server_error(env):
     assert r.status_code == 200 and r.json()["messages"] == []           # nothing after it
     r = c.get(f"/api/rooms/{ROOM}/messages?before_id={huge}")
     assert r.status_code == 200 and len(r.json()["messages"]) == 4       # everything is before it
-    assert not os.path.exists(env["inbox"])
+    assert _inbox_rows(env["inbox"], "approvals") == []
 
 
 def test_pages_cannot_be_framed(env):
@@ -405,6 +406,17 @@ def test_approve_is_refused_when_code_now_judges_the_gate_failed(env):
     assert c.post(f"/api/proposals/{ok}/decide", json={"decision": "reject"}).status_code == 200   # rejecting is fine
     blocked = next(x for x in c.get("/api/proposals").json() if x["id"] == env["blocked_proposal"])
     assert blocked["gate_now"] is None                                 # only open proposals are re-judged
+
+
+def test_the_dashboard_start_creates_an_empty_inbox(tmp_path):
+    """The live runner refuses every new extra account while inbox.db is missing (it cannot see a reject click):
+    the dashboard creates the empty file when it starts, not only at the owners' first post or click."""
+    inbox = str(tmp_path / "inbox.db")
+    create_app(str(tmp_path / "paper3.db"), hash_password(PW), SECRET, agents_db=str(tmp_path / "agents3.db"),
+               inbox_db=inbox)
+    assert _inbox_rows(inbox, "approvals") == [] and _inbox_rows(inbox, "owner_messages") == []
+    create_app(str(tmp_path / "paper3.db"), hash_password(PW), SECRET, inbox_db=str(tmp_path / "no" / "inbox.db"))
+    assert not os.path.exists(tmp_path / "no")                        # a missing folder is not created
 
 
 def test_inbox_db_must_be_its_own_file(tmp_path):
@@ -694,7 +706,7 @@ def test_proposal_cards_for_new_strategies_started_accounts_and_runtime_refusals
     """A new-strategy proposal card (its proposal number, ledger number, the lab's count), a proposal whose
     account started (no reject button), one the runner waits on for a fresh click ('다시 승인'), and the
     approve confirmation once the runner's feature is deployed."""
-    got = _js(("agentsState", "decisionWhen", "decideButtons", "newlabKo", "testKo", "propCard"), """
+    got = _js(("RE_APPROVE", "agentsState", "decisionWhen", "decideButtons", "newlabKo", "testKo", "propCard"), """
 const now = 1e12;
 var DIR_KO = {long: "롱만", short: "숏만", both: "롱·숏"};
 var rs = {confirm: null, ov: {ready: true, now, tick_every_ms: 900000, last_tick: {ts: now, ok: true}, rooms: []}};
@@ -708,10 +720,13 @@ const run = {id: 6, kind: "copy", status: "approved", effective_status: "approve
   account_running: {account_id: "N17_KC_RSI@15m~c1", label_ko: "켈트너·RSI 15분 복제 c1", extra_status: "suspended"}};
 const stale = {...run, id: 7, account_running: null,
   runtime_refusal: {code: "stale_ok", text_ko: "한 번 더 승인해야 시작합니다", proposal_ts: 1}};
+const lost = {...stale, id: 8, runtime_refusal: {code: "owner_click_missing", text_ko: "승인 클릭을 찾지 못했습니다",
+  proposal_ts: 1}};
 rs.confirm = {id: 5, dec: "approve"};
 const confirm = propCard(lab);
 rs.confirm = null;
-console.log(JSON.stringify({lab: propCard(lab), run: propCard(run), stale: propCard(stale), confirm}));
+console.log(JSON.stringify({lab: propCard(lab), run: propCard(run), stale: propCard(stale), lost: propCard(lost),
+                            confirm}));
 """)
     assert "새 매매법 제안 #5 · 장부 #57" in got["lab"] and "1시간 RSI 되돌림 (롱만)" in got["lab"]
     assert "새 매매법 시험 4번 기준" in got["lab"] and "새 매매법 시험 5번 기준" in got["lab"]
@@ -719,4 +734,5 @@ console.log(JSON.stringify({lab: propCard(lab), run: propCard(run), stale: propC
     assert "계좌 시작됨" in got["run"] and "N17_KC_RSI@15m~c1" in got["run"] and "멈춤(보류)" in got["run"]
     assert 'data-dec="reject"' not in got["run"] and "원본 계좌 N17_KC_RSI@15m" in got["run"]
     assert "다시 승인" in got["stale"] and "실행기: 한 번 더 승인해야 시작합니다" in got["stale"]
+    assert "다시 승인" in got["lost"] and 'data-dec="approve"' in got["lost"]      # a lost click: one more click
     assert "다음 5분 봉 경계" in got["confirm"] and "거절로 멈출 수 없습니다" in got["confirm"]

@@ -734,10 +734,11 @@ sudo journalctl -u <그 이름> -n 50 --no-pager
 - **설정할 것 없음:** 기본값(관찰 21일, 처음 60일 두 분 승인, `paper3.db` 옆의 `agents3.db`·`inbox.db`를 읽기만 함)으로 돕니다.
   바꿀 때만 `deploy/extras.example.json`을 `/etc/paperbot/extras.json`로 복사해 고칩니다(봇이 5분마다 다시 읽음).
   `paperbot-live3.service`와 실행 명령은 그대로입니다.
-- **한 대만:** 봇은 켜질 때 `paper3.db.lock`을 잡습니다. 두 번째 live 봇은 "another live runner already holds"로 바로 끝납니다.
+- **한 대만:** 봇은 켜질 때 `paper3.db` 파일 자체를 잠급니다(flock). 같은 파일이면 경로를 어떻게 쓰든(심볼릭 링크, 하드 링크, 바인드 마운트) 두 번째 live 봇은 "another live runner already holds"로 바로 끝납니다.
 - **보기:** 운영 표의 "추가 계좌" 명령, 대시보드 순위표의 "복제"/"새" 표시.
 - **에이전트 장부(agents3.db)·inbox.db 복원:** live 봇을 멈추지 않고 `extras.json`에 `"pause_activation": true` → 복원 →
-  `agents_db: regressed`가 보이면 알림의 값을 `"agents_ack"`에 → `pause_activation` false (`docs/extra-accounts.md` 6장).
+  (inbox.db면 백업 뒤에 누른 승인·거절을 두 분이 다시 누름) → `agents_db: regressed`가 보이면 알림의 값을 `"agents_ack"`에,
+  `inbox_db: regressed`면 `"inbox_ack"`에 → `pause_activation` false (`docs/extra-accounts.md` 6장).
 - **알림:** 새 계좌 시작은 텔레그램 무음, 추가 계좌의 낙폭·파산은 "추가 계좌 알림 모음"(한 시간에 한 번, 무음), 멈춤·정지는
   CRITICAL로 바로 옵니다.
 - **판정:** 추가 계좌는 자기가 시작된 날부터 30일을 세고, 동전 봇도 자기 묶음으로 따로 돌려 원래 계좌들의 판정은 그대로입니다.

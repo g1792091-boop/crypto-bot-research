@@ -15,11 +15,14 @@ from Binance and replays the minutes it missed. Signals from those minutes are
 logged as LATE and not traded (a live bot would have missed them too).
 
 Extra accounts (copies and new strategies started from approved proposals,
-paperbot/extras.py and docs/extra-accounts.md) run in the same book. The only
-hook is ``post_boundary(boundary, submitted, timed_out)``, called after the 195's
-work at a boundary has been committed; it guards itself, and a last fence here
-rolls back its writes and keeps the 195 running. Only one runner may write a
-database at a time (a lock file next to it).
+paperbot/extras.py and docs/extra-accounts.md) run in the same book. The hooks
+are ``post_boundary(boundary, submitted, timed_out)``, called after the 195's
+work at a boundary has been committed (it guards itself, and a last fence here
+rolls back its writes and keeps the 195 running), and ``post_batch(now)`` at the
+end of a poll (the extras' Telegram messages). Before a boundary's compute the
+extras cost the 195 nothing but their engines' step: they fetch no order book
+(fill costs) and send no message. Only one runner may write a database at a
+time (a lock on the database file itself).
 
 No orders are ever sent; the Binance key, if set, must be read-only.
 """
@@ -34,7 +37,7 @@ import sys
 import time
 from typing import Callable, Optional
 
-from .accounts import AccountBook, hold_others
+from .accounts import ORIGINAL_KINDS, AccountBook, hold_others
 from .aggregate import TF_MS, Aggregator
 from .binance import BinanceError, BinanceREST, RegionBlocked
 from .config import V3_SYMBOLS, v3_settings
@@ -114,6 +117,9 @@ class Runner3:
         # post_boundary(boundary: int, submitted: list[tuple[str, Signal]], timed_out: bool)
         self.post_boundary = None
         self.post_boundary_errors = 0
+        # extras: called as post_batch(now_ms) at the end of process(), after every boundary of the batch and the
+        # commit (their Telegram messages wait until then, so they never delay a 195 compute of the batch)
+        self.post_batch = None
 
     def process(self, steps) -> None:
         for ts, bars, funding in steps:
@@ -136,10 +142,29 @@ class Runner3:
         self.store.put_state("heartbeat", now, {"steps": self.steps, "last_step": self.book.last_ts})
         self._health(now)
         self.store.commit()
+        if self.post_batch is not None:
+            try:
+                self.post_batch(now)
+            except Exception:  # noqa: BLE001  the extras' messages only; never stops the 195
+                pass
 
     def _fill_costs(self, ts: int, snap: dict, bars: dict) -> None:
+        """Order-book cost records of the step. Only the original accounts' events fetch a book (a REST call
+        made before this boundary's signal compute); an extra account's event reuses a book fetched for them in
+        this step, else it is recorded as 'skipped', so the extras never move the 195's ref_time / delay_ms."""
         try:
-            rows = self.fills.after(ts, self.book.engines, snap, bars, self.now_ms())
+            now = self.now_ms()
+            orig, others = {}, {}
+            for aid, e in self.book.engines.items():
+                kind = (self.book.meta.get(aid) or {}).get("kind")
+                (orig if kind in ORIGINAL_KINDS else others)[aid] = e
+            books: dict = {}
+            rows = self.fills.after(ts, orig, snap, bars, now, books=books)
+            if others:
+                try:
+                    rows = rows + self.fills.after(ts, others, snap, bars, now, books=books, fetch=False)
+                except Exception:  # noqa: BLE001  (an extra's record only)
+                    self.fills.errors += 1
             if rows:
                 self.store.fill_costs(rows)
         except Exception as exc:  # noqa: BLE001  (a record only: the bot goes on)
@@ -229,14 +254,19 @@ def bind_extras(ext, runner: "Runner3", store: Store3, notifier: Notifier) -> No
 
 
 def single_runner_lock(db: str):
-    """Hold an exclusive lock on ``<db>.lock`` for this process's life, so two runners never write the same
-    paper3.db. Exits with a clear message when another runner holds it."""
-    fh = open(db + ".lock", "a+")
+    """Hold an exclusive ``flock`` on the database file itself for this process's life, so two runners never
+    write the same paper3.db, however its path is spelled (a symlink, a hard link, a bind mount, a relative
+    path: one inode, one lock). Exits with a clear message when another runner holds it.
+
+    SQLite locks with POSIX (fcntl) locks, which are independent of flock. Closing any descriptor of the
+    database file drops this process's POSIX locks on it, so the returned handle stays open until the process
+    ends (cmd_run keeps it; the store is closed first)."""
+    fh = os.fdopen(os.open(db, os.O_RDONLY | os.O_CREAT, 0o644), "rb")
     try:
         fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError:
-        fh.close()
-        raise SystemExit(f"another live runner already holds {db}.lock; only one runner may write {db}")
+        fh.close()                      # this process exits right away
+        raise SystemExit(f"another live runner already holds {os.path.realpath(db)}; only one runner may write it")
     return fh
 
 

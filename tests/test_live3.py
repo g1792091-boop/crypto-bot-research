@@ -150,6 +150,30 @@ def test_single_runner_lock(tmp_path):
     single_runner_lock(db).close()                             # free again once the first runner is gone
 
 
+def test_single_runner_lock_holds_for_every_spelling_of_the_database(tmp_path):
+    """The lock is on the database file itself: a symlink, a hard link or a relative spelling of the same
+    paper3.db cannot start a second runner (a '<db>.lock' next to each spelling could)."""
+    import os
+    import pytest
+    from paperbot.live3 import single_runner_lock
+    (tmp_path / "data").mkdir()
+    (tmp_path / "alias").mkdir()
+    db = str(tmp_path / "data" / "paper3.db")
+    Store3(db).close()
+    os.symlink(db, str(tmp_path / "alias" / "paper3.db"))
+    os.link(db, str(tmp_path / "alias" / "hard.db"))
+    fh = single_runner_lock(db)
+    for other in (str(tmp_path / "alias" / "paper3.db"), str(tmp_path / "alias" / "hard.db"),
+                  os.path.relpath(db), str(tmp_path / "data" / ".." / "data" / "paper3.db")):
+        with pytest.raises(SystemExit, match="another live runner"):
+            single_runner_lock(other)
+    fh.close()
+    single_runner_lock(str(tmp_path / "alias" / "hard.db")).close()
+    st = Store3(db)                                 # the database itself is untouched by the lock
+    assert st.conn.execute("SELECT COUNT(*) FROM accounts").fetchone()[0] == 0
+    st.close()
+
+
 def test_extras_import_failure_holds_extras(tmp_path, monkeypatch):
     import sys
     from paperbot.accounts import HeldEngine, hold_others

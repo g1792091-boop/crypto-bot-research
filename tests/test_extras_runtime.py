@@ -44,8 +44,7 @@ def test_contract_literals():
     for name in names36():
         assert not name.startswith("NL") and "~" not in name and "@" not in name
     assert X.PERMANENT == {"contract_missing", "contract_mismatch", "spec_invalid", "trial_status", "stale_run",
-                           "owner_ok_missing", "owner_click_missing", "duplicate", "gate_now_fail", "parent_missing",
-                           "parent_bust"}
+                           "owner_ok_missing", "duplicate", "gate_now_fail", "parent_missing", "parent_bust"}
     assert not (X.PERMANENT & X.TEMPORARY)
     assert set(X.CODES_KO) == X.PERMANENT | X.TEMPORARY
 
@@ -333,6 +332,15 @@ def _setup_refusal(w, code):
         os.remove(w.agents_path)
         w.agents = R.open_agents(w.agents_path)        # an older (here: empty) agents3.db with ids re-used
         return w.copy_proposal()[0], "db"
+    if code == "inbox_regressed":
+        R.add_approval(w.inbox, 999, "approve", "A", ts=w.now)    # some click the runner sees (fingerprint)
+        w.copy_proposal(approve=False)
+        w.boundary(T0 + 5 * MIN)
+        assert w.state()["inbox_fingerprint"][0] == 2
+        w.inbox.close()
+        os.remove(w.inbox_path)
+        w.inbox = R.open_inbox_rw(w.inbox_path)          # an older (here: empty) inbox.db with ids re-used
+        return w.copy_proposal()[0], "refused"
     if code == "stale_ok":
         w.ext.state["since"] = w.now + HOUR            # the feature started after this approval
         return w.copy_proposal()[0], "refused"
@@ -413,7 +421,7 @@ def test_refusal_codes(tmp_path, code):
             assert rf["since"] == B
         lvl = [r for r in w.store.conn.execute("SELECT level, text FROM alerts WHERE text LIKE ?", (f"%#{pid}:%{code}%",))]
         if where == "refused":
-            assert lvl and lvl[0][0] == ("WARN" if code in X.PERMANENT or code == "id_conflict" else "INFO")
+            assert lvl and lvl[0][0] == ("WARN" if code in X.PERMANENT or code in X.LOUD else "INFO")
     finally:
         r = getattr(w, "_restore", None)
         if r:
@@ -561,7 +569,7 @@ def test_gate_strict_count_and_hwm(tmp_path, monkeypatch):
     pid = w.copy_proposal()[0]
     # (a) a strict count query that fails: the whole poll is unreadable (never a count of 0)
     real = X.Activator.Q_ROOM_TESTS
-    monkeypatch.setattr(X.Activator, "Q_ROOM_TESTS", "SELECT COUNT(*) FROM no_such_table WHERE room_id = ?")
+    monkeypatch.setattr(X.Activator, "Q_ROOM_TESTS", "SELECT room_id, COUNT(*) FROM no_such_table GROUP BY room_id")
     w.boundary(T0 + 5 * MIN)
     assert w.state()["agents_db"] == "unreadable" and not w.extras_rows()
     monkeypatch.setattr(X.Activator, "Q_ROOM_TESTS", real)
@@ -594,6 +602,65 @@ def test_gate_strict_count_and_hwm(tmp_path, monkeypatch):
     w.boundary(T0 + 2 * HOUR)
     assert w.refused(pid)["code"] == "gate_now_fail"                  # judged with n = 20, not 1
     assert w.state()["hwm"]["room_tests"]["strat:V45_AMB"] == 20         # marks never go down
+    w.close()
+
+
+def _restore_agents(w):
+    """agents3.db restored to an older copy (here: an empty one; ids are reused from 1)."""
+    w.agents.close()
+    os.remove(w.agents_path)
+    w.agents = w.R.open_agents(w.agents_path)
+
+
+def test_hwm_counts_every_room_not_only_rooms_with_an_approved_proposal(tmp_path, monkeypatch):
+    """A room with 20 tests and no approved proposal before an agents3 restore: after the restore and the
+    operator's ack its proposal is judged with n = 20 (the mark), not with the restored count."""
+    import tests.extras_harness as H
+    res = copy.deepcopy(H.COPY_RESULT)
+    res["periods"]["1"]["p"] = 0.004                   # passes at n <= 12 only
+    monkeypatch.setattr(H, "COPY_RESULT", res)
+    w = World(tmp_path, hist=True)
+    w.process(T0)
+    for k in range(19):
+        w.R.add_trial(w.agents, "strat:V45_AMB", "V45_AMB", "test", {"other": k}, ts=w.now)
+    w.R.add_trial(w.agents, "strat:V45_AMB", "V45_AMB", "test", {"other": 19}, ts=w.now)
+    w.copy_proposal("N17_KC_RSI", "15m", click=False)  # the only approved proposal is in another room
+    w.boundary(T0 + 5 * MIN)
+    assert w.state()["hwm"]["room_tests"]["strat:V45_AMB"] == 20
+    _restore_agents(w)
+    w.now += HOUR
+    pid = w.copy_proposal("V45_AMB", "15m")[0]        # passes at the restored n = 1
+    w.ext.cfg.agents_ack = X.fingerprint_text({"trial": [1, w.now], "proposal": [1, w.now]})
+    w.boundary(T0 + 2 * HOUR)
+    assert not w.extras_rows()
+    assert w.refused(pid)["code"] == "gate_now_fail" and "n 20" in w.refused(pid)["detail"]
+    w.close()
+
+
+def test_agents_restore_during_the_observation_period_is_seen(tmp_path, monkeypatch):
+    """The fingerprint and the test counts are read at live boundaries of the observation period too: an
+    agents3.db restored in those days is regressed at the first poll after the floor (until the ack), and the
+    gate then uses the counts seen before the restore."""
+    import tests.extras_harness as H
+    res = copy.deepcopy(H.COPY_RESULT)
+    res["periods"]["1"]["p"] = 0.004
+    monkeypatch.setattr(H, "COPY_RESULT", res)
+    w = World(tmp_path, hist=True, observe_days=1)
+    w.process(T0)
+    for k in range(20):
+        w.R.add_trial(w.agents, "strat:V45_AMB", "V45_AMB", "test", {"other": k}, ts=w.now)
+    w.boundary(T0 + 5 * MIN)                           # observing: nothing created, the counts are kept
+    assert w.state()["agents_db"] == "observing" and w.state()["inbox_db"] == "observing"
+    assert w.state()["hwm"]["room_tests"]["strat:V45_AMB"] == 20 and w.state()["fingerprint"]["trial"][0] == 20
+    _restore_agents(w)
+    w.now = T0 + DAY + HOUR                            # after the floor
+    pid = w.copy_proposal("V45_AMB", "15m")[0]
+    w.boundary(T0 + DAY + HOUR)
+    assert w.state()["agents_db"] == "regressed" and not w.extras_rows()
+    p = w.R.get_proposal(w.agents, pid)
+    w.ext.cfg.agents_ack = X.fingerprint_text({"trial": [p["trial_id"], p["ts"]], "proposal": [pid, p["ts"]]})
+    w.boundary(T0 + DAY + HOUR + 5 * MIN)
+    assert not w.extras_rows() and w.refused(pid)["code"] == "gate_now_fail"
     w.close()
 
 
@@ -866,7 +933,9 @@ def test_load_failures_hold_or_suspend(tmp_path):
     assert acc["NL1@5m"] == {"status": "suspended", "code": "spec_invalid", "since": acc["NL1@5m"]["since"]}
     ev = [(e["account_id"], e["event"]) for e in w.state()["events"] if e["event"] != "created"]
     assert ev == [("V45_AMB@15m~c1", "held"), ("NL1@5m", "suspended")]
-    assert sum(1 for m in w.notifier.messages if m[0] == "CRITICAL") == 2
+    crit = [m[1] for m in w.notifier.messages if m[0] == "CRITICAL"]     # one message at start-up, both named
+    assert len(crit) == 1 and "추가 계좌 긴급 알림 2건" in crit[0]
+    assert "V45_AMB@15m~c1" in crit[0] and "NL1@5m" in crit[0]
     w.close()
 
 
@@ -902,3 +971,273 @@ def test_status_command(world):
     w.store.commit()
     text = X.status_text(w.db)
     assert "V45_AMB@15m~c1" in text and "agents3 ok" in text
+
+
+# ============================================================================ no Telegram send before a 195 compute
+class _SlowNotifier:
+    """A Telegram send that costs the world's clock ``ms`` (a blocking urlopen)."""
+
+    def __init__(self, ms: int):
+        self.ms, self.w, self.messages = ms, None, []
+
+    def send(self, level, text):
+        self.messages.append((level, text))
+        if self.w is not None:
+            self.w.now += self.ms
+
+
+@pytest.mark.parametrize("variant", ["liquidation", "fault", "digest"])
+def test_extras_sends_never_delay_a_195_compute(tmp_path, variant):
+    """A catch-up burst over a non-live boundary B1 and B2, where the 195's B2 compute is 179 s after B2. An
+    extra's liquidation (CRITICAL), its engine's fault (CRITICAL) or the extras digest becoming due must not be
+    sent inside the batch (each send blocks up to Telegram's 10 s timeout and would make the 195 late); the alert
+    rows are written at once and the messages go out after the batch."""
+    from paperbot import Signal
+    slow = _SlowNotifier(2_000)
+    w = World(tmp_path, hist=True, notifier=slow)
+    slow.w = w
+    w.copy_proposal()
+    w.run(T0, T0 + 20 * MIN)
+    aid = "V45_AMB@15m~c1"
+    e = w.book.engines[aid]
+    assert isinstance(e, X.GuardedEngine)
+    if variant == "liquidation":
+        b = T0 + 20 * MIN
+        e.submit(Signal(ts=b - 1, symbol="BTCUSDT", timeframe="15m", strategy_id="V45_AMB", side=1, stop_price=0.0,
+                        tier="best", atr=0.2, meta={"stop_dist": 0.4, "ref_price": 100.01, "ref_time": b,
+                                                    "delay_ms": 1500, "account": aid, "ctx": {}}))
+    w.process(T0 + 20 * MIN)
+    if variant == "liquidation":
+        assert e.position is not None
+    elif variant == "fault":
+        def boom(*a, **k):
+            raise ZeroDivisionError("injected")
+        e._mark_to_market = boom
+    else:
+        w.ext.digest.add("[extra] V45_AMB@15m~c1 drawdown 30%")
+        w.ext.digest.last_ms = w.now - 2 * HOUR
+    w.store.commit()
+    B2 = T0 + 30 * MIN                                   # B1 = T0 + 25m is in the same burst
+    w.service.fire[(B2, "5m")] = [("V45_AMB@5m", 1, "ETHUSDT", {})]
+    n0 = len(slow.messages)
+    w.now = B2 + 179_000
+    burst = [(t, w.bars(t, px=90.0 if variant == "liquidation" and t == T0 + 21 * MIN else None), {})
+             for t in range(T0 + 21 * MIN, B2, MIN)]
+    w.runner.process(burst)
+    delay = w.store.conn.execute("SELECT delay_ms FROM signal_log WHERE bar_close = ? AND strategy = 'V45_AMB' "
+                                 "AND timeframe = '5m'", (B2,)).fetchone()[0]
+    assert delay == 179_000                              # 181,000 (LATE) when a 2 s send ran inside the batch
+    sent = slow.messages[n0:]
+    texts = [r[0] for r in w.store.conn.execute("SELECT text FROM alerts WHERE ts < ?", (B2,))]
+    if variant == "liquidation":
+        assert e.position is None and any("LIQUIDATED" in t and aid in t for t in texts)
+        assert any(lvl == "CRITICAL" and "LIQUIDATED" in t for lvl, t in sent)       # still sent, after the batch
+    elif variant == "fault":
+        assert e.held and any(lvl == "CRITICAL" and aid in t for lvl, t in sent)
+    else:
+        assert any("추가 계좌 알림 모음" in t for _lvl, t in sent) and not w.ext.digest.items
+    w.close()
+
+
+# ============================================================================ races and partial failures in phase 2
+def test_reject_click_during_creation_is_honoured(world, monkeypatch):
+    """A reject click written after the poll's R1 read (C5) but before the phase-2 commit: R1 is read again just
+    before the commit, the poll is undone and runs once more, so the proposal is refused (reject_pending) and no
+    account starts; another proposal of the same poll is still created."""
+    w = world
+    pid = w.copy_proposal()[0]
+    other = w.copy_proposal("N17_KC_RSI", "15m")[0]
+    orig = X.Activator._gate
+    clicked = []
+
+    def gate(self, kind, p, t, snap, conn):
+        if p["id"] == pid and not clicked:            # the owner clicks reject inside the window, once
+            w.R.add_approval(w.inbox, pid, "reject", "B", ts=w.now)
+            clicked.append(w.now)
+        return orig(self, kind, p, t, snap, conn)
+    monkeypatch.setattr(X.Activator, "_gate", gate)
+    w.boundary(T0 + 5 * MIN)
+    assert clicked
+    assert [a["account_id"] for a in w.extras_rows()] == ["N17_KC_RSI@15m~c1"]
+    assert "V45_AMB@15m~c1" not in w.book.engines and "V45_AMB@15m~c1" not in w.ext.extras
+    assert w.refused(pid)["code"] == "reject_pending" and str(pid) not in w.state()["created"]
+    assert w.state()["created"][str(other)]["account_id"] == "N17_KC_RSI@15m~c1"
+    started = [t for (t,) in w.store.conn.execute("SELECT text FROM alerts WHERE text LIKE '%새 paper 계좌 시작%'")]
+    assert len(started) == 1 and "N17_KC_RSI@15m~c1" in started[0]
+    assert not any("V45_AMB" in m[1] and "새 paper 계좌 시작" in m[1] for m in w.notifier.messages)
+    assert w.state()["health"]["errors"] == 0
+
+
+def test_config_days_are_clamped():
+    cfg = X.Config.from_text(json.dumps({"observe_days": 1e308, "owner_ok_days": 1e300}), "/tmp/x/paper3.db")
+    assert cfg.observe_days == X.DAYS_MAX and cfg.owner_ok_days == X.DAYS_MAX
+    assert X.observe_floor(T0, cfg) == T0 + X.DAYS_MAX * DAY
+    assert X.Config.from_text(json.dumps({"observe_days": 5}), "/tmp/x/paper3.db").observe_days == 21
+
+
+def _with_newlab(w):
+    w.newlab_proposal(0)
+    w.boundary(T0 + 5 * MIN)
+    assert "NL1@5m" in w.ext.extras and w.ext.newlab.specs
+
+
+def test_an_activation_failure_keeps_the_new_strategy_signals(world, monkeypatch):
+    """The activation poll runs in its own savepoint after the new strategies' rows: an exception there (e.g. a
+    configuration value that breaks the floor) undoes only the poll, never the boundary's new-strategy rows."""
+    w = world
+    _with_newlab(w)
+    real = X.Extras._newlab_boundary
+
+    def newlab_boundary(self, boundary, deadline, j):
+        real(self, boundary, deadline, j)
+        self.store.log_signals([{"bar_close": boundary, "timeframe": "5m", "strategy": "NL1", "symbol": "BTCUSDT",
+                                 "side": 1, "atr": 0.2, "ref_price": 100.0, "ref_time": boundary, "delay_ms": 0,
+                                 "status": "SUBMITTED", "data": {"marker": True}}])
+    monkeypatch.setattr(X.Extras, "_newlab_boundary", newlab_boundary)
+
+    def poll(boundary, j):
+        raise OverflowError("cannot convert float infinity to integer")
+    monkeypatch.setattr(w.ext.activator, "poll", poll)
+    pid = w.copy_proposal()[0]
+    B = T0 + 10 * MIN
+    w.boundary(B)
+    w.store.commit()
+    assert w.store.conn.execute("SELECT COUNT(*) FROM signal_log WHERE bar_close = ? AND strategy = 'NL1'",
+                                (B,)).fetchone()[0] == 1
+    h = w.state()["health"]
+    assert h["errors"] == 1 and "activation" in h["last_error"] and "OverflowError" in h["last_error"]
+    assert w.store.conn.execute("SELECT COUNT(*) FROM alerts WHERE text LIKE '[extra]%새 계좌 확인%실패%'").fetchone()[0] == 1
+    assert not w.refused(pid) and len(w.extras_rows()) == 1
+
+
+def test_a_new_strategy_failure_never_blocks_activation(world, monkeypatch):
+    """A failing new-strategy signal job (in its own savepoint) does not stop the copies' activation."""
+    w = world
+    _with_newlab(w)
+
+    def newlab_boundary(self, boundary, deadline, j):
+        self.store.alert(boundary, "INFO", "[extra] written before the failure")
+        raise ValueError("bad bar data")
+    monkeypatch.setattr(X.Extras, "_newlab_boundary", newlab_boundary)
+    w.copy_proposal()
+    w.boundary(T0 + 10 * MIN)
+    w.store.commit()
+    assert [a["account_id"] for a in w.extras_rows()] == ["NL1@5m", "V45_AMB@15m~c1"]
+    h = w.state()["health"]
+    assert h["errors"] == 1 and "newlab" in h["last_error"]
+    assert w.store.conn.execute("SELECT COUNT(*) FROM alerts WHERE text = '[extra] written before the failure'"
+                                ).fetchone()[0] == 0                    # the failed part's own writes are undone
+
+
+# ============================================================================ inbox.db restored
+def _backup_inbox(w, dst):
+    w.inbox.execute(f"VACUUM INTO '{dst}'")
+
+
+def _restore_inbox(w, backup):
+    import shutil
+    w.inbox.close()
+    for suf in ("", "-wal", "-shm"):
+        if os.path.exists(w.inbox_path + suf):
+            os.remove(w.inbox_path + suf)
+    shutil.copy(backup, w.inbox_path)
+    w.inbox = w.R.open_inbox_rw(w.inbox_path)
+
+
+def _tick(w):
+    from paperbot.agents import extra_accounts as XA
+    from paperbot.agents import rooms as RM
+    from paperbot.notify import NullNotifier
+    w.store.commit()
+    ctx = RM.RoundContext(agents_conn=w.agents, paper_ro=w.R.open_ro(w.db), daily_ro=None,
+                          inbox_ro=w.R.open_ro(w.inbox_path), runner=None, lab=None, now_ms=w.now,
+                          notifier=NullNotifier())
+    return XA.extras_tick(ctx)
+
+
+def test_inbox_restore_that_loses_an_approve_click(tmp_path):
+    """inbox.db restored to a backup from before the owners' approve click: activation stops (inbox_regressed,
+    CRITICAL) until the operator acknowledges; the lost click then shows as owner_click_missing, which is
+    temporary (the tick does not close the owners' approval), and the deciding owner's fresh click starts it."""
+    w = World(tmp_path, hist=True, min_parent_trades=10_000)     # the proposal waits (parent_trades)
+    w.process(T0)
+    bk = os.path.join(str(tmp_path), "inbox_backup.db")
+    _backup_inbox(w, bk)
+    pid = w.copy_proposal()[0]                                     # click + approval
+    w.boundary(T0 + 5 * MIN)
+    assert w.refused(pid)["code"] == "parent_trades" and w.state()["inbox_fingerprint"][0] == 1
+    _restore_inbox(w, bk)
+    w.ext.activator.min_parent_trades = 0
+    w.boundary(T0 + 10 * MIN)
+    assert w.state()["inbox_db"] == "regressed" and w.refused(pid)["code"] == "inbox_regressed"
+    assert not w.extras_rows() and w.refused(pid)["permanent"] is False
+    crit = [m for m in w.notifier.messages if m[0] == "CRITICAL" and "inbox_ack" in m[1]]
+    assert len(crit) == 1 and X.inbox_fingerprint_text([0, 0]) in crit[0][1]
+    assert _tick(w)["closed"] == []
+    w.ext.cfg.inbox_ack = X.inbox_fingerprint_text([0, 0])
+    w.boundary(T0 + 15 * MIN)
+    rf = w.refused(pid)
+    assert rf["code"] == "owner_click_missing" and rf["permanent"] is False and not w.extras_rows()
+    assert _tick(w)["closed"] == [] and w.R.get_proposal(w.agents, pid)["status"] == "approved"
+    w.R.add_approval(w.inbox, pid, "approve", "A", ts=w.now)      # the deciding owner clicks "다시 승인"
+    w.boundary(T0 + 20 * MIN)
+    assert [a["account_id"] for a in w.extras_rows()] == ["V45_AMB@15m~c1"]
+    w.close()
+
+
+def test_inbox_restore_that_loses_a_reject_click(tmp_path):
+    """inbox.db restored to a backup from before a reject click the runner had seen: no account starts (the
+    restore is seen by the inbox fingerprint) until the operator acknowledges, after the owners clicked again."""
+    w = World(tmp_path, hist=True, min_parent_trades=10_000)
+    w.process(T0)
+    pid = w.copy_proposal()[0]
+    bk = os.path.join(str(tmp_path), "inbox_backup.db")
+    _backup_inbox(w, bk)                                           # after the approve click
+    w.boundary(T0 + 5 * MIN)
+    w.R.add_approval(w.inbox, pid, "reject", "A", ts=w.now)        # rejected; the tick has not applied it yet
+    w.ext.activator.min_parent_trades = 0
+    w.boundary(T0 + 10 * MIN)
+    assert w.refused(pid)["code"] == "reject_pending" and w.state()["inbox_fingerprint"][0] == 2
+    _restore_inbox(w, bk)                                          # the reject click is lost
+    w.boundary(T0 + 15 * MIN)
+    assert not w.extras_rows() and w.refused(pid)["code"] == "inbox_regressed"
+    w.now = T0 + 16 * MIN
+    w.R.add_approval(w.inbox, pid, "reject", "A", ts=w.now)        # the owners click reject again (id 2, new ts)
+    w.boundary(T0 + 20 * MIN)
+    assert not w.extras_rows() and w.refused(pid)["code"] == "inbox_regressed"   # id 2 now has another ts
+    w.ext.cfg.inbox_ack = X.inbox_fingerprint_text([2, T0 + 16 * MIN])
+    w.boundary(T0 + 25 * MIN)
+    assert not w.extras_rows() and w.refused(pid)["code"] == "reject_pending"
+    w.close()
+
+
+def test_a_missing_inbox_is_warned_once(world):
+    """A missing inbox.db refuses every creation (no reject click can be seen) and says so once as a WARN (the
+    dashboard creates the empty file at its start, so a missing one is a set-up problem)."""
+    w = world
+    pid = w.copy_proposal(click=False, decided_by="approver")[0]
+    w.inbox.close()
+    for suf in ("", "-wal", "-shm"):
+        if os.path.exists(w.inbox_path + suf):
+            os.remove(w.inbox_path + suf)
+    w.boundary(T0 + 5 * MIN)
+    w.boundary(T0 + 10 * MIN)
+    assert w.state()["inbox_db"] == "missing" and w.refused(pid)["code"] == "inbox_unreadable"
+    warns = [r for r in w.store.conn.execute("SELECT level, text FROM alerts WHERE text LIKE '[extra] inbox.db%'")]
+    assert len(warns) == 1 and warns[0][0] == "WARN" and "없음" in warns[0][1]
+    assert not w.extras_rows()
+    w.inbox = w.R.open_inbox_rw(w.inbox_path)
+
+
+def test_an_account_for_the_proposal_in_paper3_is_never_made_twice(world):
+    """Defence in depth next to the single-runner lock: an extra for this proposal row that is in paper3.db but
+    not in this process's registry (a second runner made it) refuses the creation (id_conflict, loud)."""
+    w = world
+    pid = w.copy_proposal()[0]
+    p = w.R.get_proposal(w.agents, pid)
+    w.store.add_account("V45_AMB@15m~c7", "V45_AMB", "15m", "copy", T0, "paper-v3", "V45_AMB@15m",
+                        {"v": 1, "kind": "copy", "source": {"proposal_id": pid, "proposal_ts": p["ts"]}})
+    w.store.commit()
+    w.boundary(T0 + 5 * MIN)
+    assert w.refused(pid)["code"] == "id_conflict" and "V45_AMB@15m~c7" in w.refused(pid)["detail"]
+    assert [a["account_id"] for a in w.extras_rows()] == ["V45_AMB@15m~c7"]

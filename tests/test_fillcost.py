@@ -94,3 +94,33 @@ def test_the_nightly_report_summarises_the_day(tmp_path):
     assert (row["symbol"], row["event"], row["orders"], row["assumed"]) == ("BTCUSDT", "entry", 1, S.slippage_frac)
     import sqlite3
     assert fill_cost_report(sqlite3.connect(":memory:"), 0, 1) is None        # a database from before the table
+
+
+def test_an_extra_accounts_fill_never_fetches_an_order_book(tmp_path):
+    """An extra account's entry or exit reuses a book fetched for the 195 in the same step, else it is recorded
+    as 'skipped': a fetch runs before the boundary's 195 compute and would move their ref_time / delay_ms."""
+    from paperbot import Signal
+    depth = Depth()
+    store = Store3(str(tmp_path / "x.db"))
+    book = AccountBook(S, {s: Brackets.example() for s in V3_SYMBOLS}, store)
+    book.open_accounts([{"strategy": "S", "timeframe": "5m", "kind": "strategy"},
+                        {"strategy": "S", "timeframe": "5m", "kind": "copy", "account_id": "S@5m~c1",
+                         "parent": "S@5m"},
+                        {"strategy": "NL1", "timeframe": "5m", "kind": "newlab", "account_id": "NL1@5m"}], 0)
+    run = Runner3(book, FakeService(10 * MIN), store, None, V3_SYMBOLS, lambda: 10 * MIN + 5_000,
+                  lambda: {"BTCUSDT": (100.1, 100.2)}, fills=FillProbe(depth, S.slippage_frac))
+    run.process(steps(0, 10))                     # the 195's S@5m gets its BTC signal at the 10m boundary
+
+    def sig(sym, aid):
+        return Signal(ts=10 * MIN - 1, symbol=sym, timeframe="5m", strategy_id=aid.split("@")[0], side=1,
+                      stop_price=0.0, tier="best", atr=0.2, meta={"stop_dist": 0.4, "ref_price": 100.2,
+                                                                  "ref_time": 10 * MIN, "account": aid})
+    book.submit("S@5m~c1", sig("BTCUSDT", "S@5m~c1"))
+    book.submit("NL1@5m", sig("ETHUSDT", "NL1@5m"))
+    run.process(steps(10, 11))                    # all three enter at minute 10
+    rows = {r["account_id"]: r for r in _rows(store)}
+    assert depth.calls == ["BTCUSDT"]             # only the original account's event fetched a book
+    assert rows["S@5m"]["status"] == "ok"
+    assert rows["S@5m~c1"]["status"] == "ok" and rows["S@5m~c1"]["best"] == 100.2   # the 195's book, reused
+    assert rows["NL1@5m"]["status"] == "skipped" and rows["NL1@5m"]["event"] == "entry"
+    assert all(book.engines[a].position is not None for a in ("S@5m", "S@5m~c1", "NL1@5m"))

@@ -290,3 +290,70 @@ def test_crash_gap_label(tmp_path):
                           "data_quality": {}}, ListNotifier())
     assert [m[0] for m in msgs] == ["WARN", "INFO"] and CRASH_GAP_KO in msgs[0][1]
     w.close()
+
+
+def test_copy_losses_get_their_stop_what_ifs_and_skipped_shadows_use_the_copys_settings(tmp_path, monkeypatch):
+    """A copy's loss card reads the stop what-ifs under its parent's id (the copy repeats the parent's signal):
+    they are computed also when only the copy lost (here the parent never took the signals). A lock_start copy's
+    skipped signal is replayed with its own first lock."""
+    import sqlite3
+    from paperbot import daily3 as D
+    from paperbot.cards import cards_from_db
+    from paperbot.models import SignalOutcome
+    store = Store3(str(tmp_path / "c.db"))
+    book = AccountBook(S, BR, store)
+    book.open_accounts([{"strategy": "A", "timeframe": "15m", "kind": "strategy"},
+                        {"strategy": "A", "timeframe": "15m", "kind": "copy", "account_id": "A@15m~c1",
+                         "parent": "A@15m", "data": {"v": 1, "kind": "copy",
+                                                     "rule": {"template": "stop_atr", "k": 1.5}}},
+                        {"strategy": "B", "timeframe": "15m", "kind": "strategy"},
+                        {"strategy": "B", "timeframe": "15m", "kind": "copy", "account_id": "B@15m~c2",
+                         "parent": "B@15m", "data": {"v": 1, "kind": "copy",
+                                                     "rule": {"template": "lock_start", "first_lock": 0.3}}}], 0)
+    steps = _steps(DAY // MIN + 1)
+    rng = np.random.default_rng(4)
+    skipped = None
+    for ts, bars, fund in steps:
+        book.step(ts, bars, fund)
+        b = ts + MIN
+        if b % (15 * MIN) == 0 and b < DAY - HOUR and rng.random() < 0.7:
+            s = V3_SYMBOLS[int(rng.integers(6))]
+            row = {"bar_close": b, "timeframe": "15m", "strategy": "A", "symbol": s,
+                   "side": 1 if rng.random() < 0.5 else -1, "atr": 0.15, "ref_price": bars[s].close,
+                   "ref_time": b + 5000, "delay_ms": 5000, "status": "SUBMITTED"}
+            store.log_signals([row])
+            book.submit("A@15m~c1", make_signal(row, stop_atr=1.5))        # only the copy takes it
+            if skipped is None:
+                skipped = dict(row, strategy="B")
+                store.log_signals([skipped])
+                store.outcome("B@15m~c2", SignalOutcome(make_signal(skipped), "SKIPPED", "in position", b))
+        book.save(ts)
+    store.commit()
+    conn = store.conn
+    lost = conn.execute("SELECT COUNT(*) FROM trades WHERE account_id = 'A@15m~c1' AND exit_reason IN ('SL','LIQ')"
+                        ).fetchone()[0]
+    assert lost > 0 and conn.execute("SELECT COUNT(*) FROM trades WHERE account_id = 'A@15m'").fetchone()[0] == 0
+    seen = []
+    real_alone = D._alone
+
+    def alone(settings, *a, **k):
+        seen.append(settings)
+        return real_alone(settings, *a, **k)
+    monkeypatch.setattr(D, "_alone", alone)
+    rows = D.shadows(S, BR, {}, conn, "d", 0, DAY, steps)
+    stop = [r for r in rows if r["kind"].startswith("stop")]
+    assert len(stop) == 3 * lost and all(r["account_id"] == "A@15m" for r in stop)
+    assert all(json.loads(r["data"])["actual_roe"] is None and json.loads(r["data"])["copies"] == ["A@15m~c1"]
+               for r in stop)
+    assert [r["account_id"] for r in rows if r["kind"] == "skipped" and r["account_id"].startswith("B@")] == \
+        ["B@15m~c2"]
+    assert any(getattr(x, "ladder_first_lock", None) == 0.3 for x in seen)        # the copy's own first lock
+    # the copy's loss cards now show the what-ifs
+    daily = sqlite3.connect(":memory:")
+    daily.executescript(D.SCHEMA)
+    daily.executemany("INSERT INTO shadows VALUES (:key,:day,:kind,:account_id,:symbol,:timeframe,:side,"
+                      ":filled,:roe,:exit_reason,:resolved,:data)", rows)
+    cards = cards_from_db(conn, S.round_trip_cost, account_id="A@15m~c1", daily_conn=daily, limit=500)
+    losing = [c for c in cards if c["pnl"] < 0]
+    assert losing and all(set(c["if_stop"]) == {"1.5", "2.5", "3.0"} for c in losing)
+    store.close()

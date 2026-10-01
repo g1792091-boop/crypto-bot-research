@@ -107,7 +107,9 @@ class Data:
 
     def cards(self, strategy: Optional[str], tf: Optional[str], days: Optional[float], limit: int,
               losses_only: bool = True) -> list[dict]:
-        """Trade cards of the last ``days`` days (all history when None)."""
+        """Trade cards of the last ``days`` days (all history when None). For one strategy (the strategy tab and
+        its 30-day tag shares) only its own accounts (kind 'strategy'): a copy account carries its parent's
+        strategy name, but its trades follow another rule and are not the strategy's."""
         from ..agents.roster3 import STRATEGY_KO
         from ..cards import cards_from_db
         since = 0 if days is None else int(time.time() * 1000 - days * 86_400_000)
@@ -115,7 +117,7 @@ class Data:
         try:
             with self.conn() as c:
                 return cards_from_db(c, self._round_trip(c), strategy, tf, losses_only, since, limit, d,
-                                     STRATEGY_KO)
+                                     STRATEGY_KO, kinds=("strategy",) if strategy else None)
         finally:
             if d is not None:
                 d.close()
@@ -182,12 +184,12 @@ class Data:
             st = self.state(c, "accounts")
             eng = st[1]["engines"] if st else {}
             xstate = self.extras_state(c)
-        for a in accts:
-            a.update(self._extra_fields(a, xstate))         # (drops the raw data column)
-            stats = {r["account_id"]: dict(r) for r in c.execute(
+            stats = {r["account_id"]: dict(r) for r in c.execute(       # one pass over trades for every account
                 "SELECT account_id, COUNT(*) AS trades, SUM(pnl > 0) AS wins, SUM(pnl) AS pnl, "
                 "SUM(exit_reason = 'LOCK') AS locks, MAX(exit_time) AS last_exit, "
                 "AVG(leverage) AS avg_lev FROM trades GROUP BY account_id")}
+        for a in accts:
+            a.update(self._extra_fields(a, xstate))         # (drops the raw data column)
         rows = []
         for a in accts:
             e = eng.get(a["account_id"], {})
@@ -214,6 +216,8 @@ class Data:
         for r in rows:
             b = best_random.get(r["timeframe"])
             r["beats_random"] = None if b is None or r["wallet"] is None else (r["wallet"] > b and not r["bust"])
+            if r["kind"] in ("copy", "newlab"):
+                r["beats_random"] = None   # started later than the coin-flip accounts: their wallets are not comparable
         return {"ts": st[0] if st else None, "accounts": rows, "best_random": best_random,
                 "initial": self.initial(), "extras_runtime": xstate}
 
@@ -264,9 +268,11 @@ class Data:
             run = self.state(c, "run")
             alerts = [dict(r) for r in c.execute(
                 "SELECT ts, level, text FROM alerts WHERE level != 'INFO' ORDER BY rowid DESC LIMIT 50")]
+            # the 195's signals only: a new-strategy account's own rows (strategy 'NL<n>', written after the
+            # 195's compute) are not theirs (as in agents/packets3.py)
             sig = [dict(r) for r in c.execute(
                 "SELECT timeframe, status, COUNT(*) AS n, AVG(delay_ms) AS avg_delay FROM signal_log "
-                "WHERE bar_close > ? GROUP BY timeframe, status",
+                "WHERE bar_close > ? AND strategy NOT GLOB 'NL[0-9]*' GROUP BY timeframe, status",
                 (int(time.time() * 1000) - 86_400_000,))]
         return {"now": int(time.time() * 1000), "heartbeat": hb, "run": run, "alerts": alerts,
                 "signals_24h": sig}
@@ -888,6 +894,19 @@ class Rooms:
             return self.R.last_message_id(a)
 
     # -- write side (inbox.db only)
+    def ensure_inbox(self) -> None:
+        """Create an empty inbox.db at the dashboard's start when there is none yet. The live runner reads it at
+        every activation (the sticky reject and the owners' clicks): a missing file refuses every new extra account,
+        including a copy the autonomous approver may approve alone after day 60. Never raises."""
+        if not self.inbox_db or os.path.exists(self.inbox_db):
+            return
+        if not os.path.isdir(os.path.dirname(os.path.abspath(self.inbox_db))):
+            return
+        try:
+            self.R.open_inbox_rw(self.inbox_db).close()
+        except Exception as exc:  # noqa: BLE001  the first owner write creates it again
+            print(f"inbox.db not created at start: {type(exc).__name__}: {exc}", file=sys.stderr)
+
     def _inbox(self) -> sqlite3.Connection:
         if not self.inbox_db:
             raise HTTPException(503, "두 분 메시지 저장소(inbox.db)가 설정되지 않았습니다")
@@ -931,9 +950,10 @@ class Rooms:
             if isinstance(now, dict) and now.get("pass") is False:
                 raise HTTPException(409, "시험을 더 해서, 지금 기준으로 다시 판정하면 코드 관문을 "
                                          "통과하지 못합니다. 승인할 수 없습니다")
-            # an approval given before the runner's extra-account feature started needs one more click
+            # one more click on an approved proposal: given before the runner's extra-account feature started
+            # (stale_ok), or the deciding owner's click is no longer in inbox.db (owner_click_missing)
             again = (p["status"] == "approved" and running is None and isinstance(refusal, dict)
-                     and refusal.get("code") == "stale_ok")
+                     and refusal.get("code") in self.X.RE_APPROVE)
             if dec is not None and dec.get("rejected_before"):
                 raise HTTPException(409, f"이 제안은 지금 승인할 수 없는 상태입니다 ({PSTATUS_KO.get(eff, eff)})")
             if eff != "awaiting_owner" and not again:
@@ -1005,6 +1025,7 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
     data = Data(db, daily_db)
     rooms = Rooms(agents_db, inbox_db, os.environ.get("AGENTS_BUDGET"), say_per_hour,
                   owner_names(os.environ.get("DASH_OWNERS")), paper_db=db)
+    rooms.ensure_inbox()
     fails: dict[str, list[float]] = {}
 
     def authed(req: Request) -> bool:

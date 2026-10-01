@@ -171,9 +171,11 @@ def test_contract_literals():
     for name in STRATEGY_KO:                       # no original name can look like an extra
         assert not name.startswith("NL") and "~" not in name and "@" not in name
     assert X.PERMANENT == {"contract_missing", "contract_mismatch", "spec_invalid", "trial_status", "stale_run",
-                           "owner_ok_missing", "owner_click_missing", "duplicate", "gate_now_fail", "parent_missing",
-                           "parent_bust"}
+                           "owner_ok_missing", "duplicate", "gate_now_fail", "parent_missing", "parent_bust"}
     assert set(X.PERMANENT) <= set(X.REFUSAL_KO)
+    from paperbot import extras as RT                       # every runtime code has its Korean text here
+    assert set(RT.CODES_KO) <= set(X.REFUSAL_KO) and X.PERMANENT == RT.PERMANENT
+    assert set(X.RE_APPROVE) <= RT.TEMPORARY
     assert X.proposal_kind({"change": {"x": 1}}) == "copy" and X.proposal_kind({"change": {"kind": "newlab"}}) == "newlab"
 
 
@@ -334,6 +336,42 @@ def test_newlab_observation_writes_nothing(world):
     pol = RM.RoomsPolicy(observe_until=R.kst_day(QUIET + DAY))
     world.tick(QueueRunner({}), QUIET, policy=pol)
     assert R.list_proposals(world.agents) == [] and R.get_trial(world.agents, t["id"])["result"]["status"] == "passed"
+
+
+def test_agents_never_propose_before_the_runners_floor(world):
+    """The live runner refuses for good a proposal written before its floor (run start + at least 21 days, later by
+    its extras.json: stale_run) or decided by the approver alone in the first 60 days (owner_ok_missing); the tick
+    then closes it and the pass is never proposed again. Settings that allowed that are refused, and the agents'
+    observation lasts until the latest of their days, their date and the runner's recorded floor."""
+    for bad in ({"AGENTS_OBSERVE_DAYS": "0"}, {"AGENTS_OBSERVE_DAYS": "20"}, {"AGENTS_OWNER_OK": "no"}):
+        with pytest.raises(ValueError):
+            RM.policy_from_env(bad)
+    assert RM.policy_from_env({"AGENTS_OBSERVE_DAYS": "30"}).observe_days == 30
+    floor = START + 21 * DAY
+    assert START < QUIET < floor
+    # a date before run start + 21 days does not shorten the period (it used to win over the days)
+    pol = RM.policy_from_env({"AGENTS_OBSERVE_UNTIL": R.kst_day(START + 3 * DAY)})
+    c = ctx(world, QUIET)
+    c.policy = pol
+    assert RM.observing(c) == R.kst_day(floor - 1)
+    c = ctx(world, floor)
+    c.policy = pol
+    assert RM.observing(c) is None
+    # a later date still extends it
+    pol_late = RM.policy_from_env({"AGENTS_OBSERVE_UNTIL": R.kst_day(floor + 3 * DAY)})
+    c.policy = pol_late
+    assert RM.observing(c) == R.kst_day(floor + 3 * DAY)
+    # the runner's own floor (state 'extras'.observe_until, from its extras.json) is later: the agents wait for it
+    runner_state(world, observe_until=floor + 5 * DAY)
+    c = ctx(world, floor + DAY)
+    c.policy = RM.policy_from_env({})
+    assert RM.observing(c) == R.kst_day(floor + 5 * DAY - 1)
+    t = newlab_trial(world)
+    got = A.newlab_propose(env(world, room=LAB, strategy=None, now=floor + DAY, observing=RM.observing(c) or ""), t)
+    assert got == {"proposed": False, "why": "observing"} and R.list_proposals(world.agents) == []
+    c = ctx(world, floor + 5 * DAY)
+    c.policy = RM.policy_from_env({})
+    assert RM.observing(c) is None
 
 
 def test_newlab_cap_full_waits_and_retries(world):
@@ -667,6 +705,29 @@ def test_reapprove_stale_ok(world, dash):
     world.tick(QueueRunner({}), QUIET + MIN)
     assert R.get_proposal(world.agents, p["id"])["status"] == "approved"
     assert any("승인 클릭을 한 번 더 받았습니다" in m for m in msgs(world))
+
+
+def test_reapprove_owner_click_missing(world, dash):
+    """The runner cannot find the deciding owner's approve click (e.g. inbox.db restored): a temporary refusal the
+    tick never closes, and the dashboard takes one more approve click on the approved proposal."""
+    start(world)
+    world.parent_trades()
+    p, _ = copy_proposal(world, status="approved")
+    runner_state(world, refused={str(p["id"]): {"code": "owner_click_missing", "permanent": False,
+                                                "proposal_ts": p["ts"]}})
+    shown = next(x for x in dash.get("/api/proposals").json() if x["id"] == p["id"])
+    assert shown["runtime_refusal"]["code"] == "owner_click_missing" and "다시 승인" in shown["runtime_refusal"]["text_ko"]
+    assert X.extras_tick(ctx(world, QUIET + MIN))["closed"] == []
+    r = dash.post(f"/api/proposals/{p['id']}/decide", json={"decision": "approve"})
+    assert r.status_code == 200
+    world.tick(QueueRunner({}), QUIET + 2 * MIN)
+    assert R.get_proposal(world.agents, p["id"])["status"] == "approved"
+    assert any("승인 클릭을 한 번 더 받았습니다" in m for m in msgs(world))
+    import os
+    js = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "paperbot", "dash", "static",
+                           "rooms.js"), encoding="utf-8").read()
+    assert 'const RE_APPROVE = ["stale_ok", "owner_click_missing"];' in js and list(X.RE_APPROVE) == ["stale_ok",
+                                                                                                   "owner_click_missing"]
 
 
 def test_runtime_state_absent_keeps_old_texts(world, dash):

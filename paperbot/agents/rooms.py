@@ -299,10 +299,10 @@ class RoomsPolicy:
     retries: int = 1                        # one more try when an answer is unreadable
     owner_ok_required: Optional[bool] = None  # None: required for the first ``owner_ok_days`` of the run
     owner_ok_days: int = 60
-    # the owners' observation period at the start (2026-09-30: "2~3주정도만 일단 지켜보고 싶은데"): until
-    # ``observe_days`` after the run's start, or through the KST date ``observe_until`` when set, the staff
-    # record and analyse only; no copy proposal is made (tests still run and stay in the ledger).
-    # The server's policy (``policy_from_env``) starts at OBSERVE_DAYS_DEFAULT; 0 here = off
+    # the owners' observation period at the start (2026-09-30: "2~3주정도만 일단 지켜보고 싶은데"): until the
+    # latest of ``observe_days`` after the run's start, the KST date ``observe_until`` and the live runner's own
+    # floor (``observing``), the staff record and analyse only; no copy proposal is made (tests still run and
+    # stay in the ledger). The server's policy (``policy_from_env``) is at least OBSERVE_DAYS_DEFAULT; 0 here = off
     observe_days: int = 0
     observe_until: Optional[str] = None
     week_budget: tuple = DEFAULT_WEEK       # rolling 7 KST days (calls, tokens), all classes
@@ -869,9 +869,11 @@ RESEARCH_EVERY_MIN_DEFAULT = 60
 ENV_INTS = {
     # the live runner refuses an approval decided in the first 60 days without the owners (whatever this says)
     "AGENTS_OWNER_OK_DAYS": ("owner_ok_days", 60),
+    # the live runner creates no account before run start + 21 days and refuses for good a proposal written
+    # earlier (stale_run): a shorter observation period here would only lose passes
+    "AGENTS_OBSERVE_DAYS": ("observe_days", OBSERVE_DAYS_DEFAULT),
     "AGENTS_NEWLAB_CAP_TOTAL": ("newlab_cap_total", 0),
     "AGENTS_EXTRAS_MEETINGS_PER_DAY": ("triggers.extras_meetings_per_day", 0),
-    "AGENTS_OBSERVE_DAYS": ("observe_days", 0),
     "AGENTS_COPY_CAP_PER_STRATEGY": ("copy_cap_per_strategy", 0),
     "AGENTS_COPY_CAP_TOTAL": ("copy_cap_total", 0),
     "AGENTS_FLAG_MAX_PER_DAY": ("flag_max_per_day", 0),
@@ -899,7 +901,12 @@ def policy_from_env(environ: Optional[dict] = None) -> RoomsPolicy:
     ok = (env.get("AGENTS_OWNER_OK") or "").strip().lower()
     if ok:
         if ok not in OWNER_OK:
-            raise ValueError(f"AGENTS_OWNER_OK={ok!r}: use auto, yes or no")
+            raise ValueError(f"AGENTS_OWNER_OK={ok!r}: use auto or yes")
+        if ok == "no":
+            # 'no' differs from 'auto' only in the first 60 days, where the live runner refuses an approval without
+            # the owners' click for good (owner_ok_missing): the pass would be lost
+            raise ValueError("AGENTS_OWNER_OK='no': the live runner needs the owners' click for every copy decided in "
+                             "the first 60 days; use auto (the approver alone from day 61) or yes")
         p.owner_ok_required = OWNER_OK[ok]
     until = (env.get("AGENTS_OBSERVE_UNTIL") or "").strip()
     if until:
@@ -1613,18 +1620,34 @@ def _trials(ctx: RoundContext, room: str, strategy: Optional[str]) -> dict:
                                "note": "entry study, same 5-year data, nothing passed; not in this room's gate count"}}
 
 
+def _kst_day_end(day: str) -> int:
+    """00:00 KST after the KST date ``day`` (YYYY-MM-DD), in ms."""
+    from ..sessions import KST
+    return int(datetime.strptime(day, "%Y-%m-%d").replace(tzinfo=KST).timestamp() * 1000) + DAY_MS
+
+
 def observing(ctx: RoundContext) -> Optional[str]:
-    """The last KST day of the observation period while it lasts, else None. Before the paper bot
-    has started, the period has not begun either: observing."""
+    """The last KST day of the observation period while it lasts, else None. It lasts until the latest of the
+    KST date ``observe_until`` (inclusive), the bot's first start + ``observe_days``, and the live runner's own
+    floor (paper3 state 'extras'.observe_until: run start + at least 21 days, later with its extras.json). The
+    runner refuses for good a proposal written before its floor (stale_run) and the pass could never be proposed
+    again, so the agents never propose before it. Before the paper bot has started, the period has not begun
+    either: observing."""
     p = ctx.policy
+    ends = []
     if p.observe_until:
-        return p.observe_until if R.kst_day(ctx.now_ms) <= p.observe_until else None
-    if p.observe_days <= 0:
+        ends.append(_kst_day_end(p.observe_until))
+    if p.observe_days > 0:
+        start = TR.run_start(ctx.paper_ro)
+        if start is None:
+            return "봇 시작 뒤 %d일" % p.observe_days
+        ends.append(start + p.observe_days * DAY_MS)
+    floor = (X.runner_state(ctx.paper_ro) or {}).get("observe_until")
+    if isinstance(floor, int) and not isinstance(floor, bool):
+        ends.append(floor)
+    if not ends:
         return None
-    start = TR.run_start(ctx.paper_ro)
-    if start is None:
-        return "봇 시작 뒤 %d일" % p.observe_days
-    end = start + p.observe_days * DAY_MS
+    end = max(ends)
     return R.kst_day(end - 1) if ctx.now_ms < end else None
 
 
@@ -2936,11 +2959,13 @@ def apply_approvals(conn: sqlite3.Connection, inbox_ro: Optional[sqlite3.Connect
                        + (" " + A.start_text(paper_ro) if want == "approved" else ""),
                        ref, ts=now_ms, commit=False)
             elif want == "approved" and p["status"] == "approved":
-                # approved again (the runner asks for a click made after its feature started: 'stale_ok')
+                # approved again (the runner asks for a click made after its feature started, 'stale_ok', or the
+                # deciding owner's click is no longer in inbox.db, 'owner_click_missing')
                 R.post(conn, p["room_id"], None, "owner_decision", "owner",
                        f"두 분 ({a['author']})" if a.get("author") else "두 분", "owner",
                        f"제안 #{p['id']}(이미 승인됨)에 승인 클릭을 한 번 더 받았습니다. 추가 계좌 기능이 켜지기 전에 "
-                       "승인한 제안이면 live 실행기가 이 클릭을 보고 코드로 다시 확인한 뒤 계좌를 시작합니다.",
+                       "승인했거나 승인 클릭 기록을 잃은 제안이면 live 실행기가 이 클릭을 보고 코드로 다시 확인한 뒤 "
+                       "계좌를 시작합니다.",
                        {**ref, "again": True}, ts=now_ms, commit=False)
             done.append({"approval_id": a["id"], "ok": bool(changed), "proposal_id": p["id"], "status": want})
         R.set_cursor(conn, "inbox:approvals", int(a["id"]), commit=False)

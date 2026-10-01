@@ -288,7 +288,8 @@ function tfSummary() {
   if (!state.board) return "";
   const extras = state.board.accounts.filter((a) => EXTRA_KINDS.includes(a.kind));
   const rows = TRADE_TFS.map((tf) => {
-    const all = state.board.accounts.filter((a) => a.timeframe === tf);
+    // the original accounts of this timeframe only: the extras are counted once, in their own line below
+    const all = state.board.accounts.filter((a) => a.timeframe === tf && !EXTRA_KINDS.includes(a.kind));
     const st = all.filter((a) => a.kind === "strategy"), rnd = all.filter((a) => a.kind === "random");
     const w = st.map((a) => a.wallet ?? INITIAL);
     const best = st.reduce((b, a) => (!b || (a.wallet ?? INITIAL) > (b.wallet ?? INITIAL)) ? a : b, null);
@@ -303,7 +304,7 @@ function tfSummary() {
   const xrow = extras.length ? `<tr><td class="l">추가 계좌</td><td>${extras.length}</td><td>${extras.filter((a) => a.position).length}</td>
       <td>${extras.filter((a) => a.bust).length}</td><td class="mono">$${fmt(median(extras.map((a) => a.wallet ?? INITIAL)))}</td>
       <td class="l">${xbest ? esc(name(xbest)) + ` <span class="mono ${cls((xbest.wallet ?? INITIAL) - INITIAL)}">$${fmt(xbest.wallet ?? INITIAL)}</span>` : "—"}</td>
-      <td class="mono">—</td><td>${extras.filter((a) => a.beats_random).length}</td></tr>` : "";
+      <td class="mono">—</td><td title="늦게 시작해 처음부터 돈 동전 봇과 잔고를 비교하지 않음">—</td></tr>` : "";
   return `<table><thead><tr><th class="l">봉</th><th>매매법 계좌</th><th>포지션</th><th>파산</th><th>잔고 중앙값</th>
     <th class="l">최고 계좌</th><th>동전 봇 최고</th><th>동전 봇보다 나음</th></tr></thead><tbody>${rows}${xrow}</tbody></table>`;
 }

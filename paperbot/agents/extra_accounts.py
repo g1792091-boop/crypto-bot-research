@@ -49,8 +49,11 @@ LAB_ROOM = R.LAB_ROOM
 # Runtime refusal codes that only a status change can resolve (state 'extras'.refused[pid].permanent); both
 # sides copy this literal (docs: the extras design, section 3.4).
 PERMANENT = frozenset({"contract_missing", "contract_mismatch", "spec_invalid", "trial_status", "stale_run",
-                       "owner_ok_missing", "owner_click_missing", "duplicate", "gate_now_fail", "parent_missing",
-                       "parent_bust"})
+                       "owner_ok_missing", "duplicate", "gate_now_fail", "parent_missing", "parent_bust"})
+# Runtime refusals an owner resolves with one more approve click on the (already approved) proposal: the runner
+# wants a click made after its feature started (stale_ok), or the deciding owner's click is no longer in inbox.db
+# (owner_click_missing, e.g. after an inbox.db restore). The dashboard offers "다시 승인" for these.
+RE_APPROVE = ("stale_ok", "owner_click_missing")
 
 # Account ids are assigned by the runner (never by this side); these are what they look like.
 COPY_ID_RE = re.compile(r"^(?P<S>[A-Za-z0-9_]+)@(?P<tf>5m|15m|30m|1h|4h)~c(?P<n>[1-9][0-9]{0,3})$")
@@ -64,7 +67,9 @@ REFUSAL_KO = {
     "trial_status": "시험 기록이 계좌를 만들 수 있는 상태가 아닙니다",
     "stale_run": "이번 paper 실행 전이나 관찰 기간 중에 만든(또는 결정한) 제안이라 이 실행에서는 계좌를 만들지 않습니다",
     "owner_ok_missing": "운영 처음 60일 안의 결정이라 두 분 확인이 필요한데, 두 분이 승인한 기록이 없습니다",
-    "owner_click_missing": "두 분 승인으로 기록돼 있지만 대시보드에서 누른 승인 클릭을 찾지 못했습니다",
+    "owner_click_missing": "두 분 승인으로 기록돼 있지만 대시보드에서 누른 승인 클릭을 찾지 못했습니다(예: inbox.db 복원). "
+                           "승인한 분이 '다시 승인'을 한 번 더 누르면 실행기가 다시 확인합니다",
+    "inbox_regressed": "실행기가 inbox.db(승인·거절 클릭 기록)가 예전 백업으로 바뀐 것을 보고 운영자 확인을 기다립니다",
     "duplicate": "같은 계좌(같은 원본에 같은 규칙, 또는 같은 새 매매법)가 이미 돌고 있습니다",
     "gate_now_fail": "계좌를 만들기 직전에 지금 시험 수로 다시 판정하니 코드 관문을 통과하지 못했습니다",
     "parent_missing": "원본 계좌가 paper3에 없습니다",
@@ -506,12 +511,8 @@ def extras_tick(ctx: Any) -> dict:
                     if (R.get_trial(conn, int(t["id"])) or {}).get("result", {}).get("status") == "proposed":
                         continue                       # repaired: the runner checks it again at its next poll
                 text = f"제안 #{p['id']}을 코드가 거절로 닫았습니다: {REFUSAL_KO.get(code, code)}."
-                if code == "owner_click_missing":
-                    text = "⚠️ " + text + " 운영자가 확인해 주세요."
                 if _close(conn, p, text, {"why": "runtime_refusal", "code": code}, now):
                     out["closed"].append((p["id"], code))
-                    if code == "owner_click_missing":
-                        _notify(ctx, f"[추가 계좌] 제안 #{p['id']}: {REFUSAL_KO[code]} (코드가 닫음)")
                 continue
             if reject_click(ctx.inbox_ro, p):
                 if _close(conn, p, f"제안 #{p['id']}: 두 분의 거절 클릭이 남아 있어 닫습니다(계좌는 시작되지 않았습니다).",

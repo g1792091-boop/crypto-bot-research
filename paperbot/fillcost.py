@@ -17,6 +17,10 @@ Timing: the book is fetched when the runner handles the step, a few seconds afte
 closed; a stop that triggered inside that minute was earlier. Steps replayed after a restart
 (older than ``max_age_ms``) are recorded without a book (``status = 'stale'``). One request per
 symbol with an event per minute (weight 5 at 100 levels), at most six a minute.
+
+Only the original accounts' events request a book. An extra account's event (paperbot/extras.py) reuses a
+book fetched for the 195 in the same step, else it is recorded as ``status = 'skipped'``: a request runs
+before the 195's next signal compute and would move their reference prices and delays.
 """
 
 from __future__ import annotations
@@ -86,18 +90,26 @@ class FillProbe:
                             "qty": new[2], "notional": new[2] * new[4]})
         return out
 
-    def after(self, ts: int, engines: dict, snap: dict, bars: dict, now_ms: int) -> list[dict]:
+    def after(self, ts: int, engines: dict, snap: dict, bars: dict, now_ms: int, books: Optional[dict] = None,
+              fetch: bool = True) -> list[dict]:
+        """Rows for ``engines``' entries and exits of the step. ``books`` (symbol -> fetched book) is filled in
+        and may be shared between calls of the same step. ``fetch=False`` never requests a book: an event on a
+        symbol without a book already fetched in this step is recorded as ``status = 'skipped'`` (the live
+        runner uses it for the extra accounts, so they never add a request before the 195's next compute)."""
         rows = self.events(ts, engines, snap, bars)
         if not rows:
             return []
         stale = now_ms - ts > self.max_age_ms
-        books: dict = {}
+        books = {} if books is None else books
         for r in rows:
             r["assumed_slip"] = self.assumed_slip
             if stale:
                 r["status"] = "stale"
                 continue
             sym = r["symbol"]
+            if sym not in books and not fetch:
+                r["status"] = "skipped"
+                continue
             if sym not in books:
                 try:
                     books[sym] = self.depth(sym)

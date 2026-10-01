@@ -497,16 +497,21 @@ def test_a_post_the_budget_defers_is_not_promised_the_next_turn(world, dash):
 
 
 def test_owner_settings_from_env_reach_the_tick_and_the_dashboard(world, dash):
-    env = {"AGENTS_BUDGET": "loss=14:400000, total=60", "AGENTS_OWNER_OK": "no", "AGENTS_COPY_CAP_TOTAL": "4",
-           "AGENTS_MAX_ROUNDS_PER_TICK": "2", "AGENTS_FLAG_MAX_PER_DAY": "1", "AGENTS_OBSERVE_DAYS": "0"}
+    env = {"AGENTS_BUDGET": "loss=14:400000, total=60", "AGENTS_OWNER_OK": "yes", "AGENTS_COPY_CAP_TOTAL": "4",
+           "AGENTS_MAX_ROUNDS_PER_TICK": "2", "AGENTS_FLAG_MAX_PER_DAY": "1", "AGENTS_OBSERVE_DAYS": "30"}
     pol = RM.policy_from_env(env)
     assert pol.budgets["loss"] == (14, 400000) and pol.budgets["owner"] == RM.DEFAULT_BUDGETS["owner"]
-    assert pol.total_budget == (60, RM.DEFAULT_TOTAL[1]) and pol.owner_ok_required is False
+    assert pol.total_budget == (60, RM.DEFAULT_TOTAL[1]) and pol.owner_ok_required is True
     assert pol.copy_cap_total == 4 and pol.max_rounds_per_tick == 2 and pol.flag_max_per_day == 1
+    assert pol.observe_days == 30
+    # the tick below runs without the owners' confirmation and without an observation period (the CLI's
+    # --owner-ok no; the environment refuses both, the live runner would refuse such proposals for good)
+    pol.owner_ok_required, pol.observe_days = False, 0
     server = RM.RoomsPolicy(observe_days=RM.OBSERVE_DAYS_DEFAULT)
     server.triggers.research_every_ms = RM.RESEARCH_EVERY_MIN_DEFAULT * 60_000     # the lab meets on the server
     assert RM.policy_from_env({}) == server
     for bad in ({"AGENTS_BUDGET": "lose=3"}, {"AGENTS_BUDGET": "loss=x"}, {"AGENTS_OWNER_OK": "maybe"},
+                {"AGENTS_OWNER_OK": "no"}, {"AGENTS_OBSERVE_DAYS": "0"},
                 {"AGENTS_COPY_CAP_TOTAL": "-1"}, {"AGENTS_MAX_ROUNDS_PER_TICK": "0"}):
         with pytest.raises(ValueError):
             RM.policy_from_env(bad)
@@ -531,7 +536,8 @@ def test_owner_settings_from_env_reach_the_tick_and_the_dashboard(world, dash):
 def test_the_observation_period_keeps_proposals_back(world):
     """The owners watch the first weeks: by default (policy_from_env) no copy proposal is made for
     AGENTS_OBSERVE_DAYS after the bot's start; tests still run and stay in the ledger."""
-    pol = RM.policy_from_env({"AGENTS_OWNER_OK": "no"})
+    pol = RM.policy_from_env({})
+    pol.owner_ok_required = False                     # (else the proposal would wait for the owners anyway)
     assert pol.observe_days == RM.OBSERVE_DAYS_DEFAULT == 21
     staff = Staff({**lab_round_answers(WIDER), "validator": [{"pass_gate": True, "explanation": "통과"}],
                    "approver": [{"approve": True, "reason": "통과"}]})

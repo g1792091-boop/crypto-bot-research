@@ -4,7 +4,7 @@
   "agents_db": "/var/lib/paperbot/agents3.db",
   "_inbox_db": "inbox.db (read-only): the owners' approve / reject clicks. Default: next to paper3.db.",
   "inbox_db": "/var/lib/paperbot/inbox.db",
-  "_observe_days": "No account is created (and no proposal counts) before run start + this many days. Never lower than 21 (the file cannot lower it).",
+  "_observe_days": "No account is created (and no proposal counts) before run start + this many days. Never lower than 21 (the file cannot lower it); above 3650 it is read as 3650.",
   "observe_days": 21,
   "_observe_until": "Optional KST date (YYYY-MM-DD, inclusive) that extends the observation period.",
   "observe_until": null,
@@ -16,6 +16,8 @@
   "pause_activation": false,
   "_agents_ack": "After an agents3.db restore the runner refuses activation until this holds the fingerprint string shown in the CRITICAL alert / the dashboard / 'python -m paperbot.extras status'.",
   "agents_ack": null,
+  "_inbox_ack": "After an inbox.db restore (or an empty inbox.db in its place) the runner refuses activation until this holds the string shown in the CRITICAL alert / 'python -m paperbot.extras status' (approval:<id>@<ts>). First ask the owners to click again every approve / reject made after the backup.",
+  "inbox_ack": null,
   "_accept_code": "Account id -> the new code pin shown in the alert, when the owners accept changed signal code for a suspended new-strategy account (a Q5 event for that account). Applied at the next restart.",
   "accept_code": {}
 }

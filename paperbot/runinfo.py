@@ -28,8 +28,12 @@ TRADING_FILES = ("paperbot/engine.py", "paperbot/ladder.py", "paperbot/margin.py
 RULES_FILES = ("docs/paper-v3-rules.md", "docs/paper-v3-rules-addendum.md")
 # Files that decide only the extra accounts (paperbot/extras.py): their trading code and signals, and the
 # code that judges an approval at creation (not trading). A change is a Q5 event for the extras only.
-EXTRA_FILES = ("paperbot/extras.py", "paperbot/newlab_live.py", "paperbot/agents/newlab_signals.py",
-               "paperbot/context.py", "paperbot/recorder.py")
+EXTRA_FILES = ("paperbot/extras.py", "paperbot/newlab_live.py", "paperbot/agents/newlab_signals.py")
+# Signal input code the 195 use too (recorder.build_frames makes their signal frames, context the chart context
+# of their cards) and the extras (new-strategy frames, copies' skip tags). Not in TRADING_FILES (open question
+# Q-11 of the extras design, the rule keeper's decision); a change is reported without saying the 195 are
+# unaffected.
+SHARED_SIGNAL_FILES = ("paperbot/recorder.py", "paperbot/context.py")
 EXTRA_GATE_FILES = ("paperbot/agents/newlab.py", "paperbot/agents/labtests.py", "paperbot/agents/actions.py",
                     "paperbot/agents/rooms_db.py")
 
@@ -40,6 +44,8 @@ WATCHED = (("commit", "코드 버전", False), ("trading_code", "체결·청산�
            ("rules", "규칙 문서", False))
 # Kept apart from WATCHED (which applies to every account): (key, name, touches the extras' trading)
 EXTRA_WATCHED = (("extra_code", "추가 계좌 코드", True), ("extra_gate_code", "추가 계좌 승인 확인 코드", False))
+# Neither WATCHED nor extras-only: (key, name, trading)
+SHARED_WATCHED = (("shared_signal_code", "신호 입력 코드(recorder·context: 원래 계좌와 추가 계좌가 함께 씀)", True),)
 EXTRAS_ONLY_KO = "추가 계좌만 해당"
 
 
@@ -97,6 +103,7 @@ def run_record(settings, brackets: dict, brackets_src: str, argv, signal_lock: O
         "packages": packages_hash(),
         "rules": files_hash(RULES_FILES, root),
         "extra_code": files_hash(EXTRA_FILES, root),
+        "shared_signal_code": files_hash(SHARED_SIGNAL_FILES, root),
         "extra_gate_code": files_hash(EXTRA_GATE_FILES, root),
         "python": platform.python_version(),
         "argv": list(argv),
@@ -105,7 +112,8 @@ def run_record(settings, brackets: dict, brackets_src: str, argv, signal_lock: O
 
 def changes(prev: Optional[dict], cur: dict) -> list[dict]:
     """What differs from the previous start (empty on the first run). Entries of EXTRA_WATCHED carry
-    ``extras_only``."""
+    ``extras_only``, entries of SHARED_WATCHED ``shared``. A key the previous record does not have yet (a record
+    written before the key existed) is not a change."""
     if prev is None:
         return []
     out = [{"key": k, "name": name, "trading": trading, "before": prev.get(k), "after": cur.get(k)}
@@ -113,6 +121,8 @@ def changes(prev: Optional[dict], cur: dict) -> list[dict]:
     out += [{"key": k, "name": name, "trading": trading, "before": prev.get(k), "after": cur.get(k),
              "extras_only": True}
             for k, name, trading in EXTRA_WATCHED if prev.get(k) != cur.get(k)]
+    out += [{"key": k, "name": name, "trading": trading, "before": prev.get(k), "after": cur.get(k), "shared": True}
+            for k, name, trading in SHARED_WATCHED if k in prev and prev.get(k) != cur.get(k)]
     return out
 
 
@@ -120,10 +130,14 @@ def change_text(ch: list[dict]) -> Optional[str]:
     if not ch:
         return None
     names = ", ".join(c["name"] + (f"({EXTRAS_ONLY_KO})" if c.get("extras_only") else "") for c in ch)
-    if any(c["trading"] and not c.get("extras_only") for c in ch):
+    if any(c["trading"] and not c.get("extras_only") and not c.get("shared") for c in ch):
         return (f"재시작 때 바뀐 것: {names}. 체결·청산·사이즈에 영향이 있을 수 있어 규칙(Q5)상 "
                 "해당 30일 기간을 오늘부터 다시 셉니다. 규칙 관리자 확인 필요")
+    if any(c["trading"] and c.get("shared") for c in ch):
+        return (f"재시작 때 바뀐 것: {names}. 원래 195개 계좌의 신호 계산(recorder.py)과 차트 설명(context.py)에도 "
+                "쓰이는 코드라 원래 계좌와 추가 계좌 모두 Q5(30일 기간을 다시 셀지) 해당 여부를 규칙 관리자가 "
+                "확인해야 합니다 (열린 질문 Q-11)")
     if any(c["trading"] for c in ch):
-        return (f"재시작 때 바뀐 것: {names}. 추가 계좌의 체결·신호 코드라 {EXTRAS_ONLY_KO}: 그 계좌들의 30일 기간을 "
-                "오늘부터 다시 셉니다(원래 195개 계좌는 그대로). 규칙 관리자 확인 필요")
+        return (f"재시작 때 바뀐 것: {names}. 추가 계좌의 체결·신호 코드라 {EXTRAS_ONLY_KO}(원래 195개 계좌의 코드는 "
+                "그대로): 그 계좌들의 30일 기간을 다시 세야 하는지 규칙 관리자 확인 필요")
     return f"재시작 때 바뀐 것: {names} (체결·청산·사이즈에는 영향 없음)"

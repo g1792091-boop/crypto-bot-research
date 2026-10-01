@@ -1417,6 +1417,49 @@ def check_paper_db(ctx: Ctx, stage: str, deadman_set: bool = False) -> list[Line
     return out
 
 
+# an extra paper account's id (paperbot/extras.py: a copy "S@15m~c1", a new strategy "NL1@1h")
+EXTRA_ACCOUNT_RE = re.compile(r"(~c[0-9]+$)|(^NL[0-9]+@)")
+
+
+def check_executor_account(ctx: Ctx) -> list[Line]:
+    """The paper account the order executor follows (``account`` in /etc/paperbot/executor.json, no keys in it)
+    must be an original strategy account (paper3.db kind 'strategy'). The executor itself does not refuse an
+    extra account yet (a copy or a new strategy, docs/extra-accounts.md 9) or a coin-flip account, and would
+    then trade real money on a rule that never went through the live-safety review. No file: nothing to say."""
+    path = os.path.join(ctx.etc, "executor.json")
+    if ctx.stat(path) is None:
+        return []
+    try:
+        with open(path, encoding="utf-8") as fh:
+            cfg = json.load(fh)
+    except (OSError, ValueError) as exc:
+        return [note(f"{path}를 읽지 못해 주문 실행기가 따라 할 계좌를 확인하지 못했습니다 ({type(exc).__name__})")]
+    acct = cfg.get("account") if isinstance(cfg, dict) else None
+    if not isinstance(acct, str) or not acct.strip():
+        return [note(f"{path}에 따라 할 계좌(account)가 없습니다: 실행기의 check-config가 거부합니다")]
+    kind = None
+    db = os.path.join(ctx.lib, "paper3.db")
+    if ctx.stat(db) is not None:
+        try:
+            conn = open_ro(db)
+            try:
+                row = conn.execute("SELECT kind FROM accounts WHERE account_id = ?", (acct,)).fetchone()
+            finally:
+                conn.close()
+            kind = row[0] if row else None
+        except sqlite3.Error:
+            kind = None
+    if EXTRA_ACCOUNT_RE.search(acct) or (kind is not None and kind != "strategy"):
+        what = {"copy": "복제 계좌", "newlab": "새 매매법 계좌", "random": "동전 봇 계좌"}.get(kind, "추가 계좌 이름")
+        return [fix(f"주문 실행기가 따라 할 계좌 {acct}는 원래 매매법 계좌가 아닙니다({what}). 실행기는 아직 이런 계좌를 "
+                    "거부하지 않아 실제 돈으로 따라 하게 됩니다 → /etc/paperbot/executor.json의 account를 원래 매매법 "
+                    "계좌(예: V45_AMB@15m)로 바꾸세요 (docs/extra-accounts.md 9장)")]
+    if kind is None:
+        return [note(f"주문 실행기가 따라 할 계좌 {acct}를 paper3.db에서 찾지 못해 종류를 확인하지 못했습니다 "
+                     "(봇 시작 전이면 괜찮습니다)")]
+    return [ok(f"주문 실행기가 따라 할 계좌 {acct}: 원래 매매법 계좌")]
+
+
 def check_liq(ctx: Ctx) -> list[Line]:
     """After the start: the liquidation recorder (paperbot-liq) keeps reconnecting on its own and stays
     'active' while the stream is down, and Binance keeps no history of liquidations: its connection log
@@ -1570,7 +1613,7 @@ def check_agents_policy(ctx: Ctx, agents: EnvFile, agents_wanted: bool, run_star
     level = fix if agents_wanted else note
     if not agents.exists or agents.error:
         return [level(f"{agents.path}를 읽지 못해 에이전트 설정(AI 예산·관찰 기간)을 확인하지 못했습니다")]
-    from .agents.rooms import OBSERVE_DAYS_DEFAULT, budget_warnings, policy_from_env
+    from .agents.rooms import OBSERVE_DAYS_DEFAULT, _kst_day_end, budget_warnings, policy_from_env
     try:
         p = policy_from_env(dict(agents.values))
     except ValueError as exc:
@@ -1578,17 +1621,19 @@ def check_agents_policy(ctx: Ctx, agents: EnvFile, agents_wanted: bool, run_star
     out = [ok(f"agents.env 설정 읽힘: AI 하루 최대 {p.total_budget[0]}회·{p.total_budget[1]:,} 토큰, "
               f"7일 {p.week_budget[0]}회·{p.week_budget[1]:,} 토큰")]
     out += [note(f"예산 경고(그 회의는 열리지 못함): {w}") for w in budget_warnings(p)]
-    if p.observe_until:
-        if p.observe_until < kst_day(ctx.now_ms()):
-            out.append(note(f"관찰 기간: AGENTS_OBSERVE_UNTIL({p.observe_until}) 날짜가 이미 지났습니다 → 관찰 기간 없이 "
-                            "복사 제안이 나올 수 있습니다"))
-        else:
-            out.append(ok(f"관찰 기간: {p.observe_until}(한국 날짜)까지 복사 제안 없음"))
-    elif p.observe_days <= 0:
-        out.append(note(f"관찰 기간 꺼짐(AGENTS_OBSERVE_DAYS=0): 첫날부터 복사 제안이 나올 수 있습니다 "
-                        f"(정한 값은 {OBSERVE_DAYS_DEFAULT}일)"))
+    # the period lasts until the later of observe_days after the start and AGENTS_OBSERVE_UNTIL (rooms.observing;
+    # the live runner's own floor can make it longer still); observe_days is never below 21 (policy_from_env)
+    days_end = run_start + p.observe_days * DAY_MS if run_start is not None else None
+    until_end = _kst_day_end(p.observe_until) if p.observe_until else None
+    if until_end is not None and (until_end <= (days_end or 0) or (days_end is None and
+                                                                     p.observe_until < kst_day(ctx.now_ms()))):
+        when = f"{kst_day(days_end - 1)}까지" if days_end is not None else "까지"
+        out.append(note(f"관찰 기간: AGENTS_OBSERVE_UNTIL({p.observe_until})이 이미 지났거나 봇 첫 시작부터 "
+                        f"{p.observe_days}일보다 빨라 쓰이지 않습니다 → 봇 첫 시작부터 {p.observe_days}일{when} 복사 제안 없음"))
+    elif until_end is not None:
+        out.append(ok(f"관찰 기간: {p.observe_until}(한국 날짜)까지 복사 제안 없음"))
     else:
-        until = (f", {kst_day(run_start + p.observe_days * DAY_MS - 1)}까지" if run_start is not None else "")
+        until = f", {kst_day(days_end - 1)}까지" if days_end is not None else ""
         text = f"관찰 기간: 봇 첫 시작부터 {p.observe_days}일{until} 복사 제안 없음"
         out.append(ok(text) if p.observe_days == OBSERVE_DAYS_DEFAULT else
                    note(f"{text} (정한 값 {OBSERVE_DAYS_DEFAULT}일과 다름)"))
@@ -1636,6 +1681,7 @@ def run_checks(ctx: Ctx, stage: str = "before", send_test: bool = False, ping: b
         ("시계", guard(check_clock, ctx)),
         ("서비스", guard(check_units, states, stage, wanted, ctx.mono_us())),
         ("서버 밖 백업 (텔레그램)", guard(check_offsite, live, states, level=note)),
+        ("주문 실행기가 따라 할 계좌", guard(check_executor_account, ctx)),
         ("데이터", guard(check_data_dir, ctx) + guard(check_paper_db, ctx, stage, bool(live.get("DEADMAN_URL")))
          + (guard(check_liq, ctx) if stage == "after" else [])),
     ]

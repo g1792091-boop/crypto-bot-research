@@ -10,9 +10,10 @@ After every step the book writes each engine's state to the store, so a
 restart continues exactly where it stopped (``AccountBook.load``).
 
 The original accounts (kinds in ``ORIGINAL_KINDS``) always get the book's own
-settings object, ``PaperEngine`` and the book's digest. Only an extra account may
-be built differently: ``load(make_of)`` and ``add_extra`` take per-account
-settings / engine class / digest, and ``HeldEngine`` keeps an account frozen.
+settings object, ``PaperEngine``, the book's digest and notifier. Only an extra
+account may be built differently: ``load(make_of)`` and ``add_extra`` take
+per-account settings / engine class / digest / forward notifier, and
+``HeldEngine`` keeps an account frozen.
 """
 
 from __future__ import annotations
@@ -94,9 +95,10 @@ class AccountBook:
 
     # ------------------------------------------------------------ setup
     def _make(self, aid: str, settings: Optional[Settings] = None, cls=None,
-              digest: Optional[Digest] = None) -> PaperEngine:
-        """One engine. The defaults (the book's settings object, PaperEngine, the book's digest) are
-        what every original account gets; an extra account may pass its own."""
+              digest: Optional[Digest] = None, forward: Optional[Notifier] = None) -> PaperEngine:
+        """One engine. The defaults (the book's settings object, PaperEngine, the book's digest, the book's
+        notifier for CRITICAL lines) are what every original account gets; an extra account may pass its own
+        (paperbot/extras.py holds an extra's CRITICAL lines until no 195 compute can wait for them)."""
         def on_trade(rec, aid=aid):
             self.store.trade(aid, rec)
 
@@ -106,7 +108,8 @@ class AccountBook:
         settings = self.s if settings is None else settings
         cls = PaperEngine if cls is None else cls
         digest = self.digest if digest is None else digest
-        return cls(settings, self.brackets, notifier=_StoreNotifier(self.store, self.notifier,
+        forward = self.notifier if forward is None else forward
+        return cls(settings, self.brackets, notifier=_StoreNotifier(self.store, forward,
                                                                    lambda: self._now, digest),
                    symbol_specs=self.specs, on_trade=on_trade, on_outcome=on_outcome,
                    book=aid)
@@ -127,7 +130,7 @@ class AccountBook:
         """Rebuild every account listed in the store and restore its state.
         Returns False when the store holds no saved state (a fresh start).
         ``make_of(row)``: how to build an account (None = the defaults; else keyword arguments of
-        ``_make``: settings, cls, digest). It is asked for every row; an exception holds that extra account
+        ``_make``: settings, cls, digest, forward). It is asked for every row; an exception holds that extra account
         (``HeldEngine``) instead of stopping the load (an original account always gets the defaults)."""
         for a in self.store.accounts():
             if a["account_id"] not in self.engines:
@@ -150,7 +153,7 @@ class AccountBook:
         return True
 
     def add_extra(self, d: dict, created_ts: int, settings: Optional[Settings] = None, cls=None,
-                  digest: Optional[Digest] = None) -> PaperEngine:
+                  digest: Optional[Digest] = None, forward: Optional[Notifier] = None) -> PaperEngine:
         """Add one extra account (accounts row + a fresh engine at the initial equity) inside the
         caller's transaction (no commit). ``d``: account_id, strategy, timeframe, kind, parent, data.
         Raises ValueError when the id is already a running engine or an accounts row."""
@@ -161,7 +164,7 @@ class AccountBook:
             raise ValueError(f"account {aid} already exists")
         self.store.add_account(aid, d["strategy"], d["timeframe"], d["kind"], created_ts, self.s.version,
                                d.get("parent"), d.get("data"))
-        e = self._make(aid, settings=settings, cls=cls, digest=digest)
+        e = self._make(aid, settings=settings, cls=cls, digest=digest, forward=forward)
         self.engines[aid] = e
         self.meta[aid] = {"strategy": d["strategy"], "timeframe": d["timeframe"], "kind": d["kind"]}
         return e

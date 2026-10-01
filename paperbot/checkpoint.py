@@ -216,9 +216,11 @@ def _extras_state(conn: sqlite3.Connection) -> dict:
 
 
 def _extra_code_changes(conn: sqlite3.Connection, upto: int) -> list[dict]:
-    """Starts of the runner whose recorded changes touch only the extras' trading code (runinfo.EXTRA_WATCHED)."""
-    from .runinfo import EXTRA_WATCHED
-    keys = {k for k, _, t in EXTRA_WATCHED if t}
+    """Starts of the runner whose recorded changes touch the extras' trading code (runinfo.EXTRA_WATCHED) or the
+    signal input code they share with the 195 (runinfo.SHARED_WATCHED; for the originals that is open question
+    Q-11, the rule keeper's decision, so it is noted on the extras' rows only)."""
+    from .runinfo import EXTRA_WATCHED, SHARED_WATCHED
+    keys = {k for k, _, t in EXTRA_WATCHED + SHARED_WATCHED if t}
     out = []
     for ts, data in conn.execute("SELECT started_ts, data FROM runs WHERE started_ts < ? ORDER BY id", (upto,)):
         ch = [c for c in json.loads(data).get("changes", []) if c in keys]
@@ -321,7 +323,8 @@ def freeze_snapshot(conn: sqlite3.Connection, cp_ts: int, symbols=V3_SYMBOLS,
                                                       and ev.get("event") != "created"], key=lambda t: t[0])
             a = accounts[aid]
             a["rule"] = rule
-            a["events"] = [{k: ev.get(k) for k in ("ts", "event", "code", "detail") if k in ev} for ev in evs]
+            a["events"] = [{k: ev.get(k) for k in ("ts", "event", "code", "detail", "effective") if k in ev}
+                           for ev in evs]
             a["signals"] = _extra_signals(conn, kind, strat, tf, parent, int(created), cp_ts, rule,
                                           [list(t) for t in tl], symbols)
             if kind == "newlab":
@@ -862,23 +865,44 @@ def _prior(out: sqlite3.Connection, date: str) -> dict:
     return st
 
 
+def q5_restart(a: dict, cp: int) -> Optional[int]:
+    """When an extra account's 30-day window starts over: its last ``code_accepted`` event before ``cp`` (the
+    owners accepted changed signal code for that account, a Q5 event for it only; docs/extra-accounts.md 4).
+    None when there is none."""
+    out = None
+    for ev in a.get("events") or []:
+        if ev.get("event") == "code_accepted":
+            t = int(ev.get("effective") or ev.get("ts") or 0)
+            if t < cp and (out is None or t > out):
+                out = t
+    return out
+
+
 def plan(snap: dict, prior: dict, prev_snaps: dict, s: Settings) -> tuple[dict, list[Task]]:
-    """Per-account decisions that need no bots, and the Q1 tasks for the rest."""
+    """Per-account decisions that need no bots, and the Q1 tasks for the rest. An extra account's window
+    starts at its creation, or later at its last accepted code change (``q5_restart``)."""
     cp = snap["cp_ts"]
     init = snap["run"]["initial_equity"]
     rows, tasks = {}, []
     for aid, a in snap["accounts"].items():
         tf = a["timeframe"]
+        extra = a["kind"] in EXTRA_KINDS
         lo = a["created_ts"]
+        restart = q5_restart(a, cp) if extra else None
+        if restart is not None and restart > lo:
+            lo = restart
         st1 = period_stats(a, lo, cp, s, init)
         base = {"strategy": a["strategy"], "timeframe": tf, "kind": a["kind"], "equity": a["equity"],
                 "bust": a["bust"], "trades_total": st1["trades"]}
-        extra = a["kind"] in EXTRA_KINDS
         pr = prior.get(aid)
         if extra:
             base["created_ts"] = a["created_ts"]
             if pr is not None and pr.get("created_ts") != a["created_ts"]:
                 pr = None                     # an id re-used after a paper3 restore starts over
+            if lo != a["created_ts"]:
+                base["window_from"] = lo      # Q5: the window starts over at the accepted code change
+                if pr is not None and lo >= day_ms(pr["date"]):
+                    pr = None                 # judged on the code before the owners accepted the new one
             rl = a.get("rule") or {}
             tkw = {"cls": aid, "stop_atr": float(rl.get("stop_atr") or V3_STOP_ATR),
                    "first_lock": rl.get("first_lock")}
@@ -914,7 +938,9 @@ def plan(snap: dict, prior: dict, prev_snaps: dict, s: Settings) -> tuple[dict, 
              "pnl": a["equity"] - init}
         old_enough = cp >= floor_day(lo) + PERIOD_DAYS * DAY_MS
         if not old_enough or st1["trades"] < MIN_TRADES:
-            why = "30일 미만 (복사 계좌는 자기 시작부터 셈)" if not old_enough else f"거래 {st1['trades']}건 < 30건"
+            why = ("30일 미만 (복사 계좌는 자기 시작부터 셈)" if lo == a["created_ts"] else
+                   "30일 미만 (바뀐 신호 코드를 받아들인 날부터 다시 셈, Q5)") if not old_enough \
+                else f"거래 {st1['trades']}건 < 30건"
             if old_enough and cp - floor_day(lo) >= NO_VERDICT_DAYS * DAY_MS:
                 why += f" · {NO_VERDICT_DAYS}일까지 30건 미달: 판정 불가"
             rows[aid] = {**r, "status": HOLD, "reason": why}
@@ -1103,10 +1129,16 @@ def extra_warnings(snap: dict, rows: dict) -> list[str]:
     extras = {aid: a for aid, a in accts.items() if a.get("kind") in EXTRA_KINDS}
     if not extras:
         return out
+    from .runinfo import SHARED_WATCHED
+    shared = {k for k, _, _ in SHARED_WATCHED}
     for ch in snap["run"].get("extra_code_changes", []):
         hit = sorted(aid for aid, a in extras.items() if a["created_ts"] < ch["ts"])
         if hit:
-            text = (f"{day_str(ch['ts'])} 재시작 때 추가 계좌 코드 변경 ({EXTRAS_ONLY_KO}: {', '.join(hit)}). "
+            what = (f"추가 계좌 코드 변경 ({EXTRAS_ONLY_KO}: {', '.join(hit)})"
+                    if not shared & set(ch.get("changes") or []) else
+                    f"신호 입력 코드(recorder·context) 변경 (원래 계좌도 쓰는 코드, 원래 계좌는 열린 질문 Q-11; "
+                    f"추가 계좌: {', '.join(hit)})")
+            text = (f"{day_str(ch['ts'])} 재시작 때 {what}. "
                     "Q5: 그 계좌들의 기간을 그날부터 다시 세야 하는지 규칙 관리자 확인 필요")
             out.append(text)
             for aid in hit:

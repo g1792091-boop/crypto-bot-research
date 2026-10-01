@@ -13,6 +13,9 @@ the same feed (each run in its own process, in parallel) and must give exactly t
     K1 K2      crash points with extras off and on (K1x, K2x)                  == K1 / K2
     K3..K6     killed inside the extras hook (phase 1 before its save, inside the newlab compute,
                after a creation before the phase-2 save, after the phase-2 save) == K2
+    T2c        the step loop charged (an order-book fetch costs 300 ms, a Telegram send 2 s), with extras
+               == T1c, the same without extras (the extras fetch no book and send nothing before a 195 compute)
+    T2cx       T2c with the step loop before that fix (every engine's fill may fetch a book)  != T1c
 
 Then the extras themselves are checked on the R2 / R2r / T2 / crash databases.
 """
@@ -58,7 +61,7 @@ def results(tmp_path_factory):
         with open(out) as fh:
             return name, json.load(fh)
     workers = max(1, min(4, os.cpu_count() or 1))
-    order = sorted(H.NEW_RUNS, key=lambda n: n[0] != "R" and n[0] != "T")   # the long runs first
+    order = sorted(H.NEW_RUNS + H.CHARGED_RUNS, key=lambda n: n[0] != "R" and n[0] != "T")   # the long runs first
     with ThreadPoolExecutor(workers) as ex:
         res = dict(ex.map(one, order))
     return g["runs"], res
@@ -81,6 +84,27 @@ def test_negative_control_sees_a_timing_leak(results):
     got, want = res["T2x"]["dump"], golden["T0"]
     assert got["signal_log"] != want["signal_log"]               # phase 2 at catch-up boundaries made the 195 late
     assert got["total"] != want["total"]
+
+
+def test_195_equal_with_the_step_loop_charged(results):
+    """An extra's entry or exit in the minute before a boundary must not fetch an order book (a REST call that
+    ran before the 195's compute and moved their ref_time / delay_ms), and an extra's Telegram line must not be
+    sent inside the step: with both charged to the clock, the 195 are equal with and without the extras."""
+    _, res = results
+    base, got, leak = res["T1c"], res["T2c"], res["T2cx"]
+    diff = [k for k in KEYS if got["dump"][k] != base["dump"][k]]
+    accounts = sorted(a for a in base["dump"]["accounts"] if base["dump"]["accounts"][a] != got["dump"]["accounts"][a])
+    assert not diff and not accounts, f"T2c vs T1c: keys {diff}, accounts {accounts[:10]}"
+    assert got["depth_calls"] == base["depth_calls"] > 0          # the extras added no order-book fetch
+    # negative control: the leaky step loop is seen by the same comparison
+    assert leak["depth_calls"] > base["depth_calls"]
+    assert leak["dump"]["signal_log"] != base["dump"]["signal_log"] and leak["dump"]["total"] != base["dump"]["total"]
+    # the extras still get their records: a book fetched for the 195 in the same step, else 'skipped'
+    c = _db(results, "T2c")
+    st = dict(c.execute("SELECT status, COUNT(*) FROM fill_costs WHERE account_id IN (SELECT account_id FROM accounts "
+                        "WHERE kind IN ('copy', 'newlab')) GROUP BY status").fetchall())
+    c.close()
+    assert st.get("ok", 0) > 0 and st.get("skipped", 0) > 0
 
 
 def _db(results, name):

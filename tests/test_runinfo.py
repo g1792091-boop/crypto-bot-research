@@ -1,4 +1,5 @@
 import json
+import os
 import sqlite3
 
 import pytest
@@ -65,14 +66,45 @@ def test_extra_watched_keys_and_text(tmp_path):
     assert not {k for k, _, _ in WATCHED} & {"extra_code", "extra_gate_code"}      # WATCHED applies to every account
     assert all(len(w) == 3 for w in WATCHED)                                          # checkpoint unpacks 3-tuples
     assert "paperbot/accounts.py" in TRADING_FILES and "paperbot/live3.py" in TRADING_FILES
-    assert set(EXTRA_FILES) == {"paperbot/extras.py", "paperbot/newlab_live.py", "paperbot/agents/newlab_signals.py",
-                                "paperbot/context.py", "paperbot/recorder.py"}
+    assert set(EXTRA_FILES) == {"paperbot/extras.py", "paperbot/newlab_live.py", "paperbot/agents/newlab_signals.py"}
     b = dict(a, extra_code="other")
     ch = changes(a, b)
     assert [(c["key"], c["trading"], c.get("extras_only")) for c in ch] == [("extra_code", True, True)]
     txt = change_text(ch)
-    assert "추가 계좌만 해당" in txt and "원래 195개 계좌는 그대로" in txt
+    assert "추가 계좌만 해당" in txt and "원래 195개 계좌의 코드는 그대로" in txt
+    # the checkpoint does not restart the extras' windows for this: the text asks the rule keeper, as for others
+    assert "다시 세야 하는지 규칙 관리자 확인 필요" in txt and "오늘부터 다시 셉니다" not in txt
     g = changes(a, dict(a, extra_gate_code="other"))
     assert [(c["key"], c["trading"]) for c in g] == [("extra_gate_code", False)] and "영향 없음" in change_text(g)
     both = changes(a, dict(a, extra_code="o", settings="o"))
     assert "다시 셉니다" in change_text(both) and "원래 195개" not in change_text(both)
+
+
+def test_signal_input_code_shared_with_the_195_is_never_called_extras_only(tmp_path):
+    """recorder.py builds the 195's signal frames and context.py their chart context: a change to them is not an
+    extras-only change, and the restart text never says the 195 are unaffected (open question Q-11)."""
+    import shutil
+    from paperbot.runinfo import EXTRA_FILES, ROOT, SHARED_SIGNAL_FILES, SHARED_WATCHED, WATCHED
+    assert set(SHARED_SIGNAL_FILES) == {"paperbot/recorder.py", "paperbot/context.py"}
+    assert not set(SHARED_SIGNAL_FILES) & (set(EXTRA_FILES) | set(TRADING_FILES))
+    assert not {k for k, _, _ in WATCHED} & {k for k, _, _ in SHARED_WATCHED}
+    # a change to recorder.py moves only the shared key
+    for rel in SHARED_SIGNAL_FILES + EXTRA_FILES:
+        os.makedirs(os.path.dirname(os.path.join(str(tmp_path), rel)), exist_ok=True)
+        shutil.copy(os.path.join(ROOT, rel), os.path.join(str(tmp_path), rel))
+    before = (files_hash(SHARED_SIGNAL_FILES, str(tmp_path)), files_hash(EXTRA_FILES, str(tmp_path)))
+    with open(os.path.join(str(tmp_path), "paperbot", "recorder.py"), "a") as fh:
+        fh.write("\n# changed\n")
+    after = (files_hash(SHARED_SIGNAL_FILES, str(tmp_path)), files_hash(EXTRA_FILES, str(tmp_path)))
+    assert after[0] != before[0] and after[1] == before[1]
+    a = run_record(v3_settings(), BR, "exchange", ["x"], signal_lock={"prereg_sha256_file": "L"})
+    assert a["shared_signal_code"] == files_hash(SHARED_SIGNAL_FILES)
+    ch = changes(a, dict(a, shared_signal_code="other"))
+    assert [(c["key"], c["trading"], c.get("extras_only"), c.get("shared")) for c in ch] == \
+        [("shared_signal_code", True, None, True)]
+    txt = change_text(ch)
+    assert "원래 195개 계좌는 그대로" not in txt and "원래 195개 계좌의 코드는 그대로" not in txt
+    assert "추가 계좌만 해당" not in txt and "원래 195개 계좌의 신호 계산" in txt and "Q-11" in txt
+    # a record written before the key existed is not a change
+    old = {k: v for k, v in a.items() if k != "shared_signal_code"}
+    assert changes(old, a) == []

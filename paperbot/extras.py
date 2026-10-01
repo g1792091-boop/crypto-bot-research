@@ -18,7 +18,10 @@ Where the code runs (the parity argument, docs/extra-accounts.md)
   activation of approved proposals. Each phase commits only through its own ``book.save``; an exception
   rolls back that phase's writes and undoes its in-memory changes. Nothing here can stop the runner.
 - Extras step in the same engine loop as the 195, so they are ``GuardedEngine`` (an exception holds that
-  account) or ``HeldEngine`` (frozen), and every Signal they get is plain JSON before it is submitted.
+  account) or ``HeldEngine`` (frozen), and every Signal they get is plain JSON before it is submitted. Inside
+  that loop they cost the 195 nothing but their engines' step: their CRITICAL lines are written to the alerts
+  table at once and sent to Telegram only after the poll (``post_batch``) or after phase 2 of a live boundary,
+  and their fills never fetch an order book (live3 ``_fill_costs``).
 - At load only runtime-owned code judges an account (``COPY_TEMPLATES``, ``NEWLAB_V1``, ``spec_sha``);
   nothing from paperbot.agents is imported. A copy whose rule cannot be read is held; a new-strategy
   account whose spec or code pin is wrong is suspended (its engine steps, no new signals).
@@ -36,7 +39,7 @@ agents3 ids.
 
 Configuration: /etc/paperbot/extras.json (optional, re-read at each live poll): agents_db, inbox_db
 (default next to paper3.db), observe_days (21, never lower), observe_until (KST date), owner_ok_days (60,
-never lower), budget_s (20), pause_activation, agents_ack, accept_code. deploy/extras.example.json.
+never lower), budget_s (20), pause_activation, agents_ack, inbox_ack, accept_code. deploy/extras.example.json.
 """
 
 from __future__ import annotations
@@ -76,6 +79,7 @@ LIVE_MS = 120_000                       # a boundary older than this at hook ent
 DEFAULT_CONFIG = "/etc/paperbot/extras.json"
 OBSERVE_DAYS_MIN = 21
 OWNER_OK_DAYS_MIN = 60
+DAYS_MAX = 3650                         # observe_days / owner_ok_days above this are read as this (ten years)
 DEFAULT_BUDGET_S = 20.0
 PARENT_MIN_TRADES = 30                  # closed trades of the copy's parent in paper3 (owners' rule; tests lower it)
 CAP_COPY_PER_STRATEGY = 1
@@ -86,11 +90,14 @@ FILTERED = "FILTERED"
 FILTER_REASON = "copy rule: skip_tag"
 
 PERMANENT = frozenset({"contract_missing", "contract_mismatch", "spec_invalid", "trial_status", "stale_run",
-                       "owner_ok_missing", "owner_click_missing", "duplicate", "gate_now_fail", "parent_missing",
-                       "parent_bust"})
+                       "owner_ok_missing", "duplicate", "gate_now_fail", "parent_missing", "parent_bust"})
+# owner_click_missing is temporary: a lost click (an inbox.db restore) is fixed by the deciding owner clicking
+# approve again on the dashboard, never by closing the owners' approval
 TEMPORARY = frozenset({"observing", "paused", "agents_unreadable", "inbox_unreadable", "agents_regressed",
-                       "stale_ok", "reject_pending", "gate_disagree", "gate_code_unavailable", "parent_trades",
-                       "cap_strategy", "cap_copy_total", "cap_newlab_total", "newlab_unavailable", "id_conflict"})
+                       "inbox_regressed", "stale_ok", "owner_click_missing", "reject_pending", "gate_disagree",
+                       "gate_code_unavailable", "parent_trades", "cap_strategy", "cap_copy_total", "cap_newlab_total",
+                       "newlab_unavailable", "id_conflict"})
+LOUD = frozenset({"id_conflict", "owner_click_missing", "inbox_regressed"})     # temporary codes sent as WARN
 CODES_KO = {
     "contract_missing": "제안에 계좌 정의가 없음(예전 형식)",
     "contract_mismatch": "제안의 계좌 정의가 시험 장부와 맞지 않음",
@@ -98,7 +105,8 @@ CODES_KO = {
     "trial_status": "시험 장부 상태가 맞지 않음",
     "stale_run": "이번 paper 운영 전(또는 관찰 기간 중)의 제안",
     "owner_ok_missing": "두 분 승인이 필요한데 두 분 결정이 아님",
-    "owner_click_missing": "두 분 결정인데 대시보드 승인 클릭 기록이 없음",
+    "owner_click_missing": "두 분 결정인데 대시보드 승인 클릭 기록이 없음: 승인한 분이 '다시 승인'을 누르면 다시 확인",
+    "inbox_regressed": "승인 클릭 기록(inbox.db)이 예전 것으로 바뀜(운영자 확인 필요)",
     "duplicate": "같은 계좌가 이미 있음",
     "gate_now_fail": "지금 시험 수로 다시 판정하면 관문 미통과",
     "parent_missing": "원본 계좌가 없음",
@@ -531,10 +539,22 @@ class GuardedEngine(PaperEngine):
         super().submit(signal)
 
 
-def engine_args(kind: str, rule: Optional[dict], base: Settings, digest=None) -> dict:
-    """How the book builds an extra's engine (AccountBook._make keywords)."""
+def engine_args(kind: str, rule: Optional[dict], base: Settings, digest=None, forward=None) -> dict:
+    """How the book builds an extra's engine (AccountBook._make keywords). ``forward``: where its CRITICAL
+    lines go (the extras' outbox, sent when no 195 compute can wait for them)."""
     return {"settings": settings_for(base, rule if kind == "copy" else None), "cls": GuardedEngine,
-            "digest": digest}
+            "digest": digest, "forward": forward}
+
+
+class _Outbox:
+    """The forward notifier of the extras' engines: a CRITICAL line (already written to the alerts table by
+    the engine's store notifier) is held in ``Extras.outbox`` instead of being sent inside the shared step."""
+
+    def __init__(self, ext: "Extras"):
+        self.ext = ext
+
+    def send(self, level: str, text: str) -> None:
+        self.ext.outbox.append((level, text))
 
 
 class ExtrasDigest(Digest):
@@ -577,6 +597,7 @@ class Config:
     budget_s: float = DEFAULT_BUDGET_S
     pause_activation: bool = False
     agents_ack: Optional[str] = None
+    inbox_ack: Optional[str] = None
     accept_code: dict = dataclasses.field(default_factory=dict)
     sha256: str = "default"
     path: Optional[str] = None
@@ -598,7 +619,8 @@ class Config:
 
     @classmethod
     def from_text(cls, text: str, db_path: str, path: Optional[str] = None) -> "Config":
-        """Parse extras.json. The file can never lower observe_days below 21 or owner_ok_days below 60.
+        """Parse extras.json. The file can never lower observe_days below 21 or owner_ok_days below 60; values
+        above DAYS_MAX are read as DAYS_MAX (a huge number would overflow the floor's timestamp).
         Raises ValueError for a file that is not a valid configuration."""
         raw = json.loads(text)
         if not isinstance(raw, dict):
@@ -625,7 +647,7 @@ class Config:
                 v = raw[key]
                 if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(float(v)):
                     raise ValueError(f"{key} must be a number")
-                setattr(cfg, key, max(float(v), float(lo)))
+                setattr(cfg, key, min(max(float(v), float(lo)), float(DAYS_MAX)))
         if "observe_until" in raw and raw["observe_until"] not in (None, ""):
             v = raw["observe_until"]
             if not isinstance(v, str):
@@ -641,10 +663,11 @@ class Config:
             if not isinstance(raw["pause_activation"], bool):
                 raise ValueError("pause_activation must be true or false")
             cfg.pause_activation = raw["pause_activation"]
-        if raw.get("agents_ack") not in (None, ""):
-            if not isinstance(raw["agents_ack"], str):
-                raise ValueError("agents_ack must be a string")
-            cfg.agents_ack = raw["agents_ack"]
+        for key in ("agents_ack", "inbox_ack"):
+            if raw.get(key) not in (None, ""):
+                if not isinstance(raw[key], str):
+                    raise ValueError(f"{key} must be a string")
+                setattr(cfg, key, raw[key])
         if "accept_code" in raw:
             ac = raw["accept_code"]
             if not isinstance(ac, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in ac.items()):
@@ -664,6 +687,11 @@ def observe_floor(run_start: Optional[int], cfg: Config) -> Optional[int]:
         end = int(d.timestamp() * 1000) + DAY_MS - KST_MS          # 00:00 KST after that date
         floor = max(floor, end)
     return floor
+
+
+def inbox_fingerprint_text(fp: Optional[list]) -> str:
+    fp = fp or [0, 0]
+    return f"approval:{int(fp[0])}@{int(fp[1])}"
 
 
 def fingerprint_text(fp: Optional[dict]) -> str:
@@ -727,6 +755,14 @@ class Journal:
     def registered(self, aid: str) -> None:
         self.registered_ids.append(aid)
 
+    def merge(self, sub: "Journal") -> None:
+        """A part of the phase that was kept (its savepoint released): its changes are the phase's, so a later
+        failure of the phase undoes them too."""
+        self.submits += sub.submits
+        self.added_ids += sub.added_ids
+        self.registered_ids += sub.registered_ids
+        self.after += sub.after
+
     def undo(self) -> None:
         x = self.ext
         for aid, sig in reversed(self.submits):
@@ -772,6 +808,10 @@ class Extras:
         self.live_gate = True                            # tests only: False runs phase 2 at every boundary
         self.activator = Activator(self)
         self.bound = False
+        # CRITICAL lines of the extras (their engines, faults, state changes): written to the alerts table at once,
+        # sent to Telegram only where no 195 compute can wait for the send (flush_outbox)
+        self.outbox: list[tuple[str, str]] = []
+        self.forward = _Outbox(self)
 
     # ------------------------------------------------------------ construction
     @classmethod
@@ -827,19 +867,44 @@ class Extras:
 
     # ------------------------------------------------------------ alerts and events
     def _alert(self, level: str, text: str, digest: bool = True) -> None:
-        """An "[extra]" line: alerts table; CRITICAL forwarded at once, WARN to the extras digest."""
+        """An "[extra]" line: alerts table at once; CRITICAL held in the outbox (flush_outbox), WARN to the
+        extras digest."""
         now = self.clock()
         try:
             self.store.alert(now, level, text)
         except Exception:  # noqa: BLE001
             pass
         if level == CRITICAL:
-            try:
-                self.notifier.send(CRITICAL, text)
-            except Exception:  # noqa: BLE001
-                pass
+            self.outbox.append((CRITICAL, text))
         elif level == WARN and digest:
             self.digest.add(text)
+
+    def flush_outbox(self) -> None:
+        """Send the held CRITICAL lines as one Telegram message. Called only where no 195 compute can wait for
+        the send: at start-up (bind), at a live boundary after phase 2, and at the end of a poll
+        (``post_batch``). Never inside the shared step or at a catch-up boundary."""
+        items, self.outbox = [t for _lvl, t in self.outbox], []
+        if not items:
+            return
+        if len(items) == 1:
+            text = items[0]
+        else:
+            more = len(items) - 15
+            text = "\n".join([f"추가 계좌 긴급 알림 {len(items)}건"] + items[:15]
+                             + ([f"외 {more}건 (대시보드 알림 목록)"] if more > 0 else []))
+        try:
+            self.notifier.send(CRITICAL, text)
+        except Exception:  # noqa: BLE001
+            pass
+
+    def post_batch(self, now: int) -> None:
+        """The runner's end of a poll (after every boundary of the batch and its commit): the held CRITICAL
+        lines and the extras digest are sent here."""
+        self.flush_outbox()
+        try:
+            self.digest.flush(now)
+        except Exception:  # noqa: BLE001
+            pass
 
     def _effective(self) -> int:
         """From which 1m step a state change applies (daily3 and checkpoint read it): the next step."""
@@ -934,7 +999,7 @@ class Extras:
                 return {"cls": HeldEngine}
             x.rule = rule
             self._set_status(x, "active")
-            return engine_args("copy", rule, self.settings, self.digest)
+            return engine_args("copy", rule, self.settings, self.digest, self.forward)
         if kind == "newlab":
             spec = data.get("spec")
             x.spec = spec if isinstance(spec, dict) else None
@@ -947,7 +1012,7 @@ class Extras:
                 self._set_status(x, "suspended", "spec_invalid", why)
             else:
                 self._set_status(x, "active")       # the code pin is checked in bind()
-            return engine_args("newlab", None, self.settings, self.digest)
+            return engine_args("newlab", None, self.settings, self.digest, self.forward)
         self._set_status(x, "held", "unknown_kind", f"kind {kind!r}")
         return {"cls": HeldEngine}
 
@@ -995,8 +1060,10 @@ class Extras:
         self._settle()
         self.bound = True
         runner.post_boundary = self.post_boundary
+        runner.post_batch = self.post_batch
         self._write_state(self.clock())
         self.store.commit()
+        self.flush_outbox()                     # start-up: no compute is waiting
 
     def _readiness(self, aid: str, why: Optional[str]) -> None:
         if self.ready.get(aid, "unknown") == why:
@@ -1022,9 +1089,10 @@ class Extras:
         if submitted and self._copies_of({aid for aid, _ in submitted}, boundary):
             self._phase(1, boundary, lambda j: self._phase1(boundary, submitted, j), snapshot=False)
         if not live or timed_out:
+            # nothing is sent here: in a catch-up burst a later boundary's 195 compute may still follow in this
+            # batch (the outbox and the digest go out at the end of the poll, post_batch)
             self._count_skipped(boundary)
             self.state["health"]["hook_ms"] = int((time.monotonic() - t0) * 1000)
-            self.digest.flush(self.clock())
             return
         t2 = time.monotonic()
         deadline = t2 + float(self.cfg.budget_s)
@@ -1034,6 +1102,7 @@ class Extras:
                 self.notifier.send(level, text)
             except Exception:  # noqa: BLE001
                 pass
+        self.flush_outbox()
         self.digest.flush(self.clock())
 
     def _phase(self, n: int, boundary: int, fn, snapshot: bool = True) -> Optional[list]:
@@ -1133,18 +1202,73 @@ class Extras:
 
     # ------------------------------------------------------------ phase 2: new strategies and activation
     def _phase2(self, boundary: int, deadline: float, j: Journal, t2: float, t0: float) -> bool:
+        """The new strategies' signals and the activation poll, each in its own savepoint inside the phase's
+        transaction: a failure in one part undoes only that part (its writes and in-memory changes), so a bad
+        configuration value or an activation bug never costs the new-strategy accounts their signals, and a
+        failing signal job never blocks the activation of copies."""
         h = self.state["health"]
         self.state["boundary"] = boundary
         if self.newlab is not None and self.newlab.specs:
-            self._newlab_boundary(boundary, deadline, j)
+            self._part(j, "newlab", boundary, lambda sub: self._newlab_boundary(boundary, deadline, sub))
         if time.monotonic() < deadline:
-            self.activator.poll(boundary, j)
+            self._activation(boundary, j)
         else:
+            h = self.state["health"]
             h["budget_skips"] = int(h.get("budget_skips") or 0) + 1
             self._alert(WARN, f"[extra] 경계 {boundary}: 시간 예산을 넘어 이번에는 새 계좌 확인을 건너뜀")
+        h = self.state["health"]
         h["phase2_ms"] = int((time.monotonic() - t2) * 1000)
         h["hook_ms"] = int((time.monotonic() - t0) * 1000)
         return True
+
+    def _part(self, j: Journal, name: str, boundary: int, fn) -> tuple[bool, Any]:
+        """Run one part of phase 2 in a savepoint. Kept: its journal joins the phase's. An exception: the savepoint
+        is rolled back, the part's in-memory changes are undone, the error is counted and a WARN written
+        (``_LateReject`` is not an error: the activation runs again). Returns (kept, result)."""
+        conn = self.store.conn
+        if not conn.in_transaction:
+            conn.execute("BEGIN")             # so releasing the savepoint never commits on its own
+        sub = Journal(self)
+        conn.execute("SAVEPOINT extras_part")
+        try:
+            out = fn(sub)
+        except Exception as exc:  # noqa: BLE001  only this part is undone
+            try:
+                conn.execute("ROLLBACK TO extras_part")
+                conn.execute("RELEASE extras_part")
+            except Exception:  # noqa: BLE001
+                sub.undo()
+                raise                         # the phase's own handler rolls the whole phase back
+            sub.undo()
+            if isinstance(exc, _LateReject):
+                return False, exc
+            h = self.state["health"]
+            h["errors"] = int(h.get("errors") or 0) + 1
+            h["last_error"] = f"phase 2 {name} at {boundary}: {type(exc).__name__}: {exc}"[:300]
+            what = "새 매매법 신호" if name == "newlab" else "새 계좌 확인"
+            self._alert(WARN, f"[extra] 추가 계좌 처리 2단계({what}) 실패, 이번 경계의 그 부분만 되돌림: "
+                              f"{type(exc).__name__}: {exc}"[:300])
+            return False, exc
+        conn.execute("RELEASE extras_part")
+        j.merge(sub)
+        return True, out
+
+    def _activation(self, boundary: int, j: Journal) -> None:
+        """The activation poll (its own savepoint). Just before the phase's commit the sticky reject (R1) is read
+        again on a fresh inbox connection for every proposal this poll created: a reject click made while the
+        accounts were being created undoes the poll, which runs once more (C5 then refuses that proposal)."""
+        def run(sub):
+            created = self.activator.poll(boundary, sub)
+            late = self.activator.recheck_rejects()
+            if late:
+                raise _LateReject(late)
+            return created
+        for _attempt in range(2):
+            kept, out = self._part(j, "activation", boundary, run)
+            if kept or not isinstance(out, _LateReject):
+                return
+            self._alert(INFO, f"[extra] 경계 {boundary}: 계좌를 만드는 동안 거절 클릭이 들어와 이번 확인을 되돌리고 "
+                              f"다시 확인함 (제안 {', '.join('#' + str(p) for p in out.pids)})"[:300])
 
     def _newlab_boundary(self, boundary: int, deadline: float, j: Journal) -> None:
         src = self.newlab
@@ -1228,6 +1352,14 @@ class Extras:
                owner_click_ts: Optional[int]) -> str:
         """Add the account inside the phase-2 transaction (committed by the phase's book.save)."""
         now = self.clock()
+        # the same check as C0, on paper3.db itself (inside this transaction): an account another runner process
+        # made for this proposal row is never made twice, even if this process's registry does not know it
+        dup = self.store.conn.execute(
+            "SELECT account_id FROM accounts WHERE kind IN ('copy', 'newlab') "
+            "AND json_extract(data, '$.source.proposal_id') = ? AND json_extract(data, '$.source.proposal_ts') = ?",
+            (int(p["id"]), int(p["ts"]))).fetchone()
+        if dup is not None:
+            raise ValueError(f"account {dup[0]} already exists for proposal #{p['id']}")
         n = next_n(self.store.conn, kind)
         content = parsed["content"]
         src = source(int(p["id"]), int(p["ts"]), int(t["id"]), int(t["ts"]), content)
@@ -1258,7 +1390,7 @@ class Extras:
                     "label_ko": label_ko("newlab", n, tf, trial_id=int(t["id"])), "description_ko": desc,
                     "window_5m": int(src_nl.windows[tf]), "code": src_nl.pin(), "activation": activation}
             rule = None
-        mk = engine_args(kind, rule, self.settings, self.digest)
+        mk = engine_args(kind, rule, self.settings, self.digest, self.forward)
         e = self.book.add_extra({"account_id": aid, "strategy": name, "timeframe": tf, "kind": kind,
                                  "parent": parent, "data": data}, created_ts=boundary, **mk)
         j.added(aid)
@@ -1297,8 +1429,9 @@ class Activator:
                json_extract(gate, '$.pass') FROM proposals WHERE status = 'approved' ORDER BY id
         the trial (id, ts, kind, strategy, room_id, spec, spec_hash) with its latest result's status and the
         result paths $.result, $.n_trials, $.gate_input, $.n_tests_so_far, of kind 'test' or 'newlab' only
-        COUNT(*) of the room's 'test' trials; COUNT(*) of 'newlab' trials; the max id/ts of trials and
-        proposals and the ts of the stored fingerprint rows
+        COUNT(*) of the 'test' trials per room (every room); COUNT(*) of 'newlab' trials; the max id/ts of
+        trials and proposals and the ts of the stored fingerprint rows (during the observation period only
+        these counts and the fingerprint, so a restore then is seen too)
     inbox.db (a separate connection, read after agents3): the three approvals queries R1 (a reject click),
     R2 (the owner's approve click, author compared in SQL), R3 (an approve click after the feature start).
     """
@@ -1317,12 +1450,32 @@ class Activator:
                "json_extract(r.result, '$.n_tests_so_far') AS n_tests_so_far "
                "FROM trials t LEFT JOIN trial_results r ON r.id = (SELECT MAX(id) FROM trial_results "
                "WHERE trial_id = t.id) WHERE t.id = ? AND t.kind IN ('test', 'newlab')")
-    Q_ROOM_TESTS = "SELECT COUNT(*) FROM trials WHERE room_id = ? AND kind = 'test'"
+    Q_ROOM_TESTS = "SELECT room_id, COUNT(*) FROM trials WHERE kind = 'test' GROUP BY room_id"
     Q_NEWLAB_TESTS = "SELECT COUNT(*) FROM trials WHERE kind = 'newlab'"
 
     def __init__(self, ext: Extras):
         self.x = ext
         self.min_parent_trades: Optional[int] = None     # tests: overrides PARENT_MIN_TRADES
+        self.created_now: list[tuple[int, int]] = []     # (proposal id, ts) of the accounts the last poll created
+
+    def recheck_rejects(self) -> list[int]:
+        """R1 again, on a fresh inbox connection, for the proposals whose accounts the last poll created (called
+        just before the phase-2 commit). Returns the proposal ids that now have a reject click; when the inbox
+        cannot be read, all of them (nothing of the poll is kept; the next boundary checks again)."""
+        if not self.created_now:
+            return []
+        from .agents import rooms_db as R
+        pids = [pid for pid, _ts in self.created_now]
+        inbox = R.open_ro(self.x.cfg.inbox_db) if self.x.cfg.inbox_db else None
+        if inbox is None:
+            return pids
+        try:
+            return [pid for pid, p_ts in self.created_now
+                    if inbox.execute(Activator.R1, (pid, p_ts)).fetchone() is not None]
+        except sqlite3.Error:
+            return pids
+        finally:
+            inbox.close()
 
     # ------------------------------------------------------------ helpers
     def _reload_config(self) -> None:
@@ -1369,7 +1522,7 @@ class Activator:
         refused[key] = {"code": code, "permanent": code in PERMANENT, "proposal_ts": p["ts"],
                         "since": old.get("since") if same else boundary, "detail": str(detail)[:300]}
         if not same:
-            level = WARN if (code in PERMANENT or code == "id_conflict") else INFO
+            level = WARN if (code in PERMANENT or code in LOUD) else INFO
             self.x._alert(level, f"[extra] 제안 #{p['id']}: 새 계좌를 시작하지 않음 — {code} "
                                  f"({CODES_KO.get(code, code)}){': ' + str(detail)[:120] if detail else ''}"[:300])
 
@@ -1377,6 +1530,7 @@ class Activator:
     def poll(self, boundary: int, j: Journal) -> list[str]:
         """G1..G5 and C0..C13 for every approved proposal (docs/extra-accounts.md). Returns created ids."""
         x = self.x
+        self.created_now = []
         self._reload_config()
         cfg = x.cfg
         st = x.state
@@ -1389,35 +1543,60 @@ class Activator:
         run_start = self.run_start()
         floor = observe_floor(run_start, cfg)
         st["run_start"], st["observe_until"] = run_start, floor
-        if run_start is None or boundary < floor:
+        if run_start is None:
             self._set_dbs("observing", "observing")
             return []
+        # During the observation period nothing is created, but agents3.db is still read (fingerprint and test
+        # counts only), so a restore in those days is seen and the gate's high-water marks never drop.
+        observing = boundary < floor
+        inbox_now = "observing" if observing else st.get("inbox_db")
         from .agents import rooms_db as R      # read-only openers (frozen interface)
         conn = R.open_ro(cfg.agents_db)
         if conn is None:
-            self._set_dbs("missing" if not os.path.exists(cfg.agents_db) else "unreadable", st.get("inbox_db"))
+            self._set_dbs("observing" if observing else
+                          ("missing" if not os.path.exists(cfg.agents_db) else "unreadable"), inbox_now)
             return []
         inbox = None
         created: list[str] = []
         try:
             try:
                 conn.execute("BEGIN")
-                snap = self._read_agents(conn)
+                snap = self._read_agents(conn, proposals=not observing)
             except sqlite3.Error as exc:
-                self._set_dbs("unreadable", st.get("inbox_db"))
+                self._set_dbs("unreadable", inbox_now)
                 st["health"]["last_error"] = f"agents3 read: {type(exc).__name__}: {exc}"[:300]
                 return []
+            self._fold_hwm(snap)
             fp_ok = self._fingerprint(conn, snap, cfg)
             if not fp_ok:
-                self._set_dbs("regressed", st.get("inbox_db"))
+                self._set_dbs("regressed", inbox_now)
+                return []
+            if observing:
+                self._set_dbs("observing", "observing")
                 return []
             self._set_dbs("ok", st.get("inbox_db"))
             inbox = R.open_ro(cfg.inbox_db)
             inbox_state = "ok" if inbox is not None else ("missing" if not os.path.exists(cfg.inbox_db) else "unreadable")
+            inbox_code = "inbox_unreadable"
+            if inbox is not None:
+                try:
+                    fp_in = self._inbox_fingerprint(inbox, cfg)
+                except sqlite3.Error:
+                    fp_in = None
+                if fp_in is not True:              # unreadable, or restored to an older copy (not acknowledged)
+                    inbox.close()
+                    inbox = None
+                    inbox_state = "unreadable" if fp_in is None else "regressed"
+                    inbox_code = "inbox_unreadable" if fp_in is None else "inbox_regressed"
+            if inbox_state != st.get("inbox_db") and inbox_state in ("missing", "unreadable"):
+                self.x._alert(WARN, f"[extra] inbox.db({cfg.inbox_db}) {'없음' if inbox_state == 'missing' else '읽지 못함'}: "
+                                    "승인·거절 클릭을 확인할 수 없어 새 계좌를 만들지 않습니다(대시보드가 켜져 있는지, "
+                                    "extras.json의 inbox_db 경로가 맞는지 확인)"[:300])
             refused: dict = {}
             for p in snap["proposals"]:
                 try:
-                    aid = self._candidate(boundary, p, snap, conn, inbox, cfg, run_start, floor, j, refused)
+                    aid = self._candidate(boundary, p, snap, conn, inbox, cfg, run_start, floor, j, refused,
+                                          inbox_code)
                 except _InboxError as exc:
                     inbox_state = "unreadable"
                     try:
@@ -1429,12 +1608,9 @@ class Activator:
                     continue
                 if aid:
                     created.append(aid)
+                    self.created_now.append((int(p["id"]), int(p["ts"])))
             st["inbox_db"] = inbox_state
             st["refused"] = refused
-            hw = st["hwm"]
-            for room, n in snap["room_counts"].items():
-                hw["room_tests"][room] = max(int(hw["room_tests"].get(room, 0)), int(n))
-            hw["newlab_tests"] = max(int(hw.get("newlab_tests") or 0), int(snap["newlab_count"]))
             try:
                 conn.execute("COMMIT")
             except sqlite3.Error:
@@ -1448,12 +1624,17 @@ class Activator:
                     except Exception:  # noqa: BLE001
                         pass
 
-    def _read_agents(self, conn) -> dict:
+    def _read_agents(self, conn, proposals: bool = True) -> dict:
+        """One snapshot. The strict test counts are read for every room on every poll (one query), so the
+        high-water marks hold every room's count, not only the rooms with an approved proposal at that moment.
+        ``proposals=False`` (the observation period): the counts only."""
         props = []
-        for r in conn.execute(self.Q_PROPOSALS).fetchall():
-            props.append({"id": int(r[0]), "ts": int(r[1]), "room_id": r[2], "trial_id": r[3], "status": r[4],
-                          "decided_ts": r[5], "decided_by": r[6], "kind": r[7], "account": r[8], "gate_pass": r[9]})
-        trials, rooms = {}, {}
+        if proposals:
+            for r in conn.execute(self.Q_PROPOSALS).fetchall():
+                props.append({"id": int(r[0]), "ts": int(r[1]), "room_id": r[2], "trial_id": r[3], "status": r[4],
+                              "decided_ts": r[5], "decided_by": r[6], "kind": r[7], "account": r[8],
+                              "gate_pass": r[9]})
+        trials = {}
         for p in props:
             tid = p["trial_id"]
             if isinstance(tid, int) and tid not in trials:
@@ -1463,10 +1644,16 @@ class Activator:
                     "spec": _loads(row[5]), "spec_hash": row[6], "result_status": row[7],
                     "test_result": _loads(row[8]), "n_trials": row[9], "gate_input": _loads(row[10]),
                     "n_tests_so_far": row[11]}
-            if p["kind"] == "copy" and isinstance(p["room_id"], str) and p["room_id"] not in rooms:
-                rooms[p["room_id"]] = int(conn.execute(self.Q_ROOM_TESTS, (p["room_id"],)).fetchone()[0])
+        rooms = {r[0]: int(r[1]) for r in conn.execute(self.Q_ROOM_TESTS).fetchall() if isinstance(r[0], str)}
         newlab = int(conn.execute(self.Q_NEWLAB_TESTS).fetchone()[0])
         return {"proposals": props, "trials": trials, "room_counts": rooms, "newlab_count": newlab}
+
+    def _fold_hwm(self, snap: dict) -> None:
+        """The high-water marks take the counts just read (they never go down within a paper3.db)."""
+        hw = self.x.state["hwm"]
+        for room, n in snap["room_counts"].items():
+            hw["room_tests"][room] = max(int(hw["room_tests"].get(room, 0)), int(n))
+        hw["newlab_tests"] = max(int(hw.get("newlab_tests") or 0), int(snap["newlab_count"]))
 
     def _fingerprint(self, conn, snap: dict, cfg: Config) -> bool:
         """False while agents3.db looks restored to an older copy and the operator has not acknowledged it."""
@@ -1504,6 +1691,41 @@ class Activator:
             st["fingerprint"] = cur
         return True
 
+    def _inbox_fingerprint(self, inbox, cfg: Config) -> bool:
+        """False while inbox.db looks restored to an older copy (or replaced by an empty one) and the operator has
+        not acknowledged it: clicks made after its backup are lost, so a lost reject must not let an account
+        start and a lost approve must not count as missing for good. ``state.inbox_fingerprint`` = [max approval
+        id, its ts]; regressed when the max id went down or the stored id's row is gone or has another ts."""
+        st = self.x.state
+        r = inbox.execute("SELECT id, ts FROM approvals ORDER BY id DESC LIMIT 1").fetchone()
+        cur = [int(r[0]), int(r[1])] if r else [0, 0]
+        old = st.get("inbox_fingerprint")
+        if not old:
+            st["inbox_fingerprint"] = cur
+            return True
+        oid, ots = int(old[0]), int(old[1])
+        bad = cur[0] < oid
+        if not bad and oid > 0:
+            row = inbox.execute("SELECT ts FROM approvals WHERE id = ?", (oid,)).fetchone()
+            bad = row is None or int(row[0]) != ots
+        text = inbox_fingerprint_text(cur)
+        if bad:
+            if cfg.inbox_ack and cfg.inbox_ack == text:
+                st["inbox_fingerprint"] = cur
+                st.pop("inbox_regressed_alert", None)
+                self.x._alert(WARN, f"[extra] 승인 클릭 기록 복원을 운영자가 확인함 ({text}); 새 계좌 확인을 다시 시작")
+                return True
+            if st.get("inbox_regressed_alert") != text:
+                st["inbox_regressed_alert"] = text
+                self.x._alert(CRITICAL, "[extra] inbox.db(승인·거절 클릭 기록)가 예전 것으로 바뀐 것 같아 새 계좌 시작을 "
+                                        "멈춤. 백업 뒤에 누른 승인·거절은 두 분이 다시 누른 뒤 extras.json에 "
+                                        f"\"inbox_ack\": \"{text}\" 를 넣으세요")
+            return False
+        st.pop("inbox_regressed_alert", None)
+        if cur[0] > oid:
+            st["inbox_fingerprint"] = cur
+        return True
+
     def _gate_modules(self):
         from .agents import actions as A
         from .agents import labtests as LT
@@ -1512,7 +1734,7 @@ class Activator:
 
     # ------------------------------------------------------------ one proposal
     def _candidate(self, boundary: int, p: dict, snap: dict, conn, inbox, cfg: Config, run_start: int,
-                   floor: int, j: Journal, refused: dict) -> Optional[str]:
+                   floor: int, j: Journal, refused: dict, inbox_code: str = "inbox_unreadable") -> Optional[str]:
         x = self.x
         kind = p["kind"]
         t = snap["trials"].get(p["trial_id"]) if isinstance(p["trial_id"], int) else None
@@ -1532,7 +1754,7 @@ class Activator:
                 and rec.get("account_id") in x.book.engines:
             return None
         try:
-            parsed = self._checks(boundary, p, t, kind, snap, conn, inbox, cfg, run_start, floor)
+            parsed = self._checks(boundary, p, t, kind, snap, conn, inbox, cfg, run_start, floor, inbox_code)
         except Refusal as r:
             self._refuse(refused, p, r.code, r.detail, boundary)
             return None
@@ -1542,7 +1764,8 @@ class Activator:
             self._refuse(refused, p, "id_conflict", str(exc), boundary)
             return None
 
-    def _checks(self, boundary, p, t, kind, snap, conn, inbox, cfg, run_start, floor) -> dict:
+    def _checks(self, boundary, p, t, kind, snap, conn, inbox, cfg, run_start, floor,
+                inbox_code: str = "inbox_unreadable") -> dict:
         x = self.x
         # C1 contract
         acct = _loads(p["account"]) if isinstance(p["account"], str) else p["account"]
@@ -1572,7 +1795,8 @@ class Activator:
             raise Refusal("stale_run", f"proposal {p['ts']} / decided {dts} vs run {run_start} floor {floor}")
         # C5 sticky reject
         if inbox is None:
-            raise Refusal("inbox_unreadable", "inbox.db missing or unreadable")
+            raise Refusal(inbox_code, "inbox.db restored to an older copy" if inbox_code == "inbox_regressed"
+                          else "inbox.db missing or unreadable")
         try:
             rej = inbox.execute(Activator.R1, (p["id"], p["ts"])).fetchone()
         except sqlite3.Error as exc:
@@ -1711,6 +1935,14 @@ class _InboxError(Exception):
     pass
 
 
+class _LateReject(Exception):
+    """A reject click arrived for a proposal while its account was being created (before the commit)."""
+
+    def __init__(self, pids: list):
+        super().__init__(f"reject click for proposal(s) {pids} during creation")
+        self.pids = list(pids)
+
+
 def _loads(v: Any) -> Any:
     if v is None or not isinstance(v, (str, bytes)):
         return v
@@ -1738,7 +1970,8 @@ def status_text(paper_db: str) -> str:
     lines = [f"extras state {st.get('ts')}: agents3 {st.get('agents_db')}, inbox {st.get('inbox_db')}, "
              f"since {st.get('since')}, observe until {st.get('observe_until')}",
              f"accounts: {len(rows)} (copy {st.get('counts', {}).get('copy', 0)}, "
-             f"newlab {st.get('counts', {}).get('newlab', 0)}), fingerprint {fingerprint_text(st.get('fingerprint'))}"]
+             f"newlab {st.get('counts', {}).get('newlab', 0)}), fingerprint {fingerprint_text(st.get('fingerprint'))}, "
+             f"inbox fingerprint {inbox_fingerprint_text(st.get('inbox_fingerprint'))}"]
     acc = st.get("accounts") or {}
     for aid, kind, created, parent in rows:
         a = acc.get(aid) or {"status": "active"}

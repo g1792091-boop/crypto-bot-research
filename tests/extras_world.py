@@ -107,7 +107,7 @@ class World:
     def __init__(self, tmp, *, observe_days: float = 0, owner_ok_days: float = 60, start_at: int = T0,
                  config_path: Optional[str] = None, strategies=STRATS, tfs=TFS, min_parent_trades: Optional[int] = 0,
                  hist: bool = False, skip_before: Optional[int] = None, reopen: bool = False, extras: bool = True,
-                 maxlen: int = 1500, run_start: int = T0):
+                 maxlen: int = 1500, run_start: int = T0, notifier=None):
         from paperbot import extras as X
         from paperbot.agents import rooms_db as R
         self.X, self.R = X, R
@@ -117,7 +117,7 @@ class World:
         self.inbox_path = os.path.join(self.tmp, "inbox.db")
         self.now = start_at
         self.store = Store3(self.db)
-        self.notifier = ListNotifier()
+        self.notifier = notifier if notifier is not None else ListNotifier()
         self.digest = Digest(ListNotifier())
         self.book = AccountBook(S, BR, self.store, self.notifier, digest=self.digest)
         self.service = FakeService(names36(), maxlen=maxlen)

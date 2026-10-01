@@ -948,9 +948,17 @@ def test_agents_policy_template_and_observation(tmp_path):
     lines = L.check_agents_policy(srv.ctx(), srv.envs()["agents"], True, None)
     assert st(lines) == [L.FIX] and "agents.env 값이 잘못됐습니다" in lines[0][1]
     srv.write_env("agents", agents_env(extra="AGENTS_OBSERVE_UNTIL=2026-09-30\n"))
-    assert "이미 지났습니다" in L.check_agents_policy(srv.ctx(), srv.envs()["agents"], True, None)[-1][1]
+    last = L.check_agents_policy(srv.ctx(), srv.envs()["agents"], True, None)[-1]
+    assert last[0] == L.NOTE and "이미 지났거나" in last[1] and "봇 첫 시작부터 21일" in last[1]
+    # a date before the bot's start + 21 days does not shorten the period (the live runner's floor)
+    last = L.check_agents_policy(srv.ctx(), srv.envs()["agents"], True, start)[-1]
+    assert "21일보다 빨라 쓰이지 않습니다" in last[1] and "2026-10-20까지" in last[1]
+    srv.write_env("agents", agents_env(extra="AGENTS_OBSERVE_UNTIL=2026-11-05\n"))
+    assert L.check_agents_policy(srv.ctx(), srv.envs()["agents"], True, start)[-1] == (
+        L.OK, "관찰 기간: 2026-11-05(한국 날짜)까지 복사 제안 없음")
     srv.write_env("agents", agents_env(extra="AGENTS_OBSERVE_DAYS=0\n"))
-    assert "관찰 기간 꺼짐" in L.check_agents_policy(srv.ctx(), srv.envs()["agents"], True, None)[-1][1]
+    lines = L.check_agents_policy(srv.ctx(), srv.envs()["agents"], True, None)
+    assert st(lines) == [L.FIX] and "AGENTS_OBSERVE_DAYS" in lines[0][1]
     os.remove(os.path.join(srv.etc, "agents.env"))
     assert st(L.check_agents_policy(srv.ctx(), srv.envs()["agents"], False, None)) == [L.NOTE]
 
@@ -1224,3 +1232,28 @@ def test_liquidation_recorder_connection(tmp_path):
     assert L.check_liq(srv.ctx())[0][0] == L.NOTE
     os.remove(os.path.join(srv.lib, "liq.db"))
     assert "liq.db가 없습니다" in fixes(L.check_liq(srv.ctx()))[0]
+
+
+def test_executor_must_follow_an_original_strategy_account(tmp_path):
+    """The order executor does not refuse an extra paper account (copy / new strategy) or a coin-flip account yet:
+    launchcheck reads its account from /etc/paperbot/executor.json and fails unless paper3.db calls it a
+    'strategy' account (docs/extra-accounts.md 9)."""
+    from paperbot.store3 import Store3
+    srv = Server(tmp_path, "after")
+    assert L.check_executor_account(srv.ctx()) == []                       # no executor configured: nothing to say
+    db = Store3(os.path.join(srv.lib, "paper3.db"))
+    db.add_account("V45_AMB@15m", "V45_AMB", "15m", "strategy", NOW, "v3")
+    db.add_account("V45_AMB@15m~c1", "V45_AMB", "15m", "copy", NOW, "v3", "V45_AMB@15m", {"v": 1})
+    db.add_account("NL1@1h", "NL1", "1h", "newlab", NOW, "v3", None, {"v": 1})
+    db.add_account("RANDOM_1@15m", "RANDOM_1", "15m", "random", NOW, "v3")
+    db.close()
+    path = os.path.join(srv.etc, "executor.json")
+    for acct, want, word in (("V45_AMB@15m", L.OK, "원래 매매법 계좌"), ("V45_AMB@15m~c1", L.FIX, "복제 계좌"),
+                             ("NL1@1h", L.FIX, "새 매매법 계좌"), ("RANDOM_1@15m", L.FIX, "동전 봇 계좌"),
+                             ("NL7@4h", L.FIX, "추가 계좌 이름"), ("S9@5m", L.NOTE, "찾지 못해")):
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump({"account": acct, "mode": "testnet"}, fh)
+        [(status, text)] = L.check_executor_account(srv.ctx())
+        assert status == want and word in text, (acct, text)
+    sections, _secrets, _cmd = L.run_checks(srv.ctx(), "after", agents="no")
+    assert any(title == "주문 실행기가 따라 할 계좌" for title, _lines in sections)
