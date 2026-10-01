@@ -103,8 +103,8 @@ def safe_path(rel: str) -> Path:
 def zip_all() -> Path:
     refresh()
     r = root()
-    out = E._dir() / f"GHQuant_결과_{datetime.now():%Y%m%d_%H%M}.zip"
-    for old in E._dir().glob("GHQuant_결과_*.zip"):
+    out = E._dir() / f"GHQuant_results_{datetime.now():%Y%m%d_%H%M}.zip"
+    for old in E._dir().glob("GHQuant_results_*.zip"):
         if time.time() - old.stat().st_mtime > 600:
             old.unlink(missing_ok=True)
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:

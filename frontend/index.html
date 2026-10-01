@@ -15,6 +15,7 @@
     <button data-view="trade" class="on">트레이드</button>
     <button data-view="lab">전략 · 백테스트</button>
     <button data-view="autopilot">오토파일럿 <i class="ap-dot" id="ap-dot"></i></button>
+    <button data-view="office">AI 사무실</button>
     <button data-view="agents">에이전트 팀</button>
     <button data-view="quant">퀀트</button>
     <button data-view="market">마켓</button>
@@ -219,6 +220,42 @@
 </section>
 
 <!-- ============================================================ 에이전트 팀 -->
+
+<!-- ============================================================ AI 사무실 -->
+<section class="view" id="v-office">
+  <div class="of">
+    <div class="of-top">
+      <span class="of-rec" id="of-mode">자동 운영</span>
+      <span class="of-status" id="of-status">불러오는 중…</span>
+      <div class="grow"></div>
+      <button class="sm pri" id="of-job" title="기존 4개 팀의 다음 차례 업무를 지금 시킨다">지금 일 시키기</button>
+      <span class="of-dd"><button class="sm" id="of-agbtn">안건 열기 ▾</button><div class="of-menu" id="of-agenda" hidden></div></span>
+      <span class="of-dd"><button class="sm" id="of-tmbtn">팀 업무 시키기 ▾</button><div class="of-menu" id="of-teammenu" hidden></div></span>
+      <button class="sm" id="of-report">📢 발표</button>
+      <button class="sm" id="of-teams">팀 구성</button>
+      <button class="sm" id="of-stop" title="진행 중인 회의 멈추기">회의 멈추기</button>
+      <span class="of-dd"><button class="sm" id="of-setbtn">설정 ▾</button><div class="of-menu of-set" id="of-set" hidden></div></span>
+    </div>
+    <div class="of-body">
+      <div class="of-floorwrap"><div class="of-meet" id="of-meet"></div><div class="of-floor" id="of-floor"></div></div>
+      <div class="of-side">
+        <div class="of-tabs" id="of-tabs">
+          <button data-tab="log" class="on">회의록</button><button data-tab="pipe">파이프라인</button><button data-tab="live">실거래</button>
+          <button data-tab="results">결과·다운로드</button><button data-tab="growth" id="of-tab-growth">성장 과제</button><button data-tab="reports">발표</button>
+          <button data-tab="models">AI 배정</button>
+        </div>
+        <div class="of-logwrap" id="of-logwrap">
+          <div class="of-chbar"><select id="of-ch"></select><span class="dim">방을 고르면 그 팀에게 질문합니다</span></div>
+          <div class="of-log" id="of-log"></div>
+          <div class="of-input"><textarea id="of-q" rows="2" placeholder="사무실에 메시지 보내기 (예: 비트코인 지금 롱 어때? / 도지코인 매매법 만들어서 백테스트 해줘 / @윤슬 알트 어때)"></textarea><button class="pri" id="of-send">보내기</button></div>
+        </div>
+        <div class="of-pane" id="of-pane" hidden></div>
+      </div>
+    </div>
+    <div class="of-foot" id="of-foot"></div>
+    <div class="of-card" id="of-card" hidden></div>
+  </div>
+</section>
 <section class="view" id="v-agents">
   <div class="team-page">
     <aside class="panel team-roster"><div class="ph"><span class="t">팀원 23명</span><div class="grow"></div><span class="muted" id="tm-engine"></span></div>

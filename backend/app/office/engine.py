@@ -302,9 +302,11 @@ def solo(aid: str, room: str, extra: str, user: str, max_tokens: int = 1200, sys
     e = post(room, "agent", agent=aid, text="", think="", live=True, steps=[], **card)
     sysp = system or persona(aid, extra)
     text, model, err = _ai(sysp, user, aid, max_tokens)
-    if text and not re.search(r"[가-힣]", ko_only(text)):
+    ok = lambda t: bool(t) and (bool(re.search(r"[가-힣]", ko_only(t))) or "```json" in t)     # 한국어 답이나 JSON 블록이 있으면 받는다
+    if text and not ok(text):
         text2, model2, err2 = _ai(sysp + "\n반드시 한국어로 답한다.", user, aid, max_tokens)
-        text, model = (text2, model2) if text2 else (text, model)
+        text, model = (text2, model2) if ok(text2) else (None, model)
+        err = err or "한국어 답을 내지 못함"
     if not text:
         update(e, live=False, text=f"({a['name']}: {'무료 AI 한도에 걸려 이번에는 쉬었습니다 · 잠시 뒤 다시 합니다' if err and _limit_hit(err) else '연결된 모델들이 이번에는 답하지 못했습니다'})",
                error=(err or "")[:160])
@@ -475,11 +477,14 @@ def _turn(m: dict, aid: str, i: int) -> dict:
         final = text
         break
     think, body = split_think(ko_only(final)) if final else ("", "")
-    if final and not body:
+    if final and not re.search(r"[가-힣]", body or ""):          # 빈 답·영어만·JSON 만 → 실패로 보고 다시
+        body = ""
         text, model2, err = _ai(sysp + "\n반드시 한국어로, 바로 말한다.", conv, aid, 1200)
         if text:
             think, body = split_think(ko_only(text))
             model = model2 or model
+    if body and not re.search(r"[가-힣]", body):
+        body, err = "", err or "한국어 답을 내지 못함"
     if not body:
         body = f"({a['name']}: {'무료 AI 한도에 걸려 이번에는 쉬었습니다 · 잠시 뒤 다시 합니다' if err and re.search('429|한도|quota', err or '') else '연결된 모델들이 이번에는 답하지 못했습니다'})"
         update(e, live=False, text=body, error=(err or "")[:160], steps=steps)

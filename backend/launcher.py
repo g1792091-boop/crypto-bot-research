@@ -45,10 +45,23 @@ ANTHROPIC_API_KEY=
 # 여러 개 넣었을 때 강제로 고르려면: auto / claude / nvidia / gemini
 LLM_PROVIDER=auto
 
+# ── 키 여러 개 (AI 사무실 직원들이 나눠 쓰기) ──
+# 무료 키는 분당 한도가 키마다 따로입니다. 2~9번 키를 넣고 'AI 사무실 → AI 배정' 에서 팀마다 nvidia#2:auto 처럼 고르거나
+# '키 골고루 나누기' 를 누르면 팀마다 나눠 씁니다. (화면에서 넣어도 이 파일에 저장됩니다)
+NVIDIA_API_KEY_2=
+NVIDIA_API_KEY_3=
+GEMINI_API_KEY_2=
+
+# ── 실거래 (기본 꺼짐 · 기본 테스트넷) ──
+# 바이낸스 USDT-M 선물 API 키. 'AI 사무실 → 실거래' 에서 직접 켜고, 매매법마다 승인해야 주문이 나갑니다.
+# 반드시 '선물 거래' 권한만 주고 '출금' 권한은 절대 주지 마세요. 처음에는 테스트넷 키(testnet.binancefuture.com)로 시험하세요.
+BINANCE_API_KEY=
+BINANCE_API_SECRET=
+
 # CoinGlass API 키 (https://www.coinglass.com/pricing) — OI/펀딩/롱숏/청산 데이터
 COINGLASS_API_KEY=
 
-# 데이터 소스: auto(바이낸스, 실패 시 합성 데이터) / binance / synthetic(오프라인 데모)
+# 데이터 소스: auto(바이낸스 → 바이비트 → OKX 실제 시세) / synthetic(오프라인 데모)
 DATA_SOURCE=auto
 
 # 사용할 포트 (이미 사용 중이면 자동으로 다른 포트를 고릅니다)
@@ -84,6 +97,12 @@ def load_settings(path: Path) -> None:
         with path.open("a", encoding="utf-8") as f:
             f.write("\n" + SETTINGS_TEMPLATE[start:SETTINGS_TEMPLATE.index("# Claude API 키")])
         print("설정 파일에 무료 NVIDIA 키 칸(NVIDIA_API_KEY)을 추가했습니다.")
+    if path.exists() and "BINANCE_API_KEY" not in path.read_text(encoding="utf-8-sig"):
+        # 키 여러 개 · 실거래 키 칸 (기존 값은 그대로)
+        start = SETTINGS_TEMPLATE.index("# ── 키 여러 개")
+        with path.open("a", encoding="utf-8") as f:
+            f.write("\n" + SETTINGS_TEMPLATE[start:SETTINGS_TEMPLATE.index("# CoinGlass API 키")])
+        print("설정 파일에 추가 AI 키 칸과 실거래 키 칸을 추가했습니다.")
     for line in path.read_text(encoding="utf-8-sig").splitlines():
         line = line.strip()
         if not line or line.startswith("#") or "=" not in line:

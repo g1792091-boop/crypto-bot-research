@@ -8,6 +8,7 @@ import { initAutopilot } from "./autopilot.js";
 import { $, $$, api, emit, esc, on, state, syncAutopilot, toast } from "./core.js";
 import { initLab } from "./lab.js";
 import { initMarket } from "./market.js";
+import { initOffice } from "./office.js";
 import { initQuant } from "./quant.js";
 import { initTrade } from "./trade.js";
 
@@ -39,6 +40,7 @@ async function init() {
   initAutopilot();
   initLab();
   initAgents();
+  initOffice();
   initMarket();
   initQuant();
   initAiAuto();
