@@ -107,7 +107,7 @@ class World:
     def __init__(self, tmp, *, observe_days: float = 0, owner_ok_days: float = 60, start_at: int = T0,
                  config_path: Optional[str] = None, strategies=STRATS, tfs=TFS, min_parent_trades: Optional[int] = 0,
                  hist: bool = False, skip_before: Optional[int] = None, reopen: bool = False, extras: bool = True,
-                 maxlen: int = 1500):
+                 maxlen: int = 1500, run_start: int = T0):
         from paperbot import extras as X
         from paperbot.agents import rooms_db as R
         self.X, self.R = X, R
@@ -136,7 +136,7 @@ class World:
         if not restored:
             defs = [{"strategy": s, "timeframe": tf, "kind": "strategy"} for tf in tfs for s in strategies]
             defs += [{"strategy": "RANDOM_1", "timeframe": tf, "kind": "random"} for tf in tfs]
-            self.book.open_accounts(defs, T0)
+            self.book.open_accounts(defs, run_start)
         self.store.commit()
         self.runner = Runner3(self.book, self.service, self.store, self.notifier, V3_SYMBOLS, lambda: self.now,
                               self.prices, skip_before=skip_before, digest=self.digest)

@@ -10,6 +10,7 @@ from paperbot.store3 import Store3
 
 MIN = 60_000
 DAY = 86_400_000
+HOUR = 3_600_000
 S = v3_settings()
 BR = {s: Brackets.example() for s in V3_SYMBOLS}
 
@@ -127,3 +128,165 @@ def test_stop_variants_cover_every_losing_trade_and_match_actual_at_2atr(tmp_pat
     d = next(x for x in sigs[t["signal_ts"] + 1] if f"{x['strategy']}@15m" == aid and x["symbol"] == t["symbol"])
     alone, ok = _alone(S, BR, {}, make_signal(d, stop_atr=2.0), steps, idx[t["signal_ts"] + 1])
     assert ok and alone.exit_time == t["exit_time"] and abs(alone.roe - t["roe"]) < 1e-9
+
+
+# ---------------------------------------------------------------------------- extras (paperbot/extras.py)
+def _extras_day(tmp_path, gap_at=None):
+    """A live UTC day with extras through the real runner (tests/extras_world.py): a lock_start copy started at
+    00:00, a stop_atr copy, a skip_tag copy and a new-strategy account started mid-day, a held interval (an
+    engine fault, then a restart) and a suspended interval (a changed code pin, then accepted)."""
+    from paperbot import extras as X
+    from paperbot import newlab_live as NLL
+    from tests.extras_world import World, T0 as W0
+    rng = np.random.default_rng(12)
+    path = 100 * np.exp(np.cumsum(rng.normal(0, 0.002, 3000)))
+    t_start = W0 - 30 * MIN
+
+    def px(t):
+        return float(path[(t - t_start) // MIN])
+
+    def script(w):
+        for b in range(t_start, W0 + DAY + HOUR, 5 * MIN):
+            k = (b // (5 * MIN)) % 7
+            ctx = {"regime": "trend_down" if k % 2 else "trend_up", "adx": 30.0}
+            w.service.fire[(b, "5m")] = [("N17_KC_RSI@5m", 1 if k % 3 else -1, "BTCUSDT", dict(ctx))]
+            if b % (15 * MIN) == 0:
+                w.service.fire[(b, "15m")] = [("V45_AMB@15m", -1 if k % 2 else 1, "ETHUSDT", dict(ctx)),
+                                              ("S2_ST_ROC@15m", 1, "SOLUSDT", dict(ctx))]
+
+    def fake_compute(self, B, due, deadline):
+        out = []
+        for aid, (name, tf, spec) in self.specs.items():
+            if tf in due and (B // (5 * MIN)) % 4 == 0:
+                out.append({"symbol": "LTCUSDT", "tf": tf, "ready": True, "why": None, "bars": 500,
+                            "bar_open": B - 5 * MIN, "close": px(B - MIN), "atr_last": 0.2,
+                            "sides": {aid: 1 if (B // (5 * MIN)) % 8 else -1}, "ctx": {"regime": "box"},
+                            "errors": []})
+        return out, []
+    real_compute = NLL.NewlabSignals.compute
+    NLL.NewlabSignals.compute = fake_compute
+    try:
+        w = World(tmp_path, hist=True, start_at=t_start, run_start=t_start,
+                  strategies=("V45_AMB", "N17_KC_RSI", "S2_ST_ROC"), tfs=("5m", "15m"))
+        script(w)
+        steps = []
+
+        def step(t):
+            w.process(t, px=px(t))
+            steps.append((t, w.bars(t, px(t)), {}))
+        real_phase1 = X.Extras._phase1
+
+        def phase1(self, boundary, submitted, j):
+            if boundary == gap_at:
+                return False                 # killed between the 195's commit and the copy's (crash gap)
+            return real_phase1(self, boundary, submitted, j)
+        X.Extras._phase1 = phase1
+        t = t_start
+        while t < W0 + DAY + 30 * MIN:
+            if t == W0 - 2 * MIN:
+                w.copy_proposal("N17_KC_RSI", "5m", {"template": "lock_start", "first_lock": 0.15})
+            if t == W0 + 2 * HOUR:
+                w.copy_proposal("V45_AMB", "15m", {"template": "stop_atr", "k": 2.5})
+                w.copy_proposal("S2_ST_ROC", "15m", {"template": "skip_tag", "tag": "추세 반대 진입"})
+                w.newlab_proposal(0)
+            if t == W0 + 6 * HOUR:
+                e = w.book.engines["V45_AMB@15m~c2"]
+
+                def boom(*a, **k):
+                    raise ZeroDivisionError("injected")
+                e._mark_to_market = boom
+            if t in (W0 + 8 * HOUR, W0 + 10 * HOUR):
+                cfg = None
+                if t == W0 + 8 * HOUR:
+                    w.store.commit()
+                    w.close()
+                    import sqlite3 as _sq
+                    c = _sq.connect(w.db)
+                    d = json.loads(c.execute("SELECT data FROM accounts WHERE account_id = 'NL1@5m'").fetchone()[0])
+                    d["code"]["recorder"] = "0" * 64
+                    c.execute("UPDATE accounts SET data = ? WHERE account_id = 'NL1@5m'", (json.dumps(d),))
+                    c.commit()
+                    c.close()
+                else:
+                    pin = NLL.pin_text(w.ext.newlab.pin())
+                    w.close()
+                    cfg = str(tmp_path / "extras.json")
+                    with open(cfg, "w") as fh:
+                        json.dump({"accept_code": {"NL1@5m": pin}}, fh)
+                w = World(tmp_path, hist=True, start_at=t, strategies=("V45_AMB", "N17_KC_RSI", "S2_ST_ROC"),
+                          tfs=("5m", "15m"), config_path=cfg)
+                script(w)
+            step(t)
+            t += MIN
+        X.Extras._phase1 = real_phase1
+    finally:
+        NLL.NewlabSignals.compute = real_compute
+    return w, [s for s in steps if W0 <= s[0] < W0 + DAY], W0
+
+
+def test_replay_with_extras_zero_mismatch(tmp_path):
+    from paperbot.daily3 import extras_of
+    w, steps, day0 = _extras_day(tmp_path)
+    conn = w.store.conn
+    ext = extras_of(conn)
+    assert set(ext) == {"N17_KC_RSI@5m~c1", "V45_AMB@15m~c2", "S2_ST_ROC@15m~c3", "NL1@5m"}
+    assert ext["N17_KC_RSI@5m~c1"]["created_ts"] == day0                              # in the 00:00 snapshot
+    snap = json.loads(conn.execute("SELECT data FROM state WHERE k = ?", (day_key(day0),)).fetchone()[0])
+    assert "N17_KC_RSI@5m~c1" in snap["engines"] and "V45_AMB@15m~c2" not in snap["engines"]
+    assert [s for _, s in ext["V45_AMB@15m~c2"]["timeline"]] == ["active", "held", "active"]
+    assert [s for _, s in ext["NL1@5m"]["timeline"]] == ["active", "suspended", "active"]
+    assert conn.execute("SELECT COUNT(*) FROM outcomes WHERE status = 'FILTERED'").fetchone()[0] > 0
+    rep = replay(S, BR, {}, snap, day_signals(conn, day0, day0 + DAY, with_data=True), steps, extras=ext)
+    stored = stored_trades(conn, day0, day0 + DAY)
+    mism = compare({a: [t for t in ts if t.exit_time < day0 + DAY] for a, ts in rep.items()}, stored)
+    assert mism == [], [m["account_id"] for m in mism]
+    for aid in ext:
+        assert len(stored.get(aid, [])) >= 2, aid
+    # without the extras' rules the copies do not reproduce (the replay really uses them)
+    rep2 = replay(S, BR, {}, snap, day_signals(conn, day0, day0 + DAY, with_data=True), steps)
+    bad = compare({a: [t for t in ts if t.exit_time < day0 + DAY] for a, ts in rep2.items()}, stored)
+    assert {m["account_id"] for m in bad} >= {"V45_AMB@15m~c2", "S2_ST_ROC@15m~c3"}
+    w.close()
+
+
+def test_replay_detects_wrong_copy_rule(tmp_path):
+    from paperbot.daily3 import extras_of
+    w, steps, day0 = _extras_day(tmp_path)
+    conn = w.store.conn
+    ext = extras_of(conn)
+    ext["V45_AMB@15m~c2"]["stop_atr"] = 2.0
+    snap = json.loads(conn.execute("SELECT data FROM state WHERE k = ?", (day_key(day0),)).fetchone()[0])
+    rep = replay(S, BR, {}, snap, day_signals(conn, day0, day0 + DAY, with_data=True), steps, extras=ext)
+    mism = compare({a: [t for t in ts if t.exit_time < day0 + DAY] for a, ts in rep.items()},
+                   stored_trades(conn, day0, day0 + DAY))
+    assert [m["account_id"] for m in mism] == ["V45_AMB@15m~c2"]
+    w.close()
+
+
+def test_crash_gap_label(tmp_path):
+    from paperbot.daily3 import CRASH_GAP_KO, extras_of, label_crash_gaps
+    from tests.extras_world import T0 as W0
+    gap = W0 + 3 * HOUR + 15 * MIN
+    w, steps, day0 = _extras_day(tmp_path, gap_at=gap)
+    conn = w.store.conn
+    w.store.add_run(gap + 2 * MIN, {"commit": "x"})           # the restart that followed the kill
+    w.store.commit()
+    ext = extras_of(conn)
+    snap = json.loads(conn.execute("SELECT data FROM state WHERE k = ?", (day_key(day0),)).fetchone()[0])
+    rep = replay(S, BR, {}, snap, day_signals(conn, day0, day0 + DAY, with_data=True), steps, extras=ext)
+    mism = compare({a: [t for t in ts if t.exit_time < day0 + DAY] for a, ts in rep.items()},
+                   stored_trades(conn, day0, day0 + DAY))
+    assert mism and all(m["account_id"] in ext for m in mism)                  # never one of the originals
+    label_crash_gaps(mism, ext, conn)
+    gaps = [m for m in mism if m.get("crash_gap")]
+    assert gaps and all(m["label"] == CRASH_GAP_KO for m in gaps)
+    first = [m for m in mism if m["account_id"] == "V45_AMB@15m~c2" or m["account_id"] == "S2_ST_ROC@15m~c3"
+             or m["account_id"] == "N17_KC_RSI@5m~c1"]
+    assert first and first[0].get("crash_gap")
+    # the nightly message keeps a gap out of the CRITICAL count
+    from paperbot.daily3 import notify_report
+    from paperbot.notify import ListNotifier
+    msgs = notify_report({"day": "d", "parity": {"accounts": 199, "mismatched_accounts": 0, "crash_gaps": 1},
+                          "data_quality": {}}, ListNotifier())
+    assert [m[0] for m in msgs] == ["WARN", "INFO"] and CRASH_GAP_KO in msgs[0][1]
+    w.close()

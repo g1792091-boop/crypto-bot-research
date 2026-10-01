@@ -466,3 +466,224 @@ def test_dashboard_endpoint(run_db, tmp_path):
     assert v["ready"] and v["day"] == 30 and v["counts"][ck.PASS1] == 1
     assert {r["account_id"]: r["status"] for r in v["rows"]}["GOOD@4h"] == ck.OBSERVE
     assert "checkpoint.js" in c.get("/").text
+
+
+# ---------------------------------------------------------------------------- extra accounts (paperbot/extras.py)
+def _x(tf, n_trades, equity, lo, hi, kind, created, rule=None):
+    a = _acct(tf, n_trades, equity, lo, hi, created=created, kind=kind)
+    a["rule"] = rule or {"stop_atr": 2.0, "first_lock": 0.1, "skip_tag": None}
+    a["events"] = []
+    return a
+
+
+def _stage2_setup(with_extra, extra_kind="newlab", rule=None):
+    cp1, cp2 = T0 + 30 * DAY, T0 + 60 * DAY
+    accts = {"A@1h": _acct("1h", 70, 9000.0, T0, cp2), "B@1h": _acct("1h", 70, 7000.0, T0, cp2)}
+    prior = {aid: {"date": ck.day_str(cp1), "status": ck.PASS1, "stage": "1차", "window": [T0 + 3_600_000, cp1]}
+             for aid in accts}
+    prev = {ck.day_str(cp1): {"accounts": {"A@1h": {"equity": 8000.0}, "B@1h": {"equity": 6000.0}}}}
+    if with_extra:
+        created = T0 + 3_600_000
+        aid = "NL1@1h" if extra_kind == "newlab" else "A@1h~c1"
+        accts[aid] = _x("1h", 70, 9500.0, T0, cp2, extra_kind, created, rule)
+        prior[aid] = {"date": ck.day_str(cp1), "status": ck.PASS1, "stage": "1차", "window": [created, cp1],
+                      "created_ts": created}
+        prev[ck.day_str(cp1)]["accounts"][aid] = {"equity": 8500.0}
+    for a in accts.values():
+        a["signals"] = {ck.day_str(cp1 + k * DAY): 30 for k in range(30)}
+    return _snap(cp2, accts), prior, prev
+
+
+def _q1(snap, prior, prev, n_bots=60):
+    rows, tasks = ck.plan(snap, prior, prev, S)
+    cp = snap["cp_ts"]
+    m = synth_minutes(T0 + 20 * DAY, cp, seed=4)
+    pv, groups = ck.run_tasks(tasks, lambda lo, hi: m.window(lo, hi), S, BR, SPECS, n_bots, 7, 5000.0)
+    summ = ck.decide(snap, rows, tasks, pv)
+    return rows, tasks, pv, groups, summ
+
+
+def test_originals_byte_identical_with_extra_in_shared_stage2_window():
+    base = _q1(*_stage2_setup(False))
+    for kind in ("newlab", "copy"):
+        got = _q1(*_stage2_setup(True, kind, {"stop_atr": 2.0, "first_lock": 0.1, "skip_tag": None}))
+        rows0, _t0, pv0, groups0, _s0 = base
+        rows1, tasks1, pv1, groups1, _s1 = got
+        extra = "NL1@1h" if kind == "newlab" else "A@1h~c1"
+        assert [t.cls for t in tasks1 if t.aid == extra] == [extra]
+        assert [t.window if hasattr(t, "window") else (t.lo, t.hi) for t in tasks1 if t.aid == extra] == \
+            [(T0 + 30 * DAY, T0 + 60 * DAY)]                                  # the originals' stage-2 window
+        for aid in ("A@1h", "B@1h"):
+            for k in ("p", "bots_median", "bots_p90", "bots_bust", "bots_trades"):
+                assert pv1[aid][k] == pv0[aid][k], (kind, aid, k)
+        assert groups1[:len(groups0)] == [{**g, "seconds": groups1[i]["seconds"]} for i, g in enumerate(groups0)]
+        assert len(groups1) == len(groups0) + 1 and groups1[-1]["account_id"] == extra
+        if kind == "newlab":                       # family B: the originals' q too are unchanged
+            for aid in ("A@1h", "B@1h"):
+                assert rows1[aid]["q"] == rows0[aid]["q"] and "q_orig" not in rows1[aid]
+
+
+def test_extra_groups_own_seed_and_rule(monkeypatch):
+    import hashlib as _h
+    snap, prior, prev = _stage2_setup(True, "copy", {"stop_atr": 2.5, "first_lock": 0.2, "skip_tag": None})
+    seen = []
+    real = ck.simulate_bots
+
+    def spy(m, tf, lo, hi, rates, s, brackets, specs=None, seed=0, **kw):
+        seen.append((list(seed), len(rates), s.ladder_first_lock, kw.get("stop_atr")))
+        return real(m, tf, lo, hi, rates, s, brackets, specs, seed=seed, **kw)
+    monkeypatch.setattr(ck, "simulate_bots", spy)
+    rows, tasks, pv, groups, summ = _q1(snap, prior, prev, n_bots=40)
+    seed_base = 7
+    orig = [seed_base, 60, (T0 + 30 * DAY) // MIN % 2 ** 31]
+    assert seen[0] == (orig, 80, 0.1, 2.0)                                # the originals: 2 accounts x 40 bots
+    want = orig + [int(_h.sha256(b"A@1h~c1").hexdigest()[:8], 16)]
+    assert seen[1] == (want, 40, 0.2, 2.5)                                # the copy alone, its own rule and seed
+    assert groups[1]["seed"] == want and groups[1]["first_lock"] == 0.2 and groups[1]["stop_atr"] == 2.5
+
+
+def test_fdr_family_a_copies_family_b_newlab():
+    cp = T0 + 30 * DAY
+    accts = {f"S{k}@1h": _acct("1h", 40, 9000.0, T0, cp) for k in range(4)}
+    accts["S0@1h~c1"] = _x("1h", 40, 9000.0, T0, cp, "copy", T0 - DAY)
+    accts["NL1@1h"] = _x("1h", 40, 9000.0, T0, cp, "newlab", T0 - DAY)
+    accts["NL2@15m"] = _x("15m", 40, 9000.0, T0, cp, "newlab", T0 - DAY)
+    s = _snap(cp, accts)
+    rows, tasks = ck.plan(s, {}, {}, S)
+    p = {"S0@1h": 0.001, "S1@1h": 0.02, "S2@1h": 0.03, "S3@1h": 0.5, "S0@1h~c1": 0.004, "NL1@1h": 0.01,
+         "NL2@15m": 0.04}
+    summ = ck.decide(s, rows, tasks, {a: {"p": v} for a, v in p.items()})
+    fam_a = ["S0@1h", "S1@1h", "S2@1h", "S3@1h", "S0@1h~c1"]
+    qa, _ = ck.bh([p[a] for a in fam_a], ck.ALPHA)
+    for a, q in zip(fam_a, qa):
+        assert rows[a]["q"] == pytest.approx(q)
+    qb, _ = ck.bh([p["NL1@1h"], p["NL2@15m"]], ck.ALPHA)
+    assert rows["NL1@1h"]["q"] == pytest.approx(qb[0]) and rows["NL2@15m"]["q"] == pytest.approx(qb[1])
+    assert summ["tested"] == 5 and summ["family_b"]["tested"] == 2
+
+
+def test_q_orig():
+    cp = T0 + 30 * DAY
+    accts = {f"S{k}@1h": _acct("1h", 40, 9000.0, T0, cp) for k in range(3)}
+    s0 = _snap(cp, dict(accts))
+    rows0, tasks0 = ck.plan(s0, {}, {}, S)
+    p = {"S0@1h": 0.004, "S1@1h": 0.03, "S2@1h": 0.2}
+    ck.decide(s0, rows0, tasks0, {a: {"p": v} for a, v in p.items()})
+    accts["S0@1h~c1"] = _x("1h", 40, 9000.0, T0, cp, "copy", T0 - DAY)
+    s1 = _snap(cp, accts)
+    rows1, tasks1 = ck.plan(s1, {}, {}, S)
+    ck.decide(s1, rows1, tasks1, {a: {"p": v} for a, v in dict(p, **{"S0@1h~c1": 0.001}).items()})
+    for a in p:
+        assert "q_orig" not in rows0[a]                                     # no copies: q is the originals' own
+        assert rows1[a]["q_orig"] == pytest.approx(rows0[a]["q"])
+        assert rows1[a]["q"] != pytest.approx(rows0[a]["q"]) or a == "S2@1h"
+    assert "q_orig" not in rows1["S0@1h~c1"]
+
+
+def _extras_paper_db(path, cp):
+    from paperbot.extras import content_key_copy
+    st = Store3(path)
+    st.put_state("run", T0, {"initial_equity": 5000.0, "taker_fee": 0.0005, "settings": "paper-v3"})
+    st.add_run(T0, {"commit": "x", "changes": []})
+    st.add_run(T0 + 12 * DAY, {"commit": "y", "changes": ["commit", "extra_code"]})
+    created = T0 + 10 * DAY
+    st.add_account("S@1h", "S", "1h", "strategy", T0, "paper-v3")
+    st.add_account("S@1h~c1", "S", "1h", "copy", created, "paper-v3", "S@1h",
+                   {"v": 1, "kind": "copy", "rule": {"template": "skip_tag", "tag": "추세 반대 진입"},
+                    "source": {"content": content_key_copy({"template": "skip_tag", "tag": "추세 반대 진입"})}})
+    st.add_account("NL1@1h", "NL1", "1h", "newlab", created, "paper-v3", None,
+                   {"v": 1, "kind": "newlab", "rule": None, "spec_hash": "h"})
+    rows = []
+    for k in range(40):
+        b = T0 + (k + 1) * 12 * 3_600_000
+        side = 1 if k % 2 else -1
+        ctx = {"regime": "trend_down"}                     # a long here carries the tag
+        rows.append({"bar_close": b, "timeframe": "1h", "strategy": "S", "symbol": "BTCUSDT", "side": side,
+                     "atr": 1.0, "ref_price": 1.0, "ref_time": b, "delay_ms": 1, "status": "SUBMITTED",
+                     "data": {"ctx": ctx}})
+        rows.append({"bar_close": b, "timeframe": "1h", "strategy": "NL1", "symbol": "ETHUSDT", "side": 1,
+                     "atr": 1.0, "ref_price": 1.0, "ref_time": b, "delay_ms": 1, "status": "SUBMITTED", "data": {}})
+    st.log_signals(rows)
+    ev = [{"ts": created, "account_id": "S@1h~c1", "event": "created", "effective": created},
+          {"ts": created, "account_id": "NL1@1h", "event": "created", "effective": created},
+          {"ts": T0 + 15 * DAY, "account_id": "NL1@1h", "event": "suspended", "code": "code_changed",
+           "effective": T0 + 15 * DAY},
+          {"ts": T0 + 16 * DAY, "account_id": "NL1@1h", "event": "code_accepted", "code": "code_changed",
+           "effective": T0 + 16 * DAY},
+          {"ts": T0 + 16 * DAY, "account_id": "NL1@1h", "event": "resumed", "code": "code_changed",
+           "effective": T0 + 16 * DAY}]
+    st.put_state("extras", T0 + 20 * DAY, {"v": 1, "events": ev, "health": {
+        "skipped_runs": [[T0 + 20 * DAY, T0 + 20 * DAY + 3 * 3_600_000]]}})
+    eng = {"wallet": 5000.0, "peak_equity": 5000.0, "max_drawdown": 0.0, "halted": False, "halt_reason": "",
+           "bust": False, "warned": [], "last_mark": {}, "position": None, "pending": [], "n_trades": 0}
+    st.put_state("day:" + ck.day_str(cp), cp, {"engines": {a: dict(eng) for a in ("S@1h", "S@1h~c1", "NL1@1h")}})
+    st.close()
+    return created
+
+
+def test_snapshot_v2_extras_and_v1_fields_unchanged(tmp_path):
+    from paperbot.agents import labtests as LT
+    cp = T0 + 30 * DAY
+    path = str(tmp_path / "p.db")
+    created = _extras_paper_db(path, cp)
+    conn = ck.ro_connect(path)
+    snap = ck.freeze_snapshot(conn, cp)
+    conn.close()
+    assert snap["version"] == 2
+    o = snap["accounts"]["S@1h"]
+    assert set(o) == {"strategy", "timeframe", "kind", "created_ts", "parent", "wallet", "bust", "halted",
+                      "position", "mark", "equity", "trades", "signals"}               # exactly the v1 fields
+    assert sum(o["signals"].values()) == 40
+    c = snap["accounts"]["S@1h~c1"]
+    assert c["rule"] == {"stop_atr": 2.0, "first_lock": 0.1, "skip_tag": "추세 반대 진입"}
+    # the parent's signals after the copy's start, minus the ones its tag drops (longs in a downtrend)
+    want = sum(1 for k in range(40) if T0 + (k + 1) * 12 * 3_600_000 > created
+               and not LT.has_tag("추세 반대 진입", 1 if k % 2 else -1, {"regime": "trend_down"}))
+    assert sum(c["signals"].values()) == want and 0 < want < 40
+    n = snap["accounts"]["NL1@1h"]
+    assert sum(n["signals"].values()) == sum(1 for k in range(40) if T0 + (k + 1) * 12 * 3_600_000 >= created)
+    assert [e["event"] for e in n["events"]] == ["created", "suspended", "code_accepted", "resumed"]
+    assert n["skipped_runs"] == [[T0 + 20 * DAY, T0 + 20 * DAY + 3 * 3_600_000]]
+    assert ck.skipped_bars(n["skipped_runs"], "1h", created, cp, created) == 4
+    assert snap["run"]["extra_code_changes"] == [{"ts": T0 + 12 * DAY, "changes": ["extra_code"]}]
+    assert snap["run"]["trading_changes"] == []                           # extra_code is not the originals' Q5
+
+
+def test_extra_warnings_only_on_extras(tmp_path):
+    cp = T0 + 40 * DAY
+    path = str(tmp_path / "p.db")
+    _extras_paper_db(path, cp)
+    conn = ck.ro_connect(path)
+    snap = ck.freeze_snapshot(conn, cp)
+    conn.close()
+    rows, tasks = ck.plan(snap, {}, {}, S)
+    w = ck.extra_warnings(snap, rows)
+    assert any("추가 계좌만 해당: NL1@1h, S@1h~c1" in x for x in w)
+    assert any(x.startswith("NL1@1h:") and "Q5 사건" in x for x in w)
+    assert all("S@1h:" not in x and "S@1h " not in x for x in w)
+    assert "notes" not in rows["S@1h"] and rows["NL1@1h"]["notes"]
+    assert rows["NL1@1h"]["created_ts"] == T0 + 10 * DAY and "created_ts" not in rows["S@1h"]
+
+
+def test_prior_ignores_reused_id_with_other_created_ts():
+    cp = T0 + 60 * DAY
+    accts = {"NL1@1h": _x("1h", 40, 9000.0, T0, cp, "newlab", T0 + 20 * DAY)}
+    prior = {"NL1@1h": {"date": ck.day_str(T0 + 30 * DAY), "status": ck.FAIL, "stage": "1차",
+                        "created_ts": T0 + 2 * DAY, "reason": "x"}}
+    rows, tasks = ck.plan(_snap(cp, accts), prior, {}, S)
+    assert rows["NL1@1h"]["status"] != ck.FAIL and [t.aid for t in tasks] == ["NL1@1h"]   # judged from its new start
+    prior["NL1@1h"]["created_ts"] = T0 + 20 * DAY
+    rows, tasks = ck.plan(_snap(cp, accts), prior, {}, S)
+    assert rows["NL1@1h"]["status"] == ck.FAIL and not tasks
+
+
+def test_run_start_ignores_extras(tmp_path):
+    path = str(tmp_path / "p.db")
+    st = Store3(path)
+    st.add_account("NL1@1h", "NL1", "1h", "newlab", T0 - 5 * DAY, "paper-v3", None, {})
+    st.add_account("S@1h", "S", "1h", "strategy", T0, "paper-v3")
+    st.add_account("RANDOM_1@1h", "RANDOM_1", "1h", "random", T0 + 1, "paper-v3")
+    st.close()
+    conn = ck.ro_connect(path)
+    assert ck.run_facts(conn)["start_ts"] == T0
+    conn.close()
