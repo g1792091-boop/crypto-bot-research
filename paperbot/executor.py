@@ -959,33 +959,112 @@ class Executor:
         return bool(rows)
 
     def loop_once(self) -> None:
+        """One loop. The order matters for safety:
+        1. kill file / persisted halt: close everything with positionRisk + reduce-only market orders only;
+        2. account -> daily loss, drawdown, loss streak (deposits/withdrawals taken out) -> close everything;
+        3. stops -> reconcile, each symbol on its own (one stuck symbol never blocks the others or the limits);
+        4. limits again (a stop-out booked by the reconcile can complete a loss streak), then follow the paper.
+        A failed reconcile action is re-raised at the end (loop_error) after everything else has run."""
         self.loops += 1
         now = self.now_ms()
+        kill = R.kill_switch_on(self.cfg.risk, self.exists)
+        rows = self.c.positions()
+        failed: list = []
+        flattened = False
+        if kill or self.risk.halted:
+            failed += self._flatten_halt(R.check_loop(self.cfg.risk, self.risk, None, kill), rows)
+            rows, flattened = self.c.positions(), True
         if now - self.last_sync >= self.cfg.time_sync_s * 1000:
             off = self.c.sync_time()
             self.last_sync = now
-            self._event(INFO, "time_sync", f"서버 시간 다시 맞춤: 차이 {off} ms", {"offset_ms": off}, notify=False)
-        snap = self._snapshot()
-        R.observe_equity(self.risk, self.now_ms(), snap.equity)
+            self._note_offset(off)
+        acct = self.c.account()
+        equity, wallet = float(acct["totalMarginBalance"]), float(acct["totalWalletBalance"])
+        self._transfers()
+        R.observe_equity(self.risk, self.now_ms(), equity)
         if now - self.last_equity >= self.cfg.equity_every_s * 1000:
-            self.store.equity(now, snap.equity, snap.wallet)
+            self.store.equity(now, equity, wallet, self.risk.transfers)
             self.last_equity = now
-        self._reconcile(snap)
-        kill = R.kill_switch_on(self.cfg.risk, self.exists)
-        dec = R.check_loop(self.cfg.risk, self.risk, snap.equity, kill)
-        if dec.action == R.FLATTEN_HALT:
+        if not flattened:
+            dec = self._limits(equity, kill)
+            if dec.action == R.FLATTEN_HALT:
+                failed += self._flatten_halt(dec, rows)
+                rows, flattened = self.c.positions(), True
+        snap = self._snapshot(rows, equity, wallet)
+        failed += self._reconcile(snap)
+        if not flattened:
+            dec = self._limits(equity, kill)
+            if dec.action == R.FLATTEN_HALT:
+                failed += self._flatten_halt(dec)
+                flattened = True
+        if flattened:
             self.new_signals = []
-            self._flatten_halt(dec)
         else:
             self._poll_signals()
-            intent, paper_ts = self.source.read()
-            direct = self._direct_intent(paper_ts) if self.new_signals else None
-            self._follow(intent, paper_ts, direct)
+            try:
+                intent, paper_ts = self.source.read()
+            except Refused as e:                 # the account is gone from paper3.db (replaced or restored db)
+                self._paper_unreadable(e)
+            else:
+                self.paper_errors = 0
+                direct = self._direct_intent(paper_ts) if self.new_signals else None
+                self._follow(intent, paper_ts, direct, entries=not failed)
         self._settle_pending()
         self._save()
+        if failed:
+            raise failed[0]
 
-    def _snapshot(self) -> Snapshot:
-        rows = self.c.positions()
+    def _limits(self, equity: float, kill: Optional[str]) -> R.Decision:
+        """check_loop; a daily-loss or drawdown halt is confirmed against a fresh read of deposits/withdrawals
+        first (a withdrawal of profit is not a loss)."""
+        dec = R.check_loop(self.cfg.risk, self.risk, equity, kill)
+        if dec.action == R.FLATTEN_HALT and set(dec.kinds) & {"daily", "drawdown"}:
+            if self._transfers(force=True):
+                dec = R.check_loop(self.cfg.risk, self.risk, equity, kill)
+        return dec
+
+    def _transfers(self, force: bool = False) -> bool:
+        """Deposits and withdrawals of the futures wallet (GET /fapi/v1/income, every ``transfer_every_s`` and
+        before a money halt): risk.apply_transfer moves the day's starting equity and the drawdown peak, so the
+        limits see trading P&L only. True when something was applied."""
+        st = self.risk
+        end = self._server_ms()
+        if st.transfers_checked is None:                     # tracking starts now: older ones are in the baselines
+            st.transfers_checked = end
+            return False
+        now = self.now_ms()
+        if not force and now - self.last_transfer_scan < self.cfg.transfer_every_s * 1000:
+            return False
+        self.last_transfer_scan = now
+        rows = self.c.income(None, None, min(st.transfers_checked, end) - 3_600_000, end)
+        seen = {str(x) for x in st.transfer_ids}
+        off = int(getattr(self.raw, "offset_ms", 0) or 0)
+        applied = False
+        for r in sorted(rows or [], key=lambda x: int(x.get("time") or 0)):
+            tid = str(r.get("tranId"))
+            if r.get("incomeType") not in TRANSFER_TYPES or tid in seen or int(r.get("time") or 0) > end:
+                continue
+            seen.add(tid)
+            st.transfer_ids = (st.transfer_ids + [tid])[-200:]
+            if r.get("asset", "USDT") != "USDT":
+                continue                                     # the limits use the USDT balance
+            amount = float(r.get("income") or 0)
+            R.apply_transfer(st, amount, int(r["time"]) - off)
+            applied = True
+            self._event(WARN, "transfer", f"선물 지갑 {'입금' if amount > 0 else '출금'} ${abs(amount):,.2f}: "
+                        "손익이 아니므로 하루 손실·낙폭 기준을 같은 만큼 옮깁니다", {"tranId": tid, "income": amount})
+        st.transfers_checked = max(st.transfers_checked, end)
+        return applied
+
+    def _paper_unreadable(self, e: Exception) -> None:
+        self.paper_errors += 1
+        held = f" 열린 포지션 {self.trade['symbol']}은 거래소 손절과 대조로 지킵니다(잠금·청산 따라가기 멈춤)." \
+            if self.trade is not None else ""
+        self._event(CRITICAL, "paper_unreadable", f"paper 계좌를 읽을 수 없습니다: {e}. 새 진입은 하지 않습니다."
+                    + held + " paper3.db를 확인하세요", notify=self.paper_errors in (1, 10, 100) or
+                    self.paper_errors % 1000 == 0)
+
+    def _snapshot(self, rows: list, equity: float, wallet: float) -> Snapshot:
         pos = {r["symbol"]: float(r["positionAmt"]) for r in rows if float(r.get("positionAmt") or 0) != 0}
         entry = {r["symbol"]: float(r.get("entryPrice") or 0) for r in rows}
         syms = set(pos)
@@ -994,71 +1073,186 @@ class Executor:
         if self.loops % self.cfg.sweep_every == 1 or self.cfg.sweep_every <= 1:
             syms |= set(self.cfg.risk.allowed_symbols)      # full sweep now and then (rate limits)
         stops = {s: live_stops(self.c, s) for s in sorted(syms)}
-        acct = self.c.account()
-        return Snapshot(pos, entry, stops, float(acct["totalMarginBalance"]), float(acct["totalWalletBalance"]))
+        return Snapshot(pos, entry, stops, equity, wallet)
 
     # ------------------------------------------------------------ reconcile
-    def _reconcile(self, snap: Snapshot) -> None:
+    def _isolated(self, failed: list, what: str, fn, *a) -> None:
+        """Run one reconcile action; a failure is logged and kept (re-raised at the end of the loop) instead of
+        stopping the other symbols, the limits and the paper exit. A rate limit still stops the loop (it waits)."""
+        try:
+            fn(*a)
+        except RateLimited:
+            raise
+        except Exception as e:  # noqa: BLE001
+            failed.append(e)
+            self._event(WARN, "reconcile_failed", f"{what} 실패: {type(e).__name__}: {e} (다른 일은 계속합니다)",
+                        notify=False)
+
+    def _reconcile(self, snap: Snapshot) -> list:
+        failed: list = []
         t = self.trade
         for sym, amt in snap.positions.items():
             if t is not None and t["symbol"] == sym:
                 continue
             self._event(CRITICAL, "unknown_position", f"모르는 포지션 발견: {sym} {amt:+g} → 바로 닫습니다",
                         {"symbol": sym, "amt": amt})
-            self._flatten_symbol(sym, "모르는 포지션 정리")
+            self._isolated(failed, f"{sym} 모르는 포지션 닫기", self._flatten_symbol, sym, "모르는 포지션 정리")
         if t is not None:
-            amt = snap.positions.get(t["symbol"], 0.0)
-            if t["status"] == "entering":
-                if amt == 0:
-                    self._event(WARN, "recover", f"재시작 복구: {t['symbol']} 진입 주문이 체결되지 않았습니다 → 진입 취소",
-                                {"key": t["key"]})
-                    self._mark_done(t["key"])
-                    self.trade = t = None
-                else:
-                    t["status"], t["qty"] = "open", abs(amt)
-                    t["entry_price"] = snap.entry.get(t["symbol"]) or t.get("entry_price")
-                    self.store.trade_open(t)
-                    self._event(WARN, "recover", f"재시작 복구: {t['symbol']} 진입이 체결돼 있습니다 → 손절을 확인합니다",
-                                {"key": t["key"], "amt": amt})
-            if t is not None and t["status"] == "open":
-                if amt == 0:
-                    self._closed_on_exchange(t, snap)
-                elif (amt > 0) != (t["side"] > 0):
-                    self._event(CRITICAL, "wrong_side", f"{t['symbol']} 포지션 방향이 반대입니다({amt:+g}) → 닫고 멈춥니다")
-                    self._flatten_symbol(t["symbol"], "방향이 반대인 포지션")
-                    if R.halt(self.risk, self.now_ms(), "방향이 반대인 포지션 발견"):
-                        self.store.halt_log(self.now_ms(), "halt", self.risk.halt_reason, planned=False)
-                else:
-                    self._ensure_stop(t, amt, snap.stops.get(t["symbol"], []))
+            self._isolated(failed, f"{t['symbol']} 대조", self._reconcile_trade, t, snap)
         for sym, stops in snap.stops.items():
             if stops and sym not in snap.positions and (self.trade is None or self.trade["symbol"] != sym):
-                self.c.cancel_all_algo(sym)
-                self._event(INFO, "stray_orders", f"{sym}: 포지션 없이 남은 손절 {len(stops)}개를 취소했습니다")
+                self._isolated(failed, f"{sym} 남은 손절 취소", self._cancel_stray, sym, len(stops))
+        return failed
+
+    def _cancel_stray(self, sym: str, n: int) -> None:
+        self.c.cancel_all_algo(sym)
+        self._event(INFO, "stray_orders", f"{sym}: 포지션 없이 남은 손절 {n}개를 취소했습니다")
+
+    def _reconcile_trade(self, t: dict, snap: Snapshot) -> None:
+        amt = snap.positions.get(t["symbol"], 0.0)
+        if t["status"] == "entering":
+            if amt == 0:
+                if self._entry_still_unknown(t):
+                    return
+                self._event(WARN, "recover", f"재시작 복구: {t['symbol']} 진입 주문이 체결되지 않았습니다 → 진입 취소",
+                            {"key": t["key"]})
+                self._mark_done(t["key"])
+                self.trade = t = None
+            else:
+                with self.c.protecting():
+                    t["status"], t["qty"] = "open", abs(amt)
+                    t["entry_price"] = snap.entry.get(t["symbol"]) or t.get("entry_price")
+                    self._note_order(t, self._entry_order(t))
+                    self._event(WARN, "recover", f"재시작 복구: {t['symbol']} 진입이 체결돼 있습니다 → 손절을 확인합니다",
+                                {"key": t["key"], "amt": amt})
+                    plan = float(t.get("planned_qty") or t["qty"])
+                    if abs(amt) > plan + self._spec(t["symbol"])["qty_step"] / 2:
+                        amt = self._trim(t, amt, plan, "진입 주문 결과를 모르는 동안 더 체결됨")
+                        t["qty"] = abs(amt)
+                    self.store.trade_open(t)
+                    if amt == 0:
+                        self._finish(t, "진입 뒤 줄이다 모두 닫힘")
+                        return
+        if t is not None and t["status"] == "open":
+            if amt == 0:
+                self._closed_on_exchange(t, snap)
+            elif (amt > 0) != (t["side"] > 0):
+                self._event(CRITICAL, "wrong_side", f"{t['symbol']} 포지션 방향이 반대입니다({amt:+g}) → 닫고 멈춥니다")
+                if R.halt(self.risk, self.now_ms(), "방향이 반대인 포지션 발견", ["wrong_side"]):
+                    self._halt_log(self.risk.halt_reason, planned=False)
+                self._flatten_symbol(t["symbol"], "방향이 반대인 포지션")
+            else:
+                self._ensure_stop(t, amt, snap.stops.get(t["symbol"], []))
+
+    def _entry_order(self, t: dict) -> Optional[dict]:
+        """The trade's entry order, looked up by its client id (None: the exchange does not have it)."""
+        try:
+            return self.c.order(t["symbol"], client_id=f"pb{t['base']}e")
+        except TestnetError as e:
+            if e.code in NOT_FOUND:
+                return None
+            raise
+
+    def _entry_still_unknown(self, t: dict) -> bool:
+        """An 'entering' trade without a position: is its entry order still possibly coming? (Its answer was lost;
+        it is never sent again.) True while the exchange shows it filling or does not know it yet, for at most
+        ``entry_unknown_s`` after it was sent."""
+        o = self._entry_order(t)
+        young = self.now_ms() - int(t.get("entry_ts") or 0) < self.cfg.entry_unknown_s * 1000
+        if o is not None and o.get("status") in FINAL_ORDER and float(o.get("executedQty") or 0) == 0:
+            return False                                  # the exchange has it and it did not fill
+        if young:
+            self._event(INFO, "entry_wait", f"{t['symbol']} 진입 주문 결과를 기다립니다"
+                        f"({'거래소에 없음' if o is None else o.get('status')}). 다시 보내지 않습니다",
+                        {"key": t["key"]}, notify=False)
+            return True
+        return False
+
+    def _trim(self, t: dict, amt: float, keep_qty: float, why: str) -> float:
+        """Cut a position larger than planned back to ``keep_qty`` with a reduce-only market order (a second fill,
+        a position over the notional cap). Returns the position after it."""
+        spec = self._spec(t["symbol"])
+        excess = _round_down(abs(amt) - keep_qty, spec["qty_step"])
+        if excess < max(spec["qty_step"], spec.get("min_qty") or 0) - 1e-12:
+            return amt
+        self._event(CRITICAL, "oversize", f"{t['symbol']} 포지션 {abs(amt):g}이 계획 {keep_qty:g}보다 큽니다({why}) "
+                    f"→ 넘는 {excess:g}을 바로 줄입니다", {"key": t["key"], "amt": amt, "keep": keep_qty})
+        o = self.c.market(t["symbol"], "SELL" if amt > 0 else "BUY", excess, reduce_only=True,
+                          client_id=self._cid(t, "x"))
+        self._note_order(t, o)
+        return float(self.c.position(t["symbol"])["positionAmt"])
+
+    def _note_order(self, t: dict, o: Optional[dict]) -> None:
+        """Remember the trade's own order ids: its P&L is read from THESE fills only."""
+        oid = (o or {}).get("orderId") if isinstance(o, dict) else None
+        if oid is not None and str(oid) not in [str(x) for x in t.setdefault("orders", [])]:
+            t["orders"].append(oid)
 
     def _ensure_stop(self, t: dict, amt: float, stops: list) -> None:
         spec = self._spec(t["symbol"])
         qty = abs(amt)
+        if qty > t["qty"] + spec["qty_step"] / 2 and self.cfg.risk.max_notional_usd:
+            price = self.c.price(t["symbol"])
+            cap = _round_down(self.cfg.risk.max_notional_usd / price, spec["qty_step"])
+            if qty > cap + spec["qty_step"] / 2:           # grew past the owners' size cap: cut it back first
+                with self.c.protecting():
+                    amt = self._trim(t, amt, max(cap, t["qty"]), f"상한 ${self.cfg.risk.max_notional_usd:,.0f} 초과")
+                qty = abs(amt)
+                stops = live_stops(self.c, t["symbol"])
         if abs(qty - t["qty"]) > spec["qty_step"] / 2:
             self._event(WARN, "size_mismatch", f"{t['symbol']} 포지션 크기가 {t['qty']:g} → {qty:g}입니다 "
                         "(부분 체결 등). 손절 수량을 맞춥니다")
             t["qty"] = qty
-        covering = [s for s in stops if covers(s, amt)]
-        exact = [s for s in covering if abs(float(s["triggerPrice"]) - t["stop"]) <= spec["tick"] / 2]
-        if exact:
-            keep = exact[0]
-            t["stop_algo_id"] = keep["algoId"]
-            others = [s["algoId"] for s in stops if s["algoId"] != keep["algoId"]]
-            if others:
-                cancel_stops(self.c, t["symbol"], others)
-                self._event(INFO, "extra_stops", f"{t['symbol']}: 남은 손절 {len(others)}개를 정리했습니다")
+        if amt == 0:
             return
+        covering = [s for s in stops if covers(s, amt)]
         if covering:
-            self._event(WARN, "stop_level", f"{t['symbol']}: 거래소 손절 위치가 기록({t['stop']:g})과 달라 맞춥니다")
+            # the tightest covering stop: never move a stop the wrong way. A tighter one than the record is a
+            # move that reached the exchange before it was saved (a restart in the middle): keep it.
+            best = max(covering, key=lambda s: float(s["triggerPrice"]) * t["side"])
+            level = float(best["triggerPrice"])
+            if (level - t["stop"]) * t["side"] >= -spec["tick"] / 2:
+                if (level - t["stop"]) * t["side"] > spec["tick"] / 2:
+                    self._event(WARN, "stop_level", f"{t['symbol']}: 거래소 손절 {level:g}이 기록({t['stop']:g})보다 "
+                                "유리한 쪽이라 그대로 씁니다(옮기던 중 재시작)")
+                    t["stop"] = level
+                t["stop_algo_id"] = best["algoId"]
+                self._note_algo(t, best["algoId"])
+                others = [s["algoId"] for s in stops if s["algoId"] != best["algoId"]]
+                if others:
+                    cancel_stops(self.c, t["symbol"], others)
+                    self._event(INFO, "extra_stops", f"{t['symbol']}: 남은 손절 {len(others)}개를 정리했습니다")
+                return
+            self._event(WARN, "stop_level", f"{t['symbol']}: 거래소 손절 위치가 기록({t['stop']:g})보다 느슨해 맞춥니다")
             self._move(t, t["stop"], [s["algoId"] for s in stops], "손절 위치 맞추기")
+            return
+        if self._stop_just_fired(t):
             return
         self._event(CRITICAL, "no_stop", f"{t['symbol']} 포지션({amt:+g})에 손절이 없습니다 → 바로 다시 겁니다",
                     {"stops": len(stops)})
         self._protect(t, [s["algoId"] for s in stops])
+
+    def _stop_just_fired(self, t: dict) -> bool:
+        """The position was read before the stop list: a stop that fired in between looks like 'no stop'. If the
+        recorded stop has fired (and this is the first time it is seen), the next loop books the exit instead of
+        raising a false emergency. Seen again with the position still open: protect it as usual."""
+        aid = t.get("stop_algo_id")
+        if aid is None or t.get("fired_seen") == aid:
+            return False
+        try:
+            o = self.c.algo_order(algo_id=aid)
+        except TestnetError:
+            return False
+        if o.get("algoStatus") not in FIRED_ALGO:
+            return False
+        t["fired_seen"] = aid
+        self._event(INFO, "stop_firing", f"{t['symbol']} 거래소 손절이 방금 발동했습니다({o.get('algoStatus')}); "
+                    "다음 확인에서 마감합니다", {"algoId": aid}, notify=False)
+        return True
+
+    def _note_algo(self, t: dict, aid) -> None:
+        if aid is not None and str(aid) not in [str(x) for x in t.setdefault("algos", [])]:
+            t["algos"].append(aid)
 
     def _closed_on_exchange(self, t: dict, snap: Snapshot) -> None:
         reason, level = "거래소에서 포지션이 닫혔습니다(이유 미확인)", WARN
@@ -1067,6 +1261,8 @@ class Executor:
                 o = self.c.algo_order(algo_id=t["stop_algo_id"])
                 if o.get("algoStatus") in FIRED_ALGO:
                     reason, level = "거래소 손절(또는 잠금) 발동", INFO
+                    if o.get("actualOrderId") not in (None, "", "0", 0):
+                        self._note_order(t, {"orderId": o["actualOrderId"]})
             except TestnetError:
                 pass
         t.setdefault("exit_ref", t["stop"])                # the paper rules exit a stop at the stop level
