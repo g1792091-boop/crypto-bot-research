@@ -114,7 +114,7 @@ function sprite(a){
 
 let ctx = null, root = null, chan = "all", unsub = null, idleT = 0, statusT = 0, seatOf = {}, away = {}, meetPlace = "meet", huddle = new Set(), speaking = null;
 const onStage = new Set(), repCache = {};
-let presentT = 0;
+let presentT = 0, scale = 1;
 const pos = {};
 export function openOffice(opts){
   ctx = opts;
@@ -149,7 +149,7 @@ function build(){
   const hq = ZONES.hq || ZONES[TEAMS[0]?.id], mz = ZONES.meet, lz = ZONES.lounge, sz = ZONES.stage, bz = ZONES.board;
   const props = `
     <div class="of-board" style="left:${hq.x + 20}px;top:${hq.y + 168}px"><b>오늘의 안건</b><span id="ofBoard">자동 회의 대기 중</span></div>
-    <div class="of-shelf" style="left:${hq.x + 216}px;top:${hq.y + 196}px"></div>
+    <div class="of-plant" style="left:${hq.x + hq.w - 36}px;top:${hq.y + hq.h - 40}px"></div>
     <div class="of-tv" style="left:${mz.x + mz.w / 2 - 95}px;top:${mz.y + 30}px"><i></i></div>
     <div class="of-table" style="left:${MT.x}px;top:${MT.y}px;width:${MT.w}px;height:${MT.h}px"></div>
     ${MEET_SEATS.map(s => `<div class="of-seat" style="left:${s.x - 11}px;top:${s.y - 4}px"></div>`).join("")}
@@ -204,7 +204,7 @@ function build(){
   </div>
   <div class="of-card" id="ofCard" hidden></div>
   <div class="of-pres" id="ofPres" hidden><div class="of-presbox" role="dialog" aria-modal="true" aria-label="시간별 성과 발표">
-    <div class="of-presh"><b>📢 시간별 성과 발표</b><span id="ofPresSub"></span><button class="of-x" data-presclose aria-label="닫기">✕</button></div>
+    <div class="of-presh"><b>📢 시간별 성과 발표</b><span id="ofPresSub"></span><button class="of-btn" id="ofPresNow" hidden title="정각을 기다리지 않고 CEO가 지금까지의 성과를 바로 발표합니다">지금 발표하기</button><button class="of-x" data-presclose aria-label="닫기">✕</button></div>
     <div class="of-presbody"><nav class="of-preslist" id="ofPresList"></nav><article class="of-presview" id="ofPresView"></article></div>
   </div></div>
   <div class="of-zoom" id="ofZoom" hidden><img alt="건축 이미지 크게 보기"></div>`;
@@ -216,10 +216,18 @@ function build(){
   if ("ResizeObserver" in window) new ResizeObserver(fit).observe(el.querySelector("#ofStage")); else window.addEventListener("resize", fit);
   return el;
 }
+// 끌어 보는 화면이면 회의·발표 장소가 보이게 스크롤
+function showPlace(id){
+  const st = root.querySelector("#ofStage"), z = ZONES[id]; if (!z || !st.classList.contains("pan")) return;
+  const fl = root.querySelector("#ofFloor"), ox = parseFloat(fl.style.left) || 0, oy = parseFloat(fl.style.top) || 0;
+  st.scrollTo({left: ox + (z.x + z.w / 2) * scale - st.clientWidth / 2, top: oy + (z.y + z.h / 2) * scale - st.clientHeight / 2, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"});
+}
 function fit(){
   if (!root) return;
   const st = root.querySelector("#ofStage"), fl = root.querySelector("#ofFloor");
-  const s = Math.min(st.clientWidth / W, st.clientHeight / H) || 1;
+  // 휴대폰처럼 좁으면 너무 작아지지 않게 0.4배까지만 줄이고, 사무실 안에서 손가락으로 끌어 본다(페이지는 넘치지 않음)
+  const fitS = Math.min(st.clientWidth / W, st.clientHeight / H) || 1, pan = st.clientWidth < 640 && fitS < 0.4, s = pan ? 0.4 : fitS;
+  scale = s; st.classList.toggle("pan", pan);
   fl.style.transform = `scale(${s})`;
   fl.style.left = Math.max(0, (st.clientWidth - W * s) / 2) + "px"; fl.style.top = Math.max(0, (st.clientHeight - H * s) / 2) + "px";
 }
@@ -230,7 +238,7 @@ function toggleMenu(btn, menu){
   const open = menu.hidden;
   root.querySelectorAll(".of-menu").forEach(m => { m.hidden = true; });
   if (!open) return;
-  menu.hidden = false;
+  menu.hidden = false; menu._at = Date.now();
   const r = btn.getBoundingClientRect(), mw = menu.offsetWidth;
   menu.style.left = Math.max(8, Math.min(r.left, innerWidth - mw - 8)) + "px"; menu.style.top = r.bottom + 4 + "px";
 }
@@ -261,7 +269,7 @@ function wire(el){
   el.querySelector("#ofPresBtn").onclick = () => openPres(null);
   el.querySelector("#ofTerm").onclick = () => { if (typeof ctx.openTerminal === "function"){ closeOffice(); ctx.openTerminal(); } };
   el.querySelector("#ofLive").onclick = () => { if (typeof ctx.openLive === "function"){ closeOffice(); ctx.openLive(); } };
-  el.querySelector(".of-top").addEventListener("scroll", () => root.querySelectorAll(".of-menu").forEach(m => { m.hidden = true; }), {passive: true});
+  el.querySelector(".of-top").addEventListener("scroll", () => root.querySelectorAll(".of-menu").forEach(m => { if (Date.now() - (m._at || 0) > 500) m.hidden = true; }), {passive: true});
   el.addEventListener("click", e => {
     const ag = e.target.closest("[data-agenda]");
     if (ag){ $o("#ofAgenda").hidden = true; O.runAgendaNow(ag.dataset.agenda); ctx.toast("회의를 엽니다"); return; }
@@ -269,6 +277,7 @@ function wire(el){
     if (e.target.closest("#ofZoom")){ $o("#ofZoom").hidden = true; return; }
     const zm = e.target.closest("[data-zoom]");
     if (zm){ const z = $o("#ofZoom"); z.querySelector("img").src = zm.getAttribute("src"); z.hidden = false; return; }
+    if (e.target.closest("#ofPresNow")){ const b = e.target.closest("#ofPresNow"); b.disabled = true; ctx.toast("CEO가 발표를 준비합니다 · 팀장 보고를 모으는 중"); Promise.resolve(O.presentNow()).catch(() => null).then(r => { b.disabled = false; if (!r) ctx.toast("지금은 발표를 만들 수 없습니다 (이미 발표 중이거나 연결된 AI가 없음)"); }); return; }
     if (e.target.closest("[data-presclose]") || e.target.id === "ofPres"){ $o("#ofPres").hidden = true; return; }
     const rp = e.target.closest("[data-rep]");
     if (rp){ showReport(rp.dataset.rep); return; }
@@ -375,7 +384,7 @@ function onEvent(ev){
     let ids = [...new Set(m.order)];
     if (meetPlace === "stage" && ids.includes(CEO)) ids = [CEO, ...ids.filter(x => x !== CEO)];
     ids.forEach((id, i) => { seatOf[id] = i; onStage.delete(id); delete away[id]; setTimeout(() => { place(id, seatAt(meetPlace, i)); bubble(id, i ? "회의 들어갑니다" : "회의 시작할게요", 2500); }, i * 250); });
-    setTable(meetPlace, true);
+    setTable(meetPlace, true); showPlace(meetPlace);
     $o("#ofBoard").textContent = `#${m.name} · ${placeName(meetPlace)}`;
   }
   if (ev.kind === "join"){ seatNew(ev.agent.id); bubble(ev.agent.id, "부르셨어요? 갑니다", 2500); }
@@ -390,7 +399,7 @@ function onEvent(ev){
   if (ev.kind === "said"){ bubble(ev.agent.id, head(ev.entry.text), 6000); updateEntry(ev.entry); highlight(null); }
   if (ev.kind === "end"){
     const ids = Object.keys(seatOf); seatOf = {}; speaking = null; highlight(null);
-    ids.forEach((id, i) => setTimeout(() => { if (seatOf[id] !== undefined) return; bubble(id, ""); if (!huddle.has(id) && !onStage.has(id)) place(id, HOME[id]); }, 3500 + i * 200));
+    ids.forEach((id, i) => setTimeout(() => { if (seatOf[id] !== undefined || huddle.has(id) || onStage.has(id)) return; bubble(id, ""); place(id, HOME[id]); }, 3500 + i * 200));
     setTimeout(() => { if (!Object.keys(seatOf).length) setTable(null, false); }, 3500);
     $o("#ofBoard").textContent = "회의 끝 · 회의록은 오른쪽";
   }
@@ -410,7 +419,7 @@ function present(r){
   returnFromStage();
   clearTimeout(presentT);
   $o("#ofStageScr").innerHTML = `<b>${label}</b><span>${E(r.title || "")}</span>`;
-  root.querySelector('[data-z="stage"]')?.classList.add("live");
+  root.querySelector('[data-z="stage"]')?.classList.add("onair"); showPlace("stage");
   if (!busyNow(CEO)){ onStage.add(CEO); delete away[CEO]; place(CEO, STG.podium); }
   bubble(CEO, label, 20000); root.querySelector(`[data-ag="${CEO}"] .of-bub`)?.classList.add("big"); highlight(CEO);
   TEAMS.filter(t => t.id !== "hq").map(t => LEAD_OF[t.id]).filter(id => id && !busyNow(id)).forEach((id, i) => {
@@ -423,7 +432,7 @@ function present(r){
 }
 function returnFromStage(){
   [...onStage].forEach((id, i) => { onStage.delete(id); if (!busyNow(id)) setTimeout(() => { if (!busyNow(id)) place(id, HOME[id]); }, i * 150); });
-  root.querySelector('[data-z="stage"]')?.classList.remove("live");
+  root.querySelector('[data-z="stage"]')?.classList.remove("onair");
 }
 const TOOL_ICON = {market_analyze: "📈", market_quote: "💹", market_news: "📰", web_search: "🔎", web_fetch: "📄", econ_calendar: "🗓", calculate: "🧮", backtest: "🧪", nv_skill_search: "🟩", nv_skill_read: "🟩"};
 // 말풍선: 말하는 중이면 말, 도구를 쓰는 중이면 무엇을 보는지, 아니면 속마음
@@ -609,6 +618,7 @@ async function openPres(want){
   }
   presList = list.sort((x, y) => (y.t || 0) - (x.t || 0));
   presSel = (want && typeof want === "object" ? want.id : want) || presList[0]?.id || null;
+  $o("#ofPresNow").hidden = !has("presentNow");
   $o("#ofPresSub").textContent = presList.length ? `지난 발표 ${presList.length}개` : "";
   $o("#ofPresList").innerHTML = presList.map(r => `<button data-rep="${E(r.id)}" aria-pressed="${r.id === presSel}"><b>${E(when(r.t))}</b><span>${E(r.title || "성과 발표")}</span></button>`).join("");
   $o("#ofPresList").hidden = presList.length < 2;
@@ -624,7 +634,7 @@ function showReport(id){
 function reportHTML(r){
   const ceo = agentById(CEO), secs = r.sections || [];
   const cards = secs.map(s => {
-    const t = teamById(s.team), ld = agentById(s.lead), items = s.items || [], next = s.next || [];
+    const t = teamById(s.team), ld = agentById(s.lead) || AGENTS.find(a => a.name === s.lead) || agentById(LEAD_OF[s.team]), items = s.items || [], next = s.next || [];
     return `<section class="of-rsec" style="--tc:${tc(s.team)}"><h4>${E(s.name || t?.name || s.team)}<span>♛ ${E(ld?.name || s.lead || "팀장")}${ld ? ` · ${E(ld.title)}` : ""}</span></h4>
       ${items.length ? `<b>이번 시간 성과</b><ul>${items.map(x => `<li>${E(x)}</li>`).join("")}</ul>` : `<p class="of-dim">이번 시간 보고된 성과 없음</p>`}
       ${next.length ? `<b>다음 할 일</b><ul class="nx">${next.map(x => `<li>${E(x)}</li>`).join("")}</ul>` : ""}</section>`;

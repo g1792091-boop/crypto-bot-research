@@ -37,7 +37,7 @@ function tokenize(src){
     if ((m = at(RE_NUM))){ T.push({t: "num", v: Number(m[0]), pos}); i += m[0].length; continue; }
     if ((m = at(RE_ID))){
       const w = m[0]; i += w.length;
-      if (WORD_OPS[w]) T.push({t: "op", v: WORD_OPS[w], pos});
+      if (Object.hasOwn(WORD_OPS, w)) T.push({t: "op", v: WORD_OPS[w], pos});   // 프로토타입 이름(constructor 등)에 걸리지 않게 hasOwn
       else if (w === "true" || w === "false") T.push({t: "num", v: w === "true" ? 1 : 0, pos});
       else if (w === "na") T.push({t: "na", pos});
       else T.push({t: "id", v: w, pos});

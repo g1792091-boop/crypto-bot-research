@@ -759,6 +759,7 @@ async function research(){
   const levHint = {crypto: "코인 선물은 1~125배", us_stock: "주식은 보통 1~4배", kr_stock: "주식은 보통 1~2.5배", futures: "선물은 보통 5~20배", index: "지수 선물은 보통 5~20배"}[mk.cls];
   const sys = personaOf(a, "이번 일은 새 매매법 개발이다. 아래 형식 설명을 따라 전략 JSON 하나를 ```json 블록으로 쓰고, 블록 뒤에 왜 이 전략인지 2~3문장으로 말한다.") + "\n\n" + Q.STRATEGY_PROMPT
     + `\n\n## 레버리지\n레버리지는 1~200배 중 자유롭게 정한다(${levHint}가 일반적). 정한 뒤 코드가 모든 레버리지(1~200배)·상승장·하락장·횡보·폭락·수수료 2~3배·진입 지연 시나리오로 다시 시험한다.`
+    + (researchLog().length % 2 ? "\n\n## 이번 과제: 커스텀 지표\n거래소 기본 보조지표만 쓰지 말고 {\"type\":\"custom\",\"expr\":\"수식\"} 지표를 최소 1개 직접 발명해서 조건에 쓴다(예: 거래량 가중 모멘텀, 변동성 대비 이격, 여러 지표의 합성 점수). 수식 문법은 위 설명의 custom 항목을 따른다." : "")
     + (cards.length ? "\n\n## 지금까지의 백테스트 연구 카드(참고)\n" + Q.cardsText(cards, 14) : "");
   const user = `시장: ${mk.name} (${mk.market}, ${mk.exchange === "binancef" ? "바이낸스 선물" : mk.exchange === "yahoo" ? "야후 파이낸스" : mk.exchange}) · ${TF_KO[tf]}봉\n시험할 과거: ${hist}\n지금 차트(보조지표 29종):\n${snapText(snap)}\n${JSON.stringify(snap.ind || {}).slice(0, 2200)}${flowText ? "\n\n호가·고래·선물 흐름(지금):\n" + flowText.slice(0, 1500) : ""}\n\n최근 우리 팀이 시험한 전략(겹치지 않게):\n${tried || "(아직 없음)"}\n\n${a.id === "qa" ? "추세추종" : "역추세·변동성"} 계열로 새 전략 하나를 만들어 주세요. symbol은 ${mk.market}, interval은 ${iv}.${deriv ? " funding·oi·oi_change_pct·long_short 피연산자도 쓸 수 있습니다." : ""}`;
   const e = await solo(a, {room: "quant", sys, user, maxTokens: 1600, temperature: 0.8});
@@ -1109,14 +1110,14 @@ async function mlJob(){
   const ML = await import("./ml.js"), Q = await import("./quant.js");
   const i = +localStorage.getItem("officeML") || 0; localStorage.setItem("officeML", String(i + 1));
   const mk = [{market: "BTCUSDT", exchange: "binancef", tf: "60"}, {market: "ETHUSDT", exchange: "binancef", tf: "60"}, {market: "NVDA", exchange: "yahoo", tf: "D"}, {market: "^KS11", exchange: "yahoo", tf: "D"}][i % 4];
-  const model = i % 2 ? "logreg" : "mlp", a = agentById("ml");
-  fire({kind: "busy", agent: a, text: `🧠 ${mk.market} ${model === "mlp" ? "신경망" : "로지스틱 회귀"} 학습 중`});
+  const model = ["mlp", "logreg", "gbs"][i % 3], a = agentById("ml");
+  fire({kind: "busy", agent: a, text: `🧠 ${mk.market} ${{mlp: "신경망", logreg: "로지스틱 회귀", gbs: "부스팅 트리"}[model]} 학습 중`});
   let cs; try { const H = await import("./history.js"); cs = (await H.historyCandles({market: mk.market, exchange: mk.exchange, interval: IV_NAME[mk.tf], maxBars: 6000})).candles; } catch(e){ cs = (await candlesFor({market: mk.market, exchange: mk.exchange, timeframe: mk.tf}, 1500)).cs; }
-  const res = ML.walkForwardML(cs, {model, horizon: 1, seed: 7 + i});
-  const acc = +(res.accuracy * (res.accuracy <= 1 ? 100 : 1)).toFixed(1), base = +((res.baseline ?? res.baseAccuracy ?? 0.5) * ((res.baseline ?? 0.5) <= 1 ? 100 : 1)).toFixed(1);
-  post({ch: "quant", kind: "ml", agent: a.id, market: mk.market, tf: TF_KO[mk.tf], model: model === "mlp" ? "신경망(MLP)" : "로지스틱 회귀", acc, base, auc: res.auc != null ? +(+res.auc).toFixed(3) : null, text: ML.mlText(res)});
-  const edge = acc - base >= 2 && (res.auc ?? 0) >= 0.53;
-  addNote("quant", `${mk.market} ${model}: 정확도 ${acc}% vs 기준 ${base}% → ${edge ? "작은 우위" : "우위 없음"}`, "머신러닝");
+  const res = ML.walkForwardML(cs, {model, horizon: 1, seed: 7 + i}), mt = res.metrics || {};
+  const acc = +((mt.accuracy ?? 0) * 100).toFixed(1), base = +((mt.baseline ?? 0.5) * 100).toFixed(1);
+  post({ch: "quant", kind: "ml", agent: a.id, market: mk.market, tf: TF_KO[mk.tf], model: {mlp: "신경망(MLP)", logreg: "로지스틱 회귀", gbs: "부스팅 트리"}[model], acc, base, auc: mt.auc ?? null, edge: res.edge, text: ML.mlText(res)});
+  const edge = res.edge === "edge";
+  addNote("quant", `${mk.market} ${model}: 정확도 ${acc}% vs 기준 ${base}% → ${{edge: "통계적 우위", weak: "약한 신호(우위 아님)", none: "우위 없음"}[res.edge] || res.edge}`, "머신러닝");
   if (!edge) return;
   // 우위가 보이면 예측 확률을 커스텀 지표로 써서 전략을 만들고 그대로 백테스트·검증
   const extra = ML.mlSeries(res);
@@ -1135,12 +1136,13 @@ async function macroJob(){
   const MA = await import("./macro.js"), a = agentById("econfc");
   fire({kind: "busy", agent: a, text: "📊 FRED 경제지표 받아서 다음 발표 예측 중"});
   const dash = await MA.macroDashboard({});
-  const rows = (dash.rows || dash.items || []).map(r => ({name: r.name, latest: r.latest, change: r.change, forecast: r.forecast, lo: r.lo, hi: r.hi, unit: r.unit, date: r.date, id: r.id}));
+  const rows = (dash.rows || []).map(r => ({name: r.name, latest: r.latest, change: r.change, trend: r.trend, forecast: r.forecast, lo: r.lo, hi: r.hi, unit: r.unit, date: r.date, id: r.id, next: r.next, model: r.model, base: r.base}));
+  if (!rows.length){ post({ch: "fut", kind: "system", text: "FRED 경제지표를 받지 못했습니다" + (dash.errors?.length ? ` (${dash.errors[0].error})` : "")}); return; }
   post({ch: "fut", kind: "macro", agent: a.id, rows});
   // 예측 장부: 다음에 새 값이 나오면 채점
   const led = readJ("officeMacroFc", []), now = Date.now();
-  for (const r of rows) if (r.forecast != null && !led.some(x => x.id === r.id && x.date === r.date)) led.push({id: r.id, name: r.name, date: r.date, forecast: r.forecast, lo: r.lo, hi: r.hi, t: now});
-  for (const x of led.filter(x => x.result == null)){ const r = rows.find(y => y.id === x.id); if (r && r.date && r.date !== x.date){ const s = MA.scoreForecast({value: x.forecast, lo: x.lo, hi: x.hi}, r.latest); x.result = s; addNote("fut", `${x.name} 예측 ${x.forecast} → 실제 ${r.latest} (${s.hit || s.inInterval ? "구간 안" : "구간 밖"})`, "경제지표"); } }
+  for (const r of rows) if (r.forecast != null && !led.some(x => x.id === r.id && x.date === r.date)) led.push({id: r.id, name: r.name, date: r.date, forecast: r.forecast, lo: r.lo, hi: r.hi, base: r.base, t: now});
+  for (const x of led.filter(x => x.result == null)){ const r = rows.find(y => y.id === x.id); if (r && r.date && r.date !== x.date){ const s = MA.scoreForecast({forecast: x.forecast, lo: x.lo, hi: x.hi, last: x.base}, r.latest); x.result = s; addNote("fut", `${x.name} 예측 ${x.forecast} → 실제 ${r.latest} (${s.inside ? "80% 구간 안" : "구간 밖"}${s.dirHit != null ? s.dirHit ? " · 방향 적중" : " · 방향 틀림" : ""})`, "경제지표"); } }
   writeJ("officeMacroFc", led.slice(-200));
   await solo(a, {room: "fut", sys: personaOf(a, "경제지표 최신값과 모델 예측(80% 구간)을 보고 다음 발표가 어떻게 나올지, 시장(금리·주식·코인)에 어떤 의미인지 4~6문장으로 해설한다. 모델 예측의 한계도 짚는다."), user: MA.macroText(dash), train: "아래 경제지표와 예측을 보고 다음 발표 전망과 시장에 주는 의미를 해설해 줘."});
 }

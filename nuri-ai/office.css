@@ -19,7 +19,7 @@ body.office-open{overflow:hidden}
 .of-menu[hidden]{display:none}
 .of-set{padding:8px 10px;gap:8px;min-width:220px}.of-set .of-tg{padding:4px 2px}.of-set .of-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .of-set select{font:inherit;font-size:12px;padding:4px 6px;border:2px solid #d8caa8;background:#fffaf0;color:var(--of-ink)}
-.of-top select.of-cl{max-width:190px}
+.of-top select.of-cl{max-width:190px}.of-top #ofSpeed{max-width:150px}
 .of-x{font:inherit;border:0;background:none;color:inherit;cursor:pointer;font-size:16px;padding:4px 8px}
 .of-body{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 440px}
 .of-stage{position:relative;overflow:hidden;background:var(--of-bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28'%3E%3Cpath d='M14 10v8M10 14h8' stroke='%23e3d8bf' stroke-width='2'/%3E%3C/svg%3E")}
@@ -31,7 +31,7 @@ body.office-open{overflow:hidden}
 .of-zl i{width:8px;height:8px;background:var(--tc);display:block}.of-zl small{font-size:10.5px;font-weight:600;letter-spacing:.04em;opacity:.7}
 .of-zone.meeting{border-style:solid;background:color-mix(in srgb,var(--tc,#7aa35a) 14%,transparent);box-shadow:inset 0 0 0 2px color-mix(in srgb,var(--tc,#7aa35a) 30%,transparent)}
 .of-zone.z-stage{background:#ece4f6;border-color:#c9b8e0}.of-zone.z-board{background:#e9ebef;border-color:#c3c8d2}
-.of-zone.z-stage.live{border-style:solid;border-color:#b58a1e;background:#f6ecd0}
+.of-zone.z-stage.onair{border-style:solid;border-color:#b58a1e;background:#f6ecd0}
 /* 가구 */
 .of-desk{position:absolute;width:68px;height:30px;background:#c98a4a;border:2px solid #8b5a2b;box-shadow:0 4px 0 #a06a35}
 .of-desk .mon{position:absolute;left:16px;top:-16px;width:32px;height:18px;background:#2f6fd6;border:3px solid #2a2f3a;box-shadow:inset 0 0 0 2px #7fb2ff}
@@ -178,12 +178,13 @@ body.office-open{overflow:hidden}
 .of-platform{position:absolute;height:96px;background:#b58a5a;border:3px solid #7a5530;box-shadow:0 6px 0 #7a5530,inset 0 -14px 0 #9c7448}
 .of-scr{position:absolute;width:220px;height:50px;background:#101722;border:3px solid #2a2f3a;color:#e9edf5;padding:4px 8px;display:flex;flex-direction:column;justify-content:center;gap:2px;overflow:hidden;font-size:10.5px}
 .of-scr b{color:#f5c542;font-size:12px}.of-scr span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#aab6cc}
-.z-stage.live~.of-scr{box-shadow:0 0 0 3px #f5c542}
+.z-stage.onair~.of-scr{box-shadow:0 0 0 3px #f5c542}
 .of-podium{position:absolute;width:26px;height:30px;background:#6e4020;border:2px solid #4a2a12;box-shadow:inset 0 5px 0 #8b5a2b}
 .of-seat.sm{width:18px;height:12px}
 .of-bub.big{font-size:15px;font-weight:700;padding:8px 12px;background:#fff6d6;border-color:#8b6914;max-width:300px}
 .of-bub.big::after{background:#fff6d6;border-color:#8b6914}
 .of-ag{will-change:left,top}
+.of-stage.pan{overflow:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 /* ---- 발표 창 ---- */
 .of-pres{position:absolute;inset:0;z-index:40;background:rgba(10,12,18,.55);display:flex;align-items:center;justify-content:center;padding:16px}
 .of-pres[hidden]{display:none}
@@ -223,7 +224,7 @@ body.office-open{overflow:hidden}
 .of-kmd{margin:6px 0;color:#d7dce6}.of-kmd p{margin:0 0 .3em}.of-kmd h1,.of-kmd h2,.of-kmd h3{font-size:13px;margin:.3em 0;color:#fff}.of-kmd ul{padding-left:1.2em;margin:.2em 0}
 .of-btn2{font:inherit;font-size:12px;padding:4px 10px;margin-top:6px;border:1px solid #3d4a63;background:#1a2234;color:#d7dce6;cursor:pointer}.of-btn2:hover{border-color:#7fb2ff}
 .of-tw{overflow-x:auto;margin-top:6px}
-.of-kt{border-collapse:collapse;width:100%;font-size:12px}.of-kt th,.of-kt td{padding:3px 6px;border-bottom:1px solid #1d2535;text-align:left;vertical-align:top}
+.of-kt{border-collapse:collapse;width:100%;min-width:340px;font-size:12px}.of-kt td,.of-kt th{word-break:keep-all;overflow-wrap:anywhere}.of-kt th,.of-kt td{padding:3px 6px;border-bottom:1px solid #1d2535;text-align:left;vertical-align:top}
 .of-kt th{color:var(--of-dim);font-weight:400;white-space:nowrap}.of-kt th small,.of-kt td small{display:block;font-size:10.5px;color:#6a7487}
 .of-kt td.num{text-align:right;white-space:nowrap}.of-kt b{color:#eef1f7}
 .of-kc .up{color:#3ddc84}.of-kc .dn{color:#ef6b6b}

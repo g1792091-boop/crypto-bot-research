@@ -77,7 +77,8 @@ function qCompute(type, meta) {
 
 export const DEFS = {};
 for (const [type, R] of Object.entries(IND_REGISTRY)) {
-  const meta = Q[type] || { name: type, group: "이동평균", pane: "sub" };
+  if (type === "custom") continue;                       // 수식 지표는 아래 c:expr 로
+  const meta = Q[type] || { name: R.desc || type, group: "오실레이터", pane: "sub" };
   DEFS["q:" + type] = { src: "q", type, name: meta.name, group: meta.group, pane: meta.pane, params: { ...R.defaults }, desc: R.desc, single: !meta.out && !meta.trend && !meta.vol, compute: qCompute(type, meta) };
 }
 // ind.js: quant 와 겹치는 키 · 서버 데이터(remote) 필요한 지표는 뺀다
@@ -121,7 +122,7 @@ DEFS["c:expr"] = {
     const key = `${p.expr}|${c.length}|${c.at(-1)?.time}|${c.at(-1)?.close}`, hit = custCache.get(ctx.id);
     if (hit && hit.key === key && hit.res) return hit.res;
     let out;
-    try { out = CUST.evalExpr(String(p.expr || ""), qc(c), ctx.extra || {}); } catch (e) { return { plots: [], note: "수식 오류: " + (e.message || e) }; }
+    try { out = CUST.evalExpr(String(p.expr || ""), qc(c), {}, { computeInd }); } catch (e) { return { plots: [], note: "수식 오류: " + (e.message || e) }; }
     if (out && typeof out.then === "function") {
       custCache.set(ctx.id, { key, res: hit?.res || { plots: [], note: "계산 중…" } });
       out.then((r) => { custCache.set(ctx.id, { key, res: toPlots(r, c.length, ctx.color) }); ctx.onAsync?.(); },

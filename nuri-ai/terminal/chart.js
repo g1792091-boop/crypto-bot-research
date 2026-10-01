@@ -9,7 +9,7 @@ const LC = () => window.LightweightCharts;
 export const COL = { up: "#089981", down: "#f23645", text: "#d1d4dc", text2: "#b2b5be", muted: "#787b86", line: "#2a2e39", bg: "#131722", accent: "#2962ff", heat: "255,152,0" };
 const FONT = '"Pretendard Variable", Pretendard, "Noto Sans KR", system-ui, sans-serif';
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-export const big = (v) => { const a = Math.abs(v); return a >= 1e12 ? (v / 1e12).toFixed(2) + "T" : a >= 1e9 ? (v / 1e9).toFixed(2) + "B" : a >= 1e6 ? (v / 1e6).toFixed(2) + "M" : a >= 1e3 ? (v / 1e3).toFixed(1) + "K" : (+v).toFixed(a >= 10 ? 0 : 2); };
+export const big = (v) => { if (v == null || !Number.isFinite(+v)) return "–"; const a = Math.abs(v); return a >= 1e12 ? (v / 1e12).toFixed(2) + "T" : a >= 1e9 ? (v / 1e9).toFixed(2) + "B" : a >= 1e6 ? (v / 1e6).toFixed(2) + "M" : a >= 1e3 ? (v / 1e3).toFixed(1) + "K" : (+v).toFixed(a >= 10 ? 0 : 2); };
 // 아래 창 지표 값 (크기에 맞게)
 export const smart = (v) => { if (v == null || !Number.isFinite(v)) return "–"; const a = Math.abs(v); return a >= 1e6 ? big(v) : a >= 1000 ? v.toFixed(0) : a >= 100 ? v.toFixed(1) : a >= 1 ? v.toFixed(2) : a === 0 ? "0" : v.toPrecision(3); };
 const SKIP = ["signals", "boxes", "profiles", "patterns", "fill"];
@@ -18,7 +18,9 @@ const SKIP = ["signals", "boxes", "profiles", "patterns", "fill"];
 export class Layer {
   constructor(draw, z = "bottom") {
     this.draw = draw; this._z = z;
-    this._view = { zOrder: () => this._z, renderer: () => ({ draw: (t) => t.useMediaCoordinateSpace(({ context, mediaSize }) => this.p && this.draw(context, mediaSize, this.p)) }) };
+    // 한 레이어의 오류가 차트 전체 그리기를 멈추지 않게 감싼다
+    const safe = (context, mediaSize) => { if (!this.p) return; context.save(); try { this.draw(context, mediaSize, this.p); } catch (e) { if (!this._warned) { this._warned = true; console.warn("[차트 레이어]", e); } } finally { context.restore(); } };
+    this._view = { zOrder: () => this._z, renderer: () => ({ draw: (t) => t.useMediaCoordinateSpace(({ context, mediaSize }) => safe(context, mediaSize)) }) };
   }
   attached(p) { this.p = p; }
   detached() { this.p = null; }
@@ -513,18 +515,18 @@ export class TermChart {
   _drawLiq(ctx, size) {
     const d = this.opts.overlays?.liq && this.flow.liq;
     if (!d) return;
-    const all = [...d.longClusters.map((x) => ({ ...x, side: "long" })), ...d.shortClusters.map((x) => ({ ...x, side: "short" }))];
-    const mx = Math.max(1, ...all.map((x) => x.estUsd));
+    const all = [...d.longClusters.map((x) => ({ ...x, side: "long" })), ...d.shortClusters.map((x) => ({ ...x, side: "short" }))].filter((x) => Number.isFinite(x.price));
+    const mx = Math.max(1, ...all.map((x) => Number.isFinite(x.estUsd) ? x.estUsd : 0));
     ctx.font = "10px " + FONT;
     for (const x of all) {
       const y = this.candle.priceToCoordinate(x.price);
       if (y == null) continue;
-      const k = x.estUsd / mx, h = 2 + 8 * k;
+      const k = Number.isFinite(x.estUsd) ? x.estUsd / mx : 0.3, h = 2 + 8 * k;
       const g = ctx.createLinearGradient(0, 0, size.width, 0);
       g.addColorStop(0, `rgba(${COL.heat},0)`); g.addColorStop(0.35, `rgba(${COL.heat},${(0.15 + 0.45 * k).toFixed(3)})`); g.addColorStop(1, `rgba(${COL.heat},${(0.25 + 0.6 * k).toFixed(3)})`);
       ctx.fillStyle = g; ctx.fillRect(0, y - h / 2, size.width, h);
       ctx.fillStyle = `rgba(255,183,77,${(0.6 + 0.4 * k).toFixed(2)})`; ctx.textAlign = "left";
-      ctx.fillText(`추정 ${x.side === "long" ? "롱" : "숏"} 청산 ${x.mainLev}배 ~$${big(x.estUsd)}${x.wall ? " +벽" : ""}`, 6, y - h / 2 - 2);
+      ctx.fillText(`추정 ${x.side === "long" ? "롱" : "숏"} 청산 ${x.mainLev}배${Number.isFinite(x.estUsd) ? ` ~$${big(x.estUsd)}` : ""}${x.wall ? " +벽" : ""}`, 6, y - h / 2 - 2);
     }
   }
   _barTime(t) {
