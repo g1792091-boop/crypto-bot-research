@@ -2,7 +2,7 @@
 // - 팀·방·직원은 코드로 정해 두고, 누가 어떤 순서로 말할지도 코드가 정한다(AI는 말만 한다).
 //   흐름: 담당 분석가 → (투자·실행 판단이면) 전략가 → 반론 검토관 → 리스크 책임자 → 팀장 정리
 // - 사용자가 아무것도 치지 않아도 정해진 안건과 급변동 감시로 스스로 회의를 연다(자동 회의).
-import { settings, saveSettings, idb, uid, brainStream, splitThink, overCap, provUse, LAUNCHER } from "./engine.js";
+import { settings, saveSettings, idb, uid, brainStream, splitThink, overCap, provUse, LAUNCHER, providerCooling, deadModels, coolingInfo } from "./engine.js";
 import { runAgent, activeSkills, TOOLS, marketNews, candlesFor, visibleText, snapText, toModelMessages } from "./agent.js";
 import { fusionSources, TRAIN_SYS } from "./train.js";
 
@@ -141,6 +141,8 @@ export function modelScore(m){
   if (/(^|[^0-9.])(0\.5|1|1\.5|2|3|4|e2|e4)b\b|mini|nano|tiny|-small|lite/.test(m)) s -= 30;
   if (/70b|72b|90b|120b|123b|235b|253b|405b|480b|671b|large|kimi-k2|deepseek-v3|deepseek-v4|maverick|scout|glm-4\.[5-9]|qwen3-coder|mistral-medium|llama-3\.3-70|command-a/.test(m)) s += 25;
   if (/r1|qwq|think|reason|magistral|nemotron.*(super|ultra)|o[1-9]-/.test(m)) s -= 20;
+  // 옛 세대·지원 끝나 가는 모델은 크기와 상관없이 뒤로 (llama2·codellama·chatqa·mixtral·gemma2·qwen1~2 등)
+  if (/llama-?2|codellama|code-?llama|chatqa|mixtral|mistral-7b|gemma-?2|gemma-7b|qwen1|qwen-?2(?!\.5)|qwen2\.5-(?!coder-32)|yi-|falcon|baichuan|dbrx|arctic|jamba|phi-?3|nemotron-4|llama-?3-|llama3-|llama-?3\.1-(?!nemotron-ultra)|solar|granite-3\.0|deepseek-coder|starcoder/.test(m)) s -= 45;
   if (/guard|safety|embed|rerank|reward|parse|ocr|-vl|vision|audio|tts|whisper/.test(m)) s -= 100;
   const h = modelHealth()[m]; if (h) s -= Math.min(40, (h.slow || 0) * 8 + (h.fail || 0) * 6);
   return s;
@@ -150,8 +152,12 @@ const HEALTH_KEY = "officeModelHealth";
 export function modelHealth(){ try { const o = JSON.parse(localStorage.getItem(HEALTH_KEY) || "{}"); for (const k in o) if (Date.now() - (o[k].t || 0) > 7 * 864e5) delete o[k]; return o; } catch(e){ return {}; } }
 function noteModel(model, what){ if (!model) return; const o = modelHealth(), k = String(model).toLowerCase(); const h = o[k] || {ok: 0, slow: 0, fail: 0}; h[what] = (h[what] || 0) + 1; if (what === "ok" && h.ok % 5 === 0){ h.slow = Math.max(0, h.slow - 1); h.fail = Math.max(0, h.fail - 1); } h.t = Date.now(); o[k] = h; try { localStorage.setItem(HEALTH_KEY, JSON.stringify(o)); } catch(e){} }
 export function assignModels(){
-  const bad = badModels(), all = fusionSources(), ok = all.filter(t => !bad[t.model]);
-  const ranked = (ok.length ? ok : all).map(t => ({t, sc: modelScore(t.model)})).filter(x => x.sc > -40).sort((x, y) => y.sc - x.sc);
+  const dead = deadModels();
+  // 없어진 모델 · 지금 한도에 걸려 쉬는 회사는 빼고 (다 빠지면 원래 목록)
+  const live0 = fusionSources().filter(t => !dead[t.model]), live = live0.filter(t => !providerCooling(t.id));
+  const bad = badModels(), all = live.length ? live : live0.length ? live0 : fusionSources(), ok = all.filter(t => !bad[t.model]);
+  // Groq 무료는 분당 토큰이 아주 적어 도구가 붙는 긴 회의 프롬프트에 금방 막힌다 → 사무실에서는 뒤로
+  const ranked = (ok.length ? ok : all).map(t => ({t, sc: modelScore(t.model) - (t.id === "groq" ? 25 : 0)})).filter(x => x.sc > -40).sort((x, y) => y.sc - x.sc);
   // 상위 모델 몇 개만 골고루 나눠 쓴다 (좋은 모델이 적으면 그다음 것까지)
   const top = ranked.filter(x => x.sc >= (ranked[0]?.sc ?? 0) - 25).slice(0, Math.max(3, Math.min(6, Math.ceil(ranked.length / 3)))).map(x => x.t);
   const pool = top.length ? top : ranked.map(x => x.t);
@@ -314,6 +320,7 @@ async function pump(){
   try {
     for (let i = 0; i < m.order.length && i < 8; i++){
       if (ctl.signal.aborted) break;
+      if (officePaused() && job.trigger !== "user" && turns.length){ post({ch: m.room, kind: "system", text: "AI 한도 때문에 이 회의는 여기서 줄입니다", meeting: m.id}); break; }
       const a = agentById(m.order[i]);
       const turn = await speak(a, m, turns, models[a.id], ctl.signal);
       if (!turn) continue;
@@ -359,6 +366,13 @@ function statusText(){
     .map(e => `- ${new Date(e.t).toLocaleTimeString("ko-KR", {hour: "2-digit", minute: "2-digit"})} ${agentById(e.agent)?.name || ""} ${e.kind === "bt" ? `매매법 '${e.name}' ${e.pass ? "통과" : "불통과"}` : e.kind === "re" ? `재개발 후보 ${e.items?.length || 0}곳` : e.kind === "arch" ? `설계안 '${e.name}'` : e.kind === "biz" ? `사업 '${e.name}' ${String(e.verdict || "").split(" — ")[0]}` : e.kind === "task" ? `과제 '${e.title}' ${e.status}` : String(e.text || e.title || e.name || e.kind).slice(0, 60)}`).join("\n");
   const open = backlog().filter(x => x.status !== "done").slice(0, 4).map(x => `- ${teamById(x.team)?.name}: ${x.title}`).join("\n");
   return `[지금 사무실 상황 · 코드가 확인한 사실]\n진행 중인 회의: ${running && running.trigger !== "user" ? running.name : "없음"} · 지금 하는 업무: ${cycling ? JOB_KO[lastJob] || lastJob : "없음"} · 다음 업무: ${JOB_KO[JOBS[(+localStorage.getItem("officeJob") || 0) % JOBS.length]]}\n최근에 한 일:\n${recent || "- (아직 없음)"}\n남은 성장 과제:\n${open || "- (없음)"}`;
+}
+// 같은 이유가 반복되면 한 줄로 묶는다 ("… → 다른 모델로 (3번)")
+function addNote2(entry, text){
+  const key = text.replace(/^[^:]+:\s*/, ""), list = entry.notes || (entry.notes = []);
+  const i = list.findIndex(n => n.replace(/^[^:]+:\s*/, "").replace(/ → 다른 모델로.*$/, "") === key);
+  if (i >= 0){ const n = (+(list[i].match(/\((\d+)번\)$/) || [])[1] || 1) + 1; list[i] = list[i].replace(/ → 다른 모델로.*$/, "") + ` → 다른 모델로 (${n}번)`; }
+  else list.push(text + " → 다른 모델로");
 }
 function transcript(m, turns){
   return turns.map(t => `[${t.agent.name} · ${t.agent.title}]\n${t.text.slice(0, 2500)}`).join("\n\n");
@@ -412,10 +426,12 @@ ${notesText(a.team)}- ${isLead ? "너는 마지막 정리 담당이다. 사용�
     if (entry.text) break;
     markBad(tg?.model || msg.route?.model);
     const why = err ? (err.message || String(err)).slice(0, 80) : msg.parts.some(p => p.think || englishy(p.text || "")) ? "생각만 하고 한국어 답을 내지 못함" : "빈 답";
-    entry.notes = [...(entry.notes || []), `${shortName(entry.model)}: ${why} → 다른 모델로 다시`];
+    if (err && isLimit(why)) noteLimit();
+    addNote2(entry, `${shortName(entry.model)}: ${why}`);
     fire({kind: "delta", meeting: m, agent: a, entry});
+    if (err && isLimit(why) && fusionSources().every(t => providerCooling(t.id))) break;   // 다 막혔으면 더 두드리지 않는다
   }
-  if (!entry.text) entry.text = `(${a.name}: 연결된 모델들이 이번에는 답하지 못했습니다)`;
+  if (!entry.text) entry.text = (entry.notes || []).some(n => isLimit(n)) ? `(${a.name}: 무료 AI 한도에 걸려 이번에는 쉬었습니다 · 잠시 뒤 다시 합니다)` : `(${a.name}: 연결된 모델들이 이번에는 답하지 못했습니다)`;
   entry.tools = entry.steps.map(x => x.act);
   // 첫 분석가가 실제 도구를 쓴 과정은 '도구 사용' 학습 예시로 (앞사람 발언에 기대지 않는 차례만)
   if (!turns.length && lastMsg && entry.steps.some(x => x.status === "done") && goodText(entry.text) && !isClaude(entry.model) && !lastMsg.parts.some(p => p.type === "tool" && p.status === "error")){
@@ -495,9 +511,23 @@ export function nextAutoIn(){
   const c = officeCfg(), last = +localStorage.getItem("officeLastAuto") || 0;
   return Math.max(0, last + c.every * 60e3 - Date.now());
 }
+/* ============ 무료 API 한도에 걸리면 잠깐 쉬기 ============ */
+// 한도 오류가 연달아 나면 자동 회의·주기 업무·수다를 몇 분 멈춘다 (대표님 질문은 계속 받는다). 계속 두드리면 한도가 더 늦게 풀린다.
+let limitHits = [], pauseUntil = 0;
+const isLimit = msg => /사용 한도|rate.?limit|429|too many requests|quota/i.test(String(msg || ""));
+export const officePaused = () => Math.max(0, pauseUntil - Date.now());
+function noteLimit(){
+  const now = Date.now(); limitHits = limitHits.filter(t => now - t < 120e3); limitHits.push(now);
+  if (limitHits.length >= 3 && now > pauseUntil){
+    pauseUntil = now + 180e3; limitHits = [];
+    const cool = Object.keys(coolingInfo()).map(id => ({groq: "Groq", nvidia: "NVIDIA", cerebras: "Cerebras", openrouter: "OpenRouter", gemini: "Gemini", hf: "Hugging Face", mistral: "Mistral", sambanova: "SambaNova", together: "Together", deepseek: "DeepSeek", anthropic: "Claude"})[id] || id);
+    post({ch: "hq", kind: "system", text: `무료 AI 한도에 걸렸습니다${cool.length ? " (" + cool.join(", ") + ")" : ""} · 3분 쉬었다가 다시 일합니다. 질문은 계속 받습니다. 한도를 늘리려면 다른 무료 키를 더 넣거나 Claude 키를 넣으세요.`});
+    fire({kind: "cfg"});
+  }
+}
 async function tick(){
   const c = officeCfg();
-  if (!c.auto || running || queue.length || !hasAI()) return;
+  if (!c.auto || running || queue.length || !hasAI() || officePaused()) return;
   const u = usage();
   if (u.auto >= c.dailyMax) return;
   await loadLog();
@@ -605,7 +635,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 function chatUsage(){ return usage().chats || 0; }
 export async function chatter(force){
   const c = officeCfg();
-  if (chatting || running || queue.length || !hasAI()) return false;
+  if (chatting || running || queue.length || !hasAI() || officePaused()) return false;
   if (!force && (!c.chat || chatUsage() >= c.chatMax)) return false;
   chatting = true;
   try {
@@ -692,7 +722,7 @@ export function startCycle(){
 }
 export async function cycle(force, onlyJob){
   const c = officeCfg();
-  if (cycling || (!force && (!c.cycle || nextCycleIn() > 0))) return false;
+  if (cycling || (!force && (!c.cycle || nextCycleIn() > 0 || officePaused()))) return false;
   if (!hasAI()) return false;
   cycling = true; localStorage.setItem("officeLastCycle", String(Date.now()));
   try {
@@ -749,7 +779,7 @@ async function solo(a, {room, sys, user, maxTokens = 900, temperature = 0.6, ext
         maxTokens, temperature, target: tg || undefined, fallback: true, onContent: d => { raw += d; show(); }, onThink: d => { think += d; show(); }});
       raw = splitThink(raw).body; show(); finalRaw = raw;
       entry.model = route?.model || tg?.model || entry.model;
-    } catch(e){ if (slow && raw){ raw = splitThink(raw).body; show(); finalRaw = raw; } entry.notes = [...(entry.notes || []), `${shortName(tg?.model)}: ${slow ? "응답이 너무 느림" : String(e.message || e).slice(0, 60)} → 다른 모델로`]; }
+    } catch(e){ if (slow && raw){ raw = splitThink(raw).body; show(); finalRaw = raw; } if (!slow && isLimit(e.message)) noteLimit(); addNote2(entry, `${shortName(tg?.model)}: ${slow ? "응답이 너무 느림" : String(e.message || e).slice(0, 60)}`); }
     finally { clearInterval(watch); }
     entry.thinking = false;
     noteModel(entry.model || tg?.model, (entry.text || finalRaw) && !slow ? "ok" : slow ? "slow" : "fail");

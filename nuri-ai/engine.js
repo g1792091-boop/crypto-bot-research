@@ -223,6 +223,13 @@ export async function addApiKey(raw){
 }
 export function removeApiKey(id){ delete settings.keys[id]; delete settings.provModels[id]; delete settings.pinModel[id]; if (settings.brain === id) settings.brain = "auto"; saveSettings(); }
 const cooldown = {};
+// 회사(공급자)별 '잠시 쉬기' — 한도(429)·장애에 걸리면 그 시간 동안은 아예 부르지 않는다 (다 막혔을 때만 예외)
+export const providerCooling = id => (cooldown[id] || 0) > Date.now();
+export const coolingInfo = () => Object.fromEntries(Object.entries(cooldown).filter(([, t]) => t > Date.now()).map(([k, t]) => [k, Math.ceil((t - Date.now()) / 1000)]));
+// 없어진·지원 끝난 모델(404·410·'모델 없음')은 이번 실행 동안 다시 고르지 않는다
+const DEAD_KEY = "deadModels";
+export const deadModels = () => { try { const o = JSON.parse(localStorage.getItem(DEAD_KEY) || "{}"); for (const k in o) if (Date.now() - o[k] > 3 * 864e5) delete o[k]; return o; } catch(e){ return {}; } };
+function markDead(model){ const o = deadModels(); o[model] = Date.now(); try { localStorage.setItem(DEAD_KEY, JSON.stringify(o)); } catch(e){} }
 const connected = () => Object.keys(PROVIDERS).filter(id => settings.keys[id]);
 // 후보 목록: 회사마다 그 역할에 가장 맞는 모델 하나씩, 순위 순
 // 유료 회사(Claude 등)는 하루 호출 한도 안에서만 쓴다
@@ -238,7 +245,8 @@ export function routeCandidates(role = "general"){
     const models = settings.pinModel[id] ? [settings.pinModel[id]] : (settings.provModels[id] && settings.provModels[id].length ? settings.provModels[id] : PROVIDERS[id].defaults);
     let pool = models;
     if (id === "openrouter"){ const free = models.filter(m => /:free$/.test(m)); if (free.length) pool = free; }
-    const best = pool.map(m => ({m, r: rankModel(m, role)})).filter(x => x.r < 999).sort((a, b) => a.r - b.r)[0];
+    const dead = deadModels();
+    const best = pool.filter(m => !dead[m]).map(m => ({m, r: rankModel(m, role)})).filter(x => x.r < 999).sort((a, b) => a.r - b.r)[0];
     if (best) out.push({id, model: best.m, score: best.r * 10 + PROVIDERS[id].bias});
   }
   // 방금 한도·오류에 걸린 곳은 잠시 뒤로 미룬다
@@ -370,9 +378,11 @@ async function streamOAI(target, {messages, maxTokens, temperature, signal, onCo
   if (target.id === "openrouter"){ headers["HTTP-Referer"] = "https://nuri.local"; headers["X-Title"] = "Nuri AI"; }
   if (target.id === "anthropic" && !LAUNCHER.on){ headers["x-api-key"] = settings.keys.anthropic; headers["anthropic-version"] = "2023-06-01"; headers["anthropic-dangerous-direct-browser-access"] = "true"; }
   if (target.id === "anthropic" && temperature > 1) temperature = 1;
+  const noSampling = target.id === "anthropic" && /opus-5|sonnet-5|fable|opus-4-[78]/.test(target.model);   // 최신 Claude 는 temperature 를 받지 않는다
   const canSee = VISION_RE.test(target.model);
   const msgs = canSee ? messages.map(m => m.images?.length ? {role: m.role, content: [{type: "text", text: m.content}, ...m.images.map(url => ({type: "image_url", image_url: {url}}))]} : {role: m.role, content: m.content}) : stripImages(messages, `${shortModel(target.model)}는 이미지를 볼 수 없습니다`);
   const body = {model: target.model, messages: msgs, stream: true, max_tokens: maxTokens, temperature};
+  if (noSampling) delete body.temperature;
   // 생각 끄기(noThink): 추론 모델이 영어로 길게 생각만 하다 끝나는 것을 막는다 (모델마다 끄는 방법이 다름)
   let kw = false;
   if (noThink || think === false){
@@ -395,7 +405,7 @@ async function streamOAI(target, {messages, maxTokens, temperature, signal, onCo
     let m = ""; try { const j = await res.json(); m = j.error?.message || j.detail || j.message || (typeof j.error === "string" ? j.error : ""); } catch(e){}
     const name = isOl ? "Ollama" : PROVIDERS[target.id].name;
     const err = new Error(res.status === 401 || res.status === 403 ? `${name} 키가 올바르지 않거나 권한이 없습니다.` : res.status === 404 ? `${name}에 '${target.model}' 모델이 없습니다.` : res.status === 429 ? `${name} 사용 한도에 걸렸습니다.` : `${name} 오류 ${res.status} ${String(m).slice(0, 140)}`);
-    err.status = res.status; err.retry = true; throw err;
+    err.status = res.status; err.retry = true; err.detail = m; const ra = +res.headers.get("retry-after"); if (ra > 0) err.retryAfter = Math.min(600, ra) * 1000; throw err;
   }
   for await (const ev of sse(res)){
     const ch = ev.choices?.[0], d = ch?.delta || {};
@@ -418,6 +428,7 @@ export async function brainStream(opts){
   if (opts.target && overCap(opts.target.id)) opts = {...opts, target: null};   // 하루 한도를 넘은 회사는 지정해도 쓰지 않는다
   if (opts.target) cands = opts.fallback ? [opts.target, ...cands.filter(c => c.id !== opts.target.id || c.model !== opts.target.model)] : [opts.target];   // 특정 회사·모델을 꼭 집어 부를 때 (fallback이면 막혔을 때 다른 AI로)
   if (opts.exclude?.length) cands = cands.filter(c => !opts.exclude.includes(c.id));
+  { const warm = cands.filter(c => !providerCooling(c.id) && !deadModels()[c.model]); if (warm.length) cands = warm; }   // 한도에 걸려 쉬는 회사·없어진 모델은 건너뛴다
   if (!cands.length && role === "vision"){ cands = routeCandidates("general"); emit("activity", {kind: "fallback", text: "이미지를 볼 수 있는 모델이 연결되어 있지 않아 글로만 답합니다 (NVIDIA·Gemini 키를 넣으면 이미지 이해 가능)"}); if (b === "local") return streamLocal(opts); }
   if (!cands.length) throw new Error("연결된 AI가 없습니다. 설정 → AI 두뇌에서 API 키를 넣거나 모델을 내려받으세요.");
   let lastErr = null;
@@ -430,7 +441,8 @@ export async function brainStream(opts){
     catch (e){
       if (opts.signal?.aborted || got || !e.retry) throw e;
       lastErr = e;
-      if (c.id !== "local" && c.id !== "ollama" && (e.status === 429 || e.status >= 500 || !e.status)) cooldown[c.id] = Date.now() + (e.status === 429 ? 90e3 : 30e3);
+      if (c.id !== "local" && c.id !== "ollama" && (e.status === 429 || e.status >= 500 || !e.status)) cooldown[c.id] = Date.now() + (e.status === 429 ? Math.max(90e3, e.retryAfter || 0) : 30e3);
+      if (e.status === 404 || e.status === 410 || (e.status === 400 && /not.?found|does not exist|deprecat|no longer|unknown model|invalid model/i.test(e.detail || ""))) markDead(c.model);
       if (i + 1 < cands.length) emit("activity", {kind:"fallback", text:`${e.message} → 다른 AI로 바꿉니다`});
     }
   }

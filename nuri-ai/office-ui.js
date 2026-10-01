@@ -489,7 +489,8 @@ function renderStatus(){
   if (document.activeElement !== sp) sp.value = cm;
   if (document.activeElement !== $o("#ofClaude")) $o("#ofClaude").value = claudeMode(c);
   const next = O.nextAutoIn();
-  const jobNow = curJob ? `<span class="of-jobnow">▶ 지금 하는 일: ${E(curJob)}</span> · ` : "";
+  const ps = O.officePaused?.() || 0;
+  const jobNow = (ps ? `<span class="of-jobnow">⏸ AI 한도 때문에 ${Math.ceil(ps / 60e3)}분 쉬는 중 (질문은 받음)</span> · ` : "") + (curJob ? `<span class="of-jobnow">▶ 지금 하는 일: ${E(curJob)}</span> · ` : "");
   $o("#ofStatus").innerHTML = jobNow + (m ? `<b class="ok">진행 중</b> · ${placeName(placeOf(m.place))} · ${m.done.length}/${m.order.length} 발언${s.queued ? ` · 대기 회의 ${s.queued}개` : ""}`
     : c.auto ? (u.auto >= c.dailyMax ? `오늘 자동 회의 ${c.dailyMax}번을 다 했습니다 · 메시지를 보내면 바로 회의합니다` : `다음 자동 회의 ${next > 60e3 ? Math.round(next / 60e3) + "분 뒤" : "곧"} · 급변동 감시 중`) : "자동 회의 꺼짐 · 메시지를 보내면 바로 회의합니다");
   const nc = O.nextChatIn();
