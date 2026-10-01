@@ -68,6 +68,7 @@ export const TOPICS = [
   {id: "us_stocks", name: "해외주식", skill: "us_stocks", agent: true, seeds: ["엔비디아 일봉 분석", "테슬라 실적 이후", "애플 주가 흐름", "반도체 ETF", "빅테크 비교", "팔란티어 변동성"]},
   {id: "kr_stocks", name: "국내주식", skill: "kr_stocks", agent: true, seeds: ["삼성전자 분석", "SK하이닉스 추세", "코스피 외국인 수급", "현대차 배당", "2차전지 업종"]},
   {id: "global_futures", name: "해외선물", skill: "global_futures", agent: true, seeds: ["WTI 원유 선물 분석", "금 선물 전망", "나스닥100 선물", "천연가스 변동성", "미 국채 선물과 금리", "구리 선물과 경기"]},
+  {id: "kr_futures", name: "국내선물", skill: "kr_futures", agent: true, seeds: ["코스피200 선물 전망", "외국인 선물 순매수 해석", "선물 만기일 영향", "미니 코스피200 선물 증거금", "야간선물과 미국 증시", "베이시스 해석"]},
   {id: "news", name: "뉴스 해설", skill: "news", agent: true, seeds: ["오늘 코인 시장 뉴스", "미국 증시 마감 뉴스", "국제유가 뉴스", "연준 금리 뉴스", "국내 증시 시황"]},
   {id: "macro", name: "경제 지표·거시경제", skill: "macro", agent: true, seeds: ["이번 주 경제 발표", "CPI 발표 해석", "FOMC와 금리", "고용지표", "달러 인덱스", "한국은행 기준금리"]},
   {id: "backtest", name: "퀀트 전략·백테스트", skill: "backtest", agent: true, seeds: ["비트코인 이동평균 전략 백테스트", "이더리움 RSI 전략", "볼린저 전략 비교", "과최적화", "손절 넣은 전략", "최대낙폭 관리"]},
@@ -112,9 +113,12 @@ const answerSys = skill => `너는 '${NAME()}'라는 한국어 AI 어시스턴�
 // 구조가 다른 모델(Llama·DeepSeek·Mistral·Qwen·Nemotron…)은 가중치를 직접 더할 수 없으므로,
 // FuseChat-3.0과 같은 '암묵적 모델 융합'을 쓴다: 같은 질문에 여러 원본 모델이 답하고 → 순위를 매겨
 // 가장 좋은 답으로 SFT, 가장 좋은 답 vs 가장 나쁜 답으로 DPO 학습 → 모든 모델의 장점이 GH Nano 하나에 녹아든다.
-const FUSE_SKIP = /guard|safety|reward|embed|rerank|retriev|parse|tts|asr|whisper|riva|ocr|clip|nv-?dino|detect|segment|flux|stable-?diff|sdxl|cosmos|audio|speech/i;
+const FUSE_SKIP = /guard|safety|reward|embed|rerank|retriev|parse|tts|asr|whisper|riva|ocr|clip|nv-?dino|detect|segment|flux|stable-?diff|sdxl|cosmos|audio|speech|deplot|fuyu|kosmos|paligemma|neva|vila\b|diffusion|recurrentgemma|starcoder|codegemma-7b$|-base\b|-pt\b/i;
 const TOOL_LEAK = /<\/?tool\b|<tool_call>|DSML|tool▁call|\[TOOL_CALLS\]/;
-const fuseBad = new Map();
+// 응답하지 않는 모델(서비스 종료·대화 미지원)은 기억해 두고 일주일간 빼서 시간을 아낀다
+const fuseBad = new Map((() => { try { const o = JSON.parse(localStorage.getItem("fuseBad") || "{}"); return Object.entries(o).filter(([, v]) => Date.now() - v.t < 7 * 864e5).map(([k, v]) => [k, v.n]); } catch(e){ return []; } })());
+const saveBad = () => { try { localStorage.setItem("fuseBad", JSON.stringify(Object.fromEntries([...fuseBad].map(([k, n]) => [k, {n, t: Date.now()}])))); } catch(e){} };
+export const fusionBadCount = () => [...fuseBad.values()].filter(n => n >= 2).length;
 const mkey = t => t.id + "|" + t.model;
 // 융합에 참여하는 원본 모델: API 키를 넣은 모든 회사의 대화·코딩·추론 모델 전부
 export function fusionSources(){
@@ -140,9 +144,10 @@ function pickSources(k){
 async function fuseAnswer(q, sys, signal, log, k = 4){
   const anchor = teachers()[0], rot = pickSources(k);
   const srcs = [anchor, ...rot.filter(t => !anchor || mkey(t) !== mkey(anchor))].filter(Boolean).slice(0, Math.max(2, k));
-  const bad = t => fuseBad.set(mkey(t), (fuseBad.get(mkey(t)) || 0) + 1);
+  const bad = (t, e) => { if (signal?.aborted || (e && /429|rate|limit|한도|too many|timeout|시간|network|fetch/i.test(e.message || ""))) return; fuseBad.set(mkey(t), (fuseBad.get(mkey(t)) || 0) + 1); saveBad(); };
+  const good = t => { if (fuseBad.has(mkey(t))){ fuseBad.delete(mkey(t)); saveBad(); } };
   const outs = (await Promise.all(srcs.map(t => ask([{role: "system", content: sys}, {role: "user", content: q}], {signal, maxTokens: 1600, temperature: 0.6, target: t})
-    .then(a => a.text && a.text.length > 40 && !TOOL_LEAK.test(a.text) ? {t, text: a.text} : (bad(t), null)).catch(() => (bad(t), null))))).filter(Boolean);
+    .then(a => a.text && a.text.length > 40 && !TOOL_LEAK.test(a.text) ? (good(t), {t, text: a.text}) : (bad(t), null)).catch(e => (bad(t, e), null))))).filter(Boolean);
   if (!outs.length) return null;
   if (signal?.aborted) throw new Error("멈춤");
   let scores;
@@ -265,14 +270,20 @@ export async function generateAllSkills({signal, onEvent, judge = true, ensemble
   let made = 0, done = 0;
   let total = cov.builtin.filter(b => b.n < BUILTIN_TARGET).length + cov.nvLeft.length;
   const step = label => { done++; onEvent?.({kind: "progress", done, total, made, label}); };
-  // 1) 기본 스킬 12개: 분야마다 BUILTIN_TARGET개 이상 (실제 도구 사용 기록 포함)
-  for (const b of cov.builtin){
-    if (signal?.aborted) return made;
-    if (b.n >= BUILTIN_TARGET || !b.topic) continue;
-    log(`기본 스킬 '${b.name}' ${BUILTIN_TARGET - b.n}개 만드는 중`);
-    made += await generateSynth({topics: [b.topic], count: BUILTIN_TARGET - b.n, judge, ensemble, agent, signal, onEvent: ev => { if (ev.kind === "log") onEvent?.(ev); }});
-    step(b.name);
-  }
+  // 1) 기본 스킬 12개: 분야마다 BUILTIN_TARGET개 이상 (실제 도구 사용 기록 포함) — NVIDIA 스킬과 동시에 진행
+  const builtinJob = async () => {
+    for (const b of cov.builtin){
+      if (signal?.aborted) return;
+      if (b.n >= BUILTIN_TARGET || !b.topic) continue;
+      const need = BUILTIN_TARGET - b.n;
+      onEvent?.({kind: "progress", done, total, made, label: `기본 스킬 '${b.name}' 0/${need}`});
+      made += await generateSynth({topics: [b.topic], count: need, judge, ensemble, agent, signal, onEvent: ev => {
+        if (ev.kind === "log") onEvent?.(ev);
+        if (ev.kind === "sample") onEvent?.({kind: "progress", done, total, made, label: `기본 스킬 '${b.name}' ${ev.made}/${need}`, sample: true});
+      }});
+      step(`기본 스킬 '${b.name}' 완료`);
+    }
+  };
   // 2) NVIDIA 스킬 전부: 스킬마다 지식 문답 + 찾아 읽고 답하는 과정 (실패한 스킬은 최대 3번까지 다시)
   const queue = [];
   const worker = async () => {
@@ -287,17 +298,20 @@ export async function generateAllSkills({signal, onEvent, judge = true, ensemble
         await idb.put("train:" + (base.id = uid()), {...base, t: Date.now(), kind: "nvidia", rejected: r.rejected || undefined, messages: [{role: "system", content: TRAIN_SYS("chat")}, {role: "user", content: r.q}, {role: "assistant", content: r.text}]});
         const conv = await nvToolConv(r.q, name, r.text);
         const id2 = uid(); await idb.put("train:" + id2, {...base, id: id2, t: Date.now(), kind: "nvtool", messages: [{role: "system", content: TRAIN_SYS("chat")}, ...conv]});
-        made += 2; log(`✓ ${name}`); step(name);
+        made += 2; log(`✓ NVIDIA 스킬 ${name} (${r.sources?.length || 1}개 모델 중 최고 답)`); step(`NVIDIA 스킬 ${name}`);
       } catch (e){ if (signal?.aborted) return; log(`'${name}' 건너뜀: ${String(e.message || e).slice(0, 60)}`); step(name); }
     }
   };
-  for (let pass = 0; pass < 3 && !signal?.aborted; pass++){
-    const left = pass ? (await skillCoverage()).nvLeft : cov.nvLeft;
-    if (!left.length) break;
-    if (pass){ total = done + left.length; log(`못 넣은 스킬 ${left.length}개를 다시 시도합니다`); }
-    queue.push(...left);
-    await Promise.all(Array.from({length: Math.max(1, conc)}, worker));
-  }
+  const nvJob = async () => {
+    for (let pass = 0; pass < 3 && !signal?.aborted; pass++){
+      const left = pass ? (await skillCoverage()).nvLeft : cov.nvLeft;
+      if (!left.length) break;
+      if (pass){ total = done + left.length + cov.builtin.filter(b => b.n < BUILTIN_TARGET).length; log(`못 넣은 스킬 ${left.length}개를 다시 시도합니다`); }
+      queue.push(...left);
+      await Promise.all(Array.from({length: Math.max(1, conc)}, worker));
+    }
+  };
+  await Promise.all([builtinJob(), nvJob()]);
   return made;
 }
 

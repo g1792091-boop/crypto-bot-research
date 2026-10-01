@@ -391,7 +391,7 @@ export async function brainStream(opts){
   else if (PROVIDERS[b]) cands = routeCandidates(role).filter(c => c.id === b).concat(routeCandidates(role).filter(c => c.id !== b));
   else cands = [];
   if (opts.only) cands = (opts.only === "ollama" ? [{id:"ollama", model: settings.olModel}] : routeCandidates(role)).filter(c => c.id === opts.only);
-  if (opts.target) cands = [opts.target];                       // 특정 회사·모델을 꼭 집어 부를 때 (여러 AI 합치기)
+  if (opts.target) cands = opts.fallback ? [opts.target, ...cands.filter(c => c.id !== opts.target.id || c.model !== opts.target.model)] : [opts.target];   // 특정 회사·모델을 꼭 집어 부를 때 (fallback이면 막혔을 때 다른 AI로)
   if (!cands.length && role === "vision"){ cands = routeCandidates("general"); emit("activity", {kind: "fallback", text: "이미지를 볼 수 있는 모델이 연결되어 있지 않아 글로만 답합니다 (NVIDIA·Gemini 키를 넣으면 이미지 이해 가능)"}); if (b === "local") return streamLocal(opts); }
   if (!cands.length) throw new Error("연결된 AI가 없습니다. 설정 → AI 두뇌에서 API 키를 넣거나 모델을 내려받으세요.");
   let lastErr = null;

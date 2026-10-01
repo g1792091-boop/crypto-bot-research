@@ -7,8 +7,10 @@ import { esc, uid, fmtN, ls, idb, bus, settings, saveSettings, CATALOG, eng, loa
 import { runAgent, BUILTIN_SKILLS, TOOLS, installSkill, marketNews } from "./agent.js";
 import { nvIndex, nvSkill, nvSearch, GROUP_KO } from "./nvskills.js";
 import { TEMPLATES } from "./templates.js";
-import { BASES, TOPICS, samplesFromChats, loadSynth, removeSynth, clearSynth, toJSONL, generateSynth, notebookJSON, localScript, teachers, NANO_MERGE, nanoNotebookJSON, mergeYAML, skillCoverage, generateAllSkills, fusionSources, fusionStats, toDPOJSONL } from "./train.js";
+import { BASES, TOPICS, samplesFromChats, loadSynth, removeSynth, clearSynth, toJSONL, generateSynth, notebookJSON, localScript, teachers, NANO_MERGE, nanoNotebookJSON, mergeYAML, skillCoverage, generateAllSkills, fusionSources, fusionStats, fusionBadCount, toDPOJSONL } from "./train.js";
 import { initTrade } from "./trade.js";
+import { openOffice, officeOpen } from "./office-ui.js";
+import { startAutopilot } from "./office.js";
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const AI = () => settings.aiName || "GH Nano";
@@ -525,6 +527,12 @@ let sheetTab = "brain";
 function openSheet(tab){ sheetTab = tab || sheetTab; if (tab === "tpl"){ const k = TEMPLATES.findIndex(c => (c.mode || "chat") === mode); if (mode === "code" && k >= 0) tplCat = k; else if (TEMPLATES[tplCat]?.mode === "code") tplCat = 0; } if (!$("#sheet").open) $("#sheet").showModal(); renderSheet(); $("#modelMenu").hidden = true; }
 $("#openSettings").onclick = () => openSheet("brain");
 $("#openKnow").onclick = () => openSheet("know");
+// AI 팀 사무실 (에이전트 팀 대시보드)
+const goOffice = () => { openOffice({md, esc, toast}); if (location.hash !== "#office") history.replaceState(null, "", "#office"); };
+$("#openOffice").onclick = goOffice; $("#officeTop").onclick = goOffice;
+window.addEventListener("hashchange", () => { if (location.hash === "#office" && !officeOpen()) goOffice(); });
+if (location.hash === "#office") setTimeout(goOffice, 0);
+else if (localStorage.getItem("officeUsed")) setTimeout(startAutopilot, 5000);   // 한 번 사무실을 연 뒤로는 채팅 중에도 팀이 자동 회의를 이어 간다
 $("#openTpl").onclick = () => openSheet("tpl");
 $("#sheetClose").onclick = () => $("#sheet").close();
 $("#sheet").addEventListener("click", e => { if (e.target.id === "sheet") $("#sheet").close(); });
@@ -584,6 +592,15 @@ function download(name, text, type = "application/json"){
   const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([text], {type: type + ";charset=utf-8"})); a.download = name;
   document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
 }
+// GH Nano 만들기 진행 막대를 화면 전체를 다시 그리지 않고 갱신 (2초에 한 번)
+let nanoRefreshT = 0;
+async function refreshNano(){
+  if (Date.now() - nanoRefreshT < 2000 || !$("#covNv")) return; nanoRefreshT = Date.now();
+  const [cov, syn] = await Promise.all([skillCoverage(), loadSynth()]), fst = fusionStats(syn), src = fusionSources();
+  const set = (id, a, b) => { const r = $("#" + id); if (!r) return; r.querySelector("i").style.width = (b ? Math.min(100, Math.round(a / b * 100)) : 0) + "%"; r.querySelector("em").textContent = `${a}/${b}`; };
+  set("covSrc", src.filter(t => fst.used.has(t.model)).length, src.length); set("covBi", cov.builtinDone, cov.builtin.length); set("covNv", cov.nvDone, cov.nvTotal);
+  const S = $("#covSum"); if (S) S.textContent = `학습 예시 ${syn.length}개 · 모델 간 비교 쌍(DPO) ${fst.pairs}개${fusionBadCount() ? ` · 응답 없는 모델 ${fusionBadCount()}개 제외` : ""}`;
+}
 async function trainTab(){
   const {chatS, syn, all} = await trainData();
   const rated = chats.flatMap(c => c.messages).filter(m => m.rating > 0).length;
@@ -596,7 +613,7 @@ async function trainTab(){
   const srcAll = fusionSources(), fst = fusionStats(syn), usedN = srcAll.filter(t => fst.used.has(t.model)).length;
   const provs = [...new Set(srcAll.map(t => PROVIDERS[t.id]?.name || t.id))];
   const skillN = cov ? cov.nvTotal + cov.builtin.length : 0, skillDone = cov ? cov.nvDone + cov.builtinDone : 0, allDone = cov && skillDone >= skillN;
-  const bar = (label, a, b, id = "") => `<div class="cov-row"><span>${label}</span><div class="bar"><i style="width:${pct(a, b)}%"></i></div><em${id ? ` id="${id}"` : ""}>${a}/${b}</em></div>`;
+  const bar = (label, a, b, id = "") => `<div class="cov-row"${id ? ` id="${id}"` : ""}><span>${label}</span><div class="bar"><i style="width:${pct(a, b)}%"></i></div><em>${a}/${b}</em></div>`;
   const chips = srcAll.slice(0, 18).map(t => `<span class="${fst.used.has(t.model) ? "on" : ""}" title="${esc(t.model)}">${esc(shortModel(t.model))}</span>`).join("") + (srcAll.length > 18 ? `<span class="more">외 ${srcAll.length - 18}개</span>` : "");
   return `<div class="nano-hero"><div class="nano-badge"><span class="logo">${esc([...AI()][0].toUpperCase())}</span><div><b>${esc(AI())} — 하나의 AI 모델</b><span>연결된 모든 AI 모델과 모든 스킬을 융합해 ${esc(AI())} 모델 파일 하나로 만듭니다</span></div></div>
     <div class="fuse"><div class="fuse-in">
@@ -604,8 +621,8 @@ async function trainTab(){
       <div class="fuse-box"><b>스킬 ${skillN}개</b><span>기본 ${cov?.builtin.length || 0} + NVIDIA ${cov?.nvTotal || 0} · 실제 도구 사용법 포함</span></div></div>
       <div class="fuse-arrow" aria-hidden="true">→</div>
       <div class="fuse-out"><span class="logo">${esc([...AI()][0].toUpperCase())}</span><b>${esc(AI())}</b><span>모델 파일 1개 · ${esc(NANO_MERGE.size)} · 이 앱에서 오프라인 실행</span></div></div>
-    <div class="nano-cov">${bar("융합된 모델", usedN, srcAll.length, "covSrc")}${cov ? bar("기본 스킬", cov.builtinDone, cov.builtin.length) + bar("NVIDIA 스킬", cov.nvDone, cov.nvTotal, "covNv") : ""}<span class="small">학습 예시 ${syn.length}개 · 모델 간 비교 쌍(DPO) ${fst.pairs}개</span></div>
-    <div class="row wrap">${running ? `<button class="btn" id="nanoStop">멈추기</button><span class="small" id="allProg">${allRun ? (allProg ? `${allProg.done}/${allProg.total} · ${esc(allProg.label || "")}` : "시작하는 중…") : "데이터를 더 만드는 중"} · 다른 대화를 해도 계속되고, 멈춰도 이어서 할 수 있습니다</span>`
+    <div class="nano-cov">${bar("융합된 모델", usedN, srcAll.length, "covSrc")}${cov ? bar("기본 스킬", cov.builtinDone, cov.builtin.length, "covBi") + bar("NVIDIA 스킬", cov.nvDone, cov.nvTotal, "covNv") : ""}<span class="small" id="covSum">학습 예시 ${syn.length}개 · 모델 간 비교 쌍(DPO) ${fst.pairs}개${fusionBadCount() ? ` · 응답 없는 모델 ${fusionBadCount()}개 제외` : ""}</span></div>
+    <div class="row wrap">${running ? `<button class="btn" id="nanoStop">멈추기</button><span class="small" id="allProg">${allRun ? (allProg ? `${allProg.done}/${allProg.total} 완료 · 지금: ${esc(allProg.label || "")}` : "시작하는 중…") : "데이터를 더 만드는 중"} · 다른 대화를 해도 계속되고, 멈춰도 이어서 할 수 있습니다</span>`
       : `${allDone ? `<button class="btn" id="nanoGo" ${ts.length && !synthCtl ? "" : "disabled"}>융합 데이터 100개 더</button>` : `<button class="btn primary" id="nanoAll" ${ts.length && !synthCtl ? "" : "disabled"}>${syn.length ? "이어서 만들기" : esc(AI()) + " 만들기 시작"} (남은 스킬 ${skillN - skillDone}개)</button>`}<button class="btn${allDone ? " primary" : ""}" id="nanoNb">Colab에서 완성하기 (노트북 받기)</button>`}</div>
     <div class="trlog" id="trLog2">${running ? synthLog.slice(-4).map(l => `<div>${esc(l)}</div>`).join("") : ""}</div>
     <ol class="nano-steps"><li class="${allDone ? "done" : running ? "run" : ""}"><b>1. 융합 데이터</b><span>모든 모델이 답하고 순위를 매김 · 모든 스킬</span></li><li><b>2. 융합 학습</b><span>무료 Colab · SFT + DPO</span></li><li class="${settings.myModel ? "done" : ""}"><b>3. 등록</b><span>${settings.myModel ? "등록됨: " + esc(settings.myModel) : "모델 파일을 앱에 넣으면 끝"}</span></li></ol>
@@ -903,7 +920,7 @@ $("#sheetBody").addEventListener("click", async e => {
     synthLog = ["모든 스킬을 학습 데이터에 넣기 시작합니다…"]; allProg = null; synthCtl = new AbortController(); synthCtl.all = true; renderSheet();
     const log = x => { synthLog.push(x); if (synthLog.length > 200) synthLog.splice(0, 100); const L = $("#trLog2"); if (L) L.innerHTML = synthLog.slice(-4).map(l => `<div>${esc(l)}</div>`).join(""); };
     generateAllSkills({signal: synthCtl.signal, judge: true, ensemble: true, agent: true,
-      onEvent: ev => { if (ev.kind === "log") log(ev.text); if (ev.kind === "progress"){ allProg = ev; const P = $("#allProg"); if (P) P.textContent = `${ev.done}/${ev.total} · ${ev.label} · 멈춰도 이어서 할 수 있습니다`; } }})
+      onEvent: ev => { if (ev.kind === "log") log(ev.text); if (ev.kind === "progress"){ allProg = ev; const P = $("#allProg"); if (P) P.textContent = `${ev.done}/${ev.total} 완료 · 지금: ${ev.label} · 다른 대화를 해도 계속되고, 멈춰도 이어서 할 수 있습니다`; refreshNano(); } }})
       .then(n => { if (!synthCtl?.signal.aborted) toast(`스킬 학습 데이터 ${n}개를 만들었습니다. 이제 'Colab에서 완성하기'를 누르세요`); })
       .catch(err => { if (!synthCtl?.signal.aborted) toast(err.message); log("멈춤: " + (err.message || "")); })
       .finally(() => { synthCtl = null; allProg = null; if ($("#sheet").open && sheetTab === "train") renderSheet(); });

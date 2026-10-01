@@ -482,7 +482,7 @@ export const BUILTIN_SKILLS = [
     prompt: `- 코인 현물(업비트 원화 KRW-, 바이낸스 USDT)을 다룬다. market_analyze로 실제 지표를 확인하고, 필요하면 market_news(category:"crypto")로 최근 흐름을 본다.
 - 해설: 지금 가격이 추세의 어디쯤인지(이동평균 위·아래, 지지·저항까지 거리), 거래량이 무엇을 말하는지, 김치 프리미엄·비트코인 도미넌스 같은 코인 시장 특유의 맥락을 말로 풀어 준다.
 - 그 다음 상승·하락·횡보 시나리오와 각 시나리오에서의 대응(분할 매수 구간, 손절 기준, 목표 구간)을 이야기하듯 설명한다. ${RISK_LINE}`},
-  {id: "crypto_futures", name: "코인 선물", icon: "⚡", keys: /선물|롱|숏|레버리지|펀딩|청산|미결제|무기한|perp|포지션/i, not: /원유|금 선물|금선물|나스닥 ?선물|s&p ?선물|해외선물|국채|원자재|천연가스/i,
+  {id: "crypto_futures", name: "코인 선물", icon: "⚡", keys: /선물|롱|숏|레버리지|펀딩|청산|미결제|무기한|perp|포지션/i, not: /원유|금 선물|금선물|나스닥 ?선물|s&p ?선물|해외선물|국채|원자재|천연가스|국내 ?선물|코스피 ?200|kospi ?200|코스닥 ?150|k200|야간 ?선물|미니 ?선물/i,
     tools: ["market_analyze", "market_quote", "market_list", "market_news", "calculate"],
     prompt: `- 코인 무기한 선물은 exchange:"binancef"로 분석한다(펀딩비·미결제약정·롱숏비율 포함).
 - 해설: 펀딩비가 양(+)이면 롱이 숏에게 비용을 내는 과열 신호인지, 미결제약정이 가격과 같이 늘었는지(새 돈 유입) 줄었는지(청산·정리), 롱숏비율이 한쪽으로 쏠렸는지를 연결해서 '지금 선물 시장 참여자들이 어떤 상태인지' 이야기로 풀어 준다.
@@ -491,7 +491,7 @@ export const BUILTIN_SKILLS = [
     tools: ["market_analyze", "market_quote", "market_search", "market_news", "web_search"],
     prompt: `- 미국 주식은 티커로(예: NVDA) market_analyze(timeframe:"D")를 쓰고, market_news(category:"us", symbol)로 최근 이슈를 본다.
 - 해설: 차트 위치와 함께 실적·가이던스·금리·섹터 흐름이 주가에 어떻게 작용하고 있는지 연결해서 설명한다. 장 마감 시간대에는 마지막 종가임을 밝힌다. 환율(달러/원)이 한국 투자자 수익에 주는 영향도 짚는다. ${RISK_LINE}`},
-  {id: "kr_stocks", name: "국내주식", icon: "🇰🇷", keys: /코스피|코스닥|삼성전자|하이닉스|현대차|네이버|카카오|lg|셀트리온|에코프로|국내주식|국내 주식|\b\d{6}\b/i,
+  {id: "kr_stocks", name: "국내주식", icon: "🇰🇷", keys: /코스피|코스닥|삼성전자|하이닉스|현대차|네이버|카카오|lg|셀트리온|에코프로|국내주식|국내 주식|\b\d{6}\b/i, not: /국내 ?선물|코스피 ?200 ?선물|선물 ?만기|야간 ?선물|미니 ?선물/,
     tools: ["market_analyze", "market_quote", "market_search", "market_news", "web_search"],
     prompt: `- 국내 주식은 6자리 코드나 한글 이름으로 market_analyze(timeframe:"D")를 쓰고, market_news(category:"kr", symbol)로 이슈를 본다.
 - 해설: 외국인·기관 수급, 업종 흐름, 환율, 미국 증시 영향 같은 국내 시장 맥락과 차트를 연결해 말로 설명한다. ${RISK_LINE}`},
@@ -499,6 +499,10 @@ export const BUILTIN_SKILLS = [
     tools: ["market_analyze", "market_quote", "market_news", "econ_calendar", "calculate"],
     prompt: `- 해외선물은 야후 코드(원유 CL=F, 금 GC=F, 은 SI=F, 천연가스 NG=F, S&P500 ES=F, 나스닥100 NQ=F, 미 10년 국채 ZN=F)로 market_analyze를 쓴다.
 - 해설: 수급·재고·OPEC·달러·금리·지정학 같은 그 상품을 움직이는 요인과 차트를 연결해 설명하고, 만기·롤오버·증거금·틱가치 같은 선물 거래의 특성과 위험을 짚는다. 이번 주 경제 발표(econ_calendar) 중 영향을 줄 것도 말해 준다. ${RISK_LINE}`},
+  {id: "kr_futures", name: "국내선물", icon: "📈", keys: /국내 ?선물|코스피 ?200|kospi ?200|코스닥 ?150|k200|미니 ?선물|야간 ?선물|베이시스|선물 ?만기|외국인 ?선물|지수 ?선물/i,
+    tools: ["market_analyze", "market_quote", "market_news", "econ_calendar", "calculate"],
+    prompt: `- 국내선물(코스피200 선물·미니 코스피200·코스닥150 선물·야간선물)은 무료 실시간 선물 시세가 없어서, 기초지수(코스피200 ^KS200, 코스피 ^KS11, 코스닥 ^KQ11)를 market_analyze(exchange:"yahoo", timeframe:"D")로 보고 선물은 그 지수를 따라간다는 점을 밝힌다.
+- 해설: 외국인 선물 순매수·베이시스(선물-현물 차이)·프로그램 매매·환율(KRW=X)·미국 지수 선물(ES=F, NQ=F) 흐름과 연결해 말로 설명한다. 만기일(매월 둘째 목요일, 3·6·9·12월은 동시만기), 증거금, 승수(코스피200 선물 1포인트=25만원, 미니=5만원), 야간 거래 특성을 짚는다. ${RISK_LINE}`},
   {id: "news", name: "뉴스 해설", icon: "📰", keys: /뉴스|소식|이슈|헤드라인|기사|속보|호재|악재|무슨 일|왜 올랐|왜 떨어|급등|급락/i,
     tools: ["market_news", "web_search", "web_fetch"],
     prompt: `- market_news(category: crypto|futures|us|kr|global_futures|macro, symbol)로 분야별 최신 기사를 모으고, 중요한 기사는 web_fetch로 본문을 읽는다.
@@ -712,11 +716,13 @@ const ROLE_KO = {general: "일반", code: "코딩", reason: "추론", fast: "빠
 const EXPLAIN = new Set(["market_backtest", "market_analyze", "design_building", "cost_estimate", "land_check", "econ_calendar", "market_quote", "market_list", "paper_trade", "realestate_search"]);
 const routeName = c => !c ? "" : c.id === "local" ? "내 기기" : c.id === "ollama" ? "Ollama" : (PROVIDERS[c.id]?.name || c.id);
 
-export async function runAgent({mode, history, msg, signal, onUpdate, openArtifact, askPermission, workspace, think}){
-  const maxSteps = mode === "code" ? 30 : 12;
+// persona: 에이전트 팀원의 역할 지시 / forceSkills: 이 팀원이 늘 쓰는 스킬 id / target: 이 팀원에게 배정된 AI 모델 (막히면 다른 모델로)
+export async function runAgent({mode, history, msg, signal, onUpdate, openArtifact, askPermission, workspace, think, persona, forceSkills, target, maxSteps: stepCap}){
+  const maxSteps = stepCap || (mode === "code" ? 30 : 12);
   const userText = [...history].reverse().find(m => m.role === "user")?.content || "";
   const recent = history.filter(m => m.role === "user").slice(-3).map(m => m.content).join("\n");
-  const skills = activeSkills(userText, mode).concat(activeSkills(recent, mode).filter(s => !activeSkills(userText, mode).some(x => x.id === s.id))).slice(0, 4);
+  const skills = forceSkills ? BUILTIN_SKILLS.filter(s => forceSkills.includes(s.id)).slice(0, 4)
+    : activeSkills(userText, mode).concat(activeSkills(recent, mode).filter(s => !activeSkills(userText, mode).some(x => x.id === s.id))).slice(0, 4);
   const lastUser = [...history].reverse().find(m => m.role === "user");
   const role = lastUser?.images?.length ? "vision" : roleFor(mode, userText, think);
   if (settings.nvSkills !== false && settings.nvAuto !== false){
@@ -727,7 +733,7 @@ export async function runAgent({mode, history, msg, signal, onUpdate, openArtifa
   if (skills.length) activity({kind: "skill", text: skills.map(s => s.name).join(" · ")});
   // 기억 길이가 짧은 모델이면 짧은 지시문을 쓰고, 지시문+대화+답이 기억 길이 안에 들도록 나눈다
   const ctxLen = brainCtx(role), small = ctxLen <= 8192;
-  const sys = systemPrompt(mode, {workspace, skills, role, compact: small});
+  const sys = systemPrompt(mode, {workspace, skills, role, compact: small}) + (persona ? "\n\n" + persona : "");
   const sysT = estTokens(sys);
   let ansLen = brainAnswerLen(role);
   if (ctxLen - sysT - ansLen < 600) ansLen = Math.max(256, Math.floor((ctxLen - sysT - 64) / 2));
@@ -738,7 +744,7 @@ export async function runAgent({mode, history, msg, signal, onUpdate, openArtifa
     const part = {type: "text", text: "", t0: Date.now()}; msg.parts.push(part);
     msg.phase = step ? "생각 정리 중" : "답변 준비 중"; onUpdate();
     let raw = "", cut = false;
-    const route = await brainStream({messages, role, maxTokens: ansLen, temperature: mode === "code" ? 0.2 : settings.temp, signal, think, stop: ["</tool>", "<tool_result"],
+    const route = await brainStream({messages, role, maxTokens: ansLen, temperature: mode === "code" ? 0.2 : settings.temp, signal, think, target, fallback: true, stop: ["</tool>", "<tool_result"],
       onContent: d => { raw += d; part.tf ||= Date.now(); part.text = visibleText(raw); msg.phase = "답변 작성 중"; onUpdate(); },
       onThink: d => { part.tf ||= Date.now(); part.think = (part.think || "") + d; msg.phase = "생각하는 중"; onUpdate(); },
       onStats: st => { if (st.cut) cut = true; if (st.tps) msg.tps = st.tps; }});

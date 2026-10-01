@@ -602,6 +602,7 @@ body{background:radial-gradient(1100px 520px at 72% -12%,color-mix(in srgb,var(-
 .nano-yml{margin:0;max-height:240px;overflow:auto;font-size:12px;background:var(--panel-2,color-mix(in srgb,var(--ink) 4%,transparent));border:1px solid var(--line);border-radius:10px;padding:10px;white-space:pre}
 .nano-steps li.run{border-color:color-mix(in srgb,var(--accent) 60%,transparent)}
 </style>
+<link rel="stylesheet" href="office.css">
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -635,6 +636,7 @@ body{background:radial-gradient(1100px 520px at 72% -12%,color-mix(in srgb,var(-
       <span class="brand"><span class="logo">G</span><span class="brand-name">GH Nano</span></span><span style="flex:1"></span>
       <button class="ib" id="sideClose" title="사이드바 접기" aria-label="사이드바 접기"><svg class="i"><use href="#i-side"/></svg></button>
     </div>
+    <button class="office-open-btn" id="openOffice"><svg class="of-mini" viewBox="0 0 12 15" shape-rendering="crispEdges" aria-hidden="true"><rect x="3" y="0" width="6" height="2" fill="#2b2b3a"/><rect x="2" y="2" width="8" height="4" fill="#f2c8a0"/><rect x="2" y="2" width="8" height="1" fill="#2b2b3a"/><rect x="4" y="3" width="1" height="1" fill="#222"/><rect x="7" y="3" width="1" height="1" fill="#222"/><rect x="1" y="6" width="10" height="5" fill="#4a6cf7"/><rect x="2" y="11" width="8" height="3" fill="#3b3f58"/></svg><span>AI 팀 사무실<small>16명이 스스로 회의하고 답합니다</small></span></button>
     <button class="new" id="newChat"><span class="plus"><svg class="i" style="width:16px;height:16px"><use href="#i-plus"/></svg></span>새 대화</button>
     <div class="side-search"><input id="search" type="search" placeholder="대화 검색" aria-label="대화 검색"></div>
     <div class="recents" id="recents"></div>
@@ -657,7 +659,7 @@ body{background:radial-gradient(1100px 520px at 72% -12%,color-mix(in srgb,var(-
         <button role="tab" data-mode="code" aria-selected="false">코드</button>
       </div>
       <div class="title" id="title"></div>
-      <div class="top-right"><button class="ib" id="actToggle" title="진행 상황" aria-label="진행 상황"><svg class="i"><use href="#i-pulse"/></svg></button><button class="ib" id="panelToggle" title="결과물 패널" aria-label="결과물 패널" hidden><svg class="i"><use href="#i-doc"/></svg></button></div>
+      <div class="top-right"><button class="ib" id="officeTop" title="AI 팀 사무실" aria-label="AI 팀 사무실"><svg class="i" viewBox="0 0 24 24"><path d="M4 21V5l8-3 8 3v16M9 21v-4h6v4M8 8h2M14 8h2M8 12h2M14 12h2"/></svg></button><button class="ib" id="actToggle" title="진행 상황" aria-label="진행 상황"><svg class="i"><use href="#i-pulse"/></svg></button><button class="ib" id="panelToggle" title="결과물 패널" aria-label="결과물 패널" hidden><svg class="i"><use href="#i-doc"/></svg></button></div>
     </header>
     <div class="split">
       <section class="convo" id="convo">
