@@ -914,6 +914,7 @@ def compare_base(base: str, hours: int, real: bool, procs: int) -> int:
         diff = [k for k in ("accounts", "steps", "signal_log", "alerts", "digest_items", "digest") if da[k] != db[k]]
         out[f"{a} vs {b}"] = {"equal": not diff, "differs": diff, "old": da["counts"], "new": db["counts"]}
     print(json.dumps({"base": base, "hours": hours, "real_lib": real, "result": out}, indent=1))
+    shutil.rmtree(work, ignore_errors=True)
     return 0 if all(v["equal"] for v in out.values()) else 1
 
 
