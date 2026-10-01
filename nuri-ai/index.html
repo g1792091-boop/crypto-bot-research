@@ -256,7 +256,7 @@ details.think .tt{white-space:pre-wrap;margin-top:6px;max-height:280px;overflow:
 .form{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .form label{display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--muted);min-width:0}
 .form .wide{grid-column:1/-1}
-.form input,.form select,.form textarea{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:8px 10px;color:var(--ink);font-size:14px;width:100%}
+.form input,.form select,.form textarea,.keyrow input,.tile label .sel,.list .prov .sel{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:8px 10px;color:var(--ink);font-size:14px;width:100%}
 .form textarea{resize:vertical;min-height:110px}
 .progress{height:7px;background:var(--panel-2);border-radius:4px;overflow:hidden}
 .progress i{display:block;height:100%;background:var(--accent);width:0;transition:width .2s}
@@ -414,6 +414,64 @@ dialog.sheet::backdrop{background:rgba(20,18,15,.45)}
   .menu{min-width:270px}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ---- 진행 상황 · 템플릿 · 스킬 ---- */
+.ptabs{display:flex;gap:4px;padding:8px 12px 0;border-bottom:1px solid var(--line)}
+.ptabs button{border:0;background:transparent;color:var(--muted);font:inherit;font-size:13px;font-weight:600;padding:6px 10px 8px;border-bottom:2px solid transparent;margin-bottom:-1px}
+.ptabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.act-host{padding:14px;overflow:auto}
+.act{display:flex;flex-direction:column;gap:14px;max-width:640px}
+.act-card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:7px}
+.act-top{display:flex;gap:10px;align-items:center}.act-top>div{display:flex;flex-direction:column}
+.act-st{width:12px;height:12px;border-radius:50%;flex:none;background:var(--muted)}
+.act-st.ok{background:var(--ok)}.act-st.bad{background:var(--bad)}
+.act-st.run{background:var(--accent);animation:pulse 1s ease-in-out infinite}
+.kv{display:flex;gap:10px;font-size:13px;align-items:baseline}.kv span{color:var(--muted);min-width:76px;flex:none}.kv b{font-weight:600;min-width:0;overflow-wrap:anywhere}
+.chips-s{display:flex;flex-wrap:wrap;gap:5px}.chips-s span{font-weight:500;font-size:12px;background:var(--accent-soft);color:var(--accent);border-radius:8px;padding:1px 8px}
+.act-sec h4{margin:0 0 8px;font-size:12.5px;color:var(--muted);font-weight:600;letter-spacing:.02em}
+.act-sec .art-card{margin:0 0 6px}
+.tl{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.tl li{display:flex;gap:10px;position:relative;padding:0 0 12px}
+.tl li:not(:last-child)::before{content:"";position:absolute;left:10px;top:22px;bottom:0;width:1px;background:var(--line)}
+.tl .ic{width:21px;height:21px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:11px;background:var(--panel-2);color:var(--muted);border:1px solid var(--line)}
+.tl li.ok .ic{color:var(--ok)}.tl li.bad .ic{color:var(--bad)}.tl li.warn .ic{color:var(--warn)}.tl li.info .ic,.tl li.think .ic{color:var(--accent)}
+.tl li>div{min-width:0;flex:1;font-size:13px}
+.tl .tt{display:flex;gap:8px;align-items:baseline;justify-content:space-between}.tl .tt b{font-weight:600;overflow-wrap:anywhere}
+.tl .sb{color:var(--muted);font-size:12.5px;overflow-wrap:anywhere;white-space:pre-wrap;max-height:7.5em;overflow:hidden}
+.tl li.think .sb{font-style:italic}
+.src-list{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:13px}
+.src-list li a{color:var(--ink);text-decoration:none;font-weight:500}.src-list li a:hover{text-decoration:underline}.src-list .small{display:block}
+.srcs{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.srcs a{display:inline-flex;gap:6px;align-items:center;font-size:12px;color:var(--muted);text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:2px 9px 2px 3px;background:var(--panel);max-width:220px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.srcs a b{display:grid;place-items:center;width:17px;height:17px;border-radius:50%;background:var(--panel-2);font-size:10.5px;color:var(--ink);flex:none}
+.srcs a:hover{border-color:var(--line-2);color:var(--ink)}
+.srcs.mini{margin-top:5px}.srcs.mini a{padding:1px 8px;font-size:11.5px}
+.skl{display:flex;flex-wrap:wrap;gap:6px}.skl span{font-size:12px;color:var(--muted);background:var(--panel-2);border-radius:8px;padding:2px 9px}
+.live{display:inline-flex;align-items:center;gap:9px;align-self:flex-start;border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:6px 13px;font:inherit;font-size:13px;color:var(--ink);max-width:100%}
+.live span:nth-child(2){overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.live .sec{color:var(--muted);font-family:var(--f-mono);font-size:12px}
+.chip.more{border-style:dashed;color:var(--muted)}
+.seg.wrap{flex-wrap:wrap;height:auto}
+.keyrow{display:flex;gap:8px}.keyrow input{flex:1;min-width:0;width:auto}.tile label{display:flex;flex-direction:column;gap:4px}
+.routes{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.routes div{border:1px solid var(--line);border-radius:10px;padding:8px 10px;display:flex;flex-direction:column;gap:2px;background:var(--panel)}
+.routes span{font-size:11.5px;color:var(--muted)}.routes b{font-size:13px;overflow-wrap:anywhere}
+.list .prov{flex-wrap:wrap}.list .prov .t{display:flex;flex-direction:column;min-width:160px}
+.list .prov .sel{max-width:220px}
+.provs{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px}
+.pv{border:1px solid var(--line);border-radius:10px;padding:9px 11px;display:flex;flex-direction:column;gap:2px;text-decoration:none;color:var(--ink);background:var(--panel);position:relative}
+.pv span{font-size:12px;color:var(--muted)}.pv:hover{border-color:var(--line-2)}
+.pv.on{border-color:var(--accent)}.pv i{position:absolute;top:8px;right:9px;font-style:normal;font-size:11px;color:var(--accent)}
+.tpls{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;margin-top:12px}
+.tpl{text-align:left;border:1px solid var(--line);background:var(--panel);border-radius:12px;padding:12px 13px;display:flex;flex-direction:column;gap:5px;color:var(--ink);font:inherit;position:relative}
+.tpl:hover{border-color:var(--accent);background:var(--panel-2)}
+.tpl b{font-size:14px}.tpl span{font-size:12.5px;color:var(--muted);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.tpl i{position:absolute;top:10px;right:10px;font-style:normal;font-size:11px;color:var(--accent)}
+.tile.dim{opacity:.6}
+.skp{white-space:pre-wrap;font-size:12px;background:var(--panel-2);border-radius:8px;padding:8px 10px;margin:6px 0 0;max-height:220px;overflow:auto}
+.chk{display:flex!important;flex-direction:row!important;align-items:center;gap:8px}
+.art-img{padding:16px;display:flex;flex-direction:column;gap:10px;align-items:center}.art-img img{max-width:100%;border-radius:10px;box-shadow:0 2px 16px rgba(0,0,0,.12)}
+@media (max-width:760px){.keyrow{flex-direction:column}.list .prov .sel{max-width:100%;flex:1}}
 </style>
 </head>
 <body>
@@ -435,6 +493,11 @@ dialog.sheet::backdrop{background:rgba(20,18,15,.45)}
   <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
   <symbol id="i-redo" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></symbol>
   <symbol id="i-chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
+  <symbol id="i-pulse" viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/></symbol>
+  <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l2.2 5.6L20 11l-5.8 2.4L12 19l-2.2-5.6L4 11l5.8-2.4z"/></symbol>
   <symbol id="i-bulb" viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.4 1 1.1 1 1.8V17h5v-1.3c0-.7.4-1.4 1-1.8A6 6 0 0 0 12 3z"/></symbol>
 </svg>
 <div class="app" id="app">
@@ -447,6 +510,8 @@ dialog.sheet::backdrop{background:rgba(20,18,15,.45)}
     <div class="side-search"><input id="search" type="search" placeholder="대화 검색" aria-label="대화 검색"></div>
     <div class="recents" id="recents"></div>
     <div class="side-bottom">
+      <button id="openTpl"><svg class="i"><use href="#i-grid"/></svg>템플릿</button>
+      <button data-open="skills"><svg class="i"><use href="#i-spark"/></svg>스킬 · 기억</button>
       <button id="openKnow"><svg class="i"><use href="#i-book"/></svg>내 지식</button>
       <button id="openSettings"><svg class="i"><use href="#i-gear"/></svg>설정</button>
       <div class="side-note">대화와 파일은 이 컴퓨터에만 저장됩니다</div>
@@ -462,7 +527,7 @@ dialog.sheet::backdrop{background:rgba(20,18,15,.45)}
         <button role="tab" data-mode="code" aria-selected="false">코드</button>
       </div>
       <div class="title" id="title"></div>
-      <div class="top-right"><button class="ib" id="panelToggle" title="결과물 패널" aria-label="결과물 패널" hidden><svg class="i"><use href="#i-doc"/></svg></button></div>
+      <div class="top-right"><button class="ib" id="actToggle" title="진행 상황" aria-label="진행 상황"><svg class="i"><use href="#i-pulse"/></svg></button><button class="ib" id="panelToggle" title="결과물 패널" aria-label="결과물 패널" hidden><svg class="i"><use href="#i-doc"/></svg></button></div>
     </header>
     <div class="split">
       <section class="convo" id="convo">
@@ -487,6 +552,7 @@ dialog.sheet::backdrop{background:rgba(20,18,15,.45)}
       </section>
       <aside class="panel" id="panel" hidden aria-label="결과물">
         <div class="drag" id="drag"></div>
+        <div class="ptabs" id="pTabs" role="tablist"><button role="tab" data-pt="art" aria-selected="true">결과물</button><button role="tab" data-pt="act" aria-selected="false">진행 상황</button></div>
         <div class="ph">
           <div class="pt"><b id="pTitle"></b><span id="pType"></span></div>
           <div class="seg" id="pView"><button data-v="preview" aria-pressed="true">미리보기</button><button data-v="code" aria-pressed="false">코드</button></div>
@@ -496,6 +562,7 @@ dialog.sheet::backdrop{background:rgba(20,18,15,.45)}
         </div>
         <div class="pb" id="pBody">
           <div id="pContent"></div>
+          <div class="act-host" id="actHost" hidden></div>
           <div class="trade-host" id="tradeHost" hidden></div>
           <div class="arch-host" id="archHost" hidden><iframe id="archFrame" title="건축 설계"></iframe></div>
         </div>
@@ -507,10 +574,13 @@ dialog.sheet::backdrop{background:rgba(20,18,15,.45)}
 <dialog class="sheet" id="sheet">
   <div class="sheet-in">
     <nav class="sheet-nav" id="sheetNav">
-      <h2>설정</h2>
-      <button data-tab="brain">AI 두뇌</button>
-      <button data-tab="local">내 기기 모델</button>
+      <h2>누리</h2>
+      <button data-tab="brain">AI 두뇌 · API 키</button>
+      <button data-tab="tpl">템플릿</button>
+      <button data-tab="skills">스킬</button>
+      <button data-tab="mem">기억</button>
       <button data-tab="know">내 지식</button>
+      <button data-tab="local">내 기기 모델</button>
       <button data-tab="instr">맞춤 지침</button>
       <button data-tab="about">사용 현황</button>
     </nav>

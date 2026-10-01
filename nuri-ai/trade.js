@@ -117,8 +117,9 @@ export function backtest(cs, key, P, opt){
 export function fmtNum(v, quote){
   if (v == null || !isFinite(v)) return "–";
   const a = Math.abs(v);
-  const d = quote === "USDT" ? (a >= 1000 ? 2 : a >= 1 ? 4 : 6) : (a >= 100 ? 0 : a >= 1 ? 2 : 4);
-  return v.toLocaleString("ko-KR", {minimumFractionDigits: d > 0 && quote === "USDT" ? Math.min(2, d) : 0, maximumFractionDigits: d});
+  const usd = quote && quote !== "KRW", fiat = usd && !/USDT|USDC|BTC|ETH/.test(quote);
+  const d = fiat ? (a >= 1 ? 2 : 4) : usd ? (a >= 1000 ? 2 : a >= 1 ? 4 : 6) : (a >= 100 ? 0 : a >= 1 ? 2 : 4);
+  return v.toLocaleString("ko-KR", {minimumFractionDigits: usd ? Math.min(2, d) : 0, maximumFractionDigits: d});
 }
 const pct = (v, d = 2) => (v >= 0 ? "+" : "") + (v * 100).toFixed(d) + "%";
 const bigKRW = v => v >= 1e12 ? (v/1e12).toFixed(2) + "조" : v >= 1e8 ? (v/1e8).toFixed(0) + "억" : v >= 1e4 ? (v/1e4).toFixed(0) + "만" : Math.round(v).toLocaleString();
@@ -128,12 +129,17 @@ const TF_MS = {"1":6e4,"5":3e5,"15":9e5,"60":36e5,"240":144e5,"D":864e5,"W":6048
 
 
 /* ================= 거래소 시세 (채팅 도구와 트레이딩 룸이 함께 씀) ================= */
-export function exchanges(apiBase){
+export const YAHOO_LIST = [["^KS11","코스피"],["^KQ11","코스닥"],["005930.KS","삼성전자"],["000660.KS","SK하이닉스"],["035420.KS","네이버"],["005380.KS","현대차"],["373220.KS","LG에너지솔루션"],
+  ["^GSPC","S&P 500"],["^IXIC","나스닥 종합"],["^DJI","다우존스"],["NVDA","엔비디아"],["AAPL","애플"],["MSFT","마이크로소프트"],["TSLA","테슬라"],["AMZN","아마존"],["GOOGL","알파벳"],["META","메타"],
+  ["ES=F","S&P500 선물"],["NQ=F","나스닥100 선물"],["YM=F","다우 선물"],["CL=F","WTI 원유 선물"],["GC=F","금 선물"],["SI=F","은 선물"],["NG=F","천연가스 선물"],["ZN=F","미 10년 국채 선물"],
+  ["KRW=X","달러/원"],["DX-Y.NYB","달러 인덱스"],["^VIX","VIX 변동성"],["^TNX","미 10년 금리"]];
+export function exchanges(apiBase, webGet){
   async function get(ex, path){
     const r = await fetch(apiBase(ex) + path, {headers: {accept: "application/json"}});
     if (!r.ok){ const e = new Error(`${(EX[ex] || {}).label || ex} ${r.status}`); e.status = r.status; throw e; }
     return r.json();
-  }  const EX = {
+  }
+  const EX = {
     upbit: {
       label: "업비트", quote: "KRW", fee: 0.05,
       async list(){
@@ -175,12 +181,42 @@ export function exchanges(apiBase){
       }
     }
   };
+  // 주식·지수·해외선물·환율 (야후 파이낸스 공개 차트)
+  const YIV = {"1":["1m","5d",1],"5":["5m","1mo",1],"15":["15m","1mo",1],"60":["60m","6mo",1],"240":["60m","1y",4],"D":["1d","5y",1],"W":["1wk","10y",1]};
+  const yChart = async (sym, iv, range) => { const j = await webGet(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=${iv}&range=${range}&includePrePost=false`, "json"); const r = j?.chart?.result?.[0]; if (!r) throw new Error(j?.chart?.error?.description || "종목을 찾을 수 없습니다: " + sym); return r; };
+  const yName = sym => (YAHOO_LIST.find(x => x[0] === sym) || [])[1];
+  async function yTick(sym){ const r = await yChart(sym, "1d", "5d"), m = r.meta, prev = m.chartPreviousClose || m.previousClose, px = m.regularMarketPrice; return {id: sym, sym, name: yName(sym) || m.shortName || m.longName || sym, price: px, chg: prev ? px / prev - 1 : 0, vol: (m.regularMarketVolume || 0) * px, hi: m.regularMarketDayHigh, lo: m.regularMarketDayLow, currency: m.currency}; }
+  async function pool(items, fn, n = 6){ const out = []; let i = 0; await Promise.all(Array.from({length: n}, async () => { while (i < items.length){ const k = i++; try { out[k] = await fn(items[k]); } catch(e){ out[k] = null; } } })); return out.filter(Boolean); }
+  EX.yahoo = {
+    label: "주식·지수·해외선물", quote: "USD", fee: 0.015, paper: false,
+    async list(){ return pool(YAHOO_LIST.map(x => x[0]), yTick); },
+    async tickers(ids){ return pool(ids.slice(0, 6), yTick); },
+    async candles(id, tf, total){
+      const [iv, range, agg] = YIV[tf] || YIV["60"]; const r = await yChart(id, iv, range), q = r.indicators?.quote?.[0] || {};
+      let rows = (r.timestamp || []).map((t, i) => ({t: t * 1000, o: q.open?.[i], h: q.high?.[i], l: q.low?.[i], c: q.close?.[i], v: q.volume?.[i] || 0})).filter(k => k.c != null && k.o != null && k.h != null && k.l != null);
+      if (agg > 1){ const out = []; for (let i = 0; i < rows.length; i += agg){ const g = rows.slice(i, i + agg); out.push({t: g[0].t, o: g[0].o, h: Math.max(...g.map(x => x.h)), l: Math.min(...g.map(x => x.l)), c: g[g.length-1].c, v: g.reduce((s, x) => s + x.v, 0)}); } rows = out; }
+      rows = rows.slice(-total); rows.currency = r.meta.currency; rows.name = yName(id) || r.meta.shortName || r.meta.longName || id; return rows;
+    }
+  };
+  // 바이낸스 USDT 무기한 선물 (펀딩비·미결제약정 포함)
+  EX.binancef = {
+    label: "바이낸스 선물", quote: "USDT", fee: 0.05, paper: false,
+    async list(){ const all = await get("binancef", "/fapi/v1/ticker/24hr"); return all.filter(t => /USDT$/.test(t.symbol) && +t.quoteVolume > 0).sort((a, b) => b.quoteVolume - a.quoteVolume).slice(0, 100).map(t => ({id: t.symbol, sym: t.symbol.replace(/USDT$/, ""), name: t.symbol.replace(/USDT$/, "") + " 무기한", price: +t.lastPrice, chg: +t.priceChangePercent / 100, vol: +t.quoteVolume, hi: +t.highPrice, lo: +t.lowPrice})); },
+    async tickers(ids){ const out = await Promise.all(ids.slice(0, 6).map(id => get("binancef", "/fapi/v1/ticker/24hr?symbol=" + id).catch(() => null))); return out.filter(Boolean).map(t => ({id: t.symbol, price: +t.lastPrice, chg: +t.priceChangePercent / 100, vol: +t.quoteVolume, hi: +t.highPrice, lo: +t.lowPrice})); },
+    async candles(id, tf, total){ const iv = {"1":"1m","5":"5m","15":"15m","60":"1h","240":"4h","D":"1d","W":"1w"}[tf]; const rows = await get("binancef", `/fapi/v1/klines?symbol=${id}&interval=${iv}&limit=${Math.min(1500, total)}`); return rows.map(r => ({t: r[0], o: +r[1], h: +r[2], l: +r[3], c: +r[4], v: +r[5]})); },
+    async extra(id){
+      const [pi, oi, ls] = await Promise.all([get("binancef", "/fapi/v1/premiumIndex?symbol=" + id), get("binancef", "/fapi/v1/openInterest?symbol=" + id), get("binancef", `/futures/data/globalLongShortAccountRatio?symbol=${id}&period=1h&limit=1`).catch(() => [])]);
+      return {funding: +pi.lastFundingRate, mark: +pi.markPrice, nextFunding: pi.nextFundingTime, oi: +oi.openInterest, longShort: ls?.[0] ? +ls[0].longShortRatio : null};
+    }
+  };
+  EX.upbit.paper = EX.binance.paper = true;
   return EX;
 }
 
+const DEF_MKT = {upbit:"KRW-BTC", binance:"BTCUSDT", binancef:"BTCUSDT", yahoo:"^GSPC"};
 /* ================= 트레이딩 룸 ================= */
 export function initTrade(ctx){
-  const {root, brain, apiBase, toast, md, esc, ls} = ctx;
+  const {root, brain, apiBase, webGet, toast, md, esc, ls} = ctx;
   const S = {
     ex: ls.get("tr:ex", "upbit"), market: null, tf: ls.get("tr:tf", "60"), total: ls.get("tr:total", 200),
     cs: [], ind: null, q: null, lv: null, list: [], tick: new Map(), filter: "",
@@ -188,13 +224,14 @@ export function initTrade(ctx){
     hover: -1, bt: null, btKey: ls.get("tr:bt", "ma"), btP: ls.get("tr:btp", {}), btOpt: Object.assign({fee:0.05, sl:0, tp:0}, ls.get("tr:bto", {})),
     tab: "bt", side: "buy", timers: [], visible: false, loading: false, err: "", aiCtl: null, ai: null, aiRaw: ""
   };
-  S.market = ls.get("tr:mkt:" + S.ex, S.ex === "upbit" ? "KRW-BTC" : "BTCUSDT");
+  S.market = ls.get("tr:mkt:" + S.ex, DEF_MKT[S.ex] || "KRW-BTC");
 
-  const EX = exchanges(apiBase);
+  const EX = exchanges(apiBase, webGet);
   const X = () => EX[S.ex];
 
-  const fmt = v => fmtNum(v, X().quote);
-  const big = v => X().quote === "KRW" ? bigKRW(v) : bigUSD(v);
+  const curQ = () => S.cur || X().quote;
+  const fmt = v => fmtNum(v, curQ());
+  const big = v => curQ() === "KRW" ? bigKRW(v) : bigUSD(v);
   const cur = () => S.list.find(m => m.id === S.market) || {id: S.market, sym: S.market, name: S.market};
 
   /* ---------- 레이아웃 ---------- */
@@ -227,7 +264,7 @@ export function initTrade(ctx){
       <div class="body" id="tr-bt" hidden></div>
       <div class="body" id="tr-paper" hidden></div>
     </div>
-    <p class="small tr-note">시세: ${"업비트·바이낸스 공개 API"}. 모든 지표와 AI 분석은 과거 데이터에 기반하며 미래 가격을 보장하지 않습니다. 투자 판단과 책임은 본인에게 있습니다.</p>
+    <p class="small tr-note">시세: 업비트·바이낸스 공개 API, 주식·지수·해외선물은 야후 파이낸스(지연 시세일 수 있음). 모든 지표와 AI 분석은 과거 데이터에 기반하며 미래 가격을 보장하지 않습니다. 투자 판단과 책임은 본인에게 있습니다.</p>
   </div>`;
   const $ = s => root.querySelector(s);
   $("#tr-ex").value = S.ex; $("#tr-total").value = String(S.total);
@@ -244,7 +281,9 @@ export function initTrade(ctx){
     try {
       const cs = await X().candles(S.market, S.tf, S.total);
       if (req !== S.req) return;
-      S.cs = cs;
+      S.cs = cs; S.cur = cs.currency || (S.ex === "yahoo" ? (/\.K[SQ]$|^\^K/.test(S.market) || S.market === "KRW=X" ? "KRW" : "USD") : X().quote);
+      if (cs.name){ const m = S.list.find(x => x.id === S.market); if (m) m.name = cs.name; else S.list.unshift({id: S.market, sym: S.market, name: cs.name, price: cs[cs.length-1].c, chg: 0, vol: 0}); }
+      S.extra = X().extra ? await X().extra(S.market).catch(() => null) : null;
       if (S.cs.length < 30) throw new Error("캔들 데이터가 부족합니다");
       recompute(); S.view.off = 0; S.view.count = Math.min(S.cs.length, 120); S.bt = null; S.ai = null; S.aiRaw = "";
       msg(""); S.err = "";
@@ -288,13 +327,14 @@ export function initTrade(ctx){
     const m = {...cur(), ...(S.tick.get(S.market) || {})};
     const px = m.price ?? (S.cs.length ? S.cs[S.cs.length-1].c : null);
     $("#tr-name").textContent = m.name || S.market; $("#tr-id").textContent = m.name && m.name !== S.market ? " " + S.market : "";
-    $("#tr-px").textContent = fmt(px) + (X().quote === "KRW" ? "원" : "");
+    $("#tr-px").textContent = fmt(px) + (curQ() === "KRW" ? "원" : curQ() === "USD" ? " $" : "");
     const chg = $("#tr-chg"); chg.textContent = m.chg != null ? pct(m.chg) : ""; chg.className = "chg num " + (m.chg > 0 ? "up" : m.chg < 0 ? "down" : "");
     $("#tr-px").className = "num " + (m.chg > 0 ? "up" : m.chg < 0 ? "down" : "");
     const a = S.ind ? last(S.ind.atr) : null;
     $("#tr-stats").innerHTML = [
       ["24시간 고가", fmt(m.hi)], ["24시간 저가", fmt(m.lo)], ["24시간 거래대금", m.vol ? big(m.vol) : "–"],
-      ["RSI(14)", S.ind ? (last(S.ind.rsi) ?? 0).toFixed(1) : "–"], ["변동성(ATR)", a && px ? (a / px * 100).toFixed(2) + "%" : "–"]
+      ["RSI(14)", S.ind ? (last(S.ind.rsi) ?? 0).toFixed(1) : "–"], ["변동성(ATR)", a && px ? (a / px * 100).toFixed(2) + "%" : "–"],
+      ...(S.extra ? [["펀딩비", (S.extra.funding * 100).toFixed(4) + "%"], ["미결제약정", bigUSD(S.extra.oi * (S.extra.mark || px || 0))], ...(S.extra.longShort ? [["롱/숏 비율", S.extra.longShort.toFixed(2)]] : [])] : [])
     ].map(([l, v]) => `<div><label>${l}</label><span class="num">${v}</span></div>`).join("");
     $("#tr-ai-brain").textContent = brain.ready() ? brain.label() : "AI 두뇌 필요";
   }
@@ -304,8 +344,10 @@ export function initTrade(ctx){
     $("#tr-rows").innerHTML = S.err && !S.list.length ? `<p class="err">${esc(S.err)}</p><button class="btn" id="tr-retry2">다시 시도</button>` : rows.map(m => `<button class="tr-row${m.id === S.market ? " on" : ""}" data-mkt="${esc(m.id)}"><span class="nm"><b>${esc(m.name)}</b><span class="small">${esc(m.sym)}</span></span><span class="num px">${fmt(m.price)}</span><span class="num chg ${m.chg > 0 ? "up" : m.chg < 0 ? "down" : ""}">${pct(m.chg || 0)}</span></button>`).join("") || `<p class="empty">검색 결과가 없습니다.</p>`;
   }
   $("#tr-rows").addEventListener("click", e => { const b = e.target.closest("[data-mkt]"); if (!b || b.dataset.mkt === S.market) return; S.market = b.dataset.mkt; ls.set("tr:mkt:" + S.ex, S.market); renderList(); renderHead(); loadCandles(); });
+  const setPh = () => { const ph = S.ex === "yahoo" ? "종목 검색 (이름·코드)" : "코인 검색 (이름·기호)"; $("#tr-q").placeholder = ph; $("#tr-q").setAttribute("aria-label", ph); };
+  setPh();
   $("#tr-q").addEventListener("input", e => { S.filter = e.target.value; renderList(); });
-  $("#tr-ex").addEventListener("change", async e => { S.ex = e.target.value; ls.set("tr:ex", S.ex); S.market = ls.get("tr:mkt:" + S.ex, S.ex === "upbit" ? "KRW-BTC" : "BTCUSDT"); S.list = []; S.tick.clear(); renderList(); await loadList(); await loadCandles(); });
+  $("#tr-ex").addEventListener("change", async e => { S.ex = e.target.value; ls.set("tr:ex", S.ex); setPh(); S.market = ls.get("tr:mkt:" + S.ex, DEF_MKT[S.ex] || "KRW-BTC"); S.list = []; S.tick.clear(); renderList(); await loadList(); await loadCandles(); });
   $("#tr-tf").addEventListener("click", e => { const b = e.target.closest("[data-tf]"); if (!b) return; S.tf = b.dataset.tf; ls.set("tr:tf", S.tf); syncTools(); loadCandles(); });
   $("#tr-show").addEventListener("click", e => { const b = e.target.closest("[data-show]"); if (!b) return; S.show[b.dataset.show] = !S.show[b.dataset.show]; ls.set("tr:show", S.show); syncTools(); draw(); });
   $("#tr-total").addEventListener("change", e => { S.total = +e.target.value; ls.set("tr:total", S.total); loadCandles(); });
@@ -603,6 +645,7 @@ export function initTrade(ctx){
   function saveAcct(a){ ls.set(acctKey(), a); }
   function priceOf(id){ const t = S.tick.get(id); if (t && t.price) return t.price; if (id === S.market && S.cs.length) return S.cs[S.cs.length-1].c; return null; }
   function renderPaper(){
+    if (!X().paper){ $("#tr-paper").innerHTML = `<p class="empty">모의투자는 업비트·바이낸스 코인 현물에서만 할 수 있습니다. 위에서 거래소를 바꿔 주세요.</p>`; return; }
     const a = acct(), el = $("#tr-paper"), fee = X().fee / 100;
     const rows = Object.entries(a.pos).map(([id, p]) => { const px = priceOf(id) ?? p.avg; return {id, ...p, px, val: p.qty * px, pnl: px / p.avg - 1}; });
     const total = a.cash + rows.reduce((s, r) => s + r.val, 0), ret = total / a.start - 1;
@@ -669,7 +712,7 @@ export function initTrade(ctx){
     hide(){ S.visible = false; clearInterval(S.t1); },
     async goto(ex, market, tf){
       const exChanged = ex && EX[ex] && ex !== S.ex;
-      if (exChanged){ S.ex = ex; ls.set("tr:ex", ex); $("#tr-ex").value = ex; S.list = []; S.tick.clear(); }
+      if (exChanged){ S.ex = ex; ls.set("tr:ex", ex); $("#tr-ex").value = ex; setPh(); S.list = []; S.tick.clear(); }
       if (tf && TF_MS[tf]){ S.tf = tf; ls.set("tr:tf", tf); }
       if (market){ S.market = market; ls.set("tr:mkt:" + S.ex, market); }
       if (!booted) return;                  // 아직 안 열렸으면 show()가 이 설정으로 불러온다

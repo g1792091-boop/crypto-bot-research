@@ -126,6 +126,7 @@ func main() {
 	})
 	mux.HandleFunc("/__nuri/proxy/", proxyHandler)
 	mux.HandleFunc("/__nuri/code/", codeHandler)
+	mux.HandleFunc("/__nuri/fetch", fetchHandler)
 	mux.Handle("/", siteHandler(sub))
 
 	srv := &http.Server{Handler: mux}
@@ -224,10 +225,26 @@ func envDuration(k string, d time.Duration) time.Duration {
 // 브라우저는 보안정책(CORS) 때문에 거래소·AI API를 직접 부를 수 없는 경우가 많아,
 // 이 실행기가 정해진 주소로만 요청을 대신 전달한다. (임의 주소 중계는 하지 않음)
 var upstreams = map[string]string{
-	"nvidia":  "https://integrate.api.nvidia.com/v1",
-	"upbit":   "https://api.upbit.com/v1",
-	"binance": "https://api.binance.com/api/v3",
-	"ollama":  "http://127.0.0.1:11434",
+	// AI (OpenAI 호환 채팅 API)
+	"nvidia":     "https://integrate.api.nvidia.com/v1",
+	"nvgenai":    "https://ai.api.nvidia.com/v1/genai",
+	"groq":       "https://api.groq.com/openai/v1",
+	"openrouter": "https://openrouter.ai/api/v1",
+	"gemini":     "https://generativelanguage.googleapis.com/v1beta/openai",
+	"cerebras":   "https://api.cerebras.ai/v1",
+	"hf":         "https://router.huggingface.co/v1",
+	"deepseek":   "https://api.deepseek.com",
+	"mistral":    "https://api.mistral.ai/v1",
+	"together":   "https://api.together.xyz/v1",
+	"sambanova":  "https://api.sambanova.ai/v1",
+	"ollama":     "http://127.0.0.1:11434",
+	// 검색
+	"tavily": "https://api.tavily.com",
+	"brave":  "https://api.search.brave.com/res/v1",
+	// 시세
+	"upbit":    "https://api.upbit.com/v1",
+	"binance":  "https://api.binance.com/api/v3",
+	"binancef": "https://fapi.binance.com",
 }
 
 var proxyClient = &http.Client{}
@@ -257,7 +274,7 @@ func proxyHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	for _, h := range []string{"Authorization", "Content-Type", "Accept"} {
+	for _, h := range []string{"Authorization", "Content-Type", "Accept", "X-Subscription-Token", "HTTP-Referer", "X-Title"} {
 		if v := r.Header.Get(h); v != "" {
 			req.Header.Set(h, v)
 		}
