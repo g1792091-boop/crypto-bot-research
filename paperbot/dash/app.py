@@ -673,7 +673,9 @@ class Rooms:
     def trials(self, strategy: Optional[str], room_id: Optional[str], limit: int = 50) -> dict:
         with self.ro(self.agents_db) as a:
             from ..agents import packets3
+            from ..agents.scorecard import scorecard
             out = {"counts": self.R.trial_counts(a, strategy), "research": packets3.research_counts(strategy),
+                   "scorecard": scorecard(a, strategy),
                    "trials": self.R.trial_history(a, strategy, room_id, limit=min(max(int(limit), 1), 500))}
         # a copy-proposal row carries the PROPOSAL it recorded (the number the owners approve or reject)
         # and that proposal's status as the owners should see it; its own id is only a ledger row number

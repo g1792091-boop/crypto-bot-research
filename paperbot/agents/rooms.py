@@ -1309,8 +1309,10 @@ def _trials(ctx: RoundContext, room: str, strategy: Optional[str]) -> dict:
             row["gate_pass_now"] = A.current_gate(env, t)[0].get("pass") is True
         hist.append(row)
     from . import packets3
+    from .scorecard import scorecard
     return {"tests_so_far": R.trial_count(ctx.agents_conn, room_id=room, kinds=("test",)),
             "counts": R.trial_counts(ctx.agents_conn, strategy), "history": hist,
+            "scorecard": scorecard(ctx.agents_conn),
             "research_tests": {**packets3.research_counts(strategy),
                                "note": "entry study, same 5-year data, nothing passed; not in this room's gate count"}}
 
@@ -2064,6 +2066,32 @@ def gate_now(conn: sqlite3.Connection, p: dict, now_ms: int) -> tuple[dict, int]
 GATE_NOW = "proposals:gate_now"      # {proposal id: {"pass", "n_trials"}} of open proposals, for the dashboard
 
 
+def grade_hypotheses(conn: sqlite3.Connection, paper_ro: Optional[sqlite3.Connection], now_ms: int) -> list[dict]:
+    """Grade the hypotheses whose predicted trades are in (scorecard.py) and say so in their rooms.
+    Never stops the pass: an error is printed and grading waits for the next tick."""
+    from . import scorecard as SC
+    try:
+        done = SC.grade_due(conn, paper_ro, now_ms, round_trip(paper_ro))
+    except Exception as exc:  # noqa: BLE001
+        print(f"warning: hypothesis grading failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+        return []
+    for g in done:
+        t = R.get_trial(conn, g["trial_id"]) or {}
+        if not t.get("room_id"):
+            continue
+        if g["status"] == "expired":
+            text = f"🎯 가설 #{g['trial_id']}: {SC.EXPIRE_DAYS}일 안에 거래가 다 모이지 않아 채점 없이 끝냈습니다 ({g['n']}건)."
+        else:
+            v = "계산 불가" if g.get("value") is None else f"{g['value']:.4g}"
+            text = (f"🎯 가설 #{g['trial_id']} 채점 ({R.role_name(g.get('by') or '') or '직원'}): "
+                    f"{'맞음' if g['correct'] else '틀림'}. {SC.describe_ko(g['prediction'])} → 실제 {v} "
+                    f"(거래 {g['n']}건, 코드 계산)")
+        R.post(conn, t["room_id"], None, None, "code", None, "system", text,
+               {"action": "grade", "trial_id": g["trial_id"], "status": g["status"], "correct": g.get("correct")},
+               ts=now_ms)
+    return done
+
+
 def store_gate_now(conn: sqlite3.Connection, now_ms: int) -> dict:
     """Re-judge every proposal still waiting for the owners (or approved) and keep the verdicts in a
     cursor, so the dashboard shows the gate as code judges it now, not as it was stored."""
@@ -2322,6 +2350,7 @@ def tick(paper_db: Optional[str], daily_db: Optional[str], agents_db: str, inbox
             approvals = apply_approvals(conn, inbox_ro, now,
                                         inbox_missing=not inbox_db or not os.path.exists(inbox_db))
             store_gate_now(conn, now)
+            graded = grade_hypotheses(conn, paper_ro, now)
             ctx = RoundContext(agents_conn=conn, paper_ro=paper_ro, daily_ro=daily_ro, inbox_ro=inbox_ro, runner=runner,
                                lab=lab, now_ms=now, policy=policy, notifier=notifier or NullNotifier(),
                                clock_ms=clock_ms, cards_path=cards_path)

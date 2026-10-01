@@ -17,6 +17,7 @@
 ## 행동 (proposal.action)
 - `note` 방 메모 남기기: `{"action": "note", "text": "..."}`
 - `hypothesis` 가설 장부에 기록(아직 시험 안 함): `{"action": "hypothesis", "text": "...", "how_to_confirm": "앞으로 어떤 데이터로, 몇 건 뒤에 확인할지"}`
+  - 가능하면 채점할 수 있는 예측을 붙입니다: `"prediction": {"metric": "mean_roe" | "win_rate" | "lock_share" | "loss_tag_share", "tag": "손실 카드 특징 이름(loss_tag_share일 때만)", "timeframe": "15m" 또는 null(5개 봉 합계), "direction": "above" | "below", "value": 숫자(비율은 0~1, ROE는 0.05 = 5%), "after_trades": 30~300}`. 코드가 가설을 쓴 뒤 들어간 거래로, 그 건수가 차면 한 번 채점해 방에 알립니다. 직원별 적중 기록은 `trials.scorecard`에 있습니다. 맞히기 쉬운 뻔한 예측(이미 그런 값)보다, 맞으면 쓸모 있는 예측을 씁니다.
 - `request_test` 코드가 5년 데이터로 정해진 시험을 돌림: `{"action": "request_test", "test": {"template": "stop_atr", "timeframe": "1h", "k": 2.5}, "propose_copy_if_pass": false, "why": "..."}`. 시험 종류·값·봉은 `rules.tests`에 있는 것만(설명용이 아니면 `timeframe` 필수). 전략은 코드가 이 방의 전략으로 정합니다.
 - `propose_copy` 관문을 통과한 시험으로 복제 계좌(원본과 같고 하나만 바꾼 새 paper 계좌) 제안: `{"action": "propose_copy", "trial_id": 12, "why": "..."}`. 번호는 `rules.passed_trials`에 있는 것만.
 - `flag_owners` 두 분 텔레그램으로 짧은 알림(하루 3번까지): `{"action": "flag_owners", "level": "INFO 또는 WARN", "text": "..."}`

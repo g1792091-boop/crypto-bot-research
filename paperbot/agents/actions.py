@@ -193,7 +193,12 @@ def validate(prop: Any, *, strategy: Optional[str] = None,
         t = _text(prop.get("text"), MAX_NOTE)
         if not t:
             return bad("가설 내용이 비어 있음")
-        return {"action": "hypothesis", "text": t, "how_to_confirm": _text(prop.get("how_to_confirm"), MAX_REASON)}, []
+        out = {"action": "hypothesis", "text": t, "how_to_confirm": _text(prop.get("how_to_confirm"), MAX_REASON)}
+        from .scorecard import clean_prediction
+        pred, why = clean_prediction(prop.get("prediction"))
+        if pred is not None:
+            out["prediction"] = pred
+        return out, ([f"hypothesis: 예측은 채점할 수 없어 뺐음 ({why})"] if why else [])
     if a == "request_test":
         spec, why = _test_spec(prop.get("test"), strategy)
         if spec is None:
@@ -260,13 +265,18 @@ def note(env: ActionEnv, a: dict) -> dict:
 
 def hypothesis(env: ActionEnv, a: dict) -> dict:
     spec = {"text": a["text"], "how_to_confirm": a.get("how_to_confirm", "")}
+    if a.get("prediction"):
+        spec.update(prediction=a["prediction"], by=env.proposer)     # graded later by code (scorecard.py)
     old = R.find_trial(env.conn, env.strategy, spec, kind="hypothesis")
     if old is not None:
         env.post("action", f"같은 가설이 이미 장부에 있습니다 (#{old['id']}). 새로 적지 않았습니다.",
                  {"action": "hypothesis", "trial_id": old["id"], "duplicate": True})
         return _done("hypothesis", True, "이미 있는 가설", trial_id=old["id"], duplicate=True)
     tid = R.add_trial(env.conn, env.room_id, env.strategy, "hypothesis", spec, env.round_id, ts=env.now_ms)
-    env.post("action", f"🧪 가설 #{tid}을 가설 장부에 적었습니다 (아직 시험 전){env.by()}.",
+    from .scorecard import describe_ko
+    graded = (f" 채점할 예측: {describe_ko(a['prediction'])}." if a.get("prediction")
+              else " 예측이 없어 채점하지 않습니다.")
+    env.post("action", f"🧪 가설 #{tid}을 가설 장부에 적었습니다 (아직 시험 전){env.by()}.{graded}",
              {"action": "hypothesis", "trial_id": tid, "text": a["text"], "proposer": env.proposer})
     return _done("hypothesis", True, "가설을 장부에 기록", trial_id=tid)
 
