@@ -93,6 +93,15 @@ def control(tmp_path_factory):
     return d
 
 
+@pytest.fixture(scope="module")
+def control_r(tmp_path_factory):
+    """The same without extras, restarted at the same minute (a restart resets the engines' trade counts)."""
+    w = _run(tmp_path_factory.mktemp("control_r"), extras=False, restart=True)
+    d = _dump(w)
+    w.close()
+    return d
+
+
 def _check(control, w):
     got = _dump(w)
     for aid in ORIG:
@@ -118,7 +127,7 @@ def test_no_fault_extras_run(control, tmp_path):
     w.close()
 
 
-def test_corrupt_spec_suspends(control, tmp_path):
+def test_corrupt_spec_suspends(control_r, tmp_path):
     def fault(w, when):
         if when == "mid":
             w.store.commit()
@@ -128,11 +137,11 @@ def test_corrupt_spec_suspends(control, tmp_path):
     assert isinstance(w.book.engines["NL1@5m"], X.GuardedEngine)              # it still steps (positions managed)
     assert not w.store.conn.execute("SELECT COUNT(*) FROM signal_log WHERE strategy = 'NL1' AND bar_close > ?",
                                     (T0 + HOUR,)).fetchone()[0]
-    _check(control, w)
+    _check(control_r, w)
     w.close()
 
 
-def test_corrupt_rule_holds(control, tmp_path):
+def test_corrupt_rule_holds(control_r, tmp_path):
     def fault(w, when):
         if when == "mid":
             w.store.commit()
@@ -140,22 +149,22 @@ def test_corrupt_rule_holds(control, tmp_path):
     w = _run(tmp_path, fault=fault, restart=True)
     assert type(w.book.engines["V45_AMB@15m~c1"]) is HeldEngine
     assert w.state()["accounts"]["V45_AMB@15m~c1"]["status"] == "held"
-    _check(control, w)
+    _check(control_r, w)
     w.close()
 
 
-def test_grammar_version_change_has_no_effect_at_load(control, tmp_path, monkeypatch):
+def test_grammar_version_change_has_no_effect_at_load(control_r, tmp_path, monkeypatch):
     def fault(w, when):
         if when == "mid":
             from paperbot.agents import newlab
             monkeypatch.setattr(newlab, "GRAMMAR_VERSION", "newlab-v2")
     w = _run(tmp_path, fault=fault, restart=True)
     assert w.ext.extras["NL1@5m"].status == "active"                       # the runtime's own frozen v1 table
-    _check(control, w)
+    _check(control_r, w)
     w.close()
 
 
-def test_agents_unimportable(control, tmp_path, monkeypatch):
+def test_agents_unimportable(control_r, tmp_path, monkeypatch):
     import paperbot.agents as pkg
 
     def fault(w, when):
@@ -166,26 +175,26 @@ def test_agents_unimportable(control, tmp_path, monkeypatch):
     w = _run(tmp_path, fault=fault, restart=True)
     assert not w.extras_rows()
     assert {w.state()["refused"][p]["code"] for p in w.state()["refused"]} == {"gate_code_unavailable"}
-    _check(control, w)
+    _check(control_r, w)
     w.close()
 
 
-def test_shrunken_maxlen_not_ready(control, tmp_path):
+def test_shrunken_maxlen_not_ready(control_r, tmp_path):
     w = _run(tmp_path, restart=True, restart_kw={"maxlen": 50})          # the history kept shrank (a code change)
     assert "NL1@5m" not in w.ext.newlab.specs and w.ext.ready.get("NL1@5m")
     assert any("아직 신호를 계산하지 않음" in t for (t,) in w.store.conn.execute("SELECT text FROM alerts"))
-    _check(control, w)
+    _check(control_r, w)
     w.close()
 
 
-def test_changed_pin_suspends(control, tmp_path):
+def test_changed_pin_suspends(control_r, tmp_path):
     def fault(w, when):
         if when == "mid":
             w.store.commit()
             _rewrite(w, "NL1@5m", lambda d: d["code"].update(context="0" * 64))
     w = _run(tmp_path, fault=fault, restart=True)
     assert (w.ext.extras["NL1@5m"].status, w.ext.extras["NL1@5m"].code) == ("suspended", "code_changed")
-    _check(control, w)
+    _check(control_r, w)
     w.close()
 
 
