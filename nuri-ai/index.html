@@ -1,6 +1,27 @@
 <!doctype html>
 <html lang="ko">
 <head>
+<script>
+/* 스스로 코드 고치기 안전장치: 승인된 코드 수정 뒤 앱이 열리지 않으면(이전 실행이 끝까지 안 갔거나 15초 안에 준비 안 됨) 그 수정을 자동으로 되돌리고 다시 연다 */
+(function(){try{
+  var now=Date.now(),last=+localStorage.getItem("ghn:boot")||0,guardAt=+localStorage.getItem("ghn:guardAt")||0;
+  var pats=JSON.parse(localStorage.getItem("ghn:patches")||"[]"),applied=pats.filter(function(p){return p.status==="applied";});
+  function undo(note){
+    if(!applied.length||now-guardAt<120000)return;
+    localStorage.setItem("ghn:guardAt",String(Date.now()));
+    var go=function(){var h={"X-Nuri-Token":window.__NURI_TOKEN||""};
+      Promise.all(applied.map(function(p){return fetch("/__nuri/override?path="+encodeURIComponent("nuri-ai/"+p.file),{method:"DELETE",headers:h}).catch(function(){});})).then(function(){
+        pats.forEach(function(p){if(p.status==="applied"){p.status="reverted";p.reverted=Date.now();p.auto=true;}});
+        localStorage.setItem("ghn:patches",JSON.stringify(pats));localStorage.setItem("ghn:safe-note",note);localStorage.removeItem("ghn:boot");location.reload();});};
+    if(window.__NURI_TOKEN)go();else document.addEventListener("DOMContentLoaded",go);
+  }
+  if(last&&now-last<120000)undo("고친 코드 때문에 앱이 제대로 열리지 않아 그 수정을 자동으로 되돌렸습니다");
+  localStorage.setItem("ghn:boot",String(now));
+  if(applied.length)setTimeout(function(){if(!window.__ghReady)undo("고친 코드 때문에 앱이 15초 안에 열리지 않아 그 수정을 자동으로 되돌렸습니다");},15000);
+  var note=localStorage.getItem("ghn:safe-note");
+  if(note){localStorage.removeItem("ghn:safe-note");document.addEventListener("DOMContentLoaded",function(){var b=document.createElement("div");b.textContent="🛠 "+note;b.style.cssText="position:fixed;left:50%;top:12px;transform:translateX(-50%);z-index:2147483647;background:#3b2a0b;color:#ffd58a;border:1px solid #8a6a2a;border-radius:10px;padding:10px 14px;font-size:13px;max-width:calc(100vw - 32px)";b.onclick=function(){b.remove();};document.body.appendChild(b);setTimeout(function(){b.remove();},12000);});}
+}catch(e){}})();
+</script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>GH Nano</title>

@@ -128,6 +128,8 @@ func main() {
 	mux.HandleFunc("/__nuri/proxy/", proxyHandler)
 	mux.HandleFunc("/__nuri/code/", codeHandler)
 	mux.HandleFunc("/__nuri/fetch", fetchHandler)
+	mux.HandleFunc("/__nuri/override", overrideHandler)
+	mux.HandleFunc("/__nuri/override/", overrideHandler)
 	mux.Handle("/", siteHandler(sub))
 
 	srv := &http.Server{Handler: mux}
@@ -165,6 +167,9 @@ func siteHandler(root fs.FS) http.Handler {
 			p = path.Join(p, "index.html")
 		}
 		data, err := fs.ReadFile(root, p)
+		if ov, ok := readOverride(p); ok { // 대표가 승인한 고친 파일
+			data, err = ov, nil
+		}
 		if err != nil {
 			http.NotFound(w, r)
 			return

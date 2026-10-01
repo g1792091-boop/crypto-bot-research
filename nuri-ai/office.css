@@ -269,3 +269,12 @@ body.office-open{overflow:hidden}
 .of-top select.of-cl{max-width:150px}.of-top #ofSpeed{max-width:120px}
 /* 재개발 후보 표: 좁은 기록 칸에서도 구역 이름이 한 줄로 */
 .of-kt td,.of-kt th{word-break:keep-all}.of-kt td:first-child b,.of-kt td:nth-child(2),.of-kt td:nth-child(3){white-space:nowrap}.of-kt td small{display:block}
+/* 🛠 코드 개선 */
+.g-code>p{margin:0 0 8px;font-size:12px}
+.of-pt .of-gih{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.of-pst{font-size:11px;padding:0 6px;border:1px solid var(--of-line)}.of-pst.wait{color:#ffd166;border-color:#806a2a}.of-pst.ok{color:#8fd3a8;border-color:#2f6b47}.of-pst.bad{color:#ff8a80;border-color:#7a3530}.of-pst.off{color:#8a93a6}
+.of-diff{margin:6px 0;max-height:260px;overflow:auto;font:11.5px/1.45 var(--of-mono,monospace);background:#0b0f17;border:1px solid var(--of-line);padding:6px;white-space:pre;max-width:100%}
+.of-diff del{display:block;text-decoration:none;color:#ffb3ad;background:rgba(229,83,75,.12)}.of-diff ins{display:block;text-decoration:none;color:#b5f0c8;background:rgba(46,160,90,.12)}
+.of-pbtn{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:4px}.of-pbtn small{color:var(--of-dim)}
+.g-code details{margin-top:6px;font-size:12px}.g-code summary{cursor:pointer;color:#aab6cc}
+.of-patch.proposed span{color:#ffd166}.of-jobnow{color:#ffd166;font-weight:700}

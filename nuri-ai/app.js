@@ -1037,3 +1037,5 @@ addEventListener("unhandledrejection", e => { const m = String(e.reason?.message
 window.__nuri = {get chats(){ return chats; }, get current(){ return current; }, settings, eng, LAUNCHER, openArtifact, get trade(){ return trade; }};
 $("#openTerminal") && ($("#openTerminal").onclick = () => openTerminal());
 $("#openLive") && ($("#openLive").onclick = () => openLive());
+// 앱이 끝까지 열렸다는 표시 (index.html 의 코드 수정 안전장치가 본다)
+window.__ghReady = true; try { localStorage.removeItem("ghn:boot"); } catch(e){}

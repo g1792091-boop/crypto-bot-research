@@ -3,6 +3,7 @@
 // 오른쪽 패널에 회의록이 쌓인다. 배치는 TEAMS에서 자동으로 만든다(팀이 늘어도 깨지지 않게).
 // office.js의 새 기능(listReports·backlog 등)은 있을 때만 쓴다 → import * as O 로 받아 typeof 검사.
 import * as O from "./office.js";
+import * as SD from "./selfdev.js";
 import { shortModel, provUse, settings, saveSettings, LAUNCHER, provCapOf } from "./engine.js";
 import { BUILTIN_SKILLS } from "./agent.js";
 
@@ -275,6 +276,15 @@ function wire(el){
   el.querySelector("#ofLive").onclick = () => { if (typeof ctx.openLive === "function"){ closeOffice(); ctx.openLive(); } };
   el.querySelector(".of-top").addEventListener("scroll", () => root.querySelectorAll(".of-menu").forEach(m => { if (Date.now() - (m._at || 0) > 500) m.hidden = true; }), {passive: true});
   el.addEventListener("click", e => {
+    const pa = e.target.closest("[data-papply]");
+    if (pa){ if (!confirm("이 코드 수정을 적용하고 앱을 다시 불러올까요?\n(앱이 안 열리면 자동으로 되돌립니다)")) return; pa.disabled = true;
+      SD.applyPatch(pa.dataset.papply).then(r => { if (r.ok){ ctx.toast("수정을 적용했습니다 · 앱을 다시 불러옵니다"); SD.reloadSoon(); } else { ctx.toast("적용하지 못했습니다: " + r.why); renderLog(); } }).catch(err => { ctx.toast("적용 실패: " + err.message); renderLog(); }); return; }
+    const pr = e.target.closest("[data-prevert]");
+    if (pr){ pr.disabled = true; SD.revertPatch(pr.dataset.prevert).then(r => { if (r.ok){ ctx.toast("수정을 되돌렸습니다 · 앱을 다시 불러옵니다"); SD.reloadSoon(); } else { ctx.toast(r.why); renderLog(); } }).catch(err => { ctx.toast("되돌리기 실패: " + err.message); renderLog(); }); return; }
+    const pj = e.target.closest("[data-preject]");
+    if (pj){ SD.rejectPatch(pj.dataset.preject); ctx.toast("수정안을 버렸습니다"); renderLog(); return; }
+    const pd = e.target.closest("[data-pdl]");
+    if (pd){ const p = SD.listPatches().find(x => x.id === pd.dataset.pdl); if (p){ const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([SD.patchText(p)], {type: "text/plain"})); a.download = `수정안-${p.file.replace(/\W+/g, "_")}.txt`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); } return; }
     const ag = e.target.closest("[data-agenda]");
     if (ag){ $o("#ofAgenda").hidden = true; O.runAgendaNow(ag.dataset.agenda); ctx.toast("회의를 엽니다"); return; }
     if (!e.target.closest(".of-pick")) root.querySelectorAll(".of-menu").forEach(m => { m.hidden = true; });
@@ -381,7 +391,7 @@ function onEvent(ev){
   if (ev.kind === "log"){ if (inChan(ev.entry)) appendEntry(ev.entry); return; }
   if (ev.kind === "cleared"){ renderLog(); return; }
   if (ev.kind === "cfg" || ev.kind === "usage"){ renderStatus(); return; }
-  if (ev.kind === "growth"){ renderGrowthCount(); if (chan === "growth") renderLog(); return; }
+  if (ev.kind === "growth" || (ev.kind === "log" && ev.entry?.kind === "patch")){ renderGrowthCount(); if (chan === "growth") renderLog(); if (ev.kind === "growth") return; }
   if (ev.kind === "present"){ present(ev.report); return; }
   if (ev.kind === "start"){
     seatOf = {}; meetPlace = placeOf(m.place);
@@ -392,7 +402,7 @@ function onEvent(ev){
     $o("#ofBoard").textContent = `#${m.name} · ${placeName(meetPlace)}`;
   }
   if (ev.kind === "join"){ seatNew(ev.agent.id); bubble(ev.agent.id, "부르셨어요? 갑니다", 2500); }
-  if (ev.kind === "turn"){ clearBubbles(ev.agent.id); speaking = ev.agent.id; if (!(ev.agent.id in seatOf)) seatNew(ev.agent.id); bubble(ev.agent.id, "💭 생각 정리하는 중…", 0); highlight(ev.agent.id); }
+  if (ev.kind === "turn"){ clearBubbles(ev.agent.id); speaking = ev.agent.id; if (!(ev.agent.id in seatOf)) seatNew(ev.agent.id); bubble(ev.agent.id, "💭 생각 중…", 0); highlight(ev.agent.id); }
   if (ev.kind === "tool" || ev.kind === "delta"){ bubble(ev.agent.id, liveBubble(ev.entry), 0); updateEntry(ev.entry); }
   if (ev.kind === "huddle"){
     clearBubbles(); const host = HOME[ev.host] || pos[ev.host];
@@ -407,9 +417,10 @@ function onEvent(ev){
     setTimeout(() => { if (!Object.keys(seatOf).length) setTable(null, false); }, 3500);
     $o("#ofBoard").textContent = "회의 끝 · 회의록은 오른쪽";
   }
-  if (ev.kind === "cycle"){ $o("#ofBoard").textContent = "지금: " + (ev.label || "업무"); }
+  if (ev.kind === "cycle"){ curJob = ev.label || "업무"; $o("#ofBoard").textContent = "지금: " + curJob; renderStatus(); }
+  if (ev.kind === "cycle-end"){ curJob = ""; renderStatus(); }
   if (ev.kind === "busy" || ev.kind === "bubble"){ if (!busyNow(ev.agent.id)){ delete away[ev.agent.id]; place(ev.agent.id, HOME[ev.agent.id]); } bubble(ev.agent.id, ev.text, ev.kind === "busy" ? 0 : 7000); }
-  if (ev.kind === "solo"){ bubble(ev.agent.id, "💭 생각 정리하는 중…", 0); highlight(ev.agent.id); }
+  if (ev.kind === "solo"){ bubble(ev.agent.id, "💭 생각 중…", 0); highlight(ev.agent.id); }
   if (ev.kind === "trade"){ bubble(ev.agent.id, ev.text.length > 140 ? ev.text.slice(0, 140) + "…" : ev.text, 9000); refreshBoard(); }
   if (ev.kind === "paper") refreshBoard();
   if (ev.kind === "alert"){ ctx.toast(`팀 회의 결과 · #${m.name}: ${head(ev.text, 60)}`); if (document.hidden && "Notification" in window && Notification.permission === "granted") new Notification("GH Nano 팀 회의 · #" + m.name, {body: head(ev.text, 120)}); }
@@ -445,9 +456,11 @@ function liveBubble(e){
   if (e.text) return "🗣 " + tail(e.text, 140);
   if (st && st.status === "running") return `${TOOL_ICON[st.name] || "🔧"} ${st.act} 하는 중…`;
   if (st && st.status === "done") return `${TOOL_ICON[st.name] || "✅"} ${st.act}${st.summary ? " → " + st.summary : ""}${st.sources?.[0] ? " · " + st.sources[0].title : ""}`.slice(0, 170);
-  if (e.think) return "💭 " + tail(e.think, 130);
-  return "💭 생각 정리하는 중…";
+  if (koT(e.think)) return "💭 " + koT(e.think);
+  return "💭 생각 중…";
 }
+// 속마음은 한국어 한 줄만 (영어로 새어 나온 생각·옛 기록은 보여 주지 않음)
+function koT(t){ t = String(t || "").replace(/\s+/g, " ").trim(); if (!t || !/[\uac00-\ud7a3]/.test(t)) return ""; const lat = (t.match(/[A-Za-z]/g) || []).length, han = (t.match(/[\uac00-\ud7a3]/g) || []).length; if (lat > 25 && han < lat * 0.15) return ""; return t.length > 120 ? t.slice(0, 118) + "…" : t; }
 function clearBubbles(except){ root.querySelectorAll(".of-ag").forEach(el => { if (el.dataset.ag !== except) bubble(el.dataset.ag, ""); }); }
 async function refreshBoard(){
   if (!root) return;
@@ -461,6 +474,7 @@ async function refreshBoard(){
   list.innerHTML = act.sort((x, y) => pct(y) - pct(x)).slice(0, 8).map(s => `<div><span>${ctx.esc(s.name).slice(0, 18)}</span><small>${ctx.esc((s.mname || s.market).replace("USDT", "").slice(0, 10))} x${s.spec?.risk?.leverage ?? "?"} ${s.pos ? (s.pos.side === "long" ? "롱" : "숏") : "대기"}</small><i class="${pct(s) >= 0 ? "up" : "dn"}">${pct(s) >= 0 ? "+" : ""}${pct(s).toFixed(2)}%</i></div>`).join("");
 }
 function highlight(id){ root.querySelectorAll(".of-ag.talk").forEach(e => e.classList.remove("talk")); if (id) root.querySelector(`[data-ag="${id}"]`)?.classList.add("talk"); }
+let curJob = "";
 function renderStatus(){
   if (!root) return;
   const s = O.officeState(), c = O.officeCfg(), u = O.officeUsage();
@@ -475,8 +489,9 @@ function renderStatus(){
   if (document.activeElement !== sp) sp.value = cm;
   if (document.activeElement !== $o("#ofClaude")) $o("#ofClaude").value = claudeMode(c);
   const next = O.nextAutoIn();
-  $o("#ofStatus").innerHTML = m ? `<b class="ok">진행 중</b> · ${placeName(placeOf(m.place))} · ${m.done.length}/${m.order.length} 발언${s.queued ? ` · 대기 회의 ${s.queued}개` : ""}`
-    : c.auto ? (u.auto >= c.dailyMax ? `오늘 자동 회의 ${c.dailyMax}번을 다 했습니다 · 메시지를 보내면 바로 회의합니다` : `다음 자동 회의 ${next > 60e3 ? Math.round(next / 60e3) + "분 뒤" : "곧"} · 급변동 감시 중`) : "자동 회의 꺼짐 · 메시지를 보내면 바로 회의합니다";
+  const jobNow = curJob ? `<span class="of-jobnow">▶ 지금 하는 일: ${E(curJob)}</span> · ` : "";
+  $o("#ofStatus").innerHTML = jobNow + (m ? `<b class="ok">진행 중</b> · ${placeName(placeOf(m.place))} · ${m.done.length}/${m.order.length} 발언${s.queued ? ` · 대기 회의 ${s.queued}개` : ""}`
+    : c.auto ? (u.auto >= c.dailyMax ? `오늘 자동 회의 ${c.dailyMax}번을 다 했습니다 · 메시지를 보내면 바로 회의합니다` : `다음 자동 회의 ${next > 60e3 ? Math.round(next / 60e3) + "분 뒤" : "곧"} · 급변동 감시 중`) : "자동 회의 꺼짐 · 메시지를 보내면 바로 회의합니다");
   const nc = O.nextChatIn();
   const nx = O.nextCycleIn(), cs = O.cycleState(), cu = provUse().n.anthropic || 0, cap = provCapOf("anthropic");
   const cmode = claudeMode(c);
@@ -566,13 +581,14 @@ function entryHTML(e){
     const prof = +s.profit;
     return kcard(a, `💼 사업 시뮬레이션 · ${E(e.name)}`, time, `<div class="of-kstats">${cell("기간", s.months != null ? num(s.months) + "개월" : "—")}${cell("매출", num(s.revenue))}<div><small>이익</small><b class="${Number.isFinite(prof) ? prof >= 0 ? "up" : "dn" : ""}">${num(s.profit)}</b></div>${cell("손익분기", s.breakeven_month != null ? num(s.breakeven_month) + "개월차" : "도달 못 함")}${cell("런웨이", s.runway != null ? num(s.runway) + "개월" : "—")}${s.irr != null ? cell("IRR", pct(s.irr)) : ""}</div>${e.verdict ? `<p class="of-kv">${E(e.verdict)}</p>` : ""}${e.plan ? `<div class="of-kfoot">📝 사업계획서 작성됨</div>` : ""}`);
   }
+  if (e.kind === "patch") return `<div class="of-work of-patch ${E(e.status || "")}"><b style="color:${tc(a.team)}">${E(a.name)}</b> <span>🛠 ${E(e.file || "")} ${e.status === "proposed" ? "수정안 준비됨 · 대표님 승인 대기" : e.status === "applied" ? "수정 적용됨" : "수정 못 함"}${e.why ? ` — ${E(e.why)}` : ""}</span> <button class="of-btn2" data-ch="growth">코드 개선 보기</button><time>${time}</time></div>`;
   if (e.kind === "live") return `<div class="of-real ${e.level === "warn" ? "warn" : "info"}">💰 실거래 · ${E(e.text)}<time>${time}</time></div>`;
   if (e.chat) return `<div class="of-msg chat"><div class="of-av sm">${sprite(a)}</div><div class="of-mb"><div class="of-who">${who(a)}<span>${E(a.title)}</span></div><div class="of-tx">${ctx.esc(e.text)}</div></div></div>`;
   if (e.kind && e.kind !== "agent" && !e.text) return `<div class="of-sys">${E(e.kind)} 기록</div>`;
-  const body = e.text ? ctx.md(e.text) : e.steps?.length || e.think ? "" : `<span class="of-typing">생각 정리하는 중<i>.</i><i>.</i><i>.</i></span>`;
+  const body = e.text ? ctx.md(e.text) : e.steps?.length ? "" : e.live ? `<span class="of-typing">생각 중<i>.</i><i>.</i><i>.</i></span>` : "";
   return `<div class="of-msg${e.live ? " of-live" : ""}" data-e="${e.id}"><div class="of-av">${sprite(a)}</div><div class="of-mb"><div class="of-who">${who(a)}<span>${E(a.title)}${e.model ? " · " + ctx.esc(shortModel(e.model)) : ""} · ${time}</span></div>
     ${e.notes?.length ? `<div class="of-note">${e.notes.map(n => "↻ " + ctx.esc(n)).join("<br>")}</div>` : ""}
-    ${e.think ? `<div class="of-think">💭 ${ctx.esc(e.think.length > 600 && !e.live ? e.think.slice(0, 600) + "…" : e.think)}</div>` : ""}
+    ${koT(e.think) ? `<div class="of-think">💭 ${ctx.esc(koT(e.think))}</div>` : ""}
     ${stepsHTML(e)}
     ${body ? `<div class="of-tx md">${body}</div>` : ""}<div class="of-acts"><button class="of-link" data-more>펼치기 · 접기</button>${!e.live && e.text ? `<button class="of-rate${e.rating > 0 ? " on" : ""}" data-rate="1" title="좋은 발언 · GH Nano 학습에 우선 사용">👍</button><button class="of-rate${e.rating < 0 ? " on" : ""}" data-rate="-1" title="나쁜 발언 · 학습 데이터에서 뺌">👎</button>${e.trainIds?.length ? `<span class="of-trn" title="이 발언으로 GH Nano 학습 예시를 만들었습니다">🎓 학습 예시</span>` : ""}` : ""}</div></div></div>`;
 }
@@ -596,7 +612,26 @@ function renderGrowthCount(){
   const n = backlogItems().filter(x => x.status !== "done").length, el = $o("#ofGrowN");
   if (el) el.textContent = n ? ` ${n}` : "";
 }
+// 🛠 코드 개선: AI·개발팀이 만든 수정안 → 대표 승인 → 적용 (되돌리기 가능)
+const PST = {proposed: ["승인 대기", "wait"], applied: ["적용됨", "ok"], rejected: ["버림", "off"], reverted: ["되돌림", "off"], invalid: ["검사 탈락", "bad"]};
+function codeHTML(){
+  const pats = SD.listPatches().slice().sort((x, y) => (y.t || 0) - (x.t || 0)), errs = SD.recentErrors(8);
+  const show = pats.filter(p => p.status !== "invalid").slice(0, 12), bad = pats.filter(p => p.status === "invalid").slice(0, 8);
+  const clip = (t, n = 20) => { const l = String(t || "").split("\n"); return E(l.slice(0, n).join("\n")) + (l.length > n ? `\n… (${l.length - n}줄 더)` : ""); };
+  const one = p => `<div class="of-gi of-pt" style="--tc:#5b8cff"><div class="of-gih"><b>🛠 ${E(p.file)}</b><span class="of-pst ${PST[p.status]?.[1] || ""}">${E(PST[p.status]?.[0] || p.status)}${p.auto ? " · 자동" : ""}</span><span>${E(when(p.t))}</span></div>
+    ${p.why ? `<p>${E(p.why)}</p>` : ""}${p.error?.msg ? `<p class="of-dim">고치려는 오류: ${E(p.error.msg)} (${p.error.count || 1}번)</p>` : ""}
+    ${p.find ? `<pre class="of-diff"><del>${clip(p.find)}</del><ins>${clip(p.replace)}</ins></pre>` : ""}<p class="of-dim">${E(p.check?.msg || "")}</p>
+    <div class="of-pbtn">${p.status === "proposed" && p.check?.ok ? (LAUNCHER.on ? `<button class="of-btn2" data-papply="${E(p.id)}">적용</button>` : `<button class="of-btn2" data-pdl="${E(p.id)}">수정안 내려받기</button><small>웹 버전에서는 적용할 수 없습니다 (GHNano.exe)</small>`) : ""}${p.status === "proposed" ? `<button class="of-btn2" data-preject="${E(p.id)}">버리기</button>` : ""}${p.status === "applied" && LAUNCHER.on ? `<button class="of-btn2" data-prevert="${E(p.id)}">되돌리기</button>` : ""}</div></div>`;
+  return `<section class="g-code"><h4>🛠 코드 개선 <span>${pats.filter(p => p.status === "proposed").length}</span></h4>
+    <p class="of-dim">AI·개발팀이 앱에서 난 오류를 찾아 고치는 수정안입니다. 실거래·키·안전장치 파일은 고치지 않고, 대표님이 [적용]을 눌러야 반영됩니다. 적용 뒤 앱이 안 열리면 자동으로 되돌립니다.</p>
+    ${show.map(one).join("") || `<p class="of-dim">아직 수정안이 없습니다${errs.length ? "" : " · 최근 오류도 없습니다"}</p>`}
+    ${bad.length ? `<details><summary>검사에서 탈락한 수정안 ${bad.length}개</summary>${bad.map(one).join("")}</details>` : ""}
+    ${errs.length ? `<details><summary>최근 오류 ${errs.length}개</summary>${errs.map(x => `<p class="of-dim">· ${E(x.file)}${x.line ? ":" + x.line : ""} — ${E(x.msg)} (${x.count}번)</p>`).join("")}</details>` : ""}</section>`;
+}
 function growthHTML(){
+  return codeHTML() + taskHTML();
+}
+function taskHTML(){
   const items = backlogItems();
   if (!items.length) return `<div class="of-empty"><b>아직 성장 과제가 없습니다</b><p>직원들이 일하다가 '더 잘하려면 무엇이 필요한지'를 과제로 올리고, 하나씩 맡아 해결합니다. 진행 상황이 여기에 쌓입니다.</p></div>`;
   const GR = [["doing", "🔨 진행 중"], ["todo", "📋 할 일"], ["done", "✅ 완료"]];
