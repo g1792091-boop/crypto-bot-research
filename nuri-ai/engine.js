@@ -34,11 +34,12 @@ export const idb = (() => {
 
 /* ============ 설정 ============ */
 export const settings = Object.assign({
-  device:"auto", ctx:4096, maxTokens:1024, temp:0.7, think:false, rag:true, last:null, autoload:true,
+  device:"auto", ctx:8192, maxTokens:1024, temp:0.7, think:false, rag:true, last:null, autoload:true,
   brain:"auto", nvKey:"", nvModel:"qwen/qwen3-235b-a22b", olModel:"hf.co/unsloth/Qwen3.5-4B-GGUF:Q4_K_M", olOk:false,
   instructions:"", permission:"ask", keys:{}, provModels:{}, pinModel:{}, memory:[], skills:[], aiName:"GH Nano", nvSkills:true, nvAuto:true
 }, ls.get("settings", {}));
 if (settings.nvKey && !settings.keys.nvidia) settings.keys.nvidia = settings.nvKey;   // 예전 설정 옮기기
+if (!settings.ctxV){ if (settings.ctx === 4096) settings.ctx = 8192; settings.ctxV = 2; }       // 지시문이 길어져 기본 기억 길이를 늘림
 if (!settings.keys) settings.keys = {};
 export const saveSettings = () => { ls.set("settings", settings); emit("engine"); };
 
@@ -51,7 +52,7 @@ export const CATALOG = [
   {id:"exaone-2.4b", name:"EXAONE 3.5 2.4B", repo:"LGAI-EXAONE/EXAONE-3.5-2.4B-Instruct-GGUF", quant:"Q4_K_M", gb:1.6, tags:["한국어 특화"], lic:"EXAONE(비상업)", desc:"LG AI연구원 모델. 한국어가 자연스럽습니다."},
   {id:"qwen2.5-0.5b", name:"Qwen2.5 0.5B", repo:"Qwen/Qwen2.5-0.5B-Instruct-GGUF", quant:"Q4_K_M", gb:0.4, tags:["가장 가벼움"], lic:"Apache-2.0", desc:"저사양·휴대폰용. 답이 단순합니다."},
   {id:"qwen2.5-1.5b", name:"Qwen2.5 1.5B", repo:"Qwen/Qwen2.5-1.5B-Instruct-GGUF", quant:"Q4_K_M", gb:1.1, tags:["안정적"], lic:"Apache-2.0", desc:"생각 모드 없이 바로 답합니다."},
-  {id:"r1-1.5b", name:"DeepSeek-R1 Distill 1.5B", repo:"unsloth/DeepSeek-R1-Distill-Qwen-1.5B-GGUF", quant:"Q4_K_M", gb:1.1, tags:["추론"], lic:"MIT", desc:"수학·논리용. 한국어는 약합니다."},
+  {id:"r1-1.5b", name:"DeepSeek-R1 Distill 1.5B", repo:"unsloth/DeepSeek-R1-Distill-Qwen-1.5B-GGUF", quant:"Q4_K_M", gb:1.1, tags:["추론"], lic:"MIT", desc:"수학·논리용. 답하기 전에 생각을 길게 해서 기억 길이를 많이 쓰고, 도구 사용과 한국어는 약합니다. 일상 대화는 Qwen3.5를 추천."},
   {id:"gemma3-1b", name:"Gemma 3 1B", repo:"unsloth/gemma-3-1b-it-GGUF", quant:"Q4_K_M", gb:0.8, tags:["가벼움"], lic:"Gemma 약관", desc:"Google의 소형 모델."},
   {id:"llama3.2-1b", name:"Llama 3.2 1B", repo:"bartowski/Llama-3.2-1B-Instruct-GGUF", quant:"Q4_K_M", gb:0.8, tags:["영어"], lic:"Llama 3.2 커뮤니티", desc:"Meta의 소형 모델."}
 ];
@@ -85,7 +86,7 @@ export async function loadModel(src){
     try { w = await attempt(useGpu); eng.gpu = useGpu; }
     catch (e){ if (!useGpu) throw e; eng.phase = "GPU로 실행하지 못해 CPU로 다시 시도합니다"; emit("engine"); w = await attempt(false); eng.gpu = false; }
     eng.w = w;
-    try { eng.ctx = w.getLoadedContextInfo()?.n_ctx || settings.ctx; } catch(e){ eng.ctx = settings.ctx; }
+    try { const ci = w.getLoadedContextInfo() || {}; eng.ctx = Math.min(ci.n_ctx || settings.ctx, ci.n_ctx_train || Infinity); } catch(e){ eng.ctx = settings.ctx; }   // 모델이 배운 길이보다 길게는 못 씀
     eng.loaded = {name: src.name, kind: src.kind, id: src.id || null};
     if (src.kind !== "file"){ settings.last = {...src, files: undefined}; ls.set("settings", settings); }
   } catch (e){
@@ -294,8 +295,12 @@ export function brainLabel(b = settings.brain){
   return b;
 }
 export const shortModel = m => String(m || "").split("/").pop().replace(/:free$/, "").replace(/-instruct(-\d+)?$/i, "");
-export const brainCtx = () => settings.brain === "local" ? (eng.ctx || settings.ctx) : settings.brain === "ollama" ? 8192 : 32768;
-export const brainAnswerLen = () => settings.brain === "local" ? Math.min(settings.maxTokens, Math.floor(brainCtx() / 3)) : settings.brain === "ollama" ? 2048 : 8192;
+// 실제로 답할 곳 (자동 선택인데 연결된 회사가 없으면 내 기기 AI가 답한다)
+export const effectiveBrain = (role = "general") => settings.brain === "auto" ? (routeCandidates(role)[0]?.id || "auto") : settings.brain;
+export const brainCtx = (role) => { const b = effectiveBrain(role); return b === "local" ? (eng.ctx || settings.ctx) : b === "ollama" ? 8192 : 32768; };
+export const brainAnswerLen = (role) => { const b = effectiveBrain(role); return b === "local" ? Math.min(settings.maxTokens, Math.floor(brainCtx(role) / 3)) : b === "ollama" ? 2048 : 8192; };
+// 토큰 수 어림: 한글은 글자당 1토큰 이상 들기 때문에 넉넉하게 센다 (예전 '글자÷1.6'은 한국어를 절반 이하로 셌다)
+export function estTokens(s){ s = String(s || ""); const ko = (s.match(/[\u3131-\u318e\uac00-\ud7a3]/g) || []).length; return Math.ceil(ko * 1.4 + (s.length - ko) / 2.8) + 4; }
 
 async function* sse(res){
   const reader = res.body.getReader(), dec = new TextDecoder(); let buf = "";
@@ -318,13 +323,28 @@ async function streamLocal({messages, maxTokens, temperature, signal, onContent,
     const params = {messages, stream: true, max_tokens: Math.min(maxTokens, Math.floor((eng.ctx || settings.ctx) / 3)), temperature, abortSignal: signal, chat_template_kwargs: {enable_thinking: !!think}};
     if (stop) params.stop = stop;
     if (window.__nuriGenExtra) Object.assign(params, window.__nuriGenExtra);
-    const stream = await eng.w.createChatCompletion(params);
-    for await (const ch of stream){
-      const d = ch.choices?.[0]?.delta || {};
-      if (d.reasoning_content) onThink?.(d.reasoning_content);
-      if (d.content) onContent?.(d.content);
-      if (ch.timings?.predicted_per_second) onStats?.({tps: ch.timings.predicted_per_second});
-      if (ch.choices?.[0]?.finish_reason === "length") onStats?.({cut: true});
+    try {
+      const stream = await eng.w.createChatCompletion(params);
+      for await (const ch of stream){
+        const d = ch.choices?.[0]?.delta || {};
+        if (d.reasoning_content) onThink?.(d.reasoning_content);
+        if (d.content) onContent?.(d.content);
+        if (ch.timings?.predicted_per_second) onStats?.({tps: ch.timings.predicted_per_second});
+        if (ch.choices?.[0]?.finish_reason === "length") onStats?.({cut: true});
+      }
+    } catch (e){
+      if (signal?.aborted) throw e;
+      const m = String(e?.message || e);
+      const ctxM = m.match(/\((\d+) tokens\) exceeds the available context size \((\d+) tokens\)/);
+      if (ctxM || /exceed_context/i.test(m)) throw new Error(`질문·지시문이 이 모델의 기억 길이(${ctxM ? ctxM[2] : eng.ctx}토큰)를 넘었습니다${ctxM ? ` (필요 ${ctxM[1]}토큰)` : ""}. 새 대화로 시작하거나, 설정 → 내 기기 모델에서 '대화 기억 길이'를 늘린 뒤 모델을 다시 불러오세요.`);
+      // (ABORT) = llama.cpp 엔진이 멈춤(기억 길이·메모리 초과 등). 엔진을 버리고 모델을 다시 불러온다
+      if (/\(ABORT\)|abort\(|RuntimeError|memory access out of bounds|unreachable/i.test(m)){
+        const last = settings.last; try { await eng.w.exit(); } catch(x){}
+        eng.w = null; eng.loaded = null; emit("engine");
+        if (last && last.kind !== "file") setTimeout(() => loadModel(last), 200);
+        throw new Error(`내 기기 AI 엔진이 멈췄습니다(기억 길이나 메모리를 넘었을 가능성이 큽니다). ${last && last.kind !== "file" ? "모델을 자동으로 다시 불러오는 중이니 잠시 뒤 '다시 생성'을 누르세요." : "모델을 다시 불러오세요."} 긴 답이 필요하면 설정 → 내 기기 모델에서 '대화 기억 길이'를 늘리거나, API 키를 넣어 클라우드 모델을 쓰세요.`);
+      }
+      throw e;
     }
   };
   const p = localLock.then(go1, go1); localLock = p.catch(() => {}); return p;

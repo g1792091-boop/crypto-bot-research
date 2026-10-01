@@ -1,6 +1,6 @@
 // 누리 AI 에이전트: 어떤 모델이든 쓸 수 있는 글자 기반 도구 호출 규약 + 도구 모음 + 스킬 + 반복 실행
 // 모델이 <tool name="도구">{"인자":"값"}</tool> 를 쓰면 실행하고 <tool_result>로 결과를 돌려준다.
-import { settings, saveSettings, brainStream, brainCtx, brainAnswerLen, splitThink, search, docs, apiBase, codeCall, ls, bus, esc,
+import { settings, saveSettings, brainStream, brainCtx, brainAnswerLen, estTokens, splitThink, search, docs, apiBase, codeCall, ls, bus, esc,
          webGet, webSearch, readPage, PROVIDERS, shortModel } from "./engine.js";
 import { nvIndex, nvSkill, nvSearch, nvAutoSkill, GROUP_KO } from "./nvskills.js";
 import { exchanges, computeAll, quantScore, levels, backtest, STRATS, fmtNum, YAHOO_LIST } from "./trade.js";
@@ -479,11 +479,22 @@ export function activeSkills(text, mode = "chat"){
 const CORE_TOOLS = ["web_search", "web_fetch", "calculate", "search_knowledge", "remember", "nv_skill_search", "nv_skill_read"];
 
 /* ================= 시스템 지침 ================= */
+// 기억 길이가 짧은 모델(내 기기 AI 등)용 짧은 지시문
+function compactPrompt(mode, extra){
+  const d = new Date(), skills = extra.skills || [], name = settings.aiName || "GH Nano";
+  const want = mode === "code" ? ["list_files", "read_file", "edit_file", "write_file", "run_command"] : [...new Set([...skills.flatMap(s => s.tools || []), "web_search", "calculate"])];
+  const tools = want.filter(n => TOOLS[n] && (TOOLS[n].mode === mode || TOOLS[n].mode === "both")).slice(0, mode === "code" ? 5 : 4);
+  const mem = (settings.memory || []).slice(-5).map(m => "- " + m.text.slice(0, 80)).join("\n");
+  return `너는 '${name}'${mode === "code" ? ` 코드다. 작업 폴더(${extra.workspace || "미지정"})의 코드를 읽고 고친다` : "라는 한국어 AI 어시스턴트다"}. 오늘은 ${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일. 핵심만 짧고 정확하게 답하고, 모르면 모른다고 한다.
+${settings.instructions ? "사용자 지침: " + settings.instructions.slice(0, 300) + "\n" : ""}${mem ? "사용자 정보:\n" + mem + "\n" : ""}도구가 필요하면 <tool name="도구">{"인자":"값"}</tool> 하나만 쓰고 멈춘다. 결과는 <tool_result>로 온다.
+${tools.map(n => `- ${n}: ${TOOLS[n].desc.split(/[.。]/)[0].slice(0, 70)} 예: ${TOOLS[n].args.slice(0, 90)}`).join("\n")}${skills.length ? "\n\n" + skills.slice(0, 2).map(s => `[${s.name}] ` + s.prompt.replace(/\s+/g, " ").slice(0, 220)).join("\n") : ""}`;
+}
 export function systemPrompt(mode, extra = {}){
+  if (extra.compact) return compactPrompt(mode, extra);
   const d = new Date(), skills = extra.skills || [];
   let tools = Object.entries(TOOLS).filter(([, t]) => t.mode === mode || t.mode === "both");
   // 작은 모델은 기억 공간이 좁으니 지금 필요한 도구만 알려준다
-  if (mode === "chat" && brainCtx() < 16000){ const need = new Set([...CORE_TOOLS, ...skills.flatMap(s => s.tools || [])]); tools = tools.filter(([n]) => need.has(n)); }
+  if (mode === "chat" && brainCtx(extra.role) < 16000){ const need = new Set([...CORE_TOOLS, ...skills.flatMap(s => s.tools || [])]); tools = tools.filter(([n]) => need.has(n)); }
   const toolDoc = tools.map(([n, t]) => `- ${n}: ${t.desc}\n  인자 예: ${t.args}`).join("\n");
   const mem = (settings.memory || []).slice(-30);
   const common = `오늘은 ${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 (${"일월화수목금토"[d.getDay()]}요일) ${d.getHours()}시다. 사용자가 쓰는 언어로 답한다(기본 한국어).
@@ -522,8 +533,8 @@ HTML은 하나의 완결된 파일로 만든다(외부 파일 없이, 필요하�
 }
 
 /* ================= 대화 → 모델 메시지 ================= */
-export function toModelMessages(history, budgetTokens){
-  const approx = s => Math.ceil(s.length / 1.6);
+export function toModelMessages(history, budgetTokens, maxTool = 24000){
+  const approx = s => estTokens(s) + 4;
   const turns = [];
   for (const m of history){
     if (m.role === "user"){
@@ -542,7 +553,7 @@ export function toModelMessages(history, budgetTokens){
         buf += `\n<tool name="${p.name}">${JSON.stringify(p.input)}</tool>`;
         turns.push({role: "assistant", content: buf.trim()}); buf = "";
         const out = p.status === "denied" ? "사용자가 이 도구 실행을 거부했습니다." : p.status === "error" ? "오류: " + (p.error || "") : (p.modelText || "");
-        turns.push({role: "user", content: `<tool_result name="${p.name}">${out.slice(0, 24000)}</tool_result>`});
+        turns.push({role: "user", content: `<tool_result name="${p.name}">${out.length > maxTool ? out.slice(0, maxTool) + "…(줄임)" : out}</tool_result>`});
       }
     }
     if (buf.trim()) turns.push({role: "assistant", content: buf.trim()});
@@ -600,15 +611,20 @@ export async function runAgent({mode, history, msg, signal, onUpdate, openArtifa
   }
   msg.skills = skills.map(s => ({id: s.id, name: s.name, icon: s.icon})); msg.qrole = role; msg.t0 = Date.now();
   if (skills.length) activity({kind: "skill", text: skills.map(s => s.name).join(" · ")});
-  const sys = systemPrompt(mode, {workspace, skills});
+  // 기억 길이가 짧은 모델이면 짧은 지시문을 쓰고, 지시문+대화+답이 기억 길이 안에 들도록 나눈다
+  const ctxLen = brainCtx(role), small = ctxLen <= 8192;
+  const sys = systemPrompt(mode, {workspace, skills, role, compact: small});
+  const sysT = estTokens(sys);
+  let ansLen = brainAnswerLen(role);
+  if (ctxLen - sysT - ansLen < 600) ansLen = Math.max(256, Math.floor((ctxLen - sysT - 64) / 2));
   for (let step = 0; step < maxSteps; step++){
     if (signal.aborted) break;
-    const budget = brainCtx() - brainAnswerLen() - Math.ceil(sys.length / 1.6) - 64;
-    const messages = [{role: "system", content: sys}, ...toModelMessages([...history, msg], Math.max(800, budget))];
+    const budget = Math.max(200, ctxLen - ansLen - sysT - 96);
+    const messages = [{role: "system", content: sys}, ...toModelMessages([...history, msg], budget, small ? Math.max(800, budget * 1.5 | 0) : 24000)];
     const part = {type: "text", text: "", t0: Date.now()}; msg.parts.push(part);
     msg.phase = step ? "생각 정리 중" : "답변 준비 중"; onUpdate();
     let raw = "", cut = false;
-    const route = await brainStream({messages, role, maxTokens: brainAnswerLen(), temperature: mode === "code" ? 0.2 : settings.temp, signal, think, stop: ["</tool>", "<tool_result"],
+    const route = await brainStream({messages, role, maxTokens: ansLen, temperature: mode === "code" ? 0.2 : settings.temp, signal, think, stop: ["</tool>", "<tool_result"],
       onContent: d => { raw += d; part.tf ||= Date.now(); part.text = visibleText(raw); msg.phase = "답변 작성 중"; onUpdate(); },
       onThink: d => { part.tf ||= Date.now(); part.think = (part.think || "") + d; msg.phase = "생각하는 중"; onUpdate(); },
       onStats: st => { if (st.cut) cut = true; if (st.tps) msg.tps = st.tps; }});
