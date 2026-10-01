@@ -1,4 +1,4 @@
-"""Order-handling drill on the Binance USD-M futures TESTNET (fake money).
+"""Order handling on the Binance USD-M futures TESTNET (fake money): client, stop protocol, drill.
 
     TESTNET_API_KEY=... TESTNET_API_SECRET=... python -m paperbot.testnet drill --symbol BTCUSDT
     python -m paperbot.testnet reconcile --symbol BTCUSDT
@@ -9,11 +9,34 @@ THE EXCHANGE (so it still works if the bot dies), moving that stop up for the pr
 without ever leaving the position unprotected, a clean exit, and a restart check that finds
 a position without a stop. The drill runs that cycle with a tiny size and checks every step.
 
+Protective stops (paper v3.1 addendum Q4). Since 2025-12-09 Binance only accepts conditional
+orders on the algo endpoints, so a stop is
+
+    POST /fapi/v1/algoOrder  algoType=CONDITIONAL type=STOP_MARKET triggerPrice=<stop>
+                             workingType=CONTRACT_PRICE (= last price, like the paper engine)
+                             priceProtect=false  quantity=<position> reduceOnly=true
+
+and is read with GET /fapi/v1/algoOrder (algoId or clientAlgoId), listed with
+GET /fapi/v1/openAlgoOrders, cancelled with DELETE /fapi/v1/algoOrder and
+DELETE /fapi/v1/algoOpenOrders. Parameter names were checked against Binance's official
+Python SDK (binance-connector-python, derivatives_trading_usds_futures, 2026-09); what the
+first testnet drill must still confirm is listed in docs/live-safety.md.
+
+Stops use ``quantity`` + ``reduceOnly`` rather than ``closePosition``: moving a stop places the
+new one BEFORE cancelling the old one, so for a moment two stops on the same side exist, and a
+second closePosition stop on the same side is refused by Binance (-4130). ``closePosition`` is
+still available (``qty=None``) for a one-off manual stop.
+
+Moving a stop (``move_stop``): place the new stop -> confirm it is live -> cancel the old one.
+If the new stop is refused with -2021 ("Order would immediately trigger": the price is already
+past it), close the position with a reduce-only market order.
+
 Safety:
 - The client refuses any host except the futures testnet. There is no mainnet code path.
 - Testnet keys live in their own variables (TESTNET_API_KEY / TESTNET_API_SECRET), never the
   read-only mainnet key used by the paper runner.
-- Agents do not call this module; people run it by hand (live-readiness checks).
+- AI agents do not call this module; people run it by hand, and paperbot/executor.py (also
+  testnet only) uses it.
 """
 
 from __future__ import annotations
@@ -35,11 +58,19 @@ from typing import Callable, Optional
 TESTNET = "https://testnet.binancefuture.com"
 ALLOWED_HOSTS = ("testnet.binancefuture.com",)
 
-# send(method, url, headers, body) -> (status, body bytes)
-Send = Callable[[str, str, dict, Optional[bytes]], tuple[int, bytes]]
+WOULD_TRIGGER = -2021          # "Order would immediately trigger."
+NOT_FOUND = (-2013, -2011)     # "Order does not exist." / "Unknown order sent."
+_TRANSIENT_CODES = (-1001, -1007, -1008)   # disconnected / backend timeout (status unknown) / overloaded
+_RATE_CODES = (-1003,)                     # too many requests
+OPEN_ALGO = ("NEW",)                       # an algo order that is resting and can still trigger
+FIRED_ALGO = ("TRIGGERING", "TRIGGERED", "FINISHED")
+
+# send(method, url, headers, body) -> (status, body bytes) or (status, body bytes, headers)
+Send = Callable[[str, str, dict, Optional[bytes]], tuple]
 
 
 class TestnetError(Exception):
+    """The exchange refused the request (4xx): never retried blindly."""
     __test__ = False  # not a pytest test class
 
     def __init__(self, status: int, code: Optional[int], msg: str):
@@ -47,61 +78,181 @@ class TestnetError(Exception):
         self.status, self.code, self.msg = status, code, msg
 
 
-def urllib_send(method: str, url: str, headers: dict, body: Optional[bytes]) -> tuple[int, bytes]:
+class TransientError(TestnetError):
+    """Network failure, timeout or 5xx. For an order the outcome is UNKNOWN: look it up by its
+    client id before sending it again."""
+
+
+class RateLimited(TestnetError):
+    """429 (slow down) or 418 (IP banned for a while). ``retry_after`` in seconds."""
+
+    def __init__(self, status: int, code: Optional[int], msg: str, retry_after: float = 0.0):
+        super().__init__(status, code, msg)
+        self.retry_after = retry_after
+
+
+class ProtectionError(Exception):
+    """A protective stop could not be confirmed live."""
+
+
+def urllib_send(method: str, url: str, headers: dict, body: Optional[bytes]) -> tuple[int, bytes, dict]:
     req = urllib.request.Request(url, data=body, headers=headers, method=method)
     try:
         with urllib.request.urlopen(req, timeout=10) as r:
-            return r.status, r.read()
+            return r.status, r.read(), dict(r.headers.items())
     except urllib.error.HTTPError as e:
-        return e.code, e.read()
+        return e.code, e.read(), dict(e.headers.items()) if e.headers else {}
 
 
 def _round_down(x: float, step: float) -> float:
-    return math.floor(x / step + 1e-9) * step
+    return round(math.floor(x / step + 1e-9) * step, 12)
 
 
 def _round_to(x: float, step: float) -> float:
     return round(round(x / step) * step, 12)
 
 
+def round_stop(price: float, tick: float, side: int) -> float:
+    """Round a protective stop to the tick, never looser than asked: up for a long, down for a short."""
+    n = price / tick
+    n = math.ceil(n - 1e-9) if side > 0 else math.floor(n + 1e-9)
+    return round(n * tick, 12)
+
+
+def algo_type(o: dict) -> str:
+    return o.get("orderType") or o.get("type") or ""
+
+
+def is_stop(o: dict) -> bool:
+    return algo_type(o) == "STOP_MARKET"
+
+
+def _truthy(v) -> bool:
+    return v is True or str(v).lower() == "true"
+
+
+def covers(stop: dict, amt: float, eps: float = 1e-12) -> bool:
+    """Does this resting stop close the whole position ``amt`` (signed)?"""
+    if amt == 0 or not is_stop(stop) or stop.get("algoStatus", "NEW") not in OPEN_ALGO:
+        return False
+    if stop.get("side") != ("SELL" if amt > 0 else "BUY"):
+        return False
+    return _truthy(stop.get("closePosition")) or float(stop.get("quantity") or 0) >= abs(amt) - eps
+
+
 class TestnetClient:
     __test__ = False
 
     def __init__(self, api_key: str, api_secret: str, base: str = TESTNET, send: Optional[Send] = None,
-                 clock_ms: Callable[[], int] = lambda: int(time.time() * 1000)):
+                 clock_ms: Callable[[], int] = lambda: int(time.time() * 1000),
+                 on_request: Optional[Callable[[dict], None]] = None):
         host = urllib.parse.urlparse(base).hostname or ""
         if host not in ALLOWED_HOSTS:
             raise ValueError(f"refusing host {host!r}: this module only talks to the futures testnet")
         if not (api_key and api_secret):
             raise ValueError("TESTNET_API_KEY and TESTNET_API_SECRET are required")
         self.base, self.key, self.secret = base.rstrip("/"), api_key, api_secret
+        self.host = host
         self.send = send or urllib_send
         self.clock_ms = clock_ms
+        self.offset_ms = 0                 # server time - local time (sync_time)
+        self.on_request = on_request       # audit hook: every request with its outcome
+        self.limits = {"weight_1m": 2400, "orders_1m": 1200, "orders_10s": 300}
+        self.used = {"weight_1m": 0, "orders_1m": 0, "orders_10s": 0}
+
+    # ------------------------------------------------------------ transport
+    def _note(self, headers: dict) -> None:
+        h = {k.lower(): v for k, v in (headers or {}).items()}
+        for key, name in (("weight_1m", "x-mbx-used-weight-1m"), ("orders_1m", "x-mbx-order-count-1m"),
+                          ("orders_10s", "x-mbx-order-count-10s")):
+            if name in h:
+                try:
+                    self.used[key] = int(h[name])
+                except ValueError:
+                    pass
+
+    def throttle_s(self, share: float = 0.8) -> float:
+        """Seconds to wait before the next request so we stay under ``share`` of each limit."""
+        now = (self.clock_ms() + self.offset_ms) / 1000.0
+        wait = 0.0
+        if self.used["orders_10s"] >= share * self.limits["orders_10s"]:
+            wait = max(wait, 10 - now % 10)
+        if self.used["weight_1m"] >= share * self.limits["weight_1m"] or \
+                self.used["orders_1m"] >= share * self.limits["orders_1m"]:
+            wait = max(wait, 60 - now % 60)
+        return wait
 
     def req(self, method: str, path: str, params: Optional[dict] = None, signed: bool = True):
         p = {k: v for k, v in (params or {}).items() if v is not None}
-        headers = {"User-Agent": "paperbot-testnet/0.1", "X-MBX-APIKEY": self.key}
+        audit = {"method": method, "path": path, "params": dict(p)}
+        headers = {"User-Agent": "paperbot-testnet/0.2", "X-MBX-APIKEY": self.key}
         if signed:
-            p["timestamp"] = self.clock_ms()
+            p["timestamp"] = self.clock_ms() + self.offset_ms
             p["recvWindow"] = 5000
         q = urllib.parse.urlencode(p)
         if signed:
             q += "&signature=" + hmac.new(self.secret.encode(), q.encode(), hashlib.sha256).hexdigest()
-        if method == "GET" or method == "DELETE":
-            status, body = self.send(method, f"{self.base}{path}?{q}", headers, None)
-        else:
-            headers["Content-Type"] = "application/x-www-form-urlencoded"
-            status, body = self.send(method, f"{self.base}{path}", headers, q.encode())
-        data = json.loads(body or b"null")
-        if status != 200:
-            code = data.get("code") if isinstance(data, dict) else None
-            msg = data.get("msg") if isinstance(data, dict) else str(body[:200])
-            raise TestnetError(status, code, msg)
+        try:
+            if method in ("GET", "DELETE"):
+                res = self.send(method, f"{self.base}{path}?{q}", headers, None)
+            else:
+                headers["Content-Type"] = "application/x-www-form-urlencoded"
+                res = self.send(method, f"{self.base}{path}", headers, q.encode())
+        except OSError as e:          # timeouts, refused connections, DNS, TLS: outcome unknown
+            err = TransientError(0, None, f"network: {type(e).__name__}: {e}")
+            self._audit(audit, err=err)
+            raise err from e
+        status, body = res[0], res[1]
+        self._note(res[2] if len(res) > 2 else {})
+        try:
+            data = json.loads(body or b"null")
+        except ValueError:
+            data = None
+        code = data.get("code") if isinstance(data, dict) else None
+        msg = data.get("msg") if isinstance(data, dict) else str((body or b"")[:200])
+        if isinstance(code, str) and code.lstrip("-").isdigit():
+            code = int(code)
+        err: Optional[TestnetError] = None
+        if status in (429, 418) or code in _RATE_CODES:
+            hdr = {k.lower(): v for k, v in (res[2] if len(res) > 2 else {}).items()}
+            try:
+                after = float(hdr.get("retry-after", 0) or 0)
+            except ValueError:
+                after = 0.0
+            err = RateLimited(status, code, msg or "rate limited", after)
+        elif status >= 500 or status == 0 or code in _TRANSIENT_CODES:
+            err = TransientError(status, code, msg or "server error")
+        elif status != 200:
+            err = TestnetError(status, code, msg)
+        self._audit(audit, status=status, data=data, err=err)
+        if err is not None:
+            raise err
         return data
 
-    # ------------------------------------------------------------ endpoints
+    def _audit(self, audit: dict, status: int = 0, data=None, err: Optional[Exception] = None) -> None:
+        if self.on_request is None:
+            return
+        audit.update(status=getattr(err, "status", status), error=None if err is None else str(err),
+                     code=getattr(err, "code", None), data=data)
+        try:
+            self.on_request(audit)
+        except Exception:  # noqa: BLE001  (an audit failure must not change order handling)
+            pass
+
+    # ------------------------------------------------------------ market data / account
+    def sync_time(self) -> int:
+        server = int(self.req("GET", "/fapi/v1/time", signed=False)["serverTime"])
+        self.offset_ms = server - self.clock_ms()
+        return self.offset_ms
+
     def spec(self, symbol: str) -> dict:
         info = self.req("GET", "/fapi/v1/exchangeInfo", signed=False)
+        for rl in info.get("rateLimits", []) or []:
+            key = {("REQUEST_WEIGHT", "MINUTE", 1): "weight_1m", ("ORDERS", "MINUTE", 1): "orders_1m",
+                   ("ORDERS", "SECOND", 10): "orders_10s"}.get(
+                (rl.get("rateLimitType"), rl.get("interval"), rl.get("intervalNum")))
+            if key:
+                self.limits[key] = int(rl["limit"])
         s = next(x for x in info["symbols"] if x["symbol"] == symbol)
         f = {x["filterType"]: x for x in s["filters"]}
         return {"qty_step": float(f["MARKET_LOT_SIZE"]["stepSize"]), "min_qty": float(f["MARKET_LOT_SIZE"]["minQty"]),
@@ -110,6 +261,13 @@ class TestnetClient:
 
     def mark(self, symbol: str) -> float:
         return float(self.req("GET", "/fapi/v1/premiumIndex", {"symbol": symbol}, signed=False)["markPrice"])
+
+    def price(self, symbol: str) -> float:
+        """Last traded price: what a CONTRACT_PRICE stop triggers on."""
+        return float(self.req("GET", "/fapi/v1/ticker/price", {"symbol": symbol}, signed=False)["price"])
+
+    def account(self) -> dict:
+        return self.req("GET", "/fapi/v2/account")
 
     def one_way(self) -> None:
         try:
@@ -128,19 +286,16 @@ class TestnetClient:
     def leverage(self, symbol: str, lev: int) -> dict:
         return self.req("POST", "/fapi/v1/leverage", {"symbol": symbol, "leverage": lev})
 
-    def market(self, symbol: str, side: str, qty: float, reduce_only: bool = False) -> dict:
+    # ------------------------------------------------------------ regular orders
+    def market(self, symbol: str, side: str, qty: float, reduce_only: bool = False,
+               client_id: Optional[str] = None) -> dict:
         return self.req("POST", "/fapi/v1/order", {"symbol": symbol, "side": side, "type": "MARKET", "quantity": qty,
                                                    "reduceOnly": "true" if reduce_only else None,
-                                                   "newOrderRespType": "RESULT"})
+                                                   "newClientOrderId": client_id, "newOrderRespType": "RESULT"})
 
-    def stop_close(self, symbol: str, side: str, stop: float) -> dict:
-        """Protective stop-market for the whole position, triggered by MARK price, resting on the exchange."""
-        return self.req("POST", "/fapi/v1/order", {"symbol": symbol, "side": side, "type": "STOP_MARKET",
-                                                   "stopPrice": stop, "closePosition": "true",
-                                                   "workingType": "MARK_PRICE", "priceProtect": "true"})
-
-    def order(self, symbol: str, order_id: int) -> dict:
-        return self.req("GET", "/fapi/v1/order", {"symbol": symbol, "orderId": order_id})
+    def order(self, symbol: str, order_id: Optional[int] = None, client_id: Optional[str] = None) -> dict:
+        return self.req("GET", "/fapi/v1/order", {"symbol": symbol, "orderId": order_id,
+                                                  "origClientOrderId": client_id})
 
     def cancel(self, symbol: str, order_id: int) -> dict:
         return self.req("DELETE", "/fapi/v1/order", {"symbol": symbol, "orderId": order_id})
@@ -151,9 +306,109 @@ class TestnetClient:
     def open_orders(self, symbol: str) -> list:
         return self.req("GET", "/fapi/v1/openOrders", {"symbol": symbol})
 
+    # ------------------------------------------------------------ algo (conditional) orders
+    def stop_close(self, symbol: str, side: str, trigger: float, qty: Optional[float] = None,
+                   client_id: Optional[str] = None) -> dict:
+        """Protective STOP_MARKET resting on the exchange, triggered by the LAST price.
+        With ``qty``: reduce-only for that quantity (two can coexist while a stop is moved).
+        Without: closePosition (closes whatever is open; one per side)."""
+        p = {"algoType": "CONDITIONAL", "symbol": symbol, "side": side, "type": "STOP_MARKET",
+             "triggerPrice": trigger, "workingType": "CONTRACT_PRICE", "priceProtect": "false",
+             "clientAlgoId": client_id}
+        if qty is None:
+            p["closePosition"] = "true"
+        else:
+            p["quantity"], p["reduceOnly"] = qty, "true"
+        return self.req("POST", "/fapi/v1/algoOrder", p)
+
+    def algo_order(self, algo_id: Optional[int] = None, client_id: Optional[str] = None) -> dict:
+        return self.req("GET", "/fapi/v1/algoOrder", {"algoId": algo_id, "clientAlgoId": client_id})
+
+    def cancel_algo(self, algo_id: Optional[int] = None, client_id: Optional[str] = None) -> dict:
+        return self.req("DELETE", "/fapi/v1/algoOrder", {"algoId": algo_id, "clientAlgoId": client_id})
+
+    def open_algo_orders(self, symbol: str) -> list:
+        return self.req("GET", "/fapi/v1/openAlgoOrders", {"symbol": symbol})
+
+    def cancel_all_algo(self, symbol: str) -> dict:
+        return self.req("DELETE", "/fapi/v1/algoOpenOrders", {"symbol": symbol})
+
+    # ------------------------------------------------------------ positions
     def position(self, symbol: str) -> dict:
         rows = self.req("GET", "/fapi/v2/positionRisk", {"symbol": symbol})
-        return next((r for r in rows if r["symbol"] == symbol), {"positionAmt": "0"})
+        return next((r for r in rows if r["symbol"] == symbol), {"symbol": symbol, "positionAmt": "0"})
+
+    def positions(self) -> list:
+        """Every symbol with a non-zero position."""
+        return [r for r in self.req("GET", "/fapi/v2/positionRisk") if float(r.get("positionAmt") or 0) != 0]
+
+
+# ---------------------------------------------------------------- stop protocol (drill and executor)
+def live_stops(c, symbol: str) -> list:
+    return [o for o in c.open_algo_orders(symbol) if is_stop(o) and o.get("algoStatus", "NEW") in OPEN_ALGO]
+
+
+def place_stop(c, symbol: str, close_side: str, trigger: float, qty: Optional[float],
+               client_id: Optional[str] = None) -> dict:
+    """Place a protective stop and confirm it is resting. Raises TestnetError (e.g. -2021) when
+    refused, ProtectionError when it was accepted but is not live."""
+    o = c.stop_close(symbol, close_side, trigger, qty=qty, client_id=client_id)
+    algo_id = o.get("algoId")
+    got = c.algo_order(algo_id=algo_id) if algo_id is not None else c.algo_order(client_id=client_id)
+    status = got.get("algoStatus")
+    if status in FIRED_ALGO:
+        return {**got, "fired": True}
+    if status not in OPEN_ALGO:
+        raise ProtectionError(f"stop {got.get('algoId')} is {status}, not live")
+    return got
+
+
+def close_market(c, symbol: str, client_id: Optional[str] = None) -> Optional[dict]:
+    """Reduce-only market order for the whole position (None when already flat)."""
+    amt = float(c.position(symbol)["positionAmt"])
+    if amt == 0:
+        return None
+    return c.market(symbol, "SELL" if amt > 0 else "BUY", abs(amt), reduce_only=True, client_id=client_id)
+
+
+def cancel_stops(c, symbol: str, algo_ids) -> list:
+    done = []
+    for aid in algo_ids:
+        try:
+            c.cancel_algo(algo_id=aid)
+        except TestnetError as e:
+            if e.code not in NOT_FOUND:
+                raise
+        done.append(aid)
+    return done
+
+
+def move_stop(c, symbol: str, close_side: str, trigger: float, qty: Optional[float], old_ids,
+              client_id: Optional[str] = None, close_id: Optional[str] = None) -> dict:
+    """Move a protective stop without a gap: new stop -> confirmed live -> cancel the old ones.
+
+    result "moved":     the new stop rests, the old ones are cancelled
+    result "closed":    the exchange refused the new stop with -2021 (price already past it), so the
+                        position was closed with a reduce-only market order and the old stops cancelled
+    result "triggered": the new stop fired at once; the old ones are left for the next reconcile
+    Any other refusal raises, and the old stop is still in place (still protected)."""
+    try:
+        new = place_stop(c, symbol, close_side, trigger, qty, client_id)
+    except TestnetError as e:
+        if e.code != WOULD_TRIGGER:
+            raise
+        x = close_market(c, symbol, client_id=close_id)
+        cancelled = cancel_stops(c, symbol, old_ids)
+        return {"result": "closed", "close": x, "cancelled": cancelled, "error": e.msg}
+    if new.get("fired"):
+        return {"result": "triggered", "stop": new, "cancelled": []}
+    cancelled = cancel_stops(c, symbol, [a for a in old_ids if a != new.get("algoId")])
+    return {"result": "moved", "stop": new, "cancelled": cancelled}
+
+
+def cancel_everything(c, symbol: str) -> None:
+    c.cancel_all_algo(symbol)
+    c.cancel_all(symbol)
 
 
 # ---------------------------------------------------------------- drill
@@ -174,14 +429,15 @@ class Drill:
             raise AssertionError(f"{name}: {detail}")
 
     def _stops(self) -> list:
-        return [o for o in self.client.open_orders(self.symbol) if o["type"] == "STOP_MARKET"]
+        return live_stops(self.client, self.symbol)
 
     def run(self) -> list:
         c, s = self.client, self.symbol
         buy, sell = ("BUY", "SELL") if self.side > 0 else ("SELL", "BUY")
         spec = c.spec(s)
-        self._step("clean start", float(c.position(s)["positionAmt"]) == 0 and not c.open_orders(s),
-                   "position must be flat and no open orders before the drill")
+        self._step("clean start", float(c.position(s)["positionAmt"]) == 0 and not c.open_orders(s)
+                   and not c.open_algo_orders(s),
+                   "position must be flat and no open (or algo) orders before the drill")
         c.one_way()
         c.isolated(s)
         lev = c.leverage(s, self.leverage)
@@ -198,28 +454,47 @@ class Drill:
         entry = float(o["avgPrice"])
         amt = float(c.position(s)["positionAmt"])
         self._step("position size", abs(amt - self.side * qty) < spec["qty_step"] / 2, {"positionAmt": amt, "qty": qty})
-        stop1 = _round_to(entry * (1 - self.side * self.stop_frac), spec["tick"])
-        st1 = c.stop_close(s, sell, stop1)
+        stop1 = round_stop(entry * (1 - self.side * self.stop_frac), spec["tick"], self.side)
+        st1 = place_stop(c, s, sell, stop1, abs(amt))
         stops = self._stops()
-        self._step("stop rests on exchange", len(stops) == 1 and float(stops[0]["stopPrice"]) == stop1,
-                   [(x["orderId"], x["stopPrice"]) for x in stops])
-        # profit lock: new stop first, then cancel the old one -> never unprotected
-        stop2 = _round_to(entry * (1 - self.side * self.stop_frac / 2), spec["tick"])
-        st2 = c.stop_close(s, sell, stop2)
-        both = self._stops()
-        c.cancel(s, st1["orderId"])
+        self._step("stop rests on exchange (algo, last price)",
+                   len(stops) == 1 and float(stops[0]["triggerPrice"]) == stop1
+                   and stops[0].get("workingType", "CONTRACT_PRICE") == "CONTRACT_PRICE",
+                   [(x["algoId"], x["triggerPrice"], x.get("workingType")) for x in stops])
+        # profit lock: new stop first, confirm it, then cancel the old one -> never unprotected
+        stop2 = round_stop(entry * (1 - self.side * self.stop_frac / 2), spec["tick"], self.side)
+        seen = {}
+        orig = c.cancel_algo
+
+        def watch_cancel(algo_id=None, client_id=None):
+            seen.setdefault("during", len(self._stops()))
+            return orig(algo_id=algo_id, client_id=client_id)
+        c.cancel_algo = watch_cancel
+        try:
+            mv = move_stop(c, s, sell, stop2, abs(amt), [st1["algoId"]])
+        finally:
+            c.cancel_algo = orig
         stops = self._stops()
-        self._step("stop moved without a gap", len(both) == 2 and len(stops) == 1 and stops[0]["orderId"] == st2["orderId"],
-                   {"during": len(both), "after": [(x["orderId"], x["stopPrice"]) for x in stops]})
+        self._step("stop moved without a gap",
+                   mv["result"] == "moved" and seen.get("during") == 2 and len(stops) == 1
+                   and stops[0]["algoId"] == mv["stop"]["algoId"],
+                   {"during": seen.get("during"), "after": [(x["algoId"], x["triggerPrice"]) for x in stops]})
         # restart check: drop the stop, reconcile must notice and restore it
-        c.cancel(s, st2["orderId"])
+        c.cancel_algo(algo_id=mv["stop"]["algoId"])
         rep = reconcile(c, s, stop_price=stop2)
         self._step("restart check restores a missing stop", rep["repaired"] and len(self._stops()) == 1, rep)
-        x = c.market(s, sell, qty, reduce_only=True)
-        self._step("exit filled", x.get("status") == "FILLED", {"status": x.get("status"), "avg": x.get("avgPrice")})
-        c.cancel_all(s)
-        self._step("flat and no orders left", float(c.position(s)["positionAmt"]) == 0 and not c.open_orders(s),
-                   {"positionAmt": c.position(s)["positionAmt"], "orders": len(c.open_orders(s))})
+        # exit through the -2021 path: a stop on the wrong side of the price must be refused
+        # and the position closed with a reduce-only market order
+        last = c.price(s)
+        bad = round_stop(last * (1 + self.side * 0.02), spec["tick"], self.side)
+        mv = move_stop(c, s, sell, bad, abs(amt), [x["algoId"] for x in self._stops()])
+        self._step("stop past the price is refused (-2021) and the position closed at market",
+                   mv["result"] == "closed", {k: mv.get(k) for k in ("result", "error")})
+        cancel_everything(c, s)
+        self._step("flat and no orders left",
+                   float(c.position(s)["positionAmt"]) == 0 and not c.open_orders(s) and not c.open_algo_orders(s),
+                   {"positionAmt": c.position(s)["positionAmt"], "orders": len(c.open_orders(s)),
+                    "algo_orders": len(c.open_algo_orders(s))})
         return self.log
 
 
@@ -227,12 +502,13 @@ def reconcile(c: TestnetClient, symbol: str, stop_price: Optional[float] = None)
     """After a restart: a position without a protective stop is the one state that must never
     last. Report it and, when the intended stop is known, put it back."""
     amt = float(c.position(symbol)["positionAmt"])
-    stops = [o for o in c.open_orders(symbol) if o["type"] == "STOP_MARKET"]
+    stops = live_stops(c, symbol)
+    covering = [o for o in stops if covers(o, amt)]
     out = {"position": amt, "stops": len(stops), "repaired": False, "problem": None}
-    if amt != 0 and not stops:
-        out["problem"] = "position without a protective stop"
+    if amt != 0 and not covering:
+        out["problem"] = "position without a protective stop" if not stops else "stop smaller than the position"
         if stop_price is not None:
-            c.stop_close(symbol, "SELL" if amt > 0 else "BUY", stop_price)
+            place_stop(c, symbol, "SELL" if amt > 0 else "BUY", stop_price, abs(amt))
             out["repaired"] = True
     elif amt == 0 and stops:
         out["problem"] = "stop orders without a position"
@@ -248,6 +524,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     ap.add_argument("--leverage", type=int, default=20)
     args = ap.parse_args(argv)
     c = TestnetClient(os.environ.get("TESTNET_API_KEY", ""), os.environ.get("TESTNET_API_SECRET", ""))
+    c.sync_time()
     if args.cmd == "reconcile":
         print(json.dumps(reconcile(c, args.symbol), indent=1))
         return 0
@@ -255,14 +532,12 @@ def main(argv: Optional[list[str]] = None) -> int:
     try:
         d.run()
         ok = True
-    except (AssertionError, TestnetError) as e:
+    except (AssertionError, TestnetError, ProtectionError) as e:
         d.log.append({"step": "stopped", "ok": False, "detail": str(e)})
         ok = False
         try:                              # leave the testnet account flat
-            amt = float(c.position(args.symbol)["positionAmt"])
-            if amt:
-                c.market(args.symbol, "SELL" if amt > 0 else "BUY", abs(amt), reduce_only=True)
-            c.cancel_all(args.symbol)
+            close_market(c, args.symbol)
+            cancel_everything(c, args.symbol)
         except TestnetError:
             pass
     for row in d.log:

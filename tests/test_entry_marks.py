@@ -304,8 +304,11 @@ def test_card_tags_from_the_entry_marks():
         c3 = card("N24_DMI@1h", _trade(ctx), 0.0014)
         assert not {"저항 바로 앞 진입", "지지선 뒤 손절", "돌파 진입"} & set(c3["tags"])
         assert c3["sr"] is None and c3["strength"] is None
-    assert set(TAG_NOTES) == {"저항 바로 앞 진입", "지지선 뒤 손절", "돌파 진입"} <= {n for n, _ in TAGS}
-    assert all("관계없" in v for v in TAG_NOTES.values())            # descriptive: the study found no effect
+    sr_tags = {"저항 바로 앞 진입", "지지선 뒤 손절", "돌파 진입"}
+    assert sr_tags <= set(TAG_NOTES) <= {n for n, _ in TAGS}
+    assert set(TAG_NOTES) - sr_tags == {"경제지표 발표 전후"}          # the macro tag (events.py) has its own note
+    assert all("관계없" in TAG_NOTES[n] for n in sr_tags)              # descriptive: the study found no effect
+    assert "설명용" in TAG_NOTES["경제지표 발표 전후"]
     rows = {r["tag"]: r for r in tag_stats([c, card("N24_DMI@1h", _trade({}, pnl=5.0, roe=0.1), 0.0014)])}
     assert rows["저항 바로 앞 진입"]["loss_share"] == 1.0 and rows["저항 바로 앞 진입"]["win_share"] == 0.0
     assert rows["돌파 진입"]["note"] == TAG_NOTES["돌파 진입"] and rows["강제청산"]["note"] is None
