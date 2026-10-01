@@ -31,13 +31,13 @@ func patchDir() (string, error) {
 // 덮어쓸 수 있는 경로인지: nuri-ai/ 아래 .js/.css, 상위 이동·보호 파일·vendor 금지
 func overridable(p string) (string, error) {
 	p = strings.TrimPrefix(path.Clean("/"+strings.ReplaceAll(p, "\\", "/")), "/")
-	if strings.Contains(p, "..") || !strings.HasPrefix(p, "nuri-ai/") {
-		return "", errors.New("nuri-ai/ 안의 파일만 고칠 수 있습니다")
+	if strings.Contains(p, "..") || !(strings.HasPrefix(p, "nuri-ai/") || strings.HasPrefix(p, "gh-coin/")) {
+		return "", errors.New("nuri-ai/ · gh-coin/ 안의 파일만 고칠 수 있습니다")
 	}
 	if ext := path.Ext(p); ext != ".js" && ext != ".css" {
 		return "", errors.New(".js · .css 파일만 고칠 수 있습니다")
 	}
-	if protectedFiles[p] || strings.HasPrefix(p, "nuri-ai/vendor/") {
+	if protectedFiles[p] || strings.HasPrefix(p, "nuri-ai/vendor/") || p == "gh-coin/index.html" {
 		return "", errors.New("보호된 파일입니다 (실거래·키·안전장치·화면 틀)")
 	}
 	return p, nil
@@ -151,4 +151,29 @@ func overrideHandler(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "method", http.StatusMethodNotAllowed)
 	}
+}
+
+// 사무실 폴더(문서/GHNano 사무실)를 탐색기로 연다: 사업계획서·보고서·설계안이 저장되는 곳
+func openFolderHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost || r.Header.Get("X-Nuri-Token") != sessionToken {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	if site := r.Header.Get("Sec-Fetch-Site"); site != "" && site != "same-origin" {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	dir, err := officeWS()
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	if sub := filepath.Clean(r.URL.Query().Get("sub")); sub != "." && sub != "" && !strings.Contains(sub, "..") && !filepath.IsAbs(sub) {
+		if st, e := os.Stat(filepath.Join(dir, sub)); e == nil && st.IsDir() {
+			dir = filepath.Join(dir, sub)
+		}
+	}
+	openDir(dir)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(obj{"ok": true, "dir": dir})
 }

@@ -1,0 +1,29 @@
+/* GH Coin: 사무실 화면(office.css) 위에 얹는 코인 본부 스타일 */
+:root{color-scheme:dark}
+html,body{margin:0;background:#0b0e14;color:#e6e9ef;font-family:"Pretendard Variable",Pretendard,-apple-system,"Segoe UI",sans-serif}
+#gcSplash{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:#0b0e14;color:#e6e9ef}
+#gcSplash b{font-size:28px;letter-spacing:.04em;color:#f7931a}#gcSplash span{color:#8a93a6;font-size:13px}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:2147483646;background:#1c2230;color:#e6e9ef;border:1px solid #2f3a4f;border-radius:10px;padding:10px 14px;font-size:13px;max-width:calc(100vw - 32px)}
+.of-pfx{color:#f7931a}
+/* 파이프라인 */
+.of-pipe{display:flex;flex-direction:column;gap:14px}
+.of-lane{border:1px solid var(--of-line,#2a3142);padding:10px;background:#0f1520}
+.of-lane h4{margin:0 0 8px;font-size:13px;color:#eef1f7}
+.of-pcols{display:flex;align-items:stretch;gap:4px;overflow-x:auto;padding-bottom:4px}
+.of-pcols>i{align-self:center;color:#596273;font-style:normal}
+.of-pc{flex:1 0 92px;min-width:92px;border:1px solid var(--of-line,#2a3142);border-top:3px solid var(--tc);background:#111826;padding:6px 8px;display:flex;flex-direction:column;gap:1px}
+.of-pc small{color:#8a93a6;font-size:11px}.of-pc b{font-size:20px;color:#eef1f7}.of-pc span{font-size:10.5px;color:#8a93a6}.of-pc em{font-style:normal;font-size:10.5px;color:#6b7487}
+.of-lane .of-kt{margin-top:8px}
+.of-promo p{margin:4px 0 8px;font-size:12.5px;line-height:1.55}
+/* AI 연결 창 */
+.gc-modal{position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box}
+.gc-box{width:min(620px,100%);max-height:calc(100vh - 32px);overflow:auto;background:#121826;border:1px solid #2f3a4f;border-radius:12px;padding:16px 18px;color:#e6e9ef;font-size:13.5px;box-sizing:border-box}
+.gc-box h3{margin:0 0 4px;font-size:17px}.gc-box h4{margin:16px 0 6px;font-size:14px}
+.gc-box p{color:#9aa4b5;margin:4px 0 8px;line-height:1.55}
+.gc-row{display:flex;gap:8px;flex-wrap:wrap}.gc-row input{flex:1;min-width:0;background:#0b0f17;border:1px solid #2f3a4f;border-radius:8px;color:#e6e9ef;padding:9px 10px;font:inherit}
+.gc-btn{background:#1f2a3d;border:1px solid #33435f;color:#e6e9ef;border-radius:8px;padding:8px 12px;font:inherit;cursor:pointer}.gc-btn.pri{background:#f7931a;border-color:#f7931a;color:#1a1204;font-weight:700}
+.gc-prov{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid #1f2736}
+.gc-prov small{color:#8a93a6}
+.gc-links{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
+.gc-links a{display:block;padding:7px 9px;border:1px solid #2a3142;border-radius:8px;color:#cfd6e3;text-decoration:none;font-size:12.5px}.gc-links a.on{border-color:#2f6b47;color:#8fd3a8}
+.gc-modal[hidden],#toast[hidden]{display:none!important}

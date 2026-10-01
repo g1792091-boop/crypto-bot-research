@@ -97,3 +97,6 @@ func pickFolder() (string, error) {
 	}
 	return p, nil
 }
+
+// 폴더를 탐색기로 연다
+func openDir(dir string) { exec.Command("explorer", dir).Start() }

@@ -534,8 +534,14 @@ const openBuilding = spec => openArtifact({type: "building", title: spec?.name |
 const openTerminal = async (opts = {}) => { try { const T = await import("./terminal/terminal.js"); T.openTerminal({market: opts.market || "BTCUSDT", exchange: opts.exchange, interval: opts.interval || "1h"}, {esc}); } catch(e){ toast("차트 터미널을 열 수 없습니다: " + e.message); } };
 import("./live-ui.js").then(L => L.initLive({toast, esc, md})).catch(e => console.warn("실거래 모듈", e));   // 승인 창은 패널을 안 열어도 등록해 둔다
 const openLive = async () => { try { const L = await import("./live-ui.js"); L.openLive({md, esc, toast}); } catch(e){ toast("실거래 콘솔을 열 수 없습니다: " + e.message); } };
-window.__ghnano = Object.assign(window.__ghnano || {}, {openBuilding, openTerminal, openLive});
-const goOffice = () => { openOffice({md, esc, toast, openBuilding, openTerminal, openLive}); if (location.hash !== "#office") history.replaceState(null, "", "#office"); };
+// 🪙 코인 본부 (GH Coin 23팀 × 11명): 같은 앱 안에서 전체 화면으로 연다. 닫아도 뒤에서 계속 일한다(같은 AI 키 사용)
+const openCoinHQ = () => {
+  let w = $("#coinHQ");
+  if (!w){ w = document.createElement("div"); w.id = "coinHQ"; w.innerHTML = `<button id="coinHQClose" title="GH Nano 로 돌아가기">✕ GH Nano 로</button><iframe src="../gh-coin/" title="GH Coin 코인 본부"></iframe>`; document.body.appendChild(w); w.querySelector("#coinHQClose").onclick = () => { w.hidden = true; }; }
+  w.hidden = false;
+};
+window.__ghnano = Object.assign(window.__ghnano || {}, {openBuilding, openTerminal, openLive, openCoinHQ});
+const goOffice = () => { openOffice({md, esc, toast, openBuilding, openTerminal, openLive, openCoinHQ}); if (location.hash !== "#office") history.replaceState(null, "", "#office"); };
 $("#openOffice").onclick = goOffice; $("#officeTop").onclick = goOffice;
 window.addEventListener("hashchange", () => { if (location.hash === "#office" && !officeOpen()) goOffice(); });
 if (location.hash === "#office") setTimeout(goOffice, 0);
@@ -1037,5 +1043,6 @@ addEventListener("unhandledrejection", e => { const m = String(e.reason?.message
 window.__nuri = {get chats(){ return chats; }, get current(){ return current; }, settings, eng, LAUNCHER, openArtifact, get trade(){ return trade; }};
 $("#openTerminal") && ($("#openTerminal").onclick = () => openTerminal());
 $("#openLive") && ($("#openLive").onclick = () => openLive());
+$("#openCoinHQ") && ($("#openCoinHQ").onclick = () => openCoinHQ());
 // 앱이 끝까지 열렸다는 표시 (index.html 의 코드 수정 안전장치가 본다)
 window.__ghReady = true; try { localStorage.removeItem("ghn:boot"); } catch(e){}

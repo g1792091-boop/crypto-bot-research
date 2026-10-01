@@ -130,6 +130,7 @@ func main() {
 	mux.HandleFunc("/__nuri/fetch", fetchHandler)
 	mux.HandleFunc("/__nuri/override", overrideHandler)
 	mux.HandleFunc("/__nuri/override/", overrideHandler)
+	mux.HandleFunc("/__nuri/openfolder", openFolderHandler)
 	mux.Handle("/", siteHandler(sub))
 
 	srv := &http.Server{Handler: mux}

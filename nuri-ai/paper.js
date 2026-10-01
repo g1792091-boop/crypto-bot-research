@@ -3,8 +3,11 @@
 import { idb, uid } from "./engine.js";
 import { candlesFor } from "./agent.js";
 
-const KEY = "paper:book", START = 10000, MAX_ACTIVE = 8;
+let KEY = "paper:book", MAX_ACTIVE = 8;
+const START = 10000;
 let BOOK = null;
+// 다른 앱(GH Coin)은 자기 장부를 따로 쓴다: setBookKey("coin:paper", 16)
+export function setBookKey(key, maxActive){ if (key && key !== KEY){ KEY = key; BOOK = null; } if (maxActive) MAX_ACTIVE = maxActive; }
 export async function loadBook(){
   if (!BOOK){ const v = await idb.all(KEY).catch(() => []); BOOK = v[0] && v[0].strategies ? v[0] : {strategies: [], updated: 0}; }
   return BOOK;
@@ -14,9 +17,9 @@ export const TFS = {"1m": "1", "5m": "5", "15m": "15", "1h": "60", "4h": "240", 
 const tfOf = iv => TFS[iv] || (Object.values(TFS).includes(String(iv)) ? String(iv) : "60");
 
 // 새 전략을 모의투자에 올린다 (활성 전략이 많으면 성과가 가장 나쁜 것을 내린다)
-export async function addStrategy({spec, market, exchange = "binancef", tf, author = "", wf = null, cls = "crypto", mname = ""}){
+export async function addStrategy({spec, market, exchange = "binancef", tf, author = "", wf = null, cls = "crypto", mname = "", lane = ""}){
   await loadBook();
-  const s = {id: uid(), name: spec.name || "이름 없는 전략", spec, market: market || spec.symbol || "BTCUSDT", mname: mname || market, cls, exchange, tf: tfOf(tf || spec.interval), author, wf,
+  const s = {id: uid(), name: spec.name || "이름 없는 전략", spec, market: market || spec.symbol || "BTCUSDT", mname: mname || market, cls, exchange, tf: tfOf(tf || spec.interval), author, wf, lane,
     status: "active", created: Date.now(), cash: START, pos: null, trades: [], equity: [{t: Date.now(), v: START}], lastBar: 0, lastSignal: null};
   BOOK.strategies.push(s);
   const active = BOOK.strategies.filter(x => x.status === "active");

@@ -2,7 +2,7 @@
 // - 팀·방·직원은 코드로 정해 두고, 누가 어떤 순서로 말할지도 코드가 정한다(AI는 말만 한다).
 //   흐름: 담당 분석가 → (투자·실행 판단이면) 전략가 → 반론 검토관 → 리스크 책임자 → 팀장 정리
 // - 사용자가 아무것도 치지 않아도 정해진 안건과 급변동 감시로 스스로 회의를 연다(자동 회의).
-import { settings, saveSettings, idb, uid, brainStream, splitThink, overCap, provUse, LAUNCHER, providerCooling, deadModels, coolingInfo } from "./engine.js";
+import { settings, saveSettings, idb, uid, brainStream, splitThink, overCap, provUse, LAUNCHER, providerCooling, deadModels, coolingInfo, PROVIDERS, modelKind } from "./engine.js";
 import { runAgent, activeSkills, TOOLS, marketNews, candlesFor, visibleText, snapText, toModelMessages } from "./agent.js";
 import { fusionSources, TRAIN_SYS } from "./train.js";
 
@@ -121,7 +121,18 @@ for (const a of AGENTS){ const r = RETITLE[a.id]; if (r){ a.team = r[0]; a.title
 export const TEAM_LEAD = {hq: "lead", coin: "coin_fut", stock: "us", fut: "macro", realestate: "land", arch: "arch", quant: "qa", strat: "strat", data: "sns", lab: "dev", venture: "vlead"};
 for (const a of AGENTS) a.lead = TEAM_LEAD[a.team] === a.id;
 export const agentById = id => AGENTS.find(a => a.id === id);
-const hasAI = () => fusionSources().length > 0 || !!settings.keys.anthropic;
+// 사무실 일에 쓸 수 있는 모든 대화 모델 (연결된 모든 회사 · Gemini 포함). 학습 데이터 제외는 keep() 에서 따로 한다(isClaude)
+export function officeSources(){
+  const out = [], seen = new Set();
+  for (const id of Object.keys(PROVIDERS)){
+    if (!settings.keys[id] || id === "anthropic" || overCap(id)) continue;
+    const ms = settings.provModels[id]?.length ? settings.provModels[id] : PROVIDERS[id].defaults || [];
+    for (const m of ms){ if (seen.has(m) || !["chat", "code", "reason"].includes(modelKind(m))) continue; seen.add(m); out.push({id, model: m}); }
+  }
+  if (settings.olModel && settings.olOk) out.push({id: "ollama", model: settings.olModel});
+  return out;
+}
+const hasAI = () => officeSources().length > 0 || !!settings.keys.anthropic;
 export const teamById = id => TEAMS.find(t => t.id === id);
 const SKILL_AGENT = {crypto_spot: "coin_spot", crypto_futures: "coin_fut", us_stocks: "us", kr_stocks: "kr", global_futures: "gfut", kr_futures: "kfut",
   macro: "macro", news: "macro", backtest: "strat", arch: "arch", land: "land", research: "research", coding: "dev"};
@@ -136,6 +147,15 @@ const BUILD = /설계|짓|건축|신축|리모델링|매입|매매|경매|계약
 const badModels = () => { try { const o = JSON.parse(localStorage.getItem("officeBad") || "{}"); return o.day === today() ? o.m || {} : {}; } catch(e){ return {}; } };
 function markBad(model){ if (!model) return; const m = badModels(); m[model] = (m[model] || 0) + 1; try { localStorage.setItem("officeBad", JSON.stringify({day: today(), m})); } catch(e){} }
 // 사무실에 맞는 모델 점수: 크고 빠른 대화 모델 우선 · 영어로 길게 생각하는 추론 모델과 아주 작은 모델은 뒤로
+// 직원·팀에 AI 모델 직접 배정 (key: 직원 id · "team:팀id" · "all", val: "회사id|모델" · 빈 값이면 자동)
+export function setAssign(key, val){ const c = officeCfg(); c.assign = {...(c.assign || {})}; if (val) c.assign[key] = val; else delete c.assign[key]; saveSettings(); fire({kind: "cfg"}); }
+export const getAssign = () => ({...(officeCfg().assign || {})});
+// 고를 수 있는 모델 목록 (회사별, 사무실에 맞는 순)
+export function modelChoices(){
+  const list = officeSources().map(t => ({...t, name: PROVIDERS[t.id]?.name || (t.id === "ollama" ? "Ollama(내 컴퓨터)" : t.id)}));
+  if (settings.keys.anthropic) for (const m of (settings.provModels.anthropic?.length ? settings.provModels.anthropic : PROVIDERS.anthropic?.defaults || [])) if (modelKind(m) === "chat" || /claude/.test(m)) list.push({id: "anthropic", model: m, name: "Claude"});
+  return list.filter(x => modelScore(x.model) > -40).sort((a, b) => a.name.localeCompare(b.name) || modelScore(b.model) - modelScore(a.model));
+}
 export function modelScore(m){
   m = String(m || "").toLowerCase(); let s = 50;
   if (/(^|[^0-9.])(0\.5|1|1\.5|2|3|4|e2|e4)b\b|mini|nano|tiny|-small|lite/.test(m)) s -= 30;
@@ -154,8 +174,8 @@ function noteModel(model, what){ if (!model) return; const o = modelHealth(), k 
 export function assignModels(){
   const dead = deadModels();
   // 없어진 모델 · 지금 한도에 걸려 쉬는 회사는 빼고 (다 빠지면 원래 목록)
-  const live0 = fusionSources().filter(t => !dead[t.model]), live = live0.filter(t => !providerCooling(t.id));
-  const bad = badModels(), all = live.length ? live : live0.length ? live0 : fusionSources(), ok = all.filter(t => !bad[t.model]);
+  const live0 = officeSources().filter(t => !dead[t.model]), live = live0.filter(t => !providerCooling(t.id));
+  const bad = badModels(), all = live.length ? live : live0.length ? live0 : officeSources(), ok = all.filter(t => !bad[t.model]);
   // Groq 무료는 분당 토큰이 아주 적어 도구가 붙는 긴 회의 프롬프트에 금방 막힌다 → 사무실에서는 뒤로
   const ranked = (ok.length ? ok : all).map(t => ({t, sc: modelScore(t.model) - (t.id === "groq" ? 25 : 0)})).filter(x => x.sc > -40).sort((x, y) => y.sc - x.sc);
   // 상위 모델 몇 개만 골고루 나눠 쓴다 (좋은 모델이 적으면 그다음 것까지)
@@ -173,6 +193,13 @@ export function assignModels(){
   const cm = claudeModels();
   // '핵심 자리만' 모드: 판단 책임이 큰 자리와 팀장만 Claude, 나머지는 무료 모델 → 그 대화는 GH Nano 학습에 쓸 수 있다
   if (cm) for (const a of AGENTS){ if (claudeMode() === "key" && !(CLAUDE_TIER[a.id] === "opus" || a.lead)) continue; const m = cm[CLAUDE_TIER[a.id] || "sonnet"]; if (m && !bad[m]) out[a.id] = {id: "anthropic", model: m}; }
+  // 대표가 직접 정한 배정이 가장 우선: 직원 → 팀 → 전원 순서 (그 회사 키가 있고 없어진 모델이 아닐 때)
+  const asg = officeCfg().assign || {};
+  for (const a of AGENTS){
+    const v = asg[a.id] || asg["team:" + a.team] || asg.all; if (!v) continue;
+    const i = v.indexOf("|"), id = v.slice(0, i), model = v.slice(i + 1);
+    if ((settings.keys[id] || id === "ollama") && !dead[model]) out[a.id] = {id, model, pinned: true};
+  }
   return out;
 }
 export const claudeMode = () => officeCfg().claudeMode || (officeCfg().claude === false ? "off" : "all");
@@ -422,7 +449,7 @@ ${notesText(a.team)}- ${isLead ? "너는 마지막 정리 담당이다. 사용�
   fire({kind: "turn", meeting: m, agent: a, entry});
   // 배정 모델 → (빈 답이면) 다른 모델 → 자동 선택 순서로 다시 시도
   const cm = claudeModels();
-  const alt = cm && target?.model !== cm.sonnet ? {id: "anthropic", model: cm.sonnet} : fusionSources().filter(t => t.model !== target?.model && !badModels()[t.model]).sort((x, y) => modelScore(y.model) - modelScore(x.model))[0];
+  const alt = cm && target?.model !== cm.sonnet ? {id: "anthropic", model: cm.sonnet} : officeSources().filter(t => t.model !== target?.model && !badModels()[t.model]).sort((x, y) => modelScore(y.model) - modelScore(x.model))[0];
   const tries = [target, alt, null].filter((t, i, arr) => i === arr.length - 1 || (t && arr.findIndex(x => x && x.model === t.model) === i));
   let lastMsg = null;
   const turnEnd = Math.min(m.deadline || Infinity, Date.now() + (m.trigger === "user" ? 200e3 : 360e3));   // 한 사람 차례 전체 시간 한도 (모델을 바꿔 다시 해도)
@@ -462,10 +489,11 @@ ${notesText(a.team)}- ${isLead ? "너는 마지막 정리 담당이다. 사용�
     if (err && isLimit(why)) noteLimit();
     addNote2(entry, `${shortName(entry.model)}: ${why}`);
     fire({kind: "delta", meeting: m, agent: a, entry});
-    if (err && isLimit(why) && fusionSources().every(t => providerCooling(t.id))) break;   // 다 막혔으면 더 두드리지 않는다
+    if (err && isLimit(why) && officeSources().every(t => providerCooling(t.id))) break;   // 다 막혔으면 더 두드리지 않는다
   }
   if (!entry.text) entry.text = (entry.notes || []).some(n => isLimit(n)) ? `(${a.name}: 무료 AI 한도에 걸려 이번에는 쉬었습니다 · 잠시 뒤 다시 합니다)` : `(${a.name}: 연결된 모델들이 이번에는 답하지 못했습니다)`;
   entry.tools = entry.steps.map(x => x.act);
+  captureFiles(entry, a.team).catch(() => {});
   // 첫 분석가가 실제 도구를 쓴 과정은 '도구 사용' 학습 예시로 (앞사람 발언에 기대지 않는 차례만)
   if (!turns.length && lastMsg && entry.steps.some(x => x.status === "done") && goodText(entry.text) && !isClaude(entry.model) && !lastMsg.parts.some(p => p.type === "tool" && p.status === "error")){
     const conv = toModelMessages([{role: "user", content: m.topic}, lastMsg], 1e9, 3000).map(x => x.role === "assistant" ? {...x, content: noMind(x.content)} : x).filter(x => x.content);
@@ -486,6 +514,30 @@ export const computerOn = () => LAUNCHER.on && officeCfg().computer !== false;
 const officePermission = async tp => computerOn() && /^office_/.test(tp.name);
 const EMPTY_MARK = /\*\((모델이 빈 답을 보냈습니다|답변 길이 한도에 닿아 끊겼습니다|알 수 없는 도구)[^)]*\)\*/g;
 const shortName = m => String(m || "모델").split("/").pop();
+/* ============ 결과물 보관함: 사업계획서·보고서·설계안·매매법·직원이 만든 파일 ============ */
+// 앱 안(IndexedDB)에 항상 보관 → [📁 결과물]에서 보기·내려받기. GHNano.exe 면 문서/GHNano 사무실 폴더에도 같은 파일이 저장된다.
+const DOC_PREFIX = "officedoc:";
+const docKey = path => DOC_PREFIX + String(path || uid()).replace(/[^\w가-힣./-]+/g, "_").slice(0, 160);
+export async function saveDoc({title, path = "", content = "", team = "hq", agent = "", mime = ""}){
+  const t = String(content ?? ""), d = {id: docKey(path).slice(DOC_PREFIX.length), t: Date.now(), title: String(title || path || "문서").slice(0, 120), path, team, agent,
+    mime: mime || (/\.csv$/i.test(path) ? "text/csv" : /\.json$/i.test(path) ? "application/json" : /\.html?$/i.test(path) ? "text/html" : /\.(py|js|sol|txt)$/i.test(path) ? "text/plain" : "text/markdown"), size: t.length, content: t.slice(0, 2e6)};
+  try { await idb.put(docKey(path), d); fire({kind: "docs", doc: {...d, content: ""}}); } catch(e){}
+  return d;
+}
+export async function listDocs(){ return (await idb.all(DOC_PREFIX).catch(() => [])).filter(d => d && d.title).sort((a, b) => b.t - a.t); }
+export async function deleteDoc(id){ await idb.del(DOC_PREFIX + id); fire({kind: "docs"}); }
+export async function openFolder(sub = ""){
+  if (!LAUNCHER.on) return {ok: false, why: "웹 버전에서는 폴더를 열 수 없습니다 (GHNano.exe 에서 됩니다)"};
+  const r = await fetch("/__nuri/openfolder" + (sub ? "?sub=" + encodeURIComponent(sub) : ""), {method: "POST", headers: {"X-Nuri-Token": window.__NURI_TOKEN || ""}}).catch(() => null);
+  return r?.ok ? await r.json() : {ok: false, why: "폴더를 열지 못했습니다"};
+}
+// 직원이 office_write 로 만든 파일도 보관함에 넣는다
+async function captureFiles(entry, team){
+  for (const st of (entry.steps || []).filter(x => x.name === "office_write" && x.status === "done" && x.summary)){
+    try { const {codeCall} = await import("./engine.js"); const r = await codeCall("raw", {path: st.summary, ws: "office"}); if (r?.content != null) await saveDoc({title: st.summary.split("/").pop(), path: st.summary, content: r.content, team, agent: entry.agent}); } catch(e){}
+  }
+}
+
 /* ============ 한국어로만, 간단하게 ============ */
 // 일부 모델(추론형)은 '어떻게 답할지' 영어 계획을 답 앞에 길게 쓴다. 그 부분은 걷어 내고 한국어 답만 보여 준다.
 const HANGUL = /[\uac00-\ud7a3]/g;
@@ -690,7 +742,7 @@ export async function chatter(force){
     bump("calls"); bump("chats");
     const cmods = claudeModels();
     const route = await brainStream({messages: [{role: "system", content: sys}, {role: "user", content: user}], role: "general", maxTokens: 600, temperature: 0.9, noThink: true,
-      ...(cmods ? {target: {id: "anthropic", model: cmods.haiku}, fallback: true} : {exclude: fusionSources().length ? ["anthropic"] : []}), onContent: d => out += d});
+      ...(cmods ? {target: {id: "anthropic", model: cmods.haiku}, fallback: true} : {exclude: officeSources().length ? ["anthropic"] : []}), onContent: d => out += d});
     const body = splitThink(out).body;
     const lines = body.split(/\n+/).map(l => l.replace(/^[\s*\-•]+/, "").replace(/\*\*/g, "").trim()).map(l => {
       const mm = l.match(/^([^:：]{1,12})\s*[:：]\s*(.+)$/); if (!mm) return null;
@@ -794,7 +846,7 @@ async function solo(a, {room, sys, user, maxTokens = 900, temperature = 0.6, ext
   const models = assignModels();
   const target = models[a.id];
   const cm = claudeModels();
-  const alt = cm && target?.model !== cm.sonnet ? {id: "anthropic", model: cm.sonnet} : fusionSources().filter(t => t.model !== target?.model && !badModels()[t.model]).sort((x, y) => modelScore(y.model) - modelScore(x.model))[0];
+  const alt = cm && target?.model !== cm.sonnet ? {id: "anthropic", model: cm.sonnet} : officeSources().filter(t => t.model !== target?.model && !badModels()[t.model]).sort((x, y) => modelScore(y.model) - modelScore(x.model))[0];
   const entry = post({ch: room || a.team, kind: "agent", agent: a.id, text: "", think: "", steps: [], live: true, model: target?.model || "", ...extra});
   fire({kind: "solo", agent: a, entry});
   let finalRaw = "";
@@ -938,6 +990,7 @@ async function research(){
     await keep("office-strategy", [{role: "user", content: clip(user, 3000)}, {role: "assistant", content: ans}], {agent: a.id, model: e.model}).catch(() => null);
   }
   if (wf.pass){
+    saveDoc({title: `매매법 · ${spec.name} (${mk.name} ${TF_KO[tf]}봉) 검증 통과`, path: `strategies/${String(spec.name).replace(/[\\/:*?"<>|\s]+/g, "_").slice(0, 50)}.json`, content: JSON.stringify({spec, backtest: {all: st(bt.stats), is: st(wf.is), oos: st(wf.oos), reasons: wf.reasons}, scenarios: scen || ""}, null, 2), team: "quant", agent: a.id});
     const s = await P.addStrategy({spec, market: mk.market, exchange: mk.exchange, tf, author: a.name, wf: {is: st(wf.is), oos: st(wf.oos)}, cls: mk.cls, mname: mk.name});
     post({ch: "quant", kind: "system", text: `📈 모의투자 시작: ${s.name} (${mk.name} ${TF_KO[tf]}봉 · 레버리지 ${spec.risk?.leverage}배 · ${a.name} 개발 · 다온 검증 통과) · 가상 10,000`});
     fire({kind: "trade", agent: agentById("trader"), text: `📈 ${s.name} 모의투자 시작합니다`});
@@ -980,6 +1033,7 @@ async function computerWork(){
   const md = `# GH Nano 사무실 일일 보고서 · ${day}\n\n## 모의투자\n${await P.bookText()}\n\n## 매매법 연구 (최근 ${res.length}건)\n${res.map(r => `- ${r.pass ? "✅" : "❌"} ${r.name} · ${r.market} ${r.tf} · 검증 구간 ${(+r.oos || 0).toFixed(1)}%`).join("\n") || "- 없음"}\n\n## 오늘 팀 발언 요약\n${log.map(e => `- **${agentById(e.agent)?.name}**: ${e.text.replace(/\s+/g, " ").slice(0, 200)}`).join("\n")}\n`;
   const csv = "strategy,market,side,entry_time,entry,exit_time,exit,pnl_usdt,roe_pct,reason\n" + book.strategies.flatMap(s => s.trades.map(t => [s.name, s.market, t.side, new Date(t.entryT).toISOString(), t.entryP, new Date(t.exitT).toISOString(), t.exitP, t.pnl.toFixed(2), t.roe.toFixed(2), t.reason].map(x => `"${String(x).replace(/"/g, '""')}"`).join(","))).join("\n");
   await codeCall("write", {ws: "office", path: `reports/${day}.md`, content: md});
+  await saveDoc({title: `일일 보고서 ${day}`, path: `reports/${day}.md`, content: md, team: "hq", agent: "eng"});
   await codeCall("write", {ws: "office", path: "data/trades.csv", content: csv});
   for (const s of book.strategies.filter(x => x.status === "active")) await codeCall("write", {ws: "office", path: `strategies/${s.name.replace(/[\\/:*?"<>|]/g, "_")}.json`, content: JSON.stringify(s.spec, null, 2)});
   post({ch: "data", kind: "work", agent: "eng", icon: "💾", text: `문서/GHNano 사무실에 저장: reports/${day}.md · data/trades.csv · strategies/*.json`});
@@ -1088,6 +1142,7 @@ async function makeReport(since){
   await idb.put("report:" + report.id, report);
   localStorage.setItem("officeLastReport", String(Date.now()));
   post({ch: "hq", kind: "report", title: report.title, text: report.text, reportId: report.id});
+  { const d = new Date(), stamp = `${d.toISOString().slice(0, 10)}-${String(hour).padStart(2, "0")}`; saveDoc({title: `${report.title} (${d.toISOString().slice(0, 10)})`, path: `reports/hourly/${stamp}.md`, content: `# ${report.title}\n\n${report.text}\n\n---\n${facts}\n`, team: "hq", agent: "lead"}); }
   fire({kind: "present", report});
   if (computerOn()){ try { const {codeCall} = await import("./engine.js"); const d = new Date(), stamp = `${d.toISOString().slice(0, 10)}-${String(hour).padStart(2, "0")}`; await codeCall("write", {ws: "office", path: `reports/hourly/${stamp}.md`, content: `# ${report.title}\n\n${report.text}\n\n---\n${facts}\n`}); } catch(err){} }
   try { if (typeof document !== "undefined" && document.hidden && "Notification" in window && Notification.permission === "granted") new Notification("GH Nano · " + report.title, {body: report.text.replace(/[#*]/g, "").slice(0, 140)}); } catch(err){}
@@ -1133,6 +1188,8 @@ async function archJob(){
   const c = await solo(s, {room: "arch", sys: personaOf(s, "방금 나온 설계안을 법규·구조·공사비·사용성 관점에서 2~3문장으로 냉정하게 지적하고, 다음 안에서 고칠 점 하나를 명확히 말한다."), user: `${spec.name}: ${JSON.stringify(metrics)}${over.length ? " · " + over.join(", ") : ""}\n특징: ${(spec.features || []).join(", ")}`, maxTokens: 500, train: "이 건축 설계안을 법규·구조·공사비·사용성 관점에서 검토하고 다음에 고칠 점을 말해 줘."});
   const designs = readJ("officeDesigns", []); designs.push({t: Date.now(), name: spec.name, use: spec.use, metrics, critique: noMind(c.text).slice(0, 200)}); writeJ("officeDesigns", designs.slice(-30));
   const files = [];
+  saveDoc({title: `설계안 · ${spec.name}`, path: `designs/${new Date().toISOString().slice(0, 10)}-${String(spec.name).replace(/[\\/:*?"<>|\s]+/g, "_").slice(0, 40)}/설계.md`,
+    content: `# ${spec.name}\n\n- 용도: ${spec.use} · 용도지역: ${spec.zone}\n- 대지 ${spec.site.w}×${spec.site.d}m · 건물 ${spec.building.w}×${spec.building.d}m · ${spec.floors}층\n- 지표: ${Object.entries(metrics).map(([k, v]) => k + " " + v).join(", ")}\n${over.length ? "- ⚠ " + over.join(", ") + "\n" : ""}\n## 구조·견적 검토\n${noMind(c.text)}\n\n## 설계 JSON\n\n\`\`\`json\n${JSON.stringify(spec, null, 2)}\n\`\`\`\n`, team: "arch", agent: d.id});
   if (computerOn()){
     try { const {codeCall} = await import("./engine.js"), base = `designs/${new Date().toISOString().slice(0, 10)}-${String(spec.name).replace(/[\\/:*?"<>|\s]+/g, "_").slice(0, 40)}`;
       await codeCall("write", {ws: "office", path: base + "/spec.json", content: JSON.stringify({spec, metrics, critique: c.text}, null, 2)}); files.push(base + "/spec.json");
@@ -1197,6 +1254,9 @@ async function bizJob(){
     const p = await solo(lead, {room: "venture", sys: personaOf(lead, "유망 판정을 받은 사업의 사업계획서를 마크다운으로 쓴다: 1.요약 2.문제와 고객 3.해결책·제품 4.시장 규모 5.경쟁 6.수익 모델 7.시뮬레이션 결과(아래 숫자 그대로) 8.실행 계획(0~3·3~6·6~12개월) 9.필요 자금·인력 10.위험과 대응(아래 컴플라이언스 의견 반영) 11.검증해야 할 가정. 과장하지 않는다."),
       user: `${B.bizText(sim)}\n\n아이디어: ${sim.idea.desc}\n고객: ${sim.idea.customer}\n\n컴플라이언스 의견: ${noMind(c.text)}`, maxTokens: 3000, train: "아래 사업 시뮬레이션 결과와 규제 의견으로 사업계획서를 써 줘."});
     plan = true;
+    { const base = `business/${String(sim.idea.name).replace(/[\\/:*?"<>|\s]+/g, "_").slice(0, 40)}`;
+      await saveDoc({title: `사업계획서 · ${sim.idea.name}`, path: base + "/사업계획서.md", content: `# ${sim.idea.name} 사업계획서\n\n${noMind(p.text)}\n\n---\n## 시뮬레이션\n${B.bizText(sim)}\n\n## 컴플라이언스 의견\n${noMind(c.text)}\n`, team: "venture", agent: lead.id});
+      await saveDoc({title: `손익표 · ${sim.idea.name}`, path: base + "/financials.csv", content: B.financialsCSV(sim), team: "venture", agent: b.id}); }
     if (computerOn()){ try { const {codeCall} = await import("./engine.js"), base = `business/${String(sim.idea.name).replace(/[\\/:*?"<>|\s]+/g, "_").slice(0, 40)}`;
       await codeCall("write", {ws: "office", path: base + "/사업계획서.md", content: `# ${sim.idea.name} 사업계획서\n\n${noMind(p.text)}\n\n---\n## 시뮬레이션\n${B.bizText(sim)}\n`}); files.push(base + "/사업계획서.md");
       await codeCall("write", {ws: "office", path: base + "/financials.csv", content: B.financialsCSV(sim)}); files.push(base + "/financials.csv"); } catch(err){} }
@@ -1244,6 +1304,7 @@ async function realestateJob(){
   const cands = R.parseCandidates(e.raw || e.text, {evidence: ev.items});
   if (!cands.length){ addNote("realestate", `${region}: 이번 자료로는 후보를 못 찾음 → 검색어 보완 필요`, "발굴"); return; }
   await R.saveCandidates(cands, {evidence: ev.items});
+  R.loadCandidates().then(all => saveDoc({title: "재개발 후보 순위 (최신)", path: "realestate/재개발-후보-순위.md", content: "# 재개발 후보 순위\n\n" + R.candidateText(R.rankCandidates(all), 40) + "\n\n" + (R.customIndicatorText?.() || ""), team: "realestate", agent: a.id})).catch(() => {});
   const ranked = R.rankCandidates(await R.loadCandidates());
   const here = ranked.filter(c => (c.region || "").includes(region.split(" ").pop()) || region.includes(c.region || "@")).slice(0, 6);
   post({ch: "realestate", kind: "re", agent: a.id, region, items: (here.length ? here : ranked.slice(0, 6)).map(c => ({area: c.area, region: c.region, project_type: c.project_type, stage: c.stage, score: c.score ?? c.index?.score, certainty: c.certainty ?? c.index?.certainty, upside: c.upside ?? c.index?.upside, sources: (c.evidence_urls || c.sources || []).slice(0, 2).map(u => typeof u === "string" ? {title: u.replace(/^https?:\/\/(www\.)?/, "").slice(0, 40), url: u} : u)}))});

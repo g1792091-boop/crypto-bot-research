@@ -40,3 +40,12 @@ func pickFolder() (string, error) {
 	}
 	return "", errors.New("이 운영체제에서는 폴더 선택 창을 지원하지 않습니다. 경로를 직접 입력하세요")
 }
+
+// 폴더를 파일 관리자로 연다
+func openDir(dir string) {
+	if runtime.GOOS == "darwin" {
+		exec.Command("open", dir).Start()
+		return
+	}
+	exec.Command("xdg-open", dir).Start()
+}

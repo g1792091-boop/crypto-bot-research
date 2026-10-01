@@ -13,9 +13,15 @@ const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(
 /* ============ 오류 모으기 ============ */
 const NOISE = /ResizeObserver|Failed to fetch|NetworkError|Load failed|aborted|AbortError|signal is aborted|chrome-extension|moz-extension|Script error\.?$|CORS|net::|사용 한도|키가 올바르지|연결하지 못했습니다|429|401|403/i;
 // 스택에서 nuri-ai 기준 파일 경로와 줄 번호
+// 파일 이름: GH Nano 파일은 'office.js' 처럼(예전 기록과 같게), GH Coin 파일은 'gh-coin/coin-office.js' 처럼
+const RE_FILE = /\/(nuri-ai|gh-coin)\/([\w\-/.]+\.js)(?:\?[^:]*)?:(\d+)/;
+const relName = (dir, f) => dir === "gh-coin" ? "gh-coin/" + f : f;
+export const sitePath = f => /^gh-coin\//.test(f) ? f : "nuri-ai/" + f;   // 사이트 기준 경로
 function whereOf(stack = "", file = "", line = 0){
-  const m = String(file ? `${file}:${line || 0}` : stack).match(/\/nuri-ai\/([\w\-/.]+\.js)(?:\?[^:]*)?:(\d+)/) || String(stack).match(/\/nuri-ai\/([\w\-/.]+\.js)(?:\?[^:]*)?:(\d+)/);
-  return m ? {file: m[1], line: +m[2]} : {file: String(file || "").replace(/^.*\/nuri-ai\//, "").replace(/\?.*$/, ""), line: +line || 0};
+  const m = String(file ? `${file}:${line || 0}` : stack).match(RE_FILE) || String(stack).match(RE_FILE);
+  if (m) return {file: relName(m[1], m[2]), line: +m[3]};
+  const f = String(file || "").replace(/\?.*$/, ""), d = f.match(/\/(nuri-ai|gh-coin)\/(.+)$/);
+  return {file: d ? relName(d[1], d[2]) : f.replace(/^.*\//, ""), line: +line || 0};
 }
 export function recordError({msg, file, line, col, stack = "", src = ""} = {}){
   msg = String(msg || "").slice(0, 300); if (!msg || NOISE.test(msg)) return null;
@@ -63,8 +69,8 @@ export function syntaxCheck(code){
 export const listPatches = () => readJ(PATCH_KEY, []);
 const savePatches = list => writeJ(PATCH_KEY, list.slice(-80));
 function upsert(p){ const list = listPatches(), i = list.findIndex(x => x.id === p.id); if (i >= 0) list[i] = p; else list.push(p); savePatches(list); return p; }
-const isProtected = f => !f || PROTECTED.includes(f) || /^vendor\//.test(f) || /\.\./.test(f) || !/\.(js|css)$/.test(f);
-async function source(file){ const r = await fetch("./" + file, {cache: "no-store"}); if (!r.ok) throw new Error(`${file}을(를) 읽지 못했습니다 (${r.status})`); return r.text(); }
+const isProtected = f => !f || PROTECTED.includes(f) || PROTECTED.includes(f.replace(/^gh-coin\//, "")) || /(^|\/)vendor\//.test(f) || /\.\./.test(f) || !/\.(js|css)$/.test(f);
+async function source(file){ const r = await fetch("/" + sitePath(file), {cache: "no-store"}); if (!r.ok) throw new Error(`${file}을(를) 읽지 못했습니다 (${r.status})`); return r.text(); }
 const count = (hay, needle) => { let n = 0, i = 0; while ((i = hay.indexOf(needle, i)) >= 0){ n++; i += needle.length || 1; } return n; };
 function pickJSON(t){
   t = String(t || "").replace(/<think>[\s\S]*?<\/think>/g, "");
@@ -126,7 +132,7 @@ export async function applyPatch(id){
   if (p.status !== "proposed") return {ok: false, why: "적용할 수 있는 상태가 아닙니다"};
   const text = await source(p.file), c = check(text, p);
   if (!c.ok){ upsert({...p, status: "invalid", check: {ok: false, msg: "지금 코드와 맞지 않음: " + c.msg}}); return {ok: false, why: c.msg}; }
-  await ov("POST", {path: "nuri-ai/" + p.file, content: c.patched});
+  await ov("POST", {path: sitePath(p.file), content: c.patched});
   await ov("POST", null, "/enable").catch(() => null);
   upsert({...p, status: "applied", applied: Date.now(), before: text.length < 1.5e6 ? text : null});
   return {ok: true};
@@ -137,8 +143,8 @@ export async function revertPatch(id){
   if (!launcherOn()) return {ok: false, why: "GHNano.exe에서만 되돌릴 수 있습니다"};
   // 같은 파일에 먼저 적용된 수정이 있으면 그 직전 상태로, 없으면 원본(exe 안 파일)으로
   const earlier = listPatches().filter(x => x.file === p.file && x.status === "applied" && x.applied < p.applied);
-  if (p.before && earlier.length) await ov("POST", {path: "nuri-ai/" + p.file, content: p.before});
-  else await ov("DELETE", null, "?path=" + encodeURIComponent("nuri-ai/" + p.file));
+  if (p.before && earlier.length) await ov("POST", {path: sitePath(p.file), content: p.before});
+  else await ov("DELETE", null, "?path=" + encodeURIComponent(sitePath(p.file)));
   upsert({...p, status: "reverted", reverted: Date.now()});
   return {ok: true};
 }

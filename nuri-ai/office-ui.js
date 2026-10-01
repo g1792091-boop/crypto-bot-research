@@ -121,7 +121,7 @@ export function openOffice(opts){
   ctx = opts;
   if (!root){ root = build(); document.body.appendChild(root); }
   root.hidden = false; document.body.classList.add("office-open");
-  $o("#ofTerm").hidden = typeof ctx.openTerminal !== "function"; $o("#ofLive").hidden = typeof ctx.openLive !== "function";
+  $o("#ofCoinHQ").hidden = typeof ctx.openCoinHQ !== "function"; $o("#ofTerm").hidden = typeof ctx.openTerminal !== "function"; $o("#ofLive").hidden = typeof ctx.openLive !== "function";
   fit(); O.loadLog().then(renderLog);
   O.startAutopilot(); try { localStorage.setItem("officeUsed", "1"); } catch(e){}
   O.setOfficeVisible(true); O.startChatter(); O.startCycle(); refreshBoard();
@@ -174,7 +174,7 @@ function build(){
     <select id="ofClaude" class="of-cl" title="Claude: 전원 — 직원 전원이 Claude로 일합니다(전략·리스크·검증·퀀트는 Opus, 분석은 Sonnet, 가벼운 일은 Haiku).&#10;Claude: 핵심 자리만 — 판단 책임이 큰 자리만 Claude, 나머지는 무료 모델이라 그 글을 GH Nano 학습에 쓸 수 있습니다.&#10;Claude: 안 씀 — 모두 무료 모델.&#10;Anthropic 약관에 따라 Claude가 쓴 글은 GH Nano 학습 데이터에서 제외됩니다. 하루 한도를 넘으면 무료 모델로 돌아갑니다."><option value="all">Claude: 전원</option><option value="key">Claude: 핵심 자리만 (나머지 무료 → GH Nano 학습 가능)</option><option value="off">Claude: 안 씀</option></select>
     <button class="of-btn" id="ofNow" title="다음 주기를 기다리지 않고 지금 한 가지 일을 시킵니다">지금 일 시키기</button>
     <span class="of-pick"><button class="of-btn" id="ofAgendaBtn" aria-haspopup="true">안건 열기 ▾</button><div class="of-menu" id="ofAgenda" hidden>${agendaOpts}</div></span>
-    <button class="of-btn" id="ofPresBtn" title="매시 CEO의 팀별 성과 발표를 다시 봅니다">📢 발표</button>
+    <button class="of-btn" id="ofPresBtn" title="매시 CEO의 팀별 성과 발표를 다시 봅니다">📢 발표</button><button class="of-btn" id="ofCoinHQ" title="GH Coin 코인 본부: 보조지표·매매법 개발·백테스트·데모·실거래·추세·타점·지지저항·익절손절·뉴스·상황판·패턴·커스텀 지표·코인별 팀 (23팀 × 11명)" hidden>🪙 코인 본부</button><button class="of-btn" id="ofDocsBtn" title="사업계획서·보고서·설계안·매매법 등 직원들이 만든 결과물">📁 결과물</button>
     <button class="of-btn" id="ofTeam">팀 구성</button>
     <button class="of-btn" id="ofTerm" hidden>📈 차트 터미널</button>
     <button class="of-btn" id="ofLive" hidden>💰 실거래</button>
@@ -268,14 +268,28 @@ function wire(el){
   el.querySelector("#ofChat").checked = c.chat !== false;
   el.querySelector("#ofChat").onchange = e => { O.setOffice({chat: e.target.checked}); if (e.target.checked){ localStorage.setItem("officeLastChat", "0"); } renderStatus(); };
   el.querySelector("#ofClose").onclick = closeOffice;
+  el.addEventListener("change", e => {
+    const sel = e.target.closest("[data-assign]"); if (!sel) return;
+    O.setAssign(sel.dataset.assign, sel.value);
+    const who = sel.dataset.assign === "all" ? "전원" : sel.dataset.assign.startsWith("team:") ? teamById(sel.dataset.assign.slice(5))?.name : agentById(sel.dataset.assign)?.name;
+    ctx.toast(sel.value ? `${who}: ${shortModel(sel.value.split("|").slice(1).join("|"))} 로 일합니다` : `${who}: 자동 배정으로 돌아갑니다`);
+  });
   el.querySelector("#ofStop").onclick = () => { O.stopMeeting(); ctx.toast("회의를 멈췄습니다"); };
   el.querySelector("#ofAgendaBtn").onclick = e => { e.stopPropagation(); toggleMenu(e.currentTarget, $o("#ofAgenda")); };
   el.querySelector("#ofSetBtn").onclick = e => { e.stopPropagation(); toggleMenu(e.currentTarget, $o("#ofSet")); };
   el.querySelector("#ofPresBtn").onclick = () => openPres(null);
+  el.querySelector("#ofDocsBtn").onclick = () => openDocs();
+  el.querySelector("#ofCoinHQ").onclick = () => { if (typeof ctx.openCoinHQ === "function") ctx.openCoinHQ(); };
   el.querySelector("#ofTerm").onclick = () => { if (typeof ctx.openTerminal === "function"){ closeOffice(); ctx.openTerminal(); } };
   el.querySelector("#ofLive").onclick = () => { if (typeof ctx.openLive === "function"){ closeOffice(); ctx.openLive(); } };
   el.querySelector(".of-top").addEventListener("scroll", () => root.querySelectorAll(".of-menu").forEach(m => { if (Date.now() - (m._at || 0) > 500) m.hidden = true; }), {passive: true});
   el.addEventListener("click", e => {
+    if (e.target.closest("[data-docclose]") || e.target.id === "ofDocs"){ $o("#ofDocs").hidden = true; return; }
+    const dv = e.target.closest("[data-docview]"); if (dv){ showDoc(dv.dataset.docview); return; }
+    const dd = e.target.closest("[data-docdl]"); if (dd){ dlDoc(dd.dataset.docdl); return; }
+    const dx = e.target.closest("[data-docdel]"); if (dx){ if (confirm("이 결과물을 앱 보관함에서 지울까요? (폴더의 파일은 그대로)")) O.deleteDoc(dx.dataset.docdel).then(() => openDocs(true)); return; }
+    if (e.target.closest("[data-docfolder]")){ O.openFolder(e.target.closest("[data-docfolder]").dataset.docfolder || "").then(r => ctx.toast(r.ok ? "폴더를 열었습니다: " + (r.dir || "") : r.why)); return; }
+    const df = e.target.closest("[data-docfilter]"); if (df){ docFilter = df.dataset.docfilter; openDocs(true); return; }
     const pa = e.target.closest("[data-papply]");
     if (pa){ if (!confirm("이 코드 수정을 적용하고 앱을 다시 불러올까요?\n(앱이 안 열리면 자동으로 되돌립니다)")) return; pa.disabled = true;
       SD.applyPatch(pa.dataset.papply).then(r => { if (r.ok){ ctx.toast("수정을 적용했습니다 · 앱을 다시 불러옵니다"); SD.reloadSoon(); } else { ctx.toast("적용하지 못했습니다: " + r.why); renderLog(); } }).catch(err => { ctx.toast("적용 실패: " + err.message); renderLog(); }); return; }
@@ -391,6 +405,7 @@ function onEvent(ev){
   if (ev.kind === "log"){ if (inChan(ev.entry)) appendEntry(ev.entry); return; }
   if (ev.kind === "cleared"){ renderLog(); return; }
   if (ev.kind === "cfg" || ev.kind === "usage"){ renderStatus(); return; }
+  if (ev.kind === "docs"){ const db = $o("#ofDocs"); if (db && !db.hidden) openDocs(true); }
   if (ev.kind === "growth" || (ev.kind === "log" && ev.entry?.kind === "patch")){ renderGrowthCount(); if (chan === "growth") renderLog(); if (ev.kind === "growth") return; }
   if (ev.kind === "present"){ present(ev.report); return; }
   if (ev.kind === "start"){
@@ -607,6 +622,38 @@ function updateEntry(e){
   el.outerHTML = entryHTML(e);
   if (near) box.scrollTop = box.scrollHeight;
 }
+/* ============ 📁 결과물 보관함 ============ */
+let docList = [], docFilter = "all", docSel = null;
+const DOC_KIND = [["all", "전체"], ["business", "사업계획서"], ["reports", "보고서"], ["strategies", "매매법"], ["designs", "설계안"], ["realestate", "부동산"], ["ventures", "신사업 파일"], ["etc", "기타"]];
+const kindOfDoc = d => { const p = String(d.path || "").replace(/^ghcoin\//, ""); const k = p.split("/")[0]; return DOC_KIND.some(x => x[0] === k) ? k : "etc"; };
+async function openDocs(keep){
+  let box = $o("#ofDocs");
+  if (!box){ root.insertAdjacentHTML("beforeend", `<div class="of-docs" id="ofDocs" hidden><div class="of-docsbox"><div class="of-docsh"><b>📁 결과물 보관함</b><span id="ofDocsSub"></span><span class="of-sp"></span><button class="of-btn2" data-docfolder="">📂 폴더 열기</button><button class="of-x" data-docclose aria-label="닫기">✕</button></div><div class="of-docsf" id="ofDocsF"></div><div class="of-docsb"><div class="of-docsl" id="ofDocsL"></div><div class="of-docsv" id="ofDocsV"></div></div></div></div>`); box = $o("#ofDocs"); }
+  box.hidden = false;
+  docList = await (O.listDocs ? O.listDocs() : []);
+  const n = k => k === "all" ? docList.length : docList.filter(d => kindOfDoc(d) === k).length;
+  $o("#ofDocsSub").textContent = `${docList.length}개 · ${LAUNCHER.on ? "앱 안 보관 + 문서/GHNano 사무실" + (O.TEAMS?.length > 20 ? "/ghcoin" : "") + " 폴더" : "앱 안에 보관 (웹 버전)"}`;
+  $o("#ofDocsF").innerHTML = DOC_KIND.filter(([k]) => k === "all" || n(k)).map(([k, l]) => `<button data-docfilter="${k}" aria-pressed="${k === docFilter}">${l} <small>${n(k)}</small></button>`).join("");
+  const list = docList.filter(d => docFilter === "all" || kindOfDoc(d) === docFilter);
+  $o("#ofDocsL").innerHTML = list.map(d => `<button class="of-doci" data-docview="${E(d.id)}" aria-pressed="${d.id === docSel}"><b>${E(d.title)}</b><small>${E(d.path || "")} · ${E(when(d.t))} · ${(d.size / 1024).toFixed(1)}KB</small></button>`).join("")
+    || `<div class="of-empty"><b>아직 결과물이 없습니다</b><p>사업계획서·시간별 보고서·검증 통과한 매매법·설계안·직원이 만든 파일이 생기면 여기에 쌓입니다.</p></div>`;
+  if (!keep || !list.some(d => d.id === docSel)) docSel = list[0]?.id || null;
+  if (docSel) showDoc(docSel); else $o("#ofDocsV").innerHTML = "";
+}
+function showDoc(id){
+  docSel = id; root.querySelectorAll("#ofDocsL [data-docview]").forEach(b => b.setAttribute("aria-pressed", b.dataset.docview === id));
+  const d = docList.find(x => x.id === id), v = $o("#ofDocsV"); if (!d){ v.innerHTML = ""; return; }
+  const body = /markdown/.test(d.mime) ? `<div class="md">${ctx.md(d.content || "")}</div>` : `<pre>${E(String(d.content || "").slice(0, 200000))}</pre>`;
+  const dir = String(d.path || "").split("/").slice(0, -1).join("/");
+  v.innerHTML = `<div class="of-docvh"><b>${E(d.title)}</b><span>${E(d.path || "")}</span><div class="of-pbtn"><button class="of-btn2" data-docdl="${E(d.id)}">⬇ 내려받기</button>${LAUNCHER.on && dir ? `<button class="of-btn2" data-docfolder="${E(dir)}">📂 이 폴더 열기</button>` : ""}<button class="of-btn2" data-docdel="${E(d.id)}">지우기</button></div></div>${body}`;
+  v.scrollTop = 0;
+}
+function dlDoc(id){
+  const d = docList.find(x => x.id === id); if (!d) return;
+  const name = String(d.path || d.title).split("/").pop() || "결과물.md", bom = /csv/.test(d.mime) ? "\ufeff" : "";
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([bom + (d.content || "")], {type: (d.mime || "text/plain") + ";charset=utf-8"})); a.download = /\.\w+$/.test(name) ? name : name + ".md";
+  a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 3000); ctx.toast("내려받았습니다: " + a.download);
+}
 /* ============ 성장 과제 보드 ============ */
 const backlogItems = () => { if (!has("backlog")) return []; try { return O.backlog() || []; } catch(e){ return []; } };
 function renderGrowthCount(){
@@ -684,21 +731,28 @@ function reportHTML(r){
     ${r.text ? `<details class="of-rfull"${cards ? "" : " open"}><summary>발표문 전체</summary><div class="of-rtx md">${ctx.md(r.text)}</div></details>` : ""}`;
 }
 /* ============ 직원 카드 · 팀 구성 ============ */
+// AI 모델 고르기 (직원·팀·전원). 비워 두면 자동: 연결된 모델 중 빠르고 큰 모델을 골고루 나눠 배정
+function modelSelect(key, cur, label = "자동 (추천)"){
+  const ch = typeof O.modelChoices === "function" ? O.modelChoices() : [];
+  if (!ch.length) return `<span class="of-dim">먼저 AI 키를 연결하세요</span>`;
+  const groups = {}; for (const m of ch) (groups[m.name] ||= []).push(m);
+  return `<select class="of-msel" data-assign="${E(key)}"><option value="">${E(label)}</option>${Object.entries(groups).map(([g, ms]) => `<optgroup label="${E(g)}">${ms.map(m => { const v = m.id + "|" + m.model; return `<option value="${E(v)}"${v === cur ? " selected" : ""}>${E(shortModel(m.model))}</option>`; }).join("")}</optgroup>`).join("")}</select>`;
+}
 function showCard(id){
   const a = agentById(id), t = teamById(a.team), mdl = O.assignModels()[id];
   const sk = (a.skills || []).map(s => BUILTIN_SKILLS.find(b => b.id === s)?.name || s);
   const c = $o("#ofCard");
   c.innerHTML = `<div class="of-cardh"><div class="of-av big">${sprite(a)}</div><div><b>${isLead(a) ? "♛ " : ""}${E(a.name)}${isLead(a) ? ` <em class="of-leadtag">${a.team === "hq" ? "CEO" : "팀장"}</em>` : ""}</b><span>${E(t?.name)} · ${E(a.title)}</span></div><button class="of-x" aria-label="닫기">✕</button></div>
     <p>${E(a.duty)}</p>
-    <dl><dt>스킬</dt><dd>${sk.length ? sk.map(ctx.esc).join(", ") : "공통 도구(검색·계산·NVIDIA 스킬)"}</dd><dt>배정된 AI 모델</dt><dd>${mdl ? ctx.esc(mdl.model) + " · 막히면 다른 모델로 자동 전환" : "API 키를 넣으면 배정됩니다"}</dd><dt>부르는 법</dt><dd>메시지에 <code>@${E(a.name)}</code></dd></dl>
+    <dl><dt>스킬</dt><dd>${sk.length ? sk.map(ctx.esc).join(", ") : "공통 도구(검색·계산·NVIDIA 스킬)"}</dd><dt>AI 직접 고르기</dt><dd>${modelSelect(a.id, (O.getAssign?.() || {})[a.id], "자동 · 팀 설정 따름")} <small class="of-dim">팀 전체는 [팀 구성]에서</small></dd><dt>배정된 AI 모델</dt><dd>${mdl ? ctx.esc(mdl.model) + " · 막히면 다른 모델로 자동 전환" : "API 키를 넣으면 배정됩니다"}</dd><dt>부르는 법</dt><dd>메시지에 <code>@${E(a.name)}</code></dd></dl>
     ${O.seen?.[id]?.length ? `<h4 class="of-h4">최근에 본 것</h4><ul class="of-seen">${O.seen[id].map(o => `<li>${ctx.esc(o.icon || "")} ${o.url ? link(o.url, o.text) : ctx.esc(o.text)} <small>${hm(o.t)}</small></li>`).join("")}</ul>` : ""}`;
   c.hidden = false;
 }
 function showTeam(){
-  const models = O.assignModels();
+  const models = O.assignModels(), asg = O.getAssign?.() || {};
   const c = $o("#ofCard");
   c.innerHTML = `<div class="of-cardh"><div><b>팀 구성 · ${TEAMS.length}개 조직 · ${AGENTS.length}명</b><span>CEO와 분야별 팀장이 팀을 이끕니다. 질문 내용으로 담당자가 자동으로 정해지고, 투자·실행 판단은 전략가 → 반론 검토관 → 리스크 책임자를 거쳐 CEO가 정리합니다. 매시 CEO가 팀별 성과를 발표합니다.</span></div><button class="of-x" aria-label="닫기">✕</button></div>
-    <div class="of-teams">${TEAMS.map(t => `<div class="of-team" style="--tc:${tc(t.id)}"><b>${E(t.name)} <small>${membersOf(t.id).length}명</small></b><span>${E(t.desc || "")}</span>${membersOf(t.id).map(a => `<div class="of-mem${isLead(a) ? " lead" : ""}" data-ag="${a.id}"><div class="of-av">${sprite(a)}</div><div><b>${isLead(a) ? "♛ " : ""}${E(a.name)}</b>${isLead(a) ? ` <em class="of-leadtag">${t.id === "hq" ? "CEO" : "팀장"}</em>` : ""} <span>${E(a.title)}</span><small>${models[a.id] ? ctx.esc(shortModel(models[a.id].model)) : "모델 미배정"}</small></div></div>`).join("")}</div>`).join("")}</div>
+    <div class="of-assign-all">전원 AI: ${modelSelect("all", asg.all, "자동 (추천)")} <small class="of-dim">팀·직원에 따로 고른 것이 우선합니다. Claude 를 고르면 그 직원의 글은 학습 데이터에서 빠집니다.</small></div><div class="of-teams">${TEAMS.map(t => `<div class="of-team" style="--tc:${tc(t.id)}"><b>${E(t.name)} <small>${membersOf(t.id).length}명</small></b><span>${E(t.desc || "")}</span><div class="of-tassign">팀 AI: ${modelSelect("team:" + t.id, asg["team:" + t.id], "자동 · 전원 설정 따름")}</div>${membersOf(t.id).map(a => `<div class="of-mem${isLead(a) ? " lead" : ""}" data-ag="${a.id}"><div class="of-av">${sprite(a)}</div><div><b>${isLead(a) ? "♛ " : ""}${E(a.name)}</b>${isLead(a) ? ` <em class="of-leadtag">${t.id === "hq" ? "CEO" : "팀장"}</em>` : ""} <span>${E(a.title)}</span><small>${models[a.id] ? ctx.esc(shortModel(models[a.id].model)) : "모델 미배정"}</small></div></div>`).join("")}</div>`).join("")}</div>
     <p class="of-flow">회의 순서(코드가 정함): 담당 분석가 → <b>전략가</b>(실행 계획) → <b>반론 검토관</b>(반대 근거 3개 + 판정) → <b>리스크 책임자</b>(승인·축소·거부) → <b>CEO</b>(최종 답). 회의는 팀 구역·대회의실·라운지·발표 무대 어디서든 열립니다. 발언 속 @이름으로 동료를 부르면 그 사람이 회의에 들어옵니다.</p>`;
   c.hidden = false;
 }

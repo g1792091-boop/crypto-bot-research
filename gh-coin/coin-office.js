@@ -1,0 +1,1340 @@
+// GH Coin 엔진: 코인 전문 AI 에이전트 회사 (GH Coin 엔진에서 갈라져 나옴 — GH Nano 와 저장소를 섞지 않는다)
+// 파이프라인(코드가 판정): 매매법 개발 → 백테스트(앞 70%/뒤 30% 검증) → 데모거래 → 관문 통과 시 실거래 후보 → 대표 승인 시 실거래
+// 커스텀 지표 라인도 같은 단계를 따로 밟는다. 분석 팀(추세·타점·지지저항·익절손절·패턴·뉴스·상황판·ML·코인별)은 코드 계산 + AI 해설.
+import { settings, saveSettings, idb, uid, brainStream, splitThink, overCap, provUse, LAUNCHER, providerCooling, deadModels, coolingInfo, PROVIDERS, modelKind } from "../nuri-ai/engine.js";
+import { runAgent, activeSkills, TOOLS, marketNews, candlesFor, visibleText, snapText, toModelMessages } from "../nuri-ai/agent.js";
+import { fusionSources, TRAIN_SYS } from "../nuri-ai/train.js";
+
+/* ============ 팀과 직원 (coin-org.js) ============ */
+import { TEAMS, AGENTS, TEAM_LEAD, agentById, teamById, SKILL_AGENT, MARKET, TOPIC_LEAD, AGENDA as COIN_AGENDA, WATCH as COIN_WATCH,
+  WATCH_OF as COIN_WATCH_OF, RELATED as COIN_RELATED, CLAUDE_TIER as COIN_TIER, COINS, coinById, TEAM_COLOR } from "./coin-org.js";
+export { TEAMS, AGENTS, TEAM_LEAD, agentById, teamById, COINS, TEAM_COLOR };
+// 사무실 일에 쓸 수 있는 모든 대화 모델 (연결된 모든 회사 · Gemini 포함). 학습 데이터 제외는 keep() 에서 따로 한다(isClaude)
+export function officeSources(){
+  const out = [], seen = new Set();
+  for (const id of Object.keys(PROVIDERS)){
+    if (!settings.keys[id] || id === "anthropic" || overCap(id)) continue;
+    const ms = settings.provModels[id]?.length ? settings.provModels[id] : PROVIDERS[id].defaults || [];
+    for (const m of ms){ if (seen.has(m) || !["chat", "code", "reason"].includes(modelKind(m))) continue; seen.add(m); out.push({id, model: m}); }
+  }
+  if (settings.olModel && settings.olOk) out.push({id: "ollama", model: settings.olModel});
+  return out;
+}
+const hasAI = () => officeSources().length > 0 || !!settings.keys.anthropic;
+const DECIDE = /사도|살까|팔까|매수|매도|진입|청산|롱|숏|레버리지|포지션|투자|전략|백테스트|들어가|비중|손절|익절|전망|어때|괜찮|해도 될까|할까/;
+const RESEARCH = /검색|찾아|조사|자료|논문|출처|리서치|비교해|후기|리뷰|최신 정보/;
+const BUILD = /$^/;
+// 장부도 GH Nano 와 따로
+import("../nuri-ai/paper.js").then(P => P.setBookKey?.("coin:paper", 16)).catch(() => {});
+
+/* ============ 직원마다 다른 AI 모델 배정 ============ */
+// 연결된 모든 대화 모델 중에서, 역할에 맞는 종류를 우선해 서로 다른 모델을 고르게 나눠 준다
+// 빈 답·오류가 난 모델은 오늘 하루 배정에서 뺀다
+const badModels = () => { try { const o = JSON.parse(localStorage.getItem("coinBad") || "{}"); return o.day === today() ? o.m || {} : {}; } catch(e){ return {}; } };
+function markBad(model){ if (!model) return; const m = badModels(); m[model] = (m[model] || 0) + 1; try { localStorage.setItem("coinBad", JSON.stringify({day: today(), m})); } catch(e){} }
+// 사무실에 맞는 모델 점수: 크고 빠른 대화 모델 우선 · 영어로 길게 생각하는 추론 모델과 아주 작은 모델은 뒤로
+// 직원·팀에 AI 모델 직접 배정 (key: 직원 id · "team:팀id" · "all", val: "회사id|모델" · 빈 값이면 자동)
+export function setAssign(key, val){ const c = officeCfg(); c.assign = {...(c.assign || {})}; if (val) c.assign[key] = val; else delete c.assign[key]; saveSettings(); fire({kind: "cfg"}); }
+export const getAssign = () => ({...(officeCfg().assign || {})});
+// 고를 수 있는 모델 목록 (회사별, 사무실에 맞는 순)
+export function modelChoices(){
+  const list = officeSources().map(t => ({...t, name: PROVIDERS[t.id]?.name || (t.id === "ollama" ? "Ollama(내 컴퓨터)" : t.id)}));
+  if (settings.keys.anthropic) for (const m of (settings.provModels.anthropic?.length ? settings.provModels.anthropic : PROVIDERS.anthropic?.defaults || [])) if (modelKind(m) === "chat" || /claude/.test(m)) list.push({id: "anthropic", model: m, name: "Claude"});
+  return list.filter(x => modelScore(x.model) > -40).sort((a, b) => a.name.localeCompare(b.name) || modelScore(b.model) - modelScore(a.model));
+}
+export function modelScore(m){
+  m = String(m || "").toLowerCase(); let s = 50;
+  if (/(^|[^0-9.])(0\.5|1|1\.5|2|3|4|e2|e4)b\b|mini|nano|tiny|-small|lite/.test(m)) s -= 30;
+  if (/70b|72b|90b|120b|123b|235b|253b|405b|480b|671b|large|kimi-k2|deepseek-v3|deepseek-v4|maverick|scout|glm-4\.[5-9]|qwen3-coder|mistral-medium|llama-3\.3-70|command-a/.test(m)) s += 25;
+  if (/r1|qwq|think|reason|magistral|nemotron.*(super|ultra)|o[1-9]-/.test(m)) s -= 20;
+  // 옛 세대·지원 끝나 가는 모델은 크기와 상관없이 뒤로 (llama2·codellama·chatqa·mixtral·gemma2·qwen1~2 등)
+  if (/llama-?2|codellama|code-?llama|chatqa|mixtral|mistral-7b|gemma-?2|gemma-7b|qwen1|qwen-?2(?!\.5)|qwen2\.5-(?!coder-32)|yi-|falcon|baichuan|dbrx|arctic|jamba|phi-?3|nemotron-4|llama-?3-|llama3-|llama-?3\.1-(?!nemotron-ultra)|solar|granite-3\.0|deepseek-coder|starcoder/.test(m)) s -= 45;
+  if (/guard|safety|embed|rerank|reward|parse|ocr|-vl|vision|audio|tts|whisper/.test(m)) s -= 100;
+  const h = modelHealth()[m]; if (h) s -= Math.min(40, (h.slow || 0) * 8 + (h.fail || 0) * 6);
+  return s;
+}
+// 모델 성적표 (스스로 배우기): 느림·실패가 쌓인 모델은 점점 덜 쓴다 (7일 지나면 잊음)
+const HEALTH_KEY = "coinModelHealth";
+export function modelHealth(){ try { const o = JSON.parse(localStorage.getItem(HEALTH_KEY) || "{}"); for (const k in o) if (Date.now() - (o[k].t || 0) > 7 * 864e5) delete o[k]; return o; } catch(e){ return {}; } }
+function noteModel(model, what){ if (!model) return; const o = modelHealth(), k = String(model).toLowerCase(); const h = o[k] || {ok: 0, slow: 0, fail: 0}; h[what] = (h[what] || 0) + 1; if (what === "ok" && h.ok % 5 === 0){ h.slow = Math.max(0, h.slow - 1); h.fail = Math.max(0, h.fail - 1); } h.t = Date.now(); o[k] = h; try { localStorage.setItem(HEALTH_KEY, JSON.stringify(o)); } catch(e){} }
+export function assignModels(){
+  const dead = deadModels();
+  // 없어진 모델 · 지금 한도에 걸려 쉬는 회사는 빼고 (다 빠지면 원래 목록)
+  const live0 = officeSources().filter(t => !dead[t.model]), live = live0.filter(t => !providerCooling(t.id));
+  const bad = badModels(), all = live.length ? live : live0.length ? live0 : officeSources(), ok = all.filter(t => !bad[t.model]);
+  // Groq 무료는 분당 토큰이 아주 적어 도구가 붙는 긴 회의 프롬프트에 금방 막힌다 → 사무실에서는 뒤로
+  const ranked = (ok.length ? ok : all).map(t => ({t, sc: modelScore(t.model) - (t.id === "groq" ? 25 : 0)})).filter(x => x.sc > -40).sort((x, y) => y.sc - x.sc);
+  // 상위 모델 몇 개만 골고루 나눠 쓴다 (좋은 모델이 적으면 그다음 것까지)
+  const top = ranked.filter(x => x.sc >= (ranked[0]?.sc ?? 0) - 25).slice(0, Math.max(3, Math.min(6, Math.ceil(ranked.length / 3)))).map(x => x.t);
+  const pool = top.length ? top : ranked.map(x => x.t);
+  const used = new Map(), out = {};
+  for (const a of AGENTS){
+    const fit = a.role === "code" ? pool.filter(t => /coder|code|devstral|kimi|qwen3/i.test(t.model)) : [];
+    const list = (fit.length ? fit : pool).slice().sort((x, y) => (used.get(x.model) || 0) - (used.get(y.model) || 0));
+    const pick = list[0];
+    if (pick){ out[a.id] = pick; used.set(pick.model, (used.get(pick.model) || 0) + 1); }
+  }
+  // Claude 모드: 키가 있고 오늘 한도가 남아 있으면 직원 전원을 Claude로 (무료 API 한도 문제 해결)
+  // 판단 책임이 큰 자리는 Opus, 반복 분석은 Sonnet, 가벼운 일은 Haiku (에이전트팀 세션과 같은 기준). 한도를 넘으면 무료 모델로 돌아간다.
+  const cm = claudeModels();
+  // '핵심 자리만' 모드: 판단 책임이 큰 자리와 팀장만 Claude, 나머지는 무료 모델 → 그 대화는 GH Nano 학습에 쓸 수 있다
+  if (cm) for (const a of AGENTS){ if (claudeMode() === "key" && !(CLAUDE_TIER[a.id] === "opus" || a.lead)) continue; const m = cm[CLAUDE_TIER[a.id] || "sonnet"]; if (m && !bad[m]) out[a.id] = {id: "anthropic", model: m}; }
+  // 대표가 직접 정한 배정이 가장 우선: 직원 → 팀 → 전원 순서 (그 회사 키가 있고 없어진 모델이 아닐 때)
+  const asg = officeCfg().assign || {};
+  for (const a of AGENTS){
+    const v = asg[a.id] || asg["team:" + a.team] || asg.all; if (!v) continue;
+    const i = v.indexOf("|"), id = v.slice(0, i), model = v.slice(i + 1);
+    if ((settings.keys[id] || id === "ollama") && !dead[model]) out[a.id] = {id, model, pinned: true};
+  }
+  return out;
+}
+export const claudeMode = () => officeCfg().claudeMode || (officeCfg().claude === false ? "off" : "all");
+export const CLAUDE_TIER = COIN_TIER; const _OLD_TIER = {strat: "opus", risk: "opus", val: "opus", qa: "opus", qb: "opus", lead: "sonnet", devil: "sonnet", aide: "haiku", dev: "sonnet", eng: "sonnet"};
+export function claudeModels(){
+  if (!settings.keys.anthropic || overCap("anthropic") || claudeMode() === "off") return null;
+  const ms = settings.provModels.anthropic?.length ? settings.provModels.anthropic : [];
+  const pick = (want, re) => ms.includes(want) ? want : ms.filter(m => re.test(m)).sort().reverse()[0] || want;
+  return {opus: pick("claude-opus-5-5", /opus/), sonnet: pick("claude-sonnet-5-5", /sonnet/), haiku: pick("claude-haiku-4-5-20251001", /haiku/)};
+}
+
+/* ============ 기록 (방 대화) ============ */
+let LOG = null;
+const LOG_KEY = "coin:log";
+export async function loadLog(){ if (!LOG){ const v = await idb.all(LOG_KEY).catch(() => []); LOG = Array.isArray(v[0]) ? v[0] : []; LOG.forEach(e => { e.live = false; }); } return LOG; }
+let saveT = 0;
+function saveLog(){ clearTimeout(saveT); saveT = setTimeout(() => idb.put(LOG_KEY, LOG.slice(-600)), 400); }
+function post(entry){ const e = {id: uid(), t: Date.now(), ...entry}; LOG.push(e); if (LOG.length > 800) LOG.splice(0, LOG.length - 600); saveLog(); fire({kind: "log", entry: e}); return e; }
+export async function clearLog(){ LOG = []; await idb.put(LOG_KEY, []); fire({kind: "cleared"}); }
+
+/* ============ 이벤트 ============ */
+const subs = new Set();
+export const onOffice = fn => (subs.add(fn), () => subs.delete(fn));
+const fire = ev => { for (const f of subs){ try { f(ev); } catch(e){ console.error(e); } } };
+
+/* ============ 설정·한도 ============ */
+export function officeCfg(){
+  settings.coinOffice = Object.assign({auto: true, every: 30, dailyMax: 12, alert: true, chat: true, chatEvery: 3, chatMax: 80, cycle: true, cycleMin: 3, callMax: 600, computer: true, claude: true, train: true}, settings.coinOffice || {});
+  return settings.coinOffice;
+}
+export function setOffice(patch){ Object.assign(officeCfg(), patch); saveSettings(); fire({kind: "cfg"}); }
+const today = () => new Date().toLocaleDateString("sv-SE");
+function usage(){ let u = {}; try { u = JSON.parse(localStorage.getItem("coinUsage") || "{}"); } catch(e){} return u.day === today() ? u : {day: today(), meetings: 0, calls: 0, auto: 0, chats: 0}; }
+function bump(k, n = 1){ const u = usage(); u[k] = (u[k] || 0) + n; try { localStorage.setItem("coinUsage", JSON.stringify(u)); } catch(e){} fire({kind: "usage", usage: u}); }
+export const officeUsage = usage;
+
+/* ============ 직원들의 대화를 GH Nano 학습 데이터로 남기기 ============ */
+// - 회의: 질문 → <think>팀원들의 분석·반론·리스크</think> + 팀장 결론 (작은 모델이 혼자서도 '팀 토론'을 거쳐 답하게)
+// - 첫 분석가의 실제 도구 사용 과정, 자료를 읽고 해설한 일(SNS·경제·모의투자 보고), 검증을 통과한 매매법, 동료 수다
+// Claude가 쓴 글은 약관에 따라 넣지 않는다. 회의록에서 👎를 누르면 그 예시는 지운다.
+// 약관상 GH Nano 학습에 쓰면 안 되는 모델(Claude·Gemini·OpenAI 유료)의 글은 학습 데이터에서 뺀다
+const isClaude = m => /claude|gemini|(^|\/)(gpt-(?!oss)|o[1-9](-|$)|chatgpt)/i.test(String(m || ""));
+const goodText = t => !!t && t.length >= 30 && !/^\(.{0,20}(답하지 못했|빈 답)/.test(t);
+const clip = (t, n) => { t = String(t || ""); return t.length > n ? t.slice(0, n) + "…" : t; };
+const noMind = t => String(t || "").replace(/^\s*💭[^\n]*\n?/gm, "").trim();
+async function keep(kind, messages, meta = {}){
+  if (officeCfg().train === false) return null;
+  const minLen = meta.minLen || 30; delete meta.minLen;
+  if (!messages.length || messages.at(-1).role !== "assistant" || messages.some(x => x.role === "assistant" && (String(x.content || "").length < minLen || /답하지 못했|빈 답\)/.test(x.content)))) return null;
+  const id = uid();
+  await idb.put("train:" + id, {id, t: Date.now(), src: "office", kind, app: "ghcoin", messages: [{role: "system", content: TRAIN_SYS("chat")}, ...messages], ...meta});
+  bump("trained");
+  return id;
+}
+export async function rateEntry(entryId, v){
+  await loadLog();
+  const e = LOG.find(x => x.id === entryId); if (!e) return null;
+  e.rating = e.rating === v ? 0 : v;
+  for (const id of e.trainIds || []){
+    const all = await idb.all("train:" + id); const rec = all[0];
+    if (!rec) continue;
+    if (e.rating < 0){ await idb.del("train:" + id); }
+    else { rec.rating = e.rating; if (e.rating > 0) rec.score = 5; await idb.put("train:" + id, rec); }
+  }
+  if (e.rating < 0) e.trainIds = [];
+  saveLog(); fire({kind: "rated", entry: e});
+  return e;
+}
+
+/* ============ 누가 말할지 (코드가 정함) ============ */
+export function planMeeting(text, room = "hq", fixed){
+  const t = String(text || "");
+  let lead = fixed ? [...fixed] : [];
+  if (!fixed){
+    // @이름으로 부른 직원
+    for (const a of AGENTS) if (a.id !== "lead" && (t.includes("@" + a.name) || t.includes("@" + a.title))) lead.push(a.id);
+    // 질문 단어 → 담당 팀장 (코인 이름이면 그 코인 팀장)
+    for (const [re, id] of TOPIC_LEAD) if (re.test(t) && !lead.includes(id)) lead.push(id);
+    // 퀀트·SNS·컴퓨터 작업 담당
+    if (/매매법|전략 (개발|만들)|백테스트|보조지표|지표 (조합|전부)|퀀트/.test(t)) lead.push("qa", "qb");
+    if (/모의투자|페이퍼|가상 (계좌|매매)|포지션 현황/.test(t)) lead.push("trader");
+    if (/sns|SNS|레딧|트위터|스톡트윗|여론|커뮤니티|공포.?탐욕|심리|분위기/.test(t)) lead.push("sns");
+    if (/파일|폴더|스크립트|보고서 (저장|만들)|엑셀|csv|컴퓨터|자동화/i.test(t)) lead.push("eng");
+    // 질문에 맞는 스킬 → 담당 분석가
+    for (const s of activeSkills(t)){
+      // 리서치 스킬은 '오늘·요즘' 같은 흔한 말에도 켜지므로, 자료를 찾아 달라는 말이 있을 때만 리서처를 부른다
+      if (s.id === "research" && !RESEARCH.test(t)) continue;
+      const id = SKILL_AGENT[s.id]; if (id && !lead.includes(id)) lead.push(id);
+    }
+    // 팀 방에서 말하면 그 팀이 먼저 답한다
+    if (room !== "hq"){
+      const mem = AGENTS.filter(a => a.team === room && !["devil", "risk"].includes(a.id)).map(a => a.id);
+      const inTeam = lead.filter(id => mem.includes(id));
+      lead = inTeam.length ? [...inTeam, ...lead.filter(id => !inTeam.includes(id))] : [mem[0], ...lead].filter(Boolean);
+    }
+    if (!lead.length) lead = [RESEARCH.test(t) || /엔비디아|nvidia/i.test(t) ? "research" : "aide"];
+  }
+  lead = [...new Set(lead)].filter(id => !["lead", "devil", "risk"].includes(id)).slice(0, 3);
+  const order = [...lead];
+  const market = lead.some(id => MARKET.has(id)), build = lead.some(id => id === "arch" || id === "land");
+  if (lead.some(id => id === "qa" || id === "qb") && !order.includes("val")) order.push("val");
+  if (market && DECIDE.test(t)){
+    if (!order.includes("strat") && /전략|백테스트|진입|계획|매수|매도|롱|숏|포지션/.test(t)) order.push("strat");
+    order.push("devil", "risk");
+  } else if (build && BUILD.test(t)) order.push("devil");
+  else if (fixed) order.push("devil");
+  if (order.length > 1) order.push("lead");
+  return order;
+}
+
+/* ============ 회의 ============ */
+const queue = [];
+let running = null;          // 지금 회의
+export const officeState = () => ({running, queued: queue.length});
+// 말로 시킨 '일'은 회의만 하지 않고 실제 업무를 바로 돌린다 (결과 카드는 그 팀 방에)
+const ACTIONS = [
+  {job: "cdev", re: /커스텀.*(지표|매매법|전략).*(만들|찾|개발|짜|연구|백테스트)/, say: "커스텀 지표 개발팀이 지금 바로 수식 지표로 매매법을 만들어 커스텀 백테스트팀이 검증합니다"},
+  {job: "dev", re: /(매매법|전략|지표).*(만들|찾|개발|짜|연구|발굴|백테스트)|(만들|찾|개발|짜).*(매매법|전략)|백테스트\s*(해|돌려)/, say: "매매법 개발팀이 지금 바로 모든 보조지표로 매매법을 만들어 백테스트팀이 검증합니다"},
+  {job: "trend", re: /추세.*(분석|봐|알려|어때)/, say: "추세 분석팀이 지금 바로 다중 시간대 추세를 봅니다"},
+  {job: "entry", re: /(타점|진입).*(분석|봐|알려|어디|잡아)/, say: "진입 타점팀이 지금 바로 진입 자리를 계산합니다"},
+  {job: "sr", re: /(지지|저항|매물대).*(분석|봐|알려|어디)/, say: "지지·저항팀이 지금 바로 가격대를 계산합니다"},
+  {job: "tpsl", re: /(손절|익절).*(관리|점검|봐|알려)/, say: "익절·손절 관리팀이 지금 바로 포지션을 점검합니다"},
+  {job: "pattern", re: /(패턴|캔들).*(분석|봐|찾|알려)/, say: "차트·캔들 패턴팀이 지금 바로 패턴을 찾습니다"},
+  {job: "situ", re: /(상황판|전체 코인|코인 상황|시장 상황)/, say: "코인 상황판팀이 지금 바로 전체 코인 상황을 정리합니다"},
+  {job: "ind", re: /보조지표.*(분석|봐|알려|해석)/, say: "보조지표 분석팀이 지금 바로 지표를 계산합니다"},
+  {job: "ml", re: /(머신러닝|딥러닝).*(해|돌려|분석|예측)/, say: "머신러닝·딥러닝팀이 지금 바로 모델을 학습합니다"},
+  {job: "news", re: /(뉴스|기사|경제지표).*(분석|봐|알려|찾)/, say: "뉴스·경제지표팀이 지금 바로 찾아 봅니다"},
+  {job: "forecast", re: /(방향|예측|전망).*(토론|예측해|맞춰)/, say: "진입 타점팀이 지금 바로 방향 예측 토론을 엽니다"},
+  {job: "promote", re: /(데모|실거래).*(심사|승격|관문)/, say: "데모거래팀이 지금 바로 실거래 관문을 심사합니다"},
+  {job: "selfdev", re: /(코드|오류|버그|에러).*(고쳐|수정|찾)/, say: "CTO가 지금 바로 오류를 찾아 코드 수정안을 만듭니다"},
+];
+let userNote = "";
+async function runJobNow(job, note){
+  userNote = note;
+  try { await (JOB_FN()[job] || (() => research("std")))(); }
+  catch(e){ post({ch: JOB_TEAM[job] || "hq", kind: "system", text: `${JOB_KO[job]} 중 문제: ${String(e.message || e).slice(0, 120)}`}); }
+  finally { userNote = ""; }
+}
+export async function ask(text, {room = "hq"} = {}){
+  await loadLog();
+  post({ch: room, kind: "user", text});
+  const act = ACTIONS.find(x => x.re.test(text));
+  if (act){ post({ch: JOB_TEAM[act.job] || room, kind: "system", text: `▶ ${act.say} (결과는 #${teamById(JOB_TEAM[act.job])?.name || "업무"} 방 카드로)`}); fire({kind: "cycle", job: act.job, label: JOB_KO[act.job]}); runJobNow(act.job, text).finally(() => fire({kind: "cycle-end"})); }
+  // 대표님(사용자) 질문이 먼저: 진행 중인 자동 회의는 잠시 멈췄다가 답한 뒤 다시 하고, 질문은 대기열 맨 앞에 넣는다
+  if (running && running.trigger !== "user"){
+    const r = running; r.preempted = true;
+    post({ch: room, kind: "system", text: `질문 먼저 답합니다 · '${r.name}' 회의는 잠시 멈췄다가 이어서 합니다`});
+    r.ctl.abort();
+  } else if (running || queue.length) post({ch: room, kind: "system", text: "질문을 받았습니다 · 앞 질문 다음에 바로 답합니다"});
+  return new Promise(res => { const at = queue.findIndex(j => j.trigger !== "user"); queue.splice(at < 0 ? queue.length : at, 0, {topic: text, room, trigger: "user", res}); pump(); });
+}
+export function stopMeeting(){ running?.ctl.abort(); queue.length = 0; }
+function enqueue(m){
+  return new Promise(res => { queue.push({...m, res}); pump(); });
+}
+async function pump(){
+  if (running || !queue.length) return;
+  if (chatting && queue[0].trigger !== "user"){ setTimeout(pump, 1500); return; }
+  const job = queue.shift();
+  const ctl = new AbortController();
+  let order = planMeeting(job.topic, job.room, job.agents);
+  // 대표님 질문은 빨리: 분석가 최대 2명 + (리스크) + 팀장 정리
+  if (job.trigger === "user" && order.length > 4){
+    const rest = order.filter(x => x !== "lead"), keep = [...new Set([...rest.filter(x => !["devil", "risk", "val"].includes(x)).slice(0, 2), ...(rest.includes("risk") ? ["risk"] : [])])];
+    order = keep.length > 1 || order.includes("lead") ? [...keep, "lead"] : keep;
+  }
+  const models = assignModels();
+  const room = teamById(job.room) || TEAMS[0];
+  const name = job.title || (job.trigger === "user" ? "질문 · " + job.topic.replace(/\s+/g, " ").slice(0, 18) : job.topic.slice(0, 20));
+  // 회의 장소: 한 팀끼리면 그 팀 자리에서, 여러 팀이면 대회의실, CEO가 부른 전사 회의도 대회의실
+  const teamsIn = [...new Set(order.map(id => agentById(id)?.team).filter(Boolean))];
+  const place = job.place || (teamsIn.length === 1 ? teamsIn[0] : teamsIn.length === 2 && teamsIn.includes(job.room) && !order.includes("lead") ? job.room : "meet");
+  const m = running = {id: uid(), room: job.room, name, trigger: job.trigger, topic: job.topic, order, done: [], ctl, t: Date.now(), models, place, deadline: Date.now() + (job.trigger === "user" ? 6 * 60e3 : 10 * 60e3)};
+  bump("meetings"); if (job.trigger !== "user") bump("auto");
+  post({ch: job.room, kind: "divider", text: `회의 · #${name} · ${new Set(order).size}명 참석`, meeting: m.id});
+  if (job.trigger === "user") post({ch: job.room, kind: "system", text: `${[...new Set(order)].map(id => agentById(id)?.name).filter(Boolean).join(" → ")} 순서로 답합니다 · 보통 1~3분 (최대 6분)`, meeting: m.id});
+  fire({kind: "start", meeting: m});
+  const turns = [];
+  try {
+    for (let i = 0; i < m.order.length && i < 8; i++){
+      if (ctl.signal.aborted) break;
+      // 회의 시간 한도를 넘기면 남은 사람은 건너뛰고 팀장이 지금까지 내용으로 정리
+      if (Date.now() > m.deadline && m.order[i] !== "lead" && m.order.includes("lead") && turns.length){ if (!m.cut){ m.cut = true; post({ch: m.room, kind: "system", text: "시간이 길어져 팀장이 지금까지 내용으로 정리합니다", meeting: m.id}); } continue; }
+      if (Date.now() > m.deadline + 120e3) break;
+      if (officePaused() && job.trigger !== "user" && turns.length){ post({ch: m.room, kind: "system", text: "AI 한도 때문에 이 회의는 여기서 줄입니다", meeting: m.id}); break; }
+      const a = agentById(m.order[i]);
+      const turn = await speak(a, m, turns, models[a.id], ctl.signal);
+      if (!turn) continue;
+      turns.push(turn); m.done.push(a.id);
+      // 발언 속 @이름 → 아직 말하지 않은 동료를 팀장 정리 전에 부른다 (회의당 최대 2명 추가)
+      const extra = AGENTS.filter(x => x.id !== a.id && !m.order.includes(x.id) && (turn.text.includes("@" + x.name) || turn.text.includes("@" + x.title)));
+      for (const x of extra.slice(0, 2)){
+        if (m.order.length >= 8) break;
+        const at = m.order.includes("lead") ? m.order.lastIndexOf("lead") : m.order.length;
+        m.order.splice(at, 0, x.id);
+        if (!m.order.includes("lead")) m.order.push("lead");
+        post({ch: m.room, kind: "system", text: `${a.name}님이 ${x.name}(${x.title})님을 불렀습니다`, meeting: m.id});
+        fire({kind: "join", meeting: m, agent: x});
+      }
+    }
+    const last = turns[turns.length - 1];
+    // 회의 전체 → '팀 토론을 머릿속으로 거친 답' 학습 예시
+    if (turns.length >= 2 && last.agent.id === "lead" && goodText(last.text) && !isClaude(last.entry.model)){
+      const inner = turns.slice(0, -1).filter(t => goodText(t.text) && !isClaude(t.entry.model));
+      let think = "", room = 1800;
+      for (const t of inner){ const piece = `[${t.agent.title}] ${clip(t.text.replace(/\s+/g, " "), Math.min(520, room))}`; if (room < 120) break; think += (think ? "\n\n" : "") + piece; room -= piece.length; }
+      if (think){
+        const id = await keep("office-meeting", [{role: "user", content: m.topic}, {role: "assistant", content: `<think>\n${think}\n</think>\n\n${last.text}`}], {meeting: m.id, speakers: inner.map(t => t.agent.id)}).catch(() => null);
+        if (id){ last.entry.trainIds = [...(last.entry.trainIds || []), id]; saveLog(); }
+      }
+    }
+    if (job.trigger !== "user" && officeCfg().alert && last) fire({kind: "alert", meeting: m, text: last.text});
+    job.res?.({meeting: m, turns, answer: last?.text || ""});
+  } catch (e){
+    if (m.preempted) queue.push(job);   // 사용자 질문 때문에 멈춘 회의는 질문에 답한 뒤 다시
+    else {
+      post({ch: m.room, kind: "system", text: "회의 중단: " + (e.message || e), meeting: m.id});
+      job.res?.({meeting: m, turns, error: e.message});
+    }
+  } finally {
+    running = null; fire({kind: "end", meeting: m});
+    setTimeout(pump, 300);
+  }
+}
+// 대표님이 '뭐 하고 있어?' 같은 걸 물으면 답할 수 있게: 지금 사무실 상황 요약 (코드가 만든 사실)
+function statusText(){
+  const recent = (LOG || []).filter(e => ["work", "bt", "re", "arch", "ml", "macro", "forecast", "biz", "files", "task", "report"].includes(e.kind)).slice(-8)
+    .map(e => `- ${new Date(e.t).toLocaleTimeString("ko-KR", {hour: "2-digit", minute: "2-digit"})} ${agentById(e.agent)?.name || ""} ${e.kind === "bt" ? `매매법 '${e.name}' ${e.pass ? "통과" : "불통과"}` : e.kind === "re" ? `재개발 후보 ${e.items?.length || 0}곳` : e.kind === "arch" ? `설계안 '${e.name}'` : e.kind === "biz" ? `사업 '${e.name}' ${String(e.verdict || "").split(" — ")[0]}` : e.kind === "task" ? `과제 '${e.title}' ${e.status}` : String(e.text || e.title || e.name || e.kind).slice(0, 60)}`).join("\n");
+  const open = backlog().filter(x => x.status !== "done").slice(0, 4).map(x => `- ${teamById(x.team)?.name}: ${x.title}`).join("\n");
+  return `[지금 사무실 상황 · 코드가 확인한 사실]\n진행 중인 회의: ${running && running.trigger !== "user" ? running.name : "없음"} · 지금 하는 업무: ${cycling ? JOB_KO[lastJob] || lastJob : "없음"} · 다음 업무: ${JOB_KO[JOBS[(+localStorage.getItem("coinJob") || 0) % JOBS.length]]}\n최근에 한 일:\n${recent || "- (아직 없음)"}\n남은 성장 과제:\n${open || "- (없음)"}`;
+}
+// 같은 이유가 반복되면 한 줄로 묶는다 ("… → 다른 모델로 (3번)")
+function addNote2(entry, text){
+  const key = text.replace(/^[^:]+:\s*/, ""), list = entry.notes || (entry.notes = []);
+  const i = list.findIndex(n => n.replace(/^[^:]+:\s*/, "").replace(/ → 다른 모델로.*$/, "") === key);
+  if (i >= 0){ const n = (+(list[i].match(/\((\d+)번\)$/) || [])[1] || 1) + 1; list[i] = list[i].replace(/ → 다른 모델로.*$/, "") + ` → 다른 모델로 (${n}번)`; }
+  else list.push(text + " → 다른 모델로");
+}
+function transcript(m, turns){
+  return turns.map(t => `[${t.agent.name} · ${t.agent.title}]\n${t.text.slice(0, 2500)}`).join("\n\n");
+}
+async function speak(a, m, turns, target, signal){
+  const team = teamById(a.team);
+  const mates = AGENTS.filter(x => x.id !== a.id && x.id !== "lead" && (x.team === a.team || x.lead)).map(x => `@${x.name}(${x.title})`).join(", ");
+  const isLead = a.id === "lead";
+  const prev = turns.at(-1)?.agent;
+  const persona = `[GH Coin · 에이전트 팀 회의]
+너는 GH Coin ${team.name}의 '${a.name}'(${a.title})다. 지금 동료들과 자유롭게 토론하는 회의 중이다.
+- 네 역할: ${a.duty}
+- 답의 첫 줄은 반드시 '💭 '로 시작하는 한 문장 속마음이다(무엇을 확인하고 어떻게 판단하려는지). 그다음 줄부터 말한다.
+- ${prev ? `앞사람(${prev.name})의 말에 이름을 불러 반응하며 시작한다(동의·보충·반박). ` : ""}같은 말은 반복하지 말고 네 전문 분야 관점을 더한다. 다른 전문가가 꼭 필요하면 @이름 으로 한 명만 부른다(동료: ${mates}).
+- 반드시 한국어로만 쓴다. 영어로 생각하거나 '어떻게 답할지' 계획을 쓰지 말고 바로 말한다.
+- 회사 동료와 대화하듯 자연스러운 한국어로 말한다. 숫자 나열이 아니라 해설로 말한다. 수치는 도구로 확인한 것만 쓰고 지어내지 않는다. 차트·뉴스를 봤다면 무엇을 봤는지 말한다.
+${notesText(a.team)}- ${isLead ? "너는 마지막 정리 담당이다. 사용자에게 주는 최종 답을 결론부터 짧고 쉽게 쓴다(5~8줄, 꼭 필요할 때만 표)." : "3~5문장으로 짧게. 사용자에게 주는 최종 답은 팀장이 정리하니, 너는 네 판단과 근거 한두 개에 집중한다."}`;
+  const ask = `${m.trigger === "user" ? "사용자 질문" : "회의 안건"}: ${m.topic}\n\n${m.trigger === "user" ? statusText() + "\n\n" : ""}${turns.length ? "지금까지 회의 내용:\n" + transcript(m, turns) + "\n\n" : ""}이제 ${a.name}(${a.title}) 차례입니다.`;
+  const entry = post({ch: m.room, kind: "agent", agent: a.id, text: "", think: "", steps: [], meeting: m.id, live: true, model: target?.model || ""});
+  fire({kind: "turn", meeting: m, agent: a, entry});
+  // 배정 모델 → (빈 답이면) 다른 모델 → 자동 선택 순서로 다시 시도
+  const cm = claudeModels();
+  const alt = cm && target?.model !== cm.sonnet ? {id: "anthropic", model: cm.sonnet} : officeSources().filter(t => t.model !== target?.model && !badModels()[t.model]).sort((x, y) => modelScore(y.model) - modelScore(x.model))[0];
+  const tries = [target, alt, null].filter((t, i, arr) => i === arr.length - 1 || (t && arr.findIndex(x => x && x.model === t.model) === i));
+  let lastMsg = null;
+  const turnEnd = Math.min(m.deadline || Infinity, Date.now() + (m.trigger === "user" ? 200e3 : 360e3));   // 한 사람 차례 전체 시간 한도 (모델을 바꿔 다시 해도)
+  for (const tg of tries){
+    if (Date.now() > turnEnd - 15e3) break;
+    const msg = lastMsg = {role: "assistant", parts: [], mode: "chat", ts: Date.now()};
+    let last = 0, lastTool = "";
+    const onUpdate = () => {
+      read(msg, entry);
+      const tool = entry.steps.at(-1), sig = tool ? tool.act + tool.status : "";
+      if (sig !== lastTool){ lastTool = sig; fire({kind: "tool", meeting: m, agent: a, entry, step: tool}); }
+      if (Date.now() - last > 150){ last = Date.now(); fire({kind: "delta", meeting: m, agent: a, entry}); }
+    };
+    let err = null;
+    // 느린 모델은 끊고 다음 모델로: 도구도 안 쓰고 75초 동안 말이 없거나, 전체 4분을 넘기면
+    const tctl = new AbortController(), t0 = Date.now(); let slow = false;
+    const relay = () => tctl.abort(); signal.addEventListener("abort", relay, {once: true});
+    const userQ = m.trigger === "user", firstMs = userQ ? 60e3 : 75e3, totalMs = userQ ? 150e3 : 240e3;
+    const watch = setInterval(() => { const el = Date.now() - t0; if ((!entry.text && !entry.steps.length && el > firstMs) || el > totalMs || Date.now() > turnEnd){ slow = true; tctl.abort(); } }, 2000);
+    // 도구(백테스트 등)가 중단 신호를 무시해도 시간이 되면 무조건 다음으로 넘어간다
+    const hardStop = new Promise((_, rej) => tctl.signal.addEventListener("abort", () => rej(Object.assign(new Error("중단"), {name: "AbortError"})), {once: true}));
+    hardStop.catch(() => {});
+    try {
+      bump("calls");
+      await Promise.race([runAgent({mode: "chat", history: [{role: "user", content: ask}], msg, signal: tctl.signal, onUpdate, think: false, workspace: "", persona, forceSkills: a.skills, target: tg || undefined,
+        maxSteps: isLead || a.id === "devil" ? 2 : m.trigger === "user" ? 3 : 5, openArtifact: async () => null, askPermission: officePermission,
+        office: true, officeTools: a.computer && computerOn() ? ["office_ls", "office_read", "office_write", "office_run"] : []}), hardStop]);
+    } catch (e){ if (signal.aborted) throw e; err = slow ? new Error("응답이 너무 느림") : e; }
+    finally { clearInterval(watch); signal.removeEventListener("abort", relay); }
+    entry.thinking = false;
+    read(msg, entry);
+    entry.model = msg.route?.model || tg?.model || entry.model;
+    noteModel(entry.model, entry.text && !slow ? "ok" : slow ? "slow" : "fail");
+    if (entry.text) break;
+    markBad(tg?.model || msg.route?.model);
+    const why = err ? (err.message || String(err)).slice(0, 80) : msg.parts.some(p => p.think || englishy(p.text || "")) ? "생각만 하고 한국어 답을 내지 못함" : "빈 답";
+    if (err && isLimit(why)) noteLimit();
+    addNote2(entry, `${shortName(entry.model)}: ${why}`);
+    fire({kind: "delta", meeting: m, agent: a, entry});
+    if (err && isLimit(why) && officeSources().every(t => providerCooling(t.id))) break;   // 다 막혔으면 더 두드리지 않는다
+  }
+  if (!entry.text) entry.text = (entry.notes || []).some(n => isLimit(n)) ? `(${a.name}: 무료 AI 한도에 걸려 이번에는 쉬었습니다 · 잠시 뒤 다시 합니다)` : `(${a.name}: 연결된 모델들이 이번에는 답하지 못했습니다)`;
+  entry.tools = entry.steps.map(x => x.act);
+  captureFiles(entry, a.team).catch(() => {});
+  // 첫 분석가가 실제 도구를 쓴 과정은 '도구 사용' 학습 예시로 (앞사람 발언에 기대지 않는 차례만)
+  if (!turns.length && lastMsg && entry.steps.some(x => x.status === "done") && goodText(entry.text) && !isClaude(entry.model) && !lastMsg.parts.some(p => p.type === "tool" && p.status === "error")){
+    const conv = toModelMessages([{role: "user", content: m.topic}, lastMsg], 1e9, 3000).map(x => x.role === "assistant" ? {...x, content: noMind(x.content)} : x).filter(x => x.content);
+    const id = await keep("office-tool", conv, {agent: a.id, model: entry.model}).catch(() => null);
+    if (id) entry.trainIds = [id];
+  } else if (!turns.length && m.order.length === 1 && m.trigger === "auto" && goodText(entry.text) && !isClaude(entry.model)){
+    // 혼자 맡은 과제(성장 과제·신사업 개발)는 도구를 안 썼어도 '과제 → 결과' 학습 예시로
+    const id = await keep("office-task", [{role: "user", content: m.topic}, {role: "assistant", content: noMind(entry.text)}], {agent: a.id, model: entry.model}).catch(() => null);
+    if (id) entry.trainIds = [id];
+  }
+  entry.live = false;
+  saveLog(); fire({kind: "said", meeting: m, agent: a, entry});
+  return {agent: a, text: entry.text, entry};
+}
+// runAgent가 붙이는 안내 문구(빈 답·길이 한도)는 답이 아니다
+// 사무실 직원은 사무실 전용 폴더 작업만 스스로 허락한다 (그 밖의 쓰기·실행은 거절)
+export const computerOn = () => LAUNCHER.on && officeCfg().computer !== false;
+const officePermission = async tp => computerOn() && /^office_/.test(tp.name);
+const EMPTY_MARK = /\*\((모델이 빈 답을 보냈습니다|답변 길이 한도에 닿아 끊겼습니다|알 수 없는 도구)[^)]*\)\*/g;
+const shortName = m => String(m || "모델").split("/").pop();
+/* ============ 결과물 보관함: 사업계획서·보고서·설계안·매매법·직원이 만든 파일 ============ */
+// 앱 안(IndexedDB)에 항상 보관 → [📁 결과물]에서 보기·내려받기. GHNano.exe 면 문서/GHNano 사무실 폴더에도 같은 파일이 저장된다.
+const DOC_PREFIX = "coindoc:";
+const docKey = path => DOC_PREFIX + String(path || uid()).replace(/[^\w가-힣./-]+/g, "_").slice(0, 160);
+export async function saveDoc({title, path = "", content = "", team = "hq", agent = "", mime = ""}){
+  const t = String(content ?? ""), d = {id: docKey(path).slice(DOC_PREFIX.length), t: Date.now(), title: String(title || path || "문서").slice(0, 120), path, team, agent,
+    mime: mime || (/\.csv$/i.test(path) ? "text/csv" : /\.json$/i.test(path) ? "application/json" : /\.html?$/i.test(path) ? "text/html" : /\.(py|js|sol|txt)$/i.test(path) ? "text/plain" : "text/markdown"), size: t.length, content: t.slice(0, 2e6)};
+  try { await idb.put(docKey(path), d); fire({kind: "docs", doc: {...d, content: ""}}); } catch(e){}
+  return d;
+}
+export async function listDocs(){ return (await idb.all(DOC_PREFIX).catch(() => [])).filter(d => d && d.title).sort((a, b) => b.t - a.t); }
+export async function deleteDoc(id){ await idb.del(DOC_PREFIX + id); fire({kind: "docs"}); }
+export async function openFolder(sub = ""){
+  if (!LAUNCHER.on) return {ok: false, why: "웹 버전에서는 폴더를 열 수 없습니다 (GHNano.exe 에서 됩니다)"};
+  const r = await fetch("/__nuri/openfolder" + (sub ? "?sub=" + encodeURIComponent(sub) : ""), {method: "POST", headers: {"X-Nuri-Token": window.__NURI_TOKEN || ""}}).catch(() => null);
+  return r?.ok ? await r.json() : {ok: false, why: "폴더를 열지 못했습니다"};
+}
+// 직원이 office_write 로 만든 파일도 보관함에 넣는다
+async function captureFiles(entry, team){
+  for (const st of (entry.steps || []).filter(x => x.name === "office_write" && x.status === "done" && x.summary)){
+    try { const {codeCall} = await import("../nuri-ai/engine.js"); const r = await codeCall("raw", {path: st.summary, ws: "office"}); if (r?.content != null) await saveDoc({title: st.summary.split("/").pop(), path: st.summary, content: r.content, team, agent: entry.agent}); } catch(e){}
+  }
+}
+
+/* ============ 한국어로만, 간단하게 ============ */
+// 일부 모델(추론형)은 '어떻게 답할지' 영어 계획을 답 앞에 길게 쓴다. 그 부분은 걷어 내고 한국어 답만 보여 준다.
+const HANGUL = /[\uac00-\ud7a3]/g;
+const PLAN_RE = /^\s*(💭\s*)?(we need|we should|we must|we can|we have|need |must |let'?s|let me|the user|user (wants|asks|requested)|i need|i should|i will|i'll|ok(ay)?[,. ]|so (we|i)|now (we|i)|also[, ]|maybe |but |given |thus|therefore|first line|then |could |however|probably|done\.|alright)/i;
+const englishy = t => { const latin = (t.match(/[A-Za-z]/g) || []).length, han = (t.match(HANGUL) || []).length; return latin > 25 && han < latin * 0.15; };
+export function koOnly(text){
+  const s = String(text || ""); if (!s.trim()) return "";
+  const out = []; let started = false;
+  for (const piece of s.split(/(```[\s\S]*?(?:```|$))/)){
+    if (piece.startsWith("```")){ out.push(piece); started = true; continue; }
+    const keep = [];
+    for (const para of piece.split(/\n{2,}/)){
+      const t = para.trim(); if (!t) continue;
+      if (englishy(t) && (!started || PLAN_RE.test(t))) continue;   // 앞부분의 영어 생각 · 중간의 영어 계획 문단
+      keep.push(para.replace(/^\n+|\n+$/g, "")); started = true;
+    }
+    if (keep.length) out.push(keep.join("\n\n"));
+  }
+  return out.join("\n").trim();
+}
+// 속마음은 한국어 한 문장만 (영어 생각은 보여 주지 않는다)
+const koThink = line => { const t = String(line || "").replace(/\s+/g, " ").trim(); if (!t || !(t.match(HANGUL) || []).length || englishy(t)) return ""; const one = t.split(/(?<=[.!?。])\s/)[0]; return one.length > 120 ? one.slice(0, 118) + "…" : one; };
+// 메시지 조각 → 말(text) · 속마음(think) · 한 일(steps)
+function read(msg, entry){
+  const texts = msg.parts.filter(p => p.type === "text");
+  let raw = texts.map(p => p.text).join("\n\n").replace(EMPTY_MARK, "").trim();
+  let think = "";
+  const mm = raw.match(/^💭\s*([^\n]*)\n?/);
+  if (mm){ think = koThink(mm[1]); raw = raw.slice(mm[0].length).trim(); }
+  raw = koOnly(raw.replace(/^\s*💭[^\n]*\n/gm, "")).trim();
+  entry.thinking = !raw && texts.some(p => p.think);   // 모델이 아직 생각 중 (내용은 보여 주지 않음)
+  entry.text = raw; entry.think = think;
+  entry.steps = msg.parts.filter(p => p.type === "tool").map(p => ({act: p.act || p.label, name: p.name, status: p.status, summary: p.summary || "", err: p.error || "", sources: (p.sources || []).slice(0, 5)}));
+}
+/* ============ 자동 회의 ============ */
+export const AGENDA = COIN_AGENDA;
+// 급변동 감시 (코드만 씀, AI 호출 없음)
+const WATCH = COIN_WATCH;
+let timer = 0, lastWatch = 0;
+export function startAutopilot(){
+  if (timer) return; officeCfg();
+  // 처음 켤 때는 2분 뒤에 첫 자동 회의
+  if (!localStorage.getItem("coinLastAuto")) localStorage.setItem("coinLastAuto", String(Date.now() - officeCfg().every * 60e3 + 120e3));
+  timer = setInterval(tick, 60e3); setTimeout(tick, 4000);
+}
+export function stopAutopilot(){ clearInterval(timer); timer = 0; }
+export function nextAutoIn(){
+  const c = officeCfg(), last = +localStorage.getItem("coinLastAuto") || 0;
+  return Math.max(0, last + c.every * 60e3 - Date.now());
+}
+/* ============ 무료 API 한도에 걸리면 잠깐 쉬기 ============ */
+// 한도 오류가 연달아 나면 자동 회의·주기 업무·수다를 몇 분 멈춘다 (대표님 질문은 계속 받는다). 계속 두드리면 한도가 더 늦게 풀린다.
+let limitHits = [], pauseUntil = 0;
+const isLimit = msg => /사용 한도|rate.?limit|429|too many requests|quota/i.test(String(msg || ""));
+export const officePaused = () => Math.max(0, pauseUntil - Date.now());
+function noteLimit(){
+  const now = Date.now(); limitHits = limitHits.filter(t => now - t < 120e3); limitHits.push(now);
+  if (limitHits.length >= 3 && now > pauseUntil){
+    pauseUntil = now + 180e3; limitHits = [];
+    const cool = Object.keys(coolingInfo()).map(id => ({groq: "Groq", nvidia: "NVIDIA", cerebras: "Cerebras", openrouter: "OpenRouter", gemini: "Gemini", hf: "Hugging Face", mistral: "Mistral", sambanova: "SambaNova", together: "Together", deepseek: "DeepSeek", anthropic: "Claude"})[id] || id);
+    post({ch: "hq", kind: "system", text: `무료 AI 한도에 걸렸습니다${cool.length ? " (" + cool.join(", ") + ")" : ""} · 3분 쉬었다가 다시 일합니다. 질문은 계속 받습니다. 한도를 늘리려면 다른 무료 키를 더 넣거나 Claude 키를 넣으세요.`});
+    fire({kind: "cfg"});
+  }
+}
+async function tick(){
+  const c = officeCfg();
+  if (!c.auto || running || queue.length || !hasAI() || officePaused()) return;
+  const u = usage();
+  if (u.auto >= c.dailyMax) return;
+  await loadLog();
+  // 1) 급변동이면 바로 긴급 회의
+  if (Date.now() - lastWatch > 10 * 60e3){
+    lastWatch = Date.now();
+    try {
+      const r = await TOOLS.market_quote.run({symbols: WATCH.map(w => w.q)});
+      const rows = JSON.parse(r.text || "[]"), seen = JSON.parse(localStorage.getItem("coinWatch") || "{}");
+      for (const w of WATCH){
+        const row = rows.find(x => String(x.종목 || "").includes(w.q) || String(x.종목 || "").includes(w.label));
+        const chg = row && +row["변동%"]; if (!Number.isFinite(chg)) continue;
+        const band = Math.trunc(chg / w.th), key = w.q + "|" + today();
+        if (band !== 0 && seen[key] !== band){
+          seen[key] = band; localStorage.setItem("coinWatch", JSON.stringify(seen));
+          post({ch: w.room, kind: "system", text: `급변동 감지: ${w.label} ${chg > 0 ? "+" : ""}${chg}% → 긴급 회의를 엽니다`});
+          enqueue({topic: `${w.label}가 하루 ${chg > 0 ? "+" : ""}${chg}% 움직였습니다. 원인과 지금 대응 방법을 점검해 주세요.`, room: w.room, trigger: "event", title: `긴급-${w.label}`, agents: w.agents});
+          localStorage.setItem("coinLastAuto", String(Date.now()));
+          return;
+        }
+      }
+    } catch(e){}
+  }
+  // 2) 정해진 간격마다 안건을 돌아가며
+  if (nextAutoIn() > 0) return;
+  const i = (+localStorage.getItem("coinAgenda") || 0) % AGENDA.length, ag = AGENDA[i];
+  localStorage.setItem("coinAgenda", String(i + 1)); localStorage.setItem("coinLastAuto", String(Date.now()));
+  enqueue({topic: ag.topic, room: ag.room, trigger: "auto", title: ag.title, agents: ag.agents});
+}
+export async function runAgendaNow(id){
+  await loadLog();
+  const ag = AGENDA.find(a => a.id === id) || AGENDA[0];
+  localStorage.setItem("coinLastAuto", String(Date.now()));
+  return enqueue({topic: ag.topic, room: ag.room, trigger: "auto", title: ag.title, agents: ag.agents});
+}
+
+/* ============ 업무: 직원이 실제로 보는 차트·뉴스 (코드만 씀, AI 호출 없음) ============ */
+const WATCH_OF = COIN_WATCH_OF;
+const IDLE_WORK = {dev: ["💻 코드 리뷰 중", "🧪 테스트 돌리는 중", "🛠 대시보드 고치는 중"], aide: ["📝 오늘 일정 정리 중", "✉️ 메일 정리 중", "🗂 회의록 정리 중"]};
+export const seen = {};   // 직원 → 최근에 본 것 [{icon, text, url, t}]
+const newsCache = {};
+export async function observe(id){
+  const list = WATCH_OF[id];
+  if (!list){ const w = IDLE_WORK[id]; return w ? {icon: "", text: w[Math.floor(Math.random() * w.length)], kind: "work", t: Date.now()} : null; }
+  const pick = list[Math.floor(Math.random() * list.length)];
+  let o = null;
+  try {
+    if (pick.flow){
+      const F = await import("../nuri-ai/flow.js");
+      const r = pick.flow === "whale" ? await F.whaleTrades({symbol: pick.sym}) : pick.flow === "book" ? await F.orderBook({symbol: pick.sym}) : await F.futuresFlow({symbol: pick.sym});
+      if (r?.summary) o = {icon: pick.flow === "whale" ? "🐋" : pick.flow === "book" ? "📚" : "🌊", kind: "flow", text: `${pick.sym.replace("USDT", "")} ${r.summary}`.slice(0, 120)};
+    } else if (pick.news){
+      const c = newsCache[pick.news];
+      const items = c && Date.now() - c.t < 15 * 60e3 ? c.items : (newsCache[pick.news] = {t: Date.now(), items: await marketNews(pick.news)}).items;
+      const it = items[Math.floor(Math.random() * Math.min(6, items.length))];
+      if (it) o = {icon: "📰", kind: "news", text: String(it.title).replace(/\s+/g, " ").slice(0, 110), url: it.url, src: (() => { try { return new URL(it.url).hostname.replace(/^www\./, ""); } catch(e){ return ""; } })()};
+    } else {
+      const r = await TOOLS.market_quote.run({symbols: [pick.q], exchange: pick.ex || ""});
+      const row = JSON.parse(r.text || "[]").find(x => x.현재가 != null);
+      if (row){
+        const chg = row["변동%"], raw = String(row.종목).split(" (")[0];
+        const nm = /[가-힣]/.test(raw) ? raw : /[가-힣]/.test(pick.q) ? pick.q : raw;
+        const where = /업비트/.test(row.시장) ? "업비트 " : /바이낸스.*선물|binancef/i.test(row.시장 + pick.ex) ? "바이낸스 선물 " : /바이낸스/.test(row.시장) ? "바이낸스 " : "";
+        const price = Number(row.현재가).toLocaleString("ko-KR", {maximumFractionDigits: 2});
+        o = {icon: chg == null ? "📈" : chg >= 0 ? "📈" : "📉", kind: "chart", chg, text: `${where}${nm} ${price}${row.통화 && row.통화 !== "KRW" ? " " + row.통화 : /업비트/.test(row.시장) ? "원" : ""}${chg != null ? ` (${chg >= 0 ? "+" : ""}${chg}%)` : ""} 차트 보는 중`};
+      }
+    }
+  } catch(e){}
+  if (!o) return null;
+  o.t = Date.now();
+  (seen[id] ||= []).unshift(o); seen[id].length = Math.min(seen[id].length, 8);
+  return o;
+}
+// 업무 기록: 같은 직원은 3분에 한 번만 회의록 패널에 남긴다 (말풍선은 매번)
+const lastWorkLog = {};
+export async function work(id){
+  const o = await observe(id); if (!o) return null;
+  if (o.kind !== "work" && Date.now() - (lastWorkLog[id] || 0) > 180e3){
+    lastWorkLog[id] = Date.now(); await loadLog();
+    post({ch: agentById(id).team, kind: "work", agent: id, icon: o.icon, text: o.text, url: o.url || "", src: o.src || ""});
+  }
+  return o;
+}
+
+/* ============ 수시 대화: 동료끼리 방금 본 것을 두고 나누는 잡담·업무 대화 ============ */
+const RELATED = COIN_RELATED;
+let chatting = false, visible = false, chatTimer = 0;
+export const setOfficeVisible = v => { visible = v; };
+export const isChatting = () => chatting;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function chatUsage(){ return usage().chats || 0; }
+export async function chatter(force){
+  const c = officeCfg();
+  if (chatting || running || queue.length || !hasAI() || officePaused()) return false;
+  if (!force && (!c.chat || chatUsage() >= c.chatMax)) return false;
+  chatting = true;
+  try {
+    await loadLog();
+    // 말을 꺼낼 사람: 방금 무언가를 본 직원 (없으면 지금 보게 한다)
+    const fresh = AGENTS.filter(a => seen[a.id]?.[0] && Date.now() - seen[a.id][0].t < 10 * 60e3 && seen[a.id][0].kind !== "work");
+    const starter = fresh.length ? fresh[Math.floor(Math.random() * fresh.length)] : (arr => arr[Math.floor(Math.random() * arr.length)])(AGENTS.filter(a => WATCH_OF[a.id]));
+    const obs = seen[starter.id]?.[0]?.kind !== "work" && seen[starter.id]?.[0] || await observe(starter.id);
+    if (!obs) return false;
+    const rel = RELATED[starter.id] || [];
+    const partners = rel.slice().sort(() => Math.random() - .5).slice(0, Math.random() < 0.5 ? 1 : 2).map(agentById);
+    const people = [starter, ...partners];
+    const sys = `[잡담] 너는 GH Coin 직원들의 대화를 쓰는 작가다. 회사 동료들이 자리에서 일하다 나누는 자연스러운 한국어 대화를 쓴다.
+참여자: ${people.map(p => `${p.name}(${p.title})`).join(", ")}
+규칙: 4~7줄. 각 줄은 '이름: 대사' 형식(참여자 이름만). 대사는 1~2문장. ${starter.name}가 방금 본 것을 꺼내며 시작한다. 각자 자기 전문 분야 관점으로 반응하고, 가벼운 농담이나 생활 이야기가 섞여도 좋다.
+방금 본 것 외의 숫자·사실은 지어내지 말고, 모르면 '확인해 볼게요'라고 한다. 투자 권유처럼 단정하지 않는다. 팀 회의가 꼭 필요할 만큼 중요하면 마지막 줄에 누군가 '회의 한번 하죠'라고 말한다.`;
+    const user = `${starter.name}가 방금 본 것: ${obs.icon} ${obs.text}${obs.src ? ` (출처: ${obs.src})` : ""}`;
+    let out = "";
+    bump("calls"); bump("chats");
+    const cmods = claudeModels();
+    const route = await brainStream({messages: [{role: "system", content: sys}, {role: "user", content: user}], role: "general", maxTokens: 600, temperature: 0.9, noThink: true,
+      ...(cmods ? {target: {id: "anthropic", model: cmods.haiku}, fallback: true} : {exclude: officeSources().length ? ["anthropic"] : []}), onContent: d => out += d});
+    const body = splitThink(out).body;
+    const lines = body.split(/\n+/).map(l => l.replace(/^[\s*\-•]+/, "").replace(/\*\*/g, "").trim()).map(l => {
+      const mm = l.match(/^([^:：]{1,12})\s*[:：]\s*(.+)$/); if (!mm) return null;
+      const who = people.find(p => mm[1].includes(p.name)); return who ? {who, text: mm[2].trim()} : null;
+    }).filter(Boolean).slice(0, 8);
+    if (lines.length < 2) return false;
+    const ch = starter.team;
+    post({ch, kind: "divider", chat: true, text: `수다 · ${people.map(p => p.name).join(", ")}${route?.model ? " · " + shortName(route.model) : ""}`});
+    post({ch, kind: "work", agent: starter.id, icon: obs.icon, text: obs.text, url: obs.url || "", src: obs.src || ""});
+    fire({kind: "huddle", ids: people.map(p => p.id), host: starter.id});
+    await sleep(1800);
+    for (const l of lines){
+      const e = post({ch, kind: "agent", chat: true, agent: l.who.id, text: l.text});
+      fire({kind: "line", agent: l.who, entry: e});
+      await sleep(Math.min(6500, 1600 + l.text.length * 45));
+    }
+    fire({kind: "huddle-end", ids: people.map(p => p.id)});
+    // 동료 수다 → 자연스러운 대화 흐름 예시 (말을 주고받는 순서대로 사용자·어시스턴트를 번갈아)
+    if (!isClaude(route?.model)){
+      const conv = lines.map((l, i) => ({role: i % 2 ? "assistant" : "user", content: l.text}));
+      if (conv.at(-1).role === "user") conv.pop();
+      if (conv.length >= 2) await keep("office-chat", conv, {speakers: people.map(p => p.id), model: route?.model || "", minLen: 4}).catch(() => null);
+    }
+    // 잡담에서 회의하자는 말이 나오면 진짜 회의를 연다
+    if (/회의\s*(한번|한 번)?\s*(하죠|합시다|해요|하자|열|해보|잡)/.test(lines.at(-1).text) && usage().auto < c.dailyMax){
+      enqueue({topic: `잡담에서 나온 이야기입니다. ${starter.name}가 본 것: ${obs.text}. 의미와 대응을 팀으로 점검해 주세요.`, room: ch, trigger: "auto", title: `잡담에서-${starter.name}`, agents: [starter.id, ...partners.map(p => p.id)].slice(0, 3)});
+    }
+    return true;
+  } catch(e){ return false; }
+  finally { chatting = false; setTimeout(pump, 200); }
+}
+export function nextChatIn(){ const c = officeCfg(), last = +localStorage.getItem("coinLastChat") || 0; return Math.max(0, last + c.chatEvery * 60e3 - Date.now()); }
+export function startChatter(){
+  if (chatTimer) return;
+  chatTimer = setInterval(async () => {
+    const c = officeCfg();
+    if (!visible || !c.chat || nextChatIn() > 0) return;
+    localStorage.setItem("coinLastChat", String(Date.now()));
+    await chatter();
+  }, 15e3);
+}
+
+/* ============ 3분 주기: 사람처럼 알아서 일하기 ============ */
+// 매 주기 ① 모의투자 장부를 실제 시세로 갱신(코드, AI 없음) ② 그때그때 한 가지 일을 고른다:
+// 매매법 연구 · SNS 여론 · 경제 리서치 · 동료 수다 · 컴퓨터 작업 · 모의투자 보고 (하루 AI 호출 한도 안에서)
+// 쉬지 않고 돌아가는 업무 순환표: 팀마다 고르게 돌아가도록 섞어 두었다 (모듈이 없으면 경제 리서치로 대신)
+const JOBS = ["dev", "ind", "trend", "situ", "cdev", "entry", "sr", "news", "promote", "pattern", "coin", "ml", "dev", "tpsl", "cdev", "trend", "chat", "forecast", "coin", "live", "retro", "task", "selfdev", "macro", "sns", "computer", "paper"];
+const JOB_KO = {dev: "매매법 개발 → 백테스트", cdev: "커스텀 지표 개발 → 백테스트", ind: "보조지표 분석", trend: "다중 시간대 추세 분석", entry: "진입 타점 분석", sr: "지지·저항 분석",
+  tpsl: "익절·손절 관리", news: "뉴스·기사 분석", macro: "경제지표 예측", situ: "코인 상황판", pattern: "차트·캔들 패턴 분석", coin: "코인팀 회의", ml: "머신러닝·딥러닝 실험",
+  promote: "데모 → 실거래 관문 심사", live: "실거래 데스크 점검", paper: "데모거래 보고", forecast: "방향 예측 토론", sns: "SNS 여론 확인", chat: "동료 수다", computer: "컴퓨터 작업",
+  retro: "팀 회고·부족한 점 찾기", task: "개선 과제 수행", selfdev: "우리 앱 오류 찾아 코드 고치기", economy: "경제 리서치"};
+const JOB_TEAM = {dev: "dev", cdev: "cdev", ind: "ind", trend: "trend", entry: "entry", sr: "sr", tpsl: "tpsl", news: "news", macro: "news", situ: "situ", pattern: "pattern", coin: "btc", ml: "ml",
+  promote: "demo", live: "live", paper: "demo", forecast: "entry", sns: "news", chat: "hq", computer: "hq", retro: "hq", task: "hq", selfdev: "hq", economy: "news"};
+const JOB_FN = () => ({dev: () => research("std"), cdev: () => research("custom"), ind: indJob, trend: trendJob, entry: entryJob, sr: srJob, tpsl: tpslJob, news: economyCheck, macro: macroJob,
+  situ: situJob, pattern: patternJob, coin: coinJob, ml: mlJob, promote: promoteJob, live: liveDeskJob, paper: paperReport, forecast: forecastJob, sns: snsCheck, chat: () => chatter(true),
+  computer: computerWork, retro, task: doTask, selfdev: selfdevJob, economy: economyCheck});
+let cycleTimer = 0, cycling = false, lastJob = "";
+export const cycleState = () => ({cycling, lastJob});
+export function nextCycleIn(){ const c = officeCfg(), last = +localStorage.getItem("coinLastCycle") || 0; return Math.max(0, last + c.cycleMin * 60e3 - Date.now()); }
+export function startCycle(){
+  startReports();
+  if (cycleTimer) return;
+  if (!localStorage.getItem("coinLastCycle")) localStorage.setItem("coinLastCycle", String(Date.now() - officeCfg().cycleMin * 60e3 + 45e3));
+  cycleTimer = setInterval(() => cycle().catch(e => console.warn(e)), 20e3);
+}
+export async function cycle(force, onlyJob){
+  const c = officeCfg();
+  if (cycling || (!force && (!c.cycle || nextCycleIn() > 0 || officePaused()))) return false;
+  if (!hasAI()) return false;
+  cycling = true; localStorage.setItem("coinLastCycle", String(Date.now()));
+  try {
+    await loadLog();
+    await paperStep();
+    // 회의가 열려 있어도 주기 업무는 따로 계속한다 (사람처럼 각자 일함). 단, 질문에 답하는 중에는 잡담만 쉰다
+    if (usage().calls >= c.callMax){ if (!usage().capNoted){ bump("capNoted"); post({ch: "hq", kind: "system", text: `오늘 사무실 AI 호출 한도(${c.callMax}번)를 다 썼습니다. 모의투자 갱신과 차트·뉴스 확인은 계속합니다.`}); } return true; }
+    let job = onlyJob;
+    if (!job){ const i = +localStorage.getItem("coinJob") || 0; job = JOBS[i % JOBS.length]; localStorage.setItem("coinJob", String(i + 1)); }
+    if (job === "paper" && !(await paperActive())) job = "dev";
+    if (job === "computer" && !computerOn()) job = "economy";
+    if (job === "task" && !backlog().some(t => t.status !== "done")) job = "retro";
+    if (job === "chat" && (running || chatting)) job = "economy";
+    lastJob = job; fire({kind: "cycle", job, label: JOB_KO[job]});
+    post({ch: JOB_TEAM[job] || "hq", kind: "work", agent: TEAM_LEAD[JOB_TEAM[job]] || "lead", icon: "▶", text: `${JOB_KO[job]} 시작`});
+    const fn = JOB_FN()[job] || (() => research("std"));
+    try { await fn(); }
+    catch(e){
+      // 새 모듈(부동산·ML·매크로 등)을 못 불러오면 그 주기는 경제 리서치로 대신한다
+      if (/import|module|fetch dynamically|Failed to fetch|is not a function|Cannot find/i.test(String(e.message || e)) && job !== "economy"){
+        post({ch: "hq", kind: "system", text: `${JOB_KO[job]} 모듈을 못 불러와 경제 리서치로 대신합니다 (${String(e.message || e).slice(0, 80)})`});
+        lastJob = "economy"; await economyCheck();
+      } else throw e;
+    }
+    return true;
+  } catch(e){
+    post({ch: "hq", kind: "system", text: `${JOB_KO[lastJob] || "일"} 중 문제: ${String(e.message || e).slice(0, 120)}`});
+    import("../nuri-ai/selfdev.js").then(S => S.recordError({msg: String(e.message || e), stack: e.stack || "", src: "job:" + lastJob})).catch(() => {});
+    return false;
+  }
+  finally { cycling = false; fire({kind: "cycle-end"}); setTimeout(pump, 200); }
+}
+
+// 혼자 하는 일 한 번: 배정 모델로 생각·말을 실시간으로 보여 주고, 빈 답이면 다른 모델로
+async function solo(a, {room, sys, user, maxTokens = 900, temperature = 0.6, extra = {}, train = "", trainRaw = false}){
+  const models = assignModels();
+  const target = models[a.id];
+  const cm = claudeModels();
+  const alt = cm && target?.model !== cm.sonnet ? {id: "anthropic", model: cm.sonnet} : officeSources().filter(t => t.model !== target?.model && !badModels()[t.model]).sort((x, y) => modelScore(y.model) - modelScore(x.model))[0];
+  const entry = post({ch: room || a.team, kind: "agent", agent: a.id, text: "", think: "", steps: [], live: true, model: target?.model || "", ...extra});
+  fire({kind: "solo", agent: a, entry});
+  let finalRaw = "";
+  for (const tg of [target, alt, null].filter((t, i, arr) => i === arr.length - 1 || (t && arr.findIndex(x => x && x.model === t.model) === i))){
+    let raw = "", think = "", last = 0;
+    const show = () => { const mm = raw.match(/^💭\s*([^\n]*)\n?/); entry.think = mm ? koThink(mm[1]) : ""; entry.text = koOnly(visibleText((mm ? raw.slice(mm[0].length) : raw).replace(/<think>[\s\S]*?(<\/think>|$)/g, "")).replace(/^\s*💭[^\n]*\n?/gm, "")).trim();
+      entry.thinking = !entry.text && !!think;
+      if (Date.now() - last > 150){ last = Date.now(); fire({kind: "delta", agent: a, entry}); } };
+    // 느린 모델은 끊고 다음 모델로: 60초 동안 한 글자도 없거나 전체 3분을 넘기면
+    const ctl = new AbortController(), t0 = Date.now(); let slow = false;
+    const watch = setInterval(() => { const el = Date.now() - t0; if ((!raw && el > 60e3) || el > 180e3){ slow = true; ctl.abort(); } }, 2000);
+    try {
+      bump("calls");
+      const route = await brainStream({messages: [{role: "system", content: sys}, {role: "user", content: user}], role: a.role === "code" ? "code" : "general", signal: ctl.signal, noThink: true,
+        maxTokens, temperature, target: tg || undefined, fallback: true, onContent: d => { raw += d; show(); }, onThink: d => { think += d; show(); }});
+      raw = splitThink(raw).body; show(); finalRaw = raw;
+      entry.model = route?.model || tg?.model || entry.model;
+    } catch(e){ if (slow && raw){ raw = splitThink(raw).body; show(); finalRaw = raw; } if (!slow && isLimit(e.message)) noteLimit(); addNote2(entry, `${shortName(tg?.model)}: ${slow ? "응답이 너무 느림" : String(e.message || e).slice(0, 60)}`); }
+    finally { clearInterval(watch); }
+    entry.thinking = false;
+    noteModel(entry.model || tg?.model, (entry.text || finalRaw) && !slow ? "ok" : slow ? "slow" : "fail");
+    if (entry.text || /```json|^\s*[\[{]\s*"?[\w{]/m.test(finalRaw)) break;
+    markBad(tg?.model);
+  }
+  if (!entry.text && !finalRaw) entry.text = `(${a.name}: 이번에는 답하지 못했습니다)`;
+  if (!entry.text && finalRaw) entry.text = (finalRaw.replace(/^\s*💭[^\n]*\n?/gm, "").replace(/```(?:json)?[\s\S]*?(```|$)/g, "").trim() || "전략을 만들었습니다") + "\n\n*(전략 JSON은 아래 백테스트 카드에 있습니다)*";
+  // 자료를 읽고 해설한 일은 '자료 해설' 학습 예시로
+  if (train && (goodText(entry.text) || trainRaw && finalRaw.length > 40) && !isClaude(entry.model)){
+    // trainRaw: 설계안·사업안·후보 추출처럼 JSON 이 결과물인 일은 JSON 까지 그대로 학습
+    const ans = trainRaw ? noMind(finalRaw.replace(/^\s*💭[^\n]*\n?/gm, "").replace(/<think>[\s\S]*?<\/think>/g, "").trim()) : noMind(entry.text);
+    const id = await keep("office-solo", [{role: "user", content: `${train}\n\n${clip(user, 3500)}`}, {role: "assistant", content: ans}], {agent: a.id, model: entry.model, job: room}).catch(() => null);
+    if (id) entry.trainIds = [id];
+  }
+  entry.live = false; saveLog(); fire({kind: "said", agent: a, entry});
+  return {...entry, raw: finalRaw};
+}
+const personaOf = (a, extra = "") => `너는 세계적인 기업 수준의 GH Coin ${teamById(a.team).name}의 '${a.name}'(${a.title})다. 역할: ${a.duty}
+${notesText(a.team)}
+반드시 한국어로만 쓰고, 영어 생각이나 답 계획은 쓰지 않는다. 이번 일에서는 도구를 부를 수 없으니 주어진 자료로만 말한다. 첫 줄은 '💭 '로 시작하는 한 문장 속마음(무엇을 보고 어떻게 판단하는지)이다. 그다음 동료에게 말하듯 자연스러운 한국어로 말한다. 데이터에 없는 숫자는 지어내지 않는다. ${extra}`;
+
+/* ---- 모의투자 (코드) ---- */
+async function paperActive(){ const P = await import("../nuri-ai/paper.js"); const b = await P.loadBook(); return b.strategies.some(s => s.status === "active"); }
+async function paperStep(){
+  const P = await import("../nuri-ai/paper.js");
+  const fmt = n => Number(n).toLocaleString("ko-KR", {maximumFractionDigits: 2});
+  await P.step(ev => {
+    // 실거래 연결: 사용자가 켜고 연결한 전략만, 안전 한도·승인을 거쳐 코드가 주문한다 (AI는 주문하지 않음). 승인 대기가 길 수 있어 기다리지 않는다
+    if (ev.kind === "open" || ev.kind === "close") import("../nuri-ai/live.js").then(L => L.onPaperEvent(ev)).then(r => {
+      if (r && (r.order || r.blocked || r.error) && !r.ignored) post({ch: ev.s.lane === "custom" ? "clive" : "live", kind: "live", level: r.error || r.blocked ? "warn" : "info", text: r.order ? `🔐 실거래 주문 체결: ${ev.s.market} ${ev.kind === "open" ? "진입" : "청산"}` : r.blocked ? `🔐 실거래 차단: ${(r.reasons || []).join(", ")}` : `🔐 실거래 오류: ${r.error}`});
+    }).catch(() => {});
+    const s = ev.s, side = k => k === "long" ? "롱" : "숏";
+    let text = "";
+    if (ev.kind === "open") text = `📗 [${s.name}] ${s.market} ${side(ev.pos.side)} 진입 ${fmt(ev.pos.entry)} (x${ev.pos.lev}${ev.pos.sl ? `, 손절 ${fmt(ev.pos.sl)}` : ""}${ev.pos.tp ? `, 익절 ${fmt(ev.pos.tp)}` : ""})${ev.why ? " — " + ev.why : ""}`;
+    else if (ev.kind === "close") text = `${ev.trade.pnl >= 0 ? "💰" : "📕"} [${s.name}] ${s.market} ${side(ev.trade.side)} 청산 ${fmt(ev.trade.exitP)} · ${ev.trade.pnl >= 0 ? "+" : ""}${fmt(ev.trade.pnl)} (ROE ${ev.trade.roe.toFixed(1)}%) · ${ev.trade.reason}`;
+    else if (ev.kind === "bust") text = `💥 [${s.name}] 가상 계좌가 파산해 운용을 멈췄습니다`;
+    else return;
+    const dl = (LANES[s.lane] || LANES.std).demoLead;
+    post({ch: (LANES[s.lane] || LANES.std).demo, kind: "trade", agent: dl, text});
+    fire({kind: "trade", agent: agentById(dl), text});
+  });
+  fire({kind: "paper"});
+}
+async function paperReport(){
+  const P = await import("../nuri-ai/paper.js"), a = agentById("trader");
+  const book = await P.bookText();
+  await solo(a, {room: "demo", sys: personaOf(a, "데모거래(모의) 현황을 팀에 3~5문장으로 보고한다. 잘 되는 전략과 안 되는 전략, 지금 포지션의 위험을 짚는다. 실제 주문이 아닌 가상 운용임을 잊지 않는다."), user: `모의투자 장부:\n${book}`, train: "아래 모의투자 장부를 보고 잘 되는 전략과 안 되는 전략, 지금 포지션의 위험을 3~5문장으로 해설해 줘."});
+}
+
+/* ---- 매매법 연구: 지표 29종 + 연구 카드 → 전략 JSON → 백테스트 · 과최적화 검사 → 통과하면 모의투자 ---- */
+// 코인 선물 · 미국 주식 · 국내 주식 · 해외선물 · 국내 지수(국내선물 기초)를 돌아가며 연구한다
+export const MARKETS = COINS.flatMap(c => [{market: c.sym, exchange: "binancef", tf: "240", cls: "crypto", name: `${c.ko} 선물`, coin: c.id}, {market: c.sym, exchange: "binancef", tf: "60", cls: "crypto", name: `${c.ko} 선물`, coin: c.id}]);
+// 자산마다 수수료·슬리피지·펀딩 (주식·선물은 펀딩 없음)
+export const COSTS = {crypto: {fee_pct: 0.04, slippage_pct: 0.01, funding_rate_8h_pct: 0.01}, us_stock: {fee_pct: 0.015, slippage_pct: 0.02, funding_rate_8h_pct: 0},
+  kr_stock: {fee_pct: 0.1, slippage_pct: 0.03, funding_rate_8h_pct: 0}, futures: {fee_pct: 0.01, slippage_pct: 0.01, funding_rate_8h_pct: 0}, index: {fee_pct: 0.01, slippage_pct: 0.01, funding_rate_8h_pct: 0}};
+const IV_NAME = {"15": "15m", "60": "1h", "240": "4h", "D": "1d"}, TF_KO = {"15": "15분", "60": "1시간", "240": "4시간", "D": "일"};
+// 두 라인: 일반(모든 보조지표) · 커스텀(직접 만든 수식 지표 중심) — 개발 → 백테스트 → 데모 팀이 각각 다르다
+export const LANES = {std: {dev: "dev", bt: "bt", demo: "demo", live: "live", authors: ["qa", "qb", "dev_2", "dev_3", "dev_4"], checker: "val", demoLead: "trader", label: "일반"},
+  custom: {dev: "cdev", bt: "cbt", demo: "cdemo", live: "clive", authors: ["cind", "cdev_1", "cdev_2", "cdev_4", "cdev_7"], checker: "cbt_lead", demoLead: "cdemo_lead", label: "커스텀 지표"}};
+function researchLog(lane){ try { const l = JSON.parse(localStorage.getItem("coinResearch") || "[]"); return lane ? l.filter(r => (r.lane || "std") === lane) : l; } catch(e){ return []; } }
+function addResearch(r){ const l = researchLog(); l.push(r); try { localStorage.setItem("coinResearch", JSON.stringify(l.slice(-200))); } catch(e){} }
+export const researchHistory = researchLog;
+function pickJSON(t){
+  const m = t.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, (t.match(/\{[\s\S]*\}/) || [""])[0]];
+  try { return JSON.parse(m[1]); } catch(e){ return null; }
+}
+const fmtDay = t => t ? new Date(t).toISOString().slice(0, 10) : "?";
+async function research(lane = "std"){
+  const L = LANES[lane] || LANES.std;
+  const Q = await import("../nuri-ai/quant.js"), P = await import("../nuri-ai/paper.js");
+  const n = researchLog(lane).length, a = agentById(L.authors[n % L.authors.length]), mk = MARKETS[(n * 5 + (lane === "custom" ? 3 : 0)) % MARKETS.length], tf = mk.tf, iv = IV_NAME[tf];
+  fire({kind: "busy", agent: a, text: `🧪 ${mk.name} ${TF_KO[tf]}봉 매매법 구상 중 (가장 오래된 과거부터)`});
+  // ① 가능한 가장 긴 과거 캔들 (없으면 최근 1,500봉)
+  let cs = null, hist = "";
+  try { const H = await import("../nuri-ai/history.js"); const h = await Promise.race([H.historyCandles({market: mk.market, exchange: mk.exchange, interval: iv, maxBars: tf === "D" ? 30000 : 20000}), new Promise((_, rej) => setTimeout(() => rej(new Error("전체 과거 받기 90초 초과 — 최근 캔들로 대신")), 90e3))]); cs = h.candles; hist = h.note && /\d{4}-\d{2}-\d{2}/.test(h.note) ? h.note : `${fmtDay(h.from)}~${fmtDay(h.to)} · ${cs.length.toLocaleString()}봉${h.note ? " · " + h.note : ""}`; } catch(e){ hist = ""; }
+  if (!cs || cs.length < 300){ cs = (await candlesFor({market: mk.market, exchange: mk.exchange, timeframe: tf}, 1500)).cs; hist = `최근 ${cs.length.toLocaleString()}봉 (${fmtDay(cs[0]?.t)}~)`; }
+  // ② 코인이면 호가·고래·선물 흐름과 펀딩 이력도 함께
+  let flowText = "", deriv = null;
+  if (mk.cls === "crypto"){
+    try { const F = await import("../nuri-ai/flow.js"); const [fs, dh] = await Promise.all([F.flowSnapshot({symbol: mk.market}).catch(() => null), F.derivHistory({symbol: mk.market, days: 30}).catch(() => null)]); flowText = fs?.text || ""; deriv = dh?.deriv || null; } catch(e){}
+  }
+  const snap = Q.snapshot(cs), cards = await Q.loadCards().catch(() => []);
+  const tried = researchLog().slice(-8).map(r => `- ${r.name} (${r.market} ${r.tf}): ${r.pass ? "통과" : "불통과"}, 검증 구간 ${r.oos?.toFixed?.(1)}%`).join("\n");
+  const levHint = {crypto: "코인 선물은 1~125배", us_stock: "주식은 보통 1~4배", kr_stock: "주식은 보통 1~2.5배", futures: "선물은 보통 5~20배", index: "지수 선물은 보통 5~20배"}[mk.cls];
+  const sys = personaOf(a, (lane === "custom" ? "이번 일은 새 매매법 개발(커스텀 지표 라인)이다. 진입·청산의 핵심 조건은 반드시 직접 만든 custom 수식 지표로 하고, 기본 지표는 필터로만 쓴다. " : "이번 일은 모든 보조지표를 조합하는 새 매매법 개발이다. 기본 29종과 tv_ 지표에서 서로 다른 성격(추세·모멘텀·변동성·거래량) 3개 이상을 쓴다. ") + " 아래 형식 설명을 따라 전략 JSON 하나를 ```json 블록으로 쓰고, 블록 뒤에 왜 이 전략인지 2~3문장으로 말한다.") + "\n\n" + Q.STRATEGY_PROMPT
+    + `\n\n## 레버리지\n레버리지는 1~200배 중 자유롭게 정한다(${levHint}가 일반적). 정한 뒤 코드가 모든 레버리지(1~200배)·상승장·하락장·횡보·폭락·수수료 2~3배·진입 지연 시나리오로 다시 시험한다.`
+    + (lane === "custom" || researchLog().length % 2 ? "\n\n## 이번 과제: 커스텀 지표\n거래소 기본 보조지표만 쓰지 말고 {\"type\":\"custom\",\"expr\":\"수식\"} 지표를 최소 1개 직접 발명해서 조건에 쓴다(예: 거래량 가중 모멘텀, 변동성 대비 이격, 여러 지표의 합성 점수). 수식 문법은 위 설명의 custom 항목을 따른다. 수식 안에서 ind(\"tv_이름\", {파라미터}, \"value|p1~p4\")로 아래 차트 터미널 지표도 쓸 수 있다." : "")
+    + "\n\n## 더 쓸 수 있는 지표\n" + Q.tvCatalogText()
+    + (userNote ? `\n\n## 대표님 지시 (최우선)\n${userNote}\n지시에 맞춰 만든다. 커스텀 수식 지표를 반드시 1개 이상 쓰고, 여러 보조지표(기본 29종 + tv_ 지표)를 조합한다.` : "")
+    + (cards.length ? "\n\n## 지금까지의 백테스트 연구 카드(참고)\n" + Q.cardsText(cards, 14) : "");
+  const user = `시장: ${mk.name} (${mk.market}, ${mk.exchange === "binancef" ? "바이낸스 선물" : mk.exchange === "yahoo" ? "야후 파이낸스" : mk.exchange}) · ${TF_KO[tf]}봉\n시험할 과거: ${hist}\n지금 차트(보조지표 29종):\n${snapText(snap)}\n${JSON.stringify(snap.ind || {}).slice(0, 2200)}${flowText ? "\n\n호가·고래·선물 흐름(지금):\n" + flowText.slice(0, 1500) : ""}\n\n최근 우리 팀이 시험한 전략(겹치지 않게):\n${tried || "(아직 없음)"}\n\n${a.id === "qa" ? "추세추종" : "역추세·변동성"} 계열로 새 전략 하나를 만들어 주세요. symbol은 ${mk.market}, interval은 ${iv}.${deriv ? " funding·oi·oi_change_pct·long_short 피연산자도 쓸 수 있습니다." : ""}`;
+  const e = await solo(a, {room: L.dev, sys, user, maxTokens: 1600, temperature: 0.8});
+  let spec = pickJSON(e.raw || e.text);
+  if (!spec){ post({ch: L.dev, kind: "system", text: `${a.name}의 답에서 전략 JSON을 찾지 못했습니다`}); addResearch({lane, name: "(형식 오류)", market: mk.market, tf, pass: false, t: Date.now()}); return; }
+  try { spec = Q.normalizeSpec({...spec, symbol: mk.market, interval: iv, risk: {...(spec.risk || {}), ...COSTS[mk.cls]}}); }
+  catch(err){ post({ch: L.dev, kind: "system", text: `전략 형식 오류(${a.name}): ${err.message}`}); addResearch({lane, name: spec.name || "(형식 오류)", market: mk.market, tf, pass: false, t: Date.now()}); return; }
+  const v = agentById(L.checker);
+  fire({kind: "busy", agent: v, text: `🧮 ${spec.name} · ${cs.length.toLocaleString()}봉 백테스트 · 시나리오 검사 중`});
+  const bt = Q.backtest(spec, cs, {deriv}), wf = Q.walkForward(spec, cs, {deriv});
+  let scen = "", scenObj = null;
+  try { const S = await import("../nuri-ai/scenarios.js"); scenObj = S.runScenarios(spec, cs, {deriv}); scen = S.scenarioText(scenObj); } catch(err){ scen = ""; }
+  const st = x => ({ret: +(x?.return_pct ?? 0), dd: +(x?.max_dd_pct ?? 0), win: +(x?.win_rate ?? 0), pf: x?.profit_factor == null ? null : +x.profit_factor, n: x?.n_trades ?? 0});
+  post({ch: L.bt, kind: "bt", agent: L.checker, lane, name: spec.name, market: mk.market, mname: mk.name, tf, hist, all: st(bt.stats), is: st(wf.is), oos: st(wf.oos), pass: wf.pass, reasons: wf.reasons, author: a.name, spec, scen, lev: spec.risk?.leverage});
+  addResearch({lane, name: spec.name, market: mk.market, tf, pass: wf.pass, oos: +(wf.oos?.return_pct ?? 0), t: Date.now()});
+  fire({kind: "bubble", agent: v, text: `${wf.pass ? "✅ 통과" : "❌ 불통과"}: ${spec.name} — ${wf.reasons.slice(0, 2).join(", ")}`});
+  // 검증관이 시나리오 결과를 말로 설명 (통과했거나 시나리오가 있을 때)
+  if (scen) await solo(v, {room: L.bt, sys: personaOf(v, "코드가 낸 백테스트·시나리오 결과를 3~5문장으로 설명한다. 어느 레버리지까지 견디는지, 어떤 장세에서 약한지, 최악의 해와 낙폭을 짚고, 통과·불통과 판정은 코드 판정을 따른다."),
+    user: `전략: ${spec.name} (${mk.name} ${TF_KO[tf]}봉, 레버리지 ${spec.risk?.leverage}배)\n과거: ${hist}\n판정: ${wf.pass ? "통과" : "불통과"} — ${wf.reasons.join(", ")}\n\n시나리오:\n${scen}`,
+    train: "아래 백테스트·시나리오 결과를 보고 이 전략이 어느 레버리지까지 견디는지, 어떤 장세에서 약한지, 최악의 구간을 쉬운 말로 설명해 줘."});
+  if (wf.pass && !isClaude(e.model)){
+    const ans = `${noMind(e.raw || "").replace(/```(?:json)?[\s\S]*?```/, "```json\n" + JSON.stringify(spec, null, 1) + "\n```")}\n\n백테스트(검증 구간): 수익 ${st(wf.oos).ret}% · 손익비 ${st(wf.oos).pf ?? "-"} · 거래 ${st(wf.oos).n}회`;
+    await keep("office-strategy", [{role: "user", content: clip(user, 3000)}, {role: "assistant", content: ans}], {agent: a.id, model: e.model}).catch(() => null);
+  }
+  if (wf.pass){
+    saveDoc({title: `매매법 · ${spec.name} (${mk.name} ${TF_KO[tf]}봉) 검증 통과`, path: `ghcoin/strategies/${String(spec.name).replace(/[\\/:*?"<>|\s]+/g, "_").slice(0, 50)}.json`, content: JSON.stringify({spec, backtest: {all: st(bt.stats), is: st(wf.is), oos: st(wf.oos), reasons: wf.reasons}, scenarios: scen || ""}, null, 2), team: L.bt, agent: a.id});
+    const s = await P.addStrategy({spec, market: mk.market, exchange: mk.exchange, tf, author: a.name, wf: {is: st(wf.is), oos: st(wf.oos)}, cls: mk.cls, mname: mk.name, lane});
+    post({ch: L.demo, kind: "system", text: `📈 데모거래 시작: ${s.name} (${mk.name} ${TF_KO[tf]}봉 · 레버리지 ${spec.risk?.leverage}배 · ${a.name} 개발 · ${v.name} 검증 통과) · 가상 10,000`});
+    fire({kind: "trade", agent: agentById(L.demoLead), text: `📈 ${s.name} 모의투자 시작합니다`});
+  }
+}
+
+/* ---- SNS 여론 ---- */
+const SNS_TOPICS = ["crypto", "crypto", "macro", "crypto"];
+async function snsCheck(){
+  const a = agentById("sns"), i = +localStorage.getItem("coinSns") || 0, topic = SNS_TOPICS[i % SNS_TOPICS.length];
+  localStorage.setItem("coinSns", String(i + 1));
+  fire({kind: "busy", agent: a, text: `📱 ${topic === "crypto" ? "코인" : topic === "us" ? "미국 주식" : "경제"} SNS 둘러보는 중`});
+  const r = await TOOLS.sns_buzz.run({topic});
+  for (const src of (r.sources || []).slice(0, 4)) post({ch: "news", kind: "work", agent: "sns", icon: "📱", text: src.title, url: src.url});
+  await solo(a, {room: "news", sys: personaOf(a, "SNS에서 본 분위기를 3~5문장으로 해설한다. 사람들이 무엇에 흥분하거나 겁먹는지, 쏠림이 지나친지(역발상 신호인지) 말한다. SNS 글은 의견일 뿐이라는 점을 잊지 않는다."), user: r.text.slice(0, 5000), train: "아래 SNS 글과 공포·탐욕 지수를 보고 지금 사람들의 분위기와 쏠림을 해설해 줘. SNS 글은 의견이라는 점도 짚어 줘."});
+  const fg = (r.text.match(/공포·탐욕 지수\] 오늘 (\d+)/) || [])[1];
+  if (fg && (+fg <= 15 || +fg >= 85) && usage().auto < officeCfg().dailyMax)
+    enqueue({topic: `코인 공포·탐욕 지수가 ${fg}로 극단입니다. SNS 분위기와 시장을 함께 점검해 주세요.`, room: "news", trigger: "event", title: `여론-극단-${fg}`, agents: ["sns", "coin_spot", "coin_fut"]});
+}
+
+/* ---- 경제 리서치 ---- */
+const ECON_Q = ["오늘 비트코인 뉴스 ETF 규제", "crypto market news today bitcoin ethereum", "코인 거래소 공지 상장 해킹", "fed rate decision crypto impact this week", "알트코인 뉴스 솔라나 리플 도지", "stablecoin regulation news"]; const _OLD_ECON = ["오늘 미국 경제 뉴스 연준 금리 물가", "global economy outlook this week markets", "한국 경제 환율 수출 금리 뉴스", "oil price OPEC dollar news today", "중국 경기 부양책 뉴스", "부동산 시장 금리 대출 규제 뉴스", "AI 반도체 수요 실적 뉴스"];
+async function economyCheck(){
+  const i = +localStorage.getItem("coinEcon") || 0, q = ECON_Q[i % ECON_Q.length], a = agentById(["macro", "research", "news_4", "news_5", "news_6"][i % 5]);
+  localStorage.setItem("coinEcon", String(i + 1));
+  fire({kind: "busy", agent: a, text: `🔎 '${q}' 찾아보는 중`});
+  const r = await TOOLS.web_search.run({query: q, n: 6});
+  for (const src of (r.sources || []).slice(0, 3)) post({ch: a.team, kind: "work", agent: a.id, icon: "📰", text: src.title, url: src.url});
+  await solo(a, {room: a.team, sys: personaOf(a, "검색 결과(뉴스·기사)로 지금 코인 시장에 무슨 일이 있는지 4~6문장으로 해설한다. 기사 제목을 나열하지 말고 흐름으로 묶고, 코인 가격에 주는 의미를 한 줄 덧붙인다. 근거 문장 끝에 [번호]."), user: `검색어: ${q}\n\n${String(r.text || "").slice(0, 6000)}`, train: "아래 검색 결과로 지금 경제가 어떻게 돌아가는지 흐름으로 해설하고, 코인·주식·부동산에 주는 의미를 덧붙여 줘. 근거 문장 끝에 [번호]."});
+}
+
+/* ---- 컴퓨터 작업 (문서/GHNano 사무실 폴더) ---- */
+async function computerWork(){
+  const {codeCall} = await import("../nuri-ai/engine.js"), P = await import("../nuri-ai/paper.js");
+  const a = agentById("eng"), day = today();
+  fire({kind: "busy", agent: a, text: "💻 사무실 폴더에 보고서 정리 중"});
+  const book = await P.loadBook();
+  const res = researchLog().slice(-20);
+  const log = (await loadLog()).filter(e => e.kind === "agent" && !e.chat && e.text && Date.now() - e.t < 864e5).slice(-12);
+  const md = `# GH Coin 일일 보고서 · ${day}\n\n## 모의투자\n${await P.bookText()}\n\n## 매매법 연구 (최근 ${res.length}건)\n${res.map(r => `- ${r.pass ? "✅" : "❌"} ${r.name} · ${r.market} ${r.tf} · 검증 구간 ${(+r.oos || 0).toFixed(1)}%`).join("\n") || "- 없음"}\n\n## 오늘 팀 발언 요약\n${log.map(e => `- **${agentById(e.agent)?.name}**: ${e.text.replace(/\s+/g, " ").slice(0, 200)}`).join("\n")}\n`;
+  const csv = "strategy,market,side,entry_time,entry,exit_time,exit,pnl_usdt,roe_pct,reason\n" + book.strategies.flatMap(s => s.trades.map(t => [s.name, s.market, t.side, new Date(t.entryT).toISOString(), t.entryP, new Date(t.exitT).toISOString(), t.exitP, t.pnl.toFixed(2), t.roe.toFixed(2), t.reason].map(x => `"${String(x).replace(/"/g, '""')}"`).join(","))).join("\n");
+  await codeCall("write", {ws: "office", path: `ghcoin/reports/${day}.md`, content: md});
+  await saveDoc({title: `일일 보고서 ${day}`, path: `ghcoin/reports/${day}.md`, content: md, team: "hq", agent: "eng"});
+  await codeCall("write", {ws: "office", path: "ghcoin/data/trades.csv", content: csv});
+  for (const s of book.strategies.filter(x => x.status === "active")) await codeCall("write", {ws: "office", path: `ghcoin/strategies/${s.name.replace(/[\\/:*?"<>|]/g, "_")}.json`, content: JSON.stringify(s.spec, null, 2)});
+  post({ch: "hq", kind: "work", agent: "eng", icon: "💾", text: `문서/GHNano 사무실/ghcoin 에 저장: reports/${day}.md · data/trades.csv · strategies/*.json`});
+  // 세 번에 한 번은 직접 파이썬 분석 스크립트를 짜서 돌려 본다
+  const k = +localStorage.getItem("coinComp") || 0; localStorage.setItem("coinComp", String(k + 1));
+  if (k % 3 !== 2 || !book.strategies.some(s => s.trades.length)) return;
+  const m = {id: uid(), room: "hq", name: "데이터-분석", trigger: "auto", topic: "ghcoin/data/trades.csv(데모거래 거래 기록)를 분석하는 파이썬 스크립트 ghcoin/analysis/summary.py를 사무실 폴더에 만들고 실행해서, 전략별 승률·평균 손익·최대 연속 손실을 보고해 주세요. 파이썬이 없으면 그 사실만 보고합니다.", order: ["eng"], done: [], ctl: new AbortController(), t: Date.now(), models: assignModels()};
+  await speak(a, m, [], m.models.eng, m.ctl.signal);
+}
+
+/* ============ 스스로 성장: 팀 노트(배운 것) · 성장 과제 · 회고 ============ */
+// 팀마다 배운 것을 쌓아 두고 다음 일할 때 지시문에 넣는다. 회고에서 부족한 점을 찾아 과제를 만들고, 다음 주기에 담당자가 직접 해낸다.
+const NOTES_KEY = "coinNotes", BL_KEY = "coinBacklog";
+const readJ = (k, d) => { try { return JSON.parse(localStorage.getItem(k) || "") ?? d; } catch(e){ return d; } };
+const writeJ = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} };
+export function teamNotes(team){ return (readJ(NOTES_KEY, {})[team] || []); }
+export function addNote(team, text, src = ""){
+  const all = readJ(NOTES_KEY, {}), list = all[team] || [];
+  const t = String(text || "").replace(/\s+/g, " ").trim().slice(0, 240); if (!t || list.some(n => n.text === t)) return;
+  list.push({t: Date.now(), text: t, src}); all[team] = list.slice(-40); writeJ(NOTES_KEY, all);
+}
+function notesText(team){
+  const n = teamNotes(team).slice(-6);
+  return n.length ? `- 우리 팀이 지금까지 배운 것(반영할 것): ${n.map(x => x.text).join(" / ")}\n` : "";
+}
+export function backlog(){ return readJ(BL_KEY, []); }
+function saveBacklog(list){ writeJ(BL_KEY, list.slice(-200)); fire({kind: "growth"}); }
+export function addTask({team, title, why = "", owner = ""}){
+  const list = backlog(); const t = String(title || "").trim().slice(0, 160);
+  if (!t || list.some(x => x.title === t && x.status !== "done")) return null;
+  const own = AGENTS.find(a => a.team === team && (a.name === owner || a.id === owner)) || AGENTS.find(a => a.team === team && !a.lead) || agentById(TEAM_LEAD[team]);
+  const item = {id: uid(), team, title: t, why: String(why).slice(0, 200), status: "todo", owner: own?.id || "", t: Date.now(), result: ""};
+  list.push(item); saveBacklog(list);
+  post({ch: team, kind: "task", agent: item.owner, title: item.title, status: "todo", result: item.why});
+  return item;
+}
+function updateTask(id, patch){ const list = backlog(), it = list.find(x => x.id === id); if (!it) return null; Object.assign(it, patch); saveBacklog(list); return it; }
+
+// 회고: 팀장이 최근 기록·실패·과제를 보고 '배운 것'과 '부족한 점 → 새 과제'를 정한다 (팀 자리에서 짧은 팀 회의)
+const RETRO_ORDER = TEAMS.filter(t => t.id !== "hq").map(t => t.id);
+async function retro(){
+  const i = +localStorage.getItem("coinRetro") || 0, team = RETRO_ORDER[i % RETRO_ORDER.length]; localStorage.setItem("coinRetro", String(i + 1));
+  const lead = agentById(TEAM_LEAD[team]), mem = AGENTS.filter(a => a.team === team);
+  fire({kind: "huddle", ids: mem.map(a => a.id), host: lead.id});
+  const recent = (await loadLog()).filter(e => e.ch === team && Date.now() - e.t < 6 * 3600e3).slice(-25)
+    .map(e => `- [${e.kind}] ${agentById(e.agent)?.name || ""}: ${String(e.text || e.title || e.name || "").replace(/\s+/g, " ").slice(0, 160)}${e.kind === "bt" ? ` (${e.pass ? "통과" : "불통과"})` : ""}`).join("\n");
+  const open = backlog().filter(x => x.team === team && x.status !== "done").map(x => `- ${x.title}`).join("\n");
+  const e = await solo(lead, {room: team, sys: personaOf(lead, `지금은 ${teamById(team).name} 회고·성장 회의다. 최근 기록을 보고 ① 배운 것(다음에 반드시 반영할 교훈) 2~4개 ② 우리 팀에 부족한 점을 메울 구체적인 새 과제 1~3개(누가 맡을지 팀원 이름 포함)를 정한다. 세계적인 기업 수준의 기준으로 냉정하게. 답 마지막에 \`\`\`json {"lessons":["..."],"tasks":[{"title":"...","why":"...","owner":"팀원 이름"}]}\`\`\` 를 붙인다.`),
+    user: `팀원: ${mem.map(a => `${a.name}(${a.title})`).join(", ")}\n최근 기록:\n${recent || "(기록 없음 — 첫 회고)"}\n\n아직 안 끝난 과제:\n${open || "(없음)"}`, maxTokens: 1200, trainRaw: true, train: "팀의 최근 업무 기록을 보고 회고해 줘: 배운 것과 부족한 점을 메울 새 과제를 JSON으로."});
+  fire({kind: "huddle-end", ids: mem.map(a => a.id)});
+  const j = pickJSON(e.raw || e.text) || {};
+  for (const l of (j.lessons || []).slice(0, 4)) addNote(team, l, "회고");
+  for (const t of (j.tasks || []).slice(0, 3)) addTask({team, title: t.title, why: t.why, owner: t.owner});
+}
+// 과제 실행: 가장 오래된 과제를 담당자가 도구를 써서 직접 해낸다
+async function doTask(){
+  const it = backlog().find(x => x.status === "todo"); if (!it) return retro();
+  const a = agentById(it.owner) || agentById(TEAM_LEAD[it.team]);
+  updateTask(it.id, {status: "doing"}); post({ch: it.team, kind: "task", agent: a.id, title: it.title, status: "doing", result: ""});
+  const m = {id: uid(), room: it.team, name: "과제-" + it.title.slice(0, 12), trigger: "auto", topic: `성장 과제: ${it.title}\n왜: ${it.why}\n도구(검색·차트·백테스트·사무실 파일 등)를 써서 실제로 해내고, 결과물과 배운 점을 보고해 주세요. 못 한 부분은 솔직히 말합니다.`, order: [a.id], done: [], ctl: new AbortController(), t: Date.now(), models: assignModels(), place: it.team};
+  const turn = await speak(a, m, [], m.models[a.id], m.ctl.signal);
+  const res = String(turn?.text || "").replace(/\s+/g, " ").slice(0, 300);
+  updateTask(it.id, {status: "done", result: res, done: Date.now()});
+  post({ch: it.team, kind: "task", agent: a.id, title: it.title, status: "done", result: res});
+  addNote(it.team, `과제 '${it.title.slice(0, 50)}' 결과: ${res.slice(0, 140)}`, "과제");
+}
+
+/* ============ 1시간마다 성과 발표 ============ */
+export async function listReports(){ const v = await idb.all("coinreport:").catch(() => []); return v.sort((a, b) => b.t - a.t); }
+let reportTimer = 0, reporting = false;
+export function startReports(){ if (!reportTimer) reportTimer = setInterval(() => maybeReport().catch(e => console.warn(e)), 60e3); }
+async function maybeReport(force){
+  const last = +localStorage.getItem("coinLastReport") || 0;
+  if (reporting || (!force && Date.now() - last < 3600e3)) return null;
+  if (!last && !force){ localStorage.setItem("coinLastReport", String(Date.now())); return null; }   // 처음 켰을 때부터 1시간 뒤 첫 발표
+  reporting = true;
+  try { return await makeReport(last || Date.now() - 3600e3); } finally { reporting = false; }
+}
+export const presentNow = () => maybeReport(true);
+async function makeReport(since){
+  await loadLog();
+  const ents = LOG.filter(e => e.t >= since);
+  const sections = [];
+  for (const t of TEAMS.filter(x => x.id !== "hq")){
+    const es = ents.filter(e => e.ch === t.id), items = [];
+    const said = es.filter(e => e.kind === "agent" && !e.chat).length; if (said) items.push(`발언·분석 ${said}건`);
+    const bts = es.filter(e => e.kind === "bt"); if (bts.length) items.push(`매매법 ${bts.length}개 검증 (통과 ${bts.filter(b => b.pass).length}: ${bts.filter(b => b.pass).map(b => b.name).join(", ") || "-"})`);
+    const tr = es.filter(e => e.kind === "trade"); if (tr.length) items.push(`모의 거래 ${tr.length}건`);
+    for (const e of es.filter(e => e.kind === "re")) items.push(`재개발 후보 ${e.items?.length || 0}곳 발굴 (${e.region}) · 1위 ${e.items?.[0]?.area || "-"} ${e.items?.[0]?.score ?? ""}점`);
+    for (const e of es.filter(e => e.kind === "arch")) items.push(`설계안 '${e.name}' 연면적 ${e.metrics?.["연면적_㎡"] ?? "?"}㎡${e.image ? " · 렌더링 완료" : ""}`);
+    for (const e of es.filter(e => e.kind === "ml")) items.push(`머신러닝 ${e.market} 정확도 ${e.acc}% (기준 ${e.base}%)`);
+    for (const e of es.filter(e => e.kind === "macro")) items.push(`경제지표 ${e.rows?.length || 0}개 예측`);
+    for (const e of es.filter(e => e.kind === "forecast")) items.push(`방향 예측 ${e.items?.length || 0}건${e.score ? ` · 적중 ${e.score.hit}/${e.score.n}` : ""}`);
+    for (const e of es.filter(e => e.kind === "biz")) items.push(`사업 시뮬레이션 '${e.name}' — ${e.verdict}`);
+    for (const e of es.filter(e => e.kind === "files")) items.push(`파일 저장: ${e.title}`);
+    for (const e of es.filter(e => e.kind === "task" && e.status === "done")) items.push(`성장 과제 완료: ${e.title}`);
+    const next = backlog().filter(x => x.team === t.id && x.status !== "done").slice(0, 2).map(x => x.title);
+    if (items.length || next.length) sections.push({team: t.id, name: t.name, lead: agentById(TEAM_LEAD[t.id])?.name, items, next});
+  }
+  const P = await import("../nuri-ai/paper.js"); const book = await P.bookText().catch(() => "");
+  const ceo = agentById("lead"), hour = new Date().getHours();
+  const facts = sections.map(s => `## ${s.name} (팀장 ${s.lead})\n${s.items.map(x => "- " + x).join("\n") || "- (이번 시간 기록 없음)"}${s.next.length ? "\n다음: " + s.next.join(" / ") : ""}`).join("\n\n");
+  const e = await solo(ceo, {room: "hq", sys: personaOf(ceo, "지금은 매시간 하는 전사 성과 발표다. 아래 사실만으로 대표(사용자)에게 짧게 발표한다: 핵심 성과 3줄 → 기록이 있는 팀만 한 줄씩(해낸 것 · 다음 할 일) → 도움이 필요한 것 1줄. 전체 15줄 이내, 한국어, 마크다운 목록. 기록이 없는 팀은 쓰지 않고, 지어내지 않는다."),
+    user: `${hour}시 발표 · 지난 ${Math.round((Date.now() - since) / 60e3)}분\n\n${facts || "(이번 시간 기록 없음)"}\n\n모의투자:\n${book.slice(0, 1500)}`, maxTokens: 1600, train: "아래 팀별 업무 기록으로 대표에게 하는 시간별 성과 발표문을 써 줘."});
+  const report = {id: uid(), t: Date.now(), since, title: `${hour}시 성과 발표`, text: noMind(e.text), sections};
+  await idb.put("coinreport:" + report.id, report);
+  localStorage.setItem("coinLastReport", String(Date.now()));
+  post({ch: "hq", kind: "report", title: report.title, text: report.text, reportId: report.id});
+  { const d = new Date(), stamp = `${d.toISOString().slice(0, 10)}-${String(hour).padStart(2, "0")}`; saveDoc({title: `${report.title} (${d.toISOString().slice(0, 10)})`, path: `ghcoin/reports/hourly/${stamp}.md`, content: `# ${report.title}\n\n${report.text}\n\n---\n${facts}\n`, team: "hq", agent: "lead"}); }
+  fire({kind: "present", report});
+  if (computerOn()){ try { const {codeCall} = await import("../nuri-ai/engine.js"); const d = new Date(), stamp = `${d.toISOString().slice(0, 10)}-${String(hour).padStart(2, "0")}`; await codeCall("write", {ws: "office", path: `reports/hourly/${stamp}.md`, content: `# ${report.title}\n\n${report.text}\n\n---\n${facts}\n`}); } catch(err){} }
+  try { if (typeof document !== "undefined" && document.hidden && "Notification" in window && Notification.permission === "granted") new Notification("GH Coin · " + report.title, {body: report.text.replace(/[#*]/g, "").slice(0, 140)}); } catch(err){}
+  return report;
+}
+
+/* ============ 방향 예측 토론 → 예측 장부 → 시간이 지나면 코드가 채점 (모의 검증) ============ */
+const FC_KEY = "coinForecasts";
+const FC_ASSETS = COINS.slice(0, 5).map(c => ({asset: c.ko, q: c.sym, ex: "binancef", team: c.id}));
+async function priceOf(a){ const r = await TOOLS.market_quote.run({symbols: [a.q], exchange: a.ex === "binancef" ? "binancef" : ""}); const row = JSON.parse(r.text || "[]").find(x => x.현재가 != null); return row ? +row.현재가 : null; }
+async function scoreForecasts(){
+  const list = readJ(FC_KEY, []), due = list.filter(f => !f.result && Date.now() >= f.due);
+  if (!due.length) return;
+  for (const f of due){
+    const now = await priceOf(FC_ASSETS.find(x => x.asset === f.asset) || {q: f.q, ex: f.ex}).catch(() => null); if (now == null) continue;
+    const ret = (now / f.p0 - 1) * 100, dir = Math.abs(ret) < 0.2 ? "flat" : ret > 0 ? "up" : "down";
+    f.result = f.dir === dir || (f.dir === "flat" && Math.abs(ret) < 0.5) ? "hit" : "miss"; f.ret = +ret.toFixed(2); f.p1 = now;
+    f.paper = +((f.dir === "up" ? 1 : f.dir === "down" ? -1 : 0) * ret).toFixed(2);   // 예측대로 1배 모의 매매했다면 수익률
+  }
+  writeJ(FC_KEY, list.slice(-300));
+  const done = list.filter(f => f.result), n = done.length, hit = done.filter(f => f.result === "hit").length;
+  const brier = n ? done.reduce((s, f) => s + Math.pow(f.prob / 100 - (f.result === "hit" ? 1 : 0), 2), 0) / n : null;
+  post({ch: "entry", kind: "forecast", agent: "strat", items: due.map(f => ({asset: f.asset, dir: f.dir, prob: f.prob, horizon: f.horizon, due: f.due, result: f.result, ret: f.ret, by: f.by})), score: {n, hit, brier: brier == null ? null : +brier.toFixed(3), paper: +done.reduce((s, f) => s + (f.paper || 0), 0).toFixed(2)}});
+  for (const f of due) addNote(agentById(f.by)?.team || "entry", `${f.asset} ${f.horizon} 예측(${f.dir} ${f.prob}%) → ${f.result === "hit" ? "적중" : "빗나감"}(${f.ret}%)`, "예측");
+}
+async function forecastJob(){
+  await scoreForecasts();
+  const r = await enqueue({topic: `향후 24시간 방향 예측 토론: ${FC_ASSETS.map(a => a.asset).join(", ")}. 각자 차트·호가·뉴스를 확인하고 반드시 '예측: 자산이름 상승|하락|횡보 확률%' 형식의 줄을 남겨 주세요. 반대 의견도 환영합니다. 팀장이 최종 예측을 정리합니다.`, room: "entry", trigger: "auto", title: "24시간-방향-예측", agents: ["trend_lead", "strat", "coin_fut", "devil"]});
+  const list = readJ(FC_KEY, []), now = Date.now(), seen = new Set();
+  for (const t of r?.turns || []){
+    for (const mm of String(t.text).matchAll(/예측\s*[:：]\s*([^\n:：]+?)\s+(상승|하락|횡보)\s*(?:확률)?\s*(\d{1,3})\s*%/g)){
+      const a = FC_ASSETS.find(x => mm[1].includes(x.asset) || x.asset.includes(mm[1].trim())); if (!a || seen.has(t.agent.id + a.asset)) continue;
+      seen.add(t.agent.id + a.asset);
+      const p0 = await priceOf(a).catch(() => null); if (p0 == null) continue;
+      list.push({id: uid(), t: now, due: now + 24 * 3600e3, horizon: "24시간", asset: a.asset, q: a.q, ex: a.ex, dir: {상승: "up", 하락: "down", 횡보: "flat"}[mm[2]], prob: Math.min(99, +mm[3]), p0, by: t.agent.id});
+    }
+  }
+  writeJ(FC_KEY, list.slice(-300));
+  const mine = list.filter(f => f.t === now);
+  if (mine.length) post({ch: "entry", kind: "forecast", agent: "strat", items: mine.map(f => ({asset: f.asset, dir: f.dir, prob: f.prob, horizon: f.horizon, due: f.due, by: agentById(f.by)?.name}))});
+}
+
+/* ============ 머신러닝·딥러닝 연구 ============ */
+async function mlJob(){
+  const ML = await import("../nuri-ai/ml.js"), Q = await import("../nuri-ai/quant.js");
+  const i = +localStorage.getItem("coinML") || 0; localStorage.setItem("coinML", String(i + 1));
+  const mk = COINS.map(c => ({market: c.sym, exchange: "binancef", tf: "60"}))[i % COINS.length];
+  const model = ["mlp", "logreg", "gbs"][i % 3], a = agentById("ml");
+  fire({kind: "busy", agent: a, text: `🧠 ${mk.market} ${{mlp: "신경망", logreg: "로지스틱 회귀", gbs: "부스팅 트리"}[model]} 학습 중`});
+  let cs; try { const H = await import("../nuri-ai/history.js"); cs = (await Promise.race([H.historyCandles({market: mk.market, exchange: mk.exchange, interval: IV_NAME[mk.tf], maxBars: 6000}), new Promise((_, rej) => setTimeout(() => rej(new Error("긴 과거 받기 30초 초과")), 30e3))])).candles; if (!(cs?.length > 300)) throw new Error("과거 데이터 부족"); } catch(e){ cs = (await candlesFor({market: mk.market, exchange: mk.exchange, timeframe: mk.tf}, 1500)).cs; }
+  const res = ML.walkForwardML(cs, {model, horizon: 1, seed: 7 + i}), mt = res.metrics || {};
+  const acc = +((mt.accuracy ?? 0) * 100).toFixed(1), base = +((mt.baseline ?? 0.5) * 100).toFixed(1);
+  post({ch: "ml", kind: "ml", agent: a.id, market: mk.market, tf: TF_KO[mk.tf], model: {mlp: "신경망(MLP)", logreg: "로지스틱 회귀", gbs: "부스팅 트리"}[model], acc, base, auc: mt.auc ?? null, edge: res.edge, text: ML.mlText(res)});
+  const edge = res.edge === "edge";
+  addNote("ml", `${mk.market} ${model}: 정확도 ${acc}% vs 기준 ${base}% → ${{edge: "통계적 우위", weak: "약한 신호(우위 아님)", none: "우위 없음"}[res.edge] || res.edge}`, "머신러닝");
+  if (!edge) return;
+  // 우위가 보이면 예측 확률을 커스텀 지표로 써서 전략을 만들고 그대로 백테스트·검증
+  const extra = ML.mlSeries(res);
+  const spec = Q.normalizeSpec({name: `ML ${model} ${mk.market}`, symbol: mk.market, interval: IV_NAME[mk.tf], indicators: [{id: "mlp", type: "custom", expr: "ml_prob"}],
+    long_entry: {logic: "all", conditions: [{left: "mlp", op: ">", right: "0.58"}]}, long_exit: {logic: "any", conditions: [{left: "mlp", op: "<", right: "0.5"}]},
+    short_entry: {logic: "all", conditions: [{left: "mlp", op: "<", right: "0.42"}]}, short_exit: {logic: "any", conditions: [{left: "mlp", op: ">", right: "0.5"}]},
+    risk: {leverage: 2, position_pct: 20, atr_stop_mult: 2, ...COSTS[mk.exchange === "binancef" ? "crypto" : "us_stock"]}});
+  const deriv = {extra};
+  const bt = Q.backtest(spec, cs, {deriv}), wf = Q.walkForward(spec, cs, {deriv});
+  const st = x => ({ret: +(x?.return_pct ?? 0), dd: +(x?.max_dd_pct ?? 0), win: +(x?.win_rate ?? 0), pf: x?.profit_factor == null ? null : +x.profit_factor, n: x?.n_trades ?? 0});
+  post({ch: "cbt", kind: "bt", agent: "cbt_lead", lane: "custom", name: spec.name, market: mk.market, mname: mk.market, tf: mk.tf, hist: `머신러닝 예측 확률 전략 · ${cs.length}봉`, all: st(bt.stats), is: st(wf.is), oos: st(wf.oos), pass: wf.pass, reasons: wf.reasons, author: a.name, spec, lev: 2});
+}
+
+/* ============ 경제지표 예측 ============ */
+async function macroJob(){
+  const MA = await import("../nuri-ai/macro.js"), a = agentById("econfc");
+  fire({kind: "busy", agent: a, text: "📊 FRED 경제지표 받아서 다음 발표 예측 중"});
+  const dash = await MA.macroDashboard({});
+  const rows = (dash.rows || []).map(r => ({name: r.name, latest: r.latest, change: r.change, trend: r.trend, forecast: r.forecast, lo: r.lo, hi: r.hi, unit: r.unit, date: r.date, id: r.id, next: r.next, model: r.model, base: r.base}));
+  if (!rows.length){ post({ch: "news", kind: "system", text: "FRED 경제지표를 받지 못했습니다" + (dash.errors?.length ? ` (${dash.errors[0].error})` : "")}); return; }
+  post({ch: "news", kind: "macro", agent: a.id, rows});
+  // 예측 장부: 다음에 새 값이 나오면 채점
+  const led = readJ("coinMacroFc", []), now = Date.now();
+  for (const r of rows) if (r.forecast != null && !led.some(x => x.id === r.id && x.date === r.date)) led.push({id: r.id, name: r.name, date: r.date, forecast: r.forecast, lo: r.lo, hi: r.hi, base: r.base, t: now});
+  for (const x of led.filter(x => x.result == null)){ const r = rows.find(y => y.id === x.id); if (r && r.date && r.date !== x.date){ const s = MA.scoreForecast({forecast: x.forecast, lo: x.lo, hi: x.hi, last: x.base}, r.latest); x.result = s; addNote("news", `${x.name} 예측 ${x.forecast} → 실제 ${r.latest} (${s.inside ? "80% 구간 안" : "구간 밖"}${s.dirHit != null ? s.dirHit ? " · 방향 적중" : " · 방향 틀림" : ""})`, "경제지표"); } }
+  writeJ("coinMacroFc", led.slice(-200));
+  await solo(a, {room: "news", sys: personaOf(a, "경제지표 최신값과 모델 예측(80% 구간)을 보고 다음 발표가 어떻게 나올지, 시장(금리·주식·코인)에 어떤 의미인지 4~6문장으로 해설한다. 모델 예측의 한계도 짚는다."), user: MA.macroText(dash), train: "아래 경제지표와 예측을 보고 다음 발표 전망과 시장에 주는 의미를 해설해 줘."});
+}
+
+/* ============ 스스로 코드 고치기 (AI·개발팀) ============ */
+// 앱에서 난 오류를 모아 두었다가, 개발팀이 원인 코드를 읽고 최소한의 수정안을 만든다.
+// 수정안은 코드가 문법·보호 파일(실거래·키·안전장치) 검사를 하고, 대표님이 [적용]을 눌러야 반영된다 (문제가 생기면 자동으로 되돌림).
+async function selfdevJob(){
+  const S = await import("../nuri-ai/selfdev.js");
+  const errs = S.recentErrors(5).filter(e => !(S.listPatches() || []).some(p => p.error?.msg === e.msg && ["proposed", "applied", "rejected"].includes(p.status)));
+  const a = agentById("dev"), q = agentById("qae") || a;
+  if (!errs.length){
+    // 고칠 오류가 없으면 테스트 담당이 최근 기록에서 이상한 점을 찾아 과제로 남긴다
+    const sys = personaOf(q, "앱 품질 담당으로서 최근 사무실 기록(실패·빈 답·느린 모델)을 보고 고칠 만한 문제 하나를 짧게 말한다. 없으면 '지금은 고칠 오류가 없습니다'라고 한 줄만.");
+    const fails = (LOG || []).filter(e => e.kind === "system" && /문제|실패|못했|중단/.test(e.text || "")).slice(-8).map(e => "- " + e.text).join("\n");
+    const slow = Object.entries(modelHealth()).filter(([, h]) => (h.slow || 0) + (h.fail || 0) >= 2).map(([m, h]) => `- ${m}: 느림 ${h.slow || 0} · 실패 ${h.fail || 0}`).join("\n");
+    if (!fails && !slow){ post({ch: "hq", kind: "work", agent: q.id, icon: "✅", text: "앱 오류 없음 · 모델 상태 양호"}); return; }
+    await solo(q, {room: "hq", sys, user: `최근 실패:\n${fails || "(없음)"}\n\n자주 느리거나 실패한 모델(자동으로 덜 쓰게 바뀜):\n${slow || "(없음)"}`, maxTokens: 500});
+    return;
+  }
+  const err = errs[0];
+  fire({kind: "busy", agent: a, text: `🛠 ${err.file || "앱"} 오류 원인 찾는 중`});
+  const ask = async (sys, user) => { const e = await solo(a, {room: "hq", sys: personaOf(a, sys), user, maxTokens: 1800, temperature: 0.2}); return e.raw || e.text || ""; };
+  const p = await S.proposeFix(err, {ask});
+  post({ch: "hq", kind: "patch", agent: a.id, file: p.file || err.file, why: p.why || p.check?.msg || "", status: p.status, patchId: p.id});
+  if (p.status === "proposed") addTask({team: "hq", title: `코드 수정안 검토: ${p.file}`, why: `${String(err.msg).slice(0, 80)} (${err.count || 1}번)`, owner: q.name});
+  addNote("hq", `${p.file || err.file} 오류 '${String(err.msg).slice(0, 50)}' → 수정안 ${p.status === "proposed" ? "준비됨(대표 승인 대기)" : "실패: " + (p.check?.msg || p.status)}`, "코드");
+  fire({kind: "growth"});
+}
+// 앱 전체의 오류를 모으기 시작 (사무실 모듈은 앱 시작 때 불러와진다)
+if (typeof window !== "undefined") import("../nuri-ai/selfdev.js").then(S => S.captureErrors()).catch(() => {});
+
+/* ================================================================
+   GH Coin 분석 팀 업무 — 숫자는 코드가 계산하고(표), 팀장이 한 번만 말로 해설한다(AI 호출 1번)
+   ================================================================ */
+const rot = (k, n) => { const i = +localStorage.getItem(k) || 0; localStorage.setItem(k, String(i + 1)); return i % n; };
+const fx = (v, d = 2) => v == null || !Number.isFinite(+v) ? "—" : (+v).toLocaleString("ko-KR", {maximumFractionDigits: Math.abs(+v) >= 1000 ? 0 : Math.abs(+v) >= 1 ? d : 6});
+const pc = v => v == null || !Number.isFinite(+v) ? "—" : (v >= 0 ? "+" : "") + (+v).toFixed(2) + "%";
+async function kl(sym, tf, n = 600){ return (await candlesFor({market: sym, exchange: "binancef", timeframe: tf}, n)).cs; }
+const lastOf = arr => { for (let i = (arr || []).length - 1; i >= 0; i--) if (arr[i] != null && Number.isFinite(+arr[i])) return +arr[i]; return null; };
+function table(ch, agent, title, cols, rows, note = ""){ return post({ch, kind: "table", agent, title, cols, rows, note}); }
+async function explain(agentId, room, task, facts, train){
+  const a = agentById(agentId);
+  return solo(a, {room, sys: personaOf(a, task + " 3~5문장. 숫자는 아래 표·자료에 있는 것만 쓰고, 확률·가능성으로 말한다(단정 금지)."), user: facts, maxTokens: 700, train});
+}
+const tableText = (cols, rows) => [cols.join(" | "), ...rows.map(r => r.join(" | "))].join("\n");
+let _TVI = null;
+async function tvInd(){ if (!_TVI) _TVI = (await import("../nuri-ai/terminal/ind.js")).INDICATORS; return _TVI; }
+const toBars = cs => cs.map(b => ({time: Math.floor(b.t / 1000), open: b.o, high: b.h, low: b.l, close: b.c, volume: b.v}));
+
+/* ---- 보조지표 분석팀: 29종 + 차트 지표 → 해석 ---- */
+async function indJob(){
+  const c = COINS[rot("coinInd", COINS.length)], tf = ["60", "240", "15"][rot("coinIndTf", 3)], Q = await import("../nuri-ai/quant.js");
+  const lead = agentById("ind_lead"); fire({kind: "busy", agent: lead, text: `📊 ${c.ko} ${TF_KO[tf]}봉 보조지표 계산 중`});
+  const k = await kl(c.sym, tf, 600), s = Q.snapshot(k), I = s.ind || {};
+  const g = (n, o = "value") => I[n]?.[o];
+  const sig = (v, lo, hi) => v == null ? "—" : v >= hi ? "과열" : v <= lo ? "침체" : "중립";
+  const rows = [
+    ["RSI(14)", fx(g("rsi"), 1), sig(g("rsi"), 30, 70)], ["스토캐스틱 K/D", `${fx(g("stoch", "k"), 1)} / ${fx(g("stoch", "d"), 1)}`, sig(g("stoch", "k"), 20, 80)],
+    ["MACD 히스토그램", fx(g("macd", "hist"), 4), g("macd", "hist") > 0 ? "상승 쪽" : "하락 쪽"], ["볼린저 폭(%)", fx(g("bb", "width"), 2), s.price > g("bb", "upper") ? "상단 돌파" : s.price < g("bb", "lower") ? "하단 이탈" : "밴드 안"],
+    ["ADX / +DI / -DI", `${fx(g("adx", "adx"), 1)} / ${fx(g("adx", "plus_di"), 1)} / ${fx(g("adx", "minus_di"), 1)}`, g("adx", "adx") > 25 ? (g("adx", "plus_di") > g("adx", "minus_di") ? "상승 추세 강함" : "하락 추세 강함") : "추세 약함"],
+    ["슈퍼트렌드", fx(g("supertrend", "line")), g("supertrend", "trend") > 0 ? "상승" : "하락"], ["EMA20 / SMA20", `${fx(g("ema"))} / ${fx(g("sma"))}`, s.price > g("ema") ? "가격 위" : "가격 아래"],
+    ["CCI / MFI", `${fx(g("cci"), 0)} / ${fx(g("mfi"), 0)}`, sig(g("mfi"), 20, 80)], ["일목 전환/기준", `${fx(g("ichimoku", "tenkan"))} / ${fx(g("ichimoku", "kijun"))}`, g("ichimoku", "tenkan") > g("ichimoku", "kijun") ? "전환선 위" : "전환선 아래"],
+    ["VWAP", fx(g("vwap")), s.price > g("vwap") ? "VWAP 위" : "VWAP 아래"], ["OBV / CMF", `${fx(g("obv"), 0)} / ${fx(g("cmf"), 3)}`, g("cmf") > 0 ? "자금 유입" : "자금 유출"],
+    ["아룬 업/다운", `${fx(g("aroon", "up"), 0)} / ${fx(g("aroon", "down"), 0)}`, g("aroon", "up") > g("aroon", "down") ? "상승 우위" : "하락 우위"],
+    ["스퀴즈 모멘텀", fx(g("tv_squeeze"), 4), g("tv_squeeze") > 0 ? "상승 압력" : "하락 압력"], ["웨이브트렌드", fx(g("tv_wavetrend"), 1), sig(g("tv_wavetrend"), -53, 53)],
+    ["허스트 지수", fx(g("tv_hurst"), 2), g("tv_hurst") > 0.5 ? "추세 지속형" : "되돌림형"], ["초피니스", fx(g("tv_chop"), 1), g("tv_chop") > 61.8 ? "횡보" : g("tv_chop") < 38.2 ? "추세" : "중간"]
+  ];
+  const up = rows.filter(r => /상승|위|유입|우위|침체/.test(r[2])).length, dn = rows.filter(r => /하락|아래|유출|과열/.test(r[2])).length;
+  table("ind", lead.id, `📊 ${c.ko} ${TF_KO[tf]}봉 보조지표 (현재가 ${fx(s.price)})`, ["지표", "값", "해석"], rows, `상승 쪽 ${up}개 · 하락 쪽 ${dn}개 · 기본 29종 + 차트 지표 136종 계산`);
+  await explain(lead.id, "ind", `${c.ko} ${TF_KO[tf]}봉 보조지표 표를 보고, 지표들이 한쪽으로 모이는지 엇갈리는지와 가장 믿을 만한 신호를 해설한다.`, tableText(["지표", "값", "해석"], rows), "아래 코인 보조지표 표를 보고 지표들이 무엇을 말하는지 해설해 줘.");
+}
+
+/* ---- 추세 분석팀: 15분·1시간·4시간·일봉 ---- */
+async function trendJob(){
+  const c = COINS[rot("coinTrend", COINS.length)], Q = await import("../nuri-ai/quant.js"), lead = agentById("trend_lead");
+  fire({kind: "busy", agent: lead, text: `📈 ${c.ko} 다중 시간대 추세 판정 중`});
+  const rows = [];
+  for (const tf of ["15", "60", "240", "D"]){
+    try {
+      const k = await kl(c.sym, tf, 400), p = k.at(-1).c;
+      const e20 = lastOf(Q.computeInd(k, "ema", {length: 20}).value), e50 = lastOf(Q.computeInd(k, "ema", {length: 50}).value), e200 = lastOf(Q.computeInd(k, "ema", {length: 200}).value);
+      const adx = Q.computeInd(k, "adx", {length: 14}), st = Q.computeInd(k, "supertrend", {});
+      const a = lastOf(adx.adx), dir = lastOf(st.trend);
+      const score = (p > e20) + (e20 > e50) + (e50 > (e200 ?? e50)) + (dir > 0) - (p < e20) - (e20 < e50) - (e50 < (e200 ?? e50)) - (dir < 0);
+      rows.push([TF_KO[tf], fx(p), `${fx(e20)} / ${fx(e50)} / ${fx(e200)}`, fx(a, 1), dir > 0 ? "상승" : "하락", score >= 3 ? "강한 상승" : score >= 1 ? "약한 상승" : score <= -3 ? "강한 하락" : score <= -1 ? "약한 하락" : "횡보"]);
+    } catch(e){ rows.push([TF_KO[tf], "—", "—", "—", "—", "자료 없음"]); }
+  }
+  const agree = new Set(rows.map(r => r[5].replace(/강한 |약한 /, ""))).size === 1;
+  table("trend", lead.id, `📈 ${c.ko} 다중 시간대 추세`, ["봉", "가격", "EMA20/50/200", "ADX", "슈퍼트렌드", "판정"], rows, agree ? "모든 시간대 방향 일치" : "시간대끼리 방향이 엇갈림");
+  addNote("trend", `${c.ko}: ${rows.map(r => r[0] + " " + r[5]).join(", ")}`, "추세");
+  await explain(lead.id, "trend", `${c.ko}의 시간대별 추세 표를 보고, 큰 추세와 작은 추세가 맞는지, 어느 시간대를 기준으로 매매해야 하는지 해설한다.`, tableText(["봉", "가격", "EMA", "ADX", "ST", "판정"], rows), "아래 다중 시간대 추세 표를 보고 추세를 해설해 줘.");
+}
+
+/* ---- 지지·저항팀 ---- */
+async function levelsOf(c){
+  const Q = await import("../nuri-ai/quant.js");
+  const k1 = await kl(c.sym, "60", 500), kd = await kl(c.sym, "D", 120), p = k1.at(-1).c;
+  const piv = Q.computeInd(kd, "tv_pivots", {}), lv = [];
+  [["피봇 P", "value"], ["R1", "p1"], ["R2", "p2"], ["S1", "p3"], ["S2", "p4"]].forEach(([n, o]) => { const v = lastOf(piv[o]); if (v) lv.push({name: "일봉 " + n, price: v}); });
+  // 스윙 고저 (1시간봉 좌우 5봉)
+  for (let i = k1.length - 6; i >= 5 && lv.length < 14; i--){
+    const w = k1.slice(i - 5, i + 6);
+    if (k1[i].h === Math.max(...w.map(b => b.h))) lv.push({name: "스윙 고점", price: k1[i].h});
+    else if (k1[i].l === Math.min(...w.map(b => b.l))) lv.push({name: "스윙 저점", price: k1[i].l});
+  }
+  // 매물대(가격대별 거래량 최대 구간)
+  const lo = Math.min(...k1.map(b => b.l)), hi = Math.max(...k1.map(b => b.h)), N = 24, hist = Array(N).fill(0);
+  for (const b of k1){ const j = Math.min(N - 1, Math.floor(((b.h + b.l) / 2 - lo) / ((hi - lo) / N || 1))); hist[j] += b.v; }
+  const jmax = hist.indexOf(Math.max(...hist)); lv.push({name: "매물대 중심(POC)", price: lo + (jmax + 0.5) * (hi - lo) / N});
+  // 라운드 넘버
+  const mag = Math.pow(10, Math.floor(Math.log10(p)) - 1) * 5; lv.push({name: "라운드 넘버", price: Math.round(p / mag) * mag});
+  // 호가 벽
+  try { const F = await import("../nuri-ai/flow.js"); const ob = await F.orderBook({symbol: c.sym}); for (const w of (ob.data?.walls || ob.walls || []).slice(0, 3)) if (w.price) lv.push({name: `호가 벽(${w.side === "bid" || w.side === "buy" ? "매수" : "매도"})`, price: +w.price}); } catch(e){}
+  return {p, lv: lv.filter(x => Number.isFinite(x.price)).sort((a, b) => b.price - a.price)};
+}
+async function srJob(){
+  const c = COINS[rot("coinSR", COINS.length)], lead = agentById("sr_lead");
+  fire({kind: "busy", agent: lead, text: `📏 ${c.ko} 지지·저항 계산 중`});
+  const {p, lv} = await levelsOf(c);
+  const rows = lv.slice(0, 14).map(x => [x.price > p ? "저항" : "지지", x.name, fx(x.price), pc((x.price / p - 1) * 100)]);
+  table("sr", lead.id, `📏 ${c.ko} 지지·저항 (현재가 ${fx(p)})`, ["구분", "근거", "가격", "현재가 대비"], rows, "피봇 · 스윙 고저 · 매물대 · 라운드 넘버 · 호가 벽");
+  await explain(lead.id, "sr", `${c.ko}의 지지·저항 표를 보고 가장 가까운 지지와 저항, 여러 근거가 겹쳐 강한 가격대, 돌파·이탈 시 다음 목표를 해설한다.`, tableText(["구분", "근거", "가격", "대비"], rows), "아래 지지·저항 표를 보고 중요한 가격대를 해설해 줘.");
+}
+
+/* ---- 진입 타점팀 ---- */
+async function entryJob(){
+  const c = COINS[rot("coinEntry", COINS.length)], Q = await import("../nuri-ai/quant.js"), lead = agentById("strat");
+  fire({kind: "busy", agent: lead, text: `🎯 ${c.ko} 진입 자리 계산 중`});
+  const k = await kl(c.sym, "60", 400), p = k.at(-1).c, atr = lastOf(Q.computeInd(k, "atr", {length: 14}).value), rsi = lastOf(Q.computeInd(k, "rsi", {length: 14}).value);
+  const {lv} = await levelsOf(c);
+  const sup = lv.filter(x => x.price < p).sort((a, b) => b.price - a.price)[0], res = lv.filter(x => x.price > p).sort((a, b) => a.price - b.price)[0];
+  const P = await import("../nuri-ai/paper.js"), book = await P.loadBook();
+  const sigs = book.strategies.filter(s => s.status === "active" && s.market === c.sym).map(s => `${s.name}: ${s.lastSignal?.action || "신호 없음"}`).slice(0, 4);
+  const longE = sup ? sup.price + atr * 0.2 : p - atr, longSL = longE - atr * 1.5, longTP = res ? res.price : p + atr * 3;
+  const shortE = res ? res.price - atr * 0.2 : p + atr, shortSL = shortE + atr * 1.5, shortTP = sup ? sup.price : p - atr * 3;
+  const rr = (e, sl, tp) => fx(Math.abs(tp - e) / Math.abs(e - sl), 2);
+  const rows = [["롱 (지지 근처 눌림)", fx(longE), fx(longSL), fx(longTP), rr(longE, longSL, longTP)], ["숏 (저항 근처 반락)", fx(shortE), fx(shortSL), fx(shortTP), rr(shortE, shortSL, shortTP)]];
+  table("entry", lead.id, `🎯 ${c.ko} 진입 자리 후보 (현재가 ${fx(p)} · ATR ${fx(atr)} · RSI ${fx(rsi, 1)})`, ["시나리오", "진입", "손절", "익절", "손익비"], rows, (sigs.join(" · ") || "데모 중인 전략 신호 없음") + " · 계산값일 뿐 매매 권유 아님");
+  await explain(lead.id, "entry", `${c.ko}의 진입 후보 표(지지·저항·ATR 기반)와 데모 전략 신호를 보고, 지금 바로 들어갈지 기다릴지, 어떤 조건이 맞으면 들어갈지 해설한다.`, tableText(["시나리오", "진입", "손절", "익절", "손익비"], rows) + "\n데모 전략 신호: " + (sigs.join(", ") || "없음"), "아래 진입 자리 계산을 보고 진입 계획을 세워 줘.");
+}
+
+/* ---- 익절·손절 관리팀: 데모 포지션 점검 ---- */
+async function tpslJob(){
+  const P = await import("../nuri-ai/paper.js"), Q = await import("../nuri-ai/quant.js"), book = await P.loadBook(), lead = agentById("risk");
+  const open = book.strategies.filter(s => s.status === "active" && s.pos);
+  if (!open.length){ post({ch: "tpsl", kind: "work", agent: lead.id, icon: "🛑", text: "열린 데모 포지션 없음 · 새 진입을 기다리는 중"}); return; }
+  const rows = [];
+  for (const s of open.slice(0, 8)){
+    const k = await kl(s.market, s.tf === "D" ? "D" : s.tf, 200).catch(() => null); if (!k) continue;
+    const p = k.at(-1).c, atr = lastOf(Q.computeInd(k, "atr", {length: 14}).value), x = s.pos, long = x.side === "long", d = long ? 1 : -1;
+    const pnl = d * (p - x.entry) / x.entry * 100 * x.lev, toSL = x.sl ? Math.abs(p - x.sl) / p * 100 : null, toLiq = Math.abs(p - x.liq) / p * 100;
+    const trail = long ? Math.max(x.sl || 0, p - atr * 2) : Math.min(x.sl || Infinity, p + atr * 2);
+    const tip = toLiq < 3 ? "⚠ 청산가 근접 — 비중 축소" : pnl > 15 ? "본전 이상으로 손절 올리기·일부 익절" : !x.sl ? "손절 없음 — ATR 2배 손절 권장" : "유지";
+    rows.push([s.name.slice(0, 18), `${s.mname || s.market} ${long ? "롱" : "숏"} x${x.lev}`, fx(x.entry), fx(p), pc(pnl), toSL == null ? "없음" : pc(-toSL), pc(-toLiq), fx(trail), tip]);
+  }
+  table("tpsl", lead.id, "🛑 데모 포지션 익절·손절 점검", ["전략", "포지션", "진입", "현재", "수익(레버리지)", "손절까지", "청산까지", "추적손절 제안", "조치"], rows, "데모(모의) 포지션 · 실제 주문 아님");
+  await explain(lead.id, "tpsl", "데모 포지션 점검표를 보고 가장 위험한 포지션과 바로 할 조치(손절 이동·일부 익절·비중 축소)를 해설한다.", tableText(["전략", "포지션", "진입", "현재", "수익", "손절까지", "청산까지", "추적손절", "조치"], rows), "아래 포지션 점검표를 보고 손절·익절 관리 조언을 해 줘.");
+}
+
+/* ---- 차트·캔들 패턴팀 ---- */
+async function patternJob(){
+  const c = COINS[rot("coinPat", COINS.length)], tf = ["60", "240"][rot("coinPatTf", 2)], lead = agentById("pat_lead"), IND = await tvInd();
+  fire({kind: "busy", agent: lead, text: `🕯 ${c.ko} ${TF_KO[tf]}봉 패턴 찾는 중`});
+  const k = await kl(c.sym, tf, 400), bars = toBars(k), rows = [];
+  for (const id of ["candles", "chartpat", "structure", "fvg", "td_seq", "sweeps", "rsi_div"]){
+    const d = IND[id]; if (!d) continue;
+    try {
+      const r = d.compute(bars, {...(d.params || {})}, {}) || {};
+      for (const pl of r.plots || []) if (pl.type === "signals" && Array.isArray(pl.data)) for (let i = pl.data.length - 1, n = 0; i >= Math.max(0, pl.data.length - 40) && n < 3; i--){ const v = pl.data[i]; if (v && typeof v === "object"){ rows.push([d.name.split(" (")[0], v.text || "", v.dir > 0 ? "상승" : v.dir < 0 ? "하락" : "중립", `${pl.data.length - 1 - i}봉 전`]); n++; } }
+    } catch(e){}
+  }
+  rows.sort((a, b) => parseInt(a[3]) - parseInt(b[3]));
+  table("pattern", lead.id, `🕯 ${c.ko} ${TF_KO[tf]}봉 차트·캔들 패턴 (최근 40봉)`, ["종류", "패턴", "방향", "언제"], rows.slice(0, 14), rows.length ? "패턴은 확률일 뿐 — 지지·저항·거래량과 함께 볼 것" : "최근 40봉에 뚜렷한 패턴 없음");
+  if (rows.length) await explain(lead.id, "pattern", `${c.ko} ${TF_KO[tf]}봉에서 찾은 패턴 목록을 보고 가장 의미 있는 패턴과 신뢰도, 무효화 조건을 해설한다.`, tableText(["종류", "패턴", "방향", "언제"], rows.slice(0, 14)), "아래 차트·캔들 패턴 목록을 해설해 줘.");
+}
+
+/* ---- 코인 상황판팀: 모든 코인 한 판 ---- */
+async function situJob(){
+  const lead = agentById("situ_lead"); fire({kind: "busy", agent: lead, text: "🖥 코인 상황판 갱신 중"});
+  const rows = [];
+  let F = null; try { F = await import("../nuri-ai/flow.js"); } catch(e){}
+  for (const c of COINS){
+    try {
+      const r = await TOOLS.market_quote.run({symbols: [c.sym], exchange: "binancef"}), row = JSON.parse(r.text || "[]")[0] || {};
+      let fs = null; try { fs = F ? (await F.flowSnapshot({symbol: c.sym})).data : null; } catch(e){}
+      const fund = fs?.futures?.funding ?? fs?.funding?.rate ?? fs?.fundingRate, oi = fs?.futures?.oiChangePct ?? fs?.oi?.changePct, score = fs?.score ?? fs?.flowScore;
+      rows.push([c.ko, fx(row.현재가), pc(row["변동%"]), fund != null ? (+fund * (Math.abs(fund) < 0.01 ? 100 : 1)).toFixed(4) + "%" : "—", oi != null ? pc(oi) : "—", score != null ? (score > 0 ? "+" : "") + Math.round(score) : "—"]);
+    } catch(e){ rows.push([c.ko, "—", "—", "—", "—", "—"]); }
+  }
+  table("situ", lead.id, "🖥 코인 상황판", ["코인", "가격(USDT)", "24시간", "펀딩비", "미결제약정 변화", "흐름 점수"], rows, "흐름 점수: 호가·고래·체결·선물 종합 (-100 매도 ~ +100 매수 압력)");
+  await explain(lead.id, "situ", "코인 상황판을 보고 가장 강한 코인과 약한 코인, 펀딩·미결제약정으로 본 과열·쏠림, 지금 주목할 이상 신호를 해설한다.", tableText(["코인", "가격", "24h", "펀딩", "OI", "흐름"], rows), "아래 코인 상황판을 보고 시장을 해설해 줘.");
+}
+
+/* ---- 코인팀 회의: 코인별 팀이 돌아가며 ---- */
+async function coinJob(){
+  const c = COINS[rot("coinTeam", COINS.length)], lead = TEAM_LEAD[c.id], mem = AGENTS.filter(a => a.team === c.id && !a.lead);
+  const pick = [mem[rot("coinTeamA" + c.id, mem.length)], mem[(rot("coinTeamB" + c.id, mem.length) + 4) % mem.length]].filter(Boolean).map(a => a.id);
+  await enqueue({topic: `${c.ko}(${c.sym}) 팀 회의: 현물·선물(펀딩·미결제약정)·고래·뉴스·차트를 실제 도구로 확인하고, 오늘 ${c.ko}를 어떻게 대응할지(관망·롱·숏, 자리와 손절) 정해 주세요.`,
+    room: c.id, trigger: "auto", title: `${c.ko}-팀-회의`, agents: [...new Set([...pick, lead])]});
+}
+
+/* ---- 파이프라인 관문: 데모 → 실거래 후보 (코드 판정, 사람 승인 전에는 절대 실거래 안 함) ---- */
+const PROMO_KEY = "coinPromoted";
+export async function pipeline(){
+  const P = await import("../nuri-ai/paper.js"), book = await P.loadBook(), log = researchLog();
+  let L = null; try { L = await import("../nuri-ai/live.js"); } catch(e){}
+  const linked = L?.liveCfg?.().linked || {}, promo = readJ(PROMO_KEY, {});
+  const out = {};
+  for (const lane of ["std", "custom"]){
+    const r = log.filter(x => (x.lane || "std") === lane), st = book.strategies.filter(s => (s.lane || "std") === lane);
+    const act = st.filter(s => s.status === "active");
+    out[lane] = {dev: r.length, pass: r.filter(x => x.pass).length, fail: r.filter(x => !x.pass).length,
+      demo: act.map(s => ({id: s.id, name: s.name, market: s.mname || s.market, tf: s.tf, eq: P.equityOf(s), trades: s.trades.length, days: Math.floor((Date.now() - s.created) / 864e5), cand: !!promo[s.id], live: !!linked[s.id]?.on})),
+      cand: act.filter(s => promo[s.id] && !linked[s.id]?.on).length, live: act.filter(s => linked[s.id]?.on).length, retired: st.filter(s => s.status !== "active").length,
+      recent: r.slice(-6).reverse()};
+  }
+  return out;
+}
+async function promoteJob(){
+  const P = await import("../nuri-ai/paper.js"), book = await P.loadBook();
+  let L = null; try { L = await import("../nuri-ai/live.js"); } catch(e){}
+  if (!L?.gateFor){ post({ch: "demo", kind: "system", text: "실거래 모듈을 불러오지 못해 관문 심사를 건너뜁니다"}); return; }
+  const promo = readJ(PROMO_KEY, {}), rows = [];
+  for (const s of book.strategies.filter(x => x.status === "active")){
+    const g = L.gateFor(s), lane = LANES[s.lane] || LANES.std, fails = (g.checks || []).filter(c => !c.ok).map(c => c.name);
+    rows.push([lane.label, s.name.slice(0, 20), s.mname || s.market, `${s.trades.length}회`, `${Math.floor((Date.now() - s.created) / 864e5)}일`, g.eligible ? "✅ 통과" : "⏳ " + fails.slice(0, 2).join(", ")]);
+    if (g.eligible && !promo[s.id]){
+      promo[s.id] = Date.now();
+      post({ch: lane.live, kind: "promo", agent: TEAM_LEAD[lane.live], sid: s.id, name: s.name, market: s.mname || s.market, lane: s.lane || "std",
+        text: `🎓 실거래 후보 승격: ${s.name} (${s.mname || s.market}) — 데모 관문(14일 · 20거래 · 손익비 1.2 · 수익 + · 낙폭 25% 미만) 통과. 대표님이 [실거래] 화면에서 연결해야만 실거래합니다.`});
+      addNote(lane.live, `${s.name} 실거래 후보 (데모 관문 통과)`, "관문");
+    }
+  }
+  writeJ(PROMO_KEY, promo);
+  table("demo", "trader", "🎓 데모 → 실거래 관문 심사 (코드 판정)", ["라인", "전략", "코인", "거래", "기간", "관문"], rows, rows.length ? "관문: 14일 이상 · 거래 20회 이상 · 손익비 1.2 이상 · 수익 + · 최대 낙폭 25% 미만" : "데모 중인 전략 없음");
+  fire({kind: "pipeline"});
+}
+/* ---- 실거래 데스크: 상태만 보고 (주문은 live.js 가 한도·승인 안에서만) ---- */
+async function liveDeskJob(){
+  let L = null; try { L = await import("../nuri-ai/live.js"); } catch(e){}
+  const lead = agentById("live_lead");
+  if (!L?.status){ post({ch: "live", kind: "system", text: "실거래 모듈 없음"}); return; }
+  const st = await Promise.resolve(L.status()).catch(() => null), cfg = L.liveCfg?.() || {};
+  const linked = Object.entries(cfg.linked || {}).filter(([, v]) => v?.on).length;
+  post({ch: "live", kind: "work", agent: lead.id, icon: "🔐", text: `실거래 ${cfg.enabled ? "켜짐" : "꺼짐"} · ${cfg.env === "mainnet" ? "실거래(메인넷)" : "테스트넷"} · ${cfg.mode === "auto" ? "자동" : "승인"} 모드 · 연결 전략 ${linked}개${st?.todayPnl != null ? ` · 오늘 실현 ${fx(st.todayPnl)} USDT` : ""}`});
+  fire({kind: "pipeline"});
+}
