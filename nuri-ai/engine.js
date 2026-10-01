@@ -238,15 +238,20 @@ const provCap = id => (settings.provCap || {})[id] ?? (id === "anthropic" ? 1000
 export const provCapOf = provCap;
 export const overCap = id => { const cap = provCap(id); return cap > 0 && (provUse().n[id] || 0) >= cap; };
 function countUse(id){ const u = provUse(); u.n[id] = (u.n[id] || 0) + 1; try { localStorage.setItem("provUse", JSON.stringify(u)); } catch(e){} }
+// 한 회사에서 그 역할에 가장 맞는 모델 (없어진 모델은 건너뜀, 고정한 모델이 없어졌으면 고정 무시). skip: 이미 실패한 모델들
+function bestOf(id, role, skip = []){
+  const dead = deadModels(), pin = settings.pinModel[id];
+  const all = settings.provModels[id] && settings.provModels[id].length ? settings.provModels[id] : PROVIDERS[id].defaults;
+  let pool = pin && !dead[pin] && !skip.includes(pin) ? [pin] : all;
+  if (id === "openrouter"){ const free = pool.filter(m => /:free$/.test(m)); if (free.length) pool = free; }
+  const best = pool.filter(m => !dead[m] && !skip.includes(m)).map(m => ({m, r: rankModel(m, role)})).filter(x => x.r < 999).sort((a, b) => a.r - b.r)[0];
+  return best || null;
+}
 export function routeCandidates(role = "general"){
   const out = [];
   for (const id of connected()){
     if (overCap(id)) continue;
-    const models = settings.pinModel[id] ? [settings.pinModel[id]] : (settings.provModels[id] && settings.provModels[id].length ? settings.provModels[id] : PROVIDERS[id].defaults);
-    let pool = models;
-    if (id === "openrouter"){ const free = models.filter(m => /:free$/.test(m)); if (free.length) pool = free; }
-    const dead = deadModels();
-    const best = pool.filter(m => !dead[m]).map(m => ({m, r: rankModel(m, role)})).filter(x => x.r < 999).sort((a, b) => a.r - b.r)[0];
+    const best = bestOf(id, role);
     if (best) out.push({id, model: best.m, score: best.r * 10 + PROVIDERS[id].bias});
   }
   // 방금 한도·오류에 걸린 곳은 잠시 뒤로 미룬다
@@ -442,7 +447,15 @@ export async function brainStream(opts){
       if (opts.signal?.aborted || got || !e.retry) throw e;
       lastErr = e;
       if (c.id !== "local" && c.id !== "ollama" && (e.status === 429 || e.status >= 500 || !e.status)) cooldown[c.id] = Date.now() + (e.status === 429 ? Math.max(90e3, e.retryAfter || 0) : 30e3);
-      if (e.status === 404 || e.status === 410 || (e.status === 400 && /not.?found|does not exist|deprecat|no longer|unknown model|invalid model/i.test(e.detail || ""))) markDead(c.model);
+      if (e.status === 404 || e.status === 410 || (e.status === 400 && /not.?found|does not exist|deprecat|no longer|unknown model|invalid model/i.test(e.detail || ""))){
+        // 목록에는 있지만 더는 서비스하지 않는 모델 → 기억해 두고, 같은 회사의 다음으로 좋은 모델을 바로 다음에 시도
+        markDead(c.model);
+        if (PROVIDERS[c.id]){
+          const tried = cands.filter(x => x.id === c.id).map(x => x.model), nxt = bestOf(c.id, role, tried);
+          if (nxt && (!opts.target || opts.fallback)) cands.splice(i + 1, 0, {id: c.id, model: nxt.m});
+          if (settings.pinModel[c.id] === c.model){ delete settings.pinModel[c.id]; saveSettings(); }
+        }
+      }
       if (i + 1 < cands.length) emit("activity", {kind:"fallback", text:`${e.message} → 다른 AI로 바꿉니다`});
     }
   }
