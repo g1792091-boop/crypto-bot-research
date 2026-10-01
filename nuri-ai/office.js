@@ -191,7 +191,8 @@ export const officeUsage = usage;
 // - 회의: 질문 → <think>팀원들의 분석·반론·리스크</think> + 팀장 결론 (작은 모델이 혼자서도 '팀 토론'을 거쳐 답하게)
 // - 첫 분석가의 실제 도구 사용 과정, 자료를 읽고 해설한 일(SNS·경제·모의투자 보고), 검증을 통과한 매매법, 동료 수다
 // Claude가 쓴 글은 약관에 따라 넣지 않는다. 회의록에서 👎를 누르면 그 예시는 지운다.
-const isClaude = m => /claude/i.test(String(m || ""));
+// 약관상 GH Nano 학습에 쓰면 안 되는 모델(Claude·Gemini·OpenAI 유료)의 글은 학습 데이터에서 뺀다
+const isClaude = m => /claude|gemini|(^|\/)(gpt-(?!oss)|o[1-9](-|$)|chatgpt)/i.test(String(m || ""));
 const goodText = t => !!t && t.length >= 30 && !/^\(.{0,20}(답하지 못했|빈 답)/.test(t);
 const clip = (t, n) => { t = String(t || ""); return t.length > n ? t.slice(0, n) + "…" : t; };
 const noMind = t => String(t || "").replace(/^\s*💭[^\n]*\n?/gm, "").trim();

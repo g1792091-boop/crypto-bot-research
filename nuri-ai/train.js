@@ -28,7 +28,8 @@ export function samplesFromChats(chats, {onlyGood = true, tools = true} = {}){
     const bad = ms.findIndex(m => m.role === "assistant" && m.rating < 0);
     const usable = bad >= 0 ? ms.slice(0, Math.max(0, bad - 1)) : ms;   // 👎 받은 답과 그 질문부터는 버린다
     const ends = [];
-    usable.forEach((m, i) => { if (m.role === "assistant" && !m.error && !m.streaming && visibleOf(m) && (!onlyGood || m.rating > 0)) ends.push(i); });
+    // 약관상 학습 금지 모델(Claude·Gemini·OpenAI 유료)이 쓴 답은 학습 예시로 쓰지 않는다
+    usable.forEach((m, i) => { if (m.role === "assistant" && !m.error && !m.streaming && visibleOf(m) && (!onlyGood || m.rating > 0) && !(m.route && (NO_TRAIN.includes(m.route.id) || NO_TRAIN_MODEL.test(m.route.model || "")))) ends.push(i); });
     const pick = onlyGood ? ends : ends.slice(-1);   // 전체 모드는 대화당 하나(앞 내용 포함)
     for (const i of pick){
       const hist = usable.slice(0, i + 1);
@@ -83,7 +84,9 @@ const PERSONAS = ["코인을 막 시작한 직장인", "10년 차 주식 투자�
 const LEVELS = ["쉬움(기초 개념)", "보통(실전 상황)", "어려움(여러 조건을 따지는 판단)"];
 const STYLES = ["짧고 구어체로", "상황을 자세히 설명하며", "숫자와 조건을 넣어서", "비교를 요청하며"];
 const pickOne = a => a[Math.floor(Math.random() * a.length)];
-const NO_TRAIN = ["anthropic"];   // 학습 데이터 생성에는 쓰지 않는 회사
+const NO_TRAIN = ["anthropic", "gemini"];   // 학습 데이터 생성에는 쓰지 않는 회사 (Claude·Gemini 약관: 경쟁 모델 개발에 출력 사용 금지)
+// 회사와 상관없이(OpenRouter 등 중계 포함) 약관상 학습에 쓰면 안 되는 모델: Claude · Gemini · OpenAI 유료 모델(gpt-oss 는 Apache 2.0 이라 허용)
+export const NO_TRAIN_MODEL = /claude|gemini|(^|\/)(gpt-(?!oss)|o[1-9](-|$)|chatgpt)/i;
 async function ask(messages, {signal, maxTokens = 1500, temperature = 0.7, target} = {}){
   let out = "";
   const route = await brainStream({messages, maxTokens, temperature, signal, role: "general", target, exclude: NO_TRAIN, onContent: d => out += d});
@@ -98,7 +101,7 @@ export function teachers(){
   const seen = new Set(), out = [];
   for (const role of ["general", "reason", "code"]) for (const c of routeCandidates(role)){
     const k = c.id + "|" + c.model;
-    if (c.id === "local" || c.id === "anthropic" || seen.has(k)) continue;
+    if (c.id === "local" || NO_TRAIN.includes(c.id) || NO_TRAIN_MODEL.test(c.model) || seen.has(k)) continue;
     seen.add(k); out.push(c); if (out.length >= 3) return out;
   }
   return out;
@@ -125,10 +128,10 @@ const mkey = t => t.id + "|" + t.model;
 export function fusionSources(){
   const out = [], seen = new Set();
   // Claude는 약관상 다른 모델 학습용 답을 만드는 데 쓰지 않는다
-  for (const id of Object.keys(PROVIDERS).filter(id => settings.keys[id] && id !== "anthropic")){
+  for (const id of Object.keys(PROVIDERS).filter(id => settings.keys[id] && !NO_TRAIN.includes(id))){
     const ms = settings.provModels[id]?.length ? settings.provModels[id] : PROVIDERS[id].defaults;
     for (const m of ms){
-      if (!["chat", "code", "reason", "vision"].includes(modelKind(m)) || FUSE_SKIP.test(m)) continue;
+      if (!["chat", "code", "reason", "vision"].includes(modelKind(m)) || FUSE_SKIP.test(m) || NO_TRAIN_MODEL.test(m)) continue;
       const t = {id, model: m}; if (seen.has(mkey(t))) continue; seen.add(mkey(t)); out.push(t);
     }
   }
