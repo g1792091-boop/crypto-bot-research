@@ -76,6 +76,8 @@ class ExecConfig:
     paper_stale_s: float = 300.0         # paper state older than this -> no new entries
     retries: int = 4
     sweep_every: int = 20                # loops between full sweeps of every allowed symbol
+    stop_from: str = "ratio"             # "ratio": same stop distance (%) from the actual fill as the paper
+                                         # stop from the paper fill; "price": the paper's stop price itself
 
     @classmethod
     def from_dict(cls, d: dict) -> "ExecConfig":
@@ -100,6 +102,8 @@ class ExecConfig:
             out.append("따라 할 paper 계좌(account)가 비어 있습니다")
         if not (isinstance(self.qty_scale, (int, float)) and self.qty_scale > 0):
             out.append("qty_scale은 0보다 커야 합니다")
+        if self.stop_from not in ("ratio", "price"):
+            out.append("stop_from은 \"ratio\" 또는 \"price\"입니다")
         return out + self.risk.problems()
 
 
@@ -636,7 +640,7 @@ class Executor:
                 t = None
             else:
                 spec = self._spec(t["symbol"])
-                new = round_stop(intent.stop, spec["tick"], t["side"])
+                new = self._stop_level(intent.stop, intent.entry_price, t["entry_price"], spec["tick"], t["side"])
                 if (new - t["stop"]) * t["side"] > spec["tick"] / 2:
                     self._move(t, new, [s["algoId"] for s in live_stops(self.c, t["symbol"])], "잠금 올리기")
                 return
@@ -670,7 +674,7 @@ class Executor:
         if not dec.ok:
             self._mark_done(it.key)
             return
-        stop = round_stop(it.stop, spec["tick"], it.side)
+        stop = self._stop_level(it.stop, it.entry_price, price, spec["tick"], it.side)
         if (price - stop) * it.side <= 0:
             self._mark_done(it.key)
             self._event(WARN, "entry_skip", f"{it.symbol} 가격 {price:g}이 이미 paper 손절선 {stop:g}을 지나 진입하지 않습니다")
@@ -707,7 +711,9 @@ class Executor:
             self._event(WARN, "entry_unfilled", f"{it.symbol} 진입 주문이 체결되지 않았습니다(상태 {o.get('status')})")
             return
         t["status"], t["qty"] = "open", abs(amt)
-        t["entry_price"] = float(o.get("avgPrice") or 0) or float(self.c.position(it.symbol).get("entryPrice") or 0)
+        t["entry_price"] = float(o.get("avgPrice") or 0) or float(self.c.position(it.symbol).get("entryPrice") or 0) \
+            or price
+        t["stop"] = t["stop_initial"] = self._stop_level(it.stop, it.entry_price, t["entry_price"], spec["tick"], it.side)
         if abs(amt) < dec.qty - spec["qty_step"] / 2:
             self._event(WARN, "partial_fill", f"{it.symbol} 진입이 일부만 체결됐습니다: {abs(amt):g}/{dec.qty:g}")
         self.store.trade_open(t)
@@ -715,6 +721,16 @@ class Executor:
         self._event(INFO, "entry", f"진입 {it.symbol} {'롱' if it.side > 0 else '숏'} {abs(amt):g} @ {t['entry_price']:g}, "
                     f"{dec.leverage}배, 손절 {stop:g}")
         self._protect(t, [])
+
+    def _stop_level(self, paper_stop: float, paper_entry: float, live_ref: Optional[float], tick: float,
+                    side: int) -> float:
+        """The exchange stop for a paper stop. "ratio" keeps the paper's distance from its fill (the testnet
+        price is not the real market price, and a live fill is never exactly the paper fill); "price" copies
+        the paper price. Rounded to the tick, never looser."""
+        level = paper_stop
+        if self.cfg.stop_from == "ratio" and live_ref and paper_entry:
+            level = live_ref * paper_stop / paper_entry
+        return round_stop(level, tick, side)
 
     def _protect(self, t: dict, old_ids: list) -> None:
         """Put the intended stop on the exchange (new first, then the old ones go). If that is not
@@ -751,8 +767,8 @@ class Executor:
         elif res["result"] == "closed":
             self._event(WARN, "stop_would_trigger", f"{t['symbol']} {why}: 가격이 이미 {new_stop:g}을 지나 "
                         "시장가로 닫았습니다(-2021)")
-            self._settle_flat(t["symbol"])
-            self._finish(t, "손절/잠금 가격이 이미 지나 시장가로 닫음")
+            if self._settle_flat(t["symbol"]):         # not flat: the next reconcile protects or closes the rest
+                self._finish(t, "손절/잠금 가격이 이미 지나 시장가로 닫음")
         else:
             t["stop"], t["stop_algo_id"] = new_stop, res["stop"].get("algoId")
             self._event(INFO, "stop_fired", f"{t['symbol']} {why}: 새 손절이 바로 발동했습니다")

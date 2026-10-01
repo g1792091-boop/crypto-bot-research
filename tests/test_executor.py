@@ -183,6 +183,31 @@ def test_stop_hit_on_the_exchange_is_booked(w):
     assert w.fake.pos[BTC] == 0 and len(w.trades()) == 1      # paper still open: not re-entered
 
 
+def test_stop_distance_follows_the_actual_fill(tmp_path):
+    """The testnet price is not the market price the paper account sees: by default the exchange stop keeps
+    the paper's distance from the fill ("ratio"); "price" copies the paper's stop price."""
+    w = World(tmp_path, fake=FakeFutures(prices={BTC: 200.0, "ETHUSDT": 50.0, "SOLUSDT": 10.0}),
+              max_notional_usd=5_000.0)
+    w.paper(stop=95.0, entry=100.0)
+    w.loop()
+    assert w.stops() == [(190.0, 5.0)]
+    w.fake.set_price(BTC, 212.0)
+    w.paper(stop=101.1, entry=100.0)                       # paper lock at +1.1 % from its fill
+    w.loop()
+    assert w.stops() == [(202.2, 5.0)] and not w.protected_after_first_stop()
+    w.store.close()
+    (tmp_path / "p").mkdir()
+    w2 = World(tmp_path / "p", fake=FakeFutures(prices={BTC: 200.0, "ETHUSDT": 50.0, "SOLUSDT": 10.0}),
+               max_notional_usd=5_000.0)
+    w2.store.close()
+    w2.cfg = ExecConfig(**{**w2.cfg.__dict__, "stop_from": "price"})
+    w2.open()
+    w2.paper(stop=95.0, entry=100.0)
+    w2.loop()                                              # the paper stop is far below this price: still valid
+    assert w2.stops() == [(95.0, 5.0)]
+    w2.store.close()
+
+
 def test_partial_fill_gets_a_stop_for_what_was_filled(w):
     w.fake.partial = 0.6
     w.paper(stop=95.0)
