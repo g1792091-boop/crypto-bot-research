@@ -6,7 +6,6 @@ connections raise if anything tries."""
 import hashlib
 import io
 import json
-import os
 import shutil
 import socket
 import sqlite3
@@ -259,7 +258,6 @@ def test_incomplete_folder_is_refused(tmp_path):
     (folder / "inbox.db").unlink()                             # exists on the server, no copy
     with pytest.raises(off.OffsiteError, match="inbox.db"):
         off.check_complete(folder, lib)
-    make_db(lib / "inbox.db", 1, 0) if not (lib / "inbox.db").exists() else None
     (folder / "inbox.db").write_bytes(b"not a database at all")
     with pytest.raises(off.OffsiteError, match="SQLite"):
         off.check_complete(folder, lib)
@@ -427,7 +425,7 @@ def test_restore_round_trip_with_integrity_check(tmp_path, capsys):
         sorted(m["databases"])
     text = capsys.readouterr().out
     assert "integrity_check ok" in text and "다음 순서" in text
-    assert f"/var/lib/paperbot/exec/executor.db" in text and f"{out / DATE / 'paper3.db'}" in text
+    assert "/var/lib/paperbot/exec/executor.db" in text and f"{out / DATE / 'paper3.db'}" in text
 
 
 def test_restore_without_manifest_needs_the_sha256(tmp_path):
@@ -476,13 +474,14 @@ def test_restore_reports_a_corrupt_database(tmp_path, capsys):
     assert "손상" in text and "integrity_check ok" not in text and "다음 순서" not in text
 
 
-def test_restore_refuses_unsafe_paths_in_the_archive(tmp_path):
+def _hand_made_backup(tmp_path, members):
+    """A tar.gz with the given (name, bytes) members, as one part plus its manifest."""
     arc = tmp_path / f"paperbot-{DATE}.tar.gz"
     with tarfile.open(arc, "w:gz") as tar:
-        data = b"SQLite format 3\x00" + b"\x00" * 100
-        ti = tarfile.TarInfo("../../evil.db")
-        ti.size = len(data)
-        tar.addfile(ti, io.BytesIO(data))
+        for name, data in members:
+            ti = tarfile.TarInfo(name)
+            ti.size = len(data)
+            tar.addfile(ti, io.BytesIO(data))
     blob = arc.read_bytes()
     part = tmp_path / f"{arc.name}.part01-of-01"
     part.write_bytes(blob)
@@ -492,9 +491,25 @@ def test_restore_refuses_unsafe_paths_in_the_archive(tmp_path):
                 "parts": [{"index": 1, "name": part.name, "offset": 0, "size": len(blob), "sha256": sha}]}
     mf = tmp_path / f"paperbot-{DATE}.manifest.json"
     mf.write_text(json.dumps(manifest))
+    return [part, mf]
+
+
+def test_restore_refuses_unsafe_paths_in_the_archive(tmp_path):
+    db = b"SQLite format 3\x00" + b"\x00" * 100
+    (tmp_path / "a").mkdir()
+    files = _hand_made_backup(tmp_path / "a", [(f"{DATE}/inbox.db", db), ("../../evil.db", db)])
     with pytest.raises(off.OffsiteError, match="이상한 경로"):
-        off.restore_backup([part, mf], tmp_path / "o", which=no_zstd, log=lambda s: None)
+        off.restore_backup(files, tmp_path / "o", which=no_zstd, log=lambda s: None)
     assert not (tmp_path / "evil.db").exists() and not (tmp_path.parent / "evil.db").exists()
+    assert not (tmp_path / "o" / DATE).exists()                   # the half-unpacked folder is removed
+    (tmp_path / "b").mkdir()
+    files = _hand_made_backup(tmp_path / "b", [(f"{DATE}/inbox.db", db), ("other/inbox.db", db)])
+    with pytest.raises(off.OffsiteError, match="두 번"):
+        off.restore_backup(files, tmp_path / "o", which=no_zstd, log=lambda s: None)
+    (tmp_path / "c").mkdir()
+    files = _hand_made_backup(tmp_path / "c", [(f"{DATE}/notes.txt", b"hello")])
+    with pytest.raises(off.OffsiteError, match="데이터베이스가 아닌"):
+        off.restore_backup(files, tmp_path / "o", which=no_zstd, log=lambda s: None)
 
 
 def test_restore_will_not_overwrite_an_earlier_restore(tmp_path):

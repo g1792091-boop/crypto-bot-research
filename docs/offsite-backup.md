@@ -128,7 +128,7 @@ systemctl status paperbot-offsite --no-pager
 ```bash
 sudo nano /etc/paperbot/live.env
 ```
-- 맨 아래에 `BACKUP_PASSPHRASE=<긴 암호>`를 넣습니다. 띄어쓰기 없이 20자 이상을 권합니다(예: 단어 4~5개를 `-`로 이은 것).
+- 맨 아래에 `BACKUP_PASSPHRASE=<긴 암호>`를 넣습니다. 20자 이상, **영문·숫자·`-`만** 씁니다(예: 단어 4~5개를 `-`로 이은 것). 띄어쓰기, 따옴표, `$`·`#` 같은 기호는 설정 파일에서 다르게 읽힐 수 있어 쓰지 않습니다.
 - 다음 날부터(또는 `sudo systemctl start paperbot-offsite`로 바로) 잠긴 파일이 갑니다. 파일 이름 끝에 `.enc`가 붙고, 요약에 "암호화함"이 나옵니다.
 - 암호를 빼려면 그 줄을 지우거나 `BACKUP_PASSPHRASE=`로 비웁니다.
 

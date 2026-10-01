@@ -318,21 +318,21 @@ def pack(folder: Path, files: Sequence[str], work: Path, compression: str, passp
     if comp == "zstd":
         proc = subprocess.Popen([which("zstd") or "zstd", "-q", "-T2", "-10", "-f", "-o", str(path)],
                                 stdin=subprocess.PIPE, stderr=subprocess.PIPE)
-        err = b""
+        broken = False
         try:
             with tarfile.open(fileobj=proc.stdin, mode="w|", format=tarfile.PAX_FORMAT) as tar:
                 for src, arc in members:
                     tar.add(src, arcname=arc, recursive=False, filter=_tar_clean)
-        except BrokenPipeError:
-            pass
+        except BrokenPipeError:                       # zstd stopped reading: never a whole archive
+            broken = True
         finally:
             try:
                 proc.stdin.close()
             except BrokenPipeError:
-                pass
+                broken = True
             err = proc.stderr.read()
             rc = proc.wait()
-        if rc != 0:
+        if rc != 0 or broken:
             raise OffsiteError(f"zstd 압축 실패 (exit {rc}): {err.decode(errors='replace')[-300:]}")
     else:
         with tarfile.open(path, mode="w:gz", compresslevel=6, format=tarfile.PAX_FORMAT) as tar:
@@ -479,7 +479,8 @@ def send_backup(root: Path, chat_env: str = "TELEGRAM_CHAT_BACKUP", *, date: Opt
                      "size": len(data), "sha256": hashlib.sha256(data).hexdigest()}
                 caption = part_caption(manifest, p)
                 if tg is not None:
-                    tg.call("sendDocument", {"chat_id": chat, "caption": caption, "disable_notification": "true"},
+                    tg.call("sendDocument", {"chat_id": chat, "caption": caption, "disable_notification": "true",
+                                             "disable_content_type_detection": "true"},
                             ("document", p["name"], data))
                 out(f"part {i}/{len(plan)} {p['name']} {p['size']} B sha256 {p['sha256']}"
                     + (" (dry run: not sent)" if tg is None else " sent"))
@@ -487,7 +488,8 @@ def send_backup(root: Path, chat_env: str = "TELEGRAM_CHAT_BACKUP", *, date: Opt
         manifest["parts"] = parts
         summary = summary_text(manifest, note)
         if tg is not None:
-            tg.call("sendDocument", {"chat_id": chat, "caption": summary, "disable_notification": "true"},
+            tg.call("sendDocument", {"chat_id": chat, "caption": summary, "disable_notification": "true",
+                                     "disable_content_type_detection": "true"},
                     ("document", f"paperbot-{folder.name}.manifest.json",
                      (json.dumps(manifest, ensure_ascii=False, indent=1) + "\n").encode()))
         out(summary)
@@ -563,6 +565,8 @@ def unpack(archive: Path, compression: str, dest: Path, which: Callable[[str], O
             name = _safe_member(m)
             if name is None:
                 continue
+            if name in names:
+                raise OffsiteError(f"압축 파일 안에 같은 이름이 두 번 있습니다: {name}")
             src = tar.extractfile(m)
             target = dest / name
             with open(target, "wb") as fh:
@@ -617,7 +621,7 @@ def _target(name: str) -> str:
 def next_steps(dest: Path, names: Sequence[str]) -> str:
     lines = [
         "",
-        "다음 순서 (docs/offsite-backup.md 6번):",
+        "다음 순서 (docs/offsite-backup.md 9-5):",
         "1) 봇과 작업을 모두 멈춥니다 (새 서버에서 아직 켜지 않았다면 'not loaded' 같은 말이 나와도 괜찮습니다):",
         "   sudo systemctl stop paperbot-live3 paperbot-dash paperbot-liq paperbot-executor \\",
         "     paperbot-agents.timer paperbot-agents.service paperbot-daily3.timer paperbot-checkpoint.timer \\",
@@ -658,7 +662,9 @@ def restore_backup(files: Sequence[Path], out: Path, *, sha256: Optional[str] = 
     if m is not None:
         ordered = _order_by_manifest(m, parts, log)
         archive_name, expect = m["archive"], m["sha256"]
-        compression, encrypted, date = m["compression"], bool(m["encrypted"]), m["date"]
+        compression, encrypted, date = m["compression"], bool(m["encrypted"]), str(m["date"])
+        if not re.fullmatch(r"\d{8}", date) or "/" in archive_name or compression not in ("zstd", "gzip"):
+            raise OffsiteError(f"목록 파일 내용이 이상합니다: {manifests[0]}")
         log(f"조각 {len(ordered)}개의 sha256이 목록과 맞습니다")
     else:
         ordered, archive_name = _order_by_name(parts)
@@ -700,7 +706,17 @@ def restore_backup(files: Sequence[Path], out: Path, *, sha256: Optional[str] = 
             openssl_run(["enc", "-d", *OPENSSL_ENC[1:], "-in", str(joined), "-out", str(archive),
                          "-pass", "env:BACKUP_PASSPHRASE"], passphrase, which, "복호화")
             joined.unlink()
-        names = unpack(archive, compression, dest, which)
+        created = not dest.exists()
+        try:
+            names = unpack(archive, compression, dest, which)
+        except BaseException:
+            # nothing half-unpacked is left behind to be mistaken for a good restore (dest was empty)
+            if created:
+                shutil.rmtree(dest, ignore_errors=True)
+            else:
+                for f in dest.iterdir():
+                    f.unlink()
+            raise
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     bad = 0
