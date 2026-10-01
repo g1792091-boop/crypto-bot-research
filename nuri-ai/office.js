@@ -381,6 +381,10 @@ ${notesText(a.team)}- ${isLead ? "너는 마지막 정리 담당이다. 사용�
     const conv = toModelMessages([{role: "user", content: m.topic}, lastMsg], 1e9, 3000).map(x => x.role === "assistant" ? {...x, content: noMind(x.content)} : x).filter(x => x.content);
     const id = await keep("office-tool", conv, {agent: a.id, model: entry.model}).catch(() => null);
     if (id) entry.trainIds = [id];
+  } else if (!turns.length && m.order.length === 1 && m.trigger === "auto" && goodText(entry.text) && !isClaude(entry.model)){
+    // 혼자 맡은 과제(성장 과제·신사업 개발)는 도구를 안 썼어도 '과제 → 결과' 학습 예시로
+    const id = await keep("office-task", [{role: "user", content: m.topic}, {role: "assistant", content: noMind(entry.text)}], {agent: a.id, model: entry.model}).catch(() => null);
+    if (id) entry.trainIds = [id];
   }
   entry.live = false;
   saveLog(); fire({kind: "said", meeting: m, agent: a, entry});
@@ -652,7 +656,7 @@ export async function cycle(force, onlyJob){
 }
 
 // 혼자 하는 일 한 번: 배정 모델로 생각·말을 실시간으로 보여 주고, 빈 답이면 다른 모델로
-async function solo(a, {room, sys, user, maxTokens = 900, temperature = 0.6, extra = {}, train = ""}){
+async function solo(a, {room, sys, user, maxTokens = 900, temperature = 0.6, extra = {}, train = "", trainRaw = false}){
   const models = assignModels();
   const target = models[a.id];
   const cm = claudeModels();
@@ -677,8 +681,10 @@ async function solo(a, {room, sys, user, maxTokens = 900, temperature = 0.6, ext
   if (!entry.text && !finalRaw) entry.text = `(${a.name}: 이번에는 답하지 못했습니다)`;
   if (!entry.text && finalRaw) entry.text = (finalRaw.replace(/^\s*💭[^\n]*\n?/gm, "").replace(/```(?:json)?[\s\S]*?(```|$)/g, "").trim() || "전략을 만들었습니다") + "\n\n*(전략 JSON은 아래 백테스트 카드에 있습니다)*";
   // 자료를 읽고 해설한 일은 '자료 해설' 학습 예시로
-  if (train && goodText(entry.text) && !isClaude(entry.model)){
-    const id = await keep("office-solo", [{role: "user", content: `${train}\n\n${clip(user, 3500)}`}, {role: "assistant", content: noMind(entry.text)}], {agent: a.id, model: entry.model}).catch(() => null);
+  if (train && (goodText(entry.text) || trainRaw && finalRaw.length > 40) && !isClaude(entry.model)){
+    // trainRaw: 설계안·사업안·후보 추출처럼 JSON 이 결과물인 일은 JSON 까지 그대로 학습
+    const ans = trainRaw ? noMind(finalRaw.replace(/^\s*💭[^\n]*\n?/gm, "").replace(/<think>[\s\S]*?<\/think>/g, "").trim()) : noMind(entry.text);
+    const id = await keep("office-solo", [{role: "user", content: `${train}\n\n${clip(user, 3500)}`}, {role: "assistant", content: ans}], {agent: a.id, model: entry.model, job: room}).catch(() => null);
     if (id) entry.trainIds = [id];
   }
   entry.live = false; saveLog(); fire({kind: "said", agent: a, entry});
@@ -751,7 +757,7 @@ async function research(){
   fire({kind: "busy", agent: a, text: `🧪 ${mk.name} ${TF_KO[tf]}봉 매매법 구상 중 (가장 오래된 과거부터)`});
   // ① 가능한 가장 긴 과거 캔들 (없으면 최근 1,500봉)
   let cs = null, hist = "";
-  try { const H = await import("./history.js"); const h = await H.historyCandles({market: mk.market, exchange: mk.exchange, interval: iv, maxBars: tf === "D" ? 30000 : 20000}); cs = h.candles; hist = h.note && /\d{4}-\d{2}-\d{2}/.test(h.note) ? h.note : `${fmtDay(h.from)}~${fmtDay(h.to)} · ${cs.length.toLocaleString()}봉${h.note ? " · " + h.note : ""}`; } catch(e){ hist = ""; }
+  try { const H = await import("./history.js"); const h = await Promise.race([H.historyCandles({market: mk.market, exchange: mk.exchange, interval: iv, maxBars: tf === "D" ? 30000 : 20000}), new Promise((_, rej) => setTimeout(() => rej(new Error("전체 과거 받기 90초 초과 — 최근 캔들로 대신")), 90e3))]); cs = h.candles; hist = h.note && /\d{4}-\d{2}-\d{2}/.test(h.note) ? h.note : `${fmtDay(h.from)}~${fmtDay(h.to)} · ${cs.length.toLocaleString()}봉${h.note ? " · " + h.note : ""}`; } catch(e){ hist = ""; }
   if (!cs || cs.length < 300){ cs = (await candlesFor({market: mk.market, exchange: mk.exchange, timeframe: tf}, 1500)).cs; hist = `최근 ${cs.length.toLocaleString()}봉 (${fmtDay(cs[0]?.t)}~)`; }
   // ② 코인이면 호가·고래·선물 흐름과 펀딩 이력도 함께
   let flowText = "", deriv = null;
@@ -763,7 +769,8 @@ async function research(){
   const levHint = {crypto: "코인 선물은 1~125배", us_stock: "주식은 보통 1~4배", kr_stock: "주식은 보통 1~2.5배", futures: "선물은 보통 5~20배", index: "지수 선물은 보통 5~20배"}[mk.cls];
   const sys = personaOf(a, "이번 일은 새 매매법 개발이다. 아래 형식 설명을 따라 전략 JSON 하나를 ```json 블록으로 쓰고, 블록 뒤에 왜 이 전략인지 2~3문장으로 말한다.") + "\n\n" + Q.STRATEGY_PROMPT
     + `\n\n## 레버리지\n레버리지는 1~200배 중 자유롭게 정한다(${levHint}가 일반적). 정한 뒤 코드가 모든 레버리지(1~200배)·상승장·하락장·횡보·폭락·수수료 2~3배·진입 지연 시나리오로 다시 시험한다.`
-    + (researchLog().length % 2 ? "\n\n## 이번 과제: 커스텀 지표\n거래소 기본 보조지표만 쓰지 말고 {\"type\":\"custom\",\"expr\":\"수식\"} 지표를 최소 1개 직접 발명해서 조건에 쓴다(예: 거래량 가중 모멘텀, 변동성 대비 이격, 여러 지표의 합성 점수). 수식 문법은 위 설명의 custom 항목을 따른다." : "")
+    + (researchLog().length % 2 ? "\n\n## 이번 과제: 커스텀 지표\n거래소 기본 보조지표만 쓰지 말고 {\"type\":\"custom\",\"expr\":\"수식\"} 지표를 최소 1개 직접 발명해서 조건에 쓴다(예: 거래량 가중 모멘텀, 변동성 대비 이격, 여러 지표의 합성 점수). 수식 문법은 위 설명의 custom 항목을 따른다. 수식 안에서 ind(\"tv_이름\", {파라미터}, \"value|p1~p4\")로 아래 차트 터미널 지표도 쓸 수 있다." : "")
+    + "\n\n## 더 쓸 수 있는 지표\n" + Q.tvCatalogText()
     + (cards.length ? "\n\n## 지금까지의 백테스트 연구 카드(참고)\n" + Q.cardsText(cards, 14) : "");
   const user = `시장: ${mk.name} (${mk.market}, ${mk.exchange === "binancef" ? "바이낸스 선물" : mk.exchange === "yahoo" ? "야후 파이낸스" : mk.exchange}) · ${TF_KO[tf]}봉\n시험할 과거: ${hist}\n지금 차트(보조지표 29종):\n${snapText(snap)}\n${JSON.stringify(snap.ind || {}).slice(0, 2200)}${flowText ? "\n\n호가·고래·선물 흐름(지금):\n" + flowText.slice(0, 1500) : ""}\n\n최근 우리 팀이 시험한 전략(겹치지 않게):\n${tried || "(아직 없음)"}\n\n${a.id === "qa" ? "추세추종" : "역추세·변동성"} 계열로 새 전략 하나를 만들어 주세요. symbol은 ${mk.market}, interval은 ${iv}.${deriv ? " funding·oi·oi_change_pct·long_short 피연산자도 쓸 수 있습니다." : ""}`;
   const e = await solo(a, {room: "quant", sys, user, maxTokens: 1600, temperature: 0.8});
@@ -879,7 +886,7 @@ async function retro(){
     .map(e => `- [${e.kind}] ${agentById(e.agent)?.name || ""}: ${String(e.text || e.title || e.name || "").replace(/\s+/g, " ").slice(0, 160)}${e.kind === "bt" ? ` (${e.pass ? "통과" : "불통과"})` : ""}`).join("\n");
   const open = backlog().filter(x => x.team === team && x.status !== "done").map(x => `- ${x.title}`).join("\n");
   const e = await solo(lead, {room: team, sys: personaOf(lead, `지금은 ${teamById(team).name} 회고·성장 회의다. 최근 기록을 보고 ① 배운 것(다음에 반드시 반영할 교훈) 2~4개 ② 우리 팀에 부족한 점을 메울 구체적인 새 과제 1~3개(누가 맡을지 팀원 이름 포함)를 정한다. 세계적인 기업 수준의 기준으로 냉정하게. 답 마지막에 \`\`\`json {"lessons":["..."],"tasks":[{"title":"...","why":"...","owner":"팀원 이름"}]}\`\`\` 를 붙인다.`),
-    user: `팀원: ${mem.map(a => `${a.name}(${a.title})`).join(", ")}\n최근 기록:\n${recent || "(기록 없음 — 첫 회고)"}\n\n아직 안 끝난 과제:\n${open || "(없음)"}`, maxTokens: 1200});
+    user: `팀원: ${mem.map(a => `${a.name}(${a.title})`).join(", ")}\n최근 기록:\n${recent || "(기록 없음 — 첫 회고)"}\n\n아직 안 끝난 과제:\n${open || "(없음)"}`, maxTokens: 1200, trainRaw: true, train: "팀의 최근 업무 기록을 보고 회고해 줘: 배운 것과 부족한 점을 메울 새 과제를 JSON으로."});
   fire({kind: "huddle-end", ids: mem.map(a => a.id)});
   const j = pickJSON(e.raw || e.text) || {};
   for (const l of (j.lessons || []).slice(0, 4)) addNote(team, l, "회고");
@@ -934,7 +941,7 @@ async function makeReport(since){
   const ceo = agentById("lead"), hour = new Date().getHours();
   const facts = sections.map(s => `## ${s.name} (팀장 ${s.lead})\n${s.items.map(x => "- " + x).join("\n") || "- (이번 시간 기록 없음)"}${s.next.length ? "\n다음: " + s.next.join(" / ") : ""}`).join("\n\n");
   const e = await solo(ceo, {room: "hq", sys: personaOf(ceo, "지금은 매시간 하는 전사 성과 발표다. 아래 사실만으로 대표(사용자)에게 발표한다: 맨 앞에 핵심 성과 3줄, 그다음 팀별로 해낸 것과 다음 계획, 마지막에 위험·도움이 필요한 것. 마크다운. 지어내지 않는다."),
-    user: `${hour}시 발표 · 지난 ${Math.round((Date.now() - since) / 60e3)}분\n\n${facts || "(이번 시간 기록 없음)"}\n\n모의투자:\n${book.slice(0, 1500)}`, maxTokens: 1600});
+    user: `${hour}시 발표 · 지난 ${Math.round((Date.now() - since) / 60e3)}분\n\n${facts || "(이번 시간 기록 없음)"}\n\n모의투자:\n${book.slice(0, 1500)}`, maxTokens: 1600, train: "아래 팀별 업무 기록으로 대표에게 하는 시간별 성과 발표문을 써 줘."});
   const report = {id: uid(), t: Date.now(), since, title: `${hour}시 성과 발표`, text: noMind(e.text), sections};
   await idb.put("report:" + report.id, report);
   localStorage.setItem("officeLastReport", String(Date.now()));
@@ -965,7 +972,8 @@ async function archJob(){
   const prev = readJ("officeDesigns", []).filter(x => x.use === brief.use).slice(-2);
   fire({kind: "busy", agent: d, text: `📐 ${brief.req} 설계 중`});
   const e = await solo(d, {room: "arch", sys: personaOf(d, `이번 일은 직접 설계다. 대지 ${brief.site.w}×${brief.site.d}m, ${brief.zone}(건폐율 ${lim[0]}% · 용적률 ${lim[1]}% 이하). 요구: ${brief.req}. 이전 안의 지적 사항을 반드시 고친다. 설계 의도 3~4문장 뒤에 \`\`\`json {"name":"...","use":"${brief.use}","zone":"${brief.zone}","site":{"w":${brief.site.w},"d":${brief.site.d}},"building":{"w":가로m,"d":세로m},"floors":층수,"floorH":층고m,"style":"modern|concrete|brick|wood|glass","roof":"flat|gable","interior":"modern|scandi|industrial|natural","materials":"외장재 설명","features":["특징"]}\`\`\` 를 쓴다.`),
-    user: `이전 설계안과 지적 사항:\n${prev.map(p => `- ${p.name}: 건폐율 ${p.metrics["건폐율%"]}%, 용적률 ${p.metrics["용적률%"]}% · 지적: ${p.critique || "없음"}`).join("\n") || "(첫 설계)"}`, maxTokens: 1400});
+    user: `대지 ${brief.site.w}×${brief.site.d}m, ${brief.zone}, 요구: ${brief.req}\n이전 설계안과 지적 사항:\n${prev.map(p => `- ${p.name}: 건폐율 ${p.metrics["건폐율%"]}%, 용적률 ${p.metrics["용적률%"]}% · 지적: ${p.critique || "없음"}`).join("\n") || "(첫 설계)"}`, maxTokens: 1400,
+    trainRaw: true, train: "아래 조건으로 건축 설계안을 만들어 줘. 설계 의도와 설계안 JSON(대지·건물 크기·층수·스타일·지붕·재료·특징)을 쓰고 이전 지적 사항을 고쳐."});
   const spec = pickJSON(e.raw || e.text); if (!spec?.building) { post({ch: "arch", kind: "system", text: "설계안 JSON을 받지 못했습니다"}); return; }
   spec.site = spec.site || brief.site; spec.floors = Math.max(1, Math.min(30, +spec.floors || 3));
   const siteA = spec.site.w * spec.site.d, ba = spec.building.w * spec.building.d, gfa = ba * spec.floors;
@@ -980,7 +988,7 @@ async function archJob(){
   }
   // 구조·견적 엔지니어가 짧게 지적 → 다음 설계에 반영 (계속 발전)
   const s = agentById("struct");
-  const c = await solo(s, {room: "arch", sys: personaOf(s, "방금 나온 설계안을 법규·구조·공사비·사용성 관점에서 2~3문장으로 냉정하게 지적하고, 다음 안에서 고칠 점 하나를 명확히 말한다."), user: `${spec.name}: ${JSON.stringify(metrics)}${over.length ? " · " + over.join(", ") : ""}\n특징: ${(spec.features || []).join(", ")}`, maxTokens: 500});
+  const c = await solo(s, {room: "arch", sys: personaOf(s, "방금 나온 설계안을 법규·구조·공사비·사용성 관점에서 2~3문장으로 냉정하게 지적하고, 다음 안에서 고칠 점 하나를 명확히 말한다."), user: `${spec.name}: ${JSON.stringify(metrics)}${over.length ? " · " + over.join(", ") : ""}\n특징: ${(spec.features || []).join(", ")}`, maxTokens: 500, train: "이 건축 설계안을 법규·구조·공사비·사용성 관점에서 검토하고 다음에 고칠 점을 말해 줘."});
   const designs = readJ("officeDesigns", []); designs.push({t: Date.now(), name: spec.name, use: spec.use, metrics, critique: noMind(c.text).slice(0, 200)}); writeJ("officeDesigns", designs.slice(-30));
   const files = [];
   if (computerOn()){
@@ -1034,7 +1042,7 @@ async function bizJob(){
   const B = await import("./biz.js"), b = agentById("biz"), lead = agentById("vlead");
   const past = readJ("officeBiz", []).slice(-8).map(x => `- ${x.name}: ${x.verdict}`).join("\n");
   const e = await solo(b, {room: "venture", sys: personaOf(b, "이번 일은 돈을 벌 수 있는 사업 구상이다. 우리 회사의 강점(AI 에이전트 팀, 퀀트·코인·부동산·건축 전문성, GH Nano 자체 AI)을 살리는 사업이면 좋다. 이유 2~3문장 뒤에 아래 JSON을 쓴다.\n" + B.IDEA_PROMPT),
-    user: `지금까지 검토한 사업:\n${past || "(없음)"}\n겹치지 않는 새 사업 하나를 제안해 주세요.`, maxTokens: 1200});
+    user: `지금까지 검토한 사업:\n${past || "(없음)"}\n겹치지 않는 새 사업 하나를 제안해 주세요.`, maxTokens: 1200, trainRaw: true, train: "돈을 벌 수 있는 사업 아이디어를 하나 내고, 숫자 가정(가격·원가·전환율·획득비용·이탈률·고정비 등)을 현실적으로 JSON으로 적어 줘."});
   const idea = pickJSON(e.raw || e.text); if (!idea?.name){ post({ch: "venture", kind: "system", text: "사업 아이디어 JSON을 받지 못했습니다"}); return; }
   const sim = B.simulate(idea);
   const list = readJ("officeBiz", []); list.push({t: Date.now(), name: sim.idea.name, verdict: sim.verdict, p24: sim.pBreakeven24, cum: sim.cumProfit.p50, idea: sim.idea}); writeJ("officeBiz", list.slice(-50));
@@ -1043,9 +1051,9 @@ async function bizJob(){
   if (sim.promising){
     // 컴플라이언스 점검 + 사업계획서
     const comp = agentById("comp");
-    const c = await solo(comp, {room: "venture", sys: personaOf(comp, "이 사업의 법·규제·인허가·개인정보·금융 규제 위험을 3~4문장으로 짚는다(투자자문업·가상자산사업자 신고·전자금융 등 해당되면)."), user: B.bizText(sim), maxTokens: 600});
+    const c = await solo(comp, {room: "venture", sys: personaOf(comp, "이 사업의 법·규제·인허가·개인정보·금융 규제 위험을 3~4문장으로 짚는다(투자자문업·가상자산사업자 신고·전자금융 등 해당되면)."), user: B.bizText(sim), maxTokens: 600, train: "이 사업의 법·규제·인허가 위험을 짚어 줘."});
     const p = await solo(lead, {room: "venture", sys: personaOf(lead, "유망 판정을 받은 사업의 사업계획서를 마크다운으로 쓴다: 1.요약 2.문제와 고객 3.해결책·제품 4.시장 규모 5.경쟁 6.수익 모델 7.시뮬레이션 결과(아래 숫자 그대로) 8.실행 계획(0~3·3~6·6~12개월) 9.필요 자금·인력 10.위험과 대응(아래 컴플라이언스 의견 반영) 11.검증해야 할 가정. 과장하지 않는다."),
-      user: `${B.bizText(sim)}\n\n아이디어: ${sim.idea.desc}\n고객: ${sim.idea.customer}\n\n컴플라이언스 의견: ${noMind(c.text)}`, maxTokens: 3000});
+      user: `${B.bizText(sim)}\n\n아이디어: ${sim.idea.desc}\n고객: ${sim.idea.customer}\n\n컴플라이언스 의견: ${noMind(c.text)}`, maxTokens: 3000, train: "아래 사업 시뮬레이션 결과와 규제 의견으로 사업계획서를 써 줘."});
     plan = true;
     if (computerOn()){ try { const {codeCall} = await import("./engine.js"), base = `business/${String(sim.idea.name).replace(/[\\/:*?"<>|\s]+/g, "_").slice(0, 40)}`;
       await codeCall("write", {ws: "office", path: base + "/사업계획서.md", content: `# ${sim.idea.name} 사업계획서\n\n${noMind(p.text)}\n\n---\n## 시뮬레이션\n${B.bizText(sim)}\n`}); files.push(base + "/사업계획서.md");
@@ -1085,7 +1093,12 @@ async function realestateJob(){
   const evText = ev.text || "";
   if (!ev.items?.length){ addNote("realestate", `${region}: 검색 근거를 못 모음(검색 차단 가능)`, "발굴"); return; }
   for (const x of (ev.items || []).slice(0, 3)) post({ch: "realestate", kind: "work", agent: a.id, icon: "📰", text: x.title, url: x.url});
-  const e = await solo(a, {room: "realestate", sys: personaOf(a, R.EXTRACT_PROMPT), user: `지역: ${region}\n\n근거 자료:\n${String(evText).slice(0, 7000)}`, maxTokens: 1800, train: `아래 ${region} 부동산 기사에서 재개발·재건축 후보 구역을 근거와 함께 정리해 줘.`});
+  // 공공데이터 키가 있으면 그 지역 아파트 실거래가 흐름(6개월)도 같이 본다 → 지역 점수 메모에 반영
+  let priceTxt = "";
+  if (settings.keys.datagokr){ try { const reg = R.findRegion(region), r = await R.aptTrades({lawdCd: reg?.lawd?.[0], months: 6}), mo = R.priceMomentum(r.deals);
+    priceTxt = R.tradesText(r, mo, region); post({ch: "realestate", kind: "work", agent: "location", icon: "🏢", text: `${region} 아파트 실거래 ${r.deals.length}건 · 가격 흐름 ${mo.signal}${mo.recent_vs_prior_pct != null ? ` (${mo.recent_vs_prior_pct > 0 ? "+" : ""}${mo.recent_vs_prior_pct}%)` : ""}`});
+    const pm = readJ("officeREPrice", {}); pm[region] = {t: Date.now(), signal: mo.signal, pct: mo.recent_vs_prior_pct, n: r.deals.length}; writeJ("officeREPrice", pm); } catch(err){} }
+  const e = await solo(a, {room: "realestate", sys: personaOf(a, R.EXTRACT_PROMPT), user: `지역: ${region}\n\n근거 자료:\n${String(evText).slice(0, 7000)}`, maxTokens: 1800, trainRaw: true, train: `아래 ${region} 부동산 기사에서 재개발·재건축 후보 구역을 근거 주소와 함께 JSON 배열로 뽑아 줘.`});
   const cands = R.parseCandidates(e.raw || e.text, {evidence: ev.items});
   if (!cands.length){ addNote("realestate", `${region}: 이번 자료로는 후보를 못 찾음 → 검색어 보완 필요`, "발굴"); return; }
   await R.saveCandidates(cands, {evidence: ev.items});
@@ -1093,7 +1106,7 @@ async function realestateJob(){
   const here = ranked.filter(c => (c.region || "").includes(region.split(" ").pop()) || region.includes(c.region || "@")).slice(0, 6);
   post({ch: "realestate", kind: "re", agent: a.id, region, items: (here.length ? here : ranked.slice(0, 6)).map(c => ({area: c.area, region: c.region, project_type: c.project_type, stage: c.stage, score: c.score ?? c.index?.score, certainty: c.certainty ?? c.index?.certainty, upside: c.upside ?? c.index?.upside, sources: (c.evidence_urls || c.sources || []).slice(0, 2).map(u => typeof u === "string" ? {title: u.replace(/^https?:\/\/(www\.)?/, "").slice(0, 40), url: u} : u)}))});
   // 세 번에 한 번은 팀장이 전체 순위로 추천
-  if (i % 3 === 2){ const lead = agentById("land"); await solo(lead, {room: "realestate", sys: personaOf(lead, "지금까지 발굴한 재개발·재건축 후보 순위와 자체 '재개발 잠재력 지수'를 보고 대표에게 추천 3곳과 이유·위험·확인할 것(토지이음·정비몽땅 등)을 말한다. 투자 권유가 아니라 조사 결과임을 밝힌다."), user: R.candidateText(ranked, 12) + "\n\n" + (R.customIndicatorText?.() || ""), maxTokens: 1400}); }
+  if (i % 3 === 2){ const lead = agentById("land"); await solo(lead, {room: "realestate", sys: personaOf(lead, "지금까지 발굴한 재개발·재건축 후보 순위와 자체 '재개발 잠재력 지수'를 보고 대표에게 추천 3곳과 이유·위험·확인할 것(토지이음·정비몽땅 등)을 말한다. 투자 권유가 아니라 조사 결과임을 밝힌다."), user: R.candidateText(ranked, 12) + "\n\n" + (R.customIndicatorText?.() || "") + (Object.keys(readJ("officeREPrice", {})).length ? "\n\n지역별 아파트 실거래가 흐름(최근 3개월 vs 그 전 3개월): " + Object.entries(readJ("officeREPrice", {})).map(([k, v]) => `${k} ${v.signal}${v.pct != null ? `(${v.pct}%)` : ""}`).join(", ") : "") + (priceTxt ? "\n\n" + priceTxt.slice(0, 1200) : ""), maxTokens: 1400, train: "아래 재개발 후보 순위와 지수를 보고 추천 3곳과 이유·위험·확인할 것을 정리해 줘."}); }
 }
 
 /* ============ 데이터·미디어팀: 유튜브·인스타·커뮤니티 ============ */

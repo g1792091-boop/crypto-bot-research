@@ -7,6 +7,7 @@
 // - type "custom" (사용자 수식 지표)은 customind.js 가 계산한다. customind.js 는 이 파일을 import 하지 않고,
 //   아래 setIndProvider 로 computeInd 를 넘겨받는다 (한쪽 방향 import → 순환 없음).
 import { parseExpr, evalExpr, setIndProvider } from "./customind.js";
+import { INDICATORS as TV_IND } from "./terminal/ind.js";   // 차트 터미널 지표 146종 (tv_이름)
 
 /* ============ 공용 ============ */
 const isNil = v => v === null || v === undefined;
@@ -363,12 +364,31 @@ export const IND_REGISTRY = {
 const EXT_NAME = name => DERIV_FIELDS.includes(name) || /^(?:ml|ext)_\w+$/.test(name);
 
 // 지표 계산. 항상 {출력이름: 시리즈} 형태 (indicators.compute)
+// 차트 터미널 지표(terminal/ind.js)를 전략·수식에서도: type "tv_<id>" · 출력 value(첫 선) p1~p4(다음 선) · 신호형은 +1/-1
+// 외부 데이터가 필요한 것(OI·펀딩·청산·BTC 대비 등)과 화면 전용(볼륨 프로파일)은 뺀다
+const TV_SKIP = new Set(["vp", "session_vp", "oi", "oi_delta", "funding", "long_short", "taker", "liq", "cb_premium", "rs_btc", "corr_btc"]);
+const TV_OUTS = ["value", "p1", "p2", "p3", "p4"];
+for (const [id, d] of Object.entries(TV_IND)) if (!TV_SKIP.has(id)) IND_REGISTRY["tv_" + id] = {outputs: TV_OUTS, defaults: {...(d.params || {})}, desc: d.name, tv: id};
+export const TV_TYPES = Object.keys(IND_REGISTRY).filter(k => k.startsWith("tv_"));
+function tvCompute(c, id, p){
+  const bars = c.map(b => ({time: Math.floor(b.t / 1000), open: b.o, high: b.h, low: b.l, close: b.c, volume: b.v}));
+  const r = TV_IND[id].compute(bars, p, {}) || {};
+  const plots = (r.plots || []).filter(x => Array.isArray(x.data) && x.data.length === c.length && x.type !== "boxes");
+  const out = {};
+  TV_OUTS.forEach((k, i) => { const pl = plots[i]; out[k] = pl ? pl.data.map(v => v == null ? null : typeof v === "object" ? (Number.isFinite(+v.dir) ? +v.dir : Number.isFinite(+v.value) ? +v.value : null) : Number.isFinite(+v) ? +v : null) : c.map(() => null); });
+  return out;
+}
+export function tvCatalogText(){
+  return "차트 터미널 지표 " + TV_TYPES.length + "종 (type \"tv_이름\", 출력 value=첫 선 · p1~p4=다음 선, 신호형은 +1 매수/-1 매도, 파라미터 이름은 아래 괄호): " +
+    TV_TYPES.map(k => `${k}(${Object.keys(IND_REGISTRY[k].defaults).join(",")})`).join(" ");
+}
 export function computeInd(candles, type, params = {}){
   const R = IND_REGISTRY[type];
   if (!R) throw new Error(`지원하지 않는 지표: ${type}`);
   const c = prep(candles);
   const p = {...R.defaults};
   for (const [k, v] of Object.entries(params || {})) if (!isNil(v) && k !== "id" && k !== "type") p[k] = v;
+  if (R.tv) return tvCompute(c, R.tv, p);
   const src = "source" in p ? srcOf(c, p.source) : null;
   const n = Math.trunc(Number(p.length ?? 14)), I = k => Math.trunc(Number(p[k])), F = k => Number(p[k]);
   switch (type){
@@ -520,7 +540,7 @@ export function normalizeSpec(spec){
     const r = {...(raw.params || {}), ...raw};
     let type = String(r.type ?? "").trim().toLowerCase();
     type = IND_ALIAS[type] || type;
-    if (!IND_REGISTRY[type]){ problems.push(`지원하지 않는 지표: ${r.type} (가능: ${Object.keys(IND_REGISTRY).join(", ")})`); return; }
+    if (!IND_REGISTRY[type]){ problems.push(`지원하지 않는 지표: ${r.type} (가능: ${Object.keys(IND_REGISTRY).filter(k => !k.startsWith("tv_")).join(", ")} + 차트 터미널 tv_* ${TV_TYPES.length}종)`); return; }
     const id = String(r.id ?? type).trim();
     if (!/^[A-Za-z_]\w*$/.test(id)){ problems.push(`지표 id 는 영문/숫자/_ 만 (숫자로 시작 불가): ${id}`); return; }
     if (PRICE_FIELDS.includes(id) || DERIV_FIELDS.includes(id)){ problems.push(`지표 id 가 가격·파생 필드 이름과 겹칩니다: ${id}`); return; }
@@ -539,6 +559,11 @@ export function normalizeSpec(spec){
     if (!isNil(r.source) && r.source !== ""){
       const s = String(r.source).toLowerCase();
       if (!SOURCES.includes(s)) problems.push(`${id}.source 는 ${SOURCES.join("/")} 중 하나 (${r.source})`); else o.source = s;
+    }
+    if (IND_REGISTRY[type].tv) for (const [k, d] of Object.entries(IND_REGISTRY[type].defaults)){   // 터미널 지표 고유 파라미터
+      if (isNil(r[k]) || r[k] === "" || k in o) continue;
+      const v = typeof d === "number" ? Number(r[k]) : r[k];
+      if (typeof d === "number" && !Number.isFinite(v)) problems.push(`${id}.${k} 는 숫자여야 합니다 (${r[k]})`); else o[k] = v;
     }
     if (type === "custom"){   // 수식 검사: 가격 · 앞에서 선언한 지표 · 파생/외부(ml_*, ext_*) 시리즈만 참조 가능
       const expr = typeof r.expr === "string" ? r.expr.trim() : "";

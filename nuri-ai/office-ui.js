@@ -180,6 +180,8 @@ function build(){
     <span class="of-pick"><button class="of-btn" id="ofSetBtn" aria-haspopup="true">설정 ▾</button><div class="of-menu of-set" id="ofSet" hidden>
       <div class="of-row"><label class="of-tg" title="사용자가 아무것도 하지 않아도 정해진 간격과 급변동 때 스스로 회의합니다"><input type="checkbox" id="ofAuto"> 자동 회의</label>
         <select id="ofEvery" title="자동 회의 간격"><option value="15">15분마다</option><option value="30">30분마다</option><option value="60">1시간마다</option><option value="180">3시간마다</option></select></div>
+      <div class="of-row" title="사무실이 하루에 AI를 부르는 최대 횟수. 다 쓰면 모의투자 갱신·차트·뉴스 확인(코드)만 계속합니다. 쉬지 않고 일하려면 크게 두세요(유료 API면 비용이 늘어납니다)">하루 AI 호출
+        <select id="ofCallMax"><option value="600">600번</option><option value="1500">1,500번</option><option value="3000">3,000번</option><option value="10000">10,000번</option><option value="1000000">제한 없음</option></select></div>
       <label class="of-tg" title="정해진 간격마다 사람처럼 한 가지 일(매매법 연구·SNS·경제 리서치·모의투자·컴퓨터 작업)을 스스로 합니다"><input type="checkbox" id="ofCycle"> 주기 업무</label>
       <label class="of-tg" title="직원들이 수시로 본 차트·뉴스를 두고 잡담합니다 (한 번에 AI 1번)"><input type="checkbox" id="ofChat"> 수시 대화</label>
       <label class="of-tg" title="문서/GHNano 사무실 폴더 안에서만 파일을 만들고 스크립트를 실행합니다 (GHNano.exe에서만)"><input type="checkbox" id="ofComp"> 컴퓨터 작업</label>
@@ -249,6 +251,8 @@ function wire(el){
   el.querySelector("#ofEvery").value = String(c.every);
   el.querySelector("#ofAuto").onchange = e => { O.setOffice({auto: e.target.checked}); ctx.toast(e.target.checked ? "자동 회의를 켰습니다. 팀이 스스로 시장을 점검합니다" : "자동 회의를 껐습니다"); renderStatus(); };
   el.querySelector("#ofEvery").onchange = e => { O.setOffice({every: +e.target.value}); renderStatus(); };
+  el.querySelector("#ofCallMax").value = String(c.callMax || 600);
+  el.querySelector("#ofCallMax").onchange = e => { O.setOffice({callMax: +e.target.value}); renderStatus(); };
   el.querySelector("#ofCycle").onchange = e => { O.setOffice({cycle: e.target.checked}); renderStatus(); };
   el.querySelector("#ofSpeed").onchange = e => { const v = +e.target.value; O.setOffice({cycleMin: v}); ctx.toast(v <= 1 ? "직원들이 쉬지 않고(1분마다) 일합니다 · AI 호출이 많아집니다" : `직원들이 ${v}분마다 한 가지 일을 합니다`); renderStatus(); };
   el.querySelector("#ofComp").onchange = e => { O.setOffice({computer: e.target.checked}); if (e.target.checked && !LAUNCHER.on) ctx.toast("컴퓨터 작업은 GHNano.exe로 실행했을 때만 됩니다"); renderStatus(); };
