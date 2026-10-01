@@ -85,7 +85,7 @@ warnings.filterwarnings("ignore")
 from paperbot import sweepsig  # noqa: E402
 
 BASE = os.environ.get("BINANCE_DIR", os.path.join(SCRATCH, "binance"))
-RAW = os.path.join(BASE, "raw")
+RAW = os.environ.get("BINANCE_RAW") or os.path.join(BASE, "raw")   # shared download cache (server)
 BARS = os.path.join(BASE, "bars")
 SIGNALS = os.environ.get("BINANCE_SIGNALS", os.path.join(BASE, "signals"))
 FUNDING = os.path.join(BASE, "funding")
@@ -102,8 +102,24 @@ KLINE_TFS = ("5m", "15m", "1h", "4h", "1d")                             # downlo
 NATIVE_HTF = ("15m", "1h", "4h", "1d")                                  # checked against resampled 5m
 TFS = ("5m", "15m", "30m", "1h", "4h", "1d")                            # cache timeframes
 START, END = "2021-01-01", "2026-09-30"                                  # bars: START <= ts < END
-MONTHS = [p.strftime("%Y-%m") for p in pd.period_range("2021-01", "2026-08", freq="M")]
-DAYS = [d.strftime("%Y-%m-%d") for d in pd.date_range("2026-09-01", "2026-09-29", freq="D")]
+
+
+def month_day_files(start: str, end: str) -> tuple[list[str], list[str]]:
+    """Monthly zips for every whole month in [start, end), daily files for the month ``end`` falls in
+    (when ``end`` is not the 1st). 2021-01-01 .. 2026-09-30 -> months 2021-01 .. 2026-08, days
+    2026-09-01 .. 2026-09-29."""
+    e = pd.Timestamp(end)
+    last_full = (e - pd.offsets.MonthBegin(1)) if e.day == 1 else (e.replace(day=1) - pd.offsets.MonthBegin(1))
+    months = [p.strftime("%Y-%m") for p in pd.period_range(pd.Timestamp(start).strftime("%Y-%m"),
+                                                            last_full.strftime("%Y-%m"), freq="M")]
+    days = [] if e.day == 1 else [d.strftime("%Y-%m-%d") for d in pd.date_range(e.replace(day=1), e - pd.Timedelta(days=1))]
+    return months, days
+
+
+# The server's monthly re-check (paperbot/agents/labmonthly.py) builds a later range the same way:
+# BINANCE_START / BINANCE_END (end exclusive). Unset: the research range above.
+START, END = os.environ.get("BINANCE_START") or START, os.environ.get("BINANCE_END") or END
+MONTHS, DAYS = month_day_files(START, END)
 CMP = ("2021-08-01", "2026-09-30")                                       # compare window (periods 1+2)
 MAX_PAR = 4
 PROCS = 3
@@ -270,7 +286,8 @@ def monthly_gap_days(recs: list[dict]) -> tuple[dict, dict]:
                 tz = d.loc[d["volume"] <= 0, "ts"]
                 zdays |= set(tz.dt.floor("D")) | set((tz - five).dt.floor("D"))
         per_day = pd.concat(cnt).groupby(level=0).sum() if cnt else pd.Series(dtype=int)
-        days = pd.date_range(START, pd.Timestamp(DAYS[0]) - pd.Timedelta(days=1), freq="D", tz="UTC")
+        last = pd.Timestamp(DAYS[0]) if DAYS else pd.Timestamp(END)
+        days = pd.date_range(START, last - pd.Timedelta(days=1), freq="D", tz="UTC")
         per_day = per_day.reindex(days, fill_value=0)
         months_have = {m for m in MONTHS if f"futures/um/monthly/klines/{s}/5m/{s}-5m-{m}.zip" in have}
         reasons = {}
@@ -311,7 +328,7 @@ def download(refresh_404: bool = False) -> dict:
     fail = df[df["status"] == "failed"]
     summary = dict(
         built_utc=pd.Timestamp.now(tz="UTC").isoformat(), source=URL, raw_dir=RAW,
-        months=[MONTHS[0], MONTHS[-1]], days=[DAYS[0], DAYS[-1]], symbols=list(SYMBOLS.values()),
+        months=[MONTHS[0], MONTHS[-1]], days=[DAYS[0], DAYS[-1]] if DAYS else [], symbols=list(SYMBOLS.values()),
         kline_tfs=list(KLINE_TFS), files=len(df), status_counts=df["status"].value_counts().to_dict(),
         files_by_kind=df["kind"].value_counts().to_dict(),
         checksum_counts=df["checksum"].fillna("n/a").value_counts().to_dict(),
@@ -588,7 +605,7 @@ def _signals_job(args) -> dict:
     L = sweepsig.lib()
     t0 = time.time()
     df = L.read_ohlcv(_bars_path(coin, tf))
-    df = df[df["ts"] < pd.Timestamp(RB.WINDOWS["cf"][1], tz="UTC")].reset_index(drop=True)
+    df = df[df["ts"] < pd.Timestamp(END, tz="UTC")].reset_index(drop=True)   # research: END = RB.WINDOWS["cf"][1]
     df.attrs["tf"] = tf
     t1 = time.time()
     arrs = FS.signal_arrays(L, df, tf, coin)

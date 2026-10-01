@@ -52,12 +52,19 @@ def paths(out: str) -> dict:
             "reports": os.path.join(out, "_reports")}
 
 
-def load_builder(out: str, procs: Optional[int] = None):
-    """research/binance_data/build.py as a module, pointed at ``out`` (its paths are read at import)."""
+BUILD_ENV = ("BINANCE_DIR", "BINANCE_SIGNALS", "BINANCE_REPORTS", "BINANCE_RAW", "BINANCE_START", "BINANCE_END")
+
+
+def load_builder(out: str, procs: Optional[int] = None, env: Optional[dict] = None):
+    """research/binance_data/build.py as a module, pointed at ``out`` (its paths are read at import).
+    ``env`` overrides those settings (labmonthly: another range into another folder)."""
     p = paths(out)
-    os.environ["BINANCE_DIR"] = p["work"]
-    os.environ["BINANCE_SIGNALS"] = p["main"]
-    os.environ["BINANCE_REPORTS"] = p["reports"]
+    want = {"BINANCE_DIR": p["work"], "BINANCE_SIGNALS": p["main"], "BINANCE_REPORTS": p["reports"], **(env or {})}
+    for k in BUILD_ENV:
+        if want.get(k):
+            os.environ[k] = want[k]
+        else:
+            os.environ.pop(k, None)        # a previous call's range never leaks into this one
     name = "paperbot_lab_binance_build"
     spec = importlib.util.spec_from_file_location(name, BUILD_PY)
     mod = importlib.util.module_from_spec(spec)

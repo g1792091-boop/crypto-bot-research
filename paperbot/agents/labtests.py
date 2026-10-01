@@ -295,13 +295,14 @@ class LabData:
     BAR_KEYS = ("ts", "o", "h", "l", "c", "atr")
 
     def __init__(self, main_dir: Optional[str] = None, pre2021_dir: Optional[str] = None,
-                 max_cached: int = 12):
+                 max_cached: int = 12, extra: Optional[dict] = None):
         self.main_dir = main_dir or os.environ.get("LAB_DATA_DIR") or None
         if pre2021_dir is None:
             pre2021_dir = os.environ.get("LAB_PRE2021_DIR") or None
             if pre2021_dir is None and self.main_dir and os.path.isdir(os.path.join(self.main_dir, "pre2021")):
                 pre2021_dir = os.path.join(self.main_dir, "pre2021")
         self.pre2021_dir = pre2021_dir
+        self.extra = dict(extra or {})     # more caches by source name (labmonthly: "recent", period 4)
         self.max_cached = max_cached
         self._bars: "OrderedDict[tuple, dict]" = OrderedDict()
         self._sig: dict = {}
@@ -316,6 +317,8 @@ class LabData:
         return d if d.available() else None
 
     def dir_of(self, source: str) -> Optional[str]:
+        if source in self.extra:
+            return self.extra[source]
         return self.main_dir if source == "main" else self.pre2021_dir
 
     def path(self, source: str, tf: str, coin: str) -> Optional[str]:
@@ -571,14 +574,14 @@ def _source_range(L, ts: np.ndarray, tf: str, periods: list[tuple]) -> tuple[int
     return lo, n_end
 
 
-def _collect(spec: dict, data: LabData, tf: str, variant: Optional[dict]) -> dict:
+def _collect(spec: dict, data: LabData, tf: str, variant: Optional[dict], periods: tuple = PERIODS) -> dict:
     """Per period: concatenated baseline (and variant) trades over the coins."""
     L = sweepsig.lib()
     strat = spec["strategy"]
     acc = {pid: {"b": [], "v": [], "coins": [], "skipped": 0, "start": s, "end": e, "source": src}
-           for pid, s, e, src in PERIODS}
-    for source in ("main", "pre2021"):
-        pers = [p for p in PERIODS if p[3] == source]
+           for pid, s, e, src in periods}
+    for source in dict.fromkeys(p[3] for p in periods):
+        pers = [p for p in periods if p[3] == source]
         for coin in data.coins(source, tf):
             b = data.bars(source, tf, coin)
             if data.signal(source, tf, coin, strat) is None:
@@ -627,9 +630,9 @@ def _cat(parts: list) -> tuple:
     return tuple(np.concatenate([p[j] for p in parts]) for j in range(5))
 
 
-def _period_table(spec: dict, acc: dict, with_variant: bool) -> dict:
+def _period_table(spec: dict, acc: dict, with_variant: bool, periods: tuple = PERIODS) -> dict:
     out = {}
-    for pid, s, e, src in PERIODS:
+    for pid, s, e, src in periods:
         a = acc[pid]
         row = {"start": s, "end": e, "cache": src, "available": bool(a["coins"]), "coins": a["coins"]}
         if not a["coins"]:

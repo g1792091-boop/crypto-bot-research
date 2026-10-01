@@ -1544,6 +1544,7 @@ def _strategy_base(rnd: _Round) -> dict:
     from . import packets3
     board = _board(ctx)
     spec = packets3.specialist_packet(board, s, ctx.cards_path or packets3.CARDS)
+    spec["recent_period"] = recent_period(ctx.lab, s)
     if board.get("error"):
         spec["error"] = board["error"]
     return {"room": {"room_id": room, "kind": "strategy", "strategy": s, "title": rnd.title},
@@ -2066,6 +2067,54 @@ def gate_now(conn: sqlite3.Connection, p: dict, now_ms: int) -> tuple[dict, int]
 GATE_NOW = "proposals:gate_now"      # {proposal id: {"pass", "n_trials"}} of open proposals, for the dashboard
 
 
+RECHECK_CURSOR = "recheck_through"
+
+
+def _lab_dir(lab: Any) -> Optional[str]:
+    return getattr(lab, "main_dir", None) if lab is not None else None
+
+
+def post_recheck(conn: sqlite3.Connection, lab: Any, now_ms: int) -> Optional[str]:
+    """When the monthly re-check (labmonthly.py) has a new month, say so: a summary in the lead room
+    and, for each re-checked passed test, a line in its strategy room. Once per month (cursor)."""
+    from . import labmonthly as LM
+    rep = LM.read(_lab_dir(lab))
+    if not rep or R.get_cursor(conn, RECHECK_CURSOR) == rep.get("through"):
+        return None
+    cells = [r for rows in rep.get("strategies", {}).values() for r in rows if r.get("trades")]
+    better = sum(1 for r in cells if r.get("five_year_mean_roe") is not None and r["mean_roe"] > r["five_year_mean_roe"])
+    trials = [t for t in rep.get("trials", []) if t.get("available")]
+    held = sum(1 for t in trials if t.get("still_better"))
+    start, end = rep.get("period", ["", ""])
+    R.post(conn, R.team_room_id("lead"), None, None, "code", None, "system",
+           f"📅 매달 재검사 ({start} ~ {end} 전날, 5년 자료 뒤의 새 기간): 거래가 있는 매매법·봉 {len(cells)}칸 중 "
+           f"거래당 평균 ROE가 5년 평균보다 높은 칸 {better}개. 관문을 통과했던 시험 {len(trials)}건 중 새 기간에서도 "
+           f"바꾼 규칙이 나은 시험 {held}건. 설명용이며 관문 판정은 바뀌지 않습니다(코드 계산).",
+           {"action": "recheck", "through": rep.get("through"), "cells": len(cells), "better": better,
+            "trials": len(trials), "held": held}, ts=now_ms)
+    for t in trials:
+        d = t.get("diff")
+        R.post(conn, t["room_id"], None, None, "code", None, "system",
+               f"📅 시험 #{t['trial_id']}({t.get('description_ko', '')}) 새 기간 재검사: 바꾼 규칙이 지금 규칙보다 "
+               f"{'나음' if t.get('still_better') else '못함'} (거래당 ROE 차이 {'없음' if d is None else f'{d * 100:+.2f}%p'}, p {t.get('p')}, "
+               f"거래 {(t.get('baseline') or {}).get('trades')}건). 설명용, 관문 판정은 그대로입니다.",
+               {"action": "recheck", "trial_id": t["trial_id"], "diff": d, "p": t.get("p")}, ts=now_ms)
+    R.set_cursor(conn, RECHECK_CURSOR, rep.get("through"))
+    return rep.get("through")
+
+
+def recent_period(lab: Any, strategy: str) -> Optional[dict]:
+    """The monthly re-check's rows for one strategy (specialist packet), if any."""
+    from . import labmonthly as LM
+    rep = LM.read(_lab_dir(lab))
+    if not rep:
+        return None
+    return {"period": rep.get("period"), "through": rep.get("through"),
+            "by_tf": rep.get("strategies", {}).get(strategy),
+            "passed_tests": [t for t in rep.get("trials", []) if t.get("strategy") == strategy],
+            "note": "5년 자료 뒤의 새 기간(매달 늘어남). 설명용, 관문 판정은 그대로"}
+
+
 def grade_hypotheses(conn: sqlite3.Connection, paper_ro: Optional[sqlite3.Connection], now_ms: int) -> list[dict]:
     """Grade the hypotheses whose predicted trades are in (scorecard.py) and say so in their rooms.
     Never stops the pass: an error is printed and grading waits for the next tick."""
@@ -2351,6 +2400,10 @@ def tick(paper_db: Optional[str], daily_db: Optional[str], agents_db: str, inbox
                                         inbox_missing=not inbox_db or not os.path.exists(inbox_db))
             store_gate_now(conn, now)
             graded = grade_hypotheses(conn, paper_ro, now)
+            try:
+                post_recheck(conn, lab, now)
+            except Exception as exc:  # noqa: BLE001  (a summary only: the meetings go on)
+                print(f"warning: monthly re-check summary failed: {type(exc).__name__}: {exc}", file=sys.stderr)
             ctx = RoundContext(agents_conn=conn, paper_ro=paper_ro, daily_ro=daily_ro, inbox_ro=inbox_ro, runner=runner,
                                lab=lab, now_ms=now, policy=policy, notifier=notifier or NullNotifier(),
                                clock_ms=clock_ms, cards_path=cards_path)

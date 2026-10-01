@@ -1,0 +1,10 @@
+[Unit]
+Description=paperbot monthly re-check, the 5th of each month at 18:30 UTC (03:30 KST on the 6th)
+
+[Timer]
+# the archive publishes a month's files in the first days of the next month
+OnCalendar=*-*-05 18:30:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

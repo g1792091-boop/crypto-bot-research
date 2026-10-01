@@ -1,0 +1,20 @@
+# Monthly re-check on new data ("period 4", paperbot/agents/labmonthly.py): builds the bars and signals
+# after the five-year lab data from Binance's public archive (no key) and writes lab/recent/recheck.json;
+# the agent tick posts the summary. Reads agents3.db only (read-only), writes only under the lab folder.
+[Unit]
+Description=paperbot monthly re-check on new data
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=paperbot
+WorkingDirectory=/opt/crypto-bot-research
+ExecStart=/opt/paperbot/venv/bin/python -m paperbot.agents.labmonthly run --lab /var/lib/paperbot/lab --agents-db /var/lib/paperbot/agents3.db --procs 2
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=3h
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/paperbot/lab
+InaccessiblePaths=-/etc/paperbot

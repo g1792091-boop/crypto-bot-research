@@ -97,7 +97,7 @@ done
 echo "== systemd units (installed, not started)"
 for u in paperbot-live3.service paperbot-dash.service paperbot-daily3.service paperbot-daily3.timer \
          paperbot-backup.service paperbot-backup.timer paperbot-agents.service paperbot-agents.timer \
-         paperbot-liq.service; do
+         paperbot-liq.service paperbot-labmonthly.service paperbot-labmonthly.timer; do
   install -m 644 "$APP/deploy/$u" /etc/systemd/system/$u
 done
 systemctl daemon-reload
@@ -115,5 +115,5 @@ Done. Next (docs/server-setup-v3.md):
   4. sudo systemctl enable --now paperbot-live3 paperbot-dash paperbot-liq paperbot-daily3.timer paperbot-backup.timer
   5. agent rooms (optional, docs/agent-rooms.md): install Claude Code for the paperbot user, fill
      /etc/paperbot/agents.env, try one pass with --dry-run, then
-     sudo systemctl enable --now paperbot-agents.timer
+     sudo systemctl enable --now paperbot-agents.timer paperbot-labmonthly.timer
 NEXT
