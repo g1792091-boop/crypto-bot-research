@@ -598,11 +598,12 @@ def test_fills_not_yet_complete_right_after_the_close_are_read_again(w):
     w.fake.route = route
     w.fake.set_price(BTC, 110.0)
     w.src.intent = None
-    w.loop()
-    assert w.store.conn.execute("SELECT pnl_source FROM trades").fetchone()[0] == "wallet"
+    w.loop()                                                   # the half record is not kept; read again later
+    assert any("체결 수량이 맞지 않음" in e[2] for e in w.events("cost_note"))
     w.loop()
     pnl, src = w.store.conn.execute("SELECT pnl, pnl_source FROM trades").fetchone()
-    assert src == "fills" and pnl > 45 and w.ex.risk.consecutive_losses == 0
+    assert src == "fills" and pnl == pytest.approx(w.fake.wallet - 10_000.0) and pnl > 45
+    assert w.ex.risk.consecutive_losses == 0
 
 
 def test_a_trade_held_more_than_seven_days_is_measured_from_its_fills(w):
@@ -677,6 +678,7 @@ def test_a_database_that_cannot_be_written_does_not_silence_the_kill_switch(w, t
     w.store.conn = Full(w.store.conn)
     (tmp_path / "STOP").write_text("")
     n = len(w.note.messages)
+    w.ex.start = lambda: None                                  # the executor is running already
     w.ex.run(max_loops=2)
     new = w.note.messages[n:]
     assert w.fake.pos[BTC] == 0 and any(lvl == CRITICAL for lvl, _ in new)
