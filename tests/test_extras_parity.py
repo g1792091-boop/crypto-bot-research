@@ -152,7 +152,7 @@ def test_newlab_rows_only_at_live_boundaries_and_filled(results):
             aid = json.loads(data)["newlab"]["account_id"]
             assert aid == f"{strat}@{tf}" and bc > created[aid]
             assert delay <= 120_000 + H.NEWLAB_COST + 60_000, (name, bc, delay)    # computed only at live boundaries
-            if status == "SUBMITTED":
+            if status == "SUBMITTED" and bc < H.T0 + H.HOURS * H.HOUR:     # (the feed's last boundary has no next step)
                 got = c.execute("SELECT COUNT(*) FROM outcomes WHERE account_id = ? AND step_ts = ? AND symbol = ?",
                                 (aid, bc, sym)).fetchone()[0]
                 assert got >= 1, (name, aid, bc)

@@ -45,6 +45,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import hmac
+import http.client
 import json
 import math
 import os
@@ -85,6 +86,12 @@ class TransientError(TestnetError):
     client id before sending it again."""
 
 
+class UnknownOutcome(TransientError):
+    """An order was sent, its answer was lost, and the look-up by client id could not tell whether it is on
+    the exchange. Opening orders are then never sent again (a second fill would double the position): the
+    executor's reconcile settles it from the position."""
+
+
 class RateLimited(TestnetError):
     """429 (slow down) or 418 (IP banned for a while). ``retry_after`` in seconds."""
 
@@ -97,10 +104,26 @@ class ProtectionError(Exception):
     """A protective stop could not be confirmed live."""
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Never follow a redirect. The host allowlist is checked on the base address only, and urllib would carry
+    the X-MBX-APIKEY header and the signed query to whatever host (or plain http) a 3xx names. A 3xx is
+    answered as an error instead (TestnetError with that status)."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def _build_opener(*extra) -> urllib.request.OpenerDirector:
+    return urllib.request.build_opener(_NoRedirect, *extra)
+
+
+_OPENER = _build_opener()
+
+
 def urllib_send(method: str, url: str, headers: dict, body: Optional[bytes]) -> tuple[int, bytes, dict]:
     req = urllib.request.Request(url, data=body, headers=headers, method=method)
     try:
-        with urllib.request.urlopen(req, timeout=10) as r:
+        with _OPENER.open(req, timeout=10) as r:
             return r.status, r.read(), dict(r.headers.items())
     except urllib.error.HTTPError as e:
         return e.code, e.read(), dict(e.headers.items()) if e.headers else {}
@@ -210,16 +233,20 @@ class TestnetClient:
             else:
                 headers["Content-Type"] = "application/x-www-form-urlencoded"
                 res = self.send(method, f"{self.base}{path}", headers, q.encode())
-        except OSError as e:          # timeouts, refused connections, DNS, TLS: outcome unknown
+        except (OSError, http.client.HTTPException) as e:
+            # timeouts, refused connections, DNS, TLS, and a connection cut in the middle of the answer
+            # (IncompleteRead, BadStatusLine: not OSError): the outcome is unknown
             err = TransientError(0, None, f"network: {type(e).__name__}: {e}")
             self._audit(audit, err=err)
             raise err from e
         status, body = res[0], res[1]
         self._note(res[2] if len(res) > 2 else {})
+        parsed = True
         try:
-            data = json.loads(body or b"null")
+            data = json.loads(body) if body else None
+            parsed = bool(body)
         except ValueError:
-            data = None
+            data, parsed = None, False
         code = data.get("code") if isinstance(data, dict) else None
         msg = data.get("msg") if isinstance(data, dict) else str((body or b"")[:200])
         if isinstance(code, str) and code.lstrip("-").isdigit():
@@ -232,8 +259,11 @@ class TestnetClient:
             except ValueError:
                 after = 0.0
             err = RateLimited(status, code, msg or "rate limited", after)
-        elif status >= 500 or status == 0 or code in _TRANSIENT_CODES:
+        elif status >= 500 or status in (0, 408) or code in _TRANSIENT_CODES:
             err = TransientError(status, code, msg or "server error")
+        elif status == 200 and not parsed:
+            # a 200 whose body is empty or not JSON (a proxy or maintenance page): nothing was confirmed
+            err = TransientError(status, None, f"응답이 JSON이 아닙니다: {msg}"[:200])
         elif status != 200:
             err = TestnetError(status, code, msg)
         self._audit(audit, status=status, data=data, err=err)
@@ -384,7 +414,16 @@ def place_stop(c, symbol: str, close_side: str, trigger: float, qty: Optional[fl
     refused, ProtectionError when it was accepted but is not live."""
     o = c.stop_close(symbol, close_side, trigger, qty=qty, client_id=client_id)
     algo_id = o.get("algoId")
-    got = c.algo_order(algo_id=algo_id) if algo_id is not None else c.algo_order(client_id=client_id)
+    try:
+        got = c.algo_order(algo_id=algo_id) if algo_id is not None else c.algo_order(client_id=client_id)
+    except TestnetError as e:
+        # the algo service answered the POST but cannot find the order a moment later (read-after-write lag):
+        # look in the open list, else trust the POST answer; the reconcile reads the open list every loop
+        if e.code not in NOT_FOUND:
+            raise
+        got = next((x for x in c.open_algo_orders(symbol)
+                    if (algo_id is not None and x.get("algoId") == algo_id)
+                    or (algo_id is None and client_id and x.get("clientAlgoId") == client_id)), None) or o
     status = got.get("algoStatus")
     if status in FIRED_ALGO:
         return {**got, "fired": True}
@@ -417,28 +456,52 @@ def move_stop(c, symbol: str, close_side: str, trigger: float, qty: Optional[flo
               client_id: Optional[str] = None, close_id: Optional[str] = None) -> dict:
     """Move a protective stop without a gap: new stop -> confirmed live -> cancel the old ones.
 
-    result "moved":     the new stop rests, the old ones are cancelled
+    result "moved":     the new stop rests, the old ones are cancelled (``left``: old ones whose cancel failed;
+                        the position is protected by the new stop, the next reconcile cancels the rest)
     result "closed":    the exchange refused the new stop with -2021 (price already past it), so the
-                        position was closed with a reduce-only market order and the old stops cancelled
+                        position was closed with a reduce-only market order and, once that close filled the
+                        whole position, the old stops cancelled (``flat``). A close that filled only part keeps
+                        the old stops: they are reduce-only and still cover the rest.
     result "triggered": the new stop fired at once; the old ones are left for the next reconcile
-    Any other refusal raises, and the old stop is still in place (still protected)."""
+    Any other refusal of the new stop raises, and the old stop is still in place (still protected)."""
     try:
         new = place_stop(c, symbol, close_side, trigger, qty, client_id)
     except TestnetError as e:
         if e.code != WOULD_TRIGGER:
             raise
-        x = close_market(c, symbol, client_id=close_id)
-        cancelled = cancel_stops(c, symbol, old_ids)
-        return {"result": "closed", "close": x, "cancelled": cancelled, "error": e.msg}
+        amt = float(c.position(symbol)["positionAmt"])
+        x = None if amt == 0 else c.market(symbol, "SELL" if amt > 0 else "BUY", abs(amt), reduce_only=True,
+                                           client_id=close_id)
+        flat = amt == 0 or float((x or {}).get("executedQty") or 0) >= abs(amt) - 1e-12
+        cancelled = cancel_stops(c, symbol, old_ids) if flat else []
+        return {"result": "closed", "close": x, "cancelled": cancelled, "error": e.msg, "flat": flat}
     if new.get("fired"):
         return {"result": "triggered", "stop": new, "cancelled": []}
-    cancelled = cancel_stops(c, symbol, [a for a in old_ids if a != new.get("algoId")])
-    return {"result": "moved", "stop": new, "cancelled": cancelled}
+    cancelled, left = [], []
+    for a in [a for a in old_ids if a != new.get("algoId")]:
+        try:                                   # the new stop is live: a failed cancel must not undo the move
+            cancelled += cancel_stops(c, symbol, [a])
+        except TestnetError:
+            left.append(a)
+    return {"result": "moved", "stop": new, "cancelled": cancelled, "left": left}
 
 
 def cancel_everything(c, symbol: str) -> None:
     c.cancel_all_algo(symbol)
     c.cancel_all(symbol)
+
+
+def hide_process_memory() -> bool:
+    """prctl(PR_SET_DUMPABLE, 0): from here on, other processes of the same user (the agent rooms, the dashboard,
+    anything else running as paperbot) can no longer read this process's /proc/<pid>/environ (the order keys
+    systemd passed in), its memory or its /proc/<pid>/root. Called first by ``python -m paperbot.executor`` and
+    ``python -m paperbot.testnet``. Linux only; False when it could not be set."""
+    try:
+        import ctypes
+        libc = ctypes.CDLL(None, use_errno=True)
+        return libc.prctl(4, 0, 0, 0, 0) == 0          # 4 = PR_SET_DUMPABLE
+    except (OSError, AttributeError):
+        return False
 
 
 # ---------------------------------------------------------------- drill
@@ -582,4 +645,5 @@ def main(argv: Optional[list[str]] = None) -> int:
 
 
 if __name__ == "__main__":
+    hide_process_memory()
     sys.exit(main())
