@@ -1,0 +1,21 @@
+{
+  "_comment": "Extra paper accounts (docs/extra-accounts.md). Optional: without /etc/paperbot/extras.json the live runner uses these defaults. Copy to /etc/paperbot/extras.json only to change something; the runner re-reads it at each live 5-minute boundary (no restart needed, except for accept_code). Keys starting with _ are ignored.",
+  "_agents_db": "agents3.db (read-only). Default: next to paper3.db. Setting only one of agents_db / inbox_db turns new-account activation off (with a warning); running extras keep running.",
+  "agents_db": "/var/lib/paperbot/agents3.db",
+  "_inbox_db": "inbox.db (read-only): the owners' approve / reject clicks. Default: next to paper3.db.",
+  "inbox_db": "/var/lib/paperbot/inbox.db",
+  "_observe_days": "No account is created (and no proposal counts) before run start + this many days. Never lower than 21 (the file cannot lower it).",
+  "observe_days": 21,
+  "_observe_until": "Optional KST date (YYYY-MM-DD, inclusive) that extends the observation period.",
+  "observe_until": null,
+  "_owner_ok_days": "Copy proposals decided before run start + this many days need the owners' click. Never lower than 60. New-strategy accounts always need it.",
+  "owner_ok_days": 60,
+  "_budget_s": "Wall-time budget (seconds) of the new-strategy signal computation at a live boundary; jobs past it are skipped and reported.",
+  "budget_s": 20,
+  "_pause_activation": "true: create no new account (set it before restoring agents3.db or inbox.db, back to false after).",
+  "pause_activation": false,
+  "_agents_ack": "After an agents3.db restore the runner refuses activation until this holds the fingerprint string shown in the CRITICAL alert / the dashboard / 'python -m paperbot.extras status'.",
+  "agents_ack": null,
+  "_accept_code": "Account id -> the new code pin shown in the alert, when the owners accept changed signal code for a suspended new-strategy account (a Q5 event for that account). Applied at the next restart.",
+  "accept_code": {}
+}

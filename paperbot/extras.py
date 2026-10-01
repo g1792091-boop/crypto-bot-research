@@ -1526,6 +1526,11 @@ class Activator:
                     return None
                 self._refuse(refused, p, "id_conflict", f"account {e.aid} has another trial", boundary)
                 return None
+        # the same, from the record written with the creation (an account whose data cannot be read any more)
+        rec = x.state["created"].get(str(p["id"]))
+        if isinstance(rec, dict) and (rec.get("source") or {}).get("proposal_ts") == p["ts"] \
+                and rec.get("account_id") in x.book.engines:
+            return None
         try:
             parsed = self._checks(boundary, p, t, kind, snap, conn, inbox, cfg, run_start, floor)
         except Refusal as r:

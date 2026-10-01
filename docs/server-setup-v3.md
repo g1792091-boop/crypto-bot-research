@@ -705,6 +705,7 @@ sudo journalctl -u <그 이름> -n 50 --no-pager
 | 체결 비용 기록 | 모의 거래가 진입·청산할 때마다 그 코인의 호가창(양쪽 100칸)을 받아, 같은 크기의 시장가 주문이 실제로 얼마에 체결됐을지 `paper3.db`의 `fill_costs`에 적습니다(`paperbot/fillcost.py`). 모의 체결 자체는 바꾸지 않습니다(엔진은 늘 0.02%로 계산). 매일 점검 보고서의 `fill_costs`에 코인별 중간값·상위 10%·0.02%를 넘은 횟수가 나옵니다 |
 | 청산 기록 | `paperbot-liq`가 바이낸스 강제청산 흐름을 `liq.db`에 모읍니다(공개 자료, 키 필요 없음). 바이낸스는 청산의 과거 자료를 주지 않아서 첫날부터 켜 둡니다. 확인: `cd /opt/crypto-bot-research && sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.liqstream status --db /var/lib/paperbot/liq.db` |
 | 계좌 요약 | `cd /opt/crypto-bot-research && sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.live3 status --db /var/lib/paperbot/paper3.db` |
+| 추가 계좌 (복제·새 매매법) | `cd /opt/crypto-bot-research && sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.extras status --db /var/lib/paperbot/paper3.db`. 설정은 `/etc/paperbot/extras.json`(없어도 됨, 예시 `deploy/extras.example.json`). 아래 "추가 계좌"와 `docs/extra-accounts.md` |
 | 에이전트 | 15분마다 자동. 기록: `sudo journalctl -u paperbot-agents -n 50 --no-pager`. 끄기: `sudo systemctl disable --now paperbot-agents.timer`(방과 기록은 남음). 설정: `docs/agent-rooms.md` "설정 바꾸기" |
 | 매달 재검사 | 매달 6일 03:30(한국 시간). 5년 자료 뒤의 새 기간으로 다시 계산해 총괄 방에 요약 |
 | 백업 | 매일 08:40(한국 시간) `/var/backups/paperbot/날짜/`, 14일 보관. 서버 밖 사본은 매일 09:15 텔레그램 'paperbot 백업' 방(`docs/offsite-backup.md`, Vultr 자동 백업은 쓰지 않음) |
@@ -723,6 +724,21 @@ sudo journalctl -u <그 이름> -n 50 --no-pager
 - **동전 봇 엔진:** paper 엔진과 같은 규칙을 2,000 × 계좌 수만큼 한꺼번에 계산하는 벡터 버전입니다. 테스트가 같은 신호를 진짜 `PaperEngine`에 넣어 거래 하나하나(손절·잠금·강제청산·펀딩·파산) 같은 결과인지 확인합니다. 시간: 30일 창에서 한 봉의 36계좌 × 2,000개가 약 2~3분, 첫 판정(4개 봉 전부)이 약 10분(코어 1개, 낮은 우선순위). 그래서 계좌끼리 동전 봇을 나눠 쓰지 않고 계좌마다 따로 2,000개를 돌립니다.
 - **결과 보기:** 대시보드 순위표의 "체크포인트 판정", 텔레그램 무음 요약, 서버에서 `cd /opt/crypto-bot-research && sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.checkpoint show --out /var/lib/paperbot/checkpoint.db`. 에이전트는 `paperbot.checkpoint.latest_verdict` / `account_status` / `statuses`로 읽습니다.
 - **주의:** 기간 중에 체결·청산·사이즈 코드가 바뀐 재시작이 있으면 판정 결과에 "주의"로 표시합니다. Q5(그 계좌의 기간을 배포일부터 다시 셈)는 아직 코드가 자동으로 적용하지 않으므로 규칙 관리자가 확인합니다.
+
+## 추가 계좌 (복제 계좌·새 매매법 계좌, `paperbot/extras.py`)
+두 분이 승인한 제안으로 live 봇이 원래 195개 옆에 새 paper 계좌를 만듭니다. 원래 195개는 바뀌지 않습니다. 자세한 것은
+`docs/extra-accounts.md`.
+
+- **설정할 것 없음:** 기본값(관찰 21일, 처음 60일 두 분 승인, `paper3.db` 옆의 `agents3.db`·`inbox.db`를 읽기만 함)으로 돕니다.
+  바꿀 때만 `deploy/extras.example.json`을 `/etc/paperbot/extras.json`로 복사해 고칩니다(봇이 5분마다 다시 읽음).
+  `paperbot-live3.service`와 실행 명령은 그대로입니다.
+- **한 대만:** 봇은 켜질 때 `paper3.db.lock`을 잡습니다. 두 번째 live 봇은 "another live runner already holds"로 바로 끝납니다.
+- **보기:** 운영 표의 "추가 계좌" 명령, 대시보드 순위표의 "복제"/"새" 표시.
+- **에이전트 장부(agents3.db)·inbox.db 복원:** live 봇을 멈추지 않고 `extras.json`에 `"pause_activation": true` → 복원 →
+  `agents_db: regressed`가 보이면 알림의 값을 `"agents_ack"`에 → `pause_activation` false (`docs/extra-accounts.md` 6장).
+- **알림:** 새 계좌 시작은 텔레그램 무음, 추가 계좌의 낙폭·파산은 "추가 계좌 알림 모음"(한 시간에 한 번, 무음), 멈춤·정지는
+  CRITICAL로 바로 옵니다.
+- **판정:** 추가 계좌는 자기가 시작된 날부터 30일을 세고, 동전 봇도 자기 묶음으로 따로 돌려 원래 계좌들의 판정은 그대로입니다.
 
 ## 실거래 준비 (이 문서 범위 밖)
 테스트넷 주문 연습과 실거래는 `docs/live-safety.md` 3장을 따릅니다. 주문 키는 `live.env`가 아니라 root만 읽을 수 있는 `/etc/paperbot/executor.env`에 넣고, 주문 실행기(`paperbot-executor`)는 그 문서의 순서대로 사람이 직접 켭니다. paper 봇의 읽기 전용 키를 주문 키로 쓰지 않습니다.
