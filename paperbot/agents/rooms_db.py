@@ -45,7 +45,13 @@ from .roster3 import ROLES, SPECIALISTS, STRATEGY_KO, TEAMS
 MESSAGE_KINDS = ("trigger", "analysis", "challenge", "expert", "revision", "code_result", "verdict",
                  "decision", "action", "owner", "summary", "system")
 ROUND_STATUSES = ("running", "done", "stopped_budget", "failed", "no_action")
-TRIAL_KINDS = ("hypothesis", "test", "copy_proposal")
+# 'newlab': one counted test of the new-strategy lab (newlab.py; team:lab, docs/newlab-prereg.md). Its count over
+# every room is the lab's Bonferroni n. (A new kind changes the CHECK constraint: new databases only.)
+TRIAL_KINDS = ("hypothesis", "test", "copy_proposal", "newlab")
+# latest result statuses of a 'newlab' trial that passed the gate when it was tested: 'passed' (not proposed
+# yet, e.g. during the observation period), 'proposed' (posted to the owners), 'lapsed' (by the time it could
+# be proposed, the larger number of tests made it fail the gate)
+NEWLAB_PASSED = ("passed", "proposed", "lapsed")
 PROPOSAL_STATUSES = ("blocked_gate", "blocked_cap", "awaiting_owner", "approved", "rejected")
 ACTIVE_PROPOSAL_STATUSES = ("awaiting_owner", "approved")   # count against the copy cap
 APPROVAL_DECISIONS = ("approve", "reject")
@@ -72,6 +78,13 @@ TEAM_ROOM_MEMBERS = {
     "review": ("pnl_reviewer", "whatif", "risk_officer", "team_lead"),
     "lead": ("team_lead", "league_referee", "rule_keeper"),
 }
+
+# The new-strategy lab (rooms.py ``_lab_round``): the strategy researcher invents specs in the lab grammar,
+# the devil's advocate drops near-duplicates and data-mining, code runs the tests, the lead sums up.
+# Not in TEAM_ROOMS (those are the roster's five teams).
+LAB_ROOM = "team:lab"
+LAB_TITLE = "새 매매법 연구실"
+LAB_ROOM_MEMBERS = ("researcher", "devils_advocate", "team_lead")
 
 ROLE_NAMES = {r[0]: r[1] for r in ROLES + SPECIALISTS}
 ROLE_NAMES.update({"code": "코드(자동 계산)", "owner": "두 분", "system": "시스템"})
@@ -403,7 +416,7 @@ def open_ro(path: Optional[str]) -> Optional[sqlite3.Connection]:
 
 # ---------------------------------------------------------------- rooms
 def room_specs() -> list[dict]:
-    """The 41 rooms: 5 team rooms, then one room per strategy (roster order)."""
+    """The 42 rooms: 5 team rooms, the new-strategy lab, then one room per strategy (roster order)."""
     team_names = dict(TEAMS)
     out = []
     for t in TEAM_ROOMS:
@@ -412,6 +425,8 @@ def room_specs() -> list[dict]:
         title = name.split(" ", 1)[1] if " " in name else name
         out.append({"room_id": team_room_id(t), "kind": "team", "strategy": None, "title": title,
                     "members": members})
+    out.append({"room_id": LAB_ROOM, "kind": "team", "strategy": None, "title": LAB_TITLE,
+                "members": list(LAB_ROOM_MEMBERS)})
     for s, ko in STRATEGY_KO.items():
         out.append({"room_id": strategy_room_id(s), "kind": "strategy", "strategy": s, "title": ko,
                     "members": [f"spec_{s}", *STRATEGY_ROOM_ROLES]})
@@ -670,6 +685,27 @@ def add_trial_result(conn: sqlite3.Connection, trial_id: int, status: str, resul
     return int(cur.lastrowid)
 
 
+def add_trial_with_result(conn: sqlite3.Connection, room_id: str, strategy: Optional[str], kind: str, spec: Any,
+                          status: str, result: Any, round_id: Optional[int] = None, *, ts: Optional[int] = None) -> int:
+    """A trial and its first result in ONE transaction (a pass killed in between never leaves a counted trial
+    without its result). Returns the trial id."""
+    if kind not in TRIAL_KINDS:
+        raise ValueError(f"unknown trial kind: {kind!r}")
+    ts = _now_ms() if ts is None else ts
+    try:
+        cur = conn.execute("INSERT INTO trials (ts, room_id, strategy, kind, spec, spec_hash, round_id) "
+                           "VALUES (?,?,?,?,?,?,?)",
+                           (ts, room_id, strategy, kind, _dumps(spec), spec_hash(spec), round_id))
+        tid = int(cur.lastrowid)
+        conn.execute("INSERT INTO trial_results (trial_id, ts, status, result) VALUES (?,?,?,?)",
+                     (tid, ts, str(status), _dumps(result)))
+        conn.commit()
+    except BaseException:
+        conn.rollback()
+        raise
+    return tid
+
+
 def _trial_rows(conn: sqlite3.Connection, where: str, args: tuple, limit: int) -> list[dict]:
     rows = _dicts(conn.execute(
         "SELECT t.id, t.ts, t.room_id, t.strategy, t.kind, t.spec, t.spec_hash, t.round_id, "
@@ -727,8 +763,19 @@ def trial_count(conn: Optional[sqlite3.Connection], room_id: Optional[str] = Non
     return _safe(conn, lambda: int(conn.execute(sql, args).fetchone()[0]), 0)
 
 
+def newlab_passed_count(conn_ro: Optional[sqlite3.Connection], strategy: Optional[str] = None) -> int:
+    """'newlab' trials whose test passed the gate when it ran (latest result in ``NEWLAB_PASSED``)."""
+    sql = ("SELECT COUNT(*) FROM trials t JOIN trial_results r ON r.id = (SELECT MAX(id) FROM trial_results "
+           f"WHERE trial_id = t.id) WHERE t.kind = 'newlab' AND r.status IN {_in(NEWLAB_PASSED)}")
+    args: tuple = ()
+    if strategy is not None:
+        sql, args = sql + " AND t.strategy = ?", (strategy,)
+    return _safe(conn_ro, lambda: int(conn_ro.execute(sql, args).fetchone()[0]), 0)
+
+
 def trial_counts(conn_ro: Optional[sqlite3.Connection], strategy: Optional[str] = None) -> dict:
-    """{'hypothesis': n, 'test': n, 'copy_proposal': n, 'total': n} for the hypothesis-ledger badge."""
+    """{'hypothesis': n, 'test': n, 'copy_proposal': n, 'newlab': n, 'total': n, 'newlab_passed': n} for the
+    hypothesis-ledger badge ('newlab_passed' is not part of 'total': those rows are counted under 'newlab')."""
     def q():
         sql, args = "SELECT kind, COUNT(*) FROM trials", ()
         if strategy is not None:
@@ -736,8 +783,9 @@ def trial_counts(conn_ro: Optional[sqlite3.Connection], strategy: Optional[str] 
         got = dict(conn_ro.execute(sql + " GROUP BY kind", args).fetchall())
         out = {k: int(got.get(k, 0)) for k in TRIAL_KINDS}
         out["total"] = sum(out.values())
+        out["newlab_passed"] = newlab_passed_count(conn_ro, strategy) if out["newlab"] else 0
         return out
-    return _safe(conn_ro, q, {**{k: 0 for k in TRIAL_KINDS}, "total": 0})
+    return _safe(conn_ro, q, {**{k: 0 for k in TRIAL_KINDS}, "total": 0, "newlab_passed": 0})
 
 
 def find_trial(conn: Optional[sqlite3.Connection], strategy: Optional[str], spec: Any,

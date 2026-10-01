@@ -27,8 +27,14 @@ Triggers (defaults in ``TriggerPolicy``; every number is configurable):
                                    >= 30 closed trades since its last weekly review; a review
                                    the budget deferred or stopped stays due on the next days
                                    until it has run (same slot key).
+    research      5  team:lab      the new-strategy lab, every ``research_every_ms`` (one slot per
+                                   period of the KST day; a slot that could not start is skipped,
+                                   not caught up). 0 = off (the default here; the rooms server's
+                                   policy turns it on, rooms.policy_from_env). Its own budget class,
+                                   paced over the day, so it only uses spare calls; exempt from the
+                                   room's daily cap (the budget bounds it).
 
-Limits: at most 3 rounds per room per KST day (incidents exempt; one of the 3 is kept
+Limits: at most 3 rounds per room per KST day (incidents and research exempt; one of the 3 is kept
 for the owners' posts until they have used one that day), one round per room per tick,
 at most 4 rounds per tick. Output order: (priority, bust before loss_cluster, oldest
 evidence).
@@ -85,20 +91,21 @@ KST_OFFSET_MS = 9 * HOUR_MS          # Korea has no daylight saving time
 
 STRATEGIES = tuple(STRATEGY_KO)       # fixed order: the index decides the weekly weekday
 TEAM_ROOMS = ("team:market", "team:risk", "team:ops", "team:review", "team:lead")
+LAB_ROOM = "team:lab"                 # the new-strategy lab (rooms_db.LAB_ROOM)
 
-TRIGGERS = ("incident", "owner", "loss_cluster", "bust", "checkpoint", "morning", "evening", "weekly")
+TRIGGERS = ("incident", "owner", "loss_cluster", "bust", "checkpoint", "morning", "evening", "weekly", "research")
 PRIORITY = {"incident": 0, "owner": 1, "loss_cluster": 2, "bust": 2, "checkpoint": 3, "morning": 3,
-            "evening": 3, "weekly": 4}
+            "evening": 3, "weekly": 4, "research": 5}
 # Sub-budget class of each trigger (the rooms engine keeps one AI budget per class).
 TRIGGER_CLASS = {"incident": "incident", "owner": "owner", "loss_cluster": "loss", "bust": "loss",
                  "checkpoint": "scheduled", "morning": "scheduled", "evening": "scheduled",
-                 "weekly": "weekly"}
+                 "weekly": "weekly", "research": "research"}
 ENDED_OK = ("done", "no_action")      # the only statuses that advance cursors
-CLASSES = ("incident", "owner", "loss", "scheduled", "weekly")
+CLASSES = ("incident", "owner", "loss", "scheduled", "weekly", "research")
 # What a stopped_budget round pauses until the next KST day, by decision.stopped (when the
 # decision has no explicit 'blocks' list). None = only the round's own class.
 STOP_BLOCKS = {"budget_class": None, "budget_total": CLASSES, "budget_week": CLASSES,
-               "budget_reserve": ("owner", "loss", "weekly"),
+               "budget_reserve": ("owner", "loss", "weekly", "research"),
                "budget_subcap": ()}      # a reduced cap (class minus the bust / critical reserve): nothing
 
 # (kind, level, text fragment) for paper3.db alerts; the first match wins, "" matches any text.
@@ -123,7 +130,7 @@ def strat_room(strategy: str) -> str:
 
 
 def all_rooms() -> tuple[str, ...]:
-    return tuple(strat_room(s) for s in STRATEGIES) + TEAM_ROOMS
+    return tuple(strat_room(s) for s in STRATEGIES) + TEAM_ROOMS + (LAB_ROOM,)
 
 
 @dataclass
@@ -141,7 +148,7 @@ class TriggerPolicy:
     priorities: dict = field(default_factory=lambda: dict(PRIORITY))
     # rate limits
     max_rounds_per_room_day: int = 3
-    cap_exempt: tuple = ("incident",)
+    cap_exempt: tuple = ("incident", "research")     # research: bounded by its own paced budget
     owner_reserved_per_room_day: int = 1     # slots of the daily cap only an owner post may use
     max_rounds_per_tick: int = 4
     max_per_room_per_tick: int = 1
@@ -173,6 +180,9 @@ class TriggerPolicy:
     morning_hour_kst: int = 8
     evening_hour_kst: int = 22
     meeting_window_ms: int = 4 * HOUR_MS
+    # new-strategy lab: one meeting slot per this period of the KST day; 0 = off (rooms.policy_from_env
+    # turns it on for the server, RESEARCH_EVERY_MIN_DEFAULT)
+    research_every_ms: int = 0
     max_items: int = 30                      # evidence rows copied into Due.data
 
 
@@ -687,6 +697,24 @@ def _scheduled(st: _Rooms) -> list[Due]:
     return out
 
 
+def _research(st: _Rooms) -> list[Due]:
+    """The lab meets once per ``research_every_ms`` slot of the KST day, at most once per that period.
+    The key is the slot: a slot the budget could not start (pacing, spare calls used up) is simply
+    skipped; no cursor (nothing to catch up). Whether the lab can test at all (cache present, tests left
+    that can still pass) and whether the budget can carry it is decided by the caller (``can_start``)."""
+    every = int(st.p.research_every_ms or 0)
+    if every <= 0:
+        return []
+    idx = (st.now - st.day_start) // every
+    slot = st.day_start + idx * every
+    last = st.last_ok_start(LAB_ROOM, "research")
+    if last is not None and st.now - last < every:
+        return []
+    hm = dt.datetime.fromtimestamp((slot + KST_OFFSET_MS) / 1000, dt.timezone.utc).strftime("%H:%M")
+    return [_due(st, LAB_ROOM, "research", f"research:{kst_date(st.now)}:{idx}", slot, {},
+                 f"새 매매법 연구 ({hm} 차례, 남는 AI 한도로)", slot=int(idx), slot_start=int(slot))]
+
+
 def _due(st: _Rooms, room: str, trigger: str, key: str, evidence_ts: int, cursors: dict, summary_ko: str,
          **extra) -> Due:
     data = {"key": key, "evidence_ts": int(evidence_ts), "cursors": {k: str(v) for k, v in cursors.items()},
@@ -729,6 +757,8 @@ def find_due(paper_ro: Optional[sqlite3.Connection], daily_ro: Optional[sqlite3.
     if "weekly" in p.enabled:
         found += _weekly(paper_ro, st)
     found += _scheduled(st)
+    if "research" in p.enabled:
+        found += _research(st)
 
     ok: list[Due] = []
     for d in found:

@@ -121,7 +121,8 @@ TELEGRAM_LIMIT = 3900
 ROLE_INFO = {r[0]: {"name": r[1], "team": r[2], "model": r[3], "duty": room_duty(r[0])} for r in ROLES + SPECIALISTS}
 TEAM_KO = dict(TEAMS)
 TRIGGER_KO = {"incident": "사고 점검", "owner": "두 분 글", "loss_cluster": "손실 묶음 복기", "bust": "파산 복기",
-              "checkpoint": "30일 단위 점검", "morning": "아침 회의", "evening": "저녁 점검", "weekly": "주간 검토"}
+              "checkpoint": "30일 단위 점검", "morning": "아침 회의", "evening": "저녁 점검", "weekly": "주간 검토",
+              "research": "새 매매법 연구"}
 VERDICT_KO = {"agree": "동의", "disagree": "반대", "needs_test": "시험 필요"}
 
 # Loss-card tags that describe the chart at entry (cards.TAGS) vs. how the trade was held.
@@ -190,8 +191,10 @@ TURN_KIND = {"specialist": "analysis", "revision": "revision", "challenge": "cha
 # Default AI budget per KST day and trigger class (calls, tokens); plus a total over all classes and a
 # rolling 7-day cap. Expected use is about 50-80 calls a day (docs/agent-rooms.md); the caps are a
 # ceiling, and every call counts against the owners' own Claude plan.
+# 'research' (the new-strategy lab, team:lab) is not reserved and is paced over the day, and it also leaves
+# the unused part of the loss/weekly reviews' caps (``lab_review_keep_calls``): it only uses spare calls.
 DEFAULT_BUDGETS = {"incident": (15, 400_000), "owner": (20, 500_000), "loss": (24, 700_000),
-                   "scheduled": (15, 450_000), "weekly": (20, 550_000)}
+                   "scheduled": (15, 450_000), "weekly": (20, 550_000), "research": (24, 700_000)}
 DEFAULT_TOTAL = (80, 2_000_000)
 DEFAULT_WEEK = (420, 10_000_000)
 # The unused part of these classes' caps is kept inside the total: other classes cannot use it, so
@@ -228,7 +231,7 @@ class RoomsPolicy:
     week_budget: tuple = DEFAULT_WEEK       # rolling 7 KST days (calls, tokens), all classes
     bust_reserve_calls: int = 8             # of the loss class: loss_cluster rounds leave these for busts
     critical_reserve_calls: int = 5         # of the incident class: kept for CRITICAL alerts (liquidations)
-    paced_triggers: tuple = ("loss_cluster", "weekly")   # spread over the KST day, not all at 00:00
+    paced_triggers: tuple = ("loss_cluster", "weekly", "research")   # spread over the KST day, not all at 00:00
     # paced (loss_cluster / weekly) calls also leave, inside the total and 7-day caps, the unused part of
     # this many owner-post calls (and of the bust reserve): a busy night of reviews never leaves the
     # owners' posts or a bust waiting for midnight
@@ -247,6 +250,17 @@ class RoomsPolicy:
     # no model call starts once this many seconds of the tick plus the runner's timeout would pass it (the
     # service's TimeoutStartSec is 100 minutes: a pass killed there counts as a failed attempt of its evidence)
     tick_hard_s: float = 95 * 60
+    # new-strategy lab (team:lab, research meetings): the tests are code (no AI tokens) but bounded per
+    # meeting: at most ``lab_max_tests`` specs, no new test once ``lab_tests_wall_s`` seconds of tests ran
+    # in this meeting, and none that could still run (``lab_test_est_s``, a slow 5-minute test) when the
+    # tick's ``tick_wall_s`` is reached
+    lab_max_tests: int = 3
+    lab_tests_wall_s: float = 120.0
+    lab_test_est_s: float = 60.0
+    lab_recent_in_packet: int = 30
+    # a research call also leaves, inside the total and 7-day caps, the unused part of the loss-cluster and
+    # weekly reviews' caps, up to this many calls (tokens pro rata): the lab uses only spare capacity
+    lab_review_keep_calls: int = 10
     copy_cap_per_strategy: int = 1
     copy_cap_total: int = 10
     flag_max_per_day: int = 3
@@ -306,8 +320,8 @@ class SubCapExceeded(BudgetExceeded):
 
 
 class PacedKeepExceeded(SubCapExceeded):
-    """A paced (loss_cluster / weekly) round reached what the total or 7-day cap keeps for the owners'
-    posts and busts (``ClassBudget.paced_keep``). Like a sub-cap it pauses nothing else: owner posts
+    """A paced (loss_cluster / weekly / research) round reached what the total or 7-day cap keeps for the
+    owners' posts and busts (and, for research, the reviews) (``ClassBudget.paced_keep``). Like a sub-cap it pauses nothing else: owner posts
     and busts still use the kept part."""
 
 
@@ -344,7 +358,7 @@ class ClassBudget(BudgetedRunner):
                  total_calls: int, total_tokens: int, clock_ms: Callable[[], int], budgets: Optional[dict] = None,
                  week: Optional[tuple] = None, paced: bool = False, pace_lead_hours: float = 3.0,
                  sub_cap: bool = False, owner_keep_calls: int = 0, bust_keep_calls: int = 0,
-                 call_tokens: int = 0):
+                 call_tokens: int = 0, review_keep_calls: int = 0):
         # BudgetedRunner.__init__ is not called: it opens a second connection and a v2 schema.
         self.runner, self.conn, self.pipeline = runner, conn, cls
         self.sub_cap = sub_cap              # max_calls/max_tokens are a reduced part of the class cap
@@ -356,6 +370,7 @@ class ClassBudget(BudgetedRunner):
         self.paced, self.pace_lead_hours = paced, pace_lead_hours
         self.owner_keep_calls, self.bust_keep_calls = max(0, int(owner_keep_calls)), max(0, int(bust_keep_calls))
         self.call_tokens = max(0, int(call_tokens))    # headroom's floor for one call's tokens
+        self.review_keep_calls = max(0, int(review_keep_calls))   # research only: what it leaves the reviews
 
     def _sum(self, where: str, args: tuple) -> tuple[int, int]:
         r = self.conn.execute(f"SELECT COUNT(*), COALESCE(SUM(tokens), 0) FROM agent_calls WHERE {where}",
@@ -417,7 +432,9 @@ class ClassBudget(BudgetedRunner):
         plain reserve: the unused part of an owner share (``owner_keep_calls`` of the owner cap, its
         tokens pro rata) and of the bust reserve (``bust_keep_calls``, bounded by what the loss class
         has left). Without it the paced reviews use the whole shared allowance of a busy-week day in
-        its first hours, and owner posts and busts wait until midnight. (0, 0) for other classes."""
+        its first hours, and owner posts and busts wait until midnight. A research call (the new-strategy
+        lab) also leaves the unused part of the loss-cluster and weekly caps, up to ``review_keep_calls``
+        (tokens pro rata): the lab only uses spare calls. (0, 0) for other classes."""
         if not self.paced:
             return 0, 0
         kc = kt = 0
@@ -434,6 +451,20 @@ class ClassBudget(BudgetedRunner):
             else:                                   # the bust reserve: what the loss class still has, at most
                 kc += max(0, min(keep, cap_c - c))
                 kt += max(0, min(share_t, cap_t - t))
+        if self.pipeline == "research" and self.review_keep_calls > 0:
+            free_c = free_t = cap_cs = cap_ts = 0
+            for cls in ("loss", "weekly"):
+                cap_c, cap_t = (int(x) for x in self.budgets.get(cls, (0, 0)))
+                if cap_c <= 0:
+                    continue
+                c, t = self.used_class(cls)
+                bust = min(self.bust_keep_calls, cap_c) if cls == "loss" else 0     # kept above already
+                free_c += max(0, cap_c - c - bust)
+                free_t += max(0, cap_t - t - cap_t * bust // cap_c)
+                cap_cs, cap_ts = cap_cs + cap_c, cap_ts + cap_t
+            if cap_cs:
+                kc += min(self.review_keep_calls, free_c)
+                kt += min(cap_ts * self.review_keep_calls // cap_cs, free_t)
         return kc, kt
 
     def call_need(self) -> int:
@@ -716,7 +747,7 @@ POLICY_CURSOR = "policy:caps"     # the caps a tick really used; the dashboard r
 
 def apply_budget_specs(policy: RoomsPolicy, specs: list[str]) -> None:
     """Apply ``CLASS=CALLS[:TOKENS]`` items (the tick's --budget flag and env AGENTS_BUDGET) to
-    ``policy``. CLASS is a trigger class (incident, owner, loss, scheduled, weekly), total (per KST
+    ``policy``. CLASS is a trigger class (incident, owner, loss, scheduled, weekly, research), total (per KST
     day) or week (rolling 7 KST days). Raises ValueError on anything else, so a typo never silently
     drops a limit."""
     for spec in specs:
@@ -741,6 +772,9 @@ def apply_budget_specs(policy: RoomsPolicy, specs: list[str]) -> None:
 
 OWNER_OK = {"auto": None, "yes": True, "no": False}
 OBSERVE_DAYS_DEFAULT = 21
+# the new-strategy lab's meeting slot on the server (minutes; env AGENTS_RESEARCH_EVERY_MIN, 0 = no lab
+# meetings). RoomsPolicy() itself leaves it off (triggers.TriggerPolicy.research_every_ms = 0).
+RESEARCH_EVERY_MIN_DEFAULT = 60
 # env name -> (where in the policy, minimum). All optional; see deploy/agents.env.example.
 ENV_INTS = {
     "AGENTS_OWNER_OK_DAYS": ("owner_ok_days", 0),
@@ -762,6 +796,10 @@ def policy_from_env(environ: Optional[dict] = None) -> RoomsPolicy:
     None of these can loosen the code gate: they only set budgets, caps and when owners confirm."""
     env = os.environ if environ is None else environ
     p = RoomsPolicy(observe_days=OBSERVE_DAYS_DEFAULT)
+    every = (env.get("AGENTS_RESEARCH_EVERY_MIN") or "").strip() or str(RESEARCH_EVERY_MIN_DEFAULT)
+    if not every.isdigit():
+        raise ValueError(f"AGENTS_RESEARCH_EVERY_MIN={every!r}: use a whole number of minutes >= 0 (0 = no lab meetings)")
+    p.triggers.research_every_ms = int(every) * 60_000
     b = (env.get("AGENTS_BUDGET") or "").strip()
     if b:
         apply_budget_specs(p, b.replace(";", ",").split(","))
@@ -824,6 +862,9 @@ def budget_warnings(policy: RoomsPolicy) -> list[str]:
             if t - kept_tok < p.est_call_tokens:
                 out.append(f"{cls} tokens {t:,} leave {who} {max(0, t - kept_tok):,} tokens after the {kept_tok:,} kept "
                            f"for {'liquidations' if cls == 'incident' else 'busts'}: less than one call, they can never start")
+    rc = int(p.budgets.get("research", (0, 0))[0])
+    if p.triggers.research_every_ms > 0 and rc < 3:
+        out.append(f"research={rc} is less than one lab meeting (3 calls): the new-strategy lab can never meet")
     for cls, (_c, t) in sorted(p.budgets.items()):
         if int(t) < p.est_call_tokens:
             out.append(f"{cls} tokens {int(t):,} are less than one call ({p.est_call_tokens:,} tokens charged "
@@ -1997,7 +2038,8 @@ def round_budget(due: TR.Due, ctx: RoundContext) -> ClassBudget:
     return ClassBudget(ctx.runner, ctx.agents_conn, cls, cap_calls, cap_tokens, p.total_budget[0], p.total_budget[1],
                        ctx.clock, budgets=p.budgets, week=p.week_budget, paced=due.trigger in p.paced_triggers,
                        pace_lead_hours=p.pace_lead_hours, sub_cap=sub, owner_keep_calls=p.owner_keep_calls,
-                       bust_keep_calls=p.bust_reserve_calls, call_tokens=p.est_call_tokens)
+                       bust_keep_calls=p.bust_reserve_calls, call_tokens=p.est_call_tokens,
+                       review_keep_calls=p.lab_review_keep_calls if cls == "research" else 0)
 
 
 def round_min_calls(due: TR.Due, policy: RoomsPolicy) -> int:
