@@ -4,7 +4,8 @@
 #   sudo bash deploy/install.sh            # run from the cloned repository
 #
 # Does: system packages, firewall (SSH only), user "paperbot", Python venv,
-# directories, env-file templates (chmod 600), systemd units (installed, NOT started).
+# directories, env-file templates (root:paperbot 640; executor.env root:root 600), systemd units
+# (installed, NOT started).
 # Does not: put any key or password anywhere, start trading, or open the dashboard to
 # the internet. Safe to run again: to update, `git pull` then run it again. It refuses
 # uncommitted changes, stops the running services only for the swap, and keeps the
@@ -18,9 +19,16 @@ VENV=/opt/paperbot/venv
 if [ "$(id -u)" -ne 0 ]; then echo "run with sudo"; exit 1; fi
 
 echo "== packages"
-apt-get update -q
-DEBIAN_FRONTEND=noninteractive apt-get install -yq python3 python3-venv python3-pip git sqlite3 ufw \
-  fail2ban unattended-upgrades chrony
+# A new server runs cloud-init and its first automatic updates for a few minutes: wait for them
+# instead of failing on "Could not get lock".
+command -v cloud-init >/dev/null && cloud-init status --wait >/dev/null 2>&1 || true
+n=0
+until apt-get -o DPkg::Lock::Timeout=60 update -q; do
+  n=$((n+1)); [ "$n" -ge 60 ] && { echo "apt is still busy after 10 minutes; run this script again later"; exit 1; }
+  echo "apt is busy (automatic updates); waiting 10 s ($n/60)"; sleep 10
+done
+DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=600 install -yq python3 python3-venv python3-pip \
+  git sqlite3 ufw fail2ban unattended-upgrades chrony
 
 echo "== firewall: SSH in, everything else closed"
 ufw default deny incoming
@@ -58,6 +66,9 @@ install -d -m 755 /opt/paperbot
 [ -x "$VENV/bin/python" ] || python3 -m venv "$VENV"
 "$VENV/bin/pip" install -q --upgrade pip
 "$VENV/bin/pip" install -q -r "$REPO_DIR/requirements.txt"
+# `python -m paperbot...` works from any folder (the services also run with WorkingDirectory=$APP)
+SITE="$("$VENV/bin/python" -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
+echo "$APP" > "$SITE/paperbot-app.pth"
 
 echo "== code"
 # Copy to a staging folder first, then swap while the services are stopped, so a
@@ -66,6 +77,15 @@ echo "== code"
 UNITS="paperbot-live3 paperbot-dash paperbot-liq paperbot-agents.timer"
 RUNNING=""
 if [ "$REPO_DIR" != "$APP" ]; then
+  # Scheduled jobs (nightly check, backups, checkpoint, monthly re-check) are not stopped for the swap:
+  # wait for a running one to finish so it never reads a half-swapped tree.
+  JOBS="paperbot-daily3.service paperbot-backup.service paperbot-checkpoint.service paperbot-labmonthly.service \
+paperbot-offsite.service"
+  n=0
+  while busy="$(for j in $JOBS; do systemctl is-active --quiet "$j" 2>/dev/null && echo "$j"; done)"; [ -n "$busy" ]; do
+    n=$((n+1)); [ "$n" -ge 120 ] && { echo "still running after 60 min: $busy; run this script again later"; exit 1; }
+    echo "waiting for a scheduled job to finish: $busy ($n/120)"; sleep 30
+  done
   rm -rf "$APP.new"
   cp -a "$REPO_DIR" "$APP.new"
   printf '{"commit": "%s", "tag": %s, "dirty": %s, "source": "install.sh", "installed_at": "%s"}\n' \
@@ -106,7 +126,8 @@ echo "== systemd units (installed, not started)"
 for u in paperbot-live3.service paperbot-dash.service paperbot-daily3.service paperbot-daily3.timer \
          paperbot-backup.service paperbot-backup.timer paperbot-agents.service paperbot-agents.timer \
          paperbot-liq.service paperbot-labmonthly.service paperbot-labmonthly.timer \
-         paperbot-checkpoint.service paperbot-checkpoint.timer paperbot-executor.service; do
+         paperbot-checkpoint.service paperbot-checkpoint.timer paperbot-offsite.service paperbot-offsite.timer \
+         paperbot-executor.service; do
   install -m 644 "$APP/deploy/$u" /etc/systemd/system/$u
 done
 systemctl daemon-reload
@@ -122,15 +143,10 @@ fi
 
 cat <<'NEXT'
 
-Done. Next (docs/server-setup-v3.md):
-  1. sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.live check     # Binance reachable?
-  2. edit /etc/paperbot/live.env   (read-only Binance key, Telegram)  -- on the server, never in chat
-  3. edit /etc/paperbot/dash.env   (python -m paperbot.dash hash; openssl rand -hex 32)
-  4. sudo systemctl enable --now paperbot-live3 paperbot-dash paperbot-liq paperbot-daily3.timer paperbot-backup.timer \
-       paperbot-checkpoint.timer
-  5. agent rooms (optional, docs/agent-rooms.md): install Claude Code for the paperbot user, fill
-     /etc/paperbot/agents.env, try one pass with --dry-run, then
-     sudo systemctl enable --now paperbot-agents.timer paperbot-labmonthly.timer
-  6. order executor (optional, docs/live-safety.md): testnet drill first; the unit paperbot-executor is
-     installed but stays off until you start it.
+Done. A first install starts nothing. Continue with docs/server-setup-v3.md (step 4 on): keys and Telegram in
+/etc/paperbot/*.env on the server only (never in chat), dashboard, Tailscale, agent login, lab data.
+Then check before the start, and again 10-15 minutes after it:
+  cd /opt/crypto-bot-research && sudo /opt/paperbot/venv/bin/python -m paperbot.launchcheck --stage before
+  cd /opt/crypto-bot-research && sudo /opt/paperbot/venv/bin/python -m paperbot.launchcheck --stage after
+The order executor (paperbot-executor) is installed but stays off (docs/live-safety.md).
 NEXT

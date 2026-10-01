@@ -16,5 +16,9 @@ TimeoutStartSec=3h
 NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
-ReadWritePaths=/var/lib/paperbot/lab
-InaccessiblePaths=-/etc/paperbot
+# agents3.db is opened read-only, but SQLite still needs its folder writable for the -shm file (a
+# read-only mount fails with "unable to open database file"); the Claude Code program and the order
+# executor's folder stay out of reach.
+ReadWritePaths=/var/lib/paperbot
+ReadOnlyPaths=-/var/lib/paperbot/.local
+InaccessiblePaths=-/etc/paperbot -/var/lib/paperbot/exec

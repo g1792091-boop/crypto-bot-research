@@ -92,7 +92,6 @@ curl -fsSL https://claude.ai/install.sh | bash
 claude setup-token
 #    나온 토큰을 /etc/paperbot/agents.env 의 CLAUDE_CODE_OAUTH_TOKEN= 뒤에 붙여 넣기
 #    (채팅창에 붙여 넣지 마세요). deploy/agents.env.example 참고
-chmod 600 /etc/paperbot/agents.env
 exit
 
 # 4) 배관 점검 (Claude 호출 없음)
