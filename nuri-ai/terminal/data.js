@@ -6,11 +6,73 @@
 import { apiBase, webGet, LAUNCHER, detectLauncher } from "../engine.js";
 import { exchanges, US_LIST, KR_LIST, GFUT_LIST, IDX_LIST } from "../trade.js";
 
-export const IVS = [["1m", "1분"], ["5m", "5분"], ["15m", "15분"], ["1h", "1시간"], ["4h", "4시간"], ["1d", "1일"], ["1w", "1주"]];
+export const IVS = [["1m", "1분"], ["3m", "3분"], ["5m", "5분"], ["6m", "6분"], ["8m", "8분"], ["10m", "10분"], ["15m", "15분"], ["1h", "1시간"], ["4h", "4시간"], ["1d", "1일"], ["1w", "1주"]];
 export const IV_LABEL = Object.fromEntries(IVS);
-export const IV_SEC = { "1m": 60, "5m": 300, "15m": 900, "1h": 3600, "4h": 14400, "1d": 86400, "1w": 604800 };
+export const IV_SEC = { "1m": 60, "3m": 180, "5m": 300, "6m": 360, "8m": 480, "10m": 600, "15m": 900, "1h": 3600, "4h": 14400, "1d": 86400, "1w": 604800 };
 const TF = { "1m": "1", "5m": "5", "15m": "15", "1h": "60", "4h": "240", "1d": "D", "1w": "W" };
-const TF_BACK = { "1": "1m", "5": "5m", "15": "15m", "60": "1h", "240": "4h", "D": "1d", "1D": "1d", "W": "1w", "1W": "1w", "1d": "1d", "1w": "1w" };
+const TF_BACK = { "1": "1m", "3": "3m", "5": "5m", "6": "6m", "8": "8m", "10": "10m", "15": "15m", "60": "1h", "240": "4h", "D": "1d", "1D": "1d", "W": "1w", "1W": "1w", "1d": "1d", "1w": "1w" };
+
+/* ---------- 3·6·8·10분봉: 거래소가 직접 주면 그대로, 아니면 작은 봉을 묶어서 만든다 ---------- */
+// 바이낸스: 3분 그대로 · 6·8분은 1분봉, 10분은 5분봉을 묶음 / 업비트: 3·10분 그대로 · 6분은 3분봉, 8분은 1분봉 / 야후: 3분은 1분봉, 6·8분은 2분봉, 10분은 5분봉
+const CUSTOM = {
+  "3m":  { binance: ["3m", 1], upbit: ["3", 1], yahoo: ["1m", 3, "5d"] },
+  "6m":  { binance: ["1m", 6], upbit: ["3", 2], yahoo: ["2m", 3, "1mo"] },
+  "8m":  { binance: ["1m", 8], upbit: ["1", 8], yahoo: ["2m", 4, "1mo"] },
+  "10m": { binance: ["5m", 2], upbit: ["10", 1], yahoo: ["5m", 2, "1mo"] },
+};
+export const isCustomIv = (iv) => !!CUSTOM[iv];
+// 같은 시각 구간(유닉스 시간 기준 sec 단위)으로 묶기 — 마지막 구간은 진행 중인 봉
+export function aggregate(bars, sec) {
+  const out = []; let cur = null;
+  for (const b of bars) {
+    const t = Math.floor(b.time / sec) * sec;
+    if (!cur || cur.time !== t) { cur = { time: t, open: b.open, high: b.high, low: b.low, close: b.close, volume: b.volume || 0 }; out.push(cur); }
+    else { cur.high = Math.max(cur.high, b.high); cur.low = Math.min(cur.low, b.low); cur.close = b.close; cur.volume += b.volume || 0; }
+  }
+  return out;
+}
+// 바이낸스 klines 를 뒤로 넘기며 count 개까지
+async function binanceKlines(exchange, symbol, iv, count) {
+  const path = exchange === "binancef" ? "/fapi/v1/klines" : "/klines", lim = exchange === "binancef" ? 1500 : 1000;
+  let end = null, rows = [];
+  while (rows.length < count) {
+    const r = await fetch(`${apiBase(exchange)}${path}?symbol=${encodeURIComponent(symbol)}&interval=${iv}&limit=${Math.min(lim, count - rows.length)}${end ? `&endTime=${end}` : ""}`, { headers: { accept: "application/json" } });
+    if (!r.ok) throw new Error("시세 " + r.status);
+    const j = await r.json(); if (!Array.isArray(j) || !j.length) break;
+    const page = j.map((k) => ({ time: Math.floor(k[0] / 1000), open: +k[1], high: +k[2], low: +k[3], close: +k[4], volume: +k[5] }));
+    rows = [...page, ...rows]; end = j[0][0] - 1;
+    if (j.length < Math.min(lim, count)) break;
+  }
+  return clean(rows);
+}
+async function yahooBars(symbol, iv, range) {
+  let err = null;
+  for (const s of _yRes.has(symbol) ? [_yRes.get(symbol)] : yCands(symbol)) {
+    try {
+      const j = await webGet(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(s)}?interval=${iv}&range=${range}&includePrePost=false`, "json");
+      const res = j?.chart?.result?.[0], q = res?.indicators?.quote?.[0] || {};
+      const rows = (res?.timestamp || []).map((t, i) => ({ time: t, open: q.open?.[i], high: q.high?.[i], low: q.low?.[i], close: q.close?.[i], volume: q.volume?.[i] || 0 })).filter((b) => b.open != null && b.close != null && b.high != null && b.low != null);
+      if (!rows.length) throw new Error("야후 데이터가 비어 있습니다: " + s);
+      _yRes.set(symbol, s);
+      return { rows: clean(rows), currency: res.meta?.currency, name: res.meta?.shortName || res.meta?.longName, resolved: s };
+    } catch (e) { err = e; }
+  }
+  throw err || new Error("종목을 찾을 수 없습니다: " + symbol);
+}
+// 3·6·8·10분봉 캔들 (want: 원하는 봉 개수)
+async function customCandles({ exchange, symbol, interval }, want = 1500) {
+  const sec = IV_SEC[interval], c = CUSTOM[interval];
+  if (exchange === "binance" || exchange === "binancef") {
+    const [iv, n] = c.binance;
+    return { candles: aggregate(await binanceKlines(exchange, symbol, iv, Math.min(want * n, 12000)), sec), currency: "USDT" };
+  }
+  if (exchange === "upbit") {
+    const [tf, n] = c.upbit;
+    return { candles: aggregate(clean((await ex().upbit.candles(symbol, tf, Math.min(800 * n, 3200))).map(toBar)), sec), currency: "KRW" };
+  }
+  const [iv, , range] = c.yahoo, r = await yahooBars(symbol, iv, range);
+  return { candles: aggregate(r.rows, sec), currency: r.currency || "USD", name: r.name, resolved: r.resolved };
+}
 export const normIv = (iv) => IV_SEC[iv] ? iv : TF_BACK[String(iv)] || TF_BACK[String(iv).toUpperCase()] || "1h";
 
 export const EXCHANGES = [["binancef", "바이낸스 선물 (USDT-M)"], ["binance", "바이낸스 현물"], ["upbit", "업비트 (KRW)"], ["yahoo", "주식·지수·선물 (야후)"]];
@@ -84,6 +146,11 @@ async function yahooCandles(symbol, interval, total) {
 // 첫 화면 캔들 (빠르게 1,000~1,500봉)
 export async function loadCandles({ exchange, symbol, interval }) {
   await ensureLauncher();
+  if (CUSTOM[interval]) {
+    const r = await customCandles({ exchange, symbol, interval });
+    if (!r.candles.length) throw new Error(`${EX_SHORT[exchange]}에 ${symbol} ${IV_LABEL[interval]} 봉이 없습니다`);
+    return { candles: r.candles, meta: { currency: r.currency, name: r.name || nameOf(exchange, symbol), resolved: r.resolved || symbol, source: EX_SHORT[exchange] + (CUSTOM[interval][exchange === "binancef" ? "binance" : exchange]?.[1] > 1 ? " · 작은 봉을 묶어 만든 봉" : "") } };
+  }
   if (exchange === "yahoo") {
     const r = await yahooCandles(symbol, interval, 5000);
     return { candles: clean(r.rows.map(toBar)), meta: { currency: r.currency || "USD", name: r.name || nameOf(exchange, symbol), resolved: r.resolved, source: "야후 파이낸스" } };
@@ -99,6 +166,12 @@ export async function loadCandles({ exchange, symbol, interval }) {
 // 최신 몇 봉 (폴링)
 const Y_LIVE = { "1m": ["1m", "1d"], "5m": ["5m", "1d"], "15m": ["15m", "5d"], "1h": ["60m", "5d"], "1d": ["1d", "5d"], "1w": ["1wk", "1mo"] };
 export async function latestBars({ exchange, symbol, interval }) {
+  if (CUSTOM[interval]) {   // 진행 중인 봉까지 다시 묶어서 마지막 2개
+    const c = CUSTOM[interval], sec = IV_SEC[interval];
+    if (exchange === "binance" || exchange === "binancef") { const [iv, n] = c.binance; return aggregate(await binanceKlines(exchange, symbol, iv, n * 2 + 1), sec).slice(-2); }
+    if (exchange === "upbit") { const [tf, n] = c.upbit; return aggregate(clean((await ex().upbit.candles(symbol, tf, n * 2 + 1)).map(toBar)), sec).slice(-2); }
+    const [iv] = c.yahoo; return aggregate((await yahooBars(symbol, iv, "1d")).rows, sec).slice(-2);
+  }
   if (exchange === "binancef" || exchange === "binance") {
     const path = exchange === "binancef" ? "/fapi/v1/klines" : "/klines";
     const r = await fetch(`${apiBase(exchange)}${path}?symbol=${encodeURIComponent(symbol)}&interval=${interval}&limit=3`, { headers: { accept: "application/json" } });
@@ -121,6 +194,7 @@ export async function latestBars({ exchange, symbol, interval }) {
 let wsBlockedUntil = 0;
 export function klineSocket({ exchange, symbol, interval }, onBar, onFail) {
   if (exchange !== "binancef" && exchange !== "binance") return null;
+  if (CUSTOM[interval] && interval !== "3m") return null;   // 묶어 만든 봉은 폴링으로 갱신
   if (typeof WebSocket !== "function" || Date.now() < wsBlockedUntil) return null;
   const s = symbol.toLowerCase(), url = exchange === "binancef" ? `wss://fstream.binance.com/ws/${s}@kline_${interval}` : `wss://stream.binance.com:9443/ws/${s}@kline_${interval}`;
   let ws, closed = false, opened = false;
@@ -143,6 +217,12 @@ export async function fullHistory({ exchange, symbol, interval, resolved }, onPr
   await ensureLauncher();
   const { historyCandles } = await import("../history.js");
   const market = exchange === "yahoo" ? (resolved || symbol) : symbol;
+  if (CUSTOM[interval]) {   // 묶어 만드는 봉: 작은 봉 전체 과거를 받아 묶는다 (바이낸스·업비트)
+    if (exchange === "yahoo") { const r = await customCandles({ exchange, symbol, interval }); return { candles: r.candles, note: "야후 분봉은 최근 한 달까지만 제공됩니다", complete: false, currency: r.currency }; }
+    const base = { binance: { "3m": "3m", "6m": "1m", "8m": "1m", "10m": "5m" }, upbit: { "3m": "3m", "6m": "3m", "8m": "1m", "10m": "5m" } }[exchange === "upbit" ? "upbit" : "binance"][interval];
+    const r = await historyCandles({ market, exchange, interval: base, maxBars: 50000 * Math.round(IV_SEC[interval] / IV_SEC[base] || 1), onProgress });
+    return { candles: aggregate(clean(r.candles.map(toBar)), IV_SEC[interval]), note: r.note, complete: r.complete, truncated: r.truncated, currency: r.currency };
+  }
   const r = await historyCandles({ market, exchange, interval, maxBars: 50000, onProgress });
   return { candles: clean(r.candles.map(toBar)), note: r.note, complete: r.complete, truncated: r.truncated, currency: r.currency };
 }

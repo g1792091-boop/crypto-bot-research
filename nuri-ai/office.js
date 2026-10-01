@@ -135,13 +135,29 @@ const BUILD = /설계|짓|건축|신축|리모델링|매입|매매|경매|계약
 // 빈 답·오류가 난 모델은 오늘 하루 배정에서 뺀다
 const badModels = () => { try { const o = JSON.parse(localStorage.getItem("officeBad") || "{}"); return o.day === today() ? o.m || {} : {}; } catch(e){ return {}; } };
 function markBad(model){ if (!model) return; const m = badModels(); m[model] = (m[model] || 0) + 1; try { localStorage.setItem("officeBad", JSON.stringify({day: today(), m})); } catch(e){} }
+// 사무실에 맞는 모델 점수: 크고 빠른 대화 모델 우선 · 영어로 길게 생각하는 추론 모델과 아주 작은 모델은 뒤로
+export function modelScore(m){
+  m = String(m || "").toLowerCase(); let s = 50;
+  if (/(^|[^0-9.])(0\.5|1|1\.5|2|3|4|e2|e4)b\b|mini|nano|tiny|-small|lite/.test(m)) s -= 30;
+  if (/70b|72b|90b|120b|123b|235b|253b|405b|480b|671b|large|kimi-k2|deepseek-v3|deepseek-v4|maverick|scout|glm-4\.[5-9]|qwen3-coder|mistral-medium|llama-3\.3-70|command-a/.test(m)) s += 25;
+  if (/r1|qwq|think|reason|magistral|nemotron.*(super|ultra)|o[1-9]-/.test(m)) s -= 20;
+  if (/guard|safety|embed|rerank|reward|parse|ocr|-vl|vision|audio|tts|whisper/.test(m)) s -= 100;
+  const h = modelHealth()[m]; if (h) s -= Math.min(40, (h.slow || 0) * 8 + (h.fail || 0) * 6);
+  return s;
+}
+// 모델 성적표 (스스로 배우기): 느림·실패가 쌓인 모델은 점점 덜 쓴다 (7일 지나면 잊음)
+const HEALTH_KEY = "officeModelHealth";
+export function modelHealth(){ try { const o = JSON.parse(localStorage.getItem(HEALTH_KEY) || "{}"); for (const k in o) if (Date.now() - (o[k].t || 0) > 7 * 864e5) delete o[k]; return o; } catch(e){ return {}; } }
+function noteModel(model, what){ if (!model) return; const o = modelHealth(), k = String(model).toLowerCase(); const h = o[k] || {ok: 0, slow: 0, fail: 0}; h[what] = (h[what] || 0) + 1; if (what === "ok" && h.ok % 5 === 0){ h.slow = Math.max(0, h.slow - 1); h.fail = Math.max(0, h.fail - 1); } h.t = Date.now(); o[k] = h; try { localStorage.setItem(HEALTH_KEY, JSON.stringify(o)); } catch(e){} }
 export function assignModels(){
   const bad = badModels(), all = fusionSources(), ok = all.filter(t => !bad[t.model]);
-  const pool = ok.length ? ok : all;
-  const kindOf = m => /r1|reason|think|qwq|nemotron.*(super|ultra)|o\d|magistral/i.test(m) ? "reason" : /coder|code|devstral|starcoder/i.test(m) ? "code" : "general";
+  const ranked = (ok.length ? ok : all).map(t => ({t, sc: modelScore(t.model)})).filter(x => x.sc > -40).sort((x, y) => y.sc - x.sc);
+  // 상위 모델 몇 개만 골고루 나눠 쓴다 (좋은 모델이 적으면 그다음 것까지)
+  const top = ranked.filter(x => x.sc >= (ranked[0]?.sc ?? 0) - 25).slice(0, Math.max(3, Math.min(6, Math.ceil(ranked.length / 3)))).map(x => x.t);
+  const pool = top.length ? top : ranked.map(x => x.t);
   const used = new Map(), out = {};
   for (const a of AGENTS){
-    const fit = pool.filter(t => kindOf(t.model) === a.role);
+    const fit = a.role === "code" ? pool.filter(t => /coder|code|devstral|kimi|qwen3/i.test(t.model)) : [];
     const list = (fit.length ? fit : pool).slice().sort((x, y) => (used.get(x.model) || 0) - (used.get(y.model) || 0));
     const pick = list[0];
     if (pick){ out[a.id] = pick; used.set(pick.model, (used.get(pick.model) || 0) + 1); }
@@ -266,7 +282,13 @@ export const officeState = () => ({running, queued: queue.length});
 export async function ask(text, {room = "hq"} = {}){
   await loadLog();
   post({ch: room, kind: "user", text});
-  return enqueue({topic: text, room, trigger: "user"});
+  // 대표님(사용자) 질문이 먼저: 진행 중인 자동 회의는 잠시 멈췄다가 답한 뒤 다시 하고, 질문은 대기열 맨 앞에 넣는다
+  if (running && running.trigger !== "user"){
+    const r = running; r.preempted = true;
+    post({ch: room, kind: "system", text: `질문 먼저 답합니다 · '${r.name}' 회의는 잠시 멈췄다가 이어서 합니다`});
+    r.ctl.abort();
+  } else if (running || queue.length) post({ch: room, kind: "system", text: "질문을 받았습니다 · 앞 질문 다음에 바로 답합니다"});
+  return new Promise(res => { const at = queue.findIndex(j => j.trigger !== "user"); queue.splice(at < 0 ? queue.length : at, 0, {topic: text, room, trigger: "user", res}); pump(); });
 }
 export function stopMeeting(){ running?.ctl.abort(); queue.length = 0; }
 function enqueue(m){
@@ -274,7 +296,7 @@ function enqueue(m){
 }
 async function pump(){
   if (running || !queue.length) return;
-  if (chatting){ setTimeout(pump, 1500); return; }
+  if (chatting && queue[0].trigger !== "user"){ setTimeout(pump, 1500); return; }
   const job = queue.shift();
   const ctl = new AbortController();
   const order = planMeeting(job.topic, job.room, job.agents);
@@ -321,12 +343,22 @@ async function pump(){
     if (job.trigger !== "user" && officeCfg().alert && last) fire({kind: "alert", meeting: m, text: last.text});
     job.res?.({meeting: m, turns, answer: last?.text || ""});
   } catch (e){
-    post({ch: m.room, kind: "system", text: "회의 중단: " + (e.message || e), meeting: m.id});
-    job.res?.({meeting: m, turns, error: e.message});
+    if (m.preempted) queue.push(job);   // 사용자 질문 때문에 멈춘 회의는 질문에 답한 뒤 다시
+    else {
+      post({ch: m.room, kind: "system", text: "회의 중단: " + (e.message || e), meeting: m.id});
+      job.res?.({meeting: m, turns, error: e.message});
+    }
   } finally {
     running = null; fire({kind: "end", meeting: m});
     setTimeout(pump, 300);
   }
+}
+// 대표님이 '뭐 하고 있어?' 같은 걸 물으면 답할 수 있게: 지금 사무실 상황 요약 (코드가 만든 사실)
+function statusText(){
+  const recent = (LOG || []).filter(e => ["work", "bt", "re", "arch", "ml", "macro", "forecast", "biz", "files", "task", "report"].includes(e.kind)).slice(-8)
+    .map(e => `- ${new Date(e.t).toLocaleTimeString("ko-KR", {hour: "2-digit", minute: "2-digit"})} ${agentById(e.agent)?.name || ""} ${e.kind === "bt" ? `매매법 '${e.name}' ${e.pass ? "통과" : "불통과"}` : e.kind === "re" ? `재개발 후보 ${e.items?.length || 0}곳` : e.kind === "arch" ? `설계안 '${e.name}'` : e.kind === "biz" ? `사업 '${e.name}' ${String(e.verdict || "").split(" — ")[0]}` : e.kind === "task" ? `과제 '${e.title}' ${e.status}` : String(e.text || e.title || e.name || e.kind).slice(0, 60)}`).join("\n");
+  const open = backlog().filter(x => x.status !== "done").slice(0, 4).map(x => `- ${teamById(x.team)?.name}: ${x.title}`).join("\n");
+  return `[지금 사무실 상황 · 코드가 확인한 사실]\n진행 중인 회의: ${running && running.trigger !== "user" ? running.name : "없음"} · 지금 하는 업무: ${cycling ? JOB_KO[lastJob] || lastJob : "없음"} · 다음 업무: ${JOB_KO[JOBS[(+localStorage.getItem("officeJob") || 0) % JOBS.length]]}\n최근에 한 일:\n${recent || "- (아직 없음)"}\n남은 성장 과제:\n${open || "- (없음)"}`;
 }
 function transcript(m, turns){
   return turns.map(t => `[${t.agent.name} · ${t.agent.title}]\n${t.text.slice(0, 2500)}`).join("\n\n");
@@ -341,14 +373,15 @@ async function speak(a, m, turns, target, signal){
 - 네 역할: ${a.duty}
 - 답의 첫 줄은 반드시 '💭 '로 시작하는 한 문장 속마음이다(무엇을 확인하고 어떻게 판단하려는지). 그다음 줄부터 말한다.
 - ${prev ? `앞사람(${prev.name})의 말에 이름을 불러 반응하며 시작한다(동의·보충·반박). ` : ""}같은 말은 반복하지 말고 네 전문 분야 관점을 더한다. 다른 전문가가 꼭 필요하면 @이름 으로 한 명만 부른다(동료: ${mates}).
+- 반드시 한국어로만 쓴다. 영어로 생각하거나 '어떻게 답할지' 계획을 쓰지 말고 바로 말한다.
 - 회사 동료와 대화하듯 자연스러운 한국어로 말한다. 숫자 나열이 아니라 해설로 말한다. 수치는 도구로 확인한 것만 쓰고 지어내지 않는다. 차트·뉴스를 봤다면 무엇을 봤는지 말한다.
-${notesText(a.team)}- ${isLead ? "너는 마지막 정리 담당이다. 사용자에게 주는 최종 답을 완결된 글로 쓴다(필요하면 소제목·표)." : "길이는 5~10문장 정도. 사용자에게 주는 최종 답은 팀장이 정리하니, 너는 네 판단과 근거에 집중한다."}`;
-  const ask = `${m.trigger === "user" ? "사용자 질문" : "회의 안건"}: ${m.topic}\n\n${turns.length ? "지금까지 회의 내용:\n" + transcript(m, turns) + "\n\n" : ""}이제 ${a.name}(${a.title}) 차례입니다.`;
+${notesText(a.team)}- ${isLead ? "너는 마지막 정리 담당이다. 사용자에게 주는 최종 답을 결론부터 짧고 쉽게 쓴다(5~8줄, 꼭 필요할 때만 표)." : "3~5문장으로 짧게. 사용자에게 주는 최종 답은 팀장이 정리하니, 너는 네 판단과 근거 한두 개에 집중한다."}`;
+  const ask = `${m.trigger === "user" ? "사용자 질문" : "회의 안건"}: ${m.topic}\n\n${m.trigger === "user" ? statusText() + "\n\n" : ""}${turns.length ? "지금까지 회의 내용:\n" + transcript(m, turns) + "\n\n" : ""}이제 ${a.name}(${a.title}) 차례입니다.`;
   const entry = post({ch: m.room, kind: "agent", agent: a.id, text: "", think: "", steps: [], meeting: m.id, live: true, model: target?.model || ""});
   fire({kind: "turn", meeting: m, agent: a, entry});
   // 배정 모델 → (빈 답이면) 다른 모델 → 자동 선택 순서로 다시 시도
   const cm = claudeModels();
-  const alt = cm && target?.model !== cm.sonnet ? {id: "anthropic", model: cm.sonnet} : fusionSources().find(t => t.model !== target?.model && !badModels()[t.model] && !/r1|reason|think|gpt-oss|qwq/i.test(t.model));
+  const alt = cm && target?.model !== cm.sonnet ? {id: "anthropic", model: cm.sonnet} : fusionSources().filter(t => t.model !== target?.model && !badModels()[t.model]).sort((x, y) => modelScore(y.model) - modelScore(x.model))[0];
   const tries = [target, alt, null].filter((t, i, arr) => i === arr.length - 1 || (t && arr.findIndex(x => x && x.model === t.model) === i));
   let lastMsg = null;
   for (const tg of tries){
@@ -361,17 +394,24 @@ ${notesText(a.team)}- ${isLead ? "너는 마지막 정리 담당이다. 사용�
       if (Date.now() - last > 150){ last = Date.now(); fire({kind: "delta", meeting: m, agent: a, entry}); }
     };
     let err = null;
+    // 느린 모델은 끊고 다음 모델로: 도구도 안 쓰고 75초 동안 말이 없거나, 전체 4분을 넘기면
+    const tctl = new AbortController(), t0 = Date.now(); let slow = false;
+    const relay = () => tctl.abort(); signal.addEventListener("abort", relay, {once: true});
+    const watch = setInterval(() => { const el = Date.now() - t0; if ((!entry.text && !entry.steps.length && el > 75e3) || el > 240e3){ slow = true; tctl.abort(); } }, 2000);
     try {
       bump("calls");
-      await runAgent({mode: "chat", history: [{role: "user", content: ask}], msg, signal, onUpdate, think: false, workspace: "", persona, forceSkills: a.skills, target: tg || undefined,
-        maxSteps: isLead || a.id === "devil" ? 2 : 6, openArtifact: async () => null, askPermission: officePermission,
+      await runAgent({mode: "chat", history: [{role: "user", content: ask}], msg, signal: tctl.signal, onUpdate, think: false, workspace: "", persona, forceSkills: a.skills, target: tg || undefined,
+        maxSteps: isLead || a.id === "devil" ? 2 : m.trigger === "user" ? 4 : 5, openArtifact: async () => null, askPermission: officePermission,
         office: true, officeTools: a.computer && computerOn() ? ["office_ls", "office_read", "office_write", "office_run"] : []});
-    } catch (e){ if (signal.aborted) throw e; err = e; }
+    } catch (e){ if (signal.aborted) throw e; err = slow ? new Error("응답이 너무 느림") : e; }
+    finally { clearInterval(watch); signal.removeEventListener("abort", relay); }
+    entry.thinking = false;
     read(msg, entry);
     entry.model = msg.route?.model || tg?.model || entry.model;
+    noteModel(entry.model, entry.text && !slow ? "ok" : slow ? "slow" : "fail");
     if (entry.text) break;
     markBad(tg?.model || msg.route?.model);
-    const why = err ? (err.message || String(err)).slice(0, 80) : entry.think ? "생각만 하고 답을 내지 못함" : "빈 답";
+    const why = err ? (err.message || String(err)).slice(0, 80) : msg.parts.some(p => p.think || englishy(p.text || "")) ? "생각만 하고 한국어 답을 내지 못함" : "빈 답";
     entry.notes = [...(entry.notes || []), `${shortName(entry.model)}: ${why} → 다른 모델로 다시`];
     fire({kind: "delta", meeting: m, agent: a, entry});
   }
@@ -397,14 +437,37 @@ export const computerOn = () => LAUNCHER.on && officeCfg().computer !== false;
 const officePermission = async tp => computerOn() && /^office_/.test(tp.name);
 const EMPTY_MARK = /\*\((모델이 빈 답을 보냈습니다|답변 길이 한도에 닿아 끊겼습니다|알 수 없는 도구)[^)]*\)\*/g;
 const shortName = m => String(m || "모델").split("/").pop();
+/* ============ 한국어로만, 간단하게 ============ */
+// 일부 모델(추론형)은 '어떻게 답할지' 영어 계획을 답 앞에 길게 쓴다. 그 부분은 걷어 내고 한국어 답만 보여 준다.
+const HANGUL = /[\uac00-\ud7a3]/g;
+const PLAN_RE = /^\s*(💭\s*)?(we need|we should|we must|we can|we have|need |must |let'?s|let me|the user|user (wants|asks|requested)|i need|i should|i will|i'll|ok(ay)?[,. ]|so (we|i)|now (we|i)|also[, ]|maybe |but |given |thus|therefore|first line|then |could |however|probably|done\.|alright)/i;
+const englishy = t => { const latin = (t.match(/[A-Za-z]/g) || []).length, han = (t.match(HANGUL) || []).length; return latin > 25 && han < latin * 0.15; };
+export function koOnly(text){
+  const s = String(text || ""); if (!s.trim()) return "";
+  const out = []; let started = false;
+  for (const piece of s.split(/(```[\s\S]*?(?:```|$))/)){
+    if (piece.startsWith("```")){ out.push(piece); started = true; continue; }
+    const keep = [];
+    for (const para of piece.split(/\n{2,}/)){
+      const t = para.trim(); if (!t) continue;
+      if (englishy(t) && (!started || PLAN_RE.test(t))) continue;   // 앞부분의 영어 생각 · 중간의 영어 계획 문단
+      keep.push(para.replace(/^\n+|\n+$/g, "")); started = true;
+    }
+    if (keep.length) out.push(keep.join("\n\n"));
+  }
+  return out.join("\n").trim();
+}
+// 속마음은 한국어 한 문장만 (영어 생각은 보여 주지 않는다)
+const koThink = line => { const t = String(line || "").replace(/\s+/g, " ").trim(); if (!t || !(t.match(HANGUL) || []).length || englishy(t)) return ""; const one = t.split(/(?<=[.!?。])\s/)[0]; return one.length > 120 ? one.slice(0, 118) + "…" : one; };
 // 메시지 조각 → 말(text) · 속마음(think) · 한 일(steps)
 function read(msg, entry){
   const texts = msg.parts.filter(p => p.type === "text");
   let raw = texts.map(p => p.text).join("\n\n").replace(EMPTY_MARK, "").trim();
-  let think = texts.map(p => p.think || "").join("\n").trim();
+  let think = "";
   const mm = raw.match(/^💭\s*([^\n]*)\n?/);
-  if (mm){ think = (think ? think + "\n" : "") + mm[1].trim(); raw = raw.slice(mm[0].length).trim(); }
-  raw = raw.replace(/^\s*💭[^\n]*\n/gm, "").trim();
+  if (mm){ think = koThink(mm[1]); raw = raw.slice(mm[0].length).trim(); }
+  raw = koOnly(raw.replace(/^\s*💭[^\n]*\n/gm, "")).trim();
+  entry.thinking = !raw && texts.some(p => p.think);   // 모델이 아직 생각 중 (내용은 보여 주지 않음)
   entry.text = raw; entry.think = think;
   entry.steps = msg.parts.filter(p => p.type === "tool").map(p => ({act: p.act || p.label, name: p.name, status: p.status, summary: p.summary || "", err: p.error || "", sources: (p.sources || []).slice(0, 5)}));
 }
@@ -563,7 +626,7 @@ export async function chatter(force){
     let out = "";
     bump("calls"); bump("chats");
     const cmods = claudeModels();
-    const route = await brainStream({messages: [{role: "system", content: sys}, {role: "user", content: user}], role: "general", maxTokens: 600, temperature: 0.9,
+    const route = await brainStream({messages: [{role: "system", content: sys}, {role: "user", content: user}], role: "general", maxTokens: 600, temperature: 0.9, noThink: true,
       ...(cmods ? {target: {id: "anthropic", model: cmods.haiku}, fallback: true} : {exclude: fusionSources().length ? ["anthropic"] : []}), onContent: d => out += d});
     const body = splitThink(out).body;
     const lines = body.split(/\n+/).map(l => l.replace(/^[\s*\-•]+/, "").replace(/\*\*/g, "").trim()).map(l => {
@@ -611,12 +674,13 @@ export function startChatter(){
 // 매 주기 ① 모의투자 장부를 실제 시세로 갱신(코드, AI 없음) ② 그때그때 한 가지 일을 고른다:
 // 매매법 연구 · SNS 여론 · 경제 리서치 · 동료 수다 · 컴퓨터 작업 · 모의투자 보고 (하루 AI 호출 한도 안에서)
 // 쉬지 않고 돌아가는 업무 순환표: 팀마다 고르게 돌아가도록 섞어 두었다 (모듈이 없으면 경제 리서치로 대신)
-const JOBS = ["research", "realestate", "arch", "forecast", "sns", "ml", "task", "biz", "macro", "media", "research", "venture", "paper", "chat", "computer", "retro", "economy", "realestate", "arch", "research", "forecast", "task", "media", "ml"];
+const JOBS = ["research", "realestate", "arch", "forecast", "sns", "ml", "task", "biz", "macro", "selfdev", "media", "research", "venture", "paper", "chat", "computer", "retro", "economy", "realestate", "arch", "research", "forecast", "task", "selfdev", "media", "ml"];
 const JOB_KO = {research: "매매법 연구", sns: "SNS 여론 확인", economy: "경제 리서치", paper: "모의투자 점검", chat: "동료 수다", computer: "컴퓨터 작업",
   realestate: "재개발 후보지 조사", arch: "설계·3D 렌더링", forecast: "차트 방향 토론·예측", ml: "머신러닝 실험", task: "개선 과제 수행", biz: "사업 구상·시뮬레이션",
-  macro: "경제지표 예측", media: "유튜브·인스타 조사", venture: "자체 코인·터미널·AI 개발", retro: "팀 회고·부족한 점 찾기"};
+  macro: "경제지표 예측", media: "유튜브·인스타 조사", venture: "자체 코인·터미널·AI 개발", retro: "팀 회고·부족한 점 찾기", selfdev: "우리 앱 오류 찾아 코드 고치기"};
+const JOB_TEAM = {research: "quant", sns: "data", economy: "fut", paper: "quant", chat: "hq", computer: "data", realestate: "realestate", arch: "arch", forecast: "strat", ml: "quant", task: "hq", biz: "venture", macro: "fut", media: "data", venture: "venture", retro: "hq", selfdev: "lab"};
 const JOB_FN = () => ({research, sns: snsCheck, economy: economyCheck, paper: paperReport, chat: () => chatter(true), computer: computerWork,
-  realestate: realestateJob, arch: archJob, forecast: forecastJob, ml: mlJob, task: doTask, biz: bizJob, macro: macroJob, media: mediaJob, venture: ventureJob, retro});
+  realestate: realestateJob, arch: archJob, forecast: forecastJob, ml: mlJob, task: doTask, biz: bizJob, macro: macroJob, media: mediaJob, venture: ventureJob, retro, selfdev: selfdevJob});
 let cycleTimer = 0, cycling = false, lastJob = "";
 export const cycleState = () => ({cycling, lastJob});
 export function nextCycleIn(){ const c = officeCfg(), last = +localStorage.getItem("officeLastCycle") || 0; return Math.max(0, last + c.cycleMin * 60e3 - Date.now()); }
@@ -634,14 +698,16 @@ export async function cycle(force, onlyJob){
   try {
     await loadLog();
     await paperStep();
-    if (running || chatting || queue.length) return true;
+    // 회의가 열려 있어도 주기 업무는 따로 계속한다 (사람처럼 각자 일함). 단, 질문에 답하는 중에는 잡담만 쉰다
     if (usage().calls >= c.callMax){ if (!usage().capNoted){ bump("capNoted"); post({ch: "hq", kind: "system", text: `오늘 사무실 AI 호출 한도(${c.callMax}번)를 다 썼습니다. 모의투자 갱신과 차트·뉴스 확인은 계속합니다.`}); } return true; }
     let job = onlyJob;
     if (!job){ const i = +localStorage.getItem("officeJob") || 0; job = JOBS[i % JOBS.length]; localStorage.setItem("officeJob", String(i + 1)); }
     if (job === "paper" && !(await paperActive())) job = "research";
     if (job === "computer" && !computerOn()) job = "economy";
     if (job === "task" && !backlog().some(t => t.status !== "done")) job = "retro";
+    if (job === "chat" && (running || chatting)) job = "economy";
     lastJob = job; fire({kind: "cycle", job, label: JOB_KO[job]});
+    post({ch: JOB_TEAM[job] || "hq", kind: "work", agent: TEAM_LEAD[JOB_TEAM[job]] || "lead", icon: "▶", text: `${JOB_KO[job]} 시작`});
     const fn = JOB_FN()[job] || research;
     try { await fn(); }
     catch(e){
@@ -652,7 +718,11 @@ export async function cycle(force, onlyJob){
       } else throw e;
     }
     return true;
-  } catch(e){ post({ch: "hq", kind: "system", text: `${JOB_KO[lastJob] || "일"} 중 문제: ${String(e.message || e).slice(0, 120)}`}); return false; }
+  } catch(e){
+    post({ch: "hq", kind: "system", text: `${JOB_KO[lastJob] || "일"} 중 문제: ${String(e.message || e).slice(0, 120)}`});
+    import("./selfdev.js").then(S => S.recordError({msg: String(e.message || e), stack: e.stack || "", src: "job:" + lastJob})).catch(() => {});
+    return false;
+  }
   finally { cycling = false; fire({kind: "cycle-end"}); setTimeout(pump, 200); }
 }
 
@@ -661,22 +731,29 @@ async function solo(a, {room, sys, user, maxTokens = 900, temperature = 0.6, ext
   const models = assignModels();
   const target = models[a.id];
   const cm = claudeModels();
-  const alt = cm && target?.model !== cm.sonnet ? {id: "anthropic", model: cm.sonnet} : fusionSources().find(t => t.model !== target?.model && !badModels()[t.model] && !/r1|reason|think|gpt-oss|qwq/i.test(t.model));
+  const alt = cm && target?.model !== cm.sonnet ? {id: "anthropic", model: cm.sonnet} : fusionSources().filter(t => t.model !== target?.model && !badModels()[t.model]).sort((x, y) => modelScore(y.model) - modelScore(x.model))[0];
   const entry = post({ch: room || a.team, kind: "agent", agent: a.id, text: "", think: "", steps: [], live: true, model: target?.model || "", ...extra});
   fire({kind: "solo", agent: a, entry});
   let finalRaw = "";
   for (const tg of [target, alt, null].filter((t, i, arr) => i === arr.length - 1 || (t && arr.findIndex(x => x && x.model === t.model) === i))){
     let raw = "", think = "", last = 0;
-    const show = () => { const mm = raw.match(/^💭\s*([^\n]*)\n?/); entry.think = (think + (mm ? "\n" + mm[1] : "")).trim(); entry.text = visibleText((mm ? raw.slice(mm[0].length) : raw).replace(/<think>[\s\S]*?(<\/think>|$)/g, "")).replace(/^\s*💭[^\n]*\n?/gm, "").trim();
+    const show = () => { const mm = raw.match(/^💭\s*([^\n]*)\n?/); entry.think = mm ? koThink(mm[1]) : ""; entry.text = koOnly(visibleText((mm ? raw.slice(mm[0].length) : raw).replace(/<think>[\s\S]*?(<\/think>|$)/g, "")).replace(/^\s*💭[^\n]*\n?/gm, "")).trim();
+      entry.thinking = !entry.text && !!think;
       if (Date.now() - last > 150){ last = Date.now(); fire({kind: "delta", agent: a, entry}); } };
+    // 느린 모델은 끊고 다음 모델로: 60초 동안 한 글자도 없거나 전체 3분을 넘기면
+    const ctl = new AbortController(), t0 = Date.now(); let slow = false;
+    const watch = setInterval(() => { const el = Date.now() - t0; if ((!raw && el > 60e3) || el > 180e3){ slow = true; ctl.abort(); } }, 2000);
     try {
       bump("calls");
-      const route = await brainStream({messages: [{role: "system", content: sys}, {role: "user", content: user}], role: a.role === "code" ? "code" : a.role === "reason" ? "reason" : "general",
+      const route = await brainStream({messages: [{role: "system", content: sys}, {role: "user", content: user}], role: a.role === "code" ? "code" : "general", signal: ctl.signal, noThink: true,
         maxTokens, temperature, target: tg || undefined, fallback: true, onContent: d => { raw += d; show(); }, onThink: d => { think += d; show(); }});
       raw = splitThink(raw).body; show(); finalRaw = raw;
       entry.model = route?.model || tg?.model || entry.model;
-    } catch(e){ entry.notes = [...(entry.notes || []), `${shortName(tg?.model)}: ${String(e.message || e).slice(0, 60)} → 다른 모델로`]; }
-    if (entry.text || /```json|\{\s*"name"/.test(finalRaw)) break;
+    } catch(e){ if (slow && raw){ raw = splitThink(raw).body; show(); finalRaw = raw; } entry.notes = [...(entry.notes || []), `${shortName(tg?.model)}: ${slow ? "응답이 너무 느림" : String(e.message || e).slice(0, 60)} → 다른 모델로`]; }
+    finally { clearInterval(watch); }
+    entry.thinking = false;
+    noteModel(entry.model || tg?.model, (entry.text || finalRaw) && !slow ? "ok" : slow ? "slow" : "fail");
+    if (entry.text || /```json|^\s*[\[{]\s*"?[\w{]/m.test(finalRaw)) break;
     markBad(tg?.model);
   }
   if (!entry.text && !finalRaw) entry.text = `(${a.name}: 이번에는 답하지 못했습니다)`;
@@ -693,7 +770,7 @@ async function solo(a, {room, sys, user, maxTokens = 900, temperature = 0.6, ext
 }
 const personaOf = (a, extra = "") => `너는 세계적인 기업 수준의 GH Nano 사무실 ${teamById(a.team).name}의 '${a.name}'(${a.title})다. 역할: ${a.duty}
 ${notesText(a.team)}
-이번 일에서는 도구를 부를 수 없으니 주어진 자료로만 말한다. 첫 줄은 '💭 '로 시작하는 한 문장 속마음(무엇을 보고 어떻게 판단하는지)이다. 그다음 동료에게 말하듯 자연스러운 한국어로 말한다. 데이터에 없는 숫자는 지어내지 않는다. ${extra}`;
+반드시 한국어로만 쓰고, 영어 생각이나 답 계획은 쓰지 않는다. 이번 일에서는 도구를 부를 수 없으니 주어진 자료로만 말한다. 첫 줄은 '💭 '로 시작하는 한 문장 속마음(무엇을 보고 어떻게 판단하는지)이다. 그다음 동료에게 말하듯 자연스러운 한국어로 말한다. 데이터에 없는 숫자는 지어내지 않는다. ${extra}`;
 
 /* ---- 모의투자 (코드) ---- */
 async function paperActive(){ const P = await import("./paper.js"); const b = await P.loadBook(); return b.strategies.some(s => s.status === "active"); }
@@ -941,7 +1018,7 @@ async function makeReport(since){
   const P = await import("./paper.js"); const book = await P.bookText().catch(() => "");
   const ceo = agentById("lead"), hour = new Date().getHours();
   const facts = sections.map(s => `## ${s.name} (팀장 ${s.lead})\n${s.items.map(x => "- " + x).join("\n") || "- (이번 시간 기록 없음)"}${s.next.length ? "\n다음: " + s.next.join(" / ") : ""}`).join("\n\n");
-  const e = await solo(ceo, {room: "hq", sys: personaOf(ceo, "지금은 매시간 하는 전사 성과 발표다. 아래 사실만으로 대표(사용자)에게 발표한다: 맨 앞에 핵심 성과 3줄, 그다음 팀별로 해낸 것과 다음 계획, 마지막에 위험·도움이 필요한 것. 마크다운. 지어내지 않는다."),
+  const e = await solo(ceo, {room: "hq", sys: personaOf(ceo, "지금은 매시간 하는 전사 성과 발표다. 아래 사실만으로 대표(사용자)에게 짧게 발표한다: 핵심 성과 3줄 → 기록이 있는 팀만 한 줄씩(해낸 것 · 다음 할 일) → 도움이 필요한 것 1줄. 전체 15줄 이내, 한국어, 마크다운 목록. 기록이 없는 팀은 쓰지 않고, 지어내지 않는다."),
     user: `${hour}시 발표 · 지난 ${Math.round((Date.now() - since) / 60e3)}분\n\n${facts || "(이번 시간 기록 없음)"}\n\n모의투자:\n${book.slice(0, 1500)}`, maxTokens: 1600, train: "아래 팀별 업무 기록으로 대표에게 하는 시간별 성과 발표문을 써 줘."});
   const report = {id: uid(), t: Date.now(), since, title: `${hour}시 성과 발표`, text: noMind(e.text), sections};
   await idb.put("report:" + report.id, report);
@@ -1164,3 +1241,31 @@ async function macroJob(){
   writeJ("officeMacroFc", led.slice(-200));
   await solo(a, {room: "fut", sys: personaOf(a, "경제지표 최신값과 모델 예측(80% 구간)을 보고 다음 발표가 어떻게 나올지, 시장(금리·주식·코인)에 어떤 의미인지 4~6문장으로 해설한다. 모델 예측의 한계도 짚는다."), user: MA.macroText(dash), train: "아래 경제지표와 예측을 보고 다음 발표 전망과 시장에 주는 의미를 해설해 줘."});
 }
+
+/* ============ 스스로 코드 고치기 (AI·개발팀) ============ */
+// 앱에서 난 오류를 모아 두었다가, 개발팀이 원인 코드를 읽고 최소한의 수정안을 만든다.
+// 수정안은 코드가 문법·보호 파일(실거래·키·안전장치) 검사를 하고, 대표님이 [적용]을 눌러야 반영된다 (문제가 생기면 자동으로 되돌림).
+async function selfdevJob(){
+  const S = await import("./selfdev.js");
+  const errs = S.recentErrors(5).filter(e => !(S.listPatches() || []).some(p => p.error?.msg === e.msg && ["proposed", "applied", "rejected"].includes(p.status)));
+  const a = agentById("dev"), q = agentById("qae") || a;
+  if (!errs.length){
+    // 고칠 오류가 없으면 테스트 담당이 최근 기록에서 이상한 점을 찾아 과제로 남긴다
+    const sys = personaOf(q, "앱 품질 담당으로서 최근 사무실 기록(실패·빈 답·느린 모델)을 보고 고칠 만한 문제 하나를 짧게 말한다. 없으면 '지금은 고칠 오류가 없습니다'라고 한 줄만.");
+    const fails = (LOG || []).filter(e => e.kind === "system" && /문제|실패|못했|중단/.test(e.text || "")).slice(-8).map(e => "- " + e.text).join("\n");
+    const slow = Object.entries(modelHealth()).filter(([, h]) => (h.slow || 0) + (h.fail || 0) >= 2).map(([m, h]) => `- ${m}: 느림 ${h.slow || 0} · 실패 ${h.fail || 0}`).join("\n");
+    if (!fails && !slow){ post({ch: "lab", kind: "work", agent: q.id, icon: "✅", text: "앱 오류 없음 · 모델 상태 양호"}); return; }
+    await solo(q, {room: "lab", sys, user: `최근 실패:\n${fails || "(없음)"}\n\n자주 느리거나 실패한 모델(자동으로 덜 쓰게 바뀜):\n${slow || "(없음)"}`, maxTokens: 500});
+    return;
+  }
+  const err = errs[0];
+  fire({kind: "busy", agent: a, text: `🛠 ${err.file || "앱"} 오류 원인 찾는 중`});
+  const ask = async (sys, user) => { const e = await solo(a, {room: "lab", sys: personaOf(a, sys), user, maxTokens: 1800, temperature: 0.2}); return e.raw || e.text || ""; };
+  const p = await S.proposeFix(err, {ask});
+  post({ch: "lab", kind: "patch", agent: a.id, file: p.file || err.file, why: p.why || p.check?.msg || "", status: p.status, patchId: p.id});
+  if (p.status === "proposed") addTask({team: "lab", title: `코드 수정안 검토: ${p.file}`, why: `${String(err.msg).slice(0, 80)} (${err.count || 1}번)`, owner: q.name});
+  addNote("lab", `${p.file || err.file} 오류 '${String(err.msg).slice(0, 50)}' → 수정안 ${p.status === "proposed" ? "준비됨(대표 승인 대기)" : "실패: " + (p.check?.msg || p.status)}`, "코드");
+  fire({kind: "growth"});
+}
+// 앱 전체의 오류를 모으기 시작 (사무실 모듈은 앱 시작 때 불러와진다)
+if (typeof window !== "undefined") import("./selfdev.js").then(S => S.captureErrors()).catch(() => {});

@@ -362,7 +362,7 @@ async function streamLocal({messages, maxTokens, temperature, signal, onContent,
   const p = localLock.then(go1, go1); localLock = p.catch(() => {}); return p;
 }
 // OpenAI 호환 스트리밍 (각 회사 · Ollama)
-async function streamOAI(target, {messages, maxTokens, temperature, signal, onContent, onThink, onStats, stop}){
+async function streamOAI(target, {messages, maxTokens, temperature, signal, onContent, onThink, onStats, stop, think, noThink}){
   const isOl = target.id === "ollama";
   const url = isOl ? apiBase("ollama") + "/v1/chat/completions" : provBase(target.id) + "/chat/completions";
   const headers = {"content-type": "application/json", accept: "text/event-stream"};
@@ -373,9 +373,19 @@ async function streamOAI(target, {messages, maxTokens, temperature, signal, onCo
   const canSee = VISION_RE.test(target.model);
   const msgs = canSee ? messages.map(m => m.images?.length ? {role: m.role, content: [{type: "text", text: m.content}, ...m.images.map(url => ({type: "image_url", image_url: {url}}))]} : {role: m.role, content: m.content}) : stripImages(messages, `${shortModel(target.model)}는 이미지를 볼 수 없습니다`);
   const body = {model: target.model, messages: msgs, stream: true, max_tokens: maxTokens, temperature};
+  // 생각 끄기(noThink): 추론 모델이 영어로 길게 생각만 하다 끝나는 것을 막는다 (모델마다 끄는 방법이 다름)
+  let kw = false;
+  if (noThink || think === false){
+    if (/gpt-oss/i.test(target.model) && !isOl) body.reasoning_effort = "low";
+    if (/qwen3(?!.*(instruct|thinking))/i.test(target.model)){ const k = msgs.map(m => m.role).lastIndexOf("user"); if (k >= 0 && typeof msgs[k].content === "string" && !msgs[k].content.includes("/no_think")) body.messages = msgs.map((m, i) => i === k ? {...m, content: m.content + " /no_think"} : m); }
+    if (target.id === "nvidia" && /nemotron|deepseek-v3\.[1-9]|deepseek-v4|qwen3|kimi-k2\.5|glm/i.test(target.model)){ body.chat_template_kwargs = {thinking: false, enable_thinking: false}; kw = true; }
+  }
   if (stop && target.id !== "gemini") body.stop = stop;
   let res;
-  try { res = await fetch(url, {method: "POST", headers, signal, body: JSON.stringify(body)}); }
+  try {
+    res = await fetch(url, {method: "POST", headers, signal, body: JSON.stringify(body)});
+    if (kw && res.status === 400){ delete body.chat_template_kwargs; res = await fetch(url, {method: "POST", headers, signal, body: JSON.stringify(body)}); }   // 이 옵션을 모르는 모델이면 빼고 다시
+  }
   catch (e){
     if (signal?.aborted) throw e;
     const err = new Error(!LAUNCHER.on ? "웹 버전에서는 브라우저 보안정책 때문에 외부 AI에 바로 연결할 수 없습니다. GHNano.exe로 실행하세요." : isOl ? "Ollama에 연결하지 못했습니다." : `${PROVIDERS[target.id].name}에 연결하지 못했습니다.`);
