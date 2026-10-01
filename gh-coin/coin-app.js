@@ -1,7 +1,7 @@
 // GH Coin 앱 시작: 트레이딩 본부(픽셀 사무실) 화면을 바로 열고, AI 연결·차트 터미널·실거래·학습 데이터를 붙인다.
 // AI 연결(API 키)·실거래 키는 같은 컴퓨터의 GH Nano 와 같은 설정을 쓴다(같은 실행기 주소일 때). 대화 기록·데모 장부·과제는 GH Coin 것만 따로 쓴다.
 import { esc, md, settings, saveSettings, PROVIDERS, SEARCH_KEYS, addApiKey, removeApiKey, detectLauncher, LAUNCHER, idb } from "../nuri-ai/engine.js";
-import { openOffice } from "./coin-ui.js";
+import { openOffice, openComboBoard } from "./coin-ui.js";
 
 const $ = s => document.querySelector(s);
 const toast = m => { const t = $("#toast"); t.textContent = m; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, 3200); };
@@ -60,6 +60,7 @@ function openKeys(){
   // 사무실 위쪽 바에 AI 연결 버튼
   const top = document.querySelector(".of-top"), set = document.querySelector("#ofSetBtn")?.closest(".of-pick");
   if (top && !$("#gcKeys")){ const b = document.createElement("button"); b.className = "of-btn"; b.id = "gcKeys"; b.textContent = "🔑 AI 연결"; b.onclick = openKeys; set ? top.insertBefore(b, set) : top.appendChild(b); }
+  if (top && !$("#gcCombo")){ const b = document.createElement("button"); b.className = "of-btn"; b.id = "gcCombo"; b.textContent = "⚡ 실시간 타점"; b.title = "모든 보조지표 × 4개 시간대 → 추세·타점 (60초마다)"; b.onclick = () => openComboBoard(true); top.insertBefore(b, top.querySelector(".of-btn") || null); }
   if (!Object.keys(PROVIDERS).some(id => settings.keys[id])) setTimeout(() => { openKeys(); toast("먼저 AI 키를 하나 이상 연결하세요 (NVIDIA·Groq·Cerebras 무료)"); }, 600);
   document.title = "GH Coin";
 })();

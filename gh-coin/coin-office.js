@@ -204,6 +204,7 @@ export const officeState = () => ({running, queued: queue.length});
 const ACTIONS = [
   {job: "cdev", re: /커스텀.*(지표|매매법|전략).*(만들|찾|개발|짜|연구|백테스트)/, say: "커스텀 지표 개발팀이 지금 바로 수식 지표로 매매법을 만들어 커스텀 백테스트팀이 검증합니다"},
   {job: "dev", re: /(매매법|전략|지표).*(만들|찾|개발|짜|연구|발굴|백테스트)|(만들|찾|개발|짜).*(매매법|전략)|백테스트\s*(해|돌려)/, say: "매매법 개발팀이 지금 바로 모든 보조지표로 매매법을 만들어 백테스트팀이 검증합니다"},
+  {job: "combo", re: /(종합|모든|전체|실시간).{0,8}(지표|보조지표).*(타점|추세|분석|봐|알려|잡아)|실시간.{0,6}(타점|추세)|지표.{0,4}(조합|종합)/, say: "실시간 종합 지표 타점팀이 지금 바로 모든 보조지표를 4개 시간대로 계산해 추세와 타점을 잡습니다"},
   {job: "trend", re: /추세.*(분석|봐|알려|어때)/, say: "추세 분석팀이 지금 바로 다중 시간대 추세를 봅니다"},
   {job: "entry", re: /(타점|진입).*(분석|봐|알려|어디|잡아)/, say: "진입 타점팀이 지금 바로 진입 자리를 계산합니다"},
   {job: "sr", re: /(지지|저항|매물대).*(분석|봐|알려|어디)/, say: "지지·저항팀이 지금 바로 가격대를 계산합니다"},
@@ -315,7 +316,7 @@ function statusText(){
   const recent = (LOG || []).filter(e => ["work", "bt", "re", "arch", "ml", "macro", "forecast", "biz", "files", "task", "report"].includes(e.kind)).slice(-8)
     .map(e => `- ${new Date(e.t).toLocaleTimeString("ko-KR", {hour: "2-digit", minute: "2-digit"})} ${agentById(e.agent)?.name || ""} ${e.kind === "bt" ? `매매법 '${e.name}' ${e.pass ? "통과" : "불통과"}` : e.kind === "re" ? `재개발 후보 ${e.items?.length || 0}곳` : e.kind === "arch" ? `설계안 '${e.name}'` : e.kind === "biz" ? `사업 '${e.name}' ${String(e.verdict || "").split(" — ")[0]}` : e.kind === "task" ? `과제 '${e.title}' ${e.status}` : String(e.text || e.title || e.name || e.kind).slice(0, 60)}`).join("\n");
   const open = backlog().filter(x => x.status !== "done").slice(0, 4).map(x => `- ${teamById(x.team)?.name}: ${x.title}`).join("\n");
-  return `[지금 사무실 상황 · 코드가 확인한 사실]\n진행 중인 회의: ${running && running.trigger !== "user" ? running.name : "없음"} · 지금 하는 업무: ${cycling ? JOB_KO[lastJob] || lastJob : "없음"} · 다음 업무: ${JOB_KO[JOBS[(+localStorage.getItem("coinJob") || 0) % JOBS.length]]}\n최근에 한 일:\n${recent || "- (아직 없음)"}\n남은 성장 과제:\n${open || "- (없음)"}`;
+  return `[지금 사무실 상황 · 코드가 확인한 사실]\n진행 중인 회의: ${running && running.trigger !== "user" ? running.name : "없음"} · 지금 하는 업무: ${cycling ? JOB_KO[lastJob] || lastJob : "없음"} · 다음 업무: ${JOB_KO[JOBS[(+localStorage.getItem("coinJob") || 0) % JOBS.length]]}\n최근에 한 일:\n${recent || "- (아직 없음)"}\n남은 성장 과제:\n${open || "- (없음)"}${comboText() ? "\n" + comboText() : ""}`;
 }
 // 같은 이유가 반복되면 한 줄로 묶는다 ("… → 다른 모델로 (3번)")
 function addNote2(entry, text){
@@ -663,14 +664,14 @@ export function startChatter(){
 // 매 주기 ① 모의투자 장부를 실제 시세로 갱신(코드, AI 없음) ② 그때그때 한 가지 일을 고른다:
 // 매매법 연구 · SNS 여론 · 경제 리서치 · 동료 수다 · 컴퓨터 작업 · 모의투자 보고 (하루 AI 호출 한도 안에서)
 // 쉬지 않고 돌아가는 업무 순환표: 팀마다 고르게 돌아가도록 섞어 두었다 (모듈이 없으면 경제 리서치로 대신)
-const JOBS = ["dev", "ind", "trend", "situ", "cdev", "entry", "sr", "news", "promote", "pattern", "coin", "ml", "dev", "tpsl", "cdev", "trend", "chat", "forecast", "coin", "live", "retro", "task", "selfdev", "macro", "sns", "computer", "paper"];
-const JOB_KO = {dev: "매매법 개발 → 백테스트", cdev: "커스텀 지표 개발 → 백테스트", ind: "보조지표 분석", trend: "다중 시간대 추세 분석", entry: "진입 타점 분석", sr: "지지·저항 분석",
+const JOBS = ["dev", "combo", "ind", "trend", "situ", "cdev", "entry", "sr", "news", "promote", "pattern", "coin", "ml", "dev", "tpsl", "combo", "cdev", "trend", "chat", "forecast", "coin", "live", "retro", "task", "selfdev", "macro", "sns", "computer", "paper"];
+const JOB_KO = {combo: "실시간 종합 지표 타점", dev: "매매법 개발 → 백테스트", cdev: "커스텀 지표 개발 → 백테스트", ind: "보조지표 분석", trend: "다중 시간대 추세 분석", entry: "진입 타점 분석", sr: "지지·저항 분석",
   tpsl: "익절·손절 관리", news: "뉴스·기사 분석", macro: "경제지표 예측", situ: "코인 상황판", pattern: "차트·캔들 패턴 분석", coin: "코인팀 회의", ml: "머신러닝·딥러닝 실험",
   promote: "데모 → 실거래 관문 심사", live: "실거래 데스크 점검", paper: "데모거래 보고", forecast: "방향 예측 토론", sns: "SNS 여론 확인", chat: "동료 수다", computer: "컴퓨터 작업",
   retro: "팀 회고·부족한 점 찾기", task: "개선 과제 수행", selfdev: "우리 앱 오류 찾아 코드 고치기", economy: "경제 리서치"};
-const JOB_TEAM = {dev: "dev", cdev: "cdev", ind: "ind", trend: "trend", entry: "entry", sr: "sr", tpsl: "tpsl", news: "news", macro: "news", situ: "situ", pattern: "pattern", coin: "btc", ml: "ml",
+const JOB_TEAM = {combo: "combo", dev: "dev", cdev: "cdev", ind: "ind", trend: "trend", entry: "entry", sr: "sr", tpsl: "tpsl", news: "news", macro: "news", situ: "situ", pattern: "pattern", coin: "btc", ml: "ml",
   promote: "demo", live: "live", paper: "demo", forecast: "entry", sns: "news", chat: "hq", computer: "hq", retro: "hq", task: "hq", selfdev: "hq", economy: "news"};
-const JOB_FN = () => ({dev: () => research("std"), cdev: () => research("custom"), ind: indJob, trend: trendJob, entry: entryJob, sr: srJob, tpsl: tpslJob, news: economyCheck, macro: macroJob,
+const JOB_FN = () => ({combo: comboJob, dev: () => research("std"), cdev: () => research("custom"), ind: indJob, trend: trendJob, entry: entryJob, sr: srJob, tpsl: tpslJob, news: economyCheck, macro: macroJob,
   situ: situJob, pattern: patternJob, coin: coinJob, ml: mlJob, promote: promoteJob, live: liveDeskJob, paper: paperReport, forecast: forecastJob, sns: snsCheck, chat: () => chatter(true),
   computer: computerWork, retro, task: doTask, selfdev: selfdevJob, economy: economyCheck});
 let cycleTimer = 0, cycling = false, lastJob = "";
@@ -1337,4 +1338,112 @@ async function liveDeskJob(){
   const linked = Object.entries(cfg.linked || {}).filter(([, v]) => v?.on).length;
   post({ch: "live", kind: "work", agent: lead.id, icon: "🔐", text: `실거래 ${cfg.enabled ? "켜짐" : "꺼짐"} · ${cfg.env === "mainnet" ? "실거래(메인넷)" : "테스트넷"} · ${cfg.mode === "auto" ? "자동" : "승인"} 모드 · 연결 전략 ${linked}개${st?.todayPnl != null ? ` · 오늘 실현 ${fx(st.todayPnl)} USDT` : ""}`});
   fire({kind: "pipeline"});
+}
+
+/* ================================================================
+   실시간 종합 지표 타점팀 — 차트 터미널의 모든 보조지표(136종)를 5분·15분·1시간·4시간에 계산해 조합
+   ① 실시간 루프(기본 60초, AI 없음): 6개 코인 타점판 갱신 · 타점이 새로 잡히면 기록장에 남기고 카드로 알림
+   ② 타점 기록장: 잡은 타점이 익절1·손절·24시간 만료 중 무엇이 됐는지 코드가 채점 (적중률 = 이 팀의 성적표)
+   ③ 업무 순환(combo): 코인 하나를 골라 지표 묶음별 표 + 시간대표 + 타점표를 올리고 팀장이 한 번 해설
+   실제 주문은 하지 않는다. 실거래는 기존 관문(데모 → 대표 승인)만 쓴다.
+   ================================================================ */
+const CB_CALLS = "coinComboCalls";
+const CB = {coins: {}, t: 0, running: false, err: ""};
+const cbCache = {};      // `${sym}:${tf}` → {at, cs, res}
+const CB_TTL = {"5": 0, "15": 50e3, "60": 170e3, "240": 590e3};
+let cbTimer = 0, cbLastTalk = {};
+const comboCfgOn = () => officeCfg().combo !== false;
+export const comboCalls = () => readJ(CB_CALLS, []);
+export function comboBoard(){ return {...CB, calls: comboCalls()}; }
+async function cbTF(c, tf, force){
+  const key = c.sym + ":" + tf, hit = cbCache[key], C = await import("./combo.js");
+  if (hit && !force && Date.now() - hit.at < CB_TTL[tf]) return hit;
+  const cs = await kl(c.sym, tf, 500);
+  const res = await C.analyzeTF(cs);
+  return (cbCache[key] = {at: Date.now(), cs, res});
+}
+// 코인 하나 실시간 분석 → 타점판 한 줄
+export async function comboScan(c, force){
+  const C = await import("./combo.js"), tf = {}, raw = {};
+  for (const k of C.TF_LIST){ try { const h = await cbTF(c, k, force); tf[k] = h.res; raw[k] = h.cs; } catch(e){ /* 그 시간대만 빠짐 */ } }
+  if (!tf["15"] && !tf["5"]) throw new Error(`${c.ko} 시세를 받지 못했습니다`);
+  const plan = C.planOf(tf), prev = CB.coins[c.id];
+  const row = {id: c.id, ko: c.ko, sym: c.sym, t: Date.now(), plan, tf: Object.fromEntries(Object.entries(tf).map(([k, r]) => [k, {score: r.score, up: r.up, dn: r.dn, flat: r.flat, total: r.total, ob: r.ob, os: r.os, oscN: r.oscN, regime: r.regime.label, fresh: r.fresh.slice(0, 4), groups: r.groups}])), n: C.comboIds().length};
+  CB.coins[c.id] = row;
+  // 기록장 채점 (5분봉으로)
+  const calls = comboCalls(); let changed = false;
+  const cs5 = raw["5"] || raw["15"];
+  for (let i = 0; i < calls.length; i++) if (!calls[i].result && calls[i].coin === c.id && cs5){ const g = C.gradeCall(calls[i], cs5); if (g.result){ calls[i] = g; changed = true; post({ch: "combo", kind: "work", agent: "combo_9", icon: g.result === "win" ? "✅" : g.result === "loss" ? "❌" : "⌛", text: `타점 채점: ${c.ko} ${g.side > 0 ? "롱" : "숏"} ${fx(g.entry)} → ${g.result === "win" ? "익절1 도달 (+1.5R)" : g.result === "loss" ? "손절 (-1R)" : `24시간 만료 (${g.r}R)`}`}); } }
+  // 새 타점: 관망·대기 → 롱/숏 타점으로 바뀐 순간만 기록 (같은 방향 열린 타점이 있으면 중복 기록 안 함)
+  const isCall = s => s === "long" || s === "short";
+  if (isCall(plan.state) && (!prev || prev.plan.state !== plan.state) && !calls.some(x => x.coin === c.id && !x.result && x.side === plan.side)){
+    const call = {id: uid(), coin: c.id, ko: c.ko, side: plan.side, entry: plan.entry, sl: plan.sl, tp1: plan.tp1, tp2: plan.tp2, conf: plan.conf, why: plan.why, big: plan.big, small: plan.small, t: (raw["5"] || raw["15"]).at(-1).t};
+    // 같은 코인의 반대 방향 열린 타점은 '반대 신호'로 그 자리에서 마감
+    for (let i = 0; i < calls.length; i++) if (calls[i].coin === c.id && !calls[i].result && calls[i].side === -plan.side){ const x = calls[i]; calls[i] = {...x, result: "flip", r: Math.round(x.side * (plan.price - x.entry) / Math.abs(x.entry - x.sl) * 100) / 100, end: call.t}; }
+    calls.push(call); changed = true;
+    onNewCall(c, row, call).catch(e => console.warn(e));
+  }
+  if (changed) writeJ(CB_CALLS, calls.slice(-300));
+  return row;
+}
+async function onNewCall(c, row, call){
+  const C = await import("./combo.js"), p = row.plan;
+  table("combo", "combo_lead", `${C.STATE_KO[p.state]} · ${c.ko} (현재가 ${fx(p.price)} · 확신 ${p.conf}%)`, ["시간대", "점수", "판정", "상승/하락/중립", "장세", "새 신호"],
+    C.TF_LIST.filter(k => row.tf[k]).map(k => [C.TF_NAME[k], C.pct(row.tf[k].score), C.verdict(row.tf[k].score), `${row.tf[k].up}/${row.tf[k].dn}/${row.tf[k].flat}`, row.tf[k].regime, row.tf[k].fresh.map(f => f.name + (f.dir > 0 ? "▲" : "▼")).join(", ") || "—"]),
+    `진입 ${fx(call.entry)} · 손절 ${fx(call.sl)} · 익절1 ${fx(call.tp1)} · 익절2 ${fx(call.tp2)} · 손익비 ${fx(p.rr, 2)} — ${p.why} · 기록장에 남겨 자동 채점 · 매매 권유 아님`);
+  addNote("combo", `${c.ko} ${call.side > 0 ? "롱" : "숏"} 타점 ${fx(call.entry)} (손절 ${fx(call.sl)}, 확신 ${call.conf}%)`, "타점");
+  fire({kind: "combo-call", call});
+  // 팀장 해설은 AI 가 있을 때만, 코인당 20분에 한 번
+  if (!hasAI() || officePaused() || Date.now() - (cbLastTalk[c.id] || 0) < 20 * 60e3 || usage().calls >= officeCfg().callMax) return;
+  cbLastTalk[c.id] = Date.now();
+  await explain("combo_lead", "combo", `${c.ko}에서 방금 잡힌 ${call.side > 0 ? "롱" : "숏"} 타점을 해설한다: 왜 지금인지(큰 추세·작은 봉 타이밍·새 신호), 손절 자리의 근거, 무효가 되는 조건.`, comboFacts(row), "아래 실시간 종합 지표 결과를 보고 타점을 해설해 줘.");
+}
+function comboFacts(row){
+  const p = row.plan, T = {"5": "5분", "15": "15분", "60": "1시간", "240": "4시간"};
+  const lines = Object.entries(row.tf).map(([k, r]) => `${T[k]}: 점수 ${Math.round(r.score * 100)} (상승 ${r.up}·하락 ${r.dn}·중립 ${r.flat}) · ${r.regime} · 과매수 ${r.ob}/${r.oscN} 과매도 ${r.os}/${r.oscN}${r.fresh.length ? " · 새 신호 " + r.fresh.map(f => f.tag.replace(/^.*새 신호 /, f.name + " ")).join(", ") : ""}`);
+  return `${row.ko} 현재가 ${fx(p.price)} · ATR(15분) ${fx(p.atr)} · 계산한 지표 ${row.n}종\n${lines.join("\n")}\n큰 추세 점수 ${Math.round(p.big * 100)} · 타이밍 점수 ${Math.round(p.small * 100)} · 판정 ${p.state} (${p.why})\n` +
+    (p.entry ? `진입 ${fx(p.entry)} · 손절 ${fx(p.sl)} · 익절1 ${fx(p.tp1)} · 익절2 ${fx(p.tp2)} · 손익비 ${fx(p.rr, 2)}\n` : "") +
+    `가까운 지지 ${p.sup ? fx(p.sup.price) + " (" + p.sup.names.join("·") + ")" : "—"} · 가까운 저항 ${p.res ? fx(p.res.price) + " (" + p.res.names.join("·") + ")" : "—"}`;
+}
+// 회의·대표 질문 때 붙는 한 줄 요약
+export function comboText(){
+  const rows = Object.values(CB.coins); if (!rows.length) return "";
+  const K = {long: "롱 타점", short: "숏 타점", longWait: "롱 대기", shortWait: "숏 대기", wait: "관망"};
+  const st = (() => { const done = comboCalls().filter(x => x.result), w = done.filter(x => (x.r || 0) > 0).length; return done.length ? ` · 기록장 적중 ${w}/${done.length}` : ""; })();
+  return `[실시간 종합 지표 타점판 · ${new Date(CB.t).toLocaleTimeString("ko-KR", {hour: "2-digit", minute: "2-digit"})} 기준${st}]\n` + rows.map(r => `- ${r.ko} ${fx(r.plan.price)}: ${K[r.plan.state]} (큰 추세 ${Math.round(r.plan.big * 100)}, 타이밍 ${Math.round(r.plan.small * 100)}${r.plan.entry ? `, 진입 ${fx(r.plan.entry)} 손절 ${fx(r.plan.sl)} 익절 ${fx(r.plan.tp1)}` : ""})`).join("\n");
+}
+export async function comboTick(force){
+  if (CB.running || (!force && !comboCfgOn())) return;
+  CB.running = true; fire({kind: "combo"});
+  try {
+    for (const c of COINS){ try { await comboScan(c); } catch(e){ CB.err = String(e.message || e).slice(0, 100); } }
+    CB.t = Date.now(); if (Object.keys(CB.coins).length) CB.err = "";
+  } finally { CB.running = false; fire({kind: "combo"}); }
+}
+export function startCombo(){
+  if (cbTimer) return;
+  const sec = Math.max(30, +officeCfg().comboSec || 60);
+  cbTimer = setInterval(() => comboTick().catch(e => console.warn(e)), sec * 1e3);
+  setTimeout(() => comboTick().catch(e => console.warn(e)), 2500);
+}
+export function stopCombo(){ clearInterval(cbTimer); cbTimer = 0; }
+// 업무 순환·말로 시킨 일: 코인 하나를 깊게 (지표 묶음별 표 + 시간대표 + 타점) → 팀장 해설
+async function comboJob(){
+  const C = await import("./combo.js"), lead = agentById("combo_lead");
+  const named = userNote && COINS.find(c => new RegExp(`${c.ko}|${c.sym.replace("USDT", "")}`, "i").test(userNote));
+  const c = named || COINS[rot("coinCombo", COINS.length)];
+  fire({kind: "busy", agent: lead, text: `⚡ ${c.ko} 보조지표 ${C.comboIds().length}종 × 4개 시간대 계산 중`});
+  const row = await comboScan(c, true), p = row.plan;
+  const G = {};
+  for (const r of Object.values(row.tf)) for (const [g, v] of Object.entries(r.groups)){ const x = G[g] ||= {up: 0, dn: 0, flat: 0}; x.up += v.up; x.dn += v.dn; x.flat += v.flat; }
+  const gRows = Object.entries(G).map(([g, v]) => [g, String(v.up), String(v.dn), String(v.flat), v.up > v.dn * 1.5 ? "상승 우세" : v.dn > v.up * 1.5 ? "하락 우세" : "엇갈림"]);
+  const tRows = C.TF_LIST.filter(k => row.tf[k]).map(k => { const r = row.tf[k]; return [C.TF_NAME[k], C.pct(r.score), C.verdict(r.score), `${r.up}/${r.dn}/${r.flat}`, r.regime, `${r.ob}/${r.os}`, r.fresh.map(f => f.name + (f.dir > 0 ? "▲" : "▼")).join(", ") || "—"]; });
+  table("combo", lead.id, `⚡ ${c.ko} 종합 지표 — 지표 묶음별 (4개 시간대 합계)`, ["묶음", "상승", "하락", "중립", "판정"], gRows, `차트 터미널 지표 ${row.n}종 중 장세 판별용(ATR·초피니스·허스트 등)은 필터로, 레벨형(피봇·피보나치 등)은 지지·저항으로 사용`);
+  table("combo", lead.id, `⚡ ${c.ko} 시간대별 점수 (현재가 ${fx(p.price)})`, ["시간대", "점수", "판정", "상승/하락/중립", "장세", "과매수/과매도", "새 신호"], tRows, `큰 추세(4시간 60% + 1시간 40%) ${Math.round(p.big * 100)} · 타이밍(15분 60% + 5분 40%) ${Math.round(p.small * 100)}`);
+  const st = C.callStats(comboCalls().filter(x => x.coin === c.id));
+  table("combo", lead.id, `🎯 ${c.ko} 타점: ${C.STATE_KO[p.state]} (확신 ${p.conf}%)`, ["항목", "값"], [["판단 이유", p.why], ["진입", fx(p.entry)], ["손절", fx(p.sl)], ["익절1 (1.5R)", fx(p.tp1)], ["익절2", fx(p.tp2)], ["손익비", fx(p.rr, 2)],
+    ["가까운 지지", p.sup ? `${fx(p.sup.price)} (${p.sup.names.join("·")})` : "—"], ["가까운 저항", p.res ? `${fx(p.res.price)} (${p.res.names.join("·")})` : "—"], ["이 코인 기록장", st.done ? `적중 ${st.win}/${st.done} (${Math.round(st.rate * 100)}%) · 누적 ${st.sumR}R` : `채점된 타점 없음 (열린 ${st.open})`]],
+    "계산값일 뿐 매매 권유 아님 · 실제 주문 없음");
+  addNote("combo", `${c.ko}: 큰 추세 ${Math.round(p.big * 100)} · 타이밍 ${Math.round(p.small * 100)} → ${C.STATE_KO[p.state]}`, "종합");
+  await explain(lead.id, "combo", `${c.ko}의 모든 보조지표 종합 결과를 보고 ① 큰 추세 ② 지금 타이밍 ③ 타점(들어갈지·기다릴지·어디서) ④ 무효 조건을 해설한다. 지표들이 엇갈리면 엇갈린다고 말한다.`, comboFacts(row) + "\n지표 묶음별: " + gRows.map(r => `${r[0]} 상승${r[1]}/하락${r[2]}`).join(", "), "아래 모든 보조지표를 조합한 결과로 추세와 타점을 판단해 줘.");
 }

@@ -27,3 +27,19 @@ html,body{margin:0;background:#0b0e14;color:#e6e9ef;font-family:"Pretendard Vari
 .gc-links{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
 .gc-links a{display:block;padding:7px 9px;border:1px solid #2a3142;border-radius:8px;color:#cfd6e3;text-decoration:none;font-size:12.5px}.gc-links a.on{border-color:#2f6b47;color:#8fd3a8}
 .gc-modal[hidden],#toast[hidden]{display:none!important}
+/* ⚡ 실시간 타점판 */
+.cb-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.cb-head>div{display:flex;flex-direction:column;gap:2px}.cb-head b{font-size:14px;color:#eef1f7}.cb-head small{color:#8a93a6;font-size:11.5px}
+.cb-wrap{overflow-x:auto;border:1px solid var(--of-line,#2a3142);background:#0f1520}
+.cb-t{min-width:880px}.cb-t td{vertical-align:middle}.cb-t td small{color:#7c8699}
+.cb-chip{display:inline-block;min-width:38px;text-align:center;padding:1px 5px;border-radius:4px;font-weight:700;font-size:12px;background:#1b2231;color:#aab3c4}
+.cb-chip.up{background:#123a2a;color:#5fd39a}.cb-chip.up2{background:#14804f;color:#fff}.cb-chip.dn{background:#3d1a20;color:#ff7b86}.cb-chip.dn2{background:#b4303d;color:#fff}
+.cb-t tr.cb-long td:first-child{box-shadow:inset 3px 0 #22b07d}.cb-t tr.cb-short td:first-child{box-shadow:inset 3px 0 #e5484d}
+.cb-t tr.cb-longWait td:first-child{box-shadow:inset 3px 0 #d4b106}.cb-t tr.cb-shortWait td:first-child{box-shadow:inset 3px 0 #f57c00}
+.cb-t .of-link{margin-right:6px}
+.of-kt td.up{color:#5fd39a}.of-kt td.dn{color:#ff7b86}
+.cb-log{min-width:520px}.cb-log td,.cb-log th{white-space:nowrap}
+.cb-big{position:fixed;inset:0;z-index:70;background:rgba(5,8,13,.72);display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box}
+.cb-big[hidden]{display:none!important}
+.cb-bigbox{width:min(1400px,100%);max-height:calc(100vh - 32px);overflow:auto;background:#0d121c;border:1px solid #2f3a4f;border-radius:10px;padding:14px 16px;box-sizing:border-box}
+.cb-bigbox .cb-t{font-size:13px}.cb-bigbox .cb-chip{font-size:13px;min-width:44px}
+.cb-t td:nth-child(7),.cb-t th{white-space:nowrap}

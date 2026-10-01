@@ -121,7 +121,7 @@ export function openOffice(opts){
   $o("#ofTerm").hidden = typeof ctx.openTerminal !== "function"; $o("#ofLive").hidden = typeof ctx.openLive !== "function";
   fit(); O.loadLog().then(renderLog);
   O.startAutopilot(); try { localStorage.setItem("coinUsed", "1"); } catch(e){}
-  O.setOfficeVisible(true); O.startChatter(); O.startCycle(); refreshBoard();
+  O.setOfficeVisible(true); O.startChatter(); O.startCycle(); O.startCombo?.(); refreshBoard();
   // 사무실을 열면 30초 안에 첫 수다가 시작되게
   if (O.nextChatIn() === 0 || O.nextChatIn() > 30e3) localStorage.setItem("coinLastChat", String(Date.now() - O.officeCfg().chatEvery * 60e3 + 30e3));
   if (!unsub) unsub = O.onOffice(onEvent);
@@ -195,7 +195,7 @@ function build(){
       <div class="of-head">
         <div class="of-h1"><i class="of-led" id="ofLed"></i><b id="ofTitle">대기 중</b><span class="of-sp"></span><span class="of-recl" id="ofRecL">녹화 중</span></div>
         <div class="of-h2" id="ofStatus"></div>
-        <div class="of-chans" id="ofChans"><button data-ch="all" aria-pressed="true">#전체</button><button data-ch="work" aria-pressed="false" style="--tc:#c9a227">#업무</button><button data-ch="pipe" aria-pressed="false" style="--tc:#5b8cff">#파이프라인</button><button data-ch="growth" aria-pressed="false" style="--tc:#3ddc84">#성장 과제<span id="ofGrowN"></span></button>${TEAMS.map(t => `<button data-ch="${t.id}" aria-pressed="false" style="--tc:${tc(t.id)}">#${t.name}</button>`).join("")}</div>
+        <div class="of-chans" id="ofChans"><button data-ch="all" aria-pressed="true">#전체</button><button data-ch="work" aria-pressed="false" style="--tc:#c9a227">#업무</button><button data-ch="cboard" aria-pressed="false" style="--tc:#00b8d4">#⚡실시간 타점판</button><button data-ch="pipe" aria-pressed="false" style="--tc:#5b8cff">#파이프라인</button><button data-ch="growth" aria-pressed="false" style="--tc:#3ddc84">#성장 과제<span id="ofGrowN"></span></button>${TEAMS.map(t => `<button data-ch="${t.id}" aria-pressed="false" style="--tc:${tc(t.id)}">#${t.name}</button>`).join("")}</div>
       </div>
       <div class="of-log" id="ofLog" aria-live="polite"></div>
       <form class="of-form" id="ofForm"><input id="ofIn" placeholder="본부에 메시지 보내기 (예: 비트코인 지금 롱 어때? / 커스텀 지표로 매매법 만들어 와)" autocomplete="off"><button type="submit" aria-label="보내기">↵</button></form>
@@ -286,6 +286,12 @@ function wire(el){
     const dx = e.target.closest("[data-docdel]"); if (dx){ if (confirm("이 결과물을 앱 보관함에서 지울까요? (폴더의 파일은 그대로)")) O.deleteDoc(dx.dataset.docdel).then(() => openDocs(true)); return; }
     if (e.target.closest("[data-docfolder]")){ O.openFolder(e.target.closest("[data-docfolder]").dataset.docfolder || "").then(r => ctx.toast(r.ok ? "폴더를 열었습니다: " + (r.dir || "") : r.why)); return; }
     const df = e.target.closest("[data-docfilter]"); if (df){ docFilter = df.dataset.docfilter; openDocs(true); return; }
+    if (e.target.closest("[data-cbbig]")){ openComboBoard(); return; }
+    if (e.target.id === "cbBig"){ e.target.hidden = true; if (chan === "cboard") renderLog(); return; }
+    if (e.target.closest("[data-cbnow]")){ const b = e.target.closest("[data-cbnow]"); b.disabled = true; b.textContent = "계산 중…"; O.comboTick(true).then(() => chan === "cboard" && renderLog()); return; }
+    if (e.target.closest("[data-cbtoggle]")){ const on = O.officeCfg().combo === false; O.setOffice({combo: on}); if (on) O.comboTick(true); ctx.toast(on ? "실시간 타점판을 켰습니다 (60초마다 갱신)" : "실시간 타점판 자동 갱신을 껐습니다"); renderLog(); return; }
+    const cc = e.target.closest("[data-cbchart]"); if (cc){ if (typeof ctx.openTerminal === "function") ctx.openTerminal({market: cc.dataset.cbchart, exchange: "binancef", interval: "15m"}); return; }
+    const cj = e.target.closest("[data-cbjob]"); if (cj){ O.ask(`${cj.dataset.cbjob} 모든 보조지표 종합해서 추세랑 타점 분석해줘`, {room: "combo"}); ctx.toast("실시간 종합 지표 타점팀이 깊게 분석합니다 · #실시간 종합 지표 타점팀 방"); return; }
     if (e.target.closest("[data-openlive]")){ if (typeof ctx.openLive === "function") ctx.openLive(); return; }
     const pa = e.target.closest("[data-papply]");
     if (pa){ if (!confirm("이 코드 수정을 적용하고 앱을 다시 불러올까요?\n(앱이 안 열리면 자동으로 되돌립니다)")) return; pa.disabled = true;
@@ -403,6 +409,8 @@ function onEvent(ev){
   if (ev.kind === "cleared"){ renderLog(); return; }
   if (ev.kind === "cfg" || ev.kind === "usage"){ renderStatus(); return; }
   if ((ev.kind === "pipeline" || ev.kind === "paper") && chan === "pipe") renderLog();
+  if (ev.kind === "combo"){ if (chan === "cboard") renderLog(); renderBig(); }
+  if (ev.kind === "combo-call"){ const c = ev.call, t = `⚡ ${c.ko} ${c.side > 0 ? "롱" : "숏"} 타점 · 진입 ${num(c.entry)} 손절 ${num(c.sl)} (확신 ${c.conf}%)`; ctx.toast(t); if (document.hidden && "Notification" in window && Notification.permission === "granted") new Notification("GH Coin 실시간 타점", {body: t}); }
   if (ev.kind === "docs"){ const db = $o("#ofDocs"); if (db && !db.hidden) openDocs(true); }
   if (ev.kind === "growth" || (ev.kind === "log" && ev.entry?.kind === "patch")){ renderGrowthCount(); if (chan === "growth") renderLog(); if (ev.kind === "growth") return; }
   if (ev.kind === "present"){ present(ev.report); return; }
@@ -513,11 +521,12 @@ function renderStatus(){
 }
 /* ============ 회의록 패널 ============ */
 // #전체: 회의·수다·보고·내 메시지 / #업무: 직원들이 본 차트·뉴스 / #성장 과제: 과제 보드 / 팀 방: 그 팀의 모든 것
-const inChan = e => chan === "all" ? e.kind !== "work" : chan === "work" ? e.kind === "work" : chan === "growth" || chan === "pipe" ? false : e.ch === chan;
+const inChan = e => chan === "all" ? e.kind !== "work" : chan === "work" ? e.kind === "work" : chan === "growth" || chan === "pipe" || chan === "cboard" ? false : e.ch === chan;
 async function renderLog(){
   const box = $o("#ofLog");
   if (chan === "growth"){ box.innerHTML = growthHTML(); renderGrowthCount(); return; }
   if (chan === "pipe"){ box.innerHTML = await pipeHTML(); return; }
+  if (chan === "cboard"){ const y = box.scrollTop; box.innerHTML = await comboHTML(); box.scrollTop = y; return; }
   const log = await O.loadLog();
   if (chan === "growth") return;
   const list = log.filter(inChan).slice(-160);
@@ -614,7 +623,7 @@ function entryHTML(e){
     ${body ? `<div class="of-tx md">${body}</div>` : ""}<div class="of-acts"><button class="of-link" data-more>펼치기 · 접기</button>${!e.live && e.text ? `<button class="of-rate${e.rating > 0 ? " on" : ""}" data-rate="1" title="좋은 발언 · GH Nano 학습에 우선 사용">👍</button><button class="of-rate${e.rating < 0 ? " on" : ""}" data-rate="-1" title="나쁜 발언 · 학습 데이터에서 뺌">👎</button>${e.trainIds?.length ? `<span class="of-trn" title="이 발언으로 GH Nano 학습 예시를 만들었습니다">🎓 학습 예시</span>` : ""}` : ""}</div></div></div>`;
 }
 function appendEntry(e){
-  const box = $o("#ofLog"); if (!box || chan === "growth" || chan === "pipe") return;
+  const box = $o("#ofLog"); if (!box || chan === "growth" || chan === "pipe" || chan === "cboard") return;
   box.querySelector(".of-empty")?.remove();
   const near = box.scrollHeight - box.scrollTop - box.clientHeight < 120;
   box.insertAdjacentHTML("beforeend", entryHTML(e));
@@ -640,6 +649,36 @@ async function pipeHTML(){
   };
   return `<div class="of-pipe"><p class="of-dim">통과·승격 판정은 코드가 합니다. 실거래는 대표님이 [실거래] 화면에서 직접 켜고 연결한 전략만, 안전 한도와 주문별 승인 안에서 합니다.</p>
     ${lane("std", "📈 일반 라인 · 모든 보조지표", ["dev", "bt", "demo", "live"])}${lane("custom", "🧮 커스텀 지표 라인", ["cdev", "cbt", "cdemo", "clive"])}</div>`;
+}
+/* ============ ⚡ 실시간 타점판: 차트 터미널의 모든 보조지표 × 4개 시간대 → 추세·타점 (코드 계산, 60초마다) ============ */
+const CB_ST = {long: "🟢 롱 타점", short: "🔴 숏 타점", longWait: "🟡 롱 대기", shortWait: "🟠 숏 대기", wait: "⚪ 관망"};
+const CB_TF = [["240", "4시간"], ["60", "1시간"], ["15", "15분"], ["5", "5분"]];
+const cbChip = s => { if (s == null) return `<span class="cb-chip">—</span>`; const v = Math.round(s * 100), k = s >= 0.35 ? "up2" : s >= 0.12 ? "up" : s <= -0.35 ? "dn2" : s <= -0.12 ? "dn" : "flat"; return `<span class="cb-chip ${k}" title="${s >= 0.12 ? "상승" : s <= -0.12 ? "하락" : "횡보"}">${v > 0 ? "+" : ""}${v}</span>`; };
+// 크게 보기 창 열기·닫기 (위쪽 바의 '⚡ 실시간 타점' 버튼도 이걸 부른다)
+export function openComboBoard(show){
+  let bg = $o("#cbBig");
+  if (!bg){ root.insertAdjacentHTML("beforeend", `<div class="cb-big" id="cbBig" hidden><div class="cb-bigbox" id="cbBigBox"></div></div>`); bg = $o("#cbBig"); }
+  bg.hidden = show === undefined ? !bg.hidden : !show; renderBig(); if (chan === "cboard") renderLog();
+  if (!bg.hidden && !Object.keys(O.comboBoard().coins).length) O.comboTick(true);
+}
+async function renderBig(){ const bg = $o("#cbBig"); if (!bg || bg.hidden) return; const box = $o("#cbBigBox"), y = box.scrollTop; box.innerHTML = await comboHTML(); box.scrollTop = y; }
+async function comboHTML(){
+  if (typeof O.comboBoard !== "function") return `<div class="of-empty"><b>실시간 타점판을 불러올 수 없습니다</b></div>`;
+  const B = O.comboBoard(), on = O.officeCfg().combo !== false, rows = O.COINS.map(c => B.coins[c.id]).filter(Boolean);
+  const calls = (B.calls || []).slice().reverse(), done = calls.filter(c => c.result), win = done.filter(c => (c.r || 0) > 0).length, sumR = done.reduce((s, c) => s + (c.r || 0), 0);
+  const n = rows[0]?.n || 136;
+  const head = `<div class="cb-head"><div><b>⚡ 실시간 종합 지표 타점판</b><small>차트 터미널 보조지표 ${n}종 × 4시간·1시간·15분·5분 · ${B.running ? "계산 중…" : B.t ? hm(B.t) + " 갱신" : "첫 계산 대기"} · ${on ? "60초마다 자동" : "자동 갱신 꺼짐"}</small></div><span class="of-sp"></span>
+    <button class="of-btn2" data-cbbig>${$o("#cbBig") && !$o("#cbBig").hidden ? "✕ 닫기" : "⛶ 크게 보기"}</button><button class="of-btn2" data-cbnow>지금 갱신</button><button class="of-btn2" data-cbtoggle>${on ? "자동 끄기" : "자동 켜기"}</button></div>
+    <p class="of-dim">점수 -100(모든 지표 하락) ~ +100(모든 지표 상승). 큰 추세 = 4시간 60% + 1시간 40%, 타이밍 = 15분 60% + 5분 40%. 둘이 같은 방향이고 오실레이터가 과열이 아닐 때만 '타점'. 손절은 여러 지표 레벨이 겹친 지지·저항 + ATR. 계산값일 뿐 매매 권유가 아니며 실제 주문은 하지 않습니다.</p>`;
+  if (!rows.length) return head + `<div class="of-empty"><b>${B.err ? "시세를 받지 못했습니다: " + E(B.err) : "첫 계산 중입니다 (코인 6개 × 시간대 4개)"}</b><p>GHCoin.exe 로 실행해야 거래소 시세를 받을 수 있습니다.</p></div>`;
+  const tbl = `<div class="cb-wrap"><table class="of-kt cb-t"><tr><th>코인</th><th>현재가</th>${CB_TF.map(([, l]) => `<th>${l}</th>`).join("")}<th>장세</th><th>판정</th><th>진입</th><th>손절</th><th>익절1 / 익절2</th><th>손익비</th><th>확신</th><th></th></tr>
+    ${rows.map(r => { const p = r.plan, t = r.tf; return `<tr class="cb-${p.state}"><td><b>${E(r.ko)}</b><small>${E(r.sym)}</small></td><td class="num">${num(p.price)}</td>${CB_TF.map(([k]) => `<td>${cbChip(t[k]?.score)}${t[k] ? `<small>${t[k].up}▲ ${t[k].dn}▼${t[k].fresh?.length ? " · 새" + t[k].fresh.length : ""}</small>` : ""}</td>`).join("")}
+      <td>${E(t["60"]?.regime || "—")}</td><td><b>${CB_ST[p.state]}</b><small>${E(p.why)}</small></td><td class="num">${num(p.entry)}</td><td class="num">${num(p.sl)}</td><td class="num">${num(p.tp1)}<small>${num(p.tp2)}</small></td><td class="num">${p.rr ? p.rr.toFixed(2) : "—"}</td><td class="num">${p.side ? p.conf + "%" : "—"}</td>
+      <td><button class="of-link" data-cbchart="${E(r.sym)}">차트</button><button class="of-link" data-cbjob="${E(r.ko)}">깊게</button></td></tr>`; }).join("")}</table></div>`;
+  const log = `<section class="of-lane"><h4>🎯 타점 기록장 — ${done.length ? `채점 ${done.length}건 · 적중(수익 마감) ${win}건 ${Math.round(win / done.length * 100)}% · 누적 ${sumR >= 0 ? "+" : ""}${sumR.toFixed(1)}R` : "아직 채점된 타점 없음"} · 진행 중 ${calls.length - done.length}건</h4>
+    <p class="of-dim">타점이 잡히면 자동 기록 → 5분봉으로 익절1(+1.5R)·손절(-1R)·반대 신호·24시간 만료를 코드가 채점합니다. 이 성적이 쌓여야 믿을 수 있습니다.</p>
+    ${calls.length ? `<div class="cb-wrap"><table class="of-kt cb-log"><tr><th>시각</th><th>코인</th><th>방향</th><th>진입</th><th>손절</th><th>익절1</th><th>확신</th><th>결과</th></tr>${calls.slice(0, 20).map(c => `<tr><td>${E(new Date(c.t).toLocaleString("ko-KR", {month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false}))}</td><td>${E(c.ko)}</td><td class="${c.side > 0 ? "up" : "dn"}">${c.side > 0 ? "롱" : "숏"}</td><td class="num">${num(c.entry)}</td><td class="num">${num(c.sl)}</td><td class="num">${num(c.tp1)}</td><td class="num">${c.conf}%</td><td>${c.result === "win" ? "✅ 익절1" : c.result === "loss" ? "❌ 손절" : c.result === "expire" ? `⌛ 만료 ${c.r}R` : c.result === "flip" ? `🔄 반대 신호 ${c.r}R` : "⏳ 진행 중"}</td></tr>`).join("")}</table></div>` : ""}</section>`;
+  return `<div class="of-pipe">${head}${tbl}${log}</div>`;
 }
 /* ============ 📁 결과물 보관함 ============ */
 let docList = [], docFilter = "all", docSel = null;
