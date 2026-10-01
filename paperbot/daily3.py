@@ -19,7 +19,8 @@ For one UTC day (default: yesterday):
    - stop1.5/2.5/3.0: each losing trade with a different initial stop;
    - trade variants (paperbot/obsshadows.py, pre-registered in docs/observation-shadows.md):
      every trade that closed in the day re-run with first lock 0.15/0.20/0.30, a time
-     stop, and fixed 10x/20x leverage, plus the unchanged rules as a control.
+     stop, and fixed 10x/20x leverage, plus the unchanged rules as a control; and (docs/
+     observation-shadows-2.md) the sizing tier picked by the signal's recorded entry strength.
    Each shadow trade runs alone on a fresh account (the starting equity) so results are comparable as ROE.
 3. Data quality: missing minutes, zero-volume minutes, extreme ranges, last vs
    mark price gaps, extreme funding.
@@ -314,7 +315,8 @@ def run_day(conn, out: sqlite3.Connection, rest: BinanceREST, settings: Settings
     # trades that closed today but were entered earlier need the steps from their signal on
     first = first_signal(conn, start, end)
     pre = fetch_steps(rest, symbols, max(first, start - LOOKBACK_MS), start) if first is not None else []
-    tv, tv_info = trade_shadows(settings, brackets, specs, conn, day, start, end, pre + steps, make_signal)
+    tv, tv_info = trade_shadows(settings, brackets, specs, conn, day, start, end, pre + steps, make_signal,
+                                quality=True)
     lim = [r for r in sh if r["kind"] == "limit"]
     report["shadows"] = {
         "limit_signals": len(lim), "limit_filled": sum(r["filled"] for r in lim),

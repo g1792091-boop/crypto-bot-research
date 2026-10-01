@@ -13,12 +13,22 @@ does (same reference price, same 1m steps, same costs and funding), once per fix
   lev10     fixed 10x, margin 20% of equity (the base tier's share); no fallback tier
   lev20     fixed 20x, margin 20%
 
+and, added by docs/observation-shadows-2.md (the owners' "best setup 50x, unclear 20x"):
+
+  quality   the requested sizing tier set by the signal's entry-strength score (``quality_tier``):
+            mean period-1 quintile of the strategy's strength features recorded live, >= 4 -> "best"
+            (40% x 50x, then the usual fallback), 2 < score < 4 -> "good" (30% x 30x), <= 2 -> "base"
+            (20% x 20x). No usable strength recorded -> not run, counted as no_quality.
+
 Nothing here touches a real account: rows go to daily3.db ``shadows`` only.
 """
 
 from __future__ import annotations
 
+import bisect
 import json
+import math
+import os
 from dataclasses import replace
 from typing import Optional
 
@@ -43,6 +53,83 @@ TIME_STOP_BARS = {"5m": 14, "15m": 12, "30m": 10, "1h": 8, "4h": 6}
 LOOKBACK_MS = 7 * DAY_MS
 # share of equity put up as margin at each leverage (paper v3 tiers; 10x is the lev10 shadow)
 MARGIN_FRAC = {50: 0.40, 40: 0.40, 30: 0.30, 20: 0.20, 10: 0.20}
+
+# ------------------------------------------------------------------ quality (docs/observation-shadows-2.md)
+QUALITY = "quality"
+QUALITY_TIERS = ("best", "good", "base")
+# Period-1 quintile edges of research/entry_study/out/bc_B_quintiles.csv, frozen with the CSV's sha256 so the
+# server does not read research outputs at run time (tests check the copy against the CSV when it is there).
+QUALITY_EDGES_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "quality_edges.json")
+_QUALITY_EDGES: Optional[dict] = None
+
+
+def quality_edges() -> dict:
+    """{"<strategy>|<tf>": {feature: {"higher_is_stronger": bool, "edges": [4 floats]}}} (loaded once)."""
+    global _QUALITY_EDGES
+    if _QUALITY_EDGES is None:
+        with open(QUALITY_EDGES_PATH) as fh:
+            _QUALITY_EDGES = json.load(fh)["cells"]
+    return _QUALITY_EDGES
+
+
+def quintile(value, edges, higher_is_stronger: bool) -> Optional[int]:
+    """1..5 (5 = strongest) of ``value`` against the study's period-1 edges. The edges are those of the
+    SIGNED feature (x -1 when lower is stronger), so the value is signed the same way: the result equals
+    6 - (raw quintile) for those features, and a value equal to an edge goes to the upper quintile
+    (analysis_bc: numpy searchsorted side="right"). None when the value is missing or not finite."""
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(v):
+        return None
+    return 1 + bisect.bisect_right(list(edges), v if higher_is_stronger else -v)
+
+
+def quality_score(strength, strategy: str, timeframe: str, edges: Optional[dict] = None) -> dict:
+    """{"score", "tier", "quintiles", "reason"} for one signal's recorded strength (ctx["strength"]).
+    score = mean quintile over the strategy's features that have a value and edges; tier None (and a
+    reason) when there is nothing to score: no_strength / strength_error / no_edges / no_values."""
+    if not isinstance(strength, dict) or not strength:
+        return {"score": None, "tier": None, "quintiles": {}, "reason": "no_strength"}
+    if "error" in strength:
+        return {"score": None, "tier": None, "quintiles": {}, "reason": "strength_error"}
+    cell = (quality_edges() if edges is None else edges).get(f"{strategy}|{timeframe}")
+    if not cell:
+        return {"score": None, "tier": None, "quintiles": {}, "reason": "no_edges"}
+    qs: dict = {}
+    for f in strength.get("features") or []:
+        e = cell.get(f.get("name"))
+        if e is None:
+            continue
+        q = quintile(f.get("value"), e["edges"], bool(e["higher_is_stronger"]))
+        if q is not None:
+            qs[f["name"]] = q
+    if not qs:
+        return {"score": None, "tier": None, "quintiles": {}, "reason": "no_values"}
+    score = sum(qs.values()) / len(qs)
+    return {"score": score, "tier": quality_tier(score), "quintiles": qs, "reason": None}
+
+
+def quality_tier(score: float) -> str:
+    """>= 4 best (40% x 50x), 2 < score < 4 good (30% x 30x), <= 2 base (20% x 20x)."""
+    if score >= 4:
+        return "best"
+    if score > 2:
+        return "good"
+    return "base"
+
+
+def signal_strength(d: dict):
+    """ctx["strength"] of a signal_log row's data (as written by sigservice / entry_marks.attach)."""
+    try:
+        data = json.loads(d.get("data") or "{}")
+    except (TypeError, ValueError):
+        return None
+    ctx = data.get("ctx") if isinstance(data, dict) else None
+    return ctx.get("strength") if isinstance(ctx, dict) else None
 
 
 def variant_settings(settings: Settings, name: str) -> Settings:
@@ -116,25 +203,30 @@ def first_signal(conn, start: int, end: int) -> Optional[int]:
 
 def _signal_row(conn, t: dict) -> Optional[dict]:
     r = conn.execute(
-        "SELECT bar_close, timeframe, strategy, symbol, side, atr, ref_price, ref_time, delay_ms FROM signal_log "
+        "SELECT bar_close, timeframe, strategy, symbol, side, atr, ref_price, ref_time, delay_ms, data FROM signal_log "
         "WHERE timeframe = ? AND bar_close = ? AND strategy = ? AND symbol = ? AND side = ? AND status = 'SUBMITTED' "
         "ORDER BY id LIMIT 1",
         (t["timeframe"], t["signal_ts"] + 1, t["strategy_id"], t["symbol"], int(t["side"]))).fetchone()
     if r is None:
         return None
     return dict(zip(("bar_close", "timeframe", "strategy", "symbol", "side", "atr", "ref_price", "ref_time",
-                     "delay_ms"), r))
+                     "delay_ms", "data"), r))
 
 
 def trade_shadows(settings: Settings, brackets, specs, conn, day: str, start: int, end: int, steps,
-                  make_signal) -> tuple[list[dict], dict]:
+                  make_signal, quality: bool = False) -> tuple[list[dict], dict]:
     """Rows for the shadows table (one per closed trade and variant) and counts of trades left out.
-    ``steps`` must reach back to the earliest signal (``first_signal``); ``make_signal`` is daily3's."""
+    ``steps`` must reach back to the earliest signal (``first_signal``); ``make_signal`` is daily3's.
+    ``quality``: also run the quality variant (docs/observation-shadows-2.md) for every trade whose
+    signal has a usable strength record; the others are counted in info["no_quality"] (by reason in
+    info["no_quality_reasons"])."""
     idx = {ts: k for k, (ts, _, _) in enumerate(steps)}
     per_symbol: dict[str, list] = {}
     vs = {v: variant_settings(settings, v) for v in VARIANTS}
     rows: list[dict] = []
     info = {"closed": 0, "no_signal": 0, "no_steps": 0}
+    if quality:
+        info.update(no_quality=0, no_quality_reasons={})
     for aid, t in closed_trades(conn, start, end):
         info["closed"] += 1
         bc = t["signal_ts"] + 1
@@ -164,12 +256,29 @@ def trade_shadows(settings: Settings, brackets, specs, conn, day: str, start: in
             if tr is not None:
                 data.update(leverage=tr.leverage, pnl_equity=pnl_equity(tr.roe, tr.leverage),
                             exit_time=tr.exit_time)
-            rows.append({"key": f"{v}|{aid}|{t['symbol']}|{bc}", "day": day, "kind": v, "account_id": aid,
-                         "symbol": t["symbol"], "timeframe": t["timeframe"], "side": int(t["side"]),
-                         "filled": None, "roe": None if tr is None else tr.roe,
-                         "exit_reason": None if tr is None else tr.exit_reason, "resolved": int(resolved),
-                         "data": json.dumps(data)})
+            rows.append(_shadow_row(v, day, aid, t, bc, tr, resolved, data))
+        if quality:
+            q = quality_score(signal_strength(d), t["strategy_id"], t["timeframe"])
+            if q["tier"] is None:
+                info["no_quality"] += 1
+                r = info["no_quality_reasons"]
+                r[q["reason"]] = r.get(q["reason"], 0) + 1
+                continue
+            tr, resolved = run_alone(settings, brackets, specs, replace(sig, tier=q["tier"]), ss, i0)
+            data = dict(actual, quality_score=q["score"], quality_tier=q["tier"], quintiles=q["quintiles"])
+            if tr is not None:
+                data.update(leverage=tr.leverage, pnl_equity=pnl_equity(tr.roe, tr.leverage),
+                            exit_time=tr.exit_time, tier=tr.tier)
+            rows.append(_shadow_row(QUALITY, day, aid, t, bc, tr, resolved, data))
     return rows, info
+
+
+def _shadow_row(kind: str, day: str, aid: str, t: dict, bc: int, tr, resolved: bool, data: dict) -> dict:
+    return {"key": f"{kind}|{aid}|{t['symbol']}|{bc}", "day": day, "kind": kind, "account_id": aid,
+            "symbol": t["symbol"], "timeframe": t["timeframe"], "side": int(t["side"]),
+            "filled": None, "roe": None if tr is None else tr.roe,
+            "exit_reason": None if tr is None else tr.exit_reason, "resolved": int(resolved),
+            "data": json.dumps(data)}
 
 
 def _mean(xs) -> Optional[float]:
@@ -183,21 +292,57 @@ def summarize(rows: list[dict], info: dict) -> dict:
     than the actual trade (P&L on equity; equal counts as neither)."""
     out: dict = dict(info)
     for v in VARIANTS:
-        rs = [r for r in rows if r["kind"] == v]
-        done = [(r, json.loads(r["data"])) for r in rs if r["resolved"] and r["roe"] is not None]
-        pairs = [(d.get("pnl_equity"), d.get("actual_pnl_equity")) for _, d in done]
-        pairs = [(a, b) for a, b in pairs if a is not None and b is not None]
-        out[v] = {
-            "trades": len(rs), "resolved": len(done),
-            "rejected": sum(1 for r in rs if r["resolved"] and r["roe"] is None),
-            "open_at_horizon": sum(1 for r in rs if not r["resolved"]),
-            "mean_roe": _mean(r["roe"] for r, _ in done),
-            "mean_pnl_equity": _mean(d.get("pnl_equity") for _, d in done),
-            "liquidations": sum(1 for r, _ in done if r["exit_reason"] == "LIQ"),
-            "better_share": sum(1 for a, b in pairs if a > b + 1e-12) / len(pairs) if pairs else None,
-            "worse_share": sum(1 for a, b in pairs if a < b - 1e-12) / len(pairs) if pairs else None,
-            "actual": {"mean_roe": _mean(d["actual_roe"] for _, d in done),
-                       "mean_pnl_equity": _mean(d["actual_pnl_equity"] for _, d in done),
-                       "liquidations": sum(1 for _, d in done if d["actual_reason"] == "LIQ")},
-        }
+        out[v] = _metrics([r for r in rows if r["kind"] == v])
+    if "no_quality" in info or any(r["kind"] == QUALITY for r in rows):
+        out[QUALITY] = quality_summary(rows, info)
+    return out
+
+
+def _metrics(rs: list[dict]) -> dict:
+    done = [(r, json.loads(r["data"])) for r in rs if r["resolved"] and r["roe"] is not None]
+    pairs = [(d.get("pnl_equity"), d.get("actual_pnl_equity")) for _, d in done]
+    pairs = [(a, b) for a, b in pairs if a is not None and b is not None]
+    return {
+        "trades": len(rs), "resolved": len(done),
+        "rejected": sum(1 for r in rs if r["resolved"] and r["roe"] is None),
+        "open_at_horizon": sum(1 for r in rs if not r["resolved"]),
+        "mean_roe": _mean(r["roe"] for r, _ in done),
+        "mean_pnl_equity": _mean(d.get("pnl_equity") for _, d in done),
+        "liquidations": sum(1 for r, _ in done if r["exit_reason"] == "LIQ"),
+        "better_share": sum(1 for a, b in pairs if a > b + 1e-12) / len(pairs) if pairs else None,
+        "worse_share": sum(1 for a, b in pairs if a < b - 1e-12) / len(pairs) if pairs else None,
+        "actual": {"mean_roe": _mean(d["actual_roe"] for _, d in done),
+                   "mean_pnl_equity": _mean(d["actual_pnl_equity"] for _, d in done),
+                   "liquidations": sum(1 for _, d in done if d["actual_reason"] == "LIQ")},
+    }
+
+
+def _with_base(rs: list[dict], base: dict) -> dict:
+    """_metrics plus the base shadow (same fresh account, current rules) over the same resolved trades."""
+    m = _metrics(rs)
+    b = [base.get(r["key"].split("|", 1)[1]) for r in rs if r["resolved"] and r["roe"] is not None]
+    b = [x for x in b if x is not None and x["resolved"] and x["roe"] is not None]
+    m["base"] = {"trades": len(b), "mean_roe": _mean(x["roe"] for x in b),
+                 "mean_pnl_equity": _mean(json.loads(x["data"]).get("pnl_equity") for x in b)}
+    return m
+
+
+def quality_summary(rows: list[dict], info: dict) -> dict:
+    """report["shadows"]["trade_variants"]["quality"]: the variant metrics, the base shadow over the same
+    trades, the requested-tier mix, the entered-leverage mix, the same metrics per requested tier, and the
+    trades not scored (no_quality, by reason)."""
+    rs = [r for r in rows if r["kind"] == QUALITY]
+    base = {r["key"].split("|", 1)[1]: r for r in rows if r["kind"] == "base"}
+    tiers = {r["key"]: json.loads(r["data"]).get("quality_tier") for r in rs}
+    out = _with_base(rs, base)
+    out["tier_mix"] = {t: sum(1 for r in rs if tiers[r["key"]] == t) for t in QUALITY_TIERS}
+    levs: dict = {}
+    for r in rs:
+        lev = json.loads(r["data"]).get("leverage") if r["roe"] is not None else None
+        if lev is not None:
+            levs[str(int(lev))] = levs.get(str(int(lev)), 0) + 1
+    out["leverage_mix"] = dict(sorted(levs.items(), key=lambda kv: -int(kv[0])))
+    out["by_tier"] = {t: _with_base([r for r in rs if tiers[r["key"]] == t], base) for t in QUALITY_TIERS}
+    out["no_quality"] = int(info.get("no_quality", 0))
+    out["no_quality_reasons"] = dict(info.get("no_quality_reasons", {}))
     return out
