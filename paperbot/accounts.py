@@ -127,8 +127,8 @@ class AccountBook:
         """Rebuild every account listed in the store and restore its state.
         Returns False when the store holds no saved state (a fresh start).
         ``make_of(row)``: how to build an account (None = the defaults; else keyword arguments of
-        ``_make``: settings, cls, digest). It is asked for every row; an exception holds that account
-        (``HeldEngine``) instead of stopping the load."""
+        ``_make``: settings, cls, digest). It is asked for every row; an exception holds that extra account
+        (``HeldEngine``) instead of stopping the load (an original account always gets the defaults)."""
         for a in self.store.accounts():
             if a["account_id"] not in self.engines:
                 how = None
@@ -136,7 +136,7 @@ class AccountBook:
                     try:
                         how = make_of(a)
                     except Exception:  # noqa: BLE001  an extra the runtime cannot build is held, never fatal
-                        how = {"cls": HeldEngine}
+                        how = None if a.get("kind") in ORIGINAL_KINDS else {"cls": HeldEngine}
                 self.engines[a["account_id"]] = self._make(a["account_id"], **(how or {}))
                 self.meta[a["account_id"]] = {k: a[k] for k in ("strategy", "timeframe", "kind")}
         got = self.store.get_state(STATE_KEY)

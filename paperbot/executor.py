@@ -32,9 +32,15 @@ and funding (GET /fapi/v1/income), with the cost ratio of addendum Q6 #4 (paperb
 ``stage-check`` runs risk.leverage_stage_review on that record.
 
 Errors: network failures, timeouts and 5xx are retried with backoff, and an order whose outcome
-is unknown is first looked up by its client id (never sent twice). A 4xx refusal is never retried
-blindly (a -1021 clock refusal re-syncs the server time and is sent once more). 429/418 wait for
-Retry-After; the rate-limit headers slow the loop down. The server time is re-synced periodically.
+is unknown is first looked up by its client id. An OPENING order whose outcome stays unknown is never
+sent again (a late first fill plus a resend would double the position): the trade stays "entering" and
+the reconcile adopts (and protects) whatever filled. A 4xx refusal is never retried blindly (a -1021
+clock refusal re-syncs the server time and is sent once more). 429/418 wait for Retry-After; the
+rate-limit headers slow the loop down, except for protective work (the stop after a fill, stop moves,
+reduce-only closes). The server time is re-synced periodically.
+
+Each loop checks the kill file and a persisted halt FIRST, with nothing but positionRisk and reduce-only
+market orders, so a failing read or a stuck reconcile action never keeps them from closing everything.
 
 Everything (decisions, every order request and answer, trades, fills, halts) goes to the executor's
 own SQLite database, one database per mode (the mode is recorded and checked). One writer: a lock
@@ -46,10 +52,13 @@ AI agents never import or run this module (tests/test_executor.py checks it).
 from __future__ import annotations
 
 import argparse
+import contextlib
 import datetime as _dt
 import hashlib
 import json
+import math
 import os
+import signal
 import sqlite3
 import sys
 import time
@@ -66,15 +75,22 @@ from .margin import Brackets
 from .notify import CRITICAL, INFO, WARN, ConsoleNotifier, NullNotifier, Notifier
 from .sizing import size_position
 from .testnet import (ALLOWED_HOSTS, BAD_TIMESTAMP, FIRED_ALGO, NOT_FOUND, ProtectionError, RateLimited,
-                      TestnetClient, TestnetError, TransientError, _round_down, cancel_stops, covers, live_stops,
-                      move_stop, round_stop)
+                      TestnetClient, TestnetError, TransientError, UnknownOutcome, _round_down, cancel_stops, covers,
+                      hide_process_memory, live_stops, move_stop, round_stop)
 
 SUPPORTED_MODES = (MODE_TESTNET, MODE_MAINNET)
 TESTNET_HOSTS = ("testnet.binancefuture.com",)
 PREFIX = {MODE_TESTNET: "[테스트넷 실행기]", MODE_MAINNET: "[실거래 실행기]"}
 ENTRY_SOURCES = ("paper", "signal")
 # reconcile emergencies: counted with the unplanned halts by stage-check
-EMERGENCY_KINDS = ("unknown_position", "wrong_side", "protect_failed", "not_flat", "no_stop")
+EMERGENCY_KINDS = ("unknown_position", "wrong_side", "protect_failed", "not_flat", "no_stop", "oversize")
+# income types that move money in or out of the futures wallet (not trading P&L)
+TRANSFER_TYPES = ("TRANSFER", "INTERNAL_TRANSFER", "CROSS_COLLATERAL_TRANSFER", "STRATEGY_UMFUTURES_TRANSFER",
+                  "COIN_SWAP_DEPOSIT", "COIN_SWAP_WITHDRAW")
+# income types that belong to a trade's P&L besides its fills
+TRADE_INCOME_TYPES = ("FUNDING_FEE", "SPECIAL_FUNDING_FEE", "INSURANCE_CLEAR")
+FINAL_ORDER = ("FILLED", "CANCELED", "EXPIRED", "REJECTED", "EXPIRED_IN_MATCH")
+USER_TRADES_SPAN = 7 * 86_400_000 - 1     # GET /fapi/v1/userTrades: at most 7 days per request
 
 
 # ---------------------------------------------------------------- config
@@ -103,6 +119,8 @@ class ExecConfig:
     paper_env_file: str = PAPER_ENV_FILE      # the paper runner's env file: its read-only key is refused here
     time_sync_s: float = 600.0           # server time re-sync interval
     equity_every_s: float = 300.0        # equity samples (stage-check drawdown)
+    entry_unknown_s: float = 60.0        # an entry whose outcome is unknown: wait this long for it to show up
+    transfer_every_s: float = 60.0       # deposits/withdrawals read this often (and before a money halt)
 
     @classmethod
     def from_dict(cls, d: dict) -> "ExecConfig":
@@ -137,7 +155,19 @@ class ExecConfig:
             out.append("budget_usd는 0보다 커야 합니다")
         if self.mode == MODE_MAINNET and self.budget_usd is None:
             out.append("실거래(mainnet)는 정한 금액 budget_usd(예: 500)가 필요합니다")
+        if self.risk.kill_file and self.db and not _kill_file_visible(self.risk.kill_file, self.db):
+            out.append(f"비상 정지 파일 {self.risk.kill_file}은 실행기 DB가 있는 폴더나 그 위 폴더에 둡니다"
+                       "(예: /var/lib/paperbot/STOP). /tmp·/home 같은 곳은 서비스 안에서 보이지 않아 "
+                       "파일을 만들어도 멈추지 않습니다")
         return out + self.risk.problems()
+
+
+def _kill_file_visible(kill_file: str, db: str) -> bool:
+    """The service sees the folder of its own database (ReadWritePaths) and every folder above it in the same
+    view as a person's shell; /tmp (PrivateTmp) and /home (ProtectHome) it does not."""
+    kdir = os.path.dirname(os.path.abspath(kill_file))
+    ddir = os.path.dirname(os.path.abspath(db))
+    return ddir == kdir or ddir.startswith(kdir.rstrip(os.sep) + os.sep)
 
 
 def refuse_unless_allowed(cfg: ExecConfig, client) -> None:
@@ -313,7 +343,7 @@ MIGRATIONS = (
     ("trades", "mode", "TEXT"), ("trades", "pnl_source", "TEXT"), ("trades", "realized", "REAL"),
     ("trades", "commission", "REAL"), ("trades", "funding", "REAL"), ("trades", "slippage", "REAL"),
     ("trades", "real_cost", "REAL"), ("trades", "assumed_cost", "REAL"), ("trades", "cost_ok", "INTEGER"),
-    ("halts", "planned", "INTEGER"),
+    ("halts", "planned", "INTEGER"), ("equity", "transfers", "REAL"),
 )
 
 
@@ -378,8 +408,10 @@ class ExecStore:
                               [(r.get("symbol"), int(r["tranId"]), key, int(r.get("time") or 0),
                                 float(r.get("income") or 0), json.dumps(r)) for r in rows])
 
-    def equity(self, ts: int, equity: float, wallet: float) -> None:
-        self.conn.execute("INSERT OR REPLACE INTO equity VALUES (?,?,?)", (ts, equity, wallet))
+    def equity(self, ts: int, equity: float, wallet: float, transfers: float = 0.0) -> None:
+        """``transfers``: net deposits/withdrawals so far (stage-check measures the drawdown without them)."""
+        self.conn.execute("INSERT OR REPLACE INTO equity (ts, equity, wallet, transfers) VALUES (?,?,?,?)",
+                          (ts, equity, wallet, transfers))
 
     def halt_log(self, ts: int, action: str, reason: str, who: Optional[str] = None,
                  note: Optional[str] = None, planned: Optional[bool] = None) -> None:
@@ -411,20 +443,35 @@ class Guarded:
     - reads: network/5xx/429 -> retry with backoff (Retry-After honoured); 4xx -> raise;
     - idempotent writes (leverage, margin type, cancel-all): same as reads;
     - orders (market, stop): sent with a client id; after an unknown outcome the order is looked up
-      by that id, and only sent again when the exchange does not have it;
+      by that id, and only sent again when the exchange does not have it -- except an OPENING order
+      (``resend=False``): it is never sent twice (UnknownOutcome; the reconcile settles it);
     - 418 (IP banned) is never retried here: the loop waits;
-    - before every request: wait if the rate-limit headers say we are near a limit."""
+    - before every request: wait if the rate-limit headers say we are near a limit, except inside
+      ``protecting()`` (the stop after a fill, stop moves, closes: a position must not wait for a minute
+      boundary without its stop; 429/418 are still handled)."""
 
     def __init__(self, client: TestnetClient, sleep: Callable[[float], None], retries: int = 4,
                  base_delay: float = 0.5, max_delay: float = 8.0,
                  on_retry: Optional[Callable[[str, Exception], None]] = None):
         self.c, self.sleep, self.retries = client, sleep, max(1, retries)
         self.base_delay, self.max_delay, self.on_retry = base_delay, max_delay, on_retry
+        self.urgent = 0
 
     def __getattr__(self, name):          # host, base, limits ... (not the endpoints: those are below)
         return getattr(self.c, name)
 
+    @contextlib.contextmanager
+    def protecting(self):
+        """Protective work: no pacing pauses inside."""
+        self.urgent += 1
+        try:
+            yield
+        finally:
+            self.urgent -= 1
+
     def _pace(self) -> None:
+        if self.urgent:
+            return
         w = self.c.throttle_s()
         if w > 0:
             self.sleep(w)
@@ -464,10 +511,14 @@ class Guarded:
                 resynced = True
                 self._resync(what, e)
 
-    def _write(self, what: str, send, lookup):
-        """Send an order that has a client id; on an unknown outcome, look it up before resending."""
+    def _write(self, what: str, send, lookup, resend: bool = True):
+        """Send an order that has a client id; on an unknown outcome, look it up before resending.
+
+        ``resend=False`` (an opening order): once an attempt's outcome is unknown (network failure, timeout,
+        5xx) the order is only looked up, never sent again; still not found -> UnknownOutcome. A 429 is a
+        refusal (nothing executed) and is sent again after Retry-After either way."""
         last: Optional[Exception] = None
-        attempt, resynced = 0, False
+        attempt, resynced, unknown = 0, False, False
         while attempt < self.retries:
             self._pace()
             try:
@@ -475,19 +526,56 @@ class Guarded:
             except (TransientError, RateLimited) as e:
                 last = e
                 if isinstance(e, RateLimited) and e.status == 418:
+                    if unknown:
+                        raise UnknownOutcome(e.status, e.code, f"{what}: 결과를 모르는 채 IP 차단(418): {e.msg}") from e
                     raise
+                unknown = unknown or not isinstance(e, RateLimited)
                 self._backoff(attempt, e, what)
                 attempt += 1
-                found = lookup()
+                found = self._find(what, lookup, unknown)
                 if found is not None:
                     return found
+                if unknown and not resend:
+                    return self._await(what, lookup, attempt, e)
             except TestnetError as e:
-                if e.code != BAD_TIMESTAMP or resynced:
-                    raise
-                resynced = True
-                self._resync(what, e)
+                if e.code == BAD_TIMESTAMP and not resynced:
+                    resynced = True
+                    self._resync(what, e)
+                    continue
+                if unknown:
+                    # e.g. -4116/-20132 "duplicated", -2022 reduce-only rejected: the first send may have worked
+                    try:
+                        found = lookup()
+                    except TestnetError:
+                        found = None
+                    if found is not None:
+                        return found
+                raise
         assert last is not None
+        if unknown and not isinstance(last, UnknownOutcome):
+            raise UnknownOutcome(last.status, last.code, f"{what}: 결과를 모릅니다({last.msg})") from last
         raise last
+
+    def _find(self, what: str, lookup, unknown: bool):
+        """The look-up after a failed send. A look-up that itself fails (429, 418, network) leaves the outcome
+        unknown: UnknownOutcome, never a refusal."""
+        try:
+            return lookup()
+        except TestnetError as e:
+            if not unknown:
+                raise
+            raise UnknownOutcome(e.status, e.code, f"{what}: 결과를 모르고 조회도 실패했습니다({e})") from e
+
+    def _await(self, what: str, lookup, attempt: int, err: Exception):
+        """An opening order whose outcome is unknown: look it up a few more times, never send it again."""
+        while attempt < self.retries:
+            self._backoff(attempt, err, what)
+            attempt += 1
+            found = self._find(what, lookup, True)
+            if found is not None:
+                return found
+        raise UnknownOutcome(getattr(err, "status", 0), getattr(err, "code", None),
+                             f"{what}: 결과를 모릅니다. 다시 보내지 않습니다(두 번 들어가지 않게): {err}")
 
     def _lookup(self, fn, **k):
         try:
@@ -557,24 +645,31 @@ class Guarded:
         return self._retry("cancel all algo", self.c.cancel_all_algo, symbol)
 
     def cancel_algo(self, algo_id=None, client_id=None):
-        sent = False
-        for attempt in range(self.retries):
+        sent, resynced, attempt = False, False, 0
+        while attempt < self.retries:
             self._pace()
             try:
                 return self.c.cancel_algo(algo_id=algo_id, client_id=client_id)
             except TestnetError as e:
                 if e.code in NOT_FOUND and sent:
                     return {"algoId": algo_id, "gone": True}     # our earlier attempt did it
+                if e.code == BAD_TIMESTAMP and not resynced:     # refused, not executed: re-sync and send again
+                    resynced = True
+                    self._resync("cancel algo", e)
+                    continue
                 if not isinstance(e, (TransientError, RateLimited)) or attempt == self.retries - 1:
                     raise
                 sent = True
                 self._backoff(attempt, e, "cancel algo")
+                attempt += 1
 
     # orders
     def market(self, symbol, side, qty, reduce_only=False, client_id=None):
+        """A reduce-only order may be sent again after a look-up that found nothing (it can only close); an
+        opening order never is."""
         cid = client_id or new_client_id("m")
         return self._write("market", lambda: self.c.market(symbol, side, qty, reduce_only=reduce_only, client_id=cid),
-                           lambda: self._lookup(self.c.order, symbol=symbol, client_id=cid))
+                           lambda: self._lookup(self.c.order, symbol=symbol, client_id=cid), resend=reduce_only)
 
     def stop_close(self, symbol, side, trigger, qty=None, client_id=None):
         cid = client_id or new_client_id("s")
@@ -660,6 +755,10 @@ class Executor:
         self.new_signals: list = []
         self.brackets: dict = {}
         self.paper_taker = cfg.paper_taker_fee
+        self.paper_errors = 0
+        self.db_failed = False
+        self.stopping = False                   # SIGTERM: finish the loop in progress, then stop
+        self.last_transfer_scan = 0
 
     # ------------------------------------------------------------ records
     def _audit(self, a: dict) -> None:
@@ -668,26 +767,53 @@ class Executor:
             self.store.commit()
 
     def _event(self, level: str, kind: str, text: str, data: Optional[dict] = None, notify: bool = True) -> None:
-        self.store.event(self.now_ms(), level, kind, text, data)
-        self.store.commit()
+        """Record, then alert. The alert never depends on the database: a write that fails (disk full) is
+        reported once as CRITICAL and every WARN/CRITICAL still goes out."""
+        try:
+            self.store.event(self.now_ms(), level, kind, text, data)
+            self.store.commit()
+        except sqlite3.Error as e:
+            if not self.db_failed:
+                self.db_failed = True
+                self.notifier.send(CRITICAL, f"{self.prefix} 실행기 DB에 기록하지 못합니다({type(e).__name__}: {e}). "
+                                             "알림은 계속 보냅니다. 디스크를 확인하세요")
         if notify and level in (WARN, CRITICAL):
             self.notifier.send(level, f"{self.prefix} {text}")
 
-    def _save(self) -> None:
-        self.store.put_state("bot", self.now_ms(), {
-            "trade": self.trade, "done": self.done[-200:], "risk": self.risk.to_dict(), "loops": self.loops,
-            "mode": self.cfg.mode, "account": self.cfg.account})
-        self.store.commit()
+    def _save(self, strict: bool = True) -> None:
+        try:
+            self.store.put_state("bot", self.now_ms(), {
+                "trade": self.trade, "done": self.done[-200:], "risk": self.risk.to_dict(), "loops": self.loops,
+                "mode": self.cfg.mode, "account": self.cfg.account})
+            self.store.commit()
+        except sqlite3.Error as e:
+            if strict:
+                raise
+            self._event(CRITICAL, "db_error", f"상태 저장 실패(주문은 계속): {e}", notify=False)
 
     def _mark_done(self, key: str) -> None:
         if key not in self.done:
             self.done.append(key)
 
     def _cid(self, t: dict, tag: str) -> str:
-        """Deterministic client id per trade and order, saved BEFORE the order is sent."""
+        """Deterministic client id per trade and order, saved BEFORE the order is sent (best effort: a database
+        that cannot be written must not keep a protective order or a close from going out)."""
         t["n"] = int(t.get("n", 0)) + 1
-        self._save()
+        self._save(strict=False)
         return f"pb{t['base']}{tag}{t['n']}"
+
+    def _server_ms(self) -> int:
+        """The exchange's clock (fills, income and transfers carry exchange time)."""
+        return self.now_ms() + int(getattr(self.raw, "offset_ms", 0) or 0)
+
+    def _note_offset(self, off) -> None:
+        try:
+            big = abs(float(off)) > 1000
+        except (TypeError, ValueError):
+            return
+        self._event(WARN if big else INFO, "time_sync", f"서버 시간 다시 맞춤: 차이 {off} ms"
+                    + (" (1초 넘게 어긋남: 서버 시계(chrony)를 확인하세요)" if big else ""),
+                    {"offset_ms": off}, notify=big)
 
     def _spec(self, symbol: str) -> dict:
         if symbol not in self.specs:
@@ -696,8 +822,10 @@ class Executor:
 
     # ------------------------------------------------------------ start / loop
     def start(self) -> None:
-        self.c.sync_time()
+        off = self.c.sync_time()
         self.last_sync = self.now_ms()
+        if off is not None and abs(float(off)) > 1000:
+            self._note_offset(off)
         if self.cfg.mode == MODE_MAINNET:
             self._mainnet_gates()
         self.c.one_way()
@@ -711,23 +839,52 @@ class Executor:
                 self._event(WARN, "margin", f"{s}: 주문이나 포지션이 있어 격리 마진으로 못 바꿨습니다({e.msg})")
         if self.signals is not None:
             self._signal_mode_setup()
+        meta = self.store.get_state("meta") or {}
+        if not meta.get("live_since"):                     # the first start that passed every gate (stage-check)
+            meta = {"mode": self.cfg.mode, "account": self.cfg.account, **meta, "live_since": self.now_ms()}
+            self.store.put_state("meta", self.now_ms(), meta)
+            self.store.commit()
         self._event(INFO, "start", f"시작: paper 계좌 {self.cfg.account} 따라 하기, {self.cfg.mode}, "
-                    f"진입 {'신호 즉시' if self.signals is not None else 'paper 포지션'}",
-                    {"halted": self.risk.halted, "trade": self.trade})
+                    f"진입 {'신호 즉시' if self.signals is not None else 'paper 포지션'}, "
+                    f"비상 정지 파일 {os.path.abspath(self.cfg.risk.kill_file)}",
+                    {"halted": self.risk.halted, "trade": self.trade, "kill_file": self.cfg.risk.kill_file})
         if self.risk.halted:
             self._event(WARN, "halted", f"멈춤 상태로 시작합니다(사람이 풀어야 함): {self.risk.halt_reason}")
         self._save()
 
     def _mainnet_gates(self) -> None:
-        """Online gates before any order: key permissions on api.binance.com and the wallet size."""
+        """Online gates before any order: key permissions on api.binance.com and the wallet size.
+
+        The permission read is retried like any other read. If api.binance.com still cannot be reached, that
+        is not a refusal (nothing was found wrong): the error escapes, the process exits 1 and systemd starts
+        it again in 30 s. A definite problem (permissions, wallet) refuses: exit 2, a person must act."""
         kc = self.keycheck
         kc.offset_ms = self.raw.offset_ms                  # same Binance clock for the signed GET
-        wallet = float(self.c.account()["totalWalletBalance"])
-        problems, warnings = online_gates(kc.api_restrictions, wallet, float(self.cfg.budget_usd))
+        acct = self.c.account()
+        wallet = float(acct["totalWalletBalance"])
+        held = ""
+        if self.trade is not None:
+            held = (f" 열린 포지션 {self.trade['symbol']}이 있습니다: 그동안은 거래소에 걸린 손절만 지킵니다"
+                    "(잠금·청산 따라가기, 비상 정지 파일, 하루 손실 한도는 실행기가 다시 켜질 때까지 멈춤).")
+        try:
+            perm = self.c._retry("키 권한", kc.api_restrictions)
+        except (TransientError, RateLimited) as e:
+            self._event(CRITICAL, "mainnet_unreachable", f"api.binance.com 키 권한 확인이 안 됩니다({e}). "
+                        "30초 뒤 다시 켭니다(systemd)." + held)
+            raise
+        except TestnetError as e:
+            err = e
+
+            def perm_reader():
+                raise err
+        else:
+            def perm_reader():
+                return perm
+        problems, warnings = online_gates(perm_reader, wallet, float(self.cfg.budget_usd), acct.get("assets"))
         for w in warnings:
             self._event(WARN, "key_permission", w)
         if problems:
-            self._event(CRITICAL, "mainnet_refused", "실거래를 시작하지 않습니다: " + "; ".join(problems))
+            self._event(CRITICAL, "mainnet_refused", "실거래를 시작하지 않습니다: " + "; ".join(problems) + held)
             raise Refused("; ".join(problems))
         self._event(INFO, "mainnet_gates", f"실거래 관문 통과: 출금 꺼짐, 선물 켜짐, IP 제한 있음, "
                     f"지갑 ${wallet:,.2f} ≤ ${self.cfg.budget_usd * 1.2:,.2f}")
@@ -749,9 +906,11 @@ class Executor:
             self._event(WARN, "signal_read", f"paper3.db 신호 기록을 못 읽었습니다: {e}", notify=False)
 
     def run(self, max_loops: Optional[int] = None) -> None:
+        """Start (a refused gate raises Refused: exit 2), then loop until ``max_loops`` or SIGTERM. After the
+        start nothing ends the loop but SIGTERM: every error, a Refused included, is logged and alerted."""
         self.start()
         n = 0
-        while max_loops is None or n < max_loops:
+        while (max_loops is None or n < max_loops) and not self.stopping:
             try:
                 self.loop_once()
                 self.errors = 0
@@ -760,15 +919,18 @@ class Executor:
                 self._event(CRITICAL if e.status == 418 else WARN, "rate_limit",
                             f"요청 한도 초과({e.status}), {wait:.0f}초 쉽니다")
                 self.sleep(wait)
-            except Refused:
-                raise
             except Exception as e:  # noqa: BLE001  (log, alert, keep the loop alive)
                 self.errors += 1
                 level = CRITICAL if self.errors in (3, 10, 30) else WARN
                 self._event(level, "loop_error", f"반복 처리 오류 {self.errors}번째: {type(e).__name__}: {e}",
                             notify=self.errors in (1, 3, 10, 30))
             n += 1
+            if self.stopping:
+                break
             self._wait()
+        if self.stopping:
+            self._event(INFO, "stop", "끄라는 신호(SIGTERM)를 받아 하던 반복을 마치고 멈춥니다. 열린 포지션과 "
+                        "거래소 손절은 그대로 남습니다", {"trade": self.trade})
 
     def _wait(self) -> None:
         """Sleep until the next loop. In signal mode the wait is cut into ``direct_poll_s`` slices and a new
@@ -778,7 +940,7 @@ class Executor:
             self.sleep(total)
             return
         waited = 0.0
-        while waited < total - 1e-9:
+        while waited < total - 1e-9 and not self.stopping:
             step = min(self.cfg.direct_poll_s, total - waited)
             self.sleep(step)
             waited += step
