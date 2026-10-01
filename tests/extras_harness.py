@@ -28,9 +28,25 @@ What is synthetic (design section 11.1)
 - prices() is a pure function of the batch's last closes.
 
 The dump of the 195 (``dump195``): per original account its trades, outcomes and equity rows (no row ids),
-its "[aid]" alerts, its engine state after every process() call, its final saved state and every day:*
-snapshot entry; globally the signal_log rows of every strategy that is not a new-strategy account (statuses
-and delays included), the alerts that do not start with "[", the 195 digest's items and the texts it sent.
+its "[aid]" alerts, its engine state after every process() call (as the runner last saved it in that call),
+its final saved state and every day:* snapshot entry; globally the signal_log rows of every strategy that is
+not a new-strategy account (statuses and delays included), the alerts that do not start with "[", the 195
+digest's items and the texts it sent.
+
+Runs (the golden file holds the base commit's R0, R0r, T0, K1, K2; tests/test_extras_parity.py runs the rest):
+- R: 26 hours, logical clock; R*r restart after 901 steps (no outage, a fresh process from the file).
+- T: timed clock, restart after 900 steps with a 30-minute outage, then one catch-up burst (its last boundary
+  is live and has signals) and single steps.
+- K1..K6: a 10-hour feed in a subprocess killed with os._exit(137) at one boundary (minute 480), then a
+  restart from the file to the end. K1 instead of the 195's boundary save, K2 right after it; in the new
+  tree K3 phase 1 written before its save, K4 inside the newlab compute after the first job, K5 after a
+  creation before the phase-2 save, K6 right after the phase-2 save (K3..K6 are compared with K2).
+- The new tree's scenario (``extras``): at minute 358 three copies (stop_atr 2.5 on V45_AMB@15m, lock_start
+  0.20 on N23_HA_ST@5m, skip_tag on N12_ICHI_AO@1h, parents that signal at the crash boundary) and nine
+  new-strategy accounts are approved by inbox click (created at minute 360), one more new strategy at minute
+  476 (created at 480). Parents need no trades here (``min_parent_trades = 0``); new-strategy windows are
+  small (NL_WINDOWS, the history kept by FakeLib is 1,440 5m bars). T2x turns the live-boundary gate off: the
+  extras' phase 2 then runs during the catch-up burst and must make the 195 late (negative control).
 """
 
 from __future__ import annotations
@@ -47,8 +63,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from types import SimpleNamespace
-from typing import Callable, Optional
+from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -145,6 +160,7 @@ class _FakeLib:
 
 
 _FAKE = None
+REAL = {"on": False, "procs": 4}         # --real-lib: the locked library, real windows and entry marks (manual check)
 
 
 def fake_lib() -> _FakeLib:
@@ -154,8 +170,16 @@ def fake_lib() -> _FakeLib:
     return _FAKE
 
 
-def install_fakes() -> _FakeLib:
-    """sigservice computes with FakeLib; entry marks are stubbed (descriptions only)."""
+def signal_lib():
+    return sweepsig.lib() if REAL["on"] else fake_lib()
+
+
+def install_fakes():
+    """sigservice computes with FakeLib; entry marks are stubbed (descriptions only). With --real-lib nothing
+    is replaced."""
+    if REAL["on"]:
+        sigservice._LIB = sweepsig.lib()
+        return sigservice._LIB
     from paperbot import entry_marks
     lib = fake_lib()
     sigservice._LIB = lib
@@ -169,7 +193,7 @@ class Feed:
     """One continuous seeded 1m series per symbol from ORIGIN (history for any restart) to the feed end."""
 
     def __init__(self, hours: int = HOURS, seed: int = SEED, hist_5m: Optional[int] = None):
-        lib = fake_lib()
+        lib = signal_lib()
         keep = max(sigservice.window_5m(lib, tf) for tf in sigservice.TRADE_TFS + sigservice.RECORD_TFS)
         self.hist_5m = hist_5m or keep
         self.origin = T0 - (self.hist_5m + 12) * FIVE
@@ -310,7 +334,7 @@ class _RecNotifier:
 
 
 def originals(lib=None) -> list[str]:
-    lib = lib or fake_lib()
+    lib = lib or signal_lib()
     return [f"{d['strategy']}@{d['timeframe']}" for d in account_defs(sigservice.strategy_names(lib),
                                                                       sigservice.TRADE_TFS)]
 
@@ -334,7 +358,8 @@ class Session:
         self.digest.add = _add
         brackets = {s: Brackets.example() for s in V3_SYMBOLS}
         self.book = AccountBook(self.settings, brackets, self.store, self.notifier, SPECS, digest=self.digest)
-        self.service = sigservice.SignalService(V3_SYMBOLS, ("XRPUSDT",), RANDOM_RATES, procs=1, lib=self.lib)
+        self.service = sigservice.SignalService(V3_SYMBOLS, ("XRPUSDT",), RANDOM_RATES,
+                                                procs=REAL["procs"] if REAL["on"] else 1, lib=self.lib)
         orig = self.service.compute
 
         def compute(boundary, tf, now_ms, book, _orig=orig):
@@ -693,15 +718,15 @@ def crash_run(workdir: str, point: str, at: int, extras: Optional[dict] = None, 
         if os.path.exists(p):
             os.remove(p)
     cmd = [sys.executable, "-m", "tests.extras_harness", "--child", db, "--point", point, "--at", str(at),
-           "--hours", str(hours), "--rec", rp]
+           "--hours", str(hours), "--rec", rp] + (["--real-lib"] if REAL["on"] else [])
     if extras is not None:
         cmd += ["--extras", json.dumps(extras)]
     r = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, timeout=1200)
     if r.returncode != 137:
         raise RuntimeError(f"crash child for {point}@{at} exited {r.returncode} (expected 137):\n{r.stderr[-3000:]}")
-    rec = run(db, hours=hours, extras=extras, rec_path=rp, resume_only=True)
+    run(db, hours=hours, extras=extras, rec_path=rp, resume_only=True)
     full = Recorder.load(rp)
-    return dump195(db, full, fake_lib()), full
+    return dump195(db, full, signal_lib()), full
 
 
 # ====================================================================== the dump
@@ -788,7 +813,7 @@ def base_runs(workdir: str, log=print) -> dict:
 SCENARIO = {"scenario": "approve", "budget_s": 20.0}
 
 
-def new_run(name: str, workdir: str) -> dict:
+def new_run(name: str, workdir: str, hours: int = HOURS, crash_hours: int = CRASH_HOURS) -> dict:
     """One named run of the new tree (design 11.3 / 11.4). Returns {"name", "golden", "dump", "db"}: the dump
     of the 195 and the name of the golden run it must equal."""
     at = crash_boundary()
@@ -802,7 +827,7 @@ def new_run(name: str, workdir: str) -> dict:
             for r in (q, q + "-wal", q + "-shm"):
                 if os.path.exists(r):
                     os.remove(r)
-        rec = run(db, **kw)
+        rec = run(db, hours=hours, **kw)
         golden = {"R1": "R0", "R1r": "R0r", "R2": "R0", "R2r": "R0r", "T2": "T0", "T2x": "T0"}[name]
         return {"name": name, "golden": golden, "dump": dump195(db, rec), "db": db, "restore": rec.restore}
     point = name[:2]
@@ -810,7 +835,7 @@ def new_run(name: str, workdir: str) -> dict:
     golden = f"{'K1' if point == 'K1' else 'K2'}@{at}"
     sub = os.path.join(workdir, name)
     os.makedirs(sub, exist_ok=True)
-    d, rec = crash_run(sub, point, at, extras=extras)
+    d, rec = crash_run(sub, point, at, extras=extras, hours=crash_hours)
     return {"name": name, "golden": golden, "dump": d, "db": os.path.join(sub, f"crash_{point}_{at}.db"),
             "restore": rec.restore}
 
@@ -856,6 +881,42 @@ def write_golden(path: str = GOLDEN, base: Optional[str] = None, log=print) -> d
     return doc
 
 
+def compare_base(base: str, hours: int, real: bool, procs: int) -> int:
+    """Old vs new on the same feed (design 11.6 step 3): the base commit exported with git archive (the repository
+    is not touched), this harness copied into it, each tree run in its own process."""
+    work = tempfile.mkdtemp(prefix="extras_compare_")
+    old = os.path.join(work, "old")
+    os.makedirs(old)
+    arch = subprocess.run(["git", "-C", ROOT, "archive", base], capture_output=True, timeout=300)
+    if arch.returncode != 0:
+        raise SystemExit(f"git archive {base} failed: {arch.stderr.decode()[-500:]}")
+    subprocess.run(["tar", "-x", "-C", old], input=arch.stdout, check=True, timeout=300)
+    shutil.copy(os.path.abspath(__file__), os.path.join(old, "tests", "extras_harness.py"))
+    flags = ["--hours", str(hours)] + (["--real-lib", "--procs", str(procs)] if real else [])
+    pairs = [("R0", "R2")]
+    if hours * 60 > crash_boundary() // MIN - T0 // MIN + 10:
+        pairs.append(("K2", "K2x"))
+    if hours * 60 > RESTART_T[0] + RESTART_T[1] + 10:
+        pairs.append(("T0", "T2"))
+    out = {}
+    for a, b in pairs:
+        ja, jb = os.path.join(work, a + ".json"), os.path.join(work, b + ".json")
+        pa = subprocess.Popen([sys.executable, "-m", "tests.extras_harness", "--run", a, "--json", ja] + flags, cwd=old,
+                              stdout=subprocess.DEVNULL)
+        pb = subprocess.Popen([sys.executable, "-m", "tests.extras_harness", "--new-run", b, "--work",
+                               os.path.join(work, b), "--json", jb] + flags, cwd=ROOT, stdout=subprocess.DEVNULL)
+        if pa.wait() != 0 or pb.wait() != 0:
+            raise SystemExit(f"{a}/{b} failed")
+        with open(ja) as fh:
+            da = json.load(fh)["dump"]
+        with open(jb) as fh:
+            db = json.load(fh)["dump"]
+        diff = [k for k in ("accounts", "steps", "signal_log", "alerts", "digest_items", "digest") if da[k] != db[k]]
+        out[f"{a} vs {b}"] = {"equal": not diff, "differs": diff, "old": da["counts"], "new": db["counts"]}
+    print(json.dumps({"base": base, "hours": hours, "real_lib": real, "result": out}, indent=1))
+    return 0 if all(v["equal"] for v in out.values()) else 1
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--write-golden", action="store_true")
@@ -868,10 +929,21 @@ def main(argv=None) -> int:
     ap.add_argument("--child", help=argparse.SUPPRESS)
     ap.add_argument("--point", help=argparse.SUPPRESS)
     ap.add_argument("--at", type=int, help=argparse.SUPPRESS)
-    ap.add_argument("--hours", type=int, default=HOURS, help=argparse.SUPPRESS)
+    ap.add_argument("--hours", type=int, default=HOURS, help="feed hours (default 26)")
+    ap.add_argument("--real-lib", action="store_true",
+                    help="the locked library with its real windows and entry marks (slow; a manual check)")
+    ap.add_argument("--procs", type=int, default=4, help="signal workers with --real-lib")
+    ap.add_argument("--compare-base", metavar="COMMIT",
+                    help="old vs new: export COMMIT (git archive) to a scratch folder, run the base tree (R0, and K2 / "
+                         "T0 when --hours allows) and this tree (R2 / K2x / T2 with extras) each in its own process, and "
+                         "compare the dumps of the 195")
     ap.add_argument("--rec", help=argparse.SUPPRESS)
     ap.add_argument("--extras", help=argparse.SUPPRESS)
     args = ap.parse_args(argv)
+    if args.real_lib:
+        REAL.update(on=True, procs=args.procs)
+    if args.compare_base:
+        return compare_base(args.compare_base, args.hours, args.real_lib, args.procs)
     if args.child:
         extras = json.loads(args.extras) if args.extras else None
         run(args.child, hours=args.hours, extras=extras, rec_path=args.rec,
@@ -880,7 +952,8 @@ def main(argv=None) -> int:
     if args.new_run:
         work = args.work or tempfile.mkdtemp(prefix="extras_new_")
         os.makedirs(work, exist_ok=True)
-        res = new_run(args.new_run, work)
+        res = new_run(args.new_run, work, hours=args.hours,
+                      crash_hours=min(CRASH_HOURS, args.hours) if args.hours != HOURS else CRASH_HOURS)
         if args.json:
             with open(args.json, "w") as fh:
                 json.dump(res, fh)
@@ -892,9 +965,17 @@ def main(argv=None) -> int:
         return 0
     if args.run:
         work = tempfile.mkdtemp(prefix="extras_run_")
-        kw = {"R0": {}, "R0r": {"restart": (RESTART_R, 0)}, "T0": {"timed": True, "restart": RESTART_T}}[args.run]
-        db = _p(work, args.run)
-        print(json.dumps(dump195(db, run(db, **kw)), indent=1))
+        at = crash_boundary()
+        if args.run in ("K1", "K2"):
+            d = crash_run(work, args.run, at, hours=min(CRASH_HOURS, args.hours))[0]
+        else:
+            kw = {"R0": {}, "R0r": {"restart": (RESTART_R, 0)}, "T0": {"timed": True, "restart": RESTART_T}}[args.run]
+            db = _p(work, args.run)
+            d = dump195(db, run(db, hours=args.hours, **kw))
+        if args.json:
+            with open(args.json, "w") as fh:
+                json.dump({"name": args.run, "dump": d}, fh)
+        print(json.dumps(d, indent=1))
         shutil.rmtree(work, ignore_errors=True)
         return 0
     ap.print_help()

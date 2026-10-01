@@ -165,7 +165,6 @@ def test_newlab_rows_only_at_live_boundaries_and_filled(results):
 
 def test_extras_survive_the_restart(results):
     for name in ("R2r", "T2"):
-        rec = results[1][name]
         c = _db(results, name)
         restart = H.T0 + (H.RESTART_R if name == "R2r" else H.RESTART_T[0]) * H.MIN
         assert c.execute("SELECT COUNT(*) FROM signal_log WHERE strategy LIKE 'NL%' AND bar_close > ?",

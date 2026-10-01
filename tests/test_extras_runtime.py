@@ -5,7 +5,6 @@ import copy
 import itertools
 import json
 import os
-import shutil
 import sqlite3
 import subprocess
 import sys
@@ -16,7 +15,7 @@ import pytest
 from paperbot import extras as X
 from paperbot.accounts import HeldEngine
 from paperbot.engine import PaperEngine
-from tests.extras_world import DAY, HOUR, MIN, T0, World, add_copy_proposal, names36, newlab_spec
+from tests.extras_world import DAY, HOUR, MIN, T0, World, names36, newlab_spec
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -492,7 +491,7 @@ def test_stale_run_and_observation(tmp_path):
     w.boundary(T0 + 2 * DAY)
     assert w.state()["agents_db"] == "observing" and not w.extras_rows()
     w.now = T0 + 22 * DAY
-    late = w.copy_proposal("N17_KC_RSI", "15m")[0]
+    w.copy_proposal("N17_KC_RSI", "15m")
     w.boundary(T0 + 22 * DAY + 5 * MIN)
     assert w.refused(early)["code"] == "stale_run" and w.refused(early)["permanent"]
     assert [a["account_id"] for a in w.extras_rows()] == ["N17_KC_RSI@15m~c1"]
@@ -505,7 +504,7 @@ def test_owner_ok_judged_at_decision_time(tmp_path):
     w.process(T0)
     early = w.copy_proposal(click=False, decided_by="approver", ts=T0 + HOUR)[0]
     w.now = T0 + 2 * DAY
-    late = w.copy_proposal("N17_KC_RSI", "15m", click=False, decided_by="approver")[0]
+    w.copy_proposal("N17_KC_RSI", "15m", click=False, decided_by="approver")
     w.boundary(T0 + 2 * DAY + 5 * MIN)
     assert w.refused(early)["code"] == "owner_ok_missing"             # needed an owner then, even if polled later
     assert [a["account_id"] for a in w.extras_rows()] == ["N17_KC_RSI@15m~c1"]
@@ -519,7 +518,7 @@ def test_owner_ok_judged_at_decision_time(tmp_path):
 def test_owner_click_required(world):
     w = world
     p1 = w.copy_proposal(click=False)[0]
-    p2 = w.copy_proposal("N17_KC_RSI", "15m", author="B")[0]
+    w.copy_proposal("N17_KC_RSI", "15m", author="B")
     w.R.add_approval(w.inbox, p1, "approve", "Z", ts=w.now)       # another author's click is not the decision's
     p3 = w.copy_proposal("S2_ST_ROC", "15m", author="")[0]        # decided_by "owner" (no author)
     assert w.R.get_proposal(w.agents, p3)["decided_by"] == "owner"
@@ -551,8 +550,6 @@ def test_reject_sticky(world):
     assert w.refused(pid)["code"] == "reject_pending" and not w.extras_rows()
     # a reject click older than the proposal row belongs to an earlier proposal with that id
     w2 = w.copy_proposal("N17_KC_RSI", "15m")[0]
-    w.inbox.execute("UPDATE approvals SET ts = ? WHERE proposal_id = ? AND decision = 'reject'", (0, pid)) \
-        if False else None
     w.R.add_approval(w.inbox, w2, "reject", "B", ts=w.now - 10 * MIN)
     w.boundary(T0 + 10 * MIN)
     assert [a["account_id"] for a in w.extras_rows()] == ["N17_KC_RSI@15m~c1"]

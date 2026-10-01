@@ -7,7 +7,6 @@ trades, outcomes, alerts and engine states must be identical, and the runner mus
 new-strategy code on full-length windows."""
 
 import json
-import os
 import sqlite3
 import sys
 import time
@@ -18,7 +17,7 @@ import pytest
 from paperbot import extras as X
 from paperbot.accounts import HeldEngine
 from paperbot.engine import engine_state
-from tests.extras_world import FIVE, HOUR, MIN, T0, World
+from tests.extras_world import HOUR, MIN, T0, World
 
 ORIG = ("V45_AMB@15m", "V45_AMB@5m", "N17_KC_RSI@5m", "S2_ST_ROC@15m", "RANDOM_1@5m")
 END = T0 + 3 * HOUR
