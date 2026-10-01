@@ -623,7 +623,7 @@ df -h /
 - **서버 안, 매일:** 08:40 `/var/backups/paperbot/<날짜>/`에 14일치. agents3(가설 장부), inbox(두 분 글·승인), liq(강제청산), checkpoint(판정), daily3(매일 점검), paper3(계좌). 실거래 기록(exec)이 생기면 그것도.
 - **서버 밖, 매일:** 09:15 위 백업을 묶어서 텔레그램 'paperbot 백업' 방으로 보냅니다(4-3, `docs/offsite-backup.md`). 두 분은 비용 때문에 Vultr 자동 백업을 켜지 않았습니다(1-5). 그래서 서버가 사라지면 이 텔레그램 사본이 유일한 사본입니다.
 - **DB 하나를 되살릴 때:** 순서를 꼭 지켜야 파일이 깨지지 않습니다. `docs/agent-rooms.md`의 "데이터베이스를 백업에서 되살릴 때"를 따릅니다. 거기 적힌 것 외에, `liq.db`를 되살릴 때는 `paperbot-liq`도, `checkpoint.db`를 되살릴 때는 `paperbot-checkpoint.timer paperbot-checkpoint.service`도 먼저 멈춥니다.
-- **서버를 통째로 잃었을 때:** `docs/offsite-backup.md` 9번 "새 서버에 되살리기"를 따릅니다. 새 서버를 1~8번대로 만들고, 텔레그램에서 마지막 백업을 내려받아 DB를 되살린 뒤 11번으로 켜고 12번으로 확인합니다. **10번(시작 전 점검)은 하지 않습니다:** 되살린 paper3.db를 "예전 시작 기록"으로 보고 옮기라는 줄이 나오는데, 따르면 되살린 기록이 빠집니다. 마지막 백업(08:40) 뒤의 기록은 없습니다(최대 하루). 봇은 백업 시점의 상태에서 이어서 돌고, 꺼져 있던 동안의 신호는 "늦음"으로 기록만 됩니다. 에이전트의 AI 사용 기록도 그 시점으로 돌아가므로, 그날은 `sudo systemctl stop paperbot-agents.timer`로 에이전트를 쉬게 하고 다음 날 `sudo systemctl start paperbot-agents.timer`로 켭니다(`docs/agent-rooms.md`). 되살린 뒤 12번 확인을 다시 하고 개발자에게 알립니다.
+- **서버를 통째로 잃었을 때:** `docs/offsite-backup.md` 9번 "새 서버에 되살리기"를 따릅니다. 새 서버를 1~9번대로 만들고(9번 5년 자료 포함), 텔레그램에서 마지막 백업을 내려받아 DB를 되살린 뒤 11번으로 켜고 12번으로 확인합니다. **10번(시작 전 점검)은 하지 않습니다:** 되살린 paper3.db를 "예전 시작 기록"으로 보고 옮기라는 줄이 나오는데, 따르면 되살린 기록이 빠집니다. 마지막 백업(08:40) 뒤의 기록은 없습니다(최대 하루). 봇은 백업 시점의 상태에서 이어서 돌고, 꺼져 있던 동안의 신호는 "늦음"으로 기록만 됩니다. 에이전트의 AI 사용 기록도 그 시점으로 돌아가므로, 그날은 `sudo systemctl stop paperbot-agents.timer`로 에이전트를 쉬게 하고 다음 날 `sudo systemctl start paperbot-agents.timer`로 켭니다(`docs/agent-rooms.md`). 되살린 뒤 12번 확인을 다시 하고(그날 쉬게 한 `paperbot-agents.timer: 꺼져 있음` 줄은 따르지 않습니다) 개발자에게 알립니다.
 
 ### 13-7. 문제가 생기면
 

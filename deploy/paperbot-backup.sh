@@ -21,6 +21,7 @@ d="$out/$(date -u +%Y%m%d)"
 mkdir -p "$d" || exit 1
 find "$out" -name '*.db.part' -type f -delete
 fail=0
+# keep this list the same as DB_NAMES in paperbot/offsite.py (tests/test_offsite.py checks it)
 for f in agents3 inbox liq checkpoint exec/executor exec/executor-testnet daily3 paper3; do
   src="$lib/$f.db"
   [ -f "$src" ] || continue

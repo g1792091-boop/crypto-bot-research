@@ -29,7 +29,7 @@ ProtectSystem=strict
 ReadWritePaths=/var/lib/paperbot
 ReadOnlyPaths=-/var/lib/paperbot/.local -/var/lib/paperbot/lab
 # The order executor's keys and its databases (directory: a stable inode) are never visible here.
-InaccessiblePaths=-/etc/paperbot/agents.env -/etc/paperbot/live.env -/etc/paperbot/executor.env -/var/lib/paperbot/exec
+InaccessiblePaths=-/etc/paperbot/agents.env -/etc/paperbot/live.env -/etc/paperbot/executor.env -/var/lib/paperbot/exec -/var/backups/paperbot
 
 [Install]
 WantedBy=multi-user.target
