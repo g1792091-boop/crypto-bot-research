@@ -116,7 +116,8 @@ for f in live dash agents; do
   [ -f /etc/paperbot/$f.env ] && chmod 640 /etc/paperbot/$f.env && chown root:paperbot /etc/paperbot/$f.env
 done
 # The executor's order keys: root only. systemd reads the file for paperbot-executor.service before it drops
-# to the paperbot user, so nothing else running as paperbot (agents, dashboard) can read the keys.
+# to the paperbot user; the agents and the dashboard cannot open the file, and the executor makes itself
+# non-dumpable at start so other paperbot processes cannot read the keys from /proc/<pid>/environ either.
 if [ ! -f /etc/paperbot/executor.env ] && [ -f "$APP/deploy/executor.env.example" ]; then
   install -o root -g root -m 600 "$APP/deploy/executor.env.example" /etc/paperbot/executor.env
 fi

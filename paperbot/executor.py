@@ -865,8 +865,11 @@ class Executor:
         if self.trade is not None:
             held = (f" 열린 포지션 {self.trade['symbol']}이 있습니다: 그동안은 거래소에 걸린 손절만 지킵니다"
                     "(잠금·청산 따라가기, 비상 정지 파일, 하루 손실 한도는 실행기가 다시 켜질 때까지 멈춤).")
+        def read_permissions():
+            kc.offset_ms = self.raw.offset_ms              # again after a -1021 re-sync
+            return kc.api_restrictions()
         try:
-            perm = self.c._retry("키 권한", kc.api_restrictions)
+            perm = self.c._retry("키 권한", read_permissions)
         except (TransientError, RateLimited) as e:
             self._event(CRITICAL, "mainnet_unreachable", f"api.binance.com 키 권한 확인이 안 됩니다({e}). "
                         "30초 뒤 다시 켭니다(systemd)." + held)
@@ -982,8 +985,11 @@ class Executor:
         self._transfers()
         R.observe_equity(self.risk, self.now_ms(), equity)
         if now - self.last_equity >= self.cfg.equity_every_s * 1000:
-            self.store.equity(now, equity, wallet, self.risk.transfers)
-            self.last_equity = now
+            try:                                 # a record: never in front of the limits
+                self.store.equity(now, equity, wallet, self.risk.transfers)
+                self.last_equity = now
+            except sqlite3.Error as e:
+                self._event(CRITICAL, "db_error", f"금액 기록 실패: {e}", notify=False)
         if not flattened:
             dec = self._limits(equity, kill)
             if dec.action == R.FLATTEN_HALT:
@@ -1035,7 +1041,11 @@ class Executor:
         if not force and now - self.last_transfer_scan < self.cfg.transfer_every_s * 1000:
             return False
         self.last_transfer_scan = now
-        rows = self.c.income(None, None, min(st.transfers_checked, end) - 3_600_000, end)
+        try:
+            rows = self.c.income(None, None, max(min(st.transfers_checked, end) - 3_600_000, end - 7 * 86_400_000), end)
+        except TestnetError as e:                            # never in front of the limits: they use what they have
+            self._event(WARN, "transfers_unread", f"입출금 기록을 못 읽었습니다: {e}", notify=False)
+            return False
         seen = {str(x) for x in st.transfer_ids}
         off = int(getattr(self.raw, "offset_ms", 0) or 0)
         applied = False

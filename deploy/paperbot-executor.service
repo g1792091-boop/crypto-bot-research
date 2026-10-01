@@ -7,11 +7,16 @@
 #   sudo systemctl start paperbot-executor        (and `enable` only once the testnet soak is done)
 #
 # The key file is root-only (chmod 600 root:root): systemd reads EnvironmentFile= as root before it
-# drops to the paperbot user, so the keys reach this process only; the agents and the dashboard cannot
-# read the file (and their units hide it and /var/lib/paperbot/exec as well).
-# Exit status 2 = a gate refused the start: not restarted (fix the cause, then start it by hand).
-# Any other failure restarts after 30 s: open positions keep their exchange stop meanwhile, and the
-# executor resumes from its database (a halt stays a halt).
+# drops to the paperbot user and passes the keys in this process's environment. The agents and the
+# dashboard cannot read the file (their units hide it, /var/lib/paperbot/exec and /var/backups/paperbot).
+# They run as the same user, so the executor makes itself non-dumpable first thing (PR_SET_DUMPABLE=0):
+# same-user processes then cannot read its /proc/<pid>/environ (the keys), memory or root. A dedicated
+# executor user is still to do (docs/live-safety.md section 5).
+# Exit status 2 = a gate refused the start for a definite reason (key permissions, wallet, config): not
+# restarted (fix the cause, then start it by hand). Any other failure (api.binance.com unreachable, a
+# crash) restarts after 30 s with a CRITICAL alert: open positions keep their exchange stop meanwhile,
+# and the executor resumes from its database (a halt stays a halt). `systemctl stop` (SIGTERM) lets the
+# loop in progress finish (a stop being placed goes on) before it exits.
 [Unit]
 Description=paperbot order executor (testnet unless every mainnet gate passes)
 After=network-online.target paperbot-live3.service
