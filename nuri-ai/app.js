@@ -89,10 +89,16 @@ const CHIPS = {
   chat: [["chart","비트코인 지금 분석해줘"],["chart","이번 주 경제 발표 일정과 시장 영향"],["home","대지 60평에 3층 단독주택 설계하고 견적서까지"],["search","최신 AI 뉴스 검색해서 정리해줘"],["code","할 일 관리 웹앱 만들어줘"]],
   code: [["folder","이 프로젝트 구조를 설명해줘"],["code","버그를 찾아서 고쳐줘"],["doc","README.md를 써줘"],["redo","테스트를 실행하고 실패하면 고쳐줘"]]
 };
+// 좁은 화면에서는 패널이 화면 위쪽을 덮으므로, 입력창은 항상 아래(독)에 두고 패널은 그 위까지만 덮는다
+const isNarrow = () => matchMedia("(max-width:980px)").matches;
+function syncDock(){ const d = $("#dock"); document.documentElement.style.setProperty("--dock-h", (d.hidden ? 0 : d.offsetHeight) + "px"); }
+if (window.ResizeObserver) new ResizeObserver(syncDock).observe($("#dock"));
+addEventListener("resize", () => { syncDock(); if (current && !current.messages.length && !$("#panel").hidden) render(); });
 function render(){
   const th = $("#thread"), empty = !current.messages.length;
   if ($("#composer").parentElement.id !== "dock") $("#dock").prepend($("#composer")); // 다시 그리기 전에 입력창을 안전한 곳으로
   $("#title").textContent = empty ? "" : current.title;
+  if (empty && isNarrow() && !$("#panel").hidden){ th.innerHTML = ""; $("#dock").hidden = false; syncDock(); $("#panelToggle").hidden = !lastArtifact(); return; }
   if (empty){
     const note = !brainReady() ? `<div class="hero-note"><b>먼저 AI 두뇌를 준비하세요.</b> 입력창의 모델 버튼에서 고르거나 <a href="#" data-open="brain" style="color:var(--accent)">설정</a>을 여세요.</div>`
       : mode === "code" && !LAUNCHER.on ? `<div class="hero-note"><b>코드 모드는 GHNano.exe로 실행해야 쓸 수 있습니다.</b></div>`
@@ -101,7 +107,7 @@ function render(){
     th.innerHTML = `<div class="hero"><h1><span class="logo">${esc([...AI()][0].toUpperCase())}</span>${mode === "code" ? "무엇을 만들어 볼까요?" : GREET}</h1><div class="hero-slot" id="heroSlot"></div>
       <div class="chips">${CHIPS[mode].map(([i, t]) => `<button class="chip" data-chip>${ico(i)}${esc(t)}</button>`).join("")}<button class="chip more" data-open="tpl">${ico("grid")}템플릿 더 보기</button></div>${note}</div>`;
     $("#heroSlot").appendChild($("#composer"));
-    $("#dock").hidden = true;
+    $("#dock").hidden = true; syncDock();
   } else {
     $("#dock").hidden = false;
     th.innerHTML = current.messages.map((m, i) => msgHTML(m, i)).join("");
@@ -384,7 +390,7 @@ function showArtEmpty(){
   $("#pContent").hidden = false; $("#pContent").innerHTML = `<p class="empty" style="padding:28px">아직 이 대화에 결과물이 없습니다.</p>`;
 }
 async function openArtifact(a, wait){
-  panelArt = a; $("#panel").hidden = false; setTabs("art");
+  panelArt = a; $("#panel").hidden = false; setTabs("art"); panelOpened();
   $("#pTitle").textContent = a.title || "결과물";
   $("#pType").textContent = ({html: "웹페이지", code: (a.lang || "코드"), markdown: "문서", svg: "SVG 그림", trading: "실시간 차트 · 트레이딩 룸", building: "건축 설계 · 3D·평면·AutoCAD/Revit/SketchUp/루미온 내보내기", image: "AI 렌더링 이미지"})[a.type] || a.type;
   const textual = ["html", "code", "markdown", "svg"].includes(a.type);
@@ -422,11 +428,14 @@ $("#pSave").onclick = () => {
   const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([panelArt.content], {type: "text/plain;charset=utf-8"}));
   a.download = (panelArt.title || "nuri").replace(/[\\/:*?"<>|]+/g, "_") + "." + ext; document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
 };
-function closePanel(){ $("#panel").hidden = true; trade?.hide(); panelArt = null; }
+function closePanel(){ $("#panel").hidden = true; trade?.hide(); panelArt = null; if (isNarrow() && current && !current.messages.length) render(); }
+// 패널이 열릴 때 좁은 화면이면 입력창을 아래로 옮겨 항상 쓸 수 있게
+function panelOpened(){ if (isNarrow() && current && !current.messages.length && $("#composer").parentElement.id !== "dock") render(); syncDock(); }
+document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("#panel").hidden && !$("#sheet").open && isNarrow()) closePanel(); });
 
 /* ============ 진행 상황 (지금 무엇을 하는지 실시간으로) ============ */
 function openActivity(){
-  $("#panel").hidden = false; setTabs("act"); trade?.hide();
+  $("#panel").hidden = false; setTabs("act"); trade?.hide(); panelOpened();
   $("#pTitle").textContent = "진행 상황"; $("#pType").textContent = `${AI()}가 지금 하는 일 · 쓴 AI · 스킬 · 도구 · 출처`;
   $("#pView").hidden = $("#pCopy").hidden = $("#pSave").hidden = true;
   $("#pContent").hidden = $("#tradeHost").hidden = $("#archHost").hidden = true;
@@ -925,4 +934,7 @@ if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol) && !wind
     reg.update().catch(() => {});
   }).catch(() => {});
 }
+// 실행 중 오류를 숨기지 않고 알려 준다 (원인을 알려 주시면 고칠 수 있게)
+addEventListener("error", e => { if (e.message && !/ResizeObserver/.test(e.message)) toast("오류: " + e.message.slice(0, 120)); });
+addEventListener("unhandledrejection", e => { const m = String(e.reason?.message || e.reason || ""); if (m && !/abort/i.test(m)) toast("오류: " + m.slice(0, 120)); });
 window.__nuri = {get chats(){ return chats; }, get current(){ return current; }, settings, eng, LAUNCHER, openArtifact, get trade(){ return trade; }};

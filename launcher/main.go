@@ -5,6 +5,7 @@ package main
 import (
 	"bytes"
 	"crypto/sha1"
+	"crypto/sha256"
 	"embed"
 	"encoding/hex"
 	"fmt"
@@ -183,15 +184,22 @@ func siteHandler(root fs.FS) http.Handler {
 		if ct != "" {
 			h.Set("Content-Type", ct)
 		}
+		// 모든 파일을 매번 확인(ETag)한다: 새 exe로 바꿨을 때 옛 스크립트와 새 스크립트가 섞이면 앱 전체가 멈추기 때문
+		h.Set("Cache-Control", "no-cache")
 		if ext == ".html" {
-			h.Set("Cache-Control", "no-cache")
 			if i := bytes.LastIndex(data, []byte("</body>")); i >= 0 {
 				data = append(append(append([]byte{}, data[:i]...), keepAlive()...), data[i:]...)
 			} else {
 				data = append(append([]byte{}, data...), keepAlive()...)
 			}
 		} else {
-			h.Set("Cache-Control", "public, max-age=3600")
+			sum := sha256.Sum256(data)
+			tag := `"` + hex.EncodeToString(sum[:12]) + `"`
+			h.Set("ETag", tag)
+			if r.Header.Get("If-None-Match") == tag {
+				w.WriteHeader(http.StatusNotModified)
+				return
+			}
 		}
 		if r.Method == http.MethodHead {
 			return
