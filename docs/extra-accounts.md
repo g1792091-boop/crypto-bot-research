@@ -125,7 +125,7 @@ live 봇이 승인된 제안을 **읽기만** 하고(에이전트 장부 `agents
 | `paused` | `pause_activation` | 아니오 | 운영자 |
 | `agents_unreadable` / `inbox_unreadable` | 장부나 클릭 기록 파일이 없거나 읽지 못함 (inbox.db가 없으면 경고 한 번: 대시보드가 켜질 때 빈 inbox.db를 만듦) | 아니오 | 운영자 |
 | `agents_regressed` | 장부가 예전 것으로 바뀜 (6장) | 아니오 | 운영자 |
-| `inbox_regressed` | 승인 클릭 기록(inbox.db)이 예전 것으로 바뀜 (6장) | 아니오 | 두 분이 다시 클릭, 운영자가 `inbox_ack` (크게 알림) |
+| `inbox_regressed` | 승인 클릭 기록(inbox.db)이 예전 것으로 바뀜 (6장) | 아니오 | 운영자가 먼저 `inbox_ack`, 그다음 두 분이 다시 클릭 (확인 전에는 "다시 승인"이 안 나옴, 크게 알림) |
 | `stale_ok` | 이 기능 전에 승인됨: 두 분이 "다시 승인"을 한 번 더 | 아니오 | 두 분 |
 | `reject_pending` | 거절 클릭이 있음 | 아니오 | 에이전트가 반영 |
 | `gate_disagree` / `gate_code_unavailable` | 관문 재판정 숫자가 에이전트 쪽과 다름 / 관문 코드를 못 불러옴 | 아니오 | 운영자 |

@@ -899,12 +899,9 @@ class Extras:
 
     def post_batch(self, now: int) -> None:
         """The runner's end of a poll (after every boundary of the batch and its commit): the held CRITICAL
-        lines and the extras digest are sent here."""
+        lines are sent here. The hourly extras digest is not: a poll can end a second before a 5m close, so it
+        goes out only right after a live boundary's compute (post_boundary)."""
         self.flush_outbox()
-        try:
-            self.digest.flush(now)
-        except Exception:  # noqa: BLE001
-            pass
 
     def _effective(self) -> int:
         """From which 1m step a state change applies (daily3 and checkpoint read it): the next step."""
@@ -1354,10 +1351,13 @@ class Extras:
         now = self.clock()
         # the same check as C0, on paper3.db itself (inside this transaction): an account another runner process
         # made for this proposal row is never made twice, even if this process's registry does not know it
-        dup = self.store.conn.execute(
-            "SELECT account_id FROM accounts WHERE kind IN ('copy', 'newlab') "
-            "AND json_extract(data, '$.source.proposal_id') = ? AND json_extract(data, '$.source.proposal_ts') = ?",
-            (int(p["id"]), int(p["ts"]))).fetchone()
+        try:            # an extras row with unreadable data (held at load) must not abort every activation
+            dup = self.store.conn.execute(
+                "SELECT account_id FROM accounts WHERE kind IN ('copy', 'newlab') AND json_valid(data) "
+                "AND json_extract(data, '$.source.proposal_id') = ? AND json_extract(data, '$.source.proposal_ts') = ?",
+                (int(p["id"]), int(p["ts"]))).fetchone()
+        except sqlite3.Error as exc:
+            raise ValueError(f"could not check paper3 for an account of proposal #{p['id']}: {exc}") from exc
         if dup is not None:
             raise ValueError(f"account {dup[0]} already exists for proposal #{p['id']}")
         n = next_n(self.store.conn, kind)

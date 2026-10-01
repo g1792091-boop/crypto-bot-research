@@ -233,3 +233,30 @@ console.log(JSON.stringify(rows));"""
     store.close()
     got = {a["account_id"]: a for a in Data(db).board()["accounts"]}
     assert got["V45_AMB@15m~c1"]["beats_random"] is None and got["V45_AMB@15m"]["beats_random"] is False
+
+
+def test_strategy_list_best_wallet_leaves_out_copy_accounts():
+    """The strategy list shows the best of the strategy's own 5 accounts; a copy account (listed on its own) must
+    not lift it."""
+    import json as _json
+    import os
+    import re
+    import shutil
+    import subprocess
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("needs node")
+    path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "paperbot", "dash", "static",
+                        "strat.js")
+    src = open(path, encoding="utf-8").read()
+    fn = re.search(r"^function bestWallet\(.*?^}$", src, re.S | re.M).group(0)
+    body = """
+const state = {board: {accounts: [
+  {account_id: "V45_AMB@15m", strategy: "V45_AMB", kind: "strategy", wallet: 5100},
+  {account_id: "V45_AMB@1h", strategy: "V45_AMB", kind: "strategy", wallet: 4900},
+  {account_id: "V45_AMB@15m~c1", strategy: "V45_AMB", kind: "copy", wallet: 9000}]}};
+const INITIAL = 5000;
+console.log(JSON.stringify(bestWallet("V45_AMB")));"""
+    r = subprocess.run([node, "-e", fn + "\n" + body], capture_output=True, text=True, timeout=30)
+    assert r.returncode == 0, r.stderr
+    assert _json.loads(r.stdout) == 5100

@@ -251,6 +251,16 @@ def bind_extras(ext, runner: "Runner3", store: Store3, notifier: Notifier) -> No
         store.alert(int(time.time() * 1000), CRITICAL, text)
         store.commit()
         notifier.send(CRITICAL, text)
+        # the extras' engines still step and hold their CRITICAL lines (liquidations, faults) in the outbox:
+        # keep sending them at the end of each poll even though the extras never started
+        flush = getattr(ext, "flush_outbox", None)
+        if callable(flush) and runner.post_batch is None:
+            def _flush_only(_now: int) -> None:
+                try:
+                    flush()
+                except Exception:  # noqa: BLE001
+                    pass
+            runner.post_batch = _flush_only
 
 
 def single_runner_lock(db: str):

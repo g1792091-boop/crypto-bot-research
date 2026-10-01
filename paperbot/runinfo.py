@@ -24,15 +24,16 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # Files whose change can alter a fill, an exit or a position size.
 TRADING_FILES = ("paperbot/engine.py", "paperbot/ladder.py", "paperbot/margin.py", "paperbot/sizing.py",
                  "paperbot/config.py", "paperbot/models.py", "paperbot/accounts.py",
-                 "paperbot/sigservice.py", "paperbot/aggregate.py", "paperbot/feed.py", "paperbot/live3.py")
+                 "paperbot/sigservice.py", "paperbot/aggregate.py", "paperbot/feed.py", "paperbot/live3.py",
+                 "paperbot/recorder.py")
 RULES_FILES = ("docs/paper-v3-rules.md", "docs/paper-v3-rules-addendum.md")
 # Files that decide only the extra accounts (paperbot/extras.py): their trading code and signals, and the
 # code that judges an approval at creation (not trading). A change is a Q5 event for the extras only.
 EXTRA_FILES = ("paperbot/extras.py", "paperbot/newlab_live.py", "paperbot/agents/newlab_signals.py")
 # Signal input code the 195 use too (recorder.build_frames makes their signal frames, context the chart context
-# of their cards) and the extras (new-strategy frames, copies' skip tags). Not in TRADING_FILES (open question
-# Q-11 of the extras design, the rule keeper's decision); a change is reported without saying the 195 are
-# unaffected.
+# of their cards) and the extras (new-strategy frames, copies' skip tags). recorder.py is also in TRADING_FILES
+# (Q-11, decided 2026-10-01 before the first start: it builds the 195's signal frames, like sigservice.py); a
+# change here is reported without saying the 195 are unaffected.
 SHARED_SIGNAL_FILES = ("paperbot/recorder.py", "paperbot/context.py")
 EXTRA_GATE_FILES = ("paperbot/agents/newlab.py", "paperbot/agents/labtests.py", "paperbot/agents/actions.py",
                     "paperbot/agents/rooms_db.py")
@@ -136,7 +137,7 @@ def change_text(ch: list[dict]) -> Optional[str]:
     if any(c["trading"] and c.get("shared") for c in ch):
         return (f"재시작 때 바뀐 것: {names}. 원래 195개 계좌의 신호 계산(recorder.py)과 차트 설명(context.py)에도 "
                 "쓰이는 코드라 원래 계좌와 추가 계좌 모두 Q5(30일 기간을 다시 셀지) 해당 여부를 규칙 관리자가 "
-                "확인해야 합니다 (열린 질문 Q-11)")
+                "확인해야 합니다 (recorder.py 변경은 원래 계좌의 거래 코드 변경으로도 따로 잡힙니다, Q-11)")
     if any(c["trading"] for c in ch):
         return (f"재시작 때 바뀐 것: {names}. 추가 계좌의 체결·신호 코드라 {EXTRAS_ONLY_KO}(원래 195개 계좌의 코드는 "
                 "그대로): 그 계좌들의 30일 기간을 다시 세야 하는지 규칙 관리자 확인 필요")

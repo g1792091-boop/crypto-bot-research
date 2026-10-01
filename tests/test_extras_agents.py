@@ -786,3 +786,25 @@ def test_overlap_excludes_copies(world):
     assert all(aid not in m["accounts"] for m in (rep["exposure"] or {}).get("top", []))
     assert "copy" in overlap.RULES["exposure_counts"]
     assert np.isfinite(rep["copies"][0]["corr_with_parent"])
+
+
+def test_owner_ok_period_follows_the_runners_longer_setting(world):
+    """extras.json may set owner_ok_days above 60 (say 90). The approver must not approve a copy alone where the
+    runner still wants the owners' click (owner_ok_missing is permanent: the pass would be lost). The agents take
+    the longer of their own and the runner's period; settings the runner refuses are refused at start."""
+    day70 = START + 70 * DAY
+    c = ctx(world, day70)
+    c.policy = RM.policy_from_env({})
+    runner_state(world)
+    assert RM.owner_ok_required(c) is False                       # agents' 60 days are over
+    runner_state(world, config={"owner_ok_days": 90})
+    c = ctx(world, day70)
+    c.policy = RM.policy_from_env({})
+    assert RM.owner_ok_required(c) is True                        # the runner's 90 days are not
+    c = ctx(world, START + 91 * DAY)
+    c.policy = RM.policy_from_env({})
+    assert RM.owner_ok_required(c) is False
+    for bad in ({"AGENTS_COPY_CAP_PER_STRATEGY": "2"}, {"AGENTS_COPY_CAP_TOTAL": "11"}):
+        with pytest.raises(ValueError):
+            RM.policy_from_env(bad)
+    assert RM.policy_from_env({"AGENTS_COPY_CAP_TOTAL": "5"}).copy_cap_total == 5

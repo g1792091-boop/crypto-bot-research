@@ -20,7 +20,9 @@ async function loadStrat() {
 // ------------------------------------------------------------ list
 function bestWallet(name) {
   if (!state.board) return null;
-  const ws = state.board.accounts.filter((a) => a.strategy === name).map((a) => a.wallet ?? INITIAL);
+  // the strategy's own 5 accounts only: its copy accounts (kind "copy") are listed on their own
+  const ws = state.board.accounts.filter((a) => a.strategy === name && (a.kind ?? "strategy") === "strategy")
+    .map((a) => a.wallet ?? INITIAL);
   return ws.length ? Math.max(...ws) : null;
 }
 function renderSList() {

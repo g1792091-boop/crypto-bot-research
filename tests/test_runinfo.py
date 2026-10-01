@@ -86,7 +86,9 @@ def test_signal_input_code_shared_with_the_195_is_never_called_extras_only(tmp_p
     import shutil
     from paperbot.runinfo import EXTRA_FILES, ROOT, SHARED_SIGNAL_FILES, SHARED_WATCHED, WATCHED
     assert set(SHARED_SIGNAL_FILES) == {"paperbot/recorder.py", "paperbot/context.py"}
-    assert not set(SHARED_SIGNAL_FILES) & (set(EXTRA_FILES) | set(TRADING_FILES))
+    assert not set(SHARED_SIGNAL_FILES) & set(EXTRA_FILES)
+    # Q-11 (decided before the first start): recorder.py builds the 195's signal frames, so it is trading code
+    assert "paperbot/recorder.py" in TRADING_FILES and "paperbot/context.py" not in TRADING_FILES
     assert not {k for k, _, _ in WATCHED} & {k for k, _, _ in SHARED_WATCHED}
     # a change to recorder.py moves only the shared key
     for rel in SHARED_SIGNAL_FILES + EXTRA_FILES:

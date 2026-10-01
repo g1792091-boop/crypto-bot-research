@@ -923,6 +923,10 @@ def policy_from_env(environ: Optional[dict] = None) -> RoomsPolicy:
             raise ValueError(f"{name}={raw!r}: use a whole number >= {lo}")
         obj, _, leaf = attr.rpartition(".")
         setattr(getattr(p, obj) if obj else p, leaf, int(raw))
+    if p.copy_cap_per_strategy > 1 or p.copy_cap_total > 10:
+        raise ValueError(f"AGENTS_COPY_CAP_PER_STRATEGY={p.copy_cap_per_strategy}, AGENTS_COPY_CAP_TOTAL="
+                         f"{p.copy_cap_total}: at most 1 copy per strategy and 10 in all (rule Q7; the live runner "
+                         "refuses more)")
     if p.newlab_cap_total > X.NEWLAB_CAP_TOTAL:
         raise ValueError(f"AGENTS_NEWLAB_CAP_TOTAL={p.newlab_cap_total}: at most {X.NEWLAB_CAP_TOTAL} new-strategy "
                          "accounts (the live runner refuses more)")
@@ -1656,7 +1660,13 @@ def owner_ok_required(ctx: RoundContext) -> bool:
     if p is not None:
         return bool(p)
     start = TR.run_start(ctx.paper_ro)
-    return start is None or ctx.now_ms - start < ctx.policy.owner_ok_days * DAY_MS
+    # the live runner's own owner-OK period (extras.json owner_ok_days, >= 60) wins when it is longer: an approval
+    # the approver gives alone inside it is refused for good by the runner (owner_ok_missing)
+    days = ctx.policy.owner_ok_days
+    rd = ((X.runner_state(ctx.paper_ro) or {}).get("config") or {}).get("owner_ok_days")
+    if isinstance(rd, (int, float)) and not isinstance(rd, bool):
+        days = max(days, rd)
+    return start is None or ctx.now_ms - start < days * DAY_MS
 
 
 def _passed_unproposed(ctx: RoundContext, room: str, strategy: str) -> list[int]:
@@ -3354,7 +3364,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     t.add_argument("--no-send", action="store_true", help="print Telegram messages instead of sending")
     t.add_argument("--claude-bin", default="claude")
     t.add_argument("--timeout", type=float, default=900.0)
-    t.add_argument("--owner-ok", choices=tuple(OWNER_OK), default=None,
+    t.add_argument("--owner-ok", choices=tuple(k for k in OWNER_OK if k != "no"), default=None,
                    help="approved copies wait for the owners (auto: first 60 days of the run; "
                         "default: env AGENTS_OWNER_OK, else auto)")
     t.add_argument("--budget", action="append", default=[], metavar="CLASS=CALLS[:TOKENS]",

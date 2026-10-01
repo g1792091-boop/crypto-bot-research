@@ -716,6 +716,11 @@ def test_extra_window_starts_over_at_its_accepted_code_change():
     rows, tasks = ck.plan(snap(cp2), prior, {}, S)
     t = next(t for t in tasks if t.aid == "NL1@1h")
     assert (t.stage, t.lo, t.hi) == ("1차", accepted, cp2) and rows["NL1@1h"]["window"] == [accepted, cp2]
+    # judged on the new code's window only: value and P&L leave out what the old code made or lost
+    a = snap(cp2)["accounts"]["NL1@1h"]
+    st = ck.period_stats(a, accepted, cp2, S, 5000.0)
+    assert t.value == 5000.0 + st["pnl"] and rows["NL1@1h"]["pnl"] == st["pnl"]
+    assert rows["NL1@1h"]["equity"] == 5000.0 + st["pnl"] and rows["NL1@1h"]["equity_total"] == a["equity"]
     # a verdict after the acceptance is kept
     prior["NL1@1h"]["date"] = ck.day_str(T0 + 75 * DAY)
     rows, tasks = ck.plan(snap(T0 + 90 * DAY), prior, {}, S)

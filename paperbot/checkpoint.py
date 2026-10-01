@@ -934,8 +934,13 @@ def plan(snap: dict, prior: dict, prev_snaps: dict, s: Settings) -> tuple[dict, 
             tasks.append(Task(aid, "2차", tf, plo, cp, init + scaled, r["rate"], **tkw))
             continue
         # not yet judged
+        # Q5 restart of an extra: judge only the window on the accepted code (equity as if it began there)
+        restarted = lo != a["created_ts"]
+        pnl1 = st1["pnl"] if restarted else a["equity"] - init
         r = {**base, "stage": None, "window": [lo, cp], "trades": st1["trades"], "signals": st1["signals"],
-             "pnl": a["equity"] - init}
+             "pnl": pnl1}
+        if restarted:
+            r.update(equity=init + pnl1, equity_total=a["equity"])
         old_enough = cp >= floor_day(lo) + PERIOD_DAYS * DAY_MS
         if not old_enough or st1["trades"] < MIN_TRADES:
             why = ("30일 미만 (복사 계좌는 자기 시작부터 셈)" if lo == a["created_ts"] else
@@ -949,7 +954,7 @@ def plan(snap: dict, prior: dict, prev_snaps: dict, s: Settings) -> tuple[dict, 
         if st1.get("skipped_bars"):
             r["skipped_bars"] = st1["skipped_bars"]
         rows[aid] = r
-        tasks.append(Task(aid, "1차", tf, lo, cp, a["equity"], r["rate"], **tkw))
+        tasks.append(Task(aid, "1차", tf, lo, cp, init + pnl1 if restarted else a["equity"], r["rate"], **tkw))
     return rows, tasks
 
 
@@ -1136,7 +1141,7 @@ def extra_warnings(snap: dict, rows: dict) -> list[str]:
         if hit:
             what = (f"추가 계좌 코드 변경 ({EXTRAS_ONLY_KO}: {', '.join(hit)})"
                     if not shared & set(ch.get("changes") or []) else
-                    f"신호 입력 코드(recorder·context) 변경 (원래 계좌도 쓰는 코드, 원래 계좌는 열린 질문 Q-11; "
+                    f"신호 입력 코드(recorder·context) 변경 (원래 계좌도 쓰는 코드, 원래 계좌는 recorder.py가 거래 코드로 따로 잡힘, Q-11; "
                     f"추가 계좌: {', '.join(hit)})")
             text = (f"{day_str(ch['ts'])} 재시작 때 {what}. "
                     "Q5: 그 계좌들의 기간을 그날부터 다시 세야 하는지 규칙 관리자 확인 필요")

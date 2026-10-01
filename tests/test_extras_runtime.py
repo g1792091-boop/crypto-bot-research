@@ -1035,7 +1035,18 @@ def test_extras_sends_never_delay_a_195_compute(tmp_path, variant):
     elif variant == "fault":
         assert e.held and any(lvl == "CRITICAL" and aid in t for lvl, t in sent)
     else:
-        assert any("추가 계좌 알림 모음" in t for _lvl, t in sent) and not w.ext.digest.items
+        # the digest never goes out at the end of a poll (it can end a second before a 5m close): it waits for
+        # the next live boundary and is sent right after that boundary's compute
+        assert not any("추가 계좌 알림 모음" in t for _lvl, t in sent) and w.ext.digest.items
+        B3 = B2 + 5 * MIN
+        w.service.fire[(B3, "5m")] = [("V45_AMB@5m", 1, "ETHUSDT", {})]
+        n1 = len(slow.messages)
+        w.now = B3 + 1_500
+        w.runner.process([(t, w.bars(t), {}) for t in range(B2, B3, MIN)])
+        d3 = w.store.conn.execute("SELECT delay_ms FROM signal_log WHERE bar_close = ? AND strategy = 'V45_AMB' "
+                                  "AND timeframe = '5m'", (B3,)).fetchone()[0]
+        assert d3 == 1_500                               # computed before the digest went out
+        assert any("추가 계좌 알림 모음" in t for _lvl, t in slow.messages[n1:]) and not w.ext.digest.items
     w.close()
 
 
@@ -1241,3 +1252,61 @@ def test_an_account_for_the_proposal_in_paper3_is_never_made_twice(world):
     w.boundary(T0 + 5 * MIN)
     assert w.refused(pid)["code"] == "id_conflict" and "V45_AMB@15m~c7" in w.refused(pid)["detail"]
     assert [a["account_id"] for a in w.extras_rows()] == ["V45_AMB@15m~c7"]
+
+
+def test_one_unreadable_extra_never_blocks_other_creations(tmp_path):
+    """An extras row whose data cannot be parsed is held at load; the duplicate check in create() must skip it
+    (json_valid) instead of raising 'malformed JSON' and rolling back every activation."""
+    from extras_world import World as XW, T0 as XT0, MIN as XMIN, STRATS as XSTRATS
+    w = XW(tmp_path, start_at=XT0)
+    b = XT0 + 30 * XMIN
+    w.copy_proposal(strategy=XSTRATS[0], tf="15m")
+    w.boundary(b)
+    rows = w.extras_rows()
+    assert len(rows) == 1
+    w.store.conn.execute("UPDATE accounts SET data = '{bad' WHERE account_id = ?", (rows[0]["account_id"],))
+    w.store.commit()
+    w.close()
+    w2 = XW(tmp_path, start_at=XT0)
+    pid2, _ = w2.copy_proposal(strategy=XSTRATS[1], tf="15m", rule={"template": "lock_start", "first_lock": 0.2})
+    for k in range(1, 4):
+        w2.boundary(b + k * 5 * XMIN)
+    assert len(w2.extras_rows()) == 2, w2.refused(pid2)
+    assert "malformed JSON" not in (w2.state()["health"]["last_error"] or "")
+    w2.close()
+
+
+def test_a_failed_bind_still_sends_the_extras_critical_lines(tmp_path, monkeypatch):
+    """live3.bind_extras catches a bind failure and the extras' engines keep stepping: their liquidations and
+    faults (held in the outbox) must still reach Telegram at the end of each poll."""
+    from extras_world import World as XW, T0 as XT0, MIN as XMIN
+    from paperbot import extras as X
+    from paperbot import Signal
+    from paperbot.live3 import bind_extras
+    from paperbot.notify import ListNotifier
+    w = XW(tmp_path, hist=True)
+    w.copy_proposal()
+    w.run(XT0, XT0 + 20 * XMIN)
+    aid = "V45_AMB@15m~c1"
+    assert aid in w.book.engines
+    w.close()
+    orig_bind = X.Extras.bind
+    monkeypatch.setattr(X.Extras, "bind", lambda self, runner: None)         # World binds directly
+    note = ListNotifier()
+    w2 = XW(tmp_path, hist=True, notifier=note)
+    monkeypatch.setattr(X.Extras, "bind", lambda self, runner: (_ for _ in ()).throw(ImportError("newlab_live")))
+    bind_extras(w2.ext, w2.runner, w2.store, note)                            # the failure, caught as in cmd_run
+    monkeypatch.setattr(X.Extras, "bind", orig_bind)
+    assert w2.runner.post_batch is not None
+    e = w2.book.engines[aid]
+    b = XT0 + 20 * XMIN
+    e.submit(Signal(ts=b - 1, symbol="BTCUSDT", timeframe="15m", strategy_id="V45_AMB", side=1, stop_price=0.0,
+                    tier="best", atr=0.2, meta={"stop_dist": 0.4, "ref_price": 100.01, "ref_time": b,
+                                                "delay_ms": 1500, "account": aid, "ctx": {}}))
+    w2.process(XT0 + 20 * XMIN)
+    assert e.position is not None
+    w2.process(XT0 + 21 * XMIN, px=90.0)
+    w2.process(XT0 + 22 * XMIN)
+    assert any(lvl == "CRITICAL" and "LIQUIDATED" in t and aid in t for lvl, t in note.messages)
+    assert not w2.ext.outbox
+    w2.close()
