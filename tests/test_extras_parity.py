@@ -175,12 +175,10 @@ def test_extras_survive_the_restart(results):
         st = json.loads(c.execute("SELECT data FROM state WHERE k = 'extras'").fetchone()[0])
         assert st["accounts"] == {} and st["health"]["errors"] == 0
         c.close()
-    # the restored engines equal their saved states (recorded by the harness at load)
-    for name in ("R2r", "T2", "K3", "K5", "K6"):
-        notes = H.Recorder.load(os.path.join(os.path.dirname(results[1][name]["db"]), "x")).restore
-        assert notes == [] or True
-    r = subprocess.run([sys.executable, "-c", "print(1)"], capture_output=True)
-    assert r.returncode == 0
+    # the restored engines equal their saved states (compared by the harness right after book.load)
+    for name, n in (("R2r", 13), ("T2", 13), ("K3", 12), ("K4", 12), ("K5", 12), ("K6", 13)):
+        notes = results[1][name]["restore"]
+        assert len(notes) == n and all(x.endswith(":same") for x in notes), (name, notes)
 
 
 def test_crash_points_extras(results):

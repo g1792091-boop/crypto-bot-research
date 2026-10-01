@@ -804,14 +804,15 @@ def new_run(name: str, workdir: str) -> dict:
                     os.remove(r)
         rec = run(db, **kw)
         golden = {"R1": "R0", "R1r": "R0r", "R2": "R0", "R2r": "R0r", "T2": "T0", "T2x": "T0"}[name]
-        return {"name": name, "golden": golden, "dump": dump195(db, rec), "db": db}
+        return {"name": name, "golden": golden, "dump": dump195(db, rec), "db": db, "restore": rec.restore}
     point = name[:2]
     extras = None if name in ("K1", "K2") else SCENARIO
     golden = f"{'K1' if point == 'K1' else 'K2'}@{at}"
     sub = os.path.join(workdir, name)
     os.makedirs(sub, exist_ok=True)
-    d, _rec = crash_run(sub, point, at, extras=extras)
-    return {"name": name, "golden": golden, "dump": d, "db": os.path.join(sub, f"crash_{point}_{at}.db")}
+    d, rec = crash_run(sub, point, at, extras=extras)
+    return {"name": name, "golden": golden, "dump": d, "db": os.path.join(sub, f"crash_{point}_{at}.db"),
+            "restore": rec.restore}
 
 
 NEW_RUNS = ("R1", "R1r", "R2", "R2r", "T2", "T2x", "K1", "K2", "K1x", "K2x", "K3", "K4", "K5", "K6")
