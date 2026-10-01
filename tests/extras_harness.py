@@ -13,13 +13,14 @@ What is synthetic (design section 11.1)
 - Feed: a seeded generator (numpy default_rng(SEED)), seven symbols (the six trade coins plus XRP) at
   realistic price levels, 1m geometric random walk (sigma ~0.15 %/min) with regime drift switches and
   about one jump (2-4 %) per symbol per 6 hours, mark = last x (1 + N(0, 2e-4)), funding at 00/08/16 UTC,
-  one injected one-hour zero-volume flat halt. Real 1m ``Bar`` objects with volume, starting 20:00 UTC (one
-  UTC midnight, a 1d record boundary, 4h closes). The 5m history the runner bootstraps comes from the same
+  one injected one-hour zero-volume flat halt. Real 1m ``Bar`` objects with volume, starting 22:00 UTC (a
+  UTC midnight and 26 hours, so the UTC day 2..26 h is complete for daily3, 1d record boundaries,
+  4h closes). The 5m history the runner bootstraps comes from the same
   generator (the 5m aggregates of the minutes before the feed).
 - Signals: the real ``SignalService`` (procs=1) with ``sigservice._LIB = FakeLib``: the real NAMES,
   tf_minutes, resample_ohlcv and fg, small warm-ups, and ``compute_signals`` = per strategy k a cheap
-  deterministic cross of the close over SMA(5 + k % 9) thinned by (bar number + k) % 3 == 0 (DOGE_S <= 0,
-  DOGE_L >= 0). Entry marks are stubbed to {}.
+  deterministic cross of the close over SMA(5 + k % 9) thinned by (bar number + k) % 3 == 0, on the
+  symbols with (k + symbol index) % 4 == 0 (DOGE_S <= 0, DOGE_L >= 0). Entry marks are stubbed to {}.
 - Clock: ``now_ms() = last step of the current process() batch + 61.5 s + charged`` (the live edge, as wall
   time is during a real catch-up burst). ``charged`` restarts at every process() call; the logical model
   charges nothing, the timed model charges every ``service.compute`` its COSTS[tf] and, in the new tree,
@@ -75,15 +76,15 @@ MIN = 60_000
 FIVE = 300_000
 HOUR = 3_600_000
 DAY = 86_400_000
-T0 = 1_793_908_800_000                  # 2026-11-05 20:00 UTC
-HOURS = 30
-CRASH_HOURS = 12
+T0 = 1_793_916_000_000                  # 2026-11-05 22:00 UTC (00:00 at hour 2, the feed ends at 00:00)
+HOURS = 26
+CRASH_HOURS = 10
 SYMBOLS = tuple(V3_SYMBOLS) + ("XRPUSDT",)
 LEVELS = {"BTCUSDT": 68_000.0, "ETHUSDT": 2_600.0, "SOLUSDT": 160.0, "DOGEUSDT": 0.16, "LTCUSDT": 72.0,
           "BCHUSDT": 380.0, "XRPUSDT": 0.55}
 HALT = ("SOLUSDT", 10 * 60, 11 * 60)    # symbol, [from, to) minutes after T0: flat bars, volume 0
 RANDOM_RATES = {"5m": 0.02, "15m": 0.03, "30m": 0.04, "1h": 0.05, "4h": 0.08}
-WARMUP = {"5m": 20, "15m": 12, "30m": 10, "1h": 8, "4h": 6, "1d": 3}
+WARMUP = {"5m": 20, "15m": 12, "30m": 10, "1h": 8, "4h": 6, "1d": 1}
 COSTS = {"5m": 6_000, "15m": 7_000, "30m": 8_000, "1h": 9_000, "4h": 12_000, "1d": 15_000}
 NEWLAB_COST = 40_000
 POLL_COST = 5_000
@@ -114,22 +115,27 @@ class _FakeLib:
 
     def compute_signals(self, frames: dict, tf: str, names, strict: bool = False) -> dict:
         span = self.tf_minutes(tf) * MIN
-        out: dict = {}
-        for k, name in enumerate(self.NAMES):
-            if name not in names:
-                continue
-            out[name] = {}
-            for sym, df in frames.items():
-                c = df["close"].to_numpy(float)
-                n = 5 + k % 9
-                sma = pd.Series(c).rolling(n, min_periods=n).mean().to_numpy()
-                above = np.nan_to_num(c - sma, nan=0.0) > 0
+        out: dict = {name: {} for name in self.NAMES if name in names}
+        for sym, df in frames.items():
+            c = df["close"].to_numpy(float)
+            num = (df["ts"].astype("int64").to_numpy() // 1_000_000) // span
+            cs = np.r_[0.0, np.cumsum(c)]
+            cross = {}
+            for n in range(5, 14):
+                sma = np.full(len(c), np.nan)
+                if len(c) >= n:
+                    sma[n - 1:] = (cs[n:] - cs[:-n]) / n
                 valid = np.isfinite(sma)
-                prev = np.r_[False, above[:-1]]
-                pvalid = np.r_[False, valid[:-1]]
-                num = (df["ts"].astype("int64").to_numpy() // 1_000_000) // span
-                keep = ((num + k) % 3 == 0) & valid & pvalid
-                s = np.where(above & ~prev & keep, 1, np.where(~above & prev & keep, -1, 0)).astype(np.int8)
+                above = valid & (c > np.where(valid, sma, 0.0))
+                prev, pvalid = np.r_[False, above[:-1]], np.r_[False, valid[:-1]]
+                ok = valid & pvalid
+                cross[n] = (above & ~prev & ok, ~above & prev & ok)
+            for k, name in enumerate(self.NAMES):
+                if name not in out:
+                    continue
+                up, dn = cross[5 + k % 9]
+                keep = ((num + k) % 3 == 0) & ((k + SYMBOLS.index(sym)) % 4 == 0)
+                s = np.where(up & keep, 1, np.where(dn & keep, -1, 0)).astype(np.int8)
                 if name == "DOGE_S":
                     s = np.minimum(s, 0).astype(np.int8)
                 elif name == "DOGE_L":
@@ -329,6 +335,14 @@ class Session:
             self.clock.charge(COSTS[tf])
             return _orig(boundary, tf, now_ms, book)
         self.service.compute = compute
+        self.saved = None
+        put = self.store.put_state
+
+        def put_state(key, ts, data, _put=put):
+            if key == "accounts":
+                self.saved = data
+            return _put(key, ts, data)
+        self.store.put_state = put_state
         self.ext = None
         self.extras_opts = extras
         make_of = None
@@ -361,7 +375,12 @@ class Session:
     def process(self, steps) -> None:
         self.clock.batch(steps)
         self.runner.process(steps)
-        st = {aid: engine_state(self.book.engines[aid]) for aid in self.originals}
+        # the 195's engine states as the runner last saved them in this call (book.save serialises every
+        # engine after each step, after the boundary's submits and after the extras hook's phases; nothing
+        # changes an engine after the last save of a process() call)
+        eng = self.saved["engines"] if self.saved is not None else \
+            {aid: engine_state(e) for aid, e in self.book.engines.items()}
+        st = {aid: eng[aid] for aid in self.originals}
         self.rec.step(hashlib.sha256(json.dumps(st, sort_keys=True).encode()).hexdigest())
 
     def close(self) -> None:
@@ -415,7 +434,9 @@ def run(db: str, *, hours: int = HOURS, timed: bool = False, restart: Optional[t
         outage = 0
     sess = Session(db, feed, clock, rec, extras)
     t = sess.resume + outage * MIN
-    sess.process(feed.steps(sess.start, t))
+    burst = feed.steps(sess.start, t)       # every minute missed, in one poll (steps < resume only feed history)
+    if burst:
+        sess.process(burst)
     while t < end:
         extras_hour(sess, extras, t)
         sess.process(feed.steps(t, t + MIN))
@@ -543,8 +564,8 @@ CRASH_AT = None          # boundary of the crash runs (set below; one boundary f
 
 
 def crash_boundary() -> int:
-    """A boundary at minute 600 after T0 (session 1 of the crash runs)."""
-    return T0 + 600 * MIN
+    """A boundary at minute 480 after T0 (session 1 of the crash runs)."""
+    return T0 + 480 * MIN
 
 
 def base_runs(workdir: str, log=print) -> dict:

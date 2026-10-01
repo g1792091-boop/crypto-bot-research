@@ -12,17 +12,24 @@ the fixed lists, becomes ``no_action`` (the room is told why).
                    strategy, records trial + result, and applies the code gate
     propose_copy   a copy-account proposal for a trial whose test passed the gate;
                    status by code: blocked_gate / blocked_cap / rejected / awaiting_owner /
-                   approved. The approver agent can never overturn the gate or the cap.
+                   approved. The approver agent can never overturn the gate or the cap. Only when
+                   paper3.db can be read and the parent account (strategy x timeframe) is not bust
+                   and has closed at least 30 trades; the caps count active proposals and running
+                   copy accounts together.
     flag_owners    a short Telegram message to the owners (INFO or WARN, 3 per KST day)
     no_action      nothing
 
 The new-strategy lab (team:lab, rooms._lab_round) has no model action: code checks each spec the
 researcher wrote (``newlab.normalize_spec``, a repeat by hash is shown, never re-run), runs it
-(``newlab_test``), stores every counted test as an append-only 'newlab' trial, and for a pass posts the
-proposal, tells the owners once by Telegram (``newlab_propose``) and creates nothing.
+(``newlab_test``), stores every counted test as an append-only 'newlab' trial, and for a pass writes a
+proposal row of kind 'newlab' for the owners (``newlab_propose``: always 'awaiting_owner', the proposal and
+the trial's 'proposed' result in one transaction, never while the new-strategy cap is full) and tells them
+once by Telegram.
 
-Copy accounts are NOT created here. An 'approved' proposal only waits for the future
-copy-account feature of the live runner (paper3.db has one writer: the live runner).
+No account is created here. Every proposal row carries ``change.kind`` and ``change.account``, the
+account's definition built by code from the trial row (agents/extra_accounts.py). The live runner (the only
+writer of paper3.db) reads approved rows read-only, re-checks them itself and starts the extra paper account
+at its next 5-minute boundary; an account that started is never stopped or changed from here.
 All texts for the owners are Korean and written by code from stored numbers. A line posted
 as role 'code' never quotes model text (the model's words stay in its own message), so a
 model cannot write something that looks like a code result.
@@ -39,6 +46,7 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from ..notify import INFO, WARN, Notifier, NullNotifier
+from . import extra_accounts as X
 from . import rooms_db as R
 
 try:  # the lab stream (5-year tests); the engine works without it (tests are then "no data")
@@ -252,6 +260,11 @@ class ActionEnv:
     flag_max_per_day: int = 3
     proposer: str = ""                  # role id whose proposal is being carried out (named, never quoted)
     evidence_key: str = ""              # the meeting's trigger key: a retried meeting never re-sends its flag
+    # paper3.db, read-only (None: missing or unreadable): the copy's parent account, running extra accounts
+    # (the caps count them) and whether the runner's extra-account feature is deployed. Nothing is proposed
+    # without it.
+    paper_ro: Optional[sqlite3.Connection] = None
+    newlab_cap_total: int = X.NEWLAB_CAP_TOTAL
 
     def post(self, kind: str, text: str, data: Any = None, role: str = "code") -> int:
         return R.post(self.conn, self.room_id, self.round_id, self.meeting, role, None, kind, text, data,
@@ -513,10 +526,15 @@ def current_gate(env: ActionEnv, t: dict) -> tuple[dict, int]:
             "n_trials": n_now}, n_now
 
 
+PAPER_UNREADABLE_KO = "paper3를 읽지 못해 제안하지 않음"
+
+
 def copy_check(env: ActionEnv, trial_id: int) -> dict:
     """What code knows before any approver speaks: does the trial exist for this room's
     strategy, does its test pass the gate NOW (re-judged with the room's current test count),
-    is a copy slot free, was it proposed before."""
+    was it proposed before, can paper3.db be read (no proposal without it), is the parent account
+    (the test's strategy x timeframe) not bust and with at least 30 closed trades, is a copy slot
+    free (active proposals and running copy accounts together, extra_accounts.slots)."""
     t = R.get_trial(env.conn, trial_id)
     if t is None or t.get("kind") != "test" or t.get("strategy") != env.strategy:
         return {"ok": False, "why": "이 방의 시험 번호가 아님", "trial": None, "gate": None}
@@ -527,13 +545,31 @@ def copy_check(env: ActionEnv, trial_id: int) -> dict:
     if live:
         return {"ok": False, "why": f"이미 제안된 시험 (제안 #{live[0]['id']}, {live[0]['status']})", "trial": t,
                 "gate": gate, "duplicate": True}
+    no = lambda why: {"ok": False, "why": why, "trial": t, "gate": gate}  # noqa: E731
+    extras = X.paper_extras(env.paper_ro)
+    if extras is None:
+        return no(PAPER_UNREADABLE_KO)
+    acc = X.copy_account(t)
+    if acc is not None:
+        f = X.parent_facts(env.paper_ro, acc["parent"])
+        if f is None:
+            return no(PAPER_UNREADABLE_KO)
+        if not f["exists"] or f["kind"] != "strategy":
+            return no("원본 계좌가 paper3에 없어 복제하지 않음")
+        if f["bust"]:
+            return no("원본 계좌가 파산해 복제하지 않음")
+        if f["trades"] < X.PARENT_MIN_TRADES:
+            return no(f"원본 계좌 거래 {f['trades']}건 < {X.PARENT_MIN_TRADES}건")
+    used_s = X.slots(env.conn, env.paper_ro, "copy", env.strategy, extras)
+    used = X.slots(env.conn, env.paper_ro, "copy", None, extras)
     cap = ""
-    if R.active_proposals(env.conn, env.strategy) >= env.copy_cap_per_strategy:
-        cap = f"이 매매법은 이미 진행 중인 제안이 {env.copy_cap_per_strategy}개 있음"
-    elif R.active_proposals(env.conn) >= env.copy_cap_total:
-        cap = f"전체 진행 중인 제안이 한도 {env.copy_cap_total}개에 도달"
+    if used_s >= env.copy_cap_per_strategy:
+        cap = f"이 매매법은 이미 진행 중인 제안·복제 계좌가 {env.copy_cap_per_strategy}개 있음"
+    elif used >= env.copy_cap_total:
+        cap = f"전체 진행 중인 제안·복제 계좌가 한도 {env.copy_cap_total}개에 도달"
     return {"ok": True, "trial": t, "gate": gate, "gate_pass": st == "passed" and gate.get("pass") is True,
-            "result_status": st, "cap": cap, "n_trials": n_now, "n_trials_at_test": body.get("n_trials")}
+            "result_status": st, "cap": cap, "n_trials": n_now, "n_trials_at_test": body.get("n_trials"),
+            "slots": {"strategy": used_s, "total": used}}
 
 
 def propose_copy(env: ActionEnv, trial_id: int, why: str, check: dict, approver: Optional[dict]) -> dict:
@@ -565,7 +601,9 @@ def propose_copy(env: ActionEnv, trial_id: int, why: str, check: dict, approver:
         status, by = "rejected", "approver"
     else:
         status, by = ("awaiting_owner", None) if env.owner_ok_required else ("approved", "approver")
-    change = {"strategy": env.strategy, "test": t.get("spec"), "why": why,
+    # kind and account: code-written from the trial row (the runner reads only these, never 'why' or 'approver')
+    change = {"kind": "copy", "account": X.copy_account(t), "strategy": env.strategy, "test": t.get("spec"),
+              "why": why,
               "approver": None if approver is None else {"approve": approver.get("approve") is True,
                                                          "reason": str(approver.get("reason", ""))[:MAX_REASON]}}
     R.add_trial(env.conn, env.room_id, env.strategy, "copy_proposal", {"from_trial": trial_id, "test": t.get("spec")},
@@ -576,12 +614,25 @@ def propose_copy(env: ActionEnv, trial_id: int, why: str, check: dict, approver:
            "rejected": "승인관이 거부했습니다",
            "awaiting_owner": "승인관이 승인했고, 두 분의 확인을 기다립니다 (대시보드에서 승인/거절)",
            "approved": "자율 승인관이 승인했습니다(두 분 확인 없이: 설정, 또는 기본 설정에서 운영 61일째부터)"}[status]
-    waits = (" 승인된 제안도 지금은 계좌를 만들지 않고, live 실행기의 복제 계좌 기능이 생길 때까지 기다립니다."
-             if status in ("awaiting_owner", "approved") else "")
+    waits = (" " + start_text(env.paper_ro) if status in ("awaiting_owner", "approved") else "")
     env.post("action", f"📄 복제 계좌 제안 #{pid} (시험 #{trial_id}): {msg}.{waits}",
              {"action": "propose_copy", "proposal_id": pid, "trial_id": trial_id, "status": status})
     return _done("propose_copy", status in ("awaiting_owner", "approved"), msg, created=True, proposal_id=pid,
                  status=status, trial_id=trial_id)
+
+
+def runtime_ready(paper_ro: Optional[sqlite3.Connection]) -> bool:
+    """Is the live runner's extra-account feature deployed (its state 'extras' in paper3.db)?"""
+    return X.runner_state(paper_ro) is not None
+
+
+def start_text(paper_ro: Optional[sqlite3.Connection]) -> str:
+    """What an approval does now (Korean, code-written)."""
+    if runtime_ready(paper_ro):
+        return ("승인이 반영되면 live 실행기가 코드로 다시 확인한 뒤 다음 5분 봉 경계에 새 paper 계좌로 시작합니다"
+                "(원본 계좌와 같은 시작 자금, 원본 195개 계좌는 그대로). 시작된 계좌는 거절로 멈출 수 없습니다.")
+    return ("live 실행기의 추가 계좌 기능이 아직 켜지지 않아 지금은 계좌를 만들지 않습니다. 기능이 켜진 뒤 두 분이 한 번 더 "
+            "승인하면 그때 시작합니다.")
 
 
 SIMPLE = {"note": note, "hypothesis": hypothesis, "flag_owners": flag_owners, "no_action": no_action}
@@ -722,17 +773,38 @@ def newlab_pending(conn: sqlite3.Connection) -> list[dict]:
     return R.trials_by_status(conn, NEWLAB, ("passed",), limit=200)[::-1]
 
 
+def newlab_live_proposal(conn: sqlite3.Connection, trial_id: int) -> Optional[dict]:
+    """The proposal row of this lab trial that is not 'blocked_cap', if any (a trial is proposed once)."""
+    for p in R.list_proposals(conn, room_id=R.LAB_ROOM, limit=1000):
+        if p.get("trial_id") == trial_id and p.get("status") != "blocked_cap":
+            return p
+    return None
+
+
 def newlab_propose(env: ActionEnv, trial: dict) -> dict:
-    """A stored pass: judged again with the count NOW (newlab_gate_now); still passing -> post the proposal
-    (newlab.proposal_of: a new paper account with the same paper v3 rules, the owners' OK needed), append a
-    'proposed' result to the ledger and tell the owners once by Telegram. Creates nothing. Failing now ->
-    a 'lapsed' result. During the observation period: nothing (the pass waits in the ledger)."""
+    """A stored pass: judged again with the count NOW (newlab_gate_now); still passing -> a proposal row of kind
+    'newlab' (``change.account`` built by code from the trial row; ``change.proposal`` = newlab.proposal_of, no
+    model words) for the owners, always 'awaiting_owner', written in ONE transaction with the trial's
+    'proposed' result; then the room line and one Telegram. Failing now -> a 'lapsed' result. The new-strategy
+    cap (active proposals and running new-strategy accounts together, ``newlab_cap_total``) full -> nothing is
+    written: the room is told once and the pass waits ('passed') for a free slot. paper3.db unreadable or
+    during the observation period: nothing (the pass waits in the ledger). A trial whose proposal already
+    exists is never proposed again (a 'passed' latest result is repaired to 'proposed')."""
     tid = int(trial["id"])
     st, body = _stored(trial)
     if st != "passed":
         return {"proposed": False, "why": st}
     if env.observing:
         return {"proposed": False, "why": "observing"}
+    old = newlab_live_proposal(env.conn, tid)
+    if old is not None:                                      # proposed before (its result is missing): repair
+        R.add_trial_result(env.conn, tid, "proposed", {**body, "proposal": (old.get("change") or {}).get("proposal"),
+                                                       "proposal_id": old["id"], "repaired": True,
+                                                       "proposed_ts": env.now_ms}, ts=env.now_ms)
+        return {"proposed": False, "why": "already_proposed", "proposal_id": old["id"]}
+    extras = X.paper_extras(env.paper_ro)
+    if extras is None:
+        return {"proposed": False, "why": "paper_unreadable"}
     gate, n_now = newlab_gate_now(env.conn, trial)
     desc = body.get("description_ko") or ""
     if gate.get("pass") is not True:
@@ -744,20 +816,45 @@ def newlab_propose(env: ActionEnv, trial: dict) -> dict:
     like = {"ok": True, "status": "done", "spec": trial["spec"], "spec_hash": trial.get("spec_hash"),
             "description_ko": desc, "summary_ko": body.get("summary_ko") or "", "periods": body.get("gate_input")}
     prop = _nl.proposal_of(like, n_tests_now=n_now)
-    if prop is None:                                         # cannot happen when gate passed; fail closed
+    account = X.newlab_account(trial)
+    if prop is None or account is None:                      # cannot happen when gate passed; fail closed
         return {"proposed": False, "why": "no_proposal"}
-    R.add_trial_result(env.conn, tid, "proposed", {**body, "proposal": prop, "n_tests_now": n_now,
-                                                   "proposed_ts": env.now_ms}, ts=env.now_ms)
-    env.post("action", f"📄 새 매매법 제안 (장부 #{tid}): {desc}\n5년 시험 관문을 통과했습니다(새 매매법 시험 {n_now + 1:,}번 기준으로 "
-                       "다시 판정해도 통과). 같은 규칙(paper v3: 청산·크기·비용 그대로)의 새 paper 계좌로 새 자료에서 확인하자는 "
-                       "제안이며, 두 분 OK가 있어야 시작합니다. 지금은 아무것도 자동으로 만들지 않습니다(새 paper 계좌로 돌리는 "
-                       "기능은 다음 단계).",
-             {"newlab": True, "action": "newlab_proposal", "trial_id": tid, "proposal": prop})
-    sent = newlab_alert(env, tid, prop, body.get("test_number"))
-    return {"proposed": True, "trial_id": tid, "proposal": prop, "telegram": sent}
+    prop = {k: v for k, v in prop.items() if k not in ("idea", "name")}     # code-written fields only
+    used = X.slots(env.conn, env.paper_ro, "newlab", None, extras)
+    if used is None:
+        return {"proposed": False, "why": "paper_unreadable"}
+    if used >= env.newlab_cap_total:
+        key = f"newlab_cap_note:{tid}"
+        if R.get_cursor(env.conn, key) is None:
+            env.post("system", f"새 매매법 장부 #{tid}({desc})는 관문을 통과했지만, 새 매매법 계좌 자리({env.newlab_cap_total}개: "
+                               "두 분 확인을 기다리는 제안과 돌고 있는 계좌를 합해서)가 차서 지금은 제안하지 않습니다. 자리가 "
+                               "나면 코드가 그때의 시험 수로 다시 판정해 제안합니다.",
+                     {"newlab": True, "trial_id": tid, "status": "cap", "used": used, "cap": env.newlab_cap_total})
+            R.set_cursor(env.conn, key, env.now_ms)
+        return {"proposed": False, "why": "cap", "used": used}
+    pgate = {**gate, "pass": True, "trial_id": tid, "n_tests": n_now}
+    change = {"kind": "newlab", "account": account, "proposal": prop}
+    try:                                       # the proposal and the trial's 'proposed' result: one transaction
+        pid = R.add_proposal(env.conn, R.LAB_ROOM, None, tid, change, pgate, "awaiting_owner", ts=env.now_ms,
+                             commit=False)
+        R.add_trial_result(env.conn, tid, "proposed", {**body, "proposal": prop, "proposal_id": pid,
+                                                       "n_tests_now": n_now, "proposed_ts": env.now_ms},
+                           ts=env.now_ms, commit=False)
+        env.conn.commit()
+    except BaseException:
+        env.conn.rollback()
+        raise
+    env.post("action", f"📄 새 매매법 제안 #{pid} (장부 #{tid}): {desc}\n5년 시험 관문을 통과했습니다(새 매매법 시험 {n_now + 1:,}번 "
+                       "기준으로 다시 판정해도 통과). 같은 규칙(paper v3: 청산·크기·비용 그대로)의 새 paper 계좌로 새 자료에서 "
+                       "확인하자는 제안이며, 두 분 OK가 있어야 시작합니다. 대시보드 '에이전트 방' → 새 매매법 연구실에서 "
+                       "승인/거절할 수 있습니다. " + start_text(env.paper_ro),
+             {"newlab": True, "action": "newlab_proposal", "trial_id": tid, "proposal_id": pid, "proposal": prop})
+    sent = newlab_alert(env, tid, prop, body.get("test_number"), pid)
+    return {"proposed": True, "trial_id": tid, "proposal_id": pid, "proposal": prop, "telegram": sent}
 
 
-def newlab_alert(env: ActionEnv, trial_id: int, proposal: dict, test_number: Any = None) -> bool:
+def newlab_alert(env: ActionEnv, trial_id: int, proposal: dict, test_number: Any = None,
+                 proposal_id: Optional[int] = None) -> bool:
     """One Telegram message per pass (never twice for the same strategy: the mark is written before the send).
     Code-written text only (the spec's Korean description from code); not counted in the daily flag limit."""
     key = f"newlab_alert:{proposal.get('spec_hash') or trial_id}"
@@ -765,9 +862,13 @@ def newlab_alert(env: ActionEnv, trial_id: int, proposal: dict, test_number: Any
         return False
     R.set_cursor(env.conn, key, env.now_ms)
     num = f", 새 매매법 시험 {int(test_number):,}번째" if _row_id(test_number) else ""
-    text = (f"[에이전트 알림] {env.room_title or env.room_id}: 새 매매법이 5년 시험 관문을 통과했습니다 (장부 #{trial_id}{num}). "
+    pnum = f"제안 #{int(proposal_id)}, " if _row_id(proposal_id) else ""
+    after = ("승인 후 코드가 다시 확인하고 다음 5분 봉 경계에 새 paper 계좌가 시작됩니다."
+             if runtime_ready(env.paper_ro) else
+             "live 실행기의 추가 계좌 기능이 켜지기 전이라 승인해도 아직 계좌는 만들어지지 않습니다.")
+    text = (f"[에이전트 알림] {env.room_title or env.room_id}: 새 매매법이 5년 시험 관문을 통과했습니다 ({pnum}장부 #{trial_id}{num}). "
             f"{telegram_safe(str(proposal.get('description_ko') or ''))}. 새 paper 계좌로 새 자료에서 확인하자는 제안이며 "
-            "두 분 OK가 있어야 시작합니다(자동으로 만드는 것은 없음). 대시보드 '에이전트 방'의 새 매매법 연구실에서 보세요.")
+            f"두 분 OK가 있어야 시작합니다. 대시보드 '에이전트 방' → 새 매매법 연구실에서 승인/거절. {after}")
     try:
         ok = env.notifier.send(WARN, text)
     except Exception as exc:  # delivery must not break the round
