@@ -573,8 +573,10 @@ def test_cli_reads_the_env_and_the_flags_win(world, monkeypatch, capsys):
             "--inbox-db", p["inbox"], "--dry-run"]
     assert RM.main(args + ["--budget", "total=5:1000"]) == 0          # ... unless a flag says otherwise
     assert seen["policy"].total_budget == (5, 1000) and seen["policy"].owner_ok_required is True
-    assert RM.main(args + ["--owner-ok", "no"]) == 0
-    assert seen["policy"].total_budget == (0, RM.DEFAULT_TOTAL[1]) and seen["policy"].owner_ok_required is False
+    assert RM.main(args + ["--owner-ok", "auto"]) == 0
+    assert seen["policy"].total_budget == (0, RM.DEFAULT_TOTAL[1]) and seen["policy"].owner_ok_required is None
+    with pytest.raises(SystemExit):     # 'no' is refused: the live runner wants the owners' click in the first 60 days
+        RM.main(args + ["--owner-ok", "no"])
     monkeypatch.setenv("AGENTS_OWNER_OK", "sometimes")
     with pytest.raises(SystemExit):
         RM.main(args)
