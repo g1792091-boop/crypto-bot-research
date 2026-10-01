@@ -278,7 +278,7 @@ sudo ls /etc/paperbot/
 대시보드 비밀번호(12자 이상)를 정합니다. 아래 상자는 비밀번호를 두 번 묻고, 그 해시를 `dash.env`에 바로 적습니다(복사할 필요 없음). 입력하는 글자가 화면에 안 보이는 게 정상입니다.
 ```bash
 cd /opt/crypto-bot-research
-H=$(sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.dash hash) && \
+H=$(sudo /opt/paperbot/venv/bin/python -B -m paperbot.dash hash) && \
   sudo sed -i "s|^DASH_PASSWORD_HASH=.*|DASH_PASSWORD_HASH='$H'|" /etc/paperbot/dash.env && echo 비밀번호 저장됨
 S=$(openssl rand -hex 32) && \
   sudo sed -i "s|^DASH_SECRET=.*|DASH_SECRET=$S|" /etc/paperbot/dash.env && echo 비밀값 저장됨
@@ -286,6 +286,7 @@ sudo awk -F= '/^DASH_(PASSWORD_HASH|SECRET)=/{print $1": "(length($2)>2?"set":"E
 ```
 - 마지막에 `DASH_PASSWORD_HASH: set`과 `DASH_SECRET: set` 두 줄이 보이면 됩니다(값 자체는 화면에 내지 않습니다). `EMPTY`가 있으면 상자를 다시 붙여 넣습니다. 해시 모양은 10번 점검이 다시 확인합니다.
 - `use at least 12 characters`나 `passwords differ`가 나오면 저장되지 않은 것입니다. 상자를 다시 붙여 넣습니다.
+- 해시는 root로 만듭니다(`sudo -u paperbot`으로 바꾸지 않습니다). Ubuntu 24.04의 sudo는 다른 사용자로 실행할 때 새 터미널을 만들어서, `$( )` 안에서는 비밀번호 입력이 `OSError: [Errno 5] Input/output error`로 실패합니다. 해시 계산만 하고 아무 파일도 쓰지 않습니다(`-B`).
 - 손으로 넣을 때: 해시는 `$` 기호가 들어 있으므로 **작은따옴표로 감쌉니다**(`DASH_PASSWORD_HASH='pbkdf2$...'`).
 - (선택) 대시보드 글·승인에 이름을 남기려면 `sudo nano /etc/paperbot/dash.env`에서 `#DASH_OWNERS=` 줄의 `#`을 지우고 두 분 이름을 쉼표로 적습니다.
 
