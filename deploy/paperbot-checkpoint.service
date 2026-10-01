@@ -1,0 +1,26 @@
+# 30-day checkpoint verdicts (paperbot/checkpoint.py; docs/paper-v3-rules.md 4 + addendum Q1-Q3).
+# Reads paper3.db read-only (mode=ro), writes only checkpoint.db and the 1m bar cache. Most runs find
+# nothing due and exit at once; on a checkpoint day the coin-flip comparison takes about 10 minutes of
+# one core, at low priority so the live runner keeps its CPU.
+[Unit]
+Description=paperbot v3 checkpoint verdicts (day 30, 60, 90, ...)
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=paperbot
+WorkingDirectory=/opt/crypto-bot-research
+EnvironmentFile=/etc/paperbot/live.env
+Nice=15
+IOSchedulingClass=idle
+ExecStart=/opt/paperbot/venv/bin/python -m paperbot.checkpoint run --db /var/lib/paperbot/paper3.db --out /var/lib/paperbot/checkpoint.db --cache /var/lib/paperbot/checkpoint_bars
+TimeoutStartSec=3h
+# Writes only /var/lib/paperbot (checkpoint.db, the bar cache, and the -shm file its read-only
+# connection to paper3.db needs); paper3.db itself is opened mode=ro by the code. The env file is read
+# by systemd before the sandbox applies, so the job keeps its variables but cannot open the file.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/paperbot
+ReadOnlyPaths=-/var/lib/paperbot/.local -/var/lib/paperbot/lab
+InaccessiblePaths=-/etc/paperbot/agents.env -/etc/paperbot/live.env -/etc/paperbot/dash.env -/etc/paperbot/executor.env -/var/lib/paperbot/exec

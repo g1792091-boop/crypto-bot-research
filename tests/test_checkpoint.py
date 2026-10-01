@@ -450,3 +450,19 @@ def test_minutes_cache(tmp_path):
     n = len(calls)
     src.load(d0 + 3_600_000, d0 + DAY)
     assert len(calls) == n and len(os.listdir(tmp_path / "bars")) == 12
+
+
+def test_dashboard_endpoint(run_db, tmp_path):
+    pytest.importorskip("fastapi")
+    from fastapi.testclient import TestClient
+    from paperbot.dash.app import create_app
+    path, cp = run_db
+    app = create_app(path, None, b"x" * 32)               # no password: tests only
+    c = TestClient(app)
+    assert c.get("/api/checkpoint").json() == {"ready": False}
+    ck.run_due(path, str(tmp_path / "checkpoint.db"), _minutes_for(), S, BR, SPECS, None, now_ms=cp + 1, n_bots=50,
+               log=lambda *_: None)
+    v = c.get("/api/checkpoint").json()
+    assert v["ready"] and v["day"] == 30 and v["counts"][ck.PASS1] == 1
+    assert {r["account_id"]: r["status"] for r in v["rows"]}["GOOD@4h"] == ck.OBSERVE
+    assert "checkpoint.js" in c.get("/").text

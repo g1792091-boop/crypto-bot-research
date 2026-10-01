@@ -909,7 +909,10 @@ def _storable(text: str) -> bool:
 
 def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fetch_candles,
                agents_db: Optional[str] = None, daily_db: Optional[str] = None, frames=fetch_frame,
-               inbox_db: Optional[str] = None, say_per_hour: int = SAY_PER_HOUR) -> FastAPI:
+               inbox_db: Optional[str] = None, say_per_hour: int = SAY_PER_HOUR,
+               checkpoint_db: Optional[str] = None) -> FastAPI:
+    # checkpoint verdicts (paperbot/checkpoint.py): by default checkpoint.db next to paper3.db, read-only
+    checkpoint_db = checkpoint_db or os.path.join(os.path.dirname(os.path.abspath(db)), "checkpoint.db")
     if inbox_db and any(other and same_file(inbox_db, other) for other in (db, daily_db, agents_db)):
         # the dashboard creates its tables in inbox.db: never in another process's database
         raise ValueError("--inbox-db must be its own file (not paper3.db, daily3.db or agents3.db)")
@@ -986,6 +989,11 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
     @app.get("/api/status")
     def status():
         return data.status()
+
+    @app.get("/api/checkpoint")
+    def checkpoint_verdict():
+        from ..checkpoint import dashboard_view
+        return dashboard_view(checkpoint_db)
 
     @app.get("/api/signals")
     def signals(tf: Optional[str] = None, symbol: Optional[str] = None, limit: int = 200):

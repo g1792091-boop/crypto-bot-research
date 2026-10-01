@@ -1,0 +1,9 @@
+[Unit]
+Description=paperbot v3 checkpoint verdicts: hourly at :35 (acts only when a checkpoint is due)
+
+[Timer]
+OnCalendar=*-*-* *:35:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target
