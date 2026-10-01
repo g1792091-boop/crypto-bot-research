@@ -2323,12 +2323,12 @@ def _lab_round(rnd: _Round) -> tuple[str, dict]:
     index = R.trial_index(conn, A.NEWLAB)
     cands: list[dict] = []
     seen: dict = {}
-    counts = {"proposed": len(t1["specs"]), "bad_spec": 0, "duplicate": 0, "dropped": 0}
+    counts = {"candidates": len(t1["specs"]), "bad_spec": 0, "duplicate": 0, "dropped": 0}
     for i, it in enumerate(t1["specs"], 1):
         try:
             canon = NL.normalize_spec(it["spec"])
-        except NL.SpecError as exc:
-            counts["bad_spec"] += 1
+        except (ValueError, TypeError, KeyError, AttributeError, OverflowError, RecursionError) as exc:
+            counts["bad_spec"] += 1          # NL.SpecError (a ValueError) with its Korean reason, or odd JSON
             rnd.system(f"후보 {i}: 문법에 맞지 않아 시험하지 않습니다(시험 수에 넣지 않음). {exc}",
                        {"newlab": True, "index": i, "status": "bad_spec", "error": str(exc)})
             continue
@@ -2403,7 +2403,8 @@ def _lab_round(rnd: _Round) -> tuple[str, dict]:
         results.append(res)
     lead = None
     if t1["specs"]:
-        lead = rnd.ask("team_lead", "lab_lead", {**rnd.base, "lab_results": [_lab_result_view(r) for r in results],
+        lead = rnd.ask("team_lead", "lab_lead", {**rnd.base, "lab": lab_overview(ctx) if results else lab,
+                                                  "lab_results": [_lab_result_view(r) for r in results],
                                                   "lab_counts": counts})
     n_now = A.newlab_count(conn)
     done = [r for r in results if r.get("counted")]
@@ -2414,7 +2415,7 @@ def _lab_round(rnd: _Round) -> tuple[str, dict]:
                 "not_counted": sum(1 for r in results if not r.get("counted")), **counts,
                 "n_tests_now": n_now, "lead": bool(lead)}
     L = ["🧾 새 매매법 연구 끝",
-         f"- 후보 {counts['proposed']}개: 문법 오류 {counts['bad_spec']}, 이미 시험함 {counts['duplicate']}, "
+         f"- 후보 {counts['candidates']}개: 문법 오류 {counts['bad_spec']}, 이미 시험함 {counts['duplicate']}, "
          f"반론 검토관이 뺌 {counts['dropped']}, 시험 {len(done)}개(통과 {len(passed)}개)"]
     for r in results:
         if r.get("counted"):

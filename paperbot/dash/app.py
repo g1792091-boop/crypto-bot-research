@@ -370,9 +370,9 @@ SAY_MAX_CHARS = 1_000        # one owner post (rooms_db.MAX_OWNER_TEXT)
 SAY_PER_HOUR = 20            # owner posts per hour, both owners together (counted in inbox.db)
 AUTHOR_MAX = 20
 BODY_MAX = 16_384            # bytes of one owner write (a 1,000-character post is at most ~4 KB of JSON)
-BUDGET_CLASSES = ("incident", "owner", "loss", "scheduled", "weekly")
+BUDGET_CLASSES = ("incident", "owner", "loss", "scheduled", "weekly", "research")
 CLASS_KO = {"incident": "사고 점검", "owner": "두 분 글", "loss": "손실·파산 복기", "scheduled": "정기 회의",
-            "weekly": "주간 검토",
+            "weekly": "주간 검토", "research": "새 매매법 연구",
             # calls that timed out with no model activity (a hung API): counted in the day's and 7-day totals only
             "timeout": "시간 초과(장애, 회의 종류 한도에는 안 셈)"}
 WEEKDAY_KO = "월화수목금토일"
