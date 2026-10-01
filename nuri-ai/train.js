@@ -1,7 +1,7 @@
 // 학습: 대화·합성 데이터를 모아 작은 오픈모델을 직접 미세조정(LoRA)하고, 결과 모델을 앱에 다시 넣는다
 // 합성 데이터는 NVIDIA data-designer 스킬과 같은 방식(조건 샘플링 → 질문 생성 → 모범 답안 → AI 채점)으로 만든다.
 import { idb, uid, brainStream, splitThink, settings, routeCandidates } from "./engine.js";
-import { toModelMessages, BUILTIN_SKILLS, runAgent } from "./agent.js";
+import { toModelMessages, BUILTIN_SKILLS, runAgent, TOOLS } from "./agent.js";
 import { nvIndex, nvSkill } from "./nvskills.js";
 
 /* ============ 바탕 모델 (RTX 3050 노트북 기준으로 고름) ============ */
@@ -63,6 +63,7 @@ export const TOPICS = [
   {id: "backtest", name: "퀀트 전략·백테스트", skill: "backtest", agent: true, seeds: ["비트코인 이동평균 전략 백테스트", "이더리움 RSI 전략", "볼린저 전략 비교", "과최적화", "손절 넣은 전략", "최대낙폭 관리"]},
   {id: "arch", name: "건축 설계·견적·렌더링", skill: "arch", agent: true, seeds: ["60평 대지 3층 주택 설계", "상가주택 설계", "카페 건물 설계", "공사비 견적", "인테리어 견적", "건폐율·용적률 계산", "CAD·Revit·SketchUp 사용"]},
   {id: "land", name: "부동산·토지·법규", skill: "land", agent: true, seeds: ["재개발 가능성", "용도지역별 건축 제한", "모아타운", "법원경매 절차", "양도소득세", "전세 계약 주의"]},
+  {id: "research", name: "인터넷 리서치·자료 조사", skill: "research", agent: true, seeds: ["최신 AI 반도체 동향 조사", "전기차 보조금 정책 찾아보기", "어떤 회사 평판 조사", "논문 내용 정리", "제품 비교 리서치", "여행지 최신 정보"]},
   {id: "daily", name: "일상 대화·글쓰기·번역", skill: null, seeds: ["이메일 작성", "보고서 요약", "자기소개서", "영어 번역", "고민 상담", "여행 계획", "공부 방법"]},
   {id: "code", name: "코딩", skill: "coding", seeds: ["파이썬 기초", "자바스크립트 웹페이지", "엑셀 자동화", "API 호출", "버그 찾기", "SQL 쿼리"]},
   {id: "nvidia", name: "NVIDIA 스킬 지식", skill: null, nv: true, seeds: []}
@@ -121,14 +122,26 @@ async function agentTrace(q, signal){
   return {conv: shrink(toModelMessages([user, msg], 1e9)), final, teacher: msg.route?.model || "", tools: msg.parts.filter(p => p.type === "tool").length};
 }
 // NVIDIA 공식 스킬 문서를 근거로 문답 만들기
-async function nvSample(signal, log){
-  const idx = await nvIndex(), s = pickOne(idx.skills), sk = await nvSkill(s.n);
+async function nvSample(signal, log, name){
+  const idx = await nvIndex(), s = (name && idx.skills.find(x => x.n === name)) || pickOne(idx.skills), sk = await nvSkill(s.n);
   const doc = String(sk.files["SKILL.md"] || "").replace(/^---[\s\S]*?\n---\s*/, "").slice(0, 5000);
   log?.(`NVIDIA 스킬 '${s.n}' 문서로 문답 만드는 중`);
   const g = await ask([{role: "system", content: "[질문 생성] 아래 기술 문서를 읽은 사용자가 실제로 물어볼 만한 한국어 질문 2개를 JSON 배열로만 출력한다."}, {role: "user", content: `문서(${s.n}):\n${doc}`}], {signal, maxTokens: 400, temperature: 0.9});
   const q = parseJSONArray(g.text)[0]; if (!q) return null;
   const a = await ask([{role: "system", content: `너는 '${NAME()}'라는 한국어 AI 어시스턴트다. 아래 NVIDIA 공식 스킬 문서만 근거로, 절차와 이유를 친절한 한국어로 설명한다. 명령어·설정 이름은 원문 그대로 쓴다. 문서에 없는 내용은 지어내지 않는다.\n\n문서(${s.n}):\n${doc}`}, {role: "user", content: q}], {signal, maxTokens: 1800, temperature: 0.4});
+  if (/<\/?tool|<tool_call>|DSML|tool▁call|\[TOOL_CALLS\]/.test(a.text)) return null;   // 도구 호출이 섞인 답은 버린다
   return a.text && a.text.length > 60 ? {q, text: a.text, teacher: a.route?.model || "", skill: s.n} : null;
+}
+// 같은 질문을 'NVIDIA 스킬을 찾아 읽고 답하는 과정'으로도 기록 (실제 도구 결과를 그대로 넣는다)
+async function nvToolConv(q, name, answer){
+  const conv = [{role: "user", content: q}], call = (tool, args, out) => conv.push({role: "assistant", content: `<tool name="${tool}">${JSON.stringify(args)}</tool>`}, {role: "user", content: `<tool_result name="${tool}">${out}</tool_result>`});
+  const query = name.replace(/[-_]+/g, " ");
+  const sr = await TOOLS.nv_skill_search.run({query});
+  if (sr.text.includes(name)) call("nv_skill_search", {query}, sr.text);
+  const rd = await TOOLS.nv_skill_read.run({name});
+  call("nv_skill_read", {name}, rd.text.length > 1500 ? rd.text.slice(0, 1500) + "…(줄임)" : rd.text);
+  conv.push({role: "assistant", content: answer});
+  return conv;
 }
 // onEvent({kind:"sample"|"log", ...})
 export async function generateSynth({topics, count, judge = true, ensemble = false, agent = false, signal, onEvent}){
@@ -174,6 +187,65 @@ export async function generateSynth({topics, count, judge = true, ensemble = fal
         await save({id: uid(), t: Date.now(), src: "synth", kind: ensemble ? "ensemble" : "single", topic: topic.id, persona, level, score, teacher: a.teacher, messages: [{role: "system", content: TRAIN_SYS("chat")}, {role: "user", content: q}, {role: "assistant", content: a.text}]});
       }
     } catch (e){ if (signal?.aborted) break; log("건너뜀: " + (e.message || e).slice(0, 80)); }
+  }
+  return made;
+}
+
+/* ============ 모든 스킬을 빠짐없이 GH Nano에 넣기 ============ */
+// 작은 모델이 스킬 문서 5천여 개를 통째로 외울 수는 없으므로, 스킬마다
+//  ① 그 스킬의 핵심을 설명하는 문답(지식)과 ② nv_skill_search → nv_skill_read로 원문을 찾아 읽고 답하는 과정(사용법)을 학습시킨다.
+// 원문은 앱(GHNano.exe)에 모두 들어 있어, 학습된 GH Nano가 필요할 때 직접 꺼내 읽는다. 이미 넣은 스킬은 건너뛰므로 멈췄다 이어서 할 수 있다.
+export const BUILTIN_TARGET = 6;
+export async function skillCoverage(){
+  const syn = await loadSynth(), idx = await nvIndex();
+  const nv = new Map(), per = {};
+  for (const s of syn){
+    if (s.skill) nv.set(s.skill, (nv.get(s.skill) || 0) + 1);
+    const t = TOPICS.find(x => x.id === s.topic); if (t?.skill) per[t.skill] = (per[t.skill] || 0) + 1;
+  }
+  const builtin = BUILTIN_SKILLS.map(b => ({id: b.id, name: b.name, n: per[b.id] || 0, topic: TOPICS.find(t => t.skill === b.id)?.id}));
+  const nvLeft = idx.skills.map(x => x.n).filter(n => (nv.get(n) || 0) < 2);
+  return {nvTotal: idx.skills.length, nvDone: idx.skills.length - nvLeft.length, nvLeft, builtin, builtinDone: builtin.filter(b => b.n >= BUILTIN_TARGET).length};
+}
+// onEvent({kind:"log"|"progress", ...}). 동시에 conc개씩 만든다
+export async function generateAllSkills({signal, onEvent, judge = true, ensemble = true, agent = true, conc = 3}){
+  const log = text => onEvent?.({kind: "log", text});
+  const cov = await skillCoverage();
+  let made = 0, done = 0;
+  let total = cov.builtin.filter(b => b.n < BUILTIN_TARGET).length + cov.nvLeft.length;
+  const step = label => { done++; onEvent?.({kind: "progress", done, total, made, label}); };
+  // 1) 기본 스킬 12개: 분야마다 BUILTIN_TARGET개 이상 (실제 도구 사용 기록 포함)
+  for (const b of cov.builtin){
+    if (signal?.aborted) return made;
+    if (b.n >= BUILTIN_TARGET || !b.topic) continue;
+    log(`기본 스킬 '${b.name}' ${BUILTIN_TARGET - b.n}개 만드는 중`);
+    made += await generateSynth({topics: [b.topic], count: BUILTIN_TARGET - b.n, judge, ensemble, agent, signal, onEvent: ev => { if (ev.kind === "log") onEvent?.(ev); }});
+    step(b.name);
+  }
+  // 2) NVIDIA 스킬 전부: 스킬마다 지식 문답 + 찾아 읽고 답하는 과정 (실패한 스킬은 최대 3번까지 다시)
+  const queue = [];
+  const worker = async () => {
+    while (queue.length && !signal?.aborted){
+      const name = queue.shift();
+      try {
+        const r = await nvSample(signal, null, name);
+        if (!r){ log(`'${name}' 질문을 못 만들어 다음에 다시 합니다`); step(name); continue; }
+        const score = judge ? await judgeScore(r.q, r.text, signal) : null;
+        if (score && score < 4){ log(`'${name}' 품질 ${score}점이라 다음에 다시 합니다`); step(name); continue; }
+        const base = {src: "synth", topic: "nvidia", score, teacher: r.teacher, skill: name};
+        await idb.put("train:" + (base.id = uid()), {...base, t: Date.now(), kind: "nvidia", messages: [{role: "system", content: TRAIN_SYS("chat")}, {role: "user", content: r.q}, {role: "assistant", content: r.text}]});
+        const conv = await nvToolConv(r.q, name, r.text);
+        const id2 = uid(); await idb.put("train:" + id2, {...base, id: id2, t: Date.now(), kind: "nvtool", messages: [{role: "system", content: TRAIN_SYS("chat")}, ...conv]});
+        made += 2; log(`✓ ${name}`); step(name);
+      } catch (e){ if (signal?.aborted) return; log(`'${name}' 건너뜀: ${String(e.message || e).slice(0, 60)}`); step(name); }
+    }
+  };
+  for (let pass = 0; pass < 3 && !signal?.aborted; pass++){
+    const left = pass ? (await skillCoverage()).nvLeft : cov.nvLeft;
+    if (!left.length) break;
+    if (pass){ total = done + left.length; log(`못 넣은 스킬 ${left.length}개를 다시 시도합니다`); }
+    queue.push(...left);
+    await Promise.all(Array.from({length: Math.max(1, conc)}, worker));
   }
   return made;
 }
@@ -315,13 +387,17 @@ MAX_LEN = 2048
 BATCH = 2
 ACCUM = 4
 OUT = "${name}"`;
-  const card = `import json, collections, datetime, os
+  const card = `import json, collections, datetime, os, re
 kinds = collections.Counter()
+nv_skills = set()
 if DATA:
     with open(DATA, encoding="utf-8") as fh:
         for line in fh:
             ms = json.loads(line)["messages"]
             kinds["도구 사용 기록" if any("<tool name=" in m["content"] for m in ms if m["role"] == "assistant") else "문답"] += 1
+            for m in ms:
+                if m["role"] == "assistant":
+                    nv_skills.update(re.findall(r'<tool name="nv_skill_read">\{"name":"([^"]+)"', m["content"]))
 merged = ${JSON.stringify(p.models.map(m => `${m.id} (${m.role}, 비중 ${m.weight})`))}
 card = f"""# ${NAME()}
 
@@ -333,6 +409,7 @@ card = f"""# ${NAME()}
 ## 추가 학습
 - 방식: LoRA(QLoRA 4비트) {EPOCHS}회 · 학습 예시 {sum(kinds.values())}개 {dict(kinds) if kinds else '(학습 데이터 없이 합치기만 함)'}
 - 데이터: 연결된 여러 AI의 답을 합친 모범답안, 기본·NVIDIA 스킬 지식, 실제 도구(시세·설계·뉴스) 사용 기록
+- NVIDIA 스킬: {len(nv_skills)}개를 찾아 읽고 답하는 법을 학습 (스킬 원문은 GH Nano 앱에 모두 들어 있음)
 
 ## 사용법
 GH Nano 앱 → 설정 → 학습 · 내 모델 → 내 모델 등록에서 GGUF 파일을 고르세요. 만든 날: {datetime.date.today()}

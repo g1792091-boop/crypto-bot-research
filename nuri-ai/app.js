@@ -7,7 +7,7 @@ import { esc, uid, fmtN, ls, idb, bus, settings, saveSettings, CATALOG, eng, loa
 import { runAgent, BUILTIN_SKILLS, TOOLS, installSkill, marketNews } from "./agent.js";
 import { nvIndex, nvSkill, nvSearch, GROUP_KO } from "./nvskills.js";
 import { TEMPLATES } from "./templates.js";
-import { BASES, TOPICS, samplesFromChats, loadSynth, removeSynth, clearSynth, toJSONL, generateSynth, notebookJSON, localScript, teachers, NANO_MERGE, nanoNotebookJSON, mergeYAML } from "./train.js";
+import { BASES, TOPICS, samplesFromChats, loadSynth, removeSynth, clearSynth, toJSONL, generateSynth, notebookJSON, localScript, teachers, NANO_MERGE, nanoNotebookJSON, mergeYAML, skillCoverage, generateAllSkills, BUILTIN_TARGET } from "./train.js";
 import { initTrade } from "./trade.js";
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
@@ -573,7 +573,7 @@ async function modelsTab(){
 }
 async function hfApi(path){ return webGet("https://huggingface.co/api/" + path, "json"); }
 /* ---- 학습 (내 모델 만들기) ---- */
-let synthCtl = null, synthLog = [], trainOpt = Object.assign({good: true, tools: true, synth: true, topics: ["crypto_spot", "crypto_futures", "us_stocks", "arch", "news"], count: 30, judge: true, ensemble: true, agent: true, base: BASES[0].id, epochs: 3}, ls.get("trainOpt", {}));
+let synthCtl = null, synthLog = [], allProg = null, trainOpt = Object.assign({good: true, tools: true, synth: true, topics: ["crypto_spot", "crypto_futures", "us_stocks", "arch", "news"], count: 30, judge: true, ensemble: true, agent: true, base: BASES[0].id, epochs: 3}, ls.get("trainOpt", {}));
 trainOpt.topics = trainOpt.topics.filter(t => TOPICS.some(x => x.id === t)); if (!trainOpt.topics.length) trainOpt.topics = ["crypto_spot", "us_stocks", "arch", "news"];
 const saveTrainOpt = () => ls.set("trainOpt", trainOpt);
 async function trainData(){
@@ -591,11 +591,16 @@ async function trainTab(){
   const teacher = routeCandidates("general")[0];
   const ck = (k, label) => `<label class="chk"><input type="checkbox" data-topt="${k}"${trainOpt[k] ? " checked" : ""}> ${label}</label>`;
   const ts = teachers(), nanoRunning = synthCtl && synthCtl.nano;
+  const cov = await skillCoverage().catch(() => null), allRun = synthCtl && synthCtl.all;
+  const pct = (a, b) => b ? Math.round(a / b * 100) : 0;
+  const covHTML = cov ? `<div class="nano-cov"><b>스킬 반영</b><div class="cov-row"><span>NVIDIA 스킬</span><div class="bar"><i style="width:${pct(cov.nvDone, cov.nvTotal)}%"></i></div><em id="covNv">${cov.nvDone}/${cov.nvTotal}</em></div><div class="cov-row"><span>기본 스킬</span><div class="bar"><i style="width:${pct(cov.builtinDone, cov.builtin.length)}%"></i></div><em>${cov.builtinDone}/${cov.builtin.length}</em></div>
+    <div class="row wrap">${allRun ? `<button class="btn" id="nanoStop">멈추기</button><span class="small" id="allProg">${allProg ? `${allProg.done}/${allProg.total} · ${esc(allProg.label || "")}` : "시작하는 중…"} · 멈춰도 이어서 할 수 있습니다</span>` : cov.nvDone >= cov.nvTotal && cov.builtinDone >= cov.builtin.length ? `<span class="small">모든 스킬이 학습 데이터에 들어갔습니다 ✓</span>` : `<button class="btn primary" id="nanoAll" ${ts.length && !synthCtl ? "" : "disabled"}>모든 스킬 넣기 (남은 ${cov.nvLeft.length + cov.builtin.filter(b => b.n < BUILTIN_TARGET).length}개)</button><span class="small">스킬마다 '핵심 문답 + 원문을 찾아 읽고 답하는 과정'을 만듭니다 · 무료 API로 1~3시간 · 멈췄다 이어서 가능</span>`}</div></div>` : "";
   return `<div class="nano-hero"><div class="nano-badge"><span class="logo">${esc([...AI()][0].toUpperCase())}</span><div><b>${esc(AI())} 모델 만들기</b><span>연결된 AI들의 지식 + 기본·NVIDIA 스킬 + 실제 도구 사용법을 하나의 작은 모델에 담습니다</span></div></div>
     <div class="nano-merge"><b>${esc(NANO_MERGE.name)} = 모델 ${NANO_MERGE.models.length}개를 하나로 합친 자체 모델</b><div class="nano-parts">${NANO_MERGE.models.map(m => `<span title="${esc(m.id)} · ${esc(m.lic)}"><i>${esc(m.id.split("/").pop().replace(/-Instruct$/, ""))}</i>${esc(m.role)} · ${Math.round(m.weight * 100)}%</span>`).join("")}</div><span class="small">같은 Qwen2 구조(1.5B)라 가중치를 직접 합칠 수 있습니다(TIES 병합). 결과 ${esc(NANO_MERGE.size)} · 앱 안에서 실행</span></div>
     <ol class="nano-steps"><li><b>0. 모델 합치기</b><span>딥시크 R1 + Qwen 대화·코딩·수학</span></li><li class="${syn.length >= 50 ? "done" : nanoRunning ? "run" : ""}"><b>1. 데이터 증류</b><span>${ts.length >= 2 ? `${ts.map(t => shortModel(t.model)).join(" + ")} 답을 합침` : ts.length ? `${shortModel(ts[0].model)}가 선생` : "API 키 필요"}</span></li><li><b>2. 학습</b><span>Colab 무료 GPU · 합친 모델에 LoRA</span></li><li class="${settings.myModel ? "done" : ""}"><b>3. 등록</b><span>${settings.myModel ? "등록됨: " + esc(settings.myModel) : "앱 안에서 실행"}</span></li></ol>
-    <div class="row wrap">${nanoRunning ? `<button class="btn" id="nanoStop">멈추기</button><span class="small">진행 중 · 다른 대화를 해도 계속 만듭니다</span>` : `<button class="btn primary" id="nanoGo" ${ts.length ? "" : "disabled"}>${esc(AI())} 데이터 100개 만들기</button><button class="btn" id="nanoNb">Colab 노트북 받기 (합치기+학습)</button><button class="btn ghost" id="nanoYml">병합 설정 보기</button>`}<span class="small">지금 합성 예시 ${syn.length}개 · 200개 이상이면 좋습니다</span></div>
-    <div class="trlog" id="trLog2">${nanoRunning ? synthLog.slice(-4).map(l => `<div>${esc(l)}</div>`).join("") : ""}</div>
+    ${covHTML}
+    <div class="row wrap">${allRun ? "" : nanoRunning ? `<button class="btn" id="nanoStop">멈추기</button><span class="small">진행 중 · 다른 대화를 해도 계속 만듭니다</span>` : `<button class="btn" id="nanoGo" ${ts.length && !synthCtl ? "" : "disabled"}>${esc(AI())} 데이터 100개 만들기</button><button class="btn" id="nanoNb">Colab 노트북 받기 (합치기+학습)</button><button class="btn ghost" id="nanoYml">병합 설정 보기</button>`}<span class="small">지금 합성 예시 ${syn.length}개 · 200개 이상이면 좋습니다</span></div>
+    <div class="trlog" id="trLog2">${nanoRunning || allRun ? synthLog.slice(-4).map(l => `<div>${esc(l)}</div>`).join("") : ""}</div>
     <pre class="nano-yml" id="nanoYmlBox" hidden>${esc(mergeYAML())}</pre>
     <p class="small" style="margin:0">① 딥시크·Qwen 모델 4개의 가중치를 실제로 합치고 ② 연결된 API AI들과 스킬로 만든 데이터로 추가 학습해 ③ 하나의 GH Nano 파일(GGUF)로 만듭니다. 노트북 하나로 무료 Colab에서 끝까지 실행되고, 데이터가 없으면 합치기만 합니다.</p></div>
   <h3 class="h">학습 · 내 모델 만들기</h3><p class="sub">${AI()}와 나눈 대화와 큰 AI가 만든 문제·모범답안으로 작은 오픈모델을 직접 미세조정(LoRA)해, 내 노트북에서 인터넷 없이 도는 나만의 AI를 만듭니다. NVIDIA 스킬(data-designer, tao-finetune-huggingface-model)과 같은 방식입니다.</p>
@@ -882,6 +887,15 @@ $("#sheetBody").addEventListener("click", async e => {
       .finally(() => { synthCtl = null; if ($("#sheet").open && sheetTab === "train") renderSheet(); });
   }
   if (t.id === "trStop" || t.id === "nanoStop"){ synthCtl?.abort(); }
+  if (t.id === "nanoAll"){
+    synthLog = ["모든 스킬을 학습 데이터에 넣기 시작합니다…"]; allProg = null; synthCtl = new AbortController(); synthCtl.all = true; renderSheet();
+    const log = x => { synthLog.push(x); if (synthLog.length > 200) synthLog.splice(0, 100); const L = $("#trLog2"); if (L) L.innerHTML = synthLog.slice(-4).map(l => `<div>${esc(l)}</div>`).join(""); };
+    generateAllSkills({signal: synthCtl.signal, judge: true, ensemble: true, agent: true,
+      onEvent: ev => { if (ev.kind === "log") log(ev.text); if (ev.kind === "progress"){ allProg = ev; const P = $("#allProg"); if (P) P.textContent = `${ev.done}/${ev.total} · ${ev.label} · 멈춰도 이어서 할 수 있습니다`; } }})
+      .then(n => { if (!synthCtl?.signal.aborted) toast(`스킬 학습 데이터 ${n}개를 만들었습니다. 이제 'Colab 노트북 받기'를 누르세요`); })
+      .catch(err => { if (!synthCtl?.signal.aborted) toast(err.message); log("멈춤: " + (err.message || "")); })
+      .finally(() => { synthCtl = null; allProg = null; if ($("#sheet").open && sheetTab === "train") renderSheet(); });
+  }
   if (t.id === "nanoGo"){
     synthLog = ["GH Nano 데이터 증류를 시작합니다…"]; synthCtl = new AbortController(); synthCtl.nano = true; renderSheet();
     const log = x => { synthLog.push(x); for (const id of ["#trLog", "#trLog2"]){ const L = $(id); if (L) L.innerHTML = synthLog.slice(id === "#trLog2" ? -4 : -6).map(l => `<div>${esc(l)}</div>`).join(""); } };
