@@ -170,7 +170,7 @@ export class Drawings {
         if (d > 6) this._commit();
       }
     };
-    window.addEventListener("pointerup", up);
+    this._onUp = up; window.addEventListener("pointerup", up);
     box.addEventListener("dblclick", (e) => {
       if (this.tool !== "cursor" || !inPlot(e)) return;
       const pt = this._pt(e, false), h = this._hit(pt.x, pt.y);
@@ -179,14 +179,16 @@ export class Drawings {
         if (s != null) { this._snap(); h.d.text = s; this._save(); this.layer.update(); }
       }
     });
-    document.addEventListener("keydown", (e) => {
+    this._onKey = (e) => {
       if (e.target.closest?.("input, textarea, select") || !this.tc.el.isConnected || !(this.tc.opts.isActive?.(this.tc) ?? true)) return;
       if ((e.key === "Delete" || e.key === "Backspace") && this.sel) { e.preventDefault(); this.remove(this.sel); }
       else if (e.key === "Escape" && (this.tool !== "cursor" || this.temp)) { e.preventDefault(); e.stopImmediatePropagation(); this.temp = null; this.setTool("cursor"); busy(false); }
       else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") { e.preventDefault(); e.shiftKey ? this.doRedo() : this.doUndo(); }
       else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") { e.preventDefault(); this.doRedo(); }
-    });
+    };
+    document.addEventListener("keydown", this._onKey, true);
   }
+  destroy() { window.removeEventListener("pointerup", this._onUp); document.removeEventListener("keydown", this._onKey, true); }
 
   _create(pt, e) {
     const type = this.tool, need = TOOLS[type].pts;
