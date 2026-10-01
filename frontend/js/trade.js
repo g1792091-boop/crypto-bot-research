@@ -52,7 +52,7 @@ async function pollTickers() {
     state.tickerSource = d.source;
     emit("tickers", state.tickers);
     renderWatchlist(); renderTickerBar();
-  } catch { /* 다음 주기 */ }
+  } catch { state.tickerSource = null; emit("tickers", state.tickers); }   // 거래소 연결 안 됨 → 상태 표시에 반영
 }
 
 function renderWatchlist() {

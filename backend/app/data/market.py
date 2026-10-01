@@ -1,6 +1,7 @@
 """데이터 소스 통합 레이어.
 
-- 캔들: 바이낸스 선물 (실패 시 합성 데이터, DATA_SOURCE=auto)
+- 캔들: 실제 거래소만 — 바이낸스 선물 → (안 되면) 바이빗 → OKX. 가상(합성) 데이터는 DATA_SOURCE=synthetic 일 때만.
+  마지막으로 성공한 거래소를 10분 동안 먼저 쓴다 (지역 차단된 바이낸스를 매번 기다리지 않게).
 - 파생 지표: CoinGlass 키가 있으면 CoinGlass, 없으면 바이낸스 공개 API
 - 도미넌스/시총: CoinGecko 공개 API
 """
@@ -10,7 +11,12 @@ from datetime import datetime, timezone
 import httpx
 
 from .. import config
-from . import binance, coinglass, synthetic
+from . import altex, binance, coinglass, synthetic
+
+REAL = ("binance", "bybit", "okx")
+NAMES = {"binance": "바이낸스", "bybit": "바이빗", "okx": "OKX", "synthetic": "가상 데이터"}
+_sticky = {"src": None, "until": 0.0}
+last_errors: dict[str, str] = {}
 
 _cache: dict[tuple, tuple[float, object]] = {}
 
@@ -45,34 +51,61 @@ def _yearly(monthly: list[dict]) -> list[dict]:
     return out
 
 
-def _binance_candles(symbol: str, interval: str, limit: int) -> list[dict]:
+_KLINES = {"binance": binance.klines, "bybit": altex.bybit_klines, "okx": altex.okx_klines}
+
+
+def _one(src: str, symbol: str, interval: str, limit: int, end_time: int | None = None) -> list[dict]:
+    fn = _KLINES[src]
     if interval == "1y":
-        return _yearly(binance.klines(symbol, "1M", min(limit * 12, 1500)))[-limit:]
-    return binance.klines(symbol, interval, limit)
+        return _yearly(fn(symbol, "1M", min(limit * 12, 1500), end_time=end_time))[-limit:]
+    return fn(symbol, interval, limit, end_time=end_time)
+
+
+def sources() -> list[str]:
+    """이번에 시도할 거래소 순서. DATA_SOURCE 가 거래소 이름이면 그것만."""
+    src = config.DATA_SOURCE
+    if src in REAL:
+        return [src]
+    order = list(REAL)
+    if _sticky["src"] in order and time.time() < _sticky["until"]:
+        order.remove(_sticky["src"])
+        order.insert(0, _sticky["src"])
+    return order
+
+
+def _real(symbol: str, interval: str, limit: int, end_time: int | None = None) -> tuple[list[dict], str]:
+    errors, missing = {}, 0
+    for src in sources():
+        try:
+            rows = _one(src, symbol, interval, limit, end_time)
+            if rows:
+                if src != "binance" or _sticky["src"] != src:
+                    _sticky.update(src=src, until=time.time() + 600)
+                last_errors.pop("candles", None)
+                return rows, src
+            missing += 1
+        except altex.NoSymbol as e:
+            missing += 1
+            errors[src] = str(e)
+        except httpx.HTTPStatusError as e:
+            if src == "binance" and e.response.status_code == 400:      # 바이낸스가 "없는 종목"이라고 답함
+                missing += 1
+            errors[src] = f"HTTP {e.response.status_code}"
+        except Exception as e:
+            errors[src] = str(e)[:120]
+    if missing == len(sources()):
+        raise ValueError(f"{symbol} 은(는) 바이낸스·바이빗·OKX 선물 어디에도 없는 종목입니다.")
+    last_errors["candles"] = " / ".join(f"{NAMES[k]}: {v}" for k, v in errors.items())
+    raise RuntimeError("거래소 시세를 받지 못했습니다 (" + last_errors["candles"] + "). 인터넷 연결이나 지역 차단을 확인하세요.")
 
 
 def candles(symbol: str, interval: str, limit: int = 500) -> tuple[list[dict], str]:
-    """(캔들, 소스명) 반환."""
+    """(캔들, 소스명) 반환. 실제 거래소만 (가상 데이터는 DATA_SOURCE=synthetic 일 때만)."""
     if interval not in INTERVALS:
         raise ValueError(f"지원하지 않는 봉 간격: {interval}")
-    src = config.DATA_SOURCE
-    if src == "synthetic":
+    if config.DATA_SOURCE == "synthetic":
         return synthetic.candles(symbol, interval, limit), "synthetic"
-    try:
-        rows = _cached(("klines", symbol, interval, limit), 5,
-                       lambda: _binance_candles(symbol, interval, limit))
-        return rows, "binance"
-    except httpx.HTTPStatusError as e:
-        # 네트워크 문제가 아니라 바이낸스가 "없는 심볼"이라고 답한 경우: 가짜 차트를 보여주지 않는다
-        if e.response.status_code == 400:
-            raise ValueError(f"{symbol} 은(는) 바이낸스 선물에 없는 종목입니다.") from e
-        if src == "binance":
-            raise
-        return synthetic.candles(symbol, interval, limit), "synthetic"
-    except Exception:
-        if src == "binance":
-            raise
-        return synthetic.candles(symbol, interval, limit), "synthetic"
+    return _cached(("klines", symbol, interval, limit), 5, lambda: _real(symbol, interval, limit))
 
 
 def candles_range(symbol: str, interval: str, start: int, end: int) -> tuple[list[dict], str]:
@@ -81,17 +114,10 @@ def candles_range(symbol: str, interval: str, start: int, end: int) -> tuple[lis
     n = max(2, (end - start) // step + 2)
     if config.DATA_SOURCE != "synthetic":
         try:
-            rows = _cached(("range", symbol, interval, start, end), 3600,
-                           lambda: binance.klines(symbol, interval, min(n, 1500), end_time=end))
-            return [b for b in rows if start <= b["time"] <= end], "binance"
-        except httpx.HTTPStatusError as e:
-            if e.response.status_code == 400:
-                return [], "binance"              # 그 시기에 상장 전
-            if config.DATA_SOURCE == "binance":
-                raise
-        except Exception:
-            if config.DATA_SOURCE == "binance":
-                raise
+            rows, src = _cached(("range", symbol, interval, start, end), 3600, lambda: _real(symbol, interval, min(n, 1500), end))
+        except ValueError:
+            return [], sources()[0]               # 그 시기에 상장 전 · 없는 종목
+        return [b for b in rows if start <= b["time"] <= end], src
     rows = synthetic.candles(symbol, interval, n, end_time=end)
     return [b for b in rows if start <= b["time"] <= end], "synthetic"
 
@@ -99,13 +125,16 @@ def candles_range(symbol: str, interval: str, start: int, end: int) -> tuple[lis
 def tickers(symbols: list[str]) -> tuple[list[dict], str]:
     """관심 종목 시세 (24h 등락, 고가/저가)."""
     if config.DATA_SOURCE != "synthetic":
-        try:
-            rows = _cached(("tickers",), 5, binance.tickers_24h)
-            by = {r["symbol"]: r for r in rows}
-            return [by[s] for s in symbols if s in by], "binance"
-        except Exception:
-            if config.DATA_SOURCE == "binance":
-                raise
+        fns = {"binance": binance.tickers_24h, "bybit": altex.bybit_tickers, "okx": altex.okx_tickers}
+        err = {}
+        for src in sources():
+            try:
+                rows = _cached(("tickers", src), 5, fns[src])
+                by = {r["symbol"]: r for r in rows}
+                return [by[s] for s in symbols if s in by], src
+            except Exception as e:
+                err[src] = str(e)[:100]
+        raise RuntimeError("거래소 시세를 받지 못했습니다: " + " / ".join(f"{NAMES[k]}: {v}" for k, v in err.items()))
     out = []
     for s in symbols:
         c = synthetic.candles(s, "1h", 25)
@@ -140,16 +169,27 @@ def derivatives(symbol: str, interval: str, limit: int = 200) -> dict:
             "long_short": lambda: binance.long_short_ratio(symbol, interval, limit),
             "taker": lambda: binance.taker_buy_sell_ratio(symbol, interval, limit),
         }
+        bybit = {
+            "open_interest": lambda: altex.bybit_open_interest(symbol, interval, limit),
+            "funding": lambda: altex.bybit_funding(symbol, limit),
+            "long_short": lambda: altex.bybit_long_short(symbol, interval, limit),
+        }
         for name in missing:
             try:
                 out[name] = _cached(("bn", name, symbol, interval, limit), 30, fallback[name])
                 out["source"] = out["source"] or "binance"
             except Exception as e:
                 out["errors"][name] = str(e)
-    if not any(out[k] for k in ("open_interest", "funding", "long_short")):
-        c, src = candles(symbol, interval, limit)
-        if src == "synthetic":
-            out.update(synthetic.derivatives(c), source="synthetic", errors={})
+                if name in bybit:                                  # 바이낸스가 막히면 바이빗 공개 데이터로
+                    try:
+                        out[name] = _cached(("bb", name, symbol, interval, limit), 30, bybit[name])
+                        out["source"] = out["source"] or "bybit"
+                        out["errors"].pop(name, None)
+                    except Exception as e2:
+                        out["errors"][name] += f" · 바이빗: {str(e2)[:80]}"
+    if config.DATA_SOURCE == "synthetic" and not any(out[k] for k in ("open_interest", "funding", "long_short")):
+        c, _ = candles(symbol, interval, limit)
+        out.update(synthetic.derivatives(c), source="synthetic", errors={})
     return out
 
 

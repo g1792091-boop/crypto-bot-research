@@ -53,6 +53,13 @@ def _bad(e: Exception):
     raise HTTPException(status_code=400, detail=str(e))
 
 
+@app.exception_handler(RuntimeError)
+async def _data_down(_req, e: RuntimeError):
+    """거래소 시세를 못 받았을 때 (가상 데이터로 몰래 바꾸지 않고 이유를 그대로 보여준다)."""
+    from fastapi.responses import JSONResponse
+    return JSONResponse(status_code=503, content={"detail": str(e)[:400]})
+
+
 # ------------------------------------------------------------------ 상태
 @app.get("/api/status")
 def status():

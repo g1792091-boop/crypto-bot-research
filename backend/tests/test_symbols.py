@@ -41,9 +41,35 @@ def test_unknown_binance_symbol_is_an_error_not_fake_chart(monkeypatch):
 
     def bad(*a, **k):
         raise httpx.HTTPStatusError("400", request=req, response=httpx.Response(400, request=req))
-    monkeypatch.setattr(market, "_binance_candles", bad)
+
+    def nosym(*a, **k):
+        raise market.altex.NoSymbol("없음")
+    monkeypatch.setattr(market, "_KLINES", {"binance": bad, "bybit": nosym, "okx": nosym})
     market._cache.clear()
     with pytest.raises(ValueError):
         market.candles("NOPEUSDT", "1h", 100)
     r = TestClient(app).get("/api/candles", params={"symbol": "NOPEUSDT", "interval": "1h"})
     assert r.status_code == 400 and "없는 종목" in r.json()["detail"]
+
+
+def test_binance_blocked_falls_back_to_bybit_not_fake(monkeypatch):
+    """바이낸스가 지역 차단(451)이면 바이빗 실제 시세로. 다 안 되면 가상 데이터가 아니라 오류."""
+    monkeypatch.setattr(config, "DATA_SOURCE", "auto")
+    req = httpx.Request("GET", "https://fapi.binance.com/fapi/v1/klines")
+
+    def blocked(*a, **k):
+        raise httpx.HTTPStatusError("451", request=req, response=httpx.Response(451, request=req))
+    bars = [{"time": 3600 * i, "open": 1, "high": 2, "low": 0.5, "close": 1.5, "volume": 10} for i in range(5)]
+    monkeypatch.setattr(market, "_KLINES", {"binance": blocked, "bybit": lambda *a, **k: bars, "okx": blocked})
+    market._cache.clear()
+    market._sticky.update(src=None, until=0)
+    rows, src = market.candles("BTCUSDT", "1h", 5)
+    assert src == "bybit" and rows == bars and market.sources()[0] == "bybit"       # 다음부터 바이빗 먼저
+    def down(*a, **k):
+        raise httpx.ConnectError("no network")
+    monkeypatch.setattr(market, "_KLINES", {"binance": down, "bybit": down, "okx": down})
+    market._cache.clear()
+    with pytest.raises(RuntimeError) as e:
+        market.candles("BTCUSDT", "1h", 5)
+    assert "거래소 시세를 받지 못했습니다" in str(e.value)
+    market._sticky.update(src=None, until=0)

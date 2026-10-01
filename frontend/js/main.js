@@ -21,7 +21,8 @@ function renderStatus() {
   const s = state.status;
   const src = state.tickerSource;
   $("#status").innerHTML = [
-    [src === "synthetic" ? "warn" : "ok", src === "synthetic" ? "가상 데이터" : "바이낸스 연결", src === "synthetic" ? "거래소에 연결되지 않아 가상 시세를 보여주고 있습니다" : ""],
+    [src === "synthetic" ? "warn" : src ? "ok" : "warn", src === "synthetic" ? "가상 데이터 (테스트 모드)" : src ? `${{ binance: "바이낸스", bybit: "바이빗", okx: "OKX" }[src] || src} 실시간` : "거래소 연결 안 됨",
+      src === "synthetic" ? "DATA_SOURCE=synthetic 이라 가상 시세입니다" : src === "binance" || !src ? (src ? "바이낸스 선물 실시간 시세" : "바이낸스·바이빗·OKX 모두 응답이 없습니다") : "바이낸스에 닿지 않아 다른 거래소의 실제 시세를 쓰고 있습니다"],
     [s.coinglass ? "ok" : "", s.coinglass ? "CoinGlass" : "CoinGlass 미연결", s.coinglass ? "" : "settings.txt 에 COINGLASS_API_KEY 를 넣으면 연결됩니다"],
     [s.llm ? "ok" : "", s.llm ? s.llm_label : "AI 미연결", s.llm ? `${s.model}${s.llm_provider === "gemini" ? " · 무료 등급은 분당 요청 수가 적어 느릴 수 있습니다" : s.llm_provider === "nvidia" ? " · NVIDIA 무료 크레딧 · 분당 약 40회" : ""}`
       : "settings.txt 에 NVIDIA_API_KEY(무료) · GEMINI_API_KEY(무료) 또는 ANTHROPIC_API_KEY 를 넣으면 연결됩니다"],
