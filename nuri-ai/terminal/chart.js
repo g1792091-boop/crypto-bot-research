@@ -91,11 +91,15 @@ export class TermChart {
     this.countdown = new Countdown(this);
     [this.fillLayer, this.vpLayer, this.boxLayer, this.liqLayer, this.wallLayer, this.whaleLayer, this.countdown].forEach((l) => this.candle.attachPrimitive(l));
     this._cdTimer = setInterval(() => !document.hidden && this.countdown.update(), 1000);
-    this.chart.subscribeCrosshairMove((p) => this._legend(p));
+    this.chart.subscribeCrosshairMove((p) => { this._lastCross = p; this._legend(p); });
+    // 칸 크기·창 높이가 바뀌면 아래 창 범례 위치를 다시 잡는다
+    this._ro = new ResizeObserver(() => this._legendSoon());
+    this._ro.observe(el);
   }
+  _legendSoon() { if (this._lgRaf) return; this._lgRaf = requestAnimationFrame(() => { this._lgRaf = 0; this._legend(this._lastCross); }); }
 
   destroy() {
-    this._stopLive(); clearInterval(this._cdTimer); clearInterval(this._flowTimer); clearInterval(this._liqTimer);
+    this._stopLive(); clearInterval(this._cdTimer); clearInterval(this._flowTimer); clearInterval(this._liqTimer); this._ro?.disconnect();
     try { this.chart.remove(); } catch (e) { /* 무시 */ }
     this.el.innerHTML = "";
   }
@@ -273,7 +277,8 @@ export class TermChart {
     this.vpLayer.update(); this.boxLayer.update(); this.fillLayer.update();
     const panes = this.chart.panes();
     panes.forEach((p, i) => p.setStretchFactor(i === 0 ? Math.max(2.2, panes.length - 0.5) : 1));   // 가격 창이 항상 절반 이상
-    this._legend();
+    this._scaleModes();
+    this._legend(); this._legendSoon();
   }
 
   // 지표 신호 → 마커. 가격 위 지표는 캔들에, 아래 창 지표는 그 지표선에 붙인다
@@ -573,7 +578,11 @@ export class TermChart {
     }
     if (this.disp) this.disp.setData(t === "bars" ? c : c.map((b) => ({ time: b.time, value: b.close })));
   }
-  setLog(on) { this.chart.priceScale("right").applyOptions({ mode: on ? 1 : 0 }); }
+  // 로그 눈금은 가격 창에만 (아래 창 지표는 항상 보통 눈금)
+  setLog(on) { this.log = !!on; this._scaleModes(); }
+  _scaleModes() {
+    this.chart.panes().forEach((pn, i) => { try { pn.priceScale("right").applyOptions({ mode: i === 0 && this.log ? 1 : 0 }); } catch (e) { /* 무시 */ } });
+  }
   showBars(n) {
     const len = this.candles.length;
     if (!len) return;

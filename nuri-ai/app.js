@@ -531,6 +531,7 @@ $("#openKnow").onclick = () => openSheet("know");
 // 사무실에서 여는 것들: 건축팀 설계안(3D), 차트 터미널, 실거래 콘솔
 const openBuilding = spec => openArtifact({type: "building", title: spec?.name || "설계안", spec});
 const openTerminal = (opts = {}) => { const q = new URLSearchParams(opts).toString(); window.open("terminal/index.html" + (q ? "?" + q : ""), "_blank"); };
+import("./live-ui.js").then(L => L.initLive({toast, esc, md})).catch(e => console.warn("실거래 모듈", e));   // 승인 창은 패널을 안 열어도 등록해 둔다
 const openLive = async () => { try { const L = await import("./live-ui.js"); L.openLive({md, esc, toast}); } catch(e){ toast("실거래 콘솔을 열 수 없습니다: " + e.message); } };
 window.__ghnano = Object.assign(window.__ghnano || {}, {openBuilding, openTerminal, openLive});
 const goOffice = () => { openOffice({md, esc, toast, openBuilding, openTerminal, openLive}); if (location.hash !== "#office") history.replaceState(null, "", "#office"); };

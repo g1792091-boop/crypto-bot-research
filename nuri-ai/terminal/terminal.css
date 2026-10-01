@@ -193,8 +193,11 @@ button.busy span { color: #5b8cff; }
   .nt-grid.g2, .nt-grid.g4 { grid-template: 1fr / 1fr; }
   .nt-grid .nt-cell:not(.on) { display: none; }
   .nt-side { position: absolute; left: 0; right: 0; top: auto; bottom: 42px; width: auto; height: 62%; border-left: 0; border-top: 1px solid var(--line-2); border-radius: 10px 10px 0 0; }
-  .nt-legend { right: 56px; }
-  .lg-note { max-width: 300px; }
+  .nt-legend { right: 56px; left: 6px; }
+  .lg-note { display: none; }
+  .lg-main .lg-head { font-size: 12px; }
+  .lg-ohlc { font-size: 10px; white-space: normal; }
+  .lg-row { font-size: 10px; line-height: 15px; }
   .nt-status { gap: 8px; padding: 2px 8px; }
   .nt-st-msg { display: none; }
   .nt-pick { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
@@ -207,3 +210,6 @@ button.busy span { color: #5b8cff; }
 }
 .nt-doc summary { cursor: pointer; color: #5b8cff; font-size: 11.5px; }
 .nt-doc pre { white-space: pre-wrap; font-family: var(--mono); font-size: 10.5px; color: var(--text-2); background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 6px; max-height: 240px; overflow: auto; }
+/* 2×2 에서는 가격 위 지표 줄을 접고, 마우스를 올린 칸만 펼친다 */
+.nt-grid.g4 .lg-main .lg-row, .nt-grid.g4 .lg-note { display: none; }
+.nt-grid.g4 .nt-cell:hover .lg-main .lg-row { display: flex; }

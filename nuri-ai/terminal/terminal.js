@@ -88,7 +88,7 @@ class Terminal {
       inds: Array.isArray(saved.inds) ? saved.inds.filter((s) => s && DEFS[s.key]).map((s) => ({ ...s, id: s.id || uid() })) : DEFAULT_INDS(),
       ctype: saved.ctype || "candles", log: !!saved.log, overlays: { walls: false, whales: false, liq: false, ...(saved.overlays || {}) },
       layout: LAYOUTS[saved.layout] ? +saved.layout : 1, cells: Array.isArray(saved.cells) ? saved.cells.filter((c) => c && D.EX_SHORT[c.exchange] && c.symbol) : [],
-      active: 0, side: saved.side ?? (innerWidth > 1100), tab: saved.tab || "flow", magnet: !!saved.magnet, stay: !!saved.stay, stratMode: saved.stratMode || "signals",
+      active: 0, side: innerWidth < 760 ? false : saved.side ?? (innerWidth > 1100),   // 휴대폰은 차트부터 tab: saved.tab || "flow", magnet: !!saved.magnet, stay: !!saved.stay, stratMode: saved.stratMode || "signals",
     };
     this.S.cells[0] = want;
     this.cells = [];

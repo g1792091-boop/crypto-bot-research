@@ -9,7 +9,7 @@ body.lv-open{overflow:hidden}
 .lv-title{font-size:16px}.lv-title small{color:var(--lv-dim);font-weight:500}
 .lv-sp{flex:1}
 .lv-x{border:0;background:none;color:inherit;font-size:18px;cursor:pointer;padding:4px 8px}
-.lv-body{flex:1;overflow:auto;padding:16px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-content:start;max-width:1280px;width:100%;margin:0 auto;box-sizing:border-box}
+.lv-body{flex:1;overflow:auto;padding:16px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-content:start;align-items:start;max-width:1280px;width:100%;margin:0 auto;box-sizing:border-box}
 .lv-card{background:var(--lv-panel);border:1px solid var(--lv-line);border-radius:var(--r,14px);padding:14px 16px;min-width:0}
 .lv-wide{grid-column:1/-1}
 .lv-card h3{margin:0 0 10px;font-size:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}.lv-card h3 small{color:var(--lv-dim);font-weight:500}.lv-card h3 .lv-btn{margin-left:auto}

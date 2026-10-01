@@ -219,9 +219,11 @@ export function exportCSV(){
 const enc = new TextEncoder();
 const hexOf = buf => [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
 const b64url = bytes => { let s = ""; for (const b of new Uint8Array(bytes)) s += String.fromCharCode(b); return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); };
-const hmacRaw = async (secret, msg) => { const C = D.crypto.subtle; const k = await C.importKey("raw", enc.encode(secret), {name: "HMAC", hash: "SHA-256"}, false, ["sign"]); return C.sign("HMAC", k, enc.encode(msg)); };
+// WebCrypto(crypto.subtle)는 보안 출처(https · 127.0.0.1 · localhost)에서만 있다
+const subtle = () => { const C = D.crypto?.subtle; if (!C) throw new LiveError("NO_CRYPTO", "이 페이지에서는 브라우저 서명 기능(WebCrypto)을 쓸 수 없습니다. https 주소나 GHNano.exe(127.0.0.1)로 여세요"); return C; };
+const hmacRaw = async (secret, msg) => { const C = subtle(); const k = await C.importKey("raw", enc.encode(secret), {name: "HMAC", hash: "SHA-256"}, false, ["sign"]); return C.sign("HMAC", k, enc.encode(msg)); };
 export const hmacHex = async (secret, msg) => hexOf(await hmacRaw(secret, msg));
-export const sha512Hex = async msg => hexOf(await D.crypto.subtle.digest("SHA-512", enc.encode(msg)));
+export const sha512Hex = async msg => hexOf(await subtle().digest("SHA-512", enc.encode(msg)));
 // 쿼리 문자열 (값이 undefined/null이면 뺀다). encode=false는 업비트 query_hash용(인코딩 안 한 원문)
 export const toQuery = (p, encode = true) => Object.entries(p || {}).filter(([, v]) => v !== undefined && v !== null).map(([k, v]) => encode ? `${encodeURIComponent(k)}=${encodeURIComponent(v)}` : `${k}=${v}`).join("&");
 export async function upbitJwt(access, secret, params, nonce = D.crypto.randomUUID()){

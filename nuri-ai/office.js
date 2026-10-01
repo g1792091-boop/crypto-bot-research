@@ -694,6 +694,10 @@ async function paperStep(){
   const P = await import("./paper.js");
   const fmt = n => Number(n).toLocaleString("ko-KR", {maximumFractionDigits: 2});
   await P.step(ev => {
+    // 실거래 연결: 사용자가 켜고 연결한 전략만, 안전 한도·승인을 거쳐 코드가 주문한다 (AI는 주문하지 않음). 승인 대기가 길 수 있어 기다리지 않는다
+    if (ev.kind === "open" || ev.kind === "close") import("./live.js").then(L => L.onPaperEvent(ev)).then(r => {
+      if (r && (r.order || r.blocked || r.error) && !r.ignored) post({ch: "coin", kind: "live", level: r.error || r.blocked ? "warn" : "info", text: r.order ? `🔐 실거래 주문 체결: ${ev.s.market} ${ev.kind === "open" ? "진입" : "청산"}` : r.blocked ? `🔐 실거래 차단: ${(r.reasons || []).join(", ")}` : `🔐 실거래 오류: ${r.error}`});
+    }).catch(() => {});
     const s = ev.s, side = k => k === "long" ? "롱" : "숏";
     let text = "";
     if (ev.kind === "open") text = `📗 [${s.name}] ${s.market} ${side(ev.pos.side)} 진입 ${fmt(ev.pos.entry)} (x${ev.pos.lev}${ev.pos.sl ? `, 손절 ${fmt(ev.pos.sl)}` : ""}${ev.pos.tp ? `, 익절 ${fmt(ev.pos.tp)}` : ""})${ev.why ? " — " + ev.why : ""}`;
