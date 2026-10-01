@@ -222,6 +222,32 @@ def news_brief(limit: int = 15):
     return {"items": _brief_cache[key]}
 
 
+class MLReq(BaseModel):
+    symbol: str = "BTCUSDT"
+    interval: str = "1h"
+    model: Literal["logreg", "mlp", "gbs", "dnn", "cnn"] = "logreg"
+    horizon: int = 1
+    bars: int = 3000
+    train_bars: int = 1500
+    test_bars: int = 250
+
+
+@app.post("/api/ml/run")
+def ml_run(req: MLReq):
+    """머신러닝·딥러닝 방향 예측 — 롤링 재학습 표본 외 평가 (정확도·AUC·보정·단순 매매·특징 중요도·판정)."""
+    from .quant import ml
+    try:
+        c = market.candles(symbols.resolve(req.symbol), req.interval, max(500, min(req.bars, 5000)))[0]
+        res = ml.cached(c, model=req.model, horizon=req.horizon, train_bars=req.train_bars, test_bars=req.test_bars)
+    except ValueError as e:
+        _bad(e)
+    out = {k: v for k, v in res.items() if k not in ("prob", "time")}
+    out["recent"] = [{"time": t, "prob": p} for t, p in zip(res["time"][-300:], res["prob"][-300:]) if p is not None]
+    out["summary"] = ml.text(res)
+    out["symbol"], out["interval"] = req.symbol.upper(), req.interval
+    return out
+
+
 @app.get("/api/knowledge")
 def knowledge_view(symbol: Optional[str] = None, interval: Optional[str] = None):
     """연구 카드(다른 세션 백테스트 결과) + 이 앱 AI 시그널 성적 학습 메모리."""

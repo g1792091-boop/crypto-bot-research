@@ -24,7 +24,7 @@ from . import indicators as ind
 IndicatorType = Literal[
     "sma", "ema", "rsi", "macd", "bb", "atr", "stoch", "supertrend", "adx",
     "cci", "vwap", "obv", "highest", "lowest", "volume_sma",
-    "wma", "hma", "vwma", "mfi", "willr", "roc", "psar", "donchian", "keltner", "stochrsi", "ichimoku", "cmf", "aroon", "atr_stop",
+    "wma", "hma", "vwma", "mfi", "willr", "roc", "psar", "donchian", "keltner", "stochrsi", "ichimoku", "cmf", "aroon", "atr_stop", "ml",
 ]
 Op = Literal[">", "<", ">=", "<=", "crosses_above", "crosses_below", "rising", "falling"]
 
@@ -40,6 +40,8 @@ class IndicatorSpec(BaseModel):
     k_smooth: Optional[int] = None
     d_smooth: Optional[int] = None
     source: Optional[Literal["close", "open", "high", "low", "hl2", "hlc3", "ohlc4"]] = None
+    model: Optional[Literal["logreg", "mlp", "gbs", "dnn", "cnn"]] = Field(None, description="type=ml 일 때 모델")
+    horizon: Optional[int] = Field(None, description="type=ml 일 때 몇 봉 뒤 방향을 예측할지")
 
     def params(self) -> dict:
         return self.model_dump(exclude={"id", "type"}, exclude_none=True)

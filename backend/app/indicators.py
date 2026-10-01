@@ -426,6 +426,9 @@ REGISTRY: dict[str, dict] = {
     "cmf": {"outputs": ["value"], "defaults": {"length": 20}, "desc": "차이킨 자금 흐름", "tv": None},
     "aroon": {"outputs": ["up", "down"], "defaults": {"length": 25}, "desc": "아룬 (0~100)", "tv": None},
     "atr_stop": {"outputs": ["line", "trend"], "defaults": {"length": 14, "mult": 3.0}, "desc": "ATR 추적 손절선 (UT Bot 계열, trend ±1)", "tv": None},
+    "ml": {"outputs": ["prob", "signal"], "defaults": {"model": "logreg", "horizon": 1},
+           "desc": "머신러닝·딥러닝 방향 예측 (롤링 재학습 표본 외 확률). model: logreg·mlp·gbs·dnn(딥 3층)·cnn(1D 합성곱). "
+                   "prob = horizon 봉 뒤 상승 확률(0~1), signal = +1(prob>0.55)/-1(prob<0.45)/0. 예: ml.prob > 0.6", "tv": None},
 }
 
 
@@ -495,4 +498,11 @@ def compute(c: list[dict], type_: str, params: dict | None = None) -> dict[str, 
         return aroon(c, n)
     if type_ == "atr_stop":
         return atr_stop(c, n, float(p["mult"]))
+    if type_ == "ml":
+        from .quant import ml
+        try:
+            res = ml.cached(c, model=str(p["model"]), horizon=int(p["horizon"]), importance=False, max_folds=12)
+        except ValueError:                                  # 봉이 모자라면 신호 없음
+            return {"prob": [None] * len(c), "signal": [None] * len(c)}
+        return ml.series(res)
     raise AssertionError(type_)
