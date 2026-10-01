@@ -630,9 +630,13 @@ def test_deploy_units_for_the_agents_tick():
     for name in ("AGENTS_BUDGET", "AGENTS_OWNER_OK", "AGENTS_COPY_CAP_PER_STRATEGY", "AGENTS_COPY_CAP_TOTAL"):
         assert f"#{name}=" in env                                  # commented settings
     assert not re.search(r"^ANTHROPIC_API_KEY\s*=", env, re.M)
-    # every setting line is empty or commented: no secret values in the repository
+    # every setting line is empty or commented: no secret values in the repository. The one exception is
+    # the owners' budget choice (not a secret), which must still parse
     for line in env.splitlines():
         if line and not line.startswith("#"):
+            if line.startswith("AGENTS_BUDGET="):
+                RM.policy_from_env({"AGENTS_BUDGET": line.split("=", 1)[1]})
+                continue
             assert re.fullmatch(r"[A-Z_]+=", line), line
     # the defaults written in the example are the engine's real defaults
     m = re.search(r"^#AGENTS_BUDGET=(.+)$", env, re.M)
