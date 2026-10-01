@@ -4,20 +4,24 @@ import { esc, uid, fmtN, ls, idb, bus, settings, saveSettings, CATALOG, eng, loa
   PROVIDERS, SEARCH_KEYS, addApiKey, removeApiKey, routeCandidates, shortModel, webGet, ollamaPull, ollamaImportGGUF,
   modelKind, KIND_KO, VISION_RE, rankModel, opfsSave, opfsList, opfsRemove,
   docs, loadDocs, addDoc, removeDoc, readTextFile, md, highlight } from "./engine.js";
-import { runAgent, BUILTIN_SKILLS, TOOLS, installSkill } from "./agent.js";
+import { runAgent, BUILTIN_SKILLS, TOOLS, installSkill, marketNews } from "./agent.js";
 import { nvIndex, nvSkill, nvSearch, GROUP_KO } from "./nvskills.js";
 import { TEMPLATES } from "./templates.js";
-import { BASES, TOPICS, samplesFromChats, loadSynth, removeSynth, clearSynth, toJSONL, generateSynth, notebookJSON, localScript } from "./train.js";
+import { BASES, TOPICS, samplesFromChats, loadSynth, removeSynth, clearSynth, toJSONL, generateSynth, notebookJSON, localScript, teachers } from "./train.js";
 import { initTrade } from "./trade.js";
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const AI = () => settings.aiName || "GH Nano";
+function applyTheme(){ document.documentElement.dataset.theme = settings.theme || "dark"; const m = document.querySelector('meta[name="theme-color"]'); if (m) m.content = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim() || "#0A0B0F"; }
 function applyBrand(){ const n = AI(); document.title = n; $$(".brand-name").forEach(e => e.textContent = n); $$(".logo").forEach(e => e.textContent = [...n][0].toUpperCase()); }
 const ico = (id, st = "") => `<svg class="i" style="${st}"><use href="#i-${id}"/></svg>`;
 const toast = m => { const t = $("#toast"); t.textContent = m; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, 2800); };
 
 /* ============ 상태 ============ */
-let chats = [], current = null, mode = ls.get("mode", "chat"), busy = false, ctl = null, attach = [];
+let chats = [], current = null, mode = ls.get("mode", "chat"), attach = [];
+// 대화마다 따로 돈다: 한 대화가 답하는 동안 다른 대화를 열거나 새 작업을 시작할 수 있다
+const runs = new Map();                       // 대화 id → {ctl, msg}
+const isBusy = (c = current) => !!(c && runs.has(c.id));
 const byUpdated = () => chats.slice().sort((a, b) => b.updated - a.updated);
 function saveChat(c){ c.updated = Date.now(); if (!chats.includes(c)) chats.push(c); idb.put("chat:" + c.id, c); }
 const pendingPerm = new Map();
@@ -33,7 +37,7 @@ function setMode(m, keepChat){
   if (!keepChat && current && (current.mode || "chat") !== m) newChat();
   renderWs();
 }
-$$(".modes [data-mode]").forEach(b => b.onclick = () => { if (!busy && b.dataset.mode !== mode) setMode(b.dataset.mode); });
+$$(".modes [data-mode]").forEach(b => b.onclick = () => { if (b.dataset.mode !== mode) setMode(b.dataset.mode); });
 
 /* ============ 대화 목록 ============ */
 function renderList(){
@@ -45,20 +49,20 @@ function renderList(){
   for (const [label, fn] of groups){
     const g = list.filter(c => !used.has(c.id) && fn(c)); if (!g.length) continue;
     g.forEach(c => used.add(c.id));
-    html += `<div class="grp">${label}</div>` + g.map(c => `<div class="ci" role="button" tabindex="0" data-id="${c.id}" aria-current="${current && current.id === c.id}"><span class="t">${esc(c.title)}</span>${c.mode === "code" ? `<span class="tag">코드</span>` : ""}<button class="del" data-del="${c.id}" aria-label="대화 삭제">삭제</button></div>`).join("");
+    html += `<div class="grp">${label}</div>` + g.map(c => `<div class="ci" role="button" tabindex="0" data-id="${c.id}" aria-current="${current && current.id === c.id}">${runs.has(c.id) ? `<span class="spin" title="답하는 중"></span>` : ""}<span class="t">${esc(c.title)}</span>${c.mode === "code" ? `<span class="tag">코드</span>` : ""}<button class="del" data-del="${c.id}" aria-label="대화 삭제">삭제</button></div>`).join("");
   }
   $("#recents").innerHTML = html || `<div class="grp" style="font-weight:400">${q ? "검색 결과가 없습니다" : "대화가 여기에 쌓입니다"}</div>`;
 }
 $("#recents").addEventListener("click", e => {
   const d = e.target.closest("[data-del]"); if (d){ e.stopPropagation(); deleteChat(d.dataset.del); return; }
-  const it = e.target.closest(".ci"); if (it && !busy) openChat(it.dataset.id);
+  const it = e.target.closest(".ci"); if (it) openChat(it.dataset.id);
 });
 $("#recents").addEventListener("keydown", e => { if (e.key === "Enter" && e.target.classList.contains("ci")) e.target.click(); });
 $("#search").addEventListener("input", renderList);
 let pendingDel = null;
 function deleteChat(id){
   if (pendingDel !== id){ pendingDel = id; toast("한 번 더 누르면 삭제합니다"); setTimeout(() => { if (pendingDel === id) pendingDel = null; }, 3000); return; }
-  pendingDel = null; chats = chats.filter(c => c.id !== id); idb.del("chat:" + id);
+  pendingDel = null; runs.get(id)?.ctl.abort(); chats = chats.filter(c => c.id !== id); idb.del("chat:" + id);
   if (current && current.id === id) newChat();
   renderList(); toast("대화를 삭제했습니다");
 }
@@ -68,9 +72,10 @@ function newChat(){
 }
 function openChat(id){
   const c = chats.find(x => x.id === id); if (!c) return newChat();
-  current = c; setMode(c.mode || "chat", true); closePanel(); render(); renderList(); renderWs(); closeSide();
+  current = c; setMode(c.mode || "chat", true); closePanel(); render(); renderList(); renderWs(); closeSide(); updateSend();
+  if (isBusy(c)){ scrollDown(true); if (!isMobile() && innerWidth >= 1100) openActivity(); }
 }
-$("#newChat").onclick = () => { if (!busy) newChat(); };
+$("#newChat").onclick = () => { newChat(); updateSend(); };
 
 /* ============ 사이드바 ============ */
 const isMobile = () => matchMedia("(max-width:760px)").matches;
@@ -104,7 +109,7 @@ function render(){
       : mode === "code" && !LAUNCHER.on ? `<div class="hero-note"><b>코드 모드는 GHNano.exe로 실행해야 쓸 수 있습니다.</b></div>`
       : mode === "code" && !current.workspace ? `<div class="hero-note">입력창의 <b>폴더 열기</b>로 작업할 폴더를 고르세요.</div>`
       : mode === "code" ? `<div class="hero-note">작업 폴더: <b>${esc(current.workspace)}</b></div>` : "";
-    th.innerHTML = `<div class="hero"><h1><span class="logo">${esc([...AI()][0].toUpperCase())}</span>${mode === "code" ? "무엇을 만들어 볼까요?" : GREET}</h1><div class="hero-slot" id="heroSlot"></div>
+    th.innerHTML = `<div class="hero"><h1><span class="logo">${esc([...AI()][0].toUpperCase())}</span><span class="g">${mode === "code" ? "무엇을 만들어 볼까요?" : GREET}</span></h1><p class="hero-sub">${mode === "code" ? "작업 폴더를 열고 무엇이든 맡기세요" : "코인·주식·선물 분석, 건축 설계, 리서치, 코딩까지 — 하나의 AI로"}</p><div class="hero-slot" id="heroSlot"></div>
       <div class="chips">${CHIPS[mode].map(([i, t]) => `<button class="chip" data-chip>${ico(i)}${esc(t)}</button>`).join("")}<button class="chip more" data-open="tpl">${ico("grid")}템플릿 더 보기</button></div>${note}</div>`;
     $("#heroSlot").appendChild($("#composer"));
     $("#dock").hidden = true; syncDock();
@@ -119,7 +124,7 @@ const aiParts = m => m.parts || [{type: "text", text: m.content || ""}];
 function msgHTML(m, i){
   if (m.role === "user"){
     const files = (m.images || []).map(u => `<img class="uimg" alt="첨부 이미지" src="${u}">`).join("") + (m.attach || []).map(a => `<span class="fchip">${ico("doc", "width:14px;height:14px")}${esc(a.name)}</span>`).join("");
-    return `<div class="msg user" data-i="${i}">${files ? `<div class="files" style="justify-content:flex-end">${files}</div>` : ""}<div class="bubble">${esc(m.content)}</div>${busy ? "" : `<div class="acts"><button data-act="copy">${ico("copy","width:14px;height:14px")}복사</button><button data-act="edit">${ico("pen","width:14px;height:14px")}수정</button></div>`}</div>`;
+    return `<div class="msg user" data-i="${i}">${files ? `<div class="files" style="justify-content:flex-end">${files}</div>` : ""}<div class="bubble">${esc(m.content)}</div>${isBusy() ? "" : `<div class="acts"><button data-act="copy">${ico("copy","width:14px;height:14px")}복사</button><button data-act="edit">${ico("pen","width:14px;height:14px")}수정</button></div>`}</div>`;
   }
   const code = (m.mode || current.mode) === "code";
   const parts = aiParts(m).map((p, j) => p.type === "text" ? textPart(p, m, i, j) : (code ? codeTool(p) : chatTool(p))).join("");
@@ -208,8 +213,8 @@ document.addEventListener("click", e => {
   const th = t.closest(".tool-h"); if (th){ const b = th.nextElementSibling; if (b) b.hidden = !b.hidden; return; }
   const cp = t.closest("[data-copy]"); if (cp){ copy(cp.closest(".codebox").querySelector("code").textContent); return; }
   const art = t.closest("[data-art]"); if (art){ openArtKey(art.dataset.art); return; }
-  const pm = t.closest("[data-perm]"); if (pm){ const r = pendingPerm.get(pm.dataset.perm); if (r){ pendingPerm.delete(pm.dataset.perm); if (pm.dataset.v === "always") current.allowAll = true; r(pm.dataset.v !== "no"); } return; }
-  const a = t.closest("[data-act]"); if (a && !busy){
+  const pm = t.closest("[data-perm]"); if (pm){ const r = pendingPerm.get(pm.dataset.perm); if (r){ pendingPerm.delete(pm.dataset.perm); if (pm.dataset.v === "always") current.allowAll = true; r.res(pm.dataset.v !== "no"); } return; }
+  const a = t.closest("[data-act]"); if (a && !isBusy()){
     const i = +a.closest(".msg").dataset.i, m = current.messages[i];
     if (a.dataset.act === "copy") copy(m.role === "user" ? m.content : aiParts(m).filter(p => p.type === "text").map(p => splitThink(p.text).body).join("\n\n"));
     if (a.dataset.act === "good" || a.dataset.act === "bad"){ const v = a.dataset.act === "good" ? 1 : -1; m.rating = m.rating === v ? 0 : v; saveChat(current); const el = $(`#thread .msg[data-i="${i}"]`); if (el) el.outerHTML = msgHTML(m, i); if (m.rating) toast(v > 0 ? "좋은 답으로 표시했습니다 · 학습 데이터에 들어갑니다" : "학습 데이터에서 뺍니다"); }
@@ -225,12 +230,12 @@ const input = $("#input");
 function autoGrow(){ input.style.height = "auto"; input.style.height = Math.min(240, input.scrollHeight) + "px"; }
 function updateSend(){
   const s = $("#send");
-  if (busy){ s.disabled = false; s.classList.add("stop"); s.innerHTML = ico("stop"); s.setAttribute("aria-label", "멈추기"); }
+  if (isBusy()){ s.disabled = false; s.classList.add("stop"); s.innerHTML = ico("stop"); s.setAttribute("aria-label", "멈추기"); }
   else { s.classList.remove("stop"); s.innerHTML = ico("up"); s.setAttribute("aria-label", "보내기"); s.disabled = !input.value.trim() && !attach.length; }
 }
 input.addEventListener("input", () => { autoGrow(); updateSend(); });
-input.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing && e.keyCode !== 229){ e.preventDefault(); if (!busy) send(); } });
-$("#send").onclick = () => busy ? stop() : send();
+input.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing && e.keyCode !== 229){ e.preventDefault(); if (!isBusy()) send(); } });
+$("#send").onclick = () => isBusy() ? stop() : send();
 $("#thinkBtn").onclick = e => { settings.think = !settings.think; saveSettings(); e.currentTarget.setAttribute("aria-pressed", settings.think); };
 $("#thinkBtn").setAttribute("aria-pressed", settings.think);
 $("#permSel").onchange = e => { settings.permission = e.target.value; saveSettings(); };
@@ -309,6 +314,7 @@ async function send(){
   if (!brainReady()){ toast("먼저 AI 두뇌를 준비하세요"); openSheet(settings.brain === "local" ? "local" : "brain"); return; }
   if (mode === "code"){
     if (!LAUNCHER.on){ toast("코드 모드는 GHNano.exe로 실행해야 쓸 수 있습니다"); return; }
+    if ([...runs.values()].some(r => r.code)){ toast("다른 코드 작업이 진행 중입니다. 작업 폴더가 하나라 끝난 뒤에 실행하세요 (채팅은 동시에 됩니다)"); return; }
     if (!current.workspace){ toast("먼저 작업 폴더를 여세요"); $("#wsBtn").click(); return; }
   }
   current.mode = mode;
@@ -319,27 +325,35 @@ async function send(){
   saveChat(current); renderList();
   run();
 }
-function stop(){ ctl?.abort(); for (const [, r] of pendingPerm) r(false); pendingPerm.clear(); }
+function stop(){
+  const r = current && runs.get(current.id); if (!r) return;
+  r.ctl.abort();
+  for (const [id, p] of pendingPerm) if (p.chat === current.id){ p.res(false); pendingPerm.delete(id); }
+}
 async function run(){
-  const msg = {role: "assistant", parts: [], mode, model: brainLabel(), ts: Date.now(), streaming: true};
-  const history = current.messages.slice();
-  current.messages.push(msg);
-  busy = true; updateSend(); render(); scrollDown(true);
-  ctl = new AbortController();
+  const chat = current, rmode = chat.mode || mode;
+  const msg = {role: "assistant", parts: [], mode: rmode, model: brainLabel(), ts: Date.now(), streaming: true};
+  const history = chat.messages.slice();
+  chat.messages.push(msg);
+  const ctl = new AbortController();
+  runs.set(chat.id, {ctl, msg, code: rmode === "code"});
+  updateSend(); render(); scrollDown(true); renderList();
   const t0 = performance.now(); let raf = 0;
-  const idx = current.messages.length - 1;
-  const paint = () => { raf = 0; const el = $(`#thread .msg[data-i="${idx}"]`); if (el){ el.outerHTML = msgHTML(msg, idx); scrollDown(); } $("#panelToggle").hidden = !lastArtifact(); };
-  const update = () => { if (!raf) raf = requestAnimationFrame(() => { paint(); renderActivity(); }); };
+  const idx = chat.messages.length - 1;
+  const here = () => current === chat;
+  const paint = () => { raf = 0; if (!here()) return; const el = $(`#thread .msg[data-i="${idx}"]`); if (el){ el.outerHTML = msgHTML(msg, idx); scrollDown(); } $("#panelToggle").hidden = !lastArtifact(); };
+  const update = () => { if (!raf) raf = requestAnimationFrame(() => { paint(); if (here()) renderActivity(); }); };
   const onAct = e => { const d = e.detail || {}; (msg.log ||= []).push({t: Date.now(), kind: d.kind, text: d.text}); update(); };
   bus.addEventListener("activity", onAct);
   const tick = setInterval(update, 1000);
   if (!isMobile() && innerWidth >= 1100 && $("#panel").hidden && settings.autoActivity !== false) openActivity(true);
   else if (!$("#panel").hidden && panelTab === "act") renderActivity();
   try {
-    if (mode === "code") await codeCall("open", {path: current.workspace});
-    await runAgent({mode, history, msg, signal: ctl.signal, onUpdate: update, think: settings.think, workspace: current.workspace,
-      openArtifact: (spec, wait) => openArtifact(spec, wait),
-      askPermission: tp => current.allowAll ? Promise.resolve(true) : new Promise(res => { pendingPerm.set(tp.id, res); update(); })});
+    if (rmode === "code") await codeCall("open", {path: chat.workspace});
+    await runAgent({mode: rmode, history, msg, signal: ctl.signal, onUpdate: update, think: settings.think, workspace: chat.workspace,
+      // 다른 대화를 보고 있으면 패널은 열지 않고(설계 수치 계산만) 결과를 카드로 남긴다
+      openArtifact: (spec, wait) => here() ? openArtifact(spec, wait) : spec.type === "building" ? loadBuilding(spec, wait) : null,
+      askPermission: tp => chat.allowAll ? Promise.resolve(true) : new Promise(res => { pendingPerm.set(tp.id, {res, chat: chat.id}); if (!here()) toast(`‘${chat.title}’ 대화가 허락을 기다립니다`); update(); })});
     if (!msg.parts.some(p => (p.type === "text" && p.text.trim()) || p.type === "tool")) msg.error = "빈 답변이 나왔습니다. 다시 생성해 보세요.";
   } catch (e){
     if (ctl.signal.aborted || e.name === "AbortError" || e.name === "WllamaAbortError"){ if (!msg.parts.length) msg.error = "답변을 멈췄습니다."; }
@@ -347,11 +361,15 @@ async function run(){
   } finally {
     cancelAnimationFrame(raf); clearInterval(tick); bus.removeEventListener("activity", onAct);
     msg.streaming = false; msg.ms = Math.round(performance.now() - t0);
-    busy = false; ctl = null;
-    saveChat(current); renderList(); updateSend(); render(); renderActivity();
-    // 이번 답변에서 새로 만든 글 결과물이 있으면 패널로 연다
-    const arts = aiParts(msg).flatMap((p, j) => p.type === "text" ? artifactsIn(splitThink(p.text).body).map((a, n) => `${idx}:${j}:${n}`) : []);
-    if (arts.length) openArtKey(arts[arts.length - 1]);
+    runs.delete(chat.id);
+    if (chats.includes(chat) || chat.messages.length) saveChat(chat);
+    renderList();
+    if (here()){
+      updateSend(); render(); renderActivity();
+      // 이번 답변에서 새로 만든 글 결과물이 있으면 패널로 연다
+      const arts = aiParts(msg).flatMap((p, j) => p.type === "text" ? artifactsIn(splitThink(p.text).body).map((a, n) => `${idx}:${j}:${n}`) : []);
+      if (arts.length) openArtKey(arts[arts.length - 1]);
+    } else toast(`‘${chat.title}’ 답변이 끝났습니다`);
   }
 }
 
@@ -401,7 +419,7 @@ async function openArtifact(a, wait){
   if (textual){ pView = a.type === "code" ? "code" : "preview"; renderArtBody(); }
   if (a.type === "image") $("#pContent").innerHTML = `<div class="art-img"><img alt="${esc(a.title)}" src="${esc(a.src)}">${a.prompt ? `<p class="small">${esc(a.prompt)}</p>` : ""}</div>`;
   if (a.type === "trading"){
-    if (!trade) trade = initTrade({root: $("#tradeHost"), brain: window.NuriBrain, apiBase, webGet, toast, md, esc, ls, launcher: () => LAUNCHER.on});
+    if (!trade) trade = initTrade({root: $("#tradeHost"), brain: window.NuriBrain, apiBase, webGet, toast, md, esc, ls, launcher: () => LAUNCHER.on, news: marketNews});
     await trade.goto(a.ex, a.market, a.tf); trade.show();
   }
   if (a.type === "building") return loadBuilding(a.spec, wait);
@@ -517,7 +535,7 @@ async function renderSheet(){
   if (sheetTab === "brain") B.innerHTML = brainTab();
   if (sheetTab === "local"){ await refreshCache(); B.innerHTML = localTab(); $("#s-device").value = settings.device; $("#s-ctx").value = settings.ctx; }
   if (sheetTab === "know") B.innerHTML = knowTab();
-  if (sheetTab === "instr") B.innerHTML = `<h3 class="h">내 AI 이름</h3><div class="card"><div class="body"><div class="keyrow"><input id="aiName" value="${esc(AI())}" maxlength="24" aria-label="AI 이름"><button class="btn primary" id="aiNameSave">저장</button></div><span class="small">모든 모델·스킬을 하나로 묶은 내 AI의 이름입니다. 화면과 대화에서 이 이름을 씁니다.</span></div></div><h3 class="h">맞춤 지침</h3><p class="sub">${AI()}가 모든 대화에서 기억할 내용입니다. 하는 일, 관심사, 원하는 답변 스타일을 적어 두세요.</p>
+  if (sheetTab === "instr") B.innerHTML = `<h3 class="h">화면 테마</h3><div class="seg wrap" id="themeSeg">${[["dark", "어둡게"], ["light", "밝게"], ["system", "시스템 따라"]].map(([v, l]) => `<button data-theme="${v}" aria-pressed="${(settings.theme || "dark") === v}">${l}</button>`).join("")}</div><h3 class="h">내 AI 이름</h3><div class="card"><div class="body"><div class="keyrow"><input id="aiName" value="${esc(AI())}" maxlength="24" aria-label="AI 이름"><button class="btn primary" id="aiNameSave">저장</button></div><span class="small">모든 모델·스킬을 하나로 묶은 내 AI의 이름입니다. 화면과 대화에서 이 이름을 씁니다.</span></div></div><h3 class="h">맞춤 지침</h3><p class="sub">${AI()}가 모든 대화에서 기억할 내용입니다. 하는 일, 관심사, 원하는 답변 스타일을 적어 두세요.</p>
     <div class="form" style="grid-template-columns:1fr"><label>지침<textarea id="instr" style="min-height:220px" placeholder="예: 나는 건축사무소를 운영하고 코인 단타를 한다. 답은 짧게 핵심만, 숫자는 표로 정리해줘.">${esc(settings.instructions)}</textarea></label></div><div class="row"><button class="btn primary" id="instrSave">저장</button></div>`;
   if (sheetTab === "about") B.innerHTML = aboutTab();
   if (sheetTab === "tpl") B.innerHTML = tplTab();
@@ -555,7 +573,8 @@ async function modelsTab(){
 }
 async function hfApi(path){ return webGet("https://huggingface.co/api/" + path, "json"); }
 /* ---- 학습 (내 모델 만들기) ---- */
-let synthCtl = null, synthLog = [], trainOpt = Object.assign({good: true, tools: true, synth: true, topics: ["market", "arch", "land"], count: 30, judge: true, base: BASES[0].id, epochs: 3}, ls.get("trainOpt", {}));
+let synthCtl = null, synthLog = [], trainOpt = Object.assign({good: true, tools: true, synth: true, topics: ["crypto_spot", "crypto_futures", "us_stocks", "arch", "news"], count: 30, judge: true, ensemble: true, agent: true, base: BASES[0].id, epochs: 3}, ls.get("trainOpt", {}));
+trainOpt.topics = trainOpt.topics.filter(t => TOPICS.some(x => x.id === t)); if (!trainOpt.topics.length) trainOpt.topics = ["crypto_spot", "us_stocks", "arch", "news"];
 const saveTrainOpt = () => ls.set("trainOpt", trainOpt);
 async function trainData(){
   const chatS = samplesFromChats(chats, {onlyGood: trainOpt.good, tools: trainOpt.tools}), syn = await loadSynth();
@@ -571,7 +590,13 @@ async function trainTab(){
   const base = BASES.find(b => b.id === trainOpt.base) || BASES[0];
   const teacher = routeCandidates("general")[0];
   const ck = (k, label) => `<label class="chk"><input type="checkbox" data-topt="${k}"${trainOpt[k] ? " checked" : ""}> ${label}</label>`;
-  return `<h3 class="h">학습 · 내 모델 만들기</h3><p class="sub">${AI()}와 나눈 대화와 큰 AI가 만든 문제·모범답안으로 작은 오픈모델을 직접 미세조정(LoRA)해, 내 노트북에서 인터넷 없이 도는 나만의 AI를 만듭니다. NVIDIA 스킬(data-designer, tao-finetune-huggingface-model)과 같은 방식입니다.</p>
+  const ts = teachers(), nanoRunning = synthCtl && synthCtl.nano;
+  return `<div class="nano-hero"><div class="nano-badge"><span class="logo">${esc([...AI()][0].toUpperCase())}</span><div><b>${esc(AI())} 모델 만들기</b><span>연결된 AI들의 지식 + 기본·NVIDIA 스킬 + 실제 도구 사용법을 하나의 작은 모델에 담습니다</span></div></div>
+    <ol class="nano-steps"><li class="${syn.length >= 50 ? "done" : nanoRunning ? "run" : ""}"><b>1. 데이터 증류</b><span>${ts.length >= 2 ? `${ts.map(t => shortModel(t.model)).join(" + ")} 답을 합침` : ts.length ? `${shortModel(ts[0].model)}가 선생` : "API 키 필요"}</span></li><li><b>2. 학습</b><span>Colab 무료 GPU · ${esc(base.name)} LoRA</span></li><li class="${settings.myModel ? "done" : ""}"><b>3. 등록</b><span>${settings.myModel ? "등록됨: " + esc(settings.myModel) : "앱 안에서 실행"}</span></li></ol>
+    <div class="row wrap">${nanoRunning ? `<button class="btn" id="nanoStop">멈추기</button><span class="small">진행 중 · 다른 대화를 해도 계속 만듭니다</span>` : `<button class="btn primary" id="nanoGo" ${ts.length ? "" : "disabled"}>${esc(AI())} 데이터 100개 만들기</button><button class="btn" id="nanoNb">Colab 학습 노트북 받기</button>`}<span class="small">지금 합성 예시 ${syn.length}개 · 200개 이상이면 좋습니다</span></div>
+    <div class="trlog" id="trLog2">${nanoRunning ? synthLog.slice(-4).map(l => `<div>${esc(l)}</div>`).join("") : ""}</div>
+    <p class="small" style="margin:0">여러 AI의 지식을 하나로 '증류'하는 방식입니다. 실제 학습(가중치 업데이트)은 GPU가 필요해 무료 Colab에서 하고, 결과 모델(${esc(base.gguf)})은 이 앱 안에서 그래픽카드로 실행됩니다.</p></div>
+  <h3 class="h">학습 · 내 모델 만들기</h3><p class="sub">${AI()}와 나눈 대화와 큰 AI가 만든 문제·모범답안으로 작은 오픈모델을 직접 미세조정(LoRA)해, 내 노트북에서 인터넷 없이 도는 나만의 AI를 만듭니다. NVIDIA 스킬(data-designer, tao-finetune-huggingface-model)과 같은 방식입니다.</p>
   <ol class="steps"><li><b>데이터 모으기</b><span>👍 받은 답변</span></li><li><b>합성 데이터</b><span>큰 AI가 문제·답 생성</span></li><li><b>학습</b><span>Colab 무료 GPU</span></li><li><b>내 모델 등록</b><span>Ollama · 내 기기</span></li></ol>
   <div class="card"><h3>① 학습 데이터 <small>총 ${all.length}개</small></h3><div class="body">
     <div class="kpis"><div class="kpi"><label>👍 받은 답</label><span class="v">${rated}</span></div><div class="kpi"><label>대화에서 뽑은 예시</label><span class="v">${chatS.length}</span></div><div class="kpi"><label>합성 예시</label><span class="v">${syn.length}</span></div></div>
@@ -579,7 +604,7 @@ async function trainTab(){
     <div class="row"><button class="btn primary" id="trDl" ${all.length ? "" : "disabled"}>학습 데이터 내려받기 (nuri-train.jsonl)</button><span class="small">답변 아래 👍로 좋은 답을 표시하세요. 최소 50개, 200개 이상이면 효과가 좋습니다.</span></div></div></div>
   <div class="card"><h3>② 합성 데이터 만들기 <small>선생 AI: ${teacher ? esc((PROVIDERS[teacher.id]?.name || teacher.id) + " · " + shortModel(teacher.model)) : "API 키 필요"}</small></h3><div class="body">
     <div class="topics">${TOPICS.map(t => `<label class="chk"><input type="checkbox" data-topic="${t.id}"${trainOpt.topics.includes(t.id) ? " checked" : ""}> ${esc(t.name)}</label>`).join("")}</div>
-    <div class="row wrap"><label class="small">개수 <select class="sel" id="trCount">${[10, 30, 60, 100, 200].map(n => `<option${n === trainOpt.count ? " selected" : ""}>${n}</option>`).join("")}</select></label>${ck("judge", "AI 채점으로 4점 이상만 남기기")}</div>
+    <div class="row wrap"><label class="small">개수 <select class="sel" id="trCount">${[10, 30, 60, 100, 200].map(n => `<option${n === trainOpt.count ? " selected" : ""}>${n}</option>`).join("")}</select></label>${ck("judge", "AI 채점으로 4점 이상만 남기기")}${ck("ensemble", "여러 AI 답을 하나로 합치기")}${ck("agent", "실제 도구 쓰는 과정까지 기록")}</div>
     <div class="row">${synthCtl ? `<button class="btn" id="trStop">멈추기</button>` : `<button class="btn primary" id="trGen" ${teacher ? "" : "disabled"}>만들기</button>`}${syn.length ? `<button class="btn danger" id="trClear">합성 데이터 모두 지우기</button>` : ""}</div>
     <div class="trlog" id="trLog">${synthLog.slice(-6).map(l => `<div>${esc(l)}</div>`).join("")}</div>
     ${syn.length ? `<div class="list">${syn.slice(-8).reverse().map(x => `<div><span class="t">${esc(x.messages[1].content)}</span><span class="small">${esc(TOPICS.find(t => t.id === x.topic)?.name || "")}${x.score ? " · " + x.score + "점" : ""}</span><button class="btn danger" data-synrm="${x.id}">삭제</button></div>`).join("")}</div>` : ""}
@@ -611,7 +636,7 @@ function tplTab(){
 function useTemplate(key){
   const [ci, ti] = key.split(":").map(Number), c = TEMPLATES[ci], t = c?.items[ti]; if (!t) return;
   $("#sheet").close();
-  if ((c.mode || "chat") !== mode && !busy) setMode(c.mode || "chat");
+  if ((c.mode || "chat") !== mode) setMode(c.mode || "chat");
   input.value = t.text; autoGrow(); updateSend(); input.focus();
   const a = t.text.indexOf("["), b = t.text.indexOf("]", a); if (a >= 0 && b > a) input.setSelectionRange(a, b + 1);
 }
@@ -796,6 +821,7 @@ $("#sheetBody").addEventListener("click", async e => {
   }
   if (t.dataset.sktoggle){ const sk = settings.skills.find(x => x.id === t.dataset.sktoggle); if (sk){ sk.off = !sk.off; saveSettings(); renderSheet(); } }
   if (t.dataset.skrm){ settings.skills = settings.skills.filter(x => x.id !== t.dataset.skrm); saveSettings(); renderSheet(); }
+  const th = t.closest("#themeSeg [data-theme]"); if (th){ settings.theme = th.dataset.theme; saveSettings(); applyTheme(); $$("#themeSeg [data-theme]").forEach(b => b.setAttribute("aria-pressed", b === th)); return; }
   const ng = t.closest("[data-nvgroup]"); if (ng){ nvGroup = ng.dataset.nvgroup; $$("#nvGroups [data-nvgroup]").forEach(b => b.setAttribute("aria-pressed", b.dataset.nvgroup === nvGroup)); $("#nvList").innerHTML = await nvListHTML(); return; }
   if (t.dataset.nvview){ const v = $("#nvView"); try { const sk = await nvSkill(t.dataset.nvview); v.textContent = `${sk.name} · 파일 ${Object.keys(sk.files).length + Object.keys(sk.bin || {}).length}개\n\n` + sk.files["SKILL.md"]; v.hidden = false; v.scrollIntoView({block: "nearest"}); } catch(err){ toast(err.message); } return; }
   if (t.id === "nvInstall"){
@@ -831,7 +857,7 @@ $("#sheetBody").addEventListener("click", async e => {
   if (t.dataset.opfsrun){ $("#sheet").close(); settings.brain = "local"; saveSettings(); await loadModel({kind: "opfs", dir: t.dataset.opfsrun, name: t.dataset.opfsrun}); toast(eng.w ? t.dataset.opfsrun + " 모델로 대화합니다" : eng.error); }
   if (t.dataset.opfsrm){ if (t.dataset.c !== "1"){ t.dataset.c = "1"; t.textContent = "정말 삭제"; return; } await opfsRemove(t.dataset.opfsrm); renderSheet(); }
   if (t.id === "trDl"){ const {all} = await trainData(); download("nuri-train.jsonl", toJSONL(all), "application/jsonl"); toast(`학습 예시 ${all.length}개를 내보냈습니다`); }
-  if (t.id === "trNb" || t.id === "trPy"){
+  if (t.id === "trNb" || t.id === "trPy" || t.id === "nanoNb"){
     const b = BASES.find(x => x.id === trainOpt.base) || BASES[0], name = ls.get("myModelName", "gh-nano"), local = t.id === "trPy";
     const o = {base: b.id, baseName: b.name, lic: b.lic, epochs: trainOpt.epochs, name, maxLen: local ? 1024 : 2048, batch: local ? 1 : 2, accum: local ? 8 : 4};
     if (local) download("nuri_train_local.py", localScript(o), "text/x-python"); else download("nuri_train_colab.ipynb", notebookJSON(o));
@@ -841,12 +867,21 @@ $("#sheetBody").addEventListener("click", async e => {
   if (t.id === "trGen"){
     synthLog = ["시작합니다…"]; synthCtl = new AbortController(); renderSheet();
     const log = x => { synthLog.push(x); const L = $("#trLog"); if (L) L.innerHTML = synthLog.slice(-6).map(l => `<div>${esc(l)}</div>`).join(""); };
-    generateSynth({topics: trainOpt.topics, count: trainOpt.count, judge: trainOpt.judge, signal: synthCtl.signal,
+    generateSynth({topics: trainOpt.topics, count: trainOpt.count, judge: trainOpt.judge, ensemble: trainOpt.ensemble, agent: trainOpt.agent, signal: synthCtl.signal,
       onEvent: ev => { if (ev.kind === "log") log(ev.text); if (ev.kind === "sample") log(`✓ ${ev.made}/${ev.count} 저장`); }})
       .then(n => { toast(`합성 예시 ${n}개를 만들었습니다`); }).catch(err => { if (!synthCtl?.signal.aborted) toast(err.message); log("멈춤: " + (err.message || "")); })
       .finally(() => { synthCtl = null; if ($("#sheet").open && sheetTab === "train") renderSheet(); });
   }
-  if (t.id === "trStop"){ synthCtl?.abort(); }
+  if (t.id === "trStop" || t.id === "nanoStop"){ synthCtl?.abort(); }
+  if (t.id === "nanoGo"){
+    synthLog = ["GH Nano 데이터 증류를 시작합니다…"]; synthCtl = new AbortController(); synthCtl.nano = true; renderSheet();
+    const log = x => { synthLog.push(x); for (const id of ["#trLog", "#trLog2"]){ const L = $(id); if (L) L.innerHTML = synthLog.slice(id === "#trLog2" ? -4 : -6).map(l => `<div>${esc(l)}</div>`).join(""); } };
+    generateSynth({topics: TOPICS.map(x => x.id), count: 100, judge: true, ensemble: true, agent: true, signal: synthCtl.signal,
+      onEvent: ev => { if (ev.kind === "log") log(ev.text); if (ev.kind === "sample") log(`✓ ${ev.made}/${ev.count} 저장 (${ev.sample.kind})`); }})
+      .then(n => { toast(`${AI()} 학습 데이터 ${n}개를 만들었습니다. 이제 'Colab 학습 노트북 받기'를 누르세요`); })
+      .catch(err => { if (!synthCtl?.signal.aborted) toast(err.message); log("멈춤: " + (err.message || "")); })
+      .finally(() => { synthCtl = null; if ($("#sheet").open && sheetTab === "train") renderSheet(); });
+  }
   if (t.id === "trClear"){ if (t.dataset.c !== "1"){ t.dataset.c = "1"; t.textContent = "정말 모두 지우기"; return; } await clearSynth(); renderSheet(); }
   if (t.dataset.synrm){ await removeSynth(t.dataset.synrm); renderSheet(); }
   if (t.id === "trOl" || t.id === "trLocal"){
@@ -915,7 +950,7 @@ $("#sheetBody").addEventListener("click", async e => {
   await detectLauncher();
   chats = (await idb.all("chat:")).map(c => ({...c, mode: c.mode || "chat"}));
   await loadDocs();
-  applyBrand(); setMode(mode, true); newChat(); renderList(); renderModelBtn(); syncSideBtn(); updateSend();
+  applyTheme(); applyBrand(); setMode(mode, true); newChat(); renderList(); renderModelBtn(); syncSideBtn(); updateSend();
   refreshCache();
   if (settings.autoload && settings.last && settings.brain === "local" && !window.__nuriNoAutoload) loadModel(settings.last);
 })();
@@ -925,10 +960,10 @@ if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol) && !wind
   const hadController = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.register("./sw.js", {updateViaCache: "none"}).then(reg => {
     const flag = "nuri:coi-reload";
-    const maybeReload = () => { if (!self.crossOriginIsolated && !sessionStorage.getItem(flag) && !eng.loading && !busy){ sessionStorage.setItem(flag, "1"); location.reload(); } };
+    const maybeReload = () => { if (!self.crossOriginIsolated && !sessionStorage.getItem(flag) && !eng.loading && !runs.size){ sessionStorage.setItem(flag, "1"); location.reload(); } };
     if (navigator.serviceWorker.controller) maybeReload();
     navigator.serviceWorker.addEventListener("controllerchange", () => {
-      if (hadController && !sessionStorage.getItem("nuri:sw-updated") && !eng.loading && !busy){ sessionStorage.setItem("nuri:sw-updated", "1"); location.reload(); }
+      if (hadController && !sessionStorage.getItem("nuri:sw-updated") && !eng.loading && !runs.size){ sessionStorage.setItem("nuri:sw-updated", "1"); location.reload(); }
       else maybeReload();
     });
     reg.update().catch(() => {});

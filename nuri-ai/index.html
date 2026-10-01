@@ -5,34 +5,44 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>GH Nano</title>
 <meta name="description" content="채팅과 코드, 두 가지 모드로 무엇이든 하는 나만의 AI">
-<meta name="theme-color" content="#FAF9F6">
+<meta name="theme-color" content="#0A0B0F">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
+<script>try{var t=JSON.parse(localStorage.getItem("nuri:settings")||"{}").theme;document.documentElement.dataset.theme=t||"dark"}catch(e){document.documentElement.dataset.theme="dark"}</script>
 <style>
 /* Layout: collapsible left rail · conversation column (max 760px) · optional artifact panel on the right; greeting + centered composer when empty */
+@font-face{font-family:"Pretendard Variable";font-weight:45 920;font-style:normal;font-display:swap;src:url(vendor/fonts/PretendardVariable.woff2) format("woff2-variations")}
+/* 테마: 기본은 어두운 화면. data-theme="light" 또는 "system"(밝은 시스템이면 밝게) */
 :root{
-  --bg:#FAF9F6; --side:#F3F1EB; --panel:#FFFFFF; --panel-2:#F1EEE7; --ink:#25231F; --muted:#77726A; --line:#E5E1D7; --line-2:#D6D1C5;
-  --accent:#C4663C; --accent-soft:#F6E7DE; --accent-ink:#FFFFFF; --user:#EFECE4;
-  --code-bg:#F6F4EF; --code-ink:#2B2925; --tok-k:#A0412D; --tok-s:#3B7A4B; --tok-c:#8E887E; --tok-n:#8A4FB0;
-  --ok:#2F7D4B; --warn:#A8691A; --bad:#B53A2F; --add:#E5F3E7; --add-ink:#22663A; --del:#FBE7E4; --del-ink:#A1352B;
-  --up:#D23B35; --down:#2563D9; --ma1:#D99414; --ma2:#8B55D6; --ma3:#1F9E8F;
-  --f-body:"Pretendard","Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",system-ui,sans-serif;
-  --f-serif:"Nanum Myeongjo","Noto Serif KR","AppleMyungjo","Batang","바탕",Georgia,serif;
-  --f-mono:ui-monospace,"Cascadia Code","SF Mono",Consolas,"D2Coding",monospace;
-  --r:12px; --panel-w:48%; color-scheme:light;
+  --bg:#0A0B0F; --side:#0D0F14; --panel:#13151C; --panel-2:#1A1D27; --ink:#ECEDF3; --muted:#8C90A4; --line:rgba(255,255,255,.07); --line-2:rgba(255,255,255,.13);
+  --accent:#8B7BFF; --accent-2:#2DD4E6; --accent-soft:rgba(139,123,255,.14); --accent-ink:#FFFFFF; --user:#1B1E29;
+  --grad:linear-gradient(135deg,#8B7BFF 0%,#5B8CFF 55%,#2DD4E6 100%); --glow:0 0 0 1px rgba(139,123,255,.35),0 8px 30px rgba(91,140,255,.25);
+  --code-bg:#0E1016; --code-ink:#E6E8EF; --tok-k:#C4A6FF; --tok-s:#7EE2B8; --tok-c:#6B7088; --tok-n:#FFB86B;
+  --ok:#4ADE80; --warn:#FBBF24; --bad:#F87171; --add:rgba(74,222,128,.12); --add-ink:#86EFAC; --del:rgba(248,113,113,.12); --del-ink:#FCA5A5;
+  --up:#FF5A5F; --down:#4C8DFF; --ma1:#F5B83D; --ma2:#B18CFF; --ma3:#34D3BE;
+  --shadow:0 10px 40px rgba(0,0,0,.45); --glass:rgba(19,21,28,.72);
+  --f-body:"Pretendard Variable","Pretendard","Inter","Segoe UI Variable","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  --f-serif:var(--f-body);
+  --f-mono:"JetBrains Mono","Cascadia Code",ui-monospace,"SF Mono",Consolas,"D2Coding",monospace;
+  --r:14px; --panel-w:48%; color-scheme:dark;
 }
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
-  --bg:#262522; --side:#1F1E1C; --panel:#2E2D2A; --panel-2:#34332F; --ink:#ECEAE4; --muted:#A39E95; --line:#3A3935; --line-2:#4A4844;
-  --accent:#E0805A; --accent-soft:#3D2C24; --accent-ink:#1F1A16; --user:#3A3834;
-  --code-bg:#1E1D1B; --code-ink:#E8E6E1; --tok-k:#F09A7A; --tok-s:#9BD09E; --tok-c:#8A857C; --tok-n:#C9A1F0;
-  --ok:#5DBE80; --warn:#E0A64E; --bad:#E57B6E; --add:#1F3324; --add-ink:#9BD8A8; --del:#3D2220; --del-ink:#F0A39A;
-  --up:#F0605A; --down:#5B8DEF; --ma1:#F2B84B; --ma2:#B08CF0; --ma3:#4CC7B6; color-scheme:dark}}
-:root[data-theme="dark"]{
-  --bg:#262522; --side:#1F1E1C; --panel:#2E2D2A; --panel-2:#34332F; --ink:#ECEAE4; --muted:#A39E95; --line:#3A3935; --line-2:#4A4844;
-  --accent:#E0805A; --accent-soft:#3D2C24; --accent-ink:#1F1A16; --user:#3A3834;
-  --code-bg:#1E1D1B; --code-ink:#E8E6E1; --tok-k:#F09A7A; --tok-s:#9BD09E; --tok-c:#8A857C; --tok-n:#C9A1F0;
-  --ok:#5DBE80; --warn:#E0A64E; --bad:#E57B6E; --add:#1F3324; --add-ink:#9BD8A8; --del:#3D2220; --del-ink:#F0A39A;
-  --up:#F0605A; --down:#5B8DEF; --ma1:#F2B84B; --ma2:#B08CF0; --ma3:#4CC7B6; color-scheme:dark}
+:root[data-theme="light"]{
+  --bg:#F7F7FA; --side:#EFEFF4; --panel:#FFFFFF; --panel-2:#F2F2F7; --ink:#0B0B12; --muted:#686A7A; --line:rgba(12,12,30,.08); --line-2:rgba(12,12,30,.15);
+  --accent:#6D5BFF; --accent-2:#0EA5C6; --accent-soft:rgba(109,91,255,.10); --accent-ink:#FFFFFF; --user:#F0EFF8;
+  --grad:linear-gradient(135deg,#6D5BFF 0%,#4F7BFF 55%,#0EA5C6 100%); --glow:0 0 0 1px rgba(109,91,255,.30),0 8px 26px rgba(79,123,255,.18);
+  --code-bg:#F5F5FA; --code-ink:#1B1B26; --tok-k:#7C3AED; --tok-s:#047857; --tok-c:#8A8C9C; --tok-n:#C2410C;
+  --ok:#16A34A; --warn:#B45309; --bad:#DC2626; --add:#E8F7EC; --add-ink:#166534; --del:#FDECEC; --del-ink:#B91C1C;
+  --up:#E5384F; --down:#2563EB; --ma1:#D99414; --ma2:#7C55D6; --ma3:#0F9E8F;
+  --shadow:0 10px 36px rgba(20,20,50,.10); --glass:rgba(255,255,255,.78); color-scheme:light;
+}
+@media (prefers-color-scheme: light){:root[data-theme="system"]{
+  --bg:#F7F7FA; --side:#EFEFF4; --panel:#FFFFFF; --panel-2:#F2F2F7; --ink:#0B0B12; --muted:#686A7A; --line:rgba(12,12,30,.08); --line-2:rgba(12,12,30,.15);
+  --accent:#6D5BFF; --accent-2:#0EA5C6; --accent-soft:rgba(109,91,255,.10); --accent-ink:#FFFFFF; --user:#F0EFF8;
+  --grad:linear-gradient(135deg,#6D5BFF 0%,#4F7BFF 55%,#0EA5C6 100%); --glow:0 0 0 1px rgba(109,91,255,.30),0 8px 26px rgba(79,123,255,.18);
+  --code-bg:#F5F5FA; --code-ink:#1B1B26; --tok-k:#7C3AED; --tok-s:#047857; --tok-c:#8A8C9C; --tok-n:#C2410C;
+  --ok:#16A34A; --warn:#B45309; --bad:#DC2626; --add:#E8F7EC; --add-ink:#166534; --del:#FDECEC; --del-ink:#B91C1C;
+  --up:#E5384F; --down:#2563EB; --ma1:#D99414; --ma2:#7C55D6; --ma3:#0F9E8F;
+  --shadow:0 10px 36px rgba(20,20,50,.10); --glass:rgba(255,255,255,.78); color-scheme:light}}
 html,body{height:100%;margin:0}
 body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15.5px;line-height:1.65;padding-top:env(safe-area-inset-top,0px);box-sizing:border-box;overflow:hidden}
 *{box-sizing:border-box}
@@ -495,6 +505,78 @@ dialog.sheet::backdrop{background:rgba(20,18,15,.45)}
 .bootfail{position:fixed;left:12px;right:12px;top:12px;z-index:100;background:#B53A2F;color:#fff;border-radius:12px;padding:12px 14px;display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;font-size:14px;box-shadow:0 8px 30px rgba(0,0,0,.25)}
 .bootfail span{flex:1;min-width:200px;opacity:.92;font-size:13px;word-break:break-all}
 .bootfail button{border:0;background:#fff;color:#B53A2F;font-weight:700;border-radius:8px;padding:8px 12px;cursor:pointer}
+
+/* ================= 2026 리디자인: 어두운 바탕 · 그라데이션 포인트 · 유리 질감 ================= */
+body{background:radial-gradient(1100px 520px at 72% -12%,color-mix(in srgb,var(--accent) 13%,transparent),transparent 62%),radial-gradient(900px 480px at -10% 110%,color-mix(in srgb,var(--accent-2) 8%,transparent),transparent 60%),var(--bg);font-size:15px;letter-spacing:-.005em;-webkit-font-smoothing:antialiased}
+::selection{background:color-mix(in srgb,var(--accent) 35%,transparent)}
+*{scrollbar-width:thin;scrollbar-color:var(--line-2) transparent}
+.logo{background:var(--grad);color:#fff;border-radius:9px;box-shadow:var(--glow);font-weight:800;letter-spacing:-.02em}
+.brand{font-weight:750;letter-spacing:-.02em}
+.side{background:color-mix(in srgb,var(--side) 92%,transparent);border-right:1px solid var(--line)}
+.side .new{border:1px solid var(--line);background:var(--panel);border-radius:12px;margin:8px 10px;transition:border-color .15s,box-shadow .15s}
+.side .new:hover{border-color:color-mix(in srgb,var(--accent) 45%,transparent);box-shadow:var(--glow);background:var(--panel)}
+.side .new .plus{background:var(--grad);color:#fff}
+.side-search input{background:var(--panel);border-color:var(--line);border-radius:10px}
+.ci{border-radius:10px;padding:7px 9px;color:color-mix(in srgb,var(--ink) 88%,transparent)}
+.ci[aria-current="true"]{background:var(--accent-soft);color:var(--ink)}
+.ci .spin{width:12px;height:12px;flex:none}
+.side-bottom button{border-radius:10px;color:color-mix(in srgb,var(--ink) 85%,transparent)}
+.top{background:transparent}
+.modes{background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:3px}
+.modes button{border-radius:999px;padding:5px 16px}
+.modes button[aria-selected="true"]{background:var(--grad);color:#fff;box-shadow:var(--glow)}
+.hero{gap:26px}
+.hero h1{font-family:var(--f-body);font-weight:700;font-size:clamp(30px,4.6vw,46px);letter-spacing:-.035em;line-height:1.15}
+.hero h1 .g{background:linear-gradient(100deg,var(--ink) 20%,color-mix(in srgb,var(--accent) 80%,var(--ink)) 60%,var(--accent-2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero h1 .logo{width:40px;height:40px;font-size:19px;border-radius:12px}
+.hero-sub{margin:-12px 0 0;color:var(--muted);font-size:15px;text-align:center}
+.chip{border-radius:999px;padding:7px 14px;background:color-mix(in srgb,var(--panel) 80%,transparent);border-color:var(--line);transition:border-color .15s,transform .15s}
+.chip:hover{border-color:color-mix(in srgb,var(--accent) 50%,transparent);background:var(--panel);transform:translateY(-1px)}
+.composer{background:var(--glass);-webkit-backdrop-filter:blur(18px) saturate(1.3);backdrop-filter:blur(18px) saturate(1.3);border:1px solid var(--line-2);border-radius:22px;padding:12px 12px 10px 16px;box-shadow:var(--shadow)}
+.composer:focus-within{border-color:color-mix(in srgb,var(--accent) 55%,transparent);box-shadow:var(--shadow),0 0 0 4px var(--accent-soft)}
+.cbtn{border-radius:999px;border-color:var(--line);padding:5px 11px}
+.cbtn.icon{padding:5px 8px}
+.send{width:36px;height:36px;border-radius:12px;background:var(--grad);color:#fff;box-shadow:var(--glow);transition:transform .12s,filter .12s}
+.send:not(:disabled):hover{transform:translateY(-1px);filter:brightness(1.08)}
+.send:disabled{box-shadow:none}
+.send.stop{background:var(--ink);color:var(--bg);box-shadow:none}
+.bubble{background:var(--user);border:1px solid var(--line);border-radius:18px 18px 6px 18px;padding:10px 16px}
+.menu{background:var(--panel);border-color:var(--line-2);border-radius:14px;box-shadow:var(--shadow)}
+.btn{border-radius:10px}
+.btn.primary{background:var(--grad);border-color:transparent;color:#fff;box-shadow:var(--glow)}
+.btn.primary:hover{filter:brightness(1.08)}
+.card,.tile{border-radius:16px;border-color:var(--line);background:color-mix(in srgb,var(--panel) 92%,transparent)}
+.tile.active{border-color:color-mix(in srgb,var(--accent) 60%,transparent);box-shadow:var(--glow)}
+.panel{background:color-mix(in srgb,var(--panel) 96%,transparent);border-left:1px solid var(--line)}
+.ptabs button[aria-selected="true"]{border-bottom-color:var(--accent)}
+.sheet{border-radius:20px;border:1px solid var(--line-2);box-shadow:0 30px 80px rgba(0,0,0,.5)}
+.sheet::backdrop{background:rgba(5,6,10,.55);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+.tool,.cc{border-radius:14px;border-color:var(--line);background:color-mix(in srgb,var(--panel) 88%,transparent)}
+.art-card{border-radius:14px}
+.art-card .ic{background:var(--accent-soft);color:var(--accent)}
+.skl span{background:var(--accent-soft);color:color-mix(in srgb,var(--accent) 85%,var(--ink))}
+.live{background:var(--panel);border-color:color-mix(in srgb,var(--accent) 35%,transparent)}
+.md h1,.md h2,.md h3{letter-spacing:-.02em}
+.md code{background:var(--panel-2);border-radius:6px}
+.acts button{border-radius:8px}
+.seg{border-radius:10px}
+/* 트레이딩 룸 분야 탭 · 뉴스 */
+.tr-cats{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.tr-cats button{border:1px solid var(--line);background:var(--panel);color:var(--muted);border-radius:999px;padding:6px 14px;font-size:13px;font-weight:600}
+.tr-cats button[aria-selected="true"]{background:var(--grad);color:#fff;border-color:transparent;box-shadow:var(--glow)}
+.news-md{font-size:14px;line-height:1.7}
+.news-src ol{margin:6px 0 0;padding-left:18px;font-size:12.5px;display:flex;flex-direction:column;gap:4px}
+.news-src a{color:var(--ink);text-decoration:none}.news-src a:hover{text-decoration:underline}
+
+/* GH Nano 모델 만들기 */
+.nano-hero{border:1px solid color-mix(in srgb,var(--accent) 35%,transparent);border-radius:18px;padding:16px;margin-bottom:18px;background:radial-gradient(600px 200px at 0% 0%,var(--accent-soft),transparent 70%),var(--panel);display:flex;flex-direction:column;gap:12px;box-shadow:var(--glow)}
+.nano-badge{display:flex;gap:12px;align-items:center}.nano-badge .logo{width:42px;height:42px;font-size:20px;border-radius:12px}
+.nano-badge b{display:block;font-size:17px;letter-spacing:-.02em}.nano-badge div span{font-size:13px;color:var(--muted)}
+.nano-steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.nano-steps li{border:1px solid var(--line);border-radius:12px;padding:9px 11px;display:flex;flex-direction:column;gap:2px;font-size:13px;background:var(--panel-2)}
+.nano-steps li span{font-size:12px;color:var(--muted)}
+.nano-steps li.done{border-color:color-mix(in srgb,var(--ok) 50%,transparent)}.nano-steps li.done b::after{content:" ✓";color:var(--ok)}
+.nano-steps li.run{border-color:color-mix(in srgb,var(--accent) 60%,transparent)}
 </style>
 </head>
 <body>

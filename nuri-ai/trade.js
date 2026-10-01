@@ -129,10 +129,18 @@ const TF_MS = {"1":6e4,"5":3e5,"15":9e5,"60":36e5,"240":144e5,"D":864e5,"W":6048
 
 
 /* ================= 거래소 시세 (채팅 도구와 트레이딩 룸이 함께 씀) ================= */
-export const YAHOO_LIST = [["^KS11","코스피"],["^KQ11","코스닥"],["005930.KS","삼성전자"],["000660.KS","SK하이닉스"],["035420.KS","네이버"],["005380.KS","현대차"],["373220.KS","LG에너지솔루션"],
-  ["^GSPC","S&P 500"],["^IXIC","나스닥 종합"],["^DJI","다우존스"],["NVDA","엔비디아"],["AAPL","애플"],["MSFT","마이크로소프트"],["TSLA","테슬라"],["AMZN","아마존"],["GOOGL","알파벳"],["META","메타"],
-  ["ES=F","S&P500 선물"],["NQ=F","나스닥100 선물"],["YM=F","다우 선물"],["CL=F","WTI 원유 선물"],["GC=F","금 선물"],["SI=F","은 선물"],["NG=F","천연가스 선물"],["ZN=F","미 10년 국채 선물"],
-  ["KRW=X","달러/원"],["DX-Y.NYB","달러 인덱스"],["^VIX","VIX 변동성"],["^TNX","미 10년 금리"]];
+// 야후 파이낸스 종목을 분야별로 나눈다
+export const US_LIST = [["NVDA","엔비디아"],["AAPL","애플"],["MSFT","마이크로소프트"],["TSLA","테슬라"],["AMZN","아마존"],["GOOGL","알파벳"],["META","메타"],["AVGO","브로드컴"],["AMD","AMD"],["PLTR","팔란티어"],
+  ["NFLX","넷플릭스"],["TSM","TSMC"],["COIN","코인베이스"],["MSTR","마이크로스트래티지"],["INTC","인텔"],["QQQ","나스닥100 ETF"],["SPY","S&P500 ETF"],["SOXX","반도체 ETF"]];
+export const KR_LIST = [["005930.KS","삼성전자"],["000660.KS","SK하이닉스"],["373220.KS","LG에너지솔루션"],["207940.KS","삼성바이오로직스"],["005380.KS","현대차"],["000270.KS","기아"],["035420.KS","네이버"],
+  ["035720.KS","카카오"],["068270.KS","셀트리온"],["105560.KS","KB금융"],["005490.KS","포스코홀딩스"],["051910.KS","LG화학"],["086520.KQ","에코프로"],["247540.KQ","에코프로비엠"],["196170.KQ","알테오젠"]];
+export const GFUT_LIST = [["ES=F","S&P500 선물"],["NQ=F","나스닥100 선물"],["YM=F","다우 선물"],["RTY=F","러셀2000 선물"],["CL=F","WTI 원유 선물"],["BZ=F","브렌트유 선물"],["GC=F","금 선물"],["SI=F","은 선물"],
+  ["HG=F","구리 선물"],["NG=F","천연가스 선물"],["ZN=F","미 10년 국채 선물"],["ZB=F","미 30년 국채 선물"],["6E=F","유로 선물"],["6J=F","엔화 선물"],["ZC=F","옥수수 선물"],["ZW=F","밀 선물"]];
+export const IDX_LIST = [["^GSPC","S&P 500"],["^IXIC","나스닥 종합"],["^DJI","다우존스"],["^KS11","코스피"],["^KQ11","코스닥"],["^N225","닛케이225"],["^HSI","항셍"],["000001.SS","상해종합"],
+  ["KRW=X","달러/원"],["JPYKRW=X","엔/원"],["EURKRW=X","유로/원"],["DX-Y.NYB","달러 인덱스"],["^VIX","VIX 변동성"],["^TNX","미 10년 금리"]];
+export const YAHOO_LIST = [...IDX_LIST, ...KR_LIST, ...US_LIST, ...GFUT_LIST];
+// 야후 종목 코드가 어느 분야인지
+export const yCat = sym => /=F$/.test(sym) ? "gfut" : /\.K[SQ]$/.test(sym) ? "kr" : /^\^|=X$|^DX-/.test(sym) || /\.SS$/.test(sym) ? "idx" : "us";
 export function exchanges(apiBase, webGet){
   async function get(ex, path){
     const r = await fetch(apiBase(ex) + path, {headers: {accept: "application/json"}});
@@ -187,17 +195,21 @@ export function exchanges(apiBase, webGet){
   const yName = sym => (YAHOO_LIST.find(x => x[0] === sym) || [])[1];
   async function yTick(sym){ const r = await yChart(sym, "1d", "5d"), m = r.meta, prev = m.chartPreviousClose || m.previousClose, px = m.regularMarketPrice; return {id: sym, sym, name: yName(sym) || m.shortName || m.longName || sym, price: px, chg: prev ? px / prev - 1 : 0, vol: (m.regularMarketVolume || 0) * px, hi: m.regularMarketDayHigh, lo: m.regularMarketDayLow, currency: m.currency}; }
   async function pool(items, fn, n = 6){ const out = []; let i = 0; await Promise.all(Array.from({length: n}, async () => { while (i < items.length){ const k = i++; try { out[k] = await fn(items[k]); } catch(e){ out[k] = null; } } })); return out.filter(Boolean); }
-  EX.yahoo = {
-    label: "주식·지수·해외선물", quote: "USD", fee: 0.015, paper: false,
-    async list(){ return pool(YAHOO_LIST.map(x => x[0]), yTick); },
-    async tickers(ids){ return pool(ids.slice(0, 6), yTick); },
-    async candles(id, tf, total){
-      const [iv, range, agg] = YIV[tf] || YIV["60"]; const r = await yChart(id, iv, range), q = r.indicators?.quote?.[0] || {};
-      let rows = (r.timestamp || []).map((t, i) => ({t: t * 1000, o: q.open?.[i], h: q.high?.[i], l: q.low?.[i], c: q.close?.[i], v: q.volume?.[i] || 0})).filter(k => k.c != null && k.o != null && k.h != null && k.l != null);
-      if (agg > 1){ const out = []; for (let i = 0; i < rows.length; i += agg){ const g = rows.slice(i, i + agg); out.push({t: g[0].t, o: g[0].o, h: Math.max(...g.map(x => x.h)), l: Math.min(...g.map(x => x.l)), c: g[g.length-1].c, v: g.reduce((s, x) => s + x.v, 0)}); } rows = out; }
-      rows = rows.slice(-total); rows.currency = r.meta.currency; rows.name = yName(id) || r.meta.shortName || r.meta.longName || id; return rows;
-    }
-  };
+  async function yCandles(id, tf, total){
+    const [iv, range, agg] = YIV[tf] || YIV["60"]; const r = await yChart(id, iv, range), q = r.indicators?.quote?.[0] || {};
+    let rows = (r.timestamp || []).map((t, i) => ({t: t * 1000, o: q.open?.[i], h: q.high?.[i], l: q.low?.[i], c: q.close?.[i], v: q.volume?.[i] || 0})).filter(k => k.c != null && k.o != null && k.h != null && k.l != null);
+    if (agg > 1){ const out = []; for (let i = 0; i < rows.length; i += agg){ const g = rows.slice(i, i + agg); out.push({t: g[0].t, o: g[0].o, h: Math.max(...g.map(x => x.h)), l: Math.min(...g.map(x => x.l)), c: g[g.length-1].c, v: g.reduce((s, x) => s + x.v, 0)}); } rows = out; }
+    rows = rows.slice(-total); rows.currency = r.meta.currency; rows.name = yName(id) || r.meta.shortName || r.meta.longName || id; return rows;
+  }
+  const ymarket = (label, list, quote) => ({label, quote, fee: 0.015, paper: false, yahoo: true,
+    async list(){ return pool((list || YAHOO_LIST).map(x => x[0]), yTick); },
+    async tickers(ids){ return pool(ids.slice(0, 8), yTick); },
+    candles: yCandles});
+  EX.us = ymarket("해외주식", US_LIST, "USD");
+  EX.kr = ymarket("국내주식", KR_LIST, "KRW");
+  EX.gfut = ymarket("해외선물", GFUT_LIST, "USD");
+  EX.idx = ymarket("지수·환율", IDX_LIST, "USD");
+  EX.yahoo = ymarket("주식·지수·해외선물", null, "USD");   // 채팅 도구용(전체)
   // 바이낸스 USDT 무기한 선물 (펀딩비·미결제약정 포함)
   EX.binancef = {
     label: "바이낸스 선물", quote: "USDT", fee: 0.05, paper: false,
@@ -213,17 +225,22 @@ export function exchanges(apiBase, webGet){
   return EX;
 }
 
-const DEF_MKT = {upbit:"KRW-BTC", binance:"BTCUSDT", binancef:"BTCUSDT", yahoo:"^GSPC"};
+const DEF_MKT = {upbit:"KRW-BTC", binance:"BTCUSDT", binancef:"BTCUSDT", yahoo:"^GSPC", us:"NVDA", kr:"005930.KS", gfut:"CL=F", idx:"^GSPC"};
+// 트레이딩 룸 분야 탭
+export const MARKET_CATS = [["spot", "코인 현물"], ["fut", "코인 선물"], ["us", "해외주식"], ["kr", "국내주식"], ["gfut", "해외선물"], ["idx", "지수·환율"]];
+const catOf = ex => ex === "upbit" || ex === "binance" ? "spot" : ex === "binancef" ? "fut" : ex;
+const NEWS_OF = {spot: "crypto", fut: "futures", us: "us", kr: "kr", gfut: "global_futures", idx: "macro"};
 /* ================= 트레이딩 룸 ================= */
 export function initTrade(ctx){
-  const {root, brain, apiBase, webGet, toast, md, esc, ls} = ctx;
+  const {root, brain, apiBase, webGet, toast, md, esc, ls, news} = ctx;
   const S = {
     ex: ls.get("tr:ex", "upbit"), market: null, tf: ls.get("tr:tf", "60"), total: ls.get("tr:total", 200),
     cs: [], ind: null, q: null, lv: null, list: [], tick: new Map(), filter: "",
     view: {count: 120, off: 0}, show: Object.assign({ma:true, bb:true, lv:true}, ls.get("tr:show", {})),
     hover: -1, bt: null, btKey: ls.get("tr:bt", "ma"), btP: ls.get("tr:btp", {}), btOpt: Object.assign({fee:0.05, sl:0, tp:0}, ls.get("tr:bto", {})),
-    tab: "bt", side: "buy", timers: [], visible: false, loading: false, err: "", aiCtl: null, ai: null, aiRaw: ""
+    tab: "bt", side: "buy", timers: [], visible: false, loading: false, err: "", aiCtl: null, ai: null, aiRaw: "", newsCtl: null, newsText: "", newsItems: []
   };
+  if (S.ex === "yahoo") S.ex = "idx";
   S.market = ls.get("tr:mkt:" + S.ex, DEF_MKT[S.ex] || "KRW-BTC");
 
   const EX = exchanges(apiBase, webGet);
@@ -237,8 +254,9 @@ export function initTrade(ctx){
   /* ---------- 레이아웃 ---------- */
   root.innerHTML = `
   <div class="tr">
+    <div class="tr-cats" id="tr-cats" role="tablist">${MARKET_CATS.map(([k, l]) => `<button role="tab" data-cat="${k}">${l}</button>`).join("")}</div>
     <div class="tr-head">
-      <div class="tr-title"><select class="sel" id="tr-ex" aria-label="거래소">${Object.entries(EX).map(([k, e]) => `<option value="${k}">${e.label}</option>`).join("")}</select><div><b id="tr-name">—</b><span id="tr-id" class="small"></span></div></div>
+      <div class="tr-title"><select class="sel" id="tr-ex" aria-label="거래소"><option value="upbit">업비트 (원화)</option><option value="binance">바이낸스 (USDT)</option></select><div><b id="tr-name">—</b><span id="tr-id" class="small"></span></div></div>
       <div class="tr-price"><span id="tr-px" class="num">—</span><span id="tr-chg" class="chg num">—</span></div>
       <div class="tr-stats" id="tr-stats"></div>
     </div>
@@ -257,6 +275,7 @@ export function initTrade(ctx){
       <aside class="tr-side">
         <div class="card"><h3>퀀트 점수 <small>지표 기반 · 투자 조언 아님</small></h3><div class="body" id="tr-score"></div></div>
         <div class="card"><h3>AI 분석 <small id="tr-ai-brain"></small></h3><div class="body" id="tr-ai"><p class="empty">현재 차트와 지표를 AI가 해석합니다.</p><button class="btn primary" id="tr-ai-go">AI 분석 실행</button></div></div>
+        <div class="card"><h3>뉴스 해설 <small id="tr-news-cat"></small></h3><div class="body" id="tr-news"></div></div>
       </aside>
     </div>
     <div class="card tr-bottom">
@@ -267,7 +286,7 @@ export function initTrade(ctx){
     <p class="small tr-note">시세: 업비트·바이낸스 공개 API, 주식·지수·해외선물은 야후 파이낸스(지연 시세일 수 있음). 모든 지표와 AI 분석은 과거 데이터에 기반하며 미래 가격을 보장하지 않습니다. 투자 판단과 책임은 본인에게 있습니다.</p>
   </div>`;
   const $ = s => root.querySelector(s);
-  $("#tr-ex").value = S.ex; $("#tr-total").value = String(S.total);
+  $("#tr-total").value = String(S.total);
 
   /* ---------- 데이터 ---------- */
   async function loadList(){
@@ -281,7 +300,7 @@ export function initTrade(ctx){
     try {
       const cs = await X().candles(S.market, S.tf, S.total);
       if (req !== S.req) return;
-      S.cs = cs; S.cur = cs.currency || (S.ex === "yahoo" ? (/\.K[SQ]$|^\^K/.test(S.market) || S.market === "KRW=X" ? "KRW" : "USD") : X().quote);
+      S.cs = cs; S.cur = cs.currency || (X().yahoo ? (/\.K[SQ]$|^\^K/.test(S.market) || /KRW=X$/.test(S.market) ? "KRW" : "USD") : X().quote);
       if (cs.name){ const m = S.list.find(x => x.id === S.market); if (m) m.name = cs.name; else S.list.unshift({id: S.market, sym: S.market, name: cs.name, price: cs[cs.length-1].c, chg: 0, vol: 0}); }
       S.extra = X().extra ? await X().extra(S.market).catch(() => null) : null;
       if (S.cs.length < 30) throw new Error("캔들 데이터가 부족합니다");
@@ -344,10 +363,20 @@ export function initTrade(ctx){
     $("#tr-rows").innerHTML = S.err && !S.list.length ? `<p class="err">${esc(S.err)}</p><button class="btn" id="tr-retry2">다시 시도</button>` : rows.map(m => `<button class="tr-row${m.id === S.market ? " on" : ""}" data-mkt="${esc(m.id)}"><span class="nm"><b>${esc(m.name)}</b><span class="small">${esc(m.sym)}</span></span><span class="num px">${fmt(m.price)}</span><span class="num chg ${m.chg > 0 ? "up" : m.chg < 0 ? "down" : ""}">${pct(m.chg || 0)}</span></button>`).join("") || `<p class="empty">검색 결과가 없습니다.</p>`;
   }
   $("#tr-rows").addEventListener("click", e => { const b = e.target.closest("[data-mkt]"); if (!b || b.dataset.mkt === S.market) return; S.market = b.dataset.mkt; ls.set("tr:mkt:" + S.ex, S.market); renderList(); renderHead(); loadCandles(); });
-  const setPh = () => { const ph = S.ex === "yahoo" ? "종목 검색 (이름·코드)" : "코인 검색 (이름·기호)"; $("#tr-q").placeholder = ph; $("#tr-q").setAttribute("aria-label", ph); };
+  const setPh = () => {
+    const ph = X().yahoo ? "종목 검색 (이름·코드)" : "코인 검색 (이름·기호)"; $("#tr-q").placeholder = ph; $("#tr-q").setAttribute("aria-label", ph);
+    const c = catOf(S.ex); root.querySelectorAll("[data-cat]").forEach(b => b.setAttribute("aria-selected", b.dataset.cat === c));
+    $("#tr-ex").hidden = c !== "spot"; if (c === "spot") $("#tr-ex").value = S.ex;
+    $("#tr-news-cat").textContent = MARKET_CATS.find(x => x[0] === c)?.[1] || "";
+  };
+  async function switchEx(ex){
+    if (!EX[ex] || ex === S.ex) return;
+    S.ex = ex; ls.set("tr:ex", S.ex); setPh(); S.market = ls.get("tr:mkt:" + S.ex, DEF_MKT[S.ex] || "KRW-BTC"); S.list = []; S.tick.clear(); S.newsText = ""; S.newsItems = []; renderNews(); renderList(); await loadList(); await loadCandles();
+  }
+  $("#tr-cats").addEventListener("click", e => { const b = e.target.closest("[data-cat]"); if (!b) return; const c = b.dataset.cat; switchEx(c === "spot" ? ls.get("tr:spot", "upbit") : c === "fut" ? "binancef" : c); });
   setPh();
   $("#tr-q").addEventListener("input", e => { S.filter = e.target.value; renderList(); });
-  $("#tr-ex").addEventListener("change", async e => { S.ex = e.target.value; ls.set("tr:ex", S.ex); setPh(); S.market = ls.get("tr:mkt:" + S.ex, DEF_MKT[S.ex] || "KRW-BTC"); S.list = []; S.tick.clear(); renderList(); await loadList(); await loadCandles(); });
+  $("#tr-ex").addEventListener("change", e => { ls.set("tr:spot", e.target.value); switchEx(e.target.value); });
   $("#tr-tf").addEventListener("click", e => { const b = e.target.closest("[data-tf]"); if (!b) return; S.tf = b.dataset.tf; ls.set("tr:tf", S.tf); syncTools(); loadCandles(); });
   $("#tr-show").addEventListener("click", e => { const b = e.target.closest("[data-show]"); if (!b) return; S.show[b.dataset.show] = !S.show[b.dataset.show]; ls.set("tr:show", S.show); syncTools(); draw(); });
   $("#tr-total").addEventListener("change", e => { S.total = +e.target.value; ls.set("tr:total", S.total); loadCandles(); });
@@ -531,7 +560,7 @@ export function initTrade(ctx){
     el.innerHTML = `<div class="ai-wait"><span class="spin"></span><span>${esc(brain.label())}가 차트를 읽는 중…</span></div><pre class="ai-stream" id="tr-ai-stream"></pre><button class="btn" id="tr-ai-stop">멈추기</button>`;
     const data = snapshot();
     const messages = [
-      {role: "system", content: "너는 신중한 암호화폐 기술적 분석가다. 주어진 숫자 데이터만 근거로 분석하고, 데이터에 없는 뉴스·사건은 지어내지 않는다. 확률적 표현을 쓰고 확신하지 않는다. 가격은 데이터의 통화 단위로 적는다. 반드시 JSON 하나만 출력한다."},
+      {role: "system", content: "너는 신중한 시장 기술적 분석가다(코인·주식·선물·지수 모두). 주어진 숫자 데이터만 근거로 분석하고, 데이터에 없는 뉴스·사건은 지어내지 않는다. 확률적 표현을 쓰고 확신하지 않는다. 가격은 데이터의 통화 단위로 적는다. 반드시 JSON 하나만 출력한다."},
       {role: "user", content: `다음 시장 데이터를 분석해 아래 JSON 형식으로만 답하라.\n\n데이터:\n${JSON.stringify(data)}\n\n형식:\n{"headline":"한 줄 결론(30자 이내)","trend":"상승|하락|횡보","summary":"3~4문장 요약","bull":{"trigger":"상승 시나리오가 맞으려면 필요한 조건","target":가격},"bear":{"trigger":"하락 시나리오 조건","target":가격},"plan":{"entry":"진입 고려 구간 설명","stop":가격,"targets":[가격,가격]},"risks":["위험 요인1","위험 요인2"],"confidence":0~100 정수}`}
     ];
     let raw = "";
@@ -569,7 +598,38 @@ export function initTrade(ctx){
       <div class="conf"><label class="small">AI 확신도 ${conf}%</label><div class="progress"><i style="width:${conf}%"></i></div></div>
       <div class="row"><button class="btn" id="tr-ai-go">다시 분석</button><span class="small">${esc(brain.label())} · ${new Date(S.aiAt).toLocaleTimeString("ko-KR", {hour:"2-digit", minute:"2-digit"})}</span></div>`;
   }
+  /* ---------- 뉴스 해설 (분야·종목별) ---------- */
+  function renderNews(){
+    const el = $("#tr-news"); if (!el) return;
+    const c = catOf(S.ex), nm = cur().name || S.market;
+    if (S.newsBusy){ el.innerHTML = `<div class="ai-wait"><span class="spin"></span><span>${esc(S.newsBusy)}</span></div><div class="md" id="tr-news-stream">${S.newsText ? md(S.newsText) : ""}</div><button class="btn" id="tr-news-stop">멈추기</button>`; return; }
+    if (S.newsText) el.innerHTML = `<div class="md news-md">${md(S.newsText)}</div>${S.newsItems.length ? `<details class="news-src"><summary class="small">참고한 기사 ${S.newsItems.length}개</summary><ol>${S.newsItems.map(x => `<li><a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.title)}</a>${x.date ? ` <span class="small">${esc(x.date)}</span>` : ""}</li>`).join("")}</ol></details>` : ""}<div class="row"><button class="btn" data-news="sym">${esc(nm)} 뉴스 다시</button><button class="btn" data-news="cat">${esc(MARKET_CATS.find(x => x[0] === c)?.[1] || "")} 전체</button></div>`;
+    else el.innerHTML = `<p class="empty">최신 기사를 모아 AI가 말로 풀어 해설합니다.</p><div class="row"><button class="btn primary" data-news="sym">${esc(nm)} 뉴스 해설</button><button class="btn" data-news="cat">${esc(MARKET_CATS.find(x => x[0] === c)?.[1] || "")} 시장 전체</button></div>`;
+  }
+  async function runNews(which){
+    if (!news){ toast("뉴스 기능을 쓸 수 없습니다"); return; }
+    const c = catOf(S.ex), nm = cur().name || S.market, sym = which === "sym" ? (X().yahoo ? S.market : nm.replace(/ 무기한$/, "")) : "";
+    S.newsCtl?.abort(); S.newsCtl = new AbortController(); const sig = S.newsCtl.signal;
+    S.newsText = ""; S.newsBusy = "기사 모으는 중…"; renderNews();
+    try {
+      const items = await news(NEWS_OF[c], sym); if (sig.aborted) return;
+      S.newsItems = items;
+      if (!items.length){ S.newsBusy = ""; S.newsText = "관련 기사를 찾지 못했습니다."; renderNews(); return; }
+      if (!brain.ready()){ S.newsBusy = ""; S.newsText = "AI 두뇌가 없어 기사 제목만 보여 드립니다.\n\n" + items.map((x, i) => `${i + 1}. ${x.title}`).join("\n"); renderNews(); return; }
+      S.newsBusy = `${brain.label()}가 해설을 쓰는 중…`; renderNews();
+      const data = items.map((x, i) => `[${i + 1}] ${x.title}${x.date ? " (" + x.date + ")" : ""}\n${x.snippet || ""}`).join("\n\n");
+      const px = S.cs.length ? S.cs[S.cs.length - 1].c : null;
+      const messages = [
+        {role: "system", content: "너는 경제 방송의 노련한 시장 해설가다. 주어진 기사들만 근거로, 기사 제목을 목록으로 나열하지 말고 '지금 무슨 일이 있고, 왜 그렇고, 이 시장과 투자자에게 어떤 의미인지'를 자연스러운 한국어 문장으로 해설한다. 큰 줄기 2~3개로 묶고, 근거 문장 끝에만 [번호]를 단다. 마지막에 '체크할 것' 한두 가지로 마무리한다. 기사에 없는 사실은 지어내지 않는다."},
+        {role: "user", content: `분야: ${MARKET_CATS.find(x => x[0] === c)?.[1]}${sym ? `\n종목: ${nm} (${S.market})${px ? `, 현재가 ${fmt(px)}` : ""}` : ""}\n\n기사:\n${data}\n\n위 기사들로 해설을 써 줘.`}
+      ];
+      await brain.text(messages, {signal: sig, temperature: 0.5, onText: t => { S.newsText = t; const s = root.querySelector("#tr-news-stream"); if (s) s.innerHTML = md(t); }});
+      S.newsBusy = ""; renderNews();
+    } catch (e){ S.newsBusy = ""; if (!sig.aborted) S.newsText = "뉴스 해설 실패: " + (e.message || e); renderNews(); }
+  }
   root.addEventListener("click", e => {
+    const nb = e.target.closest("[data-news]"); if (nb){ runNews(nb.dataset.news); return; }
+    if (e.target.id === "tr-news-stop"){ S.newsCtl?.abort(); S.newsBusy = ""; renderNews(); }
     if (e.target.id === "tr-ai-go") runAI();
     if (e.target.id === "tr-retry" || e.target.id === "tr-retry2"){ (async () => { if (!S.list.length) await loadList(); await loadCandles(); })(); }
     if (e.target.id === "tr-ai-stop") S.aiCtl?.abort();
@@ -701,7 +761,7 @@ export function initTrade(ctx){
   });
 
   /* ---------- 전체 ---------- */
-  function renderAll(){ renderHead(); renderScore(); renderAI(); syncTools(); S.tab === "bt" ? renderBT() : renderPaper(); draw(); }
+  function renderAll(){ renderHead(); renderScore(); renderAI(); renderNews(); syncTools(); S.tab === "bt" ? renderBT() : renderPaper(); draw(); }
   let booted = false;
   return {
     async show(){
@@ -711,8 +771,9 @@ export function initTrade(ctx){
     },
     hide(){ S.visible = false; clearInterval(S.t1); },
     async goto(ex, market, tf){
+      if (ex === "yahoo") ex = yCat(market || "");                 // 채팅에서 연 주식·선물·지수는 분야 탭으로
       const exChanged = ex && EX[ex] && ex !== S.ex;
-      if (exChanged){ S.ex = ex; ls.set("tr:ex", ex); $("#tr-ex").value = ex; setPh(); S.list = []; S.tick.clear(); }
+      if (exChanged){ S.ex = ex; ls.set("tr:ex", ex); if (ex === "upbit" || ex === "binance") ls.set("tr:spot", ex); setPh(); S.list = []; S.tick.clear(); S.newsText = ""; S.newsItems = []; }
       if (tf && TF_MS[tf]){ S.tf = tf; ls.set("tr:tf", tf); }
       if (market){ S.market = market; ls.set("tr:mkt:" + S.ex, market); }
       if (!booted) return;                  // 아직 안 열렸으면 show()가 이 설정으로 불러온다

@@ -13,7 +13,7 @@ const host = u => { try { return new URL(u).hostname.replace(/^www\./, ""); } ca
 const activity = detail => bus.dispatchEvent(new CustomEvent("activity", {detail}));
 let EXS = null;
 const ex = name => (EXS || (EXS = exchanges(apiBase, webGet)))[name || "upbit"];
-const EX_LABEL = {upbit:"업비트 현물", binance:"바이낸스 현물", binancef:"바이낸스 선물", yahoo:"주식·지수·해외선물"};
+const EX_LABEL = {upbit:"코인 현물(업비트)", binance:"코인 현물(바이낸스)", binancef:"코인 선물(바이낸스)", yahoo:"주식·지수·해외선물", us:"해외주식", kr:"국내주식", gfut:"해외선물", idx:"지수·환율"};
 
 /* ================= 종목 이름 → 시장 ================= */
 const COIN_KO = {"비트코인":"BTC","이더리움":"ETH","이더":"ETH","리플":"XRP","솔라나":"SOL","도지코인":"DOGE","도지":"DOGE","에이다":"ADA","트론":"TRX","아발란체":"AVAX",
@@ -30,6 +30,11 @@ const KR_NAMES = Object.assign(Object.fromEntries(YAHOO_LIST.map(([s, n]) => [n.
 });
 function normExchange(e){
   e = String(e || "").toLowerCase();
+  if (/^(us|kr|gfut|idx)$/.test(e)) return e;
+  if (/해외주식|미국 ?주식|us ?stock/.test(e)) return "us";
+  if (/국내주식|한국 ?주식|kr ?stock|코스피/.test(e)) return "kr";
+  if (/해외선물|원자재|commod|global/.test(e)) return "gfut";
+  if (/지수|환율|index|fx/.test(e)) return "idx";
   if (/binancef|futures?|선물|perp/.test(e)) return "binancef";
   if (/binance|바이낸스/.test(e)) return "binance";
   if (/upbit|업비트/.test(e)) return "upbit";
@@ -162,6 +167,41 @@ export async function installSkill(sk, base){
   for (const [f, c] of Object.entries(sk.bin || {})){ await codeCall("write", {path: `${base}/${f}`, content: c, encoding: "base64"}); n++; }
   return n;
 }
+/* ================= 분야별 뉴스 ================= */
+export const NEWS_CAT = {
+  crypto: {name: "코인 현물", q: ["비트코인 이더리움 코인 시장 뉴스", "crypto market news bitcoin ethereum"]},
+  futures: {name: "코인 선물", q: ["비트코인 선물 청산 펀딩비 미결제약정 뉴스", "crypto derivatives liquidations funding rate open interest news"]},
+  us: {name: "해외주식", q: ["미국 증시 마감 시황 뉴스", "US stock market news today"]},
+  kr: {name: "국내주식", q: ["코스피 코스닥 마감 시황", "국내 증시 외국인 수급 뉴스"]},
+  global_futures: {name: "해외선물", q: ["국제유가 금값 원자재 선물 뉴스", "oil gold commodity futures news"]},
+  macro: {name: "거시경제", q: ["미국 경제지표 연준 금리 뉴스", "Fed rates inflation economy news"]}
+};
+export function newsCat(c){
+  c = String(c || "").toLowerCase();
+  if (/future|선물/.test(c) && /coin|crypto|코인|비트/.test(c)) return "futures";
+  if (/global|commod|원자재|해외선물|유가|금/.test(c)) return "global_futures";
+  if (/^futures$|코인 ?선물/.test(c)) return "futures";
+  if (/crypto|coin|코인|비트/.test(c)) return "crypto";
+  if (/kr|korea|국내|코스피|코스닥/.test(c)) return "kr";
+  if (/us|미국|해외주식|stock|nasdaq|나스닥/.test(c)) return "us";
+  if (/macro|경제|금리|연준|fed/.test(c)) return "macro";
+  return NEWS_CAT[c] ? c : "macro";
+}
+export async function marketNews(cat, symbol){
+  const C = NEWS_CAT[cat] || NEWS_CAT.macro, out = [], seen = new Set();
+  const add = xs => { for (const x of xs || []) if (x?.url && !seen.has(x.url)){ seen.add(x.url); out.push(x); } };
+  const jobs = [];
+  if (symbol){
+    const r = resolveMarket(symbol, cat === "futures" ? "binancef" : cat === "crypto" ? "upbit" : "yahoo");
+    const nm = String(symbol).trim();
+    if (r.exn === "yahoo") jobs.push(webGet(`https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(r.market)}&quotesCount=0&newsCount=8`, "json").then(j => (j.news || []).map(x => ({title: x.title, url: x.link, snippet: x.publisher, date: x.providerPublishTime ? new Date(x.providerPublishTime * 1000).toLocaleDateString("ko-KR") : ""}))).catch(() => []));
+    jobs.push(webSearch(`${nm} ${cat === "futures" ? "선물 " : ""}뉴스`, 6).then(r => r.results).catch(() => []));
+  }
+  for (const q of C.q.slice(0, symbol ? 1 : 2)) jobs.push(webSearch(q, 6).then(r => r.results).catch(() => []));
+  for (const r of await Promise.all(jobs)) add(r);
+  return out.slice(0, 12);
+}
+
 /* ================= 도구 ================= */
 const srcText = rs => rs.map((x, i) => `[${i+1}] ${x.title}\n${x.url}${x.date ? " · " + x.date : ""}\n${x.snippet || ""}`).join("\n\n");
 export const TOOLS = {
@@ -182,8 +222,8 @@ export const TOOLS = {
     }},
 
   /* ---- 시장: 코인 현물·선물 · 주식 · 지수 · 해외선물 · 환율 ---- */
-  market_list: {mode:"chat", label:"시장 순위", args:'{"exchange":"upbit|binance|binancef|yahoo","top":10,"sort":"volume|gain|loss"}', act: a => `${EX_LABEL[normExchange(a.exchange) || "upbit"]} 순위`,
-    desc:"거래소별 종목 순위. upbit=국내 코인 현물(원화), binance=해외 코인 현물, binancef=코인 무기한 선물, yahoo=주요 주가지수·국내외 대형주·해외선물(원유·금·지수선물)·환율",
+  market_list: {mode:"chat", label:"시장 순위", args:'{"exchange":"upbit|binance|binancef|us|kr|gfut|idx","top":10,"sort":"volume|gain|loss"}', act: a => `${EX_LABEL[normExchange(a.exchange) || "upbit"]} 순위`,
+    desc:"분야별 종목 순위. upbit=코인 현물(원화), binance=코인 현물(USDT), binancef=코인 무기한 선물, us=해외(미국)주식, kr=국내주식, gfut=해외선물(원유·금·지수선물·국채), idx=주가지수·환율",
     async run(a){
       const exn = normExchange(a.exchange) || "upbit";
       let list = await ex(exn).list();
@@ -214,6 +254,13 @@ export const TOOLS = {
         news = (j.news || []).map(x => ({title: x.title, url: x.link, snippet: x.publisher, date: x.providerPublishTime ? new Date(x.providerPublishTime * 1000).toLocaleDateString("ko-KR") : ""}));
       } catch(e){}
       return {text: JSON.stringify({추천: `${local.market} (${EX_LABEL[local.exn]})`, 검색결과: quotes, 뉴스: news.map(n => `${n.title} · ${n.snippet} · ${n.date}`)}), summary: `${quotes.length}개 종목 · 뉴스 ${news.length}건`, sources: news};
+    }},
+  market_news: {mode:"chat", label:"분야별 뉴스", args:'{"category":"crypto|futures|us|kr|global_futures|macro","symbol":"선택: 비트코인, NVDA, 005930, CL=F"}', act: a => `${NEWS_CAT[newsCat(a.category)]?.name || "시장"} 뉴스 모으기${a.symbol ? " · " + a.symbol : ""}`,
+    desc:"분야별(코인 현물·코인 선물·해외주식·국내주식·해외선물·거시경제) 또는 종목별 최신 뉴스를 모은다. 결과는 목록으로 옮기지 말고 흐름 있는 해설로 풀어 쓴다",
+    async run(a){
+      const items = await marketNews(newsCat(a.category), a.symbol);
+      if (!items.length) return {text: "관련 뉴스를 찾지 못했습니다.", summary: "없음"};
+      return {text: "[아래 기사들을 제목 목록으로 옮기지 말고, 큰 줄기로 묶어 해설하라. 근거 문장 끝에만 [번호]]\n\n" + srcText(items), summary: `${NEWS_CAT[newsCat(a.category)]?.name || "뉴스"} ${items.length}건`, sources: items};
     }},
   market_analyze: {mode:"chat", label:"차트 분석", args:'{"market":"비트코인|BTCUSDT|NVDA|005930|ES=F","exchange":"upbit|binance|binancef|yahoo","timeframe":"1|5|15|60|240|D|W"}', act: a => `${a.market || ""} ${TF[a.timeframe] || ""} 차트 분석`,
     desc:"캔들로 이동평균·RSI·MACD·볼린저·ATR·지지저항·퀀트점수를 계산하고 오른쪽 패널에 차트를 연다. 선물(binancef)은 펀딩비·미결제약정·롱숏비율도 준다. 주식은 timeframe D 추천",
@@ -428,26 +475,48 @@ export const TOOLS = {
 };
 
 /* ================= 스킬: 분야별 전문가 지침 (질문에 맞는 것만 켜진다) ================= */
+const RISK_LINE = "확률적으로 말하고 확정적 예언을 하지 않는다. 마지막에 한 줄로 '투자 판단과 책임은 본인에게 있다'고 알린다.";
 export const BUILTIN_SKILLS = [
-  {id: "market", name: "시장 분석가", icon: "📈", keys: /코인|비트|이더|리플|솔라나|알트|업비트|바이낸스|선물|롱|숏|레버리지|펀딩|주식|주가|종목|나스닥|코스피|코스닥|s&p|다우|원유|금값|환율|차트|매수|매도|시세|전망|분석|etf|btc|eth|nvda|tsla/i,
-    tools: ["market_quote", "market_analyze", "market_list", "market_search", "web_search", "econ_calendar"],
-    prompt: `- 순서: market_quote나 market_analyze로 실제 숫자를 확인 → 필요하면 web_search로 최근 뉴스·이슈 확인 → 정리.
-- 답변 구성: ①현재 상황(가격·추세·지표 핵심 3~5개) ②강세/약세 근거 ③시나리오별 대응(상승·하락·횡보, 진입·손절·목표 구간) ④리스크.
-- 코인 선물(binancef)은 펀딩비·미결제약정·롱숏비율을 해석하고, 레버리지 청산 위험과 포지션 크기(계좌의 1~2% 손실 한도)를 꼭 언급한다.
-- 주식·지수·해외선물은 yahoo 시장이다. 한국 종목은 6자리 코드, 미국은 티커. 장 마감 시간대에는 마지막 종가임을 밝힌다.
-- 확률적 표현을 쓰고 확정적 예언을 하지 않는다. 마지막에 한 줄로 '투자 판단과 책임은 본인에게 있다'고 알린다.`},
-  {id: "macro", name: "거시경제 해설", icon: "🌐", keys: /경제|발표|지표|cpi|ppi|fomc|금리|연준|고용|실업|gdp|pce|인플레|파월|한국은행|기준금리|캘린더|일정/i,
-    tools: ["econ_calendar", "web_search", "web_fetch", "market_quote"],
-    prompt: `- 일정은 econ_calendar로, 결과·해석은 web_search로 최신 기사를 확인한다.
-- 지표마다 '예상 대비 높으면/낮으면 → 달러·금리·주식·코인에 어떤 영향'을 표로 정리한다. 시간은 한국시간.`},
+  {id: "crypto_spot", name: "코인 현물", icon: "🪙", keys: /코인|비트|이더|리플|솔라나|알트|도지|업비트|빗썸|현물|btc|eth|xrp|sol\b|doge/i, not: /선물|롱|숏|레버리지|펀딩|청산/,
+    tools: ["market_quote", "market_analyze", "market_list", "market_news", "market_search"],
+    prompt: `- 코인 현물(업비트 원화 KRW-, 바이낸스 USDT)을 다룬다. market_analyze로 실제 지표를 확인하고, 필요하면 market_news(category:"crypto")로 최근 흐름을 본다.
+- 해설: 지금 가격이 추세의 어디쯤인지(이동평균 위·아래, 지지·저항까지 거리), 거래량이 무엇을 말하는지, 김치 프리미엄·비트코인 도미넌스 같은 코인 시장 특유의 맥락을 말로 풀어 준다.
+- 그 다음 상승·하락·횡보 시나리오와 각 시나리오에서의 대응(분할 매수 구간, 손절 기준, 목표 구간)을 이야기하듯 설명한다. ${RISK_LINE}`},
+  {id: "crypto_futures", name: "코인 선물", icon: "⚡", keys: /선물|롱|숏|레버리지|펀딩|청산|미결제|무기한|perp|포지션/i, not: /원유|금 선물|금선물|나스닥 ?선물|s&p ?선물|해외선물|국채|원자재|천연가스/i,
+    tools: ["market_analyze", "market_quote", "market_list", "market_news", "calculate"],
+    prompt: `- 코인 무기한 선물은 exchange:"binancef"로 분석한다(펀딩비·미결제약정·롱숏비율 포함).
+- 해설: 펀딩비가 양(+)이면 롱이 숏에게 비용을 내는 과열 신호인지, 미결제약정이 가격과 같이 늘었는지(새 돈 유입) 줄었는지(청산·정리), 롱숏비율이 한쪽으로 쏠렸는지를 연결해서 '지금 선물 시장 참여자들이 어떤 상태인지' 이야기로 풀어 준다.
+- 레버리지별 청산가 계산(calculate)과 포지션 크기(계좌의 1~2% 손실 한도)를 꼭 설명한다. ${RISK_LINE}`},
+  {id: "us_stocks", name: "해외주식", icon: "🇺🇸", keys: /미국|나스닥|s&p|다우|뉴욕|엔비디아|테슬라|애플|마이크로소프트|아마존|구글|알파벳|메타|팔란티어|브로드컴|해외주식|빅테크|실적|어닝|etf|nvda|tsla|aapl|msft|amzn|googl|meta|pltr|avgo|amd/i, not: /선물/,
+    tools: ["market_analyze", "market_quote", "market_search", "market_news", "web_search"],
+    prompt: `- 미국 주식은 티커로(예: NVDA) market_analyze(timeframe:"D")를 쓰고, market_news(category:"us", symbol)로 최근 이슈를 본다.
+- 해설: 차트 위치와 함께 실적·가이던스·금리·섹터 흐름이 주가에 어떻게 작용하고 있는지 연결해서 설명한다. 장 마감 시간대에는 마지막 종가임을 밝힌다. 환율(달러/원)이 한국 투자자 수익에 주는 영향도 짚는다. ${RISK_LINE}`},
+  {id: "kr_stocks", name: "국내주식", icon: "🇰🇷", keys: /코스피|코스닥|삼성전자|하이닉스|현대차|네이버|카카오|lg|셀트리온|에코프로|국내주식|국내 주식|\b\d{6}\b/i,
+    tools: ["market_analyze", "market_quote", "market_search", "market_news", "web_search"],
+    prompt: `- 국내 주식은 6자리 코드나 한글 이름으로 market_analyze(timeframe:"D")를 쓰고, market_news(category:"kr", symbol)로 이슈를 본다.
+- 해설: 외국인·기관 수급, 업종 흐름, 환율, 미국 증시 영향 같은 국내 시장 맥락과 차트를 연결해 말로 설명한다. ${RISK_LINE}`},
+  {id: "global_futures", name: "해외선물", icon: "🛢️", keys: /해외선물|원유|wti|브렌트|금값|금 ?선물|은 ?선물|천연가스|구리|원자재|나스닥 ?선물|s&p ?선물|다우 ?선물|국채 ?선물|cl=f|gc=f|es=f|nq=f/i,
+    tools: ["market_analyze", "market_quote", "market_news", "econ_calendar", "calculate"],
+    prompt: `- 해외선물은 야후 코드(원유 CL=F, 금 GC=F, 은 SI=F, 천연가스 NG=F, S&P500 ES=F, 나스닥100 NQ=F, 미 10년 국채 ZN=F)로 market_analyze를 쓴다.
+- 해설: 수급·재고·OPEC·달러·금리·지정학 같은 그 상품을 움직이는 요인과 차트를 연결해 설명하고, 만기·롤오버·증거금·틱가치 같은 선물 거래의 특성과 위험을 짚는다. 이번 주 경제 발표(econ_calendar) 중 영향을 줄 것도 말해 준다. ${RISK_LINE}`},
+  {id: "news", name: "뉴스 해설", icon: "📰", keys: /뉴스|소식|이슈|헤드라인|기사|속보|호재|악재|무슨 일|왜 올랐|왜 떨어|급등|급락/i,
+    tools: ["market_news", "web_search", "web_fetch"],
+    prompt: `- market_news(category: crypto|futures|us|kr|global_futures|macro, symbol)로 분야별 최신 기사를 모으고, 중요한 기사는 web_fetch로 본문을 읽는다.
+- 절대로 기사 제목을 목록으로 늘어놓지 않는다. 앵커나 애널리스트가 브리핑하듯 '지금 무슨 일이 있었고, 왜 그렇고, 시장과 사용자에게 어떤 의미인지'를 하나의 흐름 있는 해설로 말한다.
+- 여러 기사를 엮어 큰 줄기 2~3개로 묶고, 근거가 되는 문장 끝에만 [1]처럼 출처 번호를 단다. 날짜가 오래된 기사는 그렇다고 밝힌다.`},
+  {id: "macro", name: "거시경제 해설", icon: "🌐", keys: /경제|발표|지표|cpi|ppi|fomc|금리|연준|고용|실업|gdp|pce|인플레|파월|한국은행|기준금리|캘린더|일정|환율|달러|엔화/i,
+    tools: ["econ_calendar", "market_news", "web_search", "web_fetch", "market_quote"],
+    prompt: `- 일정은 econ_calendar로, 결과와 시장 반응은 market_news(category:"macro")와 web_search로 확인한다. 시간은 한국시간.
+- 해설: 지표마다 예상보다 높거나 낮으면 달러·금리·주식·코인이 왜 그렇게 움직이는지 인과관계를 말로 풀어 설명한다. 표는 일정 정리에만 보조로 쓴다.`},
   {id: "backtest", name: "퀀트 전략", icon: "🧪", keys: /백테스트|전략|퀀트|승률|수익률|손절|익절|자동매매|모의투자|시스템/i,
     tools: ["market_backtest", "market_analyze", "paper_trade", "calculate"],
-    prompt: `- 전략은 market_backtest로 실제 시험하고, 여러 조건을 비교할 땐 2~3번 돌려 표로 비교한다. 과최적화 위험을 알린다.
-- 그냥 보유 대비 초과수익과 최대낙폭을 함께 본다. 수수료·슬리피지를 반영한다.`},
+    prompt: `- 전략은 market_backtest로 실제 시험한다. 조건을 비교할 땐 2~3번 돌린다.
+- 해설이 핵심이다: 수익률 숫자를 나열하지 말고, 이 전략이 어떤 장세(추세장·횡보장)에서 벌고 잃었는지, 그냥 보유한 것보다 나았거나 못했던 이유, 최대낙폭이 실제로 견딜 만한 크기인지, 거래 횟수와 수수료가 결과에 준 영향, 과최적화 위험, 그리고 구체적인 개선 아이디어(필터·손절·기간 조정)를 전문가가 설명하듯 자유롭게 풀어서 말한다.`},
   {id: "arch", name: "건축 설계·견적", icon: "🏗️", keys: /건물|건축|설계|주택|집|평면|도면|층|카페|상가|사무실|인테리어|캐드|cad|레빗|revit|스케치업|sketchup|루미온|lumion|렌더|투시도|견적|공사비|시공|리모델링/i,
     tools: ["design_building", "cost_estimate", "render_image", "land_check", "calculate"],
     prompt: `- 설계 요청: 조건(대지 크기·용도지역·층수·용도·방 구성)이 부족하면 합리적 기본값을 가정해 바로 design_building으로 그리고, 가정한 내용을 밝힌다.
-- 공사비·견적: cost_estimate로 견적서를 만든다(방금 설계했으면 면적 생략 가능).
+- 해설이 핵심이다: 수치만 말하지 말고 건축가가 고객에게 설명하듯 배치 의도(향·채광·조망·프라이버시), 층별 구성과 동선, 공간의 장단점, 법규상 주의점(건폐율·용적률·일조·주차), 바꿔 볼 만한 대안, 다음 단계(견적·렌더링·인허가)를 자유롭게 풀어 쓴다.
+- 공사비·견적: cost_estimate로 견적서를 만든다(방금 설계했으면 면적 생략 가능). 금액이 왜 그렇게 나오는지, 줄이거나 늘어날 수 있는 항목을 말로 설명한다.
 - 렌더링(루미온 같은 투시도): render_image에 건물 특징을 영어로 자세히 묘사한다. 루미온·트윈모션에서 직접 렌더하려면 패널의 'SketchUp·루미온(DAE)' 또는 OBJ를 내려받아 가져오면 된다고 안내한다.
 - 캐드는 DXF(AutoCAD에서 바로 열림), 레빗은 IFC(삽입 → IFC 열기), 스케치업은 DAE 가져오기.
 - 건폐율·용적률은 법정 상한이고 조례로 더 낮을 수 있으며, 실제 인허가는 건축사 검토가 필요하다고 알린다.`},
@@ -460,7 +529,7 @@ export const BUILTIN_SKILLS = [
   {id: "research", name: "인터넷 리서치", icon: "🔎", keys: /검색|찾아|최신|뉴스|오늘|어제|요즘|현재|202\d|누구|언제|어디|가격|출시|발표|조사|리서치|비교|추천|후기|리뷰/i,
     tools: ["web_search", "web_fetch", "todo_write"],
     prompt: `- 최신·사실 정보는 기억으로 답하지 말고 web_search → 중요한 출처 1~3개 web_fetch → 종합한다.
-- 문장 끝에 [1], [2]처럼 출처 번호를 달고, 마지막에 '출처' 목록(제목 — 주소)을 쓴다. 출처끼리 다르면 차이를 밝힌다.`},
+- 검색 결과를 목록으로 옮겨 적지 말고, 읽은 내용을 소화해서 자연스러운 문장의 해설로 정리한다. 근거 문장 끝에 [1], [2]처럼 출처 번호를 단다(출처 목록은 화면에 따로 표시되므로 길게 다시 쓰지 않는다). 출처끼리 다르면 차이를 밝힌다.`},
   {id: "coding", name: "코딩", icon: "💻", keys: /코드|코딩|프로그램|함수|버그|에러|오류|파이썬|python|자바스크립트|javascript|typescript|html|css|react|sql|자바|c\+\+|api|스크립트|앱 만들|웹페이지|게임/i,
     tools: ["web_search"],
     prompt: `- 완결된 코드를 쓴다. 20줄 넘는 코드나 실행 가능한 웹페이지는 <artifact>로 감싼다. 웹앱·게임·계산기·대시보드는 type="html" 하나의 파일로 만들면 패널에서 바로 실행된다.
@@ -468,7 +537,9 @@ export const BUILTIN_SKILLS = [
 ];
 export function activeSkills(text, mode = "chat"){
   const t = String(text || "");
-  const out = mode === "code" ? [] : BUILTIN_SKILLS.filter(s => !(settings.skillsOff || []).includes(s.id) && s.keys.test(t));
+  // keys에 맞고 not(다른 분야 신호)에 걸리지 않는 스킬만. 예: '비트코인 선물'은 코인 현물이 아니라 코인 선물
+  const fits = s => s.keys.test(t) && (!s.not || !s.not.test(t) || (s.id === "crypto_futures" && /코인|비트|이더|btc|eth/i.test(t)));
+  const out = mode === "code" ? [] : BUILTIN_SKILLS.filter(s => !(settings.skillsOff || []).includes(s.id) && fits(s));
   for (const s of settings.skills || []){
     if (s.off) continue;
     const keys = String(s.keys || "").split(/[,\s]+/).filter(Boolean);
@@ -502,7 +573,8 @@ ${settings.instructions ? `\n사용자 지침:\n${settings.instructions}\n` : ""
 ## 도구
 필요할 때 도구를 쓸 수 있다. 도구를 쓰려면 답변 중에 아래 형식으로 **한 번에 하나만** 쓰고, 바로 멈춘다.
 <tool name="도구이름">{"인자":"값"}</tool>
-그러면 <tool_result name="도구이름">결과</tool_result>가 돌아온다. 결과를 보고 이어서 답하거나 다른 도구를 쓴다. 도구 결과는 사용자에게 보이지 않으므로 중요한 내용은 답변에 정리한다.
+그러면 <tool_result name="도구이름">결과</tool_result>가 돌아온다. 결과를 보고 이어서 답하거나 다른 도구를 쓴다. 도구 결과는 사용자에게 보이지 않으므로 중요한 내용은 답변에서 해설한다.
+도구는 반드시 위의 <tool name="…"> 형식으로만 부른다. 모델 고유의 다른 도구 호출 형식(DSML, tool_call, function 등)은 쓰지 않는다.
 도구 없이 답할 수 있으면 도구를 쓰지 않는다. 도구 결과를 지어내지 않는다. 모르는 최신 정보는 추측하지 말고 web_search를 쓴다.
 사용자가 자신에 대해 오래 기억할 만한 정보(선호·상황)를 말하면 remember로 저장한다.
 사용 가능한 도구:
@@ -528,8 +600,12 @@ ${common}
 <artifact type="html|code|markdown|svg" title="제목" lang="python">내용</artifact>
 HTML은 하나의 완결된 파일로 만든다(외부 파일 없이, 필요하면 CDN 스크립트는 가능).
 
-## 답변 스타일
-핵심부터 말하고, 비교·수치는 표로, 단계는 번호 목록으로. 불확실한 것은 불확실하다고 말한다. 투자·법률·세무는 일반 정보이며 최종 판단은 전문가 확인이 필요하다고 짧게 알린다. 실제 주문 기능은 없고 모의투자만 가능하다.${nvDoc}${skillDoc}`;
+## 해설 원칙 (가장 중요)
+- 도구는 재료일 뿐이다. 도구 결과(숫자·표·검색 결과)를 그대로 늘어놓거나 '패널을 보세요'로 끝내지 않는다. 그 분야 전문가가 사람에게 말로 설명하듯, 자유롭고 자연스러운 문장으로 '무엇을 뜻하는지 → 왜 그런지 → 그래서 어떻게 하면 좋은지'를 풀어 쓴다.
+- 뉴스·검색 결과는 제목 목록으로 나열하지 않는다. 여러 기사를 엮어 지금 일어나는 일의 큰 줄기를 해설하고, 근거 문장 끝에만 [1]처럼 출처 번호를 단다.
+- 백테스트·설계·견적·분석 결과도 숫자 나열이 아니라 의미와 판단을 담은 해설로 쓴다. 표는 비교가 꼭 필요할 때만 보조로 쓴다.
+- 첫 문장에서 핵심 결론을 말하고, 이어서 이유와 맥락, 마지막에 실천할 수 있는 조언을 준다. 불확실한 것은 불확실하다고 말한다.
+- 투자·법률·세무는 일반 정보이며 최종 판단은 전문가 확인이 필요하다고 짧게 알린다. 실제 주문 기능은 없고 모의투자만 가능하다.${nvDoc}${skillDoc}`;
 }
 
 /* ================= 대화 → 모델 메시지 ================= */
@@ -573,8 +649,8 @@ export function toModelMessages(history, budgetTokens, maxTool = 24000){
 }
 
 /* ================= 에이전트 실행 ================= */
-const TOOL_RE = /<tool\s+name\s*=\s*["']?([\w-]+)["']?\s*>\s*([\s\S]*?)\s*(?:<\/tool>|$)/;
 function parseArgs(s){
+  if (s && typeof s === "object") return s;
   s = String(s || "").trim().replace(/^```(?:json)?|```$/g, "").trim();
   if (!s) return {};
   try { return JSON.parse(s); } catch(e){}
@@ -582,10 +658,47 @@ function parseArgs(s){
   const m = s.match(/\{[\s\S]*\}/); if (m){ try { return JSON.parse(m[0]); } catch(e){} }
   throw new Error("도구 인자를 해석하지 못했습니다");
 }
-// 스트리밍 중 화면에 보일 글: 도구 호출 태그가 시작되면 그 앞까지만
+/* 모델마다 도구를 부르는 고유 형식이 다르다. 누리 형식(<tool>)뿐 아니라
+   DeepSeek(DSML·｜tool▁call｜), Qwen/Hermes(<tool_call>), Llama(<function=>, python_tag), Mistral([TOOL_CALLS])도 알아듣는다. */
+const BAR = "[|｜]";
+const MARK_RE = new RegExp(`<tool[\\s>]|<tool_result|<\\s*${BAR}\\s*DSML|<\\s*${BAR}\\s*tool[▁_ ]|<tool_call>|<function=|\\[TOOL_CALLS\\]|<\\|python_tag\\|>`, "i");
+function dsmlArgs(inner){
+  const ps = [...inner.matchAll(new RegExp(`<\\s*${BAR}\\s*DSML\\s*${BAR}\\s*parameter\\s+name\\s*=\\s*"([^"]+)"[^>]*>([\\s\\S]*?)<\\s*\\/\\s*${BAR}\\s*DSML\\s*${BAR}\\s*parameter\\s*>`, "gi"))];
+  if (ps.length) return Object.fromEntries(ps.map(([, k, v]) => { const t = v.trim(); try { return [k, JSON.parse(t)]; } catch(e){ return [k, t]; } }));
+  const j = inner.replace(new RegExp(`<\\s*\\/?\\s*${BAR}\\s*DSML\\s*${BAR}[^>]*>`, "gi"), "").trim();
+  return j;
+}
+export function findToolCalls(body){
+  const calls = [];
+  const known = n => TOOLS[n] ? n : null;
+  let m;
+  // 1) 누리 형식
+  const ours = /<tool\s+name\s*=\s*["']?([\w-]+)["']?\s*>\s*([\s\S]*?)\s*(?:<\/tool>|(?=<tool[\s>])|$)/g;
+  while ((m = ours.exec(body))) calls.push({name: m[1], args: m[2]});
+  // 2) DeepSeek DSML
+  const dsml = new RegExp(`<\\s*${BAR}\\s*DSML\\s*${BAR}\\s*invoke\\s+name\\s*=\\s*"([^"]+)"\\s*>([\\s\\S]*?)(?=<\\s*\\/\\s*${BAR}\\s*DSML\\s*${BAR}\\s*invoke|<\\s*${BAR}\\s*DSML\\s*${BAR}\\s*invoke|$)`, "gi");
+  while ((m = dsml.exec(body))) calls.push({name: m[1], args: dsmlArgs(m[2])});
+  // 3) DeepSeek ｜tool▁call▁begin｜
+  const ds = new RegExp(`<\\s*${BAR}\\s*tool[▁_ ]call[▁_ ]begin\\s*${BAR}\\s*>\\s*(?:function\\s*<\\s*${BAR}\\s*tool[▁_ ]sep\\s*${BAR}\\s*>)?\\s*([\\w-]+)\\s*([\\s\\S]*?)<\\s*${BAR}\\s*tool[▁_ ]call[▁_ ]end`, "gi");
+  while ((m = ds.exec(body))) calls.push({name: m[1], args: m[2]});
+  // 4) Qwen·Hermes <tool_call>{"name":..,"arguments":..}</tool_call>
+  const hermes = /<tool_call>\s*([\s\S]*?)\s*(?:<\/tool_call>|$)/gi;
+  while ((m = hermes.exec(body))){ try { const j = parseArgs(m[1]); if (j.name) calls.push({name: j.name, args: j.arguments ?? j.parameters ?? {}}); } catch(e){} }
+  // 5) Llama <function=name>{...}</function>
+  const fn = /<function=([\w-]+)>\s*([\s\S]*?)\s*(?:<\/function>|$)/gi;
+  while ((m = fn.exec(body))) calls.push({name: m[1], args: m[2]});
+  // 6) Mistral [TOOL_CALLS][...] · Llama python_tag
+  const arr = body.match(/(?:\[TOOL_CALLS\]|<\|python_tag\|>)\s*([\[{][\s\S]*)$/);
+  if (arr){ try { const j = JSON.parse(arr[1].replace(/<\|eom_id\|>|<\|eot_id\|>/g, "").trim()); for (const c of [].concat(j)) if (c?.name) calls.push({name: c.name, args: c.arguments ?? c.parameters ?? {}}); } catch(e){} }
+  // 7) 형식 없이 JSON만 쓴 경우 ({"name":"web_search","arguments":{...}})
+  if (!calls.length){ const j = body.match(/```(?:json)?\s*(\{[\s\S]*?"name"\s*:\s*"([\w-]+)"[\s\S]*?\})\s*```/); if (j && known(j[2])){ try { const o = JSON.parse(j[1]); if (o.arguments || o.parameters) calls.push({name: o.name, args: o.arguments ?? o.parameters}); } catch(e){} } }
+  return calls.map(c => ({name: String(c.name).replace(/^functions?\./, "").trim(), args: c.args}));
+}
+// 스트리밍 중 화면에 보일 글: 어떤 형식이든 도구 호출 표시가 시작되면 그 앞까지만
 export function visibleText(t){
-  const i = t.search(/<tool[\s>]|<tool_result/);
-  return i >= 0 ? t.slice(0, i) : t.replace(/<t?o?o?l?$/, "");
+  const i = t.search(MARK_RE);
+  const cut = i >= 0 ? t.slice(0, i) : t;
+  return cut.replace(/<\s*[|｜/]?\s*[\w|｜▁ -]{0,14}$/, "").replace(/```(?:json)?\s*\{\s*"name"[\s\S]*$/, "");
 }
 // 질문 종류 → 모델 역할 (자동 선택이 이 역할에 맞는 모델을 고른다)
 export function roleFor(mode, text, think){
@@ -596,6 +709,7 @@ export function roleFor(mode, text, think){
   return "general";
 }
 const ROLE_KO = {general: "일반", code: "코딩", reason: "추론", fast: "빠름", vision: "이미지 보기"};
+const EXPLAIN = new Set(["market_backtest", "market_analyze", "design_building", "cost_estimate", "land_check", "econ_calendar", "market_quote", "market_list", "paper_trade", "realestate_search"]);
 const routeName = c => !c ? "" : c.id === "local" ? "내 기기" : c.id === "ollama" ? "Ollama" : (PROVIDERS[c.id]?.name || c.id);
 
 export async function runAgent({mode, history, msg, signal, onUpdate, openArtifact, askPermission, workspace, think}){
@@ -631,20 +745,31 @@ export async function runAgent({mode, history, msg, signal, onUpdate, openArtifa
     if (route && route.id){ msg.route = {id: route.id, model: route.model, name: routeName(route), role: ROLE_KO[role]}; }
     part.t1 = Date.now();
     const body = splitThink(raw).body;
-    const m = body.match(TOOL_RE);
-    if (!m || !TOOLS[m[1]]){
+    const found = findToolCalls(body), calls = found.filter(c => TOOLS[c.name]).slice(0, 4), unknown = found.filter(c => !TOOLS[c.name]);
+    if (!calls.length){
       part.text = visibleText(raw);
       if (cut) part.text += "\n\n*(답변 길이 한도에 닿아 끊겼습니다. '계속'이라고 보내면 이어서 씁니다.)*";
-      if (m && !TOOLS[m[1]]) part.text += `\n\n*(알 수 없는 도구 '${m[1]}'를 부르려 해서 멈췄습니다.)*`;
+      if (unknown.length) part.text += `\n\n*(알 수 없는 도구 '${unknown[0].name}'를 부르려 해서 멈췄습니다.)*`;
+      if (!part.text.trim() && !part.think) part.text = "*(모델이 빈 답을 보냈습니다. '다시 생성'을 눌러 보세요.)*";
       msg.phase = ""; msg.t1 = Date.now(); onUpdate(); return;
     }
-    // 도구 호출
+    // 도구 호출 (한 번에 여러 개를 부르면 차례로 실행)
     part.text = visibleText(raw).trim();
     if (!part.text && !part.think) msg.parts.pop();
-    const name = m[1], tool = TOOLS[name];
+    let stop = false;
+    for (const call of calls){
+      if (await runTool(call)){ stop = true; break; }
+    }
+    if (stop) break;
+  }
+  msg.phase = ""; msg.t1 = Date.now(); onUpdate();
+
+  // 도구 하나 실행. 사용자가 멈췄으면 true
+  async function runTool(call){
+    const name = call.name, tool = TOOLS[name];
     const tp = {type: "tool", id: Math.random().toString(36).slice(2), name, label: tool.label, input: {}, status: "running", t0: Date.now()};
     msg.parts.push(tp);
-    try { tp.input = parseArgs(m[2]); } catch(e){ tp.status = "error"; tp.error = e.message; tp.t1 = Date.now(); onUpdate(); continue; }
+    try { tp.input = parseArgs(call.args); } catch(e){ tp.status = "error"; tp.error = e.message; tp.t1 = Date.now(); onUpdate(); return false; }
     try { tp.act = tool.act ? tool.act(tp.input) : tool.label; } catch(e){ tp.act = tool.label; }
     msg.phase = tp.act; activity({kind: "tool", text: tp.act, name});
     let pre = null;
@@ -658,19 +783,21 @@ export async function runAgent({mode, history, msg, signal, onUpdate, openArtifa
           msg.phase = "허락 기다리는 중"; onUpdate();
           const ok = await askPermission(tp);
           delete tp.preview;
-          if (!ok){ tp.status = "denied"; tp.t1 = Date.now(); onUpdate(); continue; }
+          if (!ok){ tp.status = "denied"; tp.t1 = Date.now(); onUpdate(); return false; }
         }
       }
       tp.status = "running"; msg.phase = tp.act; onUpdate();
       const r = await tool.run(tp.input, {openArtifact: (spec, wait) => { tp.artifact = spec; onUpdate(); return openArtifact(spec, wait); }, signal}, pre);
+      // 분석·설계 결과는 숫자를 나열하지 말고 해설하도록 결과 앞에 다시 일러 둔다
+      if (EXPLAIN.has(name) && r.text) r.text = "[이 결과를 숫자·표 나열이 아니라, 전문가가 말로 설명하듯 의미·이유·대응을 담은 자유로운 해설로 풀어 쓸 것]\n" + r.text;
       tp.status = "done"; tp.modelText = r.text; tp.summary = r.summary; if (r.diff) tp.diff = r.diff; if (r.todos){ tp.todos = r.todos; msg.todos = r.todos; } if (r.output !== undefined){ tp.output = r.output; tp.code = r.code; }
       if (r.sources?.length){ tp.sources = r.sources.slice(0, 12).map(s => ({title: s.title, url: s.url})); msg.sources = [...(msg.sources || []), ...tp.sources.filter(s => !(msg.sources || []).some(x => x.url === s.url))].slice(0, 30); }
     } catch (e){
-      if (signal.aborted){ tp.status = "error"; tp.error = "중단됨"; tp.t1 = Date.now(); onUpdate(); break; }
+      if (signal.aborted){ tp.status = "error"; tp.error = "중단됨"; tp.t1 = Date.now(); onUpdate(); return true; }
       tp.status = "error"; tp.error = e.message || String(e);
     }
     tp.t1 = Date.now();
     onUpdate();
+    return false;
   }
-  msg.phase = ""; msg.t1 = Date.now(); onUpdate();
 }

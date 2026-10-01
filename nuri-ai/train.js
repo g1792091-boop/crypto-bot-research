@@ -1,7 +1,8 @@
 // 학습: 대화·합성 데이터를 모아 작은 오픈모델을 직접 미세조정(LoRA)하고, 결과 모델을 앱에 다시 넣는다
 // 합성 데이터는 NVIDIA data-designer 스킬과 같은 방식(조건 샘플링 → 질문 생성 → 모범 답안 → AI 채점)으로 만든다.
-import { idb, uid, brainStream, splitThink, settings } from "./engine.js";
-import { toModelMessages, BUILTIN_SKILLS } from "./agent.js";
+import { idb, uid, brainStream, splitThink, settings, routeCandidates } from "./engine.js";
+import { toModelMessages, BUILTIN_SKILLS, runAgent } from "./agent.js";
+import { nvIndex, nvSkill } from "./nvskills.js";
 
 /* ============ 바탕 모델 (RTX 3050 노트북 기준으로 고름) ============ */
 export const BASES = [
@@ -16,7 +17,7 @@ export const BASES = [
 const NAME = () => settings.aiName || "GH Nano";
 export const TRAIN_SYS = mode => mode === "code"
   ? `너는 '${NAME()} 코드'다. 사용자의 작업 폴더에서 코드를 읽고 고치고 실행하는 숙련된 엔지니어다. 도구는 <tool name="도구">{json}</tool> 형식으로 하나씩 쓰고 <tool_result>를 받아 이어서 일한다.`
-  : `너는 '${NAME()}'라는 이름의 한국어 AI 어시스턴트다. 사용자가 직접 만든 자체 AI다. 핵심부터 정확하고 친절하게 답하고, 비교·수치는 표로 정리한다. 필요하면 <tool name=\"도구\">{json}</tool> 형식으로 도구를 하나씩 쓰고 <tool_result>를 받아 이어서 답한다. 모르는 것은 지어내지 않는다.`;
+  : `너는 '${NAME()}'라는 이름의 한국어 AI 어시스턴트다. 사용자가 직접 만든 자체 AI다. 핵심 결론부터 말하고 전문가가 설명하듯 자연스러운 문장으로 해설한다. 필요하면 <tool name=\"도구\">{json}</tool> 형식으로 도구를 하나씩 쓰고 <tool_result>를 받아 이어서 답한다. 모르는 것은 지어내지 않는다.`;
 const visibleOf = m => (m.parts || [{type: "text", text: m.content || ""}]).filter(p => p.type === "text").map(p => splitThink(p.text).body).join("\n\n").trim();
 function shrink(msgs){ return msgs.map(m => m.role === "user" && m.content.startsWith("<tool_result") && m.content.length > 3000 ? {...m, content: m.content.slice(0, 2980) + "…</tool_result>"} : m); }
 // 대화 → 학습 예시. onlyGood: 👍 받은 답만, tools: 도구 사용 과정까지 가르칠지
@@ -45,63 +46,134 @@ export const removeSynth = id => idb.del("train:" + id);
 export async function clearSynth(){ for (const s of await loadSynth()) await idb.del("train:" + s.id); }
 export function toJSONL(samples){ return samples.map(s => JSON.stringify({messages: s.messages})).join("\n") + "\n"; }
 
-/* ============ 합성 데이터 (data-designer 방식) ============ */
+/* ============ 합성 데이터: GH Nano 만들기 ============ */
+// 1) 조건 샘플링(NVIDIA data-designer 방식)으로 질문을 만들고
+// 2) 연결된 여러 AI의 답을 모아 가장 좋은 내용으로 하나의 모범답안을 합치거나(앙상블),
+//    실제 도구(시세·설계·뉴스)를 쓰는 과정까지 그대로 기록하고(에이전트 기록),
+//    NVIDIA 공식 스킬 문서를 근거로 문답을 만든 뒤
+// 3) AI 채점으로 좋은 것만 남긴다. 이렇게 모은 데이터로 작은 모델을 학습시키면 '모델 + 스킬'이 하나로 합쳐진 GH Nano가 된다.
 export const TOPICS = [
-  {id: "market", name: "코인·주식·선물 분석", skill: "market", seeds: ["비트코인 기술적 분석", "알트코인 투자 판단", "선물 레버리지와 청산", "펀딩비 해석", "미국 주식 실적 분석", "국내 주식 가치평가", "ETF 고르기", "원자재·원유 선물", "환율과 주식", "포트폴리오 분산", "손절·익절 원칙", "RSI·MACD·볼린저 해석"]},
-  {id: "macro", name: "경제 지표·거시경제", skill: "macro", seeds: ["CPI 발표 해석", "FOMC와 금리", "고용지표", "GDP와 경기", "달러 인덱스", "한국은행 기준금리", "국채 금리와 주식", "경기 침체 신호"]},
-  {id: "backtest", name: "퀀트 전략·백테스트", skill: "backtest", seeds: ["이동평균 전략", "RSI 역추세", "변동성 돌파", "과최적화", "수수료·슬리피지", "포지션 크기 결정", "최대낙폭 관리"]},
-  {id: "arch", name: "건축 설계·견적·렌더링", skill: "arch", seeds: ["단독주택 평면 구성", "상가주택 설계", "건폐율·용적률 계산", "철근콘크리트 vs 철골", "공사비 견적", "인테리어 비용", "단열·창호", "주차 계획", "CAD·Revit·SketchUp 사용", "루미온 렌더링 팁"]},
-  {id: "land", name: "부동산·토지·법규", skill: "land", seeds: ["용도지역별 건축 제한", "재개발 요건", "재건축 안전진단", "모아타운·가로주택", "법원경매 절차", "권리분석", "양도소득세", "취득세", "전세 계약 주의", "토지거래허가구역"]},
-  {id: "daily", name: "일상 대화·글쓰기·번역", skill: null, seeds: ["이메일 작성", "보고서 요약", "자기소개서", "영어 번역", "고민 상담", "여행 계획", "공부 방법", "건강한 습관"]},
-  {id: "code", name: "코딩", skill: "coding", seeds: ["파이썬 기초", "자바스크립트 웹페이지", "엑셀 자동화", "API 호출", "버그 찾기", "SQL 쿼리", "업비트 API 사용"]}
+  {id: "crypto_spot", name: "코인 현물", skill: "crypto_spot", agent: true, seeds: ["비트코인 지금 분석", "이더리움 추세", "알트코인 매수 판단", "김치 프리미엄", "거래량 급증 코인", "리플 지지선", "솔라나 전망"]},
+  {id: "crypto_futures", name: "코인 선물", skill: "crypto_futures", agent: true, seeds: ["비트코인 선물 펀딩비 해석", "레버리지 청산가 계산", "롱숏비율 쏠림", "미결제약정 증가 의미", "선물 포지션 크기", "이더리움 선물 숏 판단"]},
+  {id: "us_stocks", name: "해외주식", skill: "us_stocks", agent: true, seeds: ["엔비디아 일봉 분석", "테슬라 실적 이후", "애플 주가 흐름", "반도체 ETF", "빅테크 비교", "팔란티어 변동성"]},
+  {id: "kr_stocks", name: "국내주식", skill: "kr_stocks", agent: true, seeds: ["삼성전자 분석", "SK하이닉스 추세", "코스피 외국인 수급", "현대차 배당", "2차전지 업종"]},
+  {id: "global_futures", name: "해외선물", skill: "global_futures", agent: true, seeds: ["WTI 원유 선물 분석", "금 선물 전망", "나스닥100 선물", "천연가스 변동성", "미 국채 선물과 금리", "구리 선물과 경기"]},
+  {id: "news", name: "뉴스 해설", skill: "news", agent: true, seeds: ["오늘 코인 시장 뉴스", "미국 증시 마감 뉴스", "국제유가 뉴스", "연준 금리 뉴스", "국내 증시 시황"]},
+  {id: "macro", name: "경제 지표·거시경제", skill: "macro", agent: true, seeds: ["이번 주 경제 발표", "CPI 발표 해석", "FOMC와 금리", "고용지표", "달러 인덱스", "한국은행 기준금리"]},
+  {id: "backtest", name: "퀀트 전략·백테스트", skill: "backtest", agent: true, seeds: ["비트코인 이동평균 전략 백테스트", "이더리움 RSI 전략", "볼린저 전략 비교", "과최적화", "손절 넣은 전략", "최대낙폭 관리"]},
+  {id: "arch", name: "건축 설계·견적·렌더링", skill: "arch", agent: true, seeds: ["60평 대지 3층 주택 설계", "상가주택 설계", "카페 건물 설계", "공사비 견적", "인테리어 견적", "건폐율·용적률 계산", "CAD·Revit·SketchUp 사용"]},
+  {id: "land", name: "부동산·토지·법규", skill: "land", agent: true, seeds: ["재개발 가능성", "용도지역별 건축 제한", "모아타운", "법원경매 절차", "양도소득세", "전세 계약 주의"]},
+  {id: "daily", name: "일상 대화·글쓰기·번역", skill: null, seeds: ["이메일 작성", "보고서 요약", "자기소개서", "영어 번역", "고민 상담", "여행 계획", "공부 방법"]},
+  {id: "code", name: "코딩", skill: "coding", seeds: ["파이썬 기초", "자바스크립트 웹페이지", "엑셀 자동화", "API 호출", "버그 찾기", "SQL 쿼리"]},
+  {id: "nvidia", name: "NVIDIA 스킬 지식", skill: null, nv: true, seeds: []}
 ];
-const PERSONAS = ["코인을 막 시작한 직장인", "10년 차 주식 투자자", "건축사무소를 운영하는 건축사", "집을 짓고 싶은 40대 부부", "부동산 경매에 관심 있는 자영업자", "재개발 구역의 집주인", "경제학과 대학생", "개발을 배우는 취준생", "인테리어 업체 대표", "은퇴를 준비하는 50대"];
+const PERSONAS = ["코인을 막 시작한 직장인", "10년 차 주식 투자자", "선물 단타 트레이더", "건축사무소를 운영하는 건축사", "집을 짓고 싶은 40대 부부", "부동산 경매에 관심 있는 자영업자", "재개발 구역의 집주인", "경제학과 대학생", "개발을 배우는 취준생", "AI 엔지니어", "은퇴를 준비하는 50대"];
 const LEVELS = ["쉬움(기초 개념)", "보통(실전 상황)", "어려움(여러 조건을 따지는 판단)"];
 const STYLES = ["짧고 구어체로", "상황을 자세히 설명하며", "숫자와 조건을 넣어서", "비교를 요청하며"];
 const pickOne = a => a[Math.floor(Math.random() * a.length)];
-async function ask(messages, {signal, maxTokens = 1500, temperature = 0.7} = {}){
+async function ask(messages, {signal, maxTokens = 1500, temperature = 0.7, target} = {}){
   let out = "";
-  const route = await brainStream({messages, maxTokens, temperature, signal, role: "general", onContent: d => out += d});
-  return {text: splitThink(out).body.trim(), route};
+  const route = await brainStream({messages, maxTokens, temperature, signal, role: "general", target, onContent: d => out += d});
+  return {text: splitThink(out).body.trim(), route: route || target};
 }
 function parseJSONArray(t){
   const m = t.match(/\[[\s\S]*\]/); if (!m) return [];
   try { return JSON.parse(m[0]).map(x => typeof x === "string" ? x : x.question || x.q || "").filter(Boolean); } catch(e){ return []; }
 }
-// onEvent({kind:"progress"|"sample"|"log", ...})
-export async function generateSynth({topics, count, judge = true, signal, onEvent}){
+// 선생으로 쓸 서로 다른 AI (회사·모델이 겹치지 않게, 최대 3개)
+export function teachers(){
+  const seen = new Set(), out = [];
+  for (const role of ["general", "reason", "code"]) for (const c of routeCandidates(role)){
+    const k = c.id + "|" + c.model;
+    if (c.id === "local" || seen.has(k)) continue;
+    seen.add(k); out.push(c); if (out.length >= 3) return out;
+  }
+  return out;
+}
+async function judgeScore(q, a, signal){
+  const j = await ask([{role: "system", content: "[채점] 너는 엄격한 심사위원이다. 질문에 대한 답이 정확하고, 도움이 되고, 한국어가 자연스럽고, 수치를 지어내지 않았고, 숫자 나열이 아닌 해설로 설명했는지 1~5점으로 평가한다. 첫 줄에 '점수: N'만 쓴다."},
+    {role: "user", content: `질문:\n${q}\n\n답:\n${String(a).slice(0, 6000)}`}], {signal, maxTokens: 60, temperature: 0});
+  return +((j.text.match(/점수\s*[:：]?\s*([1-5])/) || j.text.match(/\b([1-5])\b/) || [])[1] || 0);
+}
+const answerSys = skill => `너는 '${NAME()}'라는 한국어 AI 어시스턴트다. 이 답은 학습 데이터용 모범 답안이므로 정확하고 구체적이며 친절해야 한다.
+핵심 결론부터 말하고, 이유와 맥락을 전문가가 말로 설명하듯 자연스러운 문장으로 풀어 쓴다(표는 꼭 필요할 때만). 실시간 가격·시세·최신 법령처럼 지금 확인해야 하는 수치는 지어내지 말고 '확인 방법'과 '해석하는 법'을 알려준다. 투자·법률·세무는 일반 정보이며 전문가 확인이 필요하다고 짧게 덧붙인다.${skill ? "\n\n참고할 전문가 지침(지금은 도구를 쓸 수 없으니 도구 이름은 언급하지 말고 원칙과 방법으로 답한다):\n" + skill.prompt : ""}`;
+// 여러 AI의 답을 받아 하나의 최고의 답으로 합친다
+async function ensembleAnswer(q, sys, signal, log){
+  const ts = teachers();
+  if (ts.length < 2){ const a = await ask([{role: "system", content: sys}, {role: "user", content: q}], {signal, maxTokens: 1800, temperature: 0.5}); return {text: a.text, teacher: a.route?.model || ""}; }
+  const outs = (await Promise.all(ts.map(t => ask([{role: "system", content: sys}, {role: "user", content: q}], {signal, maxTokens: 1600, temperature: 0.5, target: t}).then(a => ({t, text: a.text})).catch(() => null)))).filter(x => x && x.text && x.text.length > 40);
+  if (outs.length < 2) return {text: outs[0]?.text || "", teacher: outs[0]?.t.model || ""};
+  log?.(`${outs.length}개 AI 답 합치는 중`);
+  const m = await ask([{role: "system", content: "[통합] 너는 여러 AI의 답을 비교해 최고의 답 하나를 만드는 편집장이다. 각 답에서 정확하고 유용한 내용만 골라, 틀리거나 근거 없는 내용은 버리고, 하나의 자연스러운 한국어 모범답안으로 다시 쓴다. '답 A에 따르면' 같은 말은 쓰지 말고 완성된 답만 출력한다."},
+    {role: "user", content: `질문:\n${q}\n\n${outs.map((o, i) => `### 답 ${"ABC"[i]} (${o.t.model})\n${o.text.slice(0, 5000)}`).join("\n\n")}`}], {signal, maxTokens: 2000, temperature: 0.3});
+  return {text: m.text, teacher: outs.map(o => o.t.model).join(" + ")};
+}
+// 실제 도구를 쓰는 과정까지 기록 (GH Nano가 시세·설계·뉴스 도구를 직접 쓰도록 배우게)
+async function agentTrace(q, signal){
+  const msg = {role: "assistant", parts: [], mode: "chat", ts: Date.now()};
+  const user = {role: "user", content: q};
+  try {
+    await runAgent({mode: "chat", history: [user], msg, signal: signal || new AbortController().signal, onUpdate(){}, think: false, workspace: "",
+      openArtifact: async () => null, askPermission: async () => false});
+  } catch(e){ if (signal?.aborted) throw e; return null; }   // 실패하면 일반 문답으로 대신 만든다
+  const final = visibleOf(msg);
+  if (!final || final.length < 60 || msg.parts.some(p => p.type === "tool" && p.status === "error")) return null;
+  return {conv: shrink(toModelMessages([user, msg], 1e9)), final, teacher: msg.route?.model || "", tools: msg.parts.filter(p => p.type === "tool").length};
+}
+// NVIDIA 공식 스킬 문서를 근거로 문답 만들기
+async function nvSample(signal, log){
+  const idx = await nvIndex(), s = pickOne(idx.skills), sk = await nvSkill(s.n);
+  const doc = String(sk.files["SKILL.md"] || "").replace(/^---[\s\S]*?\n---\s*/, "").slice(0, 5000);
+  log?.(`NVIDIA 스킬 '${s.n}' 문서로 문답 만드는 중`);
+  const g = await ask([{role: "system", content: "[질문 생성] 아래 기술 문서를 읽은 사용자가 실제로 물어볼 만한 한국어 질문 2개를 JSON 배열로만 출력한다."}, {role: "user", content: `문서(${s.n}):\n${doc}`}], {signal, maxTokens: 400, temperature: 0.9});
+  const q = parseJSONArray(g.text)[0]; if (!q) return null;
+  const a = await ask([{role: "system", content: `너는 '${NAME()}'라는 한국어 AI 어시스턴트다. 아래 NVIDIA 공식 스킬 문서만 근거로, 절차와 이유를 친절한 한국어로 설명한다. 명령어·설정 이름은 원문 그대로 쓴다. 문서에 없는 내용은 지어내지 않는다.\n\n문서(${s.n}):\n${doc}`}, {role: "user", content: q}], {signal, maxTokens: 1800, temperature: 0.4});
+  return a.text && a.text.length > 60 ? {q, text: a.text, teacher: a.route?.model || "", skill: s.n} : null;
+}
+// onEvent({kind:"sample"|"log", ...})
+export async function generateSynth({topics, count, judge = true, ensemble = false, agent = false, signal, onEvent}){
   const sel = TOPICS.filter(t => topics.includes(t.id)); if (!sel.length) throw new Error("주제를 하나 이상 고르세요");
+  const log = text => onEvent?.({kind: "log", text});
+  const save = async s => { await idb.put("train:" + s.id, s); made++; onEvent?.({kind: "sample", sample: s, made, count}); };
   let made = 0, tries = 0;
   while (made < count && tries < count * 3){
     if (signal?.aborted) break;
     const topic = sel[tries % sel.length]; tries++;
-    const persona = pickOne(PERSONAS), level = pickOne(LEVELS), style = pickOne(STYLES), seed = pickOne(topic.seeds);
-    // 1) 조건에 맞는 질문 여러 개
-    const g = await ask([{role: "system", content: "[질문 생성] 너는 AI 학습 데이터를 설계하는 전문가다. 지시한 조건에 맞는 자연스러운 한국어 사용자 질문을 만든다. JSON 배열만 출력한다."},
-      {role: "user", content: `주제: ${topic.name} / 세부: ${seed}\n질문자: ${persona}\n난이도: ${level}\n말투: ${style}\n서로 다른 질문 3개를 ["질문1","질문2","질문3"] 형식의 JSON 배열로만 출력해.`}], {signal, maxTokens: 700, temperature: 0.95});
-    const qs = parseJSONArray(g.text).slice(0, 3);
-    if (!qs.length){ onEvent?.({kind: "log", text: "질문을 만들지 못해 다시 시도합니다"}); continue; }
-    const skill = BUILTIN_SKILLS.find(s => s.id === topic.skill);
-    for (const q of qs){
-      if (made >= count || signal?.aborted) break;
-      onEvent?.({kind: "log", text: `답안 작성: ${q.slice(0, 60)}`});
-      // 2) 모범 답안
-      const sys = `너는 '${NAME()}'라는 한국어 AI 어시스턴트다. 이 답은 학습 데이터용 모범 답안이므로 정확하고 구체적이며 친절해야 한다.
-핵심부터 말하고, 비교·수치는 표로, 단계는 번호 목록으로 정리한다. 실시간 가격·시세·최신 법령 개정처럼 지금 확인해야 하는 수치는 지어내지 말고 '확인 방법'과 '해석하는 법'을 알려준다. 투자·법률·세무는 일반 정보이며 전문가 확인이 필요하다고 짧게 덧붙인다.${skill ? "\n\n참고할 전문가 지침(지금은 도구를 쓸 수 없으니 도구 이름은 언급하지 말고 원칙과 방법으로 답한다):\n" + skill.prompt : ""}`;
-      const a = await ask([{role: "system", content: sys}, {role: "user", content: q}], {signal, maxTokens: 1800, temperature: 0.5});
-      if (!a.text || a.text.length < 40) continue;
-      // 3) 채점 (data-designer의 LLM 심사 열과 같은 역할)
-      let score = null;
-      if (judge){
-        const j = await ask([{role: "system", content: "[채점] 너는 엄격한 심사위원이다. 질문에 대한 답이 정확하고, 도움이 되고, 한국어가 자연스럽고, 수치를 지어내지 않았는지 1~5점으로 평가한다. 첫 줄에 '점수: N'만 쓴다."},
-          {role: "user", content: `질문:\n${q}\n\n답:\n${a.text.slice(0, 6000)}`}], {signal, maxTokens: 60, temperature: 0});
-        score = +((j.text.match(/점수\s*[:：]?\s*([1-5])/) || j.text.match(/\b([1-5])\b/) || [])[1] || 0);
-        if (score && score < 4){ onEvent?.({kind: "log", text: `품질 ${score}점이라 버림`}); continue; }
+    try {
+      if (topic.nv){
+        const r = await nvSample(signal, log); if (!r) continue;
+        const score = judge ? await judgeScore(r.q, r.text, signal) : null;
+        if (score && score < 4){ log(`품질 ${score}점이라 버림`); continue; }
+        await save({id: uid(), t: Date.now(), src: "synth", kind: "nvidia", topic: topic.id, score, teacher: r.teacher, skill: r.skill, messages: [{role: "system", content: TRAIN_SYS("chat")}, {role: "user", content: r.q}, {role: "assistant", content: r.text}]});
+        continue;
       }
-      const s = {id: uid(), t: Date.now(), src: "synth", topic: topic.id, persona, level, score, teacher: a.route?.model || "", messages: [{role: "system", content: TRAIN_SYS("chat")}, {role: "user", content: q}, {role: "assistant", content: a.text}]};
-      await idb.put("train:" + s.id, s); made++;
-      onEvent?.({kind: "sample", sample: s, made, count});
-    }
+      const persona = pickOne(PERSONAS), level = pickOne(LEVELS), style = pickOne(STYLES), seed = pickOne(topic.seeds);
+      const g = await ask([{role: "system", content: "[질문 생성] 너는 AI 학습 데이터를 설계하는 전문가다. 지시한 조건에 맞는 자연스러운 한국어 사용자 질문을 만든다. JSON 배열만 출력한다."},
+        {role: "user", content: `주제: ${topic.name} / 세부: ${seed}\n질문자: ${persona}\n난이도: ${level}\n말투: ${style}\n서로 다른 질문 3개를 ["질문1","질문2","질문3"] 형식의 JSON 배열로만 출력해.`}], {signal, maxTokens: 700, temperature: 0.95});
+      const qs = parseJSONArray(g.text).slice(0, 3);
+      if (!qs.length){ log("질문을 만들지 못해 다시 시도합니다"); continue; }
+      const skill = BUILTIN_SKILLS.find(s => s.id === topic.skill);
+      for (const q of qs){
+        if (made >= count || signal?.aborted) break;
+        // 도구를 쓰는 분야는 실제 도구 사용 과정까지 기록
+        if (agent && topic.agent){
+          log(`도구 사용 기록: ${q.slice(0, 50)}`);
+          const tr = await agentTrace(q, signal);
+          if (tr){
+            const score = judge ? await judgeScore(q, tr.final, signal) : null;
+            if (score && score < 4){ log(`품질 ${score}점이라 버림`); continue; }
+            await save({id: uid(), t: Date.now(), src: "synth", kind: "agent", topic: topic.id, persona, level, score, teacher: tr.teacher, tools: tr.tools, messages: [{role: "system", content: TRAIN_SYS("chat")}, ...tr.conv]});
+            continue;
+          }
+        }
+        log(`${ensemble ? "여러 AI로 " : ""}답안 작성: ${q.slice(0, 50)}`);
+        const a = ensemble ? await ensembleAnswer(q, answerSys(skill), signal, log) : await ask([{role: "system", content: answerSys(skill)}, {role: "user", content: q}], {signal, maxTokens: 1800, temperature: 0.5}).then(x => ({text: x.text, teacher: x.route?.model || ""}));
+        if (!a.text || a.text.length < 40) continue;
+        const score = judge ? await judgeScore(q, a.text, signal) : null;
+        if (score && score < 4){ log(`품질 ${score}점이라 버림`); continue; }
+        await save({id: uid(), t: Date.now(), src: "synth", kind: ensemble ? "ensemble" : "single", topic: topic.id, persona, level, score, teacher: a.teacher, messages: [{role: "system", content: TRAIN_SYS("chat")}, {role: "user", content: q}, {role: "assistant", content: a.text}]});
+      }
+    } catch (e){ if (signal?.aborted) break; log("건너뜀: " + (e.message || e).slice(0, 80)); }
   }
   return made;
 }
@@ -169,6 +241,27 @@ if GGUF and os.path.getsize(GGUF) > 1.95e9:
         print("2GB가 넘어 나눴습니다:", PARTS)
     else:
         print("나누기 도구를 찾지 못했습니다. 이 파일은 Ollama로 쓰거나 더 작은 바탕 모델을 고르세요.")`;
+// 모델 카드 + Modelfile: 학습 데이터 구성(대화·앙상블·도구 기록·NVIDIA 스킬)을 세어 기록한다
+const pyCard = o => `import json, collections, datetime
+kinds = collections.Counter()
+with open(DATA, encoding="utf-8") as fh:
+    for line in fh:
+        ms = json.loads(line)["messages"]
+        kinds["도구 사용 기록" if any("<tool name=" in m["content"] for m in ms if m["role"] == "assistant") else "문답"] += 1
+card = f"""# ${NAME()}
+
+사용자가 직접 만든 자체 AI 모델입니다. 여러 오픈모델의 답을 하나로 합친 모범답안, 기본·NVIDIA 스킬 지식, 실제 도구(시세·설계·뉴스) 사용 과정을 학습했습니다.
+
+- 바탕 모델: ${o.baseName} ({BASE}) · 라이선스: ${o.lic}
+- 학습 방식: LoRA(QLoRA 4비트) {EPOCHS}회 · 최대 길이 {MAX_LEN}
+- 학습 예시: {sum(kinds.values())}개 ({dict(kinds)})
+- 만든 날: {datetime.date.today()}
+- 실행: GH Nano 앱 → 설정 → 학습 · 내 모델 → 내 모델 등록 (GGUF)
+"""
+open("README.md", "w", encoding="utf-8").write(card)
+system = ${JSON.stringify(TRAIN_SYS("chat"))}
+open("Modelfile", "w", encoding="utf-8").write(f'FROM ./{os.path.basename(GGUF or "model.gguf")}\\nSYSTEM """{system}"""\\nPARAMETER temperature 0.6\\n')
+print(card)`;
 export function notebookJSON(o){
   const md = s => ({cell_type: "markdown", metadata: {}, source: s.split(/(?<=\n)/)});
   const code = s => ({cell_type: "code", metadata: {}, execution_count: null, outputs: [], source: s.split(/(?<=\n)/)});
@@ -180,7 +273,9 @@ export function notebookJSON(o){
     md("## 2. 학습 데이터 준비"), code(pyData),
     md("## 3. 학습"), code(pyTrain),
     md("## 4. 시험해 보기"), code(pyTest),
-    md("## 5. GGUF로 변환해서 내려받기"), code(`${pyGGUF}\nfor f in PARTS:\n    files.download(f)`)
+    md("## 5. GGUF로 변환해서 내려받기"), code(`${pyGGUF}\nfor f in PARTS:\n    files.download(f)`),
+    md(`## 6. ${NAME()} 모델 카드\n학습 데이터 구성과 사용법을 적은 카드(README.md)와, Ollama를 쓰는 경우를 위한 Modelfile(이름·지시문 포함)을 만듭니다.`),
+    code(`${pyCard(o)}\nfiles.download("README.md")\nfiles.download("Modelfile")`)
   ];
   return JSON.stringify({nbformat: 4, nbformat_minor: 5, metadata: {accelerator: "GPU", colab: {provenance: [], gpuType: "T4"}, kernelspec: {name: "python3", display_name: "Python 3"}, language_info: {name: "python"}}, cells}, null, 1);
 }
