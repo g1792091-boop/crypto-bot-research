@@ -166,9 +166,9 @@ class World:
         self.now = ts + 61_500 if live else ts + 10 * MIN
         self.runner.process([(ts, self.bars(ts, **kw), {})])
 
-    def run(self, lo: int, hi: int, **kw) -> None:
-        t = lo
-        while t < hi:
+    def run(self, t0: int, t1: int, **kw) -> None:
+        t = t0
+        while t < t1:
             self.process(t, **kw)
             t += MIN
 

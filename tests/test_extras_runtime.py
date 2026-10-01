@@ -576,6 +576,7 @@ def test_gate_strict_count_and_hwm(tmp_path, monkeypatch):
     monkeypatch.undo()
     w.close()
     # (c) after an agents3 restore with fewer tests, the high-water mark judges: p 0.004 passes at n <= 12 only
+    (tmp_path / "c").mkdir()
     w = World(tmp_path / "c", hist=True)
     w.process(T0)
     import tests.extras_harness as H
@@ -584,7 +585,7 @@ def test_gate_strict_count_and_hwm(tmp_path, monkeypatch):
     monkeypatch.setattr(H, "COPY_RESULT", res)
     for k in range(19):
         w.R.add_trial(w.agents, "strat:V45_AMB", "V45_AMB", "test", {"other": k}, ts=w.now)
-    w.copy_proposal(approve=False)
+    w.copy_proposal(click=False)                       # approved, refused (no click): its room's count is read
     w.boundary(T0 + 5 * MIN)
     assert w.state()["hwm"]["room_tests"]["strat:V45_AMB"] == 20
     w.agents.close()
@@ -616,12 +617,14 @@ def test_fingerprint_regressed_until_ack(world):
     assert len(crit) == 1
     w.boundary(T0 + 2 * HOUR + 5 * MIN)
     assert len([m for m in w.notifier.messages if m[0] == "CRITICAL" and "agents_ack" in m[1]]) == 1   # once
-    text = X.fingerprint_text({"trial": [1, w.now], "proposal": [1, w.now]})
+    p = w.R.get_proposal(w.agents, pid)
+    t = w.R.get_trial(w.agents, p["trial_id"])
+    text = X.fingerprint_text({"trial": [t["id"], t["ts"]], "proposal": [pid, p["ts"]]})
     assert text in crit[0][1]
     w.ext.cfg.agents_ack = text
     w.boundary(T0 + 2 * HOUR + 10 * MIN)
     assert [a["account_id"] for a in w.extras_rows()] == ["V45_AMB@15m~c1"]
-    assert w.state()["fingerprint"]["proposal"] == [pid, w.now]
+    assert w.state()["fingerprint"]["proposal"] == [pid, p["ts"]]
 
 
 def test_pause_activation_reread_without_restart(tmp_path):
@@ -776,10 +779,12 @@ def test_copy_skip_tag_filtered_outcome(world):
 
 def test_copy_gets_only_signals_after_creation(world):
     w = world
-    w.copy_proposal()
     B = T0 + 15 * MIN
+    w.run(T0 + MIN, B - 2 * MIN)
+    w.copy_proposal()                                                       # approved: created at B
     w.service.fire[(B, "15m")] = [("V45_AMB@15m", 1, "BTCUSDT", {})]       # the parent signals at the creation boundary
-    w.run(T0 + MIN, B)
+    w.run(B - 2 * MIN, B)
+    assert w.book.engines["V45_AMB@15m~c1"] is not None and w.extras_rows()[0]["created_ts"] == B
     aid = "V45_AMB@15m~c1"
     assert w.book.engines[aid].pending == [] and len(w.book.engines["V45_AMB@15m"].pending) == 1
     B2 = B + 15 * MIN

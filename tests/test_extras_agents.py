@@ -9,7 +9,6 @@ JSON and state 'extras'), as the runtime side would write them.
 """
 
 import json
-import sqlite3
 
 import pytest
 
@@ -569,6 +568,7 @@ def test_copy_losses_meet_in_the_parent_room_labelled_and_apart(world):
     [xa] = pk["extra_accounts"]
     assert xa["account_id"] == aid and xa["label"] == f"copy: {aid}, rule 손절 2.5 ATR" and xa["trades"] == 3
     assert len(xa["recent_losses"]) == 3 and xa["recent_losses"][0]["label"] == xa["label"]
+    assert all(c["new"] for c in xa["recent_losses"])                       # the losses this meeting is about
     assert pk["rules"]["running_copies"][0]["account_id"] == aid
     assert pk["rules"]["copy_slots"]["strategy_active"] == 1
 
@@ -587,6 +587,7 @@ def test_newlab_losses_meet_in_the_lab_with_their_packet(world):
     assert runner.roles() == ["researcher", "devils_advocate", "team_lead"]
     [la] = runner.calls[0]["packet"]["lab_accounts"]
     assert la["account_id"] == aid and la["trades"] == 3 and len(la["recent_losses"]) == 3
+    assert all(c["new"] for c in la["recent_losses"])
     assert la["spec"] == NLSPEC and la["proposal_id"] == nlp["id"]
     assert world.cursors()["loss:team:lab"] == str(world.store.conn.execute("SELECT MAX(id) FROM trades").fetchone()[0])
 

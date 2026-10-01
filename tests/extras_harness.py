@@ -265,6 +265,7 @@ class Recorder:
         self.steps: list[str] = []
         self.items: list[str] = []
         self.sent: list[str] = []
+        self.restore: list[str] = []          # new tree: extras whose restored engine differs from the saved state
         self.path = path
 
     def _write(self, kind: str, value: str) -> None:
@@ -285,6 +286,10 @@ class Recorder:
         self.sent.append(text)
         self._write("sent", text)
 
+    def restored(self, note: str) -> None:
+        self.restore.append(note)
+        self._write("restore", note)
+
     @classmethod
     def load(cls, path: str) -> "Recorder":
         r = cls()
@@ -292,7 +297,7 @@ class Recorder:
             with open(path) as fh:
                 for line in fh:
                     kind, value = json.loads(line)
-                    {"step": r.steps, "item": r.items, "sent": r.sent}[kind].append(value)
+                    {"step": r.steps, "item": r.items, "sent": r.sent, "restore": r.restore}[kind].append(value)
         return r
 
 
@@ -351,6 +356,12 @@ class Session:
             self.ext = extras_start(self, extras)
             make_of = self.ext.make_of
         restored = self.book.load(make_of=make_of) if make_of is not None else self.book.load()
+        if self.ext is not None and restored:
+            saved = self.store.get_state("accounts")[1]["engines"]
+            for aid in self.ext.extras:
+                a = {k: v for k, v in engine_state(self.book.engines[aid]).items() if k != "n_trades"}
+                b = {k: v for k, v in (saved.get(aid) or {}).items() if k != "n_trades"}
+                rec.restored(f"{aid}:{'same' if json.dumps(a, sort_keys=True) == json.dumps(b, sort_keys=True) else 'DIFF'}")
         if restored and self.book.last_ts is not None:
             resume = self.book.last_ts + MIN
             start = resume - resume % FIVE
