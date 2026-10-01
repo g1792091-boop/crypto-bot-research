@@ -7,16 +7,26 @@
 // Uses helpers and state from app.js ($, api, esc, toast, chip, state, seg).
 const KIND_KO = {analysis: "분석", challenge: "반론", expert: "전문가 의견", revision: "최종안", verdict: "판정",
   summary: "요약", action: "실행", code_result: "코드 계산", decision: "결정", owner: "두 분", system: "알림", trigger: "회의 시작"};
-const TEAM_AV = {"team:market": "시장", "team:risk": "위험", "team:ops": "운영", "team:review": "복기", "team:lead": "총괄"};
+const TEAM_AV = {"team:market": "시장", "team:risk": "위험", "team:ops": "운영", "team:review": "복기", "team:lead": "총괄",
+  "team:lab": "연구"};
 // short avatar labels for the roles that speak in rooms (others: the first two letters of the name)
 const ROLE_AV = {validator: "검증", approver: "승인", devils_advocate: "반론", entry_timing: "진입", exit_timing: "청산",
   whatif: "가정", strategist: "전략", team_lead: "팀장", chart_regime: "차트", derivs_flow: "파생", ops_auditor: "감사",
   pnl_reviewer: "복기", risk_officer: "위험", data_quality: "품질", code_reviewer: "코드", league_referee: "심판",
-  rule_keeper: "규칙", performance: "성과"};
+  rule_keeper: "규칙", performance: "성과", researcher: "연구"};
 const PSTATUS_KO = {awaiting_owner: "두 분 확인 대기", approved: "승인됨", rejected: "거절됨",
   blocked_gate: "코드 관문에서 막힘", blocked_cap: "복제 한도로 막힘"};
-const TRIAL_KIND_KO = {hypothesis: "가설", test: "5년 시험", copy_proposal: "복제 제안"};
+const TRIAL_KIND_KO = {hypothesis: "가설", test: "5년 시험", copy_proposal: "복제 제안", newlab: "새 매매법 시험"};
 const TRIAL_ST_KO = {passed: "통과", failed: "불통과", described: "설명용", no_data: "자료 없음", error: "오류"};
+// the new-strategy lab (team:lab): its ledger rows ('newlab' trials), statuses and the meeting kind's name
+const LAB_ROOM = "team:lab";
+const NL_ST_KO = {passed: "통과 · 제안 대기", proposed: "통과 · 두 분께 제안함", lapsed: "통과했다가 기준 미달", failed: "불통과"};
+// tests that can still pass the lab's gate: newlab.max_passable_n() + 1 (docs/newlab-prereg.md 5; a test checks it)
+const NEWLAB_MAX_TESTS = 5000;
+const CLASS_NAME = {research: "새 매매법 연구"};
+const ROOM_SCHEDULE = {[LAB_ROOM]: "남는 AI 한도로 하루 여러 번(1시간에 한 번까지): 연구원이 새 매매법을 3개까지 제안 → 반론 검토관이 " +
+  "비슷한 실패작과 데이터 뒤지기를 거름 → 코드가 5년 자료로 시험 → 팀장 요약. 두 분 글에도 답합니다."};
+const DIR_KO = {long: "롱만", short: "숏만", both: "롱·숏"};
 const rs = {ov: null, filter: "", q: "", cur: null, room: null, msgs: [], pending: [], lastId: 0, hasMore: false,
   seen: null, busy: false, again: false, side: {}, confirm: null, req: 0, sideReq: 0, agentSt: "", ownerWait: ""};
 
@@ -52,8 +62,14 @@ function roomAv(r) {
   if (r.kind === "team") return `<span class="rav team">${esc(TEAM_AV[r.room_id] || String(r.title).slice(0, 2))}</span>`;
   return `<span class="rav">${esc(String(r.strategy || "").split("_")[0].slice(0, 4))}</span>`;
 }
+function newlabKo(sp) {   // a lab spec (newlab grammar) when the code's Korean description is missing
+  const e = sp.entry || {}, ps = Object.values(e.params || {});
+  const f = (sp.filters || []).map((x) => Object.values(x).join(" ")).join(", ");
+  return `${sp.timeframe} ${e.family || ""}${ps.length ? "(" + ps.join(", ") + ")" : ""} · ${DIR_KO[sp.direction] || sp.direction || ""}${f ? " · " + f : ""}`;
+}
 function testKo(t) {   // a trial spec / proposed change in one short Korean line
   if (!t) return "내용 없음";
+  if (t.entry && t.timeframe) return newlabKo(t);
   if (t.from_trial != null) return t.test ? `${testKo(t.test)} (시험 #${t.from_trial})` : `시험 #${t.from_trial} 결과로`;
   if (t.template === "stop_atr") return `손절 거리 ${t.k} ATR로`;
   if (t.template === "lock_start") return `첫 익절 잠금 +${Math.round((t.first_lock || 0) * 100)}%부터`;
@@ -334,7 +350,7 @@ function msgHtml(m) {
     <div class="bub">${esc(m.text)}</div>${evid(m.evidence)}</div></div>`;
 }
 function emptyRoom() {
-  const s = (rs.room && rs.room.schedule_ko) || (curOv() || {}).schedule_ko || "";
+  const s = (rs.room && rs.room.schedule_ko) || (curOv() || {}).schedule_ko || ROOM_SCHEDULE[rs.cur] || "";
   return `<div class="rempty"><div class="big">아직 이 방에서 열린 회의가 없습니다</div>
     <div>${esc(s)}</div><div class="muted">회의가 열리면 직원들의 대화가 여기에 실시간으로 올라옵니다.
     궁금한 점을 아래에 남겨 두셔도 됩니다(선택).</div></div>`;
@@ -393,9 +409,11 @@ async function loadSide() {
   if (!id) return;
   const req = ++rs.sideReq;
   const strat = id.startsWith("strat:") ? id.slice(6) : "";
+  // the lab room lists its own tests (enough rows to show its passes); other rooms the latest few
+  const tq = id === LAB_ROOM ? `limit=30&room_id=${encodeURIComponent(id)}` : `limit=6${strat ? "&strategy=" + encodeURIComponent(strat) : ""}`;
   const [notes, trials, props, usage] = await Promise.all([
     api(`/api/rooms/${encodeURIComponent(id)}/notes?limit=20`).catch(() => []),
-    api(`/api/trials?limit=6${strat ? "&strategy=" + encodeURIComponent(strat) : ""}`).catch(() => null),
+    api(`/api/trials?${tq}`).catch(() => null),
     api(`/api/proposals?room_id=${encodeURIComponent(id)}&limit=20`).catch(() => []),
     api("/api/agents/usage").catch(() => null)]);
   if (req !== rs.sideReq || id !== rs.cur) return;
@@ -437,6 +455,12 @@ function propCard(p) {
 // approve or reject, "제안 #N") with its status; the test it came from is "시험 #M"; other rows are "기록 #K".
 function ledgerRow(t) {
   const sp = t.spec || {};
+  if (t.kind === "newlab") {
+    const body = (t.result && t.result.result) || {}, st = t.result && t.result.status;
+    const cls = ["passed", "proposed"].includes(st) ? "ok" : st === "lapsed" ? "acc" : st === "failed" ? "bad" : "";
+    return `<div class="trow"><span>새 매매법 #${esc(t.id)}${body.test_number ? ` (시험 ${esc(body.test_number)}번째)` : ""} · ${esc(body.description_ko || newlabKo(sp))}</span>
+      ${st ? `<span class="pill ${cls}">${esc(NL_ST_KO[st] || st)}</span>` : ""}</div>`;
+  }
   if (t.kind === "copy_proposal") {
     const st = t.proposal_status;
     const cls = st === "approved" ? "ok" : st === "awaiting_owner" ? "acc"
@@ -470,7 +494,7 @@ function renderSide() {
     ${open ? `<span class="pill acc">${open}</span>` : '<span class="pill">결정함 · 반영 대기</span>'}</h4>
     ${waiting.map(propCard).join("")}<div class="hint">승인해도 지금은 계좌가 만들어지지 않습니다. 복제 계좌 기능이 생기면 원본 계좌와 같은 시작 자금의 새 paper 계좌로 따로 시작하고,
     원본 195개 계좌와 규칙은 그대로입니다. 코드 관문을 통과하지 못한 제안은 누구도 승인할 수 없습니다.</div></div>`;
-  h += `<div class="rsec2"><h4>이 방은 언제 회의하나요</h4><div class="dim">${esc((info && info.schedule_ko) || (r && r.schedule_ko) || "")}</div>
+  h += `<div class="rsec2"><h4>이 방은 언제 회의하나요</h4><div class="dim">${esc((info && info.schedule_ko) || (r && r.schedule_ko) || ROOM_SCHEDULE[rs.cur] || "")}</div>
     <div class="hint">직원들이 스스로 회의를 열고 결정합니다. 두 분이 글을 남기면 다음 차례에 그 이야기도 다룹니다.</div></div>`;
   if (info && info.members_info) h += `<div class="rsec2"><h4>멤버 <small>${info.members_info.length}명</small></h4>${info.members_info.map((m) =>
     `<div class="mem">${roleAv(m.id, m.name)}<div class="mb"><div class="nm">${esc(m.name)}</div><div class="du">${esc(m.duty)}</div></div></div>`).join("")}</div>`;
@@ -480,11 +504,21 @@ function renderSide() {
   h += `<div class="rsec2"><h4>메모 <small>${notes.length}</small></h4>${notes.length ? notes.slice(0, 8).map((n) =>
     `<div class="nrow"><div>${esc(n.text)}</div><time>${hm(n.ts)}</time></div>`).join("") : '<div class="muted">아직 메모가 없습니다</div>'}</div>`;
   if (trials) {
-    const c = trials.counts || {};
-    h += `<div class="rsec2"><h4>가설 장부 ${rs.cur.startsWith("team:") ? "<small>전체 매매법</small>" : ""}</h4>
-      <div class="ledger"><div><b>${esc(c.hypothesis || 0)}</b><span>가설</span></div><div><b>${esc(c.test || 0)}</b><span>5년 시험</span></div>
-      <div><b>${esc(c.copy_proposal || 0)}</b><span>복제 제안</span></div></div>
-      ${(trials.trials || []).slice(0, 5).map(ledgerRow).join("")}
+    const c = trials.counts || {}, lab = rs.cur === LAB_ROOM, nl = c.newlab || 0;
+    // new-strategy lab tests: counted over every room (the gate's n), passes, and how many tests can still pass
+    const nlTiles = (lab || nl) ? `<div class="ledger"><div><b>${esc(nl)}</b><span>새 매매법 시험</span></div>
+      <div><b>${esc(c.newlab_passed || 0)}</b><span>통과</span></div>
+      <div><b>${esc(Math.max(0, NEWLAB_MAX_TESTS - nl).toLocaleString("ko-KR"))}</b><span>통과 가능 남은 시험</span></div></div>` : "";
+    const rows = trials.trials || [];
+    const passes = lab ? rows.filter((t) => t.kind === "newlab" && t.result && ["passed", "proposed", "lapsed"].includes(t.result.status)) : [];
+    h += `<div class="rsec2"><h4>가설 장부 ${lab ? "<small>새 매매법 연구실</small>" : rs.cur.startsWith("team:") ? "<small>전체 매매법</small>" : ""}</h4>
+      ${lab ? "" : `<div class="ledger"><div><b>${esc(c.hypothesis || 0)}</b><span>가설</span></div><div><b>${esc(c.test || 0)}</b><span>5년 시험</span></div>
+      <div><b>${esc(c.copy_proposal || 0)}</b><span>복제 제안</span></div></div>`}${nlTiles}
+      ${passes.length ? `<div class="hint">관문을 통과한 새 매매법</div>${passes.map(ledgerRow).join("")}<div class="hint">최근 시험</div>` : ""}
+      ${rows.filter((t) => !passes.includes(t)).slice(0, 5).map(ledgerRow).join("")}
+      ${lab ? `<div class="hint">새 매매법 시험은 모든 방을 합쳐 셉니다(통과·실패 모두). 시험이 늘수록 통과 기준이 엄격해지고(p &lt; 0.05 ÷ 시험 번호),
+        ${esc(NEWLAB_MAX_TESTS.toLocaleString("ko-KR"))}번째 시험 뒤에는 어떤 시험도 통과할 수 없어 연구실이 시험을 멈춥니다. 통과해도 자동으로 만들어지는 것은 없고,
+        새 paper 계좌는 두 분 OK 뒤의 다음 단계입니다. 관찰 기간에는 제안하지 않습니다.</div>` : ""}
       ${trials.research && trials.research.total ? `<div class="hint">연구에서 같은 5년 자료로 이미 한 시험 ${esc(trials.research.total.toLocaleString("ko-KR"))}건
         (지지·저항 ${esc(trials.research.support_resistance)}, 진입 수치 ${esc(trials.research.entry_strength)}, 파라미터 ${esc(trials.research.parameters)}): 효과가 확인된 것은 없습니다. 직원 자료에 요약이 들어갑니다.</div>` : ""}
       ${trials.scorecard && trials.scorecard.total ? `<div class="hint">가설 채점: 맞음 ${esc(trials.scorecard.total.correct)} / 채점 ${esc(trials.scorecard.total.graded)}
@@ -495,7 +529,7 @@ function renderSide() {
   if (usage) {
     h += `<div class="rsec2"><h4>오늘 AI 사용</h4><div class="ubig"><b>${esc(usage.calls)}</b>${usage.cap_calls ? ` / ${esc(usage.cap_calls)}회` : "회"}
       <span class="muted">· 토큰 ${kfmt(usage.tokens)}${usage.cap_tokens ? " / " + kfmt(usage.cap_tokens) : ""}</span></div>${bar(usage.calls, usage.cap_calls)}
-      ${usage.classes.map((c) => `<div class="urow"><span>${esc(c.name_ko)}</span><span class="mono">${esc(c.calls)}${c.cap_calls ? " / " + esc(c.cap_calls) : ""}회 · 토큰 ${kfmt(c.tokens || 0)}${c.cap_tokens ? " / " + kfmt(c.cap_tokens) : ""}</span></div>${classBar(c)}`).join("")}
+      ${usage.classes.map((c) => `<div class="urow"><span>${esc(CLASS_NAME[c.class] || c.name_ko)}</span><span class="mono">${esc(c.calls)}${c.cap_calls ? " / " + esc(c.cap_calls) : ""}회 · 토큰 ${kfmt(c.tokens || 0)}${c.cap_tokens ? " / " + kfmt(c.cap_tokens) : ""}</span></div>${classBar(c)}`).join("")}
       ${usage.week ? `<div class="urow"><span>최근 7일 합계</span><span class="mono">${esc(usage.week.calls)}${usage.week.cap_calls ? " / " + esc(usage.week.cap_calls) : ""}</span></div>${bar(usage.week.calls, usage.week.cap_calls)}` : ""}
       <div class="hint">두 분의 Claude 구독 사용량을 함께 씁니다. 한도에 닿으면 회의를 다음으로 미룹니다.
         하루 합계 중 사고 점검과 08:00·22:00 회의 몫(아직 안 쓴 부분)은 늘 비워 두므로, 다른 회의는 합계 막대가 다 차기 전에 멈춥니다.

@@ -734,7 +734,9 @@ def stop_blocks(stopped: str, cls: str) -> list[str]:
     if stopped == "budget_subcap":
         return []           # only that trigger waits (its headroom is 0); the class's reserve stays usable
     if stopped == "budget_reserve":
-        return [c for c in TR.CLASSES if c not in RESERVED_CLASSES]
+        # the lab (research) only uses spare calls: it waits on its own headroom (can_start), so another
+        # meeting's reserve stop does not need to block it; its own stop blocks it too
+        return [c for c in TR.CLASSES if c not in RESERVED_CLASSES and (c != "research" or cls == "research")]
     if stopped in ("budget_total", "budget_week"):
         return list(TR.CLASSES)
     return []

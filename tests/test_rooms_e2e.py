@@ -498,7 +498,9 @@ def test_owner_settings_from_env_reach_the_tick_and_the_dashboard(world, dash):
     assert pol.budgets["loss"] == (14, 400000) and pol.budgets["owner"] == RM.DEFAULT_BUDGETS["owner"]
     assert pol.total_budget == (60, RM.DEFAULT_TOTAL[1]) and pol.owner_ok_required is False
     assert pol.copy_cap_total == 4 and pol.max_rounds_per_tick == 2 and pol.flag_max_per_day == 1
-    assert RM.policy_from_env({}) == RM.RoomsPolicy(observe_days=RM.OBSERVE_DAYS_DEFAULT)
+    server = RM.RoomsPolicy(observe_days=RM.OBSERVE_DAYS_DEFAULT)
+    server.triggers.research_every_ms = RM.RESEARCH_EVERY_MIN_DEFAULT * 60_000     # the lab meets on the server
+    assert RM.policy_from_env({}) == server
     for bad in ({"AGENTS_BUDGET": "lose=3"}, {"AGENTS_BUDGET": "loss=x"}, {"AGENTS_OWNER_OK": "maybe"},
                 {"AGENTS_COPY_CAP_TOTAL": "-1"}, {"AGENTS_MAX_ROUNDS_PER_TICK": "0"}):
         with pytest.raises(ValueError):

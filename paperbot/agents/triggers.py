@@ -105,7 +105,7 @@ CLASSES = ("incident", "owner", "loss", "scheduled", "weekly", "research")
 # What a stopped_budget round pauses until the next KST day, by decision.stopped (when the
 # decision has no explicit 'blocks' list). None = only the round's own class.
 STOP_BLOCKS = {"budget_class": None, "budget_total": CLASSES, "budget_week": CLASSES,
-               "budget_reserve": ("owner", "loss", "weekly", "research"),
+               "budget_reserve": ("owner", "loss", "weekly"),     # rooms.stop_blocks adds research for its own
                "budget_subcap": ()}      # a reduced cap (class minus the bust / critical reserve): nothing
 
 # (kind, level, text fragment) for paper3.db alerts; the first match wins, "" matches any text.
