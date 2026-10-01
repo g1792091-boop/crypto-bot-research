@@ -220,7 +220,7 @@ class Telegram:
 # ---------------------------------------------------------------- the backup folder
 def find_folder(root: Path, date: Optional[str], now: datetime) -> Path:
     if not root.is_dir():
-        raise OffsiteError(f"백업 폴더 {root}가 없습니다 (서버 안 백업 paperbot-backup이 한 번도 돌지 않음?)")
+        raise OffsiteError(f"백업 폴더({root})가 없습니다 (서버 안 백업 paperbot-backup이 한 번도 돌지 않음?)")
     if date:
         if not re.fullmatch(r"\d{8}", date):
             raise OffsiteError(f"--date는 YYYYMMDD 모양이어야 합니다: {date!r}")
@@ -256,7 +256,7 @@ def check_complete(folder: Path, lib: Optional[Path], wait_s: float = 0.0,
         waited += poll_s
     files = {p.name: p.stat().st_size for p in sorted(folder.iterdir()) if p.is_file() and p.name.endswith(".db")}
     if not files:
-        raise OffsiteError(f"백업 폴더 {folder}가 비어 있습니다 (복사가 모두 실패?)")
+        raise OffsiteError(f"백업 폴더({folder})가 비어 있습니다 (봇을 켜기 전이거나 복사가 모두 실패)")
     bad = []
     for name in files:
         with open(folder / name, "rb") as fh:
@@ -412,9 +412,9 @@ def resolve_chat(env: Mapping[str, str], chat_env: str) -> tuple[str, str]:
         return chat, ""
     critical = (env.get("TELEGRAM_CHAT_CRITICAL") or "").strip()
     if not critical:
-        raise OffsiteError(f"보낼 방이 없습니다: {chat_env}와 TELEGRAM_CHAT_CRITICAL이 모두 비어 있습니다 "
+        raise OffsiteError(f"보낼 방이 없습니다: {chat_env}, TELEGRAM_CHAT_CRITICAL 값이 모두 비어 있습니다 "
                            "(/etc/paperbot/live.env)")
-    return critical, (f"참고: {chat_env}가 비어 있어 기본 알림방으로 보냈습니다. 백업 전용 단체방을 만들어 "
+    return critical, (f"참고: {chat_env} 값이 비어 있어 기본 알림방으로 보냈습니다. 백업 전용 단체방을 만들어 "
                       "넣어 주세요 (docs/offsite-backup.md)")
 
 
@@ -672,7 +672,7 @@ def restore_backup(files: Sequence[Path], out: Path, *, sha256: Optional[str] = 
         date = mt.group(1) if mt else "restored"
     dest = out / date
     if dest.exists() and any(dest.iterdir()):
-        raise OffsiteError(f"{dest}가 이미 있고 비어 있지 않습니다. 다른 --out 폴더를 고르세요")
+        raise OffsiteError(f"폴더({dest})가 이미 있고 비어 있지 않습니다. 다른 --out 폴더를 고르세요")
     out.mkdir(parents=True, exist_ok=True)
     tmp = Path(tempfile.mkdtemp(prefix=".offsite-restore-", dir=str(out)))
     try:
