@@ -480,6 +480,8 @@ export class TermChart {
     const walls = [...ob.bidWalls.map((w) => ({ ...w, side: "bid" })), ...ob.askWalls.map((w) => ({ ...w, side: "ask" }))];
     const maxN = Math.max(1, ...walls.map((w) => w.notional)), half = ob.mid * 0.0005, cur = ob.quote === "KRW" ? "₩" : "$";
     ctx.font = "10px " + FONT;
+    const used = [];   // 글자끼리 겹치면 큰 벽 글자만
+    walls.sort((a, b) => b.notional - a.notional);
     for (const w of walls) {
       const y1 = this.candle.priceToCoordinate(w.price + half), y2 = this.candle.priceToCoordinate(w.price - half);
       if (y1 == null || y2 == null) continue;
@@ -487,6 +489,8 @@ export class TermChart {
       ctx.fillStyle = `rgba(${col},${(0.06 + 0.12 * k).toFixed(3)})`; ctx.fillRect(0, y - h / 2, size.width, h);
       const len = 30 + 110 * k;
       ctx.fillStyle = `rgba(${col},.55)`; ctx.fillRect(size.width - len, y - Math.max(2, h / 2), len, Math.max(4, h));
+      if (used.some((u) => Math.abs(u - y) < 12)) continue;
+      used.push(y);
       ctx.fillStyle = `rgba(${col},1)`; ctx.textAlign = "right";
       ctx.fillText(`${w.side === "bid" ? "매수벽" : "매도벽"} ${cur}${big(w.notional)} (${w.distPct >= 0 ? "+" : ""}${w.distPct.toFixed(2)}%)`, size.width - len - 4, y - 3);
     }
@@ -518,13 +522,16 @@ export class TermChart {
     const all = [...d.longClusters.map((x) => ({ ...x, side: "long" })), ...d.shortClusters.map((x) => ({ ...x, side: "short" }))].filter((x) => Number.isFinite(x.price));
     const mx = Math.max(1, ...all.map((x) => Number.isFinite(x.estUsd) ? x.estUsd : 0));
     ctx.font = "10px " + FONT;
-    for (const x of all) {
+    const used = [];
+    for (const x of all.sort((a, b) => (b.estUsd || 0) - (a.estUsd || 0))) {
       const y = this.candle.priceToCoordinate(x.price);
       if (y == null) continue;
       const k = Number.isFinite(x.estUsd) ? x.estUsd / mx : 0.3, h = 2 + 8 * k;
       const g = ctx.createLinearGradient(0, 0, size.width, 0);
       g.addColorStop(0, `rgba(${COL.heat},0)`); g.addColorStop(0.35, `rgba(${COL.heat},${(0.15 + 0.45 * k).toFixed(3)})`); g.addColorStop(1, `rgba(${COL.heat},${(0.25 + 0.6 * k).toFixed(3)})`);
       ctx.fillStyle = g; ctx.fillRect(0, y - h / 2, size.width, h);
+      if (used.some((u) => Math.abs(u - y) < 12)) continue;
+      used.push(y);
       ctx.fillStyle = `rgba(255,183,77,${(0.6 + 0.4 * k).toFixed(2)})`; ctx.textAlign = "left";
       ctx.fillText(`추정 ${x.side === "long" ? "롱" : "숏"} 청산 ${x.mainLev}배${Number.isFinite(x.estUsd) ? ` ~$${big(x.estUsd)}` : ""}${x.wall ? " +벽" : ""}`, 6, y - h / 2 - 2);
     }
