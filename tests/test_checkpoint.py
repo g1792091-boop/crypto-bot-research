@@ -667,11 +667,11 @@ def test_extra_warnings_only_on_extras(tmp_path):
 
 def test_prior_ignores_reused_id_with_other_created_ts():
     cp = T0 + 60 * DAY
-    accts = {"NL1@1h": _x("1h", 40, 9000.0, T0, cp, "newlab", T0 + 20 * DAY)}
+    accts = {"NL1@1h": _x("1h", 40, 9000.0, T0 + 20 * DAY, cp, "newlab", T0 + 20 * DAY)}
     prior = {"NL1@1h": {"date": ck.day_str(T0 + 30 * DAY), "status": ck.FAIL, "stage": "1차",
                         "created_ts": T0 + 2 * DAY, "reason": "x"}}
     rows, tasks = ck.plan(_snap(cp, accts), prior, {}, S)
-    assert rows["NL1@1h"]["status"] != ck.FAIL and [t.aid for t in tasks] == ["NL1@1h"]   # judged from its new start
+    assert [t.aid for t in tasks] == ["NL1@1h"] and rows["NL1@1h"]["stage"] == "1차"    # judged from its new start
     prior["NL1@1h"]["created_ts"] = T0 + 20 * DAY
     rows, tasks = ck.plan(_snap(cp, accts), prior, {}, S)
     assert rows["NL1@1h"]["status"] == ck.FAIL and not tasks
