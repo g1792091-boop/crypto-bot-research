@@ -472,6 +472,18 @@ dialog.sheet::backdrop{background:rgba(20,18,15,.45)}
 .chk{display:flex!important;flex-direction:row!important;align-items:center;gap:8px}
 .art-img{padding:16px;display:flex;flex-direction:column;gap:10px;align-items:center}.art-img img{max-width:100%;border-radius:10px;box-shadow:0 2px 16px rgba(0,0,0,.12)}
 @media (max-width:760px){.keyrow{flex-direction:column}.list .prov .sel{max-width:100%;flex:1}}
+
+/* ---- 학습 ---- */
+.steps{list-style:none;margin:0 0 4px;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;counter-reset:st}
+.steps li{counter-increment:st;border:1px solid var(--line);background:var(--panel);border-radius:10px;padding:9px 11px;display:flex;flex-direction:column;gap:1px;font-size:13px}
+.steps li b::before{content:counter(st) ". ";color:var(--accent)}
+.steps li span{font-size:11.5px;color:var(--muted)}
+.row.wrap{flex-wrap:wrap}.row .chk{font-size:13px}
+.topics{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px}
+.trlog{font-family:var(--f-mono);font-size:11.5px;color:var(--muted);display:flex;flex-direction:column;gap:2px;max-height:9em;overflow:hidden}
+.trlog:empty{display:none}
+.tile ol{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:3px}.tile ol a{color:var(--accent)}
+.acts button[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent)}
 </style>
 </head>
 <body>
@@ -512,6 +524,7 @@ dialog.sheet::backdrop{background:rgba(20,18,15,.45)}
     <div class="side-bottom">
       <button id="openTpl"><svg class="i"><use href="#i-grid"/></svg>템플릿</button>
       <button data-open="skills"><svg class="i"><use href="#i-spark"/></svg>스킬 · 기억</button>
+      <button data-open="train"><svg class="i"><use href="#i-bulb"/></svg>학습 · 내 모델</button>
       <button id="openKnow"><svg class="i"><use href="#i-book"/></svg>내 지식</button>
       <button id="openSettings"><svg class="i"><use href="#i-gear"/></svg>설정</button>
       <div class="side-note">대화와 파일은 이 컴퓨터에만 저장됩니다</div>
@@ -579,6 +592,7 @@ dialog.sheet::backdrop{background:rgba(20,18,15,.45)}
       <button data-tab="tpl">템플릿</button>
       <button data-tab="skills">스킬</button>
       <button data-tab="mem">기억</button>
+      <button data-tab="train">학습 · 내 모델</button>
       <button data-tab="know">내 지식</button>
       <button data-tab="local">내 기기 모델</button>
       <button data-tab="instr">맞춤 지침</button>

@@ -1,10 +1,11 @@
 // 누리 AI 화면: 채팅·코드 두 모드, 결과물 패널, 설정
 import { esc, uid, fmtN, ls, idb, bus, settings, saveSettings, CATALOG, eng, loadModel, unloadModel, gpuSupported, refreshCache, cacheList,
   LAUNCHER, detectLauncher, apiBase, codeCall, OL_MODELS, BRAINS, brainReady, brainLabel, brainStream, splitThink,
-  PROVIDERS, SEARCH_KEYS, addApiKey, removeApiKey, routeCandidates, shortModel, webGet,
+  PROVIDERS, SEARCH_KEYS, addApiKey, removeApiKey, routeCandidates, shortModel, webGet, ollamaPull, ollamaImportGGUF,
   docs, loadDocs, addDoc, removeDoc, readTextFile, md, highlight } from "./engine.js";
 import { runAgent, BUILTIN_SKILLS, TOOLS } from "./agent.js";
 import { TEMPLATES } from "./templates.js";
+import { BASES, TOPICS, samplesFromChats, loadSynth, removeSynth, clearSynth, toJSONL, generateSynth, notebookJSON, localScript } from "./train.js";
 import { initTrade } from "./trade.js";
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
@@ -119,7 +120,7 @@ function msgHTML(m, i){
   const who = m.route ? `${m.route.name} · ${shortModel(m.route.model)}` : (m.model || "");
   return `<div class="msg ai" data-i="${i}">${skl}${parts}${live}${writing ? `<span class="cursor" aria-label="작성 중"></span>` : ""}
     ${m.error ? `<div class="err">${esc(m.error)}</div>` : ""}${srcs}
-    ${m.streaming ? "" : `<div class="acts"><button data-act="copy">${ico("copy","width:14px;height:14px")}복사</button><button data-act="regen">${ico("redo","width:14px;height:14px")}다시 생성</button><button data-openact>${ico("pulse","width:14px;height:14px")}과정</button><span class="meta">${esc(who)}${m.ms ? " · " + (m.ms/1000).toFixed(1) + "초" : ""}</span></div>`}</div>`;
+    ${m.streaming ? "" : `<div class="acts"><button data-act="copy">${ico("copy","width:14px;height:14px")}복사</button><button data-act="regen">${ico("redo","width:14px;height:14px")}다시 생성</button><button data-act="good" aria-pressed="${m.rating > 0}" title="좋은 답 (학습 데이터에 넣기)">👍</button><button data-act="bad" aria-pressed="${m.rating < 0}" title="나쁜 답 (학습에서 빼기)">👎</button><button data-openact>${ico("pulse","width:14px;height:14px")}과정</button><span class="meta">${esc(who)}${m.ms ? " · " + (m.ms/1000).toFixed(1) + "초" : ""}</span></div>`}</div>`;
 }
 // 글 속 <artifact> 블록 → 카드
 const ART_RE = /<artifact\b([^>]*)>([\s\S]*?)(?:<\/artifact>|$)/g;
@@ -201,6 +202,7 @@ document.addEventListener("click", e => {
   const a = t.closest("[data-act]"); if (a && !busy){
     const i = +a.closest(".msg").dataset.i, m = current.messages[i];
     if (a.dataset.act === "copy") copy(m.role === "user" ? m.content : aiParts(m).filter(p => p.type === "text").map(p => splitThink(p.text).body).join("\n\n"));
+    if (a.dataset.act === "good" || a.dataset.act === "bad"){ const v = a.dataset.act === "good" ? 1 : -1; m.rating = m.rating === v ? 0 : v; saveChat(current); const el = $(`#thread .msg[data-i="${i}"]`); if (el) el.outerHTML = msgHTML(m, i); if (m.rating) toast(v > 0 ? "좋은 답으로 표시했습니다 · 학습 데이터에 들어갑니다" : "학습 데이터에서 뺍니다"); }
     if (a.dataset.act === "regen"){ if (!brainReady()){ openSheet("brain"); return; } current.messages.splice(i); run(); }
     if (a.dataset.act === "edit"){ $("#input").value = m.content; current.messages.splice(i); saveChat(current); render(); autoGrow(); updateSend(); $("#input").focus(); }
   }
@@ -486,6 +488,53 @@ async function renderSheet(){
   if (sheetTab === "tpl") B.innerHTML = tplTab();
   if (sheetTab === "skills") B.innerHTML = skillsTab();
   if (sheetTab === "mem") B.innerHTML = memTab();
+  if (sheetTab === "train"){ B.innerHTML = await trainTab(); }
+}
+/* ---- 학습 (내 모델 만들기) ---- */
+let synthCtl = null, synthLog = [], trainOpt = Object.assign({good: true, tools: true, synth: true, topics: ["market", "arch", "land"], count: 30, judge: true, base: BASES[0].id, epochs: 3}, ls.get("trainOpt", {}));
+const saveTrainOpt = () => ls.set("trainOpt", trainOpt);
+async function trainData(){
+  const chatS = samplesFromChats(chats, {onlyGood: trainOpt.good, tools: trainOpt.tools}), syn = await loadSynth();
+  return {chatS, syn, all: [...chatS, ...(trainOpt.synth ? syn : [])]};
+}
+function download(name, text, type = "application/json"){
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([text], {type: type + ";charset=utf-8"})); a.download = name;
+  document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+async function trainTab(){
+  const {chatS, syn, all} = await trainData();
+  const rated = chats.flatMap(c => c.messages).filter(m => m.rating > 0).length;
+  const base = BASES.find(b => b.id === trainOpt.base) || BASES[0];
+  const teacher = routeCandidates("general")[0];
+  const ck = (k, label) => `<label class="chk"><input type="checkbox" data-topt="${k}"${trainOpt[k] ? " checked" : ""}> ${label}</label>`;
+  return `<h3 class="h">학습 · 내 모델 만들기</h3><p class="sub">누리와 나눈 대화와 큰 AI가 만든 문제·모범답안으로 작은 오픈모델을 직접 미세조정(LoRA)해, 내 노트북에서 인터넷 없이 도는 나만의 누리를 만듭니다. NVIDIA 스킬(data-designer, tao-finetune-huggingface-model)과 같은 방식입니다.</p>
+  <ol class="steps"><li><b>데이터 모으기</b><span>👍 받은 답변</span></li><li><b>합성 데이터</b><span>큰 AI가 문제·답 생성</span></li><li><b>학습</b><span>Colab 무료 GPU</span></li><li><b>내 모델 등록</b><span>Ollama · 내 기기</span></li></ol>
+  <div class="card"><h3>① 학습 데이터 <small>총 ${all.length}개</small></h3><div class="body">
+    <div class="kpis"><div class="kpi"><label>👍 받은 답</label><span class="v">${rated}</span></div><div class="kpi"><label>대화에서 뽑은 예시</label><span class="v">${chatS.length}</span></div><div class="kpi"><label>합성 예시</label><span class="v">${syn.length}</span></div></div>
+    <div class="row wrap">${ck("good", "👍 받은 답만")}${ck("tools", "도구 쓰는 과정까지 가르치기")}${ck("synth", "합성 데이터 포함")}</div>
+    <div class="row"><button class="btn primary" id="trDl" ${all.length ? "" : "disabled"}>학습 데이터 내려받기 (nuri-train.jsonl)</button><span class="small">답변 아래 👍로 좋은 답을 표시하세요. 최소 50개, 200개 이상이면 효과가 좋습니다.</span></div></div></div>
+  <div class="card"><h3>② 합성 데이터 만들기 <small>선생 AI: ${teacher ? esc((PROVIDERS[teacher.id]?.name || teacher.id) + " · " + shortModel(teacher.model)) : "API 키 필요"}</small></h3><div class="body">
+    <div class="topics">${TOPICS.map(t => `<label class="chk"><input type="checkbox" data-topic="${t.id}"${trainOpt.topics.includes(t.id) ? " checked" : ""}> ${esc(t.name)}</label>`).join("")}</div>
+    <div class="row wrap"><label class="small">개수 <select class="sel" id="trCount">${[10, 30, 60, 100, 200].map(n => `<option${n === trainOpt.count ? " selected" : ""}>${n}</option>`).join("")}</select></label>${ck("judge", "AI 채점으로 4점 이상만 남기기")}</div>
+    <div class="row">${synthCtl ? `<button class="btn" id="trStop">멈추기</button>` : `<button class="btn primary" id="trGen" ${teacher ? "" : "disabled"}>만들기</button>`}${syn.length ? `<button class="btn danger" id="trClear">합성 데이터 모두 지우기</button>` : ""}</div>
+    <div class="trlog" id="trLog">${synthLog.slice(-6).map(l => `<div>${esc(l)}</div>`).join("")}</div>
+    ${syn.length ? `<div class="list">${syn.slice(-8).reverse().map(x => `<div><span class="t">${esc(x.messages[1].content)}</span><span class="small">${esc(TOPICS.find(t => t.id === x.topic)?.name || "")}${x.score ? " · " + x.score + "점" : ""}</span><button class="btn danger" data-synrm="${x.id}">삭제</button></div>`).join("")}</div>` : ""}
+    <span class="small">조건(주제·질문자·난이도·말투)을 무작위로 섞어 질문을 만들고, 선생 AI가 모범답안을 쓰고, 다시 채점해 좋은 것만 남깁니다. Qwen·DeepSeek처럼 학습 사용이 허용된 오픈모델이 선생일 때 쓰세요.</span></div></div>
+  <div class="card"><h3>③ 학습하기</h3><div class="body">
+    <div class="form"><label>바탕 모델<select id="trBase">${BASES.map(b => `<option value="${esc(b.id)}"${b.id === base.id ? " selected" : ""}>${esc(b.name)} — ${esc(b.fit)}</option>`).join("")}</select></label>
+      <label>반복 횟수<select id="trEpochs">${[1, 2, 3].map(n => `<option${n === trainOpt.epochs ? " selected" : ""}>${n}</option>`).join("")}</select></label></div>
+    <p class="small" style="margin:0">라이선스: ${esc(base.lic)} · 결과 모델 크기 ${esc(base.gguf)}</p>
+    <div class="tiles">
+      <div class="tile"><div class="hd"><b>Google Colab (추천)</b><span class="tag good">무료 T4 GPU 16GB</span></div><p>노트북 그래픽카드(RTX 3050 4GB)로는 학습이 느리고 메모리가 빠듯해서, 무료 Colab GPU에서 학습하고 결과만 받아 오는 방법을 추천합니다.</p>
+        <ol class="small"><li>아래 버튼으로 노트북 파일과 학습 데이터를 받습니다.</li><li><a href="https://colab.research.google.com" target="_blank" rel="noopener">colab.research.google.com</a> → 업로드 → 노트북 파일 선택</li><li>런타임 → 런타임 유형 변경 → <b>T4 GPU</b> → 모두 실행</li><li>데이터 파일을 올리면 10~30분 뒤 .gguf가 내려받아집니다.</li></ol>
+        <div class="row"><button class="btn primary" id="trNb">Colab 노트북 받기</button></div></div>
+      <div class="tile${base.local ? "" : " dim"}"><div class="hd"><b>내 노트북에서 (RTX 3050)</b><span class="tag">고급</span></div><p>${base.local ? "4GB 그래픽카드용 설정(짧은 길이·작은 배치)으로 만든 스크립트입니다. WSL2 또는 Python 3.11 + NVIDIA 드라이버가 필요합니다." : "이 바탕 모델은 4GB 그래픽카드로 학습하기 어렵습니다. Qwen3.5 0.8B·2B 또는 EXAONE 1.2B를 고르세요."}</p>
+        <div class="row"><button class="btn" id="trPy" ${base.local ? "" : "disabled"}>로컬 학습 스크립트 받기</button></div></div></div></div></div>
+  <div class="card"><h3>④ 내 모델 등록</h3><div class="body">
+    <div class="form"><label>모델 이름<input id="trName" value="${esc(ls.get("myModelName", "nuri-mine"))}"></label><label>학습 결과 GGUF 파일<input type="file" id="trGguf" accept=".gguf"></label></div>
+    <div class="row"><button class="btn primary" id="trOl">Ollama에 등록 (추천 · 그래픽카드 사용)</button><button class="btn" id="trLocal">내 기기 AI로 바로 실행</button></div>
+    <span class="small" id="trMsg">Ollama(<a href="https://ollama.com/download" target="_blank" rel="noopener">설치</a>)에 등록하면 RTX 3050 그래픽카드로 빠르게 돌고, 누리의 두뇌로 바로 선택됩니다. 내 기기 AI(브라우저)는 2GB 이하 파일만 됩니다.</span>
+    ${settings.myModel ? `<p class="small">등록된 내 모델: <b>${esc(settings.myModel)}</b></p>` : ""}</div></div>`;
 }
 /* ---- 템플릿 ---- */
 let tplCat = 0;
@@ -508,6 +557,10 @@ function skillsTab(){
   return `<h3 class="h">스킬</h3><p class="sub">스킬은 분야별 전문가의 일하는 방식(지침)과 도구 묶음입니다. 질문 내용에 맞는 스킬이 자동으로 켜지고, '진행 상황'에서 어떤 스킬을 썼는지 보입니다. 나만의 스킬을 만들어 누리에게 일하는 방식을 가르칠 수 있습니다.</p>
     <div class="tiles">${BUILTIN_SKILLS.map(sk => { const on = !off.includes(sk.id); return `<div class="tile${on ? "" : " dim"}"><div class="hd"><b>${esc(sk.icon)} ${esc(sk.name)}</b><button class="btn" data-skoff="${sk.id}">${on ? "켜짐" : "꺼짐"}</button></div>
       <div class="meta">${(sk.tools || []).map(t => `<span class="tag">${esc(TOOLS[t]?.label || t)}</span>`).join("")}</div><details><summary class="small">지침 보기</summary><pre class="skp">${esc(sk.prompt)}</pre></details></div>`; }).join("")}</div>
+    <div class="card"><h3>엔비디아·외부 스킬 가져오기 <small>SKILL.md 형식</small></h3><div class="body">
+      <div class="keyrow"><input id="skUrl" placeholder="GitHub 주소 또는 NVIDIA 스킬 이름 (예: portfolio-optimization, data-designer)"><button class="btn primary" id="skUrlAdd">가져오기</button></div>
+      <label class="small">또는 SKILL.md 파일 <input type="file" id="skFile" accept=".md" multiple></label>
+      <span class="small"><a href="https://github.com/NVIDIA/skills/tree/main/skills" target="_blank" rel="noopener">NVIDIA 스킬 목록</a>의 지침을 누리가 그대로 참고합니다. 단, 대부분은 GPU 서버·전용 프로그램을 다루는 지침이라 누리 채팅 안에서는 '방법 안내'로만 쓰입니다.</span></div></div>
     <div class="card"><h3>새 스킬 만들기</h3><div class="body"><div class="form" style="grid-template-columns:1fr">
       <label>이름<input id="skName" placeholder="예: 우리 회사 주간보고 양식"></label>
       <label>켜지는 단어 (쉼표로 구분)<input id="skKeys" placeholder="예: 주간보고, 보고서"></label>
@@ -515,6 +568,25 @@ function skillsTab(){
       <label class="chk"><input type="checkbox" id="skAlways"> 모든 대화에서 항상 켜기</label></div>
       <div class="row"><button class="btn primary" id="skAdd">스킬 추가</button></div></div></div>
     <div class="card"><h3>내 스킬 <small>${mine.length}개</small></h3><div class="body"><div class="list">${mine.length ? mine.map(sk => `<div><span class="t"><b>${esc(sk.name)}</b> <span class="small">${sk.always ? "항상" : esc(sk.keys || "")}</span></span><button class="btn" data-sktoggle="${sk.id}">${sk.off ? "꺼짐" : "켜짐"}</button><button class="btn danger" data-skrm="${sk.id}">삭제</button></div>`).join("") : `<p class="empty">아직 없습니다.</p>`}</div></div></div>`;
+}
+// SKILL.md(NVIDIA·Claude 스킬 형식) → 내 스킬
+function importSkill(text, src){
+  const fm = text.match(/^---\s*\n([\s\S]*?)\n---\s*\n?([\s\S]*)$/);
+  if (!fm) throw new Error("SKILL.md 형식이 아닙니다 (맨 위 --- 머리말 필요)");
+  const head = fm[1], body = fm[2].replace(/<!--[\s\S]*?-->/g, "").trim();
+  const lines = head.split("\n");
+  const field = k => { const i = lines.findIndex(l => l.startsWith(k + ":")); if (i < 0) return ""; let v = lines[i].slice(k.length + 1).trim(); if (/^[>|]-?$/.test(v)){ v = ""; for (let j = i + 1; j < lines.length && /^\s+\S/.test(lines[j]); j++) v += " " + lines[j].trim(); } return v.replace(/\s+/g, " ").replace(/^["']|["']$/g, "").trim(); };
+  const name = field("name"); if (!name) throw new Error("스킬 이름(name)이 없습니다");
+  const desc = field("description");
+  const tags = [...head.matchAll(/^\s+-\s+([\w.-]+)\s*$/gm)].map(x => x[1]).filter(x => x.length > 2).slice(0, 6);
+  const STOP = new Set(["data", "model", "models", "skill", "skills", "nvidia", "gpu", "tools", "catalog", "router", "setup", "guide"]);
+  const KO = {portfolio: "포트폴리오", optimization: "최적화", finetune: "파인튜닝", finetuning: "파인튜닝", training: "학습", designer: "합성 데이터", dataset: "데이터셋", rag: "문서 검색", forecasting: "예측", cuopt: "최적화", robotics: "로봇", inference: "추론 서버"};
+  const words = [...name.split(/[-_]/), ...tags].map(w => w.toLowerCase()).filter(w => w.length > 2 && !STOP.has(w));
+  const keys = [...new Set([name, ...words, ...words.map(w => KO[w]).filter(Boolean)])].join(", ");
+  const prompt = `(가져온 스킬: ${name}${desc ? " — " + desc : ""})\n${body}`.slice(0, 8000);
+  settings.skills = (settings.skills || []).filter(x => x.name !== name);
+  settings.skills.push({id: uid(), name, keys, prompt, src, imported: true});
+  saveSettings(); toast(`스킬 '${name}'을 가져왔습니다`);
 }
 /* ---- 기억 ---- */
 function memTab(){
@@ -545,7 +617,7 @@ function brainTab(){
   <div class="tiles">
     <div class="tile"><div class="hd"><b>이미지 렌더링</b><span class="pill"><i class="dot ${settings.keys.nvidia ? "ok" : "bad"}"></i>${settings.keys.nvidia ? "NVIDIA 키 있음" : "NVIDIA 키 필요"}</span></div><p>건물 투시도·인테리어 렌더(루미온 스타일)를 NVIDIA 무료 이미지 AI로 만듭니다.</p><label class="small">모델<select class="sel" id="img-model">${opts(IMG, settings.imageModel || IMG[0][0])}</select></label></div>
     <div class="tile${settings.brain === "ollama" ? " active" : ""}"><div class="hd"><b>내 PC 대형 모델 (Ollama)</b><span class="pill"><i class="dot ${brainReady("ollama") ? "ok" : "bad"}"></i>${brainReady("ollama") ? "준비됨" : "설정 필요"}</span></div><p>고사양 PC라면 완전 오프라인으로. <a href="https://ollama.com/download" target="_blank" rel="noopener">Ollama</a> 설치 후 모델을 받으세요. 자동 선택에서도 후보로 씁니다.</p>
-      <label class="small">모델<select class="sel" id="ol-model">${opts(OL_MODELS, settings.olModel)}</select></label><div class="row"><button class="btn" id="ol-list">받은 모델 보기</button><button class="btn" data-btest="ollama">연결 테스트</button></div></div>
+      <label class="small">모델<select class="sel" id="ol-model">${opts(OL_MODELS, settings.olModel)}</select></label><div class="row"><button class="btn primary" data-olpull="1">이 모델 받기</button><button class="btn" id="ol-list">받은 모델 보기</button><button class="btn" data-btest="ollama">연결 테스트</button></div></div>
     <div class="tile${settings.brain === "local" ? " active" : ""}"><div class="hd"><b>내 기기 AI</b><span class="pill"><i class="dot ${eng.w ? "ok" : "bad"}"></i>${eng.w ? "실행 중" : "모델 없음"}</span></div><p>인터넷 없이 이 컴퓨터에서 도는 소형 모델. 현재: ${esc(eng.loaded ? eng.loaded.name : "없음")}</p><div class="row"><button class="btn" data-open="local">내 기기 모델 고르기</button></div></div>
   </div>
   <div class="card"><h3>누리는 어떻게 배우나요?</h3><div class="body"><p class="small" style="margin:0">무료 API(NVIDIA 등)는 이미 학습된 모델을 '빌려 쓰는' 방식이라 모델 자체를 다시 학습시킬 수는 없습니다. 대신 누리는 <b>스킬</b>(분야별 일하는 방식), <b>기억</b>(나에 대한 정보), <b>내 지식</b>(올린 문서), <b>맞춤 지침</b>으로 매번 그것을 참고해 답하므로, 쓰면 쓸수록 나에게 맞춰집니다. 모델 자체를 미세조정하려면 GPU와 별도 학습 환경(NVIDIA NeMo, Unsloth 등)이 필요합니다.</p></div></div>`;
@@ -593,6 +665,13 @@ function aboutTab(){
 }
 $("#sheetBody").addEventListener("change", async e => {
   const t = e.target;
+  if (t.dataset.topt){ trainOpt[t.dataset.topt] = t.checked; saveTrainOpt(); if (t.dataset.topt !== "judge") renderSheet(); }
+  if (t.dataset.topic){ const o = new Set(trainOpt.topics); t.checked ? o.add(t.dataset.topic) : o.delete(t.dataset.topic); trainOpt.topics = [...o]; saveTrainOpt(); }
+  if (t.id === "trCount"){ trainOpt.count = +t.value; saveTrainOpt(); }
+  if (t.id === "trBase"){ trainOpt.base = t.value; saveTrainOpt(); renderSheet(); }
+  if (t.id === "trEpochs"){ trainOpt.epochs = +t.value; saveTrainOpt(); }
+  if (t.id === "trName") ls.set("myModelName", t.value.trim() || "nuri-mine");
+  if (t.id === "skFile" && t.files.length){ for (const f of t.files){ try { importSkill(await f.text(), f.name); } catch(err){ toast(err.message); } } renderSheet(); }
   if (t.dataset.pin){ if (t.value) settings.pinModel[t.dataset.pin] = t.value; else delete settings.pinModel[t.dataset.pin]; saveSettings(); }
   if (t.id === "img-model"){ settings.imageModel = t.value; saveSettings(); }
   if (t.id === "ol-model"){ settings.olModel = t.value; saveSettings(); }
@@ -623,6 +702,51 @@ $("#sheetBody").addEventListener("click", async e => {
   }
   if (t.dataset.sktoggle){ const sk = settings.skills.find(x => x.id === t.dataset.sktoggle); if (sk){ sk.off = !sk.off; saveSettings(); renderSheet(); } }
   if (t.dataset.skrm){ settings.skills = settings.skills.filter(x => x.id !== t.dataset.skrm); saveSettings(); renderSheet(); }
+  if (t.id === "trDl"){ const {all} = await trainData(); download("nuri-train.jsonl", toJSONL(all), "application/jsonl"); toast(`학습 예시 ${all.length}개를 내보냈습니다`); }
+  if (t.id === "trNb" || t.id === "trPy"){
+    const b = BASES.find(x => x.id === trainOpt.base) || BASES[0], name = ls.get("myModelName", "nuri-mine"), local = t.id === "trPy";
+    const o = {base: b.id, baseName: b.name, lic: b.lic, epochs: trainOpt.epochs, name, maxLen: local ? 1024 : 2048, batch: local ? 1 : 2, accum: local ? 8 : 4};
+    if (local) download("nuri_train_local.py", localScript(o), "text/x-python"); else download("nuri_train_colab.ipynb", notebookJSON(o));
+    const {all} = await trainData(); if (all.length) setTimeout(() => download("nuri-train.jsonl", toJSONL(all), "application/jsonl"), 400);
+    toast(all.length ? "학습 파일과 데이터를 내려받았습니다" : "학습 파일을 받았습니다. 학습 데이터가 아직 없습니다");
+  }
+  if (t.id === "trGen"){
+    synthLog = ["시작합니다…"]; synthCtl = new AbortController(); renderSheet();
+    const log = x => { synthLog.push(x); const L = $("#trLog"); if (L) L.innerHTML = synthLog.slice(-6).map(l => `<div>${esc(l)}</div>`).join(""); };
+    generateSynth({topics: trainOpt.topics, count: trainOpt.count, judge: trainOpt.judge, signal: synthCtl.signal,
+      onEvent: ev => { if (ev.kind === "log") log(ev.text); if (ev.kind === "sample") log(`✓ ${ev.made}/${ev.count} 저장`); }})
+      .then(n => { toast(`합성 예시 ${n}개를 만들었습니다`); }).catch(err => { if (!synthCtl?.signal.aborted) toast(err.message); log("멈춤: " + (err.message || "")); })
+      .finally(() => { synthCtl = null; if ($("#sheet").open && sheetTab === "train") renderSheet(); });
+  }
+  if (t.id === "trStop"){ synthCtl?.abort(); }
+  if (t.id === "trClear"){ if (t.dataset.c !== "1"){ t.dataset.c = "1"; t.textContent = "정말 모두 지우기"; return; } await clearSynth(); renderSheet(); }
+  if (t.dataset.synrm){ await removeSynth(t.dataset.synrm); renderSheet(); }
+  if (t.id === "trOl" || t.id === "trLocal"){
+    const f = $("#trGguf").files[0]; if (!f){ toast("학습 결과 .gguf 파일을 먼저 고르세요"); return; }
+    const name = ($("#trName").value.trim() || "nuri-mine").toLowerCase().replace(/[^a-z0-9._:-]+/g, "-");
+    if (t.id === "trLocal"){
+      if (f.size > 2.1e9){ toast("내 기기 AI는 2GB 이하 파일만 됩니다. Ollama에 등록하세요"); return; }
+      $("#sheet").close(); settings.brain = "local"; saveSettings(); await loadModel({kind: "file", name: name, files: [f]}); if (eng.w){ settings.myModel = name + " (내 기기)"; saveSettings(); toast("내 모델로 대화합니다: " + name); } return;
+    }
+    t.disabled = true;
+    try { await ollamaImportGGUF(f, name, ph => $("#trMsg").textContent = ph); settings.olModel = name; settings.olOk = true; settings.brain = "ollama"; settings.myModel = name; saveSettings(); toast("등록 완료! 이제 내 모델(" + name + ")이 답합니다"); renderSheet(); }
+    catch(err){ $("#trMsg").textContent = (err instanceof TypeError ? "Ollama에 연결하지 못했습니다. Ollama 앱을 켜고 NuriAI.exe로 실행하세요." : err.message) + " · 직접 하려면 명령창에서: ollama create " + name + " -f Modelfile"; }
+    finally { t.disabled = false; }
+  }
+  if (t.dataset.olpull){
+    const sel = $("#ol-model"), model = sel.value; t.disabled = true; const lab = t.textContent;
+    try { await ollamaPull(model, p => { t.textContent = p.total ? `받는 중 ${Math.round((p.completed || 0) / p.total * 100)}%` : (p.status || "받는 중").slice(0, 18); }); settings.olModel = model; settings.olOk = true; saveSettings(); toast("받기 완료: " + model); renderSheet(); }
+    catch(err){ toast(err instanceof TypeError ? (LAUNCHER.on ? "Ollama에 연결하지 못했습니다. Ollama 앱을 켜세요" : "NuriAI.exe로 실행해야 연결됩니다") : err.message); }
+    finally { t.disabled = false; t.textContent = lab; }
+  }
+  if (t.id === "skUrlAdd"){
+    let u = $("#skUrl").value.trim(); if (!u) return;
+    const m = u.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)\/(?:tree|blob)\/([^/]+)\/(.+?)(?:\/SKILL\.md)?\/?$/);
+    if (m) u = `https://raw.githubusercontent.com/${m[1]}/${m[2]}/${m[3]}/${m[4]}/SKILL.md`;
+    else if (/^[\w.-]+$/.test(u)) u = `https://raw.githubusercontent.com/NVIDIA/skills/main/skills/${u}/SKILL.md`;
+    t.disabled = true;
+    try { importSkill(await webGet(u), u); renderSheet(); } catch(err){ toast("가져오지 못했습니다: " + err.message); } finally { t.disabled = false; }
+  }
   if (t.id === "memAdd"){ const v = $("#memIn").value.trim(); if (v){ (settings.memory ||= []).push({text: v.slice(0, 300), t: Date.now()}); saveSettings(); renderSheet(); } }
   if (t.dataset.memrm){ settings.memory.splice(+t.dataset.memrm, 1); saveSettings(); renderSheet(); }
   const ld = t.closest("[data-load]"); if (ld){ const c = CATALOG.find(x => x.id === ld.dataset.load); settings.brain = "local"; saveSettings(); loadModel({kind: "hf", id: c.id, name: c.name, repo: c.repo, quant: c.quant}); }

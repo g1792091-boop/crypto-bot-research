@@ -35,7 +35,7 @@ export const idb = (() => {
 /* ============ 설정 ============ */
 export const settings = Object.assign({
   device:"auto", ctx:4096, maxTokens:1024, temp:0.7, think:false, rag:true, last:null, autoload:true,
-  brain:"auto", nvKey:"", nvModel:"qwen/qwen3-235b-a22b", olModel:"qwen3:14b", olOk:false,
+  brain:"auto", nvKey:"", nvModel:"qwen/qwen3-235b-a22b", olModel:"hf.co/unsloth/Qwen3.5-4B-GGUF:Q4_K_M", olOk:false,
   instructions:"", permission:"ask", keys:{}, provModels:{}, pinModel:{}, memory:[], skills:[]
 }, ls.get("settings", {}));
 if (settings.nvKey && !settings.keys.nvidia) settings.keys.nvidia = settings.nvKey;   // 예전 설정 옮기기
@@ -44,6 +44,9 @@ export const saveSettings = () => { ls.set("settings", settings); emit("engine")
 
 /* ============ 내 기기 AI (wllama = 브라우저 속 llama.cpp) ============ */
 export const CATALOG = [
+  {id:"qwen3.5-2b", name:"Qwen3.5 2B", repo:"unsloth/Qwen3.5-2B-GGUF", quant:"Q4_K_M", gb:1.3, tags:["추천","2026","다국어"], lic:"Apache-2.0", desc:"2026년 3월 공개된 최신 소형 모델. RTX 3050 노트북에서 가볍게 돕니다. 직접 학습 바탕 모델로도 추천."},
+  {id:"qwen3.5-0.8b", name:"Qwen3.5 0.8B", repo:"unsloth/Qwen3.5-0.8B-GGUF", quant:"Q4_K_M", gb:0.6, tags:["2026","가장 가벼움"], lic:"Apache-2.0", desc:"아주 가볍고 빠릅니다. 저사양 노트북·로컬 학습용."},
+  {id:"exaone4-1.2b", name:"EXAONE 4.0 1.2B", repo:"LGAI-EXAONE/EXAONE-4.0-1.2B-GGUF", quant:"Q4_K_M", gb:0.8, tags:["한국어 특화","추론 모드"], lic:"EXAONE(비상업)", desc:"LG AI연구원 최신 소형 모델. 한국어가 자연스럽습니다. 개인·연구·교육용."},
   {id:"qwen3-1.7b", name:"Qwen3 1.7B", repo:"unsloth/Qwen3-1.7B-GGUF", quant:"Q4_K_M", gb:1.1, tags:["추천","다국어","깊게 생각"], lic:"Apache-2.0", desc:"성능과 크기의 균형이 좋습니다."},
   {id:"exaone-2.4b", name:"EXAONE 3.5 2.4B", repo:"LGAI-EXAONE/EXAONE-3.5-2.4B-Instruct-GGUF", quant:"Q4_K_M", gb:1.6, tags:["한국어 특화"], lic:"EXAONE(비상업)", desc:"LG AI연구원 모델. 한국어가 자연스럽습니다."},
   {id:"qwen2.5-0.5b", name:"Qwen2.5 0.5B", repo:"Qwen/Qwen2.5-0.5B-Instruct-GGUF", quant:"Q4_K_M", gb:0.4, tags:["가장 가벼움"], lic:"Apache-2.0", desc:"저사양·휴대폰용. 답이 단순합니다."},
@@ -195,9 +198,42 @@ export const BRAINS = {
   ollama: {name:"내 PC 대형 모델", where:"Ollama", desc:"오프라인 · 고사양 PC"}
 };
 export const OL_MODELS = [
-  ["qwen3:14b", "Qwen3 14B · 약 9GB"], ["qwen3:30b", "Qwen3 30B (MoE) · 약 19GB"], ["gpt-oss:20b", "gpt-oss 20B · 약 14GB"],
-  ["exaone3.5:7.8b", "EXAONE 3.5 7.8B · 한국어"], ["qwen2.5-coder:14b", "Qwen2.5 Coder 14B · 코딩"]
+  ["hf.co/unsloth/Qwen3.5-4B-GGUF:Q4_K_M", "Qwen3.5 4B · 약 2.7GB · RTX 3050 추천(가장 똑똑)"],
+  ["hf.co/unsloth/Qwen3.5-2B-GGUF:Q4_K_M", "Qwen3.5 2B · 약 1.3GB · RTX 3050 빠름"],
+  ["hf.co/unsloth/gemma-4-E2B-it-GGUF:Q4_K_M", "Gemma 4 E2B · 약 3GB · 다국어"],
+  ["hf.co/LGAI-EXAONE/EXAONE-4.0-1.2B-GGUF:Q4_K_M", "EXAONE 4.0 1.2B · 한국어 · 비상업"],
+  ["hf.co/unsloth/Qwen3.5-9B-GGUF:Q4_K_M", "Qwen3.5 9B · 약 5.5GB · 4GB 그래픽카드는 느림"],
+  ["hf.co/unsloth/gemma-4-E4B-it-GGUF:Q4_K_M", "Gemma 4 E4B · 약 5GB · 고사양"],
+  ["qwen3:14b", "Qwen3 14B · 약 9GB · 고사양 PC"], ["gpt-oss:20b", "gpt-oss 20B · 약 14GB · 고사양 PC"]
 ];
+// Ollama: 모델 받기(진행률) · 내가 학습한 GGUF 등록
+export async function ollamaPull(model, onProgress, signal){
+  const r = await fetch(apiBase("ollama") + "/api/pull", {method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify({model, stream: true}), signal});
+  if (!r.ok) throw new Error("Ollama 응답 오류 " + r.status + " (Ollama가 켜져 있는지 확인하세요)");
+  const reader = r.body.getReader(), dec = new TextDecoder(); let buf = "", last = null;
+  for (;;){
+    const {value, done} = await reader.read(); if (done) break;
+    buf += dec.decode(value, {stream: true}); let n;
+    while ((n = buf.indexOf("\n")) >= 0){ const line = buf.slice(0, n).trim(); buf = buf.slice(n + 1); if (!line) continue; try { last = JSON.parse(line); } catch(e){ continue; } if (last.error) throw new Error(last.error); onProgress?.(last); }
+  }
+  return last;
+}
+export async function ollamaImportGGUF(file, name, onPhase){
+  onPhase?.("파일 지문(SHA-256) 계산 중…");
+  const hex = [...new Uint8Array(await crypto.subtle.digest("SHA-256", await file.arrayBuffer()))].map(b => b.toString(16).padStart(2, "0")).join("");
+  const digest = "sha256:" + hex, base = apiBase("ollama");
+  const head = await fetch(base + "/api/blobs/" + digest, {method: "HEAD"});
+  if (head.status !== 200){
+    onPhase?.("Ollama로 옮기는 중…");
+    const up = await fetch(base + "/api/blobs/" + digest, {method: "POST", body: file});
+    if (!up.ok) throw new Error("Ollama에 파일을 올리지 못했습니다 (" + up.status + ")");
+  }
+  onPhase?.("모델 등록 중…");
+  const r = await fetch(base + "/api/create", {method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify({model: name, files: {[file.name]: digest}, stream: false})});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || j.error) throw new Error("등록 실패: " + (j.error || r.status));
+  return name;
+}
 export const NV_MODELS = PROVIDERS.nvidia.defaults.map(m => [m, m]);
 export let lastRoute = null;
 export function brainReady(b = settings.brain){
