@@ -1122,7 +1122,10 @@ class Executor:
                 with self.c.protecting():
                     t["status"], t["qty"] = "open", abs(amt)
                     t["entry_price"] = snap.entry.get(t["symbol"]) or t.get("entry_price")
-                    self._note_order(t, self._entry_order(t))
+                    try:                                   # its order id, for the P&L (best effort)
+                        self._note_order(t, self._entry_order(t))
+                    except TestnetError:
+                        pass
                     self._event(WARN, "recover", f"재시작 복구: {t['symbol']} 진입이 체결돼 있습니다 → 손절을 확인합니다",
                                 {"key": t["key"], "amt": amt})
                     plan = float(t.get("planned_qty") or t["qty"])
@@ -1328,7 +1331,10 @@ class Executor:
                       entry_price=fill, entry_time=bar, direct=True, signal_ref=ref, signal_ready=ready)
 
     # ------------------------------------------------------------ follow the paper account
-    def _follow(self, intent: Optional[Intent], paper_ts: Optional[int], direct: Optional[Intent] = None) -> None:
+    def _follow(self, intent: Optional[Intent], paper_ts: Optional[int], direct: Optional[Intent] = None,
+                entries: bool = True) -> None:
+        """``entries`` False (a reconcile action failed this loop): the open trade is still followed (lock steps,
+        exits), but no new position is opened."""
         t = self.trade
         if t is not None and t["status"] == "open":
             if t.get("direct") and not t.get("confirmed"):
@@ -1347,11 +1353,23 @@ class Executor:
                 t = None
             else:
                 spec = self._spec(t["symbol"])
-                new = self._stop_level(intent.stop, intent.entry_price, t["entry_price"], spec["tick"], t["side"])
-                if (new - t["stop"]) * t["side"] > spec["tick"] / 2:
-                    self._move(t, new, [s["algoId"] for s in live_stops(self.c, t["symbol"])], "잠금 올리기")
+                side, tick = t["side"], spec["tick"]
+                new = self._stop_level(intent.stop, intent.entry_price, t["entry_price"], tick, side)
+                if (new - t["stop"]) * side > tick / 2:
+                    last = self.c.price(t["symbol"])
+                    own = round_stop(intent.stop, tick, side)
+                    if (last - new) * side <= 0 < (last - own) * side:
+                        # the lock scaled to our fill is already past the price, the paper's own lock is not:
+                        # the paper keeps its position, so do we (a -2021 market close here would end the trade)
+                        if (own - t["stop"]) * side <= tick / 2:
+                            return
+                        self._event(INFO, "lock_paper_price", f"{t['symbol']} 비율로 옮긴 잠금 {new:g}이 이미 가격 "
+                                    f"{last:g}을 지나, paper의 잠금 가격 {own:g}에 겁니다", {"key": t["key"]},
+                                    notify=False)
+                        new = own
+                    self._move(t, new, [s["algoId"] for s in live_stops(self.c, t["symbol"])], "잠금 올리기", ref=last)
                 return
-        if self.trade is not None:
+        if self.trade is not None or not entries:
             return
         now = self.now_ms()
         if direct is not None and direct.key not in self.done:
@@ -1396,14 +1414,17 @@ class Executor:
         else:
             price = self.c.price(it.symbol)
             qty = _round_down(it.qty * self.cfg.qty_scale, spec["qty_step"])
+            rules = v3_settings(taker_fee=self.paper_taker if self.paper_taker is not None else P.PAPER_TAKER_FEE)
+            stop = self._stop_level(it.stop, it.entry_price, price, spec["tick"], it.side)
+            # the loss at the stop must fit today's remaining loss limit and the paper rules' share of LIVE equity
             dec = R.check_entry(self.cfg.risk, self.risk, it.symbol, qty, price, it.leverage, spec["qty_step"],
-                                spec["min_qty"], spec["min_notional"])
+                                spec["min_qty"], spec["min_notional"], stop=stop, equity=self.risk.last_equity,
+                                max_loss_frac=rules.max_loss_frac, cost_frac=rules.taker_fee + rules.slippage_frac)
         self._event(INFO if dec.ok else WARN, "entry_check", f"진입 검사({it.symbol}): {dec.action} - {dec.text()}",
                     {"key": it.key, "qty": dec.qty, "leverage": dec.leverage, "direct": it.direct})
         if not dec.ok:
             self._mark_done(it.key)
             return
-        stop = self._stop_level(it.stop, it.entry_price, price, spec["tick"], it.side)
         if (price - stop) * it.side <= 0:
             self._mark_done(it.key)
             self._event(WARN, "entry_skip", f"{it.symbol} 가격 {price:g}이 이미 paper 손절선 {stop:g}을 지나 진입하지 않습니다")
@@ -1427,9 +1448,10 @@ class Executor:
             self._event(WARN, "leverage_refused", f"{it.symbol} 레버리지 {dec.leverage}배 설정이 거절돼 진입하지 않습니다: {e}")
             return
         try:
-            o = self.c.market(it.symbol, open_side, dec.qty, client_id=f"pb{t['base']}e")
-        except TransientError as e:
-            self._event(WARN, "entry_unknown", f"{it.symbol} 진입 주문 결과를 모릅니다({e}); 다음 확인에서 정리합니다")
+            o = self.c.market(it.symbol, open_side, dec.qty, client_id=f"pb{t['base']}e")    # never sent twice
+        except TransientError as e:                      # UnknownOutcome too: the reconcile adopts what filled
+            self._event(WARN, "entry_unknown", f"{it.symbol} 진입 주문 결과를 모릅니다({e}); 다시 보내지 않고 "
+                        "다음 확인에서 정리합니다")
             return
         except TestnetError as e:
             self.trade = None
@@ -1437,27 +1459,52 @@ class Executor:
             self._event(WARN, "entry_refused", f"{it.symbol} 진입 주문이 거절됐습니다: {e}")
             return
         sent = self.now_ms()
-        amt = float(self.c.position(it.symbol)["positionAmt"])
-        if amt == 0:
-            self.trade = None
-            self._mark_done(it.key)
-            self._event(WARN, "entry_unfilled", f"{it.symbol} 진입 주문이 체결되지 않았습니다(상태 {o.get('status')})")
-            return
-        t["status"], t["qty"] = "open", abs(amt)
-        t["entry_price"] = float(o.get("avgPrice") or 0) or float(self.c.position(it.symbol).get("entryPrice") or 0) \
-            or price
-        t["stop"] = t["stop_initial"] = self._stop_level(it.stop, it.entry_price, t["entry_price"], spec["tick"], it.side)
-        if it.signal_ready:
-            t["signal_lag_ms"] = sent - it.signal_ready         # signal ready -> live order answered
-        if abs(amt) < dec.qty - spec["qty_step"] / 2:
-            self._event(WARN, "partial_fill", f"{it.symbol} 진입이 일부만 체결됐습니다: {abs(amt):g}/{dec.qty:g}")
-        self.store.trade_open(t)
-        self._save()
-        lag = f", 신호 후 {t['signal_lag_ms'] / 1000:.1f}초" if it.signal_ready else ""
-        self._event(INFO, "entry", f"진입 {it.symbol} {'롱' if it.side > 0 else '숏'} {abs(amt):g} @ {t['entry_price']:g}, "
-                    f"{dec.leverage}배, 손절 {t['stop']:g}{' (빠른 진입' + lag + ')' if it.direct else ''}",
-                    {"key": it.key, "direct": it.direct, "signal_lag_ms": t.get("signal_lag_ms")})
-        self._protect(t, [])
+        self._note_order(t, o)
+        with self.c.protecting():                        # from the fill to the confirmed stop: no pacing pauses
+            filled = float(o.get("executedQty") or 0)
+            amt = self._position_amt(it.symbol, expect_open=filled > 0)
+            if amt == 0:
+                if filled > 0 or o.get("status") not in FINAL_ORDER:
+                    # the order's own answer says it filled (or is not final) but positionRisk does not show it
+                    # yet: keep the trade 'entering', the reconcile adopts and protects it
+                    self._save()
+                    self._event(WARN, "entry_pending", f"{it.symbol} 진입 주문은 {o.get('status')}({filled:g})인데 "
+                                "포지션이 아직 안 보입니다. 다음 확인에서 정리합니다")
+                    return
+                self.trade = None
+                self._mark_done(it.key)
+                self._event(WARN, "entry_unfilled", f"{it.symbol} 진입 주문이 체결되지 않았습니다(상태 {o.get('status')})")
+                return
+            if abs(amt) > dec.qty + spec["qty_step"] / 2:
+                amt = self._trim(t, amt, dec.qty, "계획보다 많이 체결됨")
+            t["status"], t["qty"] = "open", abs(amt)
+            t["entry_price"] = float(o.get("avgPrice") or 0) or \
+                float(self.c.position(it.symbol).get("entryPrice") or 0) or price
+            t["stop"] = t["stop_initial"] = self._stop_level(it.stop, it.entry_price, t["entry_price"], spec["tick"],
+                                                             it.side)
+            if it.signal_ready:
+                t["signal_lag_ms"] = sent - it.signal_ready         # signal ready -> live order answered
+            if abs(amt) < dec.qty - spec["qty_step"] / 2:
+                self._event(WARN, "partial_fill", f"{it.symbol} 진입이 일부만 체결됐습니다: {abs(amt):g}/{dec.qty:g}")
+            self.store.trade_open(t)
+            self._save()
+            lag = f", 신호 후 {t['signal_lag_ms'] / 1000:.1f}초" if it.signal_ready else ""
+            self._event(INFO, "entry", f"진입 {it.symbol} {'롱' if it.side > 0 else '숏'} {abs(amt):g} @ "
+                        f"{t['entry_price']:g}, {dec.leverage}배, 손절 {t['stop']:g}"
+                        f"{' (빠른 진입' + lag + ')' if it.direct else ''}",
+                        {"key": it.key, "direct": it.direct, "signal_lag_ms": t.get("signal_lag_ms")})
+            self._protect(t, [])
+
+    def _position_amt(self, symbol: str, expect_open: Optional[bool] = None) -> float:
+        """positionRisk, read again (up to twice, 0.2 s apart) while it disagrees with what an order's own answer
+        says (positionRisk can lag the matching engine for a moment)."""
+        amt = float(self.c.position(symbol)["positionAmt"])
+        for _ in range(2):
+            if expect_open is None or (amt != 0) == expect_open:
+                break
+            self.sleep(0.2)
+            amt = float(self.c.position(symbol)["positionAmt"])
+        return amt
 
     def _stop_level(self, paper_stop: float, paper_entry: float, live_ref: Optional[float], tick: float,
                     side: int) -> float:
@@ -1473,75 +1520,93 @@ class Executor:
         """Put the intended stop on the exchange (new first, then the old ones go). If that is not
         possible the position is closed: a position without a stop must not stay."""
         close_side = "SELL" if t["side"] > 0 else "BUY"
-        try:
-            res = move_stop(self.c, t["symbol"], close_side, t["stop"], t["qty"], old_ids,
-                            client_id=self._cid(t, "s"), close_id=self._cid(t, "x"))
-        except (TestnetError, ProtectionError) as e:
-            self._event(CRITICAL, "protect_failed", f"{t['symbol']} 손절을 걸 수 없어 포지션을 닫습니다: {e}")
-            self._flatten_symbol(t["symbol"], "손절을 걸 수 없음")
-            return
-        self._after_move(t, t["stop"], res, "손절 걸기")
+        with self.c.protecting():
+            try:
+                res = move_stop(self.c, t["symbol"], close_side, t["stop"], t["qty"], old_ids,
+                                client_id=self._cid(t, "s"), close_id=self._cid(t, "x"))
+            except (TestnetError, ProtectionError) as e:
+                self._event(CRITICAL, "protect_failed", f"{t['symbol']} 손절을 걸 수 없어 포지션을 닫습니다: {e}")
+                self._flatten_symbol(t["symbol"], "손절을 걸 수 없음")
+                return
+            self._after_move(t, t["stop"], res, "손절 걸기")
 
-    def _move(self, t: dict, new_stop: float, old_ids: list, why: str) -> None:
+    def _move(self, t: dict, new_stop: float, old_ids: list, why: str, ref: Optional[float] = None) -> None:
         close_side = "SELL" if t["side"] > 0 else "BUY"
-        try:
-            res = move_stop(self.c, t["symbol"], close_side, new_stop, t["qty"], old_ids,
-                            client_id=self._cid(t, "s"), close_id=self._cid(t, "x"))
-        except (TestnetError, ProtectionError) as e:
-            self.move_failures += 1
-            self._event(CRITICAL if self.move_failures >= 3 else WARN, "move_failed",
-                        f"{t['symbol']} {why} 실패 {self.move_failures}번째(옛 손절 {t['stop']:g}은 그대로): {e}")
-            return
-        self.move_failures = 0
-        self._after_move(t, new_stop, res, why)
+        with self.c.protecting():
+            try:
+                res = move_stop(self.c, t["symbol"], close_side, new_stop, t["qty"], old_ids,
+                                client_id=self._cid(t, "s"), close_id=self._cid(t, "x"))
+            except (TestnetError, ProtectionError) as e:
+                self.move_failures += 1
+                self._event(CRITICAL if self.move_failures >= 3 else WARN, "move_failed",
+                            f"{t['symbol']} {why} 실패 {self.move_failures}번째(옛 손절 {t['stop']:g}은 그대로): {e}")
+                return
+            self.move_failures = 0
+            self._after_move(t, new_stop, res, why, ref)
 
-    def _after_move(self, t: dict, new_stop: float, res: dict, why: str) -> None:
+    def _after_move(self, t: dict, new_stop: float, res: dict, why: str, ref: Optional[float] = None) -> None:
         if res["result"] == "moved":
             old = t["stop"]
             t["stop"], t["stop_algo_id"] = new_stop, res["stop"]["algoId"]
+            self._note_algo(t, t["stop_algo_id"])
             self._event(INFO, "stop", f"{t['symbol']} {why}: 손절 {old:g} → {new_stop:g} (거래소 확인)",
-                        {"algoId": t["stop_algo_id"], "cancelled": res["cancelled"]})
+                        {"algoId": t["stop_algo_id"], "cancelled": res["cancelled"], "left": res.get("left")})
+            if res.get("left"):
+                self._event(WARN, "cancel_failed", f"{t['symbol']} 새 손절은 걸렸고, 옛 손절 {len(res['left'])}개는 "
+                            "취소가 안 돼 다음 확인에서 정리합니다", {"left": res["left"]}, notify=False)
         elif res["result"] == "closed":
             self._event(WARN, "stop_would_trigger", f"{t['symbol']} {why}: 가격이 이미 {new_stop:g}을 지나 "
                         "시장가로 닫았습니다(-2021)")
-            t.setdefault("exit_ref", new_stop)
-            if self._settle_flat(t["symbol"]):         # not flat: the next reconcile protects or closes the rest
+            # a market close: its reference is the last price seen before deciding (when known)
+            t.setdefault("exit_ref", ref if ref else new_stop)
+            self._note_order(t, res.get("close"))
+            if self._settle_flat(t["symbol"]):         # not flat: the stops stay; the next loop closes the rest
                 self._finish(t, "손절/잠금 가격이 이미 지나 시장가로 닫음")
         else:
             t["stop"], t["stop_algo_id"] = new_stop, res["stop"].get("algoId")
+            self._note_algo(t, t["stop_algo_id"])
             self._event(INFO, "stop_fired", f"{t['symbol']} {why}: 새 손절이 바로 발동했습니다")
-        self._save()
+        self._save(strict=False)
 
     # ------------------------------------------------------------ closing
     def _settle_flat(self, symbol: str) -> bool:
+        """After a close: once the position is flat, cancel the symbol's orders. NOT flat (a reduce-only close that
+        filled only in part): keep the stops (reduce-only, they still cover the rest) and let the next loop close
+        or protect the rest; never leave the rest without a stop."""
+        amt = self._position_amt(symbol, expect_open=False)
+        if amt != 0:
+            self._event(CRITICAL, "not_flat", f"{symbol} 닫은 뒤에도 포지션 {amt:+g}이 남았습니다. 손절은 그대로 두고 "
+                        "다음 반복에서 나머지를 닫습니다")
+            return False
         self.c.cancel_all_algo(symbol)
         self.c.cancel_all(symbol)
-        amt = float(self.c.position(symbol)["positionAmt"])
-        if amt != 0:
-            self._event(CRITICAL, "not_flat", f"{symbol} 닫은 뒤에도 포지션 {amt:+g}이 남았습니다")
-            return False
         return True
 
     def _exit(self, t: dict, reason: str) -> None:
-        amt = float(self.c.position(t["symbol"])["positionAmt"])
-        if amt != 0:
-            t["exit_ref"] = self.c.price(t["symbol"])
-            self.c.market(t["symbol"], "SELL" if amt > 0 else "BUY", abs(amt), reduce_only=True,
-                          client_id=self._cid(t, "x"))
-        if self._settle_flat(t["symbol"]):
-            self._finish(t, reason)
+        with self.c.protecting():
+            amt = float(self.c.position(t["symbol"])["positionAmt"])
+            if amt != 0:
+                t["exit_ref"] = self.c.price(t["symbol"])
+                o = self.c.market(t["symbol"], "SELL" if amt > 0 else "BUY", abs(amt), reduce_only=True,
+                                  client_id=self._cid(t, "x"))
+                self._note_order(t, o)
+            if self._settle_flat(t["symbol"]):
+                self._finish(t, reason)
 
     def _flatten_symbol(self, symbol: str, why: str) -> None:
         t = self.trade if self.trade is not None and self.trade["symbol"] == symbol else None
-        amt = float(self.c.position(symbol)["positionAmt"])
-        if amt != 0:
-            if t is not None:
-                t["exit_ref"] = self.c.price(symbol)
-            cid = self._cid(t, "x") if t is not None else new_client_id("x", symbol)
-            self.c.market(symbol, "SELL" if amt > 0 else "BUY", abs(amt), reduce_only=True, client_id=cid)
-        flat = self._settle_flat(symbol)
-        if t is not None and flat:
-            self._finish(t, why)
+        with self.c.protecting():
+            amt = float(self.c.position(symbol)["positionAmt"])
+            if amt != 0:
+                if t is not None:
+                    t["exit_ref"] = self.c.price(symbol)
+                cid = self._cid(t, "x") if t is not None else new_client_id("x", symbol)
+                o = self.c.market(symbol, "SELL" if amt > 0 else "BUY", abs(amt), reduce_only=True, client_id=cid)
+                if t is not None:
+                    self._note_order(t, o)
+            flat = self._settle_flat(symbol)
+            if t is not None and flat:
+                self._finish(t, why)
 
     def _finish(self, t: dict, reason: str, wallet: Optional[float] = None, level: str = INFO) -> None:
         if wallet is None:
@@ -1554,7 +1619,7 @@ class Executor:
         except Exception as e:  # noqa: BLE001  (a record only: closing the trade must go on)
             cost = None
             self._event(WARN, "fills_unread", f"{t['symbol']} 체결 기록 계산 오류: {type(e).__name__}: {e}", notify=False)
-        if cost is not None and cost["fills"]:
+        if cost is not None and cost.get("final"):
             pnl = cost["pnl"]
         R.record_trade(self.risk, pnl)
         self._mark_done(t["key"])
@@ -1569,21 +1634,52 @@ class Executor:
     # ------------------------------------------------------------ P&L and cost from the exchange's records
     def _costs(self, t: dict) -> Optional[dict]:
         """Read the trade's fills and funding; store them with the measured P&L and cost. None when the
-        exchange could not be read (retried later by ``_settle_pending``)."""
-        start = int(t["entry_ts"]) - 5_000
-        end = int(t.get("exit_ts") or self.now_ms()) + 5_000
+        exchange could not be read (retried later by ``_settle_pending``).
+
+        The fills are the trade's OWN orders (entry, closes, the stop that fired: ``t["orders"]``, plus the
+        ``actualOrderId`` of its stops), not whatever else filled on the symbol in the time window (an exit and
+        a new entry seconds apart would otherwise swallow each other's fills). The window is in exchange time
+        and read in 7-day pieces. The result is final only when the closing quantity matches the opening one;
+        otherwise the wallet estimate stays and the fills are read again later."""
+        off = int(getattr(self.raw, "offset_ms", 0) or 0)
+        start = int(t["entry_ts"]) + off - 5_000
+        end = int(t.get("exit_ts") or self.now_ms()) + off + 5_000
         try:
-            fills = self.c.user_trades(t["symbol"], start, end)
-            funding = self.c.income(t["symbol"], "FUNDING_FEE", start, end)
+            fills = self._user_trades(t["symbol"], start, end)
+            income = self.c.income(t["symbol"], None, start, end)
         except TestnetError as e:
             self._event(WARN, "fills_unread", f"{t['symbol']} 체결 기록을 못 읽어 나중에 다시 계산합니다: {e}", notify=False)
             return None
+        spec = self._spec(t["symbol"])
+        if t.get("orders"):
+            known = {str(x) for x in t["orders"]}
+            mine = [f for f in fills if str(f.get("orderId")) in known]
+            if not P.balanced(t["side"], mine, spec["qty_step"]):
+                for aid in t.get("algos") or []:            # a stop that fired: its market order's id
+                    try:
+                        o = self.c.algo_order(algo_id=aid)
+                    except TestnetError:
+                        continue
+                    if o.get("actualOrderId") not in (None, "", "0", 0):
+                        known.add(str(o["actualOrderId"]))
+                mine = [f for f in fills if str(f.get("orderId")) in known]
+            fills = mine
+        funding = [r for r in income or [] if r.get("incomeType") in TRADE_INCOME_TYPES]
+        if fills:                                            # only while this trade's position was open
+            lo, hi = min(int(f.get("time") or 0) for f in fills), max(int(f.get("time") or 0) for f in fills)
+            funding = [r for r in funding if lo <= int(r.get("time") or 0) <= hi]
+        prices = {}
+        for asset in {f.get("commissionAsset") for f in fills} - set(P.QUOTE_ASSETS) - {None}:
+            try:                                             # e.g. BNB fee discount: valued at today's price
+                prices[asset] = self.c.price(f"{asset}USDT")
+            except (TestnetError, KeyError, ValueError):
+                pass
         taker = self.paper_taker if self.paper_taker is not None else P.PAPER_TAKER_FEE
         c = P.trade_costs(t["side"], fills, funding, t.get("entry_ref"), t.get("exit_ref") or t.get("stop"),
-                          taker_fee=taker)
+                          taker_fee=taker, qty_step=spec["qty_step"], prices=prices)
         self.store.fills(t["key"], fills)
         self.store.funding(t["key"], funding)
-        if fills:
+        if c["final"]:
             self.store.trade_costs(t["key"], c)
         self.store.commit()
         if c["problems"]:
@@ -1591,9 +1687,21 @@ class Executor:
                         {"key": t["key"]}, notify=False)
         return c
 
+    def _user_trades(self, symbol: str, start: int, end: int) -> list:
+        """userTrades over any span (Binance answers at most 7 days per request), each fill once."""
+        out, seen, lo = [], set(), start
+        while lo <= end:
+            hi = min(end, lo + USER_TRADES_SPAN)
+            for f in self.c.user_trades(symbol, lo, hi) or []:
+                if f.get("id") not in seen:
+                    seen.add(f.get("id"))
+                    out.append(f)
+            lo = hi + 1
+        return out
+
     def _settle_pending(self) -> None:
         """One closed trade per loop whose P&L is still the wallet estimate: try its fills again (up to 5 times,
-        within 6 days: userTrades answers at most 7-day windows)."""
+        within 6 days)."""
         row = self.store.conn.execute(
             "SELECT key, data FROM trades WHERE exit_ts IS NOT NULL AND COALESCE(pnl_source, 'wallet') = 'wallet' "
             "AND exit_ts > ? ORDER BY exit_ts LIMIT 5", (self.now_ms() - 6 * 86_400_000,)).fetchall()
@@ -1609,15 +1717,29 @@ class Executor:
                     self._event(WARN, "fills_unread", f"{key} 체결 기록 계산 오류: {e}", notify=False)
             return
 
-    def _flatten_halt(self, dec: R.Decision) -> None:
-        if R.halt(self.risk, self.now_ms(), dec.text()):
-            self.store.halt_log(self.now_ms(), "halt", dec.text(), planned=True)
+    def _halt_log(self, reason: str, planned: bool) -> None:
+        try:
+            self.store.halt_log(self.now_ms(), "halt", reason, planned=planned)
+        except sqlite3.Error as e:
+            self._event(CRITICAL, "db_error", f"멈춤 기록 실패(멈춤은 그대로): {e}", notify=False)
+
+    def _flatten_halt(self, dec: R.Decision, rows: Optional[list] = None) -> list:
+        """Halt and close every position (positionRisk + reduce-only market orders). One symbol that cannot be
+        closed does not keep the others open: its error is returned (the loop raises it after the rest)."""
+        if R.halt(self.risk, self.now_ms(), dec.text(), [k for k in dec.kinds if k != "halted"]):
             self._event(CRITICAL, "halt", f"거래를 멈춥니다(사람이 풀 때까지): {dec.text()}")
-        for row in self.c.positions():
-            self._flatten_symbol(row["symbol"], "멈춤: " + dec.text())
-        if self.trade is not None and self.trade["status"] == "entering":
+            self._halt_log(dec.text(), planned=True)
+        failed: list = []
+        for row in (self.c.positions() if rows is None else rows):
+            if float(row.get("positionAmt") or 0) == 0:
+                continue
+            self._isolated(failed, f"{row['symbol']} 멈춤 정리", self._flatten_symbol, row["symbol"],
+                           "멈춤: " + dec.text())
+        if self.trade is not None and self.trade["status"] == "entering" and \
+                not any(r["symbol"] == self.trade["symbol"] for r in (rows or [])):
             self._mark_done(self.trade["key"])
             self.trade = None
+        return failed
 
 
 # ---------------------------------------------------------------- stage check (leverage stage review)
@@ -1633,7 +1755,9 @@ def stage_review(exec_db: str, paper_db: str, account: str, now_ms: int, qty_sca
         mode = meta.get("mode") or bot.get("mode") or MODE_TESTNET
         cols = ("key", "entry_ts", "exit_ts", "pnl", "pnl_source", "real_cost", "assumed_cost", "cost_ok")
         trades = [dict(zip(cols, r)) for r in conn.execute(f"SELECT {', '.join(cols)} FROM trades ORDER BY entry_ts")]
-        curve = [r[0] for r in conn.execute("SELECT equity FROM equity ORDER BY ts")]
+        # the equity curve without deposits/withdrawals (a withdrawal of profit is not a drawdown)
+        curve = [r[0] for r in conn.execute("SELECT equity - COALESCE(transfers, 0) FROM equity ORDER BY ts")]
+        first_start = conn.execute("SELECT MIN(ts) FROM events WHERE kind = 'start'").fetchone()[0]
         halts = conn.execute("SELECT COUNT(*) FROM halts WHERE action = 'halt' AND COALESCE(planned, 0) = 0"
                              ).fetchone()[0]
         marks = ",".join("?" * len(EMERGENCY_KINDS))
@@ -1642,7 +1766,9 @@ def stage_review(exec_db: str, paper_db: str, account: str, now_ms: int, qty_sca
     finally:
         conn.close()
     closed = [t for t in trades if t["exit_ts"] is not None and t["pnl"] is not None]
-    start = int(meta.get("since") or (trades[0]["entry_ts"] if trades else now_ms))
+    # live since the first start that passed every gate (a start the gates refused does not count)
+    start = int(meta.get("live_since") or first_start or meta.get("since")
+                or (trades[0]["entry_ts"] if trades else now_ms))
     cost = P.cost_ratio([{"ok": t["pnl_source"] == "fills" and t["cost_ok"] == 1, "real_cost": t["real_cost"],
                           "assumed_cost": t["assumed_cost"]} for t in closed])
     paper = P.paper_pnl(paper_db, account, start, now_ms)
@@ -1708,10 +1834,24 @@ def _client() -> TestnetClient:           # kept for scripts written against the
 def cmd_run(args) -> int:
     cfg = ExecConfig.from_file(args.config)
     store = ExecStore(cfg.db)
+    note = _notifier()
     try:
         client, keycheck = _clients(cfg)
-        ex = Executor(cfg, client, Paper3Source(cfg.paper_db, cfg.account), store, _notifier(), keycheck=keycheck)
-        ex.run(args.max_loops)
+        ex = Executor(cfg, client, Paper3Source(cfg.paper_db, cfg.account), store, note, keycheck=keycheck)
+
+        def on_term(signum, frame):              # systemctl stop / reboot: finish the loop in progress first
+            ex.stopping = True
+        old = signal.signal(signal.SIGTERM, on_term)
+        try:
+            ex.run(args.max_loops)
+        except Refused:
+            raise                                 # a start gate refused: already recorded and alerted
+        except Exception as e:
+            note.send(CRITICAL, f"{PREFIX.get(cfg.mode, '[실행기]')} 실행기가 오류로 멈췄습니다: {type(e).__name__}: {e}. "
+                                "systemd가 30초 뒤 다시 켭니다. 열린 포지션은 거래소 손절만 지킵니다")
+            raise
+        finally:
+            signal.signal(signal.SIGTERM, old)
     finally:
         store.close()
     return 0
@@ -1861,4 +2001,5 @@ def main(argv: Optional[list[str]] = None) -> int:
 
 
 if __name__ == "__main__":
+    hide_process_memory()          # the order keys in this process's environment: not readable by other processes
     sys.exit(main())
