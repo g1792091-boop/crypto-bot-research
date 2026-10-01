@@ -83,9 +83,10 @@ const PERSONAS = ["코인을 막 시작한 직장인", "10년 차 주식 투자�
 const LEVELS = ["쉬움(기초 개념)", "보통(실전 상황)", "어려움(여러 조건을 따지는 판단)"];
 const STYLES = ["짧고 구어체로", "상황을 자세히 설명하며", "숫자와 조건을 넣어서", "비교를 요청하며"];
 const pickOne = a => a[Math.floor(Math.random() * a.length)];
+const NO_TRAIN = ["anthropic"];   // 학습 데이터 생성에는 쓰지 않는 회사
 async function ask(messages, {signal, maxTokens = 1500, temperature = 0.7, target} = {}){
   let out = "";
-  const route = await brainStream({messages, maxTokens, temperature, signal, role: "general", target, onContent: d => out += d});
+  const route = await brainStream({messages, maxTokens, temperature, signal, role: "general", target, exclude: NO_TRAIN, onContent: d => out += d});
   return {text: splitThink(out).body.trim(), route: route || target};
 }
 function parseJSONArray(t){
@@ -97,7 +98,7 @@ export function teachers(){
   const seen = new Set(), out = [];
   for (const role of ["general", "reason", "code"]) for (const c of routeCandidates(role)){
     const k = c.id + "|" + c.model;
-    if (c.id === "local" || seen.has(k)) continue;
+    if (c.id === "local" || c.id === "anthropic" || seen.has(k)) continue;
     seen.add(k); out.push(c); if (out.length >= 3) return out;
   }
   return out;
@@ -123,7 +124,8 @@ const mkey = t => t.id + "|" + t.model;
 // 융합에 참여하는 원본 모델: API 키를 넣은 모든 회사의 대화·코딩·추론 모델 전부
 export function fusionSources(){
   const out = [], seen = new Set();
-  for (const id of Object.keys(PROVIDERS).filter(id => settings.keys[id])){
+  // Claude는 약관상 다른 모델 학습용 답을 만드는 데 쓰지 않는다
+  for (const id of Object.keys(PROVIDERS).filter(id => settings.keys[id] && id !== "anthropic")){
     const ms = settings.provModels[id]?.length ? settings.provModels[id] : PROVIDERS[id].defaults;
     for (const m of ms){
       if (!["chat", "code", "reason", "vision"].includes(modelKind(m)) || FUSE_SKIP.test(m)) continue;
@@ -169,7 +171,7 @@ async function agentTrace(q, signal){
   const msg = {role: "assistant", parts: [], mode: "chat", ts: Date.now()};
   const user = {role: "user", content: q};
   try {
-    await runAgent({mode: "chat", history: [user], msg, signal: signal || new AbortController().signal, onUpdate(){}, think: false, workspace: "",
+    await runAgent({mode: "chat", history: [user], msg, signal: signal || new AbortController().signal, exclude: NO_TRAIN, onUpdate(){}, think: false, workspace: "",
       openArtifact: async () => null, askPermission: async () => false});
   } catch(e){ if (signal?.aborted) throw e; return null; }   // 실패하면 일반 문답으로 대신 만든다
   const final = visibleOf(msg);

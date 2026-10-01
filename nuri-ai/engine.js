@@ -156,12 +156,14 @@ export const PROVIDERS = {
   mistral:    {name:"Mistral", proxy:"mistral", base:"https://api.mistral.ai/v1", key:null, url:"https://console.mistral.ai/api-keys", note:"무료 체험 요금제", bias:4, defaults:["mistral-large-latest","codestral-latest","mistral-small-latest"]},
   deepseek:   {name:"DeepSeek", proxy:"deepseek", base:"https://api.deepseek.com", key:/^sk-[a-f0-9]{32}$/, url:"https://platform.deepseek.com/api_keys", note:"유료(저렴)", bias:3, defaults:["deepseek-chat","deepseek-reasoner"]},
   together:   {name:"Together", proxy:"together", base:"https://api.together.xyz/v1", key:/^tgp_/, url:"https://api.together.ai/settings/api-keys", note:"일부 무료 모델", bias:4, defaults:["meta-llama/Llama-3.3-70B-Instruct-Turbo-Free","deepseek-ai/DeepSeek-R1-Distill-Llama-70B-free"]},
+  anthropic:  {name:"Claude", proxy:"anthropic", base:"https://api.anthropic.com/v1", key:/^sk-ant-/, url:"https://console.anthropic.com/settings/keys", note:"유료 · 하루 사용 한도 안에서만 씀", bias:-1,
+               defaults:["claude-opus-5-5","claude-sonnet-5-5","claude-haiku-4-5-20251001"]},
   sambanova:  {name:"SambaNova", proxy:"sambanova", base:"https://api.sambanova.ai/v1", key:null, url:"https://cloud.sambanova.ai/apis", note:"무료 한도", bias:3, defaults:["DeepSeek-V3-0324","Meta-Llama-3.3-70B-Instruct","DeepSeek-R1"]}
 };
 export const SEARCH_KEYS = {tavily:{name:"Tavily 검색", key:/^tvly-/, url:"https://app.tavily.com"}, brave:{name:"Brave 검색", key:/^BSA/, url:"https://brave.com/search/api/"}};
 const NOT_CHAT = /embed|rerank|guard|safety|reward|whisper|tts|speech|audio|vision-?only|clip|parse|retriever|ocr|flux|sdxl|stable-diffusion|image|moderation|nemoretriever|nv-embed|paligemma|kosmos|deplot|fuyu|neva|vila|cosmos/i;
 // 이미지를 볼 수 있는 모델
-export const VISION_RE = /llama-4|vision|[-_.]vl\b|-vl-|qwen\d?(\.\d)?-?vl|gemma-3-(4|12|27)b|gemma-4|gemini|phi-4-multimodal|phi-3\.5-vision|kimi-vl|pixtral|mistral-small-3|mistral-medium-3|nemotron.*vl|cosmos-reason|qwen3\.5/i;
+export const VISION_RE = /claude|llama-4|vision|[-_.]vl\b|-vl-|qwen\d?(\.\d)?-?vl|gemma-3-(4|12|27)b|gemma-4|gemini|phi-4-multimodal|phi-3\.5-vision|kimi-vl|pixtral|mistral-small-3|mistral-medium-3|nemotron.*vl|cosmos-reason|qwen3\.5/i;
 // 모델 종류 (모델 탐색기에 표시)
 export function modelKind(id){
   id = String(id);
@@ -178,11 +180,11 @@ export function modelKind(id){
 }
 export const KIND_KO = {chat: "대화", code: "코딩", reason: "추론", vision: "이미지 이해", image: "이미지 생성", embed: "임베딩", rerank: "재정렬", speech: "음성", safety: "안전 필터", reward: "보상 모델"};
 const ROLE_RANK = {
-  vision:  [/llama-4-maverick/i, /qwen3\.5|qwen3-vl/i, /gemini-2\.5-pro/i, /llama-4-scout/i, /qwen2\.5-vl-72b|qwen2\.5-vl/i, /gemma-4|gemma-3-27b/i, /llama-3\.2-90b-vision/i, /mistral-medium-3|pixtral/i, /gemini/i, /phi-4-multimodal/i, /kimi-vl/i, /./],
-  general: [/qwen3-235b|qwen-3-235b/i, /deepseek-(v3|chat)/i, /kimi-k2/i, /gpt-oss-120b/i, /gemini-2\.5-pro/i, /llama-?4|llama-3\.3-70b|llama-3\.1-405b/i, /gemini-2\.5-flash/i, /mistral-large/i, /qwen3-32b|qwen-?2\.5-72b/i, /nemotron.*(super|ultra)/i, /gemini/i, /qwen/i, /llama/i, /./],
-  code:    [/qwen3-coder|qwen-3-coder/i, /kimi-k2/i, /deepseek-(v3|chat)/i, /gpt-oss-120b/i, /codestral/i, /qwen2\.5-coder/i, /qwen3-235b|qwen-3-235b/i, /gemini-2\.5-pro/i, /llama-3\.3-70b/i, /./],
-  reason:  [/deepseek-r1|deepseek-reasoner/i, /gpt-oss-120b/i, /qwen3-235b|qwen-3-235b/i, /gemini-2\.5-pro/i, /qwq/i, /kimi-k2/i, /deepseek-(v3|chat)/i, /./],
-  fast:    [/gpt-oss-120b/i, /llama-3\.3-70b/i, /qwen3-32b/i, /gemini-2\.5-flash|gemini-2\.0-flash/i, /llama-3\.1-8b/i, /./]
+  vision:  [/claude-(opus|sonnet)/i, /llama-4-maverick/i, /qwen3\.5|qwen3-vl/i, /gemini-2\.5-pro/i, /llama-4-scout/i, /qwen2\.5-vl-72b|qwen2\.5-vl/i, /gemma-4|gemma-3-27b/i, /llama-3\.2-90b-vision/i, /mistral-medium-3|pixtral/i, /gemini/i, /phi-4-multimodal/i, /kimi-vl/i, /./],
+  general: [/claude-(opus|sonnet)/i, /qwen3-235b|qwen-3-235b/i, /deepseek-(v3|chat)/i, /kimi-k2/i, /gpt-oss-120b/i, /gemini-2\.5-pro/i, /llama-?4|llama-3\.3-70b|llama-3\.1-405b/i, /gemini-2\.5-flash/i, /mistral-large/i, /qwen3-32b|qwen-?2\.5-72b/i, /nemotron.*(super|ultra)/i, /gemini/i, /qwen/i, /llama/i, /./],
+  code:    [/claude-(opus|sonnet)/i, /qwen3-coder|qwen-3-coder/i, /kimi-k2/i, /deepseek-(v3|chat)/i, /gpt-oss-120b/i, /codestral/i, /qwen2\.5-coder/i, /qwen3-235b|qwen-3-235b/i, /gemini-2\.5-pro/i, /llama-3\.3-70b/i, /./],
+  reason:  [/claude-opus/i, /claude-sonnet/i, /deepseek-r1|deepseek-reasoner/i, /gpt-oss-120b/i, /qwen3-235b|qwen-3-235b/i, /gemini-2\.5-pro/i, /qwq/i, /kimi-k2/i, /deepseek-(v3|chat)/i, /./],
+  fast:    [/claude-haiku/i, /gpt-oss-120b/i, /llama-3\.3-70b/i, /qwen3-32b/i, /gemini-2\.5-flash|gemini-2\.0-flash/i, /llama-3\.1-8b/i, /./]
 };
 export function rankModel(id, role = "general"){ if (role === "vision"){ if (!VISION_RE.test(id) || /embed|rerank|guard|safety|reward/i.test(id)) return 999; } else if (NOT_CHAT.test(id)) return 999; const r = ROLE_RANK[role] || ROLE_RANK.general; const k = r.findIndex(re => re.test(id)); return k < 0 ? 900 : k; }
 export function detectKeyKind(key){
@@ -220,9 +222,15 @@ export function removeApiKey(id){ delete settings.keys[id]; delete settings.prov
 const cooldown = {};
 const connected = () => Object.keys(PROVIDERS).filter(id => settings.keys[id]);
 // 후보 목록: 회사마다 그 역할에 가장 맞는 모델 하나씩, 순위 순
+// 유료 회사(Claude 등)는 하루 호출 한도 안에서만 쓴다
+export const provUse = () => { try { const u = JSON.parse(localStorage.getItem("provUse") || "{}"); return u.day === new Date().toLocaleDateString("sv-SE") ? u : {day: new Date().toLocaleDateString("sv-SE"), n: {}}; } catch(e){ return {day: "", n: {}}; } };
+const provCap = id => (settings.provCap || {anthropic: 300})[id] ?? (id === "anthropic" ? 300 : 0);
+export const overCap = id => { const cap = provCap(id); return cap > 0 && (provUse().n[id] || 0) >= cap; };
+function countUse(id){ const u = provUse(); u.n[id] = (u.n[id] || 0) + 1; try { localStorage.setItem("provUse", JSON.stringify(u)); } catch(e){} }
 export function routeCandidates(role = "general"){
   const out = [];
   for (const id of connected()){
+    if (overCap(id)) continue;
     const models = settings.pinModel[id] ? [settings.pinModel[id]] : (settings.provModels[id] && settings.provModels[id].length ? settings.provModels[id] : PROVIDERS[id].defaults);
     let pool = models;
     if (id === "openrouter"){ const free = models.filter(m => /:free$/.test(m)); if (free.length) pool = free; }
@@ -356,6 +364,8 @@ async function streamOAI(target, {messages, maxTokens, temperature, signal, onCo
   const headers = {"content-type": "application/json", accept: "text/event-stream"};
   if (!isOl) headers.authorization = "Bearer " + settings.keys[target.id];
   if (target.id === "openrouter"){ headers["HTTP-Referer"] = "https://nuri.local"; headers["X-Title"] = "Nuri AI"; }
+  if (target.id === "anthropic" && !LAUNCHER.on){ headers["x-api-key"] = settings.keys.anthropic; headers["anthropic-version"] = "2023-06-01"; headers["anthropic-dangerous-direct-browser-access"] = "true"; }
+  if (target.id === "anthropic" && temperature > 1) temperature = 1;
   const canSee = VISION_RE.test(target.model);
   const msgs = canSee ? messages.map(m => m.images?.length ? {role: m.role, content: [{type: "text", text: m.content}, ...m.images.map(url => ({type: "image_url", image_url: {url}}))]} : {role: m.role, content: m.content}) : stripImages(messages, `${shortModel(target.model)}는 이미지를 볼 수 없습니다`);
   const body = {model: target.model, messages: msgs, stream: true, max_tokens: maxTokens, temperature};
@@ -391,7 +401,9 @@ export async function brainStream(opts){
   else if (PROVIDERS[b]) cands = routeCandidates(role).filter(c => c.id === b).concat(routeCandidates(role).filter(c => c.id !== b));
   else cands = [];
   if (opts.only) cands = (opts.only === "ollama" ? [{id:"ollama", model: settings.olModel}] : routeCandidates(role)).filter(c => c.id === opts.only);
+  if (opts.target && overCap(opts.target.id)) opts = {...opts, target: null};   // 하루 한도를 넘은 회사는 지정해도 쓰지 않는다
   if (opts.target) cands = opts.fallback ? [opts.target, ...cands.filter(c => c.id !== opts.target.id || c.model !== opts.target.model)] : [opts.target];   // 특정 회사·모델을 꼭 집어 부를 때 (fallback이면 막혔을 때 다른 AI로)
+  if (opts.exclude?.length) cands = cands.filter(c => !opts.exclude.includes(c.id));
   if (!cands.length && role === "vision"){ cands = routeCandidates("general"); emit("activity", {kind: "fallback", text: "이미지를 볼 수 있는 모델이 연결되어 있지 않아 글로만 답합니다 (NVIDIA·Gemini 키를 넣으면 이미지 이해 가능)"}); if (b === "local") return streamLocal(opts); }
   if (!cands.length) throw new Error("연결된 AI가 없습니다. 설정 → AI 두뇌에서 API 키를 넣거나 모델을 내려받으세요.");
   let lastErr = null;
@@ -400,7 +412,7 @@ export async function brainStream(opts){
     let got = false;
     const wrapped = {...opts, onContent: d => { got = true; opts.onContent?.(d); }, onThink: d => { got = true; opts.onThink?.(d); }};
     lastRoute = c; emit("activity", {kind:"route", text:`${c.id === "local" ? "내 기기" : c.id === "ollama" ? "Ollama" : PROVIDERS[c.id].name} · ${shortModel(c.model)}`, role, route: c});
-    try { if (c.id === "local") await streamLocal(wrapped); else await streamOAI(c, wrapped); return c; }
+    try { if (c.id === "local") await streamLocal(wrapped); else { if (PROVIDERS[c.id]) countUse(c.id); await streamOAI(c, wrapped); } return c; }
     catch (e){
       if (opts.signal?.aborted || got || !e.retry) throw e;
       lastErr = e;

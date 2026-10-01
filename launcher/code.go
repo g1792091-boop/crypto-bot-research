@@ -57,7 +57,25 @@ func codeHandler(w http.ResponseWriter, r *http.Request) {
 		in = obj{}
 	}
 	action := strings.TrimPrefix(r.URL.Path, "/__nuri/code/")
-	out, err := runCode(r.Context(), action, in)
+	ctx := r.Context()
+	if str(in, "ws") == "office" {
+		// 사무실 직원 요청: 전용 폴더에서만, 폴더 바꾸기와 위험한 명령은 막는다
+		if action == "pick" || action == "open" {
+			json.NewEncoder(w).Encode(obj{"ok": false, "error": "사무실 직원은 작업 폴더를 바꿀 수 없습니다"})
+			return
+		}
+		if action == "exec" && dangerous(str(in, "command")) {
+			json.NewEncoder(w).Encode(obj{"ok": false, "error": "사무실 직원에게 허용되지 않는 명령입니다"})
+			return
+		}
+		dir, err := officeWS()
+		if err != nil {
+			json.NewEncoder(w).Encode(obj{"ok": false, "error": err.Error()})
+			return
+		}
+		ctx = context.WithValue(ctx, wsKeyT{}, dir)
+	}
+	out, err := runCode(ctx, action, in)
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	if err != nil {
@@ -82,7 +100,25 @@ func num(in obj, k string, d int) int {
 	return d
 }
 
-func currentWS() (string, error) {
+type wsKeyT struct{}
+
+// AI 팀 사무실 전용 작업 폴더 (문서/GHNano 사무실). 사무실 직원은 이 폴더 밖을 쓸 수 없다
+func officeWS() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	dir := filepath.Join(home, "Documents", "GHNano 사무실")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	return dir, nil
+}
+
+func currentWS(ctx context.Context) (string, error) {
+	if v, ok := ctx.Value(wsKeyT{}).(string); ok && v != "" {
+		return v, nil
+	}
 	wsMu.Lock()
 	defer wsMu.Unlock()
 	if workspace == "" {
@@ -92,8 +128,8 @@ func currentWS() (string, error) {
 }
 
 // 작업 폴더 밖으로 나가는 경로는 거부한다
-func resolve(p string) (string, error) {
-	ws, err := currentWS()
+func resolve(ctx context.Context, p string) (string, error) {
+	ws, err := currentWS(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -113,8 +149,8 @@ func resolve(p string) (string, error) {
 	return abs, nil
 }
 
-func relOf(abs string) string {
-	ws, _ := currentWS()
+func relOf(ctx context.Context, abs string) string {
+	ws, _ := currentWS(ctx)
 	r, err := filepath.Rel(ws, abs)
 	if err != nil {
 		return abs
@@ -152,7 +188,7 @@ func runCode(ctx context.Context, action string, in obj) (obj, error) {
 		return obj{"path": abs, "name": filepath.Base(abs)}, nil
 
 	case "ls":
-		root, err := resolve(str(in, "path"))
+		root, err := resolve(ctx, str(in, "path"))
 		if err != nil {
 			return nil, err
 		}
@@ -170,7 +206,7 @@ func runCode(ctx context.Context, action string, in obj) (obj, error) {
 				return nil
 			}
 			if d.IsDir() && skipDirs[d.Name()] {
-				lines = append(lines, relOf(p)+"/ (생략)")
+				lines = append(lines, relOf(ctx, p)+"/ (생략)")
 				return filepath.SkipDir
 			}
 			if strings.Count(p, string(filepath.Separator))-base > depth {
@@ -183,16 +219,16 @@ func runCode(ctx context.Context, action string, in obj) (obj, error) {
 				return filepath.SkipAll
 			}
 			if d.IsDir() {
-				lines = append(lines, relOf(p)+"/")
+				lines = append(lines, relOf(ctx, p)+"/")
 			} else if info, e := d.Info(); e == nil {
-				lines = append(lines, fmt.Sprintf("%s (%s)", relOf(p), human(info.Size())))
+				lines = append(lines, fmt.Sprintf("%s (%s)", relOf(ctx, p), human(info.Size())))
 			}
 			return nil
 		})
 		return obj{"entries": lines, "truncated": len(lines) >= 400}, nil
 
 	case "read":
-		p, err := resolve(str(in, "path"))
+		p, err := resolve(ctx, str(in, "path"))
 		if err != nil {
 			return nil, err
 		}
@@ -231,7 +267,7 @@ func runCode(ctx context.Context, action string, in obj) (obj, error) {
 		return obj{"content": sb.String(), "total_lines": len(all), "from": off, "to": end}, nil
 
 	case "raw":
-		p, err := resolve(str(in, "path"))
+		p, err := resolve(ctx, str(in, "path"))
 		if err != nil {
 			return nil, err
 		}
@@ -245,7 +281,7 @@ func runCode(ctx context.Context, action string, in obj) (obj, error) {
 		return obj{"exists": true, "content": string(b)}, nil
 
 	case "write":
-		p, err := resolve(str(in, "path"))
+		p, err := resolve(ctx, str(in, "path"))
 		if err != nil {
 			return nil, err
 		}
@@ -263,10 +299,10 @@ func runCode(ctx context.Context, action string, in obj) (obj, error) {
 		if err := os.WriteFile(p, data, 0o644); err != nil {
 			return nil, err
 		}
-		return obj{"path": relOf(p), "created": rerr != nil, "bytes": len(data), "old": clip(string(old), 400000)}, nil
+		return obj{"path": relOf(ctx, p), "created": rerr != nil, "bytes": len(data), "old": clip(string(old), 400000)}, nil
 
 	case "edit":
-		p, err := resolve(str(in, "path"))
+		p, err := resolve(ctx, str(in, "path"))
 		if err != nil {
 			return nil, err
 		}
@@ -307,10 +343,10 @@ func runCode(ctx context.Context, action string, in obj) (obj, error) {
 			return nil, err
 		}
 		line := strings.Count(work[:strings.Index(work, oldS)], "\n") + 1
-		return obj{"path": relOf(p), "replaced": map[bool]int{true: n, false: 1}[all], "line": line}, nil
+		return obj{"path": relOf(ctx, p), "replaced": map[bool]int{true: n, false: 1}[all], "line": line}, nil
 
 	case "glob":
-		ws, err := currentWS()
+		ws, err := currentWS(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -329,7 +365,7 @@ func runCode(ctx context.Context, action string, in obj) (obj, error) {
 				}
 				return nil
 			}
-			if r := relOf(p); re.MatchString(r) {
+			if r := relOf(ctx, p); re.MatchString(r) {
 				hits = append(hits, r)
 			}
 			if len(hits) >= 500 {
@@ -341,7 +377,7 @@ func runCode(ctx context.Context, action string, in obj) (obj, error) {
 		return obj{"files": hits, "truncated": len(hits) >= 500}, nil
 
 	case "grep":
-		ws, err := currentWS()
+		ws, err := currentWS(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -367,7 +403,7 @@ func runCode(ctx context.Context, action string, in obj) (obj, error) {
 				}
 				return nil
 			}
-			r := relOf(p)
+			r := relOf(ctx, p)
 			if gre != nil && !gre.MatchString(r) {
 				return nil
 			}
@@ -399,7 +435,7 @@ func runCode(ctx context.Context, action string, in obj) (obj, error) {
 		return obj{"matches": hits, "truncated": len(hits) >= 300}, nil
 
 	case "exec":
-		ws, err := currentWS()
+		ws, err := currentWS(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -489,4 +525,11 @@ func clipMiddle(s string, n int) string {
 		return s
 	}
 	return s[:n/2] + fmt.Sprintf("\n… (%d자 생략) …\n", len(s)-n) + s[len(s)-n/2:]
+}
+
+// 사무실 직원이 실행할 수 없는 명령 (지우기·포맷·종료·레지스트리·권한 상승·원격 스크립트 실행 등)
+var dangerRe = regexp.MustCompile(`(?i)(\brm\s+-[a-z]*r|\brmdir\b|\bdel\s|\berase\b|remove-item|\bformat\b|diskpart|\bshutdown\b|\brestart-computer|stop-computer|\breg\s+(add|delete)|set-itemproperty|\bsudo\b|\brunas\b|\bchmod\b|\bchown\b|\bmkfs|\bdd\s+if=|curl[^|]*\|\s*(sh|bash|iex)|iwr[^|]*\|\s*iex|invoke-expression|-enc(odedcommand)?\s|\bschtasks\b|\bnet\s+user\b|\bcd\s+(/|\\|[a-z]:|\.\.)|\.\.[/\\]|[a-z]:\\|~[/\\]|\bgit\s+push\b)`)
+
+func dangerous(cmd string) bool {
+	return dangerRe.MatchString(cmd)
 }

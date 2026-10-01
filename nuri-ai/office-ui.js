@@ -1,8 +1,9 @@
 // GH Nano 사무실 대시보드: 픽셀아트 사무실 + 회의 기록 패널
 // 직원들이 자리에서 일하다가 회의가 열리면 회의실로 걸어가 말풍선으로 대화하고, 오른쪽 패널에 회의록이 쌓인다.
 import { TEAMS, AGENTS, AGENDA, agentById, teamById, ask, stopMeeting, onOffice, loadLog, officeCfg, setOffice, officeUsage, officeState,
-  startAutopilot, nextAutoIn, runAgendaNow, assignModels, clearLog, work, chatter, startChatter, setOfficeVisible, seen, nextChatIn, isChatting } from "./office.js";
-import { shortModel } from "./engine.js";
+  startAutopilot, nextAutoIn, runAgendaNow, assignModels, clearLog, work, chatter, startChatter, setOfficeVisible, seen, nextChatIn, isChatting,
+  startCycle, nextCycleIn, cycle, cycleState, computerOn } from "./office.js";
+import { shortModel, provUse, settings, LAUNCHER } from "./engine.js";
 import { BUILTIN_SKILLS } from "./agent.js";
 
 /* ============ 사무실 배치 (가로 1000 × 세로 700 좌표) ============ */
@@ -15,9 +16,13 @@ const ZONES = {
   lab:   {x: 340, y: 460, w: 290, h: 220, label: "리서치·개발팀"},
   strat: {x: 650, y: 20,  w: 330, h: 190, label: "전략·리스크팀"},
   lounge:{x: 650, y: 230, w: 330, h: 170, label: "라운지"},
-  meet:  {x: 650, y: 420, w: 330, h: 260, label: "회의실"}
+  meet:  {x: 650, y: 420, w: 330, h: 260, label: "회의실"},
+  quant: {x: 1000, y: 20,  w: 370, h: 230, label: "퀀트 연구소"},
+  data:  {x: 1000, y: 270, w: 370, h: 190, label: "데이터·SNS팀"},
+  board: {x: 1000, y: 480, w: 370, h: 200, label: "모의투자 현황판"}
 };
-const TEAM_COLOR = {hq: "#7c6cf0", coin: "#f0a020", stock: "#2f8fd8", fut: "#16a39a", arch: "#d9822b", strat: "#d0465a", lab: "#8a63d2"};
+const W = 1390, H = 700;
+const TEAM_COLOR = {hq: "#7c6cf0", coin: "#f0a020", stock: "#2f8fd8", fut: "#16a39a", arch: "#d9822b", strat: "#d0465a", lab: "#8a63d2", quant: "#2e9e6b", data: "#c2185b"};
 // 직원 자리: 팀 구역 안에 책상을 나란히 놓고 그 앞 의자
 const HOME = {}, DESKS = [];
 for (const t of TEAMS){
@@ -33,7 +38,7 @@ const LOUNGE = [{x: 700, y: 330, say: "커피 한 잔 하고 올게요"}, {x: 79
 const IDLE = ["시세 확인 중", "자료 정리 중", "다음 회의 준비 중", "메모하는 중", "차트 보는 중", "보고서 쓰는 중"];
 
 /* ============ 픽셀 캐릭터 ============ */
-const LONG = new Set(["coin_spot", "us", "kfut", "arch", "devil", "research", "aide"]);
+const LONG = new Set(["coin_spot", "us", "kfut", "arch", "devil", "research", "aide", "qb", "sns"]);
 function sprite(a){
   const [hair, shirt] = a.look, skin = "#f2c8a0", pants = "#3b3f58", shoe = "#2a2a2a", eye = "#222";
   const long = LONG.has(a.id);
@@ -67,7 +72,7 @@ export function openOffice(opts){
   root.hidden = false; document.body.classList.add("office-open");
   fit(); loadLog().then(renderLog);
   startAutopilot(); try { localStorage.setItem("officeUsed", "1"); } catch(e){}
-  setOfficeVisible(true); startChatter();
+  setOfficeVisible(true); startChatter(); startCycle(); refreshBoard();
   // 사무실을 열면 30초 안에 첫 수다가 시작되게
   if (nextChatIn() === 0 || nextChatIn() > 30e3) localStorage.setItem("officeLastChat", String(Date.now() - officeCfg().chatEvery * 60e3 + 30e3));
   if (!unsub) unsub = onOffice(onEvent);
@@ -95,7 +100,8 @@ function build(){
     <div class="of-table" style="left:690px;top:556px"></div>
     ${SEATS.map(s => `<div class="of-seat" style="left:${s.x - 11}px;top:${s.y - 4}px"></div>`).join("")}
     <div class="of-tv" style="left:740px;top:432px"><i></i></div>
-    <div class="of-shelf" style="left:668px;top:40px"></div>`;
+    <div class="of-shelf" style="left:668px;top:40px"></div>
+    <div class="of-pboard" style="left:1016px;top:500px"><b>모의투자 현황판 <span id="ofPTot"></span></b><div id="ofPList">아직 운용 중인 전략이 없습니다</div></div>`;
   const agents = AGENTS.map(a => `<div class="of-ag" data-ag="${a.id}" tabindex="0" role="button" aria-label="${a.name} ${a.title}"><div class="of-bub" hidden></div><div class="of-spr">${sprite(a)}</div><div class="of-nm">${a.name}</div></div>`).join("");
   const agendaOpts = AGENDA.map(a => `<button data-agenda="${a.id}">#${a.title}</button>`).join("");
   el.innerHTML = `
@@ -104,7 +110,11 @@ function build(){
     <span class="of-path">~/gh-nano/우리-사무실 · <b id="ofMode">대기</b></span>
     <span class="of-sp"></span>
     <label class="of-tg" title="사용자가 아무것도 하지 않아도 정해진 간격과 급변동 때 스스로 회의합니다"><input type="checkbox" id="ofAuto"> 자동 회의</label>
+    <label class="of-tg" title="3분마다 사람처럼 한 가지 일(매매법 연구·SNS·경제 리서치·모의투자·컴퓨터 작업)을 스스로 합니다"><input type="checkbox" id="ofCycle"> 3분 주기 업무</label>
     <label class="of-tg" title="직원들이 수시로 본 차트·뉴스를 두고 잡담합니다 (한 번에 AI 1번)"><input type="checkbox" id="ofChat"> 수시 대화</label>
+    <label class="of-tg" title="태민이 문서/GHNano 사무실 폴더 안에서만 파일을 만들고 스크립트를 실행합니다 (GHNano.exe에서만)"><input type="checkbox" id="ofComp"> 컴퓨터 작업</label>
+    <label class="of-tg" title="Claude API 키가 있으면 팀장·전략·검증·리스크 자리에 Claude를 하루 한도 안에서 씁니다"><input type="checkbox" id="ofClaude"> Claude</label>
+    <button class="of-btn" id="ofNow" title="다음 주기를 기다리지 않고 지금 한 가지 일을 시킵니다">지금 일 시키기</button>
     <select id="ofEvery" title="자동 회의 간격"><option value="15">15분마다</option><option value="30">30분마다</option><option value="60">1시간마다</option><option value="180">3시간마다</option></select>
     <span class="of-pick"><button class="of-btn" id="ofAgendaBtn">안건 열기 ▾</button><div class="of-menu" id="ofAgenda" hidden>${agendaOpts}</div></span>
     <button class="of-btn" id="ofTeam">팀 구성</button>
@@ -136,9 +146,9 @@ function build(){
 function fit(){
   if (!root) return;
   const st = root.querySelector("#ofStage"), fl = root.querySelector("#ofFloor");
-  const s = Math.min(st.clientWidth / 1000, st.clientHeight / 700) || 1;
+  const s = Math.min(st.clientWidth / W, st.clientHeight / H) || 1;
   fl.style.transform = `scale(${s})`;
-  fl.style.left = Math.max(0, (st.clientWidth - 1000 * s) / 2) + "px"; fl.style.top = Math.max(0, (st.clientHeight - 700 * s) / 2) + "px";
+  fl.style.left = Math.max(0, (st.clientWidth - W * s) / 2) + "px"; fl.style.top = Math.max(0, (st.clientHeight - H * s) / 2) + "px";
 }
 const $o = s => root.querySelector(s);
 function wire(el){
@@ -147,6 +157,10 @@ function wire(el){
   el.querySelector("#ofEvery").value = String(c.every);
   el.querySelector("#ofAuto").onchange = e => { setOffice({auto: e.target.checked}); ctx.toast(e.target.checked ? "자동 회의를 켰습니다. 팀이 스스로 시장을 점검합니다" : "자동 회의를 껐습니다"); renderStatus(); };
   el.querySelector("#ofEvery").onchange = e => { setOffice({every: +e.target.value}); renderStatus(); };
+  el.querySelector("#ofCycle").onchange = e => { setOffice({cycle: e.target.checked}); renderStatus(); };
+  el.querySelector("#ofComp").onchange = e => { setOffice({computer: e.target.checked}); if (e.target.checked && !LAUNCHER.on) ctx.toast("컴퓨터 작업은 GHNano.exe로 실행했을 때만 됩니다"); renderStatus(); };
+  el.querySelector("#ofClaude").onchange = e => { setOffice({claude: e.target.checked}); if (e.target.checked && !settings.keys.anthropic) ctx.toast("설정 → AI 두뇌에 Claude API 키(sk-ant-…)를 넣으면 씁니다"); renderStatus(); };
+  el.querySelector("#ofNow").onclick = async () => { ctx.toast("지금 한 가지 일을 시킵니다"); const ok = await cycle(true); if (!ok) ctx.toast("지금은 다른 일을 하는 중이거나 연결된 AI가 없습니다"); };
   el.querySelector("#ofChat").checked = c.chat !== false;
   el.querySelector("#ofChat").onchange = e => { setOffice({chat: e.target.checked}); if (e.target.checked){ localStorage.setItem("officeLastChat", "0"); } renderStatus(); };
   el.querySelector("#ofClose").onclick = closeOffice;
@@ -182,7 +196,7 @@ function place(id, p, instant){
   el.classList.toggle("flip", p.x < from.x - 2);
   if (!instant && dist > 4){ el.classList.add("walk"); clearTimeout(el._w); el._w = setTimeout(() => el.classList.remove("walk"), Math.min(2600, 300 + dist / 0.17)); }
   el.style.left = p.x + "px"; el.style.top = p.y + "px"; el.style.zIndex = Math.round(p.y);
-  el.classList.toggle("edge-r", p.x > 860); el.classList.toggle("edge-l", p.x < 140);
+  el.classList.toggle("edge-r", p.x > W - 140); el.classList.toggle("edge-l", p.x < 140);
   pos[id] = {x: p.x, y: p.y};
 }
 function bubble(id, text, ms){
@@ -242,6 +256,11 @@ function onEvent(ev){
     ids.forEach((id, i) => setTimeout(() => { bubble(id, ""); place(id, HOME[id]); }, 3500 + i * 200));
     $o("#ofBoard").textContent = "회의 끝 · 회의록은 오른쪽";
   }
+  if (ev.kind === "cycle"){ $o("#ofBoard").textContent = "지금: " + (ev.label || "업무"); }
+  if (ev.kind === "busy" || ev.kind === "bubble"){ if (seatOf[ev.agent.id] === undefined && !huddle.has(ev.agent.id)){ delete away[ev.agent.id]; place(ev.agent.id, HOME[ev.agent.id]); } bubble(ev.agent.id, ev.text, ev.kind === "busy" ? 0 : 7000); }
+  if (ev.kind === "solo"){ bubble(ev.agent.id, "💭 생각 정리하는 중…", 0); highlight(ev.agent.id); }
+  if (ev.kind === "trade"){ bubble(ev.agent.id, ev.text.length > 140 ? ev.text.slice(0, 140) + "…" : ev.text, 9000); refreshBoard(); }
+  if (ev.kind === "paper") refreshBoard();
   if (ev.kind === "alert"){ ctx.toast(`팀 회의 결과 · #${m.name}: ${head(ev.text, 60)}`); if (document.hidden && "Notification" in window && Notification.permission === "granted") new Notification("GH Nano 팀 회의 · #" + m.name, {body: head(ev.text, 120)}); }
   renderStatus();
 }
@@ -256,6 +275,17 @@ function liveBubble(e){
   return "💭 생각 정리하는 중…";
 }
 function clearBubbles(except){ root.querySelectorAll(".of-ag").forEach(el => { if (el.dataset.ag !== except) bubble(el.dataset.ag, ""); }); }
+async function refreshBoard(){
+  if (!root) return;
+  const P = await import("./paper.js"), b = await P.loadBook();
+  const act = b.strategies.filter(x => x.status === "active");
+  const list = $o("#ofPList"), tot = $o("#ofPTot");
+  if (!act.length){ list.textContent = "아직 운용 중인 전략이 없습니다 · 퀀트 연구소가 검증을 통과시키면 여기서 가상 운용합니다"; tot.textContent = ""; return; }
+  const pct = s => (P.equityOf(s) / 10000 - 1) * 100;
+  const sum = act.reduce((a, s) => a + P.equityOf(s), 0) / (act.length * 10000) * 100 - 100;
+  tot.innerHTML = `<i class="${sum >= 0 ? "up" : "dn"}">${sum >= 0 ? "+" : ""}${sum.toFixed(2)}%</i>`;
+  list.innerHTML = act.sort((x, y) => pct(y) - pct(x)).slice(0, 6).map(s => `<div><span>${ctx.esc(s.name).slice(0, 18)}</span><small>${ctx.esc(s.market.replace("USDT", ""))} ${s.pos ? (s.pos.side === "long" ? "롱" : "숏") : "대기"}</small><i class="${pct(s) >= 0 ? "up" : "dn"}">${pct(s) >= 0 ? "+" : ""}${pct(s).toFixed(2)}%</i></div>`).join("");
+}
 function highlight(id){ root.querySelectorAll(".of-ag.talk").forEach(e => e.classList.remove("talk")); if (id) root.querySelector(`[data-ag="${id}"]`)?.classList.add("talk"); }
 function renderStatus(){
   if (!root) return;
@@ -265,12 +295,13 @@ function renderStatus(){
   $o("#ofTitle").textContent = m ? `회의 · #${m.name}` : "대기 중";
   $o("#ofRec").classList.toggle("on", !!m); $o("#ofRecL").textContent = m ? "녹화 중" : "기록됨";
   $o("#ofMode").textContent = m ? "회의 중" : c.auto ? "자동 운영" : "대기";
-  $o("#ofStop").hidden = !m; $o("#ofAuto").checked = !!c.auto; $o("#ofEvery").value = String(c.every); $o("#ofChat").checked = c.chat !== false;
+  $o("#ofStop").hidden = !m; $o("#ofAuto").checked = !!c.auto; $o("#ofEvery").value = String(c.every); $o("#ofChat").checked = c.chat !== false; $o("#ofCycle").checked = c.cycle !== false; $o("#ofComp").checked = c.computer !== false; $o("#ofClaude").checked = c.claude !== false;
   const next = nextAutoIn();
   $o("#ofStatus").innerHTML = m ? `<b class="ok">진행 중</b> · ${m.done.length}/${m.order.length} 발언${s.queued ? ` · 대기 회의 ${s.queued}개` : ""}`
     : c.auto ? (u.auto >= c.dailyMax ? `오늘 자동 회의 ${c.dailyMax}번을 다 했습니다 · 메시지를 보내면 바로 회의합니다` : `다음 자동 회의 ${next > 60e3 ? Math.round(next / 60e3) + "분 뒤" : "곧"} · 급변동 감시 중`) : "자동 회의 꺼짐 · 메시지를 보내면 바로 회의합니다";
   const nc = nextChatIn();
-  $o("#ofFoot").innerHTML = `오늘 회의 ${u.meetings || 0}번 (자동 ${u.auto || 0}/${c.dailyMax}) · 수다 ${u.chats || 0}/${c.chatMax}${c.chat ? (isChatting() ? " (지금 대화 중)" : ` (다음 ${nc > 60e3 ? Math.round(nc / 60e3) + "분" : "곧"})`) : ""} · AI 호출 ${u.calls || 0}번 · <button id="ofClear" class="of-link">기록 지우기</button>`;
+  const nx = nextCycleIn(), cs = cycleState(), cu = provUse().n.anthropic || 0, cap = (settings.provCap || {}).anthropic ?? 300;
+  $o("#ofFoot").innerHTML = `${c.cycle !== false ? `3분 주기 ${cs.cycling ? "일하는 중" : `다음 ${nx > 60e3 ? Math.ceil(nx / 60e3) + "분" : "곧"}`} · ` : ""}${settings.keys.anthropic ? `Claude 오늘 ${cu}/${cap} · ` : ""}오늘 회의 ${u.meetings || 0}번 (자동 ${u.auto || 0}/${c.dailyMax}) · 수다 ${u.chats || 0}/${c.chatMax}${c.chat ? (isChatting() ? " (지금 대화 중)" : ` (다음 ${nc > 60e3 ? Math.round(nc / 60e3) + "분" : "곧"})`) : ""} · AI 호출 ${u.calls || 0}번 · <button id="ofClear" class="of-link">기록 지우기</button>`;
 }
 /* ============ 회의록 패널 ============ */
 // #전체: 회의·수다·내 메시지 / #업무: 직원들이 본 차트·뉴스 / 팀 방: 그 팀의 모든 것
@@ -292,6 +323,14 @@ function entryHTML(e){
   const time = new Date(e.t).toLocaleTimeString("ko-KR", {hour: "2-digit", minute: "2-digit"});
   if (e.kind === "user") return `<div class="of-msg me"><div class="of-av me">나</div><div class="of-mb"><div class="of-who"><b>나</b><span>#${ctx.esc(teamById(e.ch)?.name || "")} · ${time}</span></div><div class="of-tx">${ctx.esc(e.text)}</div></div></div>`;
   const a = agentById(e.agent) || {name: "?", title: "", team: "hq", look: ["#999", "#999"]};
+  if (e.kind === "trade") return `<div class="of-work of-trade"><b style="color:${TEAM_COLOR.quant}">현우</b> <span>${ctx.esc(e.text)}</span><time>${time}</time></div>`;
+  if (e.kind === "bt"){
+    const row = (k, x) => `<tr><th>${k}</th><td class="${x.ret >= 0 ? "up" : "dn"}">${x.ret >= 0 ? "+" : ""}${x.ret.toFixed(1)}%</td><td>${x.dd.toFixed(1)}%</td><td>${x.win.toFixed(0)}%</td><td>${x.pf.toFixed(2)}</td><td>${x.n}</td></tr>`;
+    return `<div class="of-bt ${e.pass ? "pass" : "fail"}"><div class="of-bth"><b>${e.pass ? "✅ 검증 통과" : "❌ 불통과"} · ${ctx.esc(e.name)}</b><span>${ctx.esc(e.market)} ${e.tf === "60" ? "1시간" : e.tf === "240" ? "4시간" : e.tf}봉 · 개발 ${ctx.esc(e.author || "")} · 검증 다온 · ${time}</span></div>
+      <table><tr><th></th><th>수익</th><th>최대낙폭</th><th>승률</th><th>손익비</th><th>거래</th></tr>${row("전체", e.all)}${row("개발 70%", e.is)}${row("검증 30%", e.oos)}</table>
+      <div class="of-btr">${(e.reasons || []).map(r => "· " + ctx.esc(r)).join("<br>")}</div>
+      <details><summary>전략 JSON</summary><pre>${ctx.esc(JSON.stringify(e.spec, null, 1)).slice(0, 4000)}</pre></details></div>`;
+  }
   if (e.kind === "work") return `<div class="of-work"><b style="color:${TEAM_COLOR[a.team]}">${a.name}</b> <span>${ctx.esc(e.icon || "")} ${e.url ? link(e.url, e.text) : ctx.esc(e.text)}${e.src ? ` <small>· ${ctx.esc(e.src)}</small>` : ""}</span><time>${time}</time></div>`;
   if (e.chat) return `<div class="of-msg chat"><div class="of-av sm">${sprite(a)}</div><div class="of-mb"><div class="of-who"><b style="color:${TEAM_COLOR[a.team]}">${a.name}</b><span>${a.title}</span></div><div class="of-tx">${ctx.esc(e.text)}</div></div></div>`;
   const body = e.text ? ctx.md(e.text) : e.steps?.length || e.think ? "" : `<span class="of-typing">생각 정리하는 중<i>.</i><i>.</i><i>.</i></span>`;

@@ -10,7 +10,7 @@ import { TEMPLATES } from "./templates.js";
 import { BASES, TOPICS, samplesFromChats, loadSynth, removeSynth, clearSynth, toJSONL, generateSynth, notebookJSON, localScript, teachers, NANO_MERGE, nanoNotebookJSON, mergeYAML, skillCoverage, generateAllSkills, fusionSources, fusionStats, fusionBadCount, toDPOJSONL } from "./train.js";
 import { initTrade } from "./trade.js";
 import { openOffice, officeOpen } from "./office-ui.js";
-import { startAutopilot } from "./office.js";
+import { startAutopilot, startCycle } from "./office.js";
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const AI = () => settings.aiName || "GH Nano";
@@ -532,7 +532,7 @@ const goOffice = () => { openOffice({md, esc, toast}); if (location.hash !== "#o
 $("#openOffice").onclick = goOffice; $("#officeTop").onclick = goOffice;
 window.addEventListener("hashchange", () => { if (location.hash === "#office" && !officeOpen()) goOffice(); });
 if (location.hash === "#office") setTimeout(goOffice, 0);
-else if (localStorage.getItem("officeUsed")) setTimeout(startAutopilot, 5000);   // 한 번 사무실을 연 뒤로는 채팅 중에도 팀이 자동 회의를 이어 간다
+else if (localStorage.getItem("officeUsed")) setTimeout(() => { startAutopilot(); startCycle(); }, 5000);   // 한 번 사무실을 연 뒤로는 채팅 중에도 팀이 자동 회의를 이어 간다
 $("#openTpl").onclick = () => openSheet("tpl");
 $("#sheetClose").onclick = () => $("#sheet").close();
 $("#sheet").addEventListener("click", e => { if (e.target.id === "sheet") $("#sheet").close(); });

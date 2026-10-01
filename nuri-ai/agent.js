@@ -61,7 +61,8 @@ export function resolveMarket(input, exHint = ""){
   if (exn === "upbit" || CRYPTO.has(sym) || coinKo) return {exn: "upbit", market: "KRW-" + sym};
   return {exn: "yahoo", market: sym};
 }
-async function candlesFor(a, total){
+const tfOf = iv => ({"1m": "1", "5m": "5", "15m": "15", "30m": "15", "1h": "60", "2h": "60", "4h": "240", "1d": "D", "1w": "W"})[String(iv || "1h")] || "60";
+export async function candlesFor(a, total){
   const {exn, market} = resolveMarket(a.market || a.symbol, a.exchange);
   const tf = TF[a.timeframe] ? String(a.timeframe) : exn === "yahoo" ? "D" : "60";
   const cs = await ex(exn).candles(market, tf, total);
@@ -207,6 +208,66 @@ export async function marketNews(cat, symbol){
 /* ================= 도구 ================= */
 const srcText = rs => rs.map((x, i) => `[${i+1}] ${x.title}\n${x.url}${x.date ? " · " + x.date : ""}\n${x.snippet || ""}`).join("\n\n");
 export const TOOLS = {
+  /* ---- 여론·SNS ---- */
+  sns_buzz: {mode:"both", label:"SNS 여론", args:'{"topic":"crypto|us|kr|macro","symbol":"선택: BTC, NVDA"}', act: a => `${a.symbol || a.topic || "시장"} SNS 여론 확인`,
+    desc:"레딧·스톡트윗 같은 SNS에서 지금 사람들이 무슨 얘기를 하는지(인기 글 제목, 강세·약세 비율)와 공포·탐욕 지수를 모은다. 결과는 분위기를 해설하는 데 쓴다",
+    async run(a){
+      const topic = String(a.topic || "crypto"), sym = String(a.symbol || "").toUpperCase().replace(/USDT$|-USD$|^KRW-/, "");
+      const SUBS = {crypto: ["CryptoCurrency", "Bitcoin"], us: ["stocks", "wallstreetbets"], kr: ["korea", "investing"], macro: ["economics", "investing"]}[topic] || ["CryptoCurrency"];
+      const out = [], sources = [];
+      const reddit = await Promise.all(SUBS.map(sub => webGet(`https://www.reddit.com/r/${sub}/hot.json?limit=12`, "json").then(j => ({sub, posts: (j.data?.children || []).map(c => c.data).filter(d => !d.stickied).slice(0, 6)})).catch(() => null)));
+      for (const r of reddit.filter(Boolean)) if (r.posts.length){
+        out.push(`[레딧 r/${r.sub}] 인기 글: ` + r.posts.map(d => `${String(d.title).slice(0, 90)} (추천 ${d.score}, 댓글 ${d.num_comments})`).join(" / "));
+        r.posts.slice(0, 2).forEach(d => sources.push({title: `r/${r.sub} · ${String(d.title).slice(0, 80)}`, url: "https://www.reddit.com" + d.permalink}));
+      }
+      const stSym = sym || (topic === "crypto" ? "BTC" : topic === "us" ? "SPY" : "");
+      if (stSym){
+        const st = await webGet(`https://api.stocktwits.com/api/2/streams/symbol/${topic === "crypto" ? stSym + ".X" : stSym}.json`, "json").catch(() => null);
+        const msgs = st?.messages || [];
+        if (msgs.length){
+          const bull = msgs.filter(m => m.entities?.sentiment?.basic === "Bullish").length, bear = msgs.filter(m => m.entities?.sentiment?.basic === "Bearish").length;
+          out.push(`[스톡트윗 ${stSym}] 최근 글 ${msgs.length}개 중 강세 ${bull} · 약세 ${bear}. 예: ` + msgs.slice(0, 4).map(m => String(m.body).replace(/\s+/g, " ").slice(0, 80)).join(" / "));
+          sources.push({title: `StockTwits ${stSym}`, url: `https://stocktwits.com/symbol/${topic === "crypto" ? stSym + ".X" : stSym}`});
+        }
+      }
+      if (topic === "crypto"){
+        const fg = await webGet("https://api.alternative.me/fng/?limit=7&format=json", "json").catch(() => null);
+        const d = fg?.data || [];
+        if (d.length){ out.push(`[코인 공포·탐욕 지수] 오늘 ${d[0].value} (${d[0].value_classification}) · 1주 흐름 ${d.map(x => x.value).reverse().join("→")}`); sources.push({title: "Crypto Fear & Greed Index", url: "https://alternative.me/crypto/fear-and-greed-index/"}); }
+      }
+      if (!out.length) return {text: "SNS 데이터를 가져오지 못했습니다(접속 제한일 수 있음). web_search로 대신 찾아보세요.", summary: "가져오지 못함"};
+      return {text: "[SNS 글은 개인 의견이다. 분위기·쏠림을 해설하되 사실처럼 단정하지 말 것]\n" + out.join("\n\n"), summary: out.map(x => x.slice(0, x.indexOf("]") + 1)).join(" "), sources};
+    }},
+  /* ---- 퀀트: 보조지표 29종 · 전략 백테스트 · 모의투자 ---- */
+  indicator_all: {mode:"both", label:"보조지표 전체", args:'{"market":"BTCUSDT","exchange":"binancef|upbit|binance|yahoo","timeframe":"60"}', act: a => `${a.market || ""} 보조지표 29종 계산`,
+    desc:"이동평균·RSI·MACD·볼린저·스토캐스틱·슈퍼트렌드·ADX·CCI·VWAP·OBV·MFI·윌리엄스R·ROC·파라볼릭SAR·돈치안·켈트너·스토캐스틱RSI·일목·CMF·아룬·ATR추적손절 등 29종을 한 번에 계산해 추세·모멘텀·변동성·거래량으로 정리한다",
+    async run(a){
+      const Q = await import("./quant.js"); const {market, tf, cs} = await candlesFor(a, 400);
+      const snap = Q.snapshot(cs);
+      return {text: `${cs.name || market} ${TF[tf] || tf} 최근 봉 기준\n` + (snap.text || JSON.stringify(snap).slice(0, 4000)), summary: `${cs.name || market} ${TF[tf] || tf} · 지표 29종`};
+    }},
+  strategy_backtest: {mode:"both", label:"전략 백테스트", args:'{"spec":{"name":"EMA 교차","indicators":[{"id":"f","type":"ema","length":20},{"id":"s","type":"ema","length":50}],"long_entry":{"logic":"all","conditions":[{"left":"f","op":"crosses_above","right":"s"}]},"long_exit":{"logic":"all","conditions":[{"left":"f","op":"crosses_below","right":"s"}]},"risk":{"leverage":3,"position_pct":20,"atr_stop_mult":2}},"market":"BTCUSDT","exchange":"binancef","timeframe":"60"}', act: a => `${a.spec?.name || "전략"} 백테스트`,
+    desc:"전략(JSON: 지표·진입/청산 조건·리스크)을 실제 과거 캔들로 백테스트하고 과최적화 검사(앞 70% 개발·뒤 30% 검증)까지 한다. 수익률·최대낙폭·승률·손익비·거래 수와 통과 여부를 준다",
+    async run(a){
+      const Q = await import("./quant.js");
+      const spec = Q.normalizeSpec(typeof a.spec === "string" ? JSON.parse(a.spec) : a.spec);
+      const {market, tf, cs} = await candlesFor({market: a.market || spec.symbol || "BTCUSDT", exchange: a.exchange || "binancef", timeframe: a.timeframe || tfOf(spec.interval)}, 1500);
+      const bt = Q.backtest(spec, cs), wf = Q.walkForward(spec, cs);
+      const f = s => `수익 ${s.return_pct?.toFixed?.(1)}% · 최대낙폭 ${s.max_dd_pct?.toFixed?.(1)}% · 승률 ${s.win_rate?.toFixed?.(0)}% · 손익비 ${s.profit_factor?.toFixed?.(2)} · 거래 ${s.n_trades}회`;
+      return {text: `[${spec.name}] ${market} ${TF[tf] || tf} · 캔들 ${cs.length}개\n전체: ${f(bt.stats)}\n개발 구간: ${f(wf.is)}\n검증 구간: ${f(wf.oos)}\n판정: ${wf.pass ? "통과" : "불통과"} — ${wf.reasons.join(", ")}`, summary: `${wf.pass ? "통과" : "불통과"} · 검증 ${wf.oos.return_pct?.toFixed?.(1)}%`, spec, wf};
+    }},
+  paper_status: {mode:"both", label:"모의투자 현황", args:'{}', act: () => "모의투자 장부 확인",
+    desc:"사무실 팀이 검증을 통과시켜 실제 시세로 가상 운용 중인 전략들의 포지션·손익을 본다",
+    async run(){ const P = await import("./paper.js"); const t = await P.bookText(); return {text: t, summary: t.split("\n")[0]}; }},
+  /* ---- 사무실 전용 컴퓨터 작업 (문서/GHNano 사무실 폴더 안에서만) ---- */
+  office_ls: {mode:"office", label:"사무실 폴더 보기", args:'{"path":"."}', act: a => `사무실 폴더 ${a.path || ""} 보기`, desc:"사무실 전용 폴더(문서/GHNano 사무실)의 파일 목록",
+    async run(a){ const r = await codeCall("ls", {...a, ws: "office"}); return {text: r.entries.join("\n") || "(비어 있음)", summary: `${r.entries.length}개 항목`}; }},
+  office_read: {mode:"office", label:"사무실 파일 읽기", args:'{"path":"reports/today.md"}', act: a => `${a.path} 읽기`, desc:"사무실 폴더의 파일 읽기",
+    async run(a){ const r = await codeCall("read", {...a, ws: "office"}); return {text: r.content, summary: `${r.to - r.from + 1}줄`}; }},
+  office_write: {mode:"office", label:"사무실 파일 쓰기", risk:"write", args:'{"path":"reports/2026-10-01.md","content":"..."}', act: a => `${a.path} 저장`, desc:"사무실 폴더에 보고서·데이터·스크립트 파일 저장",
+    async run(a){ const r = await codeCall("write", {...a, ws: "office"}); return {text: `저장: 문서/GHNano 사무실/${r.path} (${r.bytes}바이트)`, summary: r.path}; }},
+  office_run: {mode:"office", label:"사무실 명령 실행", risk:"exec", args:'{"command":"python analysis.py","timeout":120}', act: a => `명령 실행: ${String(a.command || "").slice(0, 40)}`, desc:"사무실 폴더 안에서 python·node 같은 명령을 실행(지우기·시스템 변경 명령은 막힘)",
+    async run(a){ const r = await codeCall("exec", {...a, ws: "office", timeout: Math.min(180, a.timeout || 120)}); return {text: `종료 코드 ${r.exit_code}\n${r.output}`, summary: `종료 코드 ${r.exit_code}`, output: r.output, code: r.exit_code}; }},
   /* ---- 인터넷 ---- */
   web_search: {mode:"both", label:"웹 검색", args:'{"query":"검색어","n":8}', act: a => `‘${a.query}’ 검색`,
     desc:"인터넷 검색. 최신 정보·뉴스·가격·법령·사실 확인이 필요하면 먼저 쓴다. 결과의 [번호]로 출처를 단다",
@@ -541,6 +602,11 @@ export const BUILTIN_SKILLS = [
     prompt: `- 완결된 코드를 쓴다. 20줄 넘는 코드나 실행 가능한 웹페이지는 <artifact>로 감싼다. 웹앱·게임·계산기·대시보드는 type="html" 하나의 파일로 만들면 패널에서 바로 실행된다.
 - 사용자 컴퓨터의 파일을 직접 고치려면 '코드' 모드를 쓰라고 안내한다.`}
 ];
+// 퀀트·SNS 도구를 분야 스킬에 붙인다
+const EXTRA_TOOLS = {crypto_spot: ["indicator_all", "sns_buzz"], crypto_futures: ["indicator_all", "sns_buzz", "strategy_backtest"], us_stocks: ["indicator_all", "sns_buzz"], kr_stocks: ["indicator_all"],
+  global_futures: ["indicator_all"], kr_futures: ["indicator_all"], news: ["sns_buzz"], macro: ["sns_buzz"], backtest: ["strategy_backtest", "indicator_all", "paper_status"], research: ["sns_buzz"]};
+for (const sk of BUILTIN_SKILLS) sk.tools = [...new Set([...(sk.tools || []), ...(EXTRA_TOOLS[sk.id] || [])])];
+
 export function activeSkills(text, mode = "chat"){
   const t = String(text || "");
   // keys에 맞고 not(다른 분야 신호)에 걸리지 않는 스킬만. 예: '비트코인 선물'은 코인 현물이 아니라 코인 선물
@@ -560,7 +626,7 @@ const CORE_TOOLS = ["web_search", "web_fetch", "calculate", "search_knowledge", 
 function compactPrompt(mode, extra){
   const d = new Date(), skills = extra.skills || [], name = settings.aiName || "GH Nano";
   const want = mode === "code" ? ["list_files", "read_file", "edit_file", "write_file", "run_command"] : [...new Set([...skills.flatMap(s => s.tools || []), "web_search", "calculate"])];
-  const tools = want.filter(n => TOOLS[n] && (TOOLS[n].mode === mode || TOOLS[n].mode === "both")).slice(0, mode === "code" ? 5 : 4);
+  const tools = [...want, ...(extra.office ? extra.officeTools || [] : [])].filter(n => TOOLS[n] && (TOOLS[n].mode === mode || TOOLS[n].mode === "both" || (extra.office && TOOLS[n].mode === "office"))).slice(0, mode === "code" ? 5 : 6);
   const mem = (settings.memory || []).slice(-5).map(m => "- " + m.text.slice(0, 80)).join("\n");
   return `너는 '${name}'${mode === "code" ? ` 코드다. 작업 폴더(${extra.workspace || "미지정"})의 코드를 읽고 고친다` : "라는 한국어 AI 어시스턴트다"}. 오늘은 ${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일. 핵심만 짧고 정확하게 답하고, 모르면 모른다고 한다.
 ${settings.instructions ? "사용자 지침: " + settings.instructions.slice(0, 300) + "\n" : ""}${mem ? "사용자 정보:\n" + mem + "\n" : ""}도구가 필요하면 <tool name="도구">{"인자":"값"}</tool> 하나만 쓰고 멈춘다. 결과는 <tool_result>로 온다.
@@ -569,9 +635,9 @@ ${tools.map(n => `- ${n}: ${TOOLS[n].desc.split(/[.。]/)[0].slice(0, 70)} 예: 
 export function systemPrompt(mode, extra = {}){
   if (extra.compact) return compactPrompt(mode, extra);
   const d = new Date(), skills = extra.skills || [];
-  let tools = Object.entries(TOOLS).filter(([, t]) => t.mode === mode || t.mode === "both");
+  let tools = Object.entries(TOOLS).filter(([, t]) => t.mode === mode || t.mode === "both" || (extra.office && t.mode === "office"));
   // 작은 모델은 기억 공간이 좁으니 지금 필요한 도구만 알려준다
-  if (mode === "chat" && brainCtx(extra.role) < 16000){ const need = new Set([...CORE_TOOLS, ...skills.flatMap(s => s.tools || [])]); tools = tools.filter(([n]) => need.has(n)); }
+  if (mode === "chat" && brainCtx(extra.role) < 16000){ const need = new Set([...CORE_TOOLS, ...skills.flatMap(s => s.tools || []), ...(extra.office ? extra.officeTools || [] : [])]); tools = tools.filter(([n]) => need.has(n)); }
   const toolDoc = tools.map(([n, t]) => `- ${n}: ${t.desc}\n  인자 예: ${t.args}`).join("\n");
   const mem = (settings.memory || []).slice(-30);
   const common = `오늘은 ${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 (${"일월화수목금토"[d.getDay()]}요일) ${d.getHours()}시다. 사용자가 쓰는 언어로 답한다(기본 한국어).
@@ -719,7 +785,7 @@ const EXPLAIN = new Set(["market_backtest", "market_analyze", "design_building",
 const routeName = c => !c ? "" : c.id === "local" ? "내 기기" : c.id === "ollama" ? "Ollama" : (PROVIDERS[c.id]?.name || c.id);
 
 // persona: 에이전트 팀원의 역할 지시 / forceSkills: 이 팀원이 늘 쓰는 스킬 id / target: 이 팀원에게 배정된 AI 모델 (막히면 다른 모델로)
-export async function runAgent({mode, history, msg, signal, onUpdate, openArtifact, askPermission, workspace, think, persona, forceSkills, target, maxSteps: stepCap}){
+export async function runAgent({mode, history, msg, signal, onUpdate, openArtifact, askPermission, workspace, think, persona, forceSkills, target, maxSteps: stepCap, exclude, office, officeTools}){
   const maxSteps = stepCap || (mode === "code" ? 30 : 12);
   const userText = [...history].reverse().find(m => m.role === "user")?.content || "";
   const recent = history.filter(m => m.role === "user").slice(-3).map(m => m.content).join("\n");
@@ -735,7 +801,7 @@ export async function runAgent({mode, history, msg, signal, onUpdate, openArtifa
   if (skills.length) activity({kind: "skill", text: skills.map(s => s.name).join(" · ")});
   // 기억 길이가 짧은 모델이면 짧은 지시문을 쓰고, 지시문+대화+답이 기억 길이 안에 들도록 나눈다
   const ctxLen = brainCtx(role), small = ctxLen <= 8192;
-  const sys = systemPrompt(mode, {workspace, skills, role, compact: small}) + (persona ? "\n\n" + persona : "");
+  const sys = systemPrompt(mode, {workspace, skills, role, compact: small, office, officeTools}) + (persona ? "\n\n" + persona : "");
   const sysT = estTokens(sys);
   let ansLen = brainAnswerLen(role);
   if (ctxLen - sysT - ansLen < 600) ansLen = Math.max(256, Math.floor((ctxLen - sysT - 64) / 2));
@@ -746,7 +812,7 @@ export async function runAgent({mode, history, msg, signal, onUpdate, openArtifa
     const part = {type: "text", text: "", t0: Date.now()}; msg.parts.push(part);
     msg.phase = step ? "생각 정리 중" : "답변 준비 중"; onUpdate();
     let raw = "", cut = false;
-    const route = await brainStream({messages, role, maxTokens: ansLen, temperature: mode === "code" ? 0.2 : settings.temp, signal, think, target, fallback: true, stop: ["</tool>", "<tool_result"],
+    const route = await brainStream({messages, role, maxTokens: ansLen, temperature: mode === "code" ? 0.2 : settings.temp, signal, think, target, fallback: true, exclude, stop: ["</tool>", "<tool_result"],
       onContent: d => { raw += d; part.tf ||= Date.now(); part.text = visibleText(raw); msg.phase = "답변 작성 중"; onUpdate(); },
       onThink: d => { part.tf ||= Date.now(); part.think = (part.think || "") + d; msg.phase = "생각하는 중"; onUpdate(); },
       onStats: st => { if (st.cut) cut = true; if (st.tps) msg.tps = st.tps; }});

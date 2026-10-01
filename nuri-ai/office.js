@@ -2,8 +2,8 @@
 // - 팀·방·직원은 코드로 정해 두고, 누가 어떤 순서로 말할지도 코드가 정한다(AI는 말만 한다).
 //   흐름: 담당 분석가 → (투자·실행 판단이면) 전략가 → 반론 검토관 → 리스크 책임자 → 팀장 정리
 // - 사용자가 아무것도 치지 않아도 정해진 안건과 급변동 감시로 스스로 회의를 연다(자동 회의).
-import { settings, saveSettings, idb, uid, brainStream, splitThink } from "./engine.js";
-import { runAgent, activeSkills, TOOLS, marketNews } from "./agent.js";
+import { settings, saveSettings, idb, uid, brainStream, splitThink, overCap, provUse, LAUNCHER } from "./engine.js";
+import { runAgent, activeSkills, TOOLS, marketNews, candlesFor, visibleText } from "./agent.js";
 import { fusionSources } from "./train.js";
 
 /* ============ 팀과 직원 ============ */
@@ -14,7 +14,9 @@ export const TEAMS = [
   {id: "fut", name: "선물·매크로팀", desc: "해외선물 · 국내선물 · 거시경제·뉴스"},
   {id: "arch", name: "건축·부동산팀", desc: "건축 설계·견적 · 부동산·토지·법규"},
   {id: "strat", name: "전략·리스크팀", desc: "전략가 · 반론 검토관 · 리스크 책임자"},
-  {id: "lab", name: "리서치·개발팀", desc: "리서치 · 개발 · 일상 비서"}
+  {id: "lab", name: "리서치·개발팀", desc: "리서치 · 개발 · 일상 비서"},
+  {id: "quant", name: "퀀트 연구소", desc: "보조지표 29종으로 매매법 개발 · 백테스트 검증 · 모의투자"},
+  {id: "data", name: "데이터·SNS팀", desc: "SNS 여론 · 컴퓨터 작업(보고서·스크립트)"}
 ];
 // look: 머리색·옷색 (픽셀 캐릭터), role: 모델 고르는 기준
 export const AGENTS = [
@@ -49,13 +51,26 @@ export const AGENTS = [
   {id: "dev", name: "코디", team: "lab", title: "개발자", role: "code", skills: ["coding"], look: ["#333", "#2d2d2d"],
     duty: "코드·자동화·데이터 처리 질문에 동작하는 코드와 설명을 준다."},
   {id: "aide", name: "하루", team: "lab", title: "비서(일상·글쓰기·번역)", role: "general", skills: [], look: ["#6d4c41", "#ef6c9a"],
-    duty: "일상 대화, 글쓰기, 번역, 요약, 계획 세우기를 친절하게 돕는다."}
+    duty: "일상 대화, 글쓰기, 번역, 요약, 계획 세우기를 친절하게 돕는다."},
+  {id: "qa", name: "준호", team: "quant", title: "퀀트 연구원(추세)", role: "reason", skills: ["backtest", "crypto_futures"], look: ["#1d1d2b", "#2f9e6b"],
+    duty: "보조지표 29종(indicator_all)과 연구 카드를 보고 추세추종 매매법을 만들고 strategy_backtest로 직접 시험한다."},
+  {id: "qb", name: "세라", team: "quant", title: "퀀트 연구원(역추세·변동성)", role: "reason", skills: ["backtest", "crypto_spot"], look: ["#a0522d", "#c2185b"],
+    duty: "과매수·과매도, 밴드 이탈, 변동성 수축·확장을 노리는 매매법을 만들고 직접 백테스트한다."},
+  {id: "val", name: "다온", team: "quant", title: "백테스트 검증관", role: "reason", skills: ["backtest"], look: ["#444", "#607d8b"],
+    duty: "백테스트 결과의 과최적화 위험을 따진다(검증 구간 성과, 거래 수, 낙폭, 수수료). 코드 판정을 쉬운 말로 설명하고 통과·불통과를 뒤집지 않는다."},
+  {id: "trader", name: "현우", team: "quant", title: "모의투자 트레이더", role: "general", skills: ["crypto_futures"], look: ["#2e2e2e", "#f57c00"],
+    duty: "모의투자 장부(paper_status)를 보고 운용 중인 전략의 포지션·손익과 다음 대응을 보고한다. 실제 주문은 하지 않는다."},
+  {id: "sns", name: "유나", team: "data", title: "SNS·여론 분석가", role: "general", skills: ["news"], look: ["#d4a017", "#8e24aa"],
+    duty: "레딧·스톡트윗·공포탐욕지수(sns_buzz)로 사람들의 분위기와 쏠림을 읽고, 뉴스와 비교해 과열·공포를 해설한다."},
+  {id: "eng", name: "태민", team: "data", title: "데이터 엔지니어(컴퓨터 작업)", role: "code", skills: ["coding"], look: ["#3e2723", "#455a64"], computer: true,
+    duty: "사무실 전용 폴더(문서/GHNano 사무실)에서 보고서·데이터 파일을 만들고 파이썬 스크립트를 짜서 실행한다(office_write, office_run)."}
 ];
 export const agentById = id => AGENTS.find(a => a.id === id);
+const hasAI = () => fusionSources().length > 0 || !!settings.keys.anthropic;
 export const teamById = id => TEAMS.find(t => t.id === id);
 const SKILL_AGENT = {crypto_spot: "coin_spot", crypto_futures: "coin_fut", us_stocks: "us", kr_stocks: "kr", global_futures: "gfut", kr_futures: "kfut",
   macro: "macro", news: "macro", backtest: "strat", arch: "arch", land: "land", research: "research", coding: "dev"};
-const MARKET = new Set(["coin_spot", "coin_fut", "us", "kr", "gfut", "kfut", "strat"]);
+const MARKET = new Set(["coin_spot", "coin_fut", "us", "kr", "gfut", "kfut", "strat", "qa", "qb", "trader"]);
 const DECIDE = /사도|살까|팔까|매수|매도|진입|청산|롱|숏|레버리지|포지션|투자|전략|백테스트|들어가|비중|손절|익절|전망|어때|괜찮|해도 될까|할까/;
 const RESEARCH = /검색|찾아|조사|자료|논문|출처|리서치|비교해|후기|리뷰|최신 정보/;
 const BUILD = /설계|짓|건축|신축|리모델링|매입|매매|경매|계약|투자|분양|재개발|공사비|견적/;
@@ -76,8 +91,16 @@ export function assignModels(){
     const pick = list[0];
     if (pick){ out[a.id] = pick; used.set(pick.model, (used.get(pick.model) || 0) + 1); }
   }
+  // Claude가 연결돼 있고 오늘 한도가 남아 있으면 판단이 중요한 자리에 쓴다 (팀장은 Opus, 전략·검증·리스크는 Sonnet)
+  if (settings.keys.anthropic && !overCap("anthropic") && officeCfg().claude !== false){
+    const ms = settings.provModels.anthropic?.length ? settings.provModels.anthropic : ["claude-opus-5-5", "claude-sonnet-5-5"];
+    const opus = ms.find(m => /opus/.test(m)), sonnet = ms.find(m => /sonnet/.test(m)) || opus;
+    if (opus && !bad[opus]) out.lead = {id: "anthropic", model: opus};
+    for (const id of CLAUDE_ROLES) if (sonnet && !bad[sonnet]) out[id] = {id: "anthropic", model: sonnet};
+  }
   return out;
 }
+const CLAUDE_ROLES = ["strat", "risk", "devil", "qa", "qb", "val"];
 
 /* ============ 기록 (방 대화) ============ */
 let LOG = null;
@@ -95,7 +118,7 @@ const fire = ev => { for (const f of subs){ try { f(ev); } catch(e){ console.err
 
 /* ============ 설정·한도 ============ */
 export function officeCfg(){
-  settings.office = Object.assign({auto: true, every: 30, dailyMax: 12, alert: true, chat: true, chatEvery: 3, chatMax: 80}, settings.office || {});
+  settings.office = Object.assign({auto: true, every: 30, dailyMax: 12, alert: true, chat: true, chatEvery: 3, chatMax: 80, cycle: true, cycleMin: 3, callMax: 600, computer: true, claude: true}, settings.office || {});
   return settings.office;
 }
 export function setOffice(patch){ Object.assign(officeCfg(), patch); saveSettings(); fire({kind: "cfg"}); }
@@ -111,6 +134,11 @@ export function planMeeting(text, room = "hq", fixed){
   if (!fixed){
     // @이름으로 부른 직원
     for (const a of AGENTS) if (a.id !== "lead" && (t.includes("@" + a.name) || t.includes("@" + a.title))) lead.push(a.id);
+    // 퀀트·SNS·컴퓨터 작업 담당
+    if (/매매법|전략 (개발|만들)|백테스트|보조지표|지표 (조합|전부)|퀀트/.test(t)) lead.push("qa", "qb");
+    if (/모의투자|페이퍼|가상 (계좌|매매)|포지션 현황/.test(t)) lead.push("trader");
+    if (/sns|SNS|레딧|트위터|스톡트윗|여론|커뮤니티|공포.?탐욕|심리|분위기/.test(t)) lead.push("sns");
+    if (/파일|폴더|스크립트|보고서 (저장|만들)|엑셀|csv|컴퓨터|자동화/i.test(t)) lead.push("eng");
     // 질문에 맞는 스킬 → 담당 분석가
     for (const s of activeSkills(t)){
       // 리서치 스킬은 '오늘·요즘' 같은 흔한 말에도 켜지므로, 자료를 찾아 달라는 말이 있을 때만 리서처를 부른다
@@ -128,6 +156,7 @@ export function planMeeting(text, room = "hq", fixed){
   lead = [...new Set(lead)].filter(id => !["lead", "devil", "risk"].includes(id)).slice(0, 3);
   const order = [...lead];
   const market = lead.some(id => MARKET.has(id)), build = lead.some(id => id === "arch" || id === "land");
+  if (lead.some(id => id === "qa" || id === "qb") && !order.includes("val")) order.push("val");
   if (market && DECIDE.test(t)){
     if (!order.includes("strat") && /전략|백테스트|진입|계획|매수|매도|롱|숏|포지션/.test(t)) order.push("strat");
     order.push("devil", "risk");
@@ -227,7 +256,8 @@ async function speak(a, m, turns, target, signal){
     try {
       bump("calls");
       await runAgent({mode: "chat", history: [{role: "user", content: ask}], msg, signal, onUpdate, think: false, workspace: "", persona, forceSkills: a.skills, target: tg || undefined,
-        maxSteps: isLead || a.id === "devil" ? 2 : 5, openArtifact: async () => null, askPermission: async () => false});
+        maxSteps: isLead || a.id === "devil" ? 2 : 6, openArtifact: async () => null, askPermission: officePermission,
+        office: true, officeTools: a.computer && computerOn() ? ["office_ls", "office_read", "office_write", "office_run"] : []});
     } catch (e){ if (signal.aborted) throw e; err = e; }
     read(msg, entry);
     entry.model = msg.route?.model || tg?.model || entry.model;
@@ -244,6 +274,9 @@ async function speak(a, m, turns, target, signal){
   return {agent: a, text: entry.text, entry};
 }
 // runAgent가 붙이는 안내 문구(빈 답·길이 한도)는 답이 아니다
+// 사무실 직원은 사무실 전용 폴더 작업만 스스로 허락한다 (그 밖의 쓰기·실행은 거절)
+export const computerOn = () => LAUNCHER.on && officeCfg().computer !== false;
+const officePermission = async tp => computerOn() && /^office_/.test(tp.name);
 const EMPTY_MARK = /\*\((모델이 빈 답을 보냈습니다|답변 길이 한도에 닿아 끊겼습니다|알 수 없는 도구)[^)]*\)\*/g;
 const shortName = m => String(m || "모델").split("/").pop();
 // 메시지 조각 → 말(text) · 속마음(think) · 한 일(steps)
@@ -283,7 +316,7 @@ export function nextAutoIn(){
 }
 async function tick(){
   const c = officeCfg();
-  if (!c.auto || running || queue.length || !fusionSources().length) return;
+  if (!c.auto || running || queue.length || !hasAI()) return;
   const u = usage();
   if (u.auto >= c.dailyMax) return;
   await loadLog();
@@ -386,7 +419,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 function chatUsage(){ return usage().chats || 0; }
 export async function chatter(force){
   const c = officeCfg();
-  if (chatting || running || queue.length || !fusionSources().length) return false;
+  if (chatting || running || queue.length || !hasAI()) return false;
   if (!force && (!c.chat || chatUsage() >= c.chatMax)) return false;
   chatting = true;
   try {
@@ -406,7 +439,7 @@ export async function chatter(force){
     const user = `${starter.name}가 방금 본 것: ${obs.icon} ${obs.text}${obs.src ? ` (출처: ${obs.src})` : ""}`;
     let out = "";
     bump("calls"); bump("chats");
-    const route = await brainStream({messages: [{role: "system", content: sys}, {role: "user", content: user}], role: "general", maxTokens: 600, temperature: 0.9, onContent: d => out += d});
+    const route = await brainStream({messages: [{role: "system", content: sys}, {role: "user", content: user}], role: "general", maxTokens: 600, temperature: 0.9, exclude: fusionSources().length ? ["anthropic"] : [], onContent: d => out += d});
     const body = splitThink(out).body;
     const lines = body.split(/\n+/).map(l => l.replace(/^[\s*\-•]+/, "").replace(/\*\*/g, "").trim()).map(l => {
       const mm = l.match(/^([^:：]{1,12})\s*[:：]\s*(.+)$/); if (!mm) return null;
@@ -441,4 +474,177 @@ export function startChatter(){
     localStorage.setItem("officeLastChat", String(Date.now()));
     await chatter();
   }, 15e3);
+}
+
+/* ============ 3분 주기: 사람처럼 알아서 일하기 ============ */
+// 매 주기 ① 모의투자 장부를 실제 시세로 갱신(코드, AI 없음) ② 그때그때 한 가지 일을 고른다:
+// 매매법 연구 · SNS 여론 · 경제 리서치 · 동료 수다 · 컴퓨터 작업 · 모의투자 보고 (하루 AI 호출 한도 안에서)
+const JOBS = ["research", "sns", "economy", "research", "paper", "chat", "computer", "economy", "research", "sns"];
+const JOB_KO = {research: "매매법 연구", sns: "SNS 여론 확인", economy: "경제 리서치", paper: "모의투자 점검", chat: "동료 수다", computer: "컴퓨터 작업"};
+let cycleTimer = 0, cycling = false, lastJob = "";
+export const cycleState = () => ({cycling, lastJob});
+export function nextCycleIn(){ const c = officeCfg(), last = +localStorage.getItem("officeLastCycle") || 0; return Math.max(0, last + c.cycleMin * 60e3 - Date.now()); }
+export function startCycle(){
+  if (cycleTimer) return;
+  if (!localStorage.getItem("officeLastCycle")) localStorage.setItem("officeLastCycle", String(Date.now() - officeCfg().cycleMin * 60e3 + 45e3));
+  cycleTimer = setInterval(() => cycle().catch(e => console.warn(e)), 20e3);
+}
+export async function cycle(force, onlyJob){
+  const c = officeCfg();
+  if (cycling || (!force && (!c.cycle || nextCycleIn() > 0))) return false;
+  if (!hasAI()) return false;
+  cycling = true; localStorage.setItem("officeLastCycle", String(Date.now()));
+  try {
+    await loadLog();
+    await paperStep();
+    if (running || chatting || queue.length) return true;
+    if (usage().calls >= c.callMax){ if (!usage().capNoted){ bump("capNoted"); post({ch: "hq", kind: "system", text: `오늘 사무실 AI 호출 한도(${c.callMax}번)를 다 썼습니다. 모의투자 갱신과 차트·뉴스 확인은 계속합니다.`}); } return true; }
+    let job = onlyJob;
+    if (!job){ const i = +localStorage.getItem("officeJob") || 0; job = JOBS[i % JOBS.length]; localStorage.setItem("officeJob", String(i + 1)); }
+    if (job === "paper" && !(await paperActive())) job = "research";
+    if (job === "computer" && !computerOn()) job = "economy";
+    lastJob = job; fire({kind: "cycle", job, label: JOB_KO[job]});
+    if (job === "research") await research();
+    else if (job === "sns") await snsCheck();
+    else if (job === "economy") await economyCheck();
+    else if (job === "paper") await paperReport();
+    else if (job === "chat") await chatter(true);
+    else if (job === "computer") await computerWork();
+    return true;
+  } catch(e){ post({ch: "hq", kind: "system", text: `${JOB_KO[lastJob] || "일"} 중 문제: ${String(e.message || e).slice(0, 120)}`}); return false; }
+  finally { cycling = false; fire({kind: "cycle-end"}); setTimeout(pump, 200); }
+}
+
+// 혼자 하는 일 한 번: 배정 모델로 생각·말을 실시간으로 보여 주고, 빈 답이면 다른 모델로
+async function solo(a, {room, sys, user, maxTokens = 900, temperature = 0.6, extra = {}}){
+  const models = assignModels();
+  const target = models[a.id];
+  const alt = fusionSources().find(t => t.model !== target?.model && !badModels()[t.model] && !/r1|reason|think|gpt-oss|qwq/i.test(t.model));
+  const entry = post({ch: room || a.team, kind: "agent", agent: a.id, text: "", think: "", steps: [], live: true, model: target?.model || "", ...extra});
+  fire({kind: "solo", agent: a, entry});
+  for (const tg of [target, alt, null].filter((t, i, arr) => i === arr.length - 1 || (t && arr.findIndex(x => x && x.model === t.model) === i))){
+    let raw = "", think = "", last = 0;
+    const show = () => { const mm = raw.match(/^💭\s*([^\n]*)\n?/); entry.think = (think + (mm ? "\n" + mm[1] : "")).trim(); entry.text = visibleText((mm ? raw.slice(mm[0].length) : raw).replace(/<think>[\s\S]*?(<\/think>|$)/g, "")).replace(/^\s*💭[^\n]*\n?/gm, "").trim();
+      if (Date.now() - last > 150){ last = Date.now(); fire({kind: "delta", agent: a, entry}); } };
+    try {
+      bump("calls");
+      const route = await brainStream({messages: [{role: "system", content: sys}, {role: "user", content: user}], role: a.role === "code" ? "code" : a.role === "reason" ? "reason" : "general",
+        maxTokens, temperature, target: tg || undefined, fallback: true, onContent: d => { raw += d; show(); }, onThink: d => { think += d; show(); }});
+      raw = splitThink(raw).body; show();
+      entry.model = route?.model || tg?.model || entry.model;
+    } catch(e){ entry.notes = [...(entry.notes || []), `${shortName(tg?.model)}: ${String(e.message || e).slice(0, 60)} → 다른 모델로`]; }
+    if (entry.text) break;
+    markBad(tg?.model);
+  }
+  if (!entry.text) entry.text = `(${a.name}: 이번에는 답하지 못했습니다)`;
+  entry.live = false; saveLog(); fire({kind: "said", agent: a, entry});
+  return entry;
+}
+const personaOf = (a, extra = "") => `너는 GH Nano 사무실 ${teamById(a.team).name}의 '${a.name}'(${a.title})다. 역할: ${a.duty}
+이번 일에서는 도구를 부를 수 없으니 주어진 자료로만 말한다. 첫 줄은 '💭 '로 시작하는 한 문장 속마음(무엇을 보고 어떻게 판단하는지)이다. 그다음 동료에게 말하듯 자연스러운 한국어로 말한다. 데이터에 없는 숫자는 지어내지 않는다. ${extra}`;
+
+/* ---- 모의투자 (코드) ---- */
+async function paperActive(){ const P = await import("./paper.js"); const b = await P.loadBook(); return b.strategies.some(s => s.status === "active"); }
+async function paperStep(){
+  const P = await import("./paper.js");
+  const fmt = n => Number(n).toLocaleString("ko-KR", {maximumFractionDigits: 2});
+  await P.step(ev => {
+    const s = ev.s, side = k => k === "long" ? "롱" : "숏";
+    let text = "";
+    if (ev.kind === "open") text = `📗 [${s.name}] ${s.market} ${side(ev.pos.side)} 진입 ${fmt(ev.pos.entry)} (x${ev.pos.lev}${ev.pos.sl ? `, 손절 ${fmt(ev.pos.sl)}` : ""}${ev.pos.tp ? `, 익절 ${fmt(ev.pos.tp)}` : ""})${ev.why ? " — " + ev.why : ""}`;
+    else if (ev.kind === "close") text = `${ev.trade.pnl >= 0 ? "💰" : "📕"} [${s.name}] ${s.market} ${side(ev.trade.side)} 청산 ${fmt(ev.trade.exitP)} · ${ev.trade.pnl >= 0 ? "+" : ""}${fmt(ev.trade.pnl)} USDT (ROE ${ev.trade.roe.toFixed(1)}%) · ${ev.trade.reason}`;
+    else if (ev.kind === "bust") text = `💥 [${s.name}] 가상 계좌가 파산해 운용을 멈췄습니다`;
+    else return;
+    post({ch: "quant", kind: "trade", agent: "trader", text});
+    fire({kind: "trade", agent: agentById("trader"), text});
+  });
+  fire({kind: "paper"});
+}
+async function paperReport(){
+  const P = await import("./paper.js"), a = agentById("trader");
+  const book = await P.bookText();
+  await solo(a, {room: "quant", sys: personaOf(a, "모의투자 현황을 팀에 3~5문장으로 보고한다. 잘 되는 전략과 안 되는 전략, 지금 포지션의 위험을 짚는다. 실제 주문이 아닌 가상 운용임을 잊지 않는다."), user: `모의투자 장부:\n${book}`});
+}
+
+/* ---- 매매법 연구: 지표 29종 + 연구 카드 → 전략 JSON → 백테스트 · 과최적화 검사 → 통과하면 모의투자 ---- */
+const MARKETS = [{market: "BTCUSDT", exchange: "binancef"}, {market: "ETHUSDT", exchange: "binancef"}, {market: "SOLUSDT", exchange: "binancef"}, {market: "XRPUSDT", exchange: "binancef"}];
+function researchLog(){ try { return JSON.parse(localStorage.getItem("officeResearch") || "[]"); } catch(e){ return []; } }
+function addResearch(r){ const l = researchLog(); l.push(r); try { localStorage.setItem("officeResearch", JSON.stringify(l.slice(-60))); } catch(e){} }
+export const researchHistory = researchLog;
+function pickJSON(t){
+  const m = t.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, (t.match(/\{[\s\S]*\}/) || [""])[0]];
+  try { return JSON.parse(m[1]); } catch(e){ return null; }
+}
+async function research(){
+  const Q = await import("./quant.js"), P = await import("./paper.js");
+  const n = researchLog().length, a = agentById(n % 2 ? "qb" : "qa"), mk = MARKETS[Math.floor(n / 2) % MARKETS.length], tf = n % 3 === 2 ? "240" : "60";
+  fire({kind: "busy", agent: a, text: `🧪 ${mk.market} ${tf === "60" ? "1시간" : "4시간"}봉 매매법 구상 중`});
+  const {cs} = await candlesFor({market: mk.market, exchange: mk.exchange, timeframe: tf}, 1500);
+  const snap = Q.snapshot(cs), cards = await Q.loadCards().catch(() => []);
+  const tried = researchLog().slice(-8).map(r => `- ${r.name} (${r.market} ${r.tf}): ${r.pass ? "통과" : "불통과"}, 검증 구간 ${r.oos?.toFixed?.(1)}%`).join("\n");
+  const sys = personaOf(a, "이번 일은 새 매매법 개발이다. 아래 형식 설명을 따라 전략 JSON 하나를 ```json 블록으로 쓰고, 블록 뒤에 왜 이 전략인지 2~3문장으로 말한다.") + "\n\n" + Q.STRATEGY_PROMPT + (cards.length ? "\n\n## 지금까지의 백테스트 연구 카드(참고)\n" + Q.cardsText(cards, 14) : "");
+  const user = `시장: ${mk.market} (${mk.exchange === "binancef" ? "바이낸스 선물" : mk.exchange}) · ${tf === "60" ? "1시간" : "4시간"}봉 · 캔들 ${cs.length}개\n지금 차트(보조지표 29종):\n${String(snap.text || "").slice(0, 3500)}\n\n최근 우리 팀이 시험한 전략(겹치지 않게):\n${tried || "(아직 없음)"}\n\n${a.id === "qa" ? "추세추종" : "역추세·변동성"} 계열로 새 전략 하나를 만들어 주세요. symbol은 ${mk.market}, interval은 ${tf === "60" ? "1h" : "4h"}.`;
+  const e = await solo(a, {room: "quant", sys, user, maxTokens: 1600, temperature: 0.8});
+  let spec = pickJSON(e.text);
+  if (!spec){ post({ch: "quant", kind: "system", text: `${a.name}의 답에서 전략 JSON을 찾지 못했습니다`}); addResearch({name: "(형식 오류)", market: mk.market, tf, pass: false, t: Date.now()}); return; }
+  try { spec = Q.normalizeSpec({...spec, symbol: mk.market, interval: tf === "60" ? "1h" : "4h"}); }
+  catch(err){ post({ch: "quant", kind: "system", text: `전략 형식 오류(${a.name}): ${err.message}`}); addResearch({name: spec.name || "(형식 오류)", market: mk.market, tf, pass: false, t: Date.now()}); return; }
+  const v = agentById("val");
+  fire({kind: "busy", agent: v, text: `🧮 ${spec.name} 백테스트 · 과최적화 검사 중`});
+  const bt = Q.backtest(spec, cs), wf = Q.walkForward(spec, cs);
+  const st = x => ({ret: +(x?.return_pct ?? 0), dd: +(x?.max_dd_pct ?? 0), win: +(x?.win_rate ?? 0), pf: +(x?.profit_factor ?? 0), n: x?.n_trades ?? 0});
+  post({ch: "quant", kind: "bt", agent: "val", name: spec.name, market: mk.market, tf, all: st(bt.stats), is: st(wf.is), oos: st(wf.oos), pass: wf.pass, reasons: wf.reasons, author: a.name, spec});
+  addResearch({name: spec.name, market: mk.market, tf, pass: wf.pass, oos: +(wf.oos?.return_pct ?? 0), t: Date.now()});
+  fire({kind: "bubble", agent: v, text: `${wf.pass ? "✅ 통과" : "❌ 불통과"}: ${spec.name} — ${wf.reasons.slice(0, 2).join(", ")}`});
+  if (wf.pass){
+    const s = await P.addStrategy({spec, market: mk.market, exchange: mk.exchange, tf, author: a.name, wf: {is: st(wf.is), oos: st(wf.oos)}});
+    post({ch: "quant", kind: "system", text: `📈 모의투자 시작: ${s.name} (${mk.market} ${tf === "60" ? "1시간" : "4시간"}봉, ${a.name} 개발 · 다온 검증 통과) · 가상 10,000 USDT`});
+    fire({kind: "trade", agent: agentById("trader"), text: `📈 ${s.name} 모의투자 시작합니다`});
+  }
+}
+
+/* ---- SNS 여론 ---- */
+const SNS_TOPICS = ["crypto", "us", "macro", "crypto"];
+async function snsCheck(){
+  const a = agentById("sns"), i = +localStorage.getItem("officeSns") || 0, topic = SNS_TOPICS[i % SNS_TOPICS.length];
+  localStorage.setItem("officeSns", String(i + 1));
+  fire({kind: "busy", agent: a, text: `📱 ${topic === "crypto" ? "코인" : topic === "us" ? "미국 주식" : "경제"} SNS 둘러보는 중`});
+  const r = await TOOLS.sns_buzz.run({topic});
+  for (const src of (r.sources || []).slice(0, 4)) post({ch: "data", kind: "work", agent: "sns", icon: "📱", text: src.title, url: src.url});
+  await solo(a, {room: "data", sys: personaOf(a, "SNS에서 본 분위기를 3~5문장으로 해설한다. 사람들이 무엇에 흥분하거나 겁먹는지, 쏠림이 지나친지(역발상 신호인지) 말한다. SNS 글은 의견일 뿐이라는 점을 잊지 않는다."), user: r.text.slice(0, 5000)});
+  const fg = (r.text.match(/공포·탐욕 지수\] 오늘 (\d+)/) || [])[1];
+  if (fg && (+fg <= 15 || +fg >= 85) && usage().auto < officeCfg().dailyMax)
+    enqueue({topic: `코인 공포·탐욕 지수가 ${fg}로 극단입니다. SNS 분위기와 시장을 함께 점검해 주세요.`, room: "data", trigger: "event", title: `여론-극단-${fg}`, agents: ["sns", "coin_spot", "coin_fut"]});
+}
+
+/* ---- 경제 리서치 ---- */
+const ECON_Q = ["오늘 미국 경제 뉴스 연준 금리 물가", "global economy outlook this week markets", "한국 경제 환율 수출 금리 뉴스", "oil price OPEC dollar news today", "중국 경기 부양책 뉴스", "부동산 시장 금리 대출 규제 뉴스", "AI 반도체 수요 실적 뉴스"];
+async function economyCheck(){
+  const i = +localStorage.getItem("officeEcon") || 0, q = ECON_Q[i % ECON_Q.length], a = agentById(i % 2 ? "research" : "macro");
+  localStorage.setItem("officeEcon", String(i + 1));
+  fire({kind: "busy", agent: a, text: `🔎 '${q}' 찾아보는 중`});
+  const r = await TOOLS.web_search.run({query: q, n: 6});
+  for (const src of (r.sources || []).slice(0, 3)) post({ch: a.team, kind: "work", agent: a.id, icon: "📰", text: src.title, url: src.url});
+  await solo(a, {room: a.team, sys: personaOf(a, "검색 결과로 '지금 경제가 어떻게 돌아가는지'를 4~6문장으로 해설한다. 기사 제목을 나열하지 말고 흐름으로 묶고, 코인·주식·부동산에 주는 의미를 한 줄 덧붙인다. 근거 문장 끝에 [번호]."), user: `검색어: ${q}\n\n${String(r.text || "").slice(0, 6000)}`});
+}
+
+/* ---- 컴퓨터 작업 (문서/GHNano 사무실 폴더) ---- */
+async function computerWork(){
+  const {codeCall} = await import("./engine.js"), P = await import("./paper.js");
+  const a = agentById("eng"), day = today();
+  fire({kind: "busy", agent: a, text: "💻 사무실 폴더에 보고서 정리 중"});
+  const book = await P.loadBook();
+  const res = researchLog().slice(-20);
+  const log = (await loadLog()).filter(e => e.kind === "agent" && !e.chat && e.text && Date.now() - e.t < 864e5).slice(-12);
+  const md = `# GH Nano 사무실 일일 보고서 · ${day}\n\n## 모의투자\n${await P.bookText()}\n\n## 매매법 연구 (최근 ${res.length}건)\n${res.map(r => `- ${r.pass ? "✅" : "❌"} ${r.name} · ${r.market} ${r.tf} · 검증 구간 ${(+r.oos || 0).toFixed(1)}%`).join("\n") || "- 없음"}\n\n## 오늘 팀 발언 요약\n${log.map(e => `- **${agentById(e.agent)?.name}**: ${e.text.replace(/\s+/g, " ").slice(0, 200)}`).join("\n")}\n`;
+  const csv = "strategy,market,side,entry_time,entry,exit_time,exit,pnl_usdt,roe_pct,reason\n" + book.strategies.flatMap(s => s.trades.map(t => [s.name, s.market, t.side, new Date(t.entryT).toISOString(), t.entryP, new Date(t.exitT).toISOString(), t.exitP, t.pnl.toFixed(2), t.roe.toFixed(2), t.reason].map(x => `"${String(x).replace(/"/g, '""')}"`).join(","))).join("\n");
+  await codeCall("write", {ws: "office", path: `reports/${day}.md`, content: md});
+  await codeCall("write", {ws: "office", path: "data/trades.csv", content: csv});
+  for (const s of book.strategies.filter(x => x.status === "active")) await codeCall("write", {ws: "office", path: `strategies/${s.name.replace(/[\\/:*?"<>|]/g, "_")}.json`, content: JSON.stringify(s.spec, null, 2)});
+  post({ch: "data", kind: "work", agent: "eng", icon: "💾", text: `문서/GHNano 사무실에 저장: reports/${day}.md · data/trades.csv · strategies/*.json`});
+  // 세 번에 한 번은 직접 파이썬 분석 스크립트를 짜서 돌려 본다
+  const k = +localStorage.getItem("officeComp") || 0; localStorage.setItem("officeComp", String(k + 1));
+  if (k % 3 !== 2 || !book.strategies.some(s => s.trades.length)) return;
+  const m = {id: uid(), room: "data", name: "데이터-분석", trigger: "auto", topic: "data/trades.csv(모의투자 거래 기록)를 분석하는 파이썬 스크립트 analysis/summary.py를 사무실 폴더에 만들고 실행해서, 전략별 승률·평균 손익·최대 연속 손실을 보고해 주세요. 파이썬이 없으면 그 사실만 보고합니다.", order: ["eng"], done: [], ctl: new AbortController(), t: Date.now(), models: assignModels()};
+  await speak(a, m, [], m.models.eng, m.ctl.signal);
 }

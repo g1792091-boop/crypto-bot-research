@@ -245,6 +245,7 @@ var upstreams = map[string]string{
 	"mistral":    "https://api.mistral.ai/v1",
 	"together":   "https://api.together.xyz/v1",
 	"sambanova":  "https://api.sambanova.ai/v1",
+	"anthropic":  "https://api.anthropic.com/v1",
 	"ollama":     "http://127.0.0.1:11434",
 	// 검색
 	"tavily": "https://api.tavily.com",
@@ -288,6 +289,13 @@ func proxyHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	req.Header.Set("User-Agent", "NuriAI/1.0")
+	// Claude: OpenAI 호환 채팅은 Bearer로 되지만 모델 목록 등은 x-api-key가 필요하다
+	if name == "anthropic" {
+		if k := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "); k != "" {
+			req.Header.Set("x-api-key", k)
+		}
+		req.Header.Set("anthropic-version", "2023-06-01")
+	}
 	res, err := proxyClient.Do(req)
 	if err != nil {
 		http.Error(w, "upstream: "+err.Error(), http.StatusBadGateway)
