@@ -54,10 +54,13 @@ FUNCTIONAL = [
      ["데모 진입 집행", "데모 청산 관리", "성과 집계", "낙폭 감시", "슬리피지 추정", "신호 품질 감시", "포지션 크기", "상관 관리", "퇴출 판정", "승격 판정"]),
     ("clive", "커스텀 지표 실거래팀", "데모를 통과한 커스텀 지표 매매법을 사람 승인 뒤 실거래로 (기본 꺼짐)", "#ad1457", "live", "커스텀 지표 실거래팀장",
      ["승인 심사", "주문 집행", "거래소 연결", "포지션 대사", "손실 한도 감시", "레버리지 통제", "비상 정지", "수수료·펀딩 정산", "실거래 리포트", "보안·키 관리"]),
+    ("termind", "터미널 지표 추세·타점팀", "차트 터미널의 보조지표 147종 전부를 실시간으로 조합해 추세를 보고 타점을 잡는다", "#ff7043", "termind", "터미널 지표 추세·타점팀장",
+     ["추세 지표 합의", "신호·패턴 지표", "스마트머니(SMC) 지표", "오실레이터 타이밍", "거래량 지표", "파생·코인글라스 지표", "통계·퀀트 지표",
+      "레벨·프로파일 목표가", "다중 시간 프레임 정렬", "타점·손익비 설계"]),
     ("pattern", "차트·캔들 패턴 분석팀", "캔들·차트 패턴을 찾고 이 코인 과거에서 통했는지 통계로 검증한다", "#00acc1", "pattern", "차트·캔들 패턴 분석팀장",
      ["장악형", "망치·역망치·유성형", "도지·잉태형", "샛별·저녁별", "적삼병·흑삼병", "쌍봉·쌍바닥", "헤드앤숄더", "삼각수렴·쐐기", "깃발·페넌트", "패턴 통계 검증"]),
 ]
-SKILLS = {"news": ["news"], "dev": ["backtest"], "cdev": ["backtest"], "bt": ["backtest"], "demo": ["backtest"], "live": ["backtest"],
+SKILLS = {"termind": ["crypto_futures"], "news": ["news"], "dev": ["backtest"], "cdev": ["backtest"], "bt": ["backtest"], "demo": ["backtest"], "live": ["backtest"],
           "tpsl": ["crypto_futures", "backtest"], "coinx": ["crypto_futures", "crypto_spot"]}
 COIN_SPECS = ["차트·추세", "선물 수급", "고래·호가", "지지저항", "진입 타점", "익절손절", "뉴스·이슈", "심리·SNS", "캔들 패턴", "리스크"]
 
@@ -126,7 +129,7 @@ def install() -> None:
         kind = t["kind"]
         roster.WATCH[a["id"]] = {"ind": [("indicators", sym)], "trend": [("indicators", sym)], "entry": [("book", sym)], "news": [("news", "crypto")],
                                  "sr": [("book", sym)], "tpsl": [("paper", "")], "board": [("movers", "")], "pattern": [("indicators", sym)],
-                                 "coinx": [("quote", sym), ("whale", sym), ("news", "crypto")], "dev": [("research", "")], "cdev": [("research", "")],
+                                 "coinx": [("quote", sym), ("whale", sym), ("news", "crypto")], "termind": [("termind", "")], "dev": [("research", "")], "cdev": [("research", "")],
                                  "bt": [("research", "")], "demo": [("paper", "")], "live": [("paper", "")]}.get(kind, [("quote", sym)])
         mates = roster.MEMBERS[a["team"]]
         i = mates.index(a["id"])

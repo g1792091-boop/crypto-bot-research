@@ -498,8 +498,98 @@ def _export_pipeline() -> None:
     (_files() / "pipeline.csv").write_text(buf.getvalue(), encoding="utf-8-sig")
 
 
+# ------------------------------------------------------------------ 터미널 지표 추세·타점팀 (실시간)
+TERM: dict = {}                 # symbol → 최근 판정 (화면·도구용)
+
+
+def term_coins() -> list[str]:
+    out = [s for s, _, _ in org.COINS]
+    try:
+        from .. import autopilot
+        out += [x for x in (autopilot.context.get("watch") or []) if x not in out]
+    except Exception:  # noqa: BLE001
+        pass
+    return out[:12]
+
+
+def termind_scan(symbol: str, post_changes: bool = True) -> dict:
+    """한 코인을 147개 지표 × 4개 봉으로 다시 판정. 추세가 바뀌거나 새 타점이 나오면 방·알림·차트 시그널로 알린다."""
+    from ..quant import termind
+    p = termind.plan(symbol)
+    prev = TERM.get(symbol)
+    TERM[symbol] = p
+    _term_csv(p)
+    if not post_changes:
+        return p
+    team = "termind"
+    lead = roster.TEAM_LEAD[team]
+    e = p.get("entry")
+    changed_trend = prev is not None and prev["trend_label"] != p["trend_label"]
+    new_entry = e and (not prev or not prev.get("entry") or prev["entry"]["action"] != e["action"] or abs(prev["entry"]["entry"] - e["entry"]) > 0.5 * abs(e["entry"] - e["stop"]))
+    if changed_trend:
+        E.post(team, "work", agent=_member(team), icon="🧭", text=f"{symbol.removesuffix('USDT')} 추세 바뀜: {prev['trend_label']} → {p['trend_label']} ({p['trend']:+d})", src="147개 지표 합의")
+    if new_entry:
+        E.post(team, "term", agent=lead, symbol=symbol, plan={k: p[k] for k in ("trend", "trend_label", "aligned", "side", "verdict", "entry", "price")},
+               per_tf={iv: {"score": a["score"], "label": a["label"]} for iv, a in p["per_tf"].items()})
+        E.bubble(lead, f"🎯 {symbol.removesuffix('USDT')} {('롱' if e['action'] == 'long' else '숏')} 타점! 손익비 {e['rr']}", 12)
+        E._push_alert(f"터미널 지표 타점 · {symbol}", p["verdict"])
+        try:                                                      # 트레이드 차트의 AI 시그널(보라 표시)·가상 체결 성과로
+            from ..quant import copilot
+            from ..data import market
+            c, _ = market.candles(symbol, e["tf"], 50)
+            copilot.record_signal({"symbol": symbol, "interval": e["tf"], "candles": c, "bar_time": c[-1]["time"], "price": p["price"], "atr": None},
+                                  {"entry_idea": {"action": e["action"], "entry": e["entry"], "stop": e["stop"], "take": e["take"], "trigger": e["trigger"],
+                                                  "reason": e["reason"]}, "confidence": e["confidence"], "headline": "터미널 지표 147종 합의 · " + p["verdict"]},
+                                  "terminal", "보조지표 147종")
+        except Exception:  # noqa: BLE001
+            pass
+        if E.ai_ok() and time.time() - _st("term_ai", [0])[0] > 300:
+            E.ST["term_ai"][0] = time.time()
+            from ..quant import termind as tm
+            E.solo(roster.MEMBERS[team][10], team, "새 타점이 나왔다. 코드가 계산한 147개 지표 합의를 보고 이 타점의 근거와 위험(반대 표, 과열·침체, 장세)을 3~4문장으로 설명한다. 진입은 사람이 판단한다.",
+                   tm.text(p), 700)
+    return p
+
+
+def _term_csv(p: dict) -> None:
+    d = _files() / "termind"
+    d.mkdir(parents=True, exist_ok=True)
+    f = d / f"{datetime.now():%Y-%m-%d}.csv"
+    new = not f.exists()
+    e = p.get("entry") or {}
+    with open(f, "a", encoding="utf-8-sig", newline="") as fh:
+        w = csv.writer(fh)
+        if new:
+            w.writerow(["time", "symbol", "price", "trend", "label"] + [f"score_{iv}" for iv in p["per_tf"]] + ["side", "kind", "entry", "stop", "take", "rr", "confidence", "verdict"])
+        w.writerow([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), p["symbol"], p["price"], p["trend"], p["trend_label"]] + [a["score"] for a in p["per_tf"].values()]
+                   + [e.get("action"), e.get("kind"), e.get("entry"), e.get("stop"), e.get("take"), e.get("rr"), e.get("confidence"), p.get("verdict")])
+
+
+def termind_tick() -> None:
+    """실시간: 한 번에 한 코인씩 돌아가며 (코인 6개면 약 6분에 전부 한 바퀴, 설정으로 조절)."""
+    coins = term_coins()
+    i = _st("term_i", [0])
+    sym = coins[i[0] % len(coins)]
+    i[0] += 1
+    E.RT["term_job"] = sym
+    try:
+        termind_scan(sym)
+    except Exception as e:  # noqa: BLE001
+        E.post("termind", "system", text=f"{sym} 지표 계산 실패: {str(e)[:160]}")
+    finally:
+        E.RT["term_job"] = None
+
+
+def j_termind(team):
+    from ..quant import termind
+    sym = _coin(team)
+    p = TERM.get(sym) if TERM.get(sym) and time.time() - TERM[sym]["time"] < 600 else termind_scan(sym, post_changes=False)
+    _say(team, termind.text(p), "차트 터미널의 보조지표 147종 합의를 너의 전공 관점에서 해설하고, 추세와 타점(또는 관망) 판단을 말한다. 반대 표가 많은 지표도 짚는다.",
+         f"{sym.removesuffix('USDT')} 147개 지표 추세·타점", 1000)
+
+
 KIND_FN = {"ind": j_ind, "trend": j_trend, "entry": j_entry, "news": j_news, "sr": j_sr, "tpsl": j_tpsl, "board": j_board, "pattern": j_pattern,
-           "coinx": j_coin, "dev": lambda t: j_dev(t, False), "cdev": lambda t: j_dev(t, True), "bt": lambda t: j_bt(t, t == "cbt"),
+           "coinx": j_coin, "termind": j_termind, "dev": lambda t: j_dev(t, False), "cdev": lambda t: j_dev(t, True), "bt": lambda t: j_bt(t, t == "cbt"),
            "demo": lambda t: j_demo(t, t == "cdemo"), "live": lambda t: j_live(t, t == "clive")}
 
 
@@ -523,7 +613,8 @@ def ext_teams() -> list[str]:
 def team_cycle() -> None:
     """확장 팀을 차례로 돌린다 (파이프라인 팀은 더 자주)."""
     order = _st("team_order", [])
-    if not order:
+    if not order or set(ext_teams()) - set(order):               # 팀이 새로 생겼으면 순서를 다시 만든다
+        order.clear()
         base = ext_teams()
         pipe = ["dev", "bt", "demo", "cdev", "cbt", "cdemo", "live", "clive"]
         order[:] = [x for pair in itertools_zip(base, pipe) for x in pair if x]

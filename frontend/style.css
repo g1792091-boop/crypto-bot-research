@@ -803,3 +803,5 @@ a.btn { display: inline-flex; align-items: center; height: 26px; padding: 0 10px
 a.btn.sm { height: 22px; padding: 0 8px; font-size: 11.5px; }
 a.btn.pri { background: var(--accent); border-color: var(--accent); color: #fff; }
 button.danger { background: rgba(242,54,69,.15); border-color: #f23645; color: #ff8a93; }
+
+.of-e.card.term { border-color: #ff7043; }

@@ -147,8 +147,8 @@ SKILL_PROMPT = {
 }
 RISK_LINE = "확률적으로 말하고 확정적 예언을 하지 않는다. 투자 판단과 책임은 본인에게 있다는 점을 잊지 않는다."
 SKILL_TOOLS = {
-    "crypto_spot": ["market_quote", "market_analyze", "market_list", "market_news", "indicator_all", "sns_buzz", "orderbook", "whale_trades", "youtube_search"],
-    "crypto_futures": ["market_analyze", "market_quote", "market_list", "market_news", "calculate", "indicator_all", "sns_buzz", "strategy_backtest",
+    "crypto_spot": ["terminal_consensus", "market_quote", "market_analyze", "market_list", "market_news", "indicator_all", "sns_buzz", "orderbook", "whale_trades", "youtube_search"],
+    "crypto_futures": ["terminal_consensus", "market_analyze", "market_quote", "market_list", "market_news", "calculate", "indicator_all", "sns_buzz", "strategy_backtest",
                        "orderbook", "whale_trades", "futures_flow"],
     "backtest": ["market_analyze", "calculate", "strategy_backtest", "history_backtest", "indicator_all", "paper_status", "ml_predict"],
     "news": ["market_news", "web_search", "web_fetch", "sns_buzz", "youtube_search", "community_search"],

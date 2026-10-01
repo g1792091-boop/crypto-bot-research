@@ -1,5 +1,6 @@
-// AI 사무실 — 26개 팀 266명이 24시간 일하는 모습 · 회의록 · 매매법 파이프라인 · 실거래 · 결과·다운로드 · AI 배정
+// AI 사무실 — 27개 팀 277명이 24시간 일하는 모습 · 회의록 · 매매법 파이프라인 · 실거래 · 결과·다운로드 · AI 배정
 import { $, $$, api, busy, esc, hhmm, mdhm, on, toast } from "./core.js";
+import { showOnChart } from "./trade.js";
 
 let R = null;                 // roster
 let S = null;                 // 마지막 state
@@ -77,6 +78,7 @@ async function poll() {
     renderTop();
     renderFloor();
     if (tab === "log" && fresh) renderLog();
+    if (tab === "term" && Date.now() - (poll.termAt || 0) > 15000 && !document.querySelector("#v-office .of-pane select:focus")) { poll.termAt = Date.now(); renderTerm().catch(() => {}); }
   } catch (e) {
     $("#of-status").textContent = "서버 응답 없음: " + e.message;
   }
@@ -163,6 +165,14 @@ function entryHtml(e) {
         ${e.scen ? `<details><summary>시나리오 (모든 레버리지 · 장세 · 연도 · 스트레스)</summary><pre>${esc(e.scen)}</pre></details>` : ""}
         <details><summary>전략 JSON</summary><pre>${esc(JSON.stringify(e.spec, null, 1))}</pre></details></div>`;
     }
+    case "term": {
+      const p = e.plan || {}, x = p.entry;
+      return `<div class="of-e card term">${room}<div class="of-ch">🎯 ${esc(e.symbol)} 터미널 지표 147종 타점 <span class="of-grade ${p.side === "long" ? "g-견고" : "g-취약"}">${p.side === "long" ? "롱" : "숏"}</span></div>
+        <div>${esc(p.verdict || "")}</div>
+        <div class="dim">${Object.entries(e.per_tf || {}).map(([iv, a]) => `${iv} ${a.score > 0 ? "+" : ""}${a.score}`).join(" · ")} · 전체 ${p.trend > 0 ? "+" : ""}${p.trend} ${esc(p.trend_label || "")}</div>
+        ${x ? `<div class="dim">${esc(x.trigger)} · ${esc(x.reason)}</div>` : ""}
+        <button class="flat sm" data-chart="${esc(e.symbol)}" data-iv="${esc(x?.tf || "1h")}">차트에서 보기</button></div>`;
+    }
     case "ml": return `<div class="of-e card">${room}<div class="of-ch">🧠 머신러닝 · ${esc(e.market)} ${esc(e.tf)} · ${esc(e.model)} <span class="of-grade g-${e.edge === "edge" ? "견고" : e.edge === "weak" ? "보통" : "취약"}">${{ edge: "우위", weak: "약한 신호", none: "우위 없음" }[e.edge]}</span></div>
       <div class="of-tiles"><div><small>정확도</small><b>${e.acc}%</b></div><div><small>기준(동전)</small><b>${e.base}%</b></div><div><small>차이</small><b>${(e.acc - e.base).toFixed(1)}%p</b></div><div><small>AUC</small><b>${e.auc ?? "-"}</b></div></div>
       <details><summary>자세히</summary><pre>${esc(e.text)}</pre></details></div>`;
@@ -190,6 +200,37 @@ function renderLog() {
   box.innerHTML = items.length ? items.map(entryHtml).join("") : `<div class="empty">아직 기록이 없습니다. 아래에 질문을 보내거나 '지금 일 시키기'를 눌러 보세요.<br>AI 키가 없으면 차트·백테스트·데이터 같은 코드 업무만 돌아갑니다.</div>`;
   $$(".of-md.clamp", box).forEach((m) => { if (m.scrollHeight > m.clientHeight + 4) { const b = document.createElement("button"); b.className = "flat sm of-more"; b.textContent = "펼치기"; b.onclick = () => { m.classList.toggle("clamp"); b.textContent = m.classList.contains("clamp") ? "펼치기" : "접기"; }; m.after(b); } });
   if (near) box.scrollTop = box.scrollHeight;
+}
+
+// ------------------------------------------------------------------ 터미널 지표 추세·타점
+let termOpen = null;
+async function renderTerm() {
+  const d = await api("/api/office/termind");
+  const sc = (v) => `<b class="${v > 0 ? "up" : v < 0 ? "down" : ""}">${v > 0 ? "+" : ""}${v}</b>`;
+  const items = d.items.slice().sort((a, b) => Math.abs(b.trend) - Math.abs(a.trend));
+  const tfs = ["15m", "1h", "4h", "1d"];
+  $("#of-pane").innerHTML = `<div class="of-pane-h"><b>터미널 지표 추세·타점</b><span class="dim">차트 터미널의 보조지표 147종 × 15분·1시간·4시간·일봉 · 코인 하나씩 ${d.interval_sec}초마다 실시간</span>
+      <div class="grow"></div><select id="tm-sym">${d.coins.map((c) => `<option>${c}</option>`).join("")}</select><button class="sm pri" id="tm-scan">지금 계산</button>
+      <a class="btn sm" href="/api/office/results" id="tm-files">기록 CSV</a></div>
+    ${d.available ? "" : `<div class="help">⚠ 지표 엔진을 열지 못했습니다: ${esc(d.error)}</div>`}
+    <div class="help">지표마다 방향 표(가격 위 선은 가격이 선 위/아래, 화살표 신호는 최근 신호 방향, 오실레이터는 기준선 위/아래)를 모아 그룹별 평균 → 가중 합 = 점수(-100~+100).
+      타점은 4시간·일봉 추세 방향으로만: 작은 봉이 침체(롱)·과열(숏)로 되돌리면 눌림 진입, 합의가 강하면 추세 추종. 손절은 ATR·스윙, 목표는 지표가 그린 레벨. 손익비 1.5 미만이면 관망.
+      새 타점은 트레이드 차트의 AI 시그널(보라 표시)로도 올라가 가상 체결로 채점됩니다.</div>
+    <table class="of-tbl"><tr><th>코인</th><th>전체</th>${tfs.map((t) => `<th>${t}</th>`).join("")}<th>판정 · 타점</th><th></th></tr>
+    ${items.map((p) => `<tr data-tm="${p.symbol}" style="cursor:pointer"><td><b>${p.symbol.replace("USDT", "")}</b><div class="dim">${mdhm(p.time)}</div></td><td>${sc(p.trend)}<div class="dim">${esc(p.trend_label)}</div></td>
+      ${tfs.map((t) => `<td>${p.per_tf[t] ? sc(p.per_tf[t].score) : "-"}${p.per_tf[t] ? `<div class="dim">${p.per_tf[t].up}↑ ${p.per_tf[t].down}↓</div>` : ""}</td>`).join("")}
+      <td>${esc(p.verdict || "")}${p.entry ? `<div class="dim">${esc(p.entry.trigger)}</div>` : ""}</td>
+      <td><button class="flat sm" data-chart="${p.symbol}" data-iv="${p.entry?.tf || "1h"}">차트</button></td></tr>
+      ${termOpen === p.symbol ? `<tr><td colspan="8">${tfs.filter((t) => p.per_tf[t]).map((t) => { const a = p.per_tf[t]; return `<div class="of-sub">${t} ${sc(a.score)} ${esc(a.label)} <span class="dim">투표 ${a.voters}개</span></div>
+        <div class="dim">${Object.entries(a.groups).map(([g, v]) => `${esc(g)} ${v > 0 ? "+" : ""}${v}`).join(" · ")}</div>
+        ${a.overbought.length || a.oversold.length ? `<div>과열: ${esc(a.overbought.join(", ") || "-")} · 침체: ${esc(a.oversold.join(", ") || "-")}</div>` : ""}
+        <div>강한 표: ${a.top.map((x) => `${esc(x.name)} <span class="${x.vote > 0 ? "up" : "down"}">${x.vote > 0 ? "+" : ""}${x.vote}</span>`).join(", ")}</div>
+        ${Object.keys(a.regime || {}).length ? `<div class="dim">장세: ${Object.entries(a.regime).map(([k, v]) => `${esc(k)} ${v}`).join(" · ")}</div>` : ""}`; }).join("")}
+        ${p.entry ? `<div class="of-sub">타점</div><div>${p.entry.action === "long" ? "롱" : "숏"} ${esc(p.entry.kind)} · 진입 ${p.entry.entry} · 손절 ${p.entry.stop} · 목표 ${p.entry.targets.map((t) => `${(+t.price).toPrecision(6)}(${esc(t.src.slice(0, 18))})`).join(" / ")} · 손익비 ${p.entry.rr} · 확신 ${p.entry.confidence}%</div>` : ""}</td></tr>` : ""}`).join("")
+      || `<tr><td colspan="8" class="dim">계산 중… (코인 하나씩 ${d.interval_sec}초마다. '지금 계산'을 누르면 바로)</td></tr>`}</table>`;
+  $("#tm-scan").onclick = (e) => busy(e.target, async () => { await api(`/api/office/termind/scan?symbol=${$("#tm-sym").value}`, { method: "POST" }); termOpen = $("#tm-sym").value; renderTerm(); });
+  $("#tm-files").onclick = (ev) => { ev.preventDefault(); setTab("results"); };
+  $$("[data-tm]").forEach((r) => (r.onclick = (ev) => { if (ev.target.closest("[data-chart]")) return; termOpen = termOpen === r.dataset.tm ? null : r.dataset.tm; renderTerm(); }));
 }
 
 // ------------------------------------------------------------------ 파이프라인
@@ -361,7 +402,7 @@ function setTab(t) {
   $$("#of-tabs button").forEach((b) => b.classList.toggle("on", b.dataset.tab === t));
   $("#of-logwrap").hidden = t !== "log";
   $("#of-pane").hidden = t === "log";
-  const fn = { pipe: renderPipe, live: renderLive, results: renderResults, growth: renderGrowth, reports: renderReports, models: renderModels }[t];
+  const fn = { term: renderTerm, pipe: renderPipe, live: renderLive, results: renderResults, growth: renderGrowth, reports: renderReports, models: renderModels }[t];
   if (fn) fn().catch((e) => ($("#of-pane").innerHTML = `<div class="empty">${esc(e.message)}</div>`));
   else renderLog();
 }
@@ -420,6 +461,10 @@ export function initOffice() {
     if (ag) agentCard(ag.dataset.ag);
   };
   $("#of-card").onclick = (e) => { const ag = e.target.closest(".of-tm[data-ag]"); if (ag) agentCard(ag.dataset.ag); else if (e.target.id === "of-card") $("#of-card").hidden = true; };
+  document.querySelector("#v-office").addEventListener("click", (e) => {
+    const ch2 = e.target.closest("[data-chart]");
+    if (ch2) showOnChart(ch2.dataset.chart, ch2.dataset.iv);
+  });
   $("#of-log").onclick = (e) => {
     const r = e.target.closest("[data-rate]");
     if (r) api(`/api/office/rate/${r.dataset.rate}?v=${r.dataset.v}`, { method: "POST" });

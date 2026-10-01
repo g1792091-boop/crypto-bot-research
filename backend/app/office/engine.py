@@ -33,6 +33,7 @@ _next = {"id": 1}
 DEFAULT_CFG = {"enabled": True, "auto": True, "every": 30, "daily_max": 12, "chat": True, "chat_every": 3, "chat_max": 80,
                "cycle": True, "cycle_min": 3, "call_max": 1500, "files": True, "alert": True,
                "team_cycle": True, "team_cycle_min": 4, "team_meet_max": 30,
+               "termind": True, "termind_sec": 60,   # 터미널 지표 추세·타점팀 실시간 스캔 (코인 하나씩 돌아가며, 초)
                "models": {}}          # 직원·팀별 AI 모델: {"team:팀id": "nvidia#2:auto", "직원id": "gemini:auto"} — 비우면 기본 배정
 CFG: dict = dict(DEFAULT_CFG)
 ST: dict = {}
@@ -1368,6 +1369,11 @@ def observe(aid: str) -> dict | None:
             from ..data import sentiment
             f = sentiment.fear_greed(7)
             o = {"icon": "😨" if f["value"] < 45 else "🤑" if f["value"] > 55 else "😐", "text": f"공포·탐욕 지수 {f['value']} ({f['label']})"}
+        elif kind == "termind":
+            from . import teamjobs
+            if teamjobs.TERM:
+                sym, p = random.choice(list(teamjobs.TERM.items()))
+                o = {"icon": "🎯" if p.get("entry") else "🧭", "text": f"{sym.removesuffix('USDT')} 지표 147종 합의 {p['trend']:+d} {p['trend_label']} · {p.get('verdict', '')[:60]}"}
         elif kind == "sources":
             o = {"icon": "📥", "text": "시세 소스 " + " → ".join(market.sources()) + (" · 최근 오류 있음" if market.last_errors else " · 정상")}
     except Exception:  # noqa: BLE001
@@ -1501,6 +1507,10 @@ def _tick() -> None:
         ST["last_team"] = now
         from . import teamjobs
         threading.Thread(target=teamjobs.team_cycle, daemon=True).start()
+    if CFG.get("termind", True) and not RT.get("term_job") and now - RT.get("last_term", 0) >= max(20, CFG.get("termind_sec", 60)) and now - RT["started"] > 30:
+        RT["last_term"] = now
+        from . import teamjobs
+        threading.Thread(target=teamjobs.termind_tick, daemon=True).start()
     if now - RT.get("last_live", 0) > 30:
         RT["last_live"] = now
         from .. import live as livex

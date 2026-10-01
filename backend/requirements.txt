@@ -5,3 +5,4 @@ pydantic>=2.6
 anthropic>=1.9
 pytest>=8
 numpy>=1.26
+quickjs>=1.19

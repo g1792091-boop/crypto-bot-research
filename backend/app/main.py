@@ -341,6 +341,25 @@ def office_team_run(team_id: str):
     return {"ok": True}
 
 
+@app.get("/api/office/termind")
+def office_termind():
+    """터미널 지표 추세·타점팀의 최근 판정 (코인별 · 봉별 147개 지표 합의 · 타점)."""
+    from .office import teamjobs
+    from .quant import termind
+    ok, err = termind.available()
+    return {"available": ok, "error": err, "coins": teamjobs.term_coins(), "items": list(teamjobs.TERM.values()),
+            "interval_sec": office.CFG.get("termind_sec", 60)}
+
+
+@app.post("/api/office/termind/scan")
+def office_termind_scan(symbol: str = "BTCUSDT"):
+    from .office import teamjobs
+    try:
+        return teamjobs.termind_scan(symbols.resolve(symbol))
+    except (ValueError, RuntimeError) as e:
+        _bad(e)
+
+
 @app.post("/api/office/models/even")
 def office_models_even():
     try:

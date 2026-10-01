@@ -196,6 +196,16 @@ def _flow(fn):
     return w
 
 
+def terminal_consensus(symbol: str | None = None, **kw):
+    from ..quant import termind
+    from . import teamjobs
+    sym = _sym(symbol or kw.get("market"))
+    p = teamjobs.TERM.get(sym)
+    if not p or time.time() - p["time"] > 300:
+        p = teamjobs.termind_scan(sym, post_changes=False)
+    return {"text": termind.text(p), "summary": f"{sym} 지표 147종 {p['trend']:+d} {p['trend_label']} · {p.get('verdict', '')[:50]}"}
+
+
 # 이름 → (함수, 화면 라벨, 인자 예시)
 TOOLS = {
     "market_quote": (market_quote, lambda a: f"{', '.join(map(str, a.get('symbols') or ['BTCUSDT']))} 시세", '{"symbols":["BTCUSDT","ETHUSDT"]}'),
@@ -211,6 +221,7 @@ TOOLS = {
     "strategy_backtest": (lambda **a: strategy_backtest(a.pop("spec", None), a.pop("market", None), a.pop("timeframe", None), **a), lambda a: f"{(a.get('spec') or {}).get('name', '전략')} 백테스트", '{"spec":{전략 JSON},"market":"BTCUSDT","timeframe":"60"}'),
     "history_backtest": (lambda **a: history_backtest(a.pop("spec", None), a.pop("market", None), a.pop("interval", None), **a), lambda a: f"{a.get('market') or (a.get('spec') or {}).get('symbol', 'BTCUSDT')} 전체 과거 백테스트", '{"spec":{전략 JSON},"market":"BTCUSDT","interval":"4h"}'),
     "ml_predict": (lambda **a: ml_predict(a.pop("market", None), a.pop("interval", None), **a), lambda a: f"{a.get('market') or 'BTCUSDT'} 머신러닝 예측", '{"market":"BTCUSDT","interval":"1h","model":"logreg|mlp|gbs|dnn|cnn"}'),
+    "terminal_consensus": (terminal_consensus, lambda a: f"{a.get('symbol') or 'BTCUSDT'} 터미널 지표 147종 합의", '{"symbol":"BTCUSDT"}'),
     "paper_status": (paper_status, lambda a: "시그널 추적 장부 확인", "{}"),
     "sns_buzz": (sns_buzz, lambda a: f"{a.get('symbol') or 'BTC'} SNS 여론 확인", '{"symbol":"BTC"}'),
     "youtube_search": (youtube_search, lambda a: f"유튜브에서 ‘{a.get('query', '')}’ 검색", '{"query":"비트코인 전망","n":8}'),
@@ -223,7 +234,7 @@ TOOLS = {
 ICON = {"market_analyze": "📈", "market_quote": "💹", "market_news": "📰", "web_search": "🔎", "web_fetch": "📄", "calculate": "🧮",
         "strategy_backtest": "🧪", "history_backtest": "🧪", "orderbook": "📚", "whale_trades": "🐋", "futures_flow": "🌊", "liquidation_map": "💥",
         "sns_buzz": "📱", "youtube_search": "▶️", "community_search": "💬", "indicator_all": "📊", "ml_predict": "🧠", "paper_status": "📒",
-        "market_list": "🏁", "research_cards": "🗂"}
+        "market_list": "🏁", "research_cards": "🗂", "terminal_consensus": "🎯"}
 
 
 def run(name: str, args: dict) -> dict:
