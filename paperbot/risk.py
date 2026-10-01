@@ -224,3 +224,54 @@ def check_entry(cfg: RiskConfig, st: RiskState, symbol: str, qty: float, price: 
 def load_config(path: str) -> RiskConfig:
     with open(path, encoding="utf-8") as fh:
         return RiskConfig.from_dict(json.load(fh))
+
+
+# ---------------------------------------------------------------------------------------------
+# leverage stages (owners, 2026-10-01): live trading starts with at most 20x; after 30 days, if the
+# live record earns it, the account may run the paper rules' own 20-50x tiers. Code only REVIEWS the
+# record; raising ``max_leverage`` stays a person's edit of the config (never automatic).
+# ---------------------------------------------------------------------------------------------
+LEVERAGE_STAGES = (20, 50)
+STAGE_MIN_DAYS = 30
+STAGE_MIN_TRADES = 30
+STAGE_MAX_DRAWDOWN = 0.25        # of the peak equity, over the live period
+STAGE_MAX_COST_RATIO = 1.5       # real trading cost / the cost the paper rules assume (addendum Q6 #4)
+
+
+def max_drawdown(equity_curve: list) -> float:
+    peak, dd = None, 0.0
+    for e in equity_curve:
+        e = float(e)
+        peak = e if peak is None or e > peak else peak
+        if peak and peak > 0:
+            dd = max(dd, 1 - e / peak)
+    return dd
+
+
+def leverage_stage_review(trades: list, start_ms: int, now_ms: int, equity_curve: list,
+                          cost_ratio: Optional[float], paper_pnl: Optional[float],
+                          unplanned_halts: int) -> dict:
+    """May the live account move from stage 1 (max 20x) to stage 2 (the paper rules' 20-50x)? All must hold:
+    30+ days live, 30+ closed trades, live net P&L > 0, the paper account it follows also > 0 over the same
+    days, live drawdown < 25 %, real cost <= 1.5x the assumed cost (measured, not missing), and no halt that
+    was not one of the planned limits (a bug, a reconcile emergency). Returns {ok, next, reasons (Korean)}."""
+    closed = [t for t in trades if t.get("exit_ts") is not None and t.get("pnl") is not None]
+    days = (now_ms - start_ms) / 86_400_000
+    pnl = sum(float(t["pnl"]) for t in closed)
+    dd = max_drawdown(equity_curve)
+    checks = [
+        (days >= STAGE_MIN_DAYS, f"실거래 기간 {days:.0f}일 (30일 이상 필요)"),
+        (len(closed) >= STAGE_MIN_TRADES, f"끝난 거래 {len(closed)}건 (30건 이상 필요)"),
+        (pnl > 0, f"실거래 순손익 ${pnl:,.2f} (플러스 필요)"),
+        (paper_pnl is not None and paper_pnl > 0,
+         "같은 기간 paper 계좌 손익 " + ("확인 안 됨" if paper_pnl is None else f"${paper_pnl:,.2f}") + " (플러스 필요)"),
+        (dd < STAGE_MAX_DRAWDOWN, f"최대 낙폭 {dd:.0%} (25% 미만 필요)"),
+        (cost_ratio is not None and cost_ratio <= STAGE_MAX_COST_RATIO,
+         "실제 비용 ÷ 가정 비용 " + ("아직 계산 안 됨" if cost_ratio is None else f"{cost_ratio:.2f}") + " (1.5 이하 필요)"),
+        (unplanned_halts == 0, f"계획에 없던 멈춤 {unplanned_halts}번 (0번 필요)"),
+    ]
+    ok = all(c for c, _ in checks)
+    return {"ok": ok, "next": LEVERAGE_STAGES[1] if ok else LEVERAGE_STAGES[0],
+            "reasons": [("통과: " if c else "미달: ") + why for c, why in checks],
+            "note": ("조건을 모두 채웠습니다. 두 분이 설정의 max_leverage를 50으로 바꾸면 paper와 같은 20~50배 단계로 돕니다."
+                     if ok else "아직 20배 상한을 유지합니다.")}

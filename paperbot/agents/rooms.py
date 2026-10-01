@@ -91,7 +91,7 @@ import tempfile
 import time
 import traceback
 import urllib.parse
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from functools import lru_cache
 from typing import Any, Callable, Iterator, Optional
@@ -648,6 +648,54 @@ def limit_text(stopped: Optional[str]) -> str:
     if stopped == "budget_reserve":
         return RESERVE_TEXT
     return LIMIT_TEXT
+
+
+# Adaptive use of the owners' Claude plan: the caps above are a ceiling. When the plan itself refuses a call
+# (its own limit, shared with the owners' chats), the caps of the non-reserved meetings shrink to
+# USAGE_SCALE_DOWN of what they were (not below USAGE_SCALE_MIN); every later KST day without such a
+# refusal they grow back by USAGE_SCALE_UP, up to the configured caps. So the rooms use as much of the
+# plan as it gives without running into it day after day.
+USAGE_SCALE_CURSOR = "usage_scale"
+USAGE_SCALE_DOWN, USAGE_SCALE_UP, USAGE_SCALE_MIN = 0.7, 0.1, 0.3
+
+
+def usage_scale(conn: sqlite3.Connection, now_ms: int) -> float:
+    """Today's scale (0.3 .. 1.0): one step up per KST day since the last plan refusal or step."""
+    st = R.get_cursor(conn, USAGE_SCALE_CURSOR) or {}
+    scale, day = float(st.get("scale", 1.0)), st.get("day")
+    today = R.kst_day(now_ms)
+    if day and day < today and scale < 1.0:
+        days = (datetime.strptime(today, "%Y-%m-%d") - datetime.strptime(day, "%Y-%m-%d")).days
+        scale = min(1.0, scale + USAGE_SCALE_UP * days)
+        R.set_cursor(conn, USAGE_SCALE_CURSOR, {"scale": round(scale, 4), "day": today, "why": "up"})
+    return max(USAGE_SCALE_MIN, min(1.0, scale))
+
+
+def lower_usage_scale(conn: sqlite3.Connection, now_ms: int) -> float:
+    """The plan refused a call this pass: shrink the caps (once per KST day)."""
+    st = R.get_cursor(conn, USAGE_SCALE_CURSOR) or {}
+    today = R.kst_day(now_ms)
+    scale = float(st.get("scale", 1.0))
+    if st.get("why") == "down" and st.get("day") == today:
+        return scale                                    # already lowered today
+    scale = max(USAGE_SCALE_MIN, scale * USAGE_SCALE_DOWN)
+    R.set_cursor(conn, USAGE_SCALE_CURSOR, {"scale": round(scale, 4), "day": today, "why": "down"})
+    return scale
+
+
+def scaled_policy(policy: "RoomsPolicy", scale: float) -> "RoomsPolicy":
+    """The policy with the non-reserved meetings' caps, the day total and the 7-day cap times ``scale``.
+    The incident and 08:00/22:00 meetings keep their caps, and the totals never drop below them."""
+    if scale >= 1.0:
+        return policy
+    up = lambda x: max(1, math.ceil(x * scale))          # noqa: E731
+    b = {k: (v if k in RESERVED_CLASSES else (up(v[0]), up(v[1]))) for k, v in policy.budgets.items()}
+    rc = sum(policy.budgets[k][0] for k in RESERVED_CLASSES if k in policy.budgets)
+    rt = sum(policy.budgets[k][1] for k in RESERVED_CLASSES if k in policy.budgets)
+    total = (max(rc + 1, up(policy.total_budget[0])), max(rt + 1, up(policy.total_budget[1])))
+    week = None if not policy.week_budget else (max(7 * rc + 1, up(policy.week_budget[0])),
+                                                max(7 * rt + 1, up(policy.week_budget[1])))
+    return replace(policy, budgets=b, total_budget=total, week_budget=week)
 
 
 def budget_caps(policy: Optional[RoomsPolicy] = None) -> dict:
@@ -2373,6 +2421,7 @@ def tick(paper_db: Optional[str], daily_db: Optional[str], agents_db: str, inbox
         paper_ro, daily_ro, inbox_ro = R.open_ro(paper_db), R.open_ro(daily_db), R.open_ro(inbox_db)
         try:
             R.ensure_rooms(conn, ts=now)
+            policy = scaled_policy(policy, usage_scale(conn, now))
             mark_tick(conn, now)
             caps = budget_caps(policy)
             if R.get_cursor(conn, POLICY_CURSOR) != caps:   # the dashboard shows the caps in force
@@ -2449,6 +2498,8 @@ def tick(paper_db: Optional[str], daily_db: Optional[str], agents_db: str, inbox
                 mark_tick(conn, ctx.clock())                 # alive: a long tick is not a stopped one
                 if res["stopped"] in ("usage_limit", "budget_total", "budget_week", "runner_error"):
                     break
+            if any(r.get("stopped") == "usage_limit" for r in results):
+                lower_usage_scale(conn, now)
             fp = inbox_fingerprint(inbox_ro)
             if fp is not None and R.get_cursor(conn, INBOX_FP) != fp:
                 R.set_cursor(conn, INBOX_FP, fp)

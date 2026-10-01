@@ -108,3 +108,20 @@ def test_clear_resets_peak_and_streak():
     assert st.peak_equity == 700.0 and st.consecutive_losses == 0
     assert R.check_loop(cfg(), st, 700.0).action == R.ALLOW
     assert R.utc_day(T0) == R.utc_day(T0 + 3_600_000) != R.utc_day(T0 + DAY)
+
+
+def test_leverage_stage_review_needs_every_condition():
+    from paperbot.risk import leverage_stage_review, max_drawdown
+    day = 86_400_000
+    good = [{"exit_ts": k, "pnl": 5.0} for k in range(30)]
+    curve = [500 + 2.5 * k for k in range(61)]
+    r = leverage_stage_review(good, 0, 31 * day, curve, 1.2, 40.0, 0)
+    assert r["ok"] and r["next"] == 50 and all(x.startswith("통과") for x in r["reasons"])
+    for kw in ({"now_ms": 20 * day}, {"trades": good[:29]}, {"trades": [{"exit_ts": 1, "pnl": -1.0}] * 30},
+               {"paper_pnl": -1.0}, {"paper_pnl": None}, {"equity_curve": [500, 360, 600]},
+               {"cost_ratio": 1.6}, {"cost_ratio": None}, {"unplanned_halts": 1}):
+        args = {"trades": good, "start_ms": 0, "now_ms": 31 * day, "equity_curve": curve, "cost_ratio": 1.2,
+                "paper_pnl": 40.0, "unplanned_halts": 0, **kw}
+        r = leverage_stage_review(**args)
+        assert not r["ok"] and r["next"] == 20 and any(x.startswith("미달") for x in r["reasons"]), kw
+    assert abs(max_drawdown([100, 120, 90, 130]) - 0.25) < 1e-9
