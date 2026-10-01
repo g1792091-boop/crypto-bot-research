@@ -2238,7 +2238,7 @@ def compose_evening(ctx: RoundContext, board: dict, lead: dict, due: Optional[TR
         L.append(f"- {since}회의 {len(rounds)}번: " + ", ".join(f"{names.get(a, a)} {n}" for a, n in acts.items()))
     waiting = len(R.list_proposals(ctx.agents_conn, status="awaiting_owner"))
     if waiting:
-        L.append(f"- 두 분 확인을 기다리는 복제 제안 {waiting}건 (대시보드 '에이전트 방')")
+        L.append(f"- 두 분 확인을 기다리는 제안 {waiting}건 (복제·새 매매법 계좌, 대시보드 '에이전트 방')")
     calls = R.usage_today(ctx.agents_conn, ctx.now_ms)["calls"]
     if late:
         calls += R.usage_today(ctx.agents_conn, day0)["calls"]

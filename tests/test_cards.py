@@ -64,3 +64,43 @@ def test_cards_from_db_joins_stop_variants(tmp_path):
     assert got[0]["if_stop"] == {"2.5": {"roe": 0.10, "exit_reason": "LOCK", "resolved": True}}
     assert len(cards_from_db(db, RT, strategy="N17_KC_RSI", losses_only=False)) == 2
     assert len(cards_from_db(db, RT, timeframe="15m")) == 2
+
+
+def test_cards_tf_filter_and_parent_shadows(tmp_path):
+    """Timeframe and strategy filters read the account's own columns (a copy 'S@15m~c1' is S on 15m), ``kinds``
+    keeps extras apart, a copy's stop what-ifs are its parent's shadows, and an extra's card is named by its label."""
+    from paperbot.store3 import Store3
+    from test_rooms import rec
+    path = str(tmp_path / "p.db")
+    st = Store3(path)
+    st.add_account("N17_KC_RSI@15m", "N17_KC_RSI", "15m", "strategy", 0, "v")
+    st.add_account("N17_KC_RSI@15m~c1", "N17_KC_RSI", "15m", "copy", 0, "v", parent="N17_KC_RSI@15m",
+                   data={"v": 1, "kind": "copy", "label_ko": "켈트너·RSI 15분 복제 c1 · 손절 2.5 ATR"})
+    st.add_account("NL1@15m", "NL1", "15m", "newlab", 0, "v", data={"v": 1, "kind": "newlab",
+                                                                    "label_ko": "새 매매법 NL1 (장부 #57) · 15분"})
+    st.add_account("N17_KC_RSI@1h", "N17_KC_RSI", "1h", "strategy", 0, "v")
+    r = rec("N17_KC_RSI", "15m", -10.0, 10_000_000)
+    for aid in ("N17_KC_RSI@15m", "N17_KC_RSI@15m~c1"):
+        st.trade(aid, r)                                     # the copy repeats its parent's signal
+    st.trade("NL1@15m", rec("NL1", "15m", -3.0, 10_000_000))
+    st.trade("N17_KC_RSI@1h", rec("N17_KC_RSI", "1h", -2.0, 10_000_000))
+    st.commit()
+    daily = sqlite3.connect(str(tmp_path / "d.db"))
+    daily.executescript(SCHEMA)
+    daily.execute("INSERT INTO shadows VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                  (f"stop2.5|N17_KC_RSI@15m|BTCUSDT|{r.signal_ts + 1}", "d", "stop2.5", "N17_KC_RSI@15m", "BTCUSDT",
+                   "15m", 1, None, 0.10, "LOCK", 1, "{}"))
+    db = sqlite3.connect(path)
+    got = cards_from_db(db, RT, timeframe="15m", daily_conn=daily)
+    assert sorted(c["account_id"] for c in got) == ["N17_KC_RSI@15m", "N17_KC_RSI@15m~c1", "NL1@15m"]
+    assert sorted(c["account_id"] for c in cards_from_db(db, RT, strategy="N17_KC_RSI")) == \
+        ["N17_KC_RSI@15m", "N17_KC_RSI@15m~c1", "N17_KC_RSI@1h"]
+    assert [c["account_id"] for c in cards_from_db(db, RT, strategy="N17_KC_RSI", timeframe="15m",
+                                                   kinds=("strategy",))] == ["N17_KC_RSI@15m"]
+    [cp] = cards_from_db(db, RT, account_id="N17_KC_RSI@15m~c1", daily_conn=daily, names_ko={"N17_KC_RSI": "켈트너·RSI"})
+    assert cp["if_stop"] == {"2.5": {"roe": 0.10, "exit_reason": "LOCK", "resolved": True}}      # the parent's shadow
+    assert cp["kind"] == "copy" and cp["parent"] == "N17_KC_RSI@15m" and cp["name_ko"].endswith("복제 c1 · 손절 2.5 ATR")
+    [nl] = cards_from_db(db, RT, account_id="NL1@15m", daily_conn=daily)
+    assert nl["name_ko"] == "새 매매법 NL1 (장부 #57) · 15분" and nl["if_stop"] == {} and nl["kind"] == "newlab"
+    [orig] = cards_from_db(db, RT, account_id="N17_KC_RSI@15m", daily_conn=daily, names_ko={"N17_KC_RSI": "켈트너·RSI"})
+    assert orig["name_ko"] == "켈트너·RSI" and "kind" not in orig and "label_ko" not in orig      # the 195's cards as before

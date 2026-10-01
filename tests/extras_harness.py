@@ -403,6 +403,10 @@ def extras_hour(sess: Session, opts: dict, t: int) -> None:
     """Called before each single step at time t (approvals at feed hour 6 in the new tree)."""
 
 
+def extras_crash(sess: Session, crash: dict) -> None:
+    raise RuntimeError(f"crash point {crash['point']} needs the new tree")
+
+
 # ---------------------------------------------------------------------- the new tree's scenario
 APPROVE_AT = 358          # minute after T0: three copies and nine new strategies approved (created at 360)
 LATE_APPROVE_AT = 476     # one more new strategy (created at minute 480, the crash runs' boundary)
@@ -666,10 +670,6 @@ def install_crash(sess: Session, crash: dict) -> None:
     book.save = save
     if point not in ("K1", "K2"):
         extras_crash(sess, crash)
-
-
-def extras_crash(sess: Session, crash: dict) -> None:
-    raise RuntimeError(f"crash point {crash['point']} needs the new tree")
 
 
 def crash_run(workdir: str, point: str, at: int, extras: Optional[dict] = None, hours: int = CRASH_HOURS) -> tuple:

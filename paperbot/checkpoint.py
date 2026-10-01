@@ -28,6 +28,18 @@ Q3 schedule
     that window. A copy account's windows start at its own creation; it is judged at the run's
     checkpoints (so it shares their FDR family) once 30 days old.
 
+Extra accounts (paperbot/extras.py: copies and new-strategy accounts)
+    Each extra is judged from its own start (``created_ts``) and runs in its OWN Q1 group (its own
+    seed, its own rule: a copy's first lock and stop distance), so the original accounts' groups, seeds,
+    bots and p-values are exactly what they would be without extras. FDR: family A = the originals plus
+    the copies (the addendum: "모든 계좌(개선 복사 계좌 포함)"); the originals' rows also keep ``q_orig``
+    (their own BH); family B = the new-strategy accounts (their own BH). An extra's signals count from its
+    start: a copy's are its parent's signals while it was active (minus the ones its skip tag drops), a
+    new-strategy account's its own rows, with the bars missed in restarts left out of its rate. An
+    extra's verdict rows carry ``created_ts``: an id re-used after a paper3 restore starts over. Code
+    changes of the extras and an extra's own events (suspended, held, code accepted) are warnings that
+    name only the affected extras.
+
 Q1 luck test
     Per judged account, 2,000 coin-flip bots run over the same window with the same rules and the
     same starting equity; each coin and bar of the account's timeframe fires with probability = the
@@ -81,7 +93,10 @@ TF_MS = {"5m": 5 * MIN, "15m": 15 * MIN, "30m": 30 * MIN, "1h": 60 * MIN, "4h": 
 TF_KO = {"5m": "5분", "15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간"}
 ATR_PREFIX_BARS = 300          # TF bars before the window for ATR14 (Wilder; (13/14)^300 ~ 2e-10)
 NO_VERDICT_DAYS = 180          # addendum Q3: still < 30 trades at day 180 -> '판정 불가'
-SNAPSHOT_VERSION = 1
+SNAPSHOT_VERSION = 2          # 2: extras carry rule / events / skipped bars (originals' fields unchanged)
+ORIG = "orig"
+EXTRA_KINDS = ("copy", "newlab")
+EXTRAS_ONLY_KO = "추가 계좌만 해당"
 
 HOLD, PASS1, FAIL, PASS2, OBSERVE = "보류", "1차 합격", "불합격", "2차 통과", "관찰용"
 STATUSES = (HOLD, PASS1, FAIL, PASS2, OBSERVE)
@@ -167,7 +182,7 @@ def run_facts(conn: sqlite3.Connection) -> dict:
     """Run start (first account creation), starting equity and fee from the run state."""
     st = conn.execute("SELECT data FROM state WHERE k = 'run'").fetchone()
     run = json.loads(st[0]) if st else {}
-    r = conn.execute("SELECT MIN(created_ts) FROM accounts WHERE parent IS NULL").fetchone()
+    r = conn.execute("SELECT MIN(created_ts) FROM accounts WHERE kind IN ('strategy', 'random')").fetchone()
     start = r[0] if r and r[0] is not None else None
     if start is None:
         r = conn.execute("SELECT MIN(started_ts) FROM runs").fetchone()
@@ -186,6 +201,58 @@ def _trading_changes(conn: sqlite3.Connection, upto: int) -> list[dict]:
         ch = [c for c in json.loads(data).get("changes", []) if c in trading]
         if ch:
             out.append({"ts": int(ts), "changes": ch})
+    return out
+
+
+def _extras_state(conn: sqlite3.Connection) -> dict:
+    try:
+        r = conn.execute("SELECT data FROM state WHERE k = 'extras'").fetchone()
+    except sqlite3.Error:
+        return {}
+    try:
+        return json.loads(r[0]) if r else {}
+    except ValueError:
+        return {}
+
+
+def _extra_code_changes(conn: sqlite3.Connection, upto: int) -> list[dict]:
+    """Starts of the runner whose recorded changes touch only the extras' trading code (runinfo.EXTRA_WATCHED)."""
+    from .runinfo import EXTRA_WATCHED
+    keys = {k for k, _, t in EXTRA_WATCHED if t}
+    out = []
+    for ts, data in conn.execute("SELECT started_ts, data FROM runs WHERE started_ts < ? ORDER BY id", (upto,)):
+        ch = [c for c in json.loads(data).get("changes", []) if c in keys]
+        if ch:
+            out.append({"ts": int(ts), "changes": ch})
+    return out
+
+
+def _extra_signals(conn: sqlite3.Connection, kind: str, strat: str, tf: str, parent: Optional[str], created: int,
+                   cp_ts: int, rule: dict, timeline: list, symbols) -> dict:
+    """{day: n} of an extra's signals from its start: a copy's parent rows while it was active (minus the ones
+    its skip tag drops), a new-strategy account's own rows."""
+    from .daily3 import extra_status
+    from .extras import skip_hit
+    src_strat, src_tf = (parent.split("@", 1) if kind == "copy" and parent and "@" in parent else (strat, tf))
+    q = ("SELECT bar_close, side, data FROM signal_log WHERE strategy = ? AND timeframe = ? AND bar_close >= ? "
+         f"AND bar_close < ? AND status IN ({','.join('?' * len(SIGNAL_STATUSES))}) "
+         f"AND symbol IN ({','.join('?' * len(symbols))})")
+    out: dict = {}
+    x = {"timeline": timeline}
+    tag = rule.get("skip_tag")
+    for bc, side, data in conn.execute(q, (src_strat, src_tf, created, cp_ts, *SIGNAL_STATUSES, *symbols)):
+        if kind == "copy":
+            if bc <= created or extra_status(x, int(bc) - MIN) != "active":
+                continue
+            if tag:
+                try:
+                    ctx = (json.loads(data or "{}") or {}).get("ctx") or {}
+                except (ValueError, AttributeError):
+                    ctx = {}
+                if skip_hit(tag, int(side), ctx):
+                    continue
+        d = day_str(int(bc) // DAY_MS * DAY_MS)
+        out[d] = out.get(d, 0) + 1
     return out
 
 
@@ -212,8 +279,9 @@ def freeze_snapshot(conn: sqlite3.Connection, cp_ts: int, symbols=V3_SYMBOLS,
     for strat, tf, d, n in conn.execute(q, (cp_ts, *SIGNAL_STATUSES, *symbols)):
         sig.setdefault((strat, tf), {})[day_str(int(d) * DAY_MS)] = int(n)
     accounts = {}
-    for aid, strat, tf, kind, created, parent in conn.execute(
-            "SELECT account_id, strategy, timeframe, kind, created_ts, parent FROM accounts ORDER BY rowid"):
+    xstate = None
+    for aid, strat, tf, kind, created, parent, adata in conn.execute(
+            "SELECT account_id, strategy, timeframe, kind, created_ts, parent, data FROM accounts ORDER BY rowid"):
         e = engines.get(aid)
         if e is None or created >= cp_ts:
             continue
@@ -233,12 +301,40 @@ def freeze_snapshot(conn: sqlite3.Connection, cp_ts: int, symbols=V3_SYMBOLS,
             "position": cpos, "mark": mark, "equity": round(equity, 8),
             "trades": trades.get(aid, []), "signals": sig.get((strat, tf), {}),
         }
+        if kind in EXTRA_KINDS:
+            from .daily3 import EXTRA_STATUS
+            from .extras import parse_rule, rule_fields
+            if xstate is None:
+                xstate = _extras_state(conn)
+            try:
+                d = json.loads(adata or "{}")
+            except ValueError:
+                d = {}
+            f = rule_fields(parse_rule(d.get("rule")) if kind == "copy" else None)
+            rule = {"stop_atr": f["stop_atr"], "first_lock": f["first_lock"] if f["first_lock"] is not None
+                    else s.ladder_first_lock, "skip_tag": f["skip_tag"]}
+            evs = [ev for ev in (xstate.get("events") or []) if ev.get("account_id") == aid
+                   and int(ev.get("ts") or 0) < cp_ts]
+            tl = sorted([(int(created), "active")] + [(int(ev.get("effective", ev.get("ts", 0)) or 0),
+                                                       EXTRA_STATUS[ev["event"]])
+                                                      for ev in evs if ev.get("event") in EXTRA_STATUS
+                                                      and ev.get("event") != "created"], key=lambda t: t[0])
+            a = accounts[aid]
+            a["rule"] = rule
+            a["events"] = [{k: ev.get(k) for k in ("ts", "event", "code", "detail") if k in ev} for ev in evs]
+            a["signals"] = _extra_signals(conn, kind, strat, tf, parent, int(created), cp_ts, rule,
+                                          [list(t) for t in tl], symbols)
+            if kind == "newlab":
+                runs = (xstate.get("health") or {}).get("skipped_runs") or []
+                a["skipped_runs"] = [[int(r0), int(r1)] for r0, r1 in runs if int(r1) >= int(created)
+                                     and int(r0) < cp_ts]
     return {
         "version": SNAPSHOT_VERSION, "date": date, "cp_ts": cp_ts,
         "source": {"state_key": "day:" + date, "state_ts": int(row[0]), "state_sha256": sha256_text(row[1])},
         "run": {"start_ts": facts["start_ts"], "initial_equity": facts["initial_equity"],
                 "taker_fee": s.taker_fee, "slippage": s.slippage_frac, "settings_version": facts["settings_version"],
-                "trading_changes": _trading_changes(conn, cp_ts)},
+                "trading_changes": _trading_changes(conn, cp_ts),
+                "extra_code_changes": _extra_code_changes(conn, cp_ts)},
         "symbols": list(symbols), "accounts": accounts,
     }
 
@@ -290,14 +386,33 @@ def period_stats(acct: dict, lo: int, hi: int, s: Settings, initial: float) -> d
                 - pos["entry_fee"] - pos["funding_paid"])
     lo_d, hi_d = day_str(lo), day_str(hi - 1)
     sigs = sum(v for d, v in acct["signals"].items() if lo_d <= d <= hi_d)
-    return {"trades": n, "pnl": pnl, "signals": sigs}
+    out = {"trades": n, "pnl": pnl, "signals": sigs}
+    if "skipped_runs" in acct:
+        out["skipped_bars"] = skipped_bars(acct["skipped_runs"], acct["timeframe"], lo, hi, acct["created_ts"])
+    return out
 
 
-def signal_rate(signals: int, tf: str, lo: int, hi: int, coins: int = 6) -> float:
+def skipped_bars(runs, tf: str, lo: int, hi: int, created: int) -> int:
+    """Bars of ``tf`` closing in [lo, hi) after ``created`` whose boundary the runner did not compute for the
+    new-strategy accounts (catch-up after a restart; extras state health.skipped_runs [[from, to], ...])."""
+    if tf not in TF_MS:
+        return 0
+    span, n = TF_MS[tf], 0
+    for a, b in runs or []:
+        a, b = max(int(a), lo, int(created) + 1), min(int(b), hi - 1)
+        if b < a:
+            continue
+        first = -(-a // span) * span
+        if first <= b:
+            n += (b - first) // span + 1
+    return n
+
+
+def signal_rate(signals: int, tf: str, lo: int, hi: int, coins: int = 6, skipped: int = 0) -> float:
     span = TF_MS[tf]
     first = -(-lo // span) * span
     bars = max(0, (hi - 1 - first) // span + 1) if hi > first else 0
-    return signals / max(coins * bars, 1)
+    return signals / max(coins * max(bars - int(skipped), 0), 1)
 
 
 # ====================================================================== Q1 statistics
@@ -732,6 +847,9 @@ class Task:
     hi: int
     value: float        # account statistic compared with the bots' final equity
     rate: float
+    cls: str = ORIG     # "orig" (the originals share one group per window) or the extra's own id
+    stop_atr: float = V3_STOP_ATR
+    first_lock: Optional[float] = None
 
 
 def _prior(out: sqlite3.Connection, date: str) -> dict:
@@ -755,7 +873,17 @@ def plan(snap: dict, prior: dict, prev_snaps: dict, s: Settings) -> tuple[dict, 
         st1 = period_stats(a, lo, cp, s, init)
         base = {"strategy": a["strategy"], "timeframe": tf, "kind": a["kind"], "equity": a["equity"],
                 "bust": a["bust"], "trades_total": st1["trades"]}
+        extra = a["kind"] in EXTRA_KINDS
         pr = prior.get(aid)
+        if extra:
+            base["created_ts"] = a["created_ts"]
+            if pr is not None and pr.get("created_ts") != a["created_ts"]:
+                pr = None                     # an id re-used after a paper3 restore starts over
+            rl = a.get("rule") or {}
+            tkw = {"cls": aid, "stop_atr": float(rl.get("stop_atr") or V3_STOP_ATR),
+                   "first_lock": rl.get("first_lock")}
+        else:
+            tkw = {}
         if a["kind"] == "random":
             rows[aid] = {**base, "status": OBSERVE, "stage": None, "reason": "동전 봇 기준 계좌 (판정 안 함, 눈으로 보는 기준)"}
             continue
@@ -775,9 +903,11 @@ def plan(snap: dict, prior: dict, prev_snaps: dict, s: Settings) -> tuple[dict, 
             scaled = st2["pnl"] * init / eq0 if eq0 and eq0 > 0 else st2["pnl"]
             r = {**base, "stage": "2차", "window": [plo, cp], "trades": st2["trades"], "pnl": st2["pnl"],
                  "pnl_scaled": scaled, "start_equity": eq0, "signals": st2["signals"],
-                 "rate": signal_rate(st2["signals"], tf, plo, cp)}
+                 "rate": signal_rate(st2["signals"], tf, plo, cp, skipped=st2.get("skipped_bars", 0))}
+            if st2.get("skipped_bars"):
+                r["skipped_bars"] = st2["skipped_bars"]
             rows[aid] = r
-            tasks.append(Task(aid, "2차", tf, plo, cp, init + scaled, r["rate"]))
+            tasks.append(Task(aid, "2차", tf, plo, cp, init + scaled, r["rate"], **tkw))
             continue
         # not yet judged
         r = {**base, "stage": None, "window": [lo, cp], "trades": st1["trades"], "signals": st1["signals"],
@@ -789,9 +919,11 @@ def plan(snap: dict, prior: dict, prev_snaps: dict, s: Settings) -> tuple[dict, 
                 why += f" · {NO_VERDICT_DAYS}일까지 30건 미달: 판정 불가"
             rows[aid] = {**r, "status": HOLD, "reason": why}
             continue
-        r.update(stage="1차", rate=signal_rate(st1["signals"], tf, lo, cp))
+        r.update(stage="1차", rate=signal_rate(st1["signals"], tf, lo, cp, skipped=st1.get("skipped_bars", 0)))
+        if st1.get("skipped_bars"):
+            r["skipped_bars"] = st1["skipped_bars"]
         rows[aid] = r
-        tasks.append(Task(aid, "1차", tf, lo, cp, a["equity"], r["rate"]))
+        tasks.append(Task(aid, "1차", tf, lo, cp, a["equity"], r["rate"], **tkw))
     return rows, tasks
 
 
@@ -799,18 +931,31 @@ def run_tasks(tasks: list[Task], minutes_for: Callable[[int, int], Minutes], s: 
               specs: dict, n_bots: int, seed_base: int, initial: float, log=None) -> tuple[dict, list[dict]]:
     """Q1 for every task: all tasks with the same timeframe and window share one vectorised pass
     (each account gets its own ``n_bots`` bots at its own rate). Returns ({aid: p}, groups)."""
+    from dataclasses import replace as _replace
     groups: dict[tuple, list[Task]] = {}
-    for t in tasks:
-        groups.setdefault((t.tf, t.lo, t.hi), []).append(t)
+    for t in tasks:                                  # the originals: one group per (tf, window), as always
+        if t.cls == ORIG:
+            groups.setdefault((t.tf, t.lo, t.hi), []).append(t)
+    order = sorted(groups.items(), key=lambda kv: (kv[0][1], TF_MS[kv[0][0]]))
+    extra = sorted(((t.tf, t.lo, t.hi, t.cls), [t]) for t in tasks if t.cls != ORIG)
+    order += sorted(extra, key=lambda kv: (kv[0][1], TF_MS[kv[0][0]], kv[0][3]))   # each extra alone, after
     pvals, info = {}, []
-    for (tf, lo, hi), ts in sorted(groups.items(), key=lambda kv: (kv[0][1], TF_MS[kv[0][0]])):
+    for key, ts in order:
+        tf, lo, hi = key[:3]
         t0 = time.time()
         pre = ATR_PREFIX_BARS * TF_MS[tf]
         start = lo - lo % TF_MS[tf] - pre
         m = minutes_for(start, hi)
         rates = np.repeat([t.rate for t in ts], n_bots)
         seed = [seed_base, TF_MS[tf] // MIN, lo // MIN % 2**31]
-        res = simulate_bots(m, tf, lo, hi, rates, s, brackets, specs, seed=seed, initial=initial)
+        gs, stop_atr = s, V3_STOP_ATR
+        if len(key) == 4:                            # an extra: its own seed and its own rule
+            x = ts[0]
+            seed = seed + [int(hashlib.sha256(x.aid.encode()).hexdigest()[:8], 16)]
+            if x.first_lock is not None and float(x.first_lock) != s.ladder_first_lock:
+                gs = _replace(s, ladder_first_lock=float(x.first_lock))
+            stop_atr = float(x.stop_atr)
+        res = simulate_bots(m, tf, lo, hi, rates, gs, brackets, specs, seed=seed, initial=initial, stop_atr=stop_atr)
         for i, t in enumerate(ts):
             bots = res["equity"][i * n_bots:(i + 1) * n_bots]
             pvals[t.aid] = {"p": luck_p(t.value, bots), "bots_median": float(np.median(bots)),
@@ -818,8 +963,11 @@ def run_tasks(tasks: list[Task], minutes_for: Callable[[int, int], Minutes], s: 
                             "bots_bust": float(np.mean(res["bust"][i * n_bots:(i + 1) * n_bots])),
                             "bots_trades": float(np.mean(res["trades"][i * n_bots:(i + 1) * n_bots]))}
         sec = time.time() - t0
-        info.append({"timeframe": tf, "window": [lo, hi], "accounts": len(ts), "bots": len(rates),
-                     "seed": seed, "seconds": round(sec, 1)})
+        row = {"timeframe": tf, "window": [lo, hi], "accounts": len(ts), "bots": len(rates),
+               "seed": seed, "seconds": round(sec, 1)}
+        if len(key) == 4:
+            row.update(account_id=ts[0].aid, stop_atr=stop_atr, first_lock=gs.ladder_first_lock)
+        info.append(row)
         if log:
             log(f"Q1 {tf} {day_str(lo)}~{day_str(hi)}: {len(ts)} accounts x {n_bots} bots, {sec:.0f}s")
     return pvals, info
@@ -827,9 +975,19 @@ def run_tasks(tasks: list[Task], minutes_for: Callable[[int, int], Minutes], s: 
 
 def decide(snap: dict, rows: dict, tasks: list[Task], pvals: dict, alpha: float = ALPHA) -> dict:
     init = snap["run"]["initial_equity"]
-    tested = [t for t in tasks if t.aid in pvals]
+    kind = {aid: a.get("kind") for aid, a in snap["accounts"].items()}
+    tested_all = [t for t in tasks if t.aid in pvals]
+    # family A: the originals and the copies (Q7); family B: the new-strategy accounts (their own BH)
+    tested = [t for t in tested_all if kind.get(t.aid) != "newlab"]
+    fam_b = [t for t in tested_all if kind.get(t.aid) == "newlab"]
     q, rej = bh([pvals[t.aid]["p"] for t in tested], alpha)
-    for t, qi, ri in zip(tested, q, rej):
+    qb, rejb = bh([pvals[t.aid]["p"] for t in fam_b], alpha)
+    origs = [t for t in tested if kind.get(t.aid) not in EXTRA_KINDS]
+    if len(origs) != len(tested):               # copies in family A: the originals' own BH, for transparency
+        qo, _ro = bh([pvals[t.aid]["p"] for t in origs], alpha)          # (without copies q_orig == q)
+        for t, qi in zip(origs, qo):
+            rows[t.aid]["q_orig"] = float(qi)
+    for t, qi, ri in list(zip(tested, q, rej)) + list(zip(fam_b, qb, rejb)):
         r = rows[t.aid]
         r.update(pvals[t.aid])
         r.update(q=float(qi), luck_pass=bool(ri))
@@ -862,10 +1020,16 @@ def decide(snap: dict, rows: dict, tasks: list[Task], pvals: dict, alpha: float 
     m = len(tested)
     n_rej = int(rej.sum()) if m else 0
     counts = {k: sum(1 for r in rows.values() if r["status"] == k) for k in STATUSES}
-    return {"tested": m, "luck_passed": n_rej,
-            "lucky_expected": round(alpha * n_rej, 3),
-            "lucky_if_uncorrected": round(alpha * m, 3),
-            "counts": counts}
+    out = {"tested": m, "luck_passed": n_rej,
+           "lucky_expected": round(alpha * n_rej, 3),
+           "lucky_if_uncorrected": round(alpha * m, 3),
+           "counts": counts}
+    if fam_b:
+        nb = int(rejb.sum())
+        out["family_b"] = {"tested": len(fam_b), "luck_passed": nb, "lucky_expected": round(alpha * nb, 3),
+                           "lucky_if_uncorrected": round(alpha * len(fam_b), 3),
+                           "what": "새 매매법 계좌끼리 따로 FDR (Q-7 기본값)"}
+    return out
 
 
 def verdict_text(v: dict) -> str:
@@ -916,6 +1080,7 @@ def judge(out: sqlite3.Connection, date: str, minutes_for, s: Settings, brackets
         if start is not None and ch["ts"] > start:
             warnings.append(f"{day_str(ch['ts'])} 재시작 때 체결·청산·사이즈 관련 변경({', '.join(ch['changes'])}). "
                             "Q5: 영향받는 계좌의 기간을 그날부터 다시 세야 하는지 규칙 관리자 확인 필요")
+    warnings += extra_warnings(snap, rows)
     v = {"date": date, "cp_ts": snap["cp_ts"], "day": int((snap["cp_ts"] - floor_day(start)) // DAY_MS) if start else None,
          "snapshot_sha256": sha, "alpha": alpha, "n_bots": n_bots, "initial_equity": init,
          "groups": groups, "warnings": warnings, "accounts": rows, **summary,
@@ -928,6 +1093,39 @@ def judge(out: sqlite3.Connection, date: str, minutes_for, s: Settings, brackets
                         [(date, aid, r["status"], r.get("stage"), r.get("p"), r.get("q"), canonical(r))
                          for aid, r in rows.items()])
     return v
+
+
+def extra_warnings(snap: dict, rows: dict) -> list[str]:
+    """Warnings that name only the affected extra accounts ("추가 계좌만 해당"); also kept on the extra's row
+    (``notes``). Never on an original's row."""
+    out = []
+    accts = snap["accounts"]
+    extras = {aid: a for aid, a in accts.items() if a.get("kind") in EXTRA_KINDS}
+    if not extras:
+        return out
+    for ch in snap["run"].get("extra_code_changes", []):
+        hit = sorted(aid for aid, a in extras.items() if a["created_ts"] < ch["ts"])
+        if hit:
+            text = (f"{day_str(ch['ts'])} 재시작 때 추가 계좌 코드 변경 ({EXTRAS_ONLY_KO}: {', '.join(hit)}). "
+                    "Q5: 그 계좌들의 기간을 그날부터 다시 세야 하는지 규칙 관리자 확인 필요")
+            out.append(text)
+            for aid in hit:
+                rows.get(aid, {}).setdefault("notes", []).append(text)
+    names = {"suspended": "멈춤", "held": "정지(동결)", "code_accepted": "바뀐 신호 코드 수락", "resumed": "재개"}
+    for aid, a in extras.items():
+        for ev in a.get("events") or []:
+            if ev.get("event") in ("suspended", "held", "code_accepted"):
+                text = (f"{aid}: {day_str(int(ev['ts']))} {names[ev['event']]} ({ev.get('code') or ''}) — "
+                        f"{EXTRAS_ONLY_KO}" + (", Q5 사건: 이 계좌의 30일 기간을 다시 셈" if ev["event"] == "code_accepted"
+                                                 else ""))
+                out.append(text)
+                rows.get(aid, {}).setdefault("notes", []).append(text)
+        r = rows.get(aid) or {}
+        if r.get("skipped_bars"):
+            note = f"{aid}: 재시작으로 계산하지 못한 봉 {r['skipped_bars']}개는 신호 비율에서 빠짐"
+            r.setdefault("notes", []).append(note)
+            out.append(note)
+    return out
 
 
 def _settings_of(snap: dict, s: Settings) -> Settings:

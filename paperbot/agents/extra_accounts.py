@@ -499,10 +499,12 @@ def extras_tick(ctx: Any) -> dict:
             ref = refusal_of(state, p)
             if ref is not None and ref.get("permanent") is True and ref.get("code") in PERMANENT:
                 code = ref["code"]
-                if (code == "trial_status" and ref.get("detail") == "passed" and kind == "newlab"
-                        and t is not None and _repair_trial(conn, p, t, now)):
-                    out["repaired"].append(p["id"])
-                    continue
+                if (code == "trial_status" and ref.get("detail") == "passed" and kind == "newlab" and t is not None
+                        and t.get("kind") == "newlab"):
+                    if _repair_trial(conn, p, t, now):
+                        out["repaired"].append(p["id"])
+                    if (R.get_trial(conn, int(t["id"])) or {}).get("result", {}).get("status") == "proposed":
+                        continue                       # repaired: the runner checks it again at its next poll
                 text = f"제안 #{p['id']}을 코드가 거절로 닫았습니다: {REFUSAL_KO.get(code, code)}."
                 if code == "owner_click_missing":
                     text = "⚠️ " + text + " 운영자가 확인해 주세요."

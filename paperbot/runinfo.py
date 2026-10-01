@@ -26,12 +26,21 @@ TRADING_FILES = ("paperbot/engine.py", "paperbot/ladder.py", "paperbot/margin.py
                  "paperbot/config.py", "paperbot/models.py", "paperbot/accounts.py",
                  "paperbot/sigservice.py", "paperbot/aggregate.py", "paperbot/feed.py", "paperbot/live3.py")
 RULES_FILES = ("docs/paper-v3-rules.md", "docs/paper-v3-rules-addendum.md")
+# Files that decide only the extra accounts (paperbot/extras.py): their trading code and signals, and the
+# code that judges an approval at creation (not trading). A change is a Q5 event for the extras only.
+EXTRA_FILES = ("paperbot/extras.py", "paperbot/newlab_live.py", "paperbot/agents/newlab_signals.py",
+               "paperbot/context.py", "paperbot/recorder.py")
+EXTRA_GATE_FILES = ("paperbot/agents/newlab.py", "paperbot/agents/labtests.py", "paperbot/agents/actions.py",
+                    "paperbot/agents/rooms_db.py")
 
 # (key, what the owners see when it changes, does it touch fills/exits/sizing)
 WATCHED = (("commit", "코드 버전", False), ("trading_code", "체결·청산·사이즈 코드", True),
            ("settings", "설정", True), ("brackets", "레버리지 구간", True),
            ("signal_code", "잠긴 신호 코드", True), ("packages", "설치된 패키지", False),
            ("rules", "규칙 문서", False))
+# Kept apart from WATCHED (which applies to every account): (key, name, touches the extras' trading)
+EXTRA_WATCHED = (("extra_code", "추가 계좌 코드", True), ("extra_gate_code", "추가 계좌 승인 확인 코드", False))
+EXTRAS_ONLY_KO = "추가 계좌만 해당"
 
 
 def _sha(data: bytes) -> str:
@@ -87,24 +96,34 @@ def run_record(settings, brackets: dict, brackets_src: str, argv, signal_lock: O
         "signal_code": None if signal_lock is None else signal_lock.get("prereg_sha256_file"),
         "packages": packages_hash(),
         "rules": files_hash(RULES_FILES, root),
+        "extra_code": files_hash(EXTRA_FILES, root),
+        "extra_gate_code": files_hash(EXTRA_GATE_FILES, root),
         "python": platform.python_version(),
         "argv": list(argv),
     }
 
 
 def changes(prev: Optional[dict], cur: dict) -> list[dict]:
-    """What differs from the previous start (empty on the first run)."""
+    """What differs from the previous start (empty on the first run). Entries of EXTRA_WATCHED carry
+    ``extras_only``."""
     if prev is None:
         return []
-    return [{"key": k, "name": name, "trading": trading, "before": prev.get(k), "after": cur.get(k)}
-            for k, name, trading in WATCHED if prev.get(k) != cur.get(k)]
+    out = [{"key": k, "name": name, "trading": trading, "before": prev.get(k), "after": cur.get(k)}
+           for k, name, trading in WATCHED if prev.get(k) != cur.get(k)]
+    out += [{"key": k, "name": name, "trading": trading, "before": prev.get(k), "after": cur.get(k),
+             "extras_only": True}
+            for k, name, trading in EXTRA_WATCHED if prev.get(k) != cur.get(k)]
+    return out
 
 
 def change_text(ch: list[dict]) -> Optional[str]:
     if not ch:
         return None
-    names = ", ".join(c["name"] for c in ch)
-    if any(c["trading"] for c in ch):
+    names = ", ".join(c["name"] + (f"({EXTRAS_ONLY_KO})" if c.get("extras_only") else "") for c in ch)
+    if any(c["trading"] and not c.get("extras_only") for c in ch):
         return (f"재시작 때 바뀐 것: {names}. 체결·청산·사이즈에 영향이 있을 수 있어 규칙(Q5)상 "
                 "해당 30일 기간을 오늘부터 다시 셉니다. 규칙 관리자 확인 필요")
+    if any(c["trading"] for c in ch):
+        return (f"재시작 때 바뀐 것: {names}. 추가 계좌의 체결·신호 코드라 {EXTRAS_ONLY_KO}: 그 계좌들의 30일 기간을 "
+                "오늘부터 다시 셉니다(원래 195개 계좌는 그대로). 규칙 관리자 확인 필요")
     return f"재시작 때 바뀐 것: {names} (체결·청산·사이즈에는 영향 없음)"

@@ -242,9 +242,18 @@ sudo ls /etc/paperbot/
    sudo nano /etc/paperbot/live.env
    ```
    맨 아래에 `TELEGRAM_CHAT_BACKUP=<방 번호>` 한 줄을 넣고 저장합니다(이미 `TELEGRAM_CHAT_BACKUP=` 줄이 있으면 그 뒤에 적습니다).
+5. 서비스 파일이 설치돼 있는지 봅니다.
+   ```bash
+   ls /etc/systemd/system/paperbot-offsite.*
+   ```
+   - `.service`와 `.timer` 두 파일이 보이면 됩니다. `No such file`이 나오면(설치 스크립트가 아직 이 서비스를 설치하지 않는 버전) 아래 상자로 설치합니다. 켜지는 않습니다.
+     ```bash
+     sudo install -m 644 /opt/crypto-bot-research/deploy/paperbot-offsite.service /opt/crypto-bot-research/deploy/paperbot-offsite.timer /etc/systemd/system/
+     sudo systemctl daemon-reload
+     ```
+- 켜는 것은 11번에서, 첫 시험과 되살리기 연습은 12번에서 합니다.
 - 폰 저장 공간을 아끼려면 이 방을 알림 끄기(Mute)하고, 텔레그램의 파일 자동 다운로드를 끕니다(`docs/offsite-backup.md` 3번).
 - 암호를 걸고 싶을 때만 `docs/offsite-backup.md` 7번을 봅니다(선택). 암호를 잃으면 백업을 되살릴 수 없습니다.
-- 켜는 것은 11번에서, 첫 시험과 되살리기 연습은 12번에서 합니다.
 
 ---
 
@@ -393,16 +402,28 @@ sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.agents.rooms tick \
 
 ---
 
-## 10. 시작 전 최종 점검 (전부 OK여야 시작)
+## 10. 시작 전 최종 점검 ([고칠 것]이 없어야 시작)
 
-설치, 설정 파일, 바이낸스 키, 텔레그램, healthchecks, 대시보드, Tailscale, 에이전트 로그인을 한 번에 점검합니다.
+설치, 설정 파일, 바이낸스 키, 텔레그램, healthchecks, 대시보드, Tailscale, 서버 밖 백업, 에이전트 로그인을 한 번에 점검합니다.
 ```bash
 cd /opt/crypto-bot-research
 sudo /opt/paperbot/venv/bin/python -m paperbot.launchcheck --stage before --send-test --ping
 ```
-- `--send-test`: 텔레그램 단체방에 시험 메시지를 보냅니다. 단체방에 왔는지 봅니다.
+- `--send-test`: 텔레그램 단체방(서버 밖 백업 방 포함)에 시험 메시지를 보냅니다. 왔는지 봅니다.
 - `--ping`: healthchecks에 첫 신호를 보냅니다. healthchecks 화면이 회색 "new"에서 초록 "up"으로 바뀌는지 봅니다.
-- **모든 줄이 OK여야 합니다.** OK가 아닌 줄이 있으면 해당 단계로 돌아가 고친 뒤 이 점검을 다시 합니다: 바이낸스 키 → 4-1, 텔레그램 → 4-2, healthchecks → 5, 대시보드 → 6, Tailscale → 7, 에이전트 로그인 → 8, 5년 자료 → 9, 설치·서비스 → 3.
+
+줄마다 앞에 셋 중 하나가 붙습니다.
+- `[OK]`: 됐습니다.
+- `[고칠 것]`: 시작 전에 고칩니다. 줄 끝에 고치는 방법이 있습니다.
+- `[참고]`: 읽어 보기만 합니다. 대개 할 일이 없고, 할 일이 있으면 그 줄에 적혀 있습니다.
+
+**통과 조건:** `[고칠 것]` 줄이 하나도 없고, 맨 아래 결론이 `[OK] 시작 준비가 끝났습니다`로 시작하면 통과입니다. 모든 줄이 `[OK]`일 필요는 없습니다.
+- 제대로 준비된 서버에서도 늘 나오는 `[참고]`는 하나입니다: `이제 체크가 켜졌습니다: 약 6분 …`(`--ping`을 붙이면 나옴. 아래 "바로 11번으로"의 이유입니다).
+- 4-3을 건너뛰었으면 `서버 밖 백업 …` `[참고]`가 하나 더 나옵니다. 4-3을 하고 이 점검을 다시 합니다.
+- 그 밖의 `[참고]`(예: Tailscale 키 만료 날짜, CPU·메모리가 권장보다 적음)는 그 줄을 읽고, 할 일이 적혀 있으면 합니다. 모르겠으면 그 줄을 개발자에게 보여 줍니다.
+- `[고칠 것]`이 있으면 해당 단계로 돌아가 고친 뒤 이 점검을 다시 합니다: 바이낸스 키 → 4-1, 텔레그램 → 4-2, 서버 밖 백업 → 4-3, healthchecks → 5, 대시보드 → 6, Tailscale → 7, 에이전트 로그인 → 8, 5년 자료 → 9, 설치·서비스 → 3.
+- 에이전트 방(8~9번)이 아직 덜 됐는데 봇부터 켜고 싶으면 끝에 `--agents no`를 붙여 점검합니다. 에이전트 줄은 건너뛰고, 결론의 시작 명령에서도 에이전트 타이머가 빠집니다. 그때는 11번 상자 대신 그 결론 줄의 `시작:` 뒤 명령으로 켜고, 8~9번을 마친 뒤 `sudo systemctl enable --now paperbot-agents.timer paperbot-labmonthly.timer`로 에이전트를 켭니다.
+- 결론 줄의 `시작:` 뒤에는 이 서버에 맞춘 시작 명령이 나옵니다. 11번 상자와 같은 것을 켭니다.
 - 이 점검이 끝나면 **바로 11번**으로 갑니다. `--ping` 뒤 6분쯤 신호가 없으면 healthchecks가 "down" 알림을 보내기 때문입니다(11번에서 봇이 준비하는 몇 분 동안 "down"이 한 번 올 수 있고, 봇이 돌기 시작하면 "up"이 옵니다).
 
 **시작 시각 팁:** 30일 판정은 시작한 날(UTC 날짜)부터 셉니다. 한국 시간 **오전 9시 이후**에 켜면 첫 30일이 온전합니다. 오전 9시 전에 켜면 첫 기간이 거의 하루 짧아집니다.
@@ -416,8 +437,11 @@ sudo systemctl enable --now \
   paperbot-live3 paperbot-dash paperbot-liq \
   paperbot-daily3.timer paperbot-backup.timer paperbot-checkpoint.timer \
   paperbot-agents.timer paperbot-labmonthly.timer
+sudo systemctl enable --now paperbot-offsite.timer
 ```
-이 한 줄로 켜지는 것:
+- 상자 하나를 통째로 붙여 넣습니다. 마지막 줄(서버 밖 백업)에서 `does not exist`가 나오면 4-3의 5번(설치)을 하고 그 줄만 다시 붙여 넣습니다. 위의 것들은 이미 켜졌습니다.
+
+이 상자로 켜지는 것:
 
 | 이름 | 하는 일 |
 |---|---|
@@ -429,6 +453,7 @@ sudo systemctl enable --now \
 | `paperbot-checkpoint.timer` | 30일마다 판정 (매시 35분에 확인만) |
 | `paperbot-agents.timer` | 에이전트 방, 15분마다 |
 | `paperbot-labmonthly.timer` | 매달 재검사, 6일 03:30 |
+| `paperbot-offsite.timer` | 서버 밖 백업, 매일 09:15 (텔레그램 'paperbot 백업' 방) |
 
 - **`paperbot-executor`(주문 실행기)는 켜지 않습니다.** 실거래는 이 문서의 범위가 아닙니다(`docs/live-safety.md`).
 - 서버가 재부팅돼도 위의 것들은 저절로 다시 켜집니다.
@@ -454,7 +479,29 @@ sudo journalctl -u paperbot-live3 -f
 cd /opt/crypto-bot-research
 sudo /opt/paperbot/venv/bin/python -m paperbot.launchcheck --stage after
 ```
-- 모든 줄이 OK여야 합니다.
+- 통과 조건은 10번과 같습니다: `[고칠 것]` 줄이 없고, 맨 아래 결론이 `[OK] 봇이 정상으로 돌고 있습니다`로 시작하면 됩니다.
+- 제대로 돌면 `[참고]`는 보통 하나도 없습니다. 봇이 1분봉을 받고 있는지, 봇이 healthchecks에 신호를 보내고 있는지, 강제청산 기록기가 연결돼 있는지도 이 점검이 봅니다.
+- 시작한 지 10분이 안 됐으면 `봇이 아직 준비 중입니다`나 `첫 healthchecks.io 핑을 기다리는 중` `[참고]`가 나옵니다. 몇 분 뒤 다시 합니다.
+- `[고칠 것]`이 있으면 그 줄의 안내대로 합니다. 모르겠으면 13-7 "문제가 생기면"을 봅니다.
+
+### 15~30분 뒤: 에이전트 첫 회의 (꼭)
+8-4의 확인은 토큰이 들어 있는지만 봅니다. 토큰이 실제로 되는지는 첫 회의에서 알 수 있습니다.
+```bash
+sudo journalctl -u paperbot-agents -n 30 --no-pager
+```
+- 정상: `team:lab research: done (3 calls) ...`처럼 회의 이름, 결과, `(n calls)`가 있는 줄. 또는 `nothing due`(지금 열 회의가 없음).
+- `-- No entries --`면 아직 첫 차례 전입니다(15분마다). 15분 뒤 다시 봅니다.
+- `refusing to run the rooms`가 있거나, 줄 끝에 `error=`가 붙어 있으면 대개 Claude 토큰 문제입니다. 8-2(토큰 새로 만들기)와 8-4를 다시 하고 15분 뒤 다시 봅니다. 그래도 같으면 그 화면을 개발자에게 보여 줍니다.
+
+### 서버 밖 백업 첫 시험 (한 번)
+```bash
+sudo systemctl start paperbot-backup
+sudo systemctl start paperbot-offsite
+systemctl status paperbot-offsite --no-pager
+```
+- 끝날 때까지 몇 초~몇 분 걸립니다. `status=0/SUCCESS`가 보이고 'paperbot 백업' 방에 조각 파일과 목록 파일·요약이 오면 성공입니다.
+- `status=1/FAILURE`면 `sudo journalctl -u paperbot-offsite -n 50 --no-pager`로 이유를 보고 `docs/offsite-backup.md` 8번 표를 봅니다.
+- 처음 한 번은 되살리기 연습(`docs/offsite-backup.md` 9번 "연습")도 합니다. 백업은 되살려 봐야 믿을 수 있습니다.
 
 ### 대시보드
 1. 폰에서 Tailscale 앱을 켜고 `http://100.x.y.z:8080`을 열어 6번의 비밀번호로 들어갑니다.
@@ -473,11 +520,9 @@ sudo /opt/paperbot/venv/bin/python -m paperbot.launchcheck --stage after
 cd /opt/crypto-bot-research
 sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.live3 status --db /var/lib/paperbot/paper3.db
 systemctl list-timers 'paperbot-*' --no-pager
-sudo journalctl -u paperbot-agents -n 30 --no-pager
 ```
 - 첫 줄: `accounts 195, open positions ..., bust 0` 모양.
-- 둘째: 타이머 5개와 다음 실행 시각.
-- 셋째: 에이전트의 첫 실행 기록(15분 안).
+- 둘째: 타이머 6개(매일 점검, 백업, 서버 밖 백업, 판정, 에이전트, 매달 재검사)와 다음 실행 시각.
 
 ---
 
@@ -489,6 +534,7 @@ sudo journalctl -u paperbot-agents -n 30 --no-pager
 |---|---|---|
 | 08:00 | 시장분석팀 아침 회의 | 대시보드 '에이전트 방' |
 | 08:40 | DB 백업 (조용히) | 서버 `/var/backups/paperbot/` |
+| 09:15 | 서버 밖 백업: 위 백업을 묶어서 보냄 + 요약 | 텔레그램 'paperbot 백업' 방 **무음** |
 | 09:20 | 매일 점검 요약: `[날짜] 매일 점검: 재계산 일치 n/n · 거래 n건 · ...` | 텔레그램 **무음** |
 | 22:00 | 손익 복기팀 → 총괄 세 줄 요약 | 텔레그램 **무음** + 에이전트 방 |
 | 수시 | 개별 거래 | 대시보드만 |
@@ -514,7 +560,7 @@ df -h /
 - 첫 줄이 `0 loaded units listed`면 정상입니다. 백업·매일 점검·판정이 실패하면 **텔레그램 없이 여기에만** 나옵니다. 나오면 13-7을 봅니다.
 - 둘째: 최근 날짜 폴더(`20261008` 모양)가 있어야 합니다. 14일치가 남습니다.
 - 셋째: 사용률(Use%)이 80% 밑이면 됩니다.
-- healthchecks가 초록인지, Vultr 서버 화면 **Backups** 탭에 최근 백업이 있는지 봅니다.
+- healthchecks가 초록인지, 텔레그램 'paperbot 백업' 방에 매일 아침 요약이 왔는지(날짜가 이어지는지) 봅니다. 서버 밖 백업이 실패한 날은 알림 단체방에도 "서버 밖 백업 실패 …"가 옵니다(`docs/offsite-backup.md` 8번).
 - 대시보드 서버 상태 탭의 "최근 경고" 목록을 훑어봅니다.
 
 ### 13-3. 처음 21일: 관찰 기간
@@ -538,6 +584,7 @@ df -h /
 - 수정은 두 가지입니다.
   - **화면·운영 수정**(대시보드, 알림, 에이전트, 문서): 언제든 배포합니다.
   - **체결·청산·사이즈가 바뀔 수 있는 수정:** 영향을 받는 계좌의 현재 30일 기간을 **배포일부터 다시 셉니다**(판정이 뒤로 밀림). 그래서 몇 개씩 모아 한 번에, 가능하면 판정일 직후에 배포합니다.
+- `git fetch`·`git pull`은 2번에서 저장한 GitHub 토큰을 씁니다. `Authentication failed`가 나오면 토큰이 만료된 것입니다: 0-3대로 새 토큰을 만들고 같은 명령을 한 번 더 실행해 새 토큰을 넣습니다.
 - 받기 전에 체결·청산·사이즈 파일이 바뀌는지 볼 수 있습니다(아무것도 안 나오면 해당 없음).
   ```bash
   cd /root/crypto-bot-research
@@ -548,7 +595,8 @@ df -h /
     paperbot/aggregate.py paperbot/feed.py paperbot/live3.py
   ```
   (이 목록은 `paperbot/runinfo.py`의 `TRADING_FILES`와 같습니다. 봇은 이 밖에 설정, 바이낸스 레버리지 구간, 잠긴 신호 코드가 바뀌어도 같은 알림을 보냅니다.)
-- **피할 시간:** 매일 08:30~09:40(백업·매일 점검), 판정일 09:30~10:30, 매달 6일 03:00~07:00(매달 재검사). 업데이트가 이 작업들을 멈추지 않아서, 도는 중에 코드가 바뀔 수 있습니다.
+- **피할 시간:** 매일 08:30~09:40(백업·서버 밖 백업·매일 점검), 판정일 09:30~10:30, 매달 6일 03:00~07:00(매달 재검사). 업데이트가 이 작업들을 멈추지 않아서, 도는 중에 코드가 바뀔 수 있습니다.
+- 설치 스크립트가 `Could not get lock`으로 멈추면 서버가 자동 보안 업데이트를 하는 중입니다. 5~10분 뒤 같은 명령을 다시 실행합니다.
 - 업데이트 순서:
   1. (선택) healthchecks에서 체크를 **Pause**. 봇이 다시 준비하는 몇 분 동안 "down" 알림이 오지 않게 합니다. 다음 신호가 오면 감시가 저절로 다시 시작됩니다.
   2. 배포:
@@ -571,11 +619,11 @@ df -h /
   ```
   되돌리기도 배포라서 체결 코드가 바뀌면 Q5가 똑같이 적용됩니다. 다음에 새 코드를 받을 때는 `git checkout claude/keen-pasteur-wav02u && git pull`부터 합니다.
 
-### 13-6. 백업 (보충 규칙 Q10)
+### 13-6. 백업 (보충 규칙 Q10, Vultr 자동 백업 대신 텔레그램)
 - **서버 안, 매일:** 08:40 `/var/backups/paperbot/<날짜>/`에 14일치. agents3(가설 장부), inbox(두 분 글·승인), liq(강제청산), checkpoint(판정), daily3(매일 점검), paper3(계좌). 실거래 기록(exec)이 생기면 그것도.
-- **서버 통째로:** Vultr 자동 백업(1번에서 켬). 서버 화면 → **Backups** 탭에 목록이 있습니다.
+- **서버 밖, 매일:** 09:15 위 백업을 묶어서 텔레그램 'paperbot 백업' 방으로 보냅니다(4-3, `docs/offsite-backup.md`). 두 분은 비용 때문에 Vultr 자동 백업을 켜지 않았습니다(1-5). 그래서 서버가 사라지면 이 텔레그램 사본이 유일한 사본입니다.
 - **DB 하나를 되살릴 때:** 순서를 꼭 지켜야 파일이 깨지지 않습니다. `docs/agent-rooms.md`의 "데이터베이스를 백업에서 되살릴 때"를 따릅니다. 거기 적힌 것 외에, `liq.db`를 되살릴 때는 `paperbot-liq`도, `checkpoint.db`를 되살릴 때는 `paperbot-checkpoint.timer paperbot-checkpoint.service`도 먼저 멈춥니다.
-- **서버를 통째로 잃었을 때:** Vultr → 서버 → Backups → 날짜 고르기 → **Restore**. 서버가 그 백업 시점으로 돌아갑니다(그 뒤 기록은 사라짐). 봇은 저장된 상태에서 이어서 돌고, 꺼져 있던 동안의 신호는 "늦음"으로 기록만 됩니다. 에이전트의 AI 사용 기록도 그 시점으로 돌아가므로, `docs/agent-rooms.md`의 안내대로 그날은 `sudo systemctl stop paperbot-agents.timer`로 에이전트를 쉬게 하고 다음 날 `sudo systemctl start paperbot-agents.timer`로 켭니다. 되살린 뒤 12번 확인을 다시 하고 개발자에게 알립니다.
+- **서버를 통째로 잃었을 때:** `docs/offsite-backup.md` 9번 "새 서버에 되살리기"를 따릅니다. 새 서버를 1~8번대로 만들고, 텔레그램에서 마지막 백업을 내려받아 DB를 되살린 뒤 11번으로 켜고 12번으로 확인합니다. **10번(시작 전 점검)은 하지 않습니다:** 되살린 paper3.db를 "예전 시작 기록"으로 보고 옮기라는 줄이 나오는데, 따르면 되살린 기록이 빠집니다. 마지막 백업(08:40) 뒤의 기록은 없습니다(최대 하루). 봇은 백업 시점의 상태에서 이어서 돌고, 꺼져 있던 동안의 신호는 "늦음"으로 기록만 됩니다. 에이전트의 AI 사용 기록도 그 시점으로 돌아가므로, 그날은 `sudo systemctl stop paperbot-agents.timer`로 에이전트를 쉬게 하고 다음 날 `sudo systemctl start paperbot-agents.timer`로 켭니다(`docs/agent-rooms.md`). 되살린 뒤 12번 확인을 다시 하고 개발자에게 알립니다.
 
 ### 13-7. 문제가 생기면
 
@@ -612,11 +660,12 @@ df -h /
 - 서버 쪽 Tailscale이 끊겼으면 `sudo tailscale up` 후 7번의 "키 만료 끄기"를 확인합니다.
 
 **텔레그램이 안 옴**
-- 시험 메시지를 직접 보내 봅니다(토큰은 파일에서 읽음).
+- 설정된 방마다 시험 메시지를 보내 봅니다(토큰은 화면에 나오지 않음).
   ```bash
-  sudo bash -c 'set -a; . /etc/paperbot/live.env; curl -s -d chat_id="$TELEGRAM_CHAT_CRITICAL" -d text="paperbot test" "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage"'
+  cd /opt/crypto-bot-research
+  sudo /opt/paperbot/venv/bin/python -m paperbot.launchcheck --stage after --send-test
   ```
-- 결과에 `"ok":true`가 있고 단체방에 메시지가 오면 정상입니다.
+- `텔레그램` 칸의 줄이 모두 `[OK] 시험 메시지 보냄`이고 단체방에 메시지가 오면 정상입니다.
 - `chat not found`나 `upgraded to a supergroup`이 나오면 방 번호가 바뀐 것입니다(단체방 설정을 바꾸면 바뀔 수 있음). 4-2의 방 번호 찾기를 다시 하고, `live.env`와 `agents.env` 둘 다 고친 뒤 `sudo systemctl restart paperbot-live3`.
 - `Unauthorized`면 봇 토큰이 틀린 것입니다. BotFather에서 토큰을 다시 확인합니다.
 
@@ -658,7 +707,7 @@ sudo journalctl -u <그 이름> -n 50 --no-pager
 | 계좌 요약 | `cd /opt/crypto-bot-research && sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.live3 status --db /var/lib/paperbot/paper3.db` |
 | 에이전트 | 15분마다 자동. 기록: `sudo journalctl -u paperbot-agents -n 50 --no-pager`. 끄기: `sudo systemctl disable --now paperbot-agents.timer`(방과 기록은 남음). 설정: `docs/agent-rooms.md` "설정 바꾸기" |
 | 매달 재검사 | 매달 6일 03:30(한국 시간). 5년 자료 뒤의 새 기간으로 다시 계산해 총괄 방에 요약 |
-| 백업 | 매일 08:40(한국 시간) `/var/backups/paperbot/날짜/`, 14일 보관. 서버 통째로는 Vultr 자동 백업 |
+| 백업 | 매일 08:40(한국 시간) `/var/backups/paperbot/날짜/`, 14일 보관. 서버 밖 사본은 매일 09:15 텔레그램 'paperbot 백업' 방(`docs/offsite-backup.md`, Vultr 자동 백업은 쓰지 않음) |
 | 코드 업데이트 | `cd /root/crypto-bot-research && git pull && sudo bash deploy/install.sh`. 배포는 **한 분만** 합니다. 커밋 안 된 수정이 있으면 멈추고, 돌던 서비스는 교체하는 순간만 멈췄다가 다시 켜집니다. 이전 코드는 `/opt/crypto-bot-research.old`에 남습니다. 봇은 켜질 때마다 코드 버전·설정을 기록하고, 체결·청산·사이즈 코드가 바뀌었으면 알림을 보냅니다(규칙상 그 기간을 다시 셈). 13-5 참고 |
 | 최종 점검 다시 | `cd /opt/crypto-bot-research && sudo /opt/paperbot/venv/bin/python -m paperbot.launchcheck --stage after` |
 | 비밀번호 로그인 끄기 (권장) | SSH 키를 등록하고 **키로 접속되는 것을 확인한 뒤** `echo 'PasswordAuthentication no' \| sudo tee /etc/ssh/sshd_config.d/00-paperbot.conf && sudo systemctl restart ssh`. 확인: `sudo sshd -T \| grep -i passwordauthentication`이 `no`. `/etc/ssh/sshd_config`만 고치면 Vultr가 넣어 둔 `sshd_config.d` 설정이 이겨서 효과가 없을 수 있습니다. 지금 접속은 끊지 말고 새 창으로 키 접속을 먼저 시험합니다. 키 등록 전에 끄면 들어갈 수 없게 되니, Vultr 웹 콘솔이 되는지 먼저 확인 |

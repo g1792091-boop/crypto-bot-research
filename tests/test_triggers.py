@@ -655,3 +655,127 @@ def test_a_file_that_is_not_a_database_reads_as_empty(w):
     bad = sqlite3.connect(w.paths["daily"])
     assert T._rows(bad, "SELECT * FROM reports") == []
     bad.close()
+
+
+# ------------------------------------------------------------------ extra paper accounts (copies, new strategies)
+def _copy(w, aid=f"{S}@15m~c1", parent=f"{S}@15m"):
+    w.store.add_account(aid, S, "15m", "copy", START + 21 * DAY, "paper-v3", parent=parent,
+                        data={"v": 1, "kind": "copy", "rule": {"template": "stop_atr", "k": 2.5}})
+    w.store.commit()
+    return aid
+
+
+def _ctrade(w, aid, pnl, exit_time, tf="15m", strategy=S, **kw):
+    w.store.trade(aid, rec(strategy, tf, pnl, exit_time, **kw))
+    w.store.commit()
+
+
+def _world(tmp_path, name):
+    (tmp_path / name).mkdir()
+    return World(tmp_path / name, START)
+
+
+def test_triggers_copy_losses_in_parent_room(w, tmp_path):
+    t = QUIET
+    aid = _copy(w)
+    for k in range(3):                                         # only the copy lost
+        _ctrade(w, aid, -10.0, t - 5 * HOUR + k * MIN)
+    ds = w.due(t)
+    assert keys(ds) == [(ROOM, "loss_cluster", 2)]
+    d = ds[0]
+    assert d.data["extras"] is True and d.data["extra_accounts"] == [aid] and d.data["losses"] == 3
+    assert "복제 계좌 손실 3건" in d.data["summary_ko"]
+    # with the original's own losses the meeting is the room's usual one (the copy's losses are evidence too)
+    w2 = _world(tmp_path, "two")
+    aid2 = _copy(w2)
+    for k in range(3):
+        w2.trade(f"{S}@15m", -10.0, t - 5 * HOUR + k * MIN)
+    _ctrade(w2, aid2, -10.0, t - 4 * HOUR)
+    d2 = w2.due(t)[0]
+    assert "extras" not in d2.data and d2.data["losses"] == 4 and d2.data["extra_accounts"] == [aid2]
+    # two of the original's and one of the copy's: opened only because of the copy -> extras
+    w3 = _world(tmp_path, "three")
+    aid3 = _copy(w3)
+    for k in range(2):
+        w3.trade(f"{S}@15m", -10.0, t - 5 * HOUR + k * MIN)
+    _ctrade(w3, aid3, -10.0, t - 4 * HOUR)
+    assert w3.due(t)[0].data["extras"] is True
+    # a bust of the copy opens a bust meeting in its parent's room, marked extras
+    w.run(d, t)
+    w.store.put_state("accounts", t + MIN, {"engines": {aid: {"bust": True}}})
+    w.store.commit()
+    ds = w.due(t + 2 * MIN)
+    assert keys(ds) == [(ROOM, "bust", 2)] and ds[0].data["accounts"] == [aid] and ds[0].data["extras"] is True
+    assert "복제 계좌" in ds[0].data["summary_ko"]
+    # the 195-only due data is unchanged (no extras keys)
+    w4 = _world(tmp_path, "four")
+    for k in range(3):
+        w4.trade(f"{S}@15m", -10.0, t - 5 * HOUR + k * MIN)
+    d4 = w4.due(t)[0]
+    assert "extras" not in d4.data and "extra_accounts" not in d4.data and "복제" not in d4.data["summary_ko"]
+
+
+def test_triggers_copy_trades_count_in_the_weekly_review(w):
+    t = kst(2026, 10, 6, 15, 0)                                 # Tuesday: N17's weekly day
+    aid = _copy(w)
+    for k in range(30):
+        _ctrade(w, aid, 1.0, t - 2 * DAY + k * MIN)
+    ds = w.due(t, only="weekly")
+    assert keys(ds) == [(ROOM, "weekly", 4)] and ds[0].data["extras"] is True and ds[0].data["trades"] == 30
+
+
+def test_triggers_newlab_dues_in_lab_room(w):
+    t = QUIET
+    w.store.add_account("NL1@1h", "NL1", "1h", "newlab", START + 21 * DAY, "paper-v3",
+                        data={"v": 1, "kind": "newlab", "label_ko": "새 매매법 NL1 (장부 #57) · 1시간"})
+    w.store.commit()
+    for k in range(3):
+        _ctrade(w, "NL1@1h", -9.0, t - 5 * HOUR + k * MIN, tf="1h", strategy="NL1")
+    ds = w.due(t)
+    assert keys(ds) == [("team:lab", "loss_cluster", 2)]
+    d = ds[0]
+    assert d.data["extras"] is True and d.data["accounts"] == ["NL1@1h"] and "새 매매법 계좌" in d.data["summary_ko"]
+    assert d.data["cursors"] == {"loss:team:lab": str(w.store.conn.execute("SELECT MAX(id) FROM trades").fetchone()[0])}
+    w.run(d, t)
+    assert w.due(t + MIN) == []
+    # a bust (saved state): once, cursor bust:<account>
+    w.store.put_state("accounts", t + MIN, {"engines": {"NL1@1h": {"bust": True}}})
+    w.store.commit()
+    ds = w.due(t + 2 * MIN)
+    assert keys(ds) == [("team:lab", "bust", 2)] and ds[0].data["accounts"] == ["NL1@1h"]
+    assert "bust:NL1@1h" in ds[0].data["cursors"]
+    w.run(ds[0], t + 2 * MIN)
+    assert w.due(t + 3 * MIN) == []
+    # the weekly review: Sunday KST, 30 closed trades since the last one
+    for k in range(30):
+        _ctrade(w, "NL1@1h", 1.0, t + HOUR + k * MIN, tf="1h", strategy="NL1")
+    sunday = kst(2026, 10, 11, 15, 0)
+    ds = w.due(sunday, only="weekly")
+    assert keys(ds) == [("team:lab", "weekly", 4)] and ds[0].data["key"] == "weekly:lab:2026-10-11"
+    assert ds[0].data["extras"] is True and "weekly:team:lab" in ds[0].data["cursors"]
+    assert w.due(kst(2026, 10, 10, 15, 0), only="weekly") == []          # Saturday: not its day
+
+
+def test_extras_budget_line(w):
+    t = QUIET
+    aid = _copy(w)
+    for k in range(3):
+        _ctrade(w, aid, -10.0, t - 5 * HOUR + k * MIN)
+    pol = TriggerPolicy(extras_meetings_per_day=1)
+    ds = w.due(t, pol)
+    assert keys(ds) == [(ROOM, "loss_cluster", 2)]
+    w.run(ds[0], t)
+    for k in range(3):                                          # more copy losses, 4h later: the line is used up
+        _ctrade(w, aid, -10.0, t + HOUR + k * MIN)
+    assert w.due(t + 5 * HOUR, pol) == []
+    assert keys(w.due(t + 5 * HOUR)) == [(ROOM, "loss_cluster", 2)]          # the default line (6) has room
+    nxt = kst(2026, 10, 8, 15, 0)                                # the next KST day
+    assert keys(w.due(nxt, pol)) == [(ROOM, "loss_cluster", 2)]
+    # extras meetings never use the room's daily slots, and the 195's meetings never wait for the extras line
+    for k in range(3):
+        w.say(ROOM, f"질문 {k}", t + 6 * HOUR + k * MIN)
+        ds = w.due(t + 6 * HOUR + k * MIN + 1, pol, only="owner")
+        assert keys(ds) == [(ROOM, "owner", 1)]
+        w.run(ds[0], t + 6 * HOUR + k * MIN + 1)
+    st = T._Rooms(w.agents, t + 7 * HOUR, pol)
+    assert st.rounds_today(ROOM) == 3 and st.extras_today() == 1

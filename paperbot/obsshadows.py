@@ -194,6 +194,15 @@ def closed_trades(conn, start: int, end: int) -> list[tuple[str, dict]]:
         "SELECT account_id, data FROM trades WHERE exit_time >= ? AND exit_time < ? ORDER BY id", (start, end))]
 
 
+def copy_accounts(conn) -> set:
+    """Ids of the copy accounts (paperbot/extras.py): their trades repeat the parent's signal, so they get no
+    trade shadows of their own (the parent's are the same signal)."""
+    try:
+        return {r[0] for r in conn.execute("SELECT account_id FROM accounts WHERE kind = 'copy'")}
+    except Exception:  # noqa: BLE001  a database without the accounts table
+        return set()
+
+
 def first_signal(conn, start: int, end: int) -> Optional[int]:
     """Earliest signal bar close (within LOOKBACK_MS) among the day's closed trades, if before ``start``."""
     bcs = [t["signal_ts"] + 1 for _, t in closed_trades(conn, start, end)]
@@ -217,6 +226,8 @@ def trade_shadows(settings: Settings, brackets, specs, conn, day: str, start: in
                   make_signal, quality: bool = False) -> tuple[list[dict], dict]:
     """Rows for the shadows table (one per closed trade and variant) and counts of trades left out.
     ``steps`` must reach back to the earliest signal (``first_signal``); ``make_signal`` is daily3's.
+    Trades of copy accounts are left out (counted in info["copy_trades"]); new-strategy accounts' trades are
+    shadowed like the others (their signal rows are their own).
     ``quality``: also run the quality variant (docs/observation-shadows-2.md) for every trade whose
     signal has a usable strength record; the others are counted in info["no_quality"] (by reason in
     info["no_quality_reasons"])."""
@@ -227,7 +238,11 @@ def trade_shadows(settings: Settings, brackets, specs, conn, day: str, start: in
     info = {"closed": 0, "no_signal": 0, "no_steps": 0}
     if quality:
         info.update(no_quality=0, no_quality_reasons={})
+    copies = copy_accounts(conn)
     for aid, t in closed_trades(conn, start, end):
+        if aid in copies:                       # a copy repeats its parent's signal: the parent's shadow is it
+            info["copy_trades"] = info.get("copy_trades", 0) + 1
+            continue
         info["closed"] += 1
         bc = t["signal_ts"] + 1
         i0 = idx.get(bc)

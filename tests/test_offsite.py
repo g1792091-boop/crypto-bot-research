@@ -630,6 +630,46 @@ def test_zstd_round_trip(tmp_path):
     assert (tmp_path / "o" / DATE / "agents3.db").read_bytes() == (folder / "agents3.db").read_bytes()
 
 
+@needs_openssl
+@pytest.mark.skipif(shutil.which("zstd") is None, reason="zstd not installed")
+def test_zstd_and_encryption_stream_into_one_archive(tmp_path):
+    # tar -> zstd -> openssl is one pipe: the work folder only ever holds the encrypted archive
+    root, lib, folder = make_backup(tmp_path)
+    seen = []
+
+    def sender(url, body, headers, timeout):
+        seen.append(sorted(p.name for w in tmp_path.glob("paperbot-offsite-*") for p in w.iterdir()))
+        return 200, json.dumps({"ok": True, "result": {}}).encode()
+
+    fake = FakeTelegram()
+
+    def both(*a):
+        sender(*a)
+        return fake(*a)
+
+    env = {**ENV, "BACKUP_PASSPHRASE": "zstd-and-openssl-passphrase"}
+    m = send(tmp_path, root, lib, both, env=env, which=shutil.which)
+    assert m["archive"] == f"paperbot-{DATE}.tar.zst.enc" and m["compression"] == "zstd" and m["encrypted"]
+    assert all(names == [m["archive"]] for names in seen)
+    files = save_downloads(fake, tmp_path / "dl")
+    assert b"".join(f.read_bytes() for f in files[:-1]).startswith(b"Salted__")
+    assert off.restore_backup(files, tmp_path / "o", env={"BACKUP_PASSPHRASE": "zstd-and-openssl-passphrase"},
+                              which=shutil.which, log=lambda s: None) == 0
+    for name in m["databases"]:
+        assert (tmp_path / "o" / DATE / name).read_bytes() == (folder / name).read_bytes()
+
+
+def test_a_failing_compressor_fails_the_send(tmp_path):
+    root, lib, _ = make_backup(tmp_path, rows=5)
+    broken = tmp_path / "zstd"
+    broken.write_text("#!/bin/sh\necho 'zstd: out of space' >&2\nexit 1\n")
+    broken.chmod(0o755)
+    fake = FakeTelegram()
+    with pytest.raises(off.OffsiteError, match="zstd 압축 실패 \\(exit 1\\): zstd: out of space"):
+        send(tmp_path, root, lib, fake, which=lambda n: str(broken) if n == "zstd" else shutil.which(n))
+    assert fake.calls == [] and not list(tmp_path.glob("paperbot-offsite-*"))
+
+
 # ---------------------------------------------------------------- chats
 def test_chats_lists_ids_and_titles(capsys):
     fake = FakeTelegram([(200, {"ok": True, "result": [

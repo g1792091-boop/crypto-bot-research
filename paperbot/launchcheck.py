@@ -108,7 +108,8 @@ LAB_BUILD = ("sudo systemd-run --uid=paperbot --gid=paperbot --unit=paperbot-lab
 OFFSITE_INSTALL = ("sudo install -m 644 /opt/crypto-bot-research/deploy/paperbot-offsite.service "
                    "/opt/crypto-bot-research/deploy/paperbot-offsite.timer /etc/systemd/system/ && "
                    "sudo systemctl daemon-reload")
-# `claude setup-token` prints sk-ant-oat01- and about 95 more characters; an API key starts sk-ant-api
+# `claude setup-token` prints sk-ant-oat01- and a long run of base64url characters (well over 60, an
+# assumption from the tokens seen, not a documented length); an API key starts sk-ant-api
 CLAUDE_TOKEN_RE = re.compile(r"sk-ant-oat\d\d-[A-Za-z0-9_-]+")
 CLAUDE_TOKEN_MIN_TAIL = 60
 
@@ -454,8 +455,7 @@ def _claude_token_format(ef: EnvFile, level: Callable[[str], Line] = fix) -> lis
         return [level(f"{where} 모양이 구독 토큰(sk-ant-oat01-로 시작, 영문·숫자·-·_만)이 아닙니다: {redo}")]
     tail = len(tok) - len("sk-ant-oat01-")
     if tail < CLAUDE_TOKEN_MIN_TAIL:
-        return [level(f"{where}이 너무 짧습니다(sk-ant-oat01- 뒤 {tail}자, 보통 90자 넘음): 끝까지 복사되지 않은 것 "
-                    f"같습니다. {redo}")]
+        return [level(f"{where}이 너무 짧습니다(sk-ant-oat01- 뒤 {tail}자): 끝까지 복사되지 않은 것 같습니다. {redo}")]
     return []
 
 
@@ -909,8 +909,9 @@ def _ufw_rules(text: str) -> list[tuple[str, str]]:
     `ufw status verbose`."""
     rules = []
     for row in text.splitlines():
-        m = re.match(r"(.+?)\s{2,}(ALLOW|LIMIT)\b(?!\s+OUT)", row)
-        if m:
+        # the 'To' column is padded, but a long one ("Anywhere (v6) on tailscale0") leaves a single space
+        m = re.match(r"(.+?)\s+(?:ALLOW|LIMIT)(?:\s+(IN|OUT|FWD))?\s+\S", row)
+        if m and m.group(2) in (None, "IN"):
             rules.append((m.group(1).strip(), " ".join(row.split())))
     return rules
 
@@ -1377,7 +1378,8 @@ def check_paper_db(ctx: Ctx, stage: str, deadman_set: bool = False) -> list[Line
             return [note(f"이미 {kst_text(start)}(한국 시간)에 시작한 기록이 있습니다({age // 3_600_000}시간 전): "
                          "30일 판정과 관찰 기간은 이때부터 셉니다. 시작한 뒤의 점검은 --stage after")]
         return [fix(f"{age // DAY_MS}일 전({kst_day(start)})에 시작한 기록이 paper3.db에 남아 있습니다: 30일 판정과 "
-                    "관찰 기간이 그날부터 셉니다. 이어서 돌리는 것이면 --stage after로 확인하세요. 시험으로 돌린 것이면 "
+                    "관찰 기간이 그날부터 셉니다. 이어서 돌리는 것(재시작, 백업에서 되살림)이면 옮기지 말고 --stage after로 "
+                    "확인하세요. 시험으로 돌린 것이면 "
                     "새로 시작하기 전에 아래 명령으로 옮기세요(백업 폴더 안 old-날짜 폴더로, 14일 뒤 저절로 지워짐): "
                     + move_old_db_command(ctx))]
     out: list[Line] = []

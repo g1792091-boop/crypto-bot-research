@@ -1,12 +1,15 @@
 # Off-site copy of the nightly database backup to a private Telegram group (paperbot/offsite.py,
 # docs/offsite-backup.md). The server has no Vultr automatic backups, so the copies that
 # paperbot-backup.service writes to /var/backups/paperbot/<date>/ would be lost with the server.
-# Started by paperbot-offsite.timer 35 minutes after the backup: takes that folder (refuses it when a
-# copy is missing or still being written), packs it (tar + zstd, gzip without zstd), encrypts it with
-# the openssl program only when BACKUP_PASSPHRASE is set, splits it into 45 MB parts (Telegram's limit is
-# 50 MB) and uploads them with a manifest and a short Korean summary to TELEGRAM_CHAT_BACKUP (empty: the
-# CRITICAL chat, with a note). Any failure sends a Korean WARN through the usual alert chat and fails the
-# unit (systemctl --failed). The server's own copies are not touched.
+# Started by paperbot-offsite.timer 35 minutes after the backup: takes that folder, packs every good copy
+# (tar + zstd, gzip without zstd), encrypts it with the openssl program only when BACKUP_PASSPHRASE is set,
+# splits it into 45 MB parts (Telegram's limit is 50 MB) and uploads them with a manifest and a short
+# Korean summary to TELEGRAM_CHAT_BACKUP (empty: the CRITICAL chat, with a note). A copy that is missing
+# or still being written does not keep the others off-site: they are sent, then the run fails.
+# Any failure sends a Korean WARN through the usual alert chat and fails the unit (systemctl --failed):
+# also a stop by systemd (the job stops itself after 50 minutes; SIGTERM at the 60-minute timeout or a
+# reboot becomes the same WARN), and a kill it cannot answer (memory limit) through ExecStopPost.
+# The server's own copies are not touched.
 # Reads the backup folder and checks which live databases exist; opens none of them and writes nothing
 # outside its private /tmp: it is not a writer of any database.
 [Unit]
@@ -22,13 +25,19 @@ WorkingDirectory=/opt/crypto-bot-research
 # TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_BACKUP (and the CRITICAL/WARN chats for the failure alert), optional
 # BACKUP_PASSPHRASE. systemd reads the file before the sandbox below applies; the job itself cannot open it.
 EnvironmentFile=/etc/paperbot/live.env
+# The rest of live.env is not this job's business: the exchange key and the dead-man URL never reach it.
+UnsetEnvironment=BINANCE_API_KEY BINANCE_API_SECRET DEADMAN_URL
 ExecStart=/opt/paperbot/venv/bin/python -m paperbot.offsite send --from /var/backups/paperbot --chat-env TELEGRAM_CHAT_BACKUP --lib /var/lib/paperbot
+# A run that systemd killed before it could alert (memory limit, SIGKILL) gets its WARN here; a run that
+# ended by itself already alerted. '-': this hook never changes the unit's result.
+ExecStopPost=-/opt/paperbot/venv/bin/python -m paperbot.offsite stopped
 # The live runner comes first: compression gets little CPU and disk time.
 Nice=15
 CPUWeight=20
 IOSchedulingClass=idle
 MemoryMax=1G
-TimeoutStartSec=30min
+# offsite.RUN_LIMIT_S (50 min) ends the uploads first, with a WARN; the next run is 24 hours later.
+TimeoutStartSec=60min
 # The archive is built in a private /tmp (removed when the job ends); everything else is read-only.
 NoNewPrivileges=yes
 PrivateTmp=yes
@@ -37,9 +46,25 @@ ProtectSystem=strict
 ProtectHome=yes
 ProtectKernelTunables=yes
 ProtectKernelModules=yes
+ProtectKernelLogs=yes
 ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProcSubset=pid
 RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 LockPersonality=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+UMask=0077
+# no core dump (it would hold the token and the passphrase)
+LimitCORE=0
 # '-': a missing folder is reported by the job itself (Korean WARN), not as a sandbox set-up failure
 ReadOnlyPaths=-/var/backups/paperbot -/var/lib/paperbot
-InaccessiblePaths=-/etc/paperbot/live.env -/etc/paperbot/agents.env -/etc/paperbot/dash.env -/etc/paperbot/executor.env
+# All of /etc/paperbot (the env files, executor.json, brackets.json, any future file), and the parts of the
+# paperbot user's home (/var/lib/paperbot) that are not databases: the Claude Code login, its program,
+# the lab caches. The job only looks at /var/lib/paperbot/*.db and exec/*.db.
+InaccessiblePaths=-/etc/paperbot -/var/lib/paperbot/.claude -/var/lib/paperbot/.claude.json -/var/lib/paperbot/.local -/var/lib/paperbot/.cache -/var/lib/paperbot/.config -/var/lib/paperbot/.npm -/var/lib/paperbot/lab

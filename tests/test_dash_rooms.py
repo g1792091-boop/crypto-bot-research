@@ -688,3 +688,35 @@ console.log(JSON.stringify({tok: classBar({calls: 5, cap_calls: 20, tokens: 4800
   none: classBar({calls: 3, tokens: 50000})}));
 """)
     assert "width:96%" in got["tok"] and "width:90%" in got["calls"] and got["none"] == ""
+
+
+def test_proposal_cards_for_new_strategies_started_accounts_and_runtime_refusals():
+    """A new-strategy proposal card (its proposal number, ledger number, the lab's count), a proposal whose
+    account started (no reject button), one the runner waits on for a fresh click ('다시 승인'), and the
+    approve confirmation once the runner's feature is deployed."""
+    got = _js(("agentsState", "decisionWhen", "decideButtons", "newlabKo", "testKo", "propCard"), """
+const now = 1e12;
+var DIR_KO = {long: "롱만", short: "숏만", both: "롱·숏"};
+var rs = {confirm: null, ov: {ready: true, now, tick_every_ms: 900000, last_tick: {ts: now, ok: true}, rooms: []}};
+const lab = {id: 5, kind: "newlab", status: "awaiting_owner", effective_status: "awaiting_owner", trial_id: 57,
+  change: {kind: "newlab", proposal: {description_ko: "1시간 RSI 되돌림 (롱만)"}, account: {spec: {timeframe: "1h"}}},
+  gate: {pass: true, n_tests: 3, reasons: ["① 통과"]}, gate_now: {pass: true, n_trials: 4}, owner_decision: null,
+  runtime_ready: true, account_running: null, runtime_refusal: null};
+const run = {id: 6, kind: "copy", status: "approved", effective_status: "approved", trial_id: 3, strategy_ko: "켈트너·RSI",
+  change: {test: {template: "stop_atr", k: 2.5}, account: {parent: "N17_KC_RSI@15m"}}, gate: {pass: true, n_trials: 1},
+  gate_now: {pass: true, n_trials: 1}, owner_decision: null, runtime_ready: true,
+  account_running: {account_id: "N17_KC_RSI@15m~c1", label_ko: "켈트너·RSI 15분 복제 c1", extra_status: "suspended"}};
+const stale = {...run, id: 7, account_running: null,
+  runtime_refusal: {code: "stale_ok", text_ko: "한 번 더 승인해야 시작합니다", proposal_ts: 1}};
+rs.confirm = {id: 5, dec: "approve"};
+const confirm = propCard(lab);
+rs.confirm = null;
+console.log(JSON.stringify({lab: propCard(lab), run: propCard(run), stale: propCard(stale), confirm}));
+""")
+    assert "새 매매법 제안 #5 · 장부 #57" in got["lab"] and "1시간 RSI 되돌림 (롱만)" in got["lab"]
+    assert "새 매매법 시험 4번 기준" in got["lab"] and "새 매매법 시험 5번 기준" in got["lab"]
+    assert 'data-dec="approve"' in got["lab"]
+    assert "계좌 시작됨" in got["run"] and "N17_KC_RSI@15m~c1" in got["run"] and "멈춤(보류)" in got["run"]
+    assert 'data-dec="reject"' not in got["run"] and "원본 계좌 N17_KC_RSI@15m" in got["run"]
+    assert "다시 승인" in got["stale"] and "실행기: 한 번 더 승인해야 시작합니다" in got["stale"]
+    assert "다음 5분 봉 경계" in got["confirm"] and "거절로 멈출 수 없습니다" in got["confirm"]

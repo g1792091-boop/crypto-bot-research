@@ -702,7 +702,7 @@ def _new_state(now: int) -> dict:
             "hwm": {"room_tests": {}, "newlab_tests": 0}, "created": {}, "refused": {}, "accounts": {},
             "events": [], "counts": {"copy": 0, "newlab": 0},
             "health": {"hook_ms": None, "phase2_ms": None, "newlab_jobs": 0, "budget_skips": 0, "errors": 0,
-                       "last_error": None, "skipped_boundaries": {}}}
+                       "last_error": None, "skipped_boundaries": {}, "skipped_runs": []}}
 
 
 class Journal:
@@ -841,8 +841,20 @@ class Extras:
         elif level == WARN and digest:
             self.digest.add(text)
 
-    def _event(self, aid: str, event: str, code: Optional[str] = None, detail: str = "", **extra) -> None:
-        ev = {"ts": self.clock(), "account_id": aid, "event": event, "code": code, "detail": str(detail)[:300]}
+    def _effective(self) -> int:
+        """From which 1m step a state change applies (daily3 and checkpoint read it): the next step."""
+        r = self.runner
+        if r is not None and r.skip_before is not None and (self.book.last_ts is None
+                                                             or self.book.last_ts < r.skip_before):
+            return int(r.skip_before)
+        if self.book is not None and self.book.last_ts is not None:
+            return int(max(self.book.last_ts, getattr(self.book, "_now", 0) or 0) + MIN)
+        return self.clock()
+
+    def _event(self, aid: str, event: str, code: Optional[str] = None, detail: str = "",
+               effective: Optional[int] = None, **extra) -> None:
+        ev = {"ts": self.clock(), "account_id": aid, "event": event, "code": code, "detail": str(detail)[:300],
+              "effective": int(effective) if effective is not None else self._effective()}
         ev.update(extra)
         self.state.setdefault("events", []).append(ev)
         if len(self.state["events"]) > MAX_EVENTS:
@@ -1062,11 +1074,25 @@ class Extras:
         self.store.put_state(STATE_KEY, now, st)
 
     def _count_skipped(self, boundary: int) -> None:
-        if self.newlab is None:
+        """A boundary the new-strategy accounts were not computed at (not live, or the 195 timed out): counted
+        per timeframe and kept as runs [[first, last], ...] (checkpoint leaves those bars out of the rate).
+        Kept in memory and written with the next state write."""
+        if self.newlab is None or not self.newlab.specs:
             return
-        sk = self.state["health"].setdefault("skipped_boundaries", {})
-        for tf in self.newlab.due(boundary):
+        due = self.newlab.due(boundary)
+        if not due:
+            return
+        h = self.state["health"]
+        sk = h.setdefault("skipped_boundaries", {})
+        for tf in due:
             sk[tf] = int(sk.get(tf, 0)) + 1
+        runs = h.setdefault("skipped_runs", [])
+        if runs and runs[-1][1] < boundary <= runs[-1][1] + FIVE:
+            runs[-1][1] = boundary
+        else:
+            runs.append([boundary, boundary])
+            if len(runs) > 1000:
+                del runs[:-1000]
 
     # ------------------------------------------------------------ phase 1: copies
     def _copies_of(self, parents: set, boundary: int) -> dict:
@@ -1248,7 +1274,7 @@ class Extras:
         pid = int(p["id"])
         text = f"[extra] 새 paper 계좌 시작: {data['label_ko']} ({aid}), 제안 #{pid}"
         self.store.alert(now, INFO, text)
-        self._event(aid, "created", None, f"proposal #{pid}", proposal_id=pid, boundary=boundary)
+        self._event(aid, "created", None, f"proposal #{pid}", effective=boundary, proposal_id=pid, boundary=boundary)
         self.state["created"][str(pid)] = {"account_id": aid, "boundary": boundary, "source": src}
         self.state["refused"].pop(str(pid), None)
         j.after.append((INFO, text))

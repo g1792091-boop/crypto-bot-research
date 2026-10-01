@@ -115,6 +115,11 @@ def ctx(world, now=QUIET, paper=True, notifier=None):
                            notifier=notifier or ListNotifier())
 
 
+def start(world, now=QUIET - 30 * MIN):
+    """A first tick: this agents3.db's approvals base is set before any click (older clicks are never applied)."""
+    world.tick(QueueRunner({}), now)
+
+
 def msgs(world, room=ROOM):
     return [m["text"] for m in world.messages(room)]
 
@@ -132,6 +137,7 @@ def test_contract_literals():
     assert X.copy_account(skip)["rule"] == {"template": "skip_tag", "tag": "추세 반대 진입"}
     k3 = {**t, "spec": {"template": "stop_atr", "strategy": S, "timeframe": "15m", "k": 3}}
     assert X.copy_account(k3)["rule"] == {"template": "stop_atr", "k": 3.0}            # stored as a float
+    assert isinstance(X.copy_account(k3)["rule"]["k"], float)
     assert X.copy_account({**t, "spec": {"template": "timeframe_only", "strategy": S}}) is None
     assert X.copy_account({**t, "kind": "newlab"}) is None and X.copy_account(None) is None
     # the content key literals
@@ -161,7 +167,7 @@ def test_contract_literals():
     # ids are the runner's; this is what they look like
     assert X.COPY_ID_RE.match("N17_KC_RSI@15m~c1").group("S", "tf", "n") == ("N17_KC_RSI", "15m", "1")
     assert X.NEWLAB_ID_RE.match("NL1@1h").group("n", "tf") == ("1", "1h")
-    for bad in ("N17_KC_RSI@15m", "N17_KC_RSI@15m~c0", "N17_KC_RSI@1d~c1", "NL0@1h", "NL1@1d", "NL1@1h~c1"):
+    for bad in ("N17_KC_RSI@15m", "N17_KC_RSI@15m~c0", "N17_KC_RSI@1d~c1", "NL0@1h", "NL1@1d", "N17@15m~c1x"):
         assert not X.COPY_ID_RE.match(bad) and not X.NEWLAB_ID_RE.match(bad), bad
     for name in STRATEGY_KO:                       # no original name can look like an extra
         assert not name.startswith("NL") and "~" not in name and "@" not in name
@@ -259,7 +265,7 @@ def test_caps_union_running_extras(world):
     got = A.copy_check(env(world), t2["id"])
     assert got["ok"] is True and "이 매매법" in got["cap"] and got["slots"] == {"strategy": 1, "total": 1}
     # total: running copies of other strategies count too
-    for k, s in enumerate([x for x in STRATEGY_KO if x != S][:9]):
+    for k, s in enumerate([x for x in STRATEGY_KO if x not in (S, "V45_AMB")][:9]):
         world.store.add_account(f"{s}@15m~c1", s, "15m", "copy", QUIET, "paper-v3", parent=f"{s}@15m",
                                 data={"v": 1, "kind": "copy", "source": {"proposal_id": 900 + k}})
     world.store.commit()
@@ -357,10 +363,24 @@ def test_newlab_cap_full_waits_and_retries(world):
         RM.policy_from_env({"AGENTS_NEWLAB_CAP_TOTAL": "11"})
 
 
+def test_policy_env_owner_ok_days_newlab_cap_and_extras_line():
+    for bad in ({"AGENTS_OWNER_OK_DAYS": "59"}, {"AGENTS_OWNER_OK_DAYS": "0"}, {"AGENTS_NEWLAB_CAP_TOTAL": "11"},
+                {"AGENTS_EXTRAS_MEETINGS_PER_DAY": "-1"}):
+        with pytest.raises(ValueError):
+            RM.policy_from_env(bad)
+    p = RM.policy_from_env({"AGENTS_OWNER_OK_DAYS": "75", "AGENTS_NEWLAB_CAP_TOTAL": "3",
+                            "AGENTS_EXTRAS_MEETINGS_PER_DAY": "2"})
+    assert p.owner_ok_days == 75 and p.newlab_cap_total == 3 and p.extras_meetings_per_day == 2
+    d = RM.policy_from_env({})
+    assert d.owner_ok_days == 60 and d.newlab_cap_total == 10 and d.extras_meetings_per_day == 6
+    caps = RM.budget_caps(p)["rooms"]
+    assert caps["extras_meetings_per_day"] == 2 and caps["newlab_cap_total"] == 3
+
+
 # ================================================================ owner clicks and re-judging
 def test_apply_approvals_newlab_approve_rejudged(world):
+    start(world)
     ok, _ = newlab_proposal(world)
-    world.inbox.execute("SELECT 1")
     R.add_approval(world.inbox, ok["id"], "approve", "owner1", ts=QUIET)
     out = world.tick(QueueRunner({}), QUIET + MIN)
     assert out["approvals"] == [{"approval_id": 1, "ok": True, "proposal_id": ok["id"], "status": "approved"}]
@@ -370,7 +390,7 @@ def test_apply_approvals_newlab_approve_rejudged(world):
     assert last["kind"] == "owner" and "추가 계좌 기능이 아직 켜지지 않아" in last["text"]
     # a marginal pass: the lab ran two more tests since -> judged now it fails, code closes it
     weak, _ = newlab_proposal(world, spec=NLSPEC2, gi=GI_MARGINAL, now=QUIET + 2 * MIN)
-    assert weak["gate"]["n_tests"] == 1 or weak["gate"]["n_tests"] == 0
+    assert weak["gate"]["n_tests"] == 1                       # two lab tests when it was proposed
     for k in range(3):
         R.add_trial_with_result(world.agents, "team:elsewhere", None, "newlab", {"fake": k}, "failed",
                                 {"gate_input": {}}, ts=QUIET)
@@ -399,6 +419,7 @@ def test_gate_now_dispatch_and_store_gate_now_covers_newlab(world):
 
 
 def test_no_reject_when_account_exists(world, monkeypatch):
+    start(world)
     world.parent_trades()
     p, t = copy_proposal(world, status="approved")
     aid = add_extra(world, p, t)
@@ -426,6 +447,7 @@ def test_no_reject_when_account_exists(world, monkeypatch):
 
 
 def test_no_transition_when_paper_unreadable(world):
+    start(world)
     world.parent_trades()
     p, _ = copy_proposal(world, status="approved")
     q, _ = copy_proposal(world, t=copy_trial(world, tf="1h"))
@@ -489,6 +511,7 @@ def test_extras_tick_closes_permanent_refusals_and_repairs_trial_status(world):
 
 
 def test_extras_tick_sticky_reject_close(world):
+    start(world)
     world.parent_trades()
     p, t = copy_proposal(world, status="approved")
     aid = add_extra(world, p, t)
@@ -502,9 +525,9 @@ def test_extras_tick_sticky_reject_close(world):
     assert R.get_proposal(world.agents, p["id"])["status"] == "rejected"
     assert any("두 분의 거절 클릭이 남아 있어 닫습니다" in m for m in msgs(world))
     # a reject click older than the proposal row (an earlier agents3.db reusing the id) does not count
-    q, _ = copy_proposal(world, t=copy_trial(world, k=3.0), status="approved", ts=QUIET + 20 * MIN)
     ib = R.open_ro(world.paths["inbox"])
-    assert X.reject_click(ib, q) is False and X.reject_click(ib, p) is True and X.reject_click(None, p) is None
+    assert X.reject_click(ib, p) is True and X.reject_click(ib, {**p, "ts": QUIET + HOUR}) is False
+    assert X.reject_click(None, p) is None
 
 
 def test_extras_tick_flags_orphan_running_extra(world):
@@ -628,6 +651,7 @@ def test_proposals_api_kind_account_running_refusal(world, dash):
 
 
 def test_reapprove_stale_ok(world, dash):
+    start(world)
     world.parent_trades()
     p, _ = copy_proposal(world, status="approved")
     r = dash.post(f"/api/proposals/{p['id']}/decide", json={"decision": "approve"})
@@ -651,7 +675,7 @@ def test_runtime_state_absent_keeps_old_texts(world, dash):
     assert shown["runtime_ready"] is False and shown["runtime_refusal"] is None and shown["account_running"] is None
     assert dash.get("/api/board").json()["extras_runtime"] is None
     assert "추가 계좌 기능이 아직 켜지지 않아" in A.start_text(None)
-    assert "다음 5분 봉 경계" in A.start_text(world.paper()) is False or True
+    assert "다음 5분 봉 경계" not in A.start_text(world.paper())
     runner_state(world)
     assert "다음 5분 봉 경계" in A.start_text(world.paper())
     import os
