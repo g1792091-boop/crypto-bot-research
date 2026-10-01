@@ -1,6 +1,6 @@
 // 학습: 대화·합성 데이터를 모아 작은 오픈모델을 직접 미세조정(LoRA)하고, 결과 모델을 앱에 다시 넣는다
 // 합성 데이터는 NVIDIA data-designer 스킬과 같은 방식(조건 샘플링 → 질문 생성 → 모범 답안 → AI 채점)으로 만든다.
-import { idb, uid, brainStream, splitThink, settings, routeCandidates } from "./engine.js";
+import { idb, uid, brainStream, splitThink, settings, routeCandidates, PROVIDERS, modelKind } from "./engine.js";
 import { toModelMessages, BUILTIN_SKILLS, runAgent, TOOLS } from "./agent.js";
 import { nvIndex, nvSkill } from "./nvskills.js";
 
@@ -45,10 +45,20 @@ export const loadSynth = async () => (await idb.all("train:")).sort((a, b) => a.
 export const removeSynth = id => idb.del("train:" + id);
 export async function clearSynth(){ for (const s of await loadSynth()) await idb.del("train:" + s.id); }
 export function toJSONL(samples){ return samples.map(s => JSON.stringify({messages: s.messages})).join("\n") + "\n"; }
+// DPO(선호 학습)용: 여러 모델 중 가장 좋은 답(chosen) vs 가장 나쁜 답(rejected)
+export function toDPOJSONL(samples){
+  return samples.filter(s => s.rejected && s.messages?.length >= 3).map(s => JSON.stringify({prompt: s.messages.slice(0, -1), chosen: [s.messages.at(-1)], rejected: [{role: "assistant", content: s.rejected}]})).join("\n") + "\n";
+}
+// 지금까지 융합에 실제로 참여한 모델
+export function fusionStats(samples){
+  const used = new Map();
+  for (const s of samples) for (const m of s.sources || []) used.set(m, (used.get(m) || 0) + 1);
+  return {used, pairs: samples.filter(s => s.rejected).length};
+}
 
 /* ============ 합성 데이터: GH Nano 만들기 ============ */
 // 1) 조건 샘플링(NVIDIA data-designer 방식)으로 질문을 만들고
-// 2) 연결된 여러 AI의 답을 모아 가장 좋은 내용으로 하나의 모범답안을 합치거나(앙상블),
+// 2) 연결된 모든 AI 모델이 같은 질문에 답하고 순위를 매겨 가장 좋은 답(SFT)과 좋은 답 vs 나쁜 답(DPO)을 고르거나(모델 융합),
 //    실제 도구(시세·설계·뉴스)를 쓰는 과정까지 그대로 기록하고(에이전트 기록),
 //    NVIDIA 공식 스킬 문서를 근거로 문답을 만든 뒤
 // 3) AI 채점으로 좋은 것만 남긴다. 이렇게 모은 데이터로 작은 모델을 학습시키면 '모델 + 스킬'이 하나로 합쳐진 GH Nano가 된다.
@@ -98,16 +108,56 @@ async function judgeScore(q, a, signal){
 }
 const answerSys = skill => `너는 '${NAME()}'라는 한국어 AI 어시스턴트다. 이 답은 학습 데이터용 모범 답안이므로 정확하고 구체적이며 친절해야 한다.
 핵심 결론부터 말하고, 이유와 맥락을 전문가가 말로 설명하듯 자연스러운 문장으로 풀어 쓴다(표는 꼭 필요할 때만). 실시간 가격·시세·최신 법령처럼 지금 확인해야 하는 수치는 지어내지 말고 '확인 방법'과 '해석하는 법'을 알려준다. 투자·법률·세무는 일반 정보이며 전문가 확인이 필요하다고 짧게 덧붙인다.${skill ? "\n\n참고할 전문가 지침(지금은 도구를 쓸 수 없으니 도구 이름은 언급하지 말고 원칙과 방법으로 답한다):\n" + skill.prompt : ""}`;
-// 여러 AI의 답을 받아 하나의 최고의 답으로 합친다
-async function ensembleAnswer(q, sys, signal, log){
-  const ts = teachers();
-  if (ts.length < 2){ const a = await ask([{role: "system", content: sys}, {role: "user", content: q}], {signal, maxTokens: 1800, temperature: 0.5}); return {text: a.text, teacher: a.route?.model || ""}; }
-  const outs = (await Promise.all(ts.map(t => ask([{role: "system", content: sys}, {role: "user", content: q}], {signal, maxTokens: 1600, temperature: 0.5, target: t}).then(a => ({t, text: a.text})).catch(() => null)))).filter(x => x && x.text && x.text.length > 40);
-  if (outs.length < 2) return {text: outs[0]?.text || "", teacher: outs[0]?.t.model || ""};
-  log?.(`${outs.length}개 AI 답 합치는 중`);
-  const m = await ask([{role: "system", content: "[통합] 너는 여러 AI의 답을 비교해 최고의 답 하나를 만드는 편집장이다. 각 답에서 정확하고 유용한 내용만 골라, 틀리거나 근거 없는 내용은 버리고, 하나의 자연스러운 한국어 모범답안으로 다시 쓴다. '답 A에 따르면' 같은 말은 쓰지 말고 완성된 답만 출력한다."},
-    {role: "user", content: `질문:\n${q}\n\n${outs.map((o, i) => `### 답 ${"ABC"[i]} (${o.t.model})\n${o.text.slice(0, 5000)}`).join("\n\n")}`}], {signal, maxTokens: 2000, temperature: 0.3});
-  return {text: m.text, teacher: outs.map(o => o.t.model).join(" + ")};
+/* ============ 모델 융합: 연결된 모든 AI 모델 → GH Nano 하나 ============ */
+// 구조가 다른 모델(Llama·DeepSeek·Mistral·Qwen·Nemotron…)은 가중치를 직접 더할 수 없으므로,
+// FuseChat-3.0과 같은 '암묵적 모델 융합'을 쓴다: 같은 질문에 여러 원본 모델이 답하고 → 순위를 매겨
+// 가장 좋은 답으로 SFT, 가장 좋은 답 vs 가장 나쁜 답으로 DPO 학습 → 모든 모델의 장점이 GH Nano 하나에 녹아든다.
+const FUSE_SKIP = /guard|safety|reward|embed|rerank|retriev|parse|tts|asr|whisper|riva|ocr|clip|nv-?dino|detect|segment|flux|stable-?diff|sdxl|cosmos|audio|speech/i;
+const TOOL_LEAK = /<\/?tool\b|<tool_call>|DSML|tool▁call|\[TOOL_CALLS\]/;
+const fuseBad = new Map();
+const mkey = t => t.id + "|" + t.model;
+// 융합에 참여하는 원본 모델: API 키를 넣은 모든 회사의 대화·코딩·추론 모델 전부
+export function fusionSources(){
+  const out = [], seen = new Set();
+  for (const id of Object.keys(PROVIDERS).filter(id => settings.keys[id])){
+    const ms = settings.provModels[id]?.length ? settings.provModels[id] : PROVIDERS[id].defaults;
+    for (const m of ms){
+      if (!["chat", "code", "reason", "vision"].includes(modelKind(m)) || FUSE_SKIP.test(m)) continue;
+      const t = {id, model: m}; if (seen.has(mkey(t))) continue; seen.add(mkey(t)); out.push(t);
+    }
+  }
+  return out;
+}
+// 모든 모델이 돌아가며 참여하도록 순서대로 고른다 (막힌 모델은 뺀다)
+function pickSources(k){
+  const all = fusionSources().filter(t => (fuseBad.get(mkey(t)) || 0) < 2); if (!all.length) return [];
+  let c = 0; try { c = +localStorage.getItem("fuseCursor") || 0; } catch(e){}
+  const out = []; for (let i = 0; i < Math.min(k, all.length); i++) out.push(all[(c + i) % all.length]);
+  try { localStorage.setItem("fuseCursor", String((c + out.length) % 1e9)); } catch(e){}
+  return out;
+}
+// 같은 질문에 여러 모델이 답하고, 심사로 순위를 매겨 최고(chosen)·최저(rejected)를 고른다
+async function fuseAnswer(q, sys, signal, log, k = 4){
+  const anchor = teachers()[0], rot = pickSources(k);
+  const srcs = [anchor, ...rot.filter(t => !anchor || mkey(t) !== mkey(anchor))].filter(Boolean).slice(0, Math.max(2, k));
+  const bad = t => fuseBad.set(mkey(t), (fuseBad.get(mkey(t)) || 0) + 1);
+  const outs = (await Promise.all(srcs.map(t => ask([{role: "system", content: sys}, {role: "user", content: q}], {signal, maxTokens: 1600, temperature: 0.6, target: t})
+    .then(a => a.text && a.text.length > 40 && !TOOL_LEAK.test(a.text) ? {t, text: a.text} : (bad(t), null)).catch(() => (bad(t), null))))).filter(Boolean);
+  if (!outs.length) return null;
+  if (signal?.aborted) throw new Error("멈춤");
+  let scores;
+  if (outs.length >= 2){
+    log?.(`모델 ${outs.length}개 답 순위 매기는 중`);
+    const j = await ask([{role: "system", content: "[순위] 너는 엄격한 심사위원이다. 같은 질문에 대한 여러 답을 정확성·유용성·자연스러운 한국어·수치를 지어내지 않음·해설의 깊이로 각각 1~10점 평가한다. 답 순서대로 점수만 JSON 배열로 출력한다. 예: [8,5,7]"},
+      {role: "user", content: `질문:\n${q}\n\n${outs.map((o, i) => `### 답 ${i + 1}\n${o.text.slice(0, 3500)}`).join("\n\n")}`}], {signal, maxTokens: 80, temperature: 0});
+    try { const arr = JSON.parse((j.text.match(/\[[\d\s.,]+\]/) || ["[]"])[0]).map(Number); if (arr.length === outs.length && arr.every(x => x >= 0 && x <= 10)) scores = arr; } catch(e){}
+  }
+  const ranked_ok = !!scores;   // 순위를 못 매기면 비교(DPO) 쌍은 만들지 않는다
+  if (!scores) scores = [(await judgeScore(q, outs[0].text, signal)) * 2, ...outs.slice(1).map(() => 0)];
+  const ranked = outs.map((o, i) => ({...o, s: scores[i]})).sort((a, b) => b.s - a.s);
+  const best = ranked[0], worst = ranked[ranked.length - 1];
+  return {text: best.text, teacher: best.t.model, score: Math.round(best.s / 2), fscore: best.s,
+    rejected: ranked_ok && ranked.length >= 2 && best.s - worst.s >= 2 ? worst.text : null, sources: outs.map(o => o.t.model)};
 }
 // 실제 도구를 쓰는 과정까지 기록 (GH Nano가 시세·설계·뉴스 도구를 직접 쓰도록 배우게)
 async function agentTrace(q, signal){
@@ -128,9 +178,10 @@ async function nvSample(signal, log, name){
   log?.(`NVIDIA 스킬 '${s.n}' 문서로 문답 만드는 중`);
   const g = await ask([{role: "system", content: "[질문 생성] 아래 기술 문서를 읽은 사용자가 실제로 물어볼 만한 한국어 질문 2개를 JSON 배열로만 출력한다."}, {role: "user", content: `문서(${s.n}):\n${doc}`}], {signal, maxTokens: 400, temperature: 0.9});
   const q = parseJSONArray(g.text)[0]; if (!q) return null;
-  const a = await ask([{role: "system", content: `너는 '${NAME()}'라는 한국어 AI 어시스턴트다. 아래 NVIDIA 공식 스킬 문서만 근거로, 절차와 이유를 친절한 한국어로 설명한다. 명령어·설정 이름은 원문 그대로 쓴다. 문서에 없는 내용은 지어내지 않는다.\n\n문서(${s.n}):\n${doc}`}, {role: "user", content: q}], {signal, maxTokens: 1800, temperature: 0.4});
-  if (/<\/?tool|<tool_call>|DSML|tool▁call|\[TOOL_CALLS\]/.test(a.text)) return null;   // 도구 호출이 섞인 답은 버린다
-  return a.text && a.text.length > 60 ? {q, text: a.text, teacher: a.route?.model || "", skill: s.n} : null;
+  // 여러 모델이 같은 문서로 답하고 가장 좋은 답을 고른다(모델 융합)
+  const a = await fuseAnswer(q, `너는 '${NAME()}'라는 한국어 AI 어시스턴트다. 아래 NVIDIA 공식 스킬 문서만 근거로, 절차와 이유를 친절한 한국어로 설명한다. 명령어·설정 이름은 원문 그대로 쓴다. 문서에 없는 내용은 지어내지 않는다. 도구 호출 형식은 쓰지 않는다.\n\n문서(${s.n}):\n${doc}`, signal, log, 3);
+  if (!a || !a.text || TOOL_LEAK.test(a.text)) return null;   // 도구 호출이 섞인 답은 버린다
+  return a.text.length > 60 ? {q, text: a.text, teacher: a.teacher, score: a.score, rejected: a.rejected, sources: a.sources, skill: s.n} : null;
 }
 // 같은 질문을 'NVIDIA 스킬을 찾아 읽고 답하는 과정'으로도 기록 (실제 도구 결과를 그대로 넣는다)
 async function nvToolConv(q, name, answer){
@@ -155,9 +206,9 @@ export async function generateSynth({topics, count, judge = true, ensemble = fal
     try {
       if (topic.nv){
         const r = await nvSample(signal, log); if (!r) continue;
-        const score = judge ? await judgeScore(r.q, r.text, signal) : null;
+        const score = r.score ?? (judge ? await judgeScore(r.q, r.text, signal) : null);
         if (score && score < 4){ log(`품질 ${score}점이라 버림`); continue; }
-        await save({id: uid(), t: Date.now(), src: "synth", kind: "nvidia", topic: topic.id, score, teacher: r.teacher, skill: r.skill, messages: [{role: "system", content: TRAIN_SYS("chat")}, {role: "user", content: r.q}, {role: "assistant", content: r.text}]});
+        await save({id: uid(), t: Date.now(), src: "synth", kind: "nvidia", topic: topic.id, score, teacher: r.teacher, skill: r.skill, sources: r.sources, rejected: r.rejected || undefined, messages: [{role: "system", content: TRAIN_SYS("chat")}, {role: "user", content: r.q}, {role: "assistant", content: r.text}]});
         continue;
       }
       const persona = pickOne(PERSONAS), level = pickOne(LEVELS), style = pickOne(STYLES), seed = pickOne(topic.seeds);
@@ -179,12 +230,12 @@ export async function generateSynth({topics, count, judge = true, ensemble = fal
             continue;
           }
         }
-        log(`${ensemble ? "여러 AI로 " : ""}답안 작성: ${q.slice(0, 50)}`);
-        const a = ensemble ? await ensembleAnswer(q, answerSys(skill), signal, log) : await ask([{role: "system", content: answerSys(skill)}, {role: "user", content: q}], {signal, maxTokens: 1800, temperature: 0.5}).then(x => ({text: x.text, teacher: x.route?.model || ""}));
-        if (!a.text || a.text.length < 40) continue;
-        const score = judge ? await judgeScore(q, a.text, signal) : null;
+        log(`${ensemble ? "여러 모델 융합: " : "답안 작성: "}${q.slice(0, 50)}`);
+        const a = ensemble ? await fuseAnswer(q, answerSys(skill), signal, log) : await ask([{role: "system", content: answerSys(skill)}, {role: "user", content: q}], {signal, maxTokens: 1800, temperature: 0.5}).then(x => ({text: x.text, teacher: x.route?.model || ""}));
+        if (!a || !a.text || a.text.length < 40 || TOOL_LEAK.test(a.text)) continue;
+        const score = a.score ?? (judge ? await judgeScore(q, a.text, signal) : null);
         if (score && score < 4){ log(`품질 ${score}점이라 버림`); continue; }
-        await save({id: uid(), t: Date.now(), src: "synth", kind: ensemble ? "ensemble" : "single", topic: topic.id, persona, level, score, teacher: a.teacher, messages: [{role: "system", content: TRAIN_SYS("chat")}, {role: "user", content: q}, {role: "assistant", content: a.text}]});
+        await save({id: uid(), t: Date.now(), src: "synth", kind: ensemble ? "fusion" : "single", topic: topic.id, persona, level, score, teacher: a.teacher, sources: a.sources, rejected: a.rejected || undefined, messages: [{role: "system", content: TRAIN_SYS("chat")}, {role: "user", content: q}, {role: "assistant", content: a.text}]});
       }
     } catch (e){ if (signal?.aborted) break; log("건너뜀: " + (e.message || e).slice(0, 80)); }
   }
@@ -230,10 +281,10 @@ export async function generateAllSkills({signal, onEvent, judge = true, ensemble
       try {
         const r = await nvSample(signal, null, name);
         if (!r){ log(`'${name}' 질문을 못 만들어 다음에 다시 합니다`); step(name); continue; }
-        const score = judge ? await judgeScore(r.q, r.text, signal) : null;
+        const score = r.score ?? (judge ? await judgeScore(r.q, r.text, signal) : null);
         if (score && score < 4){ log(`'${name}' 품질 ${score}점이라 다음에 다시 합니다`); step(name); continue; }
-        const base = {src: "synth", topic: "nvidia", score, teacher: r.teacher, skill: name};
-        await idb.put("train:" + (base.id = uid()), {...base, t: Date.now(), kind: "nvidia", messages: [{role: "system", content: TRAIN_SYS("chat")}, {role: "user", content: r.q}, {role: "assistant", content: r.text}]});
+        const base = {src: "synth", topic: "nvidia", score, teacher: r.teacher, skill: name, sources: r.sources};
+        await idb.put("train:" + (base.id = uid()), {...base, t: Date.now(), kind: "nvidia", rejected: r.rejected || undefined, messages: [{role: "system", content: TRAIN_SYS("chat")}, {role: "user", content: r.q}, {role: "assistant", content: r.text}]});
         const conv = await nvToolConv(r.q, name, r.text);
         const id2 = uid(); await idb.put("train:" + id2, {...base, id: id2, t: Date.now(), kind: "nvtool", messages: [{role: "system", content: TRAIN_SYS("chat")}, ...conv]});
         made += 2; log(`✓ ${name}`); step(name);
@@ -295,6 +346,38 @@ const pyTest = `msgs = [{"role": "system", "content": ${JSON.stringify(TRAIN_SYS
 ids = tok.apply_chat_template(msgs, add_generation_prompt=True, return_tensors="pt").to(model.device)
 out = model.generate(input_ids=ids, max_new_tokens=300, temperature=0.7, do_sample=True)
 print(tok.decode(out[0][ids.shape[-1]:], skip_special_tokens=True))`;
+// 모델 융합 2단계: 여러 모델 중 좋은 답(chosen) vs 나쁜 답(rejected)으로 DPO
+const pyDPO = `DPO_N = 0
+if DATA and DPO_DATA:
+    try:
+        try:
+            from unsloth import PatchDPOTrainer
+            PatchDPOTrainer()
+        except Exception as e:
+            print("PatchDPOTrainer 없이 진행:", e)
+        from datasets import load_dataset
+        from trl import DPOTrainer, DPOConfig
+        pairs = load_dataset("json", data_files=DPO_DATA, split="train")
+        def to_pair(ex):
+            return {"prompt": tok.apply_chat_template(ex["prompt"], tokenize=False, add_generation_prompt=True),
+                    "chosen": ex["chosen"][0]["content"] + tok.eos_token, "rejected": ex["rejected"][0]["content"] + tok.eos_token}
+        pairs = pairs.map(to_pair, remove_columns=pairs.column_names)
+        DPO_N = len(pairs)
+        print("DPO 비교 쌍", DPO_N, "개")
+        dcfg = DPOConfig(output_dir="dpo_out", per_device_train_batch_size=1, gradient_accumulation_steps=8, learning_rate=5e-6,
+                         num_train_epochs=1, beta=0.1, max_length=MAX_LEN, max_prompt_length=MAX_LEN // 2, logging_steps=5,
+                         optim="adamw_8bit", warmup_ratio=0.1, report_to="none", seed=3407)
+        kw = dict(model=model, ref_model=None, args=dcfg, train_dataset=pairs)
+        try:
+            dpo = DPOTrainer(processing_class=tok, **kw)
+        except TypeError:
+            dpo = DPOTrainer(tokenizer=tok, **kw)
+        print("DPO 끝:", dpo.train())
+    except Exception as e:
+        DPO_N = 0
+        print("DPO 단계를 건너뜁니다(SFT 결과는 그대로 씁니다):", e)
+else:
+    print("DPO 데이터가 없어 건너뜁니다.")`;
 const pyGGUF = `import glob, os
 model.save_pretrained_gguf(OUT, tokenizer, quantization_method="q4_k_m")   # 앱·llama.cpp가 읽는 GGUF로 변환
 files = sorted(glob.glob(OUT + "*/*.gguf") + glob.glob(OUT + "*.gguf") + glob.glob("*.gguf"), key=os.path.getsize)
@@ -313,7 +396,7 @@ if GGUF and os.path.getsize(GGUF) > 1.95e9:
         print("2GB가 넘어 나눴습니다:", PARTS)
     else:
         print("나누기 도구를 찾지 못했습니다. 이 파일은 Ollama로 쓰거나 더 작은 바탕 모델을 고르세요.")`;
-// 모델 카드 + Modelfile: 학습 데이터 구성(대화·앙상블·도구 기록·NVIDIA 스킬)을 세어 기록한다
+// 모델 카드 + Modelfile: 학습 데이터 구성(대화·융합·도구 기록·NVIDIA 스킬)을 세어 기록한다
 const pyCard = o => `import json, collections, datetime
 kinds = collections.Counter()
 with open(DATA, encoding="utf-8") as fh:
@@ -378,7 +461,7 @@ tokenizer_source: ${p.tokenizer}
 }
 const indent = c => c.split("\n").map(l => l ? "    " + l : l).join("\n");
 export function nanoNotebookJSON(o){
-  const p = NANO_MERGE, name = o.name || "gh-nano";
+  const p = NANO_MERGE, name = o.name || "gh-nano", srcs = o.sources || [];
   const md = s => ({cell_type: "markdown", metadata: {}, source: s.split(/(?<=\n)/)});
   const code = s => ({cell_type: "code", metadata: {}, execution_count: null, outputs: [], source: s.split(/(?<=\n)/)});
   const header = `BASE = "/content/gh-nano-merged"   # 합친 모델
@@ -399,40 +482,47 @@ if DATA:
                 if m["role"] == "assistant":
                     nv_skills.update(re.findall(r'<tool name="nv_skill_read">\{"name":"([^"]+)"', m["content"]))
 merged = ${JSON.stringify(p.models.map(m => `${m.id} (${m.role}, 비중 ${m.weight})`))}
+fused = ${JSON.stringify(srcs.map(([m, n]) => `${m} (답 ${n}개)`))}
 card = f"""# ${NAME()}
 
-여러 오픈모델을 실제로 하나로 합친(머지) 뒤, 큰 AI들의 지식·스킬·도구 사용법을 학습시킨 자체 AI 모델입니다.
+연결된 모든 AI 모델과 모든 스킬을 하나로 융합한 자체 AI 모델입니다.
 
-## 합친 모델 (TIES 머지, 공통 바탕: ${p.base})
+## 융합한 AI 모델 ({len(fused)}개)
+같은 질문에 여러 모델이 답하고 순위를 매겨, 가장 좋은 답으로 SFT · 좋은 답 vs 나쁜 답으로 DPO 학습했습니다 (FuseChat-3.0 방식).
+""" + ("\\n".join("- " + m for m in fused) or "- (아직 없음)") + f"""
+
+## 몸체 (같은 구조의 오픈모델 가중치를 TIES로 합침, 공통 바탕: ${p.base})
 """ + "\\n".join("- " + m for m in merged) + f"""
 
-## 추가 학습
-- 방식: LoRA(QLoRA 4비트) {EPOCHS}회 · 학습 예시 {sum(kinds.values())}개 {dict(kinds) if kinds else '(학습 데이터 없이 합치기만 함)'}
-- 데이터: 연결된 여러 AI의 답을 합친 모범답안, 기본·NVIDIA 스킬 지식, 실제 도구(시세·설계·뉴스) 사용 기록
+## 학습
+- 1단계 SFT: LoRA(QLoRA 4비트) {EPOCHS}회 · 학습 예시 {sum(kinds.values())}개 {dict(kinds) if kinds else '(학습 데이터 없이 합치기만 함)'}
+- 2단계 DPO(모델 간 선호 학습): {DPO_N}쌍
+- 데이터: 여러 AI 중 가장 좋은 답, 기본·NVIDIA 스킬 지식, 실제 도구(시세·설계·뉴스) 사용 기록
 - NVIDIA 스킬: {len(nv_skills)}개를 찾아 읽고 답하는 법을 학습 (스킬 원문은 GH Nano 앱에 모두 들어 있음)
 
 ## 사용법
 GH Nano 앱 → 설정 → 학습 · 내 모델 → 내 모델 등록에서 GGUF 파일을 고르세요. 만든 날: {datetime.date.today()}
-라이선스: 합친 모델들의 라이선스(Apache-2.0, MIT)를 따릅니다.
+라이선스: 몸체는 Apache-2.0·MIT입니다. 융합에 답을 쓴 모델들의 이용 약관(예: Llama 라이선스의 표기 의무, 각 API 약관)도 함께 따르세요.
 """
 open("README.md", "w", encoding="utf-8").write(card)
 system = ${JSON.stringify(TRAIN_SYS("chat"))}
 open("Modelfile", "w", encoding="utf-8").write(f'FROM ./{os.path.basename(GGUF or "model.gguf")}\\nSYSTEM """{system}"""\\nPARAMETER temperature 0.6\\n')
 print(card)`;
   const cells = [
-    md(`# ${NAME()} 만들기 — 여러 모델 합치기 + 스킬 학습\n\n**순서**: 위쪽 메뉴 **런타임 → 런타임 유형 변경 → T4 GPU** → **런타임 → 모두 실행**. 학습 데이터(\`nuri-train.jsonl\`)를 올리라고 나오면 올리세요(없으면 취소하면 합치기만 합니다).\n\n**합치는 모델** (모두 같은 Qwen2 뼈대 · 공통 바탕 \`${p.base}\`)\n${p.models.map(m => `- \`${m.id}\` — ${m.role} (비중 ${m.weight})`).join("\n")}\n\n1) mergekit TIES 방식으로 가중치를 섞어 하나의 모델을 만들고 2) 앱이 만든 GH Nano 학습 데이터로 LoRA 학습한 뒤 3) GGUF(${p.size})로 변환해 내려받습니다. 처음부터 끝까지 보통 30~60분 걸립니다.`),
+    md(`# ${NAME()} 만들기 — 모든 AI 모델 + 모든 스킬을 하나의 모델로\n\n**순서**: 위쪽 메뉴 **런타임 → 런타임 유형 변경 → T4 GPU** → **런타임 → 모두 실행**. 파일을 올리라고 나오면 앱에서 받은 \`nuri-train.jsonl\`과 \`nuri-dpo.jsonl\`을 함께 고르세요.\n\n**융합하는 AI 모델 ${srcs.length}개**: ${srcs.length ? srcs.slice(0, 60).map(([m]) => "\`" + m + "\`").join(", ") + (srcs.length > 60 ? " 외 " + (srcs.length - 60) + "개" : "") : "(앱에서 데이터를 먼저 만드세요)"}\n\n구조가 다른 모델(Llama·DeepSeek·Mistral·Qwen·Nemotron…)은 가중치를 그대로 더할 수 없어서, FuseChat-3.0과 같은 **암묵적 모델 융합**을 씁니다: 같은 질문에 여러 모델이 답한 것 중 **가장 좋은 답으로 SFT**, **가장 좋은 답 vs 가장 나쁜 답으로 DPO** 학습해 모든 모델의 장점을 하나에 담습니다.\n\n**몸체**: 같은 Qwen2 구조인 ${p.models.map(m => m.id.split("/")[1]).join(" + ")}를 mergekit TIES로 먼저 합친 ${p.name}.\n\n1) 몸체 합치기 → 2) SFT → 3) DPO → 4) GGUF(${p.size}) 내려받기. 보통 40~90분 걸립니다.`),
     code(`%%capture\n!pip install -q unsloth\n!pip install -q --upgrade datasets trl\n# 합치기 도구(mergekit)는 학습 도구와 버전이 부딪히지 않게 따로 설치\n!python -m venv /content/mkenv\n!/content/mkenv/bin/pip -q install --upgrade pip\n!/content/mkenv/bin/pip -q install torch --index-url https://download.pytorch.org/whl/cpu\n!/content/mkenv/bin/pip -q install mergekit`),
-    md("## 1. 여러 모델을 하나로 합치기 (mergekit · TIES)"),
+    md("## 1. 몸체 만들기 — 같은 구조 모델 가중치 합치기 (mergekit · TIES)"),
     code(`CONFIG = """${mergeYAML(p)}"""\nopen("gh-nano-merge.yml", "w").write(CONFIG)\nprint(CONFIG)`),
     code(`!/content/mkenv/bin/mergekit-yaml gh-nano-merge.yml /content/gh-nano-merged --lazy-unpickle --copy-tokenizer --out-shard-size 1B\n!ls -la /content/gh-nano-merged`),
     md("## 2. 학습 데이터 올리기 (선택)"),
-    code(`${header}\nfrom google.colab import files\nimport os\nDATA = "nuri-train.jsonl" if os.path.exists("nuri-train.jsonl") else None\nif not DATA:\n    print("앱에서 받은 nuri-train.jsonl을 올리세요. 없으면 취소 → 합친 모델만 만듭니다.")\n    try:\n        up = files.upload()\n        DATA = list(up.keys())[0] if up else None\n    except Exception as e:\n        print("올리기 건너뜀:", e)\nprint("학습 데이터:", DATA)`),
+    code(`${header}\nfrom google.colab import files\nimport os\nDATA = "nuri-train.jsonl" if os.path.exists("nuri-train.jsonl") else None\nDPO_DATA = "nuri-dpo.jsonl" if os.path.exists("nuri-dpo.jsonl") else None\nif not DATA:\n    print("앱에서 받은 nuri-train.jsonl과 nuri-dpo.jsonl을 함께 고르세요(여러 개 선택). 없으면 취소 → 몸체만 만듭니다.")\n    try:\n        up = files.upload() or {}\n        for k in up:\n            if "dpo" in k: DPO_DATA = k\n            elif k.endswith(".jsonl"): DATA = k\n    except Exception as e:\n        print("올리기 건너뜀:", e)\nprint("SFT 데이터:", DATA, "/ DPO 데이터:", DPO_DATA)`),
     md("## 3. 합친 모델 불러오기 (4비트 QLoRA)"), code(pyLoad),
-    md("## 4. GH Nano 학습 (스킬·도구·여러 AI 지식)"),
+    md("## 4. 모델 융합 1단계 — SFT (모든 AI의 가장 좋은 답 + 스킬 + 도구 사용법)"),
     code(`if DATA:\n${indent(pyData)}\n${indent(pyTrain)}\nelse:\n    print("학습 데이터가 없어 합친 모델 그대로 변환합니다.")`),
-    md("## 5. 시험해 보기"), code(pyTest),
-    md("## 6. GGUF로 변환해서 내려받기"), code(`${pyGGUF}\nfor f in PARTS:\n    files.download(f)`),
-    md("## 7. 모델 카드"), code(`${card}\nfiles.download("README.md")\nfiles.download("Modelfile")`)
+    md("## 5. 모델 융합 2단계 — DPO (여러 모델 중 좋은 답을 고르는 감각 학습)"), code(pyDPO),
+    md("## 6. 시험해 보기"), code(pyTest),
+    md("## 7. GGUF로 변환해서 내려받기"), code(`${pyGGUF}\nfor f in PARTS:\n    files.download(f)`),
+    md("## 8. 모델 카드"), code(`${card}\nfiles.download("README.md")\nfiles.download("Modelfile")`)
   ];
   return JSON.stringify({nbformat: 4, nbformat_minor: 5, metadata: {accelerator: "GPU", colab: {provenance: [], gpuType: "T4"}, kernelspec: {name: "python3", display_name: "Python 3"}, language_info: {name: "python"}}, cells}, null, 1);
 }

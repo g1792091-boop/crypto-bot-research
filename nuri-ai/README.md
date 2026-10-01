@@ -67,9 +67,10 @@ Claude·ChatGPT 같은 비공개 AI는 쓰지 않고, 오픈소스 모델(무료
 - **해설 중심 답변**: 백테스트·설계·견적·분석·뉴스 결과를 숫자나 기사 제목으로 늘어놓지 않고, 전문가가 말로 설명하듯 의미·이유·대응을 풀어 씁니다.
 - **시장 세분화**: 스킬과 트레이딩 룸을 코인 현물 / 코인 선물 / 해외주식 / 국내주식 / 해외선물 / 지수·환율로 나눴고, 분야·종목별 뉴스를 모아 AI가 말로 해설하는 '뉴스 해설' 카드와 `market_news` 도구를 넣었습니다.
 - **새 화면**: 어두운 바탕·그라데이션 포인트·유리 질감의 디자인, Pretendard 글꼴(OFL) 내장, 설정 → 맞춤 지침에서 어둡게/밝게/시스템 테마 선택.
-- **GH Nano 1.5B (모델 병합)**: Qwen2.5-1.5B-Instruct(대화) + DeepSeek-R1-Distill-Qwen-1.5B(딥시크 추론) + Qwen2.5-Coder-1.5B(코딩) + Qwen2.5-Math-1.5B(수학)를 mergekit TIES로 실제로 합친 뒤(공통 바탕 Qwen/Qwen2.5-1.5B), 아래 증류 데이터로 LoRA 학습해 하나의 GGUF로 만듭니다. 학습 탭 → GH Nano 카드 → [Colab 노트북 받기 (합치기+학습)]. 설정은 `train.js`의 `NANO_MERGE`.
+- **GH Nano = 모든 AI 모델 + 모든 스킬 → 모델 하나 (모델 융합)**: API 키를 넣은 모든 회사의 대화·코딩·추론 모델(`fusionSources`)이 돌아가며 같은 질문에 답하고, 심사로 순위를 매겨 가장 좋은 답(SFT)과 좋은 답 vs 나쁜 답(DPO, `nuri-dpo.jsonl`)을 만듭니다(FuseChat-3.0 방식, `fuseAnswer`). Colab 노트북이 몸체 합치기 → SFT → DPO → GGUF까지 실행합니다.
+- **몸체 (모델 병합)**: Qwen2.5-1.5B-Instruct(대화) + DeepSeek-R1-Distill-Qwen-1.5B(딥시크 추론) + Qwen2.5-Coder-1.5B(코딩) + Qwen2.5-Math-1.5B(수학)를 mergekit TIES로 실제로 합친 뒤(공통 바탕 Qwen/Qwen2.5-1.5B), 아래 증류 데이터로 LoRA 학습해 하나의 GGUF로 만듭니다. 학습 탭 → GH Nano 카드 → [Colab 노트북 받기 (합치기+학습)]. 설정은 `train.js`의 `NANO_MERGE`.
 - **모든 스킬 넣기**: 기본 스킬 12개와 NVIDIA 스킬 388개 전부에 대해 스킬마다 ① 핵심 문답 ② `nv_skill_search` → `nv_skill_read`로 원문을 찾아 읽고 답하는 과정을 학습 데이터로 만듭니다(`generateAllSkills`, 반영 현황은 `skillCoverage`). 멈췄다 이어서 할 수 있고, 실패한 스킬은 자동으로 다시 시도합니다.
-- **GH Nano 모델 만들기**: 학습 탭의 원클릭 카드로 ① 연결된 여러 AI의 답을 하나로 합친 모범답안(앙상블 증류) ② 실제 도구(시세·설계·뉴스)를 쓰는 과정 기록 ③ NVIDIA 스킬 문서 기반 문답을 만들고 AI 채점으로 거른 뒤, Colab 노트북으로 작은 모델(Qwen3.5 2B 등)에 LoRA 학습 → GGUF + 모델 카드 + Modelfile.
+- **GH Nano 모델 만들기**: 학습 탭의 원클릭 카드로 ① 연결된 여러 AI의 답을 하나로 합친 모범답안(모델 융합) ② 실제 도구(시세·설계·뉴스)를 쓰는 과정 기록 ③ NVIDIA 스킬 문서 기반 문답을 만들고 AI 채점으로 거른 뒤, Colab 노트북으로 작은 모델(Qwen3.5 2B 등)에 LoRA 학습 → GGUF + 모델 카드 + Modelfile.
 
 ## 모델 (설정 → 모델)
 
