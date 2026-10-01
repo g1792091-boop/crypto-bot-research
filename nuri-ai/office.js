@@ -3,8 +3,8 @@
 //   흐름: 담당 분석가 → (투자·실행 판단이면) 전략가 → 반론 검토관 → 리스크 책임자 → 팀장 정리
 // - 사용자가 아무것도 치지 않아도 정해진 안건과 급변동 감시로 스스로 회의를 연다(자동 회의).
 import { settings, saveSettings, idb, uid, brainStream, splitThink, overCap, provUse, LAUNCHER } from "./engine.js";
-import { runAgent, activeSkills, TOOLS, marketNews, candlesFor, visibleText, snapText } from "./agent.js";
-import { fusionSources } from "./train.js";
+import { runAgent, activeSkills, TOOLS, marketNews, candlesFor, visibleText, snapText, toModelMessages } from "./agent.js";
+import { fusionSources, TRAIN_SYS } from "./train.js";
 
 /* ============ 팀과 직원 ============ */
 export const TEAMS = [
@@ -118,7 +118,7 @@ const fire = ev => { for (const f of subs){ try { f(ev); } catch(e){ console.err
 
 /* ============ 설정·한도 ============ */
 export function officeCfg(){
-  settings.office = Object.assign({auto: true, every: 30, dailyMax: 12, alert: true, chat: true, chatEvery: 3, chatMax: 80, cycle: true, cycleMin: 3, callMax: 600, computer: true, claude: true}, settings.office || {});
+  settings.office = Object.assign({auto: true, every: 30, dailyMax: 12, alert: true, chat: true, chatEvery: 3, chatMax: 80, cycle: true, cycleMin: 3, callMax: 600, computer: true, claude: true, train: true}, settings.office || {});
   return settings.office;
 }
 export function setOffice(patch){ Object.assign(officeCfg(), patch); saveSettings(); fire({kind: "cfg"}); }
@@ -126,6 +126,38 @@ const today = () => new Date().toLocaleDateString("sv-SE");
 function usage(){ let u = {}; try { u = JSON.parse(localStorage.getItem("officeUsage") || "{}"); } catch(e){} return u.day === today() ? u : {day: today(), meetings: 0, calls: 0, auto: 0, chats: 0}; }
 function bump(k, n = 1){ const u = usage(); u[k] = (u[k] || 0) + n; try { localStorage.setItem("officeUsage", JSON.stringify(u)); } catch(e){} fire({kind: "usage", usage: u}); }
 export const officeUsage = usage;
+
+/* ============ 직원들의 대화를 GH Nano 학습 데이터로 남기기 ============ */
+// - 회의: 질문 → <think>팀원들의 분석·반론·리스크</think> + 팀장 결론 (작은 모델이 혼자서도 '팀 토론'을 거쳐 답하게)
+// - 첫 분석가의 실제 도구 사용 과정, 자료를 읽고 해설한 일(SNS·경제·모의투자 보고), 검증을 통과한 매매법, 동료 수다
+// Claude가 쓴 글은 약관에 따라 넣지 않는다. 회의록에서 👎를 누르면 그 예시는 지운다.
+const isClaude = m => /claude/i.test(String(m || ""));
+const goodText = t => !!t && t.length >= 30 && !/^\(.{0,20}(답하지 못했|빈 답)/.test(t);
+const clip = (t, n) => { t = String(t || ""); return t.length > n ? t.slice(0, n) + "…" : t; };
+const noMind = t => String(t || "").replace(/^\s*💭[^\n]*\n?/gm, "").trim();
+async function keep(kind, messages, meta = {}){
+  if (officeCfg().train === false) return null;
+  const minLen = meta.minLen || 30; delete meta.minLen;
+  if (!messages.length || messages.at(-1).role !== "assistant" || messages.some(x => x.role === "assistant" && (String(x.content || "").length < minLen || /답하지 못했|빈 답\)/.test(x.content)))) return null;
+  const id = uid();
+  await idb.put("train:" + id, {id, t: Date.now(), src: "office", kind, messages: [{role: "system", content: TRAIN_SYS("chat")}, ...messages], ...meta});
+  bump("trained");
+  return id;
+}
+export async function rateEntry(entryId, v){
+  await loadLog();
+  const e = LOG.find(x => x.id === entryId); if (!e) return null;
+  e.rating = e.rating === v ? 0 : v;
+  for (const id of e.trainIds || []){
+    const all = await idb.all("train:" + id); const rec = all[0];
+    if (!rec) continue;
+    if (e.rating < 0){ await idb.del("train:" + id); }
+    else { rec.rating = e.rating; if (e.rating > 0) rec.score = 5; await idb.put("train:" + id, rec); }
+  }
+  if (e.rating < 0) e.trainIds = [];
+  saveLog(); fire({kind: "rated", entry: e});
+  return e;
+}
 
 /* ============ 누가 말할지 (코드가 정함) ============ */
 export function planMeeting(text, room = "hq", fixed){
@@ -212,6 +244,16 @@ async function pump(){
       }
     }
     const last = turns[turns.length - 1];
+    // 회의 전체 → '팀 토론을 머릿속으로 거친 답' 학습 예시
+    if (turns.length >= 2 && last.agent.id === "lead" && goodText(last.text) && !isClaude(last.entry.model)){
+      const inner = turns.slice(0, -1).filter(t => goodText(t.text) && !isClaude(t.entry.model));
+      let think = "", room = 1800;
+      for (const t of inner){ const piece = `[${t.agent.title}] ${clip(t.text.replace(/\s+/g, " "), Math.min(520, room))}`; if (room < 120) break; think += (think ? "\n\n" : "") + piece; room -= piece.length; }
+      if (think){
+        const id = await keep("office-meeting", [{role: "user", content: m.topic}, {role: "assistant", content: `<think>\n${think}\n</think>\n\n${last.text}`}], {meeting: m.id, speakers: inner.map(t => t.agent.id)}).catch(() => null);
+        if (id){ last.entry.trainIds = [...(last.entry.trainIds || []), id]; saveLog(); }
+      }
+    }
     if (job.trigger !== "user" && officeCfg().alert && last) fire({kind: "alert", meeting: m, text: last.text});
     job.res?.({meeting: m, turns, answer: last?.text || ""});
   } catch (e){
@@ -243,8 +285,9 @@ async function speak(a, m, turns, target, signal){
   // 배정 모델 → (빈 답이면) 다른 모델 → 자동 선택 순서로 다시 시도
   const alt = fusionSources().find(t => t.model !== target?.model && !badModels()[t.model] && !/r1|reason|think|gpt-oss|qwq/i.test(t.model));
   const tries = [target, alt, null].filter((t, i, arr) => i === arr.length - 1 || (t && arr.findIndex(x => x && x.model === t.model) === i));
+  let lastMsg = null;
   for (const tg of tries){
-    const msg = {role: "assistant", parts: [], mode: "chat", ts: Date.now()};
+    const msg = lastMsg = {role: "assistant", parts: [], mode: "chat", ts: Date.now()};
     let last = 0, lastTool = "";
     const onUpdate = () => {
       read(msg, entry);
@@ -269,6 +312,12 @@ async function speak(a, m, turns, target, signal){
   }
   if (!entry.text) entry.text = `(${a.name}: 연결된 모델들이 이번에는 답하지 못했습니다)`;
   entry.tools = entry.steps.map(x => x.act);
+  // 첫 분석가가 실제 도구를 쓴 과정은 '도구 사용' 학습 예시로 (앞사람 발언에 기대지 않는 차례만)
+  if (!turns.length && lastMsg && entry.steps.some(x => x.status === "done") && goodText(entry.text) && !isClaude(entry.model) && !lastMsg.parts.some(p => p.type === "tool" && p.status === "error")){
+    const conv = toModelMessages([{role: "user", content: m.topic}, lastMsg], 1e9, 3000).map(x => x.role === "assistant" ? {...x, content: noMind(x.content)} : x).filter(x => x.content);
+    const id = await keep("office-tool", conv, {agent: a.id, model: entry.model}).catch(() => null);
+    if (id) entry.trainIds = [id];
+  }
   entry.live = false;
   saveLog(); fire({kind: "said", meeting: m, agent: a, entry});
   return {agent: a, text: entry.text, entry};
@@ -457,6 +506,12 @@ export async function chatter(force){
       await sleep(Math.min(6500, 1600 + l.text.length * 45));
     }
     fire({kind: "huddle-end", ids: people.map(p => p.id)});
+    // 동료 수다 → 자연스러운 대화 흐름 예시 (말을 주고받는 순서대로 사용자·어시스턴트를 번갈아)
+    if (!isClaude(route?.model)){
+      const conv = lines.map((l, i) => ({role: i % 2 ? "assistant" : "user", content: l.text}));
+      if (conv.at(-1).role === "user") conv.pop();
+      if (conv.length >= 2) await keep("office-chat", conv, {speakers: people.map(p => p.id), model: route?.model || "", minLen: 4}).catch(() => null);
+    }
     // 잡담에서 회의하자는 말이 나오면 진짜 회의를 연다
     if (/회의\s*(한번|한 번)?\s*(하죠|합시다|해요|하자|열|해보|잡)/.test(lines.at(-1).text) && usage().auto < c.dailyMax){
       enqueue({topic: `잡담에서 나온 이야기입니다. ${starter.name}가 본 것: ${obs.text}. 의미와 대응을 팀으로 점검해 주세요.`, room: ch, trigger: "auto", title: `잡담에서-${starter.name}`, agents: [starter.id, ...partners.map(p => p.id)].slice(0, 3)});
@@ -516,7 +571,7 @@ export async function cycle(force, onlyJob){
 }
 
 // 혼자 하는 일 한 번: 배정 모델로 생각·말을 실시간으로 보여 주고, 빈 답이면 다른 모델로
-async function solo(a, {room, sys, user, maxTokens = 900, temperature = 0.6, extra = {}}){
+async function solo(a, {room, sys, user, maxTokens = 900, temperature = 0.6, extra = {}, train = ""}){
   const models = assignModels();
   const target = models[a.id];
   const alt = fusionSources().find(t => t.model !== target?.model && !badModels()[t.model] && !/r1|reason|think|gpt-oss|qwq/i.test(t.model));
@@ -539,6 +594,11 @@ async function solo(a, {room, sys, user, maxTokens = 900, temperature = 0.6, ext
   }
   if (!entry.text && !finalRaw) entry.text = `(${a.name}: 이번에는 답하지 못했습니다)`;
   if (!entry.text && finalRaw) entry.text = (finalRaw.replace(/^\s*💭[^\n]*\n?/gm, "").replace(/```(?:json)?[\s\S]*?(```|$)/g, "").trim() || "전략을 만들었습니다") + "\n\n*(전략 JSON은 아래 백테스트 카드에 있습니다)*";
+  // 자료를 읽고 해설한 일은 '자료 해설' 학습 예시로
+  if (train && goodText(entry.text) && !isClaude(entry.model)){
+    const id = await keep("office-solo", [{role: "user", content: `${train}\n\n${clip(user, 3500)}`}, {role: "assistant", content: noMind(entry.text)}], {agent: a.id, model: entry.model}).catch(() => null);
+    if (id) entry.trainIds = [id];
+  }
   entry.live = false; saveLog(); fire({kind: "said", agent: a, entry});
   return {...entry, raw: finalRaw};
 }
@@ -565,7 +625,7 @@ async function paperStep(){
 async function paperReport(){
   const P = await import("./paper.js"), a = agentById("trader");
   const book = await P.bookText();
-  await solo(a, {room: "quant", sys: personaOf(a, "모의투자 현황을 팀에 3~5문장으로 보고한다. 잘 되는 전략과 안 되는 전략, 지금 포지션의 위험을 짚는다. 실제 주문이 아닌 가상 운용임을 잊지 않는다."), user: `모의투자 장부:\n${book}`});
+  await solo(a, {room: "quant", sys: personaOf(a, "모의투자 현황을 팀에 3~5문장으로 보고한다. 잘 되는 전략과 안 되는 전략, 지금 포지션의 위험을 짚는다. 실제 주문이 아닌 가상 운용임을 잊지 않는다."), user: `모의투자 장부:\n${book}`, train: "아래 모의투자 장부를 보고 잘 되는 전략과 안 되는 전략, 지금 포지션의 위험을 3~5문장으로 해설해 줘."});
 }
 
 /* ---- 매매법 연구: 지표 29종 + 연구 카드 → 전략 JSON → 백테스트 · 과최적화 검사 → 통과하면 모의투자 ---- */
@@ -598,6 +658,11 @@ async function research(){
   post({ch: "quant", kind: "bt", agent: "val", name: spec.name, market: mk.market, tf, all: st(bt.stats), is: st(wf.is), oos: st(wf.oos), pass: wf.pass, reasons: wf.reasons, author: a.name, spec});
   addResearch({name: spec.name, market: mk.market, tf, pass: wf.pass, oos: +(wf.oos?.return_pct ?? 0), t: Date.now()});
   fire({kind: "bubble", agent: v, text: `${wf.pass ? "✅ 통과" : "❌ 불통과"}: ${spec.name} — ${wf.reasons.slice(0, 2).join(", ")}`});
+  if (wf.pass && !isClaude(e.model)){
+    // 검증을 통과한 매매법은 '전략 설계' 학습 예시로 (결과 숫자를 함께 적어 둔다)
+    const ans = `${noMind(e.raw || "").replace(/```(?:json)?[\s\S]*?```/, "```json\n" + JSON.stringify(spec, null, 1) + "\n```")}\n\n백테스트(검증 구간): 수익 ${st(wf.oos).ret}% · 손익비 ${st(wf.oos).pf ?? "-"} · 거래 ${st(wf.oos).n}회`;
+    await keep("office-strategy", [{role: "user", content: clip(user, 3000)}, {role: "assistant", content: ans}], {agent: a.id, model: e.model}).catch(() => null);
+  }
   if (wf.pass){
     const s = await P.addStrategy({spec, market: mk.market, exchange: mk.exchange, tf, author: a.name, wf: {is: st(wf.is), oos: st(wf.oos)}});
     post({ch: "quant", kind: "system", text: `📈 모의투자 시작: ${s.name} (${mk.market} ${tf === "60" ? "1시간" : "4시간"}봉, ${a.name} 개발 · 다온 검증 통과) · 가상 10,000 USDT`});
@@ -613,7 +678,7 @@ async function snsCheck(){
   fire({kind: "busy", agent: a, text: `📱 ${topic === "crypto" ? "코인" : topic === "us" ? "미국 주식" : "경제"} SNS 둘러보는 중`});
   const r = await TOOLS.sns_buzz.run({topic});
   for (const src of (r.sources || []).slice(0, 4)) post({ch: "data", kind: "work", agent: "sns", icon: "📱", text: src.title, url: src.url});
-  await solo(a, {room: "data", sys: personaOf(a, "SNS에서 본 분위기를 3~5문장으로 해설한다. 사람들이 무엇에 흥분하거나 겁먹는지, 쏠림이 지나친지(역발상 신호인지) 말한다. SNS 글은 의견일 뿐이라는 점을 잊지 않는다."), user: r.text.slice(0, 5000)});
+  await solo(a, {room: "data", sys: personaOf(a, "SNS에서 본 분위기를 3~5문장으로 해설한다. 사람들이 무엇에 흥분하거나 겁먹는지, 쏠림이 지나친지(역발상 신호인지) 말한다. SNS 글은 의견일 뿐이라는 점을 잊지 않는다."), user: r.text.slice(0, 5000), train: "아래 SNS 글과 공포·탐욕 지수를 보고 지금 사람들의 분위기와 쏠림을 해설해 줘. SNS 글은 의견이라는 점도 짚어 줘."});
   const fg = (r.text.match(/공포·탐욕 지수\] 오늘 (\d+)/) || [])[1];
   if (fg && (+fg <= 15 || +fg >= 85) && usage().auto < officeCfg().dailyMax)
     enqueue({topic: `코인 공포·탐욕 지수가 ${fg}로 극단입니다. SNS 분위기와 시장을 함께 점검해 주세요.`, room: "data", trigger: "event", title: `여론-극단-${fg}`, agents: ["sns", "coin_spot", "coin_fut"]});
@@ -627,7 +692,7 @@ async function economyCheck(){
   fire({kind: "busy", agent: a, text: `🔎 '${q}' 찾아보는 중`});
   const r = await TOOLS.web_search.run({query: q, n: 6});
   for (const src of (r.sources || []).slice(0, 3)) post({ch: a.team, kind: "work", agent: a.id, icon: "📰", text: src.title, url: src.url});
-  await solo(a, {room: a.team, sys: personaOf(a, "검색 결과로 '지금 경제가 어떻게 돌아가는지'를 4~6문장으로 해설한다. 기사 제목을 나열하지 말고 흐름으로 묶고, 코인·주식·부동산에 주는 의미를 한 줄 덧붙인다. 근거 문장 끝에 [번호]."), user: `검색어: ${q}\n\n${String(r.text || "").slice(0, 6000)}`});
+  await solo(a, {room: a.team, sys: personaOf(a, "검색 결과로 '지금 경제가 어떻게 돌아가는지'를 4~6문장으로 해설한다. 기사 제목을 나열하지 말고 흐름으로 묶고, 코인·주식·부동산에 주는 의미를 한 줄 덧붙인다. 근거 문장 끝에 [번호]."), user: `검색어: ${q}\n\n${String(r.text || "").slice(0, 6000)}`, train: "아래 검색 결과로 지금 경제가 어떻게 돌아가는지 흐름으로 해설하고, 코인·주식·부동산에 주는 의미를 덧붙여 줘. 근거 문장 끝에 [번호]."});
 }
 
 /* ---- 컴퓨터 작업 (문서/GHNano 사무실 폴더) ---- */

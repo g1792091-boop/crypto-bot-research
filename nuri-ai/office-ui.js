@@ -2,7 +2,7 @@
 // 직원들이 자리에서 일하다가 회의가 열리면 회의실로 걸어가 말풍선으로 대화하고, 오른쪽 패널에 회의록이 쌓인다.
 import { TEAMS, AGENTS, AGENDA, agentById, teamById, ask, stopMeeting, onOffice, loadLog, officeCfg, setOffice, officeUsage, officeState,
   startAutopilot, nextAutoIn, runAgendaNow, assignModels, clearLog, work, chatter, startChatter, setOfficeVisible, seen, nextChatIn, isChatting,
-  startCycle, nextCycleIn, cycle, cycleState, computerOn } from "./office.js";
+  startCycle, nextCycleIn, cycle, cycleState, computerOn, rateEntry } from "./office.js";
 import { shortModel, provUse, settings, LAUNCHER } from "./engine.js";
 import { BUILTIN_SKILLS } from "./agent.js";
 
@@ -114,6 +114,7 @@ function build(){
     <label class="of-tg" title="직원들이 수시로 본 차트·뉴스를 두고 잡담합니다 (한 번에 AI 1번)"><input type="checkbox" id="ofChat"> 수시 대화</label>
     <label class="of-tg" title="태민이 문서/GHNano 사무실 폴더 안에서만 파일을 만들고 스크립트를 실행합니다 (GHNano.exe에서만)"><input type="checkbox" id="ofComp"> 컴퓨터 작업</label>
     <label class="of-tg" title="Claude API 키가 있으면 팀장·전략·검증·리스크 자리에 Claude를 하루 한도 안에서 씁니다"><input type="checkbox" id="ofClaude"> Claude</label>
+    <label class="of-tg" title="직원들의 회의·분석·수다를 GH Nano 학습 데이터로 남깁니다 (Claude가 쓴 글은 제외)"><input type="checkbox" id="ofTrain"> 학습에 쓰기</label>
     <button class="of-btn" id="ofNow" title="다음 주기를 기다리지 않고 지금 한 가지 일을 시킵니다">지금 일 시키기</button>
     <select id="ofEvery" title="자동 회의 간격"><option value="15">15분마다</option><option value="30">30분마다</option><option value="60">1시간마다</option><option value="180">3시간마다</option></select>
     <span class="of-pick"><button class="of-btn" id="ofAgendaBtn">안건 열기 ▾</button><div class="of-menu" id="ofAgenda" hidden>${agendaOpts}</div></span>
@@ -160,6 +161,7 @@ function wire(el){
   el.querySelector("#ofCycle").onchange = e => { setOffice({cycle: e.target.checked}); renderStatus(); };
   el.querySelector("#ofComp").onchange = e => { setOffice({computer: e.target.checked}); if (e.target.checked && !LAUNCHER.on) ctx.toast("컴퓨터 작업은 GHNano.exe로 실행했을 때만 됩니다"); renderStatus(); };
   el.querySelector("#ofClaude").onchange = e => { setOffice({claude: e.target.checked}); if (e.target.checked && !settings.keys.anthropic) ctx.toast("설정 → AI 두뇌에 Claude API 키(sk-ant-…)를 넣으면 씁니다"); renderStatus(); };
+  el.querySelector("#ofTrain").onchange = e => { setOffice({train: e.target.checked}); ctx.toast(e.target.checked ? "직원들의 대화를 GH Nano 학습 데이터로 남깁니다" : "학습 데이터 기록을 멈췄습니다"); renderStatus(); };
   el.querySelector("#ofNow").onclick = async () => { ctx.toast("지금 한 가지 일을 시킵니다"); const ok = await cycle(true); if (!ok) ctx.toast("지금은 다른 일을 하는 중이거나 연결된 AI가 없습니다"); };
   el.querySelector("#ofChat").checked = c.chat !== false;
   el.querySelector("#ofChat").onchange = e => { setOffice({chat: e.target.checked}); if (e.target.checked){ localStorage.setItem("officeLastChat", "0"); } renderStatus(); };
@@ -175,6 +177,8 @@ function wire(el){
     const a = e.target.closest("[data-ag]");
     if (a){ showCard(a.dataset.ag); return; }
     if (e.target.closest("#ofTeam")){ showTeam(); return; }
+    const rb = e.target.closest("[data-rate]");
+    if (rb){ const id = rb.closest("[data-e]")?.dataset.e; if (id) rateEntry(id, +rb.dataset.rate).then(en => { if (en){ updateEntry(en); ctx.toast(en.rating < 0 ? "이 발언은 GH Nano 학습 데이터에서 뺐습니다" : en.rating > 0 ? "좋은 발언으로 표시했습니다 (학습에 우선 사용)" : "표시를 지웠습니다"); } }); return; }
     if (e.target.closest("[data-more]")){ const m = e.target.closest(".of-msg"); m.classList.toggle("open"); return; }
     if (e.target.closest("#ofClear")){ clearLog(); return; }
     if (e.target.closest(".of-card .of-x")){ $o("#ofCard").hidden = true; return; }
@@ -295,13 +299,13 @@ function renderStatus(){
   $o("#ofTitle").textContent = m ? `회의 · #${m.name}` : "대기 중";
   $o("#ofRec").classList.toggle("on", !!m); $o("#ofRecL").textContent = m ? "녹화 중" : "기록됨";
   $o("#ofMode").textContent = m ? "회의 중" : c.auto ? "자동 운영" : "대기";
-  $o("#ofStop").hidden = !m; $o("#ofAuto").checked = !!c.auto; $o("#ofEvery").value = String(c.every); $o("#ofChat").checked = c.chat !== false; $o("#ofCycle").checked = c.cycle !== false; $o("#ofComp").checked = c.computer !== false; $o("#ofClaude").checked = c.claude !== false;
+  $o("#ofStop").hidden = !m; $o("#ofAuto").checked = !!c.auto; $o("#ofEvery").value = String(c.every); $o("#ofChat").checked = c.chat !== false; $o("#ofCycle").checked = c.cycle !== false; $o("#ofComp").checked = c.computer !== false; $o("#ofClaude").checked = c.claude !== false; $o("#ofTrain").checked = c.train !== false;
   const next = nextAutoIn();
   $o("#ofStatus").innerHTML = m ? `<b class="ok">진행 중</b> · ${m.done.length}/${m.order.length} 발언${s.queued ? ` · 대기 회의 ${s.queued}개` : ""}`
     : c.auto ? (u.auto >= c.dailyMax ? `오늘 자동 회의 ${c.dailyMax}번을 다 했습니다 · 메시지를 보내면 바로 회의합니다` : `다음 자동 회의 ${next > 60e3 ? Math.round(next / 60e3) + "분 뒤" : "곧"} · 급변동 감시 중`) : "자동 회의 꺼짐 · 메시지를 보내면 바로 회의합니다";
   const nc = nextChatIn();
   const nx = nextCycleIn(), cs = cycleState(), cu = provUse().n.anthropic || 0, cap = (settings.provCap || {}).anthropic ?? 300;
-  $o("#ofFoot").innerHTML = `${c.cycle !== false ? `3분 주기 ${cs.cycling ? "일하는 중" : `다음 ${nx > 60e3 ? Math.ceil(nx / 60e3) + "분" : "곧"}`} · ` : ""}${settings.keys.anthropic ? `Claude 오늘 ${cu}/${cap} · ` : ""}오늘 회의 ${u.meetings || 0}번 (자동 ${u.auto || 0}/${c.dailyMax}) · 수다 ${u.chats || 0}/${c.chatMax}${c.chat ? (isChatting() ? " (지금 대화 중)" : ` (다음 ${nc > 60e3 ? Math.round(nc / 60e3) + "분" : "곧"})`) : ""} · AI 호출 ${u.calls || 0}번 · <button id="ofClear" class="of-link">기록 지우기</button>`;
+  $o("#ofFoot").innerHTML = `${c.cycle !== false ? `3분 주기 ${cs.cycling ? "일하는 중" : `다음 ${nx > 60e3 ? Math.ceil(nx / 60e3) + "분" : "곧"}`} · ` : ""}${settings.keys.anthropic ? `Claude 오늘 ${cu}/${cap} · ` : ""}${c.train !== false ? `오늘 학습 예시 +${u.trained || 0} · ` : ""}오늘 회의 ${u.meetings || 0}번 (자동 ${u.auto || 0}/${c.dailyMax}) · 수다 ${u.chats || 0}/${c.chatMax}${c.chat ? (isChatting() ? " (지금 대화 중)" : ` (다음 ${nc > 60e3 ? Math.round(nc / 60e3) + "분" : "곧"})`) : ""} · AI 호출 ${u.calls || 0}번 · <button id="ofClear" class="of-link">기록 지우기</button>`;
 }
 /* ============ 회의록 패널 ============ */
 // #전체: 회의·수다·내 메시지 / #업무: 직원들이 본 차트·뉴스 / 팀 방: 그 팀의 모든 것
@@ -338,7 +342,7 @@ function entryHTML(e){
     ${e.notes?.length ? `<div class="of-note">${e.notes.map(n => "↻ " + ctx.esc(n)).join("<br>")}</div>` : ""}
     ${e.think ? `<div class="of-think">💭 ${ctx.esc(e.think.length > 600 && !e.live ? e.think.slice(0, 600) + "…" : e.think)}</div>` : ""}
     ${stepsHTML(e)}
-    ${body ? `<div class="of-tx md">${body}</div>` : ""}<button class="of-link" data-more>펼치기 · 접기</button></div></div>`;
+    ${body ? `<div class="of-tx md">${body}</div>` : ""}<div class="of-acts"><button class="of-link" data-more>펼치기 · 접기</button>${!e.live && e.text ? `<button class="of-rate${e.rating > 0 ? " on" : ""}" data-rate="1" title="좋은 발언 · GH Nano 학습에 우선 사용">👍</button><button class="of-rate${e.rating < 0 ? " on" : ""}" data-rate="-1" title="나쁜 발언 · 학습 데이터에서 뺌">👎</button>${e.trainIds?.length ? `<span class="of-trn" title="이 발언으로 GH Nano 학습 예시를 만들었습니다">🎓 학습 예시</span>` : ""}` : ""}</div></div></div>`;
 }
 function appendEntry(e){
   const box = $o("#ofLog"); if (!box) return;

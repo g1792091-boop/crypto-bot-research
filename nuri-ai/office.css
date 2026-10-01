@@ -152,3 +152,7 @@ body.office-open{overflow:hidden}
 .of-bt table{border-collapse:collapse;margin:6px 0;width:100%;font-size:12px}.of-bt th,.of-bt td{padding:2px 6px;text-align:right;border-bottom:1px solid #1d2535}.of-bt th:first-child{text-align:left;color:var(--of-dim);font-weight:400}
 .of-btr{font-size:11.5px;color:#aab6cc}
 .of-bt details summary{cursor:pointer;font-size:11.5px;color:#6f86ad;margin-top:4px}.of-bt pre{white-space:pre-wrap;font-size:11px;max-height:220px;overflow:auto;color:#aab6cc}
+.of-acts{display:flex;gap:10px;align-items:center;margin-top:2px}
+.of-rate{font:inherit;font-size:12px;background:none;border:1px solid transparent;cursor:pointer;opacity:.45;padding:0 3px}
+.of-rate:hover{opacity:1}.of-rate.on{opacity:1;border-color:#3d4a63}
+.of-trn{font-size:11px;color:#8fd3a8}

@@ -581,12 +581,14 @@ async function modelsTab(){
 }
 async function hfApi(path){ return webGet("https://huggingface.co/api/" + path, "json"); }
 /* ---- 학습 (내 모델 만들기) ---- */
-let synthCtl = null, synthLog = [], allProg = null, trainOpt = Object.assign({good: true, tools: true, synth: true, topics: ["crypto_spot", "crypto_futures", "us_stocks", "arch", "news"], count: 30, judge: true, ensemble: true, agent: true, base: BASES[0].id, epochs: 3}, ls.get("trainOpt", {}));
+let synthCtl = null, synthLog = [], allProg = null, trainOpt = Object.assign({good: true, tools: true, synth: true, office: true, topics: ["crypto_spot", "crypto_futures", "us_stocks", "arch", "news"], count: 30, judge: true, ensemble: true, agent: true, base: BASES[0].id, epochs: 3}, ls.get("trainOpt", {}));
 trainOpt.topics = trainOpt.topics.filter(t => TOPICS.some(x => x.id === t)); if (!trainOpt.topics.length) trainOpt.topics = ["crypto_spot", "us_stocks", "arch", "news"];
 const saveTrainOpt = () => ls.set("trainOpt", trainOpt);
 async function trainData(){
-  const chatS = samplesFromChats(chats, {onlyGood: trainOpt.good, tools: trainOpt.tools}), syn = await loadSynth();
-  return {chatS, syn, all: [...chatS, ...(trainOpt.synth ? syn : [])]};
+  const chatS = samplesFromChats(chats, {onlyGood: trainOpt.good, tools: trainOpt.tools}), every = await loadSynth();
+  // AI 팀 사무실 대화로 만든 예시는 따로 센다 (👎 받은 것은 이미 지워져 있음)
+  const syn = every.filter(x => x.src !== "office"), office = every.filter(x => x.src === "office" && !(x.rating < 0));
+  return {chatS, syn, office, all: [...chatS, ...(trainOpt.synth ? syn : []), ...(trainOpt.office !== false ? office : [])]};
 }
 function download(name, text, type = "application/json"){
   const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([text], {type: type + ";charset=utf-8"})); a.download = name;
@@ -596,13 +598,13 @@ function download(name, text, type = "application/json"){
 let nanoRefreshT = 0;
 async function refreshNano(){
   if (Date.now() - nanoRefreshT < 2000 || !$("#covNv")) return; nanoRefreshT = Date.now();
-  const [cov, syn] = await Promise.all([skillCoverage(), loadSynth()]), fst = fusionStats(syn), src = fusionSources();
+  const [cov, every] = await Promise.all([skillCoverage(), loadSynth()]), syn = every.filter(x => x.src !== "office"), offN = every.length - syn.length, fst = fusionStats(syn), src = fusionSources();
   const set = (id, a, b) => { const r = $("#" + id); if (!r) return; r.querySelector("i").style.width = (b ? Math.min(100, Math.round(a / b * 100)) : 0) + "%"; r.querySelector("em").textContent = `${a}/${b}`; };
   set("covSrc", src.filter(t => fst.used.has(t.model)).length, src.length); set("covBi", cov.builtinDone, cov.builtin.length); set("covNv", cov.nvDone, cov.nvTotal);
-  const S = $("#covSum"); if (S) S.textContent = `학습 예시 ${syn.length}개 · 모델 간 비교 쌍(DPO) ${fst.pairs}개${fusionBadCount() ? ` · 응답 없는 모델 ${fusionBadCount()}개 제외` : ""}`;
+  const S = $("#covSum"); if (S) S.textContent = `학습 예시 ${syn.length}개 · AI 팀 사무실 대화 ${offN}개 · 모델 간 비교 쌍(DPO) ${fst.pairs}개${fusionBadCount() ? ` · 응답 없는 모델 ${fusionBadCount()}개 제외` : ""}`;
 }
 async function trainTab(){
-  const {chatS, syn, all} = await trainData();
+  const {chatS, syn, office, all} = await trainData();
   const rated = chats.flatMap(c => c.messages).filter(m => m.rating > 0).length;
   const base = BASES.find(b => b.id === trainOpt.base) || BASES[0];
   const teacher = routeCandidates("general")[0];
@@ -621,21 +623,22 @@ async function trainTab(){
       <div class="fuse-box"><b>스킬 ${skillN}개</b><span>기본 ${cov?.builtin.length || 0} + NVIDIA ${cov?.nvTotal || 0} · 실제 도구 사용법 포함</span></div></div>
       <div class="fuse-arrow" aria-hidden="true">→</div>
       <div class="fuse-out"><span class="logo">${esc([...AI()][0].toUpperCase())}</span><b>${esc(AI())}</b><span>모델 파일 1개 · ${esc(NANO_MERGE.size)} · 이 앱에서 오프라인 실행</span></div></div>
-    <div class="nano-cov">${bar("융합된 모델", usedN, srcAll.length, "covSrc")}${cov ? bar("기본 스킬", cov.builtinDone, cov.builtin.length, "covBi") + bar("NVIDIA 스킬", cov.nvDone, cov.nvTotal, "covNv") : ""}<span class="small" id="covSum">학습 예시 ${syn.length}개 · 모델 간 비교 쌍(DPO) ${fst.pairs}개${fusionBadCount() ? ` · 응답 없는 모델 ${fusionBadCount()}개 제외` : ""}</span></div>
+    <div class="nano-cov">${bar("융합된 모델", usedN, srcAll.length, "covSrc")}${cov ? bar("기본 스킬", cov.builtinDone, cov.builtin.length, "covBi") + bar("NVIDIA 스킬", cov.nvDone, cov.nvTotal, "covNv") : ""}<span class="small" id="covSum">학습 예시 ${syn.length}개 · AI 팀 사무실 대화 ${office.length}개 · 모델 간 비교 쌍(DPO) ${fst.pairs}개${fusionBadCount() ? ` · 응답 없는 모델 ${fusionBadCount()}개 제외` : ""}</span></div>
     <div class="row wrap">${running ? `<button class="btn" id="nanoStop">멈추기</button><span class="small" id="allProg">${allRun ? (allProg ? `${allProg.done}/${allProg.total} 완료 · 지금: ${esc(allProg.label || "")}` : "시작하는 중…") : "데이터를 더 만드는 중"} · 다른 대화를 해도 계속되고, 멈춰도 이어서 할 수 있습니다</span>`
       : `${allDone ? `<button class="btn" id="nanoGo" ${ts.length && !synthCtl ? "" : "disabled"}>융합 데이터 100개 더</button>` : `<button class="btn primary" id="nanoAll" ${ts.length && !synthCtl ? "" : "disabled"}>${syn.length ? "이어서 만들기" : esc(AI()) + " 만들기 시작"} (남은 스킬 ${skillN - skillDone}개)</button>`}<button class="btn${allDone ? " primary" : ""}" id="nanoNb">Colab에서 완성하기 (노트북 받기)</button>`}</div>
     <div class="trlog" id="trLog2">${running ? synthLog.slice(-4).map(l => `<div>${esc(l)}</div>`).join("") : ""}</div>
     <ol class="nano-steps"><li class="${allDone ? "done" : running ? "run" : ""}"><b>1. 융합 데이터</b><span>모든 모델이 답하고 순위를 매김 · 모든 스킬</span></li><li><b>2. 융합 학습</b><span>무료 Colab · SFT + DPO</span></li><li class="${settings.myModel ? "done" : ""}"><b>3. 등록</b><span>${settings.myModel ? "등록됨: " + esc(settings.myModel) : "모델 파일을 앱에 넣으면 끝"}</span></li></ol>
     <details class="nano-more"><summary>어떻게 하나로 합치나요?</summary>
       <p>Llama·DeepSeek·Mistral·Qwen·Nemotron처럼 구조가 다른 모델은 가중치를 그대로 더할 수 없습니다. 그래서 FuseChat-3.0과 같은 <b>모델 융합</b>을 씁니다: 같은 질문에 여러 모델이 답하면 심사 모델이 순위를 매기고, ${esc(AI())}는 <b>가장 좋은 답을 따라 배우고(SFT)</b>, <b>좋은 답과 나쁜 답의 차이를 배웁니다(DPO)</b>. 모든 모델이 돌아가며 참여하므로 각 모델의 강점이 한 모델에 모입니다.</p>
+      <p>AI 팀 사무실 직원들의 회의는 '질문 → 팀원들의 분석·반론·리스크를 머릿속으로 거친 생각(&lt;think&gt;) → 팀장 결론' 형태로, 실제 도구 사용·자료 해설·검증 통과 매매법·동료 대화도 예시로 들어갑니다(Claude가 쓴 글 제외, 👎 받은 발언 제외).</p>
       <p>스킬은 스킬마다 핵심 문답과 '원문을 찾아 읽고 답하는 과정'으로 학습하고, 스킬 원문은 앱 안에 모두 들어 있어 ${esc(AI())}가 필요할 때 꺼내 읽습니다.</p>
       <p>몸체: 같은 Qwen2 구조인 ${NANO_MERGE.models.map(m => esc(m.id.split("/")[1]) + `(${esc(m.role)})`).join(" + ")}를 TIES로 먼저 합친 ${esc(NANO_MERGE.name)}입니다.</p>
       <pre class="nano-yml">${esc(mergeYAML())}</pre></details></div>
   <h3 class="h">학습 · 내 모델 만들기</h3><p class="sub">${AI()}와 나눈 대화와 큰 AI가 만든 문제·모범답안으로 작은 오픈모델을 직접 미세조정(LoRA)해, 내 노트북에서 인터넷 없이 도는 나만의 AI를 만듭니다. NVIDIA 스킬(data-designer, tao-finetune-huggingface-model)과 같은 방식입니다.</p>
   <ol class="steps"><li><b>데이터 모으기</b><span>👍 받은 답변</span></li><li><b>합성 데이터</b><span>큰 AI가 문제·답 생성</span></li><li><b>학습</b><span>Colab 무료 GPU</span></li><li><b>내 모델 등록</b><span>Ollama · 내 기기</span></li></ol>
   <div class="card"><h3>① 학습 데이터 <small>총 ${all.length}개</small></h3><div class="body">
-    <div class="kpis"><div class="kpi"><label>👍 받은 답</label><span class="v">${rated}</span></div><div class="kpi"><label>대화에서 뽑은 예시</label><span class="v">${chatS.length}</span></div><div class="kpi"><label>합성 예시</label><span class="v">${syn.length}</span></div></div>
-    <div class="row wrap">${ck("good", "👍 받은 답만")}${ck("tools", "도구 쓰는 과정까지 가르치기")}${ck("synth", "합성 데이터 포함")}</div>
+    <div class="kpis"><div class="kpi"><label>👍 받은 답</label><span class="v">${rated}</span></div><div class="kpi"><label>대화에서 뽑은 예시</label><span class="v">${chatS.length}</span></div><div class="kpi"><label>합성 예시</label><span class="v">${syn.length}</span></div><div class="kpi"><label>AI 팀 사무실 대화</label><span class="v">${office.length}</span></div></div>
+    <div class="row wrap">${ck("good", "👍 받은 답만")}${ck("tools", "도구 쓰는 과정까지 가르치기")}${ck("synth", "합성 데이터 포함")}${ck("office", "AI 팀 사무실 대화 포함")}</div>
     <div class="row"><button class="btn primary" id="trDl" ${all.length ? "" : "disabled"}>학습 데이터 내려받기 (nuri-train.jsonl)</button><span class="small">답변 아래 👍로 좋은 답을 표시하세요. 최소 50개, 200개 이상이면 효과가 좋습니다.</span></div></div></div>
   <div class="card"><h3>② 합성 데이터 만들기 <small>선생 AI: ${teacher ? esc((PROVIDERS[teacher.id]?.name || teacher.id) + " · " + shortModel(teacher.model)) : "API 키 필요"}</small></h3><div class="body">
     <div class="topics">${TOPICS.map(t => `<label class="chk"><input type="checkbox" data-topic="${t.id}"${trainOpt.topics.includes(t.id) ? " checked" : ""}> ${esc(t.name)}</label>`).join("")}</div>
