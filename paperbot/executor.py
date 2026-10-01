@@ -928,7 +928,7 @@ class Executor:
                 break
             self._wait()
         if self.stopping:
-            self._event(INFO, "stop", "끄라는 신호(SIGTERM)를 받아 하던 반복을 마치고 멈춥니다. 열린 포지션과 "
+            self._event(INFO, "sigterm", "끄라는 신호(SIGTERM)를 받아 하던 반복을 마치고 멈춥니다. 열린 포지션과 "
                         "거래소 손절은 그대로 남습니다", {"trade": self.trade})
 
     def _wait(self) -> None:

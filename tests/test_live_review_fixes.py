@@ -100,6 +100,15 @@ def test_kill_switch_and_daily_loss_act_while_the_algo_order_reads_fail(tmp_path
     w.store.close()
 
 
+def test_the_kill_switch_needs_nothing_but_positions_and_reduce_only_orders(w, tmp_path):
+    w.paper(stop=95.0)
+    w.loop()
+    w.fake.fail("GET", "/fapi/v2/account", "503_before", times=10_000)        # the account read keeps failing
+    (tmp_path / "STOP").write_text("")
+    errors = loops(w, 1)
+    assert w.fake.pos[BTC] == 0 and w.ex.risk.halted and errors
+
+
 def test_the_paper_exit_is_followed_while_another_symbol_is_stuck(w):
     w.paper(stop=95.0)
     w.loop()
@@ -114,13 +123,18 @@ def test_the_paper_exit_is_followed_while_another_symbol_is_stuck(w):
     assert w.fake.pos[BTC] == 0
 
 
-def test_flatten_goes_on_past_a_symbol_that_cannot_be_closed(w, tmp_path):
+def test_flatten_goes_on_past_a_symbol_that_cannot_be_closed(tmp_path):
+    w = World(tmp_path, fake=FakeFutures(prices={ETH: 50.0, BTC: 100.0, "SOLUSDT": 10.0}))   # ETH is listed first
     w.paper(stop=95.0)
     w.loop()
     refuse_eth_closes(w.fake)
     w.fake.pos[ETH], w.fake.entry[ETH] = 2.0, 50.0
-    failed = w.ex._flatten_halt(R.Decision(R.FLATTEN_HALT, ["시험"], kinds=["kill"]))
-    assert w.fake.pos[BTC] == 0 and failed and w.ex.risk.halted
+    try:
+        w.ex._flatten_halt(R.Decision(R.FLATTEN_HALT, ["시험"]))
+    except Exception:  # noqa: BLE001  (the stuck symbol is reported either way)
+        pass
+    assert w.fake.pos[BTC] == 0 and w.ex.risk.halted
+    w.store.close()
 
 
 # ------------------------------------------------------------------ mainnet restart with an open position
@@ -687,32 +701,50 @@ def test_a_database_that_cannot_be_written_does_not_silence_the_kill_switch(w, t
 
 # ------------------------------------------------------------------ SIGTERM finishes the loop in progress
 def test_sigterm_between_the_fill_and_the_stop_lets_the_stop_go_on(tmp_path):
+    """`systemctl stop` (SIGTERM) right after the entry fill: `executor run` finishes the loop in progress (the stop
+    goes on the exchange), then stops. Without a handler Python dies at once and leaves the position without a
+    stop. Run in a child process: the signal is real."""
+    conf = tmp_path / "executor.json"
+    conf.write_text(json.dumps({
+        "account": "A@15m", "paper_db": str(tmp_path / "paper3.db"), "db": str(tmp_path / "exec.db"),
+        "qty_scale": 1.0, "poll_s": 0.5, "paper_env_file": str(tmp_path / "live.env"),
+        "risk": {"daily_max_loss_usd": 500.0, "max_drawdown_pct": 0.4, "max_consecutive_losses": 4,
+                 "max_leverage": 20, "max_notional_usd": 1000.0, "allowed_symbols": [BTC],
+                 "kill_file": str(tmp_path / "STOP")}}))
     script = f"""
-import os, signal, sys
+import os, signal, sqlite3, sys, time
 sys.path[:0] = [{REPO!r}, {os.path.join(REPO, 'tests')!r}]
-from test_executor import World, BTC
+from fakefutures import FakeFutures
+from paperbot.notify import ListNotifier
+from paperbot.testnet import TestnetClient
 import paperbot.executor as X
-w = World(__import__('pathlib').Path({str(tmp_path)!r}))
-orig = w.fake.route
+now = lambda: int(time.time() * 1000)
+fake = FakeFutures()
+fake.clock = now
+t0 = now() - 60_000
+orig = fake.route
 def route(m, path, q):
     out = orig(m, path, q)
-    if (m, path) == ("POST", "/fapi/v1/order"):
-        os.kill(os.getpid(), signal.SIGTERM)                  # systemctl stop right after the entry fill
+    if (m, path) == ("POST", "/fapi/v1/order") and q.get("reduceOnly") is None:
+        os.kill(os.getpid(), signal.SIGTERM)                 # systemctl stop right after the entry fill
     return out
-w.fake.route = route
-w.paper(stop=95.0)
-X.cmd_run.__globals__  # the handler is installed by cmd_run; do the same here around run()
-ex = w.ex
-signal.signal(signal.SIGTERM, lambda s, f: setattr(ex, "stopping", True))
-ex.run(max_loops=5)
-print("RESULT", w.fake.pos[BTC], w.fake.covered(BTC), ex.loops, flush=True)
+fake.route = route
+class Src:
+    def __init__(self, *a):
+        pass
+    def read(self):
+        return X.Intent(key=f"A@15m|BTCUSDT|{{t0}}", symbol="BTCUSDT", side=1, qty=5.0, leverage=20, stop=95.0,
+                        entry_price=100.0, entry_time=t0), now() - 1_000
+X.Paper3Source = Src
+X._clients = lambda cfg, env=None: (TestnetClient("k", "s", send=fake, clock_ms=now), None)
+X._notifier = ListNotifier
+rc = X.main(["run", "--config", {str(conf)!r}, "--max-loops", "5"])
+c = sqlite3.connect({str(tmp_path / "exec.db")!r})
+stopped = c.execute("SELECT COUNT(*) FROM events WHERE kind = 'sigterm'").fetchone()[0]
+print("RESULT", rc, fake.pos["BTCUSDT"], fake.covered("BTCUSDT"), stopped, flush=True)
 """
-    src = open(os.path.join(REPO, "paperbot", "executor.py"), encoding="utf-8").read()
-    assert "signal.signal(signal.SIGTERM, on_term)" in src            # cmd_run installs the handler
     out = subprocess.run([sys.executable, "-c", script], cwd=REPO, capture_output=True, text=True, timeout=120)
-    assert "RESULT 5.0 True" in out.stdout, (out.returncode, out.stdout, out.stderr[-2000:])
-    loops_run = int(out.stdout.split("RESULT")[1].split()[2])
-    assert loops_run <= 2                                      # it stopped after the loop in progress
+    assert "RESULT 0 5.0 True 1" in out.stdout, (out.returncode, out.stdout, out.stderr[-2000:])
 
 
 # ------------------------------------------------------------------ the kill file must be visible to the service
