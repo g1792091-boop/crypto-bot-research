@@ -279,6 +279,86 @@ export function notebookJSON(o){
   ];
   return JSON.stringify({nbformat: 4, nbformat_minor: 5, metadata: {accelerator: "GPU", colab: {provenance: [], gpuType: "T4"}, kernelspec: {name: "python3", display_name: "Python 3"}, language_info: {name: "python"}}, cells}, null, 1);
 }
+/* ============ GH Nano: 여러 모델을 실제로 합친(머지) 하나의 모델 ============ */
+// 같은 뼈대(Qwen2, 28층·1536차원·어휘 151,936)인 공개 모델끼리 TIES 방식으로 가중치를 섞는다.
+// 공통 조상(Qwen2.5 1.5B)과의 차이(각 모델이 따로 배운 능력)만 골라 더하므로 서로의 장점이 한 모델에 남는다.
+export const NANO_MERGE = {
+  name: "GH Nano 1.5B", base: "Qwen/Qwen2.5-1.5B", tokenizer: "Qwen/Qwen2.5-1.5B-Instruct", size: "약 1GB (Q4)",
+  models: [
+    {id: "Qwen/Qwen2.5-1.5B-Instruct", role: "대화·지시 따르기", weight: 0.4, density: 0.6, lic: "Apache-2.0"},
+    {id: "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B", role: "딥시크 R1 추론", weight: 0.3, density: 0.5, lic: "MIT"},
+    {id: "Qwen/Qwen2.5-Coder-1.5B-Instruct", role: "코딩", weight: 0.2, density: 0.5, lic: "Apache-2.0"},
+    {id: "Qwen/Qwen2.5-Math-1.5B-Instruct", role: "수학·계산", weight: 0.1, density: 0.5, lic: "Apache-2.0"}
+  ]
+};
+export function mergeYAML(p = NANO_MERGE){
+  return `# ${p.name}: 여러 모델을 하나로 합치는 설정 (mergekit)
+merge_method: ties
+base_model: ${p.base}
+models:
+${p.models.map(m => `  - model: ${m.id}   # ${m.role}\n    parameters:\n      weight: ${m.weight}\n      density: ${m.density}`).join("\n")}
+parameters:
+  normalize: true
+  int8_mask: true
+dtype: bfloat16
+tokenizer_source: ${p.tokenizer}
+`;
+}
+const indent = c => c.split("\n").map(l => l ? "    " + l : l).join("\n");
+export function nanoNotebookJSON(o){
+  const p = NANO_MERGE, name = o.name || "gh-nano";
+  const md = s => ({cell_type: "markdown", metadata: {}, source: s.split(/(?<=\n)/)});
+  const code = s => ({cell_type: "code", metadata: {}, execution_count: null, outputs: [], source: s.split(/(?<=\n)/)});
+  const header = `BASE = "/content/gh-nano-merged"   # 합친 모델
+EPOCHS = ${o.epochs || 2}
+MAX_LEN = 2048
+BATCH = 2
+ACCUM = 4
+OUT = "${name}"`;
+  const card = `import json, collections, datetime, os
+kinds = collections.Counter()
+if DATA:
+    with open(DATA, encoding="utf-8") as fh:
+        for line in fh:
+            ms = json.loads(line)["messages"]
+            kinds["도구 사용 기록" if any("<tool name=" in m["content"] for m in ms if m["role"] == "assistant") else "문답"] += 1
+merged = ${JSON.stringify(p.models.map(m => `${m.id} (${m.role}, 비중 ${m.weight})`))}
+card = f"""# ${NAME()}
+
+여러 오픈모델을 실제로 하나로 합친(머지) 뒤, 큰 AI들의 지식·스킬·도구 사용법을 학습시킨 자체 AI 모델입니다.
+
+## 합친 모델 (TIES 머지, 공통 바탕: ${p.base})
+""" + "\\n".join("- " + m for m in merged) + f"""
+
+## 추가 학습
+- 방식: LoRA(QLoRA 4비트) {EPOCHS}회 · 학습 예시 {sum(kinds.values())}개 {dict(kinds) if kinds else '(학습 데이터 없이 합치기만 함)'}
+- 데이터: 연결된 여러 AI의 답을 합친 모범답안, 기본·NVIDIA 스킬 지식, 실제 도구(시세·설계·뉴스) 사용 기록
+
+## 사용법
+GH Nano 앱 → 설정 → 학습 · 내 모델 → 내 모델 등록에서 GGUF 파일을 고르세요. 만든 날: {datetime.date.today()}
+라이선스: 합친 모델들의 라이선스(Apache-2.0, MIT)를 따릅니다.
+"""
+open("README.md", "w", encoding="utf-8").write(card)
+system = ${JSON.stringify(TRAIN_SYS("chat"))}
+open("Modelfile", "w", encoding="utf-8").write(f'FROM ./{os.path.basename(GGUF or "model.gguf")}\\nSYSTEM """{system}"""\\nPARAMETER temperature 0.6\\n')
+print(card)`;
+  const cells = [
+    md(`# ${NAME()} 만들기 — 여러 모델 합치기 + 스킬 학습\n\n**순서**: 위쪽 메뉴 **런타임 → 런타임 유형 변경 → T4 GPU** → **런타임 → 모두 실행**. 학습 데이터(\`nuri-train.jsonl\`)를 올리라고 나오면 올리세요(없으면 취소하면 합치기만 합니다).\n\n**합치는 모델** (모두 같은 Qwen2 뼈대 · 공통 바탕 \`${p.base}\`)\n${p.models.map(m => `- \`${m.id}\` — ${m.role} (비중 ${m.weight})`).join("\n")}\n\n1) mergekit TIES 방식으로 가중치를 섞어 하나의 모델을 만들고 2) 앱이 만든 GH Nano 학습 데이터로 LoRA 학습한 뒤 3) GGUF(${p.size})로 변환해 내려받습니다. 처음부터 끝까지 보통 30~60분 걸립니다.`),
+    code(`%%capture\n!pip install -q unsloth\n!pip install -q --upgrade datasets trl\n# 합치기 도구(mergekit)는 학습 도구와 버전이 부딪히지 않게 따로 설치\n!python -m venv /content/mkenv\n!/content/mkenv/bin/pip -q install --upgrade pip\n!/content/mkenv/bin/pip -q install torch --index-url https://download.pytorch.org/whl/cpu\n!/content/mkenv/bin/pip -q install mergekit`),
+    md("## 1. 여러 모델을 하나로 합치기 (mergekit · TIES)"),
+    code(`CONFIG = """${mergeYAML(p)}"""\nopen("gh-nano-merge.yml", "w").write(CONFIG)\nprint(CONFIG)`),
+    code(`!/content/mkenv/bin/mergekit-yaml gh-nano-merge.yml /content/gh-nano-merged --lazy-unpickle --copy-tokenizer --out-shard-size 1B\n!ls -la /content/gh-nano-merged`),
+    md("## 2. 학습 데이터 올리기 (선택)"),
+    code(`${header}\nfrom google.colab import files\nimport os\nDATA = "nuri-train.jsonl" if os.path.exists("nuri-train.jsonl") else None\nif not DATA:\n    print("앱에서 받은 nuri-train.jsonl을 올리세요. 없으면 취소 → 합친 모델만 만듭니다.")\n    try:\n        up = files.upload()\n        DATA = list(up.keys())[0] if up else None\n    except Exception as e:\n        print("올리기 건너뜀:", e)\nprint("학습 데이터:", DATA)`),
+    md("## 3. 합친 모델 불러오기 (4비트 QLoRA)"), code(pyLoad),
+    md("## 4. GH Nano 학습 (스킬·도구·여러 AI 지식)"),
+    code(`if DATA:\n${indent(pyData)}\n${indent(pyTrain)}\nelse:\n    print("학습 데이터가 없어 합친 모델 그대로 변환합니다.")`),
+    md("## 5. 시험해 보기"), code(pyTest),
+    md("## 6. GGUF로 변환해서 내려받기"), code(`${pyGGUF}\nfor f in PARTS:\n    files.download(f)`),
+    md("## 7. 모델 카드"), code(`${card}\nfiles.download("README.md")\nfiles.download("Modelfile")`)
+  ];
+  return JSON.stringify({nbformat: 4, nbformat_minor: 5, metadata: {accelerator: "GPU", colab: {provenance: [], gpuType: "T4"}, kernelspec: {name: "python3", display_name: "Python 3"}, language_info: {name: "python"}}, cells}, null, 1);
+}
 export function localScript(o){
   return `# 내 AI 직접 학습 - 내 노트북(RTX 3050) 버전
 # 준비(한 번만): WSL2 Ubuntu 또는 Windows에 Python 3.11과 NVIDIA 드라이버를 설치한 뒤

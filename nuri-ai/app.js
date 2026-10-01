@@ -7,7 +7,7 @@ import { esc, uid, fmtN, ls, idb, bus, settings, saveSettings, CATALOG, eng, loa
 import { runAgent, BUILTIN_SKILLS, TOOLS, installSkill, marketNews } from "./agent.js";
 import { nvIndex, nvSkill, nvSearch, GROUP_KO } from "./nvskills.js";
 import { TEMPLATES } from "./templates.js";
-import { BASES, TOPICS, samplesFromChats, loadSynth, removeSynth, clearSynth, toJSONL, generateSynth, notebookJSON, localScript, teachers } from "./train.js";
+import { BASES, TOPICS, samplesFromChats, loadSynth, removeSynth, clearSynth, toJSONL, generateSynth, notebookJSON, localScript, teachers, NANO_MERGE, nanoNotebookJSON, mergeYAML } from "./train.js";
 import { initTrade } from "./trade.js";
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
@@ -592,10 +592,12 @@ async function trainTab(){
   const ck = (k, label) => `<label class="chk"><input type="checkbox" data-topt="${k}"${trainOpt[k] ? " checked" : ""}> ${label}</label>`;
   const ts = teachers(), nanoRunning = synthCtl && synthCtl.nano;
   return `<div class="nano-hero"><div class="nano-badge"><span class="logo">${esc([...AI()][0].toUpperCase())}</span><div><b>${esc(AI())} 모델 만들기</b><span>연결된 AI들의 지식 + 기본·NVIDIA 스킬 + 실제 도구 사용법을 하나의 작은 모델에 담습니다</span></div></div>
-    <ol class="nano-steps"><li class="${syn.length >= 50 ? "done" : nanoRunning ? "run" : ""}"><b>1. 데이터 증류</b><span>${ts.length >= 2 ? `${ts.map(t => shortModel(t.model)).join(" + ")} 답을 합침` : ts.length ? `${shortModel(ts[0].model)}가 선생` : "API 키 필요"}</span></li><li><b>2. 학습</b><span>Colab 무료 GPU · ${esc(base.name)} LoRA</span></li><li class="${settings.myModel ? "done" : ""}"><b>3. 등록</b><span>${settings.myModel ? "등록됨: " + esc(settings.myModel) : "앱 안에서 실행"}</span></li></ol>
-    <div class="row wrap">${nanoRunning ? `<button class="btn" id="nanoStop">멈추기</button><span class="small">진행 중 · 다른 대화를 해도 계속 만듭니다</span>` : `<button class="btn primary" id="nanoGo" ${ts.length ? "" : "disabled"}>${esc(AI())} 데이터 100개 만들기</button><button class="btn" id="nanoNb">Colab 학습 노트북 받기</button>`}<span class="small">지금 합성 예시 ${syn.length}개 · 200개 이상이면 좋습니다</span></div>
+    <div class="nano-merge"><b>${esc(NANO_MERGE.name)} = 모델 ${NANO_MERGE.models.length}개를 하나로 합친 자체 모델</b><div class="nano-parts">${NANO_MERGE.models.map(m => `<span title="${esc(m.id)} · ${esc(m.lic)}"><i>${esc(m.id.split("/").pop().replace(/-Instruct$/, ""))}</i>${esc(m.role)} · ${Math.round(m.weight * 100)}%</span>`).join("")}</div><span class="small">같은 Qwen2 구조(1.5B)라 가중치를 직접 합칠 수 있습니다(TIES 병합). 결과 ${esc(NANO_MERGE.size)} · 앱 안에서 실행</span></div>
+    <ol class="nano-steps"><li><b>0. 모델 합치기</b><span>딥시크 R1 + Qwen 대화·코딩·수학</span></li><li class="${syn.length >= 50 ? "done" : nanoRunning ? "run" : ""}"><b>1. 데이터 증류</b><span>${ts.length >= 2 ? `${ts.map(t => shortModel(t.model)).join(" + ")} 답을 합침` : ts.length ? `${shortModel(ts[0].model)}가 선생` : "API 키 필요"}</span></li><li><b>2. 학습</b><span>Colab 무료 GPU · 합친 모델에 LoRA</span></li><li class="${settings.myModel ? "done" : ""}"><b>3. 등록</b><span>${settings.myModel ? "등록됨: " + esc(settings.myModel) : "앱 안에서 실행"}</span></li></ol>
+    <div class="row wrap">${nanoRunning ? `<button class="btn" id="nanoStop">멈추기</button><span class="small">진행 중 · 다른 대화를 해도 계속 만듭니다</span>` : `<button class="btn primary" id="nanoGo" ${ts.length ? "" : "disabled"}>${esc(AI())} 데이터 100개 만들기</button><button class="btn" id="nanoNb">Colab 노트북 받기 (합치기+학습)</button><button class="btn ghost" id="nanoYml">병합 설정 보기</button>`}<span class="small">지금 합성 예시 ${syn.length}개 · 200개 이상이면 좋습니다</span></div>
     <div class="trlog" id="trLog2">${nanoRunning ? synthLog.slice(-4).map(l => `<div>${esc(l)}</div>`).join("") : ""}</div>
-    <p class="small" style="margin:0">여러 AI의 지식을 하나로 '증류'하는 방식입니다. 실제 학습(가중치 업데이트)은 GPU가 필요해 무료 Colab에서 하고, 결과 모델(${esc(base.gguf)})은 이 앱 안에서 그래픽카드로 실행됩니다.</p></div>
+    <pre class="nano-yml" id="nanoYmlBox" hidden>${esc(mergeYAML())}</pre>
+    <p class="small" style="margin:0">① 딥시크·Qwen 모델 4개의 가중치를 실제로 합치고 ② 연결된 API AI들과 스킬로 만든 데이터로 추가 학습해 ③ 하나의 GH Nano 파일(GGUF)로 만듭니다. 노트북 하나로 무료 Colab에서 끝까지 실행되고, 데이터가 없으면 합치기만 합니다.</p></div>
   <h3 class="h">학습 · 내 모델 만들기</h3><p class="sub">${AI()}와 나눈 대화와 큰 AI가 만든 문제·모범답안으로 작은 오픈모델을 직접 미세조정(LoRA)해, 내 노트북에서 인터넷 없이 도는 나만의 AI를 만듭니다. NVIDIA 스킬(data-designer, tao-finetune-huggingface-model)과 같은 방식입니다.</p>
   <ol class="steps"><li><b>데이터 모으기</b><span>👍 받은 답변</span></li><li><b>합성 데이터</b><span>큰 AI가 문제·답 생성</span></li><li><b>학습</b><span>Colab 무료 GPU</span></li><li><b>내 모델 등록</b><span>Ollama · 내 기기</span></li></ol>
   <div class="card"><h3>① 학습 데이터 <small>총 ${all.length}개</small></h3><div class="body">
@@ -857,7 +859,14 @@ $("#sheetBody").addEventListener("click", async e => {
   if (t.dataset.opfsrun){ $("#sheet").close(); settings.brain = "local"; saveSettings(); await loadModel({kind: "opfs", dir: t.dataset.opfsrun, name: t.dataset.opfsrun}); toast(eng.w ? t.dataset.opfsrun + " 모델로 대화합니다" : eng.error); }
   if (t.dataset.opfsrm){ if (t.dataset.c !== "1"){ t.dataset.c = "1"; t.textContent = "정말 삭제"; return; } await opfsRemove(t.dataset.opfsrm); renderSheet(); }
   if (t.id === "trDl"){ const {all} = await trainData(); download("nuri-train.jsonl", toJSONL(all), "application/jsonl"); toast(`학습 예시 ${all.length}개를 내보냈습니다`); }
-  if (t.id === "trNb" || t.id === "trPy" || t.id === "nanoNb"){
+  if (t.id === "nanoYml"){ const box = $("#nanoYmlBox"); if (box) box.hidden = !box.hidden; }
+  if (t.id === "nanoNb"){
+    const name = ls.get("myModelName", "gh-nano");
+    download("gh_nano_merge_colab.ipynb", nanoNotebookJSON({name, epochs: trainOpt.epochs}));
+    const {all} = await trainData(); if (all.length) setTimeout(() => download("nuri-train.jsonl", toJSONL(all), "application/jsonl"), 400);
+    toast(all.length ? `노트북과 학습 데이터 ${all.length}개를 받았습니다. Colab에서 위에서부터 실행하세요` : "노트북을 받았습니다. 데이터 없이 실행하면 모델 합치기만 합니다");
+  }
+  if (t.id === "trNb" || t.id === "trPy"){
     const b = BASES.find(x => x.id === trainOpt.base) || BASES[0], name = ls.get("myModelName", "gh-nano"), local = t.id === "trPy";
     const o = {base: b.id, baseName: b.name, lic: b.lic, epochs: trainOpt.epochs, name, maxLen: local ? 1024 : 2048, batch: local ? 1 : 2, accum: local ? 8 : 4};
     if (local) download("nuri_train_local.py", localScript(o), "text/x-python"); else download("nuri_train_colab.ipynb", notebookJSON(o));
