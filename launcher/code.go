@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -251,10 +252,18 @@ func runCode(ctx context.Context, action string, in obj) (obj, error) {
 		old, rerr := os.ReadFile(p)
 		os.MkdirAll(filepath.Dir(p), 0o755)
 		content := str(in, "content")
-		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+		data := []byte(content)
+		if str(in, "encoding") == "base64" { // 이미지·서명 같은 바이너리 파일
+			b, err := base64.StdEncoding.DecodeString(content)
+			if err != nil {
+				return nil, fmt.Errorf("base64 해석 실패: %v", err)
+			}
+			data = b
+		}
+		if err := os.WriteFile(p, data, 0o644); err != nil {
 			return nil, err
 		}
-		return obj{"path": relOf(p), "created": rerr != nil, "bytes": len(content), "old": clip(string(old), 400000)}, nil
+		return obj{"path": relOf(p), "created": rerr != nil, "bytes": len(data), "old": clip(string(old), 400000)}, nil
 
 	case "edit":
 		p, err := resolve(str(in, "path"))

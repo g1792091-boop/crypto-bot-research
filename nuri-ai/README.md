@@ -70,9 +70,9 @@ Claude·ChatGPT 같은 비공개 AI는 쓰지 않고, 오픈소스 모델(무료
 
 ## NVIDIA 공식 스킬 388개 (설정 → 스킬)
 
-[NVIDIA/skills](https://github.com/NVIDIA/skills) 전체(지침·참고문서·스크립트, 약 4,900개 파일)를 압축해 `skills/nvidia/`에 내장했습니다(Apache-2.0 / CC-BY-4.0).
+[NVIDIA/skills](https://github.com/NVIDIA/skills) 저장소의 **모든 파일 5,470개**(스킬 388개의 지침·참고문서·스크립트·이미지·서명 파일 + plugins·components.d·docs 등 저장소 나머지)를 압축해 `skills/nvidia/`에 내장했습니다. 빌드할 때 원본과 바이트 단위로 대조합니다(Apache-2.0 / CC-BY-4.0).
 - GH Nano가 필요할 때 `nv_skill_search` → `nv_skill_read`로 찾아 읽고 그 절차를 따릅니다. 젯슨·cuOpt·옴니버스처럼 제품 이름을 말하면 맞는 스킬이 자동으로 켜집니다.
-- **작업 폴더에 전체 설치**: `npx skills add NVIDIA/skills`와 같은 결과(`.claude/skills/`)로 설치해 Claude Code·Codex·코드 모드에서 스크립트를 실행할 수 있습니다.
+- **작업 폴더에 전체 설치**: 스킬은 `.claude/skills/<이름>/`(`npx skills add NVIDIA/skills`와 같은 위치), 저장소 나머지는 `.claude/nvidia-skills-repo/`에 원본 그대로 설치해 Claude Code·Codex·코드 모드에서 스크립트를 실행할 수 있습니다.
 - 갱신: `python3 build_nvskills.py <NVIDIA/skills 클론> nuri-ai/skills/nvidia`
 
 ## 학습 · 내 모델 만들기 (설정 → 학습 · 내 모델)

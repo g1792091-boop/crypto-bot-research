@@ -155,6 +155,13 @@ async function searchMany(queries, n = 5){
   return out;
 }
 
+// 스킬 폴더의 모든 파일(글자 + 이진)을 작업 폴더에 그대로 쓴다
+export async function installSkill(sk, base){
+  let n = 0;
+  for (const [f, c] of Object.entries(sk.files || {})){ await codeCall("write", {path: `${base}/${f}`, content: c}); n++; }
+  for (const [f, c] of Object.entries(sk.bin || {})){ await codeCall("write", {path: `${base}/${f}`, content: c, encoding: "base64"}); n++; }
+  return n;
+}
 /* ================= 도구 ================= */
 const srcText = rs => rs.map((x, i) => `[${i+1}] ${x.title}\n${x.url}${x.date ? " · " + x.date : ""}\n${x.snippet || ""}`).join("\n\n");
 export const TOOLS = {
@@ -386,8 +393,9 @@ export const TOOLS = {
     desc:"NVIDIA 스킬의 지침(SKILL.md)이나 참고 파일을 읽는다. 읽은 지침의 절차를 따라 답하거나 작업한다",
     async run(a){
       const sk = await nvSkill(a.name);
+      if (a.file && sk.bin?.[a.file]) return {text: `${a.file}: 이진 파일(이미지·서명 등, ${Math.round(sk.bin[a.file].length * 0.75).toLocaleString()}바이트)이라 글로 읽을 수 없습니다. nv_skill_install로 설치하면 그대로 쓸 수 있습니다.`, summary: "이진 파일"};
       const file = a.file && sk.files[a.file] ? a.file : "SKILL.md";
-      const others = Object.keys(sk.files).filter(f => f !== file);
+      const others = [...Object.keys(sk.files), ...Object.keys(sk.bin || {})].filter(f => f !== file);
       const body = sk.files[file] || "";
       return {text: `# ${sk.name}/${file}\n${body.slice(0, 20000)}${body.length > 20000 ? "\n…(잘림)" : ""}${others.length ? `\n\n[이 스킬의 다른 파일 ${others.length}개]\n${others.slice(0, 60).join("\n")}` : ""}`, summary: `${sk.name} · ${file} · ${body.length.toLocaleString()}자`, sources: [{title: "NVIDIA/skills · " + sk.name, url: `https://github.com/NVIDIA/skills/tree/main/skills/${sk.name}`}]};
     }},
@@ -396,7 +404,7 @@ export const TOOLS = {
     async run(a){
       const names = [].concat(a.names || a.name || []).slice(0, 400), dir = String(a.dir || ".claude/skills").replace(/\/+$/, "");
       let files = 0;
-      for (const n of names){ const sk = await nvSkill(n); for (const [f, c] of Object.entries(sk.files)){ await codeCall("write", {path: `${dir}/${sk.name}/${f}`, content: c}); files++; } }
+      for (const n of names){ const sk = await nvSkill(n); files += await installSkill(sk, `${dir}/${sk.name}`); }
       return {text: `${names.length}개 스킬, 파일 ${files}개를 ${dir}에 설치했습니다.`, summary: `${names.length}개 · 파일 ${files}개`};
     }},
 

@@ -4,7 +4,7 @@ import { esc, uid, fmtN, ls, idb, bus, settings, saveSettings, CATALOG, eng, loa
   PROVIDERS, SEARCH_KEYS, addApiKey, removeApiKey, routeCandidates, shortModel, webGet, ollamaPull, ollamaImportGGUF,
   modelKind, KIND_KO, VISION_RE, rankModel, opfsSave, opfsList, opfsRemove,
   docs, loadDocs, addDoc, removeDoc, readTextFile, md, highlight } from "./engine.js";
-import { runAgent, BUILTIN_SKILLS, TOOLS } from "./agent.js";
+import { runAgent, BUILTIN_SKILLS, TOOLS, installSkill } from "./agent.js";
 import { nvIndex, nvSkill, nvSearch, GROUP_KO } from "./nvskills.js";
 import { TEMPLATES } from "./templates.js";
 import { BASES, TOPICS, samplesFromChats, loadSynth, removeSynth, clearSynth, toJSONL, generateSynth, notebookJSON, localScript } from "./train.js";
@@ -658,13 +658,13 @@ async function nvCard(){
   const idx = await nvIndex();
   const groups = idx.skills.reduce((o, s) => (o[s.g] = (o[s.g] || 0) + 1, o), {});
   const ws = current?.workspace || ls.get("lastWs", "");
-  return `<h3>NVIDIA 공식 스킬 <small>${idx.count}개 전부 내장 · NVIDIA/skills ${esc(idx.commit)}</small></h3><div class="body">
+  return `<h3>NVIDIA 공식 스킬 <small>${idx.count}개 · 저장소 파일 ${fmtN(idx.files || 0)}개 전부 내장 · NVIDIA/skills ${esc(idx.commit)}</small></h3><div class="body">
     <div class="row wrap"><label class="chk"><input type="checkbox" data-nvopt="nvSkills"${settings.nvSkills !== false ? " checked" : ""}> 사용 (필요할 때 ${esc(AI())}가 찾아 읽음)</label><label class="chk"><input type="checkbox" data-nvopt="nvAuto"${settings.nvAuto !== false ? " checked" : ""}> 질문과 딱 맞으면 자동 적용</label></div>
     <div class="seg wrap" id="nvGroups">${[["all", "전체 " + idx.count], ...Object.entries(groups).sort((a, b) => b[1] - a[1]).map(([g, n]) => [g, (GROUP_KO[g] || g) + " " + n])].map(([g, l]) => `<button data-nvgroup="${esc(g)}" aria-pressed="${nvGroup === g}">${esc(l)}</button>`).join("")}</div>
     <input class="search" id="nvQ" type="search" placeholder="스킬 검색 (예: 젯슨, 파인튜닝, cuopt, 의료영상, 음성인식, RAG)" value="${esc(nvQ)}">
     <div class="list mlist" id="nvList">${await nvListHTML()}</div>
     <pre class="skp" id="nvView" hidden></pre>
-    <div class="row wrap"><button class="btn primary" id="nvInstall" ${LAUNCHER.on && ws ? "" : "disabled"}>작업 폴더에 전체 설치 (.claude/skills)</button><span class="small">${LAUNCHER.on ? (ws ? `작업 폴더: ${esc(ws)} · <code>npx skills add NVIDIA/skills</code>와 같은 결과라 Claude Code·Codex에서도 바로 쓰고, 코드 모드에서 스크립트를 실행할 수 있습니다.` : "코드 모드에서 작업 폴더를 먼저 여세요.") : "GHNano.exe로 실행해야 설치할 수 있습니다."}</span></div>
+    <div class="row wrap"><button class="btn primary" id="nvInstall" ${LAUNCHER.on && ws ? "" : "disabled"}>작업 폴더에 전체 설치 (.claude/skills + 저장소 전체)</button><span class="small">${LAUNCHER.on ? (ws ? `작업 폴더: ${esc(ws)} · <code>npx skills add NVIDIA/skills</code>와 같은 결과라 Claude Code·Codex에서도 바로 쓰고, 코드 모드에서 스크립트를 실행할 수 있습니다.` : "코드 모드에서 작업 폴더를 먼저 여세요.") : "GHNano.exe로 실행해야 설치할 수 있습니다."}</span></div>
     <span class="small">라이선스: Apache-2.0 / CC-BY-4.0 (NVIDIA). 대부분 NVIDIA GPU·서버용 작업 지침이라, 채팅에서는 절차 안내로, 코드 모드에서는 실제 실행에 쓰입니다.</span></div>`;
 }
 /* ---- 기억 ---- */
@@ -788,15 +788,16 @@ $("#sheetBody").addEventListener("click", async e => {
   if (t.dataset.sktoggle){ const sk = settings.skills.find(x => x.id === t.dataset.sktoggle); if (sk){ sk.off = !sk.off; saveSettings(); renderSheet(); } }
   if (t.dataset.skrm){ settings.skills = settings.skills.filter(x => x.id !== t.dataset.skrm); saveSettings(); renderSheet(); }
   const ng = t.closest("[data-nvgroup]"); if (ng){ nvGroup = ng.dataset.nvgroup; $$("#nvGroups [data-nvgroup]").forEach(b => b.setAttribute("aria-pressed", b.dataset.nvgroup === nvGroup)); $("#nvList").innerHTML = await nvListHTML(); return; }
-  if (t.dataset.nvview){ const v = $("#nvView"); try { const sk = await nvSkill(t.dataset.nvview); v.textContent = `${sk.name} · 파일 ${Object.keys(sk.files).length}개\n\n` + sk.files["SKILL.md"]; v.hidden = false; v.scrollIntoView({block: "nearest"}); } catch(err){ toast(err.message); } return; }
+  if (t.dataset.nvview){ const v = $("#nvView"); try { const sk = await nvSkill(t.dataset.nvview); v.textContent = `${sk.name} · 파일 ${Object.keys(sk.files).length + Object.keys(sk.bin || {}).length}개\n\n` + sk.files["SKILL.md"]; v.hidden = false; v.scrollIntoView({block: "nearest"}); } catch(err){ toast(err.message); } return; }
   if (t.id === "nvInstall"){
     const ws = current?.workspace || ls.get("lastWs", ""); if (!ws) return;
     t.disabled = true;
     try {
       await codeCall("open", {path: ws});
       const idx = await nvIndex(); let nf = 0, i = 0;
-      for (const s of idx.skills){ i++; t.textContent = `설치 중 ${i}/${idx.count}`; const sk = await nvSkill(s.n); for (const [f, c] of Object.entries(sk.files)){ await codeCall("write", {path: `.claude/skills/${sk.name}/${f}`, content: c}); nf++; } }
-      toast(`NVIDIA 스킬 ${idx.count}개 (파일 ${nf}개)를 설치했습니다`); t.textContent = "설치 완료 ✓";
+      for (const s of idx.skills){ i++; t.textContent = `설치 중 ${i}/${idx.count}`; nf += await installSkill(await nvSkill(s.n), `.claude/skills/${s.n}`); }
+      t.textContent = "저장소 나머지 파일 설치 중…"; nf += await installSkill(await nvSkill("_repo"), ".claude/nvidia-skills-repo");
+      toast(`NVIDIA 스킬 ${idx.count}개 + 저장소 파일, 모두 ${nf}개 파일을 설치했습니다`); t.textContent = "설치 완료 ✓";
     } catch(err){ toast("설치 실패: " + err.message); t.textContent = "다시 설치"; t.disabled = false; }
   }
   const mk = t.closest("[data-mkind]"); if (mk){ mdlKind = mk.dataset.mkind; renderSheet(); return; }
