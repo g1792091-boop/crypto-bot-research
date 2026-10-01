@@ -39,7 +39,7 @@ class FakeFutures:
         self.host, self.api_key = host, api_key
         self.hosts = {host} | ({"api.binance.com"} if host == "fapi.binance.com" else set())
         self.clock = lambda: 0     # exchange time of fills and income (tests bind it to their clock)
-        self.server_time = None    # /fapi/v1/time answer (None: 1000, as before)
+        self.server_time = None    # /fapi/v1/time answer (None: the exchange clock ``clock``)
         self.slip = 0.0            # market orders fill this fraction worse than the last price
         self.stop_slip = 0.0       # triggered stops fill this fraction worse than the trigger price
         self.fills = []            # userTrades rows
@@ -202,7 +202,7 @@ class FakeFutures:
     def route(self, m, path, q):
         ok = lambda d: (200, d)  # noqa: E731
         if path == "/fapi/v1/time":
-            return ok({"serverTime": 1_000 if self.server_time is None else self.server_time})
+            return ok({"serverTime": self.clock() if self.server_time is None else self.server_time})
         if path == "/sapi/v1/account/apiRestrictions":
             return ok(dict(self.restrictions))
         if path == "/fapi/v1/userTrades":
