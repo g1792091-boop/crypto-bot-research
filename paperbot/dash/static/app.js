@@ -73,39 +73,47 @@ function alertKo(text) {
   return t;
 }
 const toastWorthy = (a) => a.level === "CRITICAL" || /BUST|LIQUIDATED|blocked|gap|no new closed/.test(a.text);
-function entryTitle(p) {   // "진입 롱 20배 +12.3%": the selected account's position, live
+function pnlShort(u) {   // "+0.4% +$3"
+  if (!u) return "";
+  const d = Math.abs(u.pnl) < 10 ? 2 : 0;
+  return `${pct(u.roe)} ${u.pnl >= 0 ? "+$" : "-$"}${fmt(Math.abs(u.pnl), d)}`;
+}
+function entryTitle(p) {   // "진입 롱 20배 +12.3% +$154": the selected account's position, live
   const u = livePnl(p);
-  return `진입 ${p.side > 0 ? "롱" : "숏"} ${p.leverage}배${u ? " " + pct(u.roe) : ""}`;
+  return `진입 ${p.side > 0 ? "롱" : "숏"} ${p.leverage}배${u ? " " + pnlShort(u) : ""}`;
 }
-// open positions of the chart's coin, live ROE: click a name to show that account on the chart
-function renderPosBox() {
-  const box = $("posbox"); if (!box) return;
-  const list = positions().filter((a) => a.position.symbol === state.sym);
-  box.hidden = !list.length;
-  if (!list.length) { box.innerHTML = ""; return; }
-  list.sort((x, y) => ((livePnl(y.position) || {}).roe ?? -9) - ((livePnl(x.position) || {}).roe ?? -9));
-  const roes = list.map((a) => livePnl(a.position)).filter(Boolean).map((u) => u.roe);
-  const span = roes.length ? ` · 최고 <span class="${cls(roes[0])}">${pct(roes[0])}</span> 최저 <span class="${cls(roes[roes.length - 1])}">${pct(roes[roes.length - 1])}</span>` : "";
-  const folded = posboxFolded();
-  box.classList.toggle("folded", folded);
-  box.innerHTML = `<div class="h" id="posbox-h" title="눌러서 접기/펴기">${folded ? "▸" : "▾"} ${coin(state.sym)} 포지션 ${list.length}개${span}${folded ? "" : " · 실시간 평가 (마크 가격)"}</div>` +
-    (folded ? "" : list.map((a) => {
-    const p = a.position, u = livePnl(p);
-    const strat = a.kind === "strategy" || a.kind === "copy";
-    return `<div class="r ${a.account_id === state.acct ? "sel" : ""}"><span class="nm" data-pick="${esc(a.account_id)}" title="차트에 이 계좌 표시">${esc(name(a))}</span>
-      ${sideTag(p.side)} <span class="muted">${p.leverage}배</span>
-      <span class="roe ${u ? cls(u.roe) : ""}">${u ? pct(u.roe) : "—"}</span>
-      <span class="mono ${u ? cls(u.pnl) : ""}">${u ? (u.pnl >= 0 ? "+$" : "-$") + fmt(Math.abs(u.pnl), 0) : ""}</span>
-      ${strat ? `<button class="mini" data-strat="${esc(a.strategy)}" data-tf="${esc(a.timeframe)}" data-sym="${esc(p.symbol)}">매매법</button>` : ""}
-      <button class="mini" data-acct="${esc(a.account_id)}">계좌</button></div>`;
-  }).join(""));
-  $("posbox-h").onclick = () => { try { localStorage.setItem("posbox", folded ? "open" : "fold"); } catch (e) { /* private window */ } renderPosBox(); };
-  box.querySelectorAll("[data-pick]").forEach((el) => el.onclick = () => pickChartAccount(el.dataset.pick));
-  bindPosButtons(box);
-}
-function posboxFolded() {   // remembered per browser; folded by default on a phone
-  let v = null; try { v = localStorage.getItem("posbox"); } catch (e) { /* private window */ }
-  return v ? v === "fold" : window.matchMedia("(max-width: 700px)").matches;
+// Open positions of the chart's coin as thin lines at their entry price, labelled live on the line
+// ("롱 20배 +0.4% +$3", green in profit, red in loss), like an exchange chart. Entries closer than 0.05% share
+// one line ("3개 롱2·숏1 합계 +$12"), so labels never pile up. The account picked in the menu has its own line.
+let plines = {};   // key -> {line, price}
+state.posLines = true;
+function renderPosLines() {
+  if (!tseries) return;
+  const list = state.posLines && state.tf !== "1d" ? positions().filter((a) => a.position.symbol === state.sym && a.account_id !== state.acct) : [];
+  list.sort((x, y) => x.position.entry - y.position.entry);
+  const groups = [];
+  for (const a of list) {
+    const g = groups[groups.length - 1];
+    if (g && Math.abs(a.position.entry - g.price) / g.price < 0.0005) g.items.push(a); else groups.push({price: a.position.entry, items: [a]});
+  }
+  const want = {};
+  for (const g of groups) {
+    const us = g.items.map((a) => livePnl(a.position));
+    const known = us.filter(Boolean), pnl = known.reduce((s, u) => s + u.pnl, 0);
+    let title;
+    if (g.items.length === 1) { const p = g.items[0].position; title = `${p.side > 0 ? "롱" : "숏"} ${p.leverage}배 ${pnlShort(us[0])}`; }
+    else {
+      const L = g.items.filter((a) => a.position.side > 0).length;
+      title = `${g.items.length}개 ${L ? "롱" + L : ""}${L && L < g.items.length ? "·" : ""}${L < g.items.length ? "숏" + (g.items.length - L) : ""} 합계 ${pnl >= 0 ? "+$" : "-$"}${fmt(Math.abs(pnl), Math.abs(pnl) < 10 ? 2 : 0)}`;
+    }
+    const key = g.items.map((a) => a.account_id).join(",") + "@" + g.price;
+    want[key] = {price: g.price, color: !known.length ? css("--muted") : pnl >= 0 ? css("--up") : css("--down"), title};
+  }
+  for (const k of Object.keys(plines)) if (!want[k]) { try { tseries.removePriceLine(plines[k].line); } catch (e) { /* gone */ } delete plines[k]; }
+  for (const [k, w] of Object.entries(want)) {
+    const o = {price: w.price, color: w.color, lineWidth: 1, lineStyle: 1, axisLabelVisible: true, title: w.title};
+    if (plines[k]) plines[k].line.applyOptions(o); else plines[k] = {line: tseries.createPriceLine(o)};
+  }
 }
 function pickChartAccount(id, symChanged) {   // the chart moves to that account's timeframe, so its entries and exits line up
   const a = state.board && state.board.accounts.find((x) => x.account_id === id);
@@ -222,6 +230,7 @@ async function loadTradeChart() {
   legend(state.lastCandle);
   await drawTradeMarkers(data.length ? data[0].time : 0);
   tchart.timeScale().fitContent();
+  renderPosLines();
   loadLevels();
 }
 
@@ -763,7 +772,7 @@ function klineStream() {
 setInterval(() => {
   renderWatch(); renderTicker();
   if (state.view === "trade") {
-    renderPosBox();
+    renderPosLines();
     if (state.entryLine && state.acct && state.board) {
       const a = state.board.accounts.find((x) => x.account_id === state.acct);
       if (a && a.position && a.position.symbol === state.sym) { try { state.entryLine.applyOptions({title: entryTitle(a.position)}); } catch (e) { /* line removed */ } }
@@ -789,3 +798,4 @@ renderWatch();
 pollTicker();
 loadBoard().then(() => { fillAcctFilter(); loadTradeChart(); renderSide(); renderBottom(); stream(); marketStream(); klineStream(); })
   .catch((e) => console.error(e));
+$("pl-toggle").onclick = (e) => { state.posLines = !state.posLines; e.target.classList.toggle("on", state.posLines); renderPosLines(); };

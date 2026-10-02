@@ -295,7 +295,7 @@ def test_summary_and_csv_exports(client):
 
 
 def test_chart_position_box_and_strategy_shortcuts(client):
-    """The trade chart lists this coin's positions with live ROE; each links to its strategy, account and chart."""
+    """The trade chart draws this coin's positions as lines with live % and $; tables link to strategy and chart."""
     assert client.post("/api/login", json={"password": "correct horse battery"}).status_code == 200
     for a in client.get("/api/board").json()["accounts"]:
         assert {"account_id", "kind", "strategy", "timeframe"} <= set(a)     # what the buttons carry
@@ -303,7 +303,7 @@ def test_chart_position_box_and_strategy_shortcuts(client):
     html = open(os.path.join(static, "index.html"), encoding="utf-8").read()
     js = open(os.path.join(static, "app.js"), encoding="utf-8").read()
     sj = open(os.path.join(static, "strat.js"), encoding="utf-8").read()
-    assert 'id="posbox"' in html and "function renderPosBox()" in js and "renderPosBox();" in js
+    assert 'id="pl-toggle"' in html and "function renderPosLines()" in js and "renderPosLines();" in js
     assert "state.entryLine.applyOptions({title: entryTitle(" in js          # live % on the entry line
     assert "data-strat=" in js and "data-chart=" in js and "function openStrategy(name, tf, sym)" in sj
 

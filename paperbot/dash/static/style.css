@@ -437,19 +437,7 @@ a.btnlink { display: inline-flex; align-items: center; height: 28px; padding: 0 
   border-radius: 4px; background: var(--panel-2); color: var(--text); text-decoration: none; white-space: nowrap; font-size: 12px; }
 a.btnlink:hover { background: var(--hover); }
 
-/* open positions of this coin over the trade chart, live ROE */
-.posbox { position: absolute; left: 8px; bottom: 30px; z-index: 4; max-width: min(440px, 60%); max-height: 42%; overflow: auto;
-  background: var(--panel); border: 1px solid var(--line-2); border-radius: 6px; padding: 6px 8px; font-size: 12px; opacity: .94; }
-.posbox .h { color: var(--muted); font-size: 11px; margin-bottom: 4px; cursor: pointer; user-select: none; }
-.posbox.folded .h { margin-bottom: 0; }
-.posbox .r { display: flex; align-items: center; gap: 8px; padding: 3px 0; border-top: 1px solid var(--line); }
-.posbox .r:first-of-type { border-top: 0; }
-.posbox .r.sel { color: var(--accent); }
-.posbox .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
-.posbox .roe { font-family: var(--mono, monospace); min-width: 64px; text-align: right; }
 button.mini { height: 22px; padding: 0 6px; font-size: 11px; }
-@media (max-width: 700px) { .posbox { left: 8px; right: 8px; bottom: 30px; max-width: none; max-height: 40%; }
-  .posbox .r .mono { display: none; } }
 .lvnote { position: absolute; left: 10px; top: 46px; z-index: 3; pointer-events: none; font-size: 11px; color: var(--muted);
   text-shadow: 0 0 3px var(--panel), 0 0 3px var(--panel); max-width: 60%; }
 
@@ -529,6 +517,7 @@ button.mini { height: 22px; padding: 0 6px; font-size: 11px; }
 .p2n { color: var(--muted); font-size: 10.5px; margin-top: 6px; line-height: 1.5; }
 .bkbar .liqbar { background: var(--up); } .bkbar .liqbar i { background: var(--down); }
 @media (max-width: 1100px) {
+  .watch .p2tabs, #watch2-body { display: none; }   /* the chart first on a phone; GH Coin and today are on the board tab */
   .side { height: auto; }
   #side-body { max-height: 320px; }
   #side2-body { max-height: none; }
