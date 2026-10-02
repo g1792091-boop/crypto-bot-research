@@ -275,6 +275,12 @@ func proxyHandler(w http.ResponseWriter, r *http.Request) {
 	rest := strings.TrimPrefix(r.URL.Path, "/__nuri/proxy/")
 	name, tail, _ := strings.Cut(rest, "/")
 	base, ok := upstreams[name]
+	// 내 API(커스텀): 사용자가 넣은 OpenAI 호환 주소로 중계한다. 주소는 같은 출처의 브라우저가 X-Nuri-Base 헤더로 준다.
+	if name == "custom" {
+		if b := r.Header.Get("X-Nuri-Base"); strings.HasPrefix(b, "http://") || strings.HasPrefix(b, "https://") {
+			base, ok = strings.TrimRight(b, "/"), true
+		}
+	}
 	if env := os.Getenv("NURI_UPSTREAM_" + strings.ToUpper(name)); env != "" && ok {
 		base = env
 	}

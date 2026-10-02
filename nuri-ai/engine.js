@@ -158,7 +158,9 @@ export const PROVIDERS = {
   together:   {name:"Together", proxy:"together", base:"https://api.together.xyz/v1", key:/^tgp_/, url:"https://api.together.ai/settings/api-keys", note:"일부 무료 모델", bias:4, defaults:["meta-llama/Llama-3.3-70B-Instruct-Turbo-Free","deepseek-ai/DeepSeek-R1-Distill-Llama-70B-free"]},
   anthropic:  {name:"Claude", proxy:"anthropic", base:"https://api.anthropic.com/v1", key:/^sk-ant-/, url:"https://console.anthropic.com/settings/keys", note:"유료 · 하루 사용 한도 안에서만 씀", bias:-1,
                defaults:["claude-opus-5-5","claude-sonnet-5-5","claude-haiku-4-5-20251001"]},
-  sambanova:  {name:"SambaNova", proxy:"sambanova", base:"https://api.sambanova.ai/v1", key:null, url:"https://cloud.sambanova.ai/apis", note:"무료 한도", bias:3, defaults:["DeepSeek-V3-0324","Meta-Llama-3.3-70B-Instruct","DeepSeek-R1"]}
+  sambanova:  {name:"SambaNova", proxy:"sambanova", base:"https://api.sambanova.ai/v1", key:null, url:"https://cloud.sambanova.ai/apis", note:"무료 한도", bias:3, defaults:["DeepSeek-V3-0324","Meta-Llama-3.3-70B-Instruct","DeepSeek-R1"]},
+  // 내 API(커스텀): 사용자가 직접 넣는 OpenAI 호환 외부 API. base/key/model 은 settings.customApi 에 저장되고 base 는 동적으로 읽는다.
+  custom:     {name:"내 API(커스텀)", proxy:"custom", get base(){ try { return (settings.customApi && settings.customApi.base) || ""; } catch(e){ return ""; } }, key:null, url:"", note:"OpenAI 호환 외부 API 직접 연결 (base URL·모델·키)", bias:2, defaults:[]}
 };
 export const SEARCH_KEYS = {tavily:{name:"Tavily 검색", key:/^tvly-/, url:"https://app.tavily.com"}, brave:{name:"Brave 검색", key:/^BSA/, url:"https://brave.com/search/api/"},
   // 앞에 이름을 붙여 넣는다: "youtube: AIza…" · "공공데이터: 인증키"
@@ -221,7 +223,20 @@ export async function addApiKey(raw){
   if (d){ settings.keys[d.id] = key; settings.provModels[d.id] = PROVIDERS[d.id].defaults; if (!settings.brain || settings.brain === "local") settings.brain = "auto"; saveSettings(); return {kind:"ai", id:d.id, name:PROVIDERS[d.id].name, models:0, warn: lastErr ? lastErr.message : ""}; }
   throw new Error("어느 회사 키인지 알 수 없거나 연결에 실패했습니다" + (lastErr ? ` (${lastErr.message})` : ""));
 }
-export function removeApiKey(id){ delete settings.keys[id]; delete settings.provModels[id]; delete settings.pinModel[id]; if (settings.brain === id) settings.brain = "auto"; saveSettings(); }
+export function removeApiKey(id){ delete settings.keys[id]; delete settings.provModels[id]; delete settings.pinModel[id]; if (id === "custom") delete settings.customApi; if (settings.brain === id) settings.brain = "auto"; saveSettings(); }
+// 내 API(커스텀) 연결: OpenAI 호환 외부 API 의 base URL·모델·키를 직접 등록한다.
+export function setCustomApi({base, key, model, name} = {}){
+  base = String(base || "").trim().replace(/\/+$/, ""); key = String(key || "").trim(); model = String(model || "").trim();
+  if (!/^https?:\/\/.+/.test(base)) throw new Error("base URL 은 http(s):// 로 시작해야 합니다 (예: https://api.openai.com/v1)");
+  if (!key) throw new Error("API 키를 넣으세요");
+  if (!model) throw new Error("모델 이름을 넣으세요 (예: gpt-4o-mini)");
+  settings.customApi = {base, key, model, name: name || "내 API"};
+  settings.keys.custom = key; settings.provModels.custom = [model];
+  if (!settings.brain || settings.brain === "local") settings.brain = "auto";
+  saveSettings();
+  return {id: "custom", name: settings.customApi.name, base, model};
+}
+export const getCustomApi = () => (settings.customApi ? {...settings.customApi, key: settings.customApi.key ? "…" + settings.customApi.key.slice(-4) : ""} : null);
 const cooldown = {};
 // 회사(공급자)별 '잠시 쉬기' — 한도(429)·장애에 걸리면 그 시간 동안은 아예 부르지 않는다 (다 막혔을 때만 예외)
 export const providerCooling = id => (cooldown[id] || 0) > Date.now();
@@ -381,6 +396,7 @@ async function streamOAI(target, {messages, maxTokens, temperature, signal, onCo
   const headers = {"content-type": "application/json", accept: "text/event-stream"};
   if (!isOl) headers.authorization = "Bearer " + settings.keys[target.id];
   if (target.id === "openrouter"){ headers["HTTP-Referer"] = "https://nuri.local"; headers["X-Title"] = "Nuri AI"; }
+  if (target.id === "custom" && LAUNCHER.on) headers["X-Nuri-Base"] = (settings.customApi?.base || "");   // 런처 프록시가 이 주소로 중계 (CORS 회피)
   if (target.id === "anthropic" && !LAUNCHER.on){ headers["x-api-key"] = settings.keys.anthropic; headers["anthropic-version"] = "2023-06-01"; headers["anthropic-dangerous-direct-browser-access"] = "true"; }
   if (target.id === "anthropic" && temperature > 1) temperature = 1;
   const noSampling = target.id === "anthropic" && /opus-5|sonnet-5|fable|opus-4-[78]/.test(target.model);   // 최신 Claude 는 temperature 를 받지 않는다

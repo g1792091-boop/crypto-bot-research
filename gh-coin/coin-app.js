@@ -1,6 +1,6 @@
 // GH Coin 앱 시작: 트레이딩 본부(픽셀 사무실) 화면을 바로 열고, AI 연결·차트 터미널·실거래·학습 데이터를 붙인다.
 // AI 연결(API 키)·실거래 키는 같은 컴퓨터의 GH Nano 와 같은 설정을 쓴다(같은 실행기 주소일 때). 대화 기록·데모 장부·과제는 GH Coin 것만 따로 쓴다.
-import { esc, md, settings, saveSettings, PROVIDERS, SEARCH_KEYS, addApiKey, removeApiKey, detectLauncher, LAUNCHER, idb } from "../nuri-ai/engine.js";
+import { esc, md, settings, saveSettings, PROVIDERS, SEARCH_KEYS, addApiKey, removeApiKey, setCustomApi, getCustomApi, detectLauncher, LAUNCHER, idb } from "../nuri-ai/engine.js";
 import { openOffice, openComboBoard } from "./coin-ui.js";
 
 const $ = s => document.querySelector(s);
@@ -19,7 +19,14 @@ function keysHTML(){
     <h4>연결된 AI ${conn.length}곳</h4>
     ${conn.map(([id, p]) => `<div class="gc-prov"><span><b>${esc(p.name)}</b> <small>모델 ${(settings.provModels[id] || []).length}개</small></span><button class="gc-btn" data-rm="${id}">삭제</button></div>`).join("") || `<p>아직 없습니다. 아래에서 무료 키를 받아 붙여 넣으세요.</p>`}
     ${sk.map(([id, p]) => `<div class="gc-prov"><span><b>${esc(p.name)}</b></span><button class="gc-btn" data-rm="${id}">삭제</button></div>`).join("")}
-    <h4>키 받는 곳</h4><div class="gc-links">${Object.entries(PROVIDERS).map(([id, p]) => `<a class="${settings.keys[id] ? "on" : ""}" href="${p.url}" target="_blank" rel="noopener">${esc(p.name)}${settings.keys[id] ? " ✓" : ""}</a>`).join("")}</div>
+    <h4>키 받는 곳</h4><div class="gc-links">${Object.entries(PROVIDERS).filter(([id]) => id !== "custom").map(([id, p]) => `<a class="${settings.keys[id] ? "on" : ""}" href="${p.url}" target="_blank" rel="noopener">${esc(p.name)}${settings.keys[id] ? " ✓" : ""}</a>`).join("")}</div>
+    <h4>내 API 직접 연결 (OpenAI 호환 외부 API)</h4>
+    <p>회사 목록에 없는 외부 API 를 직접 연결합니다. base URL·모델·키를 넣으면 자체 AI 의견·코인 AI 봇·사무실이 이 API 를 씁니다. ${getCustomApi() ? `<b>연결됨:</b> ${esc(getCustomApi().name)} · ${esc(getCustomApi().model)} · 키 ${esc(getCustomApi().key)}` : ""}</p>
+    <div class="gc-custom">
+      <input id="gcCBase" placeholder="base URL (예: https://api.openai.com/v1)" autocomplete="off" value="${esc(settings.customApi?.base || "")}">
+      <input id="gcCModel" placeholder="모델 (예: gpt-4o-mini)" autocomplete="off" value="${esc(settings.customApi?.model || "")}">
+      <input id="gcCKey" placeholder="API 키 (sk-…)" autocomplete="off" type="password">
+      <button class="gc-btn pri" id="gcCAdd">내 API 연결</button>${getCustomApi() ? `<button class="gc-btn" id="gcCDel">연결 해제</button>` : ""}</div>
     <h4>학습 데이터 (GH Nano 만들기)</h4><p>GH Coin 직원들의 분석·회의·검증된 매매법이 학습 예시로 쌓입니다(Claude·Gemini·GPT 유료 모델이 쓴 글은 약관 때문에 제외). GH Nano 의 학습 탭에서도 함께 보이고, 여기서 따로 내려받을 수 있습니다.</p>
     <div class="gc-row"><button class="gc-btn" id="gcTrain">GH Coin 학습 데이터 내려받기 (.jsonl)</button><span id="gcTrainN" style="color:#8a93a6;align-self:center"></span></div>
     <h4>실행</h4><p>${LAUNCHER.on ? "GHCoin.exe 로 실행 중 — 외부 AI·거래소 연결, 컴퓨터 작업(문서/GHNano 사무실/ghcoin), 코드 수정 적용이 됩니다." : "웹 버전 — 브라우저 보안 때문에 외부 AI·거래소에 바로 연결되지 않을 수 있습니다. GHCoin.exe 로 실행하세요."}</p>
@@ -38,6 +45,12 @@ function openKeys(){
         catch(err){ toast(err.message || "연결하지 못했습니다"); }
         m.innerHTML = keysHTML(); return;
       }
+      if (e.target.closest("#gcCAdd")){
+        const base = $("#gcCBase").value.trim(), model = $("#gcCModel").value.trim(), key = $("#gcCKey").value.trim();
+        try { const r = setCustomApi({base, key, model}); toast(`내 API 연결됨 · ${r.model}`); } catch(err){ toast(err.message || "연결 실패"); }
+        m.innerHTML = keysHTML(); return;
+      }
+      if (e.target.closest("#gcCDel")){ removeApiKey("custom"); toast("내 API 연결을 해제했습니다"); m.innerHTML = keysHTML(); return; }
       if (e.target.closest("#gcTrain")){
         const list = await trainCount();
         if (!list.length){ toast("아직 학습 예시가 없습니다 · 직원들이 일하면 쌓입니다"); return; }

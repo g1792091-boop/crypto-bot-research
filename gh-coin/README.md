@@ -31,8 +31,12 @@
 ### 🧮 리스크 계산기 (`lib/rigor.js`) — 실제 이식
 `TLSRUF/ai-trader-team` 의 `tools/trading_rigor.py`(MIT, 표준 라이브러리 결정론적 계산)를 바닐라 JS 로 **그대로 이식**: 포지션 사이징(계좌·리스크%·진입·손절)·손익비(R:R)·실현/미실현 R-멀티플·켈리(full/half/quarter)·포트폴리오 히트(동시 손절 손실률)·상관계수. 같은 공식·같은 반올림(ROUND_HALF_EVEN)·같은 검증 규칙이라 Python 원본과 출력이 일치한다(단위 테스트 확인). 코인 AI 봇에 "포지션 크기 계좌 10000 리스크 1 진입 100 손절 95"처럼 물으면 바로 계산해 주고, 자체 AI 데스크 1위 코인에는 1.5×ATR 손절·3R 목표 예시 계획을 보여 준다. `window.ghCoinRigor` 로도 호출.
 
-### 🔌 자체 AI 외부 API 연동
-자체 AI 데스크는 외부 키 없이도 돌지만, **API 키가 연결되면 외부 LLM 의 방향·확신도 의견을 앙상블의 '한 표'로** 더한다(확신도만큼 가중, 과신 방지 상한 0.25). 1위 코인에 대해 LLM 에게 엄격 JSON 의견을 받아 `selfai.fuse` 의 `ai` 신호로 반영한다. 기본은 키가 있으면 켜짐이고 설정에서 끌 수 있다(`window.ghCoinSelfAIExternal(false)` / `setSelfaiExternal`). 코인 AI 봇도 키가 있으면 RAG 지식에 근거한 LLM 답변, 없으면 추출 답변(완전 자체).
+### 🔌 외부 API 연동 (내장 제공사 + 내 API 직접 연결)
+두 가지로 외부 API 를 쓴다.
+1. **내장 제공사** — NVIDIA·Groq·Cerebras·Gemini·OpenRouter·DeepSeek·Mistral·Together·SambaNova·Claude 등. [🔑 AI 연결]에 키를 붙여 넣으면 자동 인식.
+2. **내 API 직접 연결(커스텀)** — 목록에 없는 **OpenAI 호환 외부 API** 를 직접 연결. [🔑 AI 연결] → "내 API 직접 연결"에 **base URL(예: `https://api.openai.com/v1`)·모델(예: `gpt-4o-mini`)·키**를 넣으면 끝. `engine.js` 의 `custom` 제공사로 등록되고(`setCustomApi`), 데스크톱(GHCoin.exe)에서는 런처 프록시가 그 주소로 **서버 사이드 중계**해 브라우저 CORS 를 피한다(런처 `main.go` 의 `X-Nuri-Base` 패스스루). 연결하면 **사무실·자체 AI 의견·코인 AI 봇**이 모두 이 API 를 쓴다.
+
+**자체 AI × 외부 API**: 자체 AI 데스크는 외부 키 없이도 돌지만, 키(내장이든 내 API든)가 연결되면 외부 LLM 의 방향·확신도 의견을 앙상블의 '한 표'로 더한다(확신도 가중, 과신 방지 상한 0.25; `selfai.fuse` 의 `ai` 신호). 끄기: `window.ghCoinSelfAIExternal(false)` / `setSelfaiExternal`. 코인 AI 봇도 키가 있으면 RAG 지식에 근거한 LLM 답변, 없으면 추출 답변(완전 자체). 이 'OpenAI 호환 커스텀 제공사' 방식은 continue·dify·flowise·anythingllm 이 공통으로 쓰는 구조를 반영한 것.
 
 ### 넣지 않은 것 (안전·합법성)
 `THIRD_PARTY.md`대로 **코인 지갑 헌터**(남의 개인키·시드로 지갑 열기 = 절도)와 **앱 내장 채굴기 + 한 지갑으로 자동 입금**(배포되는 .exe 안에 넣으면 받은 사람 PC에서 몰래 도는 **크립토재킹** 모양)은 넣지 않는다. 본인 PC에서 xmrig를 **직접 본인 지갑으로** 돌리는 것은 사용자 자유이고, 자금 보관은 Rainbow 등 검증된 지갑을 쓴다. 이 앱에는 송금·출금·개인키 보관 기능이 없다.
