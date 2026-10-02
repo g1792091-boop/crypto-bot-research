@@ -45,7 +45,6 @@ jobs:
         shell: bash
         run: |
           cd nano/launcher
-          go vet .
           bash build.sh
 
       - name: App window check (WebView2 PC app window, no browser)

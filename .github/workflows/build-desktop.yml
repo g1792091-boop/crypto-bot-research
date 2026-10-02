@@ -75,7 +75,8 @@ jobs:
           $title = ""
           for ($i = 0; $i -lt 40; $i++) {
             Start-Sleep -Seconds 2
-            $title = (Get-Process -Id $p.Id -ErrorAction SilentlyContinue).MainWindowTitle
+            # 단일 exe 는 풀어 놓은 자식 프로세스가 창을 띄운다 → 같은 이름 프로세스 중 창 제목이 있는 것
+            $title = (Get-Process GHQuant -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle } | Select-Object -First 1).MainWindowTitle
             $wv = Get-CimInstance Win32_Process -Filter "Name = 'msedgewebview2.exe'" | Where-Object { $_.CommandLine -like "*app-window*" }
             if ($title -eq "GH Quant" -and $wv) { break }
           }
@@ -88,7 +89,7 @@ jobs:
           $browsers = Get-Process msedge, chrome -ErrorAction SilentlyContinue
           Write-Host "window title: '$title' · webview2 processes: $(@($wv).Count) · browser processes: $(@($browsers).Count)"
           Get-Content (Join-Path $d.FullName "state/GHQuant.log") -ErrorAction SilentlyContinue | Select-Object -Last 30
-          Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+          Get-Process GHQuant -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
           Get-Process msedgewebview2 -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
           Start-Sleep -Seconds 2
           Remove-Item -Recurse -Force (Join-Path $d.FullName "state") -ErrorAction SilentlyContinue
