@@ -102,6 +102,18 @@ export const TECH = [
     where: "자체 AI 앙상블 구성 발상 (lib/selfai.js parts)"},
   {repo: "anthropics/uplifting-biomolecular-modeling", lic: "—", teams: [], status: "해당 없음",
     what: "생체분자 모델링 연구 저장소 — 코인 트레이딩과 무관하여 적용하지 않음",
+    where: "—"},
+  {repo: "langgenius/dify · dify-plugins", lic: "오픈소스(규칙만)", teams: ["coinai"], status: "부분 적용",
+    what: "LLM 앱의 '내 지식으로 답하기(RAG)' + 지식 베이스 + 모델 제공자 추상화 개념 → 앱 지식으로 근거 있는 답을 하는 코인 AI 봇",
+    where: "코인 AI 봇 (coinai.js) + 자체 검색(lib/ragstore.js)"},
+  {repo: "FlowiseAI/Flowise · FlowiseChatEmbed · FlowiseEmbedReact · FlowiseDocs", lic: "Apache-2.0/MIT(규칙만)", teams: ["coinai"], status: "부분 적용",
+    what: "체인·에이전트 흐름을 조합하고 '어디에나 띄우는 채팅 위젯(embed)'으로 내보내는 개념 → 떠다니는 코인 AI 채팅 위젯과 신호 조합",
+    where: "코인 AI 봇 떠다니는 위젯 (coinai.js mountLauncher·채팅 UI)"},
+  {repo: "Mintplex-Labs/anything-llm · anythingllm-embed · -extension · -mobile · -docs", lic: "MIT(규칙만)", teams: ["coinai"], status: "부분 적용",
+    what: "완전 자체(프라이빗) RAG 챗: 워크스페이스에 내 문서를 넣고 로컬에서 검색·답변, 외부 키 없이도 동작 → 외부 키 없으면 추출 답변하는 '자체' 코인 AI, 앱 데이터(전략·분석·자체 AI)를 지식으로 수집",
+    where: "코인 AI 봇 지식 수집·오프라인 추출 답변 (coinai.js gatherDocs·extractive)"},
+  {repo: "probot/probot · template · create-probot-app · probot.github.io", lic: "ISC", teams: [], status: "해당 없음",
+    what: "GitHub App(깃허브 웹훅 봇) 프레임워크 — 코인 트레이딩 데스크톱 앱과 무관하여 적용하지 않음",
     where: "—"}
 ];
-export const TECH_REPOS = 37;   // +8 (에이전트·자체 AI 관련, biomolecular 1건은 해당 없음)   // 대표님이 준 주소 중 중복을 뺀 수
+export const TECH_REPOS = 40;   // 에이전트·자체 AI·RAG 관련 (biomolecular·probot 은 해당 없음)

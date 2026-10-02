@@ -64,6 +64,9 @@ function openKeys(){
   if (top && !$("#gcKeys")){ const b = document.createElement("button"); b.className = "of-btn"; b.id = "gcKeys"; b.textContent = "🔑 AI 연결"; b.onclick = openKeys; set ? top.insertBefore(b, set) : top.appendChild(b); }
   if (top && !$("#gcCombo")){ const b = document.createElement("button"); b.className = "of-btn"; b.id = "gcCombo"; b.textContent = "⚡ 실시간 타점"; b.title = "모든 보조지표 × 4개 시간대 → 추세·타점 (60초마다)"; b.onclick = () => openComboBoard(true); top.insertBefore(b, top.querySelector(".of-btn") || null); }
   if (top && !$("#gcWallet")){ const b = document.createElement("button"); b.className = "of-btn"; b.id = "gcWallet"; b.textContent = "👛 내 지갑 보기"; b.title = "공개 주소로 잔액만 보기 (읽기 전용 · 개인키 저장 안 함)"; b.onclick = async () => { try { const W = await import("./wallet.js"); W.openWallet({esc, toast}); } catch(e){ toast("지갑 보기를 열 수 없습니다: " + e.message); } }; set ? top.insertBefore(b, set) : top.appendChild(b); }
+  if (top && !$("#gcCoinAI")){ const b = document.createElement("button"); b.className = "of-btn"; b.id = "gcCoinAI"; b.textContent = "🤖 코인 AI"; b.title = "이 앱의 지식으로 답하는 자체 코인 AI 봇 (외부 키 없이도 동작)"; b.onclick = async () => { try { const A = await import("./coinai.js"); A.openCoinAI({esc, toast}); } catch(e){ toast("코인 AI 를 열 수 없습니다: " + e.message); } }; set ? top.insertBefore(b, set) : top.appendChild(b); }
+  // 어디서나 쓸 수 있는 떠다니는 코인 AI 봇 버튼
+  import("./coinai.js").then(A => A.mountLauncher({esc, toast})).catch(() => {});
   if (!Object.keys(PROVIDERS).some(id => settings.keys[id])) setTimeout(() => { openKeys(); toast("먼저 AI 키를 하나 이상 연결하세요 (NVIDIA·Groq·Cerebras 무료)"); }, 600);
   document.title = "GH Coin";
 })();

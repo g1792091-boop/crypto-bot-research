@@ -19,6 +19,9 @@
 ### 🧠 자체 AI (`lib/selfai.js`, 자체 AI 데스크팀)
 **외부 LLM 키 없이** 이 앱 안에서만 도는 앙상블 판단 엔진. 네 신호를 하나의 **방향 + 확신도(0~95)** 로 합친다: 기술 평점(트레이딩뷰식 `lib/ta_rating.js`) · 멀티 시간대 종합 점수(`combo.js`, 높은 시간대에 가중) · ML 확률(`../nuri-ai/ml.js` walk-forward, 통계적 우위만큼만 신뢰) · 알파 팩터 합성(`lib/alpha.js`). 확신도는 **신호 크기 + 신호 간 합의**로 매기고, 신호가 엇갈리면 낮아진다. `selfaiJob`(자체 AI 데스크팀)이 6개 코인 순위를 내고(1위는 ML까지 더해 정밀 재판단), "자체 AI 확신도 순위 보여줘"·봇 조종판 [🧠 자체 AI 확신도] 버튼·`window.ghCoinSelfAI(sym)`로 쓸 수 있다. **자체 AI 는 판단만 하고 주문은 내지 않는다** — 실제 주문은 그대로 `live.js`(한도·승인·긴급정지)만 낸다. 아이디어 출처: TLSRUF/ai-trader-team·jnMetaCode/agency-agents-ko·anthropics/claude-cookbooks·financial-services·continuedev/continue·ten-builder(코드 복사 없음, `THIRD_PARTY.md`).
 
+### 🤖 코인 AI 봇 (`coinai.js` + `lib/ragstore.js`) — 완전 자체 RAG 챗
+이 앱이 아는 것(앱 설명 고정 지식 + 사무실 분석·표·노트 + 데모 전략 + 실시간 자체 AI 판단)을 모아 **외부 서비스·벡터DB 없이** 브라우저 안에서 도는 가벼운 검색(TF-IDF + 코사인, 한국어 2-그램 `lib/ragstore.js`)으로 질문에 답한다. **외부 AI 키가 없으면 추출 답변(완전 자체)**, 키가 있으면 그 지식에 **근거한** LLM 답변(`brainStream`). 코인을 물으면 자체 AI 데스크(`selfAIFor`)의 실시간 방향·확신도를 함께 붙인다. 화면 오른쪽 아래 **떠다니는 [💬 코인 AI] 버튼**과 상단 **[🤖 코인 AI]** 버튼으로 어디서나 열린다. **설명·판단만 하고 주문은 내지 않는다.** 아이디어: langgenius/dify(RAG·지식베이스)·FlowiseAI/Flowise(임베드 위젯)·Mintplex-Labs/anything-llm(완전 자체 프라이빗 RAG) — 코드 복사 없이 개념만. probot(GitHub App 프레임워크)은 코인 앱과 무관해 적용하지 않음.
+
 ### 넣지 않은 것 (안전·합법성)
 `THIRD_PARTY.md`대로 **코인 지갑 헌터**(남의 개인키·시드로 지갑 열기 = 절도)와 **앱 내장 채굴기 + 한 지갑으로 자동 입금**(배포되는 .exe 안에 넣으면 받은 사람 PC에서 몰래 도는 **크립토재킹** 모양)은 넣지 않는다. 본인 PC에서 xmrig를 **직접 본인 지갑으로** 돌리는 것은 사용자 자유이고, 자금 보관은 Rainbow 등 검증된 지갑을 쓴다. 이 앱에는 송금·출금·개인키 보관 기능이 없다.
 

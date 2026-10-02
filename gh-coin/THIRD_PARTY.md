@@ -51,6 +51,16 @@ GPL·LGPL 저장소와 라이선스 표시가 없는 저장소는 특히 규칙�
 
 > 자체 AI(`lib/selfai.js`)는 **외부 LLM 키 없이** 이 앱 안에서 도는 앙상블이다: 기술 평점(트레이딩뷰식)·멀티 시간대 종합 점수·ML 확률(walk-forward)·알파 팩터를 가중 합성해 방향과 확신도(0~95)를 낸다. **판단만 하고 주문은 내지 않는다** — 실제 주문은 그대로 `../nuri-ai/live.js`(한도·승인·긴급정지)만 낸다.
 
+## 코인 AI 봇(자체 RAG) (아이디어만, 코드 복사 없음)
+| 저장소 | 들여온 것 |
+|---|---|
+| langgenius/dify · dify-plugins | '내 지식으로 답하기(RAG)' · 지식 베이스 · 모델 제공자 추상화 개념 |
+| FlowiseAI/Flowise · FlowiseChatEmbed · FlowiseEmbedReact · FlowiseDocs | 신호·체인 조합 + '어디에나 띄우는 채팅 위젯(embed)' |
+| Mintplex-Labs/anything-llm · -embed · -extension · -mobile · -docs | 완전 자체(프라이빗) RAG 챗 · 외부 키 없이도 동작 · 내 문서로 답하기 |
+| probot/probot · template · create-probot-app · probot.github.io | **해당 없음** — GitHub App 프레임워크라 코인 앱과 무관, 적용하지 않음 |
+
+> 코인 AI 봇(`coinai.js` + `lib/ragstore.js`)은 **외부 서비스·벡터DB 없이** 브라우저/Node 안에서 도는 가벼운 RAG(TF-IDF + 코사인, 한국어 2-그램)다. 이 앱이 아는 것(전략·백테스트·분석 노트·자체 AI 판단·앱 설명)을 지식으로 모아, **외부 AI 키가 없으면 추출 답변(완전 자체)**, 키가 있으면 그 지식에 **근거한** LLM 답변을 한다. 설명·판단만 하고 **주문은 내지 않는다**.
+
 ## 만들지 않은 것 (의도적으로 제외)
 사용자가 함께 요청했지만 다음은 안전·합법성 때문에 **만들지 않았다**:
 - **코인 지갑 헌터** (`CryptoWalletMiner` 등): 남의 지갑(개인키·시드)을 찾아 여는 것은 절도라서 구현하지 않음.
