@@ -20,6 +20,7 @@ state.overlays.footprint ??= false;
 delete state.overlays.rotation;
 state.overlays.ladder ??= true;
 state.overlays.ai ??= true;           // AI 진입 시그널
+state.overlays.sbot ??= true;         // 시나리오 봇 진입·포지션
 state.ctype ||= "candles";            // 차트 종류
 state.scale ||= { mode: "normal", auto: true };
 state.rightTab ||= "dock";            // 오른쪽 위젯 (기본: AI 상시 알림 · 채팅)
@@ -190,7 +191,7 @@ function renderChart() {
         symbol: i ? state.multi[i - 1].symbol : state.symbol, interval: i ? state.multi[i - 1].interval : state.interval,
         // 작은 칸에는 보조지표 창을 줄인다 (6칸 이상이면 가격 위 지표만)
         indicators: i ? state.indicators.filter((x) => INDICATORS[x.key]?.pane !== "sub").concat(n >= 6 ? [] : subInd.slice(0, 1)) : state.indicators,
-        overlays: i ? { heat: false, whales: false, bots: true, scenario: false, sr: state.overlays.sr, countdown: state.overlays.countdown, ai: state.overlays.ai } : { ...state.overlays },
+        overlays: i ? { heat: false, whales: false, bots: true, scenario: false, sr: state.overlays.sr, countdown: state.overlays.countdown, ai: state.overlays.ai, sbot: state.overlays.sbot } : { ...state.overlays },
         onLoad: i ? null : () => { draw?.load(); renderTree(); },
         onLegend: i ? null : legendAction,
       }));
@@ -446,7 +447,7 @@ function renderScenarios(a) {
         <span class="muted">RR ${s.rr ?? "–"}</span><button class="flat sm" data-sc="${i}">차트에</button></div>
       <div class="bar"><i style="width:${s.probability}%;background:${color[s.bias]}"></i></div>
       ${s.learned ? `<div class="learn" title="시나리오 진입 봇이 과거·실시간 결과로 배운 값 (체결된 것 기준)">배운 실제 적중률 <b>${s.learned.win}%</b> · 평균 <b class="${s.learned.avg_r > 0 ? "up" : "down"}">${s.learned.avg_r > 0 ? "+" : ""}${s.learned.avg_r}R</b> <span class="muted">(${s.learned.n}건${s.learned.n < 20 ? " · 적어서 전체 평균 반영" : ""})</span></div>` : ""}
-      ${(a.bot?.orders || []).filter((o) => o.title === s.title || (s.key === "range" && o.title === "박스권 양방향")).map((o) => `<div class="botst">🤖 진입 봇 ${o.interval} ${o.side > 0 ? "롱" : "숏"} ${o.status === "open" ? "보유 중" : "주문 대기"} @ ${px(o.entry)}</div>`).join("")}
+      ${(a.bot?.orders || []).filter((o) => o.title === s.title || (s.key === "range" && o.title === "박스권 양방향")).map((o) => `<div class="botst">🤖 진입 봇 ${o.interval} ${o.side > 0 ? "롱" : "숏"} ${o.lev ? o.lev + "배 " : ""}${o.status === "open" ? `보유 중${o.roe_pct != null ? ` <b class="${o.roe_pct >= 0 ? "up" : "down"}">${o.roe_pct > 0 ? "+" : ""}${o.roe_pct}%</b>` : ""}` : "주문 대기"} @ ${px(o.entry)}</div>`).join("")}
       <div class="trig">${esc(s.trigger)}</div>
       <div class="kv"><span class="k">진입</span><span>${px(s.entry)}</span>
         <span class="k">손절</span><span class="down">${px(s.stop)}</span>
@@ -699,6 +700,8 @@ on("news", () => { if (bottomTab === "news") renderBottom(); });
 on("pricealerts", renderPriceAlerts);
 // 새 AI 분석 · 새 AI 진입 시그널이 나오면 차트의 'AI 시그널'을 다시 그린다
 on("copilot", () => charts.forEach((c) => c.refreshAi?.()));
+// 시나리오 봇 주문·포지션 실시간 손익 (5초마다 · 화면이 보일 때만)
+setInterval(() => { if (!document.hidden && document.querySelector("#v-trade.on")) charts.forEach((c) => c.refreshSbot?.()); }, 5000);
 on("apsignals", (items) => {
   const syms = new Set((items || []).filter((x) => x.type === "ai_entry" || x.type === "aibot").map((x) => x.symbol));
   if (syms.size) loadAiBot();

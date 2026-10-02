@@ -78,7 +78,7 @@ async function poll() {
     renderTop();
     renderFloor();
     if (tab === "log" && fresh) renderLog();
-    if (tab === "sbot" && Date.now() - (poll.sbAt || 0) > 20000 && !document.querySelector("#v-office .of-pane input:focus")) { poll.sbAt = Date.now(); renderSbot().catch(() => {}); }
+    if (tab === "sbot" && Date.now() - (poll.sbAt || 0) > 5000 && !document.querySelector("#v-office .of-pane input:focus")) { poll.sbAt = Date.now(); renderSbot().catch(() => {}); }
     if (tab === "term" && Date.now() - (poll.termAt || 0) > 15000 && !document.querySelector("#v-office .of-pane select:focus")) { poll.termAt = Date.now(); renderTerm().catch(() => {}); }
   } catch (e) {
     $("#of-status").textContent = "서버 응답 없음: " + e.message;
@@ -245,31 +245,42 @@ async function renderSbot() {
   $("#of-pane").innerHTML = `<div class="of-pane-h"><b>시나리오 진입 봇</b><span class="of-tag ${st.enabled ? "" : "warn"}">${st.enabled ? "켜짐 · 가상 체결" : "꺼짐"}</span>
       <span class="dim">정책 v${p.version} · 진입 에이전트팀</span><div class="grow"></div>
       <button class="sm" id="sb-on">${st.enabled ? "끄기" : "켜기"}</button><button class="sm pri" id="sb-learn" ${v.busy ? "disabled" : ""}>${v.busy ? "학습 중…" : "지금 학습·개선"}</button></div>
+    ${v.busy ? `<div class="of-warn">🧠 ${esc(v.progress || "학습 중")} — 학습하는 동안에도 봇은 지금 정책으로 계속 판단·진입합니다</div>` : ""}
     <div class="help">트레이드 화면 시나리오 중 <b>정책이 고른 것</b>(처음엔 화면 % 가 가장 높은 것)으로 계속 가상 진입합니다. 진입 전에 핵심 보조지표 · 터미널 147종 합의 · <b>내 차트에 켜 둔 지표</b>가 반대면 건너뜁니다.
       과거 차트를 봉마다 다시 돌려 <b>모든 시나리오를 그림자 채점</b>해 실제 적중률을 배우고, ${st.learn_hours}시간마다 정책을 다시 골라 <b>검증 구간에서 확실히 나을 때만</b> 바꿉니다.
       ※ 화면의 % 는 추세 점수로 정한 추정값이라 실제 적중률과 다릅니다 — 아래 '배운 실제 적중률'을 보세요.</div>
     <div class="of-kpis">
-      <div><small>가상 자산</small><b>${(s.equity ?? 0).toLocaleString()}</b><span class="${s.return_pct >= 0 ? "up" : "down"}">${s.return_pct > 0 ? "+" : ""}${s.return_pct}%</span></div>
+      <div><small>가상 자산 (실시간)</small><b>${(s.equity_live ?? s.equity ?? 0).toLocaleString()}</b><span class="${s.return_live_pct >= 0 ? "up" : "down"}">${s.return_live_pct > 0 ? "+" : ""}${s.return_live_pct}%</span></div>
+      <div><small>보유 중 평가손익</small><b class="${s.upnl > 0 ? "up" : s.upnl < 0 ? "down" : ""}">${s.upnl > 0 ? "+" : ""}${(s.upnl ?? 0).toLocaleString()}</b><span class="dim">확정 ${s.pnl > 0 ? "+" : ""}${(s.pnl ?? 0).toLocaleString()}</span></div>
+      <div><small>레버리지</small><b>${st.leverage}배</b><span class="dim">증거금 ${st.margin_pct}%/주문</span></div>
       <div><small>거래</small><b>${s.n}</b><span class="dim">미체결 ${s.expired}</span></div><div><small>승률</small><b>${f(s.win, "%")}</b></div>
       <div><small>거래당 기대값</small><b>${sign(s.exp_r)}R</b></div><div><small>손익비</small><b>${f(s.pf)}</b></div><div><small>최대 낙폭</small><b>${s.max_dd_r}R</b></div>
       <div><small>학습 표본</small><b>${v.samples.total.toLocaleString()}</b><span class="dim">과거 ${v.samples.history.toLocaleString()} · 실시간 ${v.samples.live}</span></div></div>
     <div class="of-sub">지금 정책 v${p.version}</div><div>${esc(p.why || "")}</div>
     <div class="dim">최소 화면 확률 ${p.min_prob}% · 최소 손익비 ${p.min_rr} · 순위 ${p.rank === "learned" ? "배운 기대값" : "화면 확률"} · 메타 필터 ${p.use_meta ? p.meta_thr : "안 씀"} · 종류 ${p.kinds.join(", ")}
-      · 마지막 학습 ${v.last_learn ? mdhm(v.last_learn) : "-"} · 다음 ${v.next_learn ? mdhm(v.next_learn) : "-"}</div>
+      · 마지막 학습 ${v.last_learn ? mdhm(v.last_learn) : "첫 학습 중"} · 다음 ${v.last_learn ? mdhm(v.next_learn) : "-"}</div>
     ${v.report ? `<div class="dim">마지막 개선 판단: ${esc(v.report.why || "")}</div>` : ""}
     <div class="${v.candidate.ok ? "of-warn" : "dim"}">실거래: ${v.candidate.ok ? "✅ 기준 통과 — '실거래' 탭에서 코인별로 사람이 승인해야 주문합니다 (한도·보호 장치 그대로)" : "기준 미달 — " + esc(v.candidate.need)}</div>
     <div class="of-goalform">
-      <label>코인 (쉼표)<input id="sb-sym" value="${esc(st.symbols.join(","))}" style="width:240px"></label>
-      <label>봉 (쉼표)<input id="sb-iv" value="${esc(st.intervals.join(","))}" style="width:110px"></label>
-      <label>한 번 위험(자산 %)<input id="sb-risk" type="number" step="0.1" min="0.1" max="3" value="${st.risk_pct}" style="width:90px"></label>
+      <label>레버리지 (1~20배)<input id="sb-lev" type="number" step="1" min="1" max="20" value="${st.leverage}" style="width:90px"></label>
+      <label>주문당 증거금 (자산 %)<input id="sb-mg" type="number" step="1" min="1" max="100" value="${st.margin_pct}" style="width:90px"></label>
+      <label>코인 (쉼표)<input id="sb-sym" value="${esc(st.symbols.join(","))}" style="width:220px"></label>
+      <label>봉 (쉼표)<input id="sb-iv" value="${esc(st.intervals.join(","))}" style="width:100px" ${st.follow_chart ? "disabled title='내 차트 분봉을 따라갑니다'" : ""}></label>
       <label>동시 주문<input id="sb-max" type="number" min="1" max="20" value="${st.max_open}" style="width:70px"></label>
-      <label class="of-checks"><span><input type="checkbox" id="sb-tm" ${st.use_termind ? "checked" : ""}> 147종 합의 확인</span><span><input type="checkbox" id="sb-ch" ${st.use_chart ? "checked" : ""}> 내 차트 지표 확인</span></label>
+      <label class="of-checks"><span><input type="checkbox" id="sb-fc" ${st.follow_chart ? "checked" : ""}> 내가 보는 차트 분봉에서 돌기</span><span><input type="checkbox" id="sb-tm" ${st.use_termind ? "checked" : ""}> 147종 합의 확인</span><span><input type="checkbox" id="sb-ch" ${st.use_chart ? "checked" : ""}> 내 차트 지표 확인</span></label>
       <button class="sm" id="sb-save">설정 저장</button></div>
+    <div class="dim">레버리지 ${st.leverage}배 · 증거금 ${st.margin_pct}% → 주문 하나에 가상 자산의 ${(st.leverage * st.margin_pct).toFixed(0)}% 규모 포지션. 손절가보다 청산가가 가까운 주문은 내지 않습니다. 바꾼 값은 다음 주문부터 적용.</div>
+    <div class="of-sub">지금 판단 중인 코인·봉</div>
+    <table class="of-tbl"><tr><th>코인·봉</th><th>마지막 판단</th><th>다음 판단</th></tr>
+      ${(v.pairs || []).map((x) => `<tr><td>${x.symbol.replace("USDT", "")} ${x.interval}</td><td>${x.text ? esc(x.text) : "<span class='dim'>곧 첫 판단</span>"} ${x.t ? `<span class="dim">${mdhm(x.t)}</span>` : ""}</td>
+        <td class="dim">${x.next ? mdhm(x.next) + " (봉 마감 뒤)" : "-"}</td></tr>`).join("")}</table>
     <div class="of-sub">열린 주문·포지션 (${v.orders.length})</div>
-    <table class="of-tbl"><tr><th>코인·봉</th><th>시나리오</th><th>상태</th><th>진입 · 손절 · 목표</th><th>화면 % / 배운 적중률</th><th>지표 확인</th></tr>
+    <table class="of-tbl"><tr><th>코인·봉</th><th>시나리오</th><th>상태</th><th>실시간 수익률</th><th>진입 · 손절 · 목표 · 청산가</th><th>레버리지 · 증거금</th><th>화면 % / 배운 적중률</th><th>지표 확인</th><th></th></tr>
       ${v.orders.map((o) => `<tr><td>${o.symbol.replace("USDT", "")} ${o.interval}</td><td>${o.side > 0 ? "롱" : "숏"} ${esc(o.title)}</td><td>${o.status === "open" ? "<b class='up'>보유 중</b>" : "진입 대기"}</td>
-        <td>${(+o.entry).toPrecision(6)} · <span class="down">${(+o.stop).toPrecision(6)}</span> · <span class="up">${(+o.tp).toPrecision(6)}</span> (RR ${o.rr})</td>
-        <td>${o.prob}% / ${o.learned ? o.learned.win + "%" : "-"}</td><td class="dim">${esc(o.checks_brief || "")}</td></tr>`).join("") || `<tr><td colspan="6" class="dim">없음 — 새 봉이 나오면 정책에 맞는 시나리오로 주문합니다</td></tr>`}</table>
+        <td>${o.status === "open" && o.roe_pct != null ? `<b class="${o.roe_pct >= 0 ? "up" : "down"}">${o.roe_pct > 0 ? "+" : ""}${o.roe_pct}%</b> <span class="dim">(${o.upnl > 0 ? "+" : ""}${o.upnl} · ${o.r_now > 0 ? "+" : ""}${o.r_now}R · 현재가 ${(+o.mark).toPrecision(6)})</span>` : "-"}</td>
+        <td>${(+o.entry).toPrecision(6)} · <span class="down">${(+o.stop).toPrecision(6)}</span> · <span class="up">${(+o.tp).toPrecision(6)}</span> · <span class="dim">${o.liq ? (+o.liq).toPrecision(6) : "-"}</span> (RR ${o.rr})</td>
+        <td>${o.lev ?? "-"}배 · ${o.margin ?? "-"}</td><td>${o.prob}% / ${o.learned ? o.learned.win + "%" : "-"}</td><td class="dim">${esc(o.checks_brief || "")}</td>
+        <td><button class="flat sm" data-chart="${o.symbol}" data-iv="${o.interval}">차트</button></td></tr>`).join("") || `<tr><td colspan="9" class="dim">없음 — 새 봉이 나오면 정책에 맞는 시나리오로 주문합니다 (위 '지금 판단 중' 표에서 이유 확인)</td></tr>`}</table>
     <div class="of-sub">배운 실제 적중률 (체결된 것 · 표본 적으면 전체 평균 쪽으로 당김) · 체결률 ${f(cal.fill_rate, "%")}</div>
     <table class="of-tbl"><tr><th>시나리오</th><th>전체</th><th>장세 · 봉별</th></tr>
       ${Object.entries(cal.keys || {}).map(([k, x]) => `<tr><td>${KEY_KO[k] || k}</td><td>적중 ${x.win}% · ${sign(x.avg_r)}R <span class="dim">(${x.n}건)</span></td>
@@ -280,15 +291,15 @@ async function renderSbot() {
     ${v.history.map((h) => `<div class="of-oss"><b>v${h.from.version} → v${h.to.version}</b> <span class="dim">${mdhm(h.t)}</span> ${esc(h.why)}
       <button class="flat sm" data-sbrev="${h.from.version}">v${h.from.version} 으로 되돌리기</button></div>`).join("") || "<div class='dim'>아직 없음 — 검증 구간에서 확실히 나은 정책이 나오면 바뀝니다</div>"}
     <div class="of-sub">최근 거래</div>
-    <table class="of-tbl"><tr><th>시각</th><th>코인·봉</th><th>시나리오</th><th>결과</th><th>R</th><th>손익</th></tr>
-      ${v.trades.slice(0, 25).map((t) => `<tr><td>${mdhm(t.closed)}</td><td>${t.symbol.replace("USDT", "")} ${t.interval}</td><td>${t.side > 0 ? "롱" : "숏"} ${esc(t.title)} <span class="dim">${t.prob}%</span></td>
-        <td>${EXIT_KO[t.exit] || t.exit}</td><td>${sign(t.r)}</td><td>${t.pnl}</td></tr>`).join("") || `<tr><td colspan="6" class="dim">아직 없음</td></tr>`}</table>
+    <table class="of-tbl"><tr><th>시각</th><th>코인·봉</th><th>시나리오</th><th>결과</th><th>수익률(증거금)</th><th>R</th><th>손익</th></tr>
+      ${v.trades.slice(0, 25).map((t) => `<tr><td>${mdhm(t.closed)}</td><td>${t.symbol.replace("USDT", "")} ${t.interval}</td><td>${t.side > 0 ? "롱" : "숏"} ${esc(t.title)} <span class="dim">${t.prob}% · ${t.lev ?? "-"}배</span></td>
+        <td>${EXIT_KO[t.exit] || t.exit}</td><td>${t.filled ? sign(t.roe_pct) + "%" : "-"}</td><td>${sign(t.r)}</td><td>${t.pnl}</td></tr>`).join("") || `<tr><td colspan="7" class="dim">아직 없음</td></tr>`}</table>
     <div class="of-sub">기록</div><div class="of-lvlog">${v.events.slice(0, 40).map((e) => `<div><span class="dim">${mdhm(e.t)}</span> ${esc(e.text)}</div>`).join("")}</div>`;
   $("#sb-on").onclick = () => api("/api/scenbot/settings", { method: "POST", body: { enabled: !st.enabled } }).then(renderSbot);
   $("#sb-learn").onclick = (e) => busy(e.target, async () => { await api("/api/scenbot/learn", { method: "POST" }); toast("학습을 시작했습니다", "과거 그림자 채점·보정·정책 재선정 — 1~3분 뒤 이 화면에 반영됩니다"); setTimeout(() => tab === "sbot" && renderSbot(), 4000); });
   $("#sb-save").onclick = (e) => busy(e.target, async () => {
     await api("/api/scenbot/settings", { method: "POST", body: { symbols: $("#sb-sym").value.split(",").map((x) => x.trim()).filter(Boolean), intervals: $("#sb-iv").value.split(",").map((x) => x.trim()).filter(Boolean),
-      risk_pct: +$("#sb-risk").value, max_open: +$("#sb-max").value, use_termind: $("#sb-tm").checked, use_chart: $("#sb-ch").checked } });
+      leverage: +$("#sb-lev").value, margin_pct: +$("#sb-mg").value, follow_chart: $("#sb-fc").checked, max_open: +$("#sb-max").value, use_termind: $("#sb-tm").checked, use_chart: $("#sb-ch").checked } });
     toast("저장했습니다"); renderSbot();
   });
   $$("[data-sbrev]").forEach((b) => (b.onclick = () => confirm(`정책을 v${b.dataset.sbrev} 으로 되돌릴까요?`) && api(`/api/scenbot/revert/${b.dataset.sbrev}`, { method: "POST" }).then(renderSbot)));

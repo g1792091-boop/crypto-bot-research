@@ -96,16 +96,16 @@ def simulate(st: dict, future: list[dict], expire: int = EXPIRE, max_hold: int =
             if j == 0:
                 px = stop
             r = side * (px - entry) / risk - cost_r
-            return {"filled": True, "r": round(r, 3), "exit": "stop", "won": False, "bars": j + 1, "fill_bar": fill_i}
+            return {"filled": True, "r": round(r, 3), "exit": "stop", "won": False, "bars": j + 1, "fill_bar": fill_i, "px": px}
         if tp_hit:
             r = side * (tp - entry) / risk - cost_r
-            return {"filled": True, "r": round(r, 3), "exit": "target", "won": True, "bars": j + 1, "fill_bar": fill_i}
+            return {"filled": True, "r": round(r, 3), "exit": "target", "won": True, "bars": j + 1, "fill_bar": fill_i, "px": tp}
     seg = future[fill_i: fill_i + max_hold]
     if not seg or len(seg) < max_hold and fill_i + max_hold > len(future):
-        return {"filled": True, "r": 0.0, "exit": "open", "won": None}
+        return {"filled": True, "r": 0.0, "exit": "open", "won": None, "fill_bar": fill_i}
     px = seg[-1]["close"]
     r = side * (px - entry) / risk - cost_r
-    return {"filled": True, "r": round(r, 3), "exit": "time", "won": r > 0, "bars": len(seg), "fill_bar": fill_i}
+    return {"filled": True, "r": round(r, 3), "exit": "time", "won": r > 0, "bars": len(seg), "fill_bar": fill_i, "px": px}
 
 
 def replay(c: list[dict], symbol: str, interval: str, stride: int = 2, start: int | None = None) -> list[dict]:
@@ -250,6 +250,23 @@ def unprepare(samples: list[dict]) -> None:
     for x in samples:
         x.pop("_mp", None)
         x.pop("_lr", None)
+
+
+def why_not(group: list[dict], policy: dict) -> str:
+    """정책이 아무것도 고르지 않은 이유 (가장 확률 높은 시나리오 기준)."""
+    s = max(group, key=lambda x: x["prob"])
+    why = []
+    if s["prob"] < policy["min_prob"]:
+        why.append(f"최고 화면 확률 {s['prob']}% < 기준 {policy['min_prob']}%")
+    if s["rr"] < policy["min_rr"]:
+        why.append(f"손익비 {s['rr']} < 기준 {policy['min_rr']}")
+    if s["kind"] not in policy["kinds"]:
+        why.append(f"'{s['title']}' 종류는 정책에서 뺌")
+    if not why and policy.get("use_meta"):
+        why.append("메타 모델이 이길 확률을 낮게 봄")
+    if not why and policy["rank"] == "learned":
+        why.append("배운 기대값이 0 이하")
+    return f"{s['title']}({s['prob']}% · RR {s['rr']}): " + (" · ".join(why) or "조건 미달")
 
 
 def pick(group: list[dict], policy: dict, cal: dict | None, meta: dict | None) -> dict | None:

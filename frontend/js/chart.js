@@ -57,7 +57,7 @@ class Countdown {
 export class TermChart {
   constructor(el, opts = {}) {
     this.el = el;
-    this.opts = { overlays: { heat: false, whales: false, bots: true, scenario: true }, ...opts };
+    this.opts = { overlays: { heat: false, whales: false, bots: true, scenario: true, sbot: true }, ...opts };
     this.symbol = opts.symbol; this.interval = opts.interval;
     this.indicators = opts.indicators || [];
     this.candles = [];
@@ -127,7 +127,7 @@ export class TermChart {
     if (changed) {
       // 이전 코인의 포지션선·시나리오·청산맵·고래·지지저항이 새 코인 차트에 남지 않도록 즉시 비운다
       clearInterval(this._timer);
-      this.markers = this.heat = this.whales = this.sr = this.scenario = this.ai = null;
+      this.markers = this.heat = this.whales = this.sr = this.scenario = this.ai = this.sbot = null;
       this.ext = {}; this.sigMarkers = [];
       this.setForecast(null); this.fp = null; this.fpMarkers = []; this.fpLayer.update();
       this.book = null; if (this.opts.overlays.ladder) this._loadBook();
@@ -625,7 +625,7 @@ export class TermChart {
   // ------------------------------------------------------------ 오버레이
   async refreshOverlays() {
     const o = this.opts.overlays, sym = this.symbol, iv = this.interval;
-    const got = { heat: null, whales: null, markers: null, sr: null, ai: null };
+    const got = { heat: null, whales: null, markers: null, sr: null, ai: null, sbot: null };
     const jobs = [];
     if (o.heat) jobs.push(api(`/api/liq-heatmap?symbol=${sym}&interval=${iv}&limit=500`).then((h) => {
       const v = h.columns.flatMap(([, col]) => col.map(([, x]) => x)).sort((a, b) => a - b);
@@ -638,6 +638,7 @@ export class TermChart {
     jobs.push(api(`/api/paper/markers?symbol=${sym}`).then((m) => (got.markers = { ...m, symbol: sym })).catch(() => {}));
     if (o.sr) jobs.push(api(`/api/levels?symbol=${sym}&interval=${iv}`).then((l) => (got.sr = l)).catch(() => {}));
     if (o.ai) jobs.push(api(`/api/aibot?symbol=${sym}&interval=${iv}`).then((d) => (got.ai = d)).catch(() => {}));
+    if (o.sbot) jobs.push(api(`/api/scenbot/chart?symbol=${sym}&interval=${iv}`).then((d) => (got.sbot = d)).catch(() => {}));
     if (o.footprint) jobs.push(this.loadFootprint());
     await Promise.all(jobs);
     if (!this._is(sym, iv)) return;   // 기다리는 동안 코인·봉을 바꿨으면 이전 결과는 버린다
@@ -645,6 +646,18 @@ export class TermChart {
     this._applyMarkers();
     this.heatLayer.update(); this.whaleLayer.update(); this.srLayer.update();
     this._legend();
+  }
+
+  // 시나리오 봇 주문·포지션만 다시 (실시간 손익 · 몇 초마다)
+  async refreshSbot() {
+    if (!this.opts.overlays.sbot || !this.candles.length) return;
+    const sym = this.symbol, iv = this.interval;
+    let d;
+    try { d = await api(`/api/scenbot/chart?symbol=${sym}&interval=${iv}`); } catch { return; }
+    if (!this._is(sym, iv)) return;
+    const key = JSON.stringify([d.orders, d.trades.length]);
+    this.sbot = d;
+    if (key !== this._sbKey) { this._sbKey = key; this._applyMarkers(); }
   }
 
   // AI 진입 시그널만 다시 (새 분석이 나왔을 때)
@@ -823,6 +836,31 @@ export class TermChart {
           line(wait.entry, `${who} ${wait.side === "long" ? "롱" : "숏"} 진입 대기`, AIC, 2); line(wait.stop, `${who} 손절`, css("--down"), 3); line(wait.take, `${who} 익절`, css("--up"), 3);
         }
       }
+    }
+    if (this.opts.overlays.sbot && this.sbot?.symbol === this.symbol) {
+      // 시나리오 봇: 지난 진입(주황 화살표) → 청산(목표/손절 · 증거금 대비 %) · 보유 중이면 진입·손절·목표·청산가 + 실시간 수익률 · 대기 중이면 주문선
+      const SB = "#ff9f43", pc = (v) => `${v > 0 ? "+" : ""}${(+v || 0).toFixed(1)}%`;
+      const iv = this.interval, same = (x) => x.interval === iv;
+      const trades = this.sbot.trades.filter(same), nT = trades.length;
+      trades.forEach((t, i) => {
+        const long = t.side > 0, te = this._barTime(t.entry_time), tx = this._barTime(t.exit_time), recent = i >= nT - 6;
+        if (te) mk.push({ time: te, position: long ? "belowBar" : "aboveBar", shape: long ? "arrowUp" : "arrowDown", color: SB,
+          text: recent ? `시나리오 ${long ? "롱" : "숏"} ${t.lev}배` : "" });
+        if (tx) mk.push({ time: tx, position: long ? "aboveBar" : "belowBar", shape: "circle", color: t.pnl > 0 ? css("--up") : css("--down"),
+          text: recent ? `${t.exit === "target" ? "목표" : t.exit === "stop" ? "손절" : "시간"} ${pc(t.roe_pct)}` : "" });
+      });
+      this.sbot.orders.filter(same).forEach((o) => {
+        const long = o.side > 0, d = long ? "롱" : "숏";
+        if (o.status === "open") {
+          const te = this._barTime(o.filled_at);
+          if (te) mk.push({ time: te, position: long ? "belowBar" : "aboveBar", shape: long ? "arrowUp" : "arrowDown", color: SB, text: `시나리오 ${d} 진입` });
+          line(o.entry, `🤖 시나리오봇 ${d} ${o.lev}배 ${o.roe_pct != null ? pc(o.roe_pct) : ""}${o.upnl != null ? ` (${o.upnl > 0 ? "+" : ""}${fmt(o.upnl, 2)})` : ""}`, SB, 0);
+          line(o.stop, "🤖 봇 손절", css("--down")); line(o.tp, "🤖 봇 목표", css("--up")); line(o.liq, "🤖 봇 청산가", "rgba(229,72,77,.5)", 3);
+        } else {
+          line(o.entry, `🤖 시나리오봇 ${d} 대기 (${o.order === "stop" ? "돌파 시" : "지정가"} · ${o.title})`, SB, 2);
+          line(o.stop, "🤖 봇 손절", css("--down"), 3); line(o.tp, "🤖 봇 목표", css("--up"), 3);
+        }
+      });
     }
     this.editLines = {};
     const my = this._pos();

@@ -660,7 +660,7 @@ def j_scenbot(team):
     k[0] += 1
     if k[0] % 4 == 0 and not v["busy"] and time.time() - (v["last_learn"] or 0) > 3600:
         E.post(team, "work", agent=roster.TEAM_LEAD[team], icon="🧠", text="진입 봇 학습·정책 재선정 시작 (그림자 채점 · 보정 · 메타 모델 · walk-forward)")
-        scenbot.learn()
+        scenbot.learn_bg()
     trades = [t for t in v["trades"] if t["filled"]][:10]
     recent = "\n".join(f"- {t['symbol']} {t['interval']} {t['title']} {'롱' if t['side'] > 0 else '숏'} 화면 {t['prob']}% → {t['exit']} {t['r']:+.2f}R" for t in trades)
     data = scenbot.text() + ("\n최근 거래:\n" + recent if recent else "")

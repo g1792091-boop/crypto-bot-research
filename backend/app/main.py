@@ -368,7 +368,9 @@ class ScenbotSettings(BaseModel):
     enabled: Optional[bool] = None
     symbols: Optional[list[str]] = None
     intervals: Optional[list[str]] = None
-    risk_pct: Optional[float] = None
+    leverage: Optional[float] = None
+    margin_pct: Optional[float] = None
+    follow_chart: Optional[bool] = None
     max_open: Optional[int] = None
     learn_hours: Optional[float] = None
     use_termind: Optional[bool] = None
@@ -393,8 +395,17 @@ def scenbot_learn():
     from . import scenbot
     if scenbot._th["busy"]:
         return {"ok": False, "busy": True}
-    threading.Thread(target=scenbot.learn, daemon=True).start()
-    return {"ok": True}
+    return {"ok": scenbot.learn_bg()}
+
+
+@app.get("/api/scenbot/chart")
+def scenbot_chart(symbol: str = "BTCUSDT", interval: str = "1h"):
+    """트레이드 차트 표시용: 이 코인의 시나리오 봇 주문·포지션(실시간 손익)과 지난 진입·청산."""
+    from . import scenbot
+    try:
+        return scenbot.chart(symbols.resolve(symbol), interval)
+    except ValueError as e:
+        _bad(e)
 
 
 @app.post("/api/scenbot/revert/{version}")
