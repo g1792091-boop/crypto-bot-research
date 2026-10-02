@@ -53,3 +53,10 @@ html,body{margin:0;background:#0b0e14;color:#e6e9ef;font-family:"Pretendard Vari
 .cb-tv{font-size:11.5px;white-space:nowrap}.cb-tv.up{color:#5fd39a}.cb-tv.dn{color:#ff7b86}
 @media (prefers-reduced-motion:reduce){.of-sg{transition:none}}
 .of-kt td.k{white-space:nowrap;min-width:5.5em}
+/* 🤖 자동매매봇 조종판 */
+.bot-live{display:flex;flex-direction:column;gap:3px;padding:9px 11px;border:1px solid var(--of-line,#2a3142);border-left:4px solid #8a93a6;background:#0f1520;margin:4px 0}
+.bot-live.test{border-left-color:#3ddc84}.bot-live.main{border-left-color:#e5484d}.bot-live.halt{border-left-color:#e5484d;background:#2a1416}.bot-live.off{border-left-color:#8a93a6}
+.bot-live b{font-size:13px;color:#eef1f7}.bot-live span{font-size:11.5px;color:#9aa4b5}.bot-live .bot-lim{color:#7c8699}
+.bot-tb{min-width:560px}.bot-tpls{display:flex;flex-wrap:wrap;gap:6px}
+.bot-tpl{display:flex;flex-direction:column;gap:1px;text-align:left;background:#111826;border:1px solid #26314a;border-left:3px solid #00bfa5;color:#e6e9ef;border-radius:8px;padding:7px 10px;font:inherit;cursor:pointer}
+.bot-tpl.sim{border-left-color:#f0a020}.bot-tpl:hover{background:#16213a}.bot-tpl small{color:#8a93a6;font-size:10.5px}

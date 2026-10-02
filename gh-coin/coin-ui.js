@@ -198,7 +198,7 @@ function build(){
       <div class="of-head">
         <div class="of-h1"><i class="of-led" id="ofLed"></i><b id="ofTitle">대기 중</b><span class="of-sp"></span><span class="of-recl" id="ofRecL">녹화 중</span></div>
         <div class="of-h2" id="ofStatus"></div>
-        <div class="of-chans" id="ofChans"><button data-ch="all" aria-pressed="true">#전체</button><button data-ch="work" aria-pressed="false" style="--tc:#c9a227">#업무</button><button data-ch="cboard" aria-pressed="false" style="--tc:#00b8d4">#⚡실시간 타점판</button><button data-ch="pipe" aria-pressed="false" style="--tc:#5b8cff">#파이프라인</button><button data-ch="tech" aria-pressed="false" style="--tc:#9c7cf0">#📚 도입 기술</button><button data-ch="growth" aria-pressed="false" style="--tc:#3ddc84">#성장 과제<span id="ofGrowN"></span></button>${TEAMS.map(t => `<button data-ch="${t.id}" aria-pressed="false" style="--tc:${tc(t.id)}">#${t.name}</button>`).join("")}</div>
+        <div class="of-chans" id="ofChans"><button data-ch="all" aria-pressed="true">#전체</button><button data-ch="work" aria-pressed="false" style="--tc:#c9a227">#업무</button><button data-ch="cboard" aria-pressed="false" style="--tc:#00b8d4">#⚡실시간 타점판</button><button data-ch="pipe" aria-pressed="false" style="--tc:#5b8cff">#파이프라인</button><button data-ch="bots" aria-pressed="false" style="--tc:#00bfa5">#🤖 자동매매봇</button><button data-ch="tech" aria-pressed="false" style="--tc:#9c7cf0">#📚 도입 기술</button><button data-ch="growth" aria-pressed="false" style="--tc:#3ddc84">#성장 과제<span id="ofGrowN"></span></button>${TEAMS.map(t => `<button data-ch="${t.id}" aria-pressed="false" style="--tc:${tc(t.id)}">#${t.name}</button>`).join("")}</div>
       </div>
       <div class="of-log" id="ofLog" aria-live="polite"></div>
       <form class="of-form" id="ofForm"><input id="ofIn" placeholder="본부에 메시지 보내기 (예: 비트코인 지금 롱 어때? / 커스텀 지표로 매매법 만들어 와)" autocomplete="off"><button type="submit" aria-label="보내기">↵</button></form>
@@ -287,6 +287,9 @@ function wire(el){
     if (e.target.closest("[data-docfolder]")){ O.openFolder(e.target.closest("[data-docfolder]").dataset.docfolder || "").then(r => ctx.toast(r.ok ? "폴더를 열었습니다: " + (r.dir || "") : r.why)); return; }
     const df = e.target.closest("[data-docfilter]"); if (df){ docFilter = df.dataset.docfilter; openDocs(true); return; }
     const cg = e.target.closest("[data-ch-go]"); if (cg){ root.querySelector(`#ofChans [data-ch="${cg.dataset.chGo}"]`)?.click(); return; }
+    if (e.target.closest("[data-botnew]")){ O.ask("자동매매봇 전략 만들어줘", {room: "bot"}); ctx.toast("선물 자동매매봇팀이 봇 전략을 만들어 백테스트합니다 · #선물 자동매매봇팀 방"); return; }
+    if (e.target.closest("[data-botsim]")){ O.ask("그리드 봇 백테스트 돌려줘", {room: "bot"}); ctx.toast("그리드/DCA 봇을 연구용으로 백테스트합니다 (실거래로는 안 나감)"); return; }
+    if (e.target.closest("[data-botlive]")){ if (typeof ctx.openLive === "function") ctx.openLive(); else ctx.toast("실거래 화면을 열 수 없습니다"); return; }
     const sg = e.target.closest("[data-suggest]"); if (sg){ const inp = $o("#ofIn"); inp.value = sg.dataset.suggest; inp.focus(); return; }
     const rc = e.target.closest("[data-recent]"); if (rc){ const t = rc.dataset.recent; addRecent(teamById(chan) ? chan : "hq", t); O.ask(t, {room: teamById(chan) ? chan : "hq"}); return; }
     if (e.target.closest("[data-recentclear]")){ try { localStorage.removeItem("coinRecent"); } catch(err){} renderLog(); return; }
@@ -527,11 +530,12 @@ function renderStatus(){
 }
 /* ============ 회의록 패널 ============ */
 // #전체: 회의·수다·보고·내 메시지 / #업무: 직원들이 본 차트·뉴스 / #성장 과제: 과제 보드 / 팀 방: 그 팀의 모든 것
-const inChan = e => chan === "all" ? e.kind !== "work" : chan === "work" ? e.kind === "work" : chan === "growth" || chan === "pipe" || chan === "cboard" || chan === "tech" ? false : e.ch === chan;
+const inChan = e => chan === "all" ? e.kind !== "work" : chan === "work" ? e.kind === "work" : chan === "growth" || chan === "pipe" || chan === "cboard" || chan === "tech" || chan === "bots" ? false : e.ch === chan;
 async function renderLog(){
   const box = $o("#ofLog");
   if (chan === "growth"){ box.innerHTML = growthHTML(); renderGrowthCount(); return; }
   if (chan === "pipe"){ box.innerHTML = await pipeHTML(); return; }
+  if (chan === "bots"){ box.innerHTML = await botsHTML(); return; }
   if (chan === "tech"){ box.innerHTML = techHTML(); return; }
   if (chan === "cboard"){ const y = box.scrollTop; box.innerHTML = await comboHTML(); box.scrollTop = y; return; }
   const log = await O.loadLog();
@@ -630,7 +634,7 @@ function entryHTML(e){
     ${body ? `<div class="of-tx md">${body}</div>` : ""}<div class="of-acts"><button class="of-link" data-more>펼치기 · 접기</button>${!e.live && e.text ? `<button class="of-rate${e.rating > 0 ? " on" : ""}" data-rate="1" title="좋은 발언 · GH Nano 학습에 우선 사용">👍</button><button class="of-rate${e.rating < 0 ? " on" : ""}" data-rate="-1" title="나쁜 발언 · 학습 데이터에서 뺌">👎</button>${e.trainIds?.length ? `<span class="of-trn" title="이 발언으로 GH Nano 학습 예시를 만들었습니다">🎓 학습 예시</span>` : ""}` : ""}</div></div></div>`;
 }
 function appendEntry(e){
-  const box = $o("#ofLog"); if (!box || chan === "growth" || chan === "pipe" || chan === "cboard" || chan === "tech") return;
+  const box = $o("#ofLog"); if (!box || chan === "growth" || chan === "pipe" || chan === "cboard" || chan === "tech" || chan === "bots") return;
   box.querySelector(".of-empty")?.remove();
   const near = box.scrollHeight - box.scrollTop - box.clientHeight < 120;
   box.insertAdjacentHTML("beforeend", entryHTML(e));
@@ -704,6 +708,27 @@ function suggestHTML(){
   const room = teamById(chan) ? chan : "hq", sug = SUGGEST[room] || SUGGEST.hq, rec = (recents()[room] || []).slice(0, 6);
   return `<div class="of-sugg">${sug.map(t => `<button class="of-sg" data-suggest="${E(t)}">${E(t)}</button>`).join("")}</div>` +
     (rec.length ? `<div class="of-recent"><small>최근 질문</small>${rec.map(t => `<button class="of-link" data-recent="${E(t)}" title="${E(t)}">${E(t.length > 18 ? t.slice(0, 18) + "…" : t)}</button>`).join("")}<button class="of-link" data-recentclear>지우기</button></div>` : "");
+}
+/* ============ 🤖 자동매매봇 조종판 ============ */
+async function botsHTML(){
+  if (typeof O.botBoard !== "function") return `<div class="of-empty"><b>봇 조종판을 불러올 수 없습니다</b></div>`;
+  const B = await O.botBoard(), e = E, money = v => (+v).toLocaleString("ko-KR", {maximumFractionDigits: 0});
+  const live = B.live, L = live.limits || {};
+  const banner = `<div class="bot-live ${live.halted ? "halt" : live.enabled ? (live.env === "mainnet" ? "main" : "test") : "off"}">
+    <b>${live.halted ? "⛔ 긴급 정지됨" : live.enabled ? (live.env === "mainnet" ? "🔴 실거래(메인넷) 켜짐" : "🟢 테스트넷 켜짐") : "⚪ 실거래 꺼짐 (기본)"}</b>
+    <span>${live.enabled ? `${live.mode === "auto" ? "자동" : "승인"} 모드 · 연결된 봇 ${live.linked}개` : "봇은 데모에서 검증 후, 대표님이 직접 켜고 연결해야 실거래합니다"}</span>
+    <span class="bot-lim">한도: 주문당 ${L.orderNotional ?? 20}/최대 ${L.maxNotional ?? 50} USDT · ${L.maxLeverage ?? 3}배 · 포지션 ${L.maxPositions ?? 2} · 하루 손실 ${L.dailyLoss ?? 20} USDT</span></div>`;
+  const botRows = B.rows.length ? `<table class="of-kt bot-tb"><tr><th>봇</th><th>코인</th><th>상태</th><th>평가(가상 1만)</th><th>거래</th><th>일수</th><th>관문</th></tr>
+    ${B.rows.map(r => `<tr><td class="k"><b>${e(r.name.replace(/^🤖 /, ""))}</b></td><td>${e(r.market)} ${e(r.tf)}</td><td>${r.live ? "🔴 실거래" : r.status === "active" ? "🧪 데모" : "중지"}</td><td class="${r.eq >= 10000 ? "up" : "dn"}">${money(r.eq)}</td><td>${r.trades}</td><td>${r.days}</td><td>${r.gate ? "✅ 후보" : "⏳ " + (r.gateFail.slice(0, 2).join(", ") || "진행 중")}</td></tr>`).join("")}</table>`
+    : `<p class="of-dim">아직 데모 중인 봇이 없습니다. 아래 [봇 전략 만들기]를 누르거나 "자동매매봇 전략 만들어줘"라고 보내세요.</p>`;
+  return `<div class="of-pipe">
+    <p class="of-dim">유명 트레이딩 봇(passivbot·jesse·OctoBot·freqtrade·Binance 선물봇)의 전략을 우리 전략으로 만들어 <b>백테스트 → 데모거래 → 실거래</b> 순서로 올립니다.
+      <b>주문은 AI가 아니라 코드가</b>, 안전 한도와 대표님 승인 안에서만 냅니다. 기본은 테스트넷이고, 실거래는 대표님이 [실거래] 화면에서 직접 켜고 전략을 연결해야 시작됩니다. 자동 개선은 전략 최적화팀이 맡습니다.</p>
+    ${banner}
+    <div class="nt-row" style="flex-wrap:wrap;gap:6px;margin:8px 0"><button class="of-btn2" data-botnew>➕ 봇 전략 만들기(백테스트)</button><button class="of-btn2" data-botsim>🧪 그리드/DCA 연구 백테스트</button>${B.supported ? `<button class="of-btn2" data-botlive>💰 실거래 화면 열기 (켜고 연결)</button>` : ""}</div>
+    <section class="of-lane"><h4>🤖 데모·실거래 중인 봇</h4>${botRows}</section>
+    <section class="of-lane"><h4>📦 올릴 수 있는 봇 전략 (단일 포지션 · 실거래 가능)</h4><div class="bot-tpls">${B.templates.map(t => `<button class="bot-tpl" data-botnew title="${e(t.repo)}"><b>${e(t.name)}</b><small>${e(t.repo)}</small></button>`).join("")}</div></section>
+    <section class="of-lane"><h4>🧪 그리드 · DCA 봇 (연구용 백테스트만)</h4><p class="of-dim">무한 물타기로 청산될 수 있어 <b>실거래로는 내보내지 않습니다</b>. 지갑 노출·물타기 횟수 한도로 막고, 어떤 장세에서 위험한지 백테스트로만 보여 줍니다.</p><div class="bot-tpls">${B.sim.map(t => `<button class="bot-tpl sim" data-botsim title="${e(t.repo)}"><b>${e(t.name)}</b><small>${e(t.repo)}</small></button>`).join("")}</div></section></div>`;
 }
 /* ============ 📚 도입 기술: 오픈소스 23개 → 부서 ============ */
 function techHTML(){

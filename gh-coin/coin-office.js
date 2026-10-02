@@ -204,6 +204,7 @@ export const officeState = () => ({running, queued: queue.length});
 const ACTIONS = [
   {job: "cdev", re: /커스텀.*(지표|매매법|전략).*(만들|찾|개발|짜|연구|백테스트)/, say: "커스텀 지표 개발팀이 지금 바로 수식 지표로 매매법을 만들어 커스텀 백테스트팀이 검증합니다"},
   {job: "dev", re: /(매매법|전략|지표).*(만들|찾|개발|짜|연구|발굴|백테스트)|(만들|찾|개발|짜).*(매매법|전략)|백테스트\s*(해|돌려)/, say: "매매법 개발팀이 지금 바로 모든 보조지표로 매매법을 만들어 백테스트팀이 검증합니다"},
+  {job: "bot", re: /자동매매\s*봇|선물\s*봇|트레이딩\s*봇|그리드\s*봇|dca\s*봇|봇\s*(만들|돌려|전략|추가)|passivbot|jesse|octobot/i, say: "선물 자동매매봇팀이 지금 바로 봇 전략을 만들어 백테스트하고 통과하면 데모에 올립니다"},
   {job: "ic", re: /투자위원회|강세.{0,6}약세.{0,6}토론|살지.{0,4}팔지|(매수|매도).{0,6}결정/, say: "투자위원회가 지금 바로 애널리스트 보고 → 강세·약세 토론 → 리스크 토론 → 위원장 결정을 합니다"},
   {job: "qrisk", re: /(var|cvar|변동성|상관|베타|스트레스|리스크).{0,10}(계산|분석|봐|점검|알려)|결정표|주문 전 점검/i, say: "퀀트 리스크팀이 지금 바로 VaR·상관·스트레스·주문 전 점검을 계산합니다"},
   {job: "data", re: /거래소.{0,6}(비교|차이|가격차)|김치\s*프리미엄|데이터.{0,4}(품질|점검)|감사 기록/, say: "데이터 플랫폼팀이 지금 바로 8개 거래소 시세·펀딩과 데이터 품질을 비교합니다"},
@@ -672,14 +673,14 @@ export function startChatter(){
 // 매 주기 ① 모의투자 장부를 실제 시세로 갱신(코드, AI 없음) ② 그때그때 한 가지 일을 고른다:
 // 매매법 연구 · SNS 여론 · 경제 리서치 · 동료 수다 · 컴퓨터 작업 · 모의투자 보고 (하루 AI 호출 한도 안에서)
 // 쉬지 않고 돌아가는 업무 순환표: 팀마다 고르게 돌아가도록 섞어 두었다 (모듈이 없으면 경제 리서치로 대신)
-const JOBS = ["dev", "combo", "ic", "ind", "qrisk", "trend", "data", "opt", "patscan", "situ", "cdev", "entry", "sr", "news", "promote", "pattern", "coin", "ml", "dev", "tpsl", "combo", "drift", "cdev", "feeds", "alpha", "trend", "ic", "chat", "forecast", "coin", "live", "retro", "task", "selfdev", "macro", "sns", "computer", "paper"];
-const JOB_KO = {ic: "투자위원회(강세·약세 토론 → 결정)", qrisk: "퀀트 리스크(VaR·결정표·주문 전 점검)", data: "거래소 비교·데이터 품질", opt: "하이퍼옵트로 전략 다듬기", patscan: "패턴 스캐너", drift: "데모 성과 이동 감지(런 차트)", feeds: "경제 캘린더·금리·변동성 지수", alpha: "알파 팩터 순위", combo: "실시간 종합 지표 타점", dev: "매매법 개발 → 백테스트", cdev: "커스텀 지표 개발 → 백테스트", ind: "보조지표 분석", trend: "다중 시간대 추세 분석", entry: "진입 타점 분석", sr: "지지·저항 분석",
+const JOBS = ["dev", "combo", "ic", "bot", "ind", "qrisk", "trend", "data", "opt", "patscan", "situ", "cdev", "entry", "sr", "news", "promote", "pattern", "coin", "ml", "dev", "tpsl", "combo", "drift", "cdev", "feeds", "alpha", "bot", "trend", "ic", "chat", "forecast", "coin", "live", "retro", "task", "selfdev", "macro", "sns", "computer", "paper"];
+const JOB_KO = {bot: "자동매매봇 전략 만들기", ic: "투자위원회(강세·약세 토론 → 결정)", qrisk: "퀀트 리스크(VaR·결정표·주문 전 점검)", data: "거래소 비교·데이터 품질", opt: "하이퍼옵트로 전략 다듬기", patscan: "패턴 스캐너", drift: "데모 성과 이동 감지(런 차트)", feeds: "경제 캘린더·금리·변동성 지수", alpha: "알파 팩터 순위", combo: "실시간 종합 지표 타점", dev: "매매법 개발 → 백테스트", cdev: "커스텀 지표 개발 → 백테스트", ind: "보조지표 분석", trend: "다중 시간대 추세 분석", entry: "진입 타점 분석", sr: "지지·저항 분석",
   tpsl: "익절·손절 관리", news: "뉴스·기사 분석", macro: "경제지표 예측", situ: "코인 상황판", pattern: "차트·캔들 패턴 분석", coin: "코인팀 회의", ml: "머신러닝·딥러닝 실험",
   promote: "데모 → 실거래 관문 심사", live: "실거래 데스크 점검", paper: "데모거래 보고", forecast: "방향 예측 토론", sns: "SNS 여론 확인", chat: "동료 수다", computer: "컴퓨터 작업",
   retro: "팀 회고·부족한 점 찾기", task: "개선 과제 수행", selfdev: "우리 앱 오류 찾아 코드 고치기", economy: "경제 리서치"};
-const JOB_TEAM = {ic: "ic", qrisk: "qrisk", data: "data", opt: "opt", patscan: "pattern", drift: "demo", feeds: "news", alpha: "ml", combo: "combo", dev: "dev", cdev: "cdev", ind: "ind", trend: "trend", entry: "entry", sr: "sr", tpsl: "tpsl", news: "news", macro: "news", situ: "situ", pattern: "pattern", coin: "btc", ml: "ml",
+const JOB_TEAM = {bot: "bot", ic: "ic", qrisk: "qrisk", data: "data", opt: "opt", patscan: "pattern", drift: "demo", feeds: "news", alpha: "ml", combo: "combo", dev: "dev", cdev: "cdev", ind: "ind", trend: "trend", entry: "entry", sr: "sr", tpsl: "tpsl", news: "news", macro: "news", situ: "situ", pattern: "pattern", coin: "btc", ml: "ml",
   promote: "demo", live: "live", paper: "demo", forecast: "entry", sns: "news", chat: "hq", computer: "hq", retro: "hq", task: "hq", selfdev: "hq", economy: "news"};
-const JOB_FN = () => ({ic: icJob, qrisk: qriskJob, data: dataJob, opt: optJob, patscan: patternScanJob, drift: driftJob, feeds: openFeedsJob, alpha: alphaJob, combo: comboJob, dev: () => research("std"), cdev: () => research("custom"), ind: indJob, trend: trendJob, entry: entryJob, sr: srJob, tpsl: tpslJob, news: economyCheck, macro: macroJob,
+const JOB_FN = () => ({bot: botJob, ic: icJob, qrisk: qriskJob, data: dataJob, opt: optJob, patscan: patternScanJob, drift: driftJob, feeds: openFeedsJob, alpha: alphaJob, combo: comboJob, dev: () => research("std"), cdev: () => research("custom"), ind: indJob, trend: trendJob, entry: entryJob, sr: srJob, tpsl: tpslJob, news: economyCheck, macro: macroJob,
   situ: situJob, pattern: patternJob, coin: coinJob, ml: mlJob, promote: promoteJob, live: liveDeskJob, paper: paperReport, forecast: forecastJob, sns: snsCheck, chat: () => chatter(true),
   computer: computerWork, retro, task: doTask, selfdev: selfdevJob, economy: economyCheck});
 let cycleTimer = 0, cycling = false, lastJob = "";
@@ -1781,3 +1782,104 @@ export function runMigrations(){
   ])).catch(() => []);
 }
 if (typeof window !== "undefined") runMigrations();
+
+/* ================================================================
+   🤖 선물 자동매매봇팀 — 유명 트레이딩 봇(passivbot·jesse·OctoBot·freqtrade·Binance 선물봇)의 봇 전략을
+   우리 전략 JSON으로 다시 만들어(코드 복사 없음) 기존 백테스트→데모→실거래 파이프라인에 올린다.
+   · 배포되는 봇(실거래 가능): 단일 포지션 전략 — 추세추종·돌파·평균회귀·슈퍼트렌드 플립·추세 캐리.
+     주문은 기존 안전 경로(paper→live.js)로만: AI는 주문 안 함, 코드가 한도·사용자 승인·긴급정지 안에서만.
+   · 그리드·DCA 봇: 무한 물타기 청산 위험 때문에 '백테스트 연구용'으로만 보여 준다(lib/botsim.js). 실거래로 내보내지 않는다.
+   · 자동 개선: 올라간 봇 전략도 기존 하이퍼옵트(전략 최적화팀)가 데모 성과를 보고 다듬는다.
+   ================================================================ */
+const BOT_LEV = 3;   // 봇 배포 전략 레버리지: 실거래 한도(maxLeverage 3)에 맞춰 바로 연결 가능하게
+// 배포 가능한 단일 포지션 봇 전략 (출처는 tech.js). coin: COINS 항목, tf 문자열
+const BOT_TEMPLATES = [
+  {id: "trend", name: "추세추종 봇", repo: "jesse · Binance 선물봇", build: (c, tf) => ({
+    name: `🤖 추세추종 봇 · ${c.ko} ${TF_KO[tf]}`, indicators: [{id: "ef", type: "ema", length: 20}, {id: "es", type: "ema", length: 50}, {id: "adx", type: "adx", length: 14}],
+    long_entry: {logic: "all", conditions: [{left: "ef", op: "crosses_above", right: "es"}, {left: "adx.adx", op: ">", right: "20"}]},
+    short_entry: {logic: "all", conditions: [{left: "ef", op: "crosses_below", right: "es"}, {left: "adx.adx", op: ">", right: "20"}]},
+    long_exit: {logic: "any", conditions: [{left: "ef", op: "crosses_below", right: "es"}]}, short_exit: {logic: "any", conditions: [{left: "ef", op: "crosses_above", right: "es"}]},
+    risk: {leverage: BOT_LEV, position_pct: 20, atr_stop_mult: 2.5, trailing_stop_pct: 3}})},
+  {id: "break", name: "돌파 봇", repo: "OctoBot · Binance 선물봇", build: (c, tf) => ({
+    name: `🤖 돌파 봇 · ${c.ko} ${TF_KO[tf]}`, indicators: [{id: "hi", type: "highest", length: 20, source: "high"}, {id: "lo", type: "lowest", length: 20, source: "low"}, {id: "ef", type: "ema", length: 100}],
+    long_entry: {logic: "all", conditions: [{left: "close", op: "crosses_above", right: "hi[1]"}, {left: "close", op: ">", right: "ef"}]},
+    short_entry: {logic: "all", conditions: [{left: "close", op: "crosses_below", right: "lo[1]"}, {left: "close", op: "<", right: "ef"}]},
+    long_exit: {logic: "any", conditions: [{left: "close", op: "crosses_below", right: "lo[1]"}]}, short_exit: {logic: "any", conditions: [{left: "close", op: "crosses_above", right: "hi[1]"}]},
+    risk: {leverage: BOT_LEV, position_pct: 20, atr_stop_mult: 2, take_profit_pct: 6}})},
+  {id: "revert", name: "평균회귀 봇", repo: "jesse · Erfaniaa", build: (c, tf) => ({
+    name: `🤖 평균회귀 봇 · ${c.ko} ${TF_KO[tf]}`, indicators: [{id: "rsi", type: "rsi", length: 14}, {id: "bb", type: "bb", length: 20, mult: 2}, {id: "ef", type: "ema", length: 200}],
+    long_entry: {logic: "all", conditions: [{left: "rsi", op: "<", right: "30"}, {left: "close", op: "<", right: "bb.lower"}, {left: "close", op: ">", right: "ef"}]},
+    short_entry: {logic: "all", conditions: [{left: "rsi", op: ">", right: "70"}, {left: "close", op: ">", right: "bb.upper"}, {left: "close", op: "<", right: "ef"}]},
+    long_exit: {logic: "any", conditions: [{left: "rsi", op: ">", right: "55"}]}, short_exit: {logic: "any", conditions: [{left: "rsi", op: "<", right: "45"}]},
+    risk: {leverage: BOT_LEV, position_pct: 20, stop_loss_pct: 3, take_profit_pct: 4, allow_reverse: false}})},
+  {id: "super", name: "슈퍼트렌드 플립 봇", repo: "OctoBot · jesse", build: (c, tf) => ({
+    name: `🤖 슈퍼트렌드 봇 · ${c.ko} ${TF_KO[tf]}`, indicators: [{id: "st", type: "supertrend", length: 10, mult: 3}, {id: "ef", type: "ema", length: 200}],
+    long_entry: {logic: "all", conditions: [{left: "st.trend", op: "crosses_above", right: "0"}, {left: "close", op: ">", right: "ef"}]},
+    short_entry: {logic: "all", conditions: [{left: "st.trend", op: "crosses_below", right: "0"}, {left: "close", op: "<", right: "ef"}]},
+    long_exit: {logic: "any", conditions: [{left: "st.trend", op: "crosses_below", right: "0"}]}, short_exit: {logic: "any", conditions: [{left: "st.trend", op: "crosses_above", right: "0"}]},
+    risk: {leverage: BOT_LEV, position_pct: 20, atr_stop_mult: 3, trailing_stop_pct: 4}})},
+  {id: "carry", name: "추세 캐리 봇", repo: "passivbot(추세형) · freqtrade", build: (c, tf) => ({
+    name: `🤖 추세 캐리 봇 · ${c.ko} ${TF_KO[tf]}`, indicators: [{id: "ef", type: "ema", length: 50}, {id: "es", type: "ema", length: 200}, {id: "adx", type: "adx", length: 14}],
+    long_entry: {logic: "all", conditions: [{left: "ef", op: ">", right: "es"}, {left: "close", op: ">", right: "ef"}, {left: "adx.plus_di", op: ">", right: "adx.minus_di"}]},
+    short_entry: {logic: "all", conditions: [{left: "ef", op: "<", right: "es"}, {left: "close", op: "<", right: "ef"}, {left: "adx.minus_di", op: ">", right: "adx.plus_di"}]},
+    long_exit: {logic: "any", conditions: [{left: "close", op: "crosses_below", right: "ef"}]}, short_exit: {logic: "any", conditions: [{left: "close", op: "crosses_above", right: "ef"}]},
+    risk: {leverage: BOT_LEV, position_pct: 20, atr_stop_mult: 3, minimal_roi: {"0": 10, "240": 5, "960": 2, "2880": 0}}})}
+];
+// 그리드·DCA 연구용 프리셋 (실거래로 안 나감) — passivbot 방식
+const BOT_SIM_PRESETS = [
+  {id: "grid_safe", name: "그리드 봇 (보수)", repo: "passivbot", p: {side: "long", spacingPct: 1.5, qtyMult: 1.0, maxRungs: 5, walletExpo: 0.4, tpMarkupPct: 1.2, leverage: 2}},
+  {id: "grid_mid", name: "그리드 봇 (보통)", repo: "passivbot", p: {side: "long", spacingPct: 1.2, qtyMult: 1.3, maxRungs: 6, walletExpo: 0.6, tpMarkupPct: 1.0, leverage: 3}},
+  {id: "dca_capped", name: "DCA 봇 (한도형)", repo: "passivbot · OctoBot", p: {side: "long", spacingPct: 2.0, qtyMult: 1.5, maxRungs: 5, walletExpo: 0.5, tpMarkupPct: 1.5, leverage: 2}}
+];
+export const botTemplates = () => BOT_TEMPLATES.map(t => ({id: t.id, name: t.name, repo: t.repo}));
+export const botSimPresets = () => BOT_SIM_PRESETS;
+
+// 봇 전략 하나를 만들어 백테스트·검증 → 통과하면 데모에 올림(기존 파이프라인) · 그리드/DCA 차례면 연구용 시뮬만 보여 줌
+async function botJob(){
+  const Q = await import("../nuri-ai/quant.js"), P = await import("../nuri-ai/paper.js"), RB = await lib("robust"), lead = agentById("bot_lead");
+  const named = userNote && COINS.find(c => new RegExp(`${c.ko}|${c.sym.replace("USDT", "")}`, "i").test(userNote));
+  const wantGrid = userNote && /그리드|grid|dca|물타기/i.test(userNote);
+  const c = named || COINS[rot("botCoin", COINS.length)], tf = ["60", "240"][rot("botTf", 2)];
+  // 그리드/DCA 연구 (주기적으로, 또는 말로 그리드 요청 시)
+  if (wantGrid || rot("botGridEvery", 4) === 0){
+    const B = await lib("botsim"), preset = BOT_SIM_PRESETS[rot("botPreset", BOT_SIM_PRESETS.length)];
+    fire({kind: "busy", agent: lead, text: `🤖 ${c.ko} ${preset.name} 백테스트(연구용)`});
+    const cs = (await candlesFor({market: c.sym, exchange: "binancef", timeframe: tf}, 1500)).cs;
+    const r = B.simGrid(cs, preset.p), risk = B.botRisk(preset.p), s = r.stats;
+    table("bot", lead.id, `🤖 ${c.ko} ${TF_KO[tf]}봉 · ${preset.name} (연구용 백테스트)`, ["항목", "값"], [["수익률", pc(s.return_pct)], ["최대 낙폭", s.max_drawdown_pct + "%"], ["청산 횟수", String(s.liquidations)], ["최다 물타기", s.worst_rungs + "회"], ["최대 증거금 사용", s.max_margin_pct + "%"], ["익절 거래", String(s.trades)], ["위험도", risk.level]],
+      `⚠ 그리드·DCA는 추세장에서 끝까지 물리면 청산됩니다(위 청산 횟수) · 지갑 노출 ${Math.round(preset.p.walletExpo * 100)}%·물타기 ${preset.p.maxRungs}회로 막음 · 연구용일 뿐 실거래로 내보내지 않습니다${risk.warn.length ? " · " + risk.warn[0] : ""}`);
+    addNote("bot", `${c.ko} ${preset.name}: 수익 ${pc(s.return_pct)} · 청산 ${s.liquidations} · ${risk.level}`, "그리드연구");
+    await explain(lead.id, "bot", `${c.ko} ${preset.name}의 백테스트 결과를 보고 어떤 장세에서 벌고 어디서 위험한지, 왜 그리드·DCA를 실거래로 바로 돌리면 안 되는지 설명한다.`, `${preset.name}: 수익 ${pc(s.return_pct)} · 최대낙폭 ${s.max_drawdown_pct}% · 청산 ${s.liquidations}회 · 최다 물타기 ${s.worst_rungs} · 위험도 ${risk.level}`, "아래 그리드/DCA 봇 백테스트를 보고 장단점과 위험을 설명해 줘.");
+    return;
+  }
+  // 배포 가능한 단일 포지션 봇 전략
+  const T = BOT_TEMPLATES[rot("botTpl", BOT_TEMPLATES.length)];
+  fire({kind: "busy", agent: lead, text: `🤖 ${T.name} · ${c.ko} ${TF_KO[tf]}봉 백테스트`});
+  let spec; try { spec = Q.normalizeSpec({...T.build(c, tf), symbol: c.sym, interval: IV_NAME[tf], risk: {...T.build(c, tf).risk, ...COSTS.crypto}}); }
+  catch(e){ post({ch: "bot", kind: "system", text: `${T.name} 전략 형식 오류: ${e.message}`}); return; }
+  let cs; try { const H = await import("../nuri-ai/history.js"); cs = (await Promise.race([H.historyCandles({market: c.sym, exchange: "binancef", interval: IV_NAME[tf], maxBars: 20000}), new Promise((_, rej) => setTimeout(() => rej(0), 60e3))])).candles; if (!(cs?.length > 300)) throw 0; } catch(e){ cs = (await candlesFor({market: c.sym, exchange: "binancef", timeframe: tf}, 1500)).cs; }
+  const bt = Q.backtest(spec, cs), wf = Q.walkForward(spec, cs), pt = RB.permutationTest(bt.trades.map(t => t.pnl)), st = x => ({ret: +(x?.return_pct ?? 0), dd: +(x?.max_dd_pct ?? 0), win: +(x?.win_rate ?? 0), pf: x?.profit_factor == null ? null : +x.profit_factor, n: x?.n_trades ?? 0});
+  post({ch: "bt", kind: "bt", agent: "val", lane: "std", name: spec.name, market: c.sym, mname: `${c.ko} 선물`, tf, hist: `봇 전략 · ${cs.length.toLocaleString()}봉 · ${T.repo}`, all: st(bt.stats), is: st(wf.is), oos: st(wf.oos), pass: wf.pass, reasons: wf.reasons, author: lead.name, spec, lev: BOT_LEV});
+  table("bot", lead.id, `🤖 ${T.name} 백테스트 (${c.ko} ${TF_KO[tf]}봉 · ${T.repo})`, ["항목", "값"], [["검증(뒤30%) 수익", pc(st(wf.oos).ret)], ["손익비", st(wf.oos).pf ?? "—"], ["거래", String(st(wf.oos).n)], ["관문", wf.pass ? "✅ 통과 → 데모 투입" : "❌ 불통과"], ["운일 확률 p", pt.p == null ? "—" : pt.p.toFixed(3)]], wf.pass ? "데모거래로 올라가 14일·20거래·손익비 1.2 등 관문을 거쳐야 실거래 후보가 됩니다 · 자동 개선은 전략 최적화팀이 맡습니다" : "검증 불통과 — 데모로 올리지 않습니다");
+  pubTo(c.sym, "bot", {team: "bot", title: `${T.name} · ${wf.pass ? "데모 투입" : "불통과"}`, text: `검증 수익 ${pc(st(wf.oos).ret)} · 손익비 ${st(wf.oos).pf ?? "—"} · ${T.repo}`, spec, baseSpec: spec});
+  if (wf.pass){
+    const s = await P.addStrategy({spec, market: c.sym, exchange: "binancef", tf, author: lead.name, wf: {is: st(wf.is), oos: st(wf.oos)}, cls: "crypto", mname: `${c.ko} 선물`, lane: "std"});
+    post({ch: "demo", kind: "system", text: `🤖 봇 데모 투입: ${s.name} (${c.ko} ${TF_KO[tf]}봉 · 레버리지 ${BOT_LEV}배 · ${T.repo} 방식) · 가상 10,000`});
+    journal("record", "strategy", s.id, {bot: T.id, repo: T.repo}, "bot_lead", "봇 전략 데모 투입");
+  }
+  addNote("bot", `${T.name} ${c.ko}: 검증 ${pc(st(wf.oos).ret)} → ${wf.pass ? "데모 투입" : "유지"}`, "봇");
+  await explain(lead.id, "bot", `${T.name}(${c.ko})의 백테스트·검증 결과를 보고 어떤 장세에 맞는 봇인지, 실거래로 켜기 전에 데모에서 무엇을 확인해야 하는지 설명한다.`, `${T.name} ${c.ko} ${TF_KO[tf]}봉 · 검증 수익 ${pc(st(wf.oos).ret)} · 손익비 ${st(wf.oos).pf ?? "—"} · 거래 ${st(wf.oos).n} · 관문 ${wf.pass ? "통과" : "불통과"}`, "아래 자동매매봇 전략 백테스트를 보고 설명해 줘.");
+}
+// 봇 조종판 자료 (UI 가 읽음): 데모·실거래 중인 봇 전략 + 실거래 연결 상태 — 주문은 live.js 가, 연결은 사용자가 [실거래] 화면에서
+export async function botBoard(){
+  const P = await import("../nuri-ai/paper.js"), book = await P.loadBook().catch(() => ({strategies: []}));
+  let L = null, cfg = {}; try { L = await import("../nuri-ai/live.js"); cfg = L.liveCfg?.() || {}; } catch(e){}
+  const bots = book.strategies.filter(s => /^🤖/.test(s.name));
+  const rows = bots.map(s => {
+    const g = L?.gateFor ? L.gateFor(s) : {eligible: false, checks: []}, linked = cfg.linked?.[s.id]?.on, eq = P.equityOf(s);
+    return {id: s.id, name: s.name, market: s.mname || s.market, tf: s.tf, status: s.status, eq, trades: (s.trades || []).length, days: Math.floor((Date.now() - s.created) / 864e5),
+      gate: g.eligible, gateFail: (g.checks || []).filter(c => !c.ok).map(c => c.name), live: !!linked};
+  });
+  return {rows, live: {enabled: !!cfg.enabled, env: cfg.env || "testnet", mode: cfg.mode || "approve", linked: Object.values(cfg.linked || {}).filter(v => v?.on).length, halted: L?.isHalted?.() || false,
+    limits: cfg.limits || {}}, templates: botTemplates(), sim: botSimPresets(), supported: !!L};
+}

@@ -58,8 +58,26 @@ export const TECH = [
   {repo: "jh941213/my-cc-harness", lic: "MIT", teams: ["hq"], status: "적용",
     what: "독립 QA(만든 사람과 다른 직원) 100점 채점: 기능 40 · 품질 25 · 군더더기 없음 20 · 사용성·보안 15, 85↑ 통과 · 65~84 조건부 · 치명적 하나면 불합격 · 증거 없는 완료 금지",
     where: "CEO실 코드 수정안 → QA 채점 후 대표 승인"},
+  {repo: "enarjord/passivbot", lic: "Unlicense(공개)", teams: ["bot"], status: "부분 적용",
+    what: "그리드·DCA(물타기) 봇 방식: 간격·물타기 배수(ddown)·최대 물타기·지갑 노출 한도·익절 마크업. 핵심은 '무한 물타기 금지'를 위한 지갑 노출 한도·물타기 횟수 상한",
+    where: "자동매매봇팀 '그리드/DCA 연구 백테스트' (lib/botsim.js) — 청산 위험 때문에 연구용 백테스트로만, 실거래로는 안 나감"},
+  {repo: "jesse-ai/jesse", lic: "MIT", teams: ["bot"], status: "부분 적용",
+    what: "전략 클래스 방식(진입·청산·손절·익절·포지션 사이징)과 백테스트 구조 → 추세추종·평균회귀 봇 전략",
+    where: "자동매매봇팀 '추세추종 봇'·'평균회귀 봇' 전략 (coin-office BOT_TEMPLATES)"},
+  {repo: "Drakkar-Software/OctoBot", lic: "GPL-3.0(코어)·LGPL(텐타클)", teams: ["bot"], status: "부분 적용",
+    what: "트레이딩 모드(그리드·DCA·돌파·신호)와 평가기 개념 → 돌파·슈퍼트렌드 봇 전략",
+    where: "자동매매봇팀 '돌파 봇'·'슈퍼트렌드 플립 봇'"},
+  {repo: "conor19w/Binance-Futures-Trading-Bot", lic: "라이선스 없음(규칙만)", teams: ["bot"], status: "부분 적용",
+    what: "바이낸스 선물 TA 봇의 진입·손절·익절·레버리지 방식 → 추세추종·돌파 봇의 조건·한도",
+    where: "자동매매봇팀 봇 전략"},
+  {repo: "Erfaniaa/crypto-trading-strategy-backtester", lic: "GPL-3.0(규칙만)", teams: ["bot"], status: "참고",
+    what: "단순 교차 전략 백테스트 방식 → 평균회귀·추세 봇 참고",
+    where: "자동매매봇팀 봇 전략"},
+  {repo: "freqtrade/freqtrade", lic: "GPL-3.0", teams: ["bot"], status: "적용",
+    what: "(이미 최적화팀에 반영) ROI 표·추적손절·보호장치를 봇 전략에도 사용",
+    where: "자동매매봇팀 '추세 캐리 봇'(minimal_roi) 등"},
   {repo: "RanitManik/gemini-clone", lic: "MIT", teams: ["hq"], status: "적용",
     what: "빈 방 추천 질문 카드 · 최근 질문 목록(방별, 중복 제거 20개) · 한글 입력 중 Enter 오작동 막기",
     where: "본부 채팅창"}
 ];
-export const TECH_REPOS = 23;   // 대표님이 준 주소 중 중복(freqtrade·nautilus·gs-quant 두 번씩)을 뺀 23개
+export const TECH_REPOS = 29;   // +6 (트레이딩 봇 저장소)   // 대표님이 준 주소 중 중복(freqtrade·nautilus·gs-quant 두 번씩)을 뺀 23개

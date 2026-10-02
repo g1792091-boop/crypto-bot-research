@@ -1,7 +1,7 @@
 // GH Coin 조직: 코인 전문 AI 에이전트 회사. 팀마다 팀장 1명 + 팀원 10명.
 // 파이프라인: 보조지표 분석 → 매매법 개발 → 백테스트 → 데모거래 → 실거래  (커스텀 지표 라인도 같은 단계를 따로 밟는다)
 // 분석 팀: 추세 · 진입 타점 · 지지·저항 · 익절·손절 · 차트·캔들 패턴 · 뉴스·경제지표 · 코인 상황판 · 머신러닝·딥러닝 · 코인별 팀 · 실시간 종합 지표
-// 오픈소스 분석으로 추가: 투자위원회 · 퀀트 리스크 · 데이터 플랫폼 · 전략 최적화 (tech.js 참고)
+// 오픈소스 분석으로 추가: 투자위원회 · 퀀트 리스크 · 데이터 플랫폼 · 전략 최적화 · 선물 자동매매봇 (tech.js 참고)
 export const COINS = [
   {id: "btc", sym: "BTCUSDT", ko: "비트코인", up: "KRW-BTC", color: "#f7931a"},
   {id: "eth", sym: "ETHUSDT", ko: "이더리움", up: "KRW-ETH", color: "#627eea"},
@@ -62,7 +62,9 @@ const T = [
   ["data", "데이터 플랫폼팀", "여러 거래소 시세·펀딩 비교(ccxt 방식), 경제 데이터(OpenBB 방식), 데이터 모델·제약 검사와 전략 버전 관리(Legend), 저장소 이전(obevo), 이중 시간 감사 기록(reladomo)", "#00796b", "data_lead", "데이터 플랫폼팀장",
     ["멀티 거래소 연결 담당", "시세 정합성 검사", "경제 데이터 수집", "데이터 모델·제약 검사", "전략 버전 관리(SDLC)", "저장소 이전(마이그레이션)", "감사 기록(이중 시간)", "데이터 품질 모니터", "백업·복구 담당", "데이터 리포터"], ["crypto_spot", "macro"], {}],
   ["opt", "전략 최적화팀", "하이퍼옵트(손실함수)·ROI 표·추적손절·보호장치(freqtrade), 성과 분석기 SQN·VWR·칼마(backtrader), 체결 현실성(nautilus)으로 통과 전략을 다듬는다", "#ad1457", "opt_lead", "전략 최적화팀장",
-    ["하이퍼옵트 설계", "손실함수 담당", "ROI 표 설계", "추적손절 튜닝", "보호장치(프로텍션) 설계", "체결 모델(현실성) 담당", "성과 분석기(SQN·VWR)", "포지션 사이징", "과최적화 감시", "최적화 리포터"], ["backtest"], {}]
+    ["하이퍼옵트 설계", "손실함수 담당", "ROI 표 설계", "추적손절 튜닝", "보호장치(프로텍션) 설계", "체결 모델(현실성) 담당", "성과 분석기(SQN·VWR)", "포지션 사이징", "과최적화 감시", "최적화 리포터"], ["backtest"], {}],
+  ["bot", "선물 자동매매봇팀", "오픈소스 트레이딩 봇(passivbot·jesse·OctoBot·freqtrade·Binance 선물봇)의 봇 전략을 우리 전략으로 만들어 백테스트→데모→실거래 파이프라인에 올리고, 봇 조종판에서 켜고 끈다. 주문은 코드가 한도·사용자 승인 안에서만 낸다", "#00bfa5", "bot_lead", "선물 자동매매봇팀장",
+    ["추세추종 봇 담당", "돌파 봇 담당", "평균회귀 봇 담당", "슈퍼트렌드 플립 봇 담당", "펀딩 캐리 봇 담당", "그리드 봇(연구) 담당", "DCA(한도형) 봇 담당", "봇 리스크·한도 담당", "봇 성과 모니터", "봇 조종판 담당"], ["crypto_futures", "backtest"], {}]
 ];
 
 export const TEAMS = T.map(([id, name, desc, color]) => ({id, name, desc, color}));
@@ -94,6 +96,7 @@ const DUTY = {
   qrisk: "변동성·VaR·CVaR·상관·베타·낙폭을 코드로 계산한 표를 보고 위험이 어디에 몰렸는지, 주문 전 점검·결정표 판정이 무엇인지 설명한다. 판정을 뒤집지 않는다.",
   data: "여러 거래소 시세·펀딩·김치 프리미엄 차이와 데이터 품질(빈 봉·이상값·지연), 전략 버전·감사 기록을 점검하고 문제를 보고한다.",
   opt: "통과 전략의 파라미터를 하이퍼옵트로 다듬되, 학습 구간 최적값이 검증 구간에서도 통하는지(과최적화)를 가장 먼저 본다. 코드 판정을 뒤집지 않는다.",
+  bot: "유명 트레이딩 봇의 전략(추세추종·돌파·평균회귀·슈퍼트렌드·펀딩 캐리·그리드·DCA)을 우리 전략 JSON으로 만들어 백테스트·데모로 검증하고, 통과분만 봇 조종판에 올린다. 실거래는 사용자가 직접 켜고 연결해야 하며 주문은 코드가 안전 한도 안에서만 낸다. 그리드·DCA의 무한 물타기 위험을 늘 경고한다.",
   combo: "차트 터미널의 모든 보조지표를 실시간으로 계산한 표(상승·하락·중립)와 시간대별 점수를 보고, 큰 추세와 작은 봉 타이밍이 맞는 자리에서만 타점(진입·손절·익절)을 잡는다. 숫자는 코드가 낸 것만 쓴다.",
   sr: "지지·저항 가격대를 근거(피봇·스윙 고저·매물대·호가 벽)와 함께 제시한다.",
   tpsl: "열린 포지션과 전략의 손절·익절·추적손절을 점검하고 위험을 줄이는 조정을 제안한다.",
@@ -128,10 +131,10 @@ export const teamById = id => TEAMS.find(t => t.id === id);
 
 // 질문 → 담당자 (코드가 정함)
 export const SKILL_AGENT = {crypto_spot: "coin_spot", crypto_futures: "coin_fut", macro: "macro", news: "macro", backtest: "val", research: "research", coding: "dev"};
-export const MARKET = new Set(["combo_lead", "coin_spot", "coin_fut", "strat", "qa", "qb", "trader", "trend_lead", "sr_lead", "risk", ...COINS.map(c => TEAM_LEAD[c.id])]);
+export const MARKET = new Set(["combo_lead", "bot_lead", "coin_spot", "coin_fut", "strat", "qa", "qb", "trader", "trend_lead", "sr_lead", "risk", ...COINS.map(c => TEAM_LEAD[c.id])]);
 // 질문 단어 → 팀장 (planMeeting 에서 먼저 부른다)
 export const TOPIC_LEAD = [
-  [/투자위원회|강세.*약세|불.*베어|bull|bear|최종 결정/i, "ic_lead"], [/var|cvar|변동성|상관|베타|리스크 엔진|결정표|dmn/i, "qrisk_lead"], [/거래소 (비교|차이)|김치 ?프리미엄|데이터 (품질|모델)|감사 기록|버전 관리|ccxt|openbb/i, "data_lead"], [/하이퍼옵트|최적화|hyperopt|roi 표|보호장치|sqn|vwr/i, "opt_lead"],
+  [/투자위원회|강세.*약세|불.*베어|bull|bear|최종 결정/i, "ic_lead"], [/var|cvar|변동성|상관|베타|리스크 엔진|결정표|dmn/i, "qrisk_lead"], [/거래소 (비교|차이)|김치 ?프리미엄|데이터 (품질|모델)|감사 기록|버전 관리|ccxt|openbb/i, "data_lead"], [/하이퍼옵트|최적화|hyperopt|roi 표|보호장치|sqn|vwr/i, "opt_lead"], [/자동매매\s*봇|선물\s*봇|트레이딩\s*봇|그리드\s*봇|dca\s*봇|봇\s*(만들|돌려|켜|전략)|passivbot|jesse|octobot/i, "bot_lead"],
   [/종합 지표|모든 (보조)?지표|전체 지표|실시간 (타점|추세)|지표 (조합|종합)/, "combo_lead"], [/보조지표|지표 (해석|분석)|rsi|macd|볼린저|이평/i, "ind_lead"], [/매매법|전략 (개발|만들)/, "qa"], [/백테스트|검증/, "val"], [/데모|모의/, "trader"], [/실거래|실전/, "live_lead"],
   [/추세|방향/, "trend_lead"], [/타점|진입|들어가/, "strat"], [/지지|저항|매물대/, "sr_lead"], [/손절|익절|청산가|리스크/, "risk"], [/뉴스|기사|경제|지표 발표|cpi|fomc|금리/i, "macro"],
   [/상황판|전체 코인|시장 전체/, "situ_lead"], [/패턴|캔들|쌍바닥|헤드앤숄더/, "pat_lead"], [/커스텀/, "cind"], [/머신러닝|딥러닝|ai 예측/i, "ml"],
@@ -144,6 +147,7 @@ export const AGENDA = [
   {id: "trend", room: "trend", title: "다중-시간대-추세", topic: "주요 코인의 15분·1시간·4시간·일봉 추세가 서로 맞는지 점검해 주세요.", agents: ["trend_lead", "trend_1", "trend_3"]},
   {id: "combo", room: "combo", title: "실시간-종합지표-타점", topic: "실시간 종합 지표 타점판(모든 보조지표의 시간대별 점수·타점)을 보고 지금 들어갈 코인과 자리, 기다릴 코인을 정해 주세요.", agents: ["combo_lead", "combo_8", "combo_9"]},
   {id: "ic", room: "ic", title: "투자위원회", topic: "강세·약세 리서처와 리스크 토론자가 지금 비트코인을 살지·팔지·관망할지 토론하고 위원장이 결정해 주세요.", agents: ["ic_4", "ic_5", "ic_lead"]},
+  {id: "bot", room: "bot", title: "자동매매봇-점검", topic: "지금 데모·실거래 중인 선물 자동매매봇들의 성과와 한도·위험을 점검하고, 새로 올릴 봇 전략을 정해 주세요.", agents: ["bot_lead", "bot_8", "risk"]},
   {id: "entry", room: "entry", title: "진입-타점-회의", topic: "지금 진입할 만한 코인과 자리(가격·조건·손익비)를 정해 주세요.", agents: ["strat", "sr_lead", "risk"]},
   {id: "news", room: "news", title: "뉴스·경제지표", topic: "오늘 코인 뉴스와 경제지표 일정을 찾아 시장 영향을 해설해 주세요.", agents: ["macro", "research", "econfc"]},
   {id: "pattern", room: "pattern", title: "차트·캔들-패턴", topic: "주요 코인 차트에서 보이는 캔들·차트 패턴과 시장 구조를 점검해 주세요.", agents: ["pat_lead", "pattern_1", "pattern_6"]},
@@ -166,7 +170,7 @@ for (const a of AGENTS){
 }
 export const WATCH_OF = W;
 // 수다 상대: 같은 팀 동료 2명 + 같은 코인 팀장/관련 팀장
-const LINK = {ind: ["qa", "trend_lead"], dev: ["val", "ind_lead"], bt: ["qa", "trader"], demo: ["val", "live_lead"], live: ["trader", "risk"], trend: ["strat", "ind_lead"], combo: ["trend_lead", "strat"], ic: ["combo_lead", "risk"], qrisk: ["risk", "live_lead"], data: ["eng", "situ_lead"], opt: ["val", "qa"], entry: ["sr_lead", "risk"],
+const LINK = {ind: ["qa", "trend_lead"], dev: ["val", "ind_lead"], bt: ["qa", "trader"], demo: ["val", "live_lead"], live: ["trader", "risk"], trend: ["strat", "ind_lead"], combo: ["trend_lead", "strat"], ic: ["combo_lead", "risk"], qrisk: ["risk", "live_lead"], data: ["eng", "situ_lead"], opt: ["val", "qa"], bot: ["live_lead", "opt_lead"], entry: ["sr_lead", "risk"],
   sr: ["strat", "pat_lead"], tpsl: ["trader", "strat"], news: ["situ_lead", "coin_fut"], situ: ["macro", "coin_fut"], pattern: ["sr_lead", "trend_lead"], cdev: ["cbt_lead", "ml"], cbt: ["cind", "cdemo_lead"],
   cdemo: ["cbt_lead", "clive_lead"], clive: ["cdemo_lead", "risk"], ml: ["cind", "val"], hq: ["dev", "aide"]};
 export const RELATED = Object.fromEntries(AGENTS.map(a => {
@@ -174,8 +178,8 @@ export const RELATED = Object.fromEntries(AGENTS.map(a => {
   const pick = mates.length ? [mates[(a.id.length) % mates.length], mates[(a.id.length + 3) % mates.length]] : [];
   return [a.id, [...new Set([...pick, ...(LINK[a.team] || (a.coin ? ["situ_lead", "strat"] : []))])].filter(id => id !== a.id)];
 }));
-export const CLAUDE_TIER = {strat: "opus", combo_lead: "opus", ic_lead: "opus", qrisk_lead: "opus", opt_lead: "opus", risk: "opus", val: "opus", qa: "opus", cind: "opus", live_lead: "opus", clive_lead: "opus", lead: "sonnet", devil: "sonnet", aide: "haiku", dev: "sonnet", eng: "sonnet"};
+export const CLAUDE_TIER = {strat: "opus", combo_lead: "opus", ic_lead: "opus", qrisk_lead: "opus", opt_lead: "opus", bot_lead: "opus", risk: "opus", val: "opus", qa: "opus", cind: "opus", live_lead: "opus", clive_lead: "opus", lead: "sonnet", devil: "sonnet", aide: "haiku", dev: "sonnet", eng: "sonnet"};
 export const IDLE_T = {hq: ["🗂 팀별 보고 모으는 중", "📝 발표 자료 정리 중"], ind: ["📊 지표 다시 계산하는 중"], dev: ["🧪 전략 조건 다듬는 중"], bt: ["⏳ 백테스트 돌리는 중"], demo: ["🧾 데모 장부 맞추는 중"],
-  live: ["🔐 실거래 한도 점검 중"], trend: ["📈 다중 시간대 보는 중"], entry: ["🎯 타점 계산 중"], combo: ["⚡ 136개 지표 실시간 계산 중", "🎯 타점 기록장 채점 중"], ic: ["🏛 위원회 안건 준비 중", "📚 지난 결정 교훈 정리 중"], qrisk: ["📐 VaR 계산 중", "🧮 상관행렬 갱신 중"], data: ["🔌 거래소 시세 맞춰 보는 중", "🗄 감사 기록 정리 중"], opt: ["🎛 하이퍼옵트 돌리는 중", "📈 SQN 계산 중"], sr: ["📏 지지·저항 긋는 중"], tpsl: ["🛑 손절선 점검 중"], news: ["📰 기사 읽는 중"],
+  live: ["🔐 실거래 한도 점검 중"], trend: ["📈 다중 시간대 보는 중"], entry: ["🎯 타점 계산 중"], combo: ["⚡ 136개 지표 실시간 계산 중", "🎯 타점 기록장 채점 중"], ic: ["🏛 위원회 안건 준비 중", "📚 지난 결정 교훈 정리 중"], qrisk: ["📐 VaR 계산 중", "🧮 상관행렬 갱신 중"], data: ["🔌 거래소 시세 맞춰 보는 중", "🗄 감사 기록 정리 중"], opt: ["🎛 하이퍼옵트 돌리는 중", "📈 SQN 계산 중"], bot: ["🤖 봇 전략 백테스트 중", "🎚 봇 한도 점검 중", "📟 봇 조종판 보는 중"], sr: ["📏 지지·저항 긋는 중"], tpsl: ["🛑 손절선 점검 중"], news: ["📰 기사 읽는 중"],
   situ: ["🖥 상황판 갱신 중"], pattern: ["🕯 캔들 패턴 찾는 중"], cdev: ["🧮 수식 지표 짜는 중"], cbt: ["⏳ 커스텀 백테스트 중"], cdemo: ["🧾 커스텀 데모 장부 보는 중"], clive: ["🔐 커스텀 실거래 심사 중"],
   ml: ["🧠 모델 학습 중"], btc: ["₿ 비트코인 차트 보는 중"], eth: ["Ξ 이더리움 차트 보는 중"], sol: ["◎ 솔라나 보는 중"], xrp: ["✕ 리플 보는 중"], doge: ["🐕 도지 보는 중"], bnb: ["🟡 BNB 보는 중"]};

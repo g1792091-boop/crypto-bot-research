@@ -175,7 +175,7 @@ function build(){
     <select id="ofClaude" class="of-cl" title="Claude: 전원 — 직원 전원이 Claude로 일합니다(전략·리스크·검증·퀀트는 Opus, 분석은 Sonnet, 가벼운 일은 Haiku).&#10;Claude: 핵심 자리만 — 판단 책임이 큰 자리만 Claude, 나머지는 무료 모델이라 그 글을 GH Nano 학습에 쓸 수 있습니다.&#10;Claude: 안 씀 — 모두 무료 모델.&#10;Anthropic 약관에 따라 Claude가 쓴 글은 GH Nano 학습 데이터에서 제외됩니다. 하루 한도를 넘으면 무료 모델로 돌아갑니다."><option value="all">Claude: 전원</option><option value="key">Claude: 핵심 자리만 (나머지 무료 → GH Nano 학습 가능)</option><option value="off">Claude: 안 씀</option></select>
     <button class="of-btn" id="ofNow" title="다음 주기를 기다리지 않고 지금 한 가지 일을 시킵니다">지금 일 시키기</button>
     <span class="of-pick"><button class="of-btn" id="ofAgendaBtn" aria-haspopup="true">안건 열기 ▾</button><div class="of-menu" id="ofAgenda" hidden>${agendaOpts}</div></span>
-    <button class="of-btn" id="ofPresBtn" title="매시 CEO의 팀별 성과 발표를 다시 봅니다">📢 발표</button><button class="of-btn" id="ofCoinHQ" title="GH Coin 코인 본부: 보조지표·매매법 개발·백테스트·데모·실거래·추세·타점·지지저항·익절손절·뉴스·상황판·패턴·커스텀 지표·코인별 팀·실시간 종합 지표 타점·투자위원회·퀀트 리스크·데이터·최적화 (28팀 + CEO실)" hidden>🪙 코인 본부</button><button class="of-btn" id="ofDocsBtn" title="사업계획서·보고서·설계안·매매법 등 직원들이 만든 결과물">📁 결과물</button>
+    <button class="of-btn" id="ofPresBtn" title="매시 CEO의 팀별 성과 발표를 다시 봅니다">📢 발표</button><button class="of-btn" id="ofCoinHQ" title="GH Coin 코인 본부: 보조지표·매매법 개발·백테스트·데모·실거래·추세·타점·지지저항·익절손절·뉴스·상황판·패턴·커스텀 지표·코인별 팀·실시간 종합 지표 타점·투자위원회·퀀트 리스크·데이터·최적화·자동매매봇 (29팀 + CEO실)" hidden>🪙 코인 본부</button><button class="of-btn" id="ofDocsBtn" title="사업계획서·보고서·설계안·매매법 등 직원들이 만든 결과물">📁 결과물</button>
     <button class="of-btn" id="ofTeam">팀 구성</button>
     <button class="of-btn" id="ofTerm" hidden>📈 차트 터미널</button>
     <button class="of-btn" id="ofLive" hidden>💰 실거래</button>
