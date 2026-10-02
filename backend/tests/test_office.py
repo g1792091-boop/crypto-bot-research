@@ -193,3 +193,45 @@ def test_pwa_manifest_and_service_worker():
     for ic in m.json()["icons"]:
         assert c.get(ic["src"]).status_code == 200
     assert c.get("/sw.js").status_code == 200
+
+
+def test_launcher_native_window_and_fallback(monkeypatch, tmp_path):
+    import sys
+    import types
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    import launcher
+    calls = {}
+    fake = types.SimpleNamespace(settings={"OPEN_EXTERNAL_LINKS_IN_BROWSER": False, "ALLOW_DOWNLOADS": False},
+                                 create_window=lambda *a, **k: calls.setdefault("win", (a, k)),
+                                 start=lambda **k: calls.setdefault("start", k))
+    monkeypatch.setitem(sys.modules, "webview", fake)
+    monkeypatch.setattr(launcher, "_webview2_installed", lambda: True)
+    monkeypatch.delenv("APP_WINDOW", raising=False)
+    assert launcher.native_window("http://127.0.0.1:9", tmp_path) is True
+    assert calls["win"][0] == ("GH Quant", "http://127.0.0.1:9") and calls["win"][1]["confirm_close"]
+    assert calls["start"]["private_mode"] is False and (tmp_path / "state" / "app-window").is_dir()   # 키·화면 설정이 남도록
+    assert fake.settings["ALLOW_DOWNLOADS"] is True
+    monkeypatch.setenv("APP_WINDOW", "0")
+    assert launcher.native_window("http://127.0.0.1:9", tmp_path) is False                       # 브라우저 탭으로
+    monkeypatch.delenv("APP_WINDOW")
+
+    def boom(**k):
+        raise RuntimeError("no gui")
+    fake.start = boom
+    assert launcher.native_window("http://127.0.0.1:9", tmp_path) is False                       # 앱 창 실패 → 브라우저 대체
+
+
+def test_launcher_idle_exit_only_when_active():
+    import asyncio
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    import launcher
+    hits = []
+
+    async def app(scope, receive, send):
+        hits.append(scope["path"])
+    w = launcher._IdleExit(app, lambda: None)
+    asyncio.run(w({"type": "http", "path": "/api/status"}, None, None))
+    assert hits == ["/api/status"] and w.seen and not w.active

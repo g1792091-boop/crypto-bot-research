@@ -1,0 +1,4 @@
+# 데스크톱 실행 파일 빌드용 (서버·개발 실행에는 필요 없음)
+pyinstaller>=6.10
+pillow>=10            # 아이콘 PNG → .ico / .icns 변환
+pywebview>=6.2        # 브라우저 없이 PC 앱 창 (윈도우 WebView2 · 맥 WebKit)

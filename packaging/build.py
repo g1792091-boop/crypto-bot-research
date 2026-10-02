@@ -1,6 +1,6 @@
 """PyInstaller 로 단일 실행 파일을 만든다 (현재 OS 용).
 
-    pip install -r backend/requirements.txt pyinstaller
+    pip install -r backend/requirements.txt -r packaging/requirements-desktop.txt
     python packaging/build.py
 
 결과: dist/GHQuant-<os>/  (실행 파일 + settings.txt + HOW-TO-RUN.txt)
@@ -21,11 +21,25 @@ NAME = "GHQuant"
 
 
 def main() -> None:
+    mac = platform.system() == "Darwin"
+    extra = []
+    try:                                    # PC 앱 창 (pywebview: 윈도우 WebView2 · 맥 WebKit)
+        import webview  # noqa: F401
+        extra += ["--collect-all", "webview"]
+        if platform.system() == "Windows":
+            extra += ["--collect-all", "clr_loader", "--collect-all", "pythonnet", "--hidden-import", "clr"]
+    except ImportError:
+        print("pywebview 가 없어 앱 창 없이(브라우저로 여는) 빌드합니다: pip install pywebview")
+    icon = ROOT / "frontend" / "icons" / ("icon-512.png")
     PyInstaller.__main__.run([
         str(ROOT / "backend" / "launcher.py"),
         "--name", NAME,
-        "--onefile",
-        "--console",
+        # 윈도우: exe 하나 · 맥: GHQuant.app 묶음 (콘솔 창 없이 앱 창만)
+        "--onedir" if mac else "--onefile",
+        "--windowed",
+        "--icon", str(icon),
+        "--osx-bundle-identifier", "com.ghquant.app",
+        *extra,
         "--noconfirm",
         "--clean",
         "--paths", str(ROOT / "backend"),
@@ -48,8 +62,11 @@ def main() -> None:
     if out.exists():
         shutil.rmtree(out)
     out.mkdir(parents=True)
-    exe = NAME + (".exe" if os_name == "windows" else "")
-    shutil.copy2(ROOT / "dist" / "bin" / exe, out / exe)
+    if mac:
+        shutil.copytree(ROOT / "dist" / "bin" / f"{NAME}.app", out / f"{NAME}.app", symlinks=True)
+    else:
+        exe = NAME + (".exe" if os_name == "windows" else "")
+        shutil.copy2(ROOT / "dist" / "bin" / exe, out / exe)
     shutil.copy2(ROOT / "packaging" / "HOW-TO-RUN.txt", out / "HOW-TO-RUN.txt")
 
     sys.path.insert(0, str(ROOT / "backend"))

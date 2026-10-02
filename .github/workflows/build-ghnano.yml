@@ -1,0 +1,131 @@
+name: Build GH Nano / GH Coin
+
+# GH Nano · GH Coin 은 브랜치 claude/eloquent-johnson-nnt7gh 에 있다. 그 코드(79440a4)에 patches/ghnano-ghcoin-fixes.patch 를
+# 적용해 윈도우 실행 파일을 만들고, 실제 윈도우에서 PC 앱 창(WebView2)이 뜨는지 확인한 뒤 'ghnano-latest' 릴리스에 올린다.
+on:
+  push:
+    branches: ["claude/**"]
+    paths:
+      - "patches/**"
+      - ".github/workflows/build-ghnano.yml"
+  workflow_dispatch:
+
+env:
+  NANO_BASE: 79440a43bc759e32333475fa97a554cea624ad19
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Keep line endings (patch is LF)
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v4
+        with:
+          path: self
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.NANO_BASE }}
+          path: nano
+
+      - name: Apply fixes
+        shell: bash
+        run: |
+          cd nano
+          git apply ../self/patches/ghnano-ghcoin-fixes.patch
+          git status --short | head -40
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache-dependency-path: nano/launcher/go.sum
+
+      - name: Build
+        shell: bash
+        run: |
+          cd nano/launcher
+          go vet .
+          bash build.sh
+
+      - name: App window check (WebView2 PC app window, no browser)
+        shell: pwsh
+        run: |
+          $exe = Resolve-Path "nano/dist/GHNano.exe"
+          $p = Start-Process -FilePath $exe -PassThru
+          $title = ""; $wv = $null
+          for ($i = 0; $i -lt 40; $i++) {
+            Start-Sleep -Seconds 2
+            $title = (Get-Process -Id $p.Id -ErrorAction SilentlyContinue).MainWindowTitle
+            $wv = Get-CimInstance Win32_Process -Filter "Name = 'msedgewebview2.exe'" | Where-Object { $_.CommandLine -like "*GHNano\WebView2*" }
+            if ($title -and $wv) { break }
+          }
+          $ping = try { (Invoke-WebRequest -UseBasicParsing http://127.0.0.1:17860/__nuri/ping).Content } catch { "" }
+          Start-Sleep -Seconds 15
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+          $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+          [System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+          $bmp.Save("ghnano-preview-windows.png")
+          # GH Coin 을 같이 켜면 같은 서버에 창만 하나 더 뜬다
+          $c = Start-Process -FilePath (Resolve-Path "nano/dist/GHCoin.exe") -PassThru
+          $ctitle = ""
+          for ($i = 0; $i -lt 20; $i++) { Start-Sleep -Seconds 2; $ctitle = (Get-Process -Id $c.Id -ErrorAction SilentlyContinue).MainWindowTitle; if ($ctitle) { break } }
+          Start-Sleep -Seconds 12
+          [System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+          $bmp.Save("ghcoin-preview-windows.png")
+          $browsers = Get-Process msedge, chrome -ErrorAction SilentlyContinue
+          Write-Host "GHNano title: '$title' · GHCoin title: '$ctitle' · webview2: $(@($wv).Count) · ping: '$ping' · browser processes: $(@($browsers).Count)"
+          Stop-Process -Id $c.Id, $p.Id -Force -ErrorAction SilentlyContinue
+          Get-Process msedgewebview2 -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          if (-not $title -or -not $wv -or $ping -ne "nuri" -or -not $ctitle) { throw "PC app window did not open" }
+
+      - name: Zip
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory GHNano, GHCoin | Out-Null
+          Copy-Item nano/dist/GHNano.exe, "nano/dist/사용법.txt" GHNano/
+          Copy-Item nano/dist/GHCoin.exe, "nano/dist/GH Coin 사용법.txt" GHCoin/
+          Compress-Archive -Path GHNano -DestinationPath GHNano-windows.zip
+          Compress-Archive -Path GHCoin -DestinationPath GHCoin-windows.zip
+          New-Item -ItemType Directory out | Out-Null
+          Move-Item GHNano-windows.zip, GHCoin-windows.zip, *-preview-windows.png out/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GHNano-Windows
+          path: out/*
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: GHNano-Windows
+          path: out
+
+      - name: Publish 'ghnano-latest' release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -e
+          TITLE="GH Nano · GH Coin - 최신 빌드 (윈도우)"
+          NOTES="브라우저가 아니라 자체 PC 앱 창으로 열리는 윈도우용 실행 파일입니다.
+          - GHNano-windows.zip: 압축 해제 → GHNano.exe 더블클릭 (코인 본부 = GH Coin 포함)
+          - GHCoin-windows.zip: GH Coin 단독 실행
+          빌드 커밋: ${GITHUB_SHA::7} (${GITHUB_REF_NAME})"
+          if gh api "repos/$GH_REPO/git/refs/tags/ghnano-latest" >/dev/null 2>&1; then
+            gh api -X PATCH "repos/$GH_REPO/git/refs/tags/ghnano-latest" -f sha="$GITHUB_SHA" -F force=true >/dev/null
+          else
+            gh api "repos/$GH_REPO/git/refs" -f ref=refs/tags/ghnano-latest -f sha="$GITHUB_SHA" >/dev/null
+          fi
+          if gh release view ghnano-latest >/dev/null 2>&1; then
+            gh release upload ghnano-latest out/* --clobber
+            gh release edit ghnano-latest --prerelease --draft=false --title "$TITLE" --notes "$NOTES"
+          else
+            gh release create ghnano-latest out/* --verify-tag --prerelease --title "$TITLE" --notes "$NOTES"
+          fi

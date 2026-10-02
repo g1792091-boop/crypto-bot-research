@@ -1,7 +1,8 @@
 """더블클릭 실행용 런처.
 
 - 실행 파일 옆의 settings.txt 에서 API 키 등을 읽는다 (없으면 템플릿 생성)
-- 빈 포트를 골라 서버를 켜고 브라우저를 자동으로 연다
+- 빈 포트를 골라 서버를 켜고, 브라우저가 아니라 자체 PC 앱 창(윈도우: WebView2 · 맥: WebKit)으로 연다
+  (앱 창을 못 띄우는 PC 면 엣지·크롬 앱 창 → 기본 브라우저 순으로 대신 연다)
 - 페이퍼 계좌/봇 상태는 실행 파일 옆 state 폴더에 저장
 
 개발 중에는 `python launcher.py` 로도 똑같이 실행된다.
@@ -67,7 +68,7 @@ DATA_SOURCE=auto
 # 사용할 포트 (이미 사용 중이면 자동으로 다른 포트를 고릅니다)
 PORT=8000
 
-# 1 = 주소창 없는 따로 된 앱 창으로 열기 (크롬·엣지) / 0 = 평소 브라우저 탭
+# 1 = PC 앱 창으로 열기 (기본) / 0 = 평소 브라우저 탭으로 열기
 APP_WINDOW=1
 
 # ── 서버(클라우드)에서 24시간 돌릴 때 ──
@@ -79,9 +80,39 @@ HOST=0.0.0.0
 
 
 def app_dir() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).resolve().parent
-    return Path(__file__).resolve().parent
+    if not getattr(sys, "frozen", False):
+        return Path(__file__).resolve().parent
+    exe = Path(sys.executable).resolve()
+    # 맥 앱 묶음(GHQuant.app/Contents/MacOS/GHQuant)이면 .app 이 있는 폴더에 settings.txt · state 를 둔다
+    base = exe.parents[3] if exe.parent.name == "MacOS" and exe.parents[2].suffix == ".app" else exe.parent
+    if not os.access(base, os.W_OK):            # 읽기 전용 위치(맥 격리 실행 등)면 사용자 폴더
+        base = Path.home() / ("Library/Application Support/GHQuant" if sys.platform == "darwin" else "GHQuant")
+        base.mkdir(parents=True, exist_ok=True)
+    return base
+
+
+def _log_to_file(base: Path) -> None:
+    """콘솔 없는 앱 창 실행이면 출력·오류를 state/GHQuant.log 로 남긴다."""
+    if sys.stdout is not None and sys.stderr is not None:
+        return
+    (base / "state").mkdir(parents=True, exist_ok=True)
+    f = open(base / "state" / "GHQuant.log", "a", encoding="utf-8", buffering=1)  # noqa: SIM115
+    sys.stdout = sys.stderr = f
+
+
+def message_box(title: str, text: str) -> None:
+    """콘솔이 없을 때 오류·안내를 화면에 띄운다."""
+    try:
+        if sys.platform == "win32":
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(0, text, title, 0x40)
+        elif sys.platform == "darwin":
+            import subprocess
+            subprocess.run(["osascript", "-e", f"display dialog {text!r} with title {title!r} buttons {{\"확인\"}}"], check=False)
+        else:
+            print(f"{title}: {text}")
+    except Exception:  # noqa: BLE001
+        print(f"{title}: {text}")
 
 
 def load_settings(path: Path) -> None:
@@ -152,6 +183,73 @@ def open_app(url: str) -> None:
     webbrowser.open(url)
 
 
+def _webview2_installed() -> bool:
+    """윈도우에 WebView2(엣지 엔진) 런타임이 있나 — 없으면 옛 IE 엔진으로 열려 화면이 깨지므로 쓰지 않는다."""
+    if sys.platform != "win32":
+        return True
+    import winreg
+    guid = r"{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
+    for hive, key in ((winreg.HKEY_LOCAL_MACHINE, rf"SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{guid}"),
+                      (winreg.HKEY_LOCAL_MACHINE, rf"SOFTWARE\Microsoft\EdgeUpdate\Clients\{guid}"),
+                      (winreg.HKEY_CURRENT_USER, rf"Software\Microsoft\EdgeUpdate\Clients\{guid}")):
+        try:
+            with winreg.OpenKey(hive, key) as k:
+                v, _ = winreg.QueryValueEx(k, "pv")
+                if v and v != "0.0.0.0":
+                    return True
+        except OSError:
+            continue
+    return False
+
+
+def native_window(url: str, base: Path) -> bool:
+    """브라우저 없이 PC 앱 창을 띄우고 창이 닫힐 때까지 기다린다. 띄울 수 없으면 False."""
+    if os.environ.get("APP_WINDOW", "1") == "0" or not _webview2_installed():
+        return False
+    try:
+        import webview
+    except Exception:  # noqa: BLE001
+        return False
+    try:
+        webview.settings["OPEN_EXTERNAL_LINKS_IN_BROWSER"] = True       # 뉴스·유튜브 링크는 기본 브라우저로
+        webview.settings["ALLOW_DOWNLOADS"] = True                      # 결과 파일 · ZIP 받기
+        webview.create_window("GH Quant", url, width=1440, height=900, min_size=(1000, 640), maximized=True,
+                              confirm_close=True, background_color="#0f1218", text_select=True, zoomable=True)
+        store = base / "state" / "app-window"
+        store.mkdir(parents=True, exist_ok=True)
+        webview.start(gui="edgechromium" if sys.platform == "win32" else None, private_mode=False, storage_path=str(store),
+                      localization={"global.quitConfirmation": "GH Quant 를 끌까요?\n끄면 AI 사무실 · 자동 분석도 멈춥니다. 계속 돌리려면 최소화(—)하세요.",
+                                    "global.quit": "끄기", "global.cancel": "취소", "global.ok": "확인", "global.saveFile": "파일 저장"})
+        return True
+    except Exception:  # noqa: BLE001
+        traceback.print_exc()
+        return False
+
+
+class _IdleExit:
+    """앱 창 대신 브라우저로 열었을 때: 화면이 2분 동안 아무 요청도 안 하면(창을 닫으면) 프로그램도 끈다."""
+
+    def __init__(self, app, on_idle) -> None:
+        import time
+        self.app, self.on_idle, self.last, self.seen, self.active = app, on_idle, time.time(), False, False
+        threading.Thread(target=self._watch, daemon=True).start()
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http" and not scope["path"].startswith("/healthz"):
+            import time
+            self.last, self.seen = time.time(), True
+        await self.app(scope, receive, send)
+
+    def _watch(self) -> None:
+        import time
+        while True:
+            time.sleep(10)
+            # 창을 닫고 2분 · 또는 브라우저가 끝내 한 번도 안 열렸으면 5분 뒤 종료 (보이지 않는 프로그램이 남지 않게)
+            if self.active and time.time() - self.last > (120 if self.seen else 300):
+                self.on_idle()
+                return
+
+
 def running_here(port: int) -> bool:
     """이 포트에 GH Quant 가 이미 켜져 있나 (두 번 눌러도 프로그램이 둘이 되지 않게)."""
     import urllib.request
@@ -181,6 +279,7 @@ def main() -> None:
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(line_buffering=True, errors="replace")
     base = app_dir()
+    _log_to_file(base)
     server = "--server" in sys.argv or os.environ.get("SERVER_MODE") == "1"   # 클라우드 서버: 창 없이 · 정해진 포트 · 비밀번호 필수
     settings = Path(os.environ.get("SETTINGS_FILE") or base / "settings.txt")
     load_settings(settings)
@@ -197,7 +296,8 @@ def main() -> None:
     want = int(os.environ.get("PORT") or 8000)
     if not server and not os.environ.get("NO_BROWSER") and running_here(want):
         print(f"GH Quant 가 이미 켜져 있어 창만 새로 엽니다: http://127.0.0.1:{want}")
-        open_app(f"http://127.0.0.1:{want}")
+        if not native_window(f"http://127.0.0.1:{want}", base):
+            open_app(f"http://127.0.0.1:{want}")
         return
     port = want if server else pick_port(want)
     url = f"http://127.0.0.1:{port}" if not server else f"http://<서버 IP>:{port}"
@@ -208,16 +308,44 @@ def main() -> None:
 
     print("=" * 56)
     print(" GH Quant 실행 중")
-    print(f" 주소: {url}  (따로 된 앱 창으로 열립니다 · 창을 닫아도 이 창이 켜져 있으면 계속 일함)")
+    print(f" 주소: {url}  (PC 앱 창으로 열립니다 · 앱 창을 닫으면 종료)")
     from app import config as _cfg
     ai = {"claude": "Claude", "nvidia": f"NVIDIA ({'자동 선택' if _cfg.NVIDIA_MODEL == 'auto' else _cfg.NVIDIA_MODEL})", "gemini": "Gemini"}.get(_cfg.provider() or "", "미설정 (규칙 기반)")
     print(f" AI: {ai}"
           f" / CoinGlass: {'연결' if os.environ.get('COINGLASS_API_KEY') else '미설정 (바이낸스 대체)'}")
-    print(" 서버 모드 · 접속 비밀번호 켜짐" if server else " 종료하려면 이 창을 닫거나 Ctrl+C 를 누르세요.")
+    print(" 서버 모드 · 접속 비밀번호 켜짐" if server else " 종료하려면 앱 창을 닫으세요.")
     print("=" * 56)
-    if not os.environ.get("NO_BROWSER") and not server:
-        threading.Timer(1.5, open_app, [url]).start()
-    uvicorn.run(app, host=host, port=port, log_level="warning", proxy_headers=False)
+    if os.environ.get("NO_BROWSER") or server:
+        uvicorn.run(app, host=host, port=port, log_level="warning", proxy_headers=False)
+        return
+    # 서버는 뒤에서 돌리고, 앞에는 PC 앱 창을 띄운다 (창을 닫으면 프로그램 종료)
+    holder: dict = {}
+
+    def stop() -> None:
+        if holder.get("server"):
+            holder["server"].should_exit = True
+
+    asgi = _IdleExit(app, stop)
+    srv = uvicorn.Server(uvicorn.Config(asgi, host=host, port=port, log_level="warning", proxy_headers=False))
+    holder["server"] = srv
+    th = threading.Thread(target=srv.run, daemon=True)
+    th.start()
+    import time
+    for _ in range(150):                                       # 서버가 뜰 때까지 (최대 30초)
+        if srv.started or not th.is_alive():
+            break
+        time.sleep(0.2)
+    if not th.is_alive():
+        message_box("GH Quant", "서버를 시작하지 못했습니다. state/GHQuant.log 를 확인하세요.")
+        sys.exit(1)
+    if native_window(url, base):
+        stop()
+        th.join(timeout=10)
+        return
+    # 앱 창을 못 띄우는 PC: 엣지·크롬 앱 창(없으면 기본 브라우저)으로 열고, 창을 닫은 뒤 2분이 지나면 끈다
+    open_app(url)
+    asgi.active = True
+    th.join()
 
 
 if __name__ == "__main__":
@@ -229,5 +357,5 @@ if __name__ == "__main__":
         traceback.print_exc()
         # 더블클릭 실행 시 창이 바로 닫혀 오류를 못 보는 일을 막는다
         if getattr(sys, "frozen", False):
-            input("\n오류가 발생했습니다. 위 내용을 복사해 두고 Enter 를 누르면 종료합니다.")
+            message_box("GH Quant 오류", "실행 중 오류가 발생했습니다.\n" + traceback.format_exc()[-900:] + "\n\n자세한 내용: state/GHQuant.log")
         sys.exit(1)

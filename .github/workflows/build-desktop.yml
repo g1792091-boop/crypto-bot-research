@@ -31,7 +31,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install
-        run: python -m pip install -r backend/requirements.txt pyinstaller
+        run: python -m pip install -r backend/requirements.txt -r packaging/requirements-desktop.txt
 
       - name: Test
         working-directory: backend
@@ -49,6 +49,7 @@ jobs:
           dir=$(ls -d dist/GHQuant-*/)
           exe="${dir}GHQuant"
           [ -f "${exe}.exe" ] && exe="${exe}.exe"
+          [ -d "${dir}GHQuant.app" ] && exe="${dir}GHQuant.app/Contents/MacOS/GHQuant"
           "$exe" > smoke.log 2>&1 &
           pid=$!
           ok=""
@@ -60,7 +61,38 @@ jobs:
           curl -sf http://127.0.0.1:8000/ > /dev/null
           if [ "$RUNNER_OS" = "Windows" ]; then taskkill //IM GHQuant.exe //F || true; else kill $pid || true; fi
           [ -n "$ok" ] || { echo "app did not start"; exit 1; }
+          [ -f "${dir}state/GHQuant.log" ] && cat "${dir}state/GHQuant.log"
           rm -rf "${dir}state"
+
+      - name: App window check (Windows · WebView2 PC app window, no browser)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          DATA_SOURCE: synthetic
+        run: |
+          $d = Get-ChildItem dist -Directory -Filter "GHQuant-*" | Select-Object -First 1
+          $p = Start-Process -FilePath (Join-Path $d.FullName "GHQuant.exe") -PassThru
+          $title = ""
+          for ($i = 0; $i -lt 40; $i++) {
+            Start-Sleep -Seconds 2
+            $title = (Get-Process -Id $p.Id -ErrorAction SilentlyContinue).MainWindowTitle
+            $wv = Get-CimInstance Win32_Process -Filter "Name = 'msedgewebview2.exe'" | Where-Object { $_.CommandLine -like "*app-window*" }
+            if ($title -eq "GH Quant" -and $wv) { break }
+          }
+          Start-Sleep -Seconds 12
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+          $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+          [System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+          $bmp.Save("preview-windows.png")
+          $browsers = Get-Process msedge, chrome -ErrorAction SilentlyContinue
+          Write-Host "window title: '$title' · webview2 processes: $(@($wv).Count) · browser processes: $(@($browsers).Count)"
+          Get-Content (Join-Path $d.FullName "state/GHQuant.log") -ErrorAction SilentlyContinue | Select-Object -Last 30
+          Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+          Get-Process msedgewebview2 -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          Start-Sleep -Seconds 2
+          Remove-Item -Recurse -Force (Join-Path $d.FullName "state") -ErrorAction SilentlyContinue
+          if ($title -ne "GH Quant" -or -not $wv) { throw "PC app window did not open" }
 
       - name: Zip (Windows)
         if: runner.os == 'Windows'
@@ -78,7 +110,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: GHQuant-${{ runner.os }}
-          path: GHQuant-*.zip
+          path: |
+            GHQuant-*.zip
+            preview-*.png
 
   release:
     needs: build
@@ -100,7 +134,7 @@ jobs:
           TITLE="GH Quant - 최신 빌드"
           NOTES="파이썬 설치 없이 실행하는 버전입니다.
           - Windows: GHQuant-windows-x64.zip 압축 해제 → GHQuant.exe 더블클릭
-          - Mac (Apple Silicon): GHQuant-macos-arm64.zip 압축 해제 → 우클릭 → 열기
+          - Mac (Apple Silicon): GHQuant-macos-arm64.zip 압축 해제 → GHQuant 앱 우클릭 → 열기
           자세한 내용은 zip 안의 HOW-TO-RUN.txt 참고. 빌드 커밋: ${GITHUB_SHA::7} (${GITHUB_REF_NAME})"
           # 태그를 지웠다 다시 만들면 GitHub 가 릴리스를 '초안'으로 남기는 경우가 있어서,
           # 태그는 새 커밋으로 옮기고 릴리스 파일만 교체한다.
@@ -117,9 +151,9 @@ jobs:
             for a in $(gh release view desktop-latest --json assets --jq '.assets[].name'); do
               [ -f "out/$a" ] || gh release delete-asset desktop-latest "$a" -y
             done
-            gh release upload desktop-latest out/*.zip --clobber
+            gh release upload desktop-latest out/*.zip out/*.png --clobber
             gh release edit desktop-latest --prerelease --draft=false --title "$TITLE" --notes "$NOTES"
           else
-            gh release create desktop-latest out/*.zip --verify-tag --prerelease --title "$TITLE" --notes "$NOTES"
+            gh release create desktop-latest out/*.zip out/*.png --verify-tag --prerelease --title "$TITLE" --notes "$NOTES"
           fi
           gh release view desktop-latest --json isDraft,assets --jq '"draft=\(.isDraft) assets=\(.assets | length)"'

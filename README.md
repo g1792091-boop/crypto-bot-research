@@ -310,12 +310,13 @@ curl -fsSL -H "Authorization: token $GH_TOKEN" https://raw.githubusercontent.com
    - Mac (M1/M2/M3 등 Apple Silicon): `GHQuant-macos-arm64.zip`
 2. 압축을 풀고 `GHQuant.exe`를 더블클릭한다 (Mac은 우클릭 → 열기).
    Windows에서 "PC 보호" 창이 뜨면 **추가 정보 → 실행**을 누른다.
-3. 주소창 없는 앱 창(엣지·크롬 `--app`)으로 열린다 — 웹사이트 탭이 아니다. 다시 실행하면 창만 새로 연다. `settings.txt` 의 `APP_WINDOW=0` 이면 평소 브라우저 탭.
+3. 브라우저가 아니라 자체 PC 앱 창으로 열린다 (pywebview: 윈도우 WebView2 · 맥 WebKit, 콘솔 창 없음 · 기록은 `state/GHQuant.log`). 앱 창을 닫으면 종료. 다시 실행하면 창만 하나 더 뜬다.
+   WebView2 가 없는 PC 는 엣지·크롬 `--app` 창 → 기본 브라우저 순으로 대신 연다. `settings.txt` 의 `APP_WINDOW=0` 이면 평소 브라우저 탭.
    설치형 웹앱(manifest + service worker)이라 위쪽 '📲 앱 설치' 로 바탕화면·시작 메뉴 아이콘을 만들 수 있다 (서버 모드에서 휴대폰 홈 화면에도).
    API 키는 화면의 'AI 사무실 → AI 배정' 이나 같은 폴더의 `settings.txt` 에 넣는다.
 
 이 실행 파일은 GitHub Actions(`.github/workflows/build-desktop.yml`)가 코드를 푸시할 때마다 자동으로 빌드한다.
-직접 빌드하려면 `pip install -r backend/requirements.txt pyinstaller && python packaging/build.py`를 실행한다.
+직접 빌드하려면 `pip install -r backend/requirements.txt -r packaging/requirements-desktop.txt && python packaging/build.py`를 실행한다.
 
 ### 파이썬으로 실행 (개발용)
 

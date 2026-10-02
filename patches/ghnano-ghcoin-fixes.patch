@@ -1,8 +1,41 @@
+diff --git "a/dist/GH Coin \354\202\254\354\232\251\353\262\225.txt" "b/dist/GH Coin \354\202\254\354\232\251\353\262\225.txt"
+index c8c3bf7..fac4b14 100644
+--- "a/dist/GH Coin \354\202\254\354\232\251\353\262\225.txt"	
++++ "b/dist/GH Coin \354\202\254\354\232\251\353\262\225.txt"	
+@@ -2,6 +2,10 @@ GH Coin — 코인 전문 AI 에이전트 회사 (28개 팀 + CEO실 · 팀장 1
+ 
+ [실행]
+ 1. GHCoin.exe 를 더블클릭하세요. 설치는 필요 없습니다. 창을 닫으면 프로그램도 종료됩니다.
++   - 인터넷(브라우저) 창이 아니라 자체 PC 앱 창(윈도우 기본 WebView2 엔진)으로 열립니다. 작업표시줄에 이 프로그램 아이콘으로 보입니다.
++     (WebView2 가 없는 아주 옛 PC 만 엣지 앱 창으로 대신 엽니다. 뉴스·유튜브 링크는 기본 브라우저로 열립니다.)
++   - 앱 창은 자기만의 저장소를 씁니다. 예전 버전(엣지 창)에서 넣은 API 키는 처음 한 번만 다시 넣으세요.
++     'GHNano 사무실' 폴더에 저장된 결과물 파일은 그대로 있습니다.
+ 2. 처음 열면 [🔑 AI 연결] 창이 뜹니다. API 키를 붙여 넣고 [연결]을 누르세요 (여러 곳을 넣을수록 한도에 덜 걸립니다).
+    무료: NVIDIA(build.nvidia.com) · Groq(console.groq.com/keys) · Cerebras · OpenRouter · Hugging Face · SambaNova
+    유료: Claude(console.anthropic.com) · DeepSeek(platform.deepseek.com, 저렴)
+@@ -98,5 +102,5 @@ GH Coin — 코인 전문 AI 에이전트 회사 (28개 팀 + CEO실 · 팀장 1
+ - Claude 는 위쪽 'Claude' 메뉴(전원 / 핵심 자리만 / 안 씀). Claude·Gemini·GPT 유료 모델이 쓴 글은 약관 때문에 학습 데이터에서 빠집니다.
+ 
+ [저장 위치]
+-- 앱 안(브라우저 저장소): 회의 기록 · 데모 장부 · 결과물 보관함 · 학습 데이터 → [📁 결과물], [🔑 AI 연결 → 학습 데이터 내려받기]
++- 앱 안(앱 창 저장소): 회의 기록 · 데모 장부 · 결과물 보관함 · 학습 데이터 → [📁 결과물], [🔑 AI 연결 → 학습 데이터 내려받기]
+ - 내 컴퓨터: 문서/GHNano 사무실/ghcoin (보고서·거래 기록·매매법). [📁 결과물 → 📂 폴더 열기]로 바로 열 수 있습니다.
 diff --git "a/dist/\354\202\254\354\232\251\353\262\225.txt" "b/dist/\354\202\254\354\232\251\353\262\225.txt"
-index 0ff8b93..fafafb0 100644
+index 0ff8b93..3a56cd5 100644
 --- "a/dist/\354\202\254\354\232\251\353\262\225.txt"
 +++ "b/dist/\354\202\254\354\232\251\353\262\225.txt"
-@@ -87,12 +87,22 @@ CEO실 + 10개 팀, 62명(팀마다 팀장 1명 + 직원 5명)이 픽셀 사무
+@@ -4,6 +4,10 @@ GH Nano(누리 AI) / 건축설계 AI 실행 방법 (Windows 10·11, 64비트)
+ 1. GHNano.exe 를 더블클릭하세요. 설치는 필요 없습니다.
+    - 처음 실행할 때 "Windows의 PC 보호" 파란 창이 뜨면 [추가 정보] → [실행]을 누르세요.
+      (인증서로 서명하지 않은 새 프로그램이라 뜨는 경고입니다.)
++   - 인터넷(브라우저) 창이 아니라 자체 PC 앱 창(윈도우 기본 WebView2 엔진)으로 열립니다. 작업표시줄에 이 프로그램 아이콘으로 보입니다.
++     (WebView2 가 없는 아주 옛 PC 만 엣지 앱 창으로 대신 엽니다. 뉴스·유튜브 링크는 기본 브라우저로 열립니다.)
++   - 앱 창은 자기만의 저장소를 씁니다. 예전 버전(엣지 창)에서 넣은 API 키는 처음 한 번만 다시 넣으세요.
++     'GHNano 사무실' 폴더에 저장된 결과물 파일은 그대로 있습니다.
+ 2. 다 쓰면 창을 닫으세요. 프로그램도 자동으로 종료됩니다.
+ 
+ [AI 두뇌 연결]  설정 → AI 두뇌 · API 키  (또는 입력창의 모델 버튼 → API 키 추가)
+@@ -87,12 +91,22 @@ CEO실 + 10개 팀, 62명(팀마다 팀장 1명 + 직원 5명)이 픽셀 사무
  - 닫아도(✕ GH Nano 로) 뒤에서 계속 일합니다. 같은 것을 단독 프로그램으로 쓰려면 GHCoin.exe (GHCoin.zip).
  
  [AI 모델을 직원에게 배정하기]
@@ -109,11 +142,53 @@ index 23216de..16ae949 100644
  	if err := os.MkdirAll(dir, 0o755); err != nil {
  		return "", err
  	}
+diff --git a/launcher/go.mod b/launcher/go.mod
+index 18525d0..7191523 100644
+--- a/launcher/go.mod
++++ b/launcher/go.mod
+@@ -2,4 +2,10 @@ module nuri-launcher
+ 
+ go 1.24
+ 
+-require golang.org/x/text v0.21.0 // indirect
++require (
++	github.com/jchv/go-webview2 v0.0.0-20260205173254-56598839c808
++	golang.org/x/sys v0.0.0-20210218145245-beda7e5e158e
++	golang.org/x/text v0.21.0
++)
++
++require github.com/jchv/go-winloader v0.0.0-20250406163304-c1995be93bd1 // indirect
+diff --git a/launcher/go.sum b/launcher/go.sum
+index 0d8f5b2..e8ca143 100644
+--- a/launcher/go.sum
++++ b/launcher/go.sum
+@@ -1,2 +1,9 @@
++github.com/jchv/go-webview2 v0.0.0-20260205173254-56598839c808 h1:ftnsTqIUH57XQEF+PnXX9++nlHCzdkuB5zbWyMMruZo=
++github.com/jchv/go-webview2 v0.0.0-20260205173254-56598839c808/go.mod h1:rWifBlzkgrvd7zUqlfq91sWt3473OikgnglnIILx/Jo=
++github.com/jchv/go-winloader v0.0.0-20250406163304-c1995be93bd1 h1:njuLRcjAuMKr7kI3D85AXWkw6/+v9PwtV6M6o11sWHQ=
++github.com/jchv/go-winloader v0.0.0-20250406163304-c1995be93bd1/go.mod h1:alcuEEnZsY1WQsagKhZDsoPCRoOijYqhZvPwLG0kzVs=
++golang.org/x/sys v0.0.0-20200810151505-1b9f1253b3ed/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
++golang.org/x/sys v0.0.0-20210218145245-beda7e5e158e h1:f5mksnk+hgXHnImpZoWj64ja99j9zV7YUgrVG95uFE4=
++golang.org/x/sys v0.0.0-20210218145245-beda7e5e158e/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
+ golang.org/x/text v0.21.0 h1:zyQAAkrwaneQ066sspRyJaG9VNi/YJ1NfzcGB3hZ/qo=
+ golang.org/x/text v0.21.0/go.mod h1:4IBbMaMmOPCJ8SecivzSH54+73PCFmPWxNTLm+vZkEQ=
 diff --git a/launcher/main.go b/launcher/main.go
-index 23f70d9..adea44e 100644
+index 23f70d9..6f69730 100644
 --- a/launcher/main.go
 +++ b/launcher/main.go
-@@ -131,6 +131,7 @@ func main() {
+@@ -65,7 +65,10 @@ func main() {
+ 			continue
+ 		}
+ 		if version(url) == buildID {
+-			openApp(url + startPath)
++			// 이미 켜져 있으면 이 프로그램은 창만 띄운다 (창을 닫으면 끝)
++			if !nativeWindow(url + startPath) {
++				openApp(url + startPath)
++			}
+ 			return
+ 		}
+ 		stopOld(url)
+@@ -131,13 +134,17 @@ func main() {
  	mux.HandleFunc("/__nuri/override", overrideHandler)
  	mux.HandleFunc("/__nuri/override/", overrideHandler)
  	mux.HandleFunc("/__nuri/openfolder", openFolderHandler)
@@ -121,6 +196,122 @@ index 23f70d9..adea44e 100644
  	mux.Handle("/", siteHandler(sub))
  
  	srv := &http.Server{Handler: mux}
+ 	go srv.Serve(ln)
+ 
+ 	url := fmt.Sprintf("http://127.0.0.1:%d", port)
+-	openApp(url + startPath)
++	// PC 앱 창(브라우저 아님)으로 연다. 창을 닫으면 아래 감시가 다른 창(GH Coin 등)이 없을 때 서버를 끈다.
++	if !nativeWindow(url + startPath) {
++		openApp(url + startPath)
++	}
+ 
+ 	started := time.Now()
+ 	go func() { <-quit; time.Sleep(200 * time.Millisecond); os.Exit(0) }()
+diff --git a/launcher/native_other.go b/launcher/native_other.go
+new file mode 100644
+index 0000000..0fdee1e
+--- /dev/null
++++ b/launcher/native_other.go
+@@ -0,0 +1,6 @@
++//go:build !windows
++
++package main
++
++// 윈도우가 아닌 곳에서는 브라우저로 연다
++func nativeWindow(url string) bool { return false }
+diff --git a/launcher/native_windows.go b/launcher/native_windows.go
+new file mode 100644
+index 0000000..3367da2
+--- /dev/null
++++ b/launcher/native_windows.go
+@@ -0,0 +1,87 @@
++//go:build windows
++
++package main
++
++import (
++	"os"
++	"os/exec"
++	"path/filepath"
++	"runtime"
++	"strings"
++	"syscall"
++
++	webview2 "github.com/jchv/go-webview2"
++	"golang.org/x/sys/windows/registry"
++)
++
++// 창·WebView2(COM)는 처음 초기화된 메인 스레드에서만 돌아야 한다 → main 고루틴을 메인 스레드에 묶어 둔다
++func init() { runtime.LockOSThread() }
++
++// WebView2(엣지 엔진) 런타임이 있나 — 윈도우 10·11 에는 보통 기본으로 들어 있다
++func webview2Installed() bool {
++	const guid = `{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}`
++	keys := []struct {
++		root registry.Key
++		path string
++	}{
++		{registry.LOCAL_MACHINE, `SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\` + guid},
++		{registry.LOCAL_MACHINE, `SOFTWARE\Microsoft\EdgeUpdate\Clients\` + guid},
++		{registry.CURRENT_USER, `Software\Microsoft\EdgeUpdate\Clients\` + guid},
++	}
++	for _, k := range keys {
++		h, err := registry.OpenKey(k.root, k.path, registry.QUERY_VALUE)
++		if err != nil {
++			continue
++		}
++		v, _, err := h.GetStringValue("pv")
++		h.Close()
++		if err == nil && v != "" && v != "0.0.0.0" {
++			return true
++		}
++	}
++	return false
++}
++
++// 바깥 링크(뉴스·유튜브 등)는 앱 창이 아니라 기본 브라우저로 연다
++const externalLinks = `(function(){
++  var ext = function(u){ try { var x = new URL(u, location.href); return /^https?:$/.test(x.protocol) && x.origin !== location.origin ? x.href : null; } catch(e){ return null; } };
++  var open0 = window.open;
++  window.open = function(u){ var x = ext(u || ""); if (x){ window.__nuriOpenExternal(x); return null; } return open0.apply(window, arguments); };
++  document.addEventListener("click", function(e){
++    var a = e.target && e.target.closest ? e.target.closest("a[href]") : null; if (!a || a.hasAttribute("download")) return;
++    var x = ext(a.getAttribute("href")); if (!x || (a.target !== "_blank" && !e.ctrlKey && !e.metaKey)) return;
++    e.preventDefault(); window.__nuriOpenExternal(x);
++  }, true);
++})();`
++
++// 브라우저 없이 PC 앱 창(WebView2)으로 열고, 창이 닫힐 때까지 기다린다. 띄울 수 없으면 false.
++func nativeWindow(url string) bool {
++	if os.Getenv("NURI_BROWSER") != "" || !webview2Installed() {
++		return false
++	}
++	data := filepath.Join(os.Getenv("LOCALAPPDATA"), "GHNano", "WebView2") // GH Nano · GH Coin 이 같은 저장소(키·기록)를 쓴다
++	os.MkdirAll(data, 0o755)
++	w := webview2.NewWithOptions(webview2.WebViewOptions{
++		DataPath:      data,
++		AutoFocus:     true,
++		WindowOptions: webview2.WindowOptions{Title: appName, Width: 1440, Height: 900, IconId: 1, Center: true},
++	})
++	if w == nil {
++		return false
++	}
++	defer w.Destroy()
++	w.Bind("__nuriOpenExternal", func(u string) {
++		if strings.HasPrefix(u, "http://") || strings.HasPrefix(u, "https://") {
++			cmd := exec.Command("rundll32", "url.dll,FileProtocolHandler", u)
++			cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
++			cmd.Start()
++		}
++	})
++	w.Init(externalLinks)
++	w.SetSize(1000, 640, webview2.HintMin)
++	user32 := syscall.NewLazyDLL("user32.dll")
++	user32.NewProc("ShowWindow").Call(uintptr(w.Window()), 3) // SW_MAXIMIZE
++	w.Navigate(url)
++	w.Run()
++	return true
++}
 diff --git a/launcher/open_other.go b/launcher/open_other.go
 index 64167a3..37494b4 100644
 --- a/launcher/open_other.go
