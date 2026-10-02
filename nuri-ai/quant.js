@@ -390,7 +390,10 @@ export function computeInd(candles, type, params = {}){
   const p = {...R.defaults};
   for (const [k, v] of Object.entries(params || {})) if (!isNil(v) && k !== "id" && k !== "type") p[k] = v;
   if (R.tv) return tvCompute(c, R.tv, p);
-  const src = "source" in p ? srcOf(c, p.source) : null;
+  // source: 가격 필드면 그 시리즈, 다른 지표 출력이면 buildSeries 가 넘겨준 _srcSeries, 해석 불가면 close 로 폴백(오류 없음)
+  let src = null;
+  if (Array.isArray(p._srcSeries)) src = p._srcSeries;
+  else if ("source" in p){ try { src = srcOf(c, String(p.source).toLowerCase()); } catch(e){ src = srcOf(c, "close"); } }
   const n = Math.trunc(Number(p.length ?? 14)), I = k => Math.trunc(Number(p[k])), F = k => Number(p[k]);
   switch (type){
     case "sma": return {value: sma(src, n)};
@@ -575,8 +578,9 @@ export function normalizeSpec(spec){
       if (!Number.isFinite(v)) problems.push(`${id}.mult 는 숫자여야 합니다 (${r.mult})`); else o.mult = v;
     }
     if (!isNil(r.source) && r.source !== ""){
-      const s = String(r.source).toLowerCase();
-      if (SOURCES.includes(s)) o.source = s;   // 올바른 source 만 쓰고, 아니면(예: 다른 지표 출력) 기본값으로 — 전략 실패시키지 않음
+      const s = String(r.source).toLowerCase(), raw = String(r.source).trim();
+      if (SOURCES.includes(s)) o.source = s;
+      else if (/^[A-Za-z_]\w*(?:\.\w+)?$/.test(raw)) o.source = raw;   // 다른 지표 출력(예: rsi, bb.width)을 소스로 — buildSeries 에서 해석, 못 찾으면 close 로 폴백 (오류 없음)
     }
     if (IND_REGISTRY[type].tv) for (const [k, d] of Object.entries(IND_REGISTRY[type].defaults)){   // 터미널 지표 고유 파라미터
       if (isNil(r[k]) || r[k] === "" || k in o) continue;
@@ -647,7 +651,14 @@ export function buildSeries(spec, candles, deriv = null){
   for (const f of PRICE_FIELDS) s[f] = srcOf(c, f);
   for (const ind of spec.indicators){
     const {id, type, ...params} = ind;
-    const res = type === "custom" ? computeInd(c, type, {...params, extra: customExtra(c, s, deriv)}) : computeInd(c, type, params), keys = Object.keys(res);
+    // source 가 다른 지표 출력(예: "rsi", "bb.width")을 가리키면 그 시리즈를 넘겨 '지표의 이동평균' 같은 걸 실제로 계산
+    let srcSeries = null;
+    if (params.source && !PRICE_FIELDS.includes(String(params.source).toLowerCase())){
+      const sn = String(params.source).trim();
+      const key = sn in s ? sn : (`${sn}.value` in s ? `${sn}.value` : (`${sn}.line` in s ? `${sn}.line` : null));
+      if (key) srcSeries = s[key];
+    }
+    const res = type === "custom" ? computeInd(c, type, {...params, extra: customExtra(c, s, deriv)}) : computeInd(c, type, srcSeries ? {...params, _srcSeries: srcSeries} : params), keys = Object.keys(res);
     for (const k of keys) s[`${id}.${k}`] = res[k];
     if (keys.length === 1 || "value" in res) s[id] = res.value ?? res[keys[0]];
     else if ("line" in res) s[id] = res.line;
