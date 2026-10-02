@@ -66,21 +66,22 @@ jobs:
           $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
           [System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
           $bmp.Save("ghnano-preview-windows.png")
-          # GH Coin 을 같이 켜면 같은 서버에 창만 하나 더 뜬다
+          # GH Coin 을 같이 켜면 떠 있는 앱 창이 GH Coin 화면으로 바뀐다 (창 엔진을 둘 만들지 않음)
           $c = Start-Process -FilePath (Resolve-Path "nano/dist/GHCoin.exe") -PassThru
           $ctitle = ""
-          for ($i = 0; $i -lt 20; $i++) { Start-Sleep -Seconds 2; $ctitle = (Get-Process -Id $c.Id -ErrorAction SilentlyContinue).MainWindowTitle; if ($ctitle) { break } }
+          for ($i = 0; $i -lt 20; $i++) { Start-Sleep -Seconds 2; $ctitle = (Get-Process -Id $p.Id -ErrorAction SilentlyContinue).MainWindowTitle; if ($ctitle -eq "GH Coin") { break } }
+          if ($ctitle -ne "GH Coin") { $ctitle = "" }
           Start-Sleep -Seconds 12
           [System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
           $bmp.Save("ghcoin-preview-windows.png")
           $browsers = Get-Process msedge, chrome -ErrorAction SilentlyContinue
+          Get-Content "$env:LOCALAPPDATA\GHNano\launcher.log" -ErrorAction SilentlyContinue | Select-Object -Last 40 | Write-Host
           Write-Host "GHNano title: '$title' · GHCoin title: '$ctitle' · webview2: $(@($wv).Count) · ping: '$ping' · browser processes: $(@($browsers).Count)"
           Write-Host "GHCoin exited: $($c.HasExited) code: $(if ($c.HasExited) { $c.ExitCode })"
           Get-Process GHNano, GHCoin -ErrorAction SilentlyContinue | Format-Table Id, ProcessName, MainWindowTitle, MainWindowHandle -AutoSize | Out-String | Write-Host
-          Get-Content "$env:LOCALAPPDATA\GHNano\launcher.log" -ErrorAction SilentlyContinue | Write-Host
           Stop-Process -Id $c.Id, $p.Id -Force -ErrorAction SilentlyContinue
           Get-Process msedgewebview2 -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-          if (-not $title -or -not $wv -or $ping -ne "nuri" -or -not $ctitle) { throw "PC app window did not open" }
+          if (-not $title -or -not $wv -or $ping -ne "nuri" -or -not $ctitle -or @($browsers).Count -gt 0) { throw "PC app window did not open" }
 
       - name: Zip
         shell: pwsh

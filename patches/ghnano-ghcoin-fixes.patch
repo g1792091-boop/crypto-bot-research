@@ -173,22 +173,53 @@ index 0d8f5b2..e8ca143 100644
  golang.org/x/text v0.21.0 h1:zyQAAkrwaneQ066sspRyJaG9VNi/YJ1NfzcGB3hZ/qo=
  golang.org/x/text v0.21.0/go.mod h1:4IBbMaMmOPCJ8SecivzSH54+73PCFmPWxNTLm+vZkEQ=
 diff --git a/launcher/main.go b/launcher/main.go
-index 23f70d9..6f69730 100644
+index 23f70d9..4e6dea4 100644
 --- a/launcher/main.go
 +++ b/launcher/main.go
-@@ -65,7 +65,10 @@ func main() {
+@@ -14,6 +14,7 @@ import (
+ 	"mime"
+ 	"net"
+ 	"net/http"
++	neturl "net/url"
+ 	"os"
+ 	"path"
+ 	"strings"
+@@ -65,7 +66,13 @@ func main() {
  			continue
  		}
  		if version(url) == buildID {
 -			openApp(url + startPath)
-+			// 이미 켜져 있으면 이 프로그램은 창만 띄운다 (창을 닫으면 끝)
++			// 이미 켜져 있으면: 떠 있는 앱 창을 이 화면으로 바꿔 앞으로 가져오고, 창이 없으면 새로 띄운다
++			if askShow(url, startPath) {
++				return
++			}
 +			if !nativeWindow(url + startPath) {
 +				openApp(url + startPath)
 +			}
  			return
  		}
  		stopOld(url)
-@@ -131,13 +134,17 @@ func main() {
+@@ -101,6 +108,19 @@ func main() {
+ 		w.Write([]byte("bye"))
+ 		quit <- struct{}{}
+ 	})
++	mux.HandleFunc("/__nuri/show", func(w http.ResponseWriter, r *http.Request) {
++		// 새 버전 실행기만 부르도록 사용자 정의 헤더 요구 (다른 웹사이트는 이 헤더를 붙여 보낼 수 없음)
++		target := r.URL.Query().Get("path")
++		if r.Method != http.MethodPost || r.Header.Get("X-Nuri") != "1" || !strings.HasPrefix(target, "/") || strings.HasPrefix(target, "//") {
++			http.Error(w, "forbidden", http.StatusForbidden)
++			return
++		}
++		if showWindow(fmt.Sprintf("http://127.0.0.1:%d%s", port, target), r.URL.Query().Get("title")) {
++			w.Write([]byte("ok"))
++			return
++		}
++		w.Write([]byte("none"))
++	})
+ 	mux.HandleFunc("/__nuri/alive", func(w http.ResponseWriter, r *http.Request) {
+ 		fl, ok := w.(http.Flusher)
+ 		if !ok {
+@@ -131,13 +151,17 @@ func main() {
  	mux.HandleFunc("/__nuri/override", overrideHandler)
  	mux.HandleFunc("/__nuri/override/", overrideHandler)
  	mux.HandleFunc("/__nuri/openfolder", openFolderHandler)
@@ -207,24 +238,47 @@ index 23f70d9..6f69730 100644
  
  	started := time.Now()
  	go func() { <-quit; time.Sleep(200 * time.Millisecond); os.Exit(0) }()
+@@ -390,3 +414,18 @@ func waitGone(base string, d time.Duration) bool {
+ 	}
+ 	return false
+ }
++
++// 이미 켜진 실행기에게 '이 화면을 앞에 띄워 달라'고 부탁한다
++func askShow(base, path string) bool {
++	allowForeground()
++	c := http.Client{Timeout: 2 * time.Second}
++	req, _ := http.NewRequest(http.MethodPost, base+"/__nuri/show?path="+neturl.QueryEscape(path)+"&title="+neturl.QueryEscape(appName), nil)
++	req.Header.Set("X-Nuri", "1")
++	res, err := c.Do(req)
++	if err != nil {
++		return false
++	}
++	defer res.Body.Close()
++	b, _ := io.ReadAll(res.Body)
++	return string(b) == "ok"
++}
 diff --git a/launcher/native_other.go b/launcher/native_other.go
 new file mode 100644
-index 0000000..0fdee1e
+index 0000000..8433294
 --- /dev/null
 +++ b/launcher/native_other.go
-@@ -0,0 +1,6 @@
+@@ -0,0 +1,10 @@
 +//go:build !windows
 +
 +package main
 +
 +// 윈도우가 아닌 곳에서는 브라우저로 연다
 +func nativeWindow(url string) bool { return false }
++
++func showWindow(url, title string) bool { return false }
++
++func allowForeground() {}
 diff --git a/launcher/native_windows.go b/launcher/native_windows.go
 new file mode 100644
-index 0000000..4516390
+index 0000000..6fbb12f
 --- /dev/null
 +++ b/launcher/native_windows.go
-@@ -0,0 +1,102 @@
+@@ -0,0 +1,139 @@
 +//go:build windows
 +
 +package main
@@ -237,6 +291,7 @@ index 0000000..4516390
 +	"runtime"
 +	"runtime/debug"
 +	"strings"
++	"sync"
 +	"syscall"
 +
 +	webview2 "github.com/jchv/go-webview2"
@@ -320,12 +375,48 @@ index 0000000..4516390
 +		}
 +	})
 +	w.Init(externalLinks)
++	viewMu.Lock()
++	mainView = w
++	viewMu.Unlock()
++	defer func() { viewMu.Lock(); mainView = nil; viewMu.Unlock() }()
 +	w.SetSize(1000, 640, webview2.HintMin)
 +	user32 := syscall.NewLazyDLL("user32.dll")
 +	user32.NewProc("ShowWindow").Call(uintptr(w.Window()), 3) // SW_MAXIMIZE
 +	w.Navigate(url)
 +	w.Run()
 +	return true
++}
++
++var (
++	viewMu   sync.Mutex
++	mainView webview2.WebView
++)
++
++// 이미 떠 있는 앱 창을 다른 화면(GH Coin 등)으로 바꾸고 앞으로 가져온다.
++// 같은 저장소(WebView2 폴더)를 두 프로그램이 동시에 열면 창 엔진이 실패하므로, 두 번째 실행은 창을 새로 만들지 않는다.
++func showWindow(url, title string) bool {
++	viewMu.Lock()
++	w := mainView
++	viewMu.Unlock()
++	if w == nil {
++		return false
++	}
++	w.Dispatch(func() {
++		w.SetTitle(title)
++		w.Navigate(url)
++		user32 := syscall.NewLazyDLL("user32.dll")
++		h := uintptr(w.Window())
++		if r, _, _ := user32.NewProc("IsIconic").Call(h); r != 0 {
++			user32.NewProc("ShowWindow").Call(h, 9) // SW_RESTORE
++		}
++		user32.NewProc("SetForegroundWindow").Call(h)
++	})
++	return true
++}
++
++// 두 번째로 실행한 프로그램이 앞서 켜진 창을 앞으로 가져올 수 있게 허락한다
++func allowForeground() {
++	syscall.NewLazyDLL("user32.dll").NewProc("AllowSetForegroundWindow").Call(uintptr(0xFFFFFFFF))
 +}
 diff --git a/launcher/open_other.go b/launcher/open_other.go
 index 64167a3..37494b4 100644
