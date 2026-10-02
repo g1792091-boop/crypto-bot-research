@@ -73,6 +73,7 @@ function openKeys(){
   import("./coin-office.js").then(O => { window.ghCoinAsk = t => O.ask(t, {room: "combo"}); window.ghCoinSelfAI = sym => O.selfAIFor(sym); window.ghCoinSelfAIExternal = on => O.setSelfaiExternal(on); }).catch(() => {});
   import("./lib/rigor.js").then(R => { window.ghCoinRigor = R; }).catch(() => {});
   import("./lib/attbacktest.js").then(A => { window.ghCoinAttBacktest = A; }).catch(() => {});
+  import("./lib/sentiment.js").then(S => { window.ghCoinSentiment = S; }).catch(() => {});
   $("#gcSplash")?.remove();
   // 사무실 위쪽 바에 AI 연결 버튼
   const top = document.querySelector(".of-top"), set = document.querySelector("#ofSetBtn")?.closest(".of-pick");

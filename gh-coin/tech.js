@@ -123,6 +123,18 @@ export const TECH = [
     where: "lib/lessons.js(학습·강화·회상) · personaOf 로 전 에이전트 프롬프트에 주입 · plannerJob·selfaiJob·botImproveJob 가 교훈을 기록 · 코인 AI 봇 지식"},
   {repo: "AIPentest/CyberStrikeAI · 0x4m4/hexstrike-ai · usestrix/strix · oritera/Cairn", lic: "각 OSS", teams: [], status: "해당 없음(제외)",
     what: "모두 보안 공격(레드팀)용 자율 AI 도구라 거래 앱에 넣지 않는다. clone 해 내용만 확인했고, vendor 보관·포팅은 하지 않았다",
+    where: "—"},
+  {repo: "jjs523/day_trading_bot", lic: "OSS", teams: ["news", "selfai", "coinai"], status: "적용(이식)",
+    what: "뉴스 감정 → 종합 심리점수(0~100)+판정으로 매매에 반영하는 방식(sentiment.py analyze_news)을 브라우저용 '사전 기반 자체 감정 엔진'으로 이식 — 외부 FinBERT/pickle 없이 오프라인. 가격+감정 결합 아이디어는 자체 AI 앙상블에 '뉴스 감정' 한 표로",
+    where: "lib/sentiment.js · sentimentJob(뉴스팀 '시장 심리') · lib/selfai.js sent 신호 · 코인 AI 봇 지식 · window.ghCoinSentiment"},
+  {repo: "jaehong-k/Moral_Emotion_Dataset (KOME)", lic: "연구 공개", teams: ["news"], status: "적용(데이터)",
+    what: "KOME 49,663건 감정 라벨 데이터를 실제로 처리해 긍정 감정 어휘를 데이터로 추출 → 감정 사전에 반영(모델 ckpt 는 쓰지 않고 어휘만). 추출본은 gh-coin/lib/sentiment_lexicon.json",
+    where: "자체 감정 엔진 사전(lib/sentiment.js LEX)"},
+  {repo: "rickiepark/ml-ko", lic: "MIT", teams: ["ml", "selfai"], status: "참고",
+    what: "박해선 머신러닝 교재 코드 — 표준화·여러 모델 결합(소프트보팅) 등 ML 방법론 참고. 자체 AI 앙상블이 가격 ML + 감정 등 여러 신호를 가중 결합하는 설계에 반영",
+    where: "lib/selfai.js(신호 가중 결합) · 머신러닝·딥러닝팀"},
+  {repo: "gitlabhq/gitlabhq", lic: "MIT", teams: [], status: "해당 없음",
+    what: "GitLab(깃 호스팅 플랫폼, Ruby on Rails) — 코인 트레이딩 앱과 무관하여 적용하지 않음",
     where: "—"}
 ];
 export const TECH_REPOS = 40;   // 에이전트·자체 AI·RAG 관련 (biomolecular·probot 은 해당 없음)

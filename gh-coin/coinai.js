@@ -67,6 +67,7 @@ async function gatherDocs(){
     try { for (const t of (O.TEAMS || [])){ for (const n of (O.teamNotes?.(t.id) || [])) docs.push({id: "note-" + t.id + "-" + n.t, title: `${t.name} 노트`, text: `${t.name}: ${n.text}`, meta: {kind: "노트", team: t.id}}); } } catch(err){}
     try { const board = await (O.researchBoard ? O.researchBoard(16) : []); for (const f of board) docs.push({id: "board-" + f.id, title: `리서치 보드 · ${f.targetName || f.job}`, text: `${f.kind}: ${f.text} (의도 ${f.intent})`, meta: {kind: "리서치보드"}}); } catch(err){}
     try { const skills = await (O.learnedSkills ? O.learnedSkills(20) : []); for (const s of skills) docs.push({id: "skill-" + s.id, title: "배운 것(경험)", text: `${s.text} (${s.uses}회 반복, 신뢰 ${Math.round((s.conf || 0) * 100)}%)`, meta: {kind: "학습"}}); } catch(err){}
+    try { const sent = O.marketSentiment ? O.marketSentiment() : null; if (sent) docs.push({id: "sent-latest", title: "시장 심리(자체 감정)", text: `지금 시장 심리 ${sent.score}/100 (${sent.verdict}) — 뉴스·여론 ${sent.n}건 분석`, meta: {kind: "감정"}}); } catch(err){}
   } catch(err){}
   try {
     const P = await import("../nuri-ai/paper.js"), book = await P.loadBook();

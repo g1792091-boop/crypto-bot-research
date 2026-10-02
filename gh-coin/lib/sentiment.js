@@ -1,0 +1,52 @@
+// 자체 감정(시장 심리) 엔진 — 외부 모델 없이 앱 안에서 도는 한국어 뉴스·여론 심리 분석.
+// jjs523/day_trading_bot 의 sentiment.py(analyze_news: 뉴스 → 종합 심리점수 0~100 + 판정)를 브라우저용으로 다시 만든 것.
+//   원본은 FinBERT/자체 TF-IDF+LinearSVC 모델을 썼지만, 여기서는 사전(lexicon) 기반으로 오프라인에서 돈다.
+// 사전(LEX): 금융·코인 도메인어 + 일반 감정어 + jaehong-k/Moral_Emotion_Dataset(KOME, 49,663건)에서
+//   데이터로 추출한 긍정 감정어를 합쳐 만들었다(코드 복사 없음, 데이터 유래 단어는 가중치 1). ML 방법론 참고: rickiepark/ml-ko.
+//   (sentiment_lexicon.json 에 원본 추출본을 함께 보관. 브라우저 호환을 위해 여기서는 인라인으로 싣는다.)
+const LEX = {
+  "호재":2,"급등":2,"상승":1,"반등":2,"신고가":2,"돌파":1,"강세":2,"매수세":1,"상장":2,"파트너십":2,"채택":1,"승인":2,"호실적":2,"랠리":2,"불장":2,"회복":1,"순매수":1,"기관유입":2,"반감기":1,"에어드랍":1,"업그레이드":1,"낙관":1,"기대감":1,"개선":1,"수익":1,"이익":1,"성장":1,"최고가":2,"펌핑":1,"떡상":2,
+  "악재":-2,"급락":-2,"하락":-1,"폭락":-2,"청산":-2,"규제":-2,"해킹":-2,"상장폐지":-2,"매도세":-1,"약세":-2,"덤핑":-2,"공포":-2,"패닉":-2,"손실":-1,"적자":-1,"파산":-2,"디폴트":-2,"러그풀":-2,"스캠":-2,"제재":-2,"압수":-2,"기소":-1,"벌금":-1,"유출":-2,"먹튀":-2,"곰장":-2,"하락장":-2,"공매도":-1,"매도":-1,"우려":-1,"불안":-1,"급등락":-1,"변동성":-1,"떡락":-2,"손절":-1,"물림":-1,"나락":-2,
+  "좋다":1,"좋은":1,"좋아":1,"좋네요":1,"좋아요":1,"행복":1,"기쁘":1,"감사":1,"다행":1,"즐거":1,"최고":2,"대박":2,"훌륭":1,"멋지":1,"사랑":1,"희망":1,"안심":1,"든든":1,"만족":1,
+  "나쁘":-1,"싫다":-1,"싫어":-1,"화나":-1,"분노":-2,"짜증":-1,"무섭":-1,"두렵":-1,"우울":-1,"실망":-1,"최악":-2,"끔찍":-2,"절망":-2,"답답":-1,"속상":-1,"억울":-1,"걱정":-1,"슬프":-1,"위험":-1,"조심":-1,
+  "감사합니다":1,"다행이다":1,"즐거운":1,"화이팅":1,"재밌게":1,"귀여워":1,"좋습니다":1,"행복한":1,"멋진":1,"최고의":1,"응원합니다":1,"감사해요":1,"만족합니다":1,"감동":1,"덕분에":1,"좋았어요":1
+};
+
+const NEG_PREFIX = /(안|못|없|아니|비|불|무)$/;   // 바로 앞에 오면 극성을 뒤집는 부정어(어림)
+const BOOST = /(매우|너무|완전|엄청|대폭|크게|급)$/;  // 강조어 → 가중
+
+// 한 문장 심리: {polarity:-1..1, score:0..100, pos, neg, hits:[{w,v}]}
+export function score(text){
+  const t = String(text || "");
+  if (!t) return {polarity: 0, score: 50, pos: 0, neg: 0, hits: []};
+  let sum = 0, pos = 0, neg = 0, mag = 0; const hits = [];
+  for (const [w, base] of Object.entries(LEX)){
+    let from = 0, idx;
+    while ((idx = t.indexOf(w, from)) !== -1){
+      const before = t.slice(Math.max(0, idx - 3), idx);
+      let v = base;
+      if (NEG_PREFIX.test(before)) v = -v;          // 부정어가 앞에 → 뒤집기
+      if (BOOST.test(before)) v *= 1.5;             // 강조어 → 1.5배
+      sum += v; mag += Math.abs(v); if (v > 0) pos++; else if (v < 0) neg++;
+      hits.push({w, v}); from = idx + w.length;
+    }
+  }
+  const polarity = mag ? Math.max(-1, Math.min(1, sum / Math.max(mag, 3))) : 0;   // 과도한 편향 완화
+  return {polarity: +polarity.toFixed(3), score: Math.round((polarity + 1) * 50), pos, neg, hits: hits.slice(0, 12)};
+}
+
+// 여러 뉴스 종합 (day_trading_bot analyze_news): 종합 심리점수 0~100 + 판정 + 분포
+export function analyzeNews(texts = []){
+  const arr = (Array.isArray(texts) ? texts : [texts]).map(String).filter(Boolean);
+  if (!arr.length) return {score: 50, polarity: 0, verdict: "자료 없음", n: 0, dist: {pos: 0, neg: 0, neu: 0}, top: []};
+  const rs = arr.map(score);
+  const polarity = rs.reduce((s, r) => s + r.polarity, 0) / rs.length;
+  const dist = {pos: rs.filter(r => r.polarity > 0.1).length, neg: rs.filter(r => r.polarity < -0.1).length, neu: rs.filter(r => Math.abs(r.polarity) <= 0.1).length};
+  // 가장 심리를 끌어올린/끌어내린 단어 모음
+  const wc = {}; for (const r of rs) for (const h of r.hits) wc[h.w] = (wc[h.w] || 0) + h.v;
+  const top = Object.entries(wc).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, 8).map(([w, v]) => ({w, v: +v.toFixed(1)}));
+  return {score: Math.round((polarity + 1) * 50), polarity: +polarity.toFixed(3), verdict: verdictOf(polarity), n: arr.length, dist, top};
+}
+
+export function verdictOf(p){ return p >= 0.35 ? "강한 긍정" : p >= 0.1 ? "긍정" : p <= -0.35 ? "강한 부정" : p <= -0.1 ? "부정" : "중립"; }
+export const lexiconSize = () => Object.keys(LEX).length;

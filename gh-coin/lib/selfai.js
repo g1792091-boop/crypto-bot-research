@@ -26,9 +26,10 @@ export function labelOf(score){ for (const L of LABELS) if (score >= L.min) retu
 
 // 핵심 융합 — 순수 함수(숫자만 받음 → 테스트 쉬움)
 // inputs: { ta:number|null, tfScores:[{tf,score}], ml:{prob:0..1, edge:"edge"|"weak"|null}|null, alpha:number|null,
-//           ai:{score:-1..1, confidence:0..100}|null (외부 LLM API 의견 — 선택), regime?:string }
+//           ai:{score:-1..1, confidence:0..100}|null (외부 LLM API 의견 — 선택),
+//           sent:{polarity:-1..1, score?:0..100}|null (뉴스·여론 감정 — 선택), regime?:string }
 export function fuse(inputs = {}){
-  const { ta = null, tfScores = [], ml = null, alpha = null, ai = null, regime = null } = inputs;
+  const { ta = null, tfScores = [], ml = null, alpha = null, ai = null, sent = null, regime = null } = inputs;
   const parts = [];
 
   if (Number.isFinite(ta))
@@ -52,6 +53,10 @@ export function fuse(inputs = {}){
   if (Number.isFinite(alpha))
     parts.push({name: "알파 팩터", key: "alpha", w: 0.15, v: tanh(alpha / 2), text: `합성 ${fmtSigned(tanh(alpha / 2))}`});
 
+  // 뉴스·여론 감정 (자체 감정 엔진, 선택) — 시장 심리를 한 표로
+  if (sent && Number.isFinite(sent.polarity))
+    parts.push({name: "뉴스 감정", key: "sent", w: 0.15, v: clamp(sent.polarity, -1, 1), text: `시장 심리 ${sent.score ?? Math.round((clamp(sent.polarity, -1, 1) + 1) * 50)}/100`});
+
   // 외부 LLM API 의견 (선택) — 확신도만큼 가중. 자체 신호와 별개의 한 표로만 반영(과신 방지 상한 0.25)
   if (ai && Number.isFinite(ai.score)){
     const conf = clamp(Number(ai.confidence) || 0, 0, 100) / 100;
@@ -72,7 +77,7 @@ export function fuse(inputs = {}){
 
   const reasons = parts.map(p => `${p.name}: ${p.text}`);
   if (regime) reasons.push(`장세: ${regime}`);
-  return {score: +score.toFixed(4), dir: L.dir, label: L.label, confidence, agree: +agree.toFixed(2), parts, reasons, inputs: {ta, tfScores: tfs, ml, alpha, regime}};
+  return {score: +score.toFixed(4), dir: L.dir, label: L.label, confidence, agree: +agree.toFixed(2), parts, reasons, inputs: {ta, tfScores: tfs, ml, alpha, ai, sent, regime}};
 }
 
 // 사람이 읽는 한 줄 요약

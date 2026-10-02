@@ -22,6 +22,9 @@
 ### 🤖 코인 AI 봇 (`coinai.js` + `lib/ragstore.js`) — 완전 자체 RAG 챗
 이 앱이 아는 것(앱 설명 고정 지식 + 사무실 분석·표·노트 + 데모 전략 + 실시간 자체 AI 판단)을 모아 **외부 서비스·벡터DB 없이** 브라우저 안에서 도는 가벼운 검색(TF-IDF + 코사인, 한국어 2-그램 `lib/ragstore.js`)으로 질문에 답한다. **외부 AI 키가 없으면 추출 답변(완전 자체)**, 키가 있으면 그 지식에 **근거한** LLM 답변(`brainStream`). 코인을 물으면 자체 AI 데스크(`selfAIFor`)의 실시간 방향·확신도를 함께 붙인다. 화면 오른쪽 아래 **떠다니는 [💬 코인 AI] 버튼**과 상단 **[🤖 코인 AI]** 버튼으로 어디서나 열린다. **설명·판단만 하고 주문은 내지 않는다.** 아이디어: langgenius/dify(RAG·지식베이스)·FlowiseAI/Flowise(임베드 위젯)·Mintplex-Labs/anything-llm(완전 자체 프라이빗 RAG) — 코드 복사 없이 개념만. probot(GitHub App 프레임워크)은 코인 앱과 무관해 적용하지 않음.
 
+### 🫧 자체 감정(시장 심리) 엔진 (`lib/sentiment.js`)
+`jjs523/day_trading_bot`의 뉴스 감정→심리점수 방식(`sentiment.py analyze_news`)을 **외부 모델 없이 오프라인으로 도는 사전(lexicon) 기반 엔진**으로 이식. 어휘 사전은 금융·코인 도메인어 + 일반 감정어 + **`jaehong-k/Moral_Emotion_Dataset`(KOME, 49,663건)에서 실제로 데이터 처리해 추출한 긍정 감정어**로 만들었다(모델 ckpt 없이 어휘만, 추출본 `lib/sentiment_lexicon.json`). 부정어("안 좋다")·강조어("매우")를 반영해 한 문장 → 극성 −1~1, 여러 뉴스 → **종합 심리점수 0~100 + 판정**을 낸다. 뉴스·경제지표팀의 **`sentimentJob`(🫧 시장 심리)** 이 돌리고, 그 심리를 **자체 AI 앙상블에 '뉴스 감정' 한 표**(`selfai.fuse` sent)로 넣는다 — 가격 ML + 뉴스 감정을 함께 보는 day_trading_bot 식 결합(ML 방법론은 `rickiepark/ml-ko` 참고). "시장 감정 어때"·`window.ghCoinSentiment`·코인 AI 봇으로도 쓴다. (`gitlabhq`는 깃 호스팅 플랫폼이라 코인 앱과 무관, 제외.)
+
 ### 🎓 경험 학습 루프 (`lib/lessons.js`) — 모든 에이전트에 내장
 `NousResearch/hermes-agent`(MIT)의 **자기개선 학습 루프**를 트레이딩용으로 적용(코드 복사 없음). 리서치하며 배운 교훈을 쌓고, 같은 교훈이 **반복될수록 강화**(사용 횟수·신뢰도)하며, 상황에 맞게 **회상**한다. 상위 교훈은 `personaOf` 로 **모든 에이전트의 프롬프트에 주입**돼 팀원 전원이 공유하고, `plannerJob`·`selfaiJob`·`botImproveJob` 가 결과에서 교훈을 기록한다. 코인 AI 봇도 '배운 것'을 지식으로 쓴다. (같이 받은 보안 공격용 자율 도구 — CyberStrikeAI·hexstrike-ai·strix·Cairn — 은 거래 앱과 무관·위험하여 넣지 않음.)
 

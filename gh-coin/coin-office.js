@@ -205,6 +205,7 @@ const ACTIONS = [
   {job: "cdev", re: /커스텀.*(지표|매매법|전략).*(만들|찾|개발|짜|연구|백테스트)/, say: "커스텀 지표 개발팀이 지금 바로 수식 지표로 매매법을 만들어 커스텀 백테스트팀이 검증합니다"},
   {job: "dev", re: /(매매법|전략|지표).*(만들|찾|개발|짜|연구|발굴|백테스트)|(만들|찾|개발|짜).*(매매법|전략)|백테스트\s*(해|돌려)/, say: "매매법 개발팀이 지금 바로 모든 보조지표로 매매법을 만들어 백테스트팀이 검증합니다"},
   {job: "plan", re: /플래너|리서치\s*계획|할\s*일\s*목록|todolist|투두|계획\s*세워|다음\s*할\s*일|리서치\s*보드/i, say: "리서치 플래너가 지금 바로 상태를 보고 할 일 목록(todolist)을 만들고 최우선 리서치를 워커에게 배정합니다"},
+  {job: "sent", re: /감정|심리|센티먼트|sentiment|여론\s*분위기|시장\s*분위기|공포.{0,2}탐욕/i, say: "뉴스·경제지표팀이 지금 바로 자체 감정 엔진으로 뉴스·여론의 시장 심리(0~100)를 분석합니다"},
   {job: "selfai", re: /자체\s*ai|자체\s*인공지능|앙상블|트레이딩\s*데스크|자체\s*모델|ghcoinai|확신도\s*순위|ai\s*데스크/i, say: "자체 AI 데스크가 지금 바로 외부 키 없이 앙상블(기술 평점·멀티 시간대·ML·알파)로 코인 방향·확신도 순위를 냅니다"},
   {job: "botopt", re: /(자동매매\s*봇|선물\s*봇|트레이딩\s*봇|봇)\s*.{0,6}(자동\s*)?(개선|다듬|최적화|하이퍼옵트)|(보조지표|지표)\s*.{0,6}(자동\s*)?(개선|최적화|튜닝)/i, say: "선물 자동매매봇팀이 지금 바로 데모 봇의 보조지표·위험값을 하이퍼옵트로 자동 개선하고 검증 구간·견고성까지 확인합니다"},
   {job: "bot", re: /자동매매\s*봇|선물\s*봇|트레이딩\s*봇|그리드\s*봇|dca\s*봇|봇\s*(만들|돌려|전략|추가)|passivbot|jesse|octobot/i, say: "선물 자동매매봇팀이 지금 바로 봇 전략을 만들어 백테스트하고 통과하면 데모에 올립니다"},
@@ -676,14 +677,14 @@ export function startChatter(){
 // 매 주기 ① 모의투자 장부를 실제 시세로 갱신(코드, AI 없음) ② 그때그때 한 가지 일을 고른다:
 // 매매법 연구 · SNS 여론 · 경제 리서치 · 동료 수다 · 컴퓨터 작업 · 모의투자 보고 (하루 AI 호출 한도 안에서)
 // 쉬지 않고 돌아가는 업무 순환표: 팀마다 고르게 돌아가도록 섞어 두었다 (모듈이 없으면 경제 리서치로 대신)
-const JOBS = ["plan", "dev", "combo", "ic", "bot", "ind", "qrisk", "trend", "data", "opt", "patscan", "situ", "cdev", "entry", "sr", "news", "promote", "pattern", "coin", "ml", "selfai", "dev", "tpsl", "combo", "drift", "cdev", "feeds", "alpha", "bot", "botopt", "selfai", "plan", "trend", "ic", "chat", "forecast", "coin", "live", "retro", "task", "selfdev", "macro", "sns", "computer", "paper"];
-const JOB_KO = {plan: "리서치 플래너(할 일 목록 → 워커 배정)", bot: "자동매매봇 전략 만들기", botopt: "자동매매봇 자동 개선(보조지표·위험값 하이퍼옵트)", selfai: "자체 AI 데스크(앙상블 방향·확신도 순위)", ic: "투자위원회(강세·약세 토론 → 결정)", qrisk: "퀀트 리스크(VaR·결정표·주문 전 점검)", data: "거래소 비교·데이터 품질", opt: "하이퍼옵트로 전략 다듬기", patscan: "패턴 스캐너", drift: "데모 성과 이동 감지(런 차트)", feeds: "경제 캘린더·금리·변동성 지수", alpha: "알파 팩터 순위", combo: "실시간 종합 지표 타점", dev: "매매법 개발 → 백테스트", cdev: "커스텀 지표 개발 → 백테스트", ind: "보조지표 분석", trend: "다중 시간대 추세 분석", entry: "진입 타점 분석", sr: "지지·저항 분석",
+const JOBS = ["plan", "dev", "combo", "ic", "bot", "ind", "qrisk", "trend", "data", "opt", "patscan", "situ", "cdev", "entry", "sr", "news", "sent", "promote", "pattern", "coin", "ml", "selfai", "dev", "tpsl", "combo", "drift", "cdev", "feeds", "alpha", "bot", "botopt", "selfai", "plan", "trend", "ic", "chat", "forecast", "coin", "live", "retro", "task", "selfdev", "macro", "sns", "computer", "paper"];
+const JOB_KO = {plan: "리서치 플래너(할 일 목록 → 워커 배정)", sent: "시장 심리(자체 감정 엔진)", bot: "자동매매봇 전략 만들기", botopt: "자동매매봇 자동 개선(보조지표·위험값 하이퍼옵트)", selfai: "자체 AI 데스크(앙상블 방향·확신도 순위)", ic: "투자위원회(강세·약세 토론 → 결정)", qrisk: "퀀트 리스크(VaR·결정표·주문 전 점검)", data: "거래소 비교·데이터 품질", opt: "하이퍼옵트로 전략 다듬기", patscan: "패턴 스캐너", drift: "데모 성과 이동 감지(런 차트)", feeds: "경제 캘린더·금리·변동성 지수", alpha: "알파 팩터 순위", combo: "실시간 종합 지표 타점", dev: "매매법 개발 → 백테스트", cdev: "커스텀 지표 개발 → 백테스트", ind: "보조지표 분석", trend: "다중 시간대 추세 분석", entry: "진입 타점 분석", sr: "지지·저항 분석",
   tpsl: "익절·손절 관리", news: "뉴스·기사 분석", macro: "경제지표 예측", situ: "코인 상황판", pattern: "차트·캔들 패턴 분석", coin: "코인팀 회의", ml: "머신러닝·딥러닝 실험",
   promote: "데모 → 실거래 관문 심사", live: "실거래 데스크 점검", paper: "데모거래 보고", forecast: "방향 예측 토론", sns: "SNS 여론 확인", chat: "동료 수다", computer: "컴퓨터 작업",
   retro: "팀 회고·부족한 점 찾기", task: "개선 과제 수행", selfdev: "우리 앱 오류 찾아 코드 고치기", economy: "경제 리서치"};
-const JOB_TEAM = {plan: "hq", bot: "bot", botopt: "bot", selfai: "selfai", ic: "ic", qrisk: "qrisk", data: "data", opt: "opt", patscan: "pattern", drift: "demo", feeds: "news", alpha: "ml", combo: "combo", dev: "dev", cdev: "cdev", ind: "ind", trend: "trend", entry: "entry", sr: "sr", tpsl: "tpsl", news: "news", macro: "news", situ: "situ", pattern: "pattern", coin: "btc", ml: "ml",
+const JOB_TEAM = {plan: "hq", sent: "news", bot: "bot", botopt: "bot", selfai: "selfai", ic: "ic", qrisk: "qrisk", data: "data", opt: "opt", patscan: "pattern", drift: "demo", feeds: "news", alpha: "ml", combo: "combo", dev: "dev", cdev: "cdev", ind: "ind", trend: "trend", entry: "entry", sr: "sr", tpsl: "tpsl", news: "news", macro: "news", situ: "situ", pattern: "pattern", coin: "btc", ml: "ml",
   promote: "demo", live: "live", paper: "demo", forecast: "entry", sns: "news", chat: "hq", computer: "hq", retro: "hq", task: "hq", selfdev: "hq", economy: "news"};
-const JOB_FN = () => ({plan: plannerJob, bot: botJob, botopt: botImproveJob, selfai: selfaiJob, ic: icJob, qrisk: qriskJob, data: dataJob, opt: optJob, patscan: patternScanJob, drift: driftJob, feeds: openFeedsJob, alpha: alphaJob, combo: comboJob, dev: () => research("std"), cdev: () => research("custom"), ind: indJob, trend: trendJob, entry: entryJob, sr: srJob, tpsl: tpslJob, news: economyCheck, macro: macroJob,
+const JOB_FN = () => ({plan: plannerJob, sent: sentimentJob, bot: botJob, botopt: botImproveJob, selfai: selfaiJob, ic: icJob, qrisk: qriskJob, data: dataJob, opt: optJob, patscan: patternScanJob, drift: driftJob, feeds: openFeedsJob, alpha: alphaJob, combo: comboJob, dev: () => research("std"), cdev: () => research("custom"), ind: indJob, trend: trendJob, entry: entryJob, sr: srJob, tpsl: tpslJob, news: economyCheck, macro: macroJob,
   situ: situJob, pattern: patternJob, coin: coinJob, ml: mlJob, promote: promoteJob, live: liveDeskJob, paper: paperReport, forecast: forecastJob, sns: snsCheck, chat: () => chatter(true),
   computer: computerWork, retro, task: doTask, selfdev: selfdevJob, economy: economyCheck});
 let cycleTimer = 0, cycling = false, lastJob = "";
@@ -1855,6 +1856,9 @@ async function selfaiJob(){
     aiOp = await aiOpinion(top.c, top.j).catch(() => null);
     if (aiOp) top.j = SELF.fuse({...top.j.inputs, ai: {score: aiOp.score, confidence: aiOp.confidence}});
   }
+  // 자체 감정(시장 심리)도 한 표로
+  const sent = marketSentiment();
+  if (sent) top.j = SELF.fuse({...top.j.inputs, sent: {polarity: sent.polarity, score: sent.score}});
   // 이식한 trading_rigor(ai-trader-team)로 예시 계획(손절 1.5×ATR·목표 3R·계좌 10,000 1% 리스크) 계산
   try {
     const R = await lib("rigor"), CB = await import("./combo.js"), a = await CB.analyzeTF(top.k60);
@@ -1933,6 +1937,27 @@ async function plannerJob(){
 }
 // 공유 보드 읽기 (코인 AI 봇·UI 가 씀)
 export async function researchBoard(n = 12){ const B = await lib("board"); return B.makeBoard(lsStore()).recent(n); }
+
+/* ---- 🫧 자체 감정(시장 심리) — jjs523/day_trading_bot 의 뉴스 감정→심리점수 방식을 사전 기반으로 오프라인 이식.
+       어휘는 금융·코인어 + jaehong-k/Moral_Emotion_Dataset(KOME) 데이터 추출어. 뉴스팀이 돌리고, 자체 AI 에 한 표로 들어간다. ---- */
+async function sentimentJob(){
+  const S = await lib("sentiment"), lead = agentById("macro");
+  let texts = [];
+  try { texts = texts.concat((teamNotes("news") || []).slice(-12).map(n => n.text)); } catch(e){}
+  try { const log = await loadLog(); texts = texts.concat((log || []).filter(e => e.ch === "news" && (e.text || e.msg)).slice(-14).map(e => e.text || e.msg)); } catch(e){}
+  try { const B = await lib("board"); texts = texts.concat(B.makeBoard(lsStore()).recent(8).map(f => f.text)); } catch(e){}
+  texts = texts.filter(Boolean);
+  const a = S.analyzeNews(texts);
+  writeJ("coinSentiment", {score: a.score, polarity: a.polarity, verdict: a.verdict, n: a.n, t: Date.now()});
+  table("news", lead.id, `🫧 시장 심리 (자체 감정 엔진) — ${a.score}/100 · ${a.verdict}`, ["항목", "값"],
+    [["종합 심리점수", `${a.score}/100`], ["판정", a.verdict], ["분석한 뉴스·여론", `${a.n}건 (긍정 ${a.dist.pos}·부정 ${a.dist.neg}·중립 ${a.dist.neu})`], ["영향 큰 단어", a.top.map(x => `${x.w}(${x.v > 0 ? "+" : ""}${x.v})`).join(" · ") || "—"]],
+    "외부 모델 없이 오프라인으로 도는 자체 감정 엔진(day_trading_bot 방식 · KOME 데이터 유래 어휘) · 가격과 함께 봐야 함 · 참고용");
+  addNote("news", `시장 심리 ${a.score}/100 (${a.verdict}) · 긍정 ${a.dist.pos}/부정 ${a.dist.neg}`, "감정");
+  await learnSkill(`시장 심리 ${a.verdict}(${a.score}/100): ${a.top.slice(0, 3).map(x => x.w).join(",")}`, {job: "sent"});
+  await explain(lead.id, "news", "자체 감정 엔진이 낸 시장 심리 점수를 보고 지금 뉴스·여론 분위기가 긍정인지 부정인지, 어떤 단어가 그렇게 만들었는지 해설한다. 심리는 참고일 뿐이고 가격·추세와 함께 봐야 한다는 점을 밝힌다.", `종합 심리 ${a.score}/100 ${a.verdict} · 긍정 ${a.dist.pos}/부정 ${a.dist.neg}/중립 ${a.dist.neu} · 단어 ${a.top.map(x => x.w).join(",")}`, "아래 시장 심리 분석을 해설해 줘.");
+}
+// 최근(12시간 내) 시장 심리 — 자체 AI·코인 AI 봇이 읽음
+export function marketSentiment(){ const s = readJ("coinSentiment", null); return s && Date.now() - s.t <= 12 * 3600e3 ? s : null; }
 
 /* ---- 🗄 저장소 이전 (obevo 방식): 앱이 켜질 때 한 번 — 이미 한 변경은 건너뛰고, 실패하면 백업으로 되돌림 ---- */
 export function runMigrations(){
