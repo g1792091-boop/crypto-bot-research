@@ -27,3 +27,8 @@
 - `lib/runchart.js` runcharter 규칙 → `driftJob`, 승격표
 - `lib/alpha.js` vnpy Alpha158 계열 팩터 + 견고 z점수 → `alphaJob`
 - 투자위원회 `icJob`(TradingAgents), 경제 캘린더 `openFeedsJob`(OpenBB 공급원), 독립 QA 채점(my-cc-harness), 추천 질문·최근 질문(gemini-clone)
+
+## 차트 터미널 연결
+- `../nuri-ai/analysisbus.js`: 직원 업무가 `pubTo(심볼, 섹션, {title, text, lines, markers, segs, rows, spec})` 로 남김 → 터미널 `🤖 AI 팀` 탭이 `TermChart.setAiOverlay()` 로 가격선·표시·패턴 선을 그림
+- 터미널 `🧪 실험` 탭: SDLC 버전·본부 백테스트 기록·최적화 결과·전략 JSON → 백테스트·70/30 검증·견고성·하이퍼옵트·버전 저장 (`lib/hyperopt.js`, `lib/robust.js`, `lib/sdlc.js` 공용)
+- `../nuri-ai/uikit.js`: 방 탭 가로 이동(휠·끌기·◀ ▶)·☰ 모든 방·사무실 확대/축소/이동 (GH Nano 사무실과 공용)

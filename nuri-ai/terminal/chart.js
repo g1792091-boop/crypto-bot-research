@@ -89,8 +89,10 @@ export class TermChart {
     this.liqLayer = new Layer((ctx, size) => this._drawLiq(ctx, size), "bottom");
     this.wallLayer = new Layer((ctx, size) => this._drawWalls(ctx, size), "bottom");
     this.whaleLayer = new Layer((ctx, size) => this._drawWhales(ctx, size), "normal");
+    this.aiLayer = new Layer((ctx, size) => this._drawAi(ctx, size), "normal");   // AI 팀 분석: 패턴 선
+    this.ai = { segs: [] }; this.aiLines = []; this.aiMarkers = [];
     this.countdown = new Countdown(this);
-    [this.fillLayer, this.vpLayer, this.boxLayer, this.liqLayer, this.wallLayer, this.whaleLayer, this.countdown].forEach((l) => this.candle.attachPrimitive(l));
+    [this.fillLayer, this.vpLayer, this.boxLayer, this.liqLayer, this.wallLayer, this.whaleLayer, this.aiLayer, this.countdown].forEach((l) => this.candle.attachPrimitive(l));
     this._cdTimer = setInterval(() => !document.hidden && this.countdown.update(), 1000);
     this.chart.subscribeCrosshairMove((p) => { this._lastCross = p; this._legend(p); });
     // 칸 크기·창 높이가 바뀌면 아래 창 범례 위치를 다시 잡는다
@@ -307,8 +309,40 @@ export class TermChart {
     this._pushMarkers();
   }
   setStrategyMarkers(list) { this.stratMarkers = list || []; this._pushMarkers(); }
+  // AI 팀 분석 겹쳐 그리기: lines(가격선 · 가격축 이름표) · markers(봉 위 표시) · segs(패턴 선)
+  setAiOverlay({ lines = [], markers = [], segs = [] } = {}) {
+    for (const pl of this.aiLines) { try { this.candle.removePriceLine(pl); } catch (e) { /* 이미 없음 */ } }
+    this.aiLines = [];
+    for (const l of lines) {
+      if (!Number.isFinite(+l.price) || +l.price <= 0) continue;
+      try { this.aiLines.push(this.candle.createPriceLine({ price: +l.price, color: l.color || "#ab47bc", lineWidth: 1, lineStyle: l.style ?? 2, axisLabelVisible: true, title: String(l.label || "").slice(0, 22) })); } catch (e) { /* 무시 */ }
+    }
+    const c = this.candles, step = D.IV_SEC[this.interval] || 3600;
+    this.aiMarkers = markers.map((m) => {
+      const sec = Math.floor(m.t / 1000); if (!c.length || sec < c[0].time || sec > c.at(-1).time + step) return null;
+      const time = this._barTime(sec); if (time == null) return null;
+      const dir = m.dir || 0;
+      return { time, position: dir > 0 ? "belowBar" : dir < 0 ? "aboveBar" : "inBar", shape: dir > 0 ? "arrowUp" : dir < 0 ? "arrowDown" : "square", color: m.color || "#ab47bc", text: String(m.text || "").slice(0, 16), size: dir ? 1 : 0.6 };
+    }).filter(Boolean);
+    this.ai.segs = segs || [];
+    this._pushMarkers(); this.aiLayer.update();
+  }
+  _drawAi(ctx) {
+    const segs = this.ai.segs; if (!segs?.length || !this.candles.length) return;
+    const ts = this.chart.timeScale(), step = D.IV_SEC[this.interval] || 3600, c = this.candles;
+    const xOf = (t) => { const sec = Math.floor(t / 1000); if (sec > c.at(-1).time) { const lx = ts.timeToCoordinate(c.at(-1).time); return lx == null ? null : lx + (sec - c.at(-1).time) / step * (ts.options().barSpacing || 6); } const b = this._barTime(sec); return b == null ? null : ts.timeToCoordinate(b); };
+    ctx.font = "10px " + FONT; ctx.lineWidth = 1.6;
+    for (const s of segs) {
+      const x1 = xOf(s.a.t), x2 = xOf(s.b.t), y1 = this.candle.priceToCoordinate(s.a.p), y2 = this.candle.priceToCoordinate(s.b.p);
+      if ([x1, x2, y1, y2].some((v) => v == null)) continue;
+      ctx.strokeStyle = s.color || "#ffb300"; ctx.setLineDash([6, 3]);
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+      if (s.label) { ctx.setLineDash([]); ctx.fillStyle = s.color || "#ffb300"; ctx.fillText(String(s.label).slice(0, 24), Math.min(x1, x2) + 4, Math.min(y1, y2) - 4); }
+    }
+    ctx.setLineDash([]);
+  }
   _pushMarkers() {
-    const mk = [...(this.sigMarkers || []), ...(this.stratMarkers || [])];
+    const mk = [...(this.sigMarkers || []), ...(this.stratMarkers || []), ...(this.aiMarkers || [])];
     mk.sort((a, b) => a.time - b.time);
     try { this.markerApi.setMarkers(mk); } catch (e) { /* 봉이 바뀌는 중 */ }
   }

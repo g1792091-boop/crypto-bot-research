@@ -2,6 +2,7 @@
 // 직원들이 자리에서 일하다가 회의가 열리면 회의 장소(팀 구역·대회의실·라운지·발표 무대)로 걸어가 말풍선으로 대화하고,
 // 오른쪽 패널에 회의록이 쌓인다. 배치는 TEAMS에서 자동으로 만든다(팀이 늘어도 깨지지 않게).
 // office.js의 새 기능(listReports·backlog 등)은 있을 때만 쓴다 → import * as O 로 받아 typeof 검사.
+import { hscroll, revealIn, stageZoom, roomPicker } from "../nuri-ai/uikit.js";
 import * as O from "./coin-office.js";
 import { TECH } from "./tech.js";
 import { IDLE_T as COIN_IDLE } from "./coin-org.js";
@@ -191,7 +192,8 @@ function build(){
     <button class="of-x" id="ofClose" title="닫기" aria-label="닫기" hidden>✕</button>
   </div>
   <div class="of-body">
-    <div class="of-stage" id="ofStage"><div class="of-floor" id="ofFloor" style="width:${W}px;height:${H}px">${zones}${desks}${mtables}${props}${agents}</div></div>
+    <div class="of-stagewrap"><div class="of-stage" id="ofStage"><div class="of-floor" id="ofFloor" style="width:${W}px;height:${H}px">${zones}${desks}${mtables}${props}${agents}</div></div>
+      <div class="of-zoomctl" role="group" aria-label="사무실 확대·축소"><button type="button" data-zoom="out" title="축소">－</button><button type="button" data-zoom="fit" title="한 화면에 다 보기">맞춤</button><button type="button" data-zoom="read" title="직원이 잘 보이는 크기">크게</button><button type="button" data-zoom="in" title="확대 (Ctrl+휠 · 더블클릭)">＋</button><span id="ofZoomPct"></span></div></div>
     <aside class="of-side">
       <div class="of-head">
         <div class="of-h1"><i class="of-led" id="ofLed"></i><b id="ofTitle">대기 중</b><span class="of-sp"></span><span class="of-recl" id="ofRecL">녹화 중</span></div>
@@ -214,6 +216,10 @@ function build(){
   root = el;
   requestAnimationFrame(() => AGENTS.forEach(a => place(a.id, HOME[a.id], true)));
   wire(el);
+  // 넘치는 줄은 휠·끌기·◀ ▶ 로 옆으로 · 방이 많으면 ☰ 로 한 번에 고르기 · 사무실은 확대·축소·끌어서 이동
+  hscroll(el.querySelector("#ofChans")); roomPicker(el.querySelector("#ofChans")); hscroll(el.querySelector(".of-top"), {arrows: false});
+  zoomCtl = stageZoom({stage: el.querySelector("#ofStage"), floor: el.querySelector("#ofFloor"), W, H, key: "coinZoom", readable: 0.9, onScale: (s, pan) => { scale = s; const p = el.querySelector("#ofZoomPct"); if (p) p.textContent = Math.round(s * 100) + "%"; }});
+  el.querySelector(".of-zoomctl").addEventListener("click", e => { const b = e.target.closest("[data-zoom]"); if (!b) return; e.stopPropagation(); const k = b.dataset.zoom; k === "in" ? zoomCtl.zoomBy(1.2) : k === "out" ? zoomCtl.zoomBy(1 / 1.2) : k === "fit" ? zoomCtl.fit() : zoomCtl.readable(); });
   if ("ResizeObserver" in window) new ResizeObserver(fit).observe(el.querySelector("#ofStage")); else window.addEventListener("resize", fit);
   return el;
 }
@@ -223,15 +229,8 @@ function showPlace(id){
   const fl = root.querySelector("#ofFloor"), ox = parseFloat(fl.style.left) || 0, oy = parseFloat(fl.style.top) || 0;
   st.scrollTo({left: ox + (z.x + z.w / 2) * scale - st.clientWidth / 2, top: oy + (z.y + z.h / 2) * scale - st.clientHeight / 2, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"});
 }
-function fit(){
-  if (!root) return;
-  const st = root.querySelector("#ofStage"), fl = root.querySelector("#ofFloor");
-  // 휴대폰처럼 좁으면 너무 작아지지 않게 0.4배까지만 줄이고, 사무실 안에서 손가락으로 끌어 본다(페이지는 넘치지 않음)
-  const fitS = Math.min(st.clientWidth / W, st.clientHeight / H) || 1, pan = st.clientWidth < 640 && fitS < 0.4, s = pan ? 0.4 : fitS;
-  scale = s; st.classList.toggle("pan", pan);
-  fl.style.transform = `scale(${s})`;
-  fl.style.left = Math.max(0, (st.clientWidth - W * s) / 2) + "px"; fl.style.top = Math.max(0, (st.clientHeight - H * s) / 2) + "px";
-}
+let zoomCtl = null;
+function fit(){ if (root && zoomCtl) zoomCtl.apply(); }
 const $o = s => root.querySelector(s);
 const E = s => ctx.esc(String(s ?? ""));
 // 드롭다운은 위쪽 막대가 가로로 스크롤돼도 잘리지 않게 화면 기준(fixed)으로 띄운다
@@ -322,7 +321,7 @@ function wire(el){
     const bld = e.target.closest("[data-build]");
     if (bld){ O.loadLog().then(log => { const en = log.find(x => x.id === bld.dataset.build); if (en?.spec && typeof ctx.openBuilding === "function"){ closeOffice(); ctx.openBuilding(en.spec); } }); return; }
     const ch = e.target.closest("[data-ch]");
-    if (ch){ chan = ch.dataset.ch; el.querySelectorAll("[data-ch]").forEach(b => b.setAttribute("aria-pressed", b === ch)); renderLog(); $o("#ofIn").placeholder = !teamById(chan) || chan === "hq" ? "본부에 메시지 보내기 (팀장이 담당자를 부릅니다)" : `#${teamById(chan).name}에 메시지 보내기`; return; }
+    if (ch){ chan = ch.dataset.ch; el.querySelectorAll("#ofChans [data-ch]").forEach(b => b.setAttribute("aria-pressed", b.dataset.ch === chan)); revealIn(el.querySelector("#ofChans"), el.querySelector(`#ofChans [data-ch="${chan}"]`)); el.querySelector(".rp-panel")?.setAttribute("hidden", ""); renderLog(); $o("#ofIn").placeholder = !teamById(chan) || chan === "hq" ? "본부에 메시지 보내기 (팀장이 담당자를 부릅니다)" : `#${teamById(chan).name}에 메시지 보내기`; return; }
     const a = e.target.closest("[data-ag]");
     if (a){ showCard(a.dataset.ag); return; }
     if (e.target.closest("#ofTeam")){ showTeam(); return; }

@@ -221,3 +221,16 @@ button.busy span { color: #5b8cff; }
 .nt-toast { position: absolute; left: 50%; bottom: 40px; transform: translateX(-50%); z-index: 50; background: #e0e3eb; color: #131722; padding: 7px 14px; border-radius: 8px; font-size: 12.5px; max-width: calc(100% - 32px); box-shadow: 0 8px 24px rgba(0,0,0,.45); pointer-events: none; }
 .nt-toast.err { background: #f23645; color: #fff; }
 @media (max-width: 760px) { .nt-toast { bottom: 72px; } }
+/* 🤖 AI 팀 · 🧪 실험 탭 */
+.nt-tabs{overflow-x:auto;scrollbar-width:thin}.nt-tabs button{white-space:nowrap;flex:none}
+.nt-ai-h{display:flex;flex-direction:column;gap:2px;margin:2px 0 8px}.nt-ai-h b{font-size:13px}
+.nt-ai-card{margin-top:8px}.nt-ai-card .nt-card-h{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.nt-ai-card label{display:flex;gap:6px;align-items:center;cursor:pointer}
+.nt-ai-t{font-weight:600;margin:4px 0 2px;font-size:12.5px}.nt-ai-x{font-size:11.5px;line-height:1.5;margin:2px 0}
+.nt-ai-tb{width:100%;border-collapse:collapse;font-size:11.5px;margin:4px 0}.nt-ai-tb td{padding:2px 4px;border-bottom:1px solid #2a2e39;white-space:nowrap}
+.nt-ai-tb td.up,.nt-ai-tb .up{color:#26a69a}.nt-ai-tb td.down,.nt-ai-tb .down{color:#ef5350}
+.nt-lab-l{display:flex;flex-direction:column;gap:4px;font-size:12px;margin:4px 0 6px}.nt-lab-l select{width:100%}
+.nt-lab select,.nt-lab input{background:#1e222d;color:#d1d4dc;border:1px solid #363a45;padding:4px 6px;font:inherit;font-size:12px}
+.nt-lab-ep{width:64px}.nt-lab-ul{margin:6px 0;padding-left:18px;font-size:11.5px;line-height:1.5}
+.nt-eq{width:100%;height:64px;display:block;margin:6px 0;background:#161a25}
+.nt-ai .nt-row,.nt-lab .nt-row{flex-wrap:wrap;row-gap:6px}

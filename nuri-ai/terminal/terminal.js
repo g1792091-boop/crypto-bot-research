@@ -65,6 +65,7 @@ function loadCss(href) {
 }
 
 export function terminalOpen() { return !!T; }
+export const _term = () => T;   // 시험용: 열린 터미널
 
 export async function openTerminal({ market = "BTCUSDT", exchange, interval = "1h" } = {}, ctx = {}) {
   // 거래소를 안 주면 종목으로 짐작 (BTCUSDT → 바이낸스 선물 · KRW-BTC → 업비트 · NVDA/005930/^KS11/ES=F → 야후)
@@ -92,12 +93,15 @@ class Terminal {
       layout: LAYOUTS[saved.layout] ? +saved.layout : 1, cells: Array.isArray(saved.cells) ? saved.cells.filter((c) => c && D.EX_SHORT[c.exchange] && c.symbol) : [],
       // 휴대폰은 차트부터 (패널 닫힘)
       active: 0, side: innerWidth < 760 ? false : saved.side ?? (innerWidth > 1100), tab: saved.tab || "flow", magnet: !!saved.magnet, stay: !!saved.stay, stratMode: saved.stratMode || "signals",
+      aiShow: {combo: true, pattern: true, ic: true, calls: true, local: true, ...(saved.aiShow || {})},
     };
     this.S.cells[0] = want;
     this.cells = [];
     this.strat = null;   // {spec, result}
     this._build();
     this._applyLayout();
+    // AI 팀 분석이 새로 오면 차트 위 표시와 'AI 팀' 탭을 다시 그림
+    import("../analysisbus.js").then((B) => { this.bus = B; this._unbus = B.onChange(() => { this._applyAi(); if (this.S.side && this.S.tab === "ai") this._renderAi(); }); this._applyAi(); }).catch(() => {});
     this._save();
     this.root.focus();
   }
@@ -111,7 +115,7 @@ class Terminal {
   }
   _save() {
     const S = this.S;
-    lsSet(KEY, { inds: S.inds, ctype: S.ctype, log: S.log, overlays: S.overlays, layout: S.layout, cells: S.cells, side: S.side, tab: S.tab, magnet: S.magnet, stay: S.stay, stratMode: S.stratMode });
+    lsSet(KEY, { inds: S.inds, ctype: S.ctype, log: S.log, overlays: S.overlays, layout: S.layout, cells: S.cells, side: S.side, tab: S.tab, magnet: S.magnet, stay: S.stay, stratMode: S.stratMode, aiShow: S.aiShow });
   }
   get cur() { return this.cells[this.S.active]; }
 
@@ -147,8 +151,10 @@ class Terminal {
         <nav class="nt-tools" aria-label="그리기 도구">${TOOLS_HTML}</nav>
         <div class="nt-grid"></div>
         <aside class="nt-side" hidden>
-          <div class="nt-tabs"><button data-tab="flow">흐름</button><button data-tab="strat">전략</button><button class="nt-side-x" data-nt="side" aria-label="패널 닫기">✕</button></div>
+          <div class="nt-tabs"><button data-tab="flow">흐름</button><button data-tab="ai">🤖 AI 팀</button><button data-tab="lab">🧪 실험</button><button data-tab="strat">전략</button><button class="nt-side-x" data-nt="side" aria-label="패널 닫기">✕</button></div>
           <div class="nt-pane" data-pane="flow"></div>
+          <div class="nt-pane" data-pane="ai"><div class="nt-ai"></div></div>
+          <div class="nt-pane" data-pane="lab"><div class="nt-lab"></div></div>
           <div class="nt-pane" data-pane="strat">
             <div class="nt-st-help">전략 JSON(quant.js 형식)을 붙여 넣으면 지금 차트 캔들로 신호와 백테스트를 계산해 표시합니다. <a href="#" data-nt="example">예시 넣기</a></div>
             <textarea class="nt-strat" spellcheck="false" placeholder='{"indicators":[...], "long_entry":{...}, "short_entry":{...}, "risk":{...}}'></textarea>
@@ -199,7 +205,7 @@ class Terminal {
   }
 
   destroy() {
-    clearInterval(this._cd);
+    clearInterval(this._cd); this._unbus?.();
     document.removeEventListener("keydown", this._onKey);
     document.removeEventListener("pointerdown", this._onDocDown, true);
     this.cells.forEach((c) => { c.dr.destroy(); c.tc.destroy(); });
@@ -232,7 +238,7 @@ class Terminal {
       isActive: (tc) => this.cur?.tc === tc && this.modal.hidden,
       wantFlow: (tc) => S.side && S.tab === "flow" && this.cur?.tc === tc,
       onLegend: (act, id) => this._legendAct(act, id),
-      onLoad: (tc) => { cell.dr.load(); if (this.cur === cell) { this._syncToolbar(); if (this.strat) this._runStrat(true); } },
+      onLoad: (tc) => { cell.dr.load(); this._applyAi(); if (this.cur === cell) { this._syncToolbar(); if (this.strat) this._runStrat(true); if (S.side && S.tab === "ai") this._renderAi(); } },
       onFlow: (tc) => { if (this.cur?.tc === tc) this._renderFlow(); },
       onStatus: (tc) => { if (this.cur?.tc === tc) this._statusTick(); },
       onTick: (tc) => { if (this.strat && this.cur?.tc === tc && tc.candles.at(-1)?.time !== this._stratBar) this._runStrat(true); },
@@ -345,6 +351,8 @@ class Terminal {
     r.querySelectorAll(".nt-tabs [data-tab]").forEach((b) => b.classList.toggle("on", b.dataset.tab === S.tab));
     r.querySelectorAll(".nt-pane").forEach((p) => (p.hidden = p.dataset.pane !== S.tab));
     if (S.side && S.tab === "flow") this._renderFlow();
+    if (S.side && S.tab === "ai") this._renderAi();
+    if (S.side && S.tab === "lab") this._renderLab();
   }
   _statusTick() {
     const tc = this.cur?.tc, st = this.statusEl;
@@ -653,6 +661,145 @@ class Terminal {
       this.strat = null; this.cells.forEach((x) => x.tc.setStrategyMarkers([]));
       out.innerHTML = `<div class="down">${this.esc(e.message || e)}</div>${e.problems ? `<ul>${e.problems.map((p) => `<li>${this.esc(p)}</li>`).join("")}</ul>` : ""}`;
     }
+  }
+  // ------------------------------------------------------------ 🤖 AI 팀 분석 (GH Coin 직원들 → analysisbus.js)
+  _aiData(tc) { return this.bus && tc?.symbol ? this.bus.read(tc.symbol) : {}; }
+  _applyAi() {
+    if (!this.bus) return;
+    for (const cell of this.cells) {
+      const tc = cell.tc; if (!tc?.candles?.length) continue;
+      const d = this._aiData(tc), lines = [], markers = [], segs = [];
+      for (const [k, v] of Object.entries(d)) { if (!this.S.aiShow[k.replace(/4h$/, "")] || !v) continue; lines.push(...(v.lines || [])); markers.push(...(v.markers || [])); segs.push(...(v.segs || [])); }
+      tc.setAiOverlay({ lines: lines.slice(0, 24), markers: markers.slice(-80), segs: segs.slice(0, 30) });
+    }
+  }
+  _renderAi() {
+    const el = this.root.querySelector(".nt-ai"), tc = this.cur?.tc; if (!el) return;
+    const d = this._aiData(tc), e = this.esc, NAMES = { ...(this.bus?.SECTIONS || {}), local: "🔎 이 차트로 계산", pattern4h: "🕯 차트 패턴 (4시간봉)" };
+    const ago = (t) => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? "방금" : m < 60 ? `${m}분 전` : m < 1440 ? `${Math.round(m / 60)}시간 전` : `${Math.round(m / 1440)}일 전`; };
+    const keys = Object.keys(d).sort((a, b) => (d[b].t || 0) - (d[a].t || 0));
+    el.innerHTML = `<div class="nt-ai-h"><b>🤖 AI 팀 분석</b><span class="muted">${e(tc?.symbol || "")} · 직원들이 낸 분석을 차트에 겹쳐 그립니다</span></div>
+      <div class="nt-row"><button class="nt-primary" data-ai="local">이 차트로 지금 계산</button>${typeof window.ghCoinAsk === "function" ? `<button data-ai="deep">본부에 깊게 분석 맡기기</button>` : ""}<button data-ai="off">표시 모두 끄기</button></div>
+      ${keys.length ? keys.map((k) => { const v = d[k], key = k.replace(/4h$/, ""); return `<div class="nt-card nt-ai-card"><div class="nt-card-h"><label><input type="checkbox" data-aishow="${e(key)}" ${this.S.aiShow[key] ? "checked" : ""}> ${e(NAMES[k] || k)}</label><span class="muted">${ago(v.t)}</span></div>
+        <div class="nt-ai-t">${e(v.title || "")}</div><div class="muted nt-ai-x">${e(v.text || "")}</div>
+        ${v.rows?.length ? `<table class="nt-ai-tb">${v.rows.slice(0, 8).map((r) => `<tr>${r.map((x) => `<td>${e(x)}</td>`).join("")}</tr>`).join("")}</table>` : ""}
+        ${(v.lines || []).length ? `<div class="muted nt-ai-x">차트 선 ${v.lines.length}개${(v.markers || []).length ? ` · 표시 ${v.markers.length}개` : ""}${(v.segs || []).length ? ` · 패턴 선 ${v.segs.length}개` : ""}</div>` : ""}
+        ${v.spec ? `<div class="nt-row"><button data-ai="lab" data-k="${e(k)}">🧪 이 전략 실험하기</button></div>` : ""}</div>`; }).join("")
+      : `<div class="nt-empty">아직 이 코인의 AI 분석이 없습니다.<br>GH Coin 본부가 일하면(실시간 타점·패턴·위원회·리스크·거래소 비교) 여기에 쌓이고 차트에 그려집니다. 위의 <b>이 차트로 지금 계산</b>으로 바로 볼 수도 있습니다.</div>`}`;
+    el.onchange = (ev) => { const cb = ev.target.closest("[data-aishow]"); if (!cb) return; this.S.aiShow[cb.dataset.aishow] = cb.checked; this._save(); this._applyAi(); };
+    el.onclick = (ev) => { const b = ev.target.closest("[data-ai]"); if (!b) return; ev.stopPropagation();
+      if (b.dataset.ai === "local") this._aiLocal(b);
+      if (b.dataset.ai === "off") { Object.keys(this.S.aiShow).forEach((k) => (this.S.aiShow[k] = false)); this._save(); this._applyAi(); this._renderAi(); }
+      if (b.dataset.ai === "deep") { window.ghCoinAsk?.(`${tc.symbol.replace(/USDT$|^KRW-/, "")} 모든 보조지표 종합해서 추세랑 타점 분석해줘`); this.toast("본부 실시간 종합 지표 타점팀에 맡겼습니다 · 끝나면 여기에 그려집니다"); }
+      if (b.dataset.ai === "lab") { this._labPreset = d[b.dataset.k]?.spec; this.S.tab = "lab"; this._save(); this._syncSide(); }
+    };
+  }
+  // 본부가 안 돌아도: 이 차트의 캔들로 패턴·기술 요약·종합 지표·겹친 지지/저항을 바로 계산
+  async _aiLocal(btn) {
+    const tc = this.cur?.tc; if (!tc?.candles.length) return;
+    btn.disabled = true; btn.textContent = "계산 중…";
+    try {
+      const [PT, TR, CB] = await Promise.all([import("../../gh-coin/lib/patterns.js"), import("../../gh-coin/lib/ta_rating.js"), import("../../gh-coin/combo.js")]);
+      const cs = D.toQuant(tc.candles).slice(0, -1), last = cs.at(-1);
+      const pats = PT.scan(cs), tv = TR.rating(cs), cdl = TR.candles(cs), an = await CB.analyzeTF(cs.slice(-500));
+      const cl = CB.clusterLevels(an.levels, last.c, an.atr).filter((x) => x.n >= 2).sort((a, b) => Math.abs(a.price - last.c) - Math.abs(b.price - last.c)).slice(0, 6);
+      this.bus.publish(tc.symbol, "local", { team: "local", title: `${D.IV_LABEL[tc.interval]}봉 · 종합 ${Math.round(an.score * 100)} (${CB.verdict(an.score)}) · TV ${tv ? tv.label : "—"}`,
+        text: `지표 ${an.total}종 · 상승 ${an.up} · 하락 ${an.dn} · ${an.regime.label} · 패턴 ${pats.map((p) => p.name + " " + (PT.STATE_KO[p.state] || "")).join(", ") || "없음"} · 캔들 ${cdl.map((x) => x.name).join(", ") || "특이 없음"}`,
+        lines: [...cl.map((x) => ({ price: x.price, label: `${x.price > last.c ? "저항" : "지지"} ×${x.n}`, color: x.price > last.c ? "#ff9800" : "#2962ff", style: 3 })), ...pats.filter((p) => p.trigger).map((p) => ({ price: p.trigger, label: `${p.name} 기준`, color: "#ffb300", style: 2 }))],
+        segs: pats.flatMap((p) => (p.lines || []).map((l) => ({ a: { t: l.from.t, p: l.from.p }, b: { t: l.to.t, p: l.to.p }, color: p.dir > 0 ? "#26a69a" : p.dir < 0 ? "#ef5350" : "#b2b5be", label: `${p.name} ${l.name}` }))),
+        markers: [...pats.flatMap((p) => Object.entries(p.points || {}).map(([nm, q]) => ({ t: q.t, text: `${p.name.slice(0, 6)} ${nm}`, dir: 0, color: "#ffb300" }))), ...cdl.filter((x) => x.dir).map((x) => ({ t: last.t, dir: x.dir, text: x.name, color: "#ffd54f" }))],
+        rows: [["이평 15", tv ? tv.maLabel : "—"], ["오실레이터 11", tv ? tv.oscLabel : "—"], ["새 신호", an.fresh.map((f) => f.name).slice(0, 4).join(", ") || "—"]] });
+      this.S.aiShow.local = true; this._save();
+    } catch (e) { this.toast("계산 실패: " + (e.message || e), "err"); }
+    btn.disabled = false; btn.textContent = "이 차트로 지금 계산";
+  }
+
+  // ------------------------------------------------------------ 🧪 실험: AI 팀 전략으로 백테스트 · 검증 · 견고성 · 하이퍼옵트 · 버전 저장
+  async _labSources() {
+    const out = [{ id: "strat", name: "✍ 전략 탭의 JSON", get: () => { try { return JSON.parse(this.root.querySelector(".nt-strat").value); } catch (e) { return null; } } }, { id: "example", name: "예시: EMA 교차 + RSI", get: () => EXAMPLE }];
+    if (this._labPreset) out.unshift({ id: "preset", name: "🤖 AI 팀이 보낸 전략", get: () => this._labPreset });
+    try { const S = JSON.parse(localStorage.getItem("coinSDLC") || "{}"); for (const p of Object.values(S)) { const v = p.versions?.at(-1); if (v?.spec) out.push({ id: "sdlc:" + p.name, name: `📦 ${p.name} v${v.semver || v.v}`, get: () => v.spec }); } } catch (e) { /* 없음 */ }
+    try { const d = this._aiData(this.cur?.tc); if (d.opt?.spec) { out.push({ id: "opt-best", name: "🎛 최적화팀 최신 결과(최적)", get: () => d.opt.spec }); out.push({ id: "opt-base", name: "🎛 최적화팀 최신 결과(원본)", get: () => d.opt.baseSpec }); } } catch (e) { /* 없음 */ }
+    try { const E = await import("../engine.js"), v = await E.idb.all("coin:log"), log = Array.isArray(v[0]) ? v[0] : [], seen = new Set();
+      for (const x of log.filter((x) => x.kind === "bt" && x.spec).reverse()) { if (seen.has(x.name) || seen.size >= 15) continue; seen.add(x.name); out.push({ id: "bt:" + x.id, name: `${x.pass ? "✅" : "❌"} ${x.name} (${x.mname || x.market})`, get: () => x.spec }); } } catch (e) { /* 없음 */ }
+    return out;
+  }
+  async _renderLab() {
+    const el = this.root.querySelector(".nt-lab"); if (!el) return;
+    const H = await import("../../gh-coin/lib/hyperopt.js").catch(() => null), src = await this._labSources(); this._labSrc = src;
+    const e = this.esc, tc = this.cur?.tc;
+    el.innerHTML = `<div class="nt-ai-h"><b>🧪 실험실</b><span class="muted">${e(tc?.symbol || "")} · ${D.IV_LABEL[tc?.interval] || ""}봉 ${tc?.candles?.length?.toLocaleString() || 0}개로 (더 길게: 위쪽 '전체 과거')</span></div>
+      <label class="nt-lab-l">전략<select class="nt-lab-src">${src.map((x) => `<option value="${e(x.id)}">${e(x.name)}</option>`).join("")}</select></label>
+      <div class="nt-row"><button class="nt-primary" data-lab="bt">백테스트</button><button data-lab="wf">검증(70/30)</button><button data-lab="rb">견고성</button><button data-lab="edit">전략 탭으로</button></div>
+      <div class="nt-row"><select class="nt-lab-loss">${H ? Object.entries(H.LOSSES).map(([k, v]) => `<option value="${k}"${k === "SharpeDaily" ? " selected" : ""}>${e(v.ko)}</option>`).join("") : ""}</select><input class="nt-lab-ep" type="number" min="10" max="300" value="40" title="탐색 횟수"><button data-lab="ho">하이퍼옵트</button></div>
+      <div class="nt-row"><button data-lab="save">버전으로 저장 (검토 요청)</button></div>
+      <div class="nt-lab-out"></div>`;
+    el.onclick = (ev) => { const b = ev.target.closest("[data-lab]"); if (!b) return; ev.stopPropagation(); this._labRun(b.dataset.lab, b); };
+  }
+  _labSpec() {
+    const id = this.root.querySelector(".nt-lab-src")?.value, s = (this._labSrc || []).find((x) => x.id === id)?.get();
+    const tc = this.cur?.tc; return s && tc ? { ...s, interval: tc.interval, symbol: tc.symbol } : null;
+  }
+  _equitySvg(eq) {
+    if (!eq?.length) return "";
+    const v = eq.map((p) => p.v), lo = Math.min(...v), hi = Math.max(...v), W = 300, Hh = 64, step = Math.max(1, Math.floor(v.length / 300));
+    const pts = v.filter((_, i) => i % step === 0).map((x, i, a) => `${(i / Math.max(1, a.length - 1) * W).toFixed(1)},${(Hh - (x - lo) / (hi - lo || 1) * (Hh - 4) - 2).toFixed(1)}`).join(" ");
+    return `<svg class="nt-eq" viewBox="0 0 ${W} ${Hh}" preserveAspectRatio="none"><polyline points="${pts}" fill="none" stroke="${v.at(-1) >= v[0] ? "#26a69a" : "#ef5350"}" stroke-width="1.5"/></svg>`;
+  }
+  async _labRun(kind, btn) {
+    const out = this.root.querySelector(".nt-lab-out"), tc = this.cur?.tc, e = this.esc;
+    if (!tc?.candles.length) return;
+    let spec = this._labSpec();
+    if (!spec) { out.innerHTML = `<div class="down">전략을 읽을 수 없습니다 (전략 탭 JSON 확인)</div>`; return; }
+    if (kind === "edit") { this.root.querySelector(".nt-strat").value = JSON.stringify(spec, null, 2); this.S.tab = "strat"; this._save(); this._syncSide(); return; }
+    const Q = await import("../quant.js"), c = D.toQuant(tc.candles), bs = D.IV_SEC[tc.interval] || 3600, f = (x, d = 2) => x == null || !Number.isFinite(+x) ? "–" : (+x).toFixed(d), cls = (x) => x > 0 ? "up" : x < 0 ? "down" : "";
+    const old = btn.textContent; btn.disabled = true; btn.textContent = "계산 중…";
+    try {
+      spec = Q.normalizeSpec(spec);
+      const show = (bt, label) => { this.strat = { spec: bt.spec, sig: Q.signals(bt.spec, c), bt, tc }; this._stratBar = tc.candles.at(-1)?.time; this.S.stratMode = "trades"; this._applyStrat(); };
+      if (kind === "bt") {
+        const H = await import("../../gh-coin/lib/hyperopt.js"), bt = Q.backtest(spec, c, { barSeconds: bs }), st = bt.stats, an = H.analyzers(bt.equity, bt.trades, { perYear: 365 * 86400 / bs });
+        show(bt);
+        out.innerHTML = `<div class="nt-card"><div class="nt-card-h">${e(spec.name || "전략")} <span class="muted">${c.length.toLocaleString()}봉 · 레버리지 ${spec.risk.leverage}배</span></div>${this._equitySvg(bt.equity)}
+          <div class="nt-stats"><div><span>수익률</span><b class="${cls(st.total_return_pct)}">${f(st.total_return_pct)}%</b></div><div><span>보유 대비</span><b>${f(st.buy_and_hold_pct)}%</b></div><div><span>최대 낙폭</span><b class="down">${f(st.max_drawdown_pct)}%</b></div><div><span>거래</span><b>${st.trades}</b></div>
+          <div><span>승률</span><b>${f(st.win_rate_pct, 1)}%</b></div><div><span>손익비</span><b>${f(st.profit_factor)}</b></div><div><span>SQN</span><b>${f(an.sqn)} <span class="muted">${e(an.sqnGrade)}</span></b></div><div><span>VWR</span><b>${f(an.vwr, 1)}</b></div>
+          <div><span>최장 물림</span><b>${an.maxddLen}봉</b></div><div><span>연승/연패</span><b>${an.streakWon}/${an.streakLost}</b></div><div><span>ROI 익절</span><b>${st.roi_exits ?? 0}</b></div><div><span>보호장치 잠금</span><b>${st.protection_locks ?? 0}</b></div></div>
+          <div class="nt-dlg-note">차트에 진입·청산 표시 · 다음 봉 시가 체결 · 수수료 ${spec.risk.fee_pct}% · 분석용 시뮬레이션</div></div>`;
+      } else if (kind === "wf") {
+        const wf = Q.walkForward(spec, c, { barSeconds: bs }), row = (n, x) => `<tr><td>${n}</td><td class="${cls(x.net_pnl)}">${f(x.net_pnl)}</td><td>${x.trades}</td><td>${f(x.profit_factor)}</td><td>${f(x.win_rate, 1)}%</td><td>${f(x.max_dd_pct, 1)}%</td></tr>`;
+        out.innerHTML = `<div class="nt-card"><div class="nt-card-h">검증 (앞 70% 학습 · 뒤 30% 처음 보는 구간) — ${wf.pass ? `<b class="up">통과</b>` : `<b class="down">불통과</b>`}</div>
+          <table class="nt-ai-tb"><tr><td>구간</td><td>순손익</td><td>거래</td><td>손익비</td><td>승률</td><td>낙폭</td></tr>${row("학습", wf.is)}${row("검증", wf.oos)}</table>
+          <ul class="nt-lab-ul">${wf.reasons.map((r) => `<li>${e(r)}</li>`).join("")}</ul><div class="muted">3구간 관문(60/20/20): ${e({ pass: "통과", train_fail: "학습 구간 미달", valid_fail: "검증 구간 미달", hold_fail: "최종 구간 미달" }[wf.gate3.stage] || wf.gate3.stage)}</div></div>`;
+      } else if (kind === "rb") {
+        const RB = await import("../../gh-coin/lib/robust.js"), bt = Q.backtest(spec, c, { barSeconds: bs }), pnl = bt.trades.map((t) => t.pnl);
+        const pt = RB.permutationTest(pnl), b = RB.bootstrapSharpe(pnl), mw = RB.multiWindow(Q, spec, c, 5), hy = RB.hygiene(bt);
+        out.innerHTML = `<div class="nt-card"><div class="nt-card-h">견고성 — 이 성과가 운인가?</div><table class="nt-ai-tb">
+          <tr><td>운일 확률 p (1000번 뒤섞기)</td><td class="${pt.p != null && pt.p <= 0.05 ? "up" : "down"}">${f(pt.p, 3)}</td><td class="muted">${pt.p == null ? "거래 부족" : pt.p <= 0.05 ? "운으로 보기 어려움" : "운일 수 있음"}</td></tr>
+          <tr><td>부트스트랩 샤프 90%</td><td>${b ? `${f(b.lo)} ~ ${f(b.hi)}` : "–"}</td><td class="muted">0 아래가 넓으면 불안정</td></tr>
+          ${mw.windows.map((w) => `<tr><td>구간 ${w.j}</td><td class="${cls(w.ret)}">${w.err ? e(w.err) : f(w.ret) + "%"}</td><td class="muted">거래 ${w.n ?? "–"} · 손익비 ${f(w.pf)}</td></tr>`).join("")}
+          <tr><td>위생</td><td colspan="2">${hy.ok ? (hy.warns.map(e).join(", ") || "이상 없음") : `<span class="down">${hy.fails.map(e).join(", ")}</span>`}</td></tr></table></div>`;
+      } else if (kind === "ho") {
+        const H = await import("../../gh-coin/lib/hyperopt.js"), loss = this.root.querySelector(".nt-lab-loss").value, ep = Math.max(10, Math.min(300, +this.root.querySelector(".nt-lab-ep").value || 40));
+        H.setSeed(Date.now() % 100000);
+        const res = await H.hyperopt(Q, spec, c, { epochs: ep, loss, space: ["buy", "roi", "stoploss", "trailing", "protection"], tfMin: bs / 60, onProgress: (k, n) => { btn.textContent = `${k}/${n}…`; } });
+        this._labBest = res.best.spec;
+        out.innerHTML = `<div class="nt-card"><div class="nt-card-h">하이퍼옵트 (${e(res.lossKo)} · ${res.epochs}회 · 앞 70%에서만 탐색)</div><table class="nt-ai-tb">
+          <tr><td></td><td>지금</td><td>최적</td></tr><tr><td>손실값(작을수록 좋음)</td><td>${f(res.base.loss, 3)}</td><td>${f(res.best.loss, 3)}</td></tr>
+          <tr><td>검증 구간 순손익</td><td class="${cls(res.base.wf.oos.net_pnl)}">${f(res.base.wf.oos.net_pnl)}</td><td class="${cls(res.best.wf.oos.net_pnl)}">${f(res.best.wf.oos.net_pnl)}</td></tr>
+          <tr><td>관문</td><td>${res.base.wf.pass ? "통과" : "불통과"}</td><td>${res.best.wf.pass ? "통과" : "불통과"}</td></tr></table>
+          <div class="nt-dlg-note">${res.improved ? `<b class="up">처음 보는 구간에서도 좋아졌습니다</b>` : res.overfit ? `<b class="down">학습 구간만 좋아짐 = 과최적화</b>` : "뚜렷한 개선 없음"} · 바뀐 위험 설정: ${e(JSON.stringify(res.best.risk).slice(0, 220))}</div>
+          <div class="nt-row"><button data-lab="apply">최적 결과를 차트에 백테스트</button></div></div>`;
+      } else if (kind === "apply") {
+        if (!this._labBest) return;
+        this._labPreset = this._labBest; await this._renderLab(); this.root.querySelector(".nt-lab-src").value = "preset"; return this._labRun("bt", this.root.querySelector('[data-lab="bt"]'));
+      } else if (kind === "save") {
+        const S = await import("../../gh-coin/lib/sdlc.js"), wf = Q.walkForward(spec, c, { barSeconds: bs }), rv = S.propose(spec, { author: "차트 터미널", why: "실험실에서 저장" });
+        if (rv.status === "review") S.decide(spec.name || "전략", rv.id, wf.pass, { who: "코드 관문", why: wf.pass ? "70/30 검증 통과" : "검증 불통과 — 반려" });
+        const v = S.latest(spec.name || "전략");
+        out.innerHTML = `<div class="nt-card">${rv.status === "rejected" ? `<b class="down">제약 위반으로 반려:</b> ${e(rv.fails.map((x) => x.text).join(", "))}` : wf.pass ? `<b class="up">버전 ${e(v?.semver || "")} 로 저장</b> — GH Coin 본부의 전략 버전 관리·실험실 목록에 보입니다` : `<b class="down">검증 불통과라 버전으로 올리지 않았습니다</b> (검토 기록은 남음)`}<div class="muted">바뀐 곳 ${rv.diff.length}군데</div></div>`;
+      }
+    } catch (err) { out.innerHTML = `<div class="down">${e(err.message || err)}</div>${err.problems ? `<ul>${err.problems.map((p) => `<li>${e(p)}</li>`).join("")}</ul>` : ""}`; }
+    btn.disabled = false; btn.textContent = old;
   }
   _applyStrat() {
     const st = this.strat;
