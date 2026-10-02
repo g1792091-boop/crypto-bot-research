@@ -8,6 +8,18 @@ import { buildIndex, search, contextOf } from "./lib/ragstore.js";
 let ctx = {esc: s => String(s ?? ""), toast: m => console.log(m)};
 const esc = s => ctx.esc(s);
 
+/* ---------- 세션/대화기록 보존 (Mintplex-Labs/anythingllm-embed useSessionId.js·useChatHistory 방식 이식, MIT) ----------
+   원본: embedId별 localStorage 키 'allm_<embedId>_session_id' 에 uuid 저장→재개, 세션별 기록 보존.
+   GH Coin: 브라우저 로컬에만 저장, 서버 없이 동작. 키 접두사만 'ghcoin_coinai_' 로 바꿨다. */
+const uuid = () => (crypto?.randomUUID ? crypto.randomUUID() : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === "x" ? r : (r & 0x3 | 0x8)).toString(16); }));
+const SID_KEY = "ghcoin_coinai_session_id";
+function sessionId(){ try { let id = localStorage.getItem(SID_KEY); if (!id){ id = uuid(); localStorage.setItem(SID_KEY, id); } return id; } catch(e){ return "nostore"; } }
+const HIST_KEY = () => `ghcoin_coinai_history_${sessionId()}`;
+function loadHistory(){ try { return JSON.parse(localStorage.getItem(HIST_KEY()) || "[]"); } catch(e){ return []; } }
+function saveHistory(msgs){ try { localStorage.setItem(HIST_KEY(), JSON.stringify(msgs.slice(-40))); } catch(e){} }
+function resetSession(){ try { localStorage.removeItem(HIST_KEY()); localStorage.setItem(SID_KEY, uuid()); } catch(e){} }
+let history = [];
+
 /* ---------- 앱 자체 지식 (고정 사실) ---------- */
 const APP_KB = [
   {id: "kb-about", title: "GH Coin 이란", text: "GH Coin 은 코인 전문 AI 에이전트 회사 앱이다. 보조지표 분석 → 매매법 개발 → 백테스트 → 데모거래 → 실거래 파이프라인을 팀들이 돌린다. 모든 숫자는 코드가 계산하고, AI 직원은 해설·판단만 한다."},
@@ -22,7 +34,23 @@ const APP_KB = [
   {id: "kb-safe", title: "안전상 넣지 않은 것", text: "코인 지갑 헌터(남의 개인키·시드로 지갑 열기=절도)와 앱 내장 채굴기+한 지갑 자동 입금(배포 시 크립토재킹 모양)은 넣지 않았다. 본인 PC에서 본인 지갑으로 xmrig 를 직접 돌리는 것은 자유다. 이 앱에는 자금 보관·출금 기능이 없다."},
   {id: "kb-combo", title: "실시간 종합 지표 타점", text: "차트 터미널의 보조지표 136종을 5·15·60·240분에 실시간 계산해 상승·하락 표와 시간대 점수를 내고, 큰 추세와 작은 타이밍이 맞는 자리에서만 타점(진입·손절·익절)을 잡아 기록장에 남겨 적중률을 검증한다."},
   {id: "kb-nano", title: "학습 데이터(GH Nano)", text: "직원들의 검증된 분석·매매 해설이 학습 예시로 쌓여 자체 소형 모델(GH Nano) 학습 데이터가 된다. Claude·Gemini·GPT 유료 모델이 쓴 글은 약관 때문에 제외한다. 설정에서 .jsonl 로 내려받을 수 있다."},
+  {id: "kb-rigor", title: "리스크 계산기(trading rigor)", text: "ai-trader-team 에서 이식한 결정론적 계산기(lib/rigor.js): 포지션 크기(계좌·리스크%·진입·손절), 손익비(R:R), 실현·미실현 손익을 1R 대비 R-멀티플로, 켈리 기준(full/half/quarter), 포트폴리오 히트(동시 손절 시 계좌 손실률, 기본 한도 6%), 상관계수. 규칙: 트레이드당 계좌의 1% 내외만 리스크로, 손익비는 최소 1.5~2 이상, 모든 포지션 리스크 합(히트)은 6% 이내로 관리한다."},
+  {id: "kb-ext", title: "외부 AI 연동", text: "자체 AI 데스크는 외부 키 없이도 돌지만, API 키를 연결하면 외부 LLM 의 방향·확신도 의견을 앙상블의 '한 표'로 더한다(확신도만큼 가중, 과신 방지 상한). 설정에서 끄고 켤 수 있다. 코인 AI 봇도 키가 있으면 더 자연스럽게 답한다."},
+  {id: "kb-research", title: "투자 리서치 원칙", text: "agency-agents-ko 투자 리서처 원칙 반영: 강세·약세 케이스를 똑같이 엄격하게 본다. 모든 판단에는 수치화된 근거·반증 조건(무효화 트리거)·투자 기간·확신 수준을 명시한다. 하방 리스크를 수치로. 과거 성과가 미래를 보장하지 않는다. 밸류에이션만으로 사지 않는다(가치 함정 주의)."},
 ];
+const RIGOR_RE = /포지션\s*(크기|사이징)|손익비|리스크\s*리워드|r:?r|켈리|kelly|포트폴리오\s*히트|상관계수|상관관계/i;
+async function tryRigor(question){
+  if (!RIGOR_RE.test(question)) return null;
+  const nums = (question.match(/-?\d+(?:\.\d+)?/g) || []).map(Number);
+  try {
+    const R = await import("./lib/rigor.js");
+    if (/켈리|kelly/i.test(question) && nums.length >= 3){ const k = R.kellyCriterion(nums[0], nums[1], nums[2]); return `켈리 기준 — 승률 ${k.win_rate_pct}%, 손익비 ${k.payoff_ratio}: full ${k.full_kelly_pct}% · half ${k.half_kelly_pct}% · quarter ${k.quarter_kelly_pct}% ${k.has_edge ? "(우위 있음 — 보통 half/quarter 권장)" : "(우위 없음 → 베팅 비추천)"}`; }
+    if (/(포지션|사이징)/i.test(question) && nums.length >= 4){ const p = R.positionSize(nums[0], nums[1], nums[2], nums[3]); return `포지션 크기 — 계좌 ${nums[0]}·리스크 ${nums[1]}%·진입 ${nums[2]}·손절 ${nums[3]}: 수량 ${p.shares} · 명목 ${p.position_value} · 리스크 금액 ${p.risk_amount} · 계좌 대비 ${p.position_pct_of_account}%`; }
+    if (/(손익비|리스크\s*리워드|r:?r)/i.test(question) && nums.length >= 3){ const rr = R.riskReward(nums[0], nums[1], nums[2]); return `손익비 — 진입 ${nums[0]}·손절 ${nums[1]}·목표 ${nums[2]}: ${rr.direction} · 리스크 ${rr.risk} · 보상 ${rr.reward} · R:R ${rr.risk_reward_ratio}`; }
+    if (/(포트폴리오\s*히트)/i.test(question) && nums.length >= 1){ const h = R.portfolioHeat(nums, 6); return `포트폴리오 히트 — 포지션 ${h.n_positions}개 리스크 합 ${h.total_risk_pct}% / 한도 ${h.max_heat_pct}% ${h.over_limit ? "⚠ 초과!" : "(이내)"}`; }
+  } catch(e){ return "계산에 필요한 숫자가 부족해요. 예: '포지션 크기 계좌 10000 리스크 1 진입 100 손절 95', '켈리 승률 55 평균승 200 평균손 100'"; }
+  return null;
+}
 
 let index = null, builtAt = 0, building = null;
 async function gatherDocs(){
@@ -60,6 +88,9 @@ async function coinSelfAI(question){
 
 /* ---------- 답하기 ---------- */
 export async function answer(question, {onToken, signal} = {}){
+  // 계산 질문(포지션 크기·손익비·켈리·히트)은 이식한 rigor 로 결정론적으로 먼저 답한다
+  const calc = await tryRigor(question);
+  if (calc){ onToken?.(calc); return {text: calc, sources: [{title: "리스크 계산기(trading rigor)", kind: "계산", score: 1}], selfai: null}; }
   await ensureIndex();
   const hits = search(index, question, 6);
   const sa = await coinSelfAI(question);
@@ -114,13 +145,15 @@ export function openCoinAI(c){
   cssOnce();
   if (!root){
     root = document.createElement("div"); root.id = "caiPanel"; root.className = "cai-panel"; document.body.appendChild(root);
-    root.innerHTML = `<div class="cai-h"><b>🤖 코인 AI 봇</b><span class="cai-badge" id="caiMode">자체(오프라인)</span><span class="cai-sp"></span><button class="cai-x" data-cai-x aria-label="닫기">✕</button></div>
-      <div class="cai-body" id="caiBody"><div class="cai-msg bot"><div class="cai-bub">안녕하세요! GH Coin 코인 AI 예요. 이 앱이 아는 것(전략·백테스트·분석·자체 AI 판단·사용법)으로 답해요. 예: <i>"비트코인 지금 방향?"</i>, <i>"레버리지 어떻게 설정해?"</i>, <i>"봇 자동개선이 뭐야?"</i><br><small>참고용이며, 주문은 실거래 화면의 승인·한도 안에서만 나갑니다.</small></div></div></div>
-      <div class="cai-in"><input id="caiIn" placeholder="코인·전략·사용법을 물어보세요" autocomplete="off"><button class="cai-send" data-cai-send>보내기</button></div>`;
-    root.addEventListener("click", e => { if (e.target.closest("[data-cai-x]")) root.hidden = true; if (e.target.closest("[data-cai-send]")) send(); });
+    root.innerHTML = `<div class="cai-h"><b>🤖 코인 AI 봇</b><span class="cai-badge" id="caiMode">자체(오프라인)</span><span class="cai-sp"></span><button class="cai-mini" data-cai-reset title="대화 초기화(새 세션)">↻</button><button class="cai-x" data-cai-x aria-label="닫기">✕</button></div>
+      <div class="cai-body" id="caiBody"></div>
+      <div class="cai-in"><input id="caiIn" placeholder="코인·전략·사용법·리스크 계산을 물어보세요" autocomplete="off"><button class="cai-send" data-cai-send>보내기</button></div>`;
+    root.addEventListener("click", e => { if (e.target.closest("[data-cai-x]")) root.hidden = true; if (e.target.closest("[data-cai-send]")) send(); if (e.target.closest("[data-cai-reset]")){ resetSession(); history = []; renderHistory(); } });
     root.addEventListener("keydown", e => { if (e.key === "Enter" && e.target.id === "caiIn") send(); if (e.key === "Escape") root.hidden = true; });
   }
   root.hidden = false;
+  history = loadHistory();
+  renderHistory();
   detectMode();
   setTimeout(() => document.getElementById("caiIn")?.focus(), 50);
 }
@@ -131,18 +164,27 @@ async function detectMode(){
 }
 
 function bubble(who, html){ const b = document.getElementById("caiBody"); const d = document.createElement("div"); d.className = "cai-msg " + who; d.innerHTML = `<div class="cai-bub">${html}</div>`; b.appendChild(d); b.scrollTop = b.scrollHeight; return d.querySelector(".cai-bub"); }
+const GREETING = '안녕하세요! GH Coin 코인 AI 예요. 이 앱이 아는 것(전략·백테스트·분석·자체 AI 판단·사용법)으로 답해요. 예: <i>"비트코인 지금 방향?"</i>, <i>"레버리지 어떻게 설정해?"</i>, <i>"포지션 크기 계좌 10000 리스크 1 진입 100 손절 95"</i><br><small>참고용이며, 주문은 실거래 화면의 승인·한도 안에서만 나갑니다.</small>';
+function renderHistory(){
+  const b = document.getElementById("caiBody"); if (!b) return; b.innerHTML = "";
+  bubble("bot", GREETING);
+  for (const m of history){ const bub = bubble(m.role === "user" ? "me" : "bot", esc(m.text).replace(/\n/g, "<br>")); if (m.role === "bot" && m.sources?.length) bub.insertAdjacentHTML("beforeend", srcHtml(m.sources)); }
+}
+const srcHtml = sources => `<div class="cai-src">${sources.slice(0, 4).map(s => `<span title="${esc(s.kind || "")} · 관련도 ${s.score}">${esc(s.title || "자료")}</span>`).join("")}</div>`;
 
 async function send(){
   if (busy) return;
   const inp = document.getElementById("caiIn"); const q = (inp.value || "").trim(); if (!q) return;
   inp.value = ""; bubble("me", esc(q));
+  history.push({role: "user", text: q}); saveHistory(history);
   const bub = bubble("bot", '<span class="cai-dots"><i></i><i></i><i></i></span>');
   busy = true;
   try {
     let acc = "";
     const r = await answer(q, {onToken: d => { acc += d; bub.innerHTML = esc(acc).replace(/\n/g, "<br>"); document.getElementById("caiBody").scrollTop = 1e9; }});
     bub.innerHTML = esc(r.text).replace(/\n/g, "<br>");
-    if (r.sources?.length) bub.insertAdjacentHTML("beforeend", `<div class="cai-src">${r.sources.slice(0, 4).map(s => `<span title="${esc(s.kind)} · 관련도 ${s.score}">${esc(s.title || "자료")}</span>`).join("")}</div>`);
+    if (r.sources?.length) bub.insertAdjacentHTML("beforeend", srcHtml(r.sources));
+    history.push({role: "bot", text: r.text, sources: r.sources || []}); saveHistory(history);
   } catch(e){ bub.innerHTML = "답하지 못했어요: " + esc(e.message || String(e)); }
   finally { busy = false; }
 }

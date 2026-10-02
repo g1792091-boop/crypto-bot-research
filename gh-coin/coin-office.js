@@ -1830,19 +1830,33 @@ async function selfaiJob(){
   }
   if (!rows.length){ post({ch: "selfai", kind: "work", agent: lead.id, icon: "🧠", text: "시세를 받지 못해 자체 AI 판단을 내지 못했습니다 (잠시 뒤 다시 시도)"}); return; }
   rows.sort((a, b) => b.j.confidence - a.j.confidence || Math.abs(b.j.score) - Math.abs(a.j.score));
-  // 1위 코인은 ML(walk-forward)까지 더해 정밀 재판단
-  let deep = null;
+  // 1위 코인은 ML(walk-forward) + (설정 시) 외부 LLM API 의견까지 더해 정밀 재판단
+  const top = rows[0];
+  let deep = null, aiOp = null, plan = null;
   try {
-    const ML = await import("../nuri-ai/ml.js"), top = rows[0];
+    const ML = await import("../nuri-ai/ml.js");
     const res = ML.walkForwardML(top.k60, {model: "logreg", horizon: 1, trainBars: 800, testBars: 150, maxFolds: 4});
     const prob = res.prob?.at(-1);
     if (prob != null){ top.j = SELF.fuse({...top.j.inputs, ml: {prob, edge: res.edge}}); top.ml = {prob, edge: res.edge}; deep = {coin: top.c, edge: res.edge}; }
   } catch(e){}
-  table("selfai", lead.id, "🧠 자체 AI 데스크 — 방향·확신도 순위 (외부 키 없이 앙상블: 기술 평점·멀티 시간대·ML·알파)", ["순위", "코인", "방향", "점수", "확신도", "합의", "근거(신호별)"],
+  // 외부 AI 연동: 키가 연결되고(끄지 않았으면) LLM 에게 방향·확신도 의견을 받아 한 표로 반영
+  if (selfaiExternalOn()){
+    aiOp = await aiOpinion(top.c, top.j).catch(() => null);
+    if (aiOp) top.j = SELF.fuse({...top.j.inputs, ai: {score: aiOp.score, confidence: aiOp.confidence}});
+  }
+  // 이식한 trading_rigor(ai-trader-team)로 예시 계획(손절 1.5×ATR·목표 3R·계좌 10,000 1% 리스크) 계산
+  try {
+    const R = await lib("rigor"), CB = await import("./combo.js"), a = await CB.analyzeTF(top.k60);
+    if (top.j.dir !== 0 && a.price > 0 && a.atr > 0){
+      const entry = a.price, stop = top.j.dir > 0 ? entry - 1.5 * a.atr : entry + 1.5 * a.atr, target = top.j.dir > 0 ? entry + 4.5 * a.atr : entry - 4.5 * a.atr;
+      const rr = R.riskReward(entry, stop, target), ps = R.positionSize(10000, 1, entry, stop);
+      plan = `예시 계획(${top.c.ko} ${top.j.dir > 0 ? "롱" : "숏"} · 계좌 10,000·1% 리스크): 진입 ${fx(entry)} · 손절 ${fx(stop)}(1.5×ATR) · 목표 ${fx(target)} · 손익비 ${rr.risk_reward_ratio} · 수량 ${ps.shares}(명목 ${ps.position_value})`;
+    }
+  } catch(e){}
+  table("selfai", lead.id, "🧠 자체 AI 데스크 — 방향·확신도 순위 (앙상블: 기술 평점·멀티 시간대·ML·알파" + (aiOp ? "·외부 AI" : "") + ")", ["순위", "코인", "방향", "점수", "확신도", "합의", "근거(신호별)"],
     rows.map((r, i) => [String(i + 1), r.c.ko, r.j.label, (r.j.score >= 0 ? "+" : "") + r.j.score.toFixed(2), r.j.confidence + "%", Math.round(r.j.agree * 100) + "%", r.j.parts.map(p => `${p.name} ${p.v >= 0 ? "+" : ""}${p.v.toFixed(2)}`).join(" · ") || "—"]),
-    `확신도는 신호 크기 + 신호 간 합의로 매긴 0~95 참고값입니다. 자체 AI 는 판단만 하고, 실제 주문은 사용자가 켠 전략만 실거래 화면의 한도·승인 안에서 냅니다.${deep ? ` · 1위 ${deep.coin.ko}는 ML(${deep.edge === "edge" ? "우위 있음" : deep.edge === "weak" ? "약함" : "우위 없음"})까지 반영` : ""}`);
-  const top = rows[0];
-  addNote("selfai", `자체 AI 1위 ${top.c.ko} ${top.j.label} (확신도 ${top.j.confidence}%) · 순위 ${rows.map(r => r.c.ko).join(" > ")}`, "자체AI");
+    `확신도는 신호 크기 + 신호 간 합의로 매긴 0~95 참고값입니다. 자체 AI 는 판단만 하고, 실제 주문은 사용자가 켠 전략만 실거래 화면의 한도·승인 안에서 냅니다.${deep ? ` · 1위는 ML(${deep.edge === "edge" ? "우위 있음" : deep.edge === "weak" ? "약함" : "우위 없음"})` : ""}${aiOp ? ` · 외부 AI 의견 반영(확신 ${aiOp.confidence}%)` : " · 외부 AI 꺼짐(설정에서 켜면 LLM 의견도 한 표로 반영)"}${plan ? "\n" + plan : ""}`);
+  addNote("selfai", `자체 AI 1위 ${top.c.ko} ${top.j.label} (확신도 ${top.j.confidence}%) · 순위 ${rows.map(r => r.c.ko).join(" > ")}${aiOp ? " · 외부 AI 반영" : ""}`, "자체AI");
   pubTo(top.c.sym, "selfai", {team: "selfai", title: `자체 AI: ${top.c.ko} ${top.j.label} (${top.j.confidence}%)`, text: SELF.summary(top.j)});
   await explain(lead.id, "selfai", "자체 AI 앙상블 순위표를 보고 확신도가 높은 코인과 어떤 신호(기술 평점·멀티 시간대·ML·알파)가 합의했는지, 신호가 엇갈려 중립인 코인은 왜 그런지 해설한다. 확신도는 참고값이고 주문은 승인·한도 안에서만 나간다는 점을 밝힌다.", tableText(["순위", "코인", "방향", "점수", "확신도", "근거"], rows.map((r, i) => [String(i + 1), r.c.ko, r.j.label, r.j.score.toFixed(2), r.j.confidence + "%", r.j.reasons.join(" / ")])), "아래 자체 AI 앙상블 순위를 해설해 줘.");
 }
@@ -1851,6 +1865,24 @@ export async function selfAIFor(sym, {tfs = ["60", "240"]} = {}){
   const SELF = await lib("selfai"), by = {};
   for (const tf of tfs){ try { by[tf] = await kl(sym, tf, 260); } catch(e){} }
   return SELF.analyze(by, {});
+}
+// 외부 AI 연동 on/off — 키가 연결돼 있고 사용자가 끄지 않았으면 켜짐(기본). 설정에서 토글.
+const hasAIKey = () => Object.keys(PROVIDERS).some(id => settings.keys?.[id]) || settings.brain === "local" || settings.brain === "ollama";
+export const selfaiExternalOn = () => hasAIKey() && officeCfg().selfaiExternal !== false;
+export function setSelfaiExternal(on){ setOffice({selfaiExternal: !!on}); return selfaiExternalOn(); }
+// 외부 LLM API 에게 한 코인의 방향·확신도 의견을 받아 자체 AI 앙상블의 '한 표'로 쓴다 (엄격 JSON)
+async function aiOpinion(coin, j){
+  const sys = "너는 단기 코인 선물 트레이더다. 아래 자체 지표 요약만 참고해 다음 수 시간~하루 방향을 판단한다. 반드시 JSON 한 줄만 출력: {\"direction\":\"long|short|neutral\",\"confidence\":0-100,\"reason\":\"25자 이내\"}. 다른 말 금지.";
+  const user = `코인: ${coin.ko}(${coin.sym})\n자체 신호 요약: ${j.reasons.join(" / ")}\n현재 자체 점수 ${j.score} 확신도 ${j.confidence}%`;
+  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 25000);
+  let raw = "";
+  try { await brainStream({messages: [{role: "system", content: sys}, {role: "user", content: user}], role: "general", maxTokens: 120, temperature: 0.2, noThink: true, signal: ctl.signal, onContent: d => raw += d}); }
+  finally { clearTimeout(t); }
+  const m = splitThink(raw).body.match(/\{[\s\S]*\}/); if (!m) return null;
+  let o; try { o = JSON.parse(m[0]); } catch(e){ return null; }
+  const dir = /long|롱|매수|상승/i.test(o.direction) ? 1 : /short|숏|매도|하락/i.test(o.direction) ? -1 : 0;
+  const conf = Math.max(0, Math.min(100, Number(o.confidence) || 0));
+  return {score: dir * (0.4 + 0.6 * conf / 100), confidence: conf, direction: o.direction, reason: String(o.reason || "").slice(0, 40)};
 }
 
 /* ---- 🗄 저장소 이전 (obevo 방식): 앱이 켜질 때 한 번 — 이미 한 변경은 건너뛰고, 실패하면 백업으로 되돌림 ---- */

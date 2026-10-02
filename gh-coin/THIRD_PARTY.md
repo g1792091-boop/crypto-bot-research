@@ -40,8 +40,8 @@ GPL·LGPL 저장소와 라이선스 표시가 없는 저장소는 특히 규칙�
 ## 자체 AI·에이전트 (아이디어만, 코드 복사 없음)
 | 저장소 | 들여온 것 |
 |---|---|
-| TLSRUF/ai-trader-team | 여러 트레이딩 에이전트 의견 → 합의 방향·확신도 (자체 AI 앙상블 `lib/selfai.js`) |
-| jnMetaCode/agency-agents-ko | 역할 기반 한국어 에이전시 구성 → 자체 AI 데스크 11인 역할 분담 |
+| TLSRUF/ai-trader-team (MIT) | **실제 이식**: `tools/trading_rigor.py` → `lib/rigor.js`(포지션 사이징·손익비·R-멀티플·켈리·포트폴리오 히트·상관계수, 같은 공식·반올림). 합의 방식은 자체 AI 확신도에도 반영 |
+| jnMetaCode/agency-agents-ko (MIT) | **실제 이식**: finance/투자 리서처 핵심 원칙 → 코인 AI 봇 지식(APP_KB) + 자체 AI 데스크 역할 분담 |
 | anthropics/claude-cookbooks | 앙상블·LLM-판정 패턴, '우위(edge)'로 신뢰 조정 |
 | anthropics/financial-services | 리스크·확신도 프레이밍(단정 금지·참고값·확신도 상한 95) |
 | anthropics/claude-code | 에이전트-도구·코드 수정 검토 패턴(기존 selfdev 참고) |
@@ -56,7 +56,7 @@ GPL·LGPL 저장소와 라이선스 표시가 없는 저장소는 특히 규칙�
 |---|---|
 | langgenius/dify · dify-plugins | '내 지식으로 답하기(RAG)' · 지식 베이스 · 모델 제공자 추상화 개념 |
 | FlowiseAI/Flowise · FlowiseChatEmbed · FlowiseEmbedReact · FlowiseDocs | 신호·체인 조합 + '어디에나 띄우는 채팅 위젯(embed)' |
-| Mintplex-Labs/anything-llm · -embed · -extension · -mobile · -docs | 완전 자체(프라이빗) RAG 챗 · 외부 키 없이도 동작 · 내 문서로 답하기 |
+| Mintplex-Labs/anything-llm · -embed · -extension · -mobile · -docs (MIT) | **실제 이식**: anythingllm-embed `useSessionId.js`·`useChatHistory` 세션/대화기록 보존 방식 → 코인 AI 봇. 완전 자체(프라이빗) RAG·외부 키 없이 동작 구조도 반영 |
 | probot/probot · template · create-probot-app · probot.github.io | **해당 없음** — GitHub App 프레임워크라 코인 앱과 무관, 적용하지 않음 |
 
 > 코인 AI 봇(`coinai.js` + `lib/ragstore.js`)은 **외부 서비스·벡터DB 없이** 브라우저/Node 안에서 도는 가벼운 RAG(TF-IDF + 코사인, 한국어 2-그램)다. 이 앱이 아는 것(전략·백테스트·분석 노트·자체 AI 판단·앱 설명)을 지식으로 모아, **외부 AI 키가 없으면 추출 답변(완전 자체)**, 키가 있으면 그 지식에 **근거한** LLM 답변을 한다. 설명·판단만 하고 **주문은 내지 않는다**.
