@@ -222,7 +222,8 @@ def analyze(candles: list[dict], ext: dict | None = None) -> dict:
     errors = [r["name"] for r in res.values() if r.get("error")]
     return {"score": score, "label": label(score), "groups": gsc, "up": up, "down": dn, "voters": len(rows), "total": len(res),
             "overbought": ob, "oversold": os_, "regime": regime, "errors": errors, "atr": atr, "close": close,
-            "top": sorted(rows, key=lambda r: -abs(r["vote"]))[:12], "levels": levels_from(res, close)}
+            "top": sorted(rows, key=lambda r: -abs(r["vote"]))[:12], "levels": levels_from(res, close),
+            "votes": {r["key"]: r["vote"] for r in rows}, "names": {r["key"]: r["name"] for r in rows}}
 
 
 def label(score: int) -> str:

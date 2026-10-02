@@ -264,6 +264,12 @@ def results_search(query: str, n: int = 6, **kw):
     return {"text": "\n".join(f"[{i + 1}] {h[1]}: …{h[2]}…" for i, h in enumerate(hits[:int(n)])), "summary": f"저장 결과 {len(hits)}건"}
 
 
+def scenario_bot(**kw):
+    from .. import scenbot
+    v = scenbot.view()
+    return {"text": scenbot.text(), "summary": f"진입 봇 정책 v{v['policy'].get('version', 1)} · 거래 {v['stats']['n']}건 · 기대값 {v['stats']['exp_r']}R"}
+
+
 # 이름 → (함수, 화면 라벨, 인자 예시)
 TOOLS = {
     "market_quote": (market_quote, lambda a: f"{', '.join(map(str, a.get('symbols') or ['BTCUSDT']))} 시세", '{"symbols":["BTCUSDT","ETHUSDT"]}'),
@@ -280,6 +286,7 @@ TOOLS = {
     "history_backtest": (lambda **a: history_backtest(a.pop("spec", None), a.pop("market", None), a.pop("interval", None), **a), lambda a: f"{a.get('market') or (a.get('spec') or {}).get('symbol', 'BTCUSDT')} 전체 과거 백테스트", '{"spec":{전략 JSON},"market":"BTCUSDT","interval":"4h"}'),
     "ml_predict": (lambda **a: ml_predict(a.pop("market", None), a.pop("interval", None), **a), lambda a: f"{a.get('market') or 'BTCUSDT'} 머신러닝 예측", '{"market":"BTCUSDT","interval":"1h","model":"logreg|mlp|gbs|dnn|cnn"}'),
     "terminal_consensus": (terminal_consensus, lambda a: f"{a.get('symbol') or 'BTCUSDT'} 터미널 지표 147종 합의", '{"symbol":"BTCUSDT"}'),
+    "scenario_bot": (scenario_bot, lambda a: "시나리오 진입 봇 상태", "{}"),
     "growth_check": (growth_check, lambda a: f"{int(a.get('start', 100000)):,} → {int(a.get('target', 100000000)):,} 목표 현실 점검", '{"start":100000,"target":100000000,"days":30,"leverage":3}'),
     "grid_scan": (grid_scan, lambda a: "그리드 매매 백테스트", '{"symbols":["BTCUSDT","ETHUSDT"]}'),
     "funding_carry": (funding_carry, lambda a: "펀딩비 차익 점검", '{"symbols":["BTCUSDT","ETHUSDT"]}'),
@@ -298,7 +305,7 @@ ICON = {"market_analyze": "📈", "market_quote": "💹", "market_news": "📰",
         "strategy_backtest": "🧪", "history_backtest": "🧪", "orderbook": "📚", "whale_trades": "🐋", "futures_flow": "🌊", "liquidation_map": "💥",
         "sns_buzz": "📱", "youtube_search": "▶️", "community_search": "💬", "indicator_all": "📊", "ml_predict": "🧠", "paper_status": "📒",
         "market_list": "🏁", "research_cards": "🗂", "terminal_consensus": "🎯",
-        "growth_check": "🎲", "grid_scan": "🧱", "funding_carry": "💱", "oss_projects": "🐙", "results_search": "🗃"}
+        "growth_check": "🎲", "scenario_bot": "🤖", "grid_scan": "🧱", "funding_carry": "💱", "oss_projects": "🐙", "results_search": "🗃"}
 
 
 def run(name: str, args: dict) -> dict:

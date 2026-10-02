@@ -151,7 +151,7 @@ SKILL_TOOLS = {
     "crypto_futures": ["terminal_consensus", "market_analyze", "market_quote", "market_list", "market_news", "calculate", "indicator_all", "sns_buzz", "strategy_backtest",
                        "orderbook", "whale_trades", "futures_flow"],
     "backtest": ["market_analyze", "calculate", "strategy_backtest", "history_backtest", "indicator_all", "paper_status", "ml_predict",
-                 "growth_check", "grid_scan", "funding_carry", "oss_projects"],
+                 "growth_check", "grid_scan", "funding_carry", "oss_projects", "scenario_bot"],
     "news": ["market_news", "web_search", "web_fetch", "sns_buzz", "youtube_search", "community_search"],
     "coding": ["web_search", "calculate"],
 }

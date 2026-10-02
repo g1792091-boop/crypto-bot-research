@@ -458,6 +458,11 @@ def live_items() -> list[dict]:
         out.append({"id": p["id"], "name": p["name"], "symbol": p["spec"]["symbol"], "side": side, "price": b.last_price if b else None,
                     "leverage": p["spec"]["risk"].get("leverage", 1), "custom": p["custom"], "stage": p["stage"], "demo": p.get("demo"),
                     "approved": p["id"] in livex.S.get("approved", {}), "blocked": guard["reason"] if guard["blocked"] else None})
+    try:                                               # 시나리오 진입 봇 (가상 성적 기준을 넘었을 때만 · 사람 승인 필요)
+        from .. import scenbot
+        out += scenbot.live_items()
+    except Exception:  # noqa: BLE001
+        pass
     return out
 
 
@@ -648,7 +653,22 @@ def j_oss(team):
          "수익을 보장하는 기법은 없다는 점을 분명히 한다.", f"오픈소스 연구: {p['repo']}")
 
 
-KIND_FN = {"growth": j_growth, "carry": j_carry, "oss": j_oss, "ind": j_ind, "trend": j_trend, "entry": j_entry, "news": j_news, "sr": j_sr, "tpsl": j_tpsl, "board": j_board, "pattern": j_pattern,
+def j_scenbot(team):
+    from .. import scenbot
+    v = scenbot.view()
+    k = _st("scenbot_i", [0])
+    k[0] += 1
+    if k[0] % 4 == 0 and not v["busy"] and time.time() - (v["last_learn"] or 0) > 3600:
+        E.post(team, "work", agent=roster.TEAM_LEAD[team], icon="🧠", text="진입 봇 학습·정책 재선정 시작 (그림자 채점 · 보정 · 메타 모델 · walk-forward)")
+        scenbot.learn()
+    trades = [t for t in v["trades"] if t["filled"]][:10]
+    recent = "\n".join(f"- {t['symbol']} {t['interval']} {t['title']} {'롱' if t['side'] > 0 else '숏'} 화면 {t['prob']}% → {t['exit']} {t['r']:+.2f}R" for t in trades)
+    data = scenbot.text() + ("\n최근 거래:\n" + recent if recent else "")
+    _say(team, data, "시나리오 진입 봇의 성적·배운 실제 적중률·정책 변경을 점검한다. 화면 %와 실제 적중률의 차이, 지는 시나리오 종류, 다음에 바꿀 점을 "
+         "숫자 근거로 말한다. 진입·청산 결정은 코드가 하고, 팀은 해설과 개선 제안만 한다(백테스트로 이미 결과를 아는 사후 해석은 조심).", "시나리오 진입 봇 점검")
+
+
+KIND_FN = {"scenbot": j_scenbot, "growth": j_growth, "carry": j_carry, "oss": j_oss, "ind": j_ind, "trend": j_trend, "entry": j_entry, "news": j_news, "sr": j_sr, "tpsl": j_tpsl, "board": j_board, "pattern": j_pattern,
            "coinx": j_coin, "termind": j_termind, "dev": lambda t: j_dev(t, False), "cdev": lambda t: j_dev(t, True), "bt": lambda t: j_bt(t, t == "cbt"),
            "demo": lambda t: j_demo(t, t == "cdemo"), "live": lambda t: j_live(t, t == "clive")}
 

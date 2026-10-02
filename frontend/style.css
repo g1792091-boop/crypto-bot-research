@@ -815,3 +815,12 @@ button.danger { background: rgba(242,54,69,.15); border-color: #f23645; color: #
 .of-goalmath { font-size: 13px; margin: 6px 0; }
 .of-oss { padding: 6px 0; border-bottom: 1px solid var(--line); }
 td .warn, b.warn { color: #f5a524; }
+.of-kpis { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.of-kpis > div { display: flex; flex-direction: column; min-width: 92px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel-2); }
+.of-kpis small { color: var(--muted); font-size: 11px; } .of-kpis b { font-size: 15px; } .of-kpis span { font-size: 11px; }
+.of-chip { display: inline-block; margin: 1px 4px 1px 0; padding: 1px 6px; border: 1px solid var(--line); border-radius: 10px; font-size: 11px; }
+.sc .learn { font-size: 11px; color: var(--muted); padding: 0 0 2px; } .sc .learn b { color: var(--text); }
+.sc .botst { font-size: 11px; color: #b39ddb; }
+.of-goalform input[type=checkbox] { width: auto; margin: 0 4px 0 0; }
+.of-goalform label.of-checks { flex-direction: column; gap: 2px; color: var(--text); }
+.of-goalform label.of-checks span { display: inline-flex; align-items: center; }

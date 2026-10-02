@@ -57,6 +57,9 @@ FUNCTIONAL = [
     ("termind", "터미널 지표 추세·타점팀", "차트 터미널의 보조지표 147종 전부를 실시간으로 조합해 추세를 보고 타점을 잡는다", "#ff7043", "termind", "터미널 지표 추세·타점팀장",
      ["추세 지표 합의", "신호·패턴 지표", "스마트머니(SMC) 지표", "오실레이터 타이밍", "거래량 지표", "파생·코인글라스 지표", "통계·퀀트 지표",
       "레벨·프로파일 목표가", "다중 시간 프레임 정렬", "타점·손익비 설계"]),
+    ("entry_bot", "진입 에이전트팀", "트레이드 화면 시나리오 중 정책이 고른 것으로 계속 진입하는 시나리오 봇을 운영하고, 결과로 배우고 스스로 개선한다", "#7c4dff", "scenbot",
+     "진입 에이전트팀장", ["시나리오 엔진", "진입 집행(역지정가·지정가)", "손절·익절·시간 청산", "핵심 보조지표 확인", "터미널 147종 합의 확인", "내 차트 지표 확인",
+                       "실제 적중률 보정", "메타 라벨 학습(할까 말까)", "정책 자동 개선(walk-forward)", "보호 장치·급변 감지"]),
     ("growth", "1억 챌린지 검증팀", "'한 달 10만→1억' 같은 목표를 실제 거래 성적으로 계산해 달성·파산 확률과 살아남는 현실 경로를 낸다", "#e91e63", "growth", "1억 챌린지 검증팀장",
      ["목표 수학(복리·두 배 횟수)", "실제 성적 수집(데모·시그널)", "몬테카를로 시뮬레이션", "켈리·베팅 크기", "파산 확률", "레버리지 한도 점검",
       "꼬리 위험(급변 갭)", "현실 경로 설계", "자금 관리 규칙", "결과 리포트"]),
@@ -69,7 +72,7 @@ FUNCTIONAL = [
     ("pattern", "차트·캔들 패턴 분석팀", "캔들·차트 패턴을 찾고 이 코인 과거에서 통했는지 통계로 검증한다", "#00acc1", "pattern", "차트·캔들 패턴 분석팀장",
      ["장악형", "망치·역망치·유성형", "도지·잉태형", "샛별·저녁별", "적삼병·흑삼병", "쌍봉·쌍바닥", "헤드앤숄더", "삼각수렴·쐐기", "깃발·페넌트", "패턴 통계 검증"]),
 ]
-SKILLS = {"growth": ["backtest", "crypto_futures"], "carry": ["crypto_futures", "backtest"], "oss": ["backtest"], "termind": ["crypto_futures"], "news": ["news"], "dev": ["backtest"], "cdev": ["backtest"], "bt": ["backtest"], "demo": ["backtest"], "live": ["backtest"],
+SKILLS = {"scenbot": ["backtest", "crypto_futures"], "growth": ["backtest", "crypto_futures"], "carry": ["crypto_futures", "backtest"], "oss": ["backtest"], "termind": ["crypto_futures"], "news": ["news"], "dev": ["backtest"], "cdev": ["backtest"], "bt": ["backtest"], "demo": ["backtest"], "live": ["backtest"],
           "tpsl": ["crypto_futures", "backtest"], "coinx": ["crypto_futures", "crypto_spot"]}
 COIN_SPECS = ["차트·추세", "선물 수급", "고래·호가", "지지저항", "진입 타점", "익절손절", "뉴스·이슈", "심리·SNS", "캔들 패턴", "리스크"]
 
@@ -113,7 +116,7 @@ def build() -> tuple[list[dict], list[dict]]:
             title = lead if j == 0 else f"{spec} 담당"
             duty = (f"{name}을 이끈다. 팀원들의 분석을 모아 결론과 다음 할 일을 정하고, 팀의 판정 기준을 지킨다."
                     if j == 0 else f"{name}에서 '{spec}'를 전담한다. 이 관점의 근거만 보고 판단하며, 데이터에 없는 숫자는 지어내지 않는다.")
-            agents.append({"id": f"{tid}_{j}", "name": names[j], "team": tid, "title": title, "role": "reason" if kind in ("bt", "live", "dev", "cdev", "growth") and j < 3 else "general",
+            agents.append({"id": f"{tid}_{j}", "name": names[j], "team": tid, "title": title, "role": "reason" if kind in ("bt", "live", "dev", "cdev", "growth", "scenbot") and j < 3 else "general",
                            "skills": SKILLS.get(kind, ["crypto_futures"]), "look": [_LOOK_H[(k + j) % len(_LOOK_H)], color], "long": (k + j) % 3 == 0, "duty": duty, "lead": j == 0,
                            "spec": spec, "ext": True})
     return teams, agents
@@ -138,7 +141,7 @@ def install() -> None:
         kind = t["kind"]
         roster.WATCH[a["id"]] = {"ind": [("indicators", sym)], "trend": [("indicators", sym)], "entry": [("book", sym)], "news": [("news", "crypto")],
                                  "sr": [("book", sym)], "tpsl": [("paper", "")], "board": [("movers", "")], "pattern": [("indicators", sym)],
-                                 "coinx": [("quote", sym), ("whale", sym), ("news", "crypto")], "termind": [("termind", "")], "growth": [("paper", "")], "carry": [("movers", "")], "oss": [("research", "")], "dev": [("research", "")], "cdev": [("research", "")],
+                                 "coinx": [("quote", sym), ("whale", sym), ("news", "crypto")], "termind": [("termind", "")], "growth": [("paper", "")], "scenbot": [("indicators", sym)], "carry": [("movers", "")], "oss": [("research", "")], "dev": [("research", "")], "cdev": [("research", "")],
                                  "bt": [("research", "")], "demo": [("paper", "")], "live": [("paper", "")]}.get(kind, [("quote", sym)])
         mates = roster.MEMBERS[a["team"]]
         i = mates.index(a["id"])

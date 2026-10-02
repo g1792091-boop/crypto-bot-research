@@ -1,6 +1,8 @@
 """FastAPI 서버: REST API + 프론트엔드 정적 파일."""
 from __future__ import annotations
 
+import os
+import threading
 import time
 from dataclasses import asdict
 from contextlib import asynccontextmanager
@@ -40,6 +42,9 @@ async def lifespan(_app: FastAPI):
     autopilot.start()
     ai_auto.start()
     office.start()
+    if not os.environ.get("SCENBOT_OFF"):
+        from . import scenbot
+        scenbot.start()
     yield
 
 
@@ -152,7 +157,8 @@ def get_cg_index(name: str):
 @app.get("/api/analysis")
 def get_analysis(symbol: str = "BTCUSDT", interval: str = "1h", ai: bool = False):
     try:
-        return analysis.analyze(symbol.upper(), interval, with_ai=ai)
+        from . import scenbot
+        return scenbot.annotate(analysis.analyze(symbol.upper(), interval, with_ai=ai))
     except (ValueError, LLMUnavailable) as e:
         _bad(e)
 
@@ -351,6 +357,55 @@ def office_termind():
             "interval_sec": office.CFG.get("termind_sec", 60)}
 
 
+@app.get("/api/scenbot")
+def scenbot_view():
+    """시나리오 진입 봇: 정책 · 성적 · 주문 · 배운 적중률 · 메타 모델 · 개선 기록."""
+    from . import scenbot
+    return scenbot.view()
+
+
+class ScenbotSettings(BaseModel):
+    enabled: Optional[bool] = None
+    symbols: Optional[list[str]] = None
+    intervals: Optional[list[str]] = None
+    risk_pct: Optional[float] = None
+    max_open: Optional[int] = None
+    learn_hours: Optional[float] = None
+    use_termind: Optional[bool] = None
+    use_chart: Optional[bool] = None
+
+
+@app.post("/api/scenbot/settings")
+def scenbot_settings(body: ScenbotSettings):
+    from . import scenbot
+    b = body.model_dump(exclude_none=True)
+    if "symbols" in b:
+        try:
+            b["symbols"] = [symbols.resolve(x) for x in b["symbols"]]
+        except ValueError as e:
+            _bad(e)
+    return scenbot.set_settings(b)
+
+
+@app.post("/api/scenbot/learn")
+def scenbot_learn():
+    """지금 학습(그림자 채점 추가 · 보정 · 메타 모델 · 정책 walk-forward 재선정) — 뒤에서 돈다."""
+    from . import scenbot
+    if scenbot._th["busy"]:
+        return {"ok": False, "busy": True}
+    threading.Thread(target=scenbot.learn, daemon=True).start()
+    return {"ok": True}
+
+
+@app.post("/api/scenbot/revert/{version}")
+def scenbot_revert(version: int):
+    from . import scenbot
+    try:
+        return scenbot.revert(version)
+    except ValueError as e:
+        _bad(e)
+
+
 @app.get("/api/growth")
 def growth_check(start: float = 100_000, target: float = 100_000_000, days: int = 30, lev: float = 3.0, fresh: bool = False):
     """목표 현실 점검 (1억 챌린지 검증팀) — 실제 성적으로 달성·파산 확률 · 켈리 · 현실 경로. 결과는 files/growth 에도 저장."""
@@ -473,6 +528,17 @@ def live_settings(req: LiveSettings):
 def live_approve(pid: str, ok: bool = True):
     from . import live
     from .office import teamjobs
+    if pid.startswith("sb:"):                          # 시나리오 진입 봇 (코인마다) — 가상 성적 기준을 넘었을 때만
+        from . import scenbot
+        if ok and not scenbot.candidate()["ok"]:
+            _bad(ValueError("시나리오 진입 봇이 아직 실거래 기준을 넘지 못했습니다: " + scenbot.candidate()["need"]))
+        live.approve(pid, ok)
+        if not ok and pid in live._state["positions"] and live.S.get("enabled"):
+            try:
+                live.close_position(pid, live._state["positions"][pid]["entry"], "승인 취소")
+            except Exception as e:  # noqa: BLE001
+                live.log(f"⚠ 승인 취소 청산 실패: {e}")
+        return live.view()
     p = next((x for x in teamjobs.pipeline() if x["id"] == pid), None)
     if not p or p["stage"] not in ("candidate", "live"):
         _bad(ValueError("데모를 통과한(승인 대기) 매매법만 승인할 수 있습니다"))

@@ -152,7 +152,7 @@ def test_api_state_and_ask(fake_ai):
     from app.main import app
     c = TestClient(app)
     r = c.get("/api/office/roster").json()
-    assert len(r["agents"]) == 310 and len(r["teams"]) == 30
+    assert len(r["agents"]) == 321 and len(r["teams"]) == 31
     office.RT["queue"].clear()
     c.post("/api/office/ask", json={"text": "비트코인 지금 롱 어때?", "room": "coin"})
     st = c.get("/api/office/state?since=0").json()

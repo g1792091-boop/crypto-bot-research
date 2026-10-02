@@ -445,6 +445,8 @@ function renderScenarios(a) {
       <div class="h"><span class="p">${s.probability}%</span><span class="n">${esc(s.title)}</span>
         <span class="muted">RR ${s.rr ?? "–"}</span><button class="flat sm" data-sc="${i}">차트에</button></div>
       <div class="bar"><i style="width:${s.probability}%;background:${color[s.bias]}"></i></div>
+      ${s.learned ? `<div class="learn" title="시나리오 진입 봇이 과거·실시간 결과로 배운 값 (체결된 것 기준)">배운 실제 적중률 <b>${s.learned.win}%</b> · 평균 <b class="${s.learned.avg_r > 0 ? "up" : "down"}">${s.learned.avg_r > 0 ? "+" : ""}${s.learned.avg_r}R</b> <span class="muted">(${s.learned.n}건${s.learned.n < 20 ? " · 적어서 전체 평균 반영" : ""})</span></div>` : ""}
+      ${(a.bot?.orders || []).filter((o) => o.title === s.title || (s.key === "range" && o.title === "박스권 양방향")).map((o) => `<div class="botst">🤖 진입 봇 ${o.interval} ${o.side > 0 ? "롱" : "숏"} ${o.status === "open" ? "보유 중" : "주문 대기"} @ ${px(o.entry)}</div>`).join("")}
       <div class="trig">${esc(s.trigger)}</div>
       <div class="kv"><span class="k">진입</span><span>${px(s.entry)}</span>
         <span class="k">손절</span><span class="down">${px(s.stop)}</span>
