@@ -234,6 +234,8 @@ function renderTicker() {
     const left = Math.max(0, f.T - Date.now()), h = Math.floor(left / 3.6e6), m = Math.floor(left % 3.6e6 / 6e4);
     $("t-fund").innerHTML = `<span class="${cls(-f.r)}">${(f.r * 100).toFixed(4)}%</span> / ${h}시간 ${m}분`;
   } else $("t-fund").textContent = "—";
+  $("t-cd-k").textContent = state.tf === "1d" ? "일봉 마감까지" : `${TF_KO[state.tf] || state.tf}봉 마감까지`;
+  $("t-cd").textContent = closeIn(state.tf);
   const n = positions().filter((a) => a.position.symbol === s).length;
   $("t-pos").textContent = state.board ? `${n}개 계좌` : "—";
 }
@@ -571,21 +573,55 @@ function stream() {
   es.onerror = () => chip("chip-bot", false, "재연결 중");
 }
 
+// time left in the chart's current bar (bars are aligned to UTC, so the epoch modulo works up to 1 day)
+const TF_MS = {"1m": 6e4, "5m": 3e5, "15m": 9e5, "30m": 18e5, "1h": 36e5, "4h": 144e5, "1d": 864e5};
+function closeIn(tf) {
+  const ms = TF_MS[tf]; if (!ms) return "—";
+  const left = Math.ceil((ms - (Date.now() % ms)) / 1000), h = Math.floor(left / 3600), m = Math.floor(left % 3600 / 60), s = left % 60;
+  const two = (x) => String(x).padStart(2, "0");
+  return h ? `${h}:${two(m)}:${two(s)}` : `${two(m)}:${two(s)}`;
+}
+
 // ------------------------------------------------------------ live: Binance public streams (browser side)
-let mws = null, kws = null;
+// Where the browser cannot reach Binance's WebSocket (some networks and phones), the same numbers come from
+// the dashboard server instead (/api/ticker, /api/candles), polled every 5 s while the stream is down.
+let mws = null, kws = null, mwsOk = false, kwsOk = false;
+async function pollTicker() {
+  if (mwsOk) return;
+  try {
+    const d = await api("/api/ticker");
+    for (const [s, v] of Object.entries(d)) {
+      if (v.c != null) state.tick[s] = {c: v.c, p: v.p, h: v.h, l: v.l, q: v.q};
+      if (v.mark != null) { state.mark[s] = v.mark; state.fund[s] = {r: v.r, T: v.T}; }
+    }
+    if (!mwsOk && Object.keys(d).length) chip("chip-feed", true, "시세 (서버 경유)");
+  } catch (e) { /* login redirect or server down: the bot chip shows it */ }
+}
+async function pollKline() {
+  if (kwsOk || !tseries) return;
+  const sym = state.sym, tf = state.tf;
+  try {
+    const rows = await api(`/api/candles?symbol=${sym}&interval=${tf}&limit=2`);
+    if (sym !== state.sym || tf !== state.tf) return;
+    for (const c of rows) { try { tseries.update(c); state.lastCandle = c; } catch (e) { /* older than the last bar */ } }
+  } catch (e) { /* next poll */ }
+}
+setInterval(pollTicker, 5000);
+setInterval(pollKline, 5000);
 function marketStream() {
   const streams = SYMS.flatMap((s) => [s.toLowerCase() + "@markPrice@1s", s.toLowerCase() + "@ticker"]).join("/");
   try { mws = new WebSocket("wss://fstream.binance.com/stream?streams=" + streams); } catch (e) { chip("chip-feed", false, "시세 끊김"); return; }
-  mws.onopen = () => chip("chip-feed", true, "바이낸스 시세");
+  mws.onopen = () => { mwsOk = true; chip("chip-feed", true, "바이낸스 시세"); };
   mws.onmessage = (ev) => {
     const m = JSON.parse(ev.data).data; if (!m) return;
     if (m.e === "markPriceUpdate") { state.mark[m.s] = +m.p; state.fund[m.s] = {r: +m.r, T: +m.T}; }
     else if (m.e === "24hrTicker") state.tick[m.s] = {c: +m.c, p: +m.P, h: +m.h, l: +m.l, q: +m.q};
   };
-  mws.onclose = () => { chip("chip-feed", false, "시세 재연결 중"); setTimeout(marketStream, 5000); };
+  mws.onclose = () => { mwsOk = false; chip("chip-feed", false, "시세 재연결 중"); pollTicker(); setTimeout(marketStream, 5000); };
 }
 function klineStream() {
   if (kws) { kws.onclose = null; kws.close(); }
+  kwsOk = false;
   const tf = state.tf, sym = state.sym;
   try { kws = new WebSocket(`wss://fstream.binance.com/ws/${sym.toLowerCase()}@kline_${tf}`); } catch (e) { return; }
   kws.onmessage = (ev) => {
@@ -593,7 +629,8 @@ function klineStream() {
     const c = {time: Math.floor(k.t / 1000), open: +k.o, high: +k.h, low: +k.l, close: +k.c};
     try { tseries.update(c); state.lastCandle = c; } catch (e) { /* older than the last bar */ }
   };
-  kws.onclose = () => setTimeout(() => { if (sym === state.sym && tf === state.tf) klineStream(); }, 5000);
+  kws.onopen = () => { kwsOk = true; };
+  kws.onclose = () => { kwsOk = false; setTimeout(() => { if (sym === state.sym && tf === state.tf) klineStream(); }, 5000); };
 }
 setInterval(() => {
   renderWatch(); renderTicker();
@@ -613,5 +650,6 @@ topHeight();
 themeInit();
 chip("chip-ai", null, "에이전트 연결 전");
 renderWatch();
+pollTicker();
 loadBoard().then(() => { fillAcctFilter(); loadTradeChart(); renderSide(); renderBottom(); stream(); marketStream(); klineStream(); })
   .catch((e) => console.error(e));

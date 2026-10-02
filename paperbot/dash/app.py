@@ -340,7 +340,7 @@ _CANDLE_CACHE: dict = {}
 def fetch_candles(symbol: str, interval: str, limit: int = 300) -> list:
     key = (symbol, interval, limit)
     hit = _CANDLE_CACHE.get(key)
-    if hit and time.time() - hit[0] < 20:
+    if hit and time.time() - hit[0] < (4 if limit <= 5 else 20):     # small requests: the live-bar fallback
         return hit[1]
     url = f"https://fapi.binance.com/fapi/v1/klines?symbol={symbol}&interval={interval}&limit={limit}"
     with urllib.request.urlopen(url, timeout=10) as r:
@@ -348,6 +348,40 @@ def fetch_candles(symbol: str, interval: str, limit: int = 300) -> list:
     out = [{"time": int(k[0]) // 1000, "open": float(k[1]), "high": float(k[2]), "low": float(k[3]),
             "close": float(k[4])} for k in rows]
     _CANDLE_CACHE[key] = (time.time(), out)
+    return out
+
+
+TICKER_SYMBOLS = ("BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "LTCUSDT", "BCHUSDT", "XRPUSDT")
+_TICKER_CACHE: dict = {}
+
+
+def fetch_ticker() -> dict:
+    """24h change/high/low/quote volume, mark price and funding of the 7 coins, fetched by the server.
+    The page normally gets these from Binance's WebSocket in the browser; where that is blocked (some
+    networks, some phones) it polls this instead. Per-symbol requests (weight 1 each, 14 per refresh) and a
+    5 s cache shared by every viewer, so the bot's own Binance weight budget is never at risk."""
+    hit = _TICKER_CACHE.get("t")
+    if hit and time.time() - hit[0] < 5:
+        return hit[1]
+    out: dict = {}
+    for s in TICKER_SYMBOLS:
+        row: dict = {}
+        try:
+            with urllib.request.urlopen(f"https://fapi.binance.com/fapi/v1/ticker/24hr?symbol={s}", timeout=5) as r:
+                t = json.loads(r.read())
+            row.update(c=float(t["lastPrice"]), p=float(t["priceChangePercent"]), h=float(t["highPrice"]),
+                       l=float(t["lowPrice"]), q=float(t["quoteVolume"]))
+        except Exception:  # noqa: BLE001  (one coin missing is shown as "—")
+            pass
+        try:
+            with urllib.request.urlopen(f"https://fapi.binance.com/fapi/v1/premiumIndex?symbol={s}", timeout=5) as r:
+                m = json.loads(r.read())
+            row.update(mark=float(m["markPrice"]), r=float(m["lastFundingRate"]), T=int(m["nextFundingTime"]))
+        except Exception:  # noqa: BLE001
+            pass
+        if row:
+            out[s] = row
+    _TICKER_CACHE["t"] = (time.time(), out)
     return out
 
 
@@ -1012,7 +1046,7 @@ def _storable(text: str) -> bool:
         return False
 
 
-def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fetch_candles,
+def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fetch_candles, ticker=fetch_ticker,
                agents_db: Optional[str] = None, daily_db: Optional[str] = None, frames=fetch_frame,
                inbox_db: Optional[str] = None, say_per_hour: int = SAY_PER_HOUR,
                checkpoint_db: Optional[str] = None) -> FastAPI:
@@ -1301,6 +1335,11 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
         if interval not in ("1m", "5m", "15m", "30m", "1h", "4h", "1d"):
             raise HTTPException(400, "unknown interval")
         return candles(symbol, interval, min(max(limit, 10), 1500))
+
+    @app.get("/api/ticker")
+    def get_ticker():
+        """The 7 coins' 24h ticker, mark price and funding from the server (fallback for a blocked WebSocket)."""
+        return ticker()
 
     @app.get("/api/stream")
     async def stream(req: Request, trade_id: int = 0, alert_row: int = 0, room_msg: int = 0):

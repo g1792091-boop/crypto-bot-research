@@ -1,3 +1,5 @@
+import os
+
 import pytest
 
 fastapi = pytest.importorskip("fastapi")
@@ -260,3 +262,17 @@ console.log(JSON.stringify(bestWallet("V45_AMB")));"""
     r = subprocess.run([node, "-e", fn + "\n" + body], capture_output=True, text=True, timeout=30)
     assert r.returncode == 0, r.stderr
     assert _json.loads(r.stdout) == 5100
+
+
+def test_ticker_endpoint_is_the_websocket_fallback(tmp_path):
+    """Where the browser cannot reach Binance's WebSocket, the page polls /api/ticker (served by the server)."""
+    db = str(tmp_path / "p.db")
+    _store(db).close()
+    app = create_app(db, hash_password("correct horse battery"), SECRET, ticker=lambda: {"BTCUSDT": {"c": 1.5, "p": 2.0}})
+    c = TestClient(app)
+    assert c.get("/api/ticker").status_code == 401
+    assert c.post("/api/login", json={"password": "correct horse battery"}).status_code == 200
+    assert c.get("/api/ticker").json() == {"BTCUSDT": {"c": 1.5, "p": 2.0}}
+    js = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "paperbot", "dash", "static",
+                           "app.js"), encoding="utf-8").read()
+    assert 'api("/api/ticker")' in js and "function closeIn(tf)" in js and "if (mwsOk) return;" in js
