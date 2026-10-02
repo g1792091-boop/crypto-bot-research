@@ -22,6 +22,9 @@
 ### 🤖 코인 AI 봇 (`coinai.js` + `lib/ragstore.js`) — 완전 자체 RAG 챗
 이 앱이 아는 것(앱 설명 고정 지식 + 사무실 분석·표·노트 + 데모 전략 + 실시간 자체 AI 판단)을 모아 **외부 서비스·벡터DB 없이** 브라우저 안에서 도는 가벼운 검색(TF-IDF + 코사인, 한국어 2-그램 `lib/ragstore.js`)으로 질문에 답한다. **외부 AI 키가 없으면 추출 답변(완전 자체)**, 키가 있으면 그 지식에 **근거한** LLM 답변(`brainStream`). 코인을 물으면 자체 AI 데스크(`selfAIFor`)의 실시간 방향·확신도를 함께 붙인다. 화면 오른쪽 아래 **떠다니는 [💬 코인 AI] 버튼**과 상단 **[🤖 코인 AI]** 버튼으로 어디서나 열린다. **설명·판단만 하고 주문은 내지 않는다.** 아이디어: langgenius/dify(RAG·지식베이스)·FlowiseAI/Flowise(임베드 위젯)·Mintplex-Labs/anything-llm(완전 자체 프라이빗 RAG) — 코드 복사 없이 개념만. probot(GitHub App 프레임워크)은 코인 앱과 무관해 적용하지 않음.
 
+### 🧭 리서치 플래너 (`lib/planner.js` + `lib/board.js` + `plannerJob`)
+`Autumn-27/ARTEX`(AI 자율 침투테스트 시스템)의 **범용 멀티에이전트 설계만** 가져와 **공격 기능은 전부 빼고** 트레이딩 리서치에 적용했다(코드 복사 없음, 정찰·취약점·공격 요소 0). **planner** 가 상태(코인·전략·관문·성과 경보·공유 보드)를 보고 **할 일 목록(todolist)** 을 우선순위로 만들고, **선행조건**(예: 봇 자동개선은 '활성 봇' 필요)과 **중복**을 관리해 다음 의도를 고른다 → **worker** 가 그 의도를 **기존 job**(추세·종합타점·자체 AI·백테스트·자동개선…)으로 실행 → 결과를 **공유 보드**(`lib/board.js`, 발견을 디듀프하며 어느 의도에서 나왔는지 lineage 기록)에 쌓는다. 자동 업무 회전에 포함되고, "리서치 플래너 돌려줘"·봇 조종판 **[🧭 리서치 플래너]** 버튼으로도 실행. 보드는 코인 AI 봇 지식에도 들어간다. **ARTEX 의 침투·정찰·공격 기능은 하나도 넣지 않았다.**
+
 ### 📦 `vendor/` — 외부 저장소의 실제 원본 코드
 받은 GitHub 저장소의 **실제 소스를 그대로 보관**한다(수정 없음, 각 `LICENSE` 포함): `vendor/ai-trader-team/`(trading_rigor.py·backtest.py·cli_utils.py), `vendor/anythingllm-embed/`(useSessionId.js·constants.js·date.js), `vendor/agency-agents-ko/`(투자 리서처 원칙). 그중 **의존성 없는 `anythingllm-embed/constants.js` 는 코인 AI 봇이 그대로 `import` 해 사용**(위젯 열림 상태 기억). 나머지 파이썬/React 파일은 빌드 없는 브라우저 앱에서 그대로 실행되지 않아, 같은 공식·반올림으로 **충실히 이식한 실행본**(`lib/rigor.js`, `lib/attbacktest.js`, `coinai.js` 세션 로직)을 두고 원본과 출력 일치를 테스트로 확인했다. (`vendor/README.md` 참고)
 

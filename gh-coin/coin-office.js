@@ -204,6 +204,7 @@ export const officeState = () => ({running, queued: queue.length});
 const ACTIONS = [
   {job: "cdev", re: /커스텀.*(지표|매매법|전략).*(만들|찾|개발|짜|연구|백테스트)/, say: "커스텀 지표 개발팀이 지금 바로 수식 지표로 매매법을 만들어 커스텀 백테스트팀이 검증합니다"},
   {job: "dev", re: /(매매법|전략|지표).*(만들|찾|개발|짜|연구|발굴|백테스트)|(만들|찾|개발|짜).*(매매법|전략)|백테스트\s*(해|돌려)/, say: "매매법 개발팀이 지금 바로 모든 보조지표로 매매법을 만들어 백테스트팀이 검증합니다"},
+  {job: "plan", re: /플래너|리서치\s*계획|할\s*일\s*목록|todolist|투두|계획\s*세워|다음\s*할\s*일|리서치\s*보드/i, say: "리서치 플래너가 지금 바로 상태를 보고 할 일 목록(todolist)을 만들고 최우선 리서치를 워커에게 배정합니다"},
   {job: "selfai", re: /자체\s*ai|자체\s*인공지능|앙상블|트레이딩\s*데스크|자체\s*모델|ghcoinai|확신도\s*순위|ai\s*데스크/i, say: "자체 AI 데스크가 지금 바로 외부 키 없이 앙상블(기술 평점·멀티 시간대·ML·알파)로 코인 방향·확신도 순위를 냅니다"},
   {job: "botopt", re: /(자동매매\s*봇|선물\s*봇|트레이딩\s*봇|봇)\s*.{0,6}(자동\s*)?(개선|다듬|최적화|하이퍼옵트)|(보조지표|지표)\s*.{0,6}(자동\s*)?(개선|최적화|튜닝)/i, say: "선물 자동매매봇팀이 지금 바로 데모 봇의 보조지표·위험값을 하이퍼옵트로 자동 개선하고 검증 구간·견고성까지 확인합니다"},
   {job: "bot", re: /자동매매\s*봇|선물\s*봇|트레이딩\s*봇|그리드\s*봇|dca\s*봇|봇\s*(만들|돌려|전략|추가)|passivbot|jesse|octobot/i, say: "선물 자동매매봇팀이 지금 바로 봇 전략을 만들어 백테스트하고 통과하면 데모에 올립니다"},
@@ -675,14 +676,14 @@ export function startChatter(){
 // 매 주기 ① 모의투자 장부를 실제 시세로 갱신(코드, AI 없음) ② 그때그때 한 가지 일을 고른다:
 // 매매법 연구 · SNS 여론 · 경제 리서치 · 동료 수다 · 컴퓨터 작업 · 모의투자 보고 (하루 AI 호출 한도 안에서)
 // 쉬지 않고 돌아가는 업무 순환표: 팀마다 고르게 돌아가도록 섞어 두었다 (모듈이 없으면 경제 리서치로 대신)
-const JOBS = ["dev", "combo", "ic", "bot", "ind", "qrisk", "trend", "data", "opt", "patscan", "situ", "cdev", "entry", "sr", "news", "promote", "pattern", "coin", "ml", "selfai", "dev", "tpsl", "combo", "drift", "cdev", "feeds", "alpha", "bot", "botopt", "selfai", "trend", "ic", "chat", "forecast", "coin", "live", "retro", "task", "selfdev", "macro", "sns", "computer", "paper"];
-const JOB_KO = {bot: "자동매매봇 전략 만들기", botopt: "자동매매봇 자동 개선(보조지표·위험값 하이퍼옵트)", selfai: "자체 AI 데스크(앙상블 방향·확신도 순위)", ic: "투자위원회(강세·약세 토론 → 결정)", qrisk: "퀀트 리스크(VaR·결정표·주문 전 점검)", data: "거래소 비교·데이터 품질", opt: "하이퍼옵트로 전략 다듬기", patscan: "패턴 스캐너", drift: "데모 성과 이동 감지(런 차트)", feeds: "경제 캘린더·금리·변동성 지수", alpha: "알파 팩터 순위", combo: "실시간 종합 지표 타점", dev: "매매법 개발 → 백테스트", cdev: "커스텀 지표 개발 → 백테스트", ind: "보조지표 분석", trend: "다중 시간대 추세 분석", entry: "진입 타점 분석", sr: "지지·저항 분석",
+const JOBS = ["plan", "dev", "combo", "ic", "bot", "ind", "qrisk", "trend", "data", "opt", "patscan", "situ", "cdev", "entry", "sr", "news", "promote", "pattern", "coin", "ml", "selfai", "dev", "tpsl", "combo", "drift", "cdev", "feeds", "alpha", "bot", "botopt", "selfai", "plan", "trend", "ic", "chat", "forecast", "coin", "live", "retro", "task", "selfdev", "macro", "sns", "computer", "paper"];
+const JOB_KO = {plan: "리서치 플래너(할 일 목록 → 워커 배정)", bot: "자동매매봇 전략 만들기", botopt: "자동매매봇 자동 개선(보조지표·위험값 하이퍼옵트)", selfai: "자체 AI 데스크(앙상블 방향·확신도 순위)", ic: "투자위원회(강세·약세 토론 → 결정)", qrisk: "퀀트 리스크(VaR·결정표·주문 전 점검)", data: "거래소 비교·데이터 품질", opt: "하이퍼옵트로 전략 다듬기", patscan: "패턴 스캐너", drift: "데모 성과 이동 감지(런 차트)", feeds: "경제 캘린더·금리·변동성 지수", alpha: "알파 팩터 순위", combo: "실시간 종합 지표 타점", dev: "매매법 개발 → 백테스트", cdev: "커스텀 지표 개발 → 백테스트", ind: "보조지표 분석", trend: "다중 시간대 추세 분석", entry: "진입 타점 분석", sr: "지지·저항 분석",
   tpsl: "익절·손절 관리", news: "뉴스·기사 분석", macro: "경제지표 예측", situ: "코인 상황판", pattern: "차트·캔들 패턴 분석", coin: "코인팀 회의", ml: "머신러닝·딥러닝 실험",
   promote: "데모 → 실거래 관문 심사", live: "실거래 데스크 점검", paper: "데모거래 보고", forecast: "방향 예측 토론", sns: "SNS 여론 확인", chat: "동료 수다", computer: "컴퓨터 작업",
   retro: "팀 회고·부족한 점 찾기", task: "개선 과제 수행", selfdev: "우리 앱 오류 찾아 코드 고치기", economy: "경제 리서치"};
-const JOB_TEAM = {bot: "bot", botopt: "bot", selfai: "selfai", ic: "ic", qrisk: "qrisk", data: "data", opt: "opt", patscan: "pattern", drift: "demo", feeds: "news", alpha: "ml", combo: "combo", dev: "dev", cdev: "cdev", ind: "ind", trend: "trend", entry: "entry", sr: "sr", tpsl: "tpsl", news: "news", macro: "news", situ: "situ", pattern: "pattern", coin: "btc", ml: "ml",
+const JOB_TEAM = {plan: "hq", bot: "bot", botopt: "bot", selfai: "selfai", ic: "ic", qrisk: "qrisk", data: "data", opt: "opt", patscan: "pattern", drift: "demo", feeds: "news", alpha: "ml", combo: "combo", dev: "dev", cdev: "cdev", ind: "ind", trend: "trend", entry: "entry", sr: "sr", tpsl: "tpsl", news: "news", macro: "news", situ: "situ", pattern: "pattern", coin: "btc", ml: "ml",
   promote: "demo", live: "live", paper: "demo", forecast: "entry", sns: "news", chat: "hq", computer: "hq", retro: "hq", task: "hq", selfdev: "hq", economy: "news"};
-const JOB_FN = () => ({bot: botJob, botopt: botImproveJob, selfai: selfaiJob, ic: icJob, qrisk: qriskJob, data: dataJob, opt: optJob, patscan: patternScanJob, drift: driftJob, feeds: openFeedsJob, alpha: alphaJob, combo: comboJob, dev: () => research("std"), cdev: () => research("custom"), ind: indJob, trend: trendJob, entry: entryJob, sr: srJob, tpsl: tpslJob, news: economyCheck, macro: macroJob,
+const JOB_FN = () => ({plan: plannerJob, bot: botJob, botopt: botImproveJob, selfai: selfaiJob, ic: icJob, qrisk: qriskJob, data: dataJob, opt: optJob, patscan: patternScanJob, drift: driftJob, feeds: openFeedsJob, alpha: alphaJob, combo: comboJob, dev: () => research("std"), cdev: () => research("custom"), ind: indJob, trend: trendJob, entry: entryJob, sr: srJob, tpsl: tpslJob, news: economyCheck, macro: macroJob,
   situ: situJob, pattern: patternJob, coin: coinJob, ml: mlJob, promote: promoteJob, live: liveDeskJob, paper: paperReport, forecast: forecastJob, sns: snsCheck, chat: () => chatter(true),
   computer: computerWork, retro, task: doTask, selfdev: selfdevJob, economy: economyCheck});
 let cycleTimer = 0, cycling = false, lastJob = "";
@@ -1884,6 +1885,35 @@ async function aiOpinion(coin, j){
   const conf = Math.max(0, Math.min(100, Number(o.confidence) || 0));
   return {score: dir * (0.4 + 0.6 * conf / 100), confidence: conf, direction: o.direction, reason: String(o.reason || "").slice(0, 40)};
 }
+
+/* ---- 🧭 리서치 플래너 (ARTEX 의 planner/worker + 공유 todolist/보드 설계를 '공격 기능 없이' 트레이딩 리서치에 이식) ----
+   planner 가 상태(코인·전략·관문·경보·최근 보드)를 보고 '지금 할 일 목록'을 만들고, 선행조건을 지켜 최우선 의도 하나를
+   골라 기존 job(워커)으로 실행한 뒤, 결과를 공유 보드에 기록한다. 정찰·침투·공격 요소는 전혀 없다. ---- */
+const lsStore = () => ({get: (k, d) => readJ(k, d), set: (k, v) => writeJ(k, v)});
+async function plannerJob(){
+  const P = await lib("planner"), B = await lib("board"), PB = await import("../nuri-ai/paper.js"), board = B.makeBoard(lsStore());
+  let book = {strategies: []}; try { book = await PB.loadBook(); } catch(e){}
+  let L = null; try { L = await import("../nuri-ai/live.js"); } catch(e){}
+  const cfg = L?.liveCfg?.() || {linked: {}};
+  const strategies = (book.strategies || []).map(s => ({id: s.id, name: s.name, status: s.status, isBot: /^🤖/.test(s.name), gateEligible: L?.gateFor ? L.gateFor(s).eligible : false, live: !!cfg.linked?.[s.id]?.on, days: Math.floor((Date.now() - (s.created || Date.now())) / 864e5), trades: (s.trades || []).length}));
+  const alerts = backlog().filter(t => t.status !== "done" && /악화|이동|감지/.test(t.title)).slice(0, 3).map(t => ({target: t.title, targetName: t.title, kind: "성과 악화"}));
+  const state = {coins: COINS.map(c => ({id: c.id, ko: c.ko, sym: c.sym})), strategies, alerts, recent: board.recentIntents()};
+  const todo = P.planTodolist(state);
+  table("hq", "lead", "🧭 리서치 플래너 — 지금 할 일 목록 (todolist · 우선순위순)", ["#", "의도", "대상", "선행조건", "근거", "우선"],
+    todo.slice(0, 8).map((it, i) => [String(i + 1), JOB_KO[it.job] || it.job, it.targetName || "전체", (it.deps || []).length ? it.deps.join(",") : "—", it.why, String(it.prio)]),
+    "ARTEX 의 planner/worker 설계를 공격 기능 없이 트레이딩 리서치에만 적용 · 선행조건을 지키고 중복을 피해 다음 할 일을 고릅니다");
+  const pick = P.pickNext(state);
+  if (!pick){ post({ch: "hq", kind: "system", text: "플래너: 지금 실행할 리서치 의도가 없습니다"}); return; }
+  userNote = pick.target ? (COINS.find(c => c.sym === pick.target)?.ko || "") : "";
+  post({ch: JOB_TEAM[pick.job] || "hq", kind: "work", agent: TEAM_LEAD[JOB_TEAM[pick.job]] || "lead", icon: "🧭", text: `플래너가 '${JOB_KO[pick.job] || pick.job}'${pick.targetName ? ` · ${pick.targetName}` : ""} 를 워커에게 배정`});
+  const fn = JOB_FN()[pick.job];
+  try { if (fn) await fn(); } catch(e){ post({ch: "hq", kind: "system", text: `플래너 워커 오류: ${String(e.message || e).slice(0, 100)}`}); }
+  const note = teamNotes(JOB_TEAM[pick.job] || "hq").slice(-1)[0];
+  board.add({intent: pick.id, job: pick.job, target: pick.target, targetName: pick.targetName, kind: "발견", text: note?.text || `${JOB_KO[pick.job] || pick.job} 수행`});
+  addNote("hq", `플래너: ${JOB_KO[pick.job] || pick.job}${pick.targetName ? ` · ${pick.targetName}` : ""} 실행 · 공유 보드 ${board.count()}건`, "플래너");
+}
+// 공유 보드 읽기 (코인 AI 봇·UI 가 씀)
+export async function researchBoard(n = 12){ const B = await lib("board"); return B.makeBoard(lsStore()).recent(n); }
 
 /* ---- 🗄 저장소 이전 (obevo 방식): 앱이 켜질 때 한 번 — 이미 한 변경은 건너뛰고, 실패하면 백업으로 되돌림 ---- */
 export function runMigrations(){

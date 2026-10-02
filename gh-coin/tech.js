@@ -114,6 +114,9 @@ export const TECH = [
     where: "vendor/anythingllm-embed/*(원본, constants.js는 실제 import) · 코인 AI 봇 세션/대화기록/리셋(coinai.js)"},
   {repo: "probot/probot · template · create-probot-app · probot.github.io", lic: "ISC", teams: [], status: "해당 없음",
     what: "GitHub App(깃허브 웹훅 봇) 프레임워크 — 코인 트레이딩 데스크톱 앱과 무관하여 적용하지 않음",
-    where: "—"}
+    where: "—"},
+  {repo: "Autumn-27/ARTEX", lic: "AGPL-3.0 (코드 복사 없음·설계 아이디어만)", teams: ["hq", "selfai", "bot"], status: "부분 적용(공격 기능 전부 제외)",
+    what: "ARTEX 는 보안 공격(레드팀)용 자율 도구라, 그 공격류 기능은 하나도 넣지 않았다. 범용 멀티에이전트 설계만 재구현: planner 가 공유 todolist 로 다음 의도만 던지고 · worker 가 의도 하나씩 실행 · 결과를 공유 보드에 혈연 링크(어느 의도가 무엇을 냈나)로 축적 · 선행조건과 중복을 관리. 쓰는 것은 기존 코인 데이터·백테스트·자체 AI 판단뿐",
+    where: "lib/planner.js(todolist·선행조건·디듀프) · lib/board.js(공유 보드·lineage) · coin-office plannerJob('plan' job, 자동 업무 회전·음성·봇 조종판 [🧭 리서치 플래너]) · 코인 AI 봇 지식(보드)"}
 ];
 export const TECH_REPOS = 40;   // 에이전트·자체 AI·RAG 관련 (biomolecular·probot 은 해당 없음)
