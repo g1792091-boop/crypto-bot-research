@@ -36,6 +36,7 @@ import statistics
 from collections import Counter, defaultdict
 from typing import Optional
 
+from .. import breakdown as BD
 from ..config import V3_INITIAL
 
 DAY_MS = 86_400_000
@@ -204,6 +205,18 @@ def build(paper_db: str, daily_db: Optional[str], now_ms: int, min_n: int = 30) 
                 "SELECT account_id FROM mismatches WHERE day = ?", (r["day"],))]
         d.close()
 
+    # where the 180 make or lose money: by coin (best strategies of each coin), weekday/weekend x session,
+    # funding / US-open / 08:30 windows, volatility spike at entry (paperbot/breakdown.py, descriptive only)
+    try:
+        cb = _ro(paper_db)
+        try:
+            breakdown = BD.brief(BD.report(cb, min_n=min_n)) if cb is not None else None
+        finally:
+            if cb is not None:
+                cb.close()
+    except Exception as exc:  # noqa: BLE001  (a description must never stop the packet)
+        breakdown = {"error": f"{type(exc).__name__}: {exc}"[:200]}
+
     return {
         "meta": {"rules": "docs/paper-v3-rules.md", "settings_version": run.get("settings"), "min_n": min_n,
                  "days_running": _r(days, 2), "units": {"roe": "net return on isolated margin (0.10 = +10%)",
@@ -211,6 +224,7 @@ def build(paper_db: str, daily_db: Optional[str], now_ms: int, min_n: int = 30) 
                  "accounts": len(accts), "extra_accounts": len(extra_ids)},
         "league": league, "pass_check": pass_check, "by_strategy": dict(by_strategy), "by_coin": by_coin,
         "execution": execution, "exits": exits, "today": today_sec, "nightly": nightly, "extras": extras,
+        "breakdown": breakdown,
     }
 
 

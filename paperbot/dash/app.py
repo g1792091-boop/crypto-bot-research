@@ -1148,6 +1148,21 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
         return {**hit[1], "computed_at": int(hit[0] * 1000)}
 
     gh_cache: dict = {}
+    bd_cache: dict = {}
+
+    @app.get("/api/breakdown")
+    def get_breakdown():
+        """By coin, weekday/weekend x session, time windows, volatility at entry (paperbot/breakdown.py);
+        read-only, descriptive, cached ~10 min."""
+        from ..breakdown import report as bd_report
+        hit = bd_cache.get("r")
+        if hit is None or time.time() - hit[0] > OVERLAP_TTL_S:
+            c = data.conn()
+            try:
+                bd_cache["r"] = hit = (time.time(), bd_report(c))
+            finally:
+                c.close()
+        return {**hit[1], "computed_at": int(hit[0] * 1000)}
 
     @app.get("/api/ghcoin")
     def get_ghcoin():

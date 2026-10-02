@@ -439,7 +439,7 @@ sudo systemctl enable --now \
   paperbot-live3 paperbot-dash paperbot-liq \
   paperbot-daily3.timer paperbot-backup.timer paperbot-checkpoint.timer \
   paperbot-agents.timer paperbot-labmonthly.timer
-sudo systemctl enable --now paperbot-offsite.timer
+sudo systemctl enable --now paperbot-offsite.timer paperbot-ghcoin
 ```
 - 상자 하나를 통째로 붙여 넣습니다. 마지막 줄(서버 밖 백업)에서 `does not exist`가 나오면 4-3의 5번(설치)을 하고 그 줄만 다시 붙여 넣습니다. 위의 것들은 이미 켜졌습니다.
 
@@ -456,6 +456,7 @@ sudo systemctl enable --now paperbot-offsite.timer
 | `paperbot-agents.timer` | 에이전트 방, 15분마다 |
 | `paperbot-labmonthly.timer` | 매달 재검사, 6일 03:30 |
 | `paperbot-offsite.timer` | 서버 밖 백업, 매일 09:15 (텔레그램 'paperbot 백업' 방) |
+| `paperbot-ghcoin` | GH Coin 타점 기록기 (5분마다, `docs/ghcoin-recorder.md`). 195개 계좌와 섞이지 않음 |
 
 - **`paperbot-executor`(주문 실행기)는 켜지 않습니다.** 실거래는 이 문서의 범위가 아닙니다(`docs/live-safety.md`).
 - 서버가 재부팅돼도 위의 것들은 저절로 다시 켜집니다.
