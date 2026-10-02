@@ -4,6 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>GH Quant</title>
+  <link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials">
+  <meta name="theme-color" content="#131722">
+  <link rel="icon" href="/static/icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
   <link rel="stylesheet" href="/static/style.css">
   <script src="/static/vendor/lightweight-charts.standalone.production.js"></script>
@@ -22,6 +27,7 @@
   </nav>
   <div class="grow"></div>
   <div class="status" id="status"></div>
+  <button class="flat" id="install-app" hidden title="바탕화면·시작 메뉴에 GH Quant 아이콘을 만들고 따로 된 창으로 엽니다">📲 앱 설치</button>
   <button class="flat bell" id="bell" title="알림">
     <svg class="i" viewBox="0 0 24 24"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
     <span class="cnt" id="bell-cnt" hidden>0</span>

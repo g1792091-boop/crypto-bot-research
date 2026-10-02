@@ -90,7 +90,7 @@ function renderTop() {
   $("#of-mode").textContent = m ? `회의 중 · #${m.name}` : d.job || d.team_job ? "업무 중" : "자동 운영";
   $("#of-mode").className = m ? "of-rec on" : "of-rec";
   const st = [];
-  if (!d.ai) st.push("⚠ AI 키 없음 — 코드 업무(차트·백테스트·데이터)만 합니다");
+  if (!d.ai) st.push("⚠ AI 키 없음 — 코드 업무(차트·백테스트·데이터)만 합니다 · 'AI 배정' 탭에서 키 넣기");
   if (d.paused) st.push(`⏸ AI 한도로 ${Math.ceil(d.paused / 60)}분 쉬는 중 (질문은 받음)`);
   if (d.job_ko) st.push(`▶ 지금: ${d.job_ko}`);
   if (d.team_job) st.push(`▶ ${T(d.team_job)?.name || d.team_job} 업무`);
@@ -347,9 +347,13 @@ async function renderModels() {
       ${(ks[p] || []).map((s) => `<div class="dim">${s.slot}번 · ${esc(s.env)} · ${esc(s.masked)}</div>`).join("") || "<div class='dim'>키 없음</div>"}
       <div class="row"><select data-kp="${p}">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => `<option value="${n}">${n}번</option>`).join("")}</select><input data-kv="${p}" placeholder="키 붙여넣기 ('-' = 지우기)" style="flex:1"><button class="sm" data-kadd="${p}">넣기</button></div></div>`).join("")}</div>
     <datalist id="md-opts">${opts.map((o) => `<option value="${esc(o)}">`).join("")}</datalist>
-    <table class="of-tbl"><tr><th>팀</th><th>배정 모델</th></tr>${R.teams.map((t) => `<tr><td><button class="flat sm" data-mexp="${t.id}">▸</button> <span style="color:${t.color}">■</span> ${esc(t.name)}</td>
-      <td><input list="md-opts" data-mk="team:${t.id}" value="${esc(R.models["team:" + t.id] || "")}" placeholder="기본 배정"></td></tr>
-      <tr class="of-mrow" data-mt="${t.id}" hidden><td colspan="2"><div class="of-mgrid">${R.agents.filter((a) => a.team === t.id).map((a) => `<label>${a.lead ? "♛" : ""}${esc(a.name)} <span class="dim">${esc(a.title)}</span><input list="md-opts" data-mk="${a.id}" value="${esc(R.models[a.id] || "")}" placeholder="팀 배정"></label>`).join("")}</div></td></tr>`).join("")}</table>`;
+    ${R.ai ? "" : `<div class="of-warn">⚠ 아직 AI 키가 하나도 없습니다. 위 칸에 키를 붙여넣고 '넣기'를 누르면 직원들에게 자동으로 골고루 배정됩니다. (키가 없으면 차트·백테스트·데이터 같은 코드 업무만 합니다)</div>`}
+    <table class="of-tbl of-mtbl"><colgroup><col style="width:30%"><col style="width:34%"><col></colgroup><tr><th>팀</th><th>배정 모델</th><th>실제로 답한 AI (오늘)</th></tr>${R.teams.map((t) => { const us = R.agents.filter((a) => a.team === t.id && a.used); const ok = us.filter((a) => a.used.route).sort((x, y) => y.used.t - x.used.t);
+      const calls = us.reduce((n, a) => n + a.used.calls, 0), fails = us.reduce((n, a) => n + a.used.fails, 0);
+      return `<tr><td><button class="flat sm" data-mexp="${t.id}">▸</button> <span style="color:${t.color}">■</span> ${esc(t.name)}</td>
+      <td><input list="md-opts" data-mk="team:${t.id}" value="${esc(R.models["team:" + t.id] || "")}" placeholder="기본 배정"></td>
+      <td class="${ok.length ? "" : "dim"}">${ok.length ? `${esc(ok[0].used.route)} · ${calls}번${fails ? ` · 실패 ${fails}` : ""} · ${ago(ok[0].used.t)}` : fails ? `실패 ${fails}번 · ${esc(us[0].used.err || "")}` : "아직 없음"}</td></tr>
+      <tr class="of-mrow" data-mt="${t.id}" hidden><td colspan="3"><div class="of-mgrid">${R.agents.filter((a) => a.team === t.id).map((a) => `<label>${a.lead ? "♛" : ""}${esc(a.name)} <span class="dim">${esc(a.title)}</span><input list="md-opts" data-mk="${a.id}" value="${esc(R.models[a.id] || "")}" placeholder="팀 배정"><span class="dim">${esc(usedText(a.used))}</span></label>`).join("")}</div></td></tr>`; }).join("")}</table>`;
   $$("[data-mexp]").forEach((b) => (b.onclick = () => { const r = $(`[data-mt="${b.dataset.mexp}"]`); r.hidden = !r.hidden; b.textContent = r.hidden ? "▸" : "▾"; }));
   $("#md-save").onclick = (e) => busy(e.target, async () => {
     const models = {};
@@ -362,13 +366,22 @@ async function renderModels() {
     const p = b.dataset.kadd, v = $(`[data-kv="${p}"]`).value.trim(), slot = +$(`[data-kp="${p}"]`).value;
     if (!v) return toast("키를 붙여넣으세요");
     const r = await api("/api/ai/keys", { method: "POST", body: { [p === "claude" ? "anthropic" : p]: v, slot } });
-    toast(v === "-" ? "키를 지웠습니다" : "키를 넣었습니다", r.saved_to_file ? "settings.txt 에도 저장됨" : "이번 실행에만 적용 (settings.txt 위치를 찾지 못함)");
+    let even = "";
+    if (v !== "-" && !Object.keys(R.models || {}).some((k) => k.startsWith("team:"))) {   // 아직 팀 배정이 없으면 넣은 키를 바로 팀마다 나눠 준다
+      await api("/api/office/models/even", { method: "POST" }).then(() => (even = " · 팀마다 자동 배정함")).catch(() => {});
+    }
+    toast(v === "-" ? "키를 지웠습니다" : "키를 넣었습니다", (r.saved_to_file ? "settings.txt 에도 저장됨" : "이번 실행에만 적용 (settings.txt 위치를 찾지 못함)") + even);
     renderModels();
   })));
 }
 
 // ------------------------------------------------------------------ 직원 카드 · 팀 구성
-function agentCard(id) {
+const ago = (t) => { const m = Math.round((Date.now() / 1000 - t) / 60); return m < 1 ? "방금" : m < 60 ? `${m}분 전` : `${Math.round(m / 60)}시간 전`; };
+// 직원이 실제로 답한 AI (키·모델) — 배정만 되고 안 쓰이는지 화면에서 바로 확인
+const usedText = (u) => !u ? "아직 AI 호출 없음" : u.route ? `${u.route} · 오늘 ${u.calls}번 성공${u.fails ? ` · 실패 ${u.fails}번` : ""} · ${ago(u.t)}` : `실패 ${u.fails}번 · ${u.err || ""} · ${ago(u.t)}`;
+
+async function agentCard(id) {
+  R = await api("/api/office/roster").catch(() => R);
   const a = A(id);
   if (!a) return;
   const t = T(a.team);
@@ -377,11 +390,13 @@ function agentCard(id) {
   cardOpen = id;
   box.innerHTML = `<div class="of-cardin"><button class="flat of-x" id="of-cx">✕</button><div class="row" style="gap:12px">${sprite(a, 64)}
     <div><div style="font-size:16px"><b>${a.lead ? "♛ " : ""}${esc(a.name)}</b> ${a.lead ? "<span class='of-tag'>팀장</span>" : ""}</div><div class="dim">${esc(t.name)} · ${esc(a.title)}</div></div></div>
-    <p>${esc(a.duty)}</p><dl class="of-dl"><dt>쓰는 도구</dt><dd>${esc(a.tools.join(", "))}</dd><dt>배정된 AI</dt><dd>${esc(a.model || "기본 배정 (막히면 다른 모델로 자동 전환)")}</dd>
+    <p>${esc(a.duty)}</p><dl class="of-dl"><dt>쓰는 도구</dt><dd>${esc(a.tools.join(", "))}</dd><dt>배정된 AI</dt><dd>${esc(a.model || "기본 배정 (막히면 다른 모델로 자동 전환)")} <button class="flat sm" id="of-to-models">바꾸기</button></dd>
+    <dt>실제로 답한 AI</dt><dd class="${a.used?.route ? "" : "dim"}">${esc(R.ai ? usedText(a.used) : "AI 키 없음 — 'AI 배정' 탭에서 키를 넣으세요")}</dd>
     <dt>부르는 법</dt><dd>@${esc(a.name)}</dd></dl>
     <div class="of-sub">최근에 본 것</div>${(a.seen || []).slice().reverse().map((o) => `<div>${esc(o.icon)} ${o.url ? `<a href="${esc(o.url)}" target="_blank" rel="noopener">${esc(o.text)}</a>` : esc(o.text)} <span class="dim">${hhmm(o.t)}</span></div>`).join("") || "<div class='dim'>아직 없음</div>"}
     <div class="row" style="margin-top:10px"><button class="sm pri" id="of-ask-ag">이 사람에게 질문</button><button class="sm" id="of-run-team">이 팀 업무 시키기</button></div></div>`;
   $("#of-cx").onclick = () => (box.hidden = true);
+  $("#of-to-models").onclick = () => { box.hidden = true; setTab("models"); };
   $("#of-ask-ag").onclick = () => { box.hidden = true; ch = a.team; chanOptions(); setTab("log"); $("#of-q").value = `@${a.name} `; $("#of-q").focus(); };
   $("#of-run-team").onclick = (e) => busy(e.target, () => api(`/api/office/team/${a.team}`, { method: "POST" }).then(() => toast(`${t.name} 업무를 시켰습니다`)));
 }

@@ -67,6 +67,9 @@ DATA_SOURCE=auto
 # 사용할 포트 (이미 사용 중이면 자동으로 다른 포트를 고릅니다)
 PORT=8000
 
+# 1 = 주소창 없는 따로 된 앱 창으로 열기 (크롬·엣지) / 0 = 평소 브라우저 탭
+APP_WINDOW=1
+
 # ── 서버(클라우드)에서 24시간 돌릴 때 ──
 # 접속 비밀번호. 서버 모드(launcher.py --server)에서는 꼭 넣어야 합니다. 브라우저가 물으면 아이디는 아무거나, 비밀번호는 이것.
 APP_PASSWORD=
@@ -112,6 +115,53 @@ def load_settings(path: Path) -> None:
             os.environ[key] = value
 
 
+def _browsers() -> list[str]:
+    """앱 창(--app)을 열 수 있는 크로미움 계열 브라우저 (Edge 는 윈도우에 기본으로 있음)."""
+    if sys.platform == "win32":
+        out = []
+        for env in ("ProgramFiles(x86)", "ProgramFiles", "LocalAppData"):
+            base = os.environ.get(env)
+            if base:
+                out += [str(Path(base, "Microsoft", "Edge", "Application", "msedge.exe")),
+                        str(Path(base, "Google", "Chrome", "Application", "chrome.exe")),
+                        str(Path(base, "BraveSoftware", "Brave-Browser", "Application", "brave.exe"))]
+        return [x for x in out if Path(x).exists()]
+    if sys.platform == "darwin":
+        apps = ["Google Chrome", "Microsoft Edge", "Brave Browser", "Chromium"]
+        out = []
+        for root in ("/Applications", str(Path.home() / "Applications")):
+            out += [f"{root}/{a}.app/Contents/MacOS/{a}" for a in apps]
+        return [x for x in out if Path(x).exists()]
+    import shutil
+    names = ["google-chrome", "google-chrome-stable", "microsoft-edge", "chromium", "chromium-browser", "brave-browser"]
+    return [w for w in (shutil.which(n) for n in names) if w]
+
+
+def open_app(url: str) -> None:
+    """브라우저 탭(웹사이트)이 아니라 주소창 없는 따로 된 앱 창으로 연다. 크롬·엣지가 없으면 기본 브라우저."""
+    import subprocess
+    if os.environ.get("APP_WINDOW", "1") != "0":
+        for exe in _browsers():
+            try:
+                flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+                subprocess.Popen([exe, f"--app={url}", "--start-maximized", "--no-first-run"],
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=flags)
+                return
+            except OSError:
+                continue
+    webbrowser.open(url)
+
+
+def running_here(port: int) -> bool:
+    """이 포트에 GH Quant 가 이미 켜져 있나 (두 번 눌러도 프로그램이 둘이 되지 않게)."""
+    import urllib.request
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/manifest.webmanifest", timeout=1.5) as r:
+            return b'"GH Quant"' in r.read(400)
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def pick_port(preferred: int) -> int:
     for port in [preferred, *range(preferred + 1, preferred + 20)]:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -144,7 +194,12 @@ def main() -> None:
         print(" (비밀번호 없이 쓰려면 HOST=127.0.0.1 로 두고 SSH 터널로 접속)")
         print("=" * 56)
         sys.exit(2)
-    port = int(os.environ.get("PORT") or 8000) if server else pick_port(int(os.environ.get("PORT") or 8000))
+    want = int(os.environ.get("PORT") or 8000)
+    if not server and not os.environ.get("NO_BROWSER") and running_here(want):
+        print(f"GH Quant 가 이미 켜져 있어 창만 새로 엽니다: http://127.0.0.1:{want}")
+        open_app(f"http://127.0.0.1:{want}")
+        return
+    port = want if server else pick_port(want)
     url = f"http://127.0.0.1:{port}" if not server else f"http://<서버 IP>:{port}"
 
     # 설정을 환경 변수에 올린 뒤에 앱을 불러와야 config 가 값을 읽는다
@@ -153,7 +208,7 @@ def main() -> None:
 
     print("=" * 56)
     print(" GH Quant 실행 중")
-    print(f" 브라우저 주소: {url}")
+    print(f" 주소: {url}  (따로 된 앱 창으로 열립니다 · 창을 닫아도 이 창이 켜져 있으면 계속 일함)")
     from app import config as _cfg
     ai = {"claude": "Claude", "nvidia": f"NVIDIA ({'자동 선택' if _cfg.NVIDIA_MODEL == 'auto' else _cfg.NVIDIA_MODEL})", "gemini": "Gemini"}.get(_cfg.provider() or "", "미설정 (규칙 기반)")
     print(f" AI: {ai}"
@@ -161,7 +216,7 @@ def main() -> None:
     print(" 서버 모드 · 접속 비밀번호 켜짐" if server else " 종료하려면 이 창을 닫거나 Ctrl+C 를 누르세요.")
     print("=" * 56)
     if not os.environ.get("NO_BROWSER") and not server:
-        threading.Timer(1.5, webbrowser.open, [url]).start()
+        threading.Timer(1.5, open_app, [url]).start()
     uvicorn.run(app, host=host, port=port, log_level="warning", proxy_headers=False)
 
 

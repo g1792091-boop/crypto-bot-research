@@ -805,3 +805,7 @@ a.btn.pri { background: var(--accent); border-color: var(--accent); color: #fff;
 button.danger { background: rgba(242,54,69,.15); border-color: #f23645; color: #ff8a93; }
 
 .of-e.card.term { border-color: #ff7043; }
+.of-warn { margin: 8px 0; padding: 8px 10px; border: 1px solid rgba(245,165,36,.5); background: rgba(245,165,36,.1); border-radius: 6px; color: #f5a524; }
+.of-mgrid label .dim { display: block; font-size: 11px; }
+.of-mtbl { table-layout: fixed; }
+.of-mtbl td { overflow-wrap: anywhere; vertical-align: top; }

@@ -59,6 +59,7 @@ AI(코파일럿·에이전트 팀·자동 분석·오토파일럿)는 24시간 �
 ### 직원 AI 배정 · 키 여러 개
 `NVIDIA_API_KEY_2` … `_9`, `GEMINI_API_KEY_2` …, `ANTHROPIC_API_KEY_2` … 로 키를 여러 개 넣고(화면 'AI 배정' 에서도 가능), 팀·직원마다 `nvidia#2:auto` 처럼 '공급자#키번호:모델' 로 고른다.
 분당 호출 한도는 키마다 따로 센다. '키 골고루 나누기' 는 넣은 키들을 팀마다 차례로 나눠 준다. 우선순위: 직원 배정 > 팀 배정 > 'AI 모델' 창 기본 배정.
+처음 키를 넣으면 팀마다 자동으로 골고루 배정된다. 'AI 배정' 탭의 '실제로 답한 AI (오늘)' 와 직원 카드의 '실제로 답한 AI' 에 진짜 답한 키·모델·횟수·실패 이유가 나온다 (배정만 되고 안 쓰이는지 바로 확인).
 
 ### 결과 · 다운로드
 모든 결과는 `{STATE_DIR}/office/files/` 에 파일로 쌓인다 (데스크톱 앱은 실행 파일 옆 `state/office/files`). 'AI 사무실 → 결과·다운로드' 에서 실제 경로를 보여 주고, 파일마다 받기 · 전체 ZIP 받기 · 폴더 열기(데스크톱).
@@ -309,7 +310,9 @@ curl -fsSL -H "Authorization: token $GH_TOKEN" https://raw.githubusercontent.com
    - Mac (M1/M2/M3 등 Apple Silicon): `GHQuant-macos-arm64.zip`
 2. 압축을 풀고 `GHQuant.exe`를 더블클릭한다 (Mac은 우클릭 → 열기).
    Windows에서 "PC 보호" 창이 뜨면 **추가 정보 → 실행**을 누른다.
-3. 브라우저가 자동으로 열린다. API 키는 같은 폴더의 `settings.txt`를 메모장으로 열어 넣는다.
+3. 주소창 없는 앱 창(엣지·크롬 `--app`)으로 열린다 — 웹사이트 탭이 아니다. 다시 실행하면 창만 새로 연다. `settings.txt` 의 `APP_WINDOW=0` 이면 평소 브라우저 탭.
+   설치형 웹앱(manifest + service worker)이라 위쪽 '📲 앱 설치' 로 바탕화면·시작 메뉴 아이콘을 만들 수 있다 (서버 모드에서 휴대폰 홈 화면에도).
+   API 키는 화면의 'AI 사무실 → AI 배정' 이나 같은 폴더의 `settings.txt` 에 넣는다.
 
 이 실행 파일은 GitHub Actions(`.github/workflows/build-desktop.yml`)가 코드를 푸시할 때마다 자동으로 빌드한다.
 직접 빌드하려면 `pip install -r backend/requirements.txt pyinstaller && python packaging/build.py`를 실행한다.

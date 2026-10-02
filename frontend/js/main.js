@@ -50,4 +50,15 @@ async function init() {
   $("#nav").onclick = (e) => e.target.dataset.view && go(e.target.dataset.view);
 }
 
+// 설치형 웹앱: 바탕화면·시작 메뉴 아이콘으로 따로 된 창에서 열기 (브라우저가 '설치'를 허락할 때만 버튼이 보임)
+function initInstall() {
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+  let ask = null;
+  const btn = $("#install-app");
+  window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); ask = e; btn.hidden = false; });
+  window.addEventListener("appinstalled", () => { btn.hidden = true; toast("앱 설치 완료", "바탕화면·시작 메뉴의 GH Quant 아이콘으로 열 수 있습니다 (프로그램이 켜져 있어야 함)."); });
+  btn.onclick = async () => { if (!ask) return; ask.prompt(); await ask.userChoice.catch(() => null); ask = null; btn.hidden = true; };
+}
+
+initInstall();
 init().catch((e) => toast("시작 실패", e.message, "err"));

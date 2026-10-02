@@ -39,7 +39,7 @@ CFG: dict = dict(DEFAULT_CFG)
 ST: dict = {}
 RT = {"queue": deque(), "meeting": None, "agents": {}, "huddle": None, "presenting": None, "job": None, "paused_until": 0.0,
       "limits": deque(maxlen=10), "seen": {}, "last_work_post": {}, "stop_meeting": False, "visible": 0.0, "started": time.time(),
-      "events": deque(maxlen=200)}
+      "events": deque(maxlen=200), "ai_used": {}}
 JOB_KO = {"research": "매매법 연구", "forecast": "방향 예측 토론", "ml": "머신러닝 실험", "sns": "SNS 여론 확인", "media": "유튜브·인스타 조사",
           "paper": "시그널 추적 점검", "flowscan": "선물 수급 점검", "alt": "알트 순환 점검", "coinnews": "코인 뉴스 해설", "pm": "포트폴리오 점검",
           "scen": "시나리오 대비", "comp": "컴플라이언스 점검", "datacheck": "데이터 품질 점검", "viz": "시각화 자료", "files": "파일 작업",
@@ -202,20 +202,36 @@ def _ai(system: str, user: str, aid: str, max_tokens: int = 1400) -> tuple[str |
     errs = []
     for r in assigned_routes(aid):                       # 이 직원·팀에 배정한 모델(키)부터
         if not ai_routes.available(r):
+            errs.append(f"{r}: 키 없음")
             continue
         try:
             out, route = llm._run("text", system, user, max_tokens, None, None, feature, None, tier, r)
+            _used(aid, route, None)
             return out, route, None
         except Exception as e:  # noqa: BLE001
             errs.append(f"{r}: {str(e)[:120]}")
             _limit_hit(str(e))
     try:
         out, route = llm._run("text", system, user, max_tokens, None, None, feature, None, tier)
+        _used(aid, route, None)
         return out, route, None
     except (LLMUnavailable, Exception) as e:  # noqa: BLE001
         msg = " / ".join(errs + [str(e)])
         _limit_hit(msg)
+        _used(aid, None, msg[:200])
         return None, None, msg[:300]
+
+
+def _used(aid: str, route: str | None, err: str | None) -> None:
+    """직원마다 실제로 답한 AI(키·모델)와 횟수 — 화면에서 'AI 가 정말 들어갔는지' 확인용."""
+    u = RT["ai_used"].setdefault(aid, {"calls": 0, "fails": 0})
+    u["t"] = time.time()
+    if route:
+        u["calls"] += 1
+        u["route"], u["err"] = route, None
+    else:
+        u["fails"] += 1
+        u["err"] = err
 
 
 def assigned_routes(aid: str) -> list[str]:
@@ -1580,7 +1596,8 @@ def _pipe_counts() -> dict:
 def roster_view() -> dict:
     from .. import ai_routes, keyring
     return {"teams": roster.TEAMS, "agents": [{**a, "tools": roster.tools_for(a["id"]), "seen": RT["seen"].get(a["id"], [])[-6:],
-                                               "model": (assigned_routes(a["id"]) or [None])[0]} for a in roster.AGENTS],
+                                               "model": (assigned_routes(a["id"]) or [None])[0], "used": RT["ai_used"].get(a["id"])} for a in roster.AGENTS],
+            "ai": ai_ok(),
             "models": CFG.get("models") or {}, "key_slots": keyring.view(), "suggest": ai_routes.view().get("suggest"),
             "agenda": [{"id": g["id"], "title": g["title"], "room": g["room"]} for g in roster.AGENDA], "jobs": JOB_KO, "closer": roster.CLOSER}
 

@@ -159,3 +159,37 @@ def test_api_state_and_ask(fake_ai):
     assert any(e["kind"] == "user" for e in st["log"]) and st["queue"] >= 1 and "board" in st
     assert c.post("/api/office/cfg", json={"every": 60}).json()["every"] == 60
     office.set_cfg({"every": 30})
+
+
+def test_actual_ai_use_is_tracked_per_agent(fake_ai):
+    aid = roster.AGENTS[0]["id"]
+    office.RT["ai_used"].pop(aid, None)
+    out, route, err = office._ai("시스템", "질문", aid)
+    assert out and route == "fake:model" and err is None
+    u = office.roster_view()["agents"][0]["used"]
+    assert u["route"] == "fake:model" and u["calls"] == 1 and u["fails"] == 0
+
+
+def test_launcher_app_window_helpers(monkeypatch):
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    import launcher
+    opened = []
+    monkeypatch.setattr(launcher, "_browsers", lambda: [])
+    monkeypatch.setattr(launcher.webbrowser, "open", opened.append)
+    launcher.open_app("http://127.0.0.1:1")
+    assert opened == ["http://127.0.0.1:1"]                     # 크롬·엣지가 없으면 기본 브라우저
+    assert launcher.running_here(1) is False
+    assert "APP_WINDOW=1" in launcher.SETTINGS_TEMPLATE
+
+
+def test_pwa_manifest_and_service_worker():
+    from fastapi.testclient import TestClient
+    from app.main import app
+    c = TestClient(app)
+    m = c.get("/manifest.webmanifest")
+    assert m.status_code == 200 and m.json()["display"] == "standalone" and m.json()["name"] == "GH Quant"
+    for ic in m.json()["icons"]:
+        assert c.get(ic["src"]).status_code == 200
+    assert c.get("/sw.js").status_code == 200

@@ -1474,3 +1474,14 @@ app.mount("/static", StaticFiles(directory=config.FRONTEND_DIR), name="static")
 @app.get("/")
 def index():
     return FileResponse(config.FRONTEND_DIR / "index.html")
+
+
+# 앱 창(설치형 웹앱): 브라우저 탭이 아니라 따로 된 창 · 바탕화면/시작 메뉴 아이콘
+@app.get("/manifest.webmanifest", include_in_schema=False)
+def manifest():
+    return FileResponse(config.FRONTEND_DIR / "manifest.webmanifest", media_type="application/manifest+json")
+
+
+@app.get("/sw.js", include_in_schema=False)
+def service_worker():
+    return FileResponse(config.FRONTEND_DIR / "sw.js", media_type="text/javascript", headers={"Cache-Control": "no-cache"})
