@@ -117,6 +117,12 @@ export const TECH = [
     where: "—"},
   {repo: "Autumn-27/ARTEX", lic: "AGPL-3.0 (코드 복사 없음·설계 아이디어만)", teams: ["hq", "selfai", "bot"], status: "부분 적용(공격 기능 전부 제외)",
     what: "ARTEX 는 보안 공격(레드팀)용 자율 도구라, 그 공격류 기능은 하나도 넣지 않았다. 범용 멀티에이전트 설계만 재구현: planner 가 공유 todolist 로 다음 의도만 던지고 · worker 가 의도 하나씩 실행 · 결과를 공유 보드에 혈연 링크(어느 의도가 무엇을 냈나)로 축적 · 선행조건과 중복을 관리. 쓰는 것은 기존 코인 데이터·백테스트·자체 AI 판단뿐",
-    where: "lib/planner.js(todolist·선행조건·디듀프) · lib/board.js(공유 보드·lineage) · coin-office plannerJob('plan' job, 자동 업무 회전·음성·봇 조종판 [🧭 리서치 플래너]) · 코인 AI 봇 지식(보드)"}
+    where: "lib/planner.js(todolist·선행조건·디듀프) · lib/board.js(공유 보드·lineage) · coin-office plannerJob('plan' job, 자동 업무 회전·음성·봇 조종판 [🧭 리서치 플래너]) · 코인 AI 봇 지식(보드)"},
+  {repo: "NousResearch/hermes-agent", lic: "MIT", teams: ["hq", "selfai", "bot", "coinai"], status: "적용",
+    what: "경험에서 교훈(스킬)을 만들고, 쓰면서 강화하고, 상황에 맞게 떠올리는 자기개선 학습 루프 → 모든 에이전트가 공유하는 '배운 것' 메모리. 공격 요소 없는 범용 에이전트 프레임워크",
+    where: "lib/lessons.js(학습·강화·회상) · personaOf 로 전 에이전트 프롬프트에 주입 · plannerJob·selfaiJob·botImproveJob 가 교훈을 기록 · 코인 AI 봇 지식"},
+  {repo: "AIPentest/CyberStrikeAI · 0x4m4/hexstrike-ai · usestrix/strix · oritera/Cairn", lic: "각 OSS", teams: [], status: "해당 없음(제외)",
+    what: "모두 보안 공격(레드팀)용 자율 AI 도구라 거래 앱에 넣지 않는다. clone 해 내용만 확인했고, vendor 보관·포팅은 하지 않았다",
+    where: "—"}
 ];
 export const TECH_REPOS = 40;   // 에이전트·자체 AI·RAG 관련 (biomolecular·probot 은 해당 없음)

@@ -66,6 +66,7 @@ async function gatherDocs(){
     } } catch(err){}
     try { for (const t of (O.TEAMS || [])){ for (const n of (O.teamNotes?.(t.id) || [])) docs.push({id: "note-" + t.id + "-" + n.t, title: `${t.name} 노트`, text: `${t.name}: ${n.text}`, meta: {kind: "노트", team: t.id}}); } } catch(err){}
     try { const board = await (O.researchBoard ? O.researchBoard(16) : []); for (const f of board) docs.push({id: "board-" + f.id, title: `리서치 보드 · ${f.targetName || f.job}`, text: `${f.kind}: ${f.text} (의도 ${f.intent})`, meta: {kind: "리서치보드"}}); } catch(err){}
+    try { const skills = await (O.learnedSkills ? O.learnedSkills(20) : []); for (const s of skills) docs.push({id: "skill-" + s.id, title: "배운 것(경험)", text: `${s.text} (${s.uses}회 반복, 신뢰 ${Math.round((s.conf || 0) * 100)}%)`, meta: {kind: "학습"}}); } catch(err){}
   } catch(err){}
   try {
     const P = await import("../nuri-ai/paper.js"), book = await P.loadBook();

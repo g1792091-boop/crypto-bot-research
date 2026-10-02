@@ -774,7 +774,7 @@ async function solo(a, {room, sys, user, maxTokens = 900, temperature = 0.6, ext
   return {...entry, raw: finalRaw};
 }
 const personaOf = (a, extra = "") => `너는 세계적인 기업 수준의 GH Coin ${teamById(a.team).name}의 '${a.name}'(${a.title})다. 역할: ${a.duty}
-${notesText(a.team)}
+${notesText(a.team)}${skillsText()}
 반드시 한국어로만 쓰고, 영어 생각이나 답 계획은 쓰지 않는다. 이번 일에서는 도구를 부를 수 없으니 주어진 자료로만 말한다. 첫 줄은 '💭 '로 시작하는 한 문장 속마음(무엇을 보고 어떻게 판단하는지)이다. 그다음 동료에게 말하듯 자연스러운 한국어로 말한다. 데이터에 없는 숫자는 지어내지 않는다. ${extra}`;
 
 /* ---- 모의투자 (코드) ---- */
@@ -1759,6 +1759,7 @@ async function botImproveJob(){
     const ns = await P.addStrategy({spec: {...res.best.spec, name: `${s.name} v${S.latest(res.best.spec.name)?.semver || "+"}`}, market: s.market, exchange: s.exchange, tf, author: lead.name, wf: {is: res.best.wf.is, oos: res.best.wf.oos}, cls: s.cls, mname: s.mname, lane: s.lane});
     post({ch: "demo", kind: "system", text: `🔧 봇 자동개선 버전 데모 투입: ${ns.name} (원본 ${s.name}은 그대로 비교 운용 · 보조지표·위험값 하이퍼옵트)`});
     journal("record", "strategy", ns.id, {from: s.id, loss, bot: true, semver: S.latest(res.best.spec.name)?.semver}, "bot_lead", "봇 자동개선 버전");
+    await learnSkill(`${s.name} ${res.lossKo} 자동개선으로 검증 성과 개선 → 채택`, {job: "botopt"});
   }
   pubTo(s.market, "bot", {team: "bot", title: `봇 자동개선: ${ok ? "새 버전 채택" : "유지"}`, text: `${s.name} · ${res.lossKo} · 검증 순손익 ${f(res.base.wf.oos.net_pnl)} → ${f(res.best.wf.oos.net_pnl)} · 운일 확률 ${f(r1.p, 3)}`, spec: res.best.spec, baseSpec: s.spec});
   addNote("bot", `${s.name} 자동개선: ${res.lossKo} → ${ok ? "새 버전 투입" : "유지"} (검증 순손익 ${f(res.base.wf.oos.net_pnl)} → ${f(res.best.wf.oos.net_pnl)}, p=${f(r1.p, 3)})`, "봇자동개선");
@@ -1858,6 +1859,7 @@ async function selfaiJob(){
     rows.map((r, i) => [String(i + 1), r.c.ko, r.j.label, (r.j.score >= 0 ? "+" : "") + r.j.score.toFixed(2), r.j.confidence + "%", Math.round(r.j.agree * 100) + "%", r.j.parts.map(p => `${p.name} ${p.v >= 0 ? "+" : ""}${p.v.toFixed(2)}`).join(" · ") || "—"]),
     `확신도는 신호 크기 + 신호 간 합의로 매긴 0~95 참고값입니다. 자체 AI 는 판단만 하고, 실제 주문은 사용자가 켠 전략만 실거래 화면의 한도·승인 안에서 냅니다.${deep ? ` · 1위는 ML(${deep.edge === "edge" ? "우위 있음" : deep.edge === "weak" ? "약함" : "우위 없음"})` : ""}${aiOp ? ` · 외부 AI 의견 반영(확신 ${aiOp.confidence}%)` : " · 외부 AI 꺼짐(설정에서 켜면 LLM 의견도 한 표로 반영)"}${plan ? "\n" + plan : ""}`);
   addNote("selfai", `자체 AI 1위 ${top.c.ko} ${top.j.label} (확신도 ${top.j.confidence}%) · 순위 ${rows.map(r => r.c.ko).join(" > ")}${aiOp ? " · 외부 AI 반영" : ""}`, "자체AI");
+  await learnSkill(`${top.c.ko} 자체 AI ${top.j.label} (확신 ${top.j.confidence}%): ${top.j.reasons[0] || ""}`, {job: "selfai"});
   pubTo(top.c.sym, "selfai", {team: "selfai", title: `자체 AI: ${top.c.ko} ${top.j.label} (${top.j.confidence}%)`, text: SELF.summary(top.j)});
   await explain(lead.id, "selfai", "자체 AI 앙상블 순위표를 보고 확신도가 높은 코인과 어떤 신호(기술 평점·멀티 시간대·ML·알파)가 합의했는지, 신호가 엇갈려 중립인 코인은 왜 그런지 해설한다. 확신도는 참고값이고 주문은 승인·한도 안에서만 나간다는 점을 밝힌다.", tableText(["순위", "코인", "방향", "점수", "확신도", "근거"], rows.map((r, i) => [String(i + 1), r.c.ko, r.j.label, r.j.score.toFixed(2), r.j.confidence + "%", r.j.reasons.join(" / ")])), "아래 자체 AI 앙상블 순위를 해설해 줘.");
 }
@@ -1890,6 +1892,11 @@ async function aiOpinion(coin, j){
    planner 가 상태(코인·전략·관문·경보·최근 보드)를 보고 '지금 할 일 목록'을 만들고, 선행조건을 지켜 최우선 의도 하나를
    골라 기존 job(워커)으로 실행한 뒤, 결과를 공유 보드에 기록한다. 정찰·침투·공격 요소는 전혀 없다. ---- */
 const lsStore = () => ({get: (k, d) => readJ(k, d), set: (k, v) => writeJ(k, v)});
+// hermes-agent 식 경험 학습 루프: 리서치하며 배운 교훈을 쌓고(강화), 모든 에이전트 프롬프트에 넣어 재사용한다 (lib/lessons.js)
+async function learnSkill(text, {job = "", ok = true} = {}){ try { const M = await lib("lessons"); return M.makeLessons(lsStore()).learn(text, {job, ok}); } catch(e){ return null; } }
+function topSkills(n = 6){ const l = readJ("coinLessons", []); if (!Array.isArray(l) || !l.length) return []; return [...l].sort((a, b) => (b.uses * (0.5 + 0.5 * (b.conf || 0))) - (a.uses * (0.5 + 0.5 * (a.conf || 0)))).slice(0, n); }
+const skillsText = () => { const t = topSkills(5); return t.length ? `우리 팀이 경험에서 배운 것(반복될수록 강화됨 · 참고): ${t.map(x => x.text).join(" / ")}\n` : ""; };
+export async function learnedSkills(n = 20){ try { const M = await lib("lessons"); return M.makeLessons(lsStore()).top(n); } catch(e){ return []; } }
 async function plannerJob(){
   const P = await lib("planner"), B = await lib("board"), PB = await import("../nuri-ai/paper.js"), board = B.makeBoard(lsStore());
   let book = {strategies: []}; try { book = await PB.loadBook(); } catch(e){}
@@ -1910,7 +1917,8 @@ async function plannerJob(){
   try { if (fn) await fn(); } catch(e){ post({ch: "hq", kind: "system", text: `플래너 워커 오류: ${String(e.message || e).slice(0, 100)}`}); }
   const note = teamNotes(JOB_TEAM[pick.job] || "hq").slice(-1)[0];
   board.add({intent: pick.id, job: pick.job, target: pick.target, targetName: pick.targetName, kind: "발견", text: note?.text || `${JOB_KO[pick.job] || pick.job} 수행`});
-  addNote("hq", `플래너: ${JOB_KO[pick.job] || pick.job}${pick.targetName ? ` · ${pick.targetName}` : ""} 실행 · 공유 보드 ${board.count()}건`, "플래너");
+  if (note?.text) await learnSkill(`${pick.targetName || JOB_KO[pick.job] || pick.job}: ${note.text}`, {job: pick.job});
+  addNote("hq", `플래너: ${JOB_KO[pick.job] || pick.job}${pick.targetName ? ` · ${pick.targetName}` : ""} 실행 · 공유 보드 ${board.count()}건 · 배운 것 ${(await learnedSkills(999)).length}건`, "플래너");
 }
 // 공유 보드 읽기 (코인 AI 봇·UI 가 씀)
 export async function researchBoard(n = 12){ const B = await lib("board"); return B.makeBoard(lsStore()).recent(n); }
