@@ -1823,7 +1823,31 @@ const BOT_TEMPLATES = [
     long_entry: {logic: "all", conditions: [{left: "ef", op: ">", right: "es"}, {left: "close", op: ">", right: "ef"}, {left: "adx.plus_di", op: ">", right: "adx.minus_di"}]},
     short_entry: {logic: "all", conditions: [{left: "ef", op: "<", right: "es"}, {left: "close", op: "<", right: "ef"}, {left: "adx.minus_di", op: ">", right: "adx.plus_di"}]},
     long_exit: {logic: "any", conditions: [{left: "close", op: "crosses_below", right: "ef"}]}, short_exit: {logic: "any", conditions: [{left: "close", op: "crosses_above", right: "ef"}]},
-    risk: {leverage: BOT_LEV, position_pct: 20, atr_stop_mult: 3, minimal_roi: {"0": 10, "240": 5, "960": 2, "2880": 0}}})}
+    risk: {leverage: BOT_LEV, position_pct: 20, atr_stop_mult: 3, minimal_roi: {"0": 10, "240": 5, "960": 2, "2880": 0}}})},
+  {id: "macd", name: "MACD 추세 봇", repo: "freqtrade · jesse", build: (c, tf) => ({
+    name: `🤖 MACD 추세 봇 · ${c.ko} ${TF_KO[tf]}`, indicators: [{id: "m", type: "macd", fast: 12, slow: 26, signal: 9}, {id: "ef", type: "ema", length: 200}, {id: "adx", type: "adx", length: 14}],
+    long_entry: {logic: "all", conditions: [{left: "m.line", op: "crosses_above", right: "m.signal"}, {left: "m.line", op: "<", right: "0"}, {left: "close", op: ">", right: "ef"}, {left: "adx.adx", op: ">", right: "18"}]},
+    short_entry: {logic: "all", conditions: [{left: "m.line", op: "crosses_below", right: "m.signal"}, {left: "m.line", op: ">", right: "0"}, {left: "close", op: "<", right: "ef"}, {left: "adx.adx", op: ">", right: "18"}]},
+    long_exit: {logic: "any", conditions: [{left: "m.line", op: "crosses_below", right: "m.signal"}]}, short_exit: {logic: "any", conditions: [{left: "m.line", op: "crosses_above", right: "m.signal"}]},
+    risk: {leverage: BOT_LEV, position_pct: 20, atr_stop_mult: 2.5, trailing_stop_pct: 3}})},
+  {id: "keltner", name: "켈트너 추세 봇", repo: "OctoBot · freqtrade", build: (c, tf) => ({
+    name: `🤖 켈트너 추세 봇 · ${c.ko} ${TF_KO[tf]}`, indicators: [{id: "kc", type: "keltner", length: 20, mult: 2}, {id: "ef", type: "ema", length: 200}, {id: "adx", type: "adx", length: 14}],
+    long_entry: {logic: "all", conditions: [{left: "close", op: "crosses_above", right: "kc.upper"}, {left: "close", op: ">", right: "ef"}, {left: "adx.adx", op: ">", right: "20"}]},
+    short_entry: {logic: "all", conditions: [{left: "close", op: "crosses_below", right: "kc.lower"}, {left: "close", op: "<", right: "ef"}, {left: "adx.adx", op: ">", right: "20"}]},
+    long_exit: {logic: "any", conditions: [{left: "close", op: "crosses_below", right: "kc.middle"}]}, short_exit: {logic: "any", conditions: [{left: "close", op: "crosses_above", right: "kc.middle"}]},
+    risk: {leverage: BOT_LEV, position_pct: 20, atr_stop_mult: 2, trailing_stop_pct: 3.5}})},
+  {id: "srsi", name: "스토캐스틱RSI 되돌림 봇", repo: "jesse · Erfaniaa", build: (c, tf) => ({
+    name: `🤖 스토캐스틱RSI 되돌림 봇 · ${c.ko} ${TF_KO[tf]}`, indicators: [{id: "sr", type: "stochrsi", length: 14, k_smooth: 3, d_smooth: 3}, {id: "ef", type: "ema", length: 200}],
+    long_entry: {logic: "all", conditions: [{left: "sr.k", op: "crosses_above", right: "sr.d"}, {left: "sr.k", op: "<", right: "25"}, {left: "close", op: ">", right: "ef"}]},
+    short_entry: {logic: "all", conditions: [{left: "sr.k", op: "crosses_below", right: "sr.d"}, {left: "sr.k", op: ">", right: "75"}, {left: "close", op: "<", right: "ef"}]},
+    long_exit: {logic: "any", conditions: [{left: "sr.k", op: ">", right: "80"}]}, short_exit: {logic: "any", conditions: [{left: "sr.k", op: "<", right: "20"}]},
+    risk: {leverage: BOT_LEV, position_pct: 20, stop_loss_pct: 2.5, take_profit_pct: 4, allow_reverse: false}})},
+  {id: "donch", name: "변동성 돌파 봇", repo: "passivbot · freqtrade", build: (c, tf) => ({
+    name: `🤖 변동성 돌파 봇 · ${c.ko} ${TF_KO[tf]}`, indicators: [{id: "dc", type: "donchian", length: 20}, {id: "ef", type: "ema", length: 100}, {id: "adx", type: "adx", length: 14}],
+    long_entry: {logic: "all", conditions: [{left: "close", op: "crosses_above", right: "dc.upper[1]"}, {left: "close", op: ">", right: "ef"}, {left: "adx.adx", op: ">", right: "22"}]},
+    short_entry: {logic: "all", conditions: [{left: "close", op: "crosses_below", right: "dc.lower[1]"}, {left: "close", op: "<", right: "ef"}, {left: "adx.adx", op: ">", right: "22"}]},
+    long_exit: {logic: "any", conditions: [{left: "close", op: "crosses_below", right: "dc.middle"}]}, short_exit: {logic: "any", conditions: [{left: "close", op: "crosses_above", right: "dc.middle"}]},
+    risk: {leverage: BOT_LEV, position_pct: 20, atr_stop_mult: 2.5, trailing_stop_pct: 4}})}
 ];
 // 그리드·DCA 연구용 프리셋 (실거래로 안 나감) — passivbot 방식
 const BOT_SIM_PRESETS = [

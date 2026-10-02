@@ -65,13 +65,41 @@ export function approveDialog(p, {signal, ms = Live.APPROVAL_MS} = {}){
   });
 }
 
+/* ============ 실전 연결 안내 (단계별 가이드) ============ */
+const GUIDE_STEPS = [
+  {t: "1. 먼저 테스트넷에서 (가짜 돈)", d: "환경은 기본이 테스트넷입니다. testnet.binancefuture.com 에서 로그인해 API 키를 받으면 가짜 USDT로 똑같이 연습할 수 있습니다. 실거래는 테스트넷에서 충분히 돌려 본 뒤에만 켜세요."},
+  {t: "2. 거래 전용 API 키 만들기", d: "거래소 API 관리에서 <b>'선물 거래' 권한만</b> 켜고 <b>출금 권한은 반드시 끄세요</b>. 가능하면 <b>IP 제한(화이트리스트)</b>을 걸고, 실거래 전용 <b>하위(서브) 계정</b>에 쓸 만큼만 넣어 두길 권합니다. 키는 이 브라우저에만 저장되고 비밀키는 서명에만 쓰여 어디로도 전송·기록되지 않습니다. 공용 PC에서는 쓰지 마세요."},
+  {t: "3. 전략을 관문에 통과시키기", d: `아무 전략이나 실거래로 못 나갑니다. 모의투자에서 <b>${Live.GATE.days}일 이상 · 청산 거래 ${Live.GATE.trades}회 이상 · 손익비 ${Live.GATE.pf} 이상 · 수익률 0% 초과 · 최대 낙폭 ${Live.GATE.mdd}% 미만</b>을 스스로 증명한 전략만 '5. 승격' 목록에서 연결됩니다.`},
+  {t: "4. 한도·레버리지·마진 정하기", d: "'3. 한도'에서 1회 주문 금액·1회 최대 금액·최대 레버리지·동시 포지션 수·하루 손실 한도·허용 종목을 정합니다. <b>레버리지는 낮을수록 안전</b>하고(반대로 조금만 움직여도 청산), 마진은 <b>격리</b>를 권합니다(손실이 그 포지션 증거금으로 한정). 이 한도를 넘는 주문은 모두 막고 기록합니다."},
+  {t: "5. 관문 통과 전략을 연결", d: "'5. 모의투자 → 실거래 승격'에서 통과한 전략의 스위치를 켜면 그 전략의 모의투자 신호가 실제 주문 후보가 됩니다. 시장은 바이낸스 USDT-M 선물·업비트 KRW 현물만 지원합니다."},
+  {t: "6. 실거래 켜기 — 승인 모드부터", d: "맨 위 스위치로 실거래를 켭니다. 기본은 <b>승인 모드</b>: 주문마다 종목·방향·수량·금액·레버리지·손절/익절·근거를 보여 주는 창이 뜨고, <b>60초 안에 승인</b>하지 않으면 자동 취소됩니다. 익숙해지기 전엔 자동 모드를 켜지 마세요."},
+  {t: "7. 실거래(메인넷)로 전환할 때", d: `진짜 돈으로 바꾸려면 환경을 메인넷으로 바꾸며 확인 문구 '<b>${Live.MAINNET_PHRASE}</b>'를 직접 입력해야 합니다. 환경을 바꾸면 실거래가 꺼지고 승인 모드로 되돌아갑니다. <b>처음엔 가장 작은 금액</b>으로 시작하세요.`},
+  {t: "8. 문제가 생기면 — 모두 정지·청산", d: "오른쪽 위 <b>'모두 정지·청산'</b>은 미체결 주문을 취소하고 모든 포지션을 시장가(reduce-only)로 닫은 뒤 실거래를 끕니다. 하루 실현 손실 한도에 닿으면 그날은 새 진입이 자동으로 멈춥니다. 모든 판단·주문은 감사 기록에 남고 CSV로 내보낼 수 있습니다."}
+];
+export function guideDialog(){
+  cssOnce();
+  const m = document.createElement("div");
+  m.className = "lv-modal"; m.setAttribute("role", "dialog"); m.setAttribute("aria-modal", "true");
+  m.innerHTML = `<div class="lv-dlg lv-guide-dlg">
+    <div class="lv-dlg-h"><b>📘 실전 연결 안내</b><span class="lv-pill">테스트넷 → 실거래 순서</span></div>
+    <p class="lv-dim">실제 돈을 넣기 전에 이 순서대로 하세요. 손실은 모두 본인 책임이고, 과거 성과가 미래 수익을 보장하지 않습니다.</p>
+    <ol class="lv-steps">${GUIDE_STEPS.map(s => `<li><b>${esc(s.t)}</b><p>${s.d}</p></li>`).join("")}</ol>
+    <div class="lv-dlg-f"><span class="lv-left"></span><button class="lv-btn primary" data-a="ok">알겠습니다</button></div></div>`;
+  document.body.appendChild(m);
+  const finish = () => { document.removeEventListener("keydown", onKey); m.remove(); };
+  const onKey = e => { if (e.key === "Escape") finish(); };
+  m.addEventListener("click", e => { if (e.target === m || e.target.closest('[data-a="ok"]')) finish(); });
+  document.addEventListener("keydown", onKey);
+  m.querySelector('[data-a="ok"]').focus();
+}
+
 /* ============ 패널 ============ */
 export function openLive(c){
   initLive(c);
   if (!root){
     root = document.createElement("div"); root.className = "lv"; root.setAttribute("role", "dialog"); root.setAttribute("aria-label", "실거래 (내 계좌)");
     document.body.appendChild(root);
-    root.addEventListener("click", onClick); root.addEventListener("change", onChange);
+    root.addEventListener("click", onClick); root.addEventListener("change", onChange); root.addEventListener("input", onInput);
   }
   root.hidden = false; document.body.classList.add("lv-open");
   render();
@@ -86,6 +114,7 @@ function render(){
   const c = Live.liveCfg();
   root.innerHTML = `<header class="lv-top">
       <b class="lv-title">실거래 <small>(내 계좌)</small></b><span id="lvPills" class="lv-pills"></span><span class="lv-sp"></span>
+      <button class="lv-btn" data-act="guide" title="테스트넷부터 실거래까지, 순서대로 안내">📘 실전 연결 안내</button>
       <button class="lv-btn danger" data-act="kill" title="미체결 주문 취소 + 모든 포지션 시장가 청산 + 실거래 끄기">모두 정지·청산</button>
       <button class="lv-x" data-act="close" aria-label="닫기">✕</button></header>
     <div class="lv-body">
@@ -144,17 +173,27 @@ function renderKeys(){
     <button class="lv-btn sm" data-act="test">연결 확인 (잔고 조회)</button>`;
 }
 
+// 레버리지 ↔ 청산까지 대략적인 역방향 거리(%) : 격리, 유지증거금 약 0.5% 어림
+const liqMovePct = lev => lev >= 1 ? Math.max(0, (1 / lev - 0.005) * 100) : 0;
+function levHintText(lev){
+  const d = liqMovePct(lev);
+  return `레버리지 ${lev}배 → 반대로 약 ${d.toFixed(d < 1 ? 2 : 1)}%만 움직여도 청산 근처 · 손익이 ${lev}배로 커집니다`;
+}
 function renderLimits(){
-  const L = Live.liveCfg().limits;
+  const c = Live.liveCfg(), L = c.limits, mt = c.marginType === "CROSSED" ? "CROSSED" : "ISOLATED";
   const f = (k, label, step = "any", note = "") => `<label class="lv-f"><span>${label}</span><input type="number" data-lim="${k}" value="${esc(L[k])}" step="${step}" min="0">${note ? `<small>${note}</small>` : ""}</label>`;
   $("#lvLimits").innerHTML = `<div class="lv-grid2">
       ${f("orderNotional", "1회 주문 금액 (USDT)")}${f("maxNotional", "1회 최대 금액 (USDT)")}
-      ${f("maxLeverage", "최대 레버리지 (배)", 1, "전략 레버리지가 이보다 크면 막음")}${f("maxPositions", "동시 포지션 수", 1)}
+      <label class="lv-f"><span>최대 레버리지 (배)</span><input type="number" id="lvLevInput" data-lim="maxLeverage" value="${esc(L.maxLeverage)}" step="1" min="1" max="125"><small id="lvLevHint" class="${L.maxLeverage > 5 ? "warn" : ""}">${esc(levHintText(L.maxLeverage))}</small></label>
+      ${f("maxPositions", "동시 포지션 수", 1)}
       ${f("dailyLoss", "하루 실현 손실 한도 (USDT)", "any", "닿으면 그날 신규 진입 정지")}${f("krwDailyLoss", "업비트 하루 손실 한도 (원)", 1000)}
       ${f("krwOrderNotional", "업비트 1회 주문 (원)", 1000)}${f("krwMaxNotional", "업비트 1회 최대 (원)", 1000)}</div>
+    <div class="lv-f"><span>마진 방식 <small>바이낸스 선물</small></span>
+      <div class="lv-seg lv-margin"><label><input type="radio" name="lvMargin" value="ISOLATED" ${mt === "ISOLATED" ? "checked" : ""}> 격리 <small>이 포지션 증거금만 잃음 · 권장</small></label>
+        <label><input type="radio" name="lvMargin" value="CROSSED" ${mt === "CROSSED" ? "checked" : ""}> 교차 <small>계좌 잔고 전체가 증거금 · 위험</small></label></div></div>
     <label class="lv-f"><span>허용 종목 (쉼표로 구분)</span><input data-lim="symbols" value="${esc(L.symbols.join(", "))}" spellcheck="false"></label>
     <button class="lv-btn sm primary" data-act="limits">한도 저장</button>
-    <p class="lv-dim">거래소 최소 주문 단위를 맞추느라 1회 최대 금액을 넘게 되면(예: BTCUSDT 최소 100 USDT) 주문을 막습니다. 한도를 넘는 주문은 모두 막고 기록합니다.</p>`;
+    <p class="lv-dim">전략마다 정한 레버리지가 이 '최대 레버리지'보다 크면 주문을 막습니다. 레버리지는 낮을수록 안전하고, 격리 마진은 손실을 그 포지션 증거금으로 한정합니다. 거래소 최소 주문 단위 때문에 1회 최대 금액을 넘게 되면(예: BTCUSDT 최소 100 USDT) 주문을 막습니다. 한도를 넘는 주문은 모두 막고 기록합니다.</p>`;
 }
 
 function renderMode(){
@@ -229,6 +268,7 @@ async function onClick(e){
   const b = e.target.closest("[data-act]"); if (!b) return;
   const act = b.dataset.act;
   if (act === "close") return closeLive();
+  if (act === "guide") return guideDialog();
   if (act === "kill"){
     const c = Live.liveCfg();
     if (!confirm(`모두 정지·청산\n\n${envKo(c.env)} 바이낸스 선물 계정의 미체결 주문을 모두 취소하고, 모든 포지션을 시장가(reduce-only)로 청산한 뒤 실거래를 끕니다.\n업비트는 이 앱이 산 수량만 팝니다.\n\n진행할까요?`)) return;
@@ -263,8 +303,20 @@ async function onClick(e){
     setTimeout(() => URL.revokeObjectURL(a.href), 5000); return;
   }
 }
+// 레버리지 숫자를 바꾸는 동안 청산 거리 안내를 즉시 갱신
+function onInput(e){
+  if (e.target.id === "lvLevInput"){
+    const lev = Math.max(1, Math.round(+e.target.value || 1)), h = $("#lvLevHint");
+    if (h){ h.textContent = levHintText(lev); h.classList.toggle("warn", lev > 5); }
+  }
+}
 async function onChange(e){
   const t = e.target;
+  if (t.name === "lvMargin"){
+    const ok = await guard(() => Live.setLive({marginType: t.value}), t.value === "CROSSED" ? "교차 마진으로 바꿨습니다 (위험 ↑)" : "격리 마진으로 바꿨습니다");
+    if (!ok) renderLimits();
+    return;
+  }
   if (t.id === "lvOn"){
     if (t.checked){
       const c = Live.liveCfg(), L = c.limits;

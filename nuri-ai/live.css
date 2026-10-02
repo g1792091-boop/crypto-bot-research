@@ -106,3 +106,12 @@ body.lv-open{overflow:hidden}
   .lv-top{padding:8px 16px}
   .lv-strats{grid-template-columns:minmax(0,1fr)}
 }
+/* 실전 연결 안내 가이드 */
+.lv-guide-dlg{width:min(560px,100%)}
+.lv-steps{list-style:none;margin:6px 0 2px;padding:0;counter-reset:lv-s}
+.lv-steps>li{padding:10px 0;border-bottom:1px dashed var(--lv-line)}
+.lv-steps>li:last-child{border-bottom:0}
+.lv-steps>li>b{font-size:13.5px;color:var(--lv-ink)}
+.lv-steps>li>p{margin:5px 0 0;font-size:12.5px;line-height:1.65;color:var(--lv-dim)}
+.lv-steps>li>p b{color:var(--lv-ink)}
+.lv-margin label{min-width:160px}
