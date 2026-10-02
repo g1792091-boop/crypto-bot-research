@@ -453,9 +453,11 @@ def live_items() -> list[dict]:
         side = 0
         if b and b.sim.position:
             side = 1 if b.sim.position.side == 1 else -1
+        from ..quant import protect
+        guard = protect.check(b.sim.trades, b.initial_equity) if b else {"blocked": False, "reason": None}
         out.append({"id": p["id"], "name": p["name"], "symbol": p["spec"]["symbol"], "side": side, "price": b.last_price if b else None,
                     "leverage": p["spec"]["risk"].get("leverage", 1), "custom": p["custom"], "stage": p["stage"], "demo": p.get("demo"),
-                    "approved": p["id"] in livex.S.get("approved", {})})
+                    "approved": p["id"] in livex.S.get("approved", {}), "blocked": guard["reason"] if guard["blocked"] else None})
     return out
 
 
@@ -588,7 +590,65 @@ def j_termind(team):
          f"{sym.removesuffix('USDT')} 147개 지표 추세·타점", 1000)
 
 
-KIND_FN = {"ind": j_ind, "trend": j_trend, "entry": j_entry, "news": j_news, "sr": j_sr, "tpsl": j_tpsl, "board": j_board, "pattern": j_pattern,
+# ------------------------------------------------------------------ 1억 챌린지 검증 · 그리드·펀딩 차익 · 오픈소스 연구
+GROWTH = {"last": None}
+
+
+def growth_run(start: float = 100_000, target: float = 100_000_000, days: int = 30, lev: float = 3.0) -> dict:
+    from ..quant import growth
+    a = growth.analyze(start, target, days, lev)
+    a["t"] = time.time()
+    GROWTH["last"] = a
+    d = _files() / "growth"
+    d.mkdir(parents=True, exist_ok=True)
+    stamp = f"{datetime.now():%Y-%m-%d_%H%M}"
+    (d / f"{stamp}.md").write_text("# 목표 현실 점검\n\n```\n" + growth.text(a) + "\n```\n\n" + "\n".join(f"- {x}" for x in a["notes"]), encoding="utf-8")
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["bet_scale", "leverage", "over_live_limit", "p_target_pct", "p_ruin_pct", "median", "p10", "p90", "median_days_to_target"])
+    for r in a["rows"]:
+        w.writerow([r["scale"], r["leverage"], r["over_limit"], r["p_target"], r["p_ruin"], r["median"], r["p10"], r["p90"], r["median_days_to_target"]])
+    (d / f"{stamp}.csv").write_text(buf.getvalue(), encoding="utf-8-sig")
+    return a
+
+
+def j_growth(team):
+    from ..quant import growth
+    a = growth_run()
+    E.post(team, "growth", agent=roster.TEAM_LEAD[team], text=a["verdict"], p=a["best"]["p_target"], ruin=a["best"]["p_ruin"], path=a["path"])
+    _say(team, growth.text(a), "'한 달 10만 원 → 1억' 목표를 이 숫자로 정직하게 평가한다. 달성 확률·파산 확률·레버리지 한도를 근거로 말하고, "
+         "살아남으면서 가장 빨리 키우는 현실 경로(베팅 크기·자금 관리 규칙)를 제안한다. 확률을 부풀리거나 '가능하다'고 단정하지 않는다.", "1억 챌린지 현실 점검")
+
+
+def j_carry(team):
+    from ..quant import carry, grid
+    syms = [s for s, _, _ in org.COINS]
+    k = _st("carry_i", [0])
+    k[0] += 1
+    if k[0] % 2:
+        rows = grid.scan(syms)
+        title, task, data = "그리드 매매 점검", "박스권 코인에서 그리드가 수수료를 넘는 수익을 냈는지, 박스 이탈·청산 위험은 어땠는지 해설한다.", grid.text(rows)
+    else:
+        rows = carry.scan(syms)
+        title, task, data = "펀딩비 차익 점검", "가격 방향 중립으로 펀딩비만 받는 전략의 연 수익·안정성·본전 기간·위험을 해설한다. 큰돈이 아니라 안정 수익임을 분명히 한다.", carry.text(rows)
+    d = _files() / "carry"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / f"{datetime.now():%Y-%m-%d_%H%M}_{'grid' if k[0] % 2 else 'funding'}.json").write_text(json.dumps(rows, ensure_ascii=False, indent=1), encoding="utf-8")
+    _say(team, data, task, title)
+
+
+def j_oss(team):
+    from ..knowledge import oss
+    k = _st("oss_i", [0])
+    p = oss.PROJECTS[k[0] % len(oss.PROJECTS)]
+    k[0] += 1
+    data = (f"{p['repo']} (★{p.get('stars', '-')} · 라이선스 {p['license']}) · {p['kind']}\n{p['what']}\n"
+            + "".join(f"- 이미 적용: {a}\n" for a in p["applied"]) + "".join(f"- 다음 후보: {t}\n" for t in p["todo"]))
+    _say(team, data, "이 오픈소스에서 우리 시스템에 이미 옮긴 것과 다음에 옮길 것을 평가한다. 라이선스(GPL 코드는 복사 금지·개념만 재구현)를 지키고, "
+         "수익을 보장하는 기법은 없다는 점을 분명히 한다.", f"오픈소스 연구: {p['repo']}")
+
+
+KIND_FN = {"growth": j_growth, "carry": j_carry, "oss": j_oss, "ind": j_ind, "trend": j_trend, "entry": j_entry, "news": j_news, "sr": j_sr, "tpsl": j_tpsl, "board": j_board, "pattern": j_pattern,
            "coinx": j_coin, "termind": j_termind, "dev": lambda t: j_dev(t, False), "cdev": lambda t: j_dev(t, True), "bt": lambda t: j_bt(t, t == "cbt"),
            "demo": lambda t: j_demo(t, t == "cdemo"), "live": lambda t: j_live(t, t == "clive")}
 

@@ -351,6 +351,44 @@ def office_termind():
             "interval_sec": office.CFG.get("termind_sec", 60)}
 
 
+@app.get("/api/growth")
+def growth_check(start: float = 100_000, target: float = 100_000_000, days: int = 30, lev: float = 3.0, fresh: bool = False):
+    """목표 현실 점검 (1억 챌린지 검증팀) — 실제 성적으로 달성·파산 확률 · 켈리 · 현실 경로. 결과는 files/growth 에도 저장."""
+    from .office import teamjobs
+    last = teamjobs.GROWTH.get("last")
+    same = last and (last["math"]["start"], last["math"]["target"], last["math"]["days"], last["base_leverage"]) == (start, target, days, lev)
+    if same and not fresh and time.time() - last.get("t", 0) < 600:
+        return last
+    try:
+        return teamjobs.growth_run(start, target, days, lev)
+    except ValueError as e:
+        _bad(e)
+
+
+@app.get("/api/grid/scan")
+def grid_scan(symbols_csv: str = "BTCUSDT,ETHUSDT,SOLUSDT,XRPUSDT,DOGEUSDT,BNBUSDT", interval: str = "1h", levels: int = 12, lev: float = 2.0):
+    """박스권 그리드 백테스트 (앞 절반으로 박스, 뒤 절반으로 검증)."""
+    from .quant import grid
+    try:
+        return {"items": grid.scan([symbols.resolve(x) for x in symbols_csv.split(",") if x.strip()][:10], interval, 720, levels, lev)}
+    except ValueError as e:
+        _bad(e)
+
+
+@app.get("/api/carry/scan")
+def carry_scan(symbols_csv: str = "BTCUSDT,ETHUSDT,SOLUSDT,XRPUSDT,DOGEUSDT,BNBUSDT"):
+    """펀딩비 차익(현물 롱 + 선물 숏) 점검 — 분석 전용."""
+    from .quant import carry
+    return {"items": carry.scan([symbols.resolve(x) for x in symbols_csv.split(",") if x.strip()][:12])}
+
+
+@app.get("/api/oss")
+def oss_list():
+    """오픈소스 연구팀이 조사한 깃허브 프로젝트와 이 앱에 옮긴 기법."""
+    from .knowledge import oss
+    return {"items": oss.PROJECTS}
+
+
 @app.post("/api/office/termind/scan")
 def office_termind_scan(symbol: str = "BTCUSDT"):
     from .office import teamjobs

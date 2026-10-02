@@ -150,11 +150,12 @@ SKILL_TOOLS = {
     "crypto_spot": ["terminal_consensus", "market_quote", "market_analyze", "market_list", "market_news", "indicator_all", "sns_buzz", "orderbook", "whale_trades", "youtube_search"],
     "crypto_futures": ["terminal_consensus", "market_analyze", "market_quote", "market_list", "market_news", "calculate", "indicator_all", "sns_buzz", "strategy_backtest",
                        "orderbook", "whale_trades", "futures_flow"],
-    "backtest": ["market_analyze", "calculate", "strategy_backtest", "history_backtest", "indicator_all", "paper_status", "ml_predict"],
+    "backtest": ["market_analyze", "calculate", "strategy_backtest", "history_backtest", "indicator_all", "paper_status", "ml_predict",
+                 "growth_check", "grid_scan", "funding_carry", "oss_projects"],
     "news": ["market_news", "web_search", "web_fetch", "sns_buzz", "youtube_search", "community_search"],
     "coding": ["web_search", "calculate"],
 }
-CORE_TOOLS = ["web_search", "web_fetch", "calculate", "research_cards"]
+CORE_TOOLS = ["web_search", "web_fetch", "calculate", "research_cards", "results_search"]
 
 
 def tools_for(agent_id: str) -> list[str]:

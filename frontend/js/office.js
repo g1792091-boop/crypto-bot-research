@@ -1,4 +1,4 @@
-// AI 사무실 — 27개 팀 277명이 24시간 일하는 모습 · 회의록 · 매매법 파이프라인 · 실거래 · 결과·다운로드 · AI 배정
+// AI 사무실 — 30개 팀 310명이 24시간 일하는 모습 · 회의록 · 매매법 파이프라인 · 실거래 · 결과·다운로드 · AI 배정
 import { $, $$, api, busy, esc, hhmm, mdhm, on, toast } from "./core.js";
 import { showOnChart } from "./trade.js";
 
@@ -233,6 +233,62 @@ async function renderTerm() {
   $$("[data-tm]").forEach((r) => (r.onclick = (ev) => { if (ev.target.closest("[data-chart]")) return; termOpen = termOpen === r.dataset.tm ? null : r.dataset.tm; renderTerm(); }));
 }
 
+// ------------------------------------------------------------------ 1억 점검 (목표 현실 점검 · 그리드 · 펀딩 차익 · 오픈소스)
+let goalArgs = { start: 100000, target: 100000000, days: 30, lev: 3 };
+let goalSub = null;
+const won = (v) => (v == null ? "-" : Math.abs(v) >= 1e8 ? `${(v / 1e8).toFixed(2)}억` : Math.abs(v) >= 1e4 ? `${Math.round(v / 1e4).toLocaleString()}만` : Math.round(v).toLocaleString()) + "원";
+async function renderGoal(fresh = false) {
+  const q = new URLSearchParams({ ...goalArgs, fresh: fresh ? "true" : "false" });
+  $("#of-pane").innerHTML = `<div class="empty">계산 중… (몬테카를로 3,000번 × 베팅 크기 10가지)</div>`;
+  const a = await api(`/api/growth?${q}`);
+  const m = a.math, s = a.source, k = a.kelly;
+  const pc = (v, bad) => `<b class="${bad ? (v >= 50 ? "down" : v >= 10 ? "warn" : "") : v >= 10 ? "up" : ""}">${v}%</b>`;
+  $("#of-pane").innerHTML = `<div class="of-pane-h"><b>1억 챌린지 현실 점검</b><span class="dim">1억 챌린지 검증팀 · 실제 거래 성적으로 계산 (AI 가 숫자를 만들지 않음)</span></div>
+    <div class="of-goalform">
+      <label>시작 금액<input type="number" id="g-start" value="${goalArgs.start}" min="1000" step="10000"></label>
+      <label>목표 금액<input type="number" id="g-target" value="${goalArgs.target}" min="1000" step="1000000"></label>
+      <label>기간(일)<input type="number" id="g-days" value="${goalArgs.days}" min="1" max="3650"></label>
+      <label>지금 레버리지<input type="number" id="g-lev" value="${goalArgs.lev}" min="1" max="20" step="0.5"></label>
+      <button class="sm pri" id="g-run">다시 계산</button></div>
+    <div class="of-goalmath">${esc(m.text)}</div>
+    <div class="of-warn">${esc(a.verdict)}</div>
+    <div class="help">근거 성적: <b>${esc(s.label)}</b> · 거래당 평균 ${s.mean_pct > 0 ? "+" : ""}${s.mean_pct}% · 승률 ${s.win_pct}% · 손익비 ${s.pf ?? "-"} · 하루 ${s.per_day}번 · ${esc(a.tail)}<br>
+      켈리 최적 베팅: 지금의 <b>${k.k}배</b> (그 ${k.k_ruin}배를 넘으면 최악 한 번에 파산) · 현실 경로: <b>${esc(a.path)}</b></div>
+    <table class="of-tbl"><tr><th>베팅 크기</th><th>레버리지</th><th>${(m.days)}일 안 목표 도달</th><th>파산(원금 90% 손실)</th><th>중앙값</th><th>하위 10% · 상위 10%</th><th>도달 시 걸린 날(중앙)</th></tr>
+      ${a.rows.map((r) => `<tr class="${r.over_limit ? "dim" : ""}"><td>지금의 ${r.scale}배</td><td>${r.leverage}배${r.over_limit ? " ⛔ 실거래 한도(20배) 초과" : ""}</td><td>${pc(r.p_target)}</td><td>${pc(r.p_ruin, true)}</td>
+        <td>${won(r.median)}</td><td>${won(r.p10)} · ${won(r.p90)}</td><td>${r.median_days_to_target ?? "-"}</td></tr>`).join("")}</table>
+    <div class="help">${a.notes.map(esc).join("<br>")}<br>결과 파일: 결과·다운로드 → '1억 챌린지 현실 점검' (growth 폴더의 .md · .csv)</div>
+    <div class="row" style="gap:6px;margin:8px 0"><button class="sm" data-gsub="grid">🧱 그리드 매매 점검</button><button class="sm" data-gsub="carry">💱 펀딩비 차익 점검</button><button class="sm" data-gsub="oss">🐙 깃허브 오픈소스 적용 현황</button></div>
+    <div id="g-sub"></div>`;
+  $("#g-run").onclick = () => { goalArgs = { start: +$("#g-start").value, target: +$("#g-target").value, days: +$("#g-days").value, lev: +$("#g-lev").value }; renderGoal(true).catch((e) => toast("계산 실패", e.message, "err")); };
+  $$("[data-gsub]").forEach((b) => (b.onclick = () => busy(b, () => goalSubRender(b.dataset.gsub))));
+  if (goalSub) goalSubRender(goalSub).catch(() => {});
+}
+async function goalSubRender(kind) {
+  goalSub = kind;
+  const box = $("#g-sub");
+  if (kind === "grid") {
+    const d = await api("/api/grid/scan");
+    box.innerHTML = `<div class="of-sub">그리드 매매 (앞 절반 기간으로 박스를 잡고 뒤 절반으로 검증 · 12칸 · 레버리지 2배 · 수수료 포함)</div>
+      <table class="of-tbl"><tr><th>코인</th><th>그리드 수익</th><th>그냥 보유</th><th>왕복</th><th>최대 낙폭</th><th>박스권</th><th>결과</th></tr>
+      ${d.items.filter((r) => !r.error).map((r) => `<tr><td>${r.symbol.replace("USDT", "")}</td><td class="${r.return_pct >= 0 ? "up" : "down"}">${r.return_pct > 0 ? "+" : ""}${r.return_pct}%</td><td>${r.buy_hold_pct > 0 ? "+" : ""}${r.buy_hold_pct}%</td>
+        <td>${r.round_trips}번 (${r.trips_per_day}/일)</td><td>${r.max_dd_pct}%</td><td>${r.ranging ? "예" : "아니오"} <span class="dim">효율비 ${r.efficiency}</span></td><td>${r.liquidated ? "⚠ 청산" : r.stopped_at ? "박스 이탈 손절" : "진행"}</td></tr>`).join("")}</table>
+      <div class="help">그리드는 박스권에서 작은 이익을 쌓지만, 한 방향으로 크게 움직이면 박스 이탈 손절·청산으로 그동안의 이익을 한 번에 잃을 수 있습니다.</div>`;
+  } else if (kind === "carry") {
+    const d = await api("/api/carry/scan");
+    box.innerHTML = `<div class="of-sub">펀딩비 차익 (현물 롱 + 선물 숏으로 가격 방향을 지우고 펀딩비만 받기 · 왕복 수수료 0.2% 차감 · 분석 전용)</div>
+      <table class="of-tbl"><tr><th>코인</th><th>연 환산</th><th>최근 8시간</th><th>양수 비율</th><th>30일 순수익</th><th>본전</th><th>거래소 간 차이</th></tr>
+      ${d.items.filter((r) => !r.error).map((r) => `<tr><td>${r.symbol.replace("USDT", "")}</td><td class="${r.apr_pct >= 0 ? "up" : "down"}">${r.apr_pct > 0 ? "+" : ""}${r.apr_pct}%</td><td>${r.recent_pct}%</td>
+        <td>${r.positive_pct}%</td><td>${r.net_30d_pct > 0 ? "+" : ""}${r.net_30d_pct}%</td><td>${r.breakeven_days ?? "-"}일</td><td>${r.spread_apr_pct != null ? `연 ${r.spread_apr_pct}% · ${esc(r.spread_side)}` : "-"}</td></tr>`).join("")}</table>
+      <div class="help">큰 수익이 아니라 '안정적인 작은 수익' 전략입니다. 펀딩이 음수로 바뀌거나 선물 쪽이 급등해 증거금이 모자라면 손실이 납니다.</div>`;
+  } else {
+    const d = await api("/api/oss");
+    box.innerHTML = `<div class="of-sub">깃허브 오픈소스 — 코드를 복사하지 않고(라이선스) 기법만 이 앱에 맞게 다시 구현</div>
+      ${d.items.map((p) => `<div class="of-oss"><b>${esc(p.repo)}</b> <span class="dim">★${esc(p.stars || "-")} · ${esc(p.license)} · ${esc(p.kind)}</span><div>${esc(p.what)}</div>
+        ${p.applied.map((x) => `<div class="up">✔ ${esc(x)}</div>`).join("")}${p.todo.map((x) => `<div class="dim">… 다음: ${esc(x)}</div>`).join("")}</div>`).join("")}`;
+  }
+}
+
 // ------------------------------------------------------------------ 파이프라인
 async function renderPipe() {
   const d = await api("/api/office/pipeline");
@@ -417,7 +473,7 @@ function setTab(t) {
   $$("#of-tabs button").forEach((b) => b.classList.toggle("on", b.dataset.tab === t));
   $("#of-logwrap").hidden = t !== "log";
   $("#of-pane").hidden = t === "log";
-  const fn = { term: renderTerm, pipe: renderPipe, live: renderLive, results: renderResults, growth: renderGrowth, reports: renderReports, models: renderModels }[t];
+  const fn = { goal: () => renderGoal(), term: renderTerm, pipe: renderPipe, live: renderLive, results: renderResults, growth: renderGrowth, reports: renderReports, models: renderModels }[t];
   if (fn) fn().catch((e) => ($("#of-pane").innerHTML = `<div class="empty">${esc(e.message)}</div>`));
   else renderLog();
 }

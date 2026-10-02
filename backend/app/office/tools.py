@@ -206,6 +206,64 @@ def terminal_consensus(symbol: str | None = None, **kw):
     return {"text": termind.text(p), "summary": f"{sym} 지표 147종 {p['trend']:+d} {p['trend_label']} · {p.get('verdict', '')[:50]}"}
 
 
+def growth_check(start: float = 100_000, target: float = 100_000_000, days: int = 30, leverage: float = 3.0, **kw):
+    from ..quant import growth
+    a = growth.analyze(float(start), float(target), int(days), float(leverage), sims=1500)
+    return {"text": growth.text(a), "summary": f"목표 도달 최대 {a['best']['p_target']}% · 그때 파산 {a['best']['p_ruin']}%"}
+
+
+def grid_scan(symbols: list | None = None, **kw):
+    from ..quant import grid
+    syms = [_sym(x) for x in (symbols or ["BTCUSDT", "ETHUSDT", "SOLUSDT"])][:6]
+    rows = grid.scan(syms)
+    ok = [r for r in rows if "error" not in r]
+    return {"text": grid.text(rows), "summary": f"그리드 {len(ok)}개 · 최고 {ok[0]['symbol']} {ok[0]['return_pct']:+.2f}%" if ok else "데이터 없음"}
+
+
+def funding_carry(symbols: list | None = None, **kw):
+    from ..quant import carry
+    syms = [_sym(x) for x in (symbols or ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "DOGEUSDT", "BNBUSDT"])][:8]
+    rows = carry.scan(syms)
+    ok = [r for r in rows if "error" not in r]
+    return {"text": carry.text(rows), "summary": f"펀딩 차익 최고 {ok[0]['symbol']} 연 {ok[0]['apr_pct']:+.1f}%" if ok else "펀딩 기록 없음"}
+
+
+def oss_projects(query: str = "", **kw):
+    from ..knowledge import oss
+    q = (query or "").lower()
+    ps = [p for p in oss.PROJECTS if not q or q in (p["repo"] + p["what"] + p["kind"]).lower()] or oss.PROJECTS
+    lines = []
+    for p in ps[:8]:
+        lines.append(f"- {p['repo']} (★{p.get('stars', '-')} · {p['license']}): {p['what']}\n  적용: {' / '.join(p['applied']) or '없음'}\n  다음: {' / '.join(p['todo']) or '-'}")
+    return {"text": "\n".join(lines), "summary": f"오픈소스 {len(ps)}개"}
+
+
+def results_search(query: str, n: int = 6, **kw):
+    """저장된 결과 파일(보고서·팀 노트·회의록·백테스트)에서 찾기 — 챗봇 RAG(검색 후 답변) 개념의 가벼운 판."""
+    from . import results
+    words = [w for w in re.split(r"\s+", (query or "").lower()) if len(w) >= 2][:6]
+    if not words:
+        return {"text": "검색어가 필요합니다", "summary": "검색어 없음", "error": True}
+    root = results.root()
+    hits = []
+    for f in sorted(root.rglob("*"), key=lambda x: -x.stat().st_mtime)[:400]:
+        if not f.is_file() or f.suffix not in (".md", ".csv", ".json", ".txt") or f.stat().st_size > 600_000:
+            continue
+        try:
+            body = f.read_text(encoding="utf-8-sig", errors="ignore")
+        except OSError:
+            continue
+        low = body.lower()
+        score = sum(low.count(w) for w in words)
+        if score:
+            i = min((low.find(w) for w in words if w in low), default=0)
+            hits.append((score, f.relative_to(root).as_posix(), body[max(0, i - 150): i + 350].replace("\n", " ")))
+    hits.sort(key=lambda x: -x[0])
+    if not hits:
+        return {"text": f"‘{query}’ 이 들어간 저장 결과가 없습니다", "summary": "결과 없음"}
+    return {"text": "\n".join(f"[{i + 1}] {h[1]}: …{h[2]}…" for i, h in enumerate(hits[:int(n)])), "summary": f"저장 결과 {len(hits)}건"}
+
+
 # 이름 → (함수, 화면 라벨, 인자 예시)
 TOOLS = {
     "market_quote": (market_quote, lambda a: f"{', '.join(map(str, a.get('symbols') or ['BTCUSDT']))} 시세", '{"symbols":["BTCUSDT","ETHUSDT"]}'),
@@ -222,6 +280,11 @@ TOOLS = {
     "history_backtest": (lambda **a: history_backtest(a.pop("spec", None), a.pop("market", None), a.pop("interval", None), **a), lambda a: f"{a.get('market') or (a.get('spec') or {}).get('symbol', 'BTCUSDT')} 전체 과거 백테스트", '{"spec":{전략 JSON},"market":"BTCUSDT","interval":"4h"}'),
     "ml_predict": (lambda **a: ml_predict(a.pop("market", None), a.pop("interval", None), **a), lambda a: f"{a.get('market') or 'BTCUSDT'} 머신러닝 예측", '{"market":"BTCUSDT","interval":"1h","model":"logreg|mlp|gbs|dnn|cnn"}'),
     "terminal_consensus": (terminal_consensus, lambda a: f"{a.get('symbol') or 'BTCUSDT'} 터미널 지표 147종 합의", '{"symbol":"BTCUSDT"}'),
+    "growth_check": (growth_check, lambda a: f"{int(a.get('start', 100000)):,} → {int(a.get('target', 100000000)):,} 목표 현실 점검", '{"start":100000,"target":100000000,"days":30,"leverage":3}'),
+    "grid_scan": (grid_scan, lambda a: "그리드 매매 백테스트", '{"symbols":["BTCUSDT","ETHUSDT"]}'),
+    "funding_carry": (funding_carry, lambda a: "펀딩비 차익 점검", '{"symbols":["BTCUSDT","ETHUSDT"]}'),
+    "oss_projects": (oss_projects, lambda a: f"오픈소스 조사 {a.get('query', '')}", '{"query":"freqtrade"}'),
+    "results_search": (results_search, lambda a: f"저장 결과에서 ‘{a.get('query', '')}’ 찾기", '{"query":"BTC 백테스트"}'),
     "paper_status": (paper_status, lambda a: "시그널 추적 장부 확인", "{}"),
     "sns_buzz": (sns_buzz, lambda a: f"{a.get('symbol') or 'BTC'} SNS 여론 확인", '{"symbol":"BTC"}'),
     "youtube_search": (youtube_search, lambda a: f"유튜브에서 ‘{a.get('query', '')}’ 검색", '{"query":"비트코인 전망","n":8}'),
@@ -234,7 +297,8 @@ TOOLS = {
 ICON = {"market_analyze": "📈", "market_quote": "💹", "market_news": "📰", "web_search": "🔎", "web_fetch": "📄", "calculate": "🧮",
         "strategy_backtest": "🧪", "history_backtest": "🧪", "orderbook": "📚", "whale_trades": "🐋", "futures_flow": "🌊", "liquidation_map": "💥",
         "sns_buzz": "📱", "youtube_search": "▶️", "community_search": "💬", "indicator_all": "📊", "ml_predict": "🧠", "paper_status": "📒",
-        "market_list": "🏁", "research_cards": "🗂", "terminal_consensus": "🎯"}
+        "market_list": "🏁", "research_cards": "🗂", "terminal_consensus": "🎯",
+        "growth_check": "🎲", "grid_scan": "🧱", "funding_carry": "💱", "oss_projects": "🐙", "results_search": "🗃"}
 
 
 def run(name: str, args: dict) -> dict:

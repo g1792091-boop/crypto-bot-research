@@ -397,6 +397,19 @@ def _r4(v):
     return None if v is None or not np.isfinite(v) else round(float(v), 4)
 
 
+def rank_ic(p: np.ndarray, fwd: np.ndarray) -> float | None:
+    """순위 IC (스피어만 상관) — 맞고 틀림만이 아니라 '확신이 클수록 실제로 더 많이 올랐나'. 0.02~0.05 면 의미 있는 편."""
+    ok = ~np.isnan(p) & ~np.isnan(fwd)
+    if ok.sum() < 30:
+        return None
+    a = np.argsort(np.argsort(p[ok])).astype(float)
+    b = np.argsort(np.argsort(fwd[ok])).astype(float)
+    a -= a.mean()
+    b -= b.mean()
+    den = math.sqrt(float((a * a).sum() * (b * b).sum()))
+    return _r4(float((a * b).sum()) / den) if den else None
+
+
 def class_metrics(p: np.ndarray, y: np.ndarray, hi: float, lo: float) -> dict:
     N = len(p)
     rate = float(y.mean())
@@ -492,6 +505,7 @@ def walk_forward(c: list[dict], model: str = "logreg", horizon: int = 1, train_b
         raise ValueError("표본 외 예측이 없습니다 (봉 수·학습 창을 확인하세요)")
     P, Y = prob[ev], y[ev]
     m = class_metrics(P, Y, hi, lo)
+    m["rank_ic"] = rank_ic(P, F["fwd"][ev])                # qlib 식 평가: 예측 확률과 실제 다음 수익의 순위 상관
     # 단순 매매: p>hi 롱 · p<lo 숏 · 사이 관망 (봉 종가 판단 → 다음 봉 수익, 포지션 바뀔 때 편도 수수료)
     cl = F["close"]
     fp = int(np.argmax(~np.isnan(prob)))
@@ -558,7 +572,8 @@ def text(res: dict) -> str:
                "none": "판정: 우위 없음 — 동전 던지기(다수 클래스 기준선)와 통계적으로 구분되지 않는다. 이 확률로 매매하지 말 것."}[res["edge"]]
     cal = " · ".join(f"{b['lo']}~{b['hi']}: 예측 {pc(b['meanP'])}/실제 {pc(b['rate'])} ({b['n']})" for b in m["calibration"] if b["n"])
     lines = [f"ML 예측 ({res['model_ko']}, {res['horizon']}봉 뒤 방향 · 롤링 재학습 {res['folds']}회 · 표본 외 {m['N']}봉)",
-             f"정확도 {pc(m['accuracy'])} vs 기준선 {pc(m['baseline'])} (z={m['z']}) · AUC {f3(m['auc'])} (±{f3(m['aucSE'])}) · 로그손실 {f3(m['logloss'])} (동전 {f3(m['coinLogloss'])})",
+             f"정확도 {pc(m['accuracy'])} vs 기준선 {pc(m['baseline'])} (z={m['z']}) · AUC {f3(m['auc'])} (±{f3(m['aucSE'])}) · 로그손실 {f3(m['logloss'])} (동전 {f3(m['coinLogloss'])})"
+             + (f" · 순위 IC {f3(m['rank_ic'])}" if m.get("rank_ic") is not None else ""),
              f"확신 구간: p>{res['params']['hi']} 적중 {pc(m['hitHigh']['rate'])} ({m['hitHigh']['n']}봉) · p<{res['params']['lo']} 적중 {pc(m['hitLow']['rate'])} ({m['hitLow']['n']}봉)",
              f"보정: {cal}",
              f"단순 매매(편도 수수료 {tr['fee_pct']}%): {sg(tr['return_pct'])} vs 보유 {sg(tr['bh_pct'])} · 진입 {tr['trades']}회 · 최대낙폭 {tr['max_dd_pct']}%"]

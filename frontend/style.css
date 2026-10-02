@@ -809,3 +809,9 @@ button.danger { background: rgba(242,54,69,.15); border-color: #f23645; color: #
 .of-mgrid label .dim { display: block; font-size: 11px; }
 .of-mtbl { table-layout: fixed; }
 .of-mtbl td { overflow-wrap: anywhere; vertical-align: top; }
+.of-goalform { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; margin: 6px 0; }
+.of-goalform label { display: flex; flex-direction: column; font-size: 11px; color: var(--muted); }
+.of-goalform input { width: 130px; }
+.of-goalmath { font-size: 13px; margin: 6px 0; }
+.of-oss { padding: 6px 0; border-bottom: 1px solid var(--line); }
+td .warn, b.warn { color: #f5a524; }

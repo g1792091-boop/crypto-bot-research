@@ -7,6 +7,8 @@
   forecasts.csv           24시간 방향 예측 장부와 채점
   ml.csv                  머신러닝·딥러닝 실험 결과
   termind/{날짜}.csv      터미널 보조지표 147종 추세 점수·타점 (실시간 스캔마다 한 줄)
+  growth/*.md · *.csv     1억 챌린지 현실 점검 (달성·파산 확률 표)
+  carry/*.json            그리드 매매 · 펀딩비 차익 점검 결과
   teams/{팀}/{날짜}.md    팀별 분석 노트 (자료 + 팀원 해설)
   boards/*.csv            코인별 상황표
   reports/*.md            일일·시간별 보고서
@@ -29,7 +31,7 @@ from . import engine as E
 from . import roster
 
 CATS = [("pipeline.csv", "매매법 파이프라인"), ("backtests", "백테스트 결과"), ("research.csv", "퀀트 연구 기록"), ("forecasts.csv", "방향 예측 장부"),
-        ("ml.csv", "머신러닝 결과"), ("termind", "터미널 지표 추세·타점 기록"), ("teams", "팀별 분석 노트"), ("boards", "코인별 상황표"), ("reports", "보고서"), ("trades.csv", "가상 체결 거래"),
+        ("ml.csv", "머신러닝 결과"), ("termind", "터미널 지표 추세·타점 기록"), ("growth", "1억 챌린지 현실 점검"), ("carry", "그리드·펀딩 차익 점검"), ("teams", "팀별 분석 노트"), ("boards", "코인별 상황표"), ("reports", "보고서"), ("trades.csv", "가상 체결 거래"),
         ("strategies", "전략 파일"), ("meetings.md", "회의록"), ("live_log.csv", "실거래 기록")]
 
 

@@ -228,6 +228,11 @@ def sync(items: list[dict]) -> None:
                 close_position(pid, it["price"], "데모 신호 청산/반전")
                 cur_side = 0
             if it["side"] and not cur_side:
+                if it.get("blocked"):                       # 보호 장치: 새 진입만 막는다 (청산은 위에서 이미 허용)
+                    if _state.setdefault("guard_note", {}).get(pid) != it["blocked"]:
+                        _state["guard_note"][pid] = it["blocked"]
+                        log(f"🛡 {it['name']} 새 진입 보류 — {it['blocked']}", pid=pid)
+                    continue
                 open_position(pid, it["name"], it["symbol"], it["side"], it["price"], it["leverage"])
         except Exception as e:  # noqa: BLE001
             log(f"⚠ {it['name']} 주문 실패: {str(e)[:200]}", pid=pid)
