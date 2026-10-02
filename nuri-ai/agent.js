@@ -66,13 +66,32 @@ export function resolveMarket(input, exHint = ""){
 const IV_OF = {"1": "1m", "5": "5m", "15": "15m", "60": "1h", "240": "4h", "D": "1d", "W": "1w"};
 export const snapText = snap => { const t = snap?.text || {}; return typeof t === "string" ? t : [["trend", "추세"], ["momentum", "모멘텀"], ["volatility", "변동성"], ["volume", "거래량"]].map(([k, ko]) => t[k] ? (String(t[k]).startsWith(ko) ? t[k] : `${ko}: ${t[k]}`) : "").filter(Boolean).join("\n"); };
 const tfOf = iv => ({"1m": "1", "5m": "5", "15m": "15", "30m": "15", "1h": "60", "2h": "60", "4h": "240", "1d": "D", "1w": "W"})[String(iv || "1h")] || "60";
+// 봉 주기(초) — 수집 중복 방지용 캐시 TTL 과 타점판 동기화 편차 계산에 쓴다
+const TF_SEC = {"1": 60, "5": 300, "15": 900, "30": 1800, "60": 3600, "240": 14400, "D": 86400, "W": 604800};
+// 단일 수집기 + 팬아웃: 같은 (거래소·종목·봉·개수) 요청은 하나로 합치고(진행 중 공유), 최근 수집은 잠깐 재사용한다.
+// → 여러 담당자가 같은 BTC 캔들을 1분 안에 두 번 때리는 중복 수집을 막는다.
+const _candleCache = new Map(), _candleInflight = new Map();
 export async function candlesFor(a, total){
   const {exn, market} = resolveMarket(a.market || a.symbol, a.exchange);
   const tf = TF[a.timeframe] ? String(a.timeframe) : exn === "yahoo" ? "D" : "60";
-  const cs = await ex(exn).candles(market, tf, total);
-  if (cs.length < 30) throw new Error("캔들 데이터가 부족합니다 (" + market + ")");
-  return {exn, market, tf, cs};
+  const key = `${exn}|${market}|${tf}|${total || 0}`;
+  const ttl = Math.min((TF_SEC[tf] || 3600) * 1000 / 4, 30000);   // 봉 주기의 1/4, 최대 30초
+  const hit = _candleCache.get(key);
+  if (hit && Date.now() - hit.at < ttl) return withLag(hit.val);          // 최근 수집 재사용
+  if (_candleInflight.has(key)) return _candleInflight.get(key).then(withLag);   // 진행 중 요청 공유(팬아웃)
+  const p = (async () => {
+    const cs = await ex(exn).candles(market, tf, total);
+    if (cs.length < 30){ const e = new Error("캔들 데이터가 부족합니다 (" + market + ")"); e.status = cs.length === 0 ? "empty" : "failed"; throw e; }
+    const last = cs.at(-1)?.t || 0;
+    const val = {exn, market, tf, cs, exchange: exn, last_candle_ts: last, status: "ok"};
+    _candleCache.set(key, {at: Date.now(), val});
+    return val;
+  })();
+  _candleInflight.set(key, p);
+  try { return withLag(await p); } finally { _candleInflight.delete(key); }
 }
+// 응답에 수집 지연(source_lag_ms)을 '읽는 시점' 기준으로 매번 새로 넣는다(캐시 재사용 시에도 정확하게)
+function withLag(val){ return {...val, source_lag_ms: Math.max(0, Date.now() - (val.last_candle_ts || Date.now()))}; }
 const quoteOf = (exn, cs) => exn === "upbit" ? "KRW" : exn === "yahoo" ? (cs?.currency || "USD") : "USDT";
 
 /* ================= 견적서 ================= */

@@ -1431,15 +1431,23 @@ export async function comboScan(c, force){
   const C = await import("./combo.js"), tf = {}, raw = {};
   for (const k of C.TF_LIST){ try { const h = await cbTF(c, k, force); tf[k] = h.res; raw[k] = h.cs; } catch(e){ /* 그 시간대만 빠짐 */ } }
   if (!tf["15"] && !tf["5"]) throw new Error(`${c.ko} 시세를 받지 못했습니다`);
+  // 동기화 편차: 여러 시간대가 '같은 시점'의 봉으로 계산됐는지. 마지막 봉 시각 퍼짐이 가장 작은 봉 주기의 10%를 넘으면 경고.
+  const TF_SEC_MS = {"1": 60e3, "5": 300e3, "15": 900e3, "60": 3600e3, "240": 144e5, "D": 864e5};
+  const stamps = Object.entries(raw).map(([k, cs]) => cs?.at(-1)?.t).filter(Boolean);
+  let sync = null;
+  if (stamps.length >= 2){
+    const spread = Math.max(...stamps) - Math.min(...stamps), minBar = Math.min(...Object.keys(raw).map(k => TF_SEC_MS[k] || 36e5));
+    sync = {bars: stamps.length, spread_ms: spread, max_lag_ms: Math.max(...Object.values(raw).map(cs => Date.now() - (cs?.at(-1)?.t || Date.now()))), warn: spread > minBar * 0.1};
+  }
   const plan = C.planOf(tf), prev = CB.coins[c.id];
   let tv = {}; try { const T = await lib("ta_rating"); for (const k of ["60", "240"]) if (raw[k]){ const r = T.rating(raw[k]); if (r) tv[k] = {all: r.all, label: r.label, ma: r.ma, osc: r.osc}; } } catch(e){}
-  const row = {id: c.id, ko: c.ko, sym: c.sym, t: Date.now(), plan, tf: Object.fromEntries(Object.entries(tf).map(([k, r]) => [k, {score: r.score, up: r.up, dn: r.dn, flat: r.flat, total: r.total, ob: r.ob, os: r.os, oscN: r.oscN, regime: r.regime.label, fresh: r.fresh.slice(0, 4), groups: r.groups}])), n: C.comboIds().length, tv};
+  const row = {id: c.id, ko: c.ko, sym: c.sym, t: Date.now(), plan, sync, tf: Object.fromEntries(Object.entries(tf).map(([k, r]) => [k, {score: r.score, up: r.up, dn: r.dn, flat: r.flat, total: r.total, ob: r.ob, os: r.os, oscN: r.oscN, regime: r.regime.label, fresh: r.fresh.slice(0, 4), groups: r.groups}])), n: C.comboIds().length, tv};
   CB.coins[c.id] = row;
   { const lines = [], K = {long: "롱 타점", short: "숏 타점", longWait: "롱 대기", shortWait: "숏 대기", wait: "관망"};
     if (plan.entry) lines.push({price: plan.entry, label: `${plan.state.includes("Wait") ? "대기 진입" : "진입"}`, color: plan.side > 0 ? "#26a69a" : "#ef5350", style: 0}, {price: plan.sl, label: "손절", color: "#f23645", style: 2}, {price: plan.tp1, label: "익절1 (1.5R)", color: "#089981", style: 2}, {price: plan.tp2, label: "익절2", color: "#089981", style: 1});
     if (plan.sup) lines.push({price: plan.sup.price, label: `지지 (${plan.sup.names.slice(0, 2).join("·")})`, color: "#2962ff", style: 3});
     if (plan.res) lines.push({price: plan.res.price, label: `저항 (${plan.res.names.slice(0, 2).join("·")})`, color: "#ff9800", style: 3});
-    pubTo(c.sym, "combo", {team: "combo", title: `${K[plan.state]} · 확신 ${plan.conf}%`, text: `${plan.why} · 큰 추세 ${Math.round(plan.big * 100)} · 타이밍 ${Math.round(plan.small * 100)}`, lines,
+    pubTo(c.sym, "combo", {team: "combo", title: `${K[plan.state]} · 확신 ${plan.conf}%`, text: `${plan.why} · 큰 추세 ${Math.round(plan.big * 100)} · 타이밍 ${Math.round(plan.small * 100)}${row.sync?.warn ? " · ⚠ 시간대 봉 비동기(편차 " + (row.sync.spread_ms / 1000).toFixed(0) + "초)" : ""}`, lines,
       rows: Object.entries(row.tf).map(([k, r]) => [{"5": "5분", "15": "15분", "60": "1시간", "240": "4시간"}[k], Math.round(r.score * 100), `${r.up}▲ ${r.dn}▼`, r.regime, row.tv?.[k]?.label || ""])}); }
   // 기록장 채점 (5분봉으로)
   const calls = comboCalls(); let changed = false;
@@ -1512,7 +1520,8 @@ async function comboJob(){
   const gRows = Object.entries(G).map(([g, v]) => [g, String(v.up), String(v.dn), String(v.flat), v.up > v.dn * 1.5 ? "상승 우세" : v.dn > v.up * 1.5 ? "하락 우세" : "엇갈림"]);
   const tRows = C.TF_LIST.filter(k => row.tf[k]).map(k => { const r = row.tf[k]; return [C.TF_NAME[k], C.pct(r.score), C.verdict(r.score), `${r.up}/${r.dn}/${r.flat}`, r.regime, `${r.ob}/${r.os}`, r.fresh.map(f => f.name + (f.dir > 0 ? "▲" : "▼")).join(", ") || "—"]; });
   table("combo", lead.id, `⚡ ${c.ko} 종합 지표 — 지표 묶음별 (4개 시간대 합계)`, ["묶음", "상승", "하락", "중립", "판정"], gRows, `차트 터미널 지표 ${row.n}종 중 장세 판별용(ATR·초피니스·허스트 등)은 필터로, 레벨형(피봇·피보나치 등)은 지지·저항으로 사용`);
-  table("combo", lead.id, `⚡ ${c.ko} 시간대별 점수 (현재가 ${fx(p.price)})`, ["시간대", "점수", "판정", "상승/하락/중립", "장세", "과매수/과매도", "새 신호"], tRows, `큰 추세(4시간 60% + 1시간 40%) ${Math.round(p.big * 100)} · 타이밍(15분 60% + 5분 40%) ${Math.round(p.small * 100)}`);
+  const syncNote = row.sync ? ` · 동기화 ${(row.sync.spread_ms / 1000).toFixed(0)}초 편차·지연 ${(row.sync.max_lag_ms / 1000).toFixed(0)}초${row.sync.warn ? " ⚠ 시간대 봉 어긋남(같은 시점 아님) — 타점 신뢰도 낮춤" : " ✓ 같은 시점"}` : "";
+  table("combo", lead.id, `⚡ ${c.ko} 시간대별 점수 (현재가 ${fx(p.price)})`, ["시간대", "점수", "판정", "상승/하락/중립", "장세", "과매수/과매도", "새 신호"], tRows, `큰 추세(4시간 60% + 1시간 40%) ${Math.round(p.big * 100)} · 타이밍(15분 60% + 5분 40%) ${Math.round(p.small * 100)}${syncNote}`);
   const st = C.callStats(comboCalls().filter(x => x.coin === c.id));
   table("combo", lead.id, `🎯 ${c.ko} 타점: ${C.STATE_KO[p.state]} (확신 ${p.conf}%)`, ["항목", "값"], [["판단 이유", p.why], ["진입", fx(p.entry)], ["손절", fx(p.sl)], ["익절1 (1.5R)", fx(p.tp1)], ["익절2", fx(p.tp2)], ["손익비", fx(p.rr, 2)],
     ["가까운 지지", p.sup ? `${fx(p.sup.price)} (${p.sup.names.join("·")})` : "—"], ["가까운 저항", p.res ? `${fx(p.res.price)} (${p.res.names.join("·")})` : "—"], ["이 코인 기록장", st.done ? `적중 ${st.win}/${st.done} (${Math.round(st.rate * 100)}%) · 누적 ${st.sumR}R` : `채점된 타점 없음 (열린 ${st.open})`]],
@@ -1721,7 +1730,7 @@ async function optJob(){
   if (ok){
     const ns = await P.addStrategy({spec: {...res.best.spec, name: `${s.name} v${S.latest(res.best.spec.name)?.semver || "+"}`}, market: s.market, exchange: s.exchange, tf, author: lead.name, wf: {is: res.best.wf.is, oos: res.best.wf.oos}, cls: s.cls, mname: s.mname, lane: s.lane});
     post({ch: (LANES[s.lane] || LANES.std).demo, kind: "system", text: `🎛 최적화 버전 데모 투입: ${ns.name} (원본 ${s.name}은 그대로 비교 운용)`});
-    journal("record", "strategy", ns.id, {from: s.id, loss, semver: S.latest(res.best.spec.name)?.semver}, "opt_lead", "하이퍼옵트 버전");
+    journal("record", "strategy", ns.id, {from: s.id, loss, semver: S.latest(res.best.spec.name)?.semver, phash: specHash(res.best.spec)}, "opt_lead", "하이퍼옵트 버전");
   }
   pubTo(s.market, "opt", {team: "opt", title: `하이퍼옵트: ${ok ? "새 버전 채택" : "유지"}`, text: `${s.name} · ${res.lossKo} · 검증 순손익 ${f(res.base.wf.oos.net_pnl)} → ${f(res.best.wf.oos.net_pnl)} · 운일 확률 ${f(r1.p, 3)}`, spec: res.best.spec, baseSpec: s.spec});
   addNote("opt", `${s.name}: ${res.lossKo} → ${ok ? "새 버전 투입" : "유지"} (검증 순손익 ${f(res.base.wf.oos.net_pnl)} → ${f(res.best.wf.oos.net_pnl)}, p=${f(r1.p, 3)})`, "하이퍼옵트");
@@ -1758,7 +1767,7 @@ async function botImproveJob(){
   if (ok){
     const ns = await P.addStrategy({spec: {...res.best.spec, name: `${s.name} v${S.latest(res.best.spec.name)?.semver || "+"}`}, market: s.market, exchange: s.exchange, tf, author: lead.name, wf: {is: res.best.wf.is, oos: res.best.wf.oos}, cls: s.cls, mname: s.mname, lane: s.lane});
     post({ch: "demo", kind: "system", text: `🔧 봇 자동개선 버전 데모 투입: ${ns.name} (원본 ${s.name}은 그대로 비교 운용 · 보조지표·위험값 하이퍼옵트)`});
-    journal("record", "strategy", ns.id, {from: s.id, loss, bot: true, semver: S.latest(res.best.spec.name)?.semver}, "bot_lead", "봇 자동개선 버전");
+    journal("record", "strategy", ns.id, {from: s.id, loss, bot: true, semver: S.latest(res.best.spec.name)?.semver, phash: specHash(res.best.spec)}, "bot_lead", "봇 자동개선 버전");
     await learnSkill(`${s.name} ${res.lossKo} 자동개선으로 검증 성과 개선 → 채택`, {job: "botopt"});
   }
   pubTo(s.market, "bot", {team: "bot", title: `봇 자동개선: ${ok ? "새 버전 채택" : "유지"}`, text: `${s.name} · ${res.lossKo} · 검증 순손익 ${f(res.base.wf.oos.net_pnl)} → ${f(res.best.wf.oos.net_pnl)} · 운일 확률 ${f(r1.p, 3)}`, spec: res.best.spec, baseSpec: s.spec});
@@ -1892,6 +1901,8 @@ async function aiOpinion(coin, j){
    planner 가 상태(코인·전략·관문·경보·최근 보드)를 보고 '지금 할 일 목록'을 만들고, 선행조건을 지켜 최우선 의도 하나를
    골라 기존 job(워커)으로 실행한 뒤, 결과를 공유 보드에 기록한다. 정찰·침투·공격 요소는 전혀 없다. ---- */
 const lsStore = () => ({get: (k, d) => readJ(k, d), set: (k, v) => writeJ(k, v)});
+// 전략 파라미터 해시 (감사 로그용): 같은 전략이라도 지표 길이·문턱값·위험값이 바뀌면 해시가 바뀐다 → 어느 버전이 낸 신호인지 추적
+const specHash = o => { try { const s = JSON.stringify(o); let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0; return h.toString(36); } catch(e){ return ""; } };
 // hermes-agent 식 경험 학습 루프: 리서치하며 배운 교훈을 쌓고(강화), 모든 에이전트 프롬프트에 넣어 재사용한다 (lib/lessons.js)
 async function learnSkill(text, {job = "", ok = true} = {}){ try { const M = await lib("lessons"); return M.makeLessons(lsStore()).learn(text, {job, ok}); } catch(e){ return null; } }
 function topSkills(n = 6){ const l = readJ("coinLessons", []); if (!Array.isArray(l) || !l.length) return []; return [...l].sort((a, b) => (b.uses * (0.5 + 0.5 * (b.conf || 0))) - (a.uses * (0.5 + 0.5 * (a.conf || 0)))).slice(0, n); }
@@ -2040,7 +2051,7 @@ async function botJob(){
   if (wf.pass){
     const s = await P.addStrategy({spec, market: c.sym, exchange: "binancef", tf, author: lead.name, wf: {is: st(wf.is), oos: st(wf.oos)}, cls: "crypto", mname: `${c.ko} 선물`, lane: "std"});
     post({ch: "demo", kind: "system", text: `🤖 봇 데모 투입: ${s.name} (${c.ko} ${TF_KO[tf]}봉 · 레버리지 ${BOT_LEV}배 · ${T.repo} 방식) · 가상 10,000`});
-    journal("record", "strategy", s.id, {bot: T.id, repo: T.repo}, "bot_lead", "봇 전략 데모 투입");
+    journal("record", "strategy", s.id, {bot: T.id, repo: T.repo, phash: specHash(spec)}, "bot_lead", "봇 전략 데모 투입");
   }
   addNote("bot", `${T.name} ${c.ko}: 검증 ${pc(st(wf.oos).ret)} → ${wf.pass ? "데모 투입" : "유지"}`, "봇");
   await explain(lead.id, "bot", `${T.name}(${c.ko})의 백테스트·검증 결과를 보고 어떤 장세에 맞는 봇인지, 실거래로 켜기 전에 데모에서 무엇을 확인해야 하는지 설명한다.`, `${T.name} ${c.ko} ${TF_KO[tf]}봉 · 검증 수익 ${pc(st(wf.oos).ret)} · 손익비 ${st(wf.oos).pf ?? "—"} · 거래 ${st(wf.oos).n} · 관문 ${wf.pass ? "통과" : "불통과"}`, "아래 자동매매봇 전략 백테스트를 보고 설명해 줘.");
