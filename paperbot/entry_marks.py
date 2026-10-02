@@ -264,3 +264,47 @@ def attach(ctx: Optional[dict], m: Optional[dict], name: str, side: int) -> Opti
     if s is not None:
         out["strength"] = s
     return out
+
+
+# ------------------------------------------------------------------ chart lines (dashboard)
+def chart_bars(tf: str) -> int:
+    """Chart-timeframe bars that give the last bar the same levels as full history (marks_window_5m), at most
+    6,000 (four Binance requests). 0 when the timeframe has no levels (1d)."""
+    from . import sweepsig
+    lib = sweepsig.lib()
+    n5 = marks_window_5m(lib, tf)
+    if not n5:
+        return 0
+    per = lib.tf_minutes(tf) // 5
+    return int(min(6000, -(-n5 // per) + 2))
+
+
+def chart_levels(df: pd.DataFrame, tf: str, merge_atr: float = 0.1) -> dict:
+    """The lines the dashboard draws on the trade chart: sr.levels_for (unchanged) on the LAST closed bar of
+    ``df``, the nearest level of each family above the close (resistance) and below it (support), with its
+    distance in ATR14. Levels closer than ``merge_atr`` ATR on the same side are shown as one line with both
+    names. Descriptive only (the entry study found no effect on outcomes)."""
+    SR = sr_module()
+    with _contained():
+        i = len(df) - 1
+        lv = SR.levels_for(df, tf, None, at=np.array([i]))
+        atr = float(SR._atr(df)[i])
+    close = float(lv["close"][0])
+    lines = []
+    for col, side in (("up_gt", "resistance"), ("dn_lt", "support")):
+        got = []
+        for f in range(lv[col].shape[1]):
+            p, k = _num(lv[col][0, f]), int(lv[col + "_kind"][0, f])
+            if p is None or not k:
+                continue
+            got.append((p, k))
+        got.sort(key=lambda x: abs(x[0] - close))
+        for p, k in got:
+            near = next((x for x in lines if x["side"] == side and atr > 0 and abs(x["price"] - p) < merge_atr * atr), None)
+            if near is not None:
+                near["kinds"].append(k)
+                near["ko"] = " · ".join(KIND_KO.get(x, str(x)) for x in near["kinds"])
+                continue
+            lines.append({"price": p, "side": side, "kinds": [k], "ko": KIND_KO.get(k, str(k)),
+                          "atr": _num((p - close) / atr, 2) if atr > 0 else None})
+    return {"close": close, "atr": _num(atr), "levels": lines}

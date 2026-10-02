@@ -13,6 +13,8 @@ async function loadStrat() {
     $("s-sym").innerHTML = TRADE_SYMS.map((s) => `<option value="${s}">${coin(s)}</option>`).join("");
     $("s-pick").innerHTML = ss.list.map((x) => `<option value="${esc(x.strategy)}">${esc(x.name_ko)}</option>`).join("");
   }
+  $("s-sym").value = ss.sym;
+  document.querySelectorAll("#v-strat #s-tf button").forEach((b) => b.classList.toggle("on", b.dataset.tf === ss.tf));
   renderSList();
   await renderStrat();
 }
@@ -38,6 +40,13 @@ function renderSList() {
   $("s-pick").value = ss.name || "";
 }
 function pickStrat(n) { ss.name = n; renderSList(); renderStrat(); }
+// from a position anywhere (trade chart box, position tables): this strategy, at that account's timeframe and coin
+function openStrategy(name, tf, sym) {
+  ss.name = name;
+  if (tf && tf !== "1d") ss.tf = tf;
+  if (sym && TRADE_SYMS.includes(sym)) ss.sym = sym;
+  show("strat");
+}
 $("s-pick").onchange = (e) => pickStrat(e.target.value);
 $("s-sym").onchange = (e) => { ss.sym = e.target.value; drawStratChart(); };
 $("s-mk").onclick = (e) => { ss.markers = !ss.markers; e.target.classList.toggle("on", ss.markers); drawStratChart(); };

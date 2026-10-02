@@ -73,6 +73,64 @@ function alertKo(text) {
   return t;
 }
 const toastWorthy = (a) => a.level === "CRITICAL" || /BUST|LIQUIDATED|blocked|gap|no new closed/.test(a.text);
+function entryTitle(p) {   // "진입 롱 20배 +12.3%": the selected account's position, live
+  const u = livePnl(p);
+  return `진입 ${p.side > 0 ? "롱" : "숏"} ${p.leverage}배${u ? " " + pct(u.roe) : ""}`;
+}
+// open positions of the chart's coin, live ROE: click a name to show that account on the chart
+function renderPosBox() {
+  const box = $("posbox"); if (!box) return;
+  const list = positions().filter((a) => a.position.symbol === state.sym);
+  box.hidden = !list.length;
+  if (!list.length) { box.innerHTML = ""; return; }
+  list.sort((x, y) => ((livePnl(y.position) || {}).roe ?? -9) - ((livePnl(x.position) || {}).roe ?? -9));
+  const roes = list.map((a) => livePnl(a.position)).filter(Boolean).map((u) => u.roe);
+  const span = roes.length ? ` · 최고 <span class="${cls(roes[0])}">${pct(roes[0])}</span> 최저 <span class="${cls(roes[roes.length - 1])}">${pct(roes[roes.length - 1])}</span>` : "";
+  const folded = posboxFolded();
+  box.classList.toggle("folded", folded);
+  box.innerHTML = `<div class="h" id="posbox-h" title="눌러서 접기/펴기">${folded ? "▸" : "▾"} ${coin(state.sym)} 포지션 ${list.length}개${span}${folded ? "" : " · 실시간 평가 (마크 가격)"}</div>` +
+    (folded ? "" : list.map((a) => {
+    const p = a.position, u = livePnl(p);
+    const strat = a.kind === "strategy" || a.kind === "copy";
+    return `<div class="r ${a.account_id === state.acct ? "sel" : ""}"><span class="nm" data-pick="${esc(a.account_id)}" title="차트에 이 계좌 표시">${esc(name(a))}</span>
+      ${sideTag(p.side)} <span class="muted">${p.leverage}배</span>
+      <span class="roe ${u ? cls(u.roe) : ""}">${u ? pct(u.roe) : "—"}</span>
+      <span class="mono ${u ? cls(u.pnl) : ""}">${u ? (u.pnl >= 0 ? "+$" : "-$") + fmt(Math.abs(u.pnl), 0) : ""}</span>
+      ${strat ? `<button class="mini" data-strat="${esc(a.strategy)}" data-tf="${esc(a.timeframe)}" data-sym="${esc(p.symbol)}">매매법</button>` : ""}
+      <button class="mini" data-acct="${esc(a.account_id)}">계좌</button></div>`;
+  }).join(""));
+  $("posbox-h").onclick = () => { try { localStorage.setItem("posbox", folded ? "open" : "fold"); } catch (e) { /* private window */ } renderPosBox(); };
+  box.querySelectorAll("[data-pick]").forEach((el) => el.onclick = () => pickChartAccount(el.dataset.pick));
+  bindPosButtons(box);
+}
+function posboxFolded() {   // remembered per browser; folded by default on a phone
+  let v = null; try { v = localStorage.getItem("posbox"); } catch (e) { /* private window */ }
+  return v ? v === "fold" : window.matchMedia("(max-width: 700px)").matches;
+}
+function pickChartAccount(id, symChanged) {   // the chart moves to that account's timeframe, so its entries and exits line up
+  const a = state.board && state.board.accounts.find((x) => x.account_id === id);
+  const tf = a && a.timeframe, tfChanged = tf && tf !== state.tf && document.querySelector(`#tf-seg button[data-tf="${tf}"]`);
+  if (tfChanged) {
+    state.tf = tf;
+    document.querySelectorAll("#tf-seg button").forEach((b) => b.classList.toggle("on", b.dataset.tf === tf));
+  }
+  state.acct = id; state.markers = true;
+  fillAcctFilter(); $("mk-toggle").classList.add("on");
+  loadTradeChart(); if (tfChanged || symChanged) klineStream();
+}
+function bindPosButtons(root) {
+  root.querySelectorAll("button[data-strat]").forEach((b) => b.onclick = (e) => {
+    e.stopPropagation();
+    if (typeof openStrategy === "function") openStrategy(b.dataset.strat, b.dataset.tf, b.dataset.sym);
+  });
+  root.querySelectorAll("button[data-acct]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); openAccount(b.dataset.acct); });
+  root.querySelectorAll("button[data-chart]").forEach((b) => b.onclick = (e) => {
+    e.stopPropagation(); show("trade");
+    const moved = b.dataset.sym && b.dataset.sym !== state.sym;
+    if (moved) { state.sym = b.dataset.sym; renderWatch(); renderTicker(); renderSide(); }   // one chart load, below
+    pickChartAccount(b.dataset.chart, moved);
+  });
+}
 function livePnl(p) {   // p: board position {symbol, side, qty, entry, margin}
   const m = state.mark[p.symbol];
   if (!m) return null;
@@ -104,6 +162,7 @@ function show(v) {
   if (v === "status") loadStatus();
   if (v === "rooms" && typeof loadRooms === "function") loadRooms();
   if (v === "strat" && typeof loadStrat === "function") loadStrat();
+  if (v === "pos" && typeof loadPos === "function") loadPos();
   if (v === "trade" && tchart) tchart.timeScale().scrollToRealTime();
 }
 document.querySelectorAll("#nav button").forEach((b) => b.onclick = () => show(b.dataset.v));
@@ -163,7 +222,54 @@ async function loadTradeChart() {
   legend(state.lastCandle);
   await drawTradeMarkers(data.length ? data[0].time : 0);
   tchart.timeScale().fitContent();
+  loadLevels();
 }
+
+// ------------------------------------------------------------ support / resistance and GH Coin plan lines
+// S/R: /api/levels (entry_marks.chart_levels, the same level definitions recorded with every signal): the nearest
+// 3 above and below the last closed bar, within 8 ATR. Descriptive only: the entry study found no effect on outcomes.
+// GH Coin: its current plan for this coin (board.json of the recorder) when it has a side: entry, stop, TP1, TP2.
+const GH_STATE_KO = {long: "롱 타점", short: "숏 타점", longWait: "롱 대기", shortWait: "숏 대기", wait: "관망"};
+let slines = [];
+function pref(k, d) { try { const v = localStorage.getItem("pb-" + k); return v == null ? d : v === "1"; } catch (e) { return d; } }
+function setPref(k, v) { try { localStorage.setItem("pb-" + k, v ? "1" : "0"); } catch (e) { /* private window */ } }
+state.srOn = pref("sr", true); state.ghOn = pref("gh", false);
+async function loadLevels() {
+  const sym = state.sym, tf = state.tf;
+  let lv = null, gb = null;
+  if (state.srOn && tf !== "1d") { try { lv = await api(`/api/levels?symbol=${sym}&tf=${tf}`); } catch (e) { /* none */ } }
+  if (state.ghOn) { try { gb = await api("/api/ghcoin/board"); } catch (e) { /* none */ } }
+  if (sym !== state.sym || tf !== state.tf) return;
+  state.levels = lv; state.ghBoard = gb;
+  drawLevels();
+}
+function drawLevels() {
+  if (!tseries) return;
+  slines.forEach((l) => { try { tseries.removePriceLine(l); } catch (e) { /* gone */ } }); slines = [];
+  const add = (price, color, style, title) => { if (price) slines.push(tseries.createPriceLine({price, color, lineWidth: 1, lineStyle: style, title})); };
+  if (state.srOn && state.levels) {
+    for (const side of ["resistance", "support"]) {
+      (state.levels.levels || []).filter((x) => x.side === side && (x.atr == null || Math.abs(x.atr) <= 8)).slice(0, 3)
+        .forEach((x) => add(x.price, side === "resistance" ? css("--down") : css("--up"), 4, `${side === "resistance" ? "저항" : "지지"} · ${x.ko}`));
+    }
+  }
+  const g = state.ghOn && state.ghBoard && state.ghBoard.coins && state.ghBoard.coins[state.sym];
+  if (g && g.side && g.entry) {
+    const k = `GH ${GH_STATE_KO[g.state] || g.state}`;
+    add(g.entry, css("--accent"), 0, `${k} 진입`); add(g.sl, css("--accent"), 2, `${k} 손절`);
+    add(g.tp1, css("--accent"), 2, `${k} 익절1`); add(g.tp2, css("--accent"), 3, `${k} 익절2`);
+  }
+  const note = [];
+  if (state.srOn && state.levels && state.levels.levels) note.push("지지·저항: 설명용 (진입 연구에서 수익과 관계없음)");
+  if (state.ghOn) note.push(!state.ghBoard || !state.ghBoard.alive ? "GH Coin 기록기 응답 없음"
+    : g ? `GH Coin: ${GH_STATE_KO[g.state] || g.state}${g.why ? " · " + g.why : ""}` : "GH Coin: 이 코인 계획 없음");
+  $("lv-note").textContent = note.join(" · ");
+}
+$("sr-toggle").classList.toggle("on", state.srOn);
+$("gh-toggle").classList.toggle("on", state.ghOn);
+$("sr-toggle").onclick = (e) => { state.srOn = !state.srOn; setPref("sr", state.srOn); e.target.classList.toggle("on", state.srOn); loadLevels(); };
+$("gh-toggle").onclick = (e) => { state.ghOn = !state.ghOn; setPref("gh", state.ghOn); e.target.classList.toggle("on", state.ghOn); loadLevels(); };
+setInterval(() => { if (state.view === "trade") loadLevels(); }, 120000);
 async function drawTradeMarkers(t0) {
   tlines.forEach((l) => tseries.removePriceLine(l)); tlines = [];
   // All accounts at once would bury the candles in markers: draw them for one chosen account only.
@@ -182,11 +288,13 @@ async function drawTradeMarkers(t0) {
   });
   marks.sort((a, b) => a.time - b.time);
   tseries.setMarkers(marks);
+  state.entryLine = null;
   if (state.acct && state.board) {
     const a = state.board.accounts.find((x) => x.account_id === state.acct);
     const p = a && a.position;
     if (p && p.symbol === state.sym) {
-      tlines.push(tseries.createPriceLine({price: p.entry, color: css("--series"), lineWidth: 1, title: "진입"}));
+      state.entryLine = tseries.createPriceLine({price: p.entry, color: css("--series"), lineWidth: 1, title: entryTitle(p)});
+      tlines.push(state.entryLine);
       tlines.push(tseries.createPriceLine({price: p.stop, color: p.lock_roe ? css("--up") : css("--down"), lineWidth: 1, lineStyle: 2,
         title: p.lock_roe ? `잠금 +${Math.round(p.lock_roe * 100)}%` : "손절"}));
       tlines.push(tseries.createPriceLine({price: p.liq, color: css("--accent"), lineWidth: 1, lineStyle: 3, title: "청산가"}));
@@ -238,18 +346,36 @@ function renderTicker() {
   $("t-cd").textContent = closeIn(state.tf);
   const n = positions().filter((a) => a.position.symbol === s).length;
   $("t-pos").textContent = state.board ? `${n}개 계좌` : "—";
+  $("t-sess").textContent = sessionText(Date.now());
+}
+// sessions.py, in Korea time: asia 09-16, europe 16-22, us 22-05, dawn 05-09; weekend Sat/Sun; US stock open 09:30 New York
+const SESS_KO = {asia: "아시아장", europe: "유럽장", us: "미국장", dawn: "새벽"};
+function sessionText(now) {
+  const k = new Date(now + 9 * 3.6e6), h = k.getUTCHours(), wd = k.getUTCDay();
+  const ss = h >= 9 && h < 16 ? "asia" : h >= 16 && h < 22 ? "europe" : h >= 5 && h < 9 ? "dawn" : "us";
+  let out = (wd === 0 || wd === 6 ? "주말 · " : "") + SESS_KO[ss];
+  const ny = new Intl.DateTimeFormat("en-US", {timeZone: "America/New_York", hour12: false, weekday: "short", hour: "2-digit", minute: "2-digit"})
+    .formatToParts(new Date(now)).reduce((o, p) => (o[p.type] = p.value, o), {});
+  const mins = (+ny.hour % 24) * 60 + +ny.minute, open = 9 * 60 + 30;
+  if (!["Sat", "Sun"].includes(ny.weekday)) {
+    if (mins < open && open - mins <= 360) out += ` · 미국 증시 개장까지 ${Math.floor((open - mins) / 60)}시간 ${(open - mins) % 60}분`;
+    else if (mins >= open && mins < open + 60) out += " · 미국 증시 개장 직후";
+  }
+  return out;
 }
 seg("side-tabs", "t", (t) => { state.sideTab = t; renderSide(); });
 seg("bot-tabs", "t", (t) => { state.botTab = t; renderBottom(); });
 function posRows(list, withCoin) {
   if (!list.length) return '<p class="empty">열린 포지션이 없습니다</p>';
   return `<table><thead><tr><th class="l">계좌</th>${withCoin ? '<th class="l">코인</th>' : ""}<th class="l">방향</th><th>배수</th>
-    ${withCoin ? "<th>진입가</th>" : ""}<th>평가 ROE</th><th>손절/잠금</th></tr></thead><tbody>` + list.map((a) => {
+    ${withCoin ? "<th>진입가</th>" : ""}<th>평가 ROE</th><th>손절/잠금</th><th class="l">보기</th></tr></thead><tbody>` + list.map((a) => {
     const p = a.position, u = livePnl(p);
     const stop = p.lock_roe ? `<span class="up">+${Math.round(p.lock_roe * 100)}% 잠금</span>` : px(p.stop);
+    const strat = a.kind === "strategy" || a.kind === "copy";
     return `<tr class="click" data-id="${esc(a.account_id)}"><td class="l">${esc(name(a))}</td>${withCoin ? `<td class="l">${coin(p.symbol)}</td>` : ""}
       <td class="l">${sideTag(p.side)}</td><td>${p.leverage}배</td>${withCoin ? `<td class="mono">${px(p.entry)}</td>` : ""}
-      <td class="mono ${u ? cls(u.roe) : ""}">${u ? pct(u.roe) : "—"}</td><td class="mono">${stop}</td></tr>`;
+      <td class="mono ${u ? cls(u.roe) : ""}">${u ? pct(u.roe) : "—"}</td><td class="mono">${stop}</td>
+      <td class="l"><button class="mini" data-chart="${esc(a.account_id)}" data-sym="${esc(p.symbol)}">차트</button>${strat ? ` <button class="mini" data-strat="${esc(a.strategy)}" data-tf="${esc(a.timeframe)}" data-sym="${esc(p.symbol)}">매매법</button>` : ""}</td></tr>`;
   }).join("") + "</tbody></table>";
 }
 function tradeRows(rows, withCoin) {
@@ -263,6 +389,7 @@ function tradeRows(rows, withCoin) {
 }
 function bindAccountClicks(root) {
   root.querySelectorAll("tr.click[data-id]").forEach((tr) => tr.onclick = () => openAccount(tr.dataset.id));
+  bindPosButtons(root);
 }
 async function renderSide() {
   const el = $("side-body");
@@ -636,6 +763,11 @@ function klineStream() {
 setInterval(() => {
   renderWatch(); renderTicker();
   if (state.view === "trade") {
+    renderPosBox();
+    if (state.entryLine && state.acct && state.board) {
+      const a = state.board.accounts.find((x) => x.account_id === state.acct);
+      if (a && a.position && a.position.symbol === state.sym) { try { state.entryLine.applyOptions({title: entryTitle(a.position)}); } catch (e) { /* line removed */ } }
+    }
     if (state.sideTab === "pos") renderSide();
     if (state.botTab === "allpos") renderBottom();
   }

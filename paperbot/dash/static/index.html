@@ -12,6 +12,7 @@
   <span class="brand">PAPER <span>V3</span></span>
   <nav class="nav" id="nav">
     <button data-v="trade" class="on">트레이드</button>
+    <button data-v="pos">포지션</button>
     <button data-v="strat">매매법</button>
     <button data-v="board">순위표</button>
     <button data-v="account">계좌</button>
@@ -43,6 +44,7 @@
     <span class="tk"><span class="k">펀딩비 / 남은 시간</span><span class="v" id="t-fund">—</span></span>
     <span class="tk"><span class="k" id="t-cd-k">봉 마감까지</span><span class="v" id="t-cd">—</span></span>
     <span class="tk"><span class="k">이 코인 포지션</span><span class="v" id="t-pos">—</span></span>
+    <span class="tk"><span class="k">지금 시간대 (한국 시각)</span><span class="v" id="t-sess">—</span></span>
   </div>
   <div class="trade">
     <div class="watch">
@@ -60,8 +62,10 @@
         <select id="acct-filter" aria-label="표시할 계좌"><option value="">계좌를 고르면 진입·청산이 표시됩니다</option></select>
         <span class="sep"></span>
         <button id="mk-toggle" class="on">진입·청산 표시</button>
+        <button id="sr-toggle" class="on" title="가까운 지지·저항선 (위아래 3개씩)">지지·저항</button>
+        <button id="gh-toggle" title="GH Coin의 지금 계획 (진입·손절·익절)">GH Coin 타점</button>
       </div>
-      <div class="chartwrap"><div class="cw" id="tchart"></div><div class="legend" id="legend"></div></div>
+      <div class="chartwrap"><div class="cw" id="tchart"></div><div class="legend" id="legend"></div><div class="lvnote" id="lv-note"></div><div class="posbox" id="posbox" hidden></div></div>
     </div>
     <div class="side">
       <div class="ph tabs" id="side-tabs">
@@ -79,6 +83,21 @@
 </section>
 
 <!-- ========================================================= strategy -->
+<!-- ========================================================= positions (exchange-style, live) -->
+<section class="view" id="v-pos"><div class="page pv">
+  <div class="pv-coins" id="pv-coins"></div>
+  <div class="pv-sum" id="pv-sum"></div>
+  <div class="pv-mkt" id="pv-mkt" hidden><div class="pv-head" id="pv-head"></div><div class="pv-book" id="pv-book"></div></div>
+  <div class="pv-bar">
+    <div class="tabs" id="pv-tabs"><button data-t="pos" class="on">포지션</button><button data-t="orders">손절·잠금 주문</button><button data-t="hist">오늘 체결</button></div>
+    <span class="grow"></span>
+    <select id="pv-sort" aria-label="정렬"><option value="pnl">수익 큰 순</option><option value="loss">손실 큰 순</option>
+      <option value="new">최근 진입 순</option><option value="liq">청산가 가까운 순</option></select>
+  </div>
+  <div id="pv-list"></div>
+  <p class="muted" style="font-size:11px;margin-top:8px">가상(페이퍼) 계좌입니다. 미실현 손익·ROI는 바이낸스 앱처럼 마크 가격 기준, 나갈 때 수수료 전 금액입니다. 주문 버튼은 없습니다.</p>
+</div></section>
+
 <section class="view" id="v-strat">
   <div class="strat">
     <div class="slist">
@@ -228,6 +247,7 @@
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script src="/static/app.js"></script>
 <script src="/static/strat.js"></script>
+<script src="/static/pos.js"></script>
 <script src="/static/rooms.js"></script>
 <script src="/static/checkpoint.js"></script>
 <script src="/static/ghcoin.js"></script>

@@ -143,7 +143,7 @@ async function loadOverview() {
     const w = (curOv() || {}).owner_wait || "", wChanged = w !== rs.ownerWait;
     rs.ownerWait = w;
     if (stChanged || wChanged || wasRunning !== !!(curOv() || {}).running) renderChat(nearBottom());
-    if (stChanged && rs.side && rs.side.props) renderSide();     // the proposal cards follow the state too
+    if (stChanged && rs.side && rs.side.props) renderRoomSide();     // the proposal cards follow the state too
   }
 }
 function aiChip() {
@@ -424,7 +424,7 @@ async function loadSide() {
     api("/api/agents/usage").catch(() => null)]);
   if (req !== rs.sideReq || id !== rs.cur) return;
   rs.side = {notes, trials, props, usage};
-  renderSide();
+  renderRoomSide();
 }
 function decideButtons(p, label) {
   if (rs.confirm && rs.confirm.id === p.id) {
@@ -509,7 +509,7 @@ function bar(v, cap) {
   const f = Math.min(1, (v || 0) / cap);
   return `<div class="ubar"><i style="width:${Math.round(f * 100)}%;${f >= 0.9 ? "background:var(--down)" : f >= 0.7 ? "background:var(--accent)" : ""}"></i></div>`;
 }
-function renderSide() {
+function renderRoomSide() {
   const {notes = [], trials = null, props = [], usage = null} = rs.side || {};
   const info = rs.room, r = curOv();
   $("r-side-title").textContent = (r || info) ? `${(r || info).title} 정보` : "방 정보";
@@ -572,9 +572,9 @@ function renderSide() {
   document.querySelectorAll("#r-side [data-dec]").forEach((b) => b.onclick = () => {
     const pid = +b.dataset.p, inp = document.querySelector(`#r-side [data-note="${pid}"]`);
     rs.confirm = {id: pid, dec: b.dataset.dec, note: inp ? inp.value : ""};
-    renderSide();
+    renderRoomSide();
   });
-  document.querySelectorAll("#r-side [data-cancel]").forEach((b) => b.onclick = () => { rs.confirm = null; renderSide(); });
+  document.querySelectorAll("#r-side [data-cancel]").forEach((b) => b.onclick = () => { rs.confirm = null; renderRoomSide(); });
   document.querySelectorAll("#r-side [data-go]").forEach((b) => b.onclick = async () => {
     const c = rs.confirm;
     if (!c) return;

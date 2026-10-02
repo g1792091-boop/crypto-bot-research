@@ -292,3 +292,70 @@ def test_summary_and_csv_exports(client):
     assert t.status_code == 200 and t.text.startswith("﻿계좌,종류,코인")
     one = client.get("/api/export/trades.csv", params={"account": "nope@1h"})
     assert one.text.count("\n") == 1                      # header only
+
+
+def test_chart_position_box_and_strategy_shortcuts(client):
+    """The trade chart lists this coin's positions with live ROE; each links to its strategy, account and chart."""
+    assert client.post("/api/login", json={"password": "correct horse battery"}).status_code == 200
+    for a in client.get("/api/board").json()["accounts"]:
+        assert {"account_id", "kind", "strategy", "timeframe"} <= set(a)     # what the buttons carry
+    static = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "paperbot", "dash", "static")
+    html = open(os.path.join(static, "index.html"), encoding="utf-8").read()
+    js = open(os.path.join(static, "app.js"), encoding="utf-8").read()
+    sj = open(os.path.join(static, "strat.js"), encoding="utf-8").read()
+    assert 'id="posbox"' in html and "function renderPosBox()" in js and "renderPosBox();" in js
+    assert "state.entryLine.applyOptions({title: entryTitle(" in js          # live % on the entry line
+    assert "data-strat=" in js and "data-chart=" in js and "function openStrategy(name, tf, sym)" in sj
+
+
+def test_page_scripts_do_not_redeclare_each_others_globals():
+    """The page's scripts share one global scope: a second top-level function with the same name silently replaces
+    the first (rooms.js once replaced the trade screen's renderSide), a second const/let stops the whole file."""
+    import re
+    static = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "paperbot", "dash", "static")
+    html = open(os.path.join(static, "index.html"), encoding="utf-8").read()
+    seen: dict = {}
+    for src in re.findall(r'<script src="/static/([a-z0-9_]+\.js)"', html):
+        js = open(os.path.join(static, src), encoding="utf-8").read()
+        for name in re.findall(r"^(?:const|let|var|function|async function|class)\s+([A-Za-z_$][\w$]*)", js, re.M):
+            seen.setdefault(name, []).append(src)
+    assert {k: v for k, v in seen.items() if len(v) > 1} == {}
+
+
+def test_levels_depth_and_ghcoin_board_endpoints(tmp_path):
+    import json
+    from paperbot import sweepsig
+    db = str(tmp_path / "p.db")
+    _store(db).close()
+    L = sweepsig.lib()
+    df = L.synth_ohlcv(4100, "5m", seed=3, start="2026-04-01")[["ts", "open", "high", "low", "close", "volume"]]
+    app = create_app(db, hash_password("correct horse battery"), SECRET, frames=lambda s, tf, n: df.tail(n).reset_index(drop=True),
+                     depth=lambda s: {"bids": [[1.0, 2.0]], "asks": [[1.1, 3.0]], "T": 1})
+    c = TestClient(app)
+    assert c.get("/api/levels").status_code == 401
+    assert c.post("/api/login", json={"password": "correct horse battery"}).status_code == 200
+    r = c.get("/api/levels", params={"symbol": "BTCUSDT", "tf": "5m"}).json()
+    assert r["levels"] and {x["side"] for x in r["levels"]} <= {"support", "resistance"}
+    assert all((x["price"] > r["close"]) == (x["side"] == "resistance") for x in r["levels"]) and all(x["ko"] for x in r["levels"])
+    assert c.get("/api/levels", params={"symbol": "BTCUSDT", "tf": "1d"}).json()["levels"] == []
+    assert c.get("/api/levels", params={"symbol": "NOPE"}).status_code == 400
+    assert c.get("/api/depth", params={"symbol": "ETHUSDT"}).json()["asks"] == [[1.1, 3.0]]
+    assert c.get("/api/ghcoin/board").json() == {"coins": {}, "alive": False}
+    os.makedirs(tmp_path / "ghcoin")
+    (tmp_path / "ghcoin" / "board.json").write_text(json.dumps({"ts": 1, "coins": {"BTCUSDT": {"state": "long", "side": 1}}}))
+    g = c.get("/api/ghcoin/board").json()
+    assert g["coins"]["BTCUSDT"]["side"] == 1 and g["alive"] is False
+
+
+def test_positions_view_is_wired():
+    static = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "paperbot", "dash", "static")
+    html = open(os.path.join(static, "index.html"), encoding="utf-8").read()
+    js = open(os.path.join(static, "pos.js"), encoding="utf-8").read()
+    assert 'data-v="pos"' in html and 'id="v-pos"' in html and '/static/pos.js' in html
+    assert "function posCard(" in js and "@depth20@500ms" in js and "/api/depth?symbol=" in js
+    assert "order" not in re_buttons(js)                                   # no order buttons on a paper screen
+
+
+def re_buttons(js: str) -> str:
+    import re
+    return " ".join(re.findall(r"<button[^>]*>([^<]*)</button>", js)).lower()

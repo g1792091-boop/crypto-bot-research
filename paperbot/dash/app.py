@@ -461,6 +461,23 @@ def fetch_ticker() -> dict:
     return out
 
 
+_DEPTH_CACHE: dict = {}
+
+
+def fetch_depth(symbol: str) -> dict:
+    """Top 20 bids and asks of one coin, fetched by the server (fallback when the browser's WebSocket is blocked).
+    Weight 2 per request, 2 s cache shared by every viewer."""
+    hit = _DEPTH_CACHE.get(symbol)
+    if hit and time.time() - hit[0] < 2:
+        return hit[1]
+    with urllib.request.urlopen(f"https://fapi.binance.com/fapi/v1/depth?symbol={symbol}&limit=20", timeout=5) as r:
+        d = json.loads(r.read())
+    out = {"bids": [[float(p), float(q)] for p, q in d.get("bids", [])],
+           "asks": [[float(p), float(q)] for p, q in d.get("asks", [])], "T": d.get("T")}
+    _DEPTH_CACHE[symbol] = (time.time(), out)
+    return out
+
+
 _FRAME_CACHE: dict = {}
 
 
@@ -1123,6 +1140,7 @@ def _storable(text: str) -> bool:
 
 
 def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fetch_candles, ticker=fetch_ticker,
+               depth=fetch_depth,
                agents_db: Optional[str] = None, daily_db: Optional[str] = None, frames=fetch_frame,
                inbox_db: Optional[str] = None, say_per_hour: int = SAY_PER_HOUR,
                checkpoint_db: Optional[str] = None) -> FastAPI:
@@ -1427,6 +1445,51 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
     def export_board():
         return Response(data.board_csv(), media_type="text/csv; charset=utf-8",
                         headers={"Content-Disposition": 'attachment; filename="board.csv"'})
+
+    @app.get("/api/depth")
+    def get_depth(symbol: str = "BTCUSDT"):
+        """Order book top 20 from the server (fallback for a blocked WebSocket)."""
+        if symbol not in TICKER_SYMBOLS:
+            raise HTTPException(400, "unknown symbol")
+        try:
+            return depth(symbol)
+        except Exception:  # noqa: BLE001
+            raise HTTPException(503, "no order book")
+
+    levels_cache: dict = {}
+
+    @app.get("/api/levels")
+    def get_levels(symbol: str = "BTCUSDT", tf: str = "15m"):
+        """Support / resistance lines of the last closed bar (entry_marks.chart_levels: the same level
+        definitions recorded with every signal). Descriptive only."""
+        from .. import entry_marks
+        if symbol not in TICKER_SYMBOLS:
+            raise HTTPException(400, "unknown symbol")
+        if tf not in TRADE_TFS:
+            return {"levels": [], "note": "no levels for this timeframe"}
+        df = frames(symbol, tf, entry_marks.chart_bars(tf))
+        if df is None or len(df) < 320:
+            raise HTTPException(503, "no price data")
+        key = (symbol, tf, str(df["ts"].iloc[-1]))
+        if key not in levels_cache:
+            if len(levels_cache) > 128:
+                levels_cache.clear()
+            try:
+                levels_cache[key] = {**entry_marks.chart_levels(df, tf), "bar": str(df["ts"].iloc[-1])}
+            except Exception as exc:  # noqa: BLE001
+                raise HTTPException(503, f"levels failed: {type(exc).__name__}")
+        return levels_cache[key]
+
+    @app.get("/api/ghcoin/board")
+    def get_ghcoin_board():
+        """GH Coin's latest plan per coin (board.json of the recorder), without the totals."""
+        try:
+            with open(os.path.join(os.path.dirname(os.path.abspath(db)), "ghcoin", "board.json"), encoding="utf-8") as fh:
+                b = json.load(fh)
+        except (OSError, ValueError):
+            return {"coins": {}, "alive": False}
+        return {"coins": b.get("coins") or {}, "ts": b.get("ts"),
+                "alive": time.time() * 1000 - int(b.get("ts") or 0) <= 15 * 60_000}
 
     @app.get("/api/ticker")
     def get_ticker():
