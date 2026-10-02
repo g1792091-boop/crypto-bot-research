@@ -69,12 +69,19 @@ async def _data_down(_req, e: RuntimeError):
 
 
 # ------------------------------------------------------------------ 상태
+def _build_id() -> str:
+    try:
+        return (config.FRONTEND_DIR / "build.txt").read_text(encoding="utf-8").strip()[:40]
+    except OSError:
+        return "개발판"
+
+
 @app.get("/api/status")
 def status():
     return {
         "llm": config.llm_enabled(), "llm_provider": llm.provider(), "llm_label": llm.label(), "model": llm.model_name(),
         "intervals": market.INTERVALS,
-        "coinglass": coinglass.enabled(), "data_source_mode": config.DATA_SOURCE,
+        "coinglass": coinglass.enabled(), "data_source_mode": config.DATA_SOURCE, "build": _build_id(),
         "indicators": {k: {"outputs": v["outputs"], "defaults": v["defaults"], "desc": v["desc"], "tv": v["tv"]}
                        for k, v in indicators.REGISTRY.items()},
     }

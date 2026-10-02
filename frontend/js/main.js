@@ -32,6 +32,8 @@ function renderStatus() {
 
 async function init() {
   state.status = await api("/api/status");
+  const br = document.querySelector(".brand");
+  if (br && state.status.build) br.insertAdjacentHTML("beforeend", ` <small class="muted" style="font-size:10px;font-weight:400" title="빌드 번호 — 새 버전이 실행 중인지 확인용">${esc(state.status.build)}</small>`);
   initAlerts();
   initAiModels();
   initTrade();

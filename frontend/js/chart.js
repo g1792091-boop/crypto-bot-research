@@ -655,9 +655,10 @@ export class TermChart {
     let d;
     try { d = await api(`/api/scenbot/chart?symbol=${sym}&interval=${iv}`); } catch { return; }
     if (!this._is(sym, iv)) return;
-    const key = JSON.stringify([d.orders, d.trades.length]);
+    const key = JSON.stringify([d.orders, d.trades.length]), sk = JSON.stringify([d.status, d.progress, d.enabled, d.active, d.cal_n]);
     this.sbot = d;
     if (key !== this._sbKey) { this._sbKey = key; this._applyMarkers(); }
+    if (sk !== this._sbSt) { this._sbSt = sk; this._legend(); }
   }
 
   // AI 진입 시그널만 다시 (새 분석이 나왔을 때)
@@ -1145,6 +1146,7 @@ export class TermChart {
     const acts = (it) => `<span class="lg-act"><button data-lg="hide" data-ii="${this.indicators.indexOf(it.spec)}" title="${it.spec.hidden ? "보이기" : "숨기기"}">${it.spec.hidden ? "◌" : "◉"}</button><button data-lg="set" data-ii="${this.indicators.indexOf(it.spec)}" title="설정">⚙</button><button data-lg="del" data-ii="${this.indicators.indexOf(it.spec)}" title="지우기">✕</button></span>`;
     if (mainInd.length) html += mainInd.map((it) => `<div class="lg-row ${it.spec.hidden ? "off" : ""}"><span style="color:${it.last.plots.find((pl) => pl.color)?.color || "inherit"}">${esc(INDICATORS[it.spec.key].name)}${paramStr(it.params)}</span> ${it.spec.hidden ? "" : vals(it) + extra(it)}${acts(it)}</div>`).join("");
     if (this.opts.overlays.footprint && this.fp) html += `<br><span class="muted">풋프린트: ${this.fp.error ? esc(this.fp.error) : `${this.fp.sub_interval} 봉 체결로 근사 · 칸 ${px(this.fp.tick)} · 왼쪽 매도 × 오른쪽 매수 · 주황 테두리 = 봉 POC · 초록/빨강 숫자 = 3배 불균형${ts_hint(this)}`}</span>`;
+    if (this.opts.overlays.sbot && this.sbot?.symbol === this.symbol) html += `<div class="lg-sbot">${sbotLine(this.sbot, this.interval)}</div>`;
     if (this.heat) html += `<br><span class="muted">청산맵: ${this.heat.model === "coinglass" ? "CoinGlass" : this.heat.model === "estimate_oi" ? "OI 기반 추정" : "거래대금 기반 추정"}</span> <span class="scale"></span>`;
     if (this.whales) html += `<br><span class="muted">고래 체결 ≥ $${big(this.whales.min_usd)} · ${this.whales.trades.length}건${this.whales.source === "binance" && this.whales.collecting_since ? " (프로그램 실행 후 수집분)" : ""} · 호가벽 ${this.whales.walls.length}개</span>`;
     html += `</div>`;
@@ -1166,6 +1168,25 @@ function heikinAshi(c) {
     out.push({ time: b.time, open, high: Math.max(b.high, open, close), low: Math.min(b.low, open, close), close });
   });
   return out;
+}
+
+// 차트 왼쪽 위에 늘 보이는 시나리오 봇 상태 한 줄 (주문이 없어도 지금 무엇을 하는지)
+export function sbotLine(d, iv) {
+  const hm = (t) => new Date(t * 1000).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
+  let s = `<b style="color:#ff9f43">🤖 시나리오 봇</b> `;
+  if (!d.enabled) return s + `<span class="down">꺼짐</span> <span class="muted">— 오피스 › 진입 봇에서 켜세요</span>`;
+  if (d.running === false) return s + `<span class="down">실행 안 됨</span> <span class="muted">— 앱을 다시 켜 주세요</span>`;
+  if (!d.active) return s + `<span class="muted">이 차트(${esc(iv)})는 판단 대상 아님 · 지금 판단: ${esc((d.pairs || []).join(", "))} — 진입 봇에서 '내 차트 따라가기' 를 켜세요</span>`;
+  s += `<span class="up">켜짐 · 이 차트에서 판단 중</span> <span class="muted">${d.lev}배</span>`;
+  const op = (d.orders || []).filter((o) => o.interval === iv);
+  for (const o of op) s += o.status === "open"
+    ? ` · <b class="${(o.roe_pct || 0) >= 0 ? "up" : "down"}">보유 ${o.side > 0 ? "롱" : "숏"} ROE ${(o.roe_pct || 0) >= 0 ? "+" : ""}${(o.roe_pct || 0).toFixed(2)}%</b>`
+    : ` · <span style="color:#ff9f43">대기 주문 ${o.side > 0 ? "롱" : "숏"} @ ${px(o.entry)}</span>`;
+  const st = d.status;
+  s += st ? ` · <span class="muted">${esc(st.text.length > 140 ? st.text.slice(0, 140) + "…" : st.text)}</span>${st.next ? ` <span class="muted">· 다음 판단 ${hm(st.next)}</span>` : ""}`
+    : ` · <span class="muted">첫 판단 준비 중 (15초 안)</span>`;
+  s += d.learning ? ` · <span class="accent">학습 중: ${esc(d.progress || "")}</span>` : d.cal_n ? ` · <span class="muted">배운 표본 ${d.cal_n.toLocaleString()}건</span>` : ` · <span class="muted">학습 대기</span>`;
+  return s;
 }
 
 const ts_hint = (tc) => tc.chart.timeScale().options().barSpacing < 48 ? " · 더 확대하면 숫자가 보입니다" : "";

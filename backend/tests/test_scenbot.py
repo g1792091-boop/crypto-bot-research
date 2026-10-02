@@ -128,3 +128,42 @@ def test_why_not_explains():
     s = [{"title": "박스권 양방향", "prob": 30, "rr": 1.2, "kind": "range"}]
     t = L.why_not(s, {**L.DEFAULT_POLICY, "kinds": ["breakout"]})
     assert "30%" in t and "1.2" in t and "종류" in t
+
+
+def test_indicator_votes_depend_on_scenario_kind():
+    # 계속 내린 뒤 바닥: 박스권 롱(역추세)에는 RSI 낮음이 '같은 편', 돌파 롱에는 '반대'
+    c = [_bar(i * 60, 200 - i, 200.5 - i, 199 - i, 199.2 - i) for i in range(120)]
+    br = L.indicator_votes(c, 1, "breakout")
+    rg = L.indicator_votes(c, 1, "range")
+    pb = L.indicator_votes(c, 1, "pullback")
+    assert br["votes"]["RSI"] == -1 and br["score"] <= -3
+    assert rg["votes"]["RSI(역추세)"] == 1 and rg["score"] > br["score"]
+    assert set(pb["votes"]) == {"슈퍼트렌드", "EMA20/50"}
+
+
+def test_decide_falls_back_to_next_scenario_and_reports_status(monkeypatch, tmp_path):
+    from app import config, scenbot
+    monkeypatch.setattr(config, "STATE_DIR", tmp_path)
+    scenbot.load()
+    scenbot.ST.update(orders=[], trades=[], status={}, policy=dict(L.DEFAULT_POLICY), cal=None, meta=None, equity=10_000.0)
+    scenbot.S.update(leverage=2.0, margin_pct=10.0, max_open=6)
+    c, _ = market.candles("SOLUSDT", "1h", 500)
+    px = c[-1]["close"]
+    fake = [{"key": "range", "title": "박스권 양방향", "kind": "range", "side": 1, "prob": 55, "entry": px * 0.99, "stop": px * 0.97, "tp": px * 1.04,
+             "rr": 2.5, "trigger": "", "order": "limit", "state": "range"},
+            {"key": "long", "title": "저항 돌파 롱", "kind": "breakout", "side": 1, "prob": 45, "entry": px * 1.01, "stop": px * 0.99, "tp": px * 1.05,
+             "rr": 2.0, "trigger": "", "order": "stop", "state": "range"}]
+    monkeypatch.setattr(L, "setups", lambda w, reg=None, liq=None: [dict(x) for x in fake])
+    monkeypatch.setattr(scenbot, "checks", lambda sym, iv, cc, st: {"block": "테스트로 막음" if st["kind"] == "range" else None})
+    o = scenbot.decide("SOLUSDT", "1h", c)
+    assert o and o["title"] == "저항 돌파 롱" and o["rank_i"] == 2 and "1순위 박스권 양방향" in o["skipped"]
+    st = scenbot.ST["status"]["SOLUSDT|1h"]["text"]
+    assert "1순위" in st and "2순위 주문" in st
+    # 둘 다 막히면 주문 없이 이유를 남긴다
+    scenbot.ST["orders"].clear()
+    monkeypatch.setattr(scenbot, "checks", lambda sym, iv, cc, st: {"block": "모두 막음"})
+    assert scenbot.decide("SOLUSDT", "1h", c) is None
+    assert "2순위" in scenbot.ST["status"]["SOLUSDT|1h"]["text"]
+    ch = scenbot.chart("SOLUSDT", "1h")
+    for k in ("enabled", "active", "status", "learning", "progress", "samples", "lev", "pairs"):
+        assert k in ch

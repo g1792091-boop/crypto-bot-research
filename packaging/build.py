@@ -9,6 +9,7 @@ Windows 용 .exe 는 Windows 에서, Mac 용은 Mac 에서 빌드해야 한다 (
 from __future__ import annotations
 
 import os
+import time
 import platform
 import shutil
 import sys
@@ -31,6 +32,9 @@ def main() -> None:
     except ImportError:
         print("pywebview 가 없어 앱 창 없이(브라우저로 여는) 빌드합니다: pip install pywebview")
     icon = ROOT / "frontend" / "icons" / ("icon-512.png")
+    # 빌드 번호 (화면 위쪽 GH QUANT 옆에 표시 — 새 버전이 실행 중인지 확인용)
+    sha = (os.environ.get("GITHUB_SHA") or "local")[:7]
+    (ROOT / "frontend" / "build.txt").write_text(f"{sha} · {time.strftime('%Y-%m-%d')}", encoding="utf-8")
     PyInstaller.__main__.run([
         str(ROOT / "backend" / "launcher.py"),
         "--name", NAME,

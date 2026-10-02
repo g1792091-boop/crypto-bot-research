@@ -280,6 +280,15 @@ def pick(group: list[dict], policy: dict, cal: dict | None, meta: dict | None) -
     return s
 
 
+def rank(group: list[dict], policy: dict, cal: dict | None, meta: dict | None) -> list[dict]:
+    """정책을 통과한 시나리오를 점수 높은 순서로 (1순위가 지표 확인 등으로 막히면 다음 순위를 본다)."""
+    scored = [(score_of(s, policy, cal, meta), s) for s in group]
+    scored = sorted([(v, s) for v, s in scored if v is not None], key=lambda x: -x[0])
+    if policy["rank"] == "learned":
+        scored = [(v, s) for v, s in scored if v > 0]
+    return [s for _, s in scored]
+
+
 def evaluate(samples: list[dict], policy: dict, cal: dict | None = None, meta: dict | None = None, groups: list | None = None) -> dict:
     """정책대로 시간 순으로 골라 탔다면 — 같은 코인·봉에서는 앞 거래가 끝나기 전에 새로 타지 않는다."""
     if groups is None:
@@ -444,26 +453,39 @@ def shuffle_check(samples: list[dict], policy: dict, cal=None, meta=None, n: int
     return {"p_positive": round(pos / n * 100, 1)}
 
 
-def indicator_votes(c: list[dict], side: int) -> dict:
-    """빠른 보조지표 확인 (파이썬): RSI·MACD·슈퍼트렌드·EMA20/50·볼린저 위치가 진입 방향과 같은 편인지."""
+def indicator_votes(c: list[dict], side: int, kind: str = "breakout") -> dict:
+    """빠른 보조지표 확인 (파이썬) — 시나리오 종류마다 '같은 편' 의 뜻이 다르다.
+    - 돌파: RSI·MACD·슈퍼트렌드·EMA20/50·볼린저 위치가 모두 진입 방향으로 힘이 있어야 좋다 (추세 추종).
+    - 눌림목: 큰 추세(슈퍼트렌드·EMA20/50)만 본다. 눌림 중이라 RSI·볼린저가 잠깐 반대인 건 정상.
+    - 박스권: 역추세 — 박스 아래에서 롱이면 RSI 낮음·볼린저 아래쪽이 '같은 편'. 강한 추세(슈퍼트렌드+EMA)만 반대로 센다.
+    """
     close = [b["close"] for b in c]
     v = {}
     r = ind.rsi(close)[-1]
-    if r is not None:
-        v["RSI"] = side * (1 if r > 55 else -1 if r < 45 else 0)
-    m = ind.macd(close)["hist"]
-    if m[-1] is not None and m[-2] is not None:
-        v["MACD"] = side * (1 if m[-1] > 0 and m[-1] > m[-2] else -1 if m[-1] < 0 and m[-1] < m[-2] else 0)
-    st = ind.supertrend(c)["trend"][-1]
-    if st:
-        v["슈퍼트렌드"] = side * st
     e20, e50 = ind.ema(close, 20)[-1], ind.ema(close, 50)[-1]
-    if e20 and e50:
-        v["EMA20/50"] = side * (1 if e20 > e50 else -1)
+    st = ind.supertrend(c)["trend"][-1]
     bb = ind.bbands(close)
     up, lo = bb["upper"][-1], bb["lower"][-1]
-    if up and lo and up > lo:
-        pos = (close[-1] - lo) / (up - lo)
-        v["볼린저 위치"] = side * (1 if pos > 0.6 else -1 if pos < 0.4 else 0)
+    pos = (close[-1] - lo) / (up - lo) if up and lo and up > lo else None
+    if kind == "range":
+        if r is not None:
+            v["RSI(역추세)"] = side * (1 if r < 45 else -1 if r > 60 else 0)
+        if pos is not None:
+            v["볼린저 위치(역추세)"] = side * (1 if pos < 0.35 else -1 if pos > 0.75 else 0)
+        if st and e20 and e50 and st == (1 if e20 > e50 else -1):
+            v["강한 추세"] = side * st                    # 슈퍼트렌드·EMA 가 같은 방향일 때만 한 표
+    else:
+        if kind != "pullback":
+            if r is not None:
+                v["RSI"] = side * (1 if r > 55 else -1 if r < 45 else 0)
+            m = ind.macd(close)["hist"]
+            if m[-1] is not None and m[-2] is not None:
+                v["MACD"] = side * (1 if m[-1] > 0 and m[-1] > m[-2] else -1 if m[-1] < 0 and m[-1] < m[-2] else 0)
+            if pos is not None:
+                v["볼린저 위치"] = side * (1 if pos > 0.6 else -1 if pos < 0.4 else 0)
+        if st:
+            v["슈퍼트렌드"] = side * st
+        if e20 and e50:
+            v["EMA20/50"] = side * (1 if e20 > e50 else -1)
     score = sum(v.values())
-    return {"votes": v, "score": score, "n": len(v)}
+    return {"votes": v, "score": score, "n": len(v), "kind": kind}

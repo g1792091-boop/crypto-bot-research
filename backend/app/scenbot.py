@@ -31,7 +31,7 @@ ST: dict = {"policy": dict(L.DEFAULT_POLICY), "history": [], "orders": [], "trad
             "last_learn": 0.0, "last_report": None, "cal": None, "meta": None, "events": [], "skips": {}, "last_drift": 0.0, "status": {}}
 SAMPLES: list[dict] = []
 _lock = threading.RLock()
-_th = {"t": None, "busy": False, "progress": "", "learn_t": None}
+_th = {"t": None, "busy": False, "progress": "", "learn_t": None, "want": False}
 MAX_SAMPLES = 40_000
 
 
@@ -117,19 +117,27 @@ def _chart_keys(sym: str) -> list[str]:
         return []
 
 
+# 종류별 막는 기준 — 박스권·눌림목은 원래 '지금 추세와 반대쪽'에서 들어가므로 추세 지표 합의가 아주 강하게 반대일 때만 막는다
+BLOCK = {"breakout": {"py": -3, "py_n": 4, "termind": -35, "chart": -40},
+         "pullback": {"py": -2, "py_n": 2, "termind": -50, "chart": -55},
+         "range": {"py": -2, "py_n": 2, "termind": -75, "chart": -85}}
+
+
 def checks(sym: str, iv: str, c: list[dict], st: dict) -> dict:
-    """진입 전에 보조지표가 진입 방향과 크게 엇갈리면 막는다. 결과는 주문 기록에 남는다."""
-    py = L.indicator_votes(c, st["side"])
+    """진입 전에 보조지표가 진입 방향과 크게 엇갈리면 막는다 (시나리오 종류별 기준). 결과는 주문 기록에 남는다."""
+    kind = st.get("kind") if st.get("kind") in BLOCK else "breakout"
+    lim = BLOCK[kind]
+    py = L.indicator_votes(c, st["side"], kind)
     out = {"python": py, **_termind_check(sym, iv, c, st["side"], _chart_keys(sym))}
     why = []
-    if py["n"] >= 4 and py["score"] <= -3:
+    if py["n"] >= lim["py_n"] and py["score"] <= lim["py"]:
         why.append(f"핵심 지표 {py['n']}개 중 대부분이 반대 ({', '.join(k for k, v in py['votes'].items() if v < 0)})")
     t = out.get("termind")
-    if t and t["score"] <= -35:
-        why.append(f"터미널 지표 147종 합의가 반대 ({t['score']:+d})")
+    if t and t["score"] <= lim["termind"]:
+        why.append(f"터미널 지표 147종 합의가 강하게 반대 ({t['score']:+d} · 기준 {lim['termind']})")
     ch = out.get("chart")
-    if ch and ch["n"] >= 2 and ch["score"] <= -40:
-        why.append(f"내 차트 지표 {ch['n']}개 합의가 반대 ({ch['score']:+d})")
+    if ch and ch["n"] >= 2 and ch["score"] <= lim["chart"]:
+        why.append(f"내 차트 지표 {ch['n']}개 합의가 강하게 반대 ({ch['score']:+d} · 기준 {lim['chart']})")
     out["block"] = " · ".join(why) or None
     return out
 
@@ -167,6 +175,15 @@ def pairs() -> list[tuple[str, str]]:
         except Exception:  # noqa: BLE001
             pass
     return [(s_, i_) for s_ in syms for i_ in ivs]
+
+
+def _chart_pair() -> tuple[str, str] | None:
+    try:
+        from . import autopilot
+        ctx = autopilot.context
+        return (ctx["symbol"], ctx["interval"]) if ctx.get("symbol") and ctx.get("interval") else None
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def _status(sym: str, iv: str, text: str, c: list[dict] | None = None) -> None:
@@ -252,7 +269,7 @@ def decide(sym: str, iv: str, c: list[dict]) -> dict | None:
     if any(o["symbol"] == sym and o["interval"] == iv for o in ST["orders"]):
         _status(sym, iv, "이미 주문·포지션이 있어 끝날 때까지 기다림", c)
         return None
-    if len(ST["orders"]) >= S["max_open"]:
+    if len(ST["orders"]) >= S["max_open"] and (sym, iv) != _chart_pair():      # 지금 보고 있는 차트는 한도와 별도로 한 자리
         _status(sym, iv, f"동시 주문 한도({S['max_open']}개) — 다른 주문이 끝나면 다시 판단", c)
         return None
     w = c[-L.WINDOW:]
@@ -266,39 +283,48 @@ def decide(sym: str, iv: str, c: list[dict]) -> dict | None:
         s["f"] = L.features(s, reg, w)
         s["interval"] = iv
     pol, cal, meta = ST["policy"], ST.get("cal"), ST.get("meta")
-    s = L.pick(sts, pol, cal, meta)
-    if not s:
+    ranked = L.rank(sts, pol, cal, meta)
+    if not ranked:
         _status(sym, iv, "정책 조건에 맞는 시나리오 없음 — " + L.why_not(sts, pol), c)
         return None
     guard = _protected(sym)
     if guard:
-        _note_skip(sym, iv, s, f"보호 장치: {guard}")
+        _note_skip(sym, iv, ranked[0], f"보호 장치: {guard}")
         return None
-    odd = L.unfamiliar(meta, s["f"])
-    if odd:
-        _note_skip(sym, iv, s, f"낯선 상황: {odd}")
-        return None
-    ck = checks(sym, iv, c, s) if pol.get("indicator_check", True) else {"block": None}
-    if ck.get("block"):
-        _note_skip(sym, iv, s, f"지표 확인: {ck['block']}")
-        return None
-    sz = size(s["entry"])
-    liq = liq_price(s["side"], s["entry"], sz["lev"])
-    if (s["side"] > 0 and liq >= s["stop"]) or (s["side"] < 0 and liq <= s["stop"]):
-        _note_skip(sym, iv, s, f"레버리지 {sz['lev']:g}배면 청산가 {liq:.6g} 가 손절가 {s['stop']:.6g} 보다 먼저 닿음 — 레버리지를 낮추세요")
+    skipped, s, ck, sz, liq = [], None, None, None, None
+    for i, cand in enumerate(ranked, 1):
+        odd = L.unfamiliar(meta, cand["f"])
+        if odd:
+            skipped.append((i, cand, f"낯선 상황: {odd}"))
+            continue
+        k_ = checks(sym, iv, c, cand) if pol.get("indicator_check", True) else {"block": None}
+        if k_.get("block"):
+            skipped.append((i, cand, f"지표 반대: {k_['block']}"))
+            continue
+        z_ = size(cand["entry"])
+        lq = liq_price(cand["side"], cand["entry"], z_["lev"])
+        if (cand["side"] > 0 and lq >= cand["stop"]) or (cand["side"] < 0 and lq <= cand["stop"]):
+            skipped.append((i, cand, f"레버리지 {z_['lev']:g}배면 청산가 {lq:.6g} 가 손절가 {cand['stop']:.6g} 보다 먼저 닿음 — 레버리지를 낮추세요"))
+            continue
+        s, ck, sz, liq = cand, k_, z_, lq
+        break
+    skip_txt = " → ".join(f"{i}순위 {x['title']}({x['prob']}%) 건너뜀: {w}" for i, x, w in skipped)
+    if s is None:
+        _note_skip(sym, iv, ranked[0], skip_txt + (" · 정책 통과 시나리오가 모두 막힘" if len(ranked) > 1 else ""))
         return None
     lv = L.learned(cal or {}, s["key"], s["state"], iv)
     o = {**{k: s[k] for k in ("key", "title", "kind", "side", "prob", "rr", "entry", "stop", "tp", "order", "state", "trigger", "f")},
          "id": f"sb{int(time.time() * 1000)}{len(ST['trades']) % 97}", "symbol": sym, "interval": iv, "bar_time": w[-1]["time"], "placed": int(time.time()),
          "status": "pending", **sz, "liq": liq, "policy_v": pol.get("version", 1), "meta_p": L.meta_prob(meta, s["f"]),
          "learned": lv, "checks": {k: v for k, v in ck.items() if k != "block"},
-         "checks_brief": _brief(ck)}
+         "checks_brief": _brief(ck), "rank_i": ranked.index(s) + 1, "skipped": skip_txt or None}
     ST["orders"].append(o)
     stop_pct = abs(o["entry"] - o["stop"]) / o["entry"] * 100
     event(f"📝 {sym} {iv} {'롱' if o['side'] > 0 else '숏'} {o['title']} 주문 ({'역지정가' if o['order'] == 'stop' else '지정가'} {o['entry']:.6g} · 손절 {o['stop']:.6g} · "
           f"목표 {o['tp']:.6g} · {sz['lev']:g}배 · 증거금 {sz['margin']:,.2f} · 손절 시 증거금의 -{stop_pct * sz['lev']:.1f}% · 화면 {o['prob']}% · "
-          f"배운 적중률 {lv['win'] if lv else '-'}% · 손익비 {o['rr']}) {o['checks_brief']}", "order", oid=o["id"])
-    _status(sym, iv, f"📝 주문: {'롱' if o['side'] > 0 else '숏'} {o['title']} @ {o['entry']:.6g}", c)
+          f"배운 적중률 {lv['win'] if lv else '-'}% · 손익비 {o['rr']}) {o['checks_brief']}" + (f" · ({skip_txt})" if skip_txt else ""), "order", oid=o["id"])
+    _status(sym, iv, (skip_txt + " → " if skip_txt else "") + f"📝 {o['rank_i']}순위 주문: {'롱' if o['side'] > 0 else '숏'} {o['title']}({o['prob']}%) "
+            f"{'역지정가' if o['order'] == 'stop' else '지정가'} {o['entry']:.6g} · {sz['lev']:g}배", c)
     return o
 
 
@@ -315,11 +341,11 @@ def _brief(ck: dict) -> str:
 
 def _note_skip(sym, iv, s, why):
     k = f"{sym}|{iv}"
-    _status(sym, iv, f"⏸ {s['title']}({s['prob']}%) 건너뜀 — {why}")
+    _status(sym, iv, f"⏸ {s['title']}({s['prob']}%) 건너뜀 — {why}" if not why.startswith("1순위") else f"⏸ {why}")
     last = ST.setdefault("skips", {}).get(k)
     if last != why:
         ST["skips"][k] = why
-        event(f"⏸ {sym} {iv} {s['title']}({s['prob']}%) 건너뜀 — {why}", "skip")
+        event(f"⏸ {sym} {iv} " + (why if why.startswith("1순위") else f"{s['title']}({s['prob']}%) 건너뜀 — {why}"), "skip")
 
 
 # ------------------------------------------------------------------ 학습
@@ -346,21 +372,26 @@ def learn(force: bool = False) -> dict:
     _th["busy"] = True
     try:
         added = 0
-        ps = pairs()
+        ch = _chart_pair()
+        ps = sorted(pairs(), key=lambda p: p != ch)          # 지금 보고 있는 차트부터 배운다
         for i, (sym, iv) in enumerate(ps, 1):
             _th["progress"] = f"과거 차트 그림자 채점 {i}/{len(ps)} ({sym.removesuffix('USDT')} {iv})"
             try:
                 c, _ = market.candles(sym, iv, S["history_bars"])
                 added += _replay(sym, iv, c)
+                with _lock:
+                    ST["cal"] = L.calibration(SAMPLES)       # 코인 하나 끝날 때마다 '배운 실제 적중률' 을 바로 화면에
             except Exception as e:  # noqa: BLE001
                 event(f"⚠ {sym} {iv} 과거 데이터 실패: {str(e)[:80]}", "warn")
         _th["progress"] = "실제 적중률 보정 · 메타 모델 · 정책 재선정 중"
+        snap = list(SAMPLES)                              # 무거운 계산은 잠금 밖에서 (그동안에도 봇은 판단·체결 관리)
+        cal = L.calibration(snap)
+        meta = L.meta_fit(snap)
+        old = dict(ST["policy"])
+        rep = L.optimize(snap, old)
         with _lock:
-            ST["cal"] = L.calibration(SAMPLES)
-            meta = L.meta_fit(SAMPLES)
+            ST["cal"] = cal
             ST["meta"] = meta if meta.get("ok") else None
-            old = dict(ST["policy"])
-            rep = L.optimize(SAMPLES, old)
             ST["last_report"] = {k: v for k, v in rep.items() if k not in ("policy",)}
             if rep.get("adopt"):
                 ST["policy"] = rep["policy"]
@@ -407,7 +438,8 @@ def revert(version: int) -> dict:
 
 # ------------------------------------------------------------------ 반복
 def tick() -> None:
-    active = pairs()
+    ch = _chart_pair()
+    active = sorted(pairs(), key=lambda p: p != ch)       # 보고 있는 차트부터
     held = {(o["symbol"], o["interval"]) for o in ST["orders"]}
     for sym, iv in list(dict.fromkeys(active + sorted(held))):
         try:
@@ -447,10 +479,12 @@ def _loop() -> None:
         try:
             tick()                                      # 학습을 기다리지 않고 바로 판단·진입
             ps = set(pairs())
-            new_pair = bool(seen_pairs) and not ps <= seen_pairs   # 차트 분봉을 바꾸면 그 분봉도 바로 배운다
+            if seen_pairs and not ps <= seen_pairs:       # 차트 분봉을 바꾸면 그 분봉도 바로 배운다 (학습 중이면 끝나고 이어서)
+                _th["want"] = True
             seen_pairs |= ps
-            if not SAMPLES or new_pair or time.time() - ST.get("last_learn", 0) > S["learn_hours"] * 3600:
-                learn_bg()
+            if not SAMPLES or _th.get("want") or time.time() - ST.get("last_learn", 0) > S["learn_hours"] * 3600:
+                if learn_bg():
+                    _th["want"] = False
         except Exception:  # noqa: BLE001
             traceback.print_exc()
         time.sleep(15)
@@ -541,7 +575,7 @@ def annotate(a: dict) -> dict:
     for s in a.get("scenarios", []):
         lv = L.learned(cal, s["key"], st, a.get("interval", "1h"))
         s["learned"] = lv
-    a["bot"] = {"enabled": S.get("enabled"), "policy_v": ST["policy"].get("version", 1),
+    a["bot"] = {**_brain(a.get("symbol"), a.get("interval", "1h")), "policy_v": ST["policy"].get("version", 1),
                 "orders": [{k: o.get(k) for k in ("title", "side", "entry", "stop", "tp", "status", "interval", "prob", "lev", "roe_pct", "upnl")}
                            for o in ST["orders"] if o["symbol"] == a.get("symbol")]}
     return a
@@ -569,9 +603,16 @@ def chart(symbol: str, interval: str) -> dict:
     orders = [{k: o.get(k) for k in keys} for o in ST["orders"] if o["symbol"] == symbol]
     trades = [{k: t.get(k) for k in ("interval", "title", "side", "entry", "exit_px", "entry_time", "exit_time", "exit", "r", "pnl", "roe_pct", "lev", "prob")}
               for t in ST["trades"][-400:] if t["symbol"] == symbol and t["filled"] and t.get("entry_time")]
-    st = ST["status"].get(f"{symbol}|{interval}")
-    return {"symbol": symbol, "interval": interval, "enabled": S.get("enabled"), "orders": orders, "trades": trades[-80:], "status": st,
-            "active": (symbol, interval) in pairs(), "stats": stats()}
+    return {"symbol": symbol, "interval": interval, "orders": orders, "trades": trades[-80:], **_brain(symbol, interval), "stats": stats()}
+
+
+def _brain(symbol: str, interval: str) -> dict:
+    """화면에 늘 보여 줄 봇 상태: 켜짐 · 이 차트를 보고 있는지 · 마지막 판단 · 다음 판단 · 학습 진행."""
+    cal = ST.get("cal") or {}
+    return {"enabled": S.get("enabled"), "active": (symbol, interval) in pairs(), "status": ST["status"].get(f"{symbol}|{interval}"),
+            "learning": _th["busy"], "progress": _th["progress"], "last_learn": ST.get("last_learn"), "samples": len(SAMPLES),
+            "cal_n": cal.get("n", 0), "lev": S["leverage"], "running": bool(_th["t"] and _th["t"].is_alive()),
+            "pairs": [f"{a.removesuffix('USDT')} {b}" for a, b in pairs()]}
 
 
 def view() -> dict:

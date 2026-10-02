@@ -1,7 +1,7 @@
 // 트레이드 화면 — 트레이딩뷰 방식 UI (자체 제작: 위 툴바 · 왼쪽 그리기 도구 · 오른쪽 위젯 패널 · 아래 패널 · 기간 바)
 // 분석 전용: 모의 주문 · 포지션 · 계좌는 없다. AI 시그널 · 전략 시그널은 '가상 체결'로 성과만 잰다.
 import { addPriceAlert, getPriceAlerts, removePriceAlert } from "./alerts.js";
-import { TermChart } from "./chart.js";
+import { TermChart, sbotLine } from "./chart.js";
 import { copilotSymbolChanged, initCopilot, showCopilot } from "./copilot.js";
 import {
   $, $$, INTERVALS, IV_LABEL, api, big, busy, cls, css, emit, esc, fmt, hhmm, mdhm, on, pct,
@@ -446,7 +446,8 @@ function renderScenarios(a) {
       <div class="h"><span class="p">${s.probability}%</span><span class="n">${esc(s.title)}</span>
         <span class="muted">RR ${s.rr ?? "–"}</span><button class="flat sm" data-sc="${i}">차트에</button></div>
       <div class="bar"><i style="width:${s.probability}%;background:${color[s.bias]}"></i></div>
-      ${s.learned ? `<div class="learn" title="시나리오 진입 봇이 과거·실시간 결과로 배운 값 (체결된 것 기준)">배운 실제 적중률 <b>${s.learned.win}%</b> · 평균 <b class="${s.learned.avg_r > 0 ? "up" : "down"}">${s.learned.avg_r > 0 ? "+" : ""}${s.learned.avg_r}R</b> <span class="muted">(${s.learned.n}건${s.learned.n < 20 ? " · 적어서 전체 평균 반영" : ""})</span></div>` : ""}
+      ${s.learned ? `<div class="learn" title="시나리오 진입 봇이 과거·실시간 결과로 배운 값 (체결된 것 기준)">배운 실제 적중률 <b>${s.learned.win}%</b> · 평균 <b class="${s.learned.avg_r > 0 ? "up" : "down"}">${s.learned.avg_r > 0 ? "+" : ""}${s.learned.avg_r}R</b> <span class="muted">(${s.learned.n}건${s.learned.n < 20 ? " · 적어서 전체 평균 반영" : ""})</span></div>`
+        : a.bot ? `<div class="learn muted">배운 실제 적중률: ${a.bot.learning ? "학습 중… " + esc(a.bot.progress || "") : "아직 이 시나리오 표본 없음 (학습이 끝나면 표시)"}</div>` : ""}
       ${(a.bot?.orders || []).filter((o) => o.title === s.title || (s.key === "range" && o.title === "박스권 양방향")).map((o) => `<div class="botst">🤖 진입 봇 ${o.interval} ${o.side > 0 ? "롱" : "숏"} ${o.lev ? o.lev + "배 " : ""}${o.status === "open" ? `보유 중${o.roe_pct != null ? ` <b class="${o.roe_pct >= 0 ? "up" : "down"}">${o.roe_pct > 0 ? "+" : ""}${o.roe_pct}%</b>` : ""}` : "주문 대기"} @ ${px(o.entry)}</div>`).join("")}
       <div class="trig">${esc(s.trigger)}</div>
       <div class="kv"><span class="k">진입</span><span>${px(s.entry)}</span>
@@ -461,6 +462,7 @@ function renderScenarios(a) {
   $("#side-sc-body").innerHTML = `
     ${a.ai_comment ? `<div class="ai">${esc(a.ai_comment)}</div>` : ""}
     ${state.status?.llm ? `<div style="padding:8px 12px;border-bottom:1px solid var(--line)"><button class="sm" id="ai-comment">${a.ai_comment ? "AI 코멘트 새로고침" : "AI 코멘트 받기"}</button></div>` : ""}
+    ${a.bot ? `<div class="sbot-st">${sbotLine(a.bot, a.interval)}</div>` : ""}
     ${scs}
     <div class="sub">저항</div>${lv(a.resistance, "down")}
     <div class="sub">지지</div>${lv(a.support, "up")}
@@ -701,7 +703,13 @@ on("pricealerts", renderPriceAlerts);
 // 새 AI 분석 · 새 AI 진입 시그널이 나오면 차트의 'AI 시그널'을 다시 그린다
 on("copilot", () => charts.forEach((c) => c.refreshAi?.()));
 // 시나리오 봇 주문·포지션 실시간 손익 (5초마다 · 화면이 보일 때만)
-setInterval(() => { if (!document.hidden && document.querySelector("#v-trade.on")) charts.forEach((c) => c.refreshSbot?.()); }, 5000);
+setInterval(() => {
+  if (document.hidden || !document.querySelector("#v-trade.on")) return;
+  charts.forEach((c, i) => c.refreshSbot?.().then(() => {        // 시나리오 패널의 봇 상태도 같이 갱신
+    const el = document.querySelector(".sbot-st");
+    if (!i && el && c.sbot?.symbol === c.symbol) el.innerHTML = sbotLine(c.sbot, c.interval);
+  }));
+}, 5000);
 on("apsignals", (items) => {
   const syms = new Set((items || []).filter((x) => x.type === "ai_entry" || x.type === "aibot").map((x) => x.symbol));
   if (syms.size) loadAiBot();
