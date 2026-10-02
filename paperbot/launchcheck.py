@@ -155,7 +155,7 @@ LABBUILD = "paperbot-labbuild.service"
 # first install.sh; a server whose install.sh does not install it yet is not asked for it (a [참고] says so)
 EXTRA_TIMERS = ("paperbot-offsite.timer",)
 # required once installed, like the off-site timer: GH Coin's call recorder (ghcoin/recorder.mjs, a service)
-EXTRA_SERVICES = ("paperbot-ghcoin.service",)
+EXTRA_SERVICES = ("paperbot-ghcoin.service", "paperbot-tgtrades.service")
 OFFSITE_TIMER = "paperbot-offsite.timer"
 INSTALLED = SERVICES + TIMERS + AGENT_TIMERS + JOBS + (EXECUTOR,)
 ALL_UNITS = (INSTALLED + LEGACY + SYSTEM + (AUTO_UPDATES, LABBUILD) + EXTRA_TIMERS + EXTRA_SERVICES

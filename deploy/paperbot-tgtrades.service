@@ -1,0 +1,32 @@
+# Telegram entry / exit alerts of the paper accounts (paperbot/tradealerts.py): reads paper3.db read-only and
+# sends one silent message per minute with that minute's entries and exits. Never writes paper3.db, never
+# trades. Settings in live.env: TRADE_ALERTS (strategy | all | off), TRADE_ALERTS_EVERY, TRADE_ALERTS_MIN_USD.
+[Unit]
+Description=paperbot Telegram trade alerts (entries and exits, bundled)
+After=network-online.target paperbot-live3.service
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=paperbot
+Group=paperbot
+WorkingDirectory=/opt/crypto-bot-research
+# TELEGRAM_BOT_TOKEN and the chats; systemd reads the file before the sandbox below applies
+EnvironmentFile=/etc/paperbot/live.env
+UnsetEnvironment=BINANCE_API_KEY BINANCE_API_SECRET DEADMAN_URL BACKUP_PASSPHRASE
+ExecStart=/opt/paperbot/venv/bin/python -m paperbot.tradealerts run --db /var/lib/paperbot/paper3.db --state /var/lib/paperbot/tradealerts.json
+Restart=always
+RestartSec=30
+Nice=10
+MemoryMax=512M
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+# the cursor file only (SQLite read-only opens still need the directory for the -shm file of a WAL database)
+ReadWritePaths=/var/lib/paperbot
+InaccessiblePaths=-/etc/paperbot/agents.env -/etc/paperbot/executor.env -/var/lib/paperbot/exec -/var/backups/paperbot -/var/lib/paperbot/.local -/var/lib/paperbot/.claude
+
+[Install]
+WantedBy=multi-user.target

@@ -439,7 +439,7 @@ sudo systemctl enable --now \
   paperbot-live3 paperbot-dash paperbot-liq \
   paperbot-daily3.timer paperbot-backup.timer paperbot-checkpoint.timer \
   paperbot-agents.timer paperbot-labmonthly.timer
-sudo systemctl enable --now paperbot-offsite.timer paperbot-ghcoin
+sudo systemctl enable --now paperbot-offsite.timer paperbot-ghcoin paperbot-tgtrades
 ```
 - 상자 하나를 통째로 붙여 넣습니다. 마지막 줄(서버 밖 백업)에서 `does not exist`가 나오면 4-3의 5번(설치)을 하고 그 줄만 다시 붙여 넣습니다. 위의 것들은 이미 켜졌습니다.
 
@@ -457,6 +457,7 @@ sudo systemctl enable --now paperbot-offsite.timer paperbot-ghcoin
 | `paperbot-labmonthly.timer` | 매달 재검사, 6일 03:30 |
 | `paperbot-offsite.timer` | 서버 밖 백업, 매일 09:15 (텔레그램 'paperbot 백업' 방) |
 | `paperbot-ghcoin` | GH Coin 타점 기록기 (5분마다, `docs/ghcoin-recorder.md`). 195개 계좌와 섞이지 않음 |
+| `paperbot-tgtrades` | 텔레그램 거래 알림: 1분마다 그 사이 진입·청산을 한 메시지로 묶어 **무음**으로 (아래 "텔레그램 거래 알림") |
 
 - **`paperbot-executor`(주문 실행기)는 켜지 않습니다.** 실거래는 이 문서의 범위가 아닙니다(`docs/live-safety.md`).
 - 서버가 재부팅돼도 위의 것들은 저절로 다시 켜집니다.
@@ -548,7 +549,12 @@ systemctl list-timers 'paperbot-*' --no-pager
 | 09:15 | 서버 밖 백업: 위 백업을 묶어서 보냄 + 요약 | 텔레그램 'paperbot 백업' 방 **무음** |
 | 09:20 | 매일 점검 요약: `[날짜] 매일 점검: 재계산 일치 n/n · 거래 n건 · ...` | 텔레그램 **무음** |
 | 22:00 | 손익 복기팀 → 총괄 세 줄 요약 | 텔레그램 **무음** + 에이전트 방 |
-| 수시 | 개별 거래 | 대시보드만 |
+| 1분마다 (있을 때만) | 거래 알림: 그 1분 동안의 진입·청산을 한 메시지로 (진입가·배수·손절, 청산 손익·이유) | 텔레그램 **무음** |
+
+**텔레그램 거래 알림** (`paperbot-tgtrades`, `paperbot/tradealerts.py`): 거래가 하루 수백 건이라 건별로 보내면 폰이 쉬지 않고 울립니다. 그래서 1분마다 그 사이 진입·청산을 **한 메시지로 묶어 무음**으로 보냅니다(새 거래가 없으면 안 보냄). 한 메시지에 진입·청산 각각 큰 것부터 20건까지, 나머지는 "외 n건". 강제청산은 지금처럼 따로 **소리**로도 옵니다. 바꾸려면 `sudo nano /etc/paperbot/live.env`에 아래 줄을 넣고 `sudo systemctl restart paperbot-tgtrades`:
+- `TRADE_ALERTS=strategy` (기본: 매매법·복제·새 매매법 계좌) / `all` (동전 봇까지) / `off` (끔)
+- `TRADE_ALERTS_EVERY=300` (5분마다 묶기; 기본 60초)
+- `TRADE_ALERTS_MIN_USD=50` (손익 $50 미만 청산은 개수만 세고 목록에서 뺌)
 
 수시로 오는 알림(보충 규칙 Q9):
 
