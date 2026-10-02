@@ -3,6 +3,7 @@
 // 오른쪽 패널에 회의록이 쌓인다. 배치는 TEAMS에서 자동으로 만든다(팀이 늘어도 깨지지 않게).
 // office.js의 새 기능(listReports·backlog 등)은 있을 때만 쓴다 → import * as O 로 받아 typeof 검사.
 import * as O from "./coin-office.js";
+import { TECH } from "./tech.js";
 import { IDLE_T as COIN_IDLE } from "./coin-org.js";
 import * as SD from "../nuri-ai/selfdev.js";
 import { shortModel, provUse, settings, saveSettings, LAUNCHER, provCapOf } from "../nuri-ai/engine.js";
@@ -195,7 +196,7 @@ function build(){
       <div class="of-head">
         <div class="of-h1"><i class="of-led" id="ofLed"></i><b id="ofTitle">대기 중</b><span class="of-sp"></span><span class="of-recl" id="ofRecL">녹화 중</span></div>
         <div class="of-h2" id="ofStatus"></div>
-        <div class="of-chans" id="ofChans"><button data-ch="all" aria-pressed="true">#전체</button><button data-ch="work" aria-pressed="false" style="--tc:#c9a227">#업무</button><button data-ch="cboard" aria-pressed="false" style="--tc:#00b8d4">#⚡실시간 타점판</button><button data-ch="pipe" aria-pressed="false" style="--tc:#5b8cff">#파이프라인</button><button data-ch="growth" aria-pressed="false" style="--tc:#3ddc84">#성장 과제<span id="ofGrowN"></span></button>${TEAMS.map(t => `<button data-ch="${t.id}" aria-pressed="false" style="--tc:${tc(t.id)}">#${t.name}</button>`).join("")}</div>
+        <div class="of-chans" id="ofChans"><button data-ch="all" aria-pressed="true">#전체</button><button data-ch="work" aria-pressed="false" style="--tc:#c9a227">#업무</button><button data-ch="cboard" aria-pressed="false" style="--tc:#00b8d4">#⚡실시간 타점판</button><button data-ch="pipe" aria-pressed="false" style="--tc:#5b8cff">#파이프라인</button><button data-ch="tech" aria-pressed="false" style="--tc:#9c7cf0">#📚 도입 기술</button><button data-ch="growth" aria-pressed="false" style="--tc:#3ddc84">#성장 과제<span id="ofGrowN"></span></button>${TEAMS.map(t => `<button data-ch="${t.id}" aria-pressed="false" style="--tc:${tc(t.id)}">#${t.name}</button>`).join("")}</div>
       </div>
       <div class="of-log" id="ofLog" aria-live="polite"></div>
       <form class="of-form" id="ofForm"><input id="ofIn" placeholder="본부에 메시지 보내기 (예: 비트코인 지금 롱 어때? / 커스텀 지표로 매매법 만들어 와)" autocomplete="off"><button type="submit" aria-label="보내기">↵</button></form>
@@ -286,6 +287,10 @@ function wire(el){
     const dx = e.target.closest("[data-docdel]"); if (dx){ if (confirm("이 결과물을 앱 보관함에서 지울까요? (폴더의 파일은 그대로)")) O.deleteDoc(dx.dataset.docdel).then(() => openDocs(true)); return; }
     if (e.target.closest("[data-docfolder]")){ O.openFolder(e.target.closest("[data-docfolder]").dataset.docfolder || "").then(r => ctx.toast(r.ok ? "폴더를 열었습니다: " + (r.dir || "") : r.why)); return; }
     const df = e.target.closest("[data-docfilter]"); if (df){ docFilter = df.dataset.docfilter; openDocs(true); return; }
+    const cg = e.target.closest("[data-ch-go]"); if (cg){ root.querySelector(`#ofChans [data-ch="${cg.dataset.chGo}"]`)?.click(); return; }
+    const sg = e.target.closest("[data-suggest]"); if (sg){ const inp = $o("#ofIn"); inp.value = sg.dataset.suggest; inp.focus(); return; }
+    const rc = e.target.closest("[data-recent]"); if (rc){ const t = rc.dataset.recent; addRecent(teamById(chan) ? chan : "hq", t); O.ask(t, {room: teamById(chan) ? chan : "hq"}); return; }
+    if (e.target.closest("[data-recentclear]")){ try { localStorage.removeItem("coinRecent"); } catch(err){} renderLog(); return; }
     if (e.target.closest("[data-cbbig]")){ openComboBoard(); return; }
     if (e.target.id === "cbBig"){ e.target.hidden = true; if (chan === "cboard") renderLog(); return; }
     if (e.target.closest("[data-cbnow]")){ const b = e.target.closest("[data-cbnow]"); b.disabled = true; b.textContent = "계산 중…"; O.comboTick(true).then(() => chan === "cboard" && renderLog()); return; }
@@ -345,10 +350,12 @@ function wire(el){
     else if (!$o("#ofCard").hidden) $o("#ofCard").hidden = true;
     else closeOffice();
   });
+  // 한글 조합 중 Enter 는 보내지 않음 (조합이 끝난 뒤 Enter 로 보냄)
+  el.querySelector("#ofIn").addEventListener("keydown", e => { if (e.key === "Enter" && (e.isComposing || e.keyCode === 229)) e.preventDefault(); });
   el.querySelector("#ofForm").onsubmit = e => {
     e.preventDefault();
     const inp = $o("#ofIn"), text = inp.value.trim(); if (!text) return;
-    inp.value = "";
+    inp.value = ""; addRecent(teamById(chan) ? chan : "hq", text);
     O.ask(text, {room: teamById(chan) ? chan : "hq"}).then(r => { if (r?.error) ctx.toast(r.error); });
   };
 }
@@ -521,16 +528,17 @@ function renderStatus(){
 }
 /* ============ 회의록 패널 ============ */
 // #전체: 회의·수다·보고·내 메시지 / #업무: 직원들이 본 차트·뉴스 / #성장 과제: 과제 보드 / 팀 방: 그 팀의 모든 것
-const inChan = e => chan === "all" ? e.kind !== "work" : chan === "work" ? e.kind === "work" : chan === "growth" || chan === "pipe" || chan === "cboard" ? false : e.ch === chan;
+const inChan = e => chan === "all" ? e.kind !== "work" : chan === "work" ? e.kind === "work" : chan === "growth" || chan === "pipe" || chan === "cboard" || chan === "tech" ? false : e.ch === chan;
 async function renderLog(){
   const box = $o("#ofLog");
   if (chan === "growth"){ box.innerHTML = growthHTML(); renderGrowthCount(); return; }
   if (chan === "pipe"){ box.innerHTML = await pipeHTML(); return; }
+  if (chan === "tech"){ box.innerHTML = techHTML(); return; }
   if (chan === "cboard"){ const y = box.scrollTop; box.innerHTML = await comboHTML(); box.scrollTop = y; return; }
   const log = await O.loadLog();
   if (chan === "growth") return;
   const list = log.filter(inChan).slice(-160);
-  box.innerHTML = list.length ? "" : `<div class="of-empty"><b>아직 회의가 없습니다</b><p>아래에 무엇이든 보내면 담당 팀장이 회의를 엽니다. 예: "비트코인 지금 롱 어때?", "커스텀 지표로 매매법 만들어 와", "도지코인 지지·저항 알려줘", "전체 코인 상황판".</p><p>자동 회의를 켜 두면 팀이 정해진 간격과 급변동 때 스스로 회의하고, 매시 CEO가 성과를 발표합니다.</p></div>`;
+  box.innerHTML = list.length ? (list.length < 6 && chan !== "work" ? suggestHTML() : "") : suggestHTML() + `<div class="of-empty"><b>아직 회의가 없습니다</b><p>아래에 무엇이든 보내면 담당 팀장이 회의를 엽니다. 예: "비트코인 지금 롱 어때?", "커스텀 지표로 매매법 만들어 와", "도지코인 지지·저항 알려줘", "전체 코인 상황판".</p><p>자동 회의를 켜 두면 팀이 정해진 간격과 급변동 때 스스로 회의하고, 매시 CEO가 성과를 발표합니다.</p></div>`;
   list.forEach(appendEntry);
   renderGrowthCount();
 }
@@ -623,7 +631,7 @@ function entryHTML(e){
     ${body ? `<div class="of-tx md">${body}</div>` : ""}<div class="of-acts"><button class="of-link" data-more>펼치기 · 접기</button>${!e.live && e.text ? `<button class="of-rate${e.rating > 0 ? " on" : ""}" data-rate="1" title="좋은 발언 · GH Nano 학습에 우선 사용">👍</button><button class="of-rate${e.rating < 0 ? " on" : ""}" data-rate="-1" title="나쁜 발언 · 학습 데이터에서 뺌">👎</button>${e.trainIds?.length ? `<span class="of-trn" title="이 발언으로 GH Nano 학습 예시를 만들었습니다">🎓 학습 예시</span>` : ""}` : ""}</div></div></div>`;
 }
 function appendEntry(e){
-  const box = $o("#ofLog"); if (!box || chan === "growth" || chan === "pipe" || chan === "cboard") return;
+  const box = $o("#ofLog"); if (!box || chan === "growth" || chan === "pipe" || chan === "cboard" || chan === "tech") return;
   box.querySelector(".of-empty")?.remove();
   const near = box.scrollHeight - box.scrollTop - box.clientHeight < 120;
   box.insertAdjacentHTML("beforeend", entryHTML(e));
@@ -671,14 +679,38 @@ async function comboHTML(){
     <button class="of-btn2" data-cbbig>${$o("#cbBig") && !$o("#cbBig").hidden ? "✕ 닫기" : "⛶ 크게 보기"}</button><button class="of-btn2" data-cbnow>지금 갱신</button><button class="of-btn2" data-cbtoggle>${on ? "자동 끄기" : "자동 켜기"}</button></div>
     <p class="of-dim">점수 -100(모든 지표 하락) ~ +100(모든 지표 상승). 큰 추세 = 4시간 60% + 1시간 40%, 타이밍 = 15분 60% + 5분 40%. 둘이 같은 방향이고 오실레이터가 과열이 아닐 때만 '타점'. 손절은 여러 지표 레벨이 겹친 지지·저항 + ATR. 계산값일 뿐 매매 권유가 아니며 실제 주문은 하지 않습니다.</p>`;
   if (!rows.length) return head + `<div class="of-empty"><b>${B.err ? "시세를 받지 못했습니다: " + E(B.err) : "첫 계산 중입니다 (코인 6개 × 시간대 4개)"}</b><p>GHCoin.exe 로 실행해야 거래소 시세를 받을 수 있습니다.</p></div>`;
-  const tbl = `<div class="cb-wrap"><table class="of-kt cb-t"><tr><th>코인</th><th>현재가</th>${CB_TF.map(([, l]) => `<th>${l}</th>`).join("")}<th>장세</th><th>판정</th><th>진입</th><th>손절</th><th>익절1 / 익절2</th><th>손익비</th><th>확신</th><th></th></tr>
+  const tbl = `<div class="cb-wrap"><table class="of-kt cb-t"><tr><th>코인</th><th>현재가</th>${CB_TF.map(([, l]) => `<th>${l}</th>`).join("")}<th>TV 요약<small>1시간 · 4시간</small></th><th>장세</th><th>판정</th><th>진입</th><th>손절</th><th>익절1 / 익절2</th><th>손익비</th><th>확신</th><th></th></tr>
     ${rows.map(r => { const p = r.plan, t = r.tf; return `<tr class="cb-${p.state}"><td><b>${E(r.ko)}</b><small>${E(r.sym)}</small></td><td class="num">${num(p.price)}</td>${CB_TF.map(([k]) => `<td>${cbChip(t[k]?.score)}${t[k] ? `<small>${t[k].up}▲ ${t[k].dn}▼${t[k].fresh?.length ? " · 새" + t[k].fresh.length : ""}</small>` : ""}</td>`).join("")}
-      <td>${E(t["60"]?.regime || "—")}</td><td><b>${CB_ST[p.state]}</b><small>${E(p.why)}</small></td><td class="num">${num(p.entry)}</td><td class="num">${num(p.sl)}</td><td class="num">${num(p.tp1)}<small>${num(p.tp2)}</small></td><td class="num">${p.rr ? p.rr.toFixed(2) : "—"}</td><td class="num">${p.side ? p.conf + "%" : "—"}</td>
+      <td>${["60", "240"].map(k => r.tv?.[k] ? `<span class="cb-tv ${r.tv[k].all > 0.1 ? "up" : r.tv[k].all < -0.1 ? "dn" : ""}" title="이평 ${r.tv[k].ma.toFixed(2)} · 오실레이터 ${r.tv[k].osc.toFixed(2)}">${E(r.tv[k].label)}</span>` : "—").join("<br>")}</td><td>${E(t["60"]?.regime || "—")}</td><td><b>${CB_ST[p.state]}</b><small>${E(p.why)}</small></td><td class="num">${num(p.entry)}</td><td class="num">${num(p.sl)}</td><td class="num">${num(p.tp1)}<small>${num(p.tp2)}</small></td><td class="num">${p.rr ? p.rr.toFixed(2) : "—"}</td><td class="num">${p.side ? p.conf + "%" : "—"}</td>
       <td><button class="of-link" data-cbchart="${E(r.sym)}">차트</button><button class="of-link" data-cbjob="${E(r.ko)}">깊게</button></td></tr>`; }).join("")}</table></div>`;
   const log = `<section class="of-lane"><h4>🎯 타점 기록장 — ${done.length ? `채점 ${done.length}건 · 적중(수익 마감) ${win}건 ${Math.round(win / done.length * 100)}% · 누적 ${sumR >= 0 ? "+" : ""}${sumR.toFixed(1)}R` : "아직 채점된 타점 없음"} · 진행 중 ${calls.length - done.length}건</h4>
     <p class="of-dim">타점이 잡히면 자동 기록 → 5분봉으로 익절1(+1.5R)·손절(-1R)·반대 신호·24시간 만료를 코드가 채점합니다. 이 성적이 쌓여야 믿을 수 있습니다.</p>
     ${calls.length ? `<div class="cb-wrap"><table class="of-kt cb-log"><tr><th>시각</th><th>코인</th><th>방향</th><th>진입</th><th>손절</th><th>익절1</th><th>확신</th><th>결과</th></tr>${calls.slice(0, 20).map(c => `<tr><td>${E(new Date(c.t).toLocaleString("ko-KR", {month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false}))}</td><td>${E(c.ko)}</td><td class="${c.side > 0 ? "up" : "dn"}">${c.side > 0 ? "롱" : "숏"}</td><td class="num">${num(c.entry)}</td><td class="num">${num(c.sl)}</td><td class="num">${num(c.tp1)}</td><td class="num">${c.conf}%</td><td>${c.result === "win" ? "✅ 익절1" : c.result === "loss" ? "❌ 손절" : c.result === "expire" ? `⌛ 만료 ${c.r}R` : c.result === "flip" ? `🔄 반대 신호 ${c.r}R` : "⏳ 진행 중"}</td></tr>`).join("")}</table></div>` : ""}</section>`;
   return `<div class="of-pipe">${head}${tbl}${log}</div>`;
+}
+/* ============ 💬 추천 질문 · 최근 질문 (gemini-clone 방식) ============ */
+const SUGGEST = {hq: ["비트코인 투자위원회 열어서 살지 팔지 결정해줘", "지금 모든 보조지표 종합해서 타점 잡아줘", "거래소 비교하고 김치 프리미엄 알려줘", "VaR랑 스트레스 테스트 해줘"],
+  ic: ["이더리움 투자위원회 열어줘", "지난 결정들 교훈 정리해줘", "솔라나 강세 약세 토론해줘", "비트코인 매수 결정 근거 알려줘"],
+  qrisk: ["VaR랑 상관 계산해줘", "결정표 판정 알려줘", "주문 전 점검 해줘", "스트레스 테스트 해줘"],
+  data: ["거래소 비교해줘", "김치 프리미엄 알려줘", "데이터 품질 점검해줘", "감사 기록 상태 알려줘"],
+  opt: ["데모 전략 하이퍼옵트 해줘", "최적화 결과 설명해줘", "ROI 표 다듬어줘", "과최적화인지 봐줘"],
+  pattern: ["모든 코인 패턴 스캔해줘", "헤드앤숄더 찾아줘", "쌍바닥 패턴 전부 찾아줘", "삼각수렴 스캔해줘"],
+  demo: ["데모 성과 악화 감지해줘", "데모 관문 심사해줘", "데모거래 보고해줘", "성과 이동 런 차트 봐줘"],
+  combo: ["실시간 타점 알려줘", "비트코인 모든 보조지표 종합해서 타점 잡아줘", "지금 들어갈 코인 알려줘", "타점 기록장 적중률 알려줘"],
+  news: ["오늘 경제 캘린더 알려줘", "코인 뉴스 분석해줘", "DVOL 변동성 알려줘", "여론 밴드 알려줘"],
+  ml: ["알파 팩터 순위 알려줘", "머신러닝 예측 돌려줘", "딥러닝으로 방향 예측해줘", "팩터 랭킹 설명해줘"]};
+const recents = () => { try { return JSON.parse(localStorage.getItem("coinRecent") || "{}"); } catch(e){ return {}; } };
+function addRecent(room, text){ const r = recents(), l = (r[room] || []).filter(x => x !== text); l.unshift(text); r[room] = l.slice(0, 20); try { localStorage.setItem("coinRecent", JSON.stringify(r)); } catch(e){} }
+function suggestHTML(){
+  const room = teamById(chan) ? chan : "hq", sug = SUGGEST[room] || SUGGEST.hq, rec = (recents()[room] || []).slice(0, 6);
+  return `<div class="of-sugg">${sug.map(t => `<button class="of-sg" data-suggest="${E(t)}">${E(t)}</button>`).join("")}</div>` +
+    (rec.length ? `<div class="of-recent"><small>최근 질문</small>${rec.map(t => `<button class="of-link" data-recent="${E(t)}" title="${E(t)}">${E(t.length > 18 ? t.slice(0, 18) + "…" : t)}</button>`).join("")}<button class="of-link" data-recentclear>지우기</button></div>` : "");
+}
+/* ============ 📚 도입 기술: 오픈소스 23개 → 부서 ============ */
+function techHTML(){
+  const st = {"적용": "✅", "부분 적용": "🟡", "참고": "💡"};
+  return `<div class="of-pipe"><p class="of-dim">대표님이 준 오픈소스 23개를 직원들이 코드까지 읽고, 쓸 수 있는 규칙·공식을 각 부서 업무에 다시 만들어 넣었습니다(코드 복사 없음 · GPL·라이선스 없는 저장소는 규칙만). ✅ 적용 · 🟡 부분 적용 · 💡 참고(아이디어만)</p>
+    ${TECH.map(t => `<section class="of-lane tech-row"><h4>${st[t.status] || ""} ${E(t.repo)} <small>${E(t.lic)}</small></h4><p class="tech-teams">${t.teams.map(id => `<button class="tech-team" data-ch-go="${E(id)}" style="--tc:${tc(id)}">#${E(teamById(id)?.name || id)}</button>`).join("")}</p><p><b>무엇을</b> ${E(t.what)}</p><p class="of-dim"><b>어디에</b> ${E(t.where)}</p></section>`).join("")}</div>`;
 }
 /* ============ 📁 결과물 보관함 ============ */
 let docList = [], docFilter = "all", docSel = null;

@@ -12,9 +12,9 @@ function unary(test, v){
   const nm = test.match(/^not\((.*)\)$/i); if (nm) return !unary(nm[1], v);
   // 쉼표 목록 (구간 안 쉼표는 없음)
   if (/,/.test(test) && !/^[\[\]\(]/.test(test)) return test.split(",").some(t => unary(t, v));
-  let m = test.match(/^([\[\]\(])\s*([^.]+?)\s*\.\.\s*([^\]\[\)]+?)\s*([\[\]\)])$/);
+  let m = test.match(/^([\[\]\(])(.+)\.\.(.+)([\[\]\)])$/);
   if (m){
-    const lo = num(m[2]), hi = num(m[3]), x = num(v); if (!Number.isFinite(x)) return false;
+    const lo = num(m[2].trim()), hi = num(m[3].trim()), x = num(v); if (!Number.isFinite(x)) return false;
     const loOk = m[1] === "[" ? x >= lo : x > lo, hiOk = m[4] === "]" ? x <= hi : x < hi;
     return loOk && hiOk;
   }
@@ -37,7 +37,7 @@ export function evaluate(table, ctx){
   const hit = (table.hit || "U").toUpperCase(), o0 = table.outputs[0];
   const prio = v => { const L = o0.values || []; const i = L.indexOf(v); return i < 0 ? 1e9 : i; };
   let result = null, error = "";
-  if (!matched.length) result = null;
+  if (!matched.length) result = table.default ?? null;   // 맞은 규칙이 없으면 기본 출력
   else if (hit === "U"){ if (matched.length > 1) error = `UNIQUE 위반: 규칙 ${matched.map(m => m.i + 1).join(", ")} 이 동시에 맞음`; result = matched[0].out; }
   else if (hit === "F") result = matched[0].out;
   else if (hit === "P") result = [...matched].sort((a, b) => prio(a.out[o0.key]) - prio(b.out[o0.key]))[0].out;

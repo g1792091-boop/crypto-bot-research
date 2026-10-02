@@ -462,7 +462,13 @@ export const RISK_DEFAULTS = {
   slippage_pct: 0.01,        // 편도 슬리피지 %
   funding_rate_8h_pct: 0.01, // 8시간당 가정 펀딩비 % (롱 지불, 숏 수령)
   allow_reverse: true,       // 반대 신호 시 즉시 스위칭
+  // ↓ freqtrade 방식 (규칙만 재구현, 코드 복사 없음)
+  minimal_roi: null,         // 시간별 목표 수익표 {"0": 6, "60": 3, "240": 1, "720": 0} = 보유 N분 이상이면 증거금 대비 수익 % (레버리지·수수료 포함)가 값을 넘을 때 익절
+  trailing_stop_positive_pct: null,         // 수익이 오프셋을 넘은 뒤에 쓸 추적손절 거리 % (가격 기준)
+  trailing_stop_positive_offset_pct: null,  // 이 % (가격 기준) 이상 유리해지면 위 거리로 추적 시작
+  protections: null,         // 보호장치 목록 [{method:"StoplossGuard"|"MaxDrawdown"|"CooldownPeriod"|"LowProfitPairs", lookback_candles, stop_candles, trade_limit, required_profit_pct, max_allowed_drawdown_pct}]
 };
+const PROT_METHODS = ["StoplossGuard", "MaxDrawdown", "CooldownPeriod", "LowProfitPairs"];
 
 // 전략에서 실제로 만들어지는 시리즈 이름들 (build_series 와 같은 규칙)
 function seriesNames(spec){
@@ -589,6 +595,17 @@ export function normalizeSpec(spec){
   for (const k of Object.keys(RISK_DEFAULTS)){
     const v = rin[k];
     if (isNil(v) || v === "") continue;
+    if (k === "minimal_roi"){   // {분: 증거금 수익 %}
+      if (typeof v !== "object" || Array.isArray(v)){ problems.push("risk.minimal_roi 는 {\"분\": 수익%} 객체여야 합니다"); continue; }
+      const o = {}; for (const [m, x] of Object.entries(v)){ const mm = Number(m), xx = Number(x); if (!(mm >= 0) || !Number.isFinite(xx)) problems.push(`risk.minimal_roi 항목 오류: ${m}: ${x}`); else o[String(Math.trunc(mm))] = xx; }
+      if (Object.keys(o).length) r[k] = o; continue;
+    }
+    if (k === "protections"){
+      if (!Array.isArray(v)){ problems.push("risk.protections 는 배열이어야 합니다"); continue; }
+      r[k] = v.filter(x => x && PROT_METHODS.includes(x.method)).map(x => ({method: x.method, lookback_candles: Math.max(1, Math.trunc(+x.lookback_candles || 0)) || null, stop_candles: Math.max(1, Math.trunc(+x.stop_candles || 0)) || null,
+        trade_limit: Math.max(1, Math.trunc(+x.trade_limit || (x.method === "StoplossGuard" ? 10 : 1))), required_profit_pct: +x.required_profit_pct || 0, max_allowed_drawdown_pct: +x.max_allowed_drawdown_pct || 0}));
+      if (!r[k].length) r[k] = null; continue;
+    }
     if (k === "allow_reverse"){ r[k] = typeof v === "string" ? !/^(false|0|no|off|아니오)$/i.test(v.trim()) : !!v; continue; }
     const x = Number(v);
     if (!Number.isFinite(x)) problems.push(`risk.${k} 는 숫자여야 합니다 (${v})`); else r[k] = x;
@@ -729,11 +746,29 @@ export class Simulator {
     this.initialEquity = initialEquity; this.barSeconds = barSeconds;
     this.cash = initialEquity; this.position = null; this.pending = null; this.pendingReason = "";
     this.trades = []; this.equityCurve = []; this.blown = false;
+    this.lockedUntil = 0; this.locks = [];   // 보호장치 잠금 (freqtrade protections)
+  }
+  // 보호장치: 청산 직후 최근 창(lookback)의 거래를 보고 새 진입을 잠근다. 잠금 끝 = 창 안 마지막 청산 + 잠금 길이
+  protect(t){
+    const P = this.risk.protections; if (!P || !P.length) return;
+    const bar = this.barSeconds * 1000, defN = Math.max(1, Math.ceil(3600 / this.barSeconds));
+    for (const pr of P){
+      const look = (pr.lookback_candles || defN) * bar, stop = (pr.stop_candles || defN) * bar;
+      const win = this.trades.filter(x => x.exitT > t - look && x.exitT <= t); if (!win.length) continue;
+      const ratio = x => x.pnlPct / 100;
+      let hit = false, why = "";
+      if (pr.method === "StoplossGuard"){ const n = win.filter(x => /stop|liquidation/.test(x.reason) && ratio(x) < pr.required_profit_pct / 100).length; hit = n >= pr.trade_limit; why = `손절 ${n}회`; }
+      else if (pr.method === "MaxDrawdown"){ if (win.length >= pr.trade_limit){ let cum = 0, peak = 0, dd = 0; for (const x of win){ cum += ratio(x); peak = Math.max(peak, cum); dd = Math.max(dd, peak - cum); } hit = dd * 100 > pr.max_allowed_drawdown_pct; why = `창 안 낙폭 ${pyRound(dd * 100, 1)}%`; } }
+      else if (pr.method === "CooldownPeriod"){ hit = true; why = "청산 직후 쉬기"; }
+      else if (pr.method === "LowProfitPairs"){ if (win.length >= pr.trade_limit){ const sum = win.reduce((a, x) => a + ratio(x), 0); hit = sum < pr.required_profit_pct / 100; why = `창 안 수익 ${pyRound(sum * 100, 1)}%`; } }
+      if (hit){ const until = Math.max(...win.map(x => x.exitT)) + stop; if (until > this.lockedUntil){ this.lockedUntil = until; this.locks.push({method: pr.method, from: t, until, why}); } }
+    }
   }
   slip(price, side){ return price * (1 + side * this.risk.slippage_pct / 100); }
   unrealized(p, price){ return p.side * p.qty * (price - p.entryPrice); }
   open(side, price, t, atrV = null, reason = ""){
     if (this.position || this.blown || this.cash <= 0) return null;
+    if (t < this.lockedUntil) return null;   // 보호장치 잠금 중
     const r = this.risk, lev = r.leverage;
     const margin = Math.min(this.cash * r.position_pct / 100, this.cash);
     if (margin <= 0) return null;
@@ -766,6 +801,7 @@ export class Simulator {
     this.trades.push(tr);
     this.position = null;
     if (this.cash <= 0) this.blown = true;
+    this.protect(t);
     return tr;
   }
   executePending(price, t, atrV = null){
@@ -786,6 +822,11 @@ export class Simulator {
       const trail = p.extreme * (1 - p.side * r.trailing_stop_pct / 100);
       stop = stop === null ? trail : (long ? Math.max(stop, trail) : Math.min(stop, trail));
     }
+    // 수익 오프셋 이후 추적손절 (freqtrade trailing_stop_positive + offset): 지난 봉까지의 최고(저)점 기준이라 같은 봉 낙관 없음
+    if (truthy(r.trailing_stop_positive_pct) && truthy(r.trailing_stop_positive_offset_pct) && p.side * (p.extreme / p.entryPrice - 1) * 100 >= r.trailing_stop_positive_offset_pct){
+      const trail = p.extreme * (1 - p.side * r.trailing_stop_positive_pct / 100);
+      stop = stop === null ? trail : (long ? Math.max(stop, trail) : Math.min(stop, trail));
+    }
     const adverse = long ? bar.l : bar.h, favorable = long ? bar.h : bar.l;
     const hit = lv => lv !== null && (long ? adverse <= lv : adverse >= lv);
     // 청산가가 손절가보다 먼저 닿는 경우 → 강제청산
@@ -794,6 +835,16 @@ export class Simulator {
     if (hit(stop)){
       const px = long ? Math.min(stop, bar.o) : Math.max(stop, bar.o);   // 갭이면 시가 체결
       return this.close(px, bar.t, stop !== p.stop ? "trailing_stop" : "stop_loss");
+    }
+    // 시간별 목표 수익표 (freqtrade minimal_roi): 보유 분 이하 가장 큰 키의 값(증거금 수익 %, 수수료 포함)을 넘으면 그 가격에 익절
+    if (r.minimal_roi){
+      const age = Math.floor((bar.t - p.entryT) / 60000), keys = Object.keys(r.minimal_roi).map(Number).filter(k => k <= age);
+      if (keys.length){
+        const need = r.minimal_roi[String(Math.max(...keys))] / 100, fees = 2 * r.fee_pct / 100 * p.leverage;
+        const px = p.entryPrice * (1 + p.side * (need + fees) / p.leverage);
+        if (long ? bar.o >= px : bar.o <= px) return this.close(bar.o, bar.t, "roi", false);
+        if (long ? favorable >= px : favorable <= px) return this.close(px, bar.t, "roi", false);
+      }
     }
     if (p.take !== null && (long ? favorable >= p.take : favorable <= p.take)){
       const px = long ? Math.max(p.take, bar.o) : Math.min(p.take, bar.o);
@@ -868,6 +919,11 @@ function metrics(sim, barSeconds){
     fees_paid: pyRound(sum(trades.map(t => t.fees)), 2),
     funding_paid: pyRound(sum(trades.map(t => t.funding)), 2),
     exposure_pct: pyRound(inMarket / span * 100, 1),
+    // backtrader SQN = √n × 평균 / 모표준편차 (30거래 이상일 때 의미) · freqtrade 기대값 비율 = (1 + 평균이익/평균손실) × 승률 − 1
+    sqn: n > 1 ? (() => { const a = trades.map(t => t.pnl), m = sum(a) / n, sdv = Math.sqrt(sum(a.map(x => (x - m) ** 2)) / n); return sdv > 0 ? pyRound(Math.sqrt(n) * m / sdv, 2) : null; })() : null,
+    expectancy_ratio: wins.length && losses.length ? pyRound((1 + (gw / wins.length) / (gl / losses.length)) * (wins.length / n) - 1, 3) : null,
+    roi_exits: trades.filter(t => t.reason === "roi").length,
+    protection_locks: (sim.locks || []).length,
     blown_up: sim.blown,
   };
   return Object.assign(m, {return_pct: m.total_return_pct, max_dd_pct: m.max_drawdown_pct, win_rate: m.win_rate_pct, n_trades: n,

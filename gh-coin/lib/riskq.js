@@ -5,12 +5,16 @@ const mean = a => a.reduce((s, x) => s + x, 0) / (a.length || 1);
 const sd = a => { if (a.length < 2) return 0; const m = mean(a); return Math.sqrt(a.reduce((s, x) => s + (x - m) ** 2, 0) / (a.length - 1)); };
 export function returns(px, type = "simple"){ const r = []; for (let i = 1; i < px.length; i++) if (px[i - 1] > 0 && px[i] > 0) r.push(type === "logarithmic" ? Math.log(px[i] / px[i - 1]) : px[i] / px[i - 1] - 1); return r; }
 // 연율 변동성 % — 표준편차 × √(연간 관측 수) × 100 (코인: 일봉 365, 1시간봉 365×24)
-export function volatility(px, {w = 30, perYear = 365, type = "logarithmic"} = {}){ const r = returns(px.slice(-(w + 1)), type); return sd(r) * Math.sqrt(perYear) * 100; }
+export function volatility(px, {w = 30, perYear = 365, type = "simple"} = {}){ const r = returns(px.slice(-(w + 1)), type); return sd(r) * Math.sqrt(perYear) * 100; }
 // 지수 가중 변동성 (RiskMetrics 식, λ=0.94)
 export function ewmaVol(px, {lambda = 0.94, perYear = 365} = {}){ const r = returns(px, "logarithmic"); let v = r.length ? r[0] ** 2 : 0; for (const x of r) v = lambda * v + (1 - lambda) * x * x; return Math.sqrt(v * perYear) * 100; }
 export function correlation(a, b, {w = 30} = {}){ const n = Math.min(a.length, b.length); const ra = returns(a.slice(n - Math.min(n, w + 1))), rb = returns(b.slice(n - Math.min(n, w + 1))); const k = Math.min(ra.length, rb.length); if (k < 3) return null; const x = ra.slice(-k), y = rb.slice(-k), mx = mean(x), my = mean(y); let c = 0, vx = 0, vy = 0; for (let i = 0; i < k; i++){ c += (x[i] - mx) * (y[i] - my); vx += (x[i] - mx) ** 2; vy += (y[i] - my) ** 2; } return vx && vy ? c / Math.sqrt(vx * vy) : null; }
 // 베타 = cov(자산, 기준) / var(기준)  (기준 = 비트코인)
 export function beta(asset, bench, {w = 30} = {}){ const n = Math.min(asset.length, bench.length); const ra = returns(asset.slice(n - Math.min(n, w + 1))), rb = returns(bench.slice(n - Math.min(n, w + 1))); const k = Math.min(ra.length, rb.length); if (k < 3) return null; const x = ra.slice(-k), y = rb.slice(-k), mx = mean(x), my = mean(y); let c = 0, v = 0; for (let i = 0; i < k; i++){ c += (x[i] - mx) * (y[i] - my); v += (y[i] - my) ** 2; } return v ? c / v : null; }
+// 백분위 = (작은 값 수 + 0.5 × 같은 값 수) / N × 100  (gs-quant percentiles)
+export function percentile(arr, x){ const a = arr.filter(Number.isFinite); if (!a.length) return null; return (a.filter(v => v < x).length + 0.5 * a.filter(v => v === x).length) / a.length * 100; }
+// 튀는 값 다듬기 (gs-quant smooth_spikes): 양 옆 두 점보다 (1+th) 배 넘게 튀면 양옆 평균으로
+export function smoothSpikes(px, th = 0.25){ const o = px.slice(); for (let i = 1; i < px.length - 1; i++){ const a = px[i - 1], b = px[i + 1], v = px[i]; if ((v > a * (1 + th) && v > b * (1 + th)) || (v < a / (1 + th) && v < b / (1 + th))) o[i] = (a + b) / 2; } return o; }
 export function zscore(px, {w = 30} = {}){ const s = px.slice(-w); const d = sd(s); return d ? (s.at(-1) - mean(s)) / d : 0; }
 // 최대 낙폭 % (창 안의 고점 대비 최저)
 export function maxDrawdown(px, {w = px.length} = {}){ let peak = -Infinity, dd = 0; for (const v of px.slice(-w)){ peak = Math.max(peak, v); dd = Math.min(dd, v / peak - 1); } return dd * 100; }

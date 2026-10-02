@@ -8,13 +8,17 @@ const LOG = "coinDeployLog";
 const hash = s => { let h = 2166136261; for (let i = 0; i < s.length; i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(16).padStart(8, "0"); };
 export const deployLog = () => { try { return JSON.parse(localStorage.getItem(LOG) || "[]"); } catch(e){ return []; } };
 const saveLog = l => { try { localStorage.setItem(LOG, JSON.stringify(l.slice(-200))); } catch(e){} };
-// changes: [{name, keys:[백업할 localStorage 키], up: () => void, note}]
+// changes: [{name, checksum:"내용 버전 문자열", keys:[백업할 localStorage 키], up: () => void, rerunnable?, note}]
+//   checksum 은 사람이 정한 문자열을 쓴다 (압축된 코드의 fn.toString() 은 빌드마다 바뀔 수 있어서 obevo 처럼 '원본 내용'을 대신함)
+//   rerunnable: 내용이 바뀌면 다시 돌려도 되는 변경 (보통 변경은 바뀌면 오류로 멈춤)
 export function migrate(changes, {baseline = false} = {}){
   const log = deployLog(), out = [];
   for (const c of changes){
-    const sum = hash(c.name + "|" + String(c.up));
+    const sum = hash(c.name + "|" + (c.checksum || "1"));
     const done = log.find(x => x.name === c.name);
-    if (done){ if (done.sum !== sum && !done.warned){ done.warned = true; out.push({name: c.name, status: "checksum-mismatch"}); } else out.push({name: c.name, status: "already"}); continue; }
+    if (done && done.sum === sum){ out.push({name: c.name, status: "already"}); continue; }
+    if (done && !c.rerunnable){ out.push({name: c.name, status: "checksum-mismatch"}); break; }   // 이미 적용된 변경의 내용이 바뀜 → 멈추고 알림
+    if (done) log.splice(log.indexOf(done), 1);
     if (baseline){ log.push({name: c.name, sum, t: Date.now(), status: "baseline"}); out.push({name: c.name, status: "baseline"}); continue; }
     const backup = {}; for (const k of c.keys || []) backup[k] = localStorage.getItem(k);
     try { c.up(); log.push({name: c.name, sum, t: Date.now(), status: "ok", note: c.note || ""}); out.push({name: c.name, status: "ok"}); }

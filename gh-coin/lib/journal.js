@@ -11,6 +11,17 @@ function load(){ if (STORE) return STORE; try { STORE = JSON.parse(localStorage.
 function save(){ try { localStorage.setItem(KEY, JSON.stringify(STORE.slice(-3000))); } catch(e){} }
 export function _useMemory(rows = []){ STORE = rows; }   // 테스트용
 const now = () => Date.now();
+// 행마다 앞 행의 해시를 이어 붙인다(해시 사슬) — 기록이 몰래 바뀌면 verify() 에서 끊긴 곳이 드러난다
+const h32 = s => { let h = 2166136261; for (let i = 0; i < s.length; i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(16).padStart(8, "0"); };
+const sealOf = r => h32([r.entity, r.id, r.from, r.thru, r.in, JSON.stringify(r.data), r.who, r.why, r.prev].join("|"));
+function push(rows, r){ r.seq = rows.length; r.prev = rows.length ? rows[rows.length - 1].hash : "0"; r.hash = sealOf(r); rows.push(r); return r; }
+export function verify(){ const rows = load(); for (let i = 0; i < rows.length; i++){ const r = rows[i]; if (r.prev !== (i ? rows[i - 1].hash : "0") || r.hash !== sealOf(r)) return {ok: false, at: i, n: rows.length}; } return {ok: true, n: rows.length}; }
+// 감사 전용(audit-only) 기록: 거래·결정처럼 '업무 시간'이 따로 없는 사실 — 지금 시점부터 유효, 옛 행은 처리 시간만 닫힘
+export function audit(entity, id, data, {who = "", why = ""} = {}){
+  const t = now(), rows = load();
+  for (const r of live(entity, id)) r.out = t;
+  const row = push(rows, {entity, id, data, from: t, thru: INF, in: t, out: INF, who, why}); save(); return row;
+}
 // 현재(처리 시간 기준 살아 있는) 행들
 const live = (entity, id) => load().filter(r => r.entity === entity && r.id === id && r.out === INF);
 
@@ -20,11 +31,10 @@ export function record(entity, id, data, {from = now(), who = "", why = ""} = {}
   for (const r of live(entity, id)){
     if (r.thru > from && r.from < from){
       r.out = t;                                                        // 옛 행은 처리 시간 종료
-      rows.push({...r, thru: from, in: t, out: INF, seq: rows.length}); // 앞부분만 남긴 새 행
+      push(rows, {...r, thru: from, in: t, out: INF}); // 앞부분만 남긴 새 행
     } else if (r.from >= from && r.thru === INF){ r.out = t; }          // 같은 시점 이후를 덮어쓰는 경우
   }
-  const row = {entity, id, data, from, thru: INF, in: t, out: INF, who, why, seq: rows.length};
-  rows.push(row); save(); return row;
+  const row = push(rows, {entity, id, data, from, thru: INF, in: t, out: INF, who, why}); save(); return row;
 }
 // 과거 사실을 정정 (업무 시간 구간 [from, thru) 의 값을 바꿈) — 옛 기록은 처리 시간만 닫히고 남는다
 export function correct(entity, id, data, {from, thru = INF, who = "", why = "정정"} = {}){
@@ -32,16 +42,16 @@ export function correct(entity, id, data, {from, thru = INF, who = "", why = "�
   for (const r of live(entity, id)){
     if (r.from < thru && r.thru > from){
       r.out = t;
-      if (r.from < from) rows.push({...r, thru: from, in: t, out: INF, seq: rows.length});
-      if (r.thru > thru) rows.push({...r, from: thru, in: t, out: INF, seq: rows.length});
+      if (r.from < from) push(rows, {...r, thru: from, in: t, out: INF});
+      if (r.thru > thru) push(rows, {...r, from: thru, in: t, out: INF});
     }
   }
-  rows.push({entity, id, data, from, thru, in: t, out: INF, who, why, seq: rows.length}); save();
+  push(rows, {entity, id, data, from, thru, in: t, out: INF, who, why}); save();
 }
 // 개체 종료 (업무 시간 끝) — 예: 전략 은퇴
 export function terminate(entity, id, {at = now(), who = "", why = "종료"} = {}){
   const t = now(), rows = load();
-  for (const r of live(entity, id)) if (r.thru > at){ r.out = t; rows.push({...r, thru: at, in: t, out: INF, who, why, seq: rows.length}); }
+  for (const r of live(entity, id)) if (r.thru > at){ r.out = t; push(rows, {...r, thru: at, in: t, out: INF, who, why}); }
   save();
 }
 // "업무 시점 b 에 무엇이 사실이었나 — 처리 시점 p 에 알던 기준으로" (기본: 지금 알고 있는 기준)

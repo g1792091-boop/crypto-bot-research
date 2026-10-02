@@ -204,6 +204,14 @@ export const officeState = () => ({running, queued: queue.length});
 const ACTIONS = [
   {job: "cdev", re: /커스텀.*(지표|매매법|전략).*(만들|찾|개발|짜|연구|백테스트)/, say: "커스텀 지표 개발팀이 지금 바로 수식 지표로 매매법을 만들어 커스텀 백테스트팀이 검증합니다"},
   {job: "dev", re: /(매매법|전략|지표).*(만들|찾|개발|짜|연구|발굴|백테스트)|(만들|찾|개발|짜).*(매매법|전략)|백테스트\s*(해|돌려)/, say: "매매법 개발팀이 지금 바로 모든 보조지표로 매매법을 만들어 백테스트팀이 검증합니다"},
+  {job: "ic", re: /투자위원회|강세.{0,6}약세.{0,6}토론|살지.{0,4}팔지|(매수|매도).{0,6}결정/, say: "투자위원회가 지금 바로 애널리스트 보고 → 강세·약세 토론 → 리스크 토론 → 위원장 결정을 합니다"},
+  {job: "qrisk", re: /(var|cvar|변동성|상관|베타|스트레스|리스크).{0,10}(계산|분석|봐|점검|알려)|결정표|주문 전 점검/i, say: "퀀트 리스크팀이 지금 바로 VaR·상관·스트레스·주문 전 점검을 계산합니다"},
+  {job: "data", re: /거래소.{0,6}(비교|차이|가격차)|김치\s*프리미엄|데이터.{0,4}(품질|점검)|감사 기록/, say: "데이터 플랫폼팀이 지금 바로 8개 거래소 시세·펀딩과 데이터 품질을 비교합니다"},
+  {job: "opt", re: /하이퍼옵트|최적화|파라미터.{0,6}(찾|튜닝|다듬)|hyperopt/i, say: "전략 최적화팀이 지금 바로 데모 전략을 하이퍼옵트하고 검증 구간·견고성까지 확인합니다"},
+  {job: "patscan", re: /(쌍봉|쌍바닥|헤드앤숄더|삼각수렴|쐐기|깃발|vcp|채널|패턴).{0,8}(스캔|찾아|전부|모든)/i, say: "차트·캔들 패턴팀이 지금 바로 6개 코인 × 2개 시간대 패턴을 스캔합니다"},
+  {job: "feeds", re: /경제\s*(캘린더|일정)|오늘.{0,4}(일정|발표)|dvol|sofr/i, say: "뉴스·경제지표팀이 지금 바로 경제 캘린더·금리·코인 변동성 지수를 받습니다"},
+  {job: "drift", re: /성과.{0,6}(악화|이동|떨어|감지)|런\s*차트/, say: "데모거래팀이 지금 바로 전략 성과 이동을 런 차트로 감지합니다"},
+  {job: "alpha", re: /알파\s*팩터|팩터.{0,4}(순위|랭킹)/, say: "머신러닝·딥러닝팀이 지금 바로 알파 팩터 순위를 계산합니다"},
   {job: "combo", re: /(종합|모든|전체|실시간).{0,8}(지표|보조지표).*(타점|추세|분석|봐|알려|잡아)|실시간.{0,6}(타점|추세)|지표.{0,4}(조합|종합)/, say: "실시간 종합 지표 타점팀이 지금 바로 모든 보조지표를 4개 시간대로 계산해 추세와 타점을 잡습니다"},
   {job: "trend", re: /추세.*(분석|봐|알려|어때)/, say: "추세 분석팀이 지금 바로 다중 시간대 추세를 봅니다"},
   {job: "entry", re: /(타점|진입).*(분석|봐|알려|어디|잡아)/, say: "진입 타점팀이 지금 바로 진입 자리를 계산합니다"},
@@ -664,14 +672,14 @@ export function startChatter(){
 // 매 주기 ① 모의투자 장부를 실제 시세로 갱신(코드, AI 없음) ② 그때그때 한 가지 일을 고른다:
 // 매매법 연구 · SNS 여론 · 경제 리서치 · 동료 수다 · 컴퓨터 작업 · 모의투자 보고 (하루 AI 호출 한도 안에서)
 // 쉬지 않고 돌아가는 업무 순환표: 팀마다 고르게 돌아가도록 섞어 두었다 (모듈이 없으면 경제 리서치로 대신)
-const JOBS = ["dev", "combo", "ind", "trend", "situ", "cdev", "entry", "sr", "news", "promote", "pattern", "coin", "ml", "dev", "tpsl", "combo", "cdev", "trend", "chat", "forecast", "coin", "live", "retro", "task", "selfdev", "macro", "sns", "computer", "paper"];
-const JOB_KO = {combo: "실시간 종합 지표 타점", dev: "매매법 개발 → 백테스트", cdev: "커스텀 지표 개발 → 백테스트", ind: "보조지표 분석", trend: "다중 시간대 추세 분석", entry: "진입 타점 분석", sr: "지지·저항 분석",
+const JOBS = ["dev", "combo", "ic", "ind", "qrisk", "trend", "data", "opt", "patscan", "situ", "cdev", "entry", "sr", "news", "promote", "pattern", "coin", "ml", "dev", "tpsl", "combo", "drift", "cdev", "feeds", "alpha", "trend", "ic", "chat", "forecast", "coin", "live", "retro", "task", "selfdev", "macro", "sns", "computer", "paper"];
+const JOB_KO = {ic: "투자위원회(강세·약세 토론 → 결정)", qrisk: "퀀트 리스크(VaR·결정표·주문 전 점검)", data: "거래소 비교·데이터 품질", opt: "하이퍼옵트로 전략 다듬기", patscan: "패턴 스캐너", drift: "데모 성과 이동 감지(런 차트)", feeds: "경제 캘린더·금리·변동성 지수", alpha: "알파 팩터 순위", combo: "실시간 종합 지표 타점", dev: "매매법 개발 → 백테스트", cdev: "커스텀 지표 개발 → 백테스트", ind: "보조지표 분석", trend: "다중 시간대 추세 분석", entry: "진입 타점 분석", sr: "지지·저항 분석",
   tpsl: "익절·손절 관리", news: "뉴스·기사 분석", macro: "경제지표 예측", situ: "코인 상황판", pattern: "차트·캔들 패턴 분석", coin: "코인팀 회의", ml: "머신러닝·딥러닝 실험",
   promote: "데모 → 실거래 관문 심사", live: "실거래 데스크 점검", paper: "데모거래 보고", forecast: "방향 예측 토론", sns: "SNS 여론 확인", chat: "동료 수다", computer: "컴퓨터 작업",
   retro: "팀 회고·부족한 점 찾기", task: "개선 과제 수행", selfdev: "우리 앱 오류 찾아 코드 고치기", economy: "경제 리서치"};
-const JOB_TEAM = {combo: "combo", dev: "dev", cdev: "cdev", ind: "ind", trend: "trend", entry: "entry", sr: "sr", tpsl: "tpsl", news: "news", macro: "news", situ: "situ", pattern: "pattern", coin: "btc", ml: "ml",
+const JOB_TEAM = {ic: "ic", qrisk: "qrisk", data: "data", opt: "opt", patscan: "pattern", drift: "demo", feeds: "news", alpha: "ml", combo: "combo", dev: "dev", cdev: "cdev", ind: "ind", trend: "trend", entry: "entry", sr: "sr", tpsl: "tpsl", news: "news", macro: "news", situ: "situ", pattern: "pattern", coin: "btc", ml: "ml",
   promote: "demo", live: "live", paper: "demo", forecast: "entry", sns: "news", chat: "hq", computer: "hq", retro: "hq", task: "hq", selfdev: "hq", economy: "news"};
-const JOB_FN = () => ({combo: comboJob, dev: () => research("std"), cdev: () => research("custom"), ind: indJob, trend: trendJob, entry: entryJob, sr: srJob, tpsl: tpslJob, news: economyCheck, macro: macroJob,
+const JOB_FN = () => ({ic: icJob, qrisk: qriskJob, data: dataJob, opt: optJob, patscan: patternScanJob, drift: driftJob, feeds: openFeedsJob, alpha: alphaJob, combo: comboJob, dev: () => research("std"), cdev: () => research("custom"), ind: indJob, trend: trendJob, entry: entryJob, sr: srJob, tpsl: tpslJob, news: economyCheck, macro: macroJob,
   situ: situJob, pattern: patternJob, coin: coinJob, ml: mlJob, promote: promoteJob, live: liveDeskJob, paper: paperReport, forecast: forecastJob, sns: snsCheck, chat: () => chatter(true),
   computer: computerWork, retro, task: doTask, selfdev: selfdevJob, economy: economyCheck});
 let cycleTimer = 0, cycling = false, lastJob = "";
@@ -840,6 +848,9 @@ async function research(lane = "std"){
   if (!spec){ post({ch: L.dev, kind: "system", text: `${a.name}의 답에서 전략 JSON을 찾지 못했습니다`}); addResearch({lane, name: "(형식 오류)", market: mk.market, tf, pass: false, t: Date.now()}); return; }
   try { spec = Q.normalizeSpec({...spec, symbol: mk.market, interval: iv, risk: {...(spec.risk || {}), ...COSTS[mk.cls]}}); }
   catch(err){ post({ch: L.dev, kind: "system", text: `전략 형식 오류(${a.name}): ${err.message}`}); addResearch({lane, name: spec.name || "(형식 오류)", market: mk.market, tf, pass: false, t: Date.now()}); return; }
+  // 데이터 모델 제약 검사 (Legend 방식): Error 는 백테스트 전에 돌려보냄, Warn 은 표시만
+  const SD = await lib("sdlc"), vchk = SD.validate("Strategy", spec);
+  if (!vchk.ok){ post({ch: L.dev, kind: "system", text: `전략 제약 위반(${a.name}): ${vchk.fails.filter(f => f.level === "Error").map(f => f.text).join(", ")} → 다시 만듭니다`}); addResearch({lane, name: spec.name, market: mk.market, tf, pass: false, t: Date.now()}); return; }
   const v = agentById(L.checker);
   fire({kind: "busy", agent: v, text: `🧮 ${spec.name} · ${cs.length.toLocaleString()}봉 백테스트 · 시나리오 검사 중`});
   const bt = Q.backtest(spec, cs, {deriv}), wf = Q.walkForward(spec, cs, {deriv});
@@ -848,6 +859,18 @@ async function research(lane = "std"){
   const st = x => ({ret: +(x?.return_pct ?? 0), dd: +(x?.max_dd_pct ?? 0), win: +(x?.win_rate ?? 0), pf: x?.profit_factor == null ? null : +x.profit_factor, n: x?.n_trades ?? 0});
   post({ch: L.bt, kind: "bt", agent: L.checker, lane, name: spec.name, market: mk.market, mname: mk.name, tf, hist, all: st(bt.stats), is: st(wf.is), oos: st(wf.oos), pass: wf.pass, reasons: wf.reasons, author: a.name, spec, scen, lev: spec.risk?.leverage});
   addResearch({lane, name: spec.name, market: mk.market, tf, pass: wf.pass, oos: +(wf.oos?.return_pct ?? 0), t: Date.now()});
+  // 검증 보강: backtrader 분석기 · freqtrade 손실함수 · Vibe-Trading 견고성(순열 검정·5구간·위생) — 통과 판정은 여전히 코드 관문
+  try {
+    const H = await lib("hyperopt"), RB = await lib("robust"), tfMin = {"15": 15, "60": 60, "240": 240, "D": 1440}[tf] || 60;
+    const an = H.analyzers(bt.equity, bt.trades, {perYear: 365 * 24 * 60 / tfMin}), pt = RB.permutationTest(bt.trades.map(t => t.pnl)), bs = RB.bootstrapSharpe(bt.trades.map(t => t.pnl)), mw = RB.multiWindow(Q, spec, cs, 5), hy = RB.hygiene(bt);
+    const days = Math.max(1, (cs.at(-1).t - cs[0].t) / 864e5), f2 = x => x == null || !Number.isFinite(x) ? "—" : (+x).toFixed(2);
+    table(L.bt, L.checker, `🔬 ${spec.name} 검증 보강`, ["항목", "값", "뜻"], [["SQN", `${f2(an.sqn)} (${an.sqnGrade})`, "√거래수 × 평균/표준편차 — 2 이상 보통, 3 이상 좋음"], ["VWR", f2(an.vwr), "일정한 성장선에서 덜 흔들릴수록 높음"], ["최장 물림", `${an.maxddLen}봉`, "고점 회복까지 걸린 가장 긴 기간"], ["연승/연패", `${an.streakWon}/${an.streakLost}`, ""],
+      ["운일 확률 p", f2(pt.p), pt.p == null ? "거래 부족" : pt.p <= 0.05 ? "운으로 보기 어려움" : "운일 가능성 큼(주의)"], ["부트스트랩 샤프 90% 구간", bs ? `${f2(bs.lo)} ~ ${f2(bs.hi)}` : "—", "0 아래가 넓으면 불안정"], ["5구간 이익", `${mw.positive}/${mw.total}`, "기간별로 고르게 버는지"],
+      ["손실함수 Sharpe/Sortino/Calmar", `${f2(-H.LOSSES.SharpeDaily.f(bt.trades, 10000, days))} / ${f2(-H.LOSSES.SortinoDaily.f(bt.trades, 10000, days))} / ${f2(-H.LOSSES.Calmar.f(bt.trades, 10000, days))}`, "freqtrade 하이퍼옵트 기준값"], ["위생", hy.ok ? (hy.warns.join(", ") || "이상 없음") : hy.fails.join(", "), ""], ...(vchk.fails.length ? [["제약 경고", vchk.fails.map(f => f.text).join(", "), "Warn"]] : [])],
+      "참고 지표 · 통과 판정은 위 코드 관문(70/30 워크포워드)이 함");
+    if (wf.pass){ const rv = SD.propose(spec, {author: a.name, why: "백테스트 통과"}); SD.decide(spec.name, rv.id, true, {who: v.name, why: "코드 관문 통과"}); }
+    journal("audit", "backtest", spec.name, {pass: wf.pass, oos: st(wf.oos), p: pt.p, sqn: an.sqn}, v.id, "백테스트");
+  } catch(err){}
   fire({kind: "bubble", agent: v, text: `${wf.pass ? "✅ 통과" : "❌ 불통과"}: ${spec.name} — ${wf.reasons.slice(0, 2).join(", ")}`});
   // 검증관이 시나리오 결과를 말로 설명 (통과했거나 시나리오가 있을 때)
   if (scen) await solo(v, {room: L.bt, sys: personaOf(v, "코드가 낸 백테스트·시나리오 결과를 3~5문장으로 설명한다. 어느 레버리지까지 견디는지, 어떤 장세에서 약한지, 최악의 해와 낙폭을 짚고, 통과·불통과 판정은 코드 판정을 따른다."),
@@ -875,6 +898,9 @@ async function snsCheck(){
   for (const src of (r.sources || []).slice(0, 4)) post({ch: "news", kind: "work", agent: "sns", icon: "📱", text: src.title, url: src.url});
   await solo(a, {room: "news", sys: personaOf(a, "SNS에서 본 분위기를 3~5문장으로 해설한다. 사람들이 무엇에 흥분하거나 겁먹는지, 쏠림이 지나친지(역발상 신호인지) 말한다. SNS 글은 의견일 뿐이라는 점을 잊지 않는다."), user: r.text.slice(0, 5000), train: "아래 SNS 글과 공포·탐욕 지수를 보고 지금 사람들의 분위기와 쏠림을 해설해 줘. SNS 글은 의견이라는 점도 짚어 줘."});
   const fg = (r.text.match(/공포·탐욕 지수\] 오늘 (\d+)/) || [])[1];
+  // 여론 밴드 (TradingAgents 감성 분석 규칙): 90/10 이상 쏠림은 역발상 경고, 70/30 은 완만한 쏠림, 표본이 적으면 확신 낮음
+  if (fg){ const v = +fg, band = v >= 90 ? "극단적 탐욕(역발상 경고)" : v >= 70 ? "탐욕(완만한 강세 쏠림)" : v > 55 ? "약한 탐욕" : v >= 45 ? "중립·불확실" : v > 30 ? "약한 공포" : v > 10 ? "공포(완만한 약세 쏠림)" : "극단적 공포(역발상 경고)";
+    post({ch: "news", kind: "work", agent: "sns", icon: "🌡", text: `여론 밴드: 공포·탐욕 ${v} → ${band} · 점수 ${(v / 10).toFixed(1)}/10 · 확신 ${(r.sources || []).length >= 20 ? "보통" : "낮음(표본 적음)"}`}); }
   if (fg && (+fg <= 15 || +fg >= 85) && usage().auto < officeCfg().dailyMax)
     enqueue({topic: `코인 공포·탐욕 지수가 ${fg}로 극단입니다. SNS 분위기와 시장을 함께 점검해 주세요.`, room: "news", trigger: "event", title: `여론-극단-${fg}`, agents: ["sns", "coin_spot", "coin_fut"]});
 }
@@ -1070,9 +1096,10 @@ async function mlJob(){
   // 우위가 보이면 예측 확률을 커스텀 지표로 써서 전략을 만들고 그대로 백테스트·검증
   const extra = ML.mlSeries(res);
   const spec = Q.normalizeSpec({name: `ML ${model} ${mk.market}`, symbol: mk.market, interval: IV_NAME[mk.tf], indicators: [{id: "mlp", type: "custom", expr: "ml_prob"}],
-    long_entry: {logic: "all", conditions: [{left: "mlp", op: ">", right: "0.58"}]}, long_exit: {logic: "any", conditions: [{left: "mlp", op: "<", right: "0.5"}]},
-    short_entry: {logic: "all", conditions: [{left: "mlp", op: "<", right: "0.42"}]}, short_exit: {logic: "any", conditions: [{left: "mlp", op: ">", right: "0.5"}]},
-    risk: {leverage: 2, position_pct: 20, atr_stop_mult: 2, ...COSTS[mk.exchange === "binancef" ? "crypto" : "us_stock"]}});
+    // 확률 밴드 (bitoracle-ai-server 규칙): p ≥ 0.60 진입, 0.40~0.60 은 그대로(무거래 구간), 손절 −3% · 익절 +5%
+    long_entry: {logic: "all", conditions: [{left: "mlp", op: ">=", right: "0.60"}]}, long_exit: {logic: "any", conditions: [{left: "mlp", op: "<=", right: "0.40"}]},
+    short_entry: {logic: "all", conditions: [{left: "mlp", op: "<=", right: "0.40"}]}, short_exit: {logic: "any", conditions: [{left: "mlp", op: ">=", right: "0.60"}]},
+    risk: {leverage: 2, position_pct: 20, stop_loss_pct: 3, take_profit_pct: 5, ...COSTS[mk.exchange === "binancef" ? "crypto" : "us_stock"]}});
   const deriv = {extra};
   const bt = Q.backtest(spec, cs, {deriv}), wf = Q.walkForward(spec, cs, {deriv});
   const st = x => ({ret: +(x?.return_pct ?? 0), dd: +(x?.max_dd_pct ?? 0), win: +(x?.win_rate ?? 0), pf: x?.profit_factor == null ? null : +x.profit_factor, n: x?.n_trades ?? 0});
@@ -1116,6 +1143,17 @@ async function selfdevJob(){
   const ask = async (sys, user) => { const e = await solo(a, {room: "hq", sys: personaOf(a, sys), user, maxTokens: 1800, temperature: 0.2}); return e.raw || e.text || ""; };
   const p = await S.proposeFix(err, {ask});
   post({ch: "hq", kind: "patch", agent: a.id, file: p.file || err.file, why: p.why || p.check?.msg || "", status: p.status, patchId: p.id});
+  // 독립 QA 검토 (my-cc-harness 규칙): 만든 사람과 다른 직원·다른 모델이 100점 기준으로 채점 — 기능 40 · 품질 25 · 군더더기 없음 20 · 사용성·보안 15
+  //   85↑ 통과 · 65~84 조건부 · 65↓ 불합격 · 치명적(CRITICAL) 문제 하나면 불합격. 증거(문법 검사 결과) 없이 '완료'라고 하지 않는다.
+  if (p.status === "proposed" && hasAI()){
+    const diff = (S.patchText?.(p) || "").slice(0, 3500);
+    const e2 = await solo(q, {room: "hq", sys: personaOf(q, "독립 QA 검토자: 다른 직원이 만든 코드 수정안을 채점한다. 점검: 경계값·비동기 경쟁·null, XSS·비밀키, 함수 50줄·중첩 4단계 이하, 최소 변경·근본 원인. 마지막 줄을 정확히 '점수: 숫자/100 · 판정: 통과|조건부|불합격 · 치명적: 있음|없음'."),
+      user: `파일: ${p.file}\n오류: ${String(err.msg).slice(0, 200)}\n수정 이유: ${p.why || ""}\n자동 검사: ${p.check?.msg || "문법 통과"}\n\n수정안:\n${diff}`, maxTokens: 700});
+    const sc = +((String(e2.text).match(/점수\s*[:：]\s*(\d{1,3})/) || [])[1] || 0), crit = /치명적\s*[:：]\s*있음/.test(e2.text);
+    const verdict = crit ? "불합격(치명적)" : sc >= 85 ? "통과" : sc >= 65 ? "조건부" : "불합격";
+    post({ch: "hq", kind: "work", agent: q.id, icon: verdict === "통과" ? "✅" : "⚠", text: `독립 QA 채점 ${sc}/100 → ${verdict} (적용은 대표님 승인 후)`});
+    addNote("hq", `수정안 ${p.file}: QA ${sc}점 ${verdict}`, "QA");
+  }
   if (p.status === "proposed") addTask({team: "hq", title: `코드 수정안 검토: ${p.file}`, why: `${String(err.msg).slice(0, 80)} (${err.count || 1}번)`, owner: q.name});
   addNote("hq", `${p.file || err.file} 오류 '${String(err.msg).slice(0, 50)}' → 수정안 ${p.status === "proposed" ? "준비됨(대표 승인 대기)" : "실패: " + (p.check?.msg || p.status)}`, "코드");
   fire({kind: "growth"});
@@ -1228,8 +1266,10 @@ async function entryJob(){
   const longE = sup ? sup.price + atr * 0.2 : p - atr, longSL = longE - atr * 1.5, longTP = res ? res.price : p + atr * 3;
   const shortE = res ? res.price - atr * 0.2 : p + atr, shortSL = shortE + atr * 1.5, shortTP = sup ? sup.price : p - atr * 3;
   const rr = (e, sl, tp) => fx(Math.abs(tp - e) / Math.abs(e - sl), 2);
-  const rows = [["롱 (지지 근처 눌림)", fx(longE), fx(longSL), fx(longTP), rr(longE, longSL, longTP)], ["숏 (저항 근처 반락)", fx(shortE), fx(shortSL), fx(shortTP), rr(shortE, shortSL, shortTP)]];
-  table("entry", lead.id, `🎯 ${c.ko} 진입 자리 후보 (현재가 ${fx(p)} · ATR ${fx(atr)} · RSI ${fx(rsi, 1)})`, ["시나리오", "진입", "손절", "익절", "손익비"], rows, (sigs.join(" · ") || "데모 중인 전략 신호 없음") + " · 계산값일 뿐 매매 권유 아님");
+  // 고정 위험 크기 (nautilus 사이저 · freqtrade Edge 방식): 1,000 USDT 의 1% 위험, 주문당 50 USDT 상한
+  const E = await lib("execution"), sz = (e, sl) => { const q = E.fixedRiskQty({equity: 1000, riskPct: 1, entry: e, stop: sl, maxNotional: 50}); return `${fx(q * e)} USDT`; };
+  const rows = [["롱 (지지 근처 눌림)", fx(longE), fx(longSL), fx(longTP), rr(longE, longSL, longTP), sz(longE, longSL)], ["숏 (저항 근처 반락)", fx(shortE), fx(shortSL), fx(shortTP), rr(shortE, shortSL, shortTP), sz(shortE, shortSL)]];
+  table("entry", lead.id, `🎯 ${c.ko} 진입 자리 후보 (현재가 ${fx(p)} · ATR ${fx(atr)} · RSI ${fx(rsi, 1)})`, ["시나리오", "진입", "손절", "익절", "손익비", "1% 위험 크기"], rows, (sigs.join(" · ") || "데모 중인 전략 신호 없음") + " · 계산값일 뿐 매매 권유 아님");
   await explain(lead.id, "entry", `${c.ko}의 진입 후보 표(지지·저항·ATR 기반)와 데모 전략 신호를 보고, 지금 바로 들어갈지 기다릴지, 어떤 조건이 맞으면 들어갈지 해설한다.`, tableText(["시나리오", "진입", "손절", "익절", "손익비"], rows) + "\n데모 전략 신호: " + (sigs.join(", ") || "없음"), "아래 진입 자리 계산을 보고 진입 계획을 세워 줘.");
 }
 
@@ -1295,6 +1335,17 @@ async function coinJob(){
 
 /* ---- 파이프라인 관문: 데모 → 실거래 후보 (코드 판정, 사람 승인 전에는 절대 실거래 안 함) ---- */
 const PROMO_KEY = "coinPromoted";
+// 승격 결정표 (jdmn 적중 정책 PRIORITY: 거부 > 검토 > 데모 더 > 승인)
+export const PROMO_TABLE = {name: "실거래 후보 승격", hit: "P", default: {act: "데모 더", why: "관문 미통과"},
+  inputs: [{key: "gate", label: "코드 관문"}, {key: "p", label: "운일 확률 p"}, {key: "decay", label: "런 차트 악화"}, {key: "trades", label: "거래 수"}],
+  outputs: [{key: "act", label: "결정", values: ["거부", "검토", "데모 더", "승인"]}, {key: "why", label: "이유"}],
+  rules: [
+    {when: ["-", "-", "true", "-"], then: ["거부", "최근 9거래 이상 중앙값 아래로 지속 이동(성과 악화)"]},
+    {when: ["true", ">0.2", "-", "-"], then: ["검토", "관문은 통과했지만 운일 확률이 큼"]},
+    {when: ["true", "(0.05..0.2]", "-", "<40"], then: ["데모 더", "거래가 더 쌓여야 운인지 가릴 수 있음"]},
+    {when: ["false", "-", "-", "-"], then: ["데모 더", "코드 관문 미통과"]},
+    {when: ["true", "-", "false", "-"], then: ["승인", "관문 통과 · 운으로 보기 어려움 · 악화 없음"]}
+  ]};
 export async function pipeline(){
   const P = await import("../nuri-ai/paper.js"), book = await P.loadBook(), log = researchLog();
   let L = null; try { L = await import("../nuri-ai/live.js"); } catch(e){}
@@ -1314,11 +1365,14 @@ async function promoteJob(){
   const P = await import("../nuri-ai/paper.js"), book = await P.loadBook();
   let L = null; try { L = await import("../nuri-ai/live.js"); } catch(e){}
   if (!L?.gateFor){ post({ch: "demo", kind: "system", text: "실거래 모듈을 불러오지 못해 관문 심사를 건너뜁니다"}); return; }
-  const promo = readJ(PROMO_KEY, {}), rows = [];
+  const promo = readJ(PROMO_KEY, {}), rows = [], D = await lib("dmn"), RB = await lib("robust"), RC = await lib("runchart");
   for (const s of book.strategies.filter(x => x.status === "active")){
     const g = L.gateFor(s), lane = LANES[s.lane] || LANES.std, fails = (g.checks || []).filter(c => !c.ok).map(c => c.name);
-    rows.push([lane.label, s.name.slice(0, 20), s.mname || s.market, `${s.trades.length}회`, `${Math.floor((Date.now() - s.created) / 864e5)}일`, g.eligible ? "✅ 통과" : "⏳ " + fails.slice(0, 2).join(", ")]);
-    if (g.eligible && !promo[s.id]){
+    // 결정표(jdmn PRIORITY): 코드 관문 + 런 차트 악화 + 순열 검정 p — 하나라도 막히면 승격하지 않음 (관문보다 더 엄격하게만 작동)
+    const pnl = s.trades.map(t => +t.pnl || 0), pt = RB.permutationTest(pnl), dn = RC.runChart(s.trades.map(t => +t.roe || 0), {direction: "below"});
+    const dm = D.evaluate(PROMO_TABLE, {gate: g.eligible, p: pt.p ?? 1, decay: !!(dn.last && dn.last.to >= s.trades.length - 9), trades: s.trades.length});
+    rows.push([lane.label, s.name.slice(0, 20), s.mname || s.market, `${s.trades.length}회`, `${Math.floor((Date.now() - s.created) / 864e5)}일`, g.eligible ? "✅ 통과" : "⏳ " + fails.slice(0, 2).join(", "), `${dm.result.act} (규칙 ${dm.matched.map(m => m.row).join(",") || "기본"})`]);
+    if (g.eligible && dm.result.act === "승인" && !promo[s.id]){
       promo[s.id] = Date.now();
       post({ch: lane.live, kind: "promo", agent: TEAM_LEAD[lane.live], sid: s.id, name: s.name, market: s.mname || s.market, lane: s.lane || "std",
         text: `🎓 실거래 후보 승격: ${s.name} (${s.mname || s.market}) — 데모 관문(14일 · 20거래 · 손익비 1.2 · 수익 + · 낙폭 25% 미만) 통과. 대표님이 [실거래] 화면에서 연결해야만 실거래합니다.`});
@@ -1326,7 +1380,7 @@ async function promoteJob(){
     }
   }
   writeJ(PROMO_KEY, promo);
-  table("demo", "trader", "🎓 데모 → 실거래 관문 심사 (코드 판정)", ["라인", "전략", "코인", "거래", "기간", "관문"], rows, rows.length ? "관문: 14일 이상 · 거래 20회 이상 · 손익비 1.2 이상 · 수익 + · 최대 낙폭 25% 미만" : "데모 중인 전략 없음");
+  table("demo", "trader", "🎓 데모 → 실거래 관문 심사 (코드 판정 + 결정표)", ["라인", "전략", "코인", "거래", "기간", "관문", "결정표"], rows, rows.length ? "관문: 14일 이상 · 거래 20회 이상 · 손익비 1.2 이상 · 수익 + · 최대 낙폭 25% 미만" : "데모 중인 전략 없음");
   fire({kind: "pipeline"});
 }
 /* ---- 실거래 데스크: 상태만 보고 (주문은 live.js 가 한도·승인 안에서만) ---- */
@@ -1336,6 +1390,9 @@ async function liveDeskJob(){
   if (!L?.status){ post({ch: "live", kind: "system", text: "실거래 모듈 없음"}); return; }
   const st = await Promise.resolve(L.status()).catch(() => null), cfg = L.liveCfg?.() || {};
   const linked = Object.entries(cfg.linked || {}).filter(([, v]) => v?.on).length;
+  try { const E = await lib("execution"), dp = L.dayPnl?.(), st2 = E.tradingState({halted: L.isHalted?.(), dayLoss: Math.max(0, -(dp?.usdt || 0)), dayLossCap: cfg.limits?.dailyLoss ?? 20});
+    const plan = E.twapPlan({qty: 50, horizonSec: 300, intervalSec: 60});
+    post({ch: "live", kind: "work", agent: lead.id, icon: "🛡", text: `거래 상태(nautilus 방식): ${E.STATES[st2]} · 50 USDT를 5분 TWAP 으로 나누면 ${plan.map(x => x.qty.toFixed(0)).join("/")} USDT (계획일 뿐, 주문은 live.js 한도·승인)`}); } catch(e){}
   post({ch: "live", kind: "work", agent: lead.id, icon: "🔐", text: `실거래 ${cfg.enabled ? "켜짐" : "꺼짐"} · ${cfg.env === "mainnet" ? "실거래(메인넷)" : "테스트넷"} · ${cfg.mode === "auto" ? "자동" : "승인"} 모드 · 연결 전략 ${linked}개${st?.todayPnl != null ? ` · 오늘 실현 ${fx(st.todayPnl)} USDT` : ""}`});
   fire({kind: "pipeline"});
 }
@@ -1368,7 +1425,8 @@ export async function comboScan(c, force){
   for (const k of C.TF_LIST){ try { const h = await cbTF(c, k, force); tf[k] = h.res; raw[k] = h.cs; } catch(e){ /* 그 시간대만 빠짐 */ } }
   if (!tf["15"] && !tf["5"]) throw new Error(`${c.ko} 시세를 받지 못했습니다`);
   const plan = C.planOf(tf), prev = CB.coins[c.id];
-  const row = {id: c.id, ko: c.ko, sym: c.sym, t: Date.now(), plan, tf: Object.fromEntries(Object.entries(tf).map(([k, r]) => [k, {score: r.score, up: r.up, dn: r.dn, flat: r.flat, total: r.total, ob: r.ob, os: r.os, oscN: r.oscN, regime: r.regime.label, fresh: r.fresh.slice(0, 4), groups: r.groups}])), n: C.comboIds().length};
+  let tv = {}; try { const T = await lib("ta_rating"); for (const k of ["60", "240"]) if (raw[k]){ const r = T.rating(raw[k]); if (r) tv[k] = {all: r.all, label: r.label, ma: r.ma, osc: r.osc}; } } catch(e){}
+  const row = {id: c.id, ko: c.ko, sym: c.sym, t: Date.now(), plan, tf: Object.fromEntries(Object.entries(tf).map(([k, r]) => [k, {score: r.score, up: r.up, dn: r.dn, flat: r.flat, total: r.total, ob: r.ob, os: r.os, oscN: r.oscN, regime: r.regime.label, fresh: r.fresh.slice(0, 4), groups: r.groups}])), n: C.comboIds().length, tv};
   CB.coins[c.id] = row;
   // 기록장 채점 (5분봉으로)
   const calls = comboCalls(); let changed = false;
@@ -1403,6 +1461,7 @@ function comboFacts(row){
   const lines = Object.entries(row.tf).map(([k, r]) => `${T[k]}: 점수 ${Math.round(r.score * 100)} (상승 ${r.up}·하락 ${r.dn}·중립 ${r.flat}) · ${r.regime} · 과매수 ${r.ob}/${r.oscN} 과매도 ${r.os}/${r.oscN}${r.fresh.length ? " · 새 신호 " + r.fresh.map(f => f.tag.replace(/^.*새 신호 /, f.name + " ")).join(", ") : ""}`);
   return `${row.ko} 현재가 ${fx(p.price)} · ATR(15분) ${fx(p.atr)} · 계산한 지표 ${row.n}종\n${lines.join("\n")}\n큰 추세 점수 ${Math.round(p.big * 100)} · 타이밍 점수 ${Math.round(p.small * 100)} · 판정 ${p.state} (${p.why})\n` +
     (p.entry ? `진입 ${fx(p.entry)} · 손절 ${fx(p.sl)} · 익절1 ${fx(p.tp1)} · 익절2 ${fx(p.tp2)} · 손익비 ${fx(p.rr, 2)}\n` : "") +
+    (row.tv && Object.keys(row.tv).length ? `트레이딩뷰식 요약: ${Object.entries(row.tv).map(([k, v]) => `${T[k]} ${v.label}(${v.all.toFixed(2)}, 이평 ${v.ma.toFixed(2)} · 오실레이터 ${v.osc.toFixed(2)})`).join(" · ")}\n` : "") +
     `가까운 지지 ${p.sup ? fx(p.sup.price) + " (" + p.sup.names.join("·") + ")" : "—"} · 가까운 저항 ${p.res ? fx(p.res.price) + " (" + p.res.names.join("·") + ")" : "—"}`;
 }
 // 회의·대표 질문 때 붙는 한 줄 요약
@@ -1447,3 +1506,255 @@ async function comboJob(){
   addNote("combo", `${c.ko}: 큰 추세 ${Math.round(p.big * 100)} · 타이밍 ${Math.round(p.small * 100)} → ${C.STATE_KO[p.state]}`, "종합");
   await explain(lead.id, "combo", `${c.ko}의 모든 보조지표 종합 결과를 보고 ① 큰 추세 ② 지금 타이밍 ③ 타점(들어갈지·기다릴지·어디서) ④ 무효 조건을 해설한다. 지표들이 엇갈리면 엇갈린다고 말한다.`, comboFacts(row) + "\n지표 묶음별: " + gRows.map(r => `${r[0]} 상승${r[1]}/하락${r[2]}`).join(", "), "아래 모든 보조지표를 조합한 결과로 추세와 타점을 판단해 줘.");
 }
+
+/* ================================================================
+   오픈소스 분석으로 들여온 기능 — 부서별 업무 (출처는 각 lib/*.js 머리말, '📚 도입 기술' 탭에 정리)
+   ================================================================ */
+const lib = name => import(`./lib/${name}.js`);
+const toPrice = v => { if (v == null) return null; const s = String(v).trim(); if (/%|~|–|-\s*\d|N\/?A|없음/i.test(s.replace(/^-/, ""))) return null; const x = Number(s.replace(/[,$\s]|USDT/g, "")); return Number.isFinite(x) && x > 0 ? x : null; };
+// 장부·결정을 이중 시간 감사 기록에 (reladomo 방식)
+const journal = (kind, entity, id, data, who = "", why = "") => lib("journal").then(J => kind === "audit" ? J.audit(entity, id, data, {who, why}) : J.record(entity, id, data, {who, why})).catch(() => null);
+
+/* ---- 🏛 투자위원회 (TradingAgents 흐름) ----
+   애널리스트 4명 보고(코드 자료) → 강세·약세 토론(1라운드 = 발언 2번) → 리서치 매니저 5단계 등급 → 트레이더 매수·관망·매도 + 진입·손절(절대 가격)
+   → 공격·보수·중립 리스크 토론(1라운드 = 발언 3번) → 위원장 최종 5단계 등급. 해석 못 하면 REVIEW(절대 거래 안 함).
+   5봉(기본 4시간봉 × 5 = 20시간) 뒤 결과를 채점(비트코인 대비 초과수익)하고 위원장이 2~4문장 교훈을 남긴다. 교훈은 '최종 결정자'에게만 준다(같은 코인 5개 + 다른 코인 3개, 결정 시점 이전에 확정된 것만). */
+const IC_KEY = "coinICLedger", RATINGS = ["매수", "비중확대", "관망", "비중축소", "매도"], RATING_EN = {buy: "매수", overweight: "비중확대", hold: "관망", underweight: "비중축소", sell: "매도"};
+function parseRating(t){
+  const s = String(t || ""), m = s.match(/(?:최종\s*)?(?:등급|결정|판단|rating)\s*[:：]\s*\**\s*(매수|비중\s*확대|관망|비중\s*축소|매도|buy|overweight|hold|underweight|sell)/i);
+  if (!m) return "REVIEW";
+  const k = m[1].replace(/\s/g, "").toLowerCase(); return RATING_EN[k] || k;
+}
+export const icLedger = () => readJ(IC_KEY, []);
+async function icSettle(){
+  const L = icLedger(), now = Date.now(); let changed = false;
+  for (const d of L.filter(x => x.status === "pending" && now >= x.due)){
+    try {
+      const c = COINS.find(x => x.id === d.coin), k = await kl(c.sym, "240", 60), kb = d.coin === "btc" ? k : await kl("BTCUSDT", "240", 60);
+      const at = arr => arr.filter(b => b.t <= d.due).at(-1)?.c, p1 = at(k), b0 = d.btc0, b1 = at(kb); if (!p1) continue;
+      const raw = (p1 / d.p0 - 1) * 100, alpha = raw - (b0 && b1 ? (b1 / b0 - 1) * 100 : 0), dir = {매수: 1, 비중확대: 0.5, 관망: 0, 비중축소: -0.5, 매도: -1}[d.rating] ?? 0;
+      d.status = "resolved"; d.resolved = now; d.raw = +raw.toFixed(2); d.alpha = +alpha.toFixed(2); d.hit = dir === 0 ? Math.abs(raw) < 2 : Math.sign(raw) === Math.sign(dir); changed = true;
+      const lead = agentById("ic_lead");
+      if (hasAI() && !officePaused()){
+        const e = await solo(lead, {room: "ic", sys: personaOf(lead, "지난 위원회 결정의 결과를 2~4문장으로 복기한다: 초과수익(알파) 숫자를 인용하고, 어떤 논리가 맞았고 틀렸는지, 다음에 쓸 교훈 하나를 마지막 문장에 '교훈:'으로 쓴다."), user: `코인 ${d.ko} · 결정 ${d.rating} (${new Date(d.t).toLocaleString("ko-KR")}) · 결정가 ${fx(d.p0)} → ${fx(p1)} · 수익 ${pc(raw)} · 비트코인 대비 알파 ${pc(alpha)}\n결정 근거: ${clip(d.why, 600)}`, maxTokens: 400, train: "아래 투자 결정과 실제 결과를 보고 복기와 교훈을 써 줘."});
+        d.lesson = (String(e.text).match(/교훈\s*[:：]\s*(.+)/) || [])[1]?.slice(0, 200) || clip(e.text, 200);
+      } else d.lesson = `${d.rating} → 알파 ${pc(alpha)} (${d.hit ? "적중" : "빗나감"})`;
+      journal("audit", "ic-outcome", d.id, {rating: d.rating, raw: d.raw, alpha: d.alpha, hit: d.hit}, "ic_lead", "결과 채점");
+      addNote("ic", `${d.ko} ${d.rating} → 알파 ${pc(alpha)} · ${d.lesson}`, "복기");
+    } catch(e){}
+  }
+  if (changed) writeJ(IC_KEY, L.slice(-200));
+}
+function icLessons(coin, asOf = Date.now()){
+  const done = icLedger().filter(d => d.status === "resolved" && d.resolved <= asOf && d.lesson);
+  const same = done.filter(d => d.coin === coin).slice(-5), other = done.filter(d => d.coin !== coin).slice(-3);
+  return [...same, ...other].map(d => `- ${d.ko} ${d.rating} → 알파 ${pc(d.alpha)}: ${d.lesson}`).join("\n");
+}
+async function icJob(){
+  await icSettle();
+  const named = userNote && COINS.find(c => new RegExp(`${c.ko}|${c.sym.replace("USDT", "")}`, "i").test(userNote));
+  const c = named || COINS[rot("coinIC", COINS.length)], A = id => agentById(id), lead = A("ic_lead");
+  fire({kind: "busy", agent: lead, text: `🏛 ${c.ko} 투자위원회 안건 준비 중`});
+  // ① 애널리스트 4명 보고 — 숫자는 모두 코드가 만든 한 장의 '검증된 자료'(TradingAgents: 하나의 스냅샷이 유일한 출처)
+  const row = await comboScan(c).catch(() => null), T = await lib("ta_rating"), k4 = await kl(c.sym, "240", 400), k1 = await kl(c.sym, "60", 400);
+  const tv4 = T.rating(k4), tv1 = T.rating(k1), cdl = T.candles(k1);
+  let flow = "", fund = null; try { const F = await import("../nuri-ai/flow.js"); const fs = await F.flowSnapshot({symbol: c.sym}); flow = String(fs.text || "").slice(0, 900); fund = fs.data?.futures?.funding ?? null; } catch(e){}
+  let news = ""; try { const r = await TOOLS.market_news.run({category: "crypto"}); news = String(r.text || "").slice(0, 1200); } catch(e){}
+  let fg = ""; try { const r = await TOOLS.sns_buzz.run({topic: "crypto"}); fg = (String(r.text || "").match(/공포·탐욕 지수[^\n]*/) || [""])[0]; } catch(e){}
+  const price = k1.at(-1).c;
+  const reports = {
+    market: `현재가 ${fx(price)} · 실시간 종합판: ${row ? `큰 추세 ${Math.round(row.plan.big * 100)} · 타이밍 ${Math.round(row.plan.small * 100)} · ${row.plan.state} (${row.plan.why})` : "없음"} · 트레이딩뷰식 요약 4시간 ${tv4?.label} (${tv4?.all.toFixed(2)}) / 1시간 ${tv1?.label} (${tv1?.all.toFixed(2)}) · 캔들 ${cdl.map(x => x.name).join(", ") || "특이 없음"}`,
+    social: fg || "공포·탐욕 자료 없음",
+    news: news || "뉴스 자료 없음",
+    fundamentals: flow || "선물·고래 흐름 자료 없음"
+  };
+  table("ic", lead.id, `🏛 ${c.ko} 투자위원회 — 애널리스트 보고 (코드 자료)`, ["애널리스트", "보고"], [["시장·기술", reports.market], ["여론·소셜", reports.social], ["뉴스·펀더멘털", clip(reports.news, 300)], ["선물·온체인 흐름", clip(reports.fundamentals, 300)]], "모든 숫자는 이 표에서만 인용 · 충돌은 평균 내지 말고 지적");
+  const facts = `[${c.ko} ${c.sym} 위원회 자료 — 여기 숫자만 인용]\n시장·기술: ${reports.market}\n여론: ${reports.social}\n뉴스: ${clip(reports.news, 900)}\n선물·흐름: ${clip(reports.fundamentals, 900)}`;
+  if (!hasAI()) return;
+  const say = async (id, role, ask, extra = "") => (await solo(A(id), {room: "ic", sys: personaOf(A(id), role), user: `${facts}${extra}\n\n${ask}`, maxTokens: 650, train: "아래 코인 자료로 투자위원회 역할에 맞게 의견을 말해 줘."})).text || "";
+  // ② 강세·약세 토론 (1라운드 = 2발언)
+  const bull = await say("ic_4", "강세 리서처: 자료에서 오를 근거만 모아 가장 강한 매수 논리를 3~5문장으로. 약세 논리의 약점도 하나 짚는다.", "강세 논리를 말해 주세요.");
+  const bear = await say("ic_5", "약세 리서처: 자료에서 내릴 근거만 모아 가장 강한 매도 논리를 3~5문장으로. 방금 강세 논리의 약점을 반박한다.", "약세 논리로 반박해 주세요.", `\n\n강세 리서처: ${clip(bull, 700)}`);
+  // ③ 리서치 매니저: '의견 충돌은 관망 사유가 아니다' — 더 강한 쪽에 확신 크기만큼
+  const rm = await say("ic_6", "리서치 매니저: 강세·약세 토론을 심판한다. 의견이 엇갈린다는 것만으로 관망하지 않는다 — 근거가 더 강한 쪽을 고르고 그 차이만큼 등급을 정한다. 근거가 정말 비슷하거나 부족할 때만 관망. 마지막 줄은 반드시 '등급: 매수|비중확대|관망|비중축소|매도' 중 하나.", "투자 계획과 등급을 정해 주세요.", `\n\n강세: ${clip(bull, 600)}\n약세: ${clip(bear, 600)}`);
+  // ④ 트레이더: 진입·손절은 절대 가격만 (%, 범위, N/A 는 무효)
+  const tr = await say("ic_7", "트레이더: 리서치 매니저 계획을 실제 거래안으로 바꾼다. 마지막 세 줄을 정확히 '결정: 매수|관망|매도' '진입: 숫자' '손절: 숫자' 형식으로 (가격은 절대값 숫자만, % 나 범위 금지).", "거래안을 내 주세요.", `\n\n리서치 매니저: ${clip(rm, 600)}`);
+  const entry = toPrice((tr.match(/진입\s*[:：]\s*([^\n]+)/) || [])[1]), stop = toPrice((tr.match(/손절\s*[:：]\s*([^\n]+)/) || [])[1]);
+  // ⑤ 리스크 토론 (1라운드 = 3발언)
+  const ctxR = `\n\n트레이더 안: ${clip(tr, 500)}${entry ? ` (진입 ${fx(entry)}, 손절 ${stop ? fx(stop) : "없음"})` : ""}`;
+  const agg = await say("ic_8", "공격형 리스크 토론자: 기회를 놓치는 위험을 강조하며 더 과감한 크기·진입을 주장한다(근거는 자료에서).", "공격적 관점을 말해 주세요.", ctxR);
+  const con = await say("ic_10", "보수형 리스크 토론자: 손실·청산·쏠림 위험을 강조하며 크기 축소나 관망을 주장한다(근거는 자료에서).", "보수적 관점을 말해 주세요.", ctxR + `\n공격형: ${clip(agg, 400)}`);
+  const neu = await say("ic_9", "중립형 리스크 토론자: 두 주장을 저울질해 균형 잡힌 크기·조건을 제안한다.", "중립 관점을 말해 주세요.", ctxR + `\n공격형: ${clip(agg, 400)}\n보수형: ${clip(con, 400)}`);
+  // ⑥ 위원장 최종 결정 — 지난 결정의 교훈은 여기에만
+  const lessons = icLessons(c.id);
+  const pm = (await solo(lead, {room: "ic", sys: personaOf(lead, "투자위원장(포트폴리오 매니저): 리스크 토론을 심판해 최종 결정한다. 의견 충돌만으로 관망하지 않는다. 지난 교훈을 참고한다. 3~6문장, 마지막 줄은 반드시 '최종 등급: 매수|비중확대|관망|비중축소|매도'. 실제 주문은 코드 관문과 대표 승인으로만 나간다는 것을 안다."),
+    user: `${facts}\n\n리서치 매니저: ${clip(rm, 500)}\n트레이더: ${clip(tr, 400)}\n공격형: ${clip(agg, 350)}\n보수형: ${clip(con, 350)}\n중립형: ${clip(neu, 350)}\n\n지난 결정의 교훈(결정 시점 이전에 확정된 것만):\n${lessons || "(아직 없음)"}\n\n최종 결정을 내려 주세요.`, maxTokens: 700, train: "아래 투자위원회 토론을 보고 최종 결정을 내려 줘."})).text || "";
+  const rating = parseRating(pm), rmRating = parseRating(rm), b0 = (await kl("BTCUSDT", "240", 5).catch(() => null))?.at(-1)?.c;
+  const d = {id: uid(), coin: c.id, ko: c.ko, t: Date.now(), due: Date.now() + 5 * 4 * 3600e3, p0: price, btc0: b0, rating, rmRating, entry, stop, why: clip(pm, 700), status: rating === "REVIEW" ? "review" : "pending"};
+  const L = icLedger(); L.push(d); writeJ(IC_KEY, L.slice(-200));
+  journal("audit", "ic-decision", d.id, {coin: c.id, rating, entry, stop}, "ic_lead", "투자위원회 결정");
+  table("ic", lead.id, `🏛 ${c.ko} 투자위원회 결정: ${rating === "REVIEW" ? "⚠ REVIEW (등급을 읽지 못함 — 거래 금지)" : rating}`, ["단계", "결과"], [["리서치 매니저", rmRating], ["트레이더", `${(tr.match(/결정\s*[:：]\s*(매수|관망|매도)/) || [])[1] || "?"} · 진입 ${entry ? fx(entry) : "무효"} · 손절 ${stop ? fx(stop) : "무효"}`], ["최종(위원장)", rating], ["채점", "5봉(4시간봉) 뒤 비트코인 대비 초과수익으로 자동 채점 → 교훈으로 기억"]], "결정은 기록일 뿐 — 실제 주문은 데모 관문 + 대표 승인으로만");
+  addNote("ic", `${c.ko} 최종 ${rating}${entry ? ` (진입 ${fx(entry)})` : ""}`, "위원회");
+}
+
+/* ---- 📐 퀀트 리스크팀 (gs-quant 시계열 · nautilus/vnpy 리스크 엔진 · jdmn 결정표) ---- */
+export const RISK_TABLE = {name: "리스크 판정", hit: "P", default: {act: "유지", why: "규칙에 해당 없음"},
+  inputs: [{key: "var95", label: "1일 VaR95 %"}, {key: "dd", label: "30일 낙폭 %"}, {key: "vol", label: "연율 변동성 %"}, {key: "corr", label: "BTC 상관"}],
+  outputs: [{key: "act", label: "조치", values: ["거래 정지", "비중 절반", "신규 진입 보류", "유지"]}, {key: "why", label: "이유"}],
+  rules: [
+    {when: [">=12", "-", "-", "-"], then: ["거래 정지", "하루 최악 손실이 12% 이상"], note: "꼬리 위험 극단"},
+    {when: ["-", "<=-35", "-", "-"], then: ["거래 정지", "30일 낙폭 35% 이상"], note: "폭락장"},
+    {when: ["[7..12)", "-", "-", "-"], then: ["비중 절반", "VaR 7~12%"], note: ""},
+    {when: ["-", "-", ">=110", "-"], then: ["비중 절반", "변동성 연 110% 이상"], note: ""},
+    {when: ["-", "(-35..-20]", "-", "-"], then: ["신규 진입 보류", "낙폭 20~35%"], note: ""},
+    {when: ["-", "-", "-", ">=0.9"], then: ["신규 진입 보류", "BTC와 거의 같이 움직임(분산 효과 없음)"], note: "동시 포지션 주의"}
+  ]};
+async function qriskJob(){
+  const R = await lib("riskq"), D = await lib("dmn"), E = await lib("execution"), lead = agentById("qrisk_lead");
+  fire({kind: "busy", agent: lead, text: "📐 6개 코인 VaR·상관·베타 계산 중"});
+  const day = {}; for (const c of COINS){ try { day[c.id] = (await kl(c.sym, "D", 400)).map(b => b.c); } catch(e){} }
+  const btc = day.btc || [], rows = [], verdicts = [];
+  for (const c of COINS){
+    const px = day[c.id]; if (!px?.length) { rows.push([c.ko, "—", "—", "—", "—", "—", "—", "자료 없음"]); continue; }
+    const v = R.volatility(px, {w: 30}), ev = R.ewmaVol(px), hv = R.historicalVaR(px, {conf: 0.95, w: 365}), dd = R.currentDrawdown(px, {w: 30}), corr = c.id === "btc" ? 1 : R.correlation(px, btc, {w: 90}), beta = c.id === "btc" ? 1 : R.beta(px, btc, {w: 90});
+    const ctx = {var95: hv?.var, dd, vol: v, corr: c.id === "btc" ? null : corr}, ev2 = D.evaluate(RISK_TABLE, ctx);   // 비트코인 자신과의 상관(1)은 판정에 쓰지 않음
+    verdicts.push({c, res: ev2});
+    rows.push([c.ko, `${v.toFixed(0)}%`, `${ev.toFixed(0)}%`, hv ? `${hv.var.toFixed(1)}% / ${hv.cvar.toFixed(1)}%` : "—", `${dd.toFixed(1)}%`, corr == null ? "—" : corr.toFixed(2), beta == null ? "—" : beta.toFixed(2), `${ev2.result.act}${ev2.matched.length ? ` (규칙 ${ev2.matched.map(m => m.row).join(",")})` : ""}`]);
+  }
+  table("qrisk", lead.id, "📐 코인별 위험 (일봉 · gs-quant 방식, 코인은 365일 연환산)", ["코인", "변동성 30일", "EWMA 변동성", "VaR95 / CVaR95 (1일)", "30일 낙폭", "BTC 상관 90일", "베타", "결정표 판정"], rows, "결정표 적중 정책 PRIORITY: 거래 정지 > 비중 절반 > 신규 진입 보류 > 유지 · 판정은 코드가 함");
+  // 데모 포지션 포트폴리오 VaR (분산-공분산) + 스트레스(BTC −30%, 알트는 베타만큼)
+  let pv = null, stress = [];
+  try {
+    const P = await import("../nuri-ai/paper.js"), book = await P.loadBook(), w = {};
+    for (const s of book.strategies.filter(x => x.status === "active" && x.pos)){ const c = COINS.find(x => x.sym === s.market); if (!c) continue; const exp = s.pos.side === "long" ? 1 : -1; w[c.id] = (w[c.id] || 0) + exp * (s.pos.margin || 0) * (s.pos.lev || 1); }
+    if (Object.keys(w).length){
+      pv = R.portfolioVaR(day, w, {conf: 0.95});
+      for (const [id, expo] of Object.entries(w)){ const b = id === "btc" ? 1 : R.beta(day[id], btc, {w: 90}) ?? 1; stress.push([COINS.find(x => x.id === id).ko, fx(expo), `${(-30 * b).toFixed(1)}%`, fx(expo * -0.30 * b)]); }
+      table("qrisk", lead.id, `🧨 스트레스 시험: 비트코인 −30% (알트는 베타만큼) · 데모 포지션 포트폴리오 VaR95 ${pv == null ? "—" : fx(pv)} USDT`, ["코인", "노출(USDT, 롱+/숏−)", "충격", "예상 손익(USDT)"], stress, "gs-quant 시나리오(충격 비례 전파) 방식 · 데모(모의) 포지션 기준");
+    }
+  } catch(e){}
+  // 주문 전 점검 예시 (nautilus RiskEngine + vnpy 리스크 매니저) — 지금 한도에서 BTC 50 USDT 주문이 통과하는지
+  let live = null; try { const Lm = await import("../nuri-ai/live.js"); live = Lm.liveCfg?.(); } catch(e){}
+  const st = E.tradingState({halted: !!live?.halted, dayLoss: 0}), p = btc.at(-1) || 0;
+  const chk = E.preTradeCheck({side: 1, qty: +(45 / (p || 1)).toFixed(3), price: p}, {state: st, rules: {step: 0.001, minNotional: 5}, limits: {maxNotional: 50, maxPositions: 2, openPositions: 0}});
+  table("qrisk", lead.id, `🛡 주문 전 점검표 (예: BTC 약 45 USDT 롱) — ${chk.ok ? "통과" : "막힘: " + chk.text}`, ["점검", "결과", "기준"], chk.checks.map(x => [x.id, x.ok ? "✅" : "❌", x.text]), `거래 상태: ${E.STATES[st]} · 실제 주문은 live.js 의 한도·승인이 최종 결정`);
+  const bad = verdicts.filter(v => v.res.result.act !== "유지");
+  if (bad.length) addNote("qrisk", bad.map(v => `${v.c.ko}: ${v.res.result.act} (${v.res.result.why})`).join(" · "), "결정표");
+  journal("audit", "risk-verdict", today(), Object.fromEntries(verdicts.map(v => [v.c.id, v.res.result.act])), "qrisk_lead", "결정표 판정");
+  await explain(lead.id, "qrisk", "코인별 위험표·결정표 판정·스트레스 시험·주문 전 점검을 보고 지금 가장 위험한 곳과 바로 할 조치를 해설한다.", tableText(["코인", "변동성", "EWMA", "VaR/CVaR", "낙폭", "상관", "베타", "판정"], rows) + (pv != null ? `\n포트폴리오 VaR95 ${fx(pv)} USDT` : "") + `\n주문 전 점검: ${chk.text}`, "아래 위험표를 보고 위험을 해설해 줘.");
+}
+
+/* ---- 🗄 데이터 플랫폼팀 (ccxt 멀티 거래소 · OpenBB 무료 데이터 · Legend 데이터 품질 · obevo 이전 · reladomo 감사) ---- */
+async function dataJob(){
+  const X = await lib("exchanges"), S = await lib("sdlc"), J = await lib("journal"), M = await lib("migrate"), {webGet} = await import("../nuri-ai/engine.js"), lead = agentById("data_lead");
+  const c = COINS[rot("coinData", COINS.length)], base = c.sym.replace("USDT", "");
+  fire({kind: "busy", agent: lead, text: `🔌 ${c.ko} 8개 거래소 시세 맞춰 보는 중`});
+  const cmp = await X.compare(u => webGet(u, "json"), base);
+  table("data", lead.id, `🔌 ${c.ko} 거래소 비교 (ccxt 방식 통일 · 기준 바이낸스 선물)`, ["거래소", "가격", "기준 대비", "24시간", "펀딩(8시간 환산)", "미결제약정(코인)", "비고"],
+    cmp.rows.map(r => [r.ko, r.last ? `${fx(r.last)} ${r.quote}` : "—", r.spreadPct == null ? "—" : pc(r.spreadPct), r.chg24 == null ? "—" : pc(r.chg24), r.funding8h == null ? "—" : r.funding8h.toFixed(4) + "%", r.oiCoin == null ? "—" : fx(r.oiCoin, 0), r.err ? "받기 실패: " + r.err : (r.note || "")]),
+    `김치 프리미엄 ${cmp.kimchi == null ? "—" : pc(cmp.kimchi)} · 거래소 간 최대 가격차 ${cmp.maxGap == null ? "—" : cmp.maxGap.toFixed(3) + "%"} · 펀딩 최대차 ${cmp.fundSpread == null ? "—" : cmp.fundSpread.toFixed(4) + "%p"}`);
+  // 데이터 품질 (Legend 제약 방식): 1시간봉 OHLC 위반·빈 봉·이상 급등락·지연
+  const q = []; for (const cc of COINS){ try { const k = await kl(cc.sym, "60", 500), r = S.candleQuality(k, 3600e3); q.push([cc.ko, String(r.n), String(r.bad), String(r.gaps), String(r.spikes), r.stale ? "지연" : "정상", r.ok ? "✅" : "⚠"]); } catch(e){ q.push([cc.ko, "—", "—", "—", "—", "받기 실패", "❌"]); } }
+  table("data", lead.id, "🧪 시세 데이터 품질 (1시간봉 500개)", ["코인", "봉", "OHLC 위반", "빈 봉", "±25% 급변", "최신성", "판정"], q, "모델 제약: 고가 ≥ 시가·종가 ≥ 저가 > 0, 거래량 ≥ 0");
+  const v = J.verify(), dl = M.deployLog(), projs = S.projects();
+  table("data", lead.id, "🗄 저장소·감사 상태", ["항목", "상태"], [["감사 기록(이중 시간) 해시 사슬", v.ok ? `정상 · ${v.n}행` : `⚠ ${v.at}번째 행에서 끊김`], ["저장소 이전(마이그레이션)", dl.length ? dl.slice(-3).map(x => `${x.name}: ${x.status}`).join(" · ") : "기록 없음"], ["전략 버전 관리", `${projs.length}개 전략 · 버전 ${projs.reduce((s, p) => s + p.versions.length, 0)}개 · 검토 대기 ${projs.reduce((s, p) => s + p.reviews.filter(r => r.status === "review").length, 0)}건`]], "obevo · reladomo · Legend SDLC 방식");
+  await explain(lead.id, "data", "거래소 비교(가격차·김치 프리미엄·펀딩 차이)와 데이터 품질·감사 상태를 보고 이상한 점과 그 의미(차익·쏠림·데이터 오류)를 해설한다.", `${c.ko}: 김치 ${cmp.kimchi == null ? "—" : pc(cmp.kimchi)}, 최대 가격차 ${cmp.maxGap?.toFixed(3)}%, 펀딩 최대차 ${cmp.fundSpread?.toFixed(4)}%p\n` + cmp.rows.map(r => `${r.ko}: ${r.last ?? "실패"} ${r.funding8h != null ? "펀딩 " + r.funding8h.toFixed(4) : ""}`).join("\n") + "\n품질: " + q.map(r => `${r[0]} ${r[6]}`).join(", "), "아래 거래소 비교와 데이터 품질을 해설해 줘.");
+}
+// 경제 캘린더·금리·변동성 지수 (OpenBB 의 무료 공급원 주소) → 뉴스·경제지표팀
+async function openFeedsJob(){
+  const {webGet} = await import("../nuri-ai/engine.js"), a = agentById("econfc") || agentById("macro"), rows = [];
+  fire({kind: "busy", agent: a, text: "🗓 경제 캘린더·금리·변동성 지수 받는 중"});
+  const d = new Date().toISOString().slice(0, 10);
+  try { const r = await webGet(`https://api.nasdaq.com/api/calendar/economicevents?date=${d}`, "json"); for (const e of (r?.data?.rows || []).filter(x => /United States|Euro|China|Japan|Korea/i.test(x.country || "")).slice(0, 10)) rows.push(["캘린더", `${e.gmt || ""} ${e.country}`, e.eventName, `예상 ${e.consensus || "—"} · 이전 ${e.previous || "—"} · 실제 ${e.actual || "—"}`]); } catch(e){ rows.push(["캘린더", "Nasdaq", "받기 실패", String(e.message).slice(0, 40)]); }
+  try { const r = await webGet("https://markets.newyorkfed.org/api/rates/secured/sofr/last/1.json", "json"); const x = r?.refRates?.[0]; if (x) rows.push(["금리", "뉴욕 연준", "SOFR", `${x.percentRate}% (${x.effectiveDate})`]); } catch(e){}
+  try { const now = Date.now(), r = await webGet(`https://www.deribit.com/api/v2/public/get_volatility_index_data?currency=BTC&start_timestamp=${now - 3 * 864e5}&end_timestamp=${now}&resolution=3600`, "json"); const v = r?.result?.data?.at(-1); if (v) rows.push(["변동성", "Deribit", "BTC DVOL(내재변동성)", `${(+v[4]).toFixed(1)} (3일 전 ${(+r.result.data[0][4]).toFixed(1)})`]); } catch(e){}
+  try { const t = await webGet("https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS10", "text"); const last = t.trim().split("\n").filter(l => /,\d/.test(l)).at(-1); if (last) rows.push(["금리", "FRED", "미 10년물", last.replace(",", " → ") + "%"]); } catch(e){}
+  table("news", a.id, `🗓 오늘 경제 캘린더 · 금리 · 코인 변동성 (OpenBB 공급원 방식, 키 없이)`, ["종류", "출처", "항목", "값"], rows.length ? rows : [["—", "—", "받은 자료 없음", "실행기(GHCoin.exe)로 실행해야 인터넷 자료를 받습니다"]], "Nasdaq 경제 캘린더 · 뉴욕 연준 SOFR · Deribit DVOL · FRED");
+  if (rows.length > 1) await explain(a.id, "news", "오늘 경제 일정과 금리·코인 내재변동성을 보고 코인 시장에 영향이 클 시간과 이유를 해설한다.", tableText(["종류", "출처", "항목", "값"], rows), "아래 경제 일정과 지표를 보고 코인 시장 영향을 해설해 줘.");
+}
+
+/* ---- 🎛 전략 최적화팀 (freqtrade 하이퍼옵트·ROI·보호장치 · backtrader 분석기 · Vibe-Trading 견고성 · Legend SDLC 버전) ---- */
+const OPT_LOSS = ["SharpeDaily", "SortinoDaily", "Calmar", "ProfitDrawDown", "MultiMetric", "ShortTradeDur"];
+async function optJob(){
+  const Q = await import("../nuri-ai/quant.js"), P = await import("../nuri-ai/paper.js"), H = await lib("hyperopt"), RB = await lib("robust"), S = await lib("sdlc"), lead = agentById("opt_lead");
+  const book = await P.loadBook(), cands = book.strategies.filter(s => s.status === "active" && s.spec);
+  if (!cands.length){ post({ch: "opt", kind: "work", agent: lead.id, icon: "🎛", text: "다듬을 데모 전략이 없습니다 · 백테스트 통과 전략이 생기면 하이퍼옵트합니다"}); return; }
+  const s = cands[rot("coinOpt", cands.length)], loss = OPT_LOSS[rot("coinOptLoss", OPT_LOSS.length)], tf = s.tf, tfMin = {"15": 15, "60": 60, "240": 240, "D": 1440}[tf] || 60;
+  fire({kind: "busy", agent: lead, text: `🎛 ${s.name} 하이퍼옵트 (${H.LOSSES[loss].ko})`});
+  const cs = (await candlesFor({market: s.market, exchange: s.exchange || "binancef", timeframe: tf}, 1500)).cs;
+  H.setSeed(Date.now() % 100000);
+  const res = await H.hyperopt(Q, s.spec, cs, {epochs: 60, loss, space: ["buy", "roi", "stoploss", "trailing", "protection"], tfMin, onProgress: (e, n) => fire({kind: "busy", agent: lead, text: `🎛 하이퍼옵트 ${e}/${n}`})});
+  const b0 = Q.backtest(s.spec, cs), b1 = Q.backtest(res.best.spec, cs), A0 = H.analyzers(b0.equity, b0.trades, {perYear: 365 * 24 * 60 / tfMin}), A1 = H.analyzers(b1.equity, b1.trades, {perYear: 365 * 24 * 60 / tfMin});
+  const r0 = RB.permutationTest(b0.trades.map(t => t.pnl)), r1 = RB.permutationTest(b1.trades.map(t => t.pnl)), mw = RB.multiWindow(Q, res.best.spec, cs, 5), hy = RB.hygiene(b1);
+  const f = (x, d = 2) => x == null || !Number.isFinite(x) ? "—" : (+x).toFixed(d);
+  table("opt", lead.id, `🎛 ${s.name} 하이퍼옵트 결과 (${res.lossKo} · ${res.epochs}회 · 앞 70%에서만 탐색)`, ["지표", "지금 전략", "최적화 후"], [
+    ["손실함수 값(작을수록 좋음)", f(res.base.loss, 3), f(res.best.loss, 3)], ["검증 구간(뒤 30%) 순손익", f(res.base.wf.oos.net_pnl), f(res.best.wf.oos.net_pnl)], ["관문 통과", res.base.wf.pass ? "✅" : "❌", res.best.wf.pass ? "✅" : "❌"],
+    ["SQN (backtrader)", `${f(A0.sqn)} ${A0.sqnGrade}`, `${f(A1.sqn)} ${A1.sqnGrade}`], ["VWR (변동성 가중 수익)", f(A0.vwr, 1), f(A1.vwr, 1)], ["최대 낙폭 % / 최장 물림(봉)", `${f(A0.maxdd, 1)} / ${A0.maxddLen}`, `${f(A1.maxdd, 1)} / ${A1.maxddLen}`],
+    ["연승 / 연패", `${A0.streakWon} / ${A0.streakLost}`, `${A1.streakWon} / ${A1.streakLost}`], ["운일 확률 p (순열 1000회)", f(r0.p, 3), f(r1.p, 3)], ["5구간 중 이익 구간", "—", `${mw.positive}/${mw.total}`],
+    ["ROI 표 / 보호장치 잠금", "—", `${JSON.stringify(res.best.risk.minimal_roi || {})} / ${b1.stats.protection_locks}회`]],
+    res.improved ? "✅ 검증 구간에서도 좋아짐 → 새 버전으로 데모 투입" : res.overfit ? "⚠ 학습 구간만 좋아짐(과최적화) → 채택 안 함" : "변화 없음/불통과 → 지금 전략 유지");
+  // SDLC: 검토 요청 → (코드 관문 통과 + 견고성 p ≤ 0.05 + 위생) 이면 승인 → 새 버전
+  const rv = S.propose(res.best.spec, {author: lead.name, why: `하이퍼옵트(${loss})`});
+  const ok = rv.status === "review" && res.improved && r1.p != null && r1.p <= 0.05 && hy.ok && mw.positive >= Math.ceil(mw.total * 0.6);
+  S.decide(res.best.spec.name, rv.id, ok, {who: "코드 관문", why: ok ? "검증·견고성 통과" : `미채택: ${!res.improved ? "검증 개선 없음" : r1.p > 0.05 ? "운일 확률 높음" : !hy.ok ? hy.fails.join(",") : "구간 일관성 부족"}`});
+  if (ok){
+    const ns = await P.addStrategy({spec: {...res.best.spec, name: `${s.name} v${S.latest(res.best.spec.name)?.semver || "+"}`}, market: s.market, exchange: s.exchange, tf, author: lead.name, wf: {is: res.best.wf.is, oos: res.best.wf.oos}, cls: s.cls, mname: s.mname, lane: s.lane});
+    post({ch: (LANES[s.lane] || LANES.std).demo, kind: "system", text: `🎛 최적화 버전 데모 투입: ${ns.name} (원본 ${s.name}은 그대로 비교 운용)`});
+    journal("record", "strategy", ns.id, {from: s.id, loss, semver: S.latest(res.best.spec.name)?.semver}, "opt_lead", "하이퍼옵트 버전");
+  }
+  addNote("opt", `${s.name}: ${res.lossKo} → ${ok ? "새 버전 투입" : "유지"} (검증 순손익 ${f(res.base.wf.oos.net_pnl)} → ${f(res.best.wf.oos.net_pnl)}, p=${f(r1.p, 3)})`, "하이퍼옵트");
+  await explain(lead.id, "opt", "하이퍼옵트 결과표를 보고 무엇이 바뀌었는지, 검증 구간(한 번도 안 본 데이터)에서도 좋아졌는지, 과최적화·운일 가능성은 어떤지 해설한다. 채택 여부는 코드 판정을 따른다.", `전략 ${s.name} · 손실함수 ${res.lossKo}\n검증 순손익 ${f(res.base.wf.oos.net_pnl)} → ${f(res.best.wf.oos.net_pnl)} · 관문 ${res.best.wf.pass ? "통과" : "불통과"} · SQN ${f(A0.sqn)} → ${f(A1.sqn)} · 운일 확률 ${f(r1.p, 3)} · 5구간 이익 ${mw.positive}/${mw.total} · 판정 ${ok ? "채택" : "미채택"}`, "아래 하이퍼옵트 결과를 해설해 줘.");
+}
+
+/* ---- 📉 데모 성과 이동 감지 (runcharter 런 차트: 기준 13거래 중앙값, 9연속이면 이동) → 데모거래팀 ---- */
+async function driftJob(){
+  const RC = await lib("runchart"), P = await import("../nuri-ai/paper.js"), book = await P.loadBook(), rows = [], lead = agentById("trader");
+  for (const s of book.strategies.filter(x => x.status === "active")){
+    const v = (s.trades || []).map(t => +t.roe || +t.pnl || 0);
+    const up = RC.runChart(v, {direction: "above"}), dn = RC.runChart(v, {direction: "below"});
+    if (!up.enough){ rows.push([s.name.slice(0, 22), String(v.length), "—", `자료 부족 (${22 - v.length}거래 더)`]); continue; }
+    const last = [...up.shifts, ...dn.shifts].sort((a, b) => b.to - a.to)[0];
+    rows.push([s.name.slice(0, 22), String(v.length), last ? `${last.oldMedian.toFixed(2)} → ${last.newMedian.toFixed(2)}` : up.median.toFixed(2), last ? `${last.dir} (${last.to + 1}번째 거래)` : "이동 없음"]);
+    if (last && last.side < 0 && last.to >= v.length - 3){ addTask({team: "demo", title: `성과 악화 감지: ${s.name}`, why: `런 차트 9연속 중앙값 아래 (${last.oldMedian.toFixed(2)} → ${last.newMedian.toFixed(2)}) · 비중 축소·은퇴 검토`, owner: lead.name}); journal("audit", "drift", s.id, {dir: "down", from: last.oldMedian, to: last.newMedian}, "trader", "런 차트 악화"); }
+  }
+  table("demo", lead.id, "📉 데모 전략 성과 이동 감지 (런 차트: 처음 13거래 중앙값 기준, 9연속 위·아래면 지속 이동)", ["전략", "거래 수", "중앙값", "판정"], rows.length ? rows : [["—", "0", "—", "데모 중인 전략 없음"]], "중앙값과 같은 값은 건너뜀 · 이동이 확인되면 그 9개로 새 중앙값");
+}
+
+/* ---- 🕯 패턴 스캐너 (stock-pattern · chart_patterns 규칙) → 차트·캔들 패턴팀 ---- */
+async function patternScanJob(){
+  const PT = await lib("patterns"), T = await lib("ta_rating"), lead = agentById("pat_lead"), rows = [];
+  fire({kind: "busy", agent: lead, text: "🕯 6개 코인 × 1시간·4시간 패턴 스캔 중"});
+  for (const c of COINS) for (const tf of ["60", "240"]){
+    try {
+      const k = (await kl(c.sym, tf, 400)).slice(0, -1);   // 진행 중인 봉 제외 (마감 봉만)
+      for (const p of PT.scan(k)) rows.push([c.ko, TF_KO[tf], p.name, p.dir > 0 ? "상승" : p.dir < 0 ? "하락" : "중립", PT.STATE_KO[p.state] || p.state, p.trigger ? fx(p.trigger) : "—", p.target ? fx(p.target) : "—", p.invalid ? fx(p.invalid) : "—", p.why]);
+      for (const cd of T.candles(k).filter(x => x.strength >= 0.5 && x.dir)) rows.push([c.ko, TF_KO[tf], "캔들: " + cd.name, cd.dir > 0 ? "상승" : "하락", "마지막 봉", "—", "—", "—", `강도 ${cd.strength.toFixed(2)} · 직전 5봉 추세 ${cd.trend > 0 ? "상승" : cd.trend < 0 ? "하락" : "횡보"}`]);
+    } catch(e){}
+  }
+  table("pattern", lead.id, "🕯 패턴 스캐너 (마감 봉만 · 피벗 좌우 6봉 · 허용오차 = 봉 길이 중앙값)", ["코인", "봉", "패턴", "방향", "상태", "돌파 기준", "목표", "무효", "근거"], rows.slice(0, 30), rows.length ? "형성 중 → 돌파 → 목표/실패 · 패턴은 확률일 뿐" : "지금 뚜렷한 패턴 없음");
+  const hot = rows.filter(r => /돌파|목표/.test(r[4]));
+  if (hot.length) addNote("pattern", hot.slice(0, 4).map(r => `${r[0]} ${r[1]} ${r[2]} ${r[4]}`).join(" · "), "스캐너");
+  if (rows.length) await explain(lead.id, "pattern", "패턴 스캐너 결과에서 가장 의미 있는 패턴(특히 막 돌파한 것)과 목표·무효 가격, 신뢰도를 해설한다.", tableText(["코인", "봉", "패턴", "방향", "상태", "돌파", "목표", "무효", "근거"], rows.slice(0, 16)), "아래 차트 패턴 스캔 결과를 해설해 줘.");
+}
+
+/* ---- 🧠 알파 팩터 순위 (vnpy Alpha158 계열 · 횡단면 견고 z점수) → 머신러닝·딥러닝팀 ---- */
+async function alphaJob(){
+  const AL = await lib("alpha"), a = agentById("ml"), by = {}, raw = {};
+  fire({kind: "busy", agent: a, text: "🧠 6개 코인 알파 팩터 계산 중"});
+  for (const c of COINS){ try { const k = await kl(c.sym, "60", 200); by[c.id] = AL.factors(k); raw[c.id] = k; } catch(e){} }
+  const z = AL.crossRank(by), rows = Object.keys(by).map(id => { const c = COINS.find(x => x.id === id), zz = z[id] || {}, f = by[id]; return {c, score: AL.composite(zz), zz, f}; }).sort((x, y) => y.score - x.score);
+  table("ml", a.id, "🧠 알파 팩터 순위 (1시간봉 · vnpy Alpha158 계열 · 코인끼리 견고 z점수)", ["순위", "코인", "합성 점수", "5봉 모멘텀", "20봉 기울기", "RSV20", "변동성20", "거래량-가격 상관20"],
+    rows.map((r, i) => [String(i + 1), r.c.ko, r.score.toFixed(2), pc((1 / r.f.ROC5 - 1) * 100), (r.f.BETA20 * 100).toFixed(3) + "%/봉", r.f.RSV20.toFixed(2), (r.f.STD20 * 100).toFixed(2) + "%", r.f.CORR20.toFixed(2)]), "합성 = 모멘텀 + 기울기 + RSV − 변동성 (순위는 상대 비교일 뿐, 예측 보장 아님)");
+  addNote("ml", `알파 순위: ${rows.map(r => r.c.ko).join(" > ")}`, "알파");
+}
+
+/* ---- 🗄 저장소 이전 (obevo 방식): 앱이 켜질 때 한 번 — 이미 한 변경은 건너뛰고, 실패하면 백업으로 되돌림 ---- */
+export function runMigrations(){
+  return lib("migrate").then(M => M.migrate([
+    {name: "2026-10-ic-ledger", checksum: "2", rerunnable: true, keys: ["coinICLedger"], up: () => { if (!Array.isArray(JSON.parse(localStorage.getItem("coinICLedger") || "null"))) localStorage.setItem("coinICLedger", "[]"); }, note: "투자위원회 결정 장부"},
+    {name: "2026-10-journal-genesis", checksum: "1", keys: ["coinJournal"], up: () => { if (!localStorage.getItem("coinJournal")) localStorage.setItem("coinJournal", "[]"); }, note: "이중 시간 감사 기록 시작"},
+    {name: "2026-10-combo-calls-trim", checksum: "1", keys: ["coinComboCalls"], up: () => { const v = JSON.parse(localStorage.getItem("coinComboCalls") || "[]"); localStorage.setItem("coinComboCalls", JSON.stringify(v.slice(-300))); }, note: "타점 기록장 300건 제한"},
+    {name: "2026-10-sdlc-store", checksum: "1", keys: ["coinSDLC"], up: () => { if (!localStorage.getItem("coinSDLC")) localStorage.setItem("coinSDLC", "{}"); }, note: "전략 버전 저장소"}
+  ])).catch(() => []);
+}
+if (typeof window !== "undefined") runMigrations();

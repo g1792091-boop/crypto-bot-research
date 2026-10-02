@@ -43,3 +43,13 @@ html,body{margin:0;background:#0b0e14;color:#e6e9ef;font-family:"Pretendard Vari
 .cb-bigbox{width:min(1400px,100%);max-height:calc(100vh - 32px);overflow:auto;background:#0d121c;border:1px solid #2f3a4f;border-radius:10px;padding:14px 16px;box-sizing:border-box}
 .cb-bigbox .cb-t{font-size:13px}.cb-bigbox .cb-chip{font-size:13px;min-width:44px}
 .cb-t td:nth-child(7),.cb-t th{white-space:nowrap}
+/* 추천 질문 · 최근 질문 · 도입 기술 */
+.of-sugg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:8px 0}
+.of-sg{text-align:left;background:#121a28;border:1px solid #26314a;color:#d7deeb;border-radius:8px;padding:9px 10px;font:inherit;font-size:12.5px;cursor:pointer;line-height:1.4}
+.of-sg:hover{border-color:#4b6bd8;background:#16213a}
+.of-recent{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center;margin:4px 0 10px;font-size:12px}.of-recent small{color:#8a93a6}
+.tech-row p{margin:4px 0;font-size:12.5px;line-height:1.55}.tech-row h4 small{color:#8a93a6;font-weight:400;margin-left:6px}
+.tech-teams{display:flex;flex-wrap:wrap;gap:4px}.tech-team{background:#111826;border:1px solid var(--tc);color:#e6e9ef;border-radius:999px;padding:2px 9px;font:inherit;font-size:11.5px;cursor:pointer}
+.cb-tv{font-size:11.5px;white-space:nowrap}.cb-tv.up{color:#5fd39a}.cb-tv.dn{color:#ff7b86}
+@media (prefers-reduced-motion:reduce){.of-sg{transition:none}}
+.of-kt td.k{white-space:nowrap;min-width:5.5em}
