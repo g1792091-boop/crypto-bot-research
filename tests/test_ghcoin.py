@@ -64,6 +64,6 @@ def test_install_and_unit_wiring():
     unit = open(os.path.join(ROOT, "deploy", "paperbot-ghcoin.service"), encoding="utf-8").read()
     commit = open(os.path.join(ROOT, "deploy", "ghcoin.commit"), encoding="utf-8").read().strip()
     assert len(commit) == 40 and all(c in "0123456789abcdef" for c in commit)
-    assert "paperbot-ghcoin.service paperbot-executor.service; do" in inst and " nodejs\n" in inst
+    assert "paperbot-ghcoin.service paperbot-tgtrades.service paperbot-executor.service; do" in inst and " nodejs\n" in inst
     assert "gh-coin/combo.js gh-coin/lib/patterns.js gh-coin/lib/ta_rating.js" in inst
     assert "ReadWritePaths=/var/lib/paperbot/ghcoin" in unit and "-/etc/paperbot" in unit and "User=paperbot" in unit
