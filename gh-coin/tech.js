@@ -78,6 +78,30 @@ export const TECH = [
     where: "자동매매봇팀 '추세 캐리 봇'(minimal_roi) 등"},
   {repo: "RanitManik/gemini-clone", lic: "MIT", teams: ["hq"], status: "적용",
     what: "빈 방 추천 질문 카드 · 최근 질문 목록(방별, 중복 제거 20개) · 한글 입력 중 Enter 오작동 막기",
-    where: "본부 채팅창"}
+    where: "본부 채팅창"},
+  {repo: "TLSRUF/ai-trader-team", lic: "라이선스 없음(규칙만)", teams: ["selfai"], status: "부분 적용",
+    what: "여러 트레이딩 에이전트(기술·모멘텀·리스크)의 의견을 하나의 합의 방향·확신도로 모으는 방식 → 자체 AI 앙상블 합성과 확신도(신호 크기 + 신호 간 합의)",
+    where: "자체 AI 데스크 (lib/selfai.js fuse·confidence)"},
+  {repo: "jnMetaCode/agency-agents-ko", lic: "라이선스 없음(규칙만)", teams: ["selfai", "hq"], status: "참고",
+    what: "역할 기반 한국어 에이전시 에이전트 구성(역할마다 책임·산출물) → 자체 AI 데스크 11인 역할 분담",
+    where: "자체 AI 데스크 팀 구성 (coin-org.js), 각 신호(기술 평점·멀티 시간대·ML·알파) 담당 역할"},
+  {repo: "anthropics/claude-cookbooks", lic: "MIT", teams: ["selfai", "ml"], status: "참고",
+    what: "앙상블·LLM-판정(평가자) 패턴, 도구 합성 레시피 → 여러 신호를 가중 합성하고 '우위(edge)'로 신뢰를 조정하는 구조",
+    where: "자체 AI 앙상블 가중·ML 우위 반영 (lib/selfai.js)"},
+  {repo: "anthropics/financial-services", lic: "MIT", teams: ["selfai", "qrisk"], status: "참고",
+    what: "금융 에이전트의 리스크·확신도 프레이밍(단정 금지, 참고값·면책) → 자체 AI 확신도 상한 95·'판단만 함' 표기",
+    where: "자체 AI 데스크 표·해설, 리스크 문구"},
+  {repo: "anthropics/claude-code", lic: "범용(패턴만)", teams: ["hq"], status: "참고",
+    what: "에이전트-도구 호출·코드 수정 검토 패턴 → 자가 코드 수정(selfdev) 안전 검토 흐름의 참고(기존 기능)",
+    where: "본부 코드 수정(selfdev) — 이번에 새 코드로 반영한 것은 없음, 패턴 참고"},
+  {repo: "continuedev/continue", lic: "Apache-2.0", teams: ["selfai"], status: "참고",
+    what: "여러 모델 제공자를 한 인터페이스로 합치는 개념 → 여러 신호 소스를 한 앙상블로 합치는 발상",
+    where: "자체 AI 앙상블 (lib/selfai.js)"},
+  {repo: "ten-builder/ten-builder (TEN)", lic: "Apache-2.0", teams: ["selfai"], status: "참고",
+    what: "실시간 에이전트를 조합형 확장(extension) 그래프로 구성하는 개념 → 신호를 부품처럼 더하고 빼는 앙상블 구성(음성·실시간 인프라 자체는 범위 밖)",
+    where: "자체 AI 앙상블 구성 발상 (lib/selfai.js parts)"},
+  {repo: "anthropics/uplifting-biomolecular-modeling", lic: "—", teams: [], status: "해당 없음",
+    what: "생체분자 모델링 연구 저장소 — 코인 트레이딩과 무관하여 적용하지 않음",
+    where: "—"}
 ];
-export const TECH_REPOS = 29;   // +6 (트레이딩 봇 저장소)   // 대표님이 준 주소 중 중복(freqtrade·nautilus·gs-quant 두 번씩)을 뺀 23개
+export const TECH_REPOS = 37;   // +8 (에이전트·자체 AI 관련, biomolecular 1건은 해당 없음)   // 대표님이 준 주소 중 중복을 뺀 수

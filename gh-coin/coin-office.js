@@ -204,6 +204,7 @@ export const officeState = () => ({running, queued: queue.length});
 const ACTIONS = [
   {job: "cdev", re: /커스텀.*(지표|매매법|전략).*(만들|찾|개발|짜|연구|백테스트)/, say: "커스텀 지표 개발팀이 지금 바로 수식 지표로 매매법을 만들어 커스텀 백테스트팀이 검증합니다"},
   {job: "dev", re: /(매매법|전략|지표).*(만들|찾|개발|짜|연구|발굴|백테스트)|(만들|찾|개발|짜).*(매매법|전략)|백테스트\s*(해|돌려)/, say: "매매법 개발팀이 지금 바로 모든 보조지표로 매매법을 만들어 백테스트팀이 검증합니다"},
+  {job: "selfai", re: /자체\s*ai|자체\s*인공지능|앙상블|트레이딩\s*데스크|자체\s*모델|ghcoinai|확신도\s*순위|ai\s*데스크/i, say: "자체 AI 데스크가 지금 바로 외부 키 없이 앙상블(기술 평점·멀티 시간대·ML·알파)로 코인 방향·확신도 순위를 냅니다"},
   {job: "botopt", re: /(자동매매\s*봇|선물\s*봇|트레이딩\s*봇|봇)\s*.{0,6}(자동\s*)?(개선|다듬|최적화|하이퍼옵트)|(보조지표|지표)\s*.{0,6}(자동\s*)?(개선|최적화|튜닝)/i, say: "선물 자동매매봇팀이 지금 바로 데모 봇의 보조지표·위험값을 하이퍼옵트로 자동 개선하고 검증 구간·견고성까지 확인합니다"},
   {job: "bot", re: /자동매매\s*봇|선물\s*봇|트레이딩\s*봇|그리드\s*봇|dca\s*봇|봇\s*(만들|돌려|전략|추가)|passivbot|jesse|octobot/i, say: "선물 자동매매봇팀이 지금 바로 봇 전략을 만들어 백테스트하고 통과하면 데모에 올립니다"},
   {job: "ic", re: /투자위원회|강세.{0,6}약세.{0,6}토론|살지.{0,4}팔지|(매수|매도).{0,6}결정/, say: "투자위원회가 지금 바로 애널리스트 보고 → 강세·약세 토론 → 리스크 토론 → 위원장 결정을 합니다"},
@@ -674,14 +675,14 @@ export function startChatter(){
 // 매 주기 ① 모의투자 장부를 실제 시세로 갱신(코드, AI 없음) ② 그때그때 한 가지 일을 고른다:
 // 매매법 연구 · SNS 여론 · 경제 리서치 · 동료 수다 · 컴퓨터 작업 · 모의투자 보고 (하루 AI 호출 한도 안에서)
 // 쉬지 않고 돌아가는 업무 순환표: 팀마다 고르게 돌아가도록 섞어 두었다 (모듈이 없으면 경제 리서치로 대신)
-const JOBS = ["dev", "combo", "ic", "bot", "ind", "qrisk", "trend", "data", "opt", "patscan", "situ", "cdev", "entry", "sr", "news", "promote", "pattern", "coin", "ml", "dev", "tpsl", "combo", "drift", "cdev", "feeds", "alpha", "bot", "botopt", "trend", "ic", "chat", "forecast", "coin", "live", "retro", "task", "selfdev", "macro", "sns", "computer", "paper"];
-const JOB_KO = {bot: "자동매매봇 전략 만들기", botopt: "자동매매봇 자동 개선(보조지표·위험값 하이퍼옵트)", ic: "투자위원회(강세·약세 토론 → 결정)", qrisk: "퀀트 리스크(VaR·결정표·주문 전 점검)", data: "거래소 비교·데이터 품질", opt: "하이퍼옵트로 전략 다듬기", patscan: "패턴 스캐너", drift: "데모 성과 이동 감지(런 차트)", feeds: "경제 캘린더·금리·변동성 지수", alpha: "알파 팩터 순위", combo: "실시간 종합 지표 타점", dev: "매매법 개발 → 백테스트", cdev: "커스텀 지표 개발 → 백테스트", ind: "보조지표 분석", trend: "다중 시간대 추세 분석", entry: "진입 타점 분석", sr: "지지·저항 분석",
+const JOBS = ["dev", "combo", "ic", "bot", "ind", "qrisk", "trend", "data", "opt", "patscan", "situ", "cdev", "entry", "sr", "news", "promote", "pattern", "coin", "ml", "selfai", "dev", "tpsl", "combo", "drift", "cdev", "feeds", "alpha", "bot", "botopt", "selfai", "trend", "ic", "chat", "forecast", "coin", "live", "retro", "task", "selfdev", "macro", "sns", "computer", "paper"];
+const JOB_KO = {bot: "자동매매봇 전략 만들기", botopt: "자동매매봇 자동 개선(보조지표·위험값 하이퍼옵트)", selfai: "자체 AI 데스크(앙상블 방향·확신도 순위)", ic: "투자위원회(강세·약세 토론 → 결정)", qrisk: "퀀트 리스크(VaR·결정표·주문 전 점검)", data: "거래소 비교·데이터 품질", opt: "하이퍼옵트로 전략 다듬기", patscan: "패턴 스캐너", drift: "데모 성과 이동 감지(런 차트)", feeds: "경제 캘린더·금리·변동성 지수", alpha: "알파 팩터 순위", combo: "실시간 종합 지표 타점", dev: "매매법 개발 → 백테스트", cdev: "커스텀 지표 개발 → 백테스트", ind: "보조지표 분석", trend: "다중 시간대 추세 분석", entry: "진입 타점 분석", sr: "지지·저항 분석",
   tpsl: "익절·손절 관리", news: "뉴스·기사 분석", macro: "경제지표 예측", situ: "코인 상황판", pattern: "차트·캔들 패턴 분석", coin: "코인팀 회의", ml: "머신러닝·딥러닝 실험",
   promote: "데모 → 실거래 관문 심사", live: "실거래 데스크 점검", paper: "데모거래 보고", forecast: "방향 예측 토론", sns: "SNS 여론 확인", chat: "동료 수다", computer: "컴퓨터 작업",
   retro: "팀 회고·부족한 점 찾기", task: "개선 과제 수행", selfdev: "우리 앱 오류 찾아 코드 고치기", economy: "경제 리서치"};
-const JOB_TEAM = {bot: "bot", botopt: "bot", ic: "ic", qrisk: "qrisk", data: "data", opt: "opt", patscan: "pattern", drift: "demo", feeds: "news", alpha: "ml", combo: "combo", dev: "dev", cdev: "cdev", ind: "ind", trend: "trend", entry: "entry", sr: "sr", tpsl: "tpsl", news: "news", macro: "news", situ: "situ", pattern: "pattern", coin: "btc", ml: "ml",
+const JOB_TEAM = {bot: "bot", botopt: "bot", selfai: "selfai", ic: "ic", qrisk: "qrisk", data: "data", opt: "opt", patscan: "pattern", drift: "demo", feeds: "news", alpha: "ml", combo: "combo", dev: "dev", cdev: "cdev", ind: "ind", trend: "trend", entry: "entry", sr: "sr", tpsl: "tpsl", news: "news", macro: "news", situ: "situ", pattern: "pattern", coin: "btc", ml: "ml",
   promote: "demo", live: "live", paper: "demo", forecast: "entry", sns: "news", chat: "hq", computer: "hq", retro: "hq", task: "hq", selfdev: "hq", economy: "news"};
-const JOB_FN = () => ({bot: botJob, botopt: botImproveJob, ic: icJob, qrisk: qriskJob, data: dataJob, opt: optJob, patscan: patternScanJob, drift: driftJob, feeds: openFeedsJob, alpha: alphaJob, combo: comboJob, dev: () => research("std"), cdev: () => research("custom"), ind: indJob, trend: trendJob, entry: entryJob, sr: srJob, tpsl: tpslJob, news: economyCheck, macro: macroJob,
+const JOB_FN = () => ({bot: botJob, botopt: botImproveJob, selfai: selfaiJob, ic: icJob, qrisk: qriskJob, data: dataJob, opt: optJob, patscan: patternScanJob, drift: driftJob, feeds: openFeedsJob, alpha: alphaJob, combo: comboJob, dev: () => research("std"), cdev: () => research("custom"), ind: indJob, trend: trendJob, entry: entryJob, sr: srJob, tpsl: tpslJob, news: economyCheck, macro: macroJob,
   situ: situJob, pattern: patternJob, coin: coinJob, ml: mlJob, promote: promoteJob, live: liveDeskJob, paper: paperReport, forecast: forecastJob, sns: snsCheck, chat: () => chatter(true),
   computer: computerWork, retro, task: doTask, selfdev: selfdevJob, economy: economyCheck});
 let cycleTimer = 0, cycling = false, lastJob = "";
@@ -1808,6 +1809,48 @@ async function alphaJob(){
   table("ml", a.id, "🧠 알파 팩터 순위 (1시간봉 · vnpy Alpha158 계열 · 코인끼리 견고 z점수)", ["순위", "코인", "합성 점수", "5봉 모멘텀", "20봉 기울기", "RSV20", "변동성20", "거래량-가격 상관20"],
     rows.map((r, i) => [String(i + 1), r.c.ko, r.score.toFixed(2), pc((1 / r.f.ROC5 - 1) * 100), (r.f.BETA20 * 100).toFixed(3) + "%/봉", r.f.RSV20.toFixed(2), (r.f.STD20 * 100).toFixed(2) + "%", r.f.CORR20.toFixed(2)]), "합성 = 모멘텀 + 기울기 + RSV − 변동성 (순위는 상대 비교일 뿐, 예측 보장 아님)");
   addNote("ml", `알파 순위: ${rows.map(r => r.c.ko).join(" > ")}`, "알파");
+}
+
+/* ---- 🧠 자체 AI 데스크 (GHCoinAI) — 외부 키 없이 앱 안에서 도는 앙상블로 코인 방향·확신도 순위.
+       아이디어: TLSRUF/ai-trader-team(합의) · jnMetaCode/agency-agents-ko(역할) · anthropics/claude-cookbooks(앙상블)
+       · anthropics/financial-services(리스크·확신도) · continuedev/continue(여러 모델 합치기). 판단만 하고 주문은 live.js 만 낸다. ---- */
+async function selfaiJob(){
+  const AL = await lib("alpha"), SELF = await lib("selfai"), lead = agentById("selfai_lead");
+  fire({kind: "busy", agent: lead, text: "🧠 자체 AI 앙상블 — 6개 코인 방향·확신도 계산 중"});
+  const byCoin = {}, cand = {};
+  for (const c of COINS){ try { const k = await kl(c.sym, "60", 260); cand[c.id] = k; byCoin[c.id] = AL.factors(k); } catch(e){} }
+  const z = AL.crossRank(byCoin);   // 코인끼리 비교한 알파 z점수 (횡단면)
+  const rows = [];
+  for (const c of COINS){
+    const k60 = cand[c.id]; if (!k60) continue;
+    let k240 = null; try { k240 = await kl(c.sym, "240", 260); } catch(e){}
+    const alpha = AL.composite(z[c.id] || {});
+    const j = await SELF.analyze(k240 ? {"60": k60, "240": k240} : {"60": k60}, {alpha});
+    rows.push({c, j, k60});
+  }
+  if (!rows.length){ post({ch: "selfai", kind: "work", agent: lead.id, icon: "🧠", text: "시세를 받지 못해 자체 AI 판단을 내지 못했습니다 (잠시 뒤 다시 시도)"}); return; }
+  rows.sort((a, b) => b.j.confidence - a.j.confidence || Math.abs(b.j.score) - Math.abs(a.j.score));
+  // 1위 코인은 ML(walk-forward)까지 더해 정밀 재판단
+  let deep = null;
+  try {
+    const ML = await import("../nuri-ai/ml.js"), top = rows[0];
+    const res = ML.walkForwardML(top.k60, {model: "logreg", horizon: 1, trainBars: 800, testBars: 150, maxFolds: 4});
+    const prob = res.prob?.at(-1);
+    if (prob != null){ top.j = SELF.fuse({...top.j.inputs, ml: {prob, edge: res.edge}}); top.ml = {prob, edge: res.edge}; deep = {coin: top.c, edge: res.edge}; }
+  } catch(e){}
+  table("selfai", lead.id, "🧠 자체 AI 데스크 — 방향·확신도 순위 (외부 키 없이 앙상블: 기술 평점·멀티 시간대·ML·알파)", ["순위", "코인", "방향", "점수", "확신도", "합의", "근거(신호별)"],
+    rows.map((r, i) => [String(i + 1), r.c.ko, r.j.label, (r.j.score >= 0 ? "+" : "") + r.j.score.toFixed(2), r.j.confidence + "%", Math.round(r.j.agree * 100) + "%", r.j.parts.map(p => `${p.name} ${p.v >= 0 ? "+" : ""}${p.v.toFixed(2)}`).join(" · ") || "—"]),
+    `확신도는 신호 크기 + 신호 간 합의로 매긴 0~95 참고값입니다. 자체 AI 는 판단만 하고, 실제 주문은 사용자가 켠 전략만 실거래 화면의 한도·승인 안에서 냅니다.${deep ? ` · 1위 ${deep.coin.ko}는 ML(${deep.edge === "edge" ? "우위 있음" : deep.edge === "weak" ? "약함" : "우위 없음"})까지 반영` : ""}`);
+  const top = rows[0];
+  addNote("selfai", `자체 AI 1위 ${top.c.ko} ${top.j.label} (확신도 ${top.j.confidence}%) · 순위 ${rows.map(r => r.c.ko).join(" > ")}`, "자체AI");
+  pubTo(top.c.sym, "selfai", {team: "selfai", title: `자체 AI: ${top.c.ko} ${top.j.label} (${top.j.confidence}%)`, text: SELF.summary(top.j)});
+  await explain(lead.id, "selfai", "자체 AI 앙상블 순위표를 보고 확신도가 높은 코인과 어떤 신호(기술 평점·멀티 시간대·ML·알파)가 합의했는지, 신호가 엇갈려 중립인 코인은 왜 그런지 해설한다. 확신도는 참고값이고 주문은 승인·한도 안에서만 나간다는 점을 밝힌다.", tableText(["순위", "코인", "방향", "점수", "확신도", "근거"], rows.map((r, i) => [String(i + 1), r.c.ko, r.j.label, r.j.score.toFixed(2), r.j.confidence + "%", r.j.reasons.join(" / ")])), "아래 자체 AI 앙상블 순위를 해설해 줘.");
+}
+// 한 코인의 자체 AI 판단 (봇 조종판·차트 터미널이 호출) — window.ghCoinSelfAI 로도 노출
+export async function selfAIFor(sym, {tfs = ["60", "240"]} = {}){
+  const SELF = await lib("selfai"), by = {};
+  for (const tf of tfs){ try { by[tf] = await kl(sym, tf, 260); } catch(e){} }
+  return SELF.analyze(by, {});
 }
 
 /* ---- 🗄 저장소 이전 (obevo 방식): 앱이 켜질 때 한 번 — 이미 한 변경은 건너뛰고, 실패하면 백업으로 되돌림 ---- */

@@ -37,6 +37,20 @@ GPL·LGPL 저장소와 라이선스 표시가 없는 저장소는 특히 규칙�
 | conor19w/Binance-Futures-Trading-Bot (라이선스 없음) | 선물 TA 봇 진입·손절·레버리지 → 봇 전략 조건·한도 |
 | Erfaniaa/crypto-trading-strategy-backtester (GPL-3.0) | 교차 전략 백테스트 참고 |
 
+## 자체 AI·에이전트 (아이디어만, 코드 복사 없음)
+| 저장소 | 들여온 것 |
+|---|---|
+| TLSRUF/ai-trader-team | 여러 트레이딩 에이전트 의견 → 합의 방향·확신도 (자체 AI 앙상블 `lib/selfai.js`) |
+| jnMetaCode/agency-agents-ko | 역할 기반 한국어 에이전시 구성 → 자체 AI 데스크 11인 역할 분담 |
+| anthropics/claude-cookbooks | 앙상블·LLM-판정 패턴, '우위(edge)'로 신뢰 조정 |
+| anthropics/financial-services | 리스크·확신도 프레이밍(단정 금지·참고값·확신도 상한 95) |
+| anthropics/claude-code | 에이전트-도구·코드 수정 검토 패턴(기존 selfdev 참고) |
+| continuedev/continue (Apache-2.0) | 여러 모델/소스를 한 인터페이스로 합치는 발상 |
+| ten-builder/ten-builder (Apache-2.0) | 조합형 확장 그래프 개념(신호를 부품처럼 합성) — 음성·실시간 인프라는 범위 밖 |
+| anthropics/uplifting-biomolecular-modeling | **해당 없음** — 생체분자 모델링이라 코인 트레이딩과 무관, 적용하지 않음 |
+
+> 자체 AI(`lib/selfai.js`)는 **외부 LLM 키 없이** 이 앱 안에서 도는 앙상블이다: 기술 평점(트레이딩뷰식)·멀티 시간대 종합 점수·ML 확률(walk-forward)·알파 팩터를 가중 합성해 방향과 확신도(0~95)를 낸다. **판단만 하고 주문은 내지 않는다** — 실제 주문은 그대로 `../nuri-ai/live.js`(한도·승인·긴급정지)만 낸다.
+
 ## 만들지 않은 것 (의도적으로 제외)
 사용자가 함께 요청했지만 다음은 안전·합법성 때문에 **만들지 않았다**:
 - **코인 지갑 헌터** (`CryptoWalletMiner` 등): 남의 지갑(개인키·시드)을 찾아 여는 것은 절도라서 구현하지 않음.
