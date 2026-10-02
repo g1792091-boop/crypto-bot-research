@@ -359,3 +359,36 @@ def test_positions_view_is_wired():
 def re_buttons(js: str) -> str:
     import re
     return " ".join(re.findall(r"<button[^>]*>([^<]*)</button>", js)).lower()
+
+
+def test_market_liquidations_and_next_events(tmp_path):
+    import sqlite3
+    import time as _t
+    from paperbot import liqstream
+    db = str(tmp_path / "p.db")
+    _store(db).close()
+    c = TestClient(create_app(db, hash_password("correct horse battery"), SECRET))
+    assert c.post("/api/login", json={"password": "correct horse battery"}).status_code == 200
+    assert c.get("/api/liq", params={"symbol": "BTCUSDT"}).json()["recorder"] is False      # no liq.db yet
+    now = int(_t.time() * 1000)
+    q = sqlite3.connect(str(tmp_path / "liq.db"))
+    q.executescript(liqstream.SCHEMA)
+    for ts, side, px, qty in ((now - 60_000, "SELL", 100.0, 2.0), (now - 30_000, "BUY", 101.0, 1.0),
+                              (now - 7_200_000, "SELL", 90.0, 5.0)):
+        q.execute("INSERT INTO liq VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                  (ts, ts, "BTCUSDT", side, "LIMIT", "IOC", qty, px, px, "FILLED", qty, qty, ts))
+    q.commit()
+    q.close()
+    r = c.get("/api/liq", params={"symbol": "BTCUSDT", "minutes": 60}).json()
+    assert r["recorder"] and r["n"] == 2 and r["long_usd"] == 200.0 and r["short_usd"] == 101.0
+    assert [x["liquidated"] for x in r["rows"]] == ["short", "long", "long"]                 # newest first
+    assert c.get("/api/liq", params={"symbol": "NOPE"}).status_code == 400
+    assert isinstance(c.get("/api/summary").json()["events"], list)
+
+
+def test_trade_screen_lower_panels_are_wired():
+    static = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "paperbot", "dash", "static")
+    html = open(os.path.join(static, "index.html"), encoding="utf-8").read()
+    js = open(os.path.join(static, "panels.js"), encoding="utf-8").read()
+    assert 'id="watch2-body"' in html and 'id="side2-body"' in html and "/static/panels.js" in html
+    assert "/api/liq?symbol=" in js and "/api/ghcoin/board" in js and "bookHtml(state.sym" in js

@@ -311,6 +311,43 @@ class Data:
                         "liquidations": sum(x["exit_reason"] == "LIQ" for x in rows),
                         "best": [{"account_id": a, "pnl": round(p, 2)} for a, p in rank[::-1][:3] if p > 0],
                         "worst": [{"account_id": a, "pnl": round(p, 2)} for a, p in rank[:3] if p < 0]}
+        try:   # the next US macro releases of data/macro_events.csv (events.py); [] when none is registered
+            from .. import events
+            out["events"] = [e.as_dict() for e in events.all_events() if e.ts_ms >= now][:3]
+        except Exception:  # noqa: BLE001  (a broken calendar never hides the summary)
+            out["events"] = []
+        return out
+
+    def liquidations(self, liq_db: str, symbol: str, minutes: int, now_ms: Optional[int] = None,
+                     limit: int = 12) -> dict:
+        """Market-wide forced orders of one coin from liq.db (liqstream.py, its own writer): totals of the
+        last ``minutes`` and the latest rows. A SELL forced order closes a long, a BUY closes a short."""
+        now = int(time.time() * 1000) if now_ms is None else int(now_ms)
+        since = now - minutes * 60_000
+        out = {"symbol": symbol, "minutes": minutes, "long_usd": 0.0, "short_usd": 0.0, "n": 0, "rows": [],
+               "recorder": False}
+        if not os.path.exists(liq_db):
+            return out
+        c = sqlite3.connect(_ro_uri(liq_db), uri=True, timeout=5)
+        try:
+            for side, n, usd in c.execute(
+                    "SELECT side, COUNT(*), SUM(COALESCE(NULLIF(avg_price, 0), price) * COALESCE(NULLIF(filled_qty, 0), qty)) "
+                    "FROM liq WHERE symbol = ? AND trade_ts >= ? GROUP BY side", (symbol, since)):
+                out["n"] += n
+                out["long_usd" if side == "SELL" else "short_usd"] += float(usd or 0)
+            out["rows"] = [{"ts": ts, "liquidated": "long" if side == "SELL" else "short", "price": px_,
+                            "usd": round(float(usd or 0), 2)} for ts, side, px_, usd in c.execute(
+                "SELECT trade_ts, side, COALESCE(NULLIF(avg_price, 0), price), "
+                "COALESCE(NULLIF(avg_price, 0), price) * COALESCE(NULLIF(filled_qty, 0), qty) FROM liq "
+                "WHERE symbol = ? ORDER BY trade_ts DESC LIMIT ?", (symbol, limit))]
+            r = c.execute("SELECT MAX(received_ts) FROM liq").fetchone()
+            out["last_any"] = r[0] if r else None
+            out["recorder"] = True
+        except sqlite3.Error:
+            pass
+        finally:
+            c.close()
+        out["long_usd"], out["short_usd"] = round(out["long_usd"], 2), round(out["short_usd"], 2)
         return out
 
     def trades_csv(self, account: Optional[str] = None) -> str:
@@ -1455,6 +1492,14 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
             return depth(symbol)
         except Exception:  # noqa: BLE001
             raise HTTPException(503, "no order book")
+
+    @app.get("/api/liq")
+    def get_liq(symbol: str = "BTCUSDT", minutes: int = 60):
+        """Forced liquidations of one coin across Binance (the liquidation recorder's liq.db), read-only."""
+        if symbol not in TICKER_SYMBOLS:
+            raise HTTPException(400, "unknown symbol")
+        return data.liquidations(os.path.join(os.path.dirname(os.path.abspath(db)), "liq.db"), symbol,
+                                 min(max(minutes, 5), 1440))
 
     levels_cache: dict = {}
 

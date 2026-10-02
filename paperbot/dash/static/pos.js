@@ -2,7 +2,7 @@
 // Every open paper position like an exchange's position list: unrealized P&L and ROI on the live mark price
 // (same as the Binance app: before the exit fee), size, margin, entry / mark / liquidation price, the stop and the
 // profit lock, plus the coin's order book. Nothing here trades: there are no order buttons.
-const pv = {sym: "", sort: "pnl", tab: "pos", book: null, bws: null, bwsOk: false, bookSym: null, poll: null, today: null};
+const pv = {sym: "", sort: "pnl", tab: "pos"};
 const LOCK = {first: 0.10, step: 0.05, gap: 0.02};   // config.py ladder (ladder.py): arms at lock + gap net ROE
 
 function usdt(x, d = 2) { return x == null || isNaN(x) ? "—" : (x > 0 ? "+" : x < 0 ? "-" : "") + fmt(Math.abs(x), d); }
@@ -30,7 +30,7 @@ function renderPvCoins() {
     return `<button data-s="${s}" class="${pv.sym === s ? "on" : ""}">${label}<small>${n}</small></button>`;
   };
   $("pv-coins").innerHTML = chip("", "전체") + TRADE_SYMS.map((s) => chip(s, coin(s))).join("");
-  $("pv-coins").querySelectorAll("button").forEach((b) => b.onclick = () => { pv.sym = b.dataset.s; bookStream(); renderPos(); });
+  $("pv-coins").querySelectorAll("button").forEach((b) => b.onclick = () => { pv.sym = b.dataset.s; bookUse(pv.sym); renderPos(); });
 }
 function renderPvSum(list) {
   const live = list.filter((x) => x.u);
@@ -67,42 +67,47 @@ function renderPvHead() {
   $("pv-chart").onclick = () => { show("trade"); if (state.sym !== s) setSym(s); };
   renderBook();
 }
-function renderBook() {
-  const el = $("pv-book"), b = pv.book;
-  if (!pv.sym) return;
-  if (!b || pv.bookSym !== pv.sym) { el.innerHTML = '<p class="empty">호가 불러오는 중</p>'; return; }
-  const asks = b.asks.slice(0, 7).reverse(), bids = b.bids.slice(0, 7);
+function renderBook() { if (pv.sym) $("pv-book").innerHTML = bookHtml(pv.sym, 7); }
+
+// order book of one coin, shared by the positions tab and the trade screen (one subscription at a time):
+// Binance's WebSocket in the browser, or /api/depth from the server every 2 s where that is blocked
+const book = {sym: null, data: null, ws: null, ok: false, poll: null};
+function bookUse(sym) {
+  sym = sym || null;
+  if (sym === book.sym) return;
+  if (book.ws) { book.ws.onclose = null; book.ws.close(); book.ws = null; }
+  clearInterval(book.poll); book.poll = null; book.ok = false; book.data = null; book.sym = sym;
+  if (!sym) return;
+  const poll = async () => {
+    if (book.ok || sym !== book.sym) return;
+    try { const d = await api(`/api/depth?symbol=${sym}`); if (sym === book.sym && !book.ok) book.data = d; } catch (e) { /* none */ }
+  };
+  try {
+    book.ws = new WebSocket(`wss://fstream.binance.com/ws/${sym.toLowerCase()}@depth20@500ms`);
+    book.ws.onopen = () => { book.ok = true; };
+    book.ws.onmessage = (ev) => {
+      const d = JSON.parse(ev.data); if (sym !== book.sym) return;
+      book.data = {bids: (d.b || []).map((x) => [+x[0], +x[1]]), asks: (d.a || []).map((x) => [+x[0], +x[1]])};
+    };
+    book.ws.onclose = () => { book.ok = false; };
+  } catch (e) { /* blocked: the poll below */ }
+  poll(); book.poll = setInterval(poll, 2000);
+}
+function bookHtml(sym, n) {
+  const b = book.data;
+  if (!b || book.sym !== sym) return '<p class="empty">호가 불러오는 중</p>';
+  const asks = b.asks.slice(0, n).reverse(), bids = b.bids.slice(0, n);
   const mx = Math.max(...asks.map((x) => x[1]), ...bids.map((x) => x[1]), 1e-12);
   const row = (x, c) => `<div class="bk ${c}"><i style="width:${Math.min(100, x[1] / mx * 100).toFixed(1)}%"></i><span>${px(x[0])}</span><span>${fmt(x[1], x[1] < 10 ? 3 : 1)}</span></div>`;
   const bq = b.bids.reduce((s, x) => s + x[1], 0), aq = b.asks.reduce((s, x) => s + x[1], 0);
   const share = bq + aq > 0 ? bq / (bq + aq) : 0.5;
-  const t = state.tick[pv.sym], last = t ? t.c : null;
-  el.innerHTML = `<div class="bk h"><span>가격 (USDT)</span><span>수량 (${coin(pv.sym)})</span></div>` +
+  const t = state.tick[sym], last = t ? t.c : null;
+  return `<div class="bk h"><span>가격 (USDT)</span><span>수량 (${coin(sym)})</span></div>` +
     asks.map((x) => row(x, "a")).join("") +
-    `<div class="bk mid ${t ? cls(t.p) : ""}">${last ? px(last) : "—"}<small>${state.mark[pv.sym] ? px(state.mark[pv.sym]) : ""}</small></div>` +
+    `<div class="bk mid ${t ? cls(t.p) : ""}">${last ? px(last) : "—"}<small>${state.mark[sym] ? px(state.mark[sym]) : ""}</small></div>` +
     bids.map((x) => row(x, "b")).join("") +
     `<div class="bkbar"><span class="up">${(share * 100).toFixed(1)}%</span><div><i style="width:${(share * 100).toFixed(1)}%"></i></div><span class="down">${((1 - share) * 100).toFixed(1)}%</span></div>` +
-    `<div class="muted" style="font-size:10.5px">${pv.bwsOk ? "바이낸스 실시간 호가" : "호가 (서버 경유, 2초마다)"} · 위 20개 호가 기준 매수/매도 비율</div>`;
-}
-function bookStream() {
-  if (pv.bws) { pv.bws.onclose = null; pv.bws.close(); pv.bws = null; }
-  clearInterval(pv.poll); pv.poll = null; pv.bwsOk = false; pv.book = null;
-  const sym = pv.sym;
-  if (!sym || state.view !== "pos") return;
-  const poll = async () => {
-    if (pv.bwsOk || sym !== pv.sym) return;
-    try { const d = await api(`/api/depth?symbol=${sym}`); if (sym === pv.sym && !pv.bwsOk) { pv.book = d; pv.bookSym = sym; renderBook(); } } catch (e) { /* none */ }
-  };
-  try {
-    pv.bws = new WebSocket(`wss://fstream.binance.com/ws/${sym.toLowerCase()}@depth20@500ms`);
-    pv.bws.onopen = () => { pv.bwsOk = true; };
-    pv.bws.onmessage = (ev) => {
-      const d = JSON.parse(ev.data); if (sym !== pv.sym) return;
-      pv.book = {bids: (d.b || []).map((x) => [+x[0], +x[1]]), asks: (d.a || []).map((x) => [+x[0], +x[1]])}; pv.bookSym = sym;
-    };
-    pv.bws.onclose = () => { pv.bwsOk = false; };
-  } catch (e) { /* blocked: the poll below */ }
-  poll(); pv.poll = setInterval(poll, 2000);
+    `<div class="muted" style="font-size:10.5px">${book.ok ? "바이낸스 실시간 호가" : "호가 (서버 경유, 2초마다)"} · 위 20개 호가 기준 매수/매도 비율</div>`;
 }
 
 function lockText(p, u) {
@@ -151,11 +156,11 @@ function orderRows(list) {
 }
 async function renderPvHist() {
   const el = $("pv-list");
-  const now = new Date(), day0 = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());   // 09:00 KST
+  const kst = 9 * 3.6e6, day0 = Math.floor((Date.now() + kst) / 864e5) * 864e5 - kst;   // 00:00 KST, as the summary card
   const rows = (await api("/api/trades?limit=500").catch(() => [])).filter((t) => t.exit_time >= day0 && (!pv.sym || t.symbol === pv.sym));
   if (pv.tab !== "hist") return;
   const tot = rows.reduce((s, t) => s + (t.pnl || 0), 0);
-  el.innerHTML = `<div class="muted" style="margin:6px 2px">오늘(09:00 이후) 청산 ${rows.length}건 · 합계 <b class="${cls(tot)}">${usdt(tot)} USDT</b> (수수료 뒤)</div>` + tradeRows(rows, true);
+  el.innerHTML = `<div class="muted" style="margin:6px 2px">오늘(한국 0시 이후) 청산 ${rows.length}건 · 합계 <b class="${cls(tot)}">${usdt(tot)} USDT</b> (수수료 뒤)</div>` + tradeRows(rows, true);
   bindAccountClicks(el);
 }
 function renderPos() {
@@ -172,11 +177,14 @@ function renderPos() {
   bindAccountClicks(el);
   el.querySelectorAll(".pc-acct[data-acct]").forEach((s) => s.onclick = () => openAccount(s.dataset.acct));
 }
-function loadPos() { bookStream(); renderPos(); if (pv.tab === "hist") renderPvHist(); }
+function loadPos() { bookUse(pv.sym); renderPos(); if (pv.tab === "hist") renderPvHist(); }
 document.querySelectorAll("#pv-tabs button").forEach((b) => b.onclick = () => {
   pv.tab = b.dataset.t;
   document.querySelectorAll("#pv-tabs button").forEach((x) => x.classList.toggle("on", x === b));
   renderPos(); if (pv.tab === "hist") renderPvHist();
 });
 $("pv-sort").onchange = (e) => { pv.sort = e.target.value; renderPos(); };
-setInterval(() => { if (state.view === "pos") renderPos(); else if (pv.bws || pv.poll) bookStream(); }, 1000);
+setInterval(() => {
+  bookUse(state.view === "pos" ? pv.sym : state.view === "trade" && state.side2 === "book" ? state.sym : null);
+  if (state.view === "pos") renderPos();
+}, 1000);

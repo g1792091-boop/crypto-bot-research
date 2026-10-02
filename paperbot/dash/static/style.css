@@ -512,3 +512,25 @@ button.mini { height: 22px; padding: 0 6px; font-size: 11px; }
   .pv-bar { flex-wrap: wrap; } .pv-bar .tabs button { padding: 0 8px; }
 }
 .pc-top .muted { white-space: nowrap; }
+
+/* trade screen lower panels (panels.js) */
+.watch .pb.wlb { flex: none; }
+.p2tabs { border-top: 1px solid var(--line); }
+#side-body { flex: 1 1 auto; }
+#side2-body { flex: 0 1 auto; max-height: 62%; }
+.p2 { padding: 4px 8px 8px; font-size: 12px; }
+.p2t { width: 100%; }
+.p2t td, .p2t th { padding: 5px 4px; font-size: 12px; }
+.p2t td.mono { font-family: var(--mono, monospace); }
+.p2t tr.sel td { background: var(--hover); }
+.p2h { color: var(--muted); font-size: 11px; margin: 8px 0 3px; }
+.p2kv { display: flex; justify-content: space-between; gap: 6px; padding: 3px 0; border-bottom: 1px dotted var(--line); }
+.p2kv span { color: var(--text-2); } .p2kv b { font-weight: 500; text-align: right; font-family: var(--mono, monospace); }
+.p2n { color: var(--muted); font-size: 10.5px; margin-top: 6px; line-height: 1.5; }
+.bkbar .liqbar { background: var(--up); } .bkbar .liqbar i { background: var(--down); }
+@media (max-width: 1100px) {
+  .side { height: auto; }
+  #side-body { max-height: 320px; }
+  #side2-body { max-height: none; }
+}
+.watch .p2kv { flex-direction: column; gap: 0; } .watch .p2kv b { text-align: left; }

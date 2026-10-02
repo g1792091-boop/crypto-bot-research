@@ -49,8 +49,10 @@
   <div class="trade">
     <div class="watch">
       <div class="ph"><span class="t">관심 종목</span></div>
-      <div class="pb"><table class="wl"><thead><tr><th class="l">종목</th><th>가격</th><th>24시간</th></tr></thead>
+      <div class="pb wlb"><table class="wl"><thead><tr><th class="l">종목</th><th>가격</th><th>24시간</th></tr></thead>
         <tbody id="wl"></tbody></table></div>
+      <div class="ph tabs p2tabs" id="watch2-tabs"><button data-t="gh" class="on">GH Coin 판단</button><button data-t="day">오늘·일정</button></div>
+      <div class="pb p2" id="watch2-body"></div>
     </div>
     <div class="chartp">
       <div class="toolbar">
@@ -72,6 +74,8 @@
         <button data-t="pos" class="on">이 코인 포지션</button><button data-t="trades">체결</button><button data-t="sig">신호</button>
       </div>
       <div class="pb" id="side-body"></div>
+      <div class="ph tabs p2tabs" id="side2-tabs"><button data-t="book" class="on">호가</button><button data-t="liq">시장 강제청산</button></div>
+      <div class="pb p2" id="side2-body"></div>
     </div>
     <div class="bottom">
       <div class="ph tabs" id="bot-tabs">
@@ -248,6 +252,7 @@
 <script src="/static/app.js"></script>
 <script src="/static/strat.js"></script>
 <script src="/static/pos.js"></script>
+<script src="/static/panels.js"></script>
 <script src="/static/rooms.js"></script>
 <script src="/static/checkpoint.js"></script>
 <script src="/static/ghcoin.js"></script>
