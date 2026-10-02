@@ -277,6 +277,82 @@ class Data:
         return {"now": int(time.time() * 1000), "heartbeat": hb, "run": run, "alerts": alerts,
                 "signals_24h": sig}
 
+    def summary(self, now_ms: Optional[int] = None) -> dict:
+        """Experiment progress (day n of 30, next checkpoint, observation period) and today's summary (KST day)."""
+        from ..checkpoint import PERIOD_DAYS, checkpoint_ts
+        now = int(time.time() * 1000) if now_ms is None else int(now_ms)
+        day_ms, kst = 86_400_000, 9 * 3_600_000
+        with self.conn() as c:
+            r = c.execute("SELECT MIN(created_ts) FROM accounts WHERE kind IN ('strategy', 'random')").fetchone()
+            start = int(r[0]) if r and r[0] is not None else None
+            xs = self.extras_state(c)
+            since = (now + kst) // day_ms * day_ms - kst                     # 00:00 KST today
+            rows = [dict(x) for x in c.execute(
+                "SELECT t.account_id, a.kind, t.pnl, t.exit_reason FROM trades t JOIN accounts a "
+                "ON a.account_id = t.account_id WHERE t.exit_time >= ?", (since,))]
+        out: dict = {"now": now, "start": start, "period_days": PERIOD_DAYS}
+        if start is not None:
+            out["day"] = (now - (start - start % day_ms)) // day_ms + 1
+            k = 1
+            while checkpoint_ts(start, k) <= now:
+                k += 1
+            out["next_checkpoint"] = {"k": k, "ts": checkpoint_ts(start, k), "day": k * PERIOD_DAYS}
+            floor = (xs or {}).get("observe_until")
+            obs = floor if isinstance(floor, int) and not isinstance(floor, bool) else start + 21 * day_ms
+            out["observe_until"] = obs
+            out["observing"] = now < obs
+        per: dict = {}
+        for x in rows:
+            per[x["account_id"]] = per.get(x["account_id"], 0.0) + x["pnl"]
+        rank = sorted(per.items(), key=lambda kv: kv[1])
+        strat = [x for x in rows if x["kind"] == "strategy"]
+        out["today"] = {"since": since, "trades": len(rows), "pnl": round(sum(x["pnl"] for x in strat), 2),
+                        "wins": sum(x["pnl"] > 0 for x in strat), "strategy_trades": len(strat),
+                        "liquidations": sum(x["exit_reason"] == "LIQ" for x in rows),
+                        "best": [{"account_id": a, "pnl": round(p, 2)} for a, p in rank[::-1][:3] if p > 0],
+                        "worst": [{"account_id": a, "pnl": round(p, 2)} for a, p in rank[:3] if p < 0]}
+        return out
+
+    def trades_csv(self, account: Optional[str] = None) -> str:
+        """Every closed trade (or one account's) as CSV, KST times, for Excel (UTF-8 with BOM)."""
+        import csv
+        import io
+        q = ("SELECT t.account_id, a.kind, t.data FROM trades t JOIN accounts a ON a.account_id = t.account_id"
+             + (" WHERE t.account_id = ?" if account else "") + " ORDER BY t.exit_time")
+        with self.conn() as c:
+            rows = c.execute(q, (account,) if account else ()).fetchall()
+        kst = lambda ms: time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(int(ms) / 1000 + 9 * 3600)) if ms else ""
+        buf = io.StringIO()
+        w = csv.writer(buf)
+        w.writerow(["계좌", "종류", "코인", "봉", "방향", "진입(한국)", "청산(한국)", "청산 이유", "레버리지", "진입가",
+                    "청산가", "수량", "손익(USDT)", "ROE", "수수료", "펀딩", "청산 후 잔고"])
+        for aid, kind, data in rows:
+            try:
+                d = json.loads(data)
+            except (TypeError, ValueError):
+                continue
+            w.writerow([aid, kind, d.get("symbol"), d.get("timeframe"), "롱" if d.get("side", 0) > 0 else "숏",
+                        kst(d.get("entry_time")), kst(d.get("exit_time")), d.get("exit_reason"), d.get("leverage"),
+                        d.get("entry_price"), d.get("exit_price"), d.get("qty"), round(d.get("pnl") or 0, 4),
+                        round(d.get("roe") or 0, 6), round(d.get("fees") or 0, 4), round(d.get("funding") or 0, 4),
+                        round(d.get("equity_after") or 0, 4)])
+        return "\ufeff" + buf.getvalue()
+
+    def board_csv(self) -> str:
+        import csv
+        import io
+        b = self.board()
+        init = b.get("initial") or 0
+        buf = io.StringIO()
+        w = csv.writer(buf)
+        w.writerow(["계좌", "종류", "매매법", "봉", "잔고", "수익률", "거래", "승률", "최대 낙폭", "파산", "동전 봇보다 나음"])
+        for a in b["accounts"]:
+            wal = a.get("wallet")
+            w.writerow([a["account_id"], a.get("kind"), a.get("strategy"), a.get("timeframe"),
+                        "" if wal is None else round(wal, 2), "" if wal is None or not init else round(wal / init - 1, 6),
+                        a.get("trades"), a.get("win_rate"), a.get("max_drawdown"), a.get("bust"), a.get("beats_random")])
+        return "\ufeff" + buf.getvalue()
+
     def signals(self, tf: Optional[str], limit: int, symbol: Optional[str] = None) -> list[dict]:
         q, args, where = "SELECT * FROM signal_log", [], []
         if tf:
@@ -1335,6 +1411,22 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
         if interval not in ("1m", "5m", "15m", "30m", "1h", "4h", "1d"):
             raise HTTPException(400, "unknown interval")
         return candles(symbol, interval, min(max(limit, 10), 1500))
+
+    @app.get("/api/summary")
+    def get_summary():
+        """Experiment day, next checkpoint, observation period and today's summary (KST)."""
+        return data.summary()
+
+    @app.get("/api/export/trades.csv")
+    def export_trades(account: Optional[str] = None):
+        name = f"trades_{account or 'all'}.csv".replace("@", "_").replace("~", "_")
+        return Response(data.trades_csv(account), media_type="text/csv; charset=utf-8",
+                        headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+    @app.get("/api/export/board.csv")
+    def export_board():
+        return Response(data.board_csv(), media_type="text/csv; charset=utf-8",
+                        headers={"Content-Disposition": 'attachment; filename="board.csv"'})
 
     @app.get("/api/ticker")
     def get_ticker():

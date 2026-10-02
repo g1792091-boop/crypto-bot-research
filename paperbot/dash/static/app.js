@@ -432,6 +432,7 @@ function renderAccount(d) {
   const a = d.account, st = d.state || {}, trades = d.trades;
   const w = st.wallet ?? INITIAL, n = trades.length, wins = trades.filter((t) => t.pnl > 0).length;
   const locks = trades.filter((t) => t.exit_reason === "LOCK").length;
+  $("a-csv").href = "/api/export/trades.csv?account=" + encodeURIComponent(a.account_id);
   $("a-title").innerHTML = esc(name({...a, label_ko: d.extra ? d.extra.label_ko : null})) + (d.extra ? extraPills({...a, ...d.extra}) : "");
   $("a-tiles").innerHTML = [
     ["잔고", "$" + fmt(w), pct(w / INITIAL - 1)],
@@ -644,7 +645,10 @@ setInterval(() => {
 
 // ------------------------------------------------------------ start
 // the top bar wraps on phones: full-height panes (rooms) subtract its real height
-function topHeight() { document.documentElement.style.setProperty("--toph", document.querySelector(".topbar").offsetHeight + "px"); }
+function topHeight() {   // the top bar and the experiment strip under it
+  const ex = document.getElementById("expbar");
+  document.documentElement.style.setProperty("--toph", document.querySelector(".topbar").offsetHeight + (ex ? ex.offsetHeight : 0) + "px");
+}
 window.addEventListener("resize", topHeight);
 topHeight();
 themeInit();

@@ -276,3 +276,19 @@ def test_ticker_endpoint_is_the_websocket_fallback(tmp_path):
     js = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "paperbot", "dash", "static",
                            "app.js"), encoding="utf-8").read()
     assert 'api("/api/ticker")' in js and "function closeIn(tf)" in js and "if (mwsOk) return;" in js
+
+
+def test_summary_and_csv_exports(client):
+    assert client.get("/api/summary").status_code == 401
+    assert client.post("/api/login", json={"password": "correct horse battery"}).status_code == 200
+    s = client.get("/api/summary").json()
+    assert s["period_days"] == 30 and "today" in s and set(s["today"]) >= {"trades", "pnl", "wins", "liquidations"}
+    if s["start"] is not None:
+        assert s["day"] >= 1 and s["next_checkpoint"]["ts"] > s["now"] and "observe_until" in s
+    b = client.get("/api/export/board.csv")
+    assert b.status_code == 200 and b.headers["content-type"].startswith("text/csv")
+    assert b.text.startswith("﻿계좌,종류,매매법") and "attachment" in b.headers["content-disposition"]
+    t = client.get("/api/export/trades.csv")
+    assert t.status_code == 200 and t.text.startswith("﻿계좌,종류,코인")
+    one = client.get("/api/export/trades.csv", params={"account": "nope@1h"})
+    assert one.text.count("\n") == 1                      # header only

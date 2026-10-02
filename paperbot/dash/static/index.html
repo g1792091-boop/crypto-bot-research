@@ -28,6 +28,7 @@
   <button id="theme" title="밝게/어둡게">화면</button>
   <button id="logout">로그아웃</button>
 </header>
+<div class="expbar" id="expbar"></div>
 
 <!-- ========================================================= trade -->
 <section class="view on" id="v-trade">
@@ -112,6 +113,10 @@
 
 <!-- ========================================================= board -->
 <section class="view" id="v-board"><div class="page">
+  <div class="card" id="today">
+    <div class="ph"><span class="t">오늘 요약 · 한국 시간 0시부터</span><span class="grow"></span><small class="muted" id="today-at"></small></div>
+    <div class="body"><div class="tiles" id="today-tiles"></div><div id="today-list"></div></div>
+  </div>
   <div class="tiles" id="tiles"></div>
   <div class="filters">
     <div class="seg" id="f-tf">
@@ -123,6 +128,9 @@
       <option value="wallet">잔고순</option><option value="trades">거래 수순</option><option value="win">승률순</option>
       <option value="dd">낙폭 작은 순</option><option value="name">이름순</option>
     </select>
+    <span class="grow"></span>
+    <a class="btnlink" href="/api/export/board.csv" download>순위표 엑셀(CSV)</a>
+    <a class="btnlink" href="/api/export/trades.csv" download>전체 거래 엑셀(CSV)</a>
   </div>
   <div class="card scroll"><table class="cards">
     <thead><tr><th class="l">#</th><th class="l">계좌</th><th>잔고</th><th>수익률</th><th>거래</th><th>승률</th><th>최대 낙폭</th>
@@ -157,7 +165,7 @@
     <div class="card"><div class="ph"><span class="t">열린 포지션</span></div><div class="body" id="a-pos"></div></div>
     <div class="card"><div class="ph"><span class="t">자본 곡선</span></div><div class="chart" id="a-eq"></div></div>
     <div class="card"><div class="ph"><span class="t">차트와 진입·청산</span><select id="a-sym"></select></div><div class="chart tall" id="a-candles"></div></div>
-    <div class="card scroll"><div class="ph"><span class="t">거래 내역</span></div><table>
+    <div class="card scroll"><div class="ph"><span class="t">거래 내역</span><span class="grow"></span><a class="btnlink" id="a-csv" href="#" download>이 계좌 거래 엑셀(CSV)</a></div><table>
       <thead><tr><th class="l">청산 시각</th><th class="l">코인</th><th class="l">방향</th><th>레버리지</th><th>진입</th><th>청산</th>
         <th class="l">이유</th><th>ROE</th><th>손익</th><th>잔고</th></tr></thead><tbody id="a-trades"></tbody></table></div>
   </div>
@@ -224,5 +232,6 @@
 <script src="/static/checkpoint.js"></script>
 <script src="/static/ghcoin.js"></script>
 <script src="/static/breakdown.js"></script>
+<script src="/static/summary.js"></script>
 </body>
 </html>
