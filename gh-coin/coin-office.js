@@ -204,6 +204,7 @@ export const officeState = () => ({running, queued: queue.length});
 const ACTIONS = [
   {job: "cdev", re: /커스텀.*(지표|매매법|전략).*(만들|찾|개발|짜|연구|백테스트)/, say: "커스텀 지표 개발팀이 지금 바로 수식 지표로 매매법을 만들어 커스텀 백테스트팀이 검증합니다"},
   {job: "dev", re: /(매매법|전략|지표).*(만들|찾|개발|짜|연구|발굴|백테스트)|(만들|찾|개발|짜).*(매매법|전략)|백테스트\s*(해|돌려)/, say: "매매법 개발팀이 지금 바로 모든 보조지표로 매매법을 만들어 백테스트팀이 검증합니다"},
+  {job: "botopt", re: /(자동매매\s*봇|선물\s*봇|트레이딩\s*봇|봇)\s*.{0,6}(자동\s*)?(개선|다듬|최적화|하이퍼옵트)|(보조지표|지표)\s*.{0,6}(자동\s*)?(개선|최적화|튜닝)/i, say: "선물 자동매매봇팀이 지금 바로 데모 봇의 보조지표·위험값을 하이퍼옵트로 자동 개선하고 검증 구간·견고성까지 확인합니다"},
   {job: "bot", re: /자동매매\s*봇|선물\s*봇|트레이딩\s*봇|그리드\s*봇|dca\s*봇|봇\s*(만들|돌려|전략|추가)|passivbot|jesse|octobot/i, say: "선물 자동매매봇팀이 지금 바로 봇 전략을 만들어 백테스트하고 통과하면 데모에 올립니다"},
   {job: "ic", re: /투자위원회|강세.{0,6}약세.{0,6}토론|살지.{0,4}팔지|(매수|매도).{0,6}결정/, say: "투자위원회가 지금 바로 애널리스트 보고 → 강세·약세 토론 → 리스크 토론 → 위원장 결정을 합니다"},
   {job: "qrisk", re: /(var|cvar|변동성|상관|베타|스트레스|리스크).{0,10}(계산|분석|봐|점검|알려)|결정표|주문 전 점검/i, say: "퀀트 리스크팀이 지금 바로 VaR·상관·스트레스·주문 전 점검을 계산합니다"},
@@ -673,14 +674,14 @@ export function startChatter(){
 // 매 주기 ① 모의투자 장부를 실제 시세로 갱신(코드, AI 없음) ② 그때그때 한 가지 일을 고른다:
 // 매매법 연구 · SNS 여론 · 경제 리서치 · 동료 수다 · 컴퓨터 작업 · 모의투자 보고 (하루 AI 호출 한도 안에서)
 // 쉬지 않고 돌아가는 업무 순환표: 팀마다 고르게 돌아가도록 섞어 두었다 (모듈이 없으면 경제 리서치로 대신)
-const JOBS = ["dev", "combo", "ic", "bot", "ind", "qrisk", "trend", "data", "opt", "patscan", "situ", "cdev", "entry", "sr", "news", "promote", "pattern", "coin", "ml", "dev", "tpsl", "combo", "drift", "cdev", "feeds", "alpha", "bot", "trend", "ic", "chat", "forecast", "coin", "live", "retro", "task", "selfdev", "macro", "sns", "computer", "paper"];
-const JOB_KO = {bot: "자동매매봇 전략 만들기", ic: "투자위원회(강세·약세 토론 → 결정)", qrisk: "퀀트 리스크(VaR·결정표·주문 전 점검)", data: "거래소 비교·데이터 품질", opt: "하이퍼옵트로 전략 다듬기", patscan: "패턴 스캐너", drift: "데모 성과 이동 감지(런 차트)", feeds: "경제 캘린더·금리·변동성 지수", alpha: "알파 팩터 순위", combo: "실시간 종합 지표 타점", dev: "매매법 개발 → 백테스트", cdev: "커스텀 지표 개발 → 백테스트", ind: "보조지표 분석", trend: "다중 시간대 추세 분석", entry: "진입 타점 분석", sr: "지지·저항 분석",
+const JOBS = ["dev", "combo", "ic", "bot", "ind", "qrisk", "trend", "data", "opt", "patscan", "situ", "cdev", "entry", "sr", "news", "promote", "pattern", "coin", "ml", "dev", "tpsl", "combo", "drift", "cdev", "feeds", "alpha", "bot", "botopt", "trend", "ic", "chat", "forecast", "coin", "live", "retro", "task", "selfdev", "macro", "sns", "computer", "paper"];
+const JOB_KO = {bot: "자동매매봇 전략 만들기", botopt: "자동매매봇 자동 개선(보조지표·위험값 하이퍼옵트)", ic: "투자위원회(강세·약세 토론 → 결정)", qrisk: "퀀트 리스크(VaR·결정표·주문 전 점검)", data: "거래소 비교·데이터 품질", opt: "하이퍼옵트로 전략 다듬기", patscan: "패턴 스캐너", drift: "데모 성과 이동 감지(런 차트)", feeds: "경제 캘린더·금리·변동성 지수", alpha: "알파 팩터 순위", combo: "실시간 종합 지표 타점", dev: "매매법 개발 → 백테스트", cdev: "커스텀 지표 개발 → 백테스트", ind: "보조지표 분석", trend: "다중 시간대 추세 분석", entry: "진입 타점 분석", sr: "지지·저항 분석",
   tpsl: "익절·손절 관리", news: "뉴스·기사 분석", macro: "경제지표 예측", situ: "코인 상황판", pattern: "차트·캔들 패턴 분석", coin: "코인팀 회의", ml: "머신러닝·딥러닝 실험",
   promote: "데모 → 실거래 관문 심사", live: "실거래 데스크 점검", paper: "데모거래 보고", forecast: "방향 예측 토론", sns: "SNS 여론 확인", chat: "동료 수다", computer: "컴퓨터 작업",
   retro: "팀 회고·부족한 점 찾기", task: "개선 과제 수행", selfdev: "우리 앱 오류 찾아 코드 고치기", economy: "경제 리서치"};
-const JOB_TEAM = {bot: "bot", ic: "ic", qrisk: "qrisk", data: "data", opt: "opt", patscan: "pattern", drift: "demo", feeds: "news", alpha: "ml", combo: "combo", dev: "dev", cdev: "cdev", ind: "ind", trend: "trend", entry: "entry", sr: "sr", tpsl: "tpsl", news: "news", macro: "news", situ: "situ", pattern: "pattern", coin: "btc", ml: "ml",
+const JOB_TEAM = {bot: "bot", botopt: "bot", ic: "ic", qrisk: "qrisk", data: "data", opt: "opt", patscan: "pattern", drift: "demo", feeds: "news", alpha: "ml", combo: "combo", dev: "dev", cdev: "cdev", ind: "ind", trend: "trend", entry: "entry", sr: "sr", tpsl: "tpsl", news: "news", macro: "news", situ: "situ", pattern: "pattern", coin: "btc", ml: "ml",
   promote: "demo", live: "live", paper: "demo", forecast: "entry", sns: "news", chat: "hq", computer: "hq", retro: "hq", task: "hq", selfdev: "hq", economy: "news"};
-const JOB_FN = () => ({bot: botJob, ic: icJob, qrisk: qriskJob, data: dataJob, opt: optJob, patscan: patternScanJob, drift: driftJob, feeds: openFeedsJob, alpha: alphaJob, combo: comboJob, dev: () => research("std"), cdev: () => research("custom"), ind: indJob, trend: trendJob, entry: entryJob, sr: srJob, tpsl: tpslJob, news: economyCheck, macro: macroJob,
+const JOB_FN = () => ({bot: botJob, botopt: botImproveJob, ic: icJob, qrisk: qriskJob, data: dataJob, opt: optJob, patscan: patternScanJob, drift: driftJob, feeds: openFeedsJob, alpha: alphaJob, combo: comboJob, dev: () => research("std"), cdev: () => research("custom"), ind: indJob, trend: trendJob, entry: entryJob, sr: srJob, tpsl: tpslJob, news: economyCheck, macro: macroJob,
   situ: situJob, pattern: patternJob, coin: coinJob, ml: mlJob, promote: promoteJob, live: liveDeskJob, paper: paperReport, forecast: forecastJob, sns: snsCheck, chat: () => chatter(true),
   computer: computerWork, retro, task: doTask, selfdev: selfdevJob, economy: economyCheck});
 let cycleTimer = 0, cycling = false, lastJob = "";
@@ -1723,6 +1724,43 @@ async function optJob(){
   pubTo(s.market, "opt", {team: "opt", title: `하이퍼옵트: ${ok ? "새 버전 채택" : "유지"}`, text: `${s.name} · ${res.lossKo} · 검증 순손익 ${f(res.base.wf.oos.net_pnl)} → ${f(res.best.wf.oos.net_pnl)} · 운일 확률 ${f(r1.p, 3)}`, spec: res.best.spec, baseSpec: s.spec});
   addNote("opt", `${s.name}: ${res.lossKo} → ${ok ? "새 버전 투입" : "유지"} (검증 순손익 ${f(res.base.wf.oos.net_pnl)} → ${f(res.best.wf.oos.net_pnl)}, p=${f(r1.p, 3)})`, "하이퍼옵트");
   await explain(lead.id, "opt", "하이퍼옵트 결과표를 보고 무엇이 바뀌었는지, 검증 구간(한 번도 안 본 데이터)에서도 좋아졌는지, 과최적화·운일 가능성은 어떤지 해설한다. 채택 여부는 코드 판정을 따른다.", `전략 ${s.name} · 손실함수 ${res.lossKo}\n검증 순손익 ${f(res.base.wf.oos.net_pnl)} → ${f(res.best.wf.oos.net_pnl)} · 관문 ${res.best.wf.pass ? "통과" : "불통과"} · SQN ${f(A0.sqn)} → ${f(A1.sqn)} · 운일 확률 ${f(r1.p, 3)} · 5구간 이익 ${mw.positive}/${mw.total} · 판정 ${ok ? "채택" : "미채택"}`, "아래 하이퍼옵트 결과를 해설해 줘.");
+}
+
+/* ---- 🔧 자동 개선 (선물 자동매매봇팀) — 올라간 🤖 봇 전략의 보조지표 길이·문턱값(buy)과 ROI·손절·추적손절·보호장치를
+       하이퍼옵트로 다듬는다. 앞 70%에서만 탐색하고, 뒤 30%(검증) + 견고성(순열·다구간·위생)을 통과해야 새 버전 채택.
+       실거래 관문(14일·20거래…)은 그대로라 자동 개선이 실거래를 건너뛰지 않는다. ---- */
+async function botImproveJob(){
+  const Q = await import("../nuri-ai/quant.js"), P = await import("../nuri-ai/paper.js"), H = await lib("hyperopt"), RB = await lib("robust"), S = await lib("sdlc"), lead = agentById("bot_lead");
+  const book = await P.loadBook(), bots = book.strategies.filter(s => s.status === "active" && s.spec && /^🤖/.test(s.name));
+  if (!bots.length){ post({ch: "bot", kind: "work", agent: lead.id, icon: "🔧", text: "자동 개선할 데모 봇이 없습니다 · 봇 전략이 백테스트를 통과해 데모에 올라가면 보조지표·위험값을 자동으로 다듬습니다"}); return; }
+  const s = bots[rot("coinBotOpt", bots.length)], loss = OPT_LOSS[rot("coinBotOptLoss", OPT_LOSS.length)], tf = s.tf, tfMin = {"15": 15, "60": 60, "240": 240, "D": 1440}[tf] || 60;
+  fire({kind: "busy", agent: lead, text: `🔧 ${s.name} 자동 개선(보조지표·위험값 하이퍼옵트 · ${H.LOSSES[loss].ko})`});
+  const cs = (await candlesFor({market: s.market, exchange: s.exchange || "binancef", timeframe: tf}, 1500)).cs;
+  H.setSeed(Date.now() % 100000);
+  const res = await H.hyperopt(Q, s.spec, cs, {epochs: 60, loss, space: ["buy", "roi", "stoploss", "trailing", "protection"], tfMin, onProgress: (e, n) => fire({kind: "busy", agent: lead, text: `🔧 자동 개선 ${e}/${n}`})});
+  const b1 = Q.backtest(res.best.spec, cs), r1 = RB.permutationTest(b1.trades.map(t => t.pnl)), mw = RB.multiWindow(Q, res.best.spec, cs, 5), hy = RB.hygiene(b1);
+  const f = (x, d = 2) => x == null || !Number.isFinite(x) ? "—" : (+x).toFixed(d);
+  // 지표 길이·문턱값이 실제로 어떻게 바뀌었는지 사람이 읽게
+  const indBefore = (s.spec.indicators || []).map(i => `${i.type}${i.length ?? i.fast ?? ""}`).join(", ");
+  const indAfter = (res.best.spec.indicators || []).map(i => `${i.type}${i.length ?? i.fast ?? ""}`).join(", ");
+  const rv = S.propose(res.best.spec, {author: lead.name, why: `봇 자동개선(${loss})`});
+  const ok = rv.status === "review" && res.improved && r1.p != null && r1.p <= 0.05 && hy.ok && mw.positive >= Math.ceil(mw.total * 0.6);
+  S.decide(res.best.spec.name, rv.id, ok, {who: "코드 관문", why: ok ? "검증·견고성 통과" : `미채택: ${!res.improved ? "검증 개선 없음" : r1.p > 0.05 ? "운일 확률 높음" : !hy.ok ? hy.fails.join(",") : "구간 일관성 부족"}`});
+  table("bot", lead.id, `🔧 ${s.name} 자동 개선 (${res.lossKo} · ${res.epochs}회 · 앞 70%에서만 탐색)`, ["항목", "지금", "개선안"], [
+    ["보조지표", indBefore || "—", indAfter || "—"],
+    ["검증(뒤 30%) 순손익", f(res.base.wf.oos.net_pnl), f(res.best.wf.oos.net_pnl)],
+    ["관문 통과", res.base.wf.pass ? "✅" : "❌", res.best.wf.pass ? "✅" : "❌"],
+    ["운일 확률 p(순열 1000회)", "—", f(r1.p, 3)], ["5구간 중 이익 구간", "—", `${mw.positive}/${mw.total}`],
+    ["채택", "", ok ? "✅ 새 버전 데모 투입" : "❌ 지금 버전 유지"]],
+    ok ? "검증 구간·견고성까지 통과 → 새 버전을 데모에 올려 원본과 비교 운용합니다" : res.overfit ? "⚠ 학습 구간만 좋아짐(과최적화) → 채택 안 함" : "개선 없음/불통과 → 지금 버전 유지 (실거래 관문은 그대로)");
+  if (ok){
+    const ns = await P.addStrategy({spec: {...res.best.spec, name: `${s.name} v${S.latest(res.best.spec.name)?.semver || "+"}`}, market: s.market, exchange: s.exchange, tf, author: lead.name, wf: {is: res.best.wf.is, oos: res.best.wf.oos}, cls: s.cls, mname: s.mname, lane: s.lane});
+    post({ch: "demo", kind: "system", text: `🔧 봇 자동개선 버전 데모 투입: ${ns.name} (원본 ${s.name}은 그대로 비교 운용 · 보조지표·위험값 하이퍼옵트)`});
+    journal("record", "strategy", ns.id, {from: s.id, loss, bot: true, semver: S.latest(res.best.spec.name)?.semver}, "bot_lead", "봇 자동개선 버전");
+  }
+  pubTo(s.market, "bot", {team: "bot", title: `봇 자동개선: ${ok ? "새 버전 채택" : "유지"}`, text: `${s.name} · ${res.lossKo} · 검증 순손익 ${f(res.base.wf.oos.net_pnl)} → ${f(res.best.wf.oos.net_pnl)} · 운일 확률 ${f(r1.p, 3)}`, spec: res.best.spec, baseSpec: s.spec});
+  addNote("bot", `${s.name} 자동개선: ${res.lossKo} → ${ok ? "새 버전 투입" : "유지"} (검증 순손익 ${f(res.base.wf.oos.net_pnl)} → ${f(res.best.wf.oos.net_pnl)}, p=${f(r1.p, 3)})`, "봇자동개선");
+  await explain(lead.id, "bot", "봇 자동개선 결과표를 보고 보조지표 길이·문턱값과 위험값(ROI·손절·추적손절·보호장치)이 어떻게 바뀌었는지, 검증 구간에서도 좋아졌는지, 과최적화·운일 가능성은 어떤지 해설한다. 채택 여부는 코드 판정을 따르고, 실거래는 기존 관문·승인을 그대로 거친다.", `봇 ${s.name} · 손실함수 ${res.lossKo}\n보조지표 ${indBefore} → ${indAfter}\n검증 순손익 ${f(res.base.wf.oos.net_pnl)} → ${f(res.best.wf.oos.net_pnl)} · 관문 ${res.best.wf.pass ? "통과" : "불통과"} · 운일 확률 ${f(r1.p, 3)} · 5구간 이익 ${mw.positive}/${mw.total} · 판정 ${ok ? "채택" : "미채택"}`, "아래 자동매매봇 자동개선(하이퍼옵트) 결과를 해설해 줘.");
 }
 
 /* ---- 📉 데모 성과 이동 감지 (runcharter 런 차트: 기준 13거래 중앙값, 9연속이면 이동) → 데모거래팀 ---- */
