@@ -361,7 +361,8 @@ export const IND_REGISTRY = {
   custom: {outputs: ["value"], defaults: {}, desc: "사용자 수식 지표 (expr 에 수식 — 문법은 customind.js CUSTOM_DOC)"},
 };
 // custom 수식에서 데이터가 없어도 되는 외부 시리즈 이름 (없으면 null 시리즈): 파생 필드 · ml_* · ext_*
-const EXT_NAME = name => DERIV_FIELDS.includes(name) || /^(?:ml|ext)_\w+$/.test(name);
+// 허용 외부/파생 변수: ml_*·ext_* · 알려진 파생필드 · funding/oi/taker/long_short/basis/premium/cvd 계열(백테스트 null)
+const EXT_NAME = name => DERIV_FIELDS.includes(name) || /^(?:ml|ext)_\w+$/.test(name) || /^(?:funding|oi|taker|long_short|basis|premium|cvd)\w*$/.test(name);
 
 // 지표 계산. 항상 {출력이름: 시리즈} 형태 (indicators.compute)
 // 차트 터미널 지표(terminal/ind.js)를 전략·수식에서도: type "tv_<id>" · 출력 value(첫 선) p1~p4(다음 선) · 신호형은 +1/-1
@@ -421,7 +422,7 @@ export function computeInd(candles, type, params = {}){
     case "cmf": return {value: cmf(c, n)};
     case "aroon": return aroon(c, n);
     case "atr_stop": return atrStop(c, n, F("mult"));
-    case "custom": return {value: evalExpr(String(p.expr ?? ""), c, p.extra || {}, {allow: EXT_NAME, computeInd})};   // p.extra: {이름: 시리즈}
+    case "custom": try { return {value: evalExpr(String(p.expr ?? ""), c, p.extra || {}, {allow: EXT_NAME, computeInd})}; } catch(e){ return {value: nulls(c.length)}; }   // 수식 오류여도 백테스트 멈추지 않게 null
   }
 }
 setIndProvider({computeInd, registry: IND_REGISTRY});   // customind.js 의 ind() 가 쓰는 연결
@@ -434,11 +435,13 @@ setIndProvider({computeInd, registry: IND_REGISTRY});   // customind.js 의 ind(
 //   과거 값: 뒤에 [n] (예: "close[1]") · 숫자: "30" · 배수: "<참조>*<숫자>" (예: "vol_ma*2")
 const REF = /^([A-Za-z_][\w.]*)(?:\[(\d+)\])?$/;
 const PRICE_FIELDS = ["open", "high", "low", "close", "volume", "hl2", "hlc3", "ohlc4"];
-const DERIV_FIELDS = ["funding", "oi", "oi_change_pct", "long_short"];
-const OPS = [">", "<", ">=", "<=", "crosses_above", "crosses_below", "rising", "falling"];
+// 파생/시장 필드(백테스트에선 데이터가 없어 null 로 채워짐 — 전략이 실패하지 않고 그 조건만 안 걸림). AI 가 자주 쓰는 변형 이름도 포함.
+const DERIV_FIELDS = ["funding", "funding_rate", "funding_rate_pct", "funding_rate_8h_pct", "funding_8h", "funding_8h_pct", "oi", "oi_change_pct", "oi_change", "oi_delta", "long_short", "long_short_ratio", "taker_ratio", "taker_buy_ratio", "basis", "premium", "cvd"];
+const OPS = [">", "<", ">=", "<=", "==", "!=", "crosses_above", "crosses_below", "rising", "falling"];
 const OP_ALIAS = {"crossover": "crosses_above", "cross_above": "crosses_above", "crosses_over": "crosses_above", "cross_up": "crosses_above",
   "crossunder": "crosses_below", "cross_below": "crosses_below", "crosses_under": "crosses_below", "cross_down": "crosses_below",
-  "gt": ">", "lt": "<", "gte": ">=", "lte": "<=", "=>": ">=", "=<": "<=", "≥": ">=", "≤": "<="};
+  "gt": ">", "lt": "<", "gte": ">=", "lte": "<=", "=>": ">=", "=<": "<=", "≥": ">=", "≤": "<=",
+  "==": "==", "=": "==", "eq": "==", "equals": "==", "is": "==", "!=": "!=", "<>": "!=", "ne": "!=", "neq": "!=", "≠": "!="};
 const INT_PARAMS = ["length", "fast", "slow", "signal", "k_smooth", "d_smooth"];
 const SOURCES = ["close", "open", "high", "low", "hl2", "hlc3", "ohlc4", "volume"];
 const IND_ALIAS = {bollinger: "bb", bbands: "bb", vol_sma: "volume_sma", volume_ma: "volume_sma", williams: "willr", williams_r: "willr",
@@ -500,6 +503,7 @@ function checkOperand(tok, names){
   if (!m) return `해석할 수 없는 피연산자: ${tok}`;
   if (!names.has(m[1])){
     const base = m[1].split(".")[0];
+    if (EXT_NAME(m[1]) || EXT_NAME(base)) return null;   // 파생/외부(funding·oi 등) 변수는 허용(백테스트 데이터 없으면 null)
     return `조건식이 정의되지 않은 시리즈를 참조합니다: ${m[1]}` + (names.has(base + ".value") || [...names].some(x => x.startsWith(base + "."))
       ? ` (출력 이름을 붙이세요: ${[...names].filter(x => x.startsWith(base + ".")).join(", ")})` : "");
   }
@@ -572,7 +576,7 @@ export function normalizeSpec(spec){
     }
     if (!isNil(r.source) && r.source !== ""){
       const s = String(r.source).toLowerCase();
-      if (!SOURCES.includes(s)) problems.push(`${id}.source 는 ${SOURCES.join("/")} 중 하나 (${r.source})`); else o.source = s;
+      if (SOURCES.includes(s)) o.source = s;   // 올바른 source 만 쓰고, 아니면(예: 다른 지표 출력) 기본값으로 — 전략 실패시키지 않음
     }
     if (IND_REGISTRY[type].tv) for (const [k, d] of Object.entries(IND_REGISTRY[type].defaults)){   // 터미널 지표 고유 파라미터
       if (isNil(r[k]) || r[k] === "" || k in o) continue;
@@ -687,7 +691,10 @@ function operand(series, tok, n){
   const m = REF.exec(tok);
   if (!m) throw new Error(`해석할 수 없는 피연산자: ${tok}`);
   const name = m[1], shift = +(m[2] || 0);
-  if (!(name in series)) throw new Error(`알 수 없는 시리즈: ${name}`);
+  if (!(name in series)){
+    if (EXT_NAME(name) || EXT_NAME(name.split(".")[0])) return new Array(n).fill(null);   // 데이터 없는 파생/외부 변수는 null 시리즈로(전략 실패 대신 그 조건만 안 걸림)
+    throw new Error(`알 수 없는 시리즈: ${name}`);
+  }
   const base = series[name];
   return shift ? base.map((_, i) => i >= shift ? base[i - shift] : null) : base;
 }
@@ -714,6 +721,8 @@ function evalCondition(series, c, n){
       case "<": out[i] = x < y; break;
       case ">=": out[i] = x >= y; break;
       case "<=": out[i] = x <= y; break;
+      case "==": out[i] = Math.abs(x - y) < 1e-6 || Math.abs(x - y) <= Math.abs(y) * 1e-4; break;   // 근사 같음(이산 지표용)
+      case "!=": out[i] = !(Math.abs(x - y) < 1e-6 || Math.abs(x - y) <= Math.abs(y) * 1e-4); break;
       default:
         if (i > 0 && a[i - 1] !== null && b[i - 1] !== null){
           if (c.op === "crosses_above") out[i] = x > y && a[i - 1] <= b[i - 1];
