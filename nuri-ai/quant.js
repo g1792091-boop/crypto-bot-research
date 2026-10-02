@@ -442,7 +442,13 @@ const OP_ALIAS = {"crossover": "crosses_above", "cross_above": "crosses_above", 
 const INT_PARAMS = ["length", "fast", "slow", "signal", "k_smooth", "d_smooth"];
 const SOURCES = ["close", "open", "high", "low", "hl2", "hlc3", "ohlc4", "volume"];
 const IND_ALIAS = {bollinger: "bb", bbands: "bb", vol_sma: "volume_sma", volume_ma: "volume_sma", williams: "willr", williams_r: "willr",
-  stochastic: "stoch", stoch_rsi: "stochrsi", ichi: "ichimoku", parabolic_sar: "psar", sar: "psar", ut_bot: "atr_stop", dmi: "adx"};
+  stochastic: "stoch", stoch_rsi: "stochrsi", ichi: "ichimoku", parabolic_sar: "psar", sar: "psar", ut_bot: "atr_stop", dmi: "adx", st: "supertrend", super_trend: "supertrend"};
+// 차트 터미널 지표(tv_*)를 '맨 이름'으로도 쓸 수 있게 별칭 등록: 예) qqe → tv_qqe. 단, 네이티브 지표(ema·rsi·macd 등)는 덮어쓰지 않는다.
+// → AI 가 만든 전략이 터미널 지표를 prefix 없이 써도 백테스트에서 바로 인식된다(차트 터미널 보조지표 전부 사용 가능).
+{
+  const NATIVE = new Set(Object.keys(IND_REGISTRY).filter(k => !k.startsWith("tv_")));
+  for (const k of TV_TYPES){ const bare = k.slice(3); if (!NATIVE.has(bare) && !(bare in IND_ALIAS)) IND_ALIAS[bare] = k; }
+}
 
 // 파이썬 float(x) 로 읽히는 문자열인가
 const NUM_RE = /^[+-]?(?:(?:\d(?:_?\d)*)(?:\.(?:\d(?:_?\d)*)?)?|\.\d(?:_?\d)*)(?:[eE][+-]?\d(?:_?\d)*)?$/;
@@ -510,20 +516,22 @@ function normGroup(g, label, problems){
     conds = g.conditions ?? [];
   }
   if (!Array.isArray(conds)){ problems.push(`${label}: conditions 는 배열이어야 합니다`); return null; }
-  const out = [];
+  // 형식이 어긋난 개별 조건은 전략 전체를 실패시키지 않고 '건너뛴다'(드롭). 한 그룹의 조건이 전부 못 쓰면 그때만 오류.
+  const out = []; let dropped = 0;
   conds.forEach((c, i) => {
     if (typeof c === "string"){                     // "rsi < 30" 같은 문자열도 받는다
       const parts = c.trim().split(/\s+/);
-      if (parts.length !== 3){ problems.push(`${label}[${i}]: "left op right" 형식이 아닙니다: ${c}`); return; }
+      if (parts.length !== 3){ dropped++; return; }
       c = {left: parts[0], op: parts[1], right: parts[2]};
     }
-    if (!c || typeof c !== "object"){ problems.push(`${label}[${i}]: 조건 형식 오류`); return; }
+    if (!c || typeof c !== "object"){ dropped++; return; }
     let op = String(c.op ?? "").trim();
     op = OP_ALIAS[op.toLowerCase()] || op.toLowerCase();
-    if (!OPS.includes(op)){ problems.push(`${label}[${i}]: 지원하지 않는 op: ${c.op} (가능: ${OPS.join(", ")})`); return; }
-    if (isNil(c.left) || isNil(c.right)){ problems.push(`${label}[${i}]: left/right 가 필요합니다`); return; }
+    if (!OPS.includes(op)){ dropped++; return; }
+    if (isNil(c.left) || isNil(c.right)){ dropped++; return; }   // left/right 누락 조건은 버리고 나머지로 계속
     out.push({left: String(c.left).trim(), op, right: String(c.right).trim()});
   });
+  if (!out.length && conds.length){ problems.push(`${label}: 쓸 수 있는 조건이 없습니다 (${conds.length}개 모두 형식 오류)`); return null; }
   return out.length ? {logic, conditions: out} : null;
 }
 
