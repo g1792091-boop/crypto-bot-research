@@ -4,6 +4,8 @@
 // 지식으로 삼아, 외부 키가 없으면 '추출 답변(자체)'으로, 키가 있으면 그 지식에 근거한 LLM 답변으로 답한다.
 // 중요: 이 봇은 설명·판단만 한다. 주문은 절대 내지 않는다(실거래는 live.js 의 한도·승인·긴급정지만).
 import { buildIndex, search, contextOf } from "./lib/ragstore.js";
+// anythingllm-embed 의 원본 파일을 '그대로' import (vendor/, MIT). CHAT_UI_REOPEN 은 위젯 열림 상태 기억용 키.
+import { CHAT_UI_REOPEN } from "./vendor/anythingllm-embed/constants.js";
 
 let ctx = {esc: s => String(s ?? ""), toast: m => console.log(m)};
 const esc = s => ctx.esc(s);
@@ -34,6 +36,7 @@ const APP_KB = [
   {id: "kb-safe", title: "안전상 넣지 않은 것", text: "코인 지갑 헌터(남의 개인키·시드로 지갑 열기=절도)와 앱 내장 채굴기+한 지갑 자동 입금(배포 시 크립토재킹 모양)은 넣지 않았다. 본인 PC에서 본인 지갑으로 xmrig 를 직접 돌리는 것은 자유다. 이 앱에는 자금 보관·출금 기능이 없다."},
   {id: "kb-combo", title: "실시간 종합 지표 타점", text: "차트 터미널의 보조지표 136종을 5·15·60·240분에 실시간 계산해 상승·하락 표와 시간대 점수를 내고, 큰 추세와 작은 타이밍이 맞는 자리에서만 타점(진입·손절·익절)을 잡아 기록장에 남겨 적중률을 검증한다."},
   {id: "kb-nano", title: "학습 데이터(GH Nano)", text: "직원들의 검증된 분석·매매 해설이 학습 예시로 쌓여 자체 소형 모델(GH Nano) 학습 데이터가 된다. Claude·Gemini·GPT 유료 모델이 쓴 글은 약관 때문에 제외한다. 설정에서 .jsonl 로 내려받을 수 있다."},
+  {id: "kb-att", title: "ai-trader-team 백테스트", text: "ai-trader-team 의 backtest.py 를 그대로 이식한 백테스터(lib/attbacktest.js): SMA20 상향 돌파 진입·고정 5% 손절·목표 2R·최대 60일 보유·왕복비용 0.1%. 여러 거래를 한 계좌로 묶어 거래당 1% 리스크로 복리 수익률을 낸다. '에이아이 트레이더 백테스트 비트코인'처럼 물으면 일봉으로 돌려 승률·복리수익을 보여 준다."},
   {id: "kb-rigor", title: "리스크 계산기(trading rigor)", text: "ai-trader-team 에서 이식한 결정론적 계산기(lib/rigor.js): 포지션 크기(계좌·리스크%·진입·손절), 손익비(R:R), 실현·미실현 손익을 1R 대비 R-멀티플로, 켈리 기준(full/half/quarter), 포트폴리오 히트(동시 손절 시 계좌 손실률, 기본 한도 6%), 상관계수. 규칙: 트레이드당 계좌의 1% 내외만 리스크로, 손익비는 최소 1.5~2 이상, 모든 포지션 리스크 합(히트)은 6% 이내로 관리한다."},
   {id: "kb-ext", title: "외부 AI 연동", text: "자체 AI 데스크는 외부 키 없이도 돌지만, API 키를 연결하면 외부 LLM 의 방향·확신도 의견을 앙상블의 '한 표'로 더한다(확신도만큼 가중, 과신 방지 상한). 설정에서 끄고 켤 수 있다. 코인 AI 봇도 키가 있으면 더 자연스럽게 답한다."},
   {id: "kb-research", title: "투자 리서치 원칙", text: "agency-agents-ko 투자 리서처 원칙 반영: 강세·약세 케이스를 똑같이 엄격하게 본다. 모든 판단에는 수치화된 근거·반증 조건(무효화 트리거)·투자 기간·확신 수준을 명시한다. 하방 리스크를 수치로. 과거 성과가 미래를 보장하지 않는다. 밸류에이션만으로 사지 않는다(가치 함정 주의)."},
@@ -75,6 +78,27 @@ async function gatherDocs(){
 export async function rebuildKnowledge(){ const docs = await gatherDocs(); index = buildIndex(docs); builtAt = Date.now(); return index.items.length; }
 async function ensureIndex(){ if (building) return building; if (!index || Date.now() - builtAt > 60000){ building = rebuildKnowledge().finally(() => building = null); await building; } return index; }
 
+/* ---------- ai-trader-team 백테스트 (이식한 lib/attbacktest.js) ---------- */
+const BT_RE = /(ai[- ]?trader|에이아이\s*트레이더).*(백테스트|backtest)|(백테스트|backtest).*(ai[- ]?trader|트레이더\s*팀)/i;
+async function tryAttBacktest(question){
+  if (!BT_RE.test(question)) return null;
+  try {
+    const O = await import("./coin-office.js"), COINS = O.COINS || [];
+    const hit = COINS.find(c => new RegExp(`${c.ko}|${c.sym}|${c.sym.replace("USDT", "")}`, "i").test(question)) || COINS[0];
+    const AT = await import("./lib/attbacktest.js");
+    const H = await import("../nuri-ai/history.js").catch(() => null);
+    let candles = null;
+    try { candles = (await (H ? H.historyCandles({market: hit.sym, exchange: "binancef", interval: "1d", maxBars: 700}) : null))?.candles; } catch(e){}
+    if (!candles || !candles.length) return `${hit.ko} 일봉 데이터를 받지 못했어요. 잠시 뒤 다시 시도해 주세요.`;
+    const closes = candles.map(b => ({date: new Date(b.t).toISOString().slice(0, 10), close: (b.c ?? b.close)}));
+    const trades = AT.simulateTrendStrategy(closes, {sma_window: 20, stop_pct: 5, target_r_multiple: 2, max_hold_days: 60, friction_pct: 0.1});
+    const agg = AT.aggregateResults({[hit.sym]: trades}, {risk_pct_per_trade: 1});
+    return `ai-trader-team 백테스트 — ${hit.ko} 일봉 ${closes.length}개 · SMA20 돌파 진입·손절 5%·목표 2R(왕복비용 0.1%)\n` +
+      `거래 ${agg.n_trades}건 · 승 ${agg.wins} (승률 ${agg.win_rate_pct}%) · 계좌 복리 수익 ${agg.total_return_pct}% (거래당 1% 리스크)\n` +
+      `※ ai-trader-team 의 backtest.py 를 그대로 이식한 계산입니다. 참고용이며 주문과 무관합니다.`;
+  } catch(e){ return "백테스트를 돌리지 못했어요: " + (e.message || e); }
+}
+
 /* ---------- 코인 언급 감지 → 자체 AI 실시간 판단 ---------- */
 async function coinSelfAI(question){
   try {
@@ -88,6 +112,9 @@ async function coinSelfAI(question){
 
 /* ---------- 답하기 ---------- */
 export async function answer(question, {onToken, signal} = {}){
+  // ai-trader-team 백테스트 명령
+  const bt = await tryAttBacktest(question);
+  if (bt){ onToken?.(bt); return {text: bt, sources: [{title: "ai-trader-team 백테스트", kind: "백테스트", score: 1}], selfai: null}; }
   // 계산 질문(포지션 크기·손익비·켈리·히트)은 이식한 rigor 로 결정론적으로 먼저 답한다
   const calc = await tryRigor(question);
   if (calc){ onToken?.(calc); return {text: calc, sources: [{title: "리스크 계산기(trading rigor)", kind: "계산", score: 1}], selfai: null}; }
@@ -138,6 +165,7 @@ export function mountLauncher(c){
   const b = document.createElement("button"); b.id = "caiLauncher"; b.className = "cai-fab"; b.title = "코인 AI 봇에게 물어보기"; b.innerHTML = "💬<span>코인 AI</span>";
   b.onclick = () => openCoinAI();
   document.body.appendChild(b);
+  try { if (localStorage.getItem(CHAT_UI_REOPEN)) openCoinAI(); } catch(e){}   // anythingllm-embed 방식: 새로고침 전 열려 있었으면 다시 연다
 }
 
 export function openCoinAI(c){
@@ -148,10 +176,11 @@ export function openCoinAI(c){
     root.innerHTML = `<div class="cai-h"><b>🤖 코인 AI 봇</b><span class="cai-badge" id="caiMode">자체(오프라인)</span><span class="cai-sp"></span><button class="cai-mini" data-cai-reset title="대화 초기화(새 세션)">↻</button><button class="cai-x" data-cai-x aria-label="닫기">✕</button></div>
       <div class="cai-body" id="caiBody"></div>
       <div class="cai-in"><input id="caiIn" placeholder="코인·전략·사용법·리스크 계산을 물어보세요" autocomplete="off"><button class="cai-send" data-cai-send>보내기</button></div>`;
-    root.addEventListener("click", e => { if (e.target.closest("[data-cai-x]")) root.hidden = true; if (e.target.closest("[data-cai-send]")) send(); if (e.target.closest("[data-cai-reset]")){ resetSession(); history = []; renderHistory(); } });
+    root.addEventListener("click", e => { if (e.target.closest("[data-cai-x]")){ root.hidden = true; try { localStorage.removeItem(CHAT_UI_REOPEN); } catch(err){} } if (e.target.closest("[data-cai-send]")) send(); if (e.target.closest("[data-cai-reset]")){ resetSession(); history = []; renderHistory(); } });
     root.addEventListener("keydown", e => { if (e.key === "Enter" && e.target.id === "caiIn") send(); if (e.key === "Escape") root.hidden = true; });
   }
   root.hidden = false;
+  try { localStorage.setItem(CHAT_UI_REOPEN, "1"); } catch(e){}   // anythingllm-embed 방식: 다시 열림 상태 기억
   history = loadHistory();
   renderHistory();
   detectMode();

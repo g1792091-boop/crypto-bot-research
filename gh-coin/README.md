@@ -22,6 +22,12 @@
 ### 🤖 코인 AI 봇 (`coinai.js` + `lib/ragstore.js`) — 완전 자체 RAG 챗
 이 앱이 아는 것(앱 설명 고정 지식 + 사무실 분석·표·노트 + 데모 전략 + 실시간 자체 AI 판단)을 모아 **외부 서비스·벡터DB 없이** 브라우저 안에서 도는 가벼운 검색(TF-IDF + 코사인, 한국어 2-그램 `lib/ragstore.js`)으로 질문에 답한다. **외부 AI 키가 없으면 추출 답변(완전 자체)**, 키가 있으면 그 지식에 **근거한** LLM 답변(`brainStream`). 코인을 물으면 자체 AI 데스크(`selfAIFor`)의 실시간 방향·확신도를 함께 붙인다. 화면 오른쪽 아래 **떠다니는 [💬 코인 AI] 버튼**과 상단 **[🤖 코인 AI]** 버튼으로 어디서나 열린다. **설명·판단만 하고 주문은 내지 않는다.** 아이디어: langgenius/dify(RAG·지식베이스)·FlowiseAI/Flowise(임베드 위젯)·Mintplex-Labs/anything-llm(완전 자체 프라이빗 RAG) — 코드 복사 없이 개념만. probot(GitHub App 프레임워크)은 코인 앱과 무관해 적용하지 않음.
 
+### 📦 `vendor/` — 외부 저장소의 실제 원본 코드
+받은 GitHub 저장소의 **실제 소스를 그대로 보관**한다(수정 없음, 각 `LICENSE` 포함): `vendor/ai-trader-team/`(trading_rigor.py·backtest.py·cli_utils.py), `vendor/anythingllm-embed/`(useSessionId.js·constants.js·date.js), `vendor/agency-agents-ko/`(투자 리서처 원칙). 그중 **의존성 없는 `anythingllm-embed/constants.js` 는 코인 AI 봇이 그대로 `import` 해 사용**(위젯 열림 상태 기억). 나머지 파이썬/React 파일은 빌드 없는 브라우저 앱에서 그대로 실행되지 않아, 같은 공식·반올림으로 **충실히 이식한 실행본**(`lib/rigor.js`, `lib/attbacktest.js`, `coinai.js` 세션 로직)을 두고 원본과 출력 일치를 테스트로 확인했다. (`vendor/README.md` 참고)
+
+### 📊 ai-trader-team 백테스트 (`lib/attbacktest.js`) — 실제 이식
+`vendor/ai-trader-team/backtest.py` 를 그대로 이식: SMA20 상향 돌파 진입·고정 5% 손절·목표 2R·최대 60일 보유·왕복비용 0.1%, 여러 거래를 한 계좌로 묶어 거래당 1% 리스크 복리 수익(+히트 한도). Python 원본과 거래·R-멀티플·수익률이 일치한다. 코인 AI 봇에 "에이아이 트레이더 백테스트 비트코인"처럼 물으면 일봉으로 돌려 보여 주고, `window.ghCoinAttBacktest` 로도 호출.
+
 ### 🧮 리스크 계산기 (`lib/rigor.js`) — 실제 이식
 `TLSRUF/ai-trader-team` 의 `tools/trading_rigor.py`(MIT, 표준 라이브러리 결정론적 계산)를 바닐라 JS 로 **그대로 이식**: 포지션 사이징(계좌·리스크%·진입·손절)·손익비(R:R)·실현/미실현 R-멀티플·켈리(full/half/quarter)·포트폴리오 히트(동시 손절 손실률)·상관계수. 같은 공식·같은 반올림(ROUND_HALF_EVEN)·같은 검증 규칙이라 Python 원본과 출력이 일치한다(단위 테스트 확인). 코인 AI 봇에 "포지션 크기 계좌 10000 리스크 1 진입 100 손절 95"처럼 물으면 바로 계산해 주고, 자체 AI 데스크 1위 코인에는 1.5×ATR 손절·3R 목표 예시 계획을 보여 준다. `window.ghCoinRigor` 로도 호출.
 
