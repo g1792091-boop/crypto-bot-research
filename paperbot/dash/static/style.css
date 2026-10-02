@@ -523,3 +523,6 @@ button.mini { height: 22px; padding: 0 6px; font-size: 11px; }
   #side2-body { max-height: none; }
 }
 .watch .p2kv { flex-direction: column; gap: 0; } .watch .p2kv b { text-align: left; }
+.slive { flex: none; padding: 6px 8px; border-bottom: 1px solid var(--line); font-size: 12px; }
+.slive .lv { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
+.slive .lv b { font-family: var(--mono, monospace); }

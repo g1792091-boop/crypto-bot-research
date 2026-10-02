@@ -392,3 +392,16 @@ def test_trade_screen_lower_panels_are_wired():
     js = open(os.path.join(static, "panels.js"), encoding="utf-8").read()
     assert 'id="watch2-body"' in html and 'id="side2-body"' in html and "/static/panels.js" in html
     assert "/api/liq?symbol=" in js and "/api/ghcoin/board" in js and "bookHtml(state.sym" in js
+
+
+def test_board_carries_wins_losses_and_gross_for_the_live_record(client):
+    assert client.post("/api/login", json={"password": "correct horse battery"}).status_code == 200
+    accts = client.get("/api/board").json()["accounts"]
+    assert accts
+    for a in accts:
+        assert {"wins", "losses", "gross_win", "gross_loss"} <= set(a)
+        assert a["wins"] + a["losses"] <= a["trades"] and a["gross_win"] >= 0 >= a["gross_loss"]
+        assert abs(a["gross_win"] + a["gross_loss"] - a["pnl"]) < 1e-6
+    static = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "paperbot", "dash", "static")
+    sj = open(os.path.join(static, "strat.js"), encoding="utf-8").read()
+    assert "function liveRec(" in sj and "renderLive();" in sj and 'id="s-live"' in open(os.path.join(static, "index.html"), encoding="utf-8").read()

@@ -33,11 +33,33 @@ function renderSList() {
     const w = bestWallet(x.strategy);
     return `<div class="srow ${x.strategy === ss.name ? "sel" : ""}" data-n="${esc(x.strategy)}">
       <div style="min-width:0"><div class="nm">${esc(x.name_ko)}</div>
-      <div class="st">${esc(x.style || "신호 부족")}${x.rare ? " · 신호 드묾" : ""}</div></div>
+      <div class="st">${esc(x.style || "신호 부족")}${x.rare ? " · 신호 드묾" : ""}</div>
+      <div class="st">${wlText(liveRec(stratAccts(x.strategy)))}</div></div>
       <span class="w ${w == null ? "" : cls(w - INITIAL)}">${w == null ? "" : "$" + fmt(w, 0)}</span></div>`;
   }).join("") || '<p class="empty">없음</p>';
   document.querySelectorAll("#slist .srow").forEach((r) => r.onclick = () => pickStrat(r.dataset.n));
   $("s-pick").value = ss.name || "";
+}
+// live record of a strategy's accounts (the 5 timeframes; copies and new-lab accounts are not its own)
+function liveRec(list) {
+  const r = {trades: 0, wins: 0, losses: 0, pnl: 0, gw: 0, gl: 0};
+  for (const a of list) { r.trades += a.trades || 0; r.wins += a.wins || 0; r.losses += a.losses || 0; r.pnl += a.pnl || 0; r.gw += a.gross_win || 0; r.gl += a.gross_loss || 0; }
+  r.rate = r.trades ? r.wins / r.trades : null;
+  r.avgW = r.wins ? r.gw / r.wins : null; r.avgL = r.losses ? r.gl / r.losses : null;
+  r.ratio = r.avgW != null && r.avgL ? r.avgW / Math.abs(r.avgL) : null;
+  return r;
+}
+const stratAccts = (n) => (state.board ? state.board.accounts.filter((a) => a.kind === "strategy" && a.strategy === n) : []);
+const wlText = (r) => r.trades ? `${r.wins}승 ${r.losses}패 · ${Math.round(r.rate * 100)}%` : "거래 없음";
+function renderLive() {
+  const el = $("s-live"); if (!el || !ss.name) return;
+  const r = liveRec(stratAccts(ss.name));
+  const usd0 = (x) => x == null ? "—" : `${x < 0 ? "-" : "+"}$${fmt(Math.abs(x), 0)}`;
+  el.innerHTML = r.trades ? `<div class="lv"><b>실전 기록 (5개 봉 합계)</b> <span>${r.wins}승 ${r.losses}패</span>
+    <span>승률 <b>${Math.round(r.rate * 100)}%</b></span><span>손익 <b class="${cls(r.pnl)}">${usd0(r.pnl)}</b></span>
+    <span>평균 이익 <b class="up">${usd0(r.avgW)}</b></span><span>평균 손실 <b class="down">${usd0(r.avgL)}</b></span>
+    <span title="평균 이익 ÷ 평균 손실. 승률이 낮아도 이게 크면 남을 수 있음">손익비 <b>${r.ratio == null ? "—" : r.ratio.toFixed(2)}</b></span></div>`
+    : '<div class="lv muted">실전 기록: 아직 끝난 거래가 없습니다</div>';
 }
 function pickStrat(n) { ss.name = n; renderSList(); renderStrat(); }
 // from a position anywhere (trade chart box, position tables): this strategy, at that account's timeframe and coin
@@ -72,14 +94,15 @@ function renderAccts() {
   $("s-accts").innerHTML = TRADE_TFS.map((tf) => {
     const a = state.board && state.board.accounts.find((x) => x.account_id === `${ss.name}@${tf}`);
     const w = a ? (a.wallet ?? INITIAL) : null;
-    let s = a ? `${a.trades}건` : "—";
-    if (a && a.bust) s = '<span class="down">파산</span>';
-    else if (a && a.position) s = `<span class="accent">● ${coin(a.position.symbol)} ${a.position.side > 0 ? "롱" : "숏"}</span>`;
+    let s = !a ? "—" : a.trades ? `${a.wins}승 ${a.losses}패 · ${Math.round(a.trades ? a.wins / a.trades * 100 : 0)}%` : "거래 없음";
+    if (a && a.bust) s += ' · <span class="down">파산</span>';
+    else if (a && a.position) s += `<br><span class="accent">● ${coin(a.position.symbol)} ${a.position.side > 0 ? "롱" : "숏"}</span>`;
     const vs = !a || a.beats_random == null ? "" : a.beats_random ? '<span class="up">동전 봇보다 ✓</span>' : '<span class="muted">동전 봇보다 ✕</span>';
     return `<div class="acard ${tf === ss.tf ? "sel" : ""}" data-tf="${tf}" title="누르면 이 봉으로 차트를 봅니다. 두 번 누르면 계좌 화면">
       <div class="k">${TF_KO[tf]}</div><div class="v ${w == null ? "" : cls(w - INITIAL)}">${w == null ? "—" : "$" + fmt(w, 0)}</div>
       <div class="s">${s}</div><div class="s">${vs}</div></div>`;
   }).join("");
+  renderLive();
   document.querySelectorAll("#s-accts .acard").forEach((c) => {
     c.onclick = () => setStratTf(c.dataset.tf);
     c.ondblclick = () => openAccount(`${ss.name}@${c.dataset.tf}`);

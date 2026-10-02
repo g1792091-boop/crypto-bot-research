@@ -185,7 +185,8 @@ class Data:
             eng = st[1]["engines"] if st else {}
             xstate = self.extras_state(c)
             stats = {r["account_id"]: dict(r) for r in c.execute(       # one pass over trades for every account
-                "SELECT account_id, COUNT(*) AS trades, SUM(pnl > 0) AS wins, SUM(pnl) AS pnl, "
+                "SELECT account_id, COUNT(*) AS trades, SUM(pnl > 0) AS wins, SUM(pnl < 0) AS losses, SUM(pnl) AS pnl, "
+                "SUM(CASE WHEN pnl > 0 THEN pnl ELSE 0 END) AS gross_win, SUM(CASE WHEN pnl < 0 THEN pnl ELSE 0 END) AS gross_loss, "
                 "SUM(exit_reason = 'LOCK') AS locks, MAX(exit_time) AS last_exit, "
                 "AVG(leverage) AS avg_lev FROM trades GROUP BY account_id")}
         for a in accts:
@@ -200,6 +201,8 @@ class Data:
                 **a, "wallet": e.get("wallet"), "max_drawdown": e.get("max_drawdown"),
                 "bust": e.get("bust", False), "trades": n,
                 "win_rate": (s.get("wins") or 0) / n if n else None, "pnl": s.get("pnl") or 0.0,
+                "wins": s.get("wins") or 0, "losses": s.get("losses") or 0,
+                "gross_win": s.get("gross_win") or 0.0, "gross_loss": s.get("gross_loss") or 0.0,
                 "locks": s.get("locks") or 0, "avg_leverage": s.get("avg_lev"),
                 "last_exit": s.get("last_exit"),
                 "position": None if not pos else {

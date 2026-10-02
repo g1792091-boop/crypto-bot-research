@@ -489,7 +489,7 @@ function renderBoard() {
       : a.beats_random == null ? "—" : a.beats_random ? '<span class="up">✓ 나음</span>' : '<span class="down">✕ 못함</span>';
     return `<tr class="click" data-id="${esc(a.account_id)}"><td class="l muted" data-k="순위">${i + 1}</td><td class="l name">${esc(name(a))}${extraPills(a)}</td>
       <td class="mono" data-k="잔고">$${fmt(w)}</td><td class="mono ${cls(ret)}" data-k="수익률">${pct(ret)}</td><td data-k="거래">${a.trades}</td>
-      <td data-k="승률">${a.win_rate == null ? "—" : Math.round(a.win_rate * 100) + "%"}</td>
+      <td data-k="승률">${a.win_rate == null ? "—" : Math.round(a.win_rate * 100) + "%"}${a.trades ? ` <small class="muted">${a.wins}승 ${a.losses}패</small>` : ""}</td>
       <td class="mono" data-k="최대 낙폭">${a.max_drawdown ? "-" + (a.max_drawdown * 100).toFixed(1) + "%" : "—"}</td>
       <td class="l">${st}</td><td class="l" data-k="동전 봇 대비">${vs}</td></tr>`;
   }).join("") || '<tr><td colspan="9" class="empty">계좌가 없습니다</td></tr>';
