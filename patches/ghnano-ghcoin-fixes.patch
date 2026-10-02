@@ -1,0 +1,354 @@
+diff --git "a/dist/\354\202\254\354\232\251\353\262\225.txt" "b/dist/\354\202\254\354\232\251\353\262\225.txt"
+index 0ff8b93..fafafb0 100644
+--- "a/dist/\354\202\254\354\232\251\353\262\225.txt"
++++ "b/dist/\354\202\254\354\232\251\353\262\225.txt"
+@@ -87,12 +87,22 @@ CEO실 + 10개 팀, 62명(팀마다 팀장 1명 + 직원 5명)이 픽셀 사무
+ - 닫아도(✕ GH Nano 로) 뒤에서 계속 일합니다. 같은 것을 단독 프로그램으로 쓰려면 GHCoin.exe (GHCoin.zip).
+ 
+ [AI 모델을 직원에게 배정하기]
+-- 먼저 설정 → AI 두뇌에 API 키를 넣으면 연결된 모델이 직원들에게 자동으로 골고루 배정됩니다(빠르고 큰 모델 우선).
++- 꼭 GHNano.exe 로 실행하세요. 웹 버전(브라우저 주소로 연 것)은 NVIDIA 등에 바로 연결되지 않아 직원들이 AI 없이 멈춥니다.
++  (웹 버전에 넣은 키는 exe 쪽에 보이지 않습니다 — exe 에서 다시 넣으세요)
++- 설정 → AI 두뇌 · API 키에 키를 붙여넣고 [연결] → 연결된 모델이 직원들에게 자동으로 골고루 배정됩니다(빠르고 큰 모델 우선).
++  GH Coin(코인 본부)도 같은 키를 바로 씁니다(창을 다시 열 필요 없음).
++- 확인: 사무실 위쪽 상태 줄에 '⚠ 직원에게 붙은 AI 가 없습니다'가 없어야 정상입니다. 직원 캐릭터를 누르면 '배정된 AI 모델'이 보입니다.
+ - 직접 고르려면: 사무실에서 직원 캐릭터를 누르고 'AI 직접 고르기', 또는 [팀 구성]에서 '팀 AI' / '전원 AI'. 직원 > 팀 > 전원 순으로 우선합니다.
++- 채팅 두뇌를 '내 기기 AI'로 바꿔도 직원들은 API 모델로 스킬·도구를 모두 받아 일합니다.
+ 
+ [📁 결과물 보관함]  사무실 위쪽 [📁 결과물]
+ - 사업계획서·손익표·시간별/일일 보고서·검증 통과 매매법·설계안·재개발 후보 순위·직원이 만든 파일을 보고 [⬇ 내려받기] 합니다.
+-- 웹 버전에서도 앱 안에 보관됩니다. GHNano.exe 는 같은 파일이 문서/GHNano 사무실 폴더에도 저장되고 [📂 폴더 열기]로 바로 열립니다.
++- 웹 버전에서도 앱 안에 보관됩니다. GHNano.exe 는 같은 파일이 'GHNano 사무실' 폴더에도 저장되고 [📂 폴더 열기]로 바로 열립니다.
++- 저장 위치: 결과물 창 맨 위에 실제 경로가 그대로 나옵니다 (보통 C:\Users\내이름\Documents\GHNano 사무실,
++  OneDrive 백업을 켠 PC는 C:\Users\내이름\OneDrive\문서\GHNano 사무실). 사업계획서는 business\사업이름\사업계획서.md · financials.csv,
++  GH Coin 결과는 ghcoin 폴더 안입니다.
++- 사무실 기록의 '💼 사업 시뮬레이션' 카드에서 [📄 사업계획서 보기·내려받기] · [📊 손익표 보기·내려받기]를 누르면 바로 열립니다.
++- [⬇ 내려받기]는 이 PC의 '다운로드' 폴더에 '사업이름-사업계획서.md' 처럼 저장됩니다(Ctrl+J 로 목록). .md 는 메모장으로 열면 됩니다.
+ 
+ [📈 차트 터미널]  왼쪽 [차트 터미널] 또는 사무실 위쪽 버튼
+ - 트레이딩뷰처럼: 종목 검색(코인·미국·국내 주식·선물), 1·3·5·6·8·10·15분~1주(거래소에 없는 6·8·10분봉 등은 작은 봉을 묶어 만듦), 캔들/헤이킨아시/라인, 로그, 1·2·4분할 화면.
+diff --git a/gh-coin/coin-office.js b/gh-coin/coin-office.js
+index d83673f..dab373b 100644
+--- a/gh-coin/coin-office.js
++++ b/gh-coin/coin-office.js
+@@ -1038,7 +1038,7 @@ async function makeReport(since){
+   post({ch: "hq", kind: "report", title: report.title, text: report.text, reportId: report.id});
+   { const d = new Date(), stamp = `${d.toISOString().slice(0, 10)}-${String(hour).padStart(2, "0")}`; saveDoc({title: `${report.title} (${d.toISOString().slice(0, 10)})`, path: `ghcoin/reports/hourly/${stamp}.md`, content: `# ${report.title}\n\n${report.text}\n\n---\n${facts}\n`, team: "hq", agent: "lead"}); }
+   fire({kind: "present", report});
+-  if (computerOn()){ try { const {codeCall} = await import("../nuri-ai/engine.js"); const d = new Date(), stamp = `${d.toISOString().slice(0, 10)}-${String(hour).padStart(2, "0")}`; await codeCall("write", {ws: "office", path: `reports/hourly/${stamp}.md`, content: `# ${report.title}\n\n${report.text}\n\n---\n${facts}\n`}); } catch(err){} }
++  if (computerOn()){ try { const {codeCall} = await import("../nuri-ai/engine.js"); const d = new Date(), stamp = `${d.toISOString().slice(0, 10)}-${String(hour).padStart(2, "0")}`; await codeCall("write", {ws: "office", path: `ghcoin/reports/hourly/${stamp}.md`, content: `# ${report.title}\n\n${report.text}\n\n---\n${facts}\n`}); } catch(err){} }
+   try { if (typeof document !== "undefined" && document.hidden && "Notification" in window && Notification.permission === "granted") new Notification("GH Coin · " + report.title, {body: report.text.replace(/[#*]/g, "").slice(0, 140)}); } catch(err){}
+   return report;
+ }
+diff --git a/gh-coin/coin-ui.js b/gh-coin/coin-ui.js
+index 063fb8c..b9f73c2 100644
+--- a/gh-coin/coin-ui.js
++++ b/gh-coin/coin-ui.js
+@@ -517,7 +517,11 @@ function renderStatus(){
+   if (document.activeElement !== $o("#ofClaude")) $o("#ofClaude").value = claudeMode(c);
+   const next = O.nextAutoIn();
+   const ps = O.officePaused?.() || 0;
+-  const jobNow = (ps ? `<span class="of-jobnow">⏸ AI 한도 때문에 ${Math.ceil(ps / 60e3)}분 쉬는 중 (질문은 받음)</span> · ` : "") + (curJob ? `<span class="of-jobnow">▶ 지금 하는 일: ${E(curJob)}</span> · ` : "");
++  // 직원에게 AI 가 실제로 붙어 있는지 상태 줄에 바로 보여 준다
++  const staffAI = Object.keys(O.assignModels?.() || {}).length;
++  const aiWarn = !staffAI ? `<span class="of-jobnow">⚠ 직원에게 붙은 AI 가 없습니다 — 위쪽 🔑 AI 연결(또는 GH Nano 설정 → AI 두뇌 · API 키)에 키를 넣으면 직원마다 자동 배정됩니다</span> · `
++    : !LAUNCHER.on ? `<span class="of-jobnow">⚠ 웹 버전: NVIDIA 등 일부 AI 는 브라우저에서 바로 연결되지 않습니다 — GHCoin.exe(또는 GHNano.exe)로 실행하세요</span> · ` : "";
++  const jobNow = aiWarn + (ps ? `<span class="of-jobnow">⏸ AI 한도 때문에 ${Math.ceil(ps / 60e3)}분 쉬는 중 (질문은 받음)</span> · ` : "") + (curJob ? `<span class="of-jobnow">▶ 지금 하는 일: ${E(curJob)}</span> · ` : "");
+   $o("#ofStatus").innerHTML = jobNow + (m ? `<b class="ok">진행 중</b> · ${placeName(placeOf(m.place))} · ${m.done.length}/${m.order.length} 발언${s.queued ? ` · 대기 회의 ${s.queued}개` : ""}`
+     : c.auto ? (u.auto >= c.dailyMax ? `오늘 자동 회의 ${c.dailyMax}번을 다 했습니다 · 메시지를 보내면 바로 회의합니다` : `다음 자동 회의 ${next > 60e3 ? Math.round(next / 60e3) + "분 뒤" : "곧"} · 급변동 감시 중`) : "자동 회의 꺼짐 · 메시지를 보내면 바로 회의합니다");
+   const nc = O.nextChatIn();
+@@ -717,11 +721,16 @@ const DOC_KIND = [["all", "전체"], ["business", "사업계획서"], ["reports"
+ const kindOfDoc = d => { const p = String(d.path || "").replace(/^ghcoin\//, ""); const k = p.split("/")[0]; return DOC_KIND.some(x => x[0] === k) ? k : "etc"; };
+ async function openDocs(keep){
+   let box = $o("#ofDocs");
+-  if (!box){ root.insertAdjacentHTML("beforeend", `<div class="of-docs" id="ofDocs" hidden><div class="of-docsbox"><div class="of-docsh"><b>📁 결과물 보관함</b><span id="ofDocsSub"></span><span class="of-sp"></span><button class="of-btn2" data-docfolder="">📂 폴더 열기</button><button class="of-x" data-docclose aria-label="닫기">✕</button></div><div class="of-docsf" id="ofDocsF"></div><div class="of-docsb"><div class="of-docsl" id="ofDocsL"></div><div class="of-docsv" id="ofDocsV"></div></div></div></div>`); box = $o("#ofDocs"); }
++  if (!box){ root.insertAdjacentHTML("beforeend", `<div class="of-docs" id="ofDocs" hidden><div class="of-docsbox"><div class="of-docsh"><b>📁 결과물 보관함</b><span id="ofDocsSub"></span><span class="of-sp"></span><button class="of-btn2" data-docfolder="ghcoin">📂 폴더 열기</button><button class="of-x" data-docclose aria-label="닫기">✕</button></div><div class="of-docsf" id="ofDocsF"></div><div class="of-docsb"><div class="of-docsl" id="ofDocsL"></div><div class="of-docsv" id="ofDocsV"></div></div></div></div>`); box = $o("#ofDocs"); }
+   box.hidden = false;
+   docList = await (O.listDocs ? O.listDocs() : []);
+   const n = k => k === "all" ? docList.length : docList.filter(d => kindOfDoc(d) === k).length;
+-  $o("#ofDocsSub").textContent = `${docList.length}개 · ${LAUNCHER.on ? "앱 안 보관 + 문서/GHNano 사무실" + (O.TEAMS?.length > 20 ? "/ghcoin" : "") + " 폴더" : "앱 안에 보관 (웹 버전)"}`;
++  $o("#ofDocsSub").textContent = `${docList.length}개 · ${LAUNCHER.on ? "앱 안 보관 + 문서/GHNano 사무실" + (O.TEAMS?.length > 20 ? "/ghcoin" : "") + " 폴더" : "앱 안에 보관 (웹 버전 · 폴더 저장은 GHNano.exe 에서만)"}`;
++  // 실제 저장 위치를 그대로 보여 준다 (OneDrive 로 옮겨진 문서 폴더도 정확히)
++  if (LAUNCHER.on) fetch("/__nuri/officedir", {headers: {"X-Nuri-Token": window.__NURI_TOKEN || ""}}).then(r => r.ok ? r.json() : null).then(j => {
++    if (!j?.dir) return; const sub = "ghcoin", sep = j.dir.includes("\\") ? "\\" : "/";
++    const el = $o("#ofDocsSub"); el.textContent = `${docList.length}개 · 저장 위치: ${j.dir}${sub ? sep + sub : ""}`; el.title = "이 폴더에 파일로 저장됩니다. 📂 폴더 열기로 바로 열 수 있습니다."; el.style.userSelect = "text";
++  }).catch(() => {});
+   $o("#ofDocsF").innerHTML = DOC_KIND.filter(([k]) => k === "all" || n(k)).map(([k, l]) => `<button data-docfilter="${k}" aria-pressed="${k === docFilter}">${l} <small>${n(k)}</small></button>`).join("");
+   const list = docList.filter(d => docFilter === "all" || kindOfDoc(d) === docFilter);
+   $o("#ofDocsL").innerHTML = list.map(d => `<button class="of-doci" data-docview="${E(d.id)}" aria-pressed="${d.id === docSel}"><b>${E(d.title)}</b><small>${E(d.path || "")} · ${E(when(d.t))} · ${(d.size / 1024).toFixed(1)}KB</small></button>`).join("")
+@@ -739,9 +748,11 @@ function showDoc(id){
+ }
+ function dlDoc(id){
+   const d = docList.find(x => x.id === id); if (!d) return;
+-  const name = String(d.path || d.title).split("/").pop() || "결과물.md", bom = /csv/.test(d.mime) ? "\ufeff" : "";
++  const parts = String(d.path || d.title).split("/"), file = parts.pop() || "결과물.md", bom = /csv/.test(d.mime) ? "\ufeff" : "";
++  // 사업계획서.md · financials.csv 처럼 이름이 늘 같은 파일은 사업명(폴더 이름)을 앞에 붙여 서로 덮어쓰지 않게
++  const name = /^(사업계획서|financials|README|summary|plan)(?=\.|$)/i.test(file) && parts.length ? `${parts.pop()}-${file}` : file;
+   const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([bom + (d.content || "")], {type: (d.mime || "text/plain") + ";charset=utf-8"})); a.download = /\.\w+$/.test(name) ? name : name + ".md";
+-  a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 3000); ctx.toast("내려받았습니다: " + a.download);
++  a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 3000); ctx.toast(`내려받았습니다: ${a.download} → 이 PC의 '다운로드' 폴더 (Ctrl+J 로 목록)${LAUNCHER.on ? " · 같은 파일이 결과물 폴더에도 있습니다 (📂 폴더 열기)" : ""}`);
+ }
+ /* ============ 성장 과제 보드 ============ */
+ const backlogItems = () => { if (!has("backlog")) return []; try { return O.backlog() || []; } catch(e){ return []; } };
+diff --git a/launcher/code.go b/launcher/code.go
+index 23216de..16ae949 100644
+--- a/launcher/code.go
++++ b/launcher/code.go
+@@ -108,7 +108,14 @@ func officeWS() (string, error) {
+ 	if err != nil {
+ 		return "", err
+ 	}
++	// 예전 위치(사용자 폴더/Documents)에 이미 있으면 그대로 쓰고, 없으면 실제 '문서' 폴더
++	// (윈도우에서 OneDrive 백업을 켜면 문서가 OneDrive\문서 로 옮겨져 있어 예전 경로로는 찾을 수 없었다)
+ 	dir := filepath.Join(home, "Documents", "GHNano 사무실")
++	if _, e := os.Stat(dir); e != nil {
++		if docs := documentsDir(); docs != "" {
++			dir = filepath.Join(docs, "GHNano 사무실")
++		}
++	}
+ 	if err := os.MkdirAll(dir, 0o755); err != nil {
+ 		return "", err
+ 	}
+diff --git a/launcher/main.go b/launcher/main.go
+index 23f70d9..adea44e 100644
+--- a/launcher/main.go
++++ b/launcher/main.go
+@@ -131,6 +131,7 @@ func main() {
+ 	mux.HandleFunc("/__nuri/override", overrideHandler)
+ 	mux.HandleFunc("/__nuri/override/", overrideHandler)
+ 	mux.HandleFunc("/__nuri/openfolder", openFolderHandler)
++	mux.HandleFunc("/__nuri/officedir", officeDirHandler)
+ 	mux.Handle("/", siteHandler(sub))
+ 
+ 	srv := &http.Server{Handler: mux}
+diff --git a/launcher/open_other.go b/launcher/open_other.go
+index 64167a3..37494b4 100644
+--- a/launcher/open_other.go
++++ b/launcher/open_other.go
+@@ -49,3 +49,10 @@ func openDir(dir string) {
+ 	}
+ 	exec.Command("xdg-open", dir).Start()
+ }
++
++func documentsDir() string {
++	if home, err := os.UserHomeDir(); err == nil {
++		return home + "/Documents"
++	}
++	return ""
++}
+diff --git a/launcher/open_windows.go b/launcher/open_windows.go
+index af503ca..505fbac 100644
+--- a/launcher/open_windows.go
++++ b/launcher/open_windows.go
+@@ -54,7 +54,7 @@ func showError(title, msg string) {
+ // 예전 실행기(버전 확인 기능이 없는 것 포함)를 강제로 끈다. 자기 자신은 제외.
+ func killOthers() {
+ 	self, _ := os.Executable()
+-	names := map[string]bool{"NuriAI.exe": true, "GHNano.exe": true, "ArchAI.exe": true, filepath.Base(self): true}
++	names := map[string]bool{"NuriAI.exe": true, "GHNano.exe": true, "ArchAI.exe": true, "GHCoin.exe": true, filepath.Base(self): true}
+ 	for name := range names {
+ 		cmd := exec.Command("taskkill", "/F", "/IM", name, "/FI", fmt.Sprintf("PID ne %d", os.Getpid()))
+ 		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+@@ -100,3 +100,24 @@ func pickFolder() (string, error) {
+ 
+ // 폴더를 탐색기로 연다
+ func openDir(dir string) { exec.Command("explorer", dir).Start() }
++
++// 윈도우의 실제 '문서' 폴더 (OneDrive 로 옮겨진 경우 포함) — FOLDERID_Documents
++func documentsDir() string {
++	guid := [16]byte{0xD0, 0x9A, 0xD3, 0xFD, 0x8F, 0x23, 0xAF, 0x46, 0xAD, 0xB4, 0x6C, 0x85, 0x48, 0x03, 0x69, 0xC7}
++	shell32 := syscall.NewLazyDLL("shell32.dll")
++	proc := shell32.NewProc("SHGetKnownFolderPath")
++	if proc.Find() != nil {
++		return ""
++	}
++	var p *uint16
++	hr, _, _ := proc.Call(uintptr(unsafe.Pointer(&guid[0])), 0, 0, uintptr(unsafe.Pointer(&p)))
++	if hr != 0 || p == nil {
++		return ""
++	}
++	defer syscall.NewLazyDLL("ole32.dll").NewProc("CoTaskMemFree").Call(uintptr(unsafe.Pointer(p)))
++	n := 0
++	for ptr := unsafe.Pointer(p); *(*uint16)(ptr) != 0; n++ {
++		ptr = unsafe.Add(ptr, 2)
++	}
++	return syscall.UTF16ToString(unsafe.Slice(p, n))
++}
+diff --git a/launcher/override.go b/launcher/override.go
+index 80cd7b1..dc20d3c 100644
+--- a/launcher/override.go
++++ b/launcher/override.go
+@@ -169,6 +169,9 @@ func openFolderHandler(w http.ResponseWriter, r *http.Request) {
+ 		return
+ 	}
+ 	if sub := filepath.Clean(r.URL.Query().Get("sub")); sub != "." && sub != "" && !strings.Contains(sub, "..") && !filepath.IsAbs(sub) {
++		if sub == "ghcoin" { // GH Coin 결과물 폴더는 아직 파일이 없어도 만들어 두고 연다
++			os.MkdirAll(filepath.Join(dir, sub), 0o755)
++		}
+ 		if st, e := os.Stat(filepath.Join(dir, sub)); e == nil && st.IsDir() {
+ 			dir = filepath.Join(dir, sub)
+ 		}
+@@ -177,3 +180,18 @@ func openFolderHandler(w http.ResponseWriter, r *http.Request) {
+ 	w.Header().Set("Content-Type", "application/json")
+ 	json.NewEncoder(w).Encode(obj{"ok": true, "dir": dir})
+ }
++
++// 결과물 폴더의 실제 경로 (화면에 그대로 보여 준다 · 열지는 않음)
++func officeDirHandler(w http.ResponseWriter, r *http.Request) {
++	if r.Header.Get("X-Nuri-Token") != sessionToken {
++		http.Error(w, "forbidden", http.StatusForbidden)
++		return
++	}
++	dir, err := officeWS()
++	if err != nil {
++		http.Error(w, err.Error(), 500)
++		return
++	}
++	w.Header().Set("Content-Type", "application/json")
++	json.NewEncoder(w).Encode(obj{"ok": true, "dir": dir})
++}
+diff --git a/nuri-ai/agent.js b/nuri-ai/agent.js
+index b8a53c6..d138f55 100644
+--- a/nuri-ai/agent.js
++++ b/nuri-ai/agent.js
+@@ -670,7 +670,7 @@ export function systemPrompt(mode, extra = {}){
+   const d = new Date(), skills = extra.skills || [];
+   let tools = Object.entries(TOOLS).filter(([, t]) => t.mode === mode || t.mode === "both" || (extra.office && t.mode === "office"));
+   // 작은 모델은 기억 공간이 좁으니 지금 필요한 도구만 알려준다
+-  if (mode === "chat" && brainCtx(extra.role) < 16000){ const need = new Set([...CORE_TOOLS, ...skills.flatMap(s => s.tools || []), ...(extra.office ? extra.officeTools || [] : [])]); tools = tools.filter(([n]) => need.has(n)); }
++  if (mode === "chat" && brainCtx(extra.role, extra.target) < 16000){ const need = new Set([...CORE_TOOLS, ...skills.flatMap(s => s.tools || []), ...(extra.office ? extra.officeTools || [] : [])]); tools = tools.filter(([n]) => need.has(n)); }
+   const toolDoc = tools.map(([n, t]) => `- ${n}: ${t.desc}\n  인자 예: ${t.args}`).join("\n");
+   const mem = (settings.memory || []).slice(-30);
+   const common = `오늘은 ${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 (${"일월화수목금토"[d.getDay()]}요일) ${d.getHours()}시다. 사용자가 쓰는 언어로 답한다(기본 한국어).
+@@ -882,10 +882,10 @@ export async function runAgent({mode, history, msg, signal, onUpdate, openArtifa
+   msg.skills = skills.map(s => ({id: s.id, name: s.name, icon: s.icon})); msg.qrole = role; msg.t0 = Date.now();
+   if (skills.length) activity({kind: "skill", text: skills.map(s => s.name).join(" · ")});
+   // 기억 길이가 짧은 모델이면 짧은 지시문을 쓰고, 지시문+대화+답이 기억 길이 안에 들도록 나눈다
+-  const ctxLen = brainCtx(role), small = ctxLen <= 8192;
+-  const sys = systemPrompt(mode, {workspace, skills, role, compact: small, office, officeTools}) + (persona ? "\n\n" + persona : "");
++  const ctxLen = brainCtx(role, target), small = ctxLen <= 8192;
++  const sys = systemPrompt(mode, {workspace, skills, role, compact: small, office, officeTools, target}) + (persona ? "\n\n" + persona : "");
+   const sysT = estTokens(sys);
+-  let ansLen = brainAnswerLen(role);
++  let ansLen = brainAnswerLen(role, target);
+   if (ctxLen - sysT - ansLen < 600) ansLen = Math.max(256, Math.floor((ctxLen - sysT - 64) / 2));
+   for (let step = 0; step < maxSteps; step++){
+     if (signal.aborted) break;
+diff --git a/nuri-ai/app.js b/nuri-ai/app.js
+index 06b7ba9..fc2429d 100644
+--- a/nuri-ai/app.js
++++ b/nuri-ai/app.js
+@@ -857,7 +857,8 @@ $("#sheetBody").addEventListener("click", async e => {
+   if (t.id === "apiAdd"){
+     const v = $("#apiKey").value.trim(); if (!v){ toast("키를 붙여넣으세요"); return; }
+     t.disabled = true; $("#apiMsg").textContent = "어느 회사 키인지 확인하고 모델 목록을 받는 중…";
+-    try { const r = await addApiKey(v); toast(r.kind === "search" ? `${r.name} 연결됨` : `${r.name} 연결됨${r.models ? ` · 모델 ${r.models}개` : ""}${r.warn ? " (목록 확인 실패: " + r.warn + ")" : ""}`); renderSheet(); renderModelBtn(); }
++    try { const r = await addApiKey(v); const webBlocked = r.warn && !LAUNCHER.on && /fetch|network|load failed|cors/i.test(r.warn);
++    toast(webBlocked ? `⚠ 키는 저장했지만 웹 버전에서는 ${r.name} 에 바로 연결할 수 없습니다 — GHNano.exe 로 실행하면 직원들이 이 키로 일합니다` : r.kind === "search" ? `${r.name} 연결됨` : `${r.name} 연결됨 · 사무실 직원들에게 자동 배정됩니다${r.models ? ` · 모델 ${r.models}개` : ""}${r.warn ? " (목록 확인 실패: " + r.warn + ")" : ""}`); renderSheet(); renderModelBtn(); }
+     catch(err){ $("#apiMsg").textContent = err.message; t.disabled = false; }
+   }
+   if (t.dataset.rmkey){ if (t.dataset.c !== "1"){ t.dataset.c = "1"; t.textContent = "정말 삭제"; return; } removeApiKey(t.dataset.rmkey); renderSheet(); }
+diff --git a/nuri-ai/engine.js b/nuri-ai/engine.js
+index 1c68ba3..1e1cc8d 100644
+--- a/nuri-ai/engine.js
++++ b/nuri-ai/engine.js
+@@ -42,6 +42,7 @@ if (settings.nvKey && !settings.keys.nvidia) settings.keys.nvidia = settings.nvK
+ if (!settings.ctxV){ if (settings.ctx === 4096) settings.ctx = 8192; settings.ctxV = 2; }       // 지시문이 길어져 기본 기억 길이를 늘림
+ if (!settings.keys) settings.keys = {};
+ export const saveSettings = () => { ls.set("settings", settings); emit("engine"); };
++addEventListener("storage", e => { if (e.key !== "nuri:settings" || !e.newValue) return; try { const fresh = JSON.parse(e.newValue); for (const k of Object.keys(settings)) if (!(k in fresh)) delete settings[k]; Object.assign(settings, fresh); emit("engine"); } catch(_){} });
+ 
+ /* ============ 내 기기 AI (wllama = 브라우저 속 llama.cpp) ============ */
+ export const CATALOG = [
+@@ -322,8 +323,8 @@ export function brainLabel(b = settings.brain){
+ export const shortModel = m => String(m || "").split("/").pop().replace(/:free$/, "").replace(/-instruct(-\d+)?$/i, "");
+ // 실제로 답할 곳 (자동 선택인데 연결된 회사가 없으면 내 기기 AI가 답한다)
+ export const effectiveBrain = (role = "general") => settings.brain === "auto" ? (routeCandidates(role)[0]?.id || "auto") : settings.brain;
+-export const brainCtx = (role) => { const b = effectiveBrain(role); return b === "local" ? (eng.ctx || settings.ctx) : b === "ollama" ? 8192 : 32768; };
+-export const brainAnswerLen = (role) => { const b = effectiveBrain(role); return b === "local" ? Math.min(settings.maxTokens, Math.floor(brainCtx(role) / 3)) : b === "ollama" ? 2048 : 8192; };
++export const brainCtx = (role, target) => { const b = target?.id || effectiveBrain(role); return b === "local" ? (eng.ctx || settings.ctx) : b === "ollama" ? 8192 : 32768; };
++export const brainAnswerLen = (role, target) => { const b = target?.id || effectiveBrain(role); return b === "local" ? Math.min(settings.maxTokens, Math.floor(brainCtx(role, target) / 3)) : b === "ollama" ? 2048 : 8192; };
+ // 토큰 수 어림: 한글은 글자당 1토큰 이상 들기 때문에 넉넉하게 센다 (예전 '글자÷1.6'은 한국어를 절반 이하로 셌다)
+ export function estTokens(s){ s = String(s || ""); const ko = (s.match(/[\u3131-\u318e\uac00-\ud7a3]/g) || []).length; return Math.ceil(ko * 1.4 + (s.length - ko) / 2.8) + 4; }
+ 
+diff --git a/nuri-ai/office-ui.js b/nuri-ai/office-ui.js
+index 15406b7..124db9a 100644
+--- a/nuri-ai/office-ui.js
++++ b/nuri-ai/office-ui.js
+@@ -285,6 +285,7 @@ function wire(el){
+   el.addEventListener("click", e => {
+     if (e.target.closest("[data-docclose]") || e.target.id === "ofDocs"){ $o("#ofDocs").hidden = true; return; }
+     const dv = e.target.closest("[data-docview]"); if (dv){ showDoc(dv.dataset.docview); return; }
++    const od = e.target.closest("[data-opendoc]"); if (od){ const id = od.dataset.opendoc.replace(/[^\w가-힣./-]+/g, "_"); openDocs().then(() => showDoc(id)); return; }
+     const dd = e.target.closest("[data-docdl]"); if (dd){ dlDoc(dd.dataset.docdl); return; }
+     const dx = e.target.closest("[data-docdel]"); if (dx){ if (confirm("이 결과물을 앱 보관함에서 지울까요? (폴더의 파일은 그대로)")) O.deleteDoc(dx.dataset.docdel).then(() => openDocs(true)); return; }
+     if (e.target.closest("[data-docfolder]")){ O.openFolder(e.target.closest("[data-docfolder]").dataset.docfolder || "").then(r => ctx.toast(r.ok ? "폴더를 열었습니다: " + (r.dir || "") : r.why)); return; }
+@@ -504,7 +505,11 @@ function renderStatus(){
+   if (document.activeElement !== $o("#ofClaude")) $o("#ofClaude").value = claudeMode(c);
+   const next = O.nextAutoIn();
+   const ps = O.officePaused?.() || 0;
+-  const jobNow = (ps ? `<span class="of-jobnow">⏸ AI 한도 때문에 ${Math.ceil(ps / 60e3)}분 쉬는 중 (질문은 받음)</span> · ` : "") + (curJob ? `<span class="of-jobnow">▶ 지금 하는 일: ${E(curJob)}</span> · ` : "");
++  // 직원에게 AI 가 실제로 붙어 있는지 상태 줄에 바로 보여 준다
++  const staffAI = Object.keys(O.assignModels?.() || {}).length;
++  const aiWarn = !staffAI ? `<span class="of-jobnow">⚠ 직원에게 붙은 AI 가 없습니다 — 설정 → AI 두뇌 · API 키에 키를 넣으면 직원마다 자동 배정됩니다</span> · `
++    : !LAUNCHER.on ? `<span class="of-jobnow">⚠ 웹 버전: NVIDIA 등 일부 AI 는 브라우저에서 바로 연결되지 않습니다 — GHNano.exe 로 실행하세요</span> · ` : "";
++  const jobNow = aiWarn + (ps ? `<span class="of-jobnow">⏸ AI 한도 때문에 ${Math.ceil(ps / 60e3)}분 쉬는 중 (질문은 받음)</span> · ` : "") + (curJob ? `<span class="of-jobnow">▶ 지금 하는 일: ${E(curJob)}</span> · ` : "");
+   $o("#ofStatus").innerHTML = jobNow + (m ? `<b class="ok">진행 중</b> · ${placeName(placeOf(m.place))} · ${m.done.length}/${m.order.length} 발언${s.queued ? ` · 대기 회의 ${s.queued}개` : ""}`
+     : c.auto ? (u.auto >= c.dailyMax ? `오늘 자동 회의 ${c.dailyMax}번을 다 했습니다 · 메시지를 보내면 바로 회의합니다` : `다음 자동 회의 ${next > 60e3 ? Math.round(next / 60e3) + "분 뒤" : "곧"} · 급변동 감시 중`) : "자동 회의 꺼짐 · 메시지를 보내면 바로 회의합니다");
+   const nc = O.nextChatIn();
+@@ -591,10 +596,10 @@ function entryHTML(e){
+   if (e.kind === "files") return `<div class="of-work of-files"><b style="color:${tc(a.team)}">${E(a.name)}</b> <span>💾 ${E(e.title || "파일 저장")}: ${(e.files || []).map(officePath).join(" ")}${e.note ? ` <small>· ${E(e.note)}</small>` : ""} <small>(문서/GHNano 사무실)</small></span><time>${time}</time></div>`;
+   if (e.kind === "task") return `<div class="of-work of-task ${E(e.status)}"><b style="color:${tc(a.team)}">${E(a.name)}</b> <span>🌱 과제 ${E(STATUS_KO[e.status] || e.status || "")}: ${E(e.title)}${e.result ? ` — ${E(e.result)}` : ""}</span><time>${time}</time></div>`;
+   if (e.kind === "biz"){
+-    const s = e.sim || {};
++    const s = e.sim || {}, won = v => Number.isFinite(+v) ? (Math.abs(v) >= 1e8 ? (v / 1e8).toFixed(1) + "억" : Math.round(v / 1e4).toLocaleString("ko-KR") + "만") + "원" : "—";
+     const cell = (k, v) => `<div><small>${k}</small><b>${v}</b></div>`;
+-    const prof = +s.profit;
+-    return kcard(a, `💼 사업 시뮬레이션 · ${E(e.name)}`, time, `<div class="of-kstats">${cell("기간", s.months != null ? num(s.months) + "개월" : "—")}${cell("매출", num(s.revenue))}<div><small>이익</small><b class="${Number.isFinite(prof) ? prof >= 0 ? "up" : "dn" : ""}">${num(s.profit)}</b></div>${cell("손익분기", s.breakeven_month != null ? num(s.breakeven_month) + "개월차" : "도달 못 함")}${cell("런웨이", s.runway != null ? num(s.runway) + "개월" : "—")}${s.irr != null ? cell("IRR", pct(s.irr)) : ""}</div>${e.verdict ? `<p class="of-kv">${E(e.verdict)}</p>` : ""}${e.plan ? `<div class="of-kfoot">📝 사업계획서 작성됨</div>` : ""}`);
++    const docs = (e.docs || []).map(p => `<button class="of-btn2" data-opendoc="${E(p)}">${/\.csv$/.test(p) ? "📊 손익표" : "📄 사업계획서"} 보기·내려받기</button>`).join(" ");
++    return kcard(a, `💼 사업 시뮬레이션 · ${E(e.name)}`, time, `<div class="of-kstats">${cell("기간", s.months != null ? num(s.months) + "개월" : "—")}${cell("24개월 내 흑자 확률", s.p24 != null ? pct(s.p24) : "—")}${cell("손익분기", s.breakeven_month != null ? num(s.breakeven_month) + "개월차" : "도달 못 함")}${cell("누적 이익(중앙값)", won(s.cum?.p50))}${cell("12개월차 월매출", won(s.rev12))}${cell("자금 바닥 위험", s.bust != null ? pct(s.bust) : "—")}</div>${e.verdict ? `<p class="of-kv">${E(e.verdict)}</p>` : ""}${e.plan ? `<div class="of-kfoot">📝 사업계획서 작성됨 ${docs}</div>` : ""}`);
+   }
+   if (e.kind === "patch") return `<div class="of-work of-patch ${E(e.status || "")}"><b style="color:${tc(a.team)}">${E(a.name)}</b> <span>🛠 ${E(e.file || "")} ${e.status === "proposed" ? "수정안 준비됨 · 대표님 승인 대기" : e.status === "applied" ? "수정 적용됨" : "수정 못 함"}${e.why ? ` — ${E(e.why)}` : ""}</span> <button class="of-btn2" data-ch="growth">코드 개선 보기</button><time>${time}</time></div>`;
+   if (e.kind === "live") return `<div class="of-real ${e.level === "warn" ? "warn" : "info"}">💰 실거래 · ${E(e.text)}<time>${time}</time></div>`;
+@@ -631,7 +636,12 @@ async function openDocs(keep){
+   box.hidden = false;
+   docList = await (O.listDocs ? O.listDocs() : []);
+   const n = k => k === "all" ? docList.length : docList.filter(d => kindOfDoc(d) === k).length;
+-  $o("#ofDocsSub").textContent = `${docList.length}개 · ${LAUNCHER.on ? "앱 안 보관 + 문서/GHNano 사무실" + (O.TEAMS?.length > 20 ? "/ghcoin" : "") + " 폴더" : "앱 안에 보관 (웹 버전)"}`;
++  $o("#ofDocsSub").textContent = `${docList.length}개 · ${LAUNCHER.on ? "앱 안 보관 + 문서/GHNano 사무실" + (O.TEAMS?.length > 20 ? "/ghcoin" : "") + " 폴더" : "앱 안에 보관 (웹 버전 · 폴더 저장은 GHNano.exe 에서만)"}`;
++  // 실제 저장 위치를 그대로 보여 준다 (OneDrive 로 옮겨진 문서 폴더도 정확히)
++  if (LAUNCHER.on) fetch("/__nuri/officedir", {headers: {"X-Nuri-Token": window.__NURI_TOKEN || ""}}).then(r => r.ok ? r.json() : null).then(j => {
++    if (!j?.dir) return; const sub = (O.TEAMS?.length > 20 ? "ghcoin" : ""), sep = j.dir.includes("\\") ? "\\" : "/";
++    const el = $o("#ofDocsSub"); el.textContent = `${docList.length}개 · 저장 위치: ${j.dir}${sub ? sep + sub : ""}`; el.title = "이 폴더에 파일로 저장됩니다. 📂 폴더 열기로 바로 열 수 있습니다."; el.style.userSelect = "text";
++  }).catch(() => {});
+   $o("#ofDocsF").innerHTML = DOC_KIND.filter(([k]) => k === "all" || n(k)).map(([k, l]) => `<button data-docfilter="${k}" aria-pressed="${k === docFilter}">${l} <small>${n(k)}</small></button>`).join("");
+   const list = docList.filter(d => docFilter === "all" || kindOfDoc(d) === docFilter);
+   $o("#ofDocsL").innerHTML = list.map(d => `<button class="of-doci" data-docview="${E(d.id)}" aria-pressed="${d.id === docSel}"><b>${E(d.title)}</b><small>${E(d.path || "")} · ${E(when(d.t))} · ${(d.size / 1024).toFixed(1)}KB</small></button>`).join("")
+@@ -649,9 +659,11 @@ function showDoc(id){
+ }
+ function dlDoc(id){
+   const d = docList.find(x => x.id === id); if (!d) return;
+-  const name = String(d.path || d.title).split("/").pop() || "결과물.md", bom = /csv/.test(d.mime) ? "\ufeff" : "";
++  const parts = String(d.path || d.title).split("/"), file = parts.pop() || "결과물.md", bom = /csv/.test(d.mime) ? "\ufeff" : "";
++  // 사업계획서.md · financials.csv 처럼 이름이 늘 같은 파일은 사업명(폴더 이름)을 앞에 붙여 서로 덮어쓰지 않게
++  const name = /^(사업계획서|financials|README|summary|plan)(?=\.|$)/i.test(file) && parts.length ? `${parts.pop()}-${file}` : file;
+   const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([bom + (d.content || "")], {type: (d.mime || "text/plain") + ";charset=utf-8"})); a.download = /\.\w+$/.test(name) ? name : name + ".md";
+-  a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 3000); ctx.toast("내려받았습니다: " + a.download);
++  a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 3000); ctx.toast(`내려받았습니다: ${a.download} → 이 PC의 '다운로드' 폴더 (Ctrl+J 로 목록)${LAUNCHER.on ? " · 같은 파일이 결과물 폴더에도 있습니다 (📂 폴더 열기)" : ""}`);
+ }
+ /* ============ 성장 과제 보드 ============ */
+ const backlogItems = () => { if (!has("backlog")) return []; try { return O.backlog() || []; } catch(e){ return []; } };
+diff --git a/nuri-ai/office.js b/nuri-ai/office.js
+index f41719b..c0ff622 100644
+--- a/nuri-ai/office.js
++++ b/nuri-ai/office.js
+@@ -1262,7 +1262,8 @@ async function bizJob(){
+       await codeCall("write", {ws: "office", path: base + "/financials.csv", content: B.financialsCSV(sim)}); files.push(base + "/financials.csv"); } catch(err){} }
+     addNote("venture", `유망 사업: ${sim.idea.name} (24개월 흑자 확률 ${(sim.pBreakeven24 * 100).toFixed(0)}%)`, "사업");
+   } else addNote("venture", `${sim.idea.name}: ${sim.verdict.split(" — ")[0]} — 가정 재검토 필요`, "사업");
+-  post({ch: "venture", kind: "biz", agent: b.id, name: sim.idea.name, sim: {months: sim.months, p24: sim.pBreakeven24, breakeven_month: sim.breakevenMedian, cum: sim.cumProfit, bust: sim.pBust, rev12: sim.revenueMonth12}, verdict: sim.verdict, plan, files, text: B.bizText(sim)});
++  const docBase = `business/${String(sim.idea.name).replace(/[\\/:*?"<>|\s]+/g, "_").slice(0, 40)}`;
++  post({ch: "venture", kind: "biz", agent: b.id, name: sim.idea.name, docs: plan ? [docBase + "/사업계획서.md", docBase + "/financials.csv"] : [], sim: {months: sim.months, p24: sim.pBreakeven24, breakeven_month: sim.breakevenMedian, cum: sim.cumProfit, bust: sim.pBust, rev12: sim.revenueMonth12}, verdict: sim.verdict, plan, files, text: B.bizText(sim)});
+ }
+ 
+ // 신사업 개발: 자체 코인(모의 발행·토큰 이코노미·컨트랙트), 코인 터미널, 자체 AI(GH Nano) — 사무실 폴더에 실제 파일로 만든다
