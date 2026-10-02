@@ -221,10 +221,10 @@ index 0000000..0fdee1e
 +func nativeWindow(url string) bool { return false }
 diff --git a/launcher/native_windows.go b/launcher/native_windows.go
 new file mode 100644
-index 0000000..f32949f
+index 0000000..4516390
 --- /dev/null
 +++ b/launcher/native_windows.go
-@@ -0,0 +1,94 @@
+@@ -0,0 +1,102 @@
 +//go:build windows
 +
 +package main
@@ -235,6 +235,7 @@ index 0000000..f32949f
 +	"os/exec"
 +	"path/filepath"
 +	"runtime"
++	"runtime/debug"
 +	"strings"
 +	"syscall"
 +
@@ -283,7 +284,7 @@ index 0000000..f32949f
 +})();`
 +
 +// 브라우저 없이 PC 앱 창(WebView2)으로 열고, 창이 닫힐 때까지 기다린다. 띄울 수 없으면 false.
-+func nativeWindow(url string) bool {
++func nativeWindow(url string) (ok bool) {
 +	if os.Getenv("NURI_BROWSER") != "" || !webview2Installed() {
 +		return false
 +	}
@@ -292,8 +293,15 @@ index 0000000..f32949f
 +	// 창을 못 띄웠을 때 원인을 남긴다 (%LOCALAPPDATA%\GHNano\launcher.log)
 +	if f, err := os.OpenFile(filepath.Join(os.Getenv("LOCALAPPDATA"), "GHNano", "launcher.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644); err == nil {
 +		log.SetOutput(f)
++		debug.SetCrashOutput(f, debug.CrashOptions{}) // 예기치 못한 오류도 같은 파일에
 +		log.Printf("%s: 앱 창 열기 %s", appName, url)
 +	}
++	defer func() {
++		if r := recover(); r != nil {
++			log.Printf("%s: 앱 창 오류 %v\n%s", appName, r, debug.Stack())
++			ok = false
++		}
++	}()
 +	w := webview2.NewWithOptions(webview2.WebViewOptions{
 +		DataPath:      data,
 +		AutoFocus:     true,
