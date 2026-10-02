@@ -28,7 +28,7 @@ until apt-get -o DPkg::Lock::Timeout=60 update -q; do
   echo "apt is busy (automatic updates); waiting 10 s ($n/60)"; sleep 10
 done
 DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=600 install -yq python3 python3-venv python3-pip \
-  git sqlite3 ufw fail2ban unattended-upgrades chrony zstd openssl
+  git sqlite3 ufw fail2ban unattended-upgrades chrony zstd openssl nodejs
 
 echo "== firewall: SSH in, everything else closed"
 ufw default deny incoming
@@ -45,6 +45,8 @@ install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot /var/backups/paperbo
 install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot/lab
 # the order executor's databases (testnet and, later, mainnet); hidden from the agents and the dashboard
 install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot/exec
+# GH Coin call recorder output (docs/ghcoin-recorder.md)
+install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot/ghcoin
 install -d -o root -g paperbot -m 750 /etc/paperbot
 
 echo "== code version"
@@ -74,7 +76,7 @@ echo "== code"
 # Copy to a staging folder first, then swap while the services are stopped, so a
 # running bot never reads a half-copied tree. The previous code stays in $APP.old.
 # The agents timer is paused too, so no agent pass starts on a half-copied tree.
-UNITS="paperbot-live3 paperbot-dash paperbot-liq paperbot-agents.timer"
+UNITS="paperbot-live3 paperbot-dash paperbot-liq paperbot-ghcoin paperbot-agents.timer"
 RUNNING=""
 if [ "$REPO_DIR" != "$APP" ]; then
   # Scheduled jobs (nightly check, backups, checkpoint, monthly re-check) are not stopped for the swap:
@@ -108,6 +110,25 @@ paperbot-offsite.service"
   mv "$APP.new" "$APP"
 fi
 
+echo "== GH Coin code for the call recorder (pinned commit, read-only copy in /opt/ghcoin)"
+# Only the four files the recorder imports, from the commit in deploy/ghcoin.commit of the branch
+# claude/eloquent-johnson-nnt7gh. A failed fetch only skips the recorder (launchcheck reports it).
+GHC="$(tr -d '[:space:]' < "$APP/deploy/ghcoin.commit" 2>/dev/null || true)"
+if [ -n "$GHC" ] && { git -C "$REPO_DIR" cat-file -e "$GHC^{commit}" 2>/dev/null \
+     || git -C "$REPO_DIR" fetch -q origin claude/eloquent-johnson-nnt7gh; } \
+   && git -C "$REPO_DIR" cat-file -e "$GHC^{commit}" 2>/dev/null; then
+  rm -rf /opt/ghcoin.new && mkdir -p /opt/ghcoin.new
+  git -C "$REPO_DIR" archive "$GHC" gh-coin/combo.js gh-coin/lib/patterns.js gh-coin/lib/ta_rating.js \
+    nuri-ai/terminal/ind.js | tar -x -C /opt/ghcoin.new
+  echo '{"type": "module"}' > /opt/ghcoin.new/package.json
+  echo "$GHC" > /opt/ghcoin.new/COMMIT
+  chown -R root:paperbot /opt/ghcoin.new && chmod -R g+rX,o-rwx /opt/ghcoin.new
+  rm -rf /opt/ghcoin && mv /opt/ghcoin.new /opt/ghcoin
+  echo "GH Coin $GHC"
+else
+  echo "GH Coin commit ${GHC:-?} not available: the call recorder (paperbot-ghcoin) will not start"
+fi
+
 echo "== env files (empty templates; fill them on the server only)"
 for f in live dash agents; do
   if [ ! -f /etc/paperbot/$f.env ] && [ -f "$APP/deploy/$f.env.example" ]; then
@@ -128,7 +149,7 @@ for u in paperbot-live3.service paperbot-dash.service paperbot-daily3.service pa
          paperbot-backup.service paperbot-backup.timer paperbot-agents.service paperbot-agents.timer \
          paperbot-liq.service paperbot-labmonthly.service paperbot-labmonthly.timer \
          paperbot-checkpoint.service paperbot-checkpoint.timer paperbot-offsite.service paperbot-offsite.timer \
-         paperbot-executor.service; do
+         paperbot-ghcoin.service paperbot-executor.service; do
   install -m 644 "$APP/deploy/$u" /etc/systemd/system/$u
 done
 systemctl daemon-reload

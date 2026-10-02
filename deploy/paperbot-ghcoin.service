@@ -1,0 +1,30 @@
+# GH Coin call recorder (docs/ghcoin-recorder.md): GH Coin's own combo engine, unchanged, from the pinned commit
+# in deploy/ghcoin.commit (copied to /opt/ghcoin by deploy/install.sh). Public market data only, no key, no order.
+# Writes only /var/lib/paperbot/ghcoin (calls.jsonl, board.json, state.json). A separate comparison: the 195
+# paper accounts never read it.
+[Unit]
+Description=paperbot GH Coin call recorder
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=paperbot
+WorkingDirectory=/opt/crypto-bot-research
+ExecStart=/usr/bin/node /opt/crypto-bot-research/ghcoin/recorder.mjs --out /var/lib/paperbot/ghcoin --gh /opt/ghcoin
+Restart=always
+RestartSec=30
+TimeoutStopSec=30
+Nice=10
+MemoryMax=1G
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/paperbot/ghcoin
+# public data only: no key or token, and nothing of the paper bot or the executor is readable
+InaccessiblePaths=-/etc/paperbot -/var/lib/paperbot/exec -/var/backups/paperbot -/var/lib/paperbot/.local -/var/lib/paperbot/.claude
+
+[Install]
+WantedBy=multi-user.target

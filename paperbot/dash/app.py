@@ -1147,6 +1147,17 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
                 c.close()
         return {**hit[1], "computed_at": int(hit[0] * 1000)}
 
+    gh_cache: dict = {}
+
+    @app.get("/api/ghcoin")
+    def get_ghcoin():
+        """GH Coin call recorder (paperbot/ghcoin.py): its calls, net R and the coin-flip comparison; read-only."""
+        from ..ghcoin import report
+        hit = gh_cache.get("r")
+        if hit is None or time.time() - hit[0] > 60:
+            gh_cache["r"] = hit = (time.time(), report(os.path.join(os.path.dirname(os.path.abspath(db)), "ghcoin")))
+        return hit[1]
+
     view_cache: dict = {}
 
     @app.get("/api/strategy/{strategy}")

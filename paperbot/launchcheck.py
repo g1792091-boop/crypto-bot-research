@@ -154,9 +154,11 @@ LABBUILD = "paperbot-labbuild.service"
 # required once installed: the off-site copy of the nightly backup (paperbot/offsite.py), added after the
 # first install.sh; a server whose install.sh does not install it yet is not asked for it (a [참고] says so)
 EXTRA_TIMERS = ("paperbot-offsite.timer",)
+# required once installed, like the off-site timer: GH Coin's call recorder (ghcoin/recorder.mjs, a service)
+EXTRA_SERVICES = ("paperbot-ghcoin.service",)
 OFFSITE_TIMER = "paperbot-offsite.timer"
 INSTALLED = SERVICES + TIMERS + AGENT_TIMERS + JOBS + (EXECUTOR,)
-ALL_UNITS = (INSTALLED + LEGACY + SYSTEM + (AUTO_UPDATES, LABBUILD) + EXTRA_TIMERS
+ALL_UNITS = (INSTALLED + LEGACY + SYSTEM + (AUTO_UPDATES, LABBUILD) + EXTRA_TIMERS + EXTRA_SERVICES
              + ("paperbot-offsite.service",))
 UNIT_PROPS = ("Id,LoadState,UnitFileState,ActiveState,SubState,Result,NRestarts,ExecMainStatus,"
               "NextElapseUSecRealtime,ExecStart,ActiveEnterTimestampMonotonic")
@@ -1124,6 +1126,9 @@ def check_units(states: Optional[dict], stage: str, agents_wanted: bool,
             if st(job).get("Result") not in (None, "", "success"):
                 out.append(fix(f"{_short(job)}의 지난 실행이 실패했습니다({st(job).get('Result')}): "
                                f"journalctl -u {_short(job)} -n 50"))
+        for u in EXTRA_SERVICES:
+            if st(u).get("LoadState") == "loaded":
+                out.append(service_line(u, st(u), mono_us))
         for u in EXTRA_TIMERS:
             if st(u).get("LoadState") == "loaded":
                 out.append(timer_line(u, st(u), True))
@@ -1654,7 +1659,7 @@ def guard(fn: Callable[..., list], *args, level: Callable[[str], Line] = fix) ->
 def start_command(states: Optional[dict], agents_wanted: bool = False) -> str:
     """The start command for this server: the base units, the agent rooms' timers when they are wanted
     (docs/server-setup-v3.md 11 starts everything at once), and the extra timers its install.sh installed."""
-    extra = [u for u in EXTRA_TIMERS if ((states or {}).get(u) or {}).get("LoadState") == "loaded"]
+    extra = [u for u in EXTRA_SERVICES + EXTRA_TIMERS if ((states or {}).get(u) or {}).get("LoadState") == "loaded"]
     return " ".join([START_CMD] + (list(AGENT_TIMERS) if agents_wanted else []) + extra)
 
 
