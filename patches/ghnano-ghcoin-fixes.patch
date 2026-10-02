@@ -221,15 +221,16 @@ index 0000000..0fdee1e
 +func nativeWindow(url string) bool { return false }
 diff --git a/launcher/native_windows.go b/launcher/native_windows.go
 new file mode 100644
-index 0000000..3367da2
+index 0000000..f32949f
 --- /dev/null
 +++ b/launcher/native_windows.go
-@@ -0,0 +1,87 @@
+@@ -0,0 +1,94 @@
 +//go:build windows
 +
 +package main
 +
 +import (
++	"log"
 +	"os"
 +	"os/exec"
 +	"path/filepath"
@@ -288,12 +289,18 @@ index 0000000..3367da2
 +	}
 +	data := filepath.Join(os.Getenv("LOCALAPPDATA"), "GHNano", "WebView2") // GH Nano · GH Coin 이 같은 저장소(키·기록)를 쓴다
 +	os.MkdirAll(data, 0o755)
++	// 창을 못 띄웠을 때 원인을 남긴다 (%LOCALAPPDATA%\GHNano\launcher.log)
++	if f, err := os.OpenFile(filepath.Join(os.Getenv("LOCALAPPDATA"), "GHNano", "launcher.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644); err == nil {
++		log.SetOutput(f)
++		log.Printf("%s: 앱 창 열기 %s", appName, url)
++	}
 +	w := webview2.NewWithOptions(webview2.WebViewOptions{
 +		DataPath:      data,
 +		AutoFocus:     true,
 +		WindowOptions: webview2.WindowOptions{Title: appName, Width: 1440, Height: 900, IconId: 1, Center: true},
 +	})
 +	if w == nil {
++		log.Printf("%s: 앱 창을 만들지 못해 브라우저로 엽니다", appName)
 +		return false
 +	}
 +	defer w.Destroy()

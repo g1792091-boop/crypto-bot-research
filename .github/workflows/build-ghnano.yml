@@ -75,6 +75,9 @@ jobs:
           $bmp.Save("ghcoin-preview-windows.png")
           $browsers = Get-Process msedge, chrome -ErrorAction SilentlyContinue
           Write-Host "GHNano title: '$title' · GHCoin title: '$ctitle' · webview2: $(@($wv).Count) · ping: '$ping' · browser processes: $(@($browsers).Count)"
+          Write-Host "GHCoin exited: $($c.HasExited) code: $(if ($c.HasExited) { $c.ExitCode })"
+          Get-Process GHNano, GHCoin -ErrorAction SilentlyContinue | Format-Table Id, ProcessName, MainWindowTitle, MainWindowHandle -AutoSize | Out-String | Write-Host
+          Get-Content "$env:LOCALAPPDATA\GHNano\launcher.log" -ErrorAction SilentlyContinue | Write-Host
           Stop-Process -Id $c.Id, $p.Id -Force -ErrorAction SilentlyContinue
           Get-Process msedgewebview2 -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
           if (-not $title -or -not $wv -or $ping -ne "nuri" -or -not $ctitle) { throw "PC app window did not open" }
@@ -94,6 +97,12 @@ jobs:
         with:
           name: GHNano-Windows
           path: out/*
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: GHNano-debug
+          path: "*-preview-windows.png"
 
   release:
     needs: build
