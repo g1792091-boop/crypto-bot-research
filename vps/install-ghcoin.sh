@@ -54,7 +54,7 @@ for i in $(seq 1 60); do apt-get update -qq 2>/dev/null && break; echo "  자동
 apt-get install -y -qq -o DPkg::Lock::Timeout=900 --no-install-recommends \
   xfce4 xfce4-terminal dbus-x11 xfonts-base at-spi2-core \
   tigervnc-standalone-server tigervnc-tools \
-  fonts-noto-cjk fonts-noto-color-emoji fonts-nanum xdg-utils \
+  fonts-noto-cjk fonts-noto-color-emoji fonts-nanum fonts-nanum-coding xdg-utils \
   curl ca-certificates unzip python3 ufw cron earlyoom >/dev/null
 # fonts-nanum: 사무실 · 채팅 글꼴(D2Coding, NanumGothicCoding …)이 서버에서 NanumGothicCoding 으로 그려지게.
 #   실시간 화면(:8080)이 같은 글꼴 파일을 보는 쪽에 보내서 PC · 휴대폰에서도 줄바꿈 · 높이가 봇 화면과 똑같아진다.

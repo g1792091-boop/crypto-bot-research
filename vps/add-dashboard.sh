@@ -62,7 +62,7 @@ say "필요한 패키지"
 # fonts-nanum: 봇 화면의 사무실 · 채팅 글꼴(NanumGothicCoding) — 실시간 화면이 같은 글꼴 파일을 보는 쪽에 보내 줄바꿈이 똑같아짐
 FONT_NEW=""
 [ -f /usr/share/fonts/truetype/nanum/NanumGothicCoding.ttf ] || FONT_NEW=1
-apt-get install -y -qq -o DPkg::Lock::Timeout=900 --no-install-recommends python3 python3-websocket curl iptables fonts-nanum >/dev/null
+apt-get install -y -qq -o DPkg::Lock::Timeout=900 --no-install-recommends python3 python3-websocket curl iptables fonts-nanum fonts-nanum-coding >/dev/null
 
 say "대시보드 파일 받기 (내용 확인)"
 install -d -m 755 "$DASH_DIR" "$DASH_DIR/vendor"
