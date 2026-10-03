@@ -31,6 +31,8 @@ export const INTERVAL_SECONDS = {"1m":60,"3m":180,"5m":300,"15m":900,"30m":1800,
   "12h":43200,"1d":86400,"3d":259200,"1w":604800,"1M":2592000,"1y":31536000};
 // 전략에 쓸 수 있는 봉 간격 (strategy.py INTERVALS)
 export const INTERVALS = ["1m","3m","5m","15m","30m","1h","2h","4h","6h","12h","1d","3d","1w","1M"];
+// 내부 tf 표기(분·D·W)나 변형을 표준 간격으로 바꿔 받는다 — AI 가 interval:"60" 처럼 줘도 통과
+const IV_ALIAS = {"1":"1m","3":"3m","5":"5m","15":"15m","30":"30m","60":"1h","120":"2h","240":"4h","360":"6h","720":"12h","1440":"1d","d":"1d","w":"1w","m":"1M","60m":"1h","120m":"2h","240m":"4h","1min":"1m","5min":"5m","15min":"15m","1hour":"1h","4hour":"4h","daily":"1d","day":"1d","weekly":"1w"};
 
 // 초/밀리초 판단: secs를 주면 그대로 따르고, 아니면 값 크기로 (|t| < 1e11 이면 초 — 2001년 이전 ms 값을 초로 오해하지 않게 배열 단위로 판단)
 const toMs = (t, secs) => {
@@ -550,22 +552,26 @@ export function normalizeSpec(spec){
   if (!spec || typeof spec !== "object" || Array.isArray(spec)) throw new Error("전략은 JSON 객체여야 합니다");
   const problems = [];
   let interval = String(spec.interval ?? "1h").trim();
+  interval = IV_ALIAS[interval] || IV_ALIAS[interval.toLowerCase()] || interval;   // "60"→"1h" 등 자동 교정
   if (!INTERVALS.includes(interval) && INTERVALS.includes(interval.toLowerCase())) interval = interval.toLowerCase();
-  if (!INTERVALS.includes(interval)) problems.push(`지원하지 않는 봉 간격입니다: ${interval} (가능: ${INTERVALS.join(", ")})`);
+  if (!INTERVALS.includes(interval)){ interval = "1h"; }   // 그래도 모르는 간격이면 1시간으로 (전략 실패 대신)
   const out = {name: String(spec.name ?? "전략"), description: String(spec.description ?? ""),
     symbol: String(spec.symbol ?? "BTCUSDT").toUpperCase(), interval, indicators: []};
   const inds = Array.isArray(spec.indicators) ? spec.indicators : (isNil(spec.indicators) ? [] : (problems.push("indicators 는 배열이어야 합니다"), []));
-  const ids = new Set();
+  const ids = new Set(), renamed = {}, dropped = new Set();
   inds.forEach((raw, i) => {
     if (!raw || typeof raw !== "object"){ problems.push(`indicators[${i}] 형식 오류`); return; }
     const r = {...(raw.params || {}), ...raw};
     let type = String(r.type ?? "").trim().toLowerCase();
     type = IND_ALIAS[type] || type;
     if (!IND_REGISTRY[type]){ problems.push(`지원하지 않는 지표: ${r.type} (가능: ${Object.keys(IND_REGISTRY).filter(k => !k.startsWith("tv_")).join(", ")} + 차트 터미널 tv_* ${TV_TYPES.length}종)`); return; }
-    const id = String(r.id ?? type).trim();
-    if (!/^[A-Za-z_]\w*$/.test(id)){ problems.push(`지표 id 는 영문/숫자/_ 만 (숫자로 시작 불가): ${id}`); return; }
-    if (PRICE_FIELDS.includes(id) || DERIV_FIELDS.includes(id)){ problems.push(`지표 id 가 가격·파생 필드 이름과 겹칩니다: ${id}`); return; }
-    if (ids.has(id)) problems.push(`지표 id가 중복됩니다: ${id}`);
+    let id = String(r.id ?? type).trim();
+    if (!/^[A-Za-z_]\w*$/.test(id)) id = "ind" + i;   // 잘못된 id → 안전한 이름
+    if (PRICE_FIELDS.includes(id) || DERIV_FIELDS.includes(id) || ids.has(id)){   // 가격·파생 필드와 겹치거나 중복 → 자동 개명(조건도 뒤에서 함께 바꿈)
+      const base = id.replace(/\d+$/, "") || "ind"; let n, k = 2;
+      do { n = `${base}_i${k++}`; } while (PRICE_FIELDS.includes(n) || DERIV_FIELDS.includes(n) || ids.has(n));
+      renamed[id] = n; id = n;
+    }
     ids.add(id);
     const o = {id, type};
     for (const k of INT_PARAMS){
@@ -588,16 +594,24 @@ export function normalizeSpec(spec){
       if (typeof d === "number" && !Number.isFinite(v)) problems.push(`${id}.${k} 는 숫자여야 합니다 (${r[k]})`); else o[k] = v;
     }
     if (type === "custom"){   // 수식 검사: 가격 · 앞에서 선언한 지표 · 파생/외부(ml_*, ext_*) 시리즈만 참조 가능
-      const expr = typeof r.expr === "string" ? r.expr.trim() : "";
-      if (!expr) problems.push(`${id}: custom 지표에는 expr(수식 문자열)이 필요합니다`);
-      else {
-        const known = seriesNames({indicators: out.indicators});
-        try { parseExpr(expr, {vars: nm => known.has(nm) || EXT_NAME(nm)}); o.expr = expr; } catch(e){ problems.push(`${id}.expr ${e.message}`); }
-      }
+      const expr = typeof r.expr === "string" ? r.expr.trim() : "", known = seriesNames({indicators: out.indicators});
+      let okExpr = false;
+      if (expr){ try { parseExpr(expr, {vars: nm => known.has(nm) || EXT_NAME(nm)}); o.expr = expr; okExpr = true; } catch(e){} }
+      if (!okExpr){ dropped.add(id); return; }   // 수식 없음/오류(예: 알 수 없는 함수) → 이 custom 지표만 버림(전략은 유지), 참조 조건은 뒤에서 제거
     }
     out.indicators.push(o);
   });
   for (const g of ["long_entry", "short_entry", "long_exit", "short_exit"]) out[g] = normGroup(spec[g], g, problems);
+  // 자동 교정 반영: 이름이 바뀐 지표는 조건 피연산자도 바꾸고, 버려진 custom 지표를 참조하는 조건은 뺀다
+  if (Object.keys(renamed).length || dropped.size){
+    const baseId = t => (/^([A-Za-z_]\w*)/.exec(String(t)) || [, ""])[1];
+    const fix = t => { const b = baseId(t); return b && renamed[b] ? renamed[b] + String(t).slice(b.length) : t; };
+    for (const g of ["long_entry", "short_entry", "long_exit", "short_exit"]){
+      if (!out[g]) continue;
+      out[g].conditions = out[g].conditions.filter(c => !dropped.has(baseId(c.left)) && !dropped.has(baseId(c.right))).map(c => ({...c, left: fix(c.left), right: fix(c.right)}));
+      if (!out[g].conditions.length) out[g] = null;
+    }
+  }
   if (!out.long_entry && !out.short_entry) problems.push("롱 또는 숏 진입 조건이 최소 1개 필요합니다.");
   const names = seriesNames(out);
   for (const g of ["long_entry", "short_entry", "long_exit", "short_exit"]){
