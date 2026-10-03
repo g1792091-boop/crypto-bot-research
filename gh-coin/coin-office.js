@@ -207,6 +207,7 @@ const ACTIONS = [
   {job: "plan", re: /플래너|리서치\s*계획|할\s*일\s*목록|todolist|투두|계획\s*세워|다음\s*할\s*일|리서치\s*보드/i, say: "리서치 플래너가 지금 바로 상태를 보고 할 일 목록(todolist)을 만들고 최우선 리서치를 워커에게 배정합니다"},
   {job: "sent", re: /감정|심리|센티먼트|sentiment|여론\s*분위기|시장\s*분위기|공포.{0,2}탐욕/i, say: "뉴스·경제지표팀이 지금 바로 자체 감정 엔진으로 뉴스·여론의 시장 심리(0~100)를 분석합니다"},
   {job: "pos", re: /단타|스윙|스캘핑|포지션\s*(추천|알려|잡아|줘|어때|봐)|포지션\s*추천|지금\s*(사|팔|들어가)/i, say: "진입 타점팀이 지금 바로 자체 AI + ATR 로 단타·스윙 포지션(방향·진입·손절·익절·손익비)을 추천합니다"},
+  {job: "contest", re: /콘테스트|대회|리더보드|전략\s*순위|전략\s*경쟁|어느\s*전략.{0,6}(좋|나)|best\s*strategy/i, say: "데모거래팀이 지금 바로 전략 콘테스트를 열어 데모 전략들을 성과로 겨뤄 순위를 매깁니다"},
   {job: "selfai", re: /자체\s*ai|자체\s*인공지능|앙상블|트레이딩\s*데스크|자체\s*모델|ghcoinai|확신도\s*순위|ai\s*데스크/i, say: "자체 AI 데스크가 지금 바로 외부 키 없이 앙상블(기술 평점·멀티 시간대·ML·알파)로 코인 방향·확신도 순위를 냅니다"},
   {job: "botopt", re: /(자동매매\s*봇|선물\s*봇|트레이딩\s*봇|봇)\s*.{0,6}(자동\s*)?(개선|다듬|최적화|하이퍼옵트)|(보조지표|지표)\s*.{0,6}(자동\s*)?(개선|최적화|튜닝)/i, say: "선물 자동매매봇팀이 지금 바로 데모 봇의 보조지표·위험값을 하이퍼옵트로 자동 개선하고 검증 구간·견고성까지 확인합니다"},
   {job: "bot", re: /자동매매\s*봇|선물\s*봇|트레이딩\s*봇|그리드\s*봇|dca\s*봇|봇\s*(만들|돌려|전략|추가)|passivbot|jesse|octobot/i, say: "선물 자동매매봇팀이 지금 바로 봇 전략을 만들어 백테스트하고 통과하면 데모에 올립니다"},
@@ -678,14 +679,14 @@ export function startChatter(){
 // 매 주기 ① 모의투자 장부를 실제 시세로 갱신(코드, AI 없음) ② 그때그때 한 가지 일을 고른다:
 // 매매법 연구 · SNS 여론 · 경제 리서치 · 동료 수다 · 컴퓨터 작업 · 모의투자 보고 (하루 AI 호출 한도 안에서)
 // 쉬지 않고 돌아가는 업무 순환표: 팀마다 고르게 돌아가도록 섞어 두었다 (모듈이 없으면 경제 리서치로 대신)
-const JOBS = ["plan", "dev", "combo", "ic", "bot", "ind", "qrisk", "trend", "data", "opt", "patscan", "situ", "cdev", "entry", "sr", "news", "sent", "pos", "promote", "pattern", "coin", "ml", "selfai", "dev", "tpsl", "combo", "drift", "cdev", "feeds", "alpha", "bot", "botopt", "selfai", "plan", "trend", "ic", "chat", "forecast", "coin", "live", "retro", "task", "selfdev", "macro", "sns", "computer", "paper"];
-const JOB_KO = {plan: "리서치 플래너(할 일 목록 → 워커 배정)", sent: "시장 심리(자체 감정 엔진)", pos: "단타·스윙 포지션 추천", bot: "자동매매봇 전략 만들기", botopt: "자동매매봇 자동 개선(보조지표·위험값 하이퍼옵트)", selfai: "자체 AI 데스크(앙상블 방향·확신도 순위)", ic: "투자위원회(강세·약세 토론 → 결정)", qrisk: "퀀트 리스크(VaR·결정표·주문 전 점검)", data: "거래소 비교·데이터 품질", opt: "하이퍼옵트로 전략 다듬기", patscan: "패턴 스캐너", drift: "데모 성과 이동 감지(런 차트)", feeds: "경제 캘린더·금리·변동성 지수", alpha: "알파 팩터 순위", combo: "실시간 종합 지표 타점", dev: "매매법 개발 → 백테스트", cdev: "커스텀 지표 개발 → 백테스트", ind: "보조지표 분석", trend: "다중 시간대 추세 분석", entry: "진입 타점 분석", sr: "지지·저항 분석",
+const JOBS = ["plan", "dev", "combo", "ic", "bot", "ind", "qrisk", "trend", "data", "opt", "patscan", "situ", "cdev", "entry", "sr", "news", "sent", "pos", "contest", "promote", "pattern", "coin", "ml", "selfai", "dev", "tpsl", "combo", "drift", "cdev", "feeds", "alpha", "bot", "botopt", "selfai", "plan", "trend", "ic", "chat", "forecast", "coin", "live", "retro", "task", "selfdev", "macro", "sns", "computer", "paper"];
+const JOB_KO = {plan: "리서치 플래너(할 일 목록 → 워커 배정)", sent: "시장 심리(자체 감정 엔진)", pos: "단타·스윙 포지션 추천", contest: "전략 콘테스트(데모 성과 리더보드)", bot: "자동매매봇 전략 만들기", botopt: "자동매매봇 자동 개선(보조지표·위험값 하이퍼옵트)", selfai: "자체 AI 데스크(앙상블 방향·확신도 순위)", ic: "투자위원회(강세·약세 토론 → 결정)", qrisk: "퀀트 리스크(VaR·결정표·주문 전 점검)", data: "거래소 비교·데이터 품질", opt: "하이퍼옵트로 전략 다듬기", patscan: "패턴 스캐너", drift: "데모 성과 이동 감지(런 차트)", feeds: "경제 캘린더·금리·변동성 지수", alpha: "알파 팩터 순위", combo: "실시간 종합 지표 타점", dev: "매매법 개발 → 백테스트", cdev: "커스텀 지표 개발 → 백테스트", ind: "보조지표 분석", trend: "다중 시간대 추세 분석", entry: "진입 타점 분석", sr: "지지·저항 분석",
   tpsl: "익절·손절 관리", news: "뉴스·기사 분석", macro: "경제지표 예측", situ: "코인 상황판", pattern: "차트·캔들 패턴 분석", coin: "코인팀 회의", ml: "머신러닝·딥러닝 실험",
   promote: "데모 → 실거래 관문 심사", live: "실거래 데스크 점검", paper: "데모거래 보고", forecast: "방향 예측 토론", sns: "SNS 여론 확인", chat: "동료 수다", computer: "컴퓨터 작업",
   retro: "팀 회고·부족한 점 찾기", task: "개선 과제 수행", selfdev: "우리 앱 오류 찾아 코드 고치기", economy: "경제 리서치"};
-const JOB_TEAM = {plan: "hq", sent: "news", pos: "entry", bot: "bot", botopt: "bot", selfai: "selfai", ic: "ic", qrisk: "qrisk", data: "data", opt: "opt", patscan: "pattern", drift: "demo", feeds: "news", alpha: "ml", combo: "combo", dev: "dev", cdev: "cdev", ind: "ind", trend: "trend", entry: "entry", sr: "sr", tpsl: "tpsl", news: "news", macro: "news", situ: "situ", pattern: "pattern", coin: "btc", ml: "ml",
+const JOB_TEAM = {plan: "hq", sent: "news", pos: "entry", contest: "demo", bot: "bot", botopt: "bot", selfai: "selfai", ic: "ic", qrisk: "qrisk", data: "data", opt: "opt", patscan: "pattern", drift: "demo", feeds: "news", alpha: "ml", combo: "combo", dev: "dev", cdev: "cdev", ind: "ind", trend: "trend", entry: "entry", sr: "sr", tpsl: "tpsl", news: "news", macro: "news", situ: "situ", pattern: "pattern", coin: "btc", ml: "ml",
   promote: "demo", live: "live", paper: "demo", forecast: "entry", sns: "news", chat: "hq", computer: "hq", retro: "hq", task: "hq", selfdev: "hq", economy: "news"};
-const JOB_FN = () => ({plan: plannerJob, sent: sentimentJob, pos: posJob, bot: botJob, botopt: botImproveJob, selfai: selfaiJob, ic: icJob, qrisk: qriskJob, data: dataJob, opt: optJob, patscan: patternScanJob, drift: driftJob, feeds: openFeedsJob, alpha: alphaJob, combo: comboJob, dev: () => research("std"), cdev: () => research("custom"), ind: indJob, trend: trendJob, entry: entryJob, sr: srJob, tpsl: tpslJob, news: economyCheck, macro: macroJob,
+const JOB_FN = () => ({plan: plannerJob, sent: sentimentJob, pos: posJob, contest: contestJob, bot: botJob, botopt: botImproveJob, selfai: selfaiJob, ic: icJob, qrisk: qriskJob, data: dataJob, opt: optJob, patscan: patternScanJob, drift: driftJob, feeds: openFeedsJob, alpha: alphaJob, combo: comboJob, dev: () => research("std"), cdev: () => research("custom"), ind: indJob, trend: trendJob, entry: entryJob, sr: srJob, tpsl: tpslJob, news: economyCheck, macro: macroJob,
   situ: situJob, pattern: patternJob, coin: coinJob, ml: mlJob, promote: promoteJob, live: liveDeskJob, paper: paperReport, forecast: forecastJob, sns: snsCheck, chat: () => chatter(true),
   computer: computerWork, retro, task: doTask, selfdev: selfdevJob, economy: economyCheck});
 let cycleTimer = 0, cycling = false, lastJob = "";
@@ -1860,6 +1861,28 @@ async function driftJob(){
     if (last && last.side < 0 && last.to >= v.length - 3){ addTask({team: "demo", title: `성과 악화 감지: ${s.name}`, why: `런 차트 9연속 중앙값 아래 (${last.oldMedian.toFixed(2)} → ${last.newMedian.toFixed(2)}) · 비중 축소·은퇴 검토`, owner: lead.name}); journal("audit", "drift", s.id, {dir: "down", from: last.oldMedian, to: last.newMedian}, "trader", "런 차트 악화"); }
   }
   table("demo", lead.id, "📉 데모 전략 성과 이동 감지 (런 차트: 처음 13거래 중앙값 기준, 9연속 위·아래면 지속 이동)", ["전략", "거래 수", "중앙값", "판정"], rows.length ? rows : [["—", "0", "—", "데모 중인 전략 없음"]], "중앙값과 같은 값은 건너뜀 · 이동이 확인되면 그 9개로 새 중앙값");
+}
+
+/* ---- 🏆 전략 콘테스트 (FinStep-AI/ContestTrade 식 내부 경쟁) — 데모 전략을 성과로 겨뤄 순위 → 상위에 비중·실거래 우선권, 하위는 은퇴 검토 ---- */
+async function contestJob(){
+  const P = await import("../nuri-ai/paper.js"), book = await P.loadBook(), lead = agentById("trader");
+  let linked = {}; try { const L = await import("../nuri-ai/live.js"); linked = L.liveCfg?.().linked || {}; } catch(e){}
+  const active = book.strategies.filter(s => s.status === "active" && s.spec);
+  if (active.length < 2){ post({ch: "demo", kind: "work", agent: lead.id, icon: "🏆", text: `콘테스트하려면 데모 전략이 2개 이상 필요합니다 (지금 ${active.length}개) · 매매법 개발팀이 전략을 더 만들면 열립니다`}); return; }
+  const scored = active.map(s => {
+    const tr = s.trades || [], n = tr.length, wins = tr.filter(t => (t.pnl ?? t.roe ?? 0) > 0).length;
+    const ret = (P.equityOf(s) / 10000 - 1) * 100, wr = n ? wins / n * 100 : 0, pf = s.wf?.oos?.pf ?? null;
+    const score = ret * 0.5 + (wr - 50) * 0.4 + (pf ? Math.min(pf, 3) * 8 : 0) + Math.min(n, 30) * 0.2;   // 수익·승률·손익비·표본
+    return {s, ret: +ret.toFixed(2), wr: +wr.toFixed(1), n, pf, score: +score.toFixed(1), live: !!linked[s.id]?.on};
+  }).sort((a, b) => b.score - a.score);
+  const rows = scored.slice(0, 12).map((x, i) => [String(i + 1), x.s.name.slice(0, 26), pc(x.ret), x.wr + "%", String(x.n), x.pf != null ? (+x.pf).toFixed(2) : "—", String(x.score), x.live ? "🟢실거래" : i === 0 ? "🏆 1위" : i >= scored.length - 2 && scored.length >= 4 ? "⚠ 하위" : ""]);
+  table("demo", lead.id, `🏆 전략 콘테스트 — 데모 성과 리더보드 (${scored.length}개 경쟁)`, ["순위", "전략", "데모수익", "승률", "거래", "손익비", "점수", "상태"], rows,
+    "상위 전략이 비중·실거래 우선권을 갖고 하위는 은퇴를 검토합니다(ContestTrade 식 내부 경쟁) · 과거 성과가 미래를 보장하지 않으며 계산값일 뿐입니다");
+  const top = scored[0], last = scored.at(-1);
+  addNote("demo", `콘테스트 1위 ${top.s.name} (${pc(top.ret)}·승률 ${top.wr}%) · 꼴찌 ${last.s.name} (${pc(last.ret)})`, "콘테스트");
+  if (scored.length >= 4 && last.ret < 0 && last.n >= 8) addTask({team: "demo", title: `콘테스트 하위 전략 은퇴 검토: ${last.s.name}`, why: `데모 수익 ${pc(last.ret)} · 승률 ${last.wr}% — 상위 전략에 비중 양보`, owner: lead.name});
+  await learnSkill(`전략 콘테스트 1위: ${top.s.name} (${pc(top.ret)}·승률 ${top.wr}%)`, {job: "contest"});
+  if (hasAI()) await explain(lead.id, "demo", "전략 콘테스트 리더보드를 보고 지금 가장 잘하는/못하는 전략과, 비중을 어떻게 조정할지, 하위 전략은 은퇴할지 해설한다. 과거 성과가 미래를 보장하지 않는다는 점을 밝힌다.", tableText(["순위", "전략", "수익", "승률", "거래", "손익비", "점수"], rows.map(r => r.slice(0, 7))), "아래 전략 콘테스트 리더보드를 해설해 줘.");
 }
 
 /* ---- 🕯 패턴 스캐너 (stock-pattern · chart_patterns 규칙) → 차트·캔들 패턴팀 ---- */
