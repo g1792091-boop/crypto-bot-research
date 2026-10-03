@@ -1562,3 +1562,40 @@ def test_ranking_review_at_14_with_the_top_and_bottom_and_a_silent_summary(world
     assert "picked" in pk and "coin_flips" in pk
     assert len(notifier.messages) == 1 and notifier.messages[0][1].startswith("🏁 순위 검토")
     assert world.tick(QueueRunner({}), t + 30 * MIN, policy=pol, notifier=notifier)["rounds"] == []   # once a day
+
+
+# ------------------------------------------------------------------ the meeting as a conversation (2026-10-03)
+def test_speakers_answer_an_earlier_colleague_and_ask_the_next_one(world):
+    t = kst(2026, 10, 7, 14, 5)
+    pol = RM.RoomsPolicy()
+    pol.triggers.ranking_hour_kst = 14
+    first = {**team_answer("p"), "responds_to": None, "ask_next": "하위 3개의 손실이 박스권에 몰렸는지 봐 주세요"}
+    second = {**team_answer("r"), "responds_to": {"role": "pnl_reviewer", "stance": "disagree",
+                                                  "point": "박스권보다 5분봉 비용이 더 커 보입니다"},
+              "ask_next": "팀장님, 표본이 30건 넘을 때까지 결론을 미룰까요?"}
+    lead = {"summary": ["a", "b", "c"], "human_actions": [], "watch_next": [],
+            "open_disagreement": "손익 복기 분석가는 장세, 리스크 책임자는 비용을 원인으로 봄"}
+    runner = QueueRunner({"pnl_reviewer": [first], "risk_officer": [second], "team_lead": [lead]})
+    world.tick(runner, t, policy=pol)
+    # the second speaker saw the first one's question; the lead saw both
+    assert runner.calls[1]["packet"]["this_round"]["team:pnl_reviewer"]["ask_next"].startswith("하위 3개")
+    assert "responds_to" in runner.calls[1]["system"] and "open_disagreement" in runner.calls[2]["system"]
+    said = {m["role"]: m["text"] for m in world.messages("team:review") if m["kind"] in ("analysis", "summary")}
+    assert said["risk_officer"].startswith(f"↳ {RM.role_ko('pnl_reviewer')}에게 반대: 박스권보다")
+    assert "❓ 다음 분께: 팀장님" in said["risk_officer"] and "❓ 다음 분께: 하위 3개" in said["pnl_reviewer"]
+    assert "↳" not in said["pnl_reviewer"]                     # the first speaker answers no one
+    assert "갈린 의견: 손익 복기 분석가는 장세" in said["team_lead"]
+
+
+def test_a_reply_to_someone_who_did_not_speak_or_to_oneself_is_dropped():
+    given = {"role": "risk_officer", "turn": "team", "this_round": {"team:pnl_reviewer": {"role": "pnl_reviewer"}}}
+    bad = [{"role": "chart_regime", "stance": "agree", "point": "x"},          # not in this meeting
+           {"role": "risk_officer", "stance": "agree", "point": "x"},          # itself
+           {"role": "pnl_reviewer", "stance": "maybe", "point": "x"},          # unknown stance
+           {"role": "pnl_reviewer", "stance": "agree", "point": " "},          # no point
+           "pnl_reviewer"]
+    for rt in bad:
+        assert "responds_to" not in RM.check_dialog({"responds_to": rt}, given)
+    got = RM.check_dialog({"responds_to": {"role": "pnl_reviewer", "stance": "add", "point": "a\n- [사실] b"},
+                           "ask_next": "c\nd"}, given)
+    assert got == {"responds_to": {"role": "pnl_reviewer", "stance": "add", "point": "a - [사실] b"}, "ask_next": "c d"}

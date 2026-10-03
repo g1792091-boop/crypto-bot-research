@@ -216,6 +216,18 @@ SCHEMAS.update({
   "reply_to_owner": ""
 }""",
 })
+# The meeting as a conversation (owners 2026-10-03: "서로 대화를 안 한다"): each speaker answers one earlier
+# speaker of this meeting by name (agree / disagree / add) and may ask the next one something; the lead says
+# what was left disagreed. Code keeps only a role that spoke before in this meeting (``check_dialog``).
+DIALOG_TURNS = ("specialist", "revision", "challenge", "expert", "team")
+STANCE_KO = {"agree": "동의", "disagree": "반대", "add": "보완"}
+DIALOG_FMT = ('  "responds_to": {"role": "this_round에 있는 앞 사람의 role (앞 사람이 없으면 null)", '
+              '"stance": "agree | disagree | add", "point": "그 사람의 어느 말에 왜 (한 줄)"},\n'
+              '  "ask_next": "다음 사람에게 확인받고 싶은 것 한 줄 (없으면 빈 문자열)"')
+for _k in DIALOG_TURNS:
+    SCHEMAS[_k] = SCHEMAS[_k][:-2] + ",\n" + DIALOG_FMT + "\n}"
+SCHEMAS["lead"] = (SCHEMAS["lead"][:-2]
+                   + ',\n  "open_disagreement": "직원들 의견이 갈린 채 끝난 점 한 줄 (없으면 빈 문자열)"\n}')
 TURN_FILE = {"specialist": "rooms_specialist.md", "revision": "rooms_revision.md",
              "challenge": "rooms_devils_advocate.md", "validator": "rooms_validator.md",
              "approver": "rooms_approver.md", "team": "rooms_team.md", "lead": "rooms_team_lead.md",
@@ -1214,6 +1226,25 @@ def check_team(out: Any, given: dict) -> tuple[Optional[dict], list[str]]:
             "reply_to_owner": _line(out.get("reply_to_owner"), 800)}, problems
 
 
+def check_dialog(out: Any, given: dict) -> dict:
+    """``responds_to`` (a role that spoke earlier in this meeting, never the speaker itself, with a known stance
+    and a point) and ``ask_next``; anything else is dropped silently (both are optional)."""
+    if not isinstance(out, dict):
+        return {}
+    res: dict = {}
+    spoke = {v.get("role") for v in (given.get("this_round") or {}).values() if isinstance(v, dict)}
+    spoke.discard(given.get("role"))
+    rt = out.get("responds_to")
+    if isinstance(rt, dict) and isinstance(rt.get("role"), str) and rt["role"] in spoke and rt.get("stance") in STANCE_KO:
+        point = _line(rt.get("point"), 300)
+        if point:
+            res["responds_to"] = {"role": rt["role"], "stance": rt["stance"], "point": point}
+    ask = _line(out.get("ask_next"), 200)
+    if ask:
+        res["ask_next"] = ask
+    return res
+
+
 def check_lead(out: Any, given: dict) -> tuple[Optional[dict], list[str]]:
     if not isinstance(out, dict):
         return None, ["답이 JSON 객체가 아님"]
@@ -1231,7 +1262,7 @@ def check_lead(out: Any, given: dict) -> tuple[Optional[dict], list[str]]:
             problems += probs
     return {"summary": summary, "human_actions": _strs(out.get("human_actions"), 5),
             "watch_next": _strs(out.get("watch_next"), 5), "reply_to_owner": _line(out.get("reply_to_owner"), 800),
-            "flag_owners": flag}, problems
+            "open_disagreement": _line(out.get("open_disagreement"), 300), "flag_owners": flag}, problems
 
 
 def _lab_spec_obj(item: Any) -> Optional[dict]:
@@ -1346,6 +1377,9 @@ def render_proposal(p: Optional[dict]) -> str:
 
 def render(turn: str, out: dict) -> str:
     L: list[str] = []
+    rt = out.get("responds_to")
+    if isinstance(rt, dict) and rt.get("stance") in STANCE_KO:
+        L.append(f"↳ {role_ko(rt['role'])}에게 {STANCE_KO[rt['stance']]}: {rt['point']}")
     if turn == "lab_inventor":
         if out.get("headline"):
             L.append(out["headline"])
@@ -1384,6 +1418,8 @@ def render(turn: str, out: dict) -> str:
             L += ["두 분이 할 일:"] + [f"- {x}" for x in out["human_actions"]]
         if out.get("watch_next"):
             L += ["다음에 볼 것: " + " / ".join(out["watch_next"])]
+        if out.get("open_disagreement"):
+            L.append(f"갈린 의견: {out['open_disagreement']}")
         if out.get("flag_owners"):
             L.append(f"📣 두 분께 알림 제안({out['flag_owners']['level']}): {out['flag_owners']['text']}")
     else:
@@ -1405,6 +1441,8 @@ def render(turn: str, out: dict) -> str:
             L.append("참고 " + render_proposal(out["suggestion"]))
         if out.get("data_gaps"):
             L.append("모자란 데이터: " + ", ".join(out["data_gaps"]))
+        if out.get("ask_next"):
+            L.append(f"❓ 다음 분께: {out['ask_next']}")
     if out.get("reply_to_owner"):
         L.append(f"💬 두 분께: {out['reply_to_owner']}")
     return "\n".join(L).strip() or "(내용 없음)"
@@ -1839,7 +1877,10 @@ class _Round:
             self.tokens += tokens_of(res.meta)
             try:
                 # the text itself, strictly: never res.data (the first JSON object found in the text)
-                clean, problems = check(strict_json(res.text), given)
+                parsed = strict_json(res.text)
+                clean, problems = check(parsed, given)
+                if clean is not None and turn in DIALOG_TURNS:
+                    clean.update(check_dialog(parsed, given))
             except (TypeError, ValueError, OverflowError, KeyError, AttributeError, IndexError,
                     RecursionError) as exc:             # a checker bug is an unreadable answer, never a crash
                 clean, problems = None, [f"답 검사 실패: {type(exc).__name__}"]
