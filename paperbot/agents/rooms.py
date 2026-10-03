@@ -2290,6 +2290,63 @@ def _period_view(row: Any) -> Optional[dict]:
             "pnl_equity": _r(row.get("mean_pnl_equity"), 5), "vs_coinflip": _r(row.get("coinflip_diff")),
             "vs_coinflip_p": _r(row.get("coinflip_p"))}
 
+# Outside ideas for the lab (owners' request 2026-10-03): the friend's GH Coin bot templates (coin-office.js
+# BOT_TEMPLATES of branch claude/eloquent-johnson-nnt7gh / eloquent-ride-3o1bqv, rules taken from jesse, OctoBot,
+# freqtrade and passivbot) translated into this grammar, entries only (exits are always paper v3). Ideas, not
+# tests: the staff choose whether and on which timeframe to test one, and a test counts like any other.
+OUTSIDE_IDEAS = (
+    ("추세추종 봇", {"entry": {"family": "ema_cross", "params": {"fast": 20, "slow": 50}},
+                 "filters": [{"kind": "adx", "mode": "above", "level": 20}], "direction": "both"}, "그대로"),
+    ("돌파 봇", {"entry": {"family": "donchian_break", "params": {"length": 20}},
+              "filters": [{"kind": "trend_ema", "length": 100}], "direction": "both"}, "그대로"),
+    ("평균회귀 봇", {"entry": {"family": "rsi_reversal", "params": {"length": 14, "low": 30, "high": 70}},
+                "filters": [{"kind": "trend_ema", "length": 200}], "direction": "both"},
+     "근사: 원본은 RSI<30이면서 볼린저 하단 아래(이 문법은 RSI가 30 위로 돌아올 때)"),
+    ("슈퍼트렌드 플립 봇", {"entry": {"family": "supertrend_flip", "params": {"length": 10, "mult": 3.0}},
+                    "filters": [{"kind": "trend_ema", "length": 200}], "direction": "both"}, "그대로"),
+    ("MACD 추세 봇", {"entry": {"family": "macd_cross", "params": {"fast": 12, "slow": 26, "signal": 9}},
+                   "filters": [{"kind": "trend_ema", "length": 200}, {"kind": "adx", "mode": "above", "level": 20}],
+                   "direction": "both"}, "근사: 원본은 ADX>18, 그리고 MACD선이 0 아래(롱)/위(숏)일 때만"),
+    ("켈트너 추세 봇", {"entry": {"family": "keltner_break", "params": {}},
+                  "filters": [{"kind": "trend_ema", "length": 200}, {"kind": "adx", "mode": "above", "level": 20}],
+                  "direction": "both"}, "그대로(켈트너 길이·배수는 이 문법 고정값)"),
+    ("스토캐스틱RSI 되돌림 봇", {"entry": {"family": "stochrsi_zone", "params": {}},
+                       "filters": [{"kind": "trend_ema", "length": 200}], "direction": "both"},
+     "근사: 원본은 25 아래/75 위(이 문법은 20/80)"),
+    ("변동성 돌파 봇", {"entry": {"family": "donchian_break", "params": {"length": 20}},
+                  "filters": [{"kind": "trend_ema", "length": 100}, {"kind": "adx", "mode": "above", "level": 25}],
+                  "direction": "both"}, "근사: 원본은 ADX>22"),
+)
+OUTSIDE_IDEAS_NOTE_KO = (
+    "친구 GH Coin의 자동매매봇 템플릿(jesse·OctoBot·freqtrade·passivbot 규칙)을 이 문법으로 옮긴 후보입니다. 진입만 옮겼고 "
+    "청산은 항상 paper v3입니다. '추세 캐리 봇'(EMA50>EMA200 상태 진입)은 이 문법으로 못 옮겨 뺐습니다. 진입 + EMA 추세 "
+    "필터 조합은 라이브러리 A·B에서 이미 걸러졌고(통과 0개, 위 prior_research), 새로운 건 ADX 필터 조합과 paper v3 청산입니다. "
+    "시험할지, 어느 봉으로 할지는 직원이 판단하고, 시험하면 다른 시험과 똑같이 장부에 셉니다. 이미 시험한 봉은 tested_timeframes.")
+
+
+def outside_ideas(NL, index: list) -> list[dict]:
+    """OUTSIDE_IDEAS with the timeframes already tested in the ledger (same spec_hash)."""
+    if NL is None:
+        return []
+    seen = set()
+    for r in index:
+        try:
+            seen.add(NL.spec_hash(NL.normalize_spec(r["spec"])))
+        except Exception:  # noqa: BLE001  (an old ledger row outside today's grammar)
+            continue
+    out = []
+    for name, spec, how in OUTSIDE_IDEAS:
+        tested = []
+        for tf in getattr(NL, "TFS", ()):
+            try:
+                if NL.spec_hash(NL.normalize_spec({**spec, "timeframe": tf})) in seen:
+                    tested.append(tf)
+            except Exception:  # noqa: BLE001
+                continue
+        out.append({"name_ko": name, "source": "GH Coin 봇 템플릿", "spec_without_timeframe": spec, "translation": how,
+                    "tested_timeframes": tested})
+    return out
+
 
 def lab_overview(ctx: RoundContext) -> dict:
     """What the lab's staff see (code only): the grammar and gate in Korean, the global count and the next
@@ -2348,6 +2405,7 @@ def lab_overview(ctx: RoundContext) -> dict:
                     "description_ko": _describe(NL, r["spec"])} for r in passed[-10:]],
         "prior_research": {"library_ko": LIBRARY_PRIOR_KO, "entry_study_ko": doc.get("conclusion_ko", ""),
                            "entry_study_tests": doc.get("totals") or {}},
+        "outside_ideas": {"note_ko": OUTSIDE_IDEAS_NOTE_KO, "ideas": outside_ideas(NL, index)},
         "observation": ({"until": obs, "proposals": False,
                          "note": "관찰 기간: 시험은 하고 장부에 남기지만, 통과해도 새 계좌 제안은 하지 않음(기간이 끝나면 코드가 제안)"}
                         if obs else None),
