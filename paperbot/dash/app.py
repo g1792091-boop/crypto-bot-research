@@ -46,7 +46,8 @@ STATIC = os.path.join(HERE, "static")
 COOKIE = "pb_session"
 SESSION_S = 7 * 86400
 TRADE_TFS = ("5m", "15m", "30m", "1h", "4h")
-DIGEST_TTL_S = 120           # /api/digest/staff, week, tf reused this long (they read every trade)
+DIGEST_TTL_S = 120           # /api/digest/staff reused this long
+TRADES_TTL_S = 600           # /api/digest/week and tf reused this long: they decode every closed trade since the start
 OVERLAP_TTL_S = 600          # /api/overlap result reused this long (the analysis reads weeks of 5-minute equity)
 
 
@@ -222,8 +223,10 @@ class Data:
             r["beats_random"] = None if b is None or r["wallet"] is None else (r["wallet"] > b and not r["bust"])
             if r["kind"] in ("copy", "newlab"):
                 r["beats_random"] = None   # started later than the coin-flip accounts: their wallets are not comparable
+        from ..agents.roster3 import STRATEGY_KO
+        # strategy_ko: the names every Telegram message uses (app.js name() shows them, the code in a tooltip)
         return {"ts": st[0] if st else None, "accounts": rows, "best_random": best_random,
-                "initial": self.initial(), "extras_runtime": xstate}
+                "initial": self.initial(), "extras_runtime": xstate, "strategy_ko": dict(STRATEGY_KO)}
 
     def initial(self) -> float:
         """Starting wallet of every account: what the running bot recorded, else the rule."""
@@ -828,6 +831,7 @@ class Rooms:
             # the agents tick's last sign of life ({ts, ok, why}): the page tells the owners when the
             # staff have stopped (timer off, login refused, crashed) instead of promising an answer
             last_tick = self._cursor_obj(a, self.R.TICK_CURSOR)
+            ai = self._ai_failing(a)
             hours = self.hours(a)
             waits, per_day = self._owner_waits(a, int(time.time() * 1000) if now_ms is None else now_ms)
         out = []
@@ -851,8 +855,27 @@ class Rooms:
             for r in out:
                 r["open_proposals"] = waiting.get(r["room_id"], 0)
         return {"ready": ready, "now": int(time.time() * 1000) if now_ms is None else now_ms,
-                "last_tick": last_tick, "tick_every_ms": TICK_EVERY_MS, "rounds_per_room_day": per_day,
+                "last_tick": last_tick, "ai": ai, "tick_every_ms": TICK_EVERY_MS, "rounds_per_room_day": per_day,
                 "max_id": max((int(r.get("last_id") or 0) for r in out), default=0), "rooms": out}
+
+    @staticmethod
+    def _ai_failing(a: Optional[sqlite3.Connection]) -> Optional[dict]:
+        """The staff's meetings that failed in a row because no AI call was answered: {failed: how many, since: the
+        oldest one's start}, none when a call was answered since (the streak of the tick's own WARN,
+        rooms.check_runner_down). When every call fails (a revoked or expired Claude login, no route to Claude) the
+        tick still runs and its sign of life stays OK, and such a call leaves no agent_calls row (nothing ran); the
+        page says the staff stopped from this (rooms.js agentsState)."""
+        if a is None:
+            return None
+        try:
+            from ..agents.rooms import down_streak
+            n, since, _ = down_streak(a)
+            if since is not None and a.execute("SELECT 1 FROM agent_calls WHERE ok = 1 AND ts >= ? LIMIT 1",
+                                               (since,)).fetchone():
+                n, since = 0, None
+        except (sqlite3.Error, ImportError):        # no rounds table yet; the engine is optional for the dashboard
+            return None
+        return {"failed": int(n), "since": since}
 
     def hours(self, a: Optional[sqlite3.Connection] = None) -> Optional[dict]:
         """The meeting hours the agents tick last used (rooms.HOURS_CURSOR), None before its first pass."""
@@ -1572,9 +1595,9 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
     # ------------------------------------------------ meeting digest (paperbot/agents/digest.py: code only, read-only)
     digest_cache: dict = {}
 
-    def _digest_cached(key: str, fn):
+    def _digest_cached(key: str, fn, ttl: float = DIGEST_TTL_S):
         hit = digest_cache.get(key)
-        if hit is None or time.time() - hit[0] > DIGEST_TTL_S:
+        if hit is None or time.time() - hit[0] > ttl:
             digest_cache[key] = hit = (time.time(), fn())
         return {**hit[1], "computed_at": int(hit[0] * 1000)}
 
@@ -1618,7 +1641,7 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
             finally:
                 c.close()
             return {**rep, "telegram_text": DG.compose_week(rep), "hours": _trigger_defaults(rooms.hours())}
-        return _digest_cached("week", make)
+        return _digest_cached("week", make, TRADES_TTL_S)
 
     @app.get("/api/digest/tf")
     def get_digest_tf():
@@ -1635,7 +1658,7 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
                 return {**DG.tf_split(c, init), "hours": _trigger_defaults(rooms.hours())}
             finally:
                 c.close()
-        return _digest_cached("tf", make)
+        return _digest_cached("tf", make, TRADES_TTL_S)
 
     # ------------------------------------------------ agent rooms: owner writes (inbox.db only)
     @app.get("/api/market")

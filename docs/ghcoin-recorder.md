@@ -31,5 +31,16 @@
 - 서버에서: `cd /opt/crypto-bot-research && /opt/paperbot/venv/bin/python -m paperbot.ghcoin report`
 - 파일: `/var/lib/paperbot/ghcoin/` (`calls.jsonl` 타점 기록, `board.json` 지금 판단, `state.json` 재시작용)
 
+## 백업과 되살리기
+- 매일 08:40 DB 백업(`deploy/paperbot-backup.sh`)이 `calls.jsonl`·`patterns.jsonl`·`state.json`을 한 파일 `ghcoin.db`(SQLite, 표 `files`: 이름·내용)로 묶어 다른 DB와 함께 둡니다. 그래서 09:15 서버 밖 백업(텔레그램)에도 같이 갑니다. `board.json`은 5분마다 새로 만들어지므로 넣지 않습니다.
+- 되살릴 때(`docs/offsite-backup.md` 9-5): 풀린 `ghcoin.db`는 `/var/lib/paperbot`에 넣지 않고, 아래 네 줄로 파일을 꺼냅니다. 세 번째 줄의 `/root/restore-out/날짜/ghcoin.db`는 붙여 넣기 전에 9-4 "다음 순서"의 `ghcoin.db` 줄(`sudo install … /root/restore-out/20261007/ghcoin.db /var/lib/paperbot/ghcoin.db`)에 나온 **앞쪽 경로**로 바꿉니다. 하루 전 날짜로 다시 풀었거나 `--out`을 다른 이름으로 했으면 폴더가 둘 이상이라, 꼭 그 줄의 경로를 씁니다(바꾸지 않으면 "unable to open database"가 나오고 아무것도 꺼내지 않습니다).
+  ```bash
+  sudo systemctl stop paperbot-ghcoin
+  sudo install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot/ghcoin
+  sudo sqlite3 /root/restore-out/날짜/ghcoin.db "SELECT writefile('/var/lib/paperbot/ghcoin/' || name, data) FROM files"
+  sudo chown -R paperbot:paperbot /var/lib/paperbot/ghcoin
+  ```
+  숫자(파일 크기)가 줄마다 나오면 된 것입니다. 기록기는 서버를 켤 때(`docs/server-setup-v3.md` 11번) 같이 켜집니다. 백업 뒤 꺼져 있던 동안의 타점은 기록되지 않습니다.
+
 ## GH Coin 코드를 새 버전으로 바꿀 때
 `deploy/ghcoin.commit`의 커밋을 바꾸고 설치를 다시 돌립니다. 바꾼 날부터는 다른 규칙이므로 `report --since 날짜`로 나눠 봅니다.

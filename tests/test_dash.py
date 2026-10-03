@@ -508,3 +508,90 @@ def test_events_endpoint_and_chart_markers(client, tmp_path, monkeypatch):
     js = open(os.path.join(static, "app.js"), encoding="utf-8").read()
     assert "/api/events?days_back=" in js and "macroMarks(t0)" in js
     assert 'id="ev-toggle"' in open(os.path.join(static, "index.html"), encoding="utf-8").read()
+
+
+# ---------------------------------------------------------------- 2026-10-03 ops review
+STATIC = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "paperbot", "dash", "static")
+
+
+def _static(name):
+    return open(os.path.join(STATIC, name), encoding="utf-8").read()
+
+
+def _node(src: str) -> str:
+    import shutil
+    import subprocess
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("needs node")
+    r = subprocess.run([node, "-e", src], capture_output=True, text=True, timeout=30)
+    assert r.returncode == 0, r.stderr
+    return r.stdout
+
+
+def test_page_ids_are_unique_so_the_signals_buttons_reload_the_signals():
+    """The 신호 tab's timeframe buttons had the 매매법 tab's id: a tap changed the strategy tab instead."""
+    import re
+    ids = re.findall(r'\bid="([^"]+)"', _static("index.html"))
+    assert sorted({i for i in ids if ids.count(i) > 1}) == []
+    assert 'seg("sig-tf", "tf", (v) => { state.sigTf = v; loadSignals(); });' in _static("app.js")
+
+
+def test_board_and_positions_name_strategies_in_korean(client):
+    import json
+    import re
+
+    from paperbot.agents.roster3 import STRATEGY_KO
+    client.post("/api/login", json={"password": "correct horse battery"})
+    b = client.get("/api/board").json()
+    assert b["strategy_ko"] == STRATEGY_KO
+    src = _static("app.js")
+    parts = ["const state = {board: null};", "const EXTRA_KINDS = ['copy', 'newlab'];", "const extraLabel = () => null;"]
+    for n in ("TF_KO", "stratKo", "name"):
+        parts.append(re.search(r"^const %s = .*?;$" % n, src, re.S | re.M).group(0))
+    out = _node("\n".join(parts) + """
+state.board = {strategy_ko: %s};
+console.log(JSON.stringify([name({strategy: "S2_ST_ROC", timeframe: "15m", kind: "strategy"}),
+  name({strategy: "RANDOM_1", timeframe: "1h", kind: "random"}), name({strategy: "X", timeframe: "5m", label_ko: "복제 c1"}),
+  stratKo("NOT_KNOWN")]));""" % json.dumps(STRATEGY_KO))
+    assert json.loads(out) == [f"{STRATEGY_KO['S2_ST_ROC']} · 15분", "동전 봇 1 · 1시간", "복제 c1", "NOT_KNOWN"]
+    assert 'title="${esc(a.account_id)}">${esc(name(a))}' in src            # the code stays in a tooltip
+    for f in ("summary.js", "checkpoint.js", "breakdown.js"):
+        assert "idName(" in _static(f), f
+
+
+def test_checkpoint_card_shows_progress_before_the_first_verdict():
+    import json
+    out = _node("""
+const els = {}; const $ = (id) => (els[id] = els[id] || {textContent: "", innerHTML: ""});
+const api = async () => ({ready: false});
+const document = {querySelectorAll: () => []};
+const setInterval = () => 0;
+const TF_KO = {"5m": "5분", "15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간"};
+const esc = (s) => String(s); const fmt = (x) => String(x); const idName = (id) => id;
+const acct = (tf, trades, kind) => ({account_id: "S@" + tf, timeframe: tf, trades, kind: kind || "strategy"});
+const state = {board: {accounts: [acct("5m", 31), acct("5m", 29), acct("15m", 30), acct("1h", 0), acct("4h", 80),
+  acct("5m", 90, "random")]}};
+""" + _static("checkpoint.js") + """
+setTimeout(() => console.log(JSON.stringify(els["ckpt-body"].innerHTML.replace(/\\s+/g, " "))), 20);""")
+    html = json.loads(out)
+    assert "진행 상황, 판정 아님:" in html
+    assert "판정 대상 4개" in html and "30건 이상인 계좌 <b>2개</b> (5분 1 · 15분 1 · 30분 0 · 1시간 0)" in html
+    assert "합격" in html and "동전 봇 2,000개" in html                     # says how the verdict is made, no preview
+
+
+def test_trade_reading_digests_are_reused_for_ten_minutes(client, monkeypatch):
+    import time as _time
+
+    import paperbot.dash.app as A
+    clock = [_time.time()]
+    monkeypatch.setattr(A.time, "time", lambda: clock[0])
+    client.post("/api/login", json={"password": "correct horse battery"})
+    first = client.get("/api/digest/tf").json()["computed_at"]
+    clock[0] += 180                                  # the digest tab polls every 2 minutes
+    assert client.get("/api/digest/tf").json()["computed_at"] == first
+    clock[0] += A.TRADES_TTL_S
+    assert client.get("/api/digest/tf").json()["computed_at"] > first
+    # the 순위표's breakdown card (every closed trade) refreshes only while it is on screen
+    assert ('setInterval(() => { if (state.view === "board" && document.visibilityState === "visible") load(); }, 600000);'
+            in _static("breakdown.js"))

@@ -74,6 +74,8 @@ if ! systemctl is-active --quiet paperbot-executor 2>/dev/null; then
 fi
 # GH Coin call recorder output (docs/ghcoin-recorder.md)
 install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot/ghcoin
+# the failure alert's one-a-day stamps (deploy/paperbot-failed@.service)
+install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot/failalert
 install -d -o root -g paperbot -m 750 /etc/paperbot
 
 echo "== code version"
@@ -176,7 +178,7 @@ for u in paperbot-live3.service paperbot-dash.service paperbot-daily3.service pa
          paperbot-backup.service paperbot-backup.timer paperbot-agents.service paperbot-agents.timer \
          paperbot-liq.service paperbot-labmonthly.service paperbot-labmonthly.timer \
          paperbot-checkpoint.service paperbot-checkpoint.timer paperbot-offsite.service paperbot-offsite.timer \
-         paperbot-ghcoin.service paperbot-tgtrades.service paperbot-executor.service; do
+         paperbot-failed@.service paperbot-ghcoin.service paperbot-tgtrades.service paperbot-executor.service; do
   install -m 644 "$APP/deploy/$u" /etc/systemd/system/$u
 done
 systemctl daemon-reload

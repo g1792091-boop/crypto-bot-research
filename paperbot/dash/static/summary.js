@@ -1,6 +1,6 @@
 "use strict";
 // Experiment progress strip (every view) and today's summary card (순위표), from /api/summary.
-// Uses the helpers of app.js ($, api, esc, fmt, topHeight).
+// Uses the helpers of app.js ($, api, esc, fmt, idName, topHeight).
 (function () {
   const DAY = 86400000;
   const kdate = (ms) => { const d = new Date(ms + 9 * 3600e3); return `${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일`; };
@@ -25,12 +25,14 @@
       ["이긴 거래", t.strategy_trades ? `${Math.round(t.wins / t.strategy_trades * 100)}%` : "—", `${t.wins} / ${t.strategy_trades}`],
       ["강제청산", t.liquidations, "오늘 청산된 거래"],
     ].map(([k, val, s]) => `<div class="tile"><div class="k">${k}</div><div class="v">${val}</div><div class="s">${s}</div></div>`).join("");
-    const li = (arr) => arr.map((r) => `${esc(r.account_id)} <span class="${r.pnl >= 0 ? "up" : "down"}">${usd(r.pnl)}</span>`).join(" · ") || "—";
+    const li = (arr) => arr.map((r) => `<span title="${esc(r.account_id)}">${esc(idName(r.account_id))}</span> <span class="${r.pnl >= 0 ? "up" : "down"}">${usd(r.pnl)}</span>`).join(" · ") || "—";
     $("today-list").innerHTML = `<p class="muted">오늘 가장 잘한 계좌: ${li(t.best)}<br>오늘 가장 못한 계좌: ${li(t.worst)}</p>`;
   }
   async function load() {
     try { render(await api("/api/summary")); } catch (e) { /* login redirect or server down */ }
   }
+  // the board's Korean names arrive with /api/board, after the first load
+  document.querySelectorAll('#nav button[data-v="board"]').forEach((b) => b.addEventListener("click", load));
   load();
   setInterval(load, 60000);
 })();

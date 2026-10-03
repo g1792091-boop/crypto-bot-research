@@ -87,13 +87,17 @@ const curOv = () => rs.ov && rs.ov.rooms.find((r) => r.room_id === rs.cur);
 // Are the staff really running? The agents tick leaves its last sign of life in agents3.db (last_tick:
 // {ts, ok, why}). "stopped": no sign for three ticks and no meeting running (timer off, server down);
 // "login": the subscription login check refused the meetings (API key found, token expired); "error":
-// the last pass crashed; "new": the agents have never run. Only "ok" may promise an answer soon.
+// the last pass crashed; "noai": the passes run but the meetings keep failing with no AI call answered for 6 hours
+// or more (age: since when; a revoked or expired Claude login, no route to Claude; /api/rooms ai); "new": the agents
+// have never run. Only "ok" may promise an answer soon.
 function agentsState(ov) {
   if (!ov || !ov.ready) return {st: "new", age: null};
   const lt = ov.last_tick, running = (ov.rooms || []).some((r) => r.running);
   const age = lt && lt.ts ? Math.max(0, (ov.now || Date.now()) - lt.ts) : null;
   if (lt && lt.ok === false) return {st: lt.why === "login" ? "login" : "error", age};
   if (!running && (age == null || age > 3 * (ov.tick_every_ms || 900000))) return {st: "stopped", age};
+  const ai = ov.ai, now = ov.now || Date.now();
+  if (ai && ai.failed >= 3 && ai.since && now - ai.since >= 6 * 3600000) return {st: "noai", age: now - ai.since};
   return {st: "ok", age};
 }
 const agoKo = (age) => age == null ? "점검 기록 없음" : `마지막 점검 ${Math.round(age / 60000)}분 전`;
@@ -154,7 +158,8 @@ function aiChip() {
   if (a.st === "new") chip("chip-ai", null, "에이전트 시작 전");
   else if (a.st === "login") chip("chip-ai", false, "에이전트 멈춤 (로그인 확인)");
   else if (a.st === "error") chip("chip-ai", false, `에이전트 멈춤 (오류, ${ago})`);
-  else if (a.st === "stopped") chip("chip-ai", null, `에이전트 멈춤 (${ago})`);
+  else if (a.st === "noai") chip("chip-ai", false, `에이전트 멈춤 (AI 응답 없음 ${Math.floor(a.age / 3600000)}시간)`);
+  else if (a.st === "stopped") chip("chip-ai", false, `에이전트 멈춤 (${ago})`);
   else chip("chip-ai", true, running ? `자동 토론 중 ${running}곳` : "자동 토론 대기");
   $("r-auto").classList.toggle("off", a.st !== "ok");
   $("r-auto").innerHTML = {
@@ -162,6 +167,7 @@ function aiChip() {
     new: "<b>○ 자동 토론 시작 전</b> 서버에서 에이전트 순번이 돌기 시작하면 직원들이 스스로 회의를 엽니다. 지금 남긴 글은 그때 읽습니다.",
     stopped: `<b>○ 자동 토론이 멈춰 있습니다 — 서버 확인 필요</b> 에이전트 순번이 돌지 않고 있습니다(${esc(ago)}). 타이머가 꺼졌거나 서버에 문제가 있을 수 있습니다. 남긴 글은 다시 돌기 시작하면 읽습니다.`,
     login: "<b>⚠ 로그인 확인에서 멈춤(API 키 감지 등): 회의가 열리지 않습니다</b> 서버에서 Claude 구독 로그인을 확인해 주세요(docs/agent-rooms.md의 설치 1번). 남긴 글은 그 뒤에 읽습니다.",
+    noai: `<b>⚠ 직원들의 AI 호출이 ${Math.floor(a.age / 3600000)}시간째 모두 실패해 회의가 열리지 않습니다</b> 서버에서 Claude 구독 로그인과 연결을 확인해 주세요(서버 안내서 8-2·8-4). 두 분의 승인·거절은 코드가 그대로 반영하고, 남긴 글은 다시 연결되면 읽습니다.`,
     error: `<b>⚠ 에이전트 실행 중 오류로 멈춤</b> 서버 기록(journalctl -u paperbot-agents)을 확인해 주세요(${esc(ago)}). 남긴 글은 다시 돌기 시작하면 읽습니다.`,
   }[a.st];
 }

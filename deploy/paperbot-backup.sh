@@ -36,5 +36,21 @@ for f in agents3 inbox liq checkpoint exec/executor exec/executor-testnet daily3
     fail=1
   fi
 done
+# The GH Coin call recorder's files (docs/ghcoin-recorder.md) are not a database: they go into one, ghcoin.db
+# (table files: name, data), so the off-site copy sends them like the others. Restore: docs/ghcoin-recorder.md.
+g="$lib/ghcoin"
+if [ -f "$g/calls.jsonl" ] || [ -f "$g/patterns.jsonl" ] || [ -f "$g/state.json" ]; then
+  rm -f "$d/ghcoin.db.part"
+  if sqlite3 -bail "$d/ghcoin.db.part" "CREATE TABLE files (name TEXT PRIMARY KEY, data BLOB);
+      INSERT INTO files VALUES ('calls.jsonl', readfile('$g/calls.jsonl')),
+        ('patterns.jsonl', readfile('$g/patterns.jsonl')), ('state.json', readfile('$g/state.json'));
+      DELETE FROM files WHERE data IS NULL;" && mv "$d/ghcoin.db.part" "$d/ghcoin.db"; then
+    :
+  else
+    rm -f "$d/ghcoin.db.part"
+    echo "backup of ghcoin.db failed" >&2
+    fail=1
+  fi
+fi
 find "$out" -mindepth 1 -maxdepth 1 -type d -mtime +14 -exec rm -rf {} +
 exit $fail

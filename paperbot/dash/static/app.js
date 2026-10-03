@@ -34,8 +34,11 @@ const extraLabel = (aid) => {
   const a = state.board && state.board.accounts.find((x) => x.account_id === aid);
   return a ? a.label_ko : null;
 };
+// a strategy's Korean name, as every Telegram message writes it (agents/roster3 STRATEGY_KO via /api/board)
+const stratKo = (s) => String(s).startsWith("RANDOM_") ? String(s).replace("RANDOM_", "동전 봇 ")
+  : (state.board && state.board.strategy_ko && state.board.strategy_ko[s]) || s;
 const name = (a) => a.label_ko || (EXTRA_KINDS.includes(a.kind) && a.account_id && extraLabel(a.account_id))
-  || `${a.strategy.replace("RANDOM_", "동전 봇 ")} · ${TF_KO[a.timeframe] || a.timeframe}`;
+  || `${stratKo(a.strategy)} · ${TF_KO[a.timeframe] || a.timeframe}`;
 // pills of an extra account: what it is (copy / new) and the runner's status when it is not running normally
 function extraPills(a) {
   if (!EXTRA_KINDS.includes(a.kind)) return "";
@@ -58,14 +61,16 @@ function toast(text) {
   const t = $("toast"); t.textContent = text; t.classList.add("show");
   clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("show"), 5000);
 }
-// Engine and runner messages are in English; show them in Korean.
+// Engine and runner messages are in English; show them in Korean (Telegram: notify.ko).
 function alertKo(text) {
   const t = String(text); let m;
   if ((m = t.match(/^\[([^\]]+)\] drawdown ([\d.]+)% \(level (\d+)%\), equity ([\d.]+)/)))
-    return `${m[1]} 낙폭 ${m[2]}% (${m[3]}% 경고선), 잔고 $${m[4]}`;
-  if ((m = t.match(/^\[([^\]]+)\] BUST/))) return `${m[1]} 파산 (잔고 $10 미만, 계좌 정지)`;
+    return `${idName(m[1])} 낙폭 ${m[2]}% (${m[3]}% 경고선), 잔고 $${m[4]}`;
+  if ((m = t.match(/^\[([^\]]+)\] BUST/))) return `${idName(m[1])} 파산 (잔고 $10 미만, 계좌 정지)`;
   if ((m = t.match(/^\[([^\]]+)\] LIQUIDATED (\S+) (\d+)x lost margin ([\d.]+)/)))
-    return `${m[1]} 강제청산: ${coin(m[2])} ${m[3]}배, 증거금 $${m[4]} 손실`;
+    return `${idName(m[1])} 강제청산: ${coin(m[2])} ${m[3]}배, 증거금 $${m[4]} 손실`;
+  if ((m = t.match(/^signal workers did not answer within (\d+)s; signals skipped at (\d+) for (.+)/)))
+    return `신호 계산 ${m[1]}초 초과로 ${tsKo(+m[2])} 봉 신호 건너뜀: ${m[3].split(", ").map((x) => TF_KO[x] || x).join(", ")}`;
   if ((m = t.match(/^data gap at (\d+): no bar for (.+)/))) return `데이터 누락 ${tsKo(+m[1])}: ${m[2]}`;
   if (/^no new closed bars/.test(t)) return "새 1분봉이 들어오지 않음: " + t;
   if (/^5m history incomplete/.test(t)) return "5분봉 기록 불완전으로 신호 계산 건너뜀";
@@ -400,7 +405,7 @@ function posRows(list, withCoin) {
     const p = a.position, u = livePnl(p);
     const stop = p.lock_roe ? `<span class="up">+${Math.round(p.lock_roe * 100)}% 잠금</span>` : px(p.stop);
     const strat = a.kind === "strategy" || a.kind === "copy";
-    return `<tr class="click" data-id="${esc(a.account_id)}"><td class="l">${esc(name(a))}</td>${withCoin ? `<td class="l">${coin(p.symbol)}</td>` : ""}
+    return `<tr class="click" data-id="${esc(a.account_id)}"><td class="l" title="${esc(a.account_id)}">${esc(name(a))}</td>${withCoin ? `<td class="l">${coin(p.symbol)}</td>` : ""}
       <td class="l">${sideTag(p.side)}</td><td>${p.leverage}배</td>${withCoin ? `<td class="mono">${px(p.entry)}</td>` : ""}
       <td class="mono ${u ? cls(u.roe) : ""}">${u ? pct(u.roe) : "—"}</td><td class="mono">${stop}</td>
       <td class="l"><button class="mini" data-chart="${esc(a.account_id)}" data-sym="${esc(p.symbol)}">차트</button>${strat ? ` <button class="mini" data-strat="${esc(a.strategy)}" data-tf="${esc(a.timeframe)}" data-sym="${esc(p.symbol)}">매매법</button>` : ""}</td></tr>`;
@@ -410,7 +415,7 @@ function tradeRows(rows, withCoin) {
   if (!rows.length) return '<p class="empty">체결 내역이 없습니다</p>';
   return `<table><thead><tr><th class="l">청산 시각</th><th class="l">계좌</th>${withCoin ? '<th class="l">코인</th>' : ""}<th class="l">방향</th>
     <th>배수</th><th class="l">이유</th><th>ROE</th><th>손익</th></tr></thead><tbody>` + rows.map((t) => `<tr class="click" data-id="${esc(t.account_id)}">
-    <td class="l">${tsKo(t.exit_time)}</td><td class="l">${esc(name(t))}</td>${withCoin ? `<td class="l">${coin(t.symbol)}</td>` : ""}
+    <td class="l">${tsKo(t.exit_time)}</td><td class="l" title="${esc(t.account_id)}">${esc(name(t))}</td>${withCoin ? `<td class="l">${coin(t.symbol)}</td>` : ""}
     <td class="l">${sideTag(t.side)}</td><td>${t.leverage}배</td>
     <td class="l">${REASON_KO[t.exit_reason] || t.exit_reason}${t.lock_roe ? ` +${Math.round(t.lock_roe * 100)}%` : ""}</td>
     <td class="mono ${cls(t.roe)}">${pct(t.roe)}</td><td class="mono ${cls(t.pnl)}">${t.pnl > 0 ? "+" : ""}${fmt(t.pnl)}</td></tr>`).join("") + "</tbody></table>";
@@ -508,7 +513,7 @@ function renderBoard() {
     }
     const vs = a.kind === "random" ? '<span class="muted">기준</span>'
       : a.beats_random == null ? "—" : a.beats_random ? '<span class="up">✓ 나음</span>' : '<span class="down">✕ 못함</span>';
-    return `<tr class="click" data-id="${esc(a.account_id)}"><td class="l muted" data-k="순위">${i + 1}</td><td class="l name">${esc(name(a))}${extraPills(a)}</td>
+    return `<tr class="click" data-id="${esc(a.account_id)}"><td class="l muted" data-k="순위">${i + 1}</td><td class="l name" title="${esc(a.account_id)}">${esc(name(a))}${extraPills(a)}</td>
       <td class="mono" data-k="잔고">$${fmt(w)}</td><td class="mono ${cls(ret)}" data-k="수익률">${pct(ret)}</td><td data-k="거래">${a.trades}</td>
       <td data-k="승률">${a.win_rate == null ? "—" : Math.round(a.win_rate * 100) + "%"}${a.trades ? ` <small class="muted">${a.wins}승 ${a.losses}패</small>` : ""}</td>
       <td class="mono" data-k="최대 낙폭">${a.max_drawdown ? "-" + (a.max_drawdown * 100).toFixed(1) + "%" : "—"}</td>
@@ -684,11 +689,11 @@ async function drawAcctCandles(d) {
 }
 
 // ------------------------------------------------------------ signals & status
-seg("s-tf", "tf", (v) => { state.sigTf = v; loadSignals(); });
+seg("sig-tf", "tf", (v) => { state.sigTf = v; loadSignals(); });
 async function loadSignals() {
   const rows = await api("/api/signals?limit=300" + (state.sigTf ? "&tf=" + state.sigTf : "")).catch(() => []);
   $("signals").innerHTML = rows.map((r) => `<tr><td class="l">${tsKo(r.bar_close)}</td><td class="l">${TF_KO[r.timeframe] || r.timeframe}</td>
-    <td class="l">${esc(r.strategy.replace("RANDOM_", "동전 봇 "))}</td><td class="l">${coin(r.symbol)}</td><td class="l">${sideTag(r.side)}</td>
+    <td class="l" title="${esc(r.strategy)}">${esc(stratKo(r.strategy))}</td><td class="l">${coin(r.symbol)}</td><td class="l">${sideTag(r.side)}</td>
     <td class="mono">${px(r.ref_price)}</td><td>${r.delay_ms == null ? "—" : (r.delay_ms / 1000).toFixed(1) + "초"}</td>
     <td class="l">${STATUS_KO[r.status] || r.status}</td></tr>`).join("") || '<tr><td colspan="8" class="empty">신호가 없습니다</td></tr>';
 }
@@ -723,7 +728,7 @@ function stream() {
     heartbeat(d.heartbeat);
     if (d.rooms && Object.keys(d.rooms).length && typeof onRoomsStream === "function") onRoomsStream(d.rooms);
     if (Object.keys(d.changed).length) loadBoard();
-    d.trades.forEach((t) => toast(`${t.account_id} ${coin(t.symbol)} ${REASON_KO[t.exit_reason] || t.exit_reason} ${pct(t.roe)} → $${fmt(t.equity_after)}`));
+    d.trades.forEach((t) => toast(`${idName(t.account_id)} ${coin(t.symbol)} ${REASON_KO[t.exit_reason] || t.exit_reason} ${pct(t.roe)} → $${fmt(t.equity_after)}`));
     d.alerts.filter(toastWorthy).forEach((a) => toast(`⚠ ${alertKo(a.text)}`));
     if (d.trades.length && state.view === "trade") { if (state.sideTab === "trades") renderSide(); if (state.botTab === "alltrades") renderBottom(); loadTradeChart(); }
     if (state.view === "account" && state.account && d.trades.some((t) => t.account_id === state.account.account.account_id)) openAccount(state.account.account.account_id);

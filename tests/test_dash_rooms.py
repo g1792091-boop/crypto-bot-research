@@ -511,6 +511,67 @@ console.log(JSON.stringify({
     assert "자동 토론이 멈춰 있습니다" in src and "로그인 확인에서 멈춤" in src
 
 
+@pytest.mark.parametrize("error", ["Invalid API key · Please run /login", "API Error: Connection error."])
+def test_the_page_says_when_every_ai_call_fails(env, tmp_path, error):
+    """A revoked or expired Claude login, or no route to Claude: every call fails before the model answers and leaves
+    no agent_calls row (ClassBudget.call: nothing ran), while the tick itself still runs and marks itself OK. The page
+    reads the meetings that failed in a row for it (/api/rooms ai, the streak of the tick's own WARN) and shows the
+    staff stopped after 6 hours, red on a phone too."""
+    from paperbot.agents.runner import AgentCallError
+    from paperbot.notify import ListNotifier
+    from test_rooms import MIN, QUIET, World
+
+    class Refused:
+        def call(self, model, system_prompt, instruction, packet):
+            raise AgentCallError(error)
+
+    c = env["client"]
+    _login(c)
+    assert c.get("/api/rooms").json()["ai"] == {"failed": 0, "since": None}      # the fixture's last call was answered
+    (tmp_path / "w").mkdir()
+    w = World(tmp_path / "w")
+    w.say("team:lead", "질문", QUIET - 10 * MIN)
+    rm, ov = Rooms(w.paths["agents"], w.paths["inbox"]), {}
+    for k in range(7 * 4 + 1):                           # the 15-minute timer for 7 hours
+        t = QUIET + k * 15 * MIN
+        w.tick(Refused(), t, notifier=ListNotifier())
+        o = rm.overview(t)
+        ov[k * 15] = {**{x: o[x] for x in ("ready", "now", "last_tick", "ai", "tick_every_ms")},
+                      "rooms": [{"running": r["running"]} for r in o["rooms"]]}
+    assert w.q("SELECT COUNT(*) FROM agent_calls") == [(0,)] and len(w.rounds()) >= 3
+    assert ov[420]["ai"] == {"failed": len(w.rounds()), "since": QUIET}
+    w.agents.execute("INSERT INTO agent_calls VALUES (?,?,?,?,?,?,?)",
+                     (QUIET + 7 * 60 * MIN, R.kst_day(QUIET), "owner", "team_lead", "sonnet", 1, 1000))
+    w.agents.commit()
+    assert rm.overview(QUIET + 7 * 60 * MIN)["ai"] == {"failed": 0, "since": None}    # answered since: not stopped
+    got = _js(("agentsState", "agoKo", "aiChip"), """
+const now = 1e12, H = 3600000, chips = [];
+const $ = () => ({classList: {toggle() {}}, innerHTML: ""});
+function chip(id, ok, text) { chips.push([id, ok, text]); }
+const ov = (ai, tick) => ({ready: true, now, tick_every_ms: 900000, last_tick: tick || {ts: now - 60000, ok: true},
+  rooms: [{running: false}], ai});
+const st = (o) => agentsState(o).st;
+const real = %s;
+const rs = {ov: real[420]};
+aiChip();
+rs.ov = ov(undefined, {ts: now - 2 * H, ok: true});
+aiChip();
+console.log(JSON.stringify({failing: agentsState(real[420]), at6: st(real[360]), before6: st(real[345]),
+  short: st(ov({failed: 9, since: now - 2 * H})), few: st(ov({failed: 2, since: now - 9 * H})),
+  answered: st(ov({failed: 0, since: null})), old_server: st(ov(undefined)),
+  tick_gone: st(ov({failed: 3, since: now - 7 * H}, {ts: now - 2 * H, ok: true})), chips}));
+""" % json.dumps(ov))
+    assert got["failing"] == {"st": "noai", "age": 7 * 3_600_000}
+    assert (got["at6"], got["before6"]) == ("noai", "ok")
+    assert (got["short"], got["few"], got["answered"], got["old_server"], got["tick_gone"]) == (
+        "ok", "ok", "ok", "ok", "stopped")
+    assert got["chips"] == [["chip-ai", False, "에이전트 멈춤 (AI 응답 없음 7시간)"],
+                            ["chip-ai", False, "에이전트 멈춤 (마지막 점검 120분 전)"]]
+    css = open(os.path.join(os.path.dirname(ROOMS_JS), "style.css"), encoding="utf-8").read()
+    phone = css[css.index("@media (max-width: 720px)"):]
+    assert ".chips span.opt { display: none; }" in phone and ".chips #chip-ai.bad { display: inline; }" in phone
+
+
 def test_room_members_and_duties_are_what_the_room_staff_do():
     rm = Rooms(None, None)
     risk = rm.room_info("team:risk")["members_info"]

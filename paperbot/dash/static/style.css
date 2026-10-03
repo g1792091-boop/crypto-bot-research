@@ -405,6 +405,7 @@ button.sm { height: 24px; font-size: 11.5px; padding: 0 8px; }
   .topbar .nav { order: 9; width: 100%; height: 38px; }
   .topbar button#theme, .topbar button#logout { height: 26px; padding: 0 8px; }
   .chips span.opt { display: none; }
+  .chips #chip-ai.bad { display: inline; }   /* the staff stopped: shown on a phone too */
   .page { padding: 10px; }
   .tile .v { font-size: 18px; }
   table.cards thead { display: none; }

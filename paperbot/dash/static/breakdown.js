@@ -1,6 +1,6 @@
 "use strict";
 // By coin / weekday-weekend x session / windows / volatility spike (paperbot/breakdown.py via /api/breakdown).
-// Read-only, descriptive; on the 순위표 view. Uses the helpers of app.js ($, api, esc, fmt).
+// Read-only, descriptive; on the 순위표 view. Uses the helpers of app.js ($, api, esc, fmt, idName).
 (function () {
   const SES = {asia: "아시아 09~16시", europe: "유럽 16~22시", us: "미국 22~05시", dawn: "새벽 05~09시"};
   const WIN = {funding: "펀딩 정산 ±10분", us_open: "미국장 개장 ±1시간", macro: "미국 지표 시각(08:30 NY) ±30분"};
@@ -10,7 +10,7 @@
   function render(v) {
     $("bd-at").textContent = `거래 ${v.trades}건 · ${v.min_n}건 미만 칸은 결론 아님`;
     const coins = Object.entries(v.by_coin).map(([s, c]) => `<tr><td class="l">${esc(s)}</td><td class="l">${cell(c.strategies)}</td><td class="l">${cell(c.coin_flips)}</td>
-      <td class="l"><small>${c.best.map((b) => `${esc(b.account)} ${usd(b.pnl)}`).join("<br>") || "—"}</small></td></tr>`).join("");
+      <td class="l"><small>${c.best.map((b) => `<span title="${esc(b.account)}">${esc(idName(b.account))}</span> ${usd(b.pnl)}`).join("<br>") || "—"}</small></td></tr>`).join("");
     let html = `<table><thead><tr><th class="l">코인</th><th class="l">매매법 계좌 전체</th><th class="l">동전 봇</th><th class="l">이 코인에서 잘 된 계좌 (${10}건 이상)</th></tr></thead><tbody>${coins}</tbody></table>`;
     if (v.sessions) {
       const p = v.sessions.primary;
@@ -29,5 +29,6 @@
   }
   document.querySelectorAll('#nav button[data-v="board"]').forEach((b) => b.addEventListener("click", load));
   load();
-  setInterval(load, 600000);
+  // a fresh server computation reads every closed trade: refresh only while the 순위표 is on screen
+  setInterval(() => { if (state.view === "board" && document.visibilityState === "visible") load(); }, 600000);
 })();

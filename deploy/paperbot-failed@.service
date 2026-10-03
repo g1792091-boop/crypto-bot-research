@@ -1,0 +1,25 @@
+# One Korean Telegram warning when a scheduled job fails (paperbot/failalert.py). Never started by hand or by a
+# timer: paperbot-checkpoint, paperbot-daily3, paperbot-labmonthly and paperbot-agents name it in OnFailure=,
+# and systemd starts paperbot-failed@<that unit>.service. At most one warning per unit per KST day (the hourly
+# checkpoint retries and the 15-minute agent passes would repeat it); the day of the last one is kept in
+# /var/lib/paperbot/failalert/<unit>. The nightly backup is not listed: the off-site copy at 09:15 already
+# warns about a missing copy. The failed unit stays in `systemctl --failed` until reset-failed.
+[Unit]
+Description=paperbot failure alert for %i
+
+[Service]
+Type=oneshot
+User=paperbot
+Group=paperbot
+WorkingDirectory=/opt/crypto-bot-research
+# TELEGRAM_BOT_TOKEN and the alert chats; systemd reads the file before the sandbox below applies.
+EnvironmentFile=/etc/paperbot/live.env
+# The rest of live.env is not this job's business: the exchange key and the dead-man URL never reach it.
+UnsetEnvironment=BINANCE_API_KEY BINANCE_API_SECRET DEADMAN_URL
+ExecStart=/opt/paperbot/venv/bin/python -m paperbot.failalert %i
+TimeoutStartSec=2min
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/paperbot
+InaccessiblePaths=-/etc/paperbot -/var/lib/paperbot/exec -/var/lib/paperbot/.claude -/var/lib/paperbot/.local -/var/backups/paperbot

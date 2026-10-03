@@ -5,6 +5,8 @@
 [Unit]
 Description=paperbot v3 checkpoint verdicts (day 30, 60, 90, ...)
 After=network-online.target
+# a failed run sends one Korean Telegram warning a day (deploy/paperbot-failed@.service)
+OnFailure=paperbot-failed@%n.service
 
 [Service]
 Type=oneshot

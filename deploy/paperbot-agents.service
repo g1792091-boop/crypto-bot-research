@@ -5,12 +5,14 @@
 # (sudo -u paperbot ...), never as root: a root-owned lock or database would stop the timer's passes.
 # Before its first meeting a pass checks that Claude Code is logged in with the subscription and
 # not an API key (`claude auth status`); otherwise it exits with status 2 and runs nothing.
-# The only writer of agents3.db. Reads paper3.db, daily3.db and inbox.db read-only. Never places an
+# The only writer of agents3.db. Reads paper3.db, daily3.db, inbox.db and checkpoint.db read-only. Never places an
 # order, never calls an exchange API, never changes the 195 accounts, the rules or the code.
 [Unit]
 Description=paperbot agent rooms (one pass)
 After=network-online.target
 Wants=network-online.target
+# a failed run sends one Korean Telegram warning a day (deploy/paperbot-failed@.service)
+OnFailure=paperbot-failed@%n.service
 
 [Service]
 Type=oneshot
@@ -22,6 +24,9 @@ WorkingDirectory=/opt/crypto-bot-research
 EnvironmentFile=/etc/paperbot/agents.env
 # Claude Code is installed for the paperbot user (~/.local/bin, docs/agent-rooms.md)
 Environment=PATH=/var/lib/paperbot/.local/bin:/usr/local/bin:/usr/bin:/bin
+# Claude Code never updates itself here (the runner passes this on to the child, runner.ENV_ALLOW): a new
+# version is installed by hand, on purpose, and checked with one dry pass
+Environment=DISABLE_AUTOUPDATER=1
 ExecStart=/opt/paperbot/venv/bin/python -m paperbot.agents.rooms tick --paper-db /var/lib/paperbot/paper3.db --daily-db /var/lib/paperbot/daily3.db --agents-db /var/lib/paperbot/agents3.db --inbox-db /var/lib/paperbot/inbox.db --lab-dir /var/lib/paperbot/lab
 # The live runner comes first: the agents (and their 5-year tests) get lower CPU and disk priority
 # and bounded memory. A pass cut off here leaves its meeting 'running'; the next pass (it holds the
@@ -33,6 +38,9 @@ IOSchedulingPriority=7
 MemoryHigh=2G
 MemoryMax=3G
 TimeoutStartSec=100min
+# A pass stopped on purpose (`systemctl stop`: a deploy, a database restore) ends clean, without the failure
+# alert (the [Unit] hook above); one cut off by TimeoutStartSec or the memory limit still fails.
+SuccessExitStatus=SIGTERM
 # Defence in depth (the model child already has no tools): this pass may write only /var/lib/paperbot
 # (agents3.db and its lock, Claude Code's own files under ~/.claude); the live runner's, the nightly
 # check's and the dashboard's database files and the 5-year caches are read-only here, and the
@@ -50,6 +58,6 @@ NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
 ReadWritePaths=/var/lib/paperbot
-ReadOnlyPaths=-/var/lib/paperbot/paper3.db -/var/lib/paperbot/daily3.db -/var/lib/paperbot/inbox.db -/var/lib/paperbot/lab
+ReadOnlyPaths=-/var/lib/paperbot/paper3.db -/var/lib/paperbot/daily3.db -/var/lib/paperbot/inbox.db -/var/lib/paperbot/checkpoint.db -/var/lib/paperbot/lab
 # The order executor's keys and its databases (directory: a stable inode) are never visible here.
 InaccessiblePaths=-/etc/paperbot/live.env -/etc/paperbot/dash.env -/etc/paperbot/agents.env -/etc/paperbot/executor.env -/var/lib/paperbot/exec -/var/backups/paperbot
