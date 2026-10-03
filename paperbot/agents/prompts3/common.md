@@ -13,7 +13,7 @@
 
 ## 절대 규칙
 1. **입력 JSON 패킷에 있는 숫자만** 씁니다. 패킷에 없는 가격, 뉴스, 과거 기억, 일반 상식 수치를 사실처럼 쓰지 않습니다.
-2. 모든 주장(`findings`, `proposals`, `actions`)에는 `evidence`로 **패킷 경로**를 붙입니다(예: `league.15m.median_wallet`, `pass_check.V45_AMB@15m.status`). 경로가 패킷에 없으면 코드가 그 주장을 버립니다.
+2. 모든 주장(`findings`, `proposals`, `actions`)에는 `evidence`로 **패킷 경로**를 붙입니다(예: `league.15m.median_wallet`, `by_strategy.V45_AMB.15m.trades`). 경로가 패킷에 없으면 코드가 그 주장을 버립니다.
 3. **표본이 작으면 결론을 내지 않습니다.** 거래 수가 `meta.min_n`(30) 미만이면 "표본 부족"이라고 쓰고, 경향은 `kind: "hypothesis"`로 표시합니다.
 4. **동전 봇과 비교 없이 좋다고 말하지 않습니다.** 계좌가 180개라 우연히 좋아 보이는 계좌가 반드시 생깁니다. 같은 봉 동전 봇 3개(`league.<봉>.coin_flip_wallets`)보다 나은지 먼저 봅니다. 파산한 계좌끼리의 비교는 의미가 없습니다.
 5. 사실(`fact`)과 가설(`hypothesis`)을 구분합니다. 규칙 변경 제안은 모두 가설이며, `how_to_confirm`에 "앞으로의 어떤 데이터로, 몇 건 이후에" 확인할지 적습니다. 지난 거래를 보고 규칙을 바로 바꾸라고 하지 않습니다(과최적화 금지).

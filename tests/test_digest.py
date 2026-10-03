@@ -183,9 +183,11 @@ def test_weekly_report_goes_out_on_sunday_once_and_retries_a_refused_send(world)
             return False
     bad = Refuses()
     nxt = SUNDAY + 7 * DAY
-    for k in range(5):
+    for k in range(RM.WEEKLY_REPORT_TRIES + 3):
         world.tick(QueueRunner({}), nxt + k * 15 * MIN, policy=pol, notifier=bad)
     assert len(bad.messages) == RM.WEEKLY_REPORT_TRIES and R.get_cursor(world.agents, "telegram:weekly_report:2026-10-18") is None
+    # a Telegram outage of up to 3 hours (12 ticks) still delivers the week's report that evening
+    assert RM.WEEKLY_REPORT_TRIES * 15 * MIN <= 3 * HOUR < pol.weekly_report_window_ms
 
 
 # ---------------------------------------------------------------- dashboard
@@ -359,3 +361,98 @@ def test_weekly_report_carries_the_ghcoin_recorder(world, tmp_path):
     assert rep["ghcoin"]["week"]["calls"] == 3 and rep["ghcoin"]["all"]["calls"] == 3
     assert "[GH Coin 기록기" in DG.compose_week(rep) and "3타점" in DG.compose_week(rep)
     assert DG.week_report(world.paper(), world.agents, SUNDAY, ghcoin_dir=str(tmp_path / "none"))["ghcoin"] is None
+
+
+# ---------------------------------------------------------------- third review round
+def test_a_busted_timeframe_never_makes_a_split_and_a_real_split_gets_the_meeting(world):
+    for k in range(10):                                           # N17: 15m +600, 1h busted at about -4,990
+        world.trade(f"{S}@15m", 60.0, TF_AT - (30 - k) * HOUR)
+        world.trade(f"{S}@1h", -499.0, TF_AT - (20 - k) * HOUR)
+        world.trade("V45_AMB@15m", 40.0, TF_AT - (30 - k) * HOUR)  # V45: a genuine split, less wide
+        world.trade("V45_AMB@1h", -30.0, TF_AT - (20 - k) * HOUR)
+    world.store.alert(TF_AT - 10 * HOUR, "WARN", f"[{S}@1h] BUST: bust: equity 9.00 below 10.00")
+    world.store.commit()
+    got = DG.tf_split(world.paper())
+    n17 = next(r for r in got["strategies"] if r["strategy"] == S)
+    assert n17["timeframes"]["1h"]["bust"] is True and n17["split"] is False and n17["worst_tf"] == "15m"
+    assert got["split"] == ["V45_AMB"]
+    pol = tf_policy()
+    assert [d.room_id for d in TR.find_due(world.paper(), None, world.agents, None, TF_AT, pol.triggers)
+            if d.trigger == "tf_split"] == ["strat:V45_AMB"]
+
+
+def test_tf_split_does_not_read_the_trades_once_the_days_meetings_are_held(world, monkeypatch):
+    split_trades(world)
+    pol = tf_policy()
+    reads = []
+    monkeypatch.setattr(DG, "tf_split", lambda *a, **k: reads.append(1) or {"strategies": [], "split": []})
+    TR.find_due(world.paper(), None, world.agents, None, TF_AT, pol.triggers)
+    assert reads == [1]
+    for k in range(pol.triggers.tf_split_per_day):
+        world.agents.execute("INSERT INTO rounds (room_id, trigger, trigger_data, started_ts, ended_ts, status) "
+                             "VALUES (?, 'tf_split', '{}', ?, ?, 'done')", (f"strat:x{k}", TF_AT - MIN, TF_AT - 1))
+    world.agents.commit()
+    assert TR.find_due(world.paper(), None, world.agents, None, TF_AT, pol.triggers) == []
+    assert reads == [1]                      # every closed trade is read only while a meeting can still open
+
+
+def _week_ctx(world, now, notifier, paper=True):
+    pol = RM.RoomsPolicy(triggers=TR.TriggerPolicy(enabled=()), weekly_report_hour_kst=21)
+    return RM.RoundContext(agents_conn=world.agents, paper_ro=world.paper() if paper else None, daily_ro=None,
+                           inbox_ro=None, runner=None, lab=None, now_ms=now, policy=pol, notifier=notifier)
+
+
+def test_weekly_report_without_paper3_says_why_and_waits_for_the_numbers(world):
+    n = ListNotifier()
+    rep = DG.week_report(None, world.agents, SUNDAY)
+    assert rep["error"] and "(거래 기록을 읽지 못함: paper3.db를 열지 못함)" in DG.compose_week(rep)
+    assert RM.weekly_report_tick(_week_ctx(world, SUNDAY, n, paper=False)) is False and n.messages == []
+    assert RM.weekly_report_tick(_week_ctx(world, SUNDAY + 15 * MIN, n)) is True       # readable again: sent
+    assert len(n.messages) == 1 and "읽지 못함" not in n.messages[0][1]
+    assert RM.weekly_report_tick(_week_ctx(world, SUNDAY + 30 * MIN, n)) is None and len(n.messages) == 1
+    # unreadable for the whole run of tries: the last try sends the report with the reason
+    n2, nxt = ListNotifier(), SUNDAY + 7 * DAY
+    for k in range(RM.WEEKLY_REPORT_TRIES + 2):
+        RM.weekly_report_tick(_week_ctx(world, nxt + k * 15 * MIN, n2, paper=False))
+    assert len(n2.messages) == 1 and "paper3.db를 열지 못함" in n2.messages[0][1]
+
+
+@pytest.mark.parametrize("first, step", [(4 * HOUR, 15 * MIN), (0, 35 * MIN)])   # restarted at 01:05; slow ticks
+def test_unreadable_numbers_still_send_the_week_with_fewer_ticks(world, first, step):
+    """Fewer than WEEKLY_REPORT_TRIES ticks in the 6-hour window: the second half sends the report with its
+    reason instead of waiting for a try that never comes."""
+    n, t = ListNotifier(), SUNDAY + first
+    while RM.weekly_report_due(_week_ctx(world, t, n).policy, t):
+        RM.weekly_report_tick(_week_ctx(world, t, n, paper=False))
+        t += step
+    assert len(n.messages) == 1 and "paper3.db를 열지 못함" in n.messages[0][1]
+
+
+def test_a_two_hour_telegram_outage_still_delivers_the_week_once(world):
+    class Down(ListNotifier):
+        up = False
+
+        def send(self, level, text):
+            if not self.up:
+                return False
+            return super().send(level, text)
+    n = Down()
+    for k in range(8):                                            # 21:05 .. 22:50: Telegram refuses
+        assert RM.weekly_report_tick(_week_ctx(world, SUNDAY + k * 15 * MIN, n)) is False
+    n.up = True
+    assert RM.weekly_report_tick(_week_ctx(world, SUNDAY + 8 * 15 * MIN, n)) is True
+    assert RM.weekly_report_tick(_week_ctx(world, SUNDAY + 9 * 15 * MIN, n)) is None and len(n.messages) == 1
+
+
+def test_the_second_week_has_no_partial_previous_week(tmp_path):
+    w = World(tmp_path, start=kst(2026, 10, 2, 9, 0))              # the real start: 10/2 09:00 KST
+    for k in range(3):
+        w.trade(f"{S}@15m", -100.0, kst(2026, 10, 3, 12) + k * HOUR)    # in the 2.5 days before 10/4 21:05
+        w.trade(f"{S}@15m", 50.0, SUNDAY - (k + 1) * DAY)
+    rep = DG.week_report(w.paper(), w.agents, SUNDAY)
+    assert rep["strategies_total_prev"]["trades"] == 0 and all(r["prev_rank"] is None for r in rep["top"])
+    text = DG.compose_week(rep)
+    assert "지난주" not in text and "▲" not in text and "▼" not in text
+    # a later week (whole previous week inside the run) still compares
+    w.trade(f"{S}@15m", 20.0, SUNDAY + 3 * DAY)
+    assert DG.week_report(w.paper(), w.agents, SUNDAY + 7 * DAY)["strategies_total_prev"]["trades"] == 3

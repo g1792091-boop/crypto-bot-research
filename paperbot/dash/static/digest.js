@@ -155,7 +155,7 @@ function dgWeekHtml(d) {
   return `${d.error ? `<p class="down">${esc(d.error)}</p>` : ""}
     <div class="tiles">
       <div class="tile"><div class="k">매매법 계좌 손익 (7일)</div><div class="v ${cls(t.pnl)}">${usd(t.pnl)}</div>
-        <div class="s">${tp.trades ? `지난주 ${usd(tp.pnl)}` : "지난주 기록 없음"}</div></div>
+        <div class="s">${tp.trades ? `지난주 ${usd(tp.pnl)}` : d.run_start > d.from - 7 * 86400000 ? "지난주: 실험 시작 전후라 비교 안 함" : "지난주 기록 없음"}</div></div>
       <div class="tile"><div class="k">거래 · 승률</div><div class="v">${fmt(t.trades || 0, 0)}</div>
         <div class="s">승률 ${dgRate(t.win_rate)}${tp.trades ? ` (지난주 ${dgRate(tp.win_rate)})` : ""}</div></div>
       <div class="tile"><div class="k">같은 봉 동전 봇 중간값보다 나은 계좌</div><div class="v">${cf.strategy_accounts ? `${cf.strategy_accounts_beating_median}/${cf.strategy_accounts}` : "—"}</div>
@@ -192,7 +192,7 @@ function dgWeekWhen(h) {
 // ---------------------------------------------------------------- timeframe split
 function dgTfCell(v) {
   if (!v || !v.trades) return '<span class="muted">—</span>';
-  return `<b class="${cls(v.pnl)}">${usd(v.pnl)}</b><br><small class="muted">${v.trades}건 · ${dgRate(v.win_rate)}</small>`;
+  return `<b class="${cls(v.pnl)}">${usd(v.pnl)}</b><br><small class="muted">${v.trades}건 · ${dgRate(v.win_rate)}${v.bust ? " · 파산" : ""}</small>`;
 }
 function dgTfDetail(r) {
   return `<tr class="dg-tfd"><td colspan="9"><div class="dg-tfg">${DG_TFS.filter((tf) => (r.timeframes[tf] || {}).trades).map((tf) => {
@@ -224,7 +224,7 @@ function dgTfHtml(d) {
   const when = th != null && th < 0 ? "봉 비교 회의는 꺼져 있습니다(AGENTS_TF_SPLIT_HOUR=off)."
     : `매일 ${String(th == null ? 18 : th).padStart(2, "0")}:00에 가장 크게 갈린 매매법 2개의 방에서 전담이 이유를 분석하는 '봉 비교 회의'가 열립니다(같은 매매법은 3일에 한 번).`;
   return `<p class="dg-note">같은 매매법이 봉마다 정반대 결과를 내면(한 봉은 이익, 다른 봉은 손실, 둘 다 거래 ${d.min_trades}건 이상, 차이가
-      시작 자금의 ${Math.round((d.min_spread_pct || 0) * 100)}% 이상) <b>봉마다 갈림</b>으로 표시합니다. ${when}</p>
+      시작 자금의 ${Math.round((d.min_spread_pct || 0) * 100)}% 이상, 파산한 계좌는 빼고) <b>봉마다 갈림</b>으로 표시합니다. ${when}</p>
     <div class="card scroll"><table class="cards dg-t"><thead><tr><th class="l">매매법 (차이 큰 순)</th>
       ${DG_TFS.map((tf) => `<th>${TF_KO[tf] || tf}</th>`).join("")}<th>합계</th><th>최고−최저</th><th></th></tr></thead>
       <tbody>${rows || '<tr><td colspan="9" class="empty">아직 끝난 거래가 없습니다</td></tr>'}</tbody></table></div>

@@ -156,9 +156,12 @@ def tf_split(paper_ro: Optional[sqlite3.Connection], initial: Optional[float] = 
              min_trades: int = 8, min_spread_pct: float = 0.10, since_ms: int = 0) -> dict:
     """Per strategy: its timeframe accounts (``tf_stats``), the best and worst timeframe, the spread between them
     and whether they disagree: best > 0 > worst, both with >= ``min_trades`` closed trades and a spread of at
-    least ``min_spread_pct`` of the starting equity. ``split`` lists the disagreeing strategies, widest first."""
+    least ``min_spread_pct`` of the starting equity. ``split`` lists the disagreeing strategies, widest first.
+    A busted account (halted under $10: its P&L stays near minus the start for good, and its bust review already
+    met) is marked ``bust`` and never one of the pair, so it does not make every strategy with a bust 'split'."""
     if paper_ro is None:
         return {"error": "paper3.db 없음", "strategies": [], "split": []}
+    from .triggers import busts_of
     init = float(initial) if initial else initial_equity(paper_ro)
     names = _names_ko()
     by: dict = {}
@@ -167,6 +170,8 @@ def tf_split(paper_ro: Optional[sqlite3.Connection], initial: Optional[float] = 
         accts = paper_ro.execute("SELECT account_id, strategy, timeframe FROM accounts WHERE kind = 'strategy'").fetchall()
     except sqlite3.Error as exc:
         return {"error": f"paper3.db를 읽지 못함: {type(exc).__name__}", "strategies": [], "split": []}
+    busted = busts_of(paper_ro)                 # the bust trigger's own source (alerts, then the saved state)
+    bust_tf = {(s, tf) for aid, s, tf in accts if aid in busted}
     for _aid, s, tf in accts:
         if strategy is None or s == strategy:
             by.setdefault(s, {}).setdefault(tf, [])
@@ -176,7 +181,10 @@ def tf_split(paper_ro: Optional[sqlite3.Connection], initial: Optional[float] = 
     out = []
     for s, per in by.items():
         tfs = {tf: tf_stats(ts) for tf, ts in sorted(per.items(), key=lambda kv: TFS.index(kv[0]) if kv[0] in TFS else 9)}
-        live = [(tf, v) for tf, v in tfs.items() if v["trades"]]
+        for tf, v in tfs.items():
+            if (s, tf) in bust_tf:
+                v["bust"] = True
+        live = [(tf, v) for tf, v in tfs.items() if v["trades"] and not v.get("bust")]
         row: dict = {"strategy": s, "name_ko": names.get(s, s), "timeframes": tfs,
                      "pnl": round(sum(v.get("pnl", 0.0) for v in tfs.values()), 2),
                      "trades": sum(v["trades"] for v in tfs.values()), "split": False}
@@ -467,7 +475,9 @@ def week_report(paper_ro: Optional[sqlite3.Connection], agents_ro: Optional[sqli
     w0, p0 = now - 7 * DAY_MS, now - 14 * DAY_MS
     out: dict = {"from": w0, "to": now, "names_ko": None}
     names = _names_ko()
-    if paper_ro is not None:
+    if paper_ro is None:                        # missing, or not readable (a restore's stale -wal, a bad file)
+        out["error"] = "paper3.db를 열지 못함"
+    else:
         try:
             out["initial"] = initial_equity(paper_ro) if not initial else float(initial)
             both = _closed(paper_ro, p0, now, kinds=("strategy", "random"))
@@ -483,7 +493,9 @@ def week_report(paper_ro: Optional[sqlite3.Connection], agents_ro: Optional[sqli
         cur = [r for r in both if _f(r[4].get("exit_time")) >= w0]
         prev = [r for r in both if _f(r[4].get("exit_time")) < w0]
         s_cur = [r for r in cur if r[1] == "strategy"]
-        s_prev = [r for r in prev if r[1] == "strategy"]
+        # a 'week before' that starts before the run is only part of a week (2.5 days on the second Sunday): no
+        # comparison then, rather than one that looks like a whole week
+        s_prev = [] if out["run_start"] and out["run_start"] > p0 else [r for r in prev if r[1] == "strategy"]
 
         def tot(rows: list[tuple]) -> dict:
             n = len(rows)

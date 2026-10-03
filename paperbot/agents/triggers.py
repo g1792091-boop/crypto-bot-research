@@ -19,7 +19,8 @@ Triggers (defaults in ``TriggerPolicy``; every number is configurable):
                                    (cards.tag_stats) in >= 3 of them; >= 2h between
                                    loss_cluster rounds of a room.
     bust          2  strat:<S>     a strategy account went bust (once per account).
-    checkpoint    3  team:lead     day 30 / 60 / 90 ... since the run started.
+    checkpoint    3  team:lead     day 30 / 60 / 90 ... since the run started, once the checkpoint job has
+                                   stored that day's verdict (checkpoint.db, read-only).
     morning       3  team:market   08:00 KST, once per KST day (window 4h).
     ranking       3  team:review   14:00 KST, once per KST day (window 4h): the top and bottom strategies by P&L.
     evening       3  team:review   22:00 KST, once per KST day (window 4h),
@@ -31,8 +32,8 @@ Triggers (defaults in ``TriggerPolicy``; every number is configurable):
     tf_split      4  strat:<S>     at ``tf_split_hour_kst`` (18:00 on the server; -1 = off here) once per KST day
                                    (window 4h): up to ``tf_split_per_day`` strategies whose timeframe accounts
                                    disagree (best > 0 > worst, each >= 8 closed trades, spread >= 10% of the
-                                   starting equity; digest.tf_split), widest first, a strategy at most every 3
-                                   days. Weekly class (the reviews' budget).
+                                   starting equity, a busted account never one of the pair; digest.tf_split),
+                                   widest first, a strategy at most every 3 days. Weekly class (the reviews' budget).
     market_move   2  team:market   a coin's last-hour high or low >= 4% (BTC), 5% (ETH), 6% (others) away from its
                                    price an hour before (``market``: the caller fetches the 5m bars; none = never
                                    due). One meeting for all coins that moved, a coin at most every 3h, at most 4 a
@@ -685,7 +686,10 @@ def _bust(paper_ro, st: _Rooms) -> list[Due]:
     return out
 
 
-def _checkpoint(paper_ro, st: _Rooms) -> list[Due]:
+def _checkpoint(paper_ro, st: _Rooms, checkpoint_db: Optional[str] = None) -> list[Due]:
+    """Day 30 / 60 / 90 ... since the run started. With ``checkpoint_db`` (the rooms tick always passes it) the
+    meeting waits until the checkpoint job has stored that day's verdict (00:00 UTC of the run's start date + the
+    days, paperbot/checkpoint.py), so the staff discuss the official result, not a guess before it."""
     every = st.p.checkpoint_every_days
     start = run_start(paper_ro)
     if start is None or every <= 0 or st.now < start:
@@ -694,9 +698,16 @@ def _checkpoint(paper_ro, st: _Rooms) -> list[Due]:
     cp = days // every * every
     if cp < every or cp <= st.cursor_int("checkpoint:day"):
         return []
+    extra = {}
+    if checkpoint_db is not None:
+        from .. import checkpoint as CP
+        date = CP.day_str(CP.floor_day(start) + cp * DAY_MS)
+        if CP.verdict(checkpoint_db, date) is None:
+            return []
+        extra["verdict_date"] = date
     return [_due(st, "team:lead", "checkpoint", f"checkpoint:{start}:{cp}", start + cp * DAY_MS,
                  {"checkpoint:day": str(cp)}, f"{cp}일 점검: 시작 후 {days}일째",
-                 day=cp, days_elapsed=int(days), run_start=start)]
+                 day=cp, days_elapsed=int(days), run_start=start, **extra)]
 
 
 def weekly_slot(now_ms: int, index: int) -> int:
@@ -754,6 +765,10 @@ def _tf_split(paper_ro, st: _Rooms) -> list[Due]:
     if st.now - s0 >= p.meeting_window_ms:
         return []
     day = kst_date(s0)
+    taken = sum(1 for r in st.rounds if r["trigger"] == "tf_split" and r["started_ts"] >= s0
+                and r["status"] in ENDED_OK)
+    if taken >= p.tf_split_per_day:
+        return []               # the day's meetings are held: no need to read every closed trade again
     from .digest import tf_split
     try:
         got = tf_split(paper_ro, min_trades=p.tf_split_min_trades, min_spread_pct=p.tf_split_min_spread_pct)
@@ -761,8 +776,6 @@ def _tf_split(paper_ro, st: _Rooms) -> list[Due]:
         return []
     rows = {r["strategy"]: r for r in got.get("strategies") or []}
     out = []
-    taken = sum(1 for r in st.rounds if r["trigger"] == "tf_split" and r["started_ts"] >= s0
-                and r["status"] in ENDED_OK)
     for s in got.get("split") or []:
         if len(out) + taken >= p.tf_split_per_day:
             break
@@ -962,7 +975,8 @@ def find_due(paper_ro: Optional[sqlite3.Connection], daily_ro: Optional[sqlite3.
              agents_conn: sqlite3.Connection, inbox_ro: Optional[sqlite3.Connection], now_ms: int,
              policy: Optional[TriggerPolicy] = None, *, defer_classes: Iterable[str] = (),
              defer_triggers: Iterable[str] = (), skip_rooms: Iterable[str] = (),
-             can_start: Optional[Callable[[Due], bool]] = None, market: Optional[dict] = None) -> list[Due]:
+             can_start: Optional[Callable[[Due], bool]] = None, market: Optional[dict] = None,
+             checkpoint_db: Optional[str] = None) -> list[Due]:
     """Rounds to run now, sorted by (priority, bust before loss_cluster, oldest evidence). Reads only.
     ``defer_classes`` / ``defer_triggers``: what the caller cannot start now (its AI budget is used
     up or paced), left out before the per-tick pick so it never hides other meetings;
@@ -970,7 +984,8 @@ def find_due(paper_ro: Optional[sqlite3.Connection], daily_ro: Optional[sqlite3.
     meeting's shortest form); meetings it refuses are left out BEFORE the per-tick cut, so meetings
     that cannot start never take the slots of ones that can;
     ``skip_rooms``: rooms that already met in the caller's current tick;
-    ``market``: the last hour of each coin for ``market_move`` (fetched by the caller; None = not due)."""
+    ``market``: the last hour of each coin for ``market_move`` (fetched by the caller; None = not due);
+    ``checkpoint_db``: checkpoint.db (read-only); the checkpoint meeting waits for its verdict (None: no wait)."""
     p = policy or TriggerPolicy()
     st = _Rooms(agents_conn, now_ms, p)
     if st.usage_paused() or st.transient_paused():
@@ -987,7 +1002,7 @@ def find_due(paper_ro: Optional[sqlite3.Connection], daily_ro: Optional[sqlite3.
     if "bust" in p.enabled:
         found += _bust(paper_ro, st)
     if "checkpoint" in p.enabled:
-        found += _checkpoint(paper_ro, st)
+        found += _checkpoint(paper_ro, st, checkpoint_db)
     if "weekly" in p.enabled:
         found += _weekly(paper_ro, st)
     if "tf_split" in p.enabled:

@@ -102,3 +102,19 @@ def test_the_tick_grades_and_tells_the_room(dbs):
     assert g["correct"] is True
     msgs = [r[0] for r in conn.execute("SELECT text FROM messages WHERE room_id = ?", (ROOM,))]
     assert any("채점" in t and "맞음" in t for t in msgs)
+
+
+def test_more_than_2000_hypotheses_the_oldest_prediction_is_still_graded_and_counted(dbs):
+    conn, store = dbs
+    oldest = _hyp(conn, PRED)                                   # the first prediction, then 2,100 newer hypotheses
+    conn.executemany("INSERT INTO trials (ts, room_id, strategy, kind, spec, spec_hash, round_id) VALUES (?,?,?,?,?,?,?)",
+                     [(T0 + 1, ROOM, S, "hypothesis", json.dumps({"text": f"h{k}"}), f"x{k}", None) for k in range(2100)])
+    conn.commit()
+    t = SC.scorecard(conn)["total"]
+    assert (t["waiting"], t["not_gradable"]) == (1, 2100)       # every row counts, not the newest 2,000
+    _add_trades(store, 30, 1, T0 + 60_000)
+    paper = sqlite3.connect(store.conn.execute("PRAGMA database_list").fetchone()[2])
+    [g] = SC.grade_due(conn, paper, T0 + 5000, 0.0014)
+    assert g["trial_id"] == oldest and g["correct"] is True
+    t = SC.scorecard(conn)["total"]
+    assert (t["graded"], t["correct"], t["waiting"]) == (1, 1, 0)

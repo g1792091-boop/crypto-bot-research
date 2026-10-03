@@ -112,7 +112,7 @@ from datetime import datetime
 from functools import lru_cache
 from typing import Any, Callable, Iterator, Optional
 
-from ..notify import INFO, ConsoleNotifier, Notifier, NullNotifier, TelegramNotifier
+from ..notify import INFO, WARN, ConsoleNotifier, Notifier, NullNotifier, TelegramNotifier
 from . import actions as A
 from . import extra_accounts as X
 from . import rooms_db as R
@@ -402,6 +402,7 @@ class RoundContext:
     clock_ms: Optional[Callable[[], int]] = None
     cards_path: Optional[str] = None
     cache: dict = field(default_factory=dict)
+    checkpoint_db: Optional[str] = None      # checkpoint.db (the checkpoint job's), read-only: the 30-day verdict
 
     def clock(self) -> int:
         return int(self.clock_ms()) if self.clock_ms else int(time.time() * 1000)
@@ -646,12 +647,13 @@ class ClassBudget(BudgetedRunner):
                                       f"{tt:,}/{self.total_tokens:,} tokens")
         rc, rt = self.reserve()
         if not reserved and (tc + rc >= self.total_calls or tt + rt + est >= self.total_tokens):
-            raise ReserveExceeded(f"daily total cap: {tc}/{self.total_calls} calls used, {rc} kept for incidents "
-                                  f"and scheduled meetings")
+            raise ReserveExceeded(f"daily total cap: {tc}/{self.total_calls} calls used, {tt:,}/{self.total_tokens:,} "
+                                  f"tokens used, {rc} calls kept for incidents and scheduled meetings")
         kc, kt = self.paced_keep()
         if (kc or kt) and (tc + rc + kc >= self.total_calls or tt + rt + kt + est >= self.total_tokens):
-            raise PacedKeepExceeded(f"daily total cap: {tc}/{self.total_calls} calls used, {rc} kept for incidents "
-                                    f"and scheduled meetings, {kc} for owner posts and busts")
+            raise PacedKeepExceeded(f"daily total cap: {tc}/{self.total_calls} calls used, {tt:,}/{self.total_tokens:,} "
+                                    f"tokens used, {rc} calls kept for incidents and scheduled meetings, {kc} for owner "
+                                    "posts and busts")
         if self.week:
             wc, wt = self.week_for_caps()
             if wc >= self.week[0] or wt >= self.week[1] or (reserved and wt + est > self.week[1]):
@@ -662,13 +664,15 @@ class ClassBudget(BudgetedRunner):
             if not reserved:
                 nc, nt = self.week_need(rc, rt, est)
                 if nc >= self.week[0] or nt >= self.week[1]:
-                    raise WeekReserveExceeded(f"7-day cap: {wc}/{self.week[0]} calls used, the rest is kept for "
-                                              "incidents and scheduled meetings (today and the next days)")
+                    raise WeekReserveExceeded(f"7-day cap: {wc}/{self.week[0]} calls used, {wt:,}/{self.week[1]:,} "
+                                              "tokens used, the rest is kept for incidents and scheduled meetings "
+                                              "(today and the next days)")
                 if kc or kt:
                     nc, nt = self.week_need(rc + kc, rt + kt, est)
                     if nc >= self.week[0] or nt >= self.week[1]:
-                        raise PacedKeepExceeded(f"7-day cap: {wc}/{self.week[0]} calls used, the rest is kept for "
-                                                "incidents, scheduled meetings, owner posts and busts")
+                        raise PacedKeepExceeded(f"7-day cap: {wc}/{self.week[0]} calls used, {wt:,}/{self.week[1]:,} "
+                                                "tokens used, the rest is kept for incidents, scheduled meetings, "
+                                                "owner posts and busts")
 
     def headroom(self) -> int:
         """Calls a NEW meeting of this kind may make now (0 = defer it; nothing is posted). Judged like
@@ -803,8 +807,13 @@ def limit_why_ko(stopped: Optional[str], cls: str, detail: str) -> str:
         if t:
             parts.append(f"토큰 {t[0] / 10_000:,.0f}만/{t[1] / 10_000:,.0f}만")
         return " · ".join(parts)
+    kept = "합계 중 두 분 글·파산·정기 회의 몫으로 남겨 둔 부분"
+    # a paced stop (PacedKeepExceeded) is a sub-cap too, but its numbers are the day total or the 7-day total
+    subcap = (f"하루 전체 {kept}" if (detail or "").startswith("daily total cap") else
+              f"최근 7일 {kept}" if (detail or "").startswith("7-day cap") else
+              f"'{CLASS_KO.get(cls, cls)}' 몫 중 이 회의가 쓸 수 있는 부분(파산·강제청산·두 분 글 몫은 남겨 둠)")
     where = {"budget_class": f"'{CLASS_KO.get(cls, cls)}' 몫의 하루 한도",
-             "budget_subcap": f"'{CLASS_KO.get(cls, cls)}' 몫 중 이 회의가 쓸 수 있는 부분(파산·강제청산·두 분 글 몫은 남겨 둠)",
+             "budget_subcap": subcap,
              "budget_reserve": "하루·7일 합계 중 남겨 둔 몫(강제청산·정기 회의)",
              "budget_total": "하루 전체 합계",
              "budget_week": "최근 7일 합계"}.get(stopped or "", "")
@@ -1644,14 +1653,35 @@ def _board(ctx: RoundContext) -> dict:
     counts: dict[str, int] = {}
     for v in pc.values():
         counts[v.get("status", "?")] = counts.get(v.get("status", "?"), 0) + 1
-    board["pass_summary"] = {"by_status": counts, "first_pass": sorted(a for a, v in pc.items()
-                                                                       if v.get("status") == "first_pass")[:20],
-                             "bust": sum(1 for v in pc.values() if v.get("bust"))}
+    # reference only (3 coin flips): the verdict is board.checkpoint (Q1)
+    board["pass_summary"] = {"by_status": counts, "bust": sum(1 for v in pc.values() if v.get("bust")),
+                             "note": packets3.PASS_CHECK_NOTE}
+    board["checkpoint"] = packets3.checkpoint_section(_checkpoint_view(ctx))
     board["market"] = _market(ctx)
     board["macro"] = _macro(ctx)
     board.update(_day_losses(ctx))
     ctx.cache["board"] = board
     return board
+
+
+def _checkpoint_view(ctx: RoundContext) -> dict:
+    """The newest 30-day checkpoint verdict (``paperbot.checkpoint.dashboard_view`` of checkpoint.db, read-only)
+    plus ``next``, the date of the next checkpoint; once per tick."""
+    if "checkpoint" in ctx.cache:
+        return ctx.cache["checkpoint"]
+    from .. import checkpoint as CP
+    try:
+        view = CP.dashboard_view(ctx.checkpoint_db) if ctx.checkpoint_db else {"ready": False}
+        start = TR.run_start(ctx.paper_ro)
+        if start is not None:
+            last, k = (CP.day_ms(view["date"]) if view.get("ready") else -1), 1
+            while CP.checkpoint_ts(start, k) <= last:
+                k += 1
+            view["next"] = f"{CP.day_str(CP.checkpoint_ts(start, k))} 09:00 KST"
+    except Exception as exc:  # noqa: BLE001  (a verdict summary never stops a meeting)
+        view = {"ready": False, "error": type(exc).__name__}
+    ctx.cache["checkpoint"] = view
+    return view
 
 
 def _macro(ctx: RoundContext) -> dict:
@@ -2070,6 +2100,7 @@ def _strategy_base(rnd: _Round) -> dict:
     from . import packets3
     board = _board(ctx)
     spec = packets3.specialist_packet(board, s, ctx.cards_path or packets3.CARDS)
+    spec["checkpoint"] = packets3.checkpoint_section(_checkpoint_view(ctx), s)
     spec["recent_period"] = recent_period(ctx.lab, s)
     if board.get("error"):
         spec["error"] = board["error"]
@@ -2217,7 +2248,43 @@ def _do_copy(rnd: _Round, env: A.ActionEnv, trial_id: int, why: str, code_result
                            "owner_ok_required": env.owner_ok_required}})
         if approver is not None and approver["approve"]:
             check = A.copy_check(env, trial_id)          # code re-checks gate and cap after any approval
-    return A.propose_copy(env, trial_id, why, check, approver)
+    res = A.propose_copy(env, trial_id, why, check, approver)
+    if res.get("status") == "awaiting_owner":            # every copy proposal is made here: one Telegram for it
+        res["telegram"] = copy_alert(env, res)
+    return res
+
+
+def copy_alert(env: A.ActionEnv, res: dict) -> bool:
+    """One WARN when a copy proposal waits for the owners' OK, as a new strategy's pass does
+    (actions.newlab_alert): never twice for a proposal (cursor ``copy_alert:<id>``, written before the send).
+    Code-written text only; not counted in the daily flag limit. Uses no AI call."""
+    pid = res.get("proposal_id")
+    key = f"copy_alert:{pid}"
+    if not pid or R.get_cursor(env.conn, key) is not None:
+        return False
+    R.set_cursor(env.conn, key, env.now_ms)
+    prop = R.get_proposal(env.conn, int(pid)) or {}
+    ch = prop.get("change") if isinstance(prop.get("change"), dict) else {}
+    acct = ch.get("account") if isinstance(ch.get("account"), dict) else {}
+    from .digest import TF_KO
+    s, tf = acct.get("strategy") or env.strategy or "", acct.get("timeframe") or ""
+    n = (prop.get("gate") or {}).get("n_trials") if isinstance(prop.get("gate"), dict) else None
+    text = (f"[에이전트 알림] {env.room_title or env.room_id}: 복제 계좌 제안 #{pid}이 두 분 확인을 기다립니다. "
+            f"{STRATEGY_KO.get(s, s)} {TF_KO.get(tf, tf)}봉 계좌와 같고 한 가지만 바꾼 새 paper 계좌({X.rule_ko(acct.get('rule'))}), "
+            f"5년 시험 관문 통과(시험 #{res.get('trial_id')}" + (f", 이 방 시험 {n}번 기준" if n else "") + "). "
+            "방에서 시험을 더 하면 승인할 수 없게 될 수 있습니다. 대시보드 '에이전트 방'에서 승인/거절")
+    try:
+        ok = env.notifier.send(WARN, A.telegram_safe(text))
+    except Exception as exc:  # noqa: BLE001  (delivery must not break the round)
+        ok, why = False, type(exc).__name__
+    else:
+        why = "텔레그램이 받지 않음"
+    if ok is False:
+        env.post("system", f"복제 제안 알림 전송 실패: {why}", {"proposal_id": pid, "sent": False})
+        return False
+    env.post("action", f"📣 두 분께 복제 계좌 제안 #{pid} 알림(텔레그램, {WARN})을 보냈습니다.",
+             {"action": "copy_alert", "proposal_id": pid, "sent": True, "level": WARN})
+    return True
 
 
 def _strategy_summary(rnd: _Round, final: dict, res: dict, early: bool, verdict: Optional[str],
@@ -2271,9 +2338,10 @@ TEAM_VIEW = {
     "ops_auditor": ("today", "execution", "nightly"),
     "data_quality": ("nightly", "execution", "today"),
     "code_reviewer": ("nightly", "execution", "today"),
-    "league_referee": ("meta", "league", "pass_check", "pass_summary"),
-    "rule_keeper": ("meta", "pass_summary", "league"),
-    "team_lead": ("meta", "today", "league", "pass_summary"),
+    # checkpoint: the official 30-day verdict (Q1); pass_check / pass_summary are the 3-coin-flip reference
+    "league_referee": ("meta", "league", "checkpoint", "pass_check", "pass_summary"),
+    "rule_keeper": ("meta", "checkpoint", "pass_summary", "league"),
+    "team_lead": ("meta", "today", "league", "checkpoint", "pass_summary"),
     "performance": ("league", "by_strategy", "today"),
     "researcher": ("meta",),               # the lab room's packet carries ``lab`` (lab_overview)
 }
@@ -2586,24 +2654,30 @@ def compose_lead_lines(title: str, lead: Optional[dict]) -> str:
     return "\n".join(L)[:TELEGRAM_LIMIT]
 
 
+def _usd0(x: float) -> str:
+    return f"{'+' if x >= 0 else '-'}${abs(x):,.0f}"
+
+
 def compose_ranking(pk: dict, lead: Optional[dict], hour: int = 14) -> str:
     """Telegram (silent): the picked strategies' numbers by code, then the lead's three lines."""
     L = [f"🏁 순위 검토 (손익 복기팀, {int(hour):02d}:00)"]
     for r in pk.get("picked") or []:
         c = r.get("closed") or (r.get("compare") or {}).get("all") or {}       # every closed trade (code)
         wr = c.get("win_rate")
-        L.append(f"{r['group']} {r['rank']}/{r['of']} {r['name_ko']}: {'+' if r['pnl'] >= 0 else '-'}${abs(r['pnl']):,.0f}"
-                 f" · {c.get('wins', 0)}승 {c.get('losses', 0)}패" + (f" ({wr * 100:.0f}%)" if wr is not None else ""))
+        per = r.get("pnl_per_account")
+        L.append(f"{r['group']} {r['rank']}/{r['of']} {r['name_ko']}: {_usd0(r['pnl'])}"
+                 + (f" (계좌당 {_usd0(per)})" if per is not None else "")
+                 + f" · {c.get('wins', 0)}승 {c.get('losses', 0)}패" + (f" ({wr * 100:.0f}%)" if wr is not None else ""))
     fl = (pk.get("coin_flips") or {}).get("mean_pnl")
-    if fl is not None:
-        L.append(f"동전 봇 평균 {'+' if fl >= 0 else '-'}${abs(fl):,.0f}")
+    if fl is not None:      # one coin-flip account's mean: next to the per-account numbers, not the 5-account sums
+        L.append(f"동전 봇 계좌당 평균 {_usd0(fl)} (5개 합으로 치면 {_usd0(fl * 5)})")
     lines = [str(x) for x in ((lead or {}).get("summary") or []) if str(x).strip()][:3]
     if lines:
         L += ["", "[팀장 요약]"] + ["- " + A.telegram_safe(" ".join(x.split()))[:300] for x in lines]
     return "\n".join(L)[:TELEGRAM_LIMIT]
 
 
-WEEKLY_REPORT_TRIES = 3
+WEEKLY_REPORT_TRIES = 12          # 3 hours of 15-minute ticks, inside the 6-hour window
 
 
 def weekly_report_due(policy: RoomsPolicy, now_ms: int) -> Optional[str]:
@@ -2622,7 +2696,9 @@ def weekly_report_due(policy: RoomsPolicy, now_ms: int) -> Optional[str]:
 def weekly_report_tick(ctx: RoundContext) -> Optional[bool]:
     """Sunday's weekly report (digest.week_report, code only) to Telegram, silent, once per week: the cursor
     ``telegram:weekly_report:<date>`` is set when Telegram took it; a refused send is tried on the next ticks,
-    ``WEEKLY_REPORT_TRIES`` attempts in all. None = not due (or already sent)."""
+    ``WEEKLY_REPORT_TRIES`` attempts in all. A report whose trading numbers could not be read waits for the next
+    tick too, but only through the window's first half: the last try, or any tick in the second half, sends it
+    with the reason (a restarted or slow timer may never reach the last try). None = not due (or already sent)."""
     from . import digest
     day = weekly_report_due(ctx.policy, ctx.now_ms)
     if day is None:
@@ -2634,6 +2710,11 @@ def weekly_report_tick(ctx: RoundContext) -> Optional[bool]:
     if tries >= WEEKLY_REPORT_TRIES:
         return None
     rep = digest.week_report(ctx.paper_ro, ctx.agents_conn, ctx.now_ms)
+    pol = ctx.policy
+    early = ctx.now_ms - TR.slot_start(ctx.now_ms, pol.weekly_report_hour_kst) < pol.weekly_report_window_ms // 2
+    if rep.get("error") and tries + 1 < WEEKLY_REPORT_TRIES and early:
+        R.set_cursor(ctx.agents_conn, key + ":tries", str(tries + 1))
+        return False
     text = digest.compose_week(rep, TELEGRAM_LIMIT)
     try:
         ok = ctx.notifier.send(INFO, text) is not False
@@ -2682,7 +2763,7 @@ def compose_evening(ctx: RoundContext, board: dict, lead: dict, due: Optional[TR
     L += ["", "[숫자: 코드 계산]"]
     today = board.get("today") or {}
     if today:
-        L.append(f"- 최근 24시간 끝난 거래 {today.get('trades', 0)}건, 손익 {float(today.get('net_pnl') or 0):+.2f} USDT, "
+        L.append(f"- 최근 24시간 끝난 거래 {today.get('trades', 0)}건, 손익(동전 봇 포함) {float(today.get('net_pnl') or 0):+.2f} USDT, "
                  f"이긴 거래 {today.get('wins', 0)}건, 파산 계좌 누적 {today.get('busts_total', 0)}개")
     rounds = [r for r in _today_rounds(ctx, day0) if r["status"] in ("done", "no_action")]
     acts: dict[str, int] = {}
@@ -3554,6 +3635,55 @@ def reconcile_inbox_cursors(conn: sqlite3.Connection, inbox_ro: Optional[sqlite3
     return changed
 
 
+# The owners' Telegram when the staff cannot meet (code only, no AI call): this many meetings in a row failed
+# because the runner never answered (about 1.5 h of the growing back-off on the 15-minute timer) with no answered
+# AI call since. At most one WARN a KST day (cursor ``alert:agents_down:<day>``, set before the send). A refused
+# login check is not here: the pass exits 2 and the unit's OnFailure alert (paperbot.failalert) says so.
+DOWN_ROUNDS = 4
+DOWN_CURSOR = "alert:agents_down:"
+DOWN_HELP = "서버 안내서(docs/server-setup-v3.md) 8-2·8-4로 Claude 구독 로그인과 서버 연결을 확인해 주세요"
+
+
+def down_streak(conn: sqlite3.Connection) -> tuple[int, Optional[int], str]:
+    """(n, since, error): the newest finished meetings that failed 'transient' (the runner never answered), how
+    many in a row, when the oldest of them started, and the newest one's error."""
+    n, since, err = 0, None, ""
+    for started, status, decision in conn.execute("SELECT started_ts, status, decision FROM rounds "
+                                                  "WHERE status != 'running' ORDER BY round_id DESC LIMIT 50"):
+        d = TR._json(decision)
+        if not (status == "failed" and d.get("transient") is True):
+            break
+        n, since, err = n + 1, int(started), err or str(d.get("error") or "")
+    return n, since, err
+
+
+def agents_down_alert(ctx: RoundContext, text: str) -> bool:
+    """One WARN a KST day that the staff stopped meeting (``DOWN_CURSOR``, marked before the send)."""
+    key = DOWN_CURSOR + R.kst_day(ctx.now_ms)
+    if R.get_cursor(ctx.agents_conn, key) is not None:
+        return False
+    R.set_cursor(ctx.agents_conn, key, str(ctx.now_ms))
+    try:
+        return ctx.notifier.send(WARN, f"[에이전트 알림] {text} {DOWN_HELP}. (하루 한 번만 알립니다)") is not False
+    except Exception:  # noqa: BLE001  (delivery never breaks the tick)
+        return False
+
+
+def check_runner_down(ctx: RoundContext) -> bool:
+    """After the meetings: ``DOWN_ROUNDS`` or more transient failures in a row and no answered AI call since they
+    began -> ``agents_down_alert``."""
+    conn = ctx.agents_conn
+    n, since, err = down_streak(conn)
+    if n < DOWN_ROUNDS or since is None:
+        return False
+    if conn.execute("SELECT 1 FROM agent_calls WHERE ok = 1 AND ts >= ? LIMIT 1", (since,)).fetchone():
+        return False
+    mins = (ctx.now_ms - since) // 60_000
+    dur = f"{mins}분" if mins < 120 else f"약 {round(mins / 60)}시간"      # the 15-minute timer: about 90 minutes
+    return agents_down_alert(ctx, f"직원 회의가 {dur}째 AI를 부르지 못해 열리지 않습니다(회의 {n}번 연속 실패, "
+                                  f"마지막 오류: {A.telegram_safe(err[:200]) or '알 수 없음'}). 두 분 글에도 답하지 못합니다.")
+
+
 def mark_tick(conn: sqlite3.Connection, ts_ms: int, ok: bool = True, why: str = "", detail: str = "") -> None:
     """The tick's sign of life for the dashboard (cursor ``tick:last``): when it last ran, and whether
     it stopped before its meetings (``why``: 'login' when the subscription check refused, 'error' when
@@ -3564,6 +3694,11 @@ def mark_tick(conn: sqlite3.Connection, ts_ms: int, ok: bool = True, why: str = 
     if detail:
         v["detail"] = str(detail)[:200]
     R.set_cursor(conn, R.TICK_CURSOR, v)
+
+
+def checkpoint_path(paper_db: Optional[str]) -> Optional[str]:
+    """checkpoint.db next to paper3.db (the checkpoint job's default, as the dashboard reads it)."""
+    return os.path.join(os.path.dirname(os.path.abspath(paper_db)), "checkpoint.db") if paper_db else None
 
 
 @contextlib.contextmanager
@@ -3640,7 +3775,7 @@ def tick(paper_db: Optional[str], daily_db: Optional[str], agents_db: str, inbox
                                         inbox_missing=not inbox_db or not os.path.exists(inbox_db), paper_ro=paper_ro)
             ctx = RoundContext(agents_conn=conn, paper_ro=paper_ro, daily_ro=daily_ro, inbox_ro=inbox_ro, runner=runner,
                                lab=lab, now_ms=now, policy=policy, notifier=notifier or NullNotifier(),
-                               clock_ms=clock_ms, cards_path=cards_path)
+                               clock_ms=clock_ms, cards_path=cards_path, checkpoint_db=checkpoint_path(paper_db))
             X.extras_tick(ctx)                         # code only: started accounts, closed refusals, orphans
             store_gate_now(conn, now)
             graded = grade_hypotheses(conn, paper_ro, now)
@@ -3670,7 +3805,8 @@ def tick(paper_db: Optional[str], daily_db: Optional[str], agents_db: str, inbox
                     break                                   # a long tick: the rest waits for the next one
                 dues = TR.find_due(paper_ro, daily_ro, conn, inbox_ro, now, policy.triggers,
                                    defer_triggers=deferred_triggers(ctx), skip_rooms=met,
-                                   can_start=lambda d: can_start(d, ctx), market=market)
+                                   can_start=lambda d: can_start(d, ctx), market=market,
+                                   checkpoint_db=ctx.checkpoint_db)
                 if first is None:
                     first = dues
                 pick = None
@@ -3688,7 +3824,9 @@ def tick(paper_db: Optional[str], daily_db: Optional[str], agents_db: str, inbox
                     ok, why = preflight()
                     checked = True
                     if not ok:
-                        mark_tick(conn, now, False, "login", why)      # the dashboard says the staff stopped
+                        # the dashboard says the staff stopped; the Telegram is the unit's OnFailure alert
+                        # (main exits 2, paperbot.failalert names the login refusal), not a second one here
+                        mark_tick(conn, now, False, "login", why)
                         return {"skipped": f"preflight: {why}", "approvals": approvals,
                                 "due": [(d.room_id, d.trigger) for d in first], "rounds": results}
                 # the tick's first meeting and incidents are exempt from the per-tick cap; any other
@@ -3703,6 +3841,10 @@ def tick(paper_db: Optional[str], daily_db: Optional[str], agents_db: str, inbox
                     break
             if any(r.get("stopped") == "usage_limit" for r in results):
                 lower_usage_scale(conn, now)
+            try:
+                check_runner_down(ctx)
+            except sqlite3.Error as exc:  # an alert only: the tick goes on
+                print(f"warning: agents-down check failed: {type(exc).__name__}: {exc}", file=sys.stderr)
             fp = inbox_fingerprint(inbox_ro)
             if fp is not None and R.get_cursor(conn, INBOX_FP) != fp:
                 R.set_cursor(conn, INBOX_FP, fp)

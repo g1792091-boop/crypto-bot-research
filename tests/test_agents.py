@@ -176,6 +176,8 @@ def test_runner_command_env_and_parsing():
     assert set(seen["env"]) == {"PATH", "HOME", "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CODE_MAX_OUTPUT_TOKENS"}
     assert json.loads(seen["input"])["n"] == 1
     assert child_env({"ANTHROPIC_AUTH_TOKEN": "z"}) == {}
+    # the unit's switch that keeps the CLI from updating itself mid-run must reach it
+    assert child_env({"DISABLE_AUTOUPDATER": "1", "ANTHROPIC_API_KEY": "k"}) == {"DISABLE_AUTOUPDATER": "1"}
 
 
 def test_runner_maps_errors():

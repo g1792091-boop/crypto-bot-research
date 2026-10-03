@@ -65,10 +65,11 @@ import weakref
 from dataclasses import dataclass
 from typing import Callable, Optional, Protocol
 
-# Only these variables reach the child process.
+# Only these variables reach the child process. DISABLE_AUTOUPDATER: the unit sets it so the CLI never updates
+# itself mid-run (it is updated by hand, on purpose, then one dry tick).
 ENV_ALLOW = ("PATH", "HOME", "LANG", "LC_ALL", "TZ", "USER", "TMPDIR",
              "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CONFIG_DIR", "HTTPS_PROXY", "HTTP_PROXY",
-             "NO_PROXY", "NODE_EXTRA_CA_CERTS", "SSL_CERT_FILE")
+             "NO_PROXY", "NODE_EXTRA_CA_CERTS", "SSL_CERT_FILE", "DISABLE_AUTOUPDATER")
 # Output ceiling of every model request (thinking plus the small JSON answer), set in the child's
 # environment: the CLI otherwise asks for max_tokens=128000.
 MAX_OUTPUT_TOKENS = 16_000

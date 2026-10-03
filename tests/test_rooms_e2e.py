@@ -223,7 +223,8 @@ def test_staff_meet_decide_and_owners_only_confirm(world, dash):
     # 1) nobody types anything: 5 new losses open a meeting in the strategy's room by themselves
     staff = Staff({**lab_round_answers(WIDER), "validator": [{"pass_gate": True, "explanation": "두 기간 모두 개선"}],
                    "approver": [{"approve": True, "reason": "관문 통과, 복제 한도 여유"}]})
-    out = _tick(p, staff, T0, lab)
+    tg = ListNotifier()
+    out = _tick(p, staff, T0, lab, notifier=tg)
     assert out["due"] == [(ROOM, "loss_cluster")]              # the coin-flip losses open nothing
     assert [(r["room_id"], r["trigger"], r["status"], r["action"]) for r in out["rounds"]] == \
         [(ROOM, "loss_cluster", "done", "request_test")]
@@ -235,9 +236,9 @@ def test_staff_meet_decide_and_owners_only_confirm(world, dash):
     a = _ro(p["agents3"])
     msgs = R.room_messages(a, ROOM, limit=100)
     assert [m["kind"] for m in msgs] == ["trigger", "analysis", "challenge", "expert", "revision", "code_result",
-                                         "verdict", "verdict", "action", "decision"]
+                                         "verdict", "verdict", "action", "action", "decision"]
     assert [m["role"] for m in msgs] == ["code", SPEC, "devils_advocate", "entry_timing", SPEC, "code",
-                                         "validator", "approver", "code", "code"]
+                                         "validator", "approver", "code", "code", "code"]
     assert all(HANGUL.search(m["text"]) for m in msgs), [m["text"] for m in msgs]
     assert msgs[0]["text"].startswith("📣 회의 시작: 손실 묶음 복기") and "새 손실 5건" in msgs[0]["text"]
     assert msgs[1]["speaker_name"] == "켈트너·RSI 전담" and msgs[1]["evidence"]
@@ -249,7 +250,10 @@ def test_staff_meet_decide_and_owners_only_confirm(world, dash):
     assert per["1"]["variant"]["trades"] >= 300 and per["1"]["variant"]["mean_roe"] > 0 > per["1"]["baseline"]["mean_roe"]
     assert per["3"]["available"] is False
     assert "복제 계좌 제안" in msgs[8]["text"] and "기다립니다" in msgs[8]["text"]
-    assert msgs[9]["text"].startswith("🧾 결정: 5년 시험 요청") and "관문 통과" in msgs[9]["text"]
+    # the proposal waits for the owners: one code-written WARN tells them (as a new strategy's pass does)
+    assert "알림(텔레그램, WARN)" in msgs[9]["text"]
+    assert [lv for lv, _ in tg.messages] == ["WARN"] and "복제 계좌 제안 #" in tg.messages[0][1]
+    assert msgs[10]["text"].startswith("🧾 결정: 5년 시험 요청") and "관문 통과" in msgs[10]["text"]
     assert R.room_messages(a, "team:ops") == [] and R.room_messages(a, "strat:V45_AMB") == []
     # the hypothesis ledger: the test with its result, and the copy proposal
     trials = R.trial_history(a, strategy=S)
@@ -631,7 +635,7 @@ def test_deploy_units_for_the_agents_tick():
     for line in ("NoNewPrivileges=yes", "ProtectSystem=strict", "ReadWritePaths=/var/lib/paperbot"):
         assert line in svc.splitlines()
     ro = next(line for line in svc.splitlines() if line.startswith("ReadOnlyPaths="))
-    for db in ("paper3.db", "daily3.db", "inbox.db"):
+    for db in ("paper3.db", "daily3.db", "inbox.db", "checkpoint.db"):
         assert f"-/var/lib/paperbot/{db} " in ro
     # never a -wal / -shm file: a listed file is pinned to its inode for the whole pass, and the writers
     # delete and re-create their WAL (a stale WAL next to the live -shm)

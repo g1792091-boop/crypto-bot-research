@@ -107,12 +107,42 @@ def metric_value(rows: list[tuple], p: dict, round_trip: float) -> Optional[floa
     return sum(p["tag"] in c["tags"] for c in losses) / len(losses)
 
 
+def _loads(text: Any) -> Any:
+    try:
+        return json.loads(text) if text else None
+    except (TypeError, ValueError):
+        return None
+
+
+def hypotheses(conn: Optional[sqlite3.Connection], strategy: Optional[str] = None,
+               waiting_only: bool = False) -> list[dict]:
+    """Every hypothesis in the ledger, oldest first (no page cap: the ledger keeps growing, and an old prediction
+    must still be graded or expired): id, ts, strategy, spec and ``result`` (its latest result body, None while
+    it waits). ``waiting_only``: only those with no result yet."""
+    if conn is None:
+        return []
+    sql = ("SELECT t.id, t.ts, t.strategy, t.spec, r.id, r.result FROM trials t LEFT JOIN trial_results r ON r.id = "
+           "(SELECT MAX(id) FROM trial_results WHERE trial_id = t.id) WHERE t.kind = 'hypothesis'")
+    args: list = []
+    if strategy is not None:
+        sql += " AND t.strategy = ?"
+        args.append(strategy)
+    if waiting_only:
+        sql += " AND r.id IS NULL"
+    try:
+        rows = conn.execute(sql + " ORDER BY t.id", args).fetchall()
+    except sqlite3.Error:
+        return []
+    return [{"id": tid, "ts": ts, "strategy": s, "spec": _loads(spec),
+             "result": None if rid is None else (_loads(res) or {})} for tid, ts, s, spec, rid, res in rows]
+
+
 def grade_due(conn: sqlite3.Connection, paper_ro: Optional[sqlite3.Connection], now_ms: int,
               round_trip: float) -> list[dict]:
     """Grade every ungraded hypothesis whose trades are in (or that has expired). Returns the grades."""
     done = []
-    for t in R.trial_history(conn, kinds=("hypothesis",), limit=2000):
-        if t.get("result") is not None or not t.get("strategy"):
+    for t in hypotheses(conn, waiting_only=True):
+        if not t.get("strategy"):
             continue
         p = (t.get("spec") or {}).get("prediction")
         if not isinstance(p, dict):
@@ -138,14 +168,14 @@ def grade_due(conn: sqlite3.Connection, paper_ro: Optional[sqlite3.Connection], 
 
 
 def scorecard(conn: Optional[sqlite3.Connection], strategy: Optional[str] = None) -> dict:
-    """Per role (who proposed the hypothesis): graded, correct, hit rate, waiting, expired, not gradable."""
-    rows = R.trial_history(conn, strategy=strategy, kinds=("hypothesis",), limit=2000)
+    """Per role (who proposed the hypothesis): graded, correct, hit rate, waiting, expired, not gradable. Every
+    hypothesis counts (``hypotheses``), not only the newest page."""
     by: dict = {}
-    for t in rows:
-        spec = t.get("spec") or {}
+    for t in hypotheses(conn, strategy):
+        spec = t.get("spec") if isinstance(t.get("spec"), dict) else {}
         k = by.setdefault(spec.get("by") or "", {"graded": 0, "correct": 0, "waiting": 0, "expired": 0,
                                                  "not_gradable": 0})
-        res = (t.get("result") or {}).get("result") or {}
+        res = t.get("result") or {}
         if not isinstance(spec.get("prediction"), dict):
             k["not_gradable"] += 1
         elif t.get("result") is None:

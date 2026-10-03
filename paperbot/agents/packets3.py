@@ -7,7 +7,9 @@ from paper3.db (live runner, read-only) and daily3.db (nightly checks, read-only
 Sections
 - meta            rules version, units, minimum sample, day count since the start
 - league          per timeframe: strategy accounts vs the three coin-flip accounts
-- pass_check      the docs/paper-v3-rules.md criteria applied to every strategy account
+- pass_check      reference only: each strategy account's wallet against the best of its timeframe's three
+                  coin-flip accounts (the pre-addendum rule); the verdict is the checkpoint's
+                  (``checkpoint_section``: Q1, 2,000 coin flips + FDR, read from checkpoint.db by the rooms)
 - by_strategy     one strategy across its five timeframes (for the timeframe comparison)
 - by_coin         trades and net ROE per coin, and per strategy x coin for accounts with >= min_n
 - execution       signal-to-fill delay, signal statuses, fees and funding share of losses
@@ -126,10 +128,11 @@ def build(paper_db: str, daily_db: Optional[str], now_ms: int, min_n: int = 30) 
             n = len(by_acct[a])
             w = wallet(a)
             ok = n >= min_n and w > INITIAL and best_rnd is not None and w > best_rnd and not eng.get(a, {}).get("bust")
+            # reference only: the verdict is the checkpoint's (Q1: 2,000 coin flips + FDR, ``checkpoint_section``)
             pass_check[a] = {"trades": n, "wallet": _r(w, 2),
                              "beats_coin_flips": best_rnd is not None and w > best_rnd and not eng.get(a, {}).get("bust"),
                              "bust": bool(eng.get(a, {}).get("bust")),
-                             "status": "undecided_small_sample" if n < min_n else ("first_pass" if ok else "fail")}
+                             "status": "small_sample" if n < min_n else ("above_3_coin_flips" if ok else "below")}
 
     # ------------------------------------------------ one strategy across timeframes
     by_strategy = defaultdict(dict)
@@ -221,7 +224,7 @@ def build(paper_db: str, daily_db: Optional[str], now_ms: int, min_n: int = 30) 
         "meta": {"rules": "docs/paper-v3-rules.md", "settings_version": run.get("settings"), "min_n": min_n,
                  "days_running": _r(days, 2), "units": {"roe": "net return on isolated margin (0.10 = +10%)",
                                                         "wallet": f"USDT, each account starts at {INITIAL:,.0f}"},
-                 "accounts": len(accts), "extra_accounts": len(extra_ids)},
+                 "accounts": len(accts), "extra_accounts": len(extra_ids), "pass_check_note": PASS_CHECK_NOTE},
         "league": league, "pass_check": pass_check, "by_strategy": dict(by_strategy), "by_coin": by_coin,
         "execution": execution, "exits": exits, "today": today_sec, "nightly": nightly, "extras": extras,
         "breakdown": breakdown,
@@ -229,6 +232,34 @@ def build(paper_db: str, daily_db: Optional[str], now_ms: int, min_n: int = 30) 
 
 
 EXTRA_KINDS = ("copy", "newlab")
+PASS_CHECK_NOTE = ("참고용: 같은 봉 동전 봇 3개 중 최고보다 잔고가 높은지만 봄. 합격·불합격 판정은 체크포인트"
+                   "(규칙 보충안 Q1: 동전 봇 2,000개 + FDR 10%, checkpoint)가 함")
+CHECKPOINT_ROWS = 30         # verdict rows a team packet carries (tokens)
+CHECKPOINT_P = 0.10          # ... the passes plus the accounts with p at most this
+
+
+def checkpoint_section(view: dict, strategy: Optional[str] = None, max_rows: int = CHECKPOINT_ROWS) -> dict:
+    """The newest 30-day checkpoint verdict for the agents. ``view``: ``paperbot.checkpoint.dashboard_view``
+    (checkpoint.db, read-only) plus ``next`` (the next checkpoint date). Rows: 1차 합격 / 2차 통과 and the
+    accounts with p <= 0.10 (at most ``max_rows``); for one strategy's specialist, all of that strategy's rows."""
+    if not view.get("ready"):
+        return {"ready": False, "next": view.get("next"),
+                "note": "체크포인트 판정 전: 합격·불합격을 말하지 않음 (판정은 그날 09:00 KST 뒤 코드가 냄)"}
+    from ..checkpoint import PASS1, PASS2
+    rows = view.get("rows") or []
+    if strategy is not None:
+        keep = [r for r in rows if str(r.get("account_id", "")).split("@")[0] == strategy]
+    else:
+        keep = [r for r in rows if r.get("status") in (PASS1, PASS2)
+                or (r.get("p") is not None and r["p"] <= CHECKPOINT_P)]
+    out = {"ready": True, **{k: view.get(k) for k in ("date", "day", "next", "counts", "tested", "luck_passed",
+                                                      "lucky_expected", "warnings")}}
+    out["rows"] = [{k: (_r(v) if isinstance(v, float) else v) for k, v in r.items()} for r in keep[:max_rows]]
+    out["rows_left_out"] = len(rows) - len(out["rows"])
+    out["note"] = ("공식 판정(코드, 규칙 보충안 Q1·Q3): 계좌마다 동전 봇 2,000개, 그날 검정한 계좌 전체에 FDR 10%. "
+                   "p·q와 상태를 그대로 전함. rows는 " + ("이 매매법 계좌만" if strategy is not None else
+                                                       f"1차 합격·2차 통과와 p ≤ {CHECKPOINT_P:.2f}인 계좌만"))
+    return out
 
 
 def _extras(accts: dict, ids: set, eng: dict, trades: list, xstate, since: int) -> list[dict]:
@@ -321,9 +352,9 @@ def research_counts(strategy: Optional[str] = None, path: str = RESEARCH_PRIOR) 
 
 
 def specialist_packet(packet: dict, strategy: str, cards_path: str = CARDS) -> dict:
-    """What one strategy's specialist sees: its five accounts, their pass status, the
-    coin-flip league of each timeframe, the strategy's profile card and what the entry study
-    already tested for it."""
+    """What one strategy's specialist sees: its five accounts, their wallets against the three coin-flip
+    accounts (reference only; the rooms add the checkpoint verdict), the coin-flip league of each timeframe,
+    the strategy's profile card and what the entry study already tested for it."""
     pc = {a: v for a, v in (packet.get("pass_check") or {}).items() if a.split("@")[0] == strategy}
     copies = [e for e in packet.get("extras") or [] if e.get("kind") == "copy" and e.get("strategy") == strategy]
     return {"meta": packet.get("meta"), "strategy": strategy,
