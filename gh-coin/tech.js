@@ -135,6 +135,18 @@ export const TECH = [
     where: "lib/selfai.js(신호 가중 결합) · 머신러닝·딥러닝팀"},
   {repo: "gitlabhq/gitlabhq", lic: "MIT", teams: [], status: "해당 없음",
     what: "GitLab(깃 호스팅 플랫폼, Ruby on Rails) — 코인 트레이딩 앱과 무관하여 적용하지 않음",
+    where: "—"},
+  {repo: "virattt/ai-hedge-fund", lic: "OSS", teams: ["ic"], status: "적용",
+    what: "투자 대가(버핏·멍거 등) 페르소나를 AI 에이전트로 → 투자위원회 강세·약세 리서처가 매 안건마다 다른 투자 철학(가치·역발상·모멘텀·매크로·퀀트·리스크패리티)으로 토론",
+    where: "투자위원회(ic) IC_PERSONAS"},
+  {repo: "FinStep-AI/ContestTrade", lic: "OSS", teams: ["demo"], status: "적용",
+    what: "내부 경쟁으로 상위 성과만 채택하는 메커니즘 → 데모 전략을 수익·승률·손익비로 겨뤄 순위, 상위에 비중·실거래 우선권, 하위는 은퇴 검토",
+    where: "데모거래팀 '전략 콘테스트'(contestJob)"},
+  {repo: "io-uty/crypto-auto-trading · bigpie1367/trading-bot · multicore-it/robobytes · beenchangseo/binance-trading-bot", lic: "각 OSS", teams: ["bot"], status: "참고(개념 이미 적용)",
+    what: "RSI·MACD·볼린저·EMA·그리드 기반 코인 자동매매 봇들. 그 전략 방식은 GH Coin 봇 템플릿(추세·돌파·평균회귀·MACD·켈트너 등)과 그리드/DCA(lib/botsim.js)에 이미 들어 있어 새로 추가할 것은 없음(확인 후 크레딧)",
+    where: "자동매매봇팀 봇 전략 · lib/botsim.js"},
+  {repo: "tuchongkim/visualize-binance (SolTrade)", lic: "OSS", teams: [], status: "참고(미적용)",
+    what: "마켓 메이킹(호가 양방향 제시) 모델 — GH Coin 은 단일 포지션·추세 매매 중심이라 복잡·고위험의 MM 은 넣지 않음. 아이디어만 기록",
     where: "—"}
 ];
 export const TECH_REPOS = 40;   // 에이전트·자체 AI·RAG 관련 (biomolecular·probot 은 해당 없음)
