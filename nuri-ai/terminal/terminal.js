@@ -730,7 +730,7 @@ class Terminal {
     const e = this.esc, tc = this.cur?.tc;
     el.innerHTML = `<div class="nt-ai-h"><b>🧪 실험실</b><span class="muted">${e(tc?.symbol || "")} · ${D.IV_LABEL[tc?.interval] || ""}봉 ${tc?.candles?.length?.toLocaleString() || 0}개로 (더 길게: 위쪽 '전체 과거')</span></div>
       <label class="nt-lab-l">전략<select class="nt-lab-src">${src.map((x) => `<option value="${e(x.id)}">${e(x.name)}</option>`).join("")}</select></label>
-      <div class="nt-row"><button class="nt-primary" data-lab="bt">백테스트</button><button data-lab="wf">검증(70/30)</button><button data-lab="rb">견고성</button><button data-lab="edit">전략 탭으로</button></div>
+      <div class="nt-row"><button class="nt-primary" data-lab="bt">백테스트</button><button data-lab="wf">검증(70/30)</button><button data-lab="rb">견고성</button><button data-lab="trust">🏆 신뢰점수</button><button data-lab="edit">전략 탭으로</button></div>
       <div class="nt-row"><select class="nt-lab-loss">${H ? Object.entries(H.LOSSES).map(([k, v]) => `<option value="${k}"${k === "SharpeDaily" ? " selected" : ""}>${e(v.ko)}</option>`).join("") : ""}</select><input class="nt-lab-ep" type="number" min="10" max="300" value="40" title="탐색 횟수"><button data-lab="ho">하이퍼옵트</button></div>
       <div class="nt-row"><button data-lab="save">버전으로 저장 (검토 요청)</button></div>
       <div class="nt-lab-out"></div>`;
@@ -778,6 +778,28 @@ class Terminal {
           <tr><td>부트스트랩 샤프 90%</td><td>${b ? `${f(b.lo)} ~ ${f(b.hi)}` : "–"}</td><td class="muted">0 아래가 넓으면 불안정</td></tr>
           ${mw.windows.map((w) => `<tr><td>구간 ${w.j}</td><td class="${cls(w.ret)}">${w.err ? e(w.err) : f(w.ret) + "%"}</td><td class="muted">거래 ${w.n ?? "–"} · 손익비 ${f(w.pf)}</td></tr>`).join("")}
           <tr><td>위생</td><td colspan="2">${hy.ok ? (hy.warns.map(e).join(", ") || "이상 없음") : `<span class="down">${hy.fails.map(e).join(", ")}</span>`}</td></tr></table></div>`;
+      } else if (kind === "trust") {
+        // 신뢰점수: 백테스트 성과 + 견고성(순열검정·구간일관성·SQN) + 표본을 0~100 하나로 (GH Coin/Nano 와 동일 기준)
+        const RB = await import("../../gh-coin/lib/robust.js"), H = await import("../../gh-coin/lib/hyperopt.js");
+        const bt = Q.backtest(spec, c, { barSeconds: bs }), st = bt.stats;
+        const an = H.analyzers(bt.equity, bt.trades, { perYear: 365 * 86400 / bs }), pt = RB.permutationTest(bt.trades.map((t) => t.pnl)), mw = RB.multiWindow(Q, spec, c, 5), hy = RB.hygiene(bt);
+        const nTr = st.trades || 0, pOK = pt.p == null || pt.p <= 0.1, mwOK = mw.total < 3 || mw.positive >= Math.ceil(mw.total * 0.6), hyOK = hy.ok !== false, nOK = nTr >= 8;
+        const robust = { ok: pOK && mwOK && hyOK && nOK, p: pt.p ?? null, mwPos: mw.positive ?? null, mwTotal: mw.total ?? null, sqn: Number.isFinite(an.sqn) ? +an.sqn.toFixed(2) : null };
+        const clc = (lo, hi, v) => Math.max(lo, Math.min(hi, v));
+        const retN = clc(0, 1, ((st.total_return_pct || 0) + 10) / 30), wrN = clc(0, 1, ((st.win_rate_pct || 0) - 40) / 30), pf = st.profit_factor, pfN = pf == null ? 0.4 : clc(0, 1, (pf - 0.8) / 1.7);
+        const A = 35 * (0.5 * retN + 0.25 * wrN + 0.25 * pfN);
+        const pN = robust.p == null ? 0.5 : clc(0, 1, (0.2 - robust.p) / 0.2), mwN = robust.mwTotal ? clc(0, 1, robust.mwPos / robust.mwTotal) : 0.5, sqnN = robust.sqn == null ? 0.4 : clc(0, 1, robust.sqn / 3);
+        const B = 30 * (robust.ok ? 1 : 0.5) * (0.4 * pN + 0.35 * mwN + 0.25 * sqnN), C = 8, D = 15 * clc(0, 1, nTr / 25);
+        const trust = Math.round(A + B + C + D), grade = trust >= 75 ? "A 매우 신뢰" : trust >= 60 ? "B 신뢰" : trust >= 45 ? "C 보통" : trust >= 30 ? "D 주의" : "E 위험", gcol = trust >= 60 ? "up" : trust >= 45 ? "" : "down";
+        show(bt);
+        const bar = (v, max, label, sub) => `<div style="margin:5px 0"><div style="display:flex;align-items:center;gap:8px"><span class="muted" style="width:84px;font-size:12px">${e(label)}</span><span style="flex:1;height:8px;background:#2a2e39;border-radius:4px;overflow:hidden"><i style="display:block;height:100%;width:${Math.round(clc(0, 1, v / max) * 100)}%;background:#2962ff"></i></span><b style="width:44px;text-align:right;font-size:12px">${Math.round(v)}/${max}</b></div><div class="muted" style="font-size:11px;margin-left:92px">${e(sub)}</div></div>`;
+        out.innerHTML = `<div class="nt-card"><div class="nt-card-h">🏆 신뢰 점수 <span class="muted">성과+견고성+일반화+표본 종합</span></div>
+          <div style="display:flex;align-items:baseline;gap:10px;margin:6px 0 10px"><b class="${gcol}" style="font-size:34px;line-height:1">${trust}</b><span class="${gcol}">${e(grade)}</span><span class="muted">/ 100</span></div>
+          ${bar(A, 35, "데모 성과", `수익 ${f(st.total_return_pct, 1)}% · 승률 ${f(st.win_rate_pct, 0)}% · 손익비 ${f(pf)}`)}
+          ${bar(B, 30, "견고성", `운일확률 p${f(robust.p, 2)} · 구간 ${robust.mwPos ?? "–"}/${robust.mwTotal ?? "–"} · SQN ${f(robust.sqn)}`)}
+          ${bar(C, 20, "시장 일반화", "차트 실험에선 미포함 — 본부가 같은 자산군 다른 시장으로 자동 검증")}
+          ${bar(D, 15, "표본 신뢰도", `거래 ${nTr}회`)}
+          <div class="nt-dlg-note">수익만 높고 과최적화(운일확률↑·구간 들쭉날쭉·표본 적음)면 점수가 깎입니다 · 계산값일 뿐 미래 보장 아님</div></div>`;
       } else if (kind === "ho") {
         const H = await import("../../gh-coin/lib/hyperopt.js"), loss = this.root.querySelector(".nt-lab-loss").value, ep = Math.max(10, Math.min(300, +this.root.querySelector(".nt-lab-ep").value || 40));
         H.setSeed(Date.now() % 100000);
