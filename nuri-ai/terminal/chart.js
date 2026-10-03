@@ -13,6 +13,8 @@ export const big = (v) => { if (v == null || !Number.isFinite(+v)) return "–";
 // 아래 창 지표 값 (크기에 맞게)
 export const smart = (v) => { if (v == null || !Number.isFinite(v)) return "–"; const a = Math.abs(v); return a >= 1e6 ? big(v) : a >= 1000 ? v.toFixed(0) : a >= 100 ? v.toFixed(1) : a >= 1 ? v.toFixed(2) : a === 0 ? "0" : v.toPrecision(3); };
 const SKIP = ["signals", "boxes", "profiles", "patterns", "fill"];
+// 화면 표시용 지표는 최근 N봉까지만 계산한다(백테스트는 별도 경로라 영향 없음). 과거 2~3만 봉 전체를 매 틱 재계산하던 병목 제거.
+const IND_MAX = 6000;
 
 // 캔버스에 직접 그리는 레이어. 차트와 함께 확대/이동된다.
 export class Layer {
@@ -236,19 +238,36 @@ export class TermChart {
     if (!c.length) return;
     const ctxOf = (spec) => ({ id: spec.id, color: spec.color, ext: {}, extra: { symbol: this.symbol, exchange: this.exchange, interval: this.interval },
       onAsync: () => this._is(this.exchange, this.symbol, this.interval) && this.renderIndicators() });
-    const run = (spec, def, params) => { try { return def.compute(c, params, ctxOf(spec)) || { plots: [] }; } catch (e) { return { plots: [], note: "계산 오류: " + (e.message || e) }; } };
+    // 캐시: 지표 입력(봉 개수+마지막 봉 시각·종가+파라미터)이 그대로면 재계산을 건너뛴다. + 표시용은 최근 IND_MAX 봉만 계산.
+    // 계산은 최근 구간만 하되, 결과 배열은 앞을 null 로 채워 전체 봉 길이에 맞춘다(범례·신호 인덱스 정렬 유지).
+    const cache = this._indCache || (this._indCache = new Map());
+    const run = (spec, def, params) => {
+      const big = c.length > IND_MAX, cc = big ? c.slice(-IND_MAX) : c;
+      const last = cc[cc.length - 1] || {}, key = spec.id + "|" + spec.key + "|" + JSON.stringify(params);
+      const sig = c.length + "|" + (last.time ?? "") + "|" + (last.close ?? last.value ?? "");
+      const hit = cache.get(key);
+      if (hit && hit.sig === sig) return hit.res;
+      let res; try { res = def.compute(cc, params, ctxOf(spec)) || { plots: [] }; } catch (e) { res = { plots: [], note: "계산 오류: " + (e.message || e) }; }
+      if (big && Array.isArray(res.plots)) {
+        const off = c.length - cc.length, pad = (a) => Array.isArray(a) ? new Array(off).fill(null).concat(a) : a;
+        res.plots = res.plots.map((pl) => ({ ...pl, data: pad(pl.data), colors: pl.colors ? pad(pl.colors) : pl.colors }));
+      }
+      cache.set(key, { sig, res });
+      return res;
+    };
     const sameShape = valuesOnly && this.ind.length === specs.length && this.ind.every((it, i) => it.spec === specs[i]);
     if (sameShape) {
       for (const it of this.ind) {
         const r = run(it.spec, it.def, it.params);
         if (r.plots.filter((p) => !SKIP.includes(p.type)).length !== it.series.filter(Boolean).length) { return this.renderIndicators(false); }
-        r.plots.forEach((pl, k) => it.series[k] && it.series[k].setData(toData(c, pl)));
+        r.plots.forEach((pl, k) => it.series[k] && it.series[k].setData(toData(r._cc || c, pl)));
         it.last = r;
       }
       this._applySignals(); this.boxLayer.update(); this.fillLayer.update(); this.vpLayer.update();
       return;
     }
     for (const it of this.ind) { it.markers?.detach(); it.series.forEach((s) => { try { s && this.chart.removeSeries(s); } catch (e) { /* 무시 */ } }); }
+    cache.clear();   // 지표 구성이 바뀌면(추가·삭제) 캐시 비우고 새로 계산
     this.ind = [];
     while (this.chart.panes().length > 1) { try { this.chart.removePane(this.chart.panes().length - 1); } catch (e) { break; } }
     let paneNo = 0;
@@ -267,7 +286,7 @@ export class TermChart {
         else s = this.chart.addSeries(L.LineSeries, { ...common, color: pl.color || spec.color, lineWidth: pl.lineWidth ?? 2, lineStyle: pl.lineStyle ?? 0,
           crosshairMarkerVisible: false, ...(pl.type === "dots" ? { lineVisible: false, pointMarkersVisible: true, pointMarkersRadius: 1.6 } : {}),
           ...(where === "volume" ? { priceScaleId: "vol" } : {}) }, pane);
-        s.setData(toData(c, pl));
+        s.setData(toData(r._cc || c, pl));
         if (spec.hidden) s.applyOptions({ visible: false });
         return s;
       });
