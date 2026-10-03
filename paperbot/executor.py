@@ -1,10 +1,12 @@
 """Executor: mirrors ONE paper v3 account into real orders on Binance USD-M futures.
 
 Testnet (fake money) by default. Mainnet (real money) only when every gate in paperbot/mainnet.py holds.
+On the server it runs as its own user, paperbot-exec (never paperbot, the agents' and the dashboard's user): run
+these commands with ``sudo -u paperbot-exec`` (docs/live-safety.md 1-9, 3).
 
     python -m paperbot.executor run --config /etc/paperbot/executor.json      # keys from the environment
     python -m paperbot.executor preflight --config /etc/paperbot/executor.json  # gates only, no orders
-    python -m paperbot.executor status --db /var/lib/paperbot/executor.db
+    python -m paperbot.executor status --db /var/lib/paperbot/exec/executor.db
     python -m paperbot.executor clear-halt --config /etc/paperbot/executor.json --by 이름 --note "이유"
     python -m paperbot.executor check-config --config /etc/paperbot/executor.json
     python -m paperbot.executor stage-check --config /etc/paperbot/executor.json
@@ -62,14 +64,14 @@ import sqlite3
 import sys
 import time
 import urllib.parse
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, field, fields
 from typing import Callable, Mapping, Optional
 
 from . import livepnl as P
 from . import risk as R
 from .config import V3_STOP_ATR, V3_SYMBOLS, v3_settings
 from .mainnet import (MAINNET_HOSTS, MODE_MAINNET, MODE_TESTNET, PAPER_ENV_FILE, KeyCheckClient, MainnetClient,
-                      Refused, online_gates, read_env_file, trading_keys)
+                      Refused, check_assets, check_balance, online_gates, read_env_file, trading_keys)
 from .margin import Brackets
 from .notify import CRITICAL, INFO, WARN, ConsoleNotifier, NullNotifier, Notifier
 from .sizing import size_position
@@ -90,6 +92,12 @@ TRANSFER_TYPES = ("TRANSFER", "INTERNAL_TRANSFER", "CROSS_COLLATERAL_TRANSFER", 
 TRADE_INCOME_TYPES = ("FUNDING_FEE", "SPECIAL_FUNDING_FEE", "INSURANCE_CLEAR")
 FINAL_ORDER = ("FILLED", "CANCELED", "EXPIRED", "REJECTED", "EXPIRED_IN_MATCH")
 USER_TRADES_SPAN = 7 * 86_400_000 - 1     # GET /fapi/v1/userTrades: at most 7 days per request
+# the executor's own system user (deploy/install.sh, deploy/paperbot-executor.service): never "paperbot", the user of
+# the agent rooms and the dashboard (a process can read /proc/<pid>/environ -- the order keys -- of its own user only)
+EXEC_USER = "paperbot-exec"
+ENTRY_REREAD_S = (0.2, 0.2)               # positionRisk read again after an entry fill it does not show yet
+FLAT_REREAD_S = (0.2, 0.5, 1.0)           # ... after a close while it still shows a position (it can lag a fill)
+FLAT_CONFIRM_S = 0.5                      # flat without an order answer that agrees: positionRisk once more, later
 
 
 # ---------------------------------------------------------------- config
@@ -205,7 +213,8 @@ class Intent:
 
 
 def _ro(path: str) -> sqlite3.Connection:
-    return sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=5)
+    """Read-only (paper3.db, and this executor's database for status and stage-check); see livepnl.open_ro."""
+    return P.open_ro(path)
 
 
 class Paper3Source:
@@ -223,8 +232,10 @@ class Paper3Source:
         finally:
             conn.close()
         if row is None:
+            # no account states at all (a new, replaced or restored paper3.db; the paper runner not started yet):
+            # unreadable, never "the paper account is flat" (that would close the live position)
             self.engine = None
-            return None, None
+            raise Refused("paper3.db에 계좌 상태(accounts)가 없습니다")
         ts, data = int(row[0]), json.loads(row[1])
         eng = data.get("engines", {}).get(self.account)
         if eng is None:
@@ -347,11 +358,22 @@ MIGRATIONS = (
 
 
 class ExecStore:
-    def __init__(self, path: str, lock: bool = True):
+    def __init__(self, path: str, lock: bool = True, service: bool = False):
+        """``service``: opened by the running executor (``run``). There a folder it may not write is a fault of the
+        server (its owner changed: a restore, a half-done chown), not an owner's command run as the wrong user: the
+        PermissionError goes up as it is (exit 1: systemd starts it again, with an alert), never a Refused (exit 2:
+        not restarted, while a position may be open)."""
         self.lock_fh = None
         if lock:
             import fcntl
-            self.lock_fh = open(path + ".lock", "a+")
+            try:
+                self.lock_fh = open(path + ".lock", "a+")
+            except PermissionError as e:
+                if service:
+                    raise
+                # the folder and the files belong to the executor's own user (deploy/install.sh)
+                raise Refused(f"{path}에 쓸 권한이 없습니다({e.strerror}). 실행기 명령은 실행기 사용자로 돌립니다: "
+                              f"sudo -u {EXEC_USER} …") from e
             try:
                 fcntl.flock(self.lock_fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except OSError:
@@ -388,6 +410,11 @@ class ExecStore:
         self.conn.execute("UPDATE trades SET exit_ts = ?, exit_reason = ?, pnl = ?, data = ?, pnl_source = ? "
                           "WHERE key = ?",
                           (ts, reason, pnl, json.dumps(data, default=str, ensure_ascii=False), source, key))
+
+    def trade_data(self, key: str, data: dict) -> None:
+        """The trade's record (its order ids) after it was closed: what _settle_pending reads its fills by."""
+        self.conn.execute("UPDATE trades SET data = ? WHERE key = ?",
+                          (json.dumps(data, default=str, ensure_ascii=False), key))
 
     def trade_costs(self, key: str, c: dict) -> None:
         """P&L and cost measured from the exchange's fills and funding (replaces the wallet estimate)."""
@@ -429,6 +456,13 @@ class ExecStore:
 
     def close(self) -> None:
         self.conn.commit()
+        try:
+            # back to rollback mode on a clean close: the nightly backup and the owners' read-only commands run as
+            # another user (paperbot, group read) that cannot create the -wal/-shm files a read-only open of a WAL
+            # database needs once its writer is gone. Busy (a reader right now): it stays WAL until the next close.
+            self.conn.execute("PRAGMA journal_mode=DELETE")
+        except sqlite3.Error:
+            pass
         self.conn.close()
         if self.lock_fh is not None:
             self.lock_fh.close()
@@ -676,6 +710,19 @@ class Guarded:
                            lambda: self._lookup(self.c.algo_order, client_id=cid))
 
 
+class GateUnverified(RuntimeError):
+    """A mainnet start gate could not be checked (nothing was found wrong) while a position is open: an ordinary
+    error, so the process exits 1 and systemd starts it again in 30 s. Never a Refused (exit 2: not restarted)."""
+
+
+def _filled_all(o: Optional[dict], amt: float) -> bool:
+    """Does a close order's own answer say it filled the whole position ``amt``?"""
+    try:
+        return float((o or {}).get("executedQty") or 0) >= abs(amt) - 1e-12
+    except (TypeError, ValueError):
+        return False
+
+
 def new_client_id(tag: str, seed: str = "") -> str:
     """Binance client ids: ^[.A-Z:/a-z0-9_-]{1,36}$."""
     h = hashlib.sha1(f"{seed}|{time.time_ns()}|{os.getpid()}".encode()).hexdigest()[:20]
@@ -690,6 +737,7 @@ class Snapshot:
     stops: dict                          # symbol -> live STOP_MARKET algo orders
     equity: float
     wallet: float
+    mark: dict = field(default_factory=dict)   # symbol -> mark price (the same positionRisk read, no extra request)
 
 
 class Executor:
@@ -758,6 +806,8 @@ class Executor:
         self.db_failed = False
         self.stopping = False                   # SIGTERM: finish the loop in progress, then stop
         self.last_transfer_scan = 0
+        self.held: Optional[list] = None        # alerts raised during protective work: sent when it is done
+        self.gates_failed = False               # mainnet gates failed at the start with a position open (halted)
 
     # ------------------------------------------------------------ records
     def _audit(self, a: dict) -> None:
@@ -774,10 +824,38 @@ class Executor:
         except sqlite3.Error as e:
             if not self.db_failed:
                 self.db_failed = True
-                self.notifier.send(CRITICAL, f"{self.prefix} 실행기 DB에 기록하지 못합니다({type(e).__name__}: {e}). "
-                                             "알림은 계속 보냅니다. 디스크를 확인하세요")
+                self._notify(CRITICAL, f"{self.prefix} 실행기 DB에 기록하지 못합니다({type(e).__name__}: {e}). "
+                                       "알림은 계속 보냅니다. 디스크를 확인하세요")
         if notify and level in (WARN, CRITICAL):
-            self.notifier.send(level, f"{self.prefix} {text}")
+            self._notify(level, f"{self.prefix} {text}")
+
+    def _notify(self, level: str, text: str) -> None:
+        if self.held is not None:
+            self.held.append((level, text))
+        else:
+            self.notifier.send(level, text)
+
+    @contextlib.contextmanager
+    def _holding(self):
+        """Alerts raised inside go out when the outermost such block ends (also when it raises). A Telegram send waits
+        for its answer (up to 10 s): protective work -- the stop after a fill, a stop put back, a close -- must never
+        wait for one."""
+        outer = self.held is None
+        if outer:
+            self.held = []
+        try:
+            yield
+        finally:
+            if outer:
+                held, self.held = self.held, None
+                for level, text in held:
+                    self.notifier.send(level, text)
+
+    @contextlib.contextmanager
+    def _protecting(self):
+        """Protective work: no rate-limit pacing pauses (Guarded.protecting) and no alert sent in the middle."""
+        with self._holding(), self.c.protecting():
+            yield
 
     def _save(self, strict: bool = True) -> None:
         try:
@@ -789,6 +867,14 @@ class Executor:
             if strict:
                 raise
             self._event(CRITICAL, "db_error", f"상태 저장 실패(주문은 계속): {e}", notify=False)
+
+    def _new_halt(self, reason: str, kinds: list, planned: bool) -> bool:
+        """Halt (persisted at once: an error or a crash later in this loop must not lose it). True when it is new."""
+        if not R.halt(self.risk, self.now_ms(), reason, kinds):
+            return False
+        self._halt_log(reason, planned=planned)
+        self._save(strict=False)
+        return True
 
     def _mark_done(self, key: str) -> None:
         if key not in self.done:
@@ -839,7 +925,7 @@ class Executor:
         if self.signals is not None:
             self._signal_mode_setup()
         meta = self.store.get_state("meta") or {}
-        if not meta.get("live_since"):                     # the first start that passed every gate (stage-check)
+        if not meta.get("live_since") and not self.gates_failed:  # the first start that passed every gate (stage-check)
             meta = {"mode": self.cfg.mode, "account": self.cfg.account, **meta, "live_since": self.now_ms()}
             self.store.put_state("meta", self.now_ms(), meta)
             self.store.commit()
@@ -856,7 +942,17 @@ class Executor:
 
         The permission read is retried like any other read. If api.binance.com still cannot be reached, that
         is not a refusal (nothing was found wrong): the error escapes, the process exits 1 and systemd starts
-        it again in 30 s. A definite problem (permissions, wallet) refuses: exit 2, a person must act."""
+        it again in 30 s. A definite problem (permissions, wallet) refuses: exit 2, a person must act -- unless a
+        live position is open (a restart in the middle of a trade). Then exiting would leave it to its exchange stop
+        alone (no paper exit, no kill file, no loss limits). Instead the executor halts as the kill switch does
+        (persisted, unplanned): it keeps running, closes everything with reduce-only market orders, opens nothing,
+        and a person clears the halt after fixing the cause (docs/live-safety.md 1-7).
+
+        A permission check the exchange answered but did not let through (a 4xx that is not a permission record:
+        Binance's WAF answers 403 for a while, "WAF limit violated") found nothing wrong either. With a position
+        open that is never a reason to sell it: like an unreachable check it exits 1 (systemd tries again in 30 s;
+        the position keeps its exchange stop meanwhile), unless the wallet or its assets are definitely wrong.
+        With nothing open it refuses (exit 2) as before."""
         kc = self.keycheck
         kc.offset_ms = self.raw.offset_ms                  # same Binance clock for the signed GET
         acct = self.c.account()
@@ -868,6 +964,7 @@ class Executor:
         def read_permissions():
             kc.offset_ms = self.raw.offset_ms              # again after a -1021 re-sync
             return kc.api_restrictions()
+        unverified: Optional[str] = None                   # the permission check could not be done (no finding)
         try:
             perm = self.c._retry("키 권한", read_permissions)
         except (TransientError, RateLimited) as e:
@@ -876,20 +973,49 @@ class Executor:
             raise
         except TestnetError as e:
             err = e
+            unverified = str(e)
 
             def perm_reader():
                 raise err
         else:
+            if not isinstance(perm, dict):
+                unverified = f"권한 기록이 아닌 응답 {perm!r}"[:200]
+
             def perm_reader():
                 return perm
         problems, warnings = online_gates(perm_reader, wallet, float(self.cfg.budget_usd), acct.get("assets"))
         for w in warnings:
             self._event(WARN, "key_permission", w)
+        definite = [p for p in (check_balance(wallet, float(self.cfg.budget_usd)), check_assets(acct.get("assets")))
+                    if p]
+        if problems and unverified is not None and not definite and self._position_open():
+            self._event(CRITICAL, "mainnet_unverified", f"api.binance.com이 키 권한 확인을 받아 주지 않았습니다({unverified}). "
+                        "잘못된 것이 확인된 것은 아니어서 열린 포지션은 닫지 않고, 30초 뒤 다시 켭니다(systemd)." + held)
+            raise GateUnverified(unverified)
+        if problems and self._position_open():
+            self.gates_failed = True
+            reason = "실거래 관문 실패(재시작): " + "; ".join(problems)
+            self._event(CRITICAL, "mainnet_refused", reason + ". 열린 포지션이 있어 끄지 않고, 비상 정지처럼 모두 시장가"
+                        "(reduce-only)로 닫고 멈춥니다(새 진입 없음). 원인을 고친 뒤 실행기를 끄고 clear-halt로 푸세요")
+            self._new_halt(reason, ["gate"], planned=False)
+            return
         if problems:
             self._event(CRITICAL, "mainnet_refused", "실거래를 시작하지 않습니다: " + "; ".join(problems) + held)
             raise Refused("; ".join(problems))
         self._event(INFO, "mainnet_gates", f"실거래 관문 통과: 출금 꺼짐, 선물 켜짐, IP 제한 있음, 필요 없는 권한 꺼짐, "
                     f"지갑 ${wallet:,.2f} ≤ ${self.cfg.budget_usd * 1.2:,.2f}(USDT만)")
+
+    def _position_open(self) -> bool:
+        """A trade on record, or any position on the exchange (positionRisk). A read that fails for a moment raises
+        (exit 1: systemd starts it again); one the exchange refuses leaves the record to decide."""
+        if self.trade is not None:
+            return True
+        try:
+            return bool(self.c.positions())
+        except (TransientError, RateLimited):
+            raise
+        except TestnetError:
+            return False
 
     def _signal_mode_setup(self) -> None:
         """Signal mode needs the exchange's leverage brackets to size like the paper rules; without them it
@@ -963,7 +1089,8 @@ class Executor:
     def loop_once(self) -> None:
         """One loop. The order matters for safety:
         1. kill file / persisted halt: close everything with positionRisk + reduce-only market orders only;
-        2. account -> daily loss, drawdown, loss streak (deposits/withdrawals taken out) -> close everything;
+        2. deposits/withdrawals, then account -> daily loss, drawdown, loss streak (transfers taken out) -> close
+           everything (a new halt is saved at once);
         3. stops -> reconcile, each symbol on its own (one stuck symbol never blocks the others or the limits);
         4. limits again (a stop-out booked by the reconcile can complete a loss streak), then follow the paper.
         A failed reconcile action is re-raised at the end (loop_error) after everything else has run."""
@@ -980,9 +1107,9 @@ class Executor:
             off = self.c.sync_time()
             self.last_sync = now
             self._note_offset(off)
+        self._transfers()                        # first: the account read below includes every transfer applied
         acct = self.c.account()
         equity, wallet = float(acct["totalMarginBalance"]), float(acct["totalWalletBalance"])
-        self._transfers()
         R.observe_equity(self.risk, self.now_ms(), equity)
         if now - self.last_equity >= self.cfg.equity_every_s * 1000:
             try:                                 # a record: never in front of the limits
@@ -991,14 +1118,14 @@ class Executor:
             except sqlite3.Error as e:
                 self._event(CRITICAL, "db_error", f"금액 기록 실패: {e}", notify=False)
         if not flattened:
-            dec = self._limits(equity, kill)
+            dec, equity = self._limits(equity, kill)
             if dec.action == R.FLATTEN_HALT:
                 failed += self._flatten_halt(dec, rows)
                 rows, flattened = self.c.positions(), True
         snap = self._snapshot(rows, equity, wallet)
         failed += self._reconcile(snap)
         if not flattened:
-            dec = self._limits(equity, kill)
+            dec, equity = self._limits(equity, kill)
             if dec.action == R.FLATTEN_HALT:
                 failed += self._flatten_halt(dec)
                 flattened = True
@@ -1019,14 +1146,22 @@ class Executor:
         if failed:
             raise failed[0]
 
-    def _limits(self, equity: float, kill: Optional[str]) -> R.Decision:
-        """check_loop; a daily-loss or drawdown halt is confirmed against a fresh read of deposits/withdrawals
-        first (a withdrawal of profit is not a loss)."""
+    def _limits(self, equity: float, kill: Optional[str]) -> tuple[R.Decision, float]:
+        """check_loop -> (decision, the equity it used). A daily-loss or drawdown halt is confirmed against a fresh
+        read of deposits/withdrawals first (a withdrawal of profit is not a loss). When that read applies one, the
+        equity is read again after it: a transfer newer than the loop's account read is in the moved baselines and
+        must be in the equity they are compared with (a deposit would otherwise read as a loss). That account read
+        failing never holds the check back: the loop's equity is used then."""
         dec = R.check_loop(self.cfg.risk, self.risk, equity, kill)
         if dec.action == R.FLATTEN_HALT and set(dec.kinds) & {"daily", "drawdown"}:
             if self._transfers(force=True):
+                try:
+                    equity = float(self.c.account()["totalMarginBalance"])
+                except (TestnetError, KeyError, TypeError, ValueError) as e:
+                    self._event(WARN, "account_unread", f"입출금 반영 뒤 잔고를 다시 못 읽어 앞의 값을 씁니다: {e}",
+                                notify=False)
                 dec = R.check_loop(self.cfg.risk, self.risk, equity, kill)
-        return dec
+        return dec, equity
 
     def _transfers(self, force: bool = False) -> bool:
         """Deposits and withdrawals of the futures wallet (GET /fapi/v1/income, every ``transfer_every_s`` and
@@ -1076,13 +1211,19 @@ class Executor:
     def _snapshot(self, rows: list, equity: float, wallet: float) -> Snapshot:
         pos = {r["symbol"]: float(r["positionAmt"]) for r in rows if float(r.get("positionAmt") or 0) != 0}
         entry = {r["symbol"]: float(r.get("entryPrice") or 0) for r in rows}
+        mark = {}
+        for r in rows:
+            try:
+                mark[r["symbol"]] = float(r.get("markPrice") or 0)
+            except (TypeError, ValueError):
+                pass
         syms = set(pos)
         if self.trade:
             syms.add(self.trade["symbol"])
         if self.loops % self.cfg.sweep_every == 1 or self.cfg.sweep_every <= 1:
             syms |= set(self.cfg.risk.allowed_symbols)      # full sweep now and then (rate limits)
         stops = {s: live_stops(self.c, s) for s in sorted(syms)}
-        return Snapshot(pos, entry, stops, equity, wallet)
+        return Snapshot(pos, entry, stops, equity, wallet, mark)
 
     # ------------------------------------------------------------ reconcile
     def _isolated(self, failed: list, what: str, fn, *a) -> None:
@@ -1103,9 +1244,10 @@ class Executor:
         for sym, amt in snap.positions.items():
             if t is not None and t["symbol"] == sym:
                 continue
-            self._event(CRITICAL, "unknown_position", f"모르는 포지션 발견: {sym} {amt:+g} → 바로 닫습니다",
-                        {"symbol": sym, "amt": amt})
-            self._isolated(failed, f"{sym} 모르는 포지션 닫기", self._flatten_symbol, sym, "모르는 포지션 정리")
+            with self._holding():                       # the alert goes out once the close was sent
+                self._event(CRITICAL, "unknown_position", f"모르는 포지션 발견: {sym} {amt:+g} → 바로 닫습니다",
+                            {"symbol": sym, "amt": amt})
+                self._isolated(failed, f"{sym} 모르는 포지션 닫기", self._flatten_symbol, sym, "모르는 포지션 정리")
         if t is not None:
             self._isolated(failed, f"{t['symbol']} 대조", self._reconcile_trade, t, snap)
         for sym, stops in snap.stops.items():
@@ -1118,7 +1260,14 @@ class Executor:
         self._event(INFO, "stray_orders", f"{sym}: 포지션 없이 남은 손절 {n}개를 취소했습니다")
 
     def _reconcile_trade(self, t: dict, snap: Snapshot) -> None:
+        """The trade on record against the exchange. Its alerts (an adopted entry, an oversize, a missing stop) go
+        out after its stop was fixed, not before."""
+        with self._holding():
+            self._check_trade(t, snap)
+
+    def _check_trade(self, t: dict, snap: Snapshot) -> None:
         amt = snap.positions.get(t["symbol"], 0.0)
+        adopted = False
         if t["status"] == "entering":
             if amt == 0:
                 if self._entry_still_unknown(t):
@@ -1128,33 +1277,59 @@ class Executor:
                 self._mark_done(t["key"])
                 self.trade = t = None
             else:
-                with self.c.protecting():
-                    t["status"], t["qty"] = "open", abs(amt)
-                    t["entry_price"] = snap.entry.get(t["symbol"]) or t.get("entry_price")
-                    try:                                   # its order id, for the P&L (best effort)
-                        self._note_order(t, self._entry_order(t))
-                    except TestnetError:
-                        pass
-                    self._event(WARN, "recover", f"재시작 복구: {t['symbol']} 진입이 체결돼 있습니다 → 손절을 확인합니다",
-                                {"key": t["key"], "amt": amt})
-                    plan = float(t.get("planned_qty") or t["qty"])
-                    if abs(amt) > plan + self._spec(t["symbol"])["qty_step"] / 2:
-                        amt = self._trim(t, amt, plan, "진입 주문 결과를 모르는 동안 더 체결됨")
-                        t["qty"] = abs(amt)
-                    self.store.trade_open(t)
-                    if amt == 0:
-                        self._finish(t, "진입 뒤 줄이다 모두 닫힘")
-                        return
+                self._adopt(t, amt, snap)
+                adopted = True
         if t is not None and t["status"] == "open":
-            if amt == 0:
-                self._closed_on_exchange(t, snap)
-            elif (amt > 0) != (t["side"] > 0):
-                self._event(CRITICAL, "wrong_side", f"{t['symbol']} 포지션 방향이 반대입니다({amt:+g}) → 닫고 멈춥니다")
-                if R.halt(self.risk, self.now_ms(), "방향이 반대인 포지션 발견", ["wrong_side"]):
-                    self._halt_log(self.risk.halt_reason, planned=False)
-                self._flatten_symbol(t["symbol"], "방향이 반대인 포지션")
-            else:
-                self._ensure_stop(t, amt, snap.stops.get(t["symbol"], []))
+            try:
+                if amt == 0:
+                    self._closed_on_exchange(t, snap)
+                elif (amt > 0) != (t["side"] > 0):
+                    self._event(CRITICAL, "wrong_side", f"{t['symbol']} 포지션 방향이 반대입니다({amt:+g}) → 닫고 멈춥니다")
+                    self._new_halt("방향이 반대인 포지션 발견", ["wrong_side"], planned=False)
+                    self._flatten_symbol(t["symbol"], "방향이 반대인 포지션")
+                else:
+                    self._ensure_stop(t, amt, snap.stops.get(t["symbol"], []), snap.mark.get(t["symbol"]))
+            finally:
+                if adopted:
+                    self._adopted_entry_order(t)
+
+    def _adopted_entry_order(self, t: dict) -> None:
+        """An adopted entry's order id, for its P&L (read from the trade's own fills): a read, so looked up after the
+        stop, never in front of it. Best effort. A trade that closed in between (its stop could not be placed) gets
+        the id into its stored record, which the later fill read (_settle_pending) uses."""
+        try:
+            o = self._entry_order(t)
+        except TestnetError:
+            return
+        n = len(t.get("orders") or [])
+        self._note_order(t, o)
+        if len(t.get("orders") or []) == n:
+            return
+        if t.get("exit_ts") is None:
+            self._save(strict=False)
+            return
+        try:
+            self.store.trade_data(t["key"], t)
+            self.store.commit()
+        except sqlite3.Error as e:
+            self._event(WARN, "db_error", f"진입 주문 번호 기록 실패(손익은 지갑 추정): {e}", notify=False)
+
+    def _adopt(self, t: dict, amt: float, snap: Snapshot) -> None:
+        """An 'entering' trade whose entry filled (its answer was lost, or positionRisk showed it late): from here on
+        an open trade. Its row is written first, so nothing that fails after this loses it from the trades table.
+        More than the risk-checked size (a second fill) is cut back by _fix_stop, which covers the whole position
+        with a stop whatever the cut does and tries the cut again every loop until it is done (``trim_to``)."""
+        plan = float(t.get("risk_qty") or t["qty"])       # the risk-checked size the entry order was sent with
+        t["risk_qty"] = plan
+        t["status"] = "open"
+        t["entry_price"] = snap.entry.get(t["symbol"]) or t.get("entry_price")
+        self._event(WARN, "recover", f"재시작 복구: {t['symbol']} 진입이 체결돼 있습니다 → 손절을 확인합니다",
+                    {"key": t["key"], "amt": amt})
+        if abs(amt) > plan + self._spec(t["symbol"])["qty_step"] / 2:
+            t["trim_to"], t["trim_why"] = plan, "진입 주문 결과를 모르는 동안 더 체결됨"
+        t["qty"] = min(abs(amt), plan)
+        self.store.trade_open(t)
+        self._save(strict=False)
 
     def _entry_order(self, t: dict) -> Optional[dict]:
         """The trade's entry order, looked up by its client id (None: the exchange does not have it)."""
@@ -1180,19 +1355,87 @@ class Executor:
             return True
         return False
 
-    def _trim(self, t: dict, amt: float, keep_qty: float, why: str) -> float:
+    def _trim(self, t: dict, amt: float, keep_qty: float, why: str, alert: bool = True) -> float:
         """Cut a position larger than planned back to ``keep_qty`` with a reduce-only market order (a second fill,
-        a position over the notional cap). Returns the position after it."""
+        a position over the notional cap). Returns the position after it. ``alert`` False: the same cut tried again
+        (it failed before): recorded, not alerted or counted again."""
         spec = self._spec(t["symbol"])
         excess = _round_down(abs(amt) - keep_qty, spec["qty_step"])
         if excess < max(spec["qty_step"], spec.get("min_qty") or 0) - 1e-12:
             return amt
-        self._event(CRITICAL, "oversize", f"{t['symbol']} 포지션 {abs(amt):g}이 계획 {keep_qty:g}보다 큽니다({why}) "
-                    f"→ 넘는 {excess:g}을 바로 줄입니다", {"key": t["key"], "amt": amt, "keep": keep_qty})
+        if alert:
+            self._event(CRITICAL, "oversize", f"{t['symbol']} 포지션 {abs(amt):g}이 계획 {keep_qty:g}보다 큽니다({why}) "
+                        f"→ 넘는 {excess:g}을 바로 줄입니다", {"key": t["key"], "amt": amt, "keep": keep_qty})
+        else:
+            self._event(WARN, "oversize_retry", f"{t['symbol']} 포지션 {abs(amt):g}을 {keep_qty:g}로 다시 줄입니다({why})",
+                        {"key": t["key"], "amt": amt, "keep": keep_qty}, notify=False)
         o = self.c.market(t["symbol"], "SELL" if amt > 0 else "BUY", excess, reduce_only=True,
                           client_id=self._cid(t, "x"))
         self._note_order(t, o)
         return float(self.c.position(t["symbol"])["positionAmt"])
+
+    def _cut(self, t: dict, amt: float, keep: float, why: str) -> tuple[float, Optional[Exception]]:
+        """Cut the position back to ``keep``. The target is saved on the trade before the order goes out
+        (``trim_to``, with the order's client id): a cut that fails or fills only in part is tried again every loop
+        until it is done, never forgotten (the position's size alone no longer shows it once the record follows the
+        position). Returns (position after, None), or (the position as last read, the error) when the cut failed:
+        the caller covers the whole position with a stop first and raises the error after that."""
+        spec = self._spec(t["symbol"])
+        first = t.get("trim_tried") != keep
+        t["trim_to"], t["trim_why"], t["trim_tried"] = keep, why, keep
+        try:
+            with self._protecting():
+                amt = self._trim(t, amt, keep, why, alert=first)
+        except Exception as e:  # noqa: BLE001  (the stop first: the error is raised once the position is covered)
+            self._save(strict=False)
+            return amt, e
+        if _round_down(abs(amt) - keep, spec["qty_step"]) < max(spec["qty_step"], spec.get("min_qty") or 0) - 1e-12:
+            for k in ("trim_to", "trim_why", "trim_tried"):
+                t.pop(k, None)
+        self._save(strict=False)
+        return amt, None
+
+    def _oversize(self, t: dict, amt: float, mark: Optional[float]) -> tuple[Optional[float], str]:
+        """(the size the position must be cut back to, why), or (None, ""). A cut decided before and not done yet
+        (``trim_to``) comes first. Otherwise a position that grew past the record is checked against the owners'
+        size cap (max_notional_usd) at a price that needs no request in front of the stop: the mark price of the
+        loop's own positionRisk read; without one, one try at the last price, then the entry price. With no price at
+        all the check waits for the next loop, against the size before the growth (``cap_base``): adopting the
+        growth into the record must not skip it."""
+        if t.get("trim_to") is not None:
+            return float(t["trim_to"]), t.get("trim_why") or "줄이기 다시 시도"
+        spec = self._spec(t["symbol"])
+        cap_usd = self.cfg.risk.max_notional_usd
+        base = float(t.get("cap_base") or t["qty"])
+        if not cap_usd or abs(amt) <= base + spec["qty_step"] / 2:
+            t.pop("cap_base", None)
+            return None, ""
+        price = self._cap_price(t, mark)
+        if price is None:
+            t["cap_base"] = base
+            self._event(WARN, "cap_unchecked", f"{t['symbol']} 가격을 읽지 못해 크기 상한 확인을 다음 반복으로 미룹니다"
+                        "(손절은 지금 포지션 전체에 맞춥니다)", {"key": t["key"], "amt": amt}, notify=False)
+            return None, ""
+        t.pop("cap_base", None)
+        cap = _round_down(cap_usd / price, spec["qty_step"])
+        if abs(amt) > cap + spec["qty_step"] / 2:           # grew past the owners' size cap: cut it back
+            return max(cap, base), f"상한 ${cap_usd:,.0f} 초과"
+        return None, ""
+
+    def _cap_price(self, t: dict, mark: Optional[float]) -> Optional[float]:
+        if mark and mark > 0:
+            return float(mark)
+        try:
+            p = float(self.raw.price(t["symbol"]))       # one try (no retries in front of the stop)
+            if p > 0:
+                return p
+        except (TestnetError, KeyError, TypeError, ValueError):
+            pass
+        try:
+            p = float(t.get("entry_price") or 0)
+        except (TypeError, ValueError):
+            p = 0.0
+        return p if p > 0 else None
 
     def _note_order(self, t: dict, o: Optional[dict]) -> None:
         """Remember the trade's own order ids: its P&L is read from THESE fills only."""
@@ -1200,17 +1443,33 @@ class Executor:
         if oid is not None and str(oid) not in [str(x) for x in t.setdefault("orders", [])]:
             t["orders"].append(oid)
 
-    def _ensure_stop(self, t: dict, amt: float, stops: list) -> None:
+    def _ensure_stop(self, t: dict, amt: float, stops: list, mark: Optional[float] = None) -> None:
+        """The open trade's position must be covered by one stop at the recorded level (or tighter). Its alerts
+        (no stop, size, level, oversize) go out after the stop was fixed, not before."""
+        with self._holding():
+            self._fix_stop(t, amt, stops, mark)
+
+    def _fix_stop(self, t: dict, amt: float, stops: list, mark: Optional[float] = None) -> None:
+        """A cut the position needs first (a second fill, the size cap; see _oversize), then the stop for the whole
+        position as it is. A cut that fails never keeps the stop from being fixed: the stop goes on (covering the
+        larger position), then the cut's error is raised; the cut is tried again next loop."""
+        keep, why = self._oversize(t, amt, mark)
+        err = None
+        if keep is not None:
+            before = amt
+            amt, err = self._cut(t, amt, keep, why)
+            if err is None and amt != before:
+                try:
+                    stops = live_stops(self.c, t["symbol"])
+                except TestnetError:
+                    pass                                   # the loop's own read: the cut changed no stop
+        self._cover(t, amt, stops)
+        if err is not None:
+            raise err
+
+    def _cover(self, t: dict, amt: float, stops: list) -> None:
         spec = self._spec(t["symbol"])
         qty = abs(amt)
-        if qty > t["qty"] + spec["qty_step"] / 2 and self.cfg.risk.max_notional_usd:
-            price = self.c.price(t["symbol"])
-            cap = _round_down(self.cfg.risk.max_notional_usd / price, spec["qty_step"])
-            if qty > cap + spec["qty_step"] / 2:           # grew past the owners' size cap: cut it back first
-                with self.c.protecting():
-                    amt = self._trim(t, amt, max(cap, t["qty"]), f"상한 ${self.cfg.risk.max_notional_usd:,.0f} 초과")
-                qty = abs(amt)
-                stops = live_stops(self.c, t["symbol"])
         if abs(qty - t["qty"]) > spec["qty_step"] / 2:
             self._event(WARN, "size_mismatch", f"{t['symbol']} 포지션 크기가 {t['qty']:g} → {qty:g}입니다 "
                         "(부분 체결 등). 손절 수량을 맞춥니다")
@@ -1267,16 +1526,26 @@ class Executor:
             t["algos"].append(aid)
 
     def _closed_on_exchange(self, t: dict, snap: Snapshot) -> None:
-        reason, level = "거래소에서 포지션이 닫혔습니다(이유 미확인)", WARN
+        """The loop's positionRisk shows no position for the open trade. Its stop fired (the stop's own status):
+        book it. Otherwise one read is not enough to cancel its stops and forget it: positionRisk is read again
+        FLAT_CONFIRM_S later (as in _settle_flat), and a position that shows up again stays protected."""
+        reason, level, fired = "거래소에서 포지션이 닫혔습니다(이유 미확인)", WARN, False
         if t.get("stop_algo_id") is not None:
             try:
                 o = self.c.algo_order(algo_id=t["stop_algo_id"])
                 if o.get("algoStatus") in FIRED_ALGO:
-                    reason, level = "거래소 손절(또는 잠금) 발동", INFO
+                    reason, level, fired = "거래소 손절(또는 잠금) 발동", INFO, True
                     if o.get("actualOrderId") not in (None, "", "0", 0):
                         self._note_order(t, {"orderId": o["actualOrderId"]})
             except TestnetError:
                 pass
+        if not fired:
+            self.sleep(FLAT_CONFIRM_S)
+            amt = float(self.c.position(t["symbol"])["positionAmt"])
+            if amt != 0:
+                self._event(WARN, "position_read", f"{t['symbol']} 포지션 조회가 0이었다가 다시 {amt:+g}입니다: 거래를 "
+                            "마감하지 않고 손절로 계속 지킵니다", {"key": t["key"], "amt": amt}, notify=False)
+                return
         t.setdefault("exit_ref", t["stop"])                # the paper rules exit a stop at the stop level
         self.c.cancel_all_algo(t["symbol"])
         self.c.cancel_all(t["symbol"])
@@ -1440,7 +1709,8 @@ class Executor:
             return
         open_side = "BUY" if it.side > 0 else "SELL"
         t = {"key": it.key, "base": hashlib.sha1(it.key.encode()).hexdigest()[:12], "symbol": it.symbol,
-             "side": it.side, "qty": dec.qty, "leverage": dec.leverage, "stop": stop, "stop_initial": stop,
+             "side": it.side, "qty": dec.qty, "risk_qty": dec.qty, "leverage": dec.leverage, "stop": stop,
+             "stop_initial": stop,
              "stop_algo_id": None, "status": "entering", "n": 0, "entry_ts": self.now_ms(),
              "wallet_before": float(self.c.account()["totalWalletBalance"]), "paper_entry": it.entry_price,
              "entry_price": None, "entry_ref": price, "entry_time": it.entry_time, "mode": self.cfg.mode,
@@ -1469,7 +1739,9 @@ class Executor:
             return
         sent = self.now_ms()
         self._note_order(t, o)
-        with self.c.protecting():                        # from the fill to the confirmed stop: no pacing pauses
+        # from the fill to the confirmed stop: no pacing pauses, and every alert of this block (oversize, a partial
+        # fill, a failed stop) goes out only after the stop is on the exchange (or the position closed)
+        with self._protecting():
             filled = float(o.get("executedQty") or 0)
             amt = self._position_amt(it.symbol, expect_open=filled > 0)
             if amt == 0:
@@ -1484,8 +1756,9 @@ class Executor:
                 self._mark_done(it.key)
                 self._event(WARN, "entry_unfilled", f"{it.symbol} 진입 주문이 체결되지 않았습니다(상태 {o.get('status')})")
                 return
-            if abs(amt) > dec.qty + spec["qty_step"] / 2:
-                amt = self._trim(t, amt, dec.qty, "계획보다 많이 체결됨")
+            cut_err = None
+            if abs(amt) > dec.qty + spec["qty_step"] / 2:     # failed: the stop covers it all, the cut is retried
+                amt, cut_err = self._cut(t, amt, dec.qty, "계획보다 많이 체결됨")
             t["status"], t["qty"] = "open", abs(amt)
             t["entry_price"] = float(o.get("avgPrice") or 0) or \
                 float(self.c.position(it.symbol).get("entryPrice") or 0) or price
@@ -1493,8 +1766,6 @@ class Executor:
                                                              it.side)
             if it.signal_ready:
                 t["signal_lag_ms"] = sent - it.signal_ready         # signal ready -> live order answered
-            if abs(amt) < dec.qty - spec["qty_step"] / 2:
-                self._event(WARN, "partial_fill", f"{it.symbol} 진입이 일부만 체결됐습니다: {abs(amt):g}/{dec.qty:g}")
             self.store.trade_open(t)
             self._save()
             lag = f", 신호 후 {t['signal_lag_ms'] / 1000:.1f}초" if it.signal_ready else ""
@@ -1503,15 +1774,19 @@ class Executor:
                         f"{' (빠른 진입' + lag + ')' if it.direct else ''}",
                         {"key": it.key, "direct": it.direct, "signal_lag_ms": t.get("signal_lag_ms")})
             self._protect(t, [])
+            if abs(amt) < dec.qty - spec["qty_step"] / 2:      # after the stop (and sent after this block)
+                self._event(WARN, "partial_fill", f"{it.symbol} 진입이 일부만 체결됐습니다: {abs(amt):g}/{dec.qty:g}")
+            if cut_err is not None:
+                raise cut_err
 
-    def _position_amt(self, symbol: str, expect_open: Optional[bool] = None) -> float:
-        """positionRisk, read again (up to twice, 0.2 s apart) while it disagrees with what an order's own answer
-        says (positionRisk can lag the matching engine for a moment)."""
+    def _position_amt(self, symbol: str, expect_open: Optional[bool] = None, waits=ENTRY_REREAD_S) -> float:
+        """positionRisk, read again (after each of ``waits`` seconds: twice 0.2 s after an entry) while it disagrees
+        with what an order's own answer says (positionRisk can lag the matching engine for a moment)."""
         amt = float(self.c.position(symbol)["positionAmt"])
-        for _ in range(2):
+        for w in waits:
             if expect_open is None or (amt != 0) == expect_open:
                 break
-            self.sleep(0.2)
+            self.sleep(w)
             amt = float(self.c.position(symbol)["positionAmt"])
         return amt
 
@@ -1529,7 +1804,7 @@ class Executor:
         """Put the intended stop on the exchange (new first, then the old ones go). If that is not
         possible the position is closed: a position without a stop must not stay."""
         close_side = "SELL" if t["side"] > 0 else "BUY"
-        with self.c.protecting():
+        with self._protecting():
             try:
                 res = move_stop(self.c, t["symbol"], close_side, t["stop"], t["qty"], old_ids,
                                 client_id=self._cid(t, "s"), close_id=self._cid(t, "x"))
@@ -1541,7 +1816,7 @@ class Executor:
 
     def _move(self, t: dict, new_stop: float, old_ids: list, why: str, ref: Optional[float] = None) -> None:
         close_side = "SELL" if t["side"] > 0 else "BUY"
-        with self.c.protecting():
+        with self._protecting():
             try:
                 res = move_stop(self.c, t["symbol"], close_side, new_stop, t["qty"], old_ids,
                                 client_id=self._cid(t, "s"), close_id=self._cid(t, "x"))
@@ -1569,7 +1844,8 @@ class Executor:
             # a market close: its reference is the last price seen before deciding (when known)
             t.setdefault("exit_ref", ref if ref else new_stop)
             self._note_order(t, res.get("close"))
-            if self._settle_flat(t["symbol"]):         # not flat: the stops stay; the next loop closes the rest
+            closed = bool(res.get("flat")) if res.get("close") is not None else None   # the close order's own answer
+            if self._settle_flat(t["symbol"], closed):  # not flat: the stops stay; the next loop closes the rest
                 self._finish(t, "손절/잠금 가격이 이미 지나 시장가로 닫음")
         else:
             t["stop"], t["stop_algo_id"] = new_stop, res["stop"].get("algoId")
@@ -1578,11 +1854,19 @@ class Executor:
         self._save(strict=False)
 
     # ------------------------------------------------------------ closing
-    def _settle_flat(self, symbol: str) -> bool:
-        """After a close: once the position is flat, cancel the symbol's orders. NOT flat (a reduce-only close that
-        filled only in part): keep the stops (reduce-only, they still cover the rest) and let the next loop close
-        or protect the rest; never leave the rest without a stop."""
-        amt = self._position_amt(symbol, expect_open=False)
+    def _settle_flat(self, symbol: str, closed: Optional[bool] = None) -> bool:
+        """After a close: once the position is flat, cancel the symbol's orders (its stops too) and return True.
+
+        Flat takes two readings that agree, never positionRisk alone: positionRisk reads 0, AND either the close
+        order's own answer says it filled the whole position (``closed`` True) or positionRisk reads 0 again
+        FLAT_CONFIRM_S later (no order was sent: a stop closed it; or the answer says only part filled). While
+        positionRisk shows a position it is read again over about 2 s (FLAT_REREAD_S: it can lag a fill). NOT flat
+        (a reduce-only close that filled only in part): keep the stops (reduce-only, they still cover the rest) and
+        let the next loop close or protect the rest; never leave the rest without a stop."""
+        amt = self._position_amt(symbol, expect_open=False, waits=FLAT_REREAD_S)
+        if amt == 0 and closed is not True:
+            self.sleep(FLAT_CONFIRM_S)
+            amt = self._position_amt(symbol, expect_open=False, waits=FLAT_REREAD_S)
         if amt != 0:
             self._event(CRITICAL, "not_flat", f"{symbol} 닫은 뒤에도 포지션 {amt:+g}이 남았습니다. 손절은 그대로 두고 "
                         "다음 반복에서 나머지를 닫습니다")
@@ -1592,30 +1876,48 @@ class Executor:
         return True
 
     def _exit(self, t: dict, reason: str) -> None:
-        with self.c.protecting():
-            amt = float(self.c.position(t["symbol"])["positionAmt"])
-            if amt != 0:
-                t["exit_ref"] = self.c.price(t["symbol"])
+        with self._protecting():
+            row = self.c.position(t["symbol"])
+            amt, closed = float(row["positionAmt"]), None
+            if amt != 0:                                   # the close first: nothing else is read in front of it
                 o = self.c.market(t["symbol"], "SELL" if amt > 0 else "BUY", abs(amt), reduce_only=True,
                                   client_id=self._cid(t, "x"))
                 self._note_order(t, o)
-            if self._settle_flat(t["symbol"]):
+                closed = _filled_all(o, amt)
+                t["exit_ref"] = self._exit_ref(t["symbol"], row)
+            if self._settle_flat(t["symbol"], closed):
                 self._finish(t, reason)
 
     def _flatten_symbol(self, symbol: str, why: str) -> None:
         t = self.trade if self.trade is not None and self.trade["symbol"] == symbol else None
-        with self.c.protecting():
-            amt = float(self.c.position(symbol)["positionAmt"])
-            if amt != 0:
-                if t is not None:
-                    t["exit_ref"] = self.c.price(symbol)
+        with self._protecting():
+            row = self.c.position(symbol)
+            amt, closed = float(row["positionAmt"]), None
+            if amt != 0:                                   # the close first: nothing else is read in front of it
                 cid = self._cid(t, "x") if t is not None else new_client_id("x", symbol)
                 o = self.c.market(symbol, "SELL" if amt > 0 else "BUY", abs(amt), reduce_only=True, client_id=cid)
+                closed = _filled_all(o, amt)
                 if t is not None:
                     self._note_order(t, o)
-            flat = self._settle_flat(symbol)
+                    t["exit_ref"] = self._exit_ref(symbol, row)
+            flat = self._settle_flat(symbol, closed)
             if t is not None and flat:
                 self._finish(t, why)
+
+    def _exit_ref(self, symbol: str, row: dict) -> Optional[float]:
+        """The reference price of a market close (its slippage, livepnl): the mark price that came with the
+        position read just before the order, so no request ever stands between the decision and the close; without
+        one, the last price read after the close (one try: a failed read only leaves the stop level as reference)."""
+        try:
+            mark = float(row.get("markPrice") or 0)
+        except (TypeError, ValueError):
+            mark = 0.0
+        if mark > 0:
+            return mark
+        try:
+            return self.raw.price(symbol)
+        except (TestnetError, KeyError, TypeError, ValueError):
+            return None
 
     def _finish(self, t: dict, reason: str, wallet: Optional[float] = None, level: str = INFO) -> None:
         if wallet is None:
@@ -1734,21 +2036,23 @@ class Executor:
 
     def _flatten_halt(self, dec: R.Decision, rows: Optional[list] = None) -> list:
         """Halt and close every position (positionRisk + reduce-only market orders). One symbol that cannot be
-        closed does not keep the others open: its error is returned (the loop raises it after the rest)."""
-        if R.halt(self.risk, self.now_ms(), dec.text(), [k for k in dec.kinds if k != "halted"]):
-            self._event(CRITICAL, "halt", f"거래를 멈춥니다(사람이 풀 때까지): {dec.text()}")
-            self._halt_log(dec.text(), planned=True)
-        failed: list = []
-        for row in (self.c.positions() if rows is None else rows):
-            if float(row.get("positionAmt") or 0) == 0:
-                continue
-            self._isolated(failed, f"{row['symbol']} 멈춤 정리", self._flatten_symbol, row["symbol"],
-                           "멈춤: " + dec.text())
-        if self.trade is not None and self.trade["status"] == "entering" and \
-                not any(r["symbol"] == self.trade["symbol"] for r in (rows or [])):
-            self._mark_done(self.trade["key"])
-            self.trade = None
-        return failed
+        closed does not keep the others open: its error is returned (the loop raises it after the rest). A new halt
+        is saved before anything else; its alert goes out after the closes were sent."""
+        with self._holding():
+            if self._new_halt(dec.text(), [k for k in dec.kinds if k != "halted"], planned=True):
+                self._event(CRITICAL, "halt", f"거래를 멈춥니다(사람이 풀 때까지): {dec.text()}")
+            failed: list = []
+            rows = self.c.positions() if rows is None else rows
+            for row in rows:
+                if float(row.get("positionAmt") or 0) == 0:
+                    continue
+                self._isolated(failed, f"{row['symbol']} 멈춤 정리", self._flatten_symbol, row["symbol"],
+                               "멈춤: " + dec.text())
+            if self.trade is not None and self.trade["status"] == "entering" and \
+                    not any(r["symbol"] == self.trade["symbol"] for r in rows):
+                self._mark_done(self.trade["key"])
+                self.trade = None
+            return failed
 
 
 # ---------------------------------------------------------------- stage check (leverage stage review)
@@ -1842,8 +2146,20 @@ def _client() -> TestnetClient:           # kept for scripts written against the
 
 def cmd_run(args) -> int:
     cfg = ExecConfig.from_file(args.config)
-    store = ExecStore(cfg.db)
-    note = _notifier()
+    note = _notifier()                            # first: a database that cannot be opened is alerted too
+    prefix = PREFIX.get(cfg.mode, "[실행기]")
+    try:
+        store = ExecStore(cfg.db, service=True)
+    except Refused as e:                          # another executor holds the database: it stays the only one
+        note.send(CRITICAL, f"{prefix} 실행기를 시작하지 않습니다: {e}")
+        raise
+    except Exception as e:  # noqa: BLE001  (alerted, then exit 1: systemd starts it again in 30 s)
+        folder = os.path.dirname(os.path.abspath(cfg.db))
+        hint = (f" 폴더 주인을 확인하세요: sudo chown -R {EXEC_USER}:paperbot {folder} (또는 sudo bash deploy/install.sh), "
+                "그 뒤 launchcheck --stage after" if isinstance(e, (PermissionError, sqlite3.Error)) else "")
+        note.send(CRITICAL, f"{prefix} 실행기 DB를 열 수 없어 시작하지 못했습니다({type(e).__name__}: {e}). systemd가 "
+                            f"30초 뒤 다시 켭니다. 열린 포지션은 거래소 손절만 지킵니다.{hint}")
+        raise
     try:
         client, keycheck = _clients(cfg)
         ex = Executor(cfg, client, Paper3Source(cfg.paper_db, cfg.account), store, note, keycheck=keycheck)
@@ -1856,7 +2172,7 @@ def cmd_run(args) -> int:
         except Refused:
             raise                                 # a start gate refused: already recorded and alerted
         except Exception as e:
-            note.send(CRITICAL, f"{PREFIX.get(cfg.mode, '[실행기]')} 실행기가 오류로 멈췄습니다: {type(e).__name__}: {e}. "
+            note.send(CRITICAL, f"{prefix} 실행기가 오류로 멈췄습니다: {type(e).__name__}: {e}. "
                                 "systemd가 30초 뒤 다시 켭니다. 열린 포지션은 거래소 손절만 지킵니다")
             raise
         finally:
@@ -2012,5 +2328,7 @@ def main(argv: Optional[list[str]] = None) -> int:
 
 
 if __name__ == "__main__":
-    hide_process_memory()          # the order keys in this process's environment: not readable by other processes
+    # defence in depth only: the barrier against the agents and the dashboard is the user (paperbot-exec, not
+    # paperbot), which closes /proc/<pid>/environ from the first instruction (testnet.hide_process_memory)
+    hide_process_memory()
     sys.exit(main())

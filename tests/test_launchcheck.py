@@ -118,6 +118,8 @@ class Server:
         self.write_env("executor", "TESTNET_API_KEY=\nLIVE_API_KEY=\n")
         self.owners[self.etc] = (0o750, "root", "paperbot")
         self.owners[os.path.join(self.etc, "executor.env")] = (0o600, "root", "root")
+        self.owners[os.path.join(self.lib, "exec")] = (0o750, L.EXEC_USER, "paperbot")   # deploy/install.sh
+        self.uids = {"root": 0, "paperbot": 998, L.EXEC_USER: 997}
         with open(os.path.join(self.app, "VERSION.json"), "w") as fh:
             json.dump({"commit": COMMIT, "tag": None, "dirty": False, "source": "install.sh",
                        "installed_at": "2026-10-01T03:00:00Z"}, fh)
@@ -200,6 +202,7 @@ class Server:
         for u in L.INSTALLED:
             t[u] = {"LoadState": "loaded", "UnitFileState": "disabled", "ActiveState": "inactive", "SubState": "dead",
                     "Result": "success", "NRestarts": "0", "ExecMainStatus": "0"}
+        t[L.EXECUTOR]["User"] = L.EXEC_USER
         t["paperbot-live3.service"]["ExecStart"] = (
             "{ path=/opt/paperbot/venv/bin/python ; argv[]=/opt/paperbot/venv/bin/python -m paperbot.live3 run "
             "--db /var/lib/paperbot/paper3.db --procs 4 ; ignore_errors=no }")
@@ -292,7 +295,8 @@ class Server:
     def ctx(self, **over):
         kw = dict(run=self.run, fetch=self.fetch, stat=self.stat, now_ms=lambda: NOW, mono_us=lambda: MONO,
                   sleep=lambda s: None,
-                  cpu_count=lambda: 4, disk_free=lambda p: 120e9, euid=0, username="root", etc=self.etc,
+                  cpu_count=lambda: 4, disk_free=lambda p: 120e9, user_id=self.uids.get,
+                  proc_uids=lambda pid: None, euid=0, username="root", etc=self.etc,
                   app=self.app, lib=self.lib, backups=self.backups, repo=self.repo, meminfo=self.meminfo,
                   venv_python=VENV)
         kw.update(over)

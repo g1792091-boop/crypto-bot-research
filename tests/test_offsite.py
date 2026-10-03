@@ -958,3 +958,26 @@ def test_next_steps_check_after_the_start_not_before():
     text = off.next_steps(Path("/root/restore-out/20261001"), ["paper3.db", "executor.db"])
     assert "--stage after" in text and "paperbot-offsite.timer" in text
     assert "10번(--stage before)은 하지 않습니다" in text
+
+
+def test_next_steps_give_the_executor_databases_to_the_executor_user():
+    """The order executor runs as paperbot-exec (deploy/install.sh): restoring its folder or databases as paperbot
+    would let any paperbot process change its halts and trades, and the executor could no longer open them."""
+    dest = Path("/root/restore-out/20261001")
+    text = off.next_steps(dest, ["paper3.db", "executor.db", "executor-testnet.db", "agents3.db"])
+    cmds = [x.strip() for x in text.splitlines() if x.strip().startswith("sudo install")]
+    exec_lines = [c for c in cmds if "/var/lib/paperbot/exec" in c]
+    assert "sudo install -d -o paperbot-exec -g paperbot -m 750 /var/lib/paperbot/exec" in exec_lines
+    for n in ("executor.db", "executor-testnet.db"):
+        assert f"sudo install -o paperbot-exec -g paperbot -m 640 {dest / n} /var/lib/paperbot/exec/{n}" in exec_lines
+    assert not [c for c in exec_lines if "-o paperbot -g paperbot" in c]
+    for n in ("paper3.db", "agents3.db"):                      # the others stay paperbot's
+        assert f"sudo install -o paperbot -g paperbot -m 640 {dest / n} /var/lib/paperbot/{n}" in cmds
+    # the folder line is the one deploy/install.sh uses, and the user the executor's unit runs as
+    install = (REPO / "deploy" / "install.sh").read_text(encoding="utf-8")
+    assert "install -d -o paperbot-exec -g paperbot -m 750 /var/lib/paperbot/exec" in install
+    unit = (REPO / "deploy" / "paperbot-executor.service").read_text(encoding="utf-8")
+    assert f"User={off.EXEC_USER}" in unit.splitlines()
+    assert "deploy/install.sh" in text                         # what to do when that user does not exist yet
+    plain = off.next_steps(dest, ["paper3.db"])                 # no executor database: no executor folder line
+    assert "/var/lib/paperbot/exec" not in plain and "-o paperbot-exec" not in plain

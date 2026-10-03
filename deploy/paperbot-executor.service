@@ -6,17 +6,24 @@
 # install.sh installs this unit but NEVER enables or starts it. A person starts it:
 #   sudo systemctl start paperbot-executor        (and `enable` only once the testnet soak is done)
 #
-# The key file is root-only (chmod 600 root:root): systemd reads EnvironmentFile= as root before it
-# drops to the paperbot user and passes the keys in this process's environment. The agents and the
-# dashboard cannot read the file (their units hide it, /var/lib/paperbot/exec and /var/backups/paperbot).
-# They run as the same user, so the executor makes itself non-dumpable first thing (PR_SET_DUMPABLE=0):
-# same-user processes then cannot read its /proc/<pid>/environ (the keys), memory or root. A dedicated
-# executor user is still to do (docs/live-safety.md section 5).
-# Exit status 2 = a gate refused the start for a definite reason (key permissions, wallet, config): not
-# restarted (fix the cause, then start it by hand). Any other failure (api.binance.com unreachable, a
-# crash) restarts after 30 s with a CRITICAL alert: open positions keep their exchange stop meanwhile,
-# and the executor resumes from its database (a halt stays a halt). `systemctl stop` (SIGTERM) lets the
-# loop in progress finish (a stop being placed goes on) before it exits.
+# Its own user: the executor runs as paperbot-exec (deploy/install.sh makes it; primary group paperbot), NEVER as
+# paperbot, the user of the agent rooms, the dashboard and every other service. A process can read the environment
+# of another process of its own user (/proc/<pid>/environ: the order keys systemd passes in), trace it or signal it;
+# a process of another user cannot, at any moment of its life (no start-up window: the executor's own
+# PR_SET_DUMPABLE=0 comes only after its imports and is defence in depth only).
+# The key file is root-only (root:root 600): systemd reads EnvironmentFile= as root before it drops to
+# paperbot-exec. Group paperbot lets the executor read the code, paper3.db, executor.json and live.env (the paper
+# runner's read-only key, which it refuses as an order key). It writes only /var/lib/paperbot/exec
+# (paperbot-exec:paperbot 750; UMask 0027: files 640, so the nightly backup, as paperbot, can read them and nothing
+# running as paperbot can change them). The agents and the dashboard cannot see /var/lib/paperbot/exec or the key
+# file at all (their units hide them).
+# Exit status 2 = a gate refused the start for a definite reason (key permissions, wallet, config) with no position
+# open: not restarted (fix the cause, then start it by hand). With a position open a mainnet gate found wrong does
+# not exit: the executor halts like the kill switch (closes everything, opens nothing) until a person clears it. Any
+# other failure (api.binance.com unreachable or not letting the permission check through, a database it cannot open,
+# a crash) restarts after 30 s with a CRITICAL alert: open positions keep their exchange stop meanwhile, and the
+# executor resumes from its database (a halt stays a halt).
+# `systemctl stop` (SIGTERM) lets the loop in progress finish (a stop being placed goes on) before it exits.
 [Unit]
 Description=paperbot order executor (testnet unless every mainnet gate passes)
 After=network-online.target paperbot-live3.service
@@ -25,7 +32,9 @@ StartLimitIntervalSec=0
 
 [Service]
 Type=simple
-User=paperbot
+User=paperbot-exec
+Group=paperbot
+UMask=0027
 WorkingDirectory=/opt/crypto-bot-research
 EnvironmentFile=/etc/paperbot/executor.env
 ExecStart=/opt/paperbot/venv/bin/python -m paperbot.executor run --config /etc/paperbot/executor.json
@@ -37,8 +46,10 @@ NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=yes
-ReadWritePaths=/var/lib/paperbot
+ReadWritePaths=/var/lib/paperbot/exec
 InaccessiblePaths=-/etc/paperbot/agents.env -/etc/paperbot/dash.env
+# no core dump (it would hold the keys)
+LimitCORE=0
 
 [Install]
 WantedBy=multi-user.target

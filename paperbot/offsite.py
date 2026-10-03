@@ -760,8 +760,19 @@ def integrity_check(path: Path) -> str:
     return "ok" if rows == [("ok",)] else "; ".join(str(r[0]) for r in rows[:5])
 
 
+EXEC_DIR = "/var/lib/paperbot/exec"
+# the order executor's own user (deploy/install.sh): its folder and databases are its own, never paperbot's (the agents'
+# and the dashboard's user): group paperbot may read them (the nightly backup), nothing running as paperbot may change
+# them (docs/live-safety.md 1-9)
+EXEC_USER = "paperbot-exec"
+
+
 def _target(name: str) -> str:
-    return f"/var/lib/paperbot/exec/{name}" if name.startswith("executor") else f"/var/lib/paperbot/{name}"
+    return f"{EXEC_DIR}/{name}" if name.startswith("executor") else f"/var/lib/paperbot/{name}"
+
+
+def _owner(target: str) -> str:
+    return f"{EXEC_USER} -g paperbot" if target.startswith(EXEC_DIR + "/") else "paperbot -g paperbot"
 
 
 def next_steps(dest: Path, names: Sequence[str]) -> str:
@@ -774,11 +785,15 @@ def next_steps(dest: Path, names: Sequence[str]) -> str:
         "     paperbot-checkpoint.service paperbot-backup.timer paperbot-offsite.timer",
         "2) 데이터베이스를 제자리에 넣고, 남아 있을 수 있는 -wal/-shm 파일을 지웁니다:",
     ]
-    if any(n.startswith("executor") for n in names):
-        lines.append("   sudo install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot/exec")
+    if any(_target(n).startswith(EXEC_DIR + "/") for n in names):
+        lines += [
+            f"   (주문 실행기 DB는 실행기 전용 사용자 {EXEC_USER}의 것입니다. 'invalid user'가 나오면 먼저 "
+            "cd /root/crypto-bot-research && sudo bash deploy/install.sh 를 하고 이 줄부터 다시 붙여 넣습니다)",
+            f"   sudo install -d -o {EXEC_USER} -g paperbot -m 750 {EXEC_DIR}",
+        ]
     for n in names:
         t = _target(n)
-        lines.append(f"   sudo install -o paperbot -g paperbot -m 640 {dest / n} {t}")
+        lines.append(f"   sudo install -o {_owner(t)} -m 640 {dest / n} {t}")
         lines.append(f"   sudo rm -f {t}-wal {t}-shm")
     lines += [
         "3) 그날은 에이전트를 쉬게 합니다 (AI 사용 기록이 백업 시점으로 돌아감): 켤 때 paperbot-agents.timer만 빼고,",

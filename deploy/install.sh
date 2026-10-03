@@ -3,8 +3,8 @@
 #
 #   sudo bash deploy/install.sh            # run from the cloned repository
 #
-# Does: system packages, firewall (SSH only), user "paperbot", Python venv,
-# directories, env-file templates (root:paperbot 640; executor.env root:root 600), systemd units
+# Does: system packages, firewall (SSH only), user "paperbot" and the order executor's own user "paperbot-exec",
+# Python venv, directories, env-file templates (root:paperbot 640; executor.env root:root 600), systemd units
 # (installed, NOT started).
 # Does not: put any key or password anywhere, start trading, or open the dashboard to
 # the internet. Safe to run again: to update, `git pull` then run it again. It refuses
@@ -39,12 +39,39 @@ systemctl enable --now fail2ban chrony
 
 echo "== user and directories"
 id paperbot >/dev/null 2>&1 || useradd --system --create-home --home-dir /var/lib/paperbot --shell /usr/sbin/nologin paperbot
+# The order executor and the testnet drill run as their own user, never as paperbot: the agent rooms, the
+# dashboard and the other services run as paperbot, and a process can read /proc/<pid>/environ (the order keys
+# systemd passes in) of a process of its own user only (docs/live-safety.md 1-9). Primary group paperbot: it reads
+# the code, paper3.db and executor.json, and the nightly backup (paperbot) reads its databases.
+id paperbot-exec >/dev/null 2>&1 || useradd --system --gid paperbot --no-create-home --home-dir /var/lib/paperbot/exec \
+  --shell /usr/sbin/nologin paperbot-exec
+[ "$(id -gn paperbot-exec)" = paperbot ] || usermod --gid paperbot paperbot-exec
+if [ "$(id -u paperbot-exec)" = "$(id -u paperbot)" ] || [ "$(id -u paperbot-exec)" = 0 ]; then
+  echo "user paperbot-exec must be its own user (not paperbot, not root): sudo userdel paperbot-exec, then run this again"
+  exit 1
+fi
 install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot /var/backups/paperbot
 # 5-year test caches for the agent rooms (python -m paperbot.agents.labdata build --out /var/lib/paperbot/lab;
 # same build as the research, checked file by file against paperbot/agents/labdata_reference.json)
 install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot/lab
-# the order executor's databases (testnet and, later, mainnet); hidden from the agents and the dashboard
-install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot/exec
+# the order executor's databases (testnet and, later, mainnet): its user's only writable folder. Group paperbot
+# reads them (the nightly backup) but cannot change them; the agents and the dashboard cannot see the folder at all.
+# Files left by an earlier install (when the executor still ran as paperbot) move to paperbot-exec.
+install -d -o paperbot-exec -g paperbot -m 750 /var/lib/paperbot/exec
+chown -R paperbot-exec:paperbot /var/lib/paperbot/exec
+chmod -R u+rwX,g+rX,g-w,o-rwx /var/lib/paperbot/exec
+# A database the earlier code left in WAL format (it never switched back on a clean stop) has no -wal/-shm once the
+# executor stopped, and the nightly backup (paperbot: may read this folder, no longer write it) cannot open such a
+# file read-only ("attempt to write a readonly database"). While the executor is off, its own user switches each one
+# back to rollback mode; the current code does that itself on every clean stop. A running executor keeps its
+# -wal/-shm, which the backup can read.
+if ! systemctl is-active --quiet paperbot-executor 2>/dev/null; then
+  for db in /var/lib/paperbot/exec/*.db; do
+    [ -f "$db" ] || continue
+    runuser -u paperbot-exec -- sqlite3 "$db" 'PRAGMA journal_mode=DELETE;' >/dev/null \
+      || echo "could not switch $db to rollback mode: the nightly backup may fail to read it until the executor was started and stopped once"
+  done
+fi
 # GH Coin call recorder output (docs/ghcoin-recorder.md)
 install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot/ghcoin
 install -d -o root -g paperbot -m 750 /etc/paperbot
@@ -136,9 +163,9 @@ for f in live dash agents; do
   fi
   [ -f /etc/paperbot/$f.env ] && chmod 640 /etc/paperbot/$f.env && chown root:paperbot /etc/paperbot/$f.env
 done
-# The executor's order keys: root only. systemd reads the file for paperbot-executor.service before it drops
-# to the paperbot user; the agents and the dashboard cannot open the file, and the executor makes itself
-# non-dumpable at start so other paperbot processes cannot read the keys from /proc/<pid>/environ either.
+# The executor's order keys: root only. systemd reads the file for paperbot-executor.service (and the drill wrapper
+# deploy/paperbot-exec.sh) before it drops to the paperbot-exec user; the agents and the dashboard cannot open the
+# file, and as another user (paperbot) they cannot read the keys from the executor's /proc/<pid>/environ either.
 if [ ! -f /etc/paperbot/executor.env ] && [ -f "$APP/deploy/executor.env.example" ]; then
   install -o root -g root -m 600 "$APP/deploy/executor.env.example" /etc/paperbot/executor.env
 fi

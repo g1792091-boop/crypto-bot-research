@@ -633,11 +633,12 @@ def _read(rel):
 
 def test_executor_unit_is_installed_but_never_started_by_install_sh():
     unit = _read("deploy/paperbot-executor.service").splitlines()
-    for line in ("User=paperbot", "EnvironmentFile=/etc/paperbot/executor.env",
+    for line in ("User=paperbot-exec", "Group=paperbot", "EnvironmentFile=/etc/paperbot/executor.env",
                  "ExecStart=/opt/paperbot/venv/bin/python -m paperbot.executor run --config /etc/paperbot/executor.json",
                  "Restart=on-failure", "RestartPreventExitStatus=2", "NoNewPrivileges=yes", "ProtectSystem=strict",
-                 "ReadWritePaths=/var/lib/paperbot"):
+                 "ReadWritePaths=/var/lib/paperbot/exec"):
         assert line in unit, line
+    assert "User=paperbot" not in unit                                     # never the agents' and dashboard's user
     inst = _read("deploy/install.sh")
     body = inst.split("cat <<'NEXT'")[0]
     assert "paperbot-executor.service; do" in body                         # installed with the other units
@@ -647,7 +648,7 @@ def test_executor_unit_is_installed_but_never_started_by_install_sh():
         if "paperbot-executor" in line and "systemctl" in line and not line.strip().startswith("echo"):
             assert "is-active" in line, line                               # only asks; never enable/start/restart
     assert "install -o root -g root -m 600" in body and "/etc/paperbot/executor.env" in body
-    assert "install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot/exec" in body
+    assert "install -d -o paperbot-exec -g paperbot -m 750 /var/lib/paperbot/exec" in body
     env = _read("deploy/executor.env.example")
     for line in env.splitlines():
         if line and not line.startswith("#"):

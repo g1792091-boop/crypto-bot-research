@@ -1,8 +1,8 @@
 import pytest
 
 from fakefutures import FakeFutures
-from paperbot.testnet import (Drill, RateLimited, TestnetClient, TestnetError, TransientError, covers, live_stops,
-                              move_stop, place_stop, reconcile, round_stop)
+from paperbot.testnet import (Drill, RateLimited, TestnetClient, TestnetError, TransientError, cancel_everything,
+                              covers, live_stops, move_stop, place_stop, reconcile, round_stop)
 
 
 def client(fake, clock=lambda: 1_000_000):
@@ -106,8 +106,33 @@ def test_move_stop_past_price_closes_at_market():
     s1 = place_stop(c, "BTCUSDT", "BUY", 105.0, 1.0)
     fake.set_price("BTCUSDT", 104.0)
     res = move_stop(c, "BTCUSDT", "BUY", 103.0, 1.0, [s1["algoId"]])   # BUY stop below the price: -2021
-    assert res["result"] == "closed" and fake.pos["BTCUSDT"] == 0 and not fake.live_stops()
-    assert fake.calls[-2][2]["reduceOnly"] == "true"
+    assert res["result"] == "closed" and res["flat"] and fake.pos["BTCUSDT"] == 0
+    assert fake.calls[-1][2]["reduceOnly"] == "true"
+    # the old stop is the caller's to cancel once two readings agree the position is flat (never on one read)
+    assert res["cancelled"] == [] and [o["algoId"] for o in fake.live_stops()] == [s1["algoId"]]
+    cancel_everything(c, "BTCUSDT")
+    assert not fake.live_stops()
+
+
+def test_move_stop_never_cancels_the_old_stops_on_one_read_of_zero():
+    """-2021, and the one positionRisk read inside move_stop says 0 while the position is open: nothing is closed
+    and the old stop must stay (it is the only protection left)."""
+    fake = FakeFutures()
+    c = client(fake)
+    c.market("BTCUSDT", "BUY", 5.0)
+    s1 = place_stop(c, "BTCUSDT", "SELL", 95.0, 5.0)
+    fake.set_price("BTCUSDT", 98.0)
+    orig = fake.route
+
+    def route(m, path, q):
+        if (m, path) == ("GET", "/fapi/v2/positionRisk"):
+            return 200, [{"symbol": "BTCUSDT", "positionAmt": "0", "entryPrice": "0", "markPrice": "98"}]
+        return orig(m, path, q)
+    fake.route = route
+    res = move_stop(c, "BTCUSDT", "SELL", 99.0, 5.0, [s1["algoId"]])    # SELL stop above the price: -2021
+    assert res["result"] == "closed" and res["close"] is None and res["cancelled"] == []
+    assert fake.pos["BTCUSDT"] == 5.0 and [o["algoId"] for o in fake.live_stops()] == [s1["algoId"]]
+    assert fake.covered("BTCUSDT")
 
 
 def test_covers():

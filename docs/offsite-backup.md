@@ -211,6 +211,7 @@ sudo /opt/paperbot/venv/bin/python -m paperbot.offsite restore --parts /root/res
 
 ### 9-5. 제자리에 넣고 켜기
 1. "다음 순서"에 나온 명령을 위에서부터 붙여 넣습니다(멈추기 → DB 넣기 → `-wal/-shm` 지우기).
+   - 주문 실행기 DB(`executor*.db`)는 `/var/lib/paperbot/exec`에 **실행기 전용 사용자 `paperbot-exec`의 것**으로 들어갑니다(`docs/live-safety.md` 1-9: `paperbot`으로 넣으면 다른 서비스가 실행기 기록을 바꿀 수 있고, 실행기는 그 DB를 열지 못합니다). `invalid user`가 나오면 `cd /root/crypto-bot-research && sudo bash deploy/install.sh`를 먼저 하고 그 줄부터 다시 붙여 넣습니다.
 2. `docs/server-setup-v3.md` **11번**대로 켭니다. 이때 `paperbot-offsite.timer`도 함께 켭니다.
    ```bash
    sudo systemctl enable --now paperbot-offsite.timer

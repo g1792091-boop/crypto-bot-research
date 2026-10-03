@@ -29,7 +29,8 @@ still available (``qty=None``) for a one-off manual stop.
 
 Moving a stop (``move_stop``): place the new stop -> confirm it is live -> cancel the old one.
 If the new stop is refused with -2021 ("Order would immediately trigger": the price is already
-past it), close the position with a reduce-only market order.
+past it), close the position with a reduce-only market order; the old stops stay until the caller
+has confirmed the position flat.
 
 Safety:
 - ``TestnetClient`` refuses any host except the futures testnet (a class-level allowlist).
@@ -408,28 +409,45 @@ def live_stops(c, symbol: str) -> list:
     return [o for o in c.open_algo_orders(symbol) if is_stop(o) and o.get("algoStatus", "NEW") in OPEN_ALGO]
 
 
+CONFIRM_WAITS = (0.2, 0.5)      # a new stop that neither read shows yet: look again after these (seconds)
+
+
 def place_stop(c, symbol: str, close_side: str, trigger: float, qty: Optional[float],
-               client_id: Optional[str] = None) -> dict:
+               client_id: Optional[str] = None, waits=CONFIRM_WAITS) -> dict:
     """Place a protective stop and confirm it is resting. Raises TestnetError (e.g. -2021) when
-    refused, ProtectionError when it was accepted but is not live."""
+    refused, ProtectionError when it was accepted but is not live -- or not seen at all: the POST answer alone
+    never confirms a stop. The algo service may not show a new order for a moment (read-after-write lag), so it
+    is looked up by id, then in the open list, again after each of ``waits``."""
     o = c.stop_close(symbol, close_side, trigger, qty=qty, client_id=client_id)
     algo_id = o.get("algoId")
-    try:
-        got = c.algo_order(algo_id=algo_id) if algo_id is not None else c.algo_order(client_id=client_id)
-    except TestnetError as e:
-        # the algo service answered the POST but cannot find the order a moment later (read-after-write lag):
-        # look in the open list, else trust the POST answer; the reconcile reads the open list every loop
-        if e.code not in NOT_FOUND:
-            raise
-        got = next((x for x in c.open_algo_orders(symbol)
-                    if (algo_id is not None and x.get("algoId") == algo_id)
-                    or (algo_id is None and client_id and x.get("clientAlgoId") == client_id)), None) or o
+    pause = getattr(c, "sleep", None) or time.sleep        # the executor's Guarded client brings its own
+    got = _read_stop(c, symbol, algo_id, client_id)
+    for w in waits:
+        if got is not None:
+            break
+        pause(w)
+        got = _read_stop(c, symbol, algo_id, client_id)
+    if got is None:
+        raise ProtectionError(f"stop {algo_id if algo_id is not None else client_id} was accepted but the exchange "
+                              "does not show it (not confirmed)")
     status = got.get("algoStatus")
     if status in FIRED_ALGO:
         return {**got, "fired": True}
     if status not in OPEN_ALGO:
         raise ProtectionError(f"stop {got.get('algoId')} is {status}, not live")
     return got
+
+
+def _read_stop(c, symbol: str, algo_id, client_id: Optional[str]) -> Optional[dict]:
+    """The stop by its id (or client id), else from the open list; None when neither shows it."""
+    try:
+        return c.algo_order(algo_id=algo_id) if algo_id is not None else c.algo_order(client_id=client_id)
+    except TestnetError as e:
+        if e.code not in NOT_FOUND:
+            raise
+    return next((x for x in c.open_algo_orders(symbol)
+                 if (algo_id is not None and x.get("algoId") == algo_id)
+                 or (algo_id is None and client_id and x.get("clientAlgoId") == client_id)), None)
 
 
 def close_market(c, symbol: str, client_id: Optional[str] = None) -> Optional[dict]:
@@ -459,9 +477,12 @@ def move_stop(c, symbol: str, close_side: str, trigger: float, qty: Optional[flo
     result "moved":     the new stop rests, the old ones are cancelled (``left``: old ones whose cancel failed;
                         the position is protected by the new stop, the next reconcile cancels the rest)
     result "closed":    the exchange refused the new stop with -2021 (price already past it), so the
-                        position was closed with a reduce-only market order and, once that close filled the
-                        whole position, the old stops cancelled (``flat``). A close that filled only part keeps
-                        the old stops: they are reduce-only and still cover the rest.
+                        position was closed with a reduce-only market order. ``flat``: that close order's own
+                        answer says it filled the whole position (or one positionRisk read showed none to close).
+                        The old stops are NEVER cancelled here: one read or one answer is not enough to call the
+                        position flat (positionRisk can read 0 for a moment while it is open). They are
+                        reduce-only, so they cannot open anything; the caller cancels them once two readings
+                        agree the position is flat (the executor's _settle_flat; the drill's cancel_everything).
     result "triggered": the new stop fired at once; the old ones are left for the next reconcile
     Any other refusal of the new stop raises, and the old stop is still in place (still protected)."""
     try:
@@ -473,8 +494,7 @@ def move_stop(c, symbol: str, close_side: str, trigger: float, qty: Optional[flo
         x = None if amt == 0 else c.market(symbol, "SELL" if amt > 0 else "BUY", abs(amt), reduce_only=True,
                                            client_id=close_id)
         flat = amt == 0 or float((x or {}).get("executedQty") or 0) >= abs(amt) - 1e-12
-        cancelled = cancel_stops(c, symbol, old_ids) if flat else []
-        return {"result": "closed", "close": x, "cancelled": cancelled, "error": e.msg, "flat": flat}
+        return {"result": "closed", "close": x, "cancelled": [], "error": e.msg, "flat": flat}
     if new.get("fired"):
         return {"result": "triggered", "stop": new, "cancelled": []}
     cancelled, left = [], []
@@ -492,10 +512,14 @@ def cancel_everything(c, symbol: str) -> None:
 
 
 def hide_process_memory() -> bool:
-    """prctl(PR_SET_DUMPABLE, 0): from here on, other processes of the same user (the agent rooms, the dashboard,
-    anything else running as paperbot) can no longer read this process's /proc/<pid>/environ (the order keys
-    systemd passed in), its memory or its /proc/<pid>/root. Called first by ``python -m paperbot.executor`` and
-    ``python -m paperbot.testnet``. Linux only; False when it could not be set."""
+    """prctl(PR_SET_DUMPABLE, 0): from here on, other processes of the same user can no longer read this process's
+    /proc/<pid>/environ (the order keys systemd passed in), its memory or its /proc/<pid>/root. Called by
+    ``python -m paperbot.executor`` and ``python -m paperbot.testnet`` once their imports are done, so it is NOT the
+    barrier against the agent rooms and the dashboard (the keys are readable during the start-up before it): that
+    barrier is the user. Both run as their own user, paperbot-exec, never as paperbot (deploy/paperbot-executor.service,
+    deploy/paperbot-exec.sh), and /proc/<pid>/environ of another user's process is closed at every moment. This only
+    narrows what other paperbot-exec processes (an owner's status command) could read. Linux only; False when it
+    could not be set."""
     try:
         import ctypes
         libc = ctypes.CDLL(None, use_errno=True)

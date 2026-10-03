@@ -77,6 +77,9 @@ BACKUPS = "/var/backups/paperbot"
 REPO = "/root/crypto-bot-research"           # where docs/server-setup-v3.md clones the repository
 VENV_PY = "/opt/paperbot/venv/bin/python"
 USER = "paperbot"
+# the order executor's own user (deploy/install.sh): never USER, whose processes (the agent rooms, the dashboard)
+# could otherwise read the order keys from the executor's /proc/<pid>/environ (docs/live-safety.md 1-9)
+EXEC_USER = "paperbot-exec"
 RUNUSER = "/usr/sbin/runuser"               # util-linux; runs the command itself, not paperbot's nologin shell
 WALLET_API = "https://api.binance.com"      # key permissions (GET /sapi/v1/account/apiRestrictions)
 TELEGRAM = "https://api.telegram.org"
@@ -161,7 +164,7 @@ INSTALLED = SERVICES + TIMERS + AGENT_TIMERS + JOBS + (EXECUTOR,)
 ALL_UNITS = (INSTALLED + LEGACY + SYSTEM + (AUTO_UPDATES, LABBUILD) + EXTRA_TIMERS + EXTRA_SERVICES
              + ("paperbot-offsite.service",))
 UNIT_PROPS = ("Id,LoadState,UnitFileState,ActiveState,SubState,Result,NRestarts,ExecMainStatus,"
-              "NextElapseUSecRealtime,ExecStart,ActiveEnterTimestampMonotonic")
+              "NextElapseUSecRealtime,ExecStart,ActiveEnterTimestampMonotonic,User,MainPID")
 RULES_SUMS = ("docs/paper-v3-rules.sha256", "docs/paper-v3-rules-addendum.sha256")
 
 # the paper key must be read-only: any of these on is a problem (Binance apiRestrictions fields)
@@ -243,6 +246,26 @@ def _disk_free(path: str) -> int:
     return shutil.disk_usage(path or "/").free
 
 
+def _uid(name: str) -> Optional[int]:
+    """The user's number; None when there is no such user."""
+    try:
+        return pwd.getpwnam(name).pw_uid
+    except KeyError:
+        return None
+
+
+def _proc_uids(pid: int) -> Optional[tuple[int, ...]]:
+    """A running process's real, effective, saved and filesystem uid (/proc/<pid>/status); None when unread."""
+    try:
+        with open(f"/proc/{int(pid)}/status") as fh:
+            for row in fh:
+                if row.startswith("Uid:"):
+                    return tuple(int(x) for x in row.split()[1:5])
+    except (OSError, ValueError):
+        return None
+    return None
+
+
 def _whoami() -> str:
     try:
         return pwd.getpwuid(os.geteuid()).pw_name
@@ -261,6 +284,8 @@ class Ctx:
     sleep: Callable[[float], None] = time.sleep
     cpu_count: Callable[[], Optional[int]] = os.cpu_count
     disk_free: Callable[[str], int] = _disk_free
+    user_id: Callable[[str], Optional[int]] = _uid
+    proc_uids: Callable[[int], Optional[tuple]] = _proc_uids
     euid: int = field(default_factory=os.geteuid)
     username: str = field(default_factory=_whoami)
     etc: str = ETC
@@ -1231,8 +1256,9 @@ def check_code(ctx: Ctx) -> list[Line]:
 
 
 def check_data_dir(ctx: Ctx) -> list[Line]:
-    """/var/lib/paperbot and the backups belong to paperbot; a root-owned file in them (a command run with
-    sudo but without -u paperbot) stops the services that must write it."""
+    """/var/lib/paperbot and the backups belong to paperbot, and /var/lib/paperbot/exec (the order executor's
+    databases) to the executor's own user; a file of another owner in them (a command run with sudo but without
+    -u paperbot / -u paperbot-exec) stops the service that must write it."""
     out: list[Line] = []
     for path in (ctx.lib, ctx.backups):
         info = ctx.stat(path)
@@ -1240,23 +1266,75 @@ def check_data_dir(ctx: Ctx) -> list[Line]:
             out.append(fix(f"{path} 폴더가 없습니다: {INSTALL}"))
         elif (info.owner, info.group) != (ctx.user, ctx.user):
             out.append(fix(f"{path} 주인이 {info.owner}:{info.group}입니다: sudo chown {ctx.user}:{ctx.user} {path}"))
+    exec_dir = os.path.join(ctx.lib, "exec")
     foreign = []
-    for d in (ctx.lib, os.path.join(ctx.lib, "exec"), os.path.join(ctx.lib, "lab")):
+    for d in (ctx.lib, exec_dir, os.path.join(ctx.lib, "lab")):
         try:
             names = sorted(os.listdir(d))
         except OSError:
             continue
         for n in names:
             p = os.path.join(d, n)
+            want = EXEC_USER if p == exec_dir or d == exec_dir else ctx.user
             info = ctx.stat(p)
-            if info is not None and info.owner != ctx.user:
+            if info is not None and info.owner != want:
                 foreign.append(p)
     if foreign:
         more = f" 외 {len(foreign) - 5}개" if len(foreign) > 5 else ""
-        out.append(fix(f"{ctx.user}가 아닌 사용자 소유 파일이 있어 서비스가 쓰지 못합니다: {', '.join(foreign[:5])}{more} → "
-                       f"sudo chown -R {ctx.user}:{ctx.user} {ctx.lib}"))
+        out.append(fix(f"주인이 맞지 않는 파일이 있어 서비스가 쓰지 못합니다: {', '.join(foreign[:5])}{more} → "
+                       f"sudo chown -R {ctx.user}:{ctx.user} {ctx.lib} && "
+                       f"sudo chown -R {EXEC_USER}:{ctx.user} {exec_dir} (그 사용자가 없으면 먼저 {INSTALL})"))
     elif not out:
-        out.append(ok(f"데이터 폴더 주인 {ctx.user} (다른 사용자 소유 파일 없음)"))
+        out.append(ok(f"데이터 폴더 주인 {ctx.user}, 주문 실행기 폴더 {EXEC_USER} (다른 사용자 소유 파일 없음)"))
+    return out
+
+
+def check_executor_user(ctx: Ctx, states: Optional[dict]) -> list[Line]:
+    """The order executor (and the testnet drill, deploy/paperbot-exec.sh) runs as its own user paperbot-exec, never
+    as paperbot: the agent rooms and the dashboard run as paperbot, and a process can read the environment of any
+    process of its own user (/proc/<pid>/environ: the order keys systemd passes in). Checked once the executor unit
+    is installed: the user exists and is neither paperbot nor root, the unit runs as it, its folder is its own (group
+    paperbot may read, not write: the nightly backup), and paper3.db is readable by group paperbot (it follows it)."""
+    ex = (states or {}).get(EXECUTOR) or {}
+    if ex.get("LoadState") != "loaded":
+        return []
+    uid, base = ctx.user_id(EXEC_USER), ctx.user_id(ctx.user)
+    if uid is None:
+        return [fix(f"주문 실행기 전용 사용자 {EXEC_USER}가 없습니다: 설치 스크립트가 만듭니다 ({INSTALL})")]
+    out: list[Line] = []
+    if uid == 0 or uid == base:
+        out.append(fix(f"{EXEC_USER}가 {'root' if uid == 0 else ctx.user}와 같은 사용자 번호(uid {uid})입니다: 다른 서비스가 "
+                       f"실행기의 키를 읽을 수 있습니다 → sudo userdel {EXEC_USER} 뒤 {INSTALL}"))
+    run_as = ex.get("User") or "root"
+    if run_as != EXEC_USER:
+        out.append(fix(f"paperbot-executor 서비스가 {run_as} 사용자로 돕니다(맞는 값 {EXEC_USER}): 에이전트·대시보드와 같은 "
+                       f"사용자면 실행기의 키(/proc/…/environ)를 읽을 수 있습니다 → {INSTALL}"))
+    # the unit's User= is the installed file (after daemon-reload); a process started before install.sh keeps the
+    # user it was started as until it is restarted: look at the running process itself
+    pid = ex.get("MainPID") or ""
+    if _active(ex) and pid.isdigit() and int(pid) > 0 and run_as == EXEC_USER:
+        ids = ctx.proc_uids(int(pid))
+        if ids and any(u != uid for u in ids):
+            other = next(u for u in ids if u != uid)
+            who = ctx.user if other == base else "root" if other == 0 else f"uid {other}"
+            out.append(fix(f"지금 돌고 있는 주문 실행기(pid {pid})는 아직 {who} 사용자입니다(설치 전에 켜진 예전 프로세스): "
+                           f"그동안 {ctx.user} 사용자의 프로세스가 실행기의 키를 읽을 수 있습니다 → "
+                           "sudo systemctl restart paperbot-executor"))
+    d = os.path.join(ctx.lib, "exec")
+    info = ctx.stat(d)
+    if info is None:
+        out.append(fix(f"{d} 폴더가 없습니다: {INSTALL}"))
+    elif (info.owner, info.group, info.mode) != (EXEC_USER, ctx.user, 0o750):
+        out.append(fix(f"{d} 권한이 {info.owner}:{info.group} {info.mode:o}입니다(맞는 값 {EXEC_USER}:{ctx.user} 750) → "
+                       f"{INSTALL}"))
+    paper = os.path.join(ctx.lib, "paper3.db")
+    pi = ctx.stat(paper)
+    if pi is not None and (pi.group != ctx.user or not pi.mode & 0o040):
+        out.append(fix(f"주문 실행기({EXEC_USER}, 그룹 {ctx.user})가 {paper}를 읽을 수 없습니다({pi.owner}:{pi.group} "
+                       f"{pi.mode:o}) → sudo chgrp {ctx.user} {paper} && sudo chmod g+r {paper}"))
+    if not out:
+        out.append(ok(f"주문 실행기는 전용 사용자 {EXEC_USER}로 돕니다(에이전트·대시보드의 {ctx.user}와 달라 키를 읽을 수 "
+                      "없음)"))
     return out
 
 
@@ -1686,6 +1764,7 @@ def run_checks(ctx: Ctx, stage: str = "before", send_test: bool = False, ping: b
         ("시계", guard(check_clock, ctx)),
         ("서비스", guard(check_units, states, stage, wanted, ctx.mono_us())),
         ("서버 밖 백업 (텔레그램)", guard(check_offsite, live, states, level=note)),
+        ("주문 실행기 사용자 (키 분리)", guard(check_executor_user, ctx, states)),
         ("주문 실행기가 따라 할 계좌", guard(check_executor_account, ctx)),
         ("데이터", guard(check_data_dir, ctx) + guard(check_paper_db, ctx, stage, bool(live.get("DEADMAN_URL")))
          + (guard(check_liq, ctx) if stage == "after" else [])),

@@ -22,8 +22,10 @@ Funding is part of the P&L, not of the cost ratio (the paper engine charges fund
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import statistics
+import urllib.parse
 from typing import Optional
 
 PAPER_TAKER_FEE = 0.0005       # paperbot/config.py Settings.taker_fee (live3 may use the account's real rate)
@@ -106,8 +108,29 @@ def cost_ratio(rows: list) -> dict:
 
 
 # ---------------------------------------------------------------- paper3.db (read-only)
-def _ro(path: str) -> sqlite3.Connection:
-    return sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=5)
+def open_ro(path: str) -> sqlite3.Connection:
+    """A read-only connection. The order executor runs as its own user (paperbot-exec, docs/live-safety.md 1-9): it
+    may read paper3.db but cannot create files next to it, and a plain read-only open of a WAL database whose -wal and
+    -shm are gone (its writer stopped, e.g. the paper runner during a deploy) must create them. Such a database (WAL
+    format, no -wal and no -shm: no WAL connection is open and every change is in the file itself) is opened
+    ``immutable`` instead, as paperbot/launchcheck.py does. While the writer runs its -wal/-shm exist and a plain
+    read-only open uses them; a database in rollback mode is opened plainly."""
+    uri = f"file:{urllib.parse.quote(path)}?mode=ro" + ("&immutable=1" if _wal_without_writer(path) else "")
+    return sqlite3.connect(uri, uri=True, timeout=5)
+
+
+def _wal_without_writer(path: str) -> bool:
+    if os.path.exists(path + "-wal") or os.path.exists(path + "-shm"):
+        return False
+    try:
+        with open(path, "rb") as fh:
+            head = fh.read(20)
+    except OSError:
+        return False
+    return len(head) == 20 and head[18] == 2 and head[19] == 2          # file format 2 = WAL
+
+
+_ro = open_ro
 
 
 def paper_pnl(paper_db: str, account: str, start_ms: int, end_ms: int) -> Optional[dict]:
