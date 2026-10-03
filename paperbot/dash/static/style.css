@@ -555,3 +555,37 @@ button.mini { height: 22px; padding: 0 6px; font-size: 11px; }
 .rmention button { display: block; width: 100%; text-align: left; border: 0; border-radius: 0; background: transparent; padding: 7px 10px; font-size: 13px; }
 .rmention button small { color: var(--muted); font-size: 11px; margin-left: 4px; }
 .rmention button:hover { background: var(--hover); }
+
+/* meeting digest tab (digest.js) */
+.lnk { border: 0; background: transparent; color: var(--accent); padding: 0 2px; height: auto; cursor: pointer; font-size: inherit; }
+.lnk:hover { background: transparent; text-decoration: underline; }
+.dg-day { display: inline-flex; align-items: center; gap: 6px; }
+.dg-day button { height: 26px; padding: 0 9px; }
+.dg-day b { min-width: 104px; text-align: center; }
+.dg-note { font-size: 11.5px; margin: 6px 2px 12px; line-height: 1.5; }
+.dg-m { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; margin-bottom: 10px; min-width: 0; }
+.dg-mh { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.dg-room { font-size: 14px; }
+.dg-why { color: var(--text-2); font-size: 12px; margin-top: 4px; }
+.dg-lead { margin: 8px 0 0; padding-left: 20px; font-size: 13px; line-height: 1.55; }
+.dg-dis { margin-top: 6px; padding: 5px 8px; border-radius: 4px; background: var(--accent-bg); color: var(--accent); font-size: 12px; }
+.dg-sum { white-space: pre-wrap; word-break: break-word; font: inherit; font-size: 12px; color: var(--text-2); margin: 8px 0 0;
+  max-height: 6.2em; overflow: hidden; }
+.dg-sum.open { max-height: none; }
+.dg-rep { list-style: none; margin: 8px 0 0; padding: 0; font-size: 12px; line-height: 1.6; }
+.dg-rep li { padding: 2px 0; border-top: 1px dashed var(--line); }
+.dg-res { margin-top: 6px; font-size: 12px; color: var(--text-2); }
+.dg-mf { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 11.5px; flex-wrap: wrap; }
+.dg-t td, .dg-t th { padding: 6px 8px; font-size: 12px; white-space: nowrap; }
+.dg-t td.l small { white-space: normal; }
+.dg-t tr.sel td { background: var(--hover); }
+.dg-t tr.dg-tfd td { white-space: normal; background: var(--bg, transparent); }
+.dg-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 10px; margin-bottom: 10px; }
+.dg-2 > .card { margin-bottom: 0; }
+.dg-tg { white-space: pre-wrap; word-break: break-word; font-family: var(--mono, monospace); font-size: 12px; margin: 0; padding: 12px; }
+.dg-tfg { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; padding: 4px 0; }
+@media (max-width: 720px) {
+  .dg-day b { min-width: 0; }
+  .dg-t td, .dg-t th { white-space: normal; }
+  .dg-2 { grid-template-columns: 1fr; }
+}

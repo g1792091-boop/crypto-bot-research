@@ -28,6 +28,11 @@ Triggers (defaults in ``TriggerPolicy``; every number is configurable):
                                    >= 30 closed trades since its last weekly review; a review
                                    the budget deferred or stopped stays due on the next days
                                    until it has run (same slot key).
+    tf_split      4  strat:<S>     at ``tf_split_hour_kst`` (18:00 on the server; -1 = off here) once per KST day
+                                   (window 4h): up to ``tf_split_per_day`` strategies whose timeframe accounts
+                                   disagree (best > 0 > worst, each >= 8 closed trades, spread >= 10% of the
+                                   starting equity; digest.tf_split), widest first, a strategy at most every 3
+                                   days. Weekly class (the reviews' budget).
     market_move   2  team:market   a coin's last-hour high or low >= 4% (BTC), 5% (ETH), 6% (others) away from its
                                    price an hour before (``market``: the caller fetches the 5m bars; none = never
                                    due). One meeting for all coins that moved, a coin at most every 3h, at most 4 a
@@ -108,13 +113,13 @@ LAB_ROOM = "team:lab"                 # the new-strategy lab (rooms_db.LAB_ROOM)
 LAB_WEEKDAY = 6                       # the new-strategy accounts' weekly review: Sunday (KST)
 
 TRIGGERS = ("incident", "owner", "loss_cluster", "bust", "checkpoint", "morning", "evening", "weekly", "research",
-            "market_move", "ranking")
+            "market_move", "ranking", "tf_split")
 PRIORITY = {"incident": 0, "owner": 1, "loss_cluster": 2, "bust": 2, "market_move": 2, "checkpoint": 3, "morning": 3, "ranking": 3,
-            "evening": 3, "weekly": 4, "research": 5}
+            "evening": 3, "weekly": 4, "tf_split": 4, "research": 5}
 # Sub-budget class of each trigger (the rooms engine keeps one AI budget per class).
 TRIGGER_CLASS = {"incident": "incident", "owner": "owner", "loss_cluster": "loss", "bust": "loss", "market_move": "loss",
                  "checkpoint": "scheduled", "morning": "scheduled", "evening": "scheduled", "ranking": "scheduled",
-                 "weekly": "weekly", "research": "research"}
+                 "weekly": "weekly", "tf_split": "weekly", "research": "research"}
 ENDED_OK = ("done", "no_action")      # the only statuses that advance cursors
 CLASSES = ("incident", "owner", "loss", "scheduled", "weekly", "research")
 # What a stopped_budget round pauses until the next KST day, by decision.stopped (when the
@@ -204,6 +209,12 @@ class TriggerPolicy:
     # the review team's ranking review (owners' choice 2026-10-03: 14:00 on the server, rooms.policy_from_env);
     # -1 = off, as in TriggerPolicy() itself
     ranking_hour_kst: int = -1
+    # the timeframe-split review in a strategy room (owners' choice 2026-10-03: 18:00 on the server); -1 = off
+    tf_split_hour_kst: int = -1
+    tf_split_per_day: int = 2
+    tf_split_gap_ms: int = 3 * DAY_MS
+    tf_split_min_trades: int = 8
+    tf_split_min_spread_pct: float = 0.10
     meeting_window_ms: int = 4 * HOUR_MS
     # new-strategy lab: one meeting slot per this period of the KST day; 0 = off (rooms.policy_from_env
     # turns it on for the server, RESEARCH_EVERY_MIN_DEFAULT)
@@ -731,6 +742,48 @@ def _weekly(paper_ro, st: _Rooms) -> list[Due]:
     return out
 
 
+def _tf_split(paper_ro, st: _Rooms) -> list[Due]:
+    """Once per KST day from ``tf_split_hour_kst`` (window ``meeting_window_ms``): the strategies whose timeframe
+    accounts disagree most (digest.tf_split), at most ``tf_split_per_day`` of them, none met about for this in
+    the last ``tf_split_gap_ms`` (cursor ``tf_split:<room>``, the meeting's start). The key is the day: a meeting
+    the budget could not start stays due within the window."""
+    p = st.p
+    if p.tf_split_hour_kst < 0 or paper_ro is None:
+        return []
+    s0 = slot_start(st.now, p.tf_split_hour_kst)
+    if st.now - s0 >= p.meeting_window_ms:
+        return []
+    day = kst_date(s0)
+    from .digest import tf_split
+    try:
+        got = tf_split(paper_ro, min_trades=p.tf_split_min_trades, min_spread_pct=p.tf_split_min_spread_pct)
+    except Exception:  # noqa: BLE001  (unreadable paper3.db: no such meeting this tick)
+        return []
+    rows = {r["strategy"]: r for r in got.get("strategies") or []}
+    out = []
+    taken = sum(1 for r in st.rounds if r["trigger"] == "tf_split" and r["started_ts"] >= s0
+                and r["status"] in ENDED_OK)
+    for s in got.get("split") or []:
+        if len(out) + taken >= p.tf_split_per_day:
+            break
+        room = strat_room(s)
+        key = f"tf_split:{s}:{day}"
+        if st.handled(room, "tf_split", key):
+            continue
+        last = st.cursor_int(f"tf_split:{room}")
+        if last and st.now - last < p.tf_split_gap_ms:
+            continue
+        r = rows[s]
+        t = r["timeframes"]
+        cursors = {**_strategy_cursors(st, room, _trade_hwm(paper_ro)), f"tf_split:{room}": st.now}
+        out.append(_due(st, room, "tf_split", key, s0, cursors,
+                        f"{STRATEGY_KO.get(s, s)} 봉 비교: {r['best_tf']} {r['best_pnl']:+,.0f}$ "
+                        f"({t[r['best_tf']]['trades']}건) vs {r['worst_tf']} {r['worst_pnl']:+,.0f}$ "
+                        f"({t[r['worst_tf']]['trades']}건)",
+                        strategy=s, best_tf=r["best_tf"], worst_tf=r["worst_tf"], spread=r["spread"], slot_day=day))
+    return out
+
+
 def _lab_accounts(paper_ro, st: _Rooms) -> list[Due]:
     """The new-strategy accounts (kind 'newlab') in team:lab: a loss cluster (same thresholds as a strategy
     room, cursor ``loss:team:lab``), a bust (cursor ``bust:<account>``) and a weekly review on Sunday KST
@@ -934,6 +987,8 @@ def find_due(paper_ro: Optional[sqlite3.Connection], daily_ro: Optional[sqlite3.
         found += _checkpoint(paper_ro, st)
     if "weekly" in p.enabled:
         found += _weekly(paper_ro, st)
+    if "tf_split" in p.enabled:
+        found += _tf_split(paper_ro, st)
     found += _scheduled(st)
     if "market_move" in p.enabled and market:
         found += _market_move(market, st)

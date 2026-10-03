@@ -46,6 +46,7 @@ STATIC = os.path.join(HERE, "static")
 COOKIE = "pb_session"
 SESSION_S = 7 * 86400
 TRADE_TFS = ("5m", "15m", "30m", "1h", "4h")
+DIGEST_TTL_S = 120           # /api/digest/staff, week, tf reused this long (they read every trade)
 OVERLAP_TTL_S = 600          # /api/overlap result reused this long (the analysis reads weeks of 5-minute equity)
 
 
@@ -691,13 +692,13 @@ def _trigger_defaults() -> dict:
     """Numbers for the 'when does this room meet' line (from triggers.TriggerPolicy when importable)."""
     d = {"loss_min_count": 3, "loss_min_gap_ms": 4 * 3_600_000, "weekly_min_trades": 30,
          "checkpoint_every_days": 30, "morning_hour_kst": 8, "evening_hour_kst": 22,
-         "ranking_hour_kst": 14}
+         "ranking_hour_kst": 14, "tf_split_hour_kst": 18}
     try:
         from ..agents.triggers import TriggerPolicy
         p = TriggerPolicy()
         d = {k: getattr(p, k, v) for k, v in d.items()}
-        from ..agents.rooms import RANKING_HOUR_DEFAULT   # off in TriggerPolicy(), on for the server
-        d["ranking_hour_kst"] = RANKING_HOUR_DEFAULT
+        from ..agents.rooms import RANKING_HOUR_DEFAULT, TF_SPLIT_HOUR_DEFAULT   # off in TriggerPolicy(), on for the server
+        d["ranking_hour_kst"], d["tf_split_hour_kst"] = RANKING_HOUR_DEFAULT, TF_SPLIT_HOUR_DEFAULT
     except Exception:
         pass
     return d
@@ -713,7 +714,8 @@ def room_schedule_ko(room_id: str) -> str:
         wd = WEEKDAY_KO[names.index(s) % 7] if s in names else "정해진"
         gap_h = int(d["loss_min_gap_ms"] // 3_600_000)
         return (f"새 손실이 {d['loss_min_count']}건 쌓이면 (같은 방은 {gap_h}시간 간격), 계좌가 파산하면, "
-                f"거래가 {d['weekly_min_trades']}건 더 쌓인 뒤 {wd}요일 주간 검토 때 스스로 회의를 엽니다.")
+                f"거래가 {d['weekly_min_trades']}건 더 쌓인 뒤 {wd}요일 주간 검토 때, 5개 봉 계좌의 성적이 크게 갈리면 "
+                f"{d['tf_split_hour_kst']:02d}:00 봉 비교 회의로 스스로 회의를 엽니다.")
     m, e, c = d["morning_hour_kst"], d["evening_hour_kst"], d["checkpoint_every_days"]
     return {
         "team:market": f"매일 {m:02d}:00 아침 회의: 장세 → 파생·쏠림 → 전략가 → 반론 → 팀장 요약(텔레그램 발송). "
@@ -1547,6 +1549,74 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
     @app.get("/api/agents/usage")
     def get_agents_usage():
         return rooms.usage()
+
+    # ------------------------------------------------ meeting digest (paperbot/agents/digest.py: code only, read-only)
+    digest_cache: dict = {}
+
+    def _digest_cached(key: str, fn):
+        hit = digest_cache.get(key)
+        if hit is None or time.time() - hit[0] > DIGEST_TTL_S:
+            digest_cache[key] = hit = (time.time(), fn())
+        return {**hit[1], "computed_at": int(hit[0] * 1000)}
+
+    @app.get("/api/digest/day")
+    def get_digest_day(day: Optional[str] = None):
+        """Every meeting of one KST day (default today): code summary, speakers, replies, lead lines."""
+        from ..agents import digest as DG
+        d = day or rooms.R.kst_day(int(time.time() * 1000))
+        try:
+            DG.day_start_ms(d)
+        except ValueError:
+            raise HTTPException(400, "day는 YYYY-MM-DD") from None
+        with rooms.ro(rooms.agents_db) as a:
+            return DG.day_digest(a, d)
+
+    @app.get("/api/digest/staff")
+    def get_digest_staff(days: int = 7):
+        """Per staff member: turns, replies, questions, proposals, verdicts (last ``days``) and graded predictions."""
+        from ..agents import digest as DG
+        n = min(max(int(days), 1), 60)
+
+        def make():
+            with rooms.ro(rooms.agents_db) as a:
+                return DG.staff_board(a, int(time.time() * 1000), n)
+        return _digest_cached(f"staff:{n}", make)
+
+    @app.get("/api/digest/week")
+    def get_digest_week():
+        """The last 7 days against the 7 before (what the Sunday Telegram report sends)."""
+        from ..agents import digest as DG
+
+        def make():
+            try:
+                c = data.conn()
+                init = data.initial()
+            except sqlite3.Error as exc:
+                return {"error": f"paper3.db를 열지 못함: {type(exc).__name__}"}
+            try:
+                with rooms.ro(rooms.agents_db) as a:
+                    rep = DG.week_report(c, a, int(time.time() * 1000), init)
+            finally:
+                c.close()
+            return {**rep, "telegram_text": DG.compose_week(rep)}
+        return _digest_cached("week", make)
+
+    @app.get("/api/digest/tf")
+    def get_digest_tf():
+        """Each strategy's five timeframe accounts side by side and the ones that disagree (tf_split meetings)."""
+        from ..agents import digest as DG
+
+        def make():
+            try:
+                c = data.conn()
+                init = data.initial()
+            except sqlite3.Error as exc:
+                return {"error": f"paper3.db를 열지 못함: {type(exc).__name__}", "strategies": [], "split": []}
+            try:
+                return DG.tf_split(c, init)
+            finally:
+                c.close()
+        return _digest_cached("tf", make)
 
     # ------------------------------------------------ agent rooms: owner writes (inbox.db only)
     @app.get("/api/market")

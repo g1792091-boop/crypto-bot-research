@@ -18,6 +18,7 @@
     <button data-v="board">순위표</button>
     <button data-v="account">계좌</button>
     <button data-v="rooms" id="nav-rooms">에이전트 방<i class="ndot" hidden></i></button>
+    <button data-v="digest">회의 요약</button>
     <button data-v="signals">신호</button>
     <button data-v="status">서버 상태</button>
   </nav>
@@ -236,6 +237,18 @@
   </div>
 </section>
 
+<!-- ========================================================= meeting digest (digest.js) -->
+<section class="view" id="v-digest"><div class="page">
+  <div class="filters">
+    <div class="seg" id="dg-tabs"><button data-t="day" class="on">회의 결론</button><button data-t="staff">직원 성적표</button>
+      <button data-t="week">주간 성적표</button><button data-t="tf">봉 비교</button></div>
+    <span class="dg-day" id="dg-day"><button id="dg-prev" aria-label="전날">←</button><b id="dg-dlabel"></b>
+      <button id="dg-next" aria-label="다음 날">→</button><button id="dg-today">오늘</button></span>
+    <div class="seg" id="dg-days" hidden><button data-d="1">하루</button><button data-d="7" class="on">7일</button><button data-d="30">30일</button></div>
+  </div>
+  <div id="dg-body"></div>
+</div></section>
+
 <!-- ========================================================= signals -->
 <section class="view" id="v-signals"><div class="page">
   <div class="filters"><div class="seg" id="s-tf">
@@ -262,6 +275,7 @@
 <script src="/static/panels.js"></script>
 <script src="/static/market.js"></script>
 <script src="/static/rooms.js"></script>
+<script src="/static/digest.js"></script>
 <script src="/static/checkpoint.js"></script>
 <script src="/static/ghcoin.js"></script>
 <script src="/static/breakdown.js"></script>

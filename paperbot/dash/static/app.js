@@ -169,6 +169,7 @@ function show(v) {
   if (v === "signals") loadSignals();
   if (v === "status") loadStatus();
   if (v === "rooms" && typeof loadRooms === "function") loadRooms();
+  if (v === "digest" && typeof loadDigest === "function") loadDigest();
   if (v === "strat" && typeof loadStrat === "function") loadStrat();
   if (v === "pos" && typeof loadPos === "function") loadPos();
   if (v === "market" && typeof loadMarket === "function") { if (typeof renderMarket === "function") renderMarket(); loadMarket(); }

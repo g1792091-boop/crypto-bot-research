@@ -513,6 +513,8 @@ def test_owner_settings_from_env_reach_the_tick_and_the_dashboard(world, dash):
     server = RM.RoomsPolicy(observe_days=RM.OBSERVE_DAYS_DEFAULT)
     server.triggers.research_every_ms = RM.RESEARCH_EVERY_MIN_DEFAULT * 60_000     # the lab meets on the server
     server.triggers.ranking_hour_kst = RM.RANKING_HOUR_DEFAULT                     # and the 14:00 ranking review
+    server.triggers.tf_split_hour_kst = RM.TF_SPLIT_HOUR_DEFAULT                   # the 18:00 timeframe split
+    server.weekly_report_hour_kst = RM.WEEKLY_REPORT_HOUR_DEFAULT                  # the Sunday 21:00 report
     assert RM.policy_from_env({}) == server
     for bad in ({"AGENTS_BUDGET": "lose=3"}, {"AGENTS_BUDGET": "loss=x"}, {"AGENTS_OWNER_OK": "maybe"},
                 {"AGENTS_OWNER_OK": "no"}, {"AGENTS_OBSERVE_DAYS": "0"},
