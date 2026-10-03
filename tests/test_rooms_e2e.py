@@ -456,7 +456,10 @@ def test_a_post_the_budget_defers_is_not_promised_the_next_turn(world, dash):
     from paperbot.agents.runner import UsageLimitReached
     from paperbot.dash.app import Rooms
     p, lab = world["paths"], world["lab"]
-    only = RM.RoomsPolicy(triggers=TR.TriggerPolicy(enabled=("owner",)))
+    # the caps before 2026-10-03 (loss 24, scheduled 15, total 80), which the numbers above count on
+    only = RM.RoomsPolicy(triggers=TR.TriggerPolicy(enabled=("owner",)),
+                          budgets={**RM.DEFAULT_BUDGETS, "loss": (24, 700_000), "scheduled": (15, 450_000)},
+                          total_budget=(80, 2_000_000), week_budget=(420, 10_000_000))
     assert _tick(p, Staff({}), T0, lab, policy=only)["rounds"] == []      # creates agents3.db, stores the caps
     a = R.open_agents(p["agents3"])
     for cls, n in (("loss", 16), ("weekly", 20), ("owner", 13)):

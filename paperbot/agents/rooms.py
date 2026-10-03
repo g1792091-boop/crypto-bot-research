@@ -270,12 +270,13 @@ def lab_blocked(ctx: "RoundContext") -> str:
 # ceiling, and every call counts against the owners' own Claude plan.
 # 'research' (the new-strategy lab, team:lab) is not reserved and is paced over the day, and it also leaves
 # the unused part of the loss/weekly reviews' caps (``lab_review_keep_calls``): it only uses spare calls.
-DEFAULT_BUDGETS = {"incident": (15, 400_000), "owner": (20, 500_000), "loss": (24, 700_000),
+DEFAULT_BUDGETS = {"incident": (15, 400_000), "owner": (20, 500_000), "loss": (48, 1_400_000),
                    "scheduled": (20, 600_000), "weekly": (20, 550_000), "research": (24, 700_000)}
-# 2026-10-03: the 14:00 ranking review joined the scheduled class (15 -> 20 calls), and the total and 7-day caps
-# grew by the same share so the other classes keep what they had (80 -> 85, 420 -> 455)
-DEFAULT_TOTAL = (85, 2_150_000)
-DEFAULT_WEEK = (455, 10_750_000)
+# 2026-10-03: the 14:00 ranking review joined the scheduled class (15 -> 20 calls). The same day the owners saw
+# loss reviews stop at 20:00 on our own cap (2 losses a meeting left 16 loss calls a day for 36 rooms) with
+# the plan's weekly use at 7%: loss 24 -> 48, total 80 -> 120, 7-day 420 -> 600 (AGENTS_BUDGET lowers them)
+DEFAULT_TOTAL = (120, 3_400_000)
+DEFAULT_WEEK = (600, 17_000_000)
 # The unused part of these classes' caps is kept inside the total: other classes cannot use it, so
 # a busy day never leaves a liquidation or the 22:00 summary without calls.
 RESERVED_CLASSES = ("incident", "scheduled")

@@ -22,7 +22,7 @@ from paperbot.agents import triggers as TR
 from paperbot.agents.runner import UsageLimitReached, extract_json
 from paperbot.notify import ListNotifier, WARN
 from paperbot.store3 import Store3
-from test_rooms import (DAY, EVENING, HOUR, MIN, NOTE, QUIET, ROOM, S, SPEC, TEST, QueueRunner, StubLab,  # noqa: F401
+from test_rooms import (DAY, EVENING, HOUR, MIN, NOTE, OLD_CAPS, QUIET, ROOM, S, SPEC, TEST, QueueRunner, StubLab,  # noqa: F401
                         World, analysis, challenge, expert, kst, run_test_round, team_answer)
 import test_rooms_e2e as E
 
@@ -285,13 +285,15 @@ def test_a_reused_pass_that_still_passes_says_so_with_the_current_count(world, m
 
 # ================================================================ AI budget
 def test_the_week_cap_keeps_todays_reserve_for_a_liquidation_and_the_evening(world):
-    for d in range(1, 7):                                     # six busy days: 67 calls each (402)
-        prefill(world, EVENING - d * DAY, loss=24, weekly=20, scheduled=9, incident=3, owner=11)
-    prefill(world, EVENING, loss=10, weekly=8)                # today 18: 420 of 455, 35 = today's reserve
+    old = RM.RoomsPolicy(**OLD_CAPS)                          # the numbers below count on the caps before 2026-10-03
+    for d in range(1, 7):                                     # six busy days: 62 calls each (372)
+        prefill(world, EVENING - d * DAY, loss=24, weekly=20, scheduled=9, incident=3, owner=6)
+    prefill(world, EVENING, loss=10, weekly=8)                # today 18: 390 of 420, 30 = today's reserve
     world.losses(t=EVENING)                                   # a loss cluster is waiting too
     world.store.alert(EVENING - 2 * MIN, "CRITICAL", f"[{S}@15m] LIQUIDATED BTCUSDT 40x lost margin 20.00")
     world.store.commit()
-    ctx = RM.RoundContext(world.agents, None, None, None, QueueRunner({}), None, EVENING, clock_ms=lambda: EVENING)
+    ctx = RM.RoundContext(world.agents, None, None, None, QueueRunner({}), None, EVENING, policy=old,
+                          clock_ms=lambda: EVENING)
     loss = RM.round_budget(TR.Due(ROOM, "loss_cluster", 2, {"class": "loss"}, "loss_cluster"), ctx)
     assert loss.headroom() == 0
     with pytest.raises(RM.WeekReserveExceeded) as ei:
@@ -306,7 +308,7 @@ def test_the_week_cap_keeps_todays_reserve_for_a_liquidation_and_the_evening(wor
                           "pnl_reviewer": [team_answer("p")], "whatif": [team_answer("w")],
                           "risk_officer": [team_answer("r")], "team_lead": [LEAD, LEAD]})
     n = ListNotifier()
-    out = world.tick(runner, EVENING, notifier=n)
+    out = world.tick(runner, EVENING, notifier=n, policy=old)
     assert [(r["room_id"], r["trigger"], r["status"]) for r in out["rounds"]] == [
         ("team:ops", "incident", "done"), ("team:review", "evening", "done"), ("team:lead", "evening", "done")]
     assert SPEC not in runner.roles() and len(n.messages) == 1
@@ -806,7 +808,7 @@ def test_an_owners_alert_is_one_line():
 # --- the bust and liquidation reserves survive a reduced-cap stop
 def test_the_bust_reserve_survives_a_loss_cluster_that_hits_its_reduced_cap_midway(world):
     T = kst(2026, 10, 7, 21, 30)                          # pacing allows the full 16 from 21:00
-    pol = RM.RoomsPolicy(triggers=TR.TriggerPolicy(enabled=("loss_cluster", "bust")))
+    pol = RM.RoomsPolicy(triggers=TR.TriggerPolicy(enabled=("loss_cluster", "bust")), **OLD_CAPS)   # loss 24
     prefill(world, T, loss=14)
     world.losses(t=T)
     runner = QueueRunner({SPEC: [analysis(NOTE)], "devils_advocate": [challenge("disagree")],
@@ -817,7 +819,7 @@ def test_the_bust_reserve_survives_a_loss_cluster_that_hits_its_reduced_cap_midw
     assert world.rounds()[-1]["decision"]["blocks"] == []
     world.store.alert(T + 10 * MIN, "WARN", f"[{S}@15m] BUST: equity 0.00")
     world.store.commit()
-    ctx = RM.RoundContext(world.agents, None, None, None, QueueRunner({}), None, T + 15 * MIN,
+    ctx = RM.RoundContext(world.agents, None, None, None, QueueRunner({}), None, T + 15 * MIN, policy=pol,
                           clock_ms=lambda: T + 15 * MIN)
     assert RM.round_budget(TR.Due(ROOM, "bust", 2, {"class": "loss"}, "bust"), ctx).headroom() == 8
     out = world.tick(QueueRunner({SPEC: [analysis(NOTE)], "devils_advocate": [challenge("agree")]}),
@@ -849,7 +851,8 @@ def test_the_liquidation_reserve_survives_a_non_critical_incident_that_hits_its_
 
 
 def test_the_reserves_keep_their_share_of_the_tokens_too(world):
-    ctx = RM.RoundContext(world.agents, None, None, None, QueueRunner({}), None, QUIET, clock_ms=lambda: QUIET)
+    ctx = RM.RoundContext(world.agents, None, None, None, QueueRunner({}), None, QUIET, policy=RM.RoomsPolicy(**OLD_CAPS),
+                          clock_ms=lambda: QUIET)
     loss = RM.round_budget(TR.Due(ROOM, "loss_cluster", 2, {"class": "loss"}, "loss_cluster"), ctx)
     bust = RM.round_budget(TR.Due(ROOM, "bust", 2, {"class": "loss"}, "bust"), ctx)
     assert (loss.max_calls, loss.max_tokens) == (16, 700_000 * 16 // 24) and (bust.max_calls, bust.max_tokens) == (24, 700_000)
@@ -1064,11 +1067,12 @@ def test_one_large_call_cannot_eat_into_the_token_reserve(world):
     world.agents.execute("INSERT INTO agent_calls VALUES (?,?,?,?,?,?,?)",
                          (QUIET - HOUR, R.kst_day(QUIET), "weekly", "x", "sonnet", 1, 1_149_000))
     world.agents.commit()
-    ctx = RM.RoundContext(world.agents, None, None, None, QueueRunner({}), None, QUIET, clock_ms=lambda: QUIET)
+    ctx = RM.RoundContext(world.agents, None, None, None, QueueRunner({}), None, QUIET, policy=RM.RoomsPolicy(**OLD_CAPS),
+                          clock_ms=lambda: QUIET)                    # the total of 2,000,000 before 2026-10-03
     due = TR.Due(ROOM, "loss_cluster", 2, {"class": "loss"}, "loss_cluster")
     with pytest.raises(RM.PacedKeepExceeded):
         RM.round_budget(due, ctx).check(0)                    # by default a paced call also leaves the owners' share
-    ctx.policy = RM.RoomsPolicy(owner_keep_calls=0, bust_reserve_calls=0)
+    ctx.policy = RM.RoomsPolicy(owner_keep_calls=0, bust_reserve_calls=0, **OLD_CAPS)
     loss = RM.round_budget(due, ctx)
     loss.check(0)
     with pytest.raises(RM.ReserveExceeded):

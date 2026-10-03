@@ -598,6 +598,10 @@ def test_usage_limit_stops_the_tick(world):
 
 
 NO_RESERVE = {**RM.DEFAULT_BUDGETS, "incident": (0, 0), "scheduled": (0, 0)}
+# the caps before 2026-10-03 (loss 24, scheduled 15, total 80, 7 days 420): the budget mechanism tests that count
+# calls against the defaults were written on these
+OLD_CAPS = {"budgets": {**RM.DEFAULT_BUDGETS, "loss": (24, 700_000), "scheduled": (15, 450_000)},
+            "total_budget": (80, 2_000_000), "week_budget": (420, 10_000_000)}
 
 
 def test_total_budget_over_all_classes_stops_the_tick(world):
@@ -616,7 +620,7 @@ def test_total_budget_over_all_classes_stops_the_tick(world):
     world.say(ROOM, "질문", QUIET + 5 * MIN)
     assert world.tick(QueueRunner({}), QUIET + 15 * MIN, policy=policy)["rounds"] == []
     caps = RM.budget_caps(RM.RoomsPolicy(total_budget=(1, 5)))
-    assert caps["total"] == {"calls": 1, "tokens": 5} and caps["week"] == {"calls": 455, "tokens": 10_750_000}
+    assert caps["total"] == {"calls": 1, "tokens": 5} and caps["week"] == {"calls": RM.DEFAULT_WEEK[0], "tokens": RM.DEFAULT_WEEK[1]}
 
 
 def test_a_meeting_the_budget_cannot_carry_is_not_started(world):
@@ -1085,11 +1089,12 @@ def test_pacing_spreads_the_loss_class_over_the_day(world):
         t = kst(2026, 10, 8, h, m)
         return RM.round_budget(TR.Due(ROOM, "loss_cluster", 2, {"class": "loss"}, "loss_cluster"),
                                RM.RoundContext(world.agents, None, None, None, QueueRunner({}), None, t,
-                                               clock_ms=lambda: t))
+                                               policy=RM.RoomsPolicy(**OLD_CAPS), clock_ms=lambda: t))
     assert budget_at(0, 10).max_calls == 24 - 8                # 8 calls stay for busts
     assert [budget_at(h).pace_allowance() for h in (0, 3, 9, 21, 23)] == [2, 4, 8, 16, 16]
     bust = RM.round_budget(TR.Due(ROOM, "bust", 2, {"class": "loss"}, "bust"),
-                           RM.RoundContext(world.agents, None, None, None, QueueRunner({}), None, QUIET))
+                           RM.RoundContext(world.agents, None, None, None, QueueRunner({}), None, QUIET,
+                                           policy=RM.RoomsPolicy(**OLD_CAPS)))
     assert bust.max_calls == 24 and bust.pace_allowance() is None
     # at 00:10 KST only one of two due loss meetings starts; the other waits for the allowance to grow
     night = kst(2026, 10, 8, 0, 10)
@@ -1097,7 +1102,7 @@ def test_pacing_spreads_the_loss_class_over_the_day(world):
     for k in range(3):
         world.trade(f"V45_AMB@{'15m' if k % 2 == 0 else '1h'}", -10.0 - k, night - (5 - k) * HOUR)
     agree = {SPEC: [analysis(NOTE)], "devils_advocate": [challenge("agree")]}
-    pol = RM.RoomsPolicy(triggers=TR.TriggerPolicy(enabled=("loss_cluster",)))      # not last night's 22:00
+    pol = RM.RoomsPolicy(triggers=TR.TriggerPolicy(enabled=("loss_cluster",)), **OLD_CAPS)   # not last night's 22:00
     out = world.tick(QueueRunner({**agree, "spec_V45_AMB": [analysis(NOTE)]}), night, policy=pol)
     assert [(r["room_id"], r["status"]) for r in out["rounds"]] == [(ROOM, "done")]
     assert world.tick(QueueRunner({}), night + HOUR, policy=pol)["rounds"] == []    # 3 allowed, 2 used

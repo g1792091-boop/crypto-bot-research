@@ -18,7 +18,7 @@ from paperbot.agents import triggers as TR
 from paperbot.notify import WARN, ListNotifier
 
 from test_newlab import _write
-from test_rooms import DAY, HOUR, MIN, QUIET, QueueRunner, World, kst
+from test_rooms import DAY, HOUR, MIN, OLD_CAPS, QUIET, QueueRunner, World, kst
 
 LAB = "team:lab"
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -312,13 +312,13 @@ def test_research_budget_class_is_enforced_paced_and_not_reserved(world, noise):
     due = TR.Due(LAB, "research", 5, {"class": "research"}, "research")
 
     def ctx(t, pol=None):
-        return RM.RoundContext(world.agents, None, None, None, QueueRunner({}), noise, t, policy=pol or lab_policy(),
-                               clock_ms=lambda: t)
+        return RM.RoundContext(world.agents, None, None, None, QueueRunner({}), noise, t,
+                               policy=pol or lab_policy(**OLD_CAPS), clock_ms=lambda: t)    # counts on the old caps
     b = RM.round_budget(due, ctx(QUIET))
-    assert b.pipeline == "research" and b.paced and b.max_calls == 24 and b.reserve()[0] == 35
+    assert b.pipeline == "research" and b.paced and b.max_calls == 24 and b.reserve()[0] == 30
     # the owner class keeps nothing for research (research is not a reserve)
     owner = RM.round_budget(TR.Due("team:risk", "owner", 1, {"class": "owner"}, "owner"), ctx(QUIET))
-    assert owner.reserve() == (35, 1_000_000)
+    assert owner.reserve() == (30, 850_000)
 
     def use(cls, n, t):
         world.agents.executemany("INSERT INTO agent_calls VALUES (?,?,?,?,?,?,?)",
@@ -444,3 +444,24 @@ def test_ledger_helpers_and_hash_agree_with_the_engine(world):
     out, probs = RM.check_lab_skeptic({"reviews": [{"index": 9, "keep": False}, {"index": 1, "keep": "no"}]},
                                       {"candidates": [{"index": 1}]})
     assert out["reviews"] == [{"index": 1, "keep": True, "reason": ""}] and len(probs) == 2
+
+
+def test_empty_lab_meetings_in_a_row_stretch_the_wait_up_to_six_hours(world, noise):
+    """2026-10-03: 18 lab meetings in a day with no candidate. From the second empty meeting in a row the wait
+    doubles (2h, 4h, then 6h at most); a meeting with a candidate starts over."""
+    pol = lab_policy()
+    empty = {"headline": "근거 있는 새 후보 없음", "specs": []}
+    t, starts = QUIET, []
+    for _ in range(4 * 20):                                   # 20 hours of 15-minute ticks
+        out = world.tick(QueueRunner({"researcher": [empty]}), t, policy=pol, lab=noise)
+        starts += [t for r in out["rounds"] if r["trigger"] == "research"]
+        t += 15 * MIN
+    gaps = [(b - a) // HOUR for a, b in zip(starts, starts[1:])]
+    assert gaps[:4] == [1, 2, 4, 6] and set(gaps[4:]) <= {6}
+    st = TR._Rooms(world.agents, t, pol.triggers)
+    assert TR.research_gap(st, HOUR) == 6 * HOUR
+    # one meeting with a candidate: the next wait is the plain hour again
+    world.agents.execute("UPDATE rounds SET decision = json_set(decision, '$.candidates', 1) WHERE round_id = "
+                         "(SELECT MAX(round_id) FROM rounds WHERE trigger = 'research')")
+    world.agents.commit()
+    assert TR.research_gap(TR._Rooms(world.agents, t, pol.triggers), HOUR) == HOUR

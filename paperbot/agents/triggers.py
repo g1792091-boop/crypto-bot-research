@@ -208,6 +208,7 @@ class TriggerPolicy:
     # new-strategy lab: one meeting slot per this period of the KST day; 0 = off (rooms.policy_from_env
     # turns it on for the server, RESEARCH_EVERY_MIN_DEFAULT)
     research_every_ms: int = 0
+    research_idle_max_ms: int = 6 * HOUR_MS  # the longest wait after empty lab meetings (research_gap)
     # meetings opened only by extra accounts' trades (copies, new-strategy accounts) per KST day, all rooms
     # together: their own line, never the 195's room slots (env AGENTS_EXTRAS_MEETINGS_PER_DAY)
     extras_meetings_per_day: int = 6
@@ -289,6 +290,7 @@ class _Rooms:
                                 "status": status, "calls": _int(calls),
                                 "stopped": dec.get("stopped"), "transient": dec.get("transient") is True,
                                 "calls_ok": _int(dec.get("calls_ok"), _int(calls)),
+                                "candidates": dec.get("candidates") if isinstance(dec.get("candidates"), int) else None,
                                 "blocks": tuple(blocks) if isinstance(blocks, list) else None})
         self.day_start = kst_day_start(now_ms)
         self.rooms = set(all_rooms()) | {r[0] for r in _rows(conn, "SELECT room_id FROM rooms")}
@@ -819,6 +821,21 @@ def _scheduled(st: _Rooms) -> list[Due]:
     return out
 
 
+def research_gap(st: _Rooms, every: int) -> int:
+    """The wait after the lab's last meeting: ``every``, doubled for each meeting in a row (from the second) in
+    which the inventor proposed nothing, up to ``research_idle_max_ms`` (2026-10-03: 18 empty meetings in a
+    day). A meeting with a candidate, or an owners' post in the lab (its own trigger), starts over."""
+    empty = 0
+    for r in sorted((r for r in st.rounds if r["room_id"] == LAB_ROOM and r["trigger"] == "research"
+                     and r["status"] in ENDED_OK), key=lambda r: -r["started_ts"]):
+        if r["candidates"] != 0:
+            break
+        empty += 1
+    if empty < 2:
+        return every
+    return max(every, min(every * 2 ** (empty - 1), st.p.research_idle_max_ms))
+
+
 def _research(st: _Rooms) -> list[Due]:
     """The lab meets once per ``research_every_ms`` slot of the KST day, at most once per that period.
     The key is the slot: a slot the budget could not start (pacing, spare calls used up) is simply
@@ -830,7 +847,7 @@ def _research(st: _Rooms) -> list[Due]:
     idx = (st.now - st.day_start) // every
     slot = st.day_start + idx * every
     last = st.last_ok_start(LAB_ROOM, "research")
-    if last is not None and st.now - last < every:
+    if last is not None and st.now - last < research_gap(st, every):
         return []
     hm = dt.datetime.fromtimestamp((slot + KST_OFFSET_MS) / 1000, dt.timezone.utc).strftime("%H:%M")
     return [_due(st, LAB_ROOM, "research", f"research:{kst_date(st.now)}:{idx}", slot, {},
