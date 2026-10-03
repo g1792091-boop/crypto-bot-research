@@ -1,2 +1,4 @@
 dist/*.zip
 .venv/
+__pycache__/
+*.egg-info/

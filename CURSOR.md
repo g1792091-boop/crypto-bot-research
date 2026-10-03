@@ -1,5 +1,7 @@
 # Cursor(커서)에서 GH Coin 열기
 
+> 이어받는 사람은 먼저 [HANDOVER.md](HANDOVER.md)(인수인계)를 읽으세요.
+
 이 저장소의 GH Coin 코드는 전부 브랜치 **`claude/eloquent-ride-3o1bqv`** 에 있습니다.
 Cursor는 VS Code 기반이라 아래대로 하면 됩니다.
 
