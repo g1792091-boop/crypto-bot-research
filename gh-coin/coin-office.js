@@ -420,7 +420,13 @@ ${notesText(a.team)}- ${isLead ? "너는 마지막 정리 담당이다. 사용�
     fire({kind: "delta", meeting: m, agent: a, entry});
     if (err && isLimit(why) && officeSources().every(t => providerCooling(t.id))) break;   // 다 막혔으면 더 두드리지 않는다
   }
-  if (!entry.text) entry.text = (entry.notes || []).some(n => isLimit(n)) ? `(${a.name}: 무료 AI 한도에 걸려 이번에는 쉬었습니다 · 잠시 뒤 다시 합니다)` : `(${a.name}: 연결된 모델들이 이번에는 답하지 못했습니다)`;
+  if (!entry.text){
+    // 마지막 수단: 모델이 한국어 최종 답을 못 냈어도 생각(영어 추론)이 있으면 그대로 옮겨 보여 준다(죽은 답 대신). 정상 경로엔 영향 없음.
+    const sv = (lastMsg?.parts || []).map(p => p.text || p.think || "").join(" ").replace(/<think>[\s\S]*?<\/think>/g, "").replace(/\s+/g, " ").trim();
+    entry.text = (entry.notes || []).some(n => isLimit(n)) ? `(${a.name}: 무료 AI 한도에 걸려 이번에는 쉬었습니다 · 잠시 뒤 다시 합니다)`
+      : sv.length > 20 ? `${sv.slice(0, 600)}\n\n*(모델이 한국어 최종 답을 못 내 생각을 그대로 옮겼습니다)*`
+      : `(${a.name}: 연결된 모델들이 이번에는 답하지 못했습니다)`;
+  }
   entry.tools = entry.steps.map(x => x.act);
   captureFiles(entry, a.team).catch(() => {});
   // 첫 분석가가 실제 도구를 쓴 과정은 '도구 사용' 학습 예시로 (앞사람 발언에 기대지 않는 차례만)
