@@ -557,6 +557,10 @@ function entryHTML(e){
       <details><summary>전략 JSON</summary><pre>${ctx.esc(JSON.stringify(e.spec, null, 1)).slice(0, 4000)}</pre></details></div>`;
   }
   if (e.kind === "work") return `<div class="of-work"><b style="color:${tc(a.team)}">${E(a.name)}</b> <span>${ctx.esc(e.icon || "")} ${e.url ? link(e.url, e.text) : ctx.esc(e.text)}${e.src ? ` <small>· ${ctx.esc(e.src)}</small>` : ""}</span><time>${time}</time></div>`;
+  if (e.kind === "table"){
+    const rows = (e.rows || []).map(r => `<tr>${r.map((c, i) => `<td class="${/^\+/.test(c) ? "up" : /^-\d/.test(c) ? "dn" : ""}${i === 0 ? " k" : ""}">${E(c)}</td>`).join("")}</tr>`).join("");
+    return kcard(a, E(e.title || "분석"), time, `<div class="of-tw"><table class="of-kt"><tr>${(e.cols || []).map(c => `<th>${E(c)}</th>`).join("")}</tr>${rows || `<tr><td colspan="${(e.cols || []).length || 1}">자료 없음</td></tr>`}</table></div>${e.note ? `<p class="of-dim">${E(e.note)}</p>` : ""}`);
+  }
   // ---- 새 기록 종류 ----
   if (e.kind === "report"){
     const lines = String(e.text || "").split("\n").filter(l => l.trim()).slice(0, 6).join("\n");

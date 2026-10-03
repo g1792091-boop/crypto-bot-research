@@ -328,6 +328,8 @@ export const officeState = () => ({running, queued: queue.length});
 // 말로 시킨 '일'은 회의만 하지 않고 실제 업무를 바로 돌린다 (결과 카드는 그 팀 방에)
 const ACTIONS = [
   {job: "research", re: /(매매법|전략|지표).*(만들|찾|개발|짜|연구|발굴|백테스트)|(만들|찾|개발|짜).*(매매법|전략)|백테스트\s*(해|돌려)/, say: "퀀트 연구소가 지금 바로 매매법을 만들어 가장 오래된 과거부터 백테스트합니다"},
+  {job: "contest", re: /콘테스트|대회|리더보드|전략\s*순위|전략\s*경쟁|신뢰점수|어느\s*전략.{0,6}(좋|나)/, say: "퀀트 연구소가 전략 콘테스트를 열어 신뢰점수로 순위를 매기고, 저신뢰 전략은 교체합니다"},
+  {job: "ensemble", re: /앙상블|포트폴리오|분산\s*(투자|운용|배분)|비중\s*(배분|분배|나눠)|자본\s*배분/, say: "퀀트 연구소가 신뢰점수 상위 전략을 묶어 분산 포트폴리오(비중)를 제안합니다"},
   {job: "realestate", re: /(재개발|재건축|정비구역).*(조사|찾|추천|알아)/, say: "부동산팀이 지금 바로 재개발 후보지를 조사합니다"},
   {job: "arch", re: /(설계|도면|렌더링).*(해|만들|그려)/, say: "건축팀이 지금 바로 설계안을 만들고 렌더링합니다"},
   {job: "biz", re: /(사업|창업).*(구상|아이디어|만들|찾|계획)/, say: "신사업팀이 지금 바로 사업을 구상해 모의 사업을 돌립니다"},
@@ -802,12 +804,12 @@ export function startChatter(){
 // 매 주기 ① 모의투자 장부를 실제 시세로 갱신(코드, AI 없음) ② 그때그때 한 가지 일을 고른다:
 // 매매법 연구 · SNS 여론 · 경제 리서치 · 동료 수다 · 컴퓨터 작업 · 모의투자 보고 (하루 AI 호출 한도 안에서)
 // 쉬지 않고 돌아가는 업무 순환표: 팀마다 고르게 돌아가도록 섞어 두었다 (모듈이 없으면 경제 리서치로 대신)
-const JOBS = ["research", "realestate", "arch", "forecast", "sns", "ml", "task", "biz", "macro", "selfdev", "media", "research", "venture", "paper", "chat", "computer", "retro", "economy", "realestate", "arch", "research", "forecast", "task", "selfdev", "media", "ml"];
-const JOB_KO = {research: "매매법 연구", sns: "SNS 여론 확인", economy: "경제 리서치", paper: "모의투자 점검", chat: "동료 수다", computer: "컴퓨터 작업",
+const JOBS = ["research", "realestate", "arch", "forecast", "sns", "ml", "task", "biz", "macro", "selfdev", "media", "research", "contest", "venture", "paper", "chat", "computer", "retro", "economy", "realestate", "arch", "research", "ensemble", "forecast", "task", "selfdev", "media", "ml"];
+const JOB_KO = {research: "매매법 연구", contest: "전략 콘테스트(신뢰점수)+적응형 재학습", ensemble: "앙상블 포트폴리오(비중 배분)", sns: "SNS 여론 확인", economy: "경제 리서치", paper: "모의투자 점검", chat: "동료 수다", computer: "컴퓨터 작업",
   realestate: "재개발 후보지 조사", arch: "설계·3D 렌더링", forecast: "차트 방향 토론·예측", ml: "머신러닝 실험", task: "개선 과제 수행", biz: "사업 구상·시뮬레이션",
   macro: "경제지표 예측", media: "유튜브·인스타 조사", venture: "자체 코인·터미널·AI 개발", retro: "팀 회고·부족한 점 찾기", selfdev: "우리 앱 오류 찾아 코드 고치기"};
-const JOB_TEAM = {research: "quant", sns: "data", economy: "fut", paper: "quant", chat: "hq", computer: "data", realestate: "realestate", arch: "arch", forecast: "strat", ml: "quant", task: "hq", biz: "venture", macro: "fut", media: "data", venture: "venture", retro: "hq", selfdev: "lab"};
-const JOB_FN = () => ({research, sns: snsCheck, economy: economyCheck, paper: paperReport, chat: () => chatter(true), computer: computerWork,
+const JOB_TEAM = {research: "quant", contest: "quant", ensemble: "quant", sns: "data", economy: "fut", paper: "quant", chat: "hq", computer: "data", realestate: "realestate", arch: "arch", forecast: "strat", ml: "quant", task: "hq", biz: "venture", macro: "fut", media: "data", venture: "venture", retro: "hq", selfdev: "lab"};
+const JOB_FN = () => ({research, contest: contestJob, ensemble: ensembleJob, sns: snsCheck, economy: economyCheck, paper: paperReport, chat: () => chatter(true), computer: computerWork,
   realestate: realestateJob, arch: archJob, forecast: forecastJob, ml: mlJob, task: doTask, biz: bizJob, macro: macroJob, media: mediaJob, venture: ventureJob, retro, selfdev: selfdevJob});
 let cycleTimer = 0, cycling = false, lastJob = "";
 export const cycleState = () => ({cycling, lastJob});
@@ -927,6 +929,63 @@ async function paperReport(){
   await solo(a, {room: "quant", sys: personaOf(a, "모의투자 현황을 팀에 3~5문장으로 보고한다. 잘 되는 전략과 안 되는 전략, 지금 포지션의 위험을 짚는다. 실제 주문이 아닌 가상 운용임을 잊지 않는다."), user: `모의투자 장부:\n${book}`, train: "아래 모의투자 장부를 보고 잘 되는 전략과 안 되는 전략, 지금 포지션의 위험을 3~5문장으로 해설해 줘."});
 }
 
+/* ---- 🏆 전략 콘테스트 (신뢰점수 리더보드) + 적응형 재학습 (저신뢰 자동 은퇴·교체 요청) ---- */
+async function contestJob(){
+  const P = await import("./paper.js"), book = await P.loadBook(), lead = agentById("trader");
+  let linked = {}; try { const L = await import("./live.js"); linked = L.liveCfg?.().linked || {}; } catch(e){}
+  const active = book.strategies.filter(s => s.status === "active" && s.spec);
+  if (active.length < 2){ post({ch: "quant", kind: "system", text: `콘테스트하려면 모의투자 전략이 2개 이상 필요합니다 (지금 ${active.length}개) · 매매법 연구가 더 쌓이면 열립니다`}); return; }
+  const scored = active.map(s => {
+    const tr = s.trades || [], n = tr.length, wins = tr.filter(t => (t.pnl ?? t.roe ?? 0) > 0).length;
+    const ret = (P.equityOf(s) / 10000 - 1) * 100, wr = n ? wins / n * 100 : 0, pf = s.wf?.oos?.pf ?? null;
+    const trust = trustScore({ret, wr, pf, n, robust: s.robust, crossCoin: s.crossCoin});
+    const gen = s.crossCoin?.total ? `${s.crossCoin.profitable}/${s.crossCoin.total}` : "—";
+    const rob = s.robust ? (s.robust.mwTotal ? `${s.robust.mwPos}/${s.robust.mwTotal}` : "—") + (s.robust.p != null ? ` p${(+s.robust.p).toFixed(2)}` : "") : "—";
+    return {s, ret: +ret.toFixed(2), wr: +wr.toFixed(1), n, trust, gen, rob, live: !!linked[s.id]?.on};
+  }).sort((a, b) => b.trust - a.trust);
+  const rows = scored.slice(0, 12).map((x, i) => [String(i + 1), x.s.name.slice(0, 22), pc(x.ret), x.wr + "%", String(x.n), x.rob, x.gen, `${x.trust} (${trustGrade(x.trust).split(" ")[0]})`, x.live ? "🟢실거래" : x.trust >= 60 && i === 0 ? "🏆 승격후보" : x.trust < 30 ? "⚠ 은퇴검토" : ""]);
+  table("quant", lead.id, `🏆 전략 콘테스트 — 신뢰 점수 리더보드 (${scored.length}개)`, ["순위", "전략", "수익", "승률", "거래", "견고성", "일반화", "신뢰점수", "상태"], rows,
+    "신뢰점수 = 성과35 + 견고성30 + 일반화20 + 표본15. 수익만 높고 과최적화면 깎임 · 상위가 실거래 우선권, 30 미만은 은퇴 검토 · 과거 성과가 미래를 보장하지 않습니다");
+  const top = scored[0];
+  addNote("quant", `콘테스트 1위 ${top.s.name} (신뢰 ${top.trust}·${trustGrade(top.trust)})`, "콘테스트");
+  if (top.trust >= 60 && !top.live) addTask({team: "quant", title: `실거래 승격 검토: ${top.s.name}`, why: `신뢰점수 ${top.trust}(${trustGrade(top.trust)}) · 수익 ${pc(top.ret)}·일반화 ${top.gen}`, owner: lead.name});
+  // 적응형 재학습: 신뢰 30 미만(거래 10회+)은 자동 은퇴 + 매매법 연구에 교체 요청 (실거래 연결분은 자동 중지 대신 수동 점검)
+  const retired = [];
+  for (const x of scored){
+    if (x.n < 10 || x.trust >= 30) continue;
+    if (x.live){ addTask({team: "quant", title: `실거래 저신뢰 전략 점검: ${x.s.name}`, why: `신뢰 ${x.trust}로 하락 · 실거래 연결이라 사람이 해제 판단`, owner: lead.name}); continue; }
+    x.s.retiredWhy = `적응형 재학습: 신뢰점수 ${x.trust}로 하락(${x.n}거래)`;
+    await P.setStatus(x.s.id, "retired").catch(() => {});
+    addTask({team: "quant", title: `교체 전략 개발: ${x.s.mname || x.s.market}`, why: `${x.s.name}가 신뢰 ${x.trust}로 은퇴 — 더 견고한 새 전략 필요`, owner: agentById("qa")?.name || lead.name});
+    retired.push(x);
+  }
+  if (retired.length) post({ch: "quant", kind: "system", text: `🔁 적응형 재학습: ${retired.map(r => `${r.s.name}(신뢰 ${r.trust})`).join(", ")} 자동 은퇴 → 교체 전략 요청`});
+  if (hasAI()) await solo(lead, {room: "quant", maxTokens: 400, sys: personaOf(lead, "전략 콘테스트 신뢰점수 리더보드를 보고, 지금 가장 믿을 만한/위험한 전략, 수익은 나도 신뢰점수가 낮아 주의할 전략, 실거래로 올릴 후보를 3~5문장으로 해설한다. 과거 성과가 미래를 보장하지 않음을 밝힌다."),
+    user: `신뢰점수 리더보드:\n${tableText(["순위", "전략", "수익", "승률", "거래", "견고성", "일반화", "신뢰점수"], rows.map(r => r.slice(0, 8)))}`});
+}
+
+/* ---- 🧺 앙상블 포트폴리오 (신뢰점수 비례 분산 배분) ---- */
+async function ensembleJob(){
+  const P = await import("./paper.js"), book = await P.loadBook(), lead = agentById("trader");
+  let linked = {}; try { const L = await import("./live.js"); linked = L.liveCfg?.().linked || {}; } catch(e){}
+  const active = book.strategies.filter(s => s.status === "active" && s.spec);
+  const scored = active.map(s => {
+    const tr = s.trades || [], n = tr.length, wins = tr.filter(t => (t.pnl ?? t.roe ?? 0) > 0).length;
+    const ret = (P.equityOf(s) / 10000 - 1) * 100, wr = n ? wins / n * 100 : 0, pf = s.wf?.oos?.pf ?? null;
+    return {s, market: s.mname || s.market, cls: s.cls, ret: +ret.toFixed(2), n, trust: trustScore({ret, wr, pf, n, robust: s.robust, crossCoin: s.crossCoin}), live: !!linked[s.id]?.on};
+  });
+  const cands = scored.filter(x => x.trust >= 45 && x.n >= 5).sort((a, b) => b.trust - a.trust).slice(0, 8);
+  if (cands.length < 2){ post({ch: "quant", kind: "system", text: `앙상블 포트폴리오를 짜려면 신뢰점수 45 이상·거래 5회 이상 전략이 2개 이상 필요합니다 (지금 ${cands.length}개)`}); return; }
+  const CAP = Math.max(0.40, 1 / cands.length + 1e-6);
+  let w = cands.map(x => x.trust); const sum = w.reduce((a, b) => a + b, 0) || 1; w = w.map(v => v / sum);
+  for (let it = 0; it < 5; it++){ if (!w.some(v => v > CAP + 1e-9)) break; let ex = 0, fs = 0; w = w.map(v => { if (v > CAP){ ex += v - CAP; return CAP; } fs += v; return v; }); if (fs <= 0) break; w = w.map(v => v >= CAP ? v : v + ex * (v / fs)); }
+  const alloc = cands.map((x, i) => ({...x, weight: w[i]})), mkts = new Set(alloc.map(a => a.market)), wRet = alloc.reduce((a, x) => a + x.weight * x.ret, 0);
+  const rows = alloc.map((x, i) => [String(i + 1), x.s.name.slice(0, 22), x.market, String(x.trust), pc(x.ret), (x.weight * 100).toFixed(0) + "%", x.live ? "🟢실거래" : ""]);
+  table("quant", lead.id, `🧺 앙상블 포트폴리오 — 신뢰점수 비례 분산 (${alloc.length}개 전략 · ${mkts.size}개 시장)`, ["비중순", "전략", "시장", "신뢰점수", "수익", "제안비중", "상태"], rows,
+    `신뢰점수가 높을수록 자본을 더 배분(한 전략 최대 ${(CAP * 100).toFixed(0)}%) · 가중 평균 수익 ${pc(+wRet.toFixed(2))} · ${mkts.size}개 시장 분산 · 실거래는 총노출 한도와 함께 · 계산값일 뿐 미래 보장 아님`);
+  addNote("quant", `앙상블: ${alloc.slice(0, 3).map(a => `${a.s.name.slice(0, 10)} ${(a.weight * 100).toFixed(0)}%`).join(", ")}${alloc.length > 3 ? " …" : ""}`, "앙상블");
+}
+
 /* ---- 매매법 연구: 지표 29종 + 연구 카드 → 전략 JSON → 백테스트 · 과최적화 검사 → 통과하면 모의투자 ---- */
 // 코인 선물 · 미국 주식 · 국내 주식 · 해외선물 · 국내 지수(국내선물 기초)를 돌아가며 연구한다
 export const MARKETS = [
@@ -982,6 +1041,10 @@ function pickJSON(t){
   try { return JSON.parse(m[1]); } catch(e){ return null; }
 }
 const fmtDay = t => t ? new Date(t).toISOString().slice(0, 10) : "?";
+// 표·포맷 헬퍼 (콘테스트·앙상블·적응형에서 사용)
+const pc = v => v == null || !Number.isFinite(+v) ? "—" : (v >= 0 ? "+" : "") + (+v).toFixed(2) + "%";
+function table(ch, agent, title, cols, rows, note = ""){ return post({ch, kind: "table", agent, title, cols, rows, note}); }
+const tableText = (cols, rows) => [cols.join(" | "), ...rows.map(r => r.join(" | "))].join("\n");
 async function research(){
   const Q = await import("./quant.js"), P = await import("./paper.js");
   const n = researchLog().length, a = agentById(n % 2 ? "qb" : "qa"), mk = MARKETS[n % MARKETS.length], tf = mk.tf, iv = IV_NAME[tf];
