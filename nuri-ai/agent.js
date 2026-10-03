@@ -292,7 +292,17 @@ export const TOOLS = {
   indicator_all: {mode:"both", label:"보조지표 전체", args:'{"market":"BTCUSDT","exchange":"binancef|upbit|binance|yahoo","timeframe":"60"}', act: a => `${a.market || ""} 보조지표 29종 계산`,
     desc:"이동평균·RSI·MACD·볼린저·스토캐스틱·슈퍼트렌드·ADX·CCI·VWAP·OBV·MFI·윌리엄스R·ROC·파라볼릭SAR·돈치안·켈트너·스토캐스틱RSI·일목·CMF·아룬·ATR추적손절 등 29종을 한 번에 계산해 추세·모멘텀·변동성·거래량으로 정리한다",
     async run(a){
-      const Q = await import("./quant.js"); const {market, tf, cs} = await candlesFor(a, 400);
+      const Q = await import("./quant.js");
+      const markets = String(a.market || a.symbol || "").split(/[,\s]+/).filter(Boolean);
+      if (markets.length > 1){   // 코인을 여러 개 콤마로 넘겨도 종목별로 따로 받아 계산 (바이낸스는 한 번에 한 종목만)
+        const parts = [];
+        for (const m of markets.slice(0, 6)){
+          try { const r = await candlesFor({...a, market: m}, 400); parts.push(`■ ${r.cs.name || r.market} ${TF[r.tf] || r.tf}\n` + snapText(Q.snapshot(r.cs))); }
+          catch(e){ parts.push(`■ ${m}: ${String(e.message || e)}`); }
+        }
+        return {text: parts.join("\n\n"), summary: `${markets.length}개 종목 · 지표 29종`};
+      }
+      const {market, tf, cs} = await candlesFor(a, 400);
       const snap = Q.snapshot(cs);
       return {text: `${cs.name || market} ${TF[tf] || tf} 최근 봉 기준\n` + snapText(snap) + "\n\n[지표 값]\n" + JSON.stringify(snap.ind).slice(0, 3500), summary: `${cs.name || market} ${TF[tf] || tf} · 지표 29종`};
     }},

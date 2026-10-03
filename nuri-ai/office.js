@@ -176,9 +176,9 @@ export function assignModels(){
   const dead = deadModels();
   // 없어진 모델 · 지금 한도에 걸려 쉬는 회사는 빼고 (다 빠지면 원래 목록)
   const live0 = officeSources().filter(t => !dead[t.model]), live = live0.filter(t => !providerCooling(t.id));
-  const bad = badModels(), all = live.length ? live : live0.length ? live0 : officeSources(), ok = all.filter(t => !bad[t.model]);
+  const bad = badModels(), all = live.length >= 2 ? live : live0.length >= 2 ? live0 : officeSources(), ok = all.filter(t => !bad[t.model]);
   // Groq 무료는 분당 토큰이 아주 적어 도구가 붙는 긴 회의 프롬프트에 금방 막힌다 → 사무실에서는 뒤로
-  const ranked = (ok.length ? ok : all).map(t => ({t, sc: modelScore(t.model) - (t.id === "groq" ? 25 : 0)})).filter(x => x.sc > -40).sort((x, y) => y.sc - x.sc);
+  const ranked = (ok.length >= 2 ? ok : all).map(t => ({t, sc: modelScore(t.model) - (t.id === "groq" ? 25 : 0)})).filter(x => x.sc > -40).sort((x, y) => y.sc - x.sc);
   // 상위 모델 몇 개만 골고루 나눠 쓴다 (좋은 모델이 적으면 그다음 것까지)
   const top = ranked.filter(x => x.sc >= (ranked[0]?.sc ?? 0) - 25).slice(0, Math.max(3, Math.min(6, Math.ceil(ranked.length / 3)))).map(x => x.t);
   const pool = top.length ? top : ranked.map(x => x.t);
