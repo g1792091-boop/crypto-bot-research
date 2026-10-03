@@ -1571,10 +1571,19 @@ async function icSettle(){
   }
   if (changed) writeJ(IC_KEY, L.slice(-200));
 }
-function icLessons(coin, asOf = Date.now()){
+// TradingAgents 식 메모리 검색: 지금 '상황(situation)'과 비슷한 과거 복기를 우선해 꺼낸다 (토큰 겹침 + 같은 코인·최근 보정).
+// situation 이 없으면 기존처럼 최근 것 위주로.
+function icLessons(coin, asOf = Date.now(), situation = ""){
   const done = icLedger().filter(d => d.status === "resolved" && d.resolved <= asOf && d.lesson);
-  const same = done.filter(d => d.coin === coin).slice(-5), other = done.filter(d => d.coin !== coin).slice(-3);
-  return [...same, ...other].map(d => `- ${d.ko} ${d.rating} → 알파 ${pc(d.alpha)}: ${d.lesson}`).join("\n");
+  if (!done.length) return "";
+  const tok = s => (String(s).toLowerCase().match(/[a-z0-9]{2,}|[가-힣]{2,}/g) || []).flatMap(w => /[가-힣]/.test(w) && w.length > 2 ? [w, ...Array.from({length: w.length - 1}, (_, i) => w.slice(i, i + 2))] : [w]);
+  const q = new Set(tok(situation));
+  const scored = done.map(d => {
+    const lt = tok(`${d.lesson} ${d.why || ""}`); let ov = 0; for (const w of lt) if (q.has(w)) ov++;
+    const rec = Math.max(0, 1 - (asOf - d.resolved) / (30 * 864e5));   // 30일 내 최근일수록 가중
+    return {d, s: (q.size ? ov : 0) + (d.coin === coin ? 2 : 0) + rec * 2};
+  }).sort((a, b) => b.s - a.s).slice(0, 6);
+  return scored.map(({d}) => `- ${d.ko} ${d.rating} → 알파 ${pc(d.alpha)}: ${d.lesson}`).join("\n");
 }
 // 투자 대가 페르소나 (virattt/ai-hedge-fund 방식) — 강세·약세 리서처가 매번 다른 투자 철학으로 토론해 관점이 다양해진다.
 const IC_PERSONAS = [
@@ -1623,7 +1632,7 @@ async function icJob(){
   const con = await say("ic_10", "보수형 리스크 토론자: 손실·청산·쏠림 위험을 강조하며 크기 축소나 관망을 주장한다(근거는 자료에서).", "보수적 관점을 말해 주세요.", ctxR + `\n공격형: ${clip(agg, 400)}`);
   const neu = await say("ic_9", "중립형 리스크 토론자: 두 주장을 저울질해 균형 잡힌 크기·조건을 제안한다.", "중립 관점을 말해 주세요.", ctxR + `\n공격형: ${clip(agg, 400)}\n보수형: ${clip(con, 400)}`);
   // ⑥ 위원장 최종 결정 — 지난 결정의 교훈은 여기에만
-  const lessons = icLessons(c.id);
+  const lessons = icLessons(c.id, Date.now(), `${reports.market} ${reports.social} ${clip(reports.fundamentals, 200)}`);   // 지금 상황과 비슷한 과거 교훈을 우선 (TradingAgents 메모리 방식)
   const pm = (await solo(lead, {room: "ic", sys: personaOf(lead, "투자위원장(포트폴리오 매니저): 리스크 토론을 심판해 최종 결정한다. 의견 충돌만으로 관망하지 않는다. 지난 교훈을 참고한다. 3~6문장, 마지막 줄은 반드시 '최종 등급: 매수|비중확대|관망|비중축소|매도'. 실제 주문은 코드 관문과 대표 승인으로만 나간다는 것을 안다."),
     user: `${facts}\n\n리서치 매니저: ${clip(rm, 500)}\n트레이더: ${clip(tr, 400)}\n공격형: ${clip(agg, 350)}\n보수형: ${clip(con, 350)}\n중립형: ${clip(neu, 350)}\n\n지난 결정의 교훈(결정 시점 이전에 확정된 것만):\n${lessons || "(아직 없음)"}\n\n최종 결정을 내려 주세요.`, maxTokens: 700, train: "아래 투자위원회 토론을 보고 최종 결정을 내려 줘."})).text || "";
   const rating = parseRating(pm), rmRating = parseRating(rm), b0 = (await kl("BTCUSDT", "240", 5).catch(() => null))?.at(-1)?.c;
