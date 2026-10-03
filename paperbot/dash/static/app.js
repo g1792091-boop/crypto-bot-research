@@ -125,6 +125,7 @@ function pickChartAccount(id, symChanged) {   // the chart moves to that account
   state.acct = id; state.markers = true;
   fillAcctFilter(); $("mk-toggle").classList.add("on");
   loadTradeChart(); if (tfChanged || symChanged) klineStream();
+  if (tfChanged) renderTicker();      // the bar-close countdown follows the new timeframe at once
 }
 function bindPosButtons(root) {
   root.querySelectorAll("button[data-strat]").forEach((b) => b.onclick = (e) => {
@@ -244,7 +245,19 @@ const GH_STATE_KO = {long: "롱 타점", short: "숏 타점", longWait: "롱 대
 let slines = [];
 function pref(k, d) { try { const v = localStorage.getItem("pb-" + k); return v == null ? d : v === "1"; } catch (e) { return d; } }
 function setPref(k, v) { try { localStorage.setItem("pb-" + k, v ? "1" : "0"); } catch (e) { /* private window */ } }
-state.srOn = pref("sr", true); state.ghOn = pref("gh", false);
+state.srOn = pref("sr", true); state.ghOn = pref("gh", false); state.evOn = pref("ev", true);
+let macroEvs = null;           // US releases from /api/events (code only, data/macro_events.csv)
+async function macroMarks(t0) {   // a square on the bar of each release in view (CPI · FOMC · NFP · PCE)
+  if (!state.evOn || state.tf === "1d") return [];
+  if (!macroEvs || Date.now() - macroEvs.t > 600000) {
+    try { macroEvs = {t: Date.now(), list: (await api("/api/events?days_back=60&days_ahead=1")).events}; } catch (e) { macroEvs = {t: Date.now(), list: []}; }
+  }
+  const step = TF_SEC[state.tf], now = Date.now() / 1000;
+  return macroEvs.list.filter((e) => e.ts_ms / 1000 >= t0 && e.ts_ms / 1000 <= now).map((e) => {
+    const s = Math.floor(e.ts_ms / 1000);
+    return {time: s - (s % step), position: "aboveBar", color: css("--accent"), shape: "square", text: e.kind};
+  });
+}
 async function loadLevels() {
   const sym = state.sym, tf = state.tf;
   let lv = null, gb = null;
@@ -280,11 +293,14 @@ $("sr-toggle").classList.toggle("on", state.srOn);
 $("gh-toggle").classList.toggle("on", state.ghOn);
 $("sr-toggle").onclick = (e) => { state.srOn = !state.srOn; setPref("sr", state.srOn); e.target.classList.toggle("on", state.srOn); loadLevels(); };
 $("gh-toggle").onclick = (e) => { state.ghOn = !state.ghOn; setPref("gh", state.ghOn); e.target.classList.toggle("on", state.ghOn); loadLevels(); };
+$("ev-toggle").classList.toggle("on", state.evOn);
+$("ev-toggle").onclick = (e) => { state.evOn = !state.evOn; setPref("ev", state.evOn); e.target.classList.toggle("on", state.evOn); loadTradeChart(); };
 setInterval(() => { if (state.view === "trade") loadLevels(); }, 120000);
 async function drawTradeMarkers(t0) {
   tlines.forEach((l) => tseries.removePriceLine(l)); tlines = [];
   // All accounts at once would bury the candles in markers: draw them for one chosen account only.
-  if (!state.markers || state.tf === "1d" || !state.acct) { tseries.setMarkers([]); return; }
+  const ev = await macroMarks(t0);
+  if (!state.markers || state.tf === "1d" || !state.acct) { tseries.setMarkers(ev.sort((a, b) => a.time - b.time)); return; }
   let trades = [];
   try { trades = await api(`/api/trades?symbol=${state.sym}&tf=${state.tf}&limit=600`); } catch (e) { /* none */ }
   if (state.acct) trades = trades.filter((t) => t.account_id === state.acct);
@@ -297,6 +313,7 @@ async function drawTradeMarkers(t0) {
     marks.push({time: x - (x % step), position: t.side > 0 ? "aboveBar" : "belowBar", color: t.pnl > 0 ? css("--up") : css("--down"),
       shape: "circle", text: state.acct ? `${REASON_KO[t.exit_reason] || t.exit_reason} ${pct(t.roe, 0)}` : ""});
   });
+  marks.push(...ev);
   marks.sort((a, b) => a.time - b.time);
   tseries.setMarkers(marks);
   state.entryLine = null;
@@ -327,7 +344,7 @@ function fillAcctFilter() {
   sel.value = list.some((a) => a.account_id === cur) ? cur : "";
   state.acct = sel.value;
 }
-seg("tf-seg", "tf", (tf) => { state.tf = tf; fillAcctFilter(); loadTradeChart(); klineStream(); });
+seg("tf-seg", "tf", (tf) => { state.tf = tf; fillAcctFilter(); loadTradeChart(); klineStream(); renderTicker(); });
 $("acct-filter").onchange = (e) => { state.acct = e.target.value; loadTradeChart(); };
 $("mk-toggle").onclick = (e) => { state.markers = !state.markers; e.target.classList.toggle("on", state.markers); loadTradeChart(); };
 function renderWatch() {
@@ -457,6 +474,8 @@ async function loadBoard() {
   renderTicker();
   if (state.view === "board") renderBoard();
   if (state.view === "trade") { if (state.sideTab === "pos") renderSide(); if (state.botTab !== "alltrades") renderBottom(); }
+  // the strategy tab's live record (wins, losses, P&L) follows a closed trade too
+  if (state.view === "strat" && typeof renderSList === "function") { renderSList(); renderLive(); renderAccts(); }
 }
 seg("f-tf", "tf", (v) => { state.bf.tf = v; renderBoard(); });
 seg("f-kind", "k", (v) => { state.bf.kind = v; renderBoard(); });

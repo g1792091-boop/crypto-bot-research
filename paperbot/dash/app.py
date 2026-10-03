@@ -688,40 +688,51 @@ def budget_caps(env_text: Optional[str] = None) -> dict:
     return caps
 
 
-def _trigger_defaults() -> dict:
-    """Numbers for the 'when does this room meet' line (from triggers.TriggerPolicy when importable)."""
-    d = {"loss_min_count": 3, "loss_min_gap_ms": 4 * 3_600_000, "weekly_min_trades": 30,
+def _trigger_defaults(hours: Optional[dict] = None) -> dict:
+    """Numbers for the 'when does this room meet' line: the hours the agents tick last used (``hours``, its
+    cursor 'policy:hours': AGENTS_*_HOUR live in agents.env, which the dashboard does not read), else the
+    server's defaults."""
+    d = {"loss_min_count": 2, "loss_min_gap_ms": 2 * 3_600_000, "weekly_min_trades": 30,
          "checkpoint_every_days": 30, "morning_hour_kst": 8, "evening_hour_kst": 22,
-         "ranking_hour_kst": 14, "tf_split_hour_kst": 18}
+         "ranking_hour_kst": 14, "tf_split_hour_kst": 18, "weekly_report_hour_kst": 21}
     try:
         from ..agents.triggers import TriggerPolicy
         p = TriggerPolicy()
-        d = {k: getattr(p, k, v) for k, v in d.items()}
-        from ..agents.rooms import RANKING_HOUR_DEFAULT, TF_SPLIT_HOUR_DEFAULT   # off in TriggerPolicy(), on for the server
-        d["ranking_hour_kst"], d["tf_split_hour_kst"] = RANKING_HOUR_DEFAULT, TF_SPLIT_HOUR_DEFAULT
+        # TriggerPolicy() leaves the server-only meetings off (-1): keep the server's hours for those
+        d.update({k: getattr(p, k) for k in d if hasattr(p, k) and getattr(p, k) is not None
+                  and not (k.endswith("_hour_kst") and getattr(p, k) < 0)})
     except Exception:
         pass
+    for k, key in (("morning", "morning_hour_kst"), ("ranking", "ranking_hour_kst"), ("tf_split", "tf_split_hour_kst"),
+                   ("evening", "evening_hour_kst"), ("weekly_report", "weekly_report_hour_kst"),
+                   ("loss_min_count", "loss_min_count"), ("loss_min_gap_ms", "loss_min_gap_ms")):
+        v = (hours or {}).get(k)
+        if isinstance(v, int) and not isinstance(v, bool):
+            d[key] = v
     return d
 
 
-def room_schedule_ko(room_id: str) -> str:
+def room_schedule_ko(room_id: str, hours: Optional[dict] = None) -> str:
     """Plain Korean: when the staff of this room meet by themselves (no one has to type)."""
     from ..agents.roster3 import STRATEGY_KO
-    d = _trigger_defaults()
+    d = _trigger_defaults(hours)
+    hh = lambda h: f"{h:02d}:00"  # noqa: E731
     if room_id.startswith("strat:"):
         names = list(STRATEGY_KO)
         s = room_id[len("strat:"):]
         wd = WEEKDAY_KO[names.index(s) % 7] if s in names else "정해진"
         gap_h = int(d["loss_min_gap_ms"] // 3_600_000)
+        tf = (f", 5개 봉 계좌의 성적이 크게 갈리면 {hh(d['tf_split_hour_kst'])} 봉 비교 회의로"
+              if d["tf_split_hour_kst"] >= 0 else "")
         return (f"새 손실이 {d['loss_min_count']}건 쌓이면 (같은 방은 {gap_h}시간 간격), 계좌가 파산하면, "
-                f"거래가 {d['weekly_min_trades']}건 더 쌓인 뒤 {wd}요일 주간 검토 때, 5개 봉 계좌의 성적이 크게 갈리면 "
-                f"{d['tf_split_hour_kst']:02d}:00 봉 비교 회의로 스스로 회의를 엽니다.")
+                f"거래가 {d['weekly_min_trades']}건 더 쌓인 뒤 {wd}요일 주간 검토 때{tf} 스스로 회의를 엽니다.")
     m, e, c = d["morning_hour_kst"], d["evening_hour_kst"], d["checkpoint_every_days"]
     return {
         "team:market": f"매일 {m:02d}:00 아침 회의: 장세 → 파생·쏠림 → 전략가 → 반론 → 팀장 요약(텔레그램 발송). "
                        "시세가 크게 움직이면 바로 회의.",
-        "team:review": f"매일 {d['ranking_hour_kst']:02d}:00 순위 검토(잔고 상위·하위 3개 매매법, 텔레그램 발송), "
-                       f"{e:02d}:00 저녁 점검: 손익 복기 → 가정 분석 → 리스크 책임자.",
+        "team:review": (f"매일 {hh(d['ranking_hour_kst'])} 순위 검토(잔고 상위·하위 3개 매매법, 텔레그램 발송), "
+                        if d["ranking_hour_kst"] >= 0 else "매일 ")
+                       + f"{e:02d}:00 저녁 점검: 손익 복기 → 가정 분석 → 리스크 책임자.",
         "team:lead": f"매일 {e:02d}:00 팀장 3줄 요약(텔레그램 발송), {c}·{2 * c}·{3 * c}일째 중간 점검.",
         "team:ops": "사고가 나면 바로: 강제청산, 밤 점검 불일치, 데이터 끊김, 신호 지연.",
         "team:risk": "정해진 회의는 없고, 두 분이 남긴 메시지에 답합니다.",
@@ -817,6 +828,7 @@ class Rooms:
             # the agents tick's last sign of life ({ts, ok, why}): the page tells the owners when the
             # staff have stopped (timer off, login refused, crashed) instead of promising an answer
             last_tick = self._cursor_obj(a, self.R.TICK_CURSOR)
+            hours = self.hours(a)
             waits, per_day = self._owner_waits(a, int(time.time() * 1000) if now_ms is None else now_ms)
         out = []
         for rid, spec in self.specs.items():
@@ -824,7 +836,7 @@ class Rooms:
                  "members": spec["members"], "last_id": 0, "last_ts": None, "last_kind": None, "last_role": None,
                  "last_speaker": None, "last_text": "", "rounds_today": 0, "open_proposals": 0, "running": False}
             r.update({k: v for k, v in rows.pop(rid, {}).items() if v is not None or k not in r})
-            r["schedule_ko"] = room_schedule_ko(rid)
+            r["schedule_ko"] = room_schedule_ko(rid, hours)
             out.append(r)
         out += list(rows.values())          # rooms the tick knows and this code does not (newer roster)
         for r in out:
@@ -841,6 +853,13 @@ class Rooms:
         return {"ready": ready, "now": int(time.time() * 1000) if now_ms is None else now_ms,
                 "last_tick": last_tick, "tick_every_ms": TICK_EVERY_MS, "rounds_per_room_day": per_day,
                 "max_id": max((int(r.get("last_id") or 0) for r in out), default=0), "rooms": out}
+
+    def hours(self, a: Optional[sqlite3.Connection] = None) -> Optional[dict]:
+        """The meeting hours the agents tick last used (rooms.HOURS_CURSOR), None before its first pass."""
+        if a is None:
+            with self.ro(self.agents_db) as c:
+                return self._cursor_obj(c, "policy:hours")
+        return self._cursor_obj(a, "policy:hours")
 
     def _owner_waits(self, a: Optional[sqlite3.Connection], now_ms: int) -> tuple[dict, int]:
         """({room_id: why, '*': why for every room}, the room's daily meeting cap): the owners' posts that
@@ -1598,7 +1617,7 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
                     rep = DG.week_report(c, a, int(time.time() * 1000), init)
             finally:
                 c.close()
-            return {**rep, "telegram_text": DG.compose_week(rep)}
+            return {**rep, "telegram_text": DG.compose_week(rep), "hours": _trigger_defaults(rooms.hours())}
         return _digest_cached("week", make)
 
     @app.get("/api/digest/tf")
@@ -1613,7 +1632,7 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
             except sqlite3.Error as exc:
                 return {"error": f"paper3.db를 열지 못함: {type(exc).__name__}", "strategies": [], "split": []}
             try:
-                return DG.tf_split(c, init)
+                return {**DG.tf_split(c, init), "hours": _trigger_defaults(rooms.hours())}
             finally:
                 c.close()
         return _digest_cached("tf", make)
@@ -1717,7 +1736,8 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
             raise HTTPException(400, "unknown symbol")
         if interval not in ("1m", "5m", "15m", "30m", "1h", "4h", "1d"):
             raise HTTPException(400, "unknown interval")
-        return candles(symbol, interval, min(max(limit, 10), 1500))
+        # the live-bar fallback asks for 2 rows every 5 s (fetch_candles caches those 4 s); the chart load asks for 300
+        return candles(symbol, interval, min(max(limit, 2), 1500))
 
     @app.get("/api/summary")
     def get_summary():
@@ -1777,6 +1797,15 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
                 raise HTTPException(503, f"levels failed: {type(exc).__name__}")
         return levels_cache[key]
 
+    @app.get("/api/events")
+    def get_events(days_back: int = 60, days_ahead: int = 30):
+        """Registered US macro releases around now (data/macro_events.csv, code only: no outside fetch)."""
+        from .. import events as EV
+        now = int(time.time() * 1000)
+        lo = now - min(max(int(days_back), 0), 400) * 86_400_000
+        hi = now + min(max(int(days_ahead), 0), 400) * 86_400_000
+        return {"events": [e.as_dict() for e in EV.all_events() if lo <= e.ts_ms <= hi], "problems": EV.problems()}
+
     @app.get("/api/ghcoin/board")
     def get_ghcoin_board():
         """GH Coin's latest plan per coin (board.json of the recorder), without the totals."""
@@ -1785,7 +1814,7 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
                 b = json.load(fh)
         except (OSError, ValueError):
             return {"coins": {}, "alive": False}
-        return {"coins": b.get("coins") or {}, "ts": b.get("ts"),
+        return {"coins": b.get("coins") or {}, "ts": b.get("ts"), "errors": b.get("errors") or {},
                 "alive": time.time() * 1000 - int(b.get("ts") or 0) <= 15 * 60_000}
 
     @app.get("/api/ticker")

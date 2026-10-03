@@ -21,13 +21,17 @@ async function loadLiq() {
 function ghRows() {
   const g = p2.gh;
   if (!g || !g.coins || !Object.keys(g.coins).length) return '<p class="empty">GH Coin 기록기 응답 없음</p>';
-  return `<table class="p2t"><thead><tr><th class="l">코인</th><th class="l">GH Coin 판단</th><th>확신</th></tr></thead><tbody>` +
+  const ta = (c) => {   // GH Coin's TA rating (4h, else 1h): buy / sell / neutral words from its own ta_rating.js
+    const r = (c.rating || {})["240"] || (c.rating || {})["60"];
+    return r && r.label ? `<span class="${r.all > 0 ? "up" : r.all < 0 ? "down" : "muted"}">${esc(r.label)}</span>` : "—";
+  };
+  return `<table class="p2t"><thead><tr><th class="l">코인</th><th class="l">GH Coin 판단</th><th>확신</th><th title="GH Coin 보조지표 종합 평가 (4시간봉)">지표</th></tr></thead><tbody>` +
     TRADE_SYMS.map((s) => {
       const c = g.coins[s];
-      if (!c) return `<tr><td class="l"><b>${coin(s)}</b></td><td class="l muted" colspan="2">${esc((g.errors || {})[s] ? "가격 못 받음" : "—")}</td></tr>`;
+      if (!c) return `<tr><td class="l"><b>${coin(s)}</b></td><td class="l muted" colspan="3">${esc((g.errors || {})[s] ? "가격 못 받음" : "—")}</td></tr>`;
       return `<tr class="click ${s === state.sym ? "sel" : ""}" data-gs="${s}" title="${esc([c.regime, c.why].filter(Boolean).join(" · "))}"><td class="l"><b>${coin(s)}</b></td>
         <td class="l"><span class="${GH_CLS[c.state] || "muted"}">${esc(GH_STATE_KO[c.state] || c.state)}</span></td>
-        <td class="mono">${c.conf == null ? "—" : Math.round(c.conf)}</td></tr>`;
+        <td class="mono">${c.conf == null ? "—" : Math.round(c.conf)}</td><td>${ta(c)}</td></tr>`;
     }).join("") + "</tbody></table>" +
     `<div class="p2n">${g.alive ? "5분마다 갱신" : "기록기가 15분 넘게 조용함"} · 누르면 그 코인 차트에 GH Coin 선 · 기록만 하는 참고용 (195개 계좌와 무관)</div>`;
 }
@@ -58,14 +62,16 @@ function dayRows() {
   }
   out += kv("미국 증시", usOpen(now));
   const ev = s && s.events;
-  if (ev && ev.length) ev.slice(0, 2).forEach((e) => {
-    const d = Math.ceil((e.ts_ms - now) / 864e5);
+  // D-day by the Korea calendar day: an event later today is "오늘", tomorrow's is D-1
+  const kday = (ms) => Math.floor((ms + 9 * 3.6e6) / 864e5);
+  if (ev && ev.length) ev.slice(0, 3).forEach((e) => {
+    const d = kday(e.ts_ms) - kday(now);
     out += kv(esc(e.name_ko), `${tsKo(e.ts_ms)} (${d <= 0 ? "오늘" : "D-" + d})`);
   });
   else if (s) out += kv("미국 경제발표", '<span class="muted">등록된 일정 없음</span>');
   if (s && s.next_checkpoint) {
-    const d = Math.ceil((s.next_checkpoint.ts - now) / 864e5);
-    out += kv(`${s.next_checkpoint.day}일째 판정`, `${tsKo(s.next_checkpoint.ts)} (D-${d})`);
+    const d = kday(s.next_checkpoint.ts) - kday(now);
+    out += kv(`${s.next_checkpoint.day}일째 판정`, `${tsKo(s.next_checkpoint.ts)} (${d <= 0 ? "오늘" : "D-" + d})`);
   }
   if (s && s.observing) out += kv("관찰 기간 끝", tsKo(s.observe_until));
   return out;
@@ -83,12 +89,15 @@ function liqRows() {
   const d = p2.liq;
   if (!d) return '<p class="empty">불러오는 중</p>';
   if (!d.recorder) return '<p class="empty">강제청산 기록기 자료가 없습니다 (paperbot-liq)</p>';
+  // the recorder writes every few seconds on a normal market: 10 quiet minutes means it has stopped
+  const quiet = d.last_any ? Math.floor((Date.now() - d.last_any) / 6e4) : null;
+  const warn = quiet != null && quiet >= 10 ? `<div class="alwarn">강제청산 기록기가 ${quiet}분째 조용합니다. 아래 숫자는 그 전까지의 기록입니다 (서버: systemctl status paperbot-liq)</div>` : "";
   const tot = d.long_usd + d.short_usd, share = tot > 0 ? d.long_usd / tot : 0.5;
   const usdK = (x) => x >= 1e6 ? `$${(x / 1e6).toFixed(2)}M` : x >= 1e3 ? `$${(x / 1e3).toFixed(1)}K` : `$${fmt(x, 0)}`;
   const rows = d.rows.map((r) => `<tr><td class="l mono">${hms(r.ts)}</td>
     <td class="l ${r.liquidated === "long" ? "down" : "up"}">${r.liquidated === "long" ? "롱 청산" : "숏 청산"}</td>
     <td class="mono">${px(r.price)}</td><td class="mono">${r.usd >= 1e5 ? `<b>${usdK(r.usd)}</b>` : usdK(r.usd)}</td></tr>`).join("");
-  return `<div class="p2h">최근 1시간 ${coin(d.symbol)} 강제청산 (바이낸스 전체)</div>
+  return `${warn}<div class="p2h">최근 1시간 ${coin(d.symbol)} 강제청산 (바이낸스 전체, ${d.n || 0}건)</div>
     <div class="bkbar"><span class="down">롱 ${usdK(d.long_usd)}</span><div class="liqbar"><i style="width:${(share * 100).toFixed(1)}%"></i></div><span class="up">숏 ${usdK(d.short_usd)}</span></div>
     ${rows ? `<table class="p2t"><thead><tr><th class="l">시각</th><th class="l">종류</th><th>가격</th><th>규모</th></tr></thead><tbody>${rows}</tbody></table>` : '<p class="empty">최근 기록 없음</p>'}
     <div class="p2n">롱 청산 = 롱 포지션이 강제로 팔림(가격 하락 쪽), 숏 청산 = 반대. 바이낸스가 코인별로 1초에 1건만 알려줘서 실제보다 적게 잡힙니다.</div>`;

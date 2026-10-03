@@ -324,7 +324,8 @@ class RoomsPolicy:
     week_budget: tuple = DEFAULT_WEEK       # rolling 7 KST days (calls, tokens), all classes
     bust_reserve_calls: int = 8             # of the loss class: loss_cluster rounds leave these for busts
     critical_reserve_calls: int = 5         # of the incident class: kept for CRITICAL alerts (liquidations)
-    paced_triggers: tuple = ("loss_cluster", "weekly", "research")   # spread over the KST day, not all at 00:00
+    # spread over the KST day, not all at 00:00; tf_split shares the weekly reviews' class and keeps what they keep
+    paced_triggers: tuple = ("loss_cluster", "weekly", "research", "tf_split")
     # paced (loss_cluster / weekly) calls also leave, inside the total and 7-day caps, the unused part of
     # this many owner-post calls (and of the bust reserve): a busy night of reviews never leaves the
     # owners' posts or a bust waiting for midnight
@@ -780,6 +781,36 @@ def stop_blocks(stopped: str, cls: str) -> list[str]:
     return []
 
 
+CLASS_KO = {"incident": "사고 점검", "owner": "두 분 글", "loss": "손실·파산 복기", "scheduled": "정기 회의",
+            "weekly": "주간 검토·봉 비교", "research": "새 매매법 연구"}
+
+
+def limit_why_ko(stopped: Optional[str], cls: str, detail: str) -> str:
+    """Which of our caps stopped a meeting, in plain Korean with the numbers of the exception text
+    (owners 2026-10-03: "AI 사용량 도달이라는데 벌써? 이거 뭐야?")."""
+    import re as _re
+    nums = {k: (int(a.replace(",", "")), int(b.replace(",", ""))) for a, b, k in
+            _re.findall(r"([\d,]+)/([\d,]+) (calls|tokens)", detail or "")}
+
+    def amount() -> str:
+        c, t = nums.get("calls"), nums.get("tokens")
+        parts = []
+        if c:
+            parts.append(f"호출 {c[0]}/{c[1]}번")
+        if t:
+            parts.append(f"토큰 {t[0] / 10_000:,.0f}만/{t[1] / 10_000:,.0f}만")
+        return " · ".join(parts)
+    where = {"budget_class": f"'{CLASS_KO.get(cls, cls)}' 몫의 하루 한도",
+             "budget_subcap": f"'{CLASS_KO.get(cls, cls)}' 몫 중 이 회의가 쓸 수 있는 부분(파산·강제청산·두 분 글 몫은 남겨 둠)",
+             "budget_reserve": "하루·7일 합계 중 남겨 둔 몫(강제청산·정기 회의)",
+             "budget_total": "하루 전체 합계",
+             "budget_week": "최근 7일 합계"}.get(stopped or "", "")
+    if not where:
+        return ""
+    a = amount()
+    return f"{where}{f': {a}' if a else ''}. 한도는 서버의 AGENTS_BUDGET으로 바꿉니다(Claude 구독 한도와는 별개)"
+
+
 def limit_text(stopped: Optional[str]) -> str:
     """What the room is told when a meeting stops at a limit (``stop_kind``): the Claude plan's own
     limit is not our daily cap, and a stop that keeps the reserve says so."""
@@ -855,6 +886,14 @@ def budget_caps(policy: Optional[RoomsPolicy] = None) -> dict:
 
 
 POLICY_CURSOR = "policy:caps"     # the caps a tick really used; the dashboard reads them (read-only)
+HOURS_CURSOR = "policy:hours"     # the meeting hours in force (KST, -1 = off): the dashboard's schedule lines
+
+
+def schedule_hours(policy: "RoomsPolicy") -> dict:
+    t = policy.triggers
+    return {"morning": t.morning_hour_kst, "ranking": t.ranking_hour_kst, "tf_split": t.tf_split_hour_kst,
+            "evening": t.evening_hour_kst, "weekly_report": policy.weekly_report_hour_kst,
+            "loss_min_count": t.loss_min_count, "loss_min_gap_ms": t.loss_min_gap_ms}
 
 
 def apply_budget_specs(policy: RoomsPolicy, specs: list[str]) -> None:
@@ -1104,7 +1143,7 @@ def _strs(v: Any, n: int = 6, each: int = 300) -> list[str]:
 # these; owner posts, room talk, notes and this round's answers are other people's words.
 CODE_ROOTS = ("losses", "specialist", "board", "trials", "rules", "meeting", "room", "code_result", "copy_check",
               "today_rounds", "waiting_for_owners", "expert_reason", "lab", "candidates", "lab_results",
-              "extra_accounts", "lab_accounts")
+              "extra_accounts", "lab_accounts", "tf_split", "ranking", "market_move")
 
 
 def _model_written(path: str, given: Optional[dict]) -> bool:
@@ -1252,7 +1291,8 @@ def check_dialog(out: Any, given: dict) -> dict:
     spoke = {v.get("role") for v in (given.get("this_round") or {}).values() if isinstance(v, dict)}
     spoke.discard(given.get("role"))
     rt = out.get("responds_to")
-    if isinstance(rt, dict) and isinstance(rt.get("role"), str) and rt["role"] in spoke and rt.get("stance") in STANCE_KO:
+    if (isinstance(rt, dict) and isinstance(rt.get("role"), str) and rt["role"] in spoke
+            and isinstance(rt.get("stance"), str) and rt["stance"] in STANCE_KO):
         point = _line(rt.get("point"), 300)
         if point:
             res["responds_to"] = {"role": rt["role"], "stance": rt["stance"], "point": point}
@@ -1594,9 +1634,23 @@ def _board(ctx: RoundContext) -> dict:
                                                                        if v.get("status") == "first_pass")[:20],
                              "bust": sum(1 for v in pc.values() if v.get("bust"))}
     board["market"] = _market(ctx)
+    board["macro"] = _macro(ctx)
     board.update(_day_losses(ctx))
     ctx.cache["board"] = board
     return board
+
+
+def _macro(ctx: RoundContext) -> dict:
+    """The registered US releases of the next 14 days (data/macro_events.csv, code only)."""
+    from .. import events as EV
+    try:
+        up = EV.upcoming(ctx.now_ms, days=14)
+        bad = EV.problems()
+    except Exception as exc:  # noqa: BLE001  (a calendar never stops a meeting)
+        return {"error": type(exc).__name__}
+    return {"upcoming": up, "registered": len(EV.all_events()), "problems": bad[:3],
+            "note": ("미국 경제지표 발표(한국 시각은 ts_ms를 +9시간). 발표 30분 전~2시간 뒤는 변동성이 커짐(손실 카드 특징 "
+                     "'경제지표 발표 전후'). 등록된 일정이 0개면 일정을 모르는 것이지 발표가 없는 것이 아님")}
 
 
 def _market(ctx: RoundContext) -> dict:
@@ -1899,7 +1953,10 @@ class _Round:
                 parsed = strict_json(res.text)
                 clean, problems = check(parsed, given)
                 if clean is not None and turn in DIALOG_TURNS:
-                    clean.update(check_dialog(parsed, given))
+                    try:                                # optional fields never void a checked answer
+                        clean.update(check_dialog(parsed, given))
+                    except (TypeError, ValueError, KeyError, AttributeError):
+                        pass
             except (TypeError, ValueError, OverflowError, KeyError, AttributeError, IndexError,
                     RecursionError) as exc:             # a checker bug is an unreadable answer, never a crash
                 clean, problems = None, [f"답 검사 실패: {type(exc).__name__}"]
@@ -2188,13 +2245,15 @@ def _strategy_summary(rnd: _Round, final: dict, res: dict, early: bool, verdict:
 
 # ---------------------------------------------------------------- team rooms
 TEAM_VIEW = {
-    "chart_regime": ("market", "by_coin"),
-    "derivs_flow": ("market", "execution", "nightly"),
-    "strategist": ("market", "league", "today", "by_strategy"),
-    "devils_advocate": ("market", "league", "today"),
-    "pnl_reviewer": ("today", "exits", "loss_tags_24h", "by_coin"),
+    # breakdown: by coin, weekday/weekend x session, funding / US-open / 08:30 windows, volatility at entry
+    # (packets3 'breakdown', 2026-10-03: computed every tick and now read); macro: the next US releases
+    "chart_regime": ("market", "by_coin", "breakdown", "macro"),
+    "derivs_flow": ("market", "execution", "nightly", "macro"),
+    "strategist": ("market", "league", "today", "by_strategy", "breakdown", "macro"),
+    "devils_advocate": ("market", "league", "today", "breakdown"),
+    "pnl_reviewer": ("today", "exits", "loss_tags_24h", "by_coin", "breakdown"),
     "whatif": ("exits", "stop_whatif_24h", "nightly"),
-    "risk_officer": ("league", "today", "exits", "pass_summary"),
+    "risk_officer": ("league", "today", "exits", "pass_summary", "macro"),
     "ops_auditor": ("today", "execution", "nightly"),
     "data_quality": ("nightly", "execution", "today"),
     "code_reviewer": ("nightly", "execution", "today"),
@@ -2376,7 +2435,7 @@ def _team_round(rnd: _Round) -> tuple[str, dict]:
                    "시세 급변 요약", extra)
     if rnd.due.trigger == "ranking" and lead is not None:
         _send_once(rnd, f"telegram:ranking:{rnd.due.data.get('slot') or R.kst_day(ctx.now_ms)}",
-                   compose_ranking(rnd.base["ranking"], lead), "순위 검토 요약", extra)
+                   compose_ranking(rnd.base["ranking"], lead, ctx.policy.triggers.ranking_hour_kst), "순위 검토 요약", extra)
     if rnd.due.trigger == "morning" and lead is not None:
         _send_once(rnd, f"telegram:morning:{rnd.due.data.get('slot') or R.kst_day(ctx.now_ms)}",
                    compose_lead_lines("🌅 아침 회의 (시장분석팀, 08:00)", lead), "아침 요약", extra)
@@ -2508,11 +2567,11 @@ def compose_lead_lines(title: str, lead: Optional[dict]) -> str:
     return "\n".join(L)[:TELEGRAM_LIMIT]
 
 
-def compose_ranking(pk: dict, lead: Optional[dict]) -> str:
+def compose_ranking(pk: dict, lead: Optional[dict], hour: int = 14) -> str:
     """Telegram (silent): the picked strategies' numbers by code, then the lead's three lines."""
-    L = ["🏁 순위 검토 (손익 복기팀, 14:00)"]
+    L = [f"🏁 순위 검토 (손익 복기팀, {int(hour):02d}:00)"]
     for r in pk.get("picked") or []:
-        c = (r.get("compare") or {}).get("all") or {}
+        c = r.get("closed") or (r.get("compare") or {}).get("all") or {}       # every closed trade (code)
         wr = c.get("win_rate")
         L.append(f"{r['group']} {r['rank']}/{r['of']} {r['name_ko']}: {'+' if r['pnl'] >= 0 else '-'}${abs(r['pnl']):,.0f}"
                  f" · {c.get('wins', 0)}승 {c.get('losses', 0)}패" + (f" ({wr * 100:.0f}%)" if wr is not None else ""))
@@ -2543,8 +2602,8 @@ def weekly_report_due(policy: RoomsPolicy, now_ms: int) -> Optional[str]:
 
 def weekly_report_tick(ctx: RoundContext) -> Optional[bool]:
     """Sunday's weekly report (digest.week_report, code only) to Telegram, silent, once per week: the cursor
-    ``telegram:weekly_report:<date>`` is set when Telegram took it; a refused send is tried again on the next
-    ticks, at most ``WEEKLY_REPORT_TRIES`` times. None = not due (or already sent)."""
+    ``telegram:weekly_report:<date>`` is set when Telegram took it; a refused send is tried on the next ticks,
+    ``WEEKLY_REPORT_TRIES`` attempts in all. None = not due (or already sent)."""
     from . import digest
     day = weekly_report_due(ctx.policy, ctx.now_ms)
     if day is None:
@@ -3110,9 +3169,10 @@ def run_round(due: TR.Due, ctx: RoundContext, call_cap: Optional[int] = None) ->
         stopped = stop_kind(exc)
         status = "stopped_budget"
         text = limit_text(stopped)
+        why = limit_why_ko(stopped, cls, str(exc))
         decision = {"action": None, "stopped": stopped, "blocks": stop_blocks(stopped, cls),
-                    "detail": str(exc)[:300], "summary_ko": text}
-        _safe_system(rnd, text, {"reason": stopped})
+                    "detail": str(exc)[:300], "summary_ko": text, "why_ko": why}
+        _safe_system(rnd, f"{text} ({why})" if why else text, {"reason": stopped, "detail": str(exc)[:300]})
     except RunnerUnavailable as exc:                     # the evidence is fine; the runner is not
         status, error, stopped = "failed", str(exc)[:300], "runner_error"
         decision = {"action": None, "error": error, "transient": True, "calls_ok": rnd.calls_ok,
@@ -3535,6 +3595,9 @@ def tick(paper_db: Optional[str], daily_db: Optional[str], agents_db: str, inbox
             caps = budget_caps(policy)
             if R.get_cursor(conn, POLICY_CURSOR) != caps:   # the dashboard shows the caps in force
                 R.set_cursor(conn, POLICY_CURSOR, caps)
+            hours = schedule_hours(policy)
+            if R.get_cursor(conn, HOURS_CURSOR) != hours:   # ... and the meeting hours in force
+                R.set_cursor(conn, HOURS_CURSOR, hours)
             # this tick holds the lock, so a round still 'running' belongs to a pass that died (reboot,
             # kill, OOM): fail it now (one failed attempt, tried once more) instead of letting it block
             # its room and trigger for 2 hours

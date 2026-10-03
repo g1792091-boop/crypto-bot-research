@@ -342,9 +342,11 @@ def test_levels_depth_and_ghcoin_board_endpoints(tmp_path):
     assert c.get("/api/depth", params={"symbol": "ETHUSDT"}).json()["asks"] == [[1.1, 3.0]]
     assert c.get("/api/ghcoin/board").json() == {"coins": {}, "alive": False}
     os.makedirs(tmp_path / "ghcoin")
-    (tmp_path / "ghcoin" / "board.json").write_text(json.dumps({"ts": 1, "coins": {"BTCUSDT": {"state": "long", "side": 1}}}))
+    (tmp_path / "ghcoin" / "board.json").write_text(json.dumps({"ts": 1, "coins": {"BTCUSDT": {"state": "long", "side": 1}},
+                                                                 "errors": {"BCHUSDT": "HTTP 418"}}))
     g = c.get("/api/ghcoin/board").json()
     assert g["coins"]["BTCUSDT"]["side"] == 1 and g["alive"] is False
+    assert g["errors"] == {"BCHUSDT": "HTTP 418"}            # the panel says '가격 못 받음' for that coin
 
 
 def test_positions_view_is_wired():
@@ -478,3 +480,31 @@ def test_market_endpoint_each_source_on_its_own(tmp_path):
     static = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "paperbot", "dash", "static")
     html = open(os.path.join(static, "index.html"), encoding="utf-8").read()
     assert 'data-v="market"' in html and 'id="v-market"' in html and "/static/market.js" in html
+
+
+def test_events_endpoint_and_chart_markers(client, tmp_path, monkeypatch):
+    """2026-10-03: the trade chart marks the registered US releases (CPI · FOMC · NFP · PCE)."""
+    import time
+
+    from paperbot import events as EV
+    now = int(time.time() * 1000)
+    iso = lambda ms: EV.datetime.fromtimestamp(ms / 1000, EV.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")  # noqa: E731
+    p = tmp_path / "macro_events.csv"
+    p.write_text("ts_utc,kind,source_url\n"
+                 f"{iso(now - 3 * 86_400_000)},CPI,https://www.bls.gov/x\n"
+                 f"{iso(now + 5 * 86_400_000)},FOMC,https://www.federalreserve.gov/x\n"
+                 f"{iso(now - 90 * 86_400_000)},NFP,https://www.bls.gov/y\n", encoding="utf-8")
+    monkeypatch.setattr(EV, "PATH", p)
+    EV.reset()
+    try:
+        assert client.get("/api/events").status_code == 401
+        assert client.post("/api/login", json={"password": "correct horse battery"}).status_code == 200
+        got = client.get("/api/events").json()
+        assert [e["kind"] for e in got["events"]] == ["CPI", "FOMC"] and got["problems"] == []
+        assert [e["kind"] for e in client.get("/api/events?days_back=120&days_ahead=0").json()["events"]] == ["NFP", "CPI"]
+    finally:
+        EV.reset()
+    static = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "paperbot", "dash", "static")
+    js = open(os.path.join(static, "app.js"), encoding="utf-8").read()
+    assert "/api/events?days_back=" in js and "macroMarks(t0)" in js
+    assert 'id="ev-toggle"' in open(os.path.join(static, "index.html"), encoding="utf-8").read()

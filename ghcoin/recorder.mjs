@@ -16,6 +16,9 @@
 //   calls.jsonl  one line per event ({"ev":"open"} / {"ev":"close"}), append-only
 //   board.json   latest plan, scores, rating and patterns per coin + heartbeat (rewritten each pass)
 //   state.json   open calls and the last graded bar per coin (restart safety)
+//   patterns.jsonl  one line per coin and 1h / 4h bar: GH Coin's pattern scan and TA rating on that closed bar,
+//                append-only (2026-10-03: the live pattern history for the later pattern / trendline study;
+//                board.json alone keeps only the latest)
 import fs from "fs";
 import path from "path";
 import { pathToFileURL } from "url";
@@ -126,7 +129,8 @@ function writeAtomic(file, text){ const tmp = file + ".tmp"; fs.writeFileSync(tm
 
 export async function runOnce(out, gh, st, cache, commit, now = Date.now(), fetcher = fetchClosed){
   const board = {v: 1, ts: now, commit, coins: {}, errors: {}};
-  const lines = [];
+  const lines = [], patLines = [];
+  st.pat = st.pat || {};
   for (const sym of SYMBOLS){
     try {
       const bars = {};
@@ -134,9 +138,17 @@ export async function runOnce(out, gh, st, cache, commit, now = Date.now(), fetc
       const {events, row} = await passCoin(st, gh, sym, bars, cache);
       board.coins[sym] = row;
       for (const e of events) lines.push(JSON.stringify(e));
+      for (const k of ["60", "240"]){                     // once per closed 1h / 4h bar and coin
+        const arr = bars[k], lt = arr && arr.length ? arr[arr.length - 1].t : null, key = `${sym}:${k}`;
+        if (lt == null || st.pat[key] === lt) continue;
+        st.pat[key] = lt;
+        patLines.push(JSON.stringify({t: lt + TF_MS[k], sym, tf: k, close: arr[arr.length - 1].c,
+                                      patterns: row.patterns[k] || [], rating: row.rating[k] || null}));
+      }
     } catch(e){ board.errors[sym] = String(e && e.message || e).slice(0, 200); }
   }
   if (lines.length) fs.appendFileSync(path.join(out, "calls.jsonl"), lines.join("\n") + "\n");
+  if (patLines.length) fs.appendFileSync(path.join(out, "patterns.jsonl"), patLines.join("\n") + "\n");
   writeAtomic(path.join(out, "state.json"), JSON.stringify(st));
   writeAtomic(path.join(out, "board.json"), JSON.stringify(board));
   return board;

@@ -7,7 +7,9 @@ lines are ignored. Usual release times in US Eastern: CPI, NFP and PCE 08:30, FO
 14:00; ``et_to_utc`` converts with daylight saving time (zoneinfo America/New_York), and
 ``python -m paperbot.events line CPI 2026-10-14 <url>`` prints a ready line.
 
-The file is read once, on first use. A missing file means no events (``near`` returns []);
+The file is read on first use and read again when it changes (its size or modification time, checked at most every
+``RECHECK_S`` seconds), so a calendar filled in on the server reaches the running dashboard and agents without a
+restart, and the earlier trades' cards get the tag from then on. A missing file means no events (``near`` returns []);
 a bad line is skipped and reported in ``problems()`` and by ``python -m paperbot.events check``.
 """
 
@@ -16,7 +18,9 @@ from __future__ import annotations
 import bisect
 import csv
 import io
+import os
 import sys
+import time as _time
 from dataclasses import dataclass
 from datetime import date, datetime, time, timezone
 from pathlib import Path
@@ -101,25 +105,53 @@ def parse(text: str) -> tuple[list[Event], list[str]]:
     return events, problems
 
 
+RECHECK_S = 30.0          # how often the file's size and modification time are looked at again
 _cache: Optional[tuple[list[Event], list[int], list[str]]] = None
+_cache_key: Optional[tuple] = None
+_checked_at = 0.0
+
+
+def _file_key() -> Optional[tuple]:
+    try:
+        st = os.stat(PATH)
+    except OSError:
+        return None
+    return (str(PATH), st.st_mtime_ns, st.st_size)
 
 
 def _loaded() -> tuple[list[Event], list[int], list[str]]:
-    global _cache
-    if _cache is None:
+    global _cache, _cache_key, _checked_at
+    now = _time.monotonic()
+    if _cache is not None and now - _checked_at < RECHECK_S:
+        return _cache
+    _checked_at = now
+    key = _file_key()
+    if _cache is None or key != _cache_key:
         try:
             text = Path(PATH).read_text(encoding="utf-8-sig")
         except FileNotFoundError:
             text = ""
         evs, problems = parse(text)
-        _cache = (evs, [e.ts_ms for e in evs], problems)
+        _cache, _cache_key = (evs, [e.ts_ms for e in evs], problems), key
     return _cache
+
+
+def upcoming(now_ms: int, days: float = 14.0, limit: int = 10) -> list[dict]:
+    """The registered releases from ``now_ms`` to ``days`` ahead, soonest first (as_dict + hours_left)."""
+    evs, keys, _ = _loaded()
+    lo = bisect.bisect_left(keys, now_ms)
+    out = []
+    for e in evs[lo:]:
+        if e.ts_ms > now_ms + days * 86_400_000 or len(out) >= limit:
+            break
+        out.append({**e.as_dict(), "hours_left": round((e.ts_ms - now_ms) / 3_600_000, 1)})
+    return out
 
 
 def reset() -> None:
     """Forget the loaded file (next call reads PATH again)."""
-    global _cache
-    _cache = None
+    global _cache, _cache_key, _checked_at
+    _cache, _cache_key, _checked_at = None, None, 0.0
 
 
 def all_events() -> list[Event]:

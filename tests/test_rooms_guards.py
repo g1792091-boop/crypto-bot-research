@@ -422,7 +422,7 @@ def test_a_weekly_review_stopped_midway_runs_again_the_next_day(world):
     out = world.tick(_hyp_round(), tue, policy=small)
     assert [(r["trigger"], r["status"], r["stopped"]) for r in out["rounds"]] == [
         ("weekly", "stopped_budget", "budget_class")]
-    assert RM.LIMIT_TEXT in [m["text"] for m in world.messages() if m["kind"] == "system"]
+    assert any(m["text"].startswith(RM.LIMIT_TEXT) for m in world.messages() if m["kind"] == "system")
     out = world.tick(_hyp_round(), tue + DAY, policy=RM.RoomsPolicy(triggers=WEEKLY_ONLY))
     assert [(r["trigger"], r["status"]) for r in out["rounds"]] == [("weekly", "done")]
     assert world.tick(QueueRunner({}), tue + 2 * DAY, policy=RM.RoomsPolicy(triggers=WEEKLY_ONLY))["rounds"] == []

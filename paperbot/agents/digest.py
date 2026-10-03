@@ -180,14 +180,18 @@ def tf_split(paper_ro: Optional[sqlite3.Connection], initial: Optional[float] = 
         row: dict = {"strategy": s, "name_ko": names.get(s, s), "timeframes": tfs,
                      "pnl": round(sum(v.get("pnl", 0.0) for v in tfs.values()), 2),
                      "trades": sum(v["trades"] for v in tfs.values()), "split": False}
-        if live:
-            best = max(live, key=lambda kv: kv[1]["pnl"])
-            worst = min(live, key=lambda kv: kv[1]["pnl"])
+        # the pair is chosen among the timeframes with enough trades (a one-trade outlier never hides a split);
+        # with none of them, among all that traded (shown, never a split)
+        ok = [(tf, v) for tf, v in live if v["trades"] >= min_trades]
+        pool = ok or live
+        if pool:
+            best = max(pool, key=lambda kv: kv[1]["pnl"])
+            worst = min(pool, key=lambda kv: kv[1]["pnl"])
             spread = best[1]["pnl"] - worst[1]["pnl"]
             row.update(best_tf=best[0], worst_tf=worst[0], best_pnl=best[1]["pnl"], worst_pnl=worst[1]["pnl"],
                        spread=round(spread, 2), spread_pct=round(spread / init, 4) if init else None)
-            row["split"] = bool(best[1]["pnl"] > 0 > worst[1]["pnl"] and best[1]["trades"] >= min_trades
-                                and worst[1]["trades"] >= min_trades and init and spread >= min_spread_pct * init)
+            row["split"] = bool(ok and best[1]["pnl"] > 0 > worst[1]["pnl"] and init
+                                and spread >= min_spread_pct * init)
         out.append(row)
     out.sort(key=lambda r: -(r.get("spread") or 0))
     return {"initial": init, "min_trades": min_trades, "min_spread_pct": min_spread_pct, "strategies": out,
@@ -265,7 +269,7 @@ def day_digest(agents_ro: Optional[sqlite3.Connection], day: str) -> dict:
                         lead = [str(x)[:300] for x in ans["summary"]][:3]
                         disagreement = str(ans.get("open_disagreement") or "")[:300]
                     if ans.get("verdict") in ("agree", "disagree", "needs_test") and m["kind"] == "challenge":
-                        verdict = ans["verdict"]
+                        verdict = "unreadable" if ans.get("verdict_coerced") else ans["verdict"]
             elif m["kind"] == "code_result":
                 results.append(str(m["text"] or "").split("\n", 1)[0][:300])
         dec = r["decision"]
@@ -326,7 +330,8 @@ def staff_board(agents_ro: Optional[sqlite3.Connection], now_ms: int, days: int 
         data = _loads(m["data"]) or {}
         if m["kind"] == "system":
             who = data.get("role") if isinstance(data, dict) else None
-            if who and "읽을 수 없어" in str(m["text"]):
+            # the skipped turn ('…의 답을 읽을 수 없어 이번 차례는 건너뜁니다'), not a coerced verdict of a readable one
+            if who and "답을 읽을 수 없어" in str(m["text"]) and not data.get("verdict_coerced"):
                 get(who)["unreadable"] += 1
             continue
         if m["role"] in ("code", "system", "owner"):
@@ -357,7 +362,7 @@ def staff_board(agents_ro: Optional[sqlite3.Connection], now_ms: int, days: int 
             if isinstance(p, dict) and p.get("action"):
                 a = str(p["action"])
                 k["proposals"][a] = k["proposals"].get(a, 0) + 1
-        if ans.get("verdict") in ("agree", "disagree", "needs_test"):
+        if ans.get("verdict") in ("agree", "disagree", "needs_test") and not ans.get("verdict_coerced"):
             k["verdicts"][ans["verdict"]] = k["verdicts"].get(ans["verdict"], 0) + 1
     card = scorecard(agents_ro)
     graded = {r["role"]: r for r in card.get("roles") or []}
@@ -375,20 +380,22 @@ def staff_board(agents_ro: Optional[sqlite3.Connection], now_ms: int, days: int 
     out["total"] = card.get("total")
     # the latest graded predictions (whole run), newest first
     try:
-        for t in R.trial_history(agents_ro, kinds=("hypothesis",), limit=400):
-            res = (t.get("result") or {})
-            body = res.get("result") if isinstance(res.get("result"), dict) else {}
-            p = (t.get("spec") or {}).get("prediction")
-            if not isinstance(p, dict) or body.get("status") not in ("graded", "expired"):
+        rows = R._dicts(agents_ro.execute(
+            "SELECT r.ts, r.status, r.result, t.id, t.strategy, t.spec FROM trial_results r JOIN trials t "
+            "ON t.id = r.trial_id WHERE t.kind = 'hypothesis' AND r.status IN ('graded', 'expired') "
+            "ORDER BY r.id DESC LIMIT 30"))
+        for r in rows:
+            spec = _loads(r["spec"]) or {}
+            body = _loads(r["result"]) or {}
+            p = spec.get("prediction") if isinstance(spec.get("prediction"), dict) else body.get("prediction")
+            if not isinstance(p, dict):
                 continue
-            by_role = (t.get("spec") or {}).get("by") or body.get("by") or ""
+            by_role = spec.get("by") or body.get("by") or ""
             out["recent_grades"].append({
-                "trial_id": t["id"], "strategy": t.get("strategy"), "role": by_role, "name": R.role_name(by_role) if by_role else "",
-                "text": str((t.get("spec") or {}).get("text") or "")[:300], "prediction_ko": describe_ko(p),
-                "status": body.get("status"), "correct": body.get("correct"), "value": body.get("value"),
-                "n": body.get("n"), "ts": res.get("ts")})
-            if len(out["recent_grades"]) >= 30:
-                break
+                "trial_id": r["id"], "strategy": r["strategy"], "role": by_role, "name": R.role_name(by_role) if by_role else "",
+                "text": str(spec.get("text") or "")[:300], "prediction_ko": describe_ko(p),
+                "status": r["status"], "correct": body.get("correct"), "value": body.get("value"),
+                "n": body.get("n"), "ts": r["ts"]})
     except (sqlite3.Error, KeyError, TypeError, ValueError):
         pass
     out["note"] = ("말한 횟수·반응은 최근 며칠의 방 기록(코드 집계). 예측 채점은 실험 전체: 예측이 붙은 가설만, 가설을 쓴 뒤 "
@@ -506,7 +513,13 @@ def week_report(paper_ro: Optional[sqlite3.Connection], agents_ro: Optional[sqli
         out["best_accounts"] = [{"account": r["account"], "pnl": round(r["pnl"], 2), "trades": r["trades"]} for r in sa[:3]]
         out["worst_accounts"] = [{"account": r["account"], "pnl": round(r["pnl"], 2), "trades": r["trades"]}
                                  for r in sa[-3:][::-1]] if len(sa) > 3 else []
-        out["busts"] = [{"ts": int(ts), "text": str(tx)[:160]} for ts, tx in busts]
+        strat_ids = {a[0] for a in accts if a[1] == "strategy"}
+
+        def bust_of(tx: str) -> Optional[str]:      # '[<account>] BUST: ...' (engine notifier, book = account id)
+            tx = str(tx)
+            return tx[1:tx.find("]")] if tx.startswith("[") and "]" in tx else None
+        out["busts"] = [{"ts": int(ts), "account": bust_of(tx), "text": str(tx)[:160]} for ts, tx in busts
+                        if bust_of(tx) in strat_ids]
     # the staff's week
     if agents_ro is not None:
         try:
@@ -521,9 +534,12 @@ def week_report(paper_ro: Optional[sqlite3.Connection], agents_ro: Optional[sqli
             graded = R._dicts(agents_ro.execute(
                 "SELECT r.status, r.result FROM trial_results r JOIN trials t ON t.id = r.trial_id WHERE t.kind = "
                 "'hypothesis' AND r.ts >= ? AND r.ts < ?", (w0, now)))
+            # one row per trial: its first result that is a test outcome (not a later 'proposed' / 'lapsed', not a
+            # run that did not happen: 'no_data' / 'error'), counted in the week that result was written
             tests = R._dicts(agents_ro.execute(
-                "SELECT t.kind, r.status FROM trials t JOIN trial_results r ON r.trial_id = t.id WHERE t.kind IN "
-                "('test', 'newlab') AND r.ts >= ? AND r.ts < ?", (w0, now)))
+                "SELECT t.kind, r.status FROM trials t JOIN trial_results r ON r.id = (SELECT MIN(x.id) FROM "
+                "trial_results x WHERE x.trial_id = t.id AND x.status NOT IN ('proposed', 'lapsed', 'no_data', 'error')) "
+                "WHERE t.kind IN ('test', 'newlab') AND r.ts >= ? AND r.ts < ?", (w0, now)))
         except sqlite3.Error as exc:
             out["agents_error"] = f"agents3.db를 읽지 못함: {type(exc).__name__}"
         else:
@@ -535,7 +551,7 @@ def week_report(paper_ro: Optional[sqlite3.Connection], agents_ro: Optional[sqli
                 "tests": sum(1 for t in tests if t["kind"] == "test"),
                 "tests_passed": sum(1 for t in tests if t["kind"] == "test" and t["status"] == "passed"),
                 "lab_tests": sum(1 for t in tests if t["kind"] == "newlab"),
-                "lab_passed": sum(1 for t in tests if t["kind"] == "newlab" and t["status"] in ("passed", "proposed"))}
+                "lab_passed": sum(1 for t in tests if t["kind"] == "newlab" and t["status"] == "passed")}
     out["note"] = ("최근 7일(코드 계산, 끝난 거래 손익·수수료와 펀딩 포함). 7일 성적은 운이 큼: 30일 판정은 체크포인트"
                    "(동전 봇 2,000개 비교)가 함")
     return out

@@ -7,7 +7,7 @@ const DG_STANCE = {agree: "동의", disagree: "반대", add: "보완"};
 const DG_STATUS = {done: ["끝", "ok"], no_action: ["행동 없음", ""], failed: ["실패", "bad"],
   stopped_budget: ["한도로 멈춤", "acc"], running: ["진행 중", "live"]};
 const DG_ACTION = {note: "메모", hypothesis: "가설", request_test: "5년 시험", propose_copy: "복제 제안",
-  flag_owners: "두 분께 알림", no_action: "행동 없음"};
+  flag_owners: "두 분께 알림", no_action: "행동 없음", team_meeting: "", newlab_tests: "새 매매법 시험"};
 const DG_TFS = ["5m", "15m", "30m", "1h", "4h"];
 
 function dgKstDay(ms) {   // 'YYYY-MM-DD' in Korea time
@@ -15,8 +15,9 @@ function dgKstDay(ms) {   // 'YYYY-MM-DD' in Korea time
   return d.toISOString().slice(0, 10);
 }
 function dgShift(day, n) { return dgKstDay(Date.parse(day + "T00:00:00+09:00") + n * 864e5 + 3600e3); }
-function dgDayKo(day) {
-  return new Date(Date.parse(day + "T12:00:00+09:00")).toLocaleDateString("ko-KR", {month: "long", day: "numeric", weekday: "short"});
+function dgDayKo(day) {   // a KST date shown as itself, whatever the browser's time zone
+  return new Date(Date.parse(day + "T12:00:00+09:00")).toLocaleDateString("ko-KR",
+    {month: "long", day: "numeric", weekday: "short", timeZone: "Asia/Seoul"});
 }
 const dgRate = (x) => x == null ? "—" : Math.round(x * 100) + "%";
 const dgPill = (txt, c) => `<span class="pill ${c || ""}">${esc(txt)}</span>`;
@@ -25,15 +26,17 @@ function dgOpenRoom(id) {
   if (typeof openRoom === "function") openRoom(id, "chat");
 }
 
-async function loadDigest(force) {
+// what is on screen belongs to this tab (and day / period): a refresh keeps it until the new answer comes
+const dgHave = (tab) => { const d = dg.data[tab]; return !!d && (tab !== "day" || d.day === dg.day) && (tab !== "staff" || d.days === dg.days); };
+async function loadDigest() {
   const tab = dg.tab, req = ++dg.req;
   if (!dg.day) dg.day = dgKstDay(Date.now());
   const path = tab === "day" ? `/api/digest/day?day=${dg.day}` : tab === "staff" ? `/api/digest/staff?days=${dg.days}`
     : tab === "week" ? "/api/digest/week" : "/api/digest/tf";
-  if (force || !dg.data[tab] || tab === "day") renderDigest(true);
+  renderDigest(true);                     // the toggles follow the tab at once; cached data stays on screen
   let d;
   try { d = await api(path); } catch (e) {
-    if (req === dg.req) $("dg-body").innerHTML = '<p class="empty">불러오지 못했습니다. 잠시 뒤 다시 시도해 주세요.</p>';
+    if (req === dg.req && !dgHave(tab)) $("dg-body").innerHTML = '<p class="empty">불러오지 못했습니다. 잠시 뒤 다시 시도해 주세요.</p>';
     return;
   }
   if (req !== dg.req) return;
@@ -46,8 +49,9 @@ function renderDigest(loading) {
   $("dg-days").hidden = dg.tab !== "staff";
   $("dg-dlabel").textContent = dg.day ? dgDayKo(dg.day) + (dg.day === dgKstDay(Date.now()) ? " (오늘)" : "") : "";
   $("dg-next").disabled = !dg.day || dg.day >= dgKstDay(Date.now());
-  if (loading && (!d || dg.tab === "day")) { $("dg-body").innerHTML = '<p class="empty">불러오는 중…</p>'; return; }
-  if (!d) return;
+  if (loading && !dgHave(dg.tab)) { $("dg-body").innerHTML = '<p class="empty">불러오는 중…</p>'; return; }
+  if (!d || (loading && dg.body === dg.tab + ":" + (d.computed_at || d.day || ""))) return;   // already shown
+  dg.body = dg.tab + ":" + (d.computed_at || d.day || "");
   $("dg-body").innerHTML = dg.tab === "day" ? dgDayHtml(d) : dg.tab === "staff" ? dgStaffHtml(d)
     : dg.tab === "week" ? dgWeekHtml(d) : dgTfHtml(d);
   dgBind();
@@ -65,7 +69,7 @@ function dgMeetingHtml(m) {
   const summary = String(m.summary_ko || "").trim();
   return `<div class="dg-m" data-room="${esc(m.room_id)}">
     <div class="dg-mh"><b class="dg-room">${esc(m.title)}</b>${dgPill(m.trigger_ko, "acc")}${dgPill(st, sc)}
-      ${m.action ? dgPill(DG_ACTION[m.action] || m.action) : ""}<span class="grow"></span>
+      ${m.action && DG_ACTION[m.action] !== "" ? dgPill(DG_ACTION[m.action] || m.action) : ""}<span class="grow"></span>
       <time class="muted">${hm(m.started_ts)}</time></div>
     ${m.why ? `<div class="dg-why">${esc(m.why)}</div>` : ""}
     ${(m.lead || []).length ? `<ol class="dg-lead">${m.lead.map((x) => `<li>${esc(x)}</li>`).join("")}</ol>` : ""}
@@ -74,7 +78,7 @@ function dgMeetingHtml(m) {
     ${replies || asks ? `<ul class="dg-rep">${replies}${asks}</ul>` : ""}
     ${(m.results || []).length ? `<div class="dg-res">${m.results.map((x) => `<div>🧮 ${esc(x)}</div>`).join("")}</div>` : ""}
     <div class="dg-mf"><span class="muted">${who ? "발언: " + who : "발언 없음"} · AI ${m.calls}회</span><span class="grow"></span>
-      ${summary && summary.split("\n").length > 4 ? `<button class="lnk" data-more="${key}">${open ? "접기" : "결론 전부 보기"}</button>` : ""}
+      ${summary ? `<button class="lnk" data-more="${key}" ${open ? "" : "hidden"}>${open ? "접기" : "결론 전부 보기"}</button>` : ""}
       <button class="lnk" data-go="${esc(m.room_id)}">방 열기 →</button></div>
   </div>`;
 }
@@ -172,9 +176,15 @@ function dgWeekHtml(d) {
         <div class="mk-row"><span>5년 시험</span><b>${st.tests}건 (통과 ${st.tests_passed})</b></div>
         <div class="mk-row"><span>새 매매법 시험</span><b>${st.lab_tests}건 (통과 ${st.lab_passed})</b></div>` : '<div class="muted">기록 없음</div>'}</div>
     </div>
-    <div class="card"><div class="ph"><span class="t">일요일 21:00 텔레그램으로 가는 글 (지금 기준 미리보기)</span></div>
+    <div class="card"><div class="ph"><span class="t">${dgWeekWhen(d.hours)} (지금 기준 미리보기)</span></div>
       <pre class="dg-tg">${esc(d.telegram_text || "")}</pre></div>
     <p class="muted dg-note">${esc(d.note || "")}</p>`;
+}
+
+function dgWeekWhen(h) {
+  const x = h && h.weekly_report_hour_kst;
+  return x == null ? "일요일 텔레그램으로 가는 글" : x < 0 ? "텔레그램 주간 성적표는 꺼져 있음 (AGENTS_WEEKLY_REPORT_HOUR=off)"
+    : `일요일 ${String(x).padStart(2, "0")}:00 텔레그램으로 가는 글`;
 }
 
 // ---------------------------------------------------------------- timeframe split
@@ -208,9 +218,11 @@ function dgTfHtml(d) {
       <td data-k="최고−최저">${r.spread != null ? usd(r.spread).replace("+", "") : "—"}</td>
       <td data-k=""><button class="lnk" data-tfx="${esc(r.strategy)}">${dg.tfOpen === r.strategy ? "접기" : "자세히"}</button></td></tr>
       ${dg.tfOpen === r.strategy ? dgTfDetail(r) : ""}`).join("");
+  const th = d.hours && d.hours.tf_split_hour_kst;
+  const when = th != null && th < 0 ? "봉 비교 회의는 꺼져 있습니다(AGENTS_TF_SPLIT_HOUR=off)."
+    : `매일 ${String(th == null ? 18 : th).padStart(2, "0")}:00에 가장 크게 갈린 매매법 2개의 방에서 전담이 이유를 분석하는 '봉 비교 회의'가 열립니다(같은 매매법은 3일에 한 번).`;
   return `<p class="dg-note">같은 매매법이 봉마다 정반대 결과를 내면(한 봉은 이익, 다른 봉은 손실, 둘 다 거래 ${d.min_trades}건 이상, 차이가
-      시작 자금의 ${Math.round((d.min_spread_pct || 0) * 100)}% 이상) <b>봉마다 갈림</b>으로 표시하고, 매일 18:00에 가장 크게 갈린 매매법 2개의 방에서
-      전담이 이유를 분석하는 '봉 비교 회의'가 열립니다(같은 매매법은 3일에 한 번).</p>
+      시작 자금의 ${Math.round((d.min_spread_pct || 0) * 100)}% 이상) <b>봉마다 갈림</b>으로 표시합니다. ${when}</p>
     <div class="card scroll"><table class="cards dg-t"><thead><tr><th class="l">매매법 (차이 큰 순)</th>
       ${DG_TFS.map((tf) => `<th>${TF_KO[tf] || tf}</th>`).join("")}<th>합계</th><th>최고−최저</th><th></th></tr></thead>
       <tbody>${rows || '<tr><td colspan="9" class="empty">아직 끝난 거래가 없습니다</td></tr>'}</tbody></table></div>
@@ -219,25 +231,30 @@ function dgTfHtml(d) {
 
 // ---------------------------------------------------------------- wiring
 function dgBind() {
+  // '결론 전부 보기' only where the summary really is cut (long lines wrap on a phone)
+  document.querySelectorAll("#dg-body .dg-m").forEach((c) => {
+    const s = c.querySelector(".dg-sum"), b = c.querySelector("[data-more]");
+    if (s && b && !s.classList.contains("open")) b.hidden = s.scrollHeight <= s.clientHeight + 2;
+  });
   document.querySelectorAll("#dg-body [data-go]").forEach((b) => b.onclick = () => dgOpenRoom(b.dataset.go));
   document.querySelectorAll("#dg-body [data-more]").forEach((b) => b.onclick = () => {
-    dg.open[b.dataset.more] = !dg.open[b.dataset.more]; renderDigest();
+    dg.open[b.dataset.more] = !dg.open[b.dataset.more]; dg.body = null; renderDigest();
   });
   document.querySelectorAll("#dg-body [data-strat]").forEach((b) => b.onclick = (e) => {
     e.stopPropagation();
     if (typeof openStrategy === "function") openStrategy(b.dataset.strat);
   });
   document.querySelectorAll("#dg-body [data-tfx]").forEach((b) => b.onclick = () => {
-    dg.tfOpen = dg.tfOpen === b.dataset.tfx ? null : b.dataset.tfx; renderDigest();
+    dg.tfOpen = dg.tfOpen === b.dataset.tfx ? null : b.dataset.tfx; dg.body = null; renderDigest();
   });
 }
-seg("dg-tabs", "t", (t) => { dg.tab = t; loadDigest(); });
-seg("dg-days", "d", (n) => { dg.days = +n; dg.data.staff = null; loadDigest(true); });
-$("dg-prev").onclick = () => { dg.day = dgShift(dg.day || dgKstDay(Date.now()), -1); loadDigest(true); };
+seg("dg-tabs", "t", (t) => { dg.tab = t; dg.body = null; loadDigest(); });
+seg("dg-days", "d", (n) => { dg.days = +n; dg.body = null; loadDigest(); });
+$("dg-prev").onclick = () => { dg.day = dgShift(dg.day || dgKstDay(Date.now()), -1); dg.body = null; loadDigest(); };
 $("dg-next").onclick = () => {
   const today = dgKstDay(Date.now());
   if ((dg.day || today) >= today) return;
-  dg.day = dgShift(dg.day, 1); loadDigest(true);
+  dg.day = dgShift(dg.day, 1); dg.body = null; loadDigest();
 };
-$("dg-today").onclick = () => { dg.day = dgKstDay(Date.now()); loadDigest(true); };
+$("dg-today").onclick = () => { dg.day = dgKstDay(Date.now()); dg.body = null; loadDigest(); };
 setInterval(() => { if (state.view === "digest" && document.visibilityState === "visible") loadDigest(); }, 120000);

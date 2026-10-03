@@ -555,7 +555,10 @@ def test_budget_exhaustion_mid_round_stops_and_keeps_the_evidence(world):
     assert st[(ROOM, "loss_cluster")] == ("stopped_budget", "budget_class", 3)
     assert runner.roles() == ["team_lead", SPEC, "devils_advocate", "entry_timing"]   # the revision was refused
     last = world.messages()[-1]
-    assert last["kind"] == "system" and last["text"] == RM.LIMIT_TEXT
+    assert last["kind"] == "system" and last["text"].startswith(RM.LIMIT_TEXT)
+    # which cap, with its numbers (owners 2026-10-03: "AI 사용량 도달이라는데 벌써? 이거 뭐야?")
+    assert "'손실·파산 복기' 몫의 하루 한도: 호출 3/3번" in last["text"] and "AGENTS_BUDGET" in last["text"]
+    assert world.rounds()[-1]["decision"]["why_ko"].startswith("'손실·파산 복기' 몫의 하루 한도")
     assert "decision" not in world.kinds()
     cur = world.cursors()
     assert f"loss:{ROOM}" not in cur and cur["owner:team:lead"] == "1"
@@ -727,6 +730,11 @@ def test_morning_meeting_five_roles_and_the_leads_lines_by_telegram(world):
     assert len(notifier.messages) == 1 and notifier.messages[0][0] == "INFO"
     assert notifier.messages[0][1].startswith("🌅 아침 회의") and "1. a" in notifier.messages[0][1]
     assert "market" in runner.calls[0]["packet"]["board"]
+    # 2026-10-03: the breakdown (coin, weekday x session, windows, volatility) and the macro calendar reach the team
+    board = runner.calls[0]["packet"]["board"]
+    assert "breakdown" in board and set(board["macro"]) >= {"upcoming", "registered", "note"}
+    assert "breakdown" not in runner.calls[1]["packet"]["board"] and "macro" in runner.calls[1]["packet"]["board"]
+    assert "board.macro.upcoming" in runner.calls[0]["system"]
 
 
 def test_team_lead_flag_owners_is_rate_limited(world):
@@ -1599,3 +1607,11 @@ def test_a_reply_to_someone_who_did_not_speak_or_to_oneself_is_dropped():
     got = RM.check_dialog({"responds_to": {"role": "pnl_reviewer", "stance": "add", "point": "a\n- [사실] b"},
                            "ask_next": "c\nd"}, given)
     assert got == {"responds_to": {"role": "pnl_reviewer", "stance": "add", "point": "a - [사실] b"}, "ask_next": "c d"}
+
+
+def test_limit_reason_in_plain_korean():
+    why = RM.limit_why_ko("budget_subcap", "loss", "daily cap of loss (without its reserve): 39/40 calls, "
+                                                   "1,170,000/1,166,666 tokens")
+    assert why.startswith("'손실·파산 복기' 몫 중 이 회의가 쓸 수 있는 부분") and "호출 39/40번" in why and "토큰 117만/117만" in why
+    assert RM.limit_why_ko("budget_total", "owner", "daily total cap: 160/160 calls").startswith("하루 전체 합계: 호출 160/160번")
+    assert RM.limit_why_ko("usage_limit", "loss", "x") == "" and RM.limit_why_ko(None, "loss", "") == ""

@@ -768,7 +768,10 @@ def _tf_split(paper_ro, st: _Rooms) -> list[Due]:
             break
         room = strat_room(s)
         key = f"tf_split:{s}:{day}"
-        if st.handled(room, "tf_split", key):
+        # what find_due would drop anyway does not take one of the day's places (another strategy gets it)
+        if (st.handled(room, "tf_split", key) or st.room_full(room, "tf_split") or st.running_fresh(room, "tf_split")
+                or len(st.failed_attempts(room, "tf_split", key)) >= p.max_attempts
+                or st.key_waiting(room, "tf_split", key)):
             continue
         last = st.cursor_int(f"tf_split:{room}")
         if last and st.now - last < p.tf_split_gap_ms:

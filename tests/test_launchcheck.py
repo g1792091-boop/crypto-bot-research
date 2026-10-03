@@ -938,7 +938,7 @@ def test_agents_policy_template_and_observation(tmp_path):
     ag = srv.envs()["agents"]
     lines = L.check_agents_policy(srv.ctx(), ag, True, None)
     assert st(lines) == [L.OK, L.OK], lines                # the owners' template: no budget warning
-    assert "AI 하루 최대 160회" in lines[0][1] and "봇 첫 시작부터 21일 복사 제안 없음" in lines[1][1]
+    assert "AI 하루 최대 200회" in lines[0][1] and "봇 첫 시작부터 21일 복사 제안 없음" in lines[1][1]
     start = NOW - 2 * DAY
     assert "2026-10-20까지" in L.check_agents_policy(srv.ctx(), ag, True, start)[1][1]
     srv.write_env("agents", agents_env(extra="AGENTS_BUDGET=loss=8\n"))
@@ -1257,3 +1257,11 @@ def test_executor_must_follow_an_original_strategy_account(tmp_path):
         assert status == want and word in text, (acct, text)
     sections, _secrets, _cmd = L.run_checks(srv.ctx(), "after", agents="no")
     assert any(title == "주문 실행기가 따라 할 계좌" for title, _lines in sections)
+
+
+def test_the_confirmed_rules_documents_still_match_their_hashes():
+    """The owners confirmed and hashed the rules (2026-10-01): an edit without a new, agreed hash fails the
+    launch check and makes every restart report a rules change (2026-10-03: an AI-cap line was edited by mistake)."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    lines = L.rules_lines(root)
+    assert all(kind != "고칠 것" for kind, *_ in lines), lines

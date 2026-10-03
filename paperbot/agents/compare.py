@@ -119,6 +119,18 @@ def ranking(conn: sqlite3.Connection, initial: float, round_trip: float, k: int 
         s["pnl"] += wal - initial
         s["accounts"][tf] = round(wal - initial, 2)
         s["busts"] += int(bust)
+    # every closed trade of each strategy's own accounts (the compare tables use at most the latest 2000)
+    try:
+        closed = {s: {"trades": int(n), "wins": int(w or 0), "losses": int(lo or 0),
+                      "win_rate": round((w or 0) / n, 3) if n else None}
+                  for s, n, w, lo in conn.execute(
+                      "SELECT a.strategy, COUNT(*), SUM(t.pnl > 0), SUM(t.pnl < 0) FROM trades t JOIN accounts a "
+                      "ON a.account_id = t.account_id WHERE a.kind = 'strategy' GROUP BY a.strategy")}
+    except sqlite3.Error:                       # no trades table yet: the compare tables' counts stand in
+        closed = {}
+    for s in per.values():
+        if s["strategy"] in closed:
+            s["closed"] = closed[s["strategy"]]
     rows = sorted(per.values(), key=lambda r: -r["pnl"])
     for r in rows:
         r["pnl"] = round(r["pnl"], 2)

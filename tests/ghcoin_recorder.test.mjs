@@ -75,4 +75,12 @@ test("runOnce on fake bars writes board, state and the call events; errors stay 
   const saved = JSON.parse(fs.readFileSync(path.join(out, "state.json"), "utf8"));
   assert.equal(saved.open.length, lines.length);
   assert.equal(JSON.parse(fs.readFileSync(path.join(out, "board.json"), "utf8")).commit, "abc123");
+  // the pattern history: one line per coin and closed 1h / 4h bar, never twice for the same bar
+  const pats = () => fs.readFileSync(path.join(out, "patterns.jsonl"), "utf8").trim().split("\n").map(JSON.parse);
+  const n1 = pats().length;
+  assert.equal(n1, 2 * 5 * 2);                                 // two passes on new bars x 5 coins x (1h, 4h)
+  const p0 = pats()[0];
+  assert.equal(p0.patterns[0].name, "쌍바닥"); assert.equal(p0.rating.label, "매수"); assert.ok(p0.t && p0.close);
+  await R.runOnce(out, gh, st, {}, "abc123", T0 + 300e3, fetcher);   // same bars again
+  assert.equal(pats().length, n1);
 });

@@ -221,3 +221,77 @@ def test_dashboard_has_the_digest_tab():
     for path in ("/api/digest/day", "/api/digest/staff", "/api/digest/week", "/api/digest/tf"):
         assert path in js
     assert 'v === "digest"' in (root / "app.js").read_text()
+
+
+# ---------------------------------------------------------------- review fixes (2026-10-03)
+def test_a_one_trade_outlier_does_not_hide_a_split(world):
+    split_trades(world)
+    world.store.add_account(f"{S}@4h", S, "4h", "strategy", TF_AT - 30 * DAY, "paper-v3")
+    world.store.commit()
+    world.trade(f"{S}@4h", 900.0, TF_AT - 2 * HOUR)               # one trade: the best timeframe, but too few
+    row = DG.tf_split(world.paper())["strategies"][0]
+    assert row["split"] is True and (row["best_tf"], row["worst_tf"]) == ("15m", "1h")
+
+
+def test_tf_split_skips_a_full_room_and_takes_the_next_strategy(world):
+    split_trades(world)
+    for k in range(10):                                           # V45 splits too, less widely
+        world.trade("V45_AMB@15m", 40.0, TF_AT - (30 - k) * HOUR)
+        world.trade("V45_AMB@1h", -30.0, TF_AT - (20 - k) * HOUR)
+    day0 = TR.kst_day_start(TF_AT)
+    for k in range(3):                                            # N17's room used its 3 non-owner slots today
+        world.agents.execute("INSERT INTO rounds (room_id, trigger, trigger_data, started_ts, ended_ts, status) "
+                             "VALUES (?, 'loss_cluster', '{}', ?, ?, 'done')", (ROOM, day0 + k * HOUR, day0 + k * HOUR + 1))
+    world.agents.commit()
+    pol = tf_policy()
+    pol.triggers.tf_split_per_day = 1
+    dues = TR.find_due(world.paper(), None, world.agents, None, TF_AT, pol.triggers)
+    assert [d.room_id for d in dues] == ["strat:V45_AMB"]
+
+
+def test_week_counts_each_test_once_and_only_strategy_busts(world):
+    t = SUNDAY - DAY
+    a = R.add_trial_with_result(world.agents, "team:lab", None, "newlab", {"x": 1}, "passed", {}, ts=t)
+    R.add_trial_result(world.agents, a, "proposed", {}, ts=t + 1)        # the proposal row is not a second test
+    R.add_trial_with_result(world.agents, "team:lab", None, "newlab", {"x": 2}, "failed", {}, ts=t)
+    b = R.add_trial_with_result(world.agents, ROOM, S, "test", {"y": 1}, "no_data", {}, ts=t)
+    R.add_trial_result(world.agents, b, "failed", {}, ts=t + 2)          # a re-run after no data: one test
+    world.store.alert(t, "WARN", "[RANDOM_1@15m] BUST: equity 0.00")    # a coin flip: not a strategy bust
+    world.store.alert(t, "WARN", f"[{S}@1h] BUST: equity 0.00")
+    world.store.commit()
+    rep = DG.week_report(world.paper(), world.agents, SUNDAY)
+    st = rep["staff"]
+    assert (st["lab_tests"], st["lab_passed"], st["tests"], st["tests_passed"]) == (2, 1, 1, 0)
+    assert [x["account"] for x in rep["busts"]] == [f"{S}@1h"]
+
+
+def test_coerced_verdicts_are_neither_disagreements_nor_unreadable(world):
+    world.losses()
+    bad = {"headline": "반론", "objections": [], "verdict": "maybe"}
+    world.tick(QueueRunner({SPEC: [analysis(NOTE)] * 2, "devils_advocate": [bad], "entry_timing": [
+        {"headline": "e", "findings": [], "verdict": "agree", "suggestion": None}]}), kst(2026, 10, 7, 15, 0))
+    by = {s["role"]: s for s in DG.staff_board(world.agents, kst(2026, 10, 7, 16, 0), 7)["staff"]}
+    assert by["devils_advocate"]["turns"] == 1 and by["devils_advocate"]["unreadable"] == 0
+    assert by["devils_advocate"]["verdicts"] == {}
+    day = DG.day_digest(world.agents, "2026-10-07")
+    assert day["meetings"][0]["challenge"] == "unreadable"
+
+
+def test_recent_grades_come_from_the_grade_rows(world):
+    p = {"metric": "win_rate", "timeframe": None, "direction": "above", "value": 0.5, "after_trades": 30}
+    old = R.add_trial(world.agents, ROOM, S, "hypothesis", {"text": "오래된 가설", "prediction": p, "by": SPEC}, ts=1000)
+    for k in range(450):                                          # many newer hypotheses
+        R.add_trial(world.agents, ROOM, S, "hypothesis", {"text": f"새 가설 {k}"}, ts=2000 + k)
+    R.add_trial_result(world.agents, old, "graded", {"status": "graded", "correct": True, "value": 0.6, "n": 30,
+                                                     "prediction": p, "by": SPEC}, ts=5000)
+    g = DG.staff_board(world.agents, 6000, 7)["recent_grades"]
+    assert [(x["trial_id"], x["correct"], x["name"]) for x in g] == [(old, True, R.role_name(SPEC))]
+
+
+def test_a_malformed_reply_never_voids_a_good_answer(world):
+    given = {"role": "risk_officer", "turn": "team", "this_round": {"team:pnl_reviewer": {"role": "pnl_reviewer"}}}
+    for stance in (["agree"], {"a": 1}, 3, None):
+        assert RM.check_dialog({"responds_to": {"role": "pnl_reviewer", "stance": stance, "point": "x"}}, given) == {}
+    assert RM.compose_ranking({"picked": []}, None, 16).startswith("🏁 순위 검토 (손익 복기팀, 16:00)")
+    assert "tf_split" in RM.CODE_ROOTS and "ranking" in RM.CODE_ROOTS and "market_move" in RM.CODE_ROOTS
+    assert "tf_split" in RM.RoomsPolicy().paced_triggers

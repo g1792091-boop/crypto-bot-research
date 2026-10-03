@@ -147,3 +147,23 @@ def test_two_releases_close_together(calendar):
     t = events.parse_ts(nfp)
     c = card("A@15m", trade(t, t + 100 * MIN), RT)
     assert [m["kind"] for m in c["macro"]] == ["NFP", "PCE"] and c["tags"].count(MACRO_TAG) == 1
+
+
+def test_a_calendar_filled_later_is_read_without_a_restart(calendar, monkeypatch):
+    """2026-10-03: the file is read again when it changes (no restart of the dashboard or the agents)."""
+    p = calendar("ts_utc,kind,source_url\n")
+    assert events.all_events() == []
+    monkeypatch.setattr(events, "RECHECK_S", 0.0)
+    import os
+    p.write_text(csv_text((EDT_CPI, "CPI", URL), (EST_FOMC, "FOMC", FED)), encoding="utf-8")
+    os.utime(p, ns=(os.stat(p).st_mtime_ns + 10**9,) * 2)
+    assert [e.kind for e in events.all_events()] == ["CPI", "FOMC"]
+    t = events.parse_ts(EDT_CPI)
+    up = events.upcoming(t - 3_600_000, days=200)
+    assert [u["kind"] for u in up] == ["CPI", "FOMC"] and up[0]["hours_left"] == 1.0
+    assert events.upcoming(t + 1, days=1) == []                 # past it, and the FOMC is months away
+    # within RECHECK_S the stat is not repeated
+    monkeypatch.setattr(events, "RECHECK_S", 3600.0)
+    p.write_text("ts_utc,kind,source_url\n", encoding="utf-8")
+    os.utime(p, ns=(os.stat(p).st_mtime_ns + 2 * 10**9,) * 2)
+    assert len(events.all_events()) == 2
