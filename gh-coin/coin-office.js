@@ -1576,6 +1576,15 @@ function icLessons(coin, asOf = Date.now()){
   const same = done.filter(d => d.coin === coin).slice(-5), other = done.filter(d => d.coin !== coin).slice(-3);
   return [...same, ...other].map(d => `- ${d.ko} ${d.rating} → 알파 ${pc(d.alpha)}: ${d.lesson}`).join("\n");
 }
+// 투자 대가 페르소나 (virattt/ai-hedge-fund 방식) — 강세·약세 리서처가 매번 다른 투자 철학으로 토론해 관점이 다양해진다.
+const IC_PERSONAS = [
+  {name: "가치투자파", style: "버핏식 가치투자", lean: "내재가치·안전마진·장기 보유를 중시한다. 단기 변동엔 흔들리지 않되, 영구적 가치훼손(규제·해킹·토큰노믹스 붕괴)은 치명적으로 본다."},
+  {name: "역발상파", style: "하워드 막스식 역발상", lean: "군중이 공포일 때 기회, 탐욕일 때 경계. 공포·탐욕·쏠림 지표를 반대로 읽는다."},
+  {name: "모멘텀파", style: "리버모어식 추세·모멘텀", lean: "추세는 친구. 신고가·거래량 동반 돌파를 좋아하고, 추세가 꺾이면 바로 빠진다."},
+  {name: "매크로파", style: "소로스·달리오식 매크로", lean: "금리·유동성·달러·ETF 자금 같은 큰 흐름이 방향을 정한다고 본다. 과열/과냉(재귀성)을 경계한다."},
+  {name: "퀀트파", style: "데이터·확률 중심", lean: "서사보다 숫자. 변동성·상관·기대값·손익비로만 판단하고 크기는 켈리로 정한다."},
+  {name: "리스크패리티파", style: "브리지워터식 생존 우선", lean: "수익보다 생존. 포지션 크기·상관·꼬리위험을 먼저 보고 청산 가능성을 0에 가깝게 둔다."}
+];
 async function icJob(){
   await icSettle();
   const named = userNote && COINS.find(c => new RegExp(`${c.ko}|${c.sym.replace("USDT", "")}`, "i").test(userNote));
@@ -1598,9 +1607,11 @@ async function icJob(){
   const facts = `[${c.ko} ${c.sym} 위원회 자료 — 여기 숫자만 인용]\n시장·기술: ${reports.market}\n여론: ${reports.social}\n뉴스: ${clip(reports.news, 900)}\n선물·흐름: ${clip(reports.fundamentals, 900)}`;
   if (!hasAI()) return;
   const say = async (id, role, ask, extra = "") => (await solo(A(id), {room: "ic", sys: personaOf(A(id), role), user: `${facts}${extra}\n\n${ask}`, maxTokens: 650, train: "아래 코인 자료로 투자위원회 역할에 맞게 의견을 말해 줘."})).text || "";
-  // ② 강세·약세 토론 (1라운드 = 2발언)
-  const bull = await say("ic_4", "강세 리서처: 자료에서 오를 근거만 모아 가장 강한 매수 논리를 3~5문장으로. 약세 논리의 약점도 하나 짚는다.", "강세 논리를 말해 주세요.");
-  const bear = await say("ic_5", "약세 리서처: 자료에서 내릴 근거만 모아 가장 강한 매도 논리를 3~5문장으로. 방금 강세 논리의 약점을 반박한다.", "약세 논리로 반박해 주세요.", `\n\n강세 리서처: ${clip(bull, 700)}`);
+  // ② 강세·약세 토론 (1라운드 = 2발언) — 매번 다른 투자 대가 철학으로 (ai-hedge-fund 방식)
+  const pB = IC_PERSONAS[rot("icPersBull", IC_PERSONAS.length)], pR = IC_PERSONAS[(rot("icPersBear", IC_PERSONAS.length) + 1) % IC_PERSONAS.length];
+  post({ch: "ic", kind: "system", text: `🏛 오늘 ${c.ko} 토론 관점 — 강세: ${pB.name}(${pB.style}) · 약세: ${pR.name}(${pR.style})`});
+  const bull = await say("ic_4", `강세 리서처 — 투자 철학은 '${pB.name}(${pB.style})': ${pB.lean} 이 철학의 눈으로 자료에서 오를 근거만 모아 가장 강한 매수 논리를 3~5문장으로. 약세 논리의 약점도 하나 짚는다.`, "강세 논리를 말해 주세요.");
+  const bear = await say("ic_5", `약세 리서처 — 투자 철학은 '${pR.name}(${pR.style})': ${pR.lean} 이 철학의 눈으로 자료에서 내릴 근거만 모아 가장 강한 매도 논리를 3~5문장으로. 방금 강세 논리의 약점을 반박한다.`, "약세 논리로 반박해 주세요.", `\n\n강세 리서처(${pB.name}): ${clip(bull, 700)}`);
   // ③ 리서치 매니저: '의견 충돌은 관망 사유가 아니다' — 더 강한 쪽에 확신 크기만큼
   const rm = await say("ic_6", "리서치 매니저: 강세·약세 토론을 심판한다. 의견이 엇갈린다는 것만으로 관망하지 않는다 — 근거가 더 강한 쪽을 고르고 그 차이만큼 등급을 정한다. 근거가 정말 비슷하거나 부족할 때만 관망. 마지막 줄은 반드시 '등급: 매수|비중확대|관망|비중축소|매도' 중 하나.", "투자 계획과 등급을 정해 주세요.", `\n\n강세: ${clip(bull, 600)}\n약세: ${clip(bear, 600)}`);
   // ④ 트레이더: 진입·손절은 절대 가격만 (%, 범위, N/A 는 무효)
