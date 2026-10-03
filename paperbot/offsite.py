@@ -549,8 +549,8 @@ def resolve_chat(env: Mapping[str, str], chat_env: str) -> tuple[str, str]:
     if not critical:
         raise OffsiteError(f"보낼 방이 없습니다: {chat_env}, TELEGRAM_CHAT_CRITICAL 값이 모두 비어 있습니다 "
                            "(/etc/paperbot/live.env)")
-    return critical, (f"참고: {chat_env} 값이 비어 있어 기본 알림방으로 보냈습니다. 백업 전용 단체방을 만들어 "
-                      "넣어 주세요 (docs/offsite-backup.md)")
+    return critical, (f"참고: {chat_env} 값이 비어 있어 기본 알림방으로 보냈습니다. 이 방으로 받기로 했다면 그대로 "
+                      "두면 되고, 따로 받으려면 백업 전용 방 번호를 넣습니다 (docs/offsite-backup.md 5번)")
 
 
 def check_token(token: str) -> None:

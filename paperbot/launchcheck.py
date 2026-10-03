@@ -1587,8 +1587,9 @@ def check_offsite(live: EnvFile, states: Optional[dict]) -> list[Line]:
         return [note("서버 밖 백업(paperbot-offsite)이 이 서버에 설치되지 않았습니다: 서버를 잃으면 기록도 함께 "
                      f"사라집니다. 설치: {OFFSITE_INSTALL} (docs/server-setup-v3.md 4-3, 11)")]
     if not live.get("TELEGRAM_CHAT_BACKUP"):
-        return [note("live.env의 TELEGRAM_CHAT_BACKUP이 비어 있어 매일 백업 파일이 알림 단체방(CRITICAL)으로 갑니다: "
-                     "docs/server-setup-v3.md 4-3대로 'paperbot 백업' 방 번호를 넣으세요")]
+        return [note("live.env의 TELEGRAM_CHAT_BACKUP이 비어 있어 매일 백업 파일이 알림방(TELEGRAM_CHAT_CRITICAL에 넣은 방)으로 "
+                     "갑니다. 그 방으로 받기로 했으면 그대로 두면 되고, 따로 받으려면 docs/server-setup-v3.md 4-3대로 "
+                     "'paperbot 백업' 방 번호를 넣으세요")]
     return [ok("서버 밖 백업: 설치됨, 'paperbot 백업' 방 번호 있음 (매일 09:15 한국 시간)")]
 
 
