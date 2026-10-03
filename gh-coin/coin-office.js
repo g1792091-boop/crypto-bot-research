@@ -1922,7 +1922,7 @@ async function adaptiveRetrain(P, book, lead){
         await P.setStatus(s.id, "retired").catch(() => {});
         act = "🛑 자동 은퇴"; retired.push({s, trust, ret});
         // 같은 시장·결에 맞는 교체 전략을 개발팀에 요청(재학습)
-        addTask({team: "dev", title: `교체 전략 개발: ${s.mname || s.market}`, why: `${s.name}가 신뢰점수 ${trust}로 은퇴 — 같은 시장에서 더 견고한 새 전략 필요`, owner: agentById("dev_lead")?.name || lead.name});
+        addTask({team: "dev", title: `교체 전략 개발: ${s.mname || s.market}`, why: `${s.name}가 신뢰점수 ${trust}로 은퇴 — 같은 시장에서 더 견고한 새 전략 필요`, owner: agentById("qa")?.name || lead.name});
       }
     }
     rows.push([s.name.slice(0, 22), String(n), String(trust), live ? "🟢실거래" : "데모", act]);
