@@ -70,7 +70,7 @@ function openKeys(){
   await detectLauncher().catch(() => false);
   openOffice({md, esc, toast, openTerminal, openLive});
   // 차트 터미널의 '본부에 깊게 분석 맡기기' 버튼이 부르는 통로
-  import("./coin-office.js").then(O => { window.ghCoinAsk = t => O.ask(t, {room: "combo"}); window.ghCoinSelfAI = sym => O.selfAIFor(sym); window.ghCoinSelfAIExternal = on => O.setSelfaiExternal(on); window.ghCoinPosition = sym => O.positionsFor(sym); }).catch(() => {});
+  import("./coin-office.js").then(O => { window.ghCoinAsk = t => O.ask(t, {room: "combo"}); window.ghCoinSelfAI = sym => O.selfAIFor(sym); window.ghCoinSelfAIExternal = on => O.setSelfaiExternal(on); window.ghCoinPosition = sym => O.positionsFor(sym); window.ghCoinTrack = src => O.predictionStats(src); }).catch(() => {});
   import("./lib/rigor.js").then(R => { window.ghCoinRigor = R; }).catch(() => {});
   import("./lib/attbacktest.js").then(A => { window.ghCoinAttBacktest = A; }).catch(() => {});
   import("./lib/sentiment.js").then(S => { window.ghCoinSentiment = S; }).catch(() => {});

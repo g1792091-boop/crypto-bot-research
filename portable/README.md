@@ -76,6 +76,15 @@ L.learn("비트코인 추세 상승일 때 돌파 봇 성과 좋음", {job:"bot"
 L.recall("지금 비트코인 돌파 어때");   // → 관련 교훈들
 ```
 
+### `track.js` — 예측 적중률·캘리브레이션
+`makeTracker(store)` → `.record({source,coin,dir,confidence,price,horizonMs})` · `.settle(getPrice)` · `.stats(source)` · `.bySource()`
+```js
+const T = makeTracker(store);
+T.record({source:"selfai", coin:"BTCUSDT", dir:1, confidence:80, price:100, horizonMs:864e5});
+await T.settle(async coin => 110);        // horizon 지난 예측을 현재가로 채점
+T.stats();  // → {winRate, bands:[{band,avgConf,rate}], ...}  확신도가 실제 적중과 맞는지
+```
+
 ---
 
 ## 출처

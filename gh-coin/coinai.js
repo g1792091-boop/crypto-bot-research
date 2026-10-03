@@ -68,6 +68,7 @@ async function gatherDocs(){
     try { const board = await (O.researchBoard ? O.researchBoard(16) : []); for (const f of board) docs.push({id: "board-" + f.id, title: `리서치 보드 · ${f.targetName || f.job}`, text: `${f.kind}: ${f.text} (의도 ${f.intent})`, meta: {kind: "리서치보드"}}); } catch(err){}
     try { const skills = await (O.learnedSkills ? O.learnedSkills(20) : []); for (const s of skills) docs.push({id: "skill-" + s.id, title: "배운 것(경험)", text: `${s.text} (${s.uses}회 반복, 신뢰 ${Math.round((s.conf || 0) * 100)}%)`, meta: {kind: "학습"}}); } catch(err){}
     try { const sent = O.marketSentiment ? O.marketSentiment() : null; if (sent) docs.push({id: "sent-latest", title: "시장 심리(자체 감정)", text: `지금 시장 심리 ${sent.score}/100 (${sent.verdict}) — 뉴스·여론 ${sent.n}건 분석`, meta: {kind: "감정"}}); } catch(err){}
+    try { const st = O.predictionStats ? await O.predictionStats() : null; if (st && st.n) docs.push({id: "track-acc", title: "예측 적중률", text: `지금까지 예측 ${st.n}건 채점 · 전체 승률 ${st.winRate}% · 확신도 구간별: ${st.bands.filter(b => b.n).map(b => `${b.band} 평균확신${b.avgConf}%→실제${b.rate}%`).join(", ")} · 열린 예측 ${st.open}개`, meta: {kind: "적중률"}}); } catch(err){}
   } catch(err){}
   try {
     const P = await import("../nuri-ai/paper.js"), book = await P.loadBook();

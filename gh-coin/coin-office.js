@@ -208,6 +208,7 @@ const ACTIONS = [
   {job: "sent", re: /감정|심리|센티먼트|sentiment|여론\s*분위기|시장\s*분위기|공포.{0,2}탐욕/i, say: "뉴스·경제지표팀이 지금 바로 자체 감정 엔진으로 뉴스·여론의 시장 심리(0~100)를 분석합니다"},
   {job: "pos", re: /단타|스윙|스캘핑|포지션\s*(추천|알려|잡아|줘|어때|봐)|포지션\s*추천|지금\s*(사|팔|들어가)/i, say: "진입 타점팀이 지금 바로 자체 AI + ATR 로 단타·스윙 포지션(방향·진입·손절·익절·손익비)을 추천합니다"},
   {job: "contest", re: /콘테스트|대회|리더보드|전략\s*순위|전략\s*경쟁|어느\s*전략.{0,6}(좋|나)|best\s*strategy/i, say: "데모거래팀이 지금 바로 전략 콘테스트를 열어 데모 전략들을 성과로 겨뤄 순위를 매깁니다"},
+  {job: "track", re: /적중률|캘리브레이션|승률|예측.{0,6}(맞|정확|적중)|얼마나\s*맞|확신도\s*(검증|맞)/i, say: "CEO실에서 QA가 지금까지의 예측을 채점해 적중률과 확신도 캘리브레이션을 보고합니다"},
   {job: "selfai", re: /자체\s*ai|자체\s*인공지능|앙상블|트레이딩\s*데스크|자체\s*모델|ghcoinai|확신도\s*순위|ai\s*데스크/i, say: "자체 AI 데스크가 지금 바로 외부 키 없이 앙상블(기술 평점·멀티 시간대·ML·알파)로 코인 방향·확신도 순위를 냅니다"},
   {job: "botopt", re: /(자동매매\s*봇|선물\s*봇|트레이딩\s*봇|봇)\s*.{0,6}(자동\s*)?(개선|다듬|최적화|하이퍼옵트)|(보조지표|지표)\s*.{0,6}(자동\s*)?(개선|최적화|튜닝)/i, say: "선물 자동매매봇팀이 지금 바로 데모 봇의 보조지표·위험값을 하이퍼옵트로 자동 개선하고 검증 구간·견고성까지 확인합니다"},
   {job: "bot", re: /자동매매\s*봇|선물\s*봇|트레이딩\s*봇|그리드\s*봇|dca\s*봇|봇\s*(만들|돌려|전략|추가)|passivbot|jesse|octobot/i, say: "선물 자동매매봇팀이 지금 바로 봇 전략을 만들어 백테스트하고 통과하면 데모에 올립니다"},
@@ -679,14 +680,14 @@ export function startChatter(){
 // 매 주기 ① 모의투자 장부를 실제 시세로 갱신(코드, AI 없음) ② 그때그때 한 가지 일을 고른다:
 // 매매법 연구 · SNS 여론 · 경제 리서치 · 동료 수다 · 컴퓨터 작업 · 모의투자 보고 (하루 AI 호출 한도 안에서)
 // 쉬지 않고 돌아가는 업무 순환표: 팀마다 고르게 돌아가도록 섞어 두었다 (모듈이 없으면 경제 리서치로 대신)
-const JOBS = ["plan", "dev", "combo", "ic", "bot", "ind", "qrisk", "trend", "data", "opt", "patscan", "situ", "cdev", "entry", "sr", "news", "sent", "pos", "contest", "promote", "pattern", "coin", "ml", "selfai", "dev", "tpsl", "combo", "drift", "cdev", "feeds", "alpha", "bot", "botopt", "selfai", "plan", "trend", "ic", "chat", "forecast", "coin", "live", "retro", "task", "selfdev", "macro", "sns", "computer", "paper"];
-const JOB_KO = {plan: "리서치 플래너(할 일 목록 → 워커 배정)", sent: "시장 심리(자체 감정 엔진)", pos: "단타·스윙 포지션 추천", contest: "전략 콘테스트(데모 성과 리더보드)", bot: "자동매매봇 전략 만들기", botopt: "자동매매봇 자동 개선(보조지표·위험값 하이퍼옵트)", selfai: "자체 AI 데스크(앙상블 방향·확신도 순위)", ic: "투자위원회(강세·약세 토론 → 결정)", qrisk: "퀀트 리스크(VaR·결정표·주문 전 점검)", data: "거래소 비교·데이터 품질", opt: "하이퍼옵트로 전략 다듬기", patscan: "패턴 스캐너", drift: "데모 성과 이동 감지(런 차트)", feeds: "경제 캘린더·금리·변동성 지수", alpha: "알파 팩터 순위", combo: "실시간 종합 지표 타점", dev: "매매법 개발 → 백테스트", cdev: "커스텀 지표 개발 → 백테스트", ind: "보조지표 분석", trend: "다중 시간대 추세 분석", entry: "진입 타점 분석", sr: "지지·저항 분석",
+const JOBS = ["plan", "dev", "combo", "ic", "bot", "ind", "qrisk", "trend", "data", "opt", "patscan", "situ", "cdev", "entry", "sr", "news", "sent", "pos", "contest", "track", "promote", "pattern", "coin", "ml", "selfai", "dev", "tpsl", "combo", "drift", "cdev", "feeds", "alpha", "bot", "botopt", "selfai", "plan", "trend", "ic", "chat", "forecast", "coin", "live", "retro", "task", "selfdev", "macro", "sns", "computer", "paper"];
+const JOB_KO = {plan: "리서치 플래너(할 일 목록 → 워커 배정)", sent: "시장 심리(자체 감정 엔진)", pos: "단타·스윙 포지션 추천", contest: "전략 콘테스트(데모 성과 리더보드)", track: "예측 적중률·캘리브레이션", bot: "자동매매봇 전략 만들기", botopt: "자동매매봇 자동 개선(보조지표·위험값 하이퍼옵트)", selfai: "자체 AI 데스크(앙상블 방향·확신도 순위)", ic: "투자위원회(강세·약세 토론 → 결정)", qrisk: "퀀트 리스크(VaR·결정표·주문 전 점검)", data: "거래소 비교·데이터 품질", opt: "하이퍼옵트로 전략 다듬기", patscan: "패턴 스캐너", drift: "데모 성과 이동 감지(런 차트)", feeds: "경제 캘린더·금리·변동성 지수", alpha: "알파 팩터 순위", combo: "실시간 종합 지표 타점", dev: "매매법 개발 → 백테스트", cdev: "커스텀 지표 개발 → 백테스트", ind: "보조지표 분석", trend: "다중 시간대 추세 분석", entry: "진입 타점 분석", sr: "지지·저항 분석",
   tpsl: "익절·손절 관리", news: "뉴스·기사 분석", macro: "경제지표 예측", situ: "코인 상황판", pattern: "차트·캔들 패턴 분석", coin: "코인팀 회의", ml: "머신러닝·딥러닝 실험",
   promote: "데모 → 실거래 관문 심사", live: "실거래 데스크 점검", paper: "데모거래 보고", forecast: "방향 예측 토론", sns: "SNS 여론 확인", chat: "동료 수다", computer: "컴퓨터 작업",
   retro: "팀 회고·부족한 점 찾기", task: "개선 과제 수행", selfdev: "우리 앱 오류 찾아 코드 고치기", economy: "경제 리서치"};
-const JOB_TEAM = {plan: "hq", sent: "news", pos: "entry", contest: "demo", bot: "bot", botopt: "bot", selfai: "selfai", ic: "ic", qrisk: "qrisk", data: "data", opt: "opt", patscan: "pattern", drift: "demo", feeds: "news", alpha: "ml", combo: "combo", dev: "dev", cdev: "cdev", ind: "ind", trend: "trend", entry: "entry", sr: "sr", tpsl: "tpsl", news: "news", macro: "news", situ: "situ", pattern: "pattern", coin: "btc", ml: "ml",
+const JOB_TEAM = {plan: "hq", sent: "news", pos: "entry", contest: "demo", track: "hq", bot: "bot", botopt: "bot", selfai: "selfai", ic: "ic", qrisk: "qrisk", data: "data", opt: "opt", patscan: "pattern", drift: "demo", feeds: "news", alpha: "ml", combo: "combo", dev: "dev", cdev: "cdev", ind: "ind", trend: "trend", entry: "entry", sr: "sr", tpsl: "tpsl", news: "news", macro: "news", situ: "situ", pattern: "pattern", coin: "btc", ml: "ml",
   promote: "demo", live: "live", paper: "demo", forecast: "entry", sns: "news", chat: "hq", computer: "hq", retro: "hq", task: "hq", selfdev: "hq", economy: "news"};
-const JOB_FN = () => ({plan: plannerJob, sent: sentimentJob, pos: posJob, contest: contestJob, bot: botJob, botopt: botImproveJob, selfai: selfaiJob, ic: icJob, qrisk: qriskJob, data: dataJob, opt: optJob, patscan: patternScanJob, drift: driftJob, feeds: openFeedsJob, alpha: alphaJob, combo: comboJob, dev: () => research("std"), cdev: () => research("custom"), ind: indJob, trend: trendJob, entry: entryJob, sr: srJob, tpsl: tpslJob, news: economyCheck, macro: macroJob,
+const JOB_FN = () => ({plan: plannerJob, sent: sentimentJob, pos: posJob, contest: contestJob, track: trackJob, bot: botJob, botopt: botImproveJob, selfai: selfaiJob, ic: icJob, qrisk: qriskJob, data: dataJob, opt: optJob, patscan: patternScanJob, drift: driftJob, feeds: openFeedsJob, alpha: alphaJob, combo: comboJob, dev: () => research("std"), cdev: () => research("custom"), ind: indJob, trend: trendJob, entry: entryJob, sr: srJob, tpsl: tpslJob, news: economyCheck, macro: macroJob,
   situ: situJob, pattern: patternJob, coin: coinJob, ml: mlJob, promote: promoteJob, live: liveDeskJob, paper: paperReport, forecast: forecastJob, sns: snsCheck, chat: () => chatter(true),
   computer: computerWork, retro, task: doTask, selfdev: selfdevJob, economy: economyCheck});
 let cycleTimer = 0, cycling = false, lastJob = "";
@@ -1967,6 +1968,8 @@ async function selfaiJob(){
     rows.map((r, i) => [String(i + 1), r.c.ko, r.j.label, (r.j.score >= 0 ? "+" : "") + r.j.score.toFixed(2), r.j.confidence + "%", Math.round(r.j.agree * 100) + "%", r.j.parts.map(p => `${p.name} ${p.v >= 0 ? "+" : ""}${p.v.toFixed(2)}`).join(" · ") || "—"]),
     `확신도는 신호 크기 + 신호 간 합의로 매긴 0~95 참고값입니다. 자체 AI 는 판단만 하고, 실제 주문은 사용자가 켠 전략만 실거래 화면의 한도·승인 안에서 냅니다.${deep ? ` · 1위는 ML(${deep.edge === "edge" ? "우위 있음" : deep.edge === "weak" ? "약함" : "우위 없음"})` : ""}${aiOp ? ` · 외부 AI 의견 반영(확신 ${aiOp.confidence}%)` : " · 외부 AI 꺼짐(설정에서 켜면 LLM 의견도 한 표로 반영)"}${plan ? "\n" + plan : ""}`);
   addNote("selfai", `자체 AI 1위 ${top.c.ko} ${top.j.label} (확신도 ${top.j.confidence}%) · 순위 ${rows.map(r => r.c.ko).join(" > ")}${aiOp ? " · 외부 AI 반영" : ""}`, "자체AI");
+  // 예측 기록(24시간 뒤 자동 채점) — 적중률·캘리브레이션에 쌓인다
+  try { const T = await trackerOf(); await T.settle(trackPrice); for (const r of rows) T.record({source: "selfai", coin: r.c.id, ko: r.c.ko, dir: r.j.dir, confidence: r.j.confidence, price: r.k60.at(-1)?.c, horizonMs: 24 * 3600e3}); } catch(e){}
   await learnSkill(`${top.c.ko} 자체 AI ${top.j.label} (확신 ${top.j.confidence}%): ${top.j.reasons[0] || ""}`, {job: "selfai"});
   pubTo(top.c.sym, "selfai", {team: "selfai", title: `자체 AI: ${top.c.ko} ${top.j.label} (${top.j.confidence}%)`, text: SELF.summary(top.j)});
   await explain(lead.id, "selfai", "자체 AI 앙상블 순위표를 보고 확신도가 높은 코인과 어떤 신호(기술 평점·멀티 시간대·ML·알파)가 합의했는지, 신호가 엇갈려 중립인 코인은 왜 그런지 해설한다. 확신도는 참고값이고 주문은 승인·한도 안에서만 나간다는 점을 밝힌다.", tableText(["순위", "코인", "방향", "점수", "확신도", "근거"], rows.map((r, i) => [String(i + 1), r.c.ko, r.j.label, r.j.score.toFixed(2), r.j.confidence + "%", r.j.reasons.join(" / ")])), "아래 자체 AI 앙상블 순위를 해설해 줘.");
@@ -2008,6 +2011,8 @@ async function posJob(){
     [row(scalp, "단타 (5·15분)"), row(swing, "스윙 (4시간·일)")],
     "매매법을 안 정해도 바로 쓸 참고 포지션입니다 · 계산값일 뿐 매매 권유 아님 · 실제 주문은 사용자 승인·한도 안에서만 나갑니다");
   addNote("entry", `${c.ko} 단타 ${dirKo(scalp)} · 스윙 ${dirKo(swing)}`, "포지션");
+  // 예측 기록 (단타 6시간·스윙 3일 뒤 자동 채점)
+  try { const T = await trackerOf(); for (const [p, h] of [[scalp, 6 * 3600e3], [swing, 3 * 864e5]]) if (p && p.dir !== 0 && p.price > 0) T.record({source: p.styleKo, coin: c.id, ko: c.ko, dir: p.dir, confidence: p.confidence, price: p.price, horizonMs: h}); } catch(e){}
   await learnSkill(`${c.ko} 포지션: 단타 ${dirKo(scalp)}(확신 ${scalp?.confidence ?? "?"}%) · 스윙 ${dirKo(swing)}(확신 ${swing?.confidence ?? "?"}%)`, {job: "pos"});
   if (hasAI()) await explain(lead.id, "entry", "단타·스윙 포지션 추천 표를 보고, 지금 단타가 나은지 스윙이 나은지, 두 시간대 방향이 엇갈리면 어떻게 봐야 하는지, 손절·익절·손익비를 어떻게 지킬지 해설한다. 참고용이고 주문은 승인·한도 안에서만 나간다는 점을 밝힌다.",
     `${c.ko} 현재가 ${fx(scalp?.price || swing?.price)}\n단타(5·15분): ${dirKo(scalp)} 확신 ${scalp?.confidence ?? "?"}%${scalp?.entry ? ` · 진입 ${fx(scalp.entry)} 손절 ${fx(scalp.sl)} 익절 ${fx(scalp.tp)} (손익비 ${scalp.rr})` : ""} · ${scalp?.why || ""}\n스윙(4시간·일): ${dirKo(swing)} 확신 ${swing?.confidence ?? "?"}%${swing?.entry ? ` · 진입 ${fx(swing.entry)} 손절 ${fx(swing.sl)} 익절 ${fx(swing.tp)} (손익비 ${swing.rr})` : ""} · ${swing?.why || ""}`, "아래 단타·스윙 포지션 추천을 해설해 줘.");
@@ -2035,6 +2040,22 @@ async function aiOpinion(coin, j){
    planner 가 상태(코인·전략·관문·경보·최근 보드)를 보고 '지금 할 일 목록'을 만들고, 선행조건을 지켜 최우선 의도 하나를
    골라 기존 job(워커)으로 실행한 뒤, 결과를 공유 보드에 기록한다. 정찰·침투·공격 요소는 전혀 없다. ---- */
 const lsStore = () => ({get: (k, d) => readJ(k, d), set: (k, v) => writeJ(k, v)});
+// 예측 적중률 추적 (lib/track.js) — 자체 AI·단타/스윙 예측을 기록하고 horizon 뒤 현재가로 자동 채점
+const trackerOf = async () => (await lib("track")).makeTracker(lsStore());
+const trackPrice = async coin => { const c = COINS.find(x => x.id === coin || x.sym === coin); if (!c) return null; try { return (await kl(c.sym, "60", 3)).at(-1).c; } catch(e){ return null; } };
+export async function predictionStats(source){ try { return (await trackerOf()).stats(source); } catch(e){ return null; } }
+// 예측 적중률·캘리브레이션 (CEO실에서 QA가 보고) — 확신도가 실제 적중과 얼마나 맞는지
+async function trackJob(){
+  const T = await trackerOf(), lead = agentById("qae") || agentById("lead");
+  await T.settle(trackPrice);
+  const overall = T.stats(), srcs = T.bySource();
+  if (!overall.n){ post({ch: "hq", kind: "work", agent: lead.id, icon: "🎯", text: `아직 채점된 예측이 없습니다 · 열린 예측 ${overall.open}개 (horizon 지나면 자동 채점됩니다)`}); return; }
+  table("hq", lead.id, `🎯 예측 적중률·캘리브레이션 (채점 ${overall.n}건 · 전체 승률 ${overall.winRate}%)`, ["확신도 구간", "예측 수", "평균 확신", "실제 적중"],
+    overall.bands.filter(b => b.n).map(b => [b.band, b.n + "건", b.avgConf + "%", b.rate + "%"]), "'평균 확신'과 '실제 적중'이 가까울수록 잘 보정된 예측입니다 · 과거 성과가 미래를 보장하지 않습니다");
+  if (srcs.length) table("hq", lead.id, "🎯 예측 소스별 승률 (뭐가 더 맞나)", ["소스", "채점", "승률"], srcs.map(s => [s.source, s.n + "건", s.winRate + "%"]), "자체 AI·단타·스윙 중 실제로 잘 맞는 것을 신뢰에 반영");
+  addNote("hq", `예측 적중률 전체 ${overall.winRate}% (${overall.n}건 채점) · ${srcs.map(s => `${s.source} ${s.winRate}%`).join(" · ")}`, "적중률");
+  await learnSkill(`예측 적중률: 전체 ${overall.winRate}% · ${srcs.map(s => `${s.source} ${s.winRate}%`).join(", ")}`, {job: "track"});
+}
 // 전략 파라미터 해시 (감사 로그용): 같은 전략이라도 지표 길이·문턱값·위험값이 바뀌면 해시가 바뀐다 → 어느 버전이 낸 신호인지 추적
 const specHash = o => { try { const s = JSON.stringify(o); let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0; return h.toString(36); } catch(e){ return ""; } };
 // hermes-agent 식 경험 학습 루프: 리서치하며 배운 교훈을 쌓고(강화), 모든 에이전트 프롬프트에 넣어 재사용한다 (lib/lessons.js)
