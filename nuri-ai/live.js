@@ -283,6 +283,11 @@ export function checkLimits(o, st){
     if (o.notional > L.maxNotional * (1 + 1e-9)) reasons.push(`1회 최대 금액 초과: ${(+o.notional).toFixed(2)} > ${L.maxNotional} USDT`);
     if (o.lev > L.maxLeverage) reasons.push(`레버리지 한도 초과: ${o.lev}배 > ${L.maxLeverage}배`);
   }
+  // 데이터 신선도: 신호의 근거가 된 봉이 너무 오래됐으면(피드 지연·중단) 실주문을 막는다 — 오래된 값으로 실돈을 넣지 않게
+  if (st.dataLagMs != null && st.barMs){
+    const maxLag = Math.max(st.barMs * 2, 120000);   // 봉 2개 또는 2분 중 큰 값
+    if (st.dataLagMs > maxLag) reasons.push(`시세 데이터가 오래됨(${Math.round(st.dataLagMs / 1000)}초 전) — 피드 지연/중단 의심으로 신규 진입 보류`);
+  }
   if (st.hasSymbolPos) reasons.push(`${o.symbol}에 이미 포지션이 있습니다 (한 종목 한 포지션)`);
   if (st.openCount >= L.maxPositions) reasons.push(`동시 포지션 한도: ${st.openCount}/${L.maxPositions}`);
   // 포트폴리오 쏠림 방지: 열린 포지션 총 명목가 + 이번 주문이 총 노출 한도를 넘으면 막는다 (코인은 대부분 같이 움직임)
@@ -494,7 +499,9 @@ async function bnOpen(s, ev){
   const sz = sizeOrder({notional: L.linked[s.id]?.notional || lim.orderNotional, price, rules, maxNotional: lim.maxNotional});
   o.notional = sz.notional ?? (L.linked[s.id]?.notional || lim.orderNotional);
   const openNotional = poss.reduce((sum, p) => sum + Math.abs(+p.notional || (+p.positionAmt * +p.markPrice) || 0), 0);
-  const chk = checkLimits(o, {limits: lim, halted, openCount: poss.length + upCount, hasSymbolPos: poss.some(p => p.symbol === symbol), openNotional});
+  const barMs = {"1": 60e3, "5": 3e5, "15": 9e5, "60": 36e5, "240": 144e5, "D": 864e5, "W": 6048e5}[String(s.tf)] || null;
+  const dataLagMs = ev.pos?.t ? D.now() - ev.pos.t : null;
+  const chk = checkLimits(o, {limits: lim, halted, openCount: poss.length + upCount, hasSymbolPos: poss.some(p => p.symbol === symbol), openNotional, dataLagMs, barMs});
   const reasons = [...(sz.ok ? [] : [sz.why]), ...chk.reasons];
   if (reasons.length) return blocked(s, o, reasons);
   const dir = side === "long" ? 1 : -1, slD = distOf(ev.pos, "sl"), tpD = distOf(ev.pos, "tp");

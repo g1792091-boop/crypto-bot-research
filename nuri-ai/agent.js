@@ -80,7 +80,14 @@ export async function candlesFor(a, total){
   if (hit && Date.now() - hit.at < ttl) return withLag(hit.val);          // 최근 수집 재사용
   if (_candleInflight.has(key)) return _candleInflight.get(key).then(withLag);   // 진행 중 요청 공유(팬아웃)
   const p = (async () => {
-    const cs = await ex(exn).candles(market, tf, total);
+    // 일시적 거래소·네트워크 오류는 짧게 쉬었다 두 번까지 다시 시도한다(한 번 실패로 연구 주기 전체가 멎지 않게)
+    let cs, lastErr;
+    for (let attempt = 0; attempt < 3; attempt++){
+      try { cs = await ex(exn).candles(market, tf, total); if (cs && cs.length) break; }
+      catch(e){ lastErr = e; }
+      if (attempt < 2){ activity({kind: "retry", text: `${market} 캔들 수집 재시도 ${attempt + 1}/2` }); await new Promise(r => setTimeout(r, 400 * (attempt + 1))); }
+    }
+    if (!cs){ const e = new Error("캔들 데이터를 가져오지 못했습니다 (" + market + "): " + (lastErr?.message || "원인 불명")); e.status = "failed"; throw e; }
     if (cs.length < 30){ const e = new Error("캔들 데이터가 부족합니다 (" + market + ")"); e.status = cs.length === 0 ? "empty" : "failed"; throw e; }
     const last = cs.at(-1)?.t || 0;
     const val = {exn, market, tf, cs, exchange: exn, last_candle_ts: last, status: "ok"};

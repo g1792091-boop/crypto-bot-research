@@ -737,13 +737,19 @@ export async function cycle(force, onlyJob){
 }
 
 // 혼자 하는 일 한 번: 배정 모델로 생각·말을 실시간으로 보여 주고, 빈 답이면 다른 모델로
-async function solo(a, {room, sys, user, maxTokens = 900, temperature = 0.6, extra = {}, train = "", trainRaw = false, role = null}){
+// LLM 응답 캐시: 키에 질문(sys+user) 전체가 들어가므로, 상태가 글자 하나까지 같을 때만 적중한다
+// → 같은 자료로 같은 보고를 반복 요청할 때 모델을 다시 부르지 않아 비용을 아낀다(오래된 분석을 주지 않음)
+const _soloCache = new Map();
+function _hash(s){ let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return h.toString(36); }
+async function solo(a, {room, sys, user, maxTokens = 900, temperature = 0.6, extra = {}, train = "", trainRaw = false, role = null, cache = 0}){
   const models = assignModels();
   const target = models[a.id];
   const cm = claudeModels();
   const alt = cm && target?.model !== cm.sonnet ? {id: "anthropic", model: cm.sonnet} : officeSources().filter(t => t.model !== target?.model && !badModels()[t.model]).sort((x, y) => modelScore(y.model) - modelScore(x.model))[0];
   const entry = post({ch: room || a.team, kind: "agent", agent: a.id, text: "", think: "", steps: [], live: true, model: target?.model || "", ...extra});
   fire({kind: "solo", agent: a, entry});
+  const ckey = cache ? a.id + "|" + (role || "") + "|" + _hash(sys + "\u0000" + user) : null;
+  if (ckey){ const h = _soloCache.get(ckey); if (h && Date.now() - h.at < cache){ entry.text = h.text; entry.model = (h.model || "") + " · 캐시"; entry.live = false; saveLog(); fire({kind: "said", agent: a, entry}); return {...entry, raw: h.raw, cached: true}; } }
   let finalRaw = "";
   for (const tg of [target, alt, null].filter((t, i, arr) => i === arr.length - 1 || (t && arr.findIndex(x => x && x.model === t.model) === i))){
     let raw = "", think = "", last = 0;
@@ -776,6 +782,7 @@ async function solo(a, {room, sys, user, maxTokens = 900, temperature = 0.6, ext
     if (id) entry.trainIds = [id];
   }
   entry.live = false; saveLog(); fire({kind: "said", agent: a, entry});
+  if (ckey && goodText(entry.text)){ _soloCache.set(ckey, {at: Date.now(), text: entry.text, raw: finalRaw, model: entry.model}); if (_soloCache.size > 60){ const old = [..._soloCache.entries()].sort((x, y) => x[1].at - y[1].at)[0]; if (old) _soloCache.delete(old[0]); } }
   return {...entry, raw: finalRaw};
 }
 const personaOf = (a, extra = "") => `너는 세계적인 기업 수준의 GH Coin ${teamById(a.team).name}의 '${a.name}'(${a.title})다. 역할: ${a.duty}
@@ -807,7 +814,7 @@ async function paperStep(){
 async function paperReport(){
   const P = await import("../nuri-ai/paper.js"), a = agentById("trader");
   const book = await P.bookText();
-  await solo(a, {room: "demo", sys: personaOf(a, "데모거래(모의) 현황을 팀에 3~5문장으로 보고한다. 잘 되는 전략과 안 되는 전략, 지금 포지션의 위험을 짚는다. 실제 주문이 아닌 가상 운용임을 잊지 않는다."), user: `모의투자 장부:\n${book}`, train: "아래 모의투자 장부를 보고 잘 되는 전략과 안 되는 전략, 지금 포지션의 위험을 3~5문장으로 해설해 줘."});
+  await solo(a, {room: "demo", cache: 300000, sys: personaOf(a, "데모거래(모의) 현황을 팀에 3~5문장으로 보고한다. 잘 되는 전략과 안 되는 전략, 지금 포지션의 위험을 짚는다. 실제 주문이 아닌 가상 운용임을 잊지 않는다."), user: `모의투자 장부:\n${book}`, train: "아래 모의투자 장부를 보고 잘 되는 전략과 안 되는 전략, 지금 포지션의 위험을 3~5문장으로 해설해 줘."});
 }
 
 /* ---- 매매법 연구: 지표 29종 + 연구 카드 → 전략 JSON → 백테스트 · 과최적화 검사 → 통과하면 모의투자 ---- */
