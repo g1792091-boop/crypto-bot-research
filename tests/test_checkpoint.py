@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import sqlite3
+import time
 
 import numpy as np
 import pytest
@@ -12,7 +13,7 @@ from paperbot import Bar, Brackets, Signal
 from paperbot import checkpoint as ck
 from paperbot.config import V3_SYMBOLS, v3_settings
 from paperbot.engine import PaperEngine
-from paperbot.notify import INFO, ListNotifier
+from paperbot.notify import INFO, WARN, ListNotifier
 from paperbot.sizing import size_position
 from paperbot.store3 import Store3
 
@@ -265,7 +266,7 @@ def test_synthetic_checkpoint_run(run_db, tmp_path):
     bars = (cp - (T0 + 6 * 3_600_000)) // 3_600_000
     assert acc["GOOD@1h"]["rate"] == pytest.approx(400 / (6 * bars), rel=0.01)
     assert note.messages and note.messages[-1][0] == INFO and "체크포인트 30일" in note.messages[-1][1]
-    assert "1차 합격: GOOD@1h" in note.messages[-1][1]
+    assert "1차 합격: GOOD · 1시간 (q " in note.messages[-1][1]
     # read API
     assert ck.statuses(out)["GOOD@1h"] == ck.PASS1
     assert ck.account_status(out, "NOISE@1h")["status"] == ck.FAIL
@@ -274,6 +275,7 @@ def test_synthetic_checkpoint_run(run_db, tmp_path):
     # a second run does nothing (verdicts are final)
     assert ck.run_due(path, out, _minutes_for(), S, BR, SPECS, note, now_ms=cp + 7_200_000, n_bots=200,
                       log=lambda *_: None) == []
+    assert len(note.messages) == 1                    # delivered (a notifier that cannot tell): not sent again
 
 
 def test_waits_for_runner_snapshot(tmp_path):
@@ -286,6 +288,142 @@ def test_waits_for_runner_snapshot(tmp_path):
     assert len(note.messages) == 1 and "day:" in note.messages[0][1]
     ck.run_due(path, out, _minutes_for(), S, BR, SPECS, note, now_ms=cp + 7_200_000, log=lambda *_: None)
     assert len(note.messages) == 1                    # warned once per checkpoint
+
+
+def _today_db(tmp_path, days_ago):
+    """paper3.db of a run that started ``days_ago`` days before today (main() reads the real clock), with one
+    account without trades (held, so its verdict needs no bots) and the runner's state of the day-30 checkpoint."""
+    start = ck.floor_day(int(time.time() * 1000)) - days_ago * DAY
+    path = str(tmp_path / "paper3.db")
+    _paper_db(path, {"A@1h": {"wallet": 5000.0, "trades": [], "created": start + 3_600_000}}, start + 30 * DAY)
+    return path, start + 30 * DAY
+
+
+class _Telegram:
+    """send() returns ``ok`` like TelegramNotifier (False: not delivered)."""
+
+    def __init__(self, ok=True):
+        self.ok, self.messages = ok, []
+
+    def send(self, level, text):
+        self.messages.append((level, text))
+        return self.ok
+
+
+class _Rest:
+    def exchange_info(self, symbols):
+        return SPECS
+
+
+def test_main_no_binance_call_when_nothing_is_due(tmp_path, monkeypatch):
+    import paperbot.live as live
+    path, _ = _today_db(tmp_path, 10)                  # day 10: no checkpoint due yet
+    monkeypatch.setattr(live, "_rest", lambda: pytest.fail("Binance called with nothing due"))
+    monkeypatch.setattr(live, "_notifier", ListNotifier)
+    assert ck.main(["run", "--db", path, "--out", str(tmp_path / "checkpoint.db")]) == 0
+
+
+def test_main_failure_on_a_due_checkpoint_warns_once_per_date_and_error(tmp_path, monkeypatch):
+    import paperbot.live as live
+    path, cp = _today_db(tmp_path, 40)
+    out = str(tmp_path / "checkpoint.db")
+    note = ListNotifier()
+    monkeypatch.setattr(live, "_notifier", lambda: note)
+    monkeypatch.setattr(live, "_rest", _Rest)
+
+    def fail(exc):
+        def f(*a):
+            raise exc
+        return f
+    monkeypatch.setattr(live, "load_brackets", fail(ConnectionError("binance down")))
+    for _ in range(2):                                 # the timer retries hourly: one warning, not one per hour
+        with pytest.raises(ConnectionError):
+            ck.main(["run", "--db", path, "--out", out])
+    assert [lv for lv, _ in note.messages] == [WARN]
+    assert ck.day_str(cp) in note.messages[0][1] and "ConnectionError" in note.messages[0][1]
+    monkeypatch.setattr(live, "load_brackets", fail(SystemExit("No leverage brackets")))
+    with pytest.raises(SystemExit):
+        ck.main(["run", "--db", path, "--out", out])
+    assert [lv for lv, _ in note.messages] == [WARN, WARN] and "SystemExit" in note.messages[1][1]
+    # fixed: judged and sent; no warning once the verdict exists
+    monkeypatch.setattr(live, "load_brackets", lambda *a: (BR, "test"))
+    assert ck.main(["run", "--db", path, "--out", out]) == 0
+    assert note.messages[-1][0] == INFO and "[체크포인트 30일" in note.messages[-1][1] and len(note.messages) == 3
+
+
+def test_main_sends_an_undelivered_verdict_again(tmp_path, monkeypatch):
+    import paperbot.live as live
+    path, cp = _today_db(tmp_path, 40)
+    out = str(tmp_path / "checkpoint.db")
+    down = _Telegram(ok=False)
+    monkeypatch.setattr(live, "_notifier", lambda: down)
+    monkeypatch.setattr(live, "_rest", _Rest)
+    monkeypatch.setattr(live, "load_brackets", lambda *a: (BR, "test"))
+    assert ck.main(["run", "--db", path, "--out", out]) == 0
+    assert [lv for lv, _ in down.messages] == [INFO] and ck.verdict(out, ck.day_str(cp))
+    # next hour: nothing to judge (no Binance call), but the verdict Telegram did not take goes again
+    up = _Telegram(ok=True)
+    monkeypatch.setattr(live, "_notifier", lambda: up)
+    monkeypatch.setattr(live, "_rest", lambda: pytest.fail("Binance called with nothing due"))
+    assert ck.main(["run", "--db", path, "--out", out]) == 0
+    assert up.messages == down.messages
+    assert ck.main(["run", "--db", path, "--out", out]) == 0
+    assert len(up.messages) == 1                      # delivered: not again
+
+
+def test_main_sends_a_stored_verdict_while_a_later_checkpoint_keeps_failing(tmp_path, monkeypatch):
+    import paperbot.live as live
+    path, cp1 = _today_db(tmp_path, 70)                # day 30 and day 60 both due, neither judged
+    cp2 = cp1 + 30 * DAY
+    st = Store3(path)
+    st.put_state("day:" + ck.day_str(cp2), cp2, st.get_state("day:" + ck.day_str(cp1))[1])
+    st.close()
+    out = str(tmp_path / "checkpoint.db")
+    real_judge = ck.judge
+
+    def judge(o, date, *a, **kw):
+        if date == ck.day_str(cp2):
+            raise TimeoutError("binance klines timed out")
+        return real_judge(o, date, *a, **kw)
+    monkeypatch.setattr(ck, "judge", judge)
+    monkeypatch.setattr(live, "_rest", _Rest)
+    monkeypatch.setattr(live, "load_brackets", lambda *a: (BR, "test"))
+    down = _Telegram(ok=False)
+    monkeypatch.setattr(live, "_notifier", lambda: down)
+    with pytest.raises(TimeoutError):
+        ck.main(["run", "--db", path, "--out", out])
+    assert ck.verdict(out, ck.day_str(cp1)) and ck.verdict(out, ck.day_str(cp2)) is None
+    assert [lv for lv, _ in down.messages] == [INFO, WARN]
+    assert "[체크포인트 30일" in down.messages[0][1] and "[체크포인트 60일" in down.messages[1][1]
+    # next hour day 60 fails again: no second warning, but the day-30 verdict Telegram did not take goes again
+    up = _Telegram(ok=True)
+    monkeypatch.setattr(live, "_notifier", lambda: up)
+    with pytest.raises(TimeoutError):
+        ck.main(["run", "--db", path, "--out", out])
+    assert up.messages == down.messages[:1]
+    with pytest.raises(TimeoutError):
+        ck.main(["run", "--db", path, "--out", out])
+    assert len(up.messages) == 1                      # delivered: not again
+
+
+def test_verdict_text_korean_names():
+    d = "2026-11-01"
+
+    def row(strat, tf, kind, status, q):
+        return {"strategy": strat, "timeframe": tf, "kind": kind, "status": status, "q": q, "decided": d}
+    accts = {"S2_ST_ROC@1h": row("S2_ST_ROC", "1h", "strategy", ck.PASS1, 0.01),
+             "S2_ST_ROC@1h~c1": row("S2_ST_ROC", "1h", "copy", ck.PASS1, 0.02),
+             "S2_ST_ROC@1h~c2": row("S2_ST_ROC", "1h", "copy", ck.PASS2, 0.03),
+             "NL3@15m": row("NL3", "15m", "newlab", ck.PASS1, 0.04),
+             "N07_ICHI_CMO@5m": row("N07_ICHI_CMO", "5m", "strategy", ck.FAIL, 0.5)}
+    v = {"day": 30, "date": d, "n_bots": 2000, "alpha": 0.1, "tested": 5, "luck_passed": 4, "lucky_expected": 0.4,
+         "lucky_if_uncorrected": 0.5, "snapshot_sha256": "ab" * 32, "warnings": [],
+         "counts": {k: sum(r["status"] == k for r in accts.values()) for k in ck.STATUSES}, "accounts": accts}
+    t = ck.verdict_text(v)
+    assert "1차 합격: 슈퍼트렌드·ROC · 1시간 (q 0.010), 복제 슈퍼트렌드·ROC · 1시간 (S2_ST_ROC@1h~c1, q 0.020), " \
+           "새 매매법 NL3 · 15분 (q 0.040)" in t
+    assert "2차 통과: 복제 슈퍼트렌드·ROC · 1시간 (S2_ST_ROC@1h~c2, q 0.030)" in t
+    assert "S2_ST_ROC@1h " not in t and "S2_ST_ROC@1h (" not in t     # an original: its Korean name only
 
 
 # ---------------------------------------------------------------------------- snapshot (Q2)

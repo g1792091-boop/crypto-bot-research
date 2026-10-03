@@ -8,7 +8,10 @@ addendum docs/paper-v3-rules-addendum.md Q1-Q3; the addendum's '확정 내용' t
 When
     Checkpoints are 00:00 UTC (09:00 KST) on day 30, 60, 90, ... after the run start (the UTC
     date of the first account's creation in paper3.db). The job runs hourly and does nothing until
-    a checkpoint is due and the live runner has saved its ``day:<date>`` state for it.
+    a checkpoint is due and the live runner has saved its ``day:<date>`` state for it (no Binance call
+    before that). An error while a due checkpoint has no verdict sends one WARN per date and error type
+    and fails the run (the timer retries); a verdict Telegram did not take is sent again on the next run.
+    A rehearsal on the real data that never touches checkpoint.db: ``paperbot.checkpoint_preview``.
 
 Q2 snapshot
     At the checkpoint the runner itself keeps the state of every account before the 00:00 step
@@ -73,6 +76,7 @@ import sqlite3
 import sys
 import time
 import urllib.parse
+from collections import Counter
 from dataclasses import dataclass
 from typing import Callable, Optional
 
@@ -1073,14 +1077,29 @@ def verdict_text(v: dict) -> str:
              f"{v['luck_passed']}개, 우연으로 기대되는 합격 수 ≤ {v['lucky_expected']:.1f}개 "
              f"(보정 없이 p<{v['alpha']:.2f}였다면 {v['lucky_if_uncorrected']:.1f}개)"]
     new = [(aid, r) for aid, r in v["accounts"].items() if r.get("decided") == v["date"]]
+    ko = _names_ko(v["accounts"])
+    twice = Counter(ko.values())          # the code only where two accounts would read the same (copies)
     for st in (PASS2, PASS1):
-        names = [f"{aid} (q {r['q']:.3f})" for aid, r in new if r["status"] == st]
+        names = [f"{ko[aid]} ({aid + ', ' if twice[ko[aid]] > 1 else ''}q {r['q']:.3f})"
+                 for aid, r in new if r["status"] == st]
         if names:
             lines.append(f"{st}: " + ", ".join(names[:12]) + (f" 외 {len(names) - 12}개" if len(names) > 12 else ""))
     if v.get("warnings"):
         lines += ["주의: " + w for w in v["warnings"]]
     lines.append(f"스냅샷 {v['snapshot_sha256'][:12]} · 대시보드 순위표 '체크포인트 판정'")
     return "\n".join(lines)
+
+
+def _names_ko(accounts: dict) -> dict:
+    """{account_id: name} for the Telegram text, as the other Telegram messages write it: the Korean strategy
+    name (agents/roster3.STRATEGY_KO) and timeframe, '복제' / '새 매매법' before an extra. Display only."""
+    try:
+        from .agents.roster3 import STRATEGY_KO
+    except Exception:  # noqa: BLE001  (names are cosmetic)
+        STRATEGY_KO = {}
+    pre = {"copy": "복제 ", "newlab": "새 매매법 "}
+    return {aid: f"{pre.get(r.get('kind'), '')}{STRATEGY_KO.get(r['strategy'], r['strategy'])} · "
+                 f"{TF_KO.get(r['timeframe'], r['timeframe'])}" for aid, r in accounts.items()}
 
 
 def judge(out: sqlite3.Connection, date: str, minutes_for, s: Settings, brackets: dict, specs: dict,
@@ -1203,13 +1222,47 @@ def run_due(paper_db: str, out_path: str, minutes_for, s: Settings, brackets: di
                 log(f"snapshot {date} frozen: {len(snap['accounts'])} accounts, sha256 {sha}")
             v = judge(out, date, minutes_for, s, brackets, specs, n_bots=n_bots, log=log, now_ms=now)
             log(v["text"])
-            if notifier is not None:
-                notifier.send(INFO, v["text"])
             done.append(v)
+        send_verdicts(out, notifier, now)
     finally:
         conn.close()
         out.close()
     return done
+
+
+def due_unjudged(paper_db: str, out_path: str, now: int, only: Optional[str] = None) -> list[tuple[int, str]]:
+    """[(day, date)] of the due checkpoints that have no verdict yet. No REST call: most hourly runs stop here."""
+    conn = ro_connect(paper_db)
+    try:
+        start = run_facts(conn)["start_ts"]
+    finally:
+        conn.close()
+    if start is None:
+        return []
+    out = open_out(out_path)
+    todo = []
+    try:
+        for k, cp in due_checkpoints(start, now):
+            date = day_str(cp)
+            judged = out.execute("SELECT 1 FROM verdicts WHERE date = ?", (date,)).fetchone()
+            if (not only or date == only) and not judged:
+                todo.append((k * PERIOD_DAYS, date))
+    finally:
+        out.close()
+    return todo
+
+
+def send_verdicts(out, notifier, now) -> None:
+    """Send every verdict that Telegram has not taken yet (silent INFO, as documented) and mark it ``sent`` in
+    job_log. A send that returns False (not delivered) is tried again on the next hourly run; a notifier that
+    cannot tell (None) counts as delivered."""
+    if notifier is None:
+        return
+    for date, data in out.execute("SELECT date, data FROM verdicts v WHERE NOT EXISTS (SELECT 1 FROM job_log j "
+                                  "WHERE j.date = v.date AND j.text = 'sent') ORDER BY date").fetchall():
+        if notifier.send(INFO, json.loads(data)["text"]) is not False:
+            out.execute("INSERT INTO job_log VALUES (?,?,?)", (now, date, "sent"))
+            out.commit()
 
 
 def _log_once(out, date, msg, notifier, now) -> None:
@@ -1318,17 +1371,43 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.cmd == "show":
         return _show(args.out, args.date)
     from .live import _notifier, _rest, load_brackets
-    rest = _rest()
-    conn = ro_connect(args.db)
-    fee = run_facts(conn)["taker_fee"]
-    conn.close()
-    s = v3_settings(**({"taker_fee": fee} if fee else {}))
-    brackets, _ = load_brackets(rest, list(V3_SYMBOLS), args.brackets, args.allow_example_brackets)
-    specs = rest.exchange_info(list(V3_SYMBOLS))
-    cache = args.cache or os.path.join(os.path.dirname(os.path.abspath(args.out)), "checkpoint_bars")
-    src = BinanceMinutes(rest, cache)
-    run_due(args.db, args.out, src.load, s, brackets, specs, None if args.no_notify else _notifier(),
-            only=args.date, n_bots=args.bots)
+    now = int(time.time() * 1000)
+    todo = due_unjudged(args.db, args.out, now, args.date)
+    notifier = None if args.no_notify else _notifier()
+    if not todo:                          # nothing to judge: no Binance call, only a verdict not delivered yet
+        out = open_out(args.out)
+        try:
+            send_verdicts(out, notifier, now)
+        finally:
+            out.close()
+        return 0
+    try:
+        rest = _rest()
+        conn = ro_connect(args.db)
+        fee = run_facts(conn)["taker_fee"]
+        conn.close()
+        s = v3_settings(**({"taker_fee": fee} if fee else {}))
+        brackets, _ = load_brackets(rest, list(V3_SYMBOLS), args.brackets, args.allow_example_brackets)
+        specs = rest.exchange_info(list(V3_SYMBOLS))
+        cache = args.cache or os.path.join(os.path.dirname(os.path.abspath(args.out)), "checkpoint_bars")
+        src = BinanceMinutes(rest, cache)
+        run_due(args.db, args.out, src.load, s, brackets, specs, notifier, only=args.date, n_bots=args.bots)
+    except (Exception, SystemExit) as exc:
+        # a due checkpoint still without a verdict: one loud warning per date and error type (the timer retries);
+        # a verdict already stored (an earlier date judged before the error) still goes out on every run
+        out = open_out(args.out)
+        try:
+            send_verdicts(out, notifier, now)
+            left = [(day, d) for day, d in todo
+                    if out.execute("SELECT 1 FROM verdicts WHERE date = ?", (d,)).fetchone() is None]
+            if left:
+                day, d = left[0]
+                _log_once(out, d, f"[체크포인트 {day}일 · {d}] 판정 중 오류({type(exc).__name__})로 판정을 못 했습니다. "
+                                  "매시 35분에 다시 시도합니다. 계속되면 서버에서 journalctl -u paperbot-checkpoint -n 50",
+                          notifier, now)
+        finally:
+            out.close()
+        raise
     return 0
 
 

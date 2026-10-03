@@ -1,0 +1,94 @@
+"""Checkpoint rehearsal (paperbot/checkpoint_preview.py): the real verdict path on a new file, never the real
+checkpoint.db or Telegram."""
+
+import hashlib
+import os
+import time
+
+import pytest
+
+from paperbot import checkpoint as ck
+from paperbot import checkpoint_preview as pv
+from test_checkpoint import BR, DAY, SPECS, _paper_db, _trades, synth_minutes
+
+
+class _Rest:
+    def exchange_info(self, symbols):
+        return SPECS
+
+
+class _Minutes:
+    """Stands in for BinanceMinutes (synthetic 1m bars, no network)."""
+
+    def __init__(self, rest, cache):
+        self.cache, self.fetched_days = cache, 0
+
+    def load(self, lo, hi):
+        return synth_minutes(lo, hi, seed=2)
+
+
+@pytest.fixture
+def world(tmp_path, monkeypatch):
+    """A run that started 8 days before today with the runner's state of today 00:00 UTC; the real
+    checkpoint.db path points into tmp_path."""
+    import paperbot.live as live
+    monkeypatch.setattr(os, "geteuid", lambda: 1000)              # the tests may run as root; the tool refuses it
+    monkeypatch.setattr(live, "_notifier", lambda: pytest.fail("the rehearsal built a notifier"))
+    monkeypatch.setattr(live, "_rest", _Rest)
+    monkeypatch.setattr(live, "load_brackets", lambda *a: (BR, "test"))
+    monkeypatch.setattr(ck, "BinanceMinutes", _Minutes)
+    monkeypatch.setattr(pv, "REAL_OUT", str(tmp_path / "lib" / "checkpoint.db"))
+    today = ck.floor_day(int(time.time() * 1000))
+    lo = today - 8 * DAY + 5 * 3_600_000
+    path = str(tmp_path / "paper3.db")
+    _paper_db(path, {"GOOD@1h": {"wallet": 400_000.0, "trades": _trades(12, lo, today, 32_900.0), "signals": 100,
+                                 "created": lo},
+                     "FEW@1h": {"wallet": 5_100.0, "trades": _trades(5, lo, today, 20.0), "signals": 60,
+                                "created": lo}}, today)
+    return path, today
+
+
+def _sha(path):
+    return hashlib.sha256(open(path, "rb").read()).hexdigest()
+
+
+def test_rehearsal_runs_the_verdict_path_on_a_new_file(world, tmp_path, capsys):
+    path, today = world
+    before = _sha(path)
+    out = str(tmp_path / "preview.db")
+    assert pv.main(["--db", path, "--out", out, "--bots", "100", "--as-of", ck.day_str(today)]) == 0
+    v = ck.verdict(out, ck.day_str(today))
+    assert v["day"] == 8                                       # today judged as if it were the checkpoint
+    assert v["accounts"]["GOOD@1h"]["status"] == ck.PASS1    # 12 trades >= --min-trades 10
+    assert v["accounts"]["FEW@1h"]["status"] == ck.HOLD
+    assert (ck.PERIOD_DAYS, ck.MIN_TRADES) == (30, 30)        # changed only while it ran
+    assert _sha(path) == before and not os.path.exists(pv.REAL_OUT)
+    assert "미리보기 끝" in capsys.readouterr().out
+
+
+def test_rehearsal_refuses_an_existing_or_the_real_out(world, tmp_path, monkeypatch):
+    import paperbot.live as live
+    path, _ = world
+    monkeypatch.setattr(live, "_rest", lambda: pytest.fail("Binance called after a refusal"))
+    old = tmp_path / "old.db"
+    old.write_bytes(b"a verdict file")
+    assert pv.main(["--db", path, "--out", str(old)]) == 2
+    assert old.read_bytes() == b"a verdict file"
+    os.makedirs(os.path.dirname(pv.REAL_OUT))
+    assert pv.main(["--db", path, "--out", pv.REAL_OUT]) == 2           # even before the real one exists
+    assert not os.path.exists(pv.REAL_OUT)
+    os.symlink(pv.REAL_OUT, str(tmp_path / "link.db"))
+    assert pv.main(["--db", path, "--out", str(tmp_path / "link.db")]) == 2
+    assert not os.path.exists(pv.REAL_OUT)
+    monkeypatch.setattr(os, "geteuid", lambda: 0)
+    assert pv.main(["--db", path, "--out", str(tmp_path / "new.db")]) == 2      # root: the cache must stay the job's
+    assert not os.path.exists(tmp_path / "new.db")
+
+
+def test_documented_command_runs_as_paperbot_and_leaves_no_failed_unit():
+    """docs/server-setup-v3.md: a rehearsal that exits non-zero must not stay in `systemctl --failed`, which the
+    owners' guide treats as a job failure (--collect unloads the transient unit even when it failed)."""
+    doc = os.path.join(os.path.dirname(__file__), "..", "docs", "server-setup-v3.md")
+    cmd = [ln for ln in open(doc, encoding="utf-8") if "-m paperbot.checkpoint_preview" in ln]
+    assert len(cmd) == 1
+    assert "sudo systemd-run --wait --pipe --collect -p User=paperbot " in cmd[0]
