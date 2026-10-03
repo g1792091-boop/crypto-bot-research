@@ -83,6 +83,21 @@ async function ensureIndex(){ if (building) return building; if (!index || Date.
 
 /* ---------- ai-trader-team 백테스트 (이식한 lib/attbacktest.js) ---------- */
 const BT_RE = /(ai[- ]?trader|에이아이\s*트레이더).*(백테스트|backtest)|(백테스트|backtest).*(ai[- ]?trader|트레이더\s*팀)/i;
+/* ---------- 단타/스윙 포지션 추천 ---------- */
+const POS_RE = /단타|스윙|스캘핑|포지션|지금\s*(사|팔|들어가|진입)/i;
+async function tryPosition(question){
+  if (!POS_RE.test(question)) return null;
+  try {
+    const O = await import("./coin-office.js"), COINS = O.COINS || [];
+    const hit = COINS.find(c => new RegExp(`${c.ko}|${c.sym}|${c.sym.replace("USDT", "")}`, "i").test(question)) || COINS[0];
+    if (!O.positionsFor) return null;
+    const {scalp, swing} = await O.positionsFor(hit.sym);
+    const fx = n => n == null ? "-" : (+n).toLocaleString("ko-KR", {maximumFractionDigits: 8});
+    const line = (p, nm) => !p ? `${nm}: 자료 없음` : p.dir === 0 ? `${nm}: 관망 (확신 ${p.confidence}%) — ${p.why}` :
+      `${nm}: ${p.dir > 0 ? "롱" : "숏"} (확신 ${p.confidence}%) · 진입 ${fx(p.entry)} · 손절 ${fx(p.sl)} · 익절 ${fx(p.tp)} · 손익비 ${p.rr}`;
+    return `🎯 ${hit.ko} 포지션 추천 (자체 AI 방향 + ATR 손절·익절)\n${line(scalp, "단타(5·15분)")}\n${line(swing, "스윙(4시간·일)")}\n※ 매매법을 안 정해도 바로 쓸 참고용입니다. 계산값일 뿐 매매 권유 아니고, 주문은 실거래 화면 승인·한도 안에서만 나갑니다.`;
+  } catch(e){ return "포지션을 계산하지 못했어요: " + (e.message || e); }
+}
 async function tryAttBacktest(question){
   if (!BT_RE.test(question)) return null;
   try {
@@ -115,6 +130,9 @@ async function coinSelfAI(question){
 
 /* ---------- 답하기 ---------- */
 export async function answer(question, {onToken, signal} = {}){
+  // 단타/스윙 포지션 추천 명령
+  const pos = await tryPosition(question);
+  if (pos){ onToken?.(pos); return {text: pos, sources: [{title: "포지션 추천(자체 AI + ATR)", kind: "포지션", score: 1}], selfai: null}; }
   // ai-trader-team 백테스트 명령
   const bt = await tryAttBacktest(question);
   if (bt){ onToken?.(bt); return {text: bt, sources: [{title: "ai-trader-team 백테스트", kind: "백테스트", score: 1}], selfai: null}; }

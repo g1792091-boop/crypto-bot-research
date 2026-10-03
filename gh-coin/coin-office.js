@@ -206,6 +206,7 @@ const ACTIONS = [
   {job: "dev", re: /(매매법|전략|지표).*(만들|찾|개발|짜|연구|발굴|백테스트)|(만들|찾|개발|짜).*(매매법|전략)|백테스트\s*(해|돌려)/, say: "매매법 개발팀이 지금 바로 모든 보조지표로 매매법을 만들어 백테스트팀이 검증합니다"},
   {job: "plan", re: /플래너|리서치\s*계획|할\s*일\s*목록|todolist|투두|계획\s*세워|다음\s*할\s*일|리서치\s*보드/i, say: "리서치 플래너가 지금 바로 상태를 보고 할 일 목록(todolist)을 만들고 최우선 리서치를 워커에게 배정합니다"},
   {job: "sent", re: /감정|심리|센티먼트|sentiment|여론\s*분위기|시장\s*분위기|공포.{0,2}탐욕/i, say: "뉴스·경제지표팀이 지금 바로 자체 감정 엔진으로 뉴스·여론의 시장 심리(0~100)를 분석합니다"},
+  {job: "pos", re: /단타|스윙|스캘핑|포지션\s*(추천|알려|잡아|줘|어때|봐)|포지션\s*추천|지금\s*(사|팔|들어가)/i, say: "진입 타점팀이 지금 바로 자체 AI + ATR 로 단타·스윙 포지션(방향·진입·손절·익절·손익비)을 추천합니다"},
   {job: "selfai", re: /자체\s*ai|자체\s*인공지능|앙상블|트레이딩\s*데스크|자체\s*모델|ghcoinai|확신도\s*순위|ai\s*데스크/i, say: "자체 AI 데스크가 지금 바로 외부 키 없이 앙상블(기술 평점·멀티 시간대·ML·알파)로 코인 방향·확신도 순위를 냅니다"},
   {job: "botopt", re: /(자동매매\s*봇|선물\s*봇|트레이딩\s*봇|봇)\s*.{0,6}(자동\s*)?(개선|다듬|최적화|하이퍼옵트)|(보조지표|지표)\s*.{0,6}(자동\s*)?(개선|최적화|튜닝)/i, say: "선물 자동매매봇팀이 지금 바로 데모 봇의 보조지표·위험값을 하이퍼옵트로 자동 개선하고 검증 구간·견고성까지 확인합니다"},
   {job: "bot", re: /자동매매\s*봇|선물\s*봇|트레이딩\s*봇|그리드\s*봇|dca\s*봇|봇\s*(만들|돌려|전략|추가)|passivbot|jesse|octobot/i, say: "선물 자동매매봇팀이 지금 바로 봇 전략을 만들어 백테스트하고 통과하면 데모에 올립니다"},
@@ -677,14 +678,14 @@ export function startChatter(){
 // 매 주기 ① 모의투자 장부를 실제 시세로 갱신(코드, AI 없음) ② 그때그때 한 가지 일을 고른다:
 // 매매법 연구 · SNS 여론 · 경제 리서치 · 동료 수다 · 컴퓨터 작업 · 모의투자 보고 (하루 AI 호출 한도 안에서)
 // 쉬지 않고 돌아가는 업무 순환표: 팀마다 고르게 돌아가도록 섞어 두었다 (모듈이 없으면 경제 리서치로 대신)
-const JOBS = ["plan", "dev", "combo", "ic", "bot", "ind", "qrisk", "trend", "data", "opt", "patscan", "situ", "cdev", "entry", "sr", "news", "sent", "promote", "pattern", "coin", "ml", "selfai", "dev", "tpsl", "combo", "drift", "cdev", "feeds", "alpha", "bot", "botopt", "selfai", "plan", "trend", "ic", "chat", "forecast", "coin", "live", "retro", "task", "selfdev", "macro", "sns", "computer", "paper"];
-const JOB_KO = {plan: "리서치 플래너(할 일 목록 → 워커 배정)", sent: "시장 심리(자체 감정 엔진)", bot: "자동매매봇 전략 만들기", botopt: "자동매매봇 자동 개선(보조지표·위험값 하이퍼옵트)", selfai: "자체 AI 데스크(앙상블 방향·확신도 순위)", ic: "투자위원회(강세·약세 토론 → 결정)", qrisk: "퀀트 리스크(VaR·결정표·주문 전 점검)", data: "거래소 비교·데이터 품질", opt: "하이퍼옵트로 전략 다듬기", patscan: "패턴 스캐너", drift: "데모 성과 이동 감지(런 차트)", feeds: "경제 캘린더·금리·변동성 지수", alpha: "알파 팩터 순위", combo: "실시간 종합 지표 타점", dev: "매매법 개발 → 백테스트", cdev: "커스텀 지표 개발 → 백테스트", ind: "보조지표 분석", trend: "다중 시간대 추세 분석", entry: "진입 타점 분석", sr: "지지·저항 분석",
+const JOBS = ["plan", "dev", "combo", "ic", "bot", "ind", "qrisk", "trend", "data", "opt", "patscan", "situ", "cdev", "entry", "sr", "news", "sent", "pos", "promote", "pattern", "coin", "ml", "selfai", "dev", "tpsl", "combo", "drift", "cdev", "feeds", "alpha", "bot", "botopt", "selfai", "plan", "trend", "ic", "chat", "forecast", "coin", "live", "retro", "task", "selfdev", "macro", "sns", "computer", "paper"];
+const JOB_KO = {plan: "리서치 플래너(할 일 목록 → 워커 배정)", sent: "시장 심리(자체 감정 엔진)", pos: "단타·스윙 포지션 추천", bot: "자동매매봇 전략 만들기", botopt: "자동매매봇 자동 개선(보조지표·위험값 하이퍼옵트)", selfai: "자체 AI 데스크(앙상블 방향·확신도 순위)", ic: "투자위원회(강세·약세 토론 → 결정)", qrisk: "퀀트 리스크(VaR·결정표·주문 전 점검)", data: "거래소 비교·데이터 품질", opt: "하이퍼옵트로 전략 다듬기", patscan: "패턴 스캐너", drift: "데모 성과 이동 감지(런 차트)", feeds: "경제 캘린더·금리·변동성 지수", alpha: "알파 팩터 순위", combo: "실시간 종합 지표 타점", dev: "매매법 개발 → 백테스트", cdev: "커스텀 지표 개발 → 백테스트", ind: "보조지표 분석", trend: "다중 시간대 추세 분석", entry: "진입 타점 분석", sr: "지지·저항 분석",
   tpsl: "익절·손절 관리", news: "뉴스·기사 분석", macro: "경제지표 예측", situ: "코인 상황판", pattern: "차트·캔들 패턴 분석", coin: "코인팀 회의", ml: "머신러닝·딥러닝 실험",
   promote: "데모 → 실거래 관문 심사", live: "실거래 데스크 점검", paper: "데모거래 보고", forecast: "방향 예측 토론", sns: "SNS 여론 확인", chat: "동료 수다", computer: "컴퓨터 작업",
   retro: "팀 회고·부족한 점 찾기", task: "개선 과제 수행", selfdev: "우리 앱 오류 찾아 코드 고치기", economy: "경제 리서치"};
-const JOB_TEAM = {plan: "hq", sent: "news", bot: "bot", botopt: "bot", selfai: "selfai", ic: "ic", qrisk: "qrisk", data: "data", opt: "opt", patscan: "pattern", drift: "demo", feeds: "news", alpha: "ml", combo: "combo", dev: "dev", cdev: "cdev", ind: "ind", trend: "trend", entry: "entry", sr: "sr", tpsl: "tpsl", news: "news", macro: "news", situ: "situ", pattern: "pattern", coin: "btc", ml: "ml",
+const JOB_TEAM = {plan: "hq", sent: "news", pos: "entry", bot: "bot", botopt: "bot", selfai: "selfai", ic: "ic", qrisk: "qrisk", data: "data", opt: "opt", patscan: "pattern", drift: "demo", feeds: "news", alpha: "ml", combo: "combo", dev: "dev", cdev: "cdev", ind: "ind", trend: "trend", entry: "entry", sr: "sr", tpsl: "tpsl", news: "news", macro: "news", situ: "situ", pattern: "pattern", coin: "btc", ml: "ml",
   promote: "demo", live: "live", paper: "demo", forecast: "entry", sns: "news", chat: "hq", computer: "hq", retro: "hq", task: "hq", selfdev: "hq", economy: "news"};
-const JOB_FN = () => ({plan: plannerJob, sent: sentimentJob, bot: botJob, botopt: botImproveJob, selfai: selfaiJob, ic: icJob, qrisk: qriskJob, data: dataJob, opt: optJob, patscan: patternScanJob, drift: driftJob, feeds: openFeedsJob, alpha: alphaJob, combo: comboJob, dev: () => research("std"), cdev: () => research("custom"), ind: indJob, trend: trendJob, entry: entryJob, sr: srJob, tpsl: tpslJob, news: economyCheck, macro: macroJob,
+const JOB_FN = () => ({plan: plannerJob, sent: sentimentJob, pos: posJob, bot: botJob, botopt: botImproveJob, selfai: selfaiJob, ic: icJob, qrisk: qriskJob, data: dataJob, opt: optJob, patscan: patternScanJob, drift: driftJob, feeds: openFeedsJob, alpha: alphaJob, combo: comboJob, dev: () => research("std"), cdev: () => research("custom"), ind: indJob, trend: trendJob, entry: entryJob, sr: srJob, tpsl: tpslJob, news: economyCheck, macro: macroJob,
   situ: situJob, pattern: patternJob, coin: coinJob, ml: mlJob, promote: promoteJob, live: liveDeskJob, paper: paperReport, forecast: forecastJob, sns: snsCheck, chat: () => chatter(true),
   computer: computerWork, retro, task: doTask, selfdev: selfdevJob, economy: economyCheck});
 let cycleTimer = 0, cycling = false, lastJob = "";
@@ -1952,6 +1953,41 @@ export async function selfAIFor(sym, {tfs = ["60", "240"]} = {}){
   const SELF = await lib("selfai"), by = {};
   for (const tf of tfs){ try { by[tf] = await kl(sym, tf, 260); } catch(e){} }
   return SELF.analyze(by, {});
+}
+// 단타/스윙 포지션 추천 — 매매법을 안 정해도 바로 쓸 참고 포지션. 자체 AI 방향·확신 + ATR 손절·익절 + 손익비(rigor).
+//   style "scalp"(단타, 5·15분 · 손절 1.2×ATR · 1.5R) / "swing"(스윙, 4시간·일 · 손절 1.8×ATR · 3R)
+export async function positionFor(sym, style = "swing"){
+  const SELF = await lib("selfai"), R = await lib("rigor"), CB = await import("./combo.js");
+  const tfs = style === "scalp" ? ["5", "15"] : ["240", "D"], by = {};
+  for (const tf of tfs){ try { by[tf] = await kl(sym, tf, 260); } catch(e){} }
+  const prim = by[tfs[0]]; if (!prim?.length) return null;
+  const j = await SELF.analyze(by, {});
+  let price = prim.at(-1).c, atr = 0;
+  try { const a = await CB.analyzeTF(prim); if (a.price > 0) price = a.price; atr = a.atr || 0; } catch(e){}
+  const base = {style, styleKo: style === "scalp" ? "단타" : "스윙", dir: j.dir, label: j.label, confidence: j.confidence, why: j.reasons.join(" / "), tfs, price};
+  if (j.dir === 0 || !(atr > 0)) return base;
+  const slM = style === "scalp" ? 1.2 : 1.8, rM = style === "scalp" ? 1.5 : 3;
+  const entry = price, sl = j.dir > 0 ? entry - slM * atr : entry + slM * atr, tp = j.dir > 0 ? entry + slM * rM * atr : entry - slM * rM * atr;
+  let rr = rM; try { rr = R.riskReward(entry, sl, tp).risk_reward_ratio; } catch(e){}
+  return {...base, entry, sl, tp, rr, atr};
+}
+// 두 스타일 다 (코인 AI 봇·UI·window 에서 호출)
+export async function positionsFor(sym){ return {scalp: await positionFor(sym, "scalp").catch(() => null), swing: await positionFor(sym, "swing").catch(() => null)}; }
+// 진입 타점팀: 코인 하나의 단타·스윙 포지션을 표로
+async function posJob(){
+  const lead = agentById("strat"), named = userNote && COINS.find(c => new RegExp(`${c.ko}|${c.sym.replace("USDT", "")}`, "i").test(userNote));
+  const c = named || COINS[rot("coinPos", COINS.length)];
+  fire({kind: "busy", agent: lead, text: `🎯 ${c.ko} 단타·스윙 포지션 계산 중`});
+  const {scalp, swing} = await positionsFor(c.sym);
+  const dirKo = p => !p ? "자료없음" : p.dir > 0 ? "롱" : p.dir < 0 ? "숏" : "관망";
+  const row = (p, nm) => p && p.dir !== 0 ? [nm, dirKo(p), fx(p.entry), fx(p.sl), fx(p.tp), String(p.rr), p.confidence + "%"] : [nm, dirKo(p), "-", "-", "-", "-", p ? p.confidence + "%" : "-"];
+  table("entry", lead.id, `🎯 ${c.ko} 포지션 추천 (자체 AI 방향 + ATR 손절·익절)`, ["구분", "방향", "진입", "손절", "익절", "손익비", "확신"],
+    [row(scalp, "단타 (5·15분)"), row(swing, "스윙 (4시간·일)")],
+    "매매법을 안 정해도 바로 쓸 참고 포지션입니다 · 계산값일 뿐 매매 권유 아님 · 실제 주문은 사용자 승인·한도 안에서만 나갑니다");
+  addNote("entry", `${c.ko} 단타 ${dirKo(scalp)} · 스윙 ${dirKo(swing)}`, "포지션");
+  await learnSkill(`${c.ko} 포지션: 단타 ${dirKo(scalp)}(확신 ${scalp?.confidence ?? "?"}%) · 스윙 ${dirKo(swing)}(확신 ${swing?.confidence ?? "?"}%)`, {job: "pos"});
+  if (hasAI()) await explain(lead.id, "entry", "단타·스윙 포지션 추천 표를 보고, 지금 단타가 나은지 스윙이 나은지, 두 시간대 방향이 엇갈리면 어떻게 봐야 하는지, 손절·익절·손익비를 어떻게 지킬지 해설한다. 참고용이고 주문은 승인·한도 안에서만 나간다는 점을 밝힌다.",
+    `${c.ko} 현재가 ${fx(scalp?.price || swing?.price)}\n단타(5·15분): ${dirKo(scalp)} 확신 ${scalp?.confidence ?? "?"}%${scalp?.entry ? ` · 진입 ${fx(scalp.entry)} 손절 ${fx(scalp.sl)} 익절 ${fx(scalp.tp)} (손익비 ${scalp.rr})` : ""} · ${scalp?.why || ""}\n스윙(4시간·일): ${dirKo(swing)} 확신 ${swing?.confidence ?? "?"}%${swing?.entry ? ` · 진입 ${fx(swing.entry)} 손절 ${fx(swing.sl)} 익절 ${fx(swing.tp)} (손익비 ${swing.rr})` : ""} · ${swing?.why || ""}`, "아래 단타·스윙 포지션 추천을 해설해 줘.");
 }
 // 외부 AI 연동 on/off — 키가 연결돼 있고 사용자가 끄지 않았으면 켜짐(기본). 설정에서 토글.
 const hasAIKey = () => Object.keys(PROVIDERS).some(id => settings.keys?.[id]) || settings.brain === "local" || settings.brain === "ollama";
