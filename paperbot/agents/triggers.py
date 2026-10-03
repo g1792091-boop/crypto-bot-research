@@ -14,9 +14,9 @@ Triggers (defaults in ``TriggerPolicy``; every number is configurable):
                                    missing 1m bars in daily3.db reports (by report day).
     owner         1  <room>        new owner_messages in that room (inbox.db) since the cursor (the
                                    oldest ``owner_batch`` (10) per meeting; the rest open the next one).
-    loss_cluster  2  strat:<S>     since the room's last round: >= 3 new losing trades of the
+    loss_cluster  2  strat:<S>     since the room's last round: >= 2 new losing trades of the
                                    strategy (any timeframe), or one loss-card tag
-                                   (cards.tag_stats) in >= 3 of them; >= 4h between
+                                   (cards.tag_stats) in >= 3 of them; >= 2h between
                                    loss_cluster rounds of a room.
     bust          2  strat:<S>     a strategy account went bust (once per account).
     checkpoint    3  team:lead     day 30 / 60 / 90 ... since the run started.
@@ -27,6 +27,10 @@ Triggers (defaults in ``TriggerPolicy``; every number is configurable):
                                    >= 30 closed trades since its last weekly review; a review
                                    the budget deferred or stopped stays due on the next days
                                    until it has run (same slot key).
+    market_move   2  team:market   a coin's last-hour high or low >= 4% (BTC), 5% (ETH), 6% (others) away from its
+                                   price an hour before (``market``: the caller fetches the 5m bars; none = never
+                                   due). One meeting for all coins that moved, a coin at most every 3h, at most 4 a
+                                   KST day (exempt from the room's daily cap).
     research      5  team:lab      the new-strategy lab, every ``research_every_ms`` (one slot per
                                    period of the KST day; a slot that could not start is skipped,
                                    not caught up). 0 = off (the default here; the rooms server's
@@ -42,7 +46,7 @@ only extras' trades open (the originals alone would not) is marked ``extras`` in
 the room's daily slots (those stay for the 195) and is bounded instead by its own line,
 ``extras_meetings_per_day`` (6) a KST day over all rooms; when the line is full it waits for the next day.
 
-Limits: at most 3 rounds per room per KST day (incidents and research exempt; one of the 3 is kept
+Limits: at most 4 rounds per room per KST day (incidents and research exempt; one of the 4 is kept
 for the owners' posts until they have used one that day), one round per room per tick,
 at most 4 rounds per tick. Output order: (priority, bust before loss_cluster, oldest
 evidence).
@@ -102,11 +106,12 @@ TEAM_ROOMS = ("team:market", "team:risk", "team:ops", "team:review", "team:lead"
 LAB_ROOM = "team:lab"                 # the new-strategy lab (rooms_db.LAB_ROOM)
 LAB_WEEKDAY = 6                       # the new-strategy accounts' weekly review: Sunday (KST)
 
-TRIGGERS = ("incident", "owner", "loss_cluster", "bust", "checkpoint", "morning", "evening", "weekly", "research")
-PRIORITY = {"incident": 0, "owner": 1, "loss_cluster": 2, "bust": 2, "checkpoint": 3, "morning": 3,
+TRIGGERS = ("incident", "owner", "loss_cluster", "bust", "checkpoint", "morning", "evening", "weekly", "research",
+            "market_move")
+PRIORITY = {"incident": 0, "owner": 1, "loss_cluster": 2, "bust": 2, "market_move": 2, "checkpoint": 3, "morning": 3,
             "evening": 3, "weekly": 4, "research": 5}
 # Sub-budget class of each trigger (the rooms engine keeps one AI budget per class).
-TRIGGER_CLASS = {"incident": "incident", "owner": "owner", "loss_cluster": "loss", "bust": "loss",
+TRIGGER_CLASS = {"incident": "incident", "owner": "owner", "loss_cluster": "loss", "bust": "loss", "market_move": "loss",
                  "checkpoint": "scheduled", "morning": "scheduled", "evening": "scheduled",
                  "weekly": "weekly", "research": "research"}
 ENDED_OK = ("done", "no_action")      # the only statuses that advance cursors
@@ -156,8 +161,8 @@ class TriggerPolicy:
     enabled: tuple = TRIGGERS
     priorities: dict = field(default_factory=lambda: dict(PRIORITY))
     # rate limits
-    max_rounds_per_room_day: int = 3
-    cap_exempt: tuple = ("incident", "research")     # research: bounded by its own paced budget
+    max_rounds_per_room_day: int = 4     # owners' choice 2026-10-03 (was 3): more reviews, the plan has room
+    cap_exempt: tuple = ("incident", "research", "market_move")   # research: its own paced budget; market_move: below
     owner_reserved_per_room_day: int = 1     # slots of the daily cap only an owner post may use
     max_rounds_per_tick: int = 4
     max_per_room_per_tick: int = 1
@@ -176,10 +181,17 @@ class TriggerPolicy:
     nightly_parity: bool = True
     nightly_no_snapshot: bool = True
     nightly_min_missing_bars: int = 1
+    # market move (owners' choice 2026-10-03): a coin's high or low of the last hour this far from its price an
+    # hour ago opens a market-team meeting; the same coin at most every ``market_move_gap_ms``, at most
+    # ``market_move_max_per_day`` such meetings a KST day (their own line, not the room's daily slots)
+    market_move_pct: dict = field(default_factory=lambda: {"BTCUSDT": 0.04, "ETHUSDT": 0.05})
+    market_move_pct_other: float = 0.06
+    market_move_gap_ms: int = 3 * HOUR_MS
+    market_move_max_per_day: int = 4
     # loss cluster
-    loss_min_count: int = 3
+    loss_min_count: int = 2              # owners' choice 2026-10-03 (was 3)
     loss_tag_min_count: int = 3
-    loss_min_gap_ms: int = 4 * HOUR_MS
+    loss_min_gap_ms: int = 2 * HOUR_MS   # owners' choice 2026-10-03 (was 4h)
     loss_lookback_ms: int = 7 * DAY_MS
     any_round_resets_losses: bool = True     # "since the room's last round" (any trigger)
     # weekly / checkpoint / scheduled meetings
@@ -820,6 +832,44 @@ def _research(st: _Rooms) -> list[Due]:
                  f"새 매매법 연구 ({hm} 차례, 남는 AI 한도로)", slot=int(idx), slot_start=int(slot))]
 
 
+def move_of(m: dict) -> float:
+    """The larger of the hour's rise (high) and fall (low) against the price an hour before, signed."""
+    up, down = m["high"] / m["ref"] - 1, m["low"] / m["ref"] - 1
+    return up if abs(up) >= abs(down) else down
+
+
+def _market_move(market: dict, st: _Rooms) -> list[Due]:
+    """``market``: {symbol: {"t": close time of the last closed 5m bar, "ref": close an hour before it,
+    "high", "low", "last"}} (rooms.fetch_market_moves). Every coin past its threshold and not met about in
+    the last ``market_move_gap_ms`` goes into one market-team meeting."""
+    p = st.p
+    today = sum(1 for r in st.rounds if r["trigger"] == "market_move" and r["started_ts"] >= st.day_start
+                and st._counted(r))
+    if today >= p.market_move_max_per_day:
+        return []
+    moved, cursors, t_max = [], {}, 0
+    for sym in sorted(market or {}):
+        m = market[sym]
+        try:
+            mv = move_of(m)
+        except (KeyError, TypeError, ZeroDivisionError):
+            continue
+        if abs(mv) < p.market_move_pct.get(sym, p.market_move_pct_other):
+            continue
+        last = st.cursor_int(f"move:{sym}")
+        if last and st.now - last < p.market_move_gap_ms:
+            continue
+        moved.append({"symbol": sym, "move": round(mv, 5), "ref": m["ref"], "high": m["high"], "low": m["low"],
+                      "last": m["last"], "t": int(m["t"])})
+        cursors[f"move:{sym}"] = st.now
+        t_max = max(t_max, int(m["t"]))
+    if not moved:
+        return []
+    text = ", ".join(f"{x['symbol'].replace('USDT', '')} 1시간 {x['move'] * 100:+.1f}%" for x in moved)
+    key = "move:" + "+".join(x["symbol"] for x in moved) + f":{t_max // HOUR_MS}"
+    return [_due(st, "team:market", "market_move", key, t_max, cursors, f"시세 급변: {text}", moves=moved)]
+
+
 def _due(st: _Rooms, room: str, trigger: str, key: str, evidence_ts: int, cursors: dict, summary_ko: str,
          **extra) -> Due:
     data = {"key": key, "evidence_ts": int(evidence_ts), "cursors": {k: str(v) for k, v in cursors.items()},
@@ -834,14 +884,15 @@ def find_due(paper_ro: Optional[sqlite3.Connection], daily_ro: Optional[sqlite3.
              agents_conn: sqlite3.Connection, inbox_ro: Optional[sqlite3.Connection], now_ms: int,
              policy: Optional[TriggerPolicy] = None, *, defer_classes: Iterable[str] = (),
              defer_triggers: Iterable[str] = (), skip_rooms: Iterable[str] = (),
-             can_start: Optional[Callable[[Due], bool]] = None) -> list[Due]:
+             can_start: Optional[Callable[[Due], bool]] = None, market: Optional[dict] = None) -> list[Due]:
     """Rounds to run now, sorted by (priority, bust before loss_cluster, oldest evidence). Reads only.
     ``defer_classes`` / ``defer_triggers``: what the caller cannot start now (its AI budget is used
     up or paced), left out before the per-tick pick so it never hides other meetings;
     ``can_start``: the caller's exact check of one meeting (e.g. its AI budget can carry that
     meeting's shortest form); meetings it refuses are left out BEFORE the per-tick cut, so meetings
     that cannot start never take the slots of ones that can;
-    ``skip_rooms``: rooms that already met in the caller's current tick."""
+    ``skip_rooms``: rooms that already met in the caller's current tick;
+    ``market``: the last hour of each coin for ``market_move`` (fetched by the caller; None = not due)."""
     p = policy or TriggerPolicy()
     st = _Rooms(agents_conn, now_ms, p)
     if st.usage_paused() or st.transient_paused():
@@ -862,6 +913,8 @@ def find_due(paper_ro: Optional[sqlite3.Connection], daily_ro: Optional[sqlite3.
     if "weekly" in p.enabled:
         found += _weekly(paper_ro, st)
     found += _scheduled(st)
+    if "market_move" in p.enabled and market:
+        found += _market_move(market, st)
     if "research" in p.enabled:
         found += _research(st)
     found += _lab_accounts(paper_ro, st)

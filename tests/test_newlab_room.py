@@ -298,7 +298,7 @@ def test_research_trigger_is_off_by_default_on_for_the_server_and_needs_the_lab(
     due = TR.find_due(None, None, world.agents, None, QUIET, lab_policy().triggers)
     assert [(d.room_id, d.trigger, d.priority, d.data["class"]) for d in due] == [(LAB, "research", 5, "research")]
     assert due[0].data["key"] == f"research:{R.kst_day(QUIET)}:15"
-    assert TR.TriggerPolicy().cap_exempt == ("incident", "research")      # the budget bounds it, not the room cap
+    assert TR.TriggerPolicy().cap_exempt == ("incident", "research", "market_move")   # the budget bounds it, not the room cap
 
 
 def test_research_budget_class_is_enforced_paced_and_not_reserved(world, noise):

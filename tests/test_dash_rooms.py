@@ -627,7 +627,7 @@ def test_the_owner_post_ai_budget_used_up_is_shown_for_every_room(env):
     a.commit()
     a.close()
     ov = Rooms(env["agents"], env["inbox"]).overview(now_ms=env["now"])
-    assert {r["owner_wait"] for r in ov["rooms"]} == {"budget"} and ov["rounds_per_room_day"] == 3
+    assert {r["owner_wait"] for r in ov["rooms"]} == {"budget"} and ov["rounds_per_room_day"] == 4
     assert {r["owner_wait"] for r in Rooms(env["agents"], env["inbox"]).overview(
         now_ms=env["now"] + 86_400_000)["rooms"]} == {None}                             # a new KST day
 

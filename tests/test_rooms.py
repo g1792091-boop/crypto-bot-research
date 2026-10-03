@@ -91,9 +91,10 @@ class World:
     def say(self, room, text, ts, author="owner1"):
         return R.add_owner_message(self.inbox, room, author, text, ts=ts)
 
-    def tick(self, runner, now, policy=None, notifier=None, lab=None):
+    def tick(self, runner, now, policy=None, notifier=None, lab=None, market_fetch=None):
         return RM.tick(self.paths["paper"], self.paths["daily"], self.paths["agents"], self.paths["inbox"], runner,
-                       lab=lab, notifier=notifier, policy=policy, now_ms=now, clock_ms=lambda: now)
+                       lab=lab, notifier=notifier, policy=policy, now_ms=now, clock_ms=lambda: now,
+                       market_fetch=market_fetch)
 
     # readers
     def q(self, sql, args=()):
@@ -1192,12 +1193,12 @@ def test_a_post_arriving_during_a_meeting_waits_for_its_own_meeting(world, monke
 
 
 def test_owner_post_gets_the_rooms_last_slot_of_the_day(world):
-    for k, h in enumerate((1, 5)):
+    for k, h in enumerate((1, 5, 9)):
         rid = TR.begin_round(world.agents, TR.Due(ROOM, "loss_cluster", 2, {"key": f"loss:{S}:{k}", "cursors": {}},
                                                   "loss_cluster"), R.kst_day_start_ms(QUIET) + h * HOUR)
         TR.finish_round(world.agents, rid, "done", R.kst_day_start_ms(QUIET) + h * HOUR + MIN)
     world.losses()
-    assert world.tick(QueueRunner({}), QUIET)["rounds"] == []                     # 3rd slot kept for the owners
+    assert world.tick(QueueRunner({}), QUIET)["rounds"] == []                     # 4th slot kept for the owners
     world.say(ROOM, "질문", QUIET + MIN)
     runner = QueueRunner({SPEC: [analysis(NOTE)], "devils_advocate": [challenge("agree")]})
     assert [r["trigger"] for r in world.tick(runner, QUIET + 2 * MIN)["rounds"]] == ["owner"]
@@ -1439,3 +1440,67 @@ def test_a_duplicate_copy_names_the_proposal_that_blocks_it(world):
     env = A.ActionEnv(conn=world.agents, room_id=ROOM, strategy=S, round_id=None, meeting="t", now_ms=QUIET)
     chk = A.copy_check(env, tid)
     assert chk["ok"] is False and f"제안 #{second}" in chk["why"] and f"#{first}," not in chk["why"]
+
+
+# ------------------------------------------------------------------ market move (owners' choice 2026-10-03)
+def _move(ref, high, low, last, t):
+    return {"t": t, "ref": ref, "high": high, "low": low, "last": last}
+
+
+def test_market_move_meeting_with_our_exposure_and_one_silent_telegram(world):
+    t = QUIET
+    world.store.put_state("accounts", t - MIN, {"engines": {
+        f"{S}@15m": {"position": {"symbol": "BTCUSDT", "side": 1, "qty": 0.1, "entry_price": 60_000.0, "margin": 300.0,
+                                  "liq_price": 57_500.0, "leverage": 20}},
+        "RANDOM_1@5m": {"position": {"symbol": "BTCUSDT", "side": -1, "qty": 0.2, "entry_price": 60_000.0,
+                                     "margin": 400.0, "liq_price": 63_000.0, "leverage": 30}},
+        f"{S}@1h": {"position": {"symbol": "ETHUSDT", "side": 1, "qty": 1.0, "entry_price": 3000.0, "margin": 150.0,
+                                 "liq_price": 2850.0, "leverage": 20}}}})
+    world.store.commit()
+    market = {"BTCUSDT": _move(60_000.0, 60_200.0, 57_400.0, 57_600.0, t - MIN),     # -4.3%: past 4%
+              "ETHUSDT": _move(3000.0, 3100.0, 2900.0, 2950.0, t - MIN),             # +3.3% / -3.3%: under 5%
+              "SOLUSDT": _move(150.0, 159.5, 149.0, 158.0, t - MIN)}                 # +6.3%: past 6%
+    lead = {"summary": ["BTC가 1시간에 4% 넘게 빠짐", "롱 1개가 청산가 3% 안", "다음 봉 확인"], "human_actions": [],
+            "watch_next": []}
+    runner = QueueRunner({"chart_regime": [team_answer("c")], "derivs_flow": [team_answer("d")],
+                          "strategist": [team_answer("s")], "team_lead": [lead]})
+    notifier = ListNotifier()
+    out = world.tick(runner, t, notifier=notifier, market_fetch=lambda now: market)
+    assert [(r["room_id"], r["trigger"]) for r in out["rounds"]] == [("team:market", "market_move")]
+    assert runner.roles() == ["chart_regime", "derivs_flow", "strategist", "team_lead"]
+    pk = runner.calls[0]["packet"]["market_move"]
+    assert [m["symbol"] for m in pk["moves"]] == ["BTCUSDT", "SOLUSDT"]
+    btc = pk["exposure"]["BTCUSDT"]
+    assert (btc["long"], btc["short"], btc["margin"], btc["near_liq"]) == (1, 1, 700.0, 1)
+    assert btc["upnl"] == round(0.1 * (57_600 - 60_000) - 0.2 * (57_600 - 60_000), 2)
+    assert len(notifier.messages) == 1 and notifier.messages[0][0] == "INFO"
+    text = notifier.messages[0][1]
+    assert "BTC: 1시간 -4.3%" in text and "SOL: 1시간 +6.3%" in text and "청산가 3% 안 1개" in text and "[팀장 요약]" in text
+    # the same coins within 3 hours: no new meeting; ETH alone past 5% later: a new one
+    assert world.tick(QueueRunner({}), t + HOUR, market_fetch=lambda now: market)["rounds"] == []
+    market2 = {"ETHUSDT": _move(3000.0, 3000.0, 2840.0, 2850.0, t + HOUR)}
+    runner2 = QueueRunner({"chart_regime": [team_answer("c")], "derivs_flow": [team_answer("d")],
+                           "strategist": [team_answer("s")], "team_lead": [lead]})
+    out = world.tick(runner2, t + HOUR + MIN, notifier=ListNotifier(), market_fetch=lambda now: market2)
+    assert [r["trigger"] for r in out["rounds"]] == ["market_move"]
+    # no market data (Binance unreachable): never due, the tick goes on
+    def broken(now):
+        raise OSError("no network")
+    assert world.tick(QueueRunner({}), t + 5 * HOUR, market_fetch=broken)["rounds"] == []
+
+
+def test_market_move_reads_closed_5m_bars_and_skips_a_coin_it_cannot_read():
+    base = 1_800_000_000_000 - 1_800_000_000_000 % 300_000
+    def kl(i, o, h, l, c):
+        t0 = base + i * 300_000
+        return [t0, str(o), str(h), str(l), str(c), "1", t0 + 299_999]
+    rows = [kl(i, 100, 101, 99, 100 + i) for i in range(14)] + [kl(14, 120, 200, 1, 150)]   # the last one is forming
+    def get(url):
+        if "ETHUSDT" in url:
+            raise OSError("boom")
+        return rows
+    got = RM.fetch_market_moves(now_ms=base + 14 * 300_000 + 1000, get=get)
+    assert "ETHUSDT" not in got and set(got) == set(RM.MOVE_SYMBOLS) - {"ETHUSDT"}
+    m = got["BTCUSDT"]
+    assert m["ref"] == 101.0 and m["last"] == 113.0 and m["high"] == 101.0 and m["low"] == 99.0   # forming bar left out
+    assert m["t"] == base + 14 * 300_000

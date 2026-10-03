@@ -15,6 +15,9 @@ from paperbot.store3 import Store3
 
 MIN = 60_000
 HOUR = 3_600_000
+# the numbers before the owners' change of 2026-10-03 (3 losses, 4h apart, 3 meetings a room a day): the tests
+# below check the mechanism with them; test_loss_cluster_defaults_are_the_owners_choice checks today's defaults
+LEGACY = TriggerPolicy(loss_min_count=3, loss_min_gap_ms=4 * HOUR, max_rounds_per_room_day=3)
 DAY = 86_400_000
 S, S2 = "N17_KC_RSI", "V45_AMB"           # weekly weekdays (KST): N17 Tuesday, V45 Friday
 ROOM, ROOM2 = f"strat:{S}", f"strat:{S2}"
@@ -101,11 +104,14 @@ class World:
         return dict(self.agents.execute("SELECT k, v FROM cursors"))
 
     # -------------------------------------------------- reader
-    def due(self, now, policy=None, only=None):
+    policy = None                                           # a test may pin the older numbers (LEGACY)
+
+    def due(self, now, policy=None, only=None, market=None):
+        policy = policy if policy is not None else self.policy
         ro = {k: sqlite3.connect(f"file:{self.paths[k]}?mode=ro", uri=True) for k in ("paper", "daily", "inbox")}
         before = self.agents.total_changes
         try:
-            got = find_due(ro["paper"], ro["daily"], self.agents, ro["inbox"], now, policy)
+            got = find_due(ro["paper"], ro["daily"], self.agents, ro["inbox"], now, policy, market=market)
         finally:
             for c in ro.values():
                 c.close()
@@ -193,6 +199,7 @@ def test_owner_message_starts_a_round_in_its_room(w):
 
 # ------------------------------------------------------------------ loss cluster
 def test_loss_cluster_needs_three_new_losses_and_four_hours_between_rounds(w):
+    w.policy = LEGACY
     t = QUIET
     w.trade(f"{S}@15m", -10.0, t - 5 * HOUR)
     w.trade(f"{S}@1h", -12.0, t - 4 * HOUR)
@@ -373,6 +380,7 @@ def test_priority_order_oldest_evidence_and_global_cap(tmp_path):
 
 
 def test_room_day_cap_in_kst_days_and_incidents_are_exempt(w):
+    w.policy = LEGACY
     t = kst(2026, 10, 7, 15, 0)
     w.say(ROOM, "첫 질문", kst(2026, 10, 6, 23, 50))
     w.run(w.due(kst(2026, 10, 6, 23, 50))[0], kst(2026, 10, 6, 23, 50))     # yesterday (KST): does not count
@@ -395,6 +403,7 @@ def test_room_day_cap_in_kst_days_and_incidents_are_exempt(w):
 
 # ------------------------------------------------------------------ crash safety
 def test_running_round_blocks_then_fires_again_once_after_two_hours(w):
+    w.policy = LEGACY
     t = QUIET
     for k in range(3):
         w.trade(f"{S}@15m", -10.0, t - 3 * HOUR + k)
@@ -676,6 +685,7 @@ def _world(tmp_path, name):
 
 
 def test_triggers_copy_losses_in_parent_room(w, tmp_path):
+    w.policy = LEGACY
     t = QUIET
     aid = _copy(w)
     for k in range(3):                                         # only the copy lost
@@ -687,6 +697,7 @@ def test_triggers_copy_losses_in_parent_room(w, tmp_path):
     assert "복제 계좌 손실 3건" in d.data["summary_ko"]
     # with the original's own losses the meeting is the room's usual one (the copy's losses are evidence too)
     w2 = _world(tmp_path, "two")
+    w2.policy = LEGACY
     aid2 = _copy(w2)
     for k in range(3):
         w2.trade(f"{S}@15m", -10.0, t - 5 * HOUR + k * MIN)
@@ -695,6 +706,7 @@ def test_triggers_copy_losses_in_parent_room(w, tmp_path):
     assert "extras" not in d2.data and d2.data["losses"] == 4 and d2.data["extra_accounts"] == [aid2]
     # two of the original's and one of the copy's: opened only because of the copy -> extras
     w3 = _world(tmp_path, "three")
+    w3.policy = LEGACY
     aid3 = _copy(w3)
     for k in range(2):
         w3.trade(f"{S}@15m", -10.0, t - 5 * HOUR + k * MIN)
@@ -709,6 +721,7 @@ def test_triggers_copy_losses_in_parent_room(w, tmp_path):
     assert "복제 계좌" in ds[0].data["summary_ko"]
     # the 195-only due data is unchanged (no extras keys)
     w4 = _world(tmp_path, "four")
+    w4.policy = LEGACY
     for k in range(3):
         w4.trade(f"{S}@15m", -10.0, t - 5 * HOUR + k * MIN)
     d4 = w4.due(t)[0]
@@ -779,3 +792,27 @@ def test_extras_budget_line(w):
         w.run(ds[0], t + 6 * HOUR + k * MIN + 1)
     st = T._Rooms(w.agents, t + 7 * HOUR, pol)
     assert st.rounds_today(ROOM) == 3 and st.extras_today() == 1
+
+
+def test_loss_cluster_defaults_are_the_owners_choice(w):
+    """2026-10-03: two new losses open a review, two hours apart, four meetings a room a day."""
+    p = TriggerPolicy()
+    assert (p.loss_min_count, p.loss_min_gap_ms, p.max_rounds_per_room_day) == (2, 2 * HOUR, 4)
+
+
+def test_market_move_thresholds_gap_and_daily_line(w):
+    t = QUIET
+    mk = lambda ref, hi, lo: {"t": t - MIN, "ref": ref, "high": hi, "low": lo, "last": lo}   # noqa: E731
+    assert w.due(t, market={"BTCUSDT": mk(100, 103.9, 97)}) == []                # 3.9% / 3%: under 4%
+    assert w.due(t, market={"ETHUSDT": mk(100, 104.5, 99)}) == []                # 4.5% is under ETH's 5%
+    assert w.due(t, market={"DOGEUSDT": mk(100, 100, 94.2)}) == []               # 5.8% is under 6%
+    ds = w.due(t, market={"BTCUSDT": mk(100, 100, 96), "DOGEUSDT": mk(100, 106.5, 100)})
+    assert keys(ds) == [("team:market", "market_move", 2)]
+    assert [m["symbol"] for m in ds[0].data["moves"]] == ["BTCUSDT", "DOGEUSDT"] and "BTC 1시간 -4.0%" in ds[0].data["summary_ko"]
+    w.run(ds[0], t)
+    assert w.due(t + 2 * HOUR, market={"BTCUSDT": mk(100, 100, 95)}) == []        # BTC again within 3h
+    for k, sym in enumerate(("SOLUSDT", "LTCUSDT", "BCHUSDT")):                   # four in the day: the line is full
+        d = w.due(t + (4 + k) * HOUR, market={sym: mk(100, 100, 90)}, only="market_move")
+        assert d, sym
+        w.run(d[0], t + (4 + k) * HOUR)
+    assert w.due(t + 8 * HOUR, market={"ETHUSDT": mk(100, 100, 80)}, only="market_move") == []

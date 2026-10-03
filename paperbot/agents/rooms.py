@@ -139,7 +139,7 @@ ROLE_INFO = {r[0]: {"name": r[1], "team": r[2], "model": r[3], "duty": room_duty
 TEAM_KO = dict(TEAMS)
 TRIGGER_KO = {"incident": "사고 점검", "owner": "두 분 글", "loss_cluster": "손실 묶음 복기", "bust": "파산 복기",
               "checkpoint": "30일 단위 점검", "morning": "아침 회의", "evening": "저녁 점검", "weekly": "주간 검토",
-              "research": "새 매매법 연구"}
+              "research": "새 매매법 연구", "market_move": "시세 급변 회의"}
 VERDICT_KO = {"agree": "동의", "disagree": "반대", "needs_test": "시험 필요"}
 
 # Loss-card tags that describe the chart at entry (cards.TAGS) vs. how the trade was held.
@@ -880,7 +880,12 @@ ENV_INTS = {
     "AGENTS_MAX_ROUNDS_PER_TICK": ("triggers.max_rounds_per_tick", 1),
     "AGENTS_MAX_ROUNDS_PER_ROOM_DAY": ("triggers.max_rounds_per_room_day", 1),
     "AGENTS_MAX_CALLS_PER_TICK": ("max_calls_per_tick", 1),
+    # loss-review meetings of a strategy room: new losses that open one, and the minutes between two
+    "AGENTS_LOSS_MIN_COUNT": ("triggers.loss_min_count", 1),
+    "AGENTS_LOSS_MIN_GAP_MIN": ("triggers.loss_min_gap_ms", 10),
 }
+# settings given in minutes that the policy keeps in milliseconds
+ENV_MINUTES = ("AGENTS_LOSS_MIN_GAP_MIN",)
 
 
 def policy_from_env(environ: Optional[dict] = None) -> RoomsPolicy:
@@ -922,7 +927,7 @@ def policy_from_env(environ: Optional[dict] = None) -> RoomsPolicy:
         if not raw.isdigit() or int(raw) < lo:
             raise ValueError(f"{name}={raw!r}: use a whole number >= {lo}")
         obj, _, leaf = attr.rpartition(".")
-        setattr(getattr(p, obj) if obj else p, leaf, int(raw))
+        setattr(getattr(p, obj) if obj else p, leaf, int(raw) * (60_000 if name in ENV_MINUTES else 1))
     if p.copy_cap_per_strategy > 1 or p.copy_cap_total > 10:
         raise ValueError(f"AGENTS_COPY_CAP_PER_STRATEGY={p.copy_cap_per_strategy}, AGENTS_COPY_CAP_TOTAL="
                          f"{p.copy_cap_total}: at most 1 copy per strategy and 10 in all (rule Q7; the live runner "
@@ -2117,6 +2122,8 @@ def team_plan(due: TR.Due) -> list[tuple[str, str]]:
     if trig == "morning":
         return [("chart_regime", "team"), ("derivs_flow", "team"), ("strategist", "team"),
                 ("devils_advocate", "challenge"), lead]
+    if trig == "market_move":
+        return [("chart_regime", "team"), ("derivs_flow", "team"), ("strategist", "team"), lead]
     if trig == "evening" and room == "team:review":
         return [("pnl_reviewer", "team"), ("whatif", "team"), ("risk_officer", "team")]
     if trig == "incident":
@@ -2184,6 +2191,8 @@ def _team_round(rnd: _Round) -> tuple[str, dict]:
     if room == LAB_ROOM:                      # an owner post in the lab: what the lab has tested so far
         rnd.base["lab"] = lab_overview(ctx)
         rnd.base["lab_accounts"] = lab_accounts_packet(ctx, rnd.due.data.get("oldest_exit"))
+    if rnd.due.trigger == "market_move":
+        rnd.base["market_move"] = market_move_packet(ctx, rnd.due)
     answered = 0
     lead = None
     for role, turn in team_plan(rnd.due):
@@ -2221,6 +2230,9 @@ def _team_round(rnd: _Round) -> tuple[str, dict]:
                 extra["telegram"] = True
                 rnd.post("code", "action", "📨 저녁 요약을 텔레그램으로 보냈습니다.",
                          {"action": "telegram", "level": INFO, "text": text})
+    if rnd.due.trigger == "market_move":
+        _send_once(rnd, f"telegram:move:{rnd.due.data['key']}", compose_market_move(rnd.base["market_move"], lead),
+                   "시세 급변 요약", extra)
     decision = {"action": "team_meeting", "speakers": rnd.spoke, **{k: v for k, v in extra.items() if k != "flag"},
                 "flagged": bool(extra.get("flag", {}).get("sent"))}
     decision["summary_ko"] = _team_summary(rnd, board, extra)
@@ -2237,11 +2249,116 @@ def _team_summary(rnd: _Round, board: dict, extra: dict) -> str:
     if rnd.due.data.get("summary_ko"):
         L.append(f"- 계기: {rnd.due.data['summary_ko']}")
     if extra.get("telegram"):
-        L.append("- 저녁 요약을 텔레그램으로 보냄")
+        L.append("- 시세 급변 요약을 텔레그램으로 보냄" if rnd.due.trigger == "market_move" else "- 저녁 요약을 텔레그램으로 보냄")
     if (extra.get("flag") or {}).get("sent"):
         L.append("- 두 분께 알림을 보냄")
     L.append(f"- AI 호출 {rnd.calls}회")
     return "\n".join(L)
+
+
+# ---------------------------------------------------------------- market move (owners' choice 2026-10-03)
+MOVE_SYMBOLS = ("BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "LTCUSDT", "BCHUSDT")
+MOVE_NEAR_LIQ = 0.03                          # an open position within 3% of its liquidation price
+
+
+def fetch_market_moves(now_ms: Optional[int] = None, timeout: float = 5.0,
+                       get: Optional[Callable[[str], Any]] = None) -> dict:
+    """The last hour of each coin from Binance's public 5m klines (no key): {symbol: {t, ref, high, low, last}},
+    ``ref`` = the close an hour before the last closed bar. A coin that cannot be read is left out (never due)."""
+    import urllib.request
+    now = int(time.time() * 1000) if now_ms is None else int(now_ms)
+    get = get or (lambda url: json.loads(urllib.request.urlopen(url, timeout=timeout).read()))
+    out = {}
+    for sym in MOVE_SYMBOLS:
+        try:
+            rows = get(f"https://fapi.binance.com/fapi/v1/klines?symbol={sym}&interval=5m&limit=15")
+            closed = [r for r in rows if int(r[6]) < now]          # the forming bar is left out
+            if len(closed) < 13:
+                continue
+            hour = closed[-12:]
+            out[sym] = {"t": int(closed[-1][6]) + 1, "ref": float(closed[-13][4]),
+                        "high": max(float(r[2]) for r in hour), "low": min(float(r[3]) for r in hour),
+                        "last": float(closed[-1][4])}
+        except Exception:  # noqa: BLE001  (a coin we cannot read simply is not due)
+            continue
+    return out
+
+
+def market_move_packet(ctx: RoundContext, due: TR.Due) -> dict:
+    """What moved (code numbers) and our open paper positions on those coins at the last price: long/short count,
+    margin, unrealized P&L before exit fees, positions within 3% of liquidation. Read-only."""
+    moves = [m for m in (due.data.get("moves") or []) if isinstance(m, dict)]
+    eng = {}
+    if ctx.paper_ro is not None:
+        try:
+            r = ctx.paper_ro.execute("SELECT data FROM state WHERE k = 'accounts'").fetchone()
+            eng = (json.loads(r[0]) or {}).get("engines", {}) if r else {}
+        except (sqlite3.Error, ValueError, TypeError):
+            eng = {}
+    expo = {}
+    for m in moves:
+        sym, px = m["symbol"], float(m["last"])
+        e = {"long": 0, "short": 0, "margin": 0.0, "upnl": 0.0, "near_liq": 0, "accounts_near_liq": []}
+        for aid, a in eng.items():
+            p = (a or {}).get("position")
+            if not p or p.get("symbol") != sym:
+                continue
+            side = int(p.get("side") or 0)
+            e["long" if side > 0 else "short"] += 1
+            e["margin"] += float(p.get("margin") or 0)
+            e["upnl"] += side * float(p.get("qty") or 0) * (px - float(p.get("entry_price") or px))
+            liq = p.get("liq_price")
+            if liq and abs(px - float(liq)) / px < MOVE_NEAR_LIQ:
+                e["near_liq"] += 1
+                if len(e["accounts_near_liq"]) < 10:
+                    e["accounts_near_liq"].append(aid)
+        e["margin"], e["upnl"] = round(e["margin"], 2), round(e["upnl"], 2)
+        expo[sym] = e
+    return {"moves": moves, "exposure": expo,
+            "note": "코드 집계: 지난 1시간 고가·저가가 1시간 전 가격에서 움직인 폭, 지금 열린 paper 포지션(마크 대신 직전 5분봉 종가, "
+                    "나갈 때 수수료 전). 직원은 주문·규칙 변경을 할 수 없음"}
+
+
+def compose_market_move(pk: dict, lead: Optional[dict]) -> str:
+    """Telegram (silent): the moves and our exposure written by code, then the lead's summary lines (collapsed)."""
+    L = ["⚡ 시세 급변 회의 (시장분석팀)"]
+    for m in pk.get("moves") or []:
+        c = m["symbol"].replace("USDT", "")
+        L.append(f"{c}: 1시간 {m['move'] * 100:+.1f}% (1시간 전 {m['ref']:,.4g} → 지금 {m['last']:,.4g}, "
+                 f"고 {m['high']:,.4g} / 저 {m['low']:,.4g})")
+        e = (pk.get("exposure") or {}).get(m["symbol"]) or {}
+        if e:
+            L.append(f"  우리 계좌: 롱 {e['long']} · 숏 {e['short']} · 증거금 ${e['margin']:,.0f} · 평가 손익 "
+                     f"{'+' if e['upnl'] >= 0 else '-'}${abs(e['upnl']):,.0f}"
+                     + (f" · 청산가 3% 안 {e['near_liq']}개" if e.get("near_liq") else ""))
+    lines = [str(x) for x in ((lead or {}).get("summary") or []) if str(x).strip()][:3]
+    if lines:
+        L += ["", "[팀장 요약]"] + ["- " + A.telegram_safe(" ".join(x.split()))[:300] for x in lines]
+    L.append("(자세한 내용: 대시보드 에이전트 방 > 시장분석팀)")
+    return "\n".join(L)[:TELEGRAM_LIMIT]
+
+
+def _send_once(rnd: "_Round", key: str, text: str, what_ko: str, extra: dict) -> None:
+    """One Telegram message per meeting key (a retried round never sends twice), silent (INFO)."""
+    ctx = rnd.ctx
+    if R.get_cursor(ctx.agents_conn, key):
+        extra["telegram"] = False
+        rnd.system(f"{what_ko}은(는) 앞선 시도에서 보냈거나 보내는 중에 멈췄을 수 있어, 다시 보내지 않습니다.")
+        return
+    R.set_cursor(ctx.agents_conn, key, str(ctx.clock()))
+    try:
+        ok = ctx.notifier.send(INFO, text)
+    except Exception as exc:  # delivery must not break the round
+        ok, why = False, type(exc).__name__
+    else:
+        why = "텔레그램이 받지 않음"
+    if ok is False:
+        extra["telegram"] = False
+        rnd.system(f"텔레그램 전송 실패: {why}")
+    else:
+        extra["telegram"] = True
+        rnd.post("code", "action", f"📨 {what_ko}을(를) 텔레그램으로 보냈습니다.",
+                 {"action": "telegram", "level": INFO, "text": text})
 
 
 def compose_evening(ctx: RoundContext, board: dict, lead: dict, due: Optional[TR.Due] = None) -> str:
@@ -3163,7 +3280,8 @@ def tick_lock(agents_db: str) -> Iterator[bool]:
 def tick(paper_db: Optional[str], daily_db: Optional[str], agents_db: str, inbox_db: Optional[str], runner: Runner,
          *, lab: Any = None, notifier: Optional[Notifier] = None, policy: Optional[RoomsPolicy] = None,
          now_ms: Optional[int] = None, clock_ms: Optional[Callable[[], int]] = None,
-         cards_path: Optional[str] = None, preflight: Optional[Callable[[], tuple]] = None) -> dict:
+         cards_path: Optional[str] = None, preflight: Optional[Callable[[], tuple]] = None,
+         market_fetch: Optional[Callable[[int], dict]] = None) -> dict:
     """One pass of the agents process (the only writer of agents3.db). Meetings run one at a time;
     after each one ``find_due`` is asked again (code only), so a new incident goes first. A meeting
     starts only when its AI budget can carry it (``ClassBudget.headroom``, pacing included); what
@@ -3225,12 +3343,18 @@ def tick(paper_db: Optional[str], daily_db: Optional[str], agents_db: str, inbox
             met: list[str] = []
             tick_calls = 0
             checked = preflight is None
+            market = None
+            if market_fetch is not None and "market_move" in policy.triggers.enabled:
+                try:
+                    market = market_fetch(now)
+                except Exception as exc:  # noqa: BLE001  (no market data: no market-move meeting this tick)
+                    print(f"warning: market data for market-move meetings: {type(exc).__name__}", file=sys.stderr)
             while len(results) < policy.max_rounds_per_tick:
                 if results and time.monotonic() - t0 > policy.tick_wall_s:
                     break                                   # a long tick: the rest waits for the next one
                 dues = TR.find_due(paper_ro, daily_ro, conn, inbox_ro, now, policy.triggers,
                                    defer_triggers=deferred_triggers(ctx), skip_rooms=met,
-                                   can_start=lambda d: can_start(d, ctx))
+                                   can_start=lambda d: can_start(d, ctx), market=market)
                 if first is None:
                     first = dues
                 pick = None
@@ -3472,7 +3596,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             ro.close()
         try:
             out = tick(args.paper_db, args.daily_db, agents_db, args.inbox_db, runner, lab=lab, notifier=notifier,
-                       policy=policy, preflight=preflight)
+                       policy=policy, preflight=preflight, market_fetch=lambda now: fetch_market_moves(now))
         except Exception as exc:
             if not args.dry_run:
                 _mark_crash(agents_db, exc)
