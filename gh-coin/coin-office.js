@@ -47,6 +47,7 @@ export function modelScore(m){
   if (/(^|[^0-9.])(0\.5|1|1\.5|2|3|4|e2|e4)b\b|mini|nano|tiny|-small|lite/.test(m)) s -= 30;
   if (/70b|72b|90b|120b|123b|235b|253b|405b|480b|671b|large|kimi-k2|deepseek-v3|deepseek-v4|maverick|scout|glm-4\.[5-9]|qwen3-coder|mistral-medium|llama-3\.3-70|command-a/.test(m)) s += 25;
   if (/r1|qwq|think|reason|magistral|nemotron.*(super|ultra)|o[1-9]-/.test(m)) s -= 20;
+  if (/gpt-oss/.test(m)) s -= 15;   // 사무실은 한국어 답이 중요 — gpt-oss는 영어로 길게 '생각만' 하는 경향이 있어 한 단계 뒤로(폴백으로는 남김)
   // 옛 세대·지원 끝나 가는 모델은 크기와 상관없이 뒤로 (llama2·codellama·chatqa·mixtral·gemma2·qwen1~2 등)
   if (/llama-?2|codellama|code-?llama|chatqa|mixtral|mistral-7b|gemma-?2|gemma-7b|qwen1|qwen-?2(?!\.5)|qwen2\.5-(?!coder-32)|yi-|falcon|baichuan|dbrx|arctic|jamba|phi-?3|nemotron-4|llama-?3-|llama3-|llama-?3\.1-(?!nemotron-ultra)|solar|granite-3\.0|deepseek-coder|starcoder/.test(m)) s -= 45;
   if (/guard|safety|embed|rerank|reward|parse|ocr|-vl|vision|audio|tts|whisper/.test(m)) s -= 100;
