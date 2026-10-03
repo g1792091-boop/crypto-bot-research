@@ -616,7 +616,7 @@ def test_total_budget_over_all_classes_stops_the_tick(world):
     world.say(ROOM, "질문", QUIET + 5 * MIN)
     assert world.tick(QueueRunner({}), QUIET + 15 * MIN, policy=policy)["rounds"] == []
     caps = RM.budget_caps(RM.RoomsPolicy(total_budget=(1, 5)))
-    assert caps["total"] == {"calls": 1, "tokens": 5} and caps["week"] == {"calls": 420, "tokens": 10_000_000}
+    assert caps["total"] == {"calls": 1, "tokens": 5} and caps["week"] == {"calls": 455, "tokens": 10_750_000}
 
 
 def test_a_meeting_the_budget_cannot_carry_is_not_started(world):
@@ -709,7 +709,7 @@ def test_team_evening_round_sends_one_telegram_info(world):
     assert len(notifier.messages) == 1
 
 
-def test_morning_meeting_five_roles_no_telegram(world):
+def test_morning_meeting_five_roles_and_the_leads_lines_by_telegram(world):
     morning = kst(2026, 10, 7, 8, 3)
     lead = {"summary": ["a", "b", "c"], "human_actions": [], "watch_next": []}
     runner = QueueRunner({"chart_regime": [team_answer("c")], "derivs_flow": [team_answer("d")],
@@ -719,7 +719,9 @@ def test_morning_meeting_five_roles_no_telegram(world):
     out = world.tick(runner, morning, notifier=notifier)
     assert [(r["room_id"], r["trigger"], r["calls"]) for r in out["rounds"]] == [("team:market", "morning", 5)]
     assert runner.roles() == ["chart_regime", "derivs_flow", "strategist", "devils_advocate", "team_lead"]
-    assert notifier.messages == []
+    # owners' choice 2026-10-03: the lead's three lines go out silently, once
+    assert len(notifier.messages) == 1 and notifier.messages[0][0] == "INFO"
+    assert notifier.messages[0][1].startswith("🌅 아침 회의") and "1. a" in notifier.messages[0][1]
     assert "market" in runner.calls[0]["packet"]["board"]
 
 
@@ -1537,3 +1539,21 @@ def test_owner_mention_brings_a_named_expert_into_a_strategy_meeting(world):
     # without the mention an agreeing advocate and a note would end the meeting early (no expert)
     assert runner.roles() == [SPEC, "devils_advocate", "entry_timing", SPEC]
     assert runner.calls[0]["packet"]["owner_mentions"] == [{"role": "entry_timing", "name": "진입 타점 분석가"}]
+
+
+# ------------------------------------------------------------------ ranking review (owners' choice 2026-10-03)
+def test_ranking_review_at_14_with_the_top_and_bottom_and_a_silent_summary(world):
+    t = kst(2026, 10, 7, 14, 5)
+    lead = {"summary": ["상위는 추세장 롱", "하위는 박스권 숏에서 손실", "표본 적음"], "human_actions": [], "watch_next": []}
+    runner = QueueRunner({"pnl_reviewer": [team_answer("p")], "risk_officer": [team_answer("r")], "team_lead": [lead]})
+    notifier = ListNotifier()
+    assert world.tick(QueueRunner({}), t, notifier=notifier)["rounds"] == []    # off in RoomsPolicy() itself
+    pol = RM.RoomsPolicy()
+    pol.triggers.ranking_hour_kst = RM.policy_from_env({}).triggers.ranking_hour_kst     # the server's: 14:00
+    out = world.tick(runner, t, policy=pol, notifier=notifier)
+    assert [(r["room_id"], r["trigger"]) for r in out["rounds"]] == [("team:review", "ranking")]
+    assert runner.roles() == ["pnl_reviewer", "risk_officer", "team_lead"]
+    pk = runner.calls[0]["packet"]["ranking"]
+    assert "picked" in pk and "coin_flips" in pk
+    assert len(notifier.messages) == 1 and notifier.messages[0][1].startswith("🏁 순위 검토")
+    assert world.tick(QueueRunner({}), t + 30 * MIN, policy=pol, notifier=notifier)["rounds"] == []   # once a day

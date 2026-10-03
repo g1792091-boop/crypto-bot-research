@@ -21,6 +21,7 @@ Triggers (defaults in ``TriggerPolicy``; every number is configurable):
     bust          2  strat:<S>     a strategy account went bust (once per account).
     checkpoint    3  team:lead     day 30 / 60 / 90 ... since the run started.
     morning       3  team:market   08:00 KST, once per KST day (window 4h).
+    ranking       3  team:review   14:00 KST, once per KST day (window 4h): the top and bottom strategies by P&L.
     evening       3  team:review   22:00 KST, once per KST day (window 4h),
                      team:lead     then the lead (after the review team has met).
     weekly        4  strat:<S>     on weekday (strategy index mod 7, KST) when the strategy has
@@ -107,12 +108,12 @@ LAB_ROOM = "team:lab"                 # the new-strategy lab (rooms_db.LAB_ROOM)
 LAB_WEEKDAY = 6                       # the new-strategy accounts' weekly review: Sunday (KST)
 
 TRIGGERS = ("incident", "owner", "loss_cluster", "bust", "checkpoint", "morning", "evening", "weekly", "research",
-            "market_move")
-PRIORITY = {"incident": 0, "owner": 1, "loss_cluster": 2, "bust": 2, "market_move": 2, "checkpoint": 3, "morning": 3,
+            "market_move", "ranking")
+PRIORITY = {"incident": 0, "owner": 1, "loss_cluster": 2, "bust": 2, "market_move": 2, "checkpoint": 3, "morning": 3, "ranking": 3,
             "evening": 3, "weekly": 4, "research": 5}
 # Sub-budget class of each trigger (the rooms engine keeps one AI budget per class).
 TRIGGER_CLASS = {"incident": "incident", "owner": "owner", "loss_cluster": "loss", "bust": "loss", "market_move": "loss",
-                 "checkpoint": "scheduled", "morning": "scheduled", "evening": "scheduled",
+                 "checkpoint": "scheduled", "morning": "scheduled", "evening": "scheduled", "ranking": "scheduled",
                  "weekly": "weekly", "research": "research"}
 ENDED_OK = ("done", "no_action")      # the only statuses that advance cursors
 CLASSES = ("incident", "owner", "loss", "scheduled", "weekly", "research")
@@ -200,6 +201,9 @@ class TriggerPolicy:
     checkpoint_every_days: int = 30
     morning_hour_kst: int = 8
     evening_hour_kst: int = 22
+    # the review team's ranking review (owners' choice 2026-10-03: 14:00 on the server, rooms.policy_from_env);
+    # -1 = off, as in TriggerPolicy() itself
+    ranking_hour_kst: int = -1
     meeting_window_ms: int = 4 * HOUR_MS
     # new-strategy lab: one meeting slot per this period of the KST day; 0 = off (rooms.policy_from_env
     # turns it on for the server, RESEARCH_EVERY_MIN_DEFAULT)
@@ -792,10 +796,11 @@ def _lab_accounts(paper_ro, st: _Rooms) -> list[Due]:
 def _scheduled(st: _Rooms) -> list[Due]:
     p, out = st.p, []
     plan = [("morning", p.morning_hour_kst, (("team:market", "아침 회의 (08:00)"),)),
+            ("ranking", p.ranking_hour_kst, (("team:review", f"순위 검토 ({p.ranking_hour_kst:02d}:00): 잔고 상위·하위 매매법"),)),
             ("evening", p.evening_hour_kst, (("team:review", "저녁 점검 (22:00): 손익 복기"),
                                             ("team:lead", "저녁 점검 (22:00): 팀장 요약")))]
     for name, hour, rooms in plan:
-        if name not in p.enabled:
+        if name not in p.enabled or hour < 0:
             continue
         s0 = slot_start(st.now, hour)
         if st.now - s0 >= p.meeting_window_ms:

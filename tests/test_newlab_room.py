@@ -315,10 +315,10 @@ def test_research_budget_class_is_enforced_paced_and_not_reserved(world, noise):
         return RM.RoundContext(world.agents, None, None, None, QueueRunner({}), noise, t, policy=pol or lab_policy(),
                                clock_ms=lambda: t)
     b = RM.round_budget(due, ctx(QUIET))
-    assert b.pipeline == "research" and b.paced and b.max_calls == 24 and b.reserve()[0] == 30
+    assert b.pipeline == "research" and b.paced and b.max_calls == 24 and b.reserve()[0] == 35
     # the owner class keeps nothing for research (research is not a reserve)
     owner = RM.round_budget(TR.Due("team:risk", "owner", 1, {"class": "owner"}, "owner"), ctx(QUIET))
-    assert owner.reserve() == (30, 850_000)
+    assert owner.reserve() == (35, 1_000_000)
 
     def use(cls, n, t):
         world.agents.executemany("INSERT INTO agent_calls VALUES (?,?,?,?,?,?,?)",

@@ -139,7 +139,7 @@ ROLE_INFO = {r[0]: {"name": r[1], "team": r[2], "model": r[3], "duty": room_duty
 TEAM_KO = dict(TEAMS)
 TRIGGER_KO = {"incident": "사고 점검", "owner": "두 분 글", "loss_cluster": "손실 묶음 복기", "bust": "파산 복기",
               "checkpoint": "30일 단위 점검", "morning": "아침 회의", "evening": "저녁 점검", "weekly": "주간 검토",
-              "research": "새 매매법 연구", "market_move": "시세 급변 회의"}
+              "research": "새 매매법 연구", "market_move": "시세 급변 회의", "ranking": "순위 검토"}
 VERDICT_KO = {"agree": "동의", "disagree": "반대", "needs_test": "시험 필요"}
 
 # Loss-card tags that describe the chart at entry (cards.TAGS) vs. how the trade was held.
@@ -271,9 +271,11 @@ def lab_blocked(ctx: "RoundContext") -> str:
 # 'research' (the new-strategy lab, team:lab) is not reserved and is paced over the day, and it also leaves
 # the unused part of the loss/weekly reviews' caps (``lab_review_keep_calls``): it only uses spare calls.
 DEFAULT_BUDGETS = {"incident": (15, 400_000), "owner": (20, 500_000), "loss": (24, 700_000),
-                   "scheduled": (15, 450_000), "weekly": (20, 550_000), "research": (24, 700_000)}
-DEFAULT_TOTAL = (80, 2_000_000)
-DEFAULT_WEEK = (420, 10_000_000)
+                   "scheduled": (20, 600_000), "weekly": (20, 550_000), "research": (24, 700_000)}
+# 2026-10-03: the 14:00 ranking review joined the scheduled class (15 -> 20 calls), and the total and 7-day caps
+# grew by the same share so the other classes keep what they had (80 -> 85, 420 -> 455)
+DEFAULT_TOTAL = (85, 2_150_000)
+DEFAULT_WEEK = (455, 10_750_000)
 # The unused part of these classes' caps is kept inside the total: other classes cannot use it, so
 # a busy day never leaves a liquidation or the 22:00 summary without calls.
 RESERVED_CLASSES = ("incident", "scheduled")
@@ -865,6 +867,9 @@ OBSERVE_DAYS_DEFAULT = 21
 # the new-strategy lab's meeting slot on the server (minutes; env AGENTS_RESEARCH_EVERY_MIN, 0 = no lab
 # meetings). RoomsPolicy() itself leaves it off (triggers.TriggerPolicy.research_every_ms = 0).
 RESEARCH_EVERY_MIN_DEFAULT = 60
+# the review team's daily ranking review on the server (KST hour; env AGENTS_RANKING_HOUR, 'off' = none).
+# RoomsPolicy() itself leaves it off (triggers.TriggerPolicy.ranking_hour_kst = -1).
+RANKING_HOUR_DEFAULT = 14
 # env name -> (where in the policy, minimum). All optional; see deploy/agents.env.example.
 ENV_INTS = {
     # the live runner refuses an approval decided in the first 60 days without the owners (whatever this says)
@@ -900,6 +905,13 @@ def policy_from_env(environ: Optional[dict] = None) -> RoomsPolicy:
     if not every.isdigit():
         raise ValueError(f"AGENTS_RESEARCH_EVERY_MIN={every!r}: use a whole number of minutes >= 0 (0 = no lab meetings)")
     p.triggers.research_every_ms = int(every) * 60_000
+    hour = (env.get("AGENTS_RANKING_HOUR") or "").strip().lower() or str(RANKING_HOUR_DEFAULT)
+    if hour == "off":
+        p.triggers.ranking_hour_kst = -1
+    elif hour.isdigit() and 0 <= int(hour) <= 23:
+        p.triggers.ranking_hour_kst = int(hour)
+    else:
+        raise ValueError(f"AGENTS_RANKING_HOUR={hour!r}: use an hour 0-23 (Korea time) or off")
     b = (env.get("AGENTS_BUDGET") or "").strip()
     if b:
         apply_budget_specs(p, b.replace(";", ",").split(","))
@@ -1489,7 +1501,17 @@ def _losses(ctx: RoundContext, strategy: str, due: TR.Due) -> dict:
             "tag_stats": _tag_rows(tag_stats(window)), "tag_window_trades": len(window),
             "tag_window_losses": sum(1 for c in window if c["pnl"] < 0),
             "stop_whatif": stop_whatif(raw),
+            "win_loss": _win_loss(window),
             "note": "카드와 특징은 코드가 계산한 설명일 뿐 규칙이 아님. 거래 30건 미만이면 가설로만"}
+
+
+def _win_loss(window: list) -> dict:
+    """The strategy's recent wins against its losses by coin, side, timeframe, session, weekday, regime (code)."""
+    from . import compare
+    try:
+        return compare.win_loss_compare(window)
+    except Exception as exc:  # noqa: BLE001  (a summary only)
+        return {"error": type(exc).__name__}
 
 
 def _board(ctx: RoundContext) -> dict:
@@ -2160,6 +2182,8 @@ def team_plan(due: TR.Due, mentioned: tuple = ()) -> list[tuple[str, str]]:
                 ("devils_advocate", "challenge"), lead]
     if trig == "market_move":
         return [("chart_regime", "team"), ("derivs_flow", "team"), ("strategist", "team"), lead]
+    if trig == "ranking":
+        return [("pnl_reviewer", "team"), ("risk_officer", "team"), lead]
     if trig == "evening" and room == "team:review":
         return [("pnl_reviewer", "team"), ("whatif", "team"), ("risk_officer", "team")]
     if trig == "incident":
@@ -2232,6 +2256,8 @@ def _team_round(rnd: _Round) -> tuple[str, dict]:
         rnd.base["lab_accounts"] = lab_accounts_packet(ctx, rnd.due.data.get("oldest_exit"))
     if rnd.due.trigger == "market_move":
         rnd.base["market_move"] = market_move_packet(ctx, rnd.due)
+    if rnd.due.trigger == "ranking":
+        rnd.base["ranking"] = ranking_packet(ctx)
     kind = room.split(":", 1)[1] if ":" in room else room
     members = R.LAB_ROOM_MEMBERS if room == LAB_ROOM else R.TEAM_ROOM_MEMBERS.get(kind, ())
     mentioned = owner_mentions(rnd, members)
@@ -2277,6 +2303,12 @@ def _team_round(rnd: _Round) -> tuple[str, dict]:
     if rnd.due.trigger == "market_move":
         _send_once(rnd, f"telegram:move:{rnd.due.data['key']}", compose_market_move(rnd.base["market_move"], lead),
                    "시세 급변 요약", extra)
+    if rnd.due.trigger == "ranking" and lead is not None:
+        _send_once(rnd, f"telegram:ranking:{rnd.due.data.get('slot') or R.kst_day(ctx.now_ms)}",
+                   compose_ranking(rnd.base["ranking"], lead), "순위 검토 요약", extra)
+    if rnd.due.trigger == "morning" and lead is not None:
+        _send_once(rnd, f"telegram:morning:{rnd.due.data.get('slot') or R.kst_day(ctx.now_ms)}",
+                   compose_lead_lines("🌅 아침 회의 (시장분석팀, 08:00)", lead), "아침 요약", extra)
     decision = {"action": "team_meeting", "speakers": rnd.spoke, **{k: v for k, v in extra.items() if k != "flag"},
                 "flagged": bool(extra.get("flag", {}).get("sent"))}
     decision["summary_ko"] = _team_summary(rnd, board, extra)
@@ -2293,7 +2325,8 @@ def _team_summary(rnd: _Round, board: dict, extra: dict) -> str:
     if rnd.due.data.get("summary_ko"):
         L.append(f"- 계기: {rnd.due.data['summary_ko']}")
     if extra.get("telegram"):
-        L.append("- 시세 급변 요약을 텔레그램으로 보냄" if rnd.due.trigger == "market_move" else "- 저녁 요약을 텔레그램으로 보냄")
+        L.append({"market_move": "- 시세 급변 요약을 텔레그램으로 보냄", "ranking": "- 순위 검토 요약을 텔레그램으로 보냄",
+                  "morning": "- 아침 요약을 텔레그램으로 보냄"}.get(rnd.due.trigger, "- 저녁 요약을 텔레그램으로 보냄"))
     if (extra.get("flag") or {}).get("sent"):
         L.append("- 두 분께 알림을 보냄")
     L.append(f"- AI 호출 {rnd.calls}회")
@@ -2379,6 +2412,45 @@ def compose_market_move(pk: dict, lead: Optional[dict]) -> str:
     if lines:
         L += ["", "[팀장 요약]"] + ["- " + A.telegram_safe(" ".join(x.split()))[:300] for x in lines]
     L.append("(자세한 내용: 대시보드 에이전트 방 > 시장분석팀)")
+    return "\n".join(L)[:TELEGRAM_LIMIT]
+
+
+def ranking_packet(ctx: RoundContext) -> dict:
+    """compare.ranking on paper3.db (read-only): the top and bottom 3 strategies with their win/loss comparison."""
+    from . import compare
+    if ctx.paper_ro is None:
+        return {"error": "paper3.db 없음"}
+    try:
+        r = ctx.paper_ro.execute("SELECT data FROM state WHERE k = 'run'").fetchone()
+        initial = float((json.loads(r[0]) or {}).get("initial_equity", 0) or 0) if r else 0.0
+        if not initial:
+            from ..config import V3_INITIAL
+            initial = float(V3_INITIAL)
+        return compare.ranking(ctx.paper_ro, initial, round_trip(ctx.paper_ro), names_ko=STRATEGY_KO)
+    except (sqlite3.Error, KeyError, TypeError, ValueError) as exc:
+        return {"error": f"순위를 만들지 못함: {type(exc).__name__}"}
+
+
+def compose_lead_lines(title: str, lead: Optional[dict]) -> str:
+    lines = [str(x) for x in ((lead or {}).get("summary") or []) if str(x).strip()][:3]
+    L = [title] + [f"{i + 1}. {A.telegram_safe(' '.join(x.split()))[:300]}" for i, x in enumerate(lines)]
+    return "\n".join(L)[:TELEGRAM_LIMIT]
+
+
+def compose_ranking(pk: dict, lead: Optional[dict]) -> str:
+    """Telegram (silent): the picked strategies' numbers by code, then the lead's three lines."""
+    L = ["🏁 순위 검토 (손익 복기팀, 14:00)"]
+    for r in pk.get("picked") or []:
+        c = (r.get("compare") or {}).get("all") or {}
+        wr = c.get("win_rate")
+        L.append(f"{r['group']} {r['rank']}/{r['of']} {r['name_ko']}: {'+' if r['pnl'] >= 0 else '-'}${abs(r['pnl']):,.0f}"
+                 f" · {c.get('wins', 0)}승 {c.get('losses', 0)}패" + (f" ({wr * 100:.0f}%)" if wr is not None else ""))
+    fl = (pk.get("coin_flips") or {}).get("mean_pnl")
+    if fl is not None:
+        L.append(f"동전 봇 평균 {'+' if fl >= 0 else '-'}${abs(fl):,.0f}")
+    lines = [str(x) for x in ((lead or {}).get("summary") or []) if str(x).strip()][:3]
+    if lines:
+        L += ["", "[팀장 요약]"] + ["- " + A.telegram_safe(" ".join(x.split()))[:300] for x in lines]
     return "\n".join(L)[:TELEGRAM_LIMIT]
 
 

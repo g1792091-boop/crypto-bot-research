@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 from paperbot.agents import rooms_db as R  # noqa: E402
 from paperbot.dash.app import Rooms, budget_caps, create_app, hash_password, room_schedule_ko  # noqa: E402
+from paperbot.agents.rooms import DEFAULT_WEEK  # noqa: E402
 
 SECRET = b"x" * 32
 PW = "correct horse battery"
@@ -352,7 +353,7 @@ def test_usage_shows_the_seven_day_cap(env):
     c = env["client"]
     _login(c)
     u = c.get("/api/agents/usage").json()
-    assert u["week"]["calls"] == 3 and u["week"]["cap_calls"] == 420       # the 2000-01-01 row is outside
+    assert u["week"]["calls"] == 3 and u["week"]["cap_calls"] == DEFAULT_WEEK[0]      # the 2000-01-01 row is outside
     assert budget_caps("week=100:9")["week"] == {"calls": 100, "tokens": 9}
 
 
@@ -614,7 +615,7 @@ def test_a_post_the_budget_or_a_pause_defers_is_told_so():
 console.log(JSON.stringify({budget: pendingHint("ok", "budget", 3), paused: pendingHint("ok", "paused", 3),
   stopped: pendingHint("stopped", "paused", 3)}));
 """)
-    assert "다음 차례" not in got["budget"] and "7일" in got["budget"] and "08:00·22:00" in got["budget"]
+    assert "다음 차례" not in got["budget"] and "7일" in got["budget"] and "08:00·14:00·22:00" in got["budget"]
     assert "다음 차례" not in got["paused"] and "멈췄습니다" in got["paused"] and "1시간" in got["paused"]
     assert got["stopped"] == "에이전트가 멈춰 있어 아직 전달되지 않습니다"
 

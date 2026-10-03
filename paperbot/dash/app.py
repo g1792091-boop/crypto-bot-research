@@ -690,11 +690,14 @@ def budget_caps(env_text: Optional[str] = None) -> dict:
 def _trigger_defaults() -> dict:
     """Numbers for the 'when does this room meet' line (from triggers.TriggerPolicy when importable)."""
     d = {"loss_min_count": 3, "loss_min_gap_ms": 4 * 3_600_000, "weekly_min_trades": 30,
-         "checkpoint_every_days": 30, "morning_hour_kst": 8, "evening_hour_kst": 22}
+         "checkpoint_every_days": 30, "morning_hour_kst": 8, "evening_hour_kst": 22,
+         "ranking_hour_kst": 14}
     try:
         from ..agents.triggers import TriggerPolicy
         p = TriggerPolicy()
         d = {k: getattr(p, k, v) for k, v in d.items()}
+        from ..agents.rooms import RANKING_HOUR_DEFAULT   # off in TriggerPolicy(), on for the server
+        d["ranking_hour_kst"] = RANKING_HOUR_DEFAULT
     except Exception:
         pass
     return d
@@ -713,8 +716,10 @@ def room_schedule_ko(room_id: str) -> str:
                 f"거래가 {d['weekly_min_trades']}건 더 쌓인 뒤 {wd}요일 주간 검토 때 스스로 회의를 엽니다.")
     m, e, c = d["morning_hour_kst"], d["evening_hour_kst"], d["checkpoint_every_days"]
     return {
-        "team:market": f"매일 {m:02d}:00 아침 회의: 장세 → 파생·쏠림 → 전략가 → 반론 → 팀장 요약.",
-        "team:review": f"매일 {e:02d}:00 저녁 점검: 손익 복기 → 가정 분석 → 리스크 책임자.",
+        "team:market": f"매일 {m:02d}:00 아침 회의: 장세 → 파생·쏠림 → 전략가 → 반론 → 팀장 요약(텔레그램 발송). "
+                       "시세가 크게 움직이면 바로 회의.",
+        "team:review": f"매일 {d['ranking_hour_kst']:02d}:00 순위 검토(잔고 상위·하위 3개 매매법, 텔레그램 발송), "
+                       f"{e:02d}:00 저녁 점검: 손익 복기 → 가정 분석 → 리스크 책임자.",
         "team:lead": f"매일 {e:02d}:00 팀장 3줄 요약(텔레그램 발송), {c}·{2 * c}·{3 * c}일째 중간 점검.",
         "team:ops": "사고가 나면 바로: 강제청산, 밤 점검 불일치, 데이터 끊김, 신호 지연.",
         "team:risk": "정해진 회의는 없고, 두 분이 남긴 메시지에 답합니다.",

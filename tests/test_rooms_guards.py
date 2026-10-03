@@ -285,9 +285,9 @@ def test_a_reused_pass_that_still_passes_says_so_with_the_current_count(world, m
 
 # ================================================================ AI budget
 def test_the_week_cap_keeps_todays_reserve_for_a_liquidation_and_the_evening(world):
-    for d in range(1, 7):                                     # six busy days: 62 calls each (372)
-        prefill(world, EVENING - d * DAY, loss=24, weekly=20, scheduled=9, incident=3, owner=6)
-    prefill(world, EVENING, loss=10, weekly=8)                # today 18: 390 of 420, 30 = today's reserve
+    for d in range(1, 7):                                     # six busy days: 67 calls each (402)
+        prefill(world, EVENING - d * DAY, loss=24, weekly=20, scheduled=9, incident=3, owner=11)
+    prefill(world, EVENING, loss=10, weekly=8)                # today 18: 420 of 455, 35 = today's reserve
     world.losses(t=EVENING)                                   # a loss cluster is waiting too
     world.store.alert(EVENING - 2 * MIN, "CRITICAL", f"[{S}@15m] LIQUIDATED BTCUSDT 40x lost margin 20.00")
     world.store.commit()
@@ -1110,7 +1110,8 @@ def test_one_role_that_always_fails_neither_stalls_its_meeting_nor_every_room(wo
     assert (0, "team:ops", "incident", "done") in log              # at once, with the code reviewer's turn skipped
     skipped = [m["text"] for m in world.messages("team:ops") if m["kind"] == "system"]
     assert any("코드 리뷰어 호출이 실패해 이번 차례는 건너뜁니다" in x for x in skipped), skipped
-    assert [x[3] for x in log if x[2] == "evening"] == ["done", "done"] and len(n.messages) == 1
+    assert [x[3] for x in log if x[2] == "evening"] == ["done", "done"]
+    assert [m[1].split()[0] for m in n.messages] == ["📋", "🌅"]       # the evening summary, then the morning's lines
     assert [x[3] for x in log if x[2] == "morning"] == ["done"]
     risk = [x for x in log if x[1] == "team:risk"]
     assert risk and all(x[3] == "failed" for x in risk) and len(risk) < 12     # it waits on its own, growing
