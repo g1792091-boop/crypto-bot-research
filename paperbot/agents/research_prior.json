@@ -1,12 +1,13 @@
 {
- "source": "research/entry_study (PREREG_ENTRY.md; RESULTS_ENTRY.md, RESULTS_ENTRY_A.md, RESULTS_ENTRY_BC.md)",
+ "source": "research/entry_study (PREREG_ENTRY.md; RESULTS_ENTRY.md, RESULTS_ENTRY_A.md, RESULTS_ENTRY_BC.md; PREREG_TRENDLINE.md, RESULTS_TRENDLINE.md)",
  "data": "5-year outcomes, periods 2021-08..2024-06 / 2024-07..2026-09 / 2020-01..2021-07",
  "totals": {
   "support_resistance": 290,
   "entry_strength": 410,
-  "parameters": 1680
+  "parameters": 1680,
+  "trendline": 580
  },
- "conclusion_ko": "사전 등록한 세 연구(지지·저항 290건, 진입 수치 410건, 파라미터 변형 1,680건)를 같은 5년 자료로 이미 했고, 세 기간을 모두 통과한 효과는 없었다(지지·저항 후보 2건은 무작위 진입에서도 같은 효과: 시장 전체의 성질). 파라미터는 뾰족한 곳이 없고, 세 기간 플러스 변형 수도 '파라미터가 상관없다'는 가정의 기대치와 같다. 그래서 이 숫자들은 설명 자료이고, 같은 것을 다시 시험해도 새 정보가 아니다.",
+ "conclusion_ko": "사전 등록한 네 연구(지지·저항 290건, 진입 수치 410건, 파라미터 변형 1,680건, 추세선 600건(매매법 칸 580건))를 같은 5년 자료로 이미 했고, 세 기간을 모두 통과한 효과는 없었다(지지·저항 후보 2건은 무작위 진입에서도 같은 효과: 시장 전체의 성질; 추세선은 1기간 보정부터 통과 0건). 파라미터는 뾰족한 곳이 없고, 세 기간 플러스 변형 수도 '파라미터가 상관없다'는 가정의 기대치와 같다. 그래서 이 숫자들은 설명 자료이고, 같은 것을 다시 시험해도 새 정보가 아니다.",
  "strategies": {
   "DOGE": {
    "strategy": "DOGE",
@@ -268,6 +269,16 @@
       "variants": 4,
       "positive_all3": []
      }
+    ]
+   },
+   "trendline": {
+    "tests": 16,
+    "passed_all3": [],
+    "features": [
+     "tl_against",
+     "tl_aligned",
+     "tl_break_now",
+     "tl_support"
     ]
    },
    "watch": []
@@ -570,6 +581,16 @@
      }
     ]
    },
+   "trendline": {
+    "tests": 20,
+    "passed_all3": [],
+    "features": [
+     "tl_against",
+     "tl_aligned",
+     "tl_break_now",
+     "tl_support"
+    ]
+   },
    "watch": []
   },
   "N02_ST_KST": {
@@ -810,6 +831,16 @@
      }
     ]
    },
+   "trendline": {
+    "tests": 20,
+    "passed_all3": [],
+    "features": [
+     "tl_against",
+     "tl_aligned",
+     "tl_break_now",
+     "tl_support"
+    ]
+   },
    "watch": []
   },
   "N03_ADX_GC": {
@@ -1015,6 +1046,16 @@
        }
       ]
      }
+    ]
+   },
+   "trendline": {
+    "tests": 8,
+    "passed_all3": [],
+    "features": [
+     "tl_against",
+     "tl_aligned",
+     "tl_break_now",
+     "tl_support"
     ]
    },
    "watch": []
@@ -1261,6 +1302,16 @@
       "variants": 4,
       "positive_all3": []
      }
+    ]
+   },
+   "trendline": {
+    "tests": 20,
+    "passed_all3": [],
+    "features": [
+     "tl_against",
+     "tl_aligned",
+     "tl_break_now",
+     "tl_support"
     ]
    },
    "watch": []
@@ -1535,6 +1586,16 @@
       "variants": 4,
       "positive_all3": []
      }
+    ]
+   },
+   "trendline": {
+    "tests": 16,
+    "passed_all3": [],
+    "features": [
+     "tl_against",
+     "tl_aligned",
+     "tl_break_now",
+     "tl_support"
     ]
    },
    "watch": []
@@ -1837,6 +1898,16 @@
      }
     ]
    },
+   "trendline": {
+    "tests": 20,
+    "passed_all3": [],
+    "features": [
+     "tl_against",
+     "tl_aligned",
+     "tl_break_now",
+     "tl_support"
+    ]
+   },
    "watch": []
   },
   "N07_ICHI_CMO": {
@@ -2137,6 +2208,16 @@
      }
     ]
    },
+   "trendline": {
+    "tests": 20,
+    "passed_all3": [],
+    "features": [
+     "tl_against",
+     "tl_aligned",
+     "tl_break_now",
+     "tl_support"
+    ]
+   },
    "watch": []
   },
   "N08_ICHI_WR": {
@@ -2363,6 +2444,16 @@
       "variants": 4,
       "positive_all3": []
      }
+    ]
+   },
+   "trendline": {
+    "tests": 12,
+    "passed_all3": [],
+    "features": [
+     "tl_against",
+     "tl_aligned",
+     "tl_break_now",
+     "tl_support"
     ]
    },
    "watch": []
@@ -2663,6 +2754,16 @@
       "variants": 4,
       "positive_all3": []
      }
+    ]
+   },
+   "trendline": {
+    "tests": 20,
+    "passed_all3": [],
+    "features": [
+     "tl_against",
+     "tl_aligned",
+     "tl_break_now",
+     "tl_support"
     ]
    },
    "watch": []
@@ -2970,6 +3071,16 @@
      }
     ]
    },
+   "trendline": {
+    "tests": 20,
+    "passed_all3": [],
+    "features": [
+     "tl_against",
+     "tl_aligned",
+     "tl_break_now",
+     "tl_support"
+    ]
+   },
    "watch": [
     {
      "tf": "4h",
@@ -3134,6 +3245,16 @@
       "variants": 4,
       "positive_all3": []
      }
+    ]
+   },
+   "trendline": {
+    "tests": 4,
+    "passed_all3": [],
+    "features": [
+     "tl_against",
+     "tl_aligned",
+     "tl_break_now",
+     "tl_support"
     ]
    },
    "watch": []
@@ -3436,6 +3557,16 @@
      }
     ]
    },
+   "trendline": {
+    "tests": 20,
+    "passed_all3": [],
+    "features": [
+     "tl_against",
+     "tl_aligned",
+     "tl_break_now",
+     "tl_support"
+    ]
+   },
    "watch": []
   },
   "N13_3OUTSIDE": {
@@ -3676,6 +3807,16 @@
      }
     ]
    },
+   "trendline": {
+    "tests": 16,
+    "passed_all3": [],
+    "features": [
+     "tl_against",
+     "tl_aligned",
+     "tl_break_now",
+     "tl_support"
+    ]
+   },
    "watch": []
   },
   "N14_ICHI_RSI": {
@@ -3809,6 +3950,11 @@
      }
     ]
    },
+   "trendline": {
+    "tests": 0,
+    "passed_all3": [],
+    "features": []
+   },
    "watch": []
   },
   "N15_KC_AO": {
@@ -3932,6 +4078,11 @@
       "positive_all3": []
      }
     ]
+   },
+   "trendline": {
+    "tests": 0,
+    "passed_all3": [],
+    "features": []
    },
    "watch": []
   },
@@ -4233,6 +4384,16 @@
      }
     ]
    },
+   "trendline": {
+    "tests": 20,
+    "passed_all3": [],
+    "features": [
+     "tl_against",
+     "tl_aligned",
+     "tl_break_now",
+     "tl_support"
+    ]
+   },
    "watch": []
   },
   "N17_KC_RSI": {
@@ -4477,6 +4638,16 @@
       "variants": 4,
       "positive_all3": []
      }
+    ]
+   },
+   "trendline": {
+    "tests": 20,
+    "passed_all3": [],
+    "features": [
+     "tl_against",
+     "tl_aligned",
+     "tl_break_now",
+     "tl_support"
     ]
    },
    "watch": []
@@ -4779,6 +4950,16 @@
      }
     ]
    },
+   "trendline": {
+    "tests": 20,
+    "passed_all3": [],
+    "features": [
+     "tl_against",
+     "tl_aligned",
+     "tl_break_now",
+     "tl_support"
+    ]
+   },
    "watch": []
   },
   "N19_FIB_CHOP": {
@@ -5079,6 +5260,16 @@
      }
     ]
    },
+   "trendline": {
+    "tests": 20,
+    "passed_all3": [],
+    "features": [
+     "tl_against",
+     "tl_aligned",
+     "tl_break_now",
+     "tl_support"
+    ]
+   },
    "watch": []
   },
   "N20_EMA9_CHOP": {
@@ -5295,6 +5486,16 @@
      }
     ]
    },
+   "trendline": {
+    "tests": 20,
+    "passed_all3": [],
+    "features": [
+     "tl_against",
+     "tl_aligned",
+     "tl_break_now",
+     "tl_support"
+    ]
+   },
    "watch": []
   },
   "N21_ST_RSI_ADX": {
@@ -5413,6 +5614,11 @@
       "positive_all3": []
      }
     ]
+   },
+   "trendline": {
+    "tests": 0,
+    "passed_all3": [],
+    "features": []
    },
    "watch": []
   },
@@ -5714,6 +5920,16 @@
      }
     ]
    },
+   "trendline": {
+    "tests": 20,
+    "passed_all3": [],
+    "features": [
+     "tl_against",
+     "tl_aligned",
+     "tl_break_now",
+     "tl_support"
+    ]
+   },
    "watch": []
   },
   "N23_HA_ST": {
@@ -5990,6 +6206,16 @@
      }
     ]
    },
+   "trendline": {
+    "tests": 20,
+    "passed_all3": [],
+    "features": [
+     "tl_against",
+     "tl_aligned",
+     "tl_break_now",
+     "tl_support"
+    ]
+   },
    "watch": []
   },
   "N24_DMI": {
@@ -6228,6 +6454,16 @@
       "variants": 4,
       "positive_all3": []
      }
+    ]
+   },
+   "trendline": {
+    "tests": 20,
+    "passed_all3": [],
+    "features": [
+     "tl_against",
+     "tl_aligned",
+     "tl_break_now",
+     "tl_support"
     ]
    },
    "watch": []
@@ -6530,6 +6766,16 @@
      }
     ]
    },
+   "trendline": {
+    "tests": 20,
+    "passed_all3": [],
+    "features": [
+     "tl_against",
+     "tl_aligned",
+     "tl_break_now",
+     "tl_support"
+    ]
+   },
    "watch": []
   },
   "OBV_B": {
@@ -6828,6 +7074,16 @@
       "variants": 4,
       "positive_all3": []
      }
+    ]
+   },
+   "trendline": {
+    "tests": 20,
+    "passed_all3": [],
+    "features": [
+     "tl_against",
+     "tl_aligned",
+     "tl_break_now",
+     "tl_support"
     ]
    },
    "watch": []
@@ -7135,6 +7391,16 @@
      }
     ]
    },
+   "trendline": {
+    "tests": 20,
+    "passed_all3": [],
+    "features": [
+     "tl_against",
+     "tl_aligned",
+     "tl_break_now",
+     "tl_support"
+    ]
+   },
    "watch": []
   },
   "S1_EMA_RSI_CHOP": {
@@ -7262,6 +7528,11 @@
       "positive_all3": []
      }
     ]
+   },
+   "trendline": {
+    "tests": 0,
+    "passed_all3": [],
+    "features": []
    },
    "watch": []
   },
@@ -7539,6 +7810,16 @@
      }
     ]
    },
+   "trendline": {
+    "tests": 20,
+    "passed_all3": [],
+    "features": [
+     "tl_against",
+     "tl_aligned",
+     "tl_break_now",
+     "tl_support"
+    ]
+   },
    "watch": []
   },
   "S3_CMO_SANDWICH": {
@@ -7801,6 +8082,16 @@
       "variants": 4,
       "positive_all3": []
      }
+    ]
+   },
+   "trendline": {
+    "tests": 16,
+    "passed_all3": [],
+    "features": [
+     "tl_against",
+     "tl_aligned",
+     "tl_break_now",
+     "tl_support"
     ]
    },
    "watch": []
@@ -8103,6 +8394,16 @@
      }
     ]
    },
+   "trendline": {
+    "tests": 20,
+    "passed_all3": [],
+    "features": [
+     "tl_against",
+     "tl_aligned",
+     "tl_break_now",
+     "tl_support"
+    ]
+   },
    "watch": []
   },
   "S5_DONCHIAN_MFI": {
@@ -8339,6 +8640,16 @@
       "variants": 4,
       "positive_all3": []
      }
+    ]
+   },
+   "trendline": {
+    "tests": 12,
+    "passed_all3": [],
+    "features": [
+     "tl_against",
+     "tl_aligned",
+     "tl_break_now",
+     "tl_support"
     ]
    },
    "watch": []
@@ -8639,6 +8950,16 @@
       "variants": 4,
       "positive_all3": []
      }
+    ]
+   },
+   "trendline": {
+    "tests": 20,
+    "passed_all3": [],
+    "features": [
+     "tl_against",
+     "tl_aligned",
+     "tl_break_now",
+     "tl_support"
     ]
    },
    "watch": []
@@ -8950,6 +9271,16 @@
      }
     ]
    },
+   "trendline": {
+    "tests": 20,
+    "passed_all3": [],
+    "features": [
+     "tl_against",
+     "tl_aligned",
+     "tl_break_now",
+     "tl_support"
+    ]
+   },
    "watch": [
     {
      "tf": "4h",
@@ -9253,6 +9584,16 @@
       "variants": 4,
       "positive_all3": []
      }
+    ]
+   },
+   "trendline": {
+    "tests": 20,
+    "passed_all3": [],
+    "features": [
+     "tl_against",
+     "tl_aligned",
+     "tl_break_now",
+     "tl_support"
     ]
    },
    "watch": []

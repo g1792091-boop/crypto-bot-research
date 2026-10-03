@@ -572,7 +572,7 @@ function renderRoomSide() {
         ${esc(NEWLAB_MAX_TESTS.toLocaleString("ko-KR"))}번째 시험 뒤에는 어떤 시험도 통과할 수 없어 연구실이 시험을 멈춥니다. 통과하면 코드가 새 paper 계좌를 제안하고
         (위 '두 분 확인이 필요한 제안'), 두 분이 승인해야 시작합니다(동시에 10개까지). 관찰 기간에는 제안하지 않습니다.</div>` : ""}
       ${trials.research && trials.research.total ? `<div class="hint">연구에서 같은 5년 자료로 이미 한 시험 ${esc(trials.research.total.toLocaleString("ko-KR"))}건
-        (지지·저항 ${esc(trials.research.support_resistance)}, 진입 수치 ${esc(trials.research.entry_strength)}, 파라미터 ${esc(trials.research.parameters)}): 효과가 확인된 것은 없습니다. 직원 자료에 요약이 들어갑니다.</div>` : ""}
+        (지지·저항 ${esc(trials.research.support_resistance)}, 진입 수치 ${esc(trials.research.entry_strength)}, 파라미터 ${esc(trials.research.parameters)}${trials.research.trendline ? `, 추세선 ${esc(trials.research.trendline)}` : ""}): 효과가 확인된 것은 없습니다. 직원 자료에 요약이 들어갑니다.</div>` : ""}
       ${trials.scorecard && trials.scorecard.total ? `<div class="hint">가설 채점: 맞음 ${esc(trials.scorecard.total.correct)} / 채점 ${esc(trials.scorecard.total.graded)}
         · 기다리는 중 ${esc(trials.scorecard.total.waiting)}${trials.scorecard.roles.filter((r) => r.graded).map((r) =>
           ` · ${esc(r.name || "직원")} ${esc(r.correct)}/${esc(r.graded)}`).join("")}</div>` : ""}

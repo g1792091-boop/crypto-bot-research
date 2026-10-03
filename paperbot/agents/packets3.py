@@ -306,7 +306,7 @@ def research_prior(strategy: str, path: str = RESEARCH_PRIOR) -> Optional[dict]:
 
 
 def research_counts(strategy: Optional[str] = None, path: str = RESEARCH_PRIOR) -> dict:
-    """{'support_resistance': n, 'entry_strength': n, 'parameters': n, 'total': n} of the entry study,
+    """{'support_resistance': n, 'entry_strength': n, 'parameters': n, 'trendline': n, 'total': n} of the entry studies,
     for one strategy or all. Shown next to the room ledger; not in a room's gate divisor (a separate,
     pre-registered family that found nothing, docs/agent-rooms.md)."""
     doc = research_doc(path) or {"strategies": {}}
@@ -314,7 +314,8 @@ def research_counts(strategy: Optional[str] = None, path: str = RESEARCH_PRIOR) 
         ([] if strategy else list(doc["strategies"].values()))
     out = {"support_resistance": sum(r["support_resistance"]["tests"] for r in rows),
            "entry_strength": sum(r["entry_strength"]["tests"] for r in rows),
-           "parameters": sum(r["parameters"]["variants"] for r in rows)}
+           "parameters": sum(r["parameters"]["variants"] for r in rows),
+           "trendline": sum((r.get("trendline") or {}).get("tests", 0) for r in rows)}
     out["total"] = sum(out.values())
     return out
 

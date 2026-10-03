@@ -1,0 +1,6 @@
+{
+ "note": "PREREG_TRENDLINE.md sections 6 and 7, candidates only. Not part of the 600-test family; the trial ledger lists them separately as checks (trendline_trials_checks.csv).",
+ "candidates": 0,
+ "checks": [],
+ "binance_trials": "research/entry_study/out_binance/trendline_trials.csv"
+}

@@ -9,9 +9,10 @@ from paperbot.strategy_view_defs import NAMES
 def test_every_strategy_has_its_summary_and_the_totals_match_the_study():
     doc = P.research_doc()
     assert set(doc["strategies"]) == set(NAMES)
-    assert doc["totals"] == {"support_resistance": 290, "entry_strength": 410, "parameters": 1680}
-    assert P.research_counts() == {**doc["totals"], "total": 2380}
-    assert sum(P.research_counts(s)["total"] for s in NAMES) == 2380
+    # the trendline study (2026-10-03): 580 strategy-cell tests (its 20 random-entry tests are a baseline of none)
+    assert doc["totals"] == {"support_resistance": 290, "entry_strength": 410, "parameters": 1680, "trendline": 580}
+    assert P.research_counts() == {**doc["totals"], "total": 2960}
+    assert sum(P.research_counts(s)["total"] for s in NAMES) == 2960
     assert P.research_counts("NOPE")["total"] == 0 and P.research_prior("NOPE") is None
 
 
@@ -21,6 +22,7 @@ def test_the_summary_says_what_passed_and_what_to_watch():
     assert passed == {"N04_ST_KLINGER", "N17_KC_RSI"}          # both market-wide (random entries show it too)
     assert all("시장 전체" in c["note"] for k in passed for c in s[k]["support_resistance"]["passed_all3"])
     assert all(v["entry_strength"]["passed_all3"] == 0 and v["parameters"]["adopted"] == 0 for v in s.values())
+    assert all(v["trendline"]["passed_all3"] == [] for v in s.values()) and "추세선" in s["DOGE"]["conclusion_ko"]
     assert {(k, w["tf"]) for k, v in s.items() for w in v["watch"]} == {("V39_ALL", "4h"), ("N10_HA_PSAR", "4h")}
     shapes = {p["shape"] for v in s.values() for p in v["parameters"]["params"]}
     assert "spiky" not in shapes and shapes <= {"flat", "smooth", "insufficient"}

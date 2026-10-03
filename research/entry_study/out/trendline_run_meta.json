@@ -1,0 +1,3491 @@
+{
+ "script": "research/entry_study/analysis_trendline.py",
+ "git_head": "dbb482313aec15fde7323b9b934230d89f265b92",
+ "prereg_sha256_file": "f2bf70403d8efae26d4d15fb5b97c7c1e099c7bb31635d65eda4b8d3f232e0c3",
+ "prereg_sha256_now": "f2bf70403d8efae26d4d15fb5b97c7c1e099c7bb31635d65eda4b8d3f232e0c3",
+ "prereg_hash_ok": true,
+ "prereg_commit": "7f0d8afaea5330fa84a5d59d65cbf97b0752d011 2026-10-03T13:32:50+00:00 Pre-register the trendline entry study",
+ "signal_lock": "bd23a449bd3fcb54a977c3b0ee97abe9582242c2f6418caa3e20d701c3a3544c",
+ "code_sha256": {
+  "research/entry_study/trendline.py": "b6ab42e777b2ffcd3c9b123c58f0c6c91ea6bce7290a9be76bdfc81ec30621ef",
+  "research/entry_study/analysis_trendline.py": "88c39cf2069e80ee14c84e56249b3391dd976ab5cbfcb6937deaa2ef7aece6ae",
+  "tests/test_entry_trendline.py": "b03eb8edd2e4de9eca2756bc66db452a108b03a7f85c9ba49cc99f2160653193"
+ },
+ "code_lock_file": "research/entry_study/CODE_TRENDLINE.sha256",
+ "code_lock": {
+  "research/entry_study/trendline.py": "b6ab42e777b2ffcd3c9b123c58f0c6c91ea6bce7290a9be76bdfc81ec30621ef",
+  "research/entry_study/analysis_trendline.py": "88c39cf2069e80ee14c84e56249b3391dd976ab5cbfcb6937deaa2ef7aece6ae",
+  "tests/test_entry_trendline.py": "b03eb8edd2e4de9eca2756bc66db452a108b03a7f85c9ba49cc99f2160653193"
+ },
+ "code_lock_ok": true,
+ "params": {
+  "k": 5,
+  "window": 300,
+  "slope_max": 0.5,
+  "delta": 0.25,
+  "eps": 0.25,
+  "near": 2.0,
+  "cap": 10.0
+ },
+ "seeds": {
+  "random_entries": "part A's draw: np.random.default_rng([20260930, tf_minutes, coin_index (BTC,ETH,SOL,DOGE,LTC,BCH = 0..5), period]); choice then side",
+  "bootstrap": "np.random.default_rng([20261003, unit_code (account-list index 0..35, random 1000, all strategies 1001), tf_index (5m..4h = 0..4), period]); rng.integers(0, W, (B, W)); B = {1: 10000, 2: 2000, 3: 2000}; the four tests of one unit and period share the draws"
+ },
+ "constants": {
+  "periods": {
+   "1": [
+    "2021-08-01",
+    "2024-07-01"
+   ],
+   "2": [
+    "2024-07-01",
+    "2026-09-30"
+   ],
+   "3": [
+    "2020-01-01",
+    "2021-08-01"
+   ]
+  },
+  "random_n": 20000,
+  "bootstrap_resamples": {
+   "1": 10000,
+   "2": 2000,
+   "3": 2000
+  },
+  "min_signals": 300,
+  "min_group": 30,
+  "fdr_q": 0.1,
+  "confirm_alpha": 0.05,
+  "lookahead_passes": [
+   64,
+   512,
+   4096,
+   32768
+  ],
+  "first_lock_roe": 0.12000000000000001,
+  "tests": {
+   "T1": "tl_break_now",
+   "T2": "tl_against",
+   "T3": "tl_support",
+   "T4": "tl_aligned"
+  },
+  "good_group": {
+   "T1": 1,
+   "T2": 0,
+   "T3": 1,
+   "T4": 1
+  },
+  "proposal": {
+   "min_effect": 0.005,
+   "min_good_trades": {
+    "1": 300,
+    "2": 100
+   },
+   "lev_min_group": 10,
+   "coin_min_group": 30
+  }
+ },
+ "data": {
+  "periods_1_2": "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/paper_rules/signals",
+  "period_3": "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/entry_study/signals_pre2021",
+  "cache": "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/entry_study/cache_trendline",
+  "tfs": [
+   "5m",
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ]
+ },
+ "timings": {
+  "stage1": 68.4,
+  "stage2_tests_s": 12.5,
+  "stage2_cells_s": 0.8,
+  "stage2_total_s": 18.3
+ },
+ "row_counts": {
+  "trendline_cells": 180,
+  "trendline_trials": 600,
+  "trendline_random": 105,
+  "stage1_counts": 3420,
+  "stage1_week_rows": 250171,
+  "stage1_desc_rows": 9945
+ },
+ "headline": {
+  "cells_tested": 145,
+  "trials": 600,
+  "insufficient_in_period1": 35,
+  "bh_survivors_period1": 0,
+  "passing_period2": 0,
+  "passing_period3": 0,
+  "candidates": 0
+ },
+ "ambiguities": [
+  "File names: the PREREG names the analysis script analysis_tl.py and the outputs tl_*.csv / tl_*.json; the task that implemented it asked for analysis_trendline.py and trendline_*.csv / *.json. Same content.",
+  "A missing ATR makes a candidate A fail (comparisons with NaN are false), so a line needing it is 'none' (PREREG 2-2 item 4); a signal bar with a missing or non-positive ATR has no features and no trade.",
+  "A*(B) is searched once per swing low B among A >= B - 294 (an older A can never be inside the 300-bar window of a bar that can use B since i >= B + 5); the line of bar i is (A*(B), B) when A*(B) >= i - 299. This equals the PREREG's scan from the most recent A back, because the conditions on A do not depend on i.",
+  "The break tolerance delta (0.25 ATR) is used in all three 'close beyond the line' rules: between A and B, the break after B, and the close part of a touch; eps (0.25 ATR) is only the touch distance of the low / high. The sensitivity variants 'break margin 0.1 / 0.5' change delta in all three places.",
+  "tl_break_now / tl_break_3 / tl_break_10 use the line in use at bar i (the PREREG's 'line of that bar'): a break of an older line that was replaced by a newer swing is not counted. tl_break_now does not require the line to be live at i - 1 beyond 'first break bar = i' (the first break bar is by definition the first).",
+  "Clipping: a live ahead / behind line can be up to 0.25 ATR on the wrong side of the close (not yet broken); tl_ahead / tl_behind are then clipped to 0 (PREREG: clipped to 0..10).",
+  "Trade counts use the traded outcome of analysis_sr.outcomes (paper v3, profiles._scan, sizing with atr / next-bar open); 'sized and closed before the data ends' trades only, as in part A.",
+  "Bootstrap: the W weeks with >= 1 trade of the unit and period (pooled coins) are resampled W times; a resample leaving a group empty counts as <= 0; the four tests of one unit and period share the draws; period 1 uses 10,000 resamples, periods 2 / 3 use 2,000.",
+  "The family (BH, period 1) holds every tested cell's four tests plus the random entries' four tests of each timeframe; 'insufficient' tests enter with p = 1. Period 2 / 3 rules are the same for cells and random tests.",
+  "'Market-wide' label (strategy-cell candidates) = random entries of the same timeframe with the same-sign period-1 difference and unadjusted one-sided p < 0.05 (10,000 resamples), as part A.",
+  "Leverage tiers (section 6 (2)): tiers = the distinct traded leverages (20 / 30 / 40 / 50x); a tier enters when both groups have >= 10 trades; the weighted average uses the tier's trade count (both groups).",
+  "Coin majority (section 6 (5)): among the coins with >= 30 trades in both groups in period 1, the number of coins whose difference has the candidate's sign must be more than half of them.",
+  "Descriptive 'strategies pooled' counts a bar and side once per strategy that signalled it (as part A); 'first lock reached' = best net ROE (as in _scan, after costs and funding) >= 12% before the exit.",
+  "Periods 1 / 2 look back into the cached bars before 2021-08-01 (300-bar window = 50 days on 4h); the cache's DOGE bars before 2021-07 are known to be corrupted (part A, section 1). Not altered; the candidate checks report period 1 without DOGE's 2021-08 signals."
+ ],
+ "skipped": {
+  "cells_not_tested": [
+   {
+    "strategy": "S5_DONCHIAN_MFI",
+    "tf": "1h",
+    "n_signals_p1": 297
+   },
+   {
+    "strategy": "S5_DONCHIAN_MFI",
+    "tf": "4h",
+    "n_signals_p1": 57
+   },
+   {
+    "strategy": "N03_ADX_GC",
+    "tf": "30m",
+    "n_signals_p1": 282
+   },
+   {
+    "strategy": "N03_ADX_GC",
+    "tf": "1h",
+    "n_signals_p1": 156
+   },
+   {
+    "strategy": "N03_ADX_GC",
+    "tf": "4h",
+    "n_signals_p1": 25
+   },
+   {
+    "strategy": "N08_ICHI_WR",
+    "tf": "1h",
+    "n_signals_p1": 256
+   },
+   {
+    "strategy": "N08_ICHI_WR",
+    "tf": "4h",
+    "n_signals_p1": 56
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "5m",
+    "n_signals_p1": 3
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "15m",
+    "n_signals_p1": 2
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "30m",
+    "n_signals_p1": 5
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "1h",
+    "n_signals_p1": 3
+   },
+   {
+    "strategy": "N14_ICHI_RSI",
+    "tf": "4h",
+    "n_signals_p1": 2
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "5m",
+    "n_signals_p1": 0
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "15m",
+    "n_signals_p1": 0
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "30m",
+    "n_signals_p1": 0
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "1h",
+    "n_signals_p1": 1
+   },
+   {
+    "strategy": "N21_ST_RSI_ADX",
+    "tf": "4h",
+    "n_signals_p1": 0
+   },
+   {
+    "strategy": "S1_EMA_RSI_CHOP",
+    "tf": "5m",
+    "n_signals_p1": 235
+   },
+   {
+    "strategy": "S1_EMA_RSI_CHOP",
+    "tf": "15m",
+    "n_signals_p1": 103
+   },
+   {
+    "strategy": "S1_EMA_RSI_CHOP",
+    "tf": "30m",
+    "n_signals_p1": 68
+   },
+   {
+    "strategy": "S1_EMA_RSI_CHOP",
+    "tf": "1h",
+    "n_signals_p1": 42
+   },
+   {
+    "strategy": "S1_EMA_RSI_CHOP",
+    "tf": "4h",
+    "n_signals_p1": 10
+   },
+   {
+    "strategy": "S3_CMO_SANDWICH",
+    "tf": "4h",
+    "n_signals_p1": 239
+   },
+   {
+    "strategy": "N05_PSAR_POC",
+    "tf": "4h",
+    "n_signals_p1": 268
+   },
+   {
+    "strategy": "N11_BREAKAWAY",
+    "tf": "15m",
+    "n_signals_p1": 241
+   },
+   {
+    "strategy": "N11_BREAKAWAY",
+    "tf": "30m",
+    "n_signals_p1": 145
+   },
+   {
+    "strategy": "N11_BREAKAWAY",
+    "tf": "1h",
+    "n_signals_p1": 65
+   },
+   {
+    "strategy": "N11_BREAKAWAY",
+    "tf": "4h",
+    "n_signals_p1": 19
+   },
+   {
+    "strategy": "N13_3OUTSIDE",
+    "tf": "4h",
+    "n_signals_p1": 226
+   },
+   {
+    "strategy": "N15_KC_AO",
+    "tf": "5m",
+    "n_signals_p1": 123
+   },
+   {
+    "strategy": "N15_KC_AO",
+    "tf": "15m",
+    "n_signals_p1": 63
+   },
+   {
+    "strategy": "N15_KC_AO",
+    "tf": "30m",
+    "n_signals_p1": 45
+   },
+   {
+    "strategy": "N15_KC_AO",
+    "tf": "1h",
+    "n_signals_p1": 19
+   },
+   {
+    "strategy": "N15_KC_AO",
+    "tf": "4h",
+    "n_signals_p1": 3
+   },
+   {
+    "strategy": "DOGE",
+    "tf": "4h",
+    "n_signals_p1": 0
+   }
+  ],
+  "tests_insufficient": [
+   {
+    "trial_id": "TL-S2_ST_ROC-4h-T1",
+    "period": 3,
+    "n0": 114,
+    "n1": 5
+   },
+   {
+    "trial_id": "TL-S5_DONCHIAN_MFI-15m-T2",
+    "period": 3,
+    "n0": 378,
+    "n1": 20
+   },
+   {
+    "trial_id": "TL-S5_DONCHIAN_MFI-15m-T3",
+    "period": 3,
+    "n0": 379,
+    "n1": 19
+   },
+   {
+    "trial_id": "TL-S5_DONCHIAN_MFI-30m-T2",
+    "period": 3,
+    "n0": 138,
+    "n1": 7
+   },
+   {
+    "trial_id": "TL-S5_DONCHIAN_MFI-30m-T3",
+    "period": 3,
+    "n0": 142,
+    "n1": 3
+   },
+   {
+    "trial_id": "TL-S6_EMA_DMI_ADX-4h-T1",
+    "period": 1,
+    "n0": 28,
+    "n1": 14
+   },
+   {
+    "trial_id": "TL-S6_EMA_DMI_ADX-4h-T1",
+    "period": 2,
+    "n0": 43,
+    "n1": 8
+   },
+   {
+    "trial_id": "TL-S6_EMA_DMI_ADX-4h-T1",
+    "period": 3,
+    "n0": 6,
+    "n1": 1
+   },
+   {
+    "trial_id": "TL-S6_EMA_DMI_ADX-4h-T2",
+    "period": 1,
+    "n0": 30,
+    "n1": 12
+   },
+   {
+    "trial_id": "TL-S6_EMA_DMI_ADX-4h-T2",
+    "period": 2,
+    "n0": 38,
+    "n1": 13
+   },
+   {
+    "trial_id": "TL-S6_EMA_DMI_ADX-4h-T2",
+    "period": 3,
+    "n0": 4,
+    "n1": 3
+   },
+   {
+    "trial_id": "TL-S6_EMA_DMI_ADX-4h-T3",
+    "period": 1,
+    "n0": 35,
+    "n1": 7
+   },
+   {
+    "trial_id": "TL-S6_EMA_DMI_ADX-4h-T3",
+    "period": 2,
+    "n0": 39,
+    "n1": 12
+   },
+   {
+    "trial_id": "TL-S6_EMA_DMI_ADX-4h-T3",
+    "period": 3,
+    "n0": 6,
+    "n1": 1
+   },
+   {
+    "trial_id": "TL-S6_EMA_DMI_ADX-4h-T4",
+    "period": 1,
+    "n0": 21,
+    "n1": 21
+   },
+   {
+    "trial_id": "TL-S6_EMA_DMI_ADX-4h-T4",
+    "period": 2,
+    "n0": 32,
+    "n1": 19
+   },
+   {
+    "trial_id": "TL-S6_EMA_DMI_ADX-4h-T4",
+    "period": 3,
+    "n0": 4,
+    "n1": 3
+   },
+   {
+    "trial_id": "TL-N01_ST_EMA-4h-T1",
+    "period": 2,
+    "n0": 159,
+    "n1": 25
+   },
+   {
+    "trial_id": "TL-N01_ST_EMA-4h-T1",
+    "period": 3,
+    "n0": 36,
+    "n1": 9
+   },
+   {
+    "trial_id": "TL-N01_ST_EMA-4h-T2",
+    "period": 3,
+    "n0": 25,
+    "n1": 20
+   },
+   {
+    "trial_id": "TL-N01_ST_EMA-4h-T3",
+    "period": 3,
+    "n0": 25,
+    "n1": 20
+   },
+   {
+    "trial_id": "TL-N01_ST_EMA-4h-T4",
+    "period": 3,
+    "n0": 28,
+    "n1": 17
+   },
+   {
+    "trial_id": "TL-N02_ST_KST-4h-T1",
+    "period": 1,
+    "n0": 152,
+    "n1": 17
+   },
+   {
+    "trial_id": "TL-N02_ST_KST-4h-T1",
+    "period": 2,
+    "n0": 136,
+    "n1": 22
+   },
+   {
+    "trial_id": "TL-N02_ST_KST-4h-T1",
+    "period": 3,
+    "n0": 31,
+    "n1": 1
+   },
+   {
+    "trial_id": "TL-N02_ST_KST-4h-T2",
+    "period": 3,
+    "n0": 21,
+    "n1": 11
+   },
+   {
+    "trial_id": "TL-N02_ST_KST-4h-T3",
+    "period": 3,
+    "n0": 18,
+    "n1": 14
+   },
+   {
+    "trial_id": "TL-N02_ST_KST-4h-T4",
+    "period": 3,
+    "n0": 18,
+    "n1": 14
+   },
+   {
+    "trial_id": "TL-N03_ADX_GC-15m-T1",
+    "period": 1,
+    "n0": 582,
+    "n1": 24
+   },
+   {
+    "trial_id": "TL-N03_ADX_GC-15m-T1",
+    "period": 3,
+    "n0": 212,
+    "n1": 11
+   },
+   {
+    "trial_id": "TL-N03_ADX_GC-15m-T2",
+    "period": 3,
+    "n0": 195,
+    "n1": 28
+   },
+   {
+    "trial_id": "TL-N07_ICHI_CMO-4h-T1",
+    "period": 1,
+    "n0": 90,
+    "n1": 16
+   },
+   {
+    "trial_id": "TL-N07_ICHI_CMO-4h-T1",
+    "period": 2,
+    "n0": 56,
+    "n1": 11
+   },
+   {
+    "trial_id": "TL-N07_ICHI_CMO-4h-T1",
+    "period": 3,
+    "n0": 13,
+    "n1": 4
+   },
+   {
+    "trial_id": "TL-N07_ICHI_CMO-4h-T2",
+    "period": 2,
+    "n0": 41,
+    "n1": 26
+   },
+   {
+    "trial_id": "TL-N07_ICHI_CMO-4h-T2",
+    "period": 3,
+    "n0": 12,
+    "n1": 5
+   },
+   {
+    "trial_id": "TL-N07_ICHI_CMO-4h-T3",
+    "period": 2,
+    "n0": 40,
+    "n1": 27
+   },
+   {
+    "trial_id": "TL-N07_ICHI_CMO-4h-T3",
+    "period": 3,
+    "n0": 10,
+    "n1": 7
+   },
+   {
+    "trial_id": "TL-N07_ICHI_CMO-4h-T4",
+    "period": 3,
+    "n0": 7,
+    "n1": 10
+   },
+   {
+    "trial_id": "TL-N08_ICHI_WR-30m-T1",
+    "period": 3,
+    "n0": 156,
+    "n1": 26
+   },
+   {
+    "trial_id": "TL-N09_ALLIG_AROON-4h-T1",
+    "period": 2,
+    "n0": 60,
+    "n1": 12
+   },
+   {
+    "trial_id": "TL-N09_ALLIG_AROON-4h-T1",
+    "period": 3,
+    "n0": 21,
+    "n1": 4
+   },
+   {
+    "trial_id": "TL-N09_ALLIG_AROON-4h-T2",
+    "period": 1,
+    "n0": 83,
+    "n1": 22
+   },
+   {
+    "trial_id": "TL-N09_ALLIG_AROON-4h-T2",
+    "period": 2,
+    "n0": 51,
+    "n1": 21
+   },
+   {
+    "trial_id": "TL-N09_ALLIG_AROON-4h-T2",
+    "period": 3,
+    "n0": 21,
+    "n1": 4
+   },
+   {
+    "trial_id": "TL-N09_ALLIG_AROON-4h-T3",
+    "period": 2,
+    "n0": 47,
+    "n1": 25
+   },
+   {
+    "trial_id": "TL-N09_ALLIG_AROON-4h-T3",
+    "period": 3,
+    "n0": 20,
+    "n1": 5
+   },
+   {
+    "trial_id": "TL-N09_ALLIG_AROON-4h-T4",
+    "period": 3,
+    "n0": 9,
+    "n1": 16
+   },
+   {
+    "trial_id": "TL-N10_HA_PSAR-4h-T1",
+    "period": 3,
+    "n0": 22,
+    "n1": 11
+   },
+   {
+    "trial_id": "TL-N10_HA_PSAR-4h-T2",
+    "period": 3,
+    "n0": 24,
+    "n1": 9
+   },
+   {
+    "trial_id": "TL-N10_HA_PSAR-4h-T3",
+    "period": 3,
+    "n0": 24,
+    "n1": 9
+   },
+   {
+    "trial_id": "TL-N10_HA_PSAR-4h-T4",
+    "period": 3,
+    "n0": 18,
+    "n1": 15
+   },
+   {
+    "trial_id": "TL-N12_ICHI_AO-4h-T1",
+    "period": 1,
+    "n0": 93,
+    "n1": 10
+   },
+   {
+    "trial_id": "TL-N12_ICHI_AO-4h-T1",
+    "period": 2,
+    "n0": 72,
+    "n1": 11
+   },
+   {
+    "trial_id": "TL-N12_ICHI_AO-4h-T1",
+    "period": 3,
+    "n0": 17,
+    "n1": 1
+   },
+   {
+    "trial_id": "TL-N12_ICHI_AO-4h-T2",
+    "period": 1,
+    "n0": 75,
+    "n1": 28
+   },
+   {
+    "trial_id": "TL-N12_ICHI_AO-4h-T2",
+    "period": 2,
+    "n0": 60,
+    "n1": 23
+   },
+   {
+    "trial_id": "TL-N12_ICHI_AO-4h-T2",
+    "period": 3,
+    "n0": 11,
+    "n1": 7
+   },
+   {
+    "trial_id": "TL-N12_ICHI_AO-4h-T3",
+    "period": 2,
+    "n0": 66,
+    "n1": 17
+   },
+   {
+    "trial_id": "TL-N12_ICHI_AO-4h-T3",
+    "period": 3,
+    "n0": 9,
+    "n1": 9
+   },
+   {
+    "trial_id": "TL-N12_ICHI_AO-4h-T4",
+    "period": 3,
+    "n0": 9,
+    "n1": 9
+   },
+   {
+    "trial_id": "TL-N17_KC_RSI-1h-T1",
+    "period": 3,
+    "n0": 4604,
+    "n1": 14
+   },
+   {
+    "trial_id": "TL-N17_KC_RSI-4h-T1",
+    "period": 1,
+    "n0": 743,
+    "n1": 2
+   },
+   {
+    "trial_id": "TL-N17_KC_RSI-4h-T1",
+    "period": 2,
+    "n0": 585,
+    "n1": 5
+   },
+   {
+    "trial_id": "TL-N17_KC_RSI-4h-T1",
+    "period": 3,
+    "n0": 130,
+    "n1": 1
+   },
+   {
+    "trial_id": "TL-N17_KC_RSI-4h-T2",
+    "period": 3,
+    "n0": 115,
+    "n1": 16
+   },
+   {
+    "trial_id": "TL-N17_KC_RSI-4h-T3",
+    "period": 2,
+    "n0": 569,
+    "n1": 21
+   },
+   {
+    "trial_id": "TL-N17_KC_RSI-4h-T3",
+    "period": 3,
+    "n0": 111,
+    "n1": 20
+   },
+   {
+    "trial_id": "TL-N17_KC_RSI-4h-T4",
+    "period": 1,
+    "n0": 735,
+    "n1": 10
+   },
+   {
+    "trial_id": "TL-N17_KC_RSI-4h-T4",
+    "period": 2,
+    "n0": 586,
+    "n1": 4
+   },
+   {
+    "trial_id": "TL-N17_KC_RSI-4h-T4",
+    "period": 3,
+    "n0": 125,
+    "n1": 6
+   },
+   {
+    "trial_id": "TL-N18_VWMA_MACD-4h-T1",
+    "period": 3,
+    "n0": 78,
+    "n1": 8
+   },
+   {
+    "trial_id": "TL-N18_VWMA_MACD-4h-T2",
+    "period": 3,
+    "n0": 60,
+    "n1": 26
+   },
+   {
+    "trial_id": "TL-N22_VORTEX_PSAR-4h-T1",
+    "period": 3,
+    "n0": 68,
+    "n1": 16
+   },
+   {
+    "trial_id": "TL-N23_HA_ST-4h-T1",
+    "period": 3,
+    "n0": 106,
+    "n1": 27
+   },
+   {
+    "trial_id": "TL-N24_DMI-4h-T1",
+    "period": 1,
+    "n0": 220,
+    "n1": 29
+   },
+   {
+    "trial_id": "TL-N24_DMI-4h-T1",
+    "period": 2,
+    "n0": 218,
+    "n1": 26
+   },
+   {
+    "trial_id": "TL-N24_DMI-4h-T1",
+    "period": 3,
+    "n0": 41,
+    "n1": 5
+   },
+   {
+    "trial_id": "TL-N24_DMI-4h-T2",
+    "period": 3,
+    "n0": 24,
+    "n1": 22
+   },
+   {
+    "trial_id": "TL-N24_DMI-4h-T3",
+    "period": 3,
+    "n0": 27,
+    "n1": 19
+   },
+   {
+    "trial_id": "TL-N24_DMI-4h-T4",
+    "period": 3,
+    "n0": 31,
+    "n1": 15
+   },
+   {
+    "trial_id": "TL-N25_DST_CCI-4h-T1",
+    "period": 1,
+    "n0": 249,
+    "n1": 17
+   },
+   {
+    "trial_id": "TL-N25_DST_CCI-4h-T1",
+    "period": 2,
+    "n0": 242,
+    "n1": 9
+   },
+   {
+    "trial_id": "TL-N25_DST_CCI-4h-T1",
+    "period": 3,
+    "n0": 56,
+    "n1": 3
+   },
+   {
+    "trial_id": "TL-N25_DST_CCI-4h-T2",
+    "period": 3,
+    "n0": 30,
+    "n1": 29
+   },
+   {
+    "trial_id": "TL-N25_DST_CCI-4h-T3",
+    "period": 3,
+    "n0": 35,
+    "n1": 24
+   },
+   {
+    "trial_id": "TL-N25_DST_CCI-4h-T4",
+    "period": 2,
+    "n0": 235,
+    "n1": 16
+   },
+   {
+    "trial_id": "TL-N25_DST_CCI-4h-T4",
+    "period": 3,
+    "n0": 54,
+    "n1": 5
+   },
+   {
+    "trial_id": "TL-S3_CMO_SANDWICH-1h-T1",
+    "period": 3,
+    "n0": 257,
+    "n1": 15
+   },
+   {
+    "trial_id": "TL-S4_BB_BBP-4h-T1",
+    "period": 3,
+    "n0": 30,
+    "n1": 28
+   },
+   {
+    "trial_id": "TL-S4_BB_BBP-4h-T2",
+    "period": 3,
+    "n0": 51,
+    "n1": 7
+   },
+   {
+    "trial_id": "TL-S4_BB_BBP-4h-T3",
+    "period": 3,
+    "n0": 41,
+    "n1": 17
+   },
+   {
+    "trial_id": "TL-S4_BB_BBP-4h-T4",
+    "period": 3,
+    "n0": 16,
+    "n1": 42
+   },
+   {
+    "trial_id": "TL-N04_ST_KLINGER-4h-T1",
+    "period": 2,
+    "n0": 455,
+    "n1": 26
+   },
+   {
+    "trial_id": "TL-N04_ST_KLINGER-4h-T1",
+    "period": 3,
+    "n0": 134,
+    "n1": 9
+   },
+   {
+    "trial_id": "TL-N05_PSAR_POC-15m-T1",
+    "period": 3,
+    "n0": 1788,
+    "n1": 21
+   },
+   {
+    "trial_id": "TL-N05_PSAR_POC-30m-T1",
+    "period": 1,
+    "n0": 2154,
+    "n1": 25
+   },
+   {
+    "trial_id": "TL-N05_PSAR_POC-30m-T1",
+    "period": 2,
+    "n0": 1740,
+    "n1": 22
+   },
+   {
+    "trial_id": "TL-N05_PSAR_POC-30m-T1",
+    "period": 3,
+    "n0": 740,
+    "n1": 10
+   },
+   {
+    "trial_id": "TL-N05_PSAR_POC-1h-T1",
+    "period": 1,
+    "n0": 921,
+    "n1": 13
+   },
+   {
+    "trial_id": "TL-N05_PSAR_POC-1h-T1",
+    "period": 2,
+    "n0": 780,
+    "n1": 12
+   },
+   {
+    "trial_id": "TL-N05_PSAR_POC-1h-T1",
+    "period": 3,
+    "n0": 257,
+    "n1": 3
+   },
+   {
+    "trial_id": "TL-N06_MACD_ORB-4h-T1",
+    "period": 1,
+    "n0": 80,
+    "n1": 29
+   },
+   {
+    "trial_id": "TL-N06_MACD_ORB-4h-T1",
+    "period": 2,
+    "n0": 63,
+    "n1": 22
+   },
+   {
+    "trial_id": "TL-N06_MACD_ORB-4h-T1",
+    "period": 3,
+    "n0": 15,
+    "n1": 6
+   },
+   {
+    "trial_id": "TL-N06_MACD_ORB-4h-T2",
+    "period": 3,
+    "n0": 14,
+    "n1": 7
+   },
+   {
+    "trial_id": "TL-N06_MACD_ORB-4h-T3",
+    "period": 3,
+    "n0": 15,
+    "n1": 6
+   },
+   {
+    "trial_id": "TL-N06_MACD_ORB-4h-T4",
+    "period": 2,
+    "n0": 56,
+    "n1": 29
+   },
+   {
+    "trial_id": "TL-N06_MACD_ORB-4h-T4",
+    "period": 3,
+    "n0": 14,
+    "n1": 7
+   },
+   {
+    "trial_id": "TL-N11_BREAKAWAY-5m-T1",
+    "period": 1,
+    "n0": 644,
+    "n1": 24
+   },
+   {
+    "trial_id": "TL-N11_BREAKAWAY-5m-T1",
+    "period": 2,
+    "n0": 604,
+    "n1": 17
+   },
+   {
+    "trial_id": "TL-N11_BREAKAWAY-5m-T1",
+    "period": 3,
+    "n0": 464,
+    "n1": 23
+   },
+   {
+    "trial_id": "TL-N11_BREAKAWAY-5m-T4",
+    "period": 1,
+    "n0": 649,
+    "n1": 19
+   },
+   {
+    "trial_id": "TL-N11_BREAKAWAY-5m-T4",
+    "period": 2,
+    "n0": 596,
+    "n1": 25
+   },
+   {
+    "trial_id": "TL-N11_BREAKAWAY-5m-T4",
+    "period": 3,
+    "n0": 468,
+    "n1": 19
+   },
+   {
+    "trial_id": "TL-N16_BBRSI-4h-T1",
+    "period": 1,
+    "n0": 82,
+    "n1": 8
+   },
+   {
+    "trial_id": "TL-N16_BBRSI-4h-T1",
+    "period": 2,
+    "n0": 51,
+    "n1": 7
+   },
+   {
+    "trial_id": "TL-N16_BBRSI-4h-T1",
+    "period": 3,
+    "n0": 13,
+    "n1": 0
+   },
+   {
+    "trial_id": "TL-N16_BBRSI-4h-T2",
+    "period": 2,
+    "n0": 37,
+    "n1": 21
+   },
+   {
+    "trial_id": "TL-N16_BBRSI-4h-T2",
+    "period": 3,
+    "n0": 4,
+    "n1": 9
+   },
+   {
+    "trial_id": "TL-N16_BBRSI-4h-T3",
+    "period": 1,
+    "n0": 76,
+    "n1": 14
+   },
+   {
+    "trial_id": "TL-N16_BBRSI-4h-T3",
+    "period": 2,
+    "n0": 51,
+    "n1": 7
+   },
+   {
+    "trial_id": "TL-N16_BBRSI-4h-T3",
+    "period": 3,
+    "n0": 10,
+    "n1": 3
+   },
+   {
+    "trial_id": "TL-N16_BBRSI-4h-T4",
+    "period": 1,
+    "n0": 82,
+    "n1": 8
+   },
+   {
+    "trial_id": "TL-N16_BBRSI-4h-T4",
+    "period": 2,
+    "n0": 49,
+    "n1": 9
+   },
+   {
+    "trial_id": "TL-N16_BBRSI-4h-T4",
+    "period": 3,
+    "n0": 12,
+    "n1": 1
+   },
+   {
+    "trial_id": "TL-N19_FIB_CHOP-1h-T1",
+    "period": 3,
+    "n0": 191,
+    "n1": 23
+   },
+   {
+    "trial_id": "TL-N19_FIB_CHOP-4h-T1",
+    "period": 1,
+    "n0": 50,
+    "n1": 8
+   },
+   {
+    "trial_id": "TL-N19_FIB_CHOP-4h-T1",
+    "period": 2,
+    "n0": 22,
+    "n1": 3
+   },
+   {
+    "trial_id": "TL-N19_FIB_CHOP-4h-T1",
+    "period": 3,
+    "n0": 2,
+    "n1": 0
+   },
+   {
+    "trial_id": "TL-N19_FIB_CHOP-4h-T2",
+    "period": 1,
+    "n0": 47,
+    "n1": 11
+   },
+   {
+    "trial_id": "TL-N19_FIB_CHOP-4h-T2",
+    "period": 2,
+    "n0": 19,
+    "n1": 6
+   },
+   {
+    "trial_id": "TL-N19_FIB_CHOP-4h-T2",
+    "period": 3,
+    "n0": 2,
+    "n1": 0
+   },
+   {
+    "trial_id": "TL-N19_FIB_CHOP-4h-T3",
+    "period": 1,
+    "n0": 49,
+    "n1": 9
+   },
+   {
+    "trial_id": "TL-N19_FIB_CHOP-4h-T3",
+    "period": 2,
+    "n0": 17,
+    "n1": 8
+   },
+   {
+    "trial_id": "TL-N19_FIB_CHOP-4h-T3",
+    "period": 3,
+    "n0": 2,
+    "n1": 0
+   },
+   {
+    "trial_id": "TL-N19_FIB_CHOP-4h-T4",
+    "period": 1,
+    "n0": 23,
+    "n1": 35
+   },
+   {
+    "trial_id": "TL-N19_FIB_CHOP-4h-T4",
+    "period": 2,
+    "n0": 10,
+    "n1": 15
+   },
+   {
+    "trial_id": "TL-N19_FIB_CHOP-4h-T4",
+    "period": 3,
+    "n0": 0,
+    "n1": 2
+   },
+   {
+    "trial_id": "TL-N20_EMA9_CHOP-4h-T1",
+    "period": 1,
+    "n0": 290,
+    "n1": 24
+   },
+   {
+    "trial_id": "TL-N20_EMA9_CHOP-4h-T1",
+    "period": 2,
+    "n0": 245,
+    "n1": 23
+   },
+   {
+    "trial_id": "TL-N20_EMA9_CHOP-4h-T1",
+    "period": 3,
+    "n0": 66,
+    "n1": 4
+   },
+   {
+    "trial_id": "TL-N20_EMA9_CHOP-4h-T2",
+    "period": 3,
+    "n0": 25,
+    "n1": 45
+   },
+   {
+    "trial_id": "TL-N20_EMA9_CHOP-4h-T4",
+    "period": 3,
+    "n0": 56,
+    "n1": 14
+   },
+   {
+    "trial_id": "TL-V39_ALL-4h-T1",
+    "period": 1,
+    "n0": 194,
+    "n1": 11
+   },
+   {
+    "trial_id": "TL-V39_ALL-4h-T1",
+    "period": 2,
+    "n0": 179,
+    "n1": 5
+   },
+   {
+    "trial_id": "TL-V39_ALL-4h-T1",
+    "period": 3,
+    "n0": 31,
+    "n1": 4
+   },
+   {
+    "trial_id": "TL-V39_ALL-4h-T2",
+    "period": 3,
+    "n0": 15,
+    "n1": 20
+   },
+   {
+    "trial_id": "TL-V39_ALL-4h-T3",
+    "period": 3,
+    "n0": 30,
+    "n1": 5
+   },
+   {
+    "trial_id": "TL-V39_ALL-4h-T4",
+    "period": 1,
+    "n0": 192,
+    "n1": 13
+   },
+   {
+    "trial_id": "TL-V39_ALL-4h-T4",
+    "period": 2,
+    "n0": 166,
+    "n1": 18
+   },
+   {
+    "trial_id": "TL-V39_ALL-4h-T4",
+    "period": 3,
+    "n0": 33,
+    "n1": 2
+   },
+   {
+    "trial_id": "TL-OBV_S-4h-T1",
+    "period": 1,
+    "n0": 78,
+    "n1": 13
+   },
+   {
+    "trial_id": "TL-OBV_S-4h-T1",
+    "period": 2,
+    "n0": 65,
+    "n1": 14
+   },
+   {
+    "trial_id": "TL-OBV_S-4h-T1",
+    "period": 3,
+    "n0": 8,
+    "n1": 6
+   },
+   {
+    "trial_id": "TL-OBV_S-4h-T2",
+    "period": 3,
+    "n0": 10,
+    "n1": 4
+   },
+   {
+    "trial_id": "TL-OBV_S-4h-T3",
+    "period": 3,
+    "n0": 5,
+    "n1": 9
+   },
+   {
+    "trial_id": "TL-OBV_S-4h-T4",
+    "period": 1,
+    "n0": 62,
+    "n1": 29
+   },
+   {
+    "trial_id": "TL-OBV_S-4h-T4",
+    "period": 2,
+    "n0": 55,
+    "n1": 24
+   },
+   {
+    "trial_id": "TL-OBV_S-4h-T4",
+    "period": 3,
+    "n0": 9,
+    "n1": 5
+   },
+   {
+    "trial_id": "TL-OBV_B-4h-T1",
+    "period": 2,
+    "n0": 169,
+    "n1": 23
+   },
+   {
+    "trial_id": "TL-OBV_B-4h-T1",
+    "period": 3,
+    "n0": 27,
+    "n1": 8
+   },
+   {
+    "trial_id": "TL-OBV_B-4h-T2",
+    "period": 3,
+    "n0": 24,
+    "n1": 11
+   },
+   {
+    "trial_id": "TL-OBV_B-4h-T3",
+    "period": 3,
+    "n0": 9,
+    "n1": 26
+   },
+   {
+    "trial_id": "TL-OBV_B-4h-T4",
+    "period": 3,
+    "n0": 23,
+    "n1": 12
+   },
+   {
+    "trial_id": "TL-V45_AMB-30m-T1",
+    "period": 3,
+    "n0": 1075,
+    "n1": 23
+   },
+   {
+    "trial_id": "TL-V45_AMB-1h-T1",
+    "period": 2,
+    "n0": 1178,
+    "n1": 25
+   },
+   {
+    "trial_id": "TL-V45_AMB-1h-T1",
+    "period": 3,
+    "n0": 397,
+    "n1": 3
+   },
+   {
+    "trial_id": "TL-V45_AMB-1h-T4",
+    "period": 3,
+    "n0": 371,
+    "n1": 29
+   },
+   {
+    "trial_id": "TL-V45_AMB-4h-T1",
+    "period": 1,
+    "n0": 58,
+    "n1": 2
+   },
+   {
+    "trial_id": "TL-V45_AMB-4h-T1",
+    "period": 2,
+    "n0": 45,
+    "n1": 2
+   },
+   {
+    "trial_id": "TL-V45_AMB-4h-T1",
+    "period": 3,
+    "n0": 8,
+    "n1": 0
+   },
+   {
+    "trial_id": "TL-V45_AMB-4h-T2",
+    "period": 1,
+    "n0": 38,
+    "n1": 22
+   },
+   {
+    "trial_id": "TL-V45_AMB-4h-T2",
+    "period": 2,
+    "n0": 33,
+    "n1": 14
+   },
+   {
+    "trial_id": "TL-V45_AMB-4h-T2",
+    "period": 3,
+    "n0": 6,
+    "n1": 2
+   },
+   {
+    "trial_id": "TL-V45_AMB-4h-T3",
+    "period": 1,
+    "n0": 26,
+    "n1": 34
+   },
+   {
+    "trial_id": "TL-V45_AMB-4h-T3",
+    "period": 2,
+    "n0": 27,
+    "n1": 20
+   },
+   {
+    "trial_id": "TL-V45_AMB-4h-T3",
+    "period": 3,
+    "n0": 5,
+    "n1": 3
+   },
+   {
+    "trial_id": "TL-V45_AMB-4h-T4",
+    "period": 1,
+    "n0": 49,
+    "n1": 11
+   },
+   {
+    "trial_id": "TL-V45_AMB-4h-T4",
+    "period": 2,
+    "n0": 45,
+    "n1": 2
+   },
+   {
+    "trial_id": "TL-V45_AMB-4h-T4",
+    "period": 3,
+    "n0": 8,
+    "n1": 0
+   },
+   {
+    "trial_id": "TL-DOGE-1h-T1",
+    "period": 3,
+    "n0": 708,
+    "n1": 9
+   }
+  ],
+  "signals_without_trade": {
+   "1": {
+    "signals": 2989593,
+    "atr_or_next_open_invalid": 0,
+    "not_sized": 139094,
+    "open_at_data_end_excluded": 0,
+    "trades": 2850499
+   },
+   "2": {
+    "signals": 2248563,
+    "atr_or_next_open_invalid": 0,
+    "not_sized": 70823,
+    "open_at_data_end_excluded": 126,
+    "trades": 2177614
+   },
+   "3": {
+    "signals": 1363680,
+    "atr_or_next_open_invalid": 0,
+    "not_sized": 141047,
+    "open_at_data_end_excluded": 0,
+    "trades": 1222633
+   }
+  },
+  "random_without_trade": {
+   "1": {
+    "sampled": 518340,
+    "trades": 438097
+   },
+   "2": {
+    "sampled": 507413,
+    "trades": 452921
+   },
+   "3": {
+    "sampled": 435279,
+    "trades": 336506
+   }
+  }
+ },
+ "jobs": [
+  {
+   "tf": "5m",
+   "coin": "BTCUSD",
+   "series": {
+    "p12": {
+     "bars": 560818,
+     "first": "2021-05-30 02:45:00",
+     "last": "2026-09-29 09:35:00",
+     "warmup_bars": 8640,
+     "bounds": {
+      "1": {
+       "lo": 18111,
+       "hi": 324831,
+       "eligible_bars": 306720,
+       "first_signal_bar": "2021-08-01 00:00:00",
+       "last_signal_bar": "2024-06-30 23:55:00"
+      },
+      "2": {
+       "lo": 324831,
+       "hi": 560817,
+       "eligible_bars": 235986,
+       "first_signal_bar": "2024-07-01 00:00:00",
+       "last_signal_bar": "2026-09-29 09:30:00"
+      }
+     },
+     "pairs": 379947,
+     "pairs_atr_ok": 379947,
+     "pairs_sized": 379574,
+     "pairs_open_at_end": 7,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.3,
+      "outcomes": 6.8,
+      "features": 9.4,
+      "aggregate": 2.8
+     }
+    },
+    "p3": {
+     "bars": 175392,
+     "first": "2020-01-01 00:00:00",
+     "last": "2021-08-31 23:55:00",
+     "warmup_bars": 8640,
+     "bounds": {
+      "3": {
+       "lo": 8640,
+       "hi": 166464,
+       "eligible_bars": 157824,
+       "first_signal_bar": "2020-01-31 00:00:00",
+       "last_signal_bar": "2021-07-31 23:55:00"
+      }
+     },
+     "pairs": 122474,
+     "pairs_atr_ok": 122474,
+     "pairs_sized": 121664,
+     "pairs_open_at_end": 0,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.2,
+      "outcomes": 2.2,
+      "features": 2.8,
+      "aggregate": 0.7
+     }
+    }
+   },
+   "seconds": 26.1
+  },
+  {
+   "tf": "5m",
+   "coin": "ETHUSD",
+   "series": {
+    "p12": {
+     "bars": 560816,
+     "first": "2021-05-30 02:45:00",
+     "last": "2026-09-29 09:25:00",
+     "warmup_bars": 8640,
+     "bounds": {
+      "1": {
+       "lo": 18111,
+       "hi": 324831,
+       "eligible_bars": 306720,
+       "first_signal_bar": "2021-08-01 00:00:00",
+       "last_signal_bar": "2024-06-30 23:55:00"
+      },
+      "2": {
+       "lo": 324831,
+       "hi": 560815,
+       "eligible_bars": 235984,
+       "first_signal_bar": "2024-07-01 00:00:00",
+       "last_signal_bar": "2026-09-29 09:20:00"
+      }
+     },
+     "pairs": 390289,
+     "pairs_atr_ok": 390289,
+     "pairs_sized": 389323,
+     "pairs_open_at_end": 4,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 3.0,
+      "outcomes": 9.4,
+      "features": 8.9,
+      "aggregate": 2.0
+     }
+    },
+    "p3": {
+     "bars": 175392,
+     "first": "2020-01-01 00:00:00",
+     "last": "2021-08-31 23:55:00",
+     "warmup_bars": 8640,
+     "bounds": {
+      "3": {
+       "lo": 8640,
+       "hi": 166464,
+       "eligible_bars": 157824,
+       "first_signal_bar": "2020-01-31 00:00:00",
+       "last_signal_bar": "2021-07-31 23:55:00"
+      }
+     },
+     "pairs": 123042,
+     "pairs_atr_ok": 123042,
+     "pairs_sized": 121545,
+     "pairs_open_at_end": 0,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.3,
+      "outcomes": 1.9,
+      "features": 2.3,
+      "aggregate": 0.3
+     }
+    }
+   },
+   "seconds": 28.8
+  },
+  {
+   "tf": "5m",
+   "coin": "SOLUSD",
+   "series": {
+    "p12": {
+     "bars": 560526,
+     "first": "2021-05-29 14:35:00",
+     "last": "2026-09-29 09:25:00",
+     "warmup_bars": 8640,
+     "bounds": {
+      "1": {
+       "lo": 18116,
+       "hi": 324832,
+       "eligible_bars": 306716,
+       "first_signal_bar": "2021-08-01 00:00:00",
+       "last_signal_bar": "2024-06-30 23:55:00"
+      },
+      "2": {
+       "lo": 324832,
+       "hi": 560525,
+       "eligible_bars": 235693,
+       "first_signal_bar": "2024-07-01 00:00:00",
+       "last_signal_bar": "2026-09-29 09:20:00"
+      }
+     },
+     "pairs": 391611,
+     "pairs_atr_ok": 391611,
+     "pairs_sized": 387799,
+     "pairs_open_at_end": 5,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 2.9,
+      "outcomes": 5.3,
+      "features": 12.1,
+      "aggregate": 2.2
+     }
+    },
+    "p3": {
+     "bars": 101292,
+     "first": "2020-09-14 07:00:00",
+     "last": "2021-08-31 23:55:00",
+     "warmup_bars": 8640,
+     "bounds": {
+      "3": {
+       "lo": 8640,
+       "hi": 92364,
+       "eligible_bars": 83724,
+       "first_signal_bar": "2020-10-14 07:00:00",
+       "last_signal_bar": "2021-07-31 23:55:00"
+      }
+     },
+     "pairs": 71771,
+     "pairs_atr_ok": 71771,
+     "pairs_sized": 67494,
+     "pairs_open_at_end": 0,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.3,
+      "outcomes": 0.5,
+      "features": 0.9,
+      "aggregate": 0.6
+     }
+    }
+   },
+   "seconds": 25.9
+  },
+  {
+   "tf": "5m",
+   "coin": "DOGEUSD",
+   "series": {
+    "p12": {
+     "bars": 603677,
+     "first": "2021-01-01 00:00:00",
+     "last": "2026-09-29 09:15:00",
+     "warmup_bars": 8640,
+     "bounds": {
+      "1": {
+       "lo": 61007,
+       "hi": 367726,
+       "eligible_bars": 306719,
+       "first_signal_bar": "2021-08-01 00:00:00",
+       "last_signal_bar": "2024-06-30 23:55:00"
+      },
+      "2": {
+       "lo": 367726,
+       "hi": 603676,
+       "eligible_bars": 235950,
+       "first_signal_bar": "2024-07-01 00:00:00",
+       "last_signal_bar": "2026-09-29 09:10:00"
+      }
+     },
+     "pairs": 391923,
+     "pairs_atr_ok": 391923,
+     "pairs_sized": 388044,
+     "pairs_open_at_end": 10,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 1.7,
+      "outcomes": 8.3,
+      "features": 11.5,
+      "aggregate": 2.3
+     }
+    },
+    "p3": {
+     "bars": 120276,
+     "first": "2020-07-10 09:00:00",
+     "last": "2021-08-31 23:55:00",
+     "warmup_bars": 8640,
+     "bounds": {
+      "3": {
+       "lo": 8640,
+       "hi": 111348,
+       "eligible_bars": 102708,
+       "first_signal_bar": "2020-08-09 09:00:00",
+       "last_signal_bar": "2021-07-31 23:55:00"
+      }
+     },
+     "pairs": 83183,
+     "pairs_atr_ok": 83183,
+     "pairs_sized": 74580,
+     "pairs_open_at_end": 0,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.1,
+      "outcomes": 1.1,
+      "features": 2.4,
+      "aggregate": 0.4
+     }
+    }
+   },
+   "seconds": 28.7
+  },
+  {
+   "tf": "5m",
+   "coin": "LTCUSD",
+   "series": {
+    "p12": {
+     "bars": 560528,
+     "first": "2021-05-30 01:45:00",
+     "last": "2026-09-29 09:30:00",
+     "warmup_bars": 8640,
+     "bounds": {
+      "1": {
+       "lo": 18123,
+       "hi": 324842,
+       "eligible_bars": 306719,
+       "first_signal_bar": "2021-08-01 00:00:00",
+       "last_signal_bar": "2024-06-30 23:55:00"
+      },
+      "2": {
+       "lo": 324842,
+       "hi": 560527,
+       "eligible_bars": 235685,
+       "first_signal_bar": "2024-07-01 00:00:00",
+       "last_signal_bar": "2026-09-29 09:25:00"
+      }
+     },
+     "pairs": 391552,
+     "pairs_atr_ok": 391552,
+     "pairs_sized": 390192,
+     "pairs_open_at_end": 4,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 2.3,
+      "outcomes": 7.1,
+      "features": 8.6,
+      "aggregate": 1.6
+     }
+    },
+    "p3": {
+     "bars": 172991,
+     "first": "2020-01-09 08:05:00",
+     "last": "2021-08-31 23:55:00",
+     "warmup_bars": 8640,
+     "bounds": {
+      "3": {
+       "lo": 8640,
+       "hi": 164063,
+       "eligible_bars": 155423,
+       "first_signal_bar": "2020-02-08 08:05:00",
+       "last_signal_bar": "2021-07-31 23:55:00"
+      }
+     },
+     "pairs": 119796,
+     "pairs_atr_ok": 119796,
+     "pairs_sized": 117965,
+     "pairs_open_at_end": 0,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.4,
+      "outcomes": 1.5,
+      "features": 2.3,
+      "aggregate": 0.6
+     }
+    }
+   },
+   "seconds": 25.1
+  },
+  {
+   "tf": "5m",
+   "coin": "BCHUSD",
+   "series": {
+    "p12": {
+     "bars": 560544,
+     "first": "2021-05-27 22:55:00",
+     "last": "2026-09-29 09:35:00",
+     "warmup_bars": 8640,
+     "bounds": {
+      "1": {
+       "lo": 18733,
+       "hi": 325408,
+       "eligible_bars": 306675,
+       "first_signal_bar": "2021-08-01 00:00:00",
+       "last_signal_bar": "2024-06-30 23:55:00"
+      },
+      "2": {
+       "lo": 325408,
+       "hi": 560543,
+       "eligible_bars": 235135,
+       "first_signal_bar": "2024-07-01 00:00:00",
+       "last_signal_bar": "2026-09-29 09:30:00"
+      }
+     },
+     "pairs": 396806,
+     "pairs_atr_ok": 396806,
+     "pairs_sized": 395788,
+     "pairs_open_at_end": 9,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 2.2,
+      "outcomes": 7.7,
+      "features": 7.0,
+      "aggregate": 1.8
+     }
+    },
+    "p3": {
+     "bars": 175392,
+     "first": "2020-01-01 00:00:00",
+     "last": "2021-08-31 23:55:00",
+     "warmup_bars": 8640,
+     "bounds": {
+      "3": {
+       "lo": 8640,
+       "hi": 166464,
+       "eligible_bars": 157824,
+       "first_signal_bar": "2020-01-31 00:00:00",
+       "last_signal_bar": "2021-07-31 23:55:00"
+      }
+     },
+     "pairs": 122154,
+     "pairs_atr_ok": 122154,
+     "pairs_sized": 119905,
+     "pairs_open_at_end": 0,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.6,
+      "outcomes": 1.0,
+      "features": 1.9,
+      "aggregate": 0.4
+     }
+    }
+   },
+   "seconds": 23.4
+  },
+  {
+   "tf": "15m",
+   "coin": "BTCUSD",
+   "series": {
+    "p12": {
+     "bars": 186939,
+     "first": "2021-05-30 02:45:00",
+     "last": "2026-09-29 09:15:00",
+     "warmup_bars": 2880,
+     "bounds": {
+      "1": {
+       "lo": 6037,
+       "hi": 108277,
+       "eligible_bars": 102240,
+       "first_signal_bar": "2021-08-01 00:00:00",
+       "last_signal_bar": "2024-06-30 23:45:00"
+      },
+      "2": {
+       "lo": 108277,
+       "hi": 186938,
+       "eligible_bars": 78661,
+       "first_signal_bar": "2024-07-01 00:00:00",
+       "last_signal_bar": "2026-09-29 09:00:00"
+      }
+     },
+     "pairs": 149237,
+     "pairs_atr_ok": 149237,
+     "pairs_sized": 148379,
+     "pairs_open_at_end": 9,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.6,
+      "outcomes": 2.5,
+      "features": 2.9,
+      "aggregate": 0.7
+     }
+    },
+    "p3": {
+     "bars": 58464,
+     "first": "2020-01-01 00:00:00",
+     "last": "2021-08-31 23:45:00",
+     "warmup_bars": 2880,
+     "bounds": {
+      "3": {
+       "lo": 2880,
+       "hi": 55488,
+       "eligible_bars": 52608,
+       "first_signal_bar": "2020-01-31 00:00:00",
+       "last_signal_bar": "2021-07-31 23:45:00"
+      }
+     },
+     "pairs": 50625,
+     "pairs_atr_ok": 50625,
+     "pairs_sized": 48973,
+     "pairs_open_at_end": 0,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.3,
+      "outcomes": 0.4,
+      "features": 0.9,
+      "aggregate": 0.4
+     }
+    }
+   },
+   "seconds": 8.9
+  },
+  {
+   "tf": "15m",
+   "coin": "ETHUSD",
+   "series": {
+    "p12": {
+     "bars": 186939,
+     "first": "2021-05-30 02:45:00",
+     "last": "2026-09-29 09:15:00",
+     "warmup_bars": 2880,
+     "bounds": {
+      "1": {
+       "lo": 6037,
+       "hi": 108277,
+       "eligible_bars": 102240,
+       "first_signal_bar": "2021-08-01 00:00:00",
+       "last_signal_bar": "2024-06-30 23:45:00"
+      },
+      "2": {
+       "lo": 108277,
+       "hi": 186938,
+       "eligible_bars": 78661,
+       "first_signal_bar": "2024-07-01 00:00:00",
+       "last_signal_bar": "2026-09-29 09:00:00"
+      }
+     },
+     "pairs": 150656,
+     "pairs_atr_ok": 150656,
+     "pairs_sized": 148568,
+     "pairs_open_at_end": 4,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.6,
+      "outcomes": 3.3,
+      "features": 4.3,
+      "aggregate": 0.6
+     }
+    },
+    "p3": {
+     "bars": 58464,
+     "first": "2020-01-01 00:00:00",
+     "last": "2021-08-31 23:45:00",
+     "warmup_bars": 2880,
+     "bounds": {
+      "3": {
+       "lo": 2880,
+       "hi": 55488,
+       "eligible_bars": 52608,
+       "first_signal_bar": "2020-01-31 00:00:00",
+       "last_signal_bar": "2021-07-31 23:45:00"
+      }
+     },
+     "pairs": 50383,
+     "pairs_atr_ok": 50383,
+     "pairs_sized": 47125,
+     "pairs_open_at_end": 0,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.2,
+      "outcomes": 1.0,
+      "features": 1.3,
+      "aggregate": 0.4
+     }
+    }
+   },
+   "seconds": 11.9
+  },
+  {
+   "tf": "15m",
+   "coin": "SOLUSD",
+   "series": {
+    "p12": {
+     "bars": 186891,
+     "first": "2021-05-29 14:45:00",
+     "last": "2026-09-29 09:15:00",
+     "warmup_bars": 2880,
+     "bounds": {
+      "1": {
+       "lo": 6085,
+       "hi": 108325,
+       "eligible_bars": 102240,
+       "first_signal_bar": "2021-08-01 00:00:00",
+       "last_signal_bar": "2024-06-30 23:45:00"
+      },
+      "2": {
+       "lo": 108325,
+       "hi": 186890,
+       "eligible_bars": 78565,
+       "first_signal_bar": "2024-07-01 00:00:00",
+       "last_signal_bar": "2026-09-29 09:00:00"
+      }
+     },
+     "pairs": 149940,
+     "pairs_atr_ok": 149940,
+     "pairs_sized": 141938,
+     "pairs_open_at_end": 8,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.3,
+      "outcomes": 3.3,
+      "features": 4.5,
+      "aggregate": 0.5
+     }
+    },
+    "p3": {
+     "bars": 33764,
+     "first": "2020-09-14 07:00:00",
+     "last": "2021-08-31 23:45:00",
+     "warmup_bars": 2880,
+     "bounds": {
+      "3": {
+       "lo": 2880,
+       "hi": 30788,
+       "eligible_bars": 27908,
+       "first_signal_bar": "2020-10-14 07:00:00",
+       "last_signal_bar": "2021-07-31 23:45:00"
+      }
+     },
+     "pairs": 32390,
+     "pairs_atr_ok": 32390,
+     "pairs_sized": 24271,
+     "pairs_open_at_end": 0,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.0,
+      "outcomes": 0.5,
+      "features": 0.6,
+      "aggregate": 0.1
+     }
+    }
+   },
+   "seconds": 10.0
+  },
+  {
+   "tf": "15m",
+   "coin": "DOGEUSD",
+   "series": {
+    "p12": {
+     "bars": 201249,
+     "first": "2021-01-01 00:00:00",
+     "last": "2026-09-29 09:00:00",
+     "warmup_bars": 2880,
+     "bounds": {
+      "1": {
+       "lo": 20352,
+       "hi": 122592,
+       "eligible_bars": 102240,
+       "first_signal_bar": "2021-08-01 00:00:00",
+       "last_signal_bar": "2024-06-30 23:45:00"
+      },
+      "2": {
+       "lo": 122592,
+       "hi": 201248,
+       "eligible_bars": 78656,
+       "first_signal_bar": "2024-07-01 00:00:00",
+       "last_signal_bar": "2026-09-29 08:45:00"
+      }
+     },
+     "pairs": 150477,
+     "pairs_atr_ok": 150477,
+     "pairs_sized": 143048,
+     "pairs_open_at_end": 4,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.7,
+      "outcomes": 1.9,
+      "features": 2.3,
+      "aggregate": 0.5
+     }
+    },
+    "p3": {
+     "bars": 40092,
+     "first": "2020-07-10 09:00:00",
+     "last": "2021-08-31 23:45:00",
+     "warmup_bars": 2880,
+     "bounds": {
+      "3": {
+       "lo": 2880,
+       "hi": 37116,
+       "eligible_bars": 34236,
+       "first_signal_bar": "2020-08-09 09:00:00",
+       "last_signal_bar": "2021-07-31 23:45:00"
+      }
+     },
+     "pairs": 36862,
+     "pairs_atr_ok": 36862,
+     "pairs_sized": 27285,
+     "pairs_open_at_end": 0,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.1,
+      "outcomes": 0.5,
+      "features": 1.1,
+      "aggregate": 0.1
+     }
+    }
+   },
+   "seconds": 7.3
+  },
+  {
+   "tf": "15m",
+   "coin": "LTCUSD",
+   "series": {
+    "p12": {
+     "bars": 186846,
+     "first": "2021-05-30 01:45:00",
+     "last": "2026-09-29 09:15:00",
+     "warmup_bars": 2880,
+     "bounds": {
+      "1": {
+       "lo": 6041,
+       "hi": 108281,
+       "eligible_bars": 102240,
+       "first_signal_bar": "2021-08-01 00:00:00",
+       "last_signal_bar": "2024-06-30 23:45:00"
+      },
+      "2": {
+       "lo": 108281,
+       "hi": 186845,
+       "eligible_bars": 78564,
+       "first_signal_bar": "2024-07-01 00:00:00",
+       "last_signal_bar": "2026-09-29 09:00:00"
+      }
+     },
+     "pairs": 150344,
+     "pairs_atr_ok": 150344,
+     "pairs_sized": 146956,
+     "pairs_open_at_end": 6,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.5,
+      "outcomes": 2.4,
+      "features": 3.5,
+      "aggregate": 0.5
+     }
+    },
+    "p3": {
+     "bars": 57663,
+     "first": "2020-01-09 08:15:00",
+     "last": "2021-08-31 23:45:00",
+     "warmup_bars": 2880,
+     "bounds": {
+      "3": {
+       "lo": 2880,
+       "hi": 54687,
+       "eligible_bars": 51807,
+       "first_signal_bar": "2020-02-08 08:15:00",
+       "last_signal_bar": "2021-07-31 23:45:00"
+      }
+     },
+     "pairs": 49064,
+     "pairs_atr_ok": 49064,
+     "pairs_sized": 43955,
+     "pairs_open_at_end": 0,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.0,
+      "outcomes": 0.5,
+      "features": 0.9,
+      "aggregate": 0.4
+     }
+    }
+   },
+   "seconds": 8.8
+  },
+  {
+   "tf": "15m",
+   "coin": "BCHUSD",
+   "series": {
+    "p12": {
+     "bars": 187097,
+     "first": "2021-05-27 23:00:00",
+     "last": "2026-09-29 09:15:00",
+     "warmup_bars": 2880,
+     "bounds": {
+      "1": {
+       "lo": 6244,
+       "hi": 108481,
+       "eligible_bars": 102237,
+       "first_signal_bar": "2021-08-01 00:00:00",
+       "last_signal_bar": "2024-06-30 23:45:00"
+      },
+      "2": {
+       "lo": 108481,
+       "hi": 187096,
+       "eligible_bars": 78615,
+       "first_signal_bar": "2024-07-01 00:00:00",
+       "last_signal_bar": "2026-09-29 09:00:00"
+      }
+     },
+     "pairs": 150969,
+     "pairs_atr_ok": 150969,
+     "pairs_sized": 148132,
+     "pairs_open_at_end": 6,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.5,
+      "outcomes": 4.1,
+      "features": 3.0,
+      "aggregate": 0.6
+     }
+    },
+    "p3": {
+     "bars": 58464,
+     "first": "2020-01-01 00:00:00",
+     "last": "2021-08-31 23:45:00",
+     "warmup_bars": 2880,
+     "bounds": {
+      "3": {
+       "lo": 2880,
+       "hi": 55488,
+       "eligible_bars": 52608,
+       "first_signal_bar": "2020-01-31 00:00:00",
+       "last_signal_bar": "2021-07-31 23:45:00"
+      }
+     },
+     "pairs": 49777,
+     "pairs_atr_ok": 49777,
+     "pairs_sized": 44606,
+     "pairs_open_at_end": 0,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.5,
+      "outcomes": 0.6,
+      "features": 0.6,
+      "aggregate": 0.2
+     }
+    }
+   },
+   "seconds": 10.4
+  },
+  {
+   "tf": "30m",
+   "coin": "BTCUSD",
+   "series": {
+    "p12": {
+     "bars": 93469,
+     "first": "2021-05-30 03:00:00",
+     "last": "2026-09-29 09:00:00",
+     "warmup_bars": 1440,
+     "bounds": {
+      "1": {
+       "lo": 3018,
+       "hi": 54138,
+       "eligible_bars": 51120,
+       "first_signal_bar": "2021-08-01 00:00:00",
+       "last_signal_bar": "2024-06-30 23:30:00"
+      },
+      "2": {
+       "lo": 54138,
+       "hi": 93468,
+       "eligible_bars": 39330,
+       "first_signal_bar": "2024-07-01 00:00:00",
+       "last_signal_bar": "2026-09-29 08:30:00"
+      }
+     },
+     "pairs": 88994,
+     "pairs_atr_ok": 88994,
+     "pairs_sized": 87500,
+     "pairs_open_at_end": 3,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.5,
+      "outcomes": 1.3,
+      "features": 2.5,
+      "aggregate": 0.6
+     }
+    },
+    "p3": {
+     "bars": 29232,
+     "first": "2020-01-01 00:00:00",
+     "last": "2021-08-31 23:30:00",
+     "warmup_bars": 1440,
+     "bounds": {
+      "3": {
+       "lo": 1440,
+       "hi": 27744,
+       "eligible_bars": 26304,
+       "first_signal_bar": "2020-01-31 00:00:00",
+       "last_signal_bar": "2021-07-31 23:30:00"
+      }
+     },
+     "pairs": 31744,
+     "pairs_atr_ok": 31744,
+     "pairs_sized": 28653,
+     "pairs_open_at_end": 0,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.0,
+      "outcomes": 0.3,
+      "features": 0.7,
+      "aggregate": 0.1
+     }
+    }
+   },
+   "seconds": 6.2
+  },
+  {
+   "tf": "30m",
+   "coin": "ETHUSD",
+   "series": {
+    "p12": {
+     "bars": 93469,
+     "first": "2021-05-30 03:00:00",
+     "last": "2026-09-29 09:00:00",
+     "warmup_bars": 1440,
+     "bounds": {
+      "1": {
+       "lo": 3018,
+       "hi": 54138,
+       "eligible_bars": 51120,
+       "first_signal_bar": "2021-08-01 00:00:00",
+       "last_signal_bar": "2024-06-30 23:30:00"
+      },
+      "2": {
+       "lo": 54138,
+       "hi": 93468,
+       "eligible_bars": 39330,
+       "first_signal_bar": "2024-07-01 00:00:00",
+       "last_signal_bar": "2026-09-29 08:30:00"
+      }
+     },
+     "pairs": 89364,
+     "pairs_atr_ok": 89364,
+     "pairs_sized": 85933,
+     "pairs_open_at_end": 2,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.2,
+      "outcomes": 1.4,
+      "features": 2.2,
+      "aggregate": 0.6
+     }
+    },
+    "p3": {
+     "bars": 29232,
+     "first": "2020-01-01 00:00:00",
+     "last": "2021-08-31 23:30:00",
+     "warmup_bars": 1440,
+     "bounds": {
+      "3": {
+       "lo": 1440,
+       "hi": 27744,
+       "eligible_bars": 26304,
+       "first_signal_bar": "2020-01-31 00:00:00",
+       "last_signal_bar": "2021-07-31 23:30:00"
+      }
+     },
+     "pairs": 31787,
+     "pairs_atr_ok": 31787,
+     "pairs_sized": 26231,
+     "pairs_open_at_end": 0,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.1,
+      "outcomes": 0.3,
+      "features": 0.4,
+      "aggregate": 0.1
+     }
+    }
+   },
+   "seconds": 5.5
+  },
+  {
+   "tf": "30m",
+   "coin": "SOLUSD",
+   "series": {
+    "p12": {
+     "bars": 93445,
+     "first": "2021-05-29 15:00:00",
+     "last": "2026-09-29 09:00:00",
+     "warmup_bars": 1440,
+     "bounds": {
+      "1": {
+       "lo": 3042,
+       "hi": 54162,
+       "eligible_bars": 51120,
+       "first_signal_bar": "2021-08-01 00:00:00",
+       "last_signal_bar": "2024-06-30 23:30:00"
+      },
+      "2": {
+       "lo": 54162,
+       "hi": 93444,
+       "eligible_bars": 39282,
+       "first_signal_bar": "2024-07-01 00:00:00",
+       "last_signal_bar": "2026-09-29 08:30:00"
+      }
+     },
+     "pairs": 88918,
+     "pairs_atr_ok": 88918,
+     "pairs_sized": 74943,
+     "pairs_open_at_end": 4,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.2,
+      "outcomes": 1.5,
+      "features": 1.4,
+      "aggregate": 0.3
+     }
+    },
+    "p3": {
+     "bars": 16882,
+     "first": "2020-09-14 07:00:00",
+     "last": "2021-08-31 23:30:00",
+     "warmup_bars": 1440,
+     "bounds": {
+      "3": {
+       "lo": 1440,
+       "hi": 15394,
+       "eligible_bars": 13954,
+       "first_signal_bar": "2020-10-14 07:00:00",
+       "last_signal_bar": "2021-07-31 23:30:00"
+      }
+     },
+     "pairs": 18827,
+     "pairs_atr_ok": 18827,
+     "pairs_sized": 8215,
+     "pairs_open_at_end": 0,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.0,
+      "outcomes": 0.2,
+      "features": 0.3,
+      "aggregate": 0.1
+     }
+    }
+   },
+   "seconds": 4.4
+  },
+  {
+   "tf": "30m",
+   "coin": "DOGEUSD",
+   "series": {
+    "p12": {
+     "bars": 100624,
+     "first": "2021-01-01 00:00:00",
+     "last": "2026-09-29 08:30:00",
+     "warmup_bars": 1440,
+     "bounds": {
+      "1": {
+       "lo": 10176,
+       "hi": 61296,
+       "eligible_bars": 51120,
+       "first_signal_bar": "2021-08-01 00:00:00",
+       "last_signal_bar": "2024-06-30 23:30:00"
+      },
+      "2": {
+       "lo": 61296,
+       "hi": 100623,
+       "eligible_bars": 39327,
+       "first_signal_bar": "2024-07-01 00:00:00",
+       "last_signal_bar": "2026-09-29 08:00:00"
+      }
+     },
+     "pairs": 88816,
+     "pairs_atr_ok": 88816,
+     "pairs_sized": 76878,
+     "pairs_open_at_end": 1,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.6,
+      "outcomes": 1.7,
+      "features": 1.9,
+      "aggregate": 0.3
+     }
+    },
+    "p3": {
+     "bars": 20046,
+     "first": "2020-07-10 09:00:00",
+     "last": "2021-08-31 23:30:00",
+     "warmup_bars": 1440,
+     "bounds": {
+      "3": {
+       "lo": 1440,
+       "hi": 18558,
+       "eligible_bars": 17118,
+       "first_signal_bar": "2020-08-09 09:00:00",
+       "last_signal_bar": "2021-07-31 23:30:00"
+      }
+     },
+     "pairs": 23114,
+     "pairs_atr_ok": 23114,
+     "pairs_sized": 13931,
+     "pairs_open_at_end": 0,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.0,
+      "outcomes": 0.3,
+      "features": 0.8,
+      "aggregate": 0.1
+     }
+    }
+   },
+   "seconds": 5.9
+  },
+  {
+   "tf": "30m",
+   "coin": "LTCUSD",
+   "series": {
+    "p12": {
+     "bars": 93423,
+     "first": "2021-05-30 02:00:00",
+     "last": "2026-09-29 09:00:00",
+     "warmup_bars": 1440,
+     "bounds": {
+      "1": {
+       "lo": 3020,
+       "hi": 54140,
+       "eligible_bars": 51120,
+       "first_signal_bar": "2021-08-01 00:00:00",
+       "last_signal_bar": "2024-06-30 23:30:00"
+      },
+      "2": {
+       "lo": 54140,
+       "hi": 93422,
+       "eligible_bars": 39282,
+       "first_signal_bar": "2024-07-01 00:00:00",
+       "last_signal_bar": "2026-09-29 08:30:00"
+      }
+     },
+     "pairs": 88931,
+     "pairs_atr_ok": 88931,
+     "pairs_sized": 82107,
+     "pairs_open_at_end": 4,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.6,
+      "outcomes": 1.5,
+      "features": 1.5,
+      "aggregate": 0.5
+     }
+    },
+    "p3": {
+     "bars": 28831,
+     "first": "2020-01-09 08:30:00",
+     "last": "2021-08-31 23:30:00",
+     "warmup_bars": 1440,
+     "bounds": {
+      "3": {
+       "lo": 1440,
+       "hi": 27343,
+       "eligible_bars": 25903,
+       "first_signal_bar": "2020-02-08 08:30:00",
+       "last_signal_bar": "2021-07-31 23:30:00"
+      }
+     },
+     "pairs": 31040,
+     "pairs_atr_ok": 31040,
+     "pairs_sized": 22391,
+     "pairs_open_at_end": 0,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.1,
+      "outcomes": 0.4,
+      "features": 0.8,
+      "aggregate": 0.2
+     }
+    }
+   },
+   "seconds": 5.7
+  },
+  {
+   "tf": "30m",
+   "coin": "BCHUSD",
+   "series": {
+    "p12": {
+     "bars": 93569,
+     "first": "2021-05-27 23:00:00",
+     "last": "2026-09-29 09:00:00",
+     "warmup_bars": 1440,
+     "bounds": {
+      "1": {
+       "lo": 3122,
+       "hi": 54242,
+       "eligible_bars": 51120,
+       "first_signal_bar": "2021-08-01 00:00:00",
+       "last_signal_bar": "2024-06-30 23:30:00"
+      },
+      "2": {
+       "lo": 54242,
+       "hi": 93568,
+       "eligible_bars": 39326,
+       "first_signal_bar": "2024-07-01 00:00:00",
+       "last_signal_bar": "2026-09-29 08:30:00"
+      }
+     },
+     "pairs": 88893,
+     "pairs_atr_ok": 88893,
+     "pairs_sized": 83257,
+     "pairs_open_at_end": 4,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.4,
+      "outcomes": 1.6,
+      "features": 1.4,
+      "aggregate": 0.5
+     }
+    },
+    "p3": {
+     "bars": 29232,
+     "first": "2020-01-01 00:00:00",
+     "last": "2021-08-31 23:30:00",
+     "warmup_bars": 1440,
+     "bounds": {
+      "3": {
+       "lo": 1440,
+       "hi": 27744,
+       "eligible_bars": 26304,
+       "first_signal_bar": "2020-01-31 00:00:00",
+       "last_signal_bar": "2021-07-31 23:30:00"
+      }
+     },
+     "pairs": 31500,
+     "pairs_atr_ok": 31500,
+     "pairs_sized": 24045,
+     "pairs_open_at_end": 0,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.0,
+      "outcomes": 0.5,
+      "features": 0.7,
+      "aggregate": 0.1
+     }
+    }
+   },
+   "seconds": 5.6
+  },
+  {
+   "tf": "1h",
+   "coin": "BTCUSD",
+   "series": {
+    "p12": {
+     "bars": 46734,
+     "first": "2021-05-30 03:00:00",
+     "last": "2026-09-29 08:00:00",
+     "warmup_bars": 720,
+     "bounds": {
+      "1": {
+       "lo": 1509,
+       "hi": 27069,
+       "eligible_bars": 25560,
+       "first_signal_bar": "2021-08-01 00:00:00",
+       "last_signal_bar": "2024-06-30 23:00:00"
+      },
+      "2": {
+       "lo": 27069,
+       "hi": 46733,
+       "eligible_bars": 19664,
+       "first_signal_bar": "2024-07-01 00:00:00",
+       "last_signal_bar": "2026-09-29 07:00:00"
+      }
+     },
+     "pairs": 57610,
+     "pairs_atr_ok": 57610,
+     "pairs_sized": 54584,
+     "pairs_open_at_end": 4,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.1,
+      "outcomes": 0.8,
+      "features": 1.1,
+      "aggregate": 0.3
+     }
+    },
+    "p3": {
+     "bars": 14616,
+     "first": "2020-01-01 00:00:00",
+     "last": "2021-08-31 23:00:00",
+     "warmup_bars": 720,
+     "bounds": {
+      "3": {
+       "lo": 720,
+       "hi": 13872,
+       "eligible_bars": 13152,
+       "first_signal_bar": "2020-01-31 00:00:00",
+       "last_signal_bar": "2021-07-31 23:00:00"
+      }
+     },
+     "pairs": 18005,
+     "pairs_atr_ok": 18005,
+     "pairs_sized": 13737,
+     "pairs_open_at_end": 0,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.1,
+      "outcomes": 0.3,
+      "features": 0.2,
+      "aggregate": 0.1
+     }
+    }
+   },
+   "seconds": 3.1
+  },
+  {
+   "tf": "1h",
+   "coin": "ETHUSD",
+   "series": {
+    "p12": {
+     "bars": 46734,
+     "first": "2021-05-30 03:00:00",
+     "last": "2026-09-29 08:00:00",
+     "warmup_bars": 720,
+     "bounds": {
+      "1": {
+       "lo": 1509,
+       "hi": 27069,
+       "eligible_bars": 25560,
+       "first_signal_bar": "2021-08-01 00:00:00",
+       "last_signal_bar": "2024-06-30 23:00:00"
+      },
+      "2": {
+       "lo": 27069,
+       "hi": 46733,
+       "eligible_bars": 19664,
+       "first_signal_bar": "2024-07-01 00:00:00",
+       "last_signal_bar": "2026-09-29 07:00:00"
+      }
+     },
+     "pairs": 57862,
+     "pairs_atr_ok": 57862,
+     "pairs_sized": 49380,
+     "pairs_open_at_end": 3,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.1,
+      "outcomes": 0.8,
+      "features": 0.8,
+      "aggregate": 0.2
+     }
+    },
+    "p3": {
+     "bars": 14616,
+     "first": "2020-01-01 00:00:00",
+     "last": "2021-08-31 23:00:00",
+     "warmup_bars": 720,
+     "bounds": {
+      "3": {
+       "lo": 720,
+       "hi": 13872,
+       "eligible_bars": 13152,
+       "first_signal_bar": "2020-01-31 00:00:00",
+       "last_signal_bar": "2021-07-31 23:00:00"
+      }
+     },
+     "pairs": 18127,
+     "pairs_atr_ok": 18127,
+     "pairs_sized": 10830,
+     "pairs_open_at_end": 0,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.0,
+      "outcomes": 0.2,
+      "features": 0.3,
+      "aggregate": 0.1
+     }
+    }
+   },
+   "seconds": 2.5
+  },
+  {
+   "tf": "1h",
+   "coin": "SOLUSD",
+   "series": {
+    "p12": {
+     "bars": 46722,
+     "first": "2021-05-29 15:00:00",
+     "last": "2026-09-29 08:00:00",
+     "warmup_bars": 720,
+     "bounds": {
+      "1": {
+       "lo": 1521,
+       "hi": 27081,
+       "eligible_bars": 25560,
+       "first_signal_bar": "2021-08-01 00:00:00",
+       "last_signal_bar": "2024-06-30 23:00:00"
+      },
+      "2": {
+       "lo": 27081,
+       "hi": 46721,
+       "eligible_bars": 19640,
+       "first_signal_bar": "2024-07-01 00:00:00",
+       "last_signal_bar": "2026-09-29 07:00:00"
+      }
+     },
+     "pairs": 57464,
+     "pairs_atr_ok": 57464,
+     "pairs_sized": 34155,
+     "pairs_open_at_end": 4,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.1,
+      "outcomes": 0.7,
+      "features": 0.6,
+      "aggregate": 0.2
+     }
+    },
+    "p3": {
+     "bars": 8441,
+     "first": "2020-09-14 07:00:00",
+     "last": "2021-08-31 23:00:00",
+     "warmup_bars": 720,
+     "bounds": {
+      "3": {
+       "lo": 720,
+       "hi": 7697,
+       "eligible_bars": 6977,
+       "first_signal_bar": "2020-10-14 07:00:00",
+       "last_signal_bar": "2021-07-31 23:00:00"
+      }
+     },
+     "pairs": 9555,
+     "pairs_atr_ok": 9555,
+     "pairs_sized": 779,
+     "pairs_open_at_end": 0,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.2,
+      "outcomes": 0.1,
+      "features": 0.1,
+      "aggregate": 0.0
+     }
+    }
+   },
+   "seconds": 2.0
+  },
+  {
+   "tf": "1h",
+   "coin": "DOGEUSD",
+   "series": {
+    "p12": {
+     "bars": 50312,
+     "first": "2021-01-01 00:00:00",
+     "last": "2026-09-29 08:00:00",
+     "warmup_bars": 720,
+     "bounds": {
+      "1": {
+       "lo": 5088,
+       "hi": 30648,
+       "eligible_bars": 25560,
+       "first_signal_bar": "2021-08-01 00:00:00",
+       "last_signal_bar": "2024-06-30 23:00:00"
+      },
+      "2": {
+       "lo": 30648,
+       "hi": 50311,
+       "eligible_bars": 19663,
+       "first_signal_bar": "2024-07-01 00:00:00",
+       "last_signal_bar": "2026-09-29 07:00:00"
+      }
+     },
+     "pairs": 57405,
+     "pairs_atr_ok": 57405,
+     "pairs_sized": 37552,
+     "pairs_open_at_end": 6,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.2,
+      "outcomes": 0.8,
+      "features": 1.1,
+      "aggregate": 0.4
+     }
+    },
+    "p3": {
+     "bars": 10023,
+     "first": "2020-07-10 09:00:00",
+     "last": "2021-08-31 23:00:00",
+     "warmup_bars": 720,
+     "bounds": {
+      "3": {
+       "lo": 720,
+       "hi": 9279,
+       "eligible_bars": 8559,
+       "first_signal_bar": "2020-08-09 09:00:00",
+       "last_signal_bar": "2021-07-31 23:00:00"
+      }
+     },
+     "pairs": 11600,
+     "pairs_atr_ok": 11600,
+     "pairs_sized": 4882,
+     "pairs_open_at_end": 0,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.0,
+      "outcomes": 0.2,
+      "features": 0.1,
+      "aggregate": 0.1
+     }
+    }
+   },
+   "seconds": 3.0
+  },
+  {
+   "tf": "1h",
+   "coin": "LTCUSD",
+   "series": {
+    "p12": {
+     "bars": 46711,
+     "first": "2021-05-30 02:00:00",
+     "last": "2026-09-29 08:00:00",
+     "warmup_bars": 720,
+     "bounds": {
+      "1": {
+       "lo": 1510,
+       "hi": 27070,
+       "eligible_bars": 25560,
+       "first_signal_bar": "2021-08-01 00:00:00",
+       "last_signal_bar": "2024-06-30 23:00:00"
+      },
+      "2": {
+       "lo": 27070,
+       "hi": 46710,
+       "eligible_bars": 19640,
+       "first_signal_bar": "2024-07-01 00:00:00",
+       "last_signal_bar": "2026-09-29 07:00:00"
+      }
+     },
+     "pairs": 57579,
+     "pairs_atr_ok": 57579,
+     "pairs_sized": 44027,
+     "pairs_open_at_end": 7,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.1,
+      "outcomes": 0.7,
+      "features": 1.1,
+      "aggregate": 0.2
+     }
+    },
+    "p3": {
+     "bars": 14415,
+     "first": "2020-01-09 09:00:00",
+     "last": "2021-08-31 23:00:00",
+     "warmup_bars": 720,
+     "bounds": {
+      "3": {
+       "lo": 720,
+       "hi": 13671,
+       "eligible_bars": 12951,
+       "first_signal_bar": "2020-02-08 09:00:00",
+       "last_signal_bar": "2021-07-31 23:00:00"
+      }
+     },
+     "pairs": 17527,
+     "pairs_atr_ok": 17527,
+     "pairs_sized": 8409,
+     "pairs_open_at_end": 0,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.0,
+      "outcomes": 0.1,
+      "features": 0.2,
+      "aggregate": 0.1
+     }
+    }
+   },
+   "seconds": 2.6
+  },
+  {
+   "tf": "1h",
+   "coin": "BCHUSD",
+   "series": {
+    "p12": {
+     "bars": 46786,
+     "first": "2021-05-27 23:00:00",
+     "last": "2026-09-29 08:00:00",
+     "warmup_bars": 720,
+     "bounds": {
+      "1": {
+       "lo": 1561,
+       "hi": 27121,
+       "eligible_bars": 25560,
+       "first_signal_bar": "2021-08-01 00:00:00",
+       "last_signal_bar": "2024-06-30 23:00:00"
+      },
+      "2": {
+       "lo": 27121,
+       "hi": 46785,
+       "eligible_bars": 19664,
+       "first_signal_bar": "2024-07-01 00:00:00",
+       "last_signal_bar": "2026-09-29 07:00:00"
+      }
+     },
+     "pairs": 57522,
+     "pairs_atr_ok": 57522,
+     "pairs_sized": 46589,
+     "pairs_open_at_end": 4,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.1,
+      "outcomes": 0.9,
+      "features": 1.1,
+      "aggregate": 0.2
+     }
+    },
+    "p3": {
+     "bars": 14616,
+     "first": "2020-01-01 00:00:00",
+     "last": "2021-08-31 23:00:00",
+     "warmup_bars": 720,
+     "bounds": {
+      "3": {
+       "lo": 720,
+       "hi": 13872,
+       "eligible_bars": 13152,
+       "first_signal_bar": "2020-01-31 00:00:00",
+       "last_signal_bar": "2021-07-31 23:00:00"
+      }
+     },
+     "pairs": 17917,
+     "pairs_atr_ok": 17917,
+     "pairs_sized": 9188,
+     "pairs_open_at_end": 0,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.1,
+      "outcomes": 0.2,
+      "features": 0.3,
+      "aggregate": 0.1
+     }
+    }
+   },
+   "seconds": 3.0
+  },
+  {
+   "tf": "4h",
+   "coin": "BTCUSD",
+   "series": {
+    "p12": {
+     "bars": 11683,
+     "first": "2021-05-30 04:00:00",
+     "last": "2026-09-29 04:00:00",
+     "warmup_bars": 300,
+     "bounds": {
+      "1": {
+       "lo": 377,
+       "hi": 6767,
+       "eligible_bars": 6390,
+       "first_signal_bar": "2021-08-01 00:00:00",
+       "last_signal_bar": "2024-06-30 20:00:00"
+      },
+      "2": {
+       "lo": 6767,
+       "hi": 11682,
+       "eligible_bars": 4915,
+       "first_signal_bar": "2024-07-01 00:00:00",
+       "last_signal_bar": "2026-09-29 00:00:00"
+      }
+     },
+     "pairs": 15212,
+     "pairs_atr_ok": 15212,
+     "pairs_sized": 7328,
+     "pairs_open_at_end": 7,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.0,
+      "outcomes": 0.4,
+      "features": 0.2,
+      "aggregate": 0.1
+     }
+    },
+    "p3": {
+     "bars": 3654,
+     "first": "2020-01-01 00:00:00",
+     "last": "2021-08-31 20:00:00",
+     "warmup_bars": 300,
+     "bounds": {
+      "3": {
+       "lo": 300,
+       "hi": 3468,
+       "eligible_bars": 3168,
+       "first_signal_bar": "2020-02-20 00:00:00",
+       "last_signal_bar": "2021-07-31 20:00:00"
+      }
+     },
+     "pairs": 4325,
+     "pairs_atr_ok": 4325,
+     "pairs_sized": 914,
+     "pairs_open_at_end": 0,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.0,
+      "outcomes": 0.0,
+      "features": 0.0,
+      "aggregate": 0.0
+     }
+    }
+   },
+   "seconds": 0.9
+  },
+  {
+   "tf": "4h",
+   "coin": "ETHUSD",
+   "series": {
+    "p12": {
+     "bars": 11683,
+     "first": "2021-05-30 04:00:00",
+     "last": "2026-09-29 04:00:00",
+     "warmup_bars": 300,
+     "bounds": {
+      "1": {
+       "lo": 377,
+       "hi": 6767,
+       "eligible_bars": 6390,
+       "first_signal_bar": "2021-08-01 00:00:00",
+       "last_signal_bar": "2024-06-30 20:00:00"
+      },
+      "2": {
+       "lo": 6767,
+       "hi": 11682,
+       "eligible_bars": 4915,
+       "first_signal_bar": "2024-07-01 00:00:00",
+       "last_signal_bar": "2026-09-29 00:00:00"
+      }
+     },
+     "pairs": 15392,
+     "pairs_atr_ok": 15392,
+     "pairs_sized": 3237,
+     "pairs_open_at_end": 3,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.0,
+      "outcomes": 0.2,
+      "features": 0.4,
+      "aggregate": 0.2
+     }
+    },
+    "p3": {
+     "bars": 3654,
+     "first": "2020-01-01 00:00:00",
+     "last": "2021-08-31 20:00:00",
+     "warmup_bars": 300,
+     "bounds": {
+      "3": {
+       "lo": 300,
+       "hi": 3468,
+       "eligible_bars": 3168,
+       "first_signal_bar": "2020-02-20 00:00:00",
+       "last_signal_bar": "2021-07-31 20:00:00"
+      }
+     },
+     "pairs": 4309,
+     "pairs_atr_ok": 4309,
+     "pairs_sized": 220,
+     "pairs_open_at_end": 0,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.0,
+      "outcomes": 0.1,
+      "features": 0.1,
+      "aggregate": 0.1
+     }
+    }
+   },
+   "seconds": 1.1
+  },
+  {
+   "tf": "4h",
+   "coin": "SOLUSD",
+   "series": {
+    "p12": {
+     "bars": 11680,
+     "first": "2021-05-29 16:00:00",
+     "last": "2026-09-29 04:00:00",
+     "warmup_bars": 300,
+     "bounds": {
+      "1": {
+       "lo": 380,
+       "hi": 6770,
+       "eligible_bars": 6390,
+       "first_signal_bar": "2021-08-01 00:00:00",
+       "last_signal_bar": "2024-06-30 20:00:00"
+      },
+      "2": {
+       "lo": 6770,
+       "hi": 11679,
+       "eligible_bars": 4909,
+       "first_signal_bar": "2024-07-01 00:00:00",
+       "last_signal_bar": "2026-09-29 00:00:00"
+      }
+     },
+     "pairs": 15296,
+     "pairs_atr_ok": 15296,
+     "pairs_sized": 546,
+     "pairs_open_at_end": 0,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.0,
+      "outcomes": 0.2,
+      "features": 0.3,
+      "aggregate": 0.1
+     }
+    },
+    "p3": {
+     "bars": 2110,
+     "first": "2020-09-14 08:00:00",
+     "last": "2021-08-31 20:00:00",
+     "warmup_bars": 300,
+     "bounds": {
+      "3": {
+       "lo": 300,
+       "hi": 1924,
+       "eligible_bars": 1624,
+       "first_signal_bar": "2020-11-03 08:00:00",
+       "last_signal_bar": "2021-07-31 20:00:00"
+      }
+     },
+     "pairs": 2213,
+     "pairs_atr_ok": 2213,
+     "pairs_sized": 0,
+     "pairs_open_at_end": 0,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.0,
+      "outcomes": 0.0,
+      "features": 0.0,
+      "aggregate": 0.0
+     }
+    }
+   },
+   "seconds": 0.7
+  },
+  {
+   "tf": "4h",
+   "coin": "DOGEUSD",
+   "series": {
+    "p12": {
+     "bars": 12578,
+     "first": "2021-01-01 00:00:00",
+     "last": "2026-09-29 04:00:00",
+     "warmup_bars": 300,
+     "bounds": {
+      "1": {
+       "lo": 1272,
+       "hi": 7662,
+       "eligible_bars": 6390,
+       "first_signal_bar": "2021-08-01 00:00:00",
+       "last_signal_bar": "2024-06-30 20:00:00"
+      },
+      "2": {
+       "lo": 7662,
+       "hi": 12577,
+       "eligible_bars": 4915,
+       "first_signal_bar": "2024-07-01 00:00:00",
+       "last_signal_bar": "2026-09-29 00:00:00"
+      }
+     },
+     "pairs": 15195,
+     "pairs_atr_ok": 15195,
+     "pairs_sized": 1091,
+     "pairs_open_at_end": 0,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.0,
+      "outcomes": 0.1,
+      "features": 0.2,
+      "aggregate": 0.1
+     }
+    },
+    "p3": {
+     "bars": 2505,
+     "first": "2020-07-10 12:00:00",
+     "last": "2021-08-31 20:00:00",
+     "warmup_bars": 300,
+     "bounds": {
+      "3": {
+       "lo": 300,
+       "hi": 2319,
+       "eligible_bars": 2019,
+       "first_signal_bar": "2020-08-29 12:00:00",
+       "last_signal_bar": "2021-07-31 20:00:00"
+      }
+     },
+     "pairs": 2721,
+     "pairs_atr_ok": 2721,
+     "pairs_sized": 242,
+     "pairs_open_at_end": 0,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.0,
+      "outcomes": 0.0,
+      "features": 0.0,
+      "aggregate": 0.1
+     }
+    }
+   },
+   "seconds": 0.5
+  },
+  {
+   "tf": "4h",
+   "coin": "LTCUSD",
+   "series": {
+    "p12": {
+     "bars": 11677,
+     "first": "2021-05-30 04:00:00",
+     "last": "2026-09-29 04:00:00",
+     "warmup_bars": 300,
+     "bounds": {
+      "1": {
+       "lo": 377,
+       "hi": 6767,
+       "eligible_bars": 6390,
+       "first_signal_bar": "2021-08-01 00:00:00",
+       "last_signal_bar": "2024-06-30 20:00:00"
+      },
+      "2": {
+       "lo": 6767,
+       "hi": 11676,
+       "eligible_bars": 4909,
+       "first_signal_bar": "2024-07-01 00:00:00",
+       "last_signal_bar": "2026-09-29 00:00:00"
+      }
+     },
+     "pairs": 15191,
+     "pairs_atr_ok": 15191,
+     "pairs_sized": 2072,
+     "pairs_open_at_end": 0,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.0,
+      "outcomes": 0.1,
+      "features": 0.2,
+      "aggregate": 0.1
+     }
+    },
+    "p3": {
+     "bars": 3603,
+     "first": "2020-01-09 12:00:00",
+     "last": "2021-08-31 20:00:00",
+     "warmup_bars": 300,
+     "bounds": {
+      "3": {
+       "lo": 300,
+       "hi": 3417,
+       "eligible_bars": 3117,
+       "first_signal_bar": "2020-02-28 12:00:00",
+       "last_signal_bar": "2021-07-31 20:00:00"
+      }
+     },
+     "pairs": 4227,
+     "pairs_atr_ok": 4227,
+     "pairs_sized": 193,
+     "pairs_open_at_end": 0,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.1,
+      "outcomes": 0.0,
+      "features": 0.1,
+      "aggregate": 0.1
+     }
+    }
+   },
+   "seconds": 0.7
+  },
+  {
+   "tf": "4h",
+   "coin": "BCHUSD",
+   "series": {
+    "p12": {
+     "bars": 11696,
+     "first": "2021-05-28 00:00:00",
+     "last": "2026-09-29 04:00:00",
+     "warmup_bars": 300,
+     "bounds": {
+      "1": {
+       "lo": 390,
+       "hi": 6780,
+       "eligible_bars": 6390,
+       "first_signal_bar": "2021-08-01 00:00:00",
+       "last_signal_bar": "2024-06-30 20:00:00"
+      },
+      "2": {
+       "lo": 6780,
+       "hi": 11695,
+       "eligible_bars": 4915,
+       "first_signal_bar": "2024-07-01 00:00:00",
+       "last_signal_bar": "2026-09-29 00:00:00"
+      }
+     },
+     "pairs": 15283,
+     "pairs_atr_ok": 15283,
+     "pairs_sized": 1874,
+     "pairs_open_at_end": 0,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.0,
+      "outcomes": 0.2,
+      "features": 0.2,
+      "aggregate": 0.1
+     }
+    },
+    "p3": {
+     "bars": 3654,
+     "first": "2020-01-01 00:00:00",
+     "last": "2021-08-31 20:00:00",
+     "warmup_bars": 300,
+     "bounds": {
+      "3": {
+       "lo": 300,
+       "hi": 3468,
+       "eligible_bars": 3168,
+       "first_signal_bar": "2020-02-20 00:00:00",
+       "last_signal_bar": "2021-07-31 20:00:00"
+      }
+     },
+     "pairs": 4318,
+     "pairs_atr_ok": 4318,
+     "pairs_sized": 160,
+     "pairs_open_at_end": 0,
+     "pairs_without_features": 0,
+     "pairs_sized_closed_without_features": 0,
+     "seconds": {
+      "load_and_units": 0.0,
+      "outcomes": 0.0,
+      "features": 0.1,
+      "aggregate": 0.0
+     }
+    }
+   },
+   "seconds": 0.7
+  }
+ ]
+}

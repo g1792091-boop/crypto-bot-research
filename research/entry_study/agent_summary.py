@@ -26,8 +26,9 @@ TFS = ("5m", "15m", "30m", "1h", "4h")
 WATCH = {("V39_ALL", "4h"): "기본값의 거래당 평균이 세 기간 모두 0 근처(표준오차 0.5배 안). paper 성적을 조금 더 주의해서 봄. 판정 아님",
          ("N10_HA_PSAR", "4h"): "기본값의 거래당 평균이 세 기간 모두 0 근처(표준오차 0.5배 안). paper 성적을 조금 더 주의해서 봄. 판정 아님"}
 SHAPE_KO = {"flat": "평평", "smooth": "완만", "spiky": "뾰족", "insufficient": "표본 부족"}
-CONCLUSION = ("사전 등록한 세 연구(지지·저항 290건, 진입 수치 410건, 파라미터 변형 1,680건)를 같은 5년 자료로 이미 했고, "
-              "세 기간을 모두 통과한 효과는 없었다(지지·저항 후보 2건은 무작위 진입에서도 같은 효과: 시장 전체의 성질). "
+CONCLUSION = ("사전 등록한 네 연구(지지·저항 290건, 진입 수치 410건, 파라미터 변형 1,680건, 추세선 600건(매매법 칸 580건))를 같은 5년 자료로 "
+              "이미 했고, 세 기간을 모두 통과한 효과는 없었다(지지·저항 후보 2건은 무작위 진입에서도 같은 효과: 시장 전체의 성질; "
+              "추세선은 1기간 보정부터 통과 0건). "
               "파라미터는 뾰족한 곳이 없고, 세 기간 플러스 변형 수도 '파라미터가 상관없다'는 가정의 기대치와 같다. "
               "그래서 이 숫자들은 설명 자료이고, 같은 것을 다시 시험해도 새 정보가 아니다.")
 
@@ -57,10 +58,16 @@ def build() -> dict:
     bc = pd.read_csv(os.path.join(HERE, "out", "bc_trials.csv"))
     b, c = bc[bc["part"] == "B"], bc[bc["part"] == "C"]
     labels = _labels()
+    # trendline study (PREREG_TRENDLINE.md, RESULTS_TRENDLINE.md): the strategy cells only; its random-entry
+    # tests are a baseline of no strategy
+    tp = os.path.join(HERE, "out", "trendline_trials.csv")
+    t = pd.read_csv(tp) if os.path.exists(tp) else pd.DataFrame(columns=["strategy", "kind", "tf", "feature", "candidate"])
+    t = t[t["kind"] == "cell"] if "kind" in t else t
     names = sorted(set(a["strategy"]) | set(b["strategy"]) | set(c["strategy"]))
     per = {}
     for s in names:
         sa, sb, sc = a[a["strategy"] == s], b[b["strategy"] == s], c[c["strategy"] == s]
+        st = t[t["strategy"] == s]
         cand_a = [{"tf": r.tf, "feature": r.feature,
                    "note": "무작위 진입에서도 같은 효과(시장 전체의 성질)" if r.random_same_effect_p1 else ""}
                   for r in sa[sa["candidate"].astype(bool)].itertuples()]
@@ -84,11 +91,16 @@ def build() -> dict:
             "entry_strength": {"tests": int(len(sb)), "passed_all3": int(sb["candidate"].astype(bool).sum()),
                                "features": feats},
             "parameters": {"variants": int(len(sc)), "adopted": 0, "params": params},
+            "trendline": {"tests": int(len(st)),
+                          "passed_all3": [{"tf": r.tf, "feature": r.feature} for r in st[st["candidate"].astype(str) == "True"].itertuples()],
+                          "features": sorted(set(st["feature"].astype(str))) if len(st) else []},
             "watch": [{"tf": tf, "note": t} for (ws, tf), t in WATCH.items() if ws == s],
         }
-    return {"source": "research/entry_study (PREREG_ENTRY.md; RESULTS_ENTRY.md, RESULTS_ENTRY_A.md, RESULTS_ENTRY_BC.md)",
+    return {"source": "research/entry_study (PREREG_ENTRY.md; RESULTS_ENTRY.md, RESULTS_ENTRY_A.md, RESULTS_ENTRY_BC.md; "
+                      "PREREG_TRENDLINE.md, RESULTS_TRENDLINE.md)",
             "data": "5-year outcomes, periods 2021-08..2024-06 / 2024-07..2026-09 / 2020-01..2021-07",
-            "totals": {"support_resistance": int(len(a)), "entry_strength": int(len(b)), "parameters": int(len(c))},
+            "totals": {"support_resistance": int(len(a)), "entry_strength": int(len(b)), "parameters": int(len(c)),
+                       "trendline": int(len(t[t["strategy"].isin(names)]))},
             "conclusion_ko": CONCLUSION, "strategies": per}
 
 
