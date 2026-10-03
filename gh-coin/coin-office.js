@@ -733,7 +733,7 @@ export async function cycle(force, onlyJob){
 }
 
 // 혼자 하는 일 한 번: 배정 모델로 생각·말을 실시간으로 보여 주고, 빈 답이면 다른 모델로
-async function solo(a, {room, sys, user, maxTokens = 900, temperature = 0.6, extra = {}, train = "", trainRaw = false}){
+async function solo(a, {room, sys, user, maxTokens = 900, temperature = 0.6, extra = {}, train = "", trainRaw = false, role = null}){
   const models = assignModels();
   const target = models[a.id];
   const cm = claudeModels();
@@ -751,7 +751,7 @@ async function solo(a, {room, sys, user, maxTokens = 900, temperature = 0.6, ext
     const watch = setInterval(() => { const el = Date.now() - t0; if ((!raw && el > 60e3) || el > 180e3){ slow = true; ctl.abort(); } }, 2000);
     try {
       bump("calls");
-      const route = await brainStream({messages: [{role: "system", content: sys}, {role: "user", content: user}], role: a.role === "code" ? "code" : "general", signal: ctl.signal, noThink: true,
+      const route = await brainStream({messages: [{role: "system", content: sys}, {role: "user", content: user}], role: role || (a.role === "code" ? "code" : "general"), signal: ctl.signal, noThink: true,
         maxTokens, temperature, target: tg || undefined, fallback: true, onContent: d => { raw += d; show(); }, onThink: d => { think += d; show(); }});
       raw = splitThink(raw).body; show(); finalRaw = raw;
       entry.model = route?.model || tg?.model || entry.model;
@@ -820,16 +820,36 @@ function researchLog(lane){ try { const l = JSON.parse(localStorage.getItem("coi
 function addResearch(r){ const l = researchLog(); l.push(r); try { localStorage.setItem("coinResearch", JSON.stringify(l.slice(-200))); } catch(e){} }
 export const researchHistory = researchLog;
 // LLM 답에서 JSON 뽑기 — 여러 후보를 시도하고, 꼬리 콤마·주석·홑따옴표·잘린 응답(truncation)까지 자동 복구한다.
+// 열린 문자열/괄호를 '올바른 중첩 순서'로 닫는다 (잘린 응답 복구)
+function _closeOpen(str){
+  let inStr = false, esc = false; const st = [];
+  for (const ch of str){
+    if (inStr){ if (esc) esc = false; else if (ch === "\\") esc = true; else if (ch === '"') inStr = false; continue; }
+    if (ch === '"') inStr = true; else if (ch === "{" || ch === "[") st.push(ch); else if (ch === "}" || ch === "]") st.pop();
+  }
+  let out = str; if (inStr) out += '"';
+  out = out.replace(/[,:]\s*$/, "");                 // 값이 끊긴 꼬리 콤마/콜론
+  for (let i = st.length - 1; i >= 0; i--) out += st[i] === "{" ? "}" : "]";
+  return out;
+}
 function _repairJSON(s){
   let x = String(s);
   x = x.replace(/\/\/[^\n\r]*/g, "");                 // // 주석
   x = x.replace(/\/\*[\s\S]*?\*\//g, "");              // /* */ 주석
   x = x.replace(/,\s*([}\]])/g, "$1");                 // 꼬리 콤마
   x = x.replace(/'([^'\n\r]*?)'(\s*[:,}\]])/g, '"$1"$2');   // 홑따옴표 값/키 → 쌍따옴표
-  const bal = ch => x.split(ch[0]).length - x.split(ch[1]).length;   // 잘린 응답: 괄호 균형 맞추기
-  for (let n = bal("[]"); n > 0; n--) x += "]";
-  for (let n = bal("{}"); n > 0; n--) x += "}";
-  return x;
+  return _closeOpen(x);
+}
+// 깊게 잘린 응답: 미완성 꼬리를 조금씩 잘라내며 닫아 보고, 파싱되면 그걸 쓴다
+function _trimClose(s){
+  let x = String(s).replace(/\/\/[^\n\r]*/g, "").replace(/\/\*[\s\S]*?\*\//g, "");
+  for (let k = 0; k < 60; k++){
+    const v = _closeOpen(x.replace(/,\s*([}\]])/g, "$1"));
+    try { const o = JSON.parse(v); if (o && typeof o === "object") return v; } catch(e){}
+    const cut = Math.max(x.lastIndexOf(","), x.lastIndexOf("{"), x.lastIndexOf("["));   // 미완성 꼬리 제거
+    if (cut <= 0) break; x = x.slice(0, cut);
+  }
+  return null;
 }
 function _balancedBrace(t){
   const i = t.indexOf("{"); if (i < 0) return null;
@@ -850,7 +870,7 @@ function pickJSON(t){
   const greedy = t.match(/\{[\s\S]*\}/); if (greedy) cands.push(greedy[0]);   // 최후: 첫 { ~ 마지막 }
   for (let c of cands){
     c = String(c).replace(/^```(?:json)?/i, "").replace(/```\s*$/, "").trim();
-    for (const v of [c, _repairJSON(c)]){ try { const o = JSON.parse(v); if (o && typeof o === "object") return o; } catch(e){} }
+    for (const v of [c, _repairJSON(c), _trimClose(c)]){ if (v == null) continue; try { const o = JSON.parse(v); if (o && typeof o === "object") return o; } catch(e){} }
   }
   return null;
 }
@@ -879,7 +899,7 @@ async function research(lane = "std"){
     + (userNote ? `\n\n## 대표님 지시 (최우선)\n${userNote}\n지시에 맞춰 만든다. 커스텀 수식 지표를 반드시 1개 이상 쓰고, 여러 보조지표(기본 29종 + tv_ 지표)를 조합한다.` : "")
     + (cards.length ? "\n\n## 지금까지의 백테스트 연구 카드(참고)\n" + Q.cardsText(cards, 14) : "");
   const user = `시장: ${mk.name} (${mk.market}, ${mk.exchange === "binancef" ? "바이낸스 선물" : mk.exchange === "yahoo" ? "야후 파이낸스" : mk.exchange}) · ${TF_KO[tf]}봉\n시험할 과거: ${hist}\n지금 차트(보조지표 29종):\n${snapText(snap)}\n${JSON.stringify(snap.ind || {}).slice(0, 2200)}${flowText ? "\n\n호가·고래·선물 흐름(지금):\n" + flowText.slice(0, 1500) : ""}\n\n최근 우리 팀이 시험한 전략(겹치지 않게):\n${tried || "(아직 없음)"}\n\n${a.id === "qa" ? "추세추종" : "역추세·변동성"} 계열로 새 전략 하나를 만들어 주세요. symbol은 ${mk.market}, interval은 ${iv}.${deriv ? " funding·oi·oi_change_pct·long_short 피연산자도 쓸 수 있습니다." : ""}`;
-  const e = await solo(a, {room: L.dev, sys, user, maxTokens: 1600, temperature: 0.8});
+  const e = await solo(a, {room: L.dev, sys, user, maxTokens: 2200, temperature: 0.8, role: "code"});   // 전략 JSON은 코드·구조화 잘하는 모델로 라우팅 + 토큰 넉넉히(잘림 방지)
   let spec = pickJSON(e.raw || e.text);
   if (!spec){ post({ch: L.dev, kind: "system", text: `${a.name}의 답에서 전략 JSON을 찾지 못했습니다`}); addResearch({lane, name: "(형식 오류)", market: mk.market, tf, pass: false, t: Date.now()}); return; }
   try { spec = Q.normalizeSpec({...spec, symbol: mk.market, interval: iv, risk: {...(spec.risk || {}), ...COSTS[mk.cls]}}); }
@@ -1012,7 +1032,7 @@ async function retro(){
     .map(e => `- [${e.kind}] ${agentById(e.agent)?.name || ""}: ${String(e.text || e.title || e.name || "").replace(/\s+/g, " ").slice(0, 160)}${e.kind === "bt" ? ` (${e.pass ? "통과" : "불통과"})` : ""}`).join("\n");
   const open = backlog().filter(x => x.team === team && x.status !== "done").map(x => `- ${x.title}`).join("\n");
   const e = await solo(lead, {room: team, sys: personaOf(lead, `지금은 ${teamById(team).name} 회고·성장 회의다. 최근 기록을 보고 ① 배운 것(다음에 반드시 반영할 교훈) 2~4개 ② 우리 팀에 부족한 점을 메울 구체적인 새 과제 1~3개(누가 맡을지 팀원 이름 포함)를 정한다. 세계적인 기업 수준의 기준으로 냉정하게. 답 마지막에 \`\`\`json {"lessons":["..."],"tasks":[{"title":"...","why":"...","owner":"팀원 이름"}]}\`\`\` 를 붙인다.`),
-    user: `팀원: ${mem.map(a => `${a.name}(${a.title})`).join(", ")}\n최근 기록:\n${recent || "(기록 없음 — 첫 회고)"}\n\n아직 안 끝난 과제:\n${open || "(없음)"}`, maxTokens: 1200, trainRaw: true, train: "팀의 최근 업무 기록을 보고 회고해 줘: 배운 것과 부족한 점을 메울 새 과제를 JSON으로."});
+    user: `팀원: ${mem.map(a => `${a.name}(${a.title})`).join(", ")}\n최근 기록:\n${recent || "(기록 없음 — 첫 회고)"}\n\n아직 안 끝난 과제:\n${open || "(없음)"}`, maxTokens: 1200, trainRaw: true, role: "code", train: "팀의 최근 업무 기록을 보고 회고해 줘: 배운 것과 부족한 점을 메울 새 과제를 JSON으로."});
   fire({kind: "huddle-end", ids: mem.map(a => a.id)});
   const j = pickJSON(e.raw || e.text) || {};
   for (const l of (j.lessons || []).slice(0, 4)) addNote(team, l, "회고");
