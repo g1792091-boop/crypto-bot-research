@@ -642,7 +642,7 @@ def collector_loop(src):
                     STATS.set("stuck", f"봇 페이지가 {mins}분째 응답 없음 — 원격화면(:6080)에서 확인 창이 떠 있거나 'Aw, Snap' 화면인지 확인", e)
                 elif e.waited >= SLOW_AFTER:
                     STATS.set("slow", "봇이 무거운 작업 중이라 응답이 늦음 — 답을 기다리는 중", e)
-                if (cdp.tid in cdp.crashed or e.waited >= STUCK_AFTER) and t_tick - st["check_t"] >= 60:
+                if (cdp.tid in cdp.crashed or e.waited >= STUCK_AFTER) and e.waited >= 60 and t_tick - st["check_t"] >= 60:
                     st["check_t"] = t_tick
                     if cdp.needs_reconnect():           # 페이지는 멀쩡한데 기다리던 답만 사라짐 → 새로 붙음
                         STATS.last_error = {"t": int(time.time() * 1000), "msg": "기다리던 답이 사라져 다시 연결"}
