@@ -1023,6 +1023,7 @@ async function crossMarketTest(spec, excludeMarket, cls){
   const Q = await import("./quant.js"), out = [], seen = new Set();
   for (const m of MARKETS){
     if (m.cls !== cls || m.market === excludeMarket || seen.has(m.market)) continue; seen.add(m.market);
+    if (seen.size > 4) break;   // 승격 지연 방지: 같은 자산군 최대 4개 시장까지만
     try { const cs = (await candlesFor({market: m.market, exchange: m.exchange, timeframe: m.tf}, 1500)).cs;
       const s = Q.backtest(Q.normalizeSpec({...spec, symbol: m.market}), cs).stats;
       out.push({name: m.name, ret: +(s.return_pct ?? 0).toFixed(1), n: s.n_trades ?? 0}); } catch(e){}
