@@ -918,10 +918,15 @@ async function research(lane = "std"){
   const st = x => ({ret: +(x?.return_pct ?? 0), dd: +(x?.max_dd_pct ?? 0), win: +(x?.win_rate ?? 0), pf: x?.profit_factor == null ? null : +x.profit_factor, n: x?.n_trades ?? 0});
   post({ch: L.bt, kind: "bt", agent: L.checker, lane, name: spec.name, market: mk.market, mname: mk.name, tf, hist, all: st(bt.stats), is: st(wf.is), oos: st(wf.oos), pass: wf.pass, reasons: wf.reasons, author: a.name, spec, scen, lev: spec.risk?.leverage});
   addResearch({lane, name: spec.name, market: mk.market, tf, pass: wf.pass, oos: +(wf.oos?.return_pct ?? 0), t: Date.now()});
-  // 검증 보강: backtrader 분석기 · freqtrade 손실함수 · Vibe-Trading 견고성(순열 검정·5구간·위생) — 통과 판정은 여전히 코드 관문
+  // 검증 보강 + 과최적화 관문: 워크포워드(70/30)에 더해 견고성(순열 검정·5구간 일관성·위생·최소 거래수)까지 통과해야 데모에 올린다
+  let robust = {ok: true, why: ""};
   try {
     const H = await lib("hyperopt"), RB = await lib("robust"), tfMin = {"15": 15, "60": 60, "240": 240, "D": 1440}[tf] || 60;
     const an = H.analyzers(bt.equity, bt.trades, {perYear: 365 * 24 * 60 / tfMin}), pt = RB.permutationTest(bt.trades.map(t => t.pnl)), bs = RB.bootstrapSharpe(bt.trades.map(t => t.pnl)), mw = RB.multiWindow(Q, spec, cs, 5), hy = RB.hygiene(bt);
+    // 과최적화 걸러내기: 운일 확률 p ≤ 0.1 · 5구간 중 60% 이상 이익 · 위생 통과 · 거래 8회 이상 (못 재면 통과)
+    const nTr = (wf.oos?.n_trades ?? bt.stats?.n_trades ?? 0);
+    const pOK = pt.p == null || pt.p <= 0.1, mwOK = mw.total < 3 || mw.positive >= Math.ceil(mw.total * 0.6), hyOK = hy.ok !== false, nOK = nTr >= 8;
+    robust = {ok: pOK && mwOK && hyOK && nOK, why: [!pOK && `운일확률 ${pt.p?.toFixed(2)}`, !mwOK && `구간일관성 ${mw.positive}/${mw.total}`, !hyOK && (hy.fails || []).join(","), !nOK && `거래 ${nTr}회(8 미만)`].filter(Boolean).join(" · ")};
     const days = Math.max(1, (cs.at(-1).t - cs[0].t) / 864e5), f2 = x => x == null || !Number.isFinite(x) ? "—" : (+x).toFixed(2);
     table(L.bt, L.checker, `🔬 ${spec.name} 검증 보강`, ["항목", "값", "뜻"], [["SQN", `${f2(an.sqn)} (${an.sqnGrade})`, "√거래수 × 평균/표준편차 — 2 이상 보통, 3 이상 좋음"], ["VWR", f2(an.vwr), "일정한 성장선에서 덜 흔들릴수록 높음"], ["최장 물림", `${an.maxddLen}봉`, "고점 회복까지 걸린 가장 긴 기간"], ["연승/연패", `${an.streakWon}/${an.streakLost}`, ""],
       ["운일 확률 p", f2(pt.p), pt.p == null ? "거래 부족" : pt.p <= 0.05 ? "운으로 보기 어려움" : "운일 가능성 큼(주의)"], ["부트스트랩 샤프 90% 구간", bs ? `${f2(bs.lo)} ~ ${f2(bs.hi)}` : "—", "0 아래가 넓으면 불안정"], ["5구간 이익", `${mw.positive}/${mw.total}`, "기간별로 고르게 버는지"],
@@ -939,10 +944,14 @@ async function research(lane = "std"){
     const ans = `${noMind(e.raw || "").replace(/```(?:json)?[\s\S]*?```/, "```json\n" + JSON.stringify(spec, null, 1) + "\n```")}\n\n백테스트(검증 구간): 수익 ${st(wf.oos).ret}% · 손익비 ${st(wf.oos).pf ?? "-"} · 거래 ${st(wf.oos).n}회`;
     await keep("office-strategy", [{role: "user", content: clip(user, 3000)}, {role: "assistant", content: ans}], {agent: a.id, model: e.model}).catch(() => null);
   }
-  if (wf.pass){
+  if (wf.pass && !robust.ok){   // 워크포워드는 통과했지만 견고성(과최적화) 관문 미달 → 데모 보류
+    post({ch: L.bt, kind: "system", text: `⚠ ${spec.name}: 워크포워드는 통과했지만 과최적화 의심으로 데모 보류 (${robust.why}) · 더 견고한 전략만 모의투자에 올립니다`});
+    addResearch({lane, name: spec.name + " (견고성 미달)", market: mk.market, tf, pass: false, oos: +(wf.oos?.return_pct ?? 0), t: Date.now()});
+  }
+  if (wf.pass && robust.ok){
     saveDoc({title: `매매법 · ${spec.name} (${mk.name} ${TF_KO[tf]}봉) 검증 통과`, path: `ghcoin/strategies/${String(spec.name).replace(/[\\/:*?"<>|\s]+/g, "_").slice(0, 50)}.json`, content: JSON.stringify({spec, backtest: {all: st(bt.stats), is: st(wf.is), oos: st(wf.oos), reasons: wf.reasons}, scenarios: scen || ""}, null, 2), team: L.bt, agent: a.id});
     const s = await P.addStrategy({spec, market: mk.market, exchange: mk.exchange, tf, author: a.name, wf: {is: st(wf.is), oos: st(wf.oos)}, cls: mk.cls, mname: mk.name, lane});
-    post({ch: L.demo, kind: "system", text: `📈 데모거래 시작: ${s.name} (${mk.name} ${TF_KO[tf]}봉 · 레버리지 ${spec.risk?.leverage}배 · ${a.name} 개발 · ${v.name} 검증 통과) · 가상 10,000`});
+    post({ch: L.demo, kind: "system", text: `📈 데모거래 시작: ${s.name} (${mk.name} ${TF_KO[tf]}봉 · 레버리지 ${spec.risk?.leverage}배 · ${a.name} 개발 · ${v.name} 검증 통과·견고성 OK) · 가상 10,000`});
     fire({kind: "trade", agent: agentById(L.demoLead), text: `📈 ${s.name} 모의투자 시작합니다`});
   }
 }
