@@ -292,6 +292,8 @@ function wire(el){
     if (e.target.closest("[data-botopt]")){ O.ask("봇 자동개선 해줘", {room: "bot"}); ctx.toast("데모 봇의 보조지표·위험값을 하이퍼옵트로 자동 개선합니다 (검증·견고성 통과분만 새 버전)"); return; }
     if (e.target.closest("[data-botselfai]")){ O.ask("자체 AI 확신도 순위 보여줘", {room: "selfai"}); ctx.toast("자체 AI(앙상블)가 외부 키 없이 코인 방향·확신도 순위를 냅니다 · #자체 AI 데스크 방"); return; }
     if (e.target.closest("[data-botplan]")){ O.ask("리서치 플래너 돌려줘", {room: "hq"}); ctx.toast("리서치 플래너가 할 일 목록(todolist)을 만들고 최우선 리서치를 워커에게 배정합니다 · #CEO실"); return; }
+    if (e.target.closest("[data-botcontest]")){ O.ask("전략 콘테스트 열어줘", {room: "demo"}); ctx.toast("데모 전략들을 성과로 겨뤄 리더보드 순위를 매깁니다 · #데모거래팀 방 (전략 2개 이상 필요)"); return; }
+    if (e.target.closest("[data-botpos]")){ O.ask("단타 스윙 포지션 추천해줘", {room: "entry"}); ctx.toast("자체 AI + ATR 로 단타·스윙 포지션을 추천합니다 · #진입 타점팀 방"); return; }
     if (e.target.closest("[data-botlive]")){ if (typeof ctx.openLive === "function") ctx.openLive(); else ctx.toast("실거래 화면을 열 수 없습니다"); return; }
     const sg = e.target.closest("[data-suggest]"); if (sg){ const inp = $o("#ofIn"); inp.value = sg.dataset.suggest; inp.focus(); return; }
     const rc = e.target.closest("[data-recent]"); if (rc){ const t = rc.dataset.recent; addRecent(teamById(chan) ? chan : "hq", t); O.ask(t, {room: teamById(chan) ? chan : "hq"}); return; }
@@ -728,7 +730,7 @@ async function botsHTML(){
     <p class="of-dim">유명 트레이딩 봇(passivbot·jesse·OctoBot·freqtrade·Binance 선물봇)의 전략을 우리 전략으로 만들어 <b>백테스트 → 데모거래 → 실거래</b> 순서로 올립니다.
       <b>주문은 AI가 아니라 코드가</b>, 안전 한도와 대표님 승인 안에서만 냅니다. 기본은 테스트넷이고, 실거래는 대표님이 [실거래] 화면에서 직접 켜고 전략을 연결해야 시작됩니다. 자동 개선은 전략 최적화팀이 맡습니다.</p>
     ${banner}
-    <div class="nt-row" style="flex-wrap:wrap;gap:6px;margin:8px 0"><button class="of-btn2" data-botnew>➕ 봇 전략 만들기(백테스트)</button><button class="of-btn2" data-botopt>🔧 봇 자동개선(하이퍼옵트)</button><button class="of-btn2" data-botselfai>🧠 자체 AI 확신도</button><button class="of-btn2" data-botplan>🧭 리서치 플래너</button><button class="of-btn2" data-botsim>🧪 그리드/DCA 연구 백테스트</button>${B.supported ? `<button class="of-btn2" data-botlive>💰 실거래 화면 열기 (켜고 연결)</button>` : ""}</div>
+    <div class="nt-row" style="flex-wrap:wrap;gap:6px;margin:8px 0"><button class="of-btn2" data-botnew>➕ 봇 전략 만들기(백테스트)</button><button class="of-btn2" data-botopt>🔧 봇 자동개선(하이퍼옵트)</button><button class="of-btn2" data-botselfai>🧠 자체 AI 확신도</button><button class="of-btn2" data-botplan>🧭 리서치 플래너</button><button class="of-btn2" data-botcontest>🏆 전략 콘테스트</button><button class="of-btn2" data-botpos>🎯 단타·스윙 포지션</button><button class="of-btn2" data-botsim>🧪 그리드/DCA 연구 백테스트</button>${B.supported ? `<button class="of-btn2" data-botlive>💰 실거래 화면 열기 (켜고 연결)</button>` : ""}</div>
     <section class="of-lane"><h4>🤖 데모·실거래 중인 봇</h4>${botRows}</section>
     <section class="of-lane"><h4>📦 올릴 수 있는 봇 전략 (단일 포지션 · 실거래 가능)</h4><div class="bot-tpls">${B.templates.map(t => `<button class="bot-tpl" data-botnew title="${e(t.repo)}"><b>${e(t.name)}</b><small>${e(t.repo)}</small></button>`).join("")}</div></section>
     <section class="of-lane"><h4>🧪 그리드 · DCA 봇 (연구용 백테스트만)</h4><p class="of-dim">무한 물타기로 청산될 수 있어 <b>실거래로는 내보내지 않습니다</b>. 지갑 노출·물타기 횟수 한도로 막고, 어떤 장세에서 위험한지 백테스트로만 보여 줍니다.</p><div class="bot-tpls">${B.sim.map(t => `<button class="bot-tpl sim" data-botsim title="${e(t.repo)}"><b>${e(t.name)}</b><small>${e(t.repo)}</small></button>`).join("")}</div></section></div>`;
