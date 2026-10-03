@@ -223,6 +223,7 @@ const ACTIONS = [
   {job: "pos", re: /단타|스윙|스캘핑|포지션\s*(추천|알려|잡아|줘|어때|봐)|포지션\s*추천|지금\s*(사|팔|들어가)/i, say: "진입 타점팀이 지금 바로 자체 AI + ATR 로 단타·스윙 포지션(방향·진입·손절·익절·손익비)을 추천합니다"},
   {job: "contest", re: /콘테스트|대회|리더보드|전략\s*순위|전략\s*경쟁|어느\s*전략.{0,6}(좋|나)|best\s*strategy/i, say: "데모거래팀이 지금 바로 전략 콘테스트를 열어 데모 전략들을 성과로 겨뤄 순위를 매깁니다"},
   {job: "ensemble", re: /앙상블\s*포트|포트폴리오|분산\s*(투자|운용|배분)|비중\s*(배분|분배|나눠)|여러\s*전략.{0,6}(묶|섞|합)|자본\s*배분/i, say: "데모거래팀이 신뢰점수 상위 전략들을 묶어 분산 포트폴리오(전략별 자본 비중)를 제안합니다"},
+  {job: "reality", re: /1\s*억|얼마.{0,4}(벌|버|먹|불)|부자|대박|떡상|목표\s*수익|돈.{0,4}벌어|며칠.{0,6}얼마|현실\s*점검|가능\s*하냐|될\s*수\s*있/i, say: "CEO실이 '정직한 현실 점검'으로 목표 수익의 실제 도달·파산 확률을 몬테카를로로 솔직히 보여줍니다 (희망 회로 금지)"},
   {job: "track", re: /적중률|캘리브레이션|승률|예측.{0,6}(맞|정확|적중)|얼마나\s*맞|확신도\s*(검증|맞)/i, say: "CEO실에서 QA가 지금까지의 예측을 채점해 적중률과 확신도 캘리브레이션을 보고합니다"},
   {job: "report", re: /대시보드|성과\s*(보여|요약|대시|정리|보고|어때)|전체\s*수익|실적\s*(보|요약)|얼마.{0,3}벌/i, say: "CEO가 지금 바로 성과 대시보드(총 손익·전략별 기여·적중률·심리)를 한눈에 정리합니다"},
   {job: "selfai", re: /자체\s*ai|자체\s*인공지능|앙상블|트레이딩\s*데스크|자체\s*모델|ghcoinai|확신도\s*순위|ai\s*데스크/i, say: "자체 AI 데스크가 지금 바로 외부 키 없이 앙상블(기술 평점·멀티 시간대·ML·알파)로 코인 방향·확신도 순위를 냅니다"},
@@ -702,14 +703,14 @@ export function startChatter(){
 // 매 주기 ① 모의투자 장부를 실제 시세로 갱신(코드, AI 없음) ② 그때그때 한 가지 일을 고른다:
 // 매매법 연구 · SNS 여론 · 경제 리서치 · 동료 수다 · 컴퓨터 작업 · 모의투자 보고 (하루 AI 호출 한도 안에서)
 // 쉬지 않고 돌아가는 업무 순환표: 팀마다 고르게 돌아가도록 섞어 두었다 (모듈이 없으면 경제 리서치로 대신)
-const JOBS = ["plan", "dev", "combo", "ic", "bot", "ind", "qrisk", "trend", "data", "opt", "patscan", "situ", "cdev", "entry", "sr", "news", "sent", "pos", "contest", "ensemble", "track", "report", "promote", "pattern", "coin", "ml", "selfai", "dev", "tpsl", "combo", "drift", "cdev", "feeds", "alpha", "bot", "botopt", "selfai", "plan", "trend", "ic", "chat", "forecast", "coin", "live", "retro", "task", "selfdev", "macro", "sns", "computer", "paper"];
-const JOB_KO = {plan: "리서치 플래너(할 일 목록 → 워커 배정)", sent: "시장 심리(자체 감정 엔진)", pos: "단타·스윙 포지션 추천", contest: "전략 콘테스트(데모 성과 리더보드)", ensemble: "앙상블 포트폴리오(신뢰점수로 비중 배분)", track: "예측 적중률·캘리브레이션", report: "성과 대시보드", bot: "자동매매봇 전략 만들기", botopt: "자동매매봇 자동 개선(보조지표·위험값 하이퍼옵트)", selfai: "자체 AI 데스크(앙상블 방향·확신도 순위)", ic: "투자위원회(강세·약세 토론 → 결정)", qrisk: "퀀트 리스크(VaR·결정표·주문 전 점검)", data: "거래소 비교·데이터 품질", opt: "하이퍼옵트로 전략 다듬기", patscan: "패턴 스캐너", drift: "데모 성과 이동 감지(런 차트)", feeds: "경제 캘린더·금리·변동성 지수", alpha: "알파 팩터 순위", combo: "실시간 종합 지표 타점", dev: "매매법 개발 → 백테스트", cdev: "커스텀 지표 개발 → 백테스트", ind: "보조지표 분석", trend: "다중 시간대 추세 분석", entry: "진입 타점 분석", sr: "지지·저항 분석",
+const JOBS = ["plan", "dev", "combo", "ic", "bot", "ind", "qrisk", "trend", "data", "opt", "patscan", "situ", "cdev", "entry", "sr", "news", "sent", "pos", "contest", "ensemble", "reality", "track", "report", "promote", "pattern", "coin", "ml", "selfai", "dev", "tpsl", "combo", "drift", "cdev", "feeds", "alpha", "bot", "botopt", "selfai", "plan", "trend", "ic", "chat", "forecast", "coin", "live", "retro", "task", "selfdev", "macro", "sns", "computer", "paper"];
+const JOB_KO = {plan: "리서치 플래너(할 일 목록 → 워커 배정)", sent: "시장 심리(자체 감정 엔진)", pos: "단타·스윙 포지션 추천", contest: "전략 콘테스트(데모 성과 리더보드)", ensemble: "앙상블 포트폴리오(신뢰점수로 비중 배분)", reality: "정직한 현실 점검(목표 수익 도달·파산 확률)", track: "예측 적중률·캘리브레이션", report: "성과 대시보드", bot: "자동매매봇 전략 만들기", botopt: "자동매매봇 자동 개선(보조지표·위험값 하이퍼옵트)", selfai: "자체 AI 데스크(앙상블 방향·확신도 순위)", ic: "투자위원회(강세·약세 토론 → 결정)", qrisk: "퀀트 리스크(VaR·결정표·주문 전 점검)", data: "거래소 비교·데이터 품질", opt: "하이퍼옵트로 전략 다듬기", patscan: "패턴 스캐너", drift: "데모 성과 이동 감지(런 차트)", feeds: "경제 캘린더·금리·변동성 지수", alpha: "알파 팩터 순위", combo: "실시간 종합 지표 타점", dev: "매매법 개발 → 백테스트", cdev: "커스텀 지표 개발 → 백테스트", ind: "보조지표 분석", trend: "다중 시간대 추세 분석", entry: "진입 타점 분석", sr: "지지·저항 분석",
   tpsl: "익절·손절 관리", news: "뉴스·기사 분석", macro: "경제지표 예측", situ: "코인 상황판", pattern: "차트·캔들 패턴 분석", coin: "코인팀 회의", ml: "머신러닝·딥러닝 실험",
   promote: "데모 → 실거래 관문 심사", live: "실거래 데스크 점검", paper: "데모거래 보고", forecast: "방향 예측 토론", sns: "SNS 여론 확인", chat: "동료 수다", computer: "컴퓨터 작업",
   retro: "팀 회고·부족한 점 찾기", task: "개선 과제 수행", selfdev: "우리 앱 오류 찾아 코드 고치기", economy: "경제 리서치"};
-const JOB_TEAM = {plan: "hq", sent: "news", pos: "entry", contest: "demo", ensemble: "demo", track: "hq", report: "hq", bot: "bot", botopt: "bot", selfai: "selfai", ic: "ic", qrisk: "qrisk", data: "data", opt: "opt", patscan: "pattern", drift: "demo", feeds: "news", alpha: "ml", combo: "combo", dev: "dev", cdev: "cdev", ind: "ind", trend: "trend", entry: "entry", sr: "sr", tpsl: "tpsl", news: "news", macro: "news", situ: "situ", pattern: "pattern", coin: "btc", ml: "ml",
+const JOB_TEAM = {plan: "hq", sent: "news", pos: "entry", contest: "demo", ensemble: "demo", reality: "hq", track: "hq", report: "hq", bot: "bot", botopt: "bot", selfai: "selfai", ic: "ic", qrisk: "qrisk", data: "data", opt: "opt", patscan: "pattern", drift: "demo", feeds: "news", alpha: "ml", combo: "combo", dev: "dev", cdev: "cdev", ind: "ind", trend: "trend", entry: "entry", sr: "sr", tpsl: "tpsl", news: "news", macro: "news", situ: "situ", pattern: "pattern", coin: "btc", ml: "ml",
   promote: "demo", live: "live", paper: "demo", forecast: "entry", sns: "news", chat: "hq", computer: "hq", retro: "hq", task: "hq", selfdev: "hq", economy: "news"};
-const JOB_FN = () => ({plan: plannerJob, sent: sentimentJob, pos: posJob, contest: contestJob, ensemble: ensembleJob, track: trackJob, report: dashboardJob, bot: botJob, botopt: botImproveJob, selfai: selfaiJob, ic: icJob, qrisk: qriskJob, data: dataJob, opt: optJob, patscan: patternScanJob, drift: driftJob, feeds: openFeedsJob, alpha: alphaJob, combo: comboJob, dev: () => research("std"), cdev: () => research("custom"), ind: indJob, trend: trendJob, entry: entryJob, sr: srJob, tpsl: tpslJob, news: economyCheck, macro: macroJob,
+const JOB_FN = () => ({plan: plannerJob, sent: sentimentJob, pos: posJob, contest: contestJob, ensemble: ensembleJob, reality: realityJob, track: trackJob, report: dashboardJob, bot: botJob, botopt: botImproveJob, selfai: selfaiJob, ic: icJob, qrisk: qriskJob, data: dataJob, opt: optJob, patscan: patternScanJob, drift: driftJob, feeds: openFeedsJob, alpha: alphaJob, combo: comboJob, dev: () => research("std"), cdev: () => research("custom"), ind: indJob, trend: trendJob, entry: entryJob, sr: srJob, tpsl: tpslJob, news: economyCheck, macro: macroJob,
   situ: situJob, pattern: patternJob, coin: coinJob, ml: mlJob, promote: promoteJob, live: liveDeskJob, paper: paperReport, forecast: forecastJob, sns: snsCheck, chat: () => chatter(true),
   computer: computerWork, retro, task: doTask, selfdev: selfdevJob, economy: economyCheck});
 let cycleTimer = 0, cycling = false, lastJob = "";
@@ -2031,6 +2032,29 @@ async function ensembleJob(){
     `신뢰점수가 높을수록 자본을 더 배분(한 전략 최대 ${(CAP * 100).toFixed(0)}%) · 가중 평균 데모수익 ${pc(+wRet.toFixed(2))} · ${coins.size}개 코인 분산${coins.size < alloc.length ? " (같은 코인 중복 있음 — 코인은 함께 움직여 분산 효과 제한)" : ""} · 실거래는 총노출 한도와 함께 쓰세요 · 계산값일 뿐 미래 보장 아님`);
   addNote("demo", `앙상블 포트폴리오: ${alloc.slice(0, 3).map(a => `${a.s.name.slice(0, 12)} ${(a.weight * 100).toFixed(0)}%`).join(", ")}${alloc.length > 3 ? " …" : ""}`, "앙상블");
   if (hasAI()) await explain(lead.id, "demo", "앙상블 포트폴리오 표를 보고, 왜 이렇게 비중을 나눴는지(신뢰점수 비례, 한 전략 쏠림 방지 상한), 코인 분산이 충분한지(코인은 같이 움직이는 경향이 있어 분산 효과가 제한됨), 실거래에 쓸 때 총노출 한도와 어떻게 맞출지 해설한다. 계산값일 뿐 미래를 보장하지 않는다는 점을 밝힌다.", tableText(["비중순", "전략", "시장", "신뢰점수", "데모수익", "제안비중"], rows.map(r => r.slice(0, 6))), "아래 앙상블 포트폴리오 배분을 해설해 줘.");
+}
+
+/* ---- 🧮 정직한 현실 점검 — 목표 수익의 실제 도달·파산 확률을 몬테카를로로 솔직히 (희망 회로 금지) ---- */
+async function realityJob(text = ""){
+  const G = await lib("growth"), lead = agentById("trader");
+  // 목표·기간 파싱 (예: "1억", "30일"). 기본 10만원 → 1억 / 30일
+  const start = 100000; let target = 100000000, days = 30;
+  const mt = String(text).match(/(\d[\d,]*)\s*(억|천만|백만|만원|만|원)/);
+  if (mt){ const n = +mt[1].replace(/,/g, ""); const u = mt[2]; target = u === "억" ? n * 1e8 : u === "천만" ? n * 1e7 : u === "백만" ? n * 1e6 : u.startsWith("만") ? n * 1e4 : n; }
+  const md = String(text).match(/(\d+)\s*(일|주|달|개월)/);
+  if (md){ const n = +md[1], u = md[2]; days = u === "일" ? n : u === "주" ? n * 7 : n * 30; }
+  if (!(target > start) || !(days >= 1)){ target = 100000000; days = 30; }
+  const base = G.honestGrowth({start, target, days});
+  const rows = [2, 10, 25, 50].map(r => { const g = G.honestGrowth({start, target, days, winRate: 0.55, rr: 1.5, tradesPerDay: 3, riskPct: r});
+    return [`1회 ${r}%`, `${g.pReach}%`, `${g.pBust >= 30 ? "⚠ " : ""}${g.pBust}%`, "₩" + g.median.toLocaleString(), "₩" + g.p10.toLocaleString() + " ~ ₩" + g.p90.toLocaleString()]; });
+  table("hq", lead.id, `🧮 정직한 현실 점검 — ₩${start.toLocaleString()} → ₩${target.toLocaleString()} / ${days}일`,
+    ["1회 베팅(위험)", "목표 도달", "파산", "중간 결과", "하위10%~상위10%"], rows,
+    `목표까지 매일 복리 ${base.needDaily.toFixed(1)}% 필요 · 좋은 전략(승률 55%·손익비 1.5·1회 기대값 +0.38R)을 가정한 ${base.sims.toLocaleString()}회 시뮬레이션. ` +
+    `안전하게(2%) 걸면 목표에 거의 못 가고, 1억 쫓아 크게(50%) 걸면 대부분 파산합니다. ` +
+    `자동매매는 돈을 벌어주지 않습니다 — 과최적화를 걸러 '덜 잃게' 돕는 도구일 뿐. 잃어도 되는 돈만, 데모·소액 테스트넷부터.`);
+  addNote("hq", `현실 점검: ₩${target.toLocaleString()}/${days}일 — 안전하면 도달 희박, 무리하면 파산 급등`, "정직");
+  post({ch: "hq", kind: "system", text: `⚠️ 정직하게: 이 앱은 자동으로 돈 벌어주는 기계가 아닙니다. 과최적화·운 좋은 가짜 전략을 신뢰점수·게이트로 걸러 손실 확률을 낮추는 연구·검증 도구입니다.`});
+  if (hasAI()) await explain(lead.id, "hq", "정직한 현실 점검 표를 보고, 왜 '적게 걸면 목표 못 가고 많이 걸면 파산'인지(복리·레버리지·변동성), 자동매매가 돈을 벌어주지 않는다는 점, 잃어도 되는 돈만·데모·소액 테스트넷부터 해야 하는 이유를 솔직하고 단호하게 3~5문장으로 설명한다. 희망적인 말로 포장하지 않는다.", tableText(["1회 베팅", "도달", "파산", "중간"], rows.map(r => r.slice(0, 4))), "아래 현실 점검 결과를 솔직하게 해설해 줘.");
 }
 
 /* ---- 🕯 패턴 스캐너 (stock-pattern · chart_patterns 규칙) → 차트·캔들 패턴팀 ---- */
