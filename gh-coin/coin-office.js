@@ -224,6 +224,7 @@ const ACTIONS = [
   {job: "contest", re: /콘테스트|대회|리더보드|전략\s*순위|전략\s*경쟁|어느\s*전략.{0,6}(좋|나)|best\s*strategy/i, say: "데모거래팀이 지금 바로 전략 콘테스트를 열어 데모 전략들을 성과로 겨뤄 순위를 매깁니다"},
   {job: "ensemble", re: /앙상블\s*포트|포트폴리오|분산\s*(투자|운용|배분)|비중\s*(배분|분배|나눠)|여러\s*전략.{0,6}(묶|섞|합)|자본\s*배분/i, say: "데모거래팀이 신뢰점수 상위 전략들을 묶어 분산 포트폴리오(전략별 자본 비중)를 제안합니다"},
   {job: "reality", re: /1\s*억|얼마.{0,4}(벌|버|먹|불)|부자|대박|떡상|목표\s*수익|돈.{0,4}벌어|며칠.{0,6}얼마|현실\s*점검|가능\s*하냐|될\s*수\s*있/i, say: "CEO실이 '정직한 현실 점검'으로 목표 수익의 실제 도달·파산 확률을 몬테카를로로 솔직히 보여줍니다 (희망 회로 금지)"},
+  {job: "preset", re: /프리셋|준비된\s*매매법|기본\s*전략|고전\s*전략|rsi.{0,4}macd|RSI.{0,4}MACD|프리\s*셋|전략\s*비교/i, say: "준비된 매매법 프리셋(RSI·MACD·볼린저·스토캐스틱·EMA 등)을 AI 없이 바로 백테스트해 수익률·신뢰점수로 비교합니다 (io-uty 아이디어)"},
   {job: "track", re: /적중률|캘리브레이션|승률|예측.{0,6}(맞|정확|적중)|얼마나\s*맞|확신도\s*(검증|맞)/i, say: "CEO실에서 QA가 지금까지의 예측을 채점해 적중률과 확신도 캘리브레이션을 보고합니다"},
   {job: "report", re: /대시보드|성과\s*(보여|요약|대시|정리|보고|어때)|전체\s*수익|실적\s*(보|요약)|얼마.{0,3}벌/i, say: "CEO가 지금 바로 성과 대시보드(총 손익·전략별 기여·적중률·심리)를 한눈에 정리합니다"},
   {job: "selfai", re: /자체\s*ai|자체\s*인공지능|앙상블|트레이딩\s*데스크|자체\s*모델|ghcoinai|확신도\s*순위|ai\s*데스크/i, say: "자체 AI 데스크가 지금 바로 외부 키 없이 앙상블(기술 평점·멀티 시간대·ML·알파)로 코인 방향·확신도 순위를 냅니다"},
@@ -703,14 +704,14 @@ export function startChatter(){
 // 매 주기 ① 모의투자 장부를 실제 시세로 갱신(코드, AI 없음) ② 그때그때 한 가지 일을 고른다:
 // 매매법 연구 · SNS 여론 · 경제 리서치 · 동료 수다 · 컴퓨터 작업 · 모의투자 보고 (하루 AI 호출 한도 안에서)
 // 쉬지 않고 돌아가는 업무 순환표: 팀마다 고르게 돌아가도록 섞어 두었다 (모듈이 없으면 경제 리서치로 대신)
-const JOBS = ["plan", "dev", "combo", "ic", "bot", "ind", "qrisk", "trend", "data", "opt", "patscan", "situ", "cdev", "entry", "sr", "news", "sent", "pos", "contest", "ensemble", "reality", "track", "report", "promote", "pattern", "coin", "ml", "selfai", "dev", "tpsl", "combo", "drift", "cdev", "feeds", "alpha", "bot", "botopt", "selfai", "plan", "trend", "ic", "chat", "forecast", "coin", "live", "retro", "task", "selfdev", "macro", "sns", "computer", "paper"];
-const JOB_KO = {plan: "리서치 플래너(할 일 목록 → 워커 배정)", sent: "시장 심리(자체 감정 엔진)", pos: "단타·스윙 포지션 추천", contest: "전략 콘테스트(데모 성과 리더보드)", ensemble: "앙상블 포트폴리오(신뢰점수로 비중 배분)", reality: "정직한 현실 점검(목표 수익 도달·파산 확률)", track: "예측 적중률·캘리브레이션", report: "성과 대시보드", bot: "자동매매봇 전략 만들기", botopt: "자동매매봇 자동 개선(보조지표·위험값 하이퍼옵트)", selfai: "자체 AI 데스크(앙상블 방향·확신도 순위)", ic: "투자위원회(강세·약세 토론 → 결정)", qrisk: "퀀트 리스크(VaR·결정표·주문 전 점검)", data: "거래소 비교·데이터 품질", opt: "하이퍼옵트로 전략 다듬기", patscan: "패턴 스캐너", drift: "데모 성과 이동 감지(런 차트)", feeds: "경제 캘린더·금리·변동성 지수", alpha: "알파 팩터 순위", combo: "실시간 종합 지표 타점", dev: "매매법 개발 → 백테스트", cdev: "커스텀 지표 개발 → 백테스트", ind: "보조지표 분석", trend: "다중 시간대 추세 분석", entry: "진입 타점 분석", sr: "지지·저항 분석",
+const JOBS = ["plan", "dev", "combo", "ic", "bot", "ind", "qrisk", "trend", "data", "opt", "patscan", "situ", "cdev", "entry", "sr", "news", "sent", "pos", "contest", "ensemble", "reality", "preset", "track", "report", "promote", "pattern", "coin", "ml", "selfai", "dev", "tpsl", "combo", "drift", "cdev", "feeds", "alpha", "bot", "botopt", "selfai", "plan", "trend", "ic", "chat", "forecast", "coin", "live", "retro", "task", "selfdev", "macro", "sns", "computer", "paper"];
+const JOB_KO = {plan: "리서치 플래너(할 일 목록 → 워커 배정)", sent: "시장 심리(자체 감정 엔진)", pos: "단타·스윙 포지션 추천", contest: "전략 콘테스트(데모 성과 리더보드)", ensemble: "앙상블 포트폴리오(신뢰점수로 비중 배분)", reality: "정직한 현실 점검(목표 수익 도달·파산 확률)", preset: "준비된 매매법 프리셋 비교(io-uty RSI·MACD + 지표 146종)", track: "예측 적중률·캘리브레이션", report: "성과 대시보드", bot: "자동매매봇 전략 만들기", botopt: "자동매매봇 자동 개선(보조지표·위험값 하이퍼옵트)", selfai: "자체 AI 데스크(앙상블 방향·확신도 순위)", ic: "투자위원회(강세·약세 토론 → 결정)", qrisk: "퀀트 리스크(VaR·결정표·주문 전 점검)", data: "거래소 비교·데이터 품질", opt: "하이퍼옵트로 전략 다듬기", patscan: "패턴 스캐너", drift: "데모 성과 이동 감지(런 차트)", feeds: "경제 캘린더·금리·변동성 지수", alpha: "알파 팩터 순위", combo: "실시간 종합 지표 타점", dev: "매매법 개발 → 백테스트", cdev: "커스텀 지표 개발 → 백테스트", ind: "보조지표 분석", trend: "다중 시간대 추세 분석", entry: "진입 타점 분석", sr: "지지·저항 분석",
   tpsl: "익절·손절 관리", news: "뉴스·기사 분석", macro: "경제지표 예측", situ: "코인 상황판", pattern: "차트·캔들 패턴 분석", coin: "코인팀 회의", ml: "머신러닝·딥러닝 실험",
   promote: "데모 → 실거래 관문 심사", live: "실거래 데스크 점검", paper: "데모거래 보고", forecast: "방향 예측 토론", sns: "SNS 여론 확인", chat: "동료 수다", computer: "컴퓨터 작업",
   retro: "팀 회고·부족한 점 찾기", task: "개선 과제 수행", selfdev: "우리 앱 오류 찾아 코드 고치기", economy: "경제 리서치"};
-const JOB_TEAM = {plan: "hq", sent: "news", pos: "entry", contest: "demo", ensemble: "demo", reality: "hq", track: "hq", report: "hq", bot: "bot", botopt: "bot", selfai: "selfai", ic: "ic", qrisk: "qrisk", data: "data", opt: "opt", patscan: "pattern", drift: "demo", feeds: "news", alpha: "ml", combo: "combo", dev: "dev", cdev: "cdev", ind: "ind", trend: "trend", entry: "entry", sr: "sr", tpsl: "tpsl", news: "news", macro: "news", situ: "situ", pattern: "pattern", coin: "btc", ml: "ml",
+const JOB_TEAM = {plan: "hq", sent: "news", pos: "entry", contest: "demo", ensemble: "demo", reality: "hq", preset: "demo", track: "hq", report: "hq", bot: "bot", botopt: "bot", selfai: "selfai", ic: "ic", qrisk: "qrisk", data: "data", opt: "opt", patscan: "pattern", drift: "demo", feeds: "news", alpha: "ml", combo: "combo", dev: "dev", cdev: "cdev", ind: "ind", trend: "trend", entry: "entry", sr: "sr", tpsl: "tpsl", news: "news", macro: "news", situ: "situ", pattern: "pattern", coin: "btc", ml: "ml",
   promote: "demo", live: "live", paper: "demo", forecast: "entry", sns: "news", chat: "hq", computer: "hq", retro: "hq", task: "hq", selfdev: "hq", economy: "news"};
-const JOB_FN = () => ({plan: plannerJob, sent: sentimentJob, pos: posJob, contest: contestJob, ensemble: ensembleJob, reality: realityJob, track: trackJob, report: dashboardJob, bot: botJob, botopt: botImproveJob, selfai: selfaiJob, ic: icJob, qrisk: qriskJob, data: dataJob, opt: optJob, patscan: patternScanJob, drift: driftJob, feeds: openFeedsJob, alpha: alphaJob, combo: comboJob, dev: () => research("std"), cdev: () => research("custom"), ind: indJob, trend: trendJob, entry: entryJob, sr: srJob, tpsl: tpslJob, news: economyCheck, macro: macroJob,
+const JOB_FN = () => ({plan: plannerJob, sent: sentimentJob, pos: posJob, contest: contestJob, ensemble: ensembleJob, reality: realityJob, preset: presetJob, track: trackJob, report: dashboardJob, bot: botJob, botopt: botImproveJob, selfai: selfaiJob, ic: icJob, qrisk: qriskJob, data: dataJob, opt: optJob, patscan: patternScanJob, drift: driftJob, feeds: openFeedsJob, alpha: alphaJob, combo: comboJob, dev: () => research("std"), cdev: () => research("custom"), ind: indJob, trend: trendJob, entry: entryJob, sr: srJob, tpsl: tpslJob, news: economyCheck, macro: macroJob,
   situ: situJob, pattern: patternJob, coin: coinJob, ml: mlJob, promote: promoteJob, live: liveDeskJob, paper: paperReport, forecast: forecastJob, sns: snsCheck, chat: () => chatter(true),
   computer: computerWork, retro, task: doTask, selfdev: selfdevJob, economy: economyCheck});
 let cycleTimer = 0, cycling = false, lastJob = "";
@@ -2055,6 +2056,43 @@ async function realityJob(text = ""){
   addNote("hq", `현실 점검: ₩${target.toLocaleString()}/${days}일 — 안전하면 도달 희박, 무리하면 파산 급등`, "정직");
   post({ch: "hq", kind: "system", text: `⚠️ 정직하게: 이 앱은 자동으로 돈 벌어주는 기계가 아닙니다. 과최적화·운 좋은 가짜 전략을 신뢰점수·게이트로 걸러 손실 확률을 낮추는 연구·검증 도구입니다.`});
   if (hasAI()) await explain(lead.id, "hq", "정직한 현실 점검 표를 보고, 왜 '적게 걸면 목표 못 가고 많이 걸면 파산'인지(복리·레버리지·변동성), 자동매매가 돈을 벌어주지 않는다는 점, 잃어도 되는 돈만·데모·소액 테스트넷부터 해야 하는 이유를 솔직하고 단호하게 3~5문장으로 설명한다. 희망적인 말로 포장하지 않는다.", tableText(["1회 베팅", "도달", "파산", "중간"], rows.map(r => r.slice(0, 4))), "아래 현실 점검 결과를 솔직하게 해설해 줘.");
+}
+
+/* ---- 🧩 준비된 매매법 프리셋 비교 (io-uty RSI·MACD 아이디어 + 우리 지표 146종) — AI 없이 바로 돌려 비교·승격 ---- */
+async function presetJob(){
+  const Q = await import("../nuri-ai/quant.js"), P = await import("../nuri-ai/paper.js"), lead = agentById("trader");
+  let PRE; try { PRE = (await lib("presets")).PRESETS; } catch(e){ post({ch: "demo", kind: "system", text: "프리셋을 불러오지 못했습니다"}); return; }
+  const mk = MARKETS[0];   // 비트코인 선물 4시간봉 (io-uty 는 업비트 1분봉 — 여기선 우리 코인·지표로 일반화)
+  let cs; try { cs = await kl(mk.market, mk.tf, 1500); } catch(e){ post({ch: "demo", kind: "system", text: "캔들을 못 받아 프리셋 비교를 건너뜁니다"}); return; }
+  const RB = await lib("robust").catch(() => null);
+  const st = x => ({ret: +(x?.return_pct ?? 0), dd: +(x?.max_dd_pct ?? 0), win: +(x?.win_rate ?? 0), pf: x?.profit_factor == null ? null : +x.profit_factor, n: x?.n_trades ?? 0});
+  const rows = [], results = [];
+  for (const pr of PRE){
+    try {
+      const spec = Q.normalizeSpec({...pr.spec, symbol: mk.market, interval: IV_NAME[mk.tf] || "4h", risk: {...(pr.spec.risk || {}), ...COSTS[mk.cls]}});
+      const bt = Q.backtest(spec, cs), wf = Q.walkForward(spec, cs);
+      let robust = null;
+      if (RB){ const pt = RB.permutationTest(bt.trades.map(t => t.pnl)), mw = RB.multiWindow(Q, spec, cs, 5); robust = {ok: (pt.p == null || pt.p <= 0.1) && (mw.total < 3 || mw.positive >= Math.ceil(mw.total * 0.6)), p: pt.p ?? null, mwPos: mw.positive, mwTotal: mw.total, sqn: null}; }
+      const oos = wf.oos || {}, trust = trustScore({ret: +(oos.return_pct ?? 0), wr: +(oos.win_rate ?? 0), pf: oos.profit_factor ?? null, n: oos.n_trades ?? 0, robust});
+      results.push({pr, spec, wf, trust, robust});
+      rows.push([pr.name, pc(+(bt.stats.return_pct ?? 0)), String(bt.stats.n_trades ?? 0), bt.stats.profit_factor ?? "—", wf.pass ? "✅" : "—", `${trust} ${trustGrade(trust).split(" ")[0]}`]);
+    } catch(e){ rows.push([pr.name, "오류", "-", "-", "-", "-"]); }
+  }
+  results.sort((a, b) => b.trust - a.trust);
+  rows.sort((a, b) => (parseInt(b[5]) || 0) - (parseInt(a[5]) || 0));
+  table("demo", lead.id, `🧩 준비된 매매법 프리셋 비교 — ${mk.name} ${TF_KO[mk.tf]}봉 (io-uty RSI·MACD 아이디어 + 우리 지표 146종)`,
+    ["전략", "수익%", "거래", "손익비", "검증", "신뢰점수"], rows,
+    "AI 없이 바로 돌려본 고전 전략. 검증(70/30) 통과 + 신뢰점수 높은 것만 데모로 올립니다 · 전략 조건에 차트 터미널 지표 146종 전부 사용 가능 · 과거 성과가 미래를 보장하지 않음");
+  let promoted = 0;
+  for (const r of results){
+    if (promoted >= 2) break;
+    if (r.wf.pass && (!r.robust || r.robust.ok)){
+      const s = await P.addStrategy({spec: r.spec, market: mk.market, exchange: mk.exchange, tf: mk.tf, author: "프리셋(io-uty)", wf: {is: st(r.wf.is), oos: st(r.wf.oos)}, cls: mk.cls, mname: mk.name, robust: r.robust, crossCoin: null});
+      post({ch: "demo", kind: "system", text: `📈 프리셋 데모 시작: ${s.name} (${mk.name} · 신뢰 ${r.trust} ${trustGrade(r.trust)})`});
+      promoted++;
+    }
+  }
+  addNote("demo", `프리셋 비교 ${PRE.length}개 · 데모 승격 ${promoted}개 (1위 ${results[0]?.pr.name} 신뢰 ${results[0]?.trust})`, "프리셋");
 }
 
 /* ---- 🕯 패턴 스캐너 (stock-pattern · chart_patterns 규칙) → 차트·캔들 패턴팀 ---- */

@@ -369,13 +369,17 @@ const EXT_NAME = name => DERIV_FIELDS.includes(name) || /^(?:ml|ext)_\w+$/.test(
 // 지표 계산. 항상 {출력이름: 시리즈} 형태 (indicators.compute)
 // 차트 터미널 지표(terminal/ind.js)를 전략·수식에서도: type "tv_<id>" · 출력 value(첫 선) p1~p4(다음 선) · 신호형은 +1/-1
 // 외부 데이터가 필요한 것(OI·펀딩·청산·BTC 대비 등)과 화면 전용(볼륨 프로파일)은 뺀다
-const TV_SKIP = new Set(["vp", "session_vp", "oi", "oi_delta", "funding", "long_short", "taker", "liq", "cb_premium", "rs_btc", "corr_btc"]);
+// 차트 터미널 지표 전부를 전략에서 쓸 수 있게 한다. 외부/파생 데이터(펀딩·OI·롱숏·청산·거래소프리미엄 등)가
+// 필요한 지표는 데이터가 없으면 tvCompute 가 조용히 null 을 돌려주고, 그 조건은 normalizeSpec 뒤처리에서 자동으로 빠진다.
+const TV_SKIP = new Set();
 const TV_OUTS = ["value", "p1", "p2", "p3", "p4"];
 for (const [id, d] of Object.entries(TV_IND)) if (!TV_SKIP.has(id)) IND_REGISTRY["tv_" + id] = {outputs: TV_OUTS, defaults: {...(d.params || {})}, desc: d.name, tv: id};
 export const TV_TYPES = Object.keys(IND_REGISTRY).filter(k => k.startsWith("tv_"));
 function tvCompute(c, id, p){
-  const bars = c.map(b => ({time: Math.floor(b.t / 1000), open: b.o, high: b.h, low: b.l, close: b.c, volume: b.v}));
-  const r = TV_IND[id].compute(bars, p, {}) || {};
+  const bars = c.map(b => ({time: Math.floor(b.t / 1000), open: b.o, high: b.h, low: b.l, close: b.c, volume: b.v,
+    ...(b.taker_buy != null ? {taker_buy: b.taker_buy} : {}), ...(b.funding != null ? {funding: b.funding} : {}), ...(b.oi != null ? {oi: b.oi} : {})}));
+  let r = {};
+  try { r = TV_IND[id].compute(bars, p, {}) || {}; } catch(e){ r = {}; }   // 외부 데이터 없는 지표는 조용히 빈 결과 → 조건 자동 드롭(하드 오류 방지)
   const plots = (r.plots || []).filter(x => Array.isArray(x.data) && x.data.length === c.length && x.type !== "boxes");
   const out = {};
   TV_OUTS.forEach((k, i) => { const pl = plots[i]; out[k] = pl ? pl.data.map(v => v == null ? null : typeof v === "object" ? (Number.isFinite(+v.dir) ? +v.dir : Number.isFinite(+v.value) ? +v.value : null) : Number.isFinite(+v) ? +v : null) : c.map(() => null); });
