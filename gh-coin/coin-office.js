@@ -64,8 +64,8 @@ export function assignModels(){
   const bad = badModels(), all = live.length ? live : live0.length ? live0 : officeSources(), ok = all.filter(t => !bad[t.model]);
   // Groq 무료는 분당 토큰이 아주 적어 도구가 붙는 긴 회의 프롬프트에 금방 막힌다 → 사무실에서는 뒤로
   const ranked = (ok.length ? ok : all).map(t => ({t, sc: modelScore(t.model) - (t.id === "groq" ? 25 : 0)})).filter(x => x.sc > -40).sort((x, y) => y.sc - x.sc);
-  // 상위 모델 몇 개만 골고루 나눠 쓴다 (좋은 모델이 적으면 그다음 것까지)
-  const top = ranked.filter(x => x.sc >= (ranked[0]?.sc ?? 0) - 25).slice(0, Math.max(3, Math.min(6, Math.ceil(ranked.length / 3)))).map(x => x.t);
+  // 상위 모델을 골고루 나눠 쓴다 — 점수 차가 크더라도 여러 모델을 풀에 넣어 직원마다 다른 모델을 쓰게 한다(다양성)
+  const top = ranked.slice(0, Math.max(3, Math.min(6, ranked.length))).map(x => x.t);
   const pool = top.length ? top : ranked.map(x => x.t);
   const used = new Map(), out = {};
   for (const a of AGENTS){
