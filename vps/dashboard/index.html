@@ -67,9 +67,10 @@ button{font:inherit;color:inherit}
 .pb{padding:12px 14px}
 .pb.np{padding:0}
 .tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
-table{border-collapse:collapse;width:100%;font-size:13px}
+table{border-collapse:collapse;width:100%;min-width:max-content;font-size:13px}
 th{color:var(--mut);font-weight:600;font-size:12px;text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap;background:var(--bg2);position:sticky;top:0}
-td{padding:7px 10px;border-bottom:1px solid rgba(37,48,81,.6);vertical-align:middle}
+td{padding:7px 10px;border-bottom:1px solid rgba(37,48,81,.6);vertical-align:middle;white-space:nowrap}
+td .sub2{white-space:normal;display:block;min-width:170px;max-width:440px}
 tr:last-child td{border-bottom:0}
 tbody tr:hover td{background:rgba(79,140,255,.05)}
 .n{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap;font-size:12.5px}
@@ -148,7 +149,8 @@ th.n{font-family:var(--sans)}
   body{font-size:13.5px}
   .topin{padding:8px 12px;gap:8px}
   .brand{order:1} .pills{order:2} .tabs{order:3;flex-basis:100%;margin:0 -4px}
-  .brand span{display:none}
+  .brand span{display:none} .brand b{font-size:17px}
+  .pill{font-size:11px;padding:3px 8px;gap:5px}
   .tab{padding:6px 10px;font-size:13px}
   .wrap{padding:10px 12px 30px} .banners{padding:0 12px} .foot{padding:0 12px 24px}
   .kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
@@ -169,7 +171,7 @@ th.n{font-family:var(--sans)}
     <nav class="tabs" id="tabs" aria-label="화면"></nav>
     <div class="pills">
       <span class="pill" id="pBot"><i class="dot"></i><span>연결 중…</span></span>
-      <span class="pill" id="pAge"><span>마지막 갱신 —</span></span>
+      <span class="pill" id="pAge"><span>갱신 —</span></span>
       <span class="pill" id="pLive"><span>실거래 —</span></span>
     </div>
   </div>
@@ -194,6 +196,8 @@ const NEEDS = {
 const JOB_KO = {plan: "리서치 플래너", sent: "시장 심리(자체 감정 엔진)", pos: "단타·스윙 포지션 추천", contest: "전략 콘테스트", ensemble: "앙상블 포트폴리오", reality: "정직한 현실 점검", preset: "매매법 프리셋 비교", track: "예측 적중률·캘리브레이션", report: "성과 대시보드", bot: "자동매매봇 전략 만들기", botopt: "자동매매봇 자동 개선", selfai: "자체 AI 데스크", ic: "투자위원회", qrisk: "퀀트 리스크", data: "거래소 비교·데이터 품질", opt: "하이퍼옵트로 전략 다듬기", patscan: "패턴 스캐너", drift: "데모 성과 이동 감지", feeds: "경제 캘린더·금리·변동성 지수", alpha: "알파 팩터 순위", combo: "실시간 종합 지표 타점", dev: "매매법 개발 → 백테스트", cdev: "커스텀 지표 개발 → 백테스트", ind: "보조지표 분석", trend: "다중 시간대 추세 분석", entry: "진입 타점 분석", sr: "지지·저항 분석", tpsl: "익절·손절 관리", news: "뉴스·기사 분석", macro: "경제지표 예측", situ: "코인 상황판", pattern: "차트·캔들 패턴 분석", coin: "코인팀 회의", ml: "머신러닝·딥러닝 실험", promote: "데모 → 실거래 관문 심사", live: "실거래 데스크 점검", paper: "데모거래 보고", forecast: "방향 예측 토론", sns: "SNS 여론 확인", chat: "동료 수다", computer: "컴퓨터 작업", retro: "팀 회고", task: "개선 과제 수행", selfdev: "앱 오류 찾아 고치기", economy: "경제 리서치"};
 const TF_KO = {"1": "1분", "5": "5분", "15": "15분", "60": "1시간", "240": "4시간", "D": "일봉"};
 const CB_ST = {long: ["🟢 롱 타점", "up"], short: ["🔴 숏 타점", "dn"], longWait: ["🟡 롱 대기", "warn"], shortWait: ["🟠 숏 대기", "warn"], wait: ["⚪ 관망", ""]};
+const AUDIT_KO = {decision: "판단", order: "주문", response: "응답", block: "차단", approval: "승인", config: "설정", error: "오류", warn: "경고", info: "정보", halt: "자동 정지", kill: "긴급 정지"};
+const STATUS_KO = {sent: "보냄", approved: "승인됨", rejected: "거절됨", timeout: "시간 초과", no_approver: "승인 창 없음", auto: "자동", FILLED: "체결", sl: "손절", tp: "익절", cancelled: "취소", done: "완료", partial: "일부"};
 const REASON_TONE = {"익절": "up", "손절": "dn", "강제청산": "dn", "추적 손절": "warn"};
 
 let S = {};                       // 서버에서 받은 상태
@@ -226,6 +230,7 @@ const nf = (v, d = 2, min) => isN(v) ? v.toLocaleString("ko-KR", {minimumFractio
 const sg = (v, d = 2) => isN(v) ? (v > 0 ? "+" : v < 0 ? "-" : "") + nf(Math.abs(v), d) : "—";
 const pc = (v, d = 2) => isN(v) ? sg(v, d) + "%" : "—";
 const usd = (v, d = 2) => isN(v) ? sg(v, d) + " USDT" : "—";
+const usdV = (v, d = 2) => isN(v) ? [sg(v, d), h("small", null, "USDT")] : "—";   // 카드용 (단위는 작게)
 const px = v => { if (!isN(v)) return "—"; const a = Math.abs(v), d = a >= 1000 ? 1 : a >= 100 ? 2 : a >= 1 ? 4 : a >= 0.01 ? 5 : 8; return v.toLocaleString("ko-KR", {minimumFractionDigits: 0, maximumFractionDigits: d}); };
 const tn = v => !isN(v) || v === 0 ? "" : v > 0 ? "up" : "dn";
 const p2 = n => String(n).padStart(2, "0");
@@ -238,7 +243,7 @@ function fT(ms, sec){
 function agoS(ms){ if (!isN(ms) || !ms) return "—"; const s = Math.max(0, Math.round((sNow() - ms) / 1000)); return s < 60 ? s + "초 전" : s < 3600 ? Math.floor(s / 60) + "분 전" : s < 86400 ? Math.floor(s / 3600) + "시간 " + (Math.floor(s / 60) % 60) + "분 전" : Math.floor(s / 86400) + "일 전"; }
 function dur(ms){ if (!isN(ms)) return "—"; const s = Math.max(0, Math.round(ms / 1000)); if (s < 60) return s + "초"; if (s < 3600) return Math.floor(s / 60) + "분" + (s % 60 ? " " + (s % 60) + "초" : ""); if (s < 86400) return Math.floor(s / 3600) + "시간 " + Math.floor(s / 60) % 60 + "분"; return Math.floor(s / 86400) + "일 " + Math.floor(s / 3600) % 24 + "시간"; }
 const ago = ms => h("span", {"data-ago": ms}, agoS(ms));
-const until = (snapTs, ms) => isN(ms) && isN(snapTs) ? h("span", {"data-until": snapTs + ms}, ms <= 0 ? "곧" : dur(snapTs + ms - sNow())) : "—";
+const untilAt = at => !isN(at) ? "—" : at <= 0 || at <= sNow() ? "곧" : h("span", {"data-until": at}, dur(at - sNow()));   // at = 그 시각(ms), 0 = 곧
 const sideKo = s => s === "short" || s === -1 ? "숏" : s === "long" || s === 1 ? "롱" : "—";
 const sideTone = s => s === "short" || s === -1 ? "dn" : s === "long" || s === 1 ? "up" : "";
 const tfKo = t => TF_KO[t] || (t ? t + "분" : "");
@@ -298,20 +303,26 @@ function gradeTone(g){ return /^A|^B/.test(g || "") ? "up" : /^C/.test(g || "") 
 function jobText(o){ if (!o) return ""; return o.jobNow || (o.lastJob ? "▶ 최근 업무: " + (JOB_KO[o.lastJob] || o.lastJob) : ""); }
 
 /* ================= 상단 · 경고 띠 ================= */
+const DOWN = {crashed: "봇 페이지(탭)가 죽었습니다", stuck: "봇 페이지가 응답하지 않습니다", no_app: "봇 페이지가 열리지 않았습니다"};
+function freshness(){
+  const m = S.meta || {}, age = isN(m.lastOk) ? (sNow() - m.lastOk) / 1000 : null;
+  return {m, age, fresh: !serverDown && !!lastMsg && m.status === "ok" && !m.stale && age != null && age <= 20};
+}
 function renderHeader(){
-  const m = S.meta || {}, L = S.live, srv = S.server || {};
+  const {m, age, fresh} = freshness(), L = S.live, srv = S.server || {};
   const pb = document.getElementById("pBot"), pa = document.getElementById("pAge"), pl = document.getElementById("pLive");
-  let bt = "봇 실시간", bc = "ok";
+  let bt, bc;
   if (serverDown){ bt = "대시보드 연결 끊김"; bc = "bad"; }
-  else if (!lastMsg){ bt = "연결 중…"; bc = ""; }
+  else if (!lastMsg || !m.status || m.status === "starting"){ bt = "연결 중…"; bc = ""; }
+  else if (DOWN[m.status]){ bt = "봇 멈춤"; bc = "bad"; }
   else if (m.status === "booting"){ bt = "봇 창 켜지는 중"; bc = "warn"; }
   else if (m.status === "no_chrome" || m.status === "no_page"){ bt = "봇 창 연결 끊김"; bc = "bad"; }
   else if (m.status === "error"){ bt = "수집 오류"; bc = "warn"; }
-  else if (m.stale){ bt = "봇 응답 지연"; bc = "warn"; }
+  else if (!fresh){ bt = "봇 응답 지연"; bc = "warn"; }          // 'slow' · 오래된 자료 · 알 수 없는 상태
+  else { bt = "봇 실시간"; bc = "ok"; }
   pb.className = "pill " + bc; pb.lastChild.textContent = bt;
-  const age = m.lastOk ? (sNow() - m.lastOk) / 1000 : null;
   pa.className = "pill " + (age == null ? "" : age < 15 ? "ok" : age < 60 ? "warn" : "bad");
-  pa.lastChild.textContent = age == null ? "마지막 갱신 —" : "마지막 갱신 " + agoS(m.lastOk);
+  pa.lastChild.textContent = age == null ? "갱신 —" : (innerWidth > 640 ? "마지막 갱신 " : "") + agoS(m.lastOk);
   const [lt, lc] = liveLabel(L);
   pl.className = "pill " + lc; pl.lastChild.textContent = lt;
 
@@ -319,20 +330,24 @@ function renderHeader(){
   const old = m.lastOk ? ` 아래는 ${agoS(m.lastOk)} 받은 자료입니다.` : " 아직 받은 자료가 없습니다.";
   if (serverDown) B.push(["bad", "대시보드 서버(:8080)에 연결할 수 없습니다", "Tailscale 이 켜져 있는지, 서버에서 ghcoin-dash 서비스가 돌고 있는지 확인하세요. 자동으로 다시 연결합니다."]);
   else if (lastMsg){
-    if (m.status === "booting") B.push(["warn", "봇 창(Chrome)이 막 켜졌습니다 — 30초쯤 뒤부터 실시간 자료가 들어옵니다.", old]);
-    else if (m.status === "no_chrome") B.push(["bad", "봇 창(Chrome)에 연결할 수 없습니다 — 다시 붙는 중", "매일 05:15 재시작·충돌 직후라면 1분 안에 자동으로 다시 연결됩니다." + old]);
+    if (DOWN[m.status]) B.push(["bad alert", "⛔ 봇이 지금 거래하지 않습니다 — " + DOWN[m.status], (m.message || "") + "." + old]);
+    else if (m.status === "booting") B.push(["warn", "봇 창(Chrome)이 막 켜졌습니다 — 30초쯤 뒤부터 실시간 자료가 들어옵니다.", old]);
+    else if (m.status === "no_chrome") B.push(["bad", "봇 창(Chrome)에 연결할 수 없습니다 — 다시 붙는 중", (isN(m.downS) && m.downS > 120 ? m.message + "." : "매일 05:15 재시작·충돌 직후라면 1분 안에 자동으로 다시 연결됩니다.") + old]);
     else if (m.status === "no_page") B.push(["bad", "Chrome 은 켜져 있지만 GH Coin 페이지가 없습니다", (m.message || "") + old]);
+    else if (m.status === "slow") B.push(["warn", "봇이 무거운 작업 중이라 응답이 늦습니다", "백테스트·지표 계산이 끝나면 다시 실시간으로 바뀝니다. 2분 넘게 답이 없으면 '봇 멈춤'으로 바뀝니다." + old]);
     else if (m.status === "error") B.push(["warn", "자료를 읽는 중 오류가 났습니다", (srv.lastError && srv.lastError.msg ? srv.lastError.msg + " ·" : "") + old]);
-    else if (m.stale) B.push(["warn", "자료가 잠시 갱신되지 않았습니다", "봇이 백테스트처럼 무거운 일을 하는 중이면 늦어질 수 있습니다." + old]);
+    else if (!fresh) B.push(["warn", "자료가 잠시 갱신되지 않았습니다", "봇이 백테스트처럼 무거운 일을 하는 중이면 늦어질 수 있습니다." + old]);
     if (m.pages > 1) B.push(["warn", `GH Coin 페이지가 ${m.pages}개 열려 있습니다`, "봇이 두 번 돌고 있을 수 있습니다. 원격화면에서 창 하나만 남기세요."]);
   }
+  // 승인 대기는 최신 자료일 때만 (승인 창은 60초 뒤 저절로 취소되므로 오래된 자료로는 띄우지 않음)
+  const apprOk = fresh && age < 30, items = apprOk && L && L.pendingApprovals ? L.pendingApprovals.items || [] : [];
   if (L){
-    const pa2 = L.pendingApprovals || {};
-    for (const a of (pa2.items || [])){
+    for (const a of items){
       const f = Object.fromEntries(a.fields || []);
       B.push(["bad alert", `⏳ ${a.title || "실거래 주문 승인"} 대기 중${a.mainnet ? " · 메인넷(진짜 돈)" : " · 테스트넷"} — ${a.countdown || ""}`,
         [f["전략"], f["종목"], f["방향"], f["주문 금액"], f["레버리지"]].filter(Boolean).join(" · ") + " — 승인·거절은 앱 화면(원격화면 :6080)에서만 할 수 있습니다."]);
     }
+    if (!apprOk && L.enabled && L.mode !== "auto") B.push(["warn", "승인 대기 여부 확인 불가", "봇 자료가 최신이 아니라 지금 승인을 기다리는 주문이 있는지 알 수 없습니다. 실거래 승인 모드이니 필요하면 원격화면(:6080)에서 직접 확인하세요."]);
     if (L.halted) B.push(["bad", "⛔ 실거래가 오늘 자동 정지됐습니다", (L.halted.why || "") + " · 새 진입 없음 (청산은 계속)"]);
     else if (L.enabled && L.env === "mainnet") B.push(["info", "🔴 실거래(메인넷) 켜짐 · " + (L.mode === "auto" ? "자동 모드 — 승인 없이 주문합니다" : "승인 모드"), `주문당 ${nf(L.limits && L.limits.orderNotional, 0)} · 최대 ${nf(L.limits && L.limits.maxNotional, 0)} USDT · 하루 손실 한도 ${nf(L.limits && L.limits.dailyLoss, 0)} USDT`]);
     if (L.state === "REDUCING" && !L.halted) B.push(["warn", "오늘 실현 손실이 한도에 닿았습니다", `오늘 ${usd(L.dayPnl && L.dayPnl.usdt)} · 한도 -${nf(L.limits && L.limits.dailyLoss, 0)} USDT`]);
@@ -340,21 +355,20 @@ function renderHeader(){
   const box = document.getElementById("banners");
   const sig = JSON.stringify(B);
   if (box.dataset.sig !== sig){ box.dataset.sig = sig; box.replaceChildren(...B.map(([c, t, s]) => h("div", {class: "banner " + c}, h("div", null, t, s ? h("small", null, s) : null)))); }
-  const pend = L && L.pendingApprovals ? L.pendingApprovals.count : 0;
+  const pend = items.length;
   document.querySelectorAll(".tab").forEach(b => { const bd = b.querySelector(".bd"); const want = b.dataset.t === "live" && pend ? String(pend) : ""; if (want){ if (!bd) b.append(h("span", {class: "bd"}, want)); else bd.textContent = want; } else if (bd) bd.remove(); });
 }
 
 /* ================= 요약 ================= */
 function rSum(){
   const sm = S.summary || {}, D = sm.demo || {}, L = S.live || {}, O = S.office || {}, cb = (S.combo && S.combo.stats) || sm.combo || {}, pr = S.predict, se = S.sentiment, u = O.usage || {};
-  const [lt] = liveLabel(S.live);
   const dayU = L.dayPnl ? L.dayPnl.usdt : null, dl = L.limits ? L.limits.dailyLoss : null;
   const k = h("div", {class: "grid kpis"},
-    card("데모 총 손익", D.nActive ? [usd(D.totalPnl)] : "—", D.nActive ? `${pc(D.totalRetPct)} · 가상 1만 USDT × ${D.nActive}개` : "아직 데모 전략이 없습니다", tn(D.totalPnl), D.nActive ? (D.totalPnl >= 0 ? "up" : "dn") : ""),
+    card("데모 총 손익", D.nActive ? usdV(D.totalPnl) : "—", D.nActive ? `${pc(D.totalRetPct)} · 가상 1만 USDT × ${D.nActive}개` : "아직 데모 전략이 없습니다", tn(D.totalPnl), D.nActive ? (D.totalPnl >= 0 ? "up" : "dn") : ""),
     card("운용 중인 전략", (D.nActive ?? "—") + "개", `은퇴 ${D.nRetired ?? 0} · 실거래 후보 ${D.cand ?? 0} · 실거래 ${D.live ?? 0}`),
     card("보유 포지션 (데모)", (D.open ?? 0) + "개", D.open ? `롱 ${D.longs} · 숏 ${D.shorts} · 미실현 ${usd(D.unreal)}` : "모든 전략 대기 중", D.open ? tn(D.unreal) : ""),
     card("전체 거래 · 승률", (D.trades ?? 0) + "건", isN(D.winRate) ? `승률 ${nf(D.winRate, 1)}%` : "청산된 거래 없음"),
-    card("실거래", lt.replace(/^\S+\s/, ""), L.enabled ? `오늘 실현 ${usd(dayU)} / 한도 -${nf(dl, 0)}` : "연결된 전략 " + ((L.linked || []).length) + "개 · 주문 없음", L.halted ? "dn" : L.enabled && L.env === "mainnet" ? "dn" : L.enabled ? "warn" : "", L.halted || (L.enabled && L.env === "mainnet") ? "dn" : L.enabled ? "warn" : ""),
+    card("실거래", L.halted ? "정지됨" : !L.enabled ? "꺼짐" : (L.env === "mainnet" ? "메인넷" : "테스트넷") + " · " + (L.mode === "auto" ? "자동" : "승인"), L.enabled ? `오늘 실현 ${usd(dayU)} / 한도 -${nf(dl, 0)}` : "연결된 전략 " + ((L.linked || []).length) + "개 · 주문 없음", L.halted ? "dn" : L.enabled && L.env === "mainnet" ? "dn" : L.enabled ? "warn" : "", L.halted || (L.enabled && L.env === "mainnet") ? "dn" : L.enabled ? "warn" : ""),
     card("타점판 적중률", isN(cb.rate) ? cb.rate + "%" : "—", cb.n ? `채점 ${cb.done} · 진행 ${cb.open} · 누적 ${sg(cb.sumR)}R` : "아직 잡힌 타점 없음", isN(cb.sumR) ? tn(cb.sumR) : ""),
     card("예측 적중률", pr && isN(pr.winRate) ? pr.winRate + "%" : "—", pr ? (pr.n ? `채점 ${pr.n}건 · 열린 예측 ${pr.open}` : `채점 전 · 열린 예측 ${pr.open || 0}`) : "불러오는 중"),
     card("시장 심리", se ? [String(se.score), h("small", null, "/100")] : "—", se ? `${se.verdict} · 기사 ${se.n ?? "?"}건 · ${agoS(se.t)}` : "12시간 안에 계산된 값 없음", se ? (se.score >= 55 ? "up" : se.score <= 45 ? "dn" : "") : ""),
@@ -368,7 +382,7 @@ function rSum(){
   return [k,
     h("div", {class: "grid cols2 mtop"},
       panel("보유 포지션 (데모)", D.updated ? ["장부 갱신 ", ago(D.updated)] : "", tposN, {np: 1}),
-      panel("지금 사무실", O.ui && O.ui.title ? O.ui.title : "", officeNow(O, true))),
+      panel("지금 사무실", O.meeting ? "회의 중" : "", officeNow(O, true))),
     h("div", {class: "grid cols2 mtop"},
       panel("전략 순위 (데모 수익순)", "가상 1만 USDT/전략", tStr, {np: 1}),
       panel("최근 활동", "회의록 최근 10개", feedList((S.feed || []).filter(e => e.kind !== "work").slice(0, 10), true), {np: 1}))];
@@ -377,9 +391,9 @@ function rSum(){
 /* ================= 사무실 지금 ================= */
 function officeNow(O, short){
   if (!O || !O.mode) return empty("사무실 상태를 아직 못 받았습니다");
-  const ts = S.ts, m = O.meeting, sp = O.speaker;
+  const m = O.meeting, sp = O.speaker;
   const head = h("div", {class: "chips"}, chip(O.modeKo, O.mode === "meeting" ? "up" : O.mode === "auto" ? "info" : ""),
-    O.pausedMs > 0 ? chip("⏸ AI 한도 때문에 쉬는 중 · " + dur(O.pausedMs), "warn") : null,
+    isN(O.pausedUntil) && O.pausedUntil > sNow() ? chip(["⏸ AI 한도 때문에 쉬는 중 · ", untilAt(O.pausedUntil)], "warn") : null,
     O.cycling ? chip("업무 중", "vio") : null, O.chatting ? chip("수다 중", "vio") : null, O.queued ? chip("대기 회의 " + O.queued, "warn") : null);
   const job = jobText(O);
   const out = [head, job ? h("div", {class: "mtop"}, h("b", null, job)) : null];
@@ -391,10 +405,10 @@ function officeNow(O, short){
       h("div", {class: "ft" + (sp.live ? " typing" : "")}, plain(sp.text) || (sp.live ? "💭 생각 중…" : ""))));
   }
   out.push(h("div", {class: "mtop"}, kv([
-    O.cfg && O.cfg.cycle ? ["다음 업무", O.cycling ? "일하는 중" : until(ts, O.nextCycleMs)] : null,
-    O.cfg && O.cfg.auto ? ["다음 자동 회의", O.usage && O.cfg && O.usage.auto >= O.cfg.dailyMax ? `오늘 ${O.cfg.dailyMax}번 다 함` : until(ts, O.nextAutoMs)] : ["자동 회의", "꺼짐"],
-    O.nextAgenda ? ["다음 안건", `${O.nextAgenda.title} · ${O.nextAgenda.roomName}`] : null,
-    O.cfg && O.cfg.chat ? ["다음 수다", O.chatting ? "대화 중" : until(ts, O.nextChatMs)] : null,
+    O.cfg && O.cfg.cycle ? ["다음 업무", O.cycling ? "일하는 중" : untilAt(O.nextCycleAt)] : null,
+    O.cfg && O.cfg.auto ? ["다음 자동 회의", O.usage && O.cfg && O.usage.auto >= O.cfg.dailyMax ? `오늘 ${O.cfg.dailyMax}번 다 함` : untilAt(O.nextAutoAt)] : ["자동 회의", "꺼짐"],
+    O.nextAgenda ? ["다음 안건", O.nextAgenda.title === O.nextAgenda.roomName ? O.nextAgenda.title : `${O.nextAgenda.title} · ${O.nextAgenda.roomName}`] : null,
+    O.cfg && O.cfg.chat ? ["다음 수다", O.chatting ? "대화 중" : untilAt(O.nextChatAt)] : null,
     short ? null : ["오늘 사용", `회의 ${O.usage.meetings} (자동 ${O.usage.auto}/${O.cfg.dailyMax}) · 수다 ${O.usage.chats}/${O.cfg.chatMax} · AI 호출 ${O.usage.calls}/${O.cfg.callMax} · 학습 +${O.usage.trained}`],
     short ? null : ["설정", `업무 ${O.cfg.cycleMin}분 주기 · 자동 회의 ${O.cfg.every}분 · Claude ${O.cfg.claudeMode === "all" ? "전원" : O.cfg.claudeMode === "key" ? "핵심 자리" : "안 씀"} · 타점판 ${O.cfg.combo ? "켜짐" : "꺼짐"}`]
   ])));
@@ -437,22 +451,22 @@ function feedItem(e, compact){
 /* ================= 포지션 ================= */
 function rPos(){
   const P = S.positions || [], L = S.live || {}, T = S.trades || [], D = (S.summary || {}).demo || {};
-  const rows = P.map(p => [h("span", {class: "tname", title: p.name}, p.name), p.market, tfKo(p.tf), chip(sideKo(p.side), sideTone(p.side)), p.lev ? "×" + p.lev : "—",
-    px(p.entry), px(p.mark), {v: usd(p.unreal), cls: tn(p.unreal)}, {v: pc(p.roe), cls: tn(p.roe)}, nf(p.margin, 2), nf(p.notional, 2), {v: px(p.sl), cls: "dn"}, {v: px(p.tp), cls: "up"}, {v: px(p.liq), cls: "warn"}, h("span", {class: "nw"}, fT(p.t), " ", h("span", {class: "dim"}, "(", ago(p.t), ")"))]);
+  const rows = P.map(p => [h("span", {class: "tname", title: p.name}, p.name), chip(sideKo(p.side) + (p.lev ? " ×" + p.lev : ""), sideTone(p.side)), {v: usd(p.unreal), cls: tn(p.unreal)}, {v: pc(p.roe), cls: tn(p.roe)},
+    px(p.entry), px(p.mark), {v: px(p.sl), cls: "dn"}, {v: px(p.tp), cls: "up"}, {v: px(p.liq), cls: "warn"}, p.market, tfKo(p.tf), nf(p.margin, 2), nf(p.notional, 2), h("span", {class: "nw"}, fT(p.t), " ", h("span", {class: "dim"}, "(", ago(p.t), ")"))]);
   const lp = (L.positions || []).map(p => [h("span", {class: "tname"}, p.name || p.sid), p.ex === "upbit" ? "업비트" : "바이낸스 선물", chip(p.env === "mainnet" ? "메인넷" : "테스트넷", p.env === "mainnet" ? "dn" : "warn"), p.symbol, chip(sideKo(p.side), sideTone(p.side)),
     nf(p.qty, 6, 0), px(p.entry), p.lev ? "×" + p.lev : "—", {v: px(p.sl), cls: "dn"}, {v: px(p.tp), cls: "up"}, px(p.paperMark), fT(p.t)]);
-  const tr = T.map(t => [fT(t.exitT), h("span", {class: "tname"}, t.name), t.market, chip(sideKo(t.side), sideTone(t.side)), px(t.entryP), px(t.exitP), {v: usd(t.pnl), cls: tn(t.pnl)}, {v: pc(t.roe), cls: tn(t.roe)}, chip(t.reason || "—", REASON_TONE[t.reason] || ""), h("span", {class: "dim nw"}, dur((t.exitT || 0) - (t.entryT || 0)))]);
+  const tr = T.map(t => [fT(t.exitT), h("span", {class: "tname"}, t.name), chip(sideKo(t.side), sideTone(t.side)), {v: usd(t.pnl), cls: tn(t.pnl)}, {v: pc(t.roe), cls: tn(t.roe)}, chip(t.reason || "—", REASON_TONE[t.reason] || ""), px(t.entryP), px(t.exitP), t.market, h("span", {class: "dim nw"}, dur((t.exitT || 0) - (t.entryT || 0)))]);
   return [
     h("div", {class: "grid kpis"},
       card("데모 포지션", P.length + "개", `롱 ${D.longs ?? 0} · 숏 ${D.shorts ?? 0}`),
-      card("미실현 손익 (데모)", usd(D.unreal), "마지막 모의 단계의 현재가 기준", tn(D.unreal)),
+      card("미실현 손익 (데모)", usdV(D.unreal), "마지막 모의 단계의 현재가 기준", tn(D.unreal)),
       card("실거래 포지션", (L.positions || []).length + "개", "앱이 연 포지션 기록 기준"),
       card("최근 청산", T.length + "건", T[0] ? "마지막 " + agoS(T[0].exitT) : "아직 없음")),
-    panel("데모(모의투자) 포지션", D.updated ? ["가격은 모의 단계(약 3분)마다 갱신 · ", ago(D.updated)] : "", table("pos-demo", [{t: "전략"}, {t: "코인"}, {t: "봉"}, {t: "방향"}, {t: "레버리지", n: 1}, {t: "진입가", n: 1}, {t: "현재가", n: 1}, {t: "미실현", n: 1}, {t: "ROE", n: 1}, {t: "증거금", n: 1}, {t: "명목", n: 1}, {t: "손절", n: 1}, {t: "익절", n: 1}, {t: "청산가", n: 1}, {t: "진입 시각"}], rows,
+    panel("데모(모의투자) 포지션", D.updated ? ["가격은 모의 단계(약 3분)마다 갱신 · ", ago(D.updated)] : "", table("pos-demo", [{t: "전략"}, {t: "방향"}, {t: "미실현", n: 1}, {t: "ROE", n: 1}, {t: "진입가", n: 1}, {t: "현재가", n: 1}, {t: "손절", n: 1}, {t: "익절", n: 1}, {t: "청산가", n: 1}, {t: "코인"}, {t: "봉"}, {t: "증거금", n: 1}, {t: "명목", n: 1}, {t: "진입 시각"}], rows,
       empty("보유 중인 데모 포지션이 없습니다", D.nActive ? `운용 중인 전략 ${D.nActive}개가 모두 신호를 기다리는 중` : "아직 데모 전략이 없습니다")), {np: 1}),
     panel("실거래 포지션 (앱 기록)", "거래소에 묻지 않음 · 거래소에서 직접 연 포지션은 안 보임", table("pos-live", [{t: "전략"}, {t: "거래소"}, {t: "환경"}, {t: "종목"}, {t: "방향"}, {t: "수량", n: 1}, {t: "진입가", n: 1}, {t: "레버리지", n: 1}, {t: "손절", n: 1}, {t: "익절", n: 1}, {t: "데모 현재가", n: 1}, {t: "시각"}], lp,
       empty("실거래 포지션 없음", L.enabled ? "연결된 전략의 신호를 기다리는 중" : "실거래가 꺼져 있습니다")), {np: 1}),
-    panel("최근 청산 (데모)", "최신 40건", table("pos-closed", [{t: "청산"}, {t: "전략"}, {t: "코인"}, {t: "방향"}, {t: "진입가", n: 1}, {t: "청산가", n: 1}, {t: "손익", n: 1}, {t: "ROE", n: 1}, {t: "사유"}, {t: "보유"}], tr, empty("아직 청산된 데모 거래가 없습니다")), {np: 1})
+    panel("최근 청산 (데모)", "최신 40건", table("pos-closed", [{t: "청산"}, {t: "전략"}, {t: "방향"}, {t: "손익", n: 1}, {t: "ROE", n: 1}, {t: "사유"}, {t: "진입가", n: 1}, {t: "청산가", n: 1}, {t: "코인"}, {t: "보유"}], tr, empty("아직 청산된 데모 거래가 없습니다")), {np: 1})
   ];
 }
 
@@ -501,7 +515,7 @@ function rStr(){
       h("span", {class: "chips"}, s.live ? chip("실거래", "dn") : s.cand ? chip("🎓 후보", "vio") : null, s.holding ? chip(sideKo(s.holding) + " 보유", sideTone(s.holding)) : chip("대기", "")), isN(s.days) ? s.days + "일" : "—"];
   });
   const gates = A.filter(s => s.gate).map(s => h("div", {style: "padding:8px 14px;border-bottom:1px solid rgba(37,48,81,.6)"}, h("div", null, h("b", null, s.name), " ", s.gate.eligible ? chip("✅ 실거래 후보 자격", "up") : chip("⏳ 미통과", "")),
-    h("div", {class: "gate"}, s.gate.checks.map(c => chip((c.ok ? "✓ " : "✗ ") + c.name + " " + c.text, c.ok ? "up" : "dn", "기준: " + c.need)))));
+    h("div", {class: "gate"}, s.gate.checks.map(c => chip((c.ok ? "✓ " : "✗ ") + c.name + (c.text && !c.name.includes(c.text) ? " " + c.text : ""), c.ok ? "up" : "dn", "기준: " + c.need)))));
   const lane = (title, x) => x ? h("div", null, h("div", {class: "sub2", style: "margin-bottom:6px;font-weight:700"}, title),
     h("div", {class: "funnel"}, [["개발", x.dev], ["백테스트 통과", x.ok], ["불통과", x.fail], ["데모", x.demo], ["실거래 후보", x.cand], ["실거래", x.live], ["은퇴", x.retired]].map(([l, v]) => h("div", {class: "fs"}, h("div", {class: "l"}, l), h("div", {class: "x"}, String(v ?? 0))))),
     x.recent && x.recent.length ? h("div", {style: "margin-top:8px"}, x.recent.map(r => h("div", {class: "sub2"}, chip(r.ok ? "✅" : "❌", r.ok ? "up" : "dn"), " ", r.name, ` · ${r.market} ${tfKo(r.tf)}`, isN(r.oos) ? ` · 검증 ${pc(r.oos, 1)}` : "", " · ", ago(r.t)))) : null) : null;
@@ -509,7 +523,7 @@ function rStr(){
   return [
     h("div", {class: "grid kpis"},
       card("운용 중", A.length + "개", `최대 16개 · 은퇴 ${D.nRetired ?? 0}`),
-      card("총 가상손익", usd(D.totalPnl), pc(D.totalRetPct), tn(D.totalPnl)),
+      card("총 가상손익", usdV(D.totalPnl), pc(D.totalRetPct), tn(D.totalPnl)),
       card("최고 전략", D.best ? pc(D.best.retPct) : "—", D.best ? D.best.name : "", D.best ? tn(D.best.retPct) : ""),
       card("최저 전략", D.worst ? pc(D.worst.retPct) : "—", D.worst ? D.worst.name : "", D.worst ? tn(D.worst.retPct) : "")),
     panel("📊 전략별 성과 (데모 수익순)", "신뢰점수 = 성과 + 견고성 + 일반화 + 표본 (앱과 같은 공식)", table("str-main", [{t: "#"}, {t: "전략"}, {t: "시장"}, {t: "봉"}, {t: "평가 곡선"}, {t: "수익률", n: 1}, {t: "손익", n: 1}, {t: "승률", n: 1}, {t: "거래", n: 1}, {t: "최대낙폭", n: 1}, {t: "신뢰"}, {t: "관문"}, {t: "상태"}, {t: "운용", n: 1}], rows,
@@ -536,7 +550,7 @@ function rOffice(){
     h("div", {class: "z"}, a.talking ? "🗣 " : a.walking ? "🚶 " : "", a.zoneName || (a.atDesk ? "자기 자리" : "")),
     h("div", {class: "act"}, a.bubble || (a.talking ? "말하는 중" : a.walking ? "이동 중" : ""), a.seen ? h("small", null, (a.seen.icon || "") + " " + a.seen.text + " · ", ago(a.seen.t), a.seen.url ? [" · ", ext(a.seen.url, a.seen.src || "출처")] : null) : null)));
   const left = [
-    panel("지금 사무실", O.ui && O.ui.title ? O.ui.title : "", officeNow(O, false)),
+    panel("지금 사무실", O.meeting ? O.ui && O.ui.title : "", officeNow(O, false)),
     panel("직원 활동", `직원 ${ST.total ?? "?"}명 · 팀 ${ST.teams ?? "?"}개`, [
       h("div", {class: "chips", style: "padding:10px 14px;border-bottom:1px solid var(--line)"}, chip(`움직이는 직원 ${c.active ?? 0}`, "info"), chip(`말하는 중 ${c.talking ?? 0}`, c.talking ? "up" : ""), chip(`이동 ${c.walking ?? 0}`), chip(`대회의실 ${c.meet ?? 0}`), chip(`라운지 ${c.lounge ?? 0}`), chip(`발표 무대 ${c.stage ?? 0}`),
         ST.officeVisible === false ? chip("사무실 화면이 닫혀 있어 말풍선이 멈춰 있음", "warn") : null),
@@ -546,7 +560,7 @@ function rOffice(){
   const extra = [];
   if (IC) extra.push(panel("🏛 투자위원회 결정", `${IC.n}건 · 채점 ${IC.resolved} · 적중 ${isN(IC.hitRate) ? IC.hitRate + "%" : "—"} · 평균 초과수익 ${pc(IC.avgAlpha)}`,
     table("of-ic", [{t: "시각"}, {t: "코인"}, {t: "최종"}, {t: "리서치"}, {t: "진입", n: 1}, {t: "손절", n: 1}, {t: "결과"}, {t: "초과수익", n: 1}, {t: "근거"}],
-      (IC.recent || []).map(d => [fT(d.t), d.ko, chip(d.rating || "—", /매수|확대/.test(d.rating || "") ? "up" : /매도|축소/.test(d.rating || "") ? "dn" : ""), d.rmRating || "—", px(d.entry), px(d.stop),
+      (IC.recent || []).map(d => [fT(d.t), h("span", {class: "nw"}, d.ko), chip(d.rating || "—", /매수|확대/.test(d.rating || "") ? "up" : /매도|축소/.test(d.rating || "") ? "dn" : ""), d.rmRating || "—", px(d.entry), px(d.stop),
         d.status === "resolved" ? chip(d.hit ? "✅ 적중" : "❌ 빗나감", d.hit ? "up" : "dn") : chip(d.status === "pending" ? "⏳ 채점 대기" : d.status || "—", "info"), {v: pc(d.alpha), cls: tn(d.alpha)}, h("span", {class: "sub2"}, plain(d.why))]), empty("아직 투자위원회 결정이 없습니다")), {np: 1}));
   if (PR) extra.push(panel("🎯 예측 적중률 · 캘리브레이션", `채점 ${PR.n}건 · 열린 예측 ${PR.open}`, PR.n ? [
     table("of-pr", [{t: "확신도 구간"}, {t: "예측 수", n: 1}, {t: "평균 확신", n: 1}, {t: "실제 적중", n: 1}, {t: ""}], PR.bands.filter(b => b.n).map(b => [b.band, String(b.n), isN(b.avgConf) ? b.avgConf + "%" : "—", isN(b.rate) ? b.rate + "%" : "—", bar(b.rate, (b.rate ?? 0) >= (b.avgConf ?? 0) ? "up" : "warn")])),
@@ -569,17 +583,17 @@ function rLive(){
   const [lt, lc] = liveLabel(L), lim = L.limits || {}, d = L.dayPnl || {}, used = isN(d.usdt) && d.usdt < 0 && lim.dailyLoss ? -d.usdt / lim.dailyLoss * 100 : 0;
   const stKo = {ACTIVE: ["정상", "up"], REDUCING: ["손실 한도 도달", "warn"], HALTED: ["자동 정지", "dn"]}[L.state] || ["—", ""];
   const acc = L.exchangeAccess || {};
-  const pend = (L.pendingApprovals || {}).items || [];
-  const audit = AU ? (AU.items || []).map(e => [h("span", {class: "mono nw"}, fT(e.t, true)), chip(e.kind, e.kind === "error" || e.kind === "kill" || e.kind === "halt" ? "dn" : e.kind === "block" || e.kind === "warn" ? "warn" : e.kind === "order" || e.kind === "response" ? "info" : ""),
-    chip(e.env === "mainnet" ? "메인넷" : "테스트넷", e.env === "mainnet" ? "dn" : ""), h("span", {class: "tname"}, e.sname || "—"), [e.symbol, e.side ? sideKo(e.side) : ""].filter(Boolean).join(" ") || "—", isN(e.notional) ? nf(e.notional, 2) : "—", e.status || "—", h("span", {class: "sub2"}, e.msg || "")]) : [];
+  const fr = freshness(), apprOk = fr.fresh && fr.age < 30, pend = apprOk ? (L.pendingApprovals || {}).items || [] : [];
+  const audit = AU ? (AU.items || []).map(e => [h("span", {class: "mono nw"}, fT(e.t, true)), chip(AUDIT_KO[e.kind] || e.kind, e.kind === "error" || e.kind === "kill" || e.kind === "halt" ? "dn" : e.kind === "block" || e.kind === "warn" ? "warn" : e.kind === "order" || e.kind === "response" ? "info" : ""),
+    chip(e.env === "mainnet" ? "메인넷" : "테스트넷", e.env === "mainnet" ? "dn" : ""), h("span", {class: "tname"}, e.sname || "—"), [e.symbol, e.side ? sideKo(e.side) : ""].filter(Boolean).join(" ") || "—", isN(e.notional) ? nf(e.notional, 2) : "—", STATUS_KO[e.status] || e.status || "—", h("span", {class: "sub2"}, e.msg || "")]) : [];
   return [
     h("div", {class: "banner " + (L.halted || (L.enabled && L.env === "mainnet") ? "bad" : L.enabled ? "warn" : "info"), style: "margin:0 0 12px"},
       h("div", null, h("span", {class: "big"}, lt), h("small", null, (L.mode === "auto" ? "자동 모드 — 승인 없이 주문합니다" : "승인 모드 — 주문마다 앱 화면에서 60초 안에 승인해야 합니다 (안 하면 자동 취소)") + ` · 마진 ${L.marginType === "CROSSED" ? "교차" : "격리"}`))),
     h("div", {class: "grid kpis"},
-      card("오늘 실현 손익", usd(d.usdt), `한도 -${nf(lim.dailyLoss, 0)} USDT 중 ${nf(used, 0)}% 사용${isN(d.exchange) ? " · 거래소 기록 " + usd(d.exchange) : ""}`, tn(d.usdt), used >= 100 ? "dn" : used >= 60 ? "warn" : ""),
+      card("오늘 실현 손익", usdV(d.usdt), `한도 -${nf(lim.dailyLoss, 0)} USDT 중 ${nf(used, 0)}% 사용${isN(d.exchange) ? " · 거래소 기록 " + usd(d.exchange) : ""}`, tn(d.usdt), used >= 100 ? "dn" : used >= 60 ? "warn" : ""),
       card("업비트 오늘 (KRW)", isN(d.krw) ? sg(d.krw, 0) + "원" : "—", `한도 -${nf(lim.krwDailyLoss, 0)}원`, tn(d.krw)),
       card("거래 상태", stKo[0], L.halted ? L.halted.why || "" : "하루 손실 한도에 닿으면 그날은 새 진입 멈춤", stKo[1]),
-      card("승인 대기", pend.length + "건", pend.length ? "앱 화면에서 승인·거절하세요" : "대기 중인 주문 없음", pend.length ? "dn" : "", pend.length ? "dn" : ""),
+      card("승인 대기", apprOk ? pend.length + "건" : "확인 불가", !apprOk ? "봇 자료가 최신이 아님 — 원격화면에서 직접 확인" : pend.length ? "앱 화면에서 승인·거절하세요" : "대기 중인 주문 없음", pend.length ? "dn" : !apprOk ? "warn" : "", pend.length ? "dn" : !apprOk ? "warn" : ""),
       card("연결된 전략", (L.linked || []).length + "개", "관문 통과 + 대표가 직접 연결한 것만"),
       card("실거래 포지션", (L.positions || []).length + "개", "앱 기록 기준")),
     pend.length ? panel("⏳ 승인 대기 주문", "승인은 앱 화면(원격화면)에서만", pend.map(a => h("div", {style: "margin-bottom:10px"}, h("div", null, h("b", null, a.title), " ", chip(a.mainnet ? "메인넷" : "테스트넷", a.mainnet ? "dn" : "warn"), " ", h("span", {class: "warn"}, a.countdown || "")), bar(a.remainingPct, "warn"), kv(a.fields || [])))) : null,
@@ -587,7 +601,7 @@ function rLive(){
       panel("한도", "앱 [실거래] 화면에서 바꿈", kv([["주문당 금액", nf(lim.orderNotional, 0) + " USDT"], ["1회 최대 금액", nf(lim.maxNotional, 0) + " USDT"], ["전체 최대 금액", nf(lim.maxTotalNotional, 0) + " USDT"], ["최대 레버리지", "×" + nf(lim.maxLeverage, 0)], ["동시 포지션", nf(lim.maxPositions, 0) + "개"], ["하루 손실 한도", nf(lim.dailyLoss, 0) + " USDT"],
         ["업비트 주문당 / 최대", nf(lim.krwOrderNotional, 0) + " / " + nf(lim.krwMaxNotional, 0) + "원"], ["업비트 하루 손실", nf(lim.krwDailyLoss, 0) + "원"], ["허용 종목", (lim.symbols || []).join(", ") || "—"]])),
       panel("거래소 연결 (키 내용은 안 보여 줌)", "", kv([["바이낸스 테스트넷", acc.binancef_test ? chip("키 있음", "up") : chip("없음")], ["바이낸스 메인넷", acc.binancef ? chip("키 있음", "dn") : chip("없음")], ["업비트", acc.upbit ? chip("키 있음", "dn") : chip("없음")],
-        AU && AU.lastKill ? ["마지막 긴급 정지", [fT(AU.lastKill.t), " · ", AU.lastKill.status || "", " ", AU.lastKill.msg || ""]] : ["긴급 정지 기록", "없음"]]))),
+        AU && AU.lastKill ? ["마지막 긴급 정지", [fT(AU.lastKill.t), " · ", STATUS_KO[AU.lastKill.status] || AU.lastKill.status || "", " ", AU.lastKill.msg || ""]] : ["긴급 정지 기록", "없음"]]))),
     panel("연결된 전략", "", table("lv-linked", [{t: "전략"}, {t: "시장"}, {t: "거래소"}, {t: "금액", n: 1}, {t: "연결 시각"}, {t: "데모 수익률", n: 1}],
       (L.linked || []).map(x => { const s = A.find(a => a.id === x.sid); return [h("span", {class: "tname"}, x.name || x.sid), x.market || "—", x.exchange || "—", isN(x.notional) ? nf(x.notional, 0) : "기본", fT(x.t), s ? {v: pc(s.retPct), cls: tn(s.retPct)} : "—"]; }),
       empty("실거래에 연결된 전략이 없습니다", "데모 관문을 통과한 전략만 앱 [실거래] 화면에서 연결할 수 있습니다")), {np: 1}),
@@ -603,10 +617,11 @@ function rServer(){
   const v = S.server || {}, m = S.meta || {}, c = v.chrome || {}, ho = v.host || {}, E = S.errors || [], M = S.models || [];
   const memUsed = isN(ho.memTotalMb) && isN(ho.memAvailMb) ? ho.memTotalMb - ho.memAvailMb : null, memPct = memUsed != null ? memUsed / ho.memTotalMb * 100 : 0;
   const swUsed = isN(ho.swapTotalMb) && isN(ho.swapFreeMb) ? ho.swapTotalMb - ho.swapFreeMb : null;
-  const stKo = {ok: "정상", booting: "봇 창 켜지는 중", no_chrome: "Chrome 연결 안 됨", no_page: "GH Coin 페이지 없음", error: "수집 오류", starting: "시작 중"}[m.status] || m.status || "—";
+  const stKo = {ok: "정상", booting: "봇 창 켜지는 중", no_chrome: "Chrome 연결 안 됨", no_page: "GH Coin 페이지 없음", error: "수집 오류", slow: "봇 응답 지연", starting: "시작 중",
+    crashed: "봇 멈춤 (탭이 죽음)", stuck: "봇 멈춤 (응답 없음)", no_app: "봇 멈춤 (페이지 안 열림)"}[m.status] || m.status || "—";
   return [
     h("div", {class: "grid kpis"},
-      card("수집 상태", stKo, m.message || "", m.status === "ok" && !m.stale ? "up" : m.status === "booting" || m.status === "error" ? "warn" : "dn"),
+      card("수집 상태", stKo, m.message || "", m.status === "ok" && !m.stale ? "up" : m.status === "booting" || m.status === "error" || m.status === "slow" || m.status === "ok" ? "warn" : "dn"),
       card("마지막 성공", m.lastOk ? agoS(m.lastOk) : "—", `${nf(v.intervalS, 0)}초마다 · 무거운 항목 ${nf(v.slowS, 0)}초마다`),
       card("수집 횟수", nf(v.okPolls, 0, 0) + "회", `오류 ${nf(v.errorCount, 0, 0)} · 다시 연결 ${nf(v.reconnects, 0, 0)}`),
       card("한 번 읽는 시간", isN(v.lastEvalMs) ? nf(v.lastEvalMs, 0) + " ms" : "—", `평균 ${nf(v.avgEvalMs, 0)} ms · 페이지 안 ${nf(S.tookMs, 0)} ms`),
@@ -622,6 +637,7 @@ function rServer(){
         ["Chrome 메모리 합계", isN(c.rssMb) && c.procs ? `${nf(c.rssMb, 0)} MB (프로세스 ${c.procs}개)` : "—"]])]),
       panel("봇 창 (Chrome)", c.connected ? chip("연결됨", "up") : chip("끊김", "dn"), kv([
         ["Chrome", c.browser || "—"], ["페이지", c.target ? c.target.title + " · " + c.target.url : "—"], ["페이지 켜진 지", isN(S.uptimeMs) ? dur(S.uptimeMs) : "—"],
+        ["읽기 대기", isN(c.waitingS) ? chip(dur(c.waitingS * 1000) + "째 답을 기다리는 중", c.waitingS >= 120 ? "dn" : c.waitingS >= 20 ? "warn" : "") : "없음"],
         ["열린 GH Coin 페이지", c.pages > 1 ? chip(c.pages + "개 (하나만 있어야 함)", "warn") : String(c.pages ?? 0) + "개"],
         ["화면 상태", S.page ? (S.page.visibility === "visible" ? "보이는 중" : "가려짐 (타이머 느려지지 않게 설정됨)") : "—"],
         ["마지막 오류", v.lastError ? [fT(v.lastError.t, true), " · ", v.lastError.msg] : "없음"]]))),

@@ -299,6 +299,11 @@ EOF
 
 # 앱 창: 창을 닫거나 Chrome 이 죽어도 10초 뒤 다시 열림.
 # 백그라운드 절약 옵션을 꺼서 아무도 화면을 안 봐도 봇 타이머가 느려지지 않게 한다.
+# 웹 대시보드(add-dashboard.sh)를 이미 켰으면 읽기 통로(127.0.0.1:9222)를 그대로 유지한다 (다시 실행해도 대시보드가 끊기지 않게).
+CDP_FLAG=""
+if [ -f /etc/systemd/system/ghcoin-dash.service ] || grep -qs -- "--remote-debugging-port=" /etc/systemd/system/ghcoin-chrome.service; then
+  CDP_FLAG="--remote-debugging-port=9222 "
+fi
 cat > /etc/systemd/system/ghcoin-chrome.service <<EOF
 [Unit]
 Description=GH Coin 앱 창 (Chrome)
@@ -309,7 +314,7 @@ After=ghcoin-desktop.service ghcoin-server.service
 User=$APP_USER
 Environment=DISPLAY=:1 HOME=$APP_HOME
 ExecStartPre=/bin/sleep 6
-ExecStart=/usr/bin/google-chrome --app=http://127.0.0.1:$APP_PORT/gh-coin/ --user-data-dir=$APP_HOME/.config/ghcoin-chrome --no-first-run --no-default-browser-check --password-store=basic --start-maximized --disable-session-crashed-bubble --hide-crash-restore-bubble --disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows --disable-features=IntensiveWakeUpThrottling,CalculateNativeWinOcclusion
+ExecStart=/usr/bin/google-chrome ${CDP_FLAG}--app=http://127.0.0.1:$APP_PORT/gh-coin/ --user-data-dir=$APP_HOME/.config/ghcoin-chrome --no-first-run --no-default-browser-check --password-store=basic --start-maximized --disable-session-crashed-bubble --hide-crash-restore-bubble --disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows --disable-features=IntensiveWakeUpThrottling,CalculateNativeWinOcclusion
 Restart=always
 RestartSec=10
 
@@ -394,7 +399,8 @@ echo '*/5 * * * * root /usr/local/bin/ghcoin-memlog' > /etc/cron.d/ghcoin-memlog
 cat > /usr/local/bin/ghcoin-status <<'EOF'
 #!/usr/bin/env bash
 echo "== 서비스 (전부 active 여야 정상)"
-for s in ghcoin-vnc ghcoin-desktop ghcoin-server ghcoin-chrome ghcoin-novnc; do
+for s in ghcoin-vnc ghcoin-desktop ghcoin-server ghcoin-chrome ghcoin-novnc ghcoin-dash; do
+  [ "$s" = ghcoin-dash ] && [ ! -f /etc/systemd/system/ghcoin-dash.service ] && continue
   printf '  %-16s %s\n' "$s" "$(systemctl is-active "$s")"
 done
 echo "== 메모리 (available 이 500Mi 밑으로 자주 내려가면 사양 올리기)"
@@ -403,9 +409,10 @@ echo "== 최근 메모리 기록 (5분 간격)"
 if [ -s /var/log/ghcoin-mem.log ]; then tail -n 6 /var/log/ghcoin-mem.log | sed 's/^/  /'; else echo "  (아직 없음)"; fi
 echo "== 디스크"
 df -h / | sed 's/^/  /'
-echo "== 웹 원격화면 주소"
+echo "== 주소 (Tailscale 켜고 열기)"
 ip4=$(tailscale ip -4 2>/dev/null | head -1)
-echo "  http://${ip4:-<tailscale IP>}:6080/"
+[ -f /etc/systemd/system/ghcoin-dash.service ] && echo "  대시보드  http://${ip4:-<tailscale IP>}:8080/"
+echo "  원격화면  http://${ip4:-<tailscale IP>}:6080/"
 EOF
 chmod 755 /usr/local/bin/ghcoin-status
 

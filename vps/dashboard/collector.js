@@ -12,12 +12,15 @@
  *  - 모든 문자열은 LLM·뉴스·거래소에서 온 것일 수 있다 → 대시보드는 textContent 로만 그린다.
  *
  * 맨 끝의 /*OPT*\/{} 는 ghcoin-dash 가 {"slow":true,"reports":true} 처럼 바꿔 끼운다 (무거운 부분은 가끔만).
+ * 오류가 나도 예외를 밖으로 던지지 않고 {ok:false, why} 로 돌려준다 (DevTools 쪽에 오류 객체가 쌓이지 않게).
  */
 (async (OPT) => {
   "use strict";
   OPT = OPT || {};
   const now = Date.now(), up = Math.round(performance.now()), t0 = performance.now();
   const base = {version: 1, ts: now, uptimeMs: up};
+  try {
+  if (location.protocol === "chrome-error:") return {...base, ok: false, why: "error_page"};   // 실행기가 꺼져 있을 때 Chrome 이 띄운 오류 화면
   if (!/^\/gh-coin\//.test(location.pathname)) return {...base, ok: false, why: "not_gh_coin_page"};
   if (document.readyState !== "complete" || window.__ghReady !== true || up < 30000) return {...base, ok: false, booting: true};
 
@@ -121,6 +124,8 @@
     const q = sel => { const el = document.querySelector(sel); return el ? str(el.textContent.replace(/\s+/g, " ").trim(), 300) : ""; };
     const jobNow = [...document.querySelectorAll("#ofStatus .of-jobnow")].map(el => el.textContent.trim()).join(" · ");
     const AG = O.AGENDA || [], ai = AG.length ? (+localStorage.getItem("coinAgenda") || 0) % AG.length : 0, na = AG[ai];
+    // 남은 시간 대신 '그 시각'을 보낸다 → 읽을 때마다 값이 바뀌지 않아 대시보드가 다시 그리지 않음 (0 = 이미 지남/곧)
+    const at = ms => { const n = num(ms); return n == null ? null : n > 0 ? Math.round((Date.now() + n) / 1000) * 1000 : 0; };
     return {
       mode: m ? "meeting" : c.auto ? "auto" : "idle", modeKo: m ? "회의 중" : c.auto ? "자동 운영" : "대기",
       meeting: m ? {id: str(m.id, 40), name: str(m.name, 60), room: str(m.room, 24), roomName: roomName(m.room), trigger: str(m.trigger, 10), topic: str(m.topic, 300),
@@ -128,12 +133,12 @@
         order: (m.order || []).map(id => ({...who(id), done: (m.done || []).includes(id)})), done: (m.done || []).length, total: (m.order || []).length} : null,
       speaker: cur ? {...who(cur.agent), live: !!cur.live, text: str(String(cur.text || "").slice(-400), 400), tool: str(st && st.act, 60), toolStatus: str(st && st.status, 10)} : null,
       queued: num(s.queued) || 0, cycling: !!cs.cycling, lastJob: str(cs.lastJob, 24), jobNow: str(jobNow, 200), chatting: !!O.isChatting(),
-      nextCycleMs: num(O.nextCycleIn()), nextAutoMs: num(O.nextAutoIn()), nextChatMs: num(O.nextChatIn()), pausedMs: num(O.officePaused()),
+      nextCycleAt: at(O.nextCycleIn()), nextAutoAt: at(O.nextAutoIn()), nextChatAt: at(O.nextChatIn()), pausedUntil: at(O.officePaused()),
       nextAgenda: na ? {id: str(na.id, 24), title: str(na.title, 60), room: str(na.room, 24), roomName: roomName(na.room)} : null,
       usage: {day: str(u.day, 12), meetings: num(u.meetings) || 0, auto: num(u.auto) || 0, calls: num(u.calls) || 0, chats: num(u.chats) || 0, trained: num(u.trained) || 0},
       cfg: {auto: !!c.auto, every: num(c.every), dailyMax: num(c.dailyMax), chat: c.chat !== false, chatEvery: num(c.chatEvery), chatMax: num(c.chatMax),
         cycle: c.cycle !== false, cycleMin: num(c.cycleMin), callMax: num(c.callMax), combo: c.combo !== false, claudeMode: str(O.claudeMode(), 8)},
-      ui: {title: q("#ofTitle"), mode: q("#ofMode"), status: q("#ofStatus"), board: q("#ofBoard")}
+      ui: {title: q("#ofTitle")}
     };
   });
 
@@ -163,9 +168,9 @@
       active: list.slice(0, 60)};
   });
 
-  /* ---------- 4. 회의록 · 활동 피드 (최근 80개, 최신 먼저) ---------- */
+  /* ---------- 4. 회의록 · 활동 피드 (최근 40개, 최신 먼저) ---------- */
   out.feed = await run("feed", 1500, async () => {
-    const log = await O.loadLog(), N = Math.min(120, Math.max(10, num(OPT.feedN) || 80));
+    const log = await O.loadLog(), N = Math.min(120, Math.max(10, num(OPT.feedN) || 40));
     return log.slice(-N).reverse().map(e => {
       const a = e.kind === "user" ? null : who(e.agent), ch = e.ch || "hq";
       const x = compact({id: str(e.id, 40), t: num(e.t), room: str(ch, 24), roomName: roomName(ch), kind: str(e.kind, 16),
@@ -176,8 +181,8 @@
         status: str(e.status, 12), level: str(e.level, 8), market: str(e.mname || e.market, 30), tf: str(e.tf, 6), note: str(e.note, 200)});
       if (e.pass != null) x.ok = !!e.pass;
       if (e.oos && typeof e.oos === "object") x.oos = compact({ret: rnd(e.oos.ret), dd: rnd(e.oos.dd), win: rnd(e.oos.win), pf: rnd(e.oos.pf), n: num(e.oos.n)});
-      if (Array.isArray(e.cols) && Array.isArray(e.rows)) x.table = {cols: e.cols.slice(0, 8).map(c => str(c, 30)),
-        rows: e.rows.slice(0, 8).map(r => (Array.isArray(r) ? r : []).slice(0, 8).map(c => str(c, 60))), more: Math.max(0, e.rows.length - 8)};
+      if (Array.isArray(e.cols) && Array.isArray(e.rows)) x.table = {cols: e.cols.slice(0, 6).map(c => str(c, 30)),
+        rows: e.rows.slice(0, 6).map(r => (Array.isArray(r) ? r : []).slice(0, 6).map(c => str(c, 60))), more: Math.max(0, e.rows.length - 6)};
       return x;
     });
   });
@@ -269,8 +274,8 @@
     });
     out.growth = await run("growth", 2500, async () => {
       const bl = O.backlog() || [];
-      const notes = [];
-      for (const t of (O.TEAMS || [])) for (const n of (O.teamNotes(t.id) || []).slice(-3)) notes.push(compact({team: str(t.id, 24), teamName: str(t.name, 40), t: num(n.t), text: str(n.text, 200), src: str(n.src, 20)}));
+      const notes = [], NT = lsJ("coinNotes", {}) || {};          // O.teamNotes(id) 와 같은 값 (한 번만 읽음)
+      for (const t of (O.TEAMS || [])) for (const n of (Array.isArray(NT[t.id]) ? NT[t.id] : []).slice(-3)) notes.push(compact({team: str(t.id, 24), teamName: str(t.name, 40), t: num(n.t), text: str(n.text, 200), src: str(n.src, 20)}));
       notes.sort((a, b) => (b.t || 0) - (a.t || 0));
       let skills = [], board = [];
       try { skills = (await O.learnedSkills(8)).map(x => compact({text: str(x.text, 200), job: str(x.job, 16), uses: num(x.uses), conf: rnd(x.conf), t: num(x.t)})); } catch (e) {}
@@ -285,8 +290,21 @@
   }
   if (OPT.reports){
     out.report = await run("report", 4000, async () => {
-      const R = await O.listReports(), x = R[0];
-      return {count: R.length, latest: x ? {t: num(x.t), since: num(x.since), title: str(x.title, 80), text: str(x.text, 2500),
+      // O.listReports() 는 지금까지의 발표를 전부 읽는다(지우지 않으므로 계속 늘어남) → 최신 3개와 개수만 직접 읽기 (읽기 전용 트랜잭션)
+      // 키 = "coinreport:" + Date.now().toString(36) + … 이라 키 순서 = 시간 순서
+      if (!indexedDB.databases || !(await indexedDB.databases()).some(d => d.name === "nuri-ai")) return {count: 0, latest: null};   // 앱 DB 를 새로 만들지 않음
+      const db = await new Promise((res, rej) => { const r = indexedDB.open("nuri-ai"); r.onupgradeneeded = () => r.transaction.abort(); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); r.onblocked = () => rej(new Error("blocked")); });
+      let count = 0, R = [];
+      try {
+        if (!db.objectStoreNames.contains("kv")) return {count: 0, latest: null};
+        const os = db.transaction("kv", "readonly").objectStore("kv"), rg = IDBKeyRange.bound("coinreport:", "coinreport:\uffff");
+        const cq = os.count(rg);
+        const cur = new Promise((res, rej) => { const c = os.openCursor(rg, "prev"); c.onsuccess = () => { const x = c.result; if (x && R.length < 3){ R.push(x.value); x.continue(); } else res(); }; c.onerror = () => rej(c.error); });
+        count = await new Promise((res, rej) => { cq.onsuccess = () => res(cq.result); cq.onerror = () => rej(cq.error); });
+        await cur;
+      } finally { db.close(); }
+      const x = R.filter(v => v && typeof v === "object").sort((a, b) => (+b.t || 0) - (+a.t || 0))[0];
+      return {count, latest: x ? {t: num(x.t), since: num(x.since), title: str(x.title, 80), text: str(x.text, 2500),
         sections: (x.sections || []).slice(0, 12).map(s => ({name: str(s.name, 40), lead: str(s.lead, 20), items: (s.items || []).slice(0, 6).map(i => str(i, 160)), next: (s.next || []).slice(0, 3).map(i => str(i, 120))}))} : null};
     });
   }
@@ -299,7 +317,7 @@
     summary: {
       demo: book ? book.demo : null,
       office: {mode: of.mode || "", modeKo: of.modeKo || "", meeting: of.meeting ? `#${of.meeting.name} · ${of.meeting.done}/${of.meeting.total} 발언` : "",
-        jobNow: of.jobNow || "", lastJob: of.lastJob || "", pausedMs: of.pausedMs || 0, usage: of.usage || null},
+        jobNow: of.jobNow || "", lastJob: of.lastJob || "", pausedUntil: of.pausedUntil || 0, usage: of.usage || null},
       live: {enabled: !!lv.enabled, env: lv.env || "", mode: lv.mode || "", state: lv.state || "", halted: !!lv.halted, dayUsdt: lv.dayPnl ? lv.dayPnl.usdt : null,
         dailyLoss: lv.limits ? lv.limits.dailyLoss : null, pending: lv.pendingApprovals ? lv.pendingApprovals.count : 0, positions: (lv.positions || []).length, linked: (lv.linked || []).length},
       combo: cb.stats || null, sentiment: out.sentiment || null
@@ -345,4 +363,7 @@
   const clean = scrub(snap, 0);
   clean.redactions = red;
   return clean;
+  } catch (e) {
+    return {...base, ok: false, why: "collector: " + String((e && e.name) || "Error").slice(0, 30) + ": " + String((e && e.message) || e).slice(0, 160)};
+  }
 })(/*OPT*/{});
