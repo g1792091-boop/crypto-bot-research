@@ -584,6 +584,7 @@ button.mini { height: 22px; padding: 0 6px; font-size: 11px; }
 .dg-2 > .card { margin-bottom: 0; }
 .dg-tg { white-space: pre-wrap; word-break: break-word; font-family: var(--mono, monospace); font-size: 12px; margin: 0; padding: 12px; }
 .dg-tfg { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; padding: 4px 0; }
+.dg-tfg .mk-row { gap: 8px; } .dg-tfg .mk-row span { white-space: nowrap; flex: none; } .dg-tfg .mk-row b { text-align: right; }
 @media (max-width: 720px) {
   .dg-day b { min-width: 0; }
   .dg-t td, .dg-t th { white-space: normal; }
