@@ -7,12 +7,12 @@
 # 하는 일
 #   1. 가상 화면(XFCE 데스크톱) + Chrome 설치 — GH Coin 은 브라우저 창 안에서 돌아가는 앱이라 화면이 필요함
 #   2. 드라이브의 zip 에서 앱 코드만 꺼내(약 30MB) 실행기를 빌드
-#   3. 서비스 5개 등록 — 재부팅·충돌 시 자동으로 다시 켜짐
-#        ghcoin-vnc(가상 화면) · ghcoin-desktop(XFCE) · ghcoin-server(앱 실행기) · ghcoin-chrome(앱 창) · ghcoin-novnc(웹 원격화면)
-#   4. 방화벽: SSH 와 Tailscale 안쪽만 허용 → 화면 주소(8080 · 6080)는 Tailscale 로만 열림
+#   3. 서비스 등록 — 재부팅·충돌 시 자동으로 다시 켜짐
+#        ghcoin-vnc(서버 안 가상 화면, 밖으로 안 나감) · ghcoin-desktop(XFCE) · ghcoin-server(앱 실행기) · ghcoin-chrome(앱 창)
+#   4. 방화벽: SSH 와 Tailscale 안쪽만 허용 → 화면 주소(8080)는 Tailscale 로만 열림
 #   5. Tailscale 설치·로그인
 #   6. 실시간 화면(:8080, 비밀번호 로그인) — add-dashboard.sh. 봇 화면을 내 브라우저가 직접 그려서 선명함.
-#      원격화면(noVNC :6080)은 비상용으로만 남는다.
+#      (예전 원격화면 noVNC :6080 은 없앤다)
 #
 # 다시 실행해도 안전함(이미 한 단계는 건너뜀). 비밀번호는 처음 만든 것을 유지.
 set -euo pipefail
@@ -27,7 +27,6 @@ SRV_HOME="/home/$SRV_USER"
 APP_DIR="/opt/ghcoin"
 APP_PORT=17860
 VNC_PORT=5901
-NOVNC_PORT=6080
 SCREEN="1600x900"
 SRC_IN_ZIP="crypto-bot-research/crypto-bot-research"   # zip 안의 최신 코드 폴더
 
@@ -49,15 +48,17 @@ if ! swapon --show | grep -q .; then           # 메모리가 잠깐 몰려도 �
 fi
 
 # ---------------------------------------------------------------- 1. 패키지
-say "패키지 설치 (데스크톱 · 가상 화면 · 웹 원격화면 · 한글 글꼴) — 3~5분"
+say "패키지 설치 (데스크톱 · 가상 화면 · 한글 글꼴) — 3~5분"
 # 새 서버는 처음 몇 분 동안 자동 업데이트가 돌아서 설치가 막힐 수 있다 → 끝날 때까지 기다렸다가 진행
 for i in $(seq 1 60); do apt-get update -qq 2>/dev/null && break; echo "  자동 업데이트가 끝나길 기다리는 중... ($i)"; sleep 10; done
 apt-get install -y -qq -o DPkg::Lock::Timeout=900 --no-install-recommends \
   xfce4 xfce4-terminal dbus-x11 xfonts-base at-spi2-core \
-  tigervnc-standalone-server tigervnc-tools novnc websockify \
-  fonts-noto-cjk fonts-noto-color-emoji xdg-utils \
+  tigervnc-standalone-server tigervnc-tools \
+  fonts-noto-cjk fonts-noto-color-emoji fonts-nanum xdg-utils \
   curl ca-certificates unzip python3 ufw cron earlyoom >/dev/null
-# 화면 잠금이 걸리면 원격화면에서 풀 수 없으므로 잠금 프로그램은 빼 둔다
+# fonts-nanum: 사무실 · 채팅 글꼴(D2Coding, NanumGothicCoding …)이 서버에서 NanumGothicCoding 으로 그려지게.
+#   실시간 화면(:8080)이 같은 글꼴 파일을 보는 쪽에 보내서 PC · 휴대폰에서도 줄바꿈 · 높이가 봇 화면과 똑같아진다.
+# 화면 잠금이 걸리면 봇 화면이 가려지므로 잠금 프로그램은 빼 둔다
 apt-get purge -y -qq xfce4-screensaver light-locker >/dev/null 2>&1 || true
 
 if ! command -v google-chrome >/dev/null; then
@@ -219,18 +220,15 @@ mkdir -p "$APP_DIR"
 mv -f "$APP_DIR/ghcoin.new" "$APP_DIR/ghcoin"
 chmod 755 "$APP_DIR/ghcoin"
 
-# ---------------------------------------------------------------- 4. 웹 원격화면 비밀번호 · 첫 화면
-say "웹 원격화면 설정"
+# ---------------------------------------------------------------- 4. 가상 화면 (서버 안에서만 쓰는 화면 · 밖으로 안 나감)
+say "가상 화면 설정"
 install -d -o "$APP_USER" -g "$APP_USER" -m 700 "$APP_HOME/.vnc"
-PASSFILE=/root/ghcoin-원격화면-비밀번호.txt
-if [ ! -s "$APP_HOME/.vnc/passwd" ] || [ ! -s "$PASSFILE" ]; then
-  # 원격화면 비밀번호는 8글자까지만 쓰임 (헷갈리는 0/O/1/l/I 제외)
-  VNCPASS=$(python3 -c "import secrets; a='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'; print(''.join(secrets.choice(a) for _ in range(8)))")
+if [ ! -s "$APP_HOME/.vnc/passwd" ]; then   # 서버 안 화면 잠금용 무작위 비밀번호 (사람이 쓸 일 없음)
+  VNCPASS=$(python3 -c "import secrets; print(secrets.token_urlsafe(12)[:8])")
   printf '%s\n' "$VNCPASS" | vncpasswd -f > "$APP_HOME/.vnc/passwd"
-  printf '%s\n' "$VNCPASS" > "$PASSFILE"; chmod 600 "$PASSFILE"
 fi
 chown "$APP_USER:$APP_USER" "$APP_HOME/.vnc/passwd"; chmod 600 "$APP_HOME/.vnc/passwd"
-VNCPASS=$(cat "$PASSFILE")
+rm -f /root/ghcoin-원격화면-비밀번호.txt   # 예전 원격화면(noVNC) 비밀번호 — 이제 안 씀
 
 # XFCE 첫 실행 때 뜨는 '패널 설정' 질문 창이 화면을 가리지 않게 기본 패널을 미리 깔아 둔다
 XFCONF="$APP_HOME/.config/xfce4/xfconf/xfce-perchannel-xml"
@@ -239,11 +237,13 @@ if [ ! -f "$XFCONF/xfce4-panel.xml" ] && [ -f /etc/xdg/xfce4/panel/default.xml ]
   install -o "$APP_USER" -g "$APP_USER" -m 644 /etc/xdg/xfce4/panel/default.xml "$XFCONF/xfce4-panel.xml"
 fi
 
-rm -rf "$APP_DIR/novnc" && cp -r /usr/share/novnc "$APP_DIR/novnc"
-cat > "$APP_DIR/novnc/index.html" <<'EOF'
-<!doctype html><meta charset="utf-8"><title>GH Coin</title>
-<script>location.replace("vnc.html?autoconnect=1&resize=scale&reconnect=1&reconnect_delay=3000");</script>
-EOF
+# 예전 원격화면(noVNC :6080)은 없앤다 — 화면은 :8080 실시간 화면 하나로
+if [ -f /etc/systemd/system/ghcoin-novnc.service ]; then
+  systemctl disable --now ghcoin-novnc >/dev/null 2>&1 || true
+  rm -f /etc/systemd/system/ghcoin-novnc.service
+fi
+rm -rf "$APP_DIR/novnc"
+apt-get purge -y -qq novnc websockify python3-novnc >/dev/null 2>&1 || true
 
 # ---------------------------------------------------------------- 5. 서비스
 say "서비스 등록 (재부팅·충돌 시 자동 재시작)"
@@ -324,22 +324,6 @@ RestartSec=10
 WantedBy=multi-user.target
 EOF
 
-cat > /etc/systemd/system/ghcoin-novnc.service <<EOF
-[Unit]
-Description=GH Coin 웹 원격화면 (noVNC :$NOVNC_PORT, Tailscale 로만 접속)
-Requires=ghcoin-vnc.service
-After=ghcoin-vnc.service
-
-[Service]
-User=$APP_USER
-ExecStart=/usr/bin/websockify --web=$APP_DIR/novnc $NOVNC_PORT 127.0.0.1:$VNC_PORT
-Restart=always
-RestartSec=3
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
 # Chrome 정책: 봇 탭을 절대 잠재우지 않기 (메모리 절약 모드 · 백그라운드 타이머 느리게 하기 끄기)
 #              + 화면을 가리는 팝업 끄기 (번역 · 비밀번호 저장 · 알림 권한)
 install -d /etc/opt/chrome/policies/managed
@@ -360,7 +344,7 @@ EOF
 
 # 메모리가 바닥나면 서버 전체가 멈추기 전에 Chrome 만 정리 → 서비스가 10초 뒤 다시 켬
 cat > /etc/default/earlyoom <<'EOF'
-EARLYOOM_ARGS="-r 3600 -m 5 -s 10 --prefer (^|/)(chrome)$ --avoid (^|/)(Xtigervnc|xfce4-session|sshd|ghcoin|websockify|tailscaled|systemd)$"
+EARLYOOM_ARGS="-r 3600 -m 5 -s 10 --prefer (^|/)(chrome)$ --avoid (^|/)(Xtigervnc|xfce4-session|sshd|ghcoin|tailscaled|systemd)$"
 EOF
 systemctl enable -q earlyoom
 systemctl restart earlyoom
@@ -401,7 +385,7 @@ echo '*/5 * * * * root /usr/local/bin/ghcoin-memlog' > /etc/cron.d/ghcoin-memlog
 cat > /usr/local/bin/ghcoin-status <<'EOF'
 #!/usr/bin/env bash
 echo "== 서비스 (전부 active 여야 정상)"
-for s in ghcoin-vnc ghcoin-desktop ghcoin-server ghcoin-chrome ghcoin-novnc ghcoin-dash; do
+for s in ghcoin-vnc ghcoin-desktop ghcoin-server ghcoin-chrome ghcoin-dash; do
   [ "$s" = ghcoin-dash ] && [ ! -f /etc/systemd/system/ghcoin-dash.service ] && continue
   printf '  %-16s %s\n' "$s" "$(systemctl is-active "$s")"
 done
@@ -413,15 +397,14 @@ echo "== 디스크"
 df -h / | sed 's/^/  /'
 echo "== 주소 (Tailscale 켜고 열기)"
 ip4=$(tailscale ip -4 2>/dev/null | head -1)
-[ -f /etc/systemd/system/ghcoin-dash.service ] && echo "  실시간 화면(로그인)  http://${ip4:-<tailscale IP>}:8080/"
-echo "  비상용 원격화면      http://${ip4:-<tailscale IP>}:6080/"
+echo "  GH Coin 화면(로그인)  http://${ip4:-<tailscale IP>}:8080/"
 EOF
 chmod 755 /usr/local/bin/ghcoin-status
 
 systemctl daemon-reload
-systemctl enable -q ghcoin-vnc ghcoin-desktop ghcoin-server ghcoin-chrome ghcoin-novnc ghcoin-chrome-restart.timer
+systemctl enable -q ghcoin-vnc ghcoin-desktop ghcoin-server ghcoin-chrome ghcoin-chrome-restart.timer
 systemctl start ghcoin-chrome-restart.timer
-systemctl restart ghcoin-vnc ghcoin-server ghcoin-novnc
+systemctl restart ghcoin-vnc ghcoin-server
 systemctl restart ghcoin-desktop
 systemctl restart ghcoin-chrome
 
@@ -457,7 +440,7 @@ if [ "${GHCOIN_NO_DASH:-0}" != 1 ]; then
   if [ -s "$WORK/add-dashboard.sh" ] && GHCOIN_REV="$DREV" bash "$WORK/add-dashboard.sh"; then
     DASH_OK=1
   else
-    echo "  (실시간 화면 설치는 실패했지만 봇은 정상입니다 — 위 화면을 캡처해서 보내 주세요. 그동안은 원격화면 :6080 으로 보세요)"
+    echo "  (실시간 화면 설치는 실패했지만 봇은 정상입니다 — 위 화면을 캡처해서 보내 주세요)"
   fi
 fi
 DASHPASS=$(cat "/root/ghcoin-대시보드-비밀번호.txt" 2>/dev/null || true)
@@ -475,17 +458,12 @@ cat <<EOF
     상태 확인:          ghcoin-status
   └───────────────────────────────────────────────────────────────┘
   * 이 주소 하나로 봇 화면을 그대로 보고, 누르기 · 키 입력 · 설정 · 실거래 승인까지 합니다.
-  * 비상용 원격화면(noVNC): http://${TSIP:-<tailscale IP>}:$NOVNC_PORT/  비밀번호 $VNCPASS  (sudo cat $PASSFILE)
 EOF
 else
 cat <<EOF
 
-  ┌───────────────────────────────────────────────────────────────┐
-    원격화면:           Tailscale 켜고 →  http://${TSIP:-<tailscale IP>}:$NOVNC_PORT/
-    원격화면 비밀번호:  $VNCPASS
-      (잊어버리면:  sudo cat $PASSFILE)
-    상태 확인:          ghcoin-status
-  └───────────────────────────────────────────────────────────────┘
+  !! 실시간 화면(:8080)이 아직 안 켜졌습니다. 봇은 서버에서 돌고 있습니다.
+     위 화면을 캡처해서 보내 주세요.  (상태 확인: ghcoin-status)
 EOF
 fi
 cat <<EOF

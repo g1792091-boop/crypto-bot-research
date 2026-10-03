@@ -15,6 +15,7 @@ import hashlib
 import http.client
 import json
 import re
+import secrets
 import sys
 import threading
 import time
@@ -27,12 +28,15 @@ BINDING = "__ghMirror"
 LEASE_EVERY = 10.0           # 기록기 임대 갱신 간격 (초)
 LEASE_MS = 45000             # 이만큼 갱신이 없으면 페이지 안 기록기가 스스로 멈춤
 DIALOG_TIMEOUT = 120.0       # JS 확인 창 자동 취소
-BASE_LIMIT = 8 << 20         # 늦게 들어온 사람용 버퍼 상한 (바이트)
-CLIENT_CAP = 12 << 20        # 한 사람 앞에 쌓인 미전송 상한 (넘으면 새 사진부터)
+BASE_LIMIT = 6 << 20         # 늦게 들어온 사람용 버퍼 상한 (글자 수, 새로고침 직후 사무실 2.5MB 가 들어갈 만큼)
+CLIENT_CAP = 8 << 20         # 한 사람 앞에 쌓인 미전송 상한 (넘으면 새 사진부터)
 MAX_PAYLOAD = 24 << 20       # 페이지에서 온 한 묶음 상한
 MAX_VIEWERS = 4              # 동시에 보는 실시간 화면 수 (넘으면 가장 오래된 것을 끊음)
 ACT_TIMEOUT = 5.0
 CALL_TIMEOUT = 10.0
+RESYNC_EVERY = 60.0          # 깨진 묶음이 오면 새 사진을 부탁 (이 간격보다 자주는 아님)
+BUSY_RELOAD_AFTER = 150.0    # 붙지 못하고 '응답 없음'이 이만큼 이어지고 봇 상태도 '멈춤'이면 앱 새로고침 (확인 창이 떠 있던 경우)
+BUSY_RELOAD_GAP = 600.0      # 위 자동 새로고침은 10분에 한 번까지
 MAX_STATIC = 4 << 20
 STATIC_RE = re.compile(r"^(gh-coin|nuri-ai)/[A-Za-z0-9._\-/]{1,200}\.(svg|png|jpe?g|gif|webp|ico|css|woff2?|ttf|otf)$")
 STATIC_TYPES = {"svg": "image/svg+xml", "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "gif": "image/gif",
@@ -40,7 +44,9 @@ STATIC_TYPES = {"svg": "image/svg+xml", "png": "image/png", "jpg": "image/jpeg",
                 "woff2": "font/woff2", "ttf": "font/ttf", "otf": "font/otf"}
 HEAD_RE = re.compile(r'^\{"k":"([ricv])","n":(\d{1,7}),"e":(\d{1,9}),')
 # 화면 글자에 섞여 나온 API 키 형식은 한 번 더 가린다 (입력 칸 값은 recorder.js 가 이미 ****)
-SECRET_RE = re.compile(r"(?<![A-Za-z0-9_\-])(?:nvapi-|sk-(?:ant-|or-|proj-)?|gsk_|tvly-|csk-|xai-|hf_|pplx-|AIza|ghp_|github_pat_|glpat-)[A-Za-z0-9_\-]{16,}")
+# JSON 글자 그대로 검사하므로 줄바꿈 바로 뒤(\n · \t · \u00xx 다음)에서 시작하는 키도 잡는다 (n · t 가 '글자 뒤'로 보이지 않게)
+SECRET_RE = re.compile(r"(?:(?<=\\[nrtbf])|(?<=\\u00[0-9a-fA-F]{2})|(?<![A-Za-z0-9_\-]))"
+                       r"(?:nvapi-|sk-(?:ant-|or-|proj-)?|gsk_|tvly-|csk-|xai-|hf_|pplx-|AIza|ghp_|github_pat_|glpat-)[A-Za-z0-9_\-]{16,}")
 ACT_FN = "function(a){var c=window.__ghMirrorCtl;return c?c.act(a):{ok:false,err:'no-recorder'}}"
 KEYS = {"Enter", "Escape", "Tab", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Backspace", "Delete",
         "Home", "End", "PageUp", "PageDown", " "}
@@ -204,8 +210,25 @@ class Session:
             pass
 
 
+def _local_ws(target):
+    """DevTools 목록의 웹소켓 주소 — 이 서버 안(127.0.0.1 · localhost · ::1)이 아니면 거부."""
+    ws_url = str(target.get("webSocketDebuggerUrl") or "")
+    host = urllib.parse.urlsplit(ws_url.replace("ws://", "http://", 1)).hostname or ""
+    if not ws_url.startswith("ws://") or host not in ("127.0.0.1", "localhost", "::1"):
+        raise ConnectionError("DevTools 주소가 이상함")
+    return ws_url
+
+
+def _quiet_shutdown(sock):
+    try:
+        sock.shutdown(2)
+    except OSError:
+        pass
+
+
 class Viewer:
-    __slots__ = ("q", "qbytes", "need_reset", "waiting", "gone", "status_seen", "raw", "wire", "joined", "sock", "resets")
+    __slots__ = ("q", "qbytes", "need_reset", "waiting", "gone", "status_seen", "raw", "wire", "joined", "sock", "resets",
+                 "evicted", "vid", "visible")
 
     def __init__(self, sock):
         self.q = collections.deque()
@@ -219,6 +242,9 @@ class Viewer:
         self.joined = time.time()
         self.sock = sock
         self.resets = 0
+        self.evicted = False         # 다른 창이 들어와서 밀려남 → 'bye' 를 보내고 끊음 (브라우저가 저절로 다시 붙어 서로 밀어내지 않게)
+        self.vid = secrets.token_urlsafe(12)   # 이 연결 이름 (보이는지 알릴 때)
+        self.visible = True          # 이 창(탭)이 지금 화면에 보이는지 (차트 그림은 보이는 사람이 있을 때만 만든다)
 
 
 class Mirror:
@@ -240,7 +266,7 @@ class Mirror:
         self.sess = None
         self.ctx = None                  # 봇 페이지의 JS 실행 공간 id (바인딩 호출에서 얻음)
         self.main_frame = None           # 봇 페이지 맨 위 프레임 id
-        self.contexts = {}               # 실행 공간 id -> (frame id, 기본 공간인지) — 맨 위 프레임의 기본 공간에서 온 것만 받는다
+        self.contexts = {}               # 실행 공간 id -> (frame id, 기본 공간인지, origin) — 맨 위 GH Coin 문서의 기본 공간에서 온 것만 받는다
         self.origin = ""                 # http://127.0.0.1:17860
         self.state = "starting"          # starting · connecting · live · no_page · no_chrome · crashed · busy · error
         self.state_msg = "시작하는 중"
@@ -260,6 +286,14 @@ class Mirror:
         self.page_stats = None
         self.last_batch = 0.0
         self.st = collections.Counter()   # 숫자 통계
+        self.resync_at = 0.0             # 깨진 묶음 때문에 새 사진을 부탁한 시각
+        self.busy_since = 0.0            # 붙기가 '응답 없음'으로 계속 실패하기 시작한 때 (확인 창이 떠 있을 때 생김)
+        self.busy_reload_at = 0.0
+        self.lease_now = False           # 보이는 사람 수가 바뀜 → 임대를 바로 갱신 (차트 그림 켜기/끄기)
+        self.font = ""                   # 봇 화면이 쓰는 고정폭 글꼴 ("nanum" = NanumGothicCoding → 보는 쪽도 같은 글꼴 파일로)
+        self.notice = None               # 보는 사람에게 한 번 알릴 것 (봇이 서버에 파일을 내려받음 등)
+        self.notice_seq = 0
+        self.downloads = {}              # guid -> 파일 이름 (내려받기 알림용)
         self.act_ms = collections.deque(maxlen=50)
         self.static_cache = collections.OrderedDict()
         self.static_lock = threading.Lock()
@@ -278,7 +312,8 @@ class Mirror:
         d = self.dialog
         s = jdump({"mirror": self.state, "msg": self.state_msg, "bot": bot.get("status"), "botMsg": bot.get("message"),
                    "dialog": {k: d[k] for k in ("seq", "type", "message", "default")} if d else None,
-                   "busy": bool(self.lease_sent and time.monotonic() - self.lease_sent > 20)})
+                   "busy": bool(self.lease_sent and time.monotonic() - self.lease_sent > 20),
+                   "font": self.font, "notice": self.notice, "connectBusy": bool(self.busy_since)})
         with self.cond:
             if s != self.status_json:
                 self.status_json = s
@@ -292,17 +327,29 @@ class Mirror:
         with self.cond:
             while len(self.viewers) >= MAX_VIEWERS:
                 old = self.viewers.pop(0)
-                old.gone = True
+                old.gone = old.evicted = True
                 victims.append(old)
             self.viewers.append(v)
             self.cond.notify_all()
-        for o in victims:
-            try:
-                o.sock.shutdown(2)
-            except OSError:
-                pass
+        for o in victims:                                 # 'bye' 를 쓸 시간을 준 뒤, 막혀 있으면 소켓을 닫음
+            self.st["evictions"] += 1
+            t = threading.Timer(3.0, _quiet_shutdown, (o.sock,))
+            t.daemon = True
+            t.start()
         self.st["joins"] += 1
+        self.lease_now = True
         return v
+
+    def set_visible(self, vid, visible):
+        """보는 창이 보이는지/숨었는지 (live.js 가 알림). 차트 그림은 보이는 창이 있을 때만 만든다. 모르는 vid 면 False."""
+        with self.cond:
+            for v in self.viewers:
+                if v.vid == vid:
+                    if v.visible != visible:
+                        v.visible = visible
+                        self.lease_now = True
+                    return True
+        return False
 
     def leave(self, v):
         with self.cond:
@@ -374,6 +421,20 @@ class Mirror:
         except Exception:
             self.checkout_at = 0.0
 
+    def resync(self, why):
+        """모두에게 새 사진(r)을 부탁 (깨진 묶음 등으로 보는 화면이 어긋났을 때). RESYNC_EVERY 에 한 번까지."""
+        s = self.sess
+        now = time.monotonic()
+        if not s or not s.alive or now - self.resync_at < RESYNC_EVERY:
+            return
+        self.resync_at = now
+        self.st["resyncs"] += 1
+        try:
+            s.send("Runtime.evaluate", {"expression": "window.__ghMirrorCtl && window.__ghMirrorCtl.resync(%s)" % jdump(str(why)[:20]),
+                                        "silent": True}, cb=lambda m: None)
+        except Exception:
+            pass
+
     # ------------------------------------------------------------ 페이지에서 온 것
     def _on_event(self, sess, method, p):
         if sess is not self.sess:
@@ -382,8 +443,9 @@ class Mirror:
             if p.get("name") == BINDING:
                 cid = p.get("executionContextId")
                 fr = self.contexts.get(cid)
-                # 맨 위 GH Coin 문서의 기본 실행 공간에서 온 것만 (페이지 안 다른 프레임이 바인딩을 불러 조작 대상을 바꾸지 못하게)
-                if not fr or not fr[1] or fr[0] != self.main_frame:
+                # 맨 위 GH Coin 문서(앱 주소)의 기본 실행 공간에서 온 것만: 페이지 안 다른 프레임이나, 봇 탭이 다른 사이트로 넘어간 뒤의
+                # 문서가 바인딩을 불러 조작 대상을 바꾸거나 사용자가 치는 글자를 받아 가지 못하게
+                if not fr or not fr[1] or fr[0] != self.main_frame or not self.origin or fr[2] != self.origin:
                     self.st["foreign_binding_calls"] += 1
                     return
                 self.ctx = cid
@@ -391,7 +453,7 @@ class Mirror:
         elif method == "Runtime.executionContextCreated":
             c = p.get("context") or {}
             aux = c.get("auxData") or {}
-            self.contexts[c.get("id")] = (aux.get("frameId"), bool(aux.get("isDefault")))
+            self.contexts[c.get("id")] = (aux.get("frameId"), bool(aux.get("isDefault")), str(c.get("origin") or ""))
             while len(self.contexts) > 200:
                 self.contexts.pop(next(iter(self.contexts)))
         elif method == "Runtime.executionContextsCleared":
@@ -405,6 +467,15 @@ class Mirror:
             f = p.get("frame") or {}
             if not f.get("parentId") and f.get("id"):
                 self.main_frame = f["id"]
+                url = str(f.get("url", ""))
+                if self.target_re.match(url):              # 실행기 포트가 바뀌었을 수 있음 (17860~17869)
+                    u = urllib.parse.urlsplit(url)
+                    self.origin = f"{u.scheme}://{u.netloc}"
+                else:                                      # 봇 탭이 앱이 아닌 곳으로 감: 그 문서는 믿지 않고 연결을 끊는다
+                    self.ctx = None
+                    self.st["left_app"] += 1
+                    self._set_state("no_page", "봇 탭이 GH Coin 이 아닌 페이지로 바뀌었습니다 — 메뉴의 '앱 새로고침'으로 돌아옵니다")
+                    sess.close()
         elif method == "Page.javascriptDialogOpening":
             self.dialog_seq += 1
             self.dialog = {"seq": self.dialog_seq, "type": str(p.get("type", "alert"))[:20],
@@ -415,6 +486,19 @@ class Mirror:
         elif method == "Page.javascriptDialogClosed":
             self.dialog = None
             self.refresh_status()
+        elif method == "Page.downloadWillBegin":           # 봇이 파일을 내려받음 → 서버에 저장된다는 것을 보는 사람에게 알림
+            name = SECRET_RE.sub("[가림]", str(p.get("suggestedFilename") or "파일"))[:80]
+            self.downloads[str(p.get("guid"))[:64]] = name
+            while len(self.downloads) > 20:
+                self.downloads.pop(next(iter(self.downloads)))
+        elif method == "Page.downloadProgress":
+            if p.get("state") in ("completed", "canceled"):
+                name = self.downloads.pop(str(p.get("guid"))[:64], None)
+                if name and p.get("state") == "completed":
+                    self.st["downloads"] += 1
+                    self.notice_seq += 1
+                    self.notice = {"seq": self.notice_seq, "kind": "download", "name": name, "t": int(time.time() * 1000)}
+                    self.refresh_status()
         elif method == "Inspector.targetCrashed":
             self.ctx = None
             self.dialog = None
@@ -426,8 +510,11 @@ class Mirror:
 
     def _on_batch(self, payload):
         m = HEAD_RE.match(payload[:48])
-        if not m or len(payload) > MAX_PAYLOAD:
+        # JSON.stringify 결과에는 날것의 줄바꿈이 없다: 있으면 SSE 틀(event:/data:)을 깨려는 것 → 버림
+        if not m or len(payload) > MAX_PAYLOAD or "\n" in payload or "\r" in payload:
             self.st["bad_batches"] += 1
+            if m and m.group(1) != "v":                   # 정상 머리의 묶음을 버림 → 보는 화면이 어긋남: 새 사진을 부탁 (1분에 한 번까지)
+                self.resync("bad-batch")
             return
         kind, n = m.group(1), int(m.group(2))
         now = time.monotonic()
@@ -497,22 +584,33 @@ class Mirror:
         except Exception as e:
             raise ConnectionError(f"DevTools 연결 불가: {type(e).__name__}") from None
         if not pages:
-            self._set_state("no_page", "봇 페이지가 아직 없음 (Chrome 이 켜지는 중일 수 있음)")
+            self.busy_since = 0.0
+            if self.state != "no_page":                   # '앱 밖으로 넘어감' 같은 더 자세한 안내는 그대로 둔다
+                self._set_state("no_page", "봇 페이지가 아직 없음 (Chrome 이 켜지는 중일 수 있음)")
             return None
         t = pages[0]
-        ws_url = str(t.get("webSocketDebuggerUrl") or "")
-        host = urllib.parse.urlsplit(ws_url.replace("ws://", "http://", 1)).hostname or ""
-        if not ws_url.startswith("ws://") or host not in ("127.0.0.1", "localhost", "::1"):
-            raise ConnectionError("DevTools 주소가 이상함")
+        ws_url = _local_ws(t)
         u = urllib.parse.urlsplit(str(t.get("url", "")))
         self.origin = f"{u.scheme}://{u.netloc}"
-        self._set_state("connecting", "봇 화면에 붙는 중")
+        if not self.busy_since:                           # '응답 없음'(확인 창) 안내는 다시 붙는 동안에도 그대로 둔다 (깜빡이지 않게)
+            self._set_state("connecting", "봇 화면에 붙는 중")
         ws = websocket.create_connection(ws_url, timeout=10, suppress_origin=True, enable_multithread=True)
         ws.settimeout(None)
         sess = Session(ws, self._on_event)
         self.sess = sess
         self.ctx = None
         sess.start()
+        try:
+            return self._setup(sess)
+        except BaseException:
+            # 넣는 도중 실패(확인 창 · 바쁜 페이지로 시간 초과 등): 이 연결을 반드시 닫는다.
+            # 안 닫으면 시도할 때마다 DevTools 세션 · 소켓 · 읽는 스레드가 하나씩 남아 TasksMax 를 다 쓰고 :8080 이 멈춘다.
+            sess.close()
+            if self.sess is sess:
+                self.sess = None
+            raise
+
+    def _setup(self, sess):
         t0 = time.monotonic()
         self.contexts = {}
         sess.call("Page.enable")
@@ -529,6 +627,7 @@ class Mirror:
         log(f"봇 화면에 붙음 (기록기 {self.version}, {self.st['inject_ms']}ms)")
         self.lease_ok = time.monotonic()
         self.lease_sent = 0.0
+        self.busy_since = 0.0
         return sess
 
     def _lease(self, sess):
@@ -536,7 +635,7 @@ class Mirror:
             return
         self.lease_sent = time.monotonic()
         with self.cond:
-            n = sum(1 for v in self.viewers if not v.gone)
+            n = sum(1 for v in self.viewers if not v.gone and v.visible)   # 차트 그림은 '보이는' 창이 있을 때만
         expr = (f"(function(c){{if(!c)return null;var r=c.lease({LEASE_MS},{n});r.stats=c.stats();return r}})(window.__ghMirrorCtl)")
 
         def done(msg):
@@ -556,6 +655,10 @@ class Mirror:
                 sess.send("Runtime.evaluate", {"expression": self.boot + "\n;void 0", "silent": True, "returnByValue": True}, cb=lambda m: None)
                 return
             self.page_stats = val.get("stats")
+            font = str(val.get("font") or "")[:12]
+            if font != self.font:
+                self.font = font
+                self.refresh_status()
             if not val.get("rec"):                        # 임대가 끝나 멈춰 있었음 → 새로 시작
                 self.st["restarts"] += 1
                 sess.send("Runtime.evaluate", {"expression": "window.__ghMirrorCtl && window.__ghMirrorCtl.resync('lease')", "silent": True}, cb=lambda m: None)
@@ -572,15 +675,22 @@ class Mirror:
                 if sess:
                     backoff = 1.0
                     self._watch(sess)
+            except (TimeoutError, RuntimeError) as e:      # TimeoutError 는 OSError 의 하위 → 먼저 잡아야 '응답 없음'으로 보임
+                first = not self.busy_since
+                if first:
+                    self.busy_since = time.monotonic()
+                if self.state != "crashed":
+                    self._set_state("busy", "봇 페이지가 응답하지 않음 (확인 창이 떠 있을 수 있음) — 메뉴의 '앱 새로고침'으로 풀 수 있음")
+                self.st["connect_timeouts"] += 1
+                if first or self.st["connect_timeouts"] % 20 == 0:   # 확인 창이 오래 떠 있어도 기록이 넘치지 않게
+                    log(f"넣기 실패: {type(e).__name__}: {str(e)[:120]} (연속 {int(time.monotonic() - self.busy_since)}초)")
+                self._busy_reload()
             except (ConnectionError, OSError, websocket.WebSocketException) as e:
+                self.busy_since = 0.0
                 if self.state != "crashed":
                     self._set_state("no_chrome", "Chrome(봇 창)에 연결할 수 없음 — 다시 붙는 중")
                 if "DevTools 연결 불가" not in str(e):
                     log(f"연결 실패: {type(e).__name__}: {str(e)[:120]}")
-            except (TimeoutError, RuntimeError) as e:
-                if self.state != "crashed":
-                    self._set_state("busy", "봇 페이지가 응답하지 않음 — 다시 붙는 중")
-                log(f"넣기 실패: {type(e).__name__}: {str(e)[:120]}")
             except Exception as e:
                 self._set_state("error", "실시간 화면 내부 오류")
                 log(f"내부 오류: {type(e).__name__}: {e}")
@@ -596,12 +706,34 @@ class Mirror:
             self.stop.wait(backoff)
             backoff = min(backoff * 2, 5.0)
 
+    def _busy_reload(self):
+        """붙는 동안 확인 창(confirm · prompt)이 이미 떠 있으면 Page.enable 이 막혀서 그 창을 보지도, 2분 뒤 취소하지도 못한다.
+        붙기가 BUSY_RELOAD_AFTER 넘게 '응답 없음'이고 봇 상태(요약 수집기)도 '멈춤'이면 앱을 새로고침해서 푼다
+        (메뉴의 '앱 새로고침'과 같음 · 10분에 한 번까지 · 그대로 두면 감시가 3분 뒤 Chrome 전체를 다시 띄움)."""
+        now = time.monotonic()
+        if not self.busy_since or now - self.busy_since < BUSY_RELOAD_AFTER or now - self.busy_reload_at < BUSY_RELOAD_GAP:
+            return
+        try:
+            bot = (self.status_fn() or {}).get("status")
+        except Exception:
+            bot = None
+        if bot != "stuck":
+            return
+        self.busy_reload_at = now
+        self.st["busy_reloads"] += 1
+        log(f"봇 페이지가 {int(now - self.busy_since)}초째 응답하지 않아 (확인 창이 떠 있던 것으로 봄) 앱을 새로고침합니다")
+        try:
+            self.reload()
+        except Exception as e:
+            log(f"자동 새로고침 실패: {type(e).__name__}")
+
     def _watch(self, sess):
         next_lease = 0.0
         next_discard = time.monotonic() + 60
         while sess.alive and not self.stop.is_set():
             now = time.monotonic()
-            if now >= next_lease:
+            if now >= next_lease or (self.lease_now and not self.lease_sent):
+                self.lease_now = False
                 next_lease = now + LEASE_EVERY
                 self._lease(sess)
             if self.lease_sent and now - self.lease_sent > 20 and self.state == "live":
@@ -630,7 +762,7 @@ class Mirror:
                 self.request_checkout()
             self.refresh_status()
             self.stop.wait(0.5)
-        if self.state not in ("crashed",):
+        if self.state not in ("crashed", "no_page"):         # (봇 탭이 앱 밖으로 감 · 죽음 안내는 그대로)
             self._set_state("connecting", "봇 화면 연결이 끊김 — 다시 붙는 중")
 
     # ------------------------------------------------------------ 사용자 조작
@@ -684,12 +816,25 @@ class Mirror:
                 return
             except (TimeoutError, RuntimeError, ConnectionError):
                 pass
-        pages = self._pages()                             # 잠깐 따로 붙어서
+        try:                                              # 잠깐 따로 붙어서
+            pages = self._pages()
+        except Exception:
+            raise Unavailable("Chrome(봇 창)에 연결할 수 없습니다") from None
+        method, params = "Page.reload", {}
         if not pages:
-            raise Unavailable("봇 페이지가 없습니다")
-        ws = websocket.create_connection(str(pages[0].get("webSocketDebuggerUrl")), timeout=5, suppress_origin=True)
+            # 봇 탭이 앱이 아닌 곳으로 넘어갔으면: 마지막으로 본 앱 주소로 되돌린다 (앱 주소 형식이 맞을 때만)
+            home = (self.origin + "/gh-coin/") if self.origin else ""
+            others = []
+            if home and self.target_re.match(home):
+                with _NO_PROXY.open(self.cdp_base + "/json/list", timeout=3) as r:
+                    others = [t for t in json.loads(r.read(4 << 20).decode("utf-8", "replace")) if isinstance(t, dict) and t.get("type") == "page"]
+            if len(others) != 1:
+                raise Unavailable("봇 페이지가 없습니다")
+            pages, method, params = others, "Page.navigate", {"url": home}
+            log("봇 탭이 앱 밖에 있어 앱 주소로 되돌립니다")
+        ws = websocket.create_connection(_local_ws(pages[0]), timeout=5, suppress_origin=True)
         try:
-            ws.send(jdump({"id": 1, "method": "Page.reload", "params": {}}))
+            ws.send(jdump({"id": 1, "method": method, "params": params}))
             deadline = time.monotonic() + 5
             while time.monotonic() < deadline:
                 ws.settimeout(max(0.1, deadline - time.monotonic()))
@@ -735,7 +880,7 @@ class Mirror:
     def stats(self):
         with self.cond:
             viewers = [{"sec": round(time.time() - v.joined), "raw": v.raw, "wire": v.wire, "queued": v.qbytes, "resets": v.resets,
-                        "waiting": v.waiting} for v in self.viewers]
+                        "waiting": v.waiting, "visible": v.visible} for v in self.viewers]
             base = {"valid": self.base_valid, "batches": len(self.base), "bytes": self.base_bytes}
         acts = sorted(self.act_ms)
         return {"version": self.version, "state": self.state, "message": self.state_msg, "connected": bool(self.sess and self.sess.alive),

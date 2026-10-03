@@ -15,16 +15,17 @@
 <body>
 <div id="stage" aria-label="GH Coin 봇 화면 (실시간)"></div>
 <div id="cover"><div class="spin"></div><p id="coverMsg">봇 화면을 불러오는 중…</p></div>
-<div id="officeGone" hidden><span>사무실 화면이 닫혔습니다</span><button id="officeReload" type="button">다시 열기 (앱 새로고침)</button></div>
+<div id="officeGone" hidden><span id="officeGoneTxt">사무실 화면이 닫혔습니다</span><button id="officeReload" type="button">다시 열기 (앱 새로고침)</button></div>
+<button id="apprBar" type="button" hidden>🔔 주문 승인 대기 — 보기</button>
+<div id="evicted" hidden><p>다른 창(탭)에서 실시간 화면을 열어서 여기는 멈췄습니다.<br><small>동시에 볼 수 있는 창은 4개까지입니다.</small></p><button id="evictedBtn" type="button">여기서 다시 보기</button></div>
 <div id="dock">
-  <button id="pill" type="button" aria-expanded="false" aria-controls="menu" title="연결 상태 · 메뉴"><i></i><span id="pillTxt">연결 중…</span></button>
+  <button id="pill" type="button" aria-expanded="false" aria-controls="menu" title="연결 상태 · 메뉴"><i></i><span id="pillTxt">연결 중…</span><b class="mi" aria-hidden="true">☰</b></button>
   <div id="menu" hidden>
     <div id="menuStatus"></div>
     <a href="/summary">📊 요약 화면 (숫자로 보기)</a>
     <button id="fitBtn" type="button">🔍 실제 크기로 보기</button>
     <button id="reloadBtn" type="button">🔄 앱 새로고침</button>
     <button id="logoutBtn" type="button">🚪 로그아웃</button>
-    <a id="vncLink" class="dim" href="#" target="_blank" rel="noopener noreferrer">비상용: 원격화면(noVNC, :6080)</a>
   </div>
 </div>
 <div id="toast" role="status" aria-live="polite"></div>

@@ -29,6 +29,7 @@ Chrome DevTools(127.0.0.1:9222, 서버 안 · ghcoin 계정만)로 그 페이지
   GHCOIN_DASH_PWFILE    (/etc/ghcoin/dash-password.hash)  비밀번호 파일 (auth.py 참고)
   GHCOIN_DASH_MIRROR    (1)               0 이면 실시간 화면을 끈다 (요약만)
   GHCOIN_CDP            (http://127.0.0.1:9222)  Chrome DevTools 주소 (반드시 이 서버 안: 127.0.0.1/localhost/::1)
+  GHCOIN_DASH_FONTDIR   (/usr/share/fonts/truetype/nanum)  봇 화면과 같은 고정폭 글꼴(NanumGothicCoding)을 보는 쪽에도 보내려고 읽는 곳
 
 비밀번호 파일 만들기:  printf '%s\n' '<비밀번호>' | python3 ghcoin_dash.py --make-password-hash > /etc/ghcoin/dash-password.hash
 """
@@ -37,6 +38,7 @@ import gzip
 import hashlib
 import html
 import http.client
+import io
 import ipaddress
 import json
 import os
@@ -91,6 +93,9 @@ RETRY_MAX = 5.0                         # Chrome 에 다시 붙는 간격 상한
 WATCHDOG_S = max(120.0, 3 * INTERVAL + 60)  # 수집기가 이만큼 멈추면 서비스를 끝내 systemd 가 다시 켜게 함
 MAX_SSE = 16                            # 동시에 열린 실시간 연결 수 (넘으면 가장 오래된 것을 끊음)
 MAX_CONN = 64                           # 동시에 처리하는 HTTP 연결 수 (넘으면 바로 끊음)
+MAX_CONN_PER_IP = 16                    # 주소 하나가 잡을 수 있는 연결 수 (느리게 보내는 연결로 자리를 다 채우지 못하게)
+MAX_CONN_LOCAL = 32                     # 이 서버 안(127.0.0.1 · tailscale serve 를 거친 접속은 모두 이 주소)
+HEADER_DEADLINE = 20.0                  # 요청 머리글(+본문)을 다 받기까지 전체 시간 (한 바이트씩 천천히 보내는 연결 끊기)
 MAX_SNAPSHOT_BYTES = 768 * 1024         # 상태 사진 크기 상한 (넘으면 목록을 더 줄인다)
 CHROME_UNIT = "/etc/systemd/system/ghcoin-chrome.service"
 TARGET_RE = re.compile(r"^http://(127\.0\.0\.1|localhost):1786[0-9]/gh-coin/(index\.html)?([?#].*)?$")  # 앱 창 (실행기는 17860~17869 중 빈 포트)
@@ -718,6 +723,11 @@ FILES = {
     "/vendor/rrweb-replay.css": ("vendor/rrweb-replay.css", "text/css; charset=utf-8"),
 }
 PAGES = {"/": "live", "/index.html": "live", "/summary": "summary", "/summary.html": "summary"}
+# 봇 화면과 같은 글꼴 파일 (사무실 · 채팅은 고정폭 'D2Coding, NanumGothicCoding, …' → 서버에는 NanumGothicCoding).
+# 보는 쪽(Windows · 휴대폰)이 다른 글꼴로 그리면 줄바꿈 · 높이가 달라져 채팅 스크롤 위치가 어긋난다 → 같은 파일을 쓰게 한다.
+FONT_DIR = os.environ.get("GHCOIN_DASH_FONTDIR", "/usr/share/fonts/truetype/nanum")
+FONTS = {"/fonts/nanum-coding.ttf": "NanumGothicCoding.ttf", "/fonts/nanum-coding-bold.ttf": "NanumGothicCodingBold.ttf"}
+ACT_MAX_AGE_MS = 10000                               # 이보다 늦게 도착한 조작은 버림 (끊겼던 연결이 돌아오며 한꺼번에 들어오는 클릭)
 
 
 class Files:
@@ -778,10 +788,33 @@ def bot_status():
     return {"status": m.get("status", STATS.status), "message": m.get("message", STATS.message)}
 
 
+class _DeadlineIO(io.RawIOBase):
+    """요청을 읽는 동안 '전체' 시간 제한 (handler._deadline). 읽기 한 번의 제한(10초)만으로는
+    한 바이트씩 천천히 보내는 연결이 자리를 끝없이 잡을 수 있다."""
+
+    def __init__(self, handler):
+        super().__init__()
+        self.h = handler
+
+    def readable(self):
+        return True
+
+    def readinto(self, b):
+        h = self.h
+        d = h._deadline
+        if d is not None:
+            left = d - time.monotonic()
+            if left <= 0:
+                raise TimeoutError("요청을 너무 천천히 보냄")
+            h.connection.settimeout(min(h.timeout, max(0.5, left)))
+        return h.connection.recv_into(b)
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "ghcoin-dash"
     protocol_version = "HTTP/1.1"
     timeout = 10              # 읽기 한 번 기다리는 시간 (느리게 보내는 연결이 자리를 오래 잡지 못하게)
+    _deadline = None
 
     def version_string(self):
         return self.server_version
@@ -789,8 +822,26 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):  # 접속 기록은 남기지 않는다 (journald 절약 · 입력 값 보호)
         pass
 
+    def setup(self):
+        super().setup()
+        orig, self.rfile = self.rfile, io.BufferedReader(_DeadlineIO(self), 65536)
+        orig.close()
+
+    def handle_one_request(self):
+        self._deadline = time.monotonic() + HEADER_DEADLINE     # 요청 줄 + 머리글 (keep-alive 로 기다리는 시간 포함)
+        try:
+            super().handle_one_request()
+        finally:
+            self._deadline = None
+
     def parse_request(self):
-        if not super().parse_request():
+        ok = super().parse_request()
+        self._deadline = None                                   # 머리글을 다 받음 (본문은 _body 가 따로)
+        try:
+            self.connection.settimeout(self.timeout)
+        except OSError:
+            return False
+        if not ok:
             return False
         # 방화벽(ufw)이 꺼져도: 보낸 쪽과 받은 주소가 모두 이 서버 안 · Tailscale 일 때만 받는다
         try:
@@ -799,6 +850,10 @@ class Handler(BaseHTTPRequestHandler):
             return False
         if not (addr_ok(self.client_address[0]) and addr_ok(local)):
             self._send(403, "text/plain; charset=utf-8", "Tailscale 로만 접속할 수 있습니다\n", {"Connection": "close"})
+            return False
+        if self.headers.get("Transfer-Encoding"):               # 본문 길이를 두 가지로 말하는 요청 (tailscale serve 뒤에서 요청 밀반입 방지)
+            self.close_connection = True
+            self._send(400, "text/plain; charset=utf-8", "Transfer-Encoding 은 받지 않습니다\n", {"Connection": "close"})
             return False
         return True
 
@@ -835,18 +890,24 @@ class Handler(BaseHTTPRequestHandler):
     def _redirect(self, to, extra=None):
         self._send(303, "text/plain; charset=utf-8", "", dict({"Location": to}, **(extra or {})))
 
-    def _file(self, name, ctype, extra=None):
+    def _file(self, name, ctype, extra=None, cache="private, no-cache"):
         e = FILECACHE.get(name)
         if not e:
             return self._send(404, "text/plain; charset=utf-8", "없는 파일입니다\n")
         if self.headers.get("If-None-Match") == e["etag"]:
-            return self._send(304, ctype, b"", {"ETag": e["etag"]}, cache="private, no-cache")
+            return self._send(304, ctype, b"", {"ETag": e["etag"]}, cache=cache)
         hdr = dict({"ETag": e["etag"], "Vary": "Accept-Encoding"}, **(extra or {}))
         body = e["body"]
         if e["gz"] and "gzip" in (self.headers.get("Accept-Encoding") or ""):
             body = e["gz"]
             hdr["Content-Encoding"] = "gzip"
-        self._send(200, ctype, body, hdr, cache="private, no-cache")
+        self._send(200, ctype, body, hdr, cache=cache)
+
+    def _event_stream_ok(self):
+        """SSE 주소는 EventSource(fetch) 로만: 화면에 섞여 온 <video poster="/api/live"> · <img> 같은 것이
+        로그인된 내 브라우저로 실시간 연결을 몰래 여러 개 열어 진짜 연결을 밀어내지 못하게."""
+        return ("text/event-stream" in (self.headers.get("Accept") or "") and
+                self.headers.get("Sec-Fetch-Dest") in (None, "empty"))
 
     # ------------------------------------------------------------ 로그인 확인
     def _cookies(self):
@@ -896,9 +957,11 @@ class Handler(BaseHTTPRequestHandler):
                                     "age_s": m.get("ageS"), "uptime_s": int(time.time() - STATS.started),
                                     "mirror": MIRROR.state if MIRROR else "off"})
         if path == "/login":
+            nxt = (urllib.parse.parse_qs(u.query).get("next") or ["/"])[0]
+            nxt = nxt if nxt in ("/", "/summary") else "/"
             if self._session():
-                return self._redirect("/")
-            return self._login_page("")
+                return self._redirect(nxt)
+            return self._login_page("", nxt=nxt)
         nonce = self._session()
         if not nonce:
             return self._need_login(path, u.query)
@@ -915,9 +978,13 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, "text/html; charset=utf-8", body, {"Content-Security-Policy": CSP_LIVE})
         if path in FILES:
             return self._file(*FILES[path])
+        if path in FONTS:
+            return self._file(os.path.join(FONT_DIR, FONTS[path]), "font/ttf", cache="private, max-age=604800")
         if path == "/api/state":
             body, _ = HUB.body(0)
             return self._send(200, "application/json; charset=utf-8", body)
+        if path in ("/api/stream", "/api/live") and not self._event_stream_ok():
+            return self._json(400, {"ok": False, "err": "EventSource 로만 엽니다"})
         if path == "/api/stream":
             return self._stream()
         if path == "/api/live":
@@ -1022,28 +1089,43 @@ class Handler(BaseHTTPRequestHandler):
             sock.settimeout(30)
             z = zlib.compressobj(6, zlib.DEFLATED, 31) if gz else None
 
-            def out(b):
-                v.raw += len(b)
+            def out(*chunks):
+                # 큰 사진(수 MB)을 한 덩어리로 합치지 않고 조각마다 압축해서 보낸다 (메모리 봉우리를 낮게)
+                parts = []
+                for c in chunks:
+                    v.raw += len(c)
+                    if z:
+                        c = z.compress(c)
+                    if c:
+                        parts.append(c)
                 if z:
-                    b = z.compress(b) + z.flush(zlib.Z_SYNC_FLUSH)
-                v.wire += len(b)
-                self.wfile.write(b)
+                    parts.append(z.flush(zlib.Z_SYNC_FLUSH))
+                for c in parts:
+                    v.wire += len(c)
+                    self.wfile.write(c)
                 self.wfile.flush()
 
-            out(b"retry: 2000\n\n")
+            # hello: 이 연결 이름(보이는지 알릴 때) + 서버 시각 (누른 것이 늦게 도착하면 서버가 버리도록 시각을 맞춤)
+            out(b"retry: 2000\nevent: hello\ndata: " + jdump({"vid": v.vid, "now": int(time.time() * 1000)}).encode() + b"\n\n")
             checked = time.monotonic()
             while not STOP.is_set():
                 items = MIRROR.next_items(v, 15.0)
                 if items is None:
+                    if v.evicted:                                    # 다른 창이 들어와 밀려남: 브라우저가 저절로 다시 붙지 않게
+                        out(b"event: bye\ndata: {}\n\n")
                     break
                 if time.monotonic() - checked > LIVE_CHECK_S:       # 로그아웃 · 비밀번호 바뀜 → 끊음
                     checked = time.monotonic()
                     if not AUTH.session(cookie):
                         break
                 if not items:
-                    out(b": ping\n\n")
+                    # 보이는 이벤트로 (주석 핑은 브라우저 JS 가 못 봄): 35초 넘게 아무것도 안 오면 live.js 가 끊김으로 보고 다시 붙는다
+                    out(b"event: ping\ndata: {}\n\n")
                     continue
-                out("".join(f"event: {ev}\ndata: {data}\n\n" for ev, data in items).encode("utf-8"))
+                chunks = []
+                for ev, data in items:
+                    chunks += (b"event: " + ev.encode() + b"\ndata: ", data.encode("utf-8"), b"\n\n")
+                out(*chunks)
         except (OSError, ValueError):
             pass
         finally:
@@ -1059,7 +1141,19 @@ class Handler(BaseHTTPRequestHandler):
             self.close_connection = True
             self._json(413, {"ok": False, "err": "너무 큽니다"})
             return None
-        return self.rfile.read(n) if n else b""
+        if not n:
+            return b""
+        self._deadline = time.monotonic() + HEADER_DEADLINE
+        try:
+            raw = self.rfile.read(n)
+        finally:
+            self._deadline = None
+            self.connection.settimeout(self.timeout)
+        if len(raw) != n:                                     # 덜 보내고 끊음
+            self.close_connection = True
+            self._json(400, {"ok": False, "err": "본문이 잘림"})
+            return None
+        return raw
 
     def do_POST(self):
         if not host_ok(self.headers.get("Host")):
@@ -1096,7 +1190,16 @@ class Handler(BaseHTTPRequestHandler):
                     a = mirrormod.validate(body)
                 except ValueError as e:
                     return self._json(400, {"ok": False, "err": f"잘못된 조작 ({e})"})
+                st = body.get("st")                          # 누른 때 (live.js 가 서버 시각으로 맞춰 보냄)
+                if isinstance(st, (int, float)) and not isinstance(st, bool) and abs(time.time() * 1000 - st) > ACT_MAX_AGE_MS:
+                    MIRROR.st["acts_stale"] += 1
+                    return self._json(409, {"ok": False, "err": "늦게 도착한 조작이라 버렸습니다 (연결 확인 후 다시 눌러 주세요)", "stale": True})
                 return self._json(200, MIRROR.act(a))
+            if path == "/api/live-vis":                      # 이 창이 보이는지/숨었는지 (차트 그림을 만들지 정함)
+                vid = body.get("vid") if isinstance(body, dict) else None
+                if not isinstance(vid, str) or len(vid) > 40:
+                    return self._json(400, {"ok": False, "err": "잘못된 요청"})
+                return self._json(200, {"ok": MIRROR.set_visible(vid, bool(body.get("visible")))})
             if path == "/api/dialog":
                 seq = body.get("seq") if isinstance(body, dict) else None
                 if not isinstance(seq, int) or isinstance(seq, bool):
@@ -1131,9 +1234,9 @@ class Handler(BaseHTTPRequestHandler):
         if not AUTH.allow_attempt(ip):
             return self._login_page("시도가 너무 많습니다 — 1분 뒤에 다시 해 보세요", 429, nxt)
         if not AUTH.check_password((form.get("password") or [""])[0]):
-            AUTH.failed(ip)
-            time.sleep(0.4)
+            time.sleep(0.4)                                   # (틀린 시도는 allow_attempt 가 이미 셌음)
             return self._login_page("비밀번호가 틀렸습니다", 401, nxt)
+        AUTH.succeeded(ip)
         token = AUTH.new_session()
         sec = "; Secure" if self._secure() else ""
         age = authmod.SESSION_DAYS * 86400
@@ -1160,18 +1263,47 @@ class Server(ThreadingHTTPServer):
 
     def __init__(self, addr, handler):
         self._slots = threading.BoundedSemaphore(MAX_CONN)
+        self._per_ip = {}
+        self._ip_lock = threading.Lock()
         if ":" in addr[0]:
             self.address_family = socket.AF_INET6
         super().__init__(addr, handler)
 
+    def _ip_take(self, ip):
+        try:
+            loop = ipaddress.ip_address(str(ip).split("%", 1)[0])
+            loop = (getattr(loop, "ipv4_mapped", None) or loop).is_loopback
+        except ValueError:
+            loop = False
+        with self._ip_lock:
+            n = self._per_ip.get(ip, 0)
+            if n >= (MAX_CONN_LOCAL if loop else MAX_CONN_PER_IP):
+                return False
+            self._per_ip[ip] = n + 1
+            return True
+
+    def _ip_give(self, ip):
+        with self._ip_lock:
+            n = self._per_ip.get(ip, 0) - 1
+            if n > 0:
+                self._per_ip[ip] = n
+            else:
+                self._per_ip.pop(ip, None)
+
     def process_request(self, request, client_address):
+        ip = client_address[0]
+        if not self._ip_take(ip):                       # 주소 하나가 자리를 다 채우지 못하게
+            self.shutdown_request(request)
+            return
         if not self._slots.acquire(blocking=False):     # 자리가 없으면 바로 끊음 (스레드·메모리를 더 쓰지 않음)
+            self._ip_give(ip)
             self.shutdown_request(request)
             return
         try:
             super().process_request(request, client_address)
         except BaseException:
             self._slots.release()
+            self._ip_give(ip)
             raise
 
     def process_request_thread(self, request, client_address):
@@ -1179,6 +1311,7 @@ class Server(ThreadingHTTPServer):
             super().process_request_thread(request, client_address)
         finally:
             self._slots.release()
+            self._ip_give(client_address[0])
 
     def handle_error(self, request, client_address):
         if isinstance(sys.exc_info()[1], (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, TimeoutError, socket.timeout)):
@@ -1218,7 +1351,14 @@ def main():
         return 2
     if not AUTH.ready():
         sys.stderr.write(f"주의: {AUTH.error} (로그인할 수 없음)\n")
-    srv = Server((BIND, PORT), Handler)
+    for i in range(20):                       # 다시 켤 때 예전 프로세스가 아직 포트를 쥐고 있으면 잠깐 기다림
+        try:
+            srv = Server((BIND, PORT), Handler)
+            break
+        except OSError as e:
+            if e.errno != 98 or i == 19:
+                raise
+            time.sleep(0.5)
     COLLECTOR = threading.Thread(target=collector_loop, args=(src,), name="collector", daemon=True)
     COLLECTOR.start()
     if MIRROR:

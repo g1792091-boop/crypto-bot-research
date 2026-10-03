@@ -9,7 +9,7 @@
 #   1. 앱 창(Chrome)에 '이 서버 안에서만' 열리는 통로(DevTools 9222, 127.0.0.1)를 켠다
 #      + 방화벽 규칙으로 그 통로는 ghcoin 계정(Chrome · 대시보드)만 쓸 수 있게 막는다
 #   2. ghcoin-dash 서비스 (:8080, Tailscale 로만 · 비밀번호 로그인)
-#        /         실시간 화면: 봇 화면을 내 브라우저가 직접 그림 (원격화면보다 선명 · 부드러움) + 누르기 · 입력 · 승인
+#        /         실시간 화면: 봇 화면을 내 브라우저가 직접 그림 (그림 전송이 아니라 선명 · 부드러움) + 누르기 · 입력 · 승인
 #        /summary  요약: 숫자 · 표 (보기 전용, 휴대폰용)
 #   3. 로그인 비밀번호: 처음 한 번 만들어 /root/ghcoin-대시보드-비밀번호.txt 에 저장 (해시는 /etc/ghcoin/dash-password.hash)
 # 앱(친구 코드)은 전혀 바꾸지 않는다. 다시 실행해도 안전함 (앱 창은 통로를 처음 켤 때만 다시 띄움 · 비밀번호는 그대로).
@@ -33,16 +33,16 @@ FILES="ghcoin_dash.py mirror.py auth.py collector.js recorder.js live.html live.
 # 받은 파일이 아래 값과 하나라도 다르면 설치하지 않는다 (이 파일들은 Chrome 통로 = 키 · 주문에 닿는 코드).
 # vps/dashboard 파일을 고치면 같이 바꿀 것:  cd vps/dashboard && sha256sum <위 FILES>
 declare -A SHA=(
-  [ghcoin_dash.py]=770daf5819769e495e80feb25a9251b25798e6c42e1855f3a81d3aee994297c8
-  [mirror.py]=62e7f49ecb0fd201ee55e855750f5bb60c5fee6cc48eeab2279fa5a006357041
-  [auth.py]=5e131c3388a7ea422d6dbb4beafabc3e36db9fb6109aa0cda6d242ee42251bb2
+  [ghcoin_dash.py]=d89fea01769da02b0b94c88127ab62c67832fec2781d6bbb908531c0226e2f17
+  [mirror.py]=5963894d4c430f1f3af79a5c858fa64c26ccd4590de0110a982696bf2bbd0028
+  [auth.py]=f9a8c7aa65d73f62104a04a596376f559db9319af6ee4f55956fe1d7e2dcac3a
   [collector.js]=6c365900e5c7f1adafd67818f0943b6c167abde1264dfd741624cb73b74a9264
-  [recorder.js]=3cb270ee618ba469bbf45add6c78c8e997603a3092c12cda66e2735067451d63
-  [live.html]=5564e6560e0619fe9f21a2c055f7369cdcb220cacf1b3482e2f4838f028645ea
-  [live.js]=d5bdc71a16ea8c13b3c5fcf25cbf971aec6e09c0b7ab52f20f5c8bbecec39073
-  [live.css]=422340f7deb2cf3974c58ffec3fd4fb03dff2234f8757d5a7475995bcf207c79
+  [recorder.js]=3321a854f697155fbf1dd9f5ce510c6f5f86331b0bd0d18fa3d29eee54336bc6
+  [live.html]=097ec17a19564ada2be9b078004caaf72bd3e75c4de6f1bc7dff40cfe89f35e8
+  [live.js]=6cdf6412ab33f7efebefc6706fba10e505315066ae8d76582de93137ea08db58
+  [live.css]=bcc0561b3607ccd051e4e3166e4061a9cfcb08dda9d548888d4dd6a24be96350
   [login.html]=1afadd954c38efad575bf7be19c19921412f452f92e51a6c5230da128425efef
-  [summary.html]=db591020b08a841056899ddc7ccdef475a217198f0aec05ce9ac0edbc1ad9287
+  [summary.html]=9c3440b38b85d6d2c453644f1aa84fed569f4c0048317307a82e96672a5985b4
   [vendor/rrweb-record.min.js]=fde9a5c5c38fc23c9f8d6429b4e74c8996156e1632f132693b68e32509dc92f0
   [vendor/rrweb-replay.min.js]=4ab2043bf8b77f5051c2b912f92feec7c22b9556718b04dddab8fdc09d8acce9
   [vendor/rrweb-replay.css]=64d720c3a8966a3764822abf7b14f78135c90ce09dcfae4286e50f06d9e01545
@@ -59,7 +59,10 @@ id "$APP_USER" >/dev/null 2>&1 || die "$APP_USER 계정이 없습니다 — 먼�
 export DEBIAN_FRONTEND=noninteractive
 
 say "필요한 패키지"
-apt-get install -y -qq -o DPkg::Lock::Timeout=900 --no-install-recommends python3 python3-websocket curl iptables >/dev/null
+# fonts-nanum: 봇 화면의 사무실 · 채팅 글꼴(NanumGothicCoding) — 실시간 화면이 같은 글꼴 파일을 보는 쪽에 보내 줄바꿈이 똑같아짐
+FONT_NEW=""
+[ -f /usr/share/fonts/truetype/nanum/NanumGothicCoding.ttf ] || FONT_NEW=1
+apt-get install -y -qq -o DPkg::Lock::Timeout=900 --no-install-recommends python3 python3-websocket curl iptables fonts-nanum >/dev/null
 
 say "대시보드 파일 받기 (내용 확인)"
 install -d -m 755 "$DASH_DIR" "$DASH_DIR/vendor"
@@ -75,7 +78,7 @@ for f in $FILES; do
   fi
 done
 for f in $FILES; do mv -f "$DASH_DIR/$f.new" "$DASH_DIR/$f"; done   # 모두 확인된 뒤에만 바꿈
-rm -f "$DASH_DIR/index.html"                                          # 예전(보기 전용) 대시보드의 첫 화면 파일
+rm -rf "$DASH_DIR/index.html" "$DASH_DIR/__pycache__"                 # 예전(보기 전용) 대시보드의 첫 화면 파일 · 캐시
 chmod 755 "$DASH_DIR/vendor"
 chmod 644 "$DASH_DIR"/*.* "$DASH_DIR"/vendor/*
 
@@ -88,7 +91,7 @@ if [ -n "$NEWPASS_ARG" ] || [ ! -s "$PW_HASH" ]; then
   # 12글자 (헷갈리는 0/O/1/l/I 제외)
   DASHPASS=$(python3 -c "import secrets; a='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'; print(''.join(secrets.choice(a) for _ in range(12)))")
   ( umask 077
-    printf '%s\n' "$DASHPASS" | python3 "$DASH_DIR/ghcoin_dash.py" --make-password-hash > "$PW_HASH.new" ) \
+    printf '%s\n' "$DASHPASS" | python3 -B "$DASH_DIR/ghcoin_dash.py" --make-password-hash > "$PW_HASH.new" ) \
     || { rm -f "$PW_HASH.new"; die "비밀번호를 만들지 못했습니다"; }
   chown "root:$APP_USER" "$PW_HASH.new"; chmod 640 "$PW_HASH.new"
   ( umask 077; printf '%s\n' "$DASHPASS" > "$PW_FILE.new" ); chmod 600 "$PW_FILE.new"
@@ -142,7 +145,8 @@ Wants=ghcoin-chrome.service ghcoin-cdp-guard.service
 
 [Service]
 User=$APP_USER
-Environment=GHCOIN_DASH_PORT=$DASH_PORT GHCOIN_DASH_BIND=0.0.0.0 GHCOIN_CDP=http://127.0.0.1:$CDP_PORT GHCOIN_DASH_PWFILE=$PW_HASH PYTHONDONTWRITEBYTECODE=1
+# MALLOC_*: 화면 사진(수 MB)을 보내고 버린 메모리가 스레드마다 쌓여 남지 않게 (glibc)
+Environment=GHCOIN_DASH_PORT=$DASH_PORT GHCOIN_DASH_BIND=0.0.0.0 GHCOIN_CDP=http://127.0.0.1:$CDP_PORT GHCOIN_DASH_PWFILE=$PW_HASH PYTHONDONTWRITEBYTECODE=1 MALLOC_ARENA_MAX=2 MALLOC_MMAP_THRESHOLD_=131072
 ExecStart=/usr/bin/python3 $DASH_DIR/ghcoin_dash.py
 Restart=always
 RestartSec=3
@@ -181,11 +185,17 @@ systemctl restart ghcoin-dash
 
 # ghcoin-status 에 대시보드도 표시 (예전 install-ghcoin.sh 로 만든 것만 고침)
 if [ -f /usr/local/bin/ghcoin-status ] && ! grep -q ghcoin-dash /usr/local/bin/ghcoin-status; then
-  sed -i 's/for s in ghcoin-vnc ghcoin-desktop ghcoin-server ghcoin-chrome ghcoin-novnc; do/for s in ghcoin-vnc ghcoin-desktop ghcoin-server ghcoin-chrome ghcoin-novnc ghcoin-dash; do/' /usr/local/bin/ghcoin-status
+  sed -i 's/for s in ghcoin-vnc ghcoin-desktop ghcoin-server ghcoin-chrome ghcoin-novnc; do/for s in ghcoin-vnc ghcoin-desktop ghcoin-server ghcoin-chrome ghcoin-dash; do/' /usr/local/bin/ghcoin-status
 fi
-# 주소 안내: 실시간 화면(:8080)이 기본, 원격화면(:6080)은 비상용
+# 예전 원격화면(noVNC :6080)은 없앤다 — 화면은 :8080 하나로
+if [ -f /etc/systemd/system/ghcoin-novnc.service ]; then
+  systemctl disable --now ghcoin-novnc >/dev/null 2>&1 || true
+  rm -f /etc/systemd/system/ghcoin-novnc.service
+  systemctl daemon-reload
+fi
+rm -rf /opt/ghcoin/novnc /root/ghcoin-원격화면-비밀번호.txt
 if [ -f /usr/local/bin/ghcoin-status ]; then
-  sed -i 's#^\[ -f /etc/systemd/system/ghcoin-dash.service \] && echo "  대시보드  http#[ -f /etc/systemd/system/ghcoin-dash.service ] \&\& echo "  실시간 화면(로그인)  http#; s#^echo "  원격화면  http#echo "  비상용 원격화면      http#' /usr/local/bin/ghcoin-status
+  sed -i 's/ ghcoin-novnc//; /6080/d' /usr/local/bin/ghcoin-status
 fi
 
 # 봇 탭이 죽거나('Aw, Snap' — 메모리 정리로 탭만 죽은 경우 포함) 멈춘 채로 3분이 넘으면 앱 창을 다시 띄운다
@@ -266,6 +276,8 @@ cat <<EOF
   └───────────────────────────────────────────────────────────────┘
   * 봇 화면을 그대로 보고 누르기 · 입력 · 키 넣기 · 실거래 승인까지 이 주소에서 합니다.
   * 숫자만 빠르게 보기(휴대폰):  http://${TSIP:-<tailscale IP>}:$DASH_PORT/summary
-  * 원격화면(:6080, noVNC)은 비상용으로만 남겨 둡니다.
   * Tailscale Funnel 로 :$DASH_PORT 을 인터넷에 열지 마세요.
 EOF
+if [ -n "$FONT_NEW" ] && [ -z "$CHG" ]; then
+  echo "  * 새 글꼴(나눔고딕코딩)은 봇 앱 창을 다시 띄운 뒤 쓰입니다 (매일 05:15 자동 · 바로 하려면  sudo systemctl restart ghcoin-chrome)"
+fi

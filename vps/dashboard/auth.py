@@ -27,6 +27,7 @@ SESSION_DAYS = 30
 SCRYPT = (2 ** 14, 8, 1)            # 16MB · 약 50ms
 LOGIN_PER_IP = 5                    # 1분에 IP 하나가 틀릴 수 있는 횟수
 LOGIN_GLOBAL = 30                   # 1분에 전체 로그인 시도 (scrypt CPU 상한)
+SCRYPT_SLOTS = threading.BoundedSemaphore(2)   # 동시에 도는 scrypt 수
 
 
 def _b64(b):
@@ -61,7 +62,7 @@ class Auth:
     def _load(self):
         try:
             st = os.stat(self.path)
-        except OSError as e:
+        except OSError:
             self._rec, self._mtime = None, None
             self.error = f"비밀번호 파일이 없습니다 ({self.path}) — sudo bash add-dashboard.sh 를 다시 실행하세요"
             return None
@@ -96,28 +97,32 @@ class Auth:
 
     # ------------------------------------------------------------ 로그인 시도 제한
     def allow_attempt(self, ip):
-        """시도해도 되면 True. 틀린 시도 기록은 failed() 로."""
+        """시도해도 되면 True. 시도는 여기서 바로 '틀림'으로 세고, 맞으면 succeeded() 가 하나 지운다
+        (틀린 것을 확인 뒤에 세면 동시에 수십 개를 보내 IP 상한을 건너뛸 수 있음)."""
         now = time.monotonic()
         with self.lock:
             while self.attempts and now - self.attempts[0] > 60:
                 self.attempts.popleft()
+            dq = self.fails.setdefault(ip, collections.deque())
+            while dq and now - dq[0] > 60:
+                dq.popleft()
+            if len(dq) >= LOGIN_PER_IP:                # IP 상한을 먼저: 주소 하나가 전체 상한을 다 써서 다른 사람을 막지 못하게
+                return False
             if len(self.attempts) >= LOGIN_GLOBAL:
                 return False
-            dq = self.fails.get(ip)
-            if dq:
-                while dq and now - dq[0] > 60:
-                    dq.popleft()
-                if len(dq) >= LOGIN_PER_IP:
-                    return False
+            dq.append(now)
             self.attempts.append(now)
             if len(self.fails) > 1000:                 # 오래된 IP 정리
                 for k in [k for k, v in self.fails.items() if not v or now - v[-1] > 60]:
                     del self.fails[k]
             return True
 
-    def failed(self, ip):
+    def succeeded(self, ip):
+        """맞는 비밀번호: allow_attempt 가 미리 센 '틀림' 하나를 지운다."""
         with self.lock:
-            self.fails.setdefault(ip, collections.deque()).append(time.monotonic())
+            dq = self.fails.get(ip)
+            if dq:
+                dq.pop()
 
     def check_password(self, password):
         with self.lock:
@@ -125,7 +130,12 @@ class Auth:
         if not rec or not isinstance(password, str) or not password or len(password) > 256:
             return False
         n, r, p, salt, want, _ = rec
-        got = hashlib.scrypt(password.encode("utf-8"), salt=salt, n=n, r=r, p=p, dklen=len(want), maxmem=64 * 1024 * 1024)
+        if not SCRYPT_SLOTS.acquire(timeout=5):      # 동시에 2개까지 (하나에 16MB) — 몰려도 메모리 상한(256MB)을 넘지 않게
+            return False
+        try:
+            got = hashlib.scrypt(password.encode("utf-8"), salt=salt, n=n, r=r, p=p, dklen=len(want), maxmem=64 * 1024 * 1024)
+        finally:
+            SCRYPT_SLOTS.release()
         return hmac.compare_digest(got, want)
 
     # ------------------------------------------------------------ 세션 · CSRF

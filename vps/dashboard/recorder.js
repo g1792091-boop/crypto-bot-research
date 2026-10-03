@@ -6,7 +6,10 @@
  *   2. 사용자가 실시간 화면에서 누른 것(클릭 · 입력 · 선택 · 키 · 스크롤 · 휠)을 같은 노드에 그대로 일으킨다 (act)
  *      - rrweb 이 붙인 노드 번호(id)로만 찾는다. 임의 코드 실행 없음
  *
- * 봇에 주는 부담: 평소(사무실 대기) 1초에 1KB 미만 · JS 몇 ms/분. 사진 한 장은 0.15~0.2초 (접속할 때 · 새로고침 뒤에만).
+ * 봇에 주는 부담 (측정): 평소(사무실 대기) 1초에 약 0.5KB · 기록기 JS 약 20ms/분 (한 코어의 0.04%).
+ *   메모리: 봇 탭(렌더러) +45~50MB 한 번 (rrweb 노드 표 · 속성 객체, 그 뒤로 늘지 않음 · JS 힙만 보면 +6~7MB).
+ *   사진 한 장(full snapshot)은 봇 화면을 0.17~0.21초 멈춘다: 접속할 때 · 새로고침 뒤 · 버퍼가 넘친 뒤 첫 접속에만.
+ *   큰 화면을 열고 닫을 때(팀 구성 335명 등)도 기록 · 직렬화에 0.2~0.4초 정도 든다.
  * ghcoin-dash 가 10초마다 '임대(lease)'를 갱신한다. 45초 넘게 갱신이 없으면 (서비스가 꺼짐) 기록을 멈춘다.
  * 비밀: 비밀번호 칸과 키 · 비밀 칸의 값은 ****** 로만 나간다 (봇 안의 값은 그대로).
  *
@@ -44,7 +47,15 @@ __RRWEB_RECORD_SRC__
 
   // ---------------------------------------------------------------- 보내기 (묶어서)
   var queue = [], timer = 0, stopFn = null, epoch = 0, sent = 0, dropped = 0, lastErr = "", pendingKind = null;
-  var FLUSH_MS = 80, fastUntil = 0, viewers = 0;
+  var FLUSH_MS = 80, fastUntil = 0, viewers = 0, dropResyncAt = 0;
+  function lost(n, why) {                                 // 묶음을 못 보냄 → 보는 화면이 어긋남: 잠시 뒤 새 사진 (1분에 한 번까지)
+    dropped += n; lastErr = why;
+    var now = Date.now();
+    if (stopFn && now - dropResyncAt > 60000 && typeof window[BIND] === "function") {
+      dropResyncAt = now;
+      setTimeout(function () { try { ctl.resync("drop"); } catch (e) {} }, 1000);
+    }
+  }
   function flush() {
     if (timer) { clearTimeout(timer); timer = 0; }
     if (!queue.length) return;
@@ -52,10 +63,10 @@ __RRWEB_RECORD_SRC__
     queue = [];
     var payload;
     try { payload = '{"k":"' + kind + '","n":' + batch.length + ',"e":' + epoch + ',"ev":' + JSON.stringify(batch) + "}"; }
-    catch (err) { lastErr = "json " + err; dropped += batch.length; return; }
+    catch (err) { lost(batch.length, "json " + err); return; }
     var fn = window[BIND];
-    if (typeof fn !== "function") { dropped += batch.length; return; }
-    try { fn(payload); sent += payload.length; } catch (err) { dropped += batch.length; lastErr = "bind " + err; }
+    if (typeof fn !== "function") { dropped += batch.length; return; }   // 서비스가 없음 (다시 붙으면 새 사진부터)
+    try { fn(payload); sent += payload.length; } catch (err) { lost(batch.length, "bind " + err); }
   }
   var lastFrame = {};
   function emit(ev, isCheckout) {
@@ -63,21 +74,32 @@ __RRWEB_RECORD_SRC__
       if (queue.length) flush();
       queue.kind = pendingKind || (isCheckout ? "c" : "r");
       pendingKind = null;
-      if (queue.kind === "r") lastFrame = {};
+      if (queue.kind === "r") { lastFrame = {}; lastSig = {}; }
     }
     queue.push(ev);
     if (ev.type === 2) { flush(); return; }               // 사진은 바로
     if (!timer) timer = setTimeout(flush, Date.now() < fastUntil ? 0 : FLUSH_MS);
   }
 
+  var startPending = false, dead = false;
   function start() {
+    if (dead || stopFn) return;                            // 이미 기록 중이면 두 번 켜지 않음 (기록기 둘 = 모든 변화가 두 번)
+    if (document.readyState === "loading") {               // 문서를 만드는 중: DOMContentLoaded 에 한 번만
+      if (!startPending) {
+        startPending = true;
+        document.addEventListener("DOMContentLoaded", function () { startPending = false; start(); }, { once: true });
+      }
+      return;
+    }
     epoch++;
     pendingKind = "r";
     stopFn = record({
       emit: emit,
       recordCanvas: false,                                 // 차트 캔버스는 아래 1초 타이머로 (rrweb 것은 rAF 를 계속 돌림)
       sampling: { mousemove: false, mouseInteraction: false, scroll: 150, media: 800, input: "last" },
-      inlineStylesheet: true,
+      // 앱의 스타일 파일(<link>)은 내용을 풀어 쓰지 않고 주소만 보낸다 → 보는 쪽(live.js)이 /app/ 중계로 원본 파일을 받아
+      // 그리기 전에 <style> 로 넣는다. (풀어 쓰면 Chrome 이 var() 를 쓴 border 같은 줄임 속성을 빈 값으로 내보내 테두리가 사라짐 · 사진도 작아짐)
+      inlineStylesheet: false,
       inlineImages: false,
       collectFonts: false,
       recordCrossOriginIframes: false,
@@ -94,6 +116,44 @@ __RRWEB_RECORD_SRC__
     stopFn = null; queue = []; if (timer) { clearTimeout(timer); timer = 0; }
   }
 
+  // ---------------------------------------------------------------- 스크롤: 칸마다 마지막 위치를 꼭 보냄
+  // rrweb 은 모든 칸의 스크롤을 150ms 하나로 묶어서, 두 칸이 같이 움직이면(채팅 맨 아래로 + 사무실 카메라 이동) 앞 칸의 마지막 위치가 빠진다.
+  // → 칸마다 50ms 뒤 마지막 위치를 한 번 더 보낸다 (사무실 카메라 이동도 초당 ~15번으로 부드러워짐).
+  var scrolled = new Set(), scrollT = 0;
+  function sendScrolls() {
+    scrollT = 0;
+    if (!stopFn) { scrolled.clear(); return; }
+    var now = Date.now();
+    scrolled.forEach(function (el) {
+      var isDoc = el === document, se = isDoc ? (document.scrollingElement || document.documentElement) : el;
+      var id = record.mirror.getId(el);
+      if (id > 0 && (isDoc || el.isConnected)) emit({ type: 3, data: { source: 3, id: id, x: se.scrollLeft, y: se.scrollTop }, timestamp: now });
+    });
+    scrolled.clear();
+  }
+  document.addEventListener("scroll", function (e) {
+    if (!stopFn) return;
+    var t = e.target;
+    if (t !== document && (!t || t.nodeType !== 1)) return;
+    scrolled.add(t);
+    if (!scrollT) scrollT = setTimeout(sendScrolls, 50);
+  }, { capture: true, passive: true });
+
+  // ---------------------------------------------------------------- 글꼴: 봇 화면의 고정폭 글꼴이 NanumGothicCoding 인지
+  // (사무실 · 채팅 글꼴 'D2Coding, NanumGothicCoding, …'. 서버에 fonts-nanum 이 있으면 NanumGothicCoding →
+  //  ghcoin-dash 가 같은 파일을 보는 쪽에 보내 줄바꿈 · 높이가 똑같아진다)
+  var fontKind = null;
+  function detectFont() {
+    if (fontKind !== null) return fontKind;
+    try {
+      var cx = document.createElement("canvas").getContext("2d"), txt = "가나다라 GH Coin 0123 mmmWWWiii 한글채팅";
+      var w = function (f) { cx.font = "16px " + f; return cx.measureText(txt).width; };
+      var base = w("monospace"), d2 = w('"D2Coding", monospace'), nanum = w('"NanumGothicCoding", monospace');
+      fontKind = (d2 === base && nanum !== base) ? "nanum" : "";
+    } catch (e) { fontKind = ""; }
+    return fontKind;
+  }
+
   // ---------------------------------------------------------------- 임대: 서비스가 사라지면 아무도 안 보는 기록을 멈춤
   var leaseUntil = Date.now() + 60000, lastTick = Date.now(), timers = [];
   timers.push(setInterval(function () {
@@ -108,7 +168,7 @@ __RRWEB_RECORD_SRC__
     lease: function (ms, n) {
       leaseUntil = Date.now() + Math.max(15000, Math.min(+ms || 45000, 120000));
       viewers = Math.max(0, Math.min(+n || 0, 99));
-      return { ok: true, rec: !!stopFn, epoch: epoch, v: V };
+      return { ok: true, rec: !!stopFn || startPending, epoch: epoch, v: V, font: detectFont() };
     },
     // 서비스가 다시 붙음 / 새 사진이 필요함: 노드 번호를 유지하는 takeFullSnapshot (stop+record 는 rrweb 안에서 약 4MB 씩 샘)
     resync: function (why) {
@@ -127,7 +187,7 @@ __RRWEB_RECORD_SRC__
       return { ok: true, epoch: epoch };
     },
     restart: function () { leaseUntil = Date.now() + 60000; stop(); start(); return { ok: true, epoch: epoch }; },
-    shutdown: function () { stop(); timers.forEach(clearInterval); timers = []; return { ok: true }; },
+    shutdown: function () { dead = true; stop(); timers.forEach(clearInterval); timers = []; return { ok: true }; },
     stats: function () {
       var m = performance.memory || {};
       return { v: V, rec: !!stopFn, epoch: epoch, sent: sent, dropped: dropped, lastErr: lastErr, viewers: viewers,
@@ -203,6 +263,7 @@ __RRWEB_RECORD_SRC__
         var go = mouse(el, "mousedown", p);
         var f = el.closest && el.closest("input,textarea,select,button,a[href],[tabindex],[contenteditable]");
         if (go && f && f.focus) f.focus({ preventScroll: true });
+        else if (go && !f && document.activeElement && document.activeElement !== document.body && document.activeElement.blur) document.activeElement.blur();   // 진짜 마우스처럼: 빈 곳을 누르면 포커스가 빠짐
         mouse(el, "pointerup", p); mouse(el, "mouseup", p);
         mouse(el, "click", p);                             // 체크박스 · 라벨 · 링크의 기본 동작도 그대로 일어남
         break;
@@ -233,11 +294,14 @@ __RRWEB_RECORD_SRC__
       case "key": {
         var ki = { key: a.key, code: a.key === " " ? "Space" : a.key, bubbles: true, cancelable: true, composed: true, shiftKey: !!a.shift };
         var tgt = el;
-        if (document.activeElement !== el && el !== document.documentElement && el.focus) el.focus({ preventScroll: true });
-        if (el === document.documentElement) tgt = document.activeElement || document.body;
-        var guard = null;
+        // 실시간 화면은 글자 칸에서 친 키만 그 칸 번호로 보낸다. 그 밖(문서)이면 봇에서 지금 포커스가 있는 곳에 — 앱이 연 창이
+        // 스스로 잡은 포커스를 빼앗지 않아야 그 창의 Esc · Enter 가 듣는다 (AI 연결 · 지갑 · 코인 AI 창)
+        var textEl = el.tagName === "TEXTAREA" || (el.tagName === "INPUT" && TEXT_TYPES.test(el.type));
+        if (textEl && document.activeElement !== el && el.focus) el.focus({ preventScroll: true });
+        if (!textEl) tgt = (document.activeElement && document.activeElement !== document.body) ? document.activeElement : (el === document.documentElement ? document.body : el);
+        var guard = null, swallowed = false;
         if (a.key === "Escape") {
-          guard = function (e) { if (officeWouldClose()) e.stopPropagation(); };
+          guard = function (e) { if (officeWouldClose()) { e.stopPropagation(); swallowed = true; } };
           document.documentElement.addEventListener("keydown", guard);
         }
         try {
@@ -249,6 +313,11 @@ __RRWEB_RECORD_SRC__
           tgt.dispatchEvent(new KeyboardEvent("keyup", ki));
         } finally {
           if (guard) document.documentElement.removeEventListener("keydown", guard);
+        }
+        // 막은 Esc 가 실거래 승인 창 · 안내 창 위였다면: 앱의 Esc 처럼 '거절'('알겠습니다')을 누른다 (사무실은 닫지 않음)
+        if (swallowed) {
+          var mb = document.querySelector('.lv-modal [data-a="no"]') || document.querySelector('.lv-modal [data-a="ok"]');
+          if (mb && visible(mb)) mb.click();
         }
         break;
       }
@@ -269,9 +338,21 @@ __RRWEB_RECORD_SRC__
     return { ok: true, ms: Math.round((performance.now() - t0) * 100) / 100 };
   }
 
-  // ---------------------------------------------------------------- 차트 캔버스 (보는 사람이 있고, 보이는 캔버스가 있을 때만 1초에 한 번)
-  // 바뀐 그림만 webp 로 보낸다. 사진 버퍼에는 안 쌓이고 캔버스마다 마지막 것만 남는다.
-  var canvases = document.getElementsByTagName("canvas"), canvasBusy = false;
+  // ---------------------------------------------------------------- 차트 캔버스 (화면에 '보이는' 실시간 창이 있고, 보이는 캔버스가 있을 때만 1초에 한 번)
+  // 바뀐 그림만 webp 로 보낸다: 먼저 작은 사본(≤256×160)의 지문을 보고, 그대로면 인코딩을 건너뛴다 (그대로인 차트 7개: +7.7% → +0.2% CPU).
+  // 사진 버퍼에는 안 쌓이고 캔버스마다 마지막 것만 남는다.
+  var canvases = document.getElementsByTagName("canvas"), canvasBusy = false, lastSig = {}, fpC = null, fpX = null;
+  function sig(c) {
+    try {
+      var w = Math.min(256, Math.max(1, c.width >> 2)), h = Math.min(160, Math.max(1, c.height >> 2));
+      if (!fpC) { fpC = document.createElement("canvas"); fpX = fpC.getContext("2d", { willReadFrequently: true }); }
+      if (fpC.width !== w || fpC.height !== h) { fpC.width = w; fpC.height = h; } else fpX.clearRect(0, 0, w, h);
+      fpX.drawImage(c, 0, 0, w, h);
+      var d = new Int32Array(fpX.getImageData(0, 0, w, h).data.buffer), x = 2166136261;
+      for (var i = 0; i < d.length; i++) x = Math.imul(x ^ d[i], 16777619);
+      return (x >>> 0) + ":" + c.width + "x" + c.height;
+    } catch (e) { return null; }
+  }
   timers.push(setInterval(function () {
     if (!stopFn || !viewers || canvasBusy || !canvases.length || document.hidden || typeof window[BIND] !== "function") return;
     var list = [];
@@ -285,13 +366,17 @@ __RRWEB_RECORD_SRC__
     list.forEach(function (x) {
       var c = x[0], id = x[1];
       try {
+        var sg = sig(c);
+        if (sg !== null && lastSig[id] === sg) return done();       // 그림이 그대로: 인코딩 안 함
+        lastSig[id] = sg;
         c.toBlob(function (blob) {
           if (!blob) return done();
           var fr = new FileReader();
           fr.onload = function () {
-            var url = fr.result;
-            if (lastFrame[id] !== url && typeof url === "string" && url.indexOf("data:image/") === 0) {
-              lastFrame[id] = url;
+            var url = fr.result, h = "";
+            if (typeof url === "string") { var x2 = 2166136261; for (var k = 0; k < url.length; k++) x2 = Math.imul(x2 ^ url.charCodeAt(k), 16777619); h = url.length + ":" + (x2 >>> 0); }
+            if (lastFrame[id] !== h && typeof url === "string" && url.indexOf("data:image/") === 0) {
+              lastFrame[id] = h;                                       // 그림 전체가 아니라 짧은 표시만 기억 (봇 메모리)
               try { window[BIND]('{"k":"v","n":1,"e":' + epoch + ',"id":' + id + ',"w":' + c.width + ',"h":' + c.height + ',"url":' + JSON.stringify(url) + "}"); sent += url.length; } catch (e) {}
             }
             done();
@@ -311,6 +396,5 @@ __RRWEB_RECORD_SRC__
     try { old && old.resync && old.resync("fallback"); } catch (e2) {}
     return;
   }
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start, { once: true });
-  else start();
+  start();
 })();

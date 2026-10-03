@@ -9,8 +9,9 @@
   var CSRF = (document.querySelector('meta[name="ghd-csrf"]') || {}).content || "";
   var stage = $("stage"), cover = $("cover"), coverMsg = $("coverMsg"), pill = $("pill"), pillTxt = $("pillTxt"), menu = $("menu");
   var M = window.__live = { batches: 0, bytes: 0, events: 0, resets: 0, lastBatchAt: 0, acts: 0, actFails: 0, lastActMs: null,
-                            status: {}, connected: false, built: false, scale: 1, echoDropped: 0, trimmed: 0 };
-  var replayer = null, fresh = true, focusedId = -1, es = null, hiddenT = 0;
+                            status: {}, connected: false, built: false, scale: 1, echoDropped: 0, trimmed: 0,
+                            vid: "", clockOff: 0, lastEventAt: 0, evicted: false, staleReconnects: 0, pans: 0, font: "" };
+  var replayer = null, fresh = true, focusedId = -1, es = null, everBuilt = false;
   var fitMode = "";                       // "" = 아직 안 고름: 화면이 작으면(휴대폰 세로) 실제 크기, 아니면 맞춤
   try { var fm = localStorage.getItem("ghd_fit"); fitMode = fm === "real" || fm === "fit" ? fm : ""; } catch (e) {}
 
@@ -36,10 +37,31 @@
   }
   function onRebuilt() {
     hook();
+    fonts();
     fit();
     M.built = true;
     cover.hidden = true;
     render();
+    if (!everBuilt) {                       // 처음 그린 뒤: 키보드(Esc · Enter)가 바로 봇 화면으로 가게
+      everBuilt = true;
+      try { if (!document.activeElement || document.activeElement === document.body) replayer.iframe.focus(); } catch (e) {}
+      portraitHint();
+    }
+  }
+
+  // 봇 화면과 같은 글꼴: 서버의 봇이 사무실 · 채팅을 NanumGothicCoding 으로 그리면 이 브라우저도 같은 파일로 그린다
+  // (Windows · 휴대폰 글꼴로 그리면 줄바꿈 · 높이가 달라져 채팅 스크롤 위치가 어긋남). 앱의 글꼴 목록에서 그 앞 이름(D2Coding)도 같은 파일로.
+  var FONT_CSS = ["D2Coding", "NanumGothicCoding"].map(function (n) {
+    return '@font-face{font-family:"' + n + '";src:url(/fonts/nanum-coding.ttf) format("truetype");font-weight:100 599;font-display:swap}' +
+           '@font-face{font-family:"' + n + '";src:url(/fonts/nanum-coding-bold.ttf) format("truetype");font-weight:600 900;font-display:swap}';
+  }).join("");
+  function fonts() {
+    var doc = replayer && replayer.iframe && replayer.iframe.contentDocument;
+    if (!doc || !doc.head || M.font !== "nanum" || doc.getElementById("ghd-fonts")) return;
+    var st = doc.createElement("style");
+    st.id = "ghd-fonts";
+    st.textContent = FONT_CSS;
+    doc.head.appendChild(st);
   }
 
   // 화면 맞춤(기본): 봇 창 크기(1600×797 등)를 이 창에 맞게 CSS 로 축소/확대 — 글자는 벡터로 다시 그려져 선명함
@@ -68,34 +90,125 @@
   // ------------------------------------------------------------ 받기 (SSE)
   function connect() {
     if (es) es.close();
+    M.evicted = false; $("evicted").hidden = true;
+    M.lastEventAt = Date.now();
     es = new EventSource("/api/live");
-    es.onopen = function () { M.connected = true; render(); };
+    var seen = function () { M.lastEventAt = Date.now(); };
+    es.onopen = function () { M.connected = true; seen(); render(); };
     es.onerror = function () {
       M.connected = false; render();
       fetch("/api/live-stats", { cache: "no-store" }).then(function (r) { if (r.status === 401) location.href = "/login?next=/"; }).catch(function () {});
     };
-    es.addEventListener("status", function (m) { try { M.status = JSON.parse(m.data) || {}; } catch (e) { return; } render(); dialog(M.status.dialog); });
-    es.addEventListener("wait", function () { if (!M.built) coverMsg.textContent = "봇 화면 사진을 받는 중…"; });
-    es.addEventListener("reset", function () { mk(); });
+    // hello: 이 연결 이름 + 서버 시각 (누른 때를 서버 시각으로 보내 늦게 도착한 조작은 서버가 버린다)
+    es.addEventListener("hello", function (m) {
+      seen();
+      try { var h = JSON.parse(m.data); M.vid = String(h.vid || ""); if (typeof h.now === "number") M.clockOff = h.now - Date.now(); } catch (e) {}
+      reportVisible();
+    });
+    es.addEventListener("ping", seen);
+    es.addEventListener("bye", function () {            // 다른 창(탭)에서 실시간 화면을 열어 밀려남: 저절로 다시 붙지 않음 (서로 밀어내기 방지)
+      es.close(); es = null; M.connected = false; M.evicted = true; render();
+      $("evicted").hidden = false;
+    });
+    es.addEventListener("status", function (m) {
+      seen();
+      try { M.status = JSON.parse(m.data) || {}; } catch (e) { return; }
+      if (M.status.font !== M.font) { M.font = M.status.font || ""; fonts(); }
+      notice(M.status.notice);
+      render(); dialog(M.status.dialog);
+    });
+    es.addEventListener("wait", function () { seen(); if (!M.built) coverMsg.textContent = "봇 화면 사진을 받는 중…"; });
+    es.addEventListener("reset", function () { seen(); held = null; mk(); });
     es.addEventListener("m", function (m) {
+      seen();
       var b;
       try { b = JSON.parse(m.data); } catch (e) { return; }
-      if (!replayer || (b.k === "r" && !fresh)) mk();
-      M.batches++; M.bytes += m.data.length; M.lastBatchAt = Date.now();
-      var ev = b.ev || [];
-      for (var i = 0; i < ev.length; i++) {
-        var e = ev[i];
-        // 지금 입력 중인 칸에 봇이 돌려준 값은 무시 (내가 친 글자가 이김 · 가려진 **** 이 들어오지 않게)
-        if (e.type === 3 && e.data && e.data.source === 5 && e.data.id === focusedId) { M.echoDropped++; continue; }
-        replayer.addEvent(e);
-        M.events++;
-        canvasTouched(e);
+      M.bytes += m.data.length;
+      if (held) { held.push(b); return; }                 // 스타일 파일을 받는 동안은 순서대로 모아 둠
+      var need = cssNeeded(b);
+      if (need.length) {
+        held = [b];
+        var mine = held;
+        loadCss(need).then(function () { if (held !== mine) return; held = null; mine.forEach(apply); });
+        return;
       }
-      fresh = false;
-      trim();
-      if (hasPending) Promise.resolve().then(retryFrames);
+      apply(b);
     });
-    es.addEventListener("cv", function (m) { var f; try { f = JSON.parse(m.data); } catch (e) { return; } drawCanvas(f); });
+    es.addEventListener("cv", function (m) { seen(); var f; try { f = JSON.parse(m.data); } catch (e) { return; } drawCanvas(f); });
+  }
+  // 연결이 소리 없이 죽음(와이파이 바뀜 · 패킷만 사라짐): 서버는 15초마다 ping 을 보내므로 35초 넘게 아무것도 없으면 다시 붙는다
+  setInterval(function () {
+    if (es && !M.evicted && Date.now() - M.lastEventAt > 35000) {
+      M.staleReconnects++; M.connected = false; render();
+      connect();
+    }
+  }, 5000);
+  function reportVisible() {                            // 이 창이 보이는지 → 서버는 보이는 창이 있을 때만 차트 그림을 만든다
+    if (!M.vid) return;
+    post("/api/live-vis", { vid: M.vid, visible: !document.hidden }).catch(function () {});
+  }
+
+  function apply(b) {
+    if (!replayer || (b.k === "r" && !fresh)) mk();
+    M.batches++; M.lastBatchAt = Date.now();
+    var ev = b.ev || [];
+    for (var i = 0; i < ev.length; i++) {
+      var e = ev[i];
+      // 지금 입력 중인 칸에 봇이 돌려준 값은 무시 (내가 친 글자가 이김 · 가려진 **** 이 들어오지 않게)
+      if (e.type === 3 && e.data && e.data.source === 5 && e.data.id === focusedId) { M.echoDropped++; continue; }
+      if (e.type === 2) inlineCss(e);
+      replayer.addEvent(e);
+      M.events++;
+      canvasTouched(e);
+    }
+    fresh = false;
+    trim();
+    if (hasPending) Promise.resolve().then(retryFrames);
+  }
+
+  // ------------------------------------------------------------ 앱 스타일 파일: 화면 사진을 그리기 전에 받아서 <style> 로 바로 넣는다
+  // 봇은 <link> 주소만 보낸다 (Chrome 이 다시 풀어 쓴 CSS 는 var() 를 쓴 테두리가 빠짐). <link> 로 두면 그리는 순간엔 스타일이 없어서
+  // 사진에 담긴 스크롤 위치(채팅 맨 아래 등)가 0 으로 잘리고 잠깐 맨 화면이 보인다 → 원본 파일(/app/…css)을 먼저 받아 그대로 넣는다.
+  var cssCache = {}, held = null;
+  function headLinks(e) {
+    var out = [], doc = e.data && e.data.node, html = null, head = null, i;
+    for (i = 0; doc && doc.childNodes && i < doc.childNodes.length; i++) if (doc.childNodes[i].tagName === "html") html = doc.childNodes[i];
+    for (i = 0; html && html.childNodes && i < html.childNodes.length; i++) if (html.childNodes[i].tagName === "head") head = html.childNodes[i];
+    for (i = 0; head && head.childNodes && i < head.childNodes.length; i++) {
+      var n = head.childNodes[i], a = n.attributes || {};
+      if (n.tagName === "link" && /(^|\s)stylesheet(\s|$)/i.test(a.rel || "") && /^\/app\/[^?#]+\.css([?#].*)?$/.test(a.href || "")) out.push(n);
+    }
+    return out;
+  }
+  function cssNeeded(b) {
+    var need = [], ev = b.ev || [];
+    for (var i = 0; i < ev.length; i++) if (ev[i].type === 2) {
+      if (b.k === "r") cssCache = {};                     // 봇 페이지를 새로 읽음: 파일이 바뀌었을 수 있음 (브라우저 캐시 5분)
+      headLinks(ev[i]).forEach(function (n) { var h = n.attributes.href; if (!(h in cssCache) && need.indexOf(h) < 0) need.push(h); });
+    }
+    return need;
+  }
+  function absCss(css, href) {                            // 파일 안의 상대 주소(url(img.png))를 /app/… 기준으로
+    var base = location.origin + href;
+    return css.replace(/url\(\s*(['"]?)([^'")]+)\1\s*\)/g, function (all, q, u) {
+      if (/^(data:|https?:|\/|#)/i.test(u)) return all;
+      try { var x = new URL(u, base); return "url(" + q + x.pathname + x.search + q + ")"; } catch (e) { return all; }
+    });
+  }
+  function loadCss(hrefs) {
+    return Promise.all(hrefs.map(function (h) {
+      var ac = window.AbortController ? new AbortController() : null, t = ac ? setTimeout(function () { ac.abort(); }, 5000) : 0;
+      return fetch(h, { credentials: "same-origin", signal: ac ? ac.signal : undefined })
+        .then(function (r) { return r.ok ? r.text() : null; })
+        .then(function (txt) { cssCache[h] = txt ? absCss(txt, h) : false; }, function () { cssCache[h] = false; })
+        .then(function () { clearTimeout(t); });
+    }));
+  }
+  function inlineCss(e) {                                 // 받은 파일이 있으면 <link> 를 같은 내용의 <style> 로 (rrweb: _cssText 가 있는 link → style)
+    headLinks(e).forEach(function (n) {
+      var txt = cssCache[n.attributes.href];
+      if (txt) { n.attributes = { _cssText: txt }; M.cssInlined = (M.cssInlined || 0) + 1; }
+    });
   }
 
   // live 모드는 받은 이벤트를 모두 쥐고 있다: 가끔 가운데를 잘라 메모리를 일정하게
@@ -128,20 +241,24 @@
 
   // ------------------------------------------------------------ 보내기 (순서대로 하나씩)
   var chain = Promise.resolve(), inflight = 0;
-  function post(url, body) {
-    var t0 = performance.now();
-    return fetch(url, { method: "POST", credentials: "same-origin", cache: "no-store",
+  function post(url, body, ms) {
+    // 6초 안에 답이 없으면 포기 (연결이 죽었을 때 누른 것이 나중에 한꺼번에 봇에 들어가지 않게 — 서버도 10초 지난 조작은 버림)
+    var t0 = performance.now(), ac = window.AbortController ? new AbortController() : null;
+    var tm = ac ? setTimeout(function () { ac.abort(); }, ms || 6000) : 0;
+    return fetch(url, { method: "POST", credentials: "same-origin", cache: "no-store", signal: ac ? ac.signal : undefined,
                         headers: { "Content-Type": "application/json", "X-CSRF-Token": CSRF }, body: JSON.stringify(body || {}) })
       .then(function (r) {
+        clearTimeout(tm);
         if (r.status === 401) { location.href = "/login?next=/"; throw new Error("login"); }
         return r.json().catch(function () { return {}; }).then(function (j) { j.status = r.status; j.rtt = performance.now() - t0; return j; });
-      });
+      }, function (e) { clearTimeout(tm); throw e; });
   }
   var ERR = { gone: "화면이 바뀌었습니다 — 다시 눌러 주세요", hidden: "지금 봇 화면에 보이지 않는 곳입니다", disabled: "지금은 누를 수 없는 버튼입니다",
               option: "그 항목은 고를 수 없습니다", "no-recorder": "봇 화면을 다시 불러오는 중입니다" };
   function send(a) {
     if (inflight > 30) { toast("봇이 응답하지 않아 보내지 못했습니다"); return Promise.resolve(null); }
     inflight++;
+    a.st = Date.now() + M.clockOff;                       // 누른 때 (서버 시각)
     var p = chain.then(function () { return post("/api/act", a); }).then(function (res) {
       M.acts++; M.lastActMs = res.rtt;
       if (!res.ok) {
@@ -193,10 +310,13 @@
     wheelAcc = null;
   }
 
+  var enterAt = 0, dragFrom = null, dragToastAt = 0;
   var H = {
     click: function (e) {
       if (e.button !== 0) return;
       var t = elt(e.target); if (!t) return;
+      // Enter 로 생긴 '가짜 클릭'(이 브라우저의 폼 보내기)은 보내지 않음 — Enter 는 키로 이미 봇에 감 (한글 조합 중 Enter 가 메시지를 보내던 문제)
+      if (e.detail === 0 && Date.now() - enterAt < 300 && t.closest('button, input[type="submit"], input[type="image"]')) { e.preventDefault(); return; }
       var a = t.closest("a[href]");
       if (a) {
         var href = a.getAttribute("href") || "";
@@ -229,14 +349,19 @@
       else if (isText(t)) { pend[id] = t.value; flushInput(true); }
     },
     keydown: function (e) {
-      if (e.isComposing || e.keyCode === 229 || composing) return;      // 한글 조합 중 Enter 는 보내지 않음
       var t = e.target, text = isText(t);
+      if (e.key === "Enter") enterAt = Date.now();
+      // 글자 칸의 Enter 는 이 브라우저에서 폼을 보내지 않게 (조합 중이어도) — 보내기는 봇이 키를 받아서 한다
+      if (e.key === "Enter" && text && !(t.tagName === "TEXTAREA" && e.shiftKey)) e.preventDefault();
+      if (e.isComposing || e.keyCode === 229 || composing) return;      // 한글 조합 중 Enter 는 보내지 않음
       if (text && !/^(Enter|Escape)$/.test(e.key)) return;              // 글자 · 지우기는 여기서 치고 값 전체를 보냄
       if (!/^(Enter|Escape|ArrowUp|ArrowDown|ArrowLeft|ArrowRight|PageUp|PageDown|Home|End|Delete|Backspace)$/.test(e.key)) return;
       if (e.key === "Enter" && t.tagName === "TEXTAREA" && e.shiftKey) return;
       if (/^(PageUp|PageDown|Home|End|ArrowUp|ArrowDown)$/.test(e.key)) userScrollAt = Date.now();
       var doc = replayer.iframe.contentDocument;
-      var target = (t === doc.body || t === doc) ? doc.documentElement : t;
+      // 글자 칸이 아니면 '문서'로 보낸다 → 봇에서 지금 포커스가 있는 곳(앱이 연 창 등)이 키를 받는다.
+      // (여기서 마지막으로 누른 버튼으로 보내면 봇에서 그 버튼이 포커스를 빼앗아, 막 연 창의 Esc 가 안 듣는다)
+      var target = text ? t : doc.documentElement;
       var id = idOf(target); if (id < 0) return;
       if (text) { pend[id] = t.value; flushInput(e.key === "Enter"); }
       send({ kind: "key", id: id, key: e.key, shift: e.shiftKey });
@@ -261,7 +386,7 @@
       userScrollAt = Date.now();
       var t = elt(e.target); if (!t) return;
       var k = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1, dx = e.deltaX * k, dy = e.deltaY * k;
-      if (e.ctrlKey) e.preventDefault();                                 // 이 브라우저 확대 대신 앱의 확대(Ctrl+휠)
+      if (e.ctrlKey || t.tagName === "CANVAS") e.preventDefault();       // 이 브라우저 확대 대신 앱의 확대(Ctrl+휠) · 차트는 봇이 확대
       else if (!dx && canScrollY(t, dy)) return;                          // 여기서 스크롤되는 곳: 스크롤 위치만 보냄
       var id = idOf(t); if (id < 0) return;
       if (wheelAcc && (wheelAcc.id !== id || wheelAcc.ctrl !== e.ctrlKey)) flushWheel();
@@ -275,6 +400,14 @@
       if (!wheelT) wheelT = setTimeout(flushWheel, 60);
     },
     touchmove: function () { userScrollAt = Date.now(); },
+    mousedown: function (e) { var t = elt(e.target); dragFrom = (e.button === 0 && t && t.tagName === "CANVAS") ? [e.clientX, e.clientY] : null; },
+    mousemove: function (e) {
+      if (!dragFrom) return;
+      if (!(e.buttons & 1)) { dragFrom = null; return; }
+      if (Math.abs(e.clientX - dragFrom[0]) + Math.abs(e.clientY - dragFrom[1]) < 10) return;
+      dragFrom = null;
+      if (Date.now() - dragToastAt > 30000) { dragToastAt = Date.now(); toast("차트 끌기 · 그리기는 아직 여기서 안 됩니다 — 휠 확대 · 클릭은 됩니다"); }
+    },
     scroll: function (e) {
       if (Date.now() - userScrollAt > 400) return;                       // 내가 한 스크롤만 (봇에서 온 스크롤은 다시 안 보냄)
       var doc = replayer.iframe.contentDocument;
@@ -332,20 +465,28 @@
   function render() {
     var s = M.status || {}, cls = "ok", txt = "연결됨";
     var bot = s.bot, mir = s.mirror;
-    if (!M.connected) { cls = "warn"; txt = "다시 연결 중…"; }
+    if (M.evicted) { cls = "warn"; txt = "다른 창에서 보는 중"; }
+    else if (!M.connected) { cls = "warn"; txt = "다시 연결 중…"; }
     else if (mir === "crashed" || bot === "crashed" || bot === "stuck") { cls = "bad"; txt = "봇 멈춤"; }
     else if (mir === "no_chrome" || mir === "no_page" || bot === "no_chrome" || bot === "no_page") { cls = "bad"; txt = "봇 창 연결 끊김"; }
     else if (bot === "no_app") { cls = "bad"; txt = "봇 페이지 오류"; }
     else if (s.busy || mir === "busy" || bot === "slow") { cls = "warn"; txt = "봇 응답 지연"; }
     else if (!M.built) { cls = "warn"; txt = "화면 받는 중…"; }
-    else if (bot === "booting" || mir === "connecting" || mir === "starting") { cls = "warn"; txt = "봇 창 켜지는 중"; }
+    // 앱을 새로고침한 뒤 요약 수집기는 30초쯤 '켜지는 중'이지만, 실시간 화면은 이미 그려져 쓸 수 있다 → 초록 (메뉴에만 적음)
+    else if (mir === "connecting" || mir === "starting" || (bot === "booting" && mir !== "live")) { cls = "warn"; txt = "봇 창 켜지는 중"; }
     pill.className = cls;
     pillTxt.textContent = txt;
     var detail = [];
+    if (M.evicted) detail.push("다른 창(탭)에서 실시간 화면을 열어서 여기는 멈췄습니다");
     if (s.msg && mir !== "live") detail.push("화면: " + s.msg);
     if (s.botMsg && bot && bot !== "ok") detail.push("봇: " + s.botMsg);
     $("menuStatus").textContent = detail.join("\n") || (cls === "ok" ? "봇 화면을 실시간으로 보고 있습니다" : "");
     stage.classList.toggle("stale", !M.connected || cls === "bad");
+    crashed = M.connected && (mir === "crashed" || bot === "crashed");
+    // 확인 창이 이미 떠 있는 봇에 다시 붙으면 화면을 못 받는다 → '앱 새로고침'을 눈에 띄게
+    // (그냥 무거운 작업으로 바쁜 것과는 구별: 그때 새로고침하면 하던 일이 끊김)
+    unresponsive = M.connected && !!s.connectBusy;
+    banner();
     if (!M.built) coverMsg.textContent = cls === "bad" ? txt + " — " + (s.botMsg || s.msg || "") : coverMsg.textContent;
     if (cls === "ok") { clearTimeout(render.t); render.t = setTimeout(function () { if (pill.className === "ok") pill.classList.add("min"); }, 4000); }
   }
@@ -362,14 +503,29 @@
     post("/api/reload", {}).then(function (r) { toast(r.ok ? "새로고침했습니다 — 잠시 기다려 주세요" : (r.err || "새로고침하지 못했습니다")); });
   }
   $("reloadBtn").onclick = reloadApp;
-  $("officeReload").onclick = reloadApp;
+  // 안내 띠의 '다시 열기'는 무엇이 일어날지 이미 적혀 있으므로 한 번 더 묻지 않는다
+  $("officeReload").onclick = function () {
+    $("officeReload").disabled = true; setTimeout(function () { $("officeReload").disabled = false; }, 5000);
+    post("/api/reload", {}).then(function (r) { toast(r.ok ? "새로고침했습니다 — 잠시 기다려 주세요" : (r.err || "새로고침하지 못했습니다")); },
+                                 function () { toast("보내지 못했습니다 (연결 확인)"); });
+  };
+  $("evictedBtn").onclick = function () { connect(); render(); };
   $("logoutBtn").onclick = function () { post("/logout", {}).then(function () { location.href = "/login"; }, function () { location.href = "/login"; }); };
-  var v = $("vncLink"); v.href = location.protocol + "//" + location.hostname + ":6080/";
+
+  // 화면 위 안내 띠: 봇 탭이 죽었을 때 · 사무실이 닫혔을 때 (둘 다 '앱 새로고침'으로 돌아옴)
+  var crashed = false, officeClosed = false, unresponsive = false;
+  function banner() {
+    var on = crashed || officeClosed || unresponsive;
+    $("officeGone").hidden = !on;
+    if (on) $("officeGoneTxt").textContent = crashed ? "봇 페이지(탭)가 죽었습니다 (3분 뒤 자동으로 다시 띄움)"
+      : unresponsive ? "봇 페이지가 응답하지 않습니다 — 봇에 확인 창이 떠 있을 수 있습니다 (앱 새로고침으로 풀림)"
+      : "사무실 화면이 닫혔습니다 (실거래 · 차트 터미널을 닫으면 앱이 사무실을 다시 열지 않음)";
+  }
 
   var toastT = 0;
-  function toast(msg) {
+  function toast(msg, ms) {
     var t = $("toast"); t.textContent = msg; t.classList.add("on");
-    clearTimeout(toastT); toastT = setTimeout(function () { t.classList.remove("on"); }, 2600);
+    clearTimeout(toastT); toastT = setTimeout(function () { t.classList.remove("on"); }, ms || 2600);
   }
 
   // 1초마다: 사무실이 닫혔는지 · 실거래 승인 창이 떴는지 (탭 제목으로도 알림)
@@ -377,16 +533,56 @@
     var doc = replayer && replayer.iframe && replayer.iframe.contentDocument;
     if (!doc || !M.built) return;
     var of = doc.getElementById("office"), other = doc.querySelector(".nt-root, .lv:not([hidden])");
-    $("officeGone").hidden = !(of && of.hidden && !(other && other.getClientRects().length));
-    var appr = doc.querySelector(".lv-modal");
-    var title = appr && appr.getClientRects().length ? "🔔 주문 승인 대기 · GH Coin" : curDlg ? "❓ 확인 필요 · GH Coin" : "GH Coin";
+    officeClosed = !!(of && of.hidden && !(other && other.getClientRects().length));
+    banner();
+    var appr = doc.querySelector(".lv-modal .lv-dlg"), apprOn = !!(appr && appr.getClientRects().length);
+    var title = apprOn ? "🔔 주문 승인 대기 · GH Coin" : curDlg ? "❓ 확인 필요 · GH Coin" : "GH Coin";
     if (document.title !== title) document.title = title;
+    // 실제 크기(휴대폰)에서는 봇 화면 가운데에 뜨는 창이 화면 밖이다 → 새로 뜬 창으로 옮겨 보여 줌 · 승인 창이면 띠도 띄움
+    var real = stage.classList.contains("real"), boxes = doc.querySelectorAll(BOXES), now = [];
+    for (var i = 0; i < boxes.length; i++) if (boxes[i].getClientRects().length) now.push(boxes[i]);
+    if (real) for (var j = 0; j < now.length; j++) if (shownBoxes.indexOf(now[j]) < 0) { if (!inView(now[j])) panTo(now[j]); break; }
+    shownBoxes = now;
+    $("apprBar").hidden = !(apprOn && real && !inView(appr));
+    apprBox = apprOn ? appr : null;
   }, 1000);
+  var BOXES = ".lv-modal .lv-dlg, .gc-modal>*, .wl-modal>*, .of-docsbox, .of-presbox, #ofCard, [role=dialog][aria-modal=true]";
+  var shownBoxes = [], apprBox = null;
+  function boxRect(el) {                                  // 봇 화면 요소의 위치 (이 창 기준)
+    var r = el.getBoundingClientRect(), f = replayer.iframe.getBoundingClientRect(), k = M.scale || 1;
+    return { left: f.left + r.left * k, top: f.top + r.top * k, width: r.width * k, height: r.height * k };
+  }
+  function inView(el) {
+    if (!el) return true;
+    var r = boxRect(el);
+    return r.left >= -4 && r.top >= -4 && r.left + r.width <= innerWidth + 4 && r.top + r.height <= innerHeight + 4;
+  }
+  function panTo(el) {
+    if (!el || !replayer) return;
+    var r = boxRect(el);
+    M.pans++;
+    stage.scrollTo({ left: Math.max(0, stage.scrollLeft + r.left + r.width / 2 - stage.clientWidth / 2),
+                     top: Math.max(0, stage.scrollTop + r.top + Math.min(r.height, stage.clientHeight) / 2 - stage.clientHeight / 2), behavior: "smooth" });
+  }
+  $("apprBar").onclick = function () { panTo(apprBox); };
 
-  // 탭을 오래 안 보면 받기를 쉬고(휴대폰 데이터 · 배터리), 다시 보면 새로 받는다
+  // 봇이 서버에 파일을 내려받음: 앱은 '내려받았습니다'라고 하지만 파일은 서버(VPS)에 있다
+  var noticeSeen = 0;
+  function notice(n) {
+    if (!n || !n.seq || n.seq <= noticeSeen) return;
+    noticeSeen = n.seq;
+    if (typeof n.t === "number" && Date.now() + M.clockOff - n.t > 20000) return;   // 이 화면을 열기 전의 알림은 넘김
+    if (n.kind === "download") toast("봇이 파일을 서버에 저장했습니다: " + (n.name || ""), 6000);
+  }
+  function portraitHint() {
+    if (stage.classList.contains("real") && innerHeight > innerWidth && !fitMode) toast("가로로 돌리면 봇 화면 전체가 보입니다 (메뉴 → 화면에 맞추기)", 5000);
+  }
+
+  // 다른 탭에 있어도 계속 받는다 (평소 1초에 수십 바이트 · 승인 창이 뜨면 탭 제목으로 알리려고).
+  // 휴대폰이 탭을 잠재워서 연결이 끊겼으면, 다시 볼 때 새로 붙는다.
   document.addEventListener("visibilitychange", function () {
-    if (document.hidden) { hiddenT = setTimeout(function () { if (es) { es.close(); es = null; M.connected = false; } }, 60000); }
-    else { clearTimeout(hiddenT); if (!es) connect(); }
+    if (!document.hidden && (!es || es.readyState === 2)) connect();
+    else reportVisible();
   });
 
   mk();

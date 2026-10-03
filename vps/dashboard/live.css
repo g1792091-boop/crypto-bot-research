@@ -30,9 +30,15 @@ button { font: inherit; color: inherit; }
 #pill.ok i { background: var(--ok); } #pill.warn i { background: var(--warn); } #pill.bad i { background: var(--bad); }
 #pill.warn { color: #fde68a; border-color: rgba(245,158,11,.55); } #pill.bad { color: #fecaca; border-color: rgba(239,68,68,.6); background: rgba(60,15,20,.9); }
 #pill span { overflow: hidden; text-overflow: ellipsis; }
+#pill .mi { display: none; font-weight: 400; }
 #pill.min { opacity: .55; padding: 6px; } #pill.min span { display: none; }
 #pill.min:hover, #pill.min:focus-visible, #pill.min[aria-expanded="true"] { opacity: 1; padding: 4px 10px 4px 8px; }
 #pill.min:hover span, #pill.min:focus-visible span, #pill.min[aria-expanded="true"] span { display: inline; }
+/* 터치 화면에는 마우스 올리기가 없다: 점으로 줄이지 않고 '☰' 를 붙여 메뉴인 것을 보이게 */
+@media (hover: none) {
+  #pill .mi { display: inline; }
+  #pill.min { opacity: .8; padding: 4px 10px 4px 8px; }
+}
 
 #menu { position: absolute; left: 0; bottom: calc(100% + 6px); min-width: 230px; padding: 6px; border-radius: 12px;
         background: rgba(23,30,49,.97); border: 1px solid var(--line); box-shadow: 0 10px 30px rgba(0,0,0,.45); }
@@ -44,11 +50,21 @@ button { font: inherit; color: inherit; }
 #menuStatus { padding: 4px 10px 8px; color: var(--mut); font-size: 12px; white-space: pre-wrap; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
 #menuStatus:empty { display: none; }
 
-#officeGone { position: fixed; left: 50%; top: 12px; transform: translateX(-50%); z-index: 15; display: flex; gap: 10px; align-items: center;
+/* 가운데 정렬은 left/right + margin auto 로 (left:50% + transform 은 휴대폰에서 폭이 화면 절반으로 줄어 세 줄이 됨) */
+#officeGone { position: fixed; left: 12px; right: 12px; top: 12px; margin: 0 auto; width: fit-content; z-index: 15; display: flex; gap: 10px; align-items: center;
               padding: 8px 10px 8px 14px; border-radius: 10px; background: rgba(23,30,49,.96); border: 1px solid var(--line); font-size: 13px;
               box-shadow: 0 6px 20px rgba(0,0,0,.4); max-width: calc(100vw - 24px); }
 #officeGone[hidden] { display: none; }
-#officeGone button, #dlg button { padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--card2); cursor: pointer; }
+#officeGone button, #dlg button, #evicted button { padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--card2); cursor: pointer; flex: none; }
+#apprBar { position: fixed; left: 12px; right: 12px; top: 12px; margin: 0 auto; width: fit-content; max-width: calc(100vw - 24px); z-index: 16;
+           padding: 9px 16px; border-radius: 10px; border: 1px solid rgba(245,158,11,.7); background: rgba(60,40,8,.96); color: #fde68a;
+           font-weight: 700; font-size: 14px; cursor: pointer; box-shadow: 0 6px 20px rgba(0,0,0,.45); }
+#apprBar[hidden] { display: none; }
+#evicted { position: fixed; inset: 0; z-index: 18; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+           background: rgba(15,19,32,.88); text-align: center; padding: 16px; }
+#evicted[hidden] { display: none; }
+#evicted p { margin: 0; max-width: 420px; } #evicted small { color: var(--mut); }
+#evicted button { padding: 9px 18px; font-size: 14px; background: var(--pri); border-color: var(--pri); color: #fff; }
 
 #toast { position: fixed; left: 50%; bottom: 56px; transform: translate(-50%, 20px); z-index: 30; padding: 8px 14px; border-radius: 10px;
          background: rgba(23,30,49,.97); border: 1px solid var(--line); font-size: 13px; opacity: 0; pointer-events: none;
