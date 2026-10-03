@@ -819,9 +819,40 @@ export const LANES = {std: {dev: "dev", bt: "bt", demo: "demo", live: "live", au
 function researchLog(lane){ try { const l = JSON.parse(localStorage.getItem("coinResearch") || "[]"); return lane ? l.filter(r => (r.lane || "std") === lane) : l; } catch(e){ return []; } }
 function addResearch(r){ const l = researchLog(); l.push(r); try { localStorage.setItem("coinResearch", JSON.stringify(l.slice(-200))); } catch(e){} }
 export const researchHistory = researchLog;
+// LLM 답에서 JSON 뽑기 — 여러 후보를 시도하고, 꼬리 콤마·주석·홑따옴표·잘린 응답(truncation)까지 자동 복구한다.
+function _repairJSON(s){
+  let x = String(s);
+  x = x.replace(/\/\/[^\n\r]*/g, "");                 // // 주석
+  x = x.replace(/\/\*[\s\S]*?\*\//g, "");              // /* */ 주석
+  x = x.replace(/,\s*([}\]])/g, "$1");                 // 꼬리 콤마
+  x = x.replace(/'([^'\n\r]*?)'(\s*[:,}\]])/g, '"$1"$2');   // 홑따옴표 값/키 → 쌍따옴표
+  const bal = ch => x.split(ch[0]).length - x.split(ch[1]).length;   // 잘린 응답: 괄호 균형 맞추기
+  for (let n = bal("[]"); n > 0; n--) x += "]";
+  for (let n = bal("{}"); n > 0; n--) x += "}";
+  return x;
+}
+function _balancedBrace(t){
+  const i = t.indexOf("{"); if (i < 0) return null;
+  let d = 0, inStr = false, esc = false;
+  for (let j = i; j < t.length; j++){
+    const ch = t[j];
+    if (inStr){ if (esc) esc = false; else if (ch === "\\") esc = true; else if (ch === '"') inStr = false; continue; }
+    if (ch === '"') inStr = true; else if (ch === "{") d++; else if (ch === "}" && --d === 0) return t.slice(i, j + 1);
+  }
+  return null;
+}
 function pickJSON(t){
-  const m = t.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, (t.match(/\{[\s\S]*\}/) || [""])[0]];
-  try { return JSON.parse(m[1]); } catch(e){ return null; }
+  t = String(t || "");
+  const cands = [], re = /```(?:json)?\s*([\s\S]*?)```/gi; let m;
+  while ((m = re.exec(t))) cands.push(m[1]);                 // 닫힌 코드블록들
+  const open = t.match(/```(?:json)?\s*([\s\S]*)$/i); if (open && !open[1].includes("```")) cands.push(open[1]);   // 안 닫힌 블록(잘림)
+  const bb = _balancedBrace(t); if (bb) cands.push(bb);      // 균형 잡힌 첫 {...}
+  const greedy = t.match(/\{[\s\S]*\}/); if (greedy) cands.push(greedy[0]);   // 최후: 첫 { ~ 마지막 }
+  for (let c of cands){
+    c = String(c).replace(/^```(?:json)?/i, "").replace(/```\s*$/, "").trim();
+    for (const v of [c, _repairJSON(c)]){ try { const o = JSON.parse(v); if (o && typeof o === "object") return o; } catch(e){} }
+  }
+  return null;
 }
 const fmtDay = t => t ? new Date(t).toISOString().slice(0, 10) : "?";
 async function research(lane = "std"){
