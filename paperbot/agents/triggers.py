@@ -882,9 +882,9 @@ def research_gap(st: _Rooms, every: int) -> int:
     which the inventor proposed nothing, up to ``research_idle_max_ms`` (2026-10-03: 18 empty meetings in a
     day). A meeting with a candidate, or an owners' post in the lab (its own trigger), starts over."""
     empty = 0
-    for r in sorted((r for r in st.rounds if r["room_id"] == LAB_ROOM and r["trigger"] == "research"
+    for r in sorted((r for r in st.rounds if r["room_id"] == LAB_ROOM and r["trigger"] in ("research", "owner")
                      and r["status"] in ENDED_OK), key=lambda r: -r["started_ts"]):
-        if r["candidates"] != 0:
+        if r["trigger"] == "owner" or r["candidates"] != 0:     # the owners spoke in the lab, or a candidate came
             break
         empty += 1
     if empty < 2:

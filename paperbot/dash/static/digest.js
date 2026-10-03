@@ -176,6 +176,8 @@ function dgWeekHtml(d) {
         <div class="mk-row"><span>5년 시험</span><b>${st.tests}건 (통과 ${st.tests_passed})</b></div>
         <div class="mk-row"><span>새 매매법 시험</span><b>${st.lab_tests}건 (통과 ${st.lab_passed})</b></div>` : '<div class="muted">기록 없음</div>'}</div>
     </div>
+    ${d.ghcoin && d.ghcoin.all && d.ghcoin.all.calls ? `<div class="mk-card" style="margin-bottom:10px"><div class="mk-name">GH Coin 기록기 <small class="muted">친구 봇 타점, 기록만 · 수수료 뒤 R</small></div>
+      ${[["최근 7일", d.ghcoin.week], ["시작부터", d.ghcoin.all]].map(([k, x]) => `<div class="mk-row"><span>${k}</span><b>${x && x.calls ? `${x.calls}타점 · <span class="${cls(x.net_r)}">${(x.net_r >= 0 ? "+" : "") + fmt(x.net_r, 1)}R</span> (동전 ${fmt(x.coin_flip_net_r, 1)}R${x.p_coin_flip != null ? ", p=" + fmt(x.p_coin_flip, 2) : ""})` : "끝난 타점 없음"}</b></div>`).join("")}</div>` : ""}
     <div class="card"><div class="ph"><span class="t">${dgWeekWhen(d.hours)} (지금 기준 미리보기)</span></div>
       <pre class="dg-tg">${esc(d.telegram_text || "")}</pre></div>
     <p class="muted dg-note">${esc(d.note || "")}</p>`;

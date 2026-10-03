@@ -432,8 +432,35 @@ def _median(xs: list[float]) -> Optional[float]:
     return xs[m] if len(xs) % 2 else (xs[m - 1] + xs[m]) / 2
 
 
+def _db_dir(conn: Optional[sqlite3.Connection]) -> Optional[str]:
+    import os
+    try:
+        for _, name, path in conn.execute("PRAGMA database_list").fetchall():
+            if name == "main" and path:
+                return os.path.dirname(path)
+    except (sqlite3.Error, AttributeError):
+        pass
+    return None
+
+
+def _ghcoin_week(directory: Optional[str], since_ms: int, now_ms: int) -> Optional[dict]:
+    """The GH Coin recorder's calls (ghcoin.py, next to paper3.db in ghcoin/) of the week and since its start:
+    net R after costs against the same-time coin flip. None when there is no recorder."""
+    import os
+    if not directory or not os.path.exists(os.path.join(directory, "calls.jsonl")):
+        return None
+    from .. import ghcoin as GH
+    try:
+        week, whole = GH.report(directory, since_ms, now_ms), GH.report(directory, None, now_ms)
+    except Exception:  # noqa: BLE001  (a summary line only)
+        return None
+    keep = ("calls", "net_r", "coin_flip_net_r", "p_coin_flip", "win_rate")
+    return {"week": {k: week["total"].get(k) for k in keep}, "all": {k: whole["total"].get(k) for k in keep},
+            "alive": week.get("alive")}
+
+
 def week_report(paper_ro: Optional[sqlite3.Connection], agents_ro: Optional[sqlite3.Connection], now_ms: int,
-                initial: Optional[float] = None, k: int = 5) -> dict:
+                initial: Optional[float] = None, k: int = 5, ghcoin_dir: Optional[str] = None) -> dict:
     """The 7 days before ``now_ms`` against the 7 before them (code)."""
     from .rooms import TRIGGER_KO
     now = int(now_ms)
@@ -552,6 +579,9 @@ def week_report(paper_ro: Optional[sqlite3.Connection], agents_ro: Optional[sqli
                 "tests_passed": sum(1 for t in tests if t["kind"] == "test" and t["status"] == "passed"),
                 "lab_tests": sum(1 for t in tests if t["kind"] == "newlab"),
                 "lab_passed": sum(1 for t in tests if t["kind"] == "newlab" and t["status"] == "passed")}
+    import os
+    gdir = ghcoin_dir or (os.path.join(_db_dir(paper_ro), "ghcoin") if _db_dir(paper_ro) else None)
+    out["ghcoin"] = _ghcoin_week(gdir, w0, now)
     out["note"] = ("최근 7일(코드 계산, 끝난 거래 손익·수수료와 펀딩 포함). 7일 성적은 운이 큼: 30일 판정은 체크포인트"
                    "(동전 봇 2,000개 비교)가 함")
     return out
@@ -606,5 +636,15 @@ def compose_week(rep: dict, limit: int = 4000) -> str:
               f"- 회의 {st['meetings_total']}번" + (f" ({top_kinds})" if top_kinds else "") + f" · AI 호출 {st['ai_calls']:,}번",
               f"- 가설 {st['hypotheses']}건 기록 · 예측 채점 {st['predictions_graded']}건 중 {st['predictions_correct']}건 맞음",
               f"- 5년 시험 {st['tests']}건(통과 {st['tests_passed']}) · 새 매매법 시험 {st['lab_tests']}건(통과 {st['lab_passed']})"]
+    gh = rep.get("ghcoin")
+    if gh and (gh.get("all") or {}).get("calls"):
+        w, a = gh.get("week") or {}, gh["all"]
+
+        def ghl(x: dict) -> str:
+            p = x.get("p_coin_flip")
+            return (f"{x.get('calls', 0)}타점 · 순 {x.get('net_r') or 0:+.1f}R (동전 {x.get('coin_flip_net_r') or 0:+.1f}R"
+                    + (f", p={p:.2f}" if p is not None else "") + ")")
+        L += ["", "[GH Coin 기록기: 친구 봇 타점, 기록만]",
+              f"- 7일 {ghl(w) if w.get('calls') else '끝난 타점 없음'}", f"- 시작부터 {ghl(a)}"]
     L += ["", "※ 7일 성적은 운이 큽니다. 30일 판정은 체크포인트(동전 봇 2,000개 비교)가 합니다. 자세히: 대시보드 '회의 요약' 탭"]
     return "\n".join(L)[:limit]

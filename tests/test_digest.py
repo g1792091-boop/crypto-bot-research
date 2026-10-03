@@ -295,3 +295,67 @@ def test_a_malformed_reply_never_voids_a_good_answer(world):
     assert RM.compose_ranking({"picked": []}, None, 16).startswith("🏁 순위 검토 (손익 복기팀, 16:00)")
     assert "tf_split" in RM.CODE_ROOTS and "ranking" in RM.CODE_ROOTS and "market_move" in RM.CODE_ROOTS
     assert "tf_split" in RM.RoomsPolicy().paced_triggers
+
+
+# ---------------------------------------------------------------- audit fixes (2026-10-03)
+def test_ranking_review_hypotheses_go_to_the_ledger_and_are_graded_later(world):
+    t = kst(2026, 10, 7, 14, 5)
+    pol = RM.RoomsPolicy()
+    pol.triggers.ranking_hour_kst = 14
+    pred = {"metric": "win_rate", "timeframe": "15m", "direction": "above", "value": 0.5, "after_trades": 30}
+    lead = {"summary": ["a", "b", "c"], "human_actions": [], "watch_next": [],
+            "hypotheses": [{"strategy": S, "text": "상위는 15분봉 추세장 롱 덕분", "how_to_confirm": "30건 뒤 승률",
+                            "prediction": pred},
+                           {"strategy": "NOPE", "text": "모르는 매매법"},
+                           {"strategy": "V45_AMB", "text": "예측 없는 가설"}]}
+    runner = QueueRunner({"pnl_reviewer": [team_answer("p")], "risk_officer": [team_answer("r")], "team_lead": [lead]})
+    world.tick(runner, t, policy=pol)
+    rows = R.trial_history(world.agents, kinds=("hypothesis",), limit=10)
+    assert sorted((r["strategy"], bool((r["spec"] or {}).get("prediction"))) for r in rows) == [(S, True), ("V45_AMB", False)]
+    mine = next(r for r in rows if r["strategy"] == S)
+    assert mine["room_id"] == "team:review" and mine["spec"]["by"] == "team_lead"
+    assert "hypotheses" in runner.calls[2]["system"]
+    texts = [m["text"] for m in world.messages("team:review")]
+    assert any("가설 #" in x and "채점할 예측" in x for x in texts)
+    # other meetings do not record them
+    assert RM.check_lead({**lead}, {})[0]["hypotheses"] and len(RM.check_lead({**lead}, {})[0]["hypotheses"]) == 2
+
+
+def test_an_owner_post_in_the_lab_starts_the_back_off_over(world):
+    from test_newlab_room import lab_policy  # noqa: F401  (same lab policy as the lab tests)
+    pol = RM.RoomsPolicy()
+    pol.triggers.research_every_ms = HOUR
+    t0 = kst(2026, 10, 8, 1, 0)
+    for k in range(3):                                            # three empty research meetings in a row
+        world.agents.execute("INSERT INTO rounds (room_id, trigger, trigger_data, started_ts, ended_ts, status, decision) "
+                             "VALUES ('team:lab', 'research', '{}', ?, ?, 'done', '{\"candidates\": 0}')",
+                             (t0 + k * HOUR, t0 + k * HOUR + 1))
+    world.agents.commit()
+    st = TR._Rooms(world.agents, t0 + 4 * HOUR, pol.triggers)
+    assert TR.research_gap(st, HOUR) == 4 * HOUR
+    world.agents.execute("INSERT INTO rounds (room_id, trigger, trigger_data, started_ts, ended_ts, status) "
+                         "VALUES ('team:lab', 'owner', '{}', ?, ?, 'done')", (t0 + 3 * HOUR, t0 + 3 * HOUR + 1))
+    world.agents.commit()
+    assert TR.research_gap(TR._Rooms(world.agents, t0 + 4 * HOUR, pol.triggers), HOUR) == HOUR
+
+
+def test_weekly_report_carries_the_ghcoin_recorder(world, tmp_path):
+    import json
+    gdir = tmp_path / "ghcoin"
+    gdir.mkdir()
+    ev = []
+    for k, (r, mr) in enumerate([(1.5, -1.0), (-1.0, 1.5), (1.5, -1.0)]):
+        t = SUNDAY - (k + 1) * DAY
+        cid = f"BTCUSDT-{t}-{k}"
+        ev += [{"ev": "open", "id": cid, "sym": "BTCUSDT", "side": 1, "entry": 100, "sl": 99, "t": t, "cost_r": 0.1},
+               {"ev": "open", "id": cid + "-m", "of": cid, "mirror": True, "sym": "BTCUSDT", "side": -1, "entry": 100,
+                "sl": 101, "t": t, "cost_r": 0.1},
+               {"ev": "close", "id": cid, "of": None, "sym": "BTCUSDT", "result": "win" if r > 0 else "loss", "r": r,
+                "net_r": r - 0.1, "end": t + HOUR},
+               {"ev": "close", "id": cid + "-m", "of": cid, "mirror": True, "sym": "BTCUSDT",
+                "result": "win" if mr > 0 else "loss", "r": mr, "net_r": mr - 0.1, "end": t + HOUR}]
+    (gdir / "calls.jsonl").write_text("".join(json.dumps(e) + "\n" for e in ev))
+    rep = DG.week_report(world.paper(), world.agents, SUNDAY, ghcoin_dir=str(gdir))
+    assert rep["ghcoin"]["week"]["calls"] == 3 and rep["ghcoin"]["all"]["calls"] == 3
+    assert "[GH Coin 기록기" in DG.compose_week(rep) and "3타점" in DG.compose_week(rep)
+    assert DG.week_report(world.paper(), world.agents, SUNDAY, ghcoin_dir=str(tmp_path / "none"))["ghcoin"] is None

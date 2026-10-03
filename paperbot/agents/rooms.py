@@ -228,7 +228,10 @@ DIALOG_FMT = ('  "responds_to": {"role": "this_round에 있는 앞 사람의 rol
 for _k in DIALOG_TURNS:
     SCHEMAS[_k] = SCHEMAS[_k][:-2] + ",\n" + DIALOG_FMT + "\n}"
 SCHEMAS["lead"] = (SCHEMAS["lead"][:-2]
-                   + ',\n  "open_disagreement": "직원들 의견이 갈린 채 끝난 점 한 줄 (없으면 빈 문자열)"\n}')
+                   + ',\n  "open_disagreement": "직원들 의견이 갈린 채 끝난 점 한 줄 (없으면 빈 문자열)",\n'
+                   '  "hypotheses": [{"strategy": "매매법 코드 (순위 검토에서만, 없으면 빈 목록)", "text": "가설 한 줄", '
+                   '"how_to_confirm": "...", "prediction": "공통 규칙의 prediction 형식 또는 null"}]\n}')
+LEAD_HYPOTHESES_MAX = 3          # the ranking review's lead may put this many gradable hypotheses in the ledger
 TURN_FILE = {"specialist": "rooms_specialist.md", "revision": "rooms_revision.md",
              "challenge": "rooms_devils_advocate.md", "validator": "rooms_validator.md",
              "approver": "rooms_approver.md", "team": "rooms_team.md", "lead": "rooms_team_lead.md",
@@ -1317,7 +1320,18 @@ def check_lead(out: Any, given: dict) -> tuple[Optional[dict], list[str]]:
             flag = clean
         else:
             problems += probs
-    return {"summary": summary, "human_actions": _strs(out.get("human_actions"), 5),
+    hyps = []
+    for h in (out.get("hypotheses") if isinstance(out.get("hypotheses"), list) else [])[:LEAD_HYPOTHESES_MAX]:
+        if not isinstance(h, dict) or h.get("strategy") not in STRATEGY_KO:
+            if h:
+                problems.append("hypotheses: 매매법 코드가 없거나 모르는 매매법 -> 뺌")
+            continue
+        clean, probs = A.validate({**h, "action": "hypothesis"}, allow=("hypothesis",))
+        if clean.get("action") == "hypothesis":
+            hyps.append({**clean, "strategy": h["strategy"]})
+        else:
+            problems += probs
+    return {"summary": summary, "human_actions": _strs(out.get("human_actions"), 5), "hypotheses": hyps,
             "watch_next": _strs(out.get("watch_next"), 5), "reply_to_owner": _line(out.get("reply_to_owner"), 800),
             "open_disagreement": _line(out.get("open_disagreement"), 300), "flag_owners": flag}, problems
 
@@ -2406,6 +2420,11 @@ def _team_round(rnd: _Round) -> tuple[str, dict]:
     extra: dict = {}
     if lead and lead.get("flag_owners"):
         extra["flag"] = A.flag_owners(rnd.env("team_lead"), lead["flag_owners"])
+    if lead and lead.get("hypotheses") and rnd.due.trigger == "ranking":
+        # the ranking review's hypotheses go to the ledger under their strategy: graded later like the rooms' own
+        extra["hypotheses"] = [A.hypothesis(replace(rnd.env("team_lead"), strategy=h["strategy"]),
+                                            {k: v for k, v in h.items() if k != "strategy"})
+                               for h in lead["hypotheses"]]
     if rnd.due.trigger == "evening" and room == "team:lead":
         if lead is None:
             raise RoundFailed("팀장 요약을 받지 못해 저녁 보고를 보내지 못했습니다")
