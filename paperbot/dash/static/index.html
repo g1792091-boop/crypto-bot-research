@@ -13,6 +13,7 @@
   <nav class="nav" id="nav">
     <button data-v="trade" class="on">트레이드</button>
     <button data-v="pos">포지션</button>
+    <button data-v="market">마켓</button>
     <button data-v="strat">매매법</button>
     <button data-v="board">순위표</button>
     <button data-v="account">계좌</button>
@@ -75,7 +76,7 @@
         <button data-t="pos" class="on">이 코인 포지션</button><button data-t="trades">체결</button><button data-t="sig">신호</button>
       </div>
       <div class="pb" id="side-body"></div>
-      <div class="ph tabs p2tabs" id="side2-tabs"><button data-t="book" class="on">호가</button><button data-t="liq">시장 강제청산</button></div>
+      <div class="ph tabs p2tabs" id="side2-tabs"><button data-t="book" class="on">호가</button><button data-t="liq">시장 강제청산</button><button data-t="alerts">가격 알림</button></div>
       <div class="pb p2" id="side2-body"></div>
     </div>
     <div class="bottom">
@@ -102,6 +103,9 @@
   <div id="pv-list"></div>
   <p class="muted" style="font-size:11px;margin-top:8px">가상(페이퍼) 계좌입니다. 미실현 손익·ROI는 바이낸스 앱처럼 마크 가격 기준, 나갈 때 수수료 전 금액입니다. 주문 버튼은 없습니다.</p>
 </div></section>
+
+<!-- ========================================================= market (outside context) -->
+<section class="view" id="v-market"><div class="page"><div id="mk-body"></div></div></section>
 
 <section class="view" id="v-strat">
   <div class="strat">
@@ -255,6 +259,7 @@
 <script src="/static/strat.js"></script>
 <script src="/static/pos.js"></script>
 <script src="/static/panels.js"></script>
+<script src="/static/market.js"></script>
 <script src="/static/rooms.js"></script>
 <script src="/static/checkpoint.js"></script>
 <script src="/static/ghcoin.js"></script>

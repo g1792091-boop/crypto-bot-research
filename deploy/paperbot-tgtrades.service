@@ -1,6 +1,7 @@
 # Telegram entry / exit alerts of the paper accounts (paperbot/tradealerts.py): reads paper3.db read-only and
-# sends one silent message per minute with that minute's entries and exits. Never writes paper3.db, never
-# trades. Settings in live.env: TRADE_ALERTS (strategy | all | off), TRADE_ALERTS_EVERY, TRADE_ALERTS_MIN_USD.
+# sends one silent message per minute with that minute's entries and exits; and the owners' price alerts (set in
+# the dashboard, read from inbox.db read-only) with sound when a price is reached. Never writes paper3.db or
+# inbox.db, never trades. Settings in live.env: TRADE_ALERTS (strategy | all | off), TRADE_ALERTS_EVERY, TRADE_ALERTS_MIN_USD.
 [Unit]
 Description=paperbot Telegram trade alerts (entries and exits, bundled)
 After=network-online.target paperbot-live3.service
@@ -15,7 +16,7 @@ WorkingDirectory=/opt/crypto-bot-research
 # TELEGRAM_BOT_TOKEN and the chats; systemd reads the file before the sandbox below applies
 EnvironmentFile=/etc/paperbot/live.env
 UnsetEnvironment=BINANCE_API_KEY BINANCE_API_SECRET DEADMAN_URL BACKUP_PASSPHRASE
-ExecStart=/opt/paperbot/venv/bin/python -m paperbot.tradealerts run --db /var/lib/paperbot/paper3.db --state /var/lib/paperbot/tradealerts.json
+ExecStart=/opt/paperbot/venv/bin/python -m paperbot.tradealerts run --db /var/lib/paperbot/paper3.db --state /var/lib/paperbot/tradealerts.json --inbox /var/lib/paperbot/inbox.db
 Restart=always
 RestartSec=30
 Nice=10

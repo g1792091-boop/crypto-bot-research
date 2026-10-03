@@ -240,6 +240,23 @@ CREATE TABLE IF NOT EXISTS approvals (
     note TEXT
 );
 {_append_only("approvals")}
+CREATE TABLE IF NOT EXISTS price_alerts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts INTEGER NOT NULL,
+    symbol TEXT NOT NULL,
+    direction TEXT NOT NULL CHECK (direction IN ('above', 'below')),
+    price REAL NOT NULL CHECK (price > 0),
+    note TEXT NOT NULL DEFAULT '',
+    author TEXT NOT NULL DEFAULT ''
+);
+{_append_only("price_alerts")}
+CREATE TABLE IF NOT EXISTS price_alert_changes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts INTEGER NOT NULL,
+    alert_id INTEGER NOT NULL,
+    action TEXT NOT NULL CHECK (action IN ('delete', 'rearm'))
+);
+{_append_only("price_alert_changes")}
 """
 
 
@@ -1018,3 +1035,59 @@ def pending_approvals(inbox_ro: Optional[sqlite3.Connection], after_id: Optional
     return _safe(inbox_ro, lambda: _dicts(inbox_ro.execute(
         "SELECT id, ts, proposal_id, decision, author, note FROM approvals WHERE id > ? ORDER BY id LIMIT ?",
         (int(after_id or 0), min(max(int(limit), 1), 1000)))), [])
+
+
+# ---------------------------------------------------------------- price alerts (inbox.db, owners' choice 2026-10-03)
+# The dashboard appends an alert and its changes (delete / re-arm); the Telegram sender (paperbot/tradealerts.py)
+# reads them read-only and keeps the times it fired in its own state file. An alert is armed when it is not
+# deleted and it has not fired since it was created or last re-armed.
+MAX_PRICE_ALERTS = 50
+
+
+def add_price_alert(conn: sqlite3.Connection, symbol: str, direction: str, price: float, note: str = "",
+                    author: str = "", *, ts: Optional[int] = None) -> int:
+    if direction not in ("above", "below"):
+        raise ValueError("direction must be above or below")
+    price = float(price)
+    if not price > 0 or price != price or price == float("inf"):
+        raise ValueError("price must be a positive number")
+    if len(price_alerts(conn)) >= MAX_PRICE_ALERTS:
+        raise ValueError(f"at most {MAX_PRICE_ALERTS} alerts")
+    cur = conn.execute("INSERT INTO price_alerts (ts, symbol, direction, price, note, author) VALUES (?,?,?,?,?,?)",
+                       (_now_ms() if ts is None else ts, symbol, direction, price,
+                        clean_text(str(note or ""))[:100], clean_text(str(author or ""))))
+    conn.commit()
+    return int(cur.lastrowid)
+
+
+def change_price_alert(conn: sqlite3.Connection, alert_id: int, action: str, *, ts: Optional[int] = None) -> None:
+    if action not in ("delete", "rearm"):
+        raise ValueError("action must be delete or rearm")
+    conn.execute("INSERT INTO price_alert_changes (ts, alert_id, action) VALUES (?,?,?)",
+                 (_now_ms() if ts is None else ts, int(alert_id), action))
+    conn.commit()
+
+
+def price_alerts(conn: Optional[sqlite3.Connection]) -> list[dict]:
+    """Alerts not deleted, oldest first, with ``armed_ts`` (created or last re-armed). Empty for an old inbox.db."""
+    if conn is None:
+        return []
+    try:
+        rows = conn.execute("SELECT id, ts, symbol, direction, price, note, author FROM price_alerts ORDER BY id").fetchall()
+        changes = conn.execute("SELECT alert_id, ts, action FROM price_alert_changes ORDER BY id").fetchall()
+    except sqlite3.OperationalError:              # no such table: an inbox.db from before price alerts
+        return []
+    deleted, armed = set(), {}
+    for aid, ts, action in changes:
+        if action == "delete":
+            deleted.add(int(aid))
+        else:
+            armed[int(aid)] = int(ts)
+    out = []
+    for r in rows:
+        aid = int(r[0])
+        if aid in deleted:
+            continue
+        out.append({"id": aid, "ts": int(r[1]), "symbol": r[2], "direction": r[3], "price": float(r[4]),
+                    "note": r[5] or "", "author": r[6] or "", "armed_ts": max(int(r[1]), armed.get(aid, 0))})
+    return out

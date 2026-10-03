@@ -83,3 +83,43 @@ def test_long_bursts_are_capped_and_the_state_file_round_trips(tmp_path):
     TA.save_state(p, {"last_id": 7, "open": {"a": "k"}})
     assert TA.load_state(p) == {"last_id": 7, "open": {"a": "k"}}
     assert TA.load_state(str(tmp_path / "none.json")) is None
+
+
+def test_price_alerts_fire_once_with_sound_and_again_after_a_rearm(tmp_path):
+    from paperbot.agents import rooms_db as R
+    from paperbot.notify import WARN
+    inbox = str(tmp_path / "inbox.db")
+    c = R.open_inbox_rw(inbox)
+    a = R.add_price_alert(c, "BTCUSDT", "below", 65_000, "지지선", ts=1)
+    b = R.add_price_alert(c, "ETHUSDT", "above", 4_000, ts=2)
+    gone = R.add_price_alert(c, "SOLUSDT", "above", 1, ts=3)
+    R.change_price_alert(c, gone, "delete", ts=4)
+    n, st = ListNotifier(), {}
+    prices = {"BTCUSDT": 65_500.0, "ETHUSDT": 3_900.0, "SOLUSDT": 150.0}
+    assert TA.check_price_alerts(inbox, st, n, 10, lambda: prices) == [] and st["armed"] == 2
+    prices["BTCUSDT"] = 64_990.0
+    sent = TA.check_price_alerts(inbox, st, n, 20, lambda: prices)
+    assert len(sent) == 1 and n.messages[0][0] == WARN and "BTC 65,000.0 아래로 도달" in sent[0] and "지지선" in sent[0]
+    assert st["fired"] == {str(a): 20}
+    assert TA.check_price_alerts(inbox, st, n, 30, lambda: prices) == []          # fired: off until re-armed
+    R.change_price_alert(c, a, "rearm", ts=40)
+    assert len(TA.check_price_alerts(inbox, st, n, 50, lambda: prices)) == 1
+    # a failed send is tried again
+    class Down:
+        def send(self, level, text):
+            return False
+    prices["ETHUSDT"] = 4_001.0
+    assert TA.check_price_alerts(inbox, st, Down(), 60, lambda: prices) == [] and str(b) not in st["fired"]
+    assert len(TA.check_price_alerts(inbox, st, n, 70, lambda: prices)) == 1
+    # nothing armed: no price request at all
+    def boom():
+        raise AssertionError("no request without an armed alert")
+    R.change_price_alert(c, a, "delete", ts=80)
+    assert TA.check_price_alerts(inbox, st, n, 90, boom) == [] and st["armed"] == 0
+    # an old inbox.db without the tables, or none at all
+    assert TA.check_price_alerts(str(tmp_path / "none.db"), {}, n, 1, boom) == []
+
+
+def test_fetch_prices_reads_every_symbol():
+    rows = [{"symbol": "BTCUSDT", "price": "65000.1", "time": 1}, {"symbol": "ETHUSDT", "price": "3000"}]
+    assert TA.fetch_prices(get=lambda url: rows) == {"BTCUSDT": 65000.1, "ETHUSDT": 3000.0}

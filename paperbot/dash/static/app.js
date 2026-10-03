@@ -171,6 +171,7 @@ function show(v) {
   if (v === "rooms" && typeof loadRooms === "function") loadRooms();
   if (v === "strat" && typeof loadStrat === "function") loadStrat();
   if (v === "pos" && typeof loadPos === "function") loadPos();
+  if (v === "market" && typeof loadMarket === "function") { if (typeof renderMarket === "function") renderMarket(); loadMarket(); }
   if (v === "trade" && tchart) tchart.timeScale().scrollToRealTime();
 }
 document.querySelectorAll("#nav button").forEach((b) => b.onclick = () => show(b.dataset.v));

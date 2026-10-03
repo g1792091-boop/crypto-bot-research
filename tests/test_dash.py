@@ -405,3 +405,76 @@ def test_board_carries_wins_losses_and_gross_for_the_live_record(client):
     static = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "paperbot", "dash", "static")
     sj = open(os.path.join(static, "strat.js"), encoding="utf-8").read()
     assert "function liveRec(" in sj and "renderLive();" in sj and 'id="s-live"' in open(os.path.join(static, "index.html"), encoding="utf-8").read()
+
+
+def test_price_alerts_api_sets_the_direction_from_the_price_and_shows_the_senders_state(tmp_path):
+    import json
+    db = str(tmp_path / "p.db")
+    _store(db).close()
+    inbox = str(tmp_path / "inbox.db")
+    app = create_app(db, hash_password("correct horse battery"), SECRET, inbox_db=inbox,
+                     ticker=lambda: {"BTCUSDT": {"c": 65_000.0}})
+    c = TestClient(app)
+    assert c.get("/api/price-alerts").status_code == 401
+    assert c.post("/api/login", json={"password": "correct horse battery"}).status_code == 200
+    h = {"origin": "http://testserver"}
+    r = c.post("/api/price-alerts", json={"symbol": "BTCUSDT", "price": 60_000, "note": "지지"}, headers=h).json()
+    assert r["direction"] == "below"
+    assert c.post("/api/price-alerts", json={"symbol": "BTCUSDT", "price": "70,000"}, headers=h).status_code == 400
+    assert c.post("/api/price-alerts", json={"symbol": "BTCUSDT", "price": 70_000}, headers=h).json()["direction"] == "above"
+    assert c.post("/api/price-alerts", json={"symbol": "NOPE", "price": 1}, headers=h).status_code == 400
+    assert c.post("/api/price-alerts", json={"symbol": "BTCUSDT", "price": -1}, headers=h).status_code == 400
+    got = c.get("/api/price-alerts").json()
+    assert [a["direction"] for a in got["alerts"]] == ["below", "above"] and all(a["armed"] for a in got["alerts"])
+    assert got["sender_alive"] is False
+    # the sender fired the first one: the page shows it, and it can be armed again
+    import time as _t
+    first = got["alerts"][0]["id"]
+    (tmp_path / "price_alerts.json").write_text(json.dumps({"fired": {str(first): int(_t.time() * 1000)},
+                                                             "hb": int(_t.time() * 1000)}))
+    got = c.get("/api/price-alerts").json()
+    assert got["sender_alive"] is True and got["alerts"][0]["armed"] is False and got["alerts"][0]["fired_ts"]
+    _t.sleep(0.01)
+    assert c.post(f"/api/price-alerts/{first}/rearm", headers=h).json() == {"ok": True}
+    assert c.get("/api/price-alerts").json()["alerts"][0]["armed"] is True
+    assert c.post(f"/api/price-alerts/{first}/delete", headers=h).json() == {"ok": True}
+    assert len(c.get("/api/price-alerts").json()["alerts"]) == 1
+    assert c.post(f"/api/price-alerts/{first}/delete", headers=h).status_code == 404
+    assert c.post("/api/price-alerts/1/explode", headers=h).status_code == 404
+    assert c.post("/api/price-alerts", json={"symbol": "BTCUSDT", "price": 1},
+                  headers={"origin": "http://evil.example"}).status_code == 403
+
+
+def test_market_endpoint_each_source_on_its_own(tmp_path):
+    from paperbot.dash import app as A
+    db = str(tmp_path / "p.db")
+    _store(db).close()
+    A._MARKET_CACHE.clear()
+    fng = {"data": [{"value": str(20 + i), "value_classification": "Fear", "timestamp": str(1_790_000_000 - i * 86400)}
+                    for i in range(8)]}
+    yahoo = {"chart": {"result": [{"meta": {"regularMarketPrice": 101.0, "chartPreviousClose": 90.0, "gmtoffset": 0,
+                                            "regularMarketTime": 1_790_100_000},
+                                   "timestamp": [1_790_000_000, 1_790_003_600, 1_790_086_400],
+                                   "indicators": {"quote": [{"close": [99.0, 100.0, 101.0]}]}}]}}
+
+    def get(url):
+        if "alternative.me" in url:
+            return fng
+        if "coingecko" in url:
+            raise OSError("down")
+        return yahoo
+    m = A.fetch_market(get)
+    assert m["fng"]["now"]["value"] == 20 and m["fng"]["now"]["label_ko"] == "공포" and m["fng"]["week"]["value"] == 27
+    assert m["global"] == {"error": "OSError"}
+    ix = m["indexes"][0]
+    assert ix["name"] == "나스닥" and ix["price"] == 101.0 and ix["prev"] == 100.0 and abs(ix["chg"] - 0.01) < 1e-12
+    A._MARKET_CACHE.clear()
+    app = create_app(db, hash_password("correct horse battery"), SECRET, market=lambda: {"fng": {}, "global": {}, "indexes": []})
+    c = TestClient(app)
+    assert c.get("/api/market").status_code == 401
+    assert c.post("/api/login", json={"password": "correct horse battery"}).status_code == 200
+    r = c.get("/api/market").json()
+    assert set(r) >= {"fng", "global", "indexes", "events", "events_total"}
+    static = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "paperbot", "dash", "static")
+    html = open(os.path.join(static, "index.html"), encoding="utf-8").read()
+    assert 'data-v="market"' in html and 'id="v-market"' in html and "/static/market.js" in html

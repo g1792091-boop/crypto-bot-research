@@ -501,6 +501,74 @@ def fetch_ticker() -> dict:
     return out
 
 
+_MARKET_CACHE: dict = {}
+INDEXES = (("^IXIC", "나스닥"), ("^GSPC", "S&P 500"), ("DX-Y.NYB", "달러 지수"), ("^TNX", "미국 10년 금리"))
+FNG_KO = {"Extreme Fear": "극도의 공포", "Fear": "공포", "Neutral": "중립", "Greed": "탐욕", "Extreme Greed": "극도의 탐욕"}
+
+
+def _get_json(url: str, timeout: float = 8.0):
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (paperbot dashboard)"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.loads(r.read())
+
+
+def _cached(key: str, ttl: float, fn):
+    hit = _MARKET_CACHE.get(key)
+    if hit and time.time() - hit[0] < ttl:
+        return hit[1]
+    try:
+        val = fn()
+    except Exception as exc:  # noqa: BLE001  (one source down is shown as such; the others still show)
+        val = {"error": type(exc).__name__}
+        if hit and "error" not in hit[1]:
+            return {**hit[1], "stale": True}            # keep the last good value, marked old
+    _MARKET_CACHE[key] = (time.time(), val)
+    return val
+
+
+def _fng(get) -> dict:
+    d = get("https://api.alternative.me/fng/?limit=8")["data"]
+    pick = lambda i: {"value": int(d[i]["value"]), "label": d[i]["value_classification"],    # noqa: E731
+                      "label_ko": FNG_KO.get(d[i]["value_classification"], d[i]["value_classification"]),
+                      "ts": int(d[i]["timestamp"]) * 1000} if len(d) > i else None
+    return {"now": pick(0), "yesterday": pick(1), "week": pick(7)}
+
+
+def _global(get) -> dict:
+    g = get("https://api.coingecko.com/api/v3/global")["data"]
+    return {"btc_dom": g["market_cap_percentage"].get("btc"), "eth_dom": g["market_cap_percentage"].get("eth"),
+            "total_mcap": g["total_market_cap"].get("usd"), "mcap_chg_24h": g.get("market_cap_change_percentage_24h_usd"),
+            "ts": int(g.get("updated_at") or 0) * 1000}
+
+
+def _index(get, sym: str) -> dict:
+    r = get("https://query1.finance.yahoo.com/v8/finance/chart/" + urllib.parse.quote(sym, safe="")
+            + "?range=5d&interval=30m")["chart"]["result"][0]
+    m = r["meta"]
+    ts, cl = r.get("timestamp") or [], (r.get("indicators", {}).get("quote") or [{}])[0].get("close") or []
+    pts = [[int(t) * 1000, float(c)] for t, c in zip(ts, cl) if c is not None]
+    step = max(1, len(pts) // 120)
+    price, prev = m.get("regularMarketPrice"), m.get("chartPreviousClose") or m.get("previousClose")
+    day_prev = None
+    if pts:                       # the change of the latest session: against the last close of the session before
+        last_day = time.strftime("%Y-%m-%d", time.gmtime(pts[-1][0] / 1000 + int(m.get("gmtoffset") or 0)))
+        before = [c for t, c in pts if time.strftime("%Y-%m-%d", time.gmtime(t / 1000 + int(m.get("gmtoffset") or 0))) < last_day]
+        day_prev = before[-1] if before else None
+    base = day_prev or prev
+    return {"price": price, "prev": base, "chg": (price / base - 1) if price and base else None,
+            "ts": int(m.get("regularMarketTime") or 0) * 1000, "points": pts[::step][-120:]}
+
+
+def fetch_market(get=None) -> dict:
+    """Fear & greed (alternative.me), dominance and total market cap (CoinGecko), Nasdaq, S&P 500, dollar index
+    and the US 10-year yield (Yahoo Finance, 5 days of 30-minute closes). Each source on its own: one that fails
+    shows as missing (or its last good value, marked stale). Cached for everyone: 30 min / 5 min / 5 min."""
+    get = get or _get_json
+    return {"fng": _cached("fng", 1800, lambda: _fng(get)), "global": _cached("global", 300, lambda: _global(get)),
+            "indexes": [{"symbol": s, "name": n, **_cached("ix:" + s, 300, lambda s=s: _index(get, s))}
+                        for s, n in INDEXES]}
+
+
 _DEPTH_CACHE: dict = {}
 
 
@@ -1096,6 +1164,51 @@ class Rooms:
         return {"ok": True, "id": mid, "ts": now_ms, "room_id": room_id, "author": author, "text": text,
                 "pending": True}
 
+    # -- price alerts (inbox.db; the Telegram sender paperbot/tradealerts.py fires them)
+    def price_alerts(self, now_ms: Optional[int] = None) -> dict:
+        """Alerts not deleted, with their state from the sender's price_alerts.json (next to inbox.db): armed /
+        fired (when), the last price it saw, and whether the sender is running (heartbeat within 2 minutes)."""
+        now_ms = int(time.time() * 1000) if now_ms is None else now_ms
+        with self.ro(self.inbox_db) as ib:
+            alerts = self.R.price_alerts(ib)
+        st: dict = {}
+        if self.inbox_db:
+            try:
+                with open(os.path.join(os.path.dirname(os.path.abspath(self.inbox_db)), "price_alerts.json"),
+                          encoding="utf-8") as fh:
+                    st = json.load(fh) or {}
+            except (OSError, ValueError):
+                st = {}
+        fired = st.get("fired") or {}
+        for a in alerts:
+            f = int(fired.get(str(a["id"]), 0) or 0)
+            a["fired_ts"] = f if f >= a["armed_ts"] else None
+            a["armed"] = a["fired_ts"] is None
+        hb = int(st.get("hb") or 0)
+        return {"alerts": alerts, "sender_alive": bool(hb) and now_ms - hb <= 120_000, "sender_hb": hb or None,
+                "max": self.R.MAX_PRICE_ALERTS}
+
+    def add_price_alert(self, symbol: str, direction: str, price: float, note: str, author: str) -> dict:
+        c = self._inbox()
+        try:
+            aid = self.R.add_price_alert(c, symbol, direction, price, note, author)
+        except ValueError as exc:
+            raise HTTPException(400, "알림을 저장하지 못했습니다: " + ("50개까지만 걸 수 있습니다" if "at most" in str(exc)
+                                                                 else "가격·방향을 확인해 주세요"))
+        finally:
+            c.close()
+        return {"ok": True, "id": aid}
+
+    def change_price_alert(self, alert_id: int, action: str) -> dict:
+        if not any(a["id"] == int(alert_id) for a in self.price_alerts()["alerts"]):
+            raise HTTPException(404, "그런 알림이 없습니다")
+        c = self._inbox()
+        try:
+            self.R.change_price_alert(c, int(alert_id), action)
+        finally:
+            c.close()
+        return {"ok": True}
+
     def decide(self, proposal_id: int, decision: str, note: str, author: str) -> dict:
         if not 0 < int(proposal_id) < 2 ** 63:          # beyond SQLite's integers: no such proposal
             raise HTTPException(404, "그런 제안이 없습니다")
@@ -1180,7 +1293,7 @@ def _storable(text: str) -> bool:
 
 
 def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fetch_candles, ticker=fetch_ticker,
-               depth=fetch_depth,
+               depth=fetch_depth, market=fetch_market,
                agents_db: Optional[str] = None, daily_db: Optional[str] = None, frames=fetch_frame,
                inbox_db: Optional[str] = None, say_per_hour: int = SAY_PER_HOUR,
                checkpoint_db: Optional[str] = None) -> FastAPI:
@@ -1431,6 +1544,67 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
         return rooms.usage()
 
     # ------------------------------------------------ agent rooms: owner writes (inbox.db only)
+    @app.get("/api/market")
+    def get_market():
+        """The market tab: outside data (fear & greed, dominance, US indexes) and the registered US macro releases."""
+        from .. import events
+        try:
+            evs = [e.as_dict() for e in events.all_events()]
+            probs = events.problems()
+        except Exception as exc:  # noqa: BLE001
+            evs, probs = [], [type(exc).__name__]
+        now = int(time.time() * 1000)
+        out = market()
+        out["events"] = [e for e in evs if now - 7 * 86_400_000 <= e["ts_ms"] <= now + 120 * 86_400_000]
+        out["events_total"] = len(evs)
+        out["events_problems"] = probs[:5]
+        return out
+
+    @app.get("/api/price-alerts")
+    def get_price_alerts():
+        return rooms.price_alerts()
+
+    @app.post("/api/price-alerts")
+    async def post_price_alert(req: Request):
+        """{symbol, price, direction?: above|below, note?}; without a direction it is set from the current
+        price (a target above it fires on the way up, below it on the way down)."""
+        if not same_origin(req):
+            raise HTTPException(403, "다른 사이트에서 온 요청은 받지 않습니다")
+        body = await _json_object(req)
+        sym = body.get("symbol")
+        if sym not in TICKER_SYMBOLS:
+            raise HTTPException(400, "모르는 코인입니다")
+        try:
+            price = float(body.get("price"))
+        except (TypeError, ValueError):
+            raise HTTPException(400, "가격을 숫자로 적어 주세요")
+        if not (price > 0 and price < 1e9):
+            raise HTTPException(400, "가격을 확인해 주세요")
+        direction = body.get("direction")
+        if direction not in ("above", "below"):
+            now_px = None
+            try:
+                t = ticker().get(sym) or {}
+                now_px = t.get("c") or t.get("mark")
+            except Exception:  # noqa: BLE001
+                now_px = None
+            if not now_px:
+                raise HTTPException(503, "지금 가격을 몰라 방향을 정하지 못했습니다. 위/아래를 골라 주세요")
+            direction = "above" if price > float(now_px) else "below"
+        note = body.get("note") if isinstance(body.get("note"), str) else ""
+        if note and not _storable(note):
+            raise HTTPException(400, "메모에 보낼 수 없는 글자가 들어 있습니다")
+        return {**rooms.add_price_alert(sym, direction, price, note.strip()[:100], rooms.author(body)),
+                "direction": direction}
+
+    @app.post("/api/price-alerts/{alert_id}/{action}")
+    async def change_price_alert(alert_id: int, action: str, req: Request):
+        if not same_origin(req):
+            raise HTTPException(403, "다른 사이트에서 온 요청은 받지 않습니다")
+        if action not in ("delete", "rearm"):
+            raise HTTPException(404, "모르는 동작입니다")
+        return rooms.change_price_alert(alert_id, action)
+
     @app.post("/api/rooms/{room_id}/say")
     async def room_say(room_id: str, req: Request):
         if not same_origin(req):

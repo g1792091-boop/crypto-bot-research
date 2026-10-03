@@ -15,6 +15,13 @@ Settings (live.env, all optional):
 
 The first pass only remembers what is already open and closed (no message for the past). The cursor (last trade
 id, open positions) is kept in ``--state`` so a restart neither repeats nor loses alerts.
+
+Price alerts (owners' choice 2026-10-03): the owners set them in the dashboard (inbox.db tables ``price_alerts`` /
+``price_alert_changes``, written only by the dashboard, read here read-only). Every 10 seconds, while an alert is
+armed, the last prices of Binance USD-M (public, one request for all coins, weight 2) are checked; an alert whose
+price is reached goes out as a Telegram message WITH sound (WARN) and is then off until the owners re-arm it. The
+times they fired, a heartbeat and the last prices are kept in ``price_alerts.json`` next to ``--state`` (the
+dashboard shows them). TRADE_ALERTS=off stops the trade messages only, not the price alerts.
 """
 
 from __future__ import annotations
@@ -29,7 +36,7 @@ import time
 import urllib.parse
 from typing import Optional
 
-from .notify import INFO, ConsoleNotifier, Notifier
+from .notify import INFO, WARN, ConsoleNotifier, Notifier
 
 TF_KO = {"5m": "5분", "15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간", "1d": "일봉"}
 REASON_KO = {"SL": "손절", "LOCK": "익절 잠금", "LIQ": "강제청산", "TP": "익절", "HALT": "정지", "MANUAL": "수동",
@@ -172,6 +179,58 @@ def pass_once(db: str, state: Optional[dict], kinds: tuple, notifier: Notifier, 
     return {"last_id": top, "open": keys}, text
 
 
+# ---------------------------------------------------------------- price alerts
+PRICE_EVERY_S = 10
+PRICE_URL = "https://fapi.binance.com/fapi/v1/ticker/price"
+
+
+def fetch_prices(get=None, timeout: float = 5.0) -> dict:
+    """{symbol: last price} of every Binance USD-M contract (one public request)."""
+    import urllib.request
+    get = get or (lambda url: json.loads(urllib.request.urlopen(url, timeout=timeout).read()))
+    return {r["symbol"]: float(r["price"]) for r in get(PRICE_URL) if isinstance(r, dict) and "symbol" in r}
+
+
+def price_text(a: dict, last: float) -> str:
+    c = a["symbol"].replace("USDT", "")
+    way = "위로" if a["direction"] == "above" else "아래로"
+    note = f" · 메모: {a['note']}" if a.get("note") else ""
+    return f"🔔 가격 알림: {c} {px(a['price'])} {way} 도달 · 지금 {px(last)}{note}"
+
+
+def check_price_alerts(inbox: Optional[str], pstate: dict, notifier: Notifier, now_ms: int, prices_fn) -> list[str]:
+    """Send the armed alerts whose price is reached (WARN: with sound). ``pstate``: {"fired": {id: ts}, "hb",
+    "prices"} (changed in place). A failed send is tried again on the next check. Returns the texts sent."""
+    from .agents import rooms_db as R
+    fired = pstate.setdefault("fired", {})
+    pstate["hb"] = now_ms
+    conn = R.open_ro(inbox) if inbox else None
+    try:
+        alerts = R.price_alerts(conn)
+    finally:
+        if conn is not None:
+            conn.close()
+    armed = [a for a in alerts if int(fired.get(str(a["id"]), 0)) < a["armed_ts"]]
+    pstate["armed"] = len(armed)
+    if not armed:
+        return []
+    prices = prices_fn()
+    pstate["prices"] = {a["symbol"]: prices.get(a["symbol"]) for a in armed}
+    pstate["prices_ts"] = now_ms
+    sent = []
+    for a in armed:
+        last = prices.get(a["symbol"])
+        if last is None:
+            continue
+        if (a["direction"] == "above" and last >= a["price"]) or (a["direction"] == "below" and last <= a["price"]):
+            text = price_text(a, last)
+            if notifier.send(WARN, text) is False:
+                continue
+            fired[str(a["id"])] = now_ms
+            sent.append(text)
+    return sent
+
+
 def kinds_for(mode: str) -> tuple:
     return ("strategy", "copy", "newlab", "random") if mode == "all" else ("strategy", "copy", "newlab")
 
@@ -181,6 +240,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     ap.add_argument("cmd", choices=("run", "sample"))
     ap.add_argument("--db", required=True)
     ap.add_argument("--state", default=None)
+    ap.add_argument("--inbox", default=None, help="inbox.db of the dashboard (price alerts), read-only")
     a = ap.parse_args(argv)
     mode = (os.environ.get("TRADE_ALERTS") or "strategy").strip().lower()
     every = max(30, int(os.environ.get("TRADE_ALERTS_EVERY") or 60))
@@ -192,9 +252,7 @@ def main(argv: Optional[list[str]] = None) -> int:
               or "(no positions or trades)")
         return 0
     if mode == "off":
-        print("TRADE_ALERTS=off: no trade alerts", file=sys.stderr)
-        while True:                       # stay up (Restart=always would loop); nothing to do
-            time.sleep(3600)
+        print("TRADE_ALERTS=off: no trade messages (price alerts still on)", file=sys.stderr)
     if not a.state:
         ap.error("run needs --state")
     if os.environ.get("TELEGRAM_BOT_TOKEN") and os.environ.get("TELEGRAM_CHAT_CRITICAL"):
@@ -206,17 +264,34 @@ def main(argv: Optional[list[str]] = None) -> int:
     stop = {"now": False}
     signal.signal(signal.SIGTERM, lambda *_: stop.update(now=True))
     state = load_state(a.state)
+    pstate_path = os.path.join(os.path.dirname(os.path.abspath(a.state)), "price_alerts.json")
+    try:
+        with open(pstate_path, encoding="utf-8") as fh:
+            pstate = json.load(fh)
+    except (OSError, ValueError):
+        pstate = {}
+    next_trade = 0.0
     while not stop["now"]:
+        if mode != "off" and time.time() >= next_trade:
+            try:
+                state, _ = pass_once(a.db, state, kinds_for(mode), notifier, int(time.time() * 1000), names, min_usd)
+                save_state(a.state, state)
+            except (sqlite3.Error, OSError, ValueError, KeyError) as exc:
+                print(f"trade alerts pass failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+            # 20 s after a minute boundary: the runner has saved that minute's snapshot by then
+            now = time.time()
+            next_trade = (now // every + 1) * every + 20
         try:
-            state, _ = pass_once(a.db, state, kinds_for(mode), notifier, int(time.time() * 1000), names, min_usd)
-            save_state(a.state, state)
-        except (sqlite3.Error, OSError, ValueError, KeyError) as exc:
-            print(f"trade alerts pass failed: {type(exc).__name__}: {exc}", file=sys.stderr)
-        # 20 s after a minute boundary: the runner has saved that minute's snapshot by then
-        now = time.time()
-        nxt = (now // every + 1) * every + 20
-        while not stop["now"] and time.time() < nxt:
-            time.sleep(min(1.0, nxt - time.time()))
+            check_price_alerts(a.inbox, pstate, notifier, int(time.time() * 1000), fetch_prices)
+        except Exception as exc:  # noqa: BLE001  (no prices this time: try again in 10 s)
+            print(f"price alerts check failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+        try:
+            save_state(pstate_path, pstate)
+        except OSError as exc:
+            print(f"price alerts state not saved: {exc}", file=sys.stderr)
+        end = time.time() + PRICE_EVERY_S
+        while not stop["now"] and time.time() < end:
+            time.sleep(min(1.0, end - time.time()))
     return 0
 
 

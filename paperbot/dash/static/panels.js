@@ -93,15 +93,68 @@ function liqRows() {
     ${rows ? `<table class="p2t"><thead><tr><th class="l">시각</th><th class="l">종류</th><th>가격</th><th>규모</th></tr></thead><tbody>${rows}</tbody></table>` : '<p class="empty">최근 기록 없음</p>'}
     <div class="p2n">롱 청산 = 롱 포지션이 강제로 팔림(가격 하락 쪽), 숏 청산 = 반대. 바이낸스가 코인별로 1초에 1건만 알려줘서 실제보다 적게 잡힙니다.</div>`;
 }
+// ------------------------------------------------------------ price alerts (inbox.db; paperbot-tgtrades sends them)
+p2.alerts = null;
+let alines = [];
+async function loadAlerts() {
+  try { p2.alerts = await api("/api/price-alerts"); } catch (e) { p2.alerts = null; }
+  drawAlertLines();
+  if (state.view === "trade" && state.side2 === "alerts") renderAlerts(false);
+}
+function drawAlertLines() {   // armed alerts of the chart's coin as dotted lines
+  if (!tseries) return;
+  alines.forEach((l) => { try { tseries.removePriceLine(l); } catch (e) { /* gone */ } }); alines = [];
+  for (const a of (p2.alerts && p2.alerts.alerts) || []) {
+    if (a.symbol !== state.sym || !a.armed) continue;
+    alines.push(tseries.createPriceLine({price: a.price, color: css("--accent"), lineWidth: 1, lineStyle: 1,
+      title: `🔔 알림 ${a.direction === "above" ? "↑" : "↓"}`}));
+  }
+}
+function renderAlerts(force) {
+  const el = $("side2-body"); if (!el) return;
+  if (!force && el.contains(document.activeElement)) return;      // never wipe what the owner is typing
+  const d = p2.alerts, last = (state.tick[state.sym] || {}).c || state.mark[state.sym];
+  const rows = ((d && d.alerts) || []).slice().sort((x, y) => (x.symbol === state.sym ? 0 : 1) - (y.symbol === state.sym ? 0 : 1) || y.id - x.id);
+  el.innerHTML = `<div class="p2h">${coin(state.sym)} 가격이 닿으면 텔레그램으로 알림 (소리 있음, 한 번 울리면 꺼짐)</div>
+    <div class="alform"><input id="al-px" inputmode="decimal" placeholder="${last ? px(last) : "가격"}" aria-label="알림 가격">
+      <input id="al-note" maxlength="100" placeholder="메모 (선택)" aria-label="메모"><button id="al-add">알림 걸기</button></div>
+    <div class="p2n" id="al-msg">${last ? `지금 ${px(last)} · 지금보다 높게 적으면 오를 때, 낮게 적으면 내릴 때 울립니다` : ""}</div>
+    ${d && !d.sender_alive ? `<div class="alwarn">텔레그램 보내는 프로그램(paperbot-tgtrades)이 꺼져 있어 알림이 가지 않습니다. 서버에서 <code>sudo systemctl enable --now paperbot-tgtrades</code></div>` : ""}
+    ${rows.length ? `<table class="p2t"><thead><tr><th class="l">코인</th><th>가격</th><th class="l">상태</th><th></th></tr></thead><tbody>${rows.map((a) => `<tr>
+      <td class="l"><b>${coin(a.symbol)}</b> ${a.direction === "above" ? "↑" : "↓"}${a.note ? ` <small class="muted">${esc(a.note)}</small>` : ""}</td>
+      <td class="mono">${px(a.price)}</td>
+      <td class="l">${a.armed ? '<span class="accent">대기 중</span>' : `<span class="muted">울림 ${hms(a.fired_ts)}</span>`}</td>
+      <td>${a.armed ? "" : `<button class="mini" data-al-rearm="${a.id}">다시 켜기</button> `}<button class="mini" data-al-del="${a.id}">지우기</button></td></tr>`).join("")}</tbody></table>`
+      : '<p class="empty">걸어 둔 알림이 없습니다</p>'}`;
+  const msg = (t) => { $("al-msg").textContent = t; };
+  $("al-add").onclick = async () => {
+    const v = parseFloat(String($("al-px").value).replace(/,/g, ""));
+    if (!(v > 0)) { msg("가격을 숫자로 적어 주세요"); return; }
+    try {
+      const r = await apiPost("/api/price-alerts", {symbol: state.sym, price: v, note: $("al-note").value});
+      await loadAlerts(); renderAlerts(true);
+      $("al-msg").textContent = `${coin(state.sym)} ${px(v)} ${r.direction === "above" ? "위로 오르면" : "아래로 내리면"} 알립니다`;
+    } catch (e) { msg(e.message); }
+  };
+  el.querySelectorAll("[data-al-del]").forEach((b) => b.onclick = async () => {
+    try { await apiPost(`/api/price-alerts/${b.dataset.alDel}/delete`, {}); await loadAlerts(); renderAlerts(true); } catch (e) { toast(e.message); }
+  });
+  el.querySelectorAll("[data-al-rearm]").forEach((b) => b.onclick = async () => {
+    try { await apiPost(`/api/price-alerts/${b.dataset.alRearm}/rearm`, {}); await loadAlerts(); renderAlerts(true); } catch (e) { toast(e.message); }
+  });
+}
 function renderSide2() {
   const el = $("side2-body"); if (!el) return;
+  if (state.side2 === "alerts") return;             // drawn on load and on every change (never every second)
   el.innerHTML = state.side2 === "book" ? bookHtml(state.sym, 8) : liqRows();
 }
 seg("watch2-tabs", "t", (t) => { state.watch2 = t; if (t === "day") loadSum(); renderWatch2(); });
-seg("side2-tabs", "t", (t) => { state.side2 = t; if (t === "liq") { p2.liq = null; loadLiq(); } renderSide2(); });
+seg("side2-tabs", "t", (t) => { state.side2 = t; if (t === "liq") { p2.liq = null; loadLiq(); } if (t === "alerts") { loadAlerts(); renderAlerts(true); return; } renderSide2(); });
 loadGh(); loadSum();
 setInterval(() => { if (state.view === "trade") { renderSide2(); if (state.watch2 === "day") renderWatch2(); } }, 1000);
 setInterval(() => { if (state.view === "trade") { loadGh(); loadSum(); } }, 60000);
 setInterval(() => { if (state.view === "trade" && state.side2 === "liq") loadLiq(); }, 10000);
 let p2sym = state.sym;
-setInterval(() => { if (p2sym !== state.sym) { p2sym = state.sym; p2.liq = null; if (state.side2 === "liq") loadLiq(); renderWatch2(); } }, 500);
+setInterval(() => { if (p2sym !== state.sym) { p2sym = state.sym; p2.liq = null; if (state.side2 === "liq") loadLiq(); renderWatch2(); drawAlertLines(); if (state.side2 === "alerts") renderAlerts(true); } }, 500);
+setInterval(() => { if (state.view === "trade") loadAlerts(); }, 15000);
+loadAlerts();
