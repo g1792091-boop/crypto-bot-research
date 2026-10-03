@@ -142,7 +142,7 @@ function renderStatus(){
     ${st.halted ? `<span class="lv-pill bad" title="${esc(st.halted.why)}">오늘 정지</span>` : ""}`;
   const on = $("#lvOn"); if (on) on.checked = st.enabled;
   const L = c.limits;
-  $("#lvSummary").innerHTML = `연결된 전략 ${st.linked}개 · 1회 ${fmt(L.orderNotional)} USDT(최대 ${fmt(L.maxNotional)}) · 레버리지 ≤ ${L.maxLeverage}배 · 포지션 ≤ ${L.maxPositions}개 · 오늘 실현 ${fmt(d.usdt)} USDT${d.krw ? ` / ${fmt(d.krw, 0)}원` : ""} (한도 -${fmt(L.dailyLoss)})
+  $("#lvSummary").innerHTML = `연결된 전략 ${st.linked}개 · 1회 ${fmt(L.orderNotional)} USDT(최대 ${fmt(L.maxNotional)}) · 레버리지 ≤ ${L.maxLeverage}배 · 포지션 ≤ ${L.maxPositions}개${L.maxTotalNotional ? ` · 총 노출 ≤ ${fmt(L.maxTotalNotional)}` : ""} · 오늘 실현 ${fmt(d.usdt)} USDT${d.krw ? ` / ${fmt(d.krw, 0)}원` : ""} (한도 -${fmt(L.dailyLoss)})
     ${st.halted ? `<br><b class="bad">자동 정지: ${esc(st.halted.why)}</b>` : ""}${st.lastError ? `<br><span class="bad">최근 오류: ${esc(st.lastError.msg)}</span>` : ""}
     ${!st.launcher ? `<br><span class="warn">웹 버전에서는 브라우저 보안정책(CORS) 때문에 거래소 연결이 막힐 수 있습니다. GHNano.exe로 실행하면 안전하게 중계합니다.</span>` : ""}`;
 }
@@ -185,7 +185,7 @@ function renderLimits(){
   $("#lvLimits").innerHTML = `<div class="lv-grid2">
       ${f("orderNotional", "1회 주문 금액 (USDT)")}${f("maxNotional", "1회 최대 금액 (USDT)")}
       <label class="lv-f"><span>최대 레버리지 (배)</span><input type="number" id="lvLevInput" data-lim="maxLeverage" value="${esc(L.maxLeverage)}" step="1" min="1" max="125"><small id="lvLevHint" class="${L.maxLeverage > 5 ? "warn" : ""}">${esc(levHintText(L.maxLeverage))}</small></label>
-      ${f("maxPositions", "동시 포지션 수", 1)}
+      ${f("maxPositions", "동시 포지션 수", 1)}${f("maxTotalNotional", "총 노출 한도 (USDT)", "any", "열린 포지션 전체 명목가 합 — 쏠림 방지")}
       ${f("dailyLoss", "하루 실현 손실 한도 (USDT)", "any", "닿으면 그날 신규 진입 정지")}${f("krwDailyLoss", "업비트 하루 손실 한도 (원)", 1000)}
       ${f("krwOrderNotional", "업비트 1회 주문 (원)", 1000)}${f("krwMaxNotional", "업비트 1회 최대 (원)", 1000)}</div>
     <div class="lv-f"><span>마진 방식 <small>바이낸스 선물</small></span>

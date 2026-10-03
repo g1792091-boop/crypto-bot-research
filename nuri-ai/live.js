@@ -39,7 +39,7 @@ export const PRINCIPLES = [
 
 export const DEFAULTS = {
   enabled: false, env: "testnet", mode: "approve", marginType: "ISOLATED", keys: {}, linked: {}, halted: null,
-  limits: {maxNotional: 50, orderNotional: 20, maxLeverage: 3, maxPositions: 2, dailyLoss: 20,
+  limits: {maxNotional: 50, orderNotional: 20, maxLeverage: 3, maxPositions: 2, maxTotalNotional: 100, dailyLoss: 20,
     symbols: ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "KRW-BTC", "KRW-ETH"],
     krwMaxNotional: 70000, krwOrderNotional: 10000, krwDailyLoss: 30000}
 };
@@ -118,6 +118,7 @@ export function setLive(patch = {}){
     if (p.orderNotional !== undefined) n.orderNotional = num(p.orderNotional, 1, 1e6, o.orderNotional);
     if (p.maxLeverage !== undefined) n.maxLeverage = Math.round(num(p.maxLeverage, 1, 125, o.maxLeverage));
     if (p.maxPositions !== undefined) n.maxPositions = Math.round(num(p.maxPositions, 1, 50, o.maxPositions));
+    if (p.maxTotalNotional !== undefined) n.maxTotalNotional = num(p.maxTotalNotional, 1, 1e7, o.maxTotalNotional);
     if (p.dailyLoss !== undefined) n.dailyLoss = num(p.dailyLoss, 1, 1e6, o.dailyLoss);
     if (p.krwMaxNotional !== undefined) n.krwMaxNotional = num(p.krwMaxNotional, UPBIT_MIN_KRW, 1e9, o.krwMaxNotional);
     if (p.krwOrderNotional !== undefined) n.krwOrderNotional = num(p.krwOrderNotional, UPBIT_MIN_KRW, 1e9, o.krwOrderNotional);
@@ -284,6 +285,11 @@ export function checkLimits(o, st){
   }
   if (st.hasSymbolPos) reasons.push(`${o.symbol}에 이미 포지션이 있습니다 (한 종목 한 포지션)`);
   if (st.openCount >= L.maxPositions) reasons.push(`동시 포지션 한도: ${st.openCount}/${L.maxPositions}`);
+  // 포트폴리오 쏠림 방지: 열린 포지션 총 명목가 + 이번 주문이 총 노출 한도를 넘으면 막는다 (코인은 대부분 같이 움직임)
+  if (!krw && st.openNotional != null){
+    const cap = L.maxTotalNotional ?? (L.maxNotional * L.maxPositions);
+    if (st.openNotional + o.notional > cap * (1 + 1e-9)) reasons.push(`총 노출(쏠림) 한도 초과: 열린 ${(+st.openNotional).toFixed(0)} + 이번 ${(+o.notional).toFixed(0)} > ${cap} USDT`);
+  }
   return {ok: !reasons.length, reasons};
 }
 
@@ -487,7 +493,8 @@ async function bnOpen(s, ev){
   const upCount = Object.values(livePos()).filter(p => p.ex === "upbit").length;
   const sz = sizeOrder({notional: L.linked[s.id]?.notional || lim.orderNotional, price, rules, maxNotional: lim.maxNotional});
   o.notional = sz.notional ?? (L.linked[s.id]?.notional || lim.orderNotional);
-  const chk = checkLimits(o, {limits: lim, halted, openCount: poss.length + upCount, hasSymbolPos: poss.some(p => p.symbol === symbol)});
+  const openNotional = poss.reduce((sum, p) => sum + Math.abs(+p.notional || (+p.positionAmt * +p.markPrice) || 0), 0);
+  const chk = checkLimits(o, {limits: lim, halted, openCount: poss.length + upCount, hasSymbolPos: poss.some(p => p.symbol === symbol), openNotional});
   const reasons = [...(sz.ok ? [] : [sz.why]), ...chk.reasons];
   if (reasons.length) return blocked(s, o, reasons);
   const dir = side === "long" ? 1 : -1, slD = distOf(ev.pos, "sl"), tpD = distOf(ev.pos, "tp");
