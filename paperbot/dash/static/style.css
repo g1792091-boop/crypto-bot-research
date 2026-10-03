@@ -549,3 +549,9 @@ button.mini { height: 22px; padding: 0 6px; font-size: 11px; }
 .mk-px span { font-size: 13px; margin-left: 6px; }
 .spark { width: 100%; height: 46px; display: block; margin: 4px 0; }
 .mk-cal { margin-bottom: 10px; }
+.rin { position: relative; }
+.rmention { position: absolute; left: 8px; right: 8px; bottom: 100%; z-index: 6; max-height: 220px; overflow: auto;
+  background: var(--panel); border: 1px solid var(--line-2); border-radius: 6px; box-shadow: 0 4px 14px rgba(0,0,0,.35); }
+.rmention button { display: block; width: 100%; text-align: left; border: 0; border-radius: 0; background: transparent; padding: 7px 10px; font-size: 13px; }
+.rmention button small { color: var(--muted); font-size: 11px; margin-left: 4px; }
+.rmention button:hover { background: var(--hover); }

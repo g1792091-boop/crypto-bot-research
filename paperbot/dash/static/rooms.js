@@ -389,6 +389,25 @@ function growInput() {
   $("r-count").textContent = `${rin.value.length}/1000`;
 }
 rin.addEventListener("input", growInput);
+// @ + a staff member of this room: that person answers first (rooms.mentioned_roles reads the display name)
+function mentionList() {
+  const box = $("r-mention");
+  const m = /@([^\s@]*)$/.exec(rin.value.slice(0, rin.selectionStart || rin.value.length));
+  const people = ((rs.room && rs.room.members_info) || []).filter((x) => x.id !== "team_lead");
+  const q = m ? m[1].replace(/[·\s]/g, "") : null;
+  const hits = q == null ? [] : people.filter((x) => String(x.name || "").replace(/[·\s]/g, "").includes(q)).slice(0, 8);
+  box.hidden = !hits.length;
+  box.innerHTML = hits.map((x) => `<button type="button" data-name="${esc(x.name)}">@${esc(x.name)} <small>${esc(x.duty || "")}</small></button>`).join("");
+  box.querySelectorAll("button").forEach((b) => b.onmousedown = (e) => {
+    e.preventDefault();                                   // keep the focus in the box
+    const pos = rin.selectionStart || rin.value.length, before = rin.value.slice(0, pos).replace(/@[^\s@]*$/, "");
+    rin.value = `${before}@${b.dataset.name} ${rin.value.slice(pos)}`;
+    const at = before.length + b.dataset.name.length + 2;
+    rin.setSelectionRange(at, at); box.hidden = true; growInput(); rin.focus();
+  });
+}
+rin.addEventListener("input", mentionList);
+rin.addEventListener("blur", () => setTimeout(() => { $("r-mention").hidden = true; }, 150));
 rin.addEventListener("keydown", (e) => {   // Enter sends on a keyboard; never while Hangul is being composed
   if (e.key === "Enter" && !e.shiftKey && !e.isComposing && e.keyCode !== 229 && !narrow()) {
     e.preventDefault(); $("r-form").requestSubmit();

@@ -224,7 +224,8 @@
       <div class="rc" id="r-chat"></div>
       <button class="rnew" id="r-new" hidden>새 메시지 ↓</button>
       <form class="rin" id="r-form" autocomplete="off">
-        <textarea id="r-in" rows="2" maxlength="1000" placeholder="끼어들기(선택): 직원들은 자동으로 토론합니다. 질문이나 의견을 남기면 다음 차례에 반영됩니다"></textarea>
+        <div class="rmention" id="r-mention" hidden></div>
+        <textarea id="r-in" rows="2" maxlength="1000" placeholder="끼어들기(선택): 직원들은 자동으로 토론합니다. 질문이나 의견을 남기면 다음 차례에 반영됩니다. @를 치면 특정 직원을 지목합니다"></textarea>
         <div class="sc"><button class="pri" id="r-send" type="submit">보내기</button><small id="r-count">0/1000</small></div>
       </form>
     </div>

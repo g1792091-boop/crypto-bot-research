@@ -1932,6 +1932,9 @@ def _strategy_base(rnd: _Round) -> dict:
             "room_messages": _room_messages(ctx, room)}
 
 
+STRATEGY_EXPERTS = ("entry_timing", "exit_timing", "whatif")
+
+
 def pick_expert(base: dict, due: TR.Due) -> tuple[Optional[str], str]:
     """At most one expert, by code: entry_timing when the new losses' top tag describes the
     entry chart, exit_timing when losses touched the first lock or the top tag is about holding,
@@ -1958,6 +1961,10 @@ def pick_expert(base: dict, due: TR.Due) -> tuple[Optional[str], str]:
 def _strategy_round(rnd: _Round) -> tuple[str, dict]:
     spec_role = f"spec_{rnd.strategy}"
     base = rnd.base = _strategy_base(rnd)
+    named = owner_mentions(rnd, (spec_role, "devils_advocate") + STRATEGY_EXPERTS)
+    if named:
+        base["owner_mentions"] = [{"role": r, "name": role_ko(r)} for r in named]
+    named_expert = next((r for r in named if r in STRATEGY_EXPERTS), None)
     t1 = rnd.ask(spec_role, "specialist", base)
     if t1 is None:
         raise RoundFailed("전담 에이전트의 첫 분석을 받지 못했습니다")
@@ -1967,11 +1974,11 @@ def _strategy_round(rnd: _Round) -> tuple[str, dict]:
     first = t1["proposal"]
     expert, t3 = None, None
     # early stop: the devil's advocate agrees with a note / no action -> no expert, no revision
-    early = verdict == "agree" and first.get("action") in ("note", "no_action")
+    early = verdict == "agree" and first.get("action") in ("note", "no_action") and named_expert is None
     if early:
         final, proposer = first, spec_role
     else:
-        expert, why = pick_expert(base, rnd.due)
+        expert, why = (named_expert, "두 분이 지목함") if named_expert else pick_expert(base, rnd.due)
         t3 = rnd.ask(expert, "expert", {**base, "expert_reason": why}) if expert else None
         t4 = rnd.ask(spec_role, "revision", base)
         final = t4["proposal"] if t4 else {"action": "no_action", "reason": "최종안을 받지 못함"}
@@ -2109,7 +2116,36 @@ OWNER_RESPONDERS = {"team:market": ("chart_regime", "strategist"), "team:risk": 
                     LAB_ROOM: ("researcher",)}
 
 
-def team_plan(due: TR.Due) -> list[tuple[str, str]]:
+def _norm_name(t: str) -> str:
+    return re.sub(r"[\s·・.,!?()\[\]{}:;'\"]", "", str(t or ""))
+
+
+def mentioned_roles(texts: list, roles) -> list[str]:
+    """Roles an owner post names with @ (its display name, spaces and dots ignored: "@리스크 책임자",
+    "@리스크책임자"), in the order they are first named. Only ``roles`` count."""
+    found = []
+    for text in texts:
+        flat = _norm_name(text).replace("＠", "@")
+        hits = []
+        for r in roles:
+            name = _norm_name(ROLE_INFO.get(r, {}).get("name") or R.role_name(r))
+            if name and ("@" + name) in flat:
+                hits.append((flat.index("@" + name), r))
+        for _, r in sorted(hits):
+            if r not in found:
+                found.append(r)
+    return found
+
+
+def owner_mentions(rnd: "_Round", roles) -> list[str]:
+    """The roles the owners named in the posts this meeting answers (only an owner meeting)."""
+    if rnd.due.trigger != "owner":
+        return []
+    texts = [m["text"] for m in (rnd.base.get("owner_messages") or []) if m.get("new")]
+    return mentioned_roles(texts, roles)
+
+
+def team_plan(due: TR.Due, mentioned: tuple = ()) -> list[tuple[str, str]]:
     room, trig = due.room_id, due.trigger
     lead = ("team_lead", "lead")
     if trig == "research":
@@ -2135,7 +2171,10 @@ def team_plan(due: TR.Due) -> list[tuple[str, str]]:
     if trig == "checkpoint":
         return [("league_referee", "team"), ("rule_keeper", "team"), lead]
     if trig == "owner":
-        return [(r, "team") for r in OWNER_RESPONDERS.get(room, ())] + [lead]
+        # a staff member the owners named (@) answers first, even when the room's posts usually go to others
+        first = [r for r in mentioned if r != "team_lead"]
+        return ([(r, "team") for r in first] + [(r, "team") for r in OWNER_RESPONDERS.get(room, ()) if r not in first]
+                + [lead])
     return [lead]
 
 
@@ -2193,9 +2232,14 @@ def _team_round(rnd: _Round) -> tuple[str, dict]:
         rnd.base["lab_accounts"] = lab_accounts_packet(ctx, rnd.due.data.get("oldest_exit"))
     if rnd.due.trigger == "market_move":
         rnd.base["market_move"] = market_move_packet(ctx, rnd.due)
+    kind = room.split(":", 1)[1] if ":" in room else room
+    members = R.LAB_ROOM_MEMBERS if room == LAB_ROOM else R.TEAM_ROOM_MEMBERS.get(kind, ())
+    mentioned = owner_mentions(rnd, members)
+    if mentioned:
+        rnd.base["owner_mentions"] = [{"role": r, "name": role_ko(r)} for r in mentioned]
     answered = 0
     lead = None
-    for role, turn in team_plan(rnd.due):
+    for role, turn in team_plan(rnd.due, tuple(mentioned)):
         out = rnd.ask(role, turn, _team_packet(rnd, role, board))
         if out is not None:
             answered += 1

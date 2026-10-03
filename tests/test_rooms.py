@@ -1504,3 +1504,36 @@ def test_market_move_reads_closed_5m_bars_and_skips_a_coin_it_cannot_read():
     m = got["BTCUSDT"]
     assert m["ref"] == 101.0 and m["last"] == 113.0 and m["high"] == 101.0 and m["low"] == 99.0   # forming bar left out
     assert m["t"] == base + 14 * 300_000
+
+
+# ------------------------------------------------------------------ @mention (owners' choice 2026-10-03)
+def test_mentioned_roles_read_display_names_with_or_without_spaces():
+    roles = ("chart_regime", "derivs_flow", "risk_officer", "team_lead")
+    assert RM.mentioned_roles(["@리스크책임자 이거 봐 주세요", "그리고 @차트·장세 분석가"], roles) == ["risk_officer", "chart_regime"]
+    assert RM.mentioned_roles(["리스크 책임자 의견은?"], roles) == []                  # no @: not a mention
+    assert RM.mentioned_roles(["@운영 감사관"], roles) == []                            # not a member here
+    plan = RM.team_plan(TR.Due("team:market", "owner", 1, {}, "owner"), ("derivs_flow", "team_lead"))
+    assert [r for r, _ in plan] == ["derivs_flow", "chart_regime", "strategist", "team_lead"]
+
+
+def test_owner_mention_makes_that_member_answer_first(world):
+    name = RM.role_ko("derivs_flow")
+    world.say("team:market", f"@{name} 펀딩비가 너무 높은데 괜찮나요?", QUIET - MIN)
+    lead = {"summary": ["a", "b", "c"], "human_actions": [], "watch_next": []}
+    runner = QueueRunner({"derivs_flow": [team_answer("d")], "chart_regime": [team_answer("c")],
+                          "strategist": [team_answer("s")], "team_lead": [lead]})
+    out = world.tick(runner, QUIET)
+    assert [(r["room_id"], r["trigger"]) for r in out["rounds"]] == [("team:market", "owner")]
+    assert runner.roles() == ["derivs_flow", "chart_regime", "strategist", "team_lead"]
+    assert runner.calls[0]["packet"]["owner_mentions"] == [{"role": "derivs_flow", "name": name}]
+
+
+def test_owner_mention_brings_a_named_expert_into_a_strategy_meeting(world):
+    world.say(ROOM, "@진입 타점 분석가 요즘 진입이 너무 늦지 않나요?", QUIET - MIN)
+    runner = QueueRunner({SPEC: [analysis(NOTE), analysis(NOTE)], "devils_advocate": [challenge("agree")],
+                          "entry_timing": [expert("agree")]})
+    out = world.tick(runner, QUIET)
+    assert [(r["room_id"], r["trigger"]) for r in out["rounds"]] == [(ROOM, "owner")]
+    # without the mention an agreeing advocate and a note would end the meeting early (no expert)
+    assert runner.roles() == [SPEC, "devils_advocate", "entry_timing", SPEC]
+    assert runner.calls[0]["packet"]["owner_mentions"] == [{"role": "entry_timing", "name": "진입 타점 분석가"}]
