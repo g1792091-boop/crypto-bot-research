@@ -96,6 +96,19 @@ export function claudeModels(){
   const pick = (want, re) => ms.includes(want) ? want : ms.filter(m => re.test(m)).sort().reverse()[0] || want;
   return {opus: pick("claude-opus-5-5", /opus/), sonnet: pick("claude-sonnet-5-5", /sonnet/), haiku: pick("claude-haiku-4-5-20251001", /haiku/)};
 }
+// 모델 전체 켜기·초기화: 연결된 회사마다 '사용 모델'을 전체 기본 목록으로 되돌리고, 그동안 쌓인
+// '없어진 모델·나쁜 모델·고정·전원배정' 기록을 싹 지워 다시 직원마다 서로 다른 모델이 배정되게 한다.
+// → "모델이 자꾸 사라지거나 하나만 쓰여요" 를 한 번에 해결.
+export function resetModels(){
+  try { for (const k of ["deadModels", "coinBad", "coinModelHealth"]) localStorage.removeItem(k); } catch(e){}
+  settings.provModels = settings.provModels || {};
+  for (const id of Object.keys(PROVIDERS)) if (settings.keys[id] && PROVIDERS[id].defaults?.length) settings.provModels[id] = [...PROVIDERS[id].defaults];
+  settings.pinModel = {}; settings.brain = "auto";
+  const asg = {...(officeCfg().assign || {})}; for (const k of Object.keys(asg)) setAssign(k, "");
+  saveSettings(); fire({kind: "cfg"});
+  const models = [...new Set(Object.values(assignModels()).map(m => m.model))];
+  return {models, count: models.length};
+}
 
 /* ============ 기록 (방 대화) ============ */
 let LOG = null;
