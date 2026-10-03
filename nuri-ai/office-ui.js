@@ -179,6 +179,7 @@ function build(){
     <button class="of-btn" id="ofTeam">팀 구성</button>
     <button class="of-btn" id="ofTerm" hidden>📈 차트 터미널</button>
     <button class="of-btn" id="ofLive" hidden>💰 실거래</button>
+    <button class="of-btn" id="ofWallet" title="공개 주소로 잔액만 보기 (읽기 전용 · 개인키 저장 안 함)">👛 내 지갑 보기</button>
     <span class="of-pick"><button class="of-btn" id="ofSetBtn" aria-haspopup="true">설정 ▾</button><div class="of-menu of-set" id="ofSet" hidden>
       <div class="of-row"><label class="of-tg" title="사용자가 아무것도 하지 않아도 정해진 간격과 급변동 때 스스로 회의합니다"><input type="checkbox" id="ofAuto"> 자동 회의</label>
         <select id="ofEvery" title="자동 회의 간격"><option value="15">15분마다</option><option value="30">30분마다</option><option value="60">1시간마다</option><option value="180">3시간마다</option></select></div>
@@ -281,6 +282,7 @@ function wire(el){
   el.querySelector("#ofCoinHQ").onclick = () => { if (typeof ctx.openCoinHQ === "function") ctx.openCoinHQ(); };
   el.querySelector("#ofTerm").onclick = () => { if (typeof ctx.openTerminal === "function"){ closeOffice(); ctx.openTerminal(); } };
   el.querySelector("#ofLive").onclick = () => { if (typeof ctx.openLive === "function"){ closeOffice(); ctx.openLive(); } };
+  el.querySelector("#ofWallet")?.addEventListener("click", async () => { try { const W = await import("../gh-coin/wallet.js"); W.openWallet({esc: ctx.esc, toast: ctx.toast}); } catch(e){ ctx.toast("지갑 보기를 열 수 없습니다: " + e.message); } });
   el.querySelector(".of-top").addEventListener("scroll", () => root.querySelectorAll(".of-menu").forEach(m => { if (Date.now() - (m._at || 0) > 500) m.hidden = true; }), {passive: true});
   el.addEventListener("click", e => {
     if (e.target.closest("[data-docclose]") || e.target.id === "ofDocs"){ $o("#ofDocs").hidden = true; return; }
