@@ -945,6 +945,31 @@ export const MARKETS = [
   {market: "TSLA", exchange: "yahoo", tf: "D", cls: "us_stock", name: "테슬라"},
   {market: "000660", exchange: "yahoo", tf: "D", cls: "kr_stock", name: "SK하이닉스"}
 ];
+// 신뢰 점수(0~100): 데모성과35 + 견고성30 + 같은자산군 일반화20 + 표본15 (GH Coin 과 동일 기준)
+export function trustScore({ret = 0, wr = 0, pf = null, n = 0, robust = null, crossCoin = null}){
+  const cl = (lo, hi, v) => Math.max(lo, Math.min(hi, v));
+  const retN = cl(0, 1, (ret + 10) / 30), wrN = cl(0, 1, (wr - 40) / 30), pfN = pf == null ? 0.4 : cl(0, 1, (pf - 0.8) / 1.7);
+  const A = 35 * (0.5 * retN + 0.25 * wrN + 0.25 * pfN);
+  let B;
+  if (!robust) B = 12;
+  else { const pN = robust.p == null ? 0.5 : cl(0, 1, (0.2 - robust.p) / 0.2), mwN = robust.mwTotal ? cl(0, 1, robust.mwPos / robust.mwTotal) : 0.5, sqnN = robust.sqn == null ? 0.4 : cl(0, 1, robust.sqn / 3);
+    B = 30 * (robust.ok === false ? 0.5 : 1) * (0.4 * pN + 0.35 * mwN + 0.25 * sqnN); }
+  const C = !crossCoin || !crossCoin.total ? 8 : 20 * cl(0, 1, crossCoin.profitable / crossCoin.total);
+  const D = 15 * cl(0, 1, n / 25);
+  return Math.round(A + B + C + D);
+}
+export const trustGrade = t => t >= 75 ? "A 매우 신뢰" : t >= 60 ? "B 신뢰" : t >= 45 ? "C 보통" : t >= 30 ? "D 주의" : "E 위험";
+// 같은 자산군의 다른 시장에서 백테스트 — 한 종목에만 맞는(과최적화) 전략인지 일반화 확인 (코인→다른 코인, 주식→다른 주식 등)
+async function crossMarketTest(spec, excludeMarket, cls){
+  const Q = await import("./quant.js"), out = [], seen = new Set();
+  for (const m of MARKETS){
+    if (m.cls !== cls || m.market === excludeMarket || seen.has(m.market)) continue; seen.add(m.market);
+    try { const cs = (await candlesFor({market: m.market, exchange: m.exchange, timeframe: m.tf}, 1500)).cs;
+      const s = Q.backtest(Q.normalizeSpec({...spec, symbol: m.market}), cs).stats;
+      out.push({name: m.name, ret: +(s.return_pct ?? 0).toFixed(1), n: s.n_trades ?? 0}); } catch(e){}
+  }
+  return {results: out, profitable: out.filter(x => x.ret > 0).length, total: out.length};
+}
 // 자산마다 수수료·슬리피지·펀딩 (주식·선물은 펀딩 없음)
 export const COSTS = {crypto: {fee_pct: 0.04, slippage_pct: 0.01, funding_rate_8h_pct: 0.01}, us_stock: {fee_pct: 0.015, slippage_pct: 0.02, funding_rate_8h_pct: 0},
   kr_stock: {fee_pct: 0.1, slippage_pct: 0.03, funding_rate_8h_pct: 0}, futures: {fee_pct: 0.01, slippage_pct: 0.01, funding_rate_8h_pct: 0}, index: {fee_pct: 0.01, slippage_pct: 0.01, funding_rate_8h_pct: 0}};
@@ -1002,11 +1027,31 @@ async function research(){
     const ans = `${noMind(e.raw || "").replace(/```(?:json)?[\s\S]*?```/, "```json\n" + JSON.stringify(spec, null, 1) + "\n```")}\n\n백테스트(검증 구간): 수익 ${st(wf.oos).ret}% · 손익비 ${st(wf.oos).pf ?? "-"} · 거래 ${st(wf.oos).n}회`;
     await keep("office-strategy", [{role: "user", content: clip(user, 3000)}, {role: "assistant", content: ans}], {agent: a.id, model: e.model}).catch(() => null);
   }
-  if (wf.pass){
+  // 과최적화 관문: 워크포워드(70/30)에 더해 견고성(순열검정·구간일관성·위생·최소거래수)까지 통과해야 모의투자에 올린다 (GH Coin 과 동일 기준)
+  let robust = {ok: true, why: "", p: null, mwPos: null, mwTotal: null, sqn: null};
+  try {
+    const RB = await import("../gh-coin/lib/robust.js"), H = await import("../gh-coin/lib/hyperopt.js"), tfMin = {"15": 15, "60": 60, "240": 240, "D": 1440}[tf] || 60;
+    const an = H.analyzers(bt.equity, bt.trades, {perYear: 365 * 24 * 60 / tfMin}), pt = RB.permutationTest(bt.trades.map(t => t.pnl)), mw = RB.multiWindow(Q, spec, cs, 5), hy = RB.hygiene(bt);
+    const nTr = (wf.oos?.n_trades ?? bt.stats?.n_trades ?? 0);
+    const pOK = pt.p == null || pt.p <= 0.1, mwOK = mw.total < 3 || mw.positive >= Math.ceil(mw.total * 0.6), hyOK = hy.ok !== false, nOK = nTr >= 8;
+    robust = {ok: pOK && mwOK && hyOK && nOK, why: [!pOK && `운일확률 ${pt.p?.toFixed(2)}`, !mwOK && `구간일관성 ${mw.positive}/${mw.total}`, !hyOK && (hy.fails || []).join(","), !nOK && `거래 ${nTr}회(8 미만)`].filter(Boolean).join(" · "),
+      p: pt.p ?? null, mwPos: mw.positive ?? null, mwTotal: mw.total ?? null, sqn: Number.isFinite(an.sqn) ? +an.sqn.toFixed(2) : null};
+  } catch(err){}
+  if (wf.pass && !robust.ok){
+    post({ch: "quant", kind: "system", text: `⚠ ${spec.name}: 워크포워드는 통과했지만 과최적화 의심으로 모의투자 보류 (${robust.why}) · 더 견고한 전략만 올립니다`});
+    addResearch({name: spec.name + " (견고성 미달)", market: mk.market, tf, pass: false, oos: +(wf.oos?.return_pct ?? 0), t: Date.now()});
+  }
+  if (wf.pass && robust.ok){
     saveDoc({title: `매매법 · ${spec.name} (${mk.name} ${TF_KO[tf]}봉) 검증 통과`, path: `strategies/${String(spec.name).replace(/[\\/:*?"<>|\s]+/g, "_").slice(0, 50)}.json`, content: JSON.stringify({spec, backtest: {all: st(bt.stats), is: st(wf.is), oos: st(wf.oos), reasons: wf.reasons}, scenarios: scen || ""}, null, 2), team: "quant", agent: a.id});
-    const s = await P.addStrategy({spec, market: mk.market, exchange: mk.exchange, tf, author: a.name, wf: {is: st(wf.is), oos: st(wf.oos)}, cls: mk.cls, mname: mk.name});
-    post({ch: "quant", kind: "system", text: `📈 모의투자 시작: ${s.name} (${mk.name} ${TF_KO[tf]}봉 · 레버리지 ${spec.risk?.leverage}배 · ${a.name} 개발 · 다온 검증 통과) · 가상 10,000`});
-    fire({kind: "trade", agent: agentById("trader"), text: `📈 ${s.name} 모의투자 시작합니다`});
+    // 같은 자산군 다른 시장에서 일반화 테스트 → 전략에 함께 저장 (신뢰점수에 반영)
+    let cc = null;
+    try { cc = await crossMarketTest(spec, mk.market, mk.cls);
+      if (cc.total) post({ch: "quant", kind: "system", text: `🌐 ${spec.name} 일반화: 같은 자산군 ${cc.total}개 중 ${cc.profitable}개에서 수익${cc.profitable <= 1 ? " ⚠️ 한 종목에만 맞는 과최적화 의심" : " — 여러 시장에 통함"}`}); } catch(e){}
+    const s = await P.addStrategy({spec, market: mk.market, exchange: mk.exchange, tf, author: a.name, wf: {is: st(wf.is), oos: st(wf.oos)}, cls: mk.cls, mname: mk.name,
+      robust: {ok: robust.ok, p: robust.p, mwPos: robust.mwPos, mwTotal: robust.mwTotal, sqn: robust.sqn}, crossCoin: cc ? {profitable: cc.profitable, total: cc.total} : null});
+    const trust = trustScore({ret: +(wf.oos?.return_pct ?? 0), wr: +(wf.oos?.win_rate ?? 0), pf: wf.oos?.profit_factor ?? null, n: wf.oos?.n_trades ?? 0, robust, crossCoin: cc});
+    post({ch: "quant", kind: "system", text: `📈 모의투자 시작: ${s.name} (${mk.name} ${TF_KO[tf]}봉 · 레버리지 ${spec.risk?.leverage}배 · ${a.name} 개발 · 다온 검증 통과·견고성 OK · 신뢰점수 ${trust} ${trustGrade(trust)}) · 가상 10,000`});
+    fire({kind: "trade", agent: agentById("trader"), text: `📈 ${s.name} 모의투자 시작합니다 (신뢰 ${trust})`});
   }
 }
 
