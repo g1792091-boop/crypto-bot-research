@@ -26,11 +26,15 @@ class H(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *a):
         pass
 
+    def end_headers(self):
+        # 모든 응답(정적 .js 포함)에 캐시 금지 → 코드 고치면 F5 로 바로 반영 (브라우저가 옛 모듈을 캐시하지 않게)
+        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
+        super().end_headers()
+
     def _raw(self, code, data=b"", ct="text/plain"):
         self.send_response(code)
         self.send_header("Content-Type", ct)
         self.send_header("Content-Length", str(len(data)))
-        self.send_header("Cache-Control", "no-store")
         self.end_headers()
         try:
             self.wfile.write(data)
@@ -64,7 +68,6 @@ class H(http.server.SimpleHTTPRequestHandler):
         ra = r.headers.get("Retry-After")
         if ra:
             self.send_header("Retry-After", ra)
-        self.send_header("Cache-Control", "no-store")
         self.end_headers()
         while True:
             try:

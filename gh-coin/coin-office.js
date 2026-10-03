@@ -813,6 +813,16 @@ async function paperReport(){
 /* ---- 매매법 연구: 지표 29종 + 연구 카드 → 전략 JSON → 백테스트 · 과최적화 검사 → 통과하면 모의투자 ---- */
 // 코인 선물 · 미국 주식 · 국내 주식 · 해외선물 · 국내 지수(국내선물 기초)를 돌아가며 연구한다
 export const MARKETS = COINS.flatMap(c => [{market: c.sym, exchange: "binancef", tf: "240", cls: "crypto", name: `${c.ko} 선물`, coin: c.id}, {market: c.sym, exchange: "binancef", tf: "60", cls: "crypto", name: `${c.ko} 선물`, coin: c.id}]);
+// 모든 코인에서 백테스트 — 한 코인에만 맞는(과최적화) 전략인지, 여러 코인에 일반화되는지 확인
+async function crossCoinTest(spec, tf, excludeSym){
+  const Q = await import("../nuri-ai/quant.js"), out = [];
+  for (const c of COINS){
+    if (c.sym === excludeSym) continue;
+    try { const cs = await kl(c.sym, tf, 1500); const s = Q.backtest(Q.normalizeSpec({...spec, symbol: c.sym}), cs).stats;
+      out.push({ko: c.ko, ret: +(s.return_pct ?? 0).toFixed(1), n: s.n_trades ?? 0, pf: s.profit_factor == null ? null : +s.profit_factor.toFixed(2)}); } catch(e){}
+  }
+  return {results: out, profitable: out.filter(x => x.ret > 0).length, total: out.length};
+}
 // 자산마다 수수료·슬리피지·펀딩 (주식·선물은 펀딩 없음)
 export const COSTS = {crypto: {fee_pct: 0.04, slippage_pct: 0.01, funding_rate_8h_pct: 0.01}, us_stock: {fee_pct: 0.015, slippage_pct: 0.02, funding_rate_8h_pct: 0},
   kr_stock: {fee_pct: 0.1, slippage_pct: 0.03, funding_rate_8h_pct: 0}, futures: {fee_pct: 0.01, slippage_pct: 0.01, funding_rate_8h_pct: 0}, index: {fee_pct: 0.01, slippage_pct: 0.01, funding_rate_8h_pct: 0}};
@@ -954,6 +964,14 @@ async function research(lane = "std"){
     const s = await P.addStrategy({spec, market: mk.market, exchange: mk.exchange, tf, author: a.name, wf: {is: st(wf.is), oos: st(wf.oos)}, cls: mk.cls, mname: mk.name, lane});
     post({ch: L.demo, kind: "system", text: `📈 데모거래 시작: ${s.name} (${mk.name} ${TF_KO[tf]}봉 · 레버리지 ${spec.risk?.leverage}배 · ${a.name} 개발 · ${v.name} 검증 통과·견고성 OK) · 가상 10,000`});
     fire({kind: "trade", agent: agentById(L.demoLead), text: `📈 ${s.name} 모의투자 시작합니다`});
+    try {
+      const cc = await crossCoinTest(spec, tf, mk.market);
+      if (cc.total){
+        table(L.bt, a.id, `🌐 ${s.name} — 모든 코인 일반화 (개발: ${mk.name})`, ["코인", "수익%", "거래", "손익비"], cc.results.map(r => [r.ko, pc(r.ret), String(r.n), r.pf ?? "—"]), `개발 코인 외 ${cc.total}개 중 ${cc.profitable}개에서 수익${cc.profitable <= 1 ? " ⚠️ 한 코인에만 맞는 과최적화 의심" : " — 여러 코인에 통하므로 견고"}`);
+        addNote(L.bt, `${s.name} 일반화: ${cc.total}개 중 ${cc.profitable}개 수익`, "교차검증");
+        if (cc.profitable <= 1) post({ch: L.demo, kind: "system", text: `⚠️ ${s.name}: 개발한 ${mk.name} 외 다른 코인에선 거의 안 통함 — 과최적화 가능성, 실거래 승격은 신중히`});
+      }
+    } catch(e){}
   }
 }
 
