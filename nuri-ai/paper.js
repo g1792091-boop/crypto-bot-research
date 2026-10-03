@@ -17,9 +17,9 @@ export const TFS = {"1m": "1", "5m": "5", "15m": "15", "1h": "60", "4h": "240", 
 const tfOf = iv => TFS[iv] || (Object.values(TFS).includes(String(iv)) ? String(iv) : "60");
 
 // 새 전략을 모의투자에 올린다 (활성 전략이 많으면 성과가 가장 나쁜 것을 내린다)
-export async function addStrategy({spec, market, exchange = "binancef", tf, author = "", wf = null, cls = "crypto", mname = "", lane = ""}){
+export async function addStrategy({spec, market, exchange = "binancef", tf, author = "", wf = null, cls = "crypto", mname = "", lane = "", robust = null, crossCoin = null}){
   await loadBook();
-  const s = {id: uid(), name: spec.name || "이름 없는 전략", spec, market: market || spec.symbol || "BTCUSDT", mname: mname || market, cls, exchange, tf: tfOf(tf || spec.interval), author, wf, lane,
+  const s = {id: uid(), name: spec.name || "이름 없는 전략", spec, market: market || spec.symbol || "BTCUSDT", mname: mname || market, cls, exchange, tf: tfOf(tf || spec.interval), author, wf, lane, robust, crossCoin,
     status: "active", created: Date.now(), cash: START, pos: null, trades: [], equity: [{t: Date.now(), v: START}], lastBar: 0, lastSignal: null};
   BOOK.strategies.push(s);
   const active = BOOK.strategies.filter(x => x.status === "active");

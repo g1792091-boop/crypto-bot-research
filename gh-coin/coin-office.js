@@ -944,7 +944,8 @@ async function research(lane = "std"){
     // 과최적화 걸러내기: 운일 확률 p ≤ 0.1 · 5구간 중 60% 이상 이익 · 위생 통과 · 거래 8회 이상 (못 재면 통과)
     const nTr = (wf.oos?.n_trades ?? bt.stats?.n_trades ?? 0);
     const pOK = pt.p == null || pt.p <= 0.1, mwOK = mw.total < 3 || mw.positive >= Math.ceil(mw.total * 0.6), hyOK = hy.ok !== false, nOK = nTr >= 8;
-    robust = {ok: pOK && mwOK && hyOK && nOK, why: [!pOK && `운일확률 ${pt.p?.toFixed(2)}`, !mwOK && `구간일관성 ${mw.positive}/${mw.total}`, !hyOK && (hy.fails || []).join(","), !nOK && `거래 ${nTr}회(8 미만)`].filter(Boolean).join(" · ")};
+    robust = {ok: pOK && mwOK && hyOK && nOK, why: [!pOK && `운일확률 ${pt.p?.toFixed(2)}`, !mwOK && `구간일관성 ${mw.positive}/${mw.total}`, !hyOK && (hy.fails || []).join(","), !nOK && `거래 ${nTr}회(8 미만)`].filter(Boolean).join(" · "),
+      p: pt.p ?? null, mwPos: mw.positive ?? null, mwTotal: mw.total ?? null, sqn: Number.isFinite(an.sqn) ? +an.sqn.toFixed(2) : null};
     const days = Math.max(1, (cs.at(-1).t - cs[0].t) / 864e5), f2 = x => x == null || !Number.isFinite(x) ? "—" : (+x).toFixed(2);
     table(L.bt, L.checker, `🔬 ${spec.name} 검증 보강`, ["항목", "값", "뜻"], [["SQN", `${f2(an.sqn)} (${an.sqnGrade})`, "√거래수 × 평균/표준편차 — 2 이상 보통, 3 이상 좋음"], ["VWR", f2(an.vwr), "일정한 성장선에서 덜 흔들릴수록 높음"], ["최장 물림", `${an.maxddLen}봉`, "고점 회복까지 걸린 가장 긴 기간"], ["연승/연패", `${an.streakWon}/${an.streakLost}`, ""],
       ["운일 확률 p", f2(pt.p), pt.p == null ? "거래 부족" : pt.p <= 0.05 ? "운으로 보기 어려움" : "운일 가능성 큼(주의)"], ["부트스트랩 샤프 90% 구간", bs ? `${f2(bs.lo)} ~ ${f2(bs.hi)}` : "—", "0 아래가 넓으면 불안정"], ["5구간 이익", `${mw.positive}/${mw.total}`, "기간별로 고르게 버는지"],
@@ -968,17 +969,20 @@ async function research(lane = "std"){
   }
   if (wf.pass && robust.ok){
     saveDoc({title: `매매법 · ${spec.name} (${mk.name} ${TF_KO[tf]}봉) 검증 통과`, path: `ghcoin/strategies/${String(spec.name).replace(/[\\/:*?"<>|\s]+/g, "_").slice(0, 50)}.json`, content: JSON.stringify({spec, backtest: {all: st(bt.stats), is: st(wf.is), oos: st(wf.oos), reasons: wf.reasons}, scenarios: scen || ""}, null, 2), team: L.bt, agent: a.id});
-    const s = await P.addStrategy({spec, market: mk.market, exchange: mk.exchange, tf, author: a.name, wf: {is: st(wf.is), oos: st(wf.oos)}, cls: mk.cls, mname: mk.name, lane});
-    post({ch: L.demo, kind: "system", text: `📈 데모거래 시작: ${s.name} (${mk.name} ${TF_KO[tf]}봉 · 레버리지 ${spec.risk?.leverage}배 · ${a.name} 개발 · ${v.name} 검증 통과·견고성 OK) · 가상 10,000`});
-    fire({kind: "trade", agent: agentById(L.demoLead), text: `📈 ${s.name} 모의투자 시작합니다`});
+    // 데모 등록 전에 교차검증(모든 코인)을 먼저 돌려 그 결과를 전략에 함께 저장 → 콘테스트 신뢰점수에 반영
+    let cc = null;
     try {
-      const cc = await crossCoinTest(spec, tf, mk.market);
+      cc = await crossCoinTest(spec, tf, mk.market);
       if (cc.total){
-        table(L.bt, a.id, `🌐 ${s.name} — 모든 코인 일반화 (개발: ${mk.name})`, ["코인", "수익%", "거래", "손익비"], cc.results.map(r => [r.ko, pc(r.ret), String(r.n), r.pf ?? "—"]), `개발 코인 외 ${cc.total}개 중 ${cc.profitable}개에서 수익${cc.profitable <= 1 ? " ⚠️ 한 코인에만 맞는 과최적화 의심" : " — 여러 코인에 통하므로 견고"}`);
-        addNote(L.bt, `${s.name} 일반화: ${cc.total}개 중 ${cc.profitable}개 수익`, "교차검증");
-        if (cc.profitable <= 1) post({ch: L.demo, kind: "system", text: `⚠️ ${s.name}: 개발한 ${mk.name} 외 다른 코인에선 거의 안 통함 — 과최적화 가능성, 실거래 승격은 신중히`});
+        table(L.bt, a.id, `🌐 ${s.name || spec.name} — 모든 코인 일반화 (개발: ${mk.name})`, ["코인", "수익%", "거래", "손익비"], cc.results.map(r => [r.ko, pc(r.ret), String(r.n), r.pf ?? "—"]), `개발 코인 외 ${cc.total}개 중 ${cc.profitable}개에서 수익${cc.profitable <= 1 ? " ⚠️ 한 코인에만 맞는 과최적화 의심" : " — 여러 코인에 통하므로 견고"}`);
+        addNote(L.bt, `${spec.name} 일반화: ${cc.total}개 중 ${cc.profitable}개 수익`, "교차검증");
       }
     } catch(e){}
+    const s = await P.addStrategy({spec, market: mk.market, exchange: mk.exchange, tf, author: a.name, wf: {is: st(wf.is), oos: st(wf.oos)}, cls: mk.cls, mname: mk.name, lane,
+      robust: {ok: robust.ok, p: robust.p ?? null, mwPos: robust.mwPos ?? null, mwTotal: robust.mwTotal ?? null, sqn: robust.sqn ?? null}, crossCoin: cc ? {profitable: cc.profitable, total: cc.total} : null});
+    post({ch: L.demo, kind: "system", text: `📈 데모거래 시작: ${s.name} (${mk.name} ${TF_KO[tf]}봉 · 레버리지 ${spec.risk?.leverage}배 · ${a.name} 개발 · ${v.name} 검증 통과·견고성 OK) · 가상 10,000`});
+    fire({kind: "trade", agent: agentById(L.demoLead), text: `📈 ${s.name} 모의투자 시작합니다`});
+    if (cc && cc.total && cc.profitable <= 1) post({ch: L.demo, kind: "system", text: `⚠️ ${s.name}: 개발한 ${mk.name} 외 다른 코인에선 거의 안 통함 — 과최적화 가능성, 실거래 승격은 신중히`});
   }
 }
 
@@ -1900,6 +1904,29 @@ async function driftJob(){
 }
 
 /* ---- 🏆 전략 콘테스트 (FinStep-AI/ContestTrade 식 내부 경쟁) — 데모 전략을 성과로 겨뤄 순위 → 상위에 비중·실거래 우선권, 하위는 은퇴 검토 ---- */
+// 신뢰 점수(0~100): 데모 성과 35 + 견고성 30 + 코인 일반화 20 + 표본 15 을 합쳐 '믿고 돈을 맡길 만한가'를 하나로 매긴다
+// 수익만 높고 과최적화(운일확률↑·한 코인만·구간 들쭉날쭉)인 전략은 점수가 깎여 하위로 밀린다
+export function trustScore({ret = 0, wr = 0, pf = null, n = 0, robust = null, crossCoin = null}){
+  const cl = (lo, hi, v) => Math.max(lo, Math.min(hi, v));
+  // A. 데모 성과 (0~35)
+  const retN = cl(0, 1, (ret + 10) / 30), wrN = cl(0, 1, (wr - 40) / 30), pfN = pf == null ? 0.4 : cl(0, 1, (pf - 0.8) / 1.7);
+  const A = 35 * (0.5 * retN + 0.25 * wrN + 0.25 * pfN);
+  // B. 견고성 (0~30) — 저장된 로버스트 지표. 없으면(옛 전략) 중립 12점
+  let B;
+  if (!robust) B = 12;
+  else {
+    const pN = robust.p == null ? 0.5 : cl(0, 1, (0.2 - robust.p) / 0.2);
+    const mwN = robust.mwTotal ? cl(0, 1, robust.mwPos / robust.mwTotal) : 0.5;
+    const sqnN = robust.sqn == null ? 0.4 : cl(0, 1, robust.sqn / 3);
+    B = 30 * (robust.ok === false ? 0.5 : 1) * (0.4 * pN + 0.35 * mwN + 0.25 * sqnN);
+  }
+  // C. 코인 일반화 (0~20) — 개발 코인 외 몇 개 코인에서 수익? 없으면 중립 8점
+  const C = !crossCoin || !crossCoin.total ? 8 : 20 * cl(0, 1, crossCoin.profitable / crossCoin.total);
+  // D. 표본 신뢰도 (0~15) — 거래가 적으면 운일 수 있어 점수 유보
+  const D = 15 * cl(0, 1, n / 25);
+  return Math.round(A + B + C + D);
+}
+const trustGrade = t => t >= 75 ? "A 매우 신뢰" : t >= 60 ? "B 신뢰" : t >= 45 ? "C 보통" : t >= 30 ? "D 주의" : "E 위험";
 async function contestJob(){
   const P = await import("../nuri-ai/paper.js"), book = await P.loadBook(), lead = agentById("trader");
   let linked = {}; try { const L = await import("../nuri-ai/live.js"); linked = L.liveCfg?.().linked || {}; } catch(e){}
@@ -1908,17 +1935,21 @@ async function contestJob(){
   const scored = active.map(s => {
     const tr = s.trades || [], n = tr.length, wins = tr.filter(t => (t.pnl ?? t.roe ?? 0) > 0).length;
     const ret = (P.equityOf(s) / 10000 - 1) * 100, wr = n ? wins / n * 100 : 0, pf = s.wf?.oos?.pf ?? null;
-    const score = ret * 0.5 + (wr - 50) * 0.4 + (pf ? Math.min(pf, 3) * 8 : 0) + Math.min(n, 30) * 0.2;   // 수익·승률·손익비·표본
-    return {s, ret: +ret.toFixed(2), wr: +wr.toFixed(1), n, pf, score: +score.toFixed(1), live: !!linked[s.id]?.on};
-  }).sort((a, b) => b.score - a.score);
-  const rows = scored.slice(0, 12).map((x, i) => [String(i + 1), x.s.name.slice(0, 26), pc(x.ret), x.wr + "%", String(x.n), x.pf != null ? (+x.pf).toFixed(2) : "—", String(x.score), x.live ? "🟢실거래" : i === 0 ? "🏆 1위" : i >= scored.length - 2 && scored.length >= 4 ? "⚠ 하위" : ""]);
-  table("demo", lead.id, `🏆 전략 콘테스트 — 데모 성과 리더보드 (${scored.length}개 경쟁)`, ["순위", "전략", "데모수익", "승률", "거래", "손익비", "점수", "상태"], rows,
-    "상위 전략이 비중·실거래 우선권을 갖고 하위는 은퇴를 검토합니다(ContestTrade 식 내부 경쟁) · 과거 성과가 미래를 보장하지 않으며 계산값일 뿐입니다");
-  const top = scored[0], last = scored.at(-1);
-  addNote("demo", `콘테스트 1위 ${top.s.name} (${pc(top.ret)}·승률 ${top.wr}%) · 꼴찌 ${last.s.name} (${pc(last.ret)})`, "콘테스트");
-  if (scored.length >= 4 && last.ret < 0 && last.n >= 8) addTask({team: "demo", title: `콘테스트 하위 전략 은퇴 검토: ${last.s.name}`, why: `데모 수익 ${pc(last.ret)} · 승률 ${last.wr}% — 상위 전략에 비중 양보`, owner: lead.name});
-  await learnSkill(`전략 콘테스트 1위: ${top.s.name} (${pc(top.ret)}·승률 ${top.wr}%)`, {job: "contest"});
-  if (hasAI()) await explain(lead.id, "demo", "전략 콘테스트 리더보드를 보고 지금 가장 잘하는/못하는 전략과, 비중을 어떻게 조정할지, 하위 전략은 은퇴할지 해설한다. 과거 성과가 미래를 보장하지 않는다는 점을 밝힌다.", tableText(["순위", "전략", "수익", "승률", "거래", "손익비", "점수"], rows.map(r => r.slice(0, 7))), "아래 전략 콘테스트 리더보드를 해설해 줘.");
+    const trust = trustScore({ret, wr, pf, n, robust: s.robust, crossCoin: s.crossCoin});
+    const gen = s.crossCoin && s.crossCoin.total ? `${s.crossCoin.profitable}/${s.crossCoin.total}` : "—";
+    const rob = s.robust ? (s.robust.mwTotal ? `${s.robust.mwPos}/${s.robust.mwTotal}` : "—") + (s.robust.p != null ? ` p${(+s.robust.p).toFixed(2)}` : "") : "—";
+    return {s, ret: +ret.toFixed(2), wr: +wr.toFixed(1), n, pf, trust, gen, rob, live: !!linked[s.id]?.on};
+  }).sort((a, b) => b.trust - a.trust);
+  const rows = scored.slice(0, 12).map((x, i) => [String(i + 1), x.s.name.slice(0, 24), pc(x.ret), x.wr + "%", String(x.n), x.rob, x.gen, `${x.trust} (${trustGrade(x.trust).split(" ")[0]})`, x.live ? "🟢실거래" : x.trust >= 60 && i === 0 ? "🏆 승격후보" : x.trust < 30 ? "⚠ 은퇴검토" : ""]);
+  table("demo", lead.id, `🏆 전략 콘테스트 — 신뢰 점수 리더보드 (${scored.length}개 경쟁)`, ["순위", "전략", "데모수익", "승률", "거래", "견고성", "일반화", "신뢰점수", "상태"], rows,
+    "신뢰점수 = 데모성과 35 + 견고성 30 + 코인일반화 20 + 표본 15. 수익만 높고 과최적화면 점수가 깎입니다 · 상위가 실거래 우선권, 30점 미만은 은퇴 검토 · 과거 성과가 미래를 보장하지 않습니다");
+  const top = scored[0], weak = scored.filter(x => x.trust < 30 && x.n >= 8);
+  addNote("demo", `콘테스트 1위 ${top.s.name} (신뢰 ${top.trust}·${trustGrade(top.trust)}) · 신뢰점수 기준 순위`, "콘테스트");
+  // 은퇴 검토: 수익이 나도 신뢰점수가 낮으면(운·과최적화 의심) 후보에 올린다
+  for (const w of weak.slice(0, 2)) addTask({team: "demo", title: `콘테스트 저신뢰 전략 은퇴 검토: ${w.s.name}`, why: `신뢰점수 ${w.trust}(${trustGrade(w.trust)}) · 데모수익 ${pc(w.ret)}·일반화 ${w.gen}·견고성 ${w.rob} — 수익이 나도 운·과최적화 의심`, owner: lead.name});
+  if (top.trust >= 60 && !top.live) addTask({team: "demo", title: `콘테스트 1위 실거래 승격 검토: ${top.s.name}`, why: `신뢰점수 ${top.trust}(${trustGrade(top.trust)}) · 데모수익 ${pc(top.ret)}·일반화 ${top.gen} — 상위 신뢰 전략에 실거래 우선권`, owner: lead.name});
+  await learnSkill(`전략 콘테스트 1위: ${top.s.name} (신뢰 ${top.trust}·${trustGrade(top.trust)})`, {job: "contest"});
+  if (hasAI()) await explain(lead.id, "demo", "전략 콘테스트 신뢰점수 리더보드를 보고, 신뢰점수가 무엇을 뜻하는지(성과만이 아니라 견고성·여러 코인 일반화·표본까지 합친 값), 지금 가장 믿을 만한/위험한 전략, 수익은 나도 신뢰점수가 낮아 주의할 전략, 실거래로 올릴 후보를 해설한다. 과거 성과가 미래를 보장하지 않는다는 점을 밝힌다.", tableText(["순위", "전략", "수익", "승률", "거래", "견고성", "일반화", "신뢰점수"], rows.map(r => r.slice(0, 8))), "아래 신뢰점수 리더보드를 해설해 줘.");
 }
 
 /* ---- 🕯 패턴 스캐너 (stock-pattern · chart_patterns 규칙) → 차트·캔들 패턴팀 ---- */
@@ -2084,7 +2115,9 @@ export async function performanceDashboard(){
   const P = await import("../nuri-ai/paper.js"), book = await P.loadBook().catch(() => ({strategies: []})), active = (book.strategies || []).filter(s => s.status === "active");
   const perStrat = active.map(s => {
     const tr = s.trades || [], n = tr.length, wins = tr.filter(t => (t.pnl ?? t.roe ?? 0) > 0).length, eq = P.equityOf(s);
-    return {id: s.id, name: s.name, market: s.mname || s.market, tf: s.tf, ret: +((eq / 10000 - 1) * 100).toFixed(2), pnl: +(eq - 10000).toFixed(0), n, wr: n ? +(wins / n * 100).toFixed(1) : 0, days: Math.floor((Date.now() - (s.created || Date.now())) / 864e5), bot: /^🤖/.test(s.name)};
+    const ret = +((eq / 10000 - 1) * 100).toFixed(2), wr = n ? +(wins / n * 100).toFixed(1) : 0;
+    return {id: s.id, name: s.name, market: s.mname || s.market, tf: s.tf, ret, pnl: +(eq - 10000).toFixed(0), n, wr, days: Math.floor((Date.now() - (s.created || Date.now())) / 864e5), bot: /^🤖/.test(s.name),
+      trust: trustScore({ret, wr, pf: s.wf?.oos?.pf ?? null, n, robust: s.robust, crossCoin: s.crossCoin})};
   }).sort((a, b) => b.ret - a.ret);
   const totalPnl = perStrat.reduce((s, x) => s + x.pnl, 0), base = active.length * 10000;
   const allTr = active.flatMap(s => s.trades || []), allWins = allTr.filter(t => (t.pnl ?? t.roe ?? 0) > 0).length;
@@ -2105,7 +2138,7 @@ async function dashboardJob(){
     ["예측 적중률", d.accuracy ? `${d.accuracy.winRate}% (${d.accuracy.n}건 채점)` : "아직 채점 전(열린 예측 쌓이는 중)"],
     ["시장 심리", d.sentiment ? `${d.sentiment.score}/100 (${d.sentiment.verdict})` : "-"],
     ["실거래 연결", `${d.liveLinked}개`]], "과거 성과가 미래 수익을 보장하지 않습니다 · 실제 주문은 승인·한도 안에서만");
-  table("hq", lead.id, "📊 전략별 성과 (데모 수익순)", ["순위", "전략", "시장", "데모수익", "승률", "거래", "운용일"], d.perStrat.slice(0, 12).map((x, i) => [String(i + 1), x.name.slice(0, 24), x.market, pc(x.ret), x.wr + "%", String(x.n), x.days + "일"]), "상위가 콘테스트·실거래 우선권");
+  table("hq", lead.id, "📊 전략별 성과 (데모 수익순)", ["순위", "전략", "시장", "데모수익", "승률", "거래", "신뢰점수", "운용일"], d.perStrat.slice(0, 12).map((x, i) => [String(i + 1), x.name.slice(0, 24), x.market, pc(x.ret), x.wr + "%", String(x.n), String(x.trust ?? "—"), x.days + "일"]), "데모수익순 · 신뢰점수는 성과+견고성+일반화+표본을 합친 값(콘테스트 리더보드와 동일) · 상위·고신뢰가 실거래 우선권");
   addNote("hq", `성과 대시보드: 총 ${pc(d.totalRetPct)} · 승률 ${d.winRate}% · 전략 ${d.nActive}개 · 적중률 ${d.accuracy ? d.accuracy.winRate + "%" : "집계중"}`, "대시보드");
   await learnSkill(`성과: 데모 총 ${pc(d.totalRetPct)}·승률 ${d.winRate}% · 최고 ${d.best?.name}(${pc(d.best?.ret)})`, {job: "report"});
 }
