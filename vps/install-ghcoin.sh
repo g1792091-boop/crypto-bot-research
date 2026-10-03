@@ -9,8 +9,10 @@
 #   2. 드라이브의 zip 에서 앱 코드만 꺼내(약 30MB) 실행기를 빌드
 #   3. 서비스 5개 등록 — 재부팅·충돌 시 자동으로 다시 켜짐
 #        ghcoin-vnc(가상 화면) · ghcoin-desktop(XFCE) · ghcoin-server(앱 실행기) · ghcoin-chrome(앱 창) · ghcoin-novnc(웹 원격화면)
-#   4. 방화벽: SSH 와 Tailscale 안쪽만 허용 → 웹 원격화면(6080)은 Tailscale 로만 열림
+#   4. 방화벽: SSH 와 Tailscale 안쪽만 허용 → 화면 주소(8080 · 6080)는 Tailscale 로만 열림
 #   5. Tailscale 설치·로그인
+#   6. 실시간 화면(:8080, 비밀번호 로그인) — add-dashboard.sh. 봇 화면을 내 브라우저가 직접 그려서 선명함.
+#      원격화면(noVNC :6080)은 비상용으로만 남는다.
 #
 # 다시 실행해도 안전함(이미 한 단계는 건너뜀). 비밀번호는 처음 만든 것을 유지.
 set -euo pipefail
@@ -411,8 +413,8 @@ echo "== 디스크"
 df -h / | sed 's/^/  /'
 echo "== 주소 (Tailscale 켜고 열기)"
 ip4=$(tailscale ip -4 2>/dev/null | head -1)
-[ -f /etc/systemd/system/ghcoin-dash.service ] && echo "  대시보드  http://${ip4:-<tailscale IP>}:8080/"
-echo "  원격화면  http://${ip4:-<tailscale IP>}:6080/"
+[ -f /etc/systemd/system/ghcoin-dash.service ] && echo "  실시간 화면(로그인)  http://${ip4:-<tailscale IP>}:8080/"
+echo "  비상용 원격화면      http://${ip4:-<tailscale IP>}:6080/"
 EOF
 chmod 755 /usr/local/bin/ghcoin-status
 
@@ -442,31 +444,51 @@ if ! tailscale ip -4 >/dev/null 2>&1; then
 fi
 TSIP=$(tailscale ip -4 2>/dev/null | head -1 || true)
 
-# ---------------------------------------------------------------- 8. 웹 대시보드 (:8080, 보기 전용)
+# ---------------------------------------------------------------- 8. 실시간 화면 + 요약 (:8080, 비밀번호 로그인)
+DASH_OK=""
 if [ "${GHCOIN_NO_DASH:-0}" != 1 ]; then
-  say "웹 대시보드 설치"
+  say "실시간 화면(:8080) 설치"
   DREV="${GHCOIN_REV:-claude/vigilant-shannon-irq1vg}"
-  if curl -fsSL -o "$WORK/add-dashboard.sh" "https://raw.githubusercontent.com/g1792091-boop/crypto-bot-research/$DREV/vps/add-dashboard.sh" \
-     && GHCOIN_REV="$DREV" bash "$WORK/add-dashboard.sh"; then
-    :
+  if [ -n "${GHCOIN_DASH_SRC:-}" ] && [ -f "$GHCOIN_DASH_SRC/../add-dashboard.sh" ]; then   # 파일을 직접 올렸으면
+    cp "$GHCOIN_DASH_SRC/../add-dashboard.sh" "$WORK/add-dashboard.sh"
   else
-    echo "  (대시보드 설치는 실패했지만 봇은 정상입니다 — 위 화면을 캡처해서 보내 주세요)"
+    curl -fsSL -o "$WORK/add-dashboard.sh" "https://raw.githubusercontent.com/g1792091-boop/crypto-bot-research/$DREV/vps/add-dashboard.sh" || true
+  fi
+  if [ -s "$WORK/add-dashboard.sh" ] && GHCOIN_REV="$DREV" bash "$WORK/add-dashboard.sh"; then
+    DASH_OK=1
+  else
+    echo "  (실시간 화면 설치는 실패했지만 봇은 정상입니다 — 위 화면을 캡처해서 보내 주세요. 그동안은 원격화면 :6080 으로 보세요)"
   fi
 fi
+DASHPASS=$(cat "/root/ghcoin-대시보드-비밀번호.txt" 2>/dev/null || true)
 
 sleep 5
 say "완료!"
 ghcoin-status
+if [ -n "$DASH_OK" ]; then
 cat <<EOF
 
   ┌───────────────────────────────────────────────────────────────┐
-    대시보드(보기):     Tailscale 켜고 →  http://${TSIP:-<tailscale IP>}:8080/
-    원격화면(조작):     Tailscale 켜고 →  http://${TSIP:-<tailscale IP>}:$NOVNC_PORT/
+    GH Coin 화면:       Tailscale 켜고 →  http://${TSIP:-<tailscale IP>}:8080/
+    로그인 비밀번호:    ${DASHPASS:-(sudo cat /root/ghcoin-대시보드-비밀번호.txt)}
+      (잊어버리면:  sudo cat /root/ghcoin-대시보드-비밀번호.txt)
+    상태 확인:          ghcoin-status
+  └───────────────────────────────────────────────────────────────┘
+  * 이 주소 하나로 봇 화면을 그대로 보고, 누르기 · 키 입력 · 설정 · 실거래 승인까지 합니다.
+  * 비상용 원격화면(noVNC): http://${TSIP:-<tailscale IP>}:$NOVNC_PORT/  비밀번호 $VNCPASS  (sudo cat $PASSFILE)
+EOF
+else
+cat <<EOF
+
+  ┌───────────────────────────────────────────────────────────────┐
+    원격화면:           Tailscale 켜고 →  http://${TSIP:-<tailscale IP>}:$NOVNC_PORT/
     원격화면 비밀번호:  $VNCPASS
       (잊어버리면:  sudo cat $PASSFILE)
     상태 확인:          ghcoin-status
   └───────────────────────────────────────────────────────────────┘
-  * 평소엔 대시보드로 보고, 키 입력 · 설정 · 실거래 승인만 원격화면에서 하세요.
+EOF
+fi
+cat <<EOF
   * 이 서버용 빌드는 AI 직원의 명령어 실행 · 앱 코드 고치기를 꺼 두었습니다 (키 보호).
   * 앱 창은 닫아도 10초 뒤 다시 열립니다. 봇 탭이 죽거나 멈추면 3분 뒤 자동으로 다시 띄웁니다.
   * 서버가 재부팅돼도 자동으로 켜집니다.

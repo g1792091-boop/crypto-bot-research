@@ -6,7 +6,7 @@
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#0f1320">
 <meta name="referrer" content="no-referrer">
-<title>GH COIN 대시보드</title>
+<title>GH COIN 요약</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230f1320'/%3E%3Cpath d='M12 44 L26 30 L36 38 L52 18' stroke='%2322c55e' stroke-width='6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <style>
 :root{
@@ -34,6 +34,8 @@ button{font:inherit;color:inherit}
 .tab .bd{display:inline-block;min-width:16px;padding:0 5px;margin-left:5px;border-radius:9px;background:var(--dn);color:#fff;font-size:11px;line-height:16px;text-align:center}
 .pills{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap}
 .pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600;border:1px solid var(--line);background:var(--card);white-space:nowrap;color:var(--mut)}
+.pill.golive{color:#cfe0ff;border-color:rgba(79,140,255,.55);background:rgba(79,140,255,.14);text-decoration:none}
+.pill.golive:hover{background:rgba(79,140,255,.25);text-decoration:none}
 .pill .dot{width:8px;height:8px;border-radius:50%;background:var(--dim)}
 .pill.ok{color:#bbf7d0;border-color:rgba(34,197,94,.45);background:rgba(34,197,94,.12)} .pill.ok .dot{background:var(--up);box-shadow:0 0 0 3px rgba(34,197,94,.22);animation:pulse 2s infinite}
 .pill.warn{color:#fde68a;border-color:rgba(245,158,11,.45);background:rgba(245,158,11,.12)} .pill.warn .dot{background:var(--warn)}
@@ -148,7 +150,7 @@ th.n{font-family:var(--sans)}
 @media (max-width:640px){
   body{font-size:13.5px}
   .topin{padding:8px 12px;gap:8px}
-  .brand{order:1} .pills{order:2} .tabs{order:3;flex-basis:100%;margin:0 -4px}
+  .brand{order:1} .golive{order:1} .pills{order:2} .tabs{order:3;flex-basis:100%;margin:0 -4px}
   .brand span{display:none} .brand b{font-size:17px}
   .pill{font-size:11px;padding:3px 8px;gap:5px}
   .tab{padding:6px 10px;font-size:13px}
@@ -167,7 +169,8 @@ th.n{font-family:var(--sans)}
 <body>
 <header class="top">
   <div class="topin">
-    <div class="brand"><b>GH <i>COIN</i></b><span>트레이딩 본부 · 보기 전용</span></div>
+    <div class="brand"><b>GH <i>COIN</i></b><span>요약 · 보기 전용</span></div>
+    <a class="pill golive" href="/" title="봇 화면을 그대로 보고 조작">🖥 실시간 화면</a>
     <nav class="tabs" id="tabs" aria-label="화면"></nav>
     <div class="pills">
       <span class="pill" id="pBot"><i class="dot"></i><span>연결 중…</span></span>
@@ -178,7 +181,7 @@ th.n{font-family:var(--sans)}
 </header>
 <div class="banners" id="banners"></div>
 <main class="wrap" id="main"><div class="empty"><b>불러오는 중…</b>봇 상태를 가져오고 있습니다</div></main>
-<div class="foot" id="foot">GH Coin 대시보드 · 보기 전용 (주문·설정 변경은 앱 화면에서만) · 숫자는 앱이 저장한 값을 그대로 보여 줍니다</div>
+<div class="foot" id="foot">GH Coin 요약 · 보기 전용 (주문·설정·승인은 <a href="/">실시간 화면</a>에서) · 숫자는 앱이 저장한 값을 그대로 보여 줍니다</div>
 <script>
 "use strict";
 (() => {
@@ -337,7 +340,7 @@ function renderHeader(){
     else if (m.status === "slow") B.push(["warn", "봇이 무거운 작업 중이라 응답이 늦습니다", "백테스트·지표 계산이 끝나면 다시 실시간으로 바뀝니다. 2분 넘게 답이 없으면 '봇 멈춤'으로 바뀝니다." + old]);
     else if (m.status === "error") B.push(["warn", "자료를 읽는 중 오류가 났습니다", (srv.lastError && srv.lastError.msg ? srv.lastError.msg + " ·" : "") + old]);
     else if (!fresh) B.push(["warn", "자료가 잠시 갱신되지 않았습니다", "봇이 백테스트처럼 무거운 일을 하는 중이면 늦어질 수 있습니다." + old]);
-    if (m.pages > 1) B.push(["warn", `GH Coin 페이지가 ${m.pages}개 열려 있습니다`, "봇이 두 번 돌고 있을 수 있습니다. 원격화면에서 창 하나만 남기세요."]);
+    if (m.pages > 1) B.push(["warn", `GH Coin 페이지가 ${m.pages}개 열려 있습니다`, "봇이 두 번 돌고 있을 수 있습니다. 비상용 원격화면(:6080)에서 창 하나만 남기세요."]);
   }
   // 승인 대기는 최신 자료일 때만 (승인 창은 60초 뒤 저절로 취소되므로 오래된 자료로는 띄우지 않음)
   const apprOk = fresh && age < 30, items = apprOk && L && L.pendingApprovals ? L.pendingApprovals.items || [] : [];
@@ -345,9 +348,9 @@ function renderHeader(){
     for (const a of items){
       const f = Object.fromEntries(a.fields || []);
       B.push(["bad alert", `⏳ ${a.title || "실거래 주문 승인"} 대기 중${a.mainnet ? " · 메인넷(진짜 돈)" : " · 테스트넷"} — ${a.countdown || ""}`,
-        [f["전략"], f["종목"], f["방향"], f["주문 금액"], f["레버리지"]].filter(Boolean).join(" · ") + " — 승인·거절은 앱 화면(원격화면 :6080)에서만 할 수 있습니다."]);
+        [f["전략"], f["종목"], f["방향"], f["주문 금액"], f["레버리지"]].filter(Boolean).join(" · ") + " — 승인·거절은 실시간 화면(이 주소 맨 앞 /)에서 하세요."]);
     }
-    if (!apprOk && L.enabled && L.mode !== "auto") B.push(["warn", "승인 대기 여부 확인 불가", "봇 자료가 최신이 아니라 지금 승인을 기다리는 주문이 있는지 알 수 없습니다. 실거래 승인 모드이니 필요하면 원격화면(:6080)에서 직접 확인하세요."]);
+    if (!apprOk && L.enabled && L.mode !== "auto") B.push(["warn", "승인 대기 여부 확인 불가", "봇 자료가 최신이 아니라 지금 승인을 기다리는 주문이 있는지 알 수 없습니다. 실거래 승인 모드이니 필요하면 실시간 화면에서 직접 확인하세요."]);
     if (L.halted) B.push(["bad", "⛔ 실거래가 오늘 자동 정지됐습니다", (L.halted.why || "") + " · 새 진입 없음 (청산은 계속)"]);
     else if (L.enabled && L.env === "mainnet") B.push(["info", "🔴 실거래(메인넷) 켜짐 · " + (L.mode === "auto" ? "자동 모드 — 승인 없이 주문합니다" : "승인 모드"), `주문당 ${nf(L.limits && L.limits.orderNotional, 0)} · 최대 ${nf(L.limits && L.limits.maxNotional, 0)} USDT · 하루 손실 한도 ${nf(L.limits && L.limits.dailyLoss, 0)} USDT`]);
     if (L.state === "REDUCING" && !L.halted) B.push(["warn", "오늘 실현 손실이 한도에 닿았습니다", `오늘 ${usd(L.dayPnl && L.dayPnl.usdt)} · 한도 -${nf(L.limits && L.limits.dailyLoss, 0)} USDT`]);
@@ -593,10 +596,10 @@ function rLive(){
       card("오늘 실현 손익", usdV(d.usdt), `한도 -${nf(lim.dailyLoss, 0)} USDT 중 ${nf(used, 0)}% 사용${isN(d.exchange) ? " · 거래소 기록 " + usd(d.exchange) : ""}`, tn(d.usdt), used >= 100 ? "dn" : used >= 60 ? "warn" : ""),
       card("업비트 오늘 (KRW)", isN(d.krw) ? sg(d.krw, 0) + "원" : "—", `한도 -${nf(lim.krwDailyLoss, 0)}원`, tn(d.krw)),
       card("거래 상태", stKo[0], L.halted ? L.halted.why || "" : "하루 손실 한도에 닿으면 그날은 새 진입 멈춤", stKo[1]),
-      card("승인 대기", apprOk ? pend.length + "건" : "확인 불가", !apprOk ? "봇 자료가 최신이 아님 — 원격화면에서 직접 확인" : pend.length ? "앱 화면에서 승인·거절하세요" : "대기 중인 주문 없음", pend.length ? "dn" : !apprOk ? "warn" : "", pend.length ? "dn" : !apprOk ? "warn" : ""),
+      card("승인 대기", apprOk ? pend.length + "건" : "확인 불가", !apprOk ? "봇 자료가 최신이 아님 — 실시간 화면에서 직접 확인" : pend.length ? "실시간 화면에서 승인·거절하세요" : "대기 중인 주문 없음", pend.length ? "dn" : !apprOk ? "warn" : "", pend.length ? "dn" : !apprOk ? "warn" : ""),
       card("연결된 전략", (L.linked || []).length + "개", "관문 통과 + 대표가 직접 연결한 것만"),
       card("실거래 포지션", (L.positions || []).length + "개", "앱 기록 기준")),
-    pend.length ? panel("⏳ 승인 대기 주문", "승인은 앱 화면(원격화면)에서만", pend.map(a => h("div", {style: "margin-bottom:10px"}, h("div", null, h("b", null, a.title), " ", chip(a.mainnet ? "메인넷" : "테스트넷", a.mainnet ? "dn" : "warn"), " ", h("span", {class: "warn"}, a.countdown || "")), bar(a.remainingPct, "warn"), kv(a.fields || [])))) : null,
+    pend.length ? panel("⏳ 승인 대기 주문", "승인은 실시간 화면에서", pend.map(a => h("div", {style: "margin-bottom:10px"}, h("div", null, h("b", null, a.title), " ", chip(a.mainnet ? "메인넷" : "테스트넷", a.mainnet ? "dn" : "warn"), " ", h("span", {class: "warn"}, a.countdown || "")), bar(a.remainingPct, "warn"), kv(a.fields || [])))) : null,
     h("div", {class: "grid cols2 mtop"},
       panel("한도", "앱 [실거래] 화면에서 바꿈", kv([["주문당 금액", nf(lim.orderNotional, 0) + " USDT"], ["1회 최대 금액", nf(lim.maxNotional, 0) + " USDT"], ["전체 최대 금액", nf(lim.maxTotalNotional, 0) + " USDT"], ["최대 레버리지", "×" + nf(lim.maxLeverage, 0)], ["동시 포지션", nf(lim.maxPositions, 0) + "개"], ["하루 손실 한도", nf(lim.dailyLoss, 0) + " USDT"],
         ["업비트 주문당 / 최대", nf(lim.krwOrderNotional, 0) + " / " + nf(lim.krwMaxNotional, 0) + "원"], ["업비트 하루 손실", nf(lim.krwDailyLoss, 0) + "원"], ["허용 종목", (lim.symbols || []).join(", ") || "—"]])),

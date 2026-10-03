@@ -1,30 +1,53 @@
 #!/usr/bin/env bash
-# 이미 install-ghcoin.sh 로 설치한 서버에 GH Coin 웹 대시보드(:8080)를 추가/업데이트한다 (root 로 실행)
+# 이미 install-ghcoin.sh 로 설치한 서버에 GH Coin 실시간 화면 + 요약(:8080)을 추가/업데이트한다 (root 로 실행)
 #
-#   사용:  sudo bash add-dashboard.sh
+#   사용:  sudo bash add-dashboard.sh                  (처음이면 로그인 비밀번호를 만들어 마지막에 보여 줌)
+#          sudo bash add-dashboard.sh --new-password   (비밀번호 새로 만들기 → 기존 로그인은 모두 풀림)
+#          (파일을 직접 올렸으면)  sudo GHCOIN_DASH_SRC=/root/vps/dashboard bash add-dashboard.sh
 #
 # 하는 일
-#   1. 앱 창(Chrome)에 '이 서버 안에서만' 열리는 읽기 통로(DevTools 9222, 127.0.0.1)를 켠다
+#   1. 앱 창(Chrome)에 '이 서버 안에서만' 열리는 통로(DevTools 9222, 127.0.0.1)를 켠다
 #      + 방화벽 규칙으로 그 통로는 ghcoin 계정(Chrome · 대시보드)만 쓸 수 있게 막는다
-#   2. ghcoin-dash 서비스: 그 통로로 봇 상태를 몇 초마다 읽어서 웹 대시보드로 보여 준다 (보기 전용, 키는 절대 안 내보냄)
-#   3. 대시보드는 Tailscale 로만 열림 (방화벽은 설치 때 이미 SSH · Tailscale 만 허용 + 대시보드도 Tailscale 주소만 받음)
-# 앱(친구 코드)은 전혀 바꾸지 않는다. 다시 실행해도 안전함 (앱 창은 읽기 통로를 처음 켤 때만 다시 띄움).
+#   2. ghcoin-dash 서비스 (:8080, Tailscale 로만 · 비밀번호 로그인)
+#        /         실시간 화면: 봇 화면을 내 브라우저가 직접 그림 (원격화면보다 선명 · 부드러움) + 누르기 · 입력 · 승인
+#        /summary  요약: 숫자 · 표 (보기 전용, 휴대폰용)
+#   3. 로그인 비밀번호: 처음 한 번 만들어 /root/ghcoin-대시보드-비밀번호.txt 에 저장 (해시는 /etc/ghcoin/dash-password.hash)
+# 앱(친구 코드)은 전혀 바꾸지 않는다. 다시 실행해도 안전함 (앱 창은 통로를 처음 켤 때만 다시 띄움 · 비밀번호는 그대로).
 set -euo pipefail
 
 BRANCH="${GHCOIN_BRANCH:-claude/vigilant-shannon-irq1vg}"
 REV="${GHCOIN_REV:-$BRANCH}"     # 커밋 해시를 넣으면 그 커밋에서 받는다
 RAW="https://raw.githubusercontent.com/g1792091-boop/crypto-bot-research/$REV/vps/dashboard"
+LOCAL_SRC="${GHCOIN_DASH_SRC:-}"  # 이 폴더에서 복사 (내려받지 않음 · 내용 확인은 똑같이)
 APP_USER="ghcoin"
 DASH_DIR="/opt/ghcoin/dashboard"
 DASH_PORT=8080
 CDP_PORT=9222
-FILES="ghcoin_dash.py collector.js index.html"
-# 받은 파일이 아래 값과 하나라도 다르면 설치하지 않는다 (이 파일들은 Chrome 읽기 통로 = 키·주문에 닿는 코드).
-# vps/dashboard 파일을 고치면 같이 바꿀 것:  sha256sum vps/dashboard/ghcoin_dash.py vps/dashboard/collector.js vps/dashboard/index.html
+PW_DIR="/etc/ghcoin"
+PW_HASH="$PW_DIR/dash-password.hash"
+PW_FILE="/root/ghcoin-대시보드-비밀번호.txt"
+NEWPASS_ARG=""
+[ "${1:-}" = "--new-password" ] && NEWPASS_ARG=1
+FILES="ghcoin_dash.py mirror.py auth.py collector.js recorder.js live.html live.js live.css login.html summary.html
+       vendor/rrweb-record.min.js vendor/rrweb-replay.min.js vendor/rrweb-replay.css vendor/LICENSE.rrweb vendor/SOURCES.txt"
+# 받은 파일이 아래 값과 하나라도 다르면 설치하지 않는다 (이 파일들은 Chrome 통로 = 키 · 주문에 닿는 코드).
+# vps/dashboard 파일을 고치면 같이 바꿀 것:  cd vps/dashboard && sha256sum <위 FILES>
 declare -A SHA=(
-  [ghcoin_dash.py]=f411e68aedf029c0b0d044214c9b1faaee375b6a8d2516ae668a114e9e2b90c6
+  [ghcoin_dash.py]=770daf5819769e495e80feb25a9251b25798e6c42e1855f3a81d3aee994297c8
+  [mirror.py]=62e7f49ecb0fd201ee55e855750f5bb60c5fee6cc48eeab2279fa5a006357041
+  [auth.py]=5e131c3388a7ea422d6dbb4beafabc3e36db9fb6109aa0cda6d242ee42251bb2
   [collector.js]=6c365900e5c7f1adafd67818f0943b6c167abde1264dfd741624cb73b74a9264
-  [index.html]=a5cdfcdd9e197abc4363fefcc1cac9c43befc5bbb6cabdcfbeb122141ac6c205
+  [recorder.js]=3cb270ee618ba469bbf45add6c78c8e997603a3092c12cda66e2735067451d63
+  [live.html]=5564e6560e0619fe9f21a2c055f7369cdcb220cacf1b3482e2f4838f028645ea
+  [live.js]=d5bdc71a16ea8c13b3c5fcf25cbf971aec6e09c0b7ab52f20f5c8bbecec39073
+  [live.css]=422340f7deb2cf3974c58ffec3fd4fb03dff2234f8757d5a7475995bcf207c79
+  [login.html]=1afadd954c38efad575bf7be19c19921412f452f92e51a6c5230da128425efef
+  [summary.html]=db591020b08a841056899ddc7ccdef475a217198f0aec05ce9ac0edbc1ad9287
+  [vendor/rrweb-record.min.js]=fde9a5c5c38fc23c9f8d6429b4e74c8996156e1632f132693b68e32509dc92f0
+  [vendor/rrweb-replay.min.js]=4ab2043bf8b77f5051c2b912f92feec7c22b9556718b04dddab8fdc09d8acce9
+  [vendor/rrweb-replay.css]=64d720c3a8966a3764822abf7b14f78135c90ce09dcfae4286e50f06d9e01545
+  [vendor/LICENSE.rrweb]=e49e62397b603438476e0d6b5ca3b6e6d4f23a80594e596aff29ac04fa3e1b1c
+  [vendor/SOURCES.txt]=0e70db66851919d01afb7bb00a23a62fe991662ab2251f2cbcf7a3e15bc87ca0
 )
 
 say(){ printf '\n\033[1;36m== %s\033[0m\n' "$*"; }
@@ -39,23 +62,51 @@ say "필요한 패키지"
 apt-get install -y -qq -o DPkg::Lock::Timeout=900 --no-install-recommends python3 python3-websocket curl iptables >/dev/null
 
 say "대시보드 파일 받기 (내용 확인)"
-install -d -m 755 "$DASH_DIR"
+install -d -m 755 "$DASH_DIR" "$DASH_DIR/vendor"
 for f in $FILES; do
-  curl -fsSL -o "$DASH_DIR/$f.new" "$RAW/$f"
+  if [ -n "$LOCAL_SRC" ]; then
+    cp -f "$LOCAL_SRC/$f" "$DASH_DIR/$f.new"
+  else
+    curl -fsSL -o "$DASH_DIR/$f.new" "$RAW/$f"
+  fi
   if ! echo "${SHA[$f]}  $DASH_DIR/$f.new" | sha256sum -c --status -; then
-    rm -f "$DASH_DIR"/*.new
+    find "$DASH_DIR" -name '*.new' -delete
     die "$f 내용이 확인한 파일과 다릅니다 (새 버전이면 add-dashboard.sh 도 새로 받아서 다시 실행하세요)"
   fi
 done
-for f in $FILES; do mv -f "$DASH_DIR/$f.new" "$DASH_DIR/$f"; done   # 셋 다 확인된 뒤에만 바꿈
-chmod 644 "$DASH_DIR"/*
+for f in $FILES; do mv -f "$DASH_DIR/$f.new" "$DASH_DIR/$f"; done   # 모두 확인된 뒤에만 바꿈
+rm -f "$DASH_DIR/index.html"                                          # 예전(보기 전용) 대시보드의 첫 화면 파일
+chmod 755 "$DASH_DIR/vendor"
+chmod 644 "$DASH_DIR"/*.* "$DASH_DIR"/vendor/*
 
-say "읽기 통로 보호: 127.0.0.1:$CDP_PORT 은 $APP_USER 계정만 접속 가능"
+say "로그인 비밀번호"
+# 실시간 화면은 봇을 조작할 수 있으므로(실거래 승인 포함) Tailscale 안에서도 비밀번호가 필요하다.
+# 해시(scrypt)는 /etc/ghcoin (root:ghcoin 640, 대시보드만 읽음), 비밀번호 글자는 root 만 읽는 파일에.
+install -d -m 755 "$PW_DIR"
+NEWPASS=""
+if [ -n "$NEWPASS_ARG" ] || [ ! -s "$PW_HASH" ]; then
+  # 12글자 (헷갈리는 0/O/1/l/I 제외)
+  DASHPASS=$(python3 -c "import secrets; a='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'; print(''.join(secrets.choice(a) for _ in range(12)))")
+  ( umask 077
+    printf '%s\n' "$DASHPASS" | python3 "$DASH_DIR/ghcoin_dash.py" --make-password-hash > "$PW_HASH.new" ) \
+    || { rm -f "$PW_HASH.new"; die "비밀번호를 만들지 못했습니다"; }
+  chown "root:$APP_USER" "$PW_HASH.new"; chmod 640 "$PW_HASH.new"
+  ( umask 077; printf '%s\n' "$DASHPASS" > "$PW_FILE.new" ); chmod 600 "$PW_FILE.new"
+  mv -f "$PW_HASH.new" "$PW_HASH"; mv -f "$PW_FILE.new" "$PW_FILE"
+  NEWPASS=1
+  echo "  새 비밀번호를 만들었습니다 (맨 아래 '완료' 상자에 보임)"
+else
+  chown "root:$APP_USER" "$PW_HASH"; chmod 640 "$PW_HASH"
+  echo "  이미 있는 비밀번호를 그대로 씁니다 (새로 만들기:  sudo bash add-dashboard.sh --new-password)"
+fi
+DASHPASS=$(cat "$PW_FILE" 2>/dev/null || echo "(글자 파일 없음 — sudo bash add-dashboard.sh --new-password 로 새로 만드세요)")
+
+say "통로 보호: 127.0.0.1:$CDP_PORT 은 $APP_USER 계정만 접속 가능"
 # 이 서버의 다른 계정(실행기 ghcoin-srv 등)이 9222 로 봇 페이지에 붙어 키를 읽거나 주문하지 못하게 한다.
 # 규칙은 OUTPUT 맨 앞에 넣는다 (ufw 의 'loopback 전부 허용' 보다 먼저 걸려야 함). 재부팅하면 이 서비스가 다시 넣음.
 cat > /etc/systemd/system/ghcoin-cdp-guard.service <<EOF
 [Unit]
-Description=GH Coin 읽기 통로 보호 (127.0.0.1:$CDP_PORT 은 $APP_USER 계정만)
+Description=GH Coin DevTools 통로 보호 (127.0.0.1:$CDP_PORT 은 $APP_USER 계정만)
 After=ufw.service
 Before=ghcoin-chrome.service ghcoin-dash.service
 
@@ -72,9 +123,9 @@ systemctl daemon-reload
 systemctl enable -q ghcoin-cdp-guard
 systemctl restart ghcoin-cdp-guard
 iptables -C OUTPUT -o lo -p tcp --dport $CDP_PORT -m owner ! --uid-owner $APP_USER -j REJECT --reject-with tcp-reset \
-  || die "읽기 통로 보호 규칙을 넣지 못했습니다:  journalctl -u ghcoin-cdp-guard -n 20"
+  || die "통로 보호 규칙을 넣지 못했습니다:  journalctl -u ghcoin-cdp-guard -n 20"
 
-say "앱 창에 읽기 통로 켜기 (127.0.0.1:$CDP_PORT, 서버 안에서만)"
+say "앱 창에 DevTools 통로 켜기 (127.0.0.1:$CDP_PORT, 서버 안에서만)"
 UNIT=/etc/systemd/system/ghcoin-chrome.service
 CHG=""
 if ! grep -q -- "--remote-debugging-port=" "$UNIT"; then
@@ -85,13 +136,13 @@ grep -q -- "--remote-debugging-port=$CDP_PORT" "$UNIT" || die "앱 창 설정을
 
 cat > /etc/systemd/system/ghcoin-dash.service <<EOF
 [Unit]
-Description=GH Coin 웹 대시보드 (:$DASH_PORT, Tailscale 로만 접속 · 보기 전용)
+Description=GH Coin 실시간 화면 + 요약 (:$DASH_PORT, Tailscale 로만 · 비밀번호 로그인)
 After=ghcoin-chrome.service ghcoin-cdp-guard.service
 Wants=ghcoin-chrome.service ghcoin-cdp-guard.service
 
 [Service]
 User=$APP_USER
-Environment=GHCOIN_DASH_PORT=$DASH_PORT GHCOIN_DASH_BIND=0.0.0.0 GHCOIN_CDP=http://127.0.0.1:$CDP_PORT
+Environment=GHCOIN_DASH_PORT=$DASH_PORT GHCOIN_DASH_BIND=0.0.0.0 GHCOIN_CDP=http://127.0.0.1:$CDP_PORT GHCOIN_DASH_PWFILE=$PW_HASH PYTHONDONTWRITEBYTECODE=1
 ExecStart=/usr/bin/python3 $DASH_DIR/ghcoin_dash.py
 Restart=always
 RestartSec=3
@@ -100,11 +151,21 @@ ProtectSystem=strict
 # /home 은 통째로 가림 (/home/$APP_USER 에는 키가 든 Chrome 저장소가 있고, 대시보드는 쓸 일이 없음)
 ProtectHome=tmpfs
 PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 # 접속이 몰려도 서버 메모리를 다 먹지 못하게 (넘치면 대시보드만 죽고 다시 켜짐 — 봇 Chrome 은 그대로)
 MemoryMax=256M
 TasksMax=96
 LimitNOFILE=1024
 OOMScoreAdjust=500
+# CPU 는 봇(Chrome)이 먼저
+CPUWeight=50
+Nice=5
 
 [Install]
 WantedBy=multi-user.target
@@ -112,7 +173,7 @@ EOF
 
 systemctl daemon-reload
 if [ -n "$CHG" ]; then
-  say "앱 창 다시 띄우기 (읽기 통로를 처음 켤 때 한 번만)"
+  say "앱 창 다시 띄우기 (통로를 처음 켤 때 한 번만)"
   systemctl restart ghcoin-chrome
 fi
 systemctl enable -q ghcoin-dash
@@ -121,7 +182,10 @@ systemctl restart ghcoin-dash
 # ghcoin-status 에 대시보드도 표시 (예전 install-ghcoin.sh 로 만든 것만 고침)
 if [ -f /usr/local/bin/ghcoin-status ] && ! grep -q ghcoin-dash /usr/local/bin/ghcoin-status; then
   sed -i 's/for s in ghcoin-vnc ghcoin-desktop ghcoin-server ghcoin-chrome ghcoin-novnc; do/for s in ghcoin-vnc ghcoin-desktop ghcoin-server ghcoin-chrome ghcoin-novnc ghcoin-dash; do/' /usr/local/bin/ghcoin-status
-  sed -i 's#^echo "== 웹 원격화면 주소"#echo "== 주소 (대시보드 :8080 · 원격화면 :6080)"#' /usr/local/bin/ghcoin-status
+fi
+# 주소 안내: 실시간 화면(:8080)이 기본, 원격화면(:6080)은 비상용
+if [ -f /usr/local/bin/ghcoin-status ]; then
+  sed -i 's#^\[ -f /etc/systemd/system/ghcoin-dash.service \] && echo "  대시보드  http#[ -f /etc/systemd/system/ghcoin-dash.service ] \&\& echo "  실시간 화면(로그인)  http#; s#^echo "  원격화면  http#echo "  비상용 원격화면      http#' /usr/local/bin/ghcoin-status
 fi
 
 # 봇 탭이 죽거나('Aw, Snap' — 메모리 정리로 탭만 죽은 경우 포함) 멈춘 채로 3분이 넘으면 앱 창을 다시 띄운다
@@ -176,10 +240,10 @@ done
 if [ -n "$ok" ]; then
   # 다른 계정은 막혀야 정상
   if runuser -u nobody -- curl -fsS -m 2 -o /dev/null "http://127.0.0.1:$CDP_PORT/json/version" 2>/dev/null; then
-    die "읽기 통로 보호가 동작하지 않습니다 (다른 계정도 9222 에 접속됨). 화면을 캡처해서 보내 주세요."
+    die "통로 보호가 동작하지 않습니다 (다른 계정도 9222 에 접속됨). 화면을 캡처해서 보내 주세요."
   fi
 else
-  echo "  (앱 창의 읽기 통로가 아직 안 열렸습니다 — Chrome 이 켜지는 중이면 1분 안에 대시보드가 저절로 붙습니다)"
+  echo "  (앱 창의 통로가 아직 안 열렸습니다 — Chrome 이 켜지는 중이면 1분 안에 대시보드가 저절로 붙습니다)"
 fi
 ok=""
 for i in $(seq 1 30); do
@@ -187,14 +251,21 @@ for i in $(seq 1 30); do
   sleep 2
 done
 [ -n "$ok" ] || { journalctl -u ghcoin-dash -n 30 --no-pager || true; die "대시보드가 아직 안 켜졌습니다. 위 기록을 캡처해서 보내 주세요."; }
+# 비밀번호 없이 열면 로그인 화면으로 넘어가야 정상
+code=$(curl -s -o /dev/null -w '%{http_code}' -m 5 "http://127.0.0.1:$DASH_PORT/" || true)
+[ "$code" = 303 ] || die "실시간 화면이 로그인을 요구하지 않습니다 (응답 $code). 화면을 캡처해서 보내 주세요."
 
 TSIP=$(tailscale ip -4 2>/dev/null | head -1 || true)
 say "완료!"
 cat <<EOF
 
   ┌───────────────────────────────────────────────────────────────┐
-    GH Coin 대시보드:  Tailscale 켜고 →  http://${TSIP:-<tailscale IP>}:$DASH_PORT/
-    (설정·키 입력·실거래 승인은 원격화면 →  http://${TSIP:-<tailscale IP>}:6080/)
+    GH Coin 화면:      Tailscale 켜고 →  http://${TSIP:-<tailscale IP>}:$DASH_PORT/
+    로그인 비밀번호:   $DASHPASS$([ -n "$NEWPASS" ] && echo "  (새로 만듦)")
+      (잊어버리면:  sudo cat $PW_FILE)
   └───────────────────────────────────────────────────────────────┘
-  * Tailscale Funnel / serve 로 :$DASH_PORT 을 밖에 열지 마세요 (대시보드에는 로그인이 없습니다).
+  * 봇 화면을 그대로 보고 누르기 · 입력 · 키 넣기 · 실거래 승인까지 이 주소에서 합니다.
+  * 숫자만 빠르게 보기(휴대폰):  http://${TSIP:-<tailscale IP>}:$DASH_PORT/summary
+  * 원격화면(:6080, noVNC)은 비상용으로만 남겨 둡니다.
+  * Tailscale Funnel 로 :$DASH_PORT 을 인터넷에 열지 마세요.
 EOF

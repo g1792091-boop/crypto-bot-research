@@ -1,34 +1,41 @@
 #!/usr/bin/env python3
-"""ghcoin-dash: GH Coin 읽기 전용 웹 대시보드.
+"""ghcoin-dash: GH Coin 실시간 화면 + 요약 대시보드 (:8080, Tailscale 로만 · 로그인 필요).
 
-GH Coin 은 Chrome 페이지 안에서 돌아가는 봇이라 상태가 전부 그 페이지 메모리·브라우저 저장소에 있다.
-이 서비스는 앱 코드를 전혀 바꾸지 않고,
+GH Coin 은 Chrome 페이지 안에서 돌아가는 봇이다. 이 서비스는 앱 코드를 전혀 바꾸지 않고
+Chrome DevTools(127.0.0.1:9222, 서버 안 · ghcoin 계정만)로 그 페이지에 붙어서 두 가지를 한다.
 
-  1. Chrome DevTools(127.0.0.1:9222, 서버 안에서만)에 붙어 GH Coin 페이지를 찾고
-  2. 몇 초마다 collector.js 하나를 Runtime.evaluate 로 실행해 '읽기만' 한 상태 사진(snapshot)을 받아
-  3. 0.0.0.0:8080 에서 대시보드 화면(index.html)과 JSON/SSE 로 보여 준다.
-     (방화벽상 Tailscale 로만 열리고, 방화벽이 꺼져도 이 서비스가 Tailscale·이 서버 안 주소가 아니면 거절한다)
+  1. 실시간 화면 ( / ):  봇 화면의 DOM 을 그대로 옮겨 사용자 브라우저가 직접 그리게 한다 (mirror.py + recorder.js + live.*)
+     → 원격화면(noVNC, 그림 전송)과 달리 선명하고 부드럽다. 누르기 · 입력 · 선택 · 스크롤 · 확인 창 답하기를 봇에 그대로 전달.
+  2. 요약 ( /summary ):  몇 초마다 collector.js 로 '읽기만' 한 숫자를 표 · 카드로 (예전 대시보드, 휴대폰용)
+     /healthz 의 봇 상태(감시 ghcoin-watchdog 가 읽음)도 이 수집기가 정한다.
 
-읽기 전용: GET/HEAD 만 받는다. 요청 내용이 페이지로 전달되는 길은 없다 (페이지에 보내는 것은 고정된 collector.js 뿐).
-비밀값(키·토큰)은 collector.js 가 키 이름·실제 값·형식으로 지우고, 여기서 한 번 더 키 이름·형식으로 지운다.
-
-봇 페이지가 바쁘면(백테스트) 읽기 요청은 한 번에 하나만 보내고 답을 기다린다 (쌓지 않음).
-오래 답이 없으면 '봇 멈춤'(확인 창이 떠 있거나 탭이 죽음)으로 알린다.
+실시간 화면은 봇을 조작할 수 있으므로(실거래 승인 포함) 비밀번호 로그인이 필요하다 (auth.py).
+  - /login, /healthz 만 로그인 없이 열린다. 세션 쿠키는 HttpOnly · SameSite=Strict, 모든 POST 는 같은 출처 + CSRF 토큰.
+  - 조작 API(/api/act)는 화면에 보이는 노드에 사람이 하는 것과 같은 입력만 한다 (임의 JS · DevTools 명령 전달 없음).
+  - /app/… 는 앱의 정적 파일(css · svg · 글꼴 · 그림)만 GET 으로 중계한다 (/__nuri 는 절대 안 됨).
+비밀값: 요약은 collector.js + 여기서 두 번 지운다. 실시간 화면은 비밀번호 · 키 칸의 값을 ****** 로만 보낸다 (recorder.js).
+접속 기록 · 입력 값은 로그에 남기지 않는다.
 
 필요한 것: Python 3.10+ 표준 라이브러리 + websocket-client (우분투 패키지 python3-websocket).
 
 환경 변수
   GHCOIN_DASH_PORT      (8080)            대시보드 포트
   GHCOIN_DASH_BIND      (0.0.0.0)         대시보드 주소
-  GHCOIN_DASH_INTERVAL  (5)               수집 간격(초), 2~60
+  GHCOIN_DASH_INTERVAL  (5)               요약 수집 간격(초), 2~60
   GHCOIN_DASH_SLOW      (30)              무거운 항목(감사 기록·파이프라인·적중률 등) 간격(초)
   GHCOIN_DASH_REPORTS   (300)             시간별 발표 간격(초)
   GHCOIN_DASH_HOSTS     ()                Host 헤더로 더 허용할 이름(쉼표 구분). IP·점 없는 이름·*.ts.net·localhost 는 기본 허용
   GHCOIN_DASH_NETS      ()                접속을 더 허용할 주소 대역(쉼표 구분, 예: 192.168.0.0/24). 기본은 이 서버 안 + Tailscale 만
+  GHCOIN_DASH_PWFILE    (/etc/ghcoin/dash-password.hash)  비밀번호 파일 (auth.py 참고)
+  GHCOIN_DASH_MIRROR    (1)               0 이면 실시간 화면을 끈다 (요약만)
   GHCOIN_CDP            (http://127.0.0.1:9222)  Chrome DevTools 주소 (반드시 이 서버 안: 127.0.0.1/localhost/::1)
+
+비밀번호 파일 만들기:  printf '%s\n' '<비밀번호>' | python3 ghcoin_dash.py --make-password-hash > /etc/ghcoin/dash-password.hash
 """
 import base64
+import gzip
 import hashlib
+import html
 import http.client
 import ipaddress
 import json
@@ -41,6 +48,7 @@ import threading
 import time
 import urllib.parse
 import urllib.request
+import zlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 try:
@@ -54,7 +62,10 @@ http.client._MAXHEADERS = 32
 http.client._MAXLINE = 8192
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VERSION = "1.1"
+VERSION = "2.0"
+sys.path.insert(0, HERE)
+import auth as authmod      # noqa: E402  (같은 폴더)
+import mirror as mirrormod  # noqa: E402
 
 
 def _env_num(name, default, lo, hi, cast=float):
@@ -567,7 +578,7 @@ def load_collector():
     return src
 
 
-MSG_CRASHED = "봇 페이지(탭)가 죽었습니다 — 원격화면(:6080)에서 새로고침하거나  sudo systemctl restart ghcoin-chrome"
+MSG_CRASHED = "봇 페이지(탭)가 죽었습니다 — 실시간 화면 메뉴의 '앱 새로고침' 또는  sudo systemctl restart ghcoin-chrome (3분 뒤 감시가 자동으로 다시 띄움)"
 MSG_NO_APP = "봇 페이지가 열리지 않음 (Chrome 오류 화면) —  sudo systemctl restart ghcoin-server ghcoin-chrome"
 
 
@@ -639,7 +650,7 @@ def collector_loop(src):
                 if cdp.tid in cdp.crashed:
                     STATS.set("crashed", MSG_CRASHED, e)
                 elif e.waited >= STUCK_AFTER:
-                    STATS.set("stuck", f"봇 페이지가 {mins}분째 응답 없음 — 원격화면(:6080)에서 확인 창이 떠 있거나 'Aw, Snap' 화면인지 확인", e)
+                    STATS.set("stuck", f"봇 페이지가 {mins}분째 응답 없음 — 실시간 화면에서 확인 창이 떠 있는지 확인 (탭이 죽었으면 3분 뒤 자동으로 다시 띄움)", e)
                 elif e.waited >= SLOW_AFTER:
                     STATS.set("slow", "봇이 무거운 작업 중이라 응답이 늦음 — 답을 기다리는 중", e)
                 if (cdp.tid in cdp.crashed or e.waited >= STUCK_AFTER) and e.waited >= 60 and t_tick - st["check_t"] >= 60:
@@ -686,32 +697,62 @@ def collector_loop(src):
 
 
 # ---------------------------------------------------------------- HTTP
-class Page:
+AUTH = authmod.Auth()
+ACT_LIMIT = authmod.Bucket(rate=25.0, burst=60.0)     # 세션별 조작 속도 (클릭 · 입력 · 휠)
+MIRROR = None
+MIRROR_THREAD = None
+MAX_BODY = 64 * 1024
+LIVE_CHECK_S = 60                                    # 실시간 연결 중에도 이 간격으로 로그인 유효한지 다시 확인
+
+CSP_LIVE = ("default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; "
+            "connect-src 'self'; frame-src 'self'; child-src 'self'; media-src 'none'; object-src 'none'; base-uri 'none'; "
+            "form-action 'none'; frame-ancestors 'none'")
+CSP_LOGIN = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
+CSP_STATIC = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; sandbox"
+
+# 로그인한 사람만 받는 이 폴더의 파일 (주소 -> (파일, 종류))
+FILES = {
+    "/live.js": ("live.js", "text/javascript; charset=utf-8"),
+    "/live.css": ("live.css", "text/css; charset=utf-8"),
+    "/vendor/rrweb-replay.min.js": ("vendor/rrweb-replay.min.js", "text/javascript; charset=utf-8"),
+    "/vendor/rrweb-replay.css": ("vendor/rrweb-replay.css", "text/css; charset=utf-8"),
+}
+PAGES = {"/": "live", "/index.html": "live", "/summary": "summary", "/summary.html": "summary"}
+
+
+class Files:
+    """이 폴더의 파일을 메모리에 (바뀌면 다시 읽음). gzip 본 · ETag · 인라인 스크립트 해시(CSP)."""
+
     def __init__(self):
-        self.path = os.path.join(HERE, "index.html")
-        self.mtime = None
-        self.body = b""
-        self.csp = ""
+        self.cache = {}
+        self.lock = threading.Lock()
 
-    def get(self):
+    def get(self, name):
+        path = os.path.join(HERE, name)
         try:
-            m = os.stat(self.path).st_mtime
+            st = os.stat(path)
         except OSError:
-            return b"<h1>index.html missing</h1>", "default-src 'none'"
-        if m != self.mtime:
-            with open(self.path, "rb") as f:
-                body = f.read()
-            text = body.decode("utf-8")
-            hashes = []
-            for s in re.findall(r"<script>(.*?)</script>", text, re.S):
-                hashes.append("'sha256-" + base64.b64encode(hashlib.sha256(s.encode("utf-8")).digest()).decode() + "'")
-            self.csp = ("default-src 'none'; script-src " + (" ".join(hashes) or "'none'") +
+            return None
+        key = (st.st_mtime_ns, st.st_size)
+        with self.lock:
+            e = self.cache.get(name)
+            if e and e["key"] == key:
+                return e
+        with open(path, "rb") as f:
+            body = f.read()
+        e = {"key": key, "body": body, "gz": gzip.compress(body, 9) if len(body) > 2048 else None,
+             "etag": '"' + hashlib.sha256(body).hexdigest()[:20] + '"'}
+        if name.endswith(".html"):
+            hashes = ["'sha256-" + base64.b64encode(hashlib.sha256(x.encode("utf-8")).digest()).decode() + "'"
+                      for x in re.findall(r"<script>(.*?)</script>", body.decode("utf-8"), re.S)]
+            e["csp"] = ("default-src 'none'; script-src " + (" ".join(hashes) or "'none'") +
                         "; style-src 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
-            self.body, self.mtime = body, m
-        return self.body, self.csp
+        with self.lock:
+            self.cache[name] = e
+        return e
 
 
-PAGE = Page()
+FILECACHE = Files()
 
 
 def host_ok(host_header):
@@ -732,6 +773,11 @@ def host_ok(host_header):
     return "." not in host and re.fullmatch(r"[a-z0-9-]{1,63}", host) is not None
 
 
+def bot_status():
+    m = HUB.meta or {}
+    return {"status": m.get("status", STATS.status), "message": m.get("message", STATS.message)}
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "ghcoin-dash"
     protocol_version = "HTTP/1.1"
@@ -740,7 +786,7 @@ class Handler(BaseHTTPRequestHandler):
     def version_string(self):
         return self.server_version
 
-    def log_message(self, fmt, *args):  # 접속 기록은 남기지 않는다 (journald 절약)
+    def log_message(self, fmt, *args):  # 접속 기록은 남기지 않는다 (journald 절약 · 입력 값 보호)
         pass
 
     def parse_request(self):
@@ -756,44 +802,150 @@ class Handler(BaseHTTPRequestHandler):
             return False
         return True
 
-    def _head(self, code, ctype, length=None, extra=None):
+    # ------------------------------------------------------------ 보내기
+    def _head(self, code, ctype, length=None, extra=None, cache="no-store"):
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         if length is not None:
             self.send_header("Content-Length", str(length))
-        self.send_header("Cache-Control", "no-store")
+        self.send_header("Cache-Control", cache)
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Cross-Origin-Opener-Policy", "same-origin")
+        self.send_header("Cross-Origin-Resource-Policy", "same-origin")
         for k, v in (extra or {}).items():
-            self.send_header(k, v)
+            if isinstance(v, list):
+                for x in v:
+                    self.send_header(k, x)
+            else:
+                self.send_header(k, v)
         self.end_headers()
 
-    def _send(self, code, ctype, body, extra=None):
+    def _send(self, code, ctype, body, extra=None, cache="no-store"):
         if isinstance(body, str):
             body = body.encode("utf-8")
-        self._head(code, ctype, len(body), extra)
+        self._head(code, ctype, len(body), extra, cache)
         if self.command != "HEAD":
             self.wfile.write(body)
 
+    def _json(self, code, obj, extra=None):
+        self._send(code, "application/json; charset=utf-8", jdump(obj), extra)
+
+    def _redirect(self, to, extra=None):
+        self._send(303, "text/plain; charset=utf-8", "", dict({"Location": to}, **(extra or {})))
+
+    def _file(self, name, ctype, extra=None):
+        e = FILECACHE.get(name)
+        if not e:
+            return self._send(404, "text/plain; charset=utf-8", "없는 파일입니다\n")
+        if self.headers.get("If-None-Match") == e["etag"]:
+            return self._send(304, ctype, b"", {"ETag": e["etag"]}, cache="private, no-cache")
+        hdr = dict({"ETag": e["etag"], "Vary": "Accept-Encoding"}, **(extra or {}))
+        body = e["body"]
+        if e["gz"] and "gzip" in (self.headers.get("Accept-Encoding") or ""):
+            body = e["gz"]
+            hdr["Content-Encoding"] = "gzip"
+        self._send(200, ctype, body, hdr, cache="private, no-cache")
+
+    # ------------------------------------------------------------ 로그인 확인
+    def _cookies(self):
+        out = {}
+        for part in (self.headers.get("Cookie") or "").split(";"):
+            k, _, v = part.strip().partition("=")
+            if k and k not in out:
+                out[k] = v.strip()
+        return out
+
+    def _session(self):
+        return AUTH.session(self._cookies().get(authmod.COOKIE))
+
+    def _secure(self):
+        # tailscale serve(HTTPS) 뒤에서만 Secure 쿠키 (그냥 http://100.x:8080 은 Tailscale 이 암호화하지만 브라우저는 http 로 봄)
+        return self.headers.get("X-Forwarded-Proto", "").lower() == "https" and self.client_address[0] in ("127.0.0.1", "::1", "::ffff:127.0.0.1")
+
+    def _same_origin(self):
+        origin, host = self.headers.get("Origin"), self.headers.get("Host")
+        if not origin or not host:
+            return False
+        u = urllib.parse.urlsplit(origin)
+        if u.scheme not in ("http", "https") or u.netloc.lower() != host.strip().lower():
+            return False
+        return self.headers.get("Sec-Fetch-Site") in (None, "same-origin")
+
+    def _need_login(self, path, query):
+        if path in PAGES:
+            nxt = "/summary" if PAGES[path] == "summary" else "/"
+            # 다른 앱의 링크로 열면 SameSite=Strict 쿠키가 안 실린다 → 로그인한 적 있으면 같은 사이트에서 한 번 더 열어 본다
+            if self._cookies().get(authmod.MARK_COOKIE) == "1" and "r=1" not in query:
+                return self._send(200, "text/html; charset=utf-8",
+                                  f'<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0;url={nxt}?r=1"><title>GH Coin</title>',
+                                  {"Content-Security-Policy": "default-src 'none'"})
+            return self._redirect("/login?next=" + urllib.parse.quote(nxt))
+        return self._json(401, {"ok": False, "err": "로그인이 필요합니다"})
+
+    # ------------------------------------------------------------ GET
     def _route(self):
         if not host_ok(self.headers.get("Host")):
             return self._send(403, "text/plain; charset=utf-8", "허용되지 않은 주소입니다 (GHCOIN_DASH_HOSTS 참고)\n")
-        path = urllib.parse.urlsplit(self.path).path
-        if path in ("/", "/index.html"):
-            body, csp = PAGE.get()
-            return self._send(200, "text/html; charset=utf-8", body, {"Content-Security-Policy": csp})
+        u = urllib.parse.urlsplit(self.path)
+        path = u.path
+        if path == "/healthz":
+            m = HUB.meta or {}
+            return self._json(200, {"ok": True, "status": m.get("status", STATS.status), "chrome": bool(m.get("connected")), "stale": m.get("stale", True),
+                                    "age_s": m.get("ageS"), "uptime_s": int(time.time() - STATS.started),
+                                    "mirror": MIRROR.state if MIRROR else "off"})
+        if path == "/login":
+            if self._session():
+                return self._redirect("/")
+            return self._login_page("")
+        nonce = self._session()
+        if not nonce:
+            return self._need_login(path, u.query)
+        if path in PAGES:
+            if PAGES[path] == "summary":
+                e = FILECACHE.get("summary.html")
+                if not e:
+                    return self._send(500, "text/plain; charset=utf-8", "summary.html 이 없습니다\n")
+                return self._send(200, "text/html; charset=utf-8", e["body"], {"Content-Security-Policy": e["csp"]})
+            e = FILECACHE.get("live.html")
+            if not e or not MIRROR:
+                return self._redirect("/summary")
+            body = e["body"].replace(b"__CSRF__", AUTH.csrf(nonce).encode())
+            return self._send(200, "text/html; charset=utf-8", body, {"Content-Security-Policy": CSP_LIVE})
+        if path in FILES:
+            return self._file(*FILES[path])
         if path == "/api/state":
             body, _ = HUB.body(0)
             return self._send(200, "application/json; charset=utf-8", body)
-        if path == "/healthz":
-            m = HUB.meta or {}
-            return self._send(200, "application/json; charset=utf-8", jdump({
-                "ok": True, "status": m.get("status", STATS.status), "chrome": bool(m.get("connected")), "stale": m.get("stale", True),
-                "age_s": m.get("ageS"), "uptime_s": int(time.time() - STATS.started)}))
         if path == "/api/stream":
             return self._stream()
+        if path == "/api/live":
+            return self._live()
+        if path == "/api/live-stats":
+            st = MIRROR.stats() if MIRROR else {"state": "off"}
+            st["service"] = {"rssMb": round(_rss_mb(), 1), "cpuPct": STATS.cpu_pct, "threads": threading.active_count(), "version": VERSION}
+            return self._json(200, st)
+        if path.startswith("/app/"):
+            return self._static(urllib.parse.unquote(path[5:]))
         return self._send(404, "text/plain; charset=utf-8", "없는 주소입니다\n")
+
+    def _login_page(self, msg, code=200, nxt="/"):
+        e = FILECACHE.get("login.html")
+        body = (e["body"] if e else b"<h1>login.html missing</h1>").decode("utf-8")
+        if not AUTH.ready():
+            msg = msg or AUTH.error
+        body = body.replace("{{MSG}}", html.escape(msg)).replace("{{NEXT}}", html.escape(nxt if nxt in ("/", "/summary") else "/"))
+        self._send(code, "text/html; charset=utf-8", body, {"Content-Security-Policy": CSP_LOGIN})
+
+    def _static(self, rel):
+        if self.command not in ("GET", "HEAD") or not MIRROR:
+            return self._send(405, "text/plain; charset=utf-8", "GET 만 됩니다\n")
+        r = MIRROR.static(rel)
+        if not r:
+            return self._send(404, "text/plain; charset=utf-8", "허용되지 않은 파일입니다\n")
+        data, ctype = r
+        self._send(200, ctype, data, {"Content-Security-Policy": CSP_STATIC}, cache="private, max-age=300")
 
     def _stream(self):
         if self.command == "HEAD":
@@ -840,6 +992,154 @@ class Handler(BaseHTTPRequestHandler):
         finally:
             HUB.leave_stream(me)
 
+    def _live(self):
+        """실시간 화면 SSE: status · wait · reset · m(DOM 묶음) · cv(캔버스 그림). gzip 으로 약 15배 작게."""
+        if not MIRROR:
+            return self._json(404, {"ok": False, "err": "실시간 화면이 꺼져 있습니다"})
+        if self.command == "HEAD":
+            return self._head(200, "text/event-stream")
+        cookie = self._cookies().get(authmod.COOKIE)
+        gz = "gzip" in (self.headers.get("Accept-Encoding") or "")
+        sock = self.connection
+        try:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 512 * 1024)
+            if hasattr(socket, "TCP_USER_TIMEOUT"):
+                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_USER_TIMEOUT, 60000)
+        except OSError:
+            pass
+        self.close_connection = True
+        v = MIRROR.join(sock)
+        try:
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("X-Accel-Buffering", "no")
+            if gz:
+                self.send_header("Content-Encoding", "gzip")
+            self.send_header("Connection", "close")
+            self.end_headers()
+            sock.settimeout(30)
+            z = zlib.compressobj(6, zlib.DEFLATED, 31) if gz else None
+
+            def out(b):
+                v.raw += len(b)
+                if z:
+                    b = z.compress(b) + z.flush(zlib.Z_SYNC_FLUSH)
+                v.wire += len(b)
+                self.wfile.write(b)
+                self.wfile.flush()
+
+            out(b"retry: 2000\n\n")
+            checked = time.monotonic()
+            while not STOP.is_set():
+                items = MIRROR.next_items(v, 15.0)
+                if items is None:
+                    break
+                if time.monotonic() - checked > LIVE_CHECK_S:       # 로그아웃 · 비밀번호 바뀜 → 끊음
+                    checked = time.monotonic()
+                    if not AUTH.session(cookie):
+                        break
+                if not items:
+                    out(b": ping\n\n")
+                    continue
+                out("".join(f"event: {ev}\ndata: {data}\n\n" for ev, data in items).encode("utf-8"))
+        except (OSError, ValueError):
+            pass
+        finally:
+            MIRROR.leave(v)
+
+    # ------------------------------------------------------------ POST
+    def _body(self):
+        try:
+            n = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            n = -1
+        if n < 0 or n > MAX_BODY:
+            self.close_connection = True
+            self._json(413, {"ok": False, "err": "너무 큽니다"})
+            return None
+        return self.rfile.read(n) if n else b""
+
+    def do_POST(self):
+        if not host_ok(self.headers.get("Host")):
+            return self._send(403, "text/plain; charset=utf-8", "허용되지 않은 주소입니다\n")
+        path = urllib.parse.urlsplit(self.path).path
+        raw = self._body()
+        if raw is None:
+            return
+        if path == "/login":
+            return self._login(raw)
+        nonce = self._session()
+        if not nonce:
+            return self._json(401, {"ok": False, "err": "로그인이 필요합니다"})
+        # 다른 사이트에서 몰래 보내는 요청 막기: 같은 출처(Origin) + 세션별 토큰 + JSON 만
+        if not self._same_origin() or not AUTH.check_csrf(nonce, self.headers.get("X-CSRF-Token")):
+            return self._json(403, {"ok": False, "err": "요청 확인 실패 (페이지를 새로고침하세요)"})
+        if (self.headers.get("Content-Type") or "").split(";")[0].strip().lower() != "application/json":
+            return self._json(415, {"ok": False, "err": "JSON 만 받습니다"})
+        try:
+            body = json.loads(raw.decode("utf-8") or "{}")
+        except (ValueError, UnicodeError):
+            return self._json(400, {"ok": False, "err": "잘못된 요청"})
+        if path == "/logout":
+            AUTH.revoke(self._cookies().get(authmod.COOKIE))
+            return self._json(200, {"ok": True}, {"Set-Cookie": [
+                f"{authmod.COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict", f"{authmod.MARK_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax"]})
+        if not MIRROR:
+            return self._json(404, {"ok": False, "err": "실시간 화면이 꺼져 있습니다"})
+        try:
+            if path == "/api/act":
+                if not ACT_LIMIT.take(nonce):
+                    return self._json(429, {"ok": False, "err": "너무 빠르게 누르고 있습니다"})
+                try:
+                    a = mirrormod.validate(body)
+                except ValueError as e:
+                    return self._json(400, {"ok": False, "err": f"잘못된 조작 ({e})"})
+                return self._json(200, MIRROR.act(a))
+            if path == "/api/dialog":
+                seq = body.get("seq") if isinstance(body, dict) else None
+                if not isinstance(seq, int) or isinstance(seq, bool):
+                    return self._json(400, {"ok": False, "err": "잘못된 요청"})
+                MIRROR.answer_dialog(seq, bool(body.get("accept")), body.get("text"))
+                return self._json(200, {"ok": True})
+            if path == "/api/reload":
+                if not ACT_LIMIT.take(nonce):
+                    return self._json(429, {"ok": False, "err": "너무 빠르게 누르고 있습니다"})
+                MIRROR.reload()
+                sys.stderr.write("ghcoin-dash: 실시간 화면에서 앱 새로고침\n")
+                return self._json(200, {"ok": True})
+        except mirrormod.Conflict as e:
+            return self._json(409, {"ok": False, "err": str(e)})
+        except (mirrormod.Unavailable, ConnectionError, OSError, websocket.WebSocketException) as e:
+            return self._json(503, {"ok": False, "err": str(e) if isinstance(e, mirrormod.Unavailable) else "봇 화면에 연결할 수 없습니다"})
+        return self._json(404, {"ok": False, "err": "없는 주소입니다"})
+
+    def _login(self, raw):
+        ip = str(self.client_address[0])
+        origin = self.headers.get("Origin")
+        if origin and origin != "null" and not self._same_origin():
+            return self._login_page("다른 사이트에서 보낸 로그인은 받지 않습니다", 403)
+        try:
+            form = urllib.parse.parse_qs(raw.decode("utf-8"), max_num_fields=4)
+        except (ValueError, UnicodeError):
+            form = {}
+        nxt = (form.get("next") or ["/"])[0]
+        nxt = nxt if nxt in ("/", "/summary") else "/"
+        if not AUTH.ready():
+            return self._login_page(AUTH.error, 503, nxt)
+        if not AUTH.allow_attempt(ip):
+            return self._login_page("시도가 너무 많습니다 — 1분 뒤에 다시 해 보세요", 429, nxt)
+        if not AUTH.check_password((form.get("password") or [""])[0]):
+            AUTH.failed(ip)
+            time.sleep(0.4)
+            return self._login_page("비밀번호가 틀렸습니다", 401, nxt)
+        token = AUTH.new_session()
+        sec = "; Secure" if self._secure() else ""
+        age = authmod.SESSION_DAYS * 86400
+        return self._redirect(nxt, {"Set-Cookie": [f"{authmod.COOKIE}={token}; Path=/; Max-Age={age}; HttpOnly; SameSite=Strict{sec}",
+                                                   f"{authmod.MARK_COOKIE}=1; Path=/; Max-Age={age}; HttpOnly; SameSite=Lax{sec}"]})
+
     def do_GET(self):
         self._route()
 
@@ -847,9 +1147,9 @@ class Handler(BaseHTTPRequestHandler):
         self._route()
 
     def _deny(self):
-        self._send(405, "text/plain; charset=utf-8", "보기 전용입니다 (GET 만 됩니다)\n", {"Allow": "GET, HEAD"})
+        self._send(405, "text/plain; charset=utf-8", "지원하지 않는 요청입니다\n", {"Allow": "GET, HEAD, POST"})
 
-    do_POST = do_PUT = do_DELETE = do_PATCH = do_OPTIONS = do_TRACE = do_CONNECT = _deny
+    do_PUT = do_DELETE = do_PATCH = do_OPTIONS = do_TRACE = do_CONNECT = _deny
 
 
 class Server(ThreadingHTTPServer):
@@ -886,37 +1186,59 @@ class Server(ThreadingHTTPServer):
         super().handle_error(request, client_address)
 
     def service_actions(self):
-        # 수집기 스레드가 죽거나 멈추면 서비스를 끝낸다 → systemd(Restart=always)가 다시 켬
+        # 수집기 · 실시간 중계 스레드가 죽거나 멈추면 서비스를 끝낸다 → systemd(Restart=always)가 다시 켬
         th = COLLECTOR
         if th is None or STOP.is_set():
             return
-        if not th.is_alive() or time.monotonic() - LAST_TICK > WATCHDOG_S:
-            sys.stderr.write("ghcoin-dash: 수집기가 멈춰서 종료합니다 (systemd 가 다시 켬)\n")
+        dead = not th.is_alive() or time.monotonic() - LAST_TICK > WATCHDOG_S or (MIRROR_THREAD is not None and not MIRROR_THREAD.is_alive())
+        if dead:
+            sys.stderr.write("ghcoin-dash: 수집기/중계가 멈춰서 종료합니다 (systemd 가 다시 켬)\n")
             sys.stderr.flush()
             os._exit(1)
 
 
 def main():
-    global COLLECTOR
+    global COLLECTOR, MIRROR, MIRROR_THREAD
+    if len(sys.argv) > 1 and sys.argv[1] == "--make-password-hash":
+        pw = sys.stdin.readline().rstrip("\r\n")
+        try:
+            print(authmod.make_hash(pw))
+        except ValueError as e:
+            sys.stderr.write(f"{e}\n")
+            return 2
+        return 0
     try:
         src = load_collector()
         _check_local(CDP_BASE)
+        if os.environ.get("GHCOIN_DASH_MIRROR", "1") != "0":
+            MIRROR = mirrormod.Mirror(CDP_BASE, TARGET_RE, os.path.join(HERE, "recorder.js"),
+                                      os.path.join(HERE, "vendor", "rrweb-record.min.js"), status_fn=bot_status)
     except (OSError, ValueError) as e:
         sys.stderr.write(f"시작할 수 없습니다: {e}\n")
         return 2
+    if not AUTH.ready():
+        sys.stderr.write(f"주의: {AUTH.error} (로그인할 수 없음)\n")
     srv = Server((BIND, PORT), Handler)
     COLLECTOR = threading.Thread(target=collector_loop, args=(src,), name="collector", daemon=True)
     COLLECTOR.start()
+    if MIRROR:
+        MIRROR_THREAD = threading.Thread(target=MIRROR.run, name="mirror", daemon=True)
+        MIRROR_THREAD.start()
 
     def bye(*_):
         STOP.set()
+        if MIRROR:
+            MIRROR.stop.set()
+            with MIRROR.cond:
+                MIRROR.cond.notify_all()
         with HUB.cond:
             HUB.cond.notify_all()
         threading.Thread(target=srv.shutdown, daemon=True).start()
 
     signal.signal(signal.SIGTERM, bye)
     signal.signal(signal.SIGINT, bye)
-    print(f"ghcoin-dash {VERSION}: http://{BIND}:{PORT}/  (DevTools {CDP_BASE}, {INTERVAL:g}초 간격)", flush=True)
+    print(f"ghcoin-dash {VERSION}: http://{BIND}:{PORT}/  (DevTools {CDP_BASE}, 요약 {INTERVAL:g}초 간격, 실시간 화면 "
+          f"{'기록기 ' + MIRROR.version if MIRROR else '꺼짐'})", flush=True)
     try:
         srv.serve_forever(poll_interval=0.5)
     finally:
