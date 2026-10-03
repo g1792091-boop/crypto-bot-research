@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0f1320">
+<meta name="referrer" content="no-referrer">
+<meta name="ghd-csrf" content="__CSRF__">
+<title>GH Coin</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230f1320'/%3E%3Cpath d='M12 44 L26 30 L36 38 L52 18' stroke='%2322c55e' stroke-width='6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/vendor/rrweb-replay.css">
+<link rel="stylesheet" href="/live.css">
+</head>
+<body>
+<div id="stage" aria-label="GH Coin 봇 화면 (실시간)"></div>
+<div id="cover"><div class="spin"></div><p id="coverMsg">봇 화면을 불러오는 중…</p></div>
+<div id="officeGone" hidden><span id="officeGoneTxt">사무실 화면이 닫혔습니다</span><button id="officeReload" type="button">다시 열기 (앱 새로고침)</button></div>
+<button id="apprBar" type="button" hidden>🔔 주문 승인 대기 — 보기</button>
+<div id="evicted" hidden><p>다른 창(탭)에서 실시간 화면을 열어서 여기는 멈췄습니다.<br><small>동시에 볼 수 있는 창은 4개까지입니다.</small></p><button id="evictedBtn" type="button">여기서 다시 보기</button></div>
+<div id="dock">
+  <button id="pill" type="button" aria-expanded="false" aria-controls="menu" title="연결 상태 · 메뉴"><i></i><span id="pillTxt">연결 중…</span><b class="mi" aria-hidden="true">☰</b></button>
+  <div id="menu" hidden>
+    <div id="menuStatus"></div>
+    <a href="/summary">📊 요약 화면 (숫자로 보기)</a>
+    <button id="fitBtn" type="button">🔍 실제 크기로 보기</button>
+    <button id="reloadBtn" type="button">🔄 앱 새로고침</button>
+    <button id="logoutBtn" type="button">🚪 로그아웃</button>
+  </div>
+</div>
+<div id="toast" role="status" aria-live="polite"></div>
+<div id="dlg" role="dialog" aria-modal="true" aria-labelledby="dlgTtl" hidden>
+  <div class="box">
+    <div class="ttl" id="dlgTtl">봇이 확인을 묻습니다</div>
+    <div id="dlgMsg"></div>
+    <input id="dlgIn" hidden autocomplete="off" aria-label="답">
+    <div class="row"><span id="dlgLeft"></span><button id="dlgNo" type="button">취소</button><button id="dlgOk" type="button" class="pri">확인</button></div>
+  </div>
+</div>
+<script src="/vendor/rrweb-replay.min.js"></script>
+<script src="/live.js"></script>
+</body>
+</html>

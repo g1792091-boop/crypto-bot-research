@@ -1,0 +1,29 @@
+Vendored third-party files (served by ghcoin-dash; no CDN is used at runtime)
+==========================================================================
+
+rrweb 2.1.6  (MIT, see LICENSE.rrweb)  https://github.com/rrweb-io/rrweb
+  gitHead 5b08843faf9cb21c836613489ffd93d455f38181, published to npm 2026-09-18, SLSA provenance on npm.
+  Fetched with `npm pack @rrweb/record@2.1.6 @rrweb/replay@2.1.6`; each tarball's sha512 matched the
+  registry's dist.integrity before extraction. Files are copied byte for byte (not modified).
+
+  file                  source (inside the npm tarball)                 sha256
+  rrweb-record.min.js   @rrweb/record@2.1.6  package/umd/record.min.js    fde9a5c5c38fc23c9f8d6429b4e74c8996156e1632f132693b68e32509dc92f0
+  rrweb-replay.min.js   @rrweb/replay@2.1.6  package/umd/replay.min.js    4ab2043bf8b77f5051c2b912f92feec7c22b9556718b04dddab8fdc09d8acce9
+  rrweb-replay.css      @rrweb/replay@2.1.6  package/dist/style.css       64d720c3a8966a3764822abf7b14f78135c90ce09dcfae4286e50f06d9e01545
+  LICENSE.rrweb         github.com/rrweb-io/rrweb  LICENSE (the npm tarballs ship none)   e49e62397b603438476e0d6b5ca3b6e6d4f23a80594e596aff29ac04fa3e1b1c
+
+  tarballs: rrweb-record-2.1.6.tgz sha256 44e6091209e786122adb82a2bc2cd4505d91f22130171709b03c032b3f3c30ae
+                                   sha512 dHOrWa97l3C+BBsUd+zgLtErTZavzudJunu1HN2bV6WhTBLGk7z8BY1fWw0QerYK7qJJyrBE9D6XHcISVdVGQQ==
+            rrweb-replay-2.1.6.tgz sha256 e47c7d7a136a3ddbb8a92c1c66a2e9aa8454738ee3ede14c493e13cc44db7dd3
+                                   sha512 Ti7zPk3Lbp33N9rKtIPCCIbUm4ctJMRRIMG5/5uI70M0efpSC1cpo/Eq8ELVW/5zWrkiElgmnPR0+h+oS79ASA==
+
+  Why 2.1.6 and not 2.1.7: 2.1.7 was one day old when this was written. The only difference between the two
+  UMD builds is an internal regex in the CSS text splitter for <style> elements with several text nodes
+  (not used by GH Coin), so the older, longer-published release was taken.
+
+  rrweb-record.min.js runs inside the bot page (injected by ghcoin-dash through Chrome DevTools, see recorder.js).
+  rrweb-replay.min.js + rrweb-replay.css run in the viewer's browser (live.html).
+
+To update: npm pack the new version, check sha512 against `npm view @rrweb/<pkg>@<ver> dist.integrity`, copy the
+same three files, update this table and the SHA-256 pins in ../../add-dashboard.sh, then test (recorder.js and
+live.js use options and one private replay field: replayer.service.state.context.events).
