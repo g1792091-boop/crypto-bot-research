@@ -18,8 +18,10 @@ set -euo pipefail
 LINK="${1:-}"
 ZIP_SHA256="${GHCOIN_ZIP_SHA256:-9eea1b6212f31bc5ab32a28031cb6038e32c4fbd14b7fe722b40d008d49460b1}"
 GO_VER="1.24.7"
-APP_USER="ghcoin"
+APP_USER="ghcoin"            # 화면 · Chrome(봇) 을 돌리는 계정
 APP_HOME="/home/$APP_USER"
+SRV_USER="ghcoin-srv"        # 앱 실행기(127.0.0.1:17860) 를 돌리는 계정
+SRV_HOME="/home/$SRV_USER"
 APP_DIR="/opt/ghcoin"
 APP_PORT=17860
 VNC_PORT=5901
@@ -65,6 +67,9 @@ fi
 
 # ---------------------------------------------------------------- 2. 실행 계정
 id "$APP_USER" >/dev/null 2>&1 || useradd -m -s /bin/bash "$APP_USER"   # root 가 아닌 전용 계정으로 돌린다
+# 실행기는 따로 된 계정으로: 혹시 무엇이 실행기를 통해 파일에 닿아도 Chrome 저장소(키)는 못 읽게
+id "$SRV_USER" >/dev/null 2>&1 || useradd -m -s /usr/sbin/nologin "$SRV_USER"
+chmod 700 "$APP_HOME"
 
 # ---------------------------------------------------------------- 3. 앱 코드 받기 · 빌드
 say "GH Coin 코드 받기"
@@ -105,6 +110,106 @@ rm -rf "$L/site" && mkdir -p "$L/site"
 cp "$SRC/index.html" "$L/site/"
 cp -r "$SRC/nuri-ai" "$SRC/arch-ai" "$SRC/gh-coin" "$L/site/"
 rm -f "$L"/site/*/README.md
+rm -f "$L/site/arch-ai/app.html"   # 쓰지 않는 페이지인데 외부(CDN) 코드를 불러오므로 뺀다
+
+# VPS 보안 강화: 서버용 빌드에만 아래 파일을 더한다 (앱 코드 · PC 용 exe 는 그대로)
+#   AI 직원이 서버에서 명령어 실행 ✗ · 사무실 폴더 밖 파일 ✗ · 앱 코드 바꿔치기 ✗ · 외부 주소로 접속 ✗ · 내부 주소로 중계 ✗
+cat > "$L/vps_harden.go" <<'GOEOF'
+package main
+
+// VPS 전용 보안 강화 — install-ghcoin.sh 가 서버용으로 빌드할 때만 넣는 파일 (원본 앱 코드는 그대로)
+//  1. AI 가 서버에서 명령어를 실행하는 기능(/__nuri/code/exec) 끔
+//  2. 파일 읽기·쓰기는 사무실 폴더 안에서만 (다른 폴더 열기·고르기 금지)
+//  3. AI 가 고친 앱 파일로 바꿔치기(app-patches) 끔
+//  4. 접속 주소(Host)가 127.0.0.1 · localhost 가 아니면 거절 (DNS 리바인딩 방지)
+//  5. API 중계가 서버 내부 주소(127.0.0.1 · 사설 · Tailscale IP)로 가는 것 금지
+
+import (
+	"bytes"
+	"encoding/json"
+	"errors"
+	"io"
+	"net"
+	"net/http"
+	"strings"
+	"syscall"
+	"time"
+)
+
+const vpsHardened = true
+
+func init() {
+	proxyClient.Transport = &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout: 15 * time.Second,
+			Control: func(network, address string, c syscall.RawConn) error {
+				host, _, err := net.SplitHostPort(address)
+				if err != nil {
+					return err
+				}
+				if !isPublicIP(net.ParseIP(host)) {
+					return errors.New("서버 내부 주소로는 중계하지 않습니다")
+				}
+				return nil
+			},
+		}).DialContext,
+		TLSHandshakeTimeout: 15 * time.Second,
+		IdleConnTimeout:     90 * time.Second,
+	}
+}
+
+func vpsDeny(w http.ResponseWriter, msg string) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusForbidden)
+	json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": msg})
+}
+
+func vpsGuard(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		host := r.Host
+		if h, _, err := net.SplitHostPort(host); err == nil {
+			host = h
+		}
+		if host != "127.0.0.1" && host != "localhost" {
+			http.Error(w, "forbidden host", http.StatusForbidden)
+			return
+		}
+		p := r.URL.Path
+		if strings.HasPrefix(p, "/__nuri/code/") {
+			switch strings.TrimPrefix(p, "/__nuri/code/") {
+			case "exec", "pick", "open":
+				vpsDeny(w, "이 서버(VPS)에서는 보안을 위해 꺼 둔 기능입니다 (명령 실행 · 폴더 바꾸기)")
+				return
+			}
+			if r.Method == http.MethodPost { // 모든 파일 작업을 사무실 폴더 안으로 고정
+				body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 20<<20))
+				if err != nil {
+					http.Error(w, "too large", http.StatusRequestEntityTooLarge)
+					return
+				}
+				var in map[string]any
+				if json.Unmarshal(body, &in) != nil || in == nil {
+					in = map[string]any{}
+				}
+				in["ws"] = "office"
+				nb, _ := json.Marshal(in)
+				r.Body = io.NopCloser(bytes.NewReader(nb))
+				r.ContentLength = int64(len(nb))
+			}
+		}
+		if strings.HasPrefix(p, "/__nuri/override") && r.Method != http.MethodGet && r.Method != http.MethodHead {
+			vpsDeny(w, "이 서버(VPS)에서는 앱 코드 고치기를 꺼 두었습니다")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+GOEOF
+sed -i 's#srv := &http.Server{Handler: mux}#srv := \&http.Server{Handler: vpsGuard(mux)}#' "$L/main.go"
+sed -i 's/^func overridesEnabled() bool {\r\?$/func overridesEnabled() bool {\n\tif vpsHardened {\n\t\treturn false\n\t}/' "$L/override.go"
+grep -q 'vpsGuard(mux)' "$L/main.go" && grep -q 'if vpsHardened' "$L/override.go" \
+  || die "보안 강화 패치를 넣지 못했습니다 (앱 코드 구조가 바뀐 것 같습니다). 화면을 캡처해서 보내 주세요."
 mkdir -p "$APP_DIR"
 ( cd "$L" && GOPATH="$WORK/gopath" GOCACHE="$WORK/gocache" GOFLAGS=-modcacherw GOTOOLCHAIN=local CGO_ENABLED=0 \
     "$GOROOT_DIR/bin/go" build -trimpath \
@@ -181,9 +286,9 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-User=$APP_USER
-Environment=HOME=$APP_HOME NURI_NO_BROWSER=1 NURI_IDLE_EXIT=87600h NURI_FIRST_WAIT=87600h
-WorkingDirectory=$APP_HOME
+User=$SRV_USER
+Environment=HOME=$SRV_HOME NURI_NO_BROWSER=1 NURI_IDLE_EXIT=87600h NURI_FIRST_WAIT=87600h
+WorkingDirectory=$SRV_HOME
 ExecStart=$APP_DIR/ghcoin
 Restart=always
 RestartSec=3
