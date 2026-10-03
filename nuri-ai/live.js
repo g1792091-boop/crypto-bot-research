@@ -164,6 +164,9 @@ export function gateFor(s, now = D.now()){
     {id: "pf", name: "손익비(Profit Factor)", ok: pf >= GATE.pf, value: pf, need: `${GATE.pf} 이상`, text: f(pf)},
     {id: "ret", name: "모의 수익률", ok: ret > GATE.ret, value: ret, need: "0% 초과", text: `${ret >= 0 ? "+" : ""}${f(ret)}%`},
     {id: "mdd", name: "최대 낙폭(MDD)", ok: mdd < GATE.mdd, value: mdd, need: `${GATE.mdd}% 미만`, text: `${f(mdd)}%`},
+    // 과최적화 방어: 전략 개발 때 저장해 둔 견고성·코인 일반화 결과를 실돈 관문에도 적용 (옛 전략은 미측정 → 통과)
+    {id: "robust", name: "과최적화 검사(견고성)", ok: !s?.robust || s.robust.ok !== false, value: s?.robust?.ok, need: "통과 또는 미측정", text: s?.robust ? (s.robust.ok === false ? "미달" : "통과") : "미측정"},
+    {id: "generalize", name: "여러 코인 일반화", ok: !s?.crossCoin || !s.crossCoin.total || s.crossCoin.profitable >= 1, value: s?.crossCoin || null, need: "다른 코인 1개+ 수익 또는 미측정", text: s?.crossCoin && s.crossCoin.total ? `${s.crossCoin.profitable}/${s.crossCoin.total} 코인 수익` : "미측정"},
     {id: "active", name: "모의투자 운용 중", ok: s?.status === "active", value: s?.status || "-", need: "운용 중", text: s?.status === "active" ? "운용 중" : (s?.retiredWhy || "중지")}
   ];
   return {eligible: checks.every(c => c.ok), checks};

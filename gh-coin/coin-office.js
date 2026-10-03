@@ -208,6 +208,7 @@ const ACTIONS = [
   {job: "sent", re: /감정|심리|센티먼트|sentiment|여론\s*분위기|시장\s*분위기|공포.{0,2}탐욕/i, say: "뉴스·경제지표팀이 지금 바로 자체 감정 엔진으로 뉴스·여론의 시장 심리(0~100)를 분석합니다"},
   {job: "pos", re: /단타|스윙|스캘핑|포지션\s*(추천|알려|잡아|줘|어때|봐)|포지션\s*추천|지금\s*(사|팔|들어가)/i, say: "진입 타점팀이 지금 바로 자체 AI + ATR 로 단타·스윙 포지션(방향·진입·손절·익절·손익비)을 추천합니다"},
   {job: "contest", re: /콘테스트|대회|리더보드|전략\s*순위|전략\s*경쟁|어느\s*전략.{0,6}(좋|나)|best\s*strategy/i, say: "데모거래팀이 지금 바로 전략 콘테스트를 열어 데모 전략들을 성과로 겨뤄 순위를 매깁니다"},
+  {job: "ensemble", re: /앙상블\s*포트|포트폴리오|분산\s*(투자|운용|배분)|비중\s*(배분|분배|나눠)|여러\s*전략.{0,6}(묶|섞|합)|자본\s*배분/i, say: "데모거래팀이 신뢰점수 상위 전략들을 묶어 분산 포트폴리오(전략별 자본 비중)를 제안합니다"},
   {job: "track", re: /적중률|캘리브레이션|승률|예측.{0,6}(맞|정확|적중)|얼마나\s*맞|확신도\s*(검증|맞)/i, say: "CEO실에서 QA가 지금까지의 예측을 채점해 적중률과 확신도 캘리브레이션을 보고합니다"},
   {job: "report", re: /대시보드|성과\s*(보여|요약|대시|정리|보고|어때)|전체\s*수익|실적\s*(보|요약)|얼마.{0,3}벌/i, say: "CEO가 지금 바로 성과 대시보드(총 손익·전략별 기여·적중률·심리)를 한눈에 정리합니다"},
   {job: "selfai", re: /자체\s*ai|자체\s*인공지능|앙상블|트레이딩\s*데스크|자체\s*모델|ghcoinai|확신도\s*순위|ai\s*데스크/i, say: "자체 AI 데스크가 지금 바로 외부 키 없이 앙상블(기술 평점·멀티 시간대·ML·알파)로 코인 방향·확신도 순위를 냅니다"},
@@ -681,14 +682,14 @@ export function startChatter(){
 // 매 주기 ① 모의투자 장부를 실제 시세로 갱신(코드, AI 없음) ② 그때그때 한 가지 일을 고른다:
 // 매매법 연구 · SNS 여론 · 경제 리서치 · 동료 수다 · 컴퓨터 작업 · 모의투자 보고 (하루 AI 호출 한도 안에서)
 // 쉬지 않고 돌아가는 업무 순환표: 팀마다 고르게 돌아가도록 섞어 두었다 (모듈이 없으면 경제 리서치로 대신)
-const JOBS = ["plan", "dev", "combo", "ic", "bot", "ind", "qrisk", "trend", "data", "opt", "patscan", "situ", "cdev", "entry", "sr", "news", "sent", "pos", "contest", "track", "report", "promote", "pattern", "coin", "ml", "selfai", "dev", "tpsl", "combo", "drift", "cdev", "feeds", "alpha", "bot", "botopt", "selfai", "plan", "trend", "ic", "chat", "forecast", "coin", "live", "retro", "task", "selfdev", "macro", "sns", "computer", "paper"];
-const JOB_KO = {plan: "리서치 플래너(할 일 목록 → 워커 배정)", sent: "시장 심리(자체 감정 엔진)", pos: "단타·스윙 포지션 추천", contest: "전략 콘테스트(데모 성과 리더보드)", track: "예측 적중률·캘리브레이션", report: "성과 대시보드", bot: "자동매매봇 전략 만들기", botopt: "자동매매봇 자동 개선(보조지표·위험값 하이퍼옵트)", selfai: "자체 AI 데스크(앙상블 방향·확신도 순위)", ic: "투자위원회(강세·약세 토론 → 결정)", qrisk: "퀀트 리스크(VaR·결정표·주문 전 점검)", data: "거래소 비교·데이터 품질", opt: "하이퍼옵트로 전략 다듬기", patscan: "패턴 스캐너", drift: "데모 성과 이동 감지(런 차트)", feeds: "경제 캘린더·금리·변동성 지수", alpha: "알파 팩터 순위", combo: "실시간 종합 지표 타점", dev: "매매법 개발 → 백테스트", cdev: "커스텀 지표 개발 → 백테스트", ind: "보조지표 분석", trend: "다중 시간대 추세 분석", entry: "진입 타점 분석", sr: "지지·저항 분석",
+const JOBS = ["plan", "dev", "combo", "ic", "bot", "ind", "qrisk", "trend", "data", "opt", "patscan", "situ", "cdev", "entry", "sr", "news", "sent", "pos", "contest", "ensemble", "track", "report", "promote", "pattern", "coin", "ml", "selfai", "dev", "tpsl", "combo", "drift", "cdev", "feeds", "alpha", "bot", "botopt", "selfai", "plan", "trend", "ic", "chat", "forecast", "coin", "live", "retro", "task", "selfdev", "macro", "sns", "computer", "paper"];
+const JOB_KO = {plan: "리서치 플래너(할 일 목록 → 워커 배정)", sent: "시장 심리(자체 감정 엔진)", pos: "단타·스윙 포지션 추천", contest: "전략 콘테스트(데모 성과 리더보드)", ensemble: "앙상블 포트폴리오(신뢰점수로 비중 배분)", track: "예측 적중률·캘리브레이션", report: "성과 대시보드", bot: "자동매매봇 전략 만들기", botopt: "자동매매봇 자동 개선(보조지표·위험값 하이퍼옵트)", selfai: "자체 AI 데스크(앙상블 방향·확신도 순위)", ic: "투자위원회(강세·약세 토론 → 결정)", qrisk: "퀀트 리스크(VaR·결정표·주문 전 점검)", data: "거래소 비교·데이터 품질", opt: "하이퍼옵트로 전략 다듬기", patscan: "패턴 스캐너", drift: "데모 성과 이동 감지(런 차트)", feeds: "경제 캘린더·금리·변동성 지수", alpha: "알파 팩터 순위", combo: "실시간 종합 지표 타점", dev: "매매법 개발 → 백테스트", cdev: "커스텀 지표 개발 → 백테스트", ind: "보조지표 분석", trend: "다중 시간대 추세 분석", entry: "진입 타점 분석", sr: "지지·저항 분석",
   tpsl: "익절·손절 관리", news: "뉴스·기사 분석", macro: "경제지표 예측", situ: "코인 상황판", pattern: "차트·캔들 패턴 분석", coin: "코인팀 회의", ml: "머신러닝·딥러닝 실험",
   promote: "데모 → 실거래 관문 심사", live: "실거래 데스크 점검", paper: "데모거래 보고", forecast: "방향 예측 토론", sns: "SNS 여론 확인", chat: "동료 수다", computer: "컴퓨터 작업",
   retro: "팀 회고·부족한 점 찾기", task: "개선 과제 수행", selfdev: "우리 앱 오류 찾아 코드 고치기", economy: "경제 리서치"};
-const JOB_TEAM = {plan: "hq", sent: "news", pos: "entry", contest: "demo", track: "hq", report: "hq", bot: "bot", botopt: "bot", selfai: "selfai", ic: "ic", qrisk: "qrisk", data: "data", opt: "opt", patscan: "pattern", drift: "demo", feeds: "news", alpha: "ml", combo: "combo", dev: "dev", cdev: "cdev", ind: "ind", trend: "trend", entry: "entry", sr: "sr", tpsl: "tpsl", news: "news", macro: "news", situ: "situ", pattern: "pattern", coin: "btc", ml: "ml",
+const JOB_TEAM = {plan: "hq", sent: "news", pos: "entry", contest: "demo", ensemble: "demo", track: "hq", report: "hq", bot: "bot", botopt: "bot", selfai: "selfai", ic: "ic", qrisk: "qrisk", data: "data", opt: "opt", patscan: "pattern", drift: "demo", feeds: "news", alpha: "ml", combo: "combo", dev: "dev", cdev: "cdev", ind: "ind", trend: "trend", entry: "entry", sr: "sr", tpsl: "tpsl", news: "news", macro: "news", situ: "situ", pattern: "pattern", coin: "btc", ml: "ml",
   promote: "demo", live: "live", paper: "demo", forecast: "entry", sns: "news", chat: "hq", computer: "hq", retro: "hq", task: "hq", selfdev: "hq", economy: "news"};
-const JOB_FN = () => ({plan: plannerJob, sent: sentimentJob, pos: posJob, contest: contestJob, track: trackJob, report: dashboardJob, bot: botJob, botopt: botImproveJob, selfai: selfaiJob, ic: icJob, qrisk: qriskJob, data: dataJob, opt: optJob, patscan: patternScanJob, drift: driftJob, feeds: openFeedsJob, alpha: alphaJob, combo: comboJob, dev: () => research("std"), cdev: () => research("custom"), ind: indJob, trend: trendJob, entry: entryJob, sr: srJob, tpsl: tpslJob, news: economyCheck, macro: macroJob,
+const JOB_FN = () => ({plan: plannerJob, sent: sentimentJob, pos: posJob, contest: contestJob, ensemble: ensembleJob, track: trackJob, report: dashboardJob, bot: botJob, botopt: botImproveJob, selfai: selfaiJob, ic: icJob, qrisk: qriskJob, data: dataJob, opt: optJob, patscan: patternScanJob, drift: driftJob, feeds: openFeedsJob, alpha: alphaJob, combo: comboJob, dev: () => research("std"), cdev: () => research("custom"), ind: indJob, trend: trendJob, entry: entryJob, sr: srJob, tpsl: tpslJob, news: economyCheck, macro: macroJob,
   situ: situJob, pattern: patternJob, coin: coinJob, ml: mlJob, promote: promoteJob, live: liveDeskJob, paper: paperReport, forecast: forecastJob, sns: snsCheck, chat: () => chatter(true),
   computer: computerWork, retro, task: doTask, selfdev: selfdevJob, economy: economyCheck});
 let cycleTimer = 0, cycling = false, lastJob = "";
@@ -1901,6 +1902,34 @@ async function driftJob(){
     if (last && last.side < 0 && last.to >= v.length - 3){ addTask({team: "demo", title: `성과 악화 감지: ${s.name}`, why: `런 차트 9연속 중앙값 아래 (${last.oldMedian.toFixed(2)} → ${last.newMedian.toFixed(2)}) · 비중 축소·은퇴 검토`, owner: lead.name}); journal("audit", "drift", s.id, {dir: "down", from: last.oldMedian, to: last.newMedian}, "trader", "런 차트 악화"); }
   }
   table("demo", lead.id, "📉 데모 전략 성과 이동 감지 (런 차트: 처음 13거래 중앙값 기준, 9연속 위·아래면 지속 이동)", ["전략", "거래 수", "중앙값", "판정"], rows.length ? rows : [["—", "0", "—", "데모 중인 전략 없음"]], "중앙값과 같은 값은 건너뜀 · 이동이 확인되면 그 9개로 새 중앙값");
+  await adaptiveRetrain(P, book, lead);
+}
+// 적응형 재학습: 데모를 돌면서 신뢰점수가 떨어진 전략을 자동으로 멈추고(은퇴), 매매법 개발팀에 교체 전략 개발을 맡긴다
+async function adaptiveRetrain(P, book, lead){
+  let linked = {}; try { const L = await import("../nuri-ai/live.js"); linked = L.liveCfg?.().linked || {}; } catch(e){}
+  const rows = [], retired = [];
+  for (const s of book.strategies.filter(x => x.status === "active" && x.spec)){
+    const tr = s.trades || [], n = tr.length, wins = tr.filter(t => (t.pnl ?? t.roe ?? 0) > 0).length;
+    const ret = (P.equityOf(s) / 10000 - 1) * 100, wr = n ? wins / n * 100 : 0, pf = s.wf?.oos?.pf ?? null;
+    const trust = trustScore({ret, wr, pf, n, robust: s.robust, crossCoin: s.crossCoin});
+    const live = !!linked[s.id]?.on;
+    // 표본이 충분(10거래 이상)하고 신뢰점수가 30 미만이면 과최적화·성과붕괴로 보고 자동 멈춤. 단 실거래 연결된 건 사람이 결정하도록 멈추지 않고 경고만.
+    let act = "유지";
+    if (n >= 10 && trust < 30){
+      if (live){ act = "⚠ 실거래 중 — 수동 점검"; addTask({team: "demo", title: `실거래 저신뢰 전략 점검: ${s.name}`, why: `신뢰점수 ${trust}로 하락(데모수익 ${pc(ret)}) · 실거래 연결 상태라 자동 중지 대신 사람이 해제 판단`, owner: lead.name}); }
+      else {
+        s.retiredWhy = `적응형 재학습: 신뢰점수 ${trust}로 하락(데모수익 ${pc(ret)}·${n}거래)`;   // setStatus 저장 전에 설정해야 함께 저장됨
+        await P.setStatus(s.id, "retired").catch(() => {});
+        act = "🛑 자동 은퇴"; retired.push({s, trust, ret});
+        // 같은 시장·결에 맞는 교체 전략을 개발팀에 요청(재학습)
+        addTask({team: "dev", title: `교체 전략 개발: ${s.mname || s.market}`, why: `${s.name}가 신뢰점수 ${trust}로 은퇴 — 같은 시장에서 더 견고한 새 전략 필요`, owner: agentById("dev_lead")?.name || lead.name});
+      }
+    }
+    rows.push([s.name.slice(0, 22), String(n), String(trust), live ? "🟢실거래" : "데모", act]);
+  }
+  if (rows.length) table("demo", lead.id, "🔁 적응형 재학습 — 신뢰점수 기반 자동 점검", ["전략", "거래", "신뢰점수", "구분", "조치"], rows,
+    "표본 10거래 이상 + 신뢰점수 30 미만이면 자동 은퇴하고 개발팀에 교체 전략을 요청합니다(실거래 연결분은 자동 중지 대신 수동 점검) · 신뢰점수는 성과+견고성+일반화+표본 종합");
+  if (retired.length){ post({ch: "demo", kind: "system", text: `🔁 적응형 재학습: ${retired.map(r => `${r.s.name}(신뢰 ${r.trust})`).join(", ")} 자동 은퇴 → 개발팀에 교체 전략 요청`}); journal("audit", "retrain", retired.map(r => r.s.id).join(","), {count: retired.length}, "trader", "적응형 재학습"); }
 }
 
 /* ---- 🏆 전략 콘테스트 (FinStep-AI/ContestTrade 식 내부 경쟁) — 데모 전략을 성과로 겨뤄 순위 → 상위에 비중·실거래 우선권, 하위는 은퇴 검토 ---- */
@@ -1950,6 +1979,38 @@ async function contestJob(){
   if (top.trust >= 60 && !top.live) addTask({team: "demo", title: `콘테스트 1위 실거래 승격 검토: ${top.s.name}`, why: `신뢰점수 ${top.trust}(${trustGrade(top.trust)}) · 데모수익 ${pc(top.ret)}·일반화 ${top.gen} — 상위 신뢰 전략에 실거래 우선권`, owner: lead.name});
   await learnSkill(`전략 콘테스트 1위: ${top.s.name} (신뢰 ${top.trust}·${trustGrade(top.trust)})`, {job: "contest"});
   if (hasAI()) await explain(lead.id, "demo", "전략 콘테스트 신뢰점수 리더보드를 보고, 신뢰점수가 무엇을 뜻하는지(성과만이 아니라 견고성·여러 코인 일반화·표본까지 합친 값), 지금 가장 믿을 만한/위험한 전략, 수익은 나도 신뢰점수가 낮아 주의할 전략, 실거래로 올릴 후보를 해설한다. 과거 성과가 미래를 보장하지 않는다는 점을 밝힌다.", tableText(["순위", "전략", "수익", "승률", "거래", "견고성", "일반화", "신뢰점수"], rows.map(r => r.slice(0, 8))), "아래 신뢰점수 리더보드를 해설해 줘.");
+}
+
+/* ---- 🧺 앙상블 포트폴리오 — 신뢰점수 상위 전략들을 묶어 '자본을 어떻게 나눌지' 제안(분산 운용) ---- */
+async function ensembleJob(){
+  const P = await import("../nuri-ai/paper.js"), book = await P.loadBook(), lead = agentById("trader");
+  let linked = {}; try { const L = await import("../nuri-ai/live.js"); linked = L.liveCfg?.().linked || {}; } catch(e){}
+  const active = book.strategies.filter(s => s.status === "active" && s.spec);
+  const scored = active.map(s => {
+    const tr = s.trades || [], n = tr.length, wins = tr.filter(t => (t.pnl ?? t.roe ?? 0) > 0).length;
+    const ret = (P.equityOf(s) / 10000 - 1) * 100, wr = n ? wins / n * 100 : 0, pf = s.wf?.oos?.pf ?? null;
+    const trust = trustScore({ret, wr, pf, n, robust: s.robust, crossCoin: s.crossCoin});
+    return {s, market: s.mname || s.market, coin: s.market, ret: +ret.toFixed(2), n, trust, live: !!linked[s.id]?.on};
+  });
+  const cands = scored.filter(x => x.trust >= 45 && x.n >= 5).sort((a, b) => b.trust - a.trust).slice(0, 8);
+  if (cands.length < 2){ post({ch: "demo", kind: "work", agent: lead.id, icon: "🧺", text: `앙상블 포트폴리오를 짜려면 신뢰점수 45 이상·거래 5회 이상 전략이 2개 이상 필요합니다 (지금 ${cands.length}개) · 콘테스트로 전략을 더 키우면 열립니다`}); return; }
+  // 신뢰점수 비례로 자본 배분 → 한 전략 쏠림 방지 상한(최대 40%, 전략 수가 적으면 균등배분선까지 완화) → 재정규화
+  const CAP = Math.max(0.40, 1 / cands.length + 1e-6);
+  let w = cands.map(x => x.trust); const sum = w.reduce((a, b) => a + b, 0) || 1; w = w.map(v => v / sum);
+  for (let it = 0; it < 5; it++){
+    if (!w.some(v => v > CAP + 1e-9)) break;
+    let excess = 0, freeSum = 0;
+    w = w.map(v => { if (v > CAP){ excess += v - CAP; return CAP; } freeSum += v; return v; });
+    if (freeSum <= 0) break;
+    w = w.map(v => v >= CAP ? v : v + excess * (v / freeSum));
+  }
+  const alloc = cands.map((x, i) => ({...x, weight: w[i]}));
+  const coins = new Set(alloc.map(a => a.coin)), wRet = alloc.reduce((a, x) => a + x.weight * x.ret, 0);
+  const rows = alloc.map((x, i) => [String(i + 1), x.s.name.slice(0, 22), x.market, String(x.trust), pc(x.ret), (x.weight * 100).toFixed(0) + "%", x.live ? "🟢실거래" : ""]);
+  table("demo", lead.id, `🧺 앙상블 포트폴리오 — 신뢰점수 비례 분산 (${alloc.length}개 전략 · ${coins.size}개 코인)`, ["비중순", "전략", "시장", "신뢰점수", "데모수익", "제안비중", "상태"], rows,
+    `신뢰점수가 높을수록 자본을 더 배분(한 전략 최대 ${(CAP * 100).toFixed(0)}%) · 가중 평균 데모수익 ${pc(+wRet.toFixed(2))} · ${coins.size}개 코인 분산${coins.size < alloc.length ? " (같은 코인 중복 있음 — 코인은 함께 움직여 분산 효과 제한)" : ""} · 실거래는 총노출 한도와 함께 쓰세요 · 계산값일 뿐 미래 보장 아님`);
+  addNote("demo", `앙상블 포트폴리오: ${alloc.slice(0, 3).map(a => `${a.s.name.slice(0, 12)} ${(a.weight * 100).toFixed(0)}%`).join(", ")}${alloc.length > 3 ? " …" : ""}`, "앙상블");
+  if (hasAI()) await explain(lead.id, "demo", "앙상블 포트폴리오 표를 보고, 왜 이렇게 비중을 나눴는지(신뢰점수 비례, 한 전략 쏠림 방지 상한), 코인 분산이 충분한지(코인은 같이 움직이는 경향이 있어 분산 효과가 제한됨), 실거래에 쓸 때 총노출 한도와 어떻게 맞출지 해설한다. 계산값일 뿐 미래를 보장하지 않는다는 점을 밝힌다.", tableText(["비중순", "전략", "시장", "신뢰점수", "데모수익", "제안비중"], rows.map(r => r.slice(0, 6))), "아래 앙상블 포트폴리오 배분을 해설해 줘.");
 }
 
 /* ---- 🕯 패턴 스캐너 (stock-pattern · chart_patterns 규칙) → 차트·캔들 패턴팀 ---- */
