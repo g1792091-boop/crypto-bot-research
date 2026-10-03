@@ -355,6 +355,22 @@ Object.assign(INDICATORS, {
     const f = (MA[p.type] || ema)(src(c), p.fast), s = (MA[p.type] || ema)(src(c), p.slow);
     return { plots: [line(`빠른 ${p.fast}`, f, C.a, { lineWidth: 1 }), line(`느린 ${p.slow}`, s, C.b, { lineWidth: 1 }), { name: "신호", type: "signals", data: crossSignals(f, s, "골든", "데드") }] };
   } },
+  divergence: { name: "다이버전스 (RSI/MACD)", group: "신호 · 패턴", pane: "main", desc: "가격과 오실레이터가 반대로 움직여 추세가 약해질 때 표시(추세 전환 경고). osc 1=RSI 2=MACD히스토그램 · left/right=피벗 좌우 봉수", params: { osc: 1, length: 14, left: 5, right: 5 }, compute: (c, p) => {
+    const close = src(c), n = c.length;
+    let o;
+    if (p.osc === 2) { const macd = sub(ema(close, 12), ema(close, 26)); o = sub(macd, ema(macd, 9)); }   // MACD 히스토그램
+    else o = rsi(close, p.length || 14);
+    const L = Math.max(1, (p.left | 0) || 5), R = Math.max(1, (p.right | 0) || 5), data = sig(n);
+    const isPH = (i) => { if (i < L || i >= n - R) return false; for (let j = 1; j <= L; j++) if (!(close[i] > close[i - j])) return false; for (let j = 1; j <= R; j++) if (!(close[i] >= close[i + j])) return false; return true; };
+    const isPL = (i) => { if (i < L || i >= n - R) return false; for (let j = 1; j <= L; j++) if (!(close[i] < close[i - j])) return false; for (let j = 1; j <= R; j++) if (!(close[i] <= close[i + j])) return false; return true; };
+    let ph = null, pl = null;
+    for (let i = 0; i < n; i++) {
+      if (o[i] == null) continue;
+      if (isPH(i)) { if (ph && close[i] > close[ph.i] && o[i] < ph.o) data[i] = { dir: -1, text: "약세 다이버전스" }; ph = { i, o: o[i] }; }
+      if (isPL(i)) { if (pl && close[i] < close[pl.i] && o[i] > pl.o) data[i] = { dir: 1, text: "강세 다이버전스" }; pl = { i, o: o[i] }; }
+    }
+    return { plots: [{ name: p.osc === 2 ? "MACD 다이버전스" : "RSI 다이버전스", type: "signals", data }] };
+  } },
   ut_bot: { name: "UT Bot 알림", group: "신호 · 패턴", pane: "main", desc: "ATR 추적 손절선 돌파로 매수/매도 신호", params: { key: 1, atr: 10 }, compute: (c, p) => {
     const a = atr(c, p.atr), x = src(c), stop = Array(c.length).fill(null), s = sig(c.length), col = Array(c.length).fill(null); let prev = 0;
     for (let i = 1; i < c.length; i++) {
