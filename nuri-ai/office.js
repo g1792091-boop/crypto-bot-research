@@ -161,6 +161,7 @@ export function modelScore(m){
   if (/(^|[^0-9.])(0\.5|1|1\.5|2|3|4|e2|e4)b\b|mini|nano|tiny|-small|lite/.test(m)) s -= 30;
   if (/70b|72b|90b|120b|123b|235b|253b|405b|480b|671b|large|kimi-k2|deepseek-v3|deepseek-v4|maverick|scout|glm-4\.[5-9]|qwen3-coder|mistral-medium|llama-3\.3-70|command-a/.test(m)) s += 25;
   if (/r1|qwq|think|reason|magistral|nemotron.*(super|ultra)|o[1-9]-/.test(m)) s -= 20;
+  if (/gpt-oss/.test(m)) s -= 15;   // 사무실은 한국어 답이 중요 — gpt-oss는 영어로 길게 '생각만' 하는 경향이 있어 한 단계 뒤로(폴백으로는 남김)
   // 옛 세대·지원 끝나 가는 모델은 크기와 상관없이 뒤로 (llama2·codellama·chatqa·mixtral·gemma2·qwen1~2 등)
   if (/llama-?2|codellama|code-?llama|chatqa|mixtral|mistral-7b|gemma-?2|gemma-7b|qwen1|qwen-?2(?!\.5)|qwen2\.5-(?!coder-32)|yi-|falcon|baichuan|dbrx|arctic|jamba|phi-?3|nemotron-4|llama-?3-|llama3-|llama-?3\.1-(?!nemotron-ultra)|solar|granite-3\.0|deepseek-coder|starcoder/.test(m)) s -= 45;
   if (/guard|safety|embed|rerank|reward|parse|ocr|-vl|vision|audio|tts|whisper/.test(m)) s -= 100;
@@ -209,6 +210,18 @@ export function claudeModels(){
   const ms = settings.provModels.anthropic?.length ? settings.provModels.anthropic : [];
   const pick = (want, re) => ms.includes(want) ? want : ms.filter(m => re.test(m)).sort().reverse()[0] || want;
   return {opus: pick("claude-opus-5-5", /opus/), sonnet: pick("claude-sonnet-5-5", /sonnet/), haiku: pick("claude-haiku-4-5-20251001", /haiku/)};
+}
+// 모델 전체 켜기·초기화: 연결된 회사마다 '사용 모델'을 전체 기본 목록으로 되돌리고, 그동안 쌓인
+// '없어진 모델·나쁜 모델·고정·전원배정' 기록을 싹 지워 다시 직원마다 서로 다른 모델이 배정되게 한다.
+export function resetModels(){
+  try { for (const k of ["deadModels", "officeBad", "officeModelHealth"]) localStorage.removeItem(k); } catch(e){}
+  settings.provModels = settings.provModels || {};
+  for (const id of Object.keys(PROVIDERS)) if (settings.keys[id] && PROVIDERS[id].defaults?.length) settings.provModels[id] = [...PROVIDERS[id].defaults];
+  settings.pinModel = {}; settings.brain = "auto";
+  const asg = {...(officeCfg().assign || {})}; for (const k of Object.keys(asg)) setAssign(k, "");
+  saveSettings(); fire({kind: "cfg"});
+  const models = [...new Set(Object.values(assignModels()).map(m => m.model))];
+  return {models, count: models.length};
 }
 
 /* ============ 기록 (방 대화) ============ */
