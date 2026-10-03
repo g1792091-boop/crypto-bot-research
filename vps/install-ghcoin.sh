@@ -316,7 +316,7 @@ After=ghcoin-desktop.service ghcoin-server.service
 User=$APP_USER
 Environment=DISPLAY=:1 HOME=$APP_HOME
 ExecStartPre=/bin/sleep 6
-ExecStart=/usr/bin/google-chrome ${CDP_FLAG}--app=http://127.0.0.1:$APP_PORT/gh-coin/ --user-data-dir=$APP_HOME/.config/ghcoin-chrome --no-first-run --no-default-browser-check --password-store=basic --start-maximized --disable-session-crashed-bubble --hide-crash-restore-bubble --disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows --disable-features=IntensiveWakeUpThrottling,CalculateNativeWinOcclusion
+ExecStart=/usr/bin/google-chrome ${CDP_FLAG}--app=http://127.0.0.1:$APP_PORT/gh-coin/ --user-data-dir=$APP_HOME/.config/ghcoin-chrome --no-first-run --no-default-browser-check --password-store=basic --kiosk --disable-session-crashed-bubble --hide-crash-restore-bubble --disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows --disable-features=IntensiveWakeUpThrottling,CalculateNativeWinOcclusion
 Restart=always
 RestartSec=10
 
