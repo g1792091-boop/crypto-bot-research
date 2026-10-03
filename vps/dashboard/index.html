@@ -330,7 +330,7 @@ function renderHeader(){
   const old = m.lastOk ? ` 아래는 ${agoS(m.lastOk)} 받은 자료입니다.` : " 아직 받은 자료가 없습니다.";
   if (serverDown) B.push(["bad", "대시보드 서버(:8080)에 연결할 수 없습니다", "Tailscale 이 켜져 있는지, 서버에서 ghcoin-dash 서비스가 돌고 있는지 확인하세요. 자동으로 다시 연결합니다."]);
   else if (lastMsg){
-    if (DOWN[m.status]) B.push(["bad alert", "⛔ 봇이 지금 거래하지 않습니다 — " + DOWN[m.status], (m.message || "") + "." + old]);
+    if (DOWN[m.status]) B.push(["bad alert", "⛔ 봇이 지금 거래하지 않습니다", (m.message || DOWN[m.status]) + "." + old]);
     else if (m.status === "booting") B.push(["warn", "봇 창(Chrome)이 막 켜졌습니다 — 30초쯤 뒤부터 실시간 자료가 들어옵니다.", old]);
     else if (m.status === "no_chrome") B.push(["bad", "봇 창(Chrome)에 연결할 수 없습니다 — 다시 붙는 중", (isN(m.downS) && m.downS > 120 ? m.message + "." : "매일 05:15 재시작·충돌 직후라면 1분 안에 자동으로 다시 연결됩니다.") + old]);
     else if (m.status === "no_page") B.push(["bad", "Chrome 은 켜져 있지만 GH Coin 페이지가 없습니다", (m.message || "") + old]);

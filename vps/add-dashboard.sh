@@ -22,9 +22,9 @@ FILES="ghcoin_dash.py collector.js index.html"
 # 받은 파일이 아래 값과 하나라도 다르면 설치하지 않는다 (이 파일들은 Chrome 읽기 통로 = 키·주문에 닿는 코드).
 # vps/dashboard 파일을 고치면 같이 바꿀 것:  sha256sum vps/dashboard/ghcoin_dash.py vps/dashboard/collector.js vps/dashboard/index.html
 declare -A SHA=(
-  [ghcoin_dash.py]=__SHA_ghcoin_dash_py__
-  [collector.js]=__SHA_collector_js__
-  [index.html]=__SHA_index_html__
+  [ghcoin_dash.py]=f411e68aedf029c0b0d044214c9b1faaee375b6a8d2516ae668a114e9e2b90c6
+  [collector.js]=6c365900e5c7f1adafd67818f0943b6c167abde1264dfd741624cb73b74a9264
+  [index.html]=a5cdfcdd9e197abc4363fefcc1cac9c43befc5bbb6cabdcfbeb122141ac6c205
 )
 
 say(){ printf '\n\033[1;36m== %s\033[0m\n' "$*"; }
@@ -123,6 +123,49 @@ if [ -f /usr/local/bin/ghcoin-status ] && ! grep -q ghcoin-dash /usr/local/bin/g
   sed -i 's/for s in ghcoin-vnc ghcoin-desktop ghcoin-server ghcoin-chrome ghcoin-novnc; do/for s in ghcoin-vnc ghcoin-desktop ghcoin-server ghcoin-chrome ghcoin-novnc ghcoin-dash; do/' /usr/local/bin/ghcoin-status
   sed -i 's#^echo "== 웹 원격화면 주소"#echo "== 주소 (대시보드 :8080 · 원격화면 :6080)"#' /usr/local/bin/ghcoin-status
 fi
+
+# 봇 탭이 죽거나('Aw, Snap' — 메모리 정리로 탭만 죽은 경우 포함) 멈춘 채로 3분이 넘으면 앱 창을 다시 띄운다
+# (대시보드가 보는 상태로 판단 · 다시 띄운 뒤 10분은 기다림 · 기록은 journalctl -t ghcoin-watchdog)
+cat > /usr/local/bin/ghcoin-watchdog <<'EOF'
+#!/usr/bin/env bash
+S=/run/ghcoin-watchdog; mkdir -p "$S"
+st=$(curl -fsS -m 5 http://127.0.0.1:8080/healthz 2>/dev/null | python3 -c 'import sys,json; print(json.load(sys.stdin).get("status",""))' 2>/dev/null)
+case "$st" in
+  crashed|no_app|stuck|no_chrome|no_page) ;;
+  *) rm -f "$S/bad_since"; exit 0 ;;
+esac
+now=$(date +%s)
+[ -f "$S/bad_since" ] || echo "$now" > "$S/bad_since"
+since=$(cat "$S/bad_since"); last=$(cat "$S/last_restart" 2>/dev/null || echo 0)
+if [ $((now - since)) -ge 180 ] && [ $((now - last)) -ge 600 ]; then
+  logger -t ghcoin-watchdog "봇 상태 '$st' 가 $((now - since))초 계속됨 → 앱 창 다시 띄움"
+  systemctl restart ghcoin-chrome
+  echo "$now" > "$S/last_restart"; rm -f "$S/bad_since"
+fi
+EOF
+chmod 755 /usr/local/bin/ghcoin-watchdog
+cat > /etc/systemd/system/ghcoin-watchdog.service <<'EOF'
+[Unit]
+Description=GH Coin 봇 탭 감시 (죽거나 멈추면 앱 창 다시 띄움)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/ghcoin-watchdog
+EOF
+cat > /etc/systemd/system/ghcoin-watchdog.timer <<'EOF'
+[Unit]
+Description=GH Coin 봇 탭 감시 (1분마다)
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=1min
+
+[Install]
+WantedBy=timers.target
+EOF
+systemctl daemon-reload
+systemctl enable -q ghcoin-watchdog.timer
+systemctl restart ghcoin-watchdog.timer
 
 say "확인 중 (최대 60초)"
 ok=""

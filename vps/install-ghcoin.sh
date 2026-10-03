@@ -442,18 +442,34 @@ if ! tailscale ip -4 >/dev/null 2>&1; then
 fi
 TSIP=$(tailscale ip -4 2>/dev/null | head -1 || true)
 
+# ---------------------------------------------------------------- 8. 웹 대시보드 (:8080, 보기 전용)
+if [ "${GHCOIN_NO_DASH:-0}" != 1 ]; then
+  say "웹 대시보드 설치"
+  DREV="${GHCOIN_REV:-claude/vigilant-shannon-irq1vg}"
+  if curl -fsSL -o "$WORK/add-dashboard.sh" "https://raw.githubusercontent.com/g1792091-boop/crypto-bot-research/$DREV/vps/add-dashboard.sh" \
+     && GHCOIN_REV="$DREV" bash "$WORK/add-dashboard.sh"; then
+    :
+  else
+    echo "  (대시보드 설치는 실패했지만 봇은 정상입니다 — 위 화면을 캡처해서 보내 주세요)"
+  fi
+fi
+
 sleep 5
 say "완료!"
 ghcoin-status
 cat <<EOF
 
   ┌───────────────────────────────────────────────────────────────┐
-    GH Coin 화면 보기:  Tailscale 켜고 →  http://${TSIP:-<tailscale IP>}:$NOVNC_PORT/
+    대시보드(보기):     Tailscale 켜고 →  http://${TSIP:-<tailscale IP>}:8080/
+    원격화면(조작):     Tailscale 켜고 →  http://${TSIP:-<tailscale IP>}:$NOVNC_PORT/
     원격화면 비밀번호:  $VNCPASS
       (잊어버리면:  sudo cat $PASSFILE)
     상태 확인:          ghcoin-status
   └───────────────────────────────────────────────────────────────┘
-  * 앱 창은 닫아도 10초 뒤 다시 열립니다. 서버가 재부팅돼도 자동으로 켜집니다.
+  * 평소엔 대시보드로 보고, 키 입력 · 설정 · 실거래 승인만 원격화면에서 하세요.
+  * 이 서버용 빌드는 AI 직원의 명령어 실행 · 앱 코드 고치기를 꺼 두었습니다 (키 보호).
+  * 앱 창은 닫아도 10초 뒤 다시 열립니다. 봇 탭이 죽거나 멈추면 3분 뒤 자동으로 다시 띄웁니다.
+  * 서버가 재부팅돼도 자동으로 켜집니다.
   * 매일 새벽 5:15 에 앱 창을 새로 띄워 메모리를 비웁니다 (설정·기록은 그대로).
   * AI 키 · 거래소 키는 그 화면 안의 GH Coin 에 처음 한 번 넣어 주세요.
   * 다 설치됐으면 구글 드라이브 공유를 다시 '제한됨'으로 바꿔도 됩니다.
