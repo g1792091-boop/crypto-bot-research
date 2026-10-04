@@ -119,7 +119,7 @@ def test_rules_files_include_change_1_and_match_their_hashes():
     from paperbot.launchcheck import RULES_SUMS
     from paperbot.runinfo import ROOT, RULES_FILES
     assert RULES_FILES == ("docs/paper-v3-rules.md", "docs/paper-v3-rules-addendum.md",
-                           "docs/paper-v3-rules-change-1.md")
+                           "docs/paper-v3-rules-change-1.md", "docs/levrule-eval.md")
     assert [p.replace(".md", ".sha256") for p in RULES_FILES] == list(RULES_SUMS)
     for rel in RULES_SUMS:
         with open(os.path.join(ROOT, rel)) as fh:

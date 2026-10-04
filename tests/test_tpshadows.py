@@ -442,7 +442,7 @@ def test_rr_packet_carries_the_take_profit_shadows_and_stays_bounded(world):
     assert "lev30m30" not in pk["shadows"]["all_strategies"]["7d"]                              # empty: left out
     # the earlier size tests (test_riskreward < 16,000, test_levstop < 17,000) are unchanged; with take-profit rows
     # and margin rows filled in both windows here the packet is about 19.6 KB
-    assert len(json.dumps(pk, ensure_ascii=False)) < 20_500
+    assert len(json.dumps(pk, ensure_ascii=False)) < 23_500         # + levrule and lev_curves (docs/levrule-eval.md)
     # 36 strategies with every take-profit variant: the per-strategy section stays bounded
     cell = {"trades": 25, "mean_eq": -0.012345, "base_mean_eq": -0.023456, "vs_base_eq": 0.011111,
             "better_share": 0.583, "worse_share": 0.25, "tp": 9, "liq": 1, "base_liq": 2}

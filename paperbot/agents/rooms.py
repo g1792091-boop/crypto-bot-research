@@ -1769,6 +1769,11 @@ def _board(ctx: RoundContext) -> dict:
     # added 2026-10-04 (owners approved): the lead's real-trading conditions and the risk officer's shock test,
     # both compact, code only, read-only (a display: nothing reads them to decide anything)
     board["readiness"] = _readiness_compact(ctx)
+    # the restart of 2026-10-04 (resetrun's cursor run:restarted) as one line, so no old-run number is read as new
+    if isinstance(board.get("meta"), dict):
+        line = packets3.run_restarted(ctx.agents_conn)
+        if line:
+            board["meta"]["run_restarted"] = line
     board["shock"] = _shock_compact(ctx)
     board["market"] = _market(ctx)
     board["macro"] = _macro(ctx)
@@ -2902,16 +2907,35 @@ def _survival(ctx: RoundContext, due: TR.Due) -> dict:
         pk["levstop_5y"] = LS.brief()
     except Exception as exc:  # noqa: BLE001
         pk["levstop_5y"] = {"error": f"5년 레버리지·손절 비교를 읽지 못함: {type(exc).__name__}"}
+    # rule B, judged only by docs/levrule-eval.md (agents/leveval.py: compact), and the leverage shadows' equity curves
+    pk["levrule"] = _levrule(ctx, "compact")
+    from . import riskreward as RRW
+    pk["lev_curves"] = RRW.curves_brief(ctx.daily_ro, ctx.paper_ro)
     return pk
+
+
+def _levrule(ctx: RoundContext, form: str) -> dict:
+    """The pre-registered evaluation of rule B (agents/leveval.levrule_eval, computed once per tick) in one of its
+    packet forms (``compact`` for the risk meeting, ``meeting`` for the checkpoint meeting). Never raises."""
+    from . import leveval as LV
+    try:
+        if "levrule" not in ctx.cache:
+            ctx.cache["levrule"] = LV.levrule_eval(ctx.paper_ro, now_ms=ctx.now_ms)
+        ev = ctx.cache["levrule"]
+        return LV.meeting_section(ev) if form == "meeting" else LV.compact(ev)
+    except Exception as exc:  # noqa: BLE001  (a description must never stop the meeting)
+        return {"error": f"규칙 B 평가를 만들지 못함: {type(exc).__name__}", "doc": LV.DOC}
 
 
 def _checkpoint_meeting(ctx: RoundContext, due: TR.Due) -> dict:
     """The 30-day checkpoint meeting's own packet (owners approved 2026-10-04): the real-trading conditions with
-    their document lines (agents/readiness.py: a display, enables nothing) and the checkpoint's statistical power
-    (agents/power.py). The verdict itself stays ``board.checkpoint``."""
+    their document lines (agents/readiness.py: a display, enables nothing), the checkpoint's statistical power
+    (agents/power.py) and rule B's pre-registered day-30 decision (agents/leveval.py, docs/levrule-eval.md). The
+    verdict itself stays ``board.checkpoint``."""
     from . import power as PW
     from . import readiness as RD
-    return {**RD.meeting(_readiness_full(ctx)), "power": PW.brief(), "rehearsal": _rehearsal(ctx)}
+    return {**RD.meeting(_readiness_full(ctx)), "power": PW.brief(), "rehearsal": _rehearsal(ctx),
+            "levrule": _levrule(ctx, "meeting")}
 
 
 REHEARSAL_KEYS = ("status", "as_of", "days", "finished_utc", "runtime_s", "min_trades", "bots", "accounts_in_snapshot",

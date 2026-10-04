@@ -23,6 +23,10 @@ Routes (registered by ``register``; all behind the dashboard login like every ot
                                     volatility and weekday buckets of agents/entrymoment.py when that one is cached
 - ``GET /api/analysis/entry``       ⑥ the moment of entry (agents/entrymoment.py dash_view, '준비 중' when missing)
 - ``GET /api/analysis/synergy``     조합 시너지 (agents/synergy.py dash_view)
+- ``GET /api/analysis/levrule``     좋은 자리 vs 보통: leverage rule B's pre-registered evaluation (agents/leveval.py,
+                                    docs/levrule-eval.md; '30일 판정 전 결론 없음' until day 30)
+- ``GET /api/analysis/shadows``     그림자 비교: every nightly shadow vs base for the new run, grouped, with the 5-year
+                                    reference lines, and the leverage equity curves (``?account=`` one account's)
 - ``GET /api/analysis/questions``   ⑦ the 45-question checklist (paperbot/dash/questions45.json, see below)
 - ``GET /api/analysis/alerts``      알림 기록: what is stored somewhere readable (see ``alert_history``)
 - ``GET /api/debate``               the 24-hour debate room: empty until the debate service exists (see ``debate``)
@@ -40,6 +44,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sqlite3
 import threading
 import time
@@ -60,6 +65,8 @@ SHOCK_TTL_S = 300
 MAP_TTL_S = 900
 ENTRY_TTL_S = 900
 SYNERGY_TTL_S = 900
+LEVRULE_TTL_S = 600
+SHADOWS_TTL_S = 600
 MAP_CARDS = 2000             # cards.cards_from_db's own cap: the latest this many closed trades per kind
 READINESS_ROWS = 40
 DEBATE_ROWS = 50
@@ -618,6 +625,144 @@ def synergy_view(paper_db: str, now_ms: int) -> dict:
         _close(c)
 
 
+# ---------------------------------------------------------------- 좋은 자리 vs 보통 (rule B, docs/levrule-eval.md)
+def levrule_view(paper_db: str, now_ms: int) -> dict:
+    """The pre-registered evaluation of leverage rule B (agents/leveval.dash_view): per group trades, win rate, mean
+    ROE, mean P&L on equity, return per unit exposure, the leverage mix and why, the coin-flip baseline at the same
+    mix, and the status ('30일 판정 전 결론 없음' until the day-30 checkpoint)."""
+    from ..agents import leveval as LV
+    c = ro_connect(paper_db)
+    if c is None:
+        return {"error": "paper3.db 없음", "doc": LV.DOC}
+    try:
+        return LV.dash_view(c, now_ms)
+    except sqlite3.Error as exc:
+        return {"error": f"paper3.db를 읽지 못함: {type(exc).__name__}", "doc": LV.DOC}
+    finally:
+        _close(c)
+
+
+# ---------------------------------------------------------------- 그림자 비교 (every shadow vs base, new run)
+SHADOW_GROUPS = (("lock", "청산 잠금", ("lock15", "lock20", "lock30")),
+                 ("time", "시간 청산", ("timestop",)),
+                 ("stop", "손절 폭", ("stopw1.5", "stopw2.5", "stopw3")),
+                 ("tp", "고정 익절", ("tp1R", "tp1.5R", "tp2R", "tp3R", "ladder_cap2R")),
+                 ("lev", "레버리지 고정(티어 비중)", ("lev10", "lev20", "lev30", "lev40", "lev50")),
+                 ("levm", "레버리지 = 비중", ("lev20m20", "lev30m30", "lev40m40", "lev50m50")))
+SHADOW_KEYS = ("trades", "mean_eq", "base_mean_eq", "vs_base_eq", "better_share", "worse_share", "liq", "base_liq",
+               "not_entered", "open", "tp", "small")
+EXITSTYLE_JSON = os.path.join(os.path.dirname(os.path.dirname(HERE)), "research", "exitstyle", "out", "exitstyle.json")
+CURVE_ACCOUNT_DAYS = 400
+ACCOUNT_RE = re.compile(r"^[A-Za-z0-9_]+@[0-9a-z]+$")         # a strategy account id ("N17_KC_RSI@15m")
+
+
+def _pct(x: Optional[float], d: int = 2) -> str:
+    return "—" if x is None else f"{x * 100:+.{d}f}%"
+
+
+def five_year_refs(exitstyle_path: str = EXITSTYLE_JSON) -> dict:
+    """One 5-year reference line per shadow group, from the committed results (research/levstop/out/levstop.json,
+    research/exitstyle/out/exitstyle.json); a group without a 5-year comparison says so."""
+    from ..agents import levstop as LS
+    from ..agents.riskreward import TP_FIVE_YEAR
+    out = {"lock": "5년 비교 없음: 첫 잠금 15·20·30%는 5년 시험 lock_start로만 확인",
+           "time": "5년 비교 없음"}
+    doc = LS.load()
+    arms = ((doc or {}).get("summary") or {}).get("by_arm") or {}
+    fr = (doc or {}).get("margin_frac") or {}
+
+    def arm(k):
+        a = arms.get(k) or {}
+        return a.get("pooled_mean_eq"), a.get("busts"), a.get("accounts")
+    if arms:
+        st = [(k, *arm(f"tiers|{k}")) for k in ("1.5", "2.0", "2.5", "3.0")]
+        out["stop"] = ("5년(research/levstop, 지금 단계 50→20배): 거래당 자금 대비 " + " · ".join(
+            f"손절 {k} ATR {_pct(m)}" for k, m, _b, _a in st) + " · 파산 " + "·".join(
+            f"{b}" for _k, _m, b, _a in st) + f"/{st[0][3]} (2 ATR이 지금 규칙)")
+        lv = [(k, *arm(f"{k}|2.0")) for k in ("10", "20", "30", "40", "50")]
+        out["lev"] = ("5년(research/levstop, 손절 2 ATR, 증거금 " + "·".join(
+            f"{int(round(float(fr.get(k, 0)) * 100))}" for k, *_x in lv) + "%): 거래당 자금 대비 " + " · ".join(
+            f"{k}배 {_pct(m)}" for k, m, _b, _a in lv) + " · 파산 " + "·".join(f"{b}" for _k, _m, b, _a in lv)
+            + f"/{lv[0][3]}")
+        out["levm"] = ("5년에 같은 비교(증거금 = 레버리지 %)는 없음. 가장 가까운 것은 위 고정 배수(50배만 증거금 40%): "
+                       + " · ".join(f"{k}배 {_pct(m)}" for k, m, _b, _a in lv[1:]))
+    else:
+        out["stop"] = out["lev"] = out["levm"] = "5년 결과 파일 없음 (research/levstop/out/levstop.json)"
+    try:
+        with open(exitstyle_path, encoding="utf-8") as fh:
+            ex = json.load(fh)
+        prim = ((ex.get("summary") or {}).get("primary") or {})
+        names = (("ladder", "계단 잠금"), ("tp1R", "1R"), ("tp1.5R", "1.5R"), ("tp2R", "2R"), ("tp3R", "3R"),
+                 ("ladder_tp2R", "잠금+2R"))
+        rec = ((ex.get("summary") or {}).get("decision") or {}).get("recommend")
+        out["tp"] = ("5년(research/exitstyle): 거래당 자금 대비 " + " · ".join(
+            f"{ko} {_pct((prim.get(k) or {}).get('pooled_mean_eq'), 3)}" for k, ko in names if k in prim)
+            + (" · 미리 정한 조건을 통과한 익절 없음 → 계단 잠금 유지" if rec == "ladder" else ""))
+    except (OSError, ValueError, AttributeError):
+        out["tp"] = TP_FIVE_YEAR
+    return out
+
+
+def shadows_view(paper_db: str, daily_db: Optional[str], now_ms: int, account: Optional[str] = None) -> dict:
+    """Every nightly shadow variant against the base for the new run (since the run start, strategy accounts;
+    agents/riskreward.shadow_summary), grouped, with each group's 5-year reference line, and the leverage variants'
+    equity curves (obsshadows.curve_view: median strategy-account equity per day, busts so far; one account's
+    curves when ``account`` is a strategy account)."""
+    from ..agents import riskreward as RR
+    from ..obsshadows import curve_view
+    c = ro_connect(paper_db)
+    d = ro_connect(daily_db)
+    try:
+        start = 0
+        accounts: list = []
+        if c is not None:
+            try:
+                from ..checkpoint import run_facts
+                start = run_facts(c).get("start_ts") or 0
+                accounts = [r[0] for r in c.execute("SELECT account_id FROM accounts WHERE kind = 'strategy' "
+                                                    "ORDER BY rowid")]
+            except sqlite3.Error:
+                start, accounts = 0, []
+        sh = RR.shadow_summary(d, c, int(start), int(now_ms)) if d is not None else {"error": "daily3.db 없음"}
+        cv = curve_view(d, account=account if account in set(accounts) else None,
+                        accounts=accounts if c is not None else None) if d is not None else {}
+    finally:
+        _close(c, d)
+    allc = (sh.get("all") or {}) if isinstance(sh, dict) else {}
+    ko = {**RR.SHADOW_KO, **RR.SHADOW_KO3, **RR.SHADOW_KO4, **RR.SHADOW_KO_M4}
+    groups = []
+    refs = five_year_refs()
+    for key, title, variants in SHADOW_GROUPS:
+        rows = []
+        for v in variants:
+            cell = allc.get(v) or {"trades": 0}
+            rows.append({"variant": v, "ko": ko.get(v, v), **{k: cell.get(k) for k in SHADOW_KEYS if k in cell}})
+        groups.append({"key": key, "title": title, "rows": rows, "five_year": refs.get(key)})
+    curves: dict = {}
+    if cv:
+        curves = {"variants": cv.get("variants") or [], "days": (cv.get("days") or [])[-CURVE_ACCOUNT_DAYS:],
+                  "start": cv.get("start"), "bust_below": cv.get("bust_below"),
+                  "by_variant": {v: {"accounts": b.get("accounts"),
+                                     "median": (b.get("median") or [])[-CURVE_ACCOUNT_DAYS:],
+                                     "busts": (b.get("busts") or [])[-CURVE_ACCOUNT_DAYS:],
+                                     "bust_accounts": (b.get("bust_accounts") or [])[:50]}
+                                 for v, b in (cv.get("by_variant") or {}).items()}}
+        if cv.get("error"):
+            curves["error"] = cv["error"]
+        if isinstance(cv.get("account"), dict):
+            a = cv["account"]
+            curves["account"] = {"account_id": a.get("account_id"),
+                                 "curves": {v: (x or [])[-CURVE_ACCOUNT_DAYS:] for v, x in (a.get("curves") or {}).items()},
+                                 "bust_day": a.get("bust_day"), "n_trades": a.get("n_trades")}
+    return {"label": RR.SHADOW_LABEL, "since": int(start or 0), "base": allc.get("base") or {"trades": 0},
+            "groups": groups, "curves": curves, "accounts": accounts[:400],
+            "account": account if account in set(accounts) else None,
+            **({"error": sh["error"]} if isinstance(sh, dict) and sh.get("error") else {}),
+            "note": ("밤 점검이 새 실행(시작 뒤) 매매법 계좌의 끝난 거래를 규칙 하나만 바꿔 다시 돌린 기록. 차이 = 그 그림자 평균 − "
+                     "같은 거래 base 평균(자금 대비), 나음·나쁨 = 같은 거래끼리 비교한 비율. 10건 미만은 작음. 설명용, 판정 아님: "
+                     "30일 규칙은 바뀌지 않음")}
+
+
 # ---------------------------------------------------------------- ⑦ the 45 questions
 STATUSES = ("done", "partial", "todo", "na")
 
@@ -722,6 +867,15 @@ def register(app, data, rooms, db: str, daily_db: Optional[str], checkpoint_db: 
     @app.get("/api/analysis/synergy")
     def get_synergy():
         return heavy.get("synergy", SYNERGY_TTL_S, lambda: synergy_view(db, _now()))
+
+    @app.get("/api/analysis/levrule")
+    def get_levrule():
+        return heavy.get("levrule", LEVRULE_TTL_S, lambda: levrule_view(db, _now()))
+
+    @app.get("/api/analysis/shadows")
+    def get_shadows(account: Optional[str] = None):
+        acct = account if account and len(account) <= 80 and ACCOUNT_RE.match(account) else None
+        return heavy.get(f"shadows:{acct or ''}", SHADOWS_TTL_S, lambda: shadows_view(db, daily, _now(), acct))
 
     @app.get("/api/analysis/questions")
     def get_questions():

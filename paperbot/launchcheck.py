@@ -170,7 +170,8 @@ ALL_UNITS = (INSTALLED + LEGACY + SYSTEM + (AUTO_UPDATES, LABBUILD) + EXTRA_TIME
 UNIT_PROPS = ("Id,LoadState,UnitFileState,ActiveState,SubState,Result,NRestarts,ExecMainStatus,"
               "NextElapseUSecRealtime,ExecStart,ActiveEnterTimestampMonotonic,User,MainPID")
 RULES_SUMS = ("docs/paper-v3-rules.sha256", "docs/paper-v3-rules-addendum.sha256",
-              "docs/paper-v3-rules-change-1.sha256")    # change 1: 5m removed at the restart of 2026-10-04
+              "docs/paper-v3-rules-change-1.sha256",    # change 1: 5m removed at the restart of 2026-10-04
+              "docs/levrule-eval.sha256")               # how rule B is judged at day 30 (pre-registered)
 
 # the paper key must be read-only: any of these on is a problem (Binance apiRestrictions fields)
 TRADE_PERMS = {"enableFutures": "선물 거래", "enableSpotAndMarginTrading": "현물·마진 거래", "enableMargin": "마진",

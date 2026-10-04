@@ -136,6 +136,7 @@ def read(db: str, kinds: tuple, since_id: int) -> tuple[dict, list[dict], int]:
         exits = [dict(x) for x in c.execute(
             "SELECT id, account_id, symbol, exit_time, exit_reason, leverage, pnl, roe, equity_after, data FROM trades "
             "WHERE id > ? ORDER BY id", (since_id,))]
+        lev_why = _lev_why(c, eng, accts, kinds)
     top = max([since_id] + [x["id"] for x in exits])      # past every row read, kept or filtered out
     pos = {}
     for aid, e in eng.items():
@@ -145,7 +146,8 @@ def read(db: str, kinds: tuple, since_id: int) -> tuple[dict, list[dict], int]:
                         "entry_time": p["entry_time"], "leverage": p["leverage"], "margin": p["margin"],
                         "stop": p["stop_price"], "kind": accts.get(aid),
                         "first_lock": first_lock.get(aid, s.ladder_first_lock), "trigger_gap": s.ladder_trigger_gap,
-                        "round_trip": s.round_trip_cost, "tier": p.get("tier"), "wallet": (e or {}).get("wallet")}
+                        "round_trip": s.round_trip_cost, "tier": p.get("tier"), "wallet": (e or {}).get("wallet"),
+                        "lev_why": lev_why.get(aid)}
     out = []
     for x in exits:
         if accts.get(x["account_id"]) not in kinds:
@@ -158,6 +160,25 @@ def read(db: str, kinds: tuple, since_id: int) -> tuple[dict, list[dict], int]:
             x["equity_after"] = d["equity_after"]
         out.append({**x, "kind": accts.get(x["account_id"]), "side": d.get("side"), "lock_roe": d.get("lock_roe")})
     return pos, out, int(top)
+
+
+def _lev_why(c: sqlite3.Connection, eng: dict, accts: dict, kinds: tuple) -> dict:
+    """{account_id: "50배 불가: 손절 손실 > 자금 15% → 30배"} of the open 좋은 자리 positions below 50x (levwhy: the
+    ENTERED outcome's rejected candidates; one indexed query each). Never raises."""
+    out = {}
+    try:
+        from .levwhy import first_reason_ko, latest_entered
+        for aid, e in eng.items():
+            p = (e or {}).get("position")
+            if not p or accts.get(aid) not in kinds or p.get("tier") != "best" or int(p.get("leverage") or 0) >= 50:
+                continue
+            dg = latest_entered(c, aid, p.get("symbol"), ((p.get("signal") or {}).get("ts")))
+            txt = first_reason_ko(dg, p.get("leverage"))
+            if txt:
+                out[aid] = txt
+    except Exception:  # noqa: BLE001  (a reason is cosmetic: the alert goes out without it)
+        return out
+    return out
 
 
 def _side(side) -> str:
@@ -177,8 +198,9 @@ def entry_block(aid: str, p: dict, names: dict) -> list[str]:
     wallet = p.get("wallet")
     share = f" ({p['margin'] / wallet:.0%})" if isinstance(wallet, (int, float)) and wallet > 0 else ""
     best = " · 좋은 자리" if p.get("tier") == "best" else ""
+    why = [p["lev_why"]] if p.get("tier") == "best" and p.get("lev_why") else []
     return [f"📈 진입 · {label(aid, p['kind'], names)}",
-            f"{_side(p['side'])} · {coin(p['symbol'])} {p['leverage']}배{best}",
+            f"{_side(p['side'])} · {coin(p['symbol'])} {p['leverage']}배{best}", *why,
             f"진입가 {px(p['entry'])}",
             f"익절 잠금 시작 {px(p_trig)} (+{trig * 100:.0f}%)",
             f"→ 손절을 {px(p_lock)}로 올림 (+{first * 100:.0f}% 확보)",

@@ -255,18 +255,30 @@ class Data:
             trades = [dict(r) for r in c.execute(
                 "SELECT id, symbol, entry_time, exit_time, exit_reason, leverage, pnl, roe, equity_after, data "
                 "FROM trades WHERE account_id = ? ORDER BY id DESC LIMIT 500", (aid,))]
+            from .. import levwhy as LW
+            oc = LW.entered_outcomes(c, aid)                # the sizing's rejected candidates, per entry
             for t in trades:
                 d = json.loads(t.pop("data"))
                 t.update(side=d["side"], entry_price=d["entry_price"], exit_price=d["exit_price"],
                          stop_initial=d.get("stop_initial"), lock_roe=d.get("lock_roe"),
-                         fees=d["fees"], funding=d["funding"])
+                         fees=d["fees"], funding=d["funding"], tier=d.get("tier"))
+                try:
+                    t["why"] = LW.compact(LW.for_trade(d, oc))
+                except Exception:  # noqa: BLE001  (an explanation never hides the trade)
+                    t["why"] = None
             eq = [{"t": r["ts"], "v": r["equity"]} for r in c.execute(
                 "SELECT ts, equity FROM equity WHERE account_id = ? ORDER BY ts", (aid,))]
             counts = {r["status"]: r["n"] for r in c.execute(
                 "SELECT status, COUNT(*) AS n FROM outcomes WHERE account_id = ? GROUP BY status", (aid,))}
             st = self.state(c, "accounts")
             xstate = self.extras_state(c)
-        e = (st[1]["engines"].get(aid) if st else None) or {}
+            e = (st[1]["engines"].get(aid) if st else None) or {}
+            pos_why = None
+            if isinstance(e.get("position"), dict):
+                try:
+                    pos_why = LW.compact(LW.for_position(c, aid, e["position"]))
+                except Exception:  # noqa: BLE001
+                    pos_why = None
         acc = dict(a)
         extra = None
         if acc.get("kind") in ("copy", "newlab"):
@@ -279,7 +291,24 @@ class Data:
             except (TypeError, ValueError, AttributeError):
                 src = {}
             extra["trial_id"] = src.get("trial_id") if isinstance(src, dict) else None
-        return {"account": acc, "state": e, "trades": trades, "equity": eq, "signals": counts, "extra": extra}
+        return {"account": acc, "state": e, "trades": trades, "equity": eq, "signals": counts, "extra": extra,
+                "position_why": pos_why}
+
+    def position_why(self) -> dict:
+        """{account_id: why} of every open position (levwhy: group, score, leverage, the rejected higher candidates)."""
+        from .. import levwhy as LW
+        out = {}
+        with self.conn() as c:
+            st = self.state(c, "accounts")
+            for aid, e in ((st[1].get("engines") or {}) if st else {}).items():
+                p = (e or {}).get("position")
+                if not isinstance(p, dict):
+                    continue
+                try:
+                    out[aid] = {**LW.compact(LW.for_position(c, aid, p)), "entry_time": p.get("entry_time")}
+                except Exception:  # noqa: BLE001
+                    continue
+        return {"positions": out}
 
     def status(self) -> dict:
         with self.conn() as c:
@@ -320,6 +349,14 @@ class Data:
             obs = floor if isinstance(floor, int) and not isinstance(floor, bool) else start + 21 * day_ms
             out["observe_until"] = obs
             out["observing"] = now < obs
+        # the restart banner (checkpoint.run_facts / checkpoint_ts, the verdict job's own definitions)
+        try:
+            from ..checkpoint import run_facts
+            with self.conn() as c:
+                rs = run_facts(c).get("start_ts")
+        except (sqlite3.Error, TypeError, ValueError):
+            rs = start
+        out["restart"] = restart_banner(rs, now)
         per: dict = {}
         for x in rows:
             per[x["account_id"]] = per.get(x["account_id"], 0.0) + x["pnl"]
@@ -450,7 +487,7 @@ class Data:
         for r in rows:
             d = json.loads(r.pop("data"))
             r.update(side=d["side"], entry_price=d["entry_price"], exit_price=d["exit_price"],
-                     lock_roe=d.get("lock_roe"))
+                     lock_roe=d.get("lock_roe"), tier=d.get("tier"))
         return rows
 
     def since(self, trade_id: int, alert_row: int) -> dict:
@@ -1613,6 +1650,35 @@ def _storable(text: str) -> bool:
         return False
 
 
+# the restarted run's rules change in one line (docs/paper-v3-rules-change-1.md), for the home banner
+RULES_CHANGE_1_KO = "5분봉 제외 · 좋은 자리 50/40배, 보통 30/20배, 비중=배수% · 1분봉 5초 뒤 읽기"
+# documents the dashboard serves read-only as text (GET /api/doc/<name>); nothing else under docs/
+DOCS = {"rules-change-1": "paper-v3-rules-change-1.md", "levrule-eval": "levrule-eval.md"}
+DOCS_DIR = os.path.join(os.path.dirname(os.path.dirname(HERE)), "docs")
+DOC_MAX_BYTES = 200_000
+
+
+def restart_banner(start_ts: Optional[int], now_ms: int) -> dict:
+    """'새 실험 D+n / 30 · 첫 판정 MM/DD' of the run started at ``start_ts`` (checkpoint.run_facts): n = whole days
+    since 00:00 UTC of the start day (the checkpoint clock: day 30 is the first verdict, checkpoint_ts), the verdict
+    date in KST (09:00). After the first verdict the next one is named instead."""
+    from ..checkpoint import PERIOD_DAYS, checkpoint_ts
+    out: dict = {"rules_ko": RULES_CHANGE_1_KO, "doc": "/api/doc/rules-change-1", "levrule_doc": "/api/doc/levrule-eval"}
+    if start_ts is None:
+        return {**out, "ready": False, "text": "새 실험: 봇이 아직 첫 계좌를 만들지 않았습니다"}
+    day_ms = 86_400_000
+    n = max(0, (int(now_ms) - (int(start_ts) - int(start_ts) % day_ms)) // day_ms)
+    k = 1
+    while checkpoint_ts(int(start_ts), k) <= int(now_ms):
+        k += 1
+    cp = checkpoint_ts(int(start_ts), k)
+    mmdd = time.strftime("%m/%d", time.gmtime(cp / 1000 + 9 * 3600))
+    text = (f"새 실험 D+{n} / {PERIOD_DAYS} · 첫 판정 {mmdd}" if k == 1
+            else f"새 실험 D+{n} · {k}번째 판정 {mmdd}")
+    return {**out, "ready": True, "day": n, "of": PERIOD_DAYS, "checkpoint": k, "verdict_ts": cp, "verdict_mmdd": mmdd,
+            "text": text}
+
+
 def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fetch_candles, ticker=fetch_ticker,
                depth=fetch_depth, market=fetch_market,
                agents_db: Optional[str] = None, daily_db: Optional[str] = None, frames=fetch_frame,
@@ -1705,6 +1771,35 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
     @app.get("/api/status")
     def status():
         return data.status()
+
+    @app.get("/api/doc/{name}")
+    def doc_text(name: str):
+        """A rules document as plain text, read-only (only the names in DOCS)."""
+        from fastapi.responses import PlainTextResponse
+        fn = DOCS.get(name)
+        if fn is None:
+            raise HTTPException(404, "no such document")
+        try:
+            with open(os.path.join(DOCS_DIR, fn), "rb") as fh:
+                raw = fh.read(DOC_MAX_BYTES)
+        except OSError:
+            raise HTTPException(404, "document not installed")
+        return PlainTextResponse(raw.decode("utf-8", "replace"), media_type="text/plain; charset=utf-8")
+
+    why_cache: dict = {}
+
+    @app.get("/api/levwhy")
+    def levwhy():
+        """Why each open position has its leverage (group, score, rejected higher candidates); 15 s cache."""
+        hit = why_cache.get("v")
+        if hit and time.time() - hit[0] < 15:
+            return hit[1]
+        try:
+            v = data.position_why()
+        except sqlite3.Error:
+            v = {"positions": {}, "error": "paper3.db를 읽지 못함"}
+        why_cache["v"] = (time.time(), v)
+        return v
 
     @app.get("/api/checkpoint")
     def checkpoint_verdict():

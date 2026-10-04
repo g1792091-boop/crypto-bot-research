@@ -335,7 +335,7 @@ def test_rr_packet_carries_tiers_and_the_new_shadows_and_stays_bounded(world):
     assert [x["strategy"] for x in nv["stop_turns"]["since_start"]["stopw1.5"]["turns_positive"]] == [S]
     assert [x["strategy"] for x in pk["shadows"]["lower_leverage"]["since_start"]["lev30"]["turns_positive"]] == [S]
     assert "stopw1.5" in pk["shadows"]["all_strategies"]["since_start"]
-    assert len(json.dumps(pk, ensure_ascii=False)) < 17_000
+    assert len(json.dumps(pk, ensure_ascii=False)) < 20_000         # + levrule and lev_curves (docs/levrule-eval.md)
     # 36 strategies with every new variant: the per-strategy section stays bounded
     cell = {"trades": 25, "mean_eq": -0.012345, "base_mean_eq": -0.023456, "vs_base_eq": 0.011111, "better_share": 0.583,
             "worse_share": 0.25, "liq": 1, "base_liq": 2, "not_entered": 3}

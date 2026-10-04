@@ -248,6 +248,26 @@ def build(paper_db: str, daily_db: Optional[str], now_ms: int, min_n: int = 30) 
 
 
 EXTRA_KINDS = ("copy", "newlab")
+RESTART_MARKER = "run:restarted"           # resetrun.MARKER (resetrun is not imported here; a test checks the name)
+
+
+def run_restarted(agents_conn: Optional[sqlite3.Connection]) -> Optional[str]:
+    """One line for ``meta.run_restarted`` from the cursor resetrun writes when the run restarts from scratch
+    (``run:restarted``: {ts, day_kst, text_ko, archive, ...}); None when there is no marker or it cannot be read."""
+    if agents_conn is None:
+        return None
+    try:
+        r = agents_conn.execute("SELECT v FROM cursors WHERE k = ?", (RESTART_MARKER,)).fetchone()
+        m = json.loads(r[0]) if r else None
+    except (sqlite3.Error, TypeError, ValueError):
+        return None
+    if not isinstance(m, dict) or not m.get("day_kst"):
+        return None
+    what = str(m.get("text_ko") or f"실험을 {m['day_kst']}에 처음부터 다시 시작함")[:160]
+    return (f"{what}. {m['day_kst']} 전의 거래·손익·계좌 숫자는 이전 실행(보관됨) 것이고 새 실행과 섞지 않음 "
+            "(docs/paper-v3-rules-change-1.md)")
+
+
 PASS_CHECK_NOTE = ("참고용: 같은 봉 동전 봇 3개 중 최고보다 잔고가 높은지만 봄. 합격·불합격 판정은 체크포인트"
                    "(규칙 보충안 Q1: 동전 봇 2,000개 + FDR 10%, checkpoint)가 함")
 CHECKPOINT_ROWS = 30         # verdict rows a team packet carries (tokens)

@@ -9,12 +9,15 @@
     const bar = $("expbar");
     if (v.start == null) { bar.innerHTML = '<span>봇이 아직 첫 계좌를 만들지 않았습니다</span>'; }
     else {
-      const cp = v.next_checkpoint, dleft = Math.max(0, Math.ceil((cp.ts - v.now) / DAY));
-      const parts = [`실험 <b>${v.day}일째</b> (${kdate(v.start)} 시작)`,
-        `${cp.k === 1 ? "첫" : cp.k + "번째"} 판정 <b>${kdate(cp.ts)} 09:00</b> (${cp.day}일째, D-${dleft})`];
+      const cp = v.next_checkpoint, dleft = Math.max(0, Math.ceil((cp.ts - v.now) / DAY)), rs = v.restart;
+      // the restart banner (server: checkpoint.run_facts / checkpoint_ts): '새 실험 D+n / 30 · 첫 판정 MM/DD'
+      const parts = rs && rs.ready ? [`<b class="rs-banner">${esc(rs.text)}</b> (${kdate(v.start)} 시작, 판정 09:00 · D-${dleft})`]
+        : [`실험 <b>${v.day}일째</b> (${kdate(v.start)} 시작)`,
+          `${cp.k === 1 ? "첫" : cp.k + "번째"} 판정 <b>${kdate(cp.ts)} 09:00</b> (${cp.day}일째, D-${dleft})`];
       if (v.observing) parts.push(`관찰 기간 <b>${kdate(v.observe_until - 1)}까지</b> (복사 제안 없이 기록만, ${Math.ceil((v.observe_until - v.now) / DAY)}일 남음)`);
       else parts.push("관찰 기간 끝: 에이전트 제안 가능");
-      bar.innerHTML = parts.map((p) => `<span>${p}</span>`).join("");
+      bar.innerHTML = parts.map((p) => `<span>${p}</span>`).join("") + (rs && rs.rules_ko
+        ? `<span class="rs-rules">규칙 변경 1: ${esc(rs.rules_ko)} · <a href="${esc(rs.doc)}" target="_blank" rel="noopener">원문 보기</a></span>` : "");
     }
     if (typeof topHeight === "function") topHeight();
     const t = v.today;

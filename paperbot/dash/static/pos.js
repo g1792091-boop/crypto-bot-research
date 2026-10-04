@@ -2,7 +2,7 @@
 // Every open paper position like an exchange's position list: unrealized P&L and ROI on the live mark price
 // (same as the Binance app: before the exit fee), size, margin, entry / mark / liquidation price, the stop and the
 // profit lock, plus the coin's order book. Nothing here trades: there are no order buttons.
-const pv = {sym: "", sort: "pnl", tab: "pos"};
+const pv = {sym: "", sort: "pnl", tab: "pos", why: {}, whyAt: 0};
 const LOCK = {first: 0.10, step: 0.05, gap: 0.02};   // config.py ladder (ladder.py): arms at lock + gap net ROE
 
 function usdt(x, d = 2) { return x == null || isNaN(x) ? "—" : (x > 0 ? "+" : x < 0 ? "-" : "") + fmt(Math.abs(x), d); }
@@ -138,11 +138,30 @@ function posCard(x) {
     <div class="pc-tpsl"><span>손절 ${px(p.stop)}</span> <span class="muted">닿으면</span> <b class="${cls(stopPnl)}">${usdt(stopPnl)}</b>
       <span class="muted">(${pct(stopPnl / p.margin, 1)})</span></div>
     <div class="pc-tpsl muted">${lockText(p, u)}</div>
+    ${whyLine(a.account_id, p)}
     <div class="pc-foot"><span class="muted">${tsKo(p.entry_time)} 진입 · ${holdKo(p.entry_time)} 보유 · ${TF_KO[a.timeframe] || a.timeframe}봉</span>
       <span class="grow"></span><button class="mini" data-chart="${esc(a.account_id)}" data-sym="${esc(p.symbol)}">차트</button>
       ${strat ? `<button class="mini" data-strat="${esc(a.strategy)}" data-tf="${esc(a.timeframe)}" data-sym="${esc(p.symbol)}">매매법</button>` : ""}
       <button class="mini" data-acct="${esc(a.account_id)}">계좌</button></div>
   </div>`;
+}
+// why this leverage (GET /api/levwhy: group 좋은 자리/보통, entry-quality score, rejected higher candidates)
+function whyHtml(w) {
+  if (!w) return "";
+  const tag = w.group === "best" ? '<span class="tag good">좋은 자리</span>' : w.group === "normal" ? '<span class="tag">보통</span>' : "";
+  const sc = w.score != null ? `품질 점수 ${Number(w.score).toFixed(2)}` : w.source === "coin_flip" ? `동전 봇 (좋은 자리 확률 ${Math.round((w.p_best || 0) * 100)}%)` : "품질 점수 없음";
+  return `${tag} ${sc} · ${esc(w.short_ko || (w.leverage ? w.leverage + "배" : ""))}`;
+}
+function whyLine(aid, p) {
+  const w = pv.why[aid];
+  if (!w || (w.entry_time != null && p.entry_time != null && w.entry_time !== p.entry_time)) return "";
+  return `<div class="pc-tpsl muted">왜 ${p.leverage}배: ${whyHtml(w)}</div>`;
+}
+async function loadWhy(force) {
+  if (!force && Date.now() - pv.whyAt < 20000) return;
+  pv.whyAt = Date.now();
+  try { pv.why = (await api("/api/levwhy")).positions || {}; } catch (e) { /* keeps the last */ }
+  if (state.view === "pos") renderPos();
 }
 function orderRows(list) {
   if (!list.length) return '<p class="empty">걸려 있는 손절·잠금 주문이 없습니다</p>';
@@ -177,7 +196,7 @@ function renderPos() {
   bindAccountClicks(el);
   el.querySelectorAll(".pc-acct[data-acct]").forEach((s) => s.onclick = () => openAccount(s.dataset.acct));
 }
-function loadPos() { bookUse(pv.sym); renderPos(); if (pv.tab === "hist") renderPvHist(); }
+function loadPos() { bookUse(pv.sym); renderPos(); loadWhy(true); if (pv.tab === "hist") renderPvHist(); }
 document.querySelectorAll("#pv-tabs button").forEach((b) => b.onclick = () => {
   pv.tab = b.dataset.t;
   document.querySelectorAll("#pv-tabs button").forEach((x) => x.classList.toggle("on", x === b));
@@ -186,5 +205,5 @@ document.querySelectorAll("#pv-tabs button").forEach((b) => b.onclick = () => {
 $("pv-sort").onchange = (e) => { pv.sort = e.target.value; renderPos(); };
 setInterval(() => {
   bookUse(state.view === "pos" ? pv.sym : state.view === "trade" && state.side2 === "book" ? state.sym : null);
-  if (state.view === "pos") renderPos();
+  if (state.view === "pos") { renderPos(); loadWhy(); }
 }, 1000);

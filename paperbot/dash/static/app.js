@@ -435,7 +435,7 @@ function tradeRows(rows, withCoin) {
   return `<table><thead><tr><th class="l">청산 시각</th><th class="l">계좌</th>${withCoin ? '<th class="l">코인</th>' : ""}<th class="l">방향</th>
     <th>배수</th><th class="l">이유</th><th>ROE</th><th>손익</th></tr></thead><tbody>` + rows.map((t) => `<tr class="click" data-id="${esc(t.account_id)}">
     <td class="l">${tsKo(t.exit_time)}</td><td class="l" title="${esc(t.account_id)}">${esc(name(t))}</td>${withCoin ? `<td class="l">${coin(t.symbol)}</td>` : ""}
-    <td class="l">${sideTag(t.side)}</td><td>${t.leverage}배</td>
+    <td class="l">${sideTag(t.side)}</td><td>${t.leverage}배${t.tier === "best" ? ' <span class="tag good" title="진입 품질 best: 50배·50%부터 시도">좋은 자리</span>' : ""}</td>
     <td class="l">${REASON_KO[t.exit_reason] || t.exit_reason}${t.lock_roe ? ` +${Math.round(t.lock_roe * 100)}%` : ""}</td>
     <td class="mono ${cls(t.roe)}">${pct(t.roe)}</td><td class="mono ${cls(t.pnl)}">${t.pnl > 0 ? "+" : ""}${fmt(t.pnl)}</td></tr>`).join("") + "</tbody></table>";
 }
@@ -626,7 +626,7 @@ function renderAccount(d) {
         + (d.signals.FILTERED ? ` · ${OUTCOME_KO.FILTERED} ${d.signals.FILTERED}` : "")],
   ].map(([k, v, s]) => `<div class="tile"><div class="k">${k}</div><div class="v">${v}</div><div class="s">${s}</div></div>`).join("");
   renderExtraInfo(d.extra);
-  renderAcctPos(st.position);
+  renderAcctPos(st.position, d.position_why);
   acharts.forEach((c) => c.remove()); acharts = [];
   if (window.LightweightCharts) {
     const el = $("a-eq"); const c = LightweightCharts.createChart(el, chartOpts(el)); acharts.push(c);
@@ -646,7 +646,7 @@ function renderAccount(d) {
     <td class="l">${sideTag(t.side)}</td><td>${t.leverage}배</td><td class="mono">${px(t.entry_price)}</td><td class="mono">${px(t.exit_price)}</td>
     <td class="l">${REASON_KO[t.exit_reason] || t.exit_reason}${t.lock_roe ? ` (+${Math.round(t.lock_roe * 100)}%)` : ""}</td>
     <td class="mono ${cls(t.roe)}">${pct(t.roe)}</td><td class="mono ${cls(t.pnl)}">${t.pnl > 0 ? "+" : ""}${fmt(t.pnl)}</td>
-    <td class="mono">$${fmt(t.equity_after)}</td></tr>`).join("") || '<tr><td colspan="10" class="empty">아직 거래가 없습니다</td></tr>';
+    <td class="mono">$${fmt(t.equity_after)}</td></tr>${t.why && typeof whyHtml === "function" ? `<tr class="why-row"><td colspan="10" class="l"><span class="why">왜 ${t.leverage}배: ${whyHtml(t.why)}</span></td></tr>` : ""}`).join("") || '<tr><td colspan="10" class="empty">아직 거래가 없습니다</td></tr>';
 }
 // an extra account: what it is (rule or new strategy), where it came from, when it started, the runner's events
 const EVENT_KO = {created: "시작", suspended: "멈춤(보류)", resumed: "다시 돎", held: "정지(동결)", code_accepted: "새 코드 받아들임"};
@@ -665,7 +665,7 @@ function renderExtraInfo(x) {
     ${ev ? `<ul class="reasons">${ev}</ul>` : ""}
     <div class="muted">원본 ${RUN.accounts}개 계좌와 따로 셉니다. 시작된 계좌는 규칙대로 돌고, 거절로 멈출 수 없습니다.</div></div>`;
 }
-function renderAcctPos(p) {
+function renderAcctPos(p, why) {
   const el = $("a-pos");
   if (!p) { el.innerHTML = '<span class="muted">없음</span>'; return; }
   const u = livePnl({symbol: p.symbol, side: p.side, qty: p.qty, entry: p.entry_price, margin: p.margin});
@@ -675,7 +675,8 @@ function renderAcctPos(p) {
     <div><span>진입가</span>${px(p.entry_price)}</div>
     <div><span>손절선</span>${px(p.stop_price)}${p.lock_roe ? ` <span class="up">+${Math.round(p.lock_roe * 100)}% 잠금</span>` : ""}</div>
     <div><span>첫 손절</span>${px(p.stop_initial)}</div><div><span>청산가</span>${px(p.liq_price)}</div>
-    <div><span>증거금</span>$${fmt(p.margin)}</div><div><span>진입 시각</span>${tsKo(p.entry_time)}</div></div>`;
+    <div><span>증거금</span>$${fmt(p.margin)}</div><div><span>진입 시각</span>${tsKo(p.entry_time)}</div></div>
+    ${why && typeof whyHtml === "function" ? `<div class="why">왜 ${p.leverage}배: ${whyHtml(why)}</div>` : ""}`;
 }
 async function drawAcctCandles(d) {
   const el = $("a-candles");

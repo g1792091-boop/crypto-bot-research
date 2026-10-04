@@ -761,11 +761,15 @@ def rr_packet(paper_ro: Optional[sqlite3.Connection], daily_ro: Optional[sqlite3
         "note": "레버리지 고정·증거금 = 레버리지 %·크기 조건 그대로(안 되면 not_entered). 계좌별 자금 곡선은 대시보드"}
     if "error" in sh["since_start"]:
         shadows["error"] = sh["since_start"]["error"]
+    # the leverage variants' shadow equity curves (obsshadows.curve_view): the last day's median and busts
+    shadows["lev_curves"] = curves_brief(daily_ro, paper_ro)
     return {"window": {w: {"from": a, "to": b} for w, (a, b) in win.items()}, "rules": {**lad, "note": RULES_NOTE},
             "lab_tests": LAB_TESTS, "trades": {w: t["all"].get("trades", 0) for w, t in tabs.items()},
             "all_strategies": {w: t["all"] for w, t in tabs.items()}, "coin_flips": flips,
             "strategies": strategies, "shadows": shadows,
             "tiers": tier_packet(got),
+            # rule B judged only by docs/levrule-eval.md (agents/leveval.py; interim before day 30)
+            "levrule": levrule_section(paper_ro, now_ms),
             "small_n": SMALL_N, "how_to_read": HOW_TO_READ,
             "note": "모두 코드 계산(수수료·펀딩 포함한 끝난 거래). 동전 봇(무작위 진입, 같은 규칙)이 규칙 자체의 손익비 기준"}
 
@@ -785,8 +789,51 @@ def strategy_brief(paper_ro: Optional[sqlite3.Connection], strategy: str, now_ms
     since7 = now_ms - days * DAY_MS
     t = table(rows, ft)["strategies"].get(strategy) or {"all": {"trades": 0}, "by_tf": {}}
     w7 = stats([x for *_s, x in rows if x["exit_time"] >= since7], ft)
-    return {"since_start": _brief(t["all"]), "7d": compact(w7),
-            "by_tf": {tf: tiny(c) for tf, c in t["by_tf"].items()}, "note": BRIEF_NOTE}
+    out = {"since_start": _brief(t["all"]), "7d": compact(w7),
+           "by_tf": {tf: tiny(c) for tf, c in t["by_tf"].items()}, "note": BRIEF_NOTE}
+    from . import leveval as LV
+    try:
+        line = LV.strategy_line(paper_ro, strategy, now_ms)
+    except (sqlite3.Error, KeyError, TypeError, ValueError):
+        line = ""
+    if line:
+        out["levrule"] = line                 # one line: its own 좋은 자리 vs 보통 (docs/levrule-eval.md)
+    return out
+
+
+def levrule_section(paper_ro: Optional[sqlite3.Connection], now_ms: int) -> dict:
+    """The rr meeting's ``levrule`` (agents/leveval.rr_section of the pre-registered evaluation); never raises."""
+    from . import leveval as LV
+    try:
+        return LV.rr_section(LV.levrule_eval(paper_ro, now_ms=now_ms))
+    except Exception as exc:  # noqa: BLE001  (a description must never stop the meeting)
+        return {"error": f"규칙 B 평가를 만들지 못함: {type(exc).__name__}", "doc": LV.DOC}
+
+
+CURVE_NOTE = ("같은 거래를 레버리지만 바꿔 돌린 그림자의 계좌별 자금 곡선(밤 점검, $5,000 시작): 마지막 날 매매법 계좌 "
+              "중앙값과 그날까지 파산한 계좌 수. 설명용, 판정 아님")
+
+
+def curves_brief(daily_ro: Optional[sqlite3.Connection], paper_ro: Optional[sqlite3.Connection]) -> dict:
+    """{"day", "columns", "variants": {variant: [accounts, median equity on the last day, busts so far]}} of the
+    strategy accounts' shadow equity curves (obsshadows.curve_view), small; never raises."""
+    if daily_ro is None:
+        return {"error": "daily3.db 없음"}
+    from ..obsshadows import curve_view
+    owner = _strategy_of(paper_ro)
+    try:
+        cv = curve_view(daily_ro, accounts=list(owner) if owner is not None else None)
+    except Exception as exc:  # noqa: BLE001
+        return {"error": f"자금 곡선을 읽지 못함: {type(exc).__name__}"}
+    if cv.get("error"):
+        return {"error": f"자금 곡선을 읽지 못함: {cv['error']}"}
+    days = cv.get("days") or []
+    if not days:
+        return {"day": None, "variants": {}, "note": CURVE_NOTE}
+    return {"day": days[-1], "columns": ["accounts", "median_equity_last_day", "busts_so_far"],
+            "variants": {v: [c.get("accounts"), _r((c.get("median") or [None])[-1], 1), (c.get("busts") or [0])[-1]]
+                         for v, c in (cv.get("by_variant") or {}).items()},
+            "note": CURVE_NOTE}
 
 
 BRIEF_NOTE = ("손익비 숫자(코드 계산): payoff = 평균 이익 ÷ |평균 손실|(자금 대비), breakeven_win_rate = 본전 승률, "

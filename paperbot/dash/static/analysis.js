@@ -5,8 +5,8 @@
 // Uses app.js helpers ($, api, esc, fmt, tsKo, idName, coin, alertKo, state, TF_KO).
 (function () {
   const ROUTE = {health: "health", risk: "risk", ready: "readiness", shock: "shock", map: "map", entry: "entry",
-    synergy: "synergy", questions: "questions", alerts: "alerts"};
-  const an = {tab: "health", data: {}, busy: {}, retry: null, alertLevel: ""};
+    synergy: "synergy", levrule: "levrule", shadows: "shadows", questions: "questions", alerts: "alerts"};
+  const an = {tab: "health", data: {}, busy: {}, retry: null, alertLevel: "", curveSet: "lev", shadowAcct: "", charts: []};
   try { const t = localStorage.getItem("pb-an-tab"); if (t && ROUTE[t]) an.tab = t; } catch (e) { /* storage blocked */ }
   const pc = (x, d = 0) => (x == null || isNaN(x) ? "—" : (x * 100).toFixed(d) + "%");
   const pcs = (x, d = 1) => (x == null || isNaN(x) ? "—" : (x > 0 ? "+" : "") + (x * 100).toFixed(d) + "%");
@@ -29,7 +29,7 @@
     if (force || !an.data[t]) render();
     an.busy[t] = true;
     try {
-      an.data[t] = await api("/api/analysis/" + ROUTE[t]);
+      an.data[t] = await api("/api/analysis/" + ROUTE[t] + (t === "shadows" && an.shadowAcct ? "?account=" + encodeURIComponent(an.shadowAcct) : ""));
     } catch (e) {
       an.data[t] = {error: "불러오지 못했습니다 (로그인이 끝났거나 서버가 응답하지 않음)"};
     }
@@ -41,13 +41,15 @@
   function render() {
     const d = an.data[an.tab], el = $("an-body");
     $("an-at").textContent = d && d.computed_at ? `${tsKo(d.computed_at)} 계산${d.stale ? " (예전 값, 다시 계산 중)" : ""}` : "";
+    an.charts.forEach((c) => c.remove()); an.charts = [];
     if (!d) { el.innerHTML = '<p class="empty">불러오는 중…</p>'; return; }
     if (d.pending) { el.innerHTML = `<p class="empty">${esc(d.note || "계산 중입니다")}</p>`; return; }
     if (d.unavailable) { el.innerHTML = `<p class="empty">준비 중입니다. ${esc(d.note || "")}</p>`; return; }
     if (d.error) { el.innerHTML = `<p class="empty">${esc(d.error)}</p>`; return; }
     try {
       el.innerHTML = ({health: rHealth, risk: rRisk, ready: rReady, shock: rShock, map: rMap, entry: rEntry,
-        synergy: rSynergy, questions: rQuestions, alerts: rAlerts})[an.tab](d);
+        synergy: rSynergy, levrule: rLevrule, shadows: rShadows, questions: rQuestions, alerts: rAlerts})[an.tab](d);
+      if (an.tab === "shadows") drawCurves(d);
     } catch (e) {
       console.error(e);
       el.innerHTML = '<p class="empty">이 화면을 그리지 못했습니다 (자료 모양이 바뀌었을 수 있음)</p>';
@@ -57,6 +59,9 @@
   function bind(el) {
     el.querySelectorAll("button[data-lv]").forEach((b) => b.onclick = () => { an.alertLevel = b.dataset.lv; render(); });
     el.querySelectorAll("[data-acct]").forEach((b) => b.onclick = () => { if (typeof openAccount === "function") openAccount(b.dataset.acct); });
+    el.querySelectorAll("button[data-cset]").forEach((b) => b.onclick = () => { an.curveSet = b.dataset.cset; render(); });
+    const pick = el.querySelector("#an-curve-acct");
+    if (pick) pick.onchange = () => { an.shadowAcct = pick.value; delete an.data.shadows; load(true); };
   }
 
   // ------------------------------------------------------------ ① 건강 점검
@@ -274,6 +279,102 @@
     return h;
   }
 
+  // ------------------------------------------------------------ 좋은 자리 vs 보통 (규칙 B, docs/levrule-eval.md)
+  const GKO = {best: "좋은 자리", normal: "보통"};
+  const rp = (x) => (x == null || isNaN(x) ? "—" : (x > 0 ? "+" : "") + (x * 100).toFixed(3) + "%");   // per unit exposure
+  function rLevrule(d) {
+    if (d.status === "no_run") return `<p class="empty">${esc(d.status_ko || "아직 계좌 없음")}</p>`;
+    const g = d.groups || {}, b = g.best || {}, n = g.normal || {}, c = d.cells || {}, tr = d.trades || {};
+    let h = head("좋은 자리 vs 보통 · 레버리지 규칙 B", `매매법 거래 ${fmt(tr.strategy || 0, 0)}건 · 동전 봇 ${fmt(tr.coin_flips || 0, 0)}건`);
+    h += d.status === "decided"
+      ? `<div class="an-status ${d.decision === "keep" ? "up" : "accent"}"><b>● ${esc(d.status_ko)}</b><span class="muted">미리 정한 방법 그대로의 코드 판정 · 다음 창은 규칙 버전에 따라 새 계좌, 두 분 확인</span></div>`
+      : `<p class="an-warn"><b>30일 판정 전 결론 없음.</b> 아래는 중간 숫자입니다. 규칙 B는 첫 판정(30일 체크포인트)에서 미리 정한 방법으로 한 번만 판정하고, 그 전에는 아무것도 바꾸지 않습니다.</p>`;
+    h += `<div class="tiles">${tile("매매법 차이 D_s", rp(d.d_s), `좋은 자리 − 보통, 노출당 · 적격 칸 ${c.strategy_eligible || 0}/${c.strategy_total || 0}`, ucls(d.d_s))}
+      ${tile("한쪽 p", d.p_s == null ? "—" : num(d.p_s, 3), `기준 ≤ ${num((d.conditions || {}).alpha, 2)} · 주 단위 블록 부트스트랩`)}
+      ${tile("동전 봇 차이 D_c", rp(d.d_c), `같은 구분의 우연 기준 · 적격 칸 ${c.coin_flips_eligible || 0}/${c.coin_flips_total || 0}`, ucls(d.d_c))}
+      ${tile("조건", `${(d.conditions || {}).a_best_beats_normal ? "✅" : "❌"} ${(d.conditions || {}).b_beats_coin_flips ? "✅" : "❌"}`, "(가) 좋은 자리가 낫고 p ≤ 0.10 · (나) 동전 봇 차이보다 큼")}</div>`;
+    const row = (k, f) => `<tr><td class="l name">${k}</td>${[b.strategy, n.strategy, b.coin_flips, n.coin_flips].map((x, i) => `<td data-k="${["좋은 자리(매매법)", "보통(매매법)", "좋은 자리(동전 봇)", "보통(동전 봇)"][i]}">${x && x.trades ? f(x) : "—"}</td>`).join("")}</tr>`;
+    h += section("묶음별 숫자", `<div class="scroll"><table class="cards"><thead><tr><th class="l"></th><th>좋은 자리 · 매매법</th><th>보통 · 매매법</th><th>좋은 자리 · 동전 봇</th><th>보통 · 동전 봇</th></tr></thead><tbody>
+      ${row("거래", (x) => fmt(x.trades, 0) + small(x.small))}${row("승률", (x) => pc(x.win_rate))}${row("평균 ROE", (x) => `<span class="${ucls(x.mean_roe)}">${pcs(x.mean_roe)}</span>`)}
+      ${row("거래당 자금 대비", (x) => `<span class="${ucls(x.mean_eq)}">${pcs(x.mean_eq, 2)}</span>`)}${row("노출 1단위당 수익", (x) => `<b class="${ucls(x.mean_r)}">${rp(x.mean_r)}</b>`)}
+      </tbody></table></div><p class="muted">노출 1단위당 수익 = 손익 ÷ (증거금 × 레버리지) = ROE ÷ 레버리지 (수수료·펀딩 뺀 순). 레버리지가 다른 거래를 같은 크기로 맞춰 비교하는 숫자입니다.</p>`);
+    const mix = d.leverage_mix || {}, rk = d.reason_ko || {};
+    const mixRows = ["best", "normal"].map((k) => {
+      const m = mix[k] || {}, bl = m.by_leverage || {}, wl = m.why_lower || {}, tot = Object.values(bl).reduce((a, x) => a + x, 0);
+      const flips = (g[k] || {}).coin_flips_by_leverage || {}, ftot = Object.values(flips).reduce((a, x) => a + x[0], 0);
+      const cells = ["50", "40", "30", "20"].map((lv) => {
+        const why = Object.entries(wl[lv] || {}).map(([code, v]) => `${esc(rk[code] || code)} ${v}`).join(", ");
+        const f = flips[lv];
+        return `<td data-k="${lv}배">${bl[lv] ? `${fmt(bl[lv], 0)} <small class="muted">(${pc(bl[lv] / tot)})</small>` : "—"}${why ? `<span class="why">왜 낮게: ${why}</span>` : ""}${f ? `<span class="why">동전 봇 ${f[0]}건 (${pc(f[0] / ftot)}) · 노출당 ${rp(f[1])}</span>` : ""}</td>`;
+      }).join("");
+      const rw = (g[k] || {}).coin_flips_at_strategy_mix || {};
+      return `<tr><td class="l name">${GKO[k]}${tot ? ` <small class="muted">${tot}건</small>` : ""}</td>${cells}<td data-k="동전 봇(같은 배수 구성)">${rw.mean_r == null ? "—" : `노출당 ${rp(rw.mean_r)} · 자금 대비 ${pcs(rw.mean_eq, 2)}${rw.coverage < 1 ? ` <small class="muted">(맞춘 비율 ${pc(rw.coverage)})</small>` : ""}`}</td></tr>`;
+    }).join("");
+    h += section("실제로 들어간 배수와 이유 (매매법 계좌)", `<div class="scroll"><table class="cards"><thead><tr><th class="l">묶음</th><th>50배</th><th>40배</th><th>30배</th><th>20배</th><th>동전 봇 · 같은 배수 구성</th></tr></thead><tbody>${mixRows}</tbody></table></div>
+      <p class="muted">좋은 자리는 50배·50%부터, 보통은 30배·30%부터 시도하고 안전 조건(거래소 구간, 손절이 청산가보다 안쪽, 손절 손실 ≤ 자금 15%)에 막히면 내려갑니다. '왜 낮게' = 첫 후보를 막은 조건(진입 기록). 동전 봇 · 같은 배수 구성 = 동전 봇의 같은 묶음을 매매법의 배수 비중으로 다시 맞춘 기준.</p>`);
+    const cr = Object.entries(d.cell_rows || {});
+    h += section("적격 칸 (두 묶음 모두 10건 이상)", cr.length ? `<div class="scroll"><table class="cards"><thead><tr><th class="l">계좌</th><th>좋은 자리</th><th>보통</th><th>차이(노출당)</th></tr></thead><tbody>` +
+      cr.map(([a, r]) => `<tr class="click" data-acct="${esc(a)}"><td class="l name">${esc(idName(a))}</td><td data-k="좋은 자리">${fmt(r[0], 0)}</td><td data-k="보통">${fmt(r[1], 0)}</td><td data-k="차이" class="${ucls(r[2])}">${rp(r[2])}</td></tr>`).join("") + "</tbody></table></div>"
+      : '<p class="muted">아직 두 묶음 모두 10건이 넘은 계좌가 없습니다.</p>');
+    h += `<p class="muted">${esc(d.note || "")} · <a href="/api/doc/levrule-eval" target="_blank" rel="noopener">미리 정한 방법 원문 (docs/levrule-eval.md)</a></p>`;
+    return h;
+  }
+
+  // ------------------------------------------------------------ 그림자 비교 (새 실험, 그림자 모두 vs base)
+  const CURVE_SETS = {lev: ["base", "lev10", "lev20", "lev30", "lev40", "lev50"], levm: ["base", "lev20m20", "lev30m30", "lev40m40", "lev50m50"]};
+  const CURVE_KO = {base: "base(실제 규칙)", lev10: "10배", lev20: "20배", lev30: "30배", lev40: "40배", lev50: "50배",
+    lev20m20: "20배·20%", lev30m30: "30배·30%", lev40m40: "40배·40%", lev50m50: "50배·50%"};
+  const share = (x) => (x == null ? "—" : Math.round(x * 100) + "%");
+  function rShadows(d) {
+    const base = d.base || {};
+    let h = head("그림자 비교 · 새 실험의 같은 거래를 규칙 하나만 바꿔", `base 그림자 ${fmt(base.trades || 0, 0)}건 · 거래당 자금 대비 ${pcs(base.mean_eq, 2)} · ${esc(d.label || "")}`);
+    if (d.error) h += `<p class="an-warn">${esc(d.error)}</p>`;
+    h += thin(base.trades || 0, 30, "base 그림자 거래");
+    h += '<div class="an-2">';
+    for (const g of d.groups || []) {
+      const rows = (g.rows || []).map((r) => `<tr class="${r.small || !r.trades ? "muted" : ""}"><td class="l name">${esc(r.ko)}${small(r.small)}</td>
+        <td data-k="거래">${fmt(r.trades || 0, 0)}${r.not_entered ? ` <small class="muted">진입 안 함 ${r.not_entered}</small>` : ""}</td>
+        <td data-k="거래당 자금 대비" class="${ucls(r.mean_eq)}">${pcs(r.mean_eq, 2)}</td>
+        <td data-k="base와 차이" class="${ucls(r.vs_base_eq)}">${pcs(r.vs_base_eq, 2)}</td>
+        <td data-k="나음 / 나쁨">${share(r.better_share)} / ${share(r.worse_share)}</td></tr>`).join("");
+      h += section(esc(g.title), `<table class="cards"><thead><tr><th class="l">그림자</th><th>거래</th><th>자금 대비</th><th>base와 차이</th><th>나음 / 나쁨</th></tr></thead><tbody>${rows}</tbody></table>
+        <p class="an-ref">5년 기준: ${esc(g.five_year || "—")}</p>`);
+    }
+    h += "</div>";
+    const cv = d.curves || {}, set = CURVE_SETS[an.curveSet] || CURVE_SETS.lev;
+    const vs = set.filter((v) => (cv.variants || []).includes(v));
+    const acc = cv.account;
+    const opts = `<option value="">매매법 계좌 중앙값 (전체)</option>` + (d.accounts || []).map((a) => `<option value="${esc(a)}"${a === an.shadowAcct ? " selected" : ""}>${esc(idName(a))}</option>`).join("");
+    let body = `<div class="an-pick"><div class="seg"><button data-cset="lev" class="${an.curveSet === "lev" ? "on" : ""}">레버리지 고정(티어 비중)</button><button data-cset="levm" class="${an.curveSet === "levm" ? "on" : ""}">레버리지 = 비중</button></div>
+      <select id="an-curve-acct" aria-label="계좌 고르기">${opts}</select></div>`;
+    if (!(cv.days || []).length || !vs.length) body += '<p class="muted">아직 그림자 자금 곡선이 없습니다 (밤 점검이 하루 이상 돈 뒤 생김).</p>';
+    else {
+      body += `<div class="an-legend">${vs.map((v, i) => `<span><i style="background:var(--c${i + 1})"></i>${esc(CURVE_KO[v] || v)}</span>`).join("")}</div><div class="an-chart" id="an-curve"></div>`;
+      const last = cv.days.length - 1;
+      body += `<div class="scroll"><table class="cards"><thead><tr><th class="l">그림자</th><th>${acc ? "이 계좌" : "중앙값"} (${esc(cv.days[last])})</th><th>파산</th></tr></thead><tbody>` +
+        vs.map((v) => { const b = (cv.by_variant || {})[v] || {}; const val = acc ? ((acc.curves || {})[v] || [])[last] : (b.median || [])[last];
+          const bust = acc ? ((acc.bust_day || {})[v] ? `파산 ${esc(acc.bust_day[v])}` : "없음") : `${(b.busts || [])[last] || 0} / ${b.accounts || 0}`;
+          return `<tr><td class="l name">${esc(CURVE_KO[v] || v)}</td><td data-k="자금">${val == null ? "—" : "$" + fmt(val, 0)}</td><td data-k="파산">${bust}</td></tr>`; }).join("") + "</tbody></table></div>";
+    }
+    h += section(acc ? `레버리지 자금 곡선 · ${esc(idName(acc.account_id))}` : "레버리지 자금 곡선 · 매매법 계좌 중앙값", body + `<p class="muted">같은 거래를 레버리지만(왼쪽 묶음: 증거금 20·20·30·40·40%, 오른쪽: 증거금 = 레버리지 %) 바꿔 $${fmt(cv.start || 5000, 0)}부터 굴린 자금. 파산 = $${fmt(cv.bust_below || 10, 0)} 아래. ${esc(d.note || "")}</p>`);
+    return h;
+  }
+  function drawCurves(d) {
+    const el = document.getElementById("an-curve"), cv = d.curves || {};
+    if (!el || !window.LightweightCharts || typeof chartOpts !== "function") return;
+    const vs = (CURVE_SETS[an.curveSet] || CURVE_SETS.lev).filter((v) => (cv.variants || []).includes(v));
+    const c = LightweightCharts.createChart(el, chartOpts(el)); an.charts.push(c);
+    const t = (cv.days || []).map((x) => Math.floor(Date.parse(x + "T00:00:00Z") / 1000));
+    vs.forEach((v, i) => {
+      const ys = cv.account ? ((cv.account.curves || {})[v] || []) : (((cv.by_variant || {})[v] || {}).median || []);
+      const s = c.addLineSeries({color: css(`--c${i + 1}`), lineWidth: 2, title: CURVE_KO[v] || v, lastValueVisible: false,
+        priceLineVisible: false, priceFormat: {type: "price", precision: 0, minMove: 1}});
+      s.setData(t.map((x, k) => ({time: x, value: ys[k]})).filter((p) => p.value != null));
+      if (i === 0) s.createPriceLine({price: cv.start || 5000, color: css("--muted"), lineStyle: 2, lineWidth: 1, title: "시작"});
+    });
+    c.timeScale().fitContent();
+  }
+
   // ------------------------------------------------------------ ⑦ 45개 질문
   const QST = {done: ["✅", "답 있음", "up"], partial: ["△", "일부", "accent"], todo: ["☐", "아직", "down"], na: ["—", "해당 없음", "muted"]};
   function rQuestions(d) {
@@ -341,6 +442,9 @@
     };
   });
   document.querySelectorAll('#nav button[data-v="analysis"]').forEach((b) => b.addEventListener("click", () => load()));
+  // the curves take the theme's colors when drawn: draw them again after the theme changes
+  const th = document.getElementById("theme");
+  if (th) th.addEventListener("click", () => setTimeout(() => { if (state.view === "analysis" && an.tab === "shadows") render(); }, 0));
   document.querySelectorAll('#nav button[data-v="office"]').forEach((b) => b.addEventListener("click", loadDebate));
   setInterval(() => {
     if (document.visibilityState !== "visible") return;

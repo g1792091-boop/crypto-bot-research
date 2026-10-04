@@ -123,7 +123,7 @@ class Server:
         with open(os.path.join(self.app, "VERSION.json"), "w") as fh:
             json.dump({"commit": COMMIT, "tag": None, "dirty": False, "source": "install.sh",
                        "installed_at": "2026-10-01T03:00:00Z"}, fh)
-        for name in ("paper-v3-rules", "paper-v3-rules-addendum", "paper-v3-rules-change-1"):
+        for name in ("paper-v3-rules", "paper-v3-rules-addendum", "paper-v3-rules-change-1", "levrule-eval"):
             data = f"rules {name}\n".encode()
             with open(os.path.join(self.app, "docs", f"{name}.md"), "wb") as fh:
                 fh.write(data)
@@ -824,7 +824,7 @@ def test_backup_chat_is_checked_and_tested_when_set(tmp_path):
 def test_code_version_rules_and_clone(tmp_path):
     srv = Server(tmp_path)
     lines = L.check_code(srv.ctx())
-    assert st(lines) == [L.OK, L.OK] and "커밋 d86c085000" in lines[0][1] and "규칙 문서 3개" in lines[1][1]
+    assert st(lines) == [L.OK, L.OK] and "커밋 d86c085000" in lines[0][1] and "규칙 문서 4개" in lines[1][1]     # + docs/levrule-eval.md
     srv.head = "e" * 40
     srv.cmd_out[(VENV, "-c", "import paperbot")] = (1, "", "/opt/paperbot/venv/bin/python: No module named 'paperbot'")
     lines = L.check_code(srv.ctx())

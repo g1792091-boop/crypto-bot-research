@@ -27,7 +27,8 @@ TRADING_FILES = ("paperbot/engine.py", "paperbot/ladder.py", "paperbot/margin.py
                  "paperbot/sigservice.py", "paperbot/aggregate.py", "paperbot/feed.py", "paperbot/live3.py",
                  "paperbot/recorder.py", "paperbot/policy.py", "paperbot/levrule.py", "paperbot/quality_edges.json",
                  "paperbot/entry_marks.py")
-RULES_FILES = ("docs/paper-v3-rules.md", "docs/paper-v3-rules-addendum.md", "docs/paper-v3-rules-change-1.md")
+RULES_FILES = ("docs/paper-v3-rules.md", "docs/paper-v3-rules-addendum.md", "docs/paper-v3-rules-change-1.md",
+               "docs/levrule-eval.md")     # how rule B is judged at day 30 (pre-registered 2026-10-04)
 # Files that decide only the extra accounts (paperbot/extras.py): their trading code and signals, and the
 # code that judges an approval at creation (not trading). A change is a Q5 event for the extras only.
 EXTRA_FILES = ("paperbot/extras.py", "paperbot/newlab_live.py", "paperbot/agents/newlab_signals.py")

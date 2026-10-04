@@ -199,7 +199,7 @@ def test_meeting_packet_strategy_brief_and_ranking_brief(world):
     assert pk["strategies"][0]["by_tf_7d"]["1h"] == {"trades": 10, "gap_pp": pytest.approx(-6.7)}
     assert "liq" not in pk["strategies"][0]["by_tf"]["1h"]
     assert pk["shadows"]["label"] == "설명용, 판정 아님" and "본전" in pk["how_to_read"]
-    assert len(json.dumps(pk, ensure_ascii=False)) < 16_000      # + tiers and docs/observation-shadows-3.md (2026-10-04)
+    assert len(json.dumps(pk, ensure_ascii=False)) < 19_000      # + tiers, docs/observation-shadows-3.md, levrule + lev_curves (2026-10-04)
     b = RR.strategy_brief(world.paper(), S, now)
     assert b["since_start"]["trades"] == 7 and b["7d"]["trades"] == 7 and set(b["by_tf"]) == {"15m", "1h"}
     assert b["since_start"]["breakeven_win_rate"] == pytest.approx(0.7914, abs=1e-4)      # (.74/3) / (.065 + .74/3)
