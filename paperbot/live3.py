@@ -38,7 +38,6 @@ import json
 import os
 import signal
 import sys
-import threading
 import time
 from typing import Callable, Optional
 
@@ -297,19 +296,47 @@ def single_runner_lock(db: str):
     return fh
 
 
-def stop_on_sigterm() -> tuple[threading.Event, Callable[[], None]]:
-    """(stop event, restore). SIGTERM (systemctl stop / restart, install.sh, a reboot) sets the event: cmd_run ends
+class StopFlag:
+    """A stop request set from a signal handler. No lock is taken in the handler (``threading.Event.set`` takes one,
+    and a SIGTERM landing while the main thread holds it inside ``Event.wait`` would deadlock the process)."""
+
+    def __init__(self) -> None:
+        self._set = False
+
+    def set(self) -> None:
+        self._set = True
+
+    def is_set(self) -> bool:
+        return self._set
+
+    def wait(self, timeout: float, slice_s: float = 0.25) -> bool:
+        """Sleep up to ``timeout`` seconds in short slices; return early (True) once set."""
+        end = time.monotonic() + max(0.0, float(timeout))
+        while not self._set:
+            left = end - time.monotonic()
+            if left <= 0:
+                break
+            time.sleep(min(slice_s, left))
+        return self._set
+
+
+def stop_on_sigterm() -> tuple[StopFlag, Callable[[], None]]:
+    """(stop flag, restore). SIGTERM (systemctl stop / restart, install.sh, a reboot) sets the flag: cmd_run ends
     the poll it is in (a batch of minutes is never cut in the middle: store.close commits, and a half-processed batch
     must not be committed) and leaves through its ``finally``, so the hourly digest's pending lines (busts,
     drawdowns, gaps) are sent. Without this the default action killed the process and those lines were lost. A
     batch longer than the unit's TimeoutStopSec ends in systemd's SIGKILL: the crash case a restart already
-    handles. A child process forked after this (a signal worker) keeps the default action: it ends at once."""
-    stop = threading.Event()
+    handles. A signal worker forked after this keeps SIGTERM's default action (it ends at once), because
+    ``Pool.terminate`` after a signal timeout relies on it. systemd must therefore signal the MAIN process only
+    (KillMode=mixed in deploy/paperbot-live3.service): a worker killed by SIGTERM while holding the pool's queue
+    lock would hang ``Pool.close/join`` in the ``finally``. The main process closes the pool; anything left after
+    it exits gets SIGKILL."""
+    stop = StopFlag()
     pid = os.getpid()
 
     def on_term(signum, frame):  # noqa: ARG001
-        if os.getpid() != pid:                    # a forked worker inherited this handler
-            signal.signal(signum, signal.SIG_DFL)
+        if os.getpid() != pid:                    # a forked worker inherited this handler: keep the default
+            signal.signal(signum, signal.SIG_DFL)  # action (Pool.terminate after a signal timeout must kill it)
             os.kill(os.getpid(), signum)
             return
         stop.set()

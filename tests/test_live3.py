@@ -374,3 +374,44 @@ def test_sigterm_handler_is_installed_only_on_the_main_thread_and_restored():
     t.join()
     got[0][1]()                                          # a no-op restore off the main thread
     assert signal.getsignal(signal.SIGTERM) is before
+
+
+def test_stop_flag_takes_no_lock_and_wait_returns_early_once_set():
+    import threading
+    import time as _t
+    from paperbot.live3 import StopFlag
+    f = StopFlag()
+    assert not f.is_set() and f.wait(0.05) is False
+    threading.Timer(0.1, f.set).start()
+    t0 = _t.monotonic()
+    assert f.wait(5.0) is True and _t.monotonic() - t0 < 1.0
+    assert not hasattr(f, "_cond") and not hasattr(f, "_lock")     # nothing a signal handler could deadlock on
+
+
+def test_live3_unit_signals_only_the_main_process():
+    from pathlib import Path
+    unit = (Path(__file__).resolve().parents[1] / "deploy" / "paperbot-live3.service").read_text()
+    assert "\nKillMode=mixed\n" in unit
+
+
+def _sleep_forever(_):
+    import time as _t
+    _t.sleep(60)
+
+
+def test_pool_terminate_still_kills_workers_forked_after_the_sigterm_handler():
+    import time as _t
+    from multiprocessing import Pool
+    from paperbot.live3 import stop_on_sigterm
+    stop, restore = stop_on_sigterm()
+    try:
+        pool = Pool(2)
+        pool.map_async(_sleep_forever, range(2))
+        _t.sleep(0.5)
+        t0 = _t.monotonic()
+        pool.terminate()
+        pool.join()
+        assert _t.monotonic() - t0 < 10
+        assert not stop.is_set()
+    finally:
+        restore()

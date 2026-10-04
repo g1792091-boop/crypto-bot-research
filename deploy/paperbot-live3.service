@@ -19,6 +19,9 @@ RestartSec=15
 NotifyAccess=main
 WatchdogSec=600
 TimeoutStopSec=60
+# SIGTERM to the main process only (it finishes its poll, sends the pending digest and closes the signal workers);
+# whatever is left after it exits gets SIGKILL. Signalling the workers too could leave the pool hung on stop.
+KillMode=mixed
 Nice=5
 
 [Install]
