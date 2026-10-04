@@ -43,9 +43,12 @@ export function connectedModels(maxN = 16) {
     for (const m of ms) { if (["chat", "code", "reason"].includes(modelKind(m))) out.push({ id, model: m }); }
   }
   const cloud = out.slice(0, maxN);
-  for (const m of olCache.slice(0, 6)) cloud.push({ id: "ollama", model: m });   // 로컬 Ollama 모델도 트레이더로 (오프라인·무료)
+  // 로컬 Ollama 모델: 4GB GPU에서 큰 모델 여러 개를 계속 바꿔 올리면 느리므로, 작고 빠른 것 우선으로 최대 6개만 트레이더로.
+  const sized = [...olCache].sort((a, b) => olSize(a) - olSize(b)).slice(0, 6);
+  for (const m of sized) cloud.push({ id: "ollama", model: m });
   return cloud;
 }
+function olSize(name) { const m = String(name).match(/(\d+(?:\.\d+)?)\s*b/i); return m ? +m[1] : 7; }   // 모델명에서 파라미터 수(b) 추정, 없으면 7b로 간주
 
 export const COINS = [["BTC", "BTCUSDT"], ["ETH", "ETHUSDT"], ["SOL", "SOLUSDT"], ["XRP", "XRPUSDT"], ["DOGE", "DOGEUSDT"], ["BNB", "BNBUSDT"]];
 const KEY = "coin:neural";
