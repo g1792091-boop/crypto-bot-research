@@ -983,7 +983,7 @@ async function research(lane = "std"){
   const tried = researchLog().slice(-8).map(r => `- ${r.name} (${r.market} ${r.tf}): ${r.pass ? "통과" : "불통과"}, 검증 구간 ${r.oos?.toFixed?.(1)}%`).join("\n");
   const levHint = {crypto: "코인 선물은 1~125배", us_stock: "주식은 보통 1~4배", kr_stock: "주식은 보통 1~2.5배", futures: "선물은 보통 5~20배", index: "지수 선물은 보통 5~20배"}[mk.cls];
   const sys = personaOf(a, (lane === "custom" ? "이번 일은 새 매매법 개발(커스텀 지표 라인)이다. 진입·청산의 핵심 조건은 반드시 직접 만든 custom 수식 지표로 하고, 기본 지표는 필터로만 쓴다. " : "이번 일은 모든 보조지표를 조합하는 새 매매법 개발이다. 기본 29종과 tv_ 지표에서 서로 다른 성격(추세·모멘텀·변동성·거래량) 3개 이상을 쓴다. ") + " 아래 형식 설명을 따라 전략 JSON 하나를 ```json 블록으로 쓰고, 블록 뒤에 왜 이 전략인지 2~3문장으로 말한다.") + "\n\n" + Q.STRATEGY_PROMPT
-    + `\n\n## 레버리지\n레버리지는 1~200배 중 자유롭게 정한다(${levHint}가 일반적). 정한 뒤 코드가 모든 레버리지(1~200배)·상승장·하락장·횡보·폭락·수수료 2~3배·진입 지연 시나리오로 다시 시험한다.`
+    + (mk.cls === "crypto" ? `\n\n## 레버리지 — 청산 공식 역산 프레임워크 (필수)\n코인 선물은 최소 20배. 청산거리≈1/레버리지, 손절(stop_loss_pct)은 청산거리의 40% 이하: 20x→손절≤2% · 50x→≤0.8% · 100x→≤0.4% · 200x→≤0.2% (비트 최대 200배·알트 100배). 1회 손실은 자본의 0.5~1%, 물타기 금지, 익절은 손절의 1.5~2.5배(손익비). 수수료(왕복 약 0.08%) 때문에 5·15분봉 초단타는 불리 — 1시간봉 이상 + 상위 추세 필터를 우선. 코드가 레버리지를 손절폭에서 다시 계산한다.` : `\n\n## 레버리지\n레버리지는 1~200배 중 자유롭게 정한다(${levHint}가 일반적). 정한 뒤 코드가 모든 레버리지(1~200배)·상승장·하락장·횡보·폭락·수수료 2~3배·진입 지연 시나리오로 다시 시험한다.`)
     + (lane === "custom" || researchLog().length % 2 ? "\n\n## 이번 과제: 커스텀 지표\n거래소 기본 보조지표만 쓰지 말고 {\"type\":\"custom\",\"expr\":\"수식\"} 지표를 최소 1개 직접 발명해서 조건에 쓴다(예: 거래량 가중 모멘텀, 변동성 대비 이격, 여러 지표의 합성 점수). 수식 문법은 위 설명의 custom 항목을 따른다. 수식 안에서 ind(\"tv_이름\", {파라미터}, \"value|p1~p4\")로 아래 차트 터미널 지표도 쓸 수 있다." : "")
     + "\n\n## 더 쓸 수 있는 지표\n" + Q.tvCatalogText()
     + "\n\n## ICT/SMC·세션 지표 (네이티브, 신호형은 조건에 ==1 또는 == -1)\nbos(구조돌파 BOS/MSS ±1) · fvg(Fair Value Gap ±1) · ob(오더블록 리테스트 ±1) · sweep(유동성 스윕 반전 ±1) · disp(변위 ±1) · premium(0~1, <0.3 디스카운트=매수존·>0.7 프리미엄=매도존) · session(start,end: UTC 시각 킬존 0/1, 런던 7~10·뉴욕 13~16). 스캘핑/스윙 어디든 추세필터와 조합 가능."
@@ -995,6 +995,10 @@ async function research(lane = "std"){
   if (!spec){ post({ch: L.dev, kind: "system", text: `${a.name}의 답에서 전략 JSON을 찾지 못했습니다`}); addResearch({lane, name: "(형식 오류)", market: mk.market, tf, pass: false, t: Date.now()}); return; }
   try { spec = Q.normalizeSpec({...spec, symbol: mk.market, interval: iv, risk: {...(spec.risk || {}), ...COSTS[mk.cls]}}); }
   catch(err){ post({ch: L.dev, kind: "system", text: `전략 형식 오류(${a.name}): ${err.message}`}); addResearch({lane, name: spec.name || "(형식 오류)", market: mk.market, tf, pass: false, t: Date.now()}); return; }
+  // 청산 공식 역산 강제(코인 선물): 손절≤2%(20x 기준)로 묶고, 레버리지 = floor(40/손절%) · 최소 20배 · 비트 200·알트 100 상한
+  if (mk.cls === "crypto" && spec.risk){ const sl = Math.min(2, Math.max(0.25, +spec.risk.stop_loss_pct || 2)), cap = mk.market === "BTCUSDT" ? 200 : 100;
+    spec.risk.stop_loss_pct = sl; spec.risk.leverage = Math.max(20, Math.min(cap, Math.floor(40 / sl)));
+    if (!(+spec.risk.take_profit_pct > sl)) spec.risk.take_profit_pct = +(sl * 2).toFixed(2); }
   // 데이터 모델 제약 검사 (Legend 방식): Error 는 백테스트 전에 돌려보냄, Warn 은 표시만
   const SD = await lib("sdlc"), vchk = SD.validate("Strategy", spec);
   if (!vchk.ok){ post({ch: L.dev, kind: "system", text: `전략 제약 위반(${a.name}): ${vchk.fails.filter(f => f.level === "Error").map(f => f.text).join(", ")} → 다시 만듭니다`}); addResearch({lane, name: spec.name, market: mk.market, tf, pass: false, t: Date.now()}); return; }

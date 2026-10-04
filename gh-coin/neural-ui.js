@@ -57,15 +57,15 @@ export async function openNeural(ctx = {}) {
   render();
   let k = 0;
   const tick = async () => {
-    try { ST = await N.step(); } catch (e) {}      // 자체 신호(뉴런) — 무료·빠름, 항상 돈다
+    try { ST = await N.step(); } catch (e) {}       // 시세→포지션 관리→국면→검증된 전략 신호→승인 대기열 (+2시간마다 자체 백테스트)
     render();
-    N.modelStep().then(render).catch(() => {});      // 연결 AI 모델이 코인 직접 판단(회전·fallback) — 한도 쿨다운 방지 위해 틱당 1명
-    if (++k % 14 === 0) N.reflect().catch(() => {});  // 복기 → 교훈 학습(집단 뇌)
-    // 모델이 지표 조합→매매법 설계→백테스트→사무실 인계. 낙폭(방어 모드)이면 더 자주 개발해 자본을 지킨다.
-    const defense = ST && ST.riskMode && ST.riskMode !== "정상";
-    if (k % 26 === 13 || (defense && k % 12 === 6)) N.designStrategy().then(render).catch(() => {});
-    if (k % 10 === 5) { try { N.brainThink(); } catch (e) {} }  // 뇌 자체 학습(망각+핵심규칙 승격)
-    if (k % 40 === 20) N.researchStrategies().then(render).catch(() => {});  // 🌐 인터넷·뉴스에서 매매법·대응 찾아 뇌에 저장
+    N.modelStep().then(render).catch(() => {});      // AI 모델이 신호를 뉴스·지식·성적 맥락으로 승인/거절
+    k++;
+    if (k % 10 === 5) { try { N.brainThink(); } catch (e) {} }                       // 뇌 자체 학습(망각+핵심규칙)
+    if (k % 30 === 3) N.researchStrategies().then(render).catch(() => {});           // 🌐 3분마다 인터넷·SNS에서 매매법·지표 사용법·추세/타점 찾기
+    if (k % 50 === 8) N.newsCheck().then(render).catch(() => {});                   // 📰 5분마다 뉴스 심리·주요 일정 위험 점검
+    if (k % 80 === 40) N.designStrategy().then(render).catch(() => {});             // 🛠 8분마다 새 매매법·커스텀 지표 개발→백테스트→통과 시 실전 후보
+    if (k % 100 === 60) N.reflect().then(render).catch(() => {});                   // 🧠 10분마다 AI 전략 회의(부진 전략 정지·손익비 조정)
   };
   tick(); loop = setInterval(tick, 6000);
   raf = requestAnimationFrame(draw);
@@ -74,6 +74,14 @@ export async function openNeural(ctx = {}) {
 function close() { if (loop) clearInterval(loop); if (raf) cancelAnimationFrame(raf); loop = raf = 0; window.removeEventListener("keydown", esc); if (root) root.remove(); root = null; }
 const esc = (e) => { if (e.key === "Escape") close(); };
 
+function engineTable(s) {
+  const rows = (s.engine || []).slice(0, 12);
+  const head = `<div class="nsub">📊 전략 엔진 — 자체 백테스트+실전 최근 20건 (기대값 > +0.1R 만 실전)${s.calib ? ` <span class="dim">· ${ago(s.calib.at)} 전 보정</span>` : ""}</div>`;
+  if (!rows.length) return head + `<div class="dim" style="padding:4px 0">${s.calibrating ? "🔬 자체 백테스트 중…" : "보정 대기 — 곧 실제 데이터로 모든 매매법을 시험합니다"}</div>`;
+  return head + rows.map(e => `<div class="nrow eng"><span class="nk" title="${E(e.name)} · ${e.cat} · 손익비 1:${e.rr} · 백테스트 ${e.bt}건·실전 ${e.live}건">${e.paused ? "⏸" : e.active ? "✅" : "··"} ${E(e.name)}<small class="dim"> ${e.tf === "60" ? "1H" : e.tf === "240" ? "4H" : e.tf + "m"}</small></span><span class="nbar"><i style="width:${Math.max(3, Math.min(100, 50 + e.mean * 50))}%;${e.mean < 0 ? "background:linear-gradient(90deg,#ff4d64,#ff8a9a)" : ""}"></i></span><b class="${e.mean >= 0 ? "up" : "dn"}">${e.mean >= 0 ? "+" : ""}${e.mean.toFixed(2)}R</b><small>승${e.wr}%·${e.n}</small></div>`).join("")
+    + (s.review ? `<div class="nsub">🧠 AI 전략 회의 <span class="dim">${ago(s.review.t)} 전${s.review.by ? " · " + E(s.review.by) : ""}</span></div><div class="brow"><span class="bt pur">결정</span><span class="btx" title="${E(s.review.text)}">${E(s.review.text)}${s.review.actions?.length ? " · " + E(s.review.actions.join(", ")) : ""}</span><small></small></div>` : "")
+    + (s.news ? `<div class="brow"><span class="bt ${s.news.score > 0 ? "up" : s.news.score < 0 ? "warn" : "dim"}">뉴스</span><span class="btx" title="${E((s.news.heads || []).join(" / "))}">${s.news.score > 0 ? "+" : ""}${s.news.score} ${E(s.news.reason || "")}${s.news.event ? " · ⚠ 신규진입 일시중지" : ""}</span><small>${ago(s.news.t)}</small></div>` : "");
+}
 function riskLearnLine() {
   let r; try { r = N.brainRisk(); } catch (e) { return ""; }
   if (!r) return "";
@@ -97,11 +105,10 @@ function render() {
   // 트레이더 리더보드 = 연결된 AI 모델 각각 + 자체 신호. PnL 순. (교훈 = 복기로 배운 수 · 보유 = 현재 포지션)
   root.querySelector("[data-neurons]").innerHTML =
     s.traders.map((tr, i) => { const u = tr.pnl >= 0;
-      return `<div class="nrow trd"><span class="rk">${i + 1}</span><span class="nk" title="${E(tr.full || tr.name)}">${tr.prov === "self" ? "🧠 " : ""}${E(tr.name)}</span><b class="${u ? "up" : "dn"}">${money(tr.pnl)}</b><small>${tr.hit == null ? "–" : tr.hit + "%"}${tr.lessons ? ` ·교훈${tr.lessons}` : ""}${tr.pos && tr.pos.length ? ` ·보유${tr.pos.length}` : ""}</small></div>`;
+      return `<div class="nrow trd"><span class="rk">${i + 1}</span><span class="nk" title="${E(tr.full || tr.name)}">${tr.prov === "self" ? "⚙️ " : ""}${E(tr.name)}</span><b class="${u ? "up" : "dn"}">${money(tr.pnl)}</b><small>${tr.hit == null ? "–" : "승" + tr.hit + "%"}${tr.approved != null ? ` ·승인${tr.approved}/거절${tr.rejected}` : ""}${(typeof tr.pos === "number" ? tr.pos : tr.pos?.length) ? ` ·보유${typeof tr.pos === "number" ? tr.pos : tr.pos.length}` : ""}</small></div>`;
     }).join("") +
-    (s.nModels === 0 ? `<div class="nsub dim">연결된 AI 모델이 없습니다 — 설정 → AI 연결에 무료 NVIDIA 키를 넣으면 모델들이 직접 거래·복기합니다 (지금은 자체 신호만)</div>` : "") +
-    `<div class="nsub">피처 뉴런 가중치 (학습으로 변함)</div>` +
-    s.neurons.map(nu => `<div class="nrow"><span class="nk">${E(nu.name)}</span><span class="nbar"><i style="width:${Math.round(nu.w / 3 * 100)}%"></i></span><b>${nu.w.toFixed(2)}</b><small>${nu.hit == null ? "–" : nu.hit + "%"}</small></div>`).join("") +
+    (s.nModels === 0 ? `<div class="nsub dim">연결된 AI 모델이 없습니다 — 자체 엔진이 검증된 신호만 집행합니다</div>` : "") +
+    engineTable(s) +
     (s.brain ? `<div class="nsub">🧠 자체 뇌 · 지능 <b style="color:#b79cff">${s.brain.iq?.score ?? 0}/100</b> <span class="dim">정확도 ${s.brain.iq?.acc ?? 0}% · ${s.brain.iq?.n ?? 0}판 학습 · 손절회피 ${s.brain.traps ?? 0}</span></div>` +
       `<div class="nsub">누적 기억 ${s.brain.n}개 <span class="dim">${Object.entries(s.brain.byType || {}).map(([t, c]) => t + " " + c).join(" · ") || "비어있음"}</span></div>` +
       (s.brain.top.length ? s.brain.top.slice(0, 7).map(m => `<div class="brow"><span class="bt ${m.type === "패턴" ? "up" : m.type === "교훈" ? "warn" : m.type === "전략" || m.type === "매매법" ? "pur" : m.type === "지식" ? "warn" : "dim"}">${E(m.type)}</span><span class="btx" title="${E(m.text)}${m.model ? " · " + E(m.model) : ""}">${E(m.text)}</span><small>×${m.w}</small></div>`).join("")
@@ -109,9 +116,9 @@ function render() {
     + riskLearnLine();
   // 코인별 결정(스캔) 그리드
   const grid = N.COINS.map(([ko, sym]) => {
-    const d = s.dec[sym];
-    const dir = d ? (d.dir > 0 ? "▲" : d.dir < 0 ? "▼" : "·") : "·", col = d ? (d.dir > 0 ? "up" : d.dir < 0 ? "dn" : "dim") : "dim";
-    return `<div class="mrow"><b>${ko}</b><span class="${col}">${dir} ${d ? d.conf + "%" : "–"}</span><em class="dim">${d ? "$" + fmtp(d.price) : "–"}</em></div>`;
+    const d = s.dec[sym], r = s.regime?.[sym];
+    const col = r ? (r.key === "상승추세" ? "up" : r.key === "하락추세" ? "dn" : "dim") : "dim";
+    return `<div class="mrow" title="1시간봉 국면 · 4시간 상위추세 · ADX"><b>${ko} <small class="${r?.htf > 0 ? "up" : r?.htf < 0 ? "dn" : "dim"}">${r?.htf > 0 ? "4H↑" : r?.htf < 0 ? "4H↓" : "4H·"}</small></b><span class="${col}">${E(r?.label || "판단중")}${r?.adx != null ? " · ADX " + r.adx : ""}</span><em class="dim">${d ? "$" + fmtp(d.price) : "–"}</em></div>`;
   }).join("");
   // 🔴 열린 포지션 (거래소 스타일: 레버리지·증거금·진입/현재·ROE·PnL·청산가) — 자체 + 모델 전부
   const allPos = [];
@@ -119,14 +126,14 @@ function render() {
   for (const tr of (s.traders || [])) if (tr.prov !== "self" && Array.isArray(tr.pos)) for (const p of tr.pos) allPos.push({ ...p, who: tr.name });
   const posList = allPos.length ? allPos.map(p => {
     const uPnl = p.margin != null ? p.margin * (p.roe || 0) / 100 : 0;
-    return `<div class="prow ${p.roe >= 0 ? "up" : "dn"}"><div class="pr1"><b>${E(p.ko)}</b> <span class="${p.side > 0 ? "up" : "dn"}">${p.side > 0 ? "롱" : "숏"} ${p.lev || "?"}x</span> <small class="dim">${E(p.who)}</small><span class="pr-roe ${p.roe >= 0 ? "up" : "dn"}">${p.roe >= 0 ? "+" : ""}${(p.roe || 0).toFixed(1)}%</span></div><div class="pr2 dim">증거금 $${(p.margin || 0).toFixed(0)} · 진입 ${fmtp(p.entry)} → ${fmtp(p.price)} · <span class="${uPnl >= 0 ? "up" : "dn"}">${uPnl >= 0 ? "+" : "−"}$${Math.abs(uPnl).toFixed(2)}</span> · 청산 ${fmtp(p.liq)}</div></div>`;
+    return `<div class="prow ${p.roe >= 0 ? "up" : "dn"}"><div class="pr1"><b>${E(p.ko)}</b> <span class="${p.side > 0 ? "up" : "dn"}">${p.side > 0 ? "롱" : "숏"} ${p.lev || "?"}x</span> <small class="dim">${E(p.who)}</small><span class="pr-roe ${p.roe >= 0 ? "up" : "dn"}">${p.roe >= 0 ? "+" : ""}${(p.roe || 0).toFixed(1)}%</span></div><div class="pr2 dim">증거금 $${(p.margin || 0).toFixed(0)} · 진입 ${fmtp(p.entry)} → ${fmtp(p.price)} · <span class="${uPnl >= 0 ? "up" : "dn"}">${uPnl >= 0 ? "+" : "−"}$${Math.abs(uPnl).toFixed(2)}</span> · 청산 ${fmtp(p.liq)}</div>${p.name ? `<div class="pr2 dim">${E(p.name)} · 손절 ${fmtp(p.sl)}${p.be ? "(본절)" : ""} · 익절 ${fmtp(p.tp)} · 1:${p.rr} · 리스크 $${p.risk}</div>` : ""}</div>`;
   }).join("") : `<div class="dim" style="padding:6px">열린 포지션 없음 — 신호가 나오면 진입합니다</div>`;
   root.querySelector("[data-markets]").innerHTML = `<div class="nd-mgrid">${grid}</div><div class="pos-h">열린 포지션 ${allPos.length}</div>${posList}`;
   // 모델이 설계한 매매법·커스텀 지표 (백테스트 → 사무실 인계)
   const des = (s.designs || []).map(d => `<div class="trow des"><span class="dim">${ago(d.t)}</span><b style="color:#b79cff">${E(d.model)}</b><span>${d.cls ? `<em style="color:#7ea6ff">${E(d.cls)}</em> ` : ""}${E(d.coin || "")}${d.tf ? "·" + E(d.tf) : ""}${d.win != null ? " 승" + d.win + "%" : ""}${d.mdd != null ? " 낙" + d.mdd + "%" : ""}</span><b class="${d.ret >= 0 ? "up" : "dn"}">${d.ret}%</b><span>${E(d.name)} <em class="${d.handed ? "up" : d.pass ? "" : "dim"}">${d.handed ? "→ 사무실 인계" : d.pass ? "통과" : "불통과"}</em></span></div>`).join("");
   // 거래
   root.querySelector("[data-trades]").innerHTML = des + (s.trades.length ? s.trades.map(t =>
-    `<div class="trow"><span class="dim">${ago(t.t)}</span><b>${t.ko}</b><span>${t.side > 0 ? "롱" : "숏"}${t.lev ? " " + t.lev + "x" : ""}</span><b class="${t.roe >= 0 ? "up" : "dn"}">${t.roe >= 0 ? "+" : ""}${t.roe}%</b><span class="${t.pnl >= 0 ? "up" : "dn"}">${t.pnl >= 0 ? "+" : "−"}$${Math.abs(t.pnl || 0).toFixed(2)}</span><span class="dim">${E(t.why)}</span></div>`
+    `<div class="trow"><span class="dim">${ago(t.t)}</span><b>${t.ko}</b><span>${t.side > 0 ? "롱" : "숏"}${t.lev ? " " + t.lev + "x" : ""}</span><b class="${t.roe >= 0 ? "up" : "dn"}">${t.roe >= 0 ? "+" : ""}${t.roe}%</b><span class="${t.pnl >= 0 ? "up" : "dn"}">${t.pnl >= 0 ? "+" : "−"}$${Math.abs(t.pnl || 0).toFixed(2)}</span><span class="dim" title="${E(t.name || "")}">${t.R != null ? (t.R >= 0 ? "+" : "") + t.R + "R · " : ""}${E(t.why)}</span></div>`
   ).join("") : (des ? "" : `<div class="dim" style="padding:10px">아직 거래 없음 — 신호가 쌓이면 자동 진입합니다</div>`));
   // 🔍 스캔 중 — 어떤 모델이 무슨 종목을 어느 국면에서 보고 있나 (오른쪽 위)
   const scEl = root.querySelector("[data-scan]");
@@ -137,7 +144,7 @@ function render() {
   }
   // ⚙️ AI 자동 조절 상태 (레버리지·시드)
   const au = root.querySelector("[data-auto]");
-  if (au) au.innerHTML = `⚙️ AI 자동: 레버 <b>${s.avgLev != null ? s.avgLev + "x" : "—"}</b> · 시드 <b>${s.avgSeed != null ? s.avgSeed + "%" : "—"}</b> <span class="dim">(모델이 상황따라 스스로)</span>`;
+  if (au) { const nw = s.news; au.innerHTML = `⚙️ 청산공식 <b>${s.fw?.minLev ?? 20}x+</b> · 1회 리스크 <b>${s.fw?.risk ?? 0.5}~${s.fw?.maxRisk ?? 1}%</b> · 실전 전략 <b>${s.nActive ?? 0}</b>${s.calibrating ? " (백테스트 중)" : ""} · 평균 <b>${s.avgLev != null ? s.avgLev + "x" : "—"}</b>${nw ? ` · 📰 <b class="${nw.score > 0 ? "up" : nw.score < 0 ? "dn" : ""}">${nw.score > 0 ? "+" : ""}${nw.score}</b>${nw.event ? " ⚠일정" : ""}` : ""}`; }
   // 🧠 뇌 그래프 데이터 갱신 + 요약 (오른쪽 아래)
   brainG = N.brainGraph();
   const bi = root.querySelector("[data-braininfo]");
@@ -315,6 +322,7 @@ function inject() {
 .pr1{display:flex;align-items:center;gap:7px}.pr1 b{color:#eef3fb;font-weight:700}.pr-roe{margin-left:auto;font-weight:800}
 .pr2{font-size:10.5px;margin-top:3px;color:#6f7b90}
 .nd-cfg{color:#8a93a6;font-size:11px;white-space:nowrap}.nd-cfg b{color:var(--accent)}
+.nrow.eng{grid-template-columns:minmax(0,1.7fr) 1fr 50px 54px}
 .nrow{display:grid;grid-template-columns:90px 1fr 42px 54px;align-items:center;gap:8px;margin:4px 0}
 .nk{color:#b3bccb;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .nbar{height:6px;background:#121a28;border-radius:4px;overflow:hidden}.nbar i{display:block;height:100%;background:linear-gradient(90deg,var(--accent2),var(--accent))}
