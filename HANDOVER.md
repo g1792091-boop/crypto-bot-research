@@ -10,7 +10,7 @@
 
 | 항목 | 상태 |
 |---|---|
-| 코드 | 이 브랜치에 전부 있음. 10/5 뉴럴 데스크 매매 엔진 재작성(5-2번)이 최신 |
+| 코드 | 이 브랜치에 전부 있음. 10/5 오픈소스 → 실제 결정 연결(5-3번)이 최신 |
 | GitHub 반영 | **이 PC에서만 커밋된 상태가 있을 수 있음.** 이어받기 전에 `git status` / `git log origin/claude/eloquent-ride-3o1bqv..HEAD` 로 확인하고 올릴 것 (아래 9번) |
 | 배포 exe (`dist/`) | **최신** (10/4 뉴럴 데스크 포함 재빌드, 커밋 `e6c9f5a`). push 여부만 확인 |
 | 자동 테스트 | 저장소에 고정된 테스트 묶음 **없음**. 그때그때 Node 스크립트 · 브라우저로 확인함 (4번) |
@@ -142,6 +142,16 @@ bash build.sh        # → dist/GHNano.exe, dist/ArchAI.exe, dist/GHCoin.exe
 - **검증(실제 바이낸스, 워크포워드)**: 5·15분 20x+ 스캘핑 −0.18R/거래(무작위 수준, 수수료가 엣지 잠식) · 1H+4H필터+선별 **+0.06R/거래(258건, 승률 31%)** — 작은 플러스, 보장 아님.
 - 웹 리서치(3분)·뉴스 위험(5분, 일정 임박 시 45분 진입중지)·AI 전략회의(10분)·매매법 개발(8분, 통과 시 실전 후보). 실패도 피드에 표시.
 
+### 5-3. 오픈소스 '표시만' → 실제 결정에 연결 (10/5) — 사용자 목록 52개 레포 감사
+- **진입 관문** `coinGate()` (`gh-coin/coin-office.js`, `paper.js` `setEntryGate` 로 데모→연결된 실거래 진입 직전에 await): 데이터 품질(Legend: 비정상 봉·누락·지연 → 차단) · 리스크 결정표(gs-quant/jdmn) · 투자위원회 반대+합의 67%↑ 차단(TradingAgents) · 뉴스 위험 · **미국 고영향 일정 ±30분 차단**(OpenBB 캘린더 `coinCalendar`) · 심리 극단 0.5배(day_trading_bot·KOME) · **자체 AI 앙상블 반대 60%↑ 차단**(bitoracle·cookbooks `coinSelfAI`) · ML 반대 확률 0.7배(ml-ko `coinML`) · TA 평점 반대 0.6배(tradingview-mcp `coinTARating`) · 패턴 반대 0.7배(stock-pattern·chart_patterns `coinPatterns`) · 알파 순위 0.75배(vnpy `coinAlpha`) · 펀딩 과열 0.5배(Vibe `fundingRegime` + 바이낸스 펀딩 이력 30분 캐시)·김치 프리미엄 0.7배(ccxt `coinData`) · 같은 코인·방향 2개↑ 차단(passivbot) · 순 쏠림 0.5배(SolTrade) · 포트폴리오 히트 6%↑ 차단·켈리 무우위 0.5배·손익비<1.2 0.6배(ai-trader-team rigor). 6개 시나리오 Node 테스트 통과.
+- 각 팀 잡이 판정을 localStorage 에 기록(`coinTARating` `coinPatterns` `coinAlpha` `coinData` `coinML` `coinSelfAI` `coinCalendar`) → 관문이 읽음. 뉴럴 데스크도 `teamCheck()` 로 결정표·캘린더·자체AI·TA·쏠림을 반영.
+- **뉴럴 매매법 추가** (`strategies.js`): 스토RSI 교차·PSAR 반전·다우 HH/HL(robobytes) · ATR 그리드 평균회귀 단일포지션(beenchangseo) · **6전략 가중 앙상블**(bigpie, `tuneEnsemble` 가 calibrate 때 앞70% 선택→뒤30% 검증 통과 시에만 채택). 실제 1H 6코인: 앙상블 +0.083R(258건), 나머지 음수 → 워크포워드 선별이 자동으로 실전 제외.
+- Erfaniaa: 다른 코인 3개+ 중 1개 이하 수익이면 데모 투입 차단(근접 후보로 보관) · reladomo: 감사 사슬 끊김/전략 해시 불일치면 승격 불가 · my-cc-harness: QA 불합격 수정안 자동 반려 · agency-agents-ko: 팀별 핵심 원칙·성공 지표를 페르소나에 · conor19w: 삼중 EMA+스토RSI 봇 템플릿.
+- 로컬 모델(Ollama) 개발 실패 원인 = 12k 토큰 프롬프트가 60초 타임아웃에 잘림 → 로컬은 압축 프롬프트·긴 타임아웃 · JSON 강제 · 형식 오류 시 오류를 돌려줘 1회 자가 수정 · 지표 별칭(volma→volume_sma 등).
+- **🧬 매매법 진화(개선·수정·조합)**: 뉴럴 `strategies.js` `evolve()` — 상위 매매법을 손익비·보유기간 조정(개선) / 필터 10종 추가(수정: 거래량·ADX·EMA200·슈퍼트렌드·MACD·VWAP·RSI·세션·스퀴즈) / A 신호 + B 확인 N봉 내(조합) / 채택본 재진화 → 앞 70% 원본보다 +0.03R↑ & 뒤 30% +0.05R↑(8건+)만 채택(최대 16개, 부진 퇴출). calibrate(2시간)마다 + 사무실 `evoJob`(JOBS 2칸, 말로 "매매법 조합해줘"). AI 전략회의·개발팀장이 `try` 실험 제안 → 다음 보정에서 검증. 사무실 데모 전략(JSON)도 `lib/evolve.js` `addFilter/tweakRR/combine`(진입 AND) → 워크포워드 통과 + 부모보다 표본외↑ + 순열 p≤0.1 이면 데모. 실데이터 1H 6코인 2세대 시험: 예) 돈치안+슈퍼트렌드 0.5→OOS 0.65R, 앙상블+ADX/EMA200 0.16→OOS 0.38R (무작위 탐색이라 매번 다름 · 다중검정 위험은 실전 워크포워드 선별로 한 번 더 거름).
+- 작은 모델 전략 JSON 관대 파싱(`quant.js normGroup`): "rsi<30" · "a and b" · {indicator,operator,value} · 중첩 그룹 허용, 버린 조건 예시를 오류에 표시.
+- 제외: 채굴기(xmrig·RandomX·CryptoWalletMiner)·지갑(rainbow) = 안전 규칙 · biomolecular = 무관. 상태표 `gh-coin/tech.js` 갱신.
+
 ---
 
 ## 6. 안전 규칙 (바꾸지 말 것)
@@ -167,6 +177,8 @@ bash build.sh        # → dist/GHNano.exe, dist/ArchAI.exe, dist/GHCoin.exe
 - 일부 경제 · 뉴스 사이트는 브라우저 차단이 있어 exe 실행기(`/__nuri/fetch`)로만 받아짐.
 - 뉴럴 엔진의 +0.06R은 약 4개월·4코인 워크포워드 결과일 뿐 — 국면이 바뀌면 마이너스 가능. 선별 기준(SEL)·수수료(FW.fee 0.08%)는 `strategies.js`/`neural.js` 상단.
 - **뉴럴 데스크**는 실제 NVIDIA 키가 있어야 모델들이 직접 판단함(키 없으면 자체 뉴런만). 모델 판단 품질·뇌 누적 효과는 실제 키로 장시간 돌려 봐야 확인됨 — 함수/문법 단위로만 검증.
+- **진입 관문(5-3)** 은 Node 시나리오 테스트로만 검증. 각 팀 판정이 쌓이려면 사무실을 몇 시간 돌려야 함(판정 없으면 관문은 통과·1배). 관문이 너무 자주 막으면 데모 거래 수가 줄어 승격(20거래)이 늦어질 수 있음.
+- 로컬 소형 모델(qwen2.5:3b 등)은 전략 JSON 형식을 자주 틀림 → 자가 수정 1회로 일부 구제. 중형 모델(14b급)을 `code` 역할에 쓰는 게 낫다.
 - `dist/*.exe` 는 **10/4 뉴럴 데스크 포함해 재빌드됨** (커밋 `e6c9f5a`). 단, 이 PC에서 아직 push 안 됐을 수 있음 → 9번대로 Cursor Sync.
 
 ## 8. 다음 할 일 후보 (우선순위 순)

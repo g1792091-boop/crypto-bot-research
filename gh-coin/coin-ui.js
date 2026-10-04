@@ -751,9 +751,9 @@ async function botsHTML(){
 }
 /* ============ 📚 도입 기술: 오픈소스 23개 → 부서 ============ */
 function techHTML(){
-  const st = {"적용": "✅", "부분 적용": "🟡", "참고": "💡"};
+  const st = {}; const ic = x => /^실동작/.test(x) ? "✅" : /^부분/.test(x) ? "🟡" : /^표시용/.test(x) ? "📊" : /^참고/.test(x) ? "💡" : /^(적용)/.test(x) ? "✅" : "";   // 10/5 감사: 실동작=결정에 반영 · 표시용=표만
   return `<div class="of-pipe"><p class="of-dim">대표님이 준 오픈소스 23개를 직원들이 코드까지 읽고, 쓸 수 있는 규칙·공식을 각 부서 업무에 다시 만들어 넣었습니다(코드 복사 없음 · GPL·라이선스 없는 저장소는 규칙만). ✅ 적용 · 🟡 부분 적용 · 💡 참고(아이디어만)</p>
-    ${TECH.map(t => `<section class="of-lane tech-row"><h4>${st[t.status] || ""} ${E(t.repo)} <small>${E(t.lic)}</small></h4><p class="tech-teams">${t.teams.map(id => `<button class="tech-team" data-ch-go="${E(id)}" style="--tc:${tc(id)}">#${E(teamById(id)?.name || id)}</button>`).join("")}</p><p><b>무엇을</b> ${E(t.what)}</p><p class="of-dim"><b>어디에</b> ${E(t.where)}</p></section>`).join("")}</div>`;
+    ${TECH.map(t => `<section class="of-lane tech-row"><h4>${ic(t.status)} ${E(t.repo)} <small>${E(t.lic)}</small> <small class="of-dim" style="display:block;font-weight:400">${E(t.status)}</small></h4><p class="tech-teams">${t.teams.map(id => `<button class="tech-team" data-ch-go="${E(id)}" style="--tc:${tc(id)}">#${E(teamById(id)?.name || id)}</button>`).join("")}</p><p><b>무엇을</b> ${E(t.what)}</p><p class="of-dim"><b>어디에</b> ${E(t.where)}</p></section>`).join("")}</div>`;
 }
 /* ============ 📁 결과물 보관함 ============ */
 let docList = [], docFilter = "all", docSel = null;

@@ -55,19 +55,10 @@ export async function openNeural(ctx = {}) {
   try { N.seedKnowledge(); } catch (e) {}   // 📚 매매법 지식베이스를 뇌에 한 번 심기
   ST = N.state();
   render();
-  let k = 0;
-  const tick = async () => {
-    try { ST = await N.step(); } catch (e) {}       // 시세→포지션 관리→국면→검증된 전략 신호→승인 대기열 (+2시간마다 자체 백테스트)
-    render();
-    N.modelStep().then(render).catch(() => {});      // AI 모델이 신호를 뉴스·지식·성적 맥락으로 승인/거절
-    k++;
-    if (k % 10 === 5) { try { N.brainThink(); } catch (e) {} }                       // 뇌 자체 학습(망각+핵심규칙)
-    if (k % 30 === 3) N.researchStrategies().then(render).catch(() => {});           // 🌐 3분마다 인터넷·SNS에서 매매법·지표 사용법·추세/타점 찾기
-    if (k % 50 === 8) N.newsCheck().then(render).catch(() => {});                   // 📰 5분마다 뉴스 심리·주요 일정 위험 점검
-    if (k % 80 === 40) N.designStrategy().then(render).catch(() => {});             // 🛠 8분마다 새 매매법·커스텀 지표 개발→백테스트→통과 시 실전 후보
-    if (k % 100 === 60) N.reflect().then(render).catch(() => {});                   // 🧠 10분마다 AI 전략 회의(부진 전략 정지·손익비 조정)
-  };
-  tick(); loop = setInterval(tick, 6000);
+  // 엔진은 백그라운드에서 상시 실행(N.startAuto) — 패널은 상태를 보여주기만 한다. 패널을 닫아도 매매·학습·리서치는 계속된다.
+  N.startAuto();
+  const tick = () => { try { ST = N.state(); render(); } catch (e) {} };
+  tick(); loop = setInterval(tick, 3000);
   raf = requestAnimationFrame(draw);
   window.addEventListener("keydown", esc);
 }
@@ -81,6 +72,15 @@ function engineTable(s) {
   return head + rows.map(e => `<div class="nrow eng"><span class="nk" title="${E(e.name)} · ${e.cat} · 손익비 1:${e.rr} · 백테스트 ${e.bt}건·실전 ${e.live}건">${e.paused ? "⏸" : e.active ? "✅" : "··"} ${E(e.name)}<small class="dim"> ${e.tf === "60" ? "1H" : e.tf === "240" ? "4H" : e.tf + "m"}</small></span><span class="nbar"><i style="width:${Math.max(3, Math.min(100, 50 + e.mean * 50))}%;${e.mean < 0 ? "background:linear-gradient(90deg,#ff4d64,#ff8a9a)" : ""}"></i></span><b class="${e.mean >= 0 ? "up" : "dn"}">${e.mean >= 0 ? "+" : ""}${e.mean.toFixed(2)}R</b><small>승${e.wr}%·${e.n}</small></div>`).join("")
     + (s.review ? `<div class="nsub">🧠 AI 전략 회의 <span class="dim">${ago(s.review.t)} 전${s.review.by ? " · " + E(s.review.by) : ""}</span></div><div class="brow"><span class="bt pur">결정</span><span class="btx" title="${E(s.review.text)}">${E(s.review.text)}${s.review.actions?.length ? " · " + E(s.review.actions.join(", ")) : ""}</span><small></small></div>` : "")
     + (s.news ? `<div class="brow"><span class="bt ${s.news.score > 0 ? "up" : s.news.score < 0 ? "warn" : "dim"}">뉴스</span><span class="btx" title="${E((s.news.heads || []).join(" / "))}">${s.news.score > 0 ? "+" : ""}${s.news.score} ${E(s.news.reason || "")}${s.news.event ? " · ⚠ 신규진입 일시중지" : ""}</span><small>${ago(s.news.t)}</small></div>` : "");
+}
+// 🧬 매매법 진화(개선·수정·조합) 현황
+function evoLine(s) {
+  const ev = s.evo; if (!ev) return "";
+  const L = ev.log?.[0];
+  const head = `<div class="nsub">🧬 매매법 진화 — 개선·수정·조합 <span class="dim">· 채택 ${ev.n}개${ev.seeds ? ` · AI 제안 대기 ${ev.seeds}` : ""}${L ? ` · ${ago(L.t)} 전` : ""}</span></div>`;
+  if (!L) return head + `<div class="dim" style="padding:4px 0">다음 자체 백테스트 때 매매법을 고치고 섞어 봅니다 (앞 70% 선택 → 뒤 30% 검증 통과만 채택)</div>`;
+  const rows = (L.adopted || []).map(a => `<div class="brow"><span class="bt ${a.src === "조합" ? "pur" : a.src === "수정" ? "warn" : "up"}">${E(a.src || "변형")}</span><span class="btx" title="${E(a.name)}">${E(a.name)} <small class="dim">원본 ${a.base}R → 검증 ${a.oos >= 0 ? "+" : ""}${a.oos}R(${a.n}건)</small></span></div>`).join("");
+  return head + `<div class="brow"><span class="bt dim">시험</span><span class="btx">변형 ${L.tested}개 → 학습구간 통과 ${L.passedIS} → 채택 ${(L.adopted || []).length}</span></div>` + rows;
 }
 function riskLearnLine() {
   let r; try { r = N.brainRisk(); } catch (e) { return ""; }
@@ -108,7 +108,7 @@ function render() {
       return `<div class="nrow trd"><span class="rk">${i + 1}</span><span class="nk" title="${E(tr.full || tr.name)}">${tr.prov === "self" ? "⚙️ " : ""}${E(tr.name)}</span><b class="${u ? "up" : "dn"}">${money(tr.pnl)}</b><small>${tr.hit == null ? "–" : "승" + tr.hit + "%"}${tr.approved != null ? ` ·승인${tr.approved}/거절${tr.rejected}` : ""}${(typeof tr.pos === "number" ? tr.pos : tr.pos?.length) ? ` ·보유${typeof tr.pos === "number" ? tr.pos : tr.pos.length}` : ""}</small></div>`;
     }).join("") +
     (s.nModels === 0 ? `<div class="nsub dim">연결된 AI 모델이 없습니다 — 자체 엔진이 검증된 신호만 집행합니다</div>` : "") +
-    engineTable(s) +
+    engineTable(s) + evoLine(s) +
     (s.brain ? `<div class="nsub">🧠 자체 뇌 · 지능 <b style="color:#b79cff">${s.brain.iq?.score ?? 0}/100</b> <span class="dim">정확도 ${s.brain.iq?.acc ?? 0}% · ${s.brain.iq?.n ?? 0}판 학습 · 손절회피 ${s.brain.traps ?? 0}</span></div>` +
       `<div class="nsub">누적 기억 ${s.brain.n}개 <span class="dim">${Object.entries(s.brain.byType || {}).map(([t, c]) => t + " " + c).join(" · ") || "비어있음"}</span></div>` +
       (s.brain.top.length ? s.brain.top.slice(0, 7).map(m => `<div class="brow"><span class="bt ${m.type === "패턴" ? "up" : m.type === "교훈" ? "warn" : m.type === "전략" || m.type === "매매법" ? "pur" : m.type === "지식" ? "warn" : "dim"}">${E(m.type)}</span><span class="btx" title="${E(m.text)}${m.model ? " · " + E(m.model) : ""}">${E(m.text)}</span><small>×${m.w}</small></div>`).join("")

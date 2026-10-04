@@ -536,8 +536,10 @@ const OP_ALIAS = {"crossover": "crosses_above", "cross_above": "crosses_above", 
   "==": "==", "=": "==", "eq": "==", "equals": "==", "is": "==", "!=": "!=", "<>": "!=", "ne": "!=", "neq": "!=", "≠": "!="};
 const INT_PARAMS = ["length", "fast", "slow", "signal", "k_smooth", "d_smooth"];
 const SOURCES = ["close", "open", "high", "low", "hl2", "hlc3", "ohlc4", "volume"];
-const IND_ALIAS = {bollinger: "bb", bbands: "bb", vol_sma: "volume_sma", volume_ma: "volume_sma", williams: "willr", williams_r: "willr",
-  stochastic: "stoch", stoch_rsi: "stochrsi", ichi: "ichimoku", parabolic_sar: "psar", sar: "psar", ut_bot: "atr_stop", dmi: "adx", st: "supertrend", super_trend: "supertrend"};
+export const IND_ALIAS = {bollinger: "bb", bbands: "bb", vol_sma: "volume_sma", volume_ma: "volume_sma", williams: "willr", williams_r: "willr",
+  stochastic: "stoch", stoch_rsi: "stochrsi", ichi: "ichimoku", parabolic_sar: "psar", sar: "psar", ut_bot: "atr_stop", dmi: "adx", st: "supertrend", super_trend: "supertrend",
+  volma: "volume_sma", vma: "volume_sma", vol_ma: "volume_sma", volume_avg: "volume_sma", avg_volume: "volume_sma", ma: "sma", moving_average: "sma", exp_ma: "ema",
+  bollinger_bands: "bb", boll: "bb", keltner_channel: "keltner", donchian_channel: "donchian", stochastic_rsi: "stochrsi", stochrsi_k: "stochrsi", average_true_range: "atr"};
 // 차트 터미널 지표(tv_*)를 '맨 이름'으로도 쓸 수 있게 별칭 등록: 예) qqe → tv_qqe. 단, 네이티브 지표(ema·rsi·macd 등)는 덮어쓰지 않는다.
 // → AI 가 만든 전략이 터미널 지표를 prefix 없이 써도 백테스트에서 바로 인식된다(차트 터미널 보조지표 전부 사용 가능).
 {
@@ -613,21 +615,32 @@ function normGroup(g, label, problems){
   }
   if (!Array.isArray(conds)){ problems.push(`${label}: conditions 는 배열이어야 합니다`); return null; }
   // 형식이 어긋난 개별 조건은 전략 전체를 실패시키지 않고 '건너뛴다'(드롭). 한 그룹의 조건이 전부 못 쓰면 그때만 오류.
-  const out = []; let dropped = 0;
-  conds.forEach((c, i) => {
-    if (typeof c === "string"){                     // "rsi < 30" 같은 문자열도 받는다
-      const parts = c.trim().split(/\s+/);
-      if (parts.length !== 3){ dropped++; return; }
-      c = {left: parts[0], op: parts[1], right: parts[2]};
+  const out = []; let dropped = 0, sample = "";
+  // 작은 AI 모델이 자주 쓰는 변형도 받아 준다: "rsi<30" · "a > b and c < d" · {indicator, operator, value} · 중첩 그룹
+  const STR_RE = /^(.+?)\s*(crosses_above|crosses_below|crossover|crossunder|cross_above|cross_below|>=|<=|==|!=|>|<)\s*(.+)$/i;
+  const flat = [];
+  const walk = c => {
+    if (typeof c === "string"){ for (const part of c.split(/\s+(?:and|&&|그리고)\s+/i)) flat.push(part); return; }
+    if (c && typeof c === "object" && !Array.isArray(c) && Array.isArray(c.conditions) && isNil(c.left) && isNil(c.op)){ c.conditions.forEach(walk); return; }
+    flat.push(c);
+  };
+  conds.forEach(walk);
+  flat.forEach(c => {
+    const raw = c;
+    if (typeof c === "string"){
+      const m = STR_RE.exec(c.trim());
+      if (!m){ dropped++; sample ||= c; return; }
+      c = {left: m[1], op: m[2], right: m[3]};
     }
-    if (!c || typeof c !== "object"){ dropped++; return; }
-    let op = String(c.op ?? "").trim();
+    if (!c || typeof c !== "object"){ dropped++; sample ||= JSON.stringify(raw); return; }
+    const pickK = ks => { for (const k of ks) if (!isNil(c[k])) return c[k]; return undefined; };
+    const left = pickK(["left", "lhs", "indicator", "series", "source", "a", "x", "var"]), right = pickK(["right", "rhs", "value", "threshold", "target", "b", "y", "level"]);
+    let op = String(pickK(["op", "operator", "cmp", "comparison", "condition", "compare"]) ?? "").trim();
     op = OP_ALIAS[op.toLowerCase()] || op.toLowerCase();
-    if (!OPS.includes(op)){ dropped++; return; }
-    if (isNil(c.left) || isNil(c.right)){ dropped++; return; }   // left/right 누락 조건은 버리고 나머지로 계속
-    out.push({left: String(c.left).trim(), op, right: String(c.right).trim()});
+    if (!OPS.includes(op) || isNil(left) || isNil(right)){ dropped++; sample ||= JSON.stringify(raw); return; }   // 못 쓰는 조건은 버리고 나머지로 계속
+    out.push({left: String(left).trim(), op, right: String(right).trim()});
   });
-  if (!out.length && conds.length){ problems.push(`${label}: 쓸 수 있는 조건이 없습니다 (${conds.length}개 모두 형식 오류)`); return null; }
+  if (!out.length && flat.length){ problems.push(`${label}: 쓸 수 있는 조건이 없습니다 (${flat.length}개 모두 형식 오류, 예: ${String(sample).slice(0, 90)})`); return null; }
   return out.length ? {logic, conditions: out} : null;
 }
 

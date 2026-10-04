@@ -48,7 +48,7 @@ export function prepare(Q, cs) {
   const bb = ci("bb", { length: 20, mult: 2 }), macd = ci("macd", { fast: 12, slow: 26, signal: 9 }), adx = ci("adx", { length: 14 });
   const st = ci("supertrend", { length: 10, mult: 3 }), sto = ci("stoch", { length: 14, k_smooth: 3, d_smooth: 3 });
   const I = {
-    n, o, h, l, c, v,
+    n, o, h, l, c, v, t: cs.map(b => +b.t),
     ema9: ci("ema", { length: 9 }).value, ema20: ci("ema", { length: 20 }).value, ema50: ci("ema", { length: 50 }).value, ema200: ci("ema", { length: 200 }).value,
     sma10: ci("sma", { length: 10 }).value, sma20: ci("sma", { length: 20 }).value,
     rsi: ci("rsi", { length: 14 }).value, atr: ci("atr", { length: 14 }).value, roc: ci("roc", { length: 9 }).value,
@@ -57,7 +57,14 @@ export function prepare(Q, cs) {
     stTrend: st.trend, stLine: st.line, stoK: sto.k, stoD: sto.d,
     vwap: ci("vwap", {}).value, volMa: ci("volume_sma", { length: 20 }).value,
     hh20: ci("highest", { length: 20, source: "high" }).value, ll20: ci("lowest", { length: 20, source: "low" }).value,
+    sma5: ci("sma", { length: 5 }).value, roc5: ci("roc", { length: 5 }).value,
   };
+  { const sr = ci("stochrsi", { length: 14, k_smooth: 3, d_smooth: 3 }), ps = ci("psar", {}); I.srK = sr.k; I.srD = sr.d; I.psar = ps.value; I.psarT = ps.trend; }
+  // 다우 이론 스윙(좌우 3봉 피벗) — i 시점에 '확정된' 직전 두 고점·저점 (미래 봉을 쓰지 않도록 3봉 지연 확정)
+  { const P = 3, sh = [], sl = []; I.swH = new Array(n).fill(null); I.swL = new Array(n).fill(null);
+    for (let i = 0; i < n; i++) { const k = i - P;
+      if (k >= P) { let isH = true, isL = true; for (let j = k - P; j <= k + P; j++) { if (j === k) continue; if (h[j] >= h[k]) isH = false; if (l[j] <= l[k]) isL = false; } if (isH) sh.push(h[k]); if (isL) sl.push(l[k]); }
+      I.swH[i] = sh.length >= 2 ? [sh.at(-2), sh.at(-1)] : null; I.swL[i] = sl.length >= 2 ? [sl.at(-2), sl.at(-1)] : null; } }
   // 볼린저 폭 백분위(최근 100봉) — 스퀴즈 판정
   I.bbWPct = I.bbW.map((w, i) => { if (w == null || i < 100) return null; let k = 0, m = 0; for (let j = i - 100; j < i; j++) if (I.bbW[j] != null) { m++; if (I.bbW[j] < w) k++; } return m ? k / m : null; });
   return I;
@@ -197,8 +204,131 @@ export const LIB = [
       if (a[i - 1] <= b[i - 1] && a[i] > b[i]) return { side: 1, sl: lowest(I.l, i - 6, i) - buf(I, i), why: "10/20 SMA 골든크로스 + ADX>20" };
       if (a[i - 1] >= b[i - 1] && a[i] < b[i]) return { side: -1, sl: highest(I.h, i - 6, i) + buf(I, i), why: "10/20 SMA 데드크로스 + ADX>20" };
       return null; } },
+  // ── robobytes/Ultimate-Crypto-Trading-Bot: 스토캐스틱 RSI 교차 · 파라볼릭 SAR 반전 · 다우 이론 HH/HL ──
+  { key: "stochrsi_x", mode: "trend", name: "스토RSI 과매도/과매수 교차(추세 방향)", cat: "추세", tf: "60", rr: 2, regimes: ["상승추세", "하락추세", "전환"], hold: 36,
+    sig(I, i) { const k = I.srK, d = I.srD; if (!ok(k[i], d[i], k[i - 1], d[i - 1], I.ema50[i])) return null;
+      if (k[i - 1] <= d[i - 1] && k[i] > d[i] && k[i - 1] < 20 && I.c[i] > I.ema50[i]) return { side: 1, sl: lowest(I.l, i - 6, i) - buf(I, i), why: `스토RSI K가 20 아래에서 D 상향교차(${k[i].toFixed(0)}) + EMA50 위` };
+      if (k[i - 1] >= d[i - 1] && k[i] < d[i] && k[i - 1] > 80 && I.c[i] < I.ema50[i]) return { side: -1, sl: highest(I.h, i - 6, i) + buf(I, i), why: `스토RSI K가 80 위에서 D 하향교차(${k[i].toFixed(0)}) + EMA50 아래` };
+      return null; } },
+  { key: "psar_flip", mode: "trend", name: "파라볼릭 SAR 반전 + EMA50·ADX", cat: "추세", tf: "60", rr: 2, regimes: ["상승추세", "하락추세", "전환"], hold: 40,
+    sig(I, i) { const t = I.psarT; if (!ok(t[i], t[i - 1], I.psar[i], I.ema50[i], I.adx[i]) || I.adx[i] < 18) return null;
+      if (t[i - 1] < 0 && t[i] > 0 && I.c[i] > I.ema50[i]) return { side: 1, sl: I.psar[i] - buf(I, i), why: "SAR 점이 가격 아래로 뒤집힘(상승 전환) + EMA50 위" };
+      if (t[i - 1] > 0 && t[i] < 0 && I.c[i] < I.ema50[i]) return { side: -1, sl: I.psar[i] + buf(I, i), why: "SAR 점이 가격 위로 뒤집힘(하락 전환) + EMA50 아래" };
+      return null; },
+    exit(I, i, side) { return ok(I.psarT[i]) && I.psarT[i] === -side; } },
+  { key: "dow_hhhl", mode: "trend", name: "다우 이론: 고점·저점 상승(HH/HL) 후 직전 고점 돌파", cat: "추세", tf: "60", rr: 2, regimes: ["상승추세", "하락추세", "전환"], hold: 40,
+    sig(I, i) { const H = I.swH[i], L = I.swL[i]; if (!H || !L || !ok(I.atr[i])) return null;
+      if (H[1] > H[0] && L[1] > L[0] && I.c[i - 1] <= H[1] && I.c[i] > H[1]) return { side: 1, sl: L[1] - buf(I, i), why: `고점 ${H[0].toFixed(2)}→${H[1].toFixed(2)}·저점 상승 확인 후 직전 고점 종가 돌파` };
+      if (H[1] < H[0] && L[1] < L[0] && I.c[i - 1] >= L[1] && I.c[i] < L[1]) return { side: -1, sl: H[1] + buf(I, i), why: `고점·저점 하락(LH/LL) 후 직전 저점 종가 이탈` };
+      return null; } },
+  // ── beenchangseo/binance-futures-grid-bot: ATR 간격 그리드를 '단일 포지션 + 하드 손절'로 — 횡보장에서 중심선 이탈 1.5칸이면 중심 복귀 노림 ──
+  { key: "atr_grid_mr", mode: "counter", name: "ATR 그리드 평균회귀(횡보장·단일 포지션)", cat: "역추세", tf: "60", rr: 1.5, regimes: ["횡보", "수축"], hold: 24,
+    sig(I, i) { const m = I.sma20[i], a = I.atr[i]; if (!ok(m, a, I.adx[i]) || I.adx[i] > 22) return null;
+      const lv = (I.c[i] - m) / a, lv0 = (I.c[i - 1] - m) / a;
+      if (lv0 <= -1.5 && lv > lv0 && I.c[i] > I.o[i]) return { side: 1, sl: I.c[i] - a * 1.2, why: `중심(SMA20)에서 ${(-lv0).toFixed(1)}ATR 아래 그리드 칸 → 반등 양봉` };
+      if (lv0 >= 1.5 && lv < lv0 && I.c[i] < I.o[i]) return { side: -1, sl: I.c[i] + a * 1.2, why: `중심에서 ${lv0.toFixed(1)}ATR 위 그리드 칸 → 반락 음봉` };
+      return null; },
+    exit(I, i, side) { return ok(I.sma20[i]) && (side > 0 ? I.c[i] >= I.sma20[i] : I.c[i] <= I.sma20[i]); } },
+  // ── bigpie1367/bitcoin_autotrading_system: 6전략(추세·모멘텀·MA5/20 스윙·0.1% 스캘핑·데이·가격행동 돌파) 가중 투표 앙상블. 가중치는 자체 백테스트(calibrate)에서 최적화 ──
+  { key: "bigpie_ens", mode: "trend", name: "6전략 가중 앙상블(가중치 자동 최적화)", cat: "추세", tf: "60", rr: 2, regimes: ["상승추세", "하락추세", "전환", "수축"], hold: 36,
+    sig(I, i) { const sc = ensScore(I, i), sp = ensScore(I, i - 1); if (sc == null || sp == null) return null;
+      if (sp < ENS.th && sc >= ENS.th) return { side: 1, sl: lowest(I.l, i - 8, i) - buf(I, i), why: `앙상블 점수 ${sc.toFixed(2)} ≥ ${ENS.th} (가중 ${ENS.w.join("/")})` };
+      if (sp > -ENS.th && sc <= -ENS.th) return { side: -1, sl: highest(I.h, i - 8, i) + buf(I, i), why: `앙상블 점수 ${sc.toFixed(2)} ≤ -${ENS.th}` };
+      return null; } },
 ];
+// 앙상블 구성 6표: [추세, 모멘텀5, MA5/20 스윙, 0.1% 스캘핑, 데이(VWAP), 가격행동 돌파] — 각 ±1, 가중 평균
+export const ENS = { w: [1, 1, 1, 1, 1, 1], th: 0.5 };
+function ensScore(I, i) {
+  if (i < 1 || !ok(I.ema20[i], I.ema50[i], I.ema200[i], I.roc5[i], I.sma5[i], I.sma20[i], I.vwap[i], I.hh20[i - 1], I.ll20[i - 1])) return null;
+  const sg = x => x > 0 ? 1 : x < 0 ? -1 : 0, c = I.c[i];
+  const v = [sg((I.ema20[i] > I.ema50[i]) + (c > I.ema200[i]) - 1), sg(I.roc5[i]), sg(I.sma5[i] - I.sma20[i]),
+    Math.abs(c / I.c[i - 1] - 1) >= 0.001 ? sg(c - I.c[i - 1]) : 0, sg(c - I.vwap[i]), c > I.hh20[i - 1] ? 1 : c < I.ll20[i - 1] ? -1 : 0];
+  const W = ENS.w.reduce((a, b) => a + b, 0) || 1; return v.reduce((a, x, k) => a + x * ENS.w[k], 0) / W;
+}
+// 가중치 최적화: 앞 70%로 후보 가중치를 고르고 뒤 30%(보지 않은 구간)에서도 평균R>0 일 때만 채택 — 아니면 균등 유지
+export function tuneEnsemble(sets) {
+  const rule = LIB.find(r => r.key === "bigpie_ens"); if (!rule || !sets?.length) return null;
+  const C = [[1, 1, 1, 1, 1, 1], [2, 1, 1, 0, 1, 1], [2, 2, 1, 0, 0, 1], [1, 2, 2, 0, 1, 1], [2, 1, 0, 0, 1, 2], [1, 1, 2, 1, 0, 2], [3, 1, 1, 0, 1, 1], [1, 1, 1, 0, 2, 2]];
+  const run = (w, part) => { const save = ENS.w; ENS.w = w; const R = [];
+    for (const d of sets) { const cut = Math.floor(d.I.n * 0.7); const r = simulate(rule, d.I, d.cs, { sym: d.sym, H: d.H, from: part ? cut : 210, to: part ? null : cut }); R.push(...r.trades.map(t => t.R)); }
+    ENS.w = save; return { n: R.length, mean: R.length ? R.reduce((a, b) => a + b, 0) / R.length : -9 }; };
+  const scored = C.map(w => ({ w, ...run(w, 0) })).filter(x => x.n >= 8).sort((a, b) => b.mean - a.mean);
+  const best = scored[0]; if (!best) return null;
+  const oos = run(best.w, 1);
+  ENS.w = oos.n >= 4 && oos.mean > 0 ? best.w : [1, 1, 1, 1, 1, 1];
+  return { w: ENS.w, is: +best.mean.toFixed(3), oos: +oos.mean.toFixed(3), n: best.n, adopted: ENS.w === best.w };
+}
 export const LIB_BY_KEY = Object.fromEntries(LIB.map(s => [s.key, s]));
+
+// ══ 🧬 매매법 진화: 개선(손익비·보유기간 조정) · 수정(필터 추가) · 조합(A 신호 + B 확인) ══
+// 변형은 직렬화 가능한 '유전자'(gene)로 저장 → buildEvo 가 실행 규칙으로 만든다. 채택은 앞 70% 선택 + 뒤 30%(안 본 구간) 검증 둘 다 통과해야.
+export const FILTERS = {
+  vol: { ko: "거래량 1.2배↑", f: (I, i) => ok(I.volMa[i]) && I.v[i] > I.volMa[i] * 1.2 },
+  adx: { ko: "ADX≥20 추세 확인", f: (I, i) => ok(I.adx[i]) && I.adx[i] >= 20 },
+  calm: { ko: "ADX<25 횡보 확인", f: (I, i) => ok(I.adx[i]) && I.adx[i] < 25 },
+  rsi: { ko: "RSI 과열 회피", f: (I, i, sd) => ok(I.rsi[i]) && (sd > 0 ? I.rsi[i] < 68 : I.rsi[i] > 32) },
+  ema200: { ko: "EMA200 방향 일치", f: (I, i, sd) => ok(I.ema200[i]) && (sd > 0 ? I.c[i] > I.ema200[i] : I.c[i] < I.ema200[i]) },
+  st: { ko: "슈퍼트렌드 일치", f: (I, i, sd) => ok(I.stTrend[i]) && Math.sign(I.stTrend[i]) === sd },
+  macd: { ko: "MACD 방향 일치", f: (I, i, sd) => ok(I.macd[i], I.macdS[i]) && (sd > 0 ? I.macd[i] > I.macdS[i] : I.macd[i] < I.macdS[i]) },
+  vwap: { ko: "VWAP 방향 일치", f: (I, i, sd) => ok(I.vwap[i]) && (sd > 0 ? I.c[i] > I.vwap[i] : I.c[i] < I.vwap[i]) },
+  session: { ko: "저유동 시간(UTC 21~01시) 제외", f: (I, i) => { const h = new Date(I.t[i]).getUTCHours(); return !(h >= 21 || h < 1); } },
+  bbw: { ko: "스퀴즈(밴드폭 하위 20%) 제외", f: (I, i) => I.bbWPct[i] == null || I.bbWPct[i] > 0.2 },
+};
+export const geneId = g => [g.base, g.with || "", (g.filters || []).slice().sort().join("+"), g.rr ?? "", g.hold ?? "", g.win ?? ""].join("|");
+export function geneName(g) {
+  const A = LIB_BY_KEY[g.base], B = g.with ? LIB_BY_KEY[g.with] : null; if (!A) return g.base;
+  const tags = [];
+  if (B) tags.push(`조합: ${B.name} 확인 ${g.win ?? 3}봉 내`);
+  if (g.filters?.length) tags.push("수정: +" + g.filters.map(f => FILTERS[f]?.ko || f).join(" +"));
+  if (g.rr != null || g.hold != null) tags.push(`개선: ${g.rr != null ? "손익비 " + g.rr : ""}${g.rr != null && g.hold != null ? "·" : ""}${g.hold != null ? "보유 " + g.hold + "봉" : ""}`);
+  return `🧬 ${A.name} [${tags.join(" / ")}]`;
+}
+export function buildEvo(g) {
+  const A = LIB_BY_KEY[g.base], B = g.with ? LIB_BY_KEY[g.with] : null; if (!A || (g.with && !B)) return null;
+  const F = (g.filters || []).map(k => FILTERS[k]).filter(Boolean), win = g.win ?? 3;
+  return { key: "evo_" + geneId(g).replace(/[^a-z0-9_]+/gi, "_"), name: geneName(g), cat: A.cat, tf: g.tf || "60", mode: A.mode, regimes: A.regimes, exit: A.exit, evo: g,
+    rr: g.rr ?? A.rr, hold: g.hold ?? (A.tf === "60" ? A.hold : 48),
+    sig(I, i) { const s = A.sig(I, i); if (!s) return null;
+      for (const f of F) if (!f.f(I, i, s.side)) return null;
+      if (B) { let hit = null; for (let j = i; j >= i - win && !hit; j--) { const b = B.sig(I, j); if (b && b.side === s.side) hit = b; } if (!hit) return null;
+        return { ...s, why: `${s.why} + ${B.name} 확인` }; }
+      return s; } };
+}
+const pick = a => a[Math.floor(Math.random() * a.length)];
+// sets: [{sym, I, cs, H}] (1시간봉) · seeds: AI가 제안한 유전자 · keep: 이미 채택된 유전자(더 진화시킴)
+export function evolve(sets, { seeds = [], keep = [], maxAdopt = 4, budget = 48 } = {}) {
+  if (!sets?.length) return { adopted: [], tested: 0 };
+  const run = (rule, part) => { const R = [];
+    for (const d of sets) { const cut = Math.floor(d.I.n * 0.7); const r = simulate(rule, d.I, d.cs, { sym: d.sym, H: d.H, from: part ? cut : 210, to: part ? null : cut }); for (const t of r.trades) R.push(t.R); }
+    return { n: R.length, mean: R.length ? +(R.reduce((a, b) => a + b, 0) / R.length).toFixed(3) : -9 }; };
+  const bases = LIB.filter(r => r.tf !== "240");
+  const bstat = Object.fromEntries(bases.map(r => [r.key, run(buildEvo({ base: r.key }), 0)]));
+  const top = bases.filter(r => bstat[r.key].n >= 10).sort((a, b) => bstat[b.key].mean - bstat[a.key].mean).slice(0, 6).map(r => r.key);
+  const FK = Object.keys(FILTERS), seen = new Set(keep.map(geneId)), C = [];
+  const add = g0 => { const g = { ...g0 }, A = LIB_BY_KEY[g.base]; if (!A) return;
+    if (g.rr === A.rr) delete g.rr; if (g.hold === (A.tf === "60" ? A.hold : 48)) delete g.hold; if (g.filters && !g.filters.length) delete g.filters;   // 부모와 같은 값은 변형이 아님
+    if (g.rr == null && g.hold == null && !g.filters && !g.with) return;
+    const id = geneId(g); if (!seen.has(id) && LIB_BY_KEY[g.base] && (!g.with || (LIB_BY_KEY[g.with] && g.with !== g.base))) { seen.add(id); C.push(g); } };
+  for (const g of seeds) add({ ...g, src: "AI 제안" });
+  for (const k of top) {
+    add({ base: k, rr: pick([1.5, 2, 2.5, 3].filter(x => x !== LIB_BY_KEY[k].rr)), src: "개선" });
+    add({ base: k, hold: pick([24, 36, 48, 72]), rr: pick([1.5, 2, 2.5]), src: "개선" });
+    add({ base: k, filters: [pick(FK)], src: "수정" }); add({ base: k, filters: [pick(FK)], src: "수정" });
+    { const f1 = pick(FK); add({ base: k, filters: [f1, pick(FK.filter(x => x !== f1))], src: "수정" }); }
+  }
+  for (let t = 0; t < 10 && top.length > 1; t++) { const a = pick(top), b = pick(bases.map(r => r.key).filter(x => x !== a)); add({ base: a, with: b, win: pick([2, 3, 5]), src: "조합" }); }
+  for (const g of keep.slice(0, 4)) {   // 이미 채택된 변형을 한 단계 더: 필터 추가 또는 손익비 조정
+    add({ ...g, filters: [...new Set([...(g.filters || []), pick(FK)])], src: "재진화" }); add({ ...g, rr: pick([1.5, 2, 2.5, 3]), src: "재진화" }); }
+  const scored = [], sig = x => x.n + ":" + x.mean, sigs = new Set(keep.map(g => { const r = buildEvo(g); return r ? sig(run(r, 0)) : ""; }));
+  for (const g of C.slice(0, budget)) { const rule = buildEvo(g); if (!rule) continue; const is = run(rule, 0), b0 = bstat[g.base] || { mean: 0 };
+    if (sigs.has(sig(is))) continue;   // 결과가 기존 채택본과 똑같으면(필터가 아무것도 안 거름) 같은 전략 — 제외
+    if (is.n >= 15 && is.mean > 0 && is.mean >= b0.mean + 0.03) { sigs.add(sig(is)); scored.push({ g, is }); } }
+  scored.sort((a, b) => b.is.mean - a.is.mean);
+  const adopted = [];
+  for (const x of scored.slice(0, 10)) { if (adopted.length >= maxAdopt) break;
+    const oos = run(buildEvo(x.g), 1); if (oos.n >= 8 && oos.mean > 0.05) adopted.push({ gene: { ...x.g, tf: "60" }, is: x.is, oos, base: bstat[x.g.base] }); }
+  return { adopted, tested: Math.min(C.length, budget), passedIS: scored.length, top: top.map(k => `${LIB_BY_KEY[k].name} ${bstat[k].mean}R`) };
+}
 
 // AI가 개발해 검증 통과한 매매법(spec) → 라이브 규칙으로 변환 (quant.signals 배열 사용, 손절은 1.2ATR 구조)
 export function specRule(Q, d) {

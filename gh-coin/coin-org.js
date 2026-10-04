@@ -146,16 +146,14 @@ export const TOPIC_LEAD = [
 
 // 자동 회의 안건
 export const AGENDA = [
+  {id: "devrev", room: "dev", title: "매매법-개발-리뷰", topic: "최근 백테스트한 매매법들(통과·탈락)의 결과 카드를 보고, 탈락 이유(손절폭·국면·수수료·과최적화·거래 수)를 짚은 뒤 다음에 개발할 매매법 2개를 구체 조건(지표·진입·손절·익절·시간봉·국면 필터)으로 정해 주세요. 마지막에 담당자와 할 일을 적어 주세요.", agents: ["qa", "qb", "dev_2", "val"]},
+  {id: "cdevrev", room: "cdev", title: "커스텀-지표-개발", topic: "기존 지표로 안 보이는 시장 특징을 잡을 새 커스텀 수식 지표 2개를 설계하고(수식·의미·어디에 쓰는지), 최근 커스텀 지표 매매법의 백테스트 결과에서 고칠 점을 정해 주세요.", agents: ["cind", "cdev_1", "cdev_2", "val"]},
+  {id: "optrev", room: "opt", title: "전략-개선-회의", topic: "데모 중인 전략과 아깝게 탈락한 개선 후보의 성과(승률·손익비·낙폭·청산 사유)를 보고, 어떤 파라미터(손절·익절·ROI표·추적손절·보호장치·진입 필터)를 바꿔야 하는지 정하고 하이퍼옵트 우선순위를 정해 주세요.", agents: ["opt_lead", "opt_1", "trader", "val"]},
+  {id: "botdev", room: "bot", title: "자동매매봇-개발", topic: "새로 만들 자동매매봇 1개(추세·돌파·평균회귀·그리드 중)를 구체 규칙으로 설계하고, 지금 봇들의 실패 원인과 개선안을 정해 주세요.", agents: ["bot_lead", "bot_1", "bot_2", "val"]},
+  {id: "mlrev", room: "ml", title: "ML-실험-리뷰", topic: "최근 머신러닝 방향 예측 실험이 기준선보다 나았는지 확인하고, 다음 실험(특징·모델·시간봉)과 매매법에 넣을 방법을 정해 주세요.", agents: ["ml", "ml_1", "ml_2", "qa"]},
   {id: "btc", room: "btc", title: "비트코인-브리핑", topic: "지금 비트코인 현물·선물·펀딩·고래 흐름과 추세를 점검하고 오늘의 대응을 정해 주세요.", agents: ["coin_fut", "btc_2", "btc_5"]},
-  {id: "trend", room: "trend", title: "다중-시간대-추세", topic: "주요 코인의 15분·1시간·4시간·일봉 추세가 서로 맞는지 점검해 주세요.", agents: ["trend_lead", "trend_1", "trend_3"]},
-  {id: "combo", room: "combo", title: "실시간-종합지표-타점", topic: "실시간 종합 지표 타점판(모든 보조지표의 시간대별 점수·타점)을 보고 지금 들어갈 코인과 자리, 기다릴 코인을 정해 주세요.", agents: ["combo_lead", "combo_8", "combo_9"]},
   {id: "ic", room: "ic", title: "투자위원회", topic: "강세·약세 리서처와 리스크 토론자가 지금 비트코인을 살지·팔지·관망할지 토론하고 위원장이 결정해 주세요.", agents: ["ic_4", "ic_5", "ic_lead"]},
   {id: "bot", room: "bot", title: "자동매매봇-점검", topic: "지금 데모·실거래 중인 선물 자동매매봇들의 성과와 한도·위험을 점검하고, 새로 올릴 봇 전략을 정해 주세요.", agents: ["bot_lead", "bot_8", "risk"]},
-  {id: "entry", room: "entry", title: "진입-타점-회의", topic: "지금 진입할 만한 코인과 자리(가격·조건·손익비)를 정해 주세요.", agents: ["strat", "sr_lead", "risk"]},
-  {id: "news", room: "news", title: "뉴스·경제지표", topic: "오늘 코인 뉴스와 경제지표 일정을 찾아 시장 영향을 해설해 주세요.", agents: ["macro", "research", "econfc"]},
-  {id: "pattern", room: "pattern", title: "차트·캔들-패턴", topic: "주요 코인 차트에서 보이는 캔들·차트 패턴과 시장 구조를 점검해 주세요.", agents: ["pat_lead", "pattern_1", "pattern_6"]},
-  {id: "eth", room: "eth", title: "이더리움-브리핑", topic: "이더리움 흐름과 비트코인 대비 강약, 오늘 대응을 이야기해 주세요.", agents: ["coin_spot", "eth_2", "eth_6"]},
-  {id: "alt", room: "situ", title: "알트코인-상황판", topic: "솔라나·리플·도지·BNB 상황을 한 판으로 점검하고 이상 신호를 짚어 주세요.", agents: ["situ_lead", "sol_lead", "doge_lead"]}
 ];
 // 급변동 감시 (코드만)
 export const WATCH = COINS.slice(0, 3).map(c => ({q: c.sym, ex: "binancef", label: c.ko, room: c.id, agents: [TEAM_LEAD[c.id], "risk"], th: c.id === "btc" ? 4 : 6}));
