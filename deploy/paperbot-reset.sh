@@ -7,8 +7,12 @@
 #     sudo bash deploy/paperbot-reset.sh --yes
 #
 # 1. stops the bot, dashboard, trade alerts, the agents and the scheduled jobs (waits for a running nightly job to
-#    finish); the market recorders (liquidations, GH Coin calls, flow, market) keep running. Refuses while the order
-#    executor runs (it reads paper3.db) and checks that no process still has a run file open;
+#    finish); the market recorders (liquidations, GH Coin calls, flow, market) keep running. Every listed service
+#    and timer that is loaded is stopped (stop is idempotent), whatever its state: a unit waiting to auto-restart
+#    after a crash shows "activating", not "active", and would otherwise come back while files move. The ones that
+#    were running (active / activating / deactivating / reloading) or are enabled are started again in step 6.
+#    A running oneshot job also shows "activating": the job wait and the writer check treat it as running.
+#    Refuses while the order executor runs (it reads paper3.db) and checks that no process still has a run file open;
 # 2. takes a fresh backup of the stopped run before anything moves: starts paperbot-backup.service (a oneshot:
 #    `systemctl start` returns when it has finished), checks its result and that today's backup folder holds a
 #    new copy of paper3.db / daily3.db / checkpoint.db; a failure stops the reset here (nothing moved). Then the
@@ -44,6 +48,7 @@ RUN_USER="${PAPERBOT_RESET_USER-paperbot}"
 SYSTEMCTL="${PAPERBOT_SYSTEMCTL:-systemctl}"
 INSTALL="${PAPERBOT_INSTALL:-$REPO_DIR/deploy/install.sh}"
 WAIT_S="${PAPERBOT_RESET_WAIT:-180}"           # how long to wait for the bot's new accounts
+POLL_S="${PAPERBOT_RESET_POLL:-30}"            # how often to look again while a scheduled job runs
 BACKUPS="${PAPERBOT_BACKUPS:-/var/backups/paperbot}"   # where paperbot-backup.service writes (deploy/paperbot-backup.sh)
 # (the PAPERBOT_* overrides exist for tests/test_reset_script.py; the server uses the defaults)
 
@@ -62,7 +67,22 @@ paperbot-labmonthly.service paperbot-offsite.service paperbot-rehearsal.service 
 # every process that writes (or reads, the executor) a file the restart moves or changes
 WRITERS="$SERVICES $JOBS paperbot-executor"
 
-active() { "$SYSTEMCTL" is-active --quiet "$1" 2>/dev/null; }
+# a unit's state as `systemctl is-active` prints it: active, activating (starting, a oneshot job while it runs, a
+# service waiting to auto-restart), deactivating, reloading, failed, inactive, ... ("unknown" when it prints nothing)
+state() { local s; s="$("$SYSTEMCTL" is-active "$1" 2>/dev/null || true)"; echo "${s:-unknown}"; }
+# running, or about to run again
+busy() { case "$(state "$1")" in active|activating|deactivating|reloading|refreshing) return 0 ;; *) return 1 ;; esac; }
+enabled() { "$SYSTEMCTL" is-enabled --quiet "$1" 2>/dev/null; }
+# installed on this server (stopping a unit that is not loaded fails)
+loaded() { [ "$("$SYSTEMCTL" show -p LoadState --value "$1" 2>/dev/null || true)" = loaded ]; }
+# what step 6 starts again: what ran or was meant to run (enabled; a crashed, failed unit that is enabled too)
+restart_set() {
+  local u out=""
+  for u in $SERVICES $TIMERS; do
+    if busy "$u" || enabled "$u"; then out="$out $u"; fi
+  done
+  echo "$out"
+}
 # the off-site copy is set up only when its timer is enabled (docs/server-setup-v3.md 4-3)
 offsite_on() { "$SYSTEMCTL" is-enabled --quiet paperbot-offsite.timer 2>/dev/null; }
 
@@ -100,10 +120,12 @@ if [ "$MODE" = "--dry-run" ]; then
   fi
   run_now=""
   for u in $SERVICES $TIMERS $JOBS; do
-    if active "$u"; then run_now="$run_now $u"; fi
+    if busy "$u"; then run_now="$run_now $u"; fi
   done
-  echo "[멈출 것]${run_now:- (지금 도는 것 없음)}"
-  if active paperbot-executor; then
+  echo "[멈출 것]${run_now:- (지금 도는 것 없음)} (설치된 서비스·타이머는 상태와 상관없이 모두 멈춤)"
+  again="$(restart_set)"
+  echo "[끝나고 다시 켤 것]${again:- (없음)}"
+  if busy paperbot-executor; then
     echo "!! paperbot-executor(주문 실행기)가 돌고 있습니다: paper3.db를 읽으므로 --yes 전에 직접 멈춰야 합니다 (sudo systemctl stop paperbot-executor)"
   fi
   echo "[옮기기 전에 새 백업] paperbot-backup.service를 한 번 돌려 $BACKUPS/<UTC 날짜>/에 멈춘 실행의 복사본을 만들고 확인합니다"
@@ -141,7 +163,7 @@ fi
 if [ "$in_window" -eq 1 ]; then
   echo "08:30-09:40 KST is the nightly check / checkpoint window: run this after 09:40"; exit 1
 fi
-if active paperbot-executor; then
+if busy paperbot-executor; then
   echo "paperbot-executor (the order executor) is running and reads paper3.db. Stop it yourself first:"
   echo "  sudo systemctl stop paperbot-executor"
   echo "then run this again, and start it after the reset (check its paper account: 5m accounts are gone)."
@@ -197,21 +219,25 @@ trap 'on_fail $LINENO' ERR
 
 echo "== 1. stop"
 PHASE=stopping
+STOP=""
 for u in $SERVICES $TIMERS; do
-  if active "$u"; then RUNNING="$RUNNING $u"; fi
+  echo "  $u: $(state "$u")$(if enabled "$u"; then echo ", enabled"; fi)"
+  if loaded "$u"; then STOP="$STOP $u"; fi
 done
+RUNNING="$(restart_set)"
 # shellcheck disable=SC2086  # unit names, split on purpose
-if [ -n "$RUNNING" ]; then "$SYSTEMCTL" stop $RUNNING; fi
-if active paperbot-agents.service; then "$SYSTEMCTL" stop paperbot-agents.service; fi
+if [ -n "$STOP" ]; then "$SYSTEMCTL" stop $STOP; fi
+if busy paperbot-agents.service; then "$SYSTEMCTL" stop paperbot-agents.service; fi
 n=0
-while busy="$(for j in $JOBS; do if active "$j"; then echo "$j"; fi; done)"; [ -n "$busy" ]; do
-  n=$((n+1)); [ "$n" -ge 120 ] && { echo "still running after 60 min: $busy"; false; }
-  echo "waiting for a scheduled job to finish: $busy ($n/120)"; sleep 30
+while jobs_now="$(for j in $JOBS; do if busy "$j"; then echo "$j"; fi; done)"; [ -n "$jobs_now" ]; do
+  n=$((n+1)); [ "$n" -ge 120 ] && { echo "still running after 120 checks: $jobs_now"; false; }
+  echo "waiting for a scheduled job to finish: $jobs_now ($n/120)"; sleep "$POLL_S"
 done
 PHASE=stopped
-echo "stopped:${RUNNING:- (nothing was running)}"
+echo "stopped:${STOP:- (nothing installed)}"
+echo "to start again in step 6:${RUNNING:- (nothing was running)}"
 for u in $WRITERS; do
-  if active "$u"; then echo "$u is still active"; false; fi
+  if busy "$u"; then echo "$u is still $(state "$u")"; false; fi
 done
 open_now="$(holders)"
 if [ -n "$open_now" ]; then
@@ -306,7 +332,7 @@ echo "옮기기 전 새 백업: $day"
 if [ "$OFFSITE_WARN" = 1 ]; then
   echo "!! 서버 밖 복사는 실패했습니다(위 경고): sudo systemctl start paperbot-offsite.service 로 다시 보내세요"
 fi
-if active paperbot-live3; then
+if busy paperbot-live3; then
   if ! helper start --paper-db "$DATA/paper3.db" --wait "$WAIT_S"; then
     echo "몇 분 뒤 시작 시각과 첫 판정일 확인:"
     echo "  cd /opt/crypto-bot-research && sudo -u paperbot $PY -m paperbot.resetrun start --paper-db $DATA/paper3.db"

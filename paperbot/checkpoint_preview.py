@@ -112,6 +112,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         print("거부: root로 실행하지 마세요(판정 캐시가 root 파일이 되면 실제 판정이 못 씁니다). "
               "문서의 systemd-run 명령(paperbot 사용자)으로 실행합니다")
         return 2
+    if not os.path.exists(args.db):       # right after a reset, before the bot created paper3.db: nothing to judge
+        print(f"INFO: {args.db} does not exist yet (new run not started): nothing to rehearse, skipped")
+        return 0
     summary_path = args.summary
     if args.rehearsal_dir:
         folder = os.path.realpath(args.rehearsal_dir)

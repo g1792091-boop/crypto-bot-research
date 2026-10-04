@@ -622,7 +622,7 @@ df -h /
 - 매매법 방의 주간 검토는 그 매매법 거래가 30건 쌓일 때마다 정해진 요일에 열립니다.
 - 첫날 예상되는 것(고장 아님):
   - 처음 맞는 09:20에 텔레그램 `[날짜] 재계산 못 함: 그날 00:00 상태 저장이 없습니다 (봇이 멈춰 있었음)` 한 번. 시작한 날은 그날 09:00(00:00 UTC) 상태 저장이 없기 때문입니다. 이 일로 운영·검증팀 회의가 한 번 열립니다.
-  - 봇이 paper3.db를 만들기 전에 판정 타이머(매시 35분)가 먼저 돌면 `systemctl --failed`에 `paperbot-checkpoint`가 한 번 보일 수 있습니다. 해롭지 않습니다. `sudo systemctl reset-failed`로 지웁니다.
+  - 봇이 paper3.db를 만들기 전에 판정(매시 35분)·판정 미리 연습·매일 점검 타이머가 먼저 돌면 "paper3.db 없음: 건너뜀"(INFO)으로 조용히 끝납니다(실패 아님, 알림 없음). 그래도 `⚠ [작업 실패] …`가 한 번 오거나 `systemctl --failed`에 하나 보이면 해롭지 않습니다. `sudo systemctl reset-failed`로 지웁니다.
 - 22일째부터 직원들이 복제 계좌를 제안할 수 있습니다. 처음 60일은 두 분이 대시보드에서 승인·거절을 눌러야 합니다(`docs/agent-rooms.md` "승인·거절").
 
 ### 13-4. 30일째 판정
@@ -644,9 +644,12 @@ df -h /
   git diff --stat HEAD origin/claude/keen-pasteur-wav02u -- \
     paperbot/engine.py paperbot/ladder.py paperbot/margin.py paperbot/sizing.py \
     paperbot/config.py paperbot/models.py paperbot/accounts.py paperbot/sigservice.py \
-    paperbot/aggregate.py paperbot/feed.py paperbot/live3.py
+    paperbot/aggregate.py paperbot/feed.py paperbot/live3.py paperbot/recorder.py \
+    paperbot/policy.py paperbot/levrule.py paperbot/quality_edges.json paperbot/entry_marks.py \
+    paperbot/binance.py paperbot/p_best_cells.json \
+    research/entry_study/DEFS_BC.sha256 research/entry_study/strength_defs
   ```
-  (이 목록은 `paperbot/runinfo.py`의 `TRADING_FILES`와 같습니다. 봇은 이 밖에 설정, 바이낸스 레버리지 구간, 잠긴 신호 코드가 바뀌어도 같은 알림을 보냅니다.)
+  (이 목록은 `paperbot/runinfo.py`의 `TRADING_FILES`와 같습니다. 마지막 줄은 신호마다 "좋은 자리"인지 정하는 진입 세기 정의와 그 잠금 파일입니다. 봇은 이 밖에 설정, 바이낸스 레버리지 구간, 잠긴 신호 코드가 바뀌어도 같은 알림을 보냅니다.)
 - **피할 시간:** 매일 08:30~09:40(백업·서버 밖 백업·매일 점검), 판정일 09:30~10:30, 매달 6일 03:00~07:00(매달 재검사), 매주 수요일 12:30~13:30(판정 미리 연습). 업데이트가 이 작업들을 멈추지 않아서, 도는 중에 코드가 바뀔 수 있습니다.
 - 설치 스크립트가 `Could not get lock`으로 멈추면 서버가 자동 보안 업데이트를 하는 중입니다. 5~10분 뒤 같은 명령을 다시 실행합니다.
 - 업데이트 순서:
@@ -792,7 +795,13 @@ sudo journalctl -u <그 이름> -n 50 --no-pager
 
 **텔레그램 "신호 계산이 …초 안에 끝나지 않아 … 신호를 건너뜀" 또는 "1분봉 빠짐 …" (소리)**
 - 봇은 계속 돕니다. 그 봉(또는 그 1분)의 신호만 빠집니다. 한두 번은 서버가 잠깐 바빴거나(판정 계산·5년 시험과 겹침) 바이낸스 쪽이 늦은 것이라 그대로 둡니다.
+- 신호 건너뜀이 계속되면 처음 한 번 뒤에는 매시 알림 모음(무음)에 횟수로 쌓이고, 마지막 소리 알림 뒤 12번째(15분봉마다면 약 3시간)거나 6시간이 지나면 "지난 소리 알림 뒤 n번 더 건너뜀"과 함께 다시 소리로 옵니다. 계속 오면 신호가 하나도 안 나오고 있다는 뜻이므로 바로 아래 화면을 개발자에게 보냅니다.
 - 하루에 여러 번 오면 `sudo journalctl -u paperbot-live3 -n 50 --no-pager` 화면을 개발자에게 보냅니다.
+
+**텔레그램 `⚠ 신호 세기 계산 실패 n건 · …` (소리) 또는 09:20 요약의 `⚠ 신호 세기 계산 실패 n/m` 줄**
+- 봇은 계속 돕니다. 그 신호들은 규칙(규칙 변경 1의 6절)대로 '보통'(30·20배)으로 들어갔습니다. 신호 세기(좋은 자리 판정 점수)를 못 낸 매매법 신호를 셉니다. 경계가 없는 매매법 × 봉(늘 '보통')과 동전 봇은 세지 않습니다.
+- 원인(세기 기록 없음, 세기 계산 오류, 세기 정의 잠금(해시) 불일치, 쓸 값 없음)마다 1시간에 한 번만 소리로 옵니다. 대시보드 알림 목록에는 `strength score failed …` 줄이 봉마다 남습니다.
+- 계속 오면 규칙 B(좋은 자리 50·40배)가 실제로는 돌지 않는 것이므로 바로 개발자에게 알림 화면과 `sudo journalctl -u paperbot-live3 -n 50 --no-pager`를 보냅니다. "잠금(해시) 불일치"는 `research/entry_study/strength_defs/`의 정의 파일이 바뀐 것입니다(거래 코드 변경으로 기록됨, Q5).
 
 **디스크가 거의 참 (`df -h /` 80% 넘음)**
 - 개발자에게 알립니다. 파일을 직접 지우지 않습니다.
@@ -811,14 +820,15 @@ sudo journalctl -u <그 이름> -n 50 --no-pager
    - 주문 실행기(`paperbot-executor`)가 돌고 있다고 나오면 먼저 `sudo systemctl stop paperbot-executor`(재시작 뒤 직접 다시 켬, 따라가는 계좌가 5분봉이면 바꾼 뒤).
 4. 다시 시작: `sudo bash deploy/paperbot-reset.sh --yes`
    - 0) 확인: 직원 기록(agents3.db·inbox.db)을 읽을 수 있는지, 커밋 안 된 수정이 없는지. 여기서 멈추면 아무것도 바뀌지 않았습니다.
-   - 1) 봇·대시보드·거래 알림·에이전트·예약 작업을 멈춥니다(돌고 있는 밤 작업은 끝날 때까지 기다림). 청산·GH Coin·흐름·시장 기록은 계속 돕니다. 멈춘 뒤 실행 파일을 연 프로세스가 하나도 없는지 확인합니다(`fuser`).
+   - 1) 봇·대시보드·거래 알림·에이전트·예약 작업을 멈춥니다(돌고 있는 밤 작업은 끝날 때까지 기다림). 설치된 서비스·타이머는 상태와 상관없이 모두 멈춥니다: 오류로 꺼졌다 다시 켜지기를 기다리는 서비스(상태 `activating`)도 옮기는 중에 다시 켜지지 않게 합니다. 6)에서 다시 켜는 것은 그때 돌고 있었거나(`active`·`activating` 등) 자동 시작(enabled)으로 설정된 것입니다. 화면에 서비스마다 상태가 나옵니다. 청산·GH Coin·흐름·시장 기록은 계속 돕니다. 멈춘 뒤 실행 파일을 연 프로세스가 하나도 없는지 확인합니다(`fuser`).
    - 2) **옮기기 전에 새 백업:** 모두 멈춘 상태에서 `paperbot-backup.service`를 한 번 돌리고 끝날 때까지 기다립니다(보통 몇 분). 결과가 성공인지, 오늘(UTC) 백업 폴더 `/var/backups/paperbot/<날짜>/`에 `paper3.db`·`daily3.db`·`checkpoint.db` 복사본이 이번에 새로 생겼는지 확인합니다. 실패하면 **아무 파일도 옮기지 않고** 멈추고, 이전 실행을 다시 켜는 명령(`sudo systemctl start ...`)과 원인 보는 명령(`journalctl -u paperbot-backup`)이 나옵니다. 서버 밖 백업(4-3)을 켜 두었으면(`paperbot-offsite.timer` 사용 중) 이어서 `paperbot-offsite.service`도 한 번 돌려 이 복사본을 텔레그램 백업 방으로 보냅니다(몇 분~최대 1시간). 이것이 실패하면 서버 안 백업은 이미 있으므로 **경고만 하고 계속**하며, 경고는 마지막 요약에도 다시 나옵니다. 재시작이 끝난 뒤 `sudo systemctl start paperbot-offsite.service`로 다시 보내면 됩니다(같은 날짜 폴더 = 이전 실행 복사본).
    - 3) 코드를 설치합니다(`deploy/install.sh`). 여기서 실패하면 이전 실행은 그대로이고, 화면에 다시 켜는 명령이 나옵니다.
    - 4) 이전 실행의 파일을 **지우지 않고** `/var/lib/paperbot/archive/run-<UTC 시각>/`으로 옮깁니다(아래 표의 "보관").
    - 5) `agents3.db`·`inbox.db`는 먼저 보관 폴더에 사본(`agents3-before-reset.db`, `inbox-before-reset.db`)을 만든 뒤, 이전 paper3.db를 가리키던 커서만 초기화하고(아래), 이전 실행의 열린 제안(두 분 확인 대기·승인됨)을 "run restarted"로 닫고, 방마다 메모 1개와 알림 1줄 "실험을 2026-10-04에 처음부터 다시 시작함 (5분봉 제외, 1분봉 5초 뒤 읽기)"을 남깁니다. 여러 번 돌려도 결과가 같습니다(`paperbot/resetrun.py`).
    - 6) 멈췄던 것을 다시 켭니다. 봇이 $5,000 계좌 **156개**(매매법 36개 × 15분·30분·1시간·4시간 = 144개 + 동전 던지기 봇 봉마다 3개 = 12개, 5분봉 없음)를 새로 만들고 그 시각이 새 시작입니다. 스크립트가 새 시작 시각(KST)과 **첫 30일 판정일**(시작한 UTC 날짜 + 30일 09:00 KST, `checkpoint.checkpoint_ts`와 같은 계산)을 보여 줍니다. 관찰 기간(21일)도 시작에서 저절로 계산됩니다.
    - 중간에 실패하면 어디까지 했는지와 그다음 명령(새 실행으로 계속하기 / 이전 실행으로 되돌리기: 옮긴 파일마다 `mv` 명령)이 화면에 나옵니다.
-5. 5분 뒤 점검: `cd /opt/crypto-bot-research && sudo /opt/paperbot/venv/bin/python -m paperbot.launchcheck --stage after`. "계좌 156개"가 나와야 합니다. paper3.db에 5분봉 계좌가 있으면(이전 실행의 DB가 그대로 남은 것) '고칠 것'으로 나옵니다.
+   - 재시작 직후 텔레그램 `⚠ [작업 실패] …`가 **한 번** 올 수 있습니다: 재시작하는 동안 놓친 예약 작업(에이전트·판정 등)이 6)에서 바로 따라 돌면서, 봇이 새 paper3.db와 계좌를 만들기 몇 초 전에 읽은 경우입니다. 해롭지 않습니다(판정·미리 연습·매일 점검은 paper3.db가 아직 없으면 조용히 건너뜁니다). `sudo systemctl reset-failed`로 지우고, 같은 작업이 다음 회차에도 실패하면 13-7처럼 봅니다.
+5. 5분 뒤 점검: `cd /opt/crypto-bot-research && sudo /opt/paperbot/venv/bin/python -m paperbot.launchcheck --stage after`. "계좌 156개"가 나와야 합니다. paper3.db에 5분봉 계좌가 있으면(이전 실행의 DB가 그대로 남은 것) '고칠 것'으로 나옵니다. 첫 15분봉 신호가 나온 뒤(시작 30분쯤 뒤)에 한 번 더 돌리면 "신호 세기 정상"이 나와야 합니다(최근 매매법 신호 20건이 모두 좋은 자리 판정 점수를 받았는지 확인, 아래 "신호 세기 계산 실패").
 
 서버에 남는 것과 재시작이 하는 일:
 

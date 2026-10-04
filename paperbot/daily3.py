@@ -70,6 +70,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import os
 import sqlite3
 import sys
 import time
@@ -955,6 +956,11 @@ def run_day(conn, out: sqlite3.Connection, rest: BinanceREST, settings: Settings
     steps = fetch_steps(rest, symbols, start, last)
     day_steps = [s for s in steps if s[0] < end]
     report = {"day": day, "steps": len(day_steps)}
+    try:   # strategy signals of cells with quality edges whose strength score failed (sized 'normal'; review M2)
+        from .strengthwatch import day_counts
+        report["strength"] = day_counts(conn, start, end)
+    except Exception as exc:  # noqa: BLE001  a count only
+        report["strength"] = {"error": f"{type(exc).__name__}: {exc}"[:200]}
     snap = conn.execute("SELECT data FROM state WHERE k = ?", (day_key(start),)).fetchone()
     if snap is None:
         report["parity"] = "no 00:00 snapshot for this day (runner not running then)"
@@ -1068,6 +1074,13 @@ def notify_report(report: dict, notifier, trades_day: Optional[int] = None) -> l
     if sh:
         lines.append(f"지정가였다면 체결 {sh.get('limit_filled', 0)}/{sh.get('limit_signals', 0)}")
         lines.append(f"포지션 중이라 놓친 신호 {sh.get('skipped', 0)}")
+    try:
+        from .strengthwatch import summary_line
+        st_line = summary_line(report.get("strength"))
+    except Exception:  # noqa: BLE001
+        st_line = None
+    if st_line:
+        lines.append(st_line)
     lines.append(f"빠진 1분봉 {sum(missing.values())}"
                  + (" (" + ", ".join(f"{s.replace('USDT', '')} {n}" for s, n in missing.items()) + ")" if missing else ""))
     ov = ((report.get("stop_slippage") or {}).get("overall") or {})
@@ -1098,6 +1111,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     ap.add_argument("--no-stop-slip", action="store_true",
                     help="skip the realistic stop slippage (4; it reads public aggTrades, a few minutes a night)")
     args = ap.parse_args(argv)
+    if not os.path.exists(args.db):       # right after a reset, before the bot created paper3.db: nothing to check
+        print(f"INFO: {args.db} does not exist yet (new run not started): nothing to check, skipped")
+        return 0
     rest = _rest()
     conn = sqlite3.connect(f"file:{args.db}?mode=ro", uri=True)
     run = conn.execute("SELECT data FROM state WHERE k = 'run'").fetchone()

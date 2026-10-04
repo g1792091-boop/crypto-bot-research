@@ -7,7 +7,7 @@ import pytest
 
 from paperbot import notify
 from paperbot.agents.roster3 import STRATEGY_KO
-from paperbot.notify import (CRITICAL, INFO, WARN, Digest, ListNotifier, Router, TelegramNotifier, ko, money,
+from paperbot.notify import (CRITICAL, INFO, WARN, Digest, ListNotifier, Router, TelegramNotifier, ko, money, render,
                              telegram_text, usd, who)
 
 T = 1790985600000          # 2026-10-03 00:00 UTC = 09:00 KST
@@ -242,6 +242,35 @@ def test_router_signal_timeouts_first_loud_then_counted():
     clk.t += Router.TIMEOUT_QUIET_MS
     r.send(WARN, line.format(clk.t))
     assert [lv for lv, _ in out.messages] == [WARN, WARN]                  # quiet for 6 hours: loud again
+
+
+def test_router_signal_timeouts_that_keep_coming_keep_ringing():
+    """96 timeouts, one at every 15m boundary for 24 h (the worker pool hangs at each boundary): the quiet period
+    runs from the last LOUD one, and every 12th further timeout rings again (review M3: it used to ring once)."""
+    out = ListNotifier()
+    d = Digest(out)
+    clk = Clock(T)
+    r = Router(out, d, clock=clk)
+    line = "signal workers did not answer within 120s; signals skipped at {} for 15m"
+    for k in range(96):
+        clk.t = T + k * 900_000
+        r.send(WARN, line.format(clk.t))
+        d.flush(clk.t)
+    loud = [t for lv, t in out.messages if lv == WARN]
+    assert len(loud) == 8                                                  # at 0 h, 3 h, 6 h, ... 21 h
+    assert "지난 소리 알림 뒤 11번 더 건너뜀" in loud[1] and loud[0].count("\n") == 0
+    assert render(loud[1]).startswith("신호 건너뜀 · ") and "지난 소리 알림 뒤 11번 더" in render(loud[1])
+    assert len([t for lv, t in out.messages if lv == INFO and "신호 건너뜀" in render(t)]) >= 16   # digest counts too
+
+
+def test_router_signal_timeouts_every_5h_ring_after_6h_since_the_last_loud():
+    out = ListNotifier()
+    r = Router(out, Digest(out), clock=Clock(T))
+    line = "signal workers did not answer within 120s; signals skipped at {} for 1h"
+    for k in range(5):                     # 0, 5, 10, 15, 20 h: before, only the first rang
+        r.clock.t = T + k * 5 * 3_600_000
+        r.send(WARN, line.format(r.clock.t))
+    assert len([1 for lv, _ in out.messages if lv == WARN]) == 3          # 0 h, 10 h, 20 h
 
 
 def test_digest_without_notes_is_unchanged():

@@ -21,12 +21,23 @@ from typing import Optional
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+# The entry-strength definitions that decide each strategy signal's leverage group (quality_v1: entry_marks loads
+# research/entry_study/strength_defs/<NAME>.py only when its bytes match DEFS_BC.sha256). Both the lock file and
+# every definition are watched, so an edit to a definition changes the trading-code hash even when the lock file is
+# left alone (the definition would then fail its check and the strategy would trade "normal").
+_DEFS_DIR = os.path.join(ROOT, "research", "entry_study", "strength_defs")
+STRENGTH_DEF_FILES = tuple(sorted("research/entry_study/strength_defs/" + f
+                                  for f in (os.listdir(_DEFS_DIR) if os.path.isdir(_DEFS_DIR) else ())
+                                  if f.endswith(".py")))
 # Files whose change can alter a fill, an exit or a position size.
 TRADING_FILES = ("paperbot/engine.py", "paperbot/ladder.py", "paperbot/margin.py", "paperbot/sizing.py",
                  "paperbot/config.py", "paperbot/models.py", "paperbot/accounts.py",
                  "paperbot/sigservice.py", "paperbot/aggregate.py", "paperbot/feed.py", "paperbot/live3.py",
                  "paperbot/recorder.py", "paperbot/policy.py", "paperbot/levrule.py", "paperbot/quality_edges.json",
-                 "paperbot/entry_marks.py")
+                 "paperbot/entry_marks.py",
+                 "paperbot/binance.py",                       # bars_from_klines builds the feed's bars
+                 "paperbot/p_best_cells.json",                # coin-flip fairness per cell (checkpoint bots)
+                 "research/entry_study/DEFS_BC.sha256") + STRENGTH_DEF_FILES
 RULES_FILES = ("docs/paper-v3-rules.md", "docs/paper-v3-rules-addendum.md", "docs/paper-v3-rules-change-1.md",
                "docs/levrule-eval.md")     # how rule B is judged at day 30 (pre-registered 2026-10-04)
 # Files that decide only the extra accounts (paperbot/extras.py): their trading code and signals, and the

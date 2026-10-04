@@ -57,9 +57,11 @@ Q1 luck test
     vectorised copy of the paper engine (``simulate_bots``): signal at the timeframe close, entry
     at the next minute's open plus slippage, stop 2 x ATR14 of the signal bar, the owners' sizing
     tiers with the exchange brackets (the restarted run's quality_v1 rule, config.V3_LEVERAGE_RULE: each
-    bot signal is 'best' - 50x / 50%, 40x / 40%, then 30x / 30%, 20x / 20% - with probability
-    config.V3_P_BEST[timeframe], the 5-year share of 'best' strategy signals, else 'normal' - 30x / 30%,
-    20x / 20%; a new-strategy account without quality edges is always 'normal', so are its bots),
+    bot signal is 'best' - 50x / 50%, 40x / 40%, then 30x / 30%, 20x / 20% - with probability p_best, else
+    'normal' - 30x / 30%, 20x / 20%. p_best is the compared account's OWN cell share
+    (paperbot/p_best_cells.json: the 5-year share of 'best' signals of that strategy x timeframe; 0 for a cell
+    without quality edges, whose signals are always 'normal'); a copy uses its parent's cell, a new-strategy
+    account 0. The live coin-flip accounts keep the pooled config.V3_P_BEST),
     coin priority, one position, stepped profit lock on 1m LAST
     high/low (applied from the next bar), liquidation on the mark price, bust below $10. A test
     checks it trade for trade against ``PaperEngine``. All bots of one timeframe and window run in
@@ -663,6 +665,38 @@ def has_quality_edges(strategy: str, tf: str) -> bool:
         return False
 
 
+P_BEST_CELLS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "p_best_cells.json")
+_P_BEST_CELLS: Optional[dict] = None
+
+
+def p_best_cells() -> dict:
+    """{"<strategy>|<tf>": {"signals", "best", "p_best"}} (paperbot/p_best_cells.json, loaded once)."""
+    global _P_BEST_CELLS
+    if _P_BEST_CELLS is None:
+        with open(P_BEST_CELLS_PATH) as fh:
+            _P_BEST_CELLS = json.load(fh)["cells"]
+    return _P_BEST_CELLS
+
+
+def cell_p_best(strategy: str, tf: str) -> float:
+    """The Q1 bots' 'best' share for an account of ``strategy`` x ``tf``: that cell's own 5-year share of 'best'
+    signals (0 for a cell without quality edges, or one not in the file)."""
+    c = p_best_cells().get(f"{strategy}|{tf}")
+    return float(c["p_best"]) if c else 0.0
+
+
+def account_p_best(a: dict) -> float:
+    """p_best of the bots compared with account ``a`` (snapshot row): a strategy account its own cell, a copy its
+    parent's cell (the copy trades its parent's signals and strength), a new-strategy account 0 (no edges)."""
+    if a.get("kind") == "newlab":
+        return 0.0
+    strat, tf = a.get("strategy"), a.get("timeframe")
+    parent = a.get("parent")
+    if a.get("kind") == "copy" and isinstance(parent, str) and "@" in parent:
+        strat, tf = parent.split("@", 1)
+    return cell_p_best(strat, tf)
+
+
 def random_draws(rng: np.random.Generator):
     """Coin-flip signals as in rules_bt.random_signals: each coin and bar fires with the bot's
     rate, side 50/50."""
@@ -673,24 +707,27 @@ def random_draws(rng: np.random.Generator):
     return draw
 
 
-def group_draws(rng: np.random.Generator, p_best: float):
+def group_draws(rng: np.random.Generator, p_best):
     """The quality_v1 leverage group of each coin-flip signal: 'best' with probability ``p_best`` (one draw per bot,
-    coin and signal bar, from its own stream so the fire / side draws are unchanged)."""
+    coin and signal bar, from its own stream so the fire / side draws are unchanged). ``p_best``: one share for
+    every bot, or one per bot (array indexed like ``rates``)."""
+    p = np.asarray(p_best, float)
+
     def draw(ts: int, idx: np.ndarray, n_coins: int) -> np.ndarray:
-        return rng.random((len(idx), n_coins)) < p_best
+        return rng.random((len(idx), n_coins)) < (p[idx, None] if p.ndim else p)
     return draw
 
 
 def simulate_bots(m: Minutes, tf: str, lo: int, hi: int, rates: np.ndarray, s: Settings,
                   brackets: dict, specs: Optional[dict] = None, seed=0, draw=None,
                   initial: Optional[float] = None, stop_atr: float = V3_STOP_ATR,
-                  atr: Optional[tuple] = None, p_best: Optional[float] = None, group_draw=None) -> dict:
+                  atr: Optional[tuple] = None, p_best=None, group_draw=None) -> dict:
     """Coin-flip accounts on real 1m bars, the paper engine's rules (see the module docstring).
 
     ``m`` must start early enough for ATR14 of the first signal bar (``ATR_PREFIX_BARS``); the
     bots trade minutes in [lo, hi) and signals of bars closing at boundaries in [lo, hi). Each bot
     i fires with ``rates[i]``. With the "quality_v1" leverage rule each signal is 'best' with probability
-    ``p_best`` (default config.V3_P_BEST[tf], as the live coin-flip accounts) and sizes with that group's chain
+    ``p_best`` (one float, or one per bot; default config.V3_P_BEST[tf]) and sizes with that group's chain
     (``group_draw(ts, idx, n_coins)`` -> bool array replaces the draw in tests). Returns final evaluated equity per
     bot (``equity``), wallet, bust flags and entered-trade counts."""
     specs = specs or {}
@@ -908,7 +945,7 @@ class Task:
     cls: str = ORIG     # "orig" (the originals share one group per window) or the extra's own id
     stop_atr: float = V3_STOP_ATR
     first_lock: Optional[float] = None
-    p_best: Optional[float] = None   # quality_v1 bots' 'best' share; None = config.V3_P_BEST[tf] (originals, copies)
+    p_best: Optional[float] = None   # quality_v1 bots' 'best' share (plan: account_p_best); None = V3_P_BEST[tf]
 
 
 def _prior(out: sqlite3.Connection, date: str) -> dict:
@@ -962,10 +999,10 @@ def plan(snap: dict, prior: dict, prev_snaps: dict, s: Settings) -> tuple[dict, 
             rl = a.get("rule") or {}
             tkw = {"cls": aid, "stop_atr": float(rl.get("stop_atr") or V3_STOP_ATR),
                    "first_lock": rl.get("first_lock")}
-            if a["kind"] == "newlab" and not has_quality_edges(a["strategy"], tf):
-                tkw["p_best"] = 0.0           # its signals are always 'normal' (no edges): so are its bots'
         else:
             tkw = {}
+        # the bots' 'best' share: the account's own cell (a copy its parent's; a new-strategy account 0)
+        tkw["p_best"] = account_p_best(a)
         if a["kind"] == "random":
             rows[aid] = {**base, "status": OBSERVE, "stage": None, "reason": "동전 봇 기준 계좌 (판정 안 함, 눈으로 보는 기준)"}
             continue
@@ -1046,7 +1083,8 @@ def run_tasks(tasks: list[Task], minutes_for: Callable[[int, int], Minutes], s: 
             if x.first_lock is not None and float(x.first_lock) != s.ladder_first_lock:
                 gs = _replace(s, ladder_first_lock=float(x.first_lock))
             stop_atr = float(x.stop_atr)
-        p_best = ts[0].p_best if len(key) == 4 else None
+        shares = [V3_P_BEST.get(tf, 0.0) if t.p_best is None else float(t.p_best) for t in ts]
+        p_best = shares[0] if len(set(shares)) == 1 else np.repeat(shares, n_bots)   # one per account's bots
         res = simulate_bots(m, tf, lo, hi, rates, gs, brackets, specs, seed=seed, initial=initial, stop_atr=stop_atr,
                             p_best=p_best)
         for i, t in enumerate(ts):
@@ -1059,7 +1097,7 @@ def run_tasks(tasks: list[Task], minutes_for: Callable[[int, int], Minutes], s: 
         row = {"timeframe": tf, "window": [lo, hi], "accounts": len(ts), "bots": len(rates),
                "seed": seed, "seconds": round(sec, 1)}
         if gs.leverage_rule == "quality_v1":
-            row["p_best"] = V3_P_BEST.get(tf, 0.0) if p_best is None else p_best
+            row["p_best"] = shares[0] if len(set(shares)) == 1 else {t.aid: p for t, p in zip(ts, shares)}
         if len(key) == 4:
             row.update(account_id=ts[0].aid, stop_atr=stop_atr, first_lock=gs.ladder_first_lock)
         info.append(row)
@@ -1439,6 +1477,11 @@ def main(argv: Optional[list[str]] = None) -> int:
     args = ap.parse_args(argv)
     if args.cmd == "show":
         return _show(args.out, args.date)
+    if not os.path.exists(args.db):
+        # right after a reset (deploy/paperbot-reset.sh) a catching-up timer run can come before the bot has created
+        # paper3.db: nothing to judge yet, so no failure (and no "작업 실패" Telegram)
+        print(f"INFO: {args.db} does not exist yet (new run not started): nothing to judge, skipped")
+        return 0
     from .live import _notifier, _rest, load_brackets
     now = int(time.time() * 1000)
     todo = due_unjudged(args.db, args.out, now, args.date)

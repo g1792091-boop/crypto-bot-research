@@ -328,9 +328,95 @@ def test_run_tasks_passes_each_tasks_p_best(monkeypatch):
              ck.Task("NL1@1h", "1차", "1h", 0, 30 * 86_400_000, 5100.0, 0.01, cls="NL1@1h", p_best=0.0),
              ck.Task("A@15m~c1", "1차", "15m", 0, 30 * 86_400_000, 5100.0, 0.01, cls="A@15m~c1")]
     _, info = ck.run_tasks(tasks, lambda a, b: None, S, {}, {}, 10, 1, 5000.0)
-    assert sorted(got) == sorted([("15m", None), ("1h", 0.0), ("15m", None)])
+    assert sorted(got) == sorted([("15m", V3_P_BEST["15m"]), ("1h", 0.0), ("15m", V3_P_BEST["15m"])])
     assert sorted(r["p_best"] for r in info) == sorted([V3_P_BEST["15m"], 0.0, V3_P_BEST["15m"]])
     assert ck.has_quality_edges(STRAT, "15m") and not ck.has_quality_edges("NL1", "1h")
+
+
+# ------------------------------------------------------------------ Q1 bots: each cell's own 'best' share
+def test_p_best_cells_sum_to_the_pooled_share_and_no_edge_cells_are_zero():
+    """paperbot/p_best_cells.json: the same 5-year signals as V3_P_BEST, split by strategy x timeframe (review FYI:
+    a cell without edges is always 'normal' live, so its bots must never draw 'best')."""
+    cells = ck.p_best_cells()
+    totals = {"15m": (231_908, 1_075_951), "30m": (111_710, 514_899), "1h": (46_973, 217_799), "4h": (2_589, 12_357)}
+    for tf, (b, n) in totals.items():
+        mine = {k: v for k, v in cells.items() if k.endswith("|" + tf)}
+        assert len(mine) == 36
+        assert sum(v["best"] for v in mine.values()) == b and sum(v["signals"] for v in mine.values()) == n
+        assert round(b / n, 4) == V3_P_BEST[tf]
+    edges = LR.edges()
+    for k, v in cells.items():
+        assert 0 <= v["best"] <= v["signals"]
+        assert v["p_best"] == (round(v["best"] / v["signals"], 4) if v["signals"] else 0.0)
+        if not edges.get(k):
+            assert v["best"] == 0 and v["p_best"] == 0.0, k
+    no_edge = {k for k in cells if not edges.get(k)}
+    assert {"N21_ST_RSI_ADX|15m", "N21_ST_RSI_ADX|30m", "N21_ST_RSI_ADX|1h", "N21_ST_RSI_ADX|4h", "N14_ICHI_RSI|15m",
+            "N14_ICHI_RSI|1h", "DOGE|4h", "N03_ADX_GC|4h", "N11_BREAKAWAY|4h", "N14_ICHI_RSI|4h", "N15_KC_AO|4h",
+            "S1_EMA_RSI_CHOP|4h"} == no_edge
+    assert all(cells[k]["p_best"] > 0 for k in cells if k not in no_edge)
+    assert ck.cell_p_best("N21_ST_RSI_ADX", "15m") == 0.0 and ck.cell_p_best("NOPE", "15m") == 0.0
+    assert ck.cell_p_best(STRAT, "15m") == cells[f"{STRAT}|15m"]["p_best"] > 0
+
+
+def test_plan_gives_each_account_its_own_cell_share():
+    from test_checkpoint import DAY, T0, _acct, _snap
+    cp = T0 + 30 * DAY
+    accts = {}
+    for aid, strat, tf, kind, parent in (("N02_ST_KST@15m", "N02_ST_KST", "15m", "strategy", None),
+                                         ("N21_ST_RSI_ADX@15m", "N21_ST_RSI_ADX", "15m", "strategy", None),
+                                         ("N14_ICHI_RSI@1h", "N14_ICHI_RSI", "1h", "strategy", None),
+                                         ("N02_ST_KST@15m~c1", "N02_ST_KST", "15m", "copy", "N02_ST_KST@15m"),
+                                         ("NL1@1h", "NL1", "1h", "newlab", None)):
+        a = _acct(tf, 80, 9000.0, T0, cp, kind=kind)
+        a.update(strategy=strat, parent=parent)
+        accts[aid] = a
+    _, tasks = ck.plan(_snap(cp, accts), {}, {}, S)
+    got = {t.aid: t.p_best for t in tasks}
+    own = ck.p_best_cells()["N02_ST_KST|15m"]["p_best"]
+    assert got == {"N02_ST_KST@15m": own, "N21_ST_RSI_ADX@15m": 0.0, "N14_ICHI_RSI@1h": 0.0,
+                   "N02_ST_KST@15m~c1": own, "NL1@1h": 0.0}
+    assert own != V3_P_BEST["15m"]
+
+
+def test_run_tasks_gives_each_original_its_own_share_in_one_pass(monkeypatch):
+    got = []
+
+    def fake(m, tf, lo, hi, rates, s, brackets, specs, seed=0, initial=None, stop_atr=2.0, p_best=None, **kw):
+        got.append(p_best)
+        n = len(rates)
+        return {"equity": np.full(n, 5000.0), "bust": np.zeros(n, bool), "trades": np.zeros(n)}
+    monkeypatch.setattr(ck, "simulate_bots", fake)
+    tasks = [ck.Task("A@15m", "1차", "15m", 0, 30 * 86_400_000, 5100.0, 0.01, p_best=0.25),
+             ck.Task("B@15m", "1차", "15m", 0, 30 * 86_400_000, 5100.0, 0.02, p_best=0.0)]
+    _, info = ck.run_tasks(tasks, lambda a, b: None, S, {}, {}, 3, 1, 5000.0)
+    assert len(got) == 1 and list(got[0]) == [0.25] * 3 + [0.0] * 3                 # one share per bot
+    assert info[0]["p_best"] == {"A@15m": 0.25, "B@15m": 0.0}
+
+
+def test_simulate_bots_per_bot_share_equals_the_scalar_runs():
+    """A per-bot p_best array draws from the same stream: the leading bots with share 0 (1) trade exactly as in a
+    p_best=0 (=1) run (a bot's draws depend on the bots before it, which are free / in a position alike), and a
+    uniform array is the scalar."""
+    from test_checkpoint import BR, SPECS, T0, DAY, synth_minutes
+    tf = "15m"
+    lo, hi = T0 + 4 * DAY, T0 + 6 * DAY
+    m = synth_minutes(T0, hi, seed=7, vol=0.0003)
+    atr = ck.tf_atr(m, tf)
+    rates = np.full(40, 0.05)
+    kw = dict(seed=[1, 2], atr=atr)
+    zero = ck.simulate_bots(m, tf, lo, hi, rates, S, BR, SPECS, p_best=0.0, **kw)
+    one = ck.simulate_bots(m, tf, lo, hi, rates, S, BR, SPECS, p_best=1.0, **kw)
+    mixed = ck.simulate_bots(m, tf, lo, hi, rates, S, BR, SPECS, p_best=np.repeat([0.0, 1.0], 20), **kw)
+    assert np.array_equal(mixed["equity"][:20], zero["equity"][:20])
+    assert not np.array_equal(mixed["equity"], zero["equity"])                   # the share-1 bots do draw 'best'
+    mixed = ck.simulate_bots(m, tf, lo, hi, rates, S, BR, SPECS, p_best=np.repeat([1.0, 0.0], 20), **kw)
+    assert np.array_equal(mixed["equity"][:20], one["equity"][:20])
+    d = ck.group_draws(np.random.default_rng(1), np.repeat([0.0, 1.0], 20))(0, np.arange(18, 40), 6)
+    assert not d[:2].any() and d[2:].all()                                        # indexed by bot, not by row
+    a = ck.simulate_bots(m, tf, lo, hi, rates, S, BR, SPECS, p_best=0.3, **kw)
+    b = ck.simulate_bots(m, tf, lo, hi, rates, S, BR, SPECS, p_best=np.full(40, 0.3), **kw)
+    assert np.array_equal(a["equity"], b["equity"])
 
 
 # ------------------------------------------------------------------ shadows and the P&L-on-equity shares

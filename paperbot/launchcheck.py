@@ -1526,9 +1526,40 @@ def check_paper_db(ctx: Ctx, stage: str, deadman_set: bool = False) -> list[Line
             out.append(note(f"봇이 설치된 코드({str(ver['commit'])[:10]})가 아닌 {str(run['commit'])[:10]}로 돌고 있습니다: "
                             "sudo systemctl restart paperbot-live3"))
     out += account_set_lines(db)
+    out += strength_lines(path)
     if start is not None:
         out.append(ok(f"첫 시작 {kst_text(start)}(한국 시간)"))
     return out
+
+
+STRENGTH_RECENT = 20      # the last strategy signals of cells with quality edges that must carry a strength score
+
+
+def strength_lines(path: str, n: int = STRENGTH_RECENT) -> list[Line]:
+    """Do recent strategy signals of cells with quality edges carry a usable strength score (quality_v1 sizes a
+    signal without one 'normal')? FIX when none of the last ``n`` does (review M2)."""
+    try:
+        from .strengthwatch import CAUSE_KO, recent_edge_signals
+        conn = open_ro(path)
+        try:
+            if not conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'signal_log'").fetchone():
+                return []
+            causes = recent_edge_signals(conn, n)
+        finally:
+            conn.close()
+    except Exception as exc:  # noqa: BLE001
+        return [note(f"신호 세기 기록을 확인하지 못했습니다: {type(exc).__name__}: {exc}"[:200])]
+    if not causes:
+        return []                           # no strategy signal yet (just started): nothing to check
+    bad = [c for c in causes if c]
+    if not bad:
+        return [ok(f"신호 세기 정상: 최근 매매법 신호 {len(causes)}건 모두 좋은 자리 판정 점수가 있음")]
+    why = ", ".join(sorted({CAUSE_KO.get(c, c) for c in bad}))
+    if len(bad) == len(causes):
+        return [fix(f"최근 매매법 신호 {len(causes)}건 모두 신호 세기 계산 실패({why}): 좋은 자리 판정이 전부 '보통'(30·20배)으로 "
+                    "처리되고 있습니다. 대시보드 알림 목록의 'strength score failed'를 개발자에게 보내세요")]
+    return [note(f"최근 매매법 신호 {len(causes)}건 중 {len(bad)}건 신호 세기 계산 실패({why}): 그 신호는 '보통'으로 처리됨. "
+                 "계속되면 개발자에게")]
 
 
 def account_set_lines(db: dict) -> list[Line]:

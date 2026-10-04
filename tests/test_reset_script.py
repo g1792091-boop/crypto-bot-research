@@ -102,24 +102,44 @@ def env(tmp_path):
     fake = tmp_path / "systemctl"
     stopped = tmp_path / "stopped"
     stopped.write_text("")
-    # a stateful systemctl: FAKE_ACTIVE are running until stopped, started again by start; FAKE_ENABLED answer
-    # is-enabled; a start of a unit in FAKE_FAIL_START fails; starting paperbot-backup.service writes today's
-    # backup folder like deploy/paperbot-backup.sh (a copy of each run database) unless FAKE_BACKUP_EMPTY=1;
-    # `show -p Result` answers FAKE_RESULT (default success)
+    # a stateful systemctl: FAKE_ACTIVE are running until stopped, started again by start; FAKE_STATES
+    # ("unit=state ...", e.g. paperbot-live3=activating for a unit in auto-restart) gives other states until stopped;
+    # FAKE_JOB_RUNS ("unit=n") is a oneshot job that answers "activating" n times, then "inactive"; is-active prints
+    # the state (exit 0 only for "active"); FAKE_ENABLED answer is-enabled; `show -p LoadState` answers "loaded"
+    # except for FAKE_NOT_LOADED; a start of a unit in FAKE_FAIL_START fails; starting paperbot-backup.service
+    # writes today's backup folder like deploy/paperbot-backup.sh (a copy of each run database) unless
+    # FAKE_BACKUP_EMPTY=1; `show -p Result` answers FAKE_RESULT (default success)
     fake.write_text(f"""#!/bin/bash
 echo "$*" >> "{log}"
 cmd="$1"; shift
 case "$cmd" in
   is-active)
     u="${{@: -1}}"
-    grep -qx "$u" "{stopped}" && exit 3
-    for a in $FAKE_ACTIVE; do [ "$a" = "$u" ] && exit 0; done
+    st=inactive
+    for a in $FAKE_ACTIVE; do [ "$a" = "$u" ] && st=active; done
+    for a in $FAKE_STATES; do [ "${{a%%=*}}" = "$u" ] && st="${{a#*=}}"; done
+    for a in $FAKE_JOB_RUNS; do
+      if [ "${{a%%=*}}" = "$u" ]; then
+        c="{tmp_path}/runs.$u"; k=$(cat "$c" 2>/dev/null || echo 0); echo $((k+1)) > "$c"
+        if [ "$k" -lt "${{a#*=}}" ]; then st=activating; else st=inactive; fi
+      fi
+    done
+    grep -qx "$u" "{stopped}" && st=inactive
+    [ "$1" = --quiet ] || echo "$st"
+    [ "$st" = active ] && exit 0
     exit 3 ;;
   is-enabled)
     u="${{@: -1}}"
     for a in $FAKE_ENABLED; do [ "$a" = "$u" ] && exit 0; done
     exit 1 ;;
-  show) echo "${{FAKE_RESULT:-success}}" ;;
+  show)
+    u="${{@: -1}}"
+    case "$*" in
+      *LoadState*)
+        for a in $FAKE_NOT_LOADED; do [ "$a" = "$u" ] && {{ echo not-found; exit 0; }}; done
+        echo loaded ;;
+      *) echo "${{FAKE_RESULT:-success}}" ;;
+    esac ;;
   stop) for u in "$@"; do echo "$u" >> "{stopped}"; done ;;
   start)
     for u in "$@"; do
@@ -152,14 +172,15 @@ def test_dry_run_changes_nothing(env):
     r = _run(env, "--dry-run")
     assert r.returncode == 0, r.stdout + r.stderr
     out = r.stdout
-    assert "[멈출 것] paperbot-live3 paperbot-dash paperbot-agents.timer" in out
+    assert "[멈출 것] paperbot-live3 paperbot-dash paperbot-agents.timer (" in out
+    assert "[끝나고 다시 켤 것] paperbot-live3 paperbot-dash paperbot-agents.timer\n" in out
     assert "  paper3.db" in out and "  tradealerts.json" in out and "  checkpoint_bars" in out
     keep = out.split("[그대로 둘 것]")[1].split("[agents3.db")[0]
     assert "agents3.db" in keep and "inbox.db" in keep and "price_alerts.json" in keep and "liq.db" in keep
     assert "loss:strat:V45_AMB: 812 -> 0" in out
     assert _tree_hash(env["data"]) == before
     calls = env["log"].read_text().splitlines()
-    assert calls and all(c.startswith(("is-active", "is-enabled")) for c in calls)
+    assert calls and all(c.startswith(("is-active", "is-enabled", "show")) for c in calls)
     assert "[옮기기 전에 새 백업] paperbot-backup.service" in out
     assert "paperbot-offsite.timer가 켜져 있지 않아 건너뜁니다" in out
     assert not (env["tmp"] / "backups").exists()
@@ -187,7 +208,8 @@ def test_refused_while_the_order_executor_runs(env):
     r = _run(env, "--yes")
     assert r.returncode == 1 and "sudo systemctl stop paperbot-executor" in r.stdout
     assert _tree_hash(env["data"]) == before
-    assert all(c.startswith("is-active") for c in env["log"].read_text().splitlines())
+    assert all(c.startswith(("is-active", "is-enabled", "show")) for c in env["log"].read_text().splitlines())
+    assert not any(c.startswith(("stop", "start")) for c in env["log"].read_text().splitlines())
 
 
 def test_usage_without_a_mode():
@@ -219,7 +241,7 @@ def test_yes_moves_the_run_keeps_memory_and_restarts(env):
     calls = env["log"].read_text().splitlines()
     stops = [c for c in calls if c.startswith("stop")]
     starts = [c for c in calls if c.startswith("start")]
-    assert stops == ["stop paperbot-live3 paperbot-dash paperbot-tgtrades paperbot-agents.timer"]
+    assert stops == ["stop " + " ".join(ALL_UNITS)]                    # every loaded unit, whatever its state
     # the fresh backup runs after everything stopped and before the move; no off-site copy (timer not enabled)
     assert starts == ["start paperbot-backup.service",
                       "start paperbot-live3 paperbot-dash paperbot-tgtrades paperbot-agents.timer"]
@@ -233,11 +255,54 @@ def test_yes_moves_the_run_keeps_memory_and_restarts(env):
     assert (day / "paper3.db").read_text() == "x" and (day / "daily3.db").exists()
 
 
+ALL_UNITS = [u for u in _list("SERVICES") + _list("TIMERS") if u != "\\"]   # (a line continuation)
+
+
+def _starts(env):
+    return [c for c in env["log"].read_text().splitlines() if c.startswith("start")]
+
+
+def test_a_crash_looping_or_failed_unit_is_stopped_and_the_right_set_restarted(env):
+    """Review m1: `is-active` is not "active" for a service waiting to auto-restart ("activating"): it is stopped
+    anyway (every loaded unit is), and started again; an enabled unit that failed comes back too; a failed unit that
+    is not enabled is stopped but stays off; a unit that is not installed is not touched."""
+    _yes_env(env, FAKE_ACTIVE="paperbot-dash paperbot-agents.timer",
+             FAKE_STATES="paperbot-live3=activating paperbot-tgtrades=failed paperbot-evening.timer=failed",
+             FAKE_ENABLED="paperbot-tgtrades paperbot-daily3.timer", FAKE_NOT_LOADED="paperbot-offsite.timer")
+    r = _run(env, "--yes")
+    assert r.returncode == 0, r.stdout + r.stderr
+    calls = env["log"].read_text().splitlines()
+    stops = [c for c in calls if c.startswith("stop")]
+    want = [u for u in ALL_UNITS if u != "paperbot-offsite.timer"]
+    assert stops == ["stop " + " ".join(want)]
+    assert _starts(env)[-1] == ("start paperbot-live3 paperbot-dash paperbot-tgtrades paperbot-agents.timer "
+                                "paperbot-daily3.timer")
+    assert "paperbot-live3: activating" in r.stdout and "paperbot-tgtrades: failed, enabled" in r.stdout
+    assert not (env["data"] / "paper3.db").exists()
+
+
+def test_a_running_oneshot_job_is_waited_for(env):
+    """A oneshot job (nightly check, backup, checkpoint) shows "activating" while it runs, never "active"."""
+    _yes_env(env, FAKE_JOB_RUNS="paperbot-daily3.service=2", PAPERBOT_RESET_POLL="0")
+    r = _run(env, "--yes")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert r.stdout.count("waiting for a scheduled job to finish: paperbot-daily3.service") == 2
+    assert r.stdout.index("waiting for a scheduled job") < r.stdout.index("== 2. fresh backup")
+
+
+def test_dry_run_lists_a_crash_looping_unit(env):
+    env["env"].update(FAKE_ACTIVE="paperbot-dash", FAKE_STATES="paperbot-live3=activating")
+    r = _run(env, "--dry-run")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "[멈출 것] paperbot-live3 paperbot-dash (" in r.stdout
+    assert "[끝나고 다시 켤 것] paperbot-live3 paperbot-dash\n" in r.stdout
+
+
 def _yes_env(env, **extra):
     stub = env["tmp"] / "install.sh"
     stub.write_text("#!/bin/bash\nexit 0\n")
     env["env"].update(PAPERBOT_INSTALL=str(stub), PAPERBOT_RESET_WAIT="0", ALLOW_DIRTY="1",
-                      FAKE_ACTIVE="paperbot-live3 paperbot-dash", **extra)
+                      **{"FAKE_ACTIVE": "paperbot-live3 paperbot-dash", **extra})
 
 
 @pytest.mark.parametrize("fail", [{"FAKE_FAIL_START": "paperbot-backup.service"}, {"FAKE_RESULT": "exit-code"},

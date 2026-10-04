@@ -505,13 +505,16 @@ class Router:
       when ``GAP_LOUD`` or more coin-minutes are missing before the digest goes out;
     - clock skew: loud at most once a KST day and only above ``SKEW_LOUD_MS`` (the bot already uses Binance's
       time); a smaller skew is one digest line a day;
-    - signal timeouts: the first is loud; more within ``TIMEOUT_QUIET_MS`` of the last one are counted in the
-      digest (loud again after that long without one).
+    - signal timeouts: the first is loud; the next ones are counted in the digest, and one rings again once
+      ``TIMEOUT_QUIET_MS`` (6 h) have passed since the last LOUD one, or when it is the ``TIMEOUT_RING_EVERY``-th
+      (12th) further timeout since the last loud one (about 3 h of timeouts at every 15m boundary). So timeouts that
+      keep coming keep ringing (96 in 24 h: 8 loud), and an isolated one after 6 h rings as before.
     The alerts table (dashboard) has every line anyway: the runner writes it before sending."""
 
     GAP_LOUD = 10
     SKEW_LOUD_MS = 5_000
     TIMEOUT_QUIET_MS = 6 * 3_600_000
+    TIMEOUT_RING_EVERY = 12
 
     def __init__(self, forward: Notifier, digest: Digest, clock=None):
         self.forward, self.digest = forward, digest
@@ -520,7 +523,9 @@ class Router:
         self.gap_loud = False
         self.skew_days: dict[str, str] = {}
         self.last_timeout: Optional[int] = None
-        self.timeouts = 0
+        self.last_timeout_loud: Optional[int] = None
+        self.timeouts = 0               # digest count (since the digest last went out)
+        self.timeouts_since_loud = 0    # further timeouts since the last loud one
 
     def send(self, level: str, text: str):
         try:
@@ -573,11 +578,17 @@ class Router:
         if not m:
             return False, None
         now = self.clock()
-        quiet = self.last_timeout is not None and now - self.last_timeout < self.TIMEOUT_QUIET_MS
         self.last_timeout = now
-        if not quiet:
-            self.timeouts = 0
+        if (self.last_timeout_loud is None or now - self.last_timeout_loud >= self.TIMEOUT_QUIET_MS
+                or self.timeouts_since_loud + 1 >= self.TIMEOUT_RING_EVERY):
+            more = self.timeouts_since_loud
+            self.timeouts = self.timeouts_since_loud = 0
+            self.last_timeout_loud = now
+            self.digest.notes.pop("timeouts", None)      # this loud one says it: the digest counts afresh
+            if more:
+                text = f"{text}\n지난 소리 알림 뒤 {more}번 더 건너뜀 · 계속되면 다시 알림"
             return True, self.forward.send(level, text)
+        self.timeouts_since_loud += 1
         if "timeouts" not in self.digest.notes:
             self.timeouts = 0
         self.timeouts += 1

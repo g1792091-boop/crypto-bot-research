@@ -53,6 +53,7 @@ from .notify import CRITICAL, INFO, WARN, Digest, Notifier, Router
 from .runinfo import change_text, changes, run_record
 from .sigservice import SignalTimeout
 from .store3 import Store3
+from .strengthwatch import StrengthWatch
 
 MIN = 60_000
 FIVE = TF_MS["5m"]
@@ -123,6 +124,11 @@ class Runner3:
         # extras: called as post_batch(now_ms) at the end of process(), after every boundary of the batch and the
         # commit (their Telegram messages wait until then, so they never delay an originals' compute of the batch)
         self.post_batch = None
+        # watches only (never changes a signal or its size): a strategy signal of a cell with quality edges whose
+        # strength score failed is sized "normal" by the rule; this writes an alert row and rings (hourly per cause).
+        # Only under the quality_v1 rule (the old tier walk never reads the strength)
+        rule = getattr(getattr(book, "s", None), "leverage_rule", None)
+        self.strength = StrengthWatch(store, notifier, now_ms) if rule == "quality_v1" else None
 
     def process(self, steps) -> None:
         for ts, bars, funding in steps:
@@ -184,6 +190,7 @@ class Runner3:
             "signal_timeouts": self.signal_timeouts,
             "pool_restarts": getattr(self.service, "pool_restarts", 0),
             "fill_cost_errors": None if self.fills is None else self.fills.errors,
+            "strength_failures": None if self.strength is None else dict(self.strength.total),
             "deadman": None if self.deadman is None else {
                 "last_ping": self.deadman.last_ping, "failures": self.deadman.failures, "sent": ping},
             "digest_pending": 0 if self.digest is None else len(self.digest.items)})
@@ -212,6 +219,11 @@ class Runner3:
                 if aid in self.book.engines and (self.skip_before is None or boundary >= self.skip_before):
                     self.book.submit(aid, sig)
                     submitted.append((aid, sig))
+        if submitted and self.strength is not None:
+            try:
+                self.strength.observe(boundary, submitted)
+            except Exception:  # noqa: BLE001  an observer: never stops the originals
+                pass
         if self.book.last_ts is not None:
             self.book.save(self.book.last_ts)
         if self.post_boundary is not None:

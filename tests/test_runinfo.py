@@ -131,3 +131,33 @@ def test_rules_files_include_change_1_and_match_their_hashes():
     assert a["rules"] == files_hash(RULES_FILES)
     two = files_hash(RULES_FILES[:2])
     assert a["rules"] != two          # a start before the change file existed reads as a rules change
+
+
+def test_trading_files_cover_what_decides_leverage_and_the_feed(tmp_path):
+    """Review M1: the strength definitions decide each signal's leverage group (quality_v1), and binance.py builds
+    the feed's bars. Editing a definition changes the trading-code hash even when the lock file is left alone."""
+    import shutil
+    from paperbot.entry_marks import locked_defs
+    from paperbot.runinfo import ROOT, STRENGTH_DEF_FILES
+    for rel in ("research/entry_study/DEFS_BC.sha256", "paperbot/binance.py", "paperbot/p_best_cells.json",
+                "paperbot/levrule.py", "paperbot/quality_edges.json", "paperbot/entry_marks.py"):
+        assert rel in TRADING_FILES and os.path.exists(os.path.join(ROOT, rel))
+    locked = {"research/entry_study/" + rel for rel in locked_defs() if rel.startswith("strength_defs/")}
+    assert locked and locked <= set(STRENGTH_DEF_FILES) <= set(TRADING_FILES)
+    assert all(os.path.exists(os.path.join(ROOT, rel)) for rel in TRADING_FILES)
+    assert len(set(TRADING_FILES)) == len(TRADING_FILES)
+    for rel in TRADING_FILES:
+        os.makedirs(os.path.dirname(os.path.join(str(tmp_path), rel)), exist_ok=True)
+        shutil.copy(os.path.join(ROOT, rel), os.path.join(str(tmp_path), rel))
+    h0 = files_hash(TRADING_FILES, str(tmp_path))
+    assert h0 == files_hash(TRADING_FILES)
+    with open(os.path.join(str(tmp_path), "research/entry_study/strength_defs/N01_ST_EMA.py"), "a") as fh:
+        fh.write("\n# edited\n")
+    h1 = files_hash(TRADING_FILES, str(tmp_path))
+    assert h1 != h0
+    with open(os.path.join(str(tmp_path), "research/entry_study/DEFS_BC.sha256"), "a") as fh:
+        fh.write("\n")
+    assert files_hash(TRADING_FILES, str(tmp_path)) not in (h0, h1)
+    with open(os.path.join(str(tmp_path), "paperbot/binance.py"), "a") as fh:
+        fh.write("\n# edited\n")
+    assert files_hash(TRADING_FILES, str(tmp_path)) not in (h0, h1)
