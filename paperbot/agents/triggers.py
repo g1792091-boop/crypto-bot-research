@@ -11,7 +11,9 @@ Triggers (defaults in ``TriggerPolicy``; every number is configurable):
     incident      0  team:ops      new CRITICAL alert (liquidation, engine halted), signal
                                    timeout or data-gap WARN in paper3.db alerts (by alert
                                    rowid); nightly parity mismatch, missing 00:00 snapshot or
-                                   missing 1m bars in daily3.db reports (by report day).
+                                   missing 1m bars in daily3.db reports (by report day). A report whose
+                                   mismatches are all proven early 1m klines (daily3 ``early_kline``)
+                                   opens none.
     owner         1  <room>        new owner_messages in that room (inbox.db) since the cursor (the
                                    oldest ``owner_batch`` (10) per meeting; the rest open the next one).
     loss_cluster  2  strat:<S>     since the room's last round: >= 2 new losing trades of the
@@ -547,9 +549,14 @@ def _incident(paper_ro, daily_ro, st: _Rooms) -> list[Due]:
         rep = _json(data)
         par = rep.get("parity")
         found = []
+        # mismatched_accounts counts only the unexplained ones: a mismatch daily3 proved to be an early 1m kline
+        # (parity.early_kline, "1분봉을 확정 전에 읽음") or an extra's restart gap never opens a meeting by itself;
+        # one unexplained mismatch does, as before
         if isinstance(par, dict) and p.nightly_parity and _int(par.get("mismatched_accounts")) > 0:
+            early = _int(par.get("early_kline"))
             found.append(("parity_mismatch", {"mismatched_accounts": _int(par["mismatched_accounts"]),
-                                              "accounts": _int(par.get("accounts"))}))
+                                              "accounts": _int(par.get("accounts")),
+                                              **({"early_kline": early} if early else {})}))
         elif isinstance(par, str) and p.nightly_no_snapshot:
             found.append(("no_snapshot", {"parity": par[:200]}))
         dq = rep.get("data_quality") or {}

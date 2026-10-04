@@ -204,8 +204,18 @@ def build(paper_db: str, daily_db: Optional[str], now_ms: int, min_n: int = 30) 
         r = d.execute("SELECT day, data FROM reports ORDER BY day DESC LIMIT 1").fetchone()
         if r:
             nightly = json.loads(r["data"])
-            nightly["mismatched_accounts"] = [m["account_id"] for m in d.execute(
-                "SELECT account_id FROM mismatches WHERE day = ?", (r["day"],))]
+            mm = d.execute("SELECT account_id, data FROM mismatches WHERE day = ?", (r["day"],)).fetchall()
+            nightly["mismatched_accounts"] = [m["account_id"] for m in mm]
+            labels = {}
+            for m in mm:
+                try:
+                    lab = json.loads(m["data"] or "{}").get("label")
+                except (TypeError, ValueError, AttributeError):
+                    lab = None
+                if lab:
+                    labels[m["account_id"]] = lab     # e.g. early_kline: proven, not an engine problem
+            if labels:
+                nightly["mismatch_labels"] = labels
         d.close()
 
     # where the 180 make or lose money: by coin (best strategies of each coin), weekday/weekend x session,

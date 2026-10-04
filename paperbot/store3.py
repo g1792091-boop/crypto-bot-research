@@ -9,6 +9,9 @@ Tables
 - state        latest snapshot of every account engine and of the feed (restart recovery)
 - alerts       notifier messages
 - runs         append-only: code version, settings and hashes of every start (runinfo.py)
+- fill_costs   order-book cost of each paper entry / exit (paperbot/fillcost.py; records only)
+- live_bars    the 1m bars the accounts actually stepped on, one row per coin per stepped minute, with the
+               time the runner handled the step (fillcost.bar_rows; records only; daily3 replays on them)
 
 WAL mode; the dashboard and the agents open it read-only.
 """
@@ -45,6 +48,22 @@ CREATE TABLE IF NOT EXISTS fill_costs (
     data TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS fill_costs_ts ON fill_costs (ts);
+CREATE TABLE IF NOT EXISTS live_bars (
+    ts INTEGER NOT NULL,
+    symbol TEXT NOT NULL,
+    open REAL NOT NULL,
+    high REAL NOT NULL,
+    low REAL NOT NULL,
+    close REAL NOT NULL,
+    volume REAL,
+    mark_open REAL,
+    mark_high REAL,
+    mark_low REAL,
+    mark_close REAL,
+    close_time INTEGER,
+    processed_at INTEGER NOT NULL,
+    PRIMARY KEY (ts, symbol)
+);
 CREATE TABLE IF NOT EXISTS trades (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     account_id TEXT NOT NULL,
@@ -121,6 +140,7 @@ class Store3:
         self.conn.execute("PRAGMA synchronous=NORMAL")
         self.conn.executescript(SCHEMA)
         self.conn.commit()
+        self.live_bar_errors = 0
 
     # ------------------------------------------------------------ accounts
     def add_account(self, account_id: str, strategy: str, timeframe: str, kind: str,
@@ -164,12 +184,41 @@ class Store3:
             [{**r, "data": json.dumps(r.get("data", {}), default=str)} for r in rows])
 
     def fill_costs(self, rows: Iterable[dict]) -> None:
-        """Order-book cost of the step's paper entries and exits (paperbot/fillcost.py; records only)."""
-        self.conn.executemany(
-            "INSERT INTO fill_costs (ts, account_id, symbol, event, status, notional, slip_best, data) "
-            "VALUES (?,?,?,?,?,?,?,?)",
-            [(r["ts"], r["account_id"], r["symbol"], r["event"], r.get("status", ""), float(r["notional"]),
-              r.get("slip_best"), json.dumps(r, default=str)) for r in rows])
+        """Order-book cost of the step's paper entries and exits (paperbot/fillcost.py; records only).
+        ``event = 'bar'`` rows (the bars the accounts stepped on, fillcost.bar_rows) go to ``live_bars``."""
+        rows = list(rows)
+        costs = [r for r in rows if r.get("event") != "bar"]
+        if costs:
+            self.conn.executemany(
+                "INSERT INTO fill_costs (ts, account_id, symbol, event, status, notional, slip_best, data) "
+                "VALUES (?,?,?,?,?,?,?,?)",
+                [(r["ts"], r["account_id"], r["symbol"], r["event"], r.get("status", ""), float(r["notional"]),
+                  r.get("slip_best"), json.dumps(r, default=str)) for r in costs])
+        bars = [r for r in rows if r.get("event") == "bar"]
+        if bars:
+            self.live_bars(bars)
+
+    def live_bars(self, rows: Iterable[dict]) -> None:
+        """The step's bars as the accounts stepped on them (first record of a coin-minute kept). A record only:
+        a failure is counted (one WARN alert the first time) and never raised into the runner."""
+        rows = list(rows)
+        try:
+            self.conn.executemany(
+                "INSERT OR IGNORE INTO live_bars (ts, symbol, open, high, low, close, volume, mark_open, mark_high, "
+                "mark_low, mark_close, close_time, processed_at) VALUES (:ts, :symbol, :open, :high, :low, :close, "
+                ":volume, :mark_open, :mark_high, :mark_low, :mark_close, :close_time, :processed_at)",
+                [{k: r.get(k) for k in ("ts", "symbol", "open", "high", "low", "close", "volume", "mark_open",
+                                        "mark_high", "mark_low", "mark_close", "close_time", "processed_at")}
+                 for r in rows])
+        except Exception as exc:  # noqa: BLE001  (a record only: the bot goes on)
+            self.live_bar_errors += 1
+            if self.live_bar_errors == 1:
+                try:
+                    self.alert(int(rows[0].get("processed_at") or rows[0]["ts"]), "WARN",
+                               f"live bar record failed (records only, trading unaffected): "
+                               f"{type(exc).__name__}: {exc}"[:300])
+                except Exception:  # noqa: BLE001
+                    pass
 
     def alert(self, ts: int, level: str, text: str) -> None:
         self.conn.execute("INSERT INTO alerts VALUES (?,?,?)", (ts, level, text))

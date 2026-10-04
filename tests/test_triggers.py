@@ -177,6 +177,22 @@ def test_incident_signal_timeout_and_nightly_reports(w):
     assert ds[0].data["counts"] == {"parity_mismatch": 1} and ds[0].data["items"][0]["day"] == "2026-10-08"
 
 
+def test_a_night_whose_mismatches_are_all_early_klines_opens_no_incident(w):
+    """daily3 counts mismatches proven to be early 1m klines apart (parity.early_kline, not in
+    mismatched_accounts): such a night opens no meeting; one unexplained mismatch next to them does."""
+    t = QUIET
+    w.report("2026-10-05", {"day": "2026-10-05", "parity": {"accounts": 195, "mismatched_accounts": 0,
+                                                            "early_kline": 7},
+                            "data_quality": {"BTCUSDT": {"missing": 0}}})
+    assert w.due(t) == []
+    w.report("2026-10-06", {"day": "2026-10-06", "parity": {"accounts": 195, "mismatched_accounts": 1,
+                                                            "early_kline": 6}})
+    ds = w.due(t)
+    assert keys(ds) == [("team:ops", "incident", 0)] and ds[0].data["counts"] == {"parity_mismatch": 1}
+    it = ds[0].data["items"][0]
+    assert (it["day"], it["mismatched_accounts"], it["early_kline"]) == ("2026-10-06", 1, 6)
+
+
 # ------------------------------------------------------------------ owner
 def test_owner_message_starts_a_round_in_its_room(w):
     t = QUIET

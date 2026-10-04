@@ -1,7 +1,9 @@
 """Nightly checks for the paper v3 run (separate process, its own database).
 
-    python -m paperbot.daily3 run --db paper3.db --out daily3.db [--day YYYY-MM-DD]
+    python -m paperbot.daily3 run --db paper3.db --out daily3.db [--day YYYY-MM-DD] [--no-notify]
         [--brackets FILE | --allow-example-brackets]
+
+Re-running a day (``--day``) replaces that day's report and mismatches in daily3.db (shadow rows by key).
 
 For one UTC day (default: yesterday):
 
@@ -17,6 +19,19 @@ For one UTC day (default: yesterday):
    (state ``extras`` events). A copy that lost one boundary's signal in a restart
    (killed between the 195's commit and the copy's) is reported for that copy
    only, as "추가 계좌 재시작 틈".
+   Early 1m klines (``explain_mismatches``): the live feed takes a 1m kline as soon as the minute has closed and
+   never reads it again, so a kline read within a second of its close can miss the minute's last trades (a less
+   extreme high/low); live then exits later than the replay on the final klines. A mismatch is labelled
+   ``early_kline`` only with proof: (i) when the live runner recorded the bars it stepped on (paper3.db
+   ``live_bars``), the day is replayed ALSO on live's own bars; a mismatch that disappears there, where live's bar
+   of the trigger minute has the same open and a less extreme high/low (or a lower volume) than the final kline,
+   is early_kline; one that persists on live's own bars is an engine / parity problem and stays CRITICAL.
+   (ii) Without live bars for the trigger minute, the public aggregate trades of that minute must show the trade
+   that reached the replay's stop in the last ``EARLY_WINDOW_MS`` of the minute, with the same entry / size / stop
+   on both sides, the replay exiting in that minute and live later (at a later bar's open beyond its stop or at
+   its stop on a later bar), and no feed warning; and this must hold for every mismatched account of that
+   coin-minute. Early-kline accounts are counted apart (``parity.early_kline``), like the restart gaps: one WARN,
+   no CRITICAL, no incident meeting (paperbot/agents/triggers.py). docs/signal-recording.md has the background.
 2. Shadows (no accounts): for every submitted signal of the day
    - limit: would a limit order 0.25 ATR better than the reference price have
      filled within one bar of the signal's timeframe, and with what net ROE under
@@ -50,7 +65,7 @@ import numpy as np
 
 from .accounts import DAY_MS, day_key
 from .aggregate import TF_MS
-from .binance import BinanceREST, bars_from_klines
+from .binance import BinanceError, BinanceREST, bars_from_klines
 from .config import V3_STOP_ATR, V3_SYMBOLS, Settings, v3_settings
 from .engine import PaperEngine, restore_engine
 from .models import Bar, Signal
@@ -242,13 +257,22 @@ def label_crash_gaps(mism: list[dict], extras: dict, conn, gap_ms: int = 10 * MI
     return mism
 
 
+def _rkey(t) -> tuple:
+    """A replayed trade (TradeRecord) as compare() sees it."""
+    return (t.symbol, t.entry_time, t.exit_time, t.exit_reason, round(t.exit_price, 10), round(t.pnl, 6))
+
+
+def _skey(t: dict) -> tuple:
+    """A stored (live) trade as compare() sees it."""
+    return (t["symbol"], t["entry_time"], t["exit_time"], t["exit_reason"], round(t["exit_price"], 10),
+            round(t["pnl"], 6))
+
+
 def compare(replayed: dict[str, list], stored: dict[str, list[dict]]) -> list[dict]:
     out = []
     for aid in sorted(set(replayed) | set(stored)):
-        a = [(t.symbol, t.entry_time, t.exit_time, t.exit_reason, round(t.exit_price, 10), round(t.pnl, 6))
-             for t in replayed.get(aid, [])]
-        b = [(t["symbol"], t["entry_time"], t["exit_time"], t["exit_reason"], round(t["exit_price"], 10),
-              round(t["pnl"], 6)) for t in stored.get(aid, [])]
+        a = [_rkey(t) for t in replayed.get(aid, [])]
+        b = [_skey(t) for t in stored.get(aid, [])]
         if a != b:
             out.append({"account_id": aid, "replayed": a[:20], "stored": b[:20],
                         "signal_bars": {str(t.entry_time): t.signal_ts + 1 for t in replayed.get(aid, [])[:20]}})
@@ -261,6 +285,322 @@ def stored_trades(conn, start: int, end: int) -> dict[str, list[dict]]:
                                   "ORDER BY id", (start, end)):
         out.setdefault(aid, []).append(json.loads(data))
     return out
+
+
+# ---------------------------------------------------------------- 1b. early 1m klines
+EARLY_KLINE_KO = "early_kline (거래소 1분봉 확정 전 읽음)"
+EARLY_SUSPECT_KO = "이른 1분봉 의심 (확인 못 함)"
+LIVE_BARS_PARITY_KO = "엔진·재계산 문제 (봇이 쓴 1분봉으로 다시 계산해도 다름)"
+EARLY_DOC = "docs/signal-recording.md '1분봉을 확정 전에 읽는 문제'"
+EARLY_WINDOW_MS = 1000          # the trade that reached the stop must be this close to the minute's end
+FEED_WARN_WINDOW_MS = 3 * MIN   # after the live exit: the feed writes a gap warning when it gives the minute up
+FEED_WARNS = ("data gap at", "returned no bars", "no new closed bars", "local clock off", "data error")
+FEED_SYMBOLS = tuple(V3_SYMBOLS) + ("XRPUSDT",)
+AGG_LIMIT = 1000
+AGG_MAX_PAGES = 60
+AGG_MAX_MINUTES = 40            # coin-minutes checked on aggTrades per night (a real engine bug can mismatch many)
+LIVE_BAR_COLS = ("ts", "symbol", "open", "high", "low", "close", "volume", "mark_open", "mark_high", "mark_low",
+                 "mark_close", "close_time", "processed_at")
+
+
+def load_live_bars(conn, start: int, end: int) -> Optional[dict]:
+    """{(ts, symbol): row} of the bars the live runner stepped on in [start, end) (paper3.db ``live_bars``,
+    paperbot/fillcost.py); None for a database from before the table."""
+    try:
+        rows = conn.execute(f"SELECT {', '.join(LIVE_BAR_COLS)} FROM live_bars WHERE ts >= ? AND ts < ?",
+                            (start, end)).fetchall()
+    except sqlite3.OperationalError:
+        return None
+    return {(int(r[0]), r[1]): dict(zip(LIVE_BAR_COLS, r)) for r in rows}
+
+
+def _bar_of(r: dict) -> Bar:
+    ts = int(r["ts"])
+    return Bar(r["symbol"], ts, int(r["close_time"]) if r.get("close_time") is not None else ts + MIN - 1,
+               float(r["open"]), float(r["high"]), float(r["low"]), float(r["close"]),
+               mark_open=r.get("mark_open"), mark_high=r.get("mark_high"), mark_low=r.get("mark_low"),
+               mark_close=r.get("mark_close"), volume=r.get("volume"))
+
+
+def steps_on_live_bars(steps, live: dict) -> list:
+    """``steps`` with every bar the live runner recorded replaced by that record (funding unchanged)."""
+    by_ts: dict[int, dict] = {}
+    for (ts, sym), r in live.items():
+        by_ts.setdefault(ts, {})[sym] = r
+    out = []
+    for ts, bars, fund in steps:
+        rec = by_ts.get(ts)
+        if rec:
+            bars = dict(bars)
+            for sym, r in rec.items():
+                bars[sym] = _bar_of(r)
+        out.append((ts, bars, fund))
+    return out
+
+
+def _minute(t: int) -> int:
+    return int(t) - int(t) % MIN
+
+
+def _hm(ms: int) -> str:
+    return dt.datetime.fromtimestamp(ms / 1000, dt.timezone.utc).strftime("%H:%M:%S.") + f"{int(ms) % 1000:03d}"
+
+
+def _bar_dict(b: Optional[Bar]) -> Optional[dict]:
+    if b is None:
+        return None
+    return {"open": b.open, "high": b.high, "low": b.low, "close": b.close, "volume": b.volume}
+
+
+def _same(x, y, rel: float = 1e-9) -> bool:
+    if x is None or y is None:
+        return x is None and y is None
+    return abs(float(x) - float(y)) <= rel * max(1.0, abs(float(x)), abs(float(y)))
+
+
+def first_diff(replayed: list, stored: list[dict]) -> tuple[Optional[object], Optional[dict]]:
+    """The first replayed / stored trade pair that compare() sees as different (either may be None)."""
+    for k in range(max(len(replayed), len(stored))):
+        a = replayed[k] if k < len(replayed) else None
+        b = stored[k] if k < len(stored) else None
+        if a is None or b is None or _rkey(a) != _skey(b):
+            return a, b
+    return None, None
+
+
+def truncated_bar(live: dict, final: Optional[Bar]) -> bool:
+    """Live's bar is an early read of the final kline: the same open, a high no higher and a low no lower, and
+    something less (a lower high, a higher low or a lower volume)."""
+    if final is None:
+        return False
+    inner = float(live["high"]) <= final.high and float(live["low"]) >= final.low
+    vol_less = live.get("volume") is not None and final.volume is not None and float(live["volume"]) < final.volume
+    less = float(live["high"]) < final.high or float(live["low"]) > final.low or vol_less
+    return float(live["open"]) == final.open and inner and less
+
+
+def early_shape(a, b: Optional[dict], bar_at, slip: float) -> tuple[list[str], dict]:
+    """The trade shape an early kline gives (failed checks, proof): the same position on both sides (entry
+    time and price, size, leverage, initial stop), the replay's SL/LOCK at its stop inside minute M, and live
+    exiting later on an SL/LOCK either at a later bar's open beyond live's stop (open-gap fill = final open x
+    (1 - side x slip)) or at its stop at a later bar's close; live's stop never looser than the replay's."""
+    if a is None or b is None:
+        return ["replay or live trade missing"], {}
+    bad = []
+    side = int(a.side)
+    if not (a.symbol == b.get("symbol") and side == int(b.get("side", 0)) and a.entry_time == b.get("entry_time")
+            and a.leverage == b.get("leverage") and _same(a.entry_price, b.get("entry_price"))
+            and _same(a.qty, b.get("qty"))):
+        bad.append("entry, size or leverage differ")
+    if not _same(a.stop_initial, b.get("stop_initial")):
+        bad.append("initial stop differs")
+    m = _minute(a.exit_time)
+    if a.exit_reason not in ("SL", "LOCK") or a.exit_time != m + MIN - 1 \
+            or not _same(a.exit_price, a.stop_price * (1 - side * slip), 1e-10):
+        bad.append("replay exit is not an SL/LOCK at its stop inside a minute")
+    lt, lstop = int(b.get("exit_time", 0)), b.get("stop_price")
+    shape = None
+    if b.get("exit_reason") not in ("SL", "LOCK") or lt <= a.exit_time or lstop is None:
+        bad.append("live exit is not a later SL/LOCK")
+    elif lt % MIN == 0:
+        fb = bar_at(lt, a.symbol)
+        if fb is not None and _same(b.get("exit_price"), fb.open * (1 - side * slip), 1e-10) \
+                and (fb.open - float(lstop)) * side <= 0:
+            shape = "open_gap"
+        else:
+            bad.append("live exit at a bar open is not the final open beyond its stop")
+    elif lt % MIN == MIN - 1:
+        if _same(b.get("exit_price"), float(lstop) * (1 - side * slip), 1e-10):
+            shape = "in_bar"
+        else:
+            bad.append("live exit at a bar close is not at its stop")
+    else:
+        bad.append("live exit time is not a bar open or close")
+    if lstop is not None and side * (float(lstop) - a.stop_price) < -1e-9 * abs(a.stop_price):
+        bad.append("live stop looser than the replay stop")
+    proof = {"replay_exit": {"time": a.exit_time, "utc": _hm(a.exit_time), "reason": a.exit_reason,
+                             "price": a.exit_price, "stop": a.stop_price},
+             "live_exit": {"time": lt, "utc": _hm(lt), "reason": b.get("exit_reason"), "price": b.get("exit_price"),
+                           "stop": lstop, "lock_roe": b.get("lock_roe"), "shape": shape},
+             "entry": {"time": a.entry_time, "price": a.entry_price, "qty": a.qty, "side": side}}
+    return bad, proof
+
+
+def agg_trades(rest, symbol: str, start: int, end: int, limit: Optional[int] = None,
+               max_pages: Optional[int] = None) -> list[tuple[int, float]]:
+    """(time ms, price) of every aggregate trade of ``symbol`` with start <= time <= end, oldest first (public
+    GET /fapi/v1/aggTrades through the REST client's generic getter: the first page by time, then by id;
+    weight 20 a page)."""
+    limit, max_pages = limit or AGG_LIMIT, max_pages or AGG_MAX_PAGES
+    out: list[tuple[int, float]] = []
+    page = rest._get("/fapi/v1/aggTrades", {"symbol": symbol, "startTime": int(start), "endTime": int(end),
+                                            "limit": limit})
+    for _ in range(max_pages):
+        last = None
+        for t in page or []:
+            ts, last = int(t["T"]), int(t["a"])
+            if ts > end:
+                return out
+            if ts >= start:
+                out.append((ts, float(t["p"])))
+        if not page or len(page) < limit or last is None:
+            return out
+        page = rest._get("/fapi/v1/aggTrades", {"symbol": symbol, "fromId": last + 1, "limit": limit})
+    raise BinanceError(f"aggTrades {symbol} at {start}: more than {max_pages} pages")
+
+
+def trade_evidence(trades: list, final: Optional[Bar], side: int, stop: float, minute: int,
+                   window_ms: int = EARLY_WINDOW_MS) -> tuple[list[str], dict]:
+    """(failed checks, proof): the minute's trades rebuild the final kline, and the first trade at or through
+    the replay's stop came in the last ``window_ms`` of the minute (what an early read could miss)."""
+    if not trades:
+        return ["no trades returned for the minute (cannot verify)"], {"trades": 0}
+    ps = [p for _, p in trades]
+    rebuilt = {"open": ps[0], "high": max(ps), "low": min(ps), "close": ps[-1]}
+    bad = []
+    if final is None or not all(_same(rebuilt[k], getattr(final, k), 1e-12) for k in rebuilt):
+        bad.append("the trades do not rebuild the final kline (cannot verify)")
+    close = minute + MIN
+    cross = next(((t, p) for t, p in trades if (p <= stop if side > 0 else p >= stop)), None)
+    if cross is None:
+        bad.append("no trade reached the replay stop")
+    elif cross[0] < close - window_ms:
+        bad.append(f"the first trade at the stop came {close - cross[0]} ms before the close "
+                   f"(not in the last {window_ms} ms)")
+    proof = {"trades": len(trades), "rebuilt": rebuilt, "final": _bar_dict(final), "window_ms": window_ms,
+             "in_window": sum(1 for t, _ in trades if t >= close - window_ms),
+             "first_at_stop": None if cross is None else {"time": cross[0], "utc": _hm(cross[0]), "price": cross[1],
+                                                          "ms_before_close": close - cross[0]}}
+    return bad, proof
+
+
+def feed_warnings(conn, symbol: str, lo: int, hi: int) -> Optional[list[dict]]:
+    """Feed warnings (data gap, no bars, stale feed, clock, data error) in paper3.db alerts between lo and hi
+    that concern ``symbol`` (or name no symbol); None when the table cannot be read."""
+    try:
+        rows = conn.execute("SELECT ts, level, text FROM alerts WHERE ts >= ? AND ts <= ? "
+                            "AND level IN ('WARN', 'CRITICAL') ORDER BY ts", (lo, hi)).fetchall()
+    except sqlite3.OperationalError:
+        return None
+    out = []
+    for ts, level, text in rows:
+        text = text or ""
+        if any(f in text for f in FEED_WARNS) and (symbol in text or not any(s in text for s in FEED_SYMBOLS)):
+            out.append({"ts": int(ts), "level": level, "text": text[:200]})
+    return out
+
+
+def explain_mismatches(conn, rest, settings: Settings, brackets, specs, snapshot: dict, signals: dict, steps,
+                       replayed: dict, stored: dict, mism: list[dict], start: int, end: int,
+                       extras: Optional[dict] = None, window_ms: int = EARLY_WINDOW_MS) -> dict:
+    """Label the mismatches an early 1m kline explains (``early_kline`` True, ``label``, ``proof``) and say why
+    the others are not (``early_kline_check``). ``replayed``: the day's replay (trades exiting before ``end``),
+    ``stored``: the live trades, ``steps``: the day's final steps. Returns the report's summary (live bars seen,
+    the replay on live's bars, the early-kline events). Restart gaps of extras are left alone."""
+    final = {(ts, sym): b for ts, bars, _ in steps for sym, b in bars.items()}
+
+    def bar_at(ts, sym):
+        return final.get((ts, sym))
+
+    slip = settings.slippage_frac
+    live = load_live_bars(conn, start, end)
+    info: dict = {"live_bars": None if live is None else len(live)}
+    live_mism: set = set()
+    if live:
+        rep_live = replay(settings, brackets, specs, snapshot, signals, steps_on_live_bars(steps, live),
+                          extras=extras)
+        cmp_live = compare({a: [t for t in ts if t.exit_time < end] for a, ts in rep_live.items()}, stored)
+        live_mism = {m["account_id"] for m in cmp_live}
+        only = sorted(live_mism - {m["account_id"] for m in mism})
+        info["live_bars_replay"] = {"mismatched": len(live_mism), "only_on_live_bars": only[:50]}
+    groups: dict[tuple, list] = {}
+    for m in mism:
+        if m.get("crash_gap"):
+            continue
+        aid = m["account_id"]
+        a, b = first_diff(replayed.get(aid, []), stored.get(aid, []))
+        if a is None or a.exit_reason not in ("SL", "LOCK"):
+            m["early_kline_check"] = {"failed": ["the first difference is not a replay stop exit"]}
+            continue
+        sym, mm = a.symbol, _minute(a.exit_time)
+        m["trigger"] = {"symbol": sym, "minute": mm, "utc": _hm(mm)}
+        if live and (mm, sym) in live:                       # (i) the bars live stepped on
+            # the position's minutes up to the trigger: every live bar that differs from the final kline must be
+            # an early read of it, and there must be one (the trigger minute's, else an earlier one that kept a
+            # lock lower)
+            diff_t, trunc_t = [], []
+            for t in range(max(start, _minute(a.entry_time)), mm + MIN, MIN):
+                lb, fb = live.get((t, sym)), bar_at(t, sym)
+                if lb is None or fb is None:
+                    continue
+                if any(lb.get(k) is None or float(lb[k]) != getattr(fb, k) for k in ("open", "high", "low", "close")) \
+                        or (lb.get("volume") is not None and fb.volume is not None
+                            and float(lb["volume"]) != fb.volume):
+                    diff_t.append(t)
+                    if truncated_bar(lb, fb):
+                        trunc_t.append(t)
+            at = mm if mm in trunc_t else (trunc_t[-1] if trunc_t else mm)
+            lb, fb = live[(at, sym)], bar_at(at, sym)
+            proof = {"source": "live_bars", "symbol": sym, "minute": at, "utc": _hm(at), "trigger_minute": mm,
+                     "live_bar": lb, "final_bar": _bar_dict(fb), "early_minutes": [_hm(t) for t in trunc_t],
+                     "processed_ms_after_close": None if lb.get("processed_at") is None
+                     else int(lb["processed_at"]) - (at + MIN)}
+            if aid in live_mism:
+                m.update(label=LIVE_BARS_PARITY_KO, live_bars_replay="mismatch",
+                         early_kline_check={"failed": ["still differs when replayed on live's own bars"], **proof})
+            elif trunc_t and len(trunc_t) == len(diff_t):
+                m.update(label=EARLY_KLINE_KO, early_kline=True, proof=proof)
+            else:
+                m["early_kline_check"] = {"failed": ["live's bars before the exit are not early reads of the final "
+                                                     "klines"], "other_minutes": [_hm(t) for t in diff_t
+                                                                                  if t not in trunc_t], **proof}
+            continue
+        groups.setdefault((sym, mm), []).append((m, a, b))
+    for k, ((sym, mm), items) in enumerate(sorted(groups.items(), key=lambda kv: kv[0][1])):   # (ii) trades
+        try:
+            if k >= AGG_MAX_MINUTES:
+                raise RuntimeError(f"more than {AGG_MAX_MINUTES} coin-minutes to check")
+            trades, err = agg_trades(rest, sym, mm, mm + MIN - 1), None
+        except Exception as exc:  # noqa: BLE001  (no proof: the mismatch stays unexplained)
+            trades, err = None, f"{type(exc).__name__}: {exc}"[:200]
+        results = []
+        for m, a, b in items:
+            bad, proof = early_shape(a, b, bar_at, slip)
+            shape_ok = not bad
+            if trades is None:
+                bad.append(f"aggTrades not read: {err}")
+            else:
+                tb, proof["trades"] = trade_evidence(trades, bar_at(mm, sym), int(a.side), a.stop_price, mm,
+                                                     window_ms)
+                bad += tb
+            hi = int(b["exit_time"]) + FEED_WARN_WINDOW_MS if b else mm + MIN + FEED_WARN_WINDOW_MS
+            warns = feed_warnings(conn, sym, mm, hi)
+            if warns is None:
+                bad.append("paper3.db alerts not readable")
+            elif warns:
+                bad.append(f"feed warning between the minute and the live exit: {warns[0]['text'][:120]}")
+                proof["feed_warnings"] = warns[:5]
+            proof.update(source="aggTrades", symbol=sym, minute=mm, utc=_hm(mm),
+                         accounts=[x[0]["account_id"] for x in items])
+            results.append((m, bad, proof, shape_ok))
+        every = all(not bad for _, bad, _, _ in results)
+        for m, bad, proof, shape_ok in results:
+            if every:
+                m.update(label=EARLY_KLINE_KO, early_kline=True, proof=proof)
+                continue
+            m["early_kline_check"] = {"failed": bad or ["another account of the same coin-minute was not explained"],
+                                      **proof}
+            if shape_ok:
+                m["label"] = EARLY_SUSPECT_KO
+    events: dict[tuple, list] = {}
+    for m in mism:
+        if m.get("early_kline"):
+            p = m["proof"]
+            events.setdefault((p["symbol"], p["minute"], p["source"]), []).append(m["account_id"])
+    info["early_kline"] = sum(len(v) for v in events.values())
+    info["early_kline_events"] = [{"symbol": s, "minute": t, "utc": _hm(t), "source": src, "accounts": v}
+                                  for (s, t, src), v in sorted(events.items(), key=lambda kv: kv[0][1])]
+    return info
 
 
 # ---------------------------------------------------------------- 2. shadows
@@ -424,7 +764,7 @@ def fill_cost_report(conn, start: int, end: int) -> Optional[dict]:
 
 
 def run_day(conn, out: sqlite3.Connection, rest: BinanceREST, settings: Settings, brackets, specs,
-            day: str, horizon_days: int = 3) -> dict:
+            day: str, horizon_days: int = 3, early_window_ms: int = EARLY_WINDOW_MS) -> dict:
     start = int(dt.datetime.strptime(day, "%Y-%m-%d").replace(tzinfo=dt.timezone.utc).timestamp() * 1000)
     end = start + DAY_MS
     now = rest.server_time()
@@ -439,14 +779,23 @@ def run_day(conn, out: sqlite3.Connection, rest: BinanceREST, settings: Settings
         mism = []
     else:
         ext = extras_of(conn)
-        rep = replay(settings, brackets, specs, json.loads(snap[0]), day_signals(conn, start, end, with_data=bool(ext)),
-                     day_steps, extras=ext)
-        mism = compare({a: [t for t in ts if t.exit_time < end] for a, ts in rep.items()},
-                       stored_trades(conn, start, end))
+        snap_d = json.loads(snap[0])
+        sigs = day_signals(conn, start, end, with_data=bool(ext))
+        rep = replay(settings, brackets, specs, snap_d, sigs, day_steps, extras=ext)
+        rep_day = {a: [t for t in ts if t.exit_time < end] for a, ts in rep.items()}
+        stored = stored_trades(conn, start, end)
+        mism = compare(rep_day, stored)
         if ext:
             label_crash_gaps(mism, ext, conn)
         gaps = sum(1 for m in mism if m.get("crash_gap"))
-        report["parity"] = {"accounts": len(rep), "mismatched_accounts": len(mism) - gaps}
+        early = explain_mismatches(conn, rest, settings, brackets, specs, snap_d, sigs, day_steps, rep_day, stored,
+                                   mism, start, end, extras=ext, window_ms=early_window_ms)
+        n_early = early["early_kline"]
+        report["parity"] = {"accounts": len(rep), "mismatched_accounts": len(mism) - gaps - n_early}
+        if n_early:
+            report["parity"].update(early_kline=n_early, early_kline_events=early["early_kline_events"])
+        if early.get("live_bars") is not None:
+            report["parity"]["live_bars"] = {"bars": early["live_bars"], **(early.get("live_bars_replay") or {})}
         if ext:
             report["parity"].update(extra_accounts=sum(1 for a in rep if a in ext), crash_gaps=gaps)
     sh = shadows(settings, brackets, specs, conn, day, start, end, steps)
@@ -488,18 +837,30 @@ def run_day(conn, out: sqlite3.Connection, rest: BinanceREST, settings: Settings
 def notify_report(report: dict, notifier, trades_day: Optional[int] = None) -> list[tuple[str, str]]:
     """Owner alerts from one nightly report (routing in docs/paper-v3-rules-addendum.md):
     a parity mismatch or a missing 00:00 snapshot is loud (CRITICAL/WARN), data gaps
-    are WARN, and the one-line summary is a silent INFO message."""
+    are WARN, and the one-line summary is a silent INFO message. Mismatches proven to be early 1m klines
+    (``parity.early_kline``) are not counted in ``mismatched_accounts``: when they are all there is, one WARN
+    instead of the CRITICAL (and the agents open no incident meeting for them)."""
     day = report["day"]
     msgs = []
     par = report.get("parity")
     if isinstance(par, dict):
+        early = int(par.get("early_kline") or 0)
         if par["mismatched_accounts"]:
+            more = f" (그 밖에 {early}개는 '1분봉을 확정 전에 읽음'으로 확인됨)" if early else ""
             msgs.append((CRITICAL, f"[{day}] 재계산 불일치: 계좌 {par['mismatched_accounts']}개의 거래가 "
-                                   "paper와 다릅니다. 운영 감사관 확인 필요 (daily3.db mismatches)"))
+                                   f"paper와 다릅니다. 운영 감사관 확인 필요 (daily3.db mismatches){more}"))
+        elif early:
+            msgs.append((WARN, f"[{day}] 재계산 차이 {early}개 계좌: 모두 '1분봉을 확정 전에 읽음'으로 확인됨"
+                               f"(계산 오류 아님, {EARLY_DOC})"))
+        only_live = (par.get("live_bars") or {}).get("only_on_live_bars") or []
+        if only_live:
+            msgs.append((WARN, f"[{day}] 봇이 쓴 1분봉으로 다시 계산하면 계좌 {len(only_live)}개가 paper와 다릅니다 "
+                               "(완성된 1분봉으로는 일치, 기록 확인 필요: daily3.db reports)"))
         if par.get("crash_gaps"):
             msgs.append((WARN, f"[{day}] {CRASH_GAP_KO}: 추가 계좌 {par['crash_gaps']}개가 재시작 때 신호 하나를 놓쳤습니다 "
                                "(원래 195개 계좌와는 무관, daily3.db mismatches)"))
-        par_txt = f"재계산 일치 {par['accounts'] - par['mismatched_accounts'] - par.get('crash_gaps', 0)}/{par['accounts']}"
+        ok = par['accounts'] - par['mismatched_accounts'] - par.get('crash_gaps', 0) - early
+        par_txt = f"재계산 일치 {ok}/{par['accounts']}" + (f" (확정 전 1분봉 {early})" if early else "")
     else:
         msgs.append((WARN, f"[{day}] 재계산 못 함: 그날 00:00 상태 저장이 없습니다 (봇이 멈춰 있었음)"))
         par_txt = "재계산 못 함"
@@ -530,6 +891,11 @@ def main(argv: Optional[list[str]] = None) -> int:
     ap.add_argument("--day")
     ap.add_argument("--brackets")
     ap.add_argument("--allow-example-brackets", action="store_true")
+    ap.add_argument("--no-notify", action="store_true",
+                    help="write the report but send no Telegram (e.g. re-running a past day to relabel it)")
+    ap.add_argument("--early-window-ms", type=int, default=EARLY_WINDOW_MS,
+                    help="early 1m kline proof: the trade that reached the stop must be this close to the end of "
+                         "the minute (default %(default)s)")
     args = ap.parse_args(argv)
     rest = _rest()
     conn = sqlite3.connect(f"file:{args.db}?mode=ro", uri=True)
@@ -542,11 +908,12 @@ def main(argv: Optional[list[str]] = None) -> int:
     out = sqlite3.connect(args.out)
     out.execute("PRAGMA journal_mode=WAL")
     out.executescript(SCHEMA)
-    report = run_day(conn, out, rest, settings, brackets, specs, day)
+    report = run_day(conn, out, rest, settings, brackets, specs, day, early_window_ms=args.early_window_ms)
     start = int(dt.datetime.strptime(day, "%Y-%m-%d").replace(tzinfo=dt.timezone.utc).timestamp() * 1000)
     n = conn.execute("SELECT COUNT(*) FROM trades WHERE exit_time >= ? AND exit_time < ?",
                      (start, start + DAY_MS)).fetchone()[0]
-    notify_report(report, _notifier(), n)
+    if not args.no_notify:
+        notify_report(report, _notifier(), n)
     print(json.dumps(report, indent=1, default=str))
     return 0
 

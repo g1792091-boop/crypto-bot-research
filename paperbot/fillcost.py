@@ -21,6 +21,14 @@ symbol with an event per minute (weight 5 at 100 levels), at most six a minute.
 Only the original accounts' events request a book. An extra account's event (paperbot/extras.py) reuses a
 book fetched for the 195 in the same step, else it is recorded as ``status = 'skipped'``: a request runs
 before the 195's next signal compute and would move their reference prices and delays.
+
+The bars live used (records only, option 3a of the 2026-10-03 parity diagnosis): the call that may fetch a book
+(``fetch=True``, the 195's call in live3) also returns one ``event = 'bar'`` row per traded coin of the step,
+with the 1m bar exactly as the accounts stepped on it (open/high/low/close/volume, mark OHLC) and
+``processed_at`` (the runner's clock when it handled the step). Store3.fill_costs sends these rows to the
+``live_bars`` table, never to ``fill_costs``. The nightly check replays the day on them to tell a 1m kline the
+feed read before Binance had folded in the minute's last trades ("early_kline") from an engine problem
+(paperbot/daily3.py). Building them is a few dicts per minute and can never raise into the runner.
 """
 
 from __future__ import annotations
@@ -54,6 +62,21 @@ def book_cost(levels: Iterable, notional: float, side: int, best: float, mid: fl
             "levels": used, "enough": bool(enough), "filled_notional": cost}
 
 
+BAR_FIELDS = ("open", "high", "low", "close", "volume", "mark_open", "mark_high", "mark_low", "mark_close")
+
+
+def bar_rows(ts: int, bars: dict, now_ms: int) -> list[dict]:
+    """One ``event = 'bar'`` row per coin of the step: the bar as the accounts stepped on it."""
+    out = []
+    for sym, b in bars.items():
+        r = {"ts": ts, "event": "bar", "symbol": sym, "close_time": b.close_time, "processed_at": now_ms}
+        for k in BAR_FIELDS:
+            v = getattr(b, k, None)
+            r[k] = None if v is None else float(v)
+        out.append(r)
+    return out
+
+
 def _pos(e) -> Optional[tuple]:
     p = e.position
     return None if p is None else (p.symbol, p.side, p.qty, p.entry_time, p.entry_price)
@@ -70,6 +93,7 @@ class FillProbe:
         self.limit = limit
         self.max_age_ms = max_age_ms
         self.errors = 0
+        self.bar_errors = 0
 
     def before(self, engines: dict) -> dict:
         return {aid: _pos(e) for aid, e in engines.items()}
@@ -95,10 +119,20 @@ class FillProbe:
         """Rows for ``engines``' entries and exits of the step. ``books`` (symbol -> fetched book) is filled in
         and may be shared between calls of the same step. ``fetch=False`` never requests a book: an event on a
         symbol without a book already fetched in this step is recorded as ``status = 'skipped'`` (the live
-        runner uses it for the extra accounts, so they never add a request before the 195's next compute)."""
+        runner uses it for the extra accounts, so they never add a request before the 195's next compute).
+
+        The ``fetch=True`` call (the 195's) also returns the step's bars as ``event = 'bar'`` rows (``bar_rows``),
+        after the entry / exit rows; the ``fetch=False`` call never does, so each bar is recorded once."""
+        bar_recs: list[dict] = []
+        if fetch:
+            try:
+                bar_recs = bar_rows(ts, bars, now_ms)
+            except Exception:  # noqa: BLE001  (a record only: never stop the runner, never drop the fill rows)
+                self.bar_errors += 1
+                bar_recs = []
         rows = self.events(ts, engines, snap, bars)
         if not rows:
-            return []
+            return bar_recs
         stale = now_ms - ts > self.max_age_ms
         books = {} if books is None else books
         for r in rows:
@@ -127,7 +161,7 @@ class FillProbe:
             r.update(book_cost(lv, r["notional"], r["order_side"], best, (bid + ask) / 2),
                      best=best, spread=(ask - bid) / ((ask + bid) / 2), status="ok",
                      book_ts=bk.get("T") or bk.get("E"))
-        return rows
+        return rows + bar_recs
 
 
 def _pct(xs: list, q: float) -> Optional[float]:

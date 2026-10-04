@@ -124,3 +124,88 @@ def test_an_extra_accounts_fill_never_fetches_an_order_book(tmp_path):
     assert rows["S@5m~c1"]["status"] == "ok" and rows["S@5m~c1"]["best"] == 100.2   # the 195's book, reused
     assert rows["NL1@5m"]["status"] == "skipped" and rows["NL1@5m"]["event"] == "entry"
     assert all(book.engines[a].position is not None for a in ("S@5m", "S@5m~c1", "NL1@5m"))
+
+
+# ---------------------------------------------------------------------------- live bars (option 3a: records only)
+def _live_bars(store):
+    return store.conn.execute("SELECT ts, symbol, open, high, low, close, volume, processed_at FROM live_bars "
+                              "ORDER BY ts, symbol").fetchall()
+
+
+def test_the_bars_live_stepped_on_are_recorded_once_per_coin_per_step_from_the_195s_call_only(tmp_path):
+    """One live_bars row per coin per stepped minute, written by the 195's FillProbe call (fetch=True); the extras'
+    call (fetch=False) adds none, fill_costs keeps only the entry / exit rows."""
+    depth = Depth()
+    store = Store3(str(tmp_path / "lb.db"))
+    book = AccountBook(S, {s: Brackets.example() for s in V3_SYMBOLS}, store)
+    book.open_accounts([{"strategy": "S", "timeframe": "5m", "kind": "strategy"},
+                        {"strategy": "S", "timeframe": "5m", "kind": "copy", "account_id": "S@5m~c1",
+                         "parent": "S@5m"}], 0)
+    probe = FillProbe(depth, S.slippage_frac)
+    run = Runner3(book, FakeService(10 * MIN), store, None, V3_SYMBOLS, lambda: 11 * MIN + 1_234,
+                  lambda: {"BTCUSDT": (100.1, 100.2)}, fills=probe)
+    st = steps(0, 11)
+    run.process(st)
+    rows = _live_bars(store)
+    assert len(rows) == 11 * len(V3_SYMBOLS) == len({(r[0], r[1]) for r in rows})
+    by = {(r[0], r[1]): r for r in rows}
+    for ts, bars, _ in st:
+        for sym, b in bars.items():
+            assert by[(ts, sym)][2:7] == (b.open, b.high, b.low, b.close, b.volume)
+            assert by[(ts, sym)][7] == 11 * MIN + 1_234                 # the runner's clock when it handled the step
+    [e] = _rows(store)                                                  # fill_costs: the entry only, as before
+    assert e["event"] == "entry" and depth.calls == ["BTCUSDT"]
+    # the extras' call never returns bar rows; the 195's call returns them even without an entry or exit
+    ts, bars, _ = steps(11, 12)[0]
+    assert probe.after(ts, {}, {}, bars, 0, fetch=False) == []
+    assert [r["event"] for r in probe.after(ts, {}, {}, bars, 0)] == ["bar"] * len(V3_SYMBOLS)
+
+
+def test_a_failing_live_bar_record_never_raises_and_never_changes_trading(tmp_path):
+    from paperbot.engine import engine_state
+
+    def world(name, fills=True):
+        (d := tmp_path / name).mkdir()
+        store = Store3(str(d / "p.db"))
+        book = AccountBook(S, {s: Brackets.example() for s in V3_SYMBOLS}, store)
+        book.open_accounts([{"strategy": "S", "timeframe": "5m", "kind": "strategy"}], 0)
+        probe = FillProbe(Depth(), S.slippage_frac) if fills else None
+        return store, book, Runner3(book, FakeService(10 * MIN), store, None, V3_SYMBOLS, lambda: 11 * MIN,
+                                    lambda: {"BTCUSDT": (100.1, 100.2)}, fills=probe), probe
+
+    crash = [(11 * MIN, {s: Bar(s, 11 * MIN, 12 * MIN - 1, 100.0, 100.0, 90.0, 91.0, volume=1.0)
+                         for s in V3_SYMBOLS}, {})]
+    control_store, control, crun, _ = world("control", fills=False)
+    crun.process(steps(0, 11))
+    crun.process(crash)
+    want = {a: engine_state(e) for a, e in control.engines.items()}
+    assert control_store.conn.execute("SELECT COUNT(*) FROM trades").fetchone()[0] == 1
+
+    # 1) the live_bars insert fails (table gone): fill costs still recorded, one WARN, trading identical
+    store, book, run, probe = world("table_gone")
+    store.conn.execute("DROP TABLE live_bars")
+    run.process(steps(0, 11))
+    run.process(crash)
+    assert {a: engine_state(e) for a, e in book.engines.items()} == want
+    assert [r["event"] for r in _rows(store)] == ["entry", "exit"]
+    assert store.live_bar_errors == 12 and probe.errors == 0
+    assert [t for (t,) in store.conn.execute("SELECT text FROM alerts WHERE text LIKE 'live bar record failed%'")] \
+        and store.conn.execute("SELECT COUNT(*) FROM alerts WHERE text LIKE 'live bar%'").fetchone()[0] == 1
+
+    # 2) the whole record call raises: the runner goes on (one WARN per failed step), trading identical
+    store, book, run, probe = world("store_down")
+
+    def boom(rows):
+        raise RuntimeError("disk full")
+    store.fill_costs = boom
+    run.process(steps(0, 11))
+    run.process(crash)
+    assert {a: engine_state(e) for a, e in book.engines.items()} == want
+
+    # 3) a bar that cannot be read: no bar rows, the entry / exit rows unchanged
+    class Broken:
+        @property
+        def close_time(self):
+            raise ValueError("bad bar")
+    p = FillProbe(Depth(), S.slippage_frac)
+    assert p.after(0, {}, {}, {"BTCUSDT": Broken()}, 0) == [] and p.bar_errors == 1
