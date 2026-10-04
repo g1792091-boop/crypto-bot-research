@@ -20,6 +20,7 @@ const KEY = "coin:neural";
 const START = 10000;          // 코인별 가상 증거금
 const LR = 0.06;              // 학습률 (맞으면 가중치↑ 틀리면↓)
 const FEE = 0.0006;           // 왕복 수수료+슬리피지 가정
+const MAXHOLD = 8 * 60 * 1000; // 최대 보유 8분 → 시간청산(짧은 세션에도 체결·학습이 쌓이게)
 const cl = (v, lo = -1, hi = 1) => Math.max(lo, Math.min(hi, v));
 
 // ── 피처 뉴런: 캔들에서 각자 [-1,1] 신호를 낸다 ──
@@ -71,7 +72,7 @@ export function decide(feat) {
 export async function step() {
   load();
   for (const [ko, sym] of COINS) {
-    let cs; try { cs = (await candlesFor({ market: sym, exchange: "binancef", timeframe: "5" }, 300)).cs; } catch (e) { continue; }
+    let cs; try { cs = (await candlesFor({ market: sym, exchange: "binancef", timeframe: "1" }, 300)).cs; } catch (e) { continue; }
     if (!cs || cs.length < 60) continue;
     const price = cs.at(-1).c, feat = featuresOf(cs), d = decide(feat);
     S.feat[sym] = feat; S.dec[sym] = { ...d, price };
@@ -81,8 +82,8 @@ export async function step() {
     if (p) {
       const roe = (price - p.entry) / p.entry * p.side * 100;
       p.roe = +roe.toFixed(2); p.price = price;
-      const flip = d.dir !== 0 && d.dir !== p.side, hardSL = roe < -3.5, hardTP = roe > 6;
-      if (flip || hardSL || hardTP) closePos(sym, price, flip ? "반대신호" : hardSL ? "손절" : "익절");
+      const flip = d.dir !== 0 && d.dir !== p.side, hardSL = roe < -2, hardTP = roe > 3, timeout = Date.now() - p.t > MAXHOLD;
+      if (flip || hardSL || hardTP || timeout) closePos(sym, price, flip ? "반대신호" : hardSL ? "손절" : hardTP ? "익절" : "시간청산");
     }
     // 무포지션 + 신호 있으면 진입
     if (!S.pos[sym] && d.dir !== 0 && d.conf >= 25) openPos(sym, ko, d.dir, price, feat);
@@ -120,7 +121,7 @@ function model(name) { return S.models[name] || (S.models[name] = { prov: "", pn
 function markModels(sym, price) {
   for (const name in S.models) { const M = S.models[name], p = M.pos[sym]; if (!p) continue;
     p.roe = +((price - p.entry) / p.entry * p.side * 100).toFixed(2); p.price = price;
-    if (p.roe < -3.5 || p.roe > 6) closeModelPos(name, sym, price, p.roe < 0 ? "손절" : "익절"); }
+    if (p.roe < -2 || p.roe > 3 || Date.now() - p.t > MAXHOLD) closeModelPos(name, sym, price, p.roe < -2 ? "손절" : p.roe > 3 ? "익절" : "시간청산"); }
 }
 function closeModelPos(name, sym, price, why) {
   const M = model(name), p = M.pos[sym]; if (!p) return;
