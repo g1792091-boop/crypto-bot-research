@@ -176,6 +176,7 @@ function show(v) {
   if (v === "status") loadStatus();
   if (v === "rooms" && typeof loadRooms === "function") loadRooms();
   if (v === "digest" && typeof loadDigest === "function") loadDigest();
+  if (v === "office" && typeof loadOffice === "function") loadOffice();
   if (v === "strat" && typeof loadStrat === "function") loadStrat();
   if (v === "pos" && typeof loadPos === "function") loadPos();
   if (v === "market" && typeof loadMarket === "function") { if (typeof renderMarket === "function") renderMarket(); loadMarket(); }
@@ -727,6 +728,7 @@ function stream() {
     const d = JSON.parse(ev.data);
     heartbeat(d.heartbeat);
     if (d.rooms && Object.keys(d.rooms).length && typeof onRoomsStream === "function") onRoomsStream(d.rooms);
+    if (d.rooms && Object.keys(d.rooms).length && typeof onOfficeStream === "function") onOfficeStream();
     if (Object.keys(d.changed).length) loadBoard();
     d.trades.forEach((t) => toast(`${idName(t.account_id)} ${coin(t.symbol)} ${REASON_KO[t.exit_reason] || t.exit_reason} ${pct(t.roe)} → $${fmt(t.equity_after)}`));
     d.alerts.filter(toastWorthy).forEach((a) => toast(`⚠ ${alertKo(a.text)}`));

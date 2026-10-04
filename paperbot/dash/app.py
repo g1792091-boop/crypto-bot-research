@@ -26,6 +26,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import contextlib
+import datetime
 import hashlib
 import hmac
 import json
@@ -35,7 +36,7 @@ import sys
 import time
 import urllib.parse
 import urllib.request
-from typing import Iterator, Optional
+from typing import Any, Iterator, Optional
 
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
@@ -742,6 +743,72 @@ def room_schedule_ko(room_id: str, hours: Optional[dict] = None) -> str:
     }.get(room_id, "")
 
 
+# ------------------------------------------------ meeting room view (/api/office): read-only, from agents3.db
+OFFICE_TTL_S = 4             # /api/office reused this long (the page polls every few seconds while it is open)
+OFFICE_RECENT = 6            # finished meetings of today shown under the office
+OFFICE_LINE = 90             # characters of a speech bubble (the first sentence of the real message)
+OFFICE_SPEAKING = ("analysis", "challenge", "expert", "revision", "verdict", "summary")   # = digest.SPEAKING
+OFFICE_STRATEGY_EXPERTS = ("entry_timing", "exit_timing", "whatif")                       # = rooms.STRATEGY_EXPERTS
+# the daily meetings the hours in 'policy:hours' stand for: (hour key of _trigger_defaults, trigger, rooms, where)
+OFFICE_DAILY = (("morning_hour_kst", "morning", ("team:market",), "시장분석팀"),
+                ("ranking_hour_kst", "ranking", ("team:review",), "손익 복기팀"),
+                ("tf_split_hour_kst", "tf_split", (), "성적이 갈린 매매법 방"),
+                ("evening_hour_kst", "evening", ("team:review", "team:lead"), "손익 복기팀 → 총괄"))
+KST_TZ = datetime.timezone(datetime.timedelta(hours=9))
+
+
+def _trigger_ko() -> dict:
+    try:
+        from ..agents.rooms import TRIGGER_KO
+        return dict(TRIGGER_KO)
+    except Exception:  # the engine is optional for the dashboard
+        return {"morning": "아침 회의", "evening": "저녁 점검", "ranking": "순위 검토", "tf_split": "봉 비교 회의"}
+
+
+def bubble_line(text: str, n: int = OFFICE_LINE) -> str:
+    """The first sentence of a room message, for a speech bubble: the first line that is not the
+    '↳ 누구에게 동의: …' reply line (that one when it is all there is), list marks dropped, cut at the
+    first sentence end and at ``n`` characters. Only ever a piece of the real message."""
+    import re
+    lines = [ln.strip() for ln in str(text or "").splitlines() if ln.strip()]
+    if not lines:
+        return ""
+    s = next((ln for ln in lines if not ln.startswith("↳")), lines[0])
+    s = re.sub(r"^(?:[-•]|\d+\.)\s+", "", s)
+    m = re.match(r"(.+?[.!?。])(?:\s|$)", s)
+    if m:
+        s = m.group(1)
+    s = " ".join(s.split())
+    return s if len(s) <= n else s[:n - 1].rstrip() + "…"
+
+
+def office_schedule(now_ms: int, hours: Optional[dict] = None) -> dict:
+    """Today's fixed meeting hours (KST) from the hours the agents tick published ('policy:hours', else the
+    server defaults) and the next one after ``now_ms``. Only the daily meetings the tick names there; meetings
+    that open on their own (losses, incidents, owner posts, the lab) have no hour."""
+    d = _trigger_defaults(hours)
+    tk = _trigger_ko()
+    slots = []
+    for key, trig, rooms, where in OFFICE_DAILY:
+        h = d.get(key)
+        if isinstance(h, int) and not isinstance(h, bool) and 0 <= h <= 23:
+            slots.append({"hour": h, "hhmm": f"{h:02d}:00", "trigger": trig, "trigger_ko": tk.get(trig, trig),
+                          "room_ids": list(rooms), "where": where})
+    slots.sort(key=lambda s: s["hour"])
+    now = datetime.datetime.fromtimestamp(now_ms / 1000, tz=KST_TZ)
+    day0 = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    nxt = None
+    for s in slots:
+        if s["hour"] * 60 > now.hour * 60 + now.minute:
+            nxt = {**s, "at_ms": int((day0 + datetime.timedelta(hours=s["hour"])).timestamp() * 1000), "tomorrow": False}
+            break
+    if nxt is None and slots:
+        s = slots[0]
+        nxt = {**s, "at_ms": int((day0 + datetime.timedelta(days=1, hours=s["hour"])).timestamp() * 1000),
+               "tomorrow": True}
+    return {"slots": slots, "next": nxt, "source": "tick" if hours else "defaults"}
+
+
 def same_origin(req: Request) -> bool:
     """Write endpoints: refuse a request whose Origin header is present and is not this site, scheme
     included (http://host is not https://host), and any browser request marked cross-site. The
@@ -856,7 +923,9 @@ class Rooms:
                 r["open_proposals"] = waiting.get(r["room_id"], 0)
         return {"ready": ready, "now": int(time.time() * 1000) if now_ms is None else now_ms,
                 "last_tick": last_tick, "ai": ai, "tick_every_ms": TICK_EVERY_MS, "rounds_per_room_day": per_day,
-                "max_id": max((int(r.get("last_id") or 0) for r in out), default=0), "rooms": out}
+                "max_id": max((int(r.get("last_id") or 0) for r in out), default=0), "rooms": out,
+                # the meeting hours the schedule lines use (the tick's 'policy:hours', else the server defaults)
+                "hours": _trigger_defaults(hours)}
 
     @staticmethod
     def _ai_failing(a: Optional[sqlite3.Connection]) -> Optional[dict]:
@@ -967,7 +1036,7 @@ class Rooms:
             spec.update({k: got[k] for k in ("title", "members") if got.get(k)})
         spec["members_info"] = [self.roles.get(m, {"id": m, "name": self.R.role_name(m), "team": "", "duty": ""})
                                 for m in spec["members"]]
-        spec["schedule_ko"] = room_schedule_ko(room_id)
+        spec["schedule_ko"] = room_schedule_ko(room_id, self.hours())
         return spec
 
     def pending_owner(self, a: Optional[sqlite3.Connection], room_id: str) -> list[dict]:
@@ -1176,6 +1245,169 @@ class Rooms:
     def last_id(self) -> int:
         with self.ro(self.agents_db) as a:
             return self.R.last_message_id(a)
+
+    # -- the meeting room view (/api/office)
+    def _role(self, role: str) -> dict:
+        """{name, short name, team} of a room member; a specialist is named after its strategy."""
+        from ..agents.roster3 import STRATEGY_KO
+        if role.startswith("spec_"):
+            s = role[len("spec_"):]
+            return {"name": self.R.role_name(role), "label": STRATEGY_KO.get(s, s), "team": "specialist"}
+        r = self.roles.get(role)
+        return {"name": r["name"] if r else self.R.role_name(role), "label": None, "team": r["team"] if r else ""}
+
+    @staticmethod
+    def _consumed(msgs: list[dict]) -> list[str]:
+        """The turns of a meeting so far, in order: a role that spoke, or whose turn code skipped (the room's
+        notice '… 차례를 건너뜁니다' / '이번 차례는 건너뜁니다', data.role)."""
+        out = []
+        for m in msgs:
+            if m["kind"] in OFFICE_SPEAKING and m["role"] not in ("code", "system", "owner"):
+                out.append(m["role"])
+            elif m["role"] == "code" and m["kind"] == "system" and "건너뜁니다" in (m["text"] or ""):
+                d = m.get("_data")
+                if isinstance(d, dict) and isinstance(d.get("role"), str):
+                    out.append(d["role"])
+        return out
+
+    def _expected(self, room_id: str, trigger: str, data: Any, msgs: list[dict]) -> tuple[Optional[str], list[str]]:
+        """(the role whose turn comes next when the meeting's own order says so, else None; the meeting's
+        planned roles in order, as far as they are known). Same order as the agents' code (rooms.team_plan,
+        rooms._strategy_round), read only: a turn that depends on an answer still to come is not guessed."""
+        done = self._consumed(msgs)
+        if room_id.startswith("strat:"):
+            spec = "spec_" + room_id[len("strat:"):]
+            plan = [spec, "devils_advocate"]
+            if not done:
+                return spec, plan
+            if done == [spec]:
+                return "devils_advocate", plan
+            if len(done) == 3 and done[:2] == plan and done[2] in OFFICE_STRATEGY_EXPERTS:
+                return spec, plan + [done[2]]          # the specialist's final answer after the expert
+            return None, plan            # after the challenge: an expert, or the end (it depends on the answers)
+        try:
+            from ..agents import rooms as RM
+            from ..agents import triggers as TR
+            plan = [r for r, _ in RM.team_plan(TR.Due(room_id, trigger, 0, data if isinstance(data, dict) else {},
+                                                      trigger))]
+        except Exception:  # the engine is optional for the dashboard; a newer plan shape: no guess
+            return None, []
+        ptr = 0
+        for r in done:
+            if r not in plan[ptr:]:
+                return None, plan            # e.g. a staff member the owners named (@) answered first
+            ptr = plan.index(r, ptr) + 1
+        if trigger == "research" and ptr == 1:
+            return None, plan                # the lab's skeptic speaks only when a proposed spec is new
+        return (plan[ptr] if ptr < len(plan) else None), plan
+
+    def _round_msgs(self, a: sqlite3.Connection, room_id: str, round_id: int, limit: int = 80) -> list[dict]:
+        rows = self.R._dicts(a.execute(
+            "SELECT id, ts, role, kind, text, data FROM messages WHERE room_id = ? AND round_id = ? "
+            "ORDER BY id DESC LIMIT ?", (room_id, round_id, limit)))[::-1]
+        for m in rows:
+            m["_data"] = self.R._loads(m.pop("data")) if m["role"] == "code" or m["kind"] in OFFICE_SPEAKING else None
+        return rows
+
+    def _meeting_now(self, a: sqlite3.Connection, r: dict, tk: dict) -> dict:
+        from ..agents.roster3 import STRATEGY_KO
+        rid = r["room_id"]
+        td = self.R._loads(r["trigger_data"]) or {}
+        msgs = self._round_msgs(a, rid, int(r["round_id"]))
+        turns, lines = [], {}
+        for m in msgs:
+            if m["kind"] in OFFICE_SPEAKING and m["role"] not in ("code", "system", "owner"):
+                t = {"role": m["role"], "kind": m["kind"], "ts": m["ts"], "line": bubble_line(m["text"])}
+                turns.append(t)
+                lines[m["role"]] = t
+        try:
+            nxt, plan = self._expected(rid, r["trigger"], td, msgs)
+        except Exception:  # a turn order this code does not know: no guess
+            nxt, plan = None, []
+        last = msgs[-1] if msgs else None
+        code = None
+        if last is not None and last["role"] == "code" and last["kind"] in ("code_result", "system", "action") and (
+                not turns or last["ts"] >= turns[-1]["ts"]):
+            code = {"kind": last["kind"], "ts": last["ts"], "line": bubble_line(last["text"])}
+        people = list(dict.fromkeys([*plan, *(t["role"] for t in turns), *([nxt] if nxt else [])]))
+        strat = self.R.room_strategy(rid)
+        spec = self.specs.get(rid) or {}
+        return {"round_id": int(r["round_id"]), "room_id": rid, "kind": spec.get("kind") or (
+                    "strategy" if strat else "team"),
+                "title": spec.get("title") or STRATEGY_KO.get(strat or "", rid), "strategy": strat,
+                "trigger": r["trigger"], "trigger_ko": tk.get(r["trigger"], r["trigger"]),
+                "why": bubble_line(td.get("summary_ko") if isinstance(td, dict) else "", 120),
+                "started_ts": r["started_ts"], "turns": turns[-20:], "lines": lines,
+                "last_role": turns[-1]["role"] if turns else None, "next_role": nxt, "participants": people,
+                "code": code}
+
+    def office(self, now_ms: Optional[int] = None) -> dict:
+        """The meeting room view: meetings running now (who spoke, in order, the first sentence of each one's
+        latest message, whose turn comes next when the order says so), today's finished meetings with their
+        decision line, the latest strategy-room meetings, today's counts and the fixed meeting hours.
+        agents3.db read-only; bounded queries (index on rounds.status and on messages (room_id, id))."""
+        now = int(time.time() * 1000) if now_ms is None else int(now_ms)
+        day0 = self.R.kst_day_start_ms(now)
+        tk = _trigger_ko()
+        zones = [{"room_id": rid, "title": s["title"], "members": list(s["members"])}
+                 for rid, s in self.specs.items() if s["kind"] == "team"]
+        out: dict = {"ready": False, "now": now, "day": self.R.kst_day(now), "zones": zones,
+                     "strategy_members": list(self.R.STRATEGY_ROOM_ROLES), "running": [], "recent": [],
+                     "latest_strategy": [], "today": {"meetings": 0, "ai_calls": 0, "by_room": {}}}
+        with self.ro(self.agents_db) as a:
+            hours = self.hours(a)
+            out["schedule"] = office_schedule(now, hours)
+            if a is not None:
+                out["ready"] = True
+                try:
+                    if a.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'rounds'").fetchone():
+                        self._office_read(a, now, day0, tk, out)
+                except (sqlite3.Error, TypeError, ValueError) as exc:
+                    out["error"] = f"agents3.db를 읽지 못함: {type(exc).__name__}"
+        used = {m for z in zones for m in z["members"]} | set(out["strategy_members"])
+        for x in out["running"]:
+            used.update(x["participants"])
+            used.update(x["lines"])
+        for x in out["recent"]:
+            used.update(x["speakers"])
+        out["roles"] = {r: self._role(r) for r in sorted(used)}
+        return out
+
+    def _office_read(self, a: sqlite3.Connection, now: int, day0: int, tk: dict, out: dict) -> None:
+        from ..agents.roster3 import STRATEGY_KO
+        running = self.R._dicts(a.execute(
+            "SELECT round_id, room_id, trigger, trigger_data, started_ts FROM rounds WHERE status = 'running' "
+            "AND started_ts >= ? ORDER BY round_id DESC LIMIT 4", (now - self.R.RUNNING_FRESH_MS,)))
+        out["running"] = [self._meeting_now(a, r, tk) for r in running[::-1]]
+        by_room = {str(k): int(n) for k, n in a.execute(
+            "SELECT room_id, COUNT(*) FROM rounds WHERE started_ts >= ? GROUP BY room_id", (day0,))}
+        out["today"] = {"meetings": sum(by_room.values()), "ai_calls": int(self.R.usage_today(a, now)["calls"]),
+                        "by_room": by_room}
+        for r in self.R._dicts(a.execute(
+                "SELECT round_id, room_id, trigger, started_ts, ended_ts, status, decision, calls FROM rounds "
+                "WHERE started_ts >= ? AND status != 'running' ORDER BY round_id DESC LIMIT ?", (day0, OFFICE_RECENT))):
+            dec = self.R._loads(r["decision"])
+            speakers = list(dict.fromkeys(x[0] for x in a.execute(
+                "SELECT role FROM messages WHERE room_id = ? AND round_id = ? AND kind IN (%s) "
+                "AND role NOT IN ('code', 'system', 'owner') ORDER BY id LIMIT 40" % ",".join("?" * len(OFFICE_SPEAKING)),
+                (r["room_id"], r["round_id"], *OFFICE_SPEAKING))))
+            strat = self.R.room_strategy(r["room_id"])
+            out["recent"].append({
+                "round_id": int(r["round_id"]), "room_id": r["room_id"], "strategy": strat,
+                "title": (self.specs.get(r["room_id"]) or {}).get("title") or STRATEGY_KO.get(strat or "", r["room_id"]),
+                "trigger": r["trigger"], "trigger_ko": tk.get(r["trigger"], r["trigger"]), "status": r["status"],
+                "started_ts": r["started_ts"], "ended_ts": r["ended_ts"], "calls": int(r["calls"] or 0),
+                "decision": bubble_line((dec or {}).get("summary_ko", "") if isinstance(dec, dict) else "", 140),
+                "speakers": speakers})
+        for r in self.R._dicts(a.execute(
+                "SELECT round_id, room_id, trigger, started_ts, ended_ts, status FROM rounds "
+                "WHERE room_id LIKE 'strat:%' ORDER BY round_id DESC LIMIT 3")):
+            strat = self.R.room_strategy(r["room_id"])
+            out["latest_strategy"].append({
+                "round_id": int(r["round_id"]), "room_id": r["room_id"], "strategy": strat,
+                "title": STRATEGY_KO.get(strat or "", r["room_id"]), "trigger": r["trigger"],
+                "trigger_ko": tk.get(r["trigger"], r["trigger"]), "status": r["status"],
+                "started_ts": r["started_ts"], "ended_ts": r["ended_ts"]})
 
     # -- write side (inbox.db only)
     def ensure_inbox(self) -> None:
@@ -1591,6 +1823,17 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
     @app.get("/api/agents/usage")
     def get_agents_usage():
         return rooms.usage()
+
+    office_cache: dict = {}
+
+    @app.get("/api/office")
+    def get_office():
+        """The meeting room view (office.js): meetings running now with the real latest line of each speaker,
+        today's finished meetings, today's counts and the fixed meeting hours. Read-only, reused a few seconds."""
+        hit = office_cache.get("o")
+        if hit is None or time.time() - hit[0] > OFFICE_TTL_S:
+            office_cache["o"] = hit = (time.time(), rooms.office())
+        return hit[1]
 
     # ------------------------------------------------ meeting digest (paperbot/agents/digest.py: code only, read-only)
     digest_cache: dict = {}

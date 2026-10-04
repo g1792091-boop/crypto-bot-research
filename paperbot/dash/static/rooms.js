@@ -103,9 +103,10 @@ function agentsState(ov) {
 const agoKo = (age) => age == null ? "점검 기록 없음" : `마지막 점검 ${Math.round(age / 60000)}분 전`;
 // wait: why the tick does not answer this room's posts on its next turn (/api/rooms owner_wait), perDay:
 // the room's daily meeting cap. Only a running agent with no such wait may promise the next turn.
-function pendingHint(st, wait, perDay) {
+// kept: the fixed meetings whose AI share is kept (keptHoursKo); the server's default hours when not given
+function pendingHint(st, wait, perDay, kept = "08:00·14:00·22:00") {
   if (st === "ok" && wait === "room_full") return `이 방은 오늘 회의를 다 해서(하루 ${perDay || 3}번) 한국 시간 자정 뒤 첫 차례에 답합니다`;
-  if (st === "ok" && wait === "budget") return "오늘 두 분 글에 쓸 수 있는 AI 한도(사고 점검·08:00·14:00·22:00 회의 몫을 남긴 나머지, 하루 또는 최근 7일 한도)를 다 써서, 한도가 풀리는 대로(보통 한국 시간 자정 뒤) 답합니다";
+  if (st === "ok" && wait === "budget") return `오늘 두 분 글에 쓸 수 있는 AI 한도(사고 점검·${kept} 회의 몫을 남긴 나머지, 하루 또는 최근 7일 한도)를 다 써서, 한도가 풀리는 대로(보통 한국 시간 자정 뒤) 답합니다`;
   if (st === "ok" && wait === "given_up") return "이 글들을 다루는 회의를 두 번 마치지 못해 멈췄습니다(방의 알림 참고). 글을 하나 더 남기시면 다시 모입니다";
   if (st === "ok" && wait === "retrying") return "이 방 회의의 첫 호출이 잇달아 실패해, 이 회의만 잠시 쉬었다가(최대 4시간) 다시 열고 답합니다";
   if (st === "ok" && wait === "paused") return "Claude 사용 한도나 연결 문제로 회의를 잠시 멈췄습니다. 다시 열리면(보통 1시간 안, 길면 몇 시간) 답합니다";
@@ -113,7 +114,15 @@ function pendingHint(st, wait, perDay) {
   if (st === "new") return "에이전트가 돌기 시작하면 읽고 답합니다";
   return "에이전트가 멈춰 있어 아직 전달되지 않습니다";
 }
-const roomHint = () => pendingHint(agentsState(rs.ov).st, (curOv() || {}).owner_wait, (rs.ov || {}).rounds_per_room_day);
+const roomHint = () => pendingHint(agentsState(rs.ov).st, (curOv() || {}).owner_wait, (rs.ov || {}).rounds_per_room_day,
+  keptHoursKo((rs.ov || {}).hours));
+// "08:00·14:00·22:00": the fixed daily meetings of the 'scheduled' AI class (morning, ranking review, evening) at the
+// hours the agents tick published (/api/rooms hours = its 'policy:hours', else the server defaults); -1 = off
+function keptHoursKo(h) {
+  if (!h) return "08:00·14:00·22:00";
+  return [h.morning_hour_kst, h.ranking_hour_kst, h.evening_hour_kst].filter((x) => Number.isInteger(x) && x >= 0 && x <= 23)
+    .sort((a, b) => a - b).map((x) => String(x).padStart(2, "0") + ":00").join("·");
+}
 // An owner's approve/reject click is applied by code at the start of the next pass (before the login
 // check, so also in the 'login' state); while the agents are stopped nothing applies it.
 function decisionWhen(st) {
@@ -590,7 +599,7 @@ function renderRoomSide() {
       ${usage.classes.map((c) => `<div class="urow"><span>${esc(CLASS_NAME[c.class] || c.name_ko)}</span><span class="mono">${esc(c.calls)}${c.cap_calls ? " / " + esc(c.cap_calls) : ""}회 · 토큰 ${kfmt(c.tokens || 0)}${c.cap_tokens ? " / " + kfmt(c.cap_tokens) : ""}</span></div>${classBar(c)}`).join("")}
       ${usage.week ? `<div class="urow"><span>최근 7일 합계</span><span class="mono">${esc(usage.week.calls)}${usage.week.cap_calls ? " / " + esc(usage.week.cap_calls) : ""}</span></div>${bar(usage.week.calls, usage.week.cap_calls)}` : ""}
       <div class="hint">두 분의 Claude 구독 사용량을 함께 씁니다. 한도에 닿으면 회의를 다음으로 미룹니다.
-        하루 합계 중 사고 점검과 08:00·14:00·22:00 회의 몫(아직 안 쓴 부분)은 늘 비워 두므로, 다른 회의는 합계 막대가 다 차기 전에 멈춥니다.
+        하루 합계 중 사고 점검과 ${esc(keptHoursKo((rs.ov || {}).hours))} 회의 몫(아직 안 쓴 부분)은 늘 비워 두므로, 다른 회의는 합계 막대가 다 차기 전에 멈춥니다.
         호출이 크면 토큰 한도가 호출 수보다 먼저 닿습니다.</div></div>`;
   }
   $("r-side").innerHTML = h;

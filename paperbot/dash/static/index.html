@@ -18,6 +18,7 @@
     <button data-v="board">순위표</button>
     <button data-v="account">계좌</button>
     <button data-v="rooms" id="nav-rooms">에이전트 방<i class="ndot" hidden></i></button>
+    <button data-v="office">회의실</button>
     <button data-v="digest">회의 요약</button>
     <button data-v="signals">신호</button>
     <button data-v="status">서버 상태</button>
@@ -238,6 +239,9 @@
   </div>
 </section>
 
+<!-- ========================================================= meeting room (office.js): the rooms drawn as one office -->
+<section class="view" id="v-office"><div class="page"><div id="of-body"><p class="empty">불러오는 중…</p></div></div></section>
+
 <!-- ========================================================= meeting digest (digest.js) -->
 <section class="view" id="v-digest"><div class="page">
   <div class="filters">
@@ -276,6 +280,7 @@
 <script src="/static/panels.js"></script>
 <script src="/static/market.js"></script>
 <script src="/static/rooms.js"></script>
+<script src="/static/office.js"></script>
 <script src="/static/digest.js"></script>
 <script src="/static/checkpoint.js"></script>
 <script src="/static/ghcoin.js"></script>
