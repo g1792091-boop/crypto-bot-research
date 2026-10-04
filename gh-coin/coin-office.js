@@ -955,6 +955,11 @@ async function coinGate({s, side, price, cs}){
   const fr = await fundingRegimeOf(c.sym);
   if (fr?.key === "hotLong" && dir > 0) cut(0.5, "펀딩 롱 과열"); if (fr?.key === "hotShort" && dir < 0) cut(0.5, "펀딩 숏 과열");
   try { const FS = await fundScanOf(c.sym); if (FS?.key === "hotLong" && dir > 0) cut(0.7, `전 거래소 롱 과열(평균 ${FS.avg}%)`); if (FS?.key === "hotShort" && dir < 0) cut(0.7, `전 거래소 숏 과열(평균 ${FS.avg}%)`); } catch(e){}   // Sharpe식 거래소 간 펀딩 스캔
+  // 🐋 고래 카피 신호(casatrickdev 감지→필터→리스크→신호): 승인된 고래 흐름이 진입과 반대면 0.6배 — 뉴럴 데스크가 학습한 적중률이 낮으면 무시
+  try { const N = await import("./neural.js"), WC = await lib("whalecopy"), F = await import("../nuri-ai/flow.js");
+    const k = "_wh" + c.sym, c0 = coinGate[k]; let sg = c0 && Date.now() - c0.t < 90e3 ? c0.s : null;
+    if (!sg){ const r = await F.whaleTrades({symbol: c.sym, exchange: "binancef", minUsd: c.sym === "BTCUSDT" ? 300000 : 100000}); sg = WC.pipeline(c.sym, r?.data, N.whaleTrust?.()); coinGate[k] = {t: Date.now(), s: sg}; }
+    if (sg.status === "approved" && sg.dir === -dir) cut(0.6, `고래 반대(순 ${sg.netPct}%)`); else if (sg.status === "approved" && sg.dir === dir) why.push(`고래 동행 ${sg.netPct}%`); } catch(e){}
   const dx = (readJ("coinDataV", {}) || {})[c.id]; if (fresh(dx, 12) && dx.kimchi != null && dx.kimchi > 5 && dir > 0) cut(0.7, `김치 프리미엄 ${dx.kimchi.toFixed(1)}%`);
   // ⑫ 노출 한도 (passivbot wallet exposure) ⑬ 재고 위험 (SolTrade·Guéant 마켓메이킹) ⑭ 포트폴리오 히트·켈리·손익비 (ai-trader-team rigor)
   try { const P = await import("../nuri-ai/paper.js"), book = await P.loadBook(), R = await import("./lib/rigor.js");

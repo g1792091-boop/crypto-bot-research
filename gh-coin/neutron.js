@@ -23,7 +23,7 @@ export async function snapshot() {
     v: 1, t: Date.now(), app: "GH Coin",
     neural: { equity: s.equity, bankroll: s.bankroll, pnl: s.pnl, drawdown: s.drawdown, fills: s.fills, winRate: s.winRate, heat: s.heat, dayPnl: s.dayPnl, riskMode: s.riskMode,
       positions: (s.pos || []).map(p => ({ sym: p.sym, side: p.side > 0 ? "long" : "short", lev: p.lev, entry: p.entry, sl: p.sl, tp: p.tp, strategy: p.name, riskPct: p.riskPct })),
-      regime: s.regime, news: s.news, review: s.review, engine: (s.engine || []).slice(0, 40), setups: s.setups || [], evo: s.evo, trades: (s.trades || []).slice(0, 40), feed: (s.feed || []).slice(0, 20) },
+      regime: s.regime, news: s.news, review: s.review, review2: s.review2, research: s.research, whale: s.whale, cfg: s.cfg, dayN: s.dayN, engine: (s.engine || []).slice(0, 40), setups: s.setups || [], evo: s.evo, trades: (s.trades || []).slice(0, 40), feed: (s.feed || []).slice(0, 20) },
     brain, verdicts, demo: book,
     policy: { framework: ENG.FW, live: limits, rules: ["AI 는 주문하지 않는다(주문은 live.js 코드가 한도·승인 안에서만)", "실거래 기본 꺼짐 · 테스트넷 먼저", "최소 20배·손절 ≤ 청산거리 40%·1회 리스크 0.5~1%·동시 리스크 4%·일일 손실 3%"] },
     lib: { strategies: ENG.LIB.map(r => ({ key: r.key, name: r.name, cat: r.cat, tf: r.tf, rr: r.rr })), filters: Object.fromEntries(Object.entries(ENG.FILTERS).map(([k, f]) => [k, f.ko])) },

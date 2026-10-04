@@ -178,6 +178,18 @@ bash build.sh        # → dist/GHNano.exe, dist/ArchAI.exe, dist/GHCoin.exe
 - **비율**: 상단 행 최소 250px, 표 열 너비·말줄임, 뇌 그래프 반발력을 면적/노드 수로 맞추고 라벨은 허브 12개만.
 - Claude Code 는 사용자가(또는 Claudian 에서) 부를 때 동작 — 앱이 스스로 Claude Code 를 호출하지는 않음(구독 사용량·권한 문제). 자동으로 도는 것은 옵시디언 볼트 쓰기/읽기·OpenClaw 1시간 하트비트.
 
+### 5-8. Robinhood 레포 5개 → 코인 선물 적용 (10/5)
+- **siropkin/robinhood-ai-trading-bot**: `reviewPositions()` 5분마다(보유 있을 때) 모델이 보유 전체를 보고 hold/close/breakeven JSON 배열 → 환각 필터(보유 종목 정확 일치·허용 결정·코드 조건: close 는 +0.5R↑ 또는 −0.3R↓+4H 역행, 본절은 +0.5R↑) → 실행. 한도 `cfg()`: 동시 포지션 4 · 하루 진입 12(PDT 대응) · 청산 후 재진입 쿨다운 30분 · 제외 코인 — 뉴럴 헤더 ⚙ 한도 버튼.
+- **kevin1chun/robinhood-for-agents**: 주문 미리보기 = 가격 칼라(신호가 `px0` 대비 0.35R↑ 추격·0.5R↓ 역행이면 취소). 코인 리서치 카드 `coinResearch()`(일봉 365: 1년 범위·위치·7/30/365일·펀딩) → 승인·스캔 프롬프트·MCP `neutron_coin_research`. OpenClaw 스킬 `openclaw/skills/ghcoin-neutron`(SKILL.md → status/research/experiment.md, ready 확인).
+- **casatrickdev/robinhood-trading-tools**: `lib/whalecopy.js` 감지→필터(3건↑·순 30%↑·5분 이내)→리스크(적중 45% 미만 무시)→신호. 신호 생성 때 첨부 → 반대면 뉴럴 리스크 ×0.5, 에이전트 팀 coinGate ×0.6. 30분 뒤 채점(`whaleTrust`).
+- **RobinBundler · noxa-bundler-bot**: 제외(시세 조작 도구 + exe 다운로드만 있는 저장소 = 악성코드 위험). 다운로드·실행 안 함.
+
+### 5-8. Robinhood 레포 5개 → 코인 선물 적용 (10/5)
+- **siropkin/robinhood-ai-trading-bot**: `reviewPositions()` 5분마다(보유 있을 때) 모델이 보유 전체를 보고 hold/close/breakeven JSON 배열 → 환각 필터(보유 종목 정확 일치·허용 결정·코드 조건: close 는 +0.5R↑ 또는 −0.3R↓+4H 역행, 본절은 +0.5R↑) → 실행. 한도 `cfg()`: 동시 포지션 4 · 하루 진입 12(PDT 대응) · 청산 후 재진입 쿨다운 30분 · 제외 코인 — 뉴럴 헤더 ⚙ 한도 버튼.
+- **kevin1chun/robinhood-for-agents**: 주문 미리보기 = 가격 칼라(신호가 `px0` 대비 0.35R↑ 추격·0.5R↓ 역행이면 취소). 코인 리서치 카드 `coinResearch()`(일봉 365: 1년 범위·위치·7/30/365일·펀딩) → 승인·스캔 프롬프트·MCP `neutron_coin_research`. OpenClaw 스킬 `openclaw/skills/ghcoin-neutron`(SKILL.md → status/research/experiment.md, ready 확인).
+- **casatrickdev/robinhood-trading-tools**: `lib/whalecopy.js` 감지→필터(3건↑·순 30%↑·5분 이내)→리스크(적중 45% 미만 무시)→신호. 신호 생성 때 첨부 → 반대면 뉴럴 리스크 ×0.5, 에이전트 팀 coinGate ×0.6. 30분 뒤 채점(`whaleTrust`).
+- **RobinBundler · noxa-bundler-bot**: 제외(시세 조작 도구 + exe 다운로드만 있는 저장소 = 악성코드 위험). 다운로드·실행 안 함.
+
 ---
 
 ## 6. 안전 규칙 (바꾸지 말 것)

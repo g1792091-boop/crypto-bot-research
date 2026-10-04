@@ -252,6 +252,14 @@ async function getTF(sym, tf, n = 420) {
 
 // ── 포지션 (코인당 1개 · 원웨이 모드 · 물타기 금지) ──
 function markPos(P, price) { const proe = (price - P.entry) / P.entry * P.side * 100; P.proe = +proe.toFixed(3); P.roe = +(proe * P.lev).toFixed(2); P.price = price; return proe; }
+// siropkin/robinhood-ai-trading-bot 의 제약(포트폴리오 상한·제외 종목·최소/최대 금액·PDT 제한)을 선물용으로:
+//   동시 포지션 상한 · 제외 코인 · 하루 최대 진입 수(과매매 방지 = PDT 대응) · 청산 후 같은 코인 재진입 쿨다운
+const CFG0 = { maxPos: 4, exclude: [], dailyMax: 12, coolMin: 30 };
+export const cfg = () => ({ ...CFG0, ...(load().cfg || {}) });
+export function setCfg(patch = {}) { load(); const c = { ...cfg(), ...patch };
+  c.maxPos = Math.max(1, Math.min(6, Math.round(+c.maxPos || 4))); c.dailyMax = Math.max(1, Math.min(50, Math.round(+c.dailyMax || 12))); c.coolMin = Math.max(0, Math.min(240, Math.round(+c.coolMin || 0)));
+  c.exclude = (Array.isArray(c.exclude) ? c.exclude : String(c.exclude || "").split(/[,\s]+/)).map(x => String(x).toUpperCase().replace(/USDT$/, "")).filter(x => COINS.some(([ko]) => ko === x));
+  S.cfg = c; save(); return c; }
 function heat() { let r = 0; for (const P of Object.values(S.pos)) r += P.be ? 0 : (P.risk || 0); return r; }
 // 🏢 에이전트 팀 판정도 뉴럴 진입에 실제 반영: 리스크 결정표·경제 캘린더·자체 AI 앙상블·TA 평점·재고(쏠림) 위험(SolTrade·Guéant)
 function teamCheck(it) {
@@ -268,6 +276,15 @@ function teamCheck(it) {
 function openFrom(it, trader, riskOverride, note) {
   const price = S.dec[it.sym]?.price; if (!price || S.pos[it.sym]) return false;
   const tc = teamCheck(it); if (tc.block) { feed(`🚦 ${it.ko} ${it.name} 차단 — 에이전트 팀 판정: ${tc.block}`); return false; }
+  // 📋 주문 미리보기(review → confirm → place, kevin1chun/robinhood-for-agents): 가격 칼라 + 포트폴리오 한도를 코드로 확인한 뒤에만 체결
+  const C = cfg(), rD = Math.abs((it.px0 || price) - it.sl), moved = it.px0 ? (price - it.px0) * it.side : 0;
+  if (it.px0 && rD > 0 && moved > 0.35 * rD) { feed(`📋 ${it.ko} ${it.name} 취소 — 가격 칼라: 신호 후 이미 ${(moved / rD).toFixed(2)}R 진행(추격 금지)`); return false; }
+  if (it.px0 && rD > 0 && moved < -0.5 * rD) { feed(`📋 ${it.ko} ${it.name} 취소 — 가격 칼라: 손절 쪽으로 ${(-moved / rD).toFixed(2)}R 밀림`); return false; }
+  if (Object.keys(S.pos).length >= C.maxPos) { feed(`📋 ${it.ko} 보류 — 동시 포지션 상한 ${C.maxPos}개`); return false; }
+  dayGate(); if ((S.day.n || 0) >= C.dailyMax) { feed(`📋 ${it.ko} 보류 — 오늘 진입 ${S.day.n}회 = 하루 상한(과매매 방지)`); return false; }
+  if (C.exclude.includes(it.ko)) return false;
+  // 🐋 고래 카피 신호(casatrickdev 감지→필터→리스크→신호): 승인된 고래 흐름이 반대면 리스크 절반, 같은 방향이면 근거로 기록
+  if (it.whale?.status === "approved" && it.whale.dir) { if (it.whale.dir === -it.side) { tc.mul *= 0.5; tc.why = (tc.why ? tc.why + " · " : "") + `고래 반대(순 ${it.whale.netPct}%)`; } else tc.why = (tc.why ? tc.why + " · " : "") + `고래 동행(순 ${it.whale.netPct}%)`; }
   if ((it.side > 0 && price <= it.sl) || (it.side < 0 && price >= it.sl)) { feed(`${it.ko} ${it.name} 신호 무효 — 가격이 이미 손절선 너머`); return false; }
   const v = VMAP()[it.vkey]; if (!v) return false;
   const r = Math.max(0.0025, (riskOverride ?? riskFor(v, it.side)) * tc.mul); if (tc.why) note = (note ? note + " · " : "") + "팀: " + tc.why;
@@ -280,6 +297,7 @@ function openFrom(it, trader, riskOverride, note) {
     vkey: it.vkey, name: it.name, cat: v.cat, tf: v.tf, why: it.why, regime: it.regime, regKey: it.regKey, trader, t: Date.now(), deadline: Date.now() + v.hold * TFMIN[v.tf] * 60e3,
     hour: new Date().getHours(), spike: !!S.brief?.[it.sym]?.spike, feat: { ...feat }, bReg: BRAIN.regimeOf(feat) };
   if (trader !== "자체 엔진") { const M = model(trader); M.opened = (M.opened || 0) + 1; }
+  S.day.n = (S.day.n || 0) + 1;
   feed(`${trader === "자체 엔진" ? "" : "[" + shortMd(trader) + "] "}${it.ko} ${it.side > 0 ? "▲롱" : "▼숏"} ${plan.lev}x @ ${fmt(price)} · ${it.name} · SL ${plan.slPct}% / TP ${plan.tpPct}%(손익비 1:${plan.rr}) · 리스크 $${plan.risk}(${plan.riskPct}%)${note ? " · " + note : ""}`);
   return true;
 }
@@ -292,7 +310,8 @@ function closeP(sym, px, why) {
   if (P.trader !== "자체 엔진") { const M = model(P.trader); M.pnl += pnl; M.fills++; if (pnl > 0) M.wins++; }
   // 전략 성적(실전) 기록 → 워크포워드 선별에 즉시 반영
   const st = (S.eng.stats[P.vkey] ||= { tr: [] }); st.tr.push({ R: +R.toFixed(3), t1: Date.now(), src: "live", reg: P.regKey }); if (st.tr.length > 60) st.tr.splice(0, st.tr.length - 60);
-  if (why === "손절" || why === "청산") S.cool[sym] = Date.now() + 2 * TFMIN[P.tf || "60"] * 60e3;   // 쿨다운: 손절 후 2봉 재진입 금지
+  if (why === "손절" || why === "청산") S.cool[sym] = Date.now() + 2 * TFMIN[P.tf || "60"] * 60e3;
+  S.cool[sym] = Math.max(S.cool[sym] || 0, Date.now() + cfg().coolMin * 60e3);   // 어떤 청산이든 설정한 분만큼 같은 코인 재진입 금지   // 쿨다운: 손절 후 2봉 재진입 금지
   S.trades.unshift({ ko: P.ko, side: P.side, entry: P.entry, exit: px, lev: P.lev, margin: Math.round(P.margin), roe: +roe.toFixed(2), pnl: +pnl.toFixed(2), R: +R.toFixed(2), why, name: P.name, model: P.trader !== "자체 엔진" ? P.trader : null, t: Date.now() });
   if (S.trades.length > 80) S.trades.pop();
   // 학습: 뉴런(시각화) · 뇌 지능 · 시간대 · 급변동 · 교훈/패턴
@@ -345,7 +364,7 @@ export async function step() {
       const reg = ENG.regimeAt(mk.I, i), hb = H ? ENG.htfBiasAt(H, mk.cs[i].t + TFMIN[tf] * 60e3) : null;
       // 보유 중인 포지션의 전략 청산신호
       const P = S.pos[sym]; if (P && P.tf === tf) { const v = V.find(x => x.vkey === P.vkey); if (v?.exit) { v.prep?.(mk.cs); if (v.exit(mk.I, i, P.side)) closeP(sym, price, "청산신호"); } }
-      if (S.pos[sym] || (S.cool[sym] || 0) > Date.now() || S.queue.some(x => x.sym === sym)) continue;
+      if (S.pos[sym] || (S.cool[sym] || 0) > Date.now() || S.queue.some(x => x.sym === sym) || cfg().exclude.includes(ko)) continue;
       const cands = [];
       for (const v of V.filter(x => x.tf === tf && isActive(x))) {
         v.prep?.(mk.cs); const s = v.sig(mk.I, i); if (!s) continue;
@@ -359,7 +378,8 @@ export async function step() {
       cands.sort((a, b) => b.st.mean - a.st.mean); const { v, s, st } = cands[0];
       if (!dayGate()) { feed(`${ko} 신호(${v.name}) 무시 — 오늘 손실 한도 ${FW.dailyStop * 100}% 도달`); continue; }
       if (S.news?.blockUntil > Date.now()) { feed(`${ko} 신호(${v.name}) 보류 — 📰 주요 일정/뉴스 위험 구간`); continue; }
-      S.queue.push({ sym, ko, vkey: v.vkey, name: v.name, side: s.side, sl: s.sl, why: s.why, regime: reg.label, regKey: reg.key, htf: hb?.bias ?? 0, st, t: Date.now() });
+      const wh = await whaleSignal(sym).catch(() => null);
+      S.queue.push({ sym, ko, vkey: v.vkey, name: v.name, side: s.side, sl: s.sl, why: s.why, regime: reg.label, regKey: reg.key, htf: hb?.bias ?? 0, st, t: Date.now(), px0: price, whale: wh });
       S.scan = { model: "전략 엔진", ko, sym, regime: `${reg.label} · ${v.name} ${s.side > 0 ? "롱" : "숏"} 신호`, t: Date.now() };
       feed(`🎯 ${ko} ${s.side > 0 ? "롱" : "숏"} 신호: ${v.name}(${tf === "60" ? "1시간" : tf === "240" ? "4시간" : tf + "분"}봉) — ${s.why} · 최근 ${st.n}건 기대값 ${st.mean >= 0 ? "+" : ""}${st.mean}R`);
     }
@@ -430,12 +450,65 @@ export async function calibrate() {
   calibrating = false; save();
 }
 
+// ══ 🐋 고래 카피 신호 (casatrickdev copyTrading: 감지 → 필터 → 리스크 → 신호 · 실행 없음) + 적중률 학습(WalletIntelligence 대응) ══
+import * as WC from "./lib/whalecopy.js";
+const _whC = {};
+export function whaleTrust() { load(); return WC.score(S.whaleLog || [], sym => S.dec[sym]?.price, 30); }
+async function whaleSignal(sym) {
+  const c0 = _whC[sym]; if (c0 && Date.now() - c0.t < 90e3) return c0.s;
+  const F = await import("../nuri-ai/flow.js"); const r = await F.whaleTrades({ symbol: sym, exchange: "binancef", minUsd: sym === "BTCUSDT" ? 300000 : 100000 });
+  const sg = WC.pipeline(sym, r?.data, whaleTrust()); _whC[sym] = { t: Date.now(), s: sg };
+  if (sg.status === "approved" && S.dec[sym]?.price) { (S.whaleLog ||= []).push({ sym, dir: sg.dir, price: S.dec[sym].price, t: Date.now() }); if (S.whaleLog.length > 400) S.whaleLog.splice(0, S.whaleLog.length - 400); }
+  return sg;
+}
+// ══ 📑 코인 리서치 카드 (kevin1chun research 스킬의 출력 구조를 코인 선물용으로): 1년 범위·위치·7/30일 수익·펀딩 ══
+async function coinResearch(sym) {
+  const R = (S.research ||= {}), c0 = R[sym]; if (c0 && Date.now() - c0.t < 3600e3) return c0;
+  const cs = (await candlesFor({ market: sym, exchange: "binancef", timeframe: "D" }, 365)).cs; if (!cs?.length) return null;
+  const hi = Math.max(...cs.map(b => b.h)), lo = Math.min(...cs.map(b => b.l)), c = cs.at(-1).c, ret = n => cs.length > n ? +((c / cs.at(-1 - n).c - 1) * 100).toFixed(1) : null;
+  let fund = null; try { const FS = await import("./lib/fundscan.js"), { webGet } = await import("../nuri-ai/engine.js"); const f = await FS.fundingScan(sym, u => webGet(u, "json")); fund = { avg: f.avg, key: f.key, ko: f.ko }; } catch (e) {}
+  R[sym] = { t: Date.now(), hi, lo, pos: +((c - lo) / Math.max(1e-9, hi - lo) * 100).toFixed(0), r7: ret(7), r30: ret(30), r365: ret(cs.length - 1), fund };
+  return R[sym];
+}
+function researchText(sym) { const r = S.research?.[sym]; if (!r) return ""; return `1년 범위 ${fmt(r.lo)}~${fmt(r.hi)} 중 ${r.pos}% 위치 · 7일 ${r.r7}% · 30일 ${r.r30}% · 1년 ${r.r365}%${r.fund ? ` · 거래소 펀딩 평균 ${r.fund.avg}%(${r.fund.ko})` : ""}`; }
+// ══ 🗂 포지션 관리 회의 (siropkin: AI 가 포트폴리오 전체를 보고 종목별 결정 → 환각 필터 → 실행) ══
+//   결정은 hold / close / breakeven 만. 코드가 조건을 확인한 것만 실행(이익 +0.5R 이상 조기 익절·본절, 또는 -0.3R 이하 + 상위추세 역행일 때만 조기 정리).
+let prRot = 0, prAt = 0;
+async function reviewPositions(cm) {
+  const P = Object.values(S.pos); if (!P.length || !cm.length || Date.now() - prAt < 5 * 60e3) return; prAt = Date.now();
+  const tgt = cm[prRot++ % cm.length], Rnow = p => ((p.price - p.entry) * p.side) / (p.rDist || 1);
+  const rows = P.map(p => ({ symbol: p.ko, side: p.side > 0 ? "long" : "short", lev: p.lev, entry: p.entry, price: p.price, R: +Rnow(p).toFixed(2), sl: p.sl, tp: p.tp, breakeven: p.be,
+    strategy: p.name, regime: S.regime[p.sym]?.label, htf4h: S.regime[p.sym]?.htf, minutes: Math.round((Date.now() - p.t) / 60e3), research: researchText(p.sym) }));
+  let raw = "";
+  try {
+    await brainStream({ messages: [
+      { role: "system", content: '너는 코인 선물 포지션 관리자다. 보유 포지션마다 hold/close/breakeven 중 하나를 고른다. close 는 이익을 지키거나 추세가 뒤집혔을 때만, breakeven 은 손절을 본전으로 올릴 때. 반드시 JSON 배열만: [{"symbol":"BTC","decision":"hold","reason":"한 문장"}]' },
+      { role: "user", content: `보유 포지션:\n${JSON.stringify(rows)}\nJSON 배열만:` }],
+      role: "fast", target: tgt, fallback: true, json: true, maxTokens: 300, temperature: 0.2, noThink: true, onContent: d => raw += d, onThink: () => {} });
+  } catch (e) { return; }
+  let arr = []; try { const m = raw.match(/\[[\s\S]*\]/); arr = JSON.parse(m ? m[0] : "[]"); } catch (e) { try { const o = JSON.parse((raw.match(/\{[\s\S]*\}/) || ["{}"])[0]); arr = Array.isArray(o.decisions) ? o.decisions : [o]; } catch (e2) {} }
+  // 환각 필터: 보유 종목과 정확히 일치(퍼지 매칭 금지) · 허용 결정만 · 코드 조건 충족만
+  const done = [], dropped = [];
+  for (const d of (Array.isArray(arr) ? arr : []).slice(0, 8)) {
+    const sym0 = String(d?.symbol || "").toUpperCase().replace(/USDT$/, ""), p = P.find(x => x.ko === sym0), dec = String(d?.decision || "").toLowerCase(), why = String(d?.reason || "").slice(0, 50);
+    if (!p) { dropped.push(`${sym0 || "?"}: 보유하지 않은 종목`); continue; }
+    if (!["hold", "close", "breakeven"].includes(dec)) { dropped.push(`${sym0}: 모르는 결정 '${dec}'`); continue; }
+    const r = Rnow(p), against = (S.regime[p.sym]?.htf || 0) === -p.side;
+    if (dec === "close") { if (r >= 0.5 || (r <= -0.3 && against)) { closeP(p.sym, p.price, "AI 정리"); done.push(`${p.ko} 정리(${r.toFixed(2)}R: ${why})`); } else dropped.push(`${p.ko}: close 조건 미충족(${r.toFixed(2)}R)`); }
+    else if (dec === "breakeven") { if (!p.be && r >= 0.5) { p.sl = p.side > 0 ? p.entry * (1 + FW.fee) : p.entry * (1 - FW.fee); p.be = true; done.push(`${p.ko} 본절 이동(${why})`); } else dropped.push(`${p.ko}: 본절 조건 미충족`); }
+  }
+  S.review2 = { t: Date.now(), by: shortMd(tgt.model), done, dropped };
+  feed(`🗂 [${shortMd(tgt.model)}] 포지션 관리: ${done.length ? done.join(" · ") : "모두 유지"}${dropped.length ? ` · 환각 필터 ${dropped.length}건 제외` : ""}`);
+  save();
+}
+
 // ── AI 모델 = 승인 담당: 검증된 신호를 뉴스·지식·성적 맥락으로 승인/거절하고 리스크(0.5~1%)를 정한다 ──
 function model(name) { return S.models[name] || (S.models[name] = { prov: "", pnl: 0, fills: 0, wins: 0, opened: 0, approved: 0, rejected: 0, lessons: [] }); }
 let mRot = 0, mBackoff = 0, mFails = 0, mBusy = false;
 export async function modelStep() {
   load(); const cm = connectedModels(); if (mBusy || !cm.length || Date.now() < mBackoff) return;
-  scoreScans();
+  scoreScans(); whaleTrust();
+  if (!S.queue.length && Object.keys(S.pos).length && Date.now() - prAt >= 5 * 60e3) { mBusy = true; try { await reviewPositions(cm); } finally { mBusy = false; } return; }
   if (!S.queue.length) { if (Date.now() - lastScan < 30e3) return; lastScan = Date.now(); mBusy = true; try { await scanStep(cm); } finally { mBusy = false; } return; }
   mBusy = true; try { await approveNext(cm); } finally { mBusy = false; }
 }
@@ -444,7 +517,8 @@ export async function modelStep() {
 let lastScan = 0, sRot = 0, cRot = 0;
 async function scanStep(cm) {
   const tgt = cm[sRot++ % cm.length], [ko, sym] = COINS[cRot++ % COINS.length], price = S.dec[sym]?.price; if (!price) return;
-  const rg = S.regime[sym] || {}, br = S.brief?.[sym]?.text || "", top = ENG ? Object.entries(S.eng.stats).length : 0;
+  const rg = S.regime[sym] || {}, br = S.brief?.[sym]?.text || "";
+  try { await coinResearch(sym); } catch (e) {} try { await whaleSignal(sym); } catch (e) {}
   S.scan = { model: shortMd(tgt.model), ko, sym, regime: `${rg.label || "판단중"} · 시장 읽기`, t: Date.now() };
   let raw = "", route;
   try {
@@ -452,7 +526,7 @@ async function scanStep(cm) {
       { role: "system", content: '너는 코인 선물 시장 분석가다. 주어진 자료만 보고 앞으로 1시간 방향을 판단한다. 반드시 JSON 한 줄: {"bias":1|0|-1,"conf":0~100,"note":"한국어 한 문장"}' },
       { role: "user", content: `${ko} 현재가 ${price} · 1시간봉 국면: ${rg.label || "?"} (ADX ${rg.adx ?? "?"}) · 4시간 추세: ${rg.htf > 0 ? "상승" : rg.htf < 0 ? "하락" : "중립"}
 시장 요약: ${br}
-피처: ${Object.entries(S.feat[sym] || {}).map(([k, v]) => k + " " + (+v).toFixed(2)).join(", ")}
+피처: ${Object.entries(S.feat[sym] || {}).map(([k, v]) => k + " " + (+v).toFixed(2)).join(", ")}\n리서치: ${researchText(sym)}\n${_whC[sym] ? WC.explain(_whC[sym].s) : ""}
 JSON만:` }],
       role: "fast", target: tgt, fallback: false, json: true, maxTokens: 120, temperature: 0.2, noThink: true, onContent: d => raw += d, onThink: () => {} });
   } catch (e) { (S.scans ||= {})[tgt.model] = { ko, sym, err: String(e?.message || e).slice(0, 40), t: Date.now() }; return; }
@@ -507,6 +581,8 @@ async function approveNext(cm) {
 계획: ${plan.lev}x · 손절 ${plan.slPct}% · 익절 ${plan.tpPct}% (1:${plan.rr}) · 청산거리 ${plan.liqPct}% · 리스크 $${plan.risk}
 ${nw} · 지금 시간대 성적: ${th ? `승률 ${th.wr}%` : "데이터 적음"}
 다른 AI 모델들의 최근 시장 읽기: ${peerViews(it.sym) || "없음"}
+코인 리서치: ${researchText(it.sym) || "없음"}
+${it.whale ? WC.explain(it.whale) : "고래 신호 없음"}
 실시간 수급(팀 도구로 방금 조회):
 ${flow.join(" / ")}
 참고 지식: ${kn || "없음"}
@@ -732,6 +808,7 @@ export function state() {
     fills: S.fills, winRate: wr, epoch: S.epoch, since: S.t0, nModels: connectedModels().length,
     neurons, traders, designs: (S.designs || []).slice(0, 10), nDesigns: (S.designs || []).length, handed: (S.designs || []).filter(d => d.handed).length,
     brain: BRAIN.brainState(), scan: S.scan || null, regime: S.regime, news: S.news, review: S.review, calib: S.eng.calib, calibrating,
+    cfg: cfg(), dayN: S.day?.n || 0, whale: { trust: whaleTrust(), last: Object.values(_whC).map(x => x.s).filter(x => x.status === "approved").slice(-6) }, review2: S.review2 || null, research: S.research || {},
     engine, nActive: engine.filter(x => x.active).length, setups: setups(engine), winrates: learnedWinrates(V), evo: { n: (S.eng.evo || []).length, seeds: (S.eng.evoSeeds || []).length, log: (S.eng.evoLog || []).slice(0, 3) }, queue: S.queue.length, heat: +(heat() / Math.max(1, eq) * 100).toFixed(2), dayPnl: +(S.day?.pnl || 0).toFixed(2),
     fw: { minLev: FW.minLev, risk: FW.baseRisk * 100, maxRisk: FW.maxRisk * 100, daily: FW.dailyStop * 100, heat: FW.maxHeat * 100, fee: FW.fee * 100 },
     pos: allPos.filter(P => P.trader === "자체 엔진"), dec: S.dec, feat: S.feat, trades: S.trades.slice(0, 22), feed: S.feed.slice(0, 24) };

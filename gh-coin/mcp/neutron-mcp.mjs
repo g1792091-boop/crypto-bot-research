@@ -61,6 +61,17 @@ const TOOLS = [
     run: () => { const s = state(); return s.demo.map(d => `${d.status} | ${d.name} | ${d.market} ${d.tf} | ${d.trades}거래 | ${d.equity} | ${d.lev ?? "—"}x | SL ${d.sl ?? "—"} TP ${d.tp ?? "—"} | ${d.author}`).join("\n") || "데모 전략 없음"; } },
   { name: "neutron_recent_trades", description: "뉴럴 데스크 최근 거래(손익·R·청산 사유·매매법)", input: { limit: { type: "number" } },
     run: a => { const s = state(); return (s.neural.trades || []).slice(0, a.limit || 20).map(t => `${new Date(t.t).toLocaleString("ko-KR")} ${t.ko} ${t.side > 0 ? "롱" : "숏"} ${t.lev}x ${t.name} → ${t.why} ${t.pnl >= 0 ? "+" : ""}${t.pnl}$ (${t.R}R)`).join("\n") || "거래 없음"; } },
+  { name: "neutron_coin_research", description: "코인 리서치 카드(1년 범위·현재 위치·7/30/365일 수익·거래소 펀딩) + 고래 카피 신호 + 팀 판정 + 국면", input: { symbol: { type: "string", description: "BTC 등" } }, required: ["symbol"],
+    run: a => { const s = state(), ko = String(a.symbol || "").toUpperCase().replace(/USDT$/, ""), sym = ko + "USDT", r = s.neural.research?.[sym], rg = s.neural.regime?.[sym], w = (s.neural.whale?.last || []).find(x => x.sym === sym), id = ko.toLowerCase();
+      return `# ${ko} 리서치
+국면: ${rg ? `${rg.label} (ADX ${rg.adx ?? "?"} · 4H ${rg.htf > 0 ? "상승" : rg.htf < 0 ? "하락" : "중립"})` : "판단 전"}
+`
+        + (r ? `1년 범위 ${r.lo} ~ ${r.hi} · 현재 ${r.pos}% 위치 · 7일 ${r.r7}% · 30일 ${r.r30}% · 1년 ${r.r365}%${r.fund ? ` · 펀딩 평균 ${r.fund.avg}% (${r.fund.ko})` : ""}
+` : `리서치 카드 없음(앱이 스캔할 때 만들어짐)
+`)
+        + `고래: ${w ? `${w.dir > 0 ? "순매수" : "순매도"} ${Math.abs(w.netPct)}% (${w.count}건)` : "승인된 신호 없음"} · 고래 흐름 적중 ${s.neural.whale?.trust?.n ? Math.round(s.neural.whale.trust.acc * 100) + "% (" + s.neural.whale.trust.n + "회)" : "학습 중"}
+`
+        + `팀 판정: 결정표 ${s.verdicts.riskVerdict?.[id]?.act ?? "—"} · TA ${s.verdicts.taRating?.[id]?.label ?? "—"} · 자체AI ${s.verdicts.selfAI?.[id] ? (s.verdicts.selfAI[id].dir > 0 ? "롱 " : s.verdicts.selfAI[id].dir < 0 ? "숏 " : "중립 ") + s.verdicts.selfAI[id].conf + "%" : "—"}${age(s)}`; } },
   { name: "neutron_funding_scan", description: "거래소 간 펀딩비 실시간 스캔(바이낸스·바이빗·OKX·비트겟): 전 거래소 과열·거래소 간 차이·차익 후보(정보용)", input: { symbol: { type: "string", description: "BTCUSDT 등" } }, required: ["symbol"],
     run: async a => { const F = await import(new URL("../lib/fundscan.js", import.meta.url)); return F.fundingText(await F.fundingScan(String(a.symbol || "BTCUSDT").toUpperCase(), async u => (await fetch(u, { signal: AbortSignal.timeout(8000) })).json())); } },
   // brain-mcp 호환 노트 도구 (옵시디언 볼트)
