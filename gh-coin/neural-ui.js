@@ -43,7 +43,10 @@ function render() {
     }).join("") +
     (s.nModels === 0 ? `<div class="nsub dim">연결된 AI 모델이 없습니다 — 설정 → AI 연결에 무료 NVIDIA 키를 넣으면 모델들이 직접 거래·복기합니다 (지금은 자체 신호만)</div>` : "") +
     `<div class="nsub">피처 뉴런 가중치 (학습으로 변함)</div>` +
-    s.neurons.map(nu => `<div class="nrow"><span class="nk">${E(nu.name)}</span><span class="nbar"><i style="width:${Math.round(nu.w / 3 * 100)}%"></i></span><b>${nu.w.toFixed(2)}</b><small>${nu.hit == null ? "–" : nu.hit + "%"}</small></div>`).join("");
+    s.neurons.map(nu => `<div class="nrow"><span class="nk">${E(nu.name)}</span><span class="nbar"><i style="width:${Math.round(nu.w / 3 * 100)}%"></i></span><b>${nu.w.toFixed(2)}</b><small>${nu.hit == null ? "–" : nu.hit + "%"}</small></div>`).join("") +
+    (s.brain ? `<div class="nsub">🧠 자체 뇌 · 누적 기억 ${s.brain.n}개 <span class="dim">${Object.entries(s.brain.byType || {}).map(([t, c]) => t + " " + c).join(" · ") || "비어있음"}</span></div>` +
+      (s.brain.top.length ? s.brain.top.slice(0, 7).map(m => `<div class="brow"><span class="bt ${m.type === "패턴" ? "up" : m.type === "교훈" ? "warn" : m.type === "전략" ? "pur" : "dim"}">${E(m.type)}</span><span class="btx" title="${E(m.text)}${m.model ? " · " + E(m.model) : ""}">${E(m.text)}</span><small>×${m.w}</small></div>`).join("")
+        : `<div class="dim" style="padding:4px 0">아직 비어있음 — 모델들이 복기·거래하며 기억을 쌓습니다</div>`) : "");
   // 코인별 결정
   root.querySelector("[data-markets]").innerHTML = N.COINS.map(([ko, sym]) => {
     const d = s.dec[sym], p = s.pos.find(x => x.ko === ko);
@@ -155,6 +158,10 @@ function inject() {
 .nbar{height:7px;background:#141a26;border-radius:4px;overflow:hidden}.nbar i{display:block;height:100%;background:#4d82ff}
 .nrow>b{text-align:right;color:#e6ebf5}.nrow small{color:#5a6374;text-align:right}.nrow small em{font-style:normal;color:#3d4454;margin-left:4px}
 .trd{grid-template-columns:18px 1fr 78px auto}.rk{color:#5a6374;text-align:center}.trd .nk{color:#dbe2ef}.trd small{white-space:nowrap}
+#ndesk .warn{color:#e0a53e}#ndesk .pur{color:#b79cff}
+.brow{display:grid;grid-template-columns:46px 1fr 34px;gap:8px;align-items:center;margin:3px 0;font-size:11px}
+.bt{font-size:9px;padding:1px 5px;border-radius:4px;background:#141a26;text-align:center}
+.btx{color:#aeb6c6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.brow small{color:#5a6374;text-align:right}
 .nsub{color:#6b7488;font-size:10px;margin:8px 0 4px;letter-spacing:1px}
 .nd-tr{display:flex;flex-direction:column;gap:2px}
 .trow{display:grid;grid-template-columns:40px 42px 36px 64px 1fr;gap:8px;align-items:center;padding:3px 4px;border-bottom:1px solid #121824}

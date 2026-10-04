@@ -174,6 +174,9 @@ export const TECH = [
     where: "설정 → AI 두뇌(engine.js PROVIDERS·custom) · 무료 키 발급 안내"},
   {repo: "anthropics/financial-services · HKUDS/AI-Trader · benstaf/FinRL_DeepSeek · TauricResearch/TradingAgents · haidrrrry/Ai-trader-pro", lic: "각 OSS", teams: ["selfai", "dev", "demo"], status: "적용",
     what: "연결된 AI 모델이 '직접' 매매·학습·복기·개선하는 트레이딩 데스크: 각 모델이 피처 신호로 데모 포지션 운용 → 손실 복기해 교훈을 스스로 뽑아 다음 판단에 반영(FinRL_DeepSeek식 보상 기반 개선) → 지표 146종을 조합해 매매법+커스텀 수식 지표를 설계 → 자동 백테스트 → 통과분을 에이전트 팀(사무실) 데모 장부로 인계(TradingAgents·AI-Trader 핸드오프)",
-    where: "🧠 뉴럴 데스크(neural.js·neural-ui.js): modelStep(직접 거래)·reflect(복기 학습)·designStrategy(매매법·커스텀 지표 설계→백테스트→사무실 인계) · 상단 '🧠 뉴럴 데스크' 버튼"}
+    where: "🧠 뉴럴 데스크(neural.js·neural-ui.js): modelStep(직접 거래)·reflect(복기 학습)·designStrategy(매매법·커스텀 지표 설계→백테스트→사무실 인계) · 상단 '🧠 뉴럴 데스크' 버튼"},
+  {repo: "memvid/claude-brain · toroleapinc/claude-brain · OoneBreath/project-brain · AgriciDaniel/claude-obsidian · ArcInstitute/brain-agent-template", lic: "각 OSS", teams: ["selfai"], status: "적용",
+    what: "영속 집단 기억(자체 뇌): 모델들이 복기·거래·설계에서 배운 교훈·승리 패턴·전략을 세션 넘어 누적하고, 다음 판단 때 지금 상황(코인+국면)에 맞는 기억을 꺼내(RAG식 회상) 프롬프트에 주입. 결과로 기억을 강화/쇠퇴(obsidian식 지식 볼트 + brain-agent 기억 그래프 개념)",
+    where: "자체 뇌(gh-coin/brain.js): learn/recall/reinforce + 뉴럴 데스크가 modelStep·reflect·designStrategy 에서 뇌를 읽고 씀 · 대시보드 '🧠 자체 뇌 · 누적 기억' 패널"}
 ];
-export const TECH_REPOS = 53;   // 뉴럴 데스크(모델 직접 매매·학습·설계) 추가
+export const TECH_REPOS = 58;   // 자체 뇌(영속 집단 기억) 추가

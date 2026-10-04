@@ -3,6 +3,7 @@
 // 전부 가상자금(데모)만 — 실주문·실자금·실지갑 없음.
 import { candlesFor } from "../nuri-ai/agent.js";
 import { brainStream, settings, PROVIDERS, modelKind } from "../nuri-ai/engine.js";
+import * as BRAIN from "./brain.js";
 
 // 연결된(키가 있는) 회사의 무료 AI 모델 목록 — 각 모델이 트레이더가 된다. 비용상 최대 maxN
 export function connectedModels(maxN = 8) {
@@ -128,6 +129,9 @@ function closeModelPos(name, sym, price, why) {
   const ret = (price - p.entry) / p.entry * p.side - FEE, pnl = p.size * ret;
   M.pnl += pnl; M.fills++; if (pnl > 0) M.wins++; M.n++; if (ret > 0) M.ok++;
   M.w = cl(M.w + LR * (ret > 0 ? 1 : -1), 0.05, 3);
+  const regime = BRAIN.regimeOf(p.feat || {});
+  BRAIN.reinforce(p.ko, regime, ret > 0);                                   // 이 상황의 기억 강화/약화
+  if (ret > 0.02) BRAIN.learn({ type: "패턴", coin: p.ko, regime, text: `${regime}에서 ${p.side > 0 ? "롱" : "숏"} +${(ret * 100).toFixed(1)}% (${strongFeat(p.feat)})`, model: shortMd(name) });   // 큰 이익 = 패턴 기억
   if (ret < 0) { M.losers.unshift({ ko: p.ko, side: p.side, roe: +(ret * 100).toFixed(1), feat: p.feat }); M.losers = M.losers.slice(0, 5); }
   S.pnl += pnl; S.fills++; if (pnl > 0) S.wins++;
   S.trades.unshift({ model: name, ko: p.ko, side: p.side, roe: +(ret * 100).toFixed(2), pnl: +pnl.toFixed(2), why, t: Date.now() });
@@ -155,11 +159,13 @@ export async function modelStep() {
   const tgt = cm[mRot % cm.length], [ko, sym] = COINS[((mRot++ / cm.length) | 0) % COINS.length];
   const feat = S.feat[sym], price = S.dec[sym]?.price; if (!feat || !price) return;
   const M = model(tgt.model); M.prov = tgt.id; M.calls = (M.calls || 0) + 1;
+  const regime = BRAIN.regimeOf(feat), mem = BRAIN.recallText(ko, regime, 3);
   const les = M.lessons.length ? `\n내가 복기로 배운 교훈(꼭 지켜라): ${M.lessons.join(" / ")}` : "";
+  const brainLine = mem ? `\n자체 뇌의 집단 기억(${regime} 국면): ${mem}` : "";
   let raw = "";
   try {
     await brainStream({ messages: [
-      { role: "system", content: `너는 ${ko} 코인 선물 데모 트레이더다. 아래 신호로 지금 롱/숏/관망을 정한다. 반드시 JSON 한 줄만 출력: {"dir":1,"conf":70} — dir 1=롱 -1=숏 0=관망, conf 0~100. 설명·다른 말 금지.${les}` },
+      { role: "system", content: `너는 ${ko} 코인 선물 데모 트레이더다. 아래 신호로 지금 롱/숏/관망을 정한다. 반드시 JSON 한 줄만 출력: {"dir":1,"conf":70} — dir 1=롱 -1=숏 0=관망, conf 0~100. 설명·다른 말 금지.${brainLine}${les}` },
       { role: "user", content: `${ko} 신호(−1 약세 ~ +1 강세): ${Object.entries(feat).map(([k, v]) => k + " " + (+v).toFixed(2)).join(", ")} · 현재가 ${price}\nJSON 만:` }],
       target: tgt, fallback: false, maxTokens: 180, temperature: 0.3, noThink: true, onContent: d => raw += d, onThink: () => {} });
   } catch (e) { feed(`[${shortMd(tgt.model)}] ${ko} 응답 실패 — 다음 차례 재시도`); save(); return; }
@@ -184,7 +190,12 @@ export async function reflect() {
       role: "fast", target: tgt, fallback: false, maxTokens: 60, temperature: 0.5, noThink: true, onContent: d => raw += d });
   } catch (e) { return; }
   const lesson = raw.replace(/["\n]/g, " ").replace(/^교훈[:\s]*/,"").trim().slice(0, 40);
-  if (lesson.length > 4) { M.lessons.unshift(lesson); M.lessons = [...new Set(M.lessons)].slice(0, 4); M.losers = []; feed(`[${shortMd(tgt.model)}] 복기 완료 → 교훈: ${lesson}`); save(); }
+  if (lesson.length > 4) {
+    const l0 = M.losers[0] || {}, regime = BRAIN.regimeOf(l0.feat || {});
+    BRAIN.learn({ type: "교훈", coin: l0.ko || "", regime, text: lesson, model: shortMd(tgt.model) });   // 집단 뇌에 공유 → 모든 모델이 다음부터 참고
+    M.lessons.unshift(lesson); M.lessons = [...new Set(M.lessons)].slice(0, 4); M.losers = [];
+    feed(`[${shortMd(tgt.model)}] 복기 → 교훈 "${lesson}" (자체 뇌에 저장)`); save();
+  }
 }
 // 매매법 설계: 성과 좋은 모델이 차트 터미널 지표(146종)를 직접 조합해 매매법 + 커스텀 수식 지표를 만들고,
 // 자동 백테스트 → 통과하면 사무실(에이전트 팀) 데모 장부로 인계한다. (HKUDS/AI-Trader·Ai-trader-pro·FinRL_DeepSeek 개념)
@@ -197,7 +208,7 @@ export async function designStrategy() {
   let raw = "";
   try {
     await brainStream({ messages: [
-      { role: "system", content: `너는 코인 선물 퀀트다. 아래 보조지표들을 조합해 BTCUSDT 1시간봉 매매법 하나를 설계한다. 반드시 custom 수식 지표를 1개 이상 포함(예: {"id":"vm","type":"custom","expr":"rsi*0.5+close/sma-1"}). 아래 JSON 스키마로만 출력(설명·코드블록 금지):\n{"name":"이름","indicators":[{"id":"r","type":"tv_rsi","length":14},{"id":"vm","type":"custom","expr":"수식"}],"long_entry":{"conditions":[{"left":"r","op":"<","right":35}]},"long_exit":{"conditions":[{"left":"r","op":">","right":65}]},"risk":{"leverage":2,"stop_loss_pct":4,"take_profit_pct":8}}\n쓸 수 있는 지표: ${catalog}.${M.lessons.length ? " 내 교훈: " + M.lessons.join(" / ") : ""}` },
+      { role: "system", content: `너는 코인 선물 퀀트다. 아래 보조지표들을 조합해 BTCUSDT 1시간봉 매매법 하나를 설계한다. 반드시 custom 수식 지표를 1개 이상 포함(예: {"id":"vm","type":"custom","expr":"rsi*0.5+close/sma-1"}). 아래 JSON 스키마로만 출력(설명·코드블록 금지):\n{"name":"이름","indicators":[{"id":"r","type":"tv_rsi","length":14},{"id":"vm","type":"custom","expr":"수식"}],"long_entry":{"conditions":[{"left":"r","op":"<","right":35}]},"long_exit":{"conditions":[{"left":"r","op":">","right":65}]},"risk":{"leverage":2,"stop_loss_pct":4,"take_profit_pct":8}}\n쓸 수 있는 지표: ${catalog}.${M.lessons.length ? " 내 교훈: " + M.lessons.join(" / ") : ""}${BRAIN.recallText("BTC", "", 4) ? " 자체 뇌 패턴: " + BRAIN.recallText("BTC", "", 4) : ""}` },
       { role: "user", content: "매매법 JSON 하나만 출력:" }],
       target: tgt, fallback: false, maxTokens: 700, temperature: 0.6, noThink: true, onContent: d => raw += d, onThink: () => {} });
   } catch (e) { feed(`[${shortMd(tgt.model)}] 매매법 설계 응답 실패`); return; }
@@ -217,11 +228,16 @@ export async function designStrategy() {
         wf: { is: {}, oos: { ret: +(wf.oos?.return_pct ?? 0), pf: wf.oos?.profit_factor ?? null, n: wf.oos?.n_trades ?? 0 } }, cls: "crypto", mname: "비트코인 선물" });
       S.designs[0].handed = true;
     } catch (e) {}
+    BRAIN.learn({ type: "전략", coin: "BTC", regime: "", text: `${norm.name} 검증통과(${(wf.oos?.return_pct ?? 0).toFixed(0)}%) — ${(norm.indicators || []).map(i => i.type).slice(0, 4).join("+")}`, model: shortMd(tgt.model) });
   }
   save();
 }
 
 function shortMd(m) { return String(m).split("/").pop().replace(/-instruct|-chat|-\d{6,}/gi, "").slice(0, 16); }
+function strongFeat(feat = {}) { return Object.entries(feat).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, 2).map(([k, v]) => k + (v >= 0 ? "+" : "") + (+v).toFixed(1)).join(",") || "—"; }
+// 뇌 상태 공개 (UI용)
+export const brainState = () => BRAIN.brainState();
+export function resetBrain() { BRAIN.reset(); }
 
 export function state() {
   load();
@@ -235,6 +251,7 @@ export function state() {
   traders.sort((a, b) => b.pnl - a.pnl);
   return { pnl: +S.pnl.toFixed(2), fills: S.fills, winRate: wr, epoch: S.epoch, since: S.t0, nModels: connectedModels().length,
     neurons, traders, designs: (S.designs || []).slice(0, 10), nDesigns: (S.designs || []).length, handed: (S.designs || []).filter(d => d.handed).length,
+    brain: BRAIN.brainState(),
     pos: Object.values(S.pos), dec: S.dec, feat: S.feat, trades: S.trades.slice(0, 22), feed: S.feed.slice(0, 24) };
 }
 // 자체 신호 트레이더의 PnL = 전체 - 모델들 합 (모델 손익은 모델 트레이더로 분리 표시)
