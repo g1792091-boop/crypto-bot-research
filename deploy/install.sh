@@ -76,6 +76,8 @@ fi
 install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot/ghcoin
 # the failure alert's one-a-day stamps (deploy/paperbot-failed@.service)
 install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot/failalert
+# the weekly checkpoint rehearsal's files and its own bar cache (deploy/paperbot-rehearsal.service)
+install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot/rehearsal
 install -d -o root -g paperbot -m 750 /etc/paperbot
 
 echo "== code version"
@@ -111,7 +113,7 @@ if [ "$REPO_DIR" != "$APP" ]; then
   # Scheduled jobs (nightly check, backups, checkpoint, monthly re-check) are not stopped for the swap:
   # wait for a running one to finish so it never reads a half-swapped tree.
   JOBS="paperbot-daily3.service paperbot-backup.service paperbot-checkpoint.service paperbot-labmonthly.service \
-paperbot-offsite.service"
+paperbot-offsite.service paperbot-rehearsal.service"
   n=0
   while busy="$(for j in $JOBS; do systemctl is-active --quiet "$j" 2>/dev/null && echo "$j"; done)"; [ -n "$busy" ]; do
     n=$((n+1)); [ "$n" -ge 120 ] && { echo "still running after 60 min: $busy; run this script again later"; exit 1; }
@@ -178,6 +180,7 @@ for u in paperbot-live3.service paperbot-dash.service paperbot-daily3.service pa
          paperbot-backup.service paperbot-backup.timer paperbot-agents.service paperbot-agents.timer \
          paperbot-liq.service paperbot-labmonthly.service paperbot-labmonthly.timer \
          paperbot-checkpoint.service paperbot-checkpoint.timer paperbot-offsite.service paperbot-offsite.timer \
+         paperbot-rehearsal.service paperbot-rehearsal.timer \
          paperbot-failed@.service paperbot-ghcoin.service paperbot-tgtrades.service paperbot-executor.service; do
   install -m 644 "$APP/deploy/$u" /etc/systemd/system/$u
 done
@@ -186,6 +189,10 @@ systemctl daemon-reload
 if systemctl is-active --quiet paperbot-executor 2>/dev/null; then
   echo "paperbot-executor is running the previous code; restart it yourself when ready:"
   echo "  sudo systemctl restart paperbot-executor"
+fi
+# New timers are installed, never enabled here (docs/server-setup-v3.md 11 and 13-5 name the one-time command).
+if ! systemctl is-enabled --quiet paperbot-rehearsal.timer 2>/dev/null; then
+  echo "weekly checkpoint rehearsal installed but off; to turn it on once: sudo systemctl enable --now paperbot-rehearsal.timer"
 fi
 if [ -n "$RUNNING" ]; then
   systemctl start $RUNNING

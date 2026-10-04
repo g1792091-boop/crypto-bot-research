@@ -1,6 +1,6 @@
 """One Telegram warning when a scheduled job fails (deploy/paperbot-failed@.service).
 
-The checkpoint, nightly-check, monthly re-check and agent units name the handler in OnFailure=, and systemd
+The checkpoint, nightly-check, monthly re-check, agent and weekly rehearsal units name the handler in OnFailure=, and systemd
 starts it with the failed unit's name: ``python -m paperbot.failalert paperbot-checkpoint.service``. It sends
 one Korean WARN: which job, how it ended (systemd's $MONITOR_SERVICE_RESULT / $MONITOR_EXIT_STATUS), and the
 commands to see why and to clear the entry. At most one per unit per KST day: the hourly checkpoint retries
@@ -26,6 +26,9 @@ JOBS_KO = {
     "paperbot-daily3.service": ("매일 점검(09:20)", "내일 09:20에 다시 돕니다."),
     "paperbot-labmonthly.service": ("매달 재검사", "다음 달 6일에 다시 돕니다. 지금 다시: sudo systemctl start paperbot-labmonthly"),
     "paperbot-agents.service": ("에이전트 회의", "15분마다 다시 시도합니다."),
+    "paperbot-rehearsal.service": ("판정 미리 연습(매주 수요일)",
+                                   "다음 주 수요일 12:30에 다시 돕니다. 진짜 판정에는 영향 없음. "
+                                   "지금 다시: sudo systemctl start paperbot-rehearsal"),
 }
 RESULT_KO = {"exit-code": "오류로 끝남", "timeout": "시간 제한을 넘김", "signal": "강제로 멈춰짐",
              "core-dump": "강제로 멈춰짐", "oom-kill": "메모리 한도를 넘김", "watchdog": "응답 없음"}

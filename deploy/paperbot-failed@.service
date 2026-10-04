@@ -1,7 +1,7 @@
 # One Korean Telegram warning when a scheduled job fails (paperbot/failalert.py). Never started by hand or by a
-# timer: paperbot-checkpoint, paperbot-daily3, paperbot-labmonthly and paperbot-agents name it in OnFailure=,
-# and systemd starts paperbot-failed@<that unit>.service. At most one warning per unit per KST day (the hourly
-# checkpoint retries and the 15-minute agent passes would repeat it); the day of the last one is kept in
+# timer: paperbot-checkpoint, paperbot-daily3, paperbot-labmonthly, paperbot-agents and paperbot-rehearsal name it
+# in OnFailure=, and systemd starts paperbot-failed@<that unit>.service. At most one warning per unit per KST day
+# (the hourly checkpoint retries and the 15-minute agent passes would repeat it); the day of the last one is kept in
 # /var/lib/paperbot/failalert/<unit>. The nightly backup is not listed: the off-site copy at 09:15 already
 # warns about a missing copy. The failed unit stays in `systemctl --failed` until reset-failed.
 [Unit]

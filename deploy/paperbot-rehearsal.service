@@ -1,0 +1,35 @@
+# Weekly rehearsal of the checkpoint verdict (paperbot/checkpoint_preview.py --rehearsal-dir): the whole verdict
+# path on today's real data (as if today were a checkpoint, 10 trades, 500 coin-flip bots), so a problem shows
+# before the real verdict. Output: a fresh /var/lib/paperbot/rehearsal/rehearsal-<UTC time>.db and .json, and
+# rehearsal/latest.json for the agents and the dashboard; the newest 4 are kept. Never the real verdict file:
+# the code refuses it and the sandbox below hides it. No Telegram of its own (the code builds no notifier and
+# the Telegram variables are removed); a failed run sends the one failure warning of paperbot-failed@.
+[Unit]
+Description=paperbot v3 checkpoint rehearsal (weekly; never the real verdict)
+After=network-online.target
+# a failed run sends one Korean Telegram warning a day (deploy/paperbot-failed@.service)
+OnFailure=paperbot-failed@%n.service
+
+[Service]
+Type=oneshot
+User=paperbot
+Group=paperbot
+WorkingDirectory=/opt/crypto-bot-research
+# the read-only Binance key for the signed leverage-bracket call; systemd reads the file before the sandbox
+EnvironmentFile=/etc/paperbot/live.env
+UnsetEnvironment=TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_CRITICAL TELEGRAM_CHAT_WARN TELEGRAM_CHAT_INFO TELEGRAM_CHAT_BACKUP DEADMAN_URL BACKUP_PASSPHRASE
+Nice=19
+IOSchedulingClass=idle
+MemoryMax=2G
+# its own bar cache (rehearsal/bars, only new days are fetched each week): never writes the real verdict's files
+ExecStart=/opt/paperbot/venv/bin/python -m paperbot.checkpoint_preview --db /var/lib/paperbot/paper3.db --rehearsal-dir /var/lib/paperbot/rehearsal --keep 4 --cache /var/lib/paperbot/rehearsal/bars
+TimeoutStartSec=2h
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+# The folder is writable only because SQLite's read-only connection to paper3.db (WAL) needs its -shm file there
+# (pinning that file would keep a stale one across a bot restart). Every database in it is pinned read-only, the
+# verdict file and the bar cache of the real verdict are hidden, so the job can write only rehearsal/.
+ReadWritePaths=/var/lib/paperbot
+ReadOnlyPaths=-/var/lib/paperbot/paper3.db -/var/lib/paperbot/daily3.db -/var/lib/paperbot/agents3.db -/var/lib/paperbot/inbox.db -/var/lib/paperbot/liq.db -/var/lib/paperbot/ghcoin -/var/lib/paperbot/failalert -/var/lib/paperbot/lab -/var/lib/paperbot/.local
+InaccessiblePaths=-/var/lib/paperbot/checkpoint.db -/var/lib/paperbot/checkpoint_bars -/var/lib/paperbot/exec -/var/lib/paperbot/.claude -/var/lib/paperbot/.claude.json -/var/backups/paperbot -/etc/paperbot/agents.env -/etc/paperbot/live.env -/etc/paperbot/dash.env -/etc/paperbot/executor.env

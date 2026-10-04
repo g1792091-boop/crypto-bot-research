@@ -51,13 +51,13 @@ def test_failed_scheduled_jobs_send_one_korean_warning():
 
 
 def test_the_owners_check_of_the_units_shows_only_the_settings():
-    """The owners' check after a deploy (`systemctl cat <the four jobs> | grep -E ...`): one line per setting, no
-    comment that only mentions one (4 failure hooks, 1 pinned Claude Code, 1 clean stop)."""
+    """The owners' check after a deploy (`systemctl cat <the five jobs> | grep -E ...`): one line per setting, no
+    comment that only mentions one (5 failure hooks with the weekly rehearsal, 1 pinned Claude Code, 1 clean stop)."""
     text = "\n".join(f"# /etc/systemd/system/{u}\n" + (DEPLOY / u).read_text(encoding="utf-8") for u in FA.JOBS_KO)
     for pat in (r"OnFailure|DISABLE_AUTOUPDATER|SuccessExitStatus",
                 r"^(OnFailure=|Environment=DISABLE_AUTOUPDATER|SuccessExitStatus=)"):
         got = [ln for ln in text.splitlines() if re.search(pat, ln)]
-        assert len(got) == 6 and sum("OnFailure" in ln for ln in got) == 4, (pat, got)
+        assert len(got) == 7 and sum("OnFailure" in ln for ln in got) == 5 == len(FA.JOBS_KO), (pat, got)
 
 
 def test_agents_unit_keeps_claude_code_from_updating_itself():
@@ -119,3 +119,52 @@ def test_backup_packs_the_ghcoin_files_and_they_come_back(tmp_path):
     shutil.rmtree(out)
     assert backup().returncode == 0
     assert os.listdir(out / day) == ["inbox.db"]
+
+
+def test_weekly_checkpoint_rehearsal_unit_is_sandboxed_and_never_the_real_verdict():
+    """deploy/paperbot-rehearsal.service/.timer: the weekly checkpoint_preview run as paperbot with live.env's
+    read-only key, a fresh file in /var/lib/paperbot/rehearsal, never the real checkpoint.db (hidden), no Telegram
+    of its own, the failure warning through paperbot-failed@; installed by install.sh but never enabled there."""
+    u = _unit("paperbot-rehearsal.service")
+    svc, unit = u["[Service]"], u["[Unit]"]
+    assert "OnFailure=paperbot-failed@%n.service" in unit
+    assert "User=paperbot" in svc and "Group=paperbot" in svc and "Type=oneshot" in svc
+    assert "EnvironmentFile=/etc/paperbot/live.env" in svc
+    unset = next(ln for ln in svc if ln.startswith("UnsetEnvironment=")).split("=", 1)[1].split()
+    assert {"TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_CRITICAL", "TELEGRAM_CHAT_WARN", "TELEGRAM_CHAT_INFO",
+            "DEADMAN_URL"} <= set(unset)
+    assert "BINANCE_API_KEY" not in unset and "BINANCE_API_SECRET" not in unset   # the signed bracket call
+    ex = next(ln for ln in svc if ln.startswith("ExecStart="))
+    assert "-m paperbot.checkpoint_preview " in ex and "--rehearsal-dir /var/lib/paperbot/rehearsal" in ex
+    assert "--keep 4" in ex and "--db /var/lib/paperbot/paper3.db" in ex
+    assert "--cache /var/lib/paperbot/rehearsal/" in ex                       # its own cache, not the real one
+    assert "checkpoint.db" not in ex and "--out" not in ex and "checkpoint_bars" not in ex
+    paths = {k: next(ln for ln in svc if ln.startswith(k + "=")).split("=", 1)[1].split()
+             for k in ("ReadWritePaths", "ReadOnlyPaths", "InaccessiblePaths")}
+    assert paths["ReadWritePaths"] == ["/var/lib/paperbot"]                  # for paper3.db's -shm only
+    assert "-/var/lib/paperbot/paper3.db" in paths["ReadOnlyPaths"]
+    assert "-/var/lib/paperbot/daily3.db" in paths["ReadOnlyPaths"]
+    # the real verdict file appears only to hide it
+    assert "-/var/lib/paperbot/checkpoint.db" in paths["InaccessiblePaths"]
+    assert "-/var/lib/paperbot/checkpoint_bars" in paths["InaccessiblePaths"]
+    assert {"-/etc/paperbot/agents.env", "-/etc/paperbot/executor.env", "-/var/lib/paperbot/exec"} \
+        <= set(paths["InaccessiblePaths"])
+    for k in ("ReadWritePaths", "ReadOnlyPaths"):
+        assert not any("checkpoint.db" in p for p in paths[k]), k
+    for k in ("NoNewPrivileges=yes", "PrivateTmp=yes", "ProtectSystem=strict", "Nice=19", "IOSchedulingClass=idle"):
+        assert k in svc, k
+    assert any(ln.startswith("MemoryMax=") for ln in svc) and any(ln.startswith("TimeoutStartSec=") for ln in svc)
+    t = _unit("paperbot-rehearsal.timer")
+    assert "OnCalendar=Wed *-*-* 03:30:00 UTC" in t["[Timer]"] and "Persistent=true" in t["[Timer]"]
+    assert "WantedBy=timers.target" in t["[Install]"]
+    inst = (DEPLOY / "install.sh").read_text(encoding="utf-8")
+    loop = re.search(r"for u in ([^;]*); do\s+install -m 644", inst).group(1).replace("\\", " ").split()
+    assert {"paperbot-rehearsal.service", "paperbot-rehearsal.timer"} <= set(loop)
+    assert "install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot/rehearsal" in inst
+    jobs = re.search(r'JOBS="([^"]*)"', inst).group(1).replace("\\", " ").split()
+    assert "paperbot-rehearsal.service" in jobs                              # a deploy waits for a running one
+    # like every timer, installed but never enabled or started by the script (the owners turn it on once)
+    assert not re.search(r"systemctl (enable|start)[^\n]*paperbot-rehearsal", inst.replace(
+        "echo \"weekly checkpoint rehearsal installed but off; to turn it on once: sudo systemctl enable --now "
+        "paperbot-rehearsal.timer\"", ""))
+    assert "paperbot-rehearsal.service" in FA.JOBS_KO

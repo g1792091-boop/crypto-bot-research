@@ -46,6 +46,16 @@ For one UTC day (default: yesterday):
    Each shadow trade runs alone on a fresh account (the starting equity) so results are comparable as ROE.
 3. Data quality: missing minutes, zero-volume minutes, extreme ranges, last vs
    mark price gaps, extreme funding.
+4. Realistic stop slippage (descriptive, paperbot/slipcost.py): for every SL / LOCK / LIQ exit of the day, where a
+   real STOP_MARKET (contract price) of the trade's size would have filled, from the public aggregate trades of
+   the exit minute from the first trade at or through the stop (the trigger) for ``slipcost.WINDOW_MS``, and the
+   order-book read the live runner recorded for that exit (fill_costs) when there is one. One row per exit in
+   daily3.db ``stop_slips`` and a summary (median, p90, worst, total $ beyond paper; per strategy, timeframe,
+   coin) in the report's ``stop_slippage``. The coin-minutes with the most exit notional first, at most
+   ``STOP_MAX_MINUTES`` of them, ``STOP_MAX_PAGES`` pages each and ``STOP_MAX_TOTAL_PAGES`` a night (weight 20 a
+   page, paced); exits past a cap or a failed request are recorded with their status, never fatal.
+5. Cost at a larger size (descriptive): from the day's fill_costs book reads, the slippage if the order had been
+   2x / 5x / 10x the paper size, per coin and timeframe (report ``size_costs``; slipcost.summarize_size_costs).
 
 paper3.db is opened read-only; results go to ``--out``.
 """
@@ -84,6 +94,13 @@ CREATE TABLE IF NOT EXISTS shadows (
     symbol TEXT NOT NULL, timeframe TEXT NOT NULL, side INTEGER NOT NULL,
     filled INTEGER, roe REAL, exit_reason TEXT, resolved INTEGER NOT NULL, data TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS stop_slips (
+    key TEXT PRIMARY KEY, day TEXT NOT NULL, account_id TEXT NOT NULL, strategy TEXT, timeframe TEXT,
+    symbol TEXT NOT NULL, exit_reason TEXT NOT NULL, exit_time INTEGER NOT NULL, status TEXT NOT NULL,
+    paper_bps REAL, real_bps REAL, diff_usd REAL, data TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS stop_slips_day ON stop_slips (day);
+CREATE INDEX IF NOT EXISTS stop_slips_exit ON stop_slips (exit_time);
 """
 
 
@@ -763,8 +780,163 @@ def fill_cost_report(conn, start: int, end: int) -> Optional[dict]:
     return rep
 
 
+# ---------------------------------------------------------------- 4. realistic stop slippage, 5. larger sizes
+STOP_MAX_MINUTES = 150          # coin-minutes read on aggTrades per night (the most exit notional first)
+STOP_MAX_PAGES = 8              # pages of 1,000 trades per coin-minute (a busy BTC minute is 1-4)
+STOP_MAX_TOTAL_PAGES = 600      # pages per night: 12,000 weight, paced below 1,600 weight a minute
+STOP_PAGE_PAUSE_S = 0.75
+STOP_MAX_FAILS = 5              # consecutive failed coin-minutes before the rest is left unread (API down)
+STOP_DEPTH_NEAR_MS = 2 * MIN    # a fill_costs read of the exit counts when its step is this close to the minute
+
+
+def _accounts_meta(conn) -> dict:
+    try:
+        return {a: (s, tf) for a, s, tf in conn.execute("SELECT account_id, strategy, timeframe FROM accounts")}
+    except sqlite3.OperationalError:
+        return {}
+
+
+def agg_rows(rest, symbol: str, start: int, end: int, limit: int, max_pages: int, enough=None, budget=None,
+             sleep=time.sleep, pause: float = STOP_PAGE_PAUSE_S) -> list[tuple[int, float, float, bool]]:
+    """(ms, price, qty, buyer_is_maker) of the aggregate trades with start <= time <= end (like ``agg_trades``),
+    stopping early once ``enough(rows)`` is true. ``budget`` ({"pages": n}) is shared by the night's calls; a page
+    past it or past ``max_pages`` raises."""
+    out: list = []
+
+    def take(page) -> tuple[bool, Optional[int]]:
+        last = None
+        for t in page or []:
+            ts, last = int(t["T"]), int(t["a"])
+            if ts > end:
+                return True, last
+            if ts >= start:
+                out.append((ts, float(t["p"]), float(t.get("q") or 0.0), bool(t.get("m", False))))
+        return (not page or len(page) < limit or last is None), last
+
+    params: dict = {"symbol": symbol, "startTime": int(start), "endTime": int(end), "limit": limit}
+    for k in range(max_pages):
+        if budget is not None:
+            if budget["pages"] <= 0:
+                raise RuntimeError("night's aggTrades page budget used up")
+            budget["pages"] -= 1
+        if k:
+            sleep(pause)
+        done, last = take(rest._get("/fapi/v1/aggTrades", params))
+        if done or (enough is not None and enough(out)):
+            return out
+        params = {"symbol": symbol, "fromId": last + 1, "limit": limit}
+    raise BinanceError(f"aggTrades {symbol} at {start}: more than {max_pages} pages")
+
+
+def _enough_for(stops: list[tuple[int, float]], start: int, window_ms: int):
+    """True once every (side, stop) has its trigger and the trades reach ``window_ms`` past it."""
+    def check(rows) -> bool:
+        if not rows:
+            return False
+        last = rows[-1][0]
+        for side, stop in stops:
+            trig = next((t for t, p, _q, _m in rows if t >= start and (p <= stop if side > 0 else p >= stop)), None)
+            if trig is None or last <= trig + window_ms:
+                return False
+        return True
+    return check
+
+
+def stop_slippage(conn, rest, settings: Settings, day: str, start: int, end: int, sleep=time.sleep,
+                  window_ms: Optional[int] = None) -> tuple[list[dict], dict]:
+    """(one row per SL / LOCK / LIQ exit in [start, end), summary). Never raises for a failed request: the
+    exits of that coin-minute get ``status = 'api_error'``; past a cap ``'cap'``."""
+    from . import slipcost as SC
+    window_ms = SC.WINDOW_MS if window_ms is None else window_ms
+    meta = _accounts_meta(conn)
+    q = ("SELECT account_id, data FROM trades WHERE exit_time >= ? AND exit_time < ? AND exit_reason IN "
+         f"({', '.join('?' * len(SC.STOP_REASONS))}) ORDER BY id")
+    exits = []
+    for aid, data in conn.execute(q, (start, end, *SC.STOP_REASONS)):
+        t = json.loads(data)
+        s, tf = meta.get(aid, (t.get("strategy_id"), t.get("timeframe")))
+        t.update(account_id=aid, strategy_id=t.get("strategy_id") or s, timeframe=t.get("timeframe") or tf)
+        exits.append(t)
+    depth: dict = {}
+    try:
+        for ts, aid, sym, sb in conn.execute(
+                "SELECT ts, account_id, symbol, slip_best FROM fill_costs WHERE event = 'exit' AND status = 'ok' "
+                "AND slip_best IS NOT NULL AND ts >= ? AND ts < ?", (start - 3 * MIN, end + 3 * MIN)):
+            depth.setdefault((aid, sym), []).append((int(ts), float(sb)))
+    except sqlite3.OperationalError:
+        pass
+    groups: dict = {}
+    for t in exits:
+        groups.setdefault((t["symbol"], _minute(int(t["exit_time"]))), []).append(t)
+    order = sorted(groups.items(), key=lambda kv: (-sum(float(t["qty"]) * float(t["exit_price"]) for t in kv[1]),
+                                                   kv[0][1], kv[0][0]))
+    budget = {"pages": STOP_MAX_TOTAL_PAGES}
+    rows, fails, pages0, read = [], 0, budget["pages"], 0
+    for k, ((sym, mm), ts_) in enumerate(order):
+        trades, err, status = None, None, None
+        if k >= STOP_MAX_MINUTES:
+            status, err = "cap", f"more than {STOP_MAX_MINUTES} coin-minutes this night"
+        elif fails >= STOP_MAX_FAILS:
+            status, err = "api_error", f"not read: {STOP_MAX_FAILS} coin-minutes failed in a row"
+        elif budget["pages"] <= 0:
+            status, err = "cap", f"more than {STOP_MAX_TOTAL_PAGES} aggTrades pages this night"
+        else:
+            if read:
+                sleep(STOP_PAGE_PAUSE_S)
+            read += 1
+            try:
+                trades = agg_rows(rest, sym, mm, mm + MIN - 1 + window_ms, AGG_LIMIT, STOP_MAX_PAGES,
+                                  enough=_enough_for([(int(t["side"]), float(t["stop_price"])) for t in ts_], mm,
+                                                     window_ms), budget=budget, sleep=sleep)
+                fails = 0
+            except Exception as exc:  # noqa: BLE001  (descriptive: the exit is recorded as not measured)
+                status, err = "api_error", f"{type(exc).__name__}: {exc}"[:200]
+                fails += 1
+                if "budget" in str(exc):
+                    status = "cap"
+        for t in ts_:
+            if trades is None:
+                fill = {"status": status, "error": err}
+            else:
+                near = [(abs(ts - mm), sb) for ts, sb in depth.get((t["account_id"], sym), [])
+                        if abs(ts - mm) <= STOP_DEPTH_NEAR_MS]
+                fill = SC.stop_fill(trades, int(t["side"]), float(t["stop_price"]), float(t["qty"]), mm, window_ms,
+                                    depth_slip=min(near)[1] if near else None)
+            r = SC.stop_row(t, fill, settings.slippage_frac)
+            r["key"] = f"{t['account_id']}|{sym}|{t['entry_time']}|{t['exit_time']}"
+            r["day"] = day
+            rows.append(r)
+    summary = SC.summarize_stops(rows, settings.slippage_frac)
+    summary["api"] = {"coin_minutes": len(order), "read": read, "pages": pages0 - budget["pages"],
+                      "window_ms": window_ms}
+    return rows, summary
+
+
+def size_cost_report(conn, start: int, end: int) -> Optional[dict]:
+    """Cost at 2x / 5x / 10x the paper size from the day's fill_costs book reads; None without the table."""
+    from .slipcost import summarize_size_costs
+    try:
+        rows = [json.loads(r[0]) for r in conn.execute(
+            "SELECT data FROM fill_costs WHERE ts >= ? AND ts < ? AND status = 'ok'", (start, end))]
+    except sqlite3.OperationalError:
+        return None
+    tf_of = {a: tf for a, (_s, tf) in _accounts_meta(conn).items()}
+    return summarize_size_costs(rows, tf_of)
+
+
+def write_stop_slips(out: sqlite3.Connection, day: str, rows: list[dict]) -> None:
+    out.execute("DELETE FROM stop_slips WHERE day = ?", (day,))
+    out.executemany("INSERT OR REPLACE INTO stop_slips VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    [(r["key"], day, r["account_id"], r.get("strategy"), r.get("timeframe"), r["symbol"],
+                      r["exit_reason"], r["exit_time"], r["status"], r.get("paper_bps"), r.get("real_bps"),
+                      r.get("diff_usd"), json.dumps(r, default=str)) for r in rows])
+
+
 def run_day(conn, out: sqlite3.Connection, rest: BinanceREST, settings: Settings, brackets, specs,
-            day: str, horizon_days: int = 3, early_window_ms: int = EARLY_WINDOW_MS) -> dict:
+            day: str, horizon_days: int = 3, early_window_ms: int = EARLY_WINDOW_MS, stop_slip: bool = False,
+            sleep=time.sleep) -> dict:
+    """One night. ``stop_slip`` (the nightly command's default): also the realistic stop slippage (4), which
+    reads aggTrades; ``sleep`` paces those pages."""
     start = int(dt.datetime.strptime(day, "%Y-%m-%d").replace(tzinfo=dt.timezone.utc).timestamp() * 1000)
     end = start + DAY_MS
     now = rest.server_time()
@@ -825,6 +997,18 @@ def run_day(conn, out: sqlite3.Connection, rest: BinanceREST, settings: Settings
     sh += tv
     report["data_quality"] = data_quality(day_steps, symbols, start, end)
     report["fill_costs"] = fill_cost_report(conn, start, end)
+    try:
+        report["size_costs"] = size_cost_report(conn, start, end)
+    except Exception as exc:  # noqa: BLE001  (descriptive: never stops the night)
+        report["size_costs"] = {"error": f"{type(exc).__name__}: {exc}"[:200]}
+    slips = None
+    if stop_slip:
+        try:
+            slips, report["stop_slippage"] = stop_slippage(conn, rest, settings, day, start, end, sleep=sleep)
+        except Exception as exc:  # noqa: BLE001  (descriptive: never stops the night)
+            report["stop_slippage"] = {"error": f"{type(exc).__name__}: {exc}"[:200]}
+    if slips is not None:
+        write_stop_slips(out, day, slips)
     out.execute("DELETE FROM mismatches WHERE day = ?", (day,))
     out.executemany("INSERT INTO mismatches VALUES (?,?,?)", [(day, m["account_id"], json.dumps(m)) for m in mism])
     out.executemany("INSERT OR REPLACE INTO shadows VALUES (:key,:day,:kind,:account_id,:symbol,:timeframe,:side,"
@@ -876,6 +1060,10 @@ def notify_report(report: dict, notifier, trades_day: Optional[int] = None) -> l
         parts.append(f"지정가였다면 체결 {sh.get('limit_filled', 0)}/{sh.get('limit_signals', 0)}")
         parts.append(f"포지션 중이라 놓친 신호 {sh.get('skipped', 0)}")
     parts.append("빠진 1분봉 " + str(sum(missing.values())))
+    ov = ((report.get("stop_slippage") or {}).get("overall") or {})
+    if ov.get("measured"):
+        parts.append(f"손절 체결 추정 {ov['measured']}건: 중간 {ov['real_bps_median']:.1f}bp"
+                     f"(paper {ov['paper_bps_median']:.1f}bp), paper보다 ${ov['diff_usd_total']:+,.0f}")
     msgs.append((INFO, f"[{day}] 매일 점검: " + " · ".join(parts)))
     for level, text in msgs:
         notifier.send(level, text)
@@ -896,6 +1084,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     ap.add_argument("--early-window-ms", type=int, default=EARLY_WINDOW_MS,
                     help="early 1m kline proof: the trade that reached the stop must be this close to the end of "
                          "the minute (default %(default)s)")
+    ap.add_argument("--no-stop-slip", action="store_true",
+                    help="skip the realistic stop slippage (4; it reads public aggTrades, a few minutes a night)")
     args = ap.parse_args(argv)
     rest = _rest()
     conn = sqlite3.connect(f"file:{args.db}?mode=ro", uri=True)
@@ -908,7 +1098,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     out = sqlite3.connect(args.out)
     out.execute("PRAGMA journal_mode=WAL")
     out.executescript(SCHEMA)
-    report = run_day(conn, out, rest, settings, brackets, specs, day, early_window_ms=args.early_window_ms)
+    report = run_day(conn, out, rest, settings, brackets, specs, day, early_window_ms=args.early_window_ms,
+                     stop_slip=not args.no_stop_slip)
     start = int(dt.datetime.strptime(day, "%Y-%m-%d").replace(tzinfo=dt.timezone.utc).timestamp() * 1000)
     n = conn.execute("SELECT COUNT(*) FROM trades WHERE exit_time >= ? AND exit_time < ?",
                      (start, start + DAY_MS)).fetchone()[0]

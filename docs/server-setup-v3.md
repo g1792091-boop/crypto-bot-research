@@ -440,8 +440,9 @@ sudo systemctl enable --now \
   paperbot-daily3.timer paperbot-backup.timer paperbot-checkpoint.timer \
   paperbot-agents.timer paperbot-labmonthly.timer
 sudo systemctl enable --now paperbot-offsite.timer paperbot-ghcoin paperbot-tgtrades
+sudo systemctl enable --now paperbot-rehearsal.timer
 ```
-- 상자 하나를 통째로 붙여 넣습니다. 마지막 줄(서버 밖 백업)에서 `does not exist`가 나오면 4-3의 5번(설치)을 하고 그 줄만 다시 붙여 넣습니다. 위의 것들은 이미 켜졌습니다.
+- 상자 하나를 통째로 붙여 넣습니다. 둘째 줄(서버 밖 백업)에서 `does not exist`가 나오면 4-3의 5번(설치)을 하고 그 줄만 다시 붙여 넣습니다. 위의 것들은 이미 켜졌습니다. 마지막 줄(판정 미리 연습)에서 `does not exist`가 나오면 설치 스크립트가 아직 그 타이머를 설치하지 않는 버전입니다. 13-5대로 업데이트한 뒤 그 줄만 다시 붙여 넣습니다.
 
 이 상자로 켜지는 것:
 
@@ -456,6 +457,7 @@ sudo systemctl enable --now paperbot-offsite.timer paperbot-ghcoin paperbot-tgtr
 | `paperbot-agents.timer` | 에이전트 방, 15분마다 |
 | `paperbot-labmonthly.timer` | 매달 재검사, 6일 03:30 |
 | `paperbot-offsite.timer` | 서버 밖 백업, 매일 09:15 (텔레그램 'paperbot 백업' 방) |
+| `paperbot-rehearsal.timer` | 판정 미리 연습, 매주 수요일 12:30. 진짜 판정 파일은 건드리지 않고 텔레그램도 보내지 않음(실패할 때만 경고 한 번). 아래 "체크포인트 판정" |
 | `paperbot-ghcoin` | GH Coin 타점 기록기 (5분마다, `docs/ghcoin-recorder.md`). 195개 계좌와 섞이지 않음 |
 | `paperbot-tgtrades` | 텔레그램 거래 알림: 1분마다 그 사이 진입·청산을 한 메시지로 묶어 **무음**으로 (아래 "텔레그램 거래 알림") |
 
@@ -548,7 +550,7 @@ sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.live3 status --db /va
 systemctl list-timers 'paperbot-*' --no-pager
 ```
 - 첫 줄: `accounts 195, open positions ..., bust 0` 모양.
-- 둘째: 타이머 6개(매일 점검, 백업, 서버 밖 백업, 판정, 에이전트, 매달 재검사)와 다음 실행 시각.
+- 둘째: 타이머 7개(매일 점검, 백업, 서버 밖 백업, 판정, 판정 미리 연습, 에이전트, 매달 재검사)와 다음 실행 시각.
 
 ---
 
@@ -596,7 +598,7 @@ systemctl --failed --no-pager
 ls /var/backups/paperbot
 df -h /
 ```
-- 첫 줄이 `0 loaded units listed`면 정상입니다. 판정·매일 점검·매달 재검사·에이전트 작업이 실패하면 텔레그램 경고 `⚠ [작업 실패] …`가 작업마다 하루 한 번 오고, 여기에도 남습니다. 서버 안 백업이 실패하면 09:15의 "서버 밖 백업 실패 …" 경고로 알게 됩니다. 나오면 13-7을 봅니다.
+- 첫 줄이 `0 loaded units listed`면 정상입니다. 판정·판정 미리 연습·매일 점검·매달 재검사·에이전트 작업이 실패하면 텔레그램 경고 `⚠ [작업 실패] …`가 작업마다 하루 한 번 오고, 여기에도 남습니다. 서버 안 백업이 실패하면 09:15의 "서버 밖 백업 실패 …" 경고로 알게 됩니다. 나오면 13-7을 봅니다.
 - 둘째: 최근 날짜 폴더(`20261008` 모양)가 있어야 합니다. 14일치가 남습니다.
 - 셋째: 사용률(Use%)이 80% 밑이면 됩니다.
 - healthchecks가 초록인지, 텔레그램 'paperbot 백업' 방에 매일 아침 요약이 왔는지(날짜가 이어지는지) 봅니다. 서버 밖 백업이 실패한 날은 알림 단체방에도 "서버 밖 백업 실패 …"가 옵니다(`docs/offsite-backup.md` 8번).
@@ -634,7 +636,7 @@ df -h /
     paperbot/aggregate.py paperbot/feed.py paperbot/live3.py
   ```
   (이 목록은 `paperbot/runinfo.py`의 `TRADING_FILES`와 같습니다. 봇은 이 밖에 설정, 바이낸스 레버리지 구간, 잠긴 신호 코드가 바뀌어도 같은 알림을 보냅니다.)
-- **피할 시간:** 매일 08:30~09:40(백업·서버 밖 백업·매일 점검), 판정일 09:30~10:30, 매달 6일 03:00~07:00(매달 재검사). 업데이트가 이 작업들을 멈추지 않아서, 도는 중에 코드가 바뀔 수 있습니다.
+- **피할 시간:** 매일 08:30~09:40(백업·서버 밖 백업·매일 점검), 판정일 09:30~10:30, 매달 6일 03:00~07:00(매달 재검사), 매주 수요일 12:30~13:30(판정 미리 연습). 업데이트가 이 작업들을 멈추지 않아서, 도는 중에 코드가 바뀔 수 있습니다.
 - 설치 스크립트가 `Could not get lock`으로 멈추면 서버가 자동 보안 업데이트를 하는 중입니다. 5~10분 뒤 같은 명령을 다시 실행합니다.
 - 업데이트 순서:
   1. (선택) healthchecks에서 체크를 **Pause**. 봇이 다시 준비하는 몇 분 동안 "down" 알림이 오지 않게 합니다. 다음 신호가 오면 감시가 저절로 다시 시작됩니다.
@@ -657,6 +659,12 @@ df -h /
   sudo bash deploy/install.sh
   ```
   되돌리기도 배포라서 체결 코드가 바뀌면 Q5가 똑같이 적용됩니다. 다음에 새 코드를 받을 때는 `git checkout claude/keen-pasteur-wav02u && git pull`부터 합니다.
+- **판정 미리 연습 타이머 켜기** (10월 4일 전에 설치한 서버, 업데이트 뒤 한 번만): 설치 스크립트는 새 타이머를 설치만 하고 켜지 않습니다(끝에 "weekly checkpoint rehearsal installed but off"가 보임). 아래 한 줄로 켜고, 다음 줄로 확인합니다(`Wed ... 03:30:00 UTC`가 보이면 됨).
+  ```bash
+  sudo systemctl enable --now paperbot-rehearsal.timer
+  systemctl list-timers paperbot-rehearsal.timer --no-pager
+  ```
+  바로 한 번 돌려 보려면 `sudo systemctl start paperbot-rehearsal` (수 분~수십 분, 끝날 때까지 기다림). 결과는 아래 "체크포인트 판정"의 "매주 미리 연습"대로 봅니다.
 - **AI 한도 줄 바꾸기** (10월 3일 전에 설치한 서버, 한 번만): 설치 스크립트는 이미 있는 `/etc/paperbot/agents.env`를 덮어쓰지 않으므로, 새 한도 줄은 직접 바꿉니다. 먼저 지금 줄을 봅니다:
   ```bash
   sudo grep -n '^AGENTS_BUDGET' /etc/paperbot/agents.env
@@ -787,8 +795,10 @@ sudo journalctl -u <그 이름> -n 50 --no-pager
 | 전체 상태 | `systemctl list-units 'paperbot-*' --no-pager`, 타이머: `systemctl list-timers 'paperbot-*' --no-pager`, 실패한 것: `systemctl --failed --no-pager` |
 | 재시작 | `sudo systemctl restart paperbot-live3`. 계좌 상태는 저장돼 있어 이어서 돕니다. 꺼져 있던 동안의 신호는 "늦음"으로 기록만 됩니다 |
 | 매일 점검 | 09:20(한국 시간)에 자동. paper와 재계산 일치, 지정가·놓친 신호 그림자 기록, 데이터 품질. 불일치마다 "1분봉을 확정 전에 읽음"인지 증거로 확인(봇이 쓴 1분봉 기록 `paper3.db` `live_bars`, 없으면 바이낸스 체결 기록). 지난 날짜 다시 돌리기는 13-7 |
+| 손절 체결 추정 (매일 점검) | 그날 손절·잠금·강제청산으로 끝난 거래마다, 실제 거래소의 손절 주문(STOP_MARKET, 마지막 체결가 기준)이었다면 얼마에 체결됐을지 바이낸스 공개 체결 기록으로 추정합니다: 손절가를 처음 넘은 체결(발동)부터 5초 동안의 체결을 거래 크기만큼 따라가고, 그 청산의 호가창 기록(`fill_costs`)이 있으면 그것도 봅니다. paper는 손절가에 0.02%(2bp)만 붙여 체결하므로, 거래마다 paper 가정과 실제 추정(bp, $)을 `daily3.db`의 `stop_slips`에 적고, 보고서 `stop_slippage`에 매매법·봉·코인별 중간값·상위 10%·최악·paper보다 더 든 $ 합계를 냅니다. 09:20 요약 끝에 `손절 체결 추정 n건: 중간 x bp(paper y bp), paper보다 $z`. 기록일 뿐 모의 체결·판정은 바뀌지 않습니다. 바이낸스 요청은 밤마다 상한(코인·분 150개, 600쪽)이 있고, 실패해도 매일 점검은 끝까지 돕니다(그 거래는 `api_error`로 표시) |
 | 체크포인트 판정 | 시작 후 30·60·90…일째 09:00(한국 시간) 기준. 매시 35분에 확인하고, 판정할 날이면 약 10분 계산한 뒤 텔레그램(무음)과 대시보드 순위표에 결과. 아래 "체크포인트 판정" 참고 |
-| 체결 비용 기록 | 모의 거래가 진입·청산할 때마다 그 코인의 호가창(양쪽 100칸)을 받아, 같은 크기의 시장가 주문이 실제로 얼마에 체결됐을지 `paper3.db`의 `fill_costs`에 적습니다(`paperbot/fillcost.py`). 모의 체결 자체는 바꾸지 않습니다(엔진은 늘 0.02%로 계산). 매일 점검 보고서의 `fill_costs`에 코인별 중간값·상위 10%·0.02%를 넘은 횟수가 나옵니다 |
+| 체결 비용 기록 | 모의 거래가 진입·청산할 때마다 그 코인의 호가창(양쪽 100칸)을 받아, 같은 크기의 시장가 주문이 실제로 얼마에 체결됐을지 `paper3.db`의 `fill_costs`에 적습니다(`paperbot/fillcost.py`). 모의 체결 자체는 바꾸지 않습니다(엔진은 늘 0.02%로 계산). 매일 점검 보고서의 `fill_costs`에 코인별 중간값·상위 10%·0.02%를 넘은 횟수가 나옵니다. `size_costs`에는 같은 기록으로 주문이 2·5·10배였다면의 슬리피지가 코인·봉별로 나옵니다. 지금 기록은 호가 칸 자체를 저장하지 않아서, 같은 순간의 다른 주문으로 알 수 있는 범위만 나오고(나머지는 `not_recorded`), 기록된 호가 100칸으로 그 크기를 못 채우면 `too_thin`입니다 |
+| 판정 미리 연습 | 매주 수요일 12:30(한국 시간) 자동. 아래 "체크포인트 판정"의 "매주 미리 연습" |
 | 청산 기록 | `paperbot-liq`가 바이낸스 강제청산 흐름을 `liq.db`에 모읍니다(공개 자료, 키 필요 없음). 바이낸스는 청산의 과거 자료를 주지 않아서 첫날부터 켜 둡니다. 확인: `cd /opt/crypto-bot-research && sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.liqstream status --db /var/lib/paperbot/liq.db` |
 | 계좌 요약 | `cd /opt/crypto-bot-research && sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.live3 status --db /var/lib/paperbot/paper3.db` |
 | 추가 계좌 (복제·새 매매법) | `cd /opt/crypto-bot-research && sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.extras status --db /var/lib/paperbot/paper3.db`. 설정은 `/etc/paperbot/extras.json`(없어도 됨, 예시 `deploy/extras.example.json`). 아래 "추가 계좌"와 `docs/extra-accounts.md` |
@@ -813,6 +823,7 @@ sudo journalctl -u <그 이름> -n 50 --no-pager
 - **미리 연습 (10/10쯤, 10/25쯤 한 번씩):** 실제 데이터로 판정 전 과정을 미리 돌려 봅니다. 오늘(UTC)을 판정일처럼, 거래 10건 이상·동전 봇 500개로 계산합니다. 진짜 `checkpoint.db`에는 쓰지 않고(이미 있는 파일이나 진짜 판정 파일 경로는 거부) 텔레그램도 보내지 않습니다. 1분봉 보관함을 미리 채워 11/1 판정도 빨라집니다. 수 분 걸립니다.
   `sudo systemd-run --wait --pipe --collect -p User=paperbot -p WorkingDirectory=/opt/crypto-bot-research -p EnvironmentFile=/etc/paperbot/live.env -p Nice=15 /opt/paperbot/venv/bin/python -m paperbot.checkpoint_preview --db /var/lib/paperbot/paper3.db --out /tmp/preview-$(date +%m%d%H%M).db --cache /var/lib/paperbot/checkpoint_bars`
   확인: 오류 없이 "미리보기 끝"까지 나오는지, 스냅샷 계좌 수(195개 + 추가 계좌), "신호 비율 0인 계좌"가 0개인지, 걸린 시간, "주의" 줄. 화면 내용을 그대로 개발 담당에게 보내 주세요.
+- **매주 미리 연습 (자동):** `paperbot-rehearsal.timer`가 매주 수요일 12:30(한국 시간)에 위 미리 연습을 같은 조건(오늘을 판정일처럼, 거래 10건 이상, 동전 봇 500개)으로 돌립니다. 결과는 `/var/lib/paperbot/rehearsal/`에 새 파일로만 쓰고 최근 4번만 남깁니다. 진짜 `checkpoint.db`와 진짜 1분봉 보관함은 이 작업에서 아예 보이지 않게 막혀 있고(자기 보관함 `rehearsal/bars` 사용), 텔레그램도 보내지 않습니다. 실패하면(오류, 그날 00:00 상태 없음 등) `[작업 실패] 판정 미리 연습` 경고가 한 번 옵니다. 요약 보기: `sudo cat /var/lib/paperbot/rehearsal/latest.json` (`status`가 `ok`, `accounts_in_snapshot`이 195개 + 추가 계좌, `zero_rate_accounts`가 빈 목록 `[]`, `runtime_s` 걸린 초, `warnings` 주의, `counts` 상태별 계좌 수). 에이전트와 대시보드도 이 파일을 읽을 수 있습니다.
 - **주의:** 기간 중에 체결·청산·사이즈 코드가 바뀐 재시작이 있으면 판정 결과에 "주의"로 표시합니다. Q5(그 계좌의 기간을 배포일부터 다시 셈)는 아직 코드가 자동으로 적용하지 않으므로 규칙 관리자가 확인합니다.
 
 ## 추가 계좌 (복제 계좌·새 매매법 계좌, `paperbot/extras.py`)
