@@ -717,27 +717,43 @@ class ClassBudget(BudgetedRunner):
         """Calls a NEW meeting of this kind may make now (0 = defer it; nothing is posted). Judged like
         ``check`` with a typical call's tokens (``call_need``), so a meeting whose first call the
         check would refuse never starts; paced classes also leave ``paced_keep``."""
+        return self.headroom_why()[0]
+
+    def headroom_why(self) -> tuple[int, dict]:
+        """``headroom`` and the numbers behind it: {limit, class, used, cap, total_used, total, reserve, keep,
+        call_tokens, (week_used, week, week_need), (pace)}; ``limit`` names the check that gave the value
+        (class_tokens, total_tokens, reserve_tokens, week_tokens: 0 at once; class_calls, total_calls,
+        week_calls, pace: the smallest room left). Kept for ``meetings:skipped`` when a meeting is deferred."""
         est = self.call_need()
         reserved = self.pipeline in RESERVED_CLASSES
         calls, tokens = self.used_today()
         tc, tt = self.total_for_caps()
         rc, rt = self.reserve()
         kc, kt = self.paced_keep()
-        if tokens >= self.max_tokens or tokens + est > self.max_tokens or tt >= self.total_tokens:
-            return 0
-        if (reserved and tt + est > self.total_tokens) or (not reserved and tt + rt + kt + est >= self.total_tokens):
-            return 0
-        room = [self.max_calls - calls, self.total_calls - tc - rc - kc]
+        info: dict = {"class": self.pipeline, "used": [calls, tokens], "cap": [self.max_calls, self.max_tokens],
+                      "total_used": [tc, tt], "total": [self.total_calls, self.total_tokens], "reserve": [rc, rt],
+                      "keep": [kc, kt], "call_tokens": est}
+        if tokens >= self.max_tokens or tokens + est > self.max_tokens:
+            return 0, {"limit": "class_tokens", **info}
+        if tt >= self.total_tokens or (reserved and tt + est > self.total_tokens):
+            return 0, {"limit": "total_tokens", **info}
+        if not reserved and tt + rt + kt + est >= self.total_tokens:
+            return 0, {"limit": "reserve_tokens", **info}
+        room = {"class_calls": self.max_calls - calls, "total_calls": self.total_calls - tc - rc - kc}
         if self.week:
             wc, wt = self.week_for_caps()
             nc, nt = self.week_need(rc + kc, rt + kt, est)    # the plain window for the reserved classes
+            info.update(week_used=[wc, wt], week=list(self.week), week_need=[nc, nt])
             if nt >= self.week[1] or wt >= self.week[1] or (reserved and wt + est > self.week[1]):
-                return 0
-            room.append(self.week[0] - max(nc, wc))
+                return 0, {"limit": "week_tokens", **info}
+            room["week_calls"] = self.week[0] - max(nc, wc)
         pa = self.pace_allowance()
         if pa is not None:
-            room.append(pa - calls)
-        return max(0, min(room))
+            info["pace"] = pa
+            room["pace"] = pa - calls
+        # the smallest room; a cap already used up (<= 0) is named before pacing (dict order: class, total, week, pace)
+        lim = min(room, key=lambda k: max(0, room[k]))
+        return max(0, room[lim]), {"limit": lim, **info}
 
     def call(self, model: str, system_prompt: str, instruction: str, packet: dict) -> CallResult:
         est = estimate_tokens(packet, system_prompt, instruction)
@@ -1146,7 +1162,69 @@ def budget_warnings(policy: RoomsPolicy) -> list[str]:
         # the 7-day cap keeps the incident and scheduled caps for today and the next six days
         out.append(f"week={p.week_budget[0]}:{p.week_budget[1]} is taken by seven days of the incident and scheduled "
                    f"caps (7 x {kept} calls, 7 x {kept_t:,} tokens): owner, loss and weekly meetings can never start")
+    ev = evening_room(p)
+    if ev is not None and (ev["left_tokens"] < ev["need_tokens"] or ev["left_calls"] < ev["need_calls"]):
+        out.append(f"at about {ev['call_tokens']:,} tokens a call, the {ev['hour']:02d}:00 timeframe-split meetings "
+                   f"(weekly class) find little room: of total={p.total_budget[0]}:{p.total_budget[1]:,} the incident "
+                   f"and scheduled caps are held until midnight ({ev['reserved_calls']} calls, "
+                   f"{ev['reserved_tokens']:,} tokens) and {ev['keep_calls']} calls / {ev['keep_tokens']:,} tokens are "
+                   f"kept for owner posts and busts; paced loss reviews may use {ev['loss_calls']} calls / "
+                   f"{ev['loss_tokens']:,} tokens and the lab {ev['research_calls']} / {ev['research_tokens']:,} by "
+                   f"then, which leaves {max(0, ev['left_calls'])} calls / {max(0, ev['left_tokens']):,} tokens "
+                   f"(need about {ev['need_calls']} / {ev['need_tokens']:,}): raise total tokens or lower the loss "
+                   "tokens (meetings:skipped lists each deferral)")
     return out
+
+
+# Tokens of one call on the server, Claude Code's own part included (docs/agent-rooms.md: 30-50k each; the
+# review of 2026-10-04 simulated 29k and 38k): ``evening_room``'s assumption for ``budget_warnings``.
+TYPICAL_CALL_TOKENS = 38_000
+RESEARCH_CALLS_PER_MEETING = 2          # a lab meeting's usual length (3 at most)
+
+
+def evening_room(p: RoomsPolicy, call_tokens: int = TYPICAL_CALL_TOKENS) -> Optional[dict]:
+    """What the gate (``ClassBudget.headroom``) leaves the weekly class at the timeframe-split hour on a day of
+    routine use, judged the way the gate does: the total minus the incident and scheduled caps (held whole until
+    midnight: what they spend lowers the reserve by as much), minus what paced calls keep for owner posts and busts
+    (``paced_keep`` with nothing used yet), minus the loss reviews at their pace allowance by that hour (their cap
+    without the bust reserve) and the lab meetings due by then, each call ``call_tokens``. None when the
+    timeframe-split meeting is off. ``need``: ``tf_split_per_day`` shortest meetings (3 calls), the last call
+    charged as the pre-call check does (``call_charge``)."""
+    t = p.triggers
+    hour = int(t.tf_split_hour_kst)
+    if hour < 0 or "tf_split" not in t.enabled:
+        return None
+    T = max(1, int(call_tokens))
+    frac = min(1.0, (hour + p.pace_lead_hours) / 24)
+    bud = {k: (int(c), int(tok)) for k, (c, tok) in p.budgets.items()}
+    res_c = sum(bud.get(k, (0, 0))[0] for k in RESERVED_CLASSES)
+    res_t = sum(bud.get(k, (0, 0))[1] for k in RESERVED_CLASSES)
+    keep_c = keep_t = 0
+    for cls, n in (("owner", p.owner_keep_calls), ("loss", p.bust_reserve_calls)):
+        cap_c, cap_t = bud.get(cls, (0, 0))
+        k = min(max(0, int(n)), cap_c)
+        if k > 0:
+            keep_c, keep_t = keep_c + k, keep_t + cap_t * k // cap_c
+    loss_c, loss_t = bud.get("loss", (0, 0))
+    sub_c = max(0, loss_c - p.bust_reserve_calls)
+    sub_t = loss_t
+    if 0 < sub_c < loss_c:                      # as round_budget sub-caps a loss review
+        sub_t = max(0, loss_t - max(loss_t - loss_t * sub_c // loss_c,
+                                    reserve_meeting_tokens(loss_c - sub_c, p.reserve_call_input_tokens)))
+    lc = min(math.ceil(sub_c * frac), sub_t // T)
+    lt = min(sub_t, lc * T)
+    rc = rt = 0
+    if t.research_every_ms > 0 and "research" in t.enabled:
+        r_c, r_t = bud.get("research", (0, 0))
+        meetings = hour * 3_600_000 // t.research_every_ms
+        rc = min(math.ceil(r_c * frac), RESEARCH_CALLS_PER_MEETING * meetings, r_t // T)
+        rt = min(r_t, rc * T)
+    total_c, total_t = (int(x) for x in p.total_budget)
+    per = max(1, int(t.tf_split_per_day))
+    return {"hour": hour, "call_tokens": T, "reserved_calls": res_c, "reserved_tokens": res_t, "keep_calls": keep_c,
+            "keep_tokens": keep_t, "loss_calls": lc, "loss_tokens": lt, "research_calls": rc, "research_tokens": rt,
+            "left_calls": total_c - res_c - keep_c - lc - rc, "left_tokens": total_t - res_t - keep_t - lt - rt,
+            "need_calls": 3 * per, "need_tokens": per * 3 * T + call_charge(T) - T}
 
 
 # ---------------------------------------------------------------- prompts
@@ -3060,9 +3138,104 @@ def store_skipped(conn: sqlite3.Connection, paper_ro: Optional[sqlite3.Connectio
     except Exception as exc:  # noqa: BLE001
         print(f"warning: skipped-meeting status failed: {type(exc).__name__}: {exc}", file=sys.stderr)
         return {}
-    if got and R.get_cursor(conn, SKIP_CURSOR) != got:
-        R.set_cursor(conn, SKIP_CURSOR, got)
+    old = R.get_cursor(conn, SKIP_CURSOR)
+    old = old if isinstance(old, dict) else {}
+    kept = prune_deferred(old.get(BUDGET_DEFERRED), now_ms)
+    # nothing new to say (no paper3.db): the old status stays, as before; the budget deferrals (``store_deferred``)
+    # of the last DEFERRED_DAYS stay either way and older ones go
+    new = dict(got) if got else {k: v for k, v in old.items() if k != BUDGET_DEFERRED}
+    if kept:
+        new[BUDGET_DEFERRED] = kept
+        if got:
+            got[BUDGET_DEFERRED] = kept
+    if new != old and (new or old):
+        R.set_cursor(conn, SKIP_CURSOR, new)
     return got
+
+
+# Meetings the AI budget deferred (owners' review 2026-10-04: the 18:00 timeframe-split meeting was starved for
+# days and nothing said so): kept in ``meetings:skipped`` under this key, one entry per KST day and trigger
+BUDGET_DEFERRED = "budget_deferred"
+DEFERRED_DAYS = 3                   # today and the two days before
+DEFERRED_MAX = 60
+_LIMIT_KO = {
+    "class_tokens": "{cls} 몫 토큰을 다 씀: {used_t:,}/{cap_t:,} (호출 한 번에 {est:,} 필요)",
+    "total_tokens": "하루 합계 토큰을 다 씀: {tt:,}/{T:,}",
+    "reserve_tokens": "하루 합계 토큰 {T:,} 안에서 사용 {tt:,} + 자정까지 남겨 두는 사고·정기 회의 몫 {rt:,} + 주인 글·파산 몫 "
+                      "{kt:,} + 호출 한 번 {est:,} = {sum_t:,}",
+    "week_tokens": "7일 합계 토큰 {W:,} 안에서 사용 {wt:,}, 사고·정기 회의 몫(오늘과 다음 엿새)까지 {nt:,}",
+    "class_calls": "{cls} 몫 호출 {used_c}/{cap_c}",
+    "total_calls": "하루 합계 호출 {TC}회 안에서 사용 {tc} + 사고·정기 회의 몫 {rc} + 주인 글·파산 몫 {kc}",
+    "week_calls": "7일 합계 호출 {WC}회 안에서 사고·정기 회의 몫까지 남은 호출",
+    "pace": "하루에 나눠 쓰기: 지금까지 {pace}회까지인데 {used_c}회 씀",
+}
+
+
+def deferral_reason(due: TR.Due, ctx: RoundContext) -> Optional[dict]:
+    """Why the AI budget cannot start ``due`` now ({limit, why, headroom, need}), or None when it is not the budget
+    (it could start, or the lab cannot meet anyway). The same numbers as ``can_start`` (``ClassBudget.headroom_why``)."""
+    if due.trigger == "research" and lab_blocked(ctx):
+        return None
+    room, info = round_budget(due, ctx).headroom_why()
+    need = round_min_calls(due, ctx.policy)
+    if room >= need:
+        return None
+    (used_c, used_t), (cap_c, cap_t) = info["used"], info["cap"]
+    (tc, tt), (TC, T) = info["total_used"], info["total"]
+    (rc, rt), (kc, kt) = info["reserve"], info["keep"]
+    wt, nt = (info.get("week_used") or [0, 0])[1], (info.get("week_need") or [0, 0])[1]
+    WC, W = info.get("week") or [0, 0]
+    est = info["call_tokens"]
+    text = _LIMIT_KO.get(info["limit"], info["limit"]).format(
+        cls=info["class"], used_c=used_c, used_t=used_t, cap_c=cap_c, cap_t=cap_t, tc=tc, tt=tt, TC=TC, T=T, rc=rc,
+        rt=rt, kc=kc, kt=kt, est=est, sum_t=tt + rt + kt + est, wt=wt, nt=nt, WC=WC, W=W, pace=info.get("pace"))
+    why = f"AI 한도로 미룸 — {text}" + ("" if info["limit"].endswith("_tokens") else f" → 남은 {room}회 < 회의 최소 {need}회")
+    return {"limit": info["limit"], "why": why, "headroom": room, "need": need}
+
+
+def prune_deferred(entries: Any, now_ms: int) -> list:
+    """The ``budget_deferred`` entries of the last ``DEFERRED_DAYS`` KST days, at most ``DEFERRED_MAX``, newest last."""
+    if not isinstance(entries, list):
+        return []
+    first = R.kst_day(now_ms - (DEFERRED_DAYS - 1) * DAY_MS)
+    keep = [e for e in entries if isinstance(e, dict) and str(e.get("day", "")) >= first]
+    keep.sort(key=lambda e: (int(e.get("last_ts") or 0), str(e.get("trigger"))))
+    return keep[-DEFERRED_MAX:]
+
+
+def store_deferred(conn: sqlite3.Connection, now_ms: int, deferrals: list) -> None:
+    """Add this tick's budget deferrals (``[(due, deferral_reason)]``) to ``meetings:skipped`` (key
+    ``BUDGET_DEFERRED``): per KST day and trigger the first and last tick, how many ticks, the rooms and the last
+    reason. A meeting that opens later stays listed (it waited). Code only; never raises into the tick."""
+    if not deferrals:
+        return
+    try:
+        cur = R.get_cursor(conn, SKIP_CURSOR)
+        cur = dict(cur) if isinstance(cur, dict) else {}
+        entries = prune_deferred(cur.get(BUDGET_DEFERRED), now_ms)
+        day = R.kst_day(now_ms)
+        by = {(e.get("day"), e.get("trigger")): e for e in entries}
+        ticked: set = set()
+        for due, why in deferrals:
+            e = by.get((day, due.trigger))
+            if e is None:
+                e = {"day": day, "trigger": due.trigger, "class": due.data.get("class"), "first_ts": now_ms,
+                     "ticks": 0, "rooms": [], "n_rooms": 0}
+                entries.append(e)
+                by[(day, due.trigger)] = e
+            if due.trigger not in ticked:
+                ticked.add(due.trigger)
+                e["ticks"] = int(e.get("ticks") or 0) + 1
+            e["last_ts"] = now_ms
+            rooms = list(e.get("rooms") or [])     # every room deferred that day (at most the ~45 rooms)
+            if due.room_id not in rooms:
+                rooms.append(due.room_id)
+            e["rooms"], e["n_rooms"] = rooms, len(rooms)
+            e.update({k: why[k] for k in ("limit", "why", "headroom", "need")})
+        cur[BUDGET_DEFERRED] = prune_deferred(entries, now_ms)
+        R.set_cursor(conn, SKIP_CURSOR, cur)
+    except (sqlite3.Error, TypeError, ValueError) as exc:
+        print(f"warning: budget-deferral record failed: {type(exc).__name__}: {exc}", file=sys.stderr)
 
 
 # ---------------------------------------------------------------- market move (owners' choice 2026-10-03)
@@ -4363,6 +4536,20 @@ def tick(paper_db: Optional[str], daily_db: Optional[str], agents_db: str, inbox
             met: list[str] = []
             tick_calls = 0
             checked = preflight is None
+            deferrals: list = []            # meetings due now that the AI budget defers (meetings:skipped)
+            noted: set = set()
+
+            def note_deferred(d: TR.Due) -> None:
+                if (d.trigger, d.room_id) in noted:
+                    return
+                noted.add((d.trigger, d.room_id))
+                try:
+                    why = deferral_reason(d, ctx)
+                except (sqlite3.Error, TypeError, ValueError, KeyError) as exc:
+                    print(f"warning: budget-deferral reason failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+                    return
+                if why is not None:
+                    deferrals.append((d, why))
             market = None
             if market_fetch is not None and "market_move" in policy.triggers.enabled:
                 try:
@@ -4375,7 +4562,7 @@ def tick(paper_db: Optional[str], daily_db: Optional[str], agents_db: str, inbox
                 dues = TR.find_due(paper_ro, daily_ro, conn, inbox_ro, now, policy.triggers,
                                    defer_triggers=deferred_triggers(ctx), skip_rooms=met,
                                    can_start=lambda d: can_start(d, ctx), market=market,
-                                   checkpoint_db=ctx.checkpoint_db)
+                                   checkpoint_db=ctx.checkpoint_db, on_deferred=note_deferred)
                 if first is None:
                     first = dues
                 pick = None
@@ -4408,6 +4595,7 @@ def tick(paper_db: Optional[str], daily_db: Optional[str], agents_db: str, inbox
                 mark_tick(conn, ctx.clock())                 # alive: a long tick is not a stopped one
                 if res["stopped"] in ("usage_limit", "budget_total", "budget_week", "runner_error"):
                     break
+            store_deferred(conn, now, deferrals)
             if any(r.get("stopped") == "usage_limit" for r in results):
                 lower_usage_scale(conn, now)
             try:

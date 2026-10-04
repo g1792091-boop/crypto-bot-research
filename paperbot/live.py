@@ -10,7 +10,7 @@
         signals for the next bar.
 
 Order within one 1m bar t:
-    engine.step(bars at t)       fills signals from bar t-1, exits, funding
+    engine.step(bars at t)       funding (positions held at t), fills signals from bar t-1, exits
     strategies see bar t closed  (and any higher-timeframe bar closing at t)
     engine.submit(signals)       they fill at bar t+1's open
 """

@@ -249,3 +249,128 @@ def test_signal_service_never_computes_5m():
     assert svc.due(day + 3 * FIVE) == ["15m"] and svc.due(day) == ["15m", "30m", "1h", "4h", "1d"]
     # the rate file still holds a 5m rate (research output): it is never reached, 5m is never due
     assert not [tf for k in range(288) for tf in svc.due(day + k * FIVE) if tf == "5m"]
+
+
+# ---------------------------------------------------------------- SIGTERM (review 3c M-1)
+_SIGTERM_CHILD = r'''
+import json, os, sys, time
+sys.path.insert(0, sys.argv[1])
+import paperbot.live3 as L3
+import paperbot.sigservice as SS
+
+out, db, ready = sys.argv[2], sys.argv[3], sys.argv[4]
+
+
+class FileNotifier:
+    def send(self, level, text):
+        with open(out, "a") as fh:
+            fh.write(json.dumps([level, text], ensure_ascii=False) + "\n")
+        return True
+
+
+class FakeRest:
+    api_key = api_secret = None
+
+    def server_time(self):
+        return int(time.time() * 1000)
+
+    def exchange_info(self, syms):
+        return {s: {"qty_step": 0.001, "min_notional": 5.0} for s in syms}
+
+    def klines(self, *a, **k):
+        return []
+
+
+class FakeService:
+    def __init__(self, symbols, record_only, rates, procs=4):
+        self.symbols, self.windows, self.lib = list(symbols), {"15m": 10}, None
+
+    def bootstrap(self, s, rows):
+        pass
+
+    def close(self):
+        pass
+
+
+DIGESTS = []
+
+
+class KeptDigest(L3.Digest):
+    def __init__(self, *a, **k):
+        super().__init__(*a, **k)
+        DIGESTS.append(self)
+
+
+class FakeFeed:
+    skew_ms = 0
+
+    def __init__(self, *a, **k):
+        self.n = 0
+
+    def poll(self):
+        self.n += 1
+        if self.n == 2:     # after the first pass (its hourly flush set the digest's clock): a bust line waits
+            DIGESTS[0].add("[S2_ST_ROC@1h] BUST: bust: equity 8.12 below 10.00")
+            open(ready, "w").close()
+        return []
+
+
+L3._rest, L3._notifier, L3.LiveFeed, L3.Digest = FakeRest, FileNotifier, FakeFeed, KeptDigest
+L3.start_extras = lambda *a: (None, None)
+SS.SignalService, SS.strategy_names = FakeService, lambda lib: ["S2_ST_ROC"]
+sys.exit(L3.main(["run", "--db", db, "--allow-example-brackets", "--poll", "0.2"]))
+'''
+
+
+def test_sigterm_ends_the_run_cleanly_and_sends_the_pending_digest(tmp_path):
+    """systemctl stop / restart send SIGTERM: the runner leaves its loop through ``finally`` (exit 0), so the hourly
+    digest's pending lines (here a bust) are sent instead of being lost with the process."""
+    import json
+    import os
+    import signal
+    import subprocess
+    import sys
+    import time
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    child, out, ready = tmp_path / "child.py", tmp_path / "sent.jsonl", tmp_path / "ready"
+    child.write_text(_SIGTERM_CHILD)
+    p = subprocess.Popen([sys.executable, str(child), root, str(out), str(tmp_path / "paper3.db"), str(ready)],
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    try:
+        deadline = time.time() + 120
+        while not ready.exists() and p.poll() is None and time.time() < deadline:
+            time.sleep(0.05)
+        assert ready.exists(), p.communicate(timeout=5)
+        sent_before = out.read_text() if out.exists() else ""
+        assert "BUST" not in sent_before and "파산" not in sent_before    # held for the hourly digest
+        t0 = time.time()
+        p.send_signal(signal.SIGTERM)
+        so, se = p.communicate(timeout=30)
+    finally:
+        if p.poll() is None:
+            p.kill()
+    assert p.returncode == 0, (p.returncode, so, se)
+    assert time.time() - t0 < 10
+    lines = [json.loads(x) for x in out.read_text().splitlines()]
+    assert any("파산 1" in text and "S2_ST_ROC@1h" in text for _, text in lines), lines
+    import sqlite3
+    c = sqlite3.connect(str(tmp_path / "paper3.db"))
+    assert c.execute("SELECT COUNT(*) FROM accounts").fetchone()[0] == len(V3_TRADE_TFS) * (1 + len(V3_RANDOM_SEEDS))
+    c.close()
+
+
+def test_sigterm_handler_is_installed_only_on_the_main_thread_and_restored():
+    import signal
+    import threading
+    from paperbot.live3 import stop_on_sigterm
+    before = signal.getsignal(signal.SIGTERM)
+    stop, restore = stop_on_sigterm()
+    assert signal.getsignal(signal.SIGTERM) is not before and not stop.is_set()
+    restore()
+    assert signal.getsignal(signal.SIGTERM) is before
+    got = []
+    t = threading.Thread(target=lambda: got.append(stop_on_sigterm()))
+    t.start()
+    t.join()
+    got[0][1]()                                          # a no-op restore off the main thread
+    assert signal.getsignal(signal.SIGTERM) is before

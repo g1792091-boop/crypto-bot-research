@@ -80,17 +80,23 @@ class PaperEngine:
     def step(self, bars: dict[str, Bar],
              funding: Optional[dict[str, float]] = None) -> None:
         """Process one aligned bar per symbol. ``funding`` maps symbol to the
-        funding rate settled at the open of these bars."""
-        entered_now = self._handle_entries(bars)
-        if self.position is not None:
-            bar = bars.get(self.position.symbol)
-            if bar is not None:
-                self._handle_exit(bar, entry_bar=entered_now)
+        funding rate settled at the open of these bars.
+
+        Funding comes first: it is paid by the position open at the funding
+        instant (the bar open), on the mark open, before this bar's entries and
+        exits. A position entered in this bar (it fills at or after the open,
+        live 10-19 s after it) pays none; a position held over the open pays
+        even when it exits in this bar."""
         if funding and self.position is not None:
             rate = funding.get(self.position.symbol)
             bar = bars.get(self.position.symbol)
             if rate is not None and bar is not None:
                 self._apply_funding(rate, bar.m_open)
+        entered_now = self._handle_entries(bars)
+        if self.position is not None:
+            bar = bars.get(self.position.symbol)
+            if bar is not None:
+                self._handle_exit(bar, entry_bar=entered_now)
         for sym, bar in bars.items():
             self._last_mark[sym] = bar.m_close
         ts = max(b.close_time for b in bars.values()) if bars else 0

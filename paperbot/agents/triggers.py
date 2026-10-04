@@ -1282,7 +1282,7 @@ def find_due(paper_ro: Optional[sqlite3.Connection], daily_ro: Optional[sqlite3.
              policy: Optional[TriggerPolicy] = None, *, defer_classes: Iterable[str] = (),
              defer_triggers: Iterable[str] = (), skip_rooms: Iterable[str] = (),
              can_start: Optional[Callable[[Due], bool]] = None, market: Optional[dict] = None,
-             checkpoint_db: Optional[str] = None) -> list[Due]:
+             checkpoint_db: Optional[str] = None, on_deferred: Optional[Callable[[Due], None]] = None) -> list[Due]:
     """Rounds to run now, sorted by (priority, bust before loss_cluster, oldest evidence). Reads only.
     ``defer_classes`` / ``defer_triggers``: what the caller cannot start now (its AI budget is used
     up or paced), left out before the per-tick pick so it never hides other meetings;
@@ -1291,7 +1291,9 @@ def find_due(paper_ro: Optional[sqlite3.Connection], daily_ro: Optional[sqlite3.
     that cannot start never take the slots of ones that can;
     ``skip_rooms``: rooms that already met in the caller's current tick;
     ``market``: the last hour of each coin for ``market_move`` (fetched by the caller; None = not due);
-    ``checkpoint_db``: checkpoint.db (read-only); the checkpoint meeting waits for its verdict (None: no wait)."""
+    ``checkpoint_db``: checkpoint.db (read-only); the checkpoint meeting waits for its verdict (None: no wait);
+    ``on_deferred``: told of each meeting that is otherwise due (not handled, not given up, not waiting) but left
+    out by ``defer_classes`` / ``defer_triggers`` / ``can_start`` (the caller records why: ``meetings:skipped``)."""
     p = policy or TriggerPolicy()
     st = _Rooms(agents_conn, now_ms, p)
     if st.usage_paused() or st.transient_paused():
@@ -1328,7 +1330,8 @@ def find_due(paper_ro: Optional[sqlite3.Connection], daily_ro: Optional[sqlite3.
     ok: list[Due] = []
     for d in found:
         key = d.data["key"]
-        if d.data["class"] in defer or d.trigger in defer_t or d.room_id in skip:
+        deferred = d.data["class"] in defer or d.trigger in defer_t
+        if (deferred and on_deferred is None) or d.room_id in skip:
             continue
         if st.class_blocked(d.data["class"]) or st.running_fresh(d.room_id, d.trigger):
             continue
@@ -1339,7 +1342,9 @@ def find_due(paper_ro: Optional[sqlite3.Connection], daily_ro: Optional[sqlite3.
             continue
         if st.key_waiting(d.room_id, d.trigger, key):
             continue            # this meeting keeps failing by itself: it waits its own pause
-        if can_start is not None and not can_start(d):
+        if deferred or (can_start is not None and not can_start(d)):
+            if on_deferred is not None:
+                on_deferred(d)
             continue            # e.g. its AI budget cannot carry it now: found again on a later tick
         if failed:
             d.data["retry_of"] = failed[-1]["round_id"]

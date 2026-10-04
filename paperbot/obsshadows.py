@@ -364,8 +364,8 @@ def run_alone_tp(settings: Settings, brackets, specs, sig: Signal, ssteps, i0: i
       - the engine steps the bar (its stop / lock / liquidation exits come first: a bar that hits both is a stop);
       - if still open and not the entry bar filled at ``ref_price``, a bar whose favourable extreme touches the
         take-profit exits at it (market: slippage and taker fee, exit time the bar close);
-      - funding is passed to the engine only after that, so a bar the trade leaves pays none (as the engine's own
-        exits) and a bar it stays in pays as in ``run_alone``.
+      - funding comes first, as in the engine (engine.step): a position held at the bar open pays that open's
+        funding before any exit of the bar (the take-profit gap included); the entry bar pays none.
     Returns (trade or None, resolved, take-profit price or None)."""
     e = PaperEngine(settings, brackets, symbol_specs=specs, book="shadow", policy=policy)
     e.submit(sig)
@@ -374,6 +374,9 @@ def run_alone_tp(settings: Settings, brackets, specs, sig: Signal, ssteps, i0: i
         ts, bars, funding = ssteps[k_]
         p = e.position
         bar = bars.get(p.symbol) if p is not None else None
+        rate = (funding or {}).get(p.symbol) if p is not None else None
+        if rate is not None and bar is not None:
+            e._apply_funding(rate, bar.m_open)
         if p is not None and tp is not None and bar is not None and (bar.open - tp) * p.side >= 0 \
                 and (bar.m_open - p.liq_price) * p.side > 0:
             e._close_market(bar.open, bar.open_time, "TP")
@@ -395,9 +398,6 @@ def run_alone_tp(settings: Settings, brackets, specs, sig: Signal, ssteps, i0: i
             if (bar.high >= tp) if p.side > 0 else (bar.low <= tp):
                 e._close_market(tp, bar.close_time, "TP")
                 return e.trades[0], True, tp
-        rate = (funding or {}).get(p.symbol)
-        if rate is not None and bar is not None:
-            e._apply_funding(rate, bar.m_open)
     return None, False, tp
 
 
@@ -744,10 +744,24 @@ def curve_rows(prev: dict, day: str, rows: list[dict], start: float = CURVE_STAR
 
 def write_curves(out_conn, day: str, rows: list[dict], start: float = CURVE_START,
                  bust_below: float = CURVE_BUST_BELOW) -> dict:
-    """Append the night's shadow equity curves to daily3.db ``shadow_curves`` (re-running a day replaces its rows and
-    starts from the latest rows before it; later days are not recomputed). Returns a small summary for the report:
-    {"rows": n, "busts": [[account_id, variant], ...] that busted this night}."""
+    """Append the night's shadow equity curves to daily3.db ``shadow_curves``. Re-running a day replaces its rows and
+    starts from the latest rows before it; then every LATER day already present is recomputed in order from its
+    stored shadow rows (daily3.db ``shadows``), so a missed night re-run afterwards reaches the curves of the days
+    after it, and the result is the same as running the nights in order (review 2026-10-04, M-3). Returns a small
+    summary for the report: {"rows": n, "busts": [[account_id, variant], ...] that busted this night,
+    "recomputed": [later days rewritten]}."""
     out_conn.executescript(CURVES_SCHEMA)
+    new = _write_curve_day(out_conn, day, rows, start, bust_below)
+    later: list = []
+    if _has_shadows(out_conn):                  # without stored shadow rows the later days are left as they are
+        later = sorted({d for (d,) in out_conn.execute("SELECT DISTINCT day FROM shadow_curves WHERE day > ?", (day,))}
+                       | set(_shadow_days_after(out_conn, day)))
+    for d in later:
+        _write_curve_day(out_conn, d, _stored_shadow_rows(out_conn, d), start, bust_below)
+    return {"rows": len(new), "busts": [[aid, v] for _d, aid, v, _e, b, _n in new if b == day], "recomputed": later}
+
+
+def _write_curve_day(out_conn, day: str, rows: list[dict], start: float, bust_below: float) -> list[tuple]:
     out_conn.execute("DELETE FROM shadow_curves WHERE day = ?", (day,))
     prev = {}
     for aid, v, eq, bust, n in out_conn.execute(
@@ -757,7 +771,31 @@ def write_curves(out_conn, day: str, rows: list[dict], start: float = CURVE_STAR
         prev[(aid, v)] = (float(eq), bust, int(n))
     new = curve_rows(prev, day, rows, start, bust_below)
     out_conn.executemany("INSERT INTO shadow_curves VALUES (?,?,?,?,?,?)", new)
-    return {"rows": len(new), "busts": [[aid, v] for _d, aid, v, _e, b, _n in new if b == day]}
+    return new
+
+
+def _has_shadows(out_conn) -> bool:
+    return out_conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'shadows'").fetchone() is not None
+
+
+def _shadow_days_after(out_conn, day: str) -> list[str]:
+    """Days after ``day`` with stored shadow rows of a curve variant (none without the ``shadows`` table)."""
+    if not _has_shadows(out_conn):
+        return []
+    q = ",".join("?" * len(CURVE_VARIANTS))
+    return [d for (d,) in out_conn.execute(f"SELECT DISTINCT day FROM shadows WHERE day > ? AND kind IN ({q})",
+                                           (day, *CURVE_VARIANTS))]
+
+
+def _stored_shadow_rows(out_conn, day: str) -> list[dict]:
+    """A night's stored shadow rows of the curve variants, as ``curve_rows`` reads them."""
+    if not _has_shadows(out_conn):
+        return []
+    q = ",".join("?" * len(CURVE_VARIANTS))
+    return [{"key": k, "kind": kind, "account_id": aid, "resolved": res, "roe": roe, "data": data}
+            for k, kind, aid, res, roe, data in out_conn.execute(
+                f"SELECT key, kind, account_id, resolved, roe, data FROM shadows WHERE day = ? AND kind IN ({q})",
+                (day, *CURVE_VARIANTS))]
 
 
 def curve_view(daily_ro, account: Optional[str] = None, accounts=None, include_random: bool = False,

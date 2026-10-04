@@ -278,3 +278,116 @@ def test_digest_without_notes_is_unchanged():
     d = Digest(out, every_ms=1)
     d.add("[S2_ST_ROC@1h] drawdown 20.4% (level 20%), equity 3980.12")
     assert d.flush(0, force=True) == "알림 모음: 낙폭 1\n[S2_ST_ROC@1h] drawdown 20.4% (level 20%), equity 3980.12"
+
+
+# ---------------------------------------------------------------- Telegram 429 and bursts of emergencies (M-2)
+def _telegram_429(monkeypatch, refuse):
+    """urlopen that accepts, except the requests ``refuse(n)`` (n = 1-based request number) answers with a 429
+    'retry after' its value in seconds (a JSON body like Telegram's)."""
+    import io
+    import urllib.error
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "t")
+    monkeypatch.setenv("TELEGRAM_CHAT_CRITICAL", "111")
+    calls, sent = [], []
+
+    class Resp:
+        def read(self):
+            return b"{}"
+
+    def fake(url, data=None, timeout=None):
+        calls.append(urllib.parse.parse_qs(data.decode()))
+        wait = refuse(len(calls))
+        if wait is not None:
+            body = ('{"ok":false,"error_code":429,"parameters":{"retry_after":%d}}' % wait).encode()
+            raise urllib.error.HTTPError(url, 429, "Too Many Requests", {"Retry-After": str(wait)}, io.BytesIO(body))
+        sent.append(calls[-1])
+        return Resp()
+    monkeypatch.setattr(notify.urllib.request, "urlopen", fake)
+    return calls, sent
+
+
+def test_telegram_send_waits_once_on_429_and_never_longer_than_30s(monkeypatch):
+    calls, sent = _telegram_429(monkeypatch, lambda n: 7 if n == 1 else None)
+    slept = []
+    n = TelegramNotifier(sleep=slept.append)
+    assert n.send(WARN, "no new closed bars for 245s") is True
+    assert slept == [7.0] and len(calls) == 2 and len(sent) == 1
+    calls, sent = _telegram_429(monkeypatch, lambda n: 35)          # longer than RETRY_WAIT_MAX_S: no wait
+    slept.clear()
+    assert n.send(WARN, "no new closed bars for 245s") is False
+    assert slept == [] and len(calls) == 1
+    calls, sent = _telegram_429(monkeypatch, lambda n: 3)           # refused again after the wait: given up
+    assert n.send(WARN, "x") is False and slept == [3.0] and len(calls) == 2
+
+
+def test_router_bundles_30_liquidations_of_a_step_and_waits_out_a_429_without_sleeping(monkeypatch):
+    """Telegram takes about 20 messages a minute in a group: 19 earlier messages, then a gap liquidates 30 accounts
+    in one step. The first liquidation goes at once, the other 29 together at the step's end (one loud message,
+    every account named); that message gets a 429 (retry after 35 s) and is sent again on a later step once the
+    35 s have passed. The trading loop never sleeps."""
+    monkeypatch.setattr(notify.time, "sleep", lambda s: (_ for _ in ()).throw(AssertionError("slept in the loop")))
+    window = {"open": True}
+    calls, sent = _telegram_429(monkeypatch, lambda n: None if n <= 20 or not window["open"] else 35)
+    tg = TelegramNotifier()
+    clk = Clock(T)
+    d = Digest(tg)
+    r = Router(tg, d, clock=clk)
+    for k in range(19):
+        r.send(WARN, f"no new closed bars for {200 + k}s")
+    books = [f"{name}@15m" for name in list(STRATEGY_KO)[:30]]
+    assert len(books) == 30
+    for b in books:
+        r.send(CRITICAL, f"[{b}] LIQUIDATED SOLUSDT 50x lost margin 2500.00")
+    assert len(sent) == 20                                   # 19 + the first liquidation, at once
+    d.flush(clk.t)                                           # the step's end: the other 29 in one message -> 429
+    assert len(calls) == 21 and len(sent) == 20 and len(r.pending) == 1
+    clk.t += 10_000
+    d.flush(clk.t)                                           # 10 s later: still waiting, nothing sent
+    assert len(calls) == 21
+    window["open"] = False                                   # the minute is over: Telegram accepts again
+    clk.t += 26_000
+    d.flush(clk.t)
+    assert len(calls) == 22 and len(sent) == 21 and r.pending == []
+    bundle = sent[-1]
+    assert bundle["disable_notification"] == ["false"]                   # CRITICAL stays loud
+    text = bundle["text"][0]
+    assert text.startswith("🚨 긴급 29건\n\n") and text.count("- 강제청산 · ") == 29
+    for b in books[1:]:
+        assert who(b) in text
+    assert who(books[0]) in sent[19]["text"][0]
+
+
+def test_router_urgent_lines_isolated_go_at_once_and_big_bursts_are_split():
+    out = ListNotifier()
+    d = Digest(out)
+    r = Router(out, d, clock=Clock(T))
+    r.send(CRITICAL, "[S2_ST_ROC@15m] LIQUIDATED SOLUSDT 25x lost margin 10.00")
+    d.flush(T)
+    r.send(CRITICAL, "[S2_ST_ROC@1h] LIQUIDATED SOLUSDT 25x lost margin 10.00")
+    assert [lv for lv, _ in out.messages] == [CRITICAL, CRITICAL]           # one per step: each at once
+    d.flush(T)
+    for k in range(101):
+        r.send(CRITICAL, f"[RANDOM_{k}@15m] LIQUIDATED BTCUSDT 50x lost margin 10.00")
+    d.flush(T)
+    msgs = out.messages[2:]
+    assert [lv for lv, _ in msgs] == [CRITICAL] * 4                          # 1 at once + 40 + 40 + 20
+    assert [m.split("\n")[0] for _, m in msgs[1:]] == ["긴급 알림 40건", "긴급 알림 40건", "긴급 알림 20건"]
+    lines = [ln for _, m in msgs for ln in m.split("\n") if "LIQUIDATED" in ln]
+    assert len(lines) == 101 and len(set(lines)) == 101
+    assert len(telegram_text(CRITICAL, msgs[1][1])[1]) < 4096
+
+
+def test_router_digest_waits_out_a_429_too(monkeypatch):
+    monkeypatch.setattr(notify.time, "sleep", lambda s: (_ for _ in ()).throw(AssertionError("slept in the loop")))
+    calls, sent = _telegram_429(monkeypatch, lambda n: 20 if n == 1 else None)
+    tg = TelegramNotifier()
+    clk = Clock(T)
+    d = Digest(tg, every_ms=1)
+    r = Router(tg, d, clock=clk)
+    d.flush(clk.t)
+    d.add("[RANDOM_2@15m] BUST: bust: equity 8.40 below 10.00")
+    d.flush(clk.t + 5)
+    assert len(calls) == 1 and sent == [] and len(r.pending) == 1
+    clk.t += 21_000
+    d.flush(clk.t)
+    assert len(sent) == 1 and "파산" in sent[0]["text"][0]

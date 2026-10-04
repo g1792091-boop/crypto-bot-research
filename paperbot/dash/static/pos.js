@@ -165,13 +165,13 @@ async function loadWhy(force) {
 }
 function orderRows(list) {
   if (!list.length) return '<p class="empty">걸려 있는 손절·잠금 주문이 없습니다</p>';
-  return `<table><thead><tr><th class="l">계좌</th><th class="l">코인</th><th class="l">종류</th><th>발동 가격</th><th>지금과 거리</th><th>발동 시 손익</th></tr></thead><tbody>` +
+  return `<div class="scroll"><table><thead><tr><th class="l">계좌</th><th class="l">코인</th><th class="l">종류</th><th>발동 가격</th><th>지금과 거리</th><th>발동 시 손익</th></tr></thead><tbody>` +
     list.map(({a, p, u}) => {
       const pnl = p.side * p.qty * (p.stop - p.entry), m = u ? u.m : null;
       return `<tr class="click" data-id="${esc(a.account_id)}"><td class="l">${esc(name(a))}</td><td class="l">${coin(p.symbol)} ${sideTag(p.side)}</td>
         <td class="l">${p.lock_roe ? `익절 잠금 +${Math.round(p.lock_roe * 100)}% (스탑 마켓)` : "손절 (스탑 마켓)"}</td><td class="mono">${px(p.stop)}</td>
         <td class="mono">${m ? pct(Math.abs(m - p.stop) / m, 2).replace("+", "") : "—"}</td><td class="mono ${cls(pnl)}">${usdt(pnl)}</td></tr>`;
-    }).join("") + "</tbody></table>";
+    }).join("") + "</tbody></table></div>";
 }
 async function renderPvHist() {
   const el = $("pv-list");

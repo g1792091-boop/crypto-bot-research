@@ -9,6 +9,14 @@ on the new tree. The golden file ``tests/data/extras_parity_golden.json`` is wri
     python -m tests.extras_harness --write-golden            (on the unmodified tree)
     python -m tests.extras_harness --run R0                  (prints one dump)
 
+When the engine's own semantics change for every account (not the extras), the golden is rewritten the same way on
+the base commit with that one change applied: ``git archive 7d2bd97 | tar -x -C <dir>``, copy this harness into
+<dir>/tests, apply the same paperbot/engine.py change, then in <dir> run
+``python -m tests.extras_harness --write-golden --base "7d2bd97...+<change>" --out <repo>/tests/data/...``. Without
+the change that command reproduces the previous golden byte for byte. Done once, 2026-10-04: funding is applied at
+the start of PaperEngine.step, before the minute's entries and exits (review 3a F2), base
+"7d2bd97ff001afd6407ed08ce0fbe6d11d1b5f8b+engine-funding-first".
+
 What is synthetic (design section 11.1)
 - Feed: a seeded generator (numpy default_rng(SEED)), seven symbols (the six trade coins plus XRP) at
   realistic price levels, 1m geometric random walk (sigma ~0.15 %/min) with regime drift switches and

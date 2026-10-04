@@ -966,7 +966,7 @@ def test_agents_policy_template_and_observation(tmp_path):
     ag = srv.envs()["agents"]
     lines = L.check_agents_policy(srv.ctx(), ag, True, None)
     assert st(lines) == [L.OK, L.OK], lines                # the owners' template: no budget warning
-    assert "AI 하루 최대 200회" in lines[0][1] and "봇 첫 시작부터 21일 복사 제안 없음" in lines[1][1]
+    assert "AI 하루 최대 150회" in lines[0][1] and "봇 첫 시작부터 21일 복사 제안 없음" in lines[1][1]
     start = NOW - 2 * DAY
     assert "2026-10-20까지" in L.check_agents_policy(srv.ctx(), ag, True, start)[1][1]
     srv.write_env("agents", agents_env(extra="AGENTS_BUDGET=loss=8\n"))

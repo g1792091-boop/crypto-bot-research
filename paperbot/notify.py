@@ -7,7 +7,12 @@ the KST time last where the line itself has none. One emoji first: the level mar
 the text already starts with its own emoji (🔔, 📈, ✅ …). Sound comes only from the level (INFO = silent).
 
 ``Router`` holds the live runner's noisy lines (1m gaps, clock skew, signal timeouts) for the hourly digest and
-rings only past a threshold; real emergencies (liquidation, job failure, …) are never held.
+rings only past a threshold; real emergencies (liquidation, job failure, …) are never held: the first CRITICAL of a
+step goes at once and the further ones of the same step go together at its end, one loud message ('긴급 알림 N건',
+every line kept), so a gap that liquidates 30 accounts is not 30 messages (Telegram allows about 20 a minute in a
+group). Telegram's 429 'retry after N s' is honoured: ``TelegramNotifier.send`` (the oneshot jobs) waits once, at
+most ``RETRY_WAIT_MAX_S``; the live runner's ``Router`` never sleeps in the trading loop and sends the refused
+message again on a later step, once N seconds have passed (review 2026-10-04, M-2).
 """
 
 from __future__ import annotations
@@ -18,6 +23,7 @@ import re
 import sys
 import time
 import unicodedata
+import urllib.error
 import urllib.parse
 import urllib.request
 from typing import Optional, Protocol
@@ -353,11 +359,11 @@ def render(text: str) -> str:
             return _digest_ko(lines[1:], extras=False)
         if lines[0].startswith("추가 계좌 알림 모음: "):
             return _digest_ko(lines[1:], extras=True)
-        m = re.match(r"추가 계좌 긴급 알림 (\d+)건$", lines[0])
+        m = re.match(r"(추가 계좌 )?긴급 알림 (\d+)건$", lines[0])
         if m:
             body = [ln for ln in lines[1:] if ln.strip()]
             items = [_urgent_item(ln) if not _MORE.match(ln) else f"외 {_MORE.match(ln)[1]}건 {_SCREEN}" for ln in body]
-            return "\n".join([f"추가 계좌 긴급 {m[1]}건", ""] + items + [now_kst()])
+            return "\n".join([f"{m[1] or ''}긴급 {m[2]}건", ""] + items + [now_kst()])
         return "\n".join(ko(line) for line in lines)
     except Exception:  # noqa: BLE001
         return text
@@ -416,7 +422,9 @@ class TelegramNotifier:
     TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_CRITICAL, TELEGRAM_CHAT_WARN,
     TELEGRAM_CHAT_INFO (WARN and INFO fall back to CRITICAL's chat)."""
 
-    def __init__(self, timeout: float = 10.0) -> None:
+    def __init__(self, timeout: float = 10.0, retry_wait_max: Optional[float] = None, sleep=None) -> None:
+        self.retry_wait_max = RETRY_WAIT_MAX_S if retry_wait_max is None else float(retry_wait_max)
+        self.sleep = sleep or time.sleep
         self.token = os.environ["TELEGRAM_BOT_TOKEN"]
         critical = os.environ["TELEGRAM_CHAT_CRITICAL"]
         self.chats = {
@@ -428,7 +436,18 @@ class TelegramNotifier:
         self.timeout = timeout
 
     def send(self, level: str, text: str) -> bool:
-        """True when Telegram accepted the message; False when delivery failed (never raises)."""
+        """True when Telegram accepted the message; False when delivery failed (never raises). A 429 'retry after
+        N s' with N <= ``retry_wait_max`` waits N seconds and tries once more (the oneshot jobs; the live runner's
+        ``Router`` uses ``send_once`` and never sleeps)."""
+        ok, wait = self.send_once(level, text)
+        if ok or wait is None or wait > self.retry_wait_max:
+            return ok
+        self.sleep(wait)
+        return self.send_once(level, text)[0]
+
+    def send_once(self, level: str, text: str) -> tuple[bool, Optional[float]]:
+        """One sendMessage: (accepted, None), or (False, seconds Telegram asked to wait) on a 429, (False, None) on
+        any other failure. Never raises."""
         level, body = telegram_text(level, text)
         data = urllib.parse.urlencode({
             "chat_id": self.chats.get(level, self.chats[CRITICAL]),
@@ -438,10 +457,38 @@ class TelegramNotifier:
         url = f"https://api.telegram.org/bot{self.token}/sendMessage"
         try:
             urllib.request.urlopen(url, data=data, timeout=self.timeout).read()
+        except urllib.error.HTTPError as exc:
+            wait = retry_after(exc) if exc.code == 429 else None
+            print(f"telegram send failed: HTTP {exc.code}" + (f", retry after {wait:g}s" if wait is not None else ""),
+                  file=sys.stderr)
+            return False, wait
         except Exception as exc:  # delivery failure must not stop trading logic
             print(f"telegram send failed: {type(exc).__name__}", file=sys.stderr)
-            return False
-        return True
+            return False, None
+        return True, None
+
+
+RETRY_WAIT_MAX_S = 30.0          # the longest a blocking send waits on a 429 (Telegram usually asks 5-40 s)
+RETRY_DEFAULT_S = 5.0            # a 429 without a readable retry_after
+
+
+def retry_after(exc: urllib.error.HTTPError) -> float:
+    """Seconds a Telegram 429 asks to wait: the JSON body's parameters.retry_after, else the Retry-After header,
+    else ``RETRY_DEFAULT_S``. Never raises."""
+    try:
+        body = json.loads(exc.read() or b"{}")
+        v = (body.get("parameters") or {}).get("retry_after")
+        if v is not None and float(v) >= 0:
+            return float(v)
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        v = (exc.headers or {}).get("Retry-After")
+        if v is not None and float(v) >= 0:
+            return float(v)
+    except Exception:  # noqa: BLE001
+        pass
+    return RETRY_DEFAULT_S
 
 
 KO_KINDS = (("BUST", "파산"), ("drawdown", "낙폭"), ("ENGINE HALTED", "정지"), ("LIQUIDATED", "강제청산"))
@@ -462,6 +509,7 @@ class Digest:
         self.items: list[str] = []
         self.notes: dict[str, str] = {}
         self.last_ms: int | None = None
+        self.hooks: list = []           # called with now_ms at every flush, first (Router: the step's urgent lines)
 
     def add(self, text: str) -> None:
         self.items.append(text)
@@ -470,6 +518,11 @@ class Digest:
         self.notes[key] = text
 
     def flush(self, now_ms: int, force: bool = False):
+        for hook in list(self.hooks):
+            try:
+                hook(now_ms)
+            except Exception as exc:  # noqa: BLE001  (a hook never stops the digest)
+                print(f"digest hook failed: {type(exc).__name__}: {exc}", file=sys.stderr)
         if self.last_ms is None:
             self.last_ms = now_ms
         if not (self.items or self.notes) or (not force and now_ms - self.last_ms < self.every_ms):
@@ -509,16 +562,35 @@ class Router:
       ``TIMEOUT_QUIET_MS`` (6 h) have passed since the last LOUD one, or when it is the ``TIMEOUT_RING_EVERY``-th
       (12th) further timeout since the last loud one (about 3 h of timeouts at every 15m boundary). So timeouts that
       keep coming keep ringing (96 in 24 h: 8 loud), and an isolated one after 6 h rings as before.
+    - emergencies (CRITICAL): the first of a step goes at once; further ones of the same step go together at the
+      step's end (``flush``, run by the digest flush at the end of every runner step) as ONE loud '긴급 알림 N건'
+      message, every line kept (``URGENT_MAX_LINES`` a message);
+    - Telegram's 429: the message waits in ``pending`` and is sent on a later step once 'retry after' has passed (at
+      most ``RETRY_MAX`` refusals); the trading loop never sleeps for it.
     The alerts table (dashboard) has every line anyway: the runner writes it before sending."""
 
     GAP_LOUD = 10
     SKEW_LOUD_MS = 5_000
     TIMEOUT_QUIET_MS = 6 * 3_600_000
     TIMEOUT_RING_EVERY = 12
+    URGENT_MAX_LINES = 40           # lines of one '긴급 알림 N건' message (about 2,000 characters; Telegram's limit 4,096)
+    RETRY_MAX = 3                   # sends of one message refused with 429 before it is dropped (the alerts table has it)
+    RETRY_WAIT_MAX_MS = 120_000     # the longest a 429 holds the queue (Telegram asks 5-40 s)
+    PENDING_MAX = 100
 
     def __init__(self, forward: Notifier, digest: Digest, clock=None):
         self.forward, self.digest = forward, digest
         self.clock = clock or (lambda: int(_clock() * 1000))
+        # the step's urgent lines: the first CRITICAL of a step goes at once, the rest at the step's end, together
+        # (``flush``: the runner flushes the digest at the end of every step, and once more when it stops)
+        self.urgent: list[str] = []
+        self.urgent_sent = False
+        # messages Telegram refused with 429, sent again once ``hold_until`` has passed: [level, text, sends]
+        self.pending: list[list] = []
+        self.hold_until = 0
+        digest.hooks.append(self.flush)
+        if digest.forward is forward:           # the digest's own message waits out a 429 too, never sleeping
+            digest.forward = _Deliver(self)
         self.gaps: dict[str, int] = {}
         self.gap_loud = False
         self.skew_days: dict[str, str] = {}
@@ -534,9 +606,63 @@ class Router:
                     done, res = rule(level, text)
                     if done:
                         return res
+            elif self.urgent_sent:
+                self.urgent.append(text)        # a further emergency of this step: with the others at its end
+                return None
+            else:
+                self.urgent_sent = True
         except Exception:  # noqa: BLE001  (a routing rule must never lose an alert)
             pass
-        return self.forward.send(level, text)
+        return self.deliver(level, text)
+
+    def flush(self, now_ms: Optional[int] = None) -> None:
+        """The step's end (``Digest.flush`` calls it first): the step's further urgent lines as one loud message
+        (``URGENT_MAX_LINES`` a message), then the messages Telegram refused once their wait has passed. Never
+        sleeps."""
+        lines, self.urgent, self.urgent_sent = self.urgent, [], False
+        for i in range(0, len(lines), self.URGENT_MAX_LINES):
+            part = lines[i:i + self.URGENT_MAX_LINES]
+            self.deliver(CRITICAL, part[0] if len(part) == 1 else "\n".join([f"긴급 알림 {len(part)}건"] + part))
+        self.retry()
+
+    def deliver(self, level: str, text: str, sends: int = 0):
+        """Send now, or queue behind a 429 still being waited out. Returns the notifier's answer (False = queued
+        or failed)."""
+        if self.clock() < self.hold_until:
+            self._queue(level, text, sends)
+            return False
+        ok, wait = self._post(level, text)
+        if ok is False and wait is not None:
+            self._queue(level, text, sends + 1, wait)
+        return ok
+
+    def retry(self) -> None:
+        """Send the queued messages in order once the wait is over; a new 429 queues the rest again."""
+        if not self.pending or self.clock() < self.hold_until:
+            return
+        todo, self.pending = self.pending, []
+        for k, (level, text, sends) in enumerate(todo):
+            if self.clock() < self.hold_until:  # refused again: the rest wait with it, in order
+                self.pending.extend(todo[k:])
+                return
+            ok, wait = self._post(level, text)
+            if ok is False and wait is not None:
+                self._queue(level, text, sends + 1, wait)
+
+    def _queue(self, level: str, text: str, sends: int, wait: Optional[float] = None) -> None:
+        if wait is not None:
+            self.hold_until = self.clock() + min(int(float(wait) * 1000), self.RETRY_WAIT_MAX_MS)
+        if sends >= self.RETRY_MAX or len(self.pending) >= self.PENDING_MAX:
+            print(f"telegram: dropped a {level} message after {sends} refused sends (in the alerts table)",
+                  file=sys.stderr)
+            return
+        self.pending.append([level, text, sends])
+
+    def _post(self, level: str, text: str) -> tuple:
+        once = getattr(self.forward, "send_once", None)
+        if once is not None:
+            return once(level, text)
+        return self.forward.send(level, text), None
 
     def _gap(self, level, text):
         g, nb = _GAP.match(text), _NOBARS.match(text)
@@ -554,7 +680,7 @@ class Router:
         self.digest.note("gaps", f"1분봉 빠짐 {total}분: {per} (그 코인은 그 1분을 건너뜀)")
         if total >= self.GAP_LOUD and not self.gap_loud:
             self.gap_loud = True
-            return True, self.forward.send(WARN, f"1분봉 빠짐 많음 · {total}분\n\n{per}\n그 코인은 그 1분을 건너뜀 · 봇은 계속 돎\n"
+            return True, self.deliver(WARN, f"1분봉 빠짐 많음 · {total}분\n\n{per}\n그 코인은 그 1분을 건너뜀 · 봇은 계속 돎\n"
                                                  "나머지는 매시 알림 모음(무음)에")
         return True, None
 
@@ -567,7 +693,7 @@ class Router:
             if self.skew_days.get("loud") == day:
                 return True, None
             self.skew_days["loud"] = day
-            return True, self.forward.send(level, text)
+            return True, self.deliver(level, text)
         if self.skew_days.get("note") != day:
             self.skew_days["note"] = day
             self.digest.note("skew", f"서버 시계 어긋남 {round(abs(int(m[1])) / 1000, 2):g}초 (바이낸스 시각으로 계산 중)")
@@ -587,10 +713,21 @@ class Router:
             self.digest.notes.pop("timeouts", None)      # this loud one says it: the digest counts afresh
             if more:
                 text = f"{text}\n지난 소리 알림 뒤 {more}번 더 건너뜀 · 계속되면 다시 알림"
-            return True, self.forward.send(level, text)
+            return True, self.deliver(level, text)
         self.timeouts_since_loud += 1
         if "timeouts" not in self.digest.notes:
             self.timeouts = 0
         self.timeouts += 1
         self.digest.note("timeouts", f"신호 건너뜀 {self.timeouts}번 더 (마지막 {hm(m[1])} 봉: {_tfs(m[2])})")
         return True, None
+
+
+class _Deliver:
+    """The digest's notifier once a Router wraps the same one: its messages go through ``Router.deliver`` (a 429
+    queues them instead of waiting in the trading loop)."""
+
+    def __init__(self, router: Router):
+        self.router = router
+
+    def send(self, level: str, text: str):
+        return self.router.deliver(level, text)

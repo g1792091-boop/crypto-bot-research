@@ -212,14 +212,28 @@ def test_an_unreachable_take_profit_equals_the_engine_run_with_funding():
     assert funded > 0 and compared >= 24
 
 
-def test_funding_is_paid_while_held_and_not_on_the_bar_it_leaves():
+def test_funding_is_paid_at_every_open_the_position_holds_and_not_on_the_entry_bar():
+    """As engine.step (review 3a F2): funding first, paid by the position open at the bar open, so the bar it
+    leaves by the take-profit pays it too and the entry bar (filled after its open) pays none."""
     steps = _flat(I0 + 1)
+    ts0, bars0, _ = steps[I0]
+    steps[I0] = (ts0, bars0, {SYM: 0.001})                              # the entry bar: not held at its open
     for j, b in enumerate(((ENTRY, ENTRY + 0.01, ENTRY - 0.01, ENTRY), (ENTRY, tp_of(1.1), ENTRY - 0.01, ENTRY))):
         ts = (I0 + 1 + j) * MIN
         steps.append((ts, {SYM: _bar(ts, *b)}, {SYM: 0.001}))
     tr, ok, _tp_px = _tp("tp1R", symbol_steps(steps, SYM))
     assert ok and tr.exit_reason == "TP"
-    assert tr.funding == pytest.approx(tr.qty * ENTRY * 0.001)          # bar 1 only (marks at ENTRY)
+    assert tr.funding == pytest.approx(2 * tr.qty * ENTRY * 0.001)      # bars 1 and 2 (marks at ENTRY)
+
+
+def test_a_take_profit_gap_at_a_funding_open_pays_that_funding():
+    steps = _flat(I0 + 1)
+    for j, b in enumerate(((ENTRY, ENTRY + 0.01, ENTRY - 0.01, ENTRY), (tp_of(1.2), tp_of(1.3), tp_of(1.1), tp_of(1.2)))):
+        ts = (I0 + 1 + j) * MIN
+        steps.append((ts, {SYM: _bar(ts, *b)}, {SYM: 0.001} if j == 1 else {}))
+    tr, ok, _tp_px = _tp("tp1R", symbol_steps(steps, SYM))
+    assert ok and tr.exit_reason == "TP" and tr.exit_time == (I0 + 2) * MIN          # at the gap's open
+    assert tr.funding == pytest.approx(tr.qty * tp_of(1.2) * 0.001)                  # on that open's mark
 
 
 # ---------------------------------------------------------------- trade_shadows rows and the summary
@@ -519,6 +533,51 @@ def test_curve_math_compounds_in_exit_order_and_stops_at_a_bust():
     assert curve_rows({}, "d", [_crow("base", a, 1, -1.2, 1)])[0][3:] == (0.0, "d", 1)   # never below 0
 
 
+def _night(db, day, rows):
+    """daily3's order for one night: the shadow rows stored, then the curves written."""
+    db.execute("CREATE TABLE IF NOT EXISTS shadows (key TEXT PRIMARY KEY, day TEXT NOT NULL, kind TEXT NOT NULL, "
+               "account_id TEXT NOT NULL, symbol TEXT NOT NULL, timeframe TEXT NOT NULL, side INTEGER NOT NULL, "
+               "filled INTEGER, roe REAL, exit_reason TEXT, resolved INTEGER NOT NULL, data TEXT NOT NULL)")
+    db.executemany("INSERT OR REPLACE INTO shadows VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                   [(r["key"], day, r["kind"], r["account_id"], "BTCUSDT", "15m", 1, 1, r["roe"], "stop", r["resolved"],
+                     r["data"]) for r in rows])
+    return write_curves(db, day, rows)
+
+
+def test_write_curves_out_of_order_nights_give_the_in_order_curves(tmp_path):
+    """A night daily3 missed and re-ran later (M-3): the later days already written are recomputed from their
+    stored shadow rows, in order, so the curves equal those of the nights run in order, whatever the order."""
+    import itertools
+    import sqlite3
+    a, b = "A@15m", "B@1h"
+    nights = {
+        "2026-10-05": [_crow("base", a, 1, 0.10, 1), _crow("lev50m50", a, 1, -0.9, 1), _crow("lev20", b, 1, 0.3, 1)],
+        "2026-10-06": [_crow("base", a, 2, -0.20, 2), _crow("lev50m50", a, 2, -0.999, 2), _crow("base", b, 2, 0.05, 2)],
+        "2026-10-07": [_crow("base", a, 3, 0.30, 3), _crow("lev50m50", a, 3, 0.5, 3), _crow("lev20", b, 3, -0.1, 3),
+                       _crow("base", b, 3, 0.02, 3)],
+    }
+
+    def curves(order, name):
+        db = sqlite3.connect(str(tmp_path / f"{name}.db"))
+        infos = {d: _night(db, d, nights[d]) for d in order}
+        return db.execute("SELECT * FROM shadow_curves ORDER BY day, account_id, variant").fetchall(), infos
+
+    want, _ = curves(sorted(nights), "in_order")
+    assert len(want) == 9 and ("2026-10-06", a, "lev50m50", pytest.approx(5000 * 0.1 * 0.001), "2026-10-06", 2) in want
+    for k, order in enumerate(itertools.permutations(sorted(nights))):
+        got, infos = curves(order, f"o{k}")
+        assert got == want, order
+    got, infos = curves(["2026-10-06", "2026-10-07", "2026-10-05"], "late")
+    assert infos["2026-10-05"]["recomputed"] == ["2026-10-06", "2026-10-07"]
+    assert infos["2026-10-07"]["recomputed"] == []
+    # without stored shadow rows (an old daily3.db): the later days already written are kept as they were
+    db = sqlite3.connect(str(tmp_path / "noshadows.db"))
+    write_curves(db, "2026-10-06", nights["2026-10-06"])
+    before = db.execute("SELECT * FROM shadow_curves").fetchall()
+    assert write_curves(db, "2026-10-05", nights["2026-10-05"])["recomputed"] == []
+    assert db.execute("SELECT * FROM shadow_curves WHERE day = '2026-10-06'").fetchall() == before
+
+
 def test_write_curves_appends_nightly_replaces_a_rerun_and_the_view(tmp_path):
     import sqlite3
     db = sqlite3.connect(str(tmp_path / "d.db"))
@@ -526,7 +585,7 @@ def test_write_curves_appends_nightly_replaces_a_rerun_and_the_view(tmp_path):
     assert curve_view(db) == {"variants": [], "days": [], "start": 5000.0, "bust_below": 10.0, "by_variant": {}}
     i1 = write_curves(db, "2026-10-05", [_crow("base", a, 1, 0.10, 1), _crow("lev50m50", a, 1, -0.999, 1),
                                          _crow("base", r, 1, 0.5, 1)])
-    assert i1 == {"rows": 3, "busts": [[a, "lev50m50"]]}
+    assert i1 == {"rows": 3, "busts": [[a, "lev50m50"]], "recomputed": []}
     write_curves(db, "2026-10-06", [_crow("base", b, 1, -0.2, 2), _crow("base", a, 2, 0.2, 2)])
     write_curves(db, "2026-10-06", [_crow("base", b, 1, -0.2, 2), _crow("base", a, 2, 0.1, 2)])     # re-run
     got = db.execute("SELECT day, account_id, variant, equity_end, n_trades FROM shadow_curves ORDER BY day, account_id, "

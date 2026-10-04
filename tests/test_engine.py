@@ -136,6 +136,46 @@ def test_funding_long_pays_positive_rate_and_moves_liquidation():
     assert p.liq_price > liq
 
 
+def test_funding_is_not_paid_by_an_entry_after_the_funding_instant():
+    """Review 3a F2: the funding of a minute is settled at its open; a signal that fills in that minute (live: at
+    ref_price 10-19 s after the open) was not open then and pays none. The next funding is paid."""
+    e, _ = engine()
+    e.submit(sig(0, meta={"ref_price": 100.0}))
+    e.step({"BTCUSDT": bar(1, 100, 100.1, 99.95, 100)}, funding={"BTCUSDT": 0.01})
+    p = e.position
+    assert p is not None and p.funding_paid == 0.0
+    assert e.wallet == pytest.approx(1000 - p.entry_fee)
+    e.step({"BTCUSDT": bar(2, 100, 100.1, 99.95, 100)}, funding={"BTCUSDT": 0.0001})
+    assert p.funding_paid == pytest.approx(p.qty * 100 * 0.0001)
+
+
+def test_funding_is_paid_by_a_position_held_over_it_and_stopped_in_that_minute():
+    e, _ = engine()
+    p = _open_long(e)
+    e.step({"BTCUSDT": bar(2, 100, 100.1, 98.5, 98.6, mark_open=100.2)}, funding={"BTCUSDT": 0.001})
+    t = e.trades[-1]
+    assert e.position is None and t.exit_reason == "SL"
+    assert t.funding == pytest.approx(p.qty * 100.2 * 0.001)               # on the mark open
+    assert t.pnl == pytest.approx(p.qty * (t.exit_price - p.entry_price) - t.fees - t.funding)
+
+
+def test_funding_comes_before_the_gap_checks_of_its_minute():
+    """Funding moves the margin and the liquidation price first; a gap through the moved liquidation price at that
+    open liquidates (the funding is part of the lost margin)."""
+    e, _ = engine()
+    p = _open_long(e)
+    liq0 = p.liq_price
+    e2, _ = engine()
+    _open_long(e2)
+    rate = 0.2 * p.margin / (p.qty * 100)             # a funding of 20% of the margin
+    mo = liq0 + (p.entry_price - liq0) * 0.05          # the mark opens just above the old liquidation price
+    for eng, f in ((e, {"BTCUSDT": rate}), (e2, None)):  # last stays above the stop (99): only the mark moved
+        eng.step({"BTCUSDT": bar(2, 99.5, 99.5, 99.5, 99.5, mark_open=mo, mark_high=mo, mark_low=mo, mark_close=mo)},
+                 funding=f)
+    assert e2.position is not None                     # without funding: still open
+    assert e.position is None and e.trades[-1].exit_reason == "LIQ"
+
+
 def test_drawdown_warnings_and_halt_at_fifty_percent():
     e, n = engine()
     # A 0.5% stop lets the best tier (40% x 50x) through. Mark-price

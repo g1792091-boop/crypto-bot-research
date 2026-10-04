@@ -161,3 +161,39 @@ def test_trading_files_cover_what_decides_leverage_and_the_feed(tmp_path):
     with open(os.path.join(str(tmp_path), "paperbot/binance.py"), "a") as fh:
         fh.write("\n# edited\n")
     assert files_hash(TRADING_FILES, str(tmp_path)) not in (h0, h1)
+
+
+def test_coin_flip_rate_file_is_a_trading_file(tmp_path):
+    """Review 3a F3: research/paper_rules/out/summary.json["random_rate"] is every live coin-flip account's fire
+    rate (live3.random_rates); a research re-run rewrites it in place, so it must change the trading-code hash."""
+    import shutil
+    from paperbot.live3 import RANDOM_RATES, random_rates
+    from paperbot.runinfo import ROOT
+    rel = "research/paper_rules/out/summary.json"
+    assert rel in TRADING_FILES and os.path.samefile(os.path.join(ROOT, rel), RANDOM_RATES)
+    for r in TRADING_FILES:
+        os.makedirs(os.path.dirname(os.path.join(str(tmp_path), r)), exist_ok=True)
+        shutil.copy(os.path.join(ROOT, r), os.path.join(str(tmp_path), r))
+    h0 = files_hash(TRADING_FILES, str(tmp_path))
+    p = os.path.join(str(tmp_path), rel)
+    with open(p) as fh:
+        doc = json.load(fh)
+    doc["random_rate"]["15m"] *= 2
+    with open(p, "w") as fh:
+        json.dump(doc, fh)
+    assert random_rates(p)["15m"] == 2 * random_rates()["15m"]
+    assert files_hash(TRADING_FILES, str(tmp_path)) != h0
+
+
+def test_update_doc_lists_the_trading_files():
+    """docs/server-setup-v3.md 13-5 lists the files to diff before an update: the same set as TRADING_FILES (the
+    strength definitions as their folder)."""
+    import re
+    from paperbot.runinfo import ROOT, STRENGTH_DEF_FILES
+    with open(os.path.join(ROOT, "docs", "server-setup-v3.md"), encoding="utf-8") as fh:
+        doc = fh.read()
+    m = re.search(r"git diff --stat HEAD origin/\S+ -- \\\n(.*?)\n\s*```", doc, re.S)
+    assert m, "the 13-5 git diff block is missing"
+    listed = set(m.group(1).replace("\\", " ").split())
+    want = (set(TRADING_FILES) - set(STRENGTH_DEF_FILES)) | {"research/entry_study/strength_defs"}
+    assert listed == want

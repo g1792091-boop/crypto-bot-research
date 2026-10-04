@@ -346,7 +346,7 @@ sudo -u paperbot -H /var/lib/paperbot/.local/bin/claude setup-token
 
 ### 8-3. agents.env의 나머지
 - 텔레그램 네 줄은 4-2에서 이미 옮겼습니다.
-- `AGENTS_BUDGET=` 줄은 두 분이 정한 Max 요금제 한도(하루 200번·토큰 600만, 7일 1,100번·3,000만; 2026-10-03에 160번·900번에서 올림)가 **이미 적혀 있습니다.** 고치지 않습니다. 10월 3일 전에 설치한 서버는 예전 줄이 남아 있으니 13-5의 "AI 한도 줄 바꾸기"를 한 번 합니다.
+- `AGENTS_BUDGET=` 줄과 `AGENTS_RESEARCH_EVERY_MIN=180` 줄은 두 분이 정한 Max 요금제 한도(하루 150번·토큰 600만, 7일 700번·2,800만; 2026-10-04 재시작 때 다시 정함)가 **이미 적혀 있습니다.** 고치지 않습니다. 그 전에 설치한 서버는 예전 줄이 남아 있으니 "처음부터 다시 시작" 4번(사용량 설정)을 한 번 합니다.
 - `ANTHROPIC_API_KEY`는 **넣지 않습니다.** 넣으면 따로 요금이 나갈 수 있습니다(코드가 지우기는 하지만 넣지 않는 것이 원칙).
 - 처음 21일은 관찰 기간입니다(기본값). 따로 적을 것이 없습니다.
 
@@ -572,7 +572,7 @@ systemctl list-timers 'paperbot-*' --no-pager
 | 22:00 | 손익 복기팀 → 총괄 세 줄 요약 | 텔레그램 **무음** + 에이전트 방 |
 | 1분마다 (있을 때만) | 거래 알림: 그 1분 동안의 진입·청산을 한 메시지로 (진입가·배수·손절, 청산 손익·이유) | 텔레그램 **무음** |
 
-**텔레그램 거래 알림** (`paperbot-tgtrades`, `paperbot/tradealerts.py`): 거래가 하루 수백 건이라 건별로 보내면 폰이 쉬지 않고 울립니다. 그래서 1분마다 그 사이 진입·청산을 **한 메시지로 묶어 무음**으로 보냅니다(새 거래가 없으면 안 보냄). 한 메시지에 진입·청산 각각 큰 것부터 20건까지, 나머지는 "외 n건". 강제청산은 지금처럼 따로 **소리**로도 옵니다. 바꾸려면 `sudo nano /etc/paperbot/live.env`에 아래 줄을 넣고 `sudo systemctl restart paperbot-tgtrades`:
+**텔레그램 거래 알림** (`paperbot-tgtrades`, `paperbot/tradealerts.py`): 거래가 하루 수백 건이라 건별로 보내면 폰이 쉬지 않고 울립니다. 그래서 1분마다 그 사이 진입·청산을 **한 메시지로 묶어 무음**으로 보냅니다(새 거래가 없으면 안 보냄). 한 메시지에 진입은 롱·숏 각각 증거금 큰 것부터 12건까지, 청산은 이익·손실 각각 손익 큰 것부터 12건까지, 나머지는 "외 n건". 강제청산은 지금처럼 따로 **소리**로도 옵니다(같은 1분에 여러 계좌면 첫 건은 바로, 나머지는 `긴급 n건` 한 메시지로 묶어서 — 계좌마다 한 줄씩 다 들어 있습니다). 바꾸려면 `sudo nano /etc/paperbot/live.env`에 아래 줄을 넣고 `sudo systemctl restart paperbot-tgtrades`:
 - `TRADE_ALERTS=strategy` (기본: 매매법·복제·새 매매법 계좌) / `all` (동전 봇까지) / `off` (끔)
 - `TRADE_ALERTS_EVERY=300` (5분마다 묶기; 기본 60초)
 - `TRADE_ALERTS_MIN_USD=50` (손익 $50 미만 청산은 개수만 세고 목록에서 뺌)
@@ -584,7 +584,8 @@ systemctl list-timers 'paperbot-*' --no-pager
 | 봇·데이터 5분 넘게 멈춤 | healthchecks → **두 분 폰** |
 | 강제청산, 재계산 불일치 | 텔레그램 **소리** |
 | 재계산 차이가 모두 "1분봉을 확정 전에 읽음"으로 확인된 날 | 소리 없음: 09:20 무음 요약에 `(n개는 확정 전 1분봉: 정상)` 한 줄 (회의는 열리지 않음) |
-| 빠진 1분봉, 신호 계산 멈춤, 재시작 때 체결·청산·사이즈 코드 변경 | 텔레그램 **소리** |
+| 빠진 1분봉이 조금(한 시간 알림 모음 사이에 코인·분 합계 10 미만) | 소리 없음: 매시 알림 모음(무음)에 `1분봉 빠짐 n분: 코인별` 한 줄 |
+| 빠진 1분봉이 한 시간 알림 모음 사이에 코인·분 합계 10 이상(그 시간에 한 번), 신호 계산 멈춤, 재시작 때 체결·청산·사이즈 코드 변경 | 텔레그램 **소리** |
 | 파산, 낙폭 −20/−30/−40% | 1시간에 한 번 묶어서 텔레그램 **무음** |
 | 직원들이 스스로 보내는 알림 | 하루 3번까지 |
 
@@ -646,10 +647,10 @@ df -h /
     paperbot/config.py paperbot/models.py paperbot/accounts.py paperbot/sigservice.py \
     paperbot/aggregate.py paperbot/feed.py paperbot/live3.py paperbot/recorder.py \
     paperbot/policy.py paperbot/levrule.py paperbot/quality_edges.json paperbot/entry_marks.py \
-    paperbot/binance.py paperbot/p_best_cells.json \
+    paperbot/binance.py paperbot/p_best_cells.json research/paper_rules/out/summary.json \
     research/entry_study/DEFS_BC.sha256 research/entry_study/strength_defs
   ```
-  (이 목록은 `paperbot/runinfo.py`의 `TRADING_FILES`와 같습니다. 마지막 줄은 신호마다 "좋은 자리"인지 정하는 진입 세기 정의와 그 잠금 파일입니다. 봇은 이 밖에 설정, 바이낸스 레버리지 구간, 잠긴 신호 코드가 바뀌어도 같은 알림을 보냅니다.)
+  (이 목록은 `paperbot/runinfo.py`의 `TRADING_FILES`와 같습니다. `research/paper_rules/out/summary.json`은 동전 던지기 계좌가 봉마다 신호를 낼 확률(`random_rate`)입니다. 마지막 줄은 신호마다 "좋은 자리"인지 정하는 진입 세기 정의와 그 잠금 파일입니다. 봇은 이 밖에 설정, 바이낸스 레버리지 구간, 잠긴 신호 코드가 바뀌어도 같은 알림을 보냅니다.)
 - **피할 시간:** 매일 08:30~09:40(백업·서버 밖 백업·매일 점검), 판정일 09:30~10:30, 매달 6일 03:00~07:00(매달 재검사), 매주 수요일 12:30~13:30(판정 미리 연습). 업데이트가 이 작업들을 멈추지 않아서, 도는 중에 코드가 바뀔 수 있습니다.
 - 설치 스크립트가 `Could not get lock`으로 멈추면 서버가 자동 보안 업데이트를 하는 중입니다. 5~10분 뒤 같은 명령을 다시 실행합니다.
 - 업데이트 순서:
@@ -679,15 +680,7 @@ df -h /
   systemctl list-timers paperbot-rehearsal.timer --no-pager
   ```
   바로 한 번 돌려 보려면 `sudo systemctl start paperbot-rehearsal` (수 분~수십 분, 끝날 때까지 기다림). 결과는 아래 "체크포인트 판정"의 "매주 미리 연습"대로 봅니다.
-- **AI 한도 줄 바꾸기** (10월 3일 전에 설치한 서버, 한 번만): 설치 스크립트는 이미 있는 `/etc/paperbot/agents.env`를 덮어쓰지 않으므로, 새 한도 줄은 직접 바꿉니다. 먼저 지금 줄을 봅니다:
-  ```bash
-  sudo grep -n '^AGENTS_BUDGET' /etc/paperbot/agents.env
-  ```
-  `loss=48:1400000`이 들어간 예전 줄이 나오면 아래 한 줄로 새 줄로 바꾸고 확인합니다(다음 에이전트 차례부터 적용, 재시작 필요 없음):
-  ```bash
-  sudo sed -i 's/^AGENTS_BUDGET=.*/AGENTS_BUDGET=incident=30:1000000,owner=40:1400000,loss=64:2600000,scheduled=30:1200000,weekly=40:1600000,research=48:1600000,total=200:6000000,week=1100:30000000/' /etc/paperbot/agents.env
-  sudo grep -n '^AGENTS_BUDGET' /etc/paperbot/agents.env
-  ```
+- **AI 한도 줄 바꾸기** (설치 스크립트는 이미 있는 `/etc/paperbot/agents.env`를 덮어쓰지 않으므로 직접 바꿉니다): 아래 "처음부터 다시 시작"의 **4번(사용량 설정)** 상자를 씁니다. 첫 줄 `B='AGENTS_BUDGET=...'`만 새 값으로 고쳐 붙여 넣으면, 줄이 있으면 바꾸고 없으면(예전에 설치한 서버는 꺼진 `#AGENTS_BUDGET=` 줄만 있어 `sed`만으로는 아무것도 바뀌지 않음) 끝에 붙이고, 결과와 파일 권한을 보여 줍니다(다음 에이전트 차례부터 적용, 재시작 필요 없음).
   며칠 뒤 Claude 앱의 사용량 화면에서 주간 사용량이 너무 빨리 오르면(두 분 채팅이 막힐 정도) 숫자를 낮춥니다. 오늘 어느 회의 몫을 얼마나 썼는지는 대시보드 '에이전트 방'의 방 정보(오른쪽) "오늘 AI 사용"에 나옵니다.
 
 ### 13-6. 백업 (보충 규칙 Q10, Vultr 자동 백업 대신 텔레그램)
@@ -793,7 +786,8 @@ sudo journalctl -u <그 이름> -n 50 --no-pager
 - 에이전트(`paperbot-agents`)이고 "Claude 로그인 확인 거부"가 적혀 있으면 8-2와 8-4를 다시 합니다. 그 밖이면 화면을 개발자에게.
 - 확인한 뒤 `sudo systemctl reset-failed`로 목록을 비웁니다.
 
-**텔레그램 "신호 계산이 …초 안에 끝나지 않아 … 신호를 건너뜀" 또는 "1분봉 빠짐 …" (소리)**
+**텔레그램 "신호 계산이 …초 안에 끝나지 않아 … 신호를 건너뜀" 또는 "1분봉 빠짐 많음 · n분" (소리)**
+- 1분봉 빠짐은 한 시간(알림 모음 사이)에 코인·분 합계가 10 이상이 될 때 한 번만 소리로 옵니다. 그보다 적으면 매시 알림 모음(무음)에 횟수로만 남습니다.
 - 봇은 계속 돕니다. 그 봉(또는 그 1분)의 신호만 빠집니다. 한두 번은 서버가 잠깐 바빴거나(판정 계산·5년 시험과 겹침) 바이낸스 쪽이 늦은 것이라 그대로 둡니다.
 - 신호 건너뜀이 계속되면 처음 한 번 뒤에는 매시 알림 모음(무음)에 횟수로 쌓이고, 마지막 소리 알림 뒤 12번째(15분봉마다면 약 3시간)거나 6시간이 지나면 "지난 소리 알림 뒤 n번 더 건너뜀"과 함께 다시 소리로 옵니다. 계속 오면 신호가 하나도 안 나오고 있다는 뜻이므로 바로 아래 화면을 개발자에게 보냅니다.
 - 하루에 여러 번 오면 `sudo journalctl -u paperbot-live3 -n 50 --no-pager` 화면을 개발자에게 보냅니다.
@@ -818,17 +812,27 @@ sudo journalctl -u <그 이름> -n 50 --no-pager
 3. 미리 보기(아무것도 바꾸지 않음): `sudo bash deploy/paperbot-reset.sh --dry-run`
    - 멈출 것, 옮기기 전에 만들 새 백업(서버 밖 복사를 할지도), 옮길 파일, 그대로 둘 것, 직원 기록에서 바뀔 것(초기화할 커서, 닫을 제안), 설정에서 확인할 것을 보여 줍니다.
    - 주문 실행기(`paperbot-executor`)가 돌고 있다고 나오면 먼저 `sudo systemctl stop paperbot-executor`(재시작 뒤 직접 다시 켬, 따라가는 계좌가 5분봉이면 바꾼 뒤).
-4. 다시 시작: `sudo bash deploy/paperbot-reset.sh --yes`
+4. 사용량 설정(AI 한도, 한 번만): 설치 스크립트는 이미 있는 `/etc/paperbot/agents.env`를 덮어쓰지 않으므로 직접 바꿉니다. 아래 상자를 그대로 붙여 넣습니다. 첫 줄이 두 분이 정한 한도입니다(바꾸려면 이 줄만 고침; 값 안에 `/`나 `&`는 넣지 않습니다). `AGENTS_BUDGET=` 줄이 있으면 바꾸고, 없으면(예전에 설치한 서버는 `#AGENTS_BUDGET=`처럼 꺼진 줄만 있음) 끝에 붙입니다. 연구 회의 간격 줄은 지운 뒤 한 번만 붙입니다.
+   ```bash
+   B='AGENTS_BUDGET=incident=30:1000000,owner=40:1400000,loss=40:2000000,scheduled=30:1200000,weekly=40:1600000,research=16:500000,total=150:6000000,week=700:28000000'
+   sudo grep -q '^AGENTS_BUDGET=' /etc/paperbot/agents.env && sudo sed -i "s/^AGENTS_BUDGET=.*/$B/" /etc/paperbot/agents.env || echo "$B" | sudo tee -a /etc/paperbot/agents.env >/dev/null
+   sudo sed -i '/^AGENTS_RESEARCH_EVERY_MIN=/d' /etc/paperbot/agents.env && echo 'AGENTS_RESEARCH_EVERY_MIN=180' | sudo tee -a /etc/paperbot/agents.env >/dev/null
+   sudo grep -n '^AGENTS_BUDGET\|^AGENTS_RESEARCH_EVERY_MIN' /etc/paperbot/agents.env; sudo stat -c '%U:%G %a' /etc/paperbot/agents.env
+   ```
+   두 줄(`AGENTS_BUDGET=...`, `AGENTS_RESEARCH_EVERY_MIN=180`)이 **한 번씩만** 나오고 마지막 줄이 `root:paperbot 640`이면 됩니다. 에이전트는 다음 차례부터 이 줄을 읽습니다(재시작 필요 없음). 같은 이름이 두 번 나오면 개발자에게 보냅니다.
+5. 다시 시작 직전: **healthchecks.io 체크를 일시정지(Pause)** 합니다(healthchecks.io → 체크 → Pause). 다시 시작하는 동안 봇이 **몇 분 이상 꺼져 있어서**(멈춤, 새 백업, 서버 밖 복사 몇 분~최대 1시간, 코드 설치, 새 계좌용 5분봉 기록 내려받기) 그대로 두면 두 분 휴대폰에 "DOWN"과 "UP"이 울립니다. 끝나면 봇의 다음 핑에 감시가 **저절로 다시 시작**됩니다(따로 켤 필요 없음).
+6. 다시 시작: `sudo bash deploy/paperbot-reset.sh --yes`
    - 0) 확인: 직원 기록(agents3.db·inbox.db)을 읽을 수 있는지, 커밋 안 된 수정이 없는지. 여기서 멈추면 아무것도 바뀌지 않았습니다.
    - 1) 봇·대시보드·거래 알림·에이전트·예약 작업을 멈춥니다(돌고 있는 밤 작업은 끝날 때까지 기다림). 설치된 서비스·타이머는 상태와 상관없이 모두 멈춥니다: 오류로 꺼졌다 다시 켜지기를 기다리는 서비스(상태 `activating`)도 옮기는 중에 다시 켜지지 않게 합니다. 6)에서 다시 켜는 것은 그때 돌고 있었거나(`active`·`activating` 등) 자동 시작(enabled)으로 설정된 것입니다. 화면에 서비스마다 상태가 나옵니다. 청산·GH Coin·흐름·시장 기록은 계속 돕니다. 멈춘 뒤 실행 파일을 연 프로세스가 하나도 없는지 확인합니다(`fuser`).
-   - 2) **옮기기 전에 새 백업:** 모두 멈춘 상태에서 `paperbot-backup.service`를 한 번 돌리고 끝날 때까지 기다립니다(보통 몇 분). 결과가 성공인지, 오늘(UTC) 백업 폴더 `/var/backups/paperbot/<날짜>/`에 `paper3.db`·`daily3.db`·`checkpoint.db` 복사본이 이번에 새로 생겼는지 확인합니다. 실패하면 **아무 파일도 옮기지 않고** 멈추고, 이전 실행을 다시 켜는 명령(`sudo systemctl start ...`)과 원인 보는 명령(`journalctl -u paperbot-backup`)이 나옵니다. 서버 밖 백업(4-3)을 켜 두었으면(`paperbot-offsite.timer` 사용 중) 이어서 `paperbot-offsite.service`도 한 번 돌려 이 복사본을 텔레그램 백업 방으로 보냅니다(몇 분~최대 1시간). 이것이 실패하면 서버 안 백업은 이미 있으므로 **경고만 하고 계속**하며, 경고는 마지막 요약에도 다시 나옵니다. 재시작이 끝난 뒤 `sudo systemctl start paperbot-offsite.service`로 다시 보내면 됩니다(같은 날짜 폴더 = 이전 실행 복사본).
+   - 2) **옮기기 전에 새 백업:** 모두 멈춘 상태에서 `paperbot-backup.service`를 한 번 돌리고 끝날 때까지 기다립니다(보통 몇 분). 결과가 성공인지, 오늘(UTC) 백업 폴더 `/var/backups/paperbot/<날짜>/`에 `paper3.db`·`daily3.db`·`checkpoint.db` 복사본이 이번에 새로 생겼는지 확인합니다. 실패하면 **아무 파일도 옮기지 않고** 멈추고, 이전 실행을 다시 켜는 명령(`sudo systemctl start ...`)과 원인 보는 명령(`journalctl -u paperbot-backup`)이 나옵니다. 백업이 끝나면 그 날짜 폴더를 `/var/backups/paperbot/<날짜>-before-reset-<UTC 시각>/<날짜>/`로 **한 벌 더 복사해 따로 둡니다**: 같은 날짜 폴더 `/var/backups/paperbot/<날짜>/`는 그날 08:40(KST) 밤 백업 때 **새 실행**으로 바뀌기 때문입니다(따로 둔 폴더도 14일 뒤 다른 백업처럼 지워짐; 이전 실행 전체는 아래 보관 폴더에 계속 있음). 서버 밖 백업(4-3)을 켜 두었으면(`paperbot-offsite.timer` 사용 중) 이어서 `paperbot-offsite.service`도 한 번 돌려 이 복사본을 텔레그램 백업 방으로 보냅니다(몇 분~최대 1시간). 이것이 실패하면 서버 안 백업은 이미 있으므로 **경고만 하고 계속**하며, 경고는 마지막 요약에도 다시 나옵니다. 서버 밖 복사가 실패했으면 요약에 나오는 명령(`sudo systemd-run ... python -m paperbot.offsite send --from /var/backups/paperbot/<날짜>-before-reset-<시각> --date <날짜>`)을 그대로 붙여 넣어 **따로 둔 복사본**을 다시 보냅니다. `sudo systemctl start paperbot-offsite.service`는 오늘 날짜 폴더를 보내므로 08:40 밤 백업 전에만 같은 것을 보냅니다.
    - 3) 코드를 설치합니다(`deploy/install.sh`). 여기서 실패하면 이전 실행은 그대로이고, 화면에 다시 켜는 명령이 나옵니다.
    - 4) 이전 실행의 파일을 **지우지 않고** `/var/lib/paperbot/archive/run-<UTC 시각>/`으로 옮깁니다(아래 표의 "보관").
    - 5) `agents3.db`·`inbox.db`는 먼저 보관 폴더에 사본(`agents3-before-reset.db`, `inbox-before-reset.db`)을 만든 뒤, 이전 paper3.db를 가리키던 커서만 초기화하고(아래), 이전 실행의 열린 제안(두 분 확인 대기·승인됨)을 "run restarted"로 닫고, 방마다 메모 1개와 알림 1줄 "실험을 2026-10-04에 처음부터 다시 시작함 (5분봉 제외, 좋은 자리 50·40배·보통 30·20배(비중=배수%), 1분봉 5초 뒤 읽기)"을 남깁니다. 여러 번 돌려도 결과가 같습니다(`paperbot/resetrun.py`).
    - 6) 멈췄던 것을 다시 켭니다. 봇이 $5,000 계좌 **156개**(매매법 36개 × 15분·30분·1시간·4시간 = 144개 + 동전 던지기 봇 봉마다 3개 = 12개, 5분봉 없음)를 새로 만들고 그 시각이 새 시작입니다. 스크립트가 새 시작 시각(KST)과 **첫 30일 판정일**(시작한 UTC 날짜 + 30일 09:00 KST, `checkpoint.checkpoint_ts`와 같은 계산)을 보여 줍니다. 관찰 기간(21일)도 시작에서 저절로 계산됩니다.
+   - **두 번 하지 않습니다.** 한 번 끝난 뒤(지금 paper3.db가 24시간 안에 재시작 기록 바로 뒤에 시작한 새 실행이면) `--yes`를 또 하면 스크립트가 "재시작은 이미 끝났습니다"라고 설명하고 아무것도 멈추거나 옮기지 않고 끝냅니다. 정말 한 번 더 처음부터 해야 할 때만(개발자와 상의한 뒤) `--yes --force-again`.
    - 중간에 실패하면 어디까지 했는지와 그다음 명령(새 실행으로 계속하기 / 이전 실행으로 되돌리기: 옮긴 파일마다 `mv` 명령)이 화면에 나옵니다.
    - 재시작 직후 텔레그램 `⚠ [작업 실패] …`가 **한 번** 올 수 있습니다: 재시작하는 동안 놓친 예약 작업(에이전트·판정 등)이 6)에서 바로 따라 돌면서, 봇이 새 paper3.db와 계좌를 만들기 몇 초 전에 읽은 경우입니다. 해롭지 않습니다(판정·미리 연습·매일 점검은 paper3.db가 아직 없으면 조용히 건너뜁니다). `sudo systemctl reset-failed`로 지우고, 같은 작업이 다음 회차에도 실패하면 13-7처럼 봅니다.
-5. 5분 뒤 점검: `cd /opt/crypto-bot-research && sudo /opt/paperbot/venv/bin/python -m paperbot.launchcheck --stage after`. "계좌 156개"가 나와야 합니다. paper3.db에 5분봉 계좌가 있으면(이전 실행의 DB가 그대로 남은 것) '고칠 것'으로 나옵니다. 첫 15분봉 신호가 나온 뒤(시작 30분쯤 뒤)에 한 번 더 돌리면 "신호 세기 정상"이 나와야 합니다(최근 매매법 신호 20건이 모두 좋은 자리 판정 점수를 받았는지 확인, 아래 "신호 세기 계산 실패").
+7. 5분 뒤 점검: `cd /opt/crypto-bot-research && sudo /opt/paperbot/venv/bin/python -m paperbot.launchcheck --stage after`. "계좌 156개"가 나와야 합니다. paper3.db에 5분봉 계좌가 있으면(이전 실행의 DB가 그대로 남은 것) '고칠 것'으로 나옵니다. 첫 15분봉 신호가 나온 뒤(시작 30분쯤 뒤)에 한 번 더 돌리면 "신호 세기 정상"이 나와야 합니다(최근 매매법 신호 20건이 모두 좋은 자리 판정 점수를 받았는지 확인, 아래 "신호 세기 계산 실패").
 
 서버에 남는 것과 재시작이 하는 일:
 
@@ -847,7 +851,7 @@ sudo journalctl -u <그 이름> -n 50 --no-pager
 | `paper.db` | v2 | v2 실행 | 그대로 |
 | `lab/` | 5년 자료, 매달 재검사 | 아니오 | 그대로 |
 | `failalert/`, `exec/`, 로그인 파일 | 실패 알림, 주문 실행기 | 아니오 | 그대로 |
-| `/var/backups/paperbot`, `/etc/paperbot/*` | 백업, 설정 | 아니오 | 그대로(옮기기 전에 오늘 날짜 폴더에 새 백업 추가) |
+| `/var/backups/paperbot`, `/etc/paperbot/*` | 백업, 설정 | 아니오 | 그대로(옮기기 전에 오늘 날짜 폴더에 새 백업 추가, 그 사본을 `<날짜>-before-reset-<시각>/`에 따로 둠; `agents.env`는 4번에서 두 분이 직접 고침) |
 
 `agents3.db` 안에서:
 - **그대로(기억):** 시험 장부(`trials`·`trial_results`: 관문의 시험 수는 절대 0으로 돌아가지 않음), 메모(`notes`), 회의 기록(`messages`·`rounds`), 채점 기록(가설 채점, 매일 토론 `committee_calls`), AI 사용량(`agent_calls`), 제안 기록(`proposals`, 지우지 않음).

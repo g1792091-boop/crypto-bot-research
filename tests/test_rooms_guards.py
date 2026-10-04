@@ -394,6 +394,9 @@ def _weekly_trades(world, t):
 
 
 WEEKLY_ONLY = TR.TriggerPolicy(enabled=("weekly",))
+# the AGENTS_BUDGET line chosen with the review's 10.5-day simulation (A-1, 2026-10-04; docs/agent-rooms.md)
+CHOSEN_BUDGET = ("incident=30:1000000,owner=40:1400000,loss=40:2000000,scheduled=30:1200000,weekly=40:1600000,"
+                 "research=16:500000,total=150:6000000,week=700:28000000")
 
 
 def _hyp_round(n=1):
@@ -413,6 +416,74 @@ def test_a_weekly_review_deferred_by_the_budget_runs_the_next_day(world):
     assert world.rounds()[-1]["trigger_data"]["key"] == f"weekly:{S}:2026-10-06"
     for d in range(2, 7):                                     # done: not again this week
         assert world.tick(QueueRunner({}), tue + d * DAY, policy=pol)["rounds"] == []
+
+
+def test_a_meeting_the_budget_defers_is_recorded_with_its_reason(world):
+    """A-1 (review 2026-10-04): a meeting that is due but that the AI budget cannot start is kept in
+    meetings:skipped (budget_deferred: per KST day and trigger, the rooms, how many ticks, the reason), survives
+    the per-tick skipped-status rewrite, and is dropped after DEFERRED_DAYS."""
+    tue = kst(2026, 10, 6, 15, 0)
+    _weekly_trades(world, tue)
+    pol = RM.RoomsPolicy(triggers=WEEKLY_ONLY)
+    prefill(world, tue, weekly=20)                            # the weekly class used up
+    for k in range(3):
+        assert world.tick(QueueRunner({}), tue + k * 15 * MIN, policy=pol)["rounds"] == []
+    got = R.get_cursor(world.agents, RM.SKIP_CURSOR)[RM.BUDGET_DEFERRED]
+    assert len(got) == 1
+    e = got[0]
+    assert (e["day"], e["trigger"], e["class"], e["rooms"], e["n_rooms"], e["ticks"]) == (
+        "2026-10-06", "weekly", "weekly", [ROOM], 1, 3)
+    assert e["first_ts"] == tue and e["last_ts"] == tue + 30 * MIN and e["headroom"] == 0 and e["need"] == 2
+    assert e["limit"] == "class_calls" and e["why"].startswith("AI 한도로 미룸 — weekly 몫 호출 20/20")
+    assert "회의 최소 2회" in e["why"]
+    # the next day it runs (nothing new deferred); the record of Tuesday stays for DEFERRED_DAYS
+    out = world.tick(_hyp_round(), tue + DAY, policy=pol)
+    assert [r["status"] for r in out["rounds"]] == ["done"]
+    assert [x["day"] for x in R.get_cursor(world.agents, RM.SKIP_CURSOR)[RM.BUDGET_DEFERRED]] == ["2026-10-06"]
+    RM.store_skipped(world.agents, None, tue + RM.DEFERRED_DAYS * DAY, pol)
+    assert RM.BUDGET_DEFERRED not in (R.get_cursor(world.agents, RM.SKIP_CURSOR) or {})
+
+
+def test_deferral_reason_names_the_held_reserve_when_the_total_tokens_bind(world):
+    """The evening starvation the review found: the incident and scheduled caps are held inside the total until
+    midnight, so a timeframe-split meeting is refused on tokens while its own class is untouched; the record says
+    so with the gate's own numbers."""
+    tue = kst(2026, 10, 6, 18, 15)
+    pol = RM.policy_from_env({"AGENTS_BUDGET": "incident=30:1000000,owner=40:1400000,loss=48:1800000,scheduled=30:"
+                                               "1200000,weekly=40:1600000,research=16:500000,total=150:4500000,"
+                                               "week=700:28000000"})
+    day = R.kst_day(tue)
+    world.agents.executemany("INSERT INTO agent_calls VALUES (?,?,?,?,?,?,?)",
+                             [(tue - HOUR, day, "loss", "x", "sonnet", 1, 40_000)] * 42
+                             + [(tue - HOUR, day, "research", "x", "sonnet", 1, 40_000)] * 12
+                             + [(tue - HOUR, day, "scheduled", "x", "sonnet", 1, 40_000)] * 12)
+    world.agents.commit()
+    ctx = RM.RoundContext(agents_conn=world.agents, paper_ro=None, daily_ro=None, inbox_ro=None, runner=QueueRunner({}),
+                          lab=None, now_ms=tue, policy=pol, notifier=ListNotifier(), clock_ms=lambda: tue)
+    due = TR.Due(ROOM, "tf_split", 4, {"class": "weekly", "key": "tf_split:x"}, "tf_split")
+    why = RM.deferral_reason(due, ctx)
+    assert not RM.can_start(due, ctx) and why["limit"] == "reserve_tokens" and why["headroom"] == 0
+    assert "자정까지 남겨 두는 사고·정기 회의 몫 1,720,000" in why["why"] and "4,500,000" in why["why"]
+    pol.total_budget = (150, 6_000_000)
+    assert RM.can_start(due, ctx) and RM.deferral_reason(due, ctx) is None
+
+
+def test_budget_warnings_say_when_the_evening_meetings_find_little_room():
+    """A-1 (b): at about 38k tokens a call, the owners' first line (total 4.5M) leaves the 18:00 timeframe-split
+    meetings almost nothing after the held reserve, the kept owner/bust share and the paced loss reviews and lab;
+    the chosen line (total 6M) leaves enough. Judged like the gate."""
+    old = RM.policy_from_env({"AGENTS_BUDGET": "incident=30:1000000,owner=40:1400000,loss=48:1800000,scheduled=30:"
+                                               "1200000,weekly=40:1600000,research=16:500000,total=150:4500000,"
+                                               "week=700:20000000", "AGENTS_RESEARCH_EVERY_MIN": "180"})
+    w = " | ".join(RM.budget_warnings(old))
+    assert "18:00 timeframe-split meetings" in w and "held until midnight (60 calls, 2,200,000 tokens)" in w
+    ev = RM.evening_room(old)
+    assert ev["left_tokens"] < ev["need_tokens"] and ev["loss_calls"] == 35
+    assert RM.evening_room(old, 29_000)["left_tokens"] > RM.evening_room(old, 29_000)["need_tokens"]
+    new = RM.policy_from_env({"AGENTS_BUDGET": CHOSEN_BUDGET, "AGENTS_RESEARCH_EVERY_MIN": "180"})
+    assert RM.budget_warnings(new) == []
+    assert RM.evening_room(new)["left_tokens"] > 3 * RM.evening_room(new)["need_tokens"]
+    assert RM.evening_room(RM.RoomsPolicy()) is None                    # tf_split off: nothing to judge
 
 
 def test_a_weekly_review_stopped_midway_runs_again_the_next_day(world):

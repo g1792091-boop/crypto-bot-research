@@ -141,6 +141,35 @@ def test_strength_marks_equal_the_study_for_all_36():
     assert EM.strength_marks("RANDOM_1", df, "1h", 1) is None
 
 
+def test_strength_values_are_recorded_at_full_precision(monkeypatch):
+    """Review 3a F1: the recorded value is the exact float64 (no 6-digit round). OBV_B@15m's stc_room edge is
+    19.9999999970898 and research puts 20 - 1e-9 below it; a rounded 20.0 would score it one quintile higher."""
+    from paperbot import levrule as LR
+    below = 19.9999999970898 - 1e-9
+    real = EM.strength_module("OBV_B")
+
+    class Fake:
+        FEATURES = real.FEATURES
+
+        @staticmethod
+        def strength(df, tf):
+            n = len(df)
+            vals = {"ac_atr": 0.1, "obv_cross_vol": 0.3, "stc_room": below}
+            return {f["name"]: (np.full(n, vals[f["name"]]), np.full(n, np.nan)) for f in real.FEATURES}
+
+    monkeypatch.setattr(EM, "strength_module", lambda name: Fake)
+    df = pd.DataFrame({"close": [1.0, 2.0, 3.0]})
+    rec = json.loads(json.dumps(EM.strength_marks("OBV_B", df, "15m", 1)))      # as stored in signals.data
+    got = {f["name"]: f["value"] for f in rec["features"]}
+    assert got["stc_room"] == below and got["stc_room"] != 20.0
+    exact = {"features": [{"name": k, "value": v} for k, v in got.items()]}
+    edges = LR.edges()["OBV_B|15m"]["stc_room"]["edges"]
+    assert LR.quintile(got["stc_room"], edges, True) == 1 and LR.quintile(20.0, edges, True) == 2
+    assert LR.quality_score(rec, "OBV_B", "15m") == LR.quality_score(exact, "OBV_B", "15m")
+    short = EM.strength_marks("OBV_B", df, "15m", -1)
+    assert all(f["value"] is None for f in short["features"])                     # NaN -> None, as before
+
+
 def test_strength_defs_load_only_when_they_match_the_locked_hashes(monkeypatch, tmp_path):
     man = tmp_path / "DEFS_BC.sha256"
     man.write_text("0" * 64 + "  strength_defs/N24_DMI.py\n")

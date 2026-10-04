@@ -3,6 +3,7 @@
     python -m paperbot.resetrun plan  --lib /var/lib/paperbot                       (read-only: what would change)
     python -m paperbot.resetrun apply --lib /var/lib/paperbot --archive <run dir>   (backup, then reset)
     python -m paperbot.resetrun start --paper-db /var/lib/paperbot/paper3.db --wait 180   (the new start)
+    python -m paperbot.resetrun guard --lib /var/lib/paperbot     (exit 4: the reset already happened, refuse --yes)
 
 The reset script MOVES the run's own files to /var/lib/paperbot/archive/run-<UTC>/ and keeps everything else. The
 agents' memory (agents3.db) and the owners' inbox (inbox.db) are KEPT in place: only the few cursors in agents3.db
@@ -244,6 +245,35 @@ def config_warnings(extras_json: str, executor_json: str) -> list[str]:
     return out
 
 
+# ---------------------------------------------------------------- already reset?
+REPEAT_MS = 24 * 3_600_000      # a run younger than this, made right after a restart marker, is the reset's new run
+
+
+def repeat_reason(paper_path: str, agents_path: str, now_ms: Optional[int] = None) -> Optional[str]:
+    """Korean text when the reset has already been done: the current paper3.db's run started less than 24 h ago and
+    agents3.db holds a ``run:restarted`` marker written at most 24 h before that start (or after it), so that run is
+    the reset's NEW run and another --yes would archive it. None otherwise (the old run, no marker, no paper3.db)."""
+    now = int(time.time() * 1000) if now_ms is None else int(now_ms)
+    start = paper_facts(paper_path).get("start")
+    if start is None or now - start >= REPEAT_MS:
+        return None
+    conn = R.open_ro(agents_path)
+    if conn is None:
+        return None
+    try:
+        marker = get_marker(conn) or {}
+    finally:
+        conn.close()
+    ts = marker.get("ts")
+    if not isinstance(ts, (int, float)) or ts < start - REPEAT_MS:
+        return None
+    return (f"!! 재시작은 이미 끝났습니다. 지금 paper3.db의 실행은 {kst_text(start)} KST에 시작했고(24시간 안), 바로 전 "
+            f"{kst_text(int(ts))} KST에 재시작 기록(run:restarted, 보관 폴더 {marker.get('archive') or '?'})이 있습니다. "
+            "여기서 --yes를 또 하면 방금 시작한 새 실행을 보관 폴더로 옮기고 처음부터 다시 시작하므로 거절합니다. "
+            "봇이 잘 도는지는 launchcheck --stage after로 봅니다. 정말 한 번 더 처음부터 시작해야 할 때만(개발자와 상의한 뒤): "
+            "sudo bash deploy/paperbot-reset.sh --yes --force-again")
+
+
 # ---------------------------------------------------------------- backup
 def backup_db(src: str, dst: str) -> str:
     """Copy ``src`` to ``dst`` with the SQLite backup API (a consistent copy, rollback-journal mode, integrity
@@ -438,10 +468,10 @@ def _print_plan(lib: str, warnings: list) -> int:
 def main(argv: Optional[list] = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m paperbot.resetrun", description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for name in ("plan", "apply", "start"):
+    for name in ("plan", "apply", "start", "guard"):
         s = sub.add_parser(name)
         s.add_argument("--user", default="", help="as root: run as this user (the services' user, paperbot)")
-        if name in ("plan", "apply"):
+        if name in ("plan", "apply", "guard"):
             s.add_argument("--lib", default="/var/lib/paperbot")
         if name == "plan":
             s.add_argument("--etc", default="/etc/paperbot")
@@ -459,6 +489,14 @@ def main(argv: Optional[list] = None) -> int:
             return 1
         return _print_plan(a.lib, warn_cfg)
     _drop_to(a.user)
+    if a.cmd == "guard":
+        if not _lib_ok(a.lib, write=False):
+            return 1
+        why = repeat_reason(os.path.join(a.lib, "paper3.db"), os.path.join(a.lib, "agents3.db"))
+        if why:
+            print(why)
+            return 4
+        return 0
     if a.cmd == "apply":
         if not (_lib_ok(a.lib, write=True) and _lib_ok(a.archive, write=True)):
             return 1

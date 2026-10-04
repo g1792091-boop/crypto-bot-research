@@ -6,6 +6,10 @@
 #     sudo bash deploy/paperbot-reset.sh --dry-run    # shows what it would do; changes nothing, stops nothing
 #     sudo bash deploy/paperbot-reset.sh --yes
 #
+# --yes refuses to run a second time: when the current paper3.db's run started less than 24 h ago right after a
+# restart marker (agents3.db cursor run:restarted, paperbot.resetrun guard), that run is the reset's new run.
+# `--yes --force-again` overrides it (only after talking to the developer).
+#
 # 1. stops the bot, dashboard, trade alerts, the agents and the scheduled jobs (waits for a running nightly job to
 #    finish); the market recorders (liquidations, GH Coin calls, flow, market) keep running. Every listed service
 #    and timer that is loaded is stopped (stop is idempotent), whatever its state: a unit waiting to auto-restart
@@ -15,9 +19,11 @@
 #    Refuses while the order executor runs (it reads paper3.db) and checks that no process still has a run file open;
 # 2. takes a fresh backup of the stopped run before anything moves: starts paperbot-backup.service (a oneshot:
 #    `systemctl start` returns when it has finished), checks its result and that today's backup folder holds a
-#    new copy of paper3.db / daily3.db / checkpoint.db; a failure stops the reset here (nothing moved). Then the
+#    new copy of paper3.db / daily3.db / checkpoint.db; a failure stops the reset here (nothing moved). The day's
+#    folder is then copied to $BACKUPS/<UTC date>-before-reset-<UTC time>/<UTC date>/, which the 08:40 KST nightly
+#    backup never writes (it rewrites the day's own folder with the NEW run; 14 days kept like the others). Then the
 #    off-site copy (paperbot-offsite.service) when its timer is enabled: a failure there is only a warning (the
-#    server's own copy is already made);
+#    server's own copy is already made; the summary prints how to send the kept copy again);
 # 3. installs the pulled code (deploy/install.sh): a failure here leaves the old run untouched;
 # 4. MOVES (never deletes) the run's own files to /var/lib/paperbot/archive/run-<UTC time>/ (ARCHIVE_DBS and
 #    ARCHIVE_FILES below);
@@ -34,10 +40,15 @@
 set -Eeuo pipefail
 
 MODE="${1:-}"
+AGAIN="${2:-}"
+USAGE="usage: sudo bash deploy/paperbot-reset.sh --dry-run | --yes [--force-again]   (--yes moves the current run to an archive and starts a new one)"
 case "$MODE" in
   --yes|--dry-run) ;;
-  *) echo "usage: sudo bash deploy/paperbot-reset.sh --dry-run | --yes   (--yes moves the current run to an archive and starts a new one)"
-     exit 2 ;;
+  *) echo "$USAGE"; exit 2 ;;
+esac
+case "$AGAIN" in
+  ""|--force-again) ;;
+  *) echo "$USAGE"; exit 2 ;;
 esac
 [ "$(id -u)" -eq 0 ] || { echo "run with sudo"; exit 1; }
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -100,7 +111,9 @@ holders() {
       elif command -v lsof >/dev/null 2>&1; then
         if lsof -t -- "$DATA/$f$s" >/dev/null 2>&1; then found="$found $f$s"; fi
       else
-        if find /proc/[0-9]*/fd -lname "$DATA/$f$s" 2>/dev/null | grep -q .; then found="$found $f$s"; fi
+        # not `find | grep -q`: find over /proc nearly always exits 1 (a PID vanishes mid-walk), and pipefail would
+        # then hide a match
+        if [ -n "$(find /proc/[0-9]*/fd -lname "$DATA/$f$s" 2>/dev/null || true)" ]; then found="$found $f$s"; fi
       fi
     done
   done
@@ -129,7 +142,8 @@ if [ "$MODE" = "--dry-run" ]; then
     echo "!! paperbot-executor(주문 실행기)가 돌고 있습니다: paper3.db를 읽으므로 --yes 전에 직접 멈춰야 합니다 (sudo systemctl stop paperbot-executor)"
   fi
   echo "[옮기기 전에 새 백업] paperbot-backup.service를 한 번 돌려 $BACKUPS/<UTC 날짜>/에 멈춘 실행의 복사본을 만들고 확인합니다"
-  echo "  (실패하면 아무것도 옮기지 않고 멈춤)"
+  echo "  (실패하면 아무것도 옮기지 않고 멈춤). 그 폴더를 $BACKUPS/<UTC 날짜>-before-reset-<UTC 시각>/<UTC 날짜>/로 한 벌 더 복사해 둡니다"
+  echo "  (같은 날짜 폴더는 08:40 KST 밤 백업 때 새 실행으로 바뀜)"
   if offsite_on; then
     echo "  서버 밖 복사: paperbot-offsite.timer가 켜져 있어 paperbot-offsite.service도 한 번 돌립니다(몇 분~최대 1시간, 실패하면 경고만 하고 계속)"
   else
@@ -151,6 +165,9 @@ if [ "$MODE" = "--dry-run" ]; then
   echo "  /etc/paperbot/*, 백업(/var/backups/paperbot), 주문 실행기"
   echo "[agents3.db / inbox.db: 보관 폴더에 사본을 만든 뒤 아래만 바꿈]"
   helper plan --lib "$DATA" --etc "$ETC"
+  if ! helper guard --lib "$DATA"; then
+    echo "   (그래서 --yes는 거절됩니다)"
+  fi
   echo "[코드] $REPO_DIR -> deploy/install.sh ($(git -C "$REPO_DIR" rev-parse --short HEAD 2>/dev/null || echo '?'))"
   if [ -n "$(git -C "$REPO_DIR" status --porcelain --untracked-files=no 2>/dev/null)" ]; then
     echo "!! 저장소에 커밋 안 된 수정이 있어 install.sh가 멈춥니다"
@@ -174,6 +191,12 @@ if [ -n "$(git -C "$REPO_DIR" status --porcelain --untracked-files=no 2>/dev/nul
   echo "the repository has uncommitted changes (install.sh would stop): deploy only committed code"; exit 1
 fi
 echo "== 0. check (nothing changed yet)"
+if [ "$AGAIN" = --force-again ]; then
+  echo "--force-again: 이미 재시작했는지 확인하지 않습니다"
+elif ! helper guard --lib "$DATA"; then
+  echo "아무것도 멈추거나 옮기지 않았습니다."
+  exit 1
+fi
 helper plan --lib "$DATA" --etc "$ETC"
 
 PHASE=none
@@ -268,6 +291,23 @@ for f in $ARCHIVE_DBS; do
   fi
 done
 echo "backup ok: $day"
+# the 08:40 KST nightly backup rewrites today's folder with the NEW run: keep this copy apart (offsite.py sends a
+# folder named by its date: --from <kept folder> --date <date>)
+DAYNAME="$(basename "$day")"
+KEEP_BK="$BACKUPS/$DAYNAME-before-reset-$(date -u +%H%M%SZ)"
+n=0
+while [ -e "$KEEP_BK" ]; do n=$((n+1)); KEEP_BK="$BACKUPS/$DAYNAME-before-reset-$(date -u +%H%M%SZ)-$n"; done
+install -d -m 750 "$KEEP_BK"
+cp -a "$day" "$KEEP_BK/$DAYNAME"
+chown -R "${RUN_USER:-root}:${RUN_USER:-root}" "$KEEP_BK"
+for f in $ARCHIVE_DBS; do
+  if [ -e "$DATA/$f" ] && ! cmp -s "$day/$f" "$KEEP_BK/$DAYNAME/$f"; then
+    echo "!! 옮기기 전 백업을 $KEEP_BK 에 복사하지 못했습니다($f). 아무 파일도 옮기지 않고 멈춥니다."
+    false
+  fi
+done
+echo "pre-reset copy kept: $KEEP_BK/$DAYNAME"
+RESEND="sudo systemd-run --wait --pipe --collect -p User=paperbot -p Group=paperbot -p WorkingDirectory=/opt/crypto-bot-research -p EnvironmentFile=/etc/paperbot/live.env /opt/paperbot/venv/bin/python -m paperbot.offsite send --from $KEEP_BK --date $DAYNAME"
 if offsite_on; then
   echo "off-site copy (paperbot-offsite.service, up to an hour)"
   if "$SYSTEMCTL" start paperbot-offsite.service; then
@@ -275,7 +315,9 @@ if offsite_on; then
   else
     echo "!! 경고: 서버 밖 복사(paperbot-offsite.service)가 실패했습니다. 서버 안 새 백업($day)은 만들어졌으므로 계속합니다."
     echo "   재시작이 끝난 뒤 원인 보기: sudo journalctl -u paperbot-offsite -n 50 --no-pager"
-    echo "   다시 보내기(같은 날짜 폴더, 이전 실행 복사본): sudo systemctl start paperbot-offsite.service"
+    echo "   다시 보내기(옮기기 전 복사본 $KEEP_BK/$DAYNAME; 같은 날짜 폴더 $day는 08:40 KST 밤 백업 때 새 실행으로 바뀌므로"
+    echo "   sudo systemctl start paperbot-offsite.service는 그 전에만 같은 것을 보냄):"
+    echo "     $RESEND"
     OFFSITE_WARN=1
   fi
 else
@@ -328,9 +370,10 @@ echo "그대로 둠: agents3.db(시험 장부·메모·채점·회의 기록·�
 echo "  price_alerts.json, liq.db·flow.db·market.db·ghcoin(시장 기록), lab, failalert, exec, /etc/paperbot, 백업"
 echo "  agents3.db·inbox.db의 바꾸기 전 사본: $ARCH/agents3-before-reset.db, $ARCH/inbox-before-reset.db"
 echo "초기화: 이전 paper3.db를 가리키던 에이전트 커서(위 5단계), 이전 실행의 열린 제안(닫음)"
-echo "옮기기 전 새 백업: $day"
+echo "옮기기 전 새 백업: $KEEP_BK/$DAYNAME (따로 보관, 14일 뒤 다른 백업처럼 지워짐; $day는 08:40 KST 밤 백업 때 새 실행으로 바뀜)"
 if [ "$OFFSITE_WARN" = 1 ]; then
-  echo "!! 서버 밖 복사는 실패했습니다(위 경고): sudo systemctl start paperbot-offsite.service 로 다시 보내세요"
+  echo "!! 서버 밖 복사는 실패했습니다(위 경고). 옮기기 전 복사본을 다시 보내기:"
+  echo "   $RESEND"
 fi
 if busy paperbot-live3; then
   if ! helper start --paper-db "$DATA/paper3.db" --wait "$WAIT_S"; then

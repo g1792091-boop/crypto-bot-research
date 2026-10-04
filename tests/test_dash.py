@@ -595,7 +595,14 @@ def test_trade_reading_digests_are_reused_for_ten_minutes(client, monkeypatch):
     clock[0] += 180                                  # the digest tab polls every 2 minutes
     assert client.get("/api/digest/tf").json()["computed_at"] == first
     clock[0] += A.TRADES_TTL_S
-    assert client.get("/api/digest/tf").json()["computed_at"] > first
+    stale = client.get("/api/digest/tf").json()          # expired: answered at once, recomputed in the background
+    assert stale["computed_at"] == first and stale["stale"] is True
+    for _ in range(200):
+        got = client.get("/api/digest/tf").json()
+        if got["computed_at"] > first:
+            break
+        _time.sleep(0.01)
+    assert got["computed_at"] > first and "stale" not in got
     # the 순위표's breakdown card (every closed trade) refreshes only while it is on screen
     assert ('setInterval(() => { if (state.view === "board" && document.visibilityState === "visible") load(); }, 600000);'
             in _static("breakdown.js"))
@@ -705,3 +712,41 @@ def test_phone_layout_fixes_stay():
     js = open(os.path.join(st, "app.js"), encoding="utf-8").read()
     assert ".pcards { grid-template-columns: minmax(0, 1fr); }" in css and "tr.why-row td .why { position: sticky" in css
     assert "renderAcctPos(state.account.state && state.account.state.position, state.account.position_why)" in js
+
+
+def test_account_equity_is_downsampled_keeping_first_last_and_extremes(tmp_path):
+    """/api/account/<id> (review 2026-10-04, M-6): 30 days of 5-minute equity (8,640 points, ~400 KB) reach the browser
+    as at most EQUITY_MAX_POINTS points in time order, with the first and last points and every bucket's low and high
+    (the deepest trough and the peak stay on the chart); a short series is sent whole."""
+    import json
+    import math
+    import sqlite3
+
+    from paperbot.dash.app import EQUITY_MAX_POINTS, downsample
+    db = str(tmp_path / "p.db")
+    _store(db).close()
+    c = sqlite3.connect(db)
+    cols = [r[1] for r in c.execute("PRAGMA table_info(equity)")]
+    t0 = 10 * 86_400_000
+    n = 30 * 288
+    vals = [5000 + 400 * math.sin(i / 50) + (i % 7) for i in range(n)]
+    vals[4321], vals[6000] = 1234.5, 9876.5                         # a trough and a peak inside one bucket each
+    rows = [{"account_id": "A@15m", "ts": t0 + i * 300_000, "equity": v, "drawdown": 0.0} for i, v in enumerate(vals)]
+    c.executemany(f"INSERT INTO equity ({','.join(cols)}) VALUES ({','.join('?' * len(cols))})",
+                  [tuple(r.get(k, 0) for k in cols) for r in rows])
+    c.commit()
+    c.close()
+    cl = TestClient(create_app(db, hash_password("correct horse battery"), SECRET, candles=lambda s, i, k: []))
+    cl.post("/api/login", json={"password": "correct horse battery"})
+    a = cl.get("/api/account/A@15m").json()
+    eq = a["equity"]
+    assert a["equity_points"] >= n and len(eq) <= EQUITY_MAX_POINTS
+    assert len(json.dumps(eq)) < 80_000
+    ts = [p["t"] for p in eq]
+    assert ts == sorted(set(ts))                                     # strictly increasing (the chart needs it)
+    assert eq[-1] == {"t": rows[-1]["ts"], "v": rows[-1]["equity"]}
+    got = {p["v"] for p in eq}
+    assert 1234.5 in got and 9876.5 in got
+    short = [{"t": i, "v": float(i)} for i in range(EQUITY_MAX_POINTS)]
+    assert downsample(short) is short
+    assert len(downsample([{"t": i, "v": float(i % 13)} for i in range(100_000)])) <= EQUITY_MAX_POINTS

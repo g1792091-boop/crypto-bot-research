@@ -800,6 +800,25 @@ def simulate_bots(m: Minutes, tf: str, lo: int, hi: int, rates: np.ndarray, s: S
         mh = np.where(np.isnan(mh), h, mh)
         ml = np.where(np.isnan(ml), l, ml)
         mc = np.where(np.isnan(mc), c, mc)
+        # ---- funding at its real minute, on the mark open, first (engine.step): paid by the positions held at the
+        #      funding instant (this minute's open), before this minute's entries (they fill after it) and exits
+        fr = w.fr[t]
+        if not np.all(np.isnan(fr)):
+            j = allidx[inpos]
+            if len(j):
+                k = coin[j]
+                rate = fr[k]
+                ok = ~np.isnan(rate) & ~np.isnan(o[k])
+                j, k, rate = j[ok], k[ok], rate[ok]
+                if len(j):
+                    pay = side[j] * qty[j] * mo[k] * rate
+                    wallet[j] -= pay
+                    margin[j] -= pay
+                    fpaid[j] += pay
+                    sj = side[j]
+                    with np.errstate(all="ignore"):
+                        liq[j] = np.maximum((margin[j] + cum[j] - sj * qty[j] * entry[j])
+                                            / (qty[j] * mmr[j] - sj * qty[j]), 0.0)
         entered = None
         # ---- entries: signals of the TF bar that closed at this minute's open
         if ts % span == 0:
@@ -895,24 +914,6 @@ def simulate_bots(m: Minutes, tf: str, lo: int, hi: int, rates: np.ndarray, s: S
                     px = entry[jr] * (1.0 + sr * (lk[raise_] / lev[jr] + rt + fund[raise_]))
                     stop[jr] = np.where(sr > 0, np.maximum(stop[jr], px), np.minimum(stop[jr], px))
                     lock[jr] = lk[raise_]
-        # ---- funding at its real minute, on the mark open
-        fr = w.fr[t]
-        if not np.all(np.isnan(fr)):
-            j = allidx[inpos]
-            if len(j):
-                k = coin[j]
-                rate = fr[k]
-                ok = ~np.isnan(rate) & ~np.isnan(o[k])
-                j, k, rate = j[ok], k[ok], rate[ok]
-                if len(j):
-                    pay = side[j] * qty[j] * mo[k] * rate
-                    wallet[j] -= pay
-                    margin[j] -= pay
-                    fpaid[j] += pay
-                    sj = side[j]
-                    with np.errstate(all="ignore"):
-                        liq[j] = np.maximum((margin[j] + cum[j] - sj * qty[j] * entry[j])
-                                            / (qty[j] * mmr[j] - sj * qty[j]), 0.0)
         if inpos.any():
             present = ~np.isnan(c)
             last_mark[present] = mc[present]

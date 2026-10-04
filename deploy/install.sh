@@ -28,7 +28,7 @@ until apt-get -o DPkg::Lock::Timeout=60 update -q; do
   echo "apt is busy (automatic updates); waiting 10 s ($n/60)"; sleep 10
 done
 DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=600 install -yq python3 python3-venv python3-pip \
-  git sqlite3 ufw fail2ban unattended-upgrades chrony zstd openssl nodejs
+  git sqlite3 ufw fail2ban unattended-upgrades chrony zstd openssl psmisc nodejs
 
 echo "== firewall: SSH in, everything else closed"
 ufw default deny incoming

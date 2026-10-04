@@ -358,3 +358,44 @@ def test_as_root_it_works_as_the_services_user(lib):
         assert r.returncode == 1 and "읽을 수 없음" in r.stdout
     finally:
         shutil.rmtree(top, ignore_errors=True)
+
+
+def _paper_at(path, start):
+    st = Store3(str(path))
+    for tf in ("15m", "30m", "1h", "4h"):
+        st.add_account(f"V45_AMB@{tf}", "V45_AMB", tf, "strategy", start, "paper-v3")
+    st.commit()
+    st.close()
+
+
+def test_guard_refuses_a_second_reset_of_the_new_run(lib, capsys, monkeypatch):
+    """Review 3b m2: after the reset, paper3.db holds the NEW run (started minutes after the run:restarted marker):
+    another --yes would archive it, so `guard` refuses (exit 4) with a Korean explanation."""
+    paper = lib["data"] / "paper3.db"
+    _paper_at(paper, OLD_START)                                     # before the reset: the old run, days old
+    assert RR.repeat_reason(str(paper), lib["agents"], NOW) is None
+    assert RR.main(["guard", "--lib", str(lib["data"])]) == 0
+    paper.unlink()
+    _apply(lib)                                                      # the reset writes the marker at NOW
+    assert RR.repeat_reason(str(paper), lib["agents"], NOW) is None   # the bot has not made its accounts yet
+    start = NOW + 4 * 60_000
+    _paper_at(paper, start)
+    later = start + 3 * 3_600_000
+    why = RR.repeat_reason(str(paper), lib["agents"], later)
+    assert why and "재시작은 이미 끝났습니다" in why and "2026-10-04 22:14" in why and "--force-again" in why
+    assert str(lib["arch"]) in why
+    assert RR.repeat_reason(str(paper), lib["agents"], start + 24 * 3_600_000) is None    # a day later: allowed
+    capsys.readouterr()
+    monkeypatch.setattr(RR.time, "time", lambda: later / 1000)
+    assert RR.main(["guard", "--lib", str(lib["data"])]) == 4
+    assert "재시작은 이미 끝났습니다" in capsys.readouterr().out
+
+
+def test_guard_ignores_an_old_marker_and_a_missing_agents_db(lib, tmp_path):
+    paper = lib["data"] / "paper3.db"
+    _apply(lib, now=NOW - 3 * 86_400_000)                            # a restart days before this run
+    _paper_at(paper, NOW)
+    assert RR.repeat_reason(str(paper), lib["agents"], NOW + 60_000) is None
+    assert RR.repeat_reason(str(paper), str(tmp_path / "none.db"), NOW + 60_000) is None
+    (tmp_path / "bad.db").write_text("not a database")
+    assert RR.repeat_reason(str(tmp_path / "bad.db"), lib["agents"], NOW + 60_000) is None

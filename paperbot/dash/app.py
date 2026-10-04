@@ -37,6 +37,7 @@ import math
 import os
 import sqlite3
 import sys
+import threading
 import time
 import urllib.parse
 import urllib.request
@@ -59,8 +60,30 @@ TRADE_TFS = tuple(V3_TRADE_TFS)
 RUN_SHAPE = {"trade_tfs": list(V3_TRADE_TFS), "judged_tfs": list(V3_JUDGED_TFS), "accounts": V3_ACCOUNTS,
              "strategy_accounts": V3_STRATEGIES * len(V3_TRADE_TFS), "q1_family": V3_Q1_MAIN_FAMILY}
 DIGEST_TTL_S = 120           # /api/digest/staff reused this long
+EQUITY_MAX_POINTS = 1_500    # /api/account/<id> equity series at most this long (first, last, each bucket's min and max)
 TRADES_TTL_S = 600           # /api/digest/week and tf reused this long: they decode every closed trade since the start
 OVERLAP_TTL_S = 600          # /api/overlap result reused this long (the analysis reads weeks of 5-minute equity)
+
+
+def downsample(points: list, limit: int = EQUITY_MAX_POINTS) -> list:
+    """An equity series ([{t, v}] in time order) of at most ``limit`` points for the chart: the first and last points
+    and, in each of (limit - 2) / 2 equal buckets of the rest, its lowest and highest point in time order, so every
+    peak and trough (the drawdowns) stays on the line. A series that fits is returned as it is."""
+    n = len(points)
+    if n <= max(3, limit):
+        return points
+    inner = points[1:-1]
+    buckets = max(1, (limit - 2) // 2)
+    out = [points[0]]
+    for b in range(buckets):
+        chunk = inner[b * len(inner) // buckets:(b + 1) * len(inner) // buckets]
+        if not chunk:
+            continue
+        lo = min(range(len(chunk)), key=lambda i: chunk[i]["v"])
+        hi = max(range(len(chunk)), key=lambda i: chunk[i]["v"])
+        out.extend(chunk[i] for i in sorted({lo, hi}))
+    out.append(points[-1])
+    return out
 
 
 # ---------------------------------------------------------------- auth
@@ -269,6 +292,8 @@ class Data:
                     t["why"] = None
             eq = [{"t": r["ts"], "v": r["equity"]} for r in c.execute(
                 "SELECT ts, equity FROM equity WHERE account_id = ? ORDER BY ts", (aid,))]
+            eq_points = len(eq)
+            eq = downsample(eq)
             counts = {r["status"]: r["n"] for r in c.execute(
                 "SELECT status, COUNT(*) AS n FROM outcomes WHERE account_id = ? GROUP BY status", (aid,))}
             st = self.state(c, "accounts")
@@ -294,8 +319,8 @@ class Data:
             extra["trial_id"] = src.get("trial_id") if isinstance(src, dict) else None
         # an open position's tp_price is NaN under the ladder exits (engine.py: no fixed take-profit), and
         # json.loads gives it back as NaN: not valid JSON (the route answered 500 for every account holding one)
-        return json_finite({"account": acc, "state": e, "trades": trades, "equity": eq, "signals": counts,
-                            "extra": extra, "position_why": pos_why})
+        return json_finite({"account": acc, "state": e, "trades": trades, "equity": eq, "equity_points": eq_points,
+                            "signals": counts, "extra": extra, "position_why": pos_why})
 
     def position_why(self) -> dict:
         """{account_id: why} of every open position (levwhy: group, score, leverage, the rejected higher candidates)."""
@@ -2024,11 +2049,31 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
 
     # ------------------------------------------------ meeting digest (paperbot/agents/digest.py: code only, read-only)
     digest_cache: dict = {}
+    digest_busy: set = set()
+    digest_lock = threading.Lock()
 
     def _digest_cached(key: str, fn, ttl: float = DIGEST_TTL_S):
+        """The first request computes; after that an expired result is answered at once (``stale: true``) while one
+        background thread recomputes it, so the week and timeframe views (every closed trade since the start: about
+        4 s at day 30) hold a request only the first time."""
         hit = digest_cache.get(key)
-        if hit is None or time.time() - hit[0] > ttl:
+        if hit is None:
             digest_cache[key] = hit = (time.time(), fn())
+        elif time.time() - hit[0] > ttl:
+            with digest_lock:
+                start = key not in digest_busy
+                digest_busy.add(key)
+            if start:
+                def refresh():
+                    try:
+                        digest_cache[key] = (time.time(), fn())
+                    except Exception as exc:  # noqa: BLE001  (the old result stays; retried on the next request)
+                        print(f"warning: digest {key} failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+                    finally:
+                        with digest_lock:
+                            digest_busy.discard(key)
+                threading.Thread(target=refresh, daemon=True, name=f"dash-digest-{key}").start()
+            return {**hit[1], "computed_at": int(hit[0] * 1000), "stale": True}
         return {**hit[1], "computed_at": int(hit[0] * 1000)}
 
     @app.get("/api/digest/day")

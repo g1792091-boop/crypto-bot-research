@@ -157,12 +157,6 @@ def _num(v, nd: Optional[int] = None):
     return v if nd is None else round(v, nd)
 
 
-def _sig(v, digits: int = 6):
-    """JSON-safe float rounded to ``digits`` significant digits (strength values have any scale)."""
-    v = _num(v)
-    return None if v is None else float(f"{v:.{digits}g}")
-
-
 def _flag(v):
     v = float(v)
     return int(v) if np.isfinite(v) else None
@@ -198,7 +192,10 @@ def sr_marks(df: pd.DataFrame, tf: str, sides=(1, -1)) -> dict:
 def strength_marks(name: str, df: pd.DataFrame, tf: str, side: int) -> Optional[dict]:
     """The strategy's strength FEATURES on the last bar of ``df`` for ``side`` (research
     side_values: the long array for a long, the short array for a short). None when the
-    strategy has no definition (coin-flip accounts)."""
+    strategy has no definition (coin-flip accounts). Values are kept at full float64 precision
+    (JSON round-trips them exactly): levrule.quality_score scores them against quality_edges.json,
+    whose edges were cut on the exact research values, and a rounded value sitting on an edge (for
+    example 20 +- 1e-9 against an edge of 19.9999999970898) would land in the wrong quintile."""
     S = strength_module(name)
     if S is None:
         return None
@@ -211,7 +208,7 @@ def strength_marks(name: str, df: pd.DataFrame, tf: str, side: int) -> Optional[
         v = (long_v if side > 0 else short_v)[i]
         feats.append({"name": f["name"], "label_ko": f["label_ko"], "unit": f["unit"],
                       "unit_ko": UNIT_KO.get(f["unit"], f["unit"]),
-                      "higher_is_stronger": bool(f["higher_is_stronger"]), "value": _sig(v)})
+                      "higher_is_stronger": bool(f["higher_is_stronger"]), "value": _num(v)})
     return {"side": int(side), "features": feats}
 
 

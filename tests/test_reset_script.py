@@ -3,6 +3,7 @@ agents' memory, the owners' inbox or a market recorder), and the --dry-run / ref
 (nothing is stopped, moved or changed)."""
 
 import hashlib
+import json
 import os
 import re
 import shutil
@@ -251,7 +252,7 @@ def test_yes_moves_the_run_keeps_memory_and_restarts(env):
     assert "agents3.db 백업: copied" in out
     assert out.index("backup ok:") < out.index("== 4. archive")
     assert "off-site copy skipped" in out
-    day = next((env["tmp"] / "backups").iterdir())
+    day = next(p for p in (env["tmp"] / "backups").iterdir() if re.fullmatch(r"\d{8}", p.name))
     assert (day / "paper3.db").read_text() == "x" and (day / "daily3.db").exists()
 
 
@@ -373,3 +374,160 @@ def test_a_failure_after_the_move_prints_how_to_go_on_or_back(env):
     calls = env["log"].read_text().splitlines()
     assert any(c.startswith("stop") for c in calls)
     assert [c for c in calls if c.startswith("start")] == ["start paperbot-backup.service"]   # the bot stays off
+
+
+def test_proc_fallback_finds_an_open_run_file_under_pipefail(tmp_path):
+    """Review 3b m1: without fuser and lsof the /proc walk must still see a holder (find over /proc exits 1 when a
+    PID vanishes mid-walk; a `find | grep -q` pipeline then reads false under pipefail)."""
+    fn = re.search(r"^holders\(\) \{\n.*?^\}\n", TEXT, re.S | re.M).group(0)
+    data = tmp_path / "lib"
+    data.mkdir()
+    (data / "agents3.db").write_text("x")
+    bin_ = tmp_path / "bin"
+    bin_.mkdir()
+    os.symlink(shutil.which("find"), bin_ / "find")              # no fuser, no lsof on this PATH
+    holder = subprocess.Popen([sys.executable, "-c", "import sys, time; f = open(sys.argv[1]); time.sleep(60)",
+                               str(data / "agents3.db")])
+    try:
+        import time
+        deadline = time.time() + 10
+        while not any(os.path.realpath(os.path.join(f"/proc/{holder.pid}/fd", fd)) == str(data / "agents3.db")
+                      for fd in os.listdir(f"/proc/{holder.pid}/fd")) and time.time() < deadline:
+            time.sleep(0.05)
+        script = f"set -Eeuo pipefail\nARCHIVE_DBS='paper3.db daily3.db checkpoint.db'\nDATA='{data}'\n{fn}\nholders\n"
+        r = subprocess.run(["/bin/bash", "-c", script], capture_output=True, text=True, timeout=60,
+                           env={"PATH": str(bin_)})
+        assert r.returncode == 0, r.stderr
+        assert r.stdout.split() == ["agents3.db"], (r.stdout, r.stderr)
+    finally:
+        holder.kill()
+        holder.wait()
+    r = subprocess.run(["/bin/bash", "-c", script], capture_output=True, text=True, timeout=60, env={"PATH": str(bin_)})
+    assert r.returncode == 0 and r.stdout.strip() == ""                                    # nobody holds it now
+
+
+def test_install_puts_fuser_on_the_server():
+    with open(os.path.join(ROOT, "deploy", "install.sh"), encoding="utf-8") as fh:
+        apt = re.search(r"apt-get [^\n]*install -yq ([^\n]*\\\n[^\n]*)", fh.read()).group(1)
+    assert "psmisc" in apt.split()
+
+
+def test_yes_keeps_a_pre_reset_copy_apart_from_the_nightly_folder(env):
+    """Review 3b m2: the 08:40 KST nightly backup rewrites today's folder with the NEW run; the reset keeps the
+    stopped run's copy in <date>-before-reset-<time>/<date>/ (a folder offsite.py sends with --from/--date)."""
+    from paperbot import offsite
+    _yes_env(env, FAKE_ENABLED="paperbot-offsite.timer", FAKE_FAIL_START="paperbot-offsite.service")
+    r = _run(env, "--yes")
+    assert r.returncode == 0, r.stdout + r.stderr
+    backups = env["tmp"] / "backups"
+    days = sorted(p.name for p in backups.iterdir())
+    assert len(days) == 2 and re.fullmatch(r"\d{8}", days[0]) and re.fullmatch(rf"{days[0]}-before-reset-\d{{6}}Z",
+                                                                                days[1])
+    kept = backups / days[1]
+    assert sorted(os.listdir(kept)) == [days[0]]
+    assert (kept / days[0] / "paper3.db").read_text() == "x" and (kept / days[0] / "agents3.db").exists()
+    # the nightly backup of the same UTC day now copies the new run into the day's folder: the kept copy stays
+    (env["data"] / "paper3.db").write_text("new run")
+    subprocess.run([env["env"]["PAPERBOT_SYSTEMCTL"], "start", "paperbot-backup.service"], env=env["env"], check=True)
+    assert (backups / days[0] / "paper3.db").read_text() == "new run"
+    assert (kept / days[0] / "paper3.db").read_text() == "x"
+    assert offsite.find_folder(kept, days[0], None) == kept / days[0]
+    resend = f"python -m paperbot.offsite send --from {kept} --date {days[0]}"
+    out = r.stdout
+    assert f"pre-reset copy kept: {kept}/{days[0]}" in out
+    assert resend in out.split("== 3.")[0] and resend in out.split("요약")[1]
+    assert "같은 날짜 폴더, 이전 실행 복사본" not in out
+    assert f"옮기기 전 새 백업: {kept}/{days[0]}" in out
+
+
+def _new_run_after_a_reset(env, start_ago_ms=3_600_000):
+    import time
+    now = int(time.time() * 1000)
+    start = now - start_ago_ms
+    (env["data"] / "paper3.db").write_bytes(b"")
+    c = sqlite3.connect(str(env["data"] / "paper3.db"))
+    c.execute("CREATE TABLE accounts (account_id TEXT, strategy TEXT, timeframe TEXT, kind TEXT, created_ts INTEGER)")
+    c.execute("INSERT INTO accounts VALUES ('V45_AMB@15m', 'V45_AMB', '15m', 'strategy', ?)", (start,))
+    c.commit()
+    c.close()
+    a = sqlite3.connect(str(env["data"] / "agents3.db"))
+    a.execute("INSERT INTO cursors (k, v) VALUES ('run:restarted', ?)",
+              (json.dumps({"ts": start - 300_000, "archive": "/var/lib/paperbot/archive/run-x"}),))
+    a.commit()
+    a.close()
+
+
+def test_a_second_yes_after_the_reset_is_refused_unless_forced(env):
+    _new_run_after_a_reset(env)
+    _yes_env(env)
+    before = _tree_hash(env["data"])
+    r = _run(env, "--dry-run")
+    assert r.returncode == 0 and "재시작은 이미 끝났습니다" in r.stdout and "--yes는 거절됩니다" in r.stdout
+    r = _run(env, "--yes")
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert "재시작은 이미 끝났습니다" in r.stdout and "--yes --force-again" in r.stdout
+    assert "아무것도 멈추거나 옮기지 않았습니다" in r.stdout
+    assert _tree_hash(env["data"]) == before
+    assert not any(c.startswith(("stop", "start")) for c in env["log"].read_text().splitlines())
+    r = _run(env, "--yes", "--force-again")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "--force-again" in r.stdout and not (env["data"] / "paper3.db").exists()
+    assert subprocess.run(["bash", SCRIPT, "--yes", "--again"], capture_output=True, text=True).returncode == 2
+
+
+def test_a_run_older_than_a_day_is_not_a_repeat(env):
+    _new_run_after_a_reset(env, start_ago_ms=25 * 3_600_000)
+    _yes_env(env)
+    r = _run(env, "--yes")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "재시작은 이미 끝났습니다" not in r.stdout
+
+
+DOC = os.path.join(ROOT, "docs", "server-setup-v3.md")
+
+
+@pytest.mark.parametrize("vintage", ["worktree", "HEAD", "613506c"])
+def test_the_doc_budget_box_sets_each_line_once_on_any_agents_env(tmp_path, vintage):
+    """Review 3b m4: the reset section's "사용량 설정" box, run on an agents.env made from the current example and
+    from the 613506c-era one (only a commented #AGENTS_BUDGET= line, where a bare `sed` changed nothing), leaves
+    exactly one AGENTS_BUDGET= line with the owners' value and one AGENTS_RESEARCH_EVERY_MIN=180, keeps the mode,
+    and the agents read the intended limits."""
+    from paperbot.agents.rooms import policy_from_env
+    from paperbot.launchcheck import parse_env
+    text = open(DOC, encoding="utf-8").read()
+    sec = text[text.index("4. 사용량 설정"):]
+    box = sec[sec.index("```bash\n") + 8:sec.index("   ```", sec.index("```bash\n") + 8)]
+    want = re.search(r"^\s*B='(AGENTS_BUDGET=[^']*)'$", box, re.M).group(1)
+    assert "/" not in want and "&" not in want
+    ex = (open(os.path.join(ROOT, "deploy", "agents.env.example"), encoding="utf-8").read() if vintage == "worktree"
+          else subprocess.run(["git", "-C", ROOT, "show", f"{vintage}:deploy/agents.env.example"], capture_output=True,
+                              text=True, check=True).stdout)
+    env = tmp_path / "agents.env"
+    env.write_text(ex + "AGENTS_RESEARCH_EVERY_MIN=60\n")
+    env.chmod(0o640)
+    script = "\n".join(ln.strip() for ln in box.splitlines()).replace("sudo ", "").replace("/etc/paperbot/agents.env",
+                                                                                            str(env))
+    r = subprocess.run(["bash", "-c", "set -e\n" + script.replace("stat -c '%U:%G %a'", "stat -c '%a'")],
+                       capture_output=True, text=True, timeout=30)
+    assert r.returncode == 0, r.stderr
+    vals, bad, dup = parse_env(env.read_text())
+    assert vals["AGENTS_BUDGET"] == want.split("=", 1)[1] and vals["AGENTS_RESEARCH_EVERY_MIN"] == "180"
+    assert not dup, dup
+    lines = env.read_text().splitlines()
+    assert sum(ln.startswith("AGENTS_BUDGET=") for ln in lines) == 1
+    assert sum(ln.startswith("AGENTS_RESEARCH_EVERY_MIN=") for ln in lines) == 1
+    assert oct(env.stat().st_mode & 0o777) == "0o640" and r.stdout.strip().endswith("640")
+    p = policy_from_env(vals)
+    assert p.triggers.research_every_ms == 180 * 60_000
+    caps = dict(x.split("=", 1) for x in want.split("=", 1)[1].split(","))
+    total_calls, total_tokens = (int(v) for v in caps["total"].split(":"))
+    assert tuple(p.total_budget)[:2] == (total_calls, total_tokens)
+
+
+def test_the_doc_budget_box_and_the_env_template_hold_the_same_lines():
+    text = open(DOC, encoding="utf-8").read()
+    sec = text[text.index("4. 사용량 설정"):]
+    want = re.search(r"^\s*B='(AGENTS_BUDGET=[^']*)'$", sec, re.M).group(1)
+    ex = open(os.path.join(ROOT, "deploy", "agents.env.example"), encoding="utf-8").read().splitlines()
+    assert [ln for ln in ex if ln.startswith("AGENTS_BUDGET=")] == [want]
+    assert [ln for ln in ex if ln.startswith("AGENTS_RESEARCH_EVERY_MIN=")] == ["AGENTS_RESEARCH_EVERY_MIN=180"]

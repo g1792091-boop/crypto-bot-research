@@ -37,6 +37,7 @@ TRADING_FILES = ("paperbot/engine.py", "paperbot/ladder.py", "paperbot/margin.py
                  "paperbot/entry_marks.py",
                  "paperbot/binance.py",                       # bars_from_klines builds the feed's bars
                  "paperbot/p_best_cells.json",                # coin-flip fairness per cell (checkpoint bots)
+                 "research/paper_rules/out/summary.json",     # random_rate: the live coin-flip accounts' fire rate (live3)
                  "research/entry_study/DEFS_BC.sha256") + STRENGTH_DEF_FILES
 RULES_FILES = ("docs/paper-v3-rules.md", "docs/paper-v3-rules-addendum.md", "docs/paper-v3-rules-change-1.md",
                "docs/levrule-eval.md")     # how rule B is judged at day 30 (pre-registered 2026-10-04)

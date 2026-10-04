@@ -36,7 +36,9 @@ import argparse
 import fcntl
 import json
 import os
+import signal
 import sys
+import threading
 import time
 from typing import Callable, Optional
 
@@ -295,6 +297,30 @@ def single_runner_lock(db: str):
     return fh
 
 
+def stop_on_sigterm() -> tuple[threading.Event, Callable[[], None]]:
+    """(stop event, restore). SIGTERM (systemctl stop / restart, install.sh, a reboot) sets the event: cmd_run ends
+    the poll it is in (a batch of minutes is never cut in the middle: store.close commits, and a half-processed batch
+    must not be committed) and leaves through its ``finally``, so the hourly digest's pending lines (busts,
+    drawdowns, gaps) are sent. Without this the default action killed the process and those lines were lost. A
+    batch longer than the unit's TimeoutStopSec ends in systemd's SIGKILL: the crash case a restart already
+    handles. A child process forked after this (a signal worker) keeps the default action: it ends at once."""
+    stop = threading.Event()
+    pid = os.getpid()
+
+    def on_term(signum, frame):  # noqa: ARG001
+        if os.getpid() != pid:                    # a forked worker inherited this handler
+            signal.signal(signum, signal.SIG_DFL)
+            os.kill(os.getpid(), signum)
+            return
+        stop.set()
+
+    try:
+        prev = signal.signal(signal.SIGTERM, on_term)
+    except ValueError:                            # not the main thread (tests): nothing to install
+        return stop, lambda: None
+    return stop, lambda: signal.signal(signal.SIGTERM, prev)
+
+
 def cmd_run(args) -> int:
     from .sigservice import TRADE_TFS, SignalService, strategy_names
     notifier = _notifier()
@@ -358,9 +384,10 @@ def cmd_run(args) -> int:
                      deadman=DeadMan(os.environ.get("DEADMAN_URL")), digest=digest,
                      fills=FillProbe(lambda s: rest.depth(s, FILL_DEPTH), settings.slippage_frac, FILL_DEPTH))
     bind_extras(ext, runner, store, notifier)
+    stop, restore = stop_on_sigterm()
     sd_notify("READY=1")
     try:
-        while args.max_polls is None or args.max_polls > 0:
+        while (args.max_polls is None or args.max_polls > 0) and not stop.is_set():
             sd_notify("WATCHDOG=1")
             try:
                 runner.process(feed.poll())
@@ -371,8 +398,9 @@ def cmd_run(args) -> int:
                 store.alert(int(time.time() * 1000), WARN, f"data error, retrying: {exc}")
             if args.max_polls is not None:
                 args.max_polls -= 1
-            time.sleep(args.poll)
+            stop.wait(args.poll)                  # returns at once on SIGTERM
     finally:
+        restore()
         digest.flush(int(time.time() * 1000), force=True)
         service.close()
         store.close()

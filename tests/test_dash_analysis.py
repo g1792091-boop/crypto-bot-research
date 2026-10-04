@@ -266,3 +266,48 @@ def test_analysis_tab_is_on_the_page(env):
     assert 'id="debate-body"' in html and "24시간 토론방" in html
     js = open(os.path.join(STATIC, "analysis.js"), encoding="utf-8").read()
     assert "/api/analysis/" in js and "/api/debate" in js and "표본이 적습니다" in js
+
+
+def test_heavy_answers_an_expired_result_at_once_and_recomputes_in_the_background(monkeypatch):
+    """M-6 (review 2026-10-04): risk / shadows / synergy take seconds on a month of data; after the first time no
+    viewer waits: an expired result is answered at once (stale) while one background computation refreshes it."""
+    import threading
+    clock = [1000.0]
+    monkeypatch.setattr(AN.time, "time", lambda: clock[0])
+    h = AN.Heavy(wait_s=5)
+    gate, calls = threading.Event(), []
+
+    def slow():
+        calls.append(1)
+        if len(calls) > 1:
+            gate.wait(5)
+        return {"n": len(calls)}
+    assert h.get("risk", 60, slow)["n"] == 1                        # the first time: computed in the request
+    clock[0] += 61
+    t = time.perf_counter()
+    got = h.get("risk", 60, slow)
+    assert time.perf_counter() - t < 1 and got["n"] == 1 and got["stale"] is True
+    assert h.get("risk", 60, slow)["stale"] is True and len(calls) == 2    # one refresh, not two
+    gate.set()
+    for _ in range(200):
+        if (h.peek("risk") or {}).get("n") == 2:
+            break
+        time.sleep(0.01)
+    fresh = h.get("risk", 60, slow)
+    assert fresh["n"] == 2 and "stale" not in fresh
+
+
+def test_shadows_view_is_cached_per_nightly_report(tmp_path):
+    d = str(tmp_path / "daily3.db")
+    assert AN.report_key(d) == "" and AN.report_key(None) == ""
+    c = sqlite3.connect(d)
+    c.execute("CREATE TABLE reports (day TEXT PRIMARY KEY, ts INTEGER, data TEXT)")
+    c.execute("INSERT INTO reports VALUES ('2026-10-05', 100, '{}')")
+    c.commit()
+    k1 = AN.report_key(d)
+    c.execute("INSERT INTO reports VALUES ('2026-10-06', 200, '{}')")
+    c.commit()
+    assert k1 == "2026-10-05@100" and AN.report_key(d) == "2026-10-06@200"
+    c.execute("INSERT OR REPLACE INTO reports VALUES ('2026-10-05', 300, '{}')")     # a missed night re-run
+    c.commit()
+    assert AN.report_key(d) == "2026-10-05@300"

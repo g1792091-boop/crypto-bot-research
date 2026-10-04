@@ -8,7 +8,10 @@ synergy): the numbers are the same the staff read in their meetings.
 
 Cost: the heavy ones (Monte Carlo, combination search, entry features) run in ONE background thread at a time
 (``Heavy``): a request waits at most ``WAIT_S`` seconds, else it answers ``{"pending": true}`` and the page asks
-again; a result is kept ``ttl`` seconds (5-15 minutes) for every viewer, an error 60 seconds.
+again; a result is kept ``ttl`` seconds (5-15 minutes) for every viewer, an error 60 seconds. Once a result exists, an
+expired one is answered at once (``stale: true``) while it is recomputed in the background, so a view that takes
+seconds on a month of data (risk, shadows, synergy) holds a request only the very first time. The shadows view is
+kept per daily3 report (it changes only when the nightly check writes a new one).
 
 Routes (registered by ``register``; all behind the dashboard login like every other /api route):
 
@@ -66,7 +69,8 @@ MAP_TTL_S = 900
 ENTRY_TTL_S = 900
 SYNERGY_TTL_S = 900
 LEVRULE_TTL_S = 600
-SHADOWS_TTL_S = 600
+SHADOWS_TTL_S = 3 * 3600        # per daily3 report (a new nightly report is a new key)
+HEAVY_KEEP = 256                # cached results kept (expired ones are dropped beyond this)
 MAP_CARDS = 2000             # cards.cards_from_db's own cap: the latest this many closed trades per kind
 READINESS_ROWS = 40
 DEBATE_ROWS = 50
@@ -137,6 +141,10 @@ class Heavy:
             except Exception as exc:  # noqa: BLE001  (a view never takes the page down)
                 val = {"error": f"계산하지 못함: {type(exc).__name__}"}
         with self.lock:
+            if len(self.cache) >= HEAVY_KEEP:
+                now = time.time()
+                for k in [k for k, h in self.cache.items() if now - h[0] >= h[2]]:
+                    del self.cache[k]
             self.cache[key] = (time.time(), val, ERROR_TTL_S if "error" in val else ttl)
             self.running.pop(key, None)
         fut.set_result(val)
@@ -153,6 +161,9 @@ class Heavy:
                 self.running[key] = fut
                 threading.Thread(target=self._run, args=(key, fn, fut, ttl), daemon=True,
                                  name=f"dash-{key}").start()
+            if hit is not None and "error" not in hit[1]:
+                # an expired result: answered now, the new one is computed in the background (no viewer waits)
+                return {**hit[1], "computed_at": int(hit[0] * 1000), "stale": True}
         try:
             fut.result(timeout=wait)
         except FutureTimeout:
@@ -703,6 +714,20 @@ def five_year_refs(exitstyle_path: str = EXITSTYLE_JSON) -> dict:
     return out
 
 
+def report_key(daily_db: Optional[str]) -> str:
+    """The newest daily3 report ('<day>@<ts>', '' when none or unreadable): what the shadows view is cached by."""
+    d = ro_connect(daily_db)
+    if d is None:
+        return ""
+    try:
+        r = d.execute("SELECT day, ts FROM reports ORDER BY ts DESC LIMIT 1").fetchone()
+        return f"{r[0]}@{r[1]}" if r else ""
+    except sqlite3.Error:
+        return ""
+    finally:
+        _close(d)
+
+
 def shadows_view(paper_db: str, daily_db: Optional[str], now_ms: int, account: Optional[str] = None) -> dict:
     """Every nightly shadow variant against the base for the new run (since the run start, strategy accounts;
     agents/riskreward.shadow_summary), grouped, with each group's 5-year reference line, and the leverage variants'
@@ -875,7 +900,8 @@ def register(app, data, rooms, db: str, daily_db: Optional[str], checkpoint_db: 
     @app.get("/api/analysis/shadows")
     def get_shadows(account: Optional[str] = None):
         acct = account if account and len(account) <= 80 and ACCOUNT_RE.match(account) else None
-        return heavy.get(f"shadows:{acct or ''}", SHADOWS_TTL_S, lambda: shadows_view(db, daily, _now(), acct))
+        return heavy.get(f"shadows:{acct or ''}:{report_key(daily)}", SHADOWS_TTL_S,
+                         lambda: shadows_view(db, daily, _now(), acct))
 
     @app.get("/api/analysis/questions")
     def get_questions():
