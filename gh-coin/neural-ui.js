@@ -16,11 +16,6 @@ export async function openNeural(ctx = {}) {
   // 🧠 뇌 그래프 호버(Obsidian식: 올린 노드와 이웃만 강조) + .canvas 내보내기(Obsidian에서 열기)
   const bcv = root.querySelector("canvas[data-brain]");
   if (bcv) { bcv.onmousemove = (e) => { const r = bcv.getBoundingClientRect(); bmouse = { x: e.clientX - r.left, y: e.clientY - r.top }; }; bcv.onmouseleave = () => { bmouse = null; }; }
-  // ⚙️ 시드비중·레버리지 조절 (코인 선물 거래소처럼)
-  const seedEl = root.querySelector("[data-seed]"), levEl = root.querySelector("[data-lev]"), seedV = root.querySelector("[data-seedv]");
-  const cfg0 = N.getCfg();
-  if (seedEl) { seedEl.value = cfg0.seedPct; if (seedV) seedV.textContent = cfg0.seedPct + "%"; seedEl.oninput = () => { if (seedV) seedV.textContent = seedEl.value + "%"; }; seedEl.onchange = () => { N.setCfg({ seedPct: +seedEl.value }); feed(`시드비중 ${seedEl.value}%로 변경 (증거금 = 자본 × ${seedEl.value}%)`); }; }
-  if (levEl) { levEl.value = cfg0.lev; levEl.onchange = () => { const v = Math.max(1, Math.min(200, +levEl.value || 10)); const c = N.setCfg({ lev: v }); levEl.value = c.lev; feed(`레버리지 ${c.lev}x로 변경 (비트 최대 200·알트 최대 100)`); }; }
   // 💻 로컬 전용 토글 (설치된 Ollama 모델만)
   const lbtn = root.querySelector("[data-local]");
   const paintLocal = () => { if (lbtn) { const on = N.localOnly(); lbtn.textContent = on ? "💻 로컬 전용: 켜짐" : "💻 로컬 전용"; lbtn.style.background = on ? "#1e3a1e" : ""; lbtn.style.color = on ? "#7fe08a" : ""; } };
@@ -124,6 +119,9 @@ function render() {
       ? `🔍 <b>${E(sc.model)}</b> 가 <b>${E(sc.ko)}</b> 스캔 중 <span class="dim">· ${E(sc.regime)} 국면</span>`
       : `<span class="dim">스캔 대기 중 — 모델이 종목을 고르면 여기에 표시됩니다</span>`;
   }
+  // ⚙️ AI 자동 조절 상태 (레버리지·시드)
+  const au = root.querySelector("[data-auto]");
+  if (au) au.innerHTML = `⚙️ AI 자동: 레버 <b>${s.avgLev != null ? s.avgLev + "x" : "—"}</b> · 시드 <b>${s.avgSeed != null ? s.avgSeed + "%" : "—"}</b> <span class="dim">(모델이 상황따라 스스로)</span>`;
   // 🧠 뇌 그래프 데이터 갱신 + 요약 (오른쪽 아래)
   brainG = N.brainGraph();
   const bi = root.querySelector("[data-braininfo]");
@@ -242,7 +240,7 @@ function shortMd(m) { return String(m).split("/").pop().replace(/-instruct|-chat
 const SHELL = `
 <div class="nd-top"><b>🧠 GH COIN // NEURAL DESK</b><span class="nd-tag">AI 모델이 직접 매매·복기·학습 · 뇌 누적 · 가상자금</span>
   <marquee class="nd-feed" data-feed scrollamount="5"></marquee><span class="nd-clock"></span>
-  <span class="nd-cfg"><label title="증거금으로 쓰는 자본 비중(1~100%)">시드 <input type="range" min="1" max="100" step="1" data-seed><b data-seedv>20%</b></label><label title="레버리지 — 비트 1~200배, 알트 1~100배">레버 <input type="number" min="1" max="200" step="1" data-lev><b>x</b></label></span>
+  <span class="nd-cfg" data-auto title="레버리지·시드비중·손절·익절은 AI 모델이 상황에 맞게 스스로 정합니다 (사용자 조절 아님)"></span>
   <button class="nd-btn" data-local title="켜면 설치된 Ollama 로컬 모델만 트레이더로 씁니다 (무료·오프라인·한도 없음). 끄면 클라우드+로컬 혼합.">💻 로컬 전용</button><button class="nd-btn" data-ollama title="내 PC Ollama에 GH Coin용 추천 무료 모델을 자동으로 받아 트레이더로 씁니다">🖥 로컬 모델 설치</button><button class="nd-btn" data-reset>초기화</button><button class="nd-btn nd-x" data-x>✕</button></div>
 <div class="nd-grid">
   <div class="nd-card nd-pnl"><div class="nd-h">가상 자본 <small>(데모 · $1000 시작 · 나만 초기화)</small></div><div class="nd-big" data-pnl></div><div class="nd-kpi" data-kpi></div></div>
@@ -285,10 +283,7 @@ function inject() {
 .prow.up{border-left-color:#2ec27e}.prow.dn{border-left-color:#f2364b}
 .pr1{display:flex;align-items:center;gap:7px}.pr1 b{color:#e6ebf5}.pr-roe{margin-left:auto;font-weight:700}
 .pr2{font-size:10.5px;margin-top:2px}
-.nd-cfg{display:flex;align-items:center;gap:12px;color:#8a93a6;font-size:11px}
-.nd-cfg label{display:flex;align-items:center;gap:5px}.nd-cfg b{color:#c9d1e0}
-.nd-cfg input[type=range]{width:78px;accent-color:#b79cff}
-.nd-cfg input[type=number]{width:52px;background:#141a26;border:1px solid #28303f;color:#e6ebf5;border-radius:4px;padding:3px 5px;font:inherit}
+.nd-cfg{color:#8a93a6;font-size:11px;white-space:nowrap}.nd-cfg b{color:#b79cff}
 .nrow{display:grid;grid-template-columns:90px 1fr 42px 54px;align-items:center;gap:8px;margin:3px 0}
 .nk{color:#aeb6c6;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .nbar{height:7px;background:#141a26;border-radius:4px;overflow:hidden}.nbar i{display:block;height:100%;background:#4d82ff}
