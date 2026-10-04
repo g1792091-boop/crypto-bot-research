@@ -2,7 +2,18 @@
 // 에이전트 '팀 회의'가 아니라, 신호 뉴런들의 온라인 학습(퍼셉트론식)으로 돌아가는 자율 데모 트레이더.
 // 전부 가상자금(데모)만 — 실주문·실자금·실지갑 없음.
 import { candlesFor } from "../nuri-ai/agent.js";
-import { brainStream, settings } from "../nuri-ai/engine.js";
+import { brainStream, settings, PROVIDERS, modelKind } from "../nuri-ai/engine.js";
+
+// 연결된(키가 있는) 회사의 무료 AI 모델 목록 — 각 모델이 트레이더가 된다. 비용상 최대 maxN
+export function connectedModels(maxN = 8) {
+  const out = [];
+  for (const id of Object.keys(PROVIDERS || {})) {
+    if (!settings?.keys?.[id]) continue;
+    const ms = settings.provModels?.[id]?.length ? settings.provModels[id] : (PROVIDERS[id].defaults || []);
+    for (const m of ms) { if (["chat", "code", "reason"].includes(modelKind(m))) out.push({ id, model: m }); }
+  }
+  return out.slice(0, maxN);
+}
 
 export const COINS = [["BTC", "BTCUSDT"], ["ETH", "ETHUSDT"], ["SOL", "SOLUSDT"], ["XRP", "XRPUSDT"], ["DOGE", "DOGEUSDT"], ["BNB", "BNBUSDT"]];
 const KEY = "coin:neural";
@@ -64,7 +75,7 @@ export async function step() {
     if (!cs || cs.length < 60) continue;
     const price = cs.at(-1).c, feat = featuresOf(cs), d = decide(feat);
     S.feat[sym] = feat; S.dec[sym] = { ...d, price };
-    scoreModels(sym, price);
+    markModels(sym, price);
     const p = S.pos[sym];
     // 보유 중이면 마크 + 청산 판단(반대 신호 또는 손절/익절)
     if (p) {
@@ -103,49 +114,78 @@ function closePos(sym, price, why) {
   feed(`${p.ko} 청산 @ ${fmt(price)} · ${ret >= 0 ? "+" : ""}${(ret * 100).toFixed(2)}% (${why}) → 학습 반영`);
   delete S.pos[sym];
 }
-// 연결된 LLM 모델의 한 표를 반영. 성과로 가중치 자가조정(채점은 scoreModels).
-export function addModelVote(model, sym, dir, conf) {
-  load(); const m = S.models[model] || (S.models[model] = { ok: 0, n: 0, w: 1, last: null, pend: null });
-  const price = S.dec[sym]?.price; m.last = { sym, dir, conf, t: Date.now() };
-  if (price && dir !== 0) m.pend = { sym, dir, price, t: Date.now() };   // 2분 뒤 채점 대기
-  if (S.dec[sym]) S.dec[sym].score = cl(S.dec[sym].score + dir * (conf / 100) * 0.3 * m.w);
+// ── 모델 트레이더: 연결된 AI 모델 각각이 직접 데모 포지션을 운용한다 ──
+function model(name) { return S.models[name] || (S.models[name] = { prov: "", pnl: 0, ok: 0, n: 0, w: 1, fills: 0, wins: 0, pos: {}, lessons: [], losers: [] }); }
+// 보유 포지션 마크 + 하드 손절/익절 (모델 질의 사이에도 포지션이 스스로 정리됨)
+function markModels(sym, price) {
+  for (const name in S.models) { const M = S.models[name], p = M.pos[sym]; if (!p) continue;
+    p.roe = +((price - p.entry) / p.entry * p.side * 100).toFixed(2); p.price = price;
+    if (p.roe < -3.5 || p.roe > 6) closeModelPos(name, sym, price, p.roe < 0 ? "손절" : "익절"); }
 }
-// 연결된 AI 모델에게 한 코인 방향을 직접 물어 투표로 반영(저비용 · 호출측에서 throttle). AI 키 없으면 skip.
-let voteRot = 0;
-export async function modelVote() {
-  load();
-  if (!settings?.keys || !Object.values(settings.keys).some(Boolean)) return;
-  const [ko, sym] = COINS[voteRot++ % COINS.length], feat = S.feat[sym];
-  if (!feat) return;
-  let raw = "", route;
+function closeModelPos(name, sym, price, why) {
+  const M = model(name), p = M.pos[sym]; if (!p) return;
+  const ret = (price - p.entry) / p.entry * p.side - FEE, pnl = p.size * ret;
+  M.pnl += pnl; M.fills++; if (pnl > 0) M.wins++; M.n++; if (ret > 0) M.ok++;
+  M.w = cl(M.w + LR * (ret > 0 ? 1 : -1), 0.05, 3);
+  if (ret < 0) { M.losers.unshift({ ko: p.ko, side: p.side, roe: +(ret * 100).toFixed(1), feat: p.feat }); M.losers = M.losers.slice(0, 5); }
+  S.pnl += pnl; S.fills++; if (pnl > 0) S.wins++;
+  S.trades.unshift({ model: name, ko: p.ko, side: p.side, roe: +(ret * 100).toFixed(2), pnl: +pnl.toFixed(2), why, t: Date.now() });
+  if (S.trades.length > 80) S.trades.pop();
+  feed(`[${shortMd(name)}] ${p.ko} 청산 ${ret >= 0 ? "+" : ""}${(ret * 100).toFixed(2)}% (${why})`);
+  delete M.pos[sym];
+}
+// 모델 한 명이 코인 하나를 직접 판단 → 포지션 갱신 (호출측에서 throttle; 비용 분산)
+let mRot = 0;
+export async function modelStep() {
+  load(); const cm = connectedModels(); if (!cm.length) return;
+  const tgt = cm[mRot % cm.length], [ko, sym] = COINS[((mRot++ / cm.length) | 0) % COINS.length];
+  const feat = S.feat[sym], price = S.dec[sym]?.price; if (!feat || !price) return;
+  const M = model(tgt.model); M.prov = tgt.id;
+  const les = M.lessons.length ? `\n내가 복기로 배운 교훈(지켜라): ${M.lessons.join(" / ")}` : "";
+  let raw = "";
   try {
-    route = await brainStream({ messages: [
-      { role: "system", content: "코인 선물 트레이더. 아래 신호로 다음 방향을 정하라. JSON 한 줄만: {\"dir\":1|0|-1,\"conf\":0~100}. 1=롱 -1=숏 0=관망." },
-      { role: "user", content: `${ko} 지금 신호: ${Object.entries(feat).map(([k, v]) => k + " " + (+v).toFixed(2)).join(", ")}` }],
-      role: "fast", maxTokens: 50, temperature: 0.3, noThink: true, onContent: d => raw += d });
+    await brainStream({ messages: [
+      { role: "system", content: `너는 ${ko} 코인 선물 데모 트레이더다. 신호를 보고 방향을 정한다. JSON 한 줄만: {"dir":1|0|-1,"conf":0~100} (1=롱 -1=숏 0=관망).${les}` },
+      { role: "user", content: `${ko} 지금 신호(−1~+1): ${Object.entries(feat).map(([k, v]) => k + " " + (+v).toFixed(2)).join(", ")} · 현재가 ${price}` }],
+      role: "fast", target: tgt, fallback: false, maxTokens: 50, temperature: 0.4, noThink: true, onContent: d => raw += d });
   } catch (e) { return; }
-  const md = raw.match(/"?dir"?\s*[:=]\s*(-?[01])/), cf = raw.match(/"?conf"?\s*[:=]\s*(\d+)/);
-  if (!md || !route?.model) return;
-  addModelVote(route.model, sym, +md[1], cf ? Math.min(100, +cf[1]) : 50);
+  const md = raw.match(/"?dir"?\s*[:=]\s*(-?[01])/); if (!md) return;
+  const dir = +md[1], cf = raw.match(/"?conf"?\s*[:=]\s*(\d+)/), conf = cf ? Math.min(100, +cf[1]) : 50;
+  const p = M.pos[sym];
+  if (p && dir !== 0 && dir !== p.side) closeModelPos(tgt.model, sym, price, "반대신호");
+  if (!M.pos[sym] && dir !== 0 && conf >= 25) { M.pos[sym] = { ko, side: dir, entry: price, price, size: START * 0.2, roe: 0, t: Date.now(), feat: { ...feat } }; feed(`[${shortMd(tgt.model)}] ${ko} ${dir > 0 ? "▲롱" : "▼숏"} 진입 @ ${fmt(price)} (${conf}%)`); }
   save();
 }
-// 모델 투표 채점: 2분+ 지난 예측이 맞았는지 가격으로 확인 → 적중률·가중치 갱신(성능 업글)
-function scoreModels(sym, price) {
-  for (const name in S.models) {
-    const m = S.models[name]; if (!m.pend || m.pend.sym !== sym) continue;
-    if (Date.now() - m.pend.t < 120000) continue;
-    const moved = (price - m.pend.price) / m.pend.price, correct = Math.sign(moved) === m.pend.dir;
-    m.n++; if (correct) m.ok++; m.w = cl(m.w + LR * (correct ? 1 : -1), 0.05, 3); m.pend = null;
-  }
+// 복기: 손실 많은 모델이 자기 손실 거래를 되돌아보고 교훈 한 줄을 스스로 뽑아 기억 → 다음 판단에 주입(성능 향상)
+export async function reflect() {
+  load(); const cm = connectedModels(); if (!cm.length) return;
+  const withLoss = cm.filter(t => (model(t.model).losers || []).length >= 2).sort((a, b) => model(a.model).pnl - model(b.model).pnl);
+  const tgt = withLoss[0]; if (!tgt) return; const M = model(tgt.model);
+  let raw = "";
+  try {
+    await brainStream({ messages: [
+      { role: "system", content: "너는 코인 트레이더다. 아래 네 최근 손실 거래를 복기해, 다음에 안 틀리게 할 교훈을 한국어 한 문장(35자 이내)으로만 써라. 교훈 문장만." },
+      { role: "user", content: M.losers.map(l => `${l.ko} ${l.side > 0 ? "롱" : "숏"} ${l.roe}% · 신호 ${Object.entries(l.feat || {}).slice(0, 3).map(([k, v]) => k + (+v).toFixed(1)).join(",")}`).join("\n") }],
+      role: "fast", target: tgt, fallback: false, maxTokens: 60, temperature: 0.5, noThink: true, onContent: d => raw += d });
+  } catch (e) { return; }
+  const lesson = raw.replace(/["\n]/g, " ").replace(/^교훈[:\s]*/,"").trim().slice(0, 40);
+  if (lesson.length > 4) { M.lessons.unshift(lesson); M.lessons = [...new Set(M.lessons)].slice(0, 4); M.losers = []; feed(`[${shortMd(tgt.model)}] 복기 완료 → 교훈: ${lesson}`); save(); }
 }
+function shortMd(m) { return String(m).split("/").pop().replace(/-instruct|-chat|-\d{6,}/gi, "").slice(0, 16); }
 
 export function state() {
   load();
   const wr = S.fills ? Math.round(S.wins / S.fills * 100) : 0;
   const neurons = NEURONS.map(k => ({ name: k, w: +S.w[k].toFixed(2), hit: S.hit[k].n ? Math.round(S.hit[k].ok / S.hit[k].n * 100) : null, n: S.hit[k].n }))
     .sort((a, b) => b.w - a.w);
-  return { pnl: +S.pnl.toFixed(2), fills: S.fills, winRate: wr, epoch: S.epoch, since: S.t0,
-    neurons, models: Object.entries(S.models).map(([name, m]) => ({ name, w: +m.w.toFixed(2), hit: m.n ? Math.round(m.ok / m.n * 100) : null, last: m.last })),
-    pos: Object.values(S.pos), dec: S.dec, feat: S.feat, trades: S.trades.slice(0, 20), feed: S.feed.slice(0, 24) };
+  // 트레이더 = 자체 신호(뉴런 합의) + 연결된 AI 모델 각각. PnL 순 리더보드.
+  const traders = [{ name: "자체 신호(뉴런)", prov: "self", pnl: +selfPnl().toFixed(2), hit: null, fills: 0, lessons: 0, pos: Object.values(S.pos).length }];
+  for (const [name, m] of Object.entries(S.models))
+    traders.push({ name: shortMd(name), full: name, prov: m.prov, pnl: +m.pnl.toFixed(2), hit: m.n ? Math.round(m.ok / m.n * 100) : null, w: +m.w.toFixed(2), fills: m.fills, wins: m.wins, lessons: (m.lessons || []).length, lessonList: m.lessons || [], pos: Object.values(m.pos) });
+  traders.sort((a, b) => b.pnl - a.pnl);
+  return { pnl: +S.pnl.toFixed(2), fills: S.fills, winRate: wr, epoch: S.epoch, since: S.t0, nModels: connectedModels().length,
+    neurons, traders, pos: Object.values(S.pos), dec: S.dec, feat: S.feat, trades: S.trades.slice(0, 22), feed: S.feed.slice(0, 24) };
 }
+// 자체 신호 트레이더의 PnL = 전체 - 모델들 합 (모델 손익은 모델 트레이더로 분리 표시)
+function selfPnl() { let m = 0; for (const n in S.models) m += S.models[n].pnl; return S.pnl - m; }
 function fmt(v) { return v >= 1000 ? Math.round(v).toLocaleString() : v >= 1 ? v.toFixed(2) : v.toPrecision(4); }

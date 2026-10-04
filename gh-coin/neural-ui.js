@@ -15,7 +15,12 @@ export async function openNeural(ctx = {}) {
   ST = N.state();
   render();
   let k = 0;
-  const tick = async () => { try { ST = await N.step(); } catch (e) {} render(); if (++k % 6 === 0) N.modelVote().catch(() => {}); };   // 36초마다 연결 AI 모델 1표(비용 절약)
+  const tick = async () => {
+    try { ST = await N.step(); } catch (e) {}      // 자체 신호(뉴런) — 무료·빠름, 항상 돈다
+    render();
+    N.modelStep().catch(() => {});                  // 연결 AI 모델 1명이 코인 1개 직접 판단(회전) — 비용 분산
+    if (++k % 20 === 0) N.reflect().catch(() => {}); // 2분마다 손실 많은 모델이 복기 → 교훈 학습
+  };
   tick(); loop = setInterval(tick, 6000);
   raf = requestAnimationFrame(draw);
   window.addEventListener("keydown", esc);
@@ -28,12 +33,15 @@ function render() {
   const s = ST, up = s.pnl >= 0;
   root.querySelector("[data-pnl]").innerHTML = `<b class="${up ? "up" : "dn"}">${money(s.pnl)}</b>`;
   root.querySelector("[data-kpi]").innerHTML =
-    `<span>체결 <b>${s.fills}</b></span><span>승률 <b class="${s.winRate >= 50 ? "up" : "dn"}">${s.winRate}%</b></span><span>에폭 <b>${s.epoch}</b></span><span>가동 <b>${ago(s.since)}</b></span>`;
-  // 뉴런 리더보드 (가중치 = 학습 결과)
-  root.querySelector("[data-neurons]").innerHTML = s.neurons.map(nu => {
-    const pct = Math.round(nu.w / 3 * 100);
-    return `<div class="nrow"><span class="nk">${E(nu.name)}</span><span class="nbar"><i style="width:${pct}%"></i></span><b>${nu.w.toFixed(2)}</b><small>${nu.hit == null ? "–" : nu.hit + "%"}<em>${nu.n}</em></small></div>`;
-  }).join("") + (s.models.length ? `<div class="nsub">연결 AI 모델</div>` + s.models.map(m => `<div class="nrow"><span class="nk" style="color:#7cc">${E(shortMd(m.name))}</span><span class="nbar"><i style="width:${Math.round(m.w / 3 * 100)}%;background:#2a6"></i></span><b>${m.w.toFixed(2)}</b><small>${m.hit == null ? "–" : m.hit + "%"}</small></div>`).join("") : "");
+    `<span>체결 <b>${s.fills}</b></span><span>승률 <b class="${s.winRate >= 50 ? "up" : "dn"}">${s.winRate}%</b></span><span>AI 모델 <b>${s.nModels}</b></span><span>에폭 <b>${s.epoch}</b></span><span>가동 <b>${ago(s.since)}</b></span>`;
+  // 트레이더 리더보드 = 연결된 AI 모델 각각 + 자체 신호. PnL 순. (교훈 = 복기로 배운 수 · 보유 = 현재 포지션)
+  root.querySelector("[data-neurons]").innerHTML =
+    s.traders.map((tr, i) => { const u = tr.pnl >= 0;
+      return `<div class="nrow trd"><span class="rk">${i + 1}</span><span class="nk" title="${E(tr.full || tr.name)}">${tr.prov === "self" ? "🧠 " : ""}${E(tr.name)}</span><b class="${u ? "up" : "dn"}">${money(tr.pnl)}</b><small>${tr.hit == null ? "–" : tr.hit + "%"}${tr.lessons ? ` ·교훈${tr.lessons}` : ""}${tr.pos && tr.pos.length ? ` ·보유${tr.pos.length}` : ""}</small></div>`;
+    }).join("") +
+    (s.nModels === 0 ? `<div class="nsub dim">연결된 AI 모델이 없습니다 — 설정 → AI 연결에 무료 NVIDIA 키를 넣으면 모델들이 직접 거래·복기합니다 (지금은 자체 신호만)</div>` : "") +
+    `<div class="nsub">피처 뉴런 가중치 (학습으로 변함)</div>` +
+    s.neurons.map(nu => `<div class="nrow"><span class="nk">${E(nu.name)}</span><span class="nbar"><i style="width:${Math.round(nu.w / 3 * 100)}%"></i></span><b>${nu.w.toFixed(2)}</b><small>${nu.hit == null ? "–" : nu.hit + "%"}</small></div>`).join("");
   // 코인별 결정
   root.querySelector("[data-markets]").innerHTML = N.COINS.map(([ko, sym]) => {
     const d = s.dec[sym], p = s.pos.find(x => x.ko === ko);
@@ -112,7 +120,7 @@ const SHELL = `
   <div class="nd-card nd-pnl"><div class="nd-h">ALL-TIME PnL <small>(데모)</small></div><div class="nd-big" data-pnl></div><div class="nd-kpi" data-kpi></div></div>
   <div class="nd-card"><div class="nd-h">코인별 결정 · 포지션</div><div class="nd-markets" data-markets></div></div>
   <div class="nd-card nd-shell"><div class="nd-h">NEURAL SHELL · 피처 → 결정 코어 → 확률 셸</div><canvas></canvas></div>
-  <div class="nd-card"><div class="nd-h">뉴런·모델 가중치 <small>(학습으로 변함 · hit=적중률)</small></div><div class="nd-neurons" data-neurons></div></div>
+  <div class="nd-card"><div class="nd-h">AI 모델 트레이더 리더보드 <small>(각 모델이 직접 거래·복기·학습 · PnL 순)</small></div><div class="nd-neurons" data-neurons></div></div>
   <div class="nd-card nd-trades"><div class="nd-h">최근 데모 거래 · 청산 시 학습 반영</div><div class="nd-tr" data-trades></div></div>
 </div>`;
 
@@ -142,6 +150,7 @@ function inject() {
 .nk{color:#aeb6c6;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .nbar{height:7px;background:#141a26;border-radius:4px;overflow:hidden}.nbar i{display:block;height:100%;background:#4d82ff}
 .nrow>b{text-align:right;color:#e6ebf5}.nrow small{color:#5a6374;text-align:right}.nrow small em{font-style:normal;color:#3d4454;margin-left:4px}
+.trd{grid-template-columns:18px 1fr 78px auto}.rk{color:#5a6374;text-align:center}.trd .nk{color:#dbe2ef}.trd small{white-space:nowrap}
 .nsub{color:#6b7488;font-size:10px;margin:8px 0 4px;letter-spacing:1px}
 .nd-tr{display:flex;flex-direction:column;gap:2px}
 .trow{display:grid;grid-template-columns:40px 42px 36px 64px 1fr;gap:8px;align-items:center;padding:3px 4px;border-bottom:1px solid #121824}
