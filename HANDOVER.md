@@ -1,6 +1,6 @@
 # 인수인계 — GH Nano · GH Coin (crypto-bot-research)
 
-> 기준일 **2026-10-03** · 브랜치 `claude/eloquent-ride-3o1bqv`
+> 기준일 **2026-10-04** · 브랜치 `claude/eloquent-ride-3o1bqv`
 > 새로 맡는 사람(또는 새 AI 채팅)은 이 문서만 읽으면 이어서 작업할 수 있게 썼습니다.
 > 맨 아래 "새 채팅에 붙여 넣을 문장"부터 써도 됩니다.
 
@@ -10,9 +10,9 @@
 
 | 항목 | 상태 |
 |---|---|
-| 코드 | 이 브랜치에 전부 있음. 10/2~10/3 작업(신뢰성 레이어 · 모델 쏠림 해결 · 지갑 보기 등)이 최신 |
+| 코드 | 이 브랜치에 전부 있음. 10/4 작업(뉴럴 데스크 · 자체 뇌 · 지식 그래프 UI, 5-1번)이 최신 |
 | GitHub 반영 | **이 PC에서만 커밋된 상태가 있을 수 있음.** 이어받기 전에 `git status` / `git log origin/claude/eloquent-ride-3o1bqv..HEAD` 로 확인하고 올릴 것 (아래 9번) |
-| 배포 exe (`dist/`) | **옛 버전** (마지막 빌드 커밋 `b00a200`, 10/2). 신뢰성 레이어 등 10/3 작업은 **exe에 아직 안 들어 있음** → 다시 빌드 필요 (3-2) |
+| 배포 exe (`dist/`) | **최신** (10/4 뉴럴 데스크 포함 재빌드, 커밋 `e6c9f5a`). push 여부만 확인 |
 | 자동 테스트 | 저장소에 고정된 테스트 묶음 **없음**. 그때그때 Node 스크립트 · 브라우저로 확인함 (4번) |
 | 실제 거래소 · 실제 AI 로 확인 | 일부만. 대부분 가짜 시세 · 가짜 AI 로 확인 (7번) |
 
@@ -126,6 +126,13 @@ bash build.sh        # → dist/GHNano.exe, dist/ArchAI.exe, dist/GHCoin.exe
 
 **기타**: 단타/스윙 포지션 추천 · 투자위원회 투자 대가 페르소나 + 상황 유사도 기억 · AI 가 만든 전략 JSON 자동 교정(`pickJSON`, 봉 이름 · id 충돌 · 수식) · 👛 내 지갑 보기(읽기 전용, GH Nano 사무실 상단에도 버튼).
 
+### 5-1. 뉴럴 데스크 (10/4) — GH Coin 전용. 연결된 NVIDIA 무료 AI 모델들이 **직접** 거래·학습·복기·설계
+- **엔진** `gh-coin/neural.js`: 피처 뉴런(모멘텀·추세·RSI·거래흐름·호가압력·변동성) + 모델 트레이더. 1분봉 · SL-2/TP+3/시간청산(8분). `modelStep()` 이 틱당 1개 모델에게 `brainStream({role:"fast",fallback:true})` 로 직접 판단을 받고, **실제 응답 모델**(`route.model`)에 귀속(한 모델 429 로 전체 실패하던 문제 해결). `designStrategy()` 는 모델이 146개 지표 조합으로 매매법+커스텀지표 설계→`normalizeSpec/backtest/walkForward`→통과 시 사무실(`P.addStrategy`)에 인계.
+- **자체 뇌** `gh-coin/brain.js`: localStorage 영속 집단 기억. `learn/recall(RAG식 회상)/reinforce`. **`consolidate()` 자체학습** = 오래된 기억 망각 + 자주 확인된 패턴을 '핵심 규칙'으로 승격. `graph(70)` 노드/엣지.
+- **UI** `gh-coin/neural-ui.js`: 6카드(손익 · 🔍스캔·포지션 · NEURAL SHELL · 트레이더 리더보드 · 거래/설계 · 🧠뇌 지식 그래프). 뇌 그래프는 force 시뮬(새 지식=퍼지는 링, 유형별 색). 루프: step 매틱 · modelStep 매틱1개 · reflect 14틱 · designStrategy 26틱 · brainThink 10틱.
+- 적용 개념(코드복사 없이): AI 트레이더 레포 5종 + brain 레포 5종(claude-brain/project-brain/claude-obsidian/brain-agent-template 등) → `gh-coin/tech.js` 크레딧.
+- exe 재빌드 완료(`dist/GHCoin.exe` 등, 커밋 `e6c9f5a`).
+
 ---
 
 ## 6. 안전 규칙 (바꾸지 말 것)
@@ -149,7 +156,8 @@ bash build.sh        # → dist/GHNano.exe, dist/ArchAI.exe, dist/GHCoin.exe
 - 투자위원회는 실제 AI 가 `등급:` 줄을 써야 결정이 나옴 (못 쓰면 REVIEW = 거래 안 함).
 - 무료 모델은 404 · 느림 · 영어 답이 잦음 → 모델이 쏠리면 [🔄 모델 전체 켜기·초기화] 부터.
 - 일부 경제 · 뉴스 사이트는 브라우저 차단이 있어 exe 실행기(`/__nuri/fetch`)로만 받아짐.
-- `dist/*.exe` 가 최신 코드보다 오래됨 (0번 표).
+- **뉴럴 데스크**는 실제 NVIDIA 키가 있어야 모델들이 직접 판단함(키 없으면 자체 뉴런만). 모델 판단 품질·뇌 누적 효과는 실제 키로 장시간 돌려 봐야 확인됨 — 함수/문법 단위로만 검증.
+- `dist/*.exe` 는 **10/4 뉴럴 데스크 포함해 재빌드됨** (커밋 `e6c9f5a`). 단, 이 PC에서 아직 push 안 됐을 수 있음 → 9번대로 Cursor Sync.
 
 ## 8. 다음 할 일 후보 (우선순위 순)
 
