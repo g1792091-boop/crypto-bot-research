@@ -54,7 +54,12 @@ day (owners' request): the Thursday risk-reward / exit meeting (rr_review, team:
 the compact risk-reward numbers in a strategy specialist's packet and in the ranking review's; the Friday drawdown /
 bust risk meeting (risk_review, team:risk, agents/survival.py and agents/btgap.py: drawdowns, a Monte Carlo of each
 account's own trades, sizing for illustration and the live-vs-backtest gap), its compact numbers in a specialist's
-packet, the ranking review's, the Saturday learning packet's (the backtest gap) and the Sunday report's.
+packet, the ranking review's, the Saturday learning packet's (the backtest gap) and the Sunday report's. Also
+approved that day (code only, no new meeting or AI call, all read-only and descriptive): the real-trading conditions
+of the addendum (agents/readiness.py: a display that enables nothing; board.readiness for the lead, the 30-day
+checkpoint meeting's ``readiness`` with the checkpoint's statistical power, agents/power.py; the Friday packet; the
+Sunday report's line), the shock test of the open positions (agents/shock.py: the Friday packet, board.shock for the
+risk officer) and portfolio synergy (agents/synergy.py: the Tuesday packet's ``combo.synergy``).
 New-strategy lab (team:lab, trigger 'research', budget class 'research', at most 3 calls, sonnet):
     T1 the researcher proposes up to 3 strategies in newlab's grammar -> code checks each (grammar; a repeat
     by hash is shown with its old result, never re-run) -> T2 the devil's advocate may drop near-duplicates
@@ -1223,7 +1228,10 @@ CODE_ROOTS = ("losses", "specialist", "board", "trials", "rules", "meeting", "ro
               # the risk-reward / exit meeting (agents/riskreward.py)
               "rr",
               # the drawdown / bust risk meeting (agents/survival.py, agents/btgap.py)
-              "survival")
+              "survival",
+              # the 30-day checkpoint meeting's real-trading readiness and the checkpoint's power (agents/readiness.py,
+              # agents/power.py; added 2026-10-04)
+              "readiness")
 
 
 def _model_written(path: str, given: Optional[dict]) -> bool:
@@ -1746,11 +1754,41 @@ def _board(ctx: RoundContext) -> dict:
     board["pass_summary"] = {"by_status": counts, "bust": sum(1 for v in pc.values() if v.get("bust")),
                              "note": packets3.PASS_CHECK_NOTE}
     board["checkpoint"] = packets3.checkpoint_section(_checkpoint_view(ctx))
+    # added 2026-10-04 (owners approved): the lead's real-trading conditions and the risk officer's shock test,
+    # both compact, code only, read-only (a display: nothing reads them to decide anything)
+    board["readiness"] = _readiness_compact(ctx)
+    board["shock"] = _shock_compact(ctx)
     board["market"] = _market(ctx)
     board["macro"] = _macro(ctx)
     board.update(_day_losses(ctx))
     ctx.cache["board"] = board
     return board
+
+
+def _readiness_full(ctx: RoundContext) -> dict:
+    """agents/readiness.evaluate over the 180 strategy accounts with the newest verdict, once per tick."""
+    if "readiness" in ctx.cache:
+        return ctx.cache["readiness"]
+    from . import readiness as RD
+    try:
+        full = RD.evaluate(ctx.paper_ro, ctx.now_ms, _checkpoint_view(ctx), names_ko=STRATEGY_KO)
+    except Exception as exc:  # noqa: BLE001  (a display never stops a meeting)
+        full = {"error": f"실거래 조건 점검을 만들지 못함: {type(exc).__name__}"}
+    ctx.cache["readiness"] = full
+    return full
+
+
+def _readiness_compact(ctx: RoundContext) -> dict:
+    from . import readiness as RD
+    return RD.compact(_readiness_full(ctx))
+
+
+def _shock_compact(ctx: RoundContext) -> dict:
+    from . import shock as SH
+    try:
+        return SH.compact(ctx.paper_ro)
+    except Exception as exc:  # noqa: BLE001
+        return {"error": f"가격 충격 시험을 만들지 못함: {type(exc).__name__}"}
 
 
 def _checkpoint_view(ctx: RoundContext) -> dict:
@@ -2459,14 +2497,16 @@ TEAM_VIEW = {
     "devils_advocate": ("market", "league", "today", "breakdown"),
     "pnl_reviewer": ("today", "exits", "loss_tags_24h", "by_coin", "breakdown"),
     "whatif": ("exits", "stop_whatif_24h", "nightly"),
-    "risk_officer": ("league", "today", "exits", "pass_summary", "macro"),
+    # shock: the open positions under instantaneous ±5/10/20% moves (agents/shock.py, compact; added 2026-10-04)
+    "risk_officer": ("league", "today", "exits", "pass_summary", "macro", "shock"),
     "ops_auditor": ("today", "execution", "nightly"),
     "data_quality": ("nightly", "execution", "today"),
     "code_reviewer": ("nightly", "execution", "today"),
     # checkpoint: the official 30-day verdict (Q1); pass_check / pass_summary are the 3-coin-flip reference
     "league_referee": ("meta", "league", "checkpoint", "pass_check", "pass_summary"),
     "rule_keeper": ("meta", "checkpoint", "pass_summary", "league"),
-    "team_lead": ("meta", "today", "league", "checkpoint", "pass_summary"),
+    # readiness: the real-trading conditions (addendum Q6, agents/readiness.py, compact; a display, enables nothing)
+    "team_lead": ("meta", "today", "league", "checkpoint", "pass_summary", "readiness"),
     "performance": ("league", "by_strategy", "today"),
     "researcher": ("meta",),               # the lab room's packet carries ``lab`` (lab_overview)
     # the meetings added 2026-10-04: each meeting's own packet (cost, combo, coins, learning, event, committee) is in
@@ -2740,7 +2780,16 @@ def _cost(ctx: RoundContext, due: TR.Due) -> dict:
 
 def _combo(ctx: RoundContext, due: TR.Due) -> dict:
     from . import meetings as M
-    return M.combo_packet(ctx.paper_ro, ctx.now_ms)
+    pk = M.combo_packet(ctx.paper_ro, ctx.now_ms)
+    # owners approved 2026-10-04: equal-weight combinations of 2-5 strategies against the same search on shuffled
+    # days and on the coin flips, diversification and 'same bet twice' (agents/synergy.py, compact)
+    if "error" not in pk:
+        from . import synergy as SY
+        try:
+            pk["synergy"] = SY.packet(ctx.paper_ro, ctx.now_ms, names_ko=STRATEGY_KO)
+        except Exception as exc:  # noqa: BLE001  (the meeting still runs and says the numbers are missing)
+            pk["synergy"] = {"error": f"조합 시너지를 만들지 못함: {type(exc).__name__}"}
+    return pk
 
 
 def _coins(ctx: RoundContext, due: TR.Due) -> dict:
@@ -2757,6 +2806,9 @@ def _learning(ctx: RoundContext, due: TR.Due) -> dict:
         pk["backtest_gap"] = BG.summary_brief(ctx.paper_ro, ctx.now_ms, cards_path=ctx.cards_path)
     except (sqlite3.Error, OSError, KeyError, TypeError, ValueError) as exc:
         pk["backtest_gap"] = {"error": f"백테스트 비교를 만들지 못함: {type(exc).__name__}"}
+    # owners approved 2026-10-04: how likely a true edge passes the checkpoint (research/power, agents/power.py)
+    from . import power as PW
+    pk["power"] = PW.brief()
     return pk
 
 
@@ -2776,7 +2828,25 @@ def _committee(ctx: RoundContext, due: TR.Due) -> dict:
 
 def _survival(ctx: RoundContext, due: TR.Due) -> dict:
     from . import survival as SV
-    return SV.survival_packet(ctx.paper_ro, ctx.now_ms, names_ko=STRATEGY_KO, cards_path=ctx.cards_path)
+    pk = SV.survival_packet(ctx.paper_ro, ctx.now_ms, names_ko=STRATEGY_KO, cards_path=ctx.cards_path)
+    # owners approved 2026-10-04: the open positions under instantaneous price shocks (agents/shock.py) and the
+    # real-trading conditions in short (agents/readiness.py: a display, enables nothing)
+    from . import shock as SH
+    try:
+        pk["shock"] = SH.packet(ctx.paper_ro)
+    except Exception as exc:  # noqa: BLE001
+        pk["shock"] = {"error": f"가격 충격 시험을 만들지 못함: {type(exc).__name__}"}
+    pk["readiness"] = _readiness_compact(ctx)
+    return pk
+
+
+def _checkpoint_meeting(ctx: RoundContext, due: TR.Due) -> dict:
+    """The 30-day checkpoint meeting's own packet (owners approved 2026-10-04): the real-trading conditions with
+    their document lines (agents/readiness.py: a display, enables nothing) and the checkpoint's statistical power
+    (agents/power.py). The verdict itself stays ``board.checkpoint``."""
+    from . import power as PW
+    from . import readiness as RD
+    return {**RD.meeting(_readiness_full(ctx)), "power": PW.brief()}
 
 
 def _rr(ctx: RoundContext, due: TR.Due) -> dict:
@@ -2789,7 +2859,7 @@ def _rr(ctx: RoundContext, due: TR.Due) -> dict:
 MEETING_PACKETS = {"cost_review": ("cost", _cost), "combo_review": ("combo", _combo), "coin_review": ("coins", _coins),
                    "learning_review": ("learning", _learning), "event_review": ("event", _event),
                    "bull_bear": ("committee", _committee), "rr_review": ("rr", _rr),
-                   "risk_review": ("survival", _survival)}
+                   "risk_review": ("survival", _survival), "checkpoint": ("readiness", _checkpoint_meeting)}
 
 
 def learning_notes(rnd: "_Round", lessons: dict) -> list[dict]:

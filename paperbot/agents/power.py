@@ -1,0 +1,55 @@
+"""The checkpoint's statistical power for the staff (owners approved 2026-10-04): reads the committed result of
+research/power/power.py (``research/power/out/power.json``: if an account had a true edge of +X net ROE per trade,
+how likely would it pass the day-30 / 60 / 90 checkpoint with 2,000 coin-flip bots and FDR 10%). Read-only; the
+numbers are code's (a Monte Carlo with stated assumptions), not a verdict. Shown in the 30-day checkpoint meeting
+and the Saturday learning meeting.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+from typing import Optional
+
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+POWER_JSON = os.path.join(ROOT, "research", "power", "out", "power.json")
+FAMILY = 144
+
+
+def load(path: str = POWER_JSON) -> Optional[dict]:
+    try:
+        with open(path, encoding="utf-8") as fh:
+            doc = json.load(fh)
+    except (OSError, ValueError):
+        return None
+    return doc if isinstance(doc, dict) and doc.get("version") == 1 else None
+
+
+def brief(path: str = POWER_JSON, family: int = FAMILY) -> dict:
+    """Compact: the code-written lines ('진짜 엣지가 거래당 +X%라면 30일에 합격할 확률 Y%'), and per timeframe and
+    edge [edge, P(1st pass at day 30), P(1st pass by day 60), P(2nd pass by day 60)] with the trades a month and
+    the coin flips' mean net ROE per trade."""
+    doc = load(path)
+    if doc is None:
+        return {"error": "검정력 결과 파일 없음 (research/power/out/power.json)"}
+    table, info = {}, {}
+    for tf, v in (doc.get("results") or {}).items():
+        p = v.get("pool") or {}
+        info[tf] = {"trades_per_30d": p.get("trades_per_30d"), "coin_flip_mean_roe": p.get("coin_flip_mean_roe")}
+        if v.get("observation_only"):
+            info[tf]["observation_only"] = True
+        if p.get("too_few"):
+            info[tf]["too_few"] = True
+        rows = []
+        for r in v.get("rows") or []:
+            f = r.get(f"family_{family}") or {}
+            rows.append([r.get("edge_roe"), f.get("p_pass1_d30"), f.get("p_pass1_by_d60"), f.get("p_pass2_by_d60")])
+        if rows:
+            table[tf] = rows
+    return {"lines_ko": doc.get("summary_ko") or [], "family": family, "table": table, "timeframes": info,
+            "columns": ["edge_roe(거래당 순 ROE에 더한 엣지, 0.01 = +1%)", "30일 1차 합격 확률", "60일까지 1차 합격 확률",
+                        "60일까지 2차 통과 확률"],
+            "generated": doc.get("generated"), "source": "research/power/power.py (out/power.json)",
+            "note": ("코드 계산(몬테카를로, 가정 포함: 거래는 서로 독립, 엣지는 모든 거래에 같음, 다른 계좌는 엣지 없음, 동전 봇 거래 "
+                     "모양은 2020-21 자료). 판정 규칙(동전 봇 2,000개 + FDR 10%)이 얼마나 엄격한지 보여 줄 뿐 판정이 아님. "
+                     "'합격 0개'가 '엣지 없음'의 증거가 되려면 이 확률이 높아야 함")}

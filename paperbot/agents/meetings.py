@@ -7,7 +7,9 @@ liq.db; agents3.db is only read here. Code computes every number; the staff read
                       signal-to-fill delay.
 - ``combo_packet``    Tuesday, 리스크팀 (combo_review): the strategies' daily P&L correlations (top pairs, clusters),
                       the hours many strategies lost together, and consensus entries (several strategies, same coin,
-                      same side within ``window_ms``) against single ones, with the coin flips for scale.
+                      same side within ``window_ms``) against single ones, with the coin flips for scale. The rooms
+                      add ``synergy`` (agents/synergy.py: equal-weight combinations against shuffled-day and coin-flip
+                      searches; it reuses ``corr_clusters``).
 - ``coin_packet``     Wednesday, 손익 복기팀 (coin_review): per strategy x coin and strategy x regime at entry (the
                       trade's chart context, cards.REGIME_KO): trades, win rate, mean ROE, P&L; cells under ``min_n``
                       trades are marked small; best and worst coin per strategy.
@@ -190,6 +192,25 @@ def _kst_day(ms: int) -> str:
     return _kst_label(ms, "%Y-%m-%d")
 
 
+def corr_clusters(units: list, pairs: list, cluster_r: float = 0.7) -> list[list]:
+    """Groups of ``units`` joined by a correlation of at least ``cluster_r`` (union-find over ``pairs``:
+    (r, a, b)), biggest first; single units are left out. Shared with agents/synergy.py."""
+    parent = {s: s for s in units}
+
+    def find(x: str) -> str:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+    for r, a, b in pairs:
+        if r >= cluster_r and a in parent and b in parent:
+            parent[find(a)] = find(b)
+    groups: dict = {}
+    for s in units:
+        groups.setdefault(find(s), []).append(s)
+    return sorted((g for g in groups.values() if len(g) > 1), key=lambda g: -len(g))
+
+
 def combo_packet(paper_ro: Optional[sqlite3.Connection], now_ms: int, days: int = 7, corr_days: int = 28,
                  window_ms: int = 30 * 60_000, min_losers: int = 8, cluster_r: float = 0.7) -> dict:
     if paper_ro is None:
@@ -220,21 +241,7 @@ def combo_packet(paper_ro: Optional[sqlite3.Connection], now_ms: int, days: int 
             if r is not None:
                 pairs.append((r, a, b))
     pairs.sort(key=lambda x: -x[0])
-    # clusters: strategies joined by a correlation of at least ``cluster_r`` (union-find)
-    parent = {s: s for s in strats}
-
-    def find(x: str) -> str:
-        while parent[x] != x:
-            parent[x] = parent[parent[x]]
-            x = parent[x]
-        return x
-    for r, a, b in pairs:
-        if r >= cluster_r:
-            parent[find(a)] = find(b)
-    groups: dict = {}
-    for s in strats:
-        groups.setdefault(find(s), []).append(s)
-    clusters = sorted(([names.get(s, s) for s in g] for g in groups.values() if len(g) > 1), key=lambda g: -len(g))
+    clusters = [[names.get(s, s) for s in g] for g in corr_clusters(strats, pairs, cluster_r)]
     pr = lambda r, a, b: {"a": names.get(a, a), "b": names.get(b, b), "r": round(r, 3)}  # noqa: E731
     corr = {"days": len(day_list), "strategies": len(strats),
             "mean_r": round(sum(p[0] for p in pairs) / len(pairs), 3) if pairs else None,

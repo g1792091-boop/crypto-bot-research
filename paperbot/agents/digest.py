@@ -601,6 +601,9 @@ def week_report(paper_ro: Optional[sqlite3.Connection], agents_ro: Optional[sqli
                 out["survival"] = SV.week_brief(paper_ro, now, names_ko=names)
             except (sqlite3.Error, OSError, KeyError, TypeError, ValueError) as exc:
                 out["survival"] = {"error": type(exc).__name__}
+            # owners approved 2026-10-04: the real-trading conditions in one line (agents/readiness.py, a display:
+            # it enables nothing), with the newest 30-day verdict read through checkpoint.dashboard_view
+            out["readiness"] = readiness_brief(paper_ro, now, names)
     # the staff's week
     if agents_ro is not None:
         try:
@@ -659,6 +662,27 @@ def _pct(x: Optional[float]) -> str:
     return "—" if x is None else f"{x * 100:.0f}%"
 
 
+def readiness_brief(paper_ro: Optional[sqlite3.Connection], now_ms: int, names: Optional[dict] = None) -> dict:
+    """The real-trading conditions' summary for the Sunday report (checkpoint.db next to paper3.db, read-only)."""
+    import os
+    from . import readiness as RD
+    d = _db_dir(paper_ro)
+    try:
+        full = RD.evaluate(paper_ro, now_ms, RD.checkpoint_view(os.path.join(d, "checkpoint.db") if d else None),
+                           names_ko=names)
+    except (sqlite3.Error, OSError, KeyError, TypeError, ValueError) as exc:
+        return {"error": type(exc).__name__}
+    if full.get("error"):
+        return {"error": full["error"]}
+    return {"summary": {k: full["summary"][k] for k in ("headline", "accounts", "met_all", "data_met_all")}}
+
+
+def readiness_line(rd: Optional[dict]) -> str:
+    """One line: '실거래 조건: 충족 N개' (agents/readiness.line)."""
+    from . import readiness as RD
+    return RD.line(rd)
+
+
 def survival_line(sv: Optional[dict]) -> str:
     """One short line: the week's 3 deepest drawdowns (strategy sums, from their peak) and the backtest gap count."""
     if not isinstance(sv, dict) or sv.get("error"):
@@ -696,6 +720,9 @@ def compose_week(rep: dict, limit: int = 4000) -> str:
         sv = survival_line(rep.get("survival"))
         if sv:
             L.append(sv)
+        rd = readiness_line(rep.get("readiness"))
+        if rd:
+            L.append(rd)
     def line(r: dict) -> str:
         mv = ""
         if r.get("prev_rank"):
