@@ -12,15 +12,20 @@ export { TEAMS, AGENTS, TEAM_LEAD, agentById, teamById, COINS, TEAM_COLOR };
 // 사무실 일에 쓸 수 있는 모든 대화 모델 (연결된 모든 회사 · Gemini 포함). 학습 데이터 제외는 keep() 에서 따로 한다(isClaude)
 let olCache = [];   // 내 PC Ollama 설치 모델 캐시 (cycle 에서 비차단 갱신)
 export async function refreshOllama(){ try { olCache = await ollamaModels(); } catch (e) { olCache = []; } return olCache; }
+export const teamLocal = () => localStorage.getItem("coinTeamLocal") === "1";   // 직원 전원 로컬(Ollama) 전용 모드
+export function setTeamLocal(on){ localStorage.setItem("coinTeamLocal", on ? "1" : "0"); if (on) refreshOllama(); }
+export const ollamaCache = () => olCache.slice();
 export function officeSources(){
   const out = [], seen = new Set();
+  const ols = olCache.length ? olCache : (settings.olModel && settings.olOk ? [settings.olModel] : []);
+  // 🖥 전원 로컬 전용: 설치된 Ollama 모델만으로 직원을 꾸린다 (무료·오프라인, API 한도 없음)
+  if (teamLocal() && ols.length) return ols.map(m => ({ id: "ollama", model: m }));
   for (const id of Object.keys(PROVIDERS)){
     if (!settings.keys[id] || id === "anthropic" || overCap(id)) continue;
     const ms = settings.provModels[id]?.length ? settings.provModels[id] : PROVIDERS[id].defaults || [];
     for (const m of ms){ if (seen.has(m) || !["chat", "code", "reason"].includes(modelKind(m))) continue; seen.add(m); out.push({id, model: m}); }
   }
-  // 내 PC Ollama 로컬 모델들도 직원으로 (오프라인·무료). 설치 목록 우선, 없으면 선택한 olModel.
-  const ols = olCache.length ? olCache : (settings.olModel && settings.olOk ? [settings.olModel] : []);
+  // 내 PC Ollama 로컬 모델들도 직원으로 (오프라인·무료).
   for (const m of ols){ if (seen.has(m)) continue; seen.add(m); out.push({id: "ollama", model: m}); }
   return out;
 }

@@ -11,6 +11,7 @@ body.office-open{overflow:hidden}
 .of-tg{display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-weight:600}
 .of-top select,.of-btn{font:inherit;font-size:12.5px;padding:6px 10px;border:2px solid #d8caa8;background:#fffaf0;color:var(--of-ink);cursor:pointer}
 .of-btn:hover,.of-top select:hover{border-color:#b9a57a}
+.of-btn.on{background:#2e7d32;color:#fff;border-color:#2e7d32}
 .of-pick{position:relative}
 .of-menu{position:fixed;z-index:70;max-height:calc(100vh - 80px);overflow:auto;background:#fffaf0;border:2px solid #d8caa8;display:flex;flex-direction:column;min-width:190px;box-shadow:4px 4px 0 rgba(0,0,0,.12)}
 .of-menu button{font:inherit;font-size:12.5px;text-align:left;padding:8px 12px;border:0;background:none;color:var(--of-ink);cursor:pointer}.of-menu button:hover{background:#f1e6cc}

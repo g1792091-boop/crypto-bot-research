@@ -279,7 +279,7 @@ function wire(el){
   el.querySelector("#ofTerm").onclick = () => { if (typeof ctx.openTerminal === "function"){ closeOffice(); ctx.openTerminal(); } };
   el.querySelector("#ofLive").onclick = () => { if (typeof ctx.openLive === "function"){ closeOffice(); ctx.openLive(); } };
   el.querySelector(".of-top").addEventListener("scroll", () => root.querySelectorAll(".of-menu").forEach(m => { if (Date.now() - (m._at || 0) > 500) m.hidden = true; }), {passive: true});
-  el.addEventListener("click", e => {
+  el.addEventListener("click", async e => {
     if (e.target.closest("[data-docclose]") || e.target.id === "ofDocs"){ $o("#ofDocs").hidden = true; return; }
     const dv = e.target.closest("[data-docview]"); if (dv){ showDoc(dv.dataset.docview); return; }
     const dd = e.target.closest("[data-docdl]"); if (dd){ dlDoc(dd.dataset.docdl); return; }
@@ -288,6 +288,10 @@ function wire(el){
     const df = e.target.closest("[data-docfilter]"); if (df){ docFilter = df.dataset.docfilter; openDocs(true); return; }
     const cg = e.target.closest("[data-ch-go]"); if (cg){ root.querySelector(`#ofChans [data-ch="${cg.dataset.chGo}"]`)?.click(); return; }
     if (e.target.closest("[data-resetmodels]")){ const r = O.resetModels(); showTeam(); ctx.toast(`모델 초기화 완료 · 직원들에게 서로 다른 모델 ${r.count}개 배정: ${r.models.slice(0, 4).map(m => shortModel(m)).join(", ")}${r.count > 4 ? " 등" : ""}`); return; }
+    if (e.target.closest("[data-teamlocal]")){ const turningOn = !O.teamLocal?.();
+      if (turningOn){ const ols = await O.refreshOllama?.(); if (!ols || !ols.length){ ctx.toast("설치된 Ollama 로컬 모델이 없습니다. 뉴럴 데스크 '🖥 로컬 모델 설치'로 먼저 받으세요."); return; } }
+      O.setTeamLocal?.(turningOn); O.resetModels?.(); showTeam();
+      ctx.toast(turningOn ? `직원 전원을 로컬(Ollama) 모델로 전환 · 설치된 ${((await O.refreshOllama?.()) || []).length}개 중 배정 (무료·오프라인)` : "로컬 전용 해제 · 다시 클라우드+로컬 섞어 씁니다"); return; }
     if (e.target.closest("[data-botnew]")){ O.ask("자동매매봇 전략 만들어줘", {room: "bot"}); ctx.toast("선물 자동매매봇팀이 봇 전략을 만들어 백테스트합니다 · #선물 자동매매봇팀 방"); return; }
     if (e.target.closest("[data-botsim]")){ O.ask("그리드 봇 백테스트 돌려줘", {room: "bot"}); ctx.toast("그리드/DCA 봇을 연구용으로 백테스트합니다 (실거래로는 안 나감)"); return; }
     if (e.target.closest("[data-botopt]")){ O.ask("봇 자동개선 해줘", {room: "bot"}); ctx.toast("데모 봇의 보조지표·위험값을 하이퍼옵트로 자동 개선합니다 (검증·견고성 통과분만 새 버전)"); return; }
@@ -874,7 +878,7 @@ function showTeam(){
   const models = O.assignModels(), asg = O.getAssign?.() || {};
   const c = $o("#ofCard");
   c.innerHTML = `<div class="of-cardh"><div><b>팀 구성 · ${TEAMS.length}개 조직 · ${AGENTS.length}명</b><span>CEO와 분야별 팀장이 팀을 이끕니다. 질문 내용으로 담당자가 자동으로 정해지고, 투자·실행 판단은 전략가 → 반론 검토관 → 리스크 책임자를 거쳐 CEO가 정리합니다. 매시 CEO가 팀별 성과를 발표합니다.</span></div><button class="of-x" aria-label="닫기">✕</button></div>
-    <div class="of-assign-all">전원 AI: ${modelSelect("all", asg.all, "자동 (추천)")} <button class="of-btn" data-resetmodels title="연결된 회사의 모든 모델을 다시 켜고, 숨겨진·고정된 기록을 지워 직원마다 서로 다른 모델이 배정되게 합니다">🔄 모델 전체 켜기·초기화</button> <small class="of-dim">팀·직원에 따로 고른 것이 우선합니다. Claude 를 고르면 그 직원의 글은 학습 데이터에서 빠집니다. 모델이 하나로 쏠리거나 사라지면 🔄 를 누르세요.</small></div><div class="of-teams">${TEAMS.map(t => `<div class="of-team" style="--tc:${tc(t.id)}"><b>${E(t.name)} <small>${membersOf(t.id).length}명</small></b><span>${E(t.desc || "")}</span><div class="of-tassign">팀 AI: ${modelSelect("team:" + t.id, asg["team:" + t.id], "자동 · 전원 설정 따름")}</div>${membersOf(t.id).map(a => `<div class="of-mem${isLead(a) ? " lead" : ""}" data-ag="${a.id}"><div class="of-av">${sprite(a)}</div><div><b>${isLead(a) ? "♛ " : ""}${E(a.name)}</b>${isLead(a) ? ` <em class="of-leadtag">${t.id === "hq" ? "CEO" : "팀장"}</em>` : ""} <span>${E(a.title)}</span><small>${models[a.id] ? ctx.esc(shortModel(models[a.id].model)) : "모델 미배정"}</small></div></div>`).join("")}</div>`).join("")}</div>
+    <div class="of-assign-all">전원 AI: ${modelSelect("all", asg.all, "자동 (추천)")} <button class="of-btn" data-resetmodels title="연결된 회사의 모든 모델을 다시 켜고, 숨겨진·고정된 기록을 지워 직원마다 서로 다른 모델이 배정되게 합니다">🔄 모델 전체 켜기·초기화</button> <button class="of-btn${O.teamLocal?.() ? " on" : ""}" data-teamlocal title="직원 전원을 내 PC Ollama 로컬 모델로만 돌립니다 (무료·오프라인·API 한도 없음). 끄면 다시 클라우드+로컬 섞어 씁니다.">💻 ${O.teamLocal?.() ? "로컬 전용 끄기" : "전원 로컬(Ollama)로"}</button> <small class="of-dim">팀·직원에 따로 고른 것이 우선합니다. Claude 를 고르면 그 직원의 글은 학습 데이터에서 빠집니다. 모델이 하나로 쏠리거나 사라지면 🔄 를 누르세요.</small></div><div class="of-teams">${TEAMS.map(t => `<div class="of-team" style="--tc:${tc(t.id)}"><b>${E(t.name)} <small>${membersOf(t.id).length}명</small></b><span>${E(t.desc || "")}</span><div class="of-tassign">팀 AI: ${modelSelect("team:" + t.id, asg["team:" + t.id], "자동 · 전원 설정 따름")}</div>${membersOf(t.id).map(a => `<div class="of-mem${isLead(a) ? " lead" : ""}" data-ag="${a.id}"><div class="of-av">${sprite(a)}</div><div><b>${isLead(a) ? "♛ " : ""}${E(a.name)}</b>${isLead(a) ? ` <em class="of-leadtag">${t.id === "hq" ? "CEO" : "팀장"}</em>` : ""} <span>${E(a.title)}</span><small>${models[a.id] ? ctx.esc(shortModel(models[a.id].model)) : "모델 미배정"}</small></div></div>`).join("")}</div>`).join("")}</div>
     <p class="of-flow">회의 순서(코드가 정함): 담당 분석가 → <b>전략가</b>(실행 계획) → <b>반론 검토관</b>(반대 근거 3개 + 판정) → <b>리스크 책임자</b>(승인·축소·거부) → <b>CEO</b>(최종 답). 회의는 팀 구역·대회의실·라운지·발표 무대 어디서든 열립니다. 발언 속 @이름으로 동료를 부르면 그 사람이 회의에 들어옵니다.</p>`;
   c.hidden = false;
 }
