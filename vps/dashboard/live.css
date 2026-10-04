@@ -47,6 +47,15 @@ button { font: inherit; color: inherit; }
                         color: var(--text); text-decoration: none; cursor: pointer; font-size: 13.5px; }
 #menu a:hover, #menu button:hover, #menu a:focus-visible, #menu button:focus-visible { background: var(--card2); outline: none; }
 #menu .dim { color: var(--mut); font-size: 11.5px; }
+#zoomRow { display: flex; align-items: center; gap: 6px; padding: 4px 10px; font-size: 13.5px; }
+#zoomRow span { flex: 1; }
+#menu #zoomRow button { display: inline-block; width: 30px; height: 28px; padding: 0; text-align: center; font-size: 16px;
+                        border: 1px solid var(--line); background: var(--card2); }
+#zoomRow b { min-width: 44px; text-align: center; font-weight: 600; }
+#menu #zoomRow button.auto { width: auto; padding: 0 8px; font-size: 12px; white-space: nowrap; }
+#menu #zoomRow button.auto:disabled { opacity: .5; cursor: default; }
+#sizeInfo { padding: 0 10px 6px; }
+#sizeInfo:empty { display: none; }
 #menuStatus { padding: 4px 10px 8px; color: var(--mut); font-size: 12px; white-space: pre-wrap; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
 #menuStatus:empty { display: none; }
 

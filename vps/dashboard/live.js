@@ -14,6 +14,17 @@
   var replayer = null, fresh = true, focusedId = -1, es = null, everBuilt = false;
   var fitMode = "";                       // "" = 아직 안 고름: 화면이 작으면(휴대폰 세로) 실제 크기, 아니면 맞춤
   try { var fm = localStorage.getItem("ghd_fit"); fitMode = fm === "real" || fm === "fit" ? fm : ""; } catch (e) {}
+  // 화면 배율: 봇 화면을 (이 창 ÷ 배율) 크기로 그리게 하고 배율만큼 줄여 보임 — 브라우저 축소(Ctrl −)와 같은 효과, 글자는 선명.
+  // GH Coin 앱은 글자 · 버튼이 커서 기본 80% (paperbot 처럼 한 화면에 알맞게). 좁은 창(휴대폰)은 배율을 쓰지 않음.
+  // 기본은 '자동': 봇 화면이 늘 약 2000px 너비로 그려지게 배율을 고름 (윈도우 배율 125% · 150% 노트북에서도 한 화면에 알맞게)
+  var ZOOMS = [0.5, 0.6, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25], zoom = 0, ZOOM_TARGET_W = 2000;
+  try { var zs = parseFloat(localStorage.getItem("ghd_zoom")); if (ZOOMS.indexOf(zs) >= 0) zoom = zs; } catch (e) {}
+  function autoZoom(W) {
+    var r = W / ZOOM_TARGET_W, z = ZOOMS[0];
+    for (var i = 0; i < ZOOMS.length; i++) if (ZOOMS[i] <= Math.min(1, r) + 0.01) z = ZOOMS[i];
+    return z;
+  }
+  function curZoom(W) { return zoom || autoZoom(W); }
 
   // ------------------------------------------------------------ 다시 그리기 (rrweb Replayer)
   function mk() {
@@ -85,6 +96,7 @@
       M.scale = s;
     }
     $("fitBtn").textContent = stage.classList.contains("real") ? "🔲 화면에 맞추기 (전체 보기)" : "🔍 실제 크기로 보기";
+    showZoom();
   }
   addEventListener("resize", fit);
 
@@ -153,7 +165,9 @@
   var lastSize = "", sizeTimer = 0;
   function reportSize() {
     if (!M.vid) return;
-    var w = Math.round(stage.clientWidth || innerWidth), h = Math.round(stage.clientHeight || innerHeight), d = devicePixelRatio || 1;
+    var W = stage.clientWidth || innerWidth, H = stage.clientHeight || innerHeight;
+    var z = W >= 1024 && fitMode !== "real" ? curZoom(W) : 1;
+    var w = Math.round(W / z), h = Math.round(H / z), d = (devicePixelRatio || 1) * z;   // 줄여 보이는 만큼 봇 차트도 그 해상도로
     var k = w + "x" + h + "@" + d;
     if (k === lastSize) return;
     lastSize = k;
@@ -509,7 +523,33 @@
     fitMode = stage.classList.contains("real") ? "fit" : "real";
     try { localStorage.setItem("ghd_fit", fitMode); } catch (e) {}
     fit(); menu.hidden = true;
+    lastSize = ""; reportSize();
   };
+  function showZoom() {
+    var W = stage.clientWidth || innerWidth;
+    $("zoomVal").textContent = Math.round(curZoom(W) * 100) + "%";
+    $("zoomAuto").textContent = zoom ? "자동으로" : "자동";
+    $("zoomAuto").disabled = !zoom;
+    var f = replayer && replayer.iframe;
+    $("sizeInfo").textContent = f ? "봇 화면 " + f.getAttribute("width") + "×" + f.getAttribute("height") : "";
+  }
+  function setZoom(step) {
+    var W = stage.clientWidth || innerWidth;
+    var i = ZOOMS.indexOf(curZoom(W)) + step;
+    if (i < 0 || i >= ZOOMS.length) return;
+    zoom = ZOOMS[i];
+    try { localStorage.setItem("ghd_zoom", String(zoom)); } catch (e) {}
+    showZoom(); lastSize = ""; reportSize();
+  }
+  $("zoomOut").onclick = function (e) { e.stopPropagation(); setZoom(-1); };
+  $("zoomIn").onclick = function (e) { e.stopPropagation(); setZoom(1); };
+  $("zoomAuto").onclick = function (e) {
+    e.stopPropagation(); zoom = 0;
+    try { localStorage.removeItem("ghd_zoom"); } catch (err) {}
+    showZoom(); lastSize = ""; reportSize();
+  };
+  addEventListener("resize", showZoom);
+  showZoom();
   function reloadApp() {
     if (!confirm("봇 앱(GH Coin 페이지)을 새로고침할까요?\n설정 · 기록 · 실거래 설정은 그대로이고, 화면이 30초쯤 뒤 다시 나옵니다.")) return;
     menu.hidden = true;
