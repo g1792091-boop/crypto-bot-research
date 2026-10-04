@@ -1,7 +1,7 @@
 // GH Coin 엔진: 코인 전문 AI 에이전트 회사 (GH Coin 엔진에서 갈라져 나옴 — GH Nano 와 저장소를 섞지 않는다)
 // 파이프라인(코드가 판정): 매매법 개발 → 백테스트(앞 70%/뒤 30% 검증) → 데모거래 → 관문 통과 시 실거래 후보 → 대표 승인 시 실거래
 // 커스텀 지표 라인도 같은 단계를 따로 밟는다. 분석 팀(추세·타점·지지저항·익절손절·패턴·뉴스·상황판·ML·코인별)은 코드 계산 + AI 해설.
-import { settings, saveSettings, idb, uid, brainStream, splitThink, overCap, provUse, LAUNCHER, providerCooling, deadModels, coolingInfo, PROVIDERS, modelKind } from "../nuri-ai/engine.js";
+import { settings, saveSettings, idb, uid, brainStream, splitThink, overCap, provUse, LAUNCHER, providerCooling, deadModels, coolingInfo, PROVIDERS, modelKind, ollamaModels } from "../nuri-ai/engine.js";
 import { runAgent, activeSkills, TOOLS, marketNews, candlesFor, visibleText, snapText, toModelMessages } from "../nuri-ai/agent.js";
 import { fusionSources, TRAIN_SYS } from "../nuri-ai/train.js";
 
@@ -10,6 +10,8 @@ import { TEAMS, AGENTS, TEAM_LEAD, agentById, teamById, SKILL_AGENT, MARKET, TOP
   WATCH_OF as COIN_WATCH_OF, RELATED as COIN_RELATED, CLAUDE_TIER as COIN_TIER, COINS, coinById, TEAM_COLOR } from "./coin-org.js";
 export { TEAMS, AGENTS, TEAM_LEAD, agentById, teamById, COINS, TEAM_COLOR };
 // 사무실 일에 쓸 수 있는 모든 대화 모델 (연결된 모든 회사 · Gemini 포함). 학습 데이터 제외는 keep() 에서 따로 한다(isClaude)
+let olCache = [];   // 내 PC Ollama 설치 모델 캐시 (cycle 에서 비차단 갱신)
+export async function refreshOllama(){ try { olCache = await ollamaModels(); } catch (e) { olCache = []; } return olCache; }
 export function officeSources(){
   const out = [], seen = new Set();
   for (const id of Object.keys(PROVIDERS)){
@@ -17,7 +19,9 @@ export function officeSources(){
     const ms = settings.provModels[id]?.length ? settings.provModels[id] : PROVIDERS[id].defaults || [];
     for (const m of ms){ if (seen.has(m) || !["chat", "code", "reason"].includes(modelKind(m))) continue; seen.add(m); out.push({id, model: m}); }
   }
-  if (settings.olModel && settings.olOk) out.push({id: "ollama", model: settings.olModel});
+  // 내 PC Ollama 로컬 모델들도 직원으로 (오프라인·무료). 설치 목록 우선, 없으면 선택한 olModel.
+  const ols = olCache.length ? olCache : (settings.olModel && settings.olOk ? [settings.olModel] : []);
+  for (const m of ols){ if (seen.has(m)) continue; seen.add(m); out.push({id: "ollama", model: m}); }
   return out;
 }
 const hasAI = () => officeSources().length > 0 || !!settings.keys.anthropic;
@@ -745,6 +749,7 @@ export const cycleState = () => ({cycling, lastJob});
 export function nextCycleIn(){ const c = officeCfg(), last = +localStorage.getItem("coinLastCycle") || 0; return Math.max(0, last + c.cycleMin * 60e3 - Date.now()); }
 export function startCycle(){
   startReports();
+  refreshOllama();   // 내 PC Ollama 설치 모델을 직원 후보로 올림
   if (cycleTimer) return;
   if (!localStorage.getItem("coinLastCycle")) localStorage.setItem("coinLastCycle", String(Date.now() - officeCfg().cycleMin * 60e3 + 45e3));
   cycleTimer = setInterval(() => cycle().catch(e => console.warn(e)), 20e3);
@@ -755,6 +760,8 @@ export async function cycle(force, onlyJob){
   if (!hasAI()) return false;
   cycling = true; localStorage.setItem("coinLastCycle", String(Date.now()));
   try {
+    if ((+localStorage.getItem("coinCyc") || 0) % 10 === 0) refreshOllama();   // 가끔 Ollama 설치 목록 갱신
+    localStorage.setItem("coinCyc", String((+localStorage.getItem("coinCyc") || 0) + 1));
     await loadLog();
     await paperStep();
     // 회의가 열려 있어도 주기 업무는 따로 계속한다 (사람처럼 각자 일함). 단, 질문에 답하는 중에는 잡담만 쉰다

@@ -292,6 +292,11 @@ export const OL_MODELS = [
   ["qwen3:14b", "Qwen3 14B · 약 9GB · 고사양 PC"], ["gpt-oss:20b", "gpt-oss 20B · 약 14GB · 고사양 PC"]
 ];
 // Ollama: 모델 받기(진행률) · 내가 학습한 GGUF 등록
+// 지금 Ollama 에 설치된(받아 둔) 무료 모델 이름들. 켜져 있지 않으면 빈 배열.
+export async function ollamaModels(){
+  try { const r = await fetch(apiBase("ollama") + "/api/tags"); if (!r.ok) return []; return ((await r.json()).models || []).map(m => m.name).filter(Boolean); }
+  catch (e){ return []; }
+}
 export async function ollamaPull(model, onProgress, signal){
   const r = await fetch(apiBase("ollama") + "/api/pull", {method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify({model, stream: true}), signal});
   if (!r.ok) throw new Error("Ollama 응답 오류 " + r.status + " (Ollama가 켜져 있는지 확인하세요)");

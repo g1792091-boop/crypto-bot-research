@@ -2,10 +2,14 @@
 // 에이전트 '팀 회의'가 아니라, 신호 뉴런들의 온라인 학습(퍼셉트론식)으로 돌아가는 자율 데모 트레이더.
 // 전부 가상자금(데모)만 — 실주문·실자금·실지갑 없음.
 import { candlesFor } from "../nuri-ai/agent.js";
-import { brainStream, settings, PROVIDERS, modelKind } from "../nuri-ai/engine.js";
+import { brainStream, settings, PROVIDERS, modelKind, ollamaModels } from "../nuri-ai/engine.js";
 import * as BRAIN from "./brain.js";
 
-// 연결된(키가 있는) 회사의 무료 AI 모델 목록 — 각 모델이 트레이더가 된다. 비용상 최대 maxN
+// 내 PC Ollama 에 설치된 무료 모델 캐시 (주기적으로 갱신 — connectedModels 는 동기라 캐시를 읽는다)
+let olCache = [], olInit = false;
+export async function refreshOllama() { try { olCache = await ollamaModels(); } catch (e) { olCache = []; } return olCache; }
+
+// 트레이더가 될 무료 AI 모델: ① 키 넣은 회사(클라우드) 모델 + ② 내 PC Ollama 로컬 모델(공짜라 한도와 무관하게 추가)
 export function connectedModels(maxN = 16) {
   const out = [];
   for (const id of Object.keys(PROVIDERS || {})) {
@@ -13,7 +17,9 @@ export function connectedModels(maxN = 16) {
     const ms = settings.provModels?.[id]?.length ? settings.provModels[id] : (PROVIDERS[id].defaults || []);
     for (const m of ms) { if (["chat", "code", "reason"].includes(modelKind(m))) out.push({ id, model: m }); }
   }
-  return out.slice(0, maxN);
+  const cloud = out.slice(0, maxN);
+  for (const m of olCache.slice(0, 6)) cloud.push({ id: "ollama", model: m });   // 로컬 Ollama 모델도 트레이더로 (오프라인·무료)
+  return cloud;
 }
 
 export const COINS = [["BTC", "BTCUSDT"], ["ETH", "ETHUSDT"], ["SOL", "SOLUSDT"], ["XRP", "XRPUSDT"], ["DOGE", "DOGEUSDT"], ["BNB", "BNBUSDT"]];
@@ -72,6 +78,7 @@ export function decide(feat) {
 // ── 한 스텝: 코인별로 피처→결정→데모 포지션→정산→학습 ──
 export async function step() {
   load();
+  if (!olInit || S.epoch % 20 === 0) { olInit = true; refreshOllama(); }   // 내 PC Ollama 설치 모델 목록 갱신(비차단)
   for (const [ko, sym] of COINS) {
     let cs; try { cs = (await candlesFor({ market: sym, exchange: "binancef", timeframe: "1" }, 300)).cs; } catch (e) { continue; }
     if (!cs || cs.length < 60) continue;
