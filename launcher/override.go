@@ -4,6 +4,8 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -52,13 +54,30 @@ func overridesEnabled() bool {
 	return err != nil
 }
 
-// siteHandler 가 부른다: 승인된 고친 파일이 있으면 그 내용
+// exe 안 원본 파일의 지문(sha256 앞 24자리)
+func embeddedHash(p string) string {
+	b, err := siteFS.ReadFile("site/" + p)
+	if err != nil {
+		return ""
+	}
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:12])
+}
+
+// siteHandler 가 부른다: 승인된 고친 파일이 있으면 그 내용.
+// 단, 고친 파일은 '만들 때의 원본'(.base 지문)과 지금 exe 의 원본이 같을 때만 쓴다.
+// exe 를 새로 빌드해 원본이 바뀌었는데 옛 수정본을 계속 내보내면 새 기능이 사라지고 옛·새 스크립트가 섞여 앱이 멈춘다(10/5 실제 발생).
 func readOverride(p string) ([]byte, bool) {
 	if _, err := overridable(p); err != nil || !overridesEnabled() {
 		return nil, false
 	}
 	dir, _ := patchDir()
-	b, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(p)))
+	fp := filepath.Join(dir, filepath.FromSlash(p))
+	base, err := os.ReadFile(fp + ".base")
+	if err != nil || strings.TrimSpace(string(base)) != embeddedHash(p) {
+		return nil, false // 지문 없음(옛 방식) 또는 원본이 바뀜 → 낡은 수정본, 무시
+	}
+	b, err := os.ReadFile(fp)
 	if err != nil {
 		return nil, false
 	}
@@ -112,7 +131,8 @@ func overrideHandler(w http.ResponseWriter, r *http.Request) {
 				return nil
 			}
 			if st, e := d.Info(); e == nil {
-				files = append(files, obj{"path": rel, "size": st.Size(), "mtime": st.ModTime().UnixMilli()})
+				_, live := readOverride(rel)
+				files = append(files, obj{"path": rel, "size": st.Size(), "mtime": st.ModTime().UnixMilli(), "stale": !live})
 			}
 			return nil
 		})
@@ -139,6 +159,7 @@ func overrideHandler(w http.ResponseWriter, r *http.Request) {
 			fail(err.Error())
 			return
 		}
+		os.WriteFile(fp+".base", []byte(embeddedHash(p)), 0o644) // 어떤 원본을 고친 것인지 기록
 		reply(obj{"ok": true, "path": p})
 	case http.MethodDelete:
 		p, err := overridable(r.URL.Query().Get("path"))
@@ -147,6 +168,7 @@ func overrideHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		os.Remove(filepath.Join(dir, filepath.FromSlash(p)))
+		os.Remove(filepath.Join(dir, filepath.FromSlash(p)) + ".base")
 		reply(obj{"ok": true, "path": p})
 	default:
 		http.Error(w, "method", http.StatusMethodNotAllowed)

@@ -161,6 +161,10 @@ bash build.sh        # → dist/GHNano.exe, dist/ArchAI.exe, dist/GHCoin.exe
 - 검증: MCP 핸드셰이크·도구 18개 호출(실시간 펀딩 포함) · 런처 응답을 흉내 낸 Node 테스트로 설치→내보내기→볼트 16노트→받은 편지함 3건 반영(주문 요청 무시) 확인. **실제 exe·Claudian 에서의 연결은 미확인.**
 - 설치 안 함(확인 결과): sharpe-mcp(상용 API) · ocean-agent(BUSL·실주문) · AgentNova(→AgentKthx 개명) · ClawTrade(2★·라이선스 없음) · brain-mcp(0★) · HyperLLM-4b(LoRA 어댑터뿐·GGUF 없음).
 
+### 5-5. 옛 자가수정 패치가 새 exe 를 덮던 문제 (10/5)
+- 증상: 뉴럴 데스크 UI 일부만 그려지고 "오류: N.startAuto is not a function". 원인: `문서/GHNano 사무실/app-patches/` 의 옛 수정본(neural.js 10/5 01:47 · agent.js·quant.js 10/3)이 exe 안 새 파일보다 우선 → 옛 엔진·옛 도구가 섞임.
+- 조치: 옛 수정본을 `app-patches-backup-20261005/` 로 옮김(삭제 아님). 런처 `override.go`: 수정본 저장 때 원본 지문(`.base`, sha256)을 같이 쓰고, 지금 exe 원본 지문과 다르면(또는 지문 없으면) 수정본을 **무시** → exe 를 새로 빌드하면 낡은 수정본이 자동으로 꺼짐. 목록 API 에 `stale` 표시.
+
 ---
 
 ## 6. 안전 규칙 (바꾸지 말 것)
