@@ -133,10 +133,12 @@ export function marketBrief(cs) {
   let hh = -Infinity, ll = Infinity; for (let i = n - 14; i < n; i++) { if (hi[i] > hh) hh = hi[i]; if (lo[i] < ll) ll = lo[i]; } const stoK = hh > ll ? (last - ll) / (hh - ll) * 100 : 50;
   // ADX 비슷한 추세강도(최근 변동의 방향 일관성)
   let dir = 0, tot = 0; for (let i = n - 14; i < n; i++) { const ch = c[i] - c[i - 1]; dir += ch; tot += Math.abs(ch); } const adx = tot ? Math.abs(dir) / tot * 100 : 0;
+  // 급변동(뉴스성) 감지: 최근 봉 범위가 평소의 2배 넘으면 '이벤트/뉴스 반응' 구간으로 본다
+  let rsum = 0; for (let i = n - 20; i < n - 1; i++) rsum += (hi[i] - lo[i]); const avgRange = rsum / 19, lastRange = hi[n - 1] - lo[n - 1]; const spike = avgRange > 0 && lastRange > avgRange * 2;
   const trend = emaPct > 0.3 ? "상승추세" : emaPct < -0.3 ? "하락추세" : "횡보";
   const ob = rsiV >= 72 ? "과매수" : rsiV <= 28 ? "과매도" : rsiV >= 56 ? "약강세" : rsiV <= 44 ? "약약세" : "중립";
   const strong = adx >= 45 ? "강함" : adx >= 25 ? "보통" : "약함(횡보성)";
-  return { rsi: Math.round(rsiV), trend, ob, emaPct: +emaPct.toFixed(2), mom5: +mom5.toFixed(2), macdHist: +macdHist.toFixed(2), pctB: +pctB.toFixed(2), stoK: Math.round(stoK), adx: Math.round(adx),
+  return { rsi: Math.round(rsiV), trend, ob, spike, emaPct: +emaPct.toFixed(2), mom5: +mom5.toFixed(2), macdHist: +macdHist.toFixed(2), pctB: +pctB.toFixed(2), stoK: Math.round(stoK), adx: Math.round(adx),
     text: `추세 ${trend}(EMA50 ${emaPct >= 0 ? "+" : ""}${emaPct.toFixed(2)}%, EMA20${last >= ema20 ? "위" : "아래"}) · 추세강도 ${strong}(ADX ${Math.round(adx)}) · RSI ${Math.round(rsiV)}(${ob}) · MACD ${macdHist >= 0 ? "상승" : "하락"} · 볼린저 ${pctB >= 0.8 ? "상단(과열)" : pctB <= 0.2 ? "하단(눌림)" : "중앙"} · 스토캐 ${Math.round(stoK)} · 모멘텀 5분 ${mom5 >= 0 ? "+" : ""}${mom5.toFixed(2)}%` };
 }
 
@@ -161,9 +163,9 @@ function bumpPeak() { if (S) S.peak = Math.max(S.peak || BANKROLL, equity()); }
 // ── 코인 선물 포지션: 레버리지·시드비중(증거금%)·손절·익절을 "AI 모델이 상황에 맞게 스스로" 정한다 ──
 export const LEV_CAP = sym => sym === "BTCUSDT" ? 200 : 100;
 const clampN = (v, lo, hi, d) => { v = +v; return Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : d; };
-// 낙폭 방어: 자본이 깎이면 레버리지·시드 상한을 자동으로 낮춰 '천달러'를 지킨다 (모델이 과하게 질러도 코드가 막음)
-function maxLev(sym) { const rf = riskFactor(); return rf < 0.5 ? 3 : rf < 1 ? 8 : LEV_CAP(sym); }
-function maxSeed() { const rf = riskFactor(); return rf < 0.5 ? 8 : rf < 1 ? 20 : 60; }
+// 낙폭 방어: 고배/중배도 쓰게 허용하되, 자본이 깎이면 상한만 낮춰 '천달러'를 지킨다. 적정 수위는 뇌가 학습한다.
+function maxLev(sym) { const rf = riskFactor(); return rf < 0.5 ? 10 : rf < 1 ? 25 : LEV_CAP(sym); }   // 정상: 비트200·알트100 / −7%: 25 / −10%: 10
+function maxSeed() { const rf = riskFactor(); return rf < 0.5 ? 12 : rf < 1 ? 30 : 80; }
 function liqPrice(entry, side, lev) { return side > 0 ? entry * (1 - 0.95 / lev) : entry * (1 + 0.95 / lev); }
 // opts: {lev, seed, sl, tp} — 모델/뉴런이 제안한 값. 코드가 안전범위로 클램프(방어모드면 더 좁게)하고 증거금을 계산한다.
 function newPos(ko, sym, side, price, feat, opts = {}) {
@@ -172,20 +174,26 @@ function newPos(ko, sym, side, price, feat, opts = {}) {
   const sl = clampN(opts.sl, 0.3, 15, 2);           // 손절 % (가격 변동 기준)
   const tp = clampN(opts.tp, 0.5, 30, sl * 2);      // 익절 %
   const margin = Math.max(5, +(equity() * seed / 100).toFixed(2));
-  return { ko, sym, side, entry: price, price, margin, lev, seed: +seed.toFixed(1), sl: +sl.toFixed(2), tp: +tp.toFixed(2), notional: +(margin * lev).toFixed(2), liq: +liqPrice(price, side, lev).toFixed(6), roe: 0, proe: 0, t: Date.now(), feat: { ...feat } };
+  return { ko, sym, side, entry: price, price, margin, lev, seed: +seed.toFixed(1), sl: +sl.toFixed(2), tp: +tp.toFixed(2), notional: +(margin * lev).toFixed(2), liq: +liqPrice(price, side, lev).toFixed(6), roe: 0, proe: 0, t: Date.now(), hour: new Date().getHours(), spike: !!(S?.brief?.[sym]?.spike), regime: BRAIN.regimeOf(feat), feat: { ...feat } };
 }
 function markPos(p, price) { const proe = (price - p.entry) / p.entry * p.side * 100; p.proe = +proe.toFixed(3); p.roe = +(proe * (p.lev || 1)).toFixed(2); p.price = price; return proe; }
 const liquidated = (p, price) => p.liq ? (p.side > 0 ? price <= p.liq : price >= p.liq) : false;
 function posMargin(p) { return Number.isFinite(p.margin) ? p.margin : (Number.isFinite(p.notional) && p.lev ? p.notional / p.lev : (Number.isFinite(p.size) ? p.size : marginFallback())); }
 function marginFallback() { return Math.max(5, equity() * 0.15); }
-// 뉴런(자체 신호)이 상황에 맞게 스스로 정하는 레버리지·시드·손절·익절 — 확신·추세강도↑ = 공격적, 변동성↑ = 보수적
+// 뉴런(자체 신호)이 상황에 맞게 스스로 정하는 레버리지·시드·손절·익절 — 뇌가 학습한 국면별 최적값을 기본으로, 확신·추세·시간대·급변동을 반영
 function autoParams(sym, d, feat, brief) {
-  const conf = d.conf || 50, adx = brief?.adx ?? 25, vol = feat?.["변동성"] ?? 0;   // vol: +면 저변동(우호), -면 고변동
+  const conf = d.conf || 50, adx = brief?.adx ?? 25, vol = feat?.["변동성"] ?? 0, regime = BRAIN.regimeOf(feat);
+  const sg = BRAIN.suggestRisk(regime);          // 뇌가 이 국면에서 배운 최적 레버·시드·손절·익절
   const aggr = (conf / 100) * (0.4 + Math.min(1, adx / 50) * 0.6) * (vol >= 0 ? 1 : 0.6);
-  const lev = Math.round(clampN(2 + aggr * 22, 2, maxLev(sym), 5));     // 2~24x 범위에서 상황 비례
-  const seed = clampN(8 + aggr * 32, 5, maxSeed(), 15);                 // 5~40%
-  const sl = clampN(vol >= 0 ? 1.5 : 2.6, 0.6, 6, 2);                   // 고변동이면 손절 넓게
-  return { lev, seed, sl, tp: +(sl * 2).toFixed(2) };
+  let lev = sg ? sg.lev : Math.round(clampN(3 + aggr * 30, 2, 30, 6));   // 학습값 우선, 없으면 상황 비례(중배까지 탐색)
+  let seed = sg ? sg.seed : clampN(8 + aggr * 32, 5, 50, 15);
+  let sl = sg ? sg.sl : clampN(vol >= 0 ? 1.5 : 2.6, 0.6, 6, 2);
+  // 시간대·급변동(뉴스성) 학습 반영: 나쁜 시간/나쁜 급변동이면 레버·시드 축소
+  const th = BRAIN.timeAdvice(new Date().getHours()), ev = BRAIN.eventAdvice(!!brief?.spike);
+  if (th && !th.good) { lev *= 0.6; seed *= 0.6; } else if (th && th.good) { lev *= 1.1; }
+  if (brief?.spike && ev && !ev.good) { lev *= 0.5; seed *= 0.5; }
+  lev = Math.round(clampN(lev, 1, maxLev(sym), 5)); seed = clampN(seed, 1, maxSeed(), 15);
+  return { lev, seed: +seed.toFixed(0), sl: +sl.toFixed(2), tp: +(sl * 2).toFixed(2) };
 }
 export const riskMode = () => riskFactor() < 0.5 ? "방어(최소)" : riskFactor() < 1 ? "방어(축소)" : "정상";
 export function load() {
@@ -274,8 +282,11 @@ function closePos(sym, price, why) {
     S.w[k] = cl(S.w[k] + LR * (correct ? 1 : -1) * Math.abs(sig), 0.05, 3);   // 맞으면↑ 틀리면↓
   }
   // 🧠 뇌 지능에도 결과 학습(국면별 가중치 교정) + 손절이면 '왜 났는지' 함정으로 기억
-  const regime = BRAIN.regimeOf(p.feat || {});
+  const regime = p.regime || BRAIN.regimeOf(p.feat || {});
   BRAIN.learnOutcome({ coin: p.ko, regime, feat: p.feat, dir: p.side, pnl: ret });
+  BRAIN.learnRisk({ regime, lev: p.lev, seed: p.seed, sl: p.sl, tp: p.tp, pnl });       // 💹 레버·시드·손절·익절 학습
+  if (p.hour != null) BRAIN.learnTime(p.hour, pnl);                                      // 🕐 시간대 학습
+  BRAIN.learnEvent(!!p.spike, pnl);                                                      // 📰 급변동(뉴스성) 학습
   if (why === "청산" || why === "손절" || ret < -0.015) BRAIN.learnLoss({ coin: p.ko, regime, feat: p.feat, dir: p.side, roe: ret * 100 });
   feed(`${p.ko} 청산 @ ${fmt(price)} · ${roeDisp >= 0 ? "+" : ""}${roeDisp.toFixed(1)}%(${p.lev}x) ${pnl >= 0 ? "+" : ""}$${Math.abs(pnl).toFixed(2)} (${why}) → 학습`);
   delete S.pos[sym];
@@ -298,9 +309,12 @@ function closeModelPos(name, sym, price, why) {
   const roeDisp = margin ? pnl / margin * 100 : ret * 100;
   M.pnl += pnl; M.fills++; if (pnl > 0) M.wins++; M.n++; if (ret > 0) M.ok++;
   M.w = cl(M.w + LR * (ret > 0 ? 1 : -1), 0.05, 3);
-  const regime = BRAIN.regimeOf(p.feat || {});
+  const regime = p.regime || BRAIN.regimeOf(p.feat || {});
   BRAIN.reinforce(p.ko, regime, ret > 0);                                   // 이 상황의 기억 강화/약화
   BRAIN.learnOutcome({ coin: p.ko, regime, feat: p.feat, dir: p.side, pnl: ret });   // 🧠 뇌 지능 학습
+  BRAIN.learnRisk({ regime, lev: p.lev, seed: p.seed, sl: p.sl, tp: p.tp, pnl });    // 💹 레버·시드·손절·익절 학습
+  if (p.hour != null) BRAIN.learnTime(p.hour, pnl);                                   // 🕐 시간대 학습
+  BRAIN.learnEvent(!!p.spike, pnl);                                                   // 📰 급변동(뉴스성) 학습
   if (ret > 0.02) BRAIN.learn({ type: "패턴", coin: p.ko, regime, text: `${regime}에서 ${p.side > 0 ? "롱" : "숏"} +${(ret * 100).toFixed(1)}% (${strongFeat(p.feat)})`, model: shortMd(name) });   // 큰 이익 = 패턴 기억
   if (ret < 0) {
     M.losers.unshift({ ko: p.ko, side: p.side, roe: +(ret * 100).toFixed(1), feat: p.feat }); M.losers = M.losers.slice(0, 5);
@@ -352,6 +366,11 @@ export async function modelStep() {
   const riskL = BRAIN.trapRisk(feat, regime, 1), riskS = BRAIN.trapRisk(feat, regime, -1);
   const iqLine = `\n${ref.text}` + (bp.dir ? `\n뇌 예측: ${bp.dir > 0 ? "롱" : "숏"} 우세(신뢰 ${Math.round(bp.trust * 100)}%)` : "");
   const trapLine = (riskL >= 0.7 || riskS >= 0.7) ? `\n⚠ 손절 위험: ${riskL >= 0.7 ? `롱 ${Math.round(riskL * 100)}%` : ""}${riskS >= 0.7 ? ` 숏 ${Math.round(riskS * 100)}%` : ""} 과거 손절과 유사 → 그 방향 피하라` : "";
+  // 💹🕐📰 뇌가 학습한 이 국면 최적 리스크 + 시간대·급변동 성적
+  const sg = BRAIN.suggestRisk(regime), th = BRAIN.timeAdvice(new Date().getHours()), ev = BRAIN.eventAdvice(!!S.brief?.[sym]?.spike);
+  const riskHint = sg ? `\n뇌가 배운 ${regime} 최적: 레버 ${sg.lev}x·시드 ${sg.seed}%·손절 ${sg.sl}%·익절 ${sg.tp}% (${sg.n}판 승률 ${sg.wr}%). 기본값으로 쓰되 상황 따라 조정.` : "";
+  const timeHint = th ? `\n지금 시간대(${new Date().getHours()}시) 과거 성적: 승률 ${th.wr}%·평균 ${th.avg >= 0 ? "+" : ""}$${th.avg} → ${th.good ? "잘 되는 시간, 평소대로" : "안 되는 시간, 작게/관망"}` : "";
+  const evHint = S.brief?.[sym]?.spike ? `\n📰 지금 급변동(뉴스성) 구간${ev ? ` — 과거 승률 ${ev.wr}% → ${ev.good ? "진입 가능" : "관망/소액 권장"}` : " — 데이터 적음, 조심"}` : "";
   let raw = "", route;
   try {
     // fallback:true → 핀한 모델이 한도/쿨다운/오류면 '응답하는 다른 모델'로 넘어가 반드시 한 번은 거래가 일어난다. 결과는 '실제 응답한 모델'에 귀속.
@@ -366,7 +385,7 @@ export async function modelStep() {
    - lev(레버리지): ${LEV_CAP(sym)}까지 가능하나 확신·추세강할 때만 높게. 애매하면 2~5x. 고배율은 작은 역행에도 청산된다.
    - seed(시드비중 %): 이번 진입에 자본의 몇 %를 증거금으로? 보통 5~20%, 고확신에만 더. 자본을 한 번에 다 걸지 마라.
    - sl(손절 %)·tp(익절 %): 가격 변동 기준. 변동성 크면 손절 넓게. 손익비는 보통 1:2 이상.
-반드시 JSON 한 줄만: {"dir":1,"conf":70,"lev":8,"seed":12,"sl":1.5,"tp":3} — dir 1롱 -1숏 0관망. 설명 금지.${brainLine}${les}${iqLine}${trapLine}` },
+반드시 JSON 한 줄만: {"dir":1,"conf":70,"lev":8,"seed":12,"sl":1.5,"tp":3} — dir 1롱 -1숏 0관망. 설명 금지.${brainLine}${les}${iqLine}${trapLine}${riskHint}${timeHint}${evHint}` },
       { role: "user", content: `${ko} 시장: ${brief.text}. 거래흐름 ${(feat["거래흐름"] || 0) >= 0 ? "매수우위" : "매도우위"}, 현재가 ${price}.\n내 자본 $${equity()} · ${riskMode() !== "정상" ? "⚠ 낙폭 방어모드(레버·시드 작게)" : "정상"}.\n방향+레버리지+시드+손절+익절을 정해 JSON만:` }],
       role: "fast", target: tgt, fallback: true, json: true, maxTokens: 160, temperature: 0.2, noThink: true, onContent: d => raw += d, onThink: () => {} });
   } catch (e) {
@@ -475,6 +494,7 @@ export const brainCanvas = () => BRAIN.toCanvas(120);  // JSON Canvas(.canvas) �
 export const brainIQ = () => BRAIN.iqScore();           // 뇌 지능 점수(자가학습 정확도)
 export const brainRefine = (coin, regime) => BRAIN.refineForProfit(coin, regime);
 export const brainIngest = (note) => BRAIN.ingest(note);   // 에이전트 팀/외부(.canvas)가 결과를 뇌에 넣음
+export const brainRisk = () => BRAIN.riskState();          // 학습한 국면별 레버·시드·손절·익절 + 시간대·급변동 성적
 export function resetBrain() { BRAIN.reset(); }
 
 export function state() {

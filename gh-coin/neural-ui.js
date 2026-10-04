@@ -72,6 +72,19 @@ export async function openNeural(ctx = {}) {
 function close() { if (loop) clearInterval(loop); if (raf) cancelAnimationFrame(raf); loop = raf = 0; window.removeEventListener("keydown", esc); if (root) root.remove(); root = null; }
 const esc = (e) => { if (e.key === "Escape") close(); };
 
+function riskLearnLine() {
+  let r; try { r = N.brainRisk(); } catch (e) { return ""; }
+  if (!r) return "";
+  const rk = (r.risk || []).slice(0, 2).map(x => `${E(x.regime)} ${x.lev}x·시드${x.seed}%·SL${x.sl}/TP${x.tp}(승${x.wr}%)`).join(" · ");
+  const bh = (r.bestHours || []).map(h => `${h.hr}시(${h.wr}%)`).join(" ");
+  const wh = (r.worstHours || []).map(h => `${h.hr}시(${h.wr}%)`).join(" ");
+  const sp = r.vol?.spike; const spStr = sp && sp.n >= 4 ? `뉴스성 급변동 승률 ${Math.round(sp.wins / sp.n * 100)}%(${sp.n}판)` : "";
+  if (!rk && !bh && !spStr) return `<div class="nsub dim">💹 리스크·시간대 학습 중 — 거래가 쌓이면 상황별 최적 레버·시드·손절·익절·시간대를 스스로 찾습니다</div>`;
+  return `<div class="nsub">💹 AI가 학습한 리스크·시간대 (스스로 조정)</div>`
+    + (rk ? `<div class="brow"><span class="bt up">리스크</span><span class="btx" title="국면별로 학습된 레버리지·시드·손절·익절">${rk}</span></div>` : "")
+    + ((bh || wh) ? `<div class="brow"><span class="bt warn">시간대</span><span class="btx">잘됨 ${bh || "–"} · 안됨 ${wh || "–"}</span></div>` : "")
+    + (spStr ? `<div class="brow"><span class="bt dim">뉴스성</span><span class="btx">${spStr}</span></div>` : "");
+}
 function render() {
   if (!root || !ST) return;
   const s = ST, up = s.pnl >= 0, eq = s.equity ?? (1000 + s.pnl);
@@ -90,7 +103,8 @@ function render() {
     (s.brain ? `<div class="nsub">🧠 자체 뇌 · 지능 <b style="color:#b79cff">${s.brain.iq?.score ?? 0}/100</b> <span class="dim">정확도 ${s.brain.iq?.acc ?? 0}% · ${s.brain.iq?.n ?? 0}판 학습 · 손절회피 ${s.brain.traps ?? 0}</span></div>` +
       `<div class="nsub">누적 기억 ${s.brain.n}개 <span class="dim">${Object.entries(s.brain.byType || {}).map(([t, c]) => t + " " + c).join(" · ") || "비어있음"}</span></div>` +
       (s.brain.top.length ? s.brain.top.slice(0, 7).map(m => `<div class="brow"><span class="bt ${m.type === "패턴" ? "up" : m.type === "교훈" ? "warn" : m.type === "전략" ? "pur" : "dim"}">${E(m.type)}</span><span class="btx" title="${E(m.text)}${m.model ? " · " + E(m.model) : ""}">${E(m.text)}</span><small>×${m.w}</small></div>`).join("")
-        : `<div class="dim" style="padding:4px 0">아직 비어있음 — 모델들이 복기·거래하며 기억을 쌓습니다</div>`) : "");
+        : `<div class="dim" style="padding:4px 0">아직 비어있음 — 모델들이 복기·거래하며 기억을 쌓습니다</div>`) : "")
+    + riskLearnLine();
   // 코인별 결정(스캔) 그리드
   const grid = N.COINS.map(([ko, sym]) => {
     const d = s.dec[sym];

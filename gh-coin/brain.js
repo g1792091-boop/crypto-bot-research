@@ -13,9 +13,12 @@ function load() {
   if (!B.mem) B.mem = []; if (!B.n) B.n = 0;
   if (!B.iq) B.iq = { w: {}, acc: { hit: 0, tot: 0 }, brier: 0.25, n: 0 };   // 지능: 국면별 학습 가중치 + 자기 정확도
   if (!B.traps) B.traps = [];                                                  // 손절 함정(안티패턴)
+  if (!B.risk) B.risk = {};                                                    // 국면별 최적 레버리지·시드·손절·익절 (결과로 학습)
+  if (!B.hours) B.hours = {};                                                  // 시간대별 성적 (0~23시)
+  if (!B.vol) B.vol = { calm: { pnl: 0, n: 0, wins: 0 }, spike: { pnl: 0, n: 0, wins: 0 } };   // 평온 vs 급변동(뉴스성) 성적
   return B;
 }
-function save() { try { localStorage.setItem(KEY, JSON.stringify({ mem: B.mem.slice(0, 400), n: B.n, iq: B.iq, traps: B.traps.slice(0, 60) })); } catch (e) {} }
+function save() { try { localStorage.setItem(KEY, JSON.stringify({ mem: B.mem.slice(0, 400), n: B.n, iq: B.iq, traps: B.traps.slice(0, 60), risk: B.risk, hours: B.hours, vol: B.vol })); } catch (e) {} }
 const IQLR = 0.08;
 const FEATS = ["모멘텀", "추세(EMA)", "RSI", "거래흐름", "호가압력", "변동성"];
 function cos(a = {}, b = {}) { let d = 0, na = 0, nb = 0; for (const k of FEATS) { const x = a[k] || 0, y = b[k] || 0; d += x * y; na += x * x; nb += y * y; } return (na && nb) ? d / Math.sqrt(na * nb) : 0; }
@@ -176,6 +179,33 @@ export function refineForProfit(coin = "", regime = "") {
   return { coin, regime, iq: iq.score, acc: iq.acc, n: iq.n, cautions: trapN, keyFeatures: bias.map(([k, v]) => `${k}${v >= 0 ? "+" : ""}${v.toFixed(2)}`),
     memory: recallText(coin, regime, 3),
     text: `[${regime} 국면] 뇌 지능 ${iq.score}/100(정확도 ${iq.acc}%·표본 ${iq.n}): ${rule}. 손절패턴 ${trapN}개는 회피.` };
+}
+
+// ════════ 💹 리스크 자가학습: 국면별 '레버리지·시드·손절·익절'을 결과로 스스로 조정 ════════
+// 이익나면 그때 쓴 값 쪽으로, 손실나면 레버리지·시드를 낮추는 쪽으로 EMA. 고배/중배도 쓰되 통하는 수위를 찾는다.
+export function learnRisk({ regime = "일반", lev, seed, sl, tp, pnl = 0 } = {}) {
+  load(); const k = regime || "일반", r = B.risk[k] || (B.risk[k] = { lev: 8, seed: 15, sl: 2, tp: 4, n: 0, wins: 0 });
+  const win = pnl >= 0, a = 0.18;
+  if (win) { if (lev) r.lev = r.lev * (1 - a) + lev * a; if (seed) r.seed = r.seed * (1 - a) + seed * a; if (sl) r.sl = r.sl * (1 - a) + sl * a; if (tp) r.tp = r.tp * (1 - a) + tp * a; r.wins++; }
+  else { r.lev = Math.max(2, r.lev * 0.9); r.seed = Math.max(4, r.seed * 0.93); if (sl) r.sl = r.sl * 0.85 + sl * 0.15; }   // 손실 = 레버·시드 낮추고 손절폭 조정
+  r.lev = Math.min(200, r.lev); r.seed = Math.min(90, r.seed); r.n++; save();
+}
+export function suggestRisk(regime) {
+  load(); const r = B.risk[regime || "일반"] || B.risk["일반"]; if (!r || r.n < 3) return null;
+  return { lev: Math.max(1, Math.round(r.lev)), seed: Math.max(1, Math.round(r.seed)), sl: +r.sl.toFixed(1), tp: +r.tp.toFixed(1), n: r.n, wr: r.n ? Math.round(r.wins / r.n * 100) : 0 };
+}
+// ════════ 🕐 시간대 학습: 어느 시간에 매매가 잘/안 되는지 (0~23시) ════════
+export function learnTime(hour, pnl = 0) { load(); const h = B.hours[hour] || (B.hours[hour] = { pnl: 0, n: 0, wins: 0 }); h.pnl += pnl; h.n++; if (pnl >= 0) h.wins++; save(); }
+export function timeAdvice(hour) { load(); const h = B.hours[hour]; if (!h || h.n < 4) return null; const wr = Math.round(h.wins / h.n * 100); return { wr, n: h.n, avg: +(h.pnl / h.n).toFixed(2), good: wr >= 50 && h.pnl >= 0 }; }
+// ════════ 📰 뉴스성 급변동 학습: 급변동(뉴스 반응) 구간에 매매가 득인지 실인지 ════════
+export function learnEvent(spike, pnl = 0) { load(); const b = B.vol[spike ? "spike" : "calm"]; b.pnl += pnl; b.n++; if (pnl >= 0) b.wins++; save(); }
+export function eventAdvice(spike) { load(); const b = B.vol[spike ? "spike" : "calm"]; if (!b || b.n < 4) return null; const wr = Math.round(b.wins / b.n * 100); return { wr, n: b.n, avg: +(b.pnl / b.n).toFixed(2), good: wr >= 50 && b.pnl >= 0 }; }
+// UI/프롬프트용 요약
+export function riskState() {
+  load();
+  const hrs = Object.entries(B.hours).filter(([, h]) => h.n >= 3).map(([hr, h]) => ({ hr: +hr, wr: Math.round(h.wins / h.n * 100), n: h.n, avg: +(h.pnl / h.n).toFixed(2) })).sort((a, b) => b.avg - a.avg);
+  return { risk: Object.entries(B.risk).map(([rg, r]) => ({ regime: rg, lev: Math.round(r.lev), seed: Math.round(r.seed), sl: +r.sl.toFixed(1), tp: +r.tp.toFixed(1), n: r.n, wr: r.n ? Math.round(r.wins / r.n * 100) : 0 })),
+    bestHours: hrs.slice(0, 3), worstHours: hrs.slice(-3).reverse(), vol: { calm: B.vol.calm, spike: B.vol.spike } };
 }
 
 export function recallText(coin, regime, n = 4) {
