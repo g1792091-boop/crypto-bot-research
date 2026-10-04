@@ -61,6 +61,15 @@ const TOOLS = [
     run: () => { const s = state(); return s.demo.map(d => `${d.status} | ${d.name} | ${d.market} ${d.tf} | ${d.trades}거래 | ${d.equity} | ${d.lev ?? "—"}x | SL ${d.sl ?? "—"} TP ${d.tp ?? "—"} | ${d.author}`).join("\n") || "데모 전략 없음"; } },
   { name: "neutron_recent_trades", description: "뉴럴 데스크 최근 거래(손익·R·청산 사유·매매법)", input: { limit: { type: "number" } },
     run: a => { const s = state(); return (s.neural.trades || []).slice(0, a.limit || 20).map(t => `${new Date(t.t).toLocaleString("ko-KR")} ${t.ko} ${t.side > 0 ? "롱" : "숏"} ${t.lev}x ${t.name} → ${t.why} ${t.pnl >= 0 ? "+" : ""}${t.pnl}$ (${t.R}R)`).join("\n") || "거래 없음"; } },
+  { name: "neutron_live_entry", description: "⚡ 실시간 진입(손매매용): 코인별 시장가 진입 방향·손절·익절1/2·유사상황 익절1 도달률(트리플 배리어)·계획 기대값·합류 점수·지지저항/호가벽 근거·팀↔뉴럴 토론 결과. 주문 도구 아님", input: { symbol: { type: "string", description: "BTC 등(비우면 전체)" } },
+    run: a => { const s = state(), R = s.verdicts.liveEntry; if (!R?.list?.length) return "아직 분석 없음 (앱이 3분마다 분석)";
+      const ko = String(a.symbol || "").toUpperCase().replace(/USDT$/, "");
+      return `${Math.round((Date.now() - R.t) / 60000)}분 전 분석
+` + R.list.filter(r => r.best && (!ko || r.ko === ko)).map(r => { const b = r.best;
+        return `${r.ko} ${b.side > 0 ? "롱" : "숏"} [${b.grade}] 시장가 ${b.entry} · 손절 ${b.sl}(−${b.slPct}%) · 익절1 ${b.tp1}(${b.rr1}R) · 익절2 ${b.tp2}(${b.rr}R) · 익절1 도달률 ${b.wr}%(${b.n}) · 기대값 ${b.exp}R · 합류 ${b.score} · 레버 ≤${b.lev}x
+  근거: ${b.why.join(" · ")}
+  주의: ${b.warn.join(" · ") || "없음"}${b.debate ? `
+  토론: ${b.debate.verdict} — 팀 ${b.debate.team?.stance}: ${b.debate.team?.reason} / 뉴럴 ${b.debate.neural?.stance}: ${b.debate.neural?.reason}` : ""}`; }).join(String.fromCharCode(10)) + age(s); } },
   { name: "neutron_coin_research", description: "코인 리서치 카드(1년 범위·현재 위치·7/30/365일 수익·거래소 펀딩) + 고래 카피 신호 + 팀 판정 + 국면", input: { symbol: { type: "string", description: "BTC 등" } }, required: ["symbol"],
     run: a => { const s = state(), ko = String(a.symbol || "").toUpperCase().replace(/USDT$/, ""), sym = ko + "USDT", r = s.neural.research?.[sym], rg = s.neural.regime?.[sym], w = (s.neural.whale?.last || []).find(x => x.sym === sym), id = ko.toLowerCase();
       return `# ${ko} 리서치

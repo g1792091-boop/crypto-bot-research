@@ -379,6 +379,7 @@ export async function step() {
       if (!dayGate()) { feed(`${ko} 신호(${v.name}) 무시 — 오늘 손실 한도 ${FW.dailyStop * 100}% 도달`); continue; }
       if (S.news?.blockUntil > Date.now()) { feed(`${ko} 신호(${v.name}) 보류 — 📰 주요 일정/뉴스 위험 구간`); continue; }
       const wh = await whaleSignal(sym).catch(() => null);
+      (S.sigLog ||= []).push({ sym, side: s.side, sl: s.sl, rr: rrFor(v), vkey: v.vkey, name: v.name, tf, mean: st.mean, n: st.n, wr: st.wr, t: Date.now(), px: price }); if (S.sigLog.length > 60) S.sigLog.splice(0, S.sigLog.length - 60);
       S.queue.push({ sym, ko, vkey: v.vkey, name: v.name, side: s.side, sl: s.sl, why: s.why, regime: reg.label, regKey: reg.key, htf: hb?.bias ?? 0, st, t: Date.now(), px0: price, whale: wh });
       S.scan = { model: "전략 엔진", ko, sym, regime: `${reg.label} · ${v.name} ${s.side > 0 ? "롱" : "숏"} 신호`, t: Date.now() };
       feed(`🎯 ${ko} ${s.side > 0 ? "롱" : "숏"} 신호: ${v.name}(${tf === "60" ? "1시간" : tf === "240" ? "4시간" : tf + "분"}봉) — ${s.why} · 최근 ${st.n}건 기대값 ${st.mean >= 0 ? "+" : ""}${st.mean}R`);
@@ -453,6 +454,32 @@ export async function calibrate() {
 // ══ 🐋 고래 카피 신호 (casatrickdev copyTrading: 감지 → 필터 → 리스크 → 신호 · 실행 없음) + 적중률 학습(WalletIntelligence 대응) ══
 import * as WC from "./lib/whalecopy.js";
 const _whC = {};
+// ⚡ 실시간 진입용: 이 코인에서 최근(기본 75분) 나온 '워크포워드 검증 통과' 매매법 신호 — 손매매 추천의 유일한 검증된 근거
+export function recentSignal(sym, maxMin = 75) { load(); return [...(S.sigLog || [])].reverse().find(x => x.sym === sym && Date.now() - x.t < maxMin * 60e3 && x.mean > SEL.thr) || null; }
+export async function whaleFor(sym) { load(); return whaleSignal(sym); }
+// ⚡ 실시간 진입 토론: 에이전트 팀의 주장에 뉴럴 데스크 모델이 반박·동의 (모델은 순번대로)
+let dbRot = 0;
+export async function debateReply(setup, teamArg) {
+  load(); const cm = connectedModels(); if (!cm.length) return null;
+  const tgt = cm[dbRot++ % cm.length]; let raw = "", route;
+  try {
+    route = await brainStream({ messages: [
+      { role: "system", content: '너는 뉴럴 데스크의 트레이더다. 에이전트 팀이 낸 실시간 진입 의견을 독립적으로 검토한다. 팀 문장을 반복하지 말고, 팀이 말하지 않은 근거(위험 요인·손절 위치·반대 시나리오·국면·다른 모델의 시장 읽기)로 판단한다. 코인 선물 이야기다. 숫자는 주어진 것만 쓴다. 반드시 JSON 한 줄: {"stance":"찬성"|"반대","reason":"한국어 한 문장"}' },
+      { role: "user", content: `진입 계획: ${setup}
+에이전트 팀 의견: ${teamArg}
+뉴럴 데스크 자료: 국면 ${Object.entries(S.regime || {}).map(([k, r]) => k.replace("USDT", "") + " " + r.label).join(", ")} · 다른 모델 시장 읽기: ${Object.values(S.scans || {}).slice(-6).map(v => v.ko + (v.bias > 0 ? "▲" : v.bias < 0 ? "▼" : "·") + v.conf).join(" ")}
+JSON만:` }],
+      role: "fast", target: tgt, fallback: true, json: true, maxTokens: 160, temperature: 0.2, noThink: true, onContent: d => raw += d, onThink: () => {} });
+  } catch (e) { return { model: shortMd(tgt.model), stance: "기권", reason: String(e?.message || e).slice(0, 40) }; }
+  let j = {}; try { j = JSON.parse((raw.match(/\{[\s\S]*\}/) || ["{}"])[0]); } catch (e) {}
+  const st = /반대|disagree|no/i.test(j.stance || "") ? "반대" : /찬성|agree|yes/i.test(j.stance || "") ? "찬성" : "기권";
+  const reason = String(j.reason || raw).replace(/\s+/g, " ").slice(0, 90);
+  // 팀 문장을 거의 그대로 반복하면(작은 모델의 앵무새 답) 독립 의견이 아니므로 기권 처리
+  const bi = t => { const a = String(t).replace(/\s/g, ""), o = new Set(); for (let i = 0; i < a.length - 1; i++) o.add(a.slice(i, i + 2)); return o; };
+  const A = bi(reason), B = bi(teamArg), inter = [...A].filter(x => B.has(x)).length, sim = A.size ? inter / Math.min(A.size, B.size || 1) : 0;
+  if (sim > 0.7) return { model: shortMd(route?.model || tgt.model), stance: "기권", reason: "팀 의견을 반복(독립 근거 없음)" };
+  return { model: shortMd(route?.model || tgt.model), stance: st, reason };
+}
 export function whaleTrust() { load(); return WC.score(S.whaleLog || [], sym => S.dec[sym]?.price, 30); }
 async function whaleSignal(sym) {
   const c0 = _whC[sym]; if (c0 && Date.now() - c0.t < 90e3) return c0.s;

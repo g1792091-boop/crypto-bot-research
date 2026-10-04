@@ -101,3 +101,11 @@ GPL·LGPL 저장소와 라이선스 표시가 없는 저장소는 특히 규칙�
 | Sharpe MCP | 상용 API | 거래소 간 펀딩 스캔 개념 → 무료 공개 API 로 재구현(`lib/fundscan.js`) |
 | ocean-agent | BUSL-1.1 | 실측 셋업 순위·국면별 학습 승률 개념만. 실주문·자율 거래 엔티티는 넣지 않음 |
 | ClawTrade · AgentNova · HyperLLM-4b | 각각 | 참고만(이미 같은 구조 보유 / GGUF 없음) |
+
+## ⚡ 실시간 진입 (10/5) — 방법론만 (코드 복사 없음)
+
+| 출처 | 적용 |
+|---|---|
+| López de Prado, *Advances in Financial ML* 트리플 배리어 (mlfinlab · finmlkit `TBMLabel`) | 익절선·손절선·시간 만료 중 먼저 닿는 것으로 유사상황 승률·기대값 |
+| pkg-support-resistance (클러스터링) · TradingView "Support & Resistance KDE" | 스윙 피벗 군집 + 터치 강도 지지·저항 |
+| TradingView "Order Book Ultimate" · nssanta/quant-order-book | 호가 벽(평균 대비 배수) + 스냅샷 간 유지 추적 + ±1% 불균형 |

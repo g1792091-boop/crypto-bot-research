@@ -16,6 +16,10 @@ export async function openNeural(ctx = {}) {
   // 🧠 뇌 그래프 호버(Obsidian식: 올린 노드와 이웃만 강조) + .canvas 내보내기(Obsidian에서 열기)
   const bcv = root.querySelector("canvas[data-brain]");
   if (bcv) { bcv.onmousemove = (e) => { const r = bcv.getBoundingClientRect(); bmouse = { x: e.clientX - r.left, y: e.clientY - r.top }; }; bcv.onmouseleave = () => { bmouse = null; }; }
+  // ⚡ 실시간 진입: 지금 분석 (사무실 runLiveEntry 와 같은 엔진·토론)
+  const rtb = root.querySelector("[data-rtgo]");
+  if (rtb) rtb.onclick = async () => { try { if (typeof Notification !== "undefined" && Notification.permission === "default") Notification.requestPermission(); } catch (e) {}
+    rtb.disabled = true; rtb.textContent = "⏳ 분석·토론 중…"; try { const O = await import("./coin-office.js"); await O.runLiveEntry({ debate: true, by: "user" }); } catch (e) { feed("⚡ 실시간 진입 실패: " + (e?.message || e)); } rtb.disabled = false; rtb.textContent = "⚡ 지금 분석"; render(); };
   // ⚙ 한도(siropkin 식 제약): 동시 포지션·하루 진입·쿨다운·제외 코인
   const gbtn = root.querySelector("[data-cfg]");
   if (gbtn) gbtn.onclick = () => { const c = N.cfg();
@@ -157,6 +161,26 @@ function render() {
   root.querySelector("[data-trades]").innerHTML = des + (s.trades.length ? s.trades.map(t =>
     `<div class="trow"><span class="dim">${ago(t.t)}</span><b>${t.ko}</b><span>${t.side > 0 ? "롱" : "숏"}${t.lev ? " " + t.lev + "x" : ""}</span><b class="${t.roe >= 0 ? "up" : "dn"}">${t.roe >= 0 ? "+" : ""}${t.roe}%</b><span class="${t.pnl >= 0 ? "up" : "dn"}">${t.pnl >= 0 ? "+" : "−"}$${Math.abs(t.pnl || 0).toFixed(2)}</span><span class="dim" title="${E(t.name || "")}">${t.R != null ? (t.R >= 0 ? "+" : "") + t.R + "R · " : ""}${E(t.why)}</span></div>`
   ).join("") : (des ? "" : `<div class="dim" style="padding:10px">아직 거래 없음 — 신호가 쌓이면 자동 진입합니다</div>`));
+  // ⚡ 실시간 진입 카드
+  const rtEl = root.querySelector("[data-rt]");
+  if (rtEl) { let R = null; try { R = JSON.parse(localStorage.getItem("coinLiveEntry") || "null"); } catch (e) {}
+    const gc = g => ({ "유력": 3, "보통": 2, "대기": 1 }[g] ?? 0);
+    if (!R?.list?.length) rtEl.innerHTML = `<div class="dim" style="padding:6px">아직 분석 전 — 앱이 켜지면 40초 뒤부터 3분마다 자동 분석합니다. [⚡ 지금 분석]을 누르면 바로 합니다.</div>`;
+    else rtEl.innerHTML = `<div class="dim" style="grid-column:1/-1;font-size:11px">${ago(R.t)} 전 분석${R.by === "user" ? " (직접 요청)" : ""} · <b>유력</b> = 워크포워드 검증을 통과한 매매법 신호가 지금 같은 방향 · <b>보통</b> = 추세 동행(우위 미확인) · 그 외 관망 · 2개월·6코인 표본외 검증: 지표·지지저항·호가 스냅샷 조합만으로는 우위 없음(−0.12R) · 승률은 과거 통계일 뿐 보장 아님 · 15분 유효</div>`
+      + [...R.list].filter(r => r.best).sort((a, b) => gc(b.best.grade) - gc(a.best.grade) || b.best.exp - a.best.exp).map(r => { const b = r.best, g = gc(b.grade), L = b.side > 0, live = Date.now() < b.validUntil;
+        const cur = s.dec?.[r.sym]?.price, gone = cur && b.invalidPx && (L ? cur >= b.invalidPx : cur <= b.invalidPx);
+        const txt = `${r.ko} ${L ? "롱" : "숏"} 시장가 ${fmtp(b.entry)} / 손절 ${fmtp(b.sl)} / 익절1 ${fmtp(b.tp1)} / 익절2 ${fmtp(b.tp2)} / 레버 ≤${b.lev}x`;
+        const d = b.debate;
+        return `<div class="rtc g${g}"><div class="rh"><b>${E(r.ko)}</b><span class="${L ? "up" : "dn"}" style="font-weight:700">${L ? "▲ 롱" : "▼ 숏"}</span><span class="gb g${g}">${E(b.grade)}</span>${!live || gone ? `<span class="gb g0">${gone ? "가격 이탈·무효" : "만료"}</span>` : ""}<span class="dim" style="margin-left:auto;font-size:10px">합류 ${b.score}/100</span><button class="cp" data-copy="${E(txt)}">복사</button></div>`
+          + `<div class="px"><div><small>시장가 진입</small><b>${fmtp(b.entry)}</b></div><div><small>손절 −${b.slPct}%</small><b class="dn">${fmtp(b.sl)}</b></div><div><small>익절1 +${b.tp1Pct}% (${b.rr1}R)</small><b class="up">${fmtp(b.tp1)}</b></div><div><small>익절2 +${b.tp2Pct}% (${b.rr}R)</small><b class="up">${fmtp(b.tp2)}</b></div></div>`
+          + `<div class="kv"><span title="보정값 = 조건 없는 기준값 쪽으로 축소한 값(표본외 검증에서 날것 통계가 과대평가되어 적용)">익절1 도달률 <b>${b.wr}%</b> <small class="dim">(보정 · 과거 통계 ${b.wrRaw ?? b.wr}% · ${b.n}표본)</small></span><span>계획 기대값 <b class="${b.exp >= 0 ? "up" : "dn"}">${b.exp >= 0 ? "+" : ""}${b.exp}R</b></span><span>권장 레버 <b>≤${b.lev}x</b> · 청산 ${fmtp(b.liq)}</span>${r.book ? `<span>호가 ±1% <b>${(r.book.imb1 * 100).toFixed(0)}%</b></span>` : ""}</div>`
+          + `<div class="kv" style="margin-top:4px;color:${b.sig ? "#8fe6b8" : "#9aa4b6"}">📌 ${E(b.evidence || "")}</div>`
+          + (b.limitAlt ? `<div class="kv" style="margin-top:4px;color:#ffcf6a">⏳ ${E(b.limitAlt.note)} (지정가 ${fmtp(b.limitAlt.entry)})</div>` : "")
+          + `<div class="chips">${b.why.slice(0, 6).map(x => `<span>${E(x)}</span>`).join("")}${b.warn.slice(0, 4).map(x => `<span class="w">${E(x)}</span>`).join("")}</div>`
+          + (d ? `<div class="db">⚖ ${E(d.verdict)} · 팀(${E(d.team?.who || "")}) <b class="${d.team?.stance === "찬성" ? "up" : d.team?.stance === "반대" ? "dn" : ""}">${E(d.team?.stance || "—")}</b> ${E(d.team?.reason || "")}${d.team?.applied ? ` <span class="dim">(${E(d.team.applied)})</span>` : ""}<br>뉴럴(${E(d.neural?.model || "—")}) <b class="${d.neural?.stance === "찬성" ? "up" : d.neural?.stance === "반대" ? "dn" : ""}">${E(d.neural?.stance || "—")}</b> ${E(d.neural?.reason || "")}</div>` : "")
+          + `</div>`; }).join("");
+    rtEl.querySelectorAll("[data-copy]").forEach(bt => bt.onclick = () => { try { navigator.clipboard.writeText(bt.dataset.copy); bt.textContent = "복사됨"; } catch (e) {} });
+  }
   // 🔍 스캔 중 — 어떤 모델이 무슨 종목을 어느 국면에서 보고 있나 (오른쪽 위)
   const scEl = root.querySelector("[data-scan]");
   if (scEl) { const sc = s.scan;
@@ -362,6 +386,7 @@ const SHELL = `
   <div class="nd-card nd-pnl"><div class="nd-h">가상 자본 <small>(데모 · $1000 시작 · 나만 초기화)</small></div><div class="nd-big" data-pnl></div><div class="nd-kpi" data-kpi></div></div>
   <div class="nd-card nd-mkt"><div class="nd-h">🔍 스캔 · 포지션</div><div class="nd-scan" data-scan></div><div class="nd-markets" data-markets></div></div>
   <div class="nd-card nd-shell"><div class="nd-h">NEURAL SHELL <small>마켓 피드 → 피처 레이어 → 결정 코어 · 실데이터</small></div><canvas data-shell></canvas></div>
+  <div class="nd-card nd-live"><div class="nd-h">⚡ 실시간 진입 <small>손매매용 · 시장가 기준 · 에이전트 팀 ↔ 뉴럴 데스크 토론 · 주문은 직접</small><button class="nd-mini" data-rtgo title="지금 모든 코인을 다시 분석하고 토론합니다">⚡ 지금 분석</button></div><div class="nd-rt" data-rt></div></div>
   <div class="nd-card nd-trd"><div class="nd-h">AI 모델 트레이더 리더보드 <small>(직접 거래·복기·학습 · PnL 순)</small></div><div class="nd-neurons" data-neurons></div></div>
   <div class="nd-card nd-trades"><div class="nd-h">최근 데모 거래 · 매매법 설계</div><div class="nd-tr" data-trades></div></div>
   <div class="nd-card nd-brain"><div class="nd-h">🧠 뇌 지식 그래프 <small data-braininfo></small><button class="nd-mini" data-canvas title="JSON Canvas로 내보내기 — Obsidian에서 열 수 있어요">.canvas ↓</button></div><canvas data-brain></canvas></div>
@@ -388,7 +413,7 @@ function inject() {
 .nd-feed span{margin-right:28px}.nd-clock{color:#6b7a92;font-size:11px;letter-spacing:1px}
 .nd-btn{background:rgba(22,30,44,.65);border:1px solid var(--line2);color:#aeb8c9;padding:5px 11px;border-radius:7px;cursor:pointer;font:inherit;font-size:11px;transition:background .15s,border-color .15s,color .15s}
 .nd-btn:hover{background:rgba(34,46,66,.9);border-color:#32455f;color:#dbe4f1}.nd-x{color:var(--dn)}.nd-x:hover{background:rgba(255,77,100,.15);border-color:rgba(255,77,100,.4)}
-.nd-grid{flex:1;display:grid;grid-template-columns:1.05fr 1fr;grid-template-rows:minmax(250px,auto) minmax(580px,64vh) 500px 560px;gap:12px;padding:12px;min-height:0;overflow-y:auto;position:relative;z-index:1}
+.nd-grid{flex:1;display:grid;grid-template-columns:1.05fr 1fr;grid-template-rows:minmax(250px,auto) minmax(580px,64vh) minmax(380px,auto) 500px 560px;gap:12px;padding:12px;min-height:0;overflow-y:auto;position:relative;z-index:1}
 .nd-card{position:relative;background:linear-gradient(180deg,rgba(14,20,33,.92),rgba(9,13,22,.92));border:1px solid var(--line);border-radius:12px;padding:12px 14px;min-height:0;overflow:auto;display:flex;flex-direction:column;box-shadow:0 1px 0 rgba(255,255,255,.03) inset,0 14px 36px -24px rgba(0,0,0,.9)}
 .nd-card::before{content:"";position:absolute;left:14px;right:14px;top:0;height:1px;background:linear-gradient(90deg,transparent,rgba(34,211,238,.45),transparent)}
 .nd-h{color:#8291a8;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px;flex:0 0 auto;display:flex;align-items:center;gap:8px;padding-left:10px;position:relative}
@@ -401,8 +426,16 @@ function inject() {
 .nd-pnl .nd-big small{font-size:14px;font-weight:600;margin-left:8px;letter-spacing:0}
 .nd-kpi{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:12px;color:#6f7b90;font-size:11px}.nd-kpi b{color:#dbe2ef;font-weight:700}.nd-kpi>span{display:flex;gap:5px;align-items:baseline}.nd-kpi small{color:#495468}
 .nd-pnl{grid-column:1/2;grid-row:1/2}.nd-mkt{grid-column:2/3;grid-row:1/2}
-.nd-shell{grid-column:1/3;grid-row:2/3;background:#f3f4ef !important;border-color:#d9dcd3 !important}.nd-shell .nd-h{color:#23272e}.nd-shell .nd-h small{color:#7c838f}.nd-trd{grid-column:2/3;grid-row:3/4}
-.nd-trades{grid-column:1/2;grid-row:3/4}.nd-brain{grid-column:1/3;grid-row:4/5}
+.nd-shell{grid-column:1/3;grid-row:2/3;background:#f3f4ef !important;border-color:#d9dcd3 !important}.nd-shell .nd-h{color:#23272e}.nd-shell .nd-h small{color:#7c838f}.nd-live{grid-column:1/3;grid-row:3/4}.nd-trd{grid-column:2/3;grid-row:4/5}
+.nd-trades{grid-column:1/2;grid-row:4/5}.nd-brain{grid-column:1/3;grid-row:5/6}
+.nd-rt{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:10px}
+.rtc{border:1px solid var(--line2);border-radius:10px;padding:10px 12px;background:rgba(12,18,30,.7)}.rtc.g3{border-color:rgba(38,208,124,.55);box-shadow:0 0 0 1px rgba(38,208,124,.25) inset}.rtc.g2{border-color:rgba(124,159,255,.4)}
+.rtc .rh{display:flex;align-items:center;gap:8px;font-size:13px}.rtc .rh b{font-size:14px}.rtc .gb{font-size:10px;padding:1px 7px;border-radius:4px;font-weight:700}.gb.g3{background:#13402a;color:#4ff0a0}.gb.g2{background:#1d2a4d;color:#9db6ff}.gb.g1{background:#3a2f12;color:#ffcf6a}.gb.g0{background:#20262f;color:#8a93a6}
+.rtc .px{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:8px 0}.rtc .px div{background:rgba(20,28,42,.7);border-radius:6px;padding:5px 7px}.rtc .px small{display:block;color:var(--dim);font-size:9px}.rtc .px b{font-size:12px}
+.rtc .kv{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:11px;color:#9aa4b6}.rtc .kv b{color:#dbe2ef}
+.rtc .chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}.rtc .chips span{font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(38,208,124,.12);color:#8fe6b8}.rtc .chips span.w{background:rgba(255,77,100,.12);color:#ff9aa8}
+.rtc .db{margin-top:6px;font-size:11px;color:#aab3c3;border-top:1px dashed var(--line2);padding-top:5px}.rtc .db b.up{color:var(--up)}.rtc .db b.dn{color:var(--dn)}
+.rtc .cp{float:right;font-size:10px;cursor:pointer;color:var(--accent);background:none;border:1px solid var(--line2);border-radius:4px;padding:0 6px}
 .nd-shell canvas,.nd-brain canvas{flex:1;width:100%;height:100%;min-height:0;display:block}
 .nd-scan{font-size:11px;color:var(--accent);margin-bottom:9px;min-height:16px;flex:0 0 auto}.nd-markets{flex:0 0 auto}.scan-roster{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}.scan-roster .sr{font-size:10px;padding:1px 6px;border:1px solid var(--line2);border-radius:4px;background:rgba(20,28,42,.6);white-space:nowrap}.nd-scan b{color:#bdeefb}
 .nd-markets{display:block}

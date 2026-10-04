@@ -184,11 +184,12 @@ bash build.sh        # → dist/GHNano.exe, dist/ArchAI.exe, dist/GHCoin.exe
 - **casatrickdev/robinhood-trading-tools**: `lib/whalecopy.js` 감지→필터(3건↑·순 30%↑·5분 이내)→리스크(적중 45% 미만 무시)→신호. 신호 생성 때 첨부 → 반대면 뉴럴 리스크 ×0.5, 에이전트 팀 coinGate ×0.6. 30분 뒤 채점(`whaleTrust`).
 - **RobinBundler · noxa-bundler-bot**: 제외(시세 조작 도구 + exe 다운로드만 있는 저장소 = 악성코드 위험). 다운로드·실행 안 함.
 
-### 5-8. Robinhood 레포 5개 → 코인 선물 적용 (10/5)
-- **siropkin/robinhood-ai-trading-bot**: `reviewPositions()` 5분마다(보유 있을 때) 모델이 보유 전체를 보고 hold/close/breakeven JSON 배열 → 환각 필터(보유 종목 정확 일치·허용 결정·코드 조건: close 는 +0.5R↑ 또는 −0.3R↓+4H 역행, 본절은 +0.5R↑) → 실행. 한도 `cfg()`: 동시 포지션 4 · 하루 진입 12(PDT 대응) · 청산 후 재진입 쿨다운 30분 · 제외 코인 — 뉴럴 헤더 ⚙ 한도 버튼.
-- **kevin1chun/robinhood-for-agents**: 주문 미리보기 = 가격 칼라(신호가 `px0` 대비 0.35R↑ 추격·0.5R↓ 역행이면 취소). 코인 리서치 카드 `coinResearch()`(일봉 365: 1년 범위·위치·7/30/365일·펀딩) → 승인·스캔 프롬프트·MCP `neutron_coin_research`. OpenClaw 스킬 `openclaw/skills/ghcoin-neutron`(SKILL.md → status/research/experiment.md, ready 확인).
-- **casatrickdev/robinhood-trading-tools**: `lib/whalecopy.js` 감지→필터(3건↑·순 30%↑·5분 이내)→리스크(적중 45% 미만 무시)→신호. 신호 생성 때 첨부 → 반대면 뉴럴 리스크 ×0.5, 에이전트 팀 coinGate ×0.6. 30분 뒤 채점(`whaleTrust`).
-- **RobinBundler · noxa-bundler-bot**: 제외(시세 조작 도구 + exe 다운로드만 있는 저장소 = 악성코드 위험). 다운로드·실행 안 함.
+### 5-9. ⚡ 실시간 진입 (손매매용) — 에이전트 팀 ↔ 뉴럴 데스크 토론 (10/5)
+- 엔진 `gh-coin/liveentry.js`: 지지·저항(1h/4h 스윙 피벗 군집 + 터치 강도 + 거래량 프로파일 POC/VAH/VAL + 스냅샷 간 유지되는 호가 벽) · 다중 시간대 추세(15m/1h/4h EMA·슈퍼트렌드·ADX) · 모멘텀(RSI·MACD·스토·BB·VWAP) · 고래·펀딩·팀 판정. 손절 = 구조 레벨 너머 0.25ATR(0.3~2%), 익절1/2 = 다음 레벨(벽) 바로 앞. 트리플 배리어(López de Prado) 방식으로 '절반 익절 → 본절 → 익절2' 계획을 과거 15m·1h 에 시뮬레이션, 조건 없는 기준값 쪽으로 베이지안 축소.
+- **2개월·6코인 표본외 검증(4,092건)**: 스냅샷 조합(지표·지지저항·호가)만으로는 우위 없음(전체 −0.12R, 앞 60% 에서 찾은 최선 조합도 뒤 40% 에서 ≈0R). → 등급을 다시 정함: **유력 = 워크포워드 검증 통과 매매법 신호(`neural.recentSignal`, 75분 이내, 기대값 > +0.1R)가 같은 방향 + 추세 2/3↑ + 손익비 1.5↑** (그 매매법의 손절·손익비·+1R 본절 계획 그대로) · 보통 = 추세 3/3 + ADX 25↑(우위 미확인) · 그 외 관망. 각 카드에 근거 문장 표시.
+- 토론 `runLiveEntry` (coin-office): 유력·보통 상위 2개를 진입 타점팀 대표(JSON 찬반 + 손절·익절 제안) → 뉴럴 모델 반박(`neural.debateReply`, 팀 문장 반복이면 기권 처리). 제안된 손절·익절은 같은 시뮬레이션으로 재검증해 기대값이 나아질 때만 채택. 둘 다 반대면 한 단계 내림(찬성으로 올리지는 않음).
+- 자동: 앱 시작 40초 뒤부터 3분마다(토론은 같은 자리 10분에 한 번) · 사무실 업무 `rtentry`(말로 "실시간 진입/손매매/지금 진입") · 차트 터미널 선(진입·손절·익절·레벨) · 새 '유력'은 본부 알림 + 브라우저 알림(허용 시) · 뉴럴 데스크 ⚡ 카드(복사 버튼) · MCP `neutron_live_entry`.
+- 버그 수정: 지지·저항팀 `levelsOf` 가 `data.walls`(없는 필드)를 읽어 호가 벽이 한 번도 안 들어가던 문제 → `bidWalls/askWalls`.
 
 ---
 

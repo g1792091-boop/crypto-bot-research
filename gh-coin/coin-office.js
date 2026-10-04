@@ -243,6 +243,7 @@ const ACTIONS = [
   {job: "ensemble", re: /앙상블\s*포트|포트폴리오|분산\s*(투자|운용|배분)|비중\s*(배분|분배|나눠)|여러\s*전략.{0,6}(묶|섞|합)|자본\s*배분/i, say: "데모거래팀이 신뢰점수 상위 전략들을 묶어 분산 포트폴리오(전략별 자본 비중)를 제안합니다"},
   {job: "reality", re: /1\s*억|얼마.{0,4}(벌|버|먹|불)|부자|대박|떡상|목표\s*수익|돈.{0,4}벌어|며칠.{0,6}얼마|현실\s*점검|가능\s*하냐|될\s*수\s*있/i, say: "CEO실이 '정직한 현실 점검'으로 목표 수익의 실제 도달·파산 확률을 몬테카를로로 솔직히 보여줍니다 (희망 회로 금지)"},
   {job: "preset", re: /프리셋|준비된\s*매매법|기본\s*전략|고전\s*전략|rsi.{0,4}macd|RSI.{0,4}MACD|프리\s*셋|전략\s*비교/i, say: "준비된 매매법 프리셋(RSI·MACD·볼린저·스토캐스틱·EMA 등)을 AI 없이 바로 백테스트해 수익률·신뢰점수로 비교합니다 (io-uty 아이디어)"},
+  {job: "rtentry", re: /실시간\s*진입|지금\s*(진입|들어가|롱|숏)|손\s*매매|시장가\s*진입|어디서\s*(들어가|진입)|진입\s*(자리|추천|알려)/i, say: "진입 타점팀과 뉴럴 데스크가 지금 바로 모든 코인의 실시간 진입 자리(손절·익절·유사상황 승률)를 계산하고 토론합니다"},
   {job: "evo", re: /매매법\s*.{0,6}(조합|섞|합쳐|개선|수정|진화|변형)|(조합|섞어|합쳐).{0,6}(매매법|전략)|전략\s*.{0,4}(조합|합치)/i, say: "매매법 개발팀이 지금 바로 매매법 개선(손익비·보유)·수정(필터)·조합(A+B)을 백테스트로 실험합니다 (검증 통과만 채택)"},
   {job: "survival", re: /생존|다윈|진화|해고|도태|번식|자연\s*선택|개발자.{0,4}(성과|평가|kpi|KPI)|KPI/i, say: "생존 경쟁 — 개발자 KPI(성과 못 내면 경고·재교육)와 다윈 전략 진화(잘하는 전략을 변이시켜 부모보다 나은 후손만 데모로 번식)를 돌립니다 (가상자금)"},
   {job: "track", re: /적중률|캘리브레이션|승률|예측.{0,6}(맞|정확|적중)|얼마나\s*맞|확신도\s*(검증|맞)/i, say: "CEO실에서 QA가 지금까지의 예측을 채점해 적중률과 확신도 캘리브레이션을 보고합니다"},
@@ -767,12 +768,12 @@ const JOBS = ["dev", "cdev", "evo", "bot", "opt", "dev", "botopt", "cdev", "surv
 const JOB_KO = {plan: "리서치 플래너(할 일 목록 → 워커 배정)", sent: "시장 심리(자체 감정 엔진)", pos: "단타·스윙 포지션 추천", contest: "전략 콘테스트(데모 성과 리더보드)", ensemble: "앙상블 포트폴리오(신뢰점수로 비중 배분)", reality: "정직한 현실 점검(목표 수익 도달·파산 확률)", preset: "준비된 매매법 프리셋 비교(io-uty RSI·MACD + 지표 146종)", survival: "생존 경쟁(개발자 KPI + 다윈 전략 진화)", track: "예측 적중률·캘리브레이션", report: "성과 대시보드", bot: "자동매매봇 전략 만들기", botopt: "자동매매봇 자동 개선(보조지표·위험값 하이퍼옵트)", selfai: "자체 AI 데스크(앙상블 방향·확신도 순위)", ic: "투자위원회(강세·약세 토론 → 결정)", qrisk: "퀀트 리스크(VaR·결정표·주문 전 점검)", data: "거래소 비교·데이터 품질", opt: "하이퍼옵트로 전략 다듬기", patscan: "패턴 스캐너", drift: "데모 성과 이동 감지(런 차트)", feeds: "경제 캘린더·금리·변동성 지수", alpha: "알파 팩터 순위", combo: "실시간 종합 지표 타점", dev: "매매법 개발 → 백테스트", cdev: "커스텀 지표 개발 → 백테스트", ind: "보조지표 분석", trend: "다중 시간대 추세 분석", entry: "진입 타점 분석", sr: "지지·저항 분석",
   tpsl: "익절·손절 관리", news: "뉴스·기사 분석", macro: "경제지표 예측", situ: "코인 상황판", pattern: "차트·캔들 패턴 분석", coin: "코인팀 회의", ml: "머신러닝·딥러닝 실험",
   promote: "데모 → 실거래 관문 심사", live: "실거래 데스크 점검", paper: "데모거래 보고", forecast: "방향 예측 토론", sns: "SNS 여론 확인", chat: "동료 수다", computer: "컴퓨터 작업",
-  retro: "팀 회고·부족한 점 찾기", task: "개선 과제 수행", selfdev: "우리 앱 오류 찾아 코드 고치기", economy: "경제 리서치", brainsync: "자체 뇌 동기화(팀 결과→뇌 학습→정제 규칙 인계)", evo: "매매법 진화(개선·수정·조합)"};
+  retro: "팀 회고·부족한 점 찾기", task: "개선 과제 수행", selfdev: "우리 앱 오류 찾아 코드 고치기", economy: "경제 리서치", brainsync: "자체 뇌 동기화(팀 결과→뇌 학습→정제 규칙 인계)", evo: "매매법 진화(개선·수정·조합)", rtentry: "⚡ 실시간 진입(손매매용 · 팀↔뉴럴 토론)"};
 const JOB_TEAM = {plan: "hq", sent: "news", pos: "entry", contest: "demo", ensemble: "demo", reality: "hq", preset: "demo", survival: "demo", track: "hq", report: "hq", bot: "bot", botopt: "bot", selfai: "selfai", ic: "ic", qrisk: "qrisk", data: "data", opt: "opt", patscan: "pattern", drift: "demo", feeds: "news", alpha: "ml", combo: "combo", dev: "dev", cdev: "cdev", ind: "ind", trend: "trend", entry: "entry", sr: "sr", tpsl: "tpsl", news: "news", macro: "news", situ: "situ", pattern: "pattern", coin: "btc", ml: "ml",
-  promote: "demo", live: "live", paper: "demo", forecast: "entry", sns: "news", chat: "hq", computer: "hq", retro: "hq", task: "hq", selfdev: "hq", economy: "news", brainsync: "hq", evo: "dev"};
+  promote: "demo", live: "live", paper: "demo", forecast: "entry", sns: "news", chat: "hq", computer: "hq", retro: "hq", task: "hq", selfdev: "hq", economy: "news", brainsync: "hq", evo: "dev", rtentry: "entry"};
 const JOB_FN = () => ({plan: plannerJob, sent: sentimentJob, pos: posJob, contest: contestJob, ensemble: ensembleJob, reality: realityJob, preset: presetJob, survival: survivalJob, track: trackJob, report: dashboardJob, bot: botJob, botopt: botImproveJob, selfai: selfaiJob, ic: icJob, qrisk: qriskJob, data: dataJob, opt: optJob, patscan: patternScanJob, drift: driftJob, feeds: openFeedsJob, alpha: alphaJob, combo: comboJob, dev: () => research("std"), cdev: () => research("custom"), ind: indJob, trend: trendJob, entry: entryJob, sr: srJob, tpsl: tpslJob, news: economyCheck, macro: macroJob,
   situ: situJob, pattern: patternJob, coin: coinJob, ml: mlJob, promote: promoteJob, live: liveDeskJob, paper: paperReport, forecast: forecastJob, sns: snsCheck, chat: () => chatter(true),
-  computer: computerWork, retro, task: doTask, selfdev: selfdevJob, economy: economyCheck, brainsync: brainSyncJob, evo: evoJob});
+  computer: computerWork, retro, task: doTask, selfdev: selfdevJob, economy: economyCheck, brainsync: brainSyncJob, evo: evoJob, rtentry: rtEntryJob});
 let cycleTimer = 0, cycling = false, lastJob = "";
 export const cycleState = () => ({cycling, lastJob});
 export function nextCycleIn(){ const c = officeCfg(), last = +localStorage.getItem("coinLastCycle") || 0; return Math.max(0, last + c.cycleMin * 60e3 - Date.now()); }
@@ -780,7 +781,9 @@ export function startCycle(){
   startReports();
   refreshOllama();   // 내 PC Ollama 설치 모델을 직원 후보로 올림
   import("./neural.js").then(N => N.startAuto?.()).catch(() => {});   // 뉴럴 데스크·자체 뇌도 앱이 켜지면 상시 실행(패널 열 필요 없음)
-  import("./neutron.js").then(M => M.startNeutron?.()).catch(() => {});   // 🧠 뉴트론: 뇌를 MCP·옵시디언 볼트로 내보내고 Claude Code·Claudian 제안을 받음 (exe 에서만)
+  import("./neutron.js").then(M => M.startNeutron?.()).catch(() => {});
+  // ⚡ 실시간 진입: 3분마다 자동 분석(토론은 유력·보통 후보만, 같은 자리 10분에 한 번)
+  if (!startCycle._rt){ startCycle._rt = setInterval(() => runLiveEntry({debate: hasAI()}).catch(() => {}), 3 * 60e3); setTimeout(() => runLiveEntry({debate: hasAI()}).catch(() => {}), 40e3); }   // 🧠 뉴트론: 뇌를 MCP·옵시디언 볼트로 내보내고 Claude Code·Claudian 제안을 받음 (exe 에서만)
   if (cycleTimer) return;
   if (!localStorage.getItem("coinLastCycle")) localStorage.setItem("coinLastCycle", String(Date.now() - officeCfg().cycleMin * 60e3 + 45e3));
   cycleTimer = setInterval(() => cycle().catch(e => console.warn(e)), 20e3);
@@ -1591,7 +1594,7 @@ async function levelsOf(c){
   // 라운드 넘버
   const mag = Math.pow(10, Math.floor(Math.log10(p)) - 1) * 5; lv.push({name: "라운드 넘버", price: Math.round(p / mag) * mag});
   // 호가 벽
-  try { const F = await import("../nuri-ai/flow.js"); const ob = await F.orderBook({symbol: c.sym}); for (const w of (ob.data?.walls || ob.walls || []).slice(0, 3)) if (w.price) lv.push({name: `호가 벽(${w.side === "bid" || w.side === "buy" ? "매수" : "매도"})`, price: +w.price}); } catch(e){}
+  try { const F = await import("../nuri-ai/flow.js"); const ob = await F.orderBook({symbol: c.sym}); for (const w of [...(ob.data?.bidWalls || []).slice(0, 2).map(x => ({...x, side: "bid"})), ...(ob.data?.askWalls || []).slice(0, 2).map(x => ({...x, side: "ask"}))]) if (w.price) lv.push({name: `호가 벽(${w.side === "bid" || w.side === "buy" ? "매수" : "매도"})`, price: +w.price}); } catch(e){}
   return {p, lv: lv.filter(x => Number.isFinite(x.price)).sort((a, b) => b.price - a.price)};
 }
 async function srJob(){
@@ -1623,6 +1626,78 @@ async function entryJob(){
   table("entry", lead.id, `🎯 ${c.ko} 진입 자리 후보 (현재가 ${fx(p)} · ATR ${fx(atr)} · RSI ${fx(rsi, 1)})`, ["시나리오", "진입", "손절", "익절", "손익비", "1% 위험 크기"], rows, (sigs.join(" · ") || "데모 중인 전략 신호 없음") + " · 계산값일 뿐 매매 권유 아님");
   await explain(lead.id, "entry", `${c.ko}의 진입 후보 표(지지·저항·ATR 기반)와 데모 전략 신호를 보고, 지금 바로 들어갈지 기다릴지, 어떤 조건이 맞으면 들어갈지 해설한다.`, tableText(["시나리오", "진입", "손절", "익절", "손익비"], rows) + "\n데모 전략 신호: " + (sigs.join(", ") || "없음"), "아래 진입 자리 계산을 보고 진입 계획을 세워 줘.");
 }
+
+/* ---- ⚡ 실시간 진입 (손매매용): 코드 분석 → 에이전트 팀 ↔ 뉴럴 데스크 토론 → 시장가 진입 후보·손절·익절·승률 ----
+   분석은 liveentry.js (트리플 배리어 승률·지지저항 군집·호가 벽 유지 추적·다중 시간대 추세·모멘텀·고래·펀딩·팀 판정).
+   토론에서 바꾼 손절·익절은 같은 방식으로 다시 시뮬레이션해 기대값이 좋아질 때만 채택. 주문은 하지 않는다(알림·표·차트 선만). */
+let rtBusy = false, rtDebateAt = {};
+export async function runLiveEntry({coins = COINS, debate = true, by = "auto"} = {}){
+  if (rtBusy) return readJ("coinLiveEntry", null); rtBusy = true;
+  try { await loadLog(); } catch(e){}
+  try {
+    const L = await import("./liveentry.js"); let N = null; try { N = await import("./neural.js"); } catch(e){}
+    const lead = agentById("strat") || agentById("qa"), list = [];
+    const V = k => readJ(k, {}) || {};
+    for (const c of coins){
+      try {
+        const ctx = {verdicts: {ta: V("coinTARating")[c.id], selfAI: V("coinSelfAI")[c.id], ml: V("coinML")[c.id]}};
+        try { ctx.whale = N?.whaleFor ? await N.whaleFor(c.sym) : null; } catch(e){}
+        try { ctx.libSignal = N?.recentSignal ? N.recentSignal(c.sym) : null; } catch(e){}
+        try { ctx.funding = await fundScanOf(c.sym); } catch(e){}
+        const r = await L.analyzeCoin(c.sym, ctx); r.ctx = {whale: ctx.whale?.status === "approved" ? ctx.whale : null, funding: ctx.funding ? {key: ctx.funding.key, ko: ctx.funding.ko, avg: ctx.funding.avg} : null};
+        list.push(r);
+      } catch(e){ list.push({sym: c.sym, ko: c.ko, err: String(e.message || e).slice(0, 60)}); }
+    }
+    const ok = list.filter(r => r.best).sort((a, b) => L.gradeRank(b.best.grade) - L.gradeRank(a.best.grade) || b.best.exp - a.best.exp);
+    // 토론: 유력·보통 후보 상위 2개만 (같은 코인·방향은 10분에 한 번)
+    if (debate && hasAI()){
+      for (const r of ok.filter(x => ["유력", "보통"].includes(x.best.grade)).slice(0, 2)){
+        const b = r.best, key = r.sym + b.side; if (Date.now() - (rtDebateAt[key] || 0) < 10 * 60e3 && by === "auto"){ b.debate = readJ("coinLiveEntry", null)?.list?.find(x => x.sym === r.sym)?.best?.debate || null; continue; }
+        rtDebateAt[key] = Date.now();
+        const facts = L.setupText(r, b) + `\n근거: ${b.why.join(" · ")}\n주의: ${b.warn.join(" · ") || "없음"}\n손절 근거 레벨: ${b.slLevel ? L.fmtPx(b.slLevel.price) + " (" + b.slLevel.src.join("+") + ")" : "ATR"} · 익절 근거: ${b.tpLevels.map(l => L.fmtPx(l.price) + "(" + l.src.join("+") + ")").join(", ") || "R배수"}`;
+        let team = null;
+        try {
+          const e = await solo(lead, {room: "entry", sys: personaOf(lead, '실시간 진입 토론의 에이전트 팀 대표다. 코드가 계산한 진입 계획을 검토해 찬성/반대하고, 손절·익절이 지지·저항·호가 벽 기준으로 더 나은 자리가 있으면 숫자로 제안한다(없으면 비움). 반드시 JSON 한 줄: {"stance":"찬성"|"반대","sl":숫자|null,"tp1":숫자|null,"tp2":숫자|null,"reason":"한 문장"}'), user: facts, maxTokens: 260, json: true});
+          const j = pickJSON(e.raw || e.text) || {}; team = {who: lead.name, stance: /반대/.test(j.stance || "") ? "반대" : /찬성/.test(j.stance || "") ? "찬성" : "기권", reason: String(j.reason || e.text || "").replace(/\s+/g, " ").slice(0, 100), adj: {sl: +j.sl || null, tp1: +j.tp1 || null, tp2: +j.tp2 || null}};
+        } catch(e){ team = {who: lead.name, stance: "기권", reason: "응답 실패"}; }
+        // 제안된 손절·익절은 같은 시뮬레이션으로 재검증 → 기대값이 나아질 때만 채택 (방향·범위 틀리면 버림)
+        const a = team.adj || {}, side = b.side, e0 = b.entry, okSl = a.sl && (e0 - a.sl) * side > 0 && Math.abs(e0 - a.sl) / e0 >= 0.003 && Math.abs(e0 - a.sl) / e0 <= 0.02, okTp = t => t && (t - e0) * side > 0;
+        if (okSl || okTp(a.tp1) || okTp(a.tp2)){
+          try { const r2 = await L.analyzeCoin(r.sym, {override: {side, sl: okSl ? a.sl : null, tp1: okTp(a.tp1) ? a.tp1 : null, tp2: okTp(a.tp2) ? a.tp2 : null}}); const b2 = r2.sides.find(x => x.side === side);
+            if (b2 && b2.exp > b.exp + 0.02 && b2.rr1 >= 1){ team.applied = `제안 채택: 기대값 ${b.exp}R → ${b2.exp}R`; Object.assign(b, {sl: b2.sl, tp1: b2.tp1, tp2: b2.tp2, slPct: b2.slPct, tp1Pct: b2.tp1Pct, tp2Pct: b2.tp2Pct, rr: b2.rr, rr1: b2.rr1, wr: b2.wr, exp: b2.exp, n: b2.n, lev: b2.lev, liq: b2.liq}); }
+            else team.applied = `제안 기각: 재검증 기대값 ${b2 ? b2.exp : "?"}R (기존 ${b.exp}R보다 낫지 않음)`; } catch(e){}
+        }
+        const neural = N?.debateReply ? await N.debateReply(L.setupText(r, b), `${team.stance}: ${team.reason}`).catch(() => null) : null;
+        const votes = [team?.stance, neural?.stance].filter(x => x === "찬성" || x === "반대");
+        const pro = votes.filter(x => x === "찬성").length, con = votes.filter(x => x === "반대").length;
+        b.debate = {team, neural, verdict: pro === 2 ? "합의: 찬성" : con === 2 ? "합의: 반대" : votes.length ? "의견 갈림" : "토론 없음", t: Date.now()};
+        if (con === 2) b.grade = b.grade === "유력" ? "보통" : "관망";   // 둘 다 반대하면 한 단계 내림 (찬성은 등급을 올리지 않음 — 등급은 데이터가 정함)
+        post({ch: "entry", kind: "work", agent: lead.id, icon: "⚖", text: `⚡ ${r.ko} ${side > 0 ? "롱" : "숏"} 토론 — 팀(${team.who}) ${team.stance}: ${team.reason}${team.applied ? " · " + team.applied : ""} / 뉴럴(${neural?.model || "—"}) ${neural?.stance || "—"}: ${neural?.reason || ""} → ${b.debate.verdict}`});
+      }
+    }
+    const slim = list.map(r => r.err ? r : ({sym: r.sym, ko: r.ko, t: r.t, price: r.price, trend: r.trend, tr: r.tr, adx1h: r.adx1h, rsi15: r.rsi15, ctx: r.ctx,
+      book: r.book ? {imb1: r.book.imb1, spreadBps: r.book.spreadBps, bidWalls: r.book.bidWalls.slice(0, 3), askWalls: r.book.askWalls.slice(0, 3), snapshots: r.book.snapshots} : null,
+      levels: r.levels.filter(l => Math.abs(l.price / r.price - 1) < 0.06).map(l => ({price: l.price, src: l.src, strength: l.strength})), sides: r.sides, best: r.best}));
+    const prev = readJ("coinLiveEntry", null), out = {t: Date.now(), by, list: slim};
+    writeJ("coinLiveEntry", out);
+    // 표 + 차트 선 + 새 '유력' 알림
+    const rows = ok.map(r => { const b = r.best; return [r.ko, b.grade, b.side > 0 ? "롱" : "숏", fx(b.entry), `${fx(b.sl)} (−${b.slPct}%)`, `${fx(b.tp1)} / ${fx(b.tp2)}`, `${b.rr1}R / ${b.rr}R`, `${b.wr}% (${b.n})`, `${b.exp >= 0 ? "+" : ""}${b.exp}R`, `${b.score}`, `≤${b.lev}x`, b.debate?.verdict || "—"]; });
+    table("entry", lead.id, `⚡ 실시간 진입 (손매매용 · 시장가 기준 · ${new Date().toLocaleTimeString("ko-KR")})`, ["코인", "등급", "방향", "시장가", "손절", "익절1 / 익절2", "손익비", "익절1 도달률(표본)", "계획 기대값", "합류", "권장 레버", "토론"], rows,
+      "등급: 유력 = 워크포워드 검증 매매법 신호가 지금 같은 방향 + 추세 2/3↑ + 손익비 1.5↑ · 보통 = 3개 시간대 추세 일치 + ADX 25↑(2개월 표본외 ≈0R, 우위 미확인) · 그 외 관망 · 스냅샷 지표 조합만으로는 표본외 우위가 없었음 · 15분 유효 · 주문은 직접");
+    for (const r of ok.slice(0, 6)){ const b = r.best; if (b.grade === "관망") continue;
+      pubTo(r.sym, "rtentry", {team: "entry", title: `⚡ 실시간 진입: ${b.side > 0 ? "롱" : "숏"} [${b.grade}]`, text: `익절1 도달률 ${b.wr}% · 기대값 ${b.exp}R · ${b.why.slice(0, 2).join(" · ")}`,
+        lines: [{price: b.entry, label: "시장가 진입", color: "#ffb300"}, {price: b.sl, label: `손절 −${b.slPct}%`, color: "#f23645", style: 2}, {price: b.tp1, label: `익절1 ${b.rr1}R`, color: "#26a69a", style: 2}, {price: b.tp2, label: `익절2 ${b.rr}R`, color: "#26a69a", style: 1},
+          ...r.levels.filter(l => Math.abs(l.price / r.price - 1) < 0.03).slice(0, 8).map(l => ({price: l.price, label: l.src.join("+") + ` (${l.strength})`, color: l.price > r.price ? "#ff9800" : "#2962ff", style: 3}))]}); }
+    const prevKeys = new Set((prev?.list || []).filter(x => x.best?.grade === "유력").map(x => x.sym + x.best.side));
+    for (const r of ok.filter(x => x.best.grade === "유력" && !prevKeys.has(x.sym + x.best.side))){
+      const msg = L.setupText(r, r.best); post({ch: "hq", kind: "system", text: "🔔 " + msg}); addNote("entry", msg.slice(0, 120), "실시간진입");
+      try { if (typeof Notification !== "undefined" && Notification.permission === "granted") new Notification("⚡ GH Coin 실시간 진입", {body: msg.slice(0, 180)}); } catch(e){}
+    }
+    fire({kind: "liveentry"});
+    return out;
+  } finally { rtBusy = false; }
+}
+async function rtEntryJob(){ await runLiveEntry({debate: hasAI(), by: "office"}); }
 
 /* ---- 익절·손절 관리팀: 데모 포지션 점검 ---- */
 async function tpslJob(){
