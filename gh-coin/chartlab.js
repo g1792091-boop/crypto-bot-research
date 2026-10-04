@@ -118,3 +118,47 @@ export async function position(g, sym) {
     state: sig ? (plan?.skip ? `${sig.side > 0 ? "롱" : "숏"} 신호(${ago}봉 전) — 손절이 너무 멀어 시장가 부적합` : `${sig.side > 0 ? "롱" : "숏"} 진입 신호 (${ago ? ago + "봉 전" : "방금 마감 봉"})`) : lean ? `${lean > 0 ? "롱" : "숏"} 쪽 ${Math.abs(vote)}/${m} — 진입 타이밍 지남(추격 금지), 다음 합의 대기` : "중립 — 신호 대기",
     side: sig?.side || 0, sl: plan && !plan.skip ? plan.sl : null, tp: plan && !plan.skip ? plan.tp : null, lev: plan && !plan.skip ? plan.lev : null, slPct: plan?.slPct ?? null, tpPct: plan?.tpPct ?? null, why: sig?.why || "" };
 }
+
+// ── 고정된 값(AI 가 설계한 매매법) 검증: 최적화 없이 학습·처음 보는 구간·다른 코인 5개 ──
+export async function validate(g, sym) {
+  const cs = await load(sym, g.tf), train = await simOn(g, sym, g.tf, cs, "train"), test = await simOn(g, sym, g.tf, cs, "test"), cross = [];
+  for (const s2 of COINS6.filter(x => x !== sym)) { try { const c2 = await load(s2, g.tf); cross.push({ sym: s2, ...(await simOn(g, s2, g.tf, c2, "all")) }); } catch (e) {} }
+  const crossPos = cross.filter(x => x.n >= 5 && x.mean > 0).length, pass = test.n >= 8 && test.mean > 0 && crossPos >= 3;
+  return { train, test, cross, crossPos, pass, verdict: pass ? "검증 통과" : test.mean > 0 ? "처음 보는 구간 플러스·다른 코인 약함" : "처음 보는 구간 마이너스" };
+}
+
+// ── 지금 차트에 없는 보조지표 추천: 후보마다 ① 자기 노이즈(처음 보는 구간) ② 내 지표 합의 매매법에 넣었을 때 처음 보는 구간 성적 변화 ──
+export const CANDIDATES = [
+  ["q:supertrend", {}, "추세 방향·추적 손절"], ["q:adx", {}, "추세 강도(DMI 방향)"], ["q:ichimoku", {}, "구름대 추세"], ["q:psar", {}, "추세 반전 점"], ["q:atr_stop", {}, "UT봇 추적 손절"],
+  ["q:macd", {}, "모멘텀 전환"], ["q:rsi", { length: 14 }, "모멘텀 50선"], ["q:stochrsi", {}, "단기 과열·전환"], ["q:cci", {}, "평균 이탈"], ["q:mfi", {}, "거래량 반영 모멘텀"],
+  ["q:obv", {}, "거래량 누적 흐름"], ["q:cmf", {}, "자금 흐름"], ["q:aroon", {}, "신고가·신저가 추세"], ["q:bb", {}, "볼린저 중심선"], ["q:keltner", {}, "켈트너 중심선"],
+  ["q:donchian", {}, "돈치안 중심선"], ["q:vwap", {}, "당일 평균가"], ["q:hma", { length: 21 }, "빠른 헐 이평"], ["q:ema", { length: 200, source: "close" }, "장기 추세선 EMA200"]];
+export async function recommend({ sym, tf, specs }, onStep = () => {}) {
+  const cs = await load(sym, tf), T = RD.toTerm(cs), atr = await atrOf(cs), cut = Math.floor(cs.length * 0.7), have = new Set(specs.map(s => s.key + JSON.stringify(s.params?.length ?? "")));
+  const N = specs.length, fixed = n => ({ k: Math.max(2, Math.ceil(n * 0.6)), rr: 2, atrK: 1.5, exitFlip: true });
+  const baseG = { id: "rb", tf, specs, ...fixed(N) }, base = N >= 2 ? await simOn(baseG, sym, tf, cs, "test") : { n: 0, mean: 0 };
+  const out = [];
+  for (const [key, params, why] of CANDIDATES) {
+    if (!DEFS[key] || have.has(key + JSON.stringify(params.length ?? DEFS[key].params?.length ?? ""))) continue;
+    onStep(`💡 ${labelOf({ key })} 넣어 보기`);
+    const T1 = await tune([{ key, params: { ...DEFS[key].params, ...params } }], cs); const spec = T1.tuned[0]; if (!spec) continue;
+    const it = RD.readings(T, [spec]).items[0]; if (!it) continue;
+    const own = noiseStats(it.series, cs, atr, cut, cs.length);
+    const g = { id: "rc", tf, specs: [...specs, spec], ...fixed(N + 1) }, withIt = await simOn(g, sym, tf, cs, "test");
+    out.push({ key, name: labelOf(spec), params: spec.params, why, own, delta: +(withIt.mean - base.mean).toFixed(3), test: withIt, base, tuned: T1.rows[0]?.changed || "" });
+  }
+  // 추천 = 처음 보는 구간에서 매매법 성적을 올리고(+0.03R↑, 거래 8번↑) 자기 노이즈도 괜찮은 지표
+  const good = out.filter(x => x.delta >= 0.03 && x.test.n >= 8 && x.own.whip <= 50).sort((a, b) => b.delta - a.delta || J(b.own) - J(a.own)).slice(0, 5);
+  // 한 코인 우연 방지: 다른 코인 2개에서도 넣었을 때 처음 보는 구간 성적이 오르는지 확인
+  const others = COINS6.filter(x => x !== sym).slice(0, 2), oc = {};
+  for (const s2 of others) { try { const c2 = await load(s2, tf); oc[s2] = { cs: c2, base: N >= 2 ? await simOn(baseG, s2, tf, c2, "test") : { mean: 0 } }; } catch (e) {} }
+  for (const x of good) { onStep(`🌐 ${x.name} 다른 코인 확인`); const ds = [];
+    for (const [s2, o] of Object.entries(oc)) { const w = await simOn({ id: "rc2", tf, specs: [...specs, { key: x.key, params: x.params }], ...fixed(N + 1) }, s2, tf, o.cs, "test"); ds.push(+(w.mean - o.base.mean).toFixed(3)); }
+    x.crossDelta = ds; x.crossOk = ds.length ? ds.filter(d => d > 0).length >= Math.ceil(ds.length / 2) : false; }
+  return { base, list: out.sort((a, b) => b.delta - a.delta), top: good.filter(x => x.crossOk).slice(0, 3), weak: good.filter(x => !x.crossOk).slice(0, 3) };
+}
+// 지금 상태(봉별 방향) 요약 — 뉴럴 스캔·UI 용
+export async function readNow(sym, tfs = ["5", "15", "60"], specs = RD.userInds()) {
+  const out = {}; for (const tf of tfs) { try { const cs = await load(sym, tf, 500), R = RD.readings(RD.toTerm(cs), specs); out[tf] = R.items.map(x => ({ name: x.name, dir: x.series[cs.length - 2] })); } catch (e) {} }
+  return out;
+}

@@ -213,6 +213,7 @@ let Q = null; const quant = async () => (Q ||= await import("../nuri-ai/quant.js
 function variants() {
   const out = [];
   for (const r of ENG.LIB) { out.push({ ...r, vkey: `${r.key}@${r.tf}` }); if (r.tf === "5" || r.tf === "15") out.push({ ...r, tf: "60", hold: 48, vkey: `${r.key}@60` }); }
+  out.push({ key: "aichart", vkey: "aichart@15", tf: "15", name: "🤖 AI 내 지표 실험", cat: "단타", mode: "trend", rr: 2, hold: 32, regimes: null, sig: () => null, exp: true });
   for (const g of S.eng.chart || []) { const r = CL.chartRule(g); out.push({ ...r, prep: r.prep, sig: r.sig, exit: r.exit, vkey: `${r.key}@${r.tf}` }); }   // 📈 내 차트 지표 매매법(연구소에서 데모 투입)
   for (const e of S.eng.evo || []) { const r = ENG.buildEvo(e.gene); if (r) out.push({ ...r, vkey: `${r.key}@60`, tf: "60" }); }   // 🧬 진화 변형(개선·수정·조합)
   if (Q) for (const c of S.eng.custom || []) { const rr = ENG.specRule(Q, c); out.push({ ...rr, prep: rr.prep, sig: rr.sig, exit: rr.exit, vkey: `${c.key}@${c.tf}` }); }
@@ -289,7 +290,7 @@ function openFrom(it, trader, riskOverride, note) {
   if (it.whale?.status === "approved" && it.whale.dir) { if (it.whale.dir === -it.side) { tc.mul *= 0.5; tc.why = (tc.why ? tc.why + " · " : "") + `고래 반대(순 ${it.whale.netPct}%)`; } else tc.why = (tc.why ? tc.why + " · " : "") + `고래 동행(순 ${it.whale.netPct}%)`; }
   if ((it.side > 0 && price <= it.sl) || (it.side < 0 && price >= it.sl)) { feed(`${it.ko} ${it.name} 신호 무효 — 가격이 이미 손절선 너머`); return false; }
   const v = VMAP()[it.vkey]; if (!v) return false;
-  const r = Math.max(0.0025, (riskOverride ?? riskFor(v, it.side)) * tc.mul); if (tc.why) note = (note ? note + " · " : "") + "팀: " + tc.why;
+  const r = it.exp ? 0.0025 : Math.max(0.0025, (riskOverride ?? riskFor(v, it.side)) * tc.mul); if (tc.why) note = (note ? note + " · " : "") + "팀: " + tc.why;
   const plan = ENG.frameworkPlan({ sym: it.sym, entry: price, side: it.side, slPrice: it.sl, cat: v.cat, rr: rrFor(v), riskPct: r, equity: equity() });
   if (!plan || plan.skip) { feed(`${it.ko} ${it.name} 보류 — ${plan?.skip || "계획 실패"}`); return false; }
   if (heat() + plan.risk > FW.maxHeat * equity()) { feed(`${it.ko} 보류 — 동시 보유 리스크 한도(자본 ${FW.maxHeat * 100}%)`); return false; }
@@ -453,6 +454,58 @@ export async function calibrate() {
   calibrating = false; save();
 }
 
+// ══ 📈 내 차트 지표 데스크: 사용자가 터미널에 띄운 보조지표로 ① 값 튜닝 ② 보조지표 추천 ③ AI 모델이 매매법 설계 → 검증 → 데모 ④ AI 실험 진입 ══
+//   차트에 적용하는 건 사용자가 직접 한다(여기서는 값과 근거만 제안). 주문은 없다(데모).
+function termCell() { try { const st = JSON.parse(localStorage.getItem("nuri:term:state") || "null"); const c = (st?.cells || [])[0] || null; let sym = String(c?.symbol || "BTCUSDT").toUpperCase(); const m = sym.match(/^KRW-(\w+)$/); if (m) sym = m[1] + "USDT"; if (!/USDT$/.test(sym)) sym += "USDT"; return { sym, interval: c?.interval || "15m", n: (st?.inds || []).length }; } catch (e) { return { sym: "BTCUSDT", interval: "15m", n: 0 }; } }
+function aiChartExperiment({ name, ko, sym, bias, conf, note, price, myRead, rg }) {
+  const now = Date.now(), X = (S.aiExp ||= { day: "", n: 0, pausedUntil: 0 });
+  if (X.day !== today()) { X.day = today(); X.n = 0; }
+  const st = vstat("aichart@15"); if (st.live >= 10 && st.mean < 0 && !X.pausedUntil) { X.pausedUntil = now + 24 * 3600e3; feed(`🤖 AI 내 지표 실험 24시간 중지 — 실전 ${st.live}건 평균 ${st.mean}R`); }
+  if (X.pausedUntil > now || !bias || conf < 75 || !myRead?.["15"]?.length || X.n >= 4 || S.pos[sym] || S.queue.some(q => q.sym === sym)) return;
+  const xs = myRead["15"], agree = xs.filter(x => x.dir === bias).length / xs.length; if (agree < 0.6) return;
+  if ((rg?.htf || 0) === -bias) return;
+  const m15 = MK[sym + "|15"], atr = m15?.I?.atr?.[m15.I.n - 2]; if (!atr) return;
+  X.n++;
+  S.queue.push({ sym, ko, vkey: "aichart@15", name: `🤖 AI 내 지표 실험(${shortMd(name)})`, side: bias, sl: price - bias * atr * 1.5, why: `${shortMd(name)} 확신 ${conf}% · 내 지표 15분 ${Math.round(agree * 100)}% ${bias > 0 ? "롱" : "숏"} · ${note}`, regime: rg?.label || "", regKey: rg?.key, htf: rg?.htf || 0, st, t: now, px0: price, exp: true });
+  feed(`🤖 [${shortMd(name)}] ${ko} 내 지표로 ${bias > 0 ? "롱" : "숏"} 실험 진입 대기 (확신 ${conf}% · 지표 동조 ${Math.round(agree * 100)}% · 리스크 0.25%)`);
+}
+let cdBusy = false;
+export async function chartDesk(force = false) {
+  load(); const c = termCell(), D = S.chartDesk || {};
+  if (cdBusy || !c.n || (!force && D.t && Date.now() - D.t < 30 * 60e3 && D.sym === c.sym && D.interval === c.interval)) return D; cdBusy = true;
+  try {
+    const RDm = await import("../nuri-ai/terminal/readings.js"), specs = RDm.userInds(), tf = CL.engTf(c.interval); if (specs.length < 1) return D;
+    const cs = (await candlesFor({ market: c.sym, exchange: "binancef", timeframe: tf }, 1500)).cs;
+    const T = await CL.tune(specs, cs), R = await CL.recommend({ sym: c.sym, tf, specs: T.tuned }).catch(() => null), now = await CL.readNow(c.sym, ["5", "15", "60"], specs).catch(() => ({}));
+    S.chartDesk = { ...D, t: Date.now(), sym: c.sym, interval: c.interval, tf, rows: T.rows, tuned: T.tuned, recs: R ? { base: R.base, top: R.top.map(x => ({ name: x.name, key: x.key, params: x.params, why: x.why, delta: x.delta, crossDelta: x.crossDelta, own: x.own, test: x.test })), weak: (R.weak || []).map(x => ({ name: x.name, delta: x.delta, crossDelta: x.crossDelta })) } : null, now };
+    feed(`📈 내 차트 지표 점검(${c.sym.replace("USDT", "")} ${c.interval}): 값 바꿀 만한 지표 ${T.rows.filter(x => x.changed).length}개 · 추천 보조지표 ${R?.top?.length || 0}개 — 차트 적용은 직접`);
+    save();
+    await aiDesignChart(specs, T, R, c, tf, now).catch(e => feed(`📈 AI 내 지표 매매법 설계 실패: ${String(e?.message || e).slice(0, 50)}`));
+    return S.chartDesk;
+  } finally { cdBusy = false; }
+}
+let cdRot = 0;
+async function aiDesignChart(specs, T, R, c, tf, now) {
+  const cm = connectedModels(); if (!cm.length) return;
+  const tgt = cm[cdRot++ % cm.length], items = T.tuned.map((s, i) => `${i}: ${String(s.key).replace(/^[qxc]:/, "")} ${JSON.stringify(s.params)}`);
+  const recs = (R?.top || []).map((x, i) => `r${i}: ${x.name} ${JSON.stringify(x.params)} (넣으면 처음 보는 구간 ${x.delta >= 0 ? "+" : ""}${x.delta}R)`);
+  let raw = "";
+  await brainStream({ messages: [
+    { role: "system", content: '너는 코인 선물 매매법 설계자다. 사용자가 차트에 띄운 보조지표(번호)와 추천 지표(r번호)로 \'N개 중 K개가 막 같은 방향이 되면 진입\' 매매법을 설계한다. 지표는 2~6개, K 는 2~N. 반드시 JSON 한 줄: {"use":[0,1],"add":["r0"],"k":2,"rr":2,"atrK":1.5,"exitFlip":true,"reason":"한 문장"}' },
+    { role: "user", content: `코인 ${c.sym} · ${tf === "60" ? "1시간" : tf + "분"}봉\n내 지표(튜닝 반영):\n${items.join("\n")}\n추천 지표:\n${recs.join("\n") || "없음"}\n지금 방향: ${Object.entries(now || {}).map(([k, xs]) => k + ": " + xs.map(x => x.name + (x.dir > 0 ? "↑" : x.dir < 0 ? "↓" : "·")).join(" ")).join(" / ")}\nJSON만:` }],
+    role: "fast", target: tgt, fallback: true, json: true, maxTokens: 220, temperature: 0.5, noThink: true, onContent: d => raw += d, onThink: () => {} });
+  let j = {}; try { j = JSON.parse((raw.match(/\{[\s\S]*\}/) || ["{}"])[0]); } catch (e) {}
+  const use = [...new Set((Array.isArray(j.use) ? j.use : []).map(Number).filter(i => i >= 0 && i < T.tuned.length))];
+  const add = (Array.isArray(j.add) ? j.add : []).map(x => +String(x).replace(/\D/g, "")).filter(i => R?.top?.[i]).map(i => ({ key: R.top[i].key, params: R.top[i].params }));
+  const gs = [...use.map(i => T.tuned[i]), ...add].slice(0, 6); if (gs.length < 2) { feed(`📈 [${shortMd(tgt.model)}] 매매법 설계 형식 오류 → 건너뜀`); return; }
+  const g = { id: "ai" + Date.now().toString(36), tf, specs: gs, k: Math.max(2, Math.min(gs.length, Math.round(+j.k || 2))), rr: Math.max(1.5, Math.min(3, +j.rr || 2)), atrK: Math.max(1, Math.min(2.5, +j.atrK || 1.5)), exitFlip: j.exitFlip !== false, from: c.sym, label: `AI ${shortMd(tgt.model)}` };
+  const V = await CL.validate(g, c.sym), att = { t: Date.now(), model: shortMd(tgt.model), reason: String(j.reason || "").slice(0, 80), k: g.k, n: gs.length, rr: g.rr, test: V.test, crossPos: V.crossPos, pass: V.pass, verdict: V.verdict, names: gs.map(s => String(s.key).replace(/^q:|^x:/, "")) };
+  (S.chartDesk.attempts ||= []).unshift(att); S.chartDesk.attempts = S.chartDesk.attempts.slice(0, 10);
+  if (V.pass) { addChartStrategy(g, { by: att.model, test: V.test, crossPos: V.crossPos, pass: true }); BRAIN.learn({ type: "매매법", coin: c.sym.replace("USDT", ""), text: `AI(${att.model}) 내 지표 매매법 ${att.names.join("+")} ${g.k}/${gs.length} 처음 보는 구간 ${V.test.mean}R · 다른 코인 ${V.crossPos}/5`, model: "내지표설계", w: 1.5 }); }
+  feed(`📈 [${att.model}] 내 지표 매매법 설계: ${att.names.join("+")} ${g.k}/${gs.length} · 손익비 ${g.rr} → 처음 보는 구간 ${V.test.mean}R(${V.test.n}) · 다른 코인 ${V.crossPos}/5 → ${V.pass ? "✅ 데모 투입" : "❌ " + V.verdict}`);
+  save();
+}
+
 // ══ 🐋 고래 카피 신호 (casatrickdev copyTrading: 감지 → 필터 → 리스크 → 신호 · 실행 없음) + 적중률 학습(WalletIntelligence 대응) ══
 import * as WC from "./lib/whalecopy.js";
 const _whC = {};
@@ -484,6 +537,7 @@ JSON만:` }],
 }
 // 🔬 내 지표 연구소 → 뉴럴 데모 거래 투입 (다른 매매법과 똑같이 자체 백테스트 + 워크포워드 선별을 거쳐야 실제 진입)
 export function addChartStrategy(gene, meta = {}) { load(); (S.eng.chart ||= []); S.eng.chart = S.eng.chart.filter(x => x.id !== gene.id).slice(-7); S.eng.chart.push({ ...gene, meta, added: Date.now() }); S.eng.calibAt = 0; save(); feed(`📈 내 지표 매매법 데모 투입: ${CL.chartRule(gene).name} (${gene.from || ""} ${gene.tf}봉) — 다음 자체 백테스트에서 6개 코인 검증 후 통과하면 실전(데모) 진입`); return true; }
+export function chartGenes() { load(); return (S.eng.chart || []).map(g => ({ ...g, active: isActive({ ...CL.chartRule(g), vkey: `${CL.chartRule(g).key}@${g.tf}` }) })); }
 export function removeChartStrategy(id) { load(); S.eng.chart = (S.eng.chart || []).filter(x => x.id !== id); save(); }
 export function chartStrategies() { load(); return (S.eng.chart || []).map(g => { const r = CL.chartRule(g), vk = `${r.key}@${r.tf}`; return { id: g.id, name: r.name, tf: g.tf, from: g.from, k: g.k, n: g.specs.length, rr: g.rr, meta: g.meta, added: g.added, stat: vstat(vk), active: isActive({ ...r, vkey: vk }) }; }); }
 export function whaleTrust() { load(); return WC.score(S.whaleLog || [], sym => S.dec[sym]?.price, 30); }
@@ -552,6 +606,8 @@ async function scanStep(cm) {
   const tgt = cm[sRot++ % cm.length], [ko, sym] = COINS[cRot++ % COINS.length], price = S.dec[sym]?.price; if (!price) return;
   const rg = S.regime[sym] || {}, br = S.brief?.[sym]?.text || "";
   try { await coinResearch(sym); } catch (e) {} try { await whaleSignal(sym); } catch (e) {}
+  let myRead = null; try { myRead = await CL.readNow(sym, ["5", "15", "60"]); } catch (e) {}
+  const myTxt = myRead && Object.keys(myRead).length ? Object.entries(myRead).map(([tf, xs]) => `${tf === "60" ? "1시간" : tf + "분"}: ${xs.map(x => x.name + (x.dir > 0 ? "↑" : x.dir < 0 ? "↓" : "·")).join(" ")}`).join(" / ") : "";
   S.scan = { model: shortMd(tgt.model), ko, sym, regime: `${rg.label || "판단중"} · 시장 읽기`, t: Date.now() };
   let raw = "", route;
   try {
@@ -559,7 +615,7 @@ async function scanStep(cm) {
       { role: "system", content: '너는 코인 선물 시장 분석가다. 주어진 자료만 보고 앞으로 1시간 방향을 판단한다. 반드시 JSON 한 줄: {"bias":1|0|-1,"conf":0~100,"note":"한국어 한 문장"}' },
       { role: "user", content: `${ko} 현재가 ${price} · 1시간봉 국면: ${rg.label || "?"} (ADX ${rg.adx ?? "?"}) · 4시간 추세: ${rg.htf > 0 ? "상승" : rg.htf < 0 ? "하락" : "중립"}
 시장 요약: ${br}
-피처: ${Object.entries(S.feat[sym] || {}).map(([k, v]) => k + " " + (+v).toFixed(2)).join(", ")}\n리서치: ${researchText(sym)}\n${_whC[sym] ? WC.explain(_whC[sym].s) : ""}
+피처: ${Object.entries(S.feat[sym] || {}).map(([k, v]) => k + " " + (+v).toFixed(2)).join(", ")}\n리서치: ${researchText(sym)}\n${_whC[sym] ? WC.explain(_whC[sym].s) : ""}${myTxt ? "\n사용자 차트 터미널 보조지표 현재 방향: " + myTxt : ""}
 JSON만:` }],
       role: "fast", target: tgt, fallback: false, json: true, maxTokens: 120, temperature: 0.2, noThink: true, onContent: d => raw += d, onThink: () => {} });
   } catch (e) { (S.scans ||= {})[tgt.model] = { ko, sym, err: String(e?.message || e).slice(0, 40), t: Date.now() }; return; }
@@ -570,6 +626,8 @@ JSON만:` }],
   (S.scanLog ||= []).push({ m: name, sym, bias, conf, price, t: Date.now() }); if (S.scanLog.length > 300) S.scanLog.splice(0, S.scanLog.length - 300);
   feed(`🔍 [${shortMd(name)}] ${ko} 시장 읽기: ${bias > 0 ? "▲상승" : bias < 0 ? "▼하락" : "· 중립"} ${conf}% — ${note || "근거 없음"}`);
   if (conf >= 70 && note) BRAIN.learn({ type: "관찰", coin: ko, regime: rg.key || "", text: note, model: "스캔:" + shortMd(name), w: 0.8 });
+  // 🤖 AI 내 지표 실험 진입: 확신 75%↑ + 내 차트 지표(15분) 60%↑ 같은 방향 + 4시간 추세 역행 아님 → 리스크 0.25% 데모 진입 (실전 성적이 나쁘면 자동 중지)
+  try { aiChartExperiment({ name, ko, sym, bias, conf, note, price, myRead, rg }); } catch (e) {}
   save();
 }
 function scoreScans() {   // 1시간 지난 스캔 의견을 실제 가격으로 채점
@@ -813,6 +871,7 @@ export async function tick() {
     if (autoK % 50 === 8) newsCheck().catch(() => {});
     if (autoK % 80 === 40) designStrategy().catch(() => {});
     if (autoK % 100 === 60) reflect().catch(() => {});
+    if (autoK % 150 === 20) chartDesk().catch(() => {});
   } finally { ticking = false; }
   return state();
 }
@@ -841,6 +900,7 @@ export function state() {
     fills: S.fills, winRate: wr, epoch: S.epoch, since: S.t0, nModels: connectedModels().length,
     neurons, traders, designs: (S.designs || []).slice(0, 10), nDesigns: (S.designs || []).length, handed: (S.designs || []).filter(d => d.handed).length,
     brain: BRAIN.brainState(), scan: S.scan || null, regime: S.regime, news: S.news, review: S.review, calib: S.eng.calib, calibrating,
+    chartDesk: S.chartDesk || null, aiExp: { ...(S.aiExp || {}), stat: vstat("aichart@15") }, chartStrats: chartStrategies(),
     cfg: cfg(), dayN: S.day?.n || 0, whale: { trust: whaleTrust(), last: Object.values(_whC).map(x => x.s).filter(x => x.status === "approved").slice(-6) }, review2: S.review2 || null, research: S.research || {},
     engine, nActive: engine.filter(x => x.active).length, setups: setups(engine), winrates: learnedWinrates(V), evo: { n: (S.eng.evo || []).length, seeds: (S.eng.evoSeeds || []).length, log: (S.eng.evoLog || []).slice(0, 3) }, queue: S.queue.length, heat: +(heat() / Math.max(1, eq) * 100).toFixed(2), dayPnl: +(S.day?.pnl || 0).toFixed(2),
     fw: { minLev: FW.minLev, risk: FW.baseRisk * 100, maxRisk: FW.maxRisk * 100, daily: FW.dailyStop * 100, heat: FW.maxHeat * 100, fee: FW.fee * 100 },

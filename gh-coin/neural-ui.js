@@ -26,6 +26,11 @@ export async function openNeural(ctx = {}) {
     rc.onclick = async (ev) => { const b = ev.target.closest("[data-mkt]"); if (!b || b.disabled) return; const t0 = b.textContent; b.disabled = true;
       try { const O = await import("./coin-office.js"); await O.marketEntryNow({ sym: b.dataset.mkt, by: "user", onStep: (t) => { b.textContent = "⏳ " + t.replace(/^\S+\s*/, "").slice(0, 10); } }); } catch (e) { feed("⚡ 시장가 실패: " + (e?.message || e)); }
       b.disabled = false; b.textContent = t0; ST = N.state(); render(); }; }
+  // 📈 내 차트 지표 데스크 버튼(지금 점검·복사) — 렌더가 3초마다 바뀌므로 위임
+  root.querySelector("[data-neurons]")?.addEventListener("click", async (ev) => {
+    const cp = ev.target.closest("[data-cdcopy]"); if (cp) { try { await navigator.clipboard.writeText(cp.dataset.cdcopy); cp.textContent = "복사됨"; } catch (e) {} return; }
+    const go = ev.target.closest("[data-cdgo]"); if (go) { go.disabled = true; go.textContent = "점검 중…"; try { await N.chartDesk(true); } catch (e) { feed("📈 점검 실패: " + (e?.message || e)); } ST = N.state(); render(); }
+  });
   // ⚙ 한도(siropkin 식 제약): 동시 포지션·하루 진입·쿨다운·제외 코인
   const gbtn = root.querySelector("[data-cfg]");
   if (gbtn) gbtn.onclick = () => { const c = N.cfg();
@@ -92,6 +97,20 @@ function engineTable(s) {
 }
 // 🧠 뉴트론(MCP·옵시디언) 연결 상태 + 검증된 셋업 순위(ocean-agent 개념)
 let NT = null; import("./neutron.js").then(m => NT = m).catch(() => {});
+// 📈 내 차트 지표 데스크: 값 튜닝 추천 · 보조지표 추천 · AI 설계 시도 · AI 실험 진입 (차트 적용은 사용자가 직접)
+function chartDeskLine(s) {
+  const D = s.chartDesk, X = s.aiExp || {}, st = X.stat || {};
+  let h = `<div class="nsub">📈 내 차트 지표 데스크 <span class="dim">${D ? `${E(D.sym.replace("USDT", ""))} ${E(D.interval)} · ${ago(D.t)} 전 점검` : "차트 터미널에 지표를 띄우면 15분 안에 점검"}</span><button class="nd-mini" data-cdgo style="margin-left:6px">지금 점검</button></div>`;
+  if (D) {
+    const ch = (D.rows || []).filter(r => r.changed);
+    h += `<div class="brow"><span class="bt warn">값</span><span class="btx" title="처음 보는 뒤 30% 에서도 나아진 것만 · 차트 적용은 직접 하세요">${ch.length ? ch.map(r => `${E(r.name)}: <b>${E(r.changed)}</b> <small class="dim">(가짜 신호 ${r.before.whip}→${r.after.whip}% · 적중 ${r.before.hit}→${r.after.hit}%)</small>`).join(" · ") : "지금 값이 가장 좋음(바꿀 것 없음)"}</span>${ch.length ? `<button class="nd-mini" data-cdcopy="${E(ch.map(r => r.name + ": " + r.changed).join(" / "))}">복사</button>` : ""}</div>`;
+    const top = D.recs?.top || [];
+    h += `<div class="brow"><span class="bt pur">추천</span><span class="btx" title="넣었을 때 내 지표 합의 매매법의 처음 보는 구간 성적 변화 + 다른 코인 2개 확인">${top.length ? top.map(x => `<b>${E(x.name)}</b> ${E(Object.entries(x.params || {}).filter(([k]) => k !== "source").map(([k, v]) => k + " " + v).join(", "))} <small class="dim">(+${x.delta}R · 다른 코인 ${(x.crossDelta || []).map(d => (d >= 0 ? "+" : "") + d).join("/")})</small>`).join(" · ") : "넣어서 확실히 좋아지는 지표 없음"}</span>${top.length ? `<button class="nd-mini" data-cdcopy="${E(top.map(x => x.name + " " + JSON.stringify(x.params)).join(" / "))}">복사</button>` : ""}</div>`;
+    for (const a of (D.attempts || []).slice(0, 3)) h += `<div class="brow"><span class="bt ${a.pass ? "up" : "dim"}">AI설계</span><span class="btx" title="${E(a.reason)}">${E(a.model)}: ${E(a.names.join("+"))} ${a.k}/${a.n} · 손익비 ${a.rr} → 처음 보는 구간 ${a.test.mean >= 0 ? "+" : ""}${a.test.mean}R(${a.test.n}) · 다른 코인 ${a.crossPos}/5 ${a.pass ? "✅ 데모 투입" : "❌"}</span><small>${ago(a.t)}</small></div>`;
+  }
+  h += `<div class="brow"><span class="bt dim">AI실험</span><span class="btx" title="스캔한 모델이 확신 75%↑ + 내 지표 60%↑ 동조일 때 리스크 0.25% 데모 진입 · 실전 10건 평균이 마이너스면 24시간 중지">${X.pausedUntil > Date.now() ? "⏸ 중지 중 · " : ""}오늘 ${X.n || 0}/4회 · 실전 ${st.live || 0}건 ${st.live ? `평균 ${st.mean >= 0 ? "+" : ""}${st.mean}R · 승률 ${st.wr}%` : ""}</span></div>`;
+  return h;
+}
 function robinLine(s) {
   const w = s.whale, tr = w?.trust, c = s.cfg || {}, rv = s.review2;
   return `<div class="nsub">🐋 고래 카피 · 🗂 포지션 관리 · ⚙ 한도</div>`
@@ -141,7 +160,7 @@ function render() {
       return `<div class="nrow trd"><span class="rk">${i + 1}</span><span class="nk" title="${E(tr.full || tr.name)}">${tr.prov === "self" ? "⚙️ " : tr.prov === "ollama" ? "🖥 " : "☁ "}${E(tr.name)}${tr.last && tr.last.bias != null ? ` <small class="${tr.last.bias > 0 ? "up" : tr.last.bias < 0 ? "dn" : "dim"}" title="${E(tr.last.note || "")}">🔍${E(tr.last.ko)} ${tr.last.bias > 0 ? "▲" : tr.last.bias < 0 ? "▼" : "·"}${tr.last.conf}%</small>` : tr.idle ? ' <small class="dim">스캔 순번 대기</small>' : ""}${tr.scanAcc != null ? ` <small class="dim">읽기적중 ${tr.scanAcc}%</small>` : ""}</span><b class="${u ? "up" : "dn"}">${money(tr.pnl)}</b><small>${tr.hit == null ? "–" : "승" + tr.hit + "%"}${tr.approved != null ? ` ·승인${tr.approved}/거절${tr.rejected}` : ""}${(typeof tr.pos === "number" ? tr.pos : tr.pos?.length) ? ` ·보유${typeof tr.pos === "number" ? tr.pos : tr.pos.length}` : ""}</small></div>`;
     }).join("") +
     (s.nModels === 0 ? `<div class="nsub dim">연결된 AI 모델이 없습니다 — 자체 엔진이 검증된 신호만 집행합니다</div>` : "") +
-    engineTable(s) + evoLine(s) + robinLine(s) + neutronLine(s) +
+    engineTable(s) + evoLine(s) + chartDeskLine(s) + robinLine(s) + neutronLine(s) +
     (s.brain ? `<div class="nsub">🧠 자체 뇌 · 지능 <b style="color:#b79cff">${s.brain.iq?.score ?? 0}/100</b> <span class="dim">정확도 ${s.brain.iq?.acc ?? 0}% · ${s.brain.iq?.n ?? 0}판 학습 · 손절회피 ${s.brain.traps ?? 0}</span></div>` +
       `<div class="nsub">누적 기억 ${s.brain.n}개 <span class="dim">${Object.entries(s.brain.byType || {}).map(([t, c]) => t + " " + c).join(" · ") || "비어있음"}</span></div>` +
       (s.brain.top.length ? s.brain.top.slice(0, 7).map(m => `<div class="brow"><span class="bt ${m.type === "패턴" ? "up" : m.type === "교훈" ? "warn" : m.type === "전략" || m.type === "매매법" ? "pur" : m.type === "지식" ? "warn" : "dim"}">${E(m.type)}</span><span class="btx" title="${E(m.text)}${m.model ? " · " + E(m.model) : ""}">${E(m.text)}</span><small>×${m.w}</small></div>`).join("")

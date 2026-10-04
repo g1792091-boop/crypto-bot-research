@@ -138,6 +138,7 @@ export async function analyzeCoin(sym, ctx = {}) {
     if (Math.abs(tp2 - price) / price < slPct * 1.8) tp2 = price * (1 + side * slPct * 1.8);
     // 검증된 매매법 신호가 이 방향으로 막 나왔으면, 그 매매법이 워크포워드로 검증된 계획(손절·손익비·+1R 본절)을 그대로 쓴다
     const sig = ctx.libSignal && ctx.libSignal.side === side ? ctx.libSignal : null;
+    const csig = (ctx.chartSigs || []).find(x => x.side === side) || null;   // 📈 내 지표 매매법(연구소·AI 설계) 신호
     if (sig && sig.sl && (price - sig.sl) * side > 0) { slPx = sig.sl; slPct = Math.max(0.003, Math.abs(price - slPx) / price); slPx = price * (1 - side * slPct); tp1 = price * (1 + side * slPct * 1.0); tp2 = price * (1 + side * slPct * Math.max(1.5, sig.rr || 2)); }
     const ov = ctx.override?.side === side ? ctx.override : null;   // 토론에서 제안된 손절·익절 (검증용 재계산)
     if (ov) { if (+ov.sl > 0) { slPx = +ov.sl; slPct = Math.abs(price - slPx) / price; } if (+ov.tp1 > 0) tp1 = +ov.tp1; if (+ov.tp2 > 0) tp2 = +ov.tp2; if ((tp2 - tp1) * side < 0) [tp1, tp2] = [tp2, tp1]; }
@@ -199,13 +200,16 @@ export async function analyzeCoin(sym, ctx = {}) {
       (f >= 0.6 ? why : f <= 0.4 ? warn : why).push(`내 차트 지표 ${side > 0 ? "롱" : "숏"} 쪽 ${MY.r5 ? `5분 ${my.v5}/${my.total} · ` : ""}15분 ${my.v15}/${my.total} · 1시간 ${my.v1h}/${my.total}`);
       // 2개월 표본외: 지표가 80%↑ 같은 방향일 때 그 방향 시장가 진입 = 평균 −0.15R(가장 나쁨, 이미 움직인 뒤 추격) → 점수 가산 대신 경고
       if (f >= 0.8) { warn.push("지표가 거의 다 같은 방향 = 이미 움직인 뒤일 가능성(표본외 평균 −0.15R) — 추격 주의"); sc -= 5; } else sc += Math.round((f - 0.5) * 8); }
+    if (csig) { sc += csig.active ? 10 : csig.pass ? 6 : 2; why.push(`📈 내 지표 매매법 '${csig.name}' ${side > 0 ? "롱" : "숏"} 신호 (${csig.active ? "뉴럴 실전 선별 통과" : csig.pass ? "검증 통과·실전 성적 쌓는 중" : "검증 미통과 — 참고"})`); }
+    for (const x of (ctx.chartSigs || []).filter(x => x.side === -side && (x.pass || x.active))) warn.push(`📈 내 지표 매매법 '${x.name}' 은 반대(${x.side > 0 ? "롱" : "숏"}) 신호`);
     sc = Math.max(0, Math.min(100, Math.round(sc)));
     const rr = +(tp2Pct / slPct).toFixed(2), rr1 = +(tp1Pct / slPct).toFixed(2);
     // 등급 (2개월·6코인 표본외 검증 결과로 다시 정함): 스냅샷 지표·지지저항·호가 조합만으로는 표본외 우위가 없었다(전체 −0.12R, 최선 조합도 ≈0R).
     //  유력 = 워크포워드 검증을 통과한 매매법 신호가 지금 같은 방향으로 나옴 + 추세 2/3↑ + 손익비 1.5↑ (그 매매법의 최근 실적이 근거)
     //  보통 = 3개 시간대 추세 일치 + 1시간 ADX 25↑ + 손익비 1.5↑ (표본외 ≈ 0R — 우위 미확인, 추세 동행일 뿐)
-    const grade = tooFar && !sig ? "대기" : (sig && tAlign >= 2 && rr >= 1.5) ? "유력" : (tAlign === 3 && adx1h >= 25 && rr >= 1.5) ? "보통" : "관망";
-    const evidence = sig ? `검증 매매법 '${sig.name}'(${sig.tf === "60" ? "1시간" : sig.tf === "240" ? "4시간" : sig.tf + "분"}봉) 신호 ${Math.round((Date.now() - sig.t) / 60000)}분 전 · 최근 ${sig.n}건 기대값 ${sig.mean >= 0 ? "+" : ""}${sig.mean}R · 승률 ${sig.wr}%`
+    const proven = sig || (csig?.active ? { name: csig.name, tf: csig.tf, mean: csig.mean ?? 0, n: csig.n ?? 0, wr: csig.wr ?? 0, t: Date.now() } : null);
+    const grade = tooFar && !proven ? "대기" : (proven && tAlign >= 2 && rr >= 1.5) ? "유력" : (tAlign === 3 && adx1h >= 25 && rr >= 1.5) ? "보통" : "관망";
+    const evidence = !sig && proven ? `내 지표 매매법 '${proven.name}' 신호 · 뉴럴 실전 선별 통과(최근 ${proven.n}건 ${proven.mean >= 0 ? "+" : ""}${proven.mean}R)` : sig ? `검증 매매법 '${sig.name}'(${sig.tf === "60" ? "1시간" : sig.tf === "240" ? "4시간" : sig.tf + "분"}봉) 신호 ${Math.round((Date.now() - sig.t) / 60000)}분 전 · 최근 ${sig.n}건 기대값 ${sig.mean >= 0 ? "+" : ""}${sig.mean}R · 승률 ${sig.wr}%`
       : grade === "보통" ? "추세 동행(3개 시간대 일치·ADX 25↑) — 2개월 표본외 검증 ≈ 0R, 통계적 우위 미확인" : "검증된 근거 없음 — 관망 권장";
     const lev = Math.max(1, Math.min(sym === "BTCUSDT" ? 100 : 50, Math.floor(0.4 / slPct)));   // 청산공식: 손절 = 청산거리 40% 이하 (상한 BTC 100x·알트 50x)
     out.sides.push({ side, grade, score: sc, entry: price, sl: +slPx.toPrecision(7), tp1: +tp1.toPrecision(7), tp2: +tp2.toPrecision(7), slPct: +(slPct * 100).toFixed(2), tp1Pct: +(tp1Pct * 100).toFixed(2), tp2Pct: +(tp2Pct * 100).toFixed(2),

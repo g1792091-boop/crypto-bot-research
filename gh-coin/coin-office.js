@@ -1643,6 +1643,7 @@ export async function runLiveEntry({coins = COINS, debate = true, by = "auto"} =
         const ctx = {verdicts: {ta: V("coinTARating")[c.id], selfAI: V("coinSelfAI")[c.id], ml: V("coinML")[c.id]}};
         try { ctx.whale = N?.whaleFor ? await N.whaleFor(c.sym) : null; } catch(e){}
         try { ctx.libSignal = N?.recentSignal ? N.recentSignal(c.sym) : null; } catch(e){}
+        ctx.chartSigs = await chartSigsFor(c.sym, N);
         try { ctx.funding = await fundScanOf(c.sym); } catch(e){}
         const r = await L.analyzeCoin(c.sym, ctx); r.ctx = {whale: ctx.whale?.status === "approved" ? ctx.whale : null, funding: ctx.funding ? {key: ctx.funding.key, ko: ctx.funding.ko, avg: ctx.funding.avg} : null};
         list.push(r);
@@ -1697,6 +1698,12 @@ export async function runLiveEntry({coins = COINS, debate = true, by = "auto"} =
     return out;
   } finally { rtBusy = false; }
 }
+// 📈 내 지표 매매법(연구소·AI 설계)의 지금 신호 — 실시간 진입·시장가 근거로
+async function chartSigsFor(sym, N){
+  try { const CL = await import("./chartlab.js"), gs = (N?.chartGenes?.() || []).slice(-3), out = [];
+    for (const g of gs){ try { const p = await CL.position(g, sym); if (p.side){ const st = N.chartStrategies?.().find(x => x.id === g.id)?.stat || {}; out.push({name: CL.chartRule(g).name, side: p.side, pass: !!g.meta?.pass, active: !!g.active, tf: g.tf, mean: st.mean, n: st.n, wr: st.wr, state: p.state}); } } catch(e){} }
+    return out; } catch(e){ return []; }
+}
 // ⚡ 시장가 버튼: 한 코인을 지금 바로 분석 → 에이전트 팀 의견 → 뉴트론(뉴럴 데스크) 반박 → 팀 최종 답 → 시장가 추천 (손매매용, 주문 안 함)
 //   롱·숏 둘 다 계산해 '덜 불리한/더 유리한 쪽'을 고르되, 검증된 근거가 없으면 '비권장'이라고 분명히 말한다.
 export async function marketEntryNow({sym = "BTCUSDT", by = "user", onStep = () => {}, debate = true} = {}){
@@ -1710,6 +1717,7 @@ export async function marketEntryNow({sym = "BTCUSDT", by = "user", onStep = () 
   try { ctx.whale = N?.whaleFor ? await N.whaleFor(sym) : null; } catch(e){}
   try { ctx.libSignal = N?.recentSignal ? N.recentSignal(sym) : null; } catch(e){}
   try { ctx.funding = await fundScanOf(sym); } catch(e){}
+  ctx.chartSigs = await chartSigsFor(sym, N);
   const r = await L.analyzeCoin(sym, ctx);
   // 고르기: 검증 매매법 신호(유력)가 있으면 그쪽, 아니면 '유사상황 기대값'과 '내 지표 같은 상태 기대값'의 평균이 높은 쪽
   const ce = x => x.grade === "유력" ? 9 + (x.sig?.mean || 0) : (x.exp + (x.my ? x.my.exp : x.exp)) / 2;
