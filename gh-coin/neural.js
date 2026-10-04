@@ -55,6 +55,32 @@ function olSize(name) { const m = String(name).match(/(\d+(?:\.\d+)?)\s*b/i); re
 function olPref(name) { const s = olSize(name); return s < 2 ? 100 + (2 - s) : Math.abs(s - 4); }   // 2b 미만은 뒤로, 4b 근처 우선(판단 품질↔속도 균형)
 
 export const COINS = [["BTC", "BTCUSDT"], ["ETH", "ETHUSDT"], ["SOL", "SOLUSDT"], ["XRP", "XRPUSDT"], ["DOGE", "DOGEUSDT"], ["BNB", "BNBUSDT"]];
+
+// 📚 매매법 스타일 로테이션 — 단타·스윙·추세·역추세·돌파·평균회귀·다지표 컨플루언스를 돌아가며 설계한다.
+// 차트 터미널 보조지표 146종 전부를 쓰되, 스타일별로 적합한 시간대·접근을 모델에게 안내한다.
+// (ICT/SMC·엘리엇파동·세션·아비트라지 계열은 지표가 아니라 가격구조·시간 개념이라 자동 백테스트 대상이 아니다 → 모델의 라이브 판단 지식으로만 활용)
+export const STYLES = [
+  { k: "scalp_rsi", cls: "단타", tf: "1", iv: "1m", hint: "1분봉 RSI 과매수(>70)/과매도(<30) 반전 스캘핑. 빠른 손절(0.5~1%)·작은 익절. 추세 필터 EMA로 역행 방지." },
+  { k: "scalp_bb", cls: "단타", tf: "1", iv: "1m", hint: "1분봉 볼린저밴드 하단 터치 후 밴드 내 복귀=매수, 상단은 반대. tv_bb 사용." },
+  { k: "scalp_vwap", cls: "단타", tf: "5", iv: "5m", hint: "VWAP 위면 롱만·아래면 숏만(추세 스캘핑). tv_vwap + 거래량." },
+  { k: "scalp_ema", cls: "단타", tf: "5", iv: "5m", hint: "EMA20 잠깐 이탈 후 첫 반대봉 복귀 진입. 손절은 직전 스윙, 익절 1.5R." },
+  { k: "scalp_momo", cls: "단타", tf: "5", iv: "5m", hint: "모멘텀 스캘핑: EMA9 + ROC(모멘텀) + 거래량 급증 동시 확인." },
+  { k: "swing_st", cls: "스윙", tf: "240", iv: "4h", hint: "200EMA 방향 + Supertrend 전환 동시 확인 스윙. tv_supertrend + tv_ema(200)." },
+  { k: "swing_pull", cls: "스윙", tf: "60", iv: "1h", hint: "상승추세에서 EMA20/50 지지 + RSI 40 반등 눌림목 매수(추세 조정)." },
+  { k: "swing_brk", cls: "스윙", tf: "60", iv: "1h", hint: "저항(Donchian 상단) 돌파 + 거래량 1.5배 확인 돌파 스윙." },
+  { k: "swing_squeeze", cls: "스윙", tf: "60", iv: "1h", hint: "볼린저 스퀴즈(밴드 폭 축소) 후 확장 시 추세 방향 진입." },
+  { k: "swing_macross", cls: "스윙", tf: "240", iv: "4h", hint: "10/20 SMA 골든/데드크로스 스윙 + ADX로 추세 강도 필터." },
+  { k: "swing_fib", cls: "스윙", tf: "60", iv: "1h", hint: "임펄스 후 되돌림 매수. custom 지표로 (close-최근저점)/(최근고점-최근저점) 비율 활용." },
+  { k: "trend_mafan", cls: "추세", tf: "60", iv: "1h", hint: "다중 MA 정렬(EMA9>50>200) 완전 정렬 시 추세 순응 진입." },
+  { k: "trend_donchian", cls: "추세", tf: "240", iv: "4h", hint: "Donchian 채널 돌파 추세추종 + ADX>25 필터." },
+  { k: "trend_macd", cls: "추세", tf: "60", iv: "1h", hint: "MACD 0선/시그널 교차 추세 + ADX 필터로 횡보 제외." },
+  { k: "rev_bb", cls: "역추세", tf: "15", iv: "15m", hint: "볼린저 밴드 외부 종가 후 내부 복귀=평균회귀 반전." },
+  { k: "rev_stoch", cls: "역추세", tf: "15", iv: "15m", hint: "스토캐스틱 80 이상 하락전환/20 이하 상승전환 반전." },
+  { k: "rev_z", cls: "역추세", tf: "15", iv: "15m", hint: "Z-score 평균회귀: custom expr (close-sma)/변동성 이 -2 이하 롱, +2 이상 숏." },
+  { k: "rev_cci", cls: "역추세", tf: "60", iv: "1h", hint: "CCI -100 하향 돌파 후 회복 매수 / +100 반대." },
+  { k: "conf_multi", cls: "다지표", tf: "60", iv: "1h", hint: "컨플루언스: RSI+MACD+EMA기울기+거래량을 custom 수식으로 가중 합산한 스코어로 2개 이상 동시 확인." },
+];
+let dRot = 0;
 const KEY = "coin:neural";
 const START = 10000;          // (구) 코인별 가상 증거금 — 아래 BANKROLL 기반 사이징으로 대체
 const BANKROLL = 1000;        // 💵 전체 가상자금 $1000로 시작 (사용자만 초기화)
@@ -333,35 +359,40 @@ export async function designStrategy() {
   const ranked = cm.map(t => ({ t, m: model(t.model) })).sort((a, b) => b.m.pnl - a.m.pnl);
   const { t: tgt, m: M } = ranked[0];
   const Q = await import("../nuri-ai/quant.js");
-  const catalog = "tv_rsi(length) tv_macd tv_bb(length) tv_ema(length) tv_sma(length) tv_adx(length) tv_stoch tv_supertrend tv_cci(length) tv_atr(length) tv_donchian(length) ema sma rsi · 그리고 custom(expr): 수식으로 나만의 지표. 피연산자는 close/open/high/low/volume·지표 id·id.p1~p4";
+  const style = STYLES[dRot % STYLES.length];               // 스타일 로테이션(단타·스윙·추세·역추세·돌파·평균회귀·다지표)
+  const [ko, sym] = COINS[(dRot++ / STYLES.length | 0) % 3]; // BTC/ETH/SOL 돌아가며
+  const mname = ko + " 선물";
+  const catalog = Q.tvCatalogText ? Q.tvCatalogText() : "tv_rsi tv_macd tv_bb tv_ema tv_sma tv_adx tv_stoch tv_supertrend tv_cci tv_atr tv_donchian";
   let raw = "";
   try {
     await brainStream({ messages: [
-      { role: "system", content: `너는 코인 선물 퀀트다. 목표는 '잃지 않는 것' — 승률 55%+·낙폭(MDD) 작게·타이트한 손절(2~4%)로 자본을 지키는 BTCUSDT 1시간봉 매매법 하나를 설계한다.
-설계 원칙: ① 추세 필터(EMA/ADX/Supertrend)로 추세 방향으로만 진입 ② 과매수/과매도(RSI·스토캐·볼린저)로 타점 ③ MACD 등으로 확인 ④ 손절은 익절보다 타이트. 반드시 custom 수식 지표를 1개 이상 포함(승률 올릴 나만의 지표, 예: {"id":"vm","type":"custom","expr":"rsi*0.5+close/sma-1"}).
-아래 JSON 스키마로만 출력(설명·코드블록 금지):\n{"name":"이름","indicators":[{"id":"r","type":"tv_rsi","length":14},{"id":"e","type":"tv_ema","length":50},{"id":"vm","type":"custom","expr":"수식"}],"long_entry":{"conditions":[{"left":"close","op":">","right":"e"},{"left":"r","op":"<","right":40}]},"long_exit":{"conditions":[{"left":"r","op":">","right":65}]},"risk":{"leverage":2,"stop_loss_pct":3,"take_profit_pct":6}}\n쓸 수 있는 지표: ${catalog}.${M.lessons.length ? " 내 교훈: " + M.lessons.join(" / ") : ""}${BRAIN.recallText("BTC", "", 4) ? " 자체 뇌 패턴: " + BRAIN.recallText("BTC", "", 4) : ""} 뇌가 이득났던 규칙(반영해 설계): ${BRAIN.refineForProfit("BTC", "").text}` },
-      { role: "user", content: "매매법 JSON 하나만 출력:" }],
-      role: "code", target: tgt, fallback: true, json: true, maxTokens: 700, temperature: 0.6, noThink: true, onContent: d => raw += d, onThink: () => {} });
-  } catch (e) { feed(`[${shortMd(tgt.model)}] 매매법 설계 응답 실패`); return; }
+      { role: "system", content: `너는 코인 선물 퀀트다. 목표는 '잃지 않는 것' — 승률 55%+·낙폭(MDD) 작게·타이트한 손절로 자본을 지킨다.
+이번 과제: [${style.cls}] 스타일로 ${ko} ${style.iv}봉 매매법 하나를 설계. 접근: ${style.hint}
+설계 원칙: ① 추세 필터로 역행 진입 방지 ② 과매수/과매도로 타점 ③ 보조지표 2개 이상 동시 확인(컨플루언스) ④ 손절은 익절보다 타이트. 반드시 custom 수식 지표 1개 이상 포함.
+아래 JSON 스키마로만 출력(설명·코드블록 금지):\n{"name":"이름","indicators":[{"id":"r","type":"tv_rsi","length":14},{"id":"vm","type":"custom","expr":"수식"}],"long_entry":{"conditions":[{"left":"r","op":"<","right":40}]},"long_exit":{"conditions":[{"left":"r","op":">","right":65}]},"short_entry":{"conditions":[...]},"risk":{"leverage":2,"stop_loss_pct":${style.cls === "단타" ? 1 : 3},"take_profit_pct":${style.cls === "단타" ? 2 : 6}}}\n쓸 수 있는 보조지표(차트 터미널 ${Q.TV_TYPES ? Q.TV_TYPES.length : 146}종 전부 + custom 수식): ${catalog}\ncustom expr 피연산자: close open high low volume · 지표 id · id.p1~p4.${M.lessons.length ? " 내 교훈: " + M.lessons.join(" / ") : ""}${BRAIN.recallText(ko, "", 3) ? " 뇌 패턴: " + BRAIN.recallText(ko, "", 3) : ""} 뇌가 이득난 규칙: ${BRAIN.refineForProfit(ko, "").text}` },
+      { role: "user", content: `[${style.cls}] ${ko} 매매법 JSON 하나만:` }],
+      role: "code", target: tgt, fallback: true, json: true, maxTokens: 800, temperature: 0.6, noThink: true, onContent: d => raw += d, onThink: () => {} });
+  } catch (e) { feed(`[${shortMd(tgt.model)}] ${style.cls} 설계 응답 실패`); return; }
   let spec; try { spec = JSON.parse((raw.match(/\{[\s\S]*\}/) || [])[0]); } catch (e) { feed(`[${shortMd(tgt.model)}] 매매법 JSON 형식 오류`); return; }
   if (!spec || !spec.indicators) return;
-  let norm; try { norm = Q.normalizeSpec({ ...spec, symbol: "BTCUSDT", interval: "1h" }); }
-  catch (e) { feed(`[${shortMd(tgt.model)}] 매매법 규격 미달: ${String(e.message || e).slice(0, 36)}`); return; }
-  let cs; try { cs = (await candlesFor({ market: "BTCUSDT", exchange: "binancef", timeframe: "60" }, 1500)).cs; } catch (e) { return; }
+  let norm; try { norm = Q.normalizeSpec({ ...spec, symbol: sym, interval: style.iv }); }
+  catch (e) { feed(`[${shortMd(tgt.model)}] ${style.cls} 규격 미달: ${String(e.message || e).slice(0, 36)}`); return; }
+  const bars = style.cls === "단타" ? 2000 : 1500;
+  let cs; try { cs = (await candlesFor({ market: sym, exchange: "binancef", timeframe: style.tf }, bars)).cs; } catch (e) { return; }
   const bt = Q.backtest(norm, cs), wf = Q.walkForward(norm, cs);
   M.designs = (M.designs || 0) + 1;
   const winR = Math.round((bt.stats.win_rate ?? bt.stats.winrate ?? 0) * (bt.stats.win_rate <= 1 ? 100 : 1)) || null;
   const mdd = bt.stats.max_drawdown_pct ?? bt.stats.mdd ?? bt.stats.max_dd ?? null;
-  S.designs = S.designs || []; S.designs.unshift({ model: shortMd(tgt.model), name: norm.name, ret: +(bt.stats.return_pct ?? 0).toFixed(1), pf: bt.stats.profit_factor ?? null, win: winR, mdd: mdd != null ? +(+mdd).toFixed(1) : null, pass: wf.pass, handed: false, t: Date.now() });
+  S.designs = S.designs || []; S.designs.unshift({ model: shortMd(tgt.model), name: norm.name, cls: style.cls, tf: style.iv, coin: ko, ret: +(bt.stats.return_pct ?? 0).toFixed(1), pf: bt.stats.profit_factor ?? null, win: winR, mdd: mdd != null ? +(+mdd).toFixed(1) : null, pass: wf.pass, handed: false, t: Date.now() });
   S.designs = S.designs.slice(0, 20);
-  feed(`[${shortMd(tgt.model)}] 매매법 "${norm.name}" → 수익 ${(bt.stats.return_pct ?? 0).toFixed(1)}%${winR ? " 승률 " + winR + "%" : ""}${mdd != null ? " 낙폭 " + (+mdd).toFixed(0) + "%" : ""} · ${wf.pass ? "✅ 통과 → 사무실 인계" : "불통과(계속 개선)"}`);
+  feed(`[${shortMd(tgt.model)}] [${style.cls}] ${ko} "${norm.name}" → 수익 ${(bt.stats.return_pct ?? 0).toFixed(1)}%${winR ? " 승률 " + winR + "%" : ""}${mdd != null ? " 낙폭 " + (+mdd).toFixed(0) + "%" : ""} · ${wf.pass ? "✅ 통과 → 사무실 인계" : "불통과(계속 개선)"}`);
   if (wf.pass) {
     try { const P = await import("../nuri-ai/paper.js");
-      await P.addStrategy({ spec: norm, market: "BTCUSDT", exchange: "binancef", tf: "60", author: `뉴럴(${shortMd(tgt.model)})`,
-        wf: { is: {}, oos: { ret: +(wf.oos?.return_pct ?? 0), pf: wf.oos?.profit_factor ?? null, n: wf.oos?.n_trades ?? 0 } }, cls: "crypto", mname: "비트코인 선물" });
+      await P.addStrategy({ spec: norm, market: sym, exchange: "binancef", tf: style.tf, author: `뉴럴(${shortMd(tgt.model)})`,
+        wf: { is: {}, oos: { ret: +(wf.oos?.return_pct ?? 0), pf: wf.oos?.profit_factor ?? null, n: wf.oos?.n_trades ?? 0 } }, cls: "crypto", mname });
       S.designs[0].handed = true;
     } catch (e) {}
-    BRAIN.learn({ type: "전략", coin: "BTC", regime: "", text: `${norm.name} 검증통과(${(wf.oos?.return_pct ?? 0).toFixed(0)}%) — ${(norm.indicators || []).map(i => i.type).slice(0, 4).join("+")}`, model: shortMd(tgt.model) });
+    BRAIN.learn({ type: "전략", coin: ko, regime: "", text: `[${style.cls}] ${norm.name} 검증통과(${(wf.oos?.return_pct ?? 0).toFixed(0)}%) — ${(norm.indicators || []).map(i => i.type).slice(0, 4).join("+")}`, model: shortMd(tgt.model) });
   }
   save();
 }

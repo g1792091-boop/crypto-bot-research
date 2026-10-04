@@ -97,7 +97,7 @@ function render() {
     return `<div class="mrow"><b>${ko}</b><span class="${col}">${dir} ${d ? d.conf + "%" : "–"}</span>${p ? `<em class="${p.roe >= 0 ? "up" : "dn"}">${p.side > 0 ? "롱" : "숏"} ${p.roe >= 0 ? "+" : ""}${p.roe}%</em>` : `<em class="dim">무포</em>`}</div>`;
   }).join("");
   // 모델이 설계한 매매법·커스텀 지표 (백테스트 → 사무실 인계)
-  const des = (s.designs || []).map(d => `<div class="trow des"><span class="dim">${ago(d.t)}</span><b style="color:#b79cff">${E(d.model)}</b><span>${d.win != null ? "승" + d.win + "%" : "매매법"}${d.mdd != null ? " 낙" + d.mdd + "%" : ""}</span><b class="${d.ret >= 0 ? "up" : "dn"}">${d.ret}%</b><span>${E(d.name)} <em class="${d.handed ? "up" : d.pass ? "" : "dim"}">${d.handed ? "→ 사무실 인계" : d.pass ? "통과" : "불통과"}</em></span></div>`).join("");
+  const des = (s.designs || []).map(d => `<div class="trow des"><span class="dim">${ago(d.t)}</span><b style="color:#b79cff">${E(d.model)}</b><span>${d.cls ? `<em style="color:#7ea6ff">${E(d.cls)}</em> ` : ""}${E(d.coin || "")}${d.tf ? "·" + E(d.tf) : ""}${d.win != null ? " 승" + d.win + "%" : ""}${d.mdd != null ? " 낙" + d.mdd + "%" : ""}</span><b class="${d.ret >= 0 ? "up" : "dn"}">${d.ret}%</b><span>${E(d.name)} <em class="${d.handed ? "up" : d.pass ? "" : "dim"}">${d.handed ? "→ 사무실 인계" : d.pass ? "통과" : "불통과"}</em></span></div>`).join("");
   // 거래
   root.querySelector("[data-trades]").innerHTML = des + (s.trades.length ? s.trades.map(t =>
     `<div class="trow"><span class="dim">${ago(t.t)}</span><b>${t.ko}</b><span>${t.side > 0 ? "롱" : "숏"}</span><b class="${t.roe >= 0 ? "up" : "dn"}">${t.roe >= 0 ? "+" : ""}${t.roe}%</b><span class="dim">${E(t.why)}</span></div>`
