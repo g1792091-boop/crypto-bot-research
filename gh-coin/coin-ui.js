@@ -141,7 +141,7 @@ if (typeof window !== "undefined") window.__officeUI = {onEvent: ev => onEvent(e
 
 function build(){
   const el = document.createElement("section");
-  el.className = "office"; el.id = "office"; el.setAttribute("aria-label", "AI 팀 사무실");
+  el.className = "office office--quant"; el.id = "office"; el.setAttribute("aria-label", "AI 팀 사무실");
   const zones = Object.entries(ZONES).map(([id, z]) => `<div class="of-zone z-${z.kind} z-${id}" data-z="${id}" style="left:${z.x}px;top:${z.y}px;width:${z.w}px;height:${z.h}px;${TEAM_COLOR[id] ? `--tc:${TEAM_COLOR[id]}` : ""}"><span class="of-zl">${TEAM_COLOR[id] ? "<i></i>" : ""}${z.label}${z.kind === "team" ? `<small>${membersOf(id).length}명</small>` : ""}</span></div>`).join("");
   const desks = DESKS.map(d => `<div class="of-desk${d.lead ? " lead" : ""}" style="left:${d.x - (d.lead ? 42 : 34)}px;top:${d.y - 20}px;--tc:${tc(d.team)}"><i class="mon"></i><i class="mug"></i>${d.plate ? `<em>${d.plate}</em>` : ""}</div><div class="of-chair" style="left:${d.x - 11}px;top:${d.y + 22}px"></div>`).join("");
   // 팀 회의용 작은 테이블 (그 팀 구역에서 회의할 때만 보인다)
