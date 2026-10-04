@@ -8,8 +8,18 @@
 //   · 원자 노트로 정제(distill): obsidianmd/obsidian-clipper
 const KEY = "coin:brain";
 let B = null;
-function load() { if (!B) { try { B = JSON.parse(localStorage.getItem(KEY)) || { mem: [], n: 0 }; } catch (e) { B = { mem: [], n: 0 }; } } return B; }
-function save() { try { localStorage.setItem(KEY, JSON.stringify({ mem: B.mem.slice(0, 400), n: B.n })); } catch (e) {} }
+function load() {
+  if (!B) { try { B = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { B = {}; } }
+  if (!B.mem) B.mem = []; if (!B.n) B.n = 0;
+  if (!B.iq) B.iq = { w: {}, acc: { hit: 0, tot: 0 }, brier: 0.25, n: 0 };   // 지능: 국면별 학습 가중치 + 자기 정확도
+  if (!B.traps) B.traps = [];                                                  // 손절 함정(안티패턴)
+  return B;
+}
+function save() { try { localStorage.setItem(KEY, JSON.stringify({ mem: B.mem.slice(0, 400), n: B.n, iq: B.iq, traps: B.traps.slice(0, 60) })); } catch (e) {} }
+const IQLR = 0.08;
+const FEATS = ["모멘텀", "추세(EMA)", "RSI", "거래흐름", "호가압력", "변동성"];
+function cos(a = {}, b = {}) { let d = 0, na = 0, nb = 0; for (const k of FEATS) { const x = a[k] || 0, y = b[k] || 0; d += x * y; na += x * x; nb += y * y; } return (na && nb) ? d / Math.sqrt(na * nb) : 0; }
+function strongKeys(f = {}) { return Object.entries(f).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, 2).map(([k, v]) => k + (v >= 0 ? "↑" : "↓")).join("·") || "—"; }
 
 // 시장 국면(regime) — 피처로 간단히 분류. 기억을 상황별로 꺼내 쓰기 위한 키.
 export function regimeOf(feat = {}) {
@@ -51,7 +61,7 @@ export function reinforce(coin, regime, good) {
 export function brainState() {
   load();
   const byType = {}; for (const m of B.mem) byType[m.type] = (byType[m.type] || 0) + 1;
-  return { n: B.mem.length, total: B.n, byType, top: B.mem.slice(0, 12).map(m => ({ type: m.type, coin: m.coin, regime: m.regime, text: m.text, w: +m.w.toFixed(1), hits: m.hits, model: m.model })) };
+  return { n: B.mem.length, total: B.n, byType, iq: iqScore(), traps: B.traps.length, top: B.mem.slice(0, 12).map(m => ({ type: m.type, coin: m.coin, regime: m.regime, text: m.text, w: +m.w.toFixed(1), hits: m.hits, model: m.model })) };
 }
 export function reset() { B = { mem: [], n: 0 }; save(); }
 
@@ -64,6 +74,9 @@ export function consolidate() {
   const byRule = {};
   for (const m of B.mem) if (m.type === "패턴") { const dir = /롱/.test(m.text) ? "롱" : /숏/.test(m.text) ? "숏" : null; if (dir) { const k = (m.regime || "일반") + "|" + dir; (byRule[k] = byRule[k] || []).push(m.id); } }
   for (const [k, ids] of Object.entries(byRule)) if (ids.length >= 3) { const [regime, dir] = k.split("|"); learn({ type: "핵심", regime, text: `${regime}에선 ${dir}이 자주 통함 (${ids.length}회 확인)`, model: "뇌", w: 3, links: ids }); changed = true; }
+  // 손절 함정도 오래되면 약화(시장이 변함) → 바닥이면 삭제
+  for (const t of B.traps) if (Date.now() - t.t > 4 * 3600e3) { t.w = Math.max(0.1, t.w - 0.1); changed = true; }
+  const bt = B.traps.length; B.traps = B.traps.filter(t => t.w > 0.25); if (B.traps.length !== bt) changed = true;
   if (changed) save();
   return changed;
 }
@@ -100,6 +113,70 @@ export function toCanvas(max = 120) {
   return { nodes, edges };
 }
 export function reset_links() { load(); for (const m of B.mem) m.links = []; save(); }   // 테스트/초기화용
+
+// ════════ 🧠 지능(자가학습 예측기) — 거래 결과로 국면별 가중치를 스스로 고친다(온라인 퍼셉트론) ════════
+// 뇌가 피처(보조지표 신호)로 '지금 롱이 이득일까 숏이 이득일까'를 예측하고, 실제 손익으로 틀리면 바로 교정한다.
+export function predict(feat = {}, regime = "") {
+  load(); const w = B.iq.w[regime || "일반"] || {};
+  let s = 0; for (const k of FEATS) s += (w[k] || 0) * (feat[k] || 0);
+  s = Math.tanh(s);
+  const acc = B.iq.acc.tot ? B.iq.acc.hit / B.iq.acc.tot : 0.5;
+  const trust = Math.max(0, (acc - 0.5) * 2) * Math.min(1, B.iq.acc.tot / 40);   // 정확도·표본이 쌓여야 신뢰
+  return { dir: s > 0.08 ? 1 : s < -0.08 ? -1 : 0, s: +s.toFixed(3), conf: Math.round(Math.abs(s) * trust * 100), trust: +trust.toFixed(2) };
+}
+// 거래 하나 끝날 때마다 호출 → 가중치·정확도 갱신 (pnl은 수익률 분수, +면 이득)
+export function learnOutcome({ coin = "", regime = "", feat = {}, dir = 0, pnl = 0 } = {}) {
+  load(); if (!dir || !feat) return;
+  const key = regime || "일반", w = B.iq.w[key] || (B.iq.w[key] = {});
+  let s = 0; for (const k of FEATS) s += (w[k] || 0) * (feat[k] || 0); s = Math.tanh(s);
+  const truth = pnl >= 0 ? dir : -dir;                      // 실제로 옳았던 방향
+  const err = truth - s;
+  for (const k of FEATS) w[k] = Math.max(-3, Math.min(3, (w[k] || 0) + IQLR * err * (feat[k] || 0)));
+  B.iq.n++; B.iq.acc.tot++; const pdir = s > 0 ? 1 : s < 0 ? -1 : 0; if (pdir === truth) B.iq.acc.hit++;
+  const p = s * 0.5 + 0.5, y = truth > 0 ? 1 : 0;           // 롱 확률 추정 vs 정답 → 칼리브레이션(Brier)
+  B.iq.brier = (B.iq.brier * (B.iq.acc.tot - 1) + (p - y) ** 2) / B.iq.acc.tot;
+  save();
+}
+export function iqScore() {
+  load(); const t = B.iq.acc.tot, acc = t ? B.iq.acc.hit / t : 0, sample = Math.min(1, t / 60), cal = 1 - Math.min(1, B.iq.brier * 2);
+  const score = Math.round((Math.max(0, acc - 0.5) * 2 * 0.6 + sample * 0.2 + cal * 0.2) * 100);
+  return { score, acc: +(acc * 100).toFixed(0), n: t, brier: +B.iq.brier.toFixed(3) };
+}
+
+// ════════ 🛑 손절 함정(안티패턴) — "왜 손절났는지" 기억하고, 비슷한 자리면 다음엔 피한다 ════════
+export function learnLoss({ coin = "", regime = "", feat = {}, dir = 0, roe = 0 } = {}) {
+  load();
+  const ex = B.traps.find(t => t.dir === dir && (!t.regime || t.regime === regime) && cos(t.feat, feat) > 0.85);
+  if (ex) { ex.hits++; ex.w = Math.min(5, ex.w + 0.5); ex.t = Date.now(); for (const k of FEATS) ex.feat[k] = (ex.feat[k] || 0) * 0.7 + (feat[k] || 0) * 0.3; }
+  else B.traps.unshift({ id: ++B.n, coin, regime, dir, feat: { ...feat }, roe: +roe.toFixed(1), hits: 1, w: 1.2, t: Date.now() });
+  B.traps.sort((a, b) => b.w - a.w); B.traps = B.traps.slice(0, 60);
+  learn({ type: "교훈", coin, regime, text: `${regime} ${dir > 0 ? "롱" : "숏"} 손절 ${roe.toFixed(1)}% — ${strongKeys(feat)}에서 진입 금지`, model: "뇌", w: 2 });
+  save();
+}
+// 지금 들어가려는 자리가 과거 손절과 얼마나 닮았나 (0~1). 높으면 진입 피해라.
+export function trapRisk(feat = {}, regime = "", dir = 0) {
+  load(); let r = 0;
+  for (const t of B.traps) { if (t.dir !== dir) continue; if (t.regime && regime && t.regime !== regime) continue; const sim = cos(t.feat, feat); if (sim > 0.8) r = Math.max(r, sim * Math.min(1, t.w / 3)); }
+  return +r.toFixed(2);
+}
+
+// ════════ 🔗 에이전트 팀 ↔ 옵시디언(뇌) ↔ 모델 브리지 ════════
+// 에이전트 팀/외부(.canvas)가 넣은 결과를 뇌가 받아 지식화(ingest) → 지능으로 '이득 날만하게' 다듬어 돌려줌(refineForProfit)
+export function ingest({ coin = "", regime = "", text = "", type = "관찰", feat = null, dir = 0, outcome = null, model = "에이전트팀" } = {}) {
+  const m = learn({ type, coin, regime, text, model, w: 1.3 });
+  if (outcome != null && feat && dir) { learnOutcome({ coin, regime, feat, dir, pnl: outcome }); if (outcome < 0) learnLoss({ coin, regime, feat, dir, roe: outcome * 100 }); }
+  return m;
+}
+// 뇌가 누적 지식+지능으로 코인 선물에서 '이득 날만한' 방향·주의를 정제해 반환 (에이전트 팀/모델에 인계)
+export function refineForProfit(coin = "", regime = "") {
+  load(); const w = B.iq.w[regime || "일반"] || {}, iq = iqScore();
+  const bias = Object.entries(w).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, 3);
+  const trapN = B.traps.filter(t => !regime || t.regime === regime).length;
+  const rule = bias.length ? bias.map(([k, v]) => `${k} 강할수록 ${v >= 0 ? "롱" : "숏"}`).join(", ") : "표본 부족";
+  return { coin, regime, iq: iq.score, acc: iq.acc, n: iq.n, cautions: trapN, keyFeatures: bias.map(([k, v]) => `${k}${v >= 0 ? "+" : ""}${v.toFixed(2)}`),
+    memory: recallText(coin, regime, 3),
+    text: `[${regime} 국면] 뇌 지능 ${iq.score}/100(정확도 ${iq.acc}%·표본 ${iq.n}): ${rule}. 손절패턴 ${trapN}개는 회피.` };
+}
 
 export function recallText(coin, regime, n = 4) {
   const r = recall(coin, regime, n); if (!r.length) return "";

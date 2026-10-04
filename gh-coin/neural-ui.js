@@ -56,7 +56,8 @@ function render() {
     (s.nModels === 0 ? `<div class="nsub dim">연결된 AI 모델이 없습니다 — 설정 → AI 연결에 무료 NVIDIA 키를 넣으면 모델들이 직접 거래·복기합니다 (지금은 자체 신호만)</div>` : "") +
     `<div class="nsub">피처 뉴런 가중치 (학습으로 변함)</div>` +
     s.neurons.map(nu => `<div class="nrow"><span class="nk">${E(nu.name)}</span><span class="nbar"><i style="width:${Math.round(nu.w / 3 * 100)}%"></i></span><b>${nu.w.toFixed(2)}</b><small>${nu.hit == null ? "–" : nu.hit + "%"}</small></div>`).join("") +
-    (s.brain ? `<div class="nsub">🧠 자체 뇌 · 누적 기억 ${s.brain.n}개 <span class="dim">${Object.entries(s.brain.byType || {}).map(([t, c]) => t + " " + c).join(" · ") || "비어있음"}</span></div>` +
+    (s.brain ? `<div class="nsub">🧠 자체 뇌 · 지능 <b style="color:#b79cff">${s.brain.iq?.score ?? 0}/100</b> <span class="dim">정확도 ${s.brain.iq?.acc ?? 0}% · ${s.brain.iq?.n ?? 0}판 학습 · 손절회피 ${s.brain.traps ?? 0}</span></div>` +
+      `<div class="nsub">누적 기억 ${s.brain.n}개 <span class="dim">${Object.entries(s.brain.byType || {}).map(([t, c]) => t + " " + c).join(" · ") || "비어있음"}</span></div>` +
       (s.brain.top.length ? s.brain.top.slice(0, 7).map(m => `<div class="brow"><span class="bt ${m.type === "패턴" ? "up" : m.type === "교훈" ? "warn" : m.type === "전략" ? "pur" : "dim"}">${E(m.type)}</span><span class="btx" title="${E(m.text)}${m.model ? " · " + E(m.model) : ""}">${E(m.text)}</span><small>×${m.w}</small></div>`).join("")
         : `<div class="dim" style="padding:4px 0">아직 비어있음 — 모델들이 복기·거래하며 기억을 쌓습니다</div>`) : "");
   // 코인별 결정
@@ -81,7 +82,8 @@ function render() {
   // 🧠 뇌 그래프 데이터 갱신 + 요약 (오른쪽 아래)
   brainG = N.brainGraph();
   const bi = root.querySelector("[data-braininfo]");
-  if (bi && s.brain) bi.textContent = `지식 ${s.brain.n} · 연결 ${(brainG && brainG.edges.length) || 0}`;
+  if (bi && s.brain) { const iq = s.brain.iq || {};
+    bi.innerHTML = `지능 <b style="color:#b79cff">${iq.score ?? 0}</b>/100 <span class="dim">(정확도 ${iq.acc ?? 0}% ·${iq.n ?? 0}판)</span> · 지식 ${s.brain.n} · 연결 ${(brainG && brainG.edges.length) || 0} · 🛑회피 ${s.brain.traps ?? 0}`; }
   // 라이브 피드 티커
   root.querySelector("[data-feed]").innerHTML = s.feed.map(f => `<span>▸ ${E(f.text)}</span>`).join(" ");
 }

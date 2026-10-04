@@ -705,16 +705,41 @@ export function startChatter(){
 // 매 주기 ① 모의투자 장부를 실제 시세로 갱신(코드, AI 없음) ② 그때그때 한 가지 일을 고른다:
 // 매매법 연구 · SNS 여론 · 경제 리서치 · 동료 수다 · 컴퓨터 작업 · 모의투자 보고 (하루 AI 호출 한도 안에서)
 // 쉬지 않고 돌아가는 업무 순환표: 팀마다 고르게 돌아가도록 섞어 두었다 (모듈이 없으면 경제 리서치로 대신)
-const JOBS = ["plan", "dev", "combo", "ic", "bot", "ind", "qrisk", "trend", "data", "opt", "patscan", "situ", "cdev", "entry", "sr", "news", "sent", "pos", "contest", "ensemble", "reality", "preset", "survival", "track", "report", "promote", "pattern", "coin", "ml", "selfai", "dev", "tpsl", "combo", "drift", "cdev", "feeds", "alpha", "bot", "botopt", "selfai", "plan", "trend", "ic", "chat", "forecast", "coin", "live", "retro", "task", "selfdev", "macro", "sns", "computer", "paper"];
+// 🔗 에이전트 팀 ↔ 자체 뇌(옵시디언) 브리지: 팀의 데모 거래 결과를 뇌에 넣고(ingest) → 뇌가 이득 날만하게 정제(refine) → 문서(옵시디언)로 저장하고 설계팀에 인계. 뉴럴 데스크 AI 모델들도 같은 뇌를 읽고 씀 → 한 뇌로 모두 학습.
+async function brainSyncJob(){
+  const P = await import("../nuri-ai/paper.js"); let BRAIN;
+  try { BRAIN = await import("./brain.js"); } catch(e){ return; }
+  const book = await P.loadBook();
+  let seen = {}; try { seen = JSON.parse(localStorage.getItem("coinBrainSeen") || "{}"); } catch(e){}
+  let ingested = 0;
+  for (const s of book.strategies || []){
+    const key = s.id || s.name, from = seen[key] || 0, tr = s.trades || [];
+    for (let i = from; i < tr.length; i++){ const t = tr[i];
+      const coin = String(s.market || "").replace(/USDT$/, ""), dir = (t.side === "long" || t.side === 1 || t.side > 0) ? 1 : -1;
+      const roe = +t.roe || 0, win = (t.pnl || 0) >= 0;
+      BRAIN.ingest({ coin, regime: "", type: win ? "패턴" : "교훈", model: "에이전트팀", text: `${coin} ${dir > 0 ? "롱" : "숏"} ${win ? "+" : ""}${roe.toFixed(1)}% (${s.name}${t.reason ? " · " + t.reason : ""})` });
+      ingested++;
+    }
+    seen[key] = tr.length;
+  }
+  try { localStorage.setItem("coinBrainSeen", JSON.stringify(seen)); } catch(e){}
+  const coins = [...new Set((book.strategies || []).map(s => String(s.market || "").replace(/USDT$/, "")).filter(Boolean))].slice(0, 6);
+  const refs = coins.map(c => BRAIN.refineForProfit(c, "")).filter(Boolean);
+  const iq = (BRAIN.iqScore && BRAIN.iqScore()) || { score: 0, acc: 0, n: 0 };
+  const md = `# 🧠 자체 뇌가 정제한 매매 규칙 · ${today()}\n\n뇌 지능 ${iq.score}/100 (정확도 ${iq.acc}% · ${iq.n}판 학습) · 이번에 팀 거래 ${ingested}건 반영\n\n${refs.map(r => `## ${r.coin}\n- ${r.text}\n- 핵심 지표: ${r.keyFeatures.join(", ") || "표본 부족"}\n- 뇌 기억: ${r.memory || "없음"}`).join("\n\n") || "- 아직 표본 부족"}\n\n> 이 규칙은 뉴럴 데스크 AI 모델과 설계팀이 함께 읽는 자체 뇌에서 자동 정제됩니다. 손절 패턴은 회피 대상으로 학습됩니다.\n`;
+  await saveDoc({ title: `자체 뇌 정제 규칙 ${today()}`, path: `ghcoin/brain/refined-rules.md`, content: md, team: "hq", agent: "eng" });
+  post({ ch: "hq", kind: "work", agent: "eng", icon: "🧠", text: `자체 뇌 동기화: 팀 거래 ${ingested}건 학습 → 지능 ${iq.score}/100. 정제 규칙을 ghcoin/brain/refined-rules.md 에 저장하고 설계팀·모델에 인계.` });
+}
+const JOBS = ["plan", "dev", "combo", "ic", "bot", "ind", "qrisk", "trend", "data", "opt", "patscan", "situ", "cdev", "entry", "sr", "news", "sent", "pos", "contest", "ensemble", "reality", "preset", "survival", "track", "report", "promote", "pattern", "coin", "ml", "selfai", "dev", "tpsl", "combo", "drift", "cdev", "feeds", "alpha", "bot", "botopt", "selfai", "plan", "trend", "ic", "chat", "forecast", "coin", "live", "retro", "task", "selfdev", "macro", "sns", "computer", "paper", "brainsync"];
 const JOB_KO = {plan: "리서치 플래너(할 일 목록 → 워커 배정)", sent: "시장 심리(자체 감정 엔진)", pos: "단타·스윙 포지션 추천", contest: "전략 콘테스트(데모 성과 리더보드)", ensemble: "앙상블 포트폴리오(신뢰점수로 비중 배분)", reality: "정직한 현실 점검(목표 수익 도달·파산 확률)", preset: "준비된 매매법 프리셋 비교(io-uty RSI·MACD + 지표 146종)", survival: "생존 경쟁(개발자 KPI + 다윈 전략 진화)", track: "예측 적중률·캘리브레이션", report: "성과 대시보드", bot: "자동매매봇 전략 만들기", botopt: "자동매매봇 자동 개선(보조지표·위험값 하이퍼옵트)", selfai: "자체 AI 데스크(앙상블 방향·확신도 순위)", ic: "투자위원회(강세·약세 토론 → 결정)", qrisk: "퀀트 리스크(VaR·결정표·주문 전 점검)", data: "거래소 비교·데이터 품질", opt: "하이퍼옵트로 전략 다듬기", patscan: "패턴 스캐너", drift: "데모 성과 이동 감지(런 차트)", feeds: "경제 캘린더·금리·변동성 지수", alpha: "알파 팩터 순위", combo: "실시간 종합 지표 타점", dev: "매매법 개발 → 백테스트", cdev: "커스텀 지표 개발 → 백테스트", ind: "보조지표 분석", trend: "다중 시간대 추세 분석", entry: "진입 타점 분석", sr: "지지·저항 분석",
   tpsl: "익절·손절 관리", news: "뉴스·기사 분석", macro: "경제지표 예측", situ: "코인 상황판", pattern: "차트·캔들 패턴 분석", coin: "코인팀 회의", ml: "머신러닝·딥러닝 실험",
   promote: "데모 → 실거래 관문 심사", live: "실거래 데스크 점검", paper: "데모거래 보고", forecast: "방향 예측 토론", sns: "SNS 여론 확인", chat: "동료 수다", computer: "컴퓨터 작업",
-  retro: "팀 회고·부족한 점 찾기", task: "개선 과제 수행", selfdev: "우리 앱 오류 찾아 코드 고치기", economy: "경제 리서치"};
+  retro: "팀 회고·부족한 점 찾기", task: "개선 과제 수행", selfdev: "우리 앱 오류 찾아 코드 고치기", economy: "경제 리서치", brainsync: "자체 뇌 동기화(팀 결과→뇌 학습→정제 규칙 인계)"};
 const JOB_TEAM = {plan: "hq", sent: "news", pos: "entry", contest: "demo", ensemble: "demo", reality: "hq", preset: "demo", survival: "demo", track: "hq", report: "hq", bot: "bot", botopt: "bot", selfai: "selfai", ic: "ic", qrisk: "qrisk", data: "data", opt: "opt", patscan: "pattern", drift: "demo", feeds: "news", alpha: "ml", combo: "combo", dev: "dev", cdev: "cdev", ind: "ind", trend: "trend", entry: "entry", sr: "sr", tpsl: "tpsl", news: "news", macro: "news", situ: "situ", pattern: "pattern", coin: "btc", ml: "ml",
-  promote: "demo", live: "live", paper: "demo", forecast: "entry", sns: "news", chat: "hq", computer: "hq", retro: "hq", task: "hq", selfdev: "hq", economy: "news"};
+  promote: "demo", live: "live", paper: "demo", forecast: "entry", sns: "news", chat: "hq", computer: "hq", retro: "hq", task: "hq", selfdev: "hq", economy: "news", brainsync: "hq"};
 const JOB_FN = () => ({plan: plannerJob, sent: sentimentJob, pos: posJob, contest: contestJob, ensemble: ensembleJob, reality: realityJob, preset: presetJob, survival: survivalJob, track: trackJob, report: dashboardJob, bot: botJob, botopt: botImproveJob, selfai: selfaiJob, ic: icJob, qrisk: qriskJob, data: dataJob, opt: optJob, patscan: patternScanJob, drift: driftJob, feeds: openFeedsJob, alpha: alphaJob, combo: comboJob, dev: () => research("std"), cdev: () => research("custom"), ind: indJob, trend: trendJob, entry: entryJob, sr: srJob, tpsl: tpslJob, news: economyCheck, macro: macroJob,
   situ: situJob, pattern: patternJob, coin: coinJob, ml: mlJob, promote: promoteJob, live: liveDeskJob, paper: paperReport, forecast: forecastJob, sns: snsCheck, chat: () => chatter(true),
-  computer: computerWork, retro, task: doTask, selfdev: selfdevJob, economy: economyCheck});
+  computer: computerWork, retro, task: doTask, selfdev: selfdevJob, economy: economyCheck, brainsync: brainSyncJob});
 let cycleTimer = 0, cycling = false, lastJob = "";
 export const cycleState = () => ({cycling, lastJob});
 export function nextCycleIn(){ const c = officeCfg(), last = +localStorage.getItem("coinLastCycle") || 0; return Math.max(0, last + c.cycleMin * 60e3 - Date.now()); }

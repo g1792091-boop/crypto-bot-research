@@ -130,8 +130,10 @@ bash build.sh        # → dist/GHNano.exe, dist/ArchAI.exe, dist/GHCoin.exe
 - **엔진** `gh-coin/neural.js`: 피처 뉴런(모멘텀·추세·RSI·거래흐름·호가압력·변동성) + 모델 트레이더. 1분봉 · SL-2/TP+3/시간청산(8분). `modelStep()` 이 틱당 1개 모델에게 `brainStream({role:"fast",fallback:true})` 로 직접 판단을 받고, **실제 응답 모델**(`route.model`)에 귀속(한 모델 429 로 전체 실패하던 문제 해결). `designStrategy()` 는 모델이 146개 지표 조합으로 매매법+커스텀지표 설계→`normalizeSpec/backtest/walkForward`→통과 시 사무실(`P.addStrategy`)에 인계.
 - **자체 뇌** `gh-coin/brain.js`: localStorage 영속 집단 기억. `learn/recall(RAG식 회상)/reinforce`. **`consolidate()` 자체학습** = 오래된 기억 망각 + 자주 확인된 패턴을 '핵심 규칙'으로 승격. `graph(70)` 노드/엣지.
 - **UI** `gh-coin/neural-ui.js`: 6카드(손익 · 🔍스캔·포지션 · NEURAL SHELL · 트레이더 리더보드 · 거래/설계 · 🧠뇌 지식 그래프). 뇌 그래프는 force 시뮬(새 지식=퍼지는 링, 유형별 색). 루프: step 매틱 · modelStep 매틱1개 · reflect 14틱 · designStrategy 26틱 · brainThink 10틱.
-- 적용 개념(코드복사 없이): AI 트레이더 레포 5종 + brain 레포 5종(claude-brain/project-brain/claude-obsidian/brain-agent-template 등) → `gh-coin/tech.js` 크레딧.
-- exe 재빌드 완료(`dist/GHCoin.exe` 등, 커밋 `e6c9f5a`).
+- 적용 개념(코드복사 없이): AI 트레이더 레포 5종 + brain 레포 5종 + Obsidian 6종(jsoncanvas·obsidian-api·clipper 등) → `gh-coin/tech.js` 크레딧.
+- **뇌 지능(자가학습)** `brain.js`: `predict/learnOutcome`(국면별 피처 가중치 온라인 퍼셉트론, 거래 손익으로 교정)·`iqScore`(정확도·칼리브레이션 0~100)·`learnLoss/trapRisk`(손절 함정 기억→비슷한 자리 회피)·`refineForProfit`(이득 규칙 정제)·`ingest`(외부 결과 받기)·`toCanvas`(.canvas 내보내기, Obsidian에서 열림). 검증: 40판 학습 후 정확도↑·숏 함정 회피 확인.
+- **닫힌 고리**: neural.js step/modelStep이 뇌 예측을 결정에 섞고 손절함정이면 진입 보류·모델에 "왜 손절났나" 교훈 주입 → closePos/closeModelPos가 결과를 뇌에 학습. coin-office.js `brainSyncJob`(JOBS에 "brainsync")이 에이전트 팀 데모거래를 뇌에 넣고→정제 규칙을 `ghcoin/brain/refined-rules.md`(옵시디언)로 저장·설계팀 인계.
+- exe 재빌드 완료(`dist/*.exe`, 최신 커밋).
 
 ---
 

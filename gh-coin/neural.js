@@ -75,7 +75,12 @@ export async function step() {
   for (const [ko, sym] of COINS) {
     let cs; try { cs = (await candlesFor({ market: sym, exchange: "binancef", timeframe: "1" }, 300)).cs; } catch (e) { continue; }
     if (!cs || cs.length < 60) continue;
-    const price = cs.at(-1).c, feat = featuresOf(cs), d = decide(feat);
+    const price = cs.at(-1).c, feat = featuresOf(cs); let d = decide(feat);
+    const regime = BRAIN.regimeOf(feat), bp = BRAIN.predict(feat, regime);   // 🧠 뇌의 지능(학습된 예측)을 결정에 섞는다
+    if (bp.dir && bp.trust > 0) {
+      const blend = d.score * 0.6 + bp.s * 0.4 * (0.5 + bp.trust * 0.5);
+      d = { ...d, score: +blend.toFixed(3), dir: blend > 0.12 ? 1 : blend < -0.12 ? -1 : 0, conf: Math.min(99, Math.round((Math.abs(blend) * 1.6 * 100 + bp.conf) / 2)), brain: bp.dir };
+    }
     S.feat[sym] = feat; S.dec[sym] = { ...d, price };
     markModels(sym, price);
     const p = S.pos[sym];
@@ -86,8 +91,12 @@ export async function step() {
       const flip = d.dir !== 0 && d.dir !== p.side, hardSL = roe < -2, hardTP = roe > 3, timeout = Date.now() - p.t > MAXHOLD;
       if (flip || hardSL || hardTP || timeout) closePos(sym, price, flip ? "반대신호" : hardSL ? "손절" : hardTP ? "익절" : "시간청산");
     }
-    // 무포지션 + 신호 있으면 진입
-    if (!S.pos[sym] && d.dir !== 0 && d.conf >= 25) openPos(sym, ko, d.dir, price, feat);
+    // 무포지션 + 신호 있으면 진입 — 단, 과거 손절과 닮은 자리면 뇌가 회피(반복 손절 줄이기)
+    if (!S.pos[sym] && d.dir !== 0 && d.conf >= 25) {
+      const risk = BRAIN.trapRisk(feat, regime, d.dir);
+      if (risk >= 0.75) feed(`${ko} ${d.dir > 0 ? "롱" : "숏"} 보류 — 과거 손절 패턴과 ${Math.round(risk * 100)}% 유사 (뇌 회피)`);
+      else openPos(sym, ko, d.dir, price, feat);
+    }
   }
   S.epoch++;
   save();
@@ -113,7 +122,11 @@ function closePos(sym, price, why) {
     S.hit[k].n++; if (correct) S.hit[k].ok++;
     S.w[k] = cl(S.w[k] + LR * (correct ? 1 : -1) * Math.abs(sig), 0.05, 3);   // 맞으면↑ 틀리면↓
   }
-  feed(`${p.ko} 청산 @ ${fmt(price)} · ${ret >= 0 ? "+" : ""}${(ret * 100).toFixed(2)}% (${why}) → 학습 반영`);
+  // 🧠 뇌 지능에도 결과 학습(국면별 가중치 교정) + 손절이면 '왜 났는지' 함정으로 기억
+  const regime = BRAIN.regimeOf(p.feat || {});
+  BRAIN.learnOutcome({ coin: p.ko, regime, feat: p.feat, dir: p.side, pnl: ret });
+  if (why === "손절" || ret < -0.015) BRAIN.learnLoss({ coin: p.ko, regime, feat: p.feat, dir: p.side, roe: ret * 100 });
+  feed(`${p.ko} 청산 @ ${fmt(price)} · ${ret >= 0 ? "+" : ""}${(ret * 100).toFixed(2)}% (${why}) → 뉴런·뇌 학습 반영`);
   delete S.pos[sym];
 }
 // ── 모델 트레이더: 연결된 AI 모델 각각이 직접 데모 포지션을 운용한다 ──
@@ -131,8 +144,16 @@ function closeModelPos(name, sym, price, why) {
   M.w = cl(M.w + LR * (ret > 0 ? 1 : -1), 0.05, 3);
   const regime = BRAIN.regimeOf(p.feat || {});
   BRAIN.reinforce(p.ko, regime, ret > 0);                                   // 이 상황의 기억 강화/약화
+  BRAIN.learnOutcome({ coin: p.ko, regime, feat: p.feat, dir: p.side, pnl: ret });   // 🧠 뇌 지능 학습
   if (ret > 0.02) BRAIN.learn({ type: "패턴", coin: p.ko, regime, text: `${regime}에서 ${p.side > 0 ? "롱" : "숏"} +${(ret * 100).toFixed(1)}% (${strongFeat(p.feat)})`, model: shortMd(name) });   // 큰 이익 = 패턴 기억
-  if (ret < 0) { M.losers.unshift({ ko: p.ko, side: p.side, roe: +(ret * 100).toFixed(1), feat: p.feat }); M.losers = M.losers.slice(0, 5); }
+  if (ret < 0) {
+    M.losers.unshift({ ko: p.ko, side: p.side, roe: +(ret * 100).toFixed(1), feat: p.feat }); M.losers = M.losers.slice(0, 5);
+    if (why === "손절" || ret < -0.012) {   // 🛑 손절: 뇌 함정 기록 + 모델에게 '다시는 이 자리서 진입 말라' 교훈 주입
+      BRAIN.learnLoss({ coin: p.ko, regime, feat: p.feat, dir: p.side, roe: ret * 100 });
+      const lesson = `${regime}에서 ${p.side > 0 ? "롱" : "숏"} 손절(${(ret * 100).toFixed(1)}%): ${strongFeat(p.feat)}일 땐 진입 금지`;
+      M.lessons = [...new Set([lesson, ...M.lessons])].slice(0, 6);
+    }
+  }
   S.pnl += pnl; S.fills++; if (pnl > 0) S.wins++;
   S.trades.unshift({ model: name, ko: p.ko, side: p.side, roe: +(ret * 100).toFixed(2), pnl: +pnl.toFixed(2), why, t: Date.now() });
   if (S.trades.length > 80) S.trades.pop();
@@ -164,11 +185,16 @@ export async function modelStep() {
   const regime = BRAIN.regimeOf(feat), mem = BRAIN.recallText(ko, regime, 3);
   const les = tM.lessons.length ? `\n내가 복기로 배운 교훈(꼭 지켜라): ${tM.lessons.join(" / ")}` : "";
   const brainLine = mem ? `\n자체 뇌의 집단 기억(${regime} 국면): ${mem}` : "";
+  // 🧠 뇌의 지능(학습된 예측) + 정제 규칙 + 손절함정 경고를 모델에게 준다
+  const bp = BRAIN.predict(feat, regime), ref = BRAIN.refineForProfit(ko, regime);
+  const riskL = BRAIN.trapRisk(feat, regime, 1), riskS = BRAIN.trapRisk(feat, regime, -1);
+  const iqLine = `\n${ref.text}` + (bp.dir ? `\n뇌 예측: ${bp.dir > 0 ? "롱" : "숏"} 우세(신뢰 ${Math.round(bp.trust * 100)}%)` : "");
+  const trapLine = (riskL >= 0.7 || riskS >= 0.7) ? `\n⚠ 손절 위험: ${riskL >= 0.7 ? `롱 ${Math.round(riskL * 100)}%` : ""}${riskS >= 0.7 ? ` 숏 ${Math.round(riskS * 100)}%` : ""} 과거 손절과 유사 → 그 방향 피하라` : "";
   let raw = "", route;
   try {
     // fallback:true → 핀한 모델이 한도/쿨다운/오류면 '응답하는 다른 모델'로 넘어가 반드시 한 번은 거래가 일어난다. 결과는 '실제 응답한 모델'에 귀속.
     route = await brainStream({ messages: [
-      { role: "system", content: `너는 ${ko} 코인 선물 데모 트레이더다. 아래 신호로 지금 롱/숏/관망을 정한다. 반드시 JSON 한 줄만 출력: {"dir":1,"conf":70} — dir 1=롱 -1=숏 0=관망, conf 0~100. 설명·다른 말 금지.${brainLine}${les}` },
+      { role: "system", content: `너는 ${ko} 코인 선물 데모 트레이더다. 아래 신호로 지금 롱/숏/관망을 정한다. 반드시 JSON 한 줄만 출력: {"dir":1,"conf":70} — dir 1=롱 -1=숏 0=관망, conf 0~100. 설명·다른 말 금지.${brainLine}${les}${iqLine}${trapLine}` },
       { role: "user", content: `${ko} 신호(−1 약세 ~ +1 강세): ${Object.entries(feat).map(([k, v]) => k + " " + (+v).toFixed(2)).join(", ")} · 현재가 ${price}\nJSON 만:` }],
       role: "fast", target: tgt, fallback: true, maxTokens: 180, temperature: 0.3, noThink: true, onContent: d => raw += d, onThink: () => {} });
   } catch (e) {
@@ -183,7 +209,9 @@ export async function modelStep() {
   if (dir === null) { feed(`[${shortMd(name)}] ${ko} 판단 형식 못 읽음`); save(); return; }
   const p = M.pos[sym];
   if (p && dir !== 0 && dir !== p.side) closeModelPos(name, sym, price, "반대신호");
-  if (!M.pos[sym] && dir !== 0) { M.pos[sym] = { ko, side: dir, entry: price, price, size: START * 0.2, roe: 0, t: Date.now(), feat: { ...feat } }; feed(`[${shortMd(name)}] ${ko} ${dir > 0 ? "▲롱" : "▼숏"} 진입 @ ${fmt(price)} (${conf}%)`); }
+  const risk = dir !== 0 ? BRAIN.trapRisk(feat, regime, dir) : 0;
+  if (!M.pos[sym] && dir !== 0 && risk >= 0.8) feed(`[${shortMd(name)}] ${ko} ${dir > 0 ? "롱" : "숏"} 보류 — 과거 손절과 ${Math.round(risk * 100)}% 유사(뇌 회피)`);   // 🛑 반복 손절 차단
+  else if (!M.pos[sym] && dir !== 0) { M.pos[sym] = { ko, side: dir, entry: price, price, size: START * 0.2, roe: 0, t: Date.now(), feat: { ...feat } }; feed(`[${shortMd(name)}] ${ko} ${dir > 0 ? "▲롱" : "▼숏"} 진입 @ ${fmt(price)} (${conf}%)`); }
   else if (dir === 0 && !p) feed(`[${shortMd(name)}] ${ko} 관망`);
   save();
 }
@@ -218,7 +246,7 @@ export async function designStrategy() {
   let raw = "";
   try {
     await brainStream({ messages: [
-      { role: "system", content: `너는 코인 선물 퀀트다. 아래 보조지표들을 조합해 BTCUSDT 1시간봉 매매법 하나를 설계한다. 반드시 custom 수식 지표를 1개 이상 포함(예: {"id":"vm","type":"custom","expr":"rsi*0.5+close/sma-1"}). 아래 JSON 스키마로만 출력(설명·코드블록 금지):\n{"name":"이름","indicators":[{"id":"r","type":"tv_rsi","length":14},{"id":"vm","type":"custom","expr":"수식"}],"long_entry":{"conditions":[{"left":"r","op":"<","right":35}]},"long_exit":{"conditions":[{"left":"r","op":">","right":65}]},"risk":{"leverage":2,"stop_loss_pct":4,"take_profit_pct":8}}\n쓸 수 있는 지표: ${catalog}.${M.lessons.length ? " 내 교훈: " + M.lessons.join(" / ") : ""}${BRAIN.recallText("BTC", "", 4) ? " 자체 뇌 패턴: " + BRAIN.recallText("BTC", "", 4) : ""}` },
+      { role: "system", content: `너는 코인 선물 퀀트다. 아래 보조지표들을 조합해 BTCUSDT 1시간봉 매매법 하나를 설계한다. 반드시 custom 수식 지표를 1개 이상 포함(예: {"id":"vm","type":"custom","expr":"rsi*0.5+close/sma-1"}). 아래 JSON 스키마로만 출력(설명·코드블록 금지):\n{"name":"이름","indicators":[{"id":"r","type":"tv_rsi","length":14},{"id":"vm","type":"custom","expr":"수식"}],"long_entry":{"conditions":[{"left":"r","op":"<","right":35}]},"long_exit":{"conditions":[{"left":"r","op":">","right":65}]},"risk":{"leverage":2,"stop_loss_pct":4,"take_profit_pct":8}}\n쓸 수 있는 지표: ${catalog}.${M.lessons.length ? " 내 교훈: " + M.lessons.join(" / ") : ""}${BRAIN.recallText("BTC", "", 4) ? " 자체 뇌 패턴: " + BRAIN.recallText("BTC", "", 4) : ""} 뇌가 이득났던 규칙(반영해 설계): ${BRAIN.refineForProfit("BTC", "").text}` },
       { role: "user", content: "매매법 JSON 하나만 출력:" }],
       role: "code", target: tgt, fallback: true, maxTokens: 700, temperature: 0.6, noThink: true, onContent: d => raw += d, onThink: () => {} });
   } catch (e) { feed(`[${shortMd(tgt.model)}] 매매법 설계 응답 실패`); return; }
@@ -250,6 +278,9 @@ export const brainState = () => BRAIN.brainState();
 export const brainGraph = () => BRAIN.graph(80);
 export const brainThink = () => BRAIN.consolidate();   // 뇌 자체 학습(망각·규칙 합성)
 export const brainCanvas = () => BRAIN.toCanvas(120);  // JSON Canvas(.canvas) 내보내기 — Obsidian에서 열기
+export const brainIQ = () => BRAIN.iqScore();           // 뇌 지능 점수(자가학습 정확도)
+export const brainRefine = (coin, regime) => BRAIN.refineForProfit(coin, regime);
+export const brainIngest = (note) => BRAIN.ingest(note);   // 에이전트 팀/외부(.canvas)가 결과를 뇌에 넣음
 export function resetBrain() { BRAIN.reset(); }
 
 export function state() {
