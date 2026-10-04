@@ -39,4 +39,34 @@ export const PRESETS = [
       long_entry: { conditions: [{ left: "ef", op: ">", right: "es" }] },
       long_exit: { conditions: [{ left: "ef", op: "<", right: "es" }] },
       risk: { leverage: 2, stop_loss_pct: 5 } } },
+
+  { name: "돈치안 채널 추세 (EMA 스캐너)", why: "돈치안 채널 중앙 위에선 타고, 하단 깨면 판다 (Darthreign KuCoin-EMA-Scanner · 추세 추종)",
+    spec: { name: "돈치안 채널 추세", indicators: [{ id: "dc", type: "tv_donchian", length: 20 }],
+      long_entry: { conditions: [{ left: "close", op: ">", right: "dc.p1" }] },
+      long_exit: { conditions: [{ left: "close", op: "<", right: "dc.p2" }] },
+      risk: { leverage: 2, stop_loss_pct: 4, take_profit_pct: 10 } } },
+
+  { name: "슈퍼트렌드 추세캐리", why: "슈퍼트렌드 선 위면 타고 가고 하방 전환에 내린다 (passivbot/ninjabot식 추세 유지)",
+    spec: { name: "슈퍼트렌드 추세캐리", indicators: [{ id: "stt", type: "tv_supertrend" }],
+      long_entry: { conditions: [{ left: "close", op: ">", right: "stt" }] },
+      long_exit: { conditions: [{ left: "close", op: "<", right: "stt" }] },
+      risk: { leverage: 2, trailing_stop_pct: 3 } } },
+
+  { name: "변동성 타겟 (ATR 사이징)", why: "ADX로 추세 확인 + ATR 기반 손절로 변동성을 일정하게 (pupedator ADX/ER·변동성 타겟 포지션 사이징)",
+    spec: { name: "변동성 타겟", indicators: [{ id: "adx", type: "tv_adx", length: 14 }, { id: "ef", type: "ema", length: 20 }, { id: "es", type: "ema", length: 50 }],
+      long_entry: { conditions: [{ left: "adx", op: ">", right: 20 }, { left: "ef", op: ">", right: "es" }] },
+      long_exit: { conditions: [{ left: "ef", op: "<", right: "es" }] },
+      risk: { leverage: 2, atr_stop_mult: 2, atr_tp_mult: 4, position_pct: 15 } } },
+
+  { name: "박스권 그리드형 반복", why: "RSI 과매도/과매수를 박스권에서 반복 매매 (passivbot 그리드 아이디어 — 추세장에선 손절로 보호)",
+    spec: { name: "박스권 그리드형", indicators: [{ id: "rsi", type: "tv_rsi", length: 7 }],
+      long_entry: { conditions: [{ left: "rsi", op: "<", right: 25 }] },
+      long_exit: { conditions: [{ left: "rsi", op: ">", right: 55 }] },
+      risk: { leverage: 2, stop_loss_pct: 6, take_profit_pct: 4 } } },
+
+  { name: "평균회귀 (통계적 이격)", why: "가격이 20이평에서 2σ 아래로 벌어지면 사고 중앙 복귀에 판다 (시스템/통계 차익 아이디어)",
+    spec: { name: "평균회귀 2σ", indicators: [{ id: "bb", type: "tv_bb", length: 20 }, { id: "rsi", type: "tv_rsi", length: 14 }],
+      long_entry: { conditions: [{ left: "close", op: "<", right: "bb.p2" }, { left: "rsi", op: "<", right: 35 }] },
+      long_exit: { conditions: [{ left: "close", op: ">", right: "bb" }] },
+      risk: { leverage: 2, stop_loss_pct: 5, take_profit_pct: 6 } } },
 ];

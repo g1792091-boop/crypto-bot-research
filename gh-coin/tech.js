@@ -147,6 +147,30 @@ export const TECH = [
     where: "자동매매봇팀 봇 전략 · lib/botsim.js"},
   {repo: "tuchongkim/visualize-binance (SolTrade)", lic: "OSS", teams: [], status: "참고(미적용)",
     what: "마켓 메이킹(호가 양방향 제시) 모델 — GH Coin 은 단일 포지션·추세 매매 중심이라 복잡·고위험의 MM 은 넣지 않음. 아이디어만 기록",
-    where: "—"}
+    where: "—"},
+  {repo: "cubexch/ai-fund · 0xSanei/darwinia · chrisworsey55/atlas-gic · chunxiaoxx/Nautilus", lic: "각 OSS", teams: ["demo", "dev"], status: "적용",
+    what: "경제적 생존 압박: KPI 미달 해고(ai-fund) · 다윈주의 약자도태·강자번식(darwinia) · 샤프 기반 자기개선 루프(atlas-gic) · 진화 못하면 제거(Nautilus). 전부 가상(데모)자금에서만 구현 — 실자금·실지갑 없음",
+    where: "'생존 경쟁'(survivalJob): 개발자 KPI·성과경고/재교육 + 다윈 전략 진화(lib/evolve.js 변이 → 검증 통과+부모보다 나은 후손만 번식) · 적응형 재학습(약자 도태)"},
+  {repo: "CyberImmortal/clawdrive · Conway Automaton", lic: "각 OSS", teams: [], status: "미적용(안전상)",
+    what: "'돈 못 벌면 죽는다' — 실제 지갑·실자금으로 자율 트레이딩·자가진화. 실자금 자율운용은 사기·해킹·손실 위험이 커서 넣지 않음. 생존 압박은 가상자금 버전으로만 구현",
+    where: "— (생존 개념은 위 survivalJob 가 가상자금으로 대체)"},
+  {repo: "virattt/ai-hedge-fund · LynchzDEV/ai-auto-trader-ahh", lic: "각 OSS", teams: ["ic"], status: "적용",
+    what: "투자 대가 12 페르소나(버핏·멍거·소로스·달리오·우드·린치·차노스·버리·사이먼스 등) · 멀티에이전트 토론 합의(debate consensus)",
+    where: "투자위원회(icJob) IC_PERSONAS 12명 · icConsensus(투표 집계로 합의 방향·강도)"},
+  {repo: "Ganador1/FenixAI · quentinjeon/openclaw-trade", lic: "각 OSS", teams: ["ic", "news", "qrisk"], status: "적용",
+    what: "멀티에이전트 파이프라인(분석→전략→리스크→실행→포트폴리오) · 메모리로 역량 진화(ReasoningBank) · 뉴스로 고위험 시 익스포저 축소",
+    where: "파이프라인(분석팀→매매법→백테스트→데모→실거래) · 교훈 메모리(lib/lessons.js) · 시장심리/뉴스(sentimentJob·economyCheck) · 퀀트 리스크(qriskJob)"},
+  {repo: "The-Quant-Trading-Vault · pupedator · enarjord/passivbot · bengalm/ninjabot · SteWolk/kuegiBot · Darthreign/KuCoin-EMA-Scanner · pkdoddamani/binance-futures-bot", lic: "각 OSS", teams: ["demo", "bot"], status: "적용",
+    what: "다양한 코인선물 전략: 돌파(돈치안)·슈퍼트렌드 추세캐리·변동성 타겟(ADX+ATR 사이징)·그리드형 반복·평균회귀(통계)·RSI/MACD/EMA",
+    where: "준비된 매매법 프리셋 12종(lib/presets.js) · 프리셋 비교(presetJob) · 자동매매봇 템플릿 · 그리드/DCA(lib/botsim.js)"},
+  {repo: "beebots · SnowingFox/open-nof1.ai · dsh-crypto-workbench · HuseynBabakhanov · TerminalGravity/blofin-app", lic: "각 OSS", teams: ["demo", "selfai", "combo", "ml"], status: "적용(개념)",
+    what: "봇/모델 경쟁 아레나 · 기회 레이더/스캔(여러 코인 선물 기회 탐지)",
+    where: "전략 콘테스트(신뢰점수 아레나) · 실시간 타점판(6코인×4시간대) · 자체 AI 방향·확신도 순위(selfaiJob) · 알파 팩터 순위(alphaJob)"},
+  {repo: "hivemoot · hermes-agent-team · longwindwang1/agent-team · Root-IO-Labs/open-agent-teams · keepongo/routa · msitarzewski/agency-agents", lic: "각 OSS", teams: ["hq"], status: "적용(개념)",
+    what: "역할 기반 다중 에이전트 팀·회의·상호 리뷰·칸반 파이프라인(Backlog→Dev→Review→Done)·230+ 전문 페르소나",
+    where: "31팀 331명 조직(coin-org.js) · 회의(전략가→반론검토관→리스크→CEO) · #파이프라인 채널 · ARTEX식 플래너/보드(lib/planner.js·board.js)"},
+  {repo: "GitHub Models · xtekky/gpt4free · zebbern/no-cost-ai · CodebuffAI/freebuff · awesome-free-models", lic: "각 OSS/무료", teams: [], status: "참고(공급자 추가는 설정에서)",
+    what: "무료 LLM 공급자 모음(GitHub Models·DeepSeek·Llama 등). GH Coin 은 NVIDIA·Groq·Cerebras·Gemini·OpenRouter 등 무료 공급자를 이미 지원하며, OpenAI 호환이면 '내 API 직접 연결'로 추가 가능",
+    where: "설정 → AI 두뇌(engine.js PROVIDERS·custom) · 무료 키 발급 안내"}
 ];
-export const TECH_REPOS = 40;   // 에이전트·자체 AI·RAG 관련 (biomolecular·probot 은 해당 없음)
+export const TECH_REPOS = 48;   // 경제적 생존·멀티에이전트·전략·무료AI 추가

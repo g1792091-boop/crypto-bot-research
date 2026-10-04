@@ -1709,8 +1709,20 @@ const IC_PERSONAS = [
   {name: "모멘텀파", style: "리버모어식 추세·모멘텀", lean: "추세는 친구. 신고가·거래량 동반 돌파를 좋아하고, 추세가 꺾이면 바로 빠진다."},
   {name: "매크로파", style: "소로스·달리오식 매크로", lean: "금리·유동성·달러·ETF 자금 같은 큰 흐름이 방향을 정한다고 본다. 과열/과냉(재귀성)을 경계한다."},
   {name: "퀀트파", style: "데이터·확률 중심", lean: "서사보다 숫자. 변동성·상관·기대값·손익비로만 판단하고 크기는 켈리로 정한다."},
-  {name: "리스크패리티파", style: "브리지워터식 생존 우선", lean: "수익보다 생존. 포지션 크기·상관·꼬리위험을 먼저 보고 청산 가능성을 0에 가깝게 둔다."}
+  {name: "리스크패리티파", style: "브리지워터식 생존 우선", lean: "수익보다 생존. 포지션 크기·상관·꼬리위험을 먼저 보고 청산 가능성을 0에 가깝게 둔다."},
+  {name: "성장주파", style: "캐시 우드·필립 피셔식 혁신 성장", lean: "판을 바꾸는 기술·채택 곡선·네트워크 효과를 본다. 단기 밸류에이션보다 장기 성장 궤적."},
+  {name: "저평가방어파", style: "찰리 멍거식 '멍청한 짓 안 하기'", lean: "확실히 아는 것만. 역방향 체크리스트로 치명적 실수(과최적화·과레버리지·사기 토큰)를 먼저 걸러낸다."},
+  {name: "현장파", style: "피터 린치식 '아는 것에 투자'", lean: "실제 쓰임·거래량·온체인 활동 같은 눈에 보이는 수요를 중시. 복잡한 서사보다 단순한 수급."},
+  {name: "공매도파", style: "짐 차노스·마이클 버리식 회의론", lean: "거품·레버리지·펀딩 과열·청산 연쇄를 찾아 약세 시나리오를 날카롭게 제시한다. 반대편 리스크 담당."},
+  {name: "이벤트파", style: "폴슨식 이벤트 드리븐", lean: "ETF·반감기·상장/상폐·규제 결정 같은 촉매와 그 전후 수급 변화를 노린다."},
+  {name: "시스템파", style: "사이먼스·르네상스식 통계 차익", lean: "서사 완전 배제. 평균회귀·통계적 엣지·체결비용만. 작은 엣지를 많이, 리스크는 기계적으로."}
 ];
+// 멀티에이전트 토론 합의 (LynchzDEV/ai-auto-trader-ahh): 페르소나 투표를 집계해 합의 강도를 낸다
+function icConsensus(votes){
+  const n = votes.length || 1, buy = votes.filter(v => v === "매수").length, sell = votes.filter(v => v === "매도").length, hold = n - buy - sell;
+  const net = (buy - sell) / n, dir = net > 0.2 ? "매수" : net < -0.2 ? "매도" : "관망";
+  return {dir, buy, sell, hold, agree: Math.round(Math.max(buy, sell, hold) / n * 100)};
+}
 async function icJob(){
   await icSettle();
   const named = userNote && COINS.find(c => new RegExp(`${c.ko}|${c.sym.replace("USDT", "")}`, "i").test(userNote));
