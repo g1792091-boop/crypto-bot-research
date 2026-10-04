@@ -247,8 +247,9 @@ function shortMd(m) { return String(m).split("/").pop().replace(/-instruct|-chat
 function strongFeat(feat = {}) { return Object.entries(feat).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, 2).map(([k, v]) => k + (v >= 0 ? "+" : "") + (+v).toFixed(1)).join(",") || "—"; }
 // 뇌 상태·그래프·자체학습 공개 (UI용)
 export const brainState = () => BRAIN.brainState();
-export const brainGraph = () => BRAIN.graph(70);
+export const brainGraph = () => BRAIN.graph(80);
 export const brainThink = () => BRAIN.consolidate();   // 뇌 자체 학습(망각·규칙 합성)
+export const brainCanvas = () => BRAIN.toCanvas(120);  // JSON Canvas(.canvas) 내보내기 — Obsidian에서 열기
 export function resetBrain() { BRAIN.reset(); }
 
 export function state() {

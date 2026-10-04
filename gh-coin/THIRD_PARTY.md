@@ -75,6 +75,13 @@ GPL·LGPL 저장소와 라이선스 표시가 없는 저장소는 특히 규칙�
 - `coin-office.js` `personaOf` — 상위 교훈을 **모든 에이전트의 프롬프트에 주입**(= 팀원 전원에게 내장). `plannerJob`·`selfaiJob`·`botImproveJob` 가 교훈을 기록한다.
 - 코인 AI 봇도 '배운 것'을 지식으로 쓴다.
 
+## 자체 뇌 지식 그래프 (Obsidian — 아이디어만, 코드 복사 없음, 적용)
+`obsidianmd` 공개 레포들의 **개념만** 가져와 뉴럴 데스크 자체 뇌(`gh-coin/brain.js`)와 그래프 UI(`gh-coin/neural-ui.js`)에 다시 구현했다(코드 복사 없음):
+- `obsidianmd/jsoncanvas` (JSON Canvas 오픈 스펙) — 뇌를 **`.canvas` 파일로 내보내기**(`brain.js` `toCanvas()`). 실제 Obsidian 무한 캔버스에서 열린다. 노드(type:"text")·엣지(fromNode/toNode/label)·프리셋 색(1~6) 스펙을 따름.
+- `obsidianmd/obsidian-api` — **위키링크[[ ]]·백링크·그래프 뷰** 개념: 기억끼리 `links`로 연결하고, 연결 수(degree)로 노드 크기를 키운다(허브 = 자주 확인된 핵심 규칙). 호버 시 이웃만 강조.
+- `obsidianmd/obsidian-clipper` — 웹/경험을 **원자 노트로 정제(distill)**: 복기·패턴을 한 줄 기억으로 요약해 쌓는 방식의 근거.
+- `obsidianmd/obsidian-help` · `obsidian-sample-plugin` · `obsidian-releases` — 그래프 뷰/플러그인 구조 참고(문서·보일러플레이트·레지스트리). UI 스타일(발광 노드·물리 이동·라벨)의 레퍼런스.
+
 ## 넣지 않은 보안 공격(레드팀) 도구 — 제외
 다음은 모두 **보안 공격(레드팀)용 자율 AI 도구**라 거래 앱·에이전트에 **넣지 않았다**(clone 해 내용만 확인, vendor·포팅 없음): `AIPentest/CyberStrikeAI`, `0x4m4/hexstrike-ai`, `usestrix/strix`, `oritera/Cairn`, `Autumn-27/ARTEX`.
 

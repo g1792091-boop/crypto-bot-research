@@ -12,6 +12,18 @@ export async function openNeural(ctx = {}) {
   inject();
   root.querySelector("[data-x]").onclick = close;
   root.querySelector("[data-reset]").onclick = () => { if (confirm("뉴럴 데스크의 가상 성적·학습 가중치를 모두 초기화할까요?")) { N.reset(); render(); } };
+  // 🧠 뇌 그래프 호버(Obsidian식: 올린 노드와 이웃만 강조) + .canvas 내보내기(Obsidian에서 열기)
+  const bcv = root.querySelector("canvas[data-brain]");
+  if (bcv) { bcv.onmousemove = (e) => { const r = bcv.getBoundingClientRect(); bmouse = { x: e.clientX - r.left, y: e.clientY - r.top }; }; bcv.onmouseleave = () => { bmouse = null; }; }
+  const cbtn = root.querySelector("[data-canvas]");
+  if (cbtn) cbtn.onclick = () => {
+    const c = N.brainCanvas();
+    if (!c.nodes.length) { alert("아직 뇌가 비어 있습니다 — 모델들이 거래·복기하며 지식이 쌓이면 내보낼 수 있어요."); return; }
+    const blob = new Blob([JSON.stringify(c, null, 1)], { type: "application/json" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+    a.download = `GHCoin-brain-${new Date().toISOString().slice(0, 10)}.canvas`; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  };
   ST = N.state();
   render();
   let k = 0;
@@ -129,9 +141,10 @@ function draw() {
   g.textAlign = "left"; g.fillText("FEATURE NEURONS", W * 0.06, H * 0.12);
 }
 
-// ── 🧠 뇌 지식 그래프 (force-directed, 지식 노드가 들어오며 응집) ──
-let brainG = null, bnodes = {};
-const BCOL = { "교훈": "224,165,62", "패턴": "46,194,126", "전략": "183,156,255", "핵심": "255,120,120", "관찰": "90,140,220" };
+// ── 🧠 뇌 지식 그래프 (Obsidian 그래프 뷰 스타일) ──
+// 발광 노드 · 연결 수(degree)로 크기 · 유형별 색 그룹 · 부드러운 물리 이동 · 호버 시 이웃만 강조(나머지 흐리게) · 새 지식 펄스.
+let brainG = null, bnodes = {}, bmouse = null;
+const BCOL = { "교훈": [224, 165, 62], "패턴": [46, 194, 126], "전략": [183, 156, 255], "핵심": [255, 120, 120], "관찰": [120, 150, 220] };
 function drawBrain() {
   const cv = root && root.querySelector("canvas[data-brain]"); if (!cv) return;
   const dpr = Math.min(2, window.devicePixelRatio || 1), W = cv.clientWidth, H = cv.clientHeight;
@@ -139,24 +152,42 @@ function drawBrain() {
   const g = cv.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
   if (!brainG || !brainG.nodes.length) { g.fillStyle = "#5a6374"; g.font = "11px ui-monospace,monospace"; g.textAlign = "center"; g.fillText("뇌가 비어있음 — 모델들이 복기·거래하며 지식이 쌓입니다", W / 2, H / 2); return; }
   const cx = W / 2, cy = H / 2, ids = new Set(brainG.nodes.map(n => n.id));
-  for (const n of brainG.nodes) { if (!bnodes[n.id]) bnodes[n.id] = { x: cx + (Math.random() - 0.5) * 24, y: cy + (Math.random() - 0.5) * 24, vx: 0, vy: 0, born: performance.now() }; bnodes[n.id].node = n; }
+  for (const n of brainG.nodes) { if (!bnodes[n.id]) bnodes[n.id] = { x: cx + (Math.random() - 0.5) * 30, y: cy + (Math.random() - 0.5) * 30, vx: 0, vy: 0, born: performance.now() }; bnodes[n.id].node = n; }
   for (const id in bnodes) if (!ids.has(+id)) delete bnodes[id];
   const arr = brainG.nodes.map(n => bnodes[n.id]);
+  const rOf = (n) => 2.6 + Math.min(9, (n.deg || 0) * 1.5 + n.w * 0.9);   // 연결 많을수록 큰 허브 노드(obsidian식)
+  // 물리: 반발 + 중심 인력 + 엣지 스프링
   for (let it = 0; it < 2; it++) {
     for (let i = 0; i < arr.length; i++) { const a = arr[i];
-      for (let j = i + 1; j < arr.length; j++) { const b = arr[j]; let dx = a.x - b.x, dy = a.y - b.y; const d2 = dx * dx + dy * dy + 0.01; if (d2 < 9000) { const f = 140 / d2; a.vx += dx * f; a.vy += dy * f; b.vx -= dx * f; b.vy -= dy * f; } }
-      a.vx += (cx - a.x) * 0.0022; a.vy += (cy - a.y) * 0.0022; }
-    for (const [i, j] of brainG.edges) { const a = arr[i], b = arr[j]; if (!a || !b) continue; const dx = b.x - a.x, dy = b.y - a.y; a.vx += dx * 0.012; a.vy += dy * 0.012; b.vx -= dx * 0.012; b.vy -= dy * 0.012; }
-    for (const a of arr) { a.vx *= 0.84; a.vy *= 0.84; a.x += Math.max(-3, Math.min(3, a.vx)); a.y += Math.max(-3, Math.min(3, a.vy)); a.x = Math.max(10, Math.min(W - 10, a.x)); a.y = Math.max(16, Math.min(H - 10, a.y)); }
+      for (let j = i + 1; j < arr.length; j++) { const b = arr[j]; let dx = a.x - b.x, dy = a.y - b.y; const d2 = dx * dx + dy * dy + 0.01; if (d2 < 11000) { const f = 170 / d2; a.vx += dx * f; a.vy += dy * f; b.vx -= dx * f; b.vy -= dy * f; } }
+      a.vx += (cx - a.x) * 0.0020; a.vy += (cy - a.y) * 0.0020; }
+    for (const [i, j, kind] of brainG.edges) { const a = arr[i], b = arr[j]; if (!a || !b) continue; const k = kind === "link" ? 0.018 : 0.010, dx = b.x - a.x, dy = b.y - a.y; a.vx += dx * k; a.vy += dy * k; b.vx -= dx * k; b.vy -= dy * k; }
+    for (const a of arr) { a.vx *= 0.85; a.vy *= 0.85; a.x += Math.max(-3, Math.min(3, a.vx)); a.y += Math.max(-3, Math.min(3, a.vy)); a.x = Math.max(12, Math.min(W - 12, a.x)); a.y = Math.max(14, Math.min(H - 12, a.y)); }
   }
-  g.strokeStyle = "rgba(90,100,120,0.16)"; g.lineWidth = 0.7;
-  for (const [i, j] of brainG.edges) { const a = arr[i], b = arr[j]; if (!a || !b) continue; g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.stroke(); }
-  for (const a of arr) { const n = a.node, c = BCOL[n.type] || "120,130,150", r = 2.5 + Math.min(7, n.w * 2);
-    const age = (performance.now() - a.born) / 650, pop = age < 1 ? 1 + (1 - age) * 1.4 : 1;
-    if (age < 1) { g.strokeStyle = `rgba(${c},${(1 - age) * 0.55})`; g.lineWidth = 1; g.beginPath(); g.arc(a.x, a.y, r * pop + 3 + (1 - age) * 5, 0, 7); g.stroke(); }   // 새 지식 = 퍼지는 링
-    g.fillStyle = `rgba(${c},0.92)`; g.beginPath(); g.arc(a.x, a.y, r * pop, 0, 7); g.fill();
-    if (n.w >= 2.5 || r > 6.2) { g.fillStyle = "#9aa4b6"; g.font = "9px ui-monospace,monospace"; g.textAlign = "center"; g.fillText(String(n.text).slice(0, 16), a.x, a.y - r - 3); }
+  // 호버된 노드 찾기(가장 가까운 것) + 이웃 집합
+  let hov = -1, hd = 1e9;
+  if (bmouse) arr.forEach((a, i) => { const d = (a.x - bmouse.x) ** 2 + (a.y - bmouse.y) ** 2; if (d < hd && d < 900) { hd = d; hov = i; } });
+  const nb = new Set(); if (hov >= 0) { nb.add(hov); for (const [i, j] of brainG.edges) { if (i === hov) nb.add(j); if (j === hov) nb.add(i); } }
+  const lit = (i) => hov < 0 || nb.has(i);
+  // 엣지
+  for (const [i, j, kind] of brainG.edges) { const a = arr[i], b = arr[j]; if (!a || !b) continue;
+    const on = hov < 0 ? false : (i === hov || j === hov), base = kind === "link" ? 0.30 : 0.14;
+    g.strokeStyle = on ? "rgba(150,180,235,0.75)" : `rgba(100,112,135,${hov < 0 ? base : base * 0.35})`;
+    g.lineWidth = on ? 1.4 : (kind === "link" ? 0.9 : 0.6);
+    g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.stroke(); }
+  // 노드(발광)
+  for (let i = 0; i < arr.length; i++) { const a = arr[i], n = a.node, c = BCOL[n.type] || [130, 140, 160], r = rOf(n);
+    const on = lit(i), al = on ? 1 : 0.22;
+    const age = (performance.now() - a.born) / 700, pop = age < 1 ? 1 + (1 - age) * 1.3 : 1;
+    if (age < 1 && on) { g.strokeStyle = `rgba(${c},${(1 - age) * 0.5})`; g.lineWidth = 1; g.beginPath(); g.arc(a.x, a.y, r * pop + 4 + (1 - age) * 7, 0, 7); g.stroke(); }   // 새 지식 = 퍼지는 펄스
+    g.save(); g.shadowColor = `rgba(${c},${on ? 0.9 : 0.2})`; g.shadowBlur = on ? 10 + r : 4;
+    g.fillStyle = `rgba(${c},${al})`; g.beginPath(); g.arc(a.x, a.y, r * pop, 0, 7); g.fill(); g.restore();
+    if (on) { g.fillStyle = `rgba(255,255,255,${0.5 * al})`; g.beginPath(); g.arc(a.x - r * 0.3, a.y - r * 0.3, r * 0.34, 0, 7); g.fill(); }   // 하이라이트 점
+    if (i === hov || (hov < 0 && (n.deg >= 3 || r > 8.5))) { g.fillStyle = i === hov ? "#eef2f8" : "#9aa4b6"; g.font = (i === hov ? "600 " : "") + "10px ui-monospace,monospace"; g.textAlign = "center"; g.fillText(String(n.text).slice(0, i === hov ? 34 : 15), a.x, a.y - r - 4); }
   }
+  // 범례(좌하단)
+  g.font = "9px ui-monospace,monospace"; g.textAlign = "left"; let lx = 8;
+  for (const [t, c] of Object.entries(BCOL)) { g.fillStyle = `rgba(${c},0.9)`; g.beginPath(); g.arc(lx + 3, H - 7, 3, 0, 7); g.fill(); g.fillStyle = "#6b7488"; g.fillText(t, lx + 9, H - 4); lx += 20 + t.length * 11; }
 }
 
 function shortMd(m) { return String(m).split("/").pop().replace(/-instruct|-chat/i, "").slice(0, 18); }
@@ -171,7 +202,7 @@ const SHELL = `
   <div class="nd-card nd-shell"><div class="nd-h">NEURAL SHELL · 피처 → 결정 코어 → 확률 셸</div><canvas data-shell></canvas></div>
   <div class="nd-card nd-trd"><div class="nd-h">AI 모델 트레이더 리더보드 <small>(직접 거래·복기·학습 · PnL 순)</small></div><div class="nd-neurons" data-neurons></div></div>
   <div class="nd-card nd-trades"><div class="nd-h">최근 데모 거래 · 매매법 설계</div><div class="nd-tr" data-trades></div></div>
-  <div class="nd-card nd-brain"><div class="nd-h">🧠 뇌 지식 그래프 <small data-braininfo></small></div><canvas data-brain></canvas></div>
+  <div class="nd-card nd-brain"><div class="nd-h">🧠 뇌 지식 그래프 <small data-braininfo></small><button class="nd-mini" data-canvas title="JSON Canvas로 내보내기 — Obsidian에서 열 수 있어요">.canvas ↓</button></div><canvas data-brain></canvas></div>
 </div>`;
 
 function inject() {
@@ -187,7 +218,9 @@ function inject() {
 .nd-btn:hover{background:#1c2434}.nd-x{color:#f2364b}
 .nd-grid{flex:1;display:grid;grid-template-columns:1.05fr 1fr;grid-template-rows:auto 1.05fr 0.82fr;gap:10px;padding:10px;min-height:0}
 .nd-card{background:#0c1119;border:1px solid #1a2130;border-radius:8px;padding:10px 12px;min-height:0;overflow:auto;display:flex;flex-direction:column}
-.nd-h{color:#6b7488;font-size:10px;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;flex:0 0 auto}.nd-h small{color:#454c5c}
+.nd-h{color:#6b7488;font-size:10px;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;flex:0 0 auto;display:flex;align-items:center;gap:8px}.nd-h small{color:#454c5c}
+.nd-mini{margin-left:auto;background:#141a26;border:1px solid #28303f;color:#8a93a6;padding:2px 7px;border-radius:4px;cursor:pointer;font:10px ui-monospace,monospace;letter-spacing:0;text-transform:none}.nd-mini:hover{background:#1c2434;color:#b79cff}
+.nd-brain canvas{cursor:crosshair}
 .nd-pnl .nd-big b{font-size:40px;font-weight:700;line-height:1}
 .nd-kpi{display:flex;gap:16px;margin-top:10px;color:#788;font-size:11px}.nd-kpi b{color:#c9d1e0}
 .nd-pnl{grid-column:1/2;grid-row:1/2}.nd-mkt{grid-column:2/3;grid-row:1/2}

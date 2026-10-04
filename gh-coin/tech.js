@@ -177,6 +177,9 @@ export const TECH = [
     where: "🧠 뉴럴 데스크(neural.js·neural-ui.js): modelStep(직접 거래)·reflect(복기 학습)·designStrategy(매매법·커스텀 지표 설계→백테스트→사무실 인계) · 상단 '🧠 뉴럴 데스크' 버튼"},
   {repo: "memvid/claude-brain · toroleapinc/claude-brain · OoneBreath/project-brain · AgriciDaniel/claude-obsidian · ArcInstitute/brain-agent-template", lic: "각 OSS", teams: ["selfai"], status: "적용",
     what: "영속 집단 기억(자체 뇌): 모델들이 복기·거래·설계에서 배운 교훈·승리 패턴·전략을 세션 넘어 누적하고, 다음 판단 때 지금 상황(코인+국면)에 맞는 기억을 꺼내(RAG식 회상) 프롬프트에 주입. 결과로 기억을 강화/쇠퇴(obsidian식 지식 볼트 + brain-agent 기억 그래프 개념)",
-    where: "자체 뇌(gh-coin/brain.js): learn/recall/reinforce + 뉴럴 데스크가 modelStep·reflect·designStrategy 에서 뇌를 읽고 씀 · 대시보드 '🧠 자체 뇌 · 누적 기억' 패널"}
+    where: "자체 뇌(gh-coin/brain.js): learn/recall/reinforce + 뉴럴 데스크가 modelStep·reflect·designStrategy 에서 뇌를 읽고 씀 · 대시보드 '🧠 자체 뇌 · 누적 기억' 패널"},
+  {repo: "obsidianmd/jsoncanvas · obsidian-api · obsidian-clipper · obsidian-help · obsidian-sample-plugin · obsidian-releases", lic: "MIT 등 각 OSS", teams: ["selfai"], status: "적용",
+    what: "자체 뇌의 지식 그래프화(Obsidian 개념): ① 기억끼리 위키링크[[ ]]·백링크로 연결하고 연결 수(degree)로 노드 크기 결정(obsidian-api 그래프 뷰) ② 핵심 규칙이 근거 패턴들에 링크되며 허브로 자람 ③ JSON Canvas(.canvas) 오픈 포맷으로 내보내 실제 Obsidian에서 열기(jsoncanvas) ④ 기억을 원자 노트로 정제(obsidian-clipper distill 개념)",
+    where: "brain.js: learn(links)·graph(degree/엣지)·toCanvas(.canvas 내보내기) · neural-ui.js: 🧠 뇌 지식 그래프 카드(Obsidian 그래프 뷰 스타일 — 발광 노드·호버 이웃 강조·degree 크기·.canvas ↓ 버튼)"}
 ];
-export const TECH_REPOS = 58;   // 자체 뇌(영속 집단 기억) 추가
+export const TECH_REPOS = 64;   // + Obsidian 6종(지식 그래프·위키링크·JSON Canvas)
