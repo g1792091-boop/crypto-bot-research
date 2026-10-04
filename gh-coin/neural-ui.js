@@ -4,6 +4,7 @@ let root = null, raf = 0, loop = 0, N = null, ST = null;
 const E = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const money = (v) => (v >= 0 ? "+" : "−") + "$" + Math.abs(v).toLocaleString(undefined, { maximumFractionDigits: 0 });
 const ago = (t) => { const s = (Date.now() - t) / 1000 | 0; return s < 60 ? s + "s" : (s / 60 | 0) + "m"; };
+const fmtp = (v) => v == null ? "–" : v >= 1000 ? Math.round(v).toLocaleString() : v >= 1 ? (+v).toFixed(2) : (+v).toPrecision(4);
 
 export async function openNeural(ctx = {}) {
   N = await import("./neural.js");
@@ -15,6 +16,11 @@ export async function openNeural(ctx = {}) {
   // 🧠 뇌 그래프 호버(Obsidian식: 올린 노드와 이웃만 강조) + .canvas 내보내기(Obsidian에서 열기)
   const bcv = root.querySelector("canvas[data-brain]");
   if (bcv) { bcv.onmousemove = (e) => { const r = bcv.getBoundingClientRect(); bmouse = { x: e.clientX - r.left, y: e.clientY - r.top }; }; bcv.onmouseleave = () => { bmouse = null; }; }
+  // ⚙️ 시드비중·레버리지 조절 (코인 선물 거래소처럼)
+  const seedEl = root.querySelector("[data-seed]"), levEl = root.querySelector("[data-lev]"), seedV = root.querySelector("[data-seedv]");
+  const cfg0 = N.getCfg();
+  if (seedEl) { seedEl.value = cfg0.seedPct; if (seedV) seedV.textContent = cfg0.seedPct + "%"; seedEl.oninput = () => { if (seedV) seedV.textContent = seedEl.value + "%"; }; seedEl.onchange = () => { N.setCfg({ seedPct: +seedEl.value }); feed(`시드비중 ${seedEl.value}%로 변경 (증거금 = 자본 × ${seedEl.value}%)`); }; }
+  if (levEl) { levEl.value = cfg0.lev; levEl.onchange = () => { const v = Math.max(1, Math.min(200, +levEl.value || 10)); const c = N.setCfg({ lev: v }); levEl.value = c.lev; feed(`레버리지 ${c.lev}x로 변경 (비트 최대 200·알트 최대 100)`); }; }
   // 💻 로컬 전용 토글 (설치된 Ollama 모델만)
   const lbtn = root.querySelector("[data-local]");
   const paintLocal = () => { if (lbtn) { const on = N.localOnly(); lbtn.textContent = on ? "💻 로컬 전용: 켜짐" : "💻 로컬 전용"; lbtn.style.background = on ? "#1e3a1e" : ""; lbtn.style.color = on ? "#7fe08a" : ""; } };
@@ -90,17 +96,26 @@ function render() {
       `<div class="nsub">누적 기억 ${s.brain.n}개 <span class="dim">${Object.entries(s.brain.byType || {}).map(([t, c]) => t + " " + c).join(" · ") || "비어있음"}</span></div>` +
       (s.brain.top.length ? s.brain.top.slice(0, 7).map(m => `<div class="brow"><span class="bt ${m.type === "패턴" ? "up" : m.type === "교훈" ? "warn" : m.type === "전략" ? "pur" : "dim"}">${E(m.type)}</span><span class="btx" title="${E(m.text)}${m.model ? " · " + E(m.model) : ""}">${E(m.text)}</span><small>×${m.w}</small></div>`).join("")
         : `<div class="dim" style="padding:4px 0">아직 비어있음 — 모델들이 복기·거래하며 기억을 쌓습니다</div>`) : "");
-  // 코인별 결정
-  root.querySelector("[data-markets]").innerHTML = N.COINS.map(([ko, sym]) => {
-    const d = s.dec[sym], p = s.pos.find(x => x.ko === ko);
+  // 코인별 결정(스캔) 그리드
+  const grid = N.COINS.map(([ko, sym]) => {
+    const d = s.dec[sym];
     const dir = d ? (d.dir > 0 ? "▲" : d.dir < 0 ? "▼" : "·") : "·", col = d ? (d.dir > 0 ? "up" : d.dir < 0 ? "dn" : "dim") : "dim";
-    return `<div class="mrow"><b>${ko}</b><span class="${col}">${dir} ${d ? d.conf + "%" : "–"}</span>${p ? `<em class="${p.roe >= 0 ? "up" : "dn"}">${p.side > 0 ? "롱" : "숏"} ${p.roe >= 0 ? "+" : ""}${p.roe}%</em>` : `<em class="dim">무포</em>`}</div>`;
+    return `<div class="mrow"><b>${ko}</b><span class="${col}">${dir} ${d ? d.conf + "%" : "–"}</span><em class="dim">${d ? "$" + fmtp(d.price) : "–"}</em></div>`;
   }).join("");
+  // 🔴 열린 포지션 (거래소 스타일: 레버리지·증거금·진입/현재·ROE·PnL·청산가) — 자체 + 모델 전부
+  const allPos = [];
+  for (const p of (s.pos || [])) allPos.push({ ...p, who: "자체" });
+  for (const tr of (s.traders || [])) if (tr.prov !== "self" && Array.isArray(tr.pos)) for (const p of tr.pos) allPos.push({ ...p, who: tr.name });
+  const posList = allPos.length ? allPos.map(p => {
+    const uPnl = p.margin != null ? p.margin * (p.roe || 0) / 100 : 0;
+    return `<div class="prow ${p.roe >= 0 ? "up" : "dn"}"><div class="pr1"><b>${E(p.ko)}</b> <span class="${p.side > 0 ? "up" : "dn"}">${p.side > 0 ? "롱" : "숏"} ${p.lev || "?"}x</span> <small class="dim">${E(p.who)}</small><span class="pr-roe ${p.roe >= 0 ? "up" : "dn"}">${p.roe >= 0 ? "+" : ""}${(p.roe || 0).toFixed(1)}%</span></div><div class="pr2 dim">증거금 $${(p.margin || 0).toFixed(0)} · 진입 ${fmtp(p.entry)} → ${fmtp(p.price)} · <span class="${uPnl >= 0 ? "up" : "dn"}">${uPnl >= 0 ? "+" : "−"}$${Math.abs(uPnl).toFixed(2)}</span> · 청산 ${fmtp(p.liq)}</div></div>`;
+  }).join("") : `<div class="dim" style="padding:6px">열린 포지션 없음 — 신호가 나오면 진입합니다</div>`;
+  root.querySelector("[data-markets]").innerHTML = `<div class="nd-mgrid">${grid}</div><div class="pos-h">열린 포지션 ${allPos.length}</div>${posList}`;
   // 모델이 설계한 매매법·커스텀 지표 (백테스트 → 사무실 인계)
   const des = (s.designs || []).map(d => `<div class="trow des"><span class="dim">${ago(d.t)}</span><b style="color:#b79cff">${E(d.model)}</b><span>${d.cls ? `<em style="color:#7ea6ff">${E(d.cls)}</em> ` : ""}${E(d.coin || "")}${d.tf ? "·" + E(d.tf) : ""}${d.win != null ? " 승" + d.win + "%" : ""}${d.mdd != null ? " 낙" + d.mdd + "%" : ""}</span><b class="${d.ret >= 0 ? "up" : "dn"}">${d.ret}%</b><span>${E(d.name)} <em class="${d.handed ? "up" : d.pass ? "" : "dim"}">${d.handed ? "→ 사무실 인계" : d.pass ? "통과" : "불통과"}</em></span></div>`).join("");
   // 거래
   root.querySelector("[data-trades]").innerHTML = des + (s.trades.length ? s.trades.map(t =>
-    `<div class="trow"><span class="dim">${ago(t.t)}</span><b>${t.ko}</b><span>${t.side > 0 ? "롱" : "숏"}</span><b class="${t.roe >= 0 ? "up" : "dn"}">${t.roe >= 0 ? "+" : ""}${t.roe}%</b><span class="dim">${E(t.why)}</span></div>`
+    `<div class="trow"><span class="dim">${ago(t.t)}</span><b>${t.ko}</b><span>${t.side > 0 ? "롱" : "숏"}${t.lev ? " " + t.lev + "x" : ""}</span><b class="${t.roe >= 0 ? "up" : "dn"}">${t.roe >= 0 ? "+" : ""}${t.roe}%</b><span class="${t.pnl >= 0 ? "up" : "dn"}">${t.pnl >= 0 ? "+" : "−"}$${Math.abs(t.pnl || 0).toFixed(2)}</span><span class="dim">${E(t.why)}</span></div>`
   ).join("") : (des ? "" : `<div class="dim" style="padding:10px">아직 거래 없음 — 신호가 쌓이면 자동 진입합니다</div>`));
   // 🔍 스캔 중 — 어떤 모델이 무슨 종목을 어느 국면에서 보고 있나 (오른쪽 위)
   const scEl = root.querySelector("[data-scan]");
@@ -227,6 +242,7 @@ function shortMd(m) { return String(m).split("/").pop().replace(/-instruct|-chat
 const SHELL = `
 <div class="nd-top"><b>🧠 GH COIN // NEURAL DESK</b><span class="nd-tag">AI 모델이 직접 매매·복기·학습 · 뇌 누적 · 가상자금</span>
   <marquee class="nd-feed" data-feed scrollamount="5"></marquee><span class="nd-clock"></span>
+  <span class="nd-cfg"><label title="증거금으로 쓰는 자본 비중(1~100%)">시드 <input type="range" min="1" max="100" step="1" data-seed><b data-seedv>20%</b></label><label title="레버리지 — 비트 1~200배, 알트 1~100배">레버 <input type="number" min="1" max="200" step="1" data-lev><b>x</b></label></span>
   <button class="nd-btn" data-local title="켜면 설치된 Ollama 로컬 모델만 트레이더로 씁니다 (무료·오프라인·한도 없음). 끄면 클라우드+로컬 혼합.">💻 로컬 전용</button><button class="nd-btn" data-ollama title="내 PC Ollama에 GH Coin용 추천 무료 모델을 자동으로 받아 트레이더로 씁니다">🖥 로컬 모델 설치</button><button class="nd-btn" data-reset>초기화</button><button class="nd-btn nd-x" data-x>✕</button></div>
 <div class="nd-grid">
   <div class="nd-card nd-pnl"><div class="nd-h">가상 자본 <small>(데모 · $1000 시작 · 나만 초기화)</small></div><div class="nd-big" data-pnl></div><div class="nd-kpi" data-kpi></div></div>
@@ -260,21 +276,32 @@ function inject() {
 .nd-trades{grid-column:1/2;grid-row:3/4}.nd-brain{grid-column:2/3;grid-row:3/4}
 .nd-shell canvas,.nd-brain canvas{flex:1;width:100%;height:100%;min-height:0;display:block}
 .nd-scan{font-size:11px;color:#7ea6ff;margin-bottom:8px;min-height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.nd-markets{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.nd-markets{display:block}
+.nd-mgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px}
 .mrow{background:#0f1521;border:1px solid #1a2130;border-radius:6px;padding:6px 8px;display:flex;flex-direction:column;gap:2px}
 .mrow>b{color:#e6ebf5}.mrow em{font-style:normal;font-size:11px}
+.pos-h{color:#6b7488;font-size:10px;letter-spacing:1px;text-transform:uppercase;margin:4px 0 4px}
+.prow{background:#0f1521;border:1px solid #1a2130;border-left:3px solid #2a3344;border-radius:6px;padding:5px 8px;margin:4px 0}
+.prow.up{border-left-color:#2ec27e}.prow.dn{border-left-color:#f2364b}
+.pr1{display:flex;align-items:center;gap:7px}.pr1 b{color:#e6ebf5}.pr-roe{margin-left:auto;font-weight:700}
+.pr2{font-size:10.5px;margin-top:2px}
+.nd-cfg{display:flex;align-items:center;gap:12px;color:#8a93a6;font-size:11px}
+.nd-cfg label{display:flex;align-items:center;gap:5px}.nd-cfg b{color:#c9d1e0}
+.nd-cfg input[type=range]{width:78px;accent-color:#b79cff}
+.nd-cfg input[type=number]{width:52px;background:#141a26;border:1px solid #28303f;color:#e6ebf5;border-radius:4px;padding:3px 5px;font:inherit}
 .nrow{display:grid;grid-template-columns:90px 1fr 42px 54px;align-items:center;gap:8px;margin:3px 0}
 .nk{color:#aeb6c6;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .nbar{height:7px;background:#141a26;border-radius:4px;overflow:hidden}.nbar i{display:block;height:100%;background:#4d82ff}
 .nrow>b{text-align:right;color:#e6ebf5}.nrow small{color:#5a6374;text-align:right}.nrow small em{font-style:normal;color:#3d4454;margin-left:4px}
 .trd{grid-template-columns:18px 1fr 78px auto}.rk{color:#5a6374;text-align:center}.trd .nk{color:#dbe2ef}.trd small{white-space:nowrap}
+.des{grid-template-columns:36px 68px 118px 48px 1fr}
 #ndesk .warn{color:#e0a53e}#ndesk .pur{color:#b79cff}
 .brow{display:grid;grid-template-columns:46px 1fr 34px;gap:8px;align-items:center;margin:3px 0;font-size:11px}
 .bt{font-size:9px;padding:1px 5px;border-radius:4px;background:#141a26;text-align:center}
 .btx{color:#aeb6c6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.brow small{color:#5a6374;text-align:right}
 .nsub{color:#6b7488;font-size:10px;margin:8px 0 4px;letter-spacing:1px}
 .nd-tr{display:flex;flex-direction:column;gap:2px}
-.trow{display:grid;grid-template-columns:40px 42px 36px 64px 1fr;gap:8px;align-items:center;padding:3px 4px;border-bottom:1px solid #121824}
+.trow{display:grid;grid-template-columns:38px 40px 52px 58px 62px 1fr;gap:7px;align-items:center;padding:3px 4px;border-bottom:1px solid #121824}
 .trow>b:first-of-type{color:#e6ebf5}
 @media(max-width:760px){.nd-grid{grid-template-columns:1fr;grid-template-rows:none}.nd-grid>.nd-card{grid-column:1 !important;grid-row:auto !important;min-height:220px}.nd-pnl,.nd-mkt{min-height:auto}}`;
   document.head.appendChild(st);

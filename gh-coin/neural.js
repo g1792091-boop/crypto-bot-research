@@ -143,6 +143,7 @@ export function marketBrief(cs) {
 // ── 상태 ──
 function blank() {
   return { pnl: 0, peak: BANKROLL, fills: 0, wins: 0,
+    cfg: { seedPct: 20, lev: 10 },                                // 시드비중(%)·레버리지(배) — 사용자가 조절
     w: Object.fromEntries(NEURONS.map(k => [k, 1])),              // 뉴런 가중치(학습으로 변함)
     hit: Object.fromEntries(NEURONS.map(k => [k, { ok: 0, n: 0 }])), // 뉴런별 적중
     models: {},                                                   // 연결된 LLM 모델 기여(이름→{ok,n,w})
@@ -155,10 +156,24 @@ function riskFactor() { const eq = equity(), peak = Math.max(S?.peak || BANKROLL
   if (eq < BANKROLL * 0.9) return 0.2;        // -10% 이하: 아주 보수적
   if (eq < peak * 0.93) return 0.5;           // 고점 대비 -7%: 절반 축소
   return 1; }
-function posSize() { return Math.max(20, +(equity() * 0.5 * riskFactor()).toFixed(2)); }   // 포지션 명목 = 자본의 50% × 위험계수
 function bumpPeak() { if (S) S.peak = Math.max(S.peak || BANKROLL, equity()); }
+
+// ── 코인 선물 포지션: 시드비중(증거금 %)·레버리지(비트 1~200·알트 1~100)·청산가 ──
+export const LEV_CAP = sym => sym === "BTCUSDT" ? 200 : 100;
+function seedPct() { return Math.max(1, Math.min(100, (S?.cfg?.seedPct) ?? 20)); }
+function levFor(sym) { return Math.max(1, Math.min(LEV_CAP(sym), Math.round((S?.cfg?.lev) ?? 10))); }
+function marginNow() { return Math.max(5, +(equity() * seedPct() / 100 * riskFactor()).toFixed(2)); }   // 증거금 = 자본 × 시드비중 × 위험계수
+function liqPrice(entry, side, lev) { return side > 0 ? entry * (1 - 0.95 / lev) : entry * (1 + 0.95 / lev); }   // 격리 청산가(유지증거금 버퍼 반영)
+function newPos(ko, sym, side, price, feat) {
+  const lev = levFor(sym), margin = marginNow();
+  return { ko, sym, side, entry: price, price, margin, lev, notional: +(margin * lev).toFixed(2), liq: +liqPrice(price, side, lev).toFixed(6), roe: 0, proe: 0, t: Date.now(), feat: { ...feat } };
+}
+function markPos(p, price) { const proe = (price - p.entry) / p.entry * p.side * 100; p.proe = +proe.toFixed(3); p.roe = +(proe * p.lev).toFixed(2); p.price = price; return proe; }   // roe = 레버리지 반영 수익률
+const liquidated = (p, price) => p.side > 0 ? price <= p.liq : price >= p.liq;
+export const getCfg = () => ({ seedPct: seedPct(), lev: (S?.cfg?.lev) ?? 10 });
+export function setCfg(c = {}) { load(); S.cfg = S.cfg || { seedPct: 20, lev: 10 }; if (c.seedPct != null) S.cfg.seedPct = Math.max(1, Math.min(100, Math.round(+c.seedPct) || 20)); if (c.lev != null) S.cfg.lev = Math.max(1, Math.min(200, Math.round(+c.lev) || 10)); save(); return getCfg(); }
 export const riskMode = () => riskFactor() < 0.5 ? "방어(최소)" : riskFactor() < 1 ? "방어(축소)" : "정상";
-export function load() { if (!S) { try { S = JSON.parse(localStorage.getItem(KEY)) || blank(); } catch (e) { S = blank(); } for (const k of NEURONS) { S.w[k] ??= 1; S.hit[k] ??= { ok: 0, n: 0 }; } } return S; }
+export function load() { if (!S) { try { S = JSON.parse(localStorage.getItem(KEY)) || blank(); } catch (e) { S = blank(); } for (const k of NEURONS) { S.w[k] ??= 1; S.hit[k] ??= { ok: 0, n: 0 }; } S.cfg ??= { seedPct: 20, lev: 10 }; S.cfg.seedPct ??= 20; S.cfg.lev ??= 10; } return S; }
 function save() { try { localStorage.setItem(KEY, JSON.stringify({ ...S, trades: S.trades.slice(-60), feed: S.feed.slice(-40) })); } catch (e) {} }
 export function reset() { S = blank(); save(); return S; }
 const feed = (t) => { S.feed.unshift({ t: Date.now(), text: t }); if (S.feed.length > 40) S.feed.pop(); };
@@ -189,12 +204,12 @@ export async function step() {
     S.feat[sym] = feat; S.dec[sym] = { ...d, price };
     markModels(sym, price);
     const p = S.pos[sym];
-    // 보유 중이면 마크 + 청산 판단(반대 신호 또는 손절/익절)
+    // 보유 중이면 마크 + 청산 판단(청산가·손절·익절·반대신호·시간)
     if (p) {
-      const roe = (price - p.entry) / p.entry * p.side * 100;
-      p.roe = +roe.toFixed(2); p.price = price;
-      const flip = d.dir !== 0 && d.dir !== p.side, hardSL = roe < -2, hardTP = roe > 3, timeout = Date.now() - p.t > MAXHOLD;
-      if (flip || hardSL || hardTP || timeout) closePos(sym, price, flip ? "반대신호" : hardSL ? "손절" : hardTP ? "익절" : "시간청산");
+      const proe = markPos(p, price);
+      const flip = d.dir !== 0 && d.dir !== p.side, hardSL = proe < -2, hardTP = proe > 3, timeout = Date.now() - p.t > MAXHOLD;
+      if (liquidated(p, price)) closePos(sym, p.liq, "청산");
+      else if (flip || hardSL || hardTP || timeout) closePos(sym, price, flip ? "반대신호" : hardSL ? "손절" : hardTP ? "익절" : "시간청산");
     }
     // 무포지션 + 신호 있으면 진입 — 낙폭 방어 모드면 더 엄격(자본 지키기) + 과거 손절 닮은 자리 회피
     const minConf = riskFactor() < 1 ? 45 : 25;
@@ -211,15 +226,17 @@ export async function step() {
   return state();
 }
 function openPos(sym, ko, side, price, feat) {
-  S.pos[sym] = { ko, side, entry: price, price, size: posSize(), roe: 0, t: Date.now(), feat: { ...feat } };
-  feed(`${ko} ${side > 0 ? "▲ 롱" : "▼ 숏"} 진입 @ ${fmt(price)} (확신 ${S.dec[sym]?.conf}%)`);
+  const p = newPos(ko, sym, side, price, feat); S.pos[sym] = p;
+  feed(`${ko} ${side > 0 ? "▲ 롱" : "▼ 숏"} 진입 @ ${fmt(price)} · ${p.lev}x · 증거금 $${p.margin} (확신 ${S.dec[sym]?.conf}%)`);
 }
 function closePos(sym, price, why) {
   const p = S.pos[sym]; if (!p) return;
-  const ret = (price - p.entry) / p.entry * p.side - FEE;      // 수수료 반영
-  const pnl = p.size * ret;
+  const pret = (price - p.entry) / p.entry * p.side - FEE;      // 가격 수익률(수수료 반영)
+  let pnl = (p.notional || p.size || 0) * pret; if (why === "청산") pnl = -p.margin; else pnl = Math.max(-p.margin, pnl);   // 격리: 손실은 증거금까지만
+  const roeDisp = p.margin ? pnl / p.margin * 100 : pret * 100;  // 레버리지 반영 수익률(증거금 대비)
+  const ret = pret;                                             // 학습용(방향 정확도)은 가격 수익률 기준
   S.pnl += pnl; S.fills++; if (pnl > 0) S.wins++; bumpPeak();
-  S.trades.unshift({ ko: p.ko, side: p.side, entry: p.entry, exit: price, roe: +(ret * 100).toFixed(2), pnl: +pnl.toFixed(2), why, t: Date.now() });
+  S.trades.unshift({ ko: p.ko, side: p.side, entry: p.entry, exit: price, lev: p.lev, margin: p.margin, roe: +roeDisp.toFixed(2), pnl: +pnl.toFixed(2), why, t: Date.now() });
   if (S.trades.length > 60) S.trades.pop();
   // ── 학습: 이 거래가 맞았나? 각 뉴런의 진입 당시 신호가 결과와 같은 방향이었는지로 가중치 업데이트 ──
   const good = ret > 0 ? 1 : -1;
@@ -233,8 +250,8 @@ function closePos(sym, price, why) {
   // 🧠 뇌 지능에도 결과 학습(국면별 가중치 교정) + 손절이면 '왜 났는지' 함정으로 기억
   const regime = BRAIN.regimeOf(p.feat || {});
   BRAIN.learnOutcome({ coin: p.ko, regime, feat: p.feat, dir: p.side, pnl: ret });
-  if (why === "손절" || ret < -0.015) BRAIN.learnLoss({ coin: p.ko, regime, feat: p.feat, dir: p.side, roe: ret * 100 });
-  feed(`${p.ko} 청산 @ ${fmt(price)} · ${ret >= 0 ? "+" : ""}${(ret * 100).toFixed(2)}% (${why}) → 뉴런·뇌 학습 반영`);
+  if (why === "청산" || why === "손절" || ret < -0.015) BRAIN.learnLoss({ coin: p.ko, regime, feat: p.feat, dir: p.side, roe: ret * 100 });
+  feed(`${p.ko} 청산 @ ${fmt(price)} · ${roeDisp >= 0 ? "+" : ""}${roeDisp.toFixed(1)}%(${p.lev}x) ${pnl >= 0 ? "+" : ""}$${Math.abs(pnl).toFixed(2)} (${why}) → 학습`);
   delete S.pos[sym];
 }
 // ── 모델 트레이더: 연결된 AI 모델 각각이 직접 데모 포지션을 운용한다 ──
@@ -242,12 +259,15 @@ function model(name) { return S.models[name] || (S.models[name] = { prov: "", pn
 // 보유 포지션 마크 + 하드 손절/익절 (모델 질의 사이에도 포지션이 스스로 정리됨)
 function markModels(sym, price) {
   for (const name in S.models) { const M = S.models[name], p = M.pos[sym]; if (!p) continue;
-    p.roe = +((price - p.entry) / p.entry * p.side * 100).toFixed(2); p.price = price;
-    if (p.roe < -2 || p.roe > 3 || Date.now() - p.t > MAXHOLD) closeModelPos(name, sym, price, p.roe < -2 ? "손절" : p.roe > 3 ? "익절" : "시간청산"); }
+    const proe = markPos(p, price);
+    if (liquidated(p, price)) closeModelPos(name, sym, p.liq, "청산");
+    else if (proe < -2 || proe > 3 || Date.now() - p.t > MAXHOLD) closeModelPos(name, sym, price, proe < -2 ? "손절" : proe > 3 ? "익절" : "시간청산"); }
 }
 function closeModelPos(name, sym, price, why) {
   const M = model(name), p = M.pos[sym]; if (!p) return;
-  const ret = (price - p.entry) / p.entry * p.side - FEE, pnl = p.size * ret;
+  const ret = (price - p.entry) / p.entry * p.side - FEE;
+  let pnl = (p.notional || p.size || 0) * ret; if (why === "청산") pnl = -p.margin; else pnl = Math.max(-p.margin, pnl);   // 격리: 손실은 증거금까지만
+  const roeDisp = p.margin ? pnl / p.margin * 100 : ret * 100;
   M.pnl += pnl; M.fills++; if (pnl > 0) M.wins++; M.n++; if (ret > 0) M.ok++;
   M.w = cl(M.w + LR * (ret > 0 ? 1 : -1), 0.05, 3);
   const regime = BRAIN.regimeOf(p.feat || {});
@@ -256,16 +276,16 @@ function closeModelPos(name, sym, price, why) {
   if (ret > 0.02) BRAIN.learn({ type: "패턴", coin: p.ko, regime, text: `${regime}에서 ${p.side > 0 ? "롱" : "숏"} +${(ret * 100).toFixed(1)}% (${strongFeat(p.feat)})`, model: shortMd(name) });   // 큰 이익 = 패턴 기억
   if (ret < 0) {
     M.losers.unshift({ ko: p.ko, side: p.side, roe: +(ret * 100).toFixed(1), feat: p.feat }); M.losers = M.losers.slice(0, 5);
-    if (why === "손절" || ret < -0.012) {   // 🛑 손절: 뇌 함정 기록 + 모델에게 '다시는 이 자리서 진입 말라' 교훈 주입
+    if (why === "청산" || why === "손절" || ret < -0.012) {   // 🛑 손절·청산: 뇌 함정 기록 + 모델에게 '다시는 이 자리서 진입 말라' 교훈 주입
       BRAIN.learnLoss({ coin: p.ko, regime, feat: p.feat, dir: p.side, roe: ret * 100 });
       const lesson = `${regime}에서 ${p.side > 0 ? "롱" : "숏"} 손절(${(ret * 100).toFixed(1)}%): ${strongFeat(p.feat)}일 땐 진입 금지`;
       M.lessons = [...new Set([lesson, ...M.lessons])].slice(0, 6);
     }
   }
   S.pnl += pnl; S.fills++; if (pnl > 0) S.wins++; bumpPeak();
-  S.trades.unshift({ model: name, ko: p.ko, side: p.side, roe: +(ret * 100).toFixed(2), pnl: +pnl.toFixed(2), why, t: Date.now() });
+  S.trades.unshift({ model: name, ko: p.ko, side: p.side, lev: p.lev, margin: p.margin, roe: +roeDisp.toFixed(2), pnl: +pnl.toFixed(2), why, t: Date.now() });
   if (S.trades.length > 80) S.trades.pop();
-  feed(`[${shortMd(name)}] ${p.ko} 청산 ${ret >= 0 ? "+" : ""}${(ret * 100).toFixed(2)}% (${why})`);
+  feed(`[${shortMd(name)}] ${p.ko} 청산 ${roeDisp >= 0 ? "+" : ""}${roeDisp.toFixed(1)}%(${p.lev}x) ${pnl >= 0 ? "+" : ""}$${Math.abs(pnl).toFixed(2)} (${why})`);
   delete M.pos[sym];
 }
 // 모델 응답에서 방향·확신 추출 — JSON 우선, 안 되면 키워드(롱/숏/관망)로 폴백 (파싱 실패로 거래 안 되는 걸 방지)
@@ -334,7 +354,7 @@ export async function modelStep() {
   }
   const risk = dir !== 0 ? BRAIN.trapRisk(feat, regime, dir) : 0;
   if (!M.pos[sym] && dir !== 0 && risk >= 0.8) feed(`[${shortMd(name)}] ${ko} ${dir > 0 ? "롱" : "숏"} 보류 — 과거 손절과 ${Math.round(risk * 100)}% 유사(뇌 회피)`);   // 🛑 반복 손절 차단
-  else if (!M.pos[sym] && dir !== 0) { M.pos[sym] = { ko, side: dir, entry: price, price, size: posSize(), roe: 0, t: Date.now(), feat: { ...feat } }; feed(`[${shortMd(name)}] ${ko} ${dir > 0 ? "▲롱" : "▼숏"} 진입 @ ${fmt(price)} (${conf}%)`); }
+  else if (!M.pos[sym] && dir !== 0) { const np = newPos(ko, sym, dir, price, feat); M.pos[sym] = np; feed(`[${shortMd(name)}] ${ko} ${dir > 0 ? "▲롱" : "▼숏"} 진입 @ ${fmt(price)} · ${np.lev}x · 증거금 $${np.margin} (${conf}%)`); }
   else if (dir === 0 && !p) feed(`[${shortMd(name)}] ${ko} 관망`);
   save();
 }
@@ -426,7 +446,7 @@ export function state() {
     traders.push({ name: shortMd(name), full: name, prov: m.prov, pnl: +m.pnl.toFixed(2), hit: m.n ? Math.round(m.ok / m.n * 100) : null, w: +m.w.toFixed(2), fills: m.fills, wins: m.wins, lessons: (m.lessons || []).length, lessonList: m.lessons || [], pos: Object.values(m.pos) });
   traders.sort((a, b) => b.pnl - a.pnl);
   const eq = equity(), peak = Math.max(S.peak || BANKROLL, eq), dd = peak > 0 ? +((peak - eq) / peak * 100).toFixed(1) : 0;
-  return { pnl: +S.pnl.toFixed(2), bankroll: BANKROLL, equity: eq, peak: +peak.toFixed(2), drawdown: dd, riskMode: riskMode(),
+  return { pnl: +S.pnl.toFixed(2), bankroll: BANKROLL, equity: eq, peak: +peak.toFixed(2), drawdown: dd, riskMode: riskMode(), cfg: getCfg(),
     fills: S.fills, winRate: wr, epoch: S.epoch, since: S.t0, nModels: connectedModels().length,
     neurons, traders, designs: (S.designs || []).slice(0, 10), nDesigns: (S.designs || []).length, handed: (S.designs || []).filter(d => d.handed).length,
     brain: BRAIN.brainState(), scan: S.scan || null,
