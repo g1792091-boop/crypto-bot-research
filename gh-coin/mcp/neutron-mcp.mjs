@@ -87,6 +87,8 @@ const TOOLS = [
     run: a => { inbox({ type: "task", team: a.team || "dev", title: String(a.title).slice(0, 80), why: a.why || "" }); return "과제 접수 → 앱이 30초 안에 팀 과제 목록에 추가"; } },
 ];
 
+// 받은 편지함에 쓰는 도구(앱에 제안만 함 — 파괴적이지 않음). 나머지는 전부 읽기 전용
+const WRITES = new Set(["neutron_log_note", "neutron_propose_experiment", "neutron_add_task"]);
 // ── MCP stdio JSON-RPC ──
 const send = m => process.stdout.write(JSON.stringify(m) + "\n");
 const schema = t => ({ type: "object", properties: t.input || {}, ...(t.required ? { required: t.required } : {}) });
@@ -97,7 +99,8 @@ async function handle(msg) {
     if (method === "initialize") return send({ jsonrpc: "2.0", id, result: { protocolVersion: params?.protocolVersion || "2024-11-05", capabilities: { tools: {} }, serverInfo: { name: "neutron", version: VERSION },
       instructions: "GH Coin 앱의 뇌(뉴트론). 읽기 도구로 상태·기억·성적·판정을 보고, 제안은 neutron_log_note / neutron_propose_experiment / neutron_add_task 로만 보낸다. 주문 도구는 없다(안전 규칙)." } });
     if (method === "ping") return send({ jsonrpc: "2.0", id, result: {} });
-    if (method === "tools/list") return send({ jsonrpc: "2.0", id, result: { tools: TOOLS.map(t => ({ name: t.name, description: t.description, inputSchema: schema(t) })) } });
+    if (method === "tools/list") return send({ jsonrpc: "2.0", id, result: { tools: TOOLS.map(t => { const w = WRITES.has(t.name), net = t.name === "neutron_funding_scan";
+      return { name: t.name, description: t.description, inputSchema: schema(t), annotations: { title: t.name, readOnlyHint: !w, destructiveHint: false, idempotentHint: !w, openWorldHint: net } }; }) } });
     if (method === "tools/call") {
       const t = TOOLS.find(x => x.name === params?.name); if (!t) return send({ jsonrpc: "2.0", id, error: { code: -32602, message: `알 수 없는 도구: ${params?.name}` } });
       try { const text = String(await t.run(params.arguments || {})); return send({ jsonrpc: "2.0", id, result: { content: [{ type: "text", text }] } }); }

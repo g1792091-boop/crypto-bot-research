@@ -71,7 +71,7 @@ export const setLocalOnly = (on) => { try { localStorage.setItem("coinTeamLocal"
 // 트레이더가 될 무료 AI 모델: ① 키 넣은 회사(클라우드) 모델 + ② 내 PC Ollama 로컬 모델(공짜라 한도와 무관하게 추가)
 export function connectedModels(maxN = 16) {
   // 로컬: 판단이 약한 초소형(1b~1.5b)보다 지시·추론 되는 3~8b를 우선(4b 근처). 4GB GPU라 최대 6개만.
-  const sized = [...olCache].sort((a, b) => olPref(a) - olPref(b)).slice(0, 6).map(m => ({ id: "ollama", model: m }));
+  const sized = [...olCache].sort((a, b) => olPref(a) - olPref(b)).slice(0, 12).map(m => ({ id: "ollama", model: m }));   // 설치된 Ollama 모델 전부(한 번에 하나씩 호출하므로 4GB GPU 도 순서대로 처리)
   if (localOnly() && sized.length) return sized;
   const out = [];
   for (const id of Object.keys(PROVIDERS || {})) {
@@ -683,7 +683,9 @@ export function state() {
   for (const [name, m] of Object.entries(S.models))
     traders.push({ name: shortMd(name), full: name, prov: m.prov, pnl: +m.pnl.toFixed(2), hit: m.fills ? Math.round(m.wins / m.fills * 100) : null, fills: m.fills, wins: m.wins, lessons: 0,
       approved: m.approved || 0, rejected: m.rejected || 0, pos: allPos.filter(P => P.trader === name) });
-  traders.sort((a, b) => b.pnl - a.pnl);
+  // 연결된 모델은 아직 승인한 신호가 없어도 리더보드에 항상 표시 (엔진 v2 이후 '승인해야 생기는' 문제 수정)
+  for (const c of connectedModels()) if (!S.models[c.model]) traders.push({ name: shortMd(c.model), full: c.model, prov: c.id, pnl: 0, hit: null, fills: 0, wins: 0, lessons: 0, approved: 0, rejected: 0, pos: [], idle: true });
+  traders.sort((a, b) => b.pnl - a.pnl || (b.approved + b.rejected) - (a.approved + a.rejected));
   const eq = equity(), peak = Math.max(S.peak || BANKROLL, eq), dd = peak > 0 ? +((peak - eq) / peak * 100).toFixed(1) : 0;
   const avgLev = allPos.length ? +(allPos.reduce((s, p) => s + (p.lev || 0), 0) / allPos.length).toFixed(1) : null;
   const avgSeed = allPos.length ? +(allPos.reduce((s, p) => s + (p.seed || 0), 0) / allPos.length).toFixed(1) : null;

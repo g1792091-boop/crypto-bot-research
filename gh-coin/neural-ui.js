@@ -56,8 +56,9 @@ export async function openNeural(ctx = {}) {
   ST = N.state();
   render();
   // 엔진은 백그라운드에서 상시 실행(N.startAuto) — 패널은 상태를 보여주기만 한다. 패널을 닫아도 매매·학습·리서치는 계속된다.
-  N.startAuto();
-  const tick = () => { try { ST = N.state(); render(); } catch (e) {} };
+  try { N.startAuto?.(); } catch (e) {}
+  seedShell();
+  const tick = () => { try { ST = N.state(); sampleShell(ST); render(); } catch (e) {} };
   tick(); loop = setInterval(tick, 3000);
   raf = requestAnimationFrame(draw);
   window.addEventListener("keydown", esc);
@@ -113,7 +114,7 @@ function render() {
   // 트레이더 리더보드 = 연결된 AI 모델 각각 + 자체 신호. PnL 순. (교훈 = 복기로 배운 수 · 보유 = 현재 포지션)
   root.querySelector("[data-neurons]").innerHTML =
     s.traders.map((tr, i) => { const u = tr.pnl >= 0;
-      return `<div class="nrow trd"><span class="rk">${i + 1}</span><span class="nk" title="${E(tr.full || tr.name)}">${tr.prov === "self" ? "⚙️ " : ""}${E(tr.name)}</span><b class="${u ? "up" : "dn"}">${money(tr.pnl)}</b><small>${tr.hit == null ? "–" : "승" + tr.hit + "%"}${tr.approved != null ? ` ·승인${tr.approved}/거절${tr.rejected}` : ""}${(typeof tr.pos === "number" ? tr.pos : tr.pos?.length) ? ` ·보유${typeof tr.pos === "number" ? tr.pos : tr.pos.length}` : ""}</small></div>`;
+      return `<div class="nrow trd"><span class="rk">${i + 1}</span><span class="nk" title="${E(tr.full || tr.name)}">${tr.prov === "self" ? "⚙️ " : tr.prov === "ollama" ? "🖥 " : "☁ "}${E(tr.name)}${tr.idle ? ' <small class="dim">대기(신호 오면 승인)</small>' : ""}</span><b class="${u ? "up" : "dn"}">${money(tr.pnl)}</b><small>${tr.hit == null ? "–" : "승" + tr.hit + "%"}${tr.approved != null ? ` ·승인${tr.approved}/거절${tr.rejected}` : ""}${(typeof tr.pos === "number" ? tr.pos : tr.pos?.length) ? ` ·보유${typeof tr.pos === "number" ? tr.pos : tr.pos.length}` : ""}</small></div>`;
     }).join("") +
     (s.nModels === 0 ? `<div class="nsub dim">연결된 AI 모델이 없습니다 — 자체 엔진이 검증된 신호만 집행합니다</div>` : "") +
     engineTable(s) + evoLine(s) + neutronLine(s) +
@@ -162,59 +163,125 @@ function render() {
   root.querySelector("[data-feed]").innerHTML = s.feed.map(f => `<span>▸ ${E(f.text)}</span>`).join(" ");
 }
 
-// ── NEURAL SHELL 캔버스 애니메이션 ──
-let parts = null, t = 0;
+// ── NEURAL SHELL (마켓 인셋 → 피처 추출 48유닛 → 결정 코어 입자 구 → 활성 마켓) ──
+// 전부 실데이터: 1분봉 가격·피처 뉴런(모멘텀·추세·RSI·거래흐름·호가압력·변동성)·국면·포지션·동시 리스크.
+const HIST = {};   // key → 최근 값(스파크라인)
+const pushH = (k, v, n = 90) => { if (!Number.isFinite(v)) return; const a = HIST[k] ||= []; a.push(v); if (a.length > n) a.shift(); };
+let shellSym = 0, shellAt = 0, parts = null, t = 0, units = null, routes = null;
+function sampleShell(s) {
+  for (const [, sym] of N.COINS) { const d = s.dec?.[sym]; if (d?.price) pushH("px:" + sym, d.price); }
+  const f = s.feat?.[N.COINS[shellSym][1]] || {};
+  for (const k of N.NEURONS) pushH("f:" + k, f[k] ?? 0);
+  pushH("heat", s.heat || 0);
+}
+async function seedShell() {   // 처음 열 때 1분봉 90개로 스파크라인을 채움
+  try { const A = await import("../nuri-ai/agent.js");
+    for (const [, sym] of N.COINS) { const cs = (await A.candlesFor({ market: sym, exchange: "binancef", timeframe: "1" }, 90)).cs; if (cs?.length) HIST["px:" + sym] = cs.map(b => +b.c); } } catch (e) {}
+}
+const SH = { bg: "#f3f4ef", grid: "rgba(40,50,60,.06)", ink: "#23272e", dim: "#7c838f", blue: "59,111,216", orange: "240,138,36", red: "229,72,77", green: "58,167,109", purple: "130,90,220" };
+function spark(g, arr, x, y, w, h, col) {
+  if (!arr || arr.length < 2) { g.strokeStyle = `rgba(${col},.3)`; g.beginPath(); g.moveTo(x, y + h / 2); g.lineTo(x + w, y + h / 2); g.stroke(); return; }
+  let lo = Math.min(...arr), hi = Math.max(...arr); if (hi - lo < 1e-9) { hi += 1; lo -= 1; }
+  g.beginPath(); arr.forEach((v, i) => { const px = x + (i / (arr.length - 1)) * w, py = y + h - ((v - lo) / (hi - lo)) * h; i ? g.lineTo(px, py) : g.moveTo(px, py); });
+  g.strokeStyle = `rgb(${col})`; g.lineWidth = 1.3; g.stroke();
+  g.lineTo(x + w, y + h); g.lineTo(x, y + h); g.closePath(); g.fillStyle = `rgba(${col},.10)`; g.fill();
+}
+function bez(g, x0, y0, x1, y1) { const mx = (x0 + x1) / 2; g.beginPath(); g.moveTo(x0, y0); g.bezierCurveTo(mx, y0, mx, y1, x1, y1); }
+function bezPt(x0, y0, x1, y1, u) { const mx = (x0 + x1) / 2, a = 1 - u; return [a * a * a * x0 + 3 * a * a * u * mx + 3 * a * u * u * mx + u * u * u * x1, a * a * a * y0 + 3 * a * a * u * y0 + 3 * a * u * u * y1 + u * u * u * y1]; }
+function rrect(g, x, y, w, h, r) { g.beginPath(); if (g.roundRect) g.roundRect(x, y, w, h, r); else g.rect(x, y, w, h); }
 function draw() {
   raf = requestAnimationFrame(draw);
   drawBrain();
   const cv = root && root.querySelector("canvas[data-shell]"); if (!cv || !ST) return;
-  const dpr = Math.min(2, window.devicePixelRatio || 1), W = cv.clientWidth, H = cv.clientHeight;
-  if (cv.width !== W * dpr) { cv.width = W * dpr; cv.height = H * dpr; }
-  const g = cv.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
+  const dpr = Math.min(2, window.devicePixelRatio || 1), W = cv.clientWidth, H = cv.clientHeight; if (W < 50 || H < 50) return;
+  if (cv.width !== W * dpr || cv.height !== H * dpr) { cv.width = W * dpr; cv.height = H * dpr; }
+  const g = cv.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0);
   t += 0.016;
-  const feats = ST.feat[N.COINS[0][1]] || {}, names = (N.NEURONS && N.NEURONS.length ? N.NEURONS : Object.keys(feats));
-  const nn = names.length || 6, coreX = W * 0.42, coreY = H / 2, coreR = Math.min(70, H * 0.12);
-  // 전체 합의(BTC 기준) 색/세기
-  const dec = ST.dec[N.COINS[0][1]] || { dir: 0, conf: 0, score: 0 };
-  const bull = dec.dir > 0, col = dec.dir === 0 ? "120,130,150" : bull ? "41,110,255" : "242,54,69";
-  // 피처 노드 (왼쪽) → 코어로 엣지
-  names.forEach((k, i) => {
-    const y = H * (0.18 + 0.64 * (i / Math.max(1, nn - 1))), x = W * 0.08, v = feats[k] || 0;
-    const c2 = v > 0 ? "41,110,255" : v < 0 ? "242,54,69" : "120,130,150";
-    g.strokeStyle = `rgba(${c2},${0.12 + Math.abs(v) * 0.5})`; g.lineWidth = 0.6 + Math.abs(v) * 2.2;
-    g.beginPath(); g.moveTo(x + 10, y);
-    const midX = W * 0.26, pulse = (Math.sin(t * 2 + i) + 1) / 2;
-    g.bezierCurveTo(midX, y, midX, coreY, coreX - coreR, coreY + (y - coreY) * 0.15); g.stroke();
-    // 흐르는 점
-    const fp = (t * 0.25 + i * 0.13) % 1; const px = x + 10 + (coreX - coreR - x - 10) * fp, py = y + (coreY - y) * fp * 0.9;
-    g.fillStyle = `rgba(${c2},${0.5 * Math.abs(v) + 0.2})`; g.beginPath(); g.arc(px, py, 1.6, 0, 7); g.fill();
-    // 노드
-    g.fillStyle = `rgb(${c2})`; g.beginPath(); g.arc(x, y, 4 + Math.abs(v) * 3, 0, 7); g.fill();
-    g.fillStyle = "#8a93a6"; g.font = "10px ui-monospace,monospace"; g.textAlign = "left"; g.fillText(k, x + 10, y - 8);
-    g.fillStyle = v > 0 ? "#4d82ff" : v < 0 ? "#f2364b" : "#788899"; g.fillText((v >= 0 ? "+" : "") + v.toFixed(2), x + 10, y + 12);
-  });
-  // 결정 코어
-  const glow = 0.3 + Math.abs(dec.score) * 0.7;
-  const grd = g.createRadialGradient(coreX, coreY, 2, coreX, coreY, coreR); grd.addColorStop(0, `rgba(${col},${glow})`); grd.addColorStop(1, `rgba(${col},0)`);
-  g.fillStyle = grd; g.beginPath(); g.arc(coreX, coreY, coreR, 0, 7); g.fill();
-  g.strokeStyle = `rgba(${col},0.9)`; g.lineWidth = 1.5; g.beginPath(); g.arc(coreX, coreY, coreR * 0.5 * (1 + 0.04 * Math.sin(t * 3)), 0, 7); g.stroke();
-  g.fillStyle = "#e6ebf5"; g.textAlign = "center"; g.font = "bold 20px ui-monospace,monospace"; g.fillText(dec.conf + "%", coreX, coreY - 2);
-  g.font = "10px ui-monospace,monospace"; g.fillStyle = `rgb(${col})`; g.fillText(dec.dir > 0 ? "LONG" : dec.dir < 0 ? "SHORT" : "FLAT", coreX, coreY + 14);
-  g.fillStyle = "#6b7488"; g.fillText("DECISION CORE", coreX, coreY + coreR + 14);
-  // 확률 셸 (오른쪽 입자 구름)
-  const shX = W * 0.74, shR = Math.min(H * 0.4, W * 0.22), M = 420;
-  if (!parts || parts.length !== M) parts = Array.from({ length: M }, () => ({ a: Math.random() * 7, r: Math.pow(Math.random(), 0.5), sp: 0.1 + Math.random() * 0.5, rd: 1 + Math.random() * 1.6 }));
-  for (const p of parts) {
-    p.a += 0.002 * p.sp * (bull ? 1 : -1);
-    const r = p.r * shR * (1 + 0.03 * Math.sin(t + p.a * 3)), x = shX + Math.cos(p.a) * r, y = coreY + Math.sin(p.a) * r;
-    const near = p.r < (0.35 + Math.abs(dec.score) * 0.5);
-    g.fillStyle = `rgba(${near ? col : "150,160,175"},${near ? 0.8 : 0.35})`;
-    g.beginPath(); g.arc(x, y, p.rd, 0, 7); g.fill();
-  }
-  // 코어→셸 연결선
-  g.strokeStyle = `rgba(${col},0.25)`; g.lineWidth = 1; g.beginPath(); g.moveTo(coreX + coreR, coreY); g.lineTo(shX - shR, coreY); g.stroke();
-  g.fillStyle = "#6b7488"; g.font = "10px ui-monospace,monospace"; g.textAlign = "center"; g.fillText("확률 셸 · 합의가 강할수록 코어 색으로 응집", shX, coreY + shR + 16);
-  g.textAlign = "left"; g.fillText("FEATURE NEURONS", W * 0.06, H * 0.12);
+  if (performance.now() - shellAt > 9000) { shellAt = performance.now(); if (ST.pos?.length) { const i = N.COINS.findIndex(c => c[1] === ST.pos[0].sym); if (i >= 0) shellSym = i; } else shellSym = (shellSym + 1) % N.COINS.length; }
+  const [ko, sym] = N.COINS[shellSym], feat = ST.feat?.[sym] || {}, rg = ST.regime?.[sym] || {}, neur = ST.neurons || [];
+  // 공정확률: 피처 뉴런 가중 합의 → 로지스틱 (뉴런 가중치는 거래 결과로 학습된 값)
+  let z = 0, ws = 0; for (const n of neur) { const v = feat[n.name] || 0; z += v * n.w; ws += Math.abs(n.w); }
+  const pUp = 1 / (1 + Math.exp(-2.4 * (ws ? z / ws : 0))), charge = Math.min(1, Math.abs(pUp - 0.5) * 2 + (rg.adx || 0) / 120);
+  // 배경(종이 + 격자)
+  g.fillStyle = SH.bg; g.fillRect(0, 0, W, H);
+  g.strokeStyle = SH.grid; g.lineWidth = 1;
+  for (let x = 0; x < W; x += 24) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke(); }
+  for (let y = 0; y < H; y += 24) { g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke(); }
+  const top = 30, botH = Math.max(78, H * 0.17), mainB = H - botH - 22;
+  g.font = "600 10px ui-monospace,monospace"; g.fillStyle = SH.ink; g.textAlign = "left";
+  g.fillText("MARKET INSET", 12, 18); g.fillText("FEATURE EXTRACTION · 48 UNITS", W * 0.36, 18);
+  g.textAlign = "right"; g.fillStyle = SH.dim; g.fillText(`${ko} · ${rg.label || "판단중"} · 4H ${rg.htf > 0 ? "↑" : rg.htf < 0 ? "↓" : "→"}`, W - 200, 18);
+  // ① 마켓 인셋 7장
+  const ref = shellSym ? "BTCUSDT" : "ETHUSDT";
+  const IN = [
+    { k: `${ko} 1M`, sub: "가격", arr: HIST["px:" + sym], v: ST.dec?.[sym]?.price, col: SH.blue, fmt: v => fmtp(v) },
+    { k: `${shellSym ? "BTC" : "ETH"} 1M`, sub: "기준 코인", arr: HIST["px:" + ref], v: ST.dec?.[ref]?.price, col: SH.orange, fmt: v => fmtp(v) },
+    { k: "ORDER BOOK", sub: "호가압력", arr: HIST["f:호가압력"], v: feat["호가압력"], col: SH.blue, fmt: v => (v * 100).toFixed(0) },
+    { k: "TAPE", sub: "거래흐름", arr: HIST["f:거래흐름"], v: feat["거래흐름"], col: SH.green, fmt: v => (v * 100).toFixed(0) },
+    { k: "VOLATILITY", sub: "변동성", arr: HIST["f:변동성"], v: feat["변동성"], col: SH.red, fmt: v => (v * 100).toFixed(0) },
+    { k: "MOMENTUM", sub: "모멘텀", arr: HIST["f:모멘텀"], v: feat["모멘텀"], col: SH.purple, fmt: v => (v * 100).toFixed(0) },
+    { k: "INVENTORY", sub: "동시 리스크 %", arr: HIST["heat"], v: ST.heat, col: SH.green, fmt: v => (+v).toFixed(2) },
+  ];
+  const iw = Math.min(170, W * 0.17), ih = (mainB - top) / IN.length - 6, ix = 12;
+  const UX = W * 0.42, uTop = top + 6, uBot = mainB - 6, NU = 48, uy = i => uTop + (uBot - uTop) * (i / (NU - 1));
+  if (!units) units = Array.from({ length: NU }, (_, i) => ({ src: i % IN.length, ph: Math.random() * 7 }));
+  const SX = W * 0.75, SY = (top + mainB) / 2, SR = Math.max(40, Math.min((mainB - top) / 2 - 6, W * 0.2));
+  if (!routes) routes = Array.from({ length: 30 }, () => ({ u: Math.floor(Math.random() * NU), th: Math.random() * 7, ph: Math.random() * 7, sp: 0.15 + Math.random() * 0.25 }));
+  // 인셋 → 유닛 연결선 + 흐르는 점
+  IN.forEach((c, j) => { const cy = top + j * (ih + 6) + ih / 2;
+    for (let u = j; u < NU; u += IN.length) { const y1 = uy(u), act = Math.min(1, Math.abs(c.v || 0) + 0.15);
+      g.strokeStyle = `rgba(${c.col},${0.10 + act * 0.25})`; g.lineWidth = 0.8; bez(g, ix + iw, cy, UX - 4, y1); g.stroke();
+      if (u % 2 === 0) { const [px, py] = bezPt(ix + iw, cy, UX - 4, y1, (t * 0.22 + u * 0.071) % 1); g.fillStyle = `rgba(${c.col},.75)`; g.beginPath(); g.arc(px, py, 1.8, 0, 7); g.fill(); } } });
+  // 인셋 카드
+  IN.forEach((c, j) => { const y = top + j * (ih + 6);
+    g.fillStyle = "#ffffff"; g.strokeStyle = "rgba(40,50,60,.18)"; g.lineWidth = 1; rrect(g, ix, y, iw, ih, 4); g.fill(); g.stroke();
+    g.fillStyle = `rgb(${c.col})`; g.fillRect(ix, y, 3, ih);
+    g.font = "700 9px ui-monospace,monospace"; g.textAlign = "left"; g.fillStyle = `rgb(${c.col})`; g.fillText(c.k, ix + 8, y + 11);
+    g.font = "8px ui-monospace,monospace"; g.fillStyle = SH.dim; g.fillText(c.sub, ix + 8, y + 21);
+    g.font = "700 11px ui-monospace,monospace"; g.textAlign = "right"; g.fillStyle = SH.ink; g.fillText(c.v == null ? "–" : c.fmt(c.v), ix + iw - 6, y + 12);
+    if (ih > 30) spark(g, c.arr, ix + 8, y + 24, iw - 16, ih - 28, c.col); });
+  // ② 유닛 → 구 (라우팅 곡선)
+  const coreN = 0.25 + charge * 0.35, up = pUp >= 0.5, cc = up ? SH.blue : SH.red;
+  for (const r of routes) { const y0 = uy(r.u), a = r.th + t * 0.05, tx = SX + Math.cos(a) * SR * 0.95, ty = SY + Math.sin(a) * SR * 0.95;
+    const col = (r.u % 3 === 0) ? SH.orange : SH.blue; g.strokeStyle = `rgba(${col},.22)`; g.lineWidth = 0.9; bez(g, UX + 4, y0, tx, ty); g.stroke();
+    const [px, py] = bezPt(UX + 4, y0, tx, ty, (t * r.sp + r.ph) % 1); g.fillStyle = `rgba(${col},.85)`; g.beginPath(); g.arc(px, py, 2, 0, 7); g.fill(); }
+  // 유닛 열 + 라벨
+  const lab = ["Δ 가격", ...N.NEURONS, "국면", "4H 추세", "스프레드", "리스크"];
+  for (let i = 0; i < NU; i++) { const y = uy(i), src = IN[units[i].src], act = Math.min(1, Math.abs(src.v || 0) * 1.4 + 0.2 * (1 + Math.sin(t * 2 + units[i].ph)) / 2);
+    g.fillStyle = `rgba(${src.col},${0.35 + act * 0.65})`; g.beginPath(); g.arc(UX, y, 2.4 + act * 1.6, 0, 7); g.fill(); }
+  g.font = "600 9px ui-monospace,monospace"; g.textAlign = "left";
+  lab.forEach((l, k) => { const y = uy(Math.round(k * (NU - 1) / (lab.length - 1))); g.fillStyle = "rgba(243,244,239,.85)"; g.fillRect(UX + 7, y - 7, g.measureText(l).width + 6, 11); g.fillStyle = SH.ink; g.fillText(l, UX + 10, y + 2); });
+  // ③ 결정 코어: 3D 입자 구 (바깥 = 합의 방향색 · 코어 = 주황, 합의가 셀수록 코어가 커지고 밀집)
+  const M = 900; if (!parts) parts = Array.from({ length: M }, (_, i) => ({ th: Math.random() * Math.PI * 2, ph: Math.acos(2 * Math.random() - 1), r: Math.pow(Math.random(), 0.33), core: i < M * 0.42, j: Math.random() }));
+  const rot = t * 0.12, pts = [];
+  for (const p of parts) { const rr = p.core ? p.r * coreN * (0.92 + 0.08 * Math.sin(t * 2 + p.j * 9)) : 0.45 + p.r * 0.55;
+    const x3 = Math.sin(p.ph) * Math.cos(p.th + rot), z3 = Math.sin(p.ph) * Math.sin(p.th + rot), y3 = Math.cos(p.ph);
+    pts.push({ x: SX + x3 * rr * SR, y: SY + y3 * rr * SR, z: z3, core: p.core }); }
+  pts.sort((a, b) => a.z - b.z);
+  for (const q of pts) { const d = (q.z + 1) / 2;
+    g.fillStyle = q.core ? `rgba(${SH.orange},${0.45 + d * 0.5})` : `rgba(${cc},${0.18 + d * 0.45})`;
+    g.beginPath(); g.arc(q.x, q.y, (q.core ? 1.6 : 1.3) + d * 1.4, 0, 7); g.fill(); }
+  // 코어 상태 박스
+  const bx = W - 182, by = top - 22, bw = 168, bh = 66;
+  g.fillStyle = "rgba(255,255,255,.94)"; g.strokeStyle = "rgba(40,50,60,.2)"; rrect(g, bx, by, bw, bh, 5); g.fill(); g.stroke();
+  g.font = "600 9px ui-monospace,monospace"; g.textAlign = "left"; g.fillStyle = SH.dim; g.fillText("CORE CHARGE", bx + 9, by + 14);
+  g.fillStyle = "rgba(40,50,60,.12)"; g.fillRect(bx + 9, by + 19, bw - 18, 6); g.fillStyle = `rgb(${SH.green})`; g.fillRect(bx + 9, by + 19, (bw - 18) * charge, 6);
+  g.fillStyle = SH.dim; g.fillText(`FAIR P(UP) · ${ko}`, bx + 9, by + 40);
+  g.font = "800 18px ui-monospace,monospace"; g.fillStyle = `rgb(${up ? SH.green : SH.red})`; g.fillText((pUp * 100).toFixed(1) + "%", bx + 9, by + 59);
+  g.font = "9px ui-monospace,monospace"; g.textAlign = "right"; g.fillStyle = SH.dim; g.fillText(`대기 신호 ${ST.queue || 0}`, bx + bw - 9, by + 59);
+  // ④ 활성 마켓 (코인별 최근 1분 가격 틱 + 보유 포지션 ◆)
+  const ay = mainB + 14, ah = (botH - 6) / N.COINS.length, ax0 = 70, ax1 = W - 150;
+  g.font = "600 9px ui-monospace,monospace"; g.textAlign = "left"; g.fillStyle = SH.ink; g.fillText("ACTIVE MARKETS", 12, mainB + 8);
+  g.textAlign = "right"; g.fillStyle = SH.dim; g.fillText("1분 틱 · ◆ 보유 포지션 · 파랑 상승 / 빨강 하락", W - 12, mainB + 8);
+  N.COINS.forEach(([k2, s2], r) => { const y = ay + r * ah + ah / 2, arr = HIST["px:" + s2] || [], P = (ST.pos || []).find(p => p.sym === s2);
+    g.fillStyle = r === shellSym ? `rgb(${SH.orange})` : SH.dim; g.textAlign = "left"; g.font = "600 9px ui-monospace,monospace"; g.fillText(k2 + " 1M", 12, y + 3);
+    g.strokeStyle = "rgba(40,50,60,.14)"; g.lineWidth = 3; g.beginPath(); g.moveTo(ax0, y); g.lineTo(ax1, y); g.stroke();
+    for (let i = 1; i < arr.length; i++) { const x = ax0 + (ax1 - ax0) * (i / Math.max(1, arr.length - 1)), upk = arr[i] >= arr[i - 1];
+      g.strokeStyle = `rgba(${upk ? SH.blue : SH.red},.75)`; g.lineWidth = 1.2; g.beginPath(); g.moveTo(x, y - 4); g.lineTo(x, y + 4); g.stroke(); }
+    if (P) { const x = ax1 - 6; g.fillStyle = `rgb(${SH.orange})`; g.beginPath(); g.moveTo(x, y - 6); g.lineTo(x + 6, y); g.lineTo(x, y + 6); g.lineTo(x - 6, y); g.closePath(); g.fill();
+      g.textAlign = "left"; g.fillStyle = SH.ink; g.fillText(`${P.side > 0 ? "롱" : "숏"} ${P.lev}x`, ax1 + 8, y + 3); } });
+  g.font = "9px ui-monospace,monospace"; g.textAlign = "left"; g.fillStyle = SH.dim; g.fillText("신호가 바깥 셸로 들어와 · 활성이 안쪽으로 스며들고 · 코어가 공정확률을 낸다", 12, H - 6);
+  g.textAlign = "right"; g.fillText(`보유 ${(ST.pos || []).length} · 실전 매매법 ${ST.nActive || 0} · 체결 ${ST.fills || 0}`, W - 12, H - 6);
 }
 
 // ── 🧠 뇌 지식 그래프 (Obsidian 그래프 뷰 스타일) ──
@@ -276,7 +343,7 @@ const SHELL = `
 <div class="nd-grid">
   <div class="nd-card nd-pnl"><div class="nd-h">가상 자본 <small>(데모 · $1000 시작 · 나만 초기화)</small></div><div class="nd-big" data-pnl></div><div class="nd-kpi" data-kpi></div></div>
   <div class="nd-card nd-mkt"><div class="nd-h">🔍 스캔 · 포지션</div><div class="nd-scan" data-scan></div><div class="nd-markets" data-markets></div></div>
-  <div class="nd-card nd-shell"><div class="nd-h">뉴럴 셸 · 피처 → 결정 코어 → 확률 셸</div><canvas data-shell></canvas></div>
+  <div class="nd-card nd-shell"><div class="nd-h">NEURAL SHELL <small>마켓 피드 → 피처 레이어 → 결정 코어 · 실데이터</small></div><canvas data-shell></canvas></div>
   <div class="nd-card nd-trd"><div class="nd-h">AI 모델 트레이더 리더보드 <small>(직접 거래·복기·학습 · PnL 순)</small></div><div class="nd-neurons" data-neurons></div></div>
   <div class="nd-card nd-trades"><div class="nd-h">최근 데모 거래 · 매매법 설계</div><div class="nd-tr" data-trades></div></div>
   <div class="nd-card nd-brain"><div class="nd-h">🧠 뇌 지식 그래프 <small data-braininfo></small><button class="nd-mini" data-canvas title="JSON Canvas로 내보내기 — Obsidian에서 열 수 있어요">.canvas ↓</button></div><canvas data-brain></canvas></div>
@@ -303,7 +370,7 @@ function inject() {
 .nd-feed span{margin-right:28px}.nd-clock{color:#6b7a92;font-size:11px;letter-spacing:1px}
 .nd-btn{background:rgba(22,30,44,.65);border:1px solid var(--line2);color:#aeb8c9;padding:5px 11px;border-radius:7px;cursor:pointer;font:inherit;font-size:11px;transition:background .15s,border-color .15s,color .15s}
 .nd-btn:hover{background:rgba(34,46,66,.9);border-color:#32455f;color:#dbe4f1}.nd-x{color:var(--dn)}.nd-x:hover{background:rgba(255,77,100,.15);border-color:rgba(255,77,100,.4)}
-.nd-grid{flex:1;display:grid;grid-template-columns:1.05fr 1fr;grid-template-rows:auto 1.05fr 0.82fr;gap:12px;padding:12px;min-height:0;position:relative;z-index:1}
+.nd-grid{flex:1;display:grid;grid-template-columns:1.05fr 1fr;grid-template-rows:auto minmax(560px,64vh) minmax(420px,auto) 380px;gap:12px;padding:12px;min-height:0;overflow-y:auto;position:relative;z-index:1}
 .nd-card{position:relative;background:linear-gradient(180deg,rgba(14,20,33,.92),rgba(9,13,22,.92));border:1px solid var(--line);border-radius:12px;padding:12px 14px;min-height:0;overflow:auto;display:flex;flex-direction:column;box-shadow:0 1px 0 rgba(255,255,255,.03) inset,0 14px 36px -24px rgba(0,0,0,.9)}
 .nd-card::before{content:"";position:absolute;left:14px;right:14px;top:0;height:1px;background:linear-gradient(90deg,transparent,rgba(34,211,238,.45),transparent)}
 .nd-h{color:#8291a8;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px;flex:0 0 auto;display:flex;align-items:center;gap:8px;padding-left:10px;position:relative}
@@ -316,8 +383,8 @@ function inject() {
 .nd-pnl .nd-big small{font-size:14px;font-weight:600;margin-left:8px;letter-spacing:0}
 .nd-kpi{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:12px;color:#6f7b90;font-size:11px}.nd-kpi b{color:#dbe2ef;font-weight:700}.nd-kpi>span{display:flex;gap:5px;align-items:baseline}.nd-kpi small{color:#495468}
 .nd-pnl{grid-column:1/2;grid-row:1/2}.nd-mkt{grid-column:2/3;grid-row:1/2}
-.nd-shell{grid-column:1/2;grid-row:2/3}.nd-trd{grid-column:2/3;grid-row:2/3}
-.nd-trades{grid-column:1/2;grid-row:3/4}.nd-brain{grid-column:2/3;grid-row:3/4}
+.nd-shell{grid-column:1/3;grid-row:2/3;background:#f3f4ef !important;border-color:#d9dcd3 !important}.nd-shell .nd-h{color:#23272e}.nd-shell .nd-h small{color:#7c838f}.nd-trd{grid-column:2/3;grid-row:3/4}
+.nd-trades{grid-column:1/2;grid-row:3/4}.nd-brain{grid-column:1/3;grid-row:4/5}
 .nd-shell canvas,.nd-brain canvas{flex:1;width:100%;height:100%;min-height:0;display:block}
 .nd-scan{font-size:11px;color:var(--accent);margin-bottom:9px;min-height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.nd-scan b{color:#bdeefb}
 .nd-markets{display:block}
