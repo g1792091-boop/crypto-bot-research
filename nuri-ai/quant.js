@@ -359,6 +359,14 @@ export const IND_REGISTRY = {
   cmf: {outputs: ["value"], defaults: {length: 20}, desc: "차이킨 자금 흐름"},
   aroon: {outputs: ["up", "down"], defaults: {length: 25}, desc: "아룬 (0~100)"},
   atr_stop: {outputs: ["line", "trend"], defaults: {length: 14, mult: 3.0}, desc: "ATR 추적 손절선 (UT Bot 계열, trend ±1)"},
+  // ── ICT/SMC · 세션 프리미티브 (가격구조·시간 기반, 신호형 ±1/값) ──
+  bos: {outputs: ["value", "trend"], defaults: {length: 20}, desc: "구조 돌파 BOS/MSS (value +1=상승 구조돌파·-1=하락, trend=최근 구조 방향 ±1). close 가 직전 N봉 스윙고/저 돌파"},
+  fvg: {outputs: ["value"], defaults: {}, desc: "Fair Value Gap (value +1=상승 FVG 생성봉·-1=하락 FVG, 0=없음). 3봉 가격 불균형"},
+  ob: {outputs: ["value"], defaults: {length: 14, mult: 1.2}, desc: "Order Block 리테스트 (value +1=상승 OB 존 되돌림·-1=하락 OB). 변위 전 마지막 반대봉 존 재진입"},
+  sweep: {outputs: ["value"], defaults: {length: 10}, desc: "유동성 스윕/스탑헌트 반전 (value +1=스윙저점 쓸고 복귀=롱·-1=스윙고점 쓸고 복귀=숏)"},
+  disp: {outputs: ["value"], defaults: {length: 14, mult: 1.2}, desc: "변위 Displacement (value +1=큰 양봉(몸통≥mult×ATR)·-1=큰 음봉·0=보통)"},
+  premium: {outputs: ["value"], defaults: {length: 50}, desc: "프리미엄/디스카운트 (value 0~1, 최근 N봉 스윙범위 내 close 위치. <0.3 디스카운트=매수존, >0.7 프리미엄=매도존)"},
+  session: {outputs: ["value"], defaults: {start: 13, end: 16}, desc: "세션/킬존 필터 (value +1=봉의 UTC시각이 [start,end) 안·0=밖). 런던 7~10, 뉴욕AM 13~16, 아시아 0~3 (UTC)"},
   // 사용자 수식 지표 (customind.js): {"id":"x","type":"custom","expr":"(close - ema(close,20)) / ind(\"atr\",{length:14})"}
   custom: {outputs: ["value"], defaults: {}, desc: "사용자 수식 지표 (expr 에 수식 — 문법은 customind.js CUSTOM_DOC)"},
 };
@@ -388,6 +396,74 @@ function tvCompute(c, id, p){
 export function tvCatalogText(){
   return "차트 터미널 지표 " + TV_TYPES.length + "종 (type \"tv_이름\", 출력 value=첫 선 · p1~p4=다음 선, 신호형은 +1 매수/-1 매도, 파라미터 이름은 아래 괄호): " +
     TV_TYPES.map(k => `${k}(${Object.keys(IND_REGISTRY[k].defaults).join(",")})`).join(" ");
+}
+// ── ICT/SMC · 세션 프리미티브 계산 (OHLCV·시각만으로) ──
+function bos(c, n){
+  const val = nulls(c.length), tr = nulls(c.length); let dir = 0;
+  for (let i = 0; i < c.length; i++){
+    if (i < n){ val[i] = 0; tr[i] = dir; continue; }
+    let hh = -Infinity, ll = Infinity;
+    for (let j = i - n; j < i; j++){ if (c[j].h > hh) hh = c[j].h; if (c[j].l < ll) ll = c[j].l; }
+    let v = 0;
+    if (c[i].c > hh){ v = 1; dir = 1; } else if (c[i].c < ll){ v = -1; dir = -1; }
+    val[i] = v; tr[i] = dir;
+  }
+  return {value: val, trend: tr};
+}
+function fvg(c){
+  const val = nulls(c.length);
+  for (let i = 0; i < c.length; i++){
+    if (i < 2){ val[i] = 0; continue; }
+    if (c[i].l > c[i - 2].h) val[i] = 1; else if (c[i].h < c[i - 2].l) val[i] = -1; else val[i] = 0;
+  }
+  return val;
+}
+function displacement(c, n, mult){
+  const a = atr(c, n), val = nulls(c.length);
+  for (let i = 0; i < c.length; i++){
+    const body = Math.abs(c[i].c - c[i].o), th = (a[i] || 0) * mult;
+    val[i] = (th > 0 && body >= th) ? (c[i].c >= c[i].o ? 1 : -1) : 0;
+  }
+  return val;
+}
+function orderBlock(c, n, mult){
+  const disp = displacement(c, n, mult), val = nulls(c.length); let bull = null, bear = null;
+  for (let i = 0; i < c.length; i++){
+    val[i] = 0;
+    if (bull && c[i].l <= bull.hi && c[i].c >= bull.lo) val[i] = 1;
+    if (bear && c[i].h >= bear.lo && c[i].c <= bear.hi) val[i] = -1;
+    if (disp[i] === 1 && i >= 1){ const p = c[i - 1]; bull = {lo: Math.min(p.o, p.c, p.l), hi: Math.max(p.o, p.c, p.h)}; }
+    else if (disp[i] === -1 && i >= 1){ const p = c[i - 1]; bear = {lo: Math.min(p.o, p.c, p.l), hi: Math.max(p.o, p.c, p.h)}; }
+  }
+  return val;
+}
+function sweep(c, n){
+  const val = nulls(c.length);
+  for (let i = 0; i < c.length; i++){
+    if (i < n){ val[i] = 0; continue; }
+    let hh = -Infinity, ll = Infinity;
+    for (let j = i - n; j < i; j++){ if (c[j].h > hh) hh = c[j].h; if (c[j].l < ll) ll = c[j].l; }
+    if (c[i].l < ll && c[i].c > ll) val[i] = 1; else if (c[i].h > hh && c[i].c < hh) val[i] = -1; else val[i] = 0;
+  }
+  return val;
+}
+function premium(c, n){
+  const val = nulls(c.length);
+  for (let i = 0; i < c.length; i++){
+    if (i < n){ val[i] = 0.5; continue; }
+    let hh = -Infinity, ll = Infinity;
+    for (let j = i - n; j <= i; j++){ if (c[j].h > hh) hh = c[j].h; if (c[j].l < ll) ll = c[j].l; }
+    val[i] = hh > ll ? (c[i].c - ll) / (hh - ll) : 0.5;
+  }
+  return val;
+}
+function session(c, start, end){
+  const val = nulls(c.length);
+  for (let i = 0; i < c.length; i++){
+    const h = new Date(c[i].t).getUTCHours(), inw = start <= end ? (h >= start && h < end) : (h >= start || h < end);
+    val[i] = inw ? 1 : 0;
+  }
+  return val;
 }
 export function computeInd(candles, type, params = {}){
   const R = IND_REGISTRY[type];
@@ -431,6 +507,13 @@ export function computeInd(candles, type, params = {}){
     case "cmf": return {value: cmf(c, n)};
     case "aroon": return aroon(c, n);
     case "atr_stop": return atrStop(c, n, F("mult"));
+    case "bos": return bos(c, n);
+    case "fvg": return {value: fvg(c)};
+    case "ob": return {value: orderBlock(c, n, F("mult"))};
+    case "sweep": return {value: sweep(c, n)};
+    case "disp": return {value: displacement(c, n, F("mult"))};
+    case "premium": return {value: premium(c, n)};
+    case "session": return {value: session(c, I("start"), I("end"))};
     case "custom": try { return {value: evalExpr(String(p.expr ?? ""), c, p.extra || {}, {allow: EXT_NAME, computeInd})}; } catch(e){ return {value: nulls(c.length)}; }   // 수식 오류여도 백테스트 멈추지 않게 null
   }
 }

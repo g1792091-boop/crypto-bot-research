@@ -79,6 +79,12 @@ export const STYLES = [
   { k: "rev_z", cls: "역추세", tf: "15", iv: "15m", hint: "Z-score 평균회귀: custom expr (close-sma)/변동성 이 -2 이하 롱, +2 이상 숏." },
   { k: "rev_cci", cls: "역추세", tf: "60", iv: "1h", hint: "CCI -100 하향 돌파 후 회복 매수 / +100 반대." },
   { k: "conf_multi", cls: "다지표", tf: "60", iv: "1h", hint: "컨플루언스: RSI+MACD+EMA기울기+거래량을 custom 수식으로 가중 합산한 스코어로 2개 이상 동시 확인." },
+  // ICT/SMC · 세션 (새 네이티브 지표 bos/fvg/ob/sweep/disp/premium/session 사용)
+  { k: "ict_ob", cls: "ICT", tf: "15", iv: "15m", hint: "오더블록 리테스트 롱: ob==1 (상승 OB 존 되돌림) + premium<0.4 (디스카운트존) + bos 상승. 지표: ob, premium, bos" },
+  { k: "ict_fvg", cls: "ICT", tf: "15", iv: "15m", hint: "FVG 되돌림: fvg==1 (상승 불균형) 생성 후 추세방향 진입, ema50 위에서만. 지표: fvg, ema" },
+  { k: "ict_sweep", cls: "ICT", tf: "15", iv: "15m", hint: "유동성 스윕 반전: sweep==1 (스윙저점 쓸고 복귀=롱) + bos 확인. 손절은 스윕 꼬리 아래. 지표: sweep, bos" },
+  { k: "ict_mss", cls: "ICT", tf: "60", iv: "1h", hint: "MSS 진입: disp(큰 변위봉) + bos(구조 돌파) 동시 = 시장구조전환. 추세방향 진입. 지표: disp, bos" },
+  { k: "session_kz", cls: "세션", tf: "15", iv: "15m", hint: "킬존 모멘텀: session(start,end)로 활성 세션(런던 7~10·뉴욕 13~16 UTC)만 + 추세방향(ema/bos) 진입. 지표: session, ema, bos" },
 ];
 let dRot = 0;
 const KEY = "coin:neural";
@@ -369,7 +375,7 @@ export async function designStrategy() {
       { role: "system", content: `너는 코인 선물 퀀트다. 목표는 '잃지 않는 것' — 승률 55%+·낙폭(MDD) 작게·타이트한 손절로 자본을 지킨다.
 이번 과제: [${style.cls}] 스타일로 ${ko} ${style.iv}봉 매매법 하나를 설계. 접근: ${style.hint}
 설계 원칙: ① 추세 필터로 역행 진입 방지 ② 과매수/과매도로 타점 ③ 보조지표 2개 이상 동시 확인(컨플루언스) ④ 손절은 익절보다 타이트. 반드시 custom 수식 지표 1개 이상 포함.
-아래 JSON 스키마로만 출력(설명·코드블록 금지):\n{"name":"이름","indicators":[{"id":"r","type":"tv_rsi","length":14},{"id":"vm","type":"custom","expr":"수식"}],"long_entry":{"conditions":[{"left":"r","op":"<","right":40}]},"long_exit":{"conditions":[{"left":"r","op":">","right":65}]},"short_entry":{"conditions":[...]},"risk":{"leverage":2,"stop_loss_pct":${style.cls === "단타" ? 1 : 3},"take_profit_pct":${style.cls === "단타" ? 2 : 6}}}\n쓸 수 있는 보조지표(차트 터미널 ${Q.TV_TYPES ? Q.TV_TYPES.length : 146}종 전부 + custom 수식): ${catalog}\ncustom expr 피연산자: close open high low volume · 지표 id · id.p1~p4.${M.lessons.length ? " 내 교훈: " + M.lessons.join(" / ") : ""}${BRAIN.recallText(ko, "", 3) ? " 뇌 패턴: " + BRAIN.recallText(ko, "", 3) : ""} 뇌가 이득난 규칙: ${BRAIN.refineForProfit(ko, "").text}` },
+아래 JSON 스키마로만 출력(설명·코드블록 금지):\n{"name":"이름","indicators":[{"id":"r","type":"tv_rsi","length":14},{"id":"vm","type":"custom","expr":"수식"}],"long_entry":{"conditions":[{"left":"r","op":"<","right":40}]},"long_exit":{"conditions":[{"left":"r","op":">","right":65}]},"short_entry":{"conditions":[...]},"risk":{"leverage":2,"stop_loss_pct":${style.cls === "단타" ? 1 : 3},"take_profit_pct":${style.cls === "단타" ? 2 : 6}}}\n쓸 수 있는 보조지표(차트 터미널 ${Q.TV_TYPES ? Q.TV_TYPES.length : 146}종 전부 + custom 수식): ${catalog}\n추가 ICT/SMC·세션 지표(네이티브, 신호형은 조건에 ==1 또는 == -1 로): bos(구조돌파 ±1) fvg(FVG ±1) ob(오더블록 리테스트 ±1) sweep(유동성스윕 반전 ±1) disp(변위 ±1) premium(0~1, <0.3 디스카운트/>0.7 프리미엄) session(start,end 킬존 0/1).\ncustom expr 피연산자: close open high low volume · 지표 id · id.p1~p4.${M.lessons.length ? " 내 교훈: " + M.lessons.join(" / ") : ""}${BRAIN.recallText(ko, "", 3) ? " 뇌 패턴: " + BRAIN.recallText(ko, "", 3) : ""} 뇌가 이득난 규칙: ${BRAIN.refineForProfit(ko, "").text}` },
       { role: "user", content: `[${style.cls}] ${ko} 매매법 JSON 하나만:` }],
       role: "code", target: tgt, fallback: true, json: true, maxTokens: 800, temperature: 0.6, noThink: true, onContent: d => raw += d, onThink: () => {} });
   } catch (e) { feed(`[${shortMd(tgt.model)}] ${style.cls} 설계 응답 실패`); return; }
