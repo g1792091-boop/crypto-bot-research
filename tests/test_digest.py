@@ -63,9 +63,14 @@ def test_tf_split_meeting_at_18_in_the_strategy_room_with_the_numbers(world):
     [due] = TR.find_due(world.paper(), None, world.agents, None, TF_AT, pol.triggers)
     assert (due.room_id, due.trigger, due.data["class"]) == (ROOM, "tf_split", "weekly")
     assert "봉 비교" in due.data["summary_ko"] and due.data["best_tf"] == "15m"
-    runner = QueueRunner({SPEC: [analysis(NOTE)], "devils_advocate": [challenge("agree")]})
+    runner = QueueRunner({SPEC: [analysis(NOTE)], "tf_compare": [{"headline": "5분봉 비용", "findings": [],
+                                                                 "verdict": "agree", "suggestion": None}],
+                          "devils_advocate": [challenge("agree")]})
     out = world.tick(runner, TF_AT, policy=pol)
     assert [(r["room_id"], r["trigger"], r["status"]) for r in out["rounds"]] == [(ROOM, "tf_split", "done")]
+    # owners' choice 2026-10-04: the timeframe comparer speaks after the specialist, with the cross-strategy view
+    assert runner.roles() == [SPEC, "tf_compare", "devils_advocate"]
+    assert "cross" in runner.calls[1]["packet"]["tf_split"] and "tf_split.cross" in runner.calls[1]["system"]
     pk = runner.calls[0]["packet"]
     assert pk["meeting"]["trigger"] == "tf_split" and pk["tf_split"]["split"] is True
     assert pk["tf_split"]["timeframes"]["1h"]["trades"] == 10 and "how_to_read" in pk["tf_split"]
@@ -110,7 +115,8 @@ def _two_meetings(world):
     second = {**team_answer("r"), "responds_to": {"role": "pnl_reviewer", "stance": "disagree",
                                                   "point": "비용이 더 커 보임"}}
     lead = {"summary": ["a", "b", "c"], "human_actions": [], "watch_next": [], "open_disagreement": "장세 vs 비용"}
-    world.tick(QueueRunner({"pnl_reviewer": [first], "risk_officer": [second], "team_lead": [lead]}), t, policy=pol)
+    world.tick(QueueRunner({"performance": [team_answer("f")], "pnl_reviewer": [first], "risk_officer": [second],
+                            "team_lead": [lead]}), t, policy=pol)
     world.losses(t=t + HOUR)
     world.tick(QueueRunner({SPEC: ["not json", "not json"]}), t + HOUR)
     return t
@@ -122,11 +128,11 @@ def test_day_digest_lists_every_meeting_with_replies_and_lead_lines(world):
     assert d["n"] == 2 and d["disagreements"] == 1
     m = d["meetings"][0]
     assert (m["room_id"], m["trigger"], m["trigger_ko"], m["status"]) == ("team:review", "ranking", "순위 검토", "done")
-    assert [s["role"] for s in m["speakers"]] == ["pnl_reviewer", "risk_officer", "team_lead"]
+    assert [s["role"] for s in m["speakers"]] == ["performance", "pnl_reviewer", "risk_officer", "team_lead"]
     assert m["replies"] == [{"from": "risk_officer", "from_name": R.role_name("risk_officer"), "to": "pnl_reviewer",
                              "to_name": R.role_name("pnl_reviewer"), "stance": "disagree", "point": "비용이 더 커 보임"}]
     assert m["asks"][0]["text"].startswith("하위 3개") and m["lead"] == ["a", "b", "c"]
-    assert m["open_disagreement"] == "장세 vs 비용" and m["calls"] == 3
+    assert m["open_disagreement"] == "장세 vs 비용" and m["calls"] == 4
     assert d["meetings"][1]["room_id"] == ROOM and d["meetings"][1]["status"] == "failed"
     assert DG.day_digest(world.agents, R.kst_day(t + DAY))["n"] == 0
     with pytest.raises(ValueError):
@@ -310,13 +316,14 @@ def test_ranking_review_hypotheses_go_to_the_ledger_and_are_graded_later(world):
                             "prediction": pred},
                            {"strategy": "NOPE", "text": "모르는 매매법"},
                            {"strategy": "V45_AMB", "text": "예측 없는 가설"}]}
-    runner = QueueRunner({"pnl_reviewer": [team_answer("p")], "risk_officer": [team_answer("r")], "team_lead": [lead]})
+    runner = QueueRunner({"performance": [team_answer("f")], "pnl_reviewer": [team_answer("p")],
+                          "risk_officer": [team_answer("r")], "team_lead": [lead]})
     world.tick(runner, t, policy=pol)
     rows = R.trial_history(world.agents, kinds=("hypothesis",), limit=10)
     assert sorted((r["strategy"], bool((r["spec"] or {}).get("prediction"))) for r in rows) == [(S, True), ("V45_AMB", False)]
     mine = next(r for r in rows if r["strategy"] == S)
     assert mine["room_id"] == "team:review" and mine["spec"]["by"] == "team_lead"
-    assert "hypotheses" in runner.calls[2]["system"]
+    assert "hypotheses" in runner.calls[3]["system"]
     texts = [m["text"] for m in world.messages("team:review")]
     assert any("가설 #" in x and "채점할 예측" in x for x in texts)
     # other meetings do not record them

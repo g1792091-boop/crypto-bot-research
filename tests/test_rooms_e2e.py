@@ -519,6 +519,8 @@ def test_owner_settings_from_env_reach_the_tick_and_the_dashboard(world, dash):
     server.triggers.ranking_hour_kst = RM.RANKING_HOUR_DEFAULT                     # and the 14:00 ranking review
     server.triggers.tf_split_hour_kst = RM.TF_SPLIT_HOUR_DEFAULT                   # the 18:00 timeframe split
     server.weekly_report_hour_kst = RM.WEEKLY_REPORT_HOUR_DEFAULT                  # the Sunday 21:00 report
+    for attr, hour in RM.NEW_MEETING_HOURS.values():                               # the meetings of 2026-10-04
+        setattr(server.triggers, attr, hour)
     assert RM.policy_from_env({}) == server
     for bad in ({"AGENTS_BUDGET": "lose=3"}, {"AGENTS_BUDGET": "loss=x"}, {"AGENTS_OWNER_OK": "maybe"},
                 {"AGENTS_OWNER_OK": "no"}, {"AGENTS_OBSERVE_DAYS": "0"},

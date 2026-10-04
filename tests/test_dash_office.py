@@ -175,7 +175,7 @@ def test_the_endpoint_needs_a_login_and_is_read_only(tmp_path):
     o = c.get("/api/office").json()
     assert o["ready"] is True and o["running"][0]["room_id"] == "team:market"
     assert o["running"][0]["next_role"] == "devils_advocate"
-    assert o["schedule"]["source"] == "tick" and [s["hhmm"] for s in o["schedule"]["slots"]] == ["08:00", "14:00", "22:00"]
+    assert o["schedule"]["source"] == "tick" and [s["hhmm"] for s in o["schedule"]["slots"]] == ["08:00", "12:00", "14:00", "22:00"]
     assert c.post("/api/office").status_code == 405
     assert _dump(path) == before
 
@@ -184,7 +184,7 @@ def test_a_missing_empty_or_unreadable_agents_db(tmp_path):
     missing = str(tmp_path / "missing.db")
     o = Rooms(missing, None).office(now_ms=NOW)
     assert o["ready"] is False and o["running"] == [] and o["recent"] == [] and o["today"]["meetings"] == 0
-    assert o["schedule"]["source"] == "defaults" and o["schedule"]["next"]["hhmm"] == "14:00"
+    assert o["schedule"]["source"] == "defaults" and o["schedule"]["next"]["hhmm"] == "12:00"
     assert len(o["zones"]) == 6 and "team_lead" in o["roles"] and not os.path.exists(missing)
     empty = str(tmp_path / "empty.db")
     sqlite3.connect(empty).close()                  # a database with no tables yet: nothing to show, no error
@@ -206,7 +206,7 @@ def test_a_missing_empty_or_unreadable_agents_db(tmp_path):
 
 
 def test_the_next_fixed_meeting_comes_from_the_published_hours():
-    h = {"morning": 9, "ranking": -1, "tf_split": 18, "evening": 21}
+    h = {"morning": 9, "ranking": -1, "tf_split": 18, "evening": 21, "bull_bear": -1}
     at = lambda hh, mm: int(datetime.datetime(2026, 10, 4, hh, mm, tzinfo=KST).timestamp() * 1000)  # noqa: E731
     s = office_schedule(at(10, 30), h)
     assert [x["hhmm"] for x in s["slots"]] == ["09:00", "18:00", "21:00"]            # -1 = off
@@ -254,4 +254,4 @@ def test_the_kept_meeting_hours_follow_the_published_hours():
     r = subprocess.run([node, "-e", "\n".join(fns) + "\n" + body], capture_output=True, text=True, timeout=30)
     assert r.returncode == 0, r.stderr
     got = json.loads(r.stdout)
-    assert got["a"] == "09:00·21:00" and got["b"] == "08:00·14:00·22:00" and "07:00·13:00·23:00" in got["c"]
+    assert got["a"] == "09:00·21:00" and got["b"] == "08:00·12:00·14:00·22:00" and "07:00·13:00·23:00" in got["c"]

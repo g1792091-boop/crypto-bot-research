@@ -1558,14 +1558,16 @@ def test_owner_mention_brings_a_named_expert_into_a_strategy_meeting(world):
 def test_ranking_review_at_14_with_the_top_and_bottom_and_a_silent_summary(world):
     t = kst(2026, 10, 7, 14, 5)
     lead = {"summary": ["상위는 추세장 롱", "하위는 박스권 숏에서 손실", "표본 적음"], "human_actions": [], "watch_next": []}
-    runner = QueueRunner({"pnl_reviewer": [team_answer("p")], "risk_officer": [team_answer("r")], "team_lead": [lead]})
+    runner = QueueRunner({"performance": [team_answer("f")], "pnl_reviewer": [team_answer("p")],
+                          "risk_officer": [team_answer("r")], "team_lead": [lead]})
     notifier = ListNotifier()
     assert world.tick(QueueRunner({}), t, notifier=notifier)["rounds"] == []    # off in RoomsPolicy() itself
     pol = RM.RoomsPolicy()
     pol.triggers.ranking_hour_kst = RM.policy_from_env({}).triggers.ranking_hour_kst     # the server's: 14:00
     out = world.tick(runner, t, policy=pol, notifier=notifier)
     assert [(r["room_id"], r["trigger"]) for r in out["rounds"]] == [("team:review", "ranking")]
-    assert runner.roles() == ["pnl_reviewer", "risk_officer", "team_lead"]
+    # owners' choice 2026-10-04: the performance analyst reads the ranking numbers first
+    assert runner.roles() == ["performance", "pnl_reviewer", "risk_officer", "team_lead"]
     pk = runner.calls[0]["packet"]["ranking"]
     assert "picked" in pk and "coin_flips" in pk
     assert len(notifier.messages) == 1 and notifier.messages[0][1].startswith("🏁 순위 검토")
@@ -1583,11 +1585,12 @@ def test_speakers_answer_an_earlier_colleague_and_ask_the_next_one(world):
               "ask_next": "팀장님, 표본이 30건 넘을 때까지 결론을 미룰까요?"}
     lead = {"summary": ["a", "b", "c"], "human_actions": [], "watch_next": [],
             "open_disagreement": "손익 복기 분석가는 장세, 리스크 책임자는 비용을 원인으로 봄"}
-    runner = QueueRunner({"pnl_reviewer": [first], "risk_officer": [second], "team_lead": [lead]})
+    runner = QueueRunner({"performance": [team_answer("f")], "pnl_reviewer": [first], "risk_officer": [second],
+                          "team_lead": [lead]})
     world.tick(runner, t, policy=pol)
     # the second speaker saw the first one's question; the lead saw both
-    assert runner.calls[1]["packet"]["this_round"]["team:pnl_reviewer"]["ask_next"].startswith("하위 3개")
-    assert "responds_to" in runner.calls[1]["system"] and "open_disagreement" in runner.calls[2]["system"]
+    assert runner.calls[2]["packet"]["this_round"]["team:pnl_reviewer"]["ask_next"].startswith("하위 3개")
+    assert "responds_to" in runner.calls[2]["system"] and "open_disagreement" in runner.calls[3]["system"]
     said = {m["role"]: m["text"] for m in world.messages("team:review") if m["kind"] in ("analysis", "summary")}
     assert said["risk_officer"].startswith(f"↳ {RM.role_ko('pnl_reviewer')}에게 반대: 박스권보다")
     assert "❓ 다음 분께: 팀장님" in said["risk_officer"] and "❓ 다음 분께: 하위 3개" in said["pnl_reviewer"]

@@ -698,7 +698,9 @@ def _trigger_defaults(hours: Optional[dict] = None) -> dict:
     server's defaults."""
     d = {"loss_min_count": 2, "loss_min_gap_ms": 2 * 3_600_000, "weekly_min_trades": 30,
          "checkpoint_every_days": 30, "morning_hour_kst": 8, "evening_hour_kst": 22,
-         "ranking_hour_kst": 14, "tf_split_hour_kst": 18, "weekly_report_hour_kst": 21}
+         "ranking_hour_kst": 14, "tf_split_hour_kst": 18, "weekly_report_hour_kst": 21,
+         "bull_bear_hour_kst": 12, "event_review_hour_kst": 11, "cost_review_hour_kst": 11,
+         "combo_review_hour_kst": 11, "coin_review_hour_kst": 11, "learning_review_hour_kst": 11}
     try:
         from ..agents.triggers import TriggerPolicy
         p = TriggerPolicy()
@@ -709,6 +711,9 @@ def _trigger_defaults(hours: Optional[dict] = None) -> dict:
         pass
     for k, key in (("morning", "morning_hour_kst"), ("ranking", "ranking_hour_kst"), ("tf_split", "tf_split_hour_kst"),
                    ("evening", "evening_hour_kst"), ("weekly_report", "weekly_report_hour_kst"),
+                   ("bull_bear", "bull_bear_hour_kst"), ("event_review", "event_review_hour_kst"),
+                   ("cost_review", "cost_review_hour_kst"), ("combo_review", "combo_review_hour_kst"),
+                   ("coin_review", "coin_review_hour_kst"), ("learning_review", "learning_review_hour_kst"),
                    ("loss_min_count", "loss_min_count"), ("loss_min_gap_ms", "loss_min_gap_ms")):
         v = (hours or {}).get(k)
         if isinstance(v, int) and not isinstance(v, bool):
@@ -726,20 +731,33 @@ def room_schedule_ko(room_id: str, hours: Optional[dict] = None) -> str:
         s = room_id[len("strat:"):]
         wd = WEEKDAY_KO[names.index(s) % 7] if s in names else "정해진"
         gap_h = int(d["loss_min_gap_ms"] // 3_600_000)
-        tf = (f", 5개 봉 계좌의 성적이 크게 갈리면 {hh(d['tf_split_hour_kst'])} 봉 비교 회의로"
+        tf = (f", 5개 봉 계좌의 성적이 크게 갈리면 {hh(d['tf_split_hour_kst'])} 봉 비교 회의(봉 비교 분석가 참석)로"
               if d["tf_split_hour_kst"] >= 0 else "")
         return (f"새 손실이 {d['loss_min_count']}건 쌓이면 (같은 방은 {gap_h}시간 간격), 계좌가 파산하면, "
                 f"거래가 {d['weekly_min_trades']}건 더 쌓인 뒤 {wd}요일 주간 검토 때{tf} 스스로 회의를 엽니다.")
     m, e, c = d["morning_hour_kst"], d["evening_hour_kst"], d["checkpoint_every_days"]
+    more = " 자료가 많이 쌓인 주에는 한 번 더(주 2번까지)."
+
+    def weekly(key: str, day: str, what: str) -> str:
+        h = d.get(key, -1)
+        return f" {day}요일 {hh(h)} {what}(자료가 쌓인 뒤부터).{more}" if isinstance(h, int) and h >= 0 else ""
+
+    bb, ev = d.get("bull_bear_hour_kst", -1), d.get("event_review_hour_kst", -1)
     return {
         "team:market": f"매일 {m:02d}:00 아침 회의: 장세 → 파생·쏠림 → 전략가 → 반론 → 팀장 요약(텔레그램 발송). "
-                       "시세가 크게 움직이면 바로 회의.",
-        "team:review": (f"매일 {hh(d['ranking_hour_kst'])} 순위 검토(잔고 상위·하위 3개 매매법, 텔레그램 발송), "
+                       + (f"매일 {hh(bb)} 낙관·비관 토론(코인 하나씩, 24시간 뒤 코드가 채점, 거래 없음). " if bb >= 0 else "")
+                       + (f"미국 경제지표 발표 다음 날 {hh(ev)} 경제지표 복기. " if ev >= 0 else "")
+                       + "시세가 크게 움직이면 바로 회의.",
+        "team:review": (f"매일 {hh(d['ranking_hour_kst'])} 순위 검토(성과 분석 → 손익 복기 → 리스크 → 팀장, 텔레그램 발송), "
                         if d["ranking_hour_kst"] >= 0 else "매일 ")
-                       + f"{e:02d}:00 저녁 점검: 손익 복기 → 가정 분석 → 리스크 책임자.",
-        "team:lead": f"매일 {e:02d}:00 팀장 3줄 요약(텔레그램 발송), {c}·{2 * c}·{3 * c}일째 중간 점검.",
-        "team:ops": "사고가 나면 바로: 강제청산, 밤 점검 불일치, 데이터 끊김, 신호 지연.",
-        "team:risk": "정해진 회의는 없고, 두 분이 남긴 메시지에 답합니다.",
+                       + f"{e:02d}:00 저녁 점검: 손익 복기 → 가정 분석 → 리스크 책임자."
+                       + weekly("coin_review_hour_kst", "수", "코인·장세 회의"),
+        "team:lead": f"매일 {e:02d}:00 팀장 3줄 요약(텔레그램 발송), {c}·{2 * c}·{3 * c}일째 중간 점검."
+                     + weekly("learning_review_hour_kst", "토", "학습 정리 회의"),
+        "team:ops": "사고가 나면 바로: 강제청산, 밤 점검 불일치, 데이터 끊김, 신호 지연."
+                    + weekly("cost_review_hour_kst", "월", "비용·체결 회의"),
+        "team:risk": (weekly("combo_review_hour_kst", "화", "조합·동시 손실 회의").strip() + " 그 밖에는 두 분 글에 답합니다."
+                      if d.get("combo_review_hour_kst", -1) >= 0 else "정해진 회의는 없고, 두 분이 남긴 메시지에 답합니다."),
     }.get(room_id, "")
 
 
@@ -751,6 +769,7 @@ OFFICE_SPEAKING = ("analysis", "challenge", "expert", "revision", "verdict", "su
 OFFICE_STRATEGY_EXPERTS = ("entry_timing", "exit_timing", "whatif")                       # = rooms.STRATEGY_EXPERTS
 # the daily meetings the hours in 'policy:hours' stand for: (hour key of _trigger_defaults, trigger, rooms, where)
 OFFICE_DAILY = (("morning_hour_kst", "morning", ("team:market",), "시장분석팀"),
+                ("bull_bear_hour_kst", "bull_bear", ("team:market",), "시장분석팀"),
                 ("ranking_hour_kst", "ranking", ("team:review",), "손익 복기팀"),
                 ("tf_split_hour_kst", "tf_split", (), "성적이 갈린 매매법 방"),
                 ("evening_hour_kst", "evening", ("team:review", "team:lead"), "손익 복기팀 → 총괄"))

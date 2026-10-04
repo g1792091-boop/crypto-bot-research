@@ -38,6 +38,21 @@ Triggers (defaults in ``TriggerPolicy``; every number is configurable):
                                    price an hour before (``market``: the caller fetches the 5m bars; none = never
                                    due). One meeting for all coins that moved, a coin at most every 3h, at most 4 a
                                    KST day (exempt from the room's daily cap).
+    cost_review   4  team:ops      Monday   } the weekly analysis meetings (owners' choice 2026-10-04): at
+    combo_review  4  team:risk     Tuesday  } ``<name>_hour_kst`` (11:00 on the server; -1 = off here) of
+    coin_review   4  team:review   Wednesday} their KST weekday, once per KST week (key = that day); a meeting the
+    learning_review 4 team:lead    Saturday } budget deferred or stopped stays due on the following days until the
+                                   next one. Only once there is enough data (``analysis_ok``: >= ``analysis_min_trades``
+                                   closed strategy trades in the 7 days before the slot and >= ``analysis_min_days``
+                                   since the run started); otherwise nothing is due and ``analysis_status`` says why
+                                   (the rooms tick keeps it in the cursor ``meetings:skipped``). Weekly class.
+    event_review  4  team:market   the KST day after each US release of data/macro_events.csv (CPI, FOMC, NFP, PCE) at
+                                   ``event_review_hour_kst`` (11:00 on the server; -1 = off), once per event, due until
+                                   ``event_review_window_ms`` after; only when the paper run covered the event's window
+                                   (2h before .. 6h after the release). Weekly class.
+    bull_bear     3  team:market   daily at ``bull_bear_hour_kst`` (12:00 on the server; -1 = off), window 4h: one coin
+                                   a day in rotation (``bull_bear_coin``). Scheduled class. The chair's call is recorded
+                                   and graded 24h later by code (agents/committee.py); no trade ever follows.
     research      5  team:lab      the new-strategy lab, every ``research_every_ms`` (one slot per
                                    period of the KST day; a slot that could not start is skipped,
                                    not caught up). 0 = off (the default here; the rooms server's
@@ -113,14 +128,26 @@ TEAM_ROOMS = ("team:market", "team:risk", "team:ops", "team:review", "team:lead"
 LAB_ROOM = "team:lab"                 # the new-strategy lab (rooms_db.LAB_ROOM)
 LAB_WEEKDAY = 6                       # the new-strategy accounts' weekly review: Sunday (KST)
 
+# The weekly analysis meetings (owners' choice 2026-10-04): trigger -> (KST weekday, Monday = 0, room)
+ANALYSES = {"cost_review": (0, "team:ops"), "combo_review": (1, "team:risk"), "coin_review": (2, "team:review"),
+            "learning_review": (5, "team:lead")}
+ANALYSIS_KO = {"cost_review": "비용·체결 회의", "combo_review": "조합·동시 손실 회의", "coin_review": "코인·장세 회의",
+               "learning_review": "학습 정리 회의"}
 TRIGGERS = ("incident", "owner", "loss_cluster", "bust", "checkpoint", "morning", "evening", "weekly", "research",
-            "market_move", "ranking", "tf_split")
+            "market_move", "ranking", "tf_split", *ANALYSES, "event_review", "bull_bear")
 PRIORITY = {"incident": 0, "owner": 1, "loss_cluster": 2, "bust": 2, "market_move": 2, "checkpoint": 3, "morning": 3, "ranking": 3,
-            "evening": 3, "weekly": 4, "tf_split": 4, "research": 5}
-# Sub-budget class of each trigger (the rooms engine keeps one AI budget per class).
+            "evening": 3, "bull_bear": 3, "weekly": 4, "tf_split": 4, **{k: 4 for k in ANALYSES}, "event_review": 4,
+            "research": 5}
+# Sub-budget class of each trigger (the rooms engine keeps one AI budget per class). The weekly analyses and the
+# event review are analysis meetings that can wait a day: the weekly reviews' class; the daily debate is a fixed
+# daily meeting: the scheduled class (reserved, like the 08:00 / 14:00 / 22:00 meetings).
 TRIGGER_CLASS = {"incident": "incident", "owner": "owner", "loss_cluster": "loss", "bust": "loss", "market_move": "loss",
                  "checkpoint": "scheduled", "morning": "scheduled", "evening": "scheduled", "ranking": "scheduled",
-                 "weekly": "weekly", "tf_split": "weekly", "research": "research"}
+                 "bull_bear": "scheduled", "weekly": "weekly", "tf_split": "weekly", **{k: "weekly" for k in ANALYSES},
+                 "event_review": "weekly", "research": "research"}
+# the coins of the daily debate, one a day in this order (the bot's own coins, config.V3_SYMBOLS)
+BULL_BEAR_COINS = ("BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "LTCUSDT", "BCHUSDT")
+SKIPPED_CURSOR = "meetings:skipped"   # why a weekly analysis / event review did not open (written by the rooms tick)
 ENDED_OK = ("done", "no_action")      # the only statuses that advance cursors
 CLASSES = ("incident", "owner", "loss", "scheduled", "weekly", "research")
 # What a stopped_budget round pauses until the next KST day, by decision.stopped (when the
@@ -217,6 +244,29 @@ class TriggerPolicy:
     tf_split_min_trades: int = 8
     tf_split_min_spread_pct: float = 0.10
     meeting_window_ms: int = 4 * HOUR_MS
+    # the weekly analysis meetings and the event review (owners' choice 2026-10-04: 11:00 on the server,
+    # rooms.policy_from_env); -1 = off, as in TriggerPolicy() itself. Each opens only with enough data: this many
+    # closed strategy trades in the 7 days before its slot and this many days since the run started
+    cost_review_hour_kst: int = -1
+    combo_review_hour_kst: int = -1
+    coin_review_hour_kst: int = -1
+    learning_review_hour_kst: int = -1
+    analysis_min_trades: int = 200
+    analysis_min_days: int = 7
+    # owners' decision 2026-10-04: besides its weekday, a weekly analysis may meet once more in the same KST week
+    # (Monday-Sunday), at its hour on another day, when ``analysis_extra_factor`` x ``analysis_min_trades`` new closed
+    # strategy trades came in since its last meeting and at least ``analysis_extra_gap_days`` KST days have passed;
+    # never more than ``analysis_max_per_week`` meetings of one kind in a KST week
+    analysis_extra_factor: int = 2
+    analysis_extra_gap_days: int = 2
+    analysis_extra_per_week: int = 1
+    analysis_max_per_week: int = 2
+    event_review_hour_kst: int = -1
+    event_review_window_ms: int = 36 * HOUR_MS    # 11:00 the day after the release .. 23:00 the day after that
+    event_before_ms: int = 2 * HOUR_MS            # the event's window: 2h before the release ..
+    event_after_ms: int = 6 * HOUR_MS             # .. 6h after it
+    # the market team's daily bull vs bear debate (12:00 on the server); -1 = off
+    bull_bear_hour_kst: int = -1
     # new-strategy lab: one meeting slot per this period of the KST day; 0 = off (rooms.policy_from_env
     # turns it on for the server, RESEARCH_EVERY_MIN_DEFAULT)
     research_every_ms: int = 0
@@ -800,6 +850,210 @@ def _tf_split(paper_ro, st: _Rooms) -> list[Due]:
     return out
 
 
+# ---------------------------------------------------------------- weekly analyses, event review, daily debate
+def analysis_slot(now_ms: int, weekday: int, hour_kst: int) -> int:
+    """UTC ms of the latest ``weekday`` (Monday = 0) ``hour_kst``:00 KST at or before ``now_ms``."""
+    s = weekly_slot(now_ms, weekday) + hour_kst * HOUR_MS
+    return s if s <= now_ms else s - 7 * DAY_MS
+
+
+def analysis_data(paper_ro, slot_ms: int, p: TriggerPolicy) -> dict:
+    """Is there enough data for a weekly analysis meeting at ``slot_ms``? Closed trades of the strategy accounts
+    in the 7 days before the slot and days since the run started (both as of the slot, so the answer for a slot
+    never changes). {ok, trades, days, why}."""
+    start = run_start(paper_ro)
+    if start is None:
+        return {"ok": False, "trades": 0, "days": 0.0, "why": "paper 실험이 아직 시작되지 않음"}
+    days = max(0.0, (slot_ms - start) / DAY_MS)
+    r = _one(paper_ro, "SELECT COUNT(*) FROM trades t JOIN accounts a ON a.account_id = t.account_id "
+                       "WHERE a.kind = 'strategy' AND t.exit_time >= ? AND t.exit_time < ?", (slot_ms - 7 * DAY_MS, slot_ms))
+    n = 0 if r is None else _int(r[0])
+    why = []
+    if days < p.analysis_min_days:
+        why.append(f"실험 시작 뒤 {days:.1f}일(최소 {p.analysis_min_days}일)")
+    if n < p.analysis_min_trades:
+        why.append(f"지난 7일 매매법 계좌의 끝난 거래 {n}건(최소 {p.analysis_min_trades}건)")
+    return {"ok": not why, "trades": n, "days": round(days, 1), "why": ", ".join(why)}
+
+
+def _analysis_runs(st: _Rooms, trig: str) -> list[dict]:
+    """The meetings of one weekly analysis that ended done / no_action or are running now, oldest first."""
+    room = ANALYSES[trig][1]
+    return [r for r in st.rounds if r["room_id"] == room and r["trigger"] == trig
+            and (r["status"] in ENDED_OK or (r["status"] == "running" and not st.stale(r)))]
+
+
+def analysis_week_runs(st: _Rooms, trig: str) -> list[dict]:
+    """This KST week's (Monday 00:00 KST on) meetings of one weekly analysis."""
+    wk0 = weekly_slot(st.now, 0)
+    return [r for r in _analysis_runs(st, trig) if r["started_ts"] >= wk0]
+
+
+def analysis_extra(paper_ro, st: _Rooms, trig: str) -> dict:
+    """May the weekly analysis ``trig`` meet once more this KST week, today at its hour (owners' decision
+    2026-10-04)? Not on its own weekday, at most ``analysis_extra_per_week`` extra and ``analysis_max_per_week``
+    meetings in all in the KST week, at least ``analysis_extra_gap_days`` KST days after its last meeting, and at
+    least ``analysis_extra_factor`` x ``analysis_min_trades`` closed strategy trades since that meeting started (as
+    of today's slot). {ok, why, day, slot, new_trades, need, last_run, week_runs}."""
+    p = st.p
+    wd = ANALYSES[trig][0]
+    hour = int(getattr(p, f"{trig}_hour_kst", -1))
+    s0 = kst_day_start(st.now) + max(0, hour) * HOUR_MS
+    week = analysis_week_runs(st, trig)
+    runs = _analysis_runs(st, trig)
+    last = max((r["started_ts"] for r in runs), default=None)
+    need = p.analysis_extra_factor * p.analysis_min_trades
+    out = {"ok": False, "day": kst_date(s0), "slot": s0, "need": need, "week_runs": len(week),
+           "last_run": None if last is None else kst_date(last), "new_trades": None}
+    if hour < 0:
+        return {**out, "why": "꺼짐"}
+    if kst_weekday(st.now) == wd:
+        return {**out, "why": "오늘은 정해진 요일(추가 회의는 다른 날에만)"}
+    if st.now < s0:
+        return {**out, "why": f"오늘 {hour:02d}:00 전"}
+    if len(week) >= p.analysis_max_per_week:
+        return {**out, "why": f"이번 주에 이미 {len(week)}번 열림(주 {p.analysis_max_per_week}번까지)"}
+    if sum(1 for r in week if ":extra:" in str(r["key"] or "")) >= p.analysis_extra_per_week:
+        return {**out, "why": "이번 주 추가 회의를 이미 함"}
+    if last is None:
+        return {**out, "why": "아직 한 번도 열리지 않음(정해진 요일 회의가 먼저)"}
+    gap = (kst_day_start(s0) - kst_day_start(last)) // DAY_MS
+    if gap < p.analysis_extra_gap_days:
+        return {**out, "why": f"지난 회의({kst_date(last)}) 뒤 {gap}일(최소 {p.analysis_extra_gap_days}일)"}
+    r = _one(paper_ro, "SELECT COUNT(*) FROM trades t JOIN accounts a ON a.account_id = t.account_id "
+                       "WHERE a.kind = 'strategy' AND t.exit_time >= ? AND t.exit_time < ?", (last, s0))
+    n = 0 if r is None else _int(r[0])
+    out["new_trades"] = n
+    if n < need:
+        return {**out, "why": f"지난 회의 뒤 새 거래 {n:,}건(추가 회의는 {need:,}건 이상)"}
+    return {**out, "ok": True, "why": f"지난 회의({kst_date(last)}) 뒤 새 거래 {n:,}건(기준 {need:,}건 이상)"}
+
+
+def _weekly_analysis(paper_ro, st: _Rooms) -> list[Due]:
+    """The four weekly analysis meetings (``ANALYSES``): on their KST weekday from their hour, once per week (the
+    key is the slot's date: a meeting the budget deferred or stopped stays due until it ends done / no_action or
+    the next week's slot replaces it), only with enough data as of the slot (``analysis_data``). Besides, once in a
+    KST week on another day when much new data came in (``analysis_extra``, key ``<trigger>:extra:<date>``, due that
+    day from its hour); never more than ``analysis_max_per_week`` meetings of one kind in a KST week."""
+    p, out = st.p, []
+    if paper_ro is None:
+        return out
+    for trig, (wd, room) in ANALYSES.items():
+        hour = int(getattr(p, f"{trig}_hour_kst", -1))
+        if trig not in p.enabled or hour < 0:
+            continue
+        full = len(analysis_week_runs(st, trig)) >= p.analysis_max_per_week
+        s0 = analysis_slot(st.now, wd, hour)
+        day = kst_date(s0)
+        key = f"{trig}:{day}"
+        if not full and not st.handled(room, trig, key):
+            info = analysis_data(paper_ro, s0, p)
+            if info["ok"]:          # otherwise rooms.store_skipped keeps why (meetings:skipped); nothing to retry
+                late = "" if day == kst_date(st.now) else f" ({day} 회의를 미뤘던 것)"
+                out.append(_due(st, room, trig, key, s0, {f"analysis:{trig}": day},
+                                f"{ANALYSIS_KO[trig]} ({hour:02d}:00): 지난 7일 매매법 계좌의 끝난 거래 "
+                                f"{info['trades']:,}건{late}",
+                                slot=day, slot_start=s0, trades=info["trades"], days_running=info["days"]))
+                continue            # the regular meeting first; an extra one is never due beside it
+        ex = analysis_extra(paper_ro, st, trig)
+        if ex["ok"]:
+            out.append(_due(st, room, trig, f"{trig}:extra:{ex['day']}", ex["slot"], {f"analysis_extra:{trig}": ex["day"]},
+                            f"{ANALYSIS_KO[trig]} 추가 회의 ({hour:02d}:00): {ex['why']}", slot=ex["day"],
+                            slot_start=ex["slot"], trades=ex["new_trades"], extra_run=True, why_ko=ex["why"]))
+    return out
+
+
+def _event_review(paper_ro, st: _Rooms) -> list[Due]:
+    """The market team's review of a US release (data/macro_events.csv): from ``event_review_hour_kst`` of the KST
+    day after the release, for ``event_review_window_ms``, once per event (key = kind and time). Only when the paper
+    run had started before the event's window (``event_before_ms`` before the release)."""
+    p = st.p
+    if p.event_review_hour_kst < 0 or paper_ro is None:
+        return []
+    from .. import events as EV
+    try:
+        evs = EV.all_events()
+    except Exception:  # noqa: BLE001  (an unreadable calendar: no event meeting)
+        return []
+    start = run_start(paper_ro)
+    out = []
+    for ev in evs:
+        s0 = kst_day_start(ev.ts_ms) + DAY_MS + p.event_review_hour_kst * HOUR_MS
+        if not s0 <= st.now < s0 + p.event_review_window_ms:
+            continue
+        key = f"event:{ev.kind}:{ev.ts_ms}"
+        if st.handled("team:market", "event_review", key):
+            continue
+        if start is None or start > ev.ts_ms - p.event_before_ms:
+            continue                # the run did not cover the event's window (rooms.store_skipped says so)
+        hm = dt.datetime.fromtimestamp((ev.ts_ms + KST_OFFSET_MS) / 1000, dt.timezone.utc).strftime("%m/%d %H:%M")
+        out.append(_due(st, "team:market", "event_review", key, s0, {"event_review:last": ev.ts_ms},
+                        f"경제지표 복기: {EV.KIND_KO.get(ev.kind, ev.kind)} 발표({hm} 한국 시간) 전후 우리 계좌의 반응",
+                        event={"kind": ev.kind, "ts_ms": ev.ts_ms, "name_ko": EV.KIND_KO.get(ev.kind, ev.kind)},
+                        slot=kst_date(s0), slot_start=s0))
+    return out
+
+
+def bull_bear_coin(ms: int) -> str:
+    """The coin of the KST day containing ``ms``: one a day, in ``BULL_BEAR_COINS`` order."""
+    return BULL_BEAR_COINS[((kst_day_start(ms) + KST_OFFSET_MS) // DAY_MS) % len(BULL_BEAR_COINS)]
+
+
+def _bull_bear(st: _Rooms) -> list[Due]:
+    """The market team's daily bull vs bear debate: once per KST day from ``bull_bear_hour_kst`` (window
+    ``meeting_window_ms``), on the day's coin."""
+    p = st.p
+    if p.bull_bear_hour_kst < 0:
+        return []
+    s0 = slot_start(st.now, p.bull_bear_hour_kst)
+    if st.now - s0 >= p.meeting_window_ms:
+        return []
+    day = kst_date(s0)
+    ck = "sched:bull_bear:team:market"
+    if (st.cursor(ck) or "") >= day:
+        return []
+    sym = bull_bear_coin(s0)
+    return [_due(st, "team:market", "bull_bear", f"bull_bear:{day}", s0, {ck: day},
+                 f"낙관·비관 토론 ({p.bull_bear_hour_kst:02d}:00): {sym.replace('USDT', '')} 앞으로 24시간 (기록·채점만, 거래 없음)",
+                 symbol=sym, slot=day, slot_start=s0)]
+
+
+def skipped_status(paper_ro, now_ms: int, p: TriggerPolicy, agents_conn=None) -> dict:
+    """Why each weekly analysis (this week's slot, once its hour has come) or the event reviews of the last week did
+    or did not open: {trigger: {slot, ok, trades, days, why, extra: {ok, why, new_trades, need, ...}},
+    'event_review': [{event, why}]}. ``extra`` (with ``agents_conn``): whether an extra meeting may open today
+    (``analysis_extra``). Code only; the rooms tick stores it in the cursor ``SKIPPED_CURSOR`` (find_due never
+    writes)."""
+    out: dict = {}
+    if paper_ro is None:
+        return out
+    st = _Rooms(agents_conn, now_ms, p) if agents_conn is not None else None
+    for trig, (wd, _room) in ANALYSES.items():
+        hour = int(getattr(p, f"{trig}_hour_kst", -1))
+        if trig not in p.enabled or hour < 0:
+            continue
+        s0 = analysis_slot(now_ms, wd, hour)
+        info = analysis_data(paper_ro, s0, p)
+        out[trig] = {"slot": kst_date(s0), **info}
+        if st is not None:
+            ex = analysis_extra(paper_ro, st, trig)
+            out[trig]["extra"] = {k: ex[k] for k in ("ok", "why", "day", "new_trades", "need", "last_run", "week_runs")}
+    if p.event_review_hour_kst >= 0 and "event_review" in p.enabled:
+        from .. import events as EV
+        start = run_start(paper_ro)
+        evs = []
+        try:
+            for ev in EV.all_events():
+                s0 = kst_day_start(ev.ts_ms) + DAY_MS + p.event_review_hour_kst * HOUR_MS
+                if s0 <= now_ms < s0 + 7 * DAY_MS and (start is None or start > ev.ts_ms - p.event_before_ms):
+                    evs.append({"event": f"{ev.kind} {ev.ts_utc}", "why": "그 발표 시간대에 paper 실험이 아직 돌지 않음"})
+        except Exception:  # noqa: BLE001
+            pass
+        if evs:
+            out["event_review"] = evs
+    return out
+
+
 def _lab_accounts(paper_ro, st: _Rooms) -> list[Due]:
     """The new-strategy accounts (kind 'newlab') in team:lab: a loss cluster (same thresholds as a strategy
     room, cursor ``loss:team:lab``), a bust (cursor ``bust:<account>``) and a weekly review on Sunday KST
@@ -1008,6 +1262,11 @@ def find_due(paper_ro: Optional[sqlite3.Connection], daily_ro: Optional[sqlite3.
     if "tf_split" in p.enabled:
         found += _tf_split(paper_ro, st)
     found += _scheduled(st)
+    found += _weekly_analysis(paper_ro, st)
+    if "event_review" in p.enabled:
+        found += _event_review(paper_ro, st)
+    if "bull_bear" in p.enabled:
+        found += _bull_bear(st)
     if "market_move" in p.enabled and market:
         found += _market_move(market, st)
     if "research" in p.enabled:

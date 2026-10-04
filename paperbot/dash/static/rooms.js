@@ -104,7 +104,7 @@ const agoKo = (age) => age == null ? "점검 기록 없음" : `마지막 점검 
 // wait: why the tick does not answer this room's posts on its next turn (/api/rooms owner_wait), perDay:
 // the room's daily meeting cap. Only a running agent with no such wait may promise the next turn.
 // kept: the fixed meetings whose AI share is kept (keptHoursKo); the server's default hours when not given
-function pendingHint(st, wait, perDay, kept = "08:00·14:00·22:00") {
+function pendingHint(st, wait, perDay, kept = "08:00·12:00·14:00·22:00") {
   if (st === "ok" && wait === "room_full") return `이 방은 오늘 회의를 다 해서(하루 ${perDay || 3}번) 한국 시간 자정 뒤 첫 차례에 답합니다`;
   if (st === "ok" && wait === "budget") return `오늘 두 분 글에 쓸 수 있는 AI 한도(사고 점검·${kept} 회의 몫을 남긴 나머지, 하루 또는 최근 7일 한도)를 다 써서, 한도가 풀리는 대로(보통 한국 시간 자정 뒤) 답합니다`;
   if (st === "ok" && wait === "given_up") return "이 글들을 다루는 회의를 두 번 마치지 못해 멈췄습니다(방의 알림 참고). 글을 하나 더 남기시면 다시 모입니다";
@@ -116,11 +116,11 @@ function pendingHint(st, wait, perDay, kept = "08:00·14:00·22:00") {
 }
 const roomHint = () => pendingHint(agentsState(rs.ov).st, (curOv() || {}).owner_wait, (rs.ov || {}).rounds_per_room_day,
   keptHoursKo((rs.ov || {}).hours));
-// "08:00·14:00·22:00": the fixed daily meetings of the 'scheduled' AI class (morning, ranking review, evening) at the
+// "08:00·12:00·14:00·22:00": the fixed daily meetings of the 'scheduled' AI class (morning, bull/bear, ranking, evening) at the
 // hours the agents tick published (/api/rooms hours = its 'policy:hours', else the server defaults); -1 = off
 function keptHoursKo(h) {
-  if (!h) return "08:00·14:00·22:00";
-  return [h.morning_hour_kst, h.ranking_hour_kst, h.evening_hour_kst].filter((x) => Number.isInteger(x) && x >= 0 && x <= 23)
+  if (!h) return "08:00·12:00·14:00·22:00";
+  return [h.morning_hour_kst, h.bull_bear_hour_kst, h.ranking_hour_kst, h.evening_hour_kst].filter((x) => Number.isInteger(x) && x >= 0 && x <= 23)
     .sort((a, b) => a - b).map((x) => String(x).padStart(2, "0") + ":00").join("·");
 }
 // An owner's approve/reject click is applied by code at the start of the next pass (before the login

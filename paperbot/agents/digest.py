@@ -11,8 +11,12 @@ account, a meeting or a cursor.
   (agree / disagree / add), questions asked, unreadable answers, proposals by kind, devil's-advocate verdicts,
   facts vs hypotheses, and the graded predictions (scorecard.py) with the latest grades.
 - ``week_report(paper_ro, agents_ro, now_ms, initial)``: the last 7 days against the 7 before (strategy accounts,
-  coin flips, top and bottom strategies, timeframes, busts, meetings, AI use, hypotheses, tests), and
-  ``compose_week`` for the Sunday Telegram report.
+  coin flips, top and bottom strategies, timeframes, busts, meetings, AI use, hypotheses, tests, the daily debate's
+  record, the agents' own security check), and ``compose_week`` for the Sunday Telegram report.
+- ``tf_cross(paper_ro, strategy)``: every strategy's timeframe pattern side by side, for the timeframe comparer.
+- ``security_check`` / ``store_security``: what the sandboxed agents pass can check about secrets and data files
+  without new privileges (counts only, never a path's content, an address or a secret); the tick keeps it in the
+  cursor ``security:check`` once a KST day and the weekly report shows it in one line.
 
 P&L here is the sum of CLOSED trades' net P&L (fees and funding included), i.e. the wallet's change without the
 open positions. A strategy's 30-day verdict is the checkpoint's (coin flips x 2,000), never these numbers.
@@ -221,6 +225,34 @@ def tf_packet(paper_ro: Optional[sqlite3.Connection], strategy: str, initial: Op
                             "1 넘으면 비용이 움직임보다 큼), hold_min, exits, sides, coins")}
 
 
+def tf_cross(paper_ro: Optional[sqlite3.Connection], strategy: Optional[str] = None, min_trades: int = 8) -> dict:
+    """The timeframe pattern over every strategy (``tf_split``): per timeframe, how many strategies are up and down,
+    their summed P&L, how often it is a strategy's best or worst timeframe and the median cost against the gross
+    move; and the strategies whose best and worst timeframes are the same as ``strategy``'s."""
+    got = tf_split(paper_ro, min_trades=min_trades)
+    rows = got.get("strategies") or []
+    me = next((r for r in rows if r["strategy"] == strategy), None)
+    per: dict = {}
+    for tf in TFS:
+        live = [r["timeframes"][tf] for r in rows if (r["timeframes"].get(tf) or {}).get("trades")
+                and not r["timeframes"][tf].get("bust")]
+        cvg = sorted(c["cost_vs_gross"] for c in live if c.get("cost_vs_gross") is not None and c["trades"] >= min_trades)
+        per[tf] = {"strategies": len(live), "up": sum(1 for c in live if c["pnl"] > 0),
+                   "down": sum(1 for c in live if c["pnl"] < 0), "pnl_sum": round(sum(c["pnl"] for c in live), 2),
+                   "best_of": sum(1 for r in rows if r.get("best_tf") == tf),
+                   "worst_of": sum(1 for r in rows if r.get("worst_tf") == tf),
+                   "median_cost_vs_gross": _median(cvg)}
+    same = []
+    if me and me.get("best_tf"):
+        same = [r["name_ko"] for r in rows if r is not me and r.get("best_tf") == me["best_tf"]
+                and r.get("worst_tf") == me["worst_tf"]]
+    return {"by_timeframe": per, "this": None if not me else {k: me.get(k) for k in ("best_tf", "worst_tf", "split")},
+            "same_best_and_worst": same[:12], "same_count": len(same),
+            "split_strategies": [r["name_ko"] for r in rows if r.get("split")],
+            "note": ("코드 집계(모든 매매법의 끝난 거래, 파산 계좌 제외). best_of/worst_of = 그 봉이 매매법의 최고/최저 봉인 수, "
+                     "median_cost_vs_gross = 거래 8건 이상 계좌의 비용 ÷ 비용 전 손익 크기 중간값")}
+
+
 # ---------------------------------------------------------------- one day's meetings
 def _round_rows(a: sqlite3.Connection, since: int, until: int) -> list[dict]:
     rows = R._dicts(a.execute(
@@ -373,6 +405,8 @@ def staff_board(agents_ro: Optional[sqlite3.Connection], now_ms: int, days: int 
         if ans.get("verdict") in ("agree", "disagree", "needs_test") and not ans.get("verdict_coerced"):
             k["verdicts"][ans["verdict"]] = k["verdicts"].get(ans["verdict"], 0) + 1
     card = scorecard(agents_ro)
+    from .committee import track_record
+    out["debate"] = track_record(agents_ro, recent=5)      # the market team's daily debate (the lead's calls)
     graded = {r["role"]: r for r in card.get("roles") or []}
     for role in set(by) | {r for r in graded if r}:
         k = get(role)
@@ -594,6 +628,14 @@ def week_report(paper_ro: Optional[sqlite3.Connection], agents_ro: Optional[sqli
     import os
     gdir = ghcoin_dir or (os.path.join(_db_dir(paper_ro), "ghcoin") if _db_dir(paper_ro) else None)
     out["ghcoin"] = _ghcoin_week(gdir, w0, now)
+    if agents_ro is not None:
+        from .committee import week_summary
+        out["debate"] = week_summary(agents_ro, w0, now)
+        try:
+            sec = R.get_cursor(agents_ro, SECURITY_CURSOR)
+        except sqlite3.Error:
+            sec = None
+        out["security"] = sec if isinstance(sec, dict) and now - int(sec.get("ts") or 0) <= 8 * DAY_MS else None
     out["note"] = ("최근 7일(코드 계산, 끝난 거래 손익·수수료와 펀딩 포함). 7일 성적은 운이 큼: 30일 판정은 체크포인트"
                    "(동전 봇 2,000개 비교)가 함")
     return out
@@ -658,5 +700,78 @@ def compose_week(rep: dict, limit: int = 4000) -> str:
                     + (f", p={p:.2f}" if p is not None else "") + ")")
         L += ["", "[GH Coin 기록기: 친구 봇 타점, 기록만]",
               f"- 7일 {ghl(w) if w.get('calls') else '끝난 타점 없음'}", f"- 시작부터 {ghl(a)}"]
+    db = rep.get("debate")
+    if db and (db.get("all") or {}).get("graded"):
+        w, a = db.get("week") or {}, db["all"]
+        L += ["", f"[낙관·비관 토론: 기록만, 거래 없음] 이번 주 채점 {w.get('graded', 0)}건 중 {w.get('correct', 0)}건 맞음 · "
+                  f"시작부터 {a['correct']}/{a['graded']} ({_pct(a.get('hit_rate'))}, 동전 50%, 늘 상승 {_pct(a.get('always_up_rate'))})"]
+    L += ["", security_line(rep.get("security"))]
     L += ["", "※ 7일 성적은 운이 큽니다. 30일 판정은 체크포인트(동전 봇 2,000개 비교)가 합니다. 자세히: 대시보드 '회의 요약' 탭"]
     return "\n".join(L)[:limit]
+
+
+# ---------------------------------------------------------------- security (code only, counts only)
+SECURITY_CURSOR = "security:check"
+# files the agents pass must never be able to read (deploy/paperbot-agents.service InaccessiblePaths)
+SECRET_FILES = ("/etc/paperbot/live.env", "/etc/paperbot/dash.env", "/etc/paperbot/agents.env",
+                "/etc/paperbot/executor.env")
+SECRET_DIRS = ("/var/lib/paperbot/exec",)
+NOT_COVERED_KO = ("대시보드 로그인 실패(대시보드가 기억만 하고 기록하지 않음)", "SSH 접속·fail2ban 차단(root만 읽는 기록)",
+                  "거래소 키 권한(서버에서 launchcheck로 확인)")
+
+
+def security_check(data_dir: Optional[str], now_ms: int, secret_files: Iterable[str] = SECRET_FILES,
+                   secret_dirs: Iterable[str] = SECRET_DIRS) -> dict:
+    """What this (sandboxed) process can check without new privileges, as counts: the secret files and the order
+    executor's directory it must not be able to open (tried, never read: only whether opening works), and the
+    database files in ``data_dir`` other users could read (permission bits). Never a content, an address or a
+    secret. What it cannot see is listed in ``not_covered``."""
+    import os
+    files = list(secret_files) + list(secret_dirs)
+    readable = 0
+    for f in secret_files:
+        try:
+            with open(f, "rb"):
+                readable += 1               # opened (nothing is read): the sandbox does not hide it
+        except OSError:
+            pass                            # missing, or hidden by the sandbox: what we want
+    for d in secret_dirs:
+        try:
+            os.listdir(d)
+            readable += 1
+        except OSError:
+            pass
+    dbs = world = 0
+    if data_dir and os.path.isdir(data_dir):
+        try:
+            for name in os.listdir(data_dir):
+                if name.endswith(".db"):
+                    dbs += 1
+                    if os.stat(os.path.join(data_dir, name)).st_mode & 0o004:
+                        world += 1
+        except OSError:
+            pass
+    return {"ts": int(now_ms), "day": R.kst_day(int(now_ms)), "secrets_checked": len(files), "secrets_readable": readable,
+            "db_files": dbs, "db_world_readable": world, "not_covered": list(NOT_COVERED_KO)}
+
+
+def store_security(conn: sqlite3.Connection, paper_db: Optional[str], now_ms: int) -> Optional[dict]:
+    """Run ``security_check`` once a KST day in the agents pass and keep it in ``SECURITY_CURSOR``."""
+    import os
+    old = R.get_cursor(conn, SECURITY_CURSOR)
+    if isinstance(old, dict) and old.get("day") == R.kst_day(int(now_ms)):
+        return None
+    got = security_check(os.path.dirname(os.path.abspath(paper_db)) if paper_db else None, now_ms)
+    R.set_cursor(conn, SECURITY_CURSOR, got)
+    return got
+
+
+def security_line(sec: Optional[dict]) -> str:
+    """One line for the weekly report (counts only)."""
+    if not sec:
+        return "[보안: 코드 점검] 이번 주 점검 기록 없음(에이전트가 돌지 않았거나 점검 전)"
+    bad = sec.get("secrets_readable", 0)
+    head = (f"[보안: 코드 점검] 에이전트가 열 수 없어야 할 비밀 파일·폴더 {sec.get('secrets_checked', 0)}개 중 "
+            f"열림 {bad}개{' ⚠️ 확인 필요' if bad else ''} · 데이터 파일 {sec.get('db_files', 0)}개 중 다른 사용자가 읽을 수 있는 것 "
+            f"{sec.get('db_world_readable', 0)}개")
+    return head + " · 못 보는 것: " + ", ".join(sec.get("not_covered") or NOT_COVERED_KO)

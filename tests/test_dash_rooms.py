@@ -676,7 +676,7 @@ def test_a_post_the_budget_or_a_pause_defers_is_told_so():
 console.log(JSON.stringify({budget: pendingHint("ok", "budget", 3), paused: pendingHint("ok", "paused", 3),
   stopped: pendingHint("stopped", "paused", 3)}));
 """)
-    assert "다음 차례" not in got["budget"] and "7일" in got["budget"] and "08:00·14:00·22:00" in got["budget"]
+    assert "다음 차례" not in got["budget"] and "7일" in got["budget"] and "08:00·12:00·14:00·22:00" in got["budget"]
     assert "다음 차례" not in got["paused"] and "멈췄습니다" in got["paused"] and "1시간" in got["paused"]
     assert got["stopped"] == "에이전트가 멈춰 있어 아직 전달되지 않습니다"
 

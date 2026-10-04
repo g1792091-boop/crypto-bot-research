@@ -1,5 +1,6 @@
-"""Agent team for paper v3: 34 roles in 11 teams (docs/FINAL-agent-team.md plus the
-additions agreed with the owners on 2026-09-30).
+"""Agent team for paper v3: 36 roles in 11 teams (docs/FINAL-agent-team.md plus the
+additions agreed with the owners on 2026-09-30, and the bull and the bear of the market team's daily
+debate, 2026-10-04).
 
 Each role: id, Korean name, team, model tier (opus = judgement-heavy, sonnet = repeated
 analysis), when it works, what it does, and ``start``: "now" (from the first paper day) or
@@ -93,6 +94,13 @@ ROLES = (
      "고정한 규칙·합격 기준 관리. 바뀌면 새 버전과 새 계좌로만, 결과 보고 기준 옮기기 금지", "now"),
     ("security", "보안 책임자", "safety", "opus", "주 1회",
      "API 키 권한, 서버 접속 기록, 대시보드 로그인 시도, 비밀 정보 노출, 부품 취약점", "now"),
+    # the market team's daily debate (owners' choice 2026-10-04, from the friend's GH Coin idea, our own code): one
+    # coin a day, the bull argues for a rise, the bear for a fall, the lead calls it; code records and grades the
+    # call 24h later. No trade follows from it.
+    ("bull", "낙관론자", "market", "sonnet", "매일 12:00",
+     "그날의 코인이 앞으로 24시간 오를 근거를 패킷 숫자로 모음(토론용, 주문 없음)", "now"),
+    ("bear", "비관론자", "market", "sonnet", "매일 12:00",
+     "그날의 코인이 앞으로 24시간 내릴 근거를 패킷 숫자로 모음(토론용, 주문 없음)", "now"),
     ("live_readiness", "실거래 준비관", "safety", "opus", "주간",
      "테스트넷 주문 연습 결과 읽기(연습은 코드와 두 분이 실행, 에이전트는 주문 불가), 거래소 규칙 변경 추적, 실거래 전환 체크리스트",
      "테스트넷 연습 시작 후"),
@@ -148,6 +156,24 @@ ROOM_DUTY = {
     "league_referee": "체크포인트 공식 판정(동전 봇 2,000개 + FDR, 규칙 보충안 Q1)의 p·q와 리그 성적을 읽고 실력인지 운인지 "
                       "설명(판정은 코드, 동전 봇 3개 비교는 참고용)",
     "rule_keeper": "고정된 규칙·합격 기준이 지켜지는지 점검(규칙·기준을 바꾸지 못함)",
+    # the meetings added 2026-10-04 (owners' choice): every number in them is code's, the staff read and interpret
+    "performance": "코드가 계산한 순위·성적 숫자(매매법·봉별 손익, 승률, 동전 봇 비교)를 읽고 무엇이 눈에 띄는지 설명",
+    "exec_cost": "코드가 계산한 매매법·봉별 비용 전 손익, 수수료·펀딩·슬리피지, 비용 때문에 손실로 바뀐 계좌를 읽고 "
+                 "비용이 어디서 수익을 먹는지 설명(체결 방식은 바꾸지 못함)",
+    "combo_synergy": "코드가 계산한 매매법끼리의 하루 손익 상관, 여러 매매법이 함께 진 시간, 같은 코인·같은 방향 합의 신호의 "
+                     "성적을 읽고 설명",
+    "coin_compare": "코드가 계산한 매매법 × 코인 성적(거래 수, 승률, 평균 ROE, 손익)을 읽고 매매법마다 잘 맞는·안 맞는 코인을 설명",
+    "regime_perf": "코드가 계산한 매매법 × 장세(진입 때 추세·박스 등) 성적을 읽고 어느 장세에서 벌고 잃는지 설명",
+    "learning": "이번 주 채점된 가설·기다리는 예측·5년 시험·새 매매법 시험·겹친 가설을 읽고 확인된 것, 틀린 것, 다시 "
+                "시험하지 않을 것을 정리",
+    "news_calendar": "코드가 등록한 미국 경제지표 일정(CPI·FOMC·고용·PCE)과 발표 전후 우리 계좌의 반응 숫자를 설명"
+                     "(인터넷·뉴스는 볼 수 없음)",
+    "macro_corr": "패킷에 있는 경제지표 일정·BTC·ETH 움직임·장세 숫자로 발표와 우리 계좌 반응의 관계를 해석(패킷에 없는 "
+                  "금리·달러 자료는 '모름')",
+    "tf_compare": "봉 비교 회의에서 이 매매법의 5개 봉 숫자와 다른 매매법들의 봉별 패턴(코드 집계)을 나란히 보고, 같은 봉 "
+                  "패턴이 다른 매매법에도 있는지 설명",
+    "bull": "그날의 코인이 앞으로 24시간 오를 근거를 코드가 계산한 숫자로 제시(토론용, 거래로 이어지지 않음)",
+    "bear": "그날의 코인이 앞으로 24시간 내릴 근거를 코드가 계산한 숫자로 제시(토론용, 거래로 이어지지 않음)",
     **{f"spec_{k}": (f"{v} 매매법({k})의 5개 봉 계좌를 맡음. 코드가 만든 손실 카드와 성적을 읽고 원인을 분석해 "
                      "여섯 가지 행동 중 하나를 제안(5년 시험 요청 포함. 관문을 통과하면 자율 승인관이 판단하고, "
                      "기본 설정에서 처음 60일은 두 분 확인도 기다림. 복제 계좌는 복제 기능이 생긴 뒤에만)")
@@ -179,5 +205,5 @@ def roster() -> dict:
     }
 
 
-assert len(ROLES) == 34 and len({r[0] for r in ROLES}) == 34
+assert len(ROLES) == 36 and len({r[0] for r in ROLES}) == 36
 assert len(SPECIALISTS) == 36

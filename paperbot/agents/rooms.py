@@ -45,7 +45,11 @@ Strategy room (strat:<S>), at most 6 calls:
     is full.
 Team rooms (team:*), at most 6 calls (the longest plan, 5 turns, plus one retry): morning, evening
 (review team, then the lead's three lines to Telegram), incident, checkpoint and owner rounds, with
-the roster3 roles.
+the roster3 roles. Added 2026-10-04 (owners' choice): the four weekly analyses (cost, combo, coin / regime,
+learning), the event review the day after a US release and the daily bull vs bear debate, each with its own
+code-computed packet (agents/meetings.py, agents/committee.py: the debate's call is recorded and graded by code
+24 hours later, never traded), and the performance analyst first in the ranking review; in a strategy room's
+timeframe-split meeting the timeframe comparer speaks after the specialist (in the expert's place).
 New-strategy lab (team:lab, trigger 'research', budget class 'research', at most 3 calls, sonnet):
     T1 the researcher proposes up to 3 strategies in newlab's grammar -> code checks each (grammar; a repeat
     by hash is shown with its old result, never re-run) -> T2 the devil's advocate may drop near-duplicates
@@ -140,7 +144,8 @@ TEAM_KO = dict(TEAMS)
 TRIGGER_KO = {"incident": "사고 점검", "owner": "두 분 글", "loss_cluster": "손실 묶음 복기", "bust": "파산 복기",
               "checkpoint": "30일 단위 점검", "morning": "아침 회의", "evening": "저녁 점검", "weekly": "주간 검토",
               "research": "새 매매법 연구", "market_move": "시세 급변 회의", "ranking": "순위 검토",
-              "tf_split": "봉 비교 회의"}
+              "tf_split": "봉 비교 회의", **TR.ANALYSIS_KO, "event_review": "경제지표 복기 회의",
+              "bull_bear": "낙관·비관 토론"}
 VERDICT_KO = {"agree": "동의", "disagree": "반대", "needs_test": "시험 필요"}
 
 # Loss-card tags that describe the chart at entry (cards.TAGS) vs. how the trade was held.
@@ -229,16 +234,29 @@ for _k in DIALOG_TURNS:
     SCHEMAS[_k] = SCHEMAS[_k][:-2] + ",\n" + DIALOG_FMT + "\n}"
 SCHEMAS["lead"] = (SCHEMAS["lead"][:-2]
                    + ',\n  "open_disagreement": "직원들 의견이 갈린 채 끝난 점 한 줄 (없으면 빈 문자열)",\n'
-                   '  "hypotheses": [{"strategy": "매매법 코드 (순위 검토에서만, 없으면 빈 목록)", "text": "가설 한 줄", '
+                   '  "hypotheses": [{"strategy": "매매법 코드 (순위 검토·비용·조합·코인 회의에서만, 없으면 빈 목록)", "text": "가설 한 줄", '
                    '"how_to_confirm": "...", "prediction": "공통 규칙의 prediction 형식 또는 null"}]\n}')
 LEAD_HYPOTHESES_MAX = 3          # the ranking review's lead may put this many gradable hypotheses in the ledger
+# meetings whose lead may put gradable hypotheses in the ledger (under their strategy, graded later by code)
+LEAD_HYPOTHESIS_MEETINGS = ("ranking", "cost_review", "combo_review", "coin_review")
+# the lead's extra output in some meetings (added to the lead's format only there)
+LEAD_EXTRA = {
+    "bull_bear": '  "call": {"direction": "상승 | 하락 | 중립 (이 셋 중 한 단어)", "confidence": 1}',
+    "learning_review": ('  "lessons": {"confirmed": ["이번 주 확인된 것 (없으면 빈 목록)"], "refuted": ["틀린 것으로 '
+                        '드러난 것"], "do_not_retest": ["다시 시험하지 않을 것"]}'),
+}
+LESSON_KO = {"confirmed": "확인됨", "refuted": "틀림", "do_not_retest": "다시 시험하지 않음"}
+# the meeting's own instructions, added after the turn's (prompts3/rooms_meeting_*.md)
+MEETING_FILE = {"cost_review": "rooms_meeting_cost.md", "combo_review": "rooms_meeting_combo.md",
+                "coin_review": "rooms_meeting_coin.md", "learning_review": "rooms_meeting_learning.md",
+                "event_review": "rooms_meeting_event.md", "bull_bear": "rooms_meeting_bull_bear.md"}
 TURN_FILE = {"specialist": "rooms_specialist.md", "revision": "rooms_revision.md",
              "challenge": "rooms_devils_advocate.md", "validator": "rooms_validator.md",
              "approver": "rooms_approver.md", "team": "rooms_team.md", "lead": "rooms_team_lead.md",
              "lab_inventor": "rooms_lab_inventor.md", "lab_skeptic": "rooms_lab_skeptic.md",
              "lab_lead": "rooms_lab_lead.md"}
 EXPERT_FILE = {"entry_timing": "rooms_entry_timing.md", "exit_timing": "rooms_exit_timing.md",
-               "whatif": "rooms_whatif.md"}
+               "whatif": "rooms_whatif.md", "tf_compare": "rooms_tf_compare.md"}
 TURN_KIND = {"specialist": "analysis", "revision": "revision", "challenge": "challenge", "expert": "expert",
              "validator": "verdict", "approver": "verdict", "team": "analysis", "lead": "summary",
              "lab_inventor": "analysis", "lab_skeptic": "challenge", "lab_lead": "summary"}
@@ -328,7 +346,7 @@ class RoomsPolicy:
     bust_reserve_calls: int = 8             # of the loss class: loss_cluster rounds leave these for busts
     critical_reserve_calls: int = 5         # of the incident class: kept for CRITICAL alerts (liquidations)
     # spread over the KST day, not all at 00:00; tf_split shares the weekly reviews' class and keeps what they keep
-    paced_triggers: tuple = ("loss_cluster", "weekly", "research", "tf_split")
+    paced_triggers: tuple = ("loss_cluster", "weekly", "research", "tf_split", *TR.ANALYSES, "event_review")
     # paced (loss_cluster / weekly) calls also leave, inside the total and 7-day caps, the unused part of
     # this many owner-post calls (and of the bust reserve): a busy night of reviews never leaves the
     # owners' posts or a bust waiting for midnight
@@ -403,6 +421,9 @@ class RoundContext:
     cards_path: Optional[str] = None
     cache: dict = field(default_factory=dict)
     checkpoint_db: Optional[str] = None      # checkpoint.db (the checkpoint job's), read-only: the 30-day verdict
+    # Binance public market data (JSON GET, no key): the daily debate's prices and its grading, the event review's
+    # BTC/ETH moves. None = not fetched (prices unknown)
+    price_get: Optional[Callable[[str], Any]] = None
 
     def clock(self) -> int:
         return int(self.clock_ms()) if self.clock_ms else int(time.time() * 1000)
@@ -902,10 +923,16 @@ HOURS_CURSOR = "policy:hours"     # the meeting hours in force (KST, -1 = off): 
 
 
 def schedule_hours(policy: "RoomsPolicy") -> dict:
+    """The meeting hours in force (KST, -1 = off), stored for the dashboard (``HOURS_CURSOR``). The weekly analyses
+    meet on their weekday (``analysis_weekdays``, Monday = 0)."""
     t = policy.triggers
     return {"morning": t.morning_hour_kst, "ranking": t.ranking_hour_kst, "tf_split": t.tf_split_hour_kst,
             "evening": t.evening_hour_kst, "weekly_report": policy.weekly_report_hour_kst,
-            "loss_min_count": t.loss_min_count, "loss_min_gap_ms": t.loss_min_gap_ms}
+            "loss_min_count": t.loss_min_count, "loss_min_gap_ms": t.loss_min_gap_ms,
+            **{k: int(getattr(t, f"{k}_hour_kst")) for k in TR.ANALYSES},
+            "analysis_weekdays": {k: wd for k, (wd, _room) in TR.ANALYSES.items()},
+            "analysis_min_trades": t.analysis_min_trades, "analysis_min_days": t.analysis_min_days,
+            "event_review": t.event_review_hour_kst, "bull_bear": t.bull_bear_hour_kst}
 
 
 def apply_budget_specs(policy: RoomsPolicy, specs: list[str]) -> None:
@@ -945,6 +972,18 @@ RANKING_HOUR_DEFAULT = 14
 # (env AGENTS_WEEKLY_REPORT_HOUR) on the server; both off in RoomsPolicy() itself
 TF_SPLIT_HOUR_DEFAULT = 18
 WEEKLY_REPORT_HOUR_DEFAULT = 21
+# the meetings added 2026-10-04 (owners' choice) on the server; all off in RoomsPolicy() itself. Env name -> default
+# KST hour ('off' = none): the four weekly analyses (each on its weekday, triggers.ANALYSES), the review of a US
+# release the day after it, and the market team's daily bull vs bear debate
+ANALYSIS_HOUR_DEFAULT = 11
+EVENT_REVIEW_HOUR_DEFAULT = 11
+BULL_BEAR_HOUR_DEFAULT = 12
+NEW_MEETING_HOURS = {"AGENTS_COST_REVIEW_HOUR": ("cost_review_hour_kst", ANALYSIS_HOUR_DEFAULT),
+                     "AGENTS_COMBO_REVIEW_HOUR": ("combo_review_hour_kst", ANALYSIS_HOUR_DEFAULT),
+                     "AGENTS_COIN_REVIEW_HOUR": ("coin_review_hour_kst", ANALYSIS_HOUR_DEFAULT),
+                     "AGENTS_LEARNING_REVIEW_HOUR": ("learning_review_hour_kst", ANALYSIS_HOUR_DEFAULT),
+                     "AGENTS_EVENT_REVIEW_HOUR": ("event_review_hour_kst", EVENT_REVIEW_HOUR_DEFAULT),
+                     "AGENTS_BULL_BEAR_HOUR": ("bull_bear_hour_kst", BULL_BEAR_HOUR_DEFAULT)}
 
 
 def _env_hour(env: dict, name: str, default: int) -> int:
@@ -973,6 +1012,10 @@ ENV_INTS = {
     # loss-review meetings of a strategy room: new losses that open one, and the minutes between two
     "AGENTS_LOSS_MIN_COUNT": ("triggers.loss_min_count", 1),
     "AGENTS_LOSS_MIN_GAP_MIN": ("triggers.loss_min_gap_ms", 10),
+    # the weekly analysis meetings open only with this many closed strategy trades in the 7 days before their slot
+    "AGENTS_ANALYSIS_MIN_TRADES": ("triggers.analysis_min_trades", 1),
+    # ... and meet once more in a KST week (on another day) with this many times that minimum of new trades
+    "AGENTS_ANALYSIS_EXTRA_FACTOR": ("triggers.analysis_extra_factor", 1),
 }
 # settings given in minutes that the policy keeps in milliseconds
 ENV_MINUTES = ("AGENTS_LOSS_MIN_GAP_MIN",)
@@ -993,6 +1036,8 @@ def policy_from_env(environ: Optional[dict] = None) -> RoomsPolicy:
     p.triggers.ranking_hour_kst = _env_hour(env, "AGENTS_RANKING_HOUR", RANKING_HOUR_DEFAULT)
     p.triggers.tf_split_hour_kst = _env_hour(env, "AGENTS_TF_SPLIT_HOUR", TF_SPLIT_HOUR_DEFAULT)
     p.weekly_report_hour_kst = _env_hour(env, "AGENTS_WEEKLY_REPORT_HOUR", WEEKLY_REPORT_HOUR_DEFAULT)
+    for name, (attr, default) in NEW_MEETING_HOURS.items():
+        setattr(p.triggers, attr, _env_hour(env, name, default))
     b = (env.get("AGENTS_BUDGET") or "").strip()
     if b:
         apply_budget_specs(p, b.replace(";", ",").split(","))
@@ -1088,19 +1133,26 @@ def _read_prompt(name: str) -> str:
         return fh.read().strip()
 
 
-def system_prompt(role: str, turn: str) -> str:
+def system_prompt(role: str, turn: str, meeting: str = "") -> str:
     """Fixed text only: common rules + the role's duty in the rooms (roster3.ROOM_DUTY) + the turn's
-    instructions + the output format. Never contains room data, owner text or trades. A lab turn has its own
-    common rules (no actions, no evidence paths: code checks and runs the specs) and duty line."""
+    instructions (+ the meeting's own, ``MEETING_FILE``, for a team or lead turn) + the output format (+ the lead's
+    extra field of that meeting, ``LEAD_EXTRA``). Never contains room data, owner text or trades. A lab turn has its
+    own common rules (no actions, no evidence paths: code checks and runs the specs) and duty line."""
     info = ROLE_INFO.get(role, {"name": role, "team": "", "duty": ""})
     fname = EXPERT_FILE.get(role) if turn == "expert" else TURN_FILE.get(turn, "rooms_team.md")
     lab = turn in LAB_TURNS
     team = "새 매매법 연구실" if lab else TEAM_KO.get(info.get("team", ""), "")
     common = _read_prompt("rooms_lab_common.md" if lab else "rooms_common.md")
     duty = LAB_DUTY[turn] if lab else info.get("duty", "")
+    extra = ""
+    if turn in ("team", "lead") and meeting in MEETING_FILE:
+        extra = "\n\n" + _read_prompt(MEETING_FILE[meeting])
+    schema = SCHEMAS["expert" if turn == "expert" else turn]
+    if turn == "lead" and meeting in LEAD_EXTRA:
+        schema = schema[:-2] + ",\n" + LEAD_EXTRA[meeting] + "\n}"
     return (f"{common}\n\n# 당신: {info['name']}" + (f" ({team})" if team else "")
-            + f"\n담당: {duty}\n\n{_read_prompt(fname)}\n\n"
-            f"# 출력 형식 (JSON 객체 하나만, 다른 글 없이)\n{SCHEMAS['expert' if turn == 'expert' else turn]}\n")
+            + f"\n담당: {duty}\n\n{_read_prompt(fname)}{extra}\n\n"
+            f"# 출력 형식 (JSON 객체 하나만, 다른 글 없이)\n{schema}\n")
 
 
 def role_model(role: str, turn: str = "") -> str:
@@ -1155,7 +1207,9 @@ def _strs(v: Any, n: int = 6, each: int = 300) -> list[str]:
 # these; owner posts, room talk, notes and this round's answers are other people's words.
 CODE_ROOTS = ("losses", "specialist", "board", "trials", "rules", "meeting", "room", "code_result", "copy_check",
               "today_rounds", "waiting_for_owners", "expert_reason", "lab", "candidates", "lab_results",
-              "extra_accounts", "lab_accounts", "tf_split", "ranking", "market_move")
+              "extra_accounts", "lab_accounts", "tf_split", "ranking", "market_move",
+              # the meetings added 2026-10-04 (agents/meetings.py, agents/committee.py)
+              "cost", "combo", "coins", "learning", "event", "committee")
 
 
 def _model_written(path: str, given: Optional[dict]) -> bool:
@@ -1340,9 +1394,23 @@ def check_lead(out: Any, given: dict) -> tuple[Optional[dict], list[str]]:
             hyps.append({**clean, "strategy": h["strategy"]})
         else:
             problems += probs
-    return {"summary": summary, "human_actions": _strs(out.get("human_actions"), 5), "hypotheses": hyps,
-            "watch_next": _strs(out.get("watch_next"), 5), "reply_to_owner": _line(out.get("reply_to_owner"), 800),
-            "open_disagreement": _line(out.get("open_disagreement"), 300), "flag_owners": flag}, problems
+    clean = {"summary": summary, "human_actions": _strs(out.get("human_actions"), 5), "hypotheses": hyps,
+             "watch_next": _strs(out.get("watch_next"), 5), "reply_to_owner": _line(out.get("reply_to_owner"), 800),
+             "open_disagreement": _line(out.get("open_disagreement"), 300), "flag_owners": flag}
+    trig = ((given or {}).get("meeting") or {}).get("trigger") if isinstance((given or {}).get("meeting"), dict) else None
+    if trig == "bull_bear":
+        # the chair's call in its fixed form; one code cannot read is kept as 'unreadable' (never graded), and the
+        # rest of the answer still counts
+        from .committee import parse_call
+        call, why = parse_call(out.get("call"))
+        clean["call"] = call
+        if why:
+            clean["call_problem"] = why
+            problems.append(f"call: {why} -> 판정을 읽을 수 없음으로 기록(채점 안 함)")
+    if trig == "learning_review":
+        raw = out.get("lessons") if isinstance(out.get("lessons"), dict) else {}
+        clean["lessons"] = {k: _strs(raw.get(k), 3, 300) for k in LESSON_KO}
+    return clean, problems
 
 
 def _lab_spec_obj(item: Any) -> Optional[dict]:
@@ -1500,6 +1568,13 @@ def render(turn: str, out: dict) -> str:
             L += ["다음에 볼 것: " + " / ".join(out["watch_next"])]
         if out.get("open_disagreement"):
             L.append(f"갈린 의견: {out['open_disagreement']}")
+        if "call" in out:
+            c = out.get("call")
+            L.append(f"판정(앞으로 24시간): {c['direction']}, 확신 {c['confidence']}/3" if isinstance(c, dict)
+                     else "판정: 읽을 수 없음 (코드가 채점하지 않음)")
+        for k, label in LESSON_KO.items():
+            if (out.get("lessons") or {}).get(k):
+                L.append(f"{label}: " + " / ".join(out["lessons"][k]))
         if out.get("flag_owners"):
             L.append(f"📣 두 분께 알림 제안({out['flag_owners']['level']}): {out['flag_owners']['text']}")
     else:
@@ -1976,7 +2051,7 @@ class _Round:
                 return None
             self.calls += 1
             try:
-                res = self.budget.call(model, system_prompt(role, turn), INSTRUCTION, given)
+                res = self.budget.call(model, system_prompt(role, turn, self.due.trigger), INSTRUCTION, given)
             except UsageLimitReached:                   # our cap (BudgetExceeded) or the plan's limit:
                 self.calls -= 1                          # not an attempt of this meeting
                 raise
@@ -2119,12 +2194,18 @@ def _strategy_base(rnd: _Round) -> dict:
 
 
 def _tf_packet(ctx: RoundContext, strategy: str) -> dict:
-    """The timeframe-split meeting's numbers (digest.tf_packet, code only)."""
+    """The timeframe-split meeting's numbers (digest.tf_packet, code only), with ``cross``: the same timeframe view
+    over every strategy (digest.tf_cross), for the timeframe comparer."""
     from . import digest
     try:
-        return digest.tf_packet(ctx.paper_ro, strategy)
+        pk = digest.tf_packet(ctx.paper_ro, strategy)
     except (sqlite3.Error, KeyError, TypeError, ValueError) as exc:
         return {"error": f"봉 비교를 만들지 못함: {type(exc).__name__}"}
+    try:
+        pk["cross"] = digest.tf_cross(ctx.paper_ro, strategy)
+    except (sqlite3.Error, KeyError, TypeError, ValueError) as exc:
+        pk["cross"] = {"error": f"다른 매매법 비교를 만들지 못함: {type(exc).__name__}"}
+    return pk
 
 
 STRATEGY_EXPERTS = ("entry_timing", "exit_timing", "whatif")
@@ -2163,6 +2244,12 @@ def _strategy_round(rnd: _Round) -> tuple[str, dict]:
     t1 = rnd.ask(spec_role, "specialist", base)
     if t1 is None:
         raise RoundFailed("전담 에이전트의 첫 분석을 받지 못했습니다")
+    tf_cmp = None
+    if rnd.due.trigger == "tf_split":
+        # owners' choice 2026-10-04: in the timeframe-split meeting the timeframe comparer speaks after the specialist
+        # (the same numbers plus the other strategies' timeframe pattern, tf_split.cross); it takes the expert's place
+        tf_cmp = rnd.ask("tf_compare", "expert",
+                         {**base, "expert_reason": "봉 비교 회의: 다른 매매법에도 같은 봉 패턴이 있는지"})
     t2 = rnd.ask("devils_advocate", "challenge", base)
     verdict = t2["verdict"] if t2 else None
     coerced = bool(t2 and t2.get("verdict_coerced"))
@@ -2171,10 +2258,14 @@ def _strategy_round(rnd: _Round) -> tuple[str, dict]:
     # early stop: the devil's advocate agrees with a note / no action -> no expert, no revision
     early = verdict == "agree" and first.get("action") in ("note", "no_action") and named_expert is None
     if early:
+        expert, t3 = ("tf_compare", tf_cmp) if tf_cmp else (None, None)
         final, proposer = first, spec_role
     else:
         expert, why = (named_expert, "두 분이 지목함") if named_expert else pick_expert(base, rnd.due)
-        t3 = rnd.ask(expert, "expert", {**base, "expert_reason": why}) if expert else None
+        if rnd.due.trigger == "tf_split" and not named_expert:
+            expert, t3 = ("tf_compare" if tf_cmp else None), tf_cmp     # already spoke: no second expert (6 calls)
+        else:
+            t3 = rnd.ask(expert, "expert", {**base, "expert_reason": why}) if expert else None
         t4 = rnd.ask(spec_role, "revision", base)
         final = t4["proposal"] if t4 else {"action": "no_action", "reason": "최종안을 받지 못함"}
         proposer = spec_role
@@ -2344,6 +2435,17 @@ TEAM_VIEW = {
     "team_lead": ("meta", "today", "league", "checkpoint", "pass_summary"),
     "performance": ("league", "by_strategy", "today"),
     "researcher": ("meta",),               # the lab room's packet carries ``lab`` (lab_overview)
+    # the meetings added 2026-10-04: each meeting's own packet (cost, combo, coins, learning, event, committee) is in
+    # every speaker's packet; these are the board sections each role sees next to it
+    "exec_cost": ("execution", "nightly"),
+    "combo_synergy": ("league", "today"),
+    "coin_compare": ("by_coin", "breakdown"),
+    "regime_perf": ("market", "breakdown"),
+    "learning": ("meta",),
+    "news_calendar": ("macro", "market"),
+    "macro_corr": ("macro", "market", "by_coin"),
+    "bull": ("market", "macro"),
+    "bear": ("market", "macro"),
 }
 OWNER_RESPONDERS = {"team:market": ("chart_regime", "strategist"), "team:risk": ("risk_officer",),
                     "team:ops": ("ops_auditor",), "team:review": ("pnl_reviewer",), "team:lead": (),
@@ -2395,7 +2497,21 @@ def team_plan(due: TR.Due, mentioned: tuple = ()) -> list[tuple[str, str]]:
     if trig == "market_move":
         return [("chart_regime", "team"), ("derivs_flow", "team"), ("strategist", "team"), lead]
     if trig == "ranking":
-        return [("pnl_reviewer", "team"), ("risk_officer", "team"), lead]
+        # owners' choice 2026-10-04: the performance analyst reads the ranking numbers first
+        return [("performance", "team"), ("pnl_reviewer", "team"), ("risk_officer", "team"), lead]
+    if trig == "cost_review":
+        return [("exec_cost", "team"), ("ops_auditor", "team"), lead]
+    if trig == "combo_review":
+        return [("combo_synergy", "team"), ("risk_officer", "team"), lead]
+    if trig == "coin_review":
+        return [("coin_compare", "team"), ("regime_perf", "team"), lead]
+    if trig == "learning_review":
+        return [("performance", "team"), ("learning", "team"), lead]
+    if trig == "event_review":
+        return [("news_calendar", "team"), ("macro_corr", "team"), ("chart_regime", "team"), lead]
+    if trig == "bull_bear":
+        # the lead chairs and gives the call (committee.parse_call); code records and grades it, nothing trades
+        return [("bull", "team"), ("bear", "team"), ("risk_officer", "team"), lead]
     if trig == "evening" and room == "team:review":
         return [("pnl_reviewer", "team"), ("whatif", "team"), ("risk_officer", "team")]
     if trig == "incident":
@@ -2470,6 +2586,12 @@ def _team_round(rnd: _Round) -> tuple[str, dict]:
         rnd.base["market_move"] = market_move_packet(ctx, rnd.due)
     if rnd.due.trigger == "ranking":
         rnd.base["ranking"] = ranking_packet(ctx)
+    if rnd.due.trigger in MEETING_PACKETS:
+        root, build = MEETING_PACKETS[rnd.due.trigger]
+        try:
+            rnd.base[root] = build(ctx, rnd.due)
+        except Exception as exc:  # noqa: BLE001  (the meeting still runs and says the numbers are missing)
+            rnd.base[root] = {"error": f"자료를 만들지 못함: {type(exc).__name__}"}
     kind = room.split(":", 1)[1] if ":" in room else room
     members = R.LAB_ROOM_MEMBERS if room == LAB_ROOM else R.TEAM_ROOM_MEMBERS.get(kind, ())
     mentioned = owner_mentions(rnd, members)
@@ -2488,8 +2610,9 @@ def _team_round(rnd: _Round) -> tuple[str, dict]:
     extra: dict = {}
     if lead and lead.get("flag_owners"):
         extra["flag"] = A.flag_owners(rnd.env("team_lead"), lead["flag_owners"])
-    if lead and lead.get("hypotheses") and rnd.due.trigger == "ranking":
-        # the ranking review's hypotheses go to the ledger under their strategy: graded later like the rooms' own
+    if lead and lead.get("hypotheses") and rnd.due.trigger in LEAD_HYPOTHESIS_MEETINGS:
+        # the ranking review's (and the weekly analyses') hypotheses go to the ledger under their strategy: graded
+        # later like the rooms' own
         extra["hypotheses"] = [A.hypothesis(replace(rnd.env("team_lead"), strategy=h["strategy"]),
                                             {k: v for k, v in h.items() if k != "strategy"})
                                for h in lead["hypotheses"]]
@@ -2517,6 +2640,10 @@ def _team_round(rnd: _Round) -> tuple[str, dict]:
                 extra["telegram"] = True
                 rnd.post("code", "action", "📨 저녁 요약을 텔레그램으로 보냈습니다.",
                          {"action": "telegram", "level": INFO, "text": text})
+    if rnd.due.trigger == "learning_review" and lead and lead.get("lessons"):
+        extra["notes"] = learning_notes(rnd, lead["lessons"])
+    if rnd.due.trigger == "bull_bear":
+        extra["call"] = record_call(rnd, lead)
     if rnd.due.trigger == "market_move":
         _send_once(rnd, f"telegram:move:{rnd.due.data['key']}", compose_market_move(rnd.base["market_move"], lead),
                    "시세 급변 요약", extra)
@@ -2546,8 +2673,142 @@ def _team_summary(rnd: _Round, board: dict, extra: dict) -> str:
                   "morning": "- 아침 요약을 텔레그램으로 보냄"}.get(rnd.due.trigger, "- 저녁 요약을 텔레그램으로 보냄"))
     if (extra.get("flag") or {}).get("sent"):
         L.append("- 두 분께 알림을 보냄")
+    if extra.get("hypotheses"):
+        L.append(f"- 가설 장부에 {sum(1 for h in extra['hypotheses'] if h.get('trial_id'))}건 (나중 거래로 코드가 채점)")
+    if extra.get("notes"):
+        L.append(f"- 학습 정리 메모 {len(extra['notes'])}건")
+    if isinstance(extra.get("call"), dict):
+        L.append(f"- {extra['call'].get('text_ko', '')}")
     L.append(f"- AI 호출 {rnd.calls}회")
     return "\n".join(L)
+
+
+# ---------------------------------------------------------------- meetings added 2026-10-04 (owners' choice)
+def _side_db(ctx: RoundContext, name: str) -> Optional[str]:
+    """A database next to paper3.db (flow.db, liq.db: their own recorders write them; read-only here)."""
+    p = _db_path(ctx.paper_ro)
+    return os.path.join(os.path.dirname(p), name) if p else None
+
+
+def _cost(ctx: RoundContext, due: TR.Due) -> dict:
+    from . import meetings as M
+    return M.cost_packet(ctx.paper_ro, ctx.now_ms)
+
+
+def _combo(ctx: RoundContext, due: TR.Due) -> dict:
+    from . import meetings as M
+    return M.combo_packet(ctx.paper_ro, ctx.now_ms)
+
+
+def _coins(ctx: RoundContext, due: TR.Due) -> dict:
+    from . import meetings as M
+    return M.coin_packet(ctx.paper_ro, ctx.now_ms)
+
+
+def _learning(ctx: RoundContext, due: TR.Due) -> dict:
+    from . import meetings as M
+    return M.learning_packet(ctx.agents_conn, ctx.now_ms)
+
+
+def _event(ctx: RoundContext, due: TR.Due) -> dict:
+    from . import meetings as M
+    t = ctx.policy.triggers
+    return M.event_packet(ctx.paper_ro, ctx.now_ms, due.data.get("event") or {}, get=ctx.price_get,
+                          liq_path=_side_db(ctx, "liq.db"), before_ms=t.event_before_ms, after_ms=t.event_after_ms)
+
+
+def _committee(ctx: RoundContext, due: TR.Due) -> dict:
+    from . import committee as CM
+    sym = due.data.get("symbol") or TR.bull_bear_coin(ctx.now_ms)
+    return CM.coin_packet(ctx.paper_ro, ctx.agents_conn, sym, ctx.now_ms, ctx.price_get, market=_board(ctx).get("market"),
+                          flow_path=_side_db(ctx, "flow.db"), liq_path=_side_db(ctx, "liq.db"))
+
+
+# trigger -> (packet root, builder): the meeting's code-computed numbers, in every speaker's packet
+MEETING_PACKETS = {"cost_review": ("cost", _cost), "combo_review": ("combo", _combo), "coin_review": ("coins", _coins),
+                   "learning_review": ("learning", _learning), "event_review": ("event", _event),
+                   "bull_bear": ("committee", _committee)}
+
+
+def learning_notes(rnd: "_Round", lessons: dict) -> list[dict]:
+    """The Saturday lead's lessons as room notes of the lead's room (code writes them; at most 3 of each kind)."""
+    day = rnd.due.data.get("slot") or R.kst_day(rnd.ctx.now_ms)
+    out = []
+    for k, label in LESSON_KO.items():
+        for x in (lessons or {}).get(k) or []:
+            clean, _p = A.validate({"action": "note", "text": f"[학습 정리 {day}] {label}: {x}"}, allow=("note",))
+            if clean.get("action") == "note":
+                out.append(A.note(rnd.env("team_lead"), clean))
+    return out
+
+
+def record_call(rnd: "_Round", lead: Optional[dict]) -> dict:
+    """Store the chair's call of the daily debate (committee.record: once per day and coin) with the reference
+    price from the packet, and say in the room what code recorded. No trade follows from it."""
+    from . import committee as CM
+    ctx, d = rnd.ctx, rnd.due.data
+    sym = d.get("symbol") or TR.bull_bear_coin(ctx.now_ms)
+    ref = (rnd.base.get("committee") or {}).get("reference")
+    call = (lead or {}).get("call") if isinstance((lead or {}).get("call"), dict) else None
+    why = "" if call else ((lead or {}).get("call_problem") or "팀장 판정을 받지 못함")
+    rid = CM.record(ctx.agents_conn, day=d.get("slot") or R.kst_day(ctx.now_ms), symbol=sym, round_id=rnd.round_id,
+                    call=call, why=why, ref=(ref["ts"], ref["price"]) if isinstance(ref, dict) else None,
+                    now_ms=ctx.clock(), data={"speakers": rnd.spoke})
+    coin = sym.replace("USDT", "")
+    if rid is None:
+        text = f"오늘 {coin} 판정은 앞선 시도에서 이미 기록했습니다(하루에 하나만 기록)."
+    elif call is None:
+        text = f"🎯 판정을 읽을 수 없어({why}) 기록만 하고 채점하지 않습니다. 거래로 이어지지 않습니다."
+    elif not isinstance(ref, dict):
+        text = (f"🎯 판정 기록: {coin} 앞으로 24시간 {call['direction']} (확신 {call['confidence']}/3). 기준 가격을 읽지 "
+                "못해 채점하지 않습니다. 거래로 이어지지 않습니다.")
+    else:
+        text = (f"🎯 판정 기록 #{rid}: {coin} 앞으로 24시간 {call['direction']} (확신 {call['confidence']}/3), 기준 가격 "
+                f"{ref['price']:,.6g}. 24시간 뒤 코드가 바이낸스 공개 가격으로 채점합니다(±{CM.THRESHOLD * 100:.1f}% 기준). "
+                "거래로 이어지지 않습니다.")
+    rnd.post("code", "action", text, {"action": "debate_call", "call_id": rid, "call": call, "symbol": sym,
+                                      "reference": ref, "why": why or None})
+    return {"call_id": rid, "symbol": sym, "call": call, "text_ko": text}
+
+
+def grade_debate(conn: sqlite3.Connection, now_ms: int, get: Optional[Callable[[str], Any]]) -> list[dict]:
+    """Grade the daily debate's calls whose 24 hours are over (committee.grade_due) and say so in the market team's
+    room. Never stops the pass."""
+    from . import committee as CM
+    try:
+        done = CM.grade_due(conn, now_ms, get)
+    except Exception as exc:  # noqa: BLE001
+        print(f"warning: debate grading failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+        return []
+    for g in done:
+        coin = str(g["symbol"]).replace("USDT", "")
+        if g["status"] == "expired":
+            text = f"🎯 판정 #{g['id']} ({g['day']} {coin}): 24시간 뒤 가격을 읽지 못해 채점 없이 끝냈습니다."
+        else:
+            text = (f"🎯 판정 #{g['id']} 채점 ({g['day']} {coin} {g['direction']}, 확신 {g['confidence']}/3): "
+                    f"{'맞음' if g['correct'] else '틀림'}. 24시간 움직임 {g['move'] * 100:+.2f}% "
+                    f"({g['ref_price']:,.6g} → {g['end_price']:,.6g}, 코드 계산, 기준 ±{CM.THRESHOLD * 100:.1f}%)")
+        R.post(conn, "team:market", None, None, "code", None, "system", text,
+               {"action": "debate_grade", "call_id": g["id"], "status": g["status"], "correct": g.get("correct")},
+               ts=now_ms)
+    return done
+
+
+SKIP_CURSOR = TR.SKIPPED_CURSOR
+
+
+def store_skipped(conn: sqlite3.Connection, paper_ro: Optional[sqlite3.Connection], now_ms: int,
+                  policy: RoomsPolicy) -> dict:
+    """Why the weekly analyses (this week's slot) and the recent event reviews did or did not open for lack of
+    data (triggers.skipped_status), kept in a cursor for the dashboard and for the record. Code only."""
+    try:
+        got = TR.skipped_status(paper_ro, now_ms, policy.triggers, conn)
+    except Exception as exc:  # noqa: BLE001
+        print(f"warning: skipped-meeting status failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+        return {}
+    if got and R.get_cursor(conn, SKIP_CURSOR) != got:
+        R.set_cursor(conn, SKIP_CURSOR, got)
+    return got
 
 
 # ---------------------------------------------------------------- market move (owners' choice 2026-10-03)
@@ -3213,9 +3474,10 @@ def round_budget(due: TR.Due, ctx: RoundContext) -> ClassBudget:
 
 
 def round_min_calls(due: TR.Due, policy: RoomsPolicy) -> int:
-    """Fewest calls a meeting can end with: strategy room T1 + T2 (early stop); team room its plan."""
+    """Fewest calls a meeting can end with: strategy room T1 + T2 (early stop; a timeframe-split meeting also has
+    the timeframe comparer, 3); team room its plan."""
     if is_strategy_room(due.room_id):
-        return 2
+        return 3 if due.trigger == "tf_split" else 2
     return max(1, min(len(team_plan(due)), policy.max_calls_team_round))
 
 
@@ -3725,12 +3987,14 @@ def tick(paper_db: Optional[str], daily_db: Optional[str], agents_db: str, inbox
          *, lab: Any = None, notifier: Optional[Notifier] = None, policy: Optional[RoomsPolicy] = None,
          now_ms: Optional[int] = None, clock_ms: Optional[Callable[[], int]] = None,
          cards_path: Optional[str] = None, preflight: Optional[Callable[[], tuple]] = None,
-         market_fetch: Optional[Callable[[int], dict]] = None) -> dict:
+         market_fetch: Optional[Callable[[int], dict]] = None,
+         price_get: Optional[Callable[[str], Any]] = None) -> dict:
     """One pass of the agents process (the only writer of agents3.db). Meetings run one at a time;
     after each one ``find_due`` is asked again (code only), so a new incident goes first. A meeting
     starts only when its AI budget can carry it (``ClassBudget.headroom``, pacing included); what
     cannot start now is simply found again on a later tick. ``preflight`` (the real runner's login
-    check) runs once, before the first meeting."""
+    check) runs once, before the first meeting. ``price_get``: a JSON GET of Binance public market data (no key) for
+    the daily debate and the event review; None = prices unknown (no reference price, nothing graded)."""
     policy = policy or RoomsPolicy()
     if any(R.same_file(other, agents_db) for other in (paper_db, daily_db, inbox_db)):
         # the tick creates its tables in agents3.db: never in another process's database
@@ -3744,6 +4008,8 @@ def tick(paper_db: Optional[str], daily_db: Optional[str], agents_db: str, inbox
         paper_ro, daily_ro, inbox_ro = R.open_ro(paper_db), R.open_ro(daily_db), R.open_ro(inbox_db)
         try:
             R.ensure_rooms(conn, ts=now)
+            from . import committee as CM
+            CM.ensure(conn)                            # the daily debate's calls (CREATE TABLE IF NOT EXISTS)
             policy = scaled_policy(policy, usage_scale(conn, now))
             mark_tick(conn, now)
             caps = budget_caps(policy)
@@ -3775,10 +4041,19 @@ def tick(paper_db: Optional[str], daily_db: Optional[str], agents_db: str, inbox
                                         inbox_missing=not inbox_db or not os.path.exists(inbox_db), paper_ro=paper_ro)
             ctx = RoundContext(agents_conn=conn, paper_ro=paper_ro, daily_ro=daily_ro, inbox_ro=inbox_ro, runner=runner,
                                lab=lab, now_ms=now, policy=policy, notifier=notifier or NullNotifier(),
-                               clock_ms=clock_ms, cards_path=cards_path, checkpoint_db=checkpoint_path(paper_db))
+                               clock_ms=clock_ms, cards_path=cards_path, checkpoint_db=checkpoint_path(paper_db),
+                               price_get=price_get)
             X.extras_tick(ctx)                         # code only: started accounts, closed refusals, orphans
             store_gate_now(conn, now)
             graded = grade_hypotheses(conn, paper_ro, now)
+            if price_get is not None:
+                grade_debate(conn, now, price_get)         # code only: the daily debate's calls after 24 hours
+            store_skipped(conn, paper_ro, now, policy)     # why a weekly analysis / event review did not open
+            try:
+                from .digest import store_security
+                store_security(conn, paper_db, now)        # code only: what this sandboxed pass can check, once a day
+            except Exception as exc:  # noqa: BLE001  (a report line only)
+                print(f"warning: security check failed: {type(exc).__name__}: {exc}", file=sys.stderr)
             try:
                 weekly_report_tick(ctx)
             except Exception as exc:  # noqa: BLE001  (a report only: the meetings go on)
@@ -3877,7 +4152,9 @@ def can_start(due: TR.Due, ctx: RoundContext) -> bool:
 _PROBE = {"incident": "team:ops", "owner": "team:lead", "loss_cluster": f"strat:{TR.STRATEGIES[0]}",
           "bust": f"strat:{TR.STRATEGIES[0]}", "checkpoint": "team:lead", "morning": "team:market",
           "evening": "team:lead", "weekly": f"strat:{TR.STRATEGIES[0]}", "research": LAB_ROOM,
-          "ranking": "team:review", "market_move": "team:market", "tf_split": f"strat:{TR.STRATEGIES[0]}"}
+          "ranking": "team:review", "market_move": "team:market", "tf_split": f"strat:{TR.STRATEGIES[0]}",
+          **{k: room for k, (_wd, room) in TR.ANALYSES.items()}, "event_review": "team:market",
+          "bull_bear": "team:market"}
 
 
 def deferred_triggers(ctx: RoundContext) -> list[str]:
@@ -3921,6 +4198,8 @@ class DryRunRunner:
             ans = {"approve": False, "reason": head}
         elif turn in ("lead", "lab_lead"):
             ans = {"summary": [f"{head} 1", f"{head} 2", f"{head} 3"], "human_actions": [], "watch_next": []}
+            if (packet.get("meeting") or {}).get("trigger") == "bull_bear":
+                ans["call"] = {"direction": "중립", "confidence": 1}
         elif turn == "lab_inventor":
             ans = {"headline": head, "specs": [{"spec": {"timeframe": "4h", "entry": {"family": "keltner_break"},
                                                          "filters": [{"kind": "adx", "mode": "above", "level": 25}],
@@ -3972,6 +4251,11 @@ def _copy_db(src: str, dst: str) -> None:
 
 
 AUTH_PREFLIGHT = auth_preflight          # tests replace it (no subprocess)
+
+
+def CM_HTTP_GET(url: str) -> Any:            # noqa: N802  (Binance public market data; tests never reach it)
+    from .committee import http_get
+    return http_get(url)
 
 
 def _mark_crash(agents_db: str, exc: BaseException) -> None:
@@ -4055,7 +4339,8 @@ def main(argv: Optional[list[str]] = None) -> int:
             ro.close()
         try:
             out = tick(args.paper_db, args.daily_db, agents_db, args.inbox_db, runner, lab=lab, notifier=notifier,
-                       policy=policy, preflight=preflight, market_fetch=lambda now: fetch_market_moves(now))
+                       policy=policy, preflight=preflight, market_fetch=lambda now: fetch_market_moves(now),
+                       price_get=CM_HTTP_GET)
         except Exception as exc:
             if not args.dry_run:
                 _mark_crash(agents_db, exc)
