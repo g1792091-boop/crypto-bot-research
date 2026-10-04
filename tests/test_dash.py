@@ -660,3 +660,48 @@ state.board = {accounts: [
   {account_id: "A@15m", strategy: "A", timeframe: "15m", kind: "strategy", wallet: 5000, position: null}]};
 console.log(JSON.stringify(tfSummary().split("<tr>").slice(2).map((r) => r.replace(/<[^>]+>/g, " ").trim().split(/\\s+/)[0])));"""))
     assert out == ["15분", "30분", "1시간", "4시간"]
+
+
+def test_an_account_holding_a_position_opens(tmp_path):
+    """Paper v3's ladder exits leave an open position's tp_price NaN in the saved engine state (engine.py); the
+    account view must still answer (JSON has no NaN: it answered 500 for every account holding a position)."""
+    import math
+    db = str(tmp_path / "p.db")
+    store = Store3(db)
+    book = AccountBook(S, {s: Brackets.example() for s in V3_SYMBOLS}, store, equity_every_ms=MIN)
+    book.open_accounts([{"strategy": "A", "timeframe": "15m", "kind": "strategy"}], 0)
+    flat = lambda i: {s: Bar(s, i * MIN, i * MIN + MIN - 1, 100.0, 100.05, 99.95, 100.0) for s in V3_SYMBOLS}  # noqa: E731
+    book.step(0, flat(0))
+    book.submit("A@15m", Signal(ts=MIN - 1, symbol="BTCUSDT", timeframe="15m", strategy_id="A", side=1,
+                                stop_price=0.0, tier="best", atr=0.2, meta={"stop_dist": 0.4}))
+    book.step(MIN, flat(1))
+    book.save(MIN)
+    assert math.isnan(book.engines["A@15m"].position.tp_price)
+    store.close()
+    c = TestClient(create_app(db, hash_password("correct horse battery"), SECRET, candles=lambda s, i, n: []))
+    assert c.post("/api/login", json={"password": "correct horse battery"}).status_code == 200
+    r = c.get("/api/account/A@15m")
+    assert r.status_code == 200
+    pos = r.json()["state"]["position"]
+    assert pos["symbol"] == "BTCUSDT" and pos["tp_price"] is None and r.json()["position_why"]["leverage"]
+
+
+def test_the_dashboard_imports_scipy_before_serving(monkeypatch):
+    """Two first imports of scipy from two request threads at once left it half initialised (500 until a restart):
+    create_app imports the lazily used packages once, up front."""
+    from paperbot.dash import app as A
+    seen = []
+    monkeypatch.setattr(A, "warm_imports", lambda: seen.append(1))
+    create_app(":memory:", None, SECRET)
+    assert seen == [1] and "scipy" in A.WARM_IMPORTS and "scipy.signal" in A.WARM_IMPORTS
+    assert A.json_finite({"x": [float("nan"), float("inf"), 1.5], "y": (2,)}) == {"x": [None, None, 1.5], "y": [2]}
+
+
+def test_phone_layout_fixes_stay():
+    """Phone width (390 px): position cards no wider than the screen, a trade's 'why' line kept in view, and the
+    account's open position keeps its 'why this leverage' line through the 1 s refresh."""
+    st = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "paperbot", "dash", "static")
+    css = open(os.path.join(st, "style.css"), encoding="utf-8").read()
+    js = open(os.path.join(st, "app.js"), encoding="utf-8").read()
+    assert ".pcards { grid-template-columns: minmax(0, 1fr); }" in css and "tr.why-row td .why { position: sticky" in css
+    assert "renderAcctPos(state.account.state && state.account.state.position, state.account.position_why)" in js

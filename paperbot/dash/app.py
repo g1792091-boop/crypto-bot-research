@@ -33,6 +33,7 @@ import datetime
 import hashlib
 import hmac
 import json
+import math
 import os
 import sqlite3
 import sys
@@ -291,8 +292,10 @@ class Data:
             except (TypeError, ValueError, AttributeError):
                 src = {}
             extra["trial_id"] = src.get("trial_id") if isinstance(src, dict) else None
-        return {"account": acc, "state": e, "trades": trades, "equity": eq, "signals": counts, "extra": extra,
-                "position_why": pos_why}
+        # an open position's tp_price is NaN under the ladder exits (engine.py: no fixed take-profit), and
+        # json.loads gives it back as NaN: not valid JSON (the route answered 500 for every account holding one)
+        return json_finite({"account": acc, "state": e, "trades": trades, "equity": eq, "signals": counts,
+                            "extra": extra, "position_why": pos_why})
 
     def position_why(self) -> dict:
         """{account_id: why} of every open position (levwhy: group, score, leverage, the rejected higher candidates)."""
@@ -504,6 +507,33 @@ class Data:
 
 # ---------------------------------------------------------------- candles (public Binance data)
 _CANDLE_CACHE: dict = {}
+
+
+# Imported here once, on the starting thread: the routes import them lazily from FastAPI's worker threads, and two
+# first imports of scipy at the same moment (a page load asks /api/levels and /api/rooms together) left it half
+# initialised ("partially initialized module 'scipy._lib._testutils'"), so every later request that needed it
+# (/api/rooms, /api/analysis/health) answered 500 until the dashboard restarted.
+WARM_IMPORTS = ("scipy", "scipy.signal", "scipy.stats", "scipy.sparse")
+
+
+def warm_imports(names=WARM_IMPORTS) -> None:
+    import importlib
+    for n in names:
+        try:
+            importlib.import_module(n)
+        except Exception:  # noqa: BLE001  (a missing optional package: the route that needs it reports it)
+            pass
+
+
+def json_finite(o):
+    """``o`` with every NaN / infinity float replaced by None (JSON has no such numbers: Starlette refuses them)."""
+    if isinstance(o, float):
+        return o if math.isfinite(o) else None
+    if isinstance(o, dict):
+        return {k: json_finite(v) for k, v in o.items()}
+    if isinstance(o, (list, tuple)):
+        return [json_finite(v) for v in o]
+    return o
 
 
 def fetch_candles(symbol: str, interval: str, limit: int = 300) -> list:
@@ -1692,6 +1722,7 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
     if inbox_db and any(other and same_file(inbox_db, other) for other in (db, daily_db, agents_db)):
         # the dashboard creates its tables in inbox.db: never in another process's database
         raise ValueError("--inbox-db must be its own file (not paper3.db, daily3.db or agents3.db)")
+    warm_imports()
     app = FastAPI(title="paper v3", docs_url=None, redoc_url=None, openapi_url=None)
     data = Data(db, daily_db)
     rooms = Rooms(agents_db, inbox_db, os.environ.get("AGENTS_BUDGET"), say_per_hour,

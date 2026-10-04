@@ -102,7 +102,10 @@ def env(tmp_path):
     fake = tmp_path / "systemctl"
     stopped = tmp_path / "stopped"
     stopped.write_text("")
-    # a stateful systemctl: FAKE_ACTIVE are running until stopped, started again by start
+    # a stateful systemctl: FAKE_ACTIVE are running until stopped, started again by start; FAKE_ENABLED answer
+    # is-enabled; a start of a unit in FAKE_FAIL_START fails; starting paperbot-backup.service writes today's
+    # backup folder like deploy/paperbot-backup.sh (a copy of each run database) unless FAKE_BACKUP_EMPTY=1;
+    # `show -p Result` answers FAKE_RESULT (default success)
     fake.write_text(f"""#!/bin/bash
 echo "$*" >> "{log}"
 cmd="$1"; shift
@@ -112,14 +115,30 @@ case "$cmd" in
     grep -qx "$u" "{stopped}" && exit 3
     for a in $FAKE_ACTIVE; do [ "$a" = "$u" ] && exit 0; done
     exit 3 ;;
+  is-enabled)
+    u="${{@: -1}}"
+    for a in $FAKE_ENABLED; do [ "$a" = "$u" ] && exit 0; done
+    exit 1 ;;
+  show) echo "${{FAKE_RESULT:-success}}" ;;
   stop) for u in "$@"; do echo "$u" >> "{stopped}"; done ;;
-  start) for u in "$@"; do grep -vx "$u" "{stopped}" > "{stopped}.n" || true; mv "{stopped}.n" "{stopped}"; done ;;
+  start)
+    for u in "$@"; do
+      for f in $FAKE_FAIL_START; do [ "$f" = "$u" ] && exit 1; done
+      if [ "$u" = paperbot-backup.service ] && [ "${{FAKE_BACKUP_EMPTY:-0}}" != 1 ]; then
+        d="$PAPERBOT_BACKUPS/$(date -u +%Y%m%d)"; mkdir -p "$d"
+        for db in paper3 daily3 checkpoint agents3 inbox; do
+          [ -f "$PAPERBOT_LIB/$db.db" ] && cp "$PAPERBOT_LIB/$db.db" "$d/$db.db"
+        done
+      fi
+      grep -vx "$u" "{stopped}" > "{stopped}.n" || true; mv "{stopped}.n" "{stopped}"
+    done ;;
 esac
 exit 0
 """)
     fake.chmod(0o755)
     e = dict(os.environ, PAPERBOT_LIB=str(data), PAPERBOT_ETC=str(tmp_path / "etc"), PAPERBOT_PY=sys.executable,
              PAPERBOT_RESET_USER="", PAPERBOT_SYSTEMCTL=str(fake), PAPERBOT_RESET_HM="2200",
+             PAPERBOT_BACKUPS=str(tmp_path / "backups"), FAKE_ENABLED="",
              FAKE_ACTIVE="paperbot-live3 paperbot-dash paperbot-agents.timer")
     return {"data": data, "env": e, "log": log, "tmp": tmp_path}
 
@@ -140,7 +159,18 @@ def test_dry_run_changes_nothing(env):
     assert "loss:strat:V45_AMB: 812 -> 0" in out
     assert _tree_hash(env["data"]) == before
     calls = env["log"].read_text().splitlines()
-    assert calls and all(c.startswith("is-active") for c in calls)
+    assert calls and all(c.startswith(("is-active", "is-enabled")) for c in calls)
+    assert "[옮기기 전에 새 백업] paperbot-backup.service" in out
+    assert "paperbot-offsite.timer가 켜져 있지 않아 건너뜁니다" in out
+    assert not (env["tmp"] / "backups").exists()
+
+
+def test_dry_run_shows_the_offsite_copy_when_its_timer_is_enabled(env):
+    env["env"]["FAKE_ENABLED"] = "paperbot-offsite.timer"
+    r = _run(env, "--dry-run")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "paperbot-offsite.service도 한 번 돌립니다" in r.stdout
+    assert not any(c.startswith("start") for c in env["log"].read_text().splitlines())
 
 
 def test_refused_in_the_nightly_window(env):
@@ -190,10 +220,62 @@ def test_yes_moves_the_run_keeps_memory_and_restarts(env):
     stops = [c for c in calls if c.startswith("stop")]
     starts = [c for c in calls if c.startswith("start")]
     assert stops == ["stop paperbot-live3 paperbot-dash paperbot-tgtrades paperbot-agents.timer"]
-    assert starts == ["start paperbot-live3 paperbot-dash paperbot-tgtrades paperbot-agents.timer"]
+    # the fresh backup runs after everything stopped and before the move; no off-site copy (timer not enabled)
+    assert starts == ["start paperbot-backup.service",
+                      "start paperbot-live3 paperbot-dash paperbot-tgtrades paperbot-agents.timer"]
+    assert calls.index("start paperbot-backup.service") > calls.index(stops[0])
     out = r.stdout
     assert "no process has the run files open" in out and "요약" in out and "봇이 아직 새 계좌를 만들지 않았습니다" in out
     assert "agents3.db 백업: copied" in out
+    assert out.index("backup ok:") < out.index("== 4. archive")
+    assert "off-site copy skipped" in out
+    day = next((env["tmp"] / "backups").iterdir())
+    assert (day / "paper3.db").read_text() == "x" and (day / "daily3.db").exists()
+
+
+def _yes_env(env, **extra):
+    stub = env["tmp"] / "install.sh"
+    stub.write_text("#!/bin/bash\nexit 0\n")
+    env["env"].update(PAPERBOT_INSTALL=str(stub), PAPERBOT_RESET_WAIT="0", ALLOW_DIRTY="1",
+                      FAKE_ACTIVE="paperbot-live3 paperbot-dash", **extra)
+
+
+@pytest.mark.parametrize("fail", [{"FAKE_FAIL_START": "paperbot-backup.service"}, {"FAKE_RESULT": "exit-code"},
+                                  {"FAKE_BACKUP_EMPTY": "1"}])
+def test_a_failed_backup_stops_before_anything_moves(env, fail):
+    _yes_env(env, **fail)
+    r = _run(env, "--yes")
+    assert r.returncode == 1, r.stdout
+    out = r.stdout
+    assert "새 백업" in out and "아무 파일도 옮기지 않고" in out and "단계 backup" in out
+    assert "이전 실행은 그대로입니다" in out and "sudo systemctl start paperbot-live3 paperbot-dash" in out
+    assert "journalctl -u paperbot-backup" in out
+    assert (env["data"] / "paper3.db").exists() and not (env["data"] / "archive").exists()
+    calls = env["log"].read_text().splitlines()
+    assert not any(c.startswith("start paperbot-live3") for c in calls)
+    assert "start paperbot-offsite.service" not in calls
+
+
+def test_the_offsite_copy_runs_when_enabled_and_its_failure_only_warns(env):
+    _yes_env(env, FAKE_ENABLED="paperbot-offsite.timer")
+    r = _run(env, "--yes")
+    assert r.returncode == 0, r.stdout + r.stderr
+    calls = env["log"].read_text().splitlines()
+    starts = [c for c in calls if c.startswith("start")]
+    assert starts[:2] == ["start paperbot-backup.service", "start paperbot-offsite.service"]
+    assert "off-site copy: sent" in r.stdout
+    # a second reset (fresh tree) where the off-site copy fails: warned twice (step and summary), the run goes on
+    for f in ("paper3.db", "daily3.db"):
+        (env["data"] / f).write_text("x")
+    env["log"].write_text("")
+    (env["tmp"] / "stopped").write_text("")
+    env["env"]["FAKE_FAIL_START"] = "paperbot-offsite.service"
+    r = _run(env, "--yes")
+    assert r.returncode == 0, r.stdout + r.stderr
+    out = r.stdout
+    assert "경고: 서버 밖 복사(paperbot-offsite.service)가 실패했습니다" in out
+    assert "서버 밖 복사는 실패했습니다" in out.split("요약")[1]
+    assert not (env["data"] / "paper3.db").exists()
 
 
 def test_an_unreadable_agents_db_stops_the_reset_before_anything_is_stopped(env):
@@ -224,4 +306,5 @@ def test_a_failure_after_the_move_prints_how_to_go_on_or_back(env):
     assert "sudo systemctl start paperbot-live3 paperbot-dash" in out
     assert f"paperbot.resetrun apply --lib {env['data']} --archive {arch}" in out
     calls = env["log"].read_text().splitlines()
-    assert any(c.startswith("stop") for c in calls) and not any(c.startswith("start") for c in calls)
+    assert any(c.startswith("stop") for c in calls)
+    assert [c for c in calls if c.startswith("start")] == ["start paperbot-backup.service"]   # the bot stays off

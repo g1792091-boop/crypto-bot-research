@@ -440,6 +440,7 @@ button.sm { height: 24px; font-size: 11.5px; padding: 0 8px; }
 .expbar .rs-banner { color: var(--text); }
 .expbar .rs-rules { flex-basis: 100%; font-size: 11.5px; }
 .expbar .rs-rules a { color: var(--series); }
+:root[data-theme="light"] .expbar .rs-rules a { color: #1f66c1; }   /* 11.5 px on the light bar: 4.9:1 (--series was 3.9:1) */
 a.btnlink { display: inline-flex; align-items: center; height: 28px; padding: 0 10px; border: 1px solid var(--line-2);
   border-radius: 4px; background: var(--panel-2); color: var(--text); text-decoration: none; white-space: nowrap; font-size: 12px; }
 a.btnlink:hover { background: var(--hover); }
@@ -480,7 +481,7 @@ button.mini { height: 22px; padding: 0 6px; font-size: 11px; }
 .bkbar i { display: block; height: 100%; background: var(--up); }
 .pv-bar { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
 .pcards { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 10px; }
-.pcard { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--line-2); border-radius: 6px; padding: 10px 12px; }
+.pcard { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--line-2); border-radius: 6px; padding: 10px 12px; min-width: 0; }
 .pcard.win { border-left-color: var(--up); } .pcard.lose { border-left-color: var(--down); }
 .pc-top { display: flex; align-items: center; gap: 6px; font-size: 13px; }
 .pc-top .grow { flex: 1; }
@@ -503,7 +504,9 @@ button.mini { height: 22px; padding: 0 6px; font-size: 11px; }
   .pv-head, .pv-book { padding: 8px; }
   .pv-px { font-size: 20px; } .pv-kv { flex-direction: column; gap: 0; } .pv-kv b { text-align: left; }
   .bk { font-size: 11px; line-height: 19px; } .bk.mid { font-size: 15px; flex-direction: column; gap: 0; line-height: 18px; padding: 4px 0; align-items: center; }
-  .pcards { grid-template-columns: 1fr; }
+  /* minmax(0, 1fr): a card never grows past the phone's width for its nowrap header (it was 442 px at 390) */
+  .pcards { grid-template-columns: minmax(0, 1fr); }
+  .pc-top { flex-wrap: wrap; row-gap: 2px; }
   .pv-bar { flex-wrap: wrap; } .pv-bar .tabs button { padding: 0 8px; }
 }
 .pc-top .muted { white-space: nowrap; }
@@ -742,4 +745,6 @@ button.mini { height: 22px; padding: 0 6px; font-size: 11px; }
 .why { display: block; font-size: 11px; color: var(--text-2); margin-top: 2px; white-space: normal; }
 .tag.good { background: var(--accent-bg); color: var(--accent); border-color: transparent; }
 tr.why-row td { padding-top: 0; border-top: 0; }
+/* phone: a trade's 'why' line stays in view while its table scrolls sideways (it ran past the screen's edge) */
+@media (max-width: 700px) { tr.why-row td .why { position: sticky; left: 8px; max-width: calc(100vw - 64px); } }
 @media (max-width: 640px) { .an-chart { height: 220px; } }

@@ -1565,6 +1565,12 @@ def test_ranking_review_at_14_with_the_top_and_bottom_and_a_silent_summary(world
     assert world.tick(QueueRunner({}), t, notifier=notifier)["rounds"] == []    # off in RoomsPolicy() itself
     pol = RM.RoomsPolicy()
     pol.triggers.ranking_hour_kst = RM.policy_from_env({}).triggers.ranking_hour_kst     # the server's: 14:00
+    # a fresh run without trades: nothing to rank yet; the reason is kept (meetings:skipped), nothing is sent
+    assert world.tick(QueueRunner({}), t, policy=pol, notifier=notifier)["rounds"] == [] and notifier.messages == []
+    sk = R.get_cursor(world.agents, TR.SKIPPED_CURSOR)["ranking"]
+    assert sk["slot"] == "2026-10-07" and sk["trades"] == 0 and sk["need"] == 10 and "최소 10건" in sk["why"]
+    for k in range(10):                                  # 10 closed strategy trades before the 14:00 slot: it opens
+        world.trade(f"{S}@15m" if k % 2 else "V45_AMB@1h", 5.0, t - 3 * HOUR + k * MIN)
     out = world.tick(runner, t, policy=pol, notifier=notifier)
     assert [(r["room_id"], r["trigger"]) for r in out["rounds"]] == [("team:review", "ranking")]
     # owners' choice 2026-10-04: the performance analyst reads the ranking numbers first
@@ -1580,6 +1586,7 @@ def test_speakers_answer_an_earlier_colleague_and_ask_the_next_one(world):
     t = kst(2026, 10, 7, 14, 5)
     pol = RM.RoomsPolicy()
     pol.triggers.ranking_hour_kst = 14
+    pol.triggers.fresh_run_min_trades = 0       # no trades in this world
     first = {**team_answer("p"), "responds_to": None, "ask_next": "하위 3개의 손실이 박스권에 몰렸는지 봐 주세요"}
     second = {**team_answer("r"), "responds_to": {"role": "pnl_reviewer", "stance": "disagree",
                                                   "point": "박스권보다 5분봉 비용이 더 커 보입니다"},

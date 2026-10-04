@@ -25,6 +25,8 @@ Triggers (defaults in ``TriggerPolicy``; every number is configurable):
                                    stored that day's verdict (checkpoint.db, read-only).
     morning       3  team:market   08:00 KST, once per KST day (window 4h).
     ranking       3  team:review   14:00 KST, once per KST day (window 4h): the top and bottom strategies by P&L.
+                                   Not while a fresh run has < ``fresh_run_min_trades`` (10) closed strategy trades as
+                                   of the slot (``fresh_run_data``; why in the cursor ``meetings:skipped``).
     evening       3  team:review   22:00 KST, once per KST day (window 4h),
                      team:lead     then the lead (after the review team has met).
     weekly        4  strat:<S>     on weekday (strategy index mod 7, KST) when the strategy has
@@ -152,7 +154,8 @@ TRIGGER_CLASS = {"incident": "incident", "owner": "owner", "loss_cluster": "loss
                  "event_review": "weekly", "research": "research"}
 # the coins of the daily debate, one a day in this order (the bot's own coins, config.V3_SYMBOLS)
 BULL_BEAR_COINS = ("BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "LTCUSDT", "BCHUSDT")
-SKIPPED_CURSOR = "meetings:skipped"   # why a weekly analysis / event review did not open (written by the rooms tick)
+SKIPPED_CURSOR = "meetings:skipped"   # why a weekly analysis / event review / ranking review / Sunday report did not
+                                      # open or go out (written by the rooms tick)
 ENDED_OK = ("done", "no_action")      # the only statuses that advance cursors
 CLASSES = ("incident", "owner", "loss", "scheduled", "weekly", "research")
 # What a stopped_budget round pauses until the next KST day, by decision.stopped (when the
@@ -260,6 +263,10 @@ class TriggerPolicy:
     risk_review_hour_kst: int = -1        # Friday's drawdown / bust risk meeting (owners' request 2026-10-04)
     analysis_min_trades: int = 200
     analysis_min_days: int = 7
+    # a fresh run (owners' restart 2026-10-04): the 14:00 ranking review and the Sunday weekly report
+    # (rooms.weekly_report_tick) wait until the run's strategy accounts have closed this many trades (as of the
+    # slot, fresh_run_data); the skip and its reason go to ``meetings:skipped``. 0 = never skip
+    fresh_run_min_trades: int = 10
     # owners' decision 2026-10-04: besides its weekday, a weekly analysis may meet once more in the same KST week
     # (Monday-Sunday), at its hour on another day, when ``analysis_extra_factor`` x ``analysis_min_trades`` new closed
     # strategy trades came in since its last meeting and at least ``analysis_extra_gap_days`` KST days have passed;
@@ -888,6 +895,28 @@ def analysis_data(paper_ro, slot_ms: int, p: TriggerPolicy) -> dict:
     return {"ok": not why, "trades": n, "days": round(days, 1), "why": ", ".join(why)}
 
 
+def fresh_run_data(paper_ro, slot_ms: int, p: TriggerPolicy) -> dict:
+    """Has the run closed enough strategy trades (``fresh_run_min_trades``, from its start up to ``slot_ms``) for the
+    ranking review or the Sunday weekly report? As of the slot, so the answer for a slot never changes. A trade
+    count that cannot be read (locked database) does not skip anything: the meeting / report handles it as before.
+    {ok, trades, need, why}."""
+    need = max(0, int(p.fresh_run_min_trades))
+    if need == 0:
+        return {"ok": True, "trades": None, "need": 0, "why": ""}
+    start = run_start(paper_ro)
+    if start is None:
+        return {"ok": False, "trades": 0, "need": need, "why": "paper 실험이 아직 시작되지 않음"}
+    r = _one(paper_ro, "SELECT COUNT(*) FROM trades t JOIN accounts a ON a.account_id = t.account_id "
+                       "WHERE a.kind = 'strategy' AND t.exit_time >= ? AND t.exit_time < ?", (start, slot_ms))
+    if r is None:
+        return {"ok": True, "trades": None, "need": need, "why": "거래 기록을 읽지 못함(건너뛰지 않음)"}
+    n = _int(r[0])
+    if n < need:
+        return {"ok": False, "trades": n, "need": need,
+                "why": f"새 실행 시작 뒤 매매법 계좌의 끝난 거래 {n}건(최소 {need}건)"}
+    return {"ok": True, "trades": n, "need": need, "why": ""}
+
+
 def _analysis_runs(st: _Rooms, trig: str) -> list[dict]:
     """The meetings of one weekly analysis that ended done / no_action or are running now, oldest first."""
     room = ANALYSES[trig][1]
@@ -1033,7 +1062,8 @@ def _bull_bear(st: _Rooms) -> list[Due]:
 def skipped_status(paper_ro, now_ms: int, p: TriggerPolicy, agents_conn=None) -> dict:
     """Why each weekly analysis (this week's slot, once its hour has come) or the event reviews of the last week did
     or did not open: {trigger: {slot, ok, trades, days, why, extra: {ok, why, new_trades, need, ...}},
-    'event_review': [{event, why}]}. ``extra`` (with ``agents_conn``): whether an extra meeting may open today
+    'event_review': [{event, why}], 'ranking': {slot, ok, trades, need, why} (only while today's ranking slot is
+    skipped for a fresh run's lack of trades, fresh_run_data)}. ``extra`` (with ``agents_conn``): whether an extra meeting may open today
     (``analysis_extra``). Code only; the rooms tick stores it in the cursor ``SKIPPED_CURSOR`` (find_due never
     writes)."""
     out: dict = {}
@@ -1063,6 +1093,11 @@ def skipped_status(paper_ro, now_ms: int, p: TriggerPolicy, agents_conn=None) ->
             pass
         if evs:
             out["event_review"] = evs
+    if p.ranking_hour_kst >= 0 and "ranking" in p.enabled:
+        s0 = slot_start(now_ms, p.ranking_hour_kst)
+        info = fresh_run_data(paper_ro, s0, p)
+        if not info["ok"]:
+            out["ranking"] = {"slot": kst_date(s0), **info}
     return out
 
 
@@ -1130,7 +1165,10 @@ def _lab_accounts(paper_ro, st: _Rooms) -> list[Due]:
     return out
 
 
-def _scheduled(st: _Rooms) -> list[Due]:
+def _scheduled(st: _Rooms, paper_ro=None) -> list[Due]:
+    """The morning, ranking and evening meetings, once per KST day from their hour (window ``meeting_window_ms``).
+    The ranking review waits for a fresh run's first trades (``fresh_run_data``, as of its slot; with ``paper_ro``):
+    a slot without them is not due, and rooms.store_skipped records why (``meetings:skipped``)."""
     p, out = st.p, []
     plan = [("morning", p.morning_hour_kst, (("team:market", "아침 회의 (08:00)"),)),
             ("ranking", p.ranking_hour_kst, (("team:review", f"순위 검토 ({p.ranking_hour_kst:02d}:00): 잔고 상위·하위 매매법"),)),
@@ -1144,6 +1182,8 @@ def _scheduled(st: _Rooms) -> list[Due]:
             continue
         day = kst_date(s0)
         key = f"{name}:{day}"
+        if name == "ranking" and paper_ro is not None and not fresh_run_data(paper_ro, s0, p)["ok"]:
+            continue                # too few trades to rank yet (meetings:skipped says so)
         for seq, (room, text) in enumerate(rooms):
             ck = f"sched:{name}:{room}"
             if (st.cursor(ck) or "") >= day:
@@ -1273,7 +1313,7 @@ def find_due(paper_ro: Optional[sqlite3.Connection], daily_ro: Optional[sqlite3.
         found += _weekly(paper_ro, st)
     if "tf_split" in p.enabled:
         found += _tf_split(paper_ro, st)
-    found += _scheduled(st)
+    found += _scheduled(st, paper_ro)
     found += _weekly_analysis(paper_ro, st)
     if "event_review" in p.enabled:
         found += _event_review(paper_ro, st)

@@ -839,7 +839,8 @@ setInterval(() => {
     if (state.botTab === "allpos") renderBottom();
   }
   if (state.view === "board") renderBoard();
-  if (state.view === "account" && state.account) renderAcctPos(state.account.state && state.account.state.position);
+  // (with its 'why this leverage' line: the 1 s refresh used to drop it)
+  if (state.view === "account" && state.account) renderAcctPos(state.account.state && state.account.state.position, state.account.position_why);
 }, 1000);
 
 // ------------------------------------------------------------ start

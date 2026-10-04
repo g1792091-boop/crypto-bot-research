@@ -30,8 +30,8 @@ For one UTC day (default: yesterday):
    that reached the replay's stop in the last ``EARLY_WINDOW_MS`` of the minute, with the same entry / size / stop
    on both sides, the replay exiting in that minute and live later (at a later bar's open beyond its stop or at
    its stop on a later bar), and no feed warning; and this must hold for every mismatched account of that
-   coin-minute. Early-kline accounts are counted apart (``parity.early_kline``), like the restart gaps: one WARN,
-   no CRITICAL, no incident meeting (paperbot/agents/triggers.py). docs/signal-recording.md has the background.
+   coin-minute. Early-kline accounts are counted apart (``parity.early_kline``), like the restart gaps: a line of the silent
+   INFO summary, no CRITICAL, no incident meeting (paperbot/agents/triggers.py). docs/signal-recording.md has the background.
 2. Shadows (no accounts): for every submitted signal of the day
    - limit: would a limit order 0.25 ATR better than the reference price have
      filled within one bar of the signal's timeframe, and with what net ROE under

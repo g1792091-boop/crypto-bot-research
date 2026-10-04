@@ -3048,10 +3048,15 @@ SKIP_CURSOR = TR.SKIPPED_CURSOR
 
 def store_skipped(conn: sqlite3.Connection, paper_ro: Optional[sqlite3.Connection], now_ms: int,
                   policy: RoomsPolicy) -> dict:
-    """Why the weekly analyses (this week's slot) and the recent event reviews did or did not open for lack of
-    data (triggers.skipped_status), kept in a cursor for the dashboard and for the record. Code only."""
+    """Why the weekly analyses (this week's slot), the recent event reviews and today's ranking review did or did
+    not open for lack of data (triggers.skipped_status), and why this week's Sunday report was not sent
+    (``weekly_report``: a fresh run without trades, weekly_report_skip), kept in a cursor for the dashboard and for
+    the record. Code only."""
     try:
         got = TR.skipped_status(paper_ro, now_ms, policy.triggers, conn)
+        wr = weekly_report_skip(policy, paper_ro, now_ms)
+        if wr is not None:
+            got["weekly_report"] = wr
     except Exception as exc:  # noqa: BLE001
         print(f"warning: skipped-meeting status failed: {type(exc).__name__}: {exc}", file=sys.stderr)
         return {}
@@ -3226,12 +3231,29 @@ def weekly_report_due(policy: RoomsPolicy, now_ms: int) -> Optional[str]:
     return day
 
 
+def weekly_report_skip(policy: RoomsPolicy, paper_ro: Optional[sqlite3.Connection], now_ms: int) -> Optional[dict]:
+    """This week's (latest Sunday's) report slot skipped because the run had closed fewer than
+    ``triggers.fresh_run_min_trades`` strategy trades by then (TR.fresh_run_data, as of the slot: the answer
+    never changes): {slot, ok: False, trades, need, why}; None when it is (or was) sent, off, or not yet due.
+    No Telegram and no AI for an empty week of a fresh run (owners' restart 2026-10-04)."""
+    h = policy.weekly_report_hour_kst
+    if h < 0 or paper_ro is None:
+        return None
+    s0 = TR.analysis_slot(now_ms, policy.weekly_report_weekday, h)
+    info = TR.fresh_run_data(paper_ro, s0, policy.triggers)
+    if info["ok"]:
+        return None
+    return {"slot": TR.kst_date(s0), **info}
+
+
 def weekly_report_tick(ctx: RoundContext) -> Optional[bool]:
     """Sunday's weekly report (digest.week_report, code only) to Telegram, silent, once per week: the cursor
     ``telegram:weekly_report:<date>`` is set when Telegram took it; a refused send is tried on the next ticks,
     ``WEEKLY_REPORT_TRIES`` attempts in all. A report whose trading numbers could not be read waits for the next
     tick too, but only through the window's first half: the last try, or any tick in the second half, sends it
-    with the reason (a restarted or slow timer may never reach the last try). None = not due (or already sent)."""
+    with the reason (a restarted or slow timer may never reach the last try). Not sent at all while a fresh run has
+    too few closed strategy trades by the slot (weekly_report_skip; store_skipped keeps why). None = not due, already
+    sent, or skipped."""
     from . import digest
     day = weekly_report_due(ctx.policy, ctx.now_ms)
     if day is None:
@@ -3239,6 +3261,8 @@ def weekly_report_tick(ctx: RoundContext) -> Optional[bool]:
     key = f"telegram:weekly_report:{day}"
     if R.get_cursor(ctx.agents_conn, key):
         return None
+    if weekly_report_skip(ctx.policy, ctx.paper_ro, ctx.now_ms) is not None:
+        return None             # a fresh run without trades yet: nothing to report (store_skipped records why)
     tries = _int0(R.get_cursor(ctx.agents_conn, key + ":tries"))
     if tries >= WEEKLY_REPORT_TRIES:
         return None

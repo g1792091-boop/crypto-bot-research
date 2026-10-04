@@ -111,6 +111,7 @@ def _two_meetings(world):
     t = kst(2026, 10, 7, 14, 5)
     pol = RM.RoomsPolicy()
     pol.triggers.ranking_hour_kst = 14
+    pol.triggers.fresh_run_min_trades = 0       # no trades in this world (the fresh-run skip: test_fresh_run_*)
     first = {**team_answer("p"), "ask_next": "하위 3개의 손실이 박스권에 몰렸나요?"}
     second = {**team_answer("r"), "responds_to": {"role": "pnl_reviewer", "stance": "disagree",
                                                   "point": "비용이 더 커 보임"}}
@@ -173,7 +174,7 @@ def test_week_report_numbers_and_the_telegram_text(world):
 
 
 def test_weekly_report_goes_out_on_sunday_once_and_retries_a_refused_send(world):
-    pol = RM.RoomsPolicy(triggers=TR.TriggerPolicy(enabled=()), weekly_report_hour_kst=21)
+    pol = RM.RoomsPolicy(triggers=TR.TriggerPolicy(enabled=(), fresh_run_min_trades=0), weekly_report_hour_kst=21)
     n = ListNotifier()
     world.tick(QueueRunner({}), SUNDAY - DAY, policy=pol, notifier=n)               # Saturday
     world.tick(QueueRunner({}), SUNDAY - 2 * HOUR, policy=pol, notifier=n)          # Sunday 19:05
@@ -310,6 +311,7 @@ def test_ranking_review_hypotheses_go_to_the_ledger_and_are_graded_later(world):
     t = kst(2026, 10, 7, 14, 5)
     pol = RM.RoomsPolicy()
     pol.triggers.ranking_hour_kst = 14
+    pol.triggers.fresh_run_min_trades = 0       # no trades in this world
     pred = {"metric": "win_rate", "timeframe": "15m", "direction": "above", "value": 0.5, "after_trades": 30}
     lead = {"summary": ["a", "b", "c"], "human_actions": [], "watch_next": [],
             "hypotheses": [{"strategy": S, "text": "상위는 15분봉 추세장 롱 덕분", "how_to_confirm": "30건 뒤 승률",
@@ -403,8 +405,8 @@ def test_tf_split_does_not_read_the_trades_once_the_days_meetings_are_held(world
     assert reads == [1]                      # every closed trade is read only while a meeting can still open
 
 
-def _week_ctx(world, now, notifier, paper=True):
-    pol = RM.RoomsPolicy(triggers=TR.TriggerPolicy(enabled=()), weekly_report_hour_kst=21)
+def _week_ctx(world, now, notifier, paper=True, min_trades=0):
+    pol = RM.RoomsPolicy(triggers=TR.TriggerPolicy(enabled=(), fresh_run_min_trades=min_trades), weekly_report_hour_kst=21)
     return RM.RoundContext(agents_conn=world.agents, paper_ro=world.paper() if paper else None, daily_ro=None,
                            inbox_ro=None, runner=None, lab=None, now_ms=now, policy=pol, notifier=notifier)
 
@@ -463,3 +465,23 @@ def test_the_second_week_has_no_partial_previous_week(tmp_path):
     # a later week (whole previous week inside the run) still compares
     w.trade(f"{S}@15m", 20.0, SUNDAY + 3 * DAY)
     assert DG.week_report(w.paper(), w.agents, SUNDAY + 7 * DAY)["strategies_total_prev"]["trades"] == 3
+
+
+def test_fresh_run_without_trades_skips_the_sunday_report_and_says_why(world):
+    """A fresh run (owners' restart 2026-10-04) with fewer than 10 closed strategy trades by the Sunday slot sends no
+    report (nothing to report); the reason stays in meetings:skipped for that week. Decided as of the slot."""
+    assert TR.TriggerPolicy().fresh_run_min_trades == 10
+    n = ListNotifier()
+    ctx = _week_ctx(world, SUNDAY, n, min_trades=10)
+    assert RM.weekly_report_tick(ctx) is None and n.messages == []
+    got = RM.store_skipped(world.agents, world.paper(), SUNDAY, ctx.policy)["weekly_report"]
+    assert got["slot"] == "2026-10-11" and got["ok"] is False and got["trades"] == 0 and got["need"] == 10
+    assert "새 실행 시작 뒤 매매법 계좌의 끝난 거래 0건(최소 10건)" == got["why"]
+    assert R.get_cursor(world.agents, TR.SKIPPED_CURSOR)["weekly_report"] == got
+    assert RM.weekly_report_skip(ctx.policy, world.paper(), SUNDAY + 3 * DAY)["slot"] == "2026-10-11"   # all week
+    for k in range(10):                                   # closed after the slot: this week's answer stays
+        world.trade(f"{S}@15m", 5.0, SUNDAY + k * MIN)
+    assert RM.weekly_report_tick(_week_ctx(world, SUNDAY + HOUR, n, min_trades=10)) is None and n.messages == []
+    assert RM.weekly_report_skip(ctx.policy, world.paper(), SUNDAY + 7 * DAY) is None                  # next week
+    assert RM.weekly_report_tick(_week_ctx(world, SUNDAY + 7 * DAY, n, min_trades=10)) is True
+    assert len(n.messages) == 1 and n.messages[0][1].startswith("📊 주간 성적표")

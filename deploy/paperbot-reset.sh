@@ -9,13 +9,18 @@
 # 1. stops the bot, dashboard, trade alerts, the agents and the scheduled jobs (waits for a running nightly job to
 #    finish); the market recorders (liquidations, GH Coin calls, flow, market) keep running. Refuses while the order
 #    executor runs (it reads paper3.db) and checks that no process still has a run file open;
-# 2. installs the pulled code (deploy/install.sh): a failure here leaves the old run untouched;
-# 3. MOVES (never deletes) the run's own files to /var/lib/paperbot/archive/run-<UTC time>/ (ARCHIVE_DBS and
+# 2. takes a fresh backup of the stopped run before anything moves: starts paperbot-backup.service (a oneshot:
+#    `systemctl start` returns when it has finished), checks its result and that today's backup folder holds a
+#    new copy of paper3.db / daily3.db / checkpoint.db; a failure stops the reset here (nothing moved). Then the
+#    off-site copy (paperbot-offsite.service) when its timer is enabled: a failure there is only a warning (the
+#    server's own copy is already made);
+# 3. installs the pulled code (deploy/install.sh): a failure here leaves the old run untouched;
+# 4. MOVES (never deletes) the run's own files to /var/lib/paperbot/archive/run-<UTC time>/ (ARCHIVE_DBS and
 #    ARCHIVE_FILES below);
-# 4. KEEPS the agents' memory and the owners' inbox in place (agents3.db, inbox.db): paperbot/resetrun.py copies
+# 5. KEEPS the agents' memory and the owners' inbox in place (agents3.db, inbox.db): paperbot/resetrun.py copies
 #    both into the archive folder first, then resets only the agents' cursors that point into the old paper3.db,
 #    closes proposals of the old run and tells every room once that the experiment restarted;
-# 5. starts everything that was running again: the bot creates 156 fresh $5,000 accounts (36 strategies + 3 coin-flip
+# 6. starts everything that was running again: the bot creates 156 fresh $5,000 accounts (36 strategies + 3 coin-flip
 #    accounts on each of 15m, 30m, 1h, 4h; no 5m) and that moment is the new start (30-day checkpoint: the start's
 #    UTC day + 30, paperbot.checkpoint.checkpoint_ts; observation period: start + 21 days).
 #
@@ -39,6 +44,7 @@ RUN_USER="${PAPERBOT_RESET_USER-paperbot}"
 SYSTEMCTL="${PAPERBOT_SYSTEMCTL:-systemctl}"
 INSTALL="${PAPERBOT_INSTALL:-$REPO_DIR/deploy/install.sh}"
 WAIT_S="${PAPERBOT_RESET_WAIT:-180}"           # how long to wait for the bot's new accounts
+BACKUPS="${PAPERBOT_BACKUPS:-/var/backups/paperbot}"   # where paperbot-backup.service writes (deploy/paperbot-backup.sh)
 # (the PAPERBOT_* overrides exist for tests/test_reset_script.py; the server uses the defaults)
 
 # What a restart archives (moved with their -wal/-shm/-journal) and what it keeps. Only the run's own files are
@@ -57,6 +63,8 @@ paperbot-labmonthly.service paperbot-offsite.service paperbot-rehearsal.service 
 WRITERS="$SERVICES $JOBS paperbot-executor"
 
 active() { "$SYSTEMCTL" is-active --quiet "$1" 2>/dev/null; }
+# the off-site copy is set up only when its timer is enabled (docs/server-setup-v3.md 4-3)
+offsite_on() { "$SYSTEMCTL" is-enabled --quiet paperbot-offsite.timer 2>/dev/null; }
 
 # the helper runs from this repository (the code being installed) and, as root, becomes the services' user first
 helper() { ( trap - ERR; cd "$REPO_DIR" && "$PY" -m paperbot.resetrun "$@" --user "$RUN_USER" ); }
@@ -97,6 +105,13 @@ if [ "$MODE" = "--dry-run" ]; then
   echo "[멈출 것]${run_now:- (지금 도는 것 없음)}"
   if active paperbot-executor; then
     echo "!! paperbot-executor(주문 실행기)가 돌고 있습니다: paper3.db를 읽으므로 --yes 전에 직접 멈춰야 합니다 (sudo systemctl stop paperbot-executor)"
+  fi
+  echo "[옮기기 전에 새 백업] paperbot-backup.service를 한 번 돌려 $BACKUPS/<UTC 날짜>/에 멈춘 실행의 복사본을 만들고 확인합니다"
+  echo "  (실패하면 아무것도 옮기지 않고 멈춤)"
+  if offsite_on; then
+    echo "  서버 밖 복사: paperbot-offsite.timer가 켜져 있어 paperbot-offsite.service도 한 번 돌립니다(몇 분~최대 1시간, 실패하면 경고만 하고 계속)"
+  else
+    echo "  서버 밖 복사: paperbot-offsite.timer가 켜져 있지 않아 건너뜁니다"
   fi
   echo "[보관 폴더로 옮길 것: $DATA/archive/run-<UTC 시각>/]"
   for f in $ARCHIVE_DBS; do
@@ -141,6 +156,7 @@ helper plan --lib "$DATA" --etc "$ETC"
 
 PHASE=none
 RUNNING=""
+OFFSITE_WARN=0
 ARCH=""
 MOVED=""
 on_fail() {
@@ -149,8 +165,11 @@ on_fail() {
   echo
   echo "!! 실패 (줄 $line, 단계 $PHASE)"
   case "$PHASE" in
-    stopping|stopped|installing|installed)
+    stopping|stopped|backup|installing|installed)
       echo "이전 실행은 그대로입니다(아무 파일도 옮기지 않음)."
+      if [ "$PHASE" = backup ]; then
+        echo "(새 백업이 끝나지 않아 멈췄습니다. 원인 보기: sudo journalctl -u paperbot-backup -n 50 --no-pager)"
+      fi
       if [ -n "$RUNNING" ]; then echo "다시 켜기: sudo systemctl start$RUNNING"; fi
       if [ "$PHASE" = installed ]; then echo "(새 코드는 설치됐습니다. 원인을 고친 뒤 이 스크립트를 다시 돌리면 됩니다)"; fi
       if [ "$PHASE" = installing ]; then
@@ -202,13 +221,48 @@ if [ -n "$open_now" ]; then
 fi
 echo "no process has the run files open"
 
-echo "== 2. install the pulled code"
+echo "== 2. fresh backup of the stopped run (before anything moves)"
+PHASE=backup
+t0=$(date +%s)
+if ! "$SYSTEMCTL" start paperbot-backup.service; then
+  echo "!! 새 백업(paperbot-backup.service)이 실패했습니다. 아무 파일도 옮기지 않고 여기서 멈춥니다."
+  false
+fi
+res="$("$SYSTEMCTL" show -p Result --value paperbot-backup.service 2>/dev/null || true)"
+if [ "$res" != success ]; then
+  echo "!! 새 백업(paperbot-backup.service)의 결과가 '${res:-알 수 없음}'입니다(success가 아님). 아무 파일도 옮기지 않고 멈춥니다."
+  false
+fi
+day="$BACKUPS/$(date -u +%Y%m%d)"
+for f in $ARCHIVE_DBS; do
+  [ -e "$DATA/$f" ] || continue
+  if [ ! -f "$day/$f" ] || [ "$(stat -c %Y "$day/$f")" -lt "$t0" ]; then
+    echo "!! 새 백업에 $f 복사본이 없습니다($day/$f 가 없거나 이번에 만든 것이 아님). 아무 파일도 옮기지 않고 멈춥니다."
+    false
+  fi
+done
+echo "backup ok: $day"
+if offsite_on; then
+  echo "off-site copy (paperbot-offsite.service, up to an hour)"
+  if "$SYSTEMCTL" start paperbot-offsite.service; then
+    echo "off-site copy: sent"
+  else
+    echo "!! 경고: 서버 밖 복사(paperbot-offsite.service)가 실패했습니다. 서버 안 새 백업($day)은 만들어졌으므로 계속합니다."
+    echo "   재시작이 끝난 뒤 원인 보기: sudo journalctl -u paperbot-offsite -n 50 --no-pager"
+    echo "   다시 보내기(같은 날짜 폴더, 이전 실행 복사본): sudo systemctl start paperbot-offsite.service"
+    OFFSITE_WARN=1
+  fi
+else
+  echo "off-site copy skipped (paperbot-offsite.timer is not enabled)"
+fi
+
+echo "== 3. install the pulled code"
 PHASE=installing
 bash "$INSTALL"
 PHASE=installed
 echo "(install.sh의 마지막 안내는 처음 설치용입니다. 이 스크립트가 이어서 진행합니다)"
 
-echo "== 3. archive the old run (moved, not deleted)"
+echo "== 4. archive the old run (moved, not deleted)"
 ARCH="$DATA/archive/run-$(date -u +%Y%m%dT%H%M%SZ)"
 install -d -o "${RUN_USER:-root}" -g "${RUN_USER:-root}" -m 750 "$DATA/archive" "$ARCH"
 PHASE=moving
@@ -224,11 +278,11 @@ install -d -o "${RUN_USER:-root}" -g "${RUN_USER:-root}" -m 750 "$DATA/rehearsal
 PHASE=moved
 echo "moved to $ARCH:${MOVED:- (nothing)}"
 
-echo "== 4. agents' memory kept; run-bound cursors reset (backup first)"
+echo "== 5. agents' memory kept; run-bound cursors reset (backup first)"
 helper apply --lib "$DATA" --archive "$ARCH"
 PHASE=reset
 
-echo "== 5. start the new run"
+echo "== 6. start the new run"
 PHASE=starting
 if [ -n "$RUNNING" ]; then
   # shellcheck disable=SC2086  # unit names, split on purpose
@@ -247,7 +301,11 @@ echo " ${MOVED:- (없음)}"
 echo "그대로 둠: agents3.db(시험 장부·메모·채점·회의 기록·제안 기록), inbox.db(두 분의 글·승인 기록·가격 알림),"
 echo "  price_alerts.json, liq.db·flow.db·market.db·ghcoin(시장 기록), lab, failalert, exec, /etc/paperbot, 백업"
 echo "  agents3.db·inbox.db의 바꾸기 전 사본: $ARCH/agents3-before-reset.db, $ARCH/inbox-before-reset.db"
-echo "초기화: 이전 paper3.db를 가리키던 에이전트 커서(위 4단계), 이전 실행의 열린 제안(닫음)"
+echo "초기화: 이전 paper3.db를 가리키던 에이전트 커서(위 5단계), 이전 실행의 열린 제안(닫음)"
+echo "옮기기 전 새 백업: $day"
+if [ "$OFFSITE_WARN" = 1 ]; then
+  echo "!! 서버 밖 복사는 실패했습니다(위 경고): sudo systemctl start paperbot-offsite.service 로 다시 보내세요"
+fi
 if active paperbot-live3; then
   if ! helper start --paper-db "$DATA/paper3.db" --wait "$WAIT_S"; then
     echo "몇 분 뒤 시작 시각과 첫 판정일 확인:"
