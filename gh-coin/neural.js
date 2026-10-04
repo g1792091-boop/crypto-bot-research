@@ -38,8 +38,8 @@ export const localOnly = () => { try { return localStorage.getItem("coinTeamLoca
 export const setLocalOnly = (on) => { try { localStorage.setItem("coinTeamLocal", on ? "1" : "0"); } catch (e) {} };
 // 트레이더가 될 무료 AI 모델: ① 키 넣은 회사(클라우드) 모델 + ② 내 PC Ollama 로컬 모델(공짜라 한도와 무관하게 추가)
 export function connectedModels(maxN = 16) {
-  // 로컬 전용 모드: 설치된 Ollama 모델만 트레이더로 (작고 빠른 것 우선 최대 6개)
-  const sized = [...olCache].sort((a, b) => olSize(a) - olSize(b)).slice(0, 6).map(m => ({ id: "ollama", model: m }));
+  // 로컬: 판단이 약한 초소형(1b~1.5b)보다 지시·추론 되는 3~8b를 우선(4b 근처). 4GB GPU라 최대 6개만.
+  const sized = [...olCache].sort((a, b) => olPref(a) - olPref(b)).slice(0, 6).map(m => ({ id: "ollama", model: m }));
   if (localOnly() && sized.length) return sized;
   const out = [];
   for (const id of Object.keys(PROVIDERS || {})) {
@@ -51,7 +51,8 @@ export function connectedModels(maxN = 16) {
   for (const m of sized) cloud.push(m);   // 로컬도 함께(혼합 모드)
   return cloud;
 }
-function olSize(name) { const m = String(name).match(/(\d+(?:\.\d+)?)\s*b/i); return m ? +m[1] : 7; }   // 모델명에서 파라미터 수(b) 추정, 없으면 7b로 간주
+function olSize(name) { const m = String(name).match(/(\d+(?:\.\d+)?)\s*b/i); return m ? +m[1] : 7; }   // 모델명에서 파라미터 수(b) 추정, 없으면 7b
+function olPref(name) { const s = olSize(name); return s < 2 ? 100 + (2 - s) : Math.abs(s - 4); }   // 2b 미만은 뒤로, 4b 근처 우선(판단 품질↔속도 균형)
 
 export const COINS = [["BTC", "BTCUSDT"], ["ETH", "ETHUSDT"], ["SOL", "SOLUSDT"], ["XRP", "XRPUSDT"], ["DOGE", "DOGEUSDT"], ["BNB", "BNBUSDT"]];
 const KEY = "coin:neural";
@@ -254,7 +255,7 @@ export async function modelStep() {
 4) 손절 -2%, 익절 +3%는 자동 적용된다. 승률 높은 자리만 골라라.
 반드시 JSON 한 줄만: {"dir":1,"conf":70} — dir 1=롱 -1=숏 0=관망, conf 0~100(자신있을 때만 높게). 설명 금지.${brainLine}${les}${iqLine}${trapLine}` },
       { role: "user", content: `${ko} 시장: ${brief.text}. 거래흐름 ${(feat["거래흐름"] || 0) >= 0 ? "매수우위" : "매도우위"}, 현재가 ${price}.\n규칙대로 판단해 JSON만:` }],
-      role: "fast", target: tgt, fallback: true, maxTokens: 160, temperature: 0.2, noThink: true, onContent: d => raw += d, onThink: () => {} });
+      role: "fast", target: tgt, fallback: true, json: true, maxTokens: 160, temperature: 0.2, noThink: true, onContent: d => raw += d, onThink: () => {} });
   } catch (e) {
     mFails++; const rl = e?.status === 429 || /한도/.test(e?.message || "");
     if (rl) { mBackoff = Date.now() + Math.min(90e3, 15e3 * Math.min(6, mFails)); feed(`무료 AI 한도 — ${Math.round((mBackoff - Date.now()) / 1000)}초 쉬었다 재개 (연결된 모든 회사가 사용량 초과)`); }
@@ -267,10 +268,14 @@ export async function modelStep() {
   if (dir === null) { feed(`[${shortMd(name)}] ${ko} 판단 형식 못 읽음`); save(); return; }
   const p = M.pos[sym];
   if (p && dir !== 0 && dir !== p.side) closeModelPos(name, sym, price, "반대신호");
-  // 🚫 최악의 타점 차단: 극단 과매수에서 추격 롱, 극단 과매도에서 추격 숏 (모델이 타점을 몰라도 코드가 거른다)
+  // 🚫 타점 가드: 추세 역행 + 과매수/과매도 추격 진입을 거른다 (약한 모델이 방향을 잘못 잡아도 코드가 보호)
   const bf = S.brief?.[sym];
-  if (!p && bf && dir === 1 && bf.rsi >= 78) { feed(`[${shortMd(name)}] ${ko} 롱 보류 — RSI ${bf.rsi} 과매수 추격 금지`); dir = 0; }
-  else if (!p && bf && dir === -1 && bf.rsi <= 22) { feed(`[${shortMd(name)}] ${ko} 숏 보류 — RSI ${bf.rsi} 과매도 추격 금지`); dir = 0; }
+  if (!p && bf && dir !== 0) {
+    const against = (dir === 1 && bf.trend === "하락추세" && (bf.mom5 ?? 0) <= 0) || (dir === -1 && bf.trend === "상승추세" && (bf.mom5 ?? 0) >= 0);
+    const chase = (dir === 1 && bf.rsi >= 76) || (dir === -1 && bf.rsi <= 24);
+    if (against) { feed(`[${shortMd(name)}] ${ko} ${dir > 0 ? "롱" : "숏"} 보류 — ${bf.trend} 역행 금지`); dir = 0; }
+    else if (chase) { feed(`[${shortMd(name)}] ${ko} ${dir > 0 ? "롱" : "숏"} 보류 — RSI ${bf.rsi} 추격 금지`); dir = 0; }
+  }
   const risk = dir !== 0 ? BRAIN.trapRisk(feat, regime, dir) : 0;
   if (!M.pos[sym] && dir !== 0 && risk >= 0.8) feed(`[${shortMd(name)}] ${ko} ${dir > 0 ? "롱" : "숏"} 보류 — 과거 손절과 ${Math.round(risk * 100)}% 유사(뇌 회피)`);   // 🛑 반복 손절 차단
   else if (!M.pos[sym] && dir !== 0) { M.pos[sym] = { ko, side: dir, entry: price, price, size: START * 0.2, roe: 0, t: Date.now(), feat: { ...feat } }; feed(`[${shortMd(name)}] ${ko} ${dir > 0 ? "▲롱" : "▼숏"} 진입 @ ${fmt(price)} (${conf}%)`); }
@@ -310,7 +315,7 @@ export async function designStrategy() {
     await brainStream({ messages: [
       { role: "system", content: `너는 코인 선물 퀀트다. 아래 보조지표들을 조합해 BTCUSDT 1시간봉 매매법 하나를 설계한다. 반드시 custom 수식 지표를 1개 이상 포함(예: {"id":"vm","type":"custom","expr":"rsi*0.5+close/sma-1"}). 아래 JSON 스키마로만 출력(설명·코드블록 금지):\n{"name":"이름","indicators":[{"id":"r","type":"tv_rsi","length":14},{"id":"vm","type":"custom","expr":"수식"}],"long_entry":{"conditions":[{"left":"r","op":"<","right":35}]},"long_exit":{"conditions":[{"left":"r","op":">","right":65}]},"risk":{"leverage":2,"stop_loss_pct":4,"take_profit_pct":8}}\n쓸 수 있는 지표: ${catalog}.${M.lessons.length ? " 내 교훈: " + M.lessons.join(" / ") : ""}${BRAIN.recallText("BTC", "", 4) ? " 자체 뇌 패턴: " + BRAIN.recallText("BTC", "", 4) : ""} 뇌가 이득났던 규칙(반영해 설계): ${BRAIN.refineForProfit("BTC", "").text}` },
       { role: "user", content: "매매법 JSON 하나만 출력:" }],
-      role: "code", target: tgt, fallback: true, maxTokens: 700, temperature: 0.6, noThink: true, onContent: d => raw += d, onThink: () => {} });
+      role: "code", target: tgt, fallback: true, json: true, maxTokens: 700, temperature: 0.6, noThink: true, onContent: d => raw += d, onThink: () => {} });
   } catch (e) { feed(`[${shortMd(tgt.model)}] 매매법 설계 응답 실패`); return; }
   let spec; try { spec = JSON.parse((raw.match(/\{[\s\S]*\}/) || [])[0]); } catch (e) { feed(`[${shortMd(tgt.model)}] 매매법 JSON 형식 오류`); return; }
   if (!spec || !spec.indicators) return;

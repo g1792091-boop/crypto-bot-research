@@ -395,7 +395,7 @@ async function streamLocal({messages, maxTokens, temperature, signal, onContent,
   const p = localLock.then(go1, go1); localLock = p.catch(() => {}); return p;
 }
 // OpenAI 호환 스트리밍 (각 회사 · Ollama)
-async function streamOAI(target, {messages, maxTokens, temperature, signal, onContent, onThink, onStats, stop, think, noThink}){
+async function streamOAI(target, {messages, maxTokens, temperature, signal, onContent, onThink, onStats, stop, think, noThink, json}){
   const isOl = target.id === "ollama";
   const url = isOl ? apiBase("ollama") + "/v1/chat/completions" : provBase(target.id) + "/chat/completions";
   const headers = {"content-type": "application/json", accept: "text/event-stream"};
@@ -409,6 +409,7 @@ async function streamOAI(target, {messages, maxTokens, temperature, signal, onCo
   const msgs = canSee ? messages.map(m => m.images?.length ? {role: m.role, content: [{type: "text", text: m.content}, ...m.images.map(url => ({type: "image_url", image_url: {url}}))]} : {role: m.role, content: m.content}) : stripImages(messages, `${shortModel(target.model)}는 이미지를 볼 수 없습니다`);
   const body = {model: target.model, messages: msgs, stream: true, max_tokens: maxTokens, temperature};
   if (noSampling) delete body.temperature;
+  if (json && (isOl || target.id === "nvidia" || target.id === "openrouter" || target.id === "together" || target.id === "groq")) body.response_format = {type: "json_object"};   // 강제 JSON 출력(지원 회사만) — 작은 로컬 모델이 설명만 늘어놓는 것 방지
   // 생각 끄기(noThink): 추론 모델이 영어로 길게 생각만 하다 끝나는 것을 막는다 (모델마다 끄는 방법이 다름)
   let kw = false;
   if (noThink || think === false){
