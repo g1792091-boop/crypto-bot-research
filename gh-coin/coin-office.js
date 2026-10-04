@@ -225,6 +225,7 @@ const ACTIONS = [
   {job: "ensemble", re: /앙상블\s*포트|포트폴리오|분산\s*(투자|운용|배분)|비중\s*(배분|분배|나눠)|여러\s*전략.{0,6}(묶|섞|합)|자본\s*배분/i, say: "데모거래팀이 신뢰점수 상위 전략들을 묶어 분산 포트폴리오(전략별 자본 비중)를 제안합니다"},
   {job: "reality", re: /1\s*억|얼마.{0,4}(벌|버|먹|불)|부자|대박|떡상|목표\s*수익|돈.{0,4}벌어|며칠.{0,6}얼마|현실\s*점검|가능\s*하냐|될\s*수\s*있/i, say: "CEO실이 '정직한 현실 점검'으로 목표 수익의 실제 도달·파산 확률을 몬테카를로로 솔직히 보여줍니다 (희망 회로 금지)"},
   {job: "preset", re: /프리셋|준비된\s*매매법|기본\s*전략|고전\s*전략|rsi.{0,4}macd|RSI.{0,4}MACD|프리\s*셋|전략\s*비교/i, say: "준비된 매매법 프리셋(RSI·MACD·볼린저·스토캐스틱·EMA 등)을 AI 없이 바로 백테스트해 수익률·신뢰점수로 비교합니다 (io-uty 아이디어)"},
+  {job: "survival", re: /생존|다윈|진화|해고|도태|번식|자연\s*선택|개발자.{0,4}(성과|평가|kpi|KPI)|KPI/i, say: "생존 경쟁 — 개발자 KPI(성과 못 내면 경고·재교육)와 다윈 전략 진화(잘하는 전략을 변이시켜 부모보다 나은 후손만 데모로 번식)를 돌립니다 (가상자금)"},
   {job: "track", re: /적중률|캘리브레이션|승률|예측.{0,6}(맞|정확|적중)|얼마나\s*맞|확신도\s*(검증|맞)/i, say: "CEO실에서 QA가 지금까지의 예측을 채점해 적중률과 확신도 캘리브레이션을 보고합니다"},
   {job: "report", re: /대시보드|성과\s*(보여|요약|대시|정리|보고|어때)|전체\s*수익|실적\s*(보|요약)|얼마.{0,3}벌/i, say: "CEO가 지금 바로 성과 대시보드(총 손익·전략별 기여·적중률·심리)를 한눈에 정리합니다"},
   {job: "selfai", re: /자체\s*ai|자체\s*인공지능|앙상블|트레이딩\s*데스크|자체\s*모델|ghcoinai|확신도\s*순위|ai\s*데스크/i, say: "자체 AI 데스크가 지금 바로 외부 키 없이 앙상블(기술 평점·멀티 시간대·ML·알파)로 코인 방향·확신도 순위를 냅니다"},
@@ -704,14 +705,14 @@ export function startChatter(){
 // 매 주기 ① 모의투자 장부를 실제 시세로 갱신(코드, AI 없음) ② 그때그때 한 가지 일을 고른다:
 // 매매법 연구 · SNS 여론 · 경제 리서치 · 동료 수다 · 컴퓨터 작업 · 모의투자 보고 (하루 AI 호출 한도 안에서)
 // 쉬지 않고 돌아가는 업무 순환표: 팀마다 고르게 돌아가도록 섞어 두었다 (모듈이 없으면 경제 리서치로 대신)
-const JOBS = ["plan", "dev", "combo", "ic", "bot", "ind", "qrisk", "trend", "data", "opt", "patscan", "situ", "cdev", "entry", "sr", "news", "sent", "pos", "contest", "ensemble", "reality", "preset", "track", "report", "promote", "pattern", "coin", "ml", "selfai", "dev", "tpsl", "combo", "drift", "cdev", "feeds", "alpha", "bot", "botopt", "selfai", "plan", "trend", "ic", "chat", "forecast", "coin", "live", "retro", "task", "selfdev", "macro", "sns", "computer", "paper"];
-const JOB_KO = {plan: "리서치 플래너(할 일 목록 → 워커 배정)", sent: "시장 심리(자체 감정 엔진)", pos: "단타·스윙 포지션 추천", contest: "전략 콘테스트(데모 성과 리더보드)", ensemble: "앙상블 포트폴리오(신뢰점수로 비중 배분)", reality: "정직한 현실 점검(목표 수익 도달·파산 확률)", preset: "준비된 매매법 프리셋 비교(io-uty RSI·MACD + 지표 146종)", track: "예측 적중률·캘리브레이션", report: "성과 대시보드", bot: "자동매매봇 전략 만들기", botopt: "자동매매봇 자동 개선(보조지표·위험값 하이퍼옵트)", selfai: "자체 AI 데스크(앙상블 방향·확신도 순위)", ic: "투자위원회(강세·약세 토론 → 결정)", qrisk: "퀀트 리스크(VaR·결정표·주문 전 점검)", data: "거래소 비교·데이터 품질", opt: "하이퍼옵트로 전략 다듬기", patscan: "패턴 스캐너", drift: "데모 성과 이동 감지(런 차트)", feeds: "경제 캘린더·금리·변동성 지수", alpha: "알파 팩터 순위", combo: "실시간 종합 지표 타점", dev: "매매법 개발 → 백테스트", cdev: "커스텀 지표 개발 → 백테스트", ind: "보조지표 분석", trend: "다중 시간대 추세 분석", entry: "진입 타점 분석", sr: "지지·저항 분석",
+const JOBS = ["plan", "dev", "combo", "ic", "bot", "ind", "qrisk", "trend", "data", "opt", "patscan", "situ", "cdev", "entry", "sr", "news", "sent", "pos", "contest", "ensemble", "reality", "preset", "survival", "track", "report", "promote", "pattern", "coin", "ml", "selfai", "dev", "tpsl", "combo", "drift", "cdev", "feeds", "alpha", "bot", "botopt", "selfai", "plan", "trend", "ic", "chat", "forecast", "coin", "live", "retro", "task", "selfdev", "macro", "sns", "computer", "paper"];
+const JOB_KO = {plan: "리서치 플래너(할 일 목록 → 워커 배정)", sent: "시장 심리(자체 감정 엔진)", pos: "단타·스윙 포지션 추천", contest: "전략 콘테스트(데모 성과 리더보드)", ensemble: "앙상블 포트폴리오(신뢰점수로 비중 배분)", reality: "정직한 현실 점검(목표 수익 도달·파산 확률)", preset: "준비된 매매법 프리셋 비교(io-uty RSI·MACD + 지표 146종)", survival: "생존 경쟁(개발자 KPI + 다윈 전략 진화)", track: "예측 적중률·캘리브레이션", report: "성과 대시보드", bot: "자동매매봇 전략 만들기", botopt: "자동매매봇 자동 개선(보조지표·위험값 하이퍼옵트)", selfai: "자체 AI 데스크(앙상블 방향·확신도 순위)", ic: "투자위원회(강세·약세 토론 → 결정)", qrisk: "퀀트 리스크(VaR·결정표·주문 전 점검)", data: "거래소 비교·데이터 품질", opt: "하이퍼옵트로 전략 다듬기", patscan: "패턴 스캐너", drift: "데모 성과 이동 감지(런 차트)", feeds: "경제 캘린더·금리·변동성 지수", alpha: "알파 팩터 순위", combo: "실시간 종합 지표 타점", dev: "매매법 개발 → 백테스트", cdev: "커스텀 지표 개발 → 백테스트", ind: "보조지표 분석", trend: "다중 시간대 추세 분석", entry: "진입 타점 분석", sr: "지지·저항 분석",
   tpsl: "익절·손절 관리", news: "뉴스·기사 분석", macro: "경제지표 예측", situ: "코인 상황판", pattern: "차트·캔들 패턴 분석", coin: "코인팀 회의", ml: "머신러닝·딥러닝 실험",
   promote: "데모 → 실거래 관문 심사", live: "실거래 데스크 점검", paper: "데모거래 보고", forecast: "방향 예측 토론", sns: "SNS 여론 확인", chat: "동료 수다", computer: "컴퓨터 작업",
   retro: "팀 회고·부족한 점 찾기", task: "개선 과제 수행", selfdev: "우리 앱 오류 찾아 코드 고치기", economy: "경제 리서치"};
-const JOB_TEAM = {plan: "hq", sent: "news", pos: "entry", contest: "demo", ensemble: "demo", reality: "hq", preset: "demo", track: "hq", report: "hq", bot: "bot", botopt: "bot", selfai: "selfai", ic: "ic", qrisk: "qrisk", data: "data", opt: "opt", patscan: "pattern", drift: "demo", feeds: "news", alpha: "ml", combo: "combo", dev: "dev", cdev: "cdev", ind: "ind", trend: "trend", entry: "entry", sr: "sr", tpsl: "tpsl", news: "news", macro: "news", situ: "situ", pattern: "pattern", coin: "btc", ml: "ml",
+const JOB_TEAM = {plan: "hq", sent: "news", pos: "entry", contest: "demo", ensemble: "demo", reality: "hq", preset: "demo", survival: "demo", track: "hq", report: "hq", bot: "bot", botopt: "bot", selfai: "selfai", ic: "ic", qrisk: "qrisk", data: "data", opt: "opt", patscan: "pattern", drift: "demo", feeds: "news", alpha: "ml", combo: "combo", dev: "dev", cdev: "cdev", ind: "ind", trend: "trend", entry: "entry", sr: "sr", tpsl: "tpsl", news: "news", macro: "news", situ: "situ", pattern: "pattern", coin: "btc", ml: "ml",
   promote: "demo", live: "live", paper: "demo", forecast: "entry", sns: "news", chat: "hq", computer: "hq", retro: "hq", task: "hq", selfdev: "hq", economy: "news"};
-const JOB_FN = () => ({plan: plannerJob, sent: sentimentJob, pos: posJob, contest: contestJob, ensemble: ensembleJob, reality: realityJob, preset: presetJob, track: trackJob, report: dashboardJob, bot: botJob, botopt: botImproveJob, selfai: selfaiJob, ic: icJob, qrisk: qriskJob, data: dataJob, opt: optJob, patscan: patternScanJob, drift: driftJob, feeds: openFeedsJob, alpha: alphaJob, combo: comboJob, dev: () => research("std"), cdev: () => research("custom"), ind: indJob, trend: trendJob, entry: entryJob, sr: srJob, tpsl: tpslJob, news: economyCheck, macro: macroJob,
+const JOB_FN = () => ({plan: plannerJob, sent: sentimentJob, pos: posJob, contest: contestJob, ensemble: ensembleJob, reality: realityJob, preset: presetJob, survival: survivalJob, track: trackJob, report: dashboardJob, bot: botJob, botopt: botImproveJob, selfai: selfaiJob, ic: icJob, qrisk: qriskJob, data: dataJob, opt: optJob, patscan: patternScanJob, drift: driftJob, feeds: openFeedsJob, alpha: alphaJob, combo: comboJob, dev: () => research("std"), cdev: () => research("custom"), ind: indJob, trend: trendJob, entry: entryJob, sr: srJob, tpsl: tpslJob, news: economyCheck, macro: macroJob,
   situ: situJob, pattern: patternJob, coin: coinJob, ml: mlJob, promote: promoteJob, live: liveDeskJob, paper: paperReport, forecast: forecastJob, sns: snsCheck, chat: () => chatter(true),
   computer: computerWork, retro, task: doTask, selfdev: selfdevJob, economy: economyCheck});
 let cycleTimer = 0, cycling = false, lastJob = "";
@@ -2093,6 +2094,52 @@ async function presetJob(){
     }
   }
   addNote("demo", `프리셋 비교 ${PRE.length}개 · 데모 승격 ${promoted}개 (1위 ${results[0]?.pr.name} 신뢰 ${results[0]?.trust})`, "프리셋");
+}
+
+/* ---- 🧬 생존 경쟁 — 개발자 KPI(성과 못 내면 경고) + 다윈 전략 진화(잘하는 전략 변이→부모보다 나은 후손만 생존) ----
+   아이디어: cubexch/ai-fund(KPI 해고) · 0xSanei/darwinia·atlas-gic(다윈 진화). 전부 데모(가상)에서만 — 실자금·실지갑 없음. */
+function _stratTrust(P, s){
+  const tr = s.trades || [], n = tr.length, wins = tr.filter(t => (t.pnl ?? t.roe ?? 0) > 0).length;
+  const ret = (P.equityOf(s) / 10000 - 1) * 100, wr = n ? wins / n * 100 : 0, pf = s.wf?.oos?.pf ?? null;
+  return {ret, n, trust: trustScore({ret, wr, pf, n, robust: s.robust, crossCoin: s.crossCoin})};
+}
+async function survivalJob(){
+  const Q = await import("../nuri-ai/quant.js"), P = await import("../nuri-ai/paper.js"), book = await P.loadBook(), lead = agentById("trader");
+  const EV = await lib("evolve");
+  const act = book.strategies.filter(s => s.spec);
+  // 1) 개발자 KPI (ai-fund 식 성과표)
+  const by = {};
+  for (const s of act){ const a = s.author || "?", o = by[a] || (by[a] = {author: a, n: 0, live: 0, dead: 0, ts: 0, pnl: 0, pass: 0});
+    const t = _stratTrust(P, s); o.n++; o.ts += t.trust; o.pnl += P.equityOf(s) - 10000; if (s.status === "active") o.live++; else o.dead++; if ((s.robust?.ok) !== false && t.trust >= 45) o.pass++; }
+  const devs = Object.values(by).map(o => ({...o, avg: o.n ? Math.round(o.ts / o.n) : 0})).sort((a, b) => b.avg - a.avg || b.pnl - a.pnl);
+  if (devs.length){
+    table("demo", lead.id, "🧬 개발자 KPI — 생존 경쟁 (성과 못 내면 경고·재교육)", ["순위", "개발자", "전략수", "평균 신뢰", "합격(45+)", "데모손익", "상태"],
+      devs.map((d, i) => [String(i + 1), d.author, `${d.n}(운용 ${d.live})`, String(d.avg), `${d.pass}/${d.n}`, "₩" + Math.round(d.pnl).toLocaleString(), d.avg >= 55 ? "🏆 우수" : d.avg < 35 ? "⚠ 성과경고" : ""]),
+      "평균 신뢰점수·합격률·데모손익 종합. 35 미만은 '성과 경고'(해고 대신 재교육: 더 견고한 전략을 만들도록 과제) · 전부 가상자금 기준");
+    for (const d of devs.filter(x => x.avg < 35 && x.n >= 3)) addTask({team: "dev", title: `성과 경고 — ${d.author} 재교육`, why: `담당 전략 평균 신뢰 ${d.avg} · 합격 ${d.pass}/${d.n} — 더 견고한(과최적화 아닌) 전략을 만들도록`, owner: agentById("qa")?.name || lead.name});
+  }
+  // 2) 다윈 전략 진화 — 상위 전략을 변이시켜 백테스트, 검증 통과 + 부모보다 나은 후손만 데모로 '번식'
+  const live = act.filter(s => s.status === "active").map(s => ({s, ..._stratTrust(P, s)})).sort((a, b) => b.trust - a.trust);
+  const rows = [], st = x => ({ret: +(x?.return_pct ?? 0), dd: +(x?.max_dd_pct ?? 0), win: +(x?.win_rate ?? 0), pf: x?.profit_factor == null ? null : +x.profit_factor, n: x?.n_trades ?? 0});
+  let bred = 0;
+  for (const par of live.slice(0, 3)){
+    let cs; try { cs = await kl(par.s.market, par.s.tf, 1500); } catch(e){ continue; }
+    let win = null;
+    for (let i = 0; i < 6; i++){
+      let child; try { child = Q.normalizeSpec(EV.mutate(par.s.spec, Date.now() + i * 7919)); } catch(e){ continue; }
+      const wf = Q.walkForward(child, cs), bt = Q.backtest(child, cs);
+      const ct = trustScore({ret: +(wf.oos?.return_pct ?? 0), wr: +(wf.oos?.win_rate ?? 0), pf: wf.oos?.profit_factor ?? null, n: wf.oos?.n_trades ?? 0, robust: par.s.robust});
+      if (wf.pass && ct > par.trust && (!win || ct > win.ct)){ win = {child, wf, bt, ct}; }
+    }
+    if (win && bred < 2){
+      const s = await P.addStrategy({spec: win.child, market: par.s.market, exchange: par.s.exchange, tf: par.s.tf, author: `진화(${par.s.author || "?"})`, wf: {is: st(win.wf.is), oos: st(win.wf.oos)}, cls: par.s.cls, mname: par.s.mname, robust: par.s.robust, crossCoin: par.s.crossCoin});
+      post({ch: "demo", kind: "system", text: `🧬 진화 성공: ${s.name} — 부모 신뢰 ${par.trust} → 후손 ${win.ct} (데모 시작)`});
+      rows.push([par.s.name.slice(0, 20), String(par.trust), win.child.name.slice(0, 20), String(win.ct), "✅ 번식"]); bred++;
+    } else rows.push([par.s.name.slice(0, 20), String(par.trust), "—", "—", "부모 유지(이긴 후손 없음)"]);
+  }
+  if (rows.length) table("demo", lead.id, "🧬 다윈 전략 진화 — 변이 후손이 부모보다 나으면 번식", ["부모 전략", "부모 신뢰", "후손", "후손 신뢰", "결과"], rows,
+    "상위 전략을 지표 기간·위험값·조건을 흔들어 변이시키고, 검증(70/30) 통과 + 부모보다 신뢰 높은 후손만 데모에 올립니다(약자 도태는 적응형 재학습이 담당) · 가상자금 기준");
+  addNote("demo", `생존 경쟁: 개발자 ${devs.length}명 · 진화 번식 ${bred}개`, "생존");
 }
 
 /* ---- 🕯 패턴 스캐너 (stock-pattern · chart_patterns 규칙) → 차트·캔들 패턴팀 ---- */
