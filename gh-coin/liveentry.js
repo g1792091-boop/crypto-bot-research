@@ -113,7 +113,13 @@ export async function analyzeCoin(sym, ctx = {}) {
   // 모멘텀
   const m15 = A["15"], i15 = k15.length - 1, rsi15 = last(m15.rsi), rsi1h = last(A["60"].rsi), hist15 = m15.macd.hist, sk = last(m15.sto.k);
   const macdUp = at(hist15, i15) > at(hist15, i15 - 1), bbU = last(m15.bb.upper), bbL = last(m15.bb.lower), vwap = last(m15.vwap);
-  const out = { sym, ko: sym.replace("USDT", ""), t: Date.now(), price, atr15, atr1h, trend, tr, adx1h, rsi15, rsi1h, book, levels: lv, sides: [] };
+  // 📈 내 차트 터미널 보조지표: 15분·1시간봉에서 지금 방향 + '지금과 같은 상태(80%↑ 일치)'였던 과거 봉 찾기
+  let MY = null;
+  if (ctx.myInds !== false) { try { const RD = await import("../nuri-ai/terminal/readings.js"), specs = ctx.specs || RD.userInds();
+    if (specs.length) { const r15 = RD.readings(RD.toTerm(k15), specs), r1h = RD.readings(RD.toTerm(k1h), specs);
+      if (r15.items.length) MY = { r15, r1h, names: r15.items.map(x => x.name), now15: r15.items.map(x => x.dir), now1h: r1h.items.map(x => x.dir), agree: RD.agree }; } } catch (e) {} }
+  const out = { sym, ko: sym.replace("USDT", ""), t: Date.now(), price, atr15, atr1h, trend, tr, adx1h, rsi15, rsi1h, book, levels: lv, sides: [],
+    myInd: MY ? MY.r15.items.map((x, k) => ({ name: x.name, d15: x.dir, d1h: MY.r1h.items[k]?.dir ?? 0 })) : null };
   for (const side of [1, -1]) {
     const S = side > 0 ? sup : res, R = side > 0 ? res : sup, why = [], warn = [];
     // 손절: 가장 가까운 구조 레벨 너머 + 0.25 ATR(15분) · 최소 0.3% · 최대 2%
@@ -142,6 +148,14 @@ export async function analyzeCoin(sym, ctx = {}) {
     const condTrend1h = i => Math.sign(trendAt("60", i) || 0) === Math.sign(tr["60"] || side);
     const tb1h = tripleBarrier(k1h, A["60"], { ...plan, H: 12, cond: condTrend1h });
     const tbTP1 = tripleBarrier(k15, m15, { side, slPct, tpPct: tp2Pct, H: 48, cond: condTrend15 });   // 참고: 끝까지 익절2 만 노렸을 때
+    // 내 지표가 지금과 같은 상태였던 과거(15분 + 1시간)에서 같은 계획의 결과
+    let my = null;
+    if (MY) { const L15 = k15.length - 1, L1 = k1h.length - 1;
+      const a = tripleBarrier(k15, m15, { ...plan, H: 48, cond: i => MY.agree(MY.r15, L15, i) >= 0.8 }), b2 = tripleBarrier(k1h, A["60"], { ...plan, H: 12, cond: i => MY.agree(MY.r1h, L1, i) >= 0.8 });
+      const nn = a.n + b2.n, base0 = tripleBarrier(k15, m15, { ...plan, H: 48 }), N1 = 150;
+      const wr0 = nn ? (a.wr * a.n + b2.wr * b2.n) / nn : 0, ex0 = nn ? (a.exp * a.n + b2.exp * b2.n) / nn : 0;
+      const v15 = MY.now15.filter(x => x === side).length, o15 = MY.now15.filter(x => x === -side).length, v1h = MY.now1h.filter(x => x === side).length, o1h = MY.now1h.filter(x => x === -side).length;
+      my = { n: nn, wrRaw: +wr0.toFixed(1), wr: +((wr0 * nn + base0.wr * N1) / (nn + N1)).toFixed(1), exp: +((ex0 * nn + base0.exp * N1) / (nn + N1)).toFixed(3), v15, o15, v1h, o1h, total: MY.now15.length }; }
     const nT = tb15.n + tb1h.n, wrRaw = nT ? (tb15.wr * tb15.n + tb1h.wr * tb1h.n) / nT : 0, expRaw = nT ? (tb15.exp * tb15.n + tb1h.exp * tb1h.n) / nT : 0;
     // 과신 보정(베이지안 축소): 같은 계획을 '조건 없이' 아무 때나 했을 때의 기준값 쪽으로 당긴다. 표본외 검증에서 날것의 통계는 익절1 도달률을 3~9%p 과대평가했음.
     const base = tripleBarrier(k15, m15, { ...plan, H: 48 }), N0 = 250;
@@ -175,6 +189,10 @@ export async function analyzeCoin(sym, ctx = {}) {
     if (V.ml?.prob != null) vt += (side > 0 ? V.ml.prob >= 0.55 : V.ml.prob <= 0.45) ? 1 : 0;
     if (ctx.libSignal && ctx.libSignal.side === side) { vt += 1; why.push(`검증 매매법 신호: ${ctx.libSignal.name}`); }
     sc += Math.max(-6, Math.min(12, vt * 4)); if (vt > 0) why.push(`팀 판정 ${vt}개 일치`); if (vt < 0) warn.push("팀 판정 반대");
+    if (my && my.total) { const f = (my.v15 + my.v1h) / Math.max(1, my.v15 + my.v1h + my.o15 + my.o1h);
+      (f >= 0.6 ? why : f <= 0.4 ? warn : why).push(`내 차트 지표 ${side > 0 ? "롱" : "숏"} 쪽 15분 ${my.v15}/${my.total} · 1시간 ${my.v1h}/${my.total}`);
+      // 2개월 표본외: 지표가 80%↑ 같은 방향일 때 그 방향 시장가 진입 = 평균 −0.15R(가장 나쁨, 이미 움직인 뒤 추격) → 점수 가산 대신 경고
+      if (f >= 0.8) { warn.push("지표가 거의 다 같은 방향 = 이미 움직인 뒤일 가능성(표본외 평균 −0.15R) — 추격 주의"); sc -= 5; } else sc += Math.round((f - 0.5) * 8); }
     sc = Math.max(0, Math.min(100, Math.round(sc)));
     const rr = +(tp2Pct / slPct).toFixed(2), rr1 = +(tp1Pct / slPct).toFixed(2);
     // 등급 (2개월·6코인 표본외 검증 결과로 다시 정함): 스냅샷 지표·지지저항·호가 조합만으로는 표본외 우위가 없었다(전체 −0.12R, 최선 조합도 ≈0R).
@@ -185,7 +203,7 @@ export async function analyzeCoin(sym, ctx = {}) {
       : grade === "보통" ? "추세 동행(3개 시간대 일치·ADX 25↑) — 2개월 표본외 검증 ≈ 0R, 통계적 우위 미확인" : "검증된 근거 없음 — 관망 권장";
     const lev = Math.max(1, Math.min(sym === "BTCUSDT" ? 100 : 50, Math.floor(0.4 / slPct)));   // 청산공식: 손절 = 청산거리 40% 이하 (상한 BTC 100x·알트 50x)
     out.sides.push({ side, grade, score: sc, entry: price, sl: +slPx.toPrecision(7), tp1: +tp1.toPrecision(7), tp2: +tp2.toPrecision(7), slPct: +(slPct * 100).toFixed(2), tp1Pct: +(tp1Pct * 100).toFixed(2), tp2Pct: +(tp2Pct * 100).toFixed(2),
-      rr, rr1, wr, exp, n: nT, evidence, sig: sig ? { name: sig.name, tf: sig.tf, mean: sig.mean, n: sig.n, wr: sig.wr, t: sig.t } : null, wrRaw: +wrRaw.toFixed(1), expRaw: +expRaw.toFixed(3), base: { wr: base.wr, exp: base.exp }, wrTP2only: tbTP1.wr, expTP2only: tbTP1.exp, tb: { m15: tb15, h1: tb1h }, lev, liq: +(price * (1 - side * 0.95 / lev)).toPrecision(7), slLevel: slLv ? { price: slLv.price, src: slLv.src, strength: slLv.strength } : null,
+      rr, rr1, wr, exp, n: nT, evidence, my, sig: sig ? { name: sig.name, tf: sig.tf, mean: sig.mean, n: sig.n, wr: sig.wr, t: sig.t } : null, wrRaw: +wrRaw.toFixed(1), expRaw: +expRaw.toFixed(3), base: { wr: base.wr, exp: base.exp }, wrTP2only: tbTP1.wr, expTP2only: tbTP1.exp, tb: { m15: tb15, h1: tb1h }, lev, liq: +(price * (1 - side * 0.95 / lev)).toPrecision(7), slLevel: slLv ? { price: slLv.price, src: slLv.src, strength: slLv.strength } : null,
       tpLevels: tgt.slice(0, 2).map(l => ({ price: l.price, src: l.src, strength: l.strength })), why, warn,
       limitAlt: tooFar && slLv ? { entry: +(slLv.price + side * atr15 * 0.2).toPrecision(7), note: `구조 손절이 ${(slPct * 100).toFixed(1)}%로 멀어 시장가 부적합 → ${fmt(slLv.price)} 근처 지정가 대기` } : null,
       validUntil: Date.now() + 15 * 60e3, invalidPx: +(price + side * Math.abs(price - slPx) * 0.3).toPrecision(7) });

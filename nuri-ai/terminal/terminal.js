@@ -143,6 +143,7 @@ class Terminal {
         <select class="nt-layout" title="화면 분할">${Object.entries(LAYOUTS).map(([k, n]) => `<option value="${k}">${n}</option>`).join("")}</select>
         <button data-nt="shot" title="스크린샷 저장">${IC.shot}</button>
         <button data-nt="side" class="nt-tog" title="흐름 · 전략 패널">${IC.side}<span>패널</span></button>
+        <button data-nt="mkt" class="nt-mkt-btn" title="지금 이 코인에 시장가로 들어간다면? — 지지·저항·매수벽/매도벽·15분/1시간/4시간 추세·내 보조지표를 분석하고 GH Coin 에이전트 팀과 뉴트론이 토론해 롱/숏·손절·익절·승률을 알려줍니다 (주문은 안 함)">⚡ 시장가</button>
         <span class="nt-grow"></span>
         <span class="nt-badge" title="분석 전용 — 주문은 트레이딩 모듈에서">분석 전용</span>
         <button class="nt-close" data-nt="close" title="닫기 (Esc)" aria-label="닫기">✕</button>
@@ -297,6 +298,7 @@ class Terminal {
         break;
       }
       case "shot": this._shot(); break;
+      case "mkt": this._marketEntry(); break;
       case "side": S.side = !S.side; this._save(); this._syncSide(); this.cur?.tc.refreshFlow(); break;
       case "example": this.root.querySelector(".nt-strat").value = JSON.stringify({ ...EXAMPLE, interval: this.S.cells[this.S.active].interval }, null, 2); break;
       case "strat-run": this._runStrat(); break;
@@ -661,6 +663,37 @@ class Terminal {
       this.strat = null; this.cells.forEach((x) => x.tc.setStrategyMarkers([]));
       out.innerHTML = `<div class="down">${this.esc(e.message || e)}</div>${e.problems ? `<ul>${e.problems.map((p) => `<li>${this.esc(p)}</li>`).join("")}</ul>` : ""}`;
     }
+  }
+  // ------------------------------------------------------------ ⚡ 시장가 (손매매용): GH Coin 분석 + 에이전트 팀 ↔ 뉴트론 토론
+  async _marketEntry() {
+    const cfg = this.S.cells[this.S.active] || {}, e = (x) => this.esc(String(x ?? ""));
+    if (typeof window.ghCoinMarketEntry !== "function") { this.toast("⚡ 시장가는 GH Coin 앱에서 쓸 수 있습니다 (GHCoin.exe)", "err"); return; }
+    let sym = String(cfg.symbol || "BTCUSDT").toUpperCase(); const m = sym.match(/^KRW-(\w+)$/); if (m) sym = m[1] + "USDT"; if (!/USDT$/.test(sym)) sym += "USDT";
+    let pn = this.root.querySelector(".nt-mkt"); if (!pn) { pn = document.createElement("div"); pn.className = "nt-mkt"; this.root.appendChild(pn); }
+    const steps = [];
+    const head = `<div class="nt-mkt-h"><b>⚡ 시장가 · ${e(sym.replace("USDT", ""))}</b><span class="muted">코인 선물 기준 · 주문은 직접</span><button data-x>✕</button></div>`;
+    const paint = (body) => { pn.innerHTML = head + body; pn.querySelector("[data-x]").onclick = () => pn.remove(); };
+    paint(`<div class="nt-mkt-st">분석 시작…</div>`);
+    const btn = this.root.querySelector('[data-nt="mkt"]'); if (btn) btn.disabled = true;
+    try {
+      const r = await window.ghCoinMarketEntry(sym, (t) => { steps.push(t); paint(`<div class="nt-mkt-st">${steps.map((x, i) => `<div>${i === steps.length - 1 ? "⏳" : "✓"} ${e(x)}</div>`).join("")}</div>`); });
+      const b = r.best, o = r.other, d = r.decision, L = b.side > 0, f = (v) => v == null ? "—" : (+v >= 1000 ? Math.round(+v).toLocaleString() : (+v).toPrecision(6).replace(/\.?0+$/, ""));
+      const db = b.debate || {}, side = (x) => `<div class="nt-mkt-cmp ${x === b ? "on" : ""}"><b class="${x.side > 0 ? "up" : "down"}">${x.side > 0 ? "롱" : "숏"}</b> 익절1 도달 ${x.wr}% · 기대값 ${x.exp >= 0 ? "+" : ""}${x.exp}R${x.my ? ` · 내 지표 같은 상태 ${x.my.wr}%` : ""} · <span class="muted">${e(x.grade)}</span></div>`;
+      paint(`<div class="nt-mkt-dec ${d.go ? "go" : "no"}">${e(d.label)}</div>
+        <div class="nt-mkt-px"><div><small>시장가</small><b>${f(b.entry)}</b></div><div><small>손절 −${b.slPct}%</small><b class="down">${f(b.sl)}</b></div><div><small>익절1 ${b.rr1}R</small><b class="up">${f(b.tp1)}</b></div><div><small>익절2 ${b.rr}R</small><b class="up">${f(b.tp2)}</b></div></div>
+        <div class="muted">권장 레버 ≤${b.lev}x · 청산 ${f(b.liq)} · 익절1에서 절반 익절 후 손절을 본전으로</div>
+        <div class="nt-mkt-sec">롱 vs 숏</div>${side(b)}${side(o)}
+        <div class="nt-mkt-sec">근거</div><div class="nt-mkt-chips">📌 ${e(b.evidence)}</div><div class="nt-mkt-chips">${b.why.map((x) => `<span>${e(x)}</span>`).join("")}${b.warn.map((x) => `<span class="w">${e(x)}</span>`).join("")}</div>
+        ${r.myInd?.length ? `<div class="nt-mkt-sec">내 차트 지표 (15분 / 1시간)</div><div class="nt-mkt-chips">${r.myInd.map((x) => `<span class="${x.d15 > 0 ? "" : x.d15 < 0 ? "w" : "n"}">${e(x.name)} ${x.d15 > 0 ? "↑" : x.d15 < 0 ? "↓" : "·"}/${x.d1h > 0 ? "↑" : x.d1h < 0 ? "↓" : "·"}</span>`).join("")}</div>` : `<div class="muted">차트에 띄운 보조지표가 없어 지표 비교는 생략</div>`}
+        <div class="nt-mkt-sec">지지·저항·벽 (가까운 순)</div><div class="nt-mkt-chips">${(r.levels || []).slice().sort((a, c) => Math.abs(a.price - r.price) - Math.abs(c.price - r.price)).slice(0, 8).map((l) => `<span class="${l.price > r.price ? "w" : ""}">${f(l.price)} ${e(l.src.join("+"))}</span>`).join("")}</div>
+        <div class="nt-mkt-sec">⚖ 토론 · ${e(db.verdict || "")}</div>
+        <div class="nt-mkt-db"><b>에이전트 팀(${e(db.team?.who || "")})</b> ${e(db.team?.pick || db.team?.stance || "")} — ${e(db.team?.reason || "")}${db.team?.applied ? ` <span class="muted">(${e(db.team.applied)})</span>` : ""}</div>
+        <div class="nt-mkt-db"><b>뉴트론(${e(db.neural?.model || "—")})</b> ${e(db.neural?.stance || "—")} — ${e(db.neural?.reason || "")}</div>
+        ${db.final ? `<div class="nt-mkt-db"><b>팀 최종</b> ${db.final.keep ? "유지" : "철회"} — ${e(db.final.reason)}</div>` : ""}
+        <div class="muted nt-mkt-foot">승률·기대값은 과거 비슷한 상황을 같은 손절·익절로 시뮬레이션한 값(수수료 포함, 보정)입니다. 2개월 표본외 검증에서 지표·지지저항·호가 조합만으로는 우위가 없었고, '진입 가능'은 검증된 매매법 신호가 있을 때만 표시합니다. 차트에 진입·손절·익절·레벨 선이 그려집니다.</div>`);
+      this._applyAi?.(); this._renderAi?.();
+    } catch (err) { paint(`<div class="down" style="padding:8px">분석 실패: ${e(err.message || err)}</div>`); }
+    if (btn) btn.disabled = false;
   }
   // ------------------------------------------------------------ 🤖 AI 팀 분석 (GH Coin 직원들 → analysisbus.js)
   _aiData(tc) { return this.bus && tc?.symbol ? this.bus.read(tc.symbol) : {}; }

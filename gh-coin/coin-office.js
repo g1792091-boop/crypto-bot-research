@@ -1697,6 +1697,77 @@ export async function runLiveEntry({coins = COINS, debate = true, by = "auto"} =
     return out;
   } finally { rtBusy = false; }
 }
+// ⚡ 시장가 버튼: 한 코인을 지금 바로 분석 → 에이전트 팀 의견 → 뉴트론(뉴럴 데스크) 반박 → 팀 최종 답 → 시장가 추천 (손매매용, 주문 안 함)
+//   롱·숏 둘 다 계산해 '덜 불리한/더 유리한 쪽'을 고르되, 검증된 근거가 없으면 '비권장'이라고 분명히 말한다.
+export async function marketEntryNow({sym = "BTCUSDT", by = "user", onStep = () => {}} = {}){
+  try { await loadLog(); } catch(e){}
+  sym = String(sym).toUpperCase().replace(/^KRW-(\w+)$/, "$1USDT"); if (!/USDT$/.test(sym)) sym += "USDT";
+  const L = await import("./liveentry.js"); let N = null; try { N = await import("./neural.js"); } catch(e){}
+  const c = COINS.find(x => x.sym === sym) || {sym, ko: sym.replace("USDT", ""), id: sym.replace("USDT", "").toLowerCase()};
+  const lead = agentById("strat") || agentById("qa"), V = k => readJ(k, {}) || {};
+  onStep("📊 지지·저항 · 매수벽/매도벽 · 15분/1시간/4시간 추세 · 내 차트 지표 · 고래 · 펀딩 분석 중");
+  const ctx = {verdicts: {ta: V("coinTARating")[c.id], selfAI: V("coinSelfAI")[c.id], ml: V("coinML")[c.id]}};
+  try { ctx.whale = N?.whaleFor ? await N.whaleFor(sym) : null; } catch(e){}
+  try { ctx.libSignal = N?.recentSignal ? N.recentSignal(sym) : null; } catch(e){}
+  try { ctx.funding = await fundScanOf(sym); } catch(e){}
+  const r = await L.analyzeCoin(sym, ctx);
+  // 고르기: 검증 매매법 신호(유력)가 있으면 그쪽, 아니면 '유사상황 기대값'과 '내 지표 같은 상태 기대값'의 평균이 높은 쪽
+  const ce = x => x.grade === "유력" ? 9 + (x.sig?.mean || 0) : (x.exp + (x.my ? x.my.exp : x.exp)) / 2;
+  const [A, B] = [...r.sides].sort((a, b) => ce(b) - ce(a)), pick = A;
+  const ok = (pick.grade === "유력" || pick.grade === "보통") && ce(pick) > 0;
+  const sideTxt = x => `${x.side > 0 ? "롱" : "숏"}: 시장가 ${L.fmtPx(x.entry)} · 손절 ${L.fmtPx(x.sl)}(−${x.slPct}%) · 익절1 ${L.fmtPx(x.tp1)}(${x.rr1}R) · 익절2 ${L.fmtPx(x.tp2)}(${x.rr}R) · 유사상황 익절1 ${x.wr}%·기대값 ${x.exp}R${x.my ? ` · 내 지표 같은 상태 ${x.my.wr}%·${x.my.exp}R(${x.my.n}표본, ${x.side > 0 ? "롱" : "숏"} 쪽 지표 15분 ${x.my.v15}/${x.my.total}·1시간 ${x.my.v1h}/${x.my.total})` : ""} · 등급 ${x.grade} · ${x.evidence}`;
+  const facts = `${c.ko} 현재가 ${L.fmtPx(r.price)} · 추세 15분 ${r.tr["15"]} / 1시간 ${r.tr["60"]} / 4시간 ${r.tr["240"]} · ADX(1h) ${r.adx1h?.toFixed(0)} · RSI(15m) ${r.rsi15?.toFixed(0)}
+지지·저항: ${r.levels.filter(l => Math.abs(l.price / r.price - 1) < 0.03).map(l => `${L.fmtPx(l.price)}(${l.src.join("+")}, 강도 ${l.strength})`).join(", ")}
+호가: ±1% 불균형 ${r.book ? (r.book.imb1 * 100).toFixed(0) + "%" : "—"} · 매수벽 ${r.book?.bidWalls.filter(w => w.stable).slice(0, 2).map(w => L.fmtPx(w.price) + "×" + (w.xAvg || 0).toFixed(1)).join(", ") || "—"} · 매도벽 ${r.book?.askWalls.filter(w => w.stable).slice(0, 2).map(w => L.fmtPx(w.price) + "×" + (w.xAvg || 0).toFixed(1)).join(", ") || "—"}
+내 차트 지표(15분): ${(r.myInd || []).map(x => x.name + (x.d15 > 0 ? "↑" : x.d15 < 0 ? "↓" : "·")).join(" ") || "없음"}
+${sideTxt(A)}
+${sideTxt(B)}
+코드 추천: ${A.side > 0 ? "롱" : "숏"} (${ok ? "진입 가능" : "우위 근거 부족 — 비권장"})`;
+  let team = {who: lead.name, stance: "기권", reason: "AI 없음"}, neural = null, final = null;
+  if (hasAI()){
+    onStep(`⚖ 에이전트 팀(${lead.name}) 의견`);
+    try {
+      const e = await solo(lead, {room: "entry", sys: personaOf(lead, '손매매 고객이 [시장가] 버튼을 눌렀다. 아래 롱·숏 계산을 보고 지금 시장가로 들어간다면 어느 쪽인지 고르고(또는 관망), 손절·익절이 지지·저항·호가 벽 기준으로 더 나은 자리가 있으면 숫자로 제안한다. 확률로 말하고 과장 금지. 반드시 JSON 한 줄: {"pick":"롱"|"숏"|"관망","sl":숫자|null,"tp1":숫자|null,"tp2":숫자|null,"reason":"한 문장"}'), user: facts, maxTokens: 300, json: true});
+      const j = pickJSON(e.raw || e.text) || {};
+      team = {who: lead.name, pick: /숏/.test(j.pick || "") ? "숏" : /롱/.test(j.pick || "") ? "롱" : "관망", reason: String(j.reason || e.text || "").replace(/\s+/g, " ").slice(0, 120), adj: {sl: +j.sl || null, tp1: +j.tp1 || null, tp2: +j.tp2 || null}};
+      team.stance = team.pick === (A.side > 0 ? "롱" : "숏") ? "찬성" : "반대";
+    } catch(e){ team = {who: lead.name, stance: "기권", reason: "응답 실패"}; }
+    // 팀이 고른 쪽의 손절·익절 제안 → 같은 시뮬레이션으로 재검증, 기대값이 나아질 때만 채택
+    const tgt = team.pick === "롱" ? r.sides.find(x => x.side > 0) : team.pick === "숏" ? r.sides.find(x => x.side < 0) : null, a = team.adj || {};
+    if (tgt && (a.sl || a.tp1 || a.tp2)){
+      const e0 = tgt.entry, sd = tgt.side, okSl = a.sl && (e0 - a.sl) * sd > 0 && Math.abs(e0 - a.sl) / e0 >= 0.003 && Math.abs(e0 - a.sl) / e0 <= 0.02, okTp = t => t && (t - e0) * sd > 0;
+      if (okSl || okTp(a.tp1) || okTp(a.tp2)) try { const r2 = await L.analyzeCoin(sym, {...ctx, override: {side: sd, sl: okSl ? a.sl : null, tp1: okTp(a.tp1) ? a.tp1 : null, tp2: okTp(a.tp2) ? a.tp2 : null}}); const b2 = r2.sides.find(x => x.side === sd);
+        if (b2 && b2.exp > tgt.exp + 0.02 && b2.rr1 >= 1){ team.applied = `제안 채택(기대값 ${tgt.exp}R → ${b2.exp}R)`; Object.assign(tgt, {sl: b2.sl, tp1: b2.tp1, tp2: b2.tp2, slPct: b2.slPct, tp1Pct: b2.tp1Pct, tp2Pct: b2.tp2Pct, rr: b2.rr, rr1: b2.rr1, wr: b2.wr, exp: b2.exp, lev: b2.lev, liq: b2.liq}); }
+        else team.applied = `제안 기각(재검증 기대값 ${b2 ? b2.exp : "?"}R ≤ 기존 ${tgt.exp}R)`; } catch(e){}
+    }
+    onStep("🧠 뉴트론(뉴럴 데스크) 반박");
+    neural = N?.debateReply ? await N.debateReply(sideTxt(A), `${team.pick || "?"} 선택 — ${team.reason}`).catch(() => null) : null;
+    if (neural && neural.stance === "반대" && team.stance !== "기권"){
+      onStep(`⚖ ${lead.name} 최종 답변`);
+      try { const e = await solo(lead, {room: "entry", sys: personaOf(lead, '뉴트론의 반박을 듣고 내 선택을 유지할지 철회할지 한 문장으로 답한다. 반드시 JSON 한 줄: {"final":"유지"|"철회","reason":"한 문장"}'), user: `내 선택: ${team.pick} — ${team.reason}\n뉴트론 반박: ${neural.reason}\n계산: ${sideTxt(A)}`, maxTokens: 160, json: true});
+        const j = pickJSON(e.raw || e.text) || {}; final = {keep: !/철회/.test(j.final || ""), reason: String(j.reason || e.text || "").replace(/\s+/g, " ").slice(0, 100)}; } catch(e){}
+    }
+  }
+  // 결론: 데이터가 정한 등급이 기준. 토론은 '둘 다 반대면 한 단계 낮춤'만 (찬성으로 올리지 않음)
+  const votes = [team.stance, neural?.stance].filter(x => x === "찬성" || x === "반대"), con = votes.filter(x => x === "반대").length;
+  let grade = pick.grade; if (con === 2 || (final && !final.keep && neural?.stance === "반대")) grade = grade === "유력" ? "보통" : "관망";
+  // 2개월·6코인 표본외: 지표·지지저항·호가·내 지표 조합으로 '더 나은 쪽'을 골라도 평균 −0.03~−0.12R → '진입 가능'은 검증 매매법 신호(유력)일 때만
+  const go = grade === "유력";
+  const decision = {side: pick.side, grade, go, label: go ? `${pick.side > 0 ? "롱" : "숏"} 시장가 진입 가능 [유력 · 검증 매매법 신호]` : `진입 비권장 — 지금은 검증된 우위 없음 · 굳이 들어간다면 ${pick.side > 0 ? "롱" : "숏"} 쪽이 계산상 덜 불리`};
+  pick.debate = {team, neural, final, verdict: votes.length === 2 ? (con === 0 ? "합의: 찬성" : con === 2 ? "합의: 반대" : "의견 갈림") : votes.length ? "한쪽만 응답" : "토론 없음", t: Date.now()};
+  const res = {t: Date.now(), by, sym, ko: c.ko, price: r.price, tr: r.tr, adx1h: r.adx1h, rsi15: r.rsi15, myInd: r.myInd, book: r.book ? {imb1: r.book.imb1, bidWalls: r.book.bidWalls.slice(0, 3), askWalls: r.book.askWalls.slice(0, 3)} : null,
+    levels: r.levels.filter(l => Math.abs(l.price / r.price - 1) < 0.04).map(l => ({price: l.price, src: l.src, strength: l.strength})), sides: r.sides, best: pick, other: B, decision};
+  writeJ("coinMarketEntry", res);
+  // 실시간 진입 목록에도 이 코인을 갱신 → 뉴럴 데스크 카드·MCP 에 바로 보임
+  try { const cur = readJ("coinLiveEntry", null) || {t: Date.now(), list: []}; const i = cur.list.findIndex(x => x.sym === sym), row = {sym, ko: c.ko, t: res.t, price: r.price, trend: r.trend, tr: r.tr, adx1h: r.adx1h, rsi15: r.rsi15, book: res.book, levels: res.levels, sides: r.sides, best: {...pick, grade}, market: decision};
+    if (i >= 0) cur.list[i] = row; else cur.list.push(row); cur.t = Date.now(); writeJ("coinLiveEntry", cur); } catch(e){}
+  pubTo(sym, "rtentry", {team: "entry", title: `⚡ 시장가: ${decision.label}`, text: `${pick.evidence} · 유사상황 익절1 ${pick.wr}% · 기대값 ${pick.exp}R${pick.my ? ` · 내 지표 같은 상태 ${pick.my.wr}%` : ""}`,
+    lines: [{price: pick.entry, label: "시장가", color: "#ffb300"}, {price: pick.sl, label: `손절 −${pick.slPct}%`, color: "#f23645", style: 2}, {price: pick.tp1, label: `익절1 ${pick.rr1}R`, color: "#26a69a", style: 2}, {price: pick.tp2, label: `익절2 ${pick.rr}R`, color: "#26a69a", style: 1},
+      ...res.levels.slice(0, 10).map(l => ({price: l.price, label: l.src.join("+") + ` (${l.strength})`, color: l.price > r.price ? "#ff9800" : "#2962ff", style: 3}))]});
+  post({ch: "entry", kind: "work", agent: lead.id, icon: "⚡", text: `[시장가] ${c.ko} → ${decision.label} · ${L.setupText(r, pick)} · 토론: 팀 ${team.pick || team.stance}(${team.reason})${team.applied ? " · " + team.applied : ""} / 뉴트론 ${neural?.stance || "—"}(${neural?.reason || ""})${final ? ` / 팀 최종 ${final.keep ? "유지" : "철회"}(${final.reason})` : ""}`});
+  fire({kind: "liveentry"});
+  return res;
+}
 async function rtEntryJob(){ await runLiveEntry({debate: hasAI(), by: "office"}); }
 
 /* ---- 익절·손절 관리팀: 데모 포지션 점검 ---- */
