@@ -78,6 +78,30 @@ MAX_OUTPUT_ENV = "CLAUDE_CODE_MAX_OUTPUT_TOKENS"
 # answer cut at the ceiling, or one with no text) before ``call`` stopped it.
 MAX_REQUESTS_PER_CALL = 2
 
+# The owners' switch (agents.env, default off): every role whose roster tier is opus runs on sonnet instead (e.g.
+# while the plan's opus limit is low). Read by the parent (rooms.policy_from_env, the evening pipeline) from its own
+# environment; it is not in ENV_ALLOW because the Claude Code child never reads it (the model is the --model flag).
+FORCE_SONNET_ENV = "AGENTS_FORCE_SONNET"
+_ON = ("1", "yes", "true", "on")
+_OFF = ("", "0", "no", "false", "off")
+
+
+def force_sonnet(environ: Optional[dict] = None) -> bool:
+    """AGENTS_FORCE_SONNET as a bool: 1/yes/true/on, or 0/no/false/off/unset. Anything else raises ValueError
+    (the tick refuses to start rather than run on a model the owners did not mean)."""
+    env = os.environ if environ is None else environ
+    raw = str(env.get(FORCE_SONNET_ENV) or "").strip().lower()
+    if raw in _ON:
+        return True
+    if raw in _OFF:
+        return False
+    raise ValueError(f"{FORCE_SONNET_ENV}={raw!r}: use 1 (every opus role on sonnet) or 0 (the roster's models)")
+
+
+def tier_model(model: str, forced_sonnet: bool) -> str:
+    """The model a role actually runs on: its roster tier, or sonnet for an opus role while the switch is on."""
+    return "sonnet" if forced_sonnet and model == "opus" else model
+
 
 def call_charge(est_input: int) -> int:
     """Most tokens one call can use, for the pre-call budget check (``ClassBudget.call``). Request k re-sends

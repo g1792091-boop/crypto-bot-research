@@ -160,9 +160,13 @@ EXTRA_TIMERS = ("paperbot-offsite.timer",)
 # required once installed, like the off-site timer: GH Coin's call recorder (ghcoin/recorder.mjs, a service)
 EXTRA_SERVICES = ("paperbot-ghcoin.service", "paperbot-tgtrades.service")
 OFFSITE_TIMER = "paperbot-offsite.timer"
+# optional: installed by install.sh but left off (the owners turn it on once, docs/server-setup-v3.md); when it is
+# installed its state is shown as [참고] only, never [고칠 것]: the weekly checkpoint rehearsal (checkpoint_preview)
+OPTIONAL_TIMERS = ("paperbot-rehearsal.timer",)
 INSTALLED = SERVICES + TIMERS + AGENT_TIMERS + JOBS + (EXECUTOR,)
 ALL_UNITS = (INSTALLED + LEGACY + SYSTEM + (AUTO_UPDATES, LABBUILD) + EXTRA_TIMERS + EXTRA_SERVICES
-             + ("paperbot-offsite.service",))
+             + ("paperbot-offsite.service",) + OPTIONAL_TIMERS
+             + tuple(u.replace(".timer", ".service") for u in OPTIONAL_TIMERS))
 UNIT_PROPS = ("Id,LoadState,UnitFileState,ActiveState,SubState,Result,NRestarts,ExecMainStatus,"
               "NextElapseUSecRealtime,ExecStart,ActiveEnterTimestampMonotonic,User,MainPID")
 RULES_SUMS = ("docs/paper-v3-rules.sha256", "docs/paper-v3-rules-addendum.sha256")
@@ -1161,6 +1165,13 @@ def check_units(states: Optional[dict], stage: str, agents_wanted: bool,
                 if st(job).get("Result") not in (None, "", "success"):
                     out.append(fix(f"{_short(job)}의 지난 실행이 실패했습니다({st(job).get('Result')}): "
                                    f"journalctl -u {_short(job)} -n 50"))
+        for u in OPTIONAL_TIMERS:                       # [참고] only: off is a choice, a failed run is worth a look
+            if st(u).get("LoadState") == "loaded":
+                out.append(timer_line(u, st(u), False))
+                job = u.replace(".timer", ".service")
+                if st(job).get("Result") not in (None, "", "success"):
+                    out.append(note(f"{_short(job)}의 지난 실행이 실패했습니다({st(job).get('Result')}): "
+                                    f"journalctl -u {_short(job)} -n 50"))
         cp = st("paperbot-checkpoint.service")
         if cp.get("Result") not in (None, "", "success"):
             out.append(note("paperbot-checkpoint의 지난 실행이 실패했습니다: 봇이 paper3.db를 만들기 전 한 번은 괜찮습니다. "
@@ -1705,6 +1716,9 @@ def check_agents_policy(ctx: Ctx, agents: EnvFile, agents_wanted: bool, run_star
     out = [ok(f"agents.env 설정 읽힘: AI 하루 최대 {p.total_budget[0]}회·{p.total_budget[1]:,} 토큰, "
               f"7일 {p.week_budget[0]}회·{p.week_budget[1]:,} 토큰")]
     out += [note(f"예산 경고(그 회의는 열리지 못함): {w}") for w in budget_warnings(p)]
+    if p.force_sonnet:
+        out.append(note("AGENTS_FORCE_SONNET 켜짐: 상위 모델을 쓰는 역할도 모두 기본 모델로 회의합니다 "
+                        "(끄려면 agents.env에서 그 줄을 지우거나 0)"))
     # the period lasts until the later of observe_days after the start and AGENTS_OBSERVE_UNTIL (rooms.observing;
     # the live runner's own floor can make it longer still); observe_days is never below 21 (policy_from_env)
     days_end = run_start + p.observe_days * DAY_MS if run_start is not None else None

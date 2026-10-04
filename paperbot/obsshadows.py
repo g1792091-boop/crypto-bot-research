@@ -20,6 +20,18 @@ and, added by docs/observation-shadows-2.md (the owners' "best setup 50x, unclea
             (40% x 50x, then the usual fallback), 2 < score < 4 -> "good" (30% x 30x), <= 2 -> "base"
             (20% x 20x). No usable strength recorded -> not run, counted as no_quality.
 
+and, added by docs/observation-shadows-3.md (``trade_shadows(..., extra3=True)``, ``VARIANTS3``):
+
+  lev30     fixed 30x, margin 30% of equity (the tier table's share); sizing checks as lev10 / lev20, no fallback
+  lev40     fixed 40x, margin 40%
+  lev50     fixed 50x, margin 40%
+  stopw1.5  initial stop 1.5 ATR (stopw2.5: 2.5, stopw3: 3) at the REAL trade's leverage and its tier margin
+            share (``SameLeveragePolicy``): only the exchange bracket and the minimum order size are checked
+            (not the 15% stop-loss cap nor the stop-inside-liquidation buffer); liquidation still applies, so
+            a stop at or beyond the liquidation price exits as LIQ (counted as ``stop_beyond_liq``). Named
+            ``stopw`` because daily3.db already holds ``stop1.5`` / ``stop2.5`` / ``stop3.0`` loss-card rows.
+
+The added variants never change the rows of the others (each runs on its own fresh engine).
 Nothing here touches a real account: rows go to daily3.db ``shadows`` only.
 """
 
@@ -37,7 +49,9 @@ import numpy as np
 from .aggregate import TF_MS
 from .config import Settings, Tier
 from .engine import PaperEngine
+from .margin import liquidation_price
 from .models import Signal
+from .sizing import SizeDecision, _round_down, tp_from_roe
 
 MIN = 60_000
 DAY_MS = 86_400_000
@@ -53,6 +67,11 @@ TIME_STOP_BARS = {"5m": 14, "15m": 12, "30m": 10, "1h": 8, "4h": 6}
 LOOKBACK_MS = 7 * DAY_MS
 # share of equity put up as margin at each leverage (paper v3 tiers; 10x is the lev10 shadow)
 MARGIN_FRAC = {50: 0.40, 40: 0.40, 30: 0.30, 20: 0.20, 10: 0.20}
+
+# ------------------------------------------------------------------ docs/observation-shadows-3.md
+VARIANTS3 = ("lev30", "lev40", "lev50", "stopw1.5", "stopw2.5", "stopw3")
+FIXED_LEVERAGE3 = {"lev30": 30, "lev40": 40, "lev50": 50}          # margin share: MARGIN_FRAC (30%, 40%, 40%)
+STOP_WIDTHS = {"stopw1.5": 1.5, "stopw2.5": 2.5, "stopw3": 3.0}     # x ATR, at the real trade's leverage
 
 # ------------------------------------------------------------------ quality (docs/observation-shadows-2.md)
 QUALITY = "quality"
@@ -140,9 +159,63 @@ def variant_settings(settings: Settings, name: str) -> Settings:
         # one tier named "best" (the tier every v3 signal requests), so there is no fallback
         return replace(settings, tiers=(Tier("best", FIXED_MARGIN_FRAC, (lev,)),),
                        min_leverage=min(lev, settings.min_leverage), max_leverage=max(lev, settings.max_leverage))
-    if name in ("base", "timestop"):
-        return settings
+    if name in FIXED_LEVERAGE3:
+        lev = FIXED_LEVERAGE3[name]
+        # the tier table's margin share for that leverage (30x 30%, 40x / 50x 40%); one tier, no fallback
+        return replace(settings, tiers=(Tier("best", MARGIN_FRAC[lev], (lev,)),),
+                       min_leverage=min(lev, settings.min_leverage), max_leverage=max(lev, settings.max_leverage))
+    if name in ("base", "timestop") or name in STOP_WIDTHS:
+        return settings                 # stopw: the stop is the signal's, the size SameLeveragePolicy's
     raise ValueError(f"unknown variant {name!r}")
+
+
+class SameLeveragePolicy:
+    """Sizing of the stop-width shadows (docs/observation-shadows-3.md section 4): the real trade's leverage and
+    that leverage's tier margin share of the (fresh) equity; only the exchange bracket and the minimum order size
+    are checked. The 15% stop-loss cap and the stop-inside-liquidation buffer of sizing.size_position are NOT
+    applied (a wider stop would otherwise mostly be refused at a high leverage); the liquidation price is the
+    exchange formula's, and the engine liquidates on it as always (a stop beyond it never fills first).
+    The engine and sizing.py are unchanged: this is passed to PaperEngine as its ``policy``."""
+
+    name = "same_leverage"
+
+    def __init__(self, settings: Settings, leverage: int):
+        self.s = settings
+        self.leverage = int(leverage)
+        self.margin_frac = MARGIN_FRAC[self.leverage]
+
+    def size(self, equity, sig, entry, brackets, spec):
+        lev, side = self.leverage, sig.side
+        if equity <= 0:
+            return SizeDecision(False, reasons=["no equity"])
+        if (entry - sig.stop_price) * side <= 0:
+            return SizeDecision(False, reasons=["stop on wrong side of entry"])
+        qty = _round_down(equity * self.margin_frac * lev / entry, spec.get("qty_step", 0.0))
+        notional = qty * entry
+        tag = f"same/{lev}x"
+        if qty <= 0 or notional < spec.get("min_notional", 0.0):
+            return SizeDecision(False, reasons=[f"{tag}: below minimum order size"])
+        margin = notional / lev
+        bracket = brackets.for_notional(notional)
+        if lev > bracket.max_leverage:
+            return SizeDecision(False, reasons=[f"{tag}: bracket allows {bracket.max_leverage}x"])
+        liq = liquidation_price(side, qty, entry, margin, bracket)
+        exit_px = sig.stop_price * (1 - side * self.s.slippage_frac)
+        loss = (qty * abs(entry - sig.stop_price) + qty * abs(sig.stop_price - exit_px)
+                + notional * self.s.taker_fee + qty * exit_px * self.s.taker_fee)
+        return SizeDecision(True, "best", lev, margin, qty, liq, min(loss, margin), [])
+
+    def take_profit(self, sig, entry, dec):
+        roe = sig.tp_roe if sig.tp_roe is not None else self.s.default_tp_roe
+        return tp_from_roe(sig.side, entry, dec.leverage, roe, round_trip=self.s.round_trip_cost)
+
+
+def stop_beyond_liq(tr) -> Optional[bool]:
+    """True when the trade's initial stop sat at or beyond its liquidation price (the stop could never fill)."""
+    stop, liq, side = getattr(tr, "stop_initial", None), getattr(tr, "liq_price", None), getattr(tr, "side", None)
+    if stop is None or liq is None or not side:
+        return None
+    return bool((stop - liq) * side <= 0)
 
 
 def pnl_equity(roe: Optional[float], leverage) -> Optional[float]:
@@ -165,11 +238,12 @@ def symbol_steps(steps, symbol: str) -> list:
 
 
 def run_alone(settings: Settings, brackets, specs, sig: Signal, ssteps, i0: int,
-              time_stop_ms: Optional[int] = None) -> tuple[Optional[object], bool]:
+              time_stop_ms: Optional[int] = None, policy=None) -> tuple[Optional[object], bool]:
     """``daily3._alone`` with an optional time stop: once ``time_stop_ms`` has passed since entry
     and the lock never armed, close at the 1m bar close (market, with slippage), reason "TIME".
+    ``policy``: another sizing policy for the engine (the stop-width shadows' SameLeveragePolicy).
     Returns (trade or None, resolved)."""
-    e = PaperEngine(settings, brackets, symbol_specs=specs, book="shadow")
+    e = PaperEngine(settings, brackets, symbol_specs=specs, book="shadow", policy=policy)
     e.submit(sig)
     for k in range(i0, len(ssteps)):
         ts, bars, funding = ssteps[k]
@@ -223,21 +297,25 @@ def _signal_row(conn, t: dict) -> Optional[dict]:
 
 
 def trade_shadows(settings: Settings, brackets, specs, conn, day: str, start: int, end: int, steps,
-                  make_signal, quality: bool = False) -> tuple[list[dict], dict]:
+                  make_signal, quality: bool = False, extra3: bool = False) -> tuple[list[dict], dict]:
     """Rows for the shadows table (one per closed trade and variant) and counts of trades left out.
     ``steps`` must reach back to the earliest signal (``first_signal``); ``make_signal`` is daily3's.
     Trades of copy accounts are left out (counted in info["copy_trades"]); new-strategy accounts' trades are
     shadowed like the others (their signal rows are their own).
     ``quality``: also run the quality variant (docs/observation-shadows-2.md) for every trade whose
     signal has a usable strength record; the others are counted in info["no_quality"] (by reason in
-    info["no_quality_reasons"])."""
+    info["no_quality_reasons"]).
+    ``extra3``: also run VARIANTS3 (docs/observation-shadows-3.md) for every trade, after the others; a trade
+    whose real leverage is not in the tier table gets no stopw rows (counted in info["no_leverage"])."""
     idx = {ts: k for k, (ts, _, _) in enumerate(steps)}
     per_symbol: dict[str, list] = {}
-    vs = {v: variant_settings(settings, v) for v in VARIANTS}
+    vs = {v: variant_settings(settings, v) for v in VARIANTS + (VARIANTS3 if extra3 else ())}
     rows: list[dict] = []
     info = {"closed": 0, "no_signal": 0, "no_steps": 0}
     if quality:
         info.update(no_quality=0, no_quality_reasons={})
+    if extra3:
+        info.update(extra3=True, no_leverage=0)
     copies = copy_accounts(conn)
     for aid, t in closed_trades(conn, start, end):
         if aid in copies:                       # a copy repeats its parent's signal: the parent's shadow is it
@@ -272,6 +350,8 @@ def trade_shadows(settings: Settings, brackets, specs, conn, day: str, start: in
                 data.update(leverage=tr.leverage, pnl_equity=pnl_equity(tr.roe, tr.leverage),
                             exit_time=tr.exit_time)
             rows.append(_shadow_row(v, day, aid, t, bc, tr, resolved, data))
+        if extra3:
+            rows += _extra3_rows(vs, brackets, specs, d, sig, ss, i0, day, aid, t, bc, actual, make_signal, info)
         if quality:
             q = quality_score(signal_strength(d), t["strategy_id"], t["timeframe"])
             if q["tier"] is None:
@@ -286,6 +366,36 @@ def trade_shadows(settings: Settings, brackets, specs, conn, day: str, start: in
                             exit_time=tr.exit_time, tier=tr.tier)
             rows.append(_shadow_row(QUALITY, day, aid, t, bc, tr, resolved, data))
     return rows, info
+
+
+def _extra3_rows(vs: dict, brackets, specs, d: dict, sig: Signal, ss, i0: int, day: str, aid: str, t: dict,
+                 bc: int, actual: dict, make_signal, info: dict) -> list[dict]:
+    """The docs/observation-shadows-3.md rows of one closed trade: lev30 / lev40 / lev50 (fixed leverage, the
+    tier's margin share, the usual sizing checks, no fallback) and stopw1.5 / 2.5 / 3 (k x ATR stop at the real
+    trade's leverage, SameLeveragePolicy)."""
+    out = []
+    for v in FIXED_LEVERAGE3:
+        tr, resolved = run_alone(vs[v], brackets, specs, sig, ss, i0)
+        data = dict(actual)
+        if tr is not None:
+            data.update(leverage=tr.leverage, pnl_equity=pnl_equity(tr.roe, tr.leverage), exit_time=tr.exit_time)
+        out.append(_shadow_row(v, day, aid, t, bc, tr, resolved, data))
+    try:
+        lev = int(round(float(t.get("leverage"))))
+    except (TypeError, ValueError):
+        lev = None
+    if lev not in MARGIN_FRAC:
+        info["no_leverage"] = info.get("no_leverage", 0) + 1
+        return out
+    for v, k in STOP_WIDTHS.items():
+        policy = SameLeveragePolicy(vs[v], lev)
+        tr, resolved = run_alone(vs[v], brackets, specs, make_signal(d, stop_atr=k), ss, i0, policy=policy)
+        data = dict(actual, stop_atr=k, same_leverage=lev)
+        if tr is not None:
+            data.update(leverage=tr.leverage, pnl_equity=pnl_equity(tr.roe, tr.leverage), exit_time=tr.exit_time,
+                        stop_beyond_liq=stop_beyond_liq(tr))
+        out.append(_shadow_row(v, day, aid, t, bc, tr, resolved, data))
+    return out
 
 
 def _shadow_row(kind: str, day: str, aid: str, t: dict, bc: int, tr, resolved: bool, data: dict) -> dict:
@@ -308,6 +418,14 @@ def summarize(rows: list[dict], info: dict) -> dict:
     out: dict = dict(info)
     for v in VARIANTS:
         out[v] = _metrics([r for r in rows if r["kind"] == v])
+    if info.get("extra3") or any(r["kind"] in VARIANTS3 for r in rows):
+        base = {r["key"].split("|", 1)[1]: r for r in rows if r["kind"] == "base"}
+        for v in VARIANTS3:
+            rs = [r for r in rows if r["kind"] == v]
+            out[v] = _with_base(rs, base)
+            out[v]["base"].update(_vs_base(rs, base))
+            if v in STOP_WIDTHS:
+                out[v]["stop_beyond_liq"] = sum(1 for r in rs if json.loads(r["data"]).get("stop_beyond_liq"))
     if "no_quality" in info or any(r["kind"] == QUALITY for r in rows):
         out[QUALITY] = quality_summary(rows, info)
     return out
@@ -340,6 +458,23 @@ def _with_base(rs: list[dict], base: dict) -> dict:
     m["base"] = {"trades": len(b), "mean_roe": _mean(x["roe"] for x in b),
                  "mean_pnl_equity": _mean(json.loads(x["data"]).get("pnl_equity") for x in b)}
     return m
+
+
+def _vs_base(rs: list[dict], base: dict) -> dict:
+    """Against the base shadow of the same trades (both resolved and entered), on P&L on equity: the mean
+    difference and how often the variant did better / worse (equal counts as neither)."""
+    pairs = []
+    for r in rs:
+        b = base.get(r["key"].split("|", 1)[1])
+        if not (r["resolved"] and r["roe"] is not None and b is not None and b["resolved"] and b["roe"] is not None):
+            continue
+        a, c = json.loads(r["data"]).get("pnl_equity"), json.loads(b["data"]).get("pnl_equity")
+        if a is not None and c is not None:
+            pairs.append((a, c))
+    n = len(pairs)
+    return {"paired": n, "vs_base_pnl_equity": _mean(a - c for a, c in pairs),
+            "better_than_base": sum(1 for a, c in pairs if a > c + 1e-12) / n if n else None,
+            "worse_than_base": sum(1 for a, c in pairs if a < c - 1e-12) / n if n else None}
 
 
 def quality_summary(rows: list[dict], info: dict) -> dict:

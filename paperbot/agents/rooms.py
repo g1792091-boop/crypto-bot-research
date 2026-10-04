@@ -50,10 +50,12 @@ learning), the event review the day after a US release and the daily bull vs bea
 code-computed packet (agents/meetings.py, agents/committee.py: the debate's call is recorded and graded by code
 24 hours later, never traded), and the performance analyst first in the ranking review; in a strategy room's
 timeframe-split meeting the timeframe comparer speaks after the specialist (in the expert's place). Added the same
-day (owners' request): the Thursday risk-reward / exit meeting (rr_review, team:review, agents/riskreward.py), and
+day (owners' request): the Thursday risk-reward / exit meeting (rr_review, team:review, agents/riskreward.py, with the
+live trades by leverage tier and the docs/observation-shadows-3.md shadows), and
 the compact risk-reward numbers in a strategy specialist's packet and in the ranking review's; the Friday drawdown /
 bust risk meeting (risk_review, team:risk, agents/survival.py and agents/btgap.py: drawdowns, a Monte Carlo of each
-account's own trades, sizing for illustration and the live-vs-backtest gap), its compact numbers in a specialist's
+account's own trades, sizing for illustration, the live-vs-backtest gap and the 5-year fixed-leverage / stop-width
+comparison of agents/levstop.py), its compact numbers in a specialist's
 packet, the ranking review's, the Saturday learning packet's (the backtest gap) and the Sunday report's. Also
 approved that day (code only, no new meeting or AI call, all read-only and descriptive): the real-trading conditions
 of the addendum (agents/readiness.py: a display that enables nothing; board.readiness for the lead, the 30-day
@@ -135,7 +137,8 @@ from .budget import BudgetedRunner, BudgetExceeded, tokens_of
 from .roles import _check_evidence
 from .roster3 import ROLES, SPECIALISTS, STRATEGY_KO, TEAMS, room_duty
 from .runner import (MAX_OUTPUT_TOKENS, AgentCallError, AgentTimeout, CallResult, Runner, UsageLimitReached,
-                     auth_preflight, billing_warnings, call_charge, input_estimate, packet_payload)
+                     auth_preflight, billing_warnings, call_charge, force_sonnet, input_estimate, packet_payload,
+                     tier_model)
 
 PROMPT_DIR = os.path.join(os.path.dirname(__file__), "prompts3")
 DAY_MS = 86_400_000
@@ -353,6 +356,8 @@ class RoomsPolicy:
     # stay in the ledger). The server's policy (``policy_from_env``) is at least OBSERVE_DAYS_DEFAULT; 0 here = off
     observe_days: int = 0
     observe_until: Optional[str] = None
+    # AGENTS_FORCE_SONNET=1 (runner.force_sonnet): every role whose roster tier is opus runs on sonnet; default off
+    force_sonnet: bool = False
     week_budget: tuple = DEFAULT_WEEK       # rolling 7 KST days (calls, tokens), all classes
     bust_reserve_calls: int = 8             # of the loss class: loss_cluster rounds leave these for busts
     critical_reserve_calls: int = 5         # of the incident class: kept for CRITICAL alerts (liquidations)
@@ -1073,6 +1078,7 @@ def policy_from_env(environ: Optional[dict] = None) -> RoomsPolicy:
         except ValueError:
             raise ValueError(f"AGENTS_OBSERVE_UNTIL={until!r}: use a date like 2026-10-21 (KST, inclusive)") from None
         p.observe_until = until
+    p.force_sonnet = force_sonnet(env)              # AGENTS_FORCE_SONNET (a bad value raises ValueError)
     for name, (attr, lo) in ENV_INTS.items():
         raw = (env.get(name) or "").strip()
         if not raw:
@@ -1170,10 +1176,12 @@ def system_prompt(role: str, turn: str, meeting: str = "") -> str:
             f"# 출력 형식 (JSON 객체 하나만, 다른 글 없이)\n{schema}\n")
 
 
-def role_model(role: str, turn: str = "") -> str:
+def role_model(role: str, turn: str = "", forced_sonnet: bool = False) -> str:
+    """The roster's model of ``role`` (the lab turns: LAB_MODEL); with ``forced_sonnet`` (the policy's
+    AGENTS_FORCE_SONNET) an opus role runs on sonnet."""
     if turn in LAB_TURNS:
-        return LAB_MODEL
-    return ROLE_INFO.get(role, {}).get("model", "sonnet")
+        return tier_model(LAB_MODEL, forced_sonnet)
+    return tier_model(ROLE_INFO.get(role, {}).get("model", "sonnet"), forced_sonnet)
 
 
 def role_ko(role: str) -> str:
@@ -1754,6 +1762,8 @@ def _board(ctx: RoundContext) -> dict:
     board["pass_summary"] = {"by_status": counts, "bust": sum(1 for v in pc.values() if v.get("bust")),
                              "note": packets3.PASS_CHECK_NOTE}
     board["checkpoint"] = packets3.checkpoint_section(_checkpoint_view(ctx))
+    # the weekly rehearsal of the verdict on today's data (checkpoint_preview latest.json; never the verdict itself)
+    board["checkpoint"]["rehearsal"] = _rehearsal(ctx)
     # added 2026-10-04 (owners approved): the lead's real-trading conditions and the risk officer's shock test,
     # both compact, code only, read-only (a display: nothing reads them to decide anything)
     board["readiness"] = _readiness_compact(ctx)
@@ -2085,7 +2095,7 @@ class _Round:
         given = {**packet, "role": role, "turn": turn, "this_round": json.loads(json.dumps(self.this_round,
                                                                                             default=str))}
         check = CHECKS[turn]
-        model = role_model(role, turn)
+        model = role_model(role, turn, self.ctx.policy.force_sonnet)
         problems: list[str] = []
         answered = ran = False
         for _ in range(self.ctx.policy.retries + 1):
@@ -2231,6 +2241,7 @@ def _strategy_base(rnd: _Round) -> dict:
     spec["recent_period"] = recent_period(ctx.lab, s)
     spec["risk_reward"] = _risk_reward_brief(ctx, s)
     spec["survival"] = _survival_brief(ctx, s)
+    spec["entry_moment"] = _entry_moment_brief(ctx, s)
     if board.get("error"):
         spec["error"] = board["error"]
     return {"room": {"room_id": room, "kind": "strategy", "strategy": s, "title": rnd.title},
@@ -2254,6 +2265,18 @@ def _risk_reward_brief(ctx: RoundContext, strategy: str) -> dict:
         return RRW.strategy_brief(ctx.paper_ro, strategy, ctx.now_ms, round_trip=round_trip(ctx.paper_ro))
     except (sqlite3.Error, KeyError, TypeError, ValueError) as exc:
         return {"error": f"손익비를 만들지 못함: {type(exc).__name__}"}
+
+
+def _entry_moment_brief(ctx: RoundContext, strategy: str) -> dict:
+    """The strategy's own outcomes by the moment of entry (entrymoment.strategy_brief_from, code only, < 2 KB)."""
+    from . import entrymoment as EM
+    feat = _entry_moment_feat(ctx)
+    if feat is None:
+        return {"error": "진입 순간 집계를 만들지 못함"}
+    try:
+        return EM.strategy_brief_from(feat, strategy)
+    except (KeyError, TypeError, ValueError) as exc:
+        return {"error": f"진입 순간 집계를 만들지 못함: {type(exc).__name__}"}
 
 
 def _survival_brief(ctx: RoundContext, strategy: str) -> dict:
@@ -2775,7 +2798,8 @@ def _side_db(ctx: RoundContext, name: str) -> Optional[str]:
 
 def _cost(ctx: RoundContext, due: TR.Due) -> dict:
     from . import meetings as M
-    return M.cost_packet(ctx.paper_ro, ctx.now_ms)
+    # daily_ro: the nightly check's estimated real stop slippage and cost at 2x/5x/10x (slipcost.week_packet)
+    return M.cost_packet(ctx.paper_ro, ctx.now_ms, daily_ro=ctx.daily_ro)
 
 
 def _combo(ctx: RoundContext, due: TR.Due) -> dict:
@@ -2794,7 +2818,38 @@ def _combo(ctx: RoundContext, due: TR.Due) -> dict:
 
 def _coins(ctx: RoundContext, due: TR.Due) -> dict:
     from . import meetings as M
-    return M.coin_packet(ctx.paper_ro, ctx.now_ms)
+    pk = M.coin_packet(ctx.paper_ro, ctx.now_ms)
+    # owners' request 2026-10-04: outcomes by the moment of entry (strength, volatility, candle shape, liquidation
+    # bursts, holding time, funding, weekday) and the signals not taken (agents/entrymoment.py, compact, descriptive)
+    if "error" not in pk:
+        from . import entrymoment as EM
+        try:
+            pk["entry_moment"] = EM.packet(ctx.paper_ro, ctx.now_ms, daily_ro=ctx.daily_ro, names_ko=STRATEGY_KO,
+                                           feat=_entry_moment_feat(ctx), **_entry_moment_paths(ctx))
+        except Exception as exc:  # noqa: BLE001  (the meeting still runs and says the numbers are missing)
+            pk["entry_moment"] = {"error": f"진입 순간 집계를 만들지 못함: {type(exc).__name__}"}
+    return pk
+
+
+def _entry_moment_paths(ctx: RoundContext) -> dict:
+    return {"liq_path": _side_db(ctx, "liq.db"), "flow_path": _side_db(ctx, "flow.db"),
+            "market_path": _side_db(ctx, "market.db")}
+
+
+def _entry_moment_feat(ctx: RoundContext) -> Optional[dict]:
+    """agents/entrymoment.features over every strategy trade since the start, once per tick (the coin meeting and
+    the strategy specialists' briefs share it). None when it cannot be built (the caller reports it)."""
+    if "entry_moment" in ctx.cache:
+        return ctx.cache["entry_moment"]
+    from . import entrymoment as EM
+    feat = None
+    if ctx.paper_ro is not None:
+        try:
+            feat = EM.features(ctx.paper_ro, ctx.now_ms, 0, **_entry_moment_paths(ctx))
+        except Exception:  # noqa: BLE001  (a description only)
+            feat = None
+    ctx.cache["entry_moment"] = feat
+    return feat
 
 
 def _learning(ctx: RoundContext, due: TR.Due) -> dict:
@@ -2837,6 +2892,12 @@ def _survival(ctx: RoundContext, due: TR.Due) -> dict:
     except Exception as exc:  # noqa: BLE001
         pk["shock"] = {"error": f"가격 충격 시험을 만들지 못함: {type(exc).__name__}"}
     pk["readiness"] = _readiness_compact(ctx)
+    # the 5-year fixed-leverage / stop-width comparison (research/levstop, agents/levstop.py: compact, < 4 KB)
+    from . import levstop as LS
+    try:
+        pk["levstop_5y"] = LS.brief()
+    except Exception as exc:  # noqa: BLE001
+        pk["levstop_5y"] = {"error": f"5년 레버리지·손절 비교를 읽지 못함: {type(exc).__name__}"}
     return pk
 
 
@@ -2846,7 +2907,35 @@ def _checkpoint_meeting(ctx: RoundContext, due: TR.Due) -> dict:
     (agents/power.py). The verdict itself stays ``board.checkpoint``."""
     from . import power as PW
     from . import readiness as RD
-    return {**RD.meeting(_readiness_full(ctx)), "power": PW.brief()}
+    return {**RD.meeting(_readiness_full(ctx)), "power": PW.brief(), "rehearsal": _rehearsal(ctx)}
+
+
+REHEARSAL_KEYS = ("status", "as_of", "days", "finished_utc", "runtime_s", "min_trades", "bots", "accounts_in_snapshot",
+                  "tested", "counts", "rate_min", "rate_max")
+
+
+def _rehearsal(ctx: RoundContext) -> dict:
+    """The newest weekly checkpoint rehearsal (paperbot/checkpoint_preview.latest_summary: rehearsal/latest.json next
+    to paper3.db, read-only), bounded: a dress rehearsal of the verdict path, never the verdict (10 trades, 500 coin
+    flips instead of 30 and 2,000)."""
+    if "rehearsal" in ctx.cache:
+        return ctx.cache["rehearsal"]
+    from ..checkpoint_preview import latest_summary
+    folder = _side_db(ctx, "rehearsal")
+    s = latest_summary(folder) if folder else None
+    if not isinstance(s, dict):
+        out = {"available": False, "note": "판정 미리 연습 기록 없음(주간 타이머가 꺼져 있거나 아직 한 번도 돌지 않음)"}
+    else:
+        out = {"available": True, **{k: s.get(k) for k in REHEARSAL_KEYS if k in s}}
+        z = s.get("zero_rate_accounts") or []
+        out["zero_rate_accounts"] = {"count": len(z), "first": [str(a)[:40] for a in z[:5]]}
+        out["warnings"] = [str(w)[:160] for w in (s.get("warnings") or [])[:3]]
+        if s.get("error"):
+            out["error"] = str(s["error"])[:200]
+        out["note"] = ("판정 경로 미리 연습(오늘을 판정일처럼, 거래 10건·동전 봇 500개). 공식 판정이 아님: 합격·불합격은 "
+                       "checkpoint만 말함. status가 failed거나 zero_rate_accounts가 있으면 판정 날 문제가 될 수 있음")
+    ctx.cache["rehearsal"] = out
+    return out
 
 
 def _rr(ctx: RoundContext, due: TR.Due) -> dict:

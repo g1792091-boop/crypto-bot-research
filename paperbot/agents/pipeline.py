@@ -23,7 +23,7 @@ from ..notify import INFO, WARN, Notifier
 from .packets import slice_for
 from .roles import EVENING_ROLES, Role, check_output, system_prompt
 from .budget import BudgetExceeded
-from .runner import AgentCallError, Runner, UsageLimitReached
+from .runner import AgentCallError, Runner, UsageLimitReached, force_sonnet, tier_model
 
 INSTRUCTION = ("표준입력으로 받은 JSON 패킷만 근거로, 시스템 프롬프트의 역할과 출력 형식에 맞춰 "
                "JSON 객체 하나로 답하세요.")
@@ -46,11 +46,21 @@ def _input_for(role: Role, packet: dict, analysts: dict, risk: Optional[dict],
     return given
 
 
+def _forced_sonnet() -> bool:
+    """AGENTS_FORCE_SONNET for this older evening pipeline; an unreadable value keeps the roster's models (the
+    rooms tick refuses to start on it, rooms.policy_from_env)."""
+    try:
+        return force_sonnet()
+    except ValueError:
+        return False
+
+
 def _call_role(role: Role, given: dict, runner: Runner, retries: int = 1):
     problems: list[str] = []
     last_text = ""
+    model = tier_model(role.model, _forced_sonnet())
     for attempt in range(retries + 1):
-        res = runner.call(role.model, system_prompt(role), INSTRUCTION, given)
+        res = runner.call(model, system_prompt(role), INSTRUCTION, given)
         last_text = res.text
         clean, probs = check_output(role, res.data, given)
         problems = probs

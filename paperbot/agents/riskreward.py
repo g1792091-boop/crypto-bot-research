@@ -19,10 +19,16 @@ the payoff ratio is low by design and the win rate has to be high to break even.
                      distribution of win and loss ROE in buckets. ``small``: under ``SMALL_N`` trades.
 - ``table``          per strategy (all five timeframes) and per strategy x timeframe over [since, until).
 - ``shadow_summary`` the nightly exit shadows (daily3.db ``shadows``: base, lock15, lock20, lock30, timestop, lev10,
-                     lev20; paperbot/obsshadows.py) per strategy over the same window: each variant's mean P&L on
-                     equity against the base shadow of the same trades, and how often it did better / worse;
-                     ``leverage_turns``: the strategies whose base loses while lev10 / lev20 makes money on equity.
-                     Descriptive only ("설명용, 판정 아님").
+                     lev20; paperbot/obsshadows.py; and from docs/observation-shadows-3.md lev30, lev40, lev50 and
+                     the stop widths stopw1.5, stopw2.5, stopw3 at the real trade's leverage) per strategy over the
+                     same window: each variant's mean P&L on equity against the base shadow of the same trades, and
+                     how often it did better / worse; ``leverage_turns``: the strategies whose base loses while
+                     lev10 .. lev50 makes money on equity (and the reverse, ``turns_negative``, when there is any);
+                     ``stop_turns``: the same for the stop widths. Descriptive only ("설명용, 판정 아님").
+- ``tier_table``     the live closed strategy trades grouped by the leverage actually used (50 / 40 / 30 / 20x):
+                     trades, win rate, mean ROE, mean P&L on equity, payoff, breakeven win rate. Confounded: the
+                     tier is chosen from the stop distance (2 ATR / price), so a tier is also a kind of spot; the
+                     shadows above (same trades, only the leverage changed) are the clean comparison.
 - ``rr_packet``      the Thursday 손익비·청산 회의 packet (team:review, trigger rr_review).
 - ``strategy_brief`` / ``brief_many``  compact numbers for a strategy specialist's packet and the 14:00 ranking.
 """
@@ -48,10 +54,19 @@ LOSS_BUCKETS = (("0~-5%", -0.05, 0.0), ("-5~-10%", -0.10, -0.05), ("-10~-20%", -
                 ("-20~-30%", -0.30, -0.20), ("-30~-50%", -0.50, -0.30), ("-50~-80%", -0.80, -0.50),
                 ("-80% 이하", None, -0.80))
 SHADOW_VARIANTS = ("lock15", "lock20", "lock30", "timestop", "lev10", "lev20")      # compared with "base"
+# docs/observation-shadows-3.md (paperbot/obsshadows.py VARIANTS3): fixed 30 / 40 / 50x at the tier's margin share,
+# and the initial stop at 1.5 / 2.5 / 3 ATR at the real trade's leverage
+SHADOW_VARIANTS3 = ("lev30", "lev40", "lev50", "stopw1.5", "stopw2.5", "stopw3")
+ALL_SHADOWS = SHADOW_VARIANTS + SHADOW_VARIANTS3
 SHADOW_KO = {"lock15": "첫 잠금 15%", "lock20": "첫 잠금 20%", "lock30": "첫 잠금 30%",
              "timestop": "잠금 없이 N봉 지나면 시장가 청산", "lev10": "10배 고정·증거금 20%", "lev20": "20배 고정·증거금 20%"}
+SHADOW_KO3 = {"lev30": "30배 고정·증거금 30%", "lev40": "40배 고정·증거금 40%", "lev50": "50배 고정·증거금 40%",
+              "stopw1.5": "처음 손절 1.5 ATR(레버리지는 실제 거래와 같게)", "stopw2.5": "처음 손절 2.5 ATR(〃)",
+              "stopw3": "처음 손절 3 ATR(〃)"}
 SHADOW_LABEL = "설명용, 판정 아님"
-LEVERAGE_SHADOWS = ("lev10", "lev20")
+LEVERAGE_SHADOWS = ("lev10", "lev20", "lev30", "lev40", "lev50")
+STOP_SHADOWS = ("stopw1.5", "stopw2.5", "stopw3")
+TIER_LEVERAGES = (50, 40, 30, 20)
 # the 5-year lab tests an improvement idea goes to (agents/labtests.py: lock_start, stop_atr); read here, never run
 LAB_TESTS = {"lock_start": {"first_lock": (0.15, 0.20, 0.30)}, "stop_atr": {"k": (1.5, 2.5, 3.0)}}
 
@@ -111,7 +126,8 @@ def norm_trade(d: dict, round_trip: float) -> Optional[dict]:
             mae_stop = mae / (abs(entry - stop0) / entry)
     reason = str(d.get("exit_reason") or "")
     return {"win": pnl > 0, "roe": roe, "eq": pnl_equity(roe, lev), "exit": reason if reason in EXITS else "other",
-            "mfe_roe": mfe, "mae": mae, "mae_stop": mae_stop, "exit_time": int(_f(d.get("exit_time")) or 0)}
+            "mfe_roe": mfe, "mae": mae, "mae_stop": mae_stop, "exit_time": int(_f(d.get("exit_time")) or 0),
+            "lev": None if lev is None else int(round(lev))}
 
 
 def _side(rows: list[dict], key: str) -> dict:
@@ -256,24 +272,64 @@ def shadow_brief(cells: dict) -> dict:
     return out
 
 
-def leverage_turns(cells_by_strategy: dict) -> dict:
-    """Per lower-leverage shadow (lev10, lev20): the strategies whose base shadow lost on average (P&L on equity
-    <= 0) while the lower-leverage shadow of the same trades made money (> 0), and the ones that stayed negative.
-    Code's count; descriptive only (small samples marked)."""
+def _turns(cells_by_strategy: dict, variants: tuple, always_reverse: bool) -> dict:
+    """Per variant: ``turns_positive`` = strategies whose base shadow lost on average (P&L on equity <= 0) while the
+    variant on the same trades made money (> 0); ``still_negative`` = the variant <= 0 too; ``turns_negative`` = the
+    reverse (base > 0, variant <= 0; listed only when there is any unless ``always_reverse``)."""
     out = {}
-    for v in LEVERAGE_SHADOWS:
-        pos, neg = [], []
+    for v in variants:
+        pos, neg, rev = [], [], []
         for st, cells in sorted(cells_by_strategy.items()):
             c = cells.get(v) or {}
             if not c.get("trades") or c.get("base_mean_eq") is None or c.get("mean_eq") is None:
                 continue
+            item = {"strategy": st, "trades": c["trades"], "mean_eq": c["mean_eq"], "base_mean_eq": c["base_mean_eq"],
+                    **({"small": True} if c.get("small") else {})}
             if c["base_mean_eq"] <= 0 < c["mean_eq"]:
-                pos.append({"strategy": st, "trades": c["trades"], "mean_eq": c["mean_eq"],
-                            "base_mean_eq": c["base_mean_eq"], **({"small": True} if c.get("small") else {})})
+                pos.append(item)
             elif c["mean_eq"] <= 0:
                 neg.append(st)
+                if c["base_mean_eq"] > 0:
+                    rev.append(item)
         out[v] = {"turns_positive": pos, "still_negative": neg}
+        if rev or always_reverse:
+            out[v]["turns_negative"] = rev
     return out
+
+
+def leverage_turns(cells_by_strategy: dict) -> dict:
+    """Per fixed-leverage shadow (lev10, lev20, and from docs/observation-shadows-3.md lev30, lev40, lev50): the
+    strategies whose base shadow lost on average (P&L on equity <= 0) while that shadow of the same trades made money
+    (> 0), the ones that stayed negative, and (``turns_negative``, only when there is any) the reverse: base > 0 but
+    the shadow <= 0. Code's count; descriptive only (small samples marked)."""
+    return _turns(cells_by_strategy, LEVERAGE_SHADOWS, False)
+
+
+def stop_turns(cells_by_strategy: dict) -> dict:
+    """Per stop-width shadow (stopw1.5, stopw2.5, stopw3: k x ATR at the real trade's leverage,
+    docs/observation-shadows-3.md): ``turns_positive`` = strategies whose base (2 ATR) lost on average while that
+    stop width made money on the same trades, ``turns_negative`` = base made money but that stop width lost,
+    ``still_negative`` = that stop width <= 0. Code's count; descriptive only (small samples marked)."""
+    return _turns(cells_by_strategy, STOP_SHADOWS, True)
+
+
+def shadow_brief3(cells: dict) -> dict:
+    """A strategy's docs/observation-shadows-3.md shadows in a meeting packet, as short rows (columns in
+    ``SHADOW3_COLUMNS``; P&L on equity to 4 decimals, shares to 2); variants without a trade are left out."""
+    out = {}
+    for v in SHADOW_VARIANTS3:
+        c = cells.get(v) or {}
+        if not c.get("trades") and not c.get("not_entered"):
+            continue
+        out[v] = [c.get("trades", 0), _r(c.get("mean_eq")), _r(c.get("base_mean_eq")), _r(c.get("vs_base_eq")),
+                  _r(c.get("better_share"), 2), _r(c.get("worse_share"), 2), c.get("liq", 0), c.get("base_liq", 0),
+                  c.get("not_entered", 0)]
+    return out
+
+
+SHADOW3_COLUMNS = ["trades(비교한 거래, 10건 미만은 작음)", "mean_eq(그림자 자금 대비 평균)", "base_mean_eq(같은 거래 base)", "vs_base_eq(차이)",
+                   "better_share(base보다 나음)", "worse_share(base보다 나쁨)", "liq(그림자 강제청산)", "base_liq",
+                   "not_entered(진입 안 함)"]
 
 
 # ---------------------------------------------------------------- reading paper3.db
@@ -329,6 +385,75 @@ def table(rows: list[tuple], first_trigger: float = 0.12, min_n: int = SMALL_N) 
     return out
 
 
+TIER_NOTE = ("레버리지 단계별 실거래(설명용, 판정 아님). 주의: 단계는 손절 거리로 정해짐 — 모든 신호가 40%×50배를 요청하고 "
+             "손절 손실 ≤ 자금 15%·청산가 여유에 막힐 때만 40 → 30 → 20배로 내려감(docs/paper-v3-rules.md). 그래서 20배 거래는 "
+             "손절이 먼(변동성 큰) 자리, 50배 거래는 손절이 가까운(조용한) 자리이고 시간봉도 섞여 있음(긴 봉일수록 낮은 단계). "
+             "단계끼리의 차이는 레버리지 때문인지 자리 때문인지 가를 수 없는 교란된 비교. 깨끗한 비교는 같은 거래를 레버리지만 "
+             "바꿔 다시 돌린 그림자(lev10·lev20·lev30·lev40·lev50, docs/observation-shadows-3.md)")
+
+
+def tier_cell(rows: list[dict]) -> dict:
+    """One leverage tier's live trades: trades, win rate, mean ROE, mean P&L on equity, payoff and breakeven win rate
+    (inside one tier the margin share is fixed, so ROE and equity give the same payoff)."""
+    n = len(rows)
+    if not n:
+        return {"trades": 0, "small": True}
+    e = _side(rows, "eq")
+    out = {"trades": n, "win_rate": _r(sum(1 for r in rows if r["win"]) / n), "mean_roe": _r(_mean(r["roe"] for r in rows)),
+           "mean_eq": _r(_mean(r["eq"] for r in rows), 5), "payoff": e["payoff"],
+           "breakeven_win_rate": e["breakeven_win_rate"], "gap_pp": e["gap_pp"],
+           "liq": sum(1 for r in rows if r["exit"] == "LIQ")}
+    if n < SMALL_N:
+        out["small"] = True
+    return out
+
+
+TIER_COLUMNS = ["trades", "win_rate", "mean_roe", "mean_eq(자금 대비)", "payoff(손익비)", "breakeven_win_rate(본전 승률)",
+                "gap_pp", "liq", "small(1 = 10건 미만)"]
+TIER_TF_COLUMNS = ["trades", "win_rate", "mean_roe", "mean_eq"]
+
+
+def tier_row(c: dict) -> list:
+    """``tier_cell`` as a short row (``TIER_COLUMNS``)."""
+    return [c.get("trades", 0), c.get("win_rate"), c.get("mean_roe"), c.get("mean_eq"), c.get("payoff"),
+            c.get("breakeven_win_rate"), c.get("gap_pp"), c.get("liq", 0), int(bool(c.get("small")))]
+
+
+def tier_packet(got: dict) -> dict:
+    """The meeting packet's ``tiers``: per window the tiers in short rows, per timeframe since the start, the note."""
+    out: dict = {"columns": TIER_COLUMNS, "by_tf_columns": TIER_TF_COLUMNS, "confounded": True, "note": TIER_NOTE}
+    for w, rows in got.items():
+        t = tier_table(rows)
+        out[w] = {"by_leverage": {lev: tier_row(c) for lev, c in t["by_leverage"].items()},
+                  **({"other_leverage": t["other_leverage"]} if t["other_leverage"] else {})}
+        if w == "since_start":
+            out[w]["by_tf"] = t["by_tf"]
+    return out
+
+
+def tier_table(rows: list[tuple]) -> dict:
+    """The ``closed`` rows grouped by the leverage actually used (50 / 40 / 30 / 20x): ``by_leverage`` per tier
+    (``tier_cell``), ``by_tf`` the same per timeframe in short rows [trades, win_rate, mean_roe, mean_eq], trades at
+    another leverage counted in ``other_leverage``, and the confound note (``TIER_NOTE``)."""
+    per: dict = {lev: [] for lev in TIER_LEVERAGES}
+    by_tf: dict = {}
+    other = 0
+    for _s, tf, t in rows:
+        lev = t.get("lev")
+        if lev not in per:
+            other += 1
+            continue
+        per[lev].append(t)
+        by_tf.setdefault(tf, {}).setdefault(lev, []).append(t)
+    tfs = sorted(by_tf, key=lambda x: TFS.index(x) if x in TFS else 9)
+    return {"by_leverage": {str(lev): tier_cell(v) for lev, v in per.items()},
+            "by_tf": {tf: {str(lev): [len(v), _r(sum(1 for r in v if r["win"]) / len(v), 3),
+                                      _r(_mean(r["roe"] for r in v)), _r(_mean(r["eq"] for r in v), 5)]
+                           for lev, v in sorted(by_tf[tf].items(), key=lambda kv: -kv[0])} for tf in tfs},
+            "by_tf_columns": ["trades", "win_rate", "mean_roe", "mean_eq"],
+            "other_leverage": other, "confounded": True, "note": TIER_NOTE}
+
+
 def windows(now_ms: int, days: int = 7) -> dict:
     """The two windows: the last ``days`` days and since the start (every closed trade)."""
     return {"7d": (now_ms - days * DAY_MS, now_ms), "since_start": (0, now_ms)}
@@ -372,8 +497,8 @@ def _shadow_cells(rows: list[tuple]) -> dict:
             base[key] = (_f(d.get("pnl_equity")), reason, _f(d.get("actual_pnl_equity")))
     out = {"base": {"trades": len(base), "mean_eq": _r(_mean(v[0] for v in base.values()), 5),
                     "actual_mean_eq": _r(_mean(v[2] for v in base.values()), 5)}}
-    for v in SHADOW_VARIANTS:
-        pairs, not_entered, open_ = [], 0, 0
+    for v in ALL_SHADOWS:
+        pairs, not_entered, open_, beyond = [], 0, 0, 0
         for kind, key, roe, reason, resolved, d in rows:
             if kind != v:
                 continue
@@ -383,7 +508,8 @@ def _shadow_cells(rows: list[tuple]) -> dict:
                 not_entered += 1
             elif key in base and _f(d.get("pnl_equity")) is not None:
                 pairs.append((_f(d.get("pnl_equity")), base[key][0], reason, base[key][1]))
-        extra = {k: x for k, x in (("not_entered", not_entered), ("open", open_)) if x}
+                beyond += 1 if d.get("stop_beyond_liq") else 0
+        extra = {k: x for k, x in (("not_entered", not_entered), ("open", open_), ("stop_beyond_liq", beyond)) if x}
         out[v] = _variant_cell(pairs, extra)
     return out
 
@@ -396,7 +522,7 @@ def shadow_summary(daily_ro: Optional[sqlite3.Connection], paper_ro: Optional[sq
     'Not entered' (sizing refused, lev10 / lev20) and unresolved rows are counted apart. Descriptive only."""
     if daily_ro is None:
         return {"error": "daily3.db 없음", "label": SHADOW_LABEL}
-    kinds = ("base", *SHADOW_VARIANTS)
+    kinds = ("base", *ALL_SHADOWS)
     try:
         got = daily_ro.execute(
             f"SELECT key, kind, account_id, roe, exit_reason, resolved, data FROM shadows WHERE day >= ? AND day <= ? "
@@ -471,7 +597,8 @@ def rr_packet(paper_ro: Optional[sqlite3.Connection], daily_ro: Optional[sqlite3
         names_ko = dict(STRATEGY_KO)
     win = windows(now_ms, days)
     try:
-        tabs = {w: table(closed(paper_ro, a, b, round_trip=rt), ft) for w, (a, b) in win.items()}
+        got = {w: closed(paper_ro, a, b, round_trip=rt) for w, (a, b) in win.items()}
+        tabs = {w: table(rows, ft) for w, rows in got.items()}
         flips = {w: stats([t for *_x, t in closed(paper_ro, a, b, kinds=("random",), round_trip=rt)], ft)
                  for w, (a, b) in win.items()}
     except sqlite3.Error as exc:
@@ -498,12 +625,24 @@ def rr_packet(paper_ro: Optional[sqlite3.Connection], daily_ro: Optional[sqlite3
                         "짧아 우연일 수 있음: 설명용, 판정 아님")}
     shadows["lower_leverage"] = {w: leverage_turns(v.get("strategies") or {}) for w, v in sh.items()
                                  if "error" not in v}
+    # docs/observation-shadows-3.md: fixed 30 / 40 / 50x and the stop widths at the real trade's leverage
+    shadows["new_variants"] = {
+        "doc": "docs/observation-shadows-3.md", "variants_ko": SHADOW_KO3, "columns": SHADOW3_COLUMNS,
+        "by_strategy_since_start": {k: b for k, b in ((k, shadow_brief3(v)) for k, v in
+                                                      (sh["since_start"].get("strategies") or {}).items()) if b},
+        "stop_turns": {w: stop_turns(v.get("strategies") or {}) for w, v in sh.items() if "error" not in v},
+        "note": ("같은 거래를 레버리지만(lev30·40·50, 크기 조건 그대로) 또는 처음 손절폭만(stopw: 실제와 같은 레버리지, "
+                 "15% 상한·청산가 여유 없이, 청산은 적용) 바꾼 기록. 전체 숫자는 all_strategies, lev30~50의 플러스 전환은 "
+                 "lower_leverage, stop_turns = base(2 ATR) 마이너스→그 손절폭 플러스(turns_positive)와 반대(turns_negative). "
+                 "30일 체크포인트(2026-11-01) 전 결론 없음")}
     if "error" in sh["since_start"]:
         shadows["error"] = sh["since_start"]["error"]
     return {"window": {w: {"from": a, "to": b} for w, (a, b) in win.items()}, "rules": {**lad, "note": RULES_NOTE},
             "lab_tests": LAB_TESTS, "trades": {w: t["all"].get("trades", 0) for w, t in tabs.items()},
             "all_strategies": {w: t["all"] for w, t in tabs.items()}, "coin_flips": flips,
-            "strategies": strategies, "shadows": shadows, "small_n": SMALL_N, "how_to_read": HOW_TO_READ,
+            "strategies": strategies, "shadows": shadows,
+            "tiers": tier_packet(got),
+            "small_n": SMALL_N, "how_to_read": HOW_TO_READ,
             "note": "모두 코드 계산(수수료·펀딩 포함한 끝난 거래). 동전 봇(무작위 진입, 같은 규칙)이 규칙 자체의 손익비 기준"}
 
 

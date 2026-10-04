@@ -3,8 +3,9 @@ liq.db; agents3.db is only read here. Code computes every number; the staff read
 
 - ``cost_packet``     Monday, 운영·검증팀 (cost_review): per strategy and timeframe over the last 7 days, the P&L before
                       costs, fees, funding and the engine's fixed slippage, costs against the move, the accounts that
-                      were up before costs and down after them, the recorded order-book slippage (fill_costs) and the
-                      signal-to-fill delay.
+                      were up before costs and down after them, the recorded order-book slippage (fill_costs), the
+                      signal-to-fill delay and ``real_slippage`` (paperbot/slipcost.week_packet with ``daily_ro``: the
+                      nightly check's estimated real stop slippage and the cost at 2x/5x/10x the size; bounded).
 - ``combo_packet``    Tuesday, 리스크팀 (combo_review): the strategies' daily P&L correlations (top pairs, clusters),
                       the hours many strategies lost together, and consensus entries (several strategies, same coin,
                       same side within ``window_ms``) against single ones, with the coin flips for scale. The rooms
@@ -12,7 +13,8 @@ liq.db; agents3.db is only read here. Code computes every number; the staff read
                       searches; it reuses ``corr_clusters``).
 - ``coin_packet``     Wednesday, 손익 복기팀 (coin_review): per strategy x coin and strategy x regime at entry (the
                       trade's chart context, cards.REGIME_KO): trades, win rate, mean ROE, P&L; cells under ``min_n``
-                      trades are marked small; best and worst coin per strategy.
+                      trades are marked small; best and worst coin per strategy. The rooms add ``entry_moment``
+                      (agents/entrymoment.py: outcomes by the moment of entry and the signals not taken).
 - ``learning_packet`` Saturday, 총괄 (learning_review): the week's graded predictions by role, the ones still waiting,
                       the week's 5-year and lab tests with their gate results, repeated hypotheses and tests, what the
                       entry study already concluded, and the daily debate's record.
@@ -89,7 +91,8 @@ def _cost_cell(ts: list[dict], slip: float) -> dict:
             "win_rate": round(sum(1 for t in ts if _f(t.get("pnl")) > 0) / n, 3)}
 
 
-def cost_packet(paper_ro: Optional[sqlite3.Connection], now_ms: int, days: int = 7, top: int = 12) -> dict:
+def cost_packet(paper_ro: Optional[sqlite3.Connection], now_ms: int, days: int = 7, top: int = 12,
+                daily_ro: Optional[sqlite3.Connection] = None) -> dict:
     if paper_ro is None:
         return {"error": "paper3.db 없음"}
     since = now_ms - days * DAY_MS
@@ -135,6 +138,7 @@ def cost_packet(paper_ro: Optional[sqlite3.Connection], now_ms: int, days: int =
            "assumed_slippage": slip}
     out["book_slippage"] = _book_slippage(paper_ro, since, now_ms, slip)
     out["signal_delay"] = _signal_delay(paper_ro, since, now_ms)
+    out["real_slippage"] = _slip_week(daily_ro, paper_ro, since, now_ms)
     out["how_to_read"] = ("gross_before_costs = 손익 + 수수료 + 펀딩 + 슬리피지 추정(엔진은 모든 주문을 기준가에 고정 슬리피지 "
                           f"{slip * 100:.2f}%를 붙여 체결, slippage_est = 그 비율 × 진입·청산 금액). costs = 수수료 + 펀딩 + 슬리피지 "
                           "추정, cost_vs_gross = costs ÷ |비용 전 손익|(1 넘으면 비용이 가격 움직임보다 큼). flipped_by_costs = 비용 "
@@ -142,6 +146,28 @@ def cost_packet(paper_ro: Optional[sqlite3.Connection], now_ms: int, days: int =
                           "기록(fill_costs, 체결은 바꾸지 않음). 단위 $, 비율 0.01 = 1%")
     out["note"] = "코드 계산(끝난 거래, 지난 7일). 거래 30건 미만 칸은 운일 수 있음. 직원은 체결 방식·규칙을 바꿀 수 없음"
     return out
+
+
+SLIP_ROWS = 12          # size-cost rows (coin x timeframe) in the cost packet, the most orders first
+
+
+def _slip_week(daily_ro: Optional[sqlite3.Connection], paper_ro: Optional[sqlite3.Connection], since: int,
+               until: int, max_rows: int = SLIP_ROWS) -> dict:
+    """paperbot/slipcost.week_packet (read-only, descriptive): the nightly check's estimated real STOP_MARKET
+    slippage of the week's SL / LOCK / LIQ exits (daily3.db stop_slips) and the cost at 2x / 5x / 10x the paper size
+    (fill_costs), bounded to ``max_rows`` coin x timeframe rows."""
+    from ..slipcost import week_packet
+    try:
+        pk = week_packet(daily_ro, paper_ro, since, until)
+    except (sqlite3.Error, KeyError, TypeError, ValueError) as exc:
+        return {"error": f"실제 슬리피지 추정을 읽지 못함: {type(exc).__name__}"}
+    sc = pk.get("size_costs") or {}
+    rows = sc.get("rows")
+    if isinstance(rows, list) and len(rows) > max_rows:
+        keep = sorted(rows, key=lambda r: -int(r.get("orders") or 0))[:max_rows]
+        sc["rows"] = keep
+        sc["rows_left_out"] = len(rows) - len(keep)
+    return pk
 
 
 def _book_slippage(paper_ro: sqlite3.Connection, since: int, until: int, assumed: float) -> dict:

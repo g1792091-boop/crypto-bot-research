@@ -9,6 +9,8 @@ would have paid walking it:
     slip_best   (VWAP - best price) / best, in the order's adverse direction
     slip_mid    (VWAP - mid) / mid           (includes half the spread)
     enough      whether the fetched depth (``limit`` levels a side) covered the whole order
+    book        the walked side's levels [[price, qty], ...] up to 10x the order's size (``book_levels``; rows
+                recorded before 2026-10-04 have none), for the nightly 2x/5x/10x walks (paperbot/slipcost.py)
 
 Nothing here changes a fill: the engine is untouched, the rows only go to ``fill_costs`` in
 paper3.db (the live runner is its writer) and to the nightly report.
@@ -37,6 +39,27 @@ import statistics
 from typing import Callable, Iterable, Optional
 
 LIMIT = 100
+# the walked side of the book kept with each row (``book``: [[price, qty], ...] best first), so the nightly check can
+# walk 2x / 5x / 10x the size exactly (paperbot/slipcost.py): the levels up to and including the one that covers
+# BOOK_KEEP_MULTIPLE x the order's notional, at most BOOK_KEEP_MAX levels (all that was fetched; on the big coins a
+# handful of levels, so a row stays small). Fewer levels than that would make slipcost call a size 'too thin' that the
+# fetched book did cover.
+BOOK_KEEP_MULTIPLE = 10
+BOOK_KEEP_MAX = LIMIT
+
+
+def book_levels(levels: Iterable, notional: float, multiple: float = BOOK_KEEP_MULTIPLE,
+                max_levels: int = BOOK_KEEP_MAX) -> list:
+    """[[price, qty], ...] of ``levels`` (best first) until ``multiple`` x ``notional`` is covered, at most
+    ``max_levels``. Recorded levels that do not cover a size make slipcost say 'book too thin' for it."""
+    out, want, seen = [], float(multiple) * float(notional), 0.0
+    for p, q in levels:
+        if len(out) >= max_levels or seen >= want:
+            break
+        p, q = float(p), float(q)
+        out.append([p, q])
+        seen += p * q
+    return out
 
 
 def book_cost(levels: Iterable, notional: float, side: int, best: float, mid: float) -> dict:
@@ -161,6 +184,10 @@ class FillProbe:
             r.update(book_cost(lv, r["notional"], r["order_side"], best, (bid + ask) / 2),
                      best=best, spread=(ask - bid) / ((ask + bid) / 2), status="ok",
                      book_ts=bk.get("T") or bk.get("E"))
+            try:                    # the levels walked, for the 2x/5x/10x walks of the nightly check (records only)
+                r["book"] = book_levels(lv, r["notional"])
+            except (TypeError, ValueError):
+                pass
         return rows + bar_recs
 
 
