@@ -21,7 +21,7 @@
     $("today-at").textContent = `${kdate(t.since)} 0시부터`;
     $("today-tiles").innerHTML = [
       ["오늘 거래", t.trades, `매매법 계좌 ${t.strategy_trades}건`],
-      ["매매법 계좌 손익", `<span class="${t.pnl >= 0 ? "up" : "down"}">${usd(t.pnl)}</span>`, "수수료·펀딩 포함, 180개 합계"],
+      ["매매법 계좌 손익", `<span class="${t.pnl >= 0 ? "up" : "down"}">${usd(t.pnl)}</span>`, `수수료·펀딩 포함, ${RUN.strategy_accounts}개 합계`],
       ["이긴 거래", t.strategy_trades ? `${Math.round(t.wins / t.strategy_trades * 100)}%` : "—", `${t.wins} / ${t.strategy_trades}`],
       ["강제청산", t.liquidations, "오늘 청산된 거래"],
     ].map(([k, val, s]) => `<div class="tile"><div class="k">${k}</div><div class="v">${val}</div><div class="s">${s}</div></div>`).join("");

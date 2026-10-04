@@ -58,7 +58,7 @@ function renderMarket() {
         : `<p class="empty">등록된 일정이 없습니다 (data/macro_events.csv)</p>`}
       ${(d.events_problems || []).length ? `<div class="down" style="font-size:11px">일정 파일에서 읽지 못한 줄: ${d.events_problems.map(esc).join(" · ")}</div>` : ""}
     </div>
-    <p class="muted" style="font-size:11px">참고용 바깥 자료입니다. 무료 공개 자료라 늦거나 비어 있을 수 있고(미국 지수는 장이 열린 시간에만 움직임), 195개 계좌의 매매에는 쓰이지 않습니다.</p>`;
+    <p class="muted" style="font-size:11px">참고용 바깥 자료입니다. 무료 공개 자료라 늦거나 비어 있을 수 있고(미국 지수는 장이 열린 시간에만 움직임), ${RUN.accounts}개 계좌의 매매에는 쓰이지 않습니다.</p>`;
 }
 async function loadMarket() {
   try { mk.data = await api("/api/market"); mk.t = Date.now(); } catch (e) { /* keep the last */ }

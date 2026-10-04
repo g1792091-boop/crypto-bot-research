@@ -119,7 +119,7 @@ def _extras_db(path, n_accounts=4, losses=(3, 2)):
     store.add_account("V45_AMB@15m~c1", "V45_AMB", "15m", "copy", now - 3_600_000, "paper-v3", "V45_AMB@15m",
                       {"v": 1, "kind": "copy", "label_ko": "복제 c1", "rule": {"template": "stop_atr", "k": 2.5}})
     for k in range(n_accounts):
-        store.add_account(f"F{k}@5m", f"F{k}", "5m", "strategy", now - 3_600_000, "paper-v3")
+        store.add_account(f"F{k}@30m", f"F{k}", "30m", "strategy", now - 3_600_000, "paper-v3")
     for aid, n in zip(("V45_AMB@15m", "V45_AMB@15m~c1"), losses):
         for i in range(n):
             t = {"strategy_id": "V45_AMB", "timeframe": "15m", "symbol": "BTCUSDT", "side": 1, "qty": 1.0,
@@ -170,8 +170,8 @@ def test_strategy_cards_and_stats_leave_out_its_copy_accounts(tmp_path):
     assert {c["account_id"] for c in data.cards(None, None, 30, 40)} == {"V45_AMB@15m", "V45_AMB@15m~c1"}
 
 
-def test_status_signals_are_the_195s_only(tmp_path):
-    """A new-strategy account's own signal rows (strategy NL<n>, written after the 195's compute) stay out of the
+def test_status_signals_are_the_originals_only(tmp_path):
+    """A new-strategy account's own signal rows (strategy NL<n>, written after the originals' compute) stay out of the
     status panel's 24-hour counts and average delay."""
     import time as _time
     from paperbot.dash.app import Data
@@ -334,10 +334,11 @@ def test_levels_depth_and_ghcoin_board_endpoints(tmp_path):
     c = TestClient(app)
     assert c.get("/api/levels").status_code == 401
     assert c.post("/api/login", json={"password": "correct horse battery"}).status_code == 200
-    r = c.get("/api/levels", params={"symbol": "BTCUSDT", "tf": "5m"}).json()
+    r = c.get("/api/levels", params={"symbol": "BTCUSDT", "tf": "15m"}).json()
     assert r["levels"] and {x["side"] for x in r["levels"]} <= {"support", "resistance"}
     assert all((x["price"] > r["close"]) == (x["side"] == "resistance") for x in r["levels"]) and all(x["ko"] for x in r["levels"])
     assert c.get("/api/levels", params={"symbol": "BTCUSDT", "tf": "1d"}).json()["levels"] == []
+    assert c.get("/api/levels", params={"symbol": "BTCUSDT", "tf": "5m"}).json()["levels"] == []   # a chart interval only
     assert c.get("/api/levels", params={"symbol": "NOPE"}).status_code == 400
     assert c.get("/api/depth", params={"symbol": "ETHUSDT"}).json()["asks"] == [[1.1, 3.0]]
     assert c.get("/api/ghcoin/board").json() == {"coins": {}, "alive": False}
@@ -568,15 +569,18 @@ const api = async () => ({ready: false});
 const document = {querySelectorAll: () => []};
 const setInterval = () => 0;
 const TF_KO = {"5m": "5분", "15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간"};
+const JUDGED_TFS = ["15m", "30m", "1h"];
 const esc = (s) => String(s); const fmt = (x) => String(x); const idName = (id) => id;
 const acct = (tf, trades, kind) => ({account_id: "S@" + tf, timeframe: tf, trades, kind: kind || "strategy"});
-const state = {board: {accounts: [acct("5m", 31), acct("5m", 29), acct("15m", 30), acct("1h", 0), acct("4h", 80),
-  acct("5m", 90, "random")]}};
+const state = {board: {accounts: [acct("15m", 31), acct("15m", 29), acct("30m", 30), acct("1h", 0), acct("4h", 80),
+  acct("15m", 90, "random"), acct("5m", 50)]}};
 """ + _static("checkpoint.js") + """
 setTimeout(() => console.log(JSON.stringify(els["ckpt-body"].innerHTML.replace(/\\s+/g, " "))), 20);""")
     html = json.loads(out)
     assert "진행 상황, 판정 아님:" in html
-    assert "판정 대상 4개" in html and "30건 이상인 계좌 <b>2개</b> (5분 1 · 15분 1 · 30분 0 · 1시간 0)" in html
+    # 4h is observed and a leftover 5m account (an old run) is not judged
+    assert "판정 대상 4개" in html and "30건 이상인 계좌 <b>2개</b> (15분 1 · 30분 1 · 1시간 0)" in html
+    assert __import__("re").search(r"(?<![0-9])5분", html) is None
     assert "합격" in html and "동전 봇 2,000개" in html                     # says how the verdict is made, no preview
 
 
@@ -595,3 +599,64 @@ def test_trade_reading_digests_are_reused_for_ten_minutes(client, monkeypatch):
     # the 순위표's breakdown card (every closed trade) refreshes only while it is on screen
     assert ('setInterval(() => { if (state.view === "board" && document.visibilityState === "visible") load(); }, 600000);'
             in _static("breakdown.js"))
+
+
+def test_dashboard_trades_the_runs_timeframes_only_and_no_filter_offers_5m(client):
+    """5m was removed with the restart of 2026-10-04 (docs/paper-v3-rules-change-1.md): the dashboard's traded
+    timeframes are config.V3_TRADE_TFS, the account counts come from config (156 / 144), and no account or
+    signal filter offers 5m. 5m stays a chart interval (CANDLE_INTERVALS, the trade chart's own buttons)."""
+    import json
+    import re
+
+    import paperbot.dash.app as A
+    from paperbot.config import V3_ACCOUNTS, V3_JUDGED_TFS, V3_STRATEGIES, V3_TRADE_TFS
+    assert A.TRADE_TFS == tuple(V3_TRADE_TFS) and "5m" not in A.TRADE_TFS and "5m" in A.CANDLE_INTERVALS
+    client.post("/api/login", json={"password": "correct horse battery"})
+    shape = client.get("/api/board").json()["run_shape"]
+    assert shape["trade_tfs"] == list(V3_TRADE_TFS) and shape["judged_tfs"] == list(V3_JUDGED_TFS)
+    assert shape["accounts"] == V3_ACCOUNTS == 156 and shape["strategy_accounts"] == V3_STRATEGIES * len(V3_TRADE_TFS) == 144
+    assert client.get("/api/strategy/V45_AMB", params={"tf": "5m"}).status_code == 400
+    # app.js: its defaults match config before /api/board arrives, and the board refills them in place
+    src = _static("app.js")
+    parts = [re.search(r"^const %s = .*?;$" % n, src, re.M).group(0) for n in ("TRADE_TFS", "JUDGED_TFS", "RUN")]
+    parts.append(re.search(r"^function applyRunShape\(.*?^}$", src, re.S | re.M).group(0))
+    out = json.loads(_node("\n".join(parts) + """
+const before = [TRADE_TFS.slice(), JUDGED_TFS.slice(), Object.assign({}, RUN)]; const ref = TRADE_TFS;
+applyRunShape({trade_tfs: ["30m", "1h"], judged_tfs: ["30m"], accounts: 7});
+console.log(JSON.stringify([before, ref === TRADE_TFS, TRADE_TFS, JUDGED_TFS, RUN.accounts]));"""))
+    assert out[0] == [list(V3_TRADE_TFS), list(V3_JUDGED_TFS),
+                      {"accounts": V3_ACCOUNTS, "strategy_accounts": 144, "q1_family": A.V3_Q1_MAIN_FAMILY}]
+    assert out[1:] == [True, ["30m", "1h"], ["30m"], 7]
+    # no account / signal / strategy filter offers 5m; the trade chart still may show it (chart interval only)
+    html = _static("index.html")
+    for seg in ("f-tf", "sig-tf", "s-tf"):
+        block = re.search(r'id="%s">(.*?)</div>' % seg, html, re.S).group(1)
+        tfs = [t for t in re.findall(r'data-tf="([^"]*)"', block) if t and t != "1d"]
+        assert tfs == list(V3_TRADE_TFS), seg
+    assert 'data-tf="5m"' in re.search(r'id="tf-seg">(.*?)</div>', html, re.S).group(1)
+    # no static file hard-codes the old run's counts or a 5m account list
+    for f in os.listdir(STATIC):
+        if f.endswith((".js", ".html")):
+            s = _static(f)
+            assert not re.search(r"(?<![0-9])(195|180)개", s), f
+            assert '["5m", "15m", "30m", "1h"' not in s, f
+    assert "state.board.run_shape" in src and 'tf: "15m"' in src            # the trade chart opens on 15m
+
+
+def test_a_leftover_5m_account_does_not_break_the_timeframe_summary():
+    """An account left on 5m (an old run's database) is not given a line of its own and does not throw."""
+    import json
+    import re
+    src = _static("app.js")
+    parts = ["const state = {board: null}; let INITIAL = 5000;",
+             "const esc = (s) => String(s ?? ''); const name = (a) => a.label_ko || a.account_id;"]
+    for n in ("TF_KO", "TRADE_TFS", "EXTRA_KINDS", "fmt", "cls"):
+        parts.append(re.search(r"^const %s = .*?;$" % n, src, re.M).group(0))
+    for n in ("median", "tfSummary"):
+        parts.append(re.search(r"^function %s\(.*?^}$" % n, src, re.S | re.M).group(0))
+    out = json.loads(_node("\n".join(parts) + """
+state.board = {accounts: [
+  {account_id: "A@5m", strategy: "A", timeframe: "5m", kind: "strategy", wallet: 4000, position: null},
+  {account_id: "A@15m", strategy: "A", timeframe: "15m", kind: "strategy", wallet: 5000, position: null}]};
+console.log(JSON.stringify(tfSummary().split("<tr>").slice(2).map((r) => r.replace(/<[^>]+>/g, " ").trim().split(/\\s+/)[0])));"""))
+    assert out == ["15분", "30분", "1시간", "4시간"]

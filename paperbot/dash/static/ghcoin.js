@@ -29,7 +29,7 @@
           ["5", "15", "60", "240"].map((k) => `<td>${c.scores[k] == null ? "—" : Math.round(c.scores[k] * 100)}</td>`).join("") +
           `<td class="l"><small>${esc(((c.patterns || {})["60"] || []).map((p) => p.name).join(", ") || "—")}</small></td></tr>`).join("") + "</tbody></table>";
     }
-    html += `<p class="muted">GH Coin 코드를 고치지 않고 서버에서 따로 돌린 기록입니다. 195개 paper 계좌와는 섞이지 않습니다. 손익 단위 R = 손절까지 거리.</p>`;
+    html += `<p class="muted">GH Coin 코드를 고치지 않고 서버에서 따로 돌린 기록입니다. ${RUN.accounts}개 paper 계좌와는 섞이지 않습니다. 손익 단위 R = 손절까지 거리.</p>`;
     body.innerHTML = html;
   }
   async function load() {

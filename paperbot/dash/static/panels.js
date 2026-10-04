@@ -33,7 +33,7 @@ function ghRows() {
         <td class="l"><span class="${GH_CLS[c.state] || "muted"}">${esc(GH_STATE_KO[c.state] || c.state)}</span></td>
         <td class="mono">${c.conf == null ? "—" : Math.round(c.conf)}</td><td>${ta(c)}</td></tr>`;
     }).join("") + "</tbody></table>" +
-    `<div class="p2n">${g.alive ? "5분마다 갱신" : "기록기가 15분 넘게 조용함"} · 누르면 그 코인 차트에 GH Coin 선 · 기록만 하는 참고용 (195개 계좌와 무관)</div>`;
+    `<div class="p2n">${g.alive ? "5분마다 갱신" : "기록기가 15분 넘게 조용함"} · 누르면 그 코인 차트에 GH Coin 선 · 기록만 하는 참고용 (${RUN.accounts}개 계좌와 무관)</div>`;
 }
 function usOpen(now) {   // US stocks 09:30-16:00 New York, weekdays
   const ny = new Intl.DateTimeFormat("en-US", {timeZone: "America/New_York", hour12: false, weekday: "short", hour: "2-digit", minute: "2-digit"})

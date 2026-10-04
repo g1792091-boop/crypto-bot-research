@@ -139,7 +139,7 @@
       <div class="toolbar">
         <select id="s-pick" aria-label="매매법"></select>
         <div class="seg" id="s-tf">
-          <button data-tf="5m">5분</button><button data-tf="15m">15분</button><button data-tf="30m">30분</button>
+          <button data-tf="15m">15분</button><button data-tf="30m">30분</button>
           <button data-tf="1h" class="on">1시간</button><button data-tf="4h">4시간</button>
         </div>
         <select id="s-sym" aria-label="코인"></select>
@@ -169,7 +169,7 @@
   <div class="tiles" id="tiles"></div>
   <div class="filters">
     <div class="seg" id="f-tf">
-      <button data-tf="" class="on">전체</button><button data-tf="5m">5분</button><button data-tf="15m">15분</button>
+      <button data-tf="" class="on">전체</button><button data-tf="15m">15분</button>
       <button data-tf="30m">30분</button><button data-tf="1h">1시간</button><button data-tf="4h">4시간</button>
     </div>
     <div class="seg" id="f-kind"><button data-k="" class="on">전체</button><button data-k="strategy">매매법</button><button data-k="random">동전 봇</button><button data-k="copy">복제</button><button data-k="newlab">새 매매법</button></div>
@@ -190,7 +190,7 @@
     <div class="body" id="ckpt-body"><p class="muted">불러오는 중…</p></div>
   </div>
   <div class="card scroll" id="bd">
-    <div class="ph"><span class="t">코인별 · 요일·시간대별 성적 (180개 매매법 계좌)</span><span class="grow"></span><small class="muted" id="bd-at"></small></div>
+    <div class="ph"><span class="t">코인별 · 요일·시간대별 성적 (<span data-run="strategy_accounts">144</span>개 매매법 계좌)</span><span class="grow"></span><small class="muted" id="bd-at"></small></div>
     <div class="body" id="bd-body"><p class="muted">불러오는 중…</p></div>
   </div>
   <div class="card scroll" id="gh">
@@ -287,7 +287,7 @@
 <!-- ========================================================= signals -->
 <section class="view" id="v-signals"><div class="page">
   <div class="filters"><div class="seg" id="sig-tf">
-    <button data-tf="" class="on">전체</button><button data-tf="5m">5분</button><button data-tf="15m">15분</button>
+    <button data-tf="" class="on">전체</button><button data-tf="15m">15분</button>
     <button data-tf="30m">30분</button><button data-tf="1h">1시간</button><button data-tf="4h">4시간</button><button data-tf="1d">일봉(기록)</button>
   </div></div>
   <div class="card scroll"><table><thead><tr><th class="l">봉 마감</th><th class="l">봉</th><th class="l">매매법</th><th class="l">코인</th>

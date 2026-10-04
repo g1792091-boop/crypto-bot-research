@@ -8,7 +8,7 @@ const DG_STATUS = {done: ["끝", "ok"], no_action: ["행동 없음", ""], failed
   stopped_budget: ["한도로 멈춤", "acc"], running: ["진행 중", "live"]};
 const DG_ACTION = {note: "메모", hypothesis: "가설", request_test: "5년 시험", propose_copy: "복제 제안",
   flag_owners: "두 분께 알림", no_action: "행동 없음", team_meeting: "", newlab_tests: "새 매매법 시험"};
-const DG_TFS = ["5m", "15m", "30m", "1h", "4h"];
+const DG_TFS = TRADE_TFS;   // app.js: the run's traded timeframes (no 5m since the restart of 2026-10-04)
 
 function dgKstDay(ms) {   // 'YYYY-MM-DD' in Korea time
   const d = new Date(ms + 9 * 3600e3);

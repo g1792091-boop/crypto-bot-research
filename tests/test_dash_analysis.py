@@ -118,7 +118,7 @@ def test_empty_paper_db_never_errors(tmp_path):
 
 
 def test_health_and_alerts_read_the_nightly_check_with_the_early_kline_label(env, tmp_path):
-    _daily(str(tmp_path / "daily3.db"), {"accounts": 195, "mismatched_accounts": 0, "early_kline": 2},
+    _daily(str(tmp_path / "daily3.db"), {"accounts": 156, "mismatched_accounts": 0, "early_kline": 2},
            labels=("early_kline (거래소 1분봉 확정 전 읽음)", "early_kline (거래소 1분봉 확정 전 읽음)"))
     os.makedirs(tmp_path / "failalert")
     (tmp_path / "failalert" / "paperbot-daily3.service").write_text("2026-10-04")
@@ -138,7 +138,7 @@ def test_health_and_alerts_read_the_nightly_check_with_the_early_kline_label(env
 def test_a_real_mismatch_is_a_problem(tmp_path):
     db = str(tmp_path / "paper3.db")
     _store(db).close()
-    _daily(str(tmp_path / "daily3.db"), {"accounts": 195, "mismatched_accounts": 3})
+    _daily(str(tmp_path / "daily3.db"), {"accounts": 156, "mismatched_accounts": 3})
     out = AN.health(type("D", (), {"db": db, "summary": lambda self, now=None: {}})(),
                     type("R", (), {"agents_db": None})(), str(tmp_path / "daily3.db"), None, None,
                     failalert_dir=str(tmp_path / "none"))

@@ -45,11 +45,18 @@ from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
+from ..config import V3_ACCOUNTS, V3_JUDGED_TFS, V3_Q1_MAIN_FAMILY, V3_STRATEGIES, V3_TRADE_TFS
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATIC = os.path.join(HERE, "static")
 COOKIE = "pb_session"
 SESSION_S = 7 * 86400
-TRADE_TFS = ("5m", "15m", "30m", "1h", "4h")
+# the run's traded timeframes (config.V3_TRADE_TFS: 15m / 30m / 1h / 4h; 5m was removed with the restart of
+# 2026-10-04, docs/paper-v3-rules-change-1.md). 5m stays a chart interval only (CANDLE_INTERVALS).
+TRADE_TFS = tuple(V3_TRADE_TFS)
+# what the browser shows as the run's shape (/api/board 'run_shape'): never hard-coded in the static files
+RUN_SHAPE = {"trade_tfs": list(V3_TRADE_TFS), "judged_tfs": list(V3_JUDGED_TFS), "accounts": V3_ACCOUNTS,
+             "strategy_accounts": V3_STRATEGIES * len(V3_TRADE_TFS), "q1_family": V3_Q1_MAIN_FAMILY}
 DIGEST_TTL_S = 120           # /api/digest/staff reused this long
 TRADES_TTL_S = 600           # /api/digest/week and tf reused this long: they decode every closed trade since the start
 OVERLAP_TTL_S = 600          # /api/overlap result reused this long (the analysis reads weeks of 5-minute equity)
@@ -163,7 +170,7 @@ class Data:
     @staticmethod
     def _extra_fields(a: dict, xstate: Optional[dict]) -> dict:
         """label_ko, rule, description_ko, proposal_id and the runner's status of an extra account (None for the
-        195): from accounts.data (written once by the runner) and state 'extras'."""
+        original accounts): from accounts.data (written once by the runner) and state 'extras'."""
         from ..agents.extra_accounts import KINDS, extra_status, label_of, rule_ko
         raw = a.pop("data", None)
         if a.get("kind") not in KINDS:
@@ -230,7 +237,8 @@ class Data:
         from ..agents.roster3 import STRATEGY_KO
         # strategy_ko: the names every Telegram message uses (app.js name() shows them, the code in a tooltip)
         return {"ts": st[0] if st else None, "accounts": rows, "best_random": best_random,
-                "initial": self.initial(), "extras_runtime": xstate, "strategy_ko": dict(STRATEGY_KO)}
+                "initial": self.initial(), "extras_runtime": xstate, "strategy_ko": dict(STRATEGY_KO),
+                "run_shape": RUN_SHAPE}
 
     def initial(self) -> float:
         """Starting wallet of every account: what the running bot recorded, else the rule."""
@@ -279,8 +287,8 @@ class Data:
             run = self.state(c, "run")
             alerts = [dict(r) for r in c.execute(
                 "SELECT ts, level, text FROM alerts WHERE level != 'INFO' ORDER BY rowid DESC LIMIT 50")]
-            # the 195's signals only: a new-strategy account's own rows (strategy 'NL<n>', written after the
-            # 195's compute) are not theirs (as in agents/packets3.py)
+            # the original accounts' signals only: a new-strategy account's own rows (strategy 'NL<n>', written
+            # after the originals' compute) are not theirs (as in agents/packets3.py)
             sig = [dict(r) for r in c.execute(
                 "SELECT timeframe, status, COUNT(*) AS n, AVG(delay_ms) AS avg_delay FROM signal_log "
                 "WHERE bar_close > ? AND strategy NOT GLOB 'NL[0-9]*' GROUP BY timeframe, status",
@@ -659,7 +667,7 @@ PUBLIC_PATHS = ("/login", "/api/login", "/static/login.html", "/static/login.css
                 # the phone home-screen shortcut: a browser fetches these without the login cookie (no data in them)
                 "/static/manifest.json", "/static/icon.svg", "/static/icon-192.png", "/static/icon-512.png",
                 "/static/apple-touch-icon.png")
-# every kline interval Binance futures serves: the bot chart may show any of them (the accounts trade 5m-4h only)
+# every kline interval Binance futures serves: the bot chart may show any of them (the accounts trade 15m-4h only)
 CANDLE_INTERVALS = ("1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w", "1M")
 TICK_EVERY_MS = 15 * 60_000  # the agents timer (deploy/paperbot-agents.timer)
 SAY_MAX_CHARS = 1_000        # one owner post (rooms_db.MAX_OWNER_TEXT)
@@ -1817,8 +1825,8 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
 
     @app.get("/api/profile/{strategy}")
     def get_profile(strategy: str):
-        """The strategy's 5-year card, plus ``live_risk`` (agents/survival.py, read-only, cached ~10 min): the five
-        accounts' deepest drawdown and the highest account bust probability (accounts with >= 20 trades)."""
+        """The strategy's 5-year card, plus ``live_risk`` (agents/survival.py, read-only, cached ~10 min): its
+        timeframe accounts' deepest drawdown and the highest account bust probability (accounts with >= 20 trades)."""
         from ..agents.packets3 import profile_card
         c = profile_card(strategy)
         if c is None:
@@ -1941,7 +1949,7 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
 
     @app.get("/api/digest/tf")
     def get_digest_tf():
-        """Each strategy's five timeframe accounts side by side and the ones that disagree (tf_split meetings)."""
+        """Each strategy's timeframe accounts side by side and the ones that disagree (tf_split meetings)."""
         from ..agents import digest as DG
 
         def make():

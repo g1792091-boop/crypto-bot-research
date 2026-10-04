@@ -557,7 +557,7 @@ function renderRoomSide() {
     ${waiting.map(propCard).join("")}<div class="hint">${ready
       ? "승인하면 live 실행기가 코드로 다시 확인한 뒤 다음 5분 봉 경계에 원본 계좌와 같은 시작 자금의 새 paper 계좌로 따로 시작합니다. 시작된 계좌는 거절로 멈출 수 없습니다."
       : "승인해도 아직 계좌가 만들어지지 않습니다(live 실행기의 추가 계좌 기능이 켜지기 전). 기능이 켜지면 원본 계좌와 같은 시작 자금의 새 paper 계좌로 따로 시작하고, 그 전에 한 승인은 한 번 더 눌러야 합니다."}
-    원본 195개 계좌와 규칙은 그대로입니다. 코드 관문을 통과하지 못한 제안은 누구도 승인할 수 없습니다.</div></div>`;
+    원본 ${RUN.accounts}개 계좌와 규칙은 그대로입니다. 코드 관문을 통과하지 못한 제안은 누구도 승인할 수 없습니다.</div></div>`;
   h += `<div class="rsec2"><h4>이 방은 언제 회의하나요</h4><div class="dim">${esc((info && info.schedule_ko) || (r && r.schedule_ko) || ROOM_SCHEDULE[rs.cur] || "")}</div>
     <div class="hint">직원들이 스스로 회의를 열고 결정합니다. 두 분이 글을 남기면 다음 차례에 그 이야기도 다룹니다.</div></div>`;
   if (info && info.members_info) h += `<div class="rsec2"><h4>멤버 <small>${info.members_info.length}명</small></h4>${info.members_info.map((m) =>

@@ -6,7 +6,11 @@ const TF_KO = {"1m": "1분", "3m": "3분", "5m": "5분", "15m": "15분", "30m": 
 // seconds per bar (a month counted as 30 days: only used to place markers, never for the countdown)
 const TF_SEC = {"1m": 60, "3m": 180, "5m": 300, "15m": 900, "30m": 1800, "1h": 3600, "2h": 7200, "4h": 14400, "6h": 21600,
   "8h": 28800, "12h": 43200, "1d": 86400, "3d": 259200, "1w": 604800, "1M": 2592000};
-const TRADE_TFS = ["5m", "15m", "30m", "1h", "4h"];
+// the run's traded timeframes and size (config.V3_TRADE_TFS etc.; 5m was removed with the restart of 2026-10-04 and
+// is a chart interval only). /api/board 'run_shape' refills these in place (applyRunShape): the other files share them.
+const TRADE_TFS = ["15m", "30m", "1h", "4h"];
+const JUDGED_TFS = ["15m", "30m", "1h"];
+const RUN = {accounts: 156, strategy_accounts: 144, q1_family: 108};
 // the chart's account features (entries, exits, position lines, S/R) exist on the accounts' own timeframes only
 const botTf = (tf) => TRADE_TFS.includes(tf);
 const REASON_KO = {SL: "손절", LOCK: "익절 잠금", LIQ: "강제청산", TP: "익절", HALT: "정지", MANUAL: "수동", END: "종료"};
@@ -17,6 +21,15 @@ const OUTCOME_KO = {ENTERED: "진입", SKIPPED: "건너뜀", REJECTED: "거절",
 const EXTRA_KINDS = ["copy", "newlab"];
 const EXTRA_ST_KO = {active: "도는 중", suspended: "멈춤(보류)", held: "정지(동결)"};
 let INITIAL = 5000;   // replaced by the bot's own value from /api/board
+function applyRunShape(r) {
+  if (!r) return;
+  if (Array.isArray(r.trade_tfs) && r.trade_tfs.length) TRADE_TFS.splice(0, TRADE_TFS.length, ...r.trade_tfs);
+  if (Array.isArray(r.judged_tfs) && r.judged_tfs.length) JUDGED_TFS.splice(0, JUDGED_TFS.length, ...r.judged_tfs);
+  for (const k of Object.keys(RUN)) if (typeof r[k] === "number") RUN[k] = r[k];
+  // counts written in the page itself (<span data-run="strategy_accounts">)
+  if (typeof document !== "undefined" && document.querySelectorAll)
+    document.querySelectorAll("[data-run]").forEach((el) => { if (RUN[el.dataset.run] != null) el.textContent = RUN[el.dataset.run]; });
+}
 const $ = (id) => document.getElementById(id);
 const state = {
   board: null, mark: {}, fund: {}, tick: {}, sym: "BTCUSDT", tf: "15m", acct: "", markers: true, view: "trade",
@@ -349,7 +362,7 @@ function setSym(s) {
 function fillAcctFilter() {
   const sel = $("acct-filter"); const cur = state.acct;
   const list = state.board ? state.board.accounts.filter((a) => a.timeframe === state.tf) : [];
-  sel.innerHTML = `<option value="">${state.tf === "1d" ? "일봉은 기록 전용 (계좌 없음)" : !botTf(state.tf) ? `${TF_KO[state.tf] || state.tf}에는 계좌가 없음 (진입·청산 표시 없음)` : "계좌를 고르면 진입·청산이 표시됩니다"}</option>` +
+  sel.innerHTML = `<option value="">${state.tf === "1d" ? "일봉은 기록 전용 (계좌 없음)" : !botTf(state.tf) ? (list.length ? `${TF_KO[state.tf] || state.tf}: 지금 매매하지 않는 봉 (진입·청산 표시 없음)` : `${TF_KO[state.tf] || state.tf}에는 계좌가 없음 (진입·청산 표시 없음)`) : "계좌를 고르면 진입·청산이 표시됩니다"}</option>` +
     list.map((a) => `<option value="${esc(a.account_id)}">${esc(name(a))}</option>`).join("");
   sel.value = list.some((a) => a.account_id === cur) ? cur : "";
   state.acct = sel.value;
@@ -481,6 +494,7 @@ function tfSummary() {
 async function loadBoard() {
   state.board = await api("/api/board");
   if (state.board.initial) INITIAL = state.board.initial;
+  applyRunShape(state.board.run_shape);
   if (!$("acct-filter").options.length || $("acct-filter").options.length === 1) fillAcctFilter();
   renderTicker();
   if (state.view === "board") renderBoard();
@@ -649,7 +663,7 @@ function renderExtraInfo(x) {
     상태 ${esc(EXTRA_ST_KO[x.extra_status] || x.extra_status || "—")}</div>
     ${x.kind === "newlab" && x.spec ? `<div class="muted mono">${esc(JSON.stringify(x.spec))}</div>` : ""}
     ${ev ? `<ul class="reasons">${ev}</ul>` : ""}
-    <div class="muted">원본 195개 계좌와 따로 셉니다. 시작된 계좌는 규칙대로 돌고, 거절로 멈출 수 없습니다.</div></div>`;
+    <div class="muted">원본 ${RUN.accounts}개 계좌와 따로 셉니다. 시작된 계좌는 규칙대로 돌고, 거절로 멈출 수 없습니다.</div></div>`;
 }
 function renderAcctPos(p) {
   const el = $("a-pos");

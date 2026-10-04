@@ -1,5 +1,5 @@
 "use strict";
-// 매매법 tab: one strategy at a time. Its five timeframe accounts, its entries on the chart,
+// 매매법 tab: one strategy at a time. Its timeframe accounts (TRADE_TFS), its entries on the chart,
 // its 5-year character (same rules), and the loss cards built by code at every losing close.
 // Uses helpers and state from app.js ($, api, esc, fmt, pct, px, cls, coin, css, tsKo, state, openAccount).
 const ss = {list: null, name: null, tf: "1h", sym: "BTCUSDT", filter: "", tab: "cards", markers: true,
@@ -51,13 +51,13 @@ function liveRec(list) {
   r.be = r.avgW != null && r.avgL ? Math.abs(r.avgL) / (r.avgW + Math.abs(r.avgL)) : null;
   return r;
 }
-// 최대 낙폭 and 파산 확률 of the strategy's five accounts (server-side, /api/profile live_risk: agents/survival.py)
+// 최대 낙폭 and 파산 확률 of the strategy's timeframe accounts (server-side, /api/profile live_risk: agents/survival.py)
 function riskSpans(lr) {
   if (!lr || lr.error) return "";
   const pc = (x) => (x * 100 < 1 && x > 0 ? (x * 100).toFixed(1) : Math.round(x * 100)) + "%";
   let s = "";
   if (lr.max_dd_pct != null) {
-    s += `<span title="5개 봉 계좌를 합친 자금이 지금까지 가장 높았던 때에서 가장 많이 내려간 폭(5분마다 기록된 평가 자금, 열린 포지션 포함)${lr.max_dd_usd != null ? `. 금액으로 $${Math.round(lr.max_dd_usd).toLocaleString("en-US")}` : ""}${lr.max_dd_at ? `, 바닥 ${lr.max_dd_at}` : ""}">최대 낙폭 <b class="${lr.max_dd_pct >= 0.3 ? "down" : ""}">${lr.max_dd_pct > 0 ? "-" : ""}${pc(lr.max_dd_pct)}</b></span>`;
+    s += `<span title="이 매매법의 봉별 계좌를 모두 합친 자금이 지금까지 가장 높았던 때에서 가장 많이 내려간 폭(5분마다 기록된 평가 자금, 열린 포지션 포함)${lr.max_dd_usd != null ? `. 금액으로 $${Math.round(lr.max_dd_usd).toLocaleString("en-US")}` : ""}${lr.max_dd_at ? `, 바닥 ${lr.max_dd_at}` : ""}">최대 낙폭 <b class="${lr.max_dd_pct >= 0.3 ? "down" : ""}">${lr.max_dd_pct > 0 ? "-" : ""}${pc(lr.max_dd_pct)}</b></span>`;
   }
   if (lr.p_bust != null) {
     s += `<span title="이 매매법 봉 계좌의 지금까지 끝난 거래(20건 이상인 계좌만)를 무작위로 다시 뽑아 앞으로 30일을 ${(lr.paths || 10000).toLocaleString("en-US")}번 흉내 냈을 때, 잔고가 파산선(엔진 기준 $10) 아래로 떨어진 비율. 봉 계좌 중 가장 높은 값(${TF_KO[lr.p_bust_tf] || lr.p_bust_tf || ""}). 지난 거래가 앞으로도 같은 모양이라는 가정이라 예측이 아니라 설명용입니다">파산 확률 <b class="${lr.p_bust >= 0.05 ? "down" : ""}">${pc(lr.p_bust)}</b></span>`;
@@ -82,7 +82,7 @@ function pickStrat(n) { ss.name = n; renderSList(); renderStrat(); }
 // from a position anywhere (trade chart box, position tables): this strategy, at that account's timeframe and coin
 function openStrategy(name, tf, sym) {
   ss.name = name;
-  if (tf && tf !== "1d") ss.tf = tf;
+  if (tf && TRADE_TFS.includes(tf)) ss.tf = tf;   // an untraded timeframe (1d, an old 5m account) keeps the tab's own
   if (sym && TRADE_SYMS.includes(sym)) ss.sym = sym;
   show("strat");
 }

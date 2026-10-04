@@ -1,6 +1,6 @@
 "use strict";
 // Checkpoint verdicts (paperbot/checkpoint.py via /api/checkpoint): read-only, on the 순위표 view.
-// Uses the helpers of app.js ($, api, esc, fmt, idName, state, TF_KO).
+// Uses the helpers of app.js ($, api, esc, fmt, idName, state, TF_KO, JUDGED_TFS: 15m / 30m / 1h).
 (function () {
   const CK_TAG = {"2차 통과": "long", "1차 합격": "acc", "불합격": "bust", "보류": "", "관찰용": ""};
   let open = false;   // show every row (default: the judged ones only)
@@ -8,9 +8,9 @@
   // Before the first verdict: how many of the judged accounts (the strategies' accounts, 4h only observed) have
   // the 30 closed trades a verdict needs, from the board. A count only, never a pass/fail preview.
   function progress() {
-    const judged = ((state.board || {}).accounts || []).filter((a) => a.kind === "strategy" && a.timeframe !== "4h");
+    const judged = ((state.board || {}).accounts || []).filter((a) => a.kind === "strategy" && JUDGED_TFS.includes(a.timeframe));
     if (!judged.length) return "";
-    const tfs = ["5m", "15m", "30m", "1h"].map((tf) => `${TF_KO[tf]} ${judged.filter((a) => a.timeframe === tf && a.trades >= 30).length}`);
+    const tfs = JUDGED_TFS.map((tf) => `${TF_KO[tf]} ${judged.filter((a) => a.timeframe === tf && a.trades >= 30).length}`);
     return `<p><b>진행 상황, 판정 아님:</b> 판정 대상 ${judged.length}개(매매법 계좌, 4시간봉은 관찰용) 중 지금까지 끝난 거래가
       30건 이상인 계좌 <b>${judged.filter((a) => a.trades >= 30).length}개</b> (${tfs.join(" · ")}).</p>
       <p class="muted">거래 수만 센 것입니다. 합격·불합격은 판정일에 계좌마다 동전 봇 2,000개와 비교해서 정하고, 그때 30건이 안 된 계좌는 "보류"입니다.</p>`;
