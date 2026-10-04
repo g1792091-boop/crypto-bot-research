@@ -143,6 +143,7 @@ class Terminal {
         <select class="nt-layout" title="화면 분할">${Object.entries(LAYOUTS).map(([k, n]) => `<option value="${k}">${n}</option>`).join("")}</select>
         <button data-nt="shot" title="스크린샷 저장">${IC.shot}</button>
         <button data-nt="side" class="nt-tog" title="흐름 · 전략 패널">${IC.side}<span>패널</span></button>
+        <button data-nt="lab" class="nt-lab-btn" title="내 차트에 띄운 보조지표로: 노이즈 적은 값 찾기 → 매매법 만들기 → 검증(처음 보는 구간·다른 코인) → 데모 투입 → 지금 포지션 실시간">🔬 내 지표</button>
         <button data-nt="mkt" class="nt-mkt-btn" title="지금 이 코인에 시장가로 들어간다면? — 지지·저항·매수벽/매도벽·15분/1시간/4시간 추세·내 보조지표를 분석하고 GH Coin 에이전트 팀과 뉴트론이 토론해 롱/숏·손절·익절·승률을 알려줍니다 (주문은 안 함)">⚡ 시장가</button>
         <span class="nt-grow"></span>
         <span class="nt-badge" title="분석 전용 — 주문은 트레이딩 모듈에서">분석 전용</span>
@@ -299,6 +300,7 @@ class Terminal {
       }
       case "shot": this._shot(); break;
       case "mkt": this._marketEntry(); break;
+      case "lab": this._chartLab(); break;
       case "side": S.side = !S.side; this._save(); this._syncSide(); this.cur?.tc.refreshFlow(); break;
       case "example": this.root.querySelector(".nt-strat").value = JSON.stringify({ ...EXAMPLE, interval: this.S.cells[this.S.active].interval }, null, 2); break;
       case "strat-run": this._runStrat(); break;
@@ -669,14 +671,20 @@ class Terminal {
     const cfg = this.S.cells[this.S.active] || {}, e = (x) => this.esc(String(x ?? ""));
     if (typeof window.ghCoinMarketEntry !== "function") { this.toast("⚡ 시장가는 GH Coin 앱에서 쓸 수 있습니다 (GHCoin.exe)", "err"); return; }
     let sym = String(cfg.symbol || "BTCUSDT").toUpperCase(); const m = sym.match(/^KRW-(\w+)$/); if (m) sym = m[1] + "USDT"; if (!/USDT$/.test(sym)) sym += "USDT";
-    let pn = this.root.querySelector(".nt-mkt"); if (!pn) { pn = document.createElement("div"); pn.className = "nt-mkt"; this.root.appendChild(pn); }
+    let pn = this.root.querySelector(".nt-mkt:not(.nt-mylab)"); if (!pn) { pn = document.createElement("div"); pn.className = "nt-mkt"; this.root.appendChild(pn); }
     const steps = [];
-    const head = `<div class="nt-mkt-h"><b>⚡ 시장가 · ${e(sym.replace("USDT", ""))}</b><span class="muted">코인 선물 기준 · 주문은 직접</span><button data-x>✕</button></div>`;
-    const paint = (body) => { pn.innerHTML = head + body; pn.querySelector("[data-x]").onclick = () => pn.remove(); };
-    paint(`<div class="nt-mkt-st">분석 시작…</div>`);
+    if (this._mktBusy) return; this._mktBusy = true;
+    const live = !!this._mktLive, head = `<div class="nt-mkt-h"><b>⚡ 시장가 · ${e(sym.replace("USDT", ""))}</b><span class="muted">${live ? "🔴 실시간 · " + new Date().toLocaleTimeString("ko-KR") : "코인 선물 기준 · 주문은 직접"}</span><label class="nt-mkt-live" title="60초마다 다시 분석 (토론은 5분에 한 번)"><input type="checkbox" data-live ${live ? "checked" : ""}> 실시간</label><button data-x>✕</button></div>`;
+    const stop = () => { clearInterval(this._mktTimer); this._mktTimer = 0; this._mktLive = false; };
+    const paint = (body) => { pn.innerHTML = head + body; pn.querySelector("[data-x]").onclick = () => { stop(); pn.remove(); };
+      pn.querySelector("[data-live]").onchange = (ev) => { if (ev.target.checked) { this._mktLive = true; this._mktSym = sym; clearInterval(this._mktTimer); this._mktTimer = setInterval(() => { if (!this.root.isConnected || !this.root.querySelector(".nt-mkt:not(.nt-mylab)")) return stop(); this._marketEntry(); }, 60e3); } else stop(); }; };
+    const debate = !live || !this._mktDebAt || Date.now() - this._mktDebAt > 5 * 60e3; if (debate) this._mktDebAt = Date.now();
+    if (!live || !pn.innerHTML) paint(`<div class="nt-mkt-st">분석 시작…</div>`);
     const btn = this.root.querySelector('[data-nt="mkt"]'); if (btn) btn.disabled = true;
     try {
-      const r = await window.ghCoinMarketEntry(sym, (t) => { steps.push(t); paint(`<div class="nt-mkt-st">${steps.map((x, i) => `<div>${i === steps.length - 1 ? "⏳" : "✓"} ${e(x)}</div>`).join("")}</div>`); });
+      const r = await window.ghCoinMarketEntry(sym, (t) => { steps.push(t); if (!live) paint(`<div class="nt-mkt-st">${steps.map((x, i) => `<div>${i === steps.length - 1 ? "⏳" : "✓"} ${e(x)}</div>`).join("")}</div>`); }, { debate });
+      if (!debate && this._mktLast?.best?.debate && !r.best.debate?.team) r.best.debate = { ...this._mktLast.best.debate, verdict: (this._mktLast.best.debate.verdict || "") + " (최근 토론)" };
+      this._mktLast = r;
       const b = r.best, o = r.other, d = r.decision, L = b.side > 0, f = (v) => v == null ? "—" : (+v >= 1000 ? Math.round(+v).toLocaleString() : (+v).toPrecision(6).replace(/\.?0+$/, ""));
       const db = b.debate || {}, side = (x) => `<div class="nt-mkt-cmp ${x === b ? "on" : ""}"><b class="${x.side > 0 ? "up" : "down"}">${x.side > 0 ? "롱" : "숏"}</b> 익절1 도달 ${x.wr}% · 기대값 ${x.exp >= 0 ? "+" : ""}${x.exp}R${x.my ? ` · 내 지표 같은 상태 ${x.my.wr}%` : ""} · <span class="muted">${e(x.grade)}</span></div>`;
       paint(`<div class="nt-mkt-dec ${d.go ? "go" : "no"}">${e(d.label)}</div>
@@ -684,7 +692,7 @@ class Terminal {
         <div class="muted">권장 레버 ≤${b.lev}x · 청산 ${f(b.liq)} · 익절1에서 절반 익절 후 손절을 본전으로</div>
         <div class="nt-mkt-sec">롱 vs 숏</div>${side(b)}${side(o)}
         <div class="nt-mkt-sec">근거</div><div class="nt-mkt-chips">📌 ${e(b.evidence)}</div><div class="nt-mkt-chips">${b.why.map((x) => `<span>${e(x)}</span>`).join("")}${b.warn.map((x) => `<span class="w">${e(x)}</span>`).join("")}</div>
-        ${r.myInd?.length ? `<div class="nt-mkt-sec">내 차트 지표 (15분 / 1시간)</div><div class="nt-mkt-chips">${r.myInd.map((x) => `<span class="${x.d15 > 0 ? "" : x.d15 < 0 ? "w" : "n"}">${e(x.name)} ${x.d15 > 0 ? "↑" : x.d15 < 0 ? "↓" : "·"}/${x.d1h > 0 ? "↑" : x.d1h < 0 ? "↓" : "·"}</span>`).join("")}</div>` : `<div class="muted">차트에 띄운 보조지표가 없어 지표 비교는 생략</div>`}
+        ${r.myInd?.length ? `<div class="nt-mkt-sec">내 차트 지표 (5분 / 15분 / 1시간)</div><div class="nt-mkt-chips">${r.myInd.map((x) => { const a = (v) => v > 0 ? "↑" : v < 0 ? "↓" : "·", sc = (x.d5 || 0) + x.d15 + x.d1h; return `<span class="${sc > 0 ? "" : sc < 0 ? "w" : "n"}">${e(x.name)} ${a(x.d5)}/${a(x.d15)}/${a(x.d1h)}</span>`; }).join("")}</div>` : `<div class="muted">차트에 띄운 보조지표가 없어 지표 비교는 생략</div>`}
         <div class="nt-mkt-sec">지지·저항·벽 (가까운 순)</div><div class="nt-mkt-chips">${(r.levels || []).slice().sort((a, c) => Math.abs(a.price - r.price) - Math.abs(c.price - r.price)).slice(0, 8).map((l) => `<span class="${l.price > r.price ? "w" : ""}">${f(l.price)} ${e(l.src.join("+"))}</span>`).join("")}</div>
         <div class="nt-mkt-sec">⚖ 토론 · ${e(db.verdict || "")}</div>
         <div class="nt-mkt-db"><b>에이전트 팀(${e(db.team?.who || "")})</b> ${e(db.team?.pick || db.team?.stance || "")} — ${e(db.team?.reason || "")}${db.team?.applied ? ` <span class="muted">(${e(db.team.applied)})</span>` : ""}</div>
@@ -693,6 +701,44 @@ class Terminal {
         <div class="muted nt-mkt-foot">승률·기대값은 과거 비슷한 상황을 같은 손절·익절로 시뮬레이션한 값(수수료 포함, 보정)입니다. 2개월 표본외 검증에서 지표·지지저항·호가 조합만으로는 우위가 없었고, '진입 가능'은 검증된 매매법 신호가 있을 때만 표시합니다. 차트에 진입·손절·익절·레벨 선이 그려집니다.</div>`);
       this._applyAi?.(); this._renderAi?.();
     } catch (err) { paint(`<div class="down" style="padding:8px">분석 실패: ${e(err.message || err)}</div>`); }
+    if (btn) btn.disabled = false; this._mktBusy = false;
+  }
+  // ------------------------------------------------------------ 🔬 내 지표 연구소: 노이즈 튜닝 → 매매법 → 검증 → 데모 투입 → 지금 포지션(30초 갱신)
+  async _chartLab() {
+    const cfg = this.S.cells[this.S.active] || {}, e = (x) => this.esc(String(x ?? ""));
+    if (typeof window.ghCoinChartLab !== "function") { this.toast("🔬 내 지표 연구소는 GH Coin 앱에서 쓸 수 있습니다 (GHCoin.exe)", "err"); return; }
+    let sym = String(cfg.symbol || "BTCUSDT").toUpperCase(); const m = sym.match(/^KRW-(\w+)$/); if (m) sym = m[1] + "USDT"; if (!/USDT$/.test(sym)) sym += "USDT";
+    let pn = this.root.querySelector(".nt-mylab"); if (!pn) { pn = document.createElement("div"); pn.className = "nt-mkt nt-mylab"; this.root.appendChild(pn); }
+    const close = () => { clearInterval(this._labTimer); this._labTimer = 0; pn.remove(); };
+    const head = `<div class="nt-mkt-h"><b>🔬 내 지표 연구소 · ${e(sym.replace("USDT", ""))} ${e(cfg.interval || "")}</b><span class="muted">차트에 띄운 보조지표 ${this.S.inds.length}개</span><button data-x>✕</button></div>`;
+    const paint = (body) => { pn.innerHTML = head + body; pn.querySelector("[data-x]").onclick = close; };
+    const steps = []; paint(`<div class="nt-mkt-st">시작…</div>`);
+    const btn = this.root.querySelector('[data-nt="lab"]'); if (btn) btn.disabled = true;
+    try {
+      const r = await window.ghCoinChartLab({ sym, interval: cfg.interval, specs: this.S.inds.map((x) => ({ id: x.id, key: x.key, params: { ...(x.params || {}) }, color: x.color })), onStep: (t) => { steps.push(t); paint(`<div class="nt-mkt-st">${steps.map((x, i) => `<div>${i === steps.length - 1 ? "⏳" : "✓"} ${e(x)}</div>`).join("")}</div>`); } });
+      const T = r.tune, B = r.build, g = B.gene;
+      const tuneRows = T.rows.map((x) => `<tr><td>${e(x.name)}</td><td>${x.changed ? `<b class="up">${e(x.changed)}</b>` : `<span class="muted">유지</span>`}</td><td>${x.before.whip}→<b>${x.after.whip}</b>%</td><td>${x.before.hit}→<b>${x.after.hit}</b>%</td></tr><tr><td colspan="4" class="muted" style="font-size:10.5px;padding-bottom:5px">${e(x.reason)}</td></tr>`).join("");
+      const sr = (lab, x) => `<tr><td>${lab}</td><td>${x.n}</td><td class="${x.mean > 0 ? "up" : "down"}">${x.mean >= 0 ? "+" : ""}${x.mean}R</td><td>${x.wr}%</td></tr>`;
+      const posBox = (p) => !p ? "" : `<div class="nt-mkt-dec ${p.side && B.pass ? "go" : "no"}">${e(p.state)}${p.side && !B.pass ? " — ⚠ 검증 미통과 매매법의 신호(참고만)" : ""}</div>${p.side && p.sl ? `<div class="nt-mkt-px"><div><small>시장가</small><b>${p.price}</b></div><div><small>손절 −${p.slPct}%</small><b class="down">${(+p.sl).toPrecision(6)}</b></div><div><small>익절 +${p.tpPct}%</small><b class="up">${(+p.tp).toPrecision(6)}</b></div><div><small>레버</small><b>≤${p.lev}x</b></div></div>` : ""}<div class="muted">지표 합의 ${p.vote}/${p.m} · ${new Date(p.t).toLocaleTimeString("ko-KR")} 갱신 (30초마다)</div>`;
+      const render = (pos) => paint(`<div class="nt-mkt-sec">① 노이즈 튜닝 — 처음 보는 뒤 30% 기준 (가짜 신호 = 3봉 안에 되돌림)</div>
+        <table class="nt-mylab-tb"><tr><th>지표</th><th>값</th><th>가짜 신호</th><th>방향 적중</th></tr>${tuneRows}</table>
+        ${T.rows.some((x) => x.changed) ? `<div class="nt-row"><button data-apply>튜닝 값을 내 차트에 적용</button></div>` : `<div class="muted">바꿀 만한 값이 없었습니다(원래 값 유지)</div>`}
+        <div class="nt-mkt-sec">② 내 지표 합의 매매법</div>
+        ${B.ok ? `<div>진입: 지표 ${g.specs.length}개 중 <b>${g.k}개</b>가 막 같은 방향이 되는 순간 · 손절 ${g.atrK}ATR/스윙 · 손익비 ${g.rr} · ${g.exitFlip ? "합의가 깨지면 청산" : "손절·익절까지 보유"}</div>
+          <table class="nt-mylab-tb"><tr><th>구간</th><th>거래</th><th>평균</th><th>승률</th></tr>${sr("학습(앞 70%)", B.train)}${sr("처음 보는(뒤 30%)", B.test)}${B.cross.map((x) => sr(e(x.sym.replace("USDT", "")) + " (같은 값)", x)).join("")}</table>
+          <div class="nt-mkt-dec ${B.pass ? "go" : "no"}">${e(B.verdict)}</div>
+          <div class="nt-row"><button data-demo>${B.pass ? "데모에 투입" : "그래도 데모에 투입(검증 미통과)"}</button></div>
+          <div class="muted">데모 투입 후에도 뉴럴 데스크가 6개 코인 자체 백테스트 + 최근 성적(기대값 +0.1R↑)을 통과해야 실제 데모 진입을 합니다.</div>` : `<div class="down">${e(B.reason)}</div>`}
+        <div class="nt-mkt-sec">③ 지금 포지션 (이 매매법 기준 · 실시간)</div>${posBox(pos)}
+        <div class="muted nt-mkt-foot">모든 숫자는 수수료 포함 백테스트 · 과거 성적은 미래를 보장하지 않습니다 · 주문은 직접</div>`);
+      const wire = () => {
+        pn.querySelector("[data-apply]")?.addEventListener("click", () => { for (const t of T.tuned) { const s0 = this.S.inds.find((x) => x.id === t.id); if (s0) s0.params = { ...t.params }; } this._indsChanged(); this.toast("튜닝 값을 차트에 적용했습니다"); });
+        pn.querySelector("[data-demo]")?.addEventListener("click", async (ev) => { ev.target.disabled = true; try { await window.ghCoinChartDemo(g, { test: B.test, crossPos: B.crossPos, pass: B.pass }); this.toast("뉴럴 데스크 데모에 투입했습니다 — 다음 자체 백테스트(최대 2시간 안)부터 검증"); ev.target.textContent = "✓ 데모 투입됨"; } catch (er) { this.toast("투입 실패: " + (er.message || er), "err"); ev.target.disabled = false; } });
+      };
+      render(r.pos); wire();
+      clearInterval(this._labTimer);
+      if (g) this._labTimer = setInterval(async () => { if (!pn.isConnected) return clearInterval(this._labTimer); try { const p = await window.ghCoinChartPos(g, sym); render(p); wire(); } catch (er) { /* 다음에 */ } }, 30e3);
+    } catch (err) { paint(`<div class="down" style="padding:8px">실패: ${e(err.message || err)}</div>`); }
     if (btn) btn.disabled = false;
   }
   // ------------------------------------------------------------ 🤖 AI 팀 분석 (GH Coin 직원들 → analysisbus.js)

@@ -93,19 +93,21 @@ export function tripleBarrier(cs, I, { side, slPct, tpPct, tp1Pct, H, cond }) {
 // ── 메인: 한 코인 분석 ──
 export async function analyzeCoin(sym, ctx = {}) {
   const Q = await Q_();
-  const [k15, k1h, k4h] = ctx.candles ? [ctx.candles["15"], ctx.candles["60"], ctx.candles["240"]]   // 검증용: 과거 시점까지 자른 캔들
-    : await Promise.all([["15", 1000], ["60", 1000], ["240", 500]].map(([tf, n]) => candlesFor({ market: sym, exchange: "binancef", timeframe: tf }, n).then(r => r.cs)));
+  const [k5, k15, k1h, k4h] = ctx.candles ? [ctx.candles["5"] || null, ctx.candles["15"], ctx.candles["60"], ctx.candles["240"]]   // 검증용: 과거 시점까지 자른 캔들
+    : await Promise.all([["5", 1000], ["15", 1000], ["60", 1000], ["240", 500]].map(([tf, n]) => candlesFor({ market: sym, exchange: "binancef", timeframe: tf }, n).then(r => r.cs).catch(() => null)));
+  const has5 = k5?.length > 300;
   if (!(k15?.length > 300 && k1h?.length > 300 && k4h?.length > 200)) throw new Error("캔들 부족");
   const ind = (cs, t, p) => Q.computeInd(cs, t, p);
   const mk = cs => ({ e20: ind(cs, "ema", { length: 20 }).value, e50: ind(cs, "ema", { length: 50 }).value, e200: ind(cs, "ema", { length: 200 }).value, st: ind(cs, "supertrend", {}).trend, adx: ind(cs, "adx", {}).adx,
     rsi: ind(cs, "rsi", { length: 14 }).value, macd: ind(cs, "macd", {}), atr: ind(cs, "atr", { length: 14 }).value, bb: ind(cs, "bb", {}), sto: ind(cs, "stoch", {}), vwap: ind(cs, "vwap", {}).value });
-  const A = { "15": mk(k15), "60": mk(k1h), "240": mk(k4h) }, CS = { "15": k15, "60": k1h, "240": k4h };
-  const price = k15.at(-1).c, atr15 = last(A["15"].atr), atr1h = last(A["60"].atr);
+  const A = { "15": mk(k15), "60": mk(k1h), "240": mk(k4h), ...(has5 ? { "5": mk(k5) } : {}) }, CS = { "15": k15, "60": k1h, "240": k4h, ...(has5 ? { "5": k5 } : {}) };
+  const price = has5 ? k5.at(-1).c : k15.at(-1).c, atr15 = last(A["15"].atr), atr1h = last(A["60"].atr);
   // 추세 (봉마다 −1..+1)
   const trendAt = (tf, i) => { const a = A[tf], c = CS[tf][i]?.c; if (!c || at(a.e200, i) == null) return 0; let s = 0;
     s += at(a.e20, i) > at(a.e50, i) ? 1 : -1; s += c > at(a.e200, i) ? 1 : -1; s += (at(a.st, i) || 0) > 0 ? 1 : -1; return s / 3; };
-  const tr = { "15": trendAt("15", k15.length - 1), "60": trendAt("60", k1h.length - 1), "240": trendAt("240", k4h.length - 1) };
-  const trend = +(tr["15"] * 0.25 + tr["60"] * 0.4 + tr["240"] * 0.35).toFixed(2), adx1h = last(A["60"].adx);
+  const tr = { "5": has5 ? trendAt("5", k5.length - 1) : null, "15": trendAt("15", k15.length - 1), "60": trendAt("60", k1h.length - 1), "240": trendAt("240", k4h.length - 1) };
+  const trend = +(has5 ? tr["5"] * 0.1 + tr["15"] * 0.2 + tr["60"] * 0.4 + tr["240"] * 0.3 : tr["15"] * 0.25 + tr["60"] * 0.4 + tr["240"] * 0.35).toFixed(2), adx1h = last(A["60"].adx);
+  const rsi5 = has5 ? last(A["5"].rsi) : null;
   // 호가·레벨
   let book = null; if (!ctx.candles) try { book = await bookWithWalls(sym); } catch (e) {}
   const lv = levels({ k1h, k4h, atr1h, book });
@@ -116,10 +118,10 @@ export async function analyzeCoin(sym, ctx = {}) {
   // 📈 내 차트 터미널 보조지표: 15분·1시간봉에서 지금 방향 + '지금과 같은 상태(80%↑ 일치)'였던 과거 봉 찾기
   let MY = null;
   if (ctx.myInds !== false) { try { const RD = await import("../nuri-ai/terminal/readings.js"), specs = ctx.specs || RD.userInds();
-    if (specs.length) { const r15 = RD.readings(RD.toTerm(k15), specs), r1h = RD.readings(RD.toTerm(k1h), specs);
-      if (r15.items.length) MY = { r15, r1h, names: r15.items.map(x => x.name), now15: r15.items.map(x => x.dir), now1h: r1h.items.map(x => x.dir), agree: RD.agree }; } } catch (e) {} }
-  const out = { sym, ko: sym.replace("USDT", ""), t: Date.now(), price, atr15, atr1h, trend, tr, adx1h, rsi15, rsi1h, book, levels: lv, sides: [],
-    myInd: MY ? MY.r15.items.map((x, k) => ({ name: x.name, d15: x.dir, d1h: MY.r1h.items[k]?.dir ?? 0 })) : null };
+    if (specs.length) { const r15 = RD.readings(RD.toTerm(k15), specs), r1h = RD.readings(RD.toTerm(k1h), specs), r5 = has5 ? RD.readings(RD.toTerm(k5), specs) : null;
+      if (r15.items.length) MY = { r5, r15, r1h, names: r15.items.map(x => x.name), now5: r5 ? r5.items.map(x => x.dir) : [], now15: r15.items.map(x => x.dir), now1h: r1h.items.map(x => x.dir), agree: RD.agree }; } } catch (e) {} }
+  const out = { sym, ko: sym.replace("USDT", ""), t: Date.now(), price, atr15, atr1h, trend, tr, adx1h, rsi5, rsi15, rsi1h, book, levels: lv, sides: [],
+    myInd: MY ? MY.r15.items.map((x, k) => ({ name: x.name, d5: MY.r5?.items[k]?.dir ?? 0, d15: x.dir, d1h: MY.r1h.items[k]?.dir ?? 0 })) : null };
   for (const side of [1, -1]) {
     const S = side > 0 ? sup : res, R = side > 0 ? res : sup, why = [], warn = [];
     // 손절: 가장 가까운 구조 레벨 너머 + 0.25 ATR(15분) · 최소 0.3% · 최대 2%
@@ -148,22 +150,26 @@ export async function analyzeCoin(sym, ctx = {}) {
     const condTrend1h = i => Math.sign(trendAt("60", i) || 0) === Math.sign(tr["60"] || side);
     const tb1h = tripleBarrier(k1h, A["60"], { ...plan, H: 12, cond: condTrend1h });
     const tbTP1 = tripleBarrier(k15, m15, { side, slPct, tpPct: tp2Pct, H: 48, cond: condTrend15 });   // 참고: 끝까지 익절2 만 노렸을 때
+    // 5분봉(시간 만료 96봉 = 8시간): 같은 방향 5분 추세에서 같은 계획
+    const tb5 = has5 ? tripleBarrier(k5, A["5"], { ...plan, H: 96, cond: i => Math.sign(trendAt("5", i) || 0) === Math.sign(tr["5"] || side) }) : { n: 0, wr: 0, exp: 0 };
     // 내 지표가 지금과 같은 상태였던 과거(15분 + 1시간)에서 같은 계획의 결과
     let my = null;
     if (MY) { const L15 = k15.length - 1, L1 = k1h.length - 1;
       const a = tripleBarrier(k15, m15, { ...plan, H: 48, cond: i => MY.agree(MY.r15, L15, i) >= 0.8 }), b2 = tripleBarrier(k1h, A["60"], { ...plan, H: 12, cond: i => MY.agree(MY.r1h, L1, i) >= 0.8 });
-      const nn = a.n + b2.n, base0 = tripleBarrier(k15, m15, { ...plan, H: 48 }), N1 = 150;
-      const wr0 = nn ? (a.wr * a.n + b2.wr * b2.n) / nn : 0, ex0 = nn ? (a.exp * a.n + b2.exp * b2.n) / nn : 0;
+      const c5 = MY.r5 ? tripleBarrier(k5, A["5"], { ...plan, H: 96, cond: i => MY.agree(MY.r5, k5.length - 1, i) >= 0.8 }) : { n: 0, wr: 0, exp: 0 };
+      const nn = a.n + b2.n + c5.n, base0 = tripleBarrier(k15, m15, { ...plan, H: 48 }), N1 = 150;
+      const wr0 = nn ? (a.wr * a.n + b2.wr * b2.n + c5.wr * c5.n) / nn : 0, ex0 = nn ? (a.exp * a.n + b2.exp * b2.n + c5.exp * c5.n) / nn : 0;
+      const v5 = MY.now5.filter(x => x === side).length, o5 = MY.now5.filter(x => x === -side).length;
       const v15 = MY.now15.filter(x => x === side).length, o15 = MY.now15.filter(x => x === -side).length, v1h = MY.now1h.filter(x => x === side).length, o1h = MY.now1h.filter(x => x === -side).length;
-      my = { n: nn, wrRaw: +wr0.toFixed(1), wr: +((wr0 * nn + base0.wr * N1) / (nn + N1)).toFixed(1), exp: +((ex0 * nn + base0.exp * N1) / (nn + N1)).toFixed(3), v15, o15, v1h, o1h, total: MY.now15.length }; }
-    const nT = tb15.n + tb1h.n, wrRaw = nT ? (tb15.wr * tb15.n + tb1h.wr * tb1h.n) / nT : 0, expRaw = nT ? (tb15.exp * tb15.n + tb1h.exp * tb1h.n) / nT : 0;
+      my = { n: nn, wrRaw: +wr0.toFixed(1), wr: +((wr0 * nn + base0.wr * N1) / (nn + N1)).toFixed(1), exp: +((ex0 * nn + base0.exp * N1) / (nn + N1)).toFixed(3), v5, o5, v15, o15, v1h, o1h, total: MY.now15.length }; }
+    const nT = tb5.n + tb15.n + tb1h.n, wrRaw = nT ? (tb5.wr * tb5.n + tb15.wr * tb15.n + tb1h.wr * tb1h.n) / nT : 0, expRaw = nT ? (tb5.exp * tb5.n + tb15.exp * tb15.n + tb1h.exp * tb1h.n) / nT : 0;
     // 과신 보정(베이지안 축소): 같은 계획을 '조건 없이' 아무 때나 했을 때의 기준값 쪽으로 당긴다. 표본외 검증에서 날것의 통계는 익절1 도달률을 3~9%p 과대평가했음.
     const base = tripleBarrier(k15, m15, { ...plan, H: 48 }), N0 = 250;
     const wr = +((wrRaw * nT + base.wr * N0) / (nT + N0)).toFixed(1), exp = +((expRaw * nT + base.exp * N0) / (nT + N0)).toFixed(3);
     // 합류 점수 (0~100)
     let sc = 0;
     const tAlign = (tr["15"] * side > 0 ? 1 : 0) + (tr["60"] * side > 0 ? 1 : 0) + (tr["240"] * side > 0 ? 1 : 0);
-    sc += tAlign / 3 * 25; why.push(`추세 ${tAlign}/3 일치(15분 ${tr["15"] > 0 ? "↑" : tr["15"] < 0 ? "↓" : "→"}·1시간 ${tr["60"] > 0 ? "↑" : tr["60"] < 0 ? "↓" : "→"}·4시간 ${tr["240"] > 0 ? "↑" : tr["240"] < 0 ? "↓" : "→"})`);
+    sc += tAlign / 3 * 25; why.push(`추세 ${tAlign}/3 일치(${has5 ? `5분 ${tr["5"] > 0 ? "↑" : tr["5"] < 0 ? "↓" : "→"}·` : ""}15분 ${tr["15"] > 0 ? "↑" : tr["15"] < 0 ? "↓" : "→"}·1시간 ${tr["60"] > 0 ? "↑" : tr["60"] < 0 ? "↓" : "→"}·4시간 ${tr["240"] > 0 ? "↑" : tr["240"] < 0 ? "↓" : "→"})`);
     const distS = slLv ? Math.abs(price - slLv.price) / atr15 : 9;
     if (slLv && distS <= 1.5) { sc += 15; why.push(`${side > 0 ? "지지" : "저항"} ${fmt(slLv.price)} 바로 앞(${distS.toFixed(1)}ATR · ${slLv.src.join("+")} · 강도 ${slLv.strength})`); } else if (slLv && distS <= 3) sc += 7;
     const room = tgt[0] ? Math.abs(tgt[0].price - price) / Math.abs(price - slPx) : 3;
@@ -190,7 +196,7 @@ export async function analyzeCoin(sym, ctx = {}) {
     if (ctx.libSignal && ctx.libSignal.side === side) { vt += 1; why.push(`검증 매매법 신호: ${ctx.libSignal.name}`); }
     sc += Math.max(-6, Math.min(12, vt * 4)); if (vt > 0) why.push(`팀 판정 ${vt}개 일치`); if (vt < 0) warn.push("팀 판정 반대");
     if (my && my.total) { const f = (my.v15 + my.v1h) / Math.max(1, my.v15 + my.v1h + my.o15 + my.o1h);
-      (f >= 0.6 ? why : f <= 0.4 ? warn : why).push(`내 차트 지표 ${side > 0 ? "롱" : "숏"} 쪽 15분 ${my.v15}/${my.total} · 1시간 ${my.v1h}/${my.total}`);
+      (f >= 0.6 ? why : f <= 0.4 ? warn : why).push(`내 차트 지표 ${side > 0 ? "롱" : "숏"} 쪽 ${MY.r5 ? `5분 ${my.v5}/${my.total} · ` : ""}15분 ${my.v15}/${my.total} · 1시간 ${my.v1h}/${my.total}`);
       // 2개월 표본외: 지표가 80%↑ 같은 방향일 때 그 방향 시장가 진입 = 평균 −0.15R(가장 나쁨, 이미 움직인 뒤 추격) → 점수 가산 대신 경고
       if (f >= 0.8) { warn.push("지표가 거의 다 같은 방향 = 이미 움직인 뒤일 가능성(표본외 평균 −0.15R) — 추격 주의"); sc -= 5; } else sc += Math.round((f - 0.5) * 8); }
     sc = Math.max(0, Math.min(100, Math.round(sc)));
@@ -203,7 +209,7 @@ export async function analyzeCoin(sym, ctx = {}) {
       : grade === "보통" ? "추세 동행(3개 시간대 일치·ADX 25↑) — 2개월 표본외 검증 ≈ 0R, 통계적 우위 미확인" : "검증된 근거 없음 — 관망 권장";
     const lev = Math.max(1, Math.min(sym === "BTCUSDT" ? 100 : 50, Math.floor(0.4 / slPct)));   // 청산공식: 손절 = 청산거리 40% 이하 (상한 BTC 100x·알트 50x)
     out.sides.push({ side, grade, score: sc, entry: price, sl: +slPx.toPrecision(7), tp1: +tp1.toPrecision(7), tp2: +tp2.toPrecision(7), slPct: +(slPct * 100).toFixed(2), tp1Pct: +(tp1Pct * 100).toFixed(2), tp2Pct: +(tp2Pct * 100).toFixed(2),
-      rr, rr1, wr, exp, n: nT, evidence, my, sig: sig ? { name: sig.name, tf: sig.tf, mean: sig.mean, n: sig.n, wr: sig.wr, t: sig.t } : null, wrRaw: +wrRaw.toFixed(1), expRaw: +expRaw.toFixed(3), base: { wr: base.wr, exp: base.exp }, wrTP2only: tbTP1.wr, expTP2only: tbTP1.exp, tb: { m15: tb15, h1: tb1h }, lev, liq: +(price * (1 - side * 0.95 / lev)).toPrecision(7), slLevel: slLv ? { price: slLv.price, src: slLv.src, strength: slLv.strength } : null,
+      rr, rr1, wr, exp, n: nT, evidence, my, sig: sig ? { name: sig.name, tf: sig.tf, mean: sig.mean, n: sig.n, wr: sig.wr, t: sig.t } : null, wrRaw: +wrRaw.toFixed(1), expRaw: +expRaw.toFixed(3), base: { wr: base.wr, exp: base.exp }, wrTP2only: tbTP1.wr, expTP2only: tbTP1.exp, tb: { m5: tb5, m15: tb15, h1: tb1h }, lev, liq: +(price * (1 - side * 0.95 / lev)).toPrecision(7), slLevel: slLv ? { price: slLv.price, src: slLv.src, strength: slLv.strength } : null,
       tpLevels: tgt.slice(0, 2).map(l => ({ price: l.price, src: l.src, strength: l.strength })), why, warn,
       limitAlt: tooFar && slLv ? { entry: +(slLv.price + side * atr15 * 0.2).toPrecision(7), note: `구조 손절이 ${(slPct * 100).toFixed(1)}%로 멀어 시장가 부적합 → ${fmt(slLv.price)} 근처 지정가 대기` } : null,
       validUntil: Date.now() + 15 * 60e3, invalidPx: +(price + side * Math.abs(price - slPx) * 0.3).toPrecision(7) });

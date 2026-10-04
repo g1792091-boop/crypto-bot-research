@@ -97,6 +97,7 @@ function robinLine(s) {
   return `<div class="nsub">🐋 고래 카피 · 🗂 포지션 관리 · ⚙ 한도</div>`
     + `<div class="brow"><span class="bt pur">고래</span><span class="btx" title="감지→필터→리스크→신호 · 30분 뒤 채점">${(w?.last || []).map(x => `${E(x.sym.replace("USDT", ""))} ${x.dir > 0 ? "▲" : "▼"}${Math.abs(x.netPct)}%`).join(" · ") || "승인된 고래 신호 없음"} <small class="dim">· 적중 ${tr?.n ? Math.round(tr.acc * 100) + "% (" + tr.n + "회)" : "학습 중"}</small></span></div>`
     + (rv ? `<div class="brow"><span class="bt up">관리</span><span class="btx" title="${E((rv.dropped || []).join(" / "))}">${E(rv.by)}: ${E((rv.done || []).join(" · ") || "모두 유지")}${rv.dropped?.length ? ` <small class="dim">· 환각 필터 ${rv.dropped.length}건</small>` : ""} <small class="dim">${ago(rv.t)} 전</small></span></div>` : "")
+    + (() => { let cs = []; try { cs = N.chartStrategies?.() || []; } catch (e) {} return cs.length ? `<div class="brow"><span class="bt up">내지표</span><span class="btx" title="차트 터미널 🔬 내 지표 연구소에서 데모 투입한 매매법 — 자체 백테스트 + 최근 기대값 +0.1R↑ 이어야 실제 데모 진입">${cs.map(x => `${x.active ? "✅" : "··"} ${E(x.name)}@${x.tf}${x.stat.n ? ` ${x.stat.mean >= 0 ? "+" : ""}${x.stat.mean}R/${x.stat.n}` : " (검증 대기)"}`).join(" · ")}</span></div>` : ""; })()
     + `<div class="brow"><span class="bt dim">한도</span><span class="btx">동시 ${c.maxPos ?? 4}개 · 오늘 진입 ${s.dayN ?? 0}/${c.dailyMax ?? 12} · 쿨다운 ${c.coolMin ?? 30}분${c.exclude?.length ? " · 제외 " + c.exclude.join(",") : ""}</span></div>`;
 }
 function neutronLine(s) {

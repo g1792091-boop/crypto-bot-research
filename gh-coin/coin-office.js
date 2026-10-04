@@ -1699,7 +1699,7 @@ export async function runLiveEntry({coins = COINS, debate = true, by = "auto"} =
 }
 // ⚡ 시장가 버튼: 한 코인을 지금 바로 분석 → 에이전트 팀 의견 → 뉴트론(뉴럴 데스크) 반박 → 팀 최종 답 → 시장가 추천 (손매매용, 주문 안 함)
 //   롱·숏 둘 다 계산해 '덜 불리한/더 유리한 쪽'을 고르되, 검증된 근거가 없으면 '비권장'이라고 분명히 말한다.
-export async function marketEntryNow({sym = "BTCUSDT", by = "user", onStep = () => {}} = {}){
+export async function marketEntryNow({sym = "BTCUSDT", by = "user", onStep = () => {}, debate = true} = {}){
   try { await loadLog(); } catch(e){}
   sym = String(sym).toUpperCase().replace(/^KRW-(\w+)$/, "$1USDT"); if (!/USDT$/.test(sym)) sym += "USDT";
   const L = await import("./liveentry.js"); let N = null; try { N = await import("./neural.js"); } catch(e){}
@@ -1724,7 +1724,7 @@ ${sideTxt(A)}
 ${sideTxt(B)}
 코드 추천: ${A.side > 0 ? "롱" : "숏"} (${ok ? "진입 가능" : "우위 근거 부족 — 비권장"})`;
   let team = {who: lead.name, stance: "기권", reason: "AI 없음"}, neural = null, final = null;
-  if (hasAI()){
+  if (hasAI() && debate){
     onStep(`⚖ 에이전트 팀(${lead.name}) 의견`);
     try {
       const e = await solo(lead, {room: "entry", sys: personaOf(lead, '손매매 고객이 [시장가] 버튼을 눌렀다. 아래 롱·숏 계산을 보고 지금 시장가로 들어간다면 어느 쪽인지 고르고(또는 관망), 손절·익절이 지지·저항·호가 벽 기준으로 더 나은 자리가 있으면 숫자로 제안한다. 확률로 말하고 과장 금지. 반드시 JSON 한 줄: {"pick":"롱"|"숏"|"관망","sl":숫자|null,"tp1":숫자|null,"tp2":숫자|null,"reason":"한 문장"}'), user: facts, maxTokens: 300, json: true});
@@ -1768,6 +1768,28 @@ ${sideTxt(B)}
   fire({kind: "liveentry"});
   return res;
 }
+// 🔬 내 지표 연구소 실행 (차트 터미널 버튼) → 커스텀 지표 개발팀 방에 결과 표 공유
+export async function chartLabRun({sym = "BTCUSDT", interval = "15m", specs = [], onStep = () => {}} = {}){
+  try { await loadLog(); } catch(e){}
+  const CL = await import("./chartlab.js"), tf = CL.engTf(interval), lead = agentById("cind") || agentById("cdev_1") || agentById("qa");
+  sym = String(sym).toUpperCase().replace(/^KRW-(\w+)$/, "$1USDT"); if (!/USDT$/.test(sym)) sym += "USDT";
+  onStep(`📥 ${sym.replace("USDT", "")} ${tf === "60" ? "1시간" : tf === "240" ? "4시간" : tf + "분"}봉 1,500개 불러오기`);
+  const A = await import("../nuri-ai/agent.js"), cs = (await A.candlesFor({market: sym, exchange: "binancef", timeframe: tf}, 1500)).cs;
+  const T = await CL.tune(specs, cs, onStep);
+  const B = await CL.build({sym, tf, specs: T.tuned}, onStep);
+  let pos = null; if (B.gene) try { pos = await CL.position(B.gene, sym); } catch(e){}
+  const res = {t: Date.now(), sym, tf, interval, tune: T, build: B, pos};
+  writeJ("coinChartLab", {...res, tune: {rows: T.rows, tuned: T.tuned}});
+  table("cdev", lead.id, `🔬 내 지표 연구소 · ${sym.replace("USDT", "")} ${tf}봉 — 노이즈 튜닝 (처음 보는 뒤 30% 기준)`, ["지표", "바뀐 값", "가짜 신호 %", "방향 적중 %", "전환 뒤 이동(ATR)", "판정"],
+    T.rows.map(r => [r.name, r.changed || "원래 값", `${r.before.whip} → ${r.after.whip}`, `${r.before.hit} → ${r.after.hit}`, `${r.before.q} → ${r.after.q}`, r.reason]), "가짜 신호 = 방향이 바뀐 뒤 3봉 안에 되돌아간 비율 · 앞 70% 로 고르고 뒤 30% 에서 나아질 때만 채택");
+  if (B.ok) table("cdev", lead.id, `📈 내 지표 합의 매매법 ${B.gene.k}/${B.gene.specs.length} · 손익비 ${B.gene.rr} · 손절 ${B.gene.atrK}ATR`, ["구간", "거래", "평균 R", "승률", "합계 R"],
+    [["학습(앞 70%)", B.train.n, B.train.mean, B.train.wr + "%", B.train.sum], ["처음 보는(뒤 30%)", B.test.n, B.test.mean, B.test.wr + "%", B.test.sum], ...B.cross.map(x => [x.sym.replace("USDT", "") + "(같은 값)", x.n, x.mean, x.wr + "%", x.sum])], `${B.verdict} · 진입 = N개 중 K개가 '막' 같은 방향이 되는 순간(이미 다 같은 방향이면 추격 안 함) · 청산공식 20x+ · 수수료 포함`);
+  else post({ch: "cdev", kind: "system", text: `🔬 내 지표 매매법: ${B.reason}`});
+  addNote("cdev", `내 지표 연구소 ${sym} ${tf}: ${B.ok ? B.verdict : B.reason}`, "내지표");
+  return res;
+}
+export function chartLabToDemo(gene, meta){ return import("./neural.js").then(N => N.addChartStrategy(gene, meta)); }
+export function chartLabPosition(gene, sym){ return import("./chartlab.js").then(CL => CL.position(gene, sym)); }
 async function rtEntryJob(){ await runLiveEntry({debate: hasAI(), by: "office"}); }
 
 /* ---- 익절·손절 관리팀: 데모 포지션 점검 ---- */

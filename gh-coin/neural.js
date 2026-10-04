@@ -5,6 +5,7 @@ import { candlesFor, TOOLS } from "../nuri-ai/agent.js";
 import { brainStream, settings, saveSettings, PROVIDERS, modelKind, ollamaModels, ollamaPull, webSearch } from "../nuri-ai/engine.js";
 import * as BRAIN from "./brain.js";
 import * as ENG from "./strategies.js";
+import * as CL from "./chartlab.js";
 
 // 📚 코인 선물 매매법 지식베이스 — 뇌에 '매매법·지식·대응'을 처음부터 깔아둔다(교훈 외에 실제 매매법 지식).
 const STRATEGY_KB = [
@@ -175,7 +176,7 @@ function blank() {
   return { ver: 2, pnl: 0, peak: BANKROLL, fills: 0, wins: 0,
     w: Object.fromEntries(NEURONS.map(k => [k, 1])), hit: Object.fromEntries(NEURONS.map(k => [k, { ok: 0, n: 0 }])),
     models: {}, pos: {}, feat: {}, dec: {}, regime: {}, trades: [], feed: [], epoch: 0, t0: Date.now(),
-    eng: { stats: {}, paused: {}, rr: {}, calibAt: 0, calib: null, lastBar: {}, custom: [], evo: [], evoSeeds: [], evoLog: [] },
+    eng: { stats: {}, paused: {}, rr: {}, calibAt: 0, calib: null, lastBar: {}, custom: [], evo: [], evoSeeds: [], evoLog: [], chart: [] },
     queue: [], cool: {}, day: { d: "", pnl: 0, eq0: BANKROLL }, news: null, review: null, designs: [] };
 }
 let S = null;
@@ -212,6 +213,7 @@ let Q = null; const quant = async () => (Q ||= await import("../nuri-ai/quant.js
 function variants() {
   const out = [];
   for (const r of ENG.LIB) { out.push({ ...r, vkey: `${r.key}@${r.tf}` }); if (r.tf === "5" || r.tf === "15") out.push({ ...r, tf: "60", hold: 48, vkey: `${r.key}@60` }); }
+  for (const g of S.eng.chart || []) { const r = CL.chartRule(g); out.push({ ...r, prep: r.prep, sig: r.sig, exit: r.exit, vkey: `${r.key}@${r.tf}` }); }   // 📈 내 차트 지표 매매법(연구소에서 데모 투입)
   for (const e of S.eng.evo || []) { const r = ENG.buildEvo(e.gene); if (r) out.push({ ...r, vkey: `${r.key}@60`, tf: "60" }); }   // 🧬 진화 변형(개선·수정·조합)
   if (Q) for (const c of S.eng.custom || []) { const rr = ENG.specRule(Q, c); out.push({ ...rr, prep: rr.prep, sig: rr.sig, exit: rr.exit, vkey: `${c.key}@${c.tf}` }); }
   return out;
@@ -480,6 +482,10 @@ JSON만:` }],
   if (sim > 0.7) return { model: shortMd(route?.model || tgt.model), stance: "기권", reason: "팀 의견을 반복(독립 근거 없음)" };
   return { model: shortMd(route?.model || tgt.model), stance: st, reason };
 }
+// 🔬 내 지표 연구소 → 뉴럴 데모 거래 투입 (다른 매매법과 똑같이 자체 백테스트 + 워크포워드 선별을 거쳐야 실제 진입)
+export function addChartStrategy(gene, meta = {}) { load(); (S.eng.chart ||= []); S.eng.chart = S.eng.chart.filter(x => x.id !== gene.id).slice(-7); S.eng.chart.push({ ...gene, meta, added: Date.now() }); S.eng.calibAt = 0; save(); feed(`📈 내 지표 매매법 데모 투입: ${CL.chartRule(gene).name} (${gene.from || ""} ${gene.tf}봉) — 다음 자체 백테스트에서 6개 코인 검증 후 통과하면 실전(데모) 진입`); return true; }
+export function removeChartStrategy(id) { load(); S.eng.chart = (S.eng.chart || []).filter(x => x.id !== id); save(); }
+export function chartStrategies() { load(); return (S.eng.chart || []).map(g => { const r = CL.chartRule(g), vk = `${r.key}@${r.tf}`; return { id: g.id, name: r.name, tf: g.tf, from: g.from, k: g.k, n: g.specs.length, rr: g.rr, meta: g.meta, added: g.added, stat: vstat(vk), active: isActive({ ...r, vkey: vk }) }; }); }
 export function whaleTrust() { load(); return WC.score(S.whaleLog || [], sym => S.dec[sym]?.price, 30); }
 async function whaleSignal(sym) {
   const c0 = _whC[sym]; if (c0 && Date.now() - c0.t < 90e3) return c0.s;
