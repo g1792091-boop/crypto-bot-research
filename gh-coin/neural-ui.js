@@ -59,7 +59,9 @@ export async function openNeural(ctx = {}) {
     render();
     N.modelStep().then(render).catch(() => {});      // 연결 AI 모델이 코인 직접 판단(회전·fallback) — 한도 쿨다운 방지 위해 틱당 1명
     if (++k % 14 === 0) N.reflect().catch(() => {});  // 복기 → 교훈 학습(집단 뇌)
-    if (k % 26 === 13) N.designStrategy().then(render).catch(() => {});  // 모델이 지표 조합→매매법 설계→백테스트→사무실 인계
+    // 모델이 지표 조합→매매법 설계→백테스트→사무실 인계. 낙폭(방어 모드)이면 더 자주 개발해 자본을 지킨다.
+    const defense = ST && ST.riskMode && ST.riskMode !== "정상";
+    if (k % 26 === 13 || (defense && k % 12 === 6)) N.designStrategy().then(render).catch(() => {});
     if (k % 10 === 5) { try { N.brainThink(); } catch (e) {} }  // 뇌 자체 학습(망각+핵심규칙 승격)
   };
   tick(); loop = setInterval(tick, 6000);
@@ -71,10 +73,11 @@ const esc = (e) => { if (e.key === "Escape") close(); };
 
 function render() {
   if (!root || !ST) return;
-  const s = ST, up = s.pnl >= 0;
-  root.querySelector("[data-pnl]").innerHTML = `<b class="${up ? "up" : "dn"}">${money(s.pnl)}</b>`;
+  const s = ST, up = s.pnl >= 0, eq = s.equity ?? (1000 + s.pnl);
+  const dmode = s.riskMode && s.riskMode !== "정상";
+  root.querySelector("[data-pnl]").innerHTML = `<b class="${eq >= (s.bankroll || 1000) ? "up" : "dn"}">$${eq.toLocaleString(undefined, { maximumFractionDigits: 0 })}</b> <small class="${up ? "up" : "dn"}">${money(s.pnl)}</small>`;
   root.querySelector("[data-kpi]").innerHTML =
-    `<span>체결 <b>${s.fills}</b></span><span>승률 <b class="${s.winRate >= 50 ? "up" : "dn"}">${s.winRate}%</b></span><span>AI 모델 <b>${s.nModels}</b></span><span>매매법 설계 <b>${s.nDesigns}</b><small>(사무실 인계 ${s.handed})</small></span><span>에폭 <b>${s.epoch}</b></span><span>가동 <b>${ago(s.since)}</b></span>`;
+    `<span>시작 <b>$${(s.bankroll || 1000).toLocaleString()}</b></span><span>낙폭 <b class="${(s.drawdown || 0) > 7 ? "dn" : "dim"}">${s.drawdown || 0}%</b></span><span>모드 <b class="${dmode ? "dn" : "up"}">${s.riskMode || "정상"}</b></span><span>승률 <b class="${s.winRate >= 50 ? "up" : "dn"}">${s.winRate}%</b></span><span>체결 <b>${s.fills}</b></span><span>AI <b>${s.nModels}</b></span><span>매매법 <b>${s.nDesigns}</b><small>(인계 ${s.handed})</small></span><span>가동 <b>${ago(s.since)}</b></span>`;
   // 트레이더 리더보드 = 연결된 AI 모델 각각 + 자체 신호. PnL 순. (교훈 = 복기로 배운 수 · 보유 = 현재 포지션)
   root.querySelector("[data-neurons]").innerHTML =
     s.traders.map((tr, i) => { const u = tr.pnl >= 0;
@@ -94,7 +97,7 @@ function render() {
     return `<div class="mrow"><b>${ko}</b><span class="${col}">${dir} ${d ? d.conf + "%" : "–"}</span>${p ? `<em class="${p.roe >= 0 ? "up" : "dn"}">${p.side > 0 ? "롱" : "숏"} ${p.roe >= 0 ? "+" : ""}${p.roe}%</em>` : `<em class="dim">무포</em>`}</div>`;
   }).join("");
   // 모델이 설계한 매매법·커스텀 지표 (백테스트 → 사무실 인계)
-  const des = (s.designs || []).map(d => `<div class="trow des"><span class="dim">${ago(d.t)}</span><b style="color:#b79cff">${E(d.model)}</b><span>매매법</span><b class="${d.ret >= 0 ? "up" : "dn"}">${d.ret}%</b><span>${E(d.name)} <em class="${d.handed ? "up" : d.pass ? "" : "dim"}">${d.handed ? "→ 사무실 인계" : d.pass ? "통과" : "불통과"}</em></span></div>`).join("");
+  const des = (s.designs || []).map(d => `<div class="trow des"><span class="dim">${ago(d.t)}</span><b style="color:#b79cff">${E(d.model)}</b><span>${d.win != null ? "승" + d.win + "%" : "매매법"}${d.mdd != null ? " 낙" + d.mdd + "%" : ""}</span><b class="${d.ret >= 0 ? "up" : "dn"}">${d.ret}%</b><span>${E(d.name)} <em class="${d.handed ? "up" : d.pass ? "" : "dim"}">${d.handed ? "→ 사무실 인계" : d.pass ? "통과" : "불통과"}</em></span></div>`).join("");
   // 거래
   root.querySelector("[data-trades]").innerHTML = des + (s.trades.length ? s.trades.map(t =>
     `<div class="trow"><span class="dim">${ago(t.t)}</span><b>${t.ko}</b><span>${t.side > 0 ? "롱" : "숏"}</span><b class="${t.roe >= 0 ? "up" : "dn"}">${t.roe >= 0 ? "+" : ""}${t.roe}%</b><span class="dim">${E(t.why)}</span></div>`
@@ -226,7 +229,7 @@ const SHELL = `
   <marquee class="nd-feed" data-feed scrollamount="5"></marquee><span class="nd-clock"></span>
   <button class="nd-btn" data-local title="켜면 설치된 Ollama 로컬 모델만 트레이더로 씁니다 (무료·오프라인·한도 없음). 끄면 클라우드+로컬 혼합.">💻 로컬 전용</button><button class="nd-btn" data-ollama title="내 PC Ollama에 GH Coin용 추천 무료 모델을 자동으로 받아 트레이더로 씁니다">🖥 로컬 모델 설치</button><button class="nd-btn" data-reset>초기화</button><button class="nd-btn nd-x" data-x>✕</button></div>
 <div class="nd-grid">
-  <div class="nd-card nd-pnl"><div class="nd-h">ALL-TIME PnL <small>(데모)</small></div><div class="nd-big" data-pnl></div><div class="nd-kpi" data-kpi></div></div>
+  <div class="nd-card nd-pnl"><div class="nd-h">가상 자본 <small>(데모 · $1000 시작 · 나만 초기화)</small></div><div class="nd-big" data-pnl></div><div class="nd-kpi" data-kpi></div></div>
   <div class="nd-card nd-mkt"><div class="nd-h">🔍 스캔 · 포지션</div><div class="nd-scan" data-scan></div><div class="nd-markets" data-markets></div></div>
   <div class="nd-card nd-shell"><div class="nd-h">NEURAL SHELL · 피처 → 결정 코어 → 확률 셸</div><canvas data-shell></canvas></div>
   <div class="nd-card nd-trd"><div class="nd-h">AI 모델 트레이더 리더보드 <small>(직접 거래·복기·학습 · PnL 순)</small></div><div class="nd-neurons" data-neurons></div></div>
