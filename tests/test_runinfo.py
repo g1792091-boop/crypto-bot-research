@@ -19,7 +19,7 @@ def test_run_record_is_stable_and_sees_setting_changes():
     c = run_record(v3_settings(taker_fee=0.0004), BR, "exchange", ["x"], signal_lock={"prereg_sha256_file": "L"})
     ch = changes(a, c)
     assert [x["key"] for x in ch] == ["settings"] and ch[0]["trading"]
-    assert "다시 셉니다" in change_text(ch)
+    assert "오늘부터 다시 셈" in change_text(ch)
 
 
 def test_commit_only_change_is_not_a_trading_change():
@@ -73,11 +73,11 @@ def test_extra_watched_keys_and_text(tmp_path):
     txt = change_text(ch)
     assert "추가 계좌만 해당" in txt and "원래 계좌의 코드는 그대로" in txt
     # the checkpoint does not restart the extras' windows for this: the text asks the rule keeper, as for others
-    assert "다시 세야 하는지 규칙 관리자 확인 필요" in txt and "오늘부터 다시 셉니다" not in txt
+    assert "30일을 다시 셀지 규칙 관리자 확인" in txt and "오늘부터 다시 셈" not in txt
     g = changes(a, dict(a, extra_gate_code="other"))
     assert [(c["key"], c["trading"]) for c in g] == [("extra_gate_code", False)] and "영향 없음" in change_text(g)
     both = changes(a, dict(a, extra_code="o", settings="o"))
-    assert "다시 셉니다" in change_text(both) and "원래 계좌의 코드는" not in change_text(both)
+    assert "오늘부터 다시 셈" in change_text(both) and "원래 계좌의 코드는" not in change_text(both)
 
 
 def test_signal_input_code_shared_with_the_originals_is_never_called_extras_only(tmp_path):

@@ -789,15 +789,51 @@ sudo journalctl -u <그 이름> -n 50 --no-pager
 ---
 
 ## 처음부터 다시 시작 (두 분 결정 2026-10-04, 한 번만)
-1분봉을 확정 전에 읽던 문제(`docs/signal-recording.md`)를 고치고 **5분봉을 실험에서 빼면서**(`docs/paper-v3-rules-change-1.md`: 5년 자료 거래당 −2.3%, 36칸 중 34칸 유의한 손실) 실험을 처음부터 다시 시작합니다. 이번이 마지막 재시작이고, 새 시작부터 30일 동안 규칙과 매매 코드는 그대로 둡니다. 08:30~09:40(KST)은 피합니다.
+1분봉을 확정 전에 읽던 문제(`docs/signal-recording.md`)를 고치고 **5분봉을 실험에서 빼면서**(`docs/paper-v3-rules-change-1.md`: 5년 자료 거래당 −2.3%, 36칸 중 34칸 유의한 손실) 실험을 처음부터 다시 시작합니다. 이번이 마지막 재시작이고, 새 시작부터 30일 동안 규칙과 매매 코드는 그대로 둡니다. 08:30~09:40(KST)은 피합니다(스크립트도 거절합니다).
+
+**아무것도 잃지 않습니다.** 옮기는 것은 이전 실행의 거래 기록뿐이고(지우지 않고 보관 폴더로), 직원들의 기억(시험 장부·메모·채점·회의 기록), 두 분이 쓴 글과 승인 기록, 가격 알림, 시장 기록은 그 자리에 그대로 둡니다.
+
 1. 측정 결과 확인: `cat /root/kline_probe.txt` (마감 뒤 몇 초에 읽어야 안전한지. 5초보다 길게 나오면 개발자에게 먼저 보냅니다)
 2. 코드 받기: `cd /root/crypto-bot-research && git pull`
-3. 다시 시작: `sudo bash deploy/paperbot-reset.sh --yes`
-   - 봇·대시보드·알림·예약 작업을 멈추고(돌고 있는 밤 작업은 끝날 때까지 기다림), 이전 실행의 `paper3.db`·`daily3.db`·`checkpoint.db`·`agents3.db`·`inbox.db`·`tradealerts.json` 등을 **지우지 않고** `/var/lib/paperbot/archive/run-<시각>/`으로 옮깁니다.
-   - 코드를 설치하고(`deploy/install.sh`), 멈췄던 것을 다시 켭니다. 봇이 $5,000 계좌 **156개**(매매법 36개 × 15분·30분·1시간·4시간 = 144개 + 동전 던지기 봇 봉마다 3개 = 12개, 5분봉 없음)를 새로 만들고 그 시각이 새 시작입니다. 30일 판정과 관찰 기간(21일)은 시작에서 저절로 계산됩니다.
-   - 청산·시장·GH Coin 기록, 설정 파일(`/etc/paperbot`), 주문 실행기와 키, 백업은 건드리지 않습니다.
-   - 대시보드에서 걸어 둔 가격 알림과 직원에게 남긴 글은 이전 실행과 함께 보관되므로, 필요하면 다시 걸어 둡니다.
-4. 5분 뒤 점검: `sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.launchcheck after`. "계좌 156개"가 나와야 합니다. paper3.db에 5분봉 계좌가 있으면(이전 실행의 DB가 그대로 남은 것) '고칠 것'으로 나옵니다.
+3. 미리 보기(아무것도 바꾸지 않음): `sudo bash deploy/paperbot-reset.sh --dry-run`
+   - 멈출 것, 옮길 파일, 그대로 둘 것, 직원 기록에서 바뀔 것(초기화할 커서, 닫을 제안), 설정에서 확인할 것을 보여 줍니다.
+   - 주문 실행기(`paperbot-executor`)가 돌고 있다고 나오면 먼저 `sudo systemctl stop paperbot-executor`(재시작 뒤 직접 다시 켬, 따라가는 계좌가 5분봉이면 바꾼 뒤).
+4. 다시 시작: `sudo bash deploy/paperbot-reset.sh --yes`
+   - 0) 확인: 직원 기록(agents3.db·inbox.db)을 읽을 수 있는지, 커밋 안 된 수정이 없는지. 여기서 멈추면 아무것도 바뀌지 않았습니다.
+   - 1) 봇·대시보드·거래 알림·에이전트·예약 작업을 멈춥니다(돌고 있는 밤 작업은 끝날 때까지 기다림). 청산·GH Coin·흐름·시장 기록은 계속 돕니다. 멈춘 뒤 실행 파일을 연 프로세스가 하나도 없는지 확인합니다(`fuser`).
+   - 2) 코드를 설치합니다(`deploy/install.sh`). 여기서 실패하면 이전 실행은 그대로이고, 화면에 다시 켜는 명령이 나옵니다.
+   - 3) 이전 실행의 파일을 **지우지 않고** `/var/lib/paperbot/archive/run-<UTC 시각>/`으로 옮깁니다(아래 표의 "보관").
+   - 4) `agents3.db`·`inbox.db`는 먼저 보관 폴더에 사본(`agents3-before-reset.db`, `inbox-before-reset.db`)을 만든 뒤, 이전 paper3.db를 가리키던 커서만 초기화하고(아래), 이전 실행의 열린 제안(두 분 확인 대기·승인됨)을 "run restarted"로 닫고, 방마다 메모 1개와 알림 1줄 "실험을 2026-10-04에 처음부터 다시 시작함 (5분봉 제외, 1분봉 5초 뒤 읽기)"을 남깁니다. 여러 번 돌려도 결과가 같습니다(`paperbot/resetrun.py`).
+   - 5) 멈췄던 것을 다시 켭니다. 봇이 $5,000 계좌 **156개**(매매법 36개 × 15분·30분·1시간·4시간 = 144개 + 동전 던지기 봇 봉마다 3개 = 12개, 5분봉 없음)를 새로 만들고 그 시각이 새 시작입니다. 스크립트가 새 시작 시각(KST)과 **첫 30일 판정일**(시작한 UTC 날짜 + 30일 09:00 KST, `checkpoint.checkpoint_ts`와 같은 계산)을 보여 줍니다. 관찰 기간(21일)도 시작에서 저절로 계산됩니다.
+   - 중간에 실패하면 어디까지 했는지와 그다음 명령(새 실행으로 계속하기 / 이전 실행으로 되돌리기: 옮긴 파일마다 `mv` 명령)이 화면에 나옵니다.
+5. 5분 뒤 점검: `cd /opt/crypto-bot-research && sudo /opt/paperbot/venv/bin/python -m paperbot.launchcheck --stage after`. "계좌 156개"가 나와야 합니다. paper3.db에 5분봉 계좌가 있으면(이전 실행의 DB가 그대로 남은 것) '고칠 것'으로 나옵니다.
+
+서버에 남는 것과 재시작이 하는 일:
+
+| 파일 (`/var/lib/paperbot`) | 쓰는 것 | 이전 실행에 묶임? | 재시작 |
+|---|---|---|---|
+| `paper3.db` | 봇(live3) | 예: 계좌·거래·번호·시작 시각 | **보관**(옮김) |
+| `daily3.db` | 매일 점검 | 예: 이전 실행의 날짜별 보고 | **보관** |
+| `checkpoint.db`, `checkpoint_bars/` | 30일 판정 | 예: 이전 실행의 스냅샷·판정(봉 캐시 포함) | **보관** |
+| `rehearsal/` | 판정 미리 연습 | 예 | **보관**(빈 폴더 새로 만듦) |
+| `tradealerts.json` | 거래 알림 | 예: 마지막 거래 번호·열린 포지션 | **보관**(새 실행은 처음부터 셈) |
+| `evening-latest.json` | 저녁 보고(v2) | v2 출력 | **보관** |
+| `agents3.db` | 에이전트, 매달 재검사 | 기억은 아님. 커서 몇 개만(아래) | **그대로**, 커서만 초기화 |
+| `inbox.db` | 대시보드 | 아니오: 두 분의 글·승인 기록·가격 알림 | **그대로**(사본만 만듦) |
+| `price_alerts.json` | 가격 알림 | 아니오: 울린 시각·켜짐 상태 | 그대로 |
+| `liq.db`, `flow.db`, `market.db`, `ghcoin/` | 시장 기록 | 아니오 | 그대로 |
+| `paper.db` | v2 | v2 실행 | 그대로 |
+| `lab/` | 5년 자료, 매달 재검사 | 아니오 | 그대로 |
+| `failalert/`, `exec/`, 로그인 파일 | 실패 알림, 주문 실행기 | 아니오 | 그대로 |
+| `/var/backups/paperbot`, `/etc/paperbot/*` | 백업, 설정 | 아니오 | 그대로 |
+
+`agents3.db` 안에서:
+- **그대로(기억):** 시험 장부(`trials`·`trial_results`: 관문의 시험 수는 절대 0으로 돌아가지 않음), 메모(`notes`), 회의 기록(`messages`·`rounds`), 채점 기록(가설 채점, 매일 토론 `committee_calls`), AI 사용량(`agent_calls`), 제안 기록(`proposals`, 지우지 않음).
+- **닫음:** 이전 실행의 열린 제안(두 분 확인 대기·승인됨)은 '거절'로 닫고(`code:run_restart`) 방에 이유를 적습니다. 새 실행의 실행기는 어차피 새 시작 전(관찰 기간 중)의 제안으로 계좌를 만들지 않습니다(`stale_run`). 시험 기록은 장부에 남습니다.
+- **초기화(이전 paper3.db의 번호를 가리키던 커서):** `loss:*`·`weekly:*`(거래 번호), `incident:alert_rowid`(알림 번호), `checkpoint:day`(30·60일째) → 0, `bust:*`(파산 계좌) 지움, `paper:fingerprint`·`extras:orphans`·`proposals:gate_now`(다음 회차가 다시 씀) 지움. 에이전트가 새 paper3.db를 처음 볼 때 하는 일(`triggers.reconcile_paper_cursors`)과 같습니다. 시각·날짜·inbox 번호로 된 나머지 커서(두 분 글, 승인, 텔레그램 보낸 표시, 주간 분석 날짜 등)는 그대로입니다.
+- **기록:** 커서 `run:restarted`에 재시작 시각·보관 폴더·이전 실행 시작 시각을 남깁니다.
+
+설정(`/etc/paperbot`)은 고치지 않습니다. 미리 보기가 `extras.json`의 `agents_ack`·`inbox_ack`·`accept_code`(이전 실행 값)나 주문 실행기가 따라가는 5분봉 계좌를 보여 주면 직접 고칩니다.
 
 ## 운영
 

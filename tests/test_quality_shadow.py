@@ -173,8 +173,11 @@ def test_quality_requests_the_scored_tier(tmp_path, st, tier, lev):
     assert q["key"] == f"quality|{STRAT}@{TF}|{SYM}|{I0 * MIN}" and q["exit_reason"] == "SL" and q["resolved"] == 1
     assert d["quality_tier"] == tier and d["leverage"] == lev and d["tier"] == tier
     assert d["pnl_equity"] == pytest.approx(q["roe"] * {50: 0.40, 30: 0.30, 20: 0.20}[lev])
-    assert json.loads(k["base"]["data"])["leverage"] == 50
-    if tier == "best":
+    # the base (the live rule, quality_v1 since 2026-10-04): 'best' 50% x 50x, any other tier 'normal' 30% x 30x;
+    # the quality shadow keeps its registered tier table (40% x 50x, 30% x 30x, 20% x 20x)
+    base_lev = {"best": 50, "good": 30, "base": 30}[tier]
+    assert json.loads(k["base"]["data"])["leverage"] == base_lev
+    if lev == base_lev:
         assert q["roe"] == pytest.approx(k["base"]["roe"])
     else:
         assert q["roe"] > k["base"]["roe"]                   # the same stop costs less ROE at lower leverage

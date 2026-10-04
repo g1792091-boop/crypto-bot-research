@@ -213,7 +213,7 @@ def test_copy_text_promises_the_start_once_the_runtime_is_deployed(world):
     e = env(world)
     A.propose_copy(e, t["id"], "why", A.copy_check(e, t["id"]), {"approve": True, "reason": "ok"})
     line = next(m for m in world.messages() if m["kind"] == "action" and "복제 계좌 제안" in m["text"])
-    assert "다음 5분 봉 경계" in line["text"] and "거절로 멈출 수 없습니다" in line["text"]
+    assert "다음 봉 경계" in line["text"] and "5분" not in line["text"] and "거절로 멈출 수 없습니다" in line["text"]
 
 
 def test_copy_check_requires_paper_ro_parent_bust_and_30_trades(world):
@@ -321,7 +321,7 @@ def test_newlab_propose_without_ai_text(world):
     assert idea not in blob and "idea" not in p["change"]["proposal"] and "name" not in p["change"]["proposal"]
     assert set(p["change"]) == {"kind", "account", "proposal"}
     assert len(note.messages) == 1 and idea not in note.messages[0][1] and f"제안 #{p['id']}" in note.messages[0][1]
-    assert "새 매매법 연구실에서 승인/거절" in note.messages[0][1]
+    assert note.messages[0][1].startswith("승인 요청 · 새 매매법 제안 #") and "→ 대시보드 '에이전트 방' → " in note.messages[0][1]
 
 
 def test_newlab_observation_writes_nothing(world):
@@ -737,9 +737,9 @@ def test_runtime_state_absent_keeps_old_texts(world, dash):
     assert shown["runtime_ready"] is False and shown["runtime_refusal"] is None and shown["account_running"] is None
     assert dash.get("/api/board").json()["extras_runtime"] is None
     assert "추가 계좌 기능이 아직 켜지지 않아" in A.start_text(None)
-    assert "다음 5분 봉 경계" not in A.start_text(world.paper())
+    assert "다음 봉 경계" not in A.start_text(world.paper())
     runner_state(world)
-    assert "다음 5분 봉 경계" in A.start_text(world.paper())
+    assert "다음 봉 경계" in A.start_text(world.paper()) and "5분" not in A.start_text(world.paper())
     import os
     js = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "paperbot", "dash", "static",
                            "rooms.js"), encoding="utf-8").read()

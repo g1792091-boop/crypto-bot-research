@@ -59,7 +59,7 @@ import time
 from typing import Any, Callable, Optional
 
 from .accounts import ORIGINAL_KINDS, HeldEngine
-from .config import V3_STOP_ATR, Settings
+from .config import V3_STOP_ATR, V3_TRADE_TFS, Settings
 from .engine import PaperEngine, engine_state, restore_engine
 from .health import sd_notify
 from .models import Signal, SignalOutcome
@@ -453,6 +453,21 @@ def parse_copy(account: Any, trial: dict, p: dict, names) -> tuple[dict, str, st
     if account.get("parent") != f"{s}@{tf}":
         raise Refusal("contract_mismatch", "parent")
     return rule, s, tf, content_key_copy(rule)
+
+
+NO_5M_KO = "5분봉은 2026-10-04부터 실험에서 뺐음(docs/paper-v3-rules-change-1.md)"
+
+
+def run_timeframe_refusal(tf: Any, run_tfs: Optional[Any] = None) -> str:
+    """Why a new-strategy account cannot start on ``tf`` ('' when it can). The lab grammar (NEWLAB_V1) still
+    allows 5m, the run does not: the account must be on one of the run's timeframes, config.V3_TRADE_TFS (the
+    signal service's ``trade_tfs``, which is that tuple in the live runner)."""
+    allowed = tuple(run_tfs) if run_tfs else V3_TRADE_TFS
+    if tf in allowed:
+        return ""
+    if tf == "5m":
+        return f"{NO_5M_KO}: 새 매매법 계좌는 {'·'.join(allowed)}봉에서만 시작"
+    return f"{tf}봉은 이번 실행의 봉({'·'.join(allowed)})이 아님"
 
 
 def parse_newlab(account: Any, trial: dict, p: dict) -> tuple[dict, str, str]:
@@ -1789,6 +1804,9 @@ class Activator:
         else:
             spec, h, content = parse_newlab(acct, t, p)
             parsed = {"spec": spec, "spec_hash": h, "timeframe": spec["timeframe"], "content": content}
+            why_tf = run_timeframe_refusal(spec["timeframe"], getattr(x.service, "trade_tfs", None))
+            if why_tf:
+                raise Refusal("spec_invalid", why_tf)
         # C4 run binding
         dts = p["decided_ts"]
         if p["ts"] < floor or not isinstance(dts, int) or dts < run_start:

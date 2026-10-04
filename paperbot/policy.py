@@ -1,7 +1,8 @@
 """Sizing and exit policies, one per ledger ("book").
 
-OwnerPolicy       the owners' rules: 20-50x, 20-40% margin tiers, ROE take-profit,
-                  15% stop-loss cap. See config.Settings.
+OwnerPolicy       the owners' rules: 20-50x, 20-50% margin tiers, ROE take-profit,
+                  15% stop-loss cap. See config.Settings (``leverage_rule``: the old
+                  tier walk, or the restarted paper v3 run's "quality_v1", levrule.py).
 RecommendedPolicy the analysis session's rules (handover 4.5 / 5.3): risk a fixed
                   share of equity per trade, size = risk / stop distance, leverage
                   is the result (capped), take-profit in R multiples or the
@@ -17,6 +18,7 @@ from dataclasses import dataclass
 from typing import Optional, Protocol
 
 from .config import Settings
+from .levrule import requested_tier
 from .margin import Brackets, liquidation_price
 from .models import Signal, TradeRecord
 from .sizing import SizeDecision, size_position, tp_from_roe
@@ -38,7 +40,8 @@ class OwnerPolicy:
         self.s = settings
 
     def size(self, equity, sig, entry, brackets, spec):
-        return size_position(self.s, equity, sig.side, entry, sig.stop_price, sig.tier,
+        # "tier_walk": the signal's own tier; "quality_v1": its group (levrule.signal_group)
+        return size_position(self.s, equity, sig.side, entry, sig.stop_price, requested_tier(self.s, sig),
                              brackets, atr=sig.atr, qty_step=spec.get("qty_step", 0.0),
                              min_notional=spec.get("min_notional", 0.0))
 

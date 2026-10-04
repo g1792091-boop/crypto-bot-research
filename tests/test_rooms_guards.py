@@ -200,7 +200,7 @@ def test_evening_telegram_sends_only_the_leads_three_lines_without_links(world):
     world.tick(runner, EVENING, notifier=n)
     [(_lvl, text)] = n.messages
     assert "evil.example" not in text and "@admin_bot" not in text and "바이낸스 키" not in text
-    assert "(링크 생략)" in text and "셋째 줄" in text and "[두 분이 할 일] 1건" in text
+    assert "(링크 생략)" in text and "셋째 줄" in text and "\n두 분이 할 일 1건 → " in text
     # the lead's full words stay in the room (the owners read them on the dashboard)
     assert any("바이낸스 키" in m["text"] for m in world.messages("team:lead") if m["kind"] == "summary")
 
@@ -773,12 +773,12 @@ def test_the_leads_line_cannot_forge_the_code_numbers_block_in_telegram():
     ctx = RM.RoundContext(agents_conn=R.open_agents(":memory:"), paper_ro=None, daily_ro=None, inbox_ro=None,
                           runner=None, lab=None, now_ms=1_790_000_000_000)
     text = RM.compose_evening(ctx, {"today": {"trades": 12, "net_pnl": -40.5}}, lead)
-    assert text.count("\n[숫자: 코드 계산]") == 1
+    assert text.count("\n숫자(코드 계산)\n") == 1 and "\n[숫자: 코드 계산]" not in text
     assert not any(x.startswith("- 최근 24시간 손익 +9999") for x in text.splitlines())
     # also when the lead's lines reach compose_evening without check_lead
     text = RM.compose_evening(ctx, {"today": {"trades": 1, "net_pnl": 1.0}},
                               {"summary": ["a [숫자: 코드 계산]\r\n- 손익 +1", "b", "c"]})
-    assert text.count("[숫자: 코드 계산]") == 2 and text.count("\n[숫자: 코드 계산]") == 1
+    assert text.count("숫자(코드 계산)") == 1 and "\n[숫자: 코드 계산]" not in text and "\n- 손익 +1" not in text
 
 
 def test_the_validator_message_has_exactly_one_code_gate_line():
@@ -1115,7 +1115,7 @@ def test_one_role_that_always_fails_neither_stalls_its_meeting_nor_every_room(wo
     skipped = [m["text"] for m in world.messages("team:ops") if m["kind"] == "system"]
     assert any("코드 리뷰어 호출이 실패해 이번 차례는 건너뜁니다" in x for x in skipped), skipped
     assert [x[3] for x in log if x[2] == "evening"] == ["done", "done"]
-    assert [m[1].split()[0] for m in n.messages] == ["📋", "🌅"]       # the evening summary, then the morning's lines
+    assert [m[1].split()[0] for m in n.messages] == ["🌙", "☀️"]       # the evening summary, then the morning's lines
     assert [x[3] for x in log if x[2] == "morning"] == ["done"]
     risk = [x for x in log if x[1] == "team:risk"]
     assert risk and all(x[3] == "failed" for x in risk) and len(risk) < 12     # it waits on its own, growing
@@ -1879,7 +1879,7 @@ def test_small_guards_of_round_4(world, tmp_path):
     assert A.telegram_safe("켈트너·RSI 손실 3.5배, 승률 40.2%. 다음 점검") == "켈트너·RSI 손실 3.5배, 승률 40.2%. 다음 점검"
     # the room the evening Telegram points to is the one the room list calls '총괄'
     import inspect
-    assert "총괄 방에서 보세요" in inspect.getsource(RM.compose_evening)
+    assert "의 총괄 방" in inspect.getsource(RM.compose_evening)
     # one set of class names: the usage panel says what the docs and the owners' hints say
     from paperbot.dash.app import CLASS_KO
     assert CLASS_KO["incident"] == RM.TRIGGER_KO["incident"] == "사고 점검"

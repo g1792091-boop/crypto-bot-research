@@ -178,7 +178,7 @@ def test_runner_stores_reconnects_and_tracks_uptime(tmp_path):
     events = [r[0] for r in store.conn.execute("SELECT event FROM conn_log ORDER BY rowid")]
     assert events.count("connected") == 2 and "bad_message" in events and events[-1] == "stopped"
     assert sleeps[:2] == [1.0, 1.0] or sleeps[0] == 1.0
-    assert any("reconnected" in m[1] for m in notes.messages)
+    assert any(m[1].startswith("청산 기록 끊김 후 복구\n\n바이낸스 청산 스트림 7분 끊김") for m in notes.messages)
 
 
 def test_uptime_share(tmp_path):

@@ -25,7 +25,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TRADING_FILES = ("paperbot/engine.py", "paperbot/ladder.py", "paperbot/margin.py", "paperbot/sizing.py",
                  "paperbot/config.py", "paperbot/models.py", "paperbot/accounts.py",
                  "paperbot/sigservice.py", "paperbot/aggregate.py", "paperbot/feed.py", "paperbot/live3.py",
-                 "paperbot/recorder.py")
+                 "paperbot/recorder.py", "paperbot/policy.py", "paperbot/levrule.py", "paperbot/quality_edges.json",
+                 "paperbot/entry_marks.py")
 RULES_FILES = ("docs/paper-v3-rules.md", "docs/paper-v3-rules-addendum.md", "docs/paper-v3-rules-change-1.md")
 # Files that decide only the extra accounts (paperbot/extras.py): their trading code and signals, and the
 # code that judges an approval at creation (not trading). A change is a Q5 event for the extras only.
@@ -128,17 +129,19 @@ def changes(prev: Optional[dict], cur: dict) -> list[dict]:
 
 
 def change_text(ch: list[dict]) -> Optional[str]:
+    """The restart's WARN / INFO (owners' Telegram layout 2026-10-04: a title, then short lines)."""
     if not ch:
         return None
     names = ", ".join(c["name"] + (f"({EXTRAS_ONLY_KO})" if c.get("extras_only") else "") for c in ch)
     if any(c["trading"] and not c.get("extras_only") and not c.get("shared") for c in ch):
-        return (f"재시작 때 바뀐 것: {names}. 체결·청산·사이즈에 영향이 있을 수 있어 규칙(Q5)상 "
-                "해당 30일 기간을 오늘부터 다시 셉니다. 규칙 관리자 확인 필요")
+        return (f"재시작 변경 · 거래 규칙 영향 있음\n\n바뀐 것: {names}\n"
+                "규칙(Q5)상 그 30일 기간을 오늘부터 다시 셈\n→ 규칙 관리자 확인 필요")
     if any(c["trading"] and c.get("shared") for c in ch):
-        return (f"재시작 때 바뀐 것: {names}. 원래 계좌의 신호 계산(recorder.py)과 차트 설명(context.py)에도 "
-                "쓰이는 코드라 원래 계좌와 추가 계좌 모두 Q5(30일 기간을 다시 셀지) 해당 여부를 규칙 관리자가 "
-                "확인해야 합니다 (recorder.py 변경은 원래 계좌의 거래 코드 변경으로도 따로 잡힙니다, Q-11)")
+        return (f"재시작 변경 · 원래·추가 계좌 모두 확인 필요\n\n바뀐 것: {names}\n"
+                "원래 계좌의 신호 계산(recorder.py)·차트 설명(context.py)에도 쓰는 코드\n"
+                "→ 규칙 관리자가 Q5(30일을 다시 셀지) 확인 (recorder.py 변경은 따로도 잡힘, Q-11)")
     if any(c["trading"] for c in ch):
-        return (f"재시작 때 바뀐 것: {names}. 추가 계좌의 체결·신호 코드라 {EXTRAS_ONLY_KO}(원래 계좌의 코드는 "
-                "그대로): 그 계좌들의 30일 기간을 다시 세야 하는지 규칙 관리자 확인 필요")
-    return f"재시작 때 바뀐 것: {names} (체결·청산·사이즈에는 영향 없음)"
+        return (f"재시작 변경 · 추가 계좌만 영향\n\n바뀐 것: {names}\n"
+                f"추가 계좌의 체결·신호 코드 ({EXTRAS_ONLY_KO}, 원래 계좌의 코드는 그대로)\n"
+                "→ 그 계좌들의 30일을 다시 셀지 규칙 관리자 확인")
+    return f"ℹ️ 재시작 변경 · {names} (거래에는 영향 없음)"

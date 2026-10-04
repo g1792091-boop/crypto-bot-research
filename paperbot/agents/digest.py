@@ -699,67 +699,69 @@ def survival_line(sv: Optional[dict]) -> str:
 
 
 def compose_week(rep: dict, limit: int = 4000) -> str:
-    """The Sunday Telegram report (silent): numbers by code only, no AI text."""
-    d = dt.datetime.fromtimestamp((rep["to"] + KST_MS) / 1000, dt.timezone.utc)
-    L = [f"📊 주간 성적표 ({d.month}/{d.day}, 지난 7일)"]
-    if rep.get("run_start") and rep["run_start"] > rep["from"]:
-        s = dt.datetime.fromtimestamp((rep["run_start"] + KST_MS) / 1000, dt.timezone.utc)
-        L[0] = f"📊 주간 성적표 ({d.month}/{d.day}, 실험 시작 {s.month}/{s.day}부터)"
+    """The Sunday Telegram report (silent): numbers by code only, no AI text (owners' layout 2026-10-04: top and
+    bottom 3, the security line only when something is wrong; the rest is on the dashboard)."""
+    def md(ms: int) -> str:
+        x = dt.datetime.fromtimestamp((ms + KST_MS) / 1000, dt.timezone.utc)
+        return f"{x.month}/{x.day:02d}"
+    # the 7 calendar days ending on the report's day, or from the experiment's start when it is younger
+    start = rep["run_start"] if rep.get("run_start") and rep["run_start"] > rep["from"] else rep["to"] - 6 * 86_400_000
+    L = [f"📊 주간 성적표 · {md(start)}~{md(rep['to'])}"]
     if rep.get("error"):
-        L.append(f"(거래 기록을 읽지 못함: {rep['error']})")
+        L += ["", f"(거래 기록을 읽지 못함: {rep['error']})"]
     t, tp = rep.get("strategies_total") or {}, rep.get("strategies_total_prev") or {}
     if t:
-        prev = f" (지난주 {_usd(tp.get('pnl'))}, 승률 {_pct(tp.get('win_rate'))})" if tp.get("trades") else ""
-        L += ["", "[매매법 계좌: 코드 계산]",
-              f"- 손익 {_usd(t.get('pnl'))} · 거래 {t.get('trades', 0):,}건 · 승률 {_pct(t.get('win_rate'))}{prev}"]
+        prev = f" (지난주 {_usd(tp.get('pnl'))})" if tp.get("trades") else ""
+        L += ["", "매매법 계좌", f"손익 {_usd(t.get('pnl'))}{prev}",
+              f"거래 {t.get('trades', 0):,}건 · 승률 {_pct(t.get('win_rate'))}"]
         cf = rep.get("coin_flips") or {}
         if cf.get("strategy_accounts"):
-            L.append(f"- 같은 봉 동전 봇 중간값보다 나은 계좌 {cf['strategy_accounts_beating_median']}/{cf['strategy_accounts']}"
-                     f" · 동전 봇 평균 {_usd(cf.get('mean_pnl'))}")
+            L.append(f"동전 봇 중간값보다 나은 계좌 {cf['strategy_accounts_beating_median']}/{cf['strategy_accounts']}")
         if rep.get("busts"):
-            L.append(f"- 파산 {len(rep['busts'])}개")
-        sv = survival_line(rep.get("survival"))
-        if sv:
-            L.append(sv)
-        rd = readiness_line(rep.get("readiness"))
-        if rd:
-            L.append(rd)
+            L.append(f"파산 {len(rep['busts'])}개")
+        sv = rep.get("survival") if isinstance(rep.get("survival"), dict) and not rep["survival"].get("error") else {}
+        deep = sv.get("deepest") or []
+        if deep:
+            L.append(f"가장 깊은 낙폭: {deep[0]['name_ko']} -{deep[0]['week_max_dd_pct'] * 100:.0f}%")
+        bt = sv.get("backtest") or {}
+        if bt.get("tested"):
+            L.append(f"5년 시험보다 나쁜 매매법 {bt['worse']}/{bt['tested']}")
+        rd = rep.get("readiness") if isinstance(rep.get("readiness"), dict) else {}
+        if not rd.get("error") and rd.get("summary"):
+            L.append(rd["summary"]["headline"].replace("실거래 조건: ", "실거래 조건 "))
+
     def line(r: dict) -> str:
         mv = ""
         if r.get("prev_rank"):
             dlt = r["prev_rank"] - r["rank"]
             mv = f" ▲{dlt}" if dlt > 0 else f" ▼{-dlt}" if dlt < 0 else " ="
-        return (f"{r['rank']}. {r['name_ko']} {_usd(r['pnl'])} (승률 {_pct(r.get('win_rate'))}, {r['trades']}건){mv}")
+        return f"{r['rank']}. {r['name_ko']} {_usd(r['pnl'])}{mv}"
     if rep.get("top"):
-        L += ["", "[이번 주 상위]"] + [line(r) for r in rep["top"]]
+        L += ["", "상위"] + [line(r) for r in rep["top"][:3]]
     if rep.get("bottom"):
-        L += ["", "[이번 주 하위]"] + [line(r) for r in rep["bottom"]]
+        L += ["", "하위"] + [line(r) for r in rep["bottom"][:3]]
     if rep.get("timeframes"):
-        L += ["", "[봉별] " + " · ".join(f"{TF_KO.get(tf, tf)} {_usd(v['pnl'])}" for tf, v in rep["timeframes"].items())]
+        tfs = [f"{TF_KO.get(tf, tf)} {_usd(v['pnl'])}" for tf, v in rep["timeframes"].items()]
+        L += ["", "봉별"] + [" · ".join(tfs[i:i + 2]) for i in range(0, len(tfs), 2)]
     st = rep.get("staff")
     if st:
-        top_kinds = ", ".join(f"{k} {v}" for k, v in list(st["meetings"].items())[:4])
-        L += ["", "[직원]",
-              f"- 회의 {st['meetings_total']}번" + (f" ({top_kinds})" if top_kinds else "") + f" · AI 호출 {st['ai_calls']:,}번",
-              f"- 가설 {st['hypotheses']}건 기록 · 예측 채점 {st['predictions_graded']}건 중 {st['predictions_correct']}건 맞음",
-              f"- 5년 시험 {st['tests']}건(통과 {st['tests_passed']}) · 새 매매법 시험 {st['lab_tests']}건(통과 {st['lab_passed']})"]
+        L += ["", "직원", f"회의 {st['meetings_total']}번 · AI 호출 {st['ai_calls']:,}번",
+              f"가설 {st['hypotheses']} · 예측 {st['predictions_correct']}/{st['predictions_graded']} 맞음",
+              f"5년 시험 {st['tests']}(통과 {st['tests_passed']}) · 새 매매법 {st['lab_tests']}(통과 {st['lab_passed']})"]
+    L.append("")
     gh = rep.get("ghcoin")
     if gh and (gh.get("all") or {}).get("calls"):
-        w, a = gh.get("week") or {}, gh["all"]
-
-        def ghl(x: dict) -> str:
-            p = x.get("p_coin_flip")
-            return (f"{x.get('calls', 0)}타점 · 순 {x.get('net_r') or 0:+.1f}R (동전 {x.get('coin_flip_net_r') or 0:+.1f}R"
-                    + (f", p={p:.2f}" if p is not None else "") + ")")
-        L += ["", "[GH Coin 기록기: 친구 봇 타점, 기록만]",
-              f"- 7일 {ghl(w) if w.get('calls') else '끝난 타점 없음'}", f"- 시작부터 {ghl(a)}"]
+        w = gh.get("week") or {}
+        L.append("GH Coin 기록: " + (f"7일 {w.get('calls', 0)}타점 {w.get('net_r') or 0:+.1f}R (동전 {w.get('coin_flip_net_r') or 0:+.1f}R)"
+                                    if w.get("calls") else f"7일 끝난 타점 없음 · 누적 {gh['all']['calls']}타점"))
     db = rep.get("debate")
     if db and (db.get("all") or {}).get("graded"):
         w, a = db.get("week") or {}, db["all"]
-        L += ["", f"[낙관·비관 토론: 기록만, 거래 없음] 이번 주 채점 {w.get('graded', 0)}건 중 {w.get('correct', 0)}건 맞음 · "
-                  f"시작부터 {a['correct']}/{a['graded']} ({_pct(a.get('hit_rate'))}, 동전 50%, 늘 상승 {_pct(a.get('always_up_rate'))})"]
-    L += ["", security_line(rep.get("security"))]
-    L += ["", "※ 7일 성적은 운이 큽니다. 30일 판정은 체크포인트(동전 봇 2,000개 비교)가 합니다. 자세히: 대시보드 '회의 요약' 탭"]
+        L.append(f"낙관·비관 토론: 이번 주 {w.get('correct', 0)}/{w.get('graded', 0)}, 누적 {a['correct']}/{a['graded']}")
+    L.append(security_line(rep.get("security"), short=True))
+    L += ["", "※ 7일 성적은 운이 큼. 판정은 30일 체크포인트"]
+    while L and not L[-1]:
+        L.pop()
     return "\n".join(L)[:limit]
 
 
@@ -819,11 +821,17 @@ def store_security(conn: sqlite3.Connection, paper_db: Optional[str], now_ms: in
     return got
 
 
-def security_line(sec: Optional[dict]) -> str:
-    """One line for the weekly report (counts only)."""
+def security_line(sec: Optional[dict], short: bool = False) -> str:
+    """One line for the weekly report (counts only). ``short`` (Telegram): '보안 점검: 이상 없음', or the problem."""
     if not sec:
-        return "[보안: 코드 점검] 이번 주 점검 기록 없음(에이전트가 돌지 않았거나 점검 전)"
+        return "보안 점검: 이번 주 기록 없음" if short else "[보안: 코드 점검] 이번 주 점검 기록 없음(에이전트가 돌지 않았거나 점검 전)"
     bad = sec.get("secrets_readable", 0)
+    if short:
+        world = sec.get("db_world_readable", 0)
+        if not bad and not world:
+            return "보안 점검: 이상 없음"
+        return "⚠ 보안 확인 필요: " + " · ".join(([f"비밀 파일 열림 {bad}개"] if bad else [])
+                                              + ([f"다른 사용자가 읽는 데이터 파일 {world}개"] if world else []))
     head = (f"[보안: 코드 점검] 에이전트가 열 수 없어야 할 비밀 파일·폴더 {sec.get('secrets_checked', 0)}개 중 "
             f"열림 {bad}개{' ⚠️ 확인 필요' if bad else ''} · 데이터 파일 {sec.get('db_files', 0)}개 중 다른 사용자가 읽을 수 있는 것 "
             f"{sec.get('db_world_readable', 0)}개")

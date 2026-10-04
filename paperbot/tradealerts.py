@@ -41,7 +41,8 @@ from .notify import INFO, WARN, ConsoleNotifier, Notifier
 TF_KO = {"5m": "5분", "15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간", "1d": "일봉"}
 REASON_KO = {"SL": "손절", "LOCK": "익절 잠금", "LIQ": "강제청산", "TP": "익절", "HALT": "정지", "MANUAL": "수동",
              "END": "종료", "BUST": "파산"}
-MAX_LINES = 20
+BLOCKS = 3          # up to this many entries (exits) in a message: one block each; more: grouped lines
+MAX_LINES = 12      # grouped lines per section, then '외 n건'
 
 
 def _ro(path: str) -> sqlite3.Connection:
@@ -59,16 +60,17 @@ def _names() -> dict:
 
 
 def label(account_id: str, kind: str, names: dict) -> str:
+    """'일목·RSI 15분', '복제 슈퍼트렌드·ROC 1시간', '새 매매법 NL2 15분', '동전 봇 3 15분' (notify.who's wording;
+    ``names``: STRATEGY_KO)."""
     strat, _, tf = account_id.partition("@")
+    tf = tf.split("~", 1)[0]
     tf_ko = TF_KO.get(tf, tf)
     if kind == "random":
-        return f"동전 봇 {strat.rsplit('_', 1)[-1]} · {tf_ko}"
+        return f"동전 봇 {strat.rsplit('_', 1)[-1]} {tf_ko}"
+    if kind == "newlab":
+        return f"새 매매법 {strat} {tf_ko}"
     base = names.get(strat, strat)
-    if kind == "copy":
-        base = f"복제 {base}"
-    elif kind == "newlab":
-        base = f"새 매매법 {base}"
-    return f"{base} · {tf_ko}"
+    return f"복제 {base} {tf_ko}" if kind == "copy" else f"{base} {tf_ko}"
 
 
 def px(x: float) -> str:
@@ -80,15 +82,59 @@ def usd(x: float) -> str:
     return f"{'+' if x >= 0 else '-'}${abs(x):,.0f}"
 
 
+def _kst(now_ms: int, fmt: str = "%m/%d %H:%M") -> str:
+    return time.strftime(fmt, time.gmtime(now_ms / 1000 + 9 * 3600))
+
+
+def _settings(c: sqlite3.Connection):
+    """The run's settings for the ladder prices: v3 with the run's taker fee (state 'run')."""
+    from .config import v3_settings
+    fee = None
+    try:
+        r = c.execute("SELECT data FROM state WHERE k = 'run'").fetchone()
+        fee = (json.loads(r["data"]) or {}).get("taker_fee") if r else None
+    except (sqlite3.Error, ValueError, TypeError):
+        fee = None
+    return v3_settings(**({"taker_fee": float(fee)} if fee else {}))
+
+
+def ladder_prices(p: dict) -> tuple[float, float, float, float]:
+    """(trigger ROE, its price, first lock ROE, the stop it moves to) of an open position: the profit lock arms at
+    first_lock + trigger_gap net ROE (ladder.LadderSpec) and moves the stop to the first lock's price, both net of
+    the run's round trip (funding left out). A copy with its own 'lock_start' rule has its own first lock."""
+    from .config import v3_settings
+    from .ladder import roe_price
+    s = v3_settings()
+    first = float(p.get("first_lock") or s.ladder_first_lock)
+    gap = float(p.get("trigger_gap") or s.ladder_trigger_gap)
+    rt = float(p.get("round_trip") or s.round_trip_cost)
+    trig = first + gap
+    return (trig, roe_price(p["side"], p["entry"], p["leverage"], trig, rt),
+            first, roe_price(p["side"], p["entry"], p["leverage"], first, rt))
+
+
 def read(db: str, kinds: tuple, since_id: int) -> tuple[dict, list[dict], int]:
     """(open positions {account_id: position}, new exits after ``since_id`` of the chosen kinds, the highest trade
     id read, filtered rows included)."""
     with _ro(db) as c:
-        accts = {r["account_id"]: r["kind"] for r in c.execute("SELECT account_id, kind FROM accounts")}
+        try:
+            rows = c.execute("SELECT account_id, kind, data FROM accounts").fetchall()
+        except sqlite3.OperationalError:            # an old table without data
+            rows = c.execute("SELECT account_id, kind, NULL AS data FROM accounts").fetchall()
+        accts, first_lock = {}, {}
+        for r in rows:
+            accts[r["account_id"]] = r["kind"]
+            try:
+                d = json.loads(r["data"] or "{}")
+            except (ValueError, TypeError):
+                d = {}
+            if isinstance(d, dict) and d.get("first_lock") is not None:
+                first_lock[r["account_id"]] = float(d["first_lock"])     # extras: their own ladder start
+        s = _settings(c)
         r = c.execute("SELECT data FROM state WHERE k = 'accounts'").fetchone()
         eng = (json.loads(r["data"]) or {}).get("engines", {}) if r else {}
         exits = [dict(x) for x in c.execute(
-            "SELECT id, account_id, symbol, exit_time, exit_reason, leverage, pnl, roe, data FROM trades "
+            "SELECT id, account_id, symbol, exit_time, exit_reason, leverage, pnl, roe, equity_after, data FROM trades "
             "WHERE id > ? ORDER BY id", (since_id,))]
     top = max([since_id] + [x["id"] for x in exits])      # past every row read, kept or filtered out
     pos = {}
@@ -97,7 +143,9 @@ def read(db: str, kinds: tuple, since_id: int) -> tuple[dict, list[dict], int]:
         if p and accts.get(aid) in kinds:
             pos[aid] = {"symbol": p["symbol"], "side": p["side"], "entry": p["entry_price"],
                         "entry_time": p["entry_time"], "leverage": p["leverage"], "margin": p["margin"],
-                        "stop": p["stop_price"], "kind": accts.get(aid)}
+                        "stop": p["stop_price"], "kind": accts.get(aid),
+                        "first_lock": first_lock.get(aid, s.ladder_first_lock), "trigger_gap": s.ladder_trigger_gap,
+                        "round_trip": s.round_trip_cost, "tier": p.get("tier"), "wallet": (e or {}).get("wallet")}
     out = []
     for x in exits:
         if accts.get(x["account_id"]) not in kinds:
@@ -106,43 +154,129 @@ def read(db: str, kinds: tuple, since_id: int) -> tuple[dict, list[dict], int]:
             d = json.loads(x.pop("data") or "{}")
         except ValueError:
             d = {}
+        if x.get("equity_after") is None and d.get("equity_after") is not None:
+            x["equity_after"] = d["equity_after"]
         out.append({**x, "kind": accts.get(x["account_id"]), "side": d.get("side"), "lock_roe": d.get("lock_roe")})
     return pos, out, int(top)
 
 
+def _side(side) -> str:
+    return "" if side is None else ("🟢 롱" if side > 0 else "🔴 숏")
+
+
+def _why(x: dict) -> str:
+    why = REASON_KO.get(x["exit_reason"], x["exit_reason"])
+    if x["exit_reason"] == "LOCK" and x.get("lock_roe"):
+        why += f"(+{round(x['lock_roe'] * 100)}%)"
+    return why
+
+
+def entry_block(aid: str, p: dict, names: dict) -> list[str]:
+    trig, p_trig, first, p_lock = ladder_prices(p)
+    dist = (p["stop"] / p["entry"] - 1) * 100
+    wallet = p.get("wallet")
+    share = f" ({p['margin'] / wallet:.0%})" if isinstance(wallet, (int, float)) and wallet > 0 else ""
+    best = " · 좋은 자리" if p.get("tier") == "best" else ""
+    return [f"📈 진입 · {label(aid, p['kind'], names)}",
+            f"{_side(p['side'])} · {coin(p['symbol'])} {p['leverage']}배{best}",
+            f"진입가 {px(p['entry'])}",
+            f"익절 잠금 시작 {px(p_trig)} (+{trig * 100:.0f}%)",
+            f"→ 손절을 {px(p_lock)}로 올림 (+{first * 100:.0f}% 확보)",
+            f"손절가 {px(p['stop'])} ({dist:+.2f}%)",
+            f"증거금 ${p['margin']:,.0f}{share}"]
+
+
+def exit_block(x: dict, names: dict) -> list[str]:
+    win = x["pnl"] > 0
+    side = _side(x.get("side"))
+    L = [f"{'✅ 이익' if win else '❌ 손실'} {usd(x['pnl'])} · {label(x['account_id'], x['kind'], names)}",
+         f"{side + ' · ' if side else ''}{coin(x['symbol'])} {x['leverage']}배 · {_why(x)}",
+         f"ROE {x['roe'] * 100:+.1f}%"]
+    if x.get("equity_after") is not None:
+        L.append(f"남은 잔고 ${x['equity_after']:,.0f}")
+    return L
+
+
+def coin(symbol: str) -> str:
+    return symbol.replace("USDT", "")
+
+
+def _grouped_entries(entries: list[tuple[str, dict]], names: dict) -> list[str]:
+    L = []
+    for side in (1, -1):
+        es = [(a, p) for a, p in entries if (p["side"] > 0) == (side > 0)]
+        if not es:
+            continue
+        L += ["", f"{_side(side)} {len(es)}건"]
+        shown = 0
+        for c in dict.fromkeys(coin(p["symbol"]) for _, p in es):
+            ce = [(a, p) for a, p in es if coin(p["symbol"]) == c]
+            same = len({p["entry"] for _, p in ce}) == 1
+            body = []
+            for a, p in ce:
+                if shown >= MAX_LINES:
+                    break
+                shown += 1
+                body.append(f"- {label(a, p['kind'], names)} · {p['leverage']}배"
+                            + ("" if same else f" · 진입 {px(p['entry'])}") + f" · 손절 {px(p['stop'])}")
+            if body:
+                L += [f"{c} · 진입 {px(ce[0][1]['entry'])}" if same else c] + body
+        if len(es) > shown:
+            L.append(f"외 {len(es) - shown}건 — 대시보드 포지션 탭")
+    return L
+
+
+def _grouped_exits(exits: list[dict], shown: list[dict], names: dict) -> list[str]:
+    L = []
+    for win in (True, False):
+        xs = [x for x in exits if (x["pnl"] > 0) == win]
+        if not xs:
+            continue
+        L += ["", f"{'✅ 이익' if win else '❌ 손실'} {len(xs)}건 {usd(sum(x['pnl'] for x in xs))}"]
+        listed = sorted([x for x in xs if any(x is y for y in shown)], key=lambda x: -abs(x["pnl"]))[:MAX_LINES]
+        for x in listed:
+            bal = f" · 잔고 ${x['equity_after']:,.0f}" if x.get("equity_after") is not None else ""
+            L.append(f"- {label(x['account_id'], x['kind'], names)} · {coin(x['symbol'])}"
+                     f" · {x['roe'] * 100:+.1f}% · {usd(x['pnl'])}{bal}")
+        if len(xs) > len(listed):
+            L.append(f"외 {len(xs) - len(listed)}건 — 대시보드 '오늘 체결'")
+    return L
+
+
 def message(entries: list[tuple[str, dict]], exits: list[dict], open_n: int, now_ms: int, names: dict,
             min_usd: float = 0.0) -> Optional[str]:
+    """The Telegram text (owners' layout 2026-10-04): one trade -> its block and the KST time; more -> a header
+    '📊 거래 알림 <time> · 진입 n (롱 a·숏 b) · 청산 m · 합계 ±$', then up to ``BLOCKS`` entries (exits) as blocks,
+    more as lines grouped by side and coin (entries) or by profit / loss (exits), ``MAX_LINES`` per section,
+    and the open positions last. Exits with |P&L| below ``min_usd`` are counted, not listed."""
     if not entries and not exits:
         return None
-    kst = time.strftime("%H:%M", time.gmtime(now_ms / 1000 + 9 * 3600))
-    lines = [f"거래 알림 {kst} · 진입 {len(entries)} · 청산 {len(exits)}"]
+    entries = sorted(entries, key=lambda e: -e[1]["margin"])
+    shown = [x for x in exits if abs(x["pnl"]) >= min_usd]
+    if len(entries) + len(exits) == 1 and (entries or shown):
+        L = entry_block(*entries[0], names) if entries else exit_block(exits[0], names)
+        return "\n".join(L + [_kst(now_ms)])
+    nl = sum(p["side"] > 0 for _, p in entries)
+    head = [f"📊 거래 알림 {_kst(now_ms)}"]
     if entries:
-        lines.append("")
-        lines.append("[진입]")
-        for aid, p in sorted(entries, key=lambda e: -e[1]["margin"])[:MAX_LINES]:
-            lines.append(f"{'롱' if p['side'] > 0 else '숏'} {p['symbol'].replace('USDT', '')} {p['leverage']}배 @ {px(p['entry'])}"
-                         f" · {label(aid, p['kind'], names)} · 증거금 ${p['margin']:,.0f} · 손절 {px(p['stop'])}")
-        if len(entries) > MAX_LINES:
-            lines.append(f"외 {len(entries) - MAX_LINES}건 (대시보드 포지션 탭)")
+        head.append(f"진입 {len(entries)}" + (f" (롱 {nl}·숏 {len(entries) - nl})" if 0 < nl < len(entries) else ""))
     if exits:
-        lines.append("")
-        lines.append("[청산]")
-        shown = [x for x in exits if abs(x["pnl"]) >= min_usd]
-        for x in sorted(shown, key=lambda x: -abs(x["pnl"]))[:MAX_LINES]:
-            why = REASON_KO.get(x["exit_reason"], x["exit_reason"])
-            if x["exit_reason"] == "LOCK" and x.get("lock_roe"):
-                why += f" +{round(x['lock_roe'] * 100)}%"
-            side = "" if x.get("side") is None else ("롱 " if x["side"] > 0 else "숏 ")
-            lines.append(f"{usd(x['pnl'])} ({x['roe'] * 100:+.1f}%) {why} · {side}{x['symbol'].replace('USDT', '')}"
-                         f" {x['leverage']}배 · {label(x['account_id'], x['kind'], names)}")
-        hidden = len(exits) - min(len(shown), MAX_LINES)
-        if hidden > 0:
-            lines.append(f"외 {hidden}건 (대시보드 '오늘 체결')")
-        tot = sum(x["pnl"] for x in exits)
-        win = sum(x["pnl"] > 0 for x in exits)
-        lines.append(f"청산 합계 {usd(tot)} · 이긴 거래 {win}/{len(exits)}")
-    lines.append(f"지금 열린 포지션 {open_n}개")
-    return "\n".join(lines)
+        head += [f"청산 {len(exits)}", f"합계 {usd(sum(x['pnl'] for x in exits))}"]
+    L = [" · ".join(head)]
+    if len(entries) <= BLOCKS:
+        for a, p in entries:
+            L += [""] + entry_block(a, p, names)
+    else:
+        L += _grouped_entries(entries, names)
+    if len(exits) <= BLOCKS:
+        for x in sorted(shown, key=lambda x: -abs(x["pnl"])):
+            L += [""] + exit_block(x, names)
+        if len(exits) > len(shown):
+            L += ["", f"외 {len(exits) - len(shown)}건 (작은 손익) — 대시보드 '오늘 체결'"]
+    else:
+        L += _grouped_exits(exits, shown, names)
+    L += ["", f"열린 포지션 {open_n}개"]
+    return "\n".join(L)
 
 
 def load_state(path: str) -> Optional[dict]:
@@ -191,11 +325,19 @@ def fetch_prices(get=None, timeout: float = 5.0) -> dict:
     return {r["symbol"]: float(r["price"]) for r in get(PRICE_URL) if isinstance(r, dict) and "symbol" in r}
 
 
-def price_text(a: dict, last: float) -> str:
+def _level(x: float) -> str:
+    """An owner-set price as they typed it: 65000 -> '65,000', 0.1234 -> '0.1234'."""
+    return f"{int(x):,}" if float(x) == int(x) else f"{x:,.10g}"
+
+
+def price_text(a: dict, last: float, now_ms: Optional[int] = None) -> str:
     c = a["symbol"].replace("USDT", "")
-    way = "위로" if a["direction"] == "above" else "아래로"
-    note = f" · 메모: {a['note']}" if a.get("note") else ""
-    return f"🔔 가격 알림: {c} {px(a['price'])} {way} 도달 · 지금 {px(last)}{note}"
+    way = "돌파" if a["direction"] == "above" else "이탈"
+    L = [f"🔔 가격 알림 · {c} {_level(a['price'])} {way}", "", f"지금 {px(last)}"]
+    if a.get("note"):
+        L.append(f"메모: {a['note']}")
+    L.append(_kst(int(time.time() * 1000) if now_ms is None else now_ms))
+    return "\n".join(L)
 
 
 def check_price_alerts(inbox: Optional[str], pstate: dict, notifier: Notifier, now_ms: int, prices_fn) -> list[str]:
@@ -223,7 +365,7 @@ def check_price_alerts(inbox: Optional[str], pstate: dict, notifier: Notifier, n
         if last is None:
             continue
         if (a["direction"] == "above" and last >= a["price"]) or (a["direction"] == "below" and last <= a["price"]):
-            text = price_text(a, last)
+            text = price_text(a, last, now_ms)
             if notifier.send(WARN, text) is False:
                 continue
             fired[str(a["id"])] = now_ms

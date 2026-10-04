@@ -80,6 +80,10 @@ if ROOT not in sys.path:
 from paperbot import Bar, Brackets, sigservice, sweepsig  # noqa: E402
 from paperbot.accounts import AccountBook  # noqa: E402
 from paperbot.config import V3_SYMBOLS, v3_settings  # noqa: E402
+try:                    # the leverage rule the golden file was written with (quality_v1 came on 2026-10-04)
+    from paperbot.config import V3_OLD_TIER_WALK as RULE  # noqa: E402
+except ImportError:     # the base commit: only the tier walk exists
+    RULE = {}
 from paperbot.engine import engine_state  # noqa: E402
 from paperbot.live3 import Runner3, account_defs  # noqa: E402
 from paperbot.notify import Digest, ListNotifier  # noqa: E402
@@ -393,7 +397,7 @@ class Session:
                  charge: Optional[dict] = None):
         self.lib = install_fakes()
         self.feed, self.clock, self.rec = feed, clock, rec
-        self.settings = v3_settings()
+        self.settings = v3_settings(**RULE)
         self.store_path = db
         self.store = Store3(db)
         self.notifier = _ChargedNotifier(clock, int(charge["notify_ms"])) if charge else ListNotifier()

@@ -44,6 +44,9 @@ class FakeService:
 
     def __init__(self, names, maxlen: int = 1500, symbols=V3_SYMBOLS):
         self.names = list(names)
+        # the world's frozen timeframe set (with 5m, like tests/extras_harness.py; the live run dropped 5m on
+        # 2026-10-04): extras.run_timeframe_refusal reads it as the run's timeframes
+        self.trade_tfs = tuple(TF_MS)
         self.trade_symbols = list(symbols)
         self.symbols = list(symbols)
         self.hist = {s: deque(maxlen=maxlen) for s in self.symbols}

@@ -130,8 +130,9 @@ class LiqRunner:
                 self.store.log("connected", {"attempt": n})
                 if down_since is not None and self.clock() - down_since >= self.alert_after_s and self.notifier:
                     from .notify import WARN
-                    self.notifier.send(WARN, f"liquidation stream was down {self.clock() - down_since:.0f}s; "
-                                             f"reconnected")
+                    from .notify import secs_ko
+                    self.notifier.send(WARN, f"청산 기록 끊김 후 복구\n\n바이낸스 청산 스트림 "
+                                             f"{secs_ko(self.clock() - down_since)} 끊김\n지금 다시 연결됨 (그동안 기록은 없음)")
                 down_since, backoff = None, 1.0
                 opened = self.clock()
                 while not self.stopping:

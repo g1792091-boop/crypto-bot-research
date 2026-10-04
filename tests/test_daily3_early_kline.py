@@ -163,7 +163,7 @@ def test_replay_on_live_bars_removes_an_early_kline_mismatch_and_keeps_a_real_on
                                           "source": "live_bars", "accounts": ["A@15m"]}]
     msgs = D.notify_report(rep, ListNotifier())
     assert msgs[0][0] == "CRITICAL" and "계좌 1개" in msgs[0][1] and "그 밖에 1개" in msgs[0][1]
-    assert "재계산 일치 0/2 (확정 전 1분봉 1)" in msgs[-1][1]
+    assert len(msgs) == 1 and "\n재계산 일치 0/2\n" in msgs[0][1]
 
 
 def test_without_the_real_mismatch_the_day_is_one_warn_and_a_rerun_relabels_cleanly(tmp_path, monkeypatch):
@@ -179,10 +179,9 @@ def test_without_the_real_mismatch_the_day_is_one_warn_and_a_rerun_relabels_clea
     rows = out.execute("SELECT day, account_id, data FROM mismatches ORDER BY day").fetchall()
     assert [(d, a) for d, a, _ in rows] == [("1969-12-31", "X"), ("1970-01-01", "A@15m")]
     assert json.loads(rows[1][2])["label"] == EARLY_KLINE_KO
-    msgs = [m for m in D.notify_report(rep, ListNotifier(), trades_day=2) if "빠진 1분봉:" not in m[1]]
-    assert [m[0] for m in msgs] == ["WARN", "INFO"]                       # (the synthetic day is only 60 minutes)
-    assert msgs[0][1].startswith("[1970-01-01] 재계산 차이 1개 계좌: 모두 '1분봉을 확정 전에 읽음'으로 확인됨(계산 오류 아님")
-    assert msgs[1][1].startswith("[1970-01-01] 매일 점검: 재계산 일치 1/2 (확정 전 1분봉 1) · 거래 2건")
+    msgs = D.notify_report(rep, ListNotifier(), trades_day=2)
+    assert [m[0] for m in msgs] == ["INFO"]                 # early klines only: a line of the silent summary
+    assert msgs[0][1].startswith("🔎 매일 점검 · 01/01\n\n재계산 일치 1/2\n(1개는 확정 전 1분봉: 정상)\n거래 2건\n")
 
 
 # ---------------------------------------------------------------------------- (ii) the minute's trades (option 1)

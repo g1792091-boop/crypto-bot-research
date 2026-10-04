@@ -2457,10 +2457,12 @@ def copy_alert(env: A.ActionEnv, res: dict) -> bool:
     from .digest import TF_KO
     s, tf = acct.get("strategy") or env.strategy or "", acct.get("timeframe") or ""
     n = (prop.get("gate") or {}).get("n_trials") if isinstance(prop.get("gate"), dict) else None
-    text = (f"[에이전트 알림] {env.room_title or env.room_id}: 복제 계좌 제안 #{pid}이 두 분 확인을 기다립니다. "
-            f"{STRATEGY_KO.get(s, s)} {TF_KO.get(tf, tf)}봉 계좌와 같고 한 가지만 바꾼 새 paper 계좌({X.rule_ko(acct.get('rule'))}), "
-            f"5년 시험 관문 통과(시험 #{res.get('trial_id')}" + (f", 이 방 시험 {n}번 기준" if n else "") + "). "
-            "방에서 시험을 더 하면 승인할 수 없게 될 수 있습니다. 대시보드 '에이전트 방'에서 승인/거절")
+    text = (f"승인 요청 · 복제 계좌 제안 #{pid}\n\n"
+            f"원본: {STRATEGY_KO.get(s, s)} {TF_KO.get(tf, tf)}\n"
+            f"바꾼 한 가지: {X.rule_ko(acct.get('rule'))}\n"
+            f"5년 시험 통과 (시험 #{res.get('trial_id')}" + (f", 방 시험 {n}번 기준" if n else "") + ")\n"
+            "방에서 시험을 더 하면 승인 못 할 수 있음\n"
+            "→ 대시보드 '에이전트 방'에서 승인/거절")
     try:
         ok = env.notifier.send(WARN, A.telegram_safe(text))
     except Exception as exc:  # noqa: BLE001  (delivery must not break the round)
@@ -2753,14 +2755,14 @@ def _team_round(rnd: _Round) -> tuple[str, dict]:
     if rnd.due.trigger == "bull_bear":
         extra["call"] = record_call(rnd, lead)
     if rnd.due.trigger == "market_move":
-        _send_once(rnd, f"telegram:move:{rnd.due.data['key']}", compose_market_move(rnd.base["market_move"], lead),
+        _send_once(rnd, f"telegram:move:{rnd.due.data['key']}", compose_market_move(rnd.base["market_move"], lead, rnd.ctx.now_ms),
                    "시세 급변 요약", extra)
     if rnd.due.trigger == "ranking" and lead is not None:
         _send_once(rnd, f"telegram:ranking:{rnd.due.data.get('slot') or R.kst_day(ctx.now_ms)}",
                    compose_ranking(rnd.base["ranking"], lead, ctx.policy.triggers.ranking_hour_kst), "순위 검토 요약", extra)
     if rnd.due.trigger == "morning" and lead is not None:
         _send_once(rnd, f"telegram:morning:{rnd.due.data.get('slot') or R.kst_day(ctx.now_ms)}",
-                   compose_lead_lines("🌅 아침 회의 (시장분석팀, 08:00)", lead), "아침 요약", extra)
+                   compose_lead_lines("☀️ 아침 회의 요약", lead), "아침 요약", extra)
     decision = {"action": "team_meeting", "speakers": rnd.spoke, **{k: v for k, v in extra.items() if k != "flag"},
                 "flagged": bool(extra.get("flag", {}).get("sent"))}
     decision["summary_ko"] = _team_summary(rnd, board, extra)
@@ -3097,22 +3099,27 @@ def market_move_packet(ctx: RoundContext, due: TR.Due) -> dict:
                     "나갈 때 수수료 전). 직원은 주문·규칙 변경을 할 수 없음"}
 
 
-def compose_market_move(pk: dict, lead: Optional[dict]) -> str:
+def compose_market_move(pk: dict, lead: Optional[dict], now_ms: Optional[int] = None) -> str:
     """Telegram (silent): the moves and our exposure written by code, then the lead's summary lines (collapsed)."""
-    L = ["⚡ 시세 급변 회의 (시장분석팀)"]
-    for m in pk.get("moves") or []:
+    from ..notify import kst
+    from ..tradealerts import px
+    moves = pk.get("moves") or []
+    head = " · ".join(f"{m['symbol'].replace('USDT', '')} {m['move'] * 100:+.1f}%" for m in moves)
+    L = [f"⚡ 시세 급변 · {head} (1시간)" if head else "⚡ 시세 급변 (1시간)"]
+    for m in moves:
         c = m["symbol"].replace("USDT", "")
-        L.append(f"{c}: 1시간 {m['move'] * 100:+.1f}% (1시간 전 {m['ref']:,.4g} → 지금 {m['last']:,.4g}, "
-                 f"고 {m['high']:,.4g} / 저 {m['low']:,.4g})")
+        L += ["", (f"{c} " if len(moves) > 1 else "")
+              + f"{px(m['ref'])} → {px(m['last'])} (고 {px(m['high'])} · 저 {px(m['low'])})"]
         e = (pk.get("exposure") or {}).get(m["symbol"]) or {}
         if e:
-            L.append(f"  우리 계좌: 롱 {e['long']} · 숏 {e['short']} · 증거금 ${e['margin']:,.0f} · 평가 손익 "
-                     f"{'+' if e['upnl'] >= 0 else '-'}${abs(e['upnl']):,.0f}"
-                     + (f" · 청산가 3% 안 {e['near_liq']}개" if e.get("near_liq") else ""))
+            L.append(f"우리 계좌: 롱 {e['long']} · 숏 {e['short']}")
+            L.append(f"증거금 ${e['margin']:,.0f} · 평가 {_usd0(e['upnl'])}")
+            if e.get("near_liq"):
+                L.append(f"청산가 3% 안 {e['near_liq']}개")
     lines = [str(x) for x in ((lead or {}).get("summary") or []) if str(x).strip()][:3]
     if lines:
-        L += ["", "[팀장 요약]"] + ["- " + A.telegram_safe(" ".join(x.split()))[:300] for x in lines]
-    L.append("(자세한 내용: 대시보드 에이전트 방 > 시장분석팀)")
+        L += ["", "팀장 요약"] + ["- " + A.telegram_safe(" ".join(x.split()))[:300] for x in lines]
+    L.append(kst(int(time.time() * 1000) if now_ms is None else now_ms))
     return "\n".join(L)[:TELEGRAM_LIMIT]
 
 
@@ -3148,7 +3155,7 @@ def ranking_packet(ctx: RoundContext) -> dict:
 
 def compose_lead_lines(title: str, lead: Optional[dict]) -> str:
     lines = [str(x) for x in ((lead or {}).get("summary") or []) if str(x).strip()][:3]
-    L = [title] + [f"{i + 1}. {A.telegram_safe(' '.join(x.split()))[:300]}" for i, x in enumerate(lines)]
+    L = [title, ""] + [f"{i + 1}. {A.telegram_safe(' '.join(x.split()))[:300]}" for i, x in enumerate(lines)]
     return "\n".join(L)[:TELEGRAM_LIMIT]
 
 
@@ -3157,22 +3164,25 @@ def _usd0(x: float) -> str:
 
 
 def compose_ranking(pk: dict, lead: Optional[dict], hour: int = 14) -> str:
-    """Telegram (silent): the picked strategies' numbers by code, then the lead's three lines."""
-    L = [f"🏁 순위 검토 (손익 복기팀, {int(hour):02d}:00)"]
-    for r in pk.get("picked") or []:
-        c = r.get("closed") or (r.get("compare") or {}).get("all") or {}       # every closed trade (code)
-        wr = c.get("win_rate")
-        per = r.get("pnl_per_account")
-        L.append(f"{r['group']} {r['rank']}/{r['of']} {r['name_ko']}: {_usd0(r['pnl'])}"
-                 + (f" (계좌당 {_usd0(per)})" if per is not None else "")
-                 + f" · {c.get('wins', 0)}승 {c.get('losses', 0)}패" + (f" ({wr * 100:.0f}%)" if wr is not None else ""))
+    """Telegram (silent): the picked strategies' numbers by code (each strategy's 4 timeframe accounts summed, and
+    per account), then the lead's three lines."""
+    L = [f"🏆 순위 검토 · {int(hour):02d}:00"]
+    for group in ("상위", "하위"):
+        rows = [r for r in pk.get("picked") or [] if r.get("group") == group]
+        if not rows:
+            continue
+        L += ["", group]
+        for r in rows:
+            c = r.get("closed") or (r.get("compare") or {}).get("all") or {}       # every closed trade (code)
+            per = r.get("pnl_per_account")
+            L.append(f"{r['rank']}. {r['name_ko']} {_usd0(r['pnl'])}" + (f" (계좌당 {_usd0(per)})" if per is not None else "")
+                     + f" · {c.get('wins', 0)}승 {c.get('losses', 0)}패")
     fl = (pk.get("coin_flips") or {}).get("mean_pnl")
-    if fl is not None:      # one coin-flip account's mean: next to the per-account numbers, not the 4-account sums
-        n = (pk.get("coin_flips") or {}).get("accounts_per_strategy") or 4
-        L.append(f"동전 봇 계좌당 평균 {_usd0(fl)} ({n}개 합으로 치면 {_usd0(fl * n)})")
+    if fl is not None:      # one coin-flip account's mean: next to the per-account numbers, not the strategy sums
+        L += ["", f"동전 봇 계좌당 평균 {_usd0(fl)}"]
     lines = [str(x) for x in ((lead or {}).get("summary") or []) if str(x).strip()][:3]
     if lines:
-        L += ["", "[팀장 요약]"] + ["- " + A.telegram_safe(" ".join(x.split()))[:300] for x in lines]
+        L += ["", "팀장 요약"] + ["- " + A.telegram_safe(" ".join(x.split()))[:300] for x in lines]
     return "\n".join(L)[:TELEGRAM_LIMIT]
 
 
@@ -3256,33 +3266,27 @@ def compose_evening(ctx: RoundContext, board: dict, lead: dict, due: Optional[TR
     when the meeting runs after midnight."""
     day0 = meeting_day_start(ctx, due)
     day = R.kst_day(day0)
-    L = [f"📋 에이전트 저녁 점검 ({day})", "", "[팀장 요약]"]
+    from ..notify import day_ko, usd
+    L = [f"🌙 저녁 점검 · {day_ko(day)}", ""]
     # each line collapsed: a summary line can never start a line of its own (e.g. a fake numbers block)
     L += [f"{i + 1}. {A.telegram_safe(' '.join(str(s).split()))}" for i, s in enumerate(lead["summary"][:3])]
-    L += ["", "[숫자: 코드 계산]"]
+    L += ["", "숫자(코드 계산)"]
     today = board.get("today") or {}
     if today:
-        L.append(f"- 최근 24시간 끝난 거래 {today.get('trades', 0)}건, 손익(동전 봇 포함) {float(today.get('net_pnl') or 0):+.2f} USDT, "
-                 f"이긴 거래 {today.get('wins', 0)}건, 파산 계좌 누적 {today.get('busts_total', 0)}개")
+        L.append(f"거래 {today.get('trades', 0)}건 · 이긴 {today.get('wins', 0)}건 · {usd(float(today.get('net_pnl') or 0))} (동전 봇 포함)")
+        L.append(f"파산 누적 {today.get('busts_total', 0)}개")
     rounds = [r for r in _today_rounds(ctx, day0) if r["status"] in ("done", "no_action")]
-    acts: dict[str, int] = {}
-    for r in rounds:
-        a = r.get("action") or "?"
-        acts[a] = acts.get(a, 0) + 1
-    names = {**A.ACTION_KO, "team_meeting": "팀 회의"}
     late = R.kst_day(ctx.now_ms) != day                   # the 22:00 meeting ran after midnight
-    since = f"{day} 0시부터 " if late else "오늘 "
-    if rounds:
-        L.append(f"- {since}회의 {len(rounds)}번: " + ", ".join(f"{names.get(a, a)} {n}" for a, n in acts.items()))
-    waiting = len(R.list_proposals(ctx.agents_conn, status="awaiting_owner"))
-    if waiting:
-        L.append(f"- 두 분 확인을 기다리는 제안 {waiting}건 (복제·새 매매법 계좌, 대시보드 '에이전트 방')")
+    since = f"{day_ko(day)} 0시부터 " if late else ""
     calls = R.usage_today(ctx.agents_conn, ctx.now_ms)["calls"]
     if late:
         calls += R.usage_today(ctx.agents_conn, day0)["calls"]
-    L.append(f"- {since}AI 호출 {calls}회")
+    L.append(f"{since}" + (f"회의 {len(rounds)}번 · " if rounds else "") + f"AI 호출 {calls}회")
+    waiting = len(R.list_proposals(ctx.agents_conn, status="awaiting_owner"))
+    if waiting:
+        L.append(f"확인 기다리는 제안 {waiting}건")
     if lead.get("human_actions"):
-        L += ["", f"[두 분이 할 일] {len(lead['human_actions'])}건 — 대시보드 '에이전트 방'의 총괄 방에서 보세요"]
+        L += ["", f"두 분이 할 일 {len(lead['human_actions'])}건 → 대시보드 '에이전트 방'의 총괄 방"]
     text = "\n".join(L)
     return text if len(text) <= TELEGRAM_LIMIT else text[:TELEGRAM_LIMIT - 20] + "\n…(잘림)"
 
@@ -4141,7 +4145,7 @@ def reconcile_inbox_cursors(conn: sqlite3.Connection, inbox_ro: Optional[sqlite3
 # login check is not here: the pass exits 2 and the unit's OnFailure alert (paperbot.failalert) says so.
 DOWN_ROUNDS = 4
 DOWN_CURSOR = "alert:agents_down:"
-DOWN_HELP = "서버 안내서(docs/server-setup-v3.md) 8-2·8-4로 Claude 구독 로그인과 서버 연결을 확인해 주세요"
+DOWN_HELP = "→ 안내서 8-2·8-4로 Claude 로그인·서버 연결 확인"
 
 
 def down_streak(conn: sqlite3.Connection) -> tuple[int, Optional[int], str]:
@@ -4164,7 +4168,7 @@ def agents_down_alert(ctx: RoundContext, text: str) -> bool:
         return False
     R.set_cursor(ctx.agents_conn, key, str(ctx.now_ms))
     try:
-        return ctx.notifier.send(WARN, f"[에이전트 알림] {text} {DOWN_HELP}. (하루 한 번만 알립니다)") is not False
+        return ctx.notifier.send(WARN, f"{text}\n{DOWN_HELP}\n(하루 한 번만 알림)") is not False
     except Exception:  # noqa: BLE001  (delivery never breaks the tick)
         return False
 
@@ -4180,8 +4184,12 @@ def check_runner_down(ctx: RoundContext) -> bool:
         return False
     mins = (ctx.now_ms - since) // 60_000
     dur = f"{mins}분" if mins < 120 else f"약 {round(mins / 60)}시간"      # the 15-minute timer: about 90 minutes
-    return agents_down_alert(ctx, f"직원 회의가 {dur}째 AI를 부르지 못해 열리지 않습니다(회의 {n}번 연속 실패, "
-                                  f"마지막 오류: {A.telegram_safe(err[:200]) or '알 수 없음'}). 두 분 글에도 답하지 못합니다.")
+    return agents_down_alert(ctx, down_text(dur, n, err))
+
+
+def down_text(dur: str, n: int, err: str) -> str:
+    return (f"직원 회의 멈춤 · {dur}째\n\n회의 {n}번 연속 실패 (AI 응답 없음)\n두 분 글에도 답하지 못함\n"
+            f"마지막 오류: {A.telegram_safe(err[:200]) or '알 수 없음'}")
 
 
 def mark_tick(conn: sqlite3.Connection, ts_ms: int, ok: bool = True, why: str = "", detail: str = "") -> None:

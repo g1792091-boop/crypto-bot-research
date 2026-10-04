@@ -11,7 +11,8 @@ is what ``paperbot/agents/power.py`` shows to the 30-day checkpoint meeting and 
 How (every number is code; the choices are fixed here, before looking at any live result)
 1. Coin-flip trades under the paper rules, from the SAME machinery as the 5-year card and the coin-flip bots:
    ``research/paper_rules/rules_bt.py`` (``random_signals`` + ``simulate``: next-bar entry with slippage, stop
-   2 x ATR14 (V3_STOP_ATR), the owners' sizing tiers, the stepped profit lock, one position at a time, coin
+   2 x ATR14 (V3_STOP_ATR), the owners' sizing tiers under the run's leverage rule (``LEVERAGE_RULE``, since
+   2026-10-04 quality_v1: a coin flip is 'best' with config.V3_P_BEST[tf]), the stepped profit lock, one position at a time, coin
    priority, liquidation, bust) on the Binance USD-M futures bars in the repository (``data/pre2021``:
    2020-01 .. 2021-08, six coins; 30m is resampled from 15m). Each timeframe's signal rate per coin-bar is the
    MEDIAN strategy's rate of the 5-year cards (``signals_per_day`` / (6 coins x bars a day), cards.json), as the
@@ -50,6 +51,7 @@ sizing rule, as in the live run) for a Monte Carlo (``too_few``); 4h is observat
 from __future__ import annotations
 
 import argparse
+import contextlib
 import datetime as dt
 import gzip
 import json
@@ -82,6 +84,11 @@ CHECKPOINTS = (30, 60, 90)
 WARMUP_BARS = 300                                   # ATR14 settles (as checkpoint.ATR_PREFIX_BARS)
 MIN_POOL = 100                                      # fewer coin-flip trades in the pool: no Monte Carlo
 TF_MIN = {"5m": 5, "15m": 15, "30m": 30, "1h": 60, "4h": 240}
+# Leverage of the coin flips: the restarted run's rule (config.V3_LEVERAGE_RULE, owners 2026-10-04): each coin-flip
+# signal is 'best' with probability config.V3_P_BEST[tf] (50x / 50%, 40x / 40%, then 30x / 30%, 20x / 20%), else
+# 'normal' (30x / 30%, 20x / 20%), as the live coin-flip accounts and the checkpoint's bots. "tier_walk" = rules_bt's own
+# sizing (every signal 40% x 50x first, then 40x, 30x, 20x), the rule of power.json before 2026-10-04.
+LEVERAGE_RULE = "quality_v1"
 
 
 def _cp():
@@ -187,11 +194,41 @@ def card_rates(cards_path: str = CARDS) -> dict:
     return out
 
 
+@contextlib.contextmanager
+def leverage_rule(rule: str, tf: str, seed: int):
+    """rules_bt.simulate sizing under ``rule``: "tier_walk" leaves it alone; "quality_v1" swaps rules_bt's
+    ``size_position`` (only while the block runs; rules_bt.py itself is unchanged) for the run's quality_v1 tiers
+    with each signal's group drawn 'best' with probability config.V3_P_BEST[tf] from its own seeded stream."""
+    import rules_bt as RB
+    if rule == "tier_walk":
+        yield
+        return
+    if rule != "quality_v1":
+        raise ValueError(f"unknown leverage rule {rule!r}")
+    from dataclasses import replace
+    from paperbot.config import V3_BEST_FALLS_TO_NORMAL, V3_P_BEST, V3_QUALITY_TIERS
+    from paperbot.levrule import GROUP_SALT
+    s = replace(RB.SETTINGS, leverage_rule="quality_v1", tiers=V3_QUALITY_TIERS, max_margin_frac=0.50,
+                best_falls_to_normal=V3_BEST_FALLS_TO_NORMAL)
+    real = RB.size_position
+    rng = np.random.default_rng([GROUP_SALT, int(seed), TF_MIN[tf]])
+    p = float(V3_P_BEST.get(tf, 0.0))
+
+    def sized(_settings, equity, side, entry, stop, _requested, brackets, **kw):
+        return real(s, equity, side, entry, stop, "best" if rng.random() < p else "normal", brackets, **kw)
+
+    RB.size_position = sized
+    try:
+        yield
+    finally:
+        RB.size_position = real
+
+
 def build_pool(bars: dict, tf: str, rate: float, seeds=SEEDS, window_days: int = PERIOD_DAYS, L=None,
-               stop_atr: Optional[float] = None, max_windows: Optional[int] = None) -> dict:
-    """Coin-flip trades of rules_bt in consecutive ``window_days`` windows (each a fresh account) x ``seeds``.
-    Returns R (net ROE on margin), mf (margin / wallet before), the trades and alive days, and per window the
-    bust flag and trade count."""
+               stop_atr: Optional[float] = None, max_windows: Optional[int] = None, rule: str = LEVERAGE_RULE) -> dict:
+    """Coin-flip trades of rules_bt in consecutive ``window_days`` windows (each a fresh account) x ``seeds``,
+    sized with the leverage ``rule`` (``leverage_rule``). Returns R (net ROE on margin), mf (margin / wallet
+    before), the trades and alive days, and per window the bust flag and trade count."""
     import rules_bt as RB
     L = L or lib()
     k = float(stop_atr if stop_atr is not None else v3_numbers()["stop_atr"])
@@ -210,7 +247,8 @@ def build_pool(bars: dict, tf: str, rate: float, seeds=SEEDS, window_days: int =
             w1 = w0 + span
             bounds = {c: (max(int(np.searchsorted(bars[c]["ts"], w0)), WARMUP_BARS),
                           int(np.searchsorted(bars[c]["ts"], w1))) for c in coins}
-            r = RB.simulate(bars, {c: sig[c] for c in coins}, bounds, k, tf, L, keep_trades=True)
+            with leverage_rule(rule, tf, int(seed) * 100_003 + len(wins)):
+                r = RB.simulate(bars, {c: sig[c] for c in coins}, bounds, k, tf, L, keep_trades=True)
             tt = r["trade_table"]
             if len(tt):
                 R.append(tt["R"].to_numpy(float))
@@ -442,7 +480,7 @@ def run(out_path: str = OUT, reps: int = 4000, n_null: int = 20000, seed: int = 
     doc = {"version": 1, "generated": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d"),
            "script": "research/power/power.py run", "seed": seed, "reps": reps, "null_accounts": n_null,
            "edges_roe": list(edges), "families": list(FAMILIES), "checkpoints": list(CHECKPOINTS),
-           "rules": nb, "data": "data/pre2021 (Binance USD-M futures 2020-01..2021-08, 6 coins; 30m from 15m)",
+           "rules": nb, "leverage": leverage_doc(), "data": "data/pre2021 (Binance USD-M futures 2020-01..2021-08, 6 coins; 30m from 15m)",
            "rates_from": "research/strategy_profiles/out_binance/cards.json (median strategy signals_per_day)",
            "timeframes": list(tfs), "no_5m": NO_5M,
            "addendum_trades_30d_median": {k: v for k, v in {"5m": 144, "15m": 104, "30m": 56, "1h": 27, "4h": 1}.items()
@@ -459,6 +497,13 @@ def run(out_path: str = OUT, reps: int = 4000, n_null: int = 20000, seed: int = 
         with open(out_path, "w", encoding="utf-8") as fh:
             json.dump(doc, fh, ensure_ascii=False, indent=1)
     return doc
+
+
+def leverage_doc() -> dict:
+    from paperbot.config import V3_BEST_FALLS_TO_NORMAL, V3_P_BEST, V3_QUALITY_TIERS
+    return {"rule": LEVERAGE_RULE, "p_best": dict(V3_P_BEST), "best_falls_to_normal": V3_BEST_FALLS_TO_NORMAL,
+            "tiers": [[t.name, t.margin_frac, list(t.leverages)] for t in V3_QUALITY_TIERS],
+            "note": "coin flips drawn 'best' with p_best[tf] (owners 2026-10-04, docs/paper-v3-rules-change-1.md)"}
 
 
 # ---------------------------------------------------------------- selftest (synthetic bars)

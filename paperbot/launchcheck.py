@@ -717,6 +717,16 @@ def telegram_chats(envs: dict[str, EnvFile], agents_wanted: bool) -> list[tuple[
     return out
 
 
+ROOMS_KO = {"CRITICAL": "긴급 알림방", "WARN": "경고 알림방", "INFO": "조용한 알림방", "BACKUP": "백업방"}
+
+
+def room_ko(label: str) -> str:
+    """'live.env CRITICAL' -> '긴급 알림방', 'agents.env INFO' -> '조용한 알림방 (에이전트)'."""
+    env, _, level = label.partition(" ")
+    room = ROOMS_KO.get(level, label)
+    return room + (" (에이전트)" if env.startswith("agents") else "")
+
+
 def check_telegram(ctx: Ctx, envs: dict[str, EnvFile], agents_wanted: bool, send_test: bool) -> list[Line]:
     live, agents = envs["live"], envs["agents"]
     token = live.get("TELEGRAM_BOT_TOKEN")
@@ -752,7 +762,7 @@ def check_telegram(ctx: Ctx, envs: dict[str, EnvFile], agents_wanted: bool, send
             out.append(ok(f"텔레그램 방 {seen}곳 확인됨: 봇이 들어가 있음 (메시지는 보내지 않음, --send-test로 시험 메시지)"))
         return out
     for label, tok, chat, silent in chats:
-        text = f"[시험] paperbot 시작 점검: {label} 알림이 이 방으로 옵니다. 답장하지 않아도 됩니다."
+        text = f"🧪 시험 메시지 · {room_ko(label)}\n\n봇 알림이 이 방으로 옵니다\n답장하지 않아도 됩니다"
         good, res = _telegram(ctx, tok, "sendMessage",
                               {"chat_id": chat, "text": text, "disable_notification": json.dumps(silent)})
         if good:

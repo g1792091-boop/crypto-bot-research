@@ -44,7 +44,10 @@ For one UTC day (default: yesterday):
      stop, and fixed 10x/20x leverage, plus the unchanged rules as a control; and (docs/
      observation-shadows-2.md) the sizing tier picked by the signal's recorded entry strength.
      docs/observation-shadows-3.md adds fixed 30x / 40x / 50x (tier margin share) and a 1.5 / 2.5 / 3 ATR stop at
-     the real trade's leverage (stopw1.5 / stopw2.5 / stopw3).
+     the real trade's leverage (stopw1.5 / stopw2.5 / stopw3). docs/observation-shadows-4.md adds fixed
+     take-profits at 1 / 1.5 / 2 / 3 R without the ladder and the ladder capped at 2R (tp1R .. tp3R, ladder_cap2R),
+     fixed 20x / 30x / 40x / 50x with margin = leverage % (lev20m20 .. lev50m50), and per account the shadow
+     equity curves of the leverage variants and the base (daily3.db shadow_curves, obsshadows.write_curves).
    Each shadow trade runs alone on a fresh account (the starting equity) so results are comparable as ROE.
 3. Data quality: missing minutes, zero-volume minutes, extreme ranges, last vs
    mark price gaps, extreme funding.
@@ -83,7 +86,7 @@ from .engine import PaperEngine, restore_engine
 from .models import Bar, Signal
 from .cards import STOP_VARIANTS
 from .notify import CRITICAL, INFO, WARN
-from .obsshadows import LOOKBACK_MS, first_signal, summarize, trade_shadows
+from .obsshadows import LOOKBACK_MS, first_signal, summarize, trade_shadows, write_curves
 
 MIN = 60_000
 LIMIT_ATR = 0.25
@@ -146,11 +149,15 @@ def day_signals(conn, start: int, end: int, with_data: bool = False) -> dict[int
 
 
 def make_signal(d: dict, stop_atr: float = V3_STOP_ATR, ref: Optional[float] = None) -> Signal:
+    """The signal_log row as the runner submitted it. With the row's ``data`` (``day_signals(with_data=True)``)
+    the signal carries its ctx as the live one does, so the quality_v1 leverage group (levrule: the recorded
+    strength) is the live account's; without it a strategy signal has no strength and sizes as "normal"."""
+    meta = {"stop_dist": stop_atr * d["atr"], "ref_price": ref if ref is not None else d["ref_price"],
+            "ref_time": d["ref_time"], "delay_ms": d["delay_ms"], "account": f"{d['strategy']}@{d['timeframe']}"}
+    if "data" in d:
+        meta["ctx"] = _ctx_of(d)
     return Signal(ts=d["bar_close"] - 1, symbol=d["symbol"], timeframe=d["timeframe"], strategy_id=d["strategy"],
-                  side=int(d["side"]), stop_price=0.0, tier="best", atr=d["atr"],
-                  meta={"stop_dist": stop_atr * d["atr"], "ref_price": ref if ref is not None else d["ref_price"],
-                        "ref_time": d["ref_time"], "delay_ms": d["delay_ms"],
-                        "account": f"{d['strategy']}@{d['timeframe']}"})
+                  side=int(d["side"]), stop_price=0.0, tier="best", atr=d["atr"], meta=meta)
 
 
 # ---------------------------------------------------------------- 1. replay parity
@@ -197,8 +204,9 @@ def extra_status(x: dict, ts: int) -> str:
 
 
 def _ctx_of(d: dict) -> dict:
+    raw = d.get("data")
     try:
-        data = json.loads(d.get("data") or "{}")
+        data = raw if isinstance(raw, dict) else json.loads(raw or "{}")
     except (TypeError, ValueError):
         return {}
     ctx = data.get("ctx") if isinstance(data, dict) else None
@@ -660,7 +668,7 @@ def shadows(settings: Settings, brackets, specs, conn, day: str, start: int, end
     idx = {ts: k for k, (ts, _, _) in enumerate(steps)}
     rows = []
     ext = extras_of(conn)
-    sigs = day_signals(conn, start - 1, end - 1)
+    sigs = day_signals(conn, start - 1, end - 1, with_data=True)     # data: the leverage group's strength
     for bc, lst in sigs.items():
         i0 = idx.get(bc)
         if i0 is None:
@@ -954,7 +962,7 @@ def run_day(conn, out: sqlite3.Connection, rest: BinanceREST, settings: Settings
     else:
         ext = extras_of(conn)
         snap_d = json.loads(snap[0])
-        sigs = day_signals(conn, start, end, with_data=bool(ext))
+        sigs = day_signals(conn, start, end, with_data=True)    # data: skip tags and the leverage group's strength
         rep = replay(settings, brackets, specs, snap_d, sigs, day_steps, extras=ext)
         rep_day = {a: [t for t in ts if t.exit_time < end] for a, ts in rep.items()}
         stored = stored_trades(conn, start, end)
@@ -977,7 +985,7 @@ def run_day(conn, out: sqlite3.Connection, rest: BinanceREST, settings: Settings
     first = first_signal(conn, start, end)
     pre = fetch_steps(rest, symbols, max(first, start - LOOKBACK_MS), start) if first is not None else []
     tv, tv_info = trade_shadows(settings, brackets, specs, conn, day, start, end, pre + steps, make_signal,
-                                quality=True, extra3=True)
+                                quality=True, extra3=True, extra4=True)
     lim = [r for r in sh if r["kind"] == "limit"]
     report["shadows"] = {
         "limit_signals": len(lim), "limit_filled": sum(r["filled"] for r in lim),
@@ -1015,58 +1023,59 @@ def run_day(conn, out: sqlite3.Connection, rest: BinanceREST, settings: Settings
     out.executemany("INSERT INTO mismatches VALUES (?,?,?)", [(day, m["account_id"], json.dumps(m)) for m in mism])
     out.executemany("INSERT OR REPLACE INTO shadows VALUES (:key,:day,:kind,:account_id,:symbol,:timeframe,:side,"
                     ":filled,:roe,:exit_reason,:resolved,:data)", sh)
+    report["shadows"]["curves"] = write_curves(out, day, tv, start=settings.initial_equity)   # observation-shadows-4
     out.execute("INSERT OR REPLACE INTO reports VALUES (?,?,?)", (day, int(time.time() * 1000), json.dumps(report)))
     out.commit()
     return report
 
 
 def notify_report(report: dict, notifier, trades_day: Optional[int] = None) -> list[tuple[str, str]]:
-    """Owner alerts from one nightly report (routing in docs/paper-v3-rules-addendum.md):
-    a parity mismatch or a missing 00:00 snapshot is loud (CRITICAL/WARN), data gaps
-    are WARN, and the one-line summary is a silent INFO message. Mismatches proven to be early 1m klines
-    (``parity.early_kline``) are not counted in ``mismatched_accounts``: when they are all there is, one WARN
-    instead of the CRITICAL (and the agents open no incident meeting for them)."""
-    day = report["day"]
-    msgs = []
+    """ONE owner message from one nightly report (routing in docs/paper-v3-rules-addendum.md; owners' Telegram
+    layout 2026-10-04): loud only for a real parity mismatch (CRITICAL) or a missing 00:00 snapshot (WARN);
+    everything else (mismatches proven to be early 1m klines, ``parity.early_kline``, which are not counted in
+    ``mismatched_accounts``; bars only on the live record; an extra's restart gap; missing 1m bars) is a line of
+    the silent INFO summary (and the agents open no incident meeting for early klines)."""
+    from .notify import day_ko, usd
+    day = day_ko(report["day"])
+    level, head, lines = INFO, [f"🔎 매일 점검 · {day}"], []
     par = report.get("parity")
-    if isinstance(par, dict):
-        early = int(par.get("early_kline") or 0)
-        if par["mismatched_accounts"]:
-            more = f" (그 밖에 {early}개는 '1분봉을 확정 전에 읽음'으로 확인됨)" if early else ""
-            msgs.append((CRITICAL, f"[{day}] 재계산 불일치: 계좌 {par['mismatched_accounts']}개의 거래가 "
-                                   f"paper와 다릅니다. 운영 감사관 확인 필요 (daily3.db mismatches){more}"))
-        elif early:
-            msgs.append((WARN, f"[{day}] 재계산 차이 {early}개 계좌: 모두 '1분봉을 확정 전에 읽음'으로 확인됨"
-                               f"(계산 오류 아님, {EARLY_DOC})"))
-        only_live = (par.get("live_bars") or {}).get("only_on_live_bars") or []
-        if only_live:
-            msgs.append((WARN, f"[{day}] 봇이 쓴 1분봉으로 다시 계산하면 계좌 {len(only_live)}개가 paper와 다릅니다 "
-                               "(완성된 1분봉으로는 일치, 기록 확인 필요: daily3.db reports)"))
-        if par.get("crash_gaps"):
-            msgs.append((WARN, f"[{day}] {CRASH_GAP_KO}: 추가 계좌 {par['crash_gaps']}개가 재시작 때 신호 하나를 놓쳤습니다 "
-                               "(원래 계좌와는 무관, daily3.db mismatches)"))
-        ok = par['accounts'] - par['mismatched_accounts'] - par.get('crash_gaps', 0) - early
-        par_txt = f"재계산 일치 {ok}/{par['accounts']}" + (f" (확정 전 1분봉 {early})" if early else "")
-    else:
-        msgs.append((WARN, f"[{day}] 재계산 못 함: 그날 00:00 상태 저장이 없습니다 (봇이 멈춰 있었음)"))
-        par_txt = "재계산 못 함"
     dq = report.get("data_quality", {})
     missing = {s: q["missing"] for s, q in dq.items() if isinstance(q, dict) and q.get("missing")}
-    if missing:
-        msgs.append((WARN, f"[{day}] 빠진 1분봉: " + ", ".join(f"{s} {n}" for s, n in missing.items())))
-    sh = report.get("shadows", {})
-    parts = [par_txt]
+    if isinstance(par, dict):
+        early = int(par.get("early_kline") or 0)
+        ok = par['accounts'] - par['mismatched_accounts'] - par.get('crash_gaps', 0) - early
+        if par["mismatched_accounts"]:
+            level = CRITICAL
+            head = [f"재계산 불일치 · {day}", "", f"계좌 {par['mismatched_accounts']}개의 거래가 paper와 다름"]
+            if early:
+                head.append(f"(그 밖에 {early}개는 확정 전 1분봉: 정상)")
+            head += ["운영 감사관 확인 필요", "자세히: daily3.db mismatches", "", "매일 점검"]
+        lines.append(f"재계산 일치 {ok}/{par['accounts']}")
+        if early and not par["mismatched_accounts"]:
+            lines.append(f"({early}개는 확정 전 1분봉: 정상)")
+        only_live = (par.get("live_bars") or {}).get("only_on_live_bars") or []
+        if only_live:
+            lines.append(f"기록 확인 필요: 봇이 쓴 1분봉으로는 계좌 {len(only_live)}개가 paper와 다름 "
+                         "(완성된 1분봉으로는 일치, daily3.db reports)")
+        if par.get("crash_gaps"):
+            lines.append(f"{CRASH_GAP_KO}: 추가 계좌 {par['crash_gaps']}개가 신호 1개를 놓침 (원래 계좌와는 무관)")
+    else:
+        level = WARN
+        head = [f"재계산 못 함 · {day}", "", "그날 09:00(한국) 상태 저장이 없음", "봇이 그때 멈춰 있었음", "", "매일 점검"]
     if trades_day is not None:
-        parts.append(f"거래 {trades_day}건")
+        lines.append(f"거래 {trades_day}건")
+    sh = report.get("shadows", {})
     if sh:
-        parts.append(f"지정가였다면 체결 {sh.get('limit_filled', 0)}/{sh.get('limit_signals', 0)}")
-        parts.append(f"포지션 중이라 놓친 신호 {sh.get('skipped', 0)}")
-    parts.append("빠진 1분봉 " + str(sum(missing.values())))
+        lines.append(f"지정가였다면 체결 {sh.get('limit_filled', 0)}/{sh.get('limit_signals', 0)}")
+        lines.append(f"포지션 중이라 놓친 신호 {sh.get('skipped', 0)}")
+    lines.append(f"빠진 1분봉 {sum(missing.values())}"
+                 + (" (" + ", ".join(f"{s.replace('USDT', '')} {n}" for s, n in missing.items()) + ")" if missing else ""))
     ov = ((report.get("stop_slippage") or {}).get("overall") or {})
     if ov.get("measured"):
-        parts.append(f"손절 체결 추정 {ov['measured']}건: 중간 {ov['real_bps_median']:.1f}bp"
-                     f"(paper {ov['paper_bps_median']:.1f}bp), paper보다 ${ov['diff_usd_total']:+,.0f}")
-    msgs.append((INFO, f"[{day}] 매일 점검: " + " · ".join(parts)))
+        lines.append(f"손절 체결 {ov['measured']}건: 실제 {ov['real_bps_median']:.1f}bp vs paper {ov['paper_bps_median']:.1f}bp")
+        lines.append(f"→ paper보다 {usd(ov['diff_usd_total'])}")
+    text = "\n".join(head + ([""] if level == INFO else []) + lines)
+    msgs = [(level, text)]
     for level, text in msgs:
         notifier.send(level, text)
     return msgs

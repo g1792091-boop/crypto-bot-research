@@ -462,7 +462,9 @@ def test_the_weekly_report_has_one_drawdown_line(world, cards):
     assert rep["survival"]["backtest"] == {"tested": 2, "worse": 1}
     text = DG.compose_week(rep)
     line = [x for x in text.splitlines() if "가장 깊은 낙폭" in x]
-    assert line == ["- 이번 주 가장 깊은 낙폭 켈트너·RSI -10% · V4.5 -1% / 5년 시험보다 유의하게 나쁜 매매법 1/2"]
+    assert line == ["가장 깊은 낙폭: 켈트너·RSI -10%"] and "5년 시험보다 나쁜 매매법 1/2" in text
+    assert DG.survival_line(rep["survival"]) == \
+        "- 이번 주 가장 깊은 낙폭 켈트너·RSI -10% · V4.5 -1% / 5년 시험보다 유의하게 나쁜 매매법 1/2"
     assert len(text) <= 4000
     assert DG.survival_line(None) == "" and DG.survival_line({"deepest": [], "backtest": {"tested": 0}}) == ""
 

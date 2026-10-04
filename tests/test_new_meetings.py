@@ -501,8 +501,10 @@ def test_weekly_report_has_the_debate_and_the_security_line(world, tmp_path):
     rep = DG.week_report(world.paper(), world.agents, kst(2026, 10, 11, 21, 5))
     assert rep["debate"]["all"]["graded"] == 1 and rep["debate"]["all"]["correct"] == 0
     text = DG.compose_week(rep)
-    assert "[낙관·비관 토론: 기록만, 거래 없음] 이번 주 채점 1건 중 0건 맞음" in text and "늘 상승 0%" in text
-    assert "[보안: 코드 점검]" in text and "열림 0개" in text and "fail2ban" in text
+    assert "낙관·비관 토론: 이번 주 0/1, 누적 0/1" in text
+    assert ("보안 점검: 이상 없음" in text or "⚠ 보안 확인 필요: " in text) and "fail2ban" not in text   # long line: dashboard
+    assert DG.security_line(sec, short=True).startswith("⚠ 보안 확인 필요: 비밀 파일 열림 1개")
+    assert DG.security_line({**sec, "secrets_readable": 0, "db_world_readable": 0}, short=True) == "보안 점검: 이상 없음"
     line = DG.security_line(sec)
     assert "열림 1개 ⚠️ 확인 필요" in line and "KEY" not in line and str(tmp_path) not in line
     assert "점검 기록 없음" in DG.security_line(None)

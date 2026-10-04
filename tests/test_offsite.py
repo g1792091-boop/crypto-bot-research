@@ -197,10 +197,10 @@ def test_send_splits_uploads_and_captions(tmp_path):
         assert fname == part["name"] == f"paperbot-{DATE}.tar.gz.part{i:02d}-of-{n:02d}"
         cap = f["caption"]
         assert len(cap) <= off.CAPTION_LIMIT
-        assert f"paperbot 백업 {DATE}" in cap and f"조각 {i}/{n}" in cap
-        assert hashlib.sha256(data).hexdigest() == part["sha256"] and part["sha256"] in cap
-        assert m["sha256"] in cap
-        assert f"({len(data)} B)" in cap and f"({m['size']} B)" in cap
+        assert cap.startswith(f"💾 백업 {DATE[4:6]}/{DATE[6:]} · 조각 {i}/{n}\n")
+        assert hashlib.sha256(data).hexdigest() == part["sha256"] and part["sha256"][:12] + "…" in cap
+        assert m["sha256"] in cap                          # in full: restore --sha256 without the manifest
+        assert " B)" not in cap
     last = docs[-1]
     assert last["files"]["document"][0] == f"paperbot-{DATE}.manifest.json"
     sent_manifest = json.loads(last["files"]["document"][1])
@@ -259,7 +259,7 @@ def test_missing_folder_fails_with_warn_and_exit_1(tmp_path, capsys):
                   sleep=lambda s: None, notifier=notes, now=NOW, which=no_zstd)
     assert rc == 1 and fake.calls == []
     (level, text), = notes.messages
-    assert level == WARN and "서버 밖 백업 실패" in text and "20260920" in text and "없습니다" in text
+    assert level == WARN and "서버 밖 백업 실패 · 날짜 모름" in text and "20260920" in text and "없습니다" in text
     assert "paperbot-backup" in capsys.readouterr().err
 
 
@@ -401,7 +401,7 @@ def test_token_never_printed_or_sent_in_a_failure(tmp_path, capsys):
     err = capsys.readouterr()
     assert TOKEN not in err.err and TOKEN not in err.out and "<token>" in err.err
     (level, text), = notes.messages
-    assert level == WARN and TOKEN not in text and "<token>" in text and DATE in text
+    assert level == WARN and TOKEN not in text and "<token>" in text and "실패 · 10/01" in text
 
 
 def test_unexpected_error_traceback_is_redacted(tmp_path, capsys):
@@ -582,7 +582,7 @@ def test_encrypted_round_trip(tmp_path):
     whole = b"".join(d["files"]["document"][1] for d in fake.documents()[:-1])
     assert whole.startswith(b"Salted__")                           # openssl's salted format
     assert b"SQLite format 3" not in whole and b"row1" not in whole
-    assert "암호화 openssl" in fake.documents()[0]["fields"]["caption"]
+    assert "암호화함" in fake.documents()[0]["fields"]["caption"]
     files = save_downloads(fake, tmp_path / "dl")
     with pytest.raises(off.OffsiteError, match="BACKUP_PASSPHRASE"):
         off.restore_backup(files, tmp_path / "o0", env={}, which=no_zstd, log=lambda s: None)
@@ -705,7 +705,7 @@ def test_sigterm_during_an_upload_sends_one_warn_and_exits_1(tmp_path):
                   sender=stalled, sleep=lambda s: None, notifier=notes, now=NOW, which=no_zstd)
     assert rc == 1 and len(calls) == 1                       # no retry after the stop
     (level, text), = notes.messages
-    assert level == WARN and "SIGTERM" in text and "시간 제한" in text and DATE in text
+    assert level == WARN and "SIGTERM" in text and "시간 제한" in text and "실패 · 10/01" in text
     assert signal.getsignal(signal.SIGTERM) == before        # the previous handler is back
     assert not list(tmp_path.glob("paperbot-offsite-*"))
 
@@ -764,11 +764,11 @@ def test_stopped_hook_warns_only_when_systemd_killed_the_run():
     env = {**ENV, "SERVICE_RESULT": "oom-kill", "EXIT_CODE": "killed", "EXIT_STATUS": "KILL"}
     assert off.main(["stopped"], env=env, notifier=notes) == 0
     (level, text), = notes.messages
-    assert level == WARN and "메모리" in text and "oom-kill" in text and "journalctl -u paperbot-offsite" in text
+    assert level == WARN and "메모리 한도(1GB) 초과" in text and "journalctl -u paperbot-offsite" in text
     notes = ListNotifier()
     off.main(["stopped"], env={**ENV, "SERVICE_RESULT": "timeout", "EXIT_CODE": "killed", "EXIT_STATUS": "KILL"},
              notifier=notes)
-    assert len(notes.messages) == 1 and "강제로 멈춰졌습니다" in notes.messages[0][1]
+    assert len(notes.messages) == 1 and "강제로 멈춰짐" in notes.messages[0][1]
 
 
 # ---------------------------------------------------------------- restore: folders, wrong passphrase

@@ -168,7 +168,7 @@ def test_week_report_numbers_and_the_telegram_text(world):
     assert cf["strategy_accounts"] == 4 and cf["strategy_accounts_beating_median"] == 1 and cf["mean_pnl"] == 10.0
     assert rep["timeframes"]["15m"]["pnl"] == 200.0 and len(rep["busts"]) == 1
     text = DG.compose_week(rep)
-    assert text.startswith("📊 주간 성적표 (10/11") and "+$80" in text and "▲1" in text and "파산 1개" in text
+    assert text.split("\n")[0].startswith("📊 주간 성적표 · ") and text.split("\n")[0].endswith("~10/11") and "+$80" in text and "▲1" in text and "파산 1개" in text
     assert "체크포인트" in text and len(text) <= 4000
 
 
@@ -300,7 +300,7 @@ def test_a_malformed_reply_never_voids_a_good_answer(world):
     given = {"role": "risk_officer", "turn": "team", "this_round": {"team:pnl_reviewer": {"role": "pnl_reviewer"}}}
     for stance in (["agree"], {"a": 1}, 3, None):
         assert RM.check_dialog({"responds_to": {"role": "pnl_reviewer", "stance": stance, "point": "x"}}, given) == {}
-    assert RM.compose_ranking({"picked": []}, None, 16).startswith("🏁 순위 검토 (손익 복기팀, 16:00)")
+    assert RM.compose_ranking({"picked": []}, None, 16) == "🏆 순위 검토 · 16:00"
     assert "tf_split" in RM.CODE_ROOTS and "ranking" in RM.CODE_ROOTS and "market_move" in RM.CODE_ROOTS
     assert "tf_split" in RM.RoomsPolicy().paced_triggers
 
@@ -366,7 +366,7 @@ def test_weekly_report_carries_the_ghcoin_recorder(world, tmp_path):
     (gdir / "calls.jsonl").write_text("".join(json.dumps(e) + "\n" for e in ev))
     rep = DG.week_report(world.paper(), world.agents, SUNDAY, ghcoin_dir=str(gdir))
     assert rep["ghcoin"]["week"]["calls"] == 3 and rep["ghcoin"]["all"]["calls"] == 3
-    assert "[GH Coin 기록기" in DG.compose_week(rep) and "3타점" in DG.compose_week(rep)
+    assert "GH Coin 기록: 7일 3타점" in DG.compose_week(rep)
     assert DG.week_report(world.paper(), world.agents, SUNDAY, ghcoin_dir=str(tmp_path / "none"))["ghcoin"] is None
 
 

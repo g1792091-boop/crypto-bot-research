@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 from paperbot import Bar, Brackets
-from paperbot.config import V3_SYMBOLS, v3_settings
+from paperbot.config import V3_OLD_TIER_WALK, V3_SYMBOLS, v3_settings
 from paperbot.daily3 import _alone, make_signal
 from paperbot.ladder import roe_price
 from paperbot.margin import BracketTier
@@ -52,11 +52,11 @@ def _lev(settings, brackets):
     return d.leverage
 
 
-def _db(tmp_path, row, steps, brackets=BR):
+def _db(tmp_path, row, steps, brackets=BR, settings=None):
     """paper3-like db with the signal and its actual trade (the current rules, run alone)."""
     store = Store3(str(tmp_path / "p.db"))
     store.log_signals([row])
-    t, ok = _alone(S, brackets, {}, make_signal(row), steps, I0)
+    t, ok = _alone(settings or S, brackets, {}, make_signal(row), steps, I0)
     assert ok and t is not None
     store.trade(f"A@{row['timeframe']}", t)
     store.commit()
@@ -79,7 +79,8 @@ def test_variant_list_is_the_preregistered_one():
         assert [(t.margin_frac, t.leverages) for t in v.tiers] == [(0.20, (lev,))]
         assert v.tier_chain("best") == [(v.tiers[0], lev)]
     assert variant_settings(S, "base") is S
-    assert pnl_equity(-1.0, 50) == -0.40 and pnl_equity(0.5, 10) == 0.10 and pnl_equity(None, 20) is None
+    # default shares: the restarted run's rule (50x 50%, owners 2026-10-04)
+    assert pnl_equity(-1.0, 50) == -0.50 and pnl_equity(0.5, 10) == 0.10 and pnl_equity(None, 20) is None
 
 
 def test_preregistration_hash_matches():
@@ -157,10 +158,13 @@ def test_time_stop_does_not_apply_once_the_lock_armed():
 
 
 def test_fixed_low_leverage_survives_a_gap_that_liquidates_50x(tmp_path):
+    # the old tier walk (every signal 40% x 50x first): under the restarted run's quality_v1 rule this unscored
+    # signal would be 'normal' (30x at most); test_levrule.py covers the shadows under that rule
+    S = v3_settings(**V3_OLD_TIER_WALK)
     assert _lev(S, BR50) == 50
     steps = _flat(I0 + 3)
     steps.append(((I0 + 3) * MIN, {SYM: _bar((I0 + 3) * MIN, 97.0, 97.1, 96.9, 97.0)}, {}))   # gap -3%
-    conn, actual = _db(tmp_path, _row(), steps, brackets=BR50)
+    conn, actual = _db(tmp_path, _row(), steps, brackets=BR50, settings=S)
     assert actual.exit_reason == "LIQ" and actual.leverage == 50 and actual.roe < -1
     rows, info = trade_shadows(S, BR50, {}, conn, "d", 0, len(steps) * MIN, steps, make_signal)
     k = _by_kind(rows)

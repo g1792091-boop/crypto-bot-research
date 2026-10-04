@@ -1,6 +1,9 @@
 """Pick margin and leverage for a signal within the owners' rules.
 
-Order of checks for each candidate (requested tier first, then lower):
+Candidates: ``settings.tier_chain(requested_tier)``, i.e. the requested tier first, then lower ("tier_walk"), or
+the requested group's tiers ("quality_v1": "best" 50x / 50%, 40x / 40%, then 30x / 30%, 20x / 20%; "normal"
+30x / 30%, 20x / 20%; config.V3_QUALITY_TIERS, the group comes from levrule.requested_tier).
+Order of checks for each candidate:
 1. leverage allowed by the symbol's bracket for this notional
 2. stop sits inside liquidation by the required buffer
 3. loss at the stop, fees and slippage included, <= max_loss_frac of equity
@@ -76,7 +79,9 @@ def size_position(settings: Settings, equity: float, side: int, entry: float,
             reasons.append(
                 f"{tag}: stop loss {loss:.2f} > {settings.max_loss_frac:.0%} of equity")
             continue
-        return SizeDecision(True, tier.name, lev, margin, qty, liq, loss, reasons)
+        # quality_v1: the signal's group (a 'best' signal entered at 30x is still 'best'; the leverage tells the rest)
+        name = requested_tier if settings.leverage_rule == "quality_v1" else tier.name
+        return SizeDecision(True, name, lev, margin, qty, liq, loss, reasons)
     return SizeDecision(False, reasons=reasons)
 
 

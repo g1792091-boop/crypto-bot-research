@@ -339,7 +339,7 @@ def flag_owners(env: ActionEnv, a: dict) -> dict:
                  {"action": "flag_owners", "sent": False, "reason": "daily_limit"})
         return _done("flag_owners", False, "하루 알림 한도", sent=False)
     title = env.room_title or env.room_id
-    text = f"[에이전트 알림] {title}: {telegram_safe(a['text'])}"
+    text = f"에이전트 알림 · {title}\n\n{telegram_safe(a['text'])}"
     if sent_key:                        # before the send, like the day's count: a kill after it still counts
         R.set_cursor(env.conn, sent_key, env.now_ms, commit=False)
     R.set_cursor(env.conn, key, used + 1)
@@ -629,8 +629,9 @@ def runtime_ready(paper_ro: Optional[sqlite3.Connection]) -> bool:
 def start_text(paper_ro: Optional[sqlite3.Connection]) -> str:
     """What an approval does now (Korean, code-written)."""
     if runtime_ready(paper_ro):
-        return ("승인이 반영되면 live 실행기가 코드로 다시 확인한 뒤 다음 5분 봉 경계에 새 paper 계좌로 시작합니다"
-                "(원본 계좌와 같은 시작 자금, 원본 195개 계좌는 그대로). 시작된 계좌는 거절로 멈출 수 없습니다.")
+        from ..config import V3_ACCOUNTS
+        return ("승인이 반영되면 live 실행기가 코드로 다시 확인한 뒤 다음 봉 경계에 새 paper 계좌로 시작합니다"
+                f"(원본 계좌와 같은 시작 자금, 원본 {V3_ACCOUNTS}개 계좌는 그대로). 시작된 계좌는 거절로 멈출 수 없습니다.")
     return ("live 실행기의 추가 계좌 기능이 아직 켜지지 않아 지금은 계좌를 만들지 않습니다. 기능이 켜진 뒤 두 분이 한 번 더 "
             "승인하면 그때 시작합니다.")
 
@@ -861,14 +862,14 @@ def newlab_alert(env: ActionEnv, trial_id: int, proposal: dict, test_number: Any
     if R.get_cursor(env.conn, key) is not None:
         return False
     R.set_cursor(env.conn, key, env.now_ms)
-    num = f", 새 매매법 시험 {int(test_number):,}번째" if _row_id(test_number) else ""
-    pnum = f"제안 #{int(proposal_id)}, " if _row_id(proposal_id) else ""
-    after = ("승인 후 코드가 다시 확인하고 다음 5분 봉 경계에 새 paper 계좌가 시작됩니다."
-             if runtime_ready(env.paper_ro) else
-             "live 실행기의 추가 계좌 기능이 켜지기 전이라 승인해도 아직 계좌는 만들어지지 않습니다.")
-    text = (f"[에이전트 알림] {env.room_title or env.room_id}: 새 매매법이 5년 시험 관문을 통과했습니다 ({pnum}장부 #{trial_id}{num}). "
-            f"{telegram_safe(str(proposal.get('description_ko') or ''))}. 새 paper 계좌로 새 자료에서 확인하자는 제안이며 "
-            f"두 분 OK가 있어야 시작합니다. 대시보드 '에이전트 방' → 새 매매법 연구실에서 승인/거절. {after}")
+    num = f", 시험 {int(test_number):,}번째" if _row_id(test_number) else ""
+    pnum = f" #{int(proposal_id)}" if _row_id(proposal_id) else ""
+    after = ("승인하면 다음 봉 경계에 계좌 시작" if runtime_ready(env.paper_ro) else
+             "추가 계좌 기능이 켜지기 전이라 승인해도 아직 계좌는 안 만들어짐")
+    desc = telegram_safe(str(proposal.get('description_ko') or '')).strip()
+    text = (f"승인 요청 · 새 매매법 제안{pnum}\n\n" + (f"{desc}\n" if desc else "")
+            + f"5년 시험 통과 (장부 #{trial_id}{num})\n새 paper 계좌로 새 자료에서 확인하자는 제안\n{after}\n"
+            f"→ 대시보드 '에이전트 방' → {env.room_title or '새 매매법 연구실'}")
     try:
         ok = env.notifier.send(WARN, text)
     except Exception as exc:  # delivery must not break the round

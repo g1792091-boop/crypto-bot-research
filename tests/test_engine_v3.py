@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 from paperbot import Bar, Brackets, PaperEngine, Signal
-from paperbot.config import v3_settings
+from paperbot.config import V3_OLD_TIER_WALK, v3_settings
 from paperbot.ladder import roe_price
 from paperbot.notify import ListNotifier
 
@@ -20,7 +20,9 @@ sys.path.insert(0, os.path.join(ROOT, "research", "paper_rules"))
 MIN = 60_000
 # Mechanics are pinned at the research scale ($1,000, as rules_bt): with the example brackets
 # a $5,000 account's top tier does not fit the 50x bracket (test_v3_start_equity_and_bracket_fallback).
-S = v3_settings(initial_equity=1000.0)
+# They are also pinned to the tier walk the research simulator uses (every signal 40% x 50x first); the restarted
+# run's quality_v1 leverage rule is tested in test_levrule.py.
+S = v3_settings(initial_equity=1000.0, **V3_OLD_TIER_WALK)
 SLIP = S.slippage_frac
 RT = S.round_trip_cost
 
@@ -139,7 +141,7 @@ def test_engine_matches_research_simulator(monkeypatch):
     assert len(ref) > 20
 
     settings = v3_settings(symbols=tuple(syms.values()), symbol_priority=tuple(syms.values()),
-                           initial_equity=R.INITIAL)
+                           initial_equity=R.INITIAL, **V3_OLD_TIER_WALK)
     e, _ = engine(settings)
     for i in range(n):
         step = {}
@@ -170,12 +172,17 @@ def test_engine_matches_research_simulator(monkeypatch):
 
 
 def test_v3_start_equity_and_bracket_fallback():
-    """Accounts start with $5,000. A 40% x 50x position is then $100k notional, over the example
-    50x bracket ($50k), so sizing steps down the owners' tiers (40x also too big) to 30% x 30x."""
+    """Accounts start with $5,000. A 50% x 50x position is then $125k notional (40% x 50x under the old tier walk:
+    $100k), over the example 50x bracket ($50k), so a 'best' signal steps down (40% x 40x, $80k, also too big) to
+    30% x 30x ($45k)."""
     from paperbot.sizing import size_position
     s5 = v3_settings()
     assert s5.initial_equity == 5000.0
     d = size_position(s5, s5.initial_equity, +1, 100.0, 99.5, "best", Brackets.example())
-    assert d.ok and (d.tier, d.leverage) == ("good", 30)
+    assert d.ok and (d.tier, d.leverage, d.margin) == ("best", 30, 1500.0)        # the signal's group, at 30% x 30x
+    assert d.reasons == ["best/50x: bracket allows 25x", "best/40x: bracket allows 25x"]
+    old = v3_settings(**V3_OLD_TIER_WALK)
+    d0 = size_position(old, old.initial_equity, +1, 100.0, 99.5, "best", Brackets.example())
+    assert d0.ok and (d0.tier, d0.leverage) == ("good", 30)
     d1 = size_position(S, S.initial_equity, +1, 100.0, 99.5, "best", Brackets.example())
     assert d1.ok and (d1.tier, d1.leverage) == ("best", 50)

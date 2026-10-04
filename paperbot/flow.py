@@ -197,6 +197,19 @@ def status(fa: FlowArchive, symbols: Iterable[str], now_ms: Optional[int] = None
     return out
 
 
+def gap_text(gaps: list) -> str:
+    """The owners' WARN for spans the exchange no longer keeps (Korean, no millisecond numbers)."""
+    from .notify import kst
+    g = gaps[0]
+    if isinstance(g, dict):
+        sym, a, b = g.get("symbol"), g.get("from"), g.get("to")
+    else:
+        sym, a, b = g[0], g[-2], g[-1]
+    first = f"{str(sym).replace('USDT', '')} {kst(a, '%m/%d').lstrip('0')}~{kst(b, '%m/%d').lstrip('0')}" \
+        if isinstance(a, (int, float)) and isinstance(b, (int, float)) else str(g)
+    return (f"주문 흐름 기록 구멍 {len(gaps)}곳\n\n바이낸스 보관 30일이 지나 다시 받을 수 없음\n첫 구멍: {first}")
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -220,8 +233,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         summary = sync(fa, _rest(), symbols, _since_ms(args.since), pace=args.pace)
         fa.log("system_log", (fa.clock_ms(), "sync", json.dumps(summary, default=str)))
         if summary["gaps"]:
-            _notifier().send(WARN, f"order-flow archive: {len(summary['gaps'])} spans older than the exchange's "
-                                   f"30-day window were never stored (first: {summary['gaps'][0]})")
+            _notifier().send(WARN, gap_text(summary["gaps"]))
         print(json.dumps(summary, indent=2, default=str))
         return 0
     finally:

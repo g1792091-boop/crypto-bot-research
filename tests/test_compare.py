@@ -63,5 +63,5 @@ def test_ranking_text_compares_per_account_numbers_with_the_coin_flip_mean(tmp_p
     assert r["coin_flips"]["accounts_per_strategy"] == 4                 # 15m / 30m / 1h / 4h (5m removed 2026-10-04)
     text = RM.compose_ranking(r, None)
     # a strategy's sum is over its accounts, the coin-flip mean is one account's: both are shown per account
-    assert "A: +$900 (계좌당 +$450)" in text
-    assert "동전 봇 계좌당 평균 -$100 (4개 합으로 치면 -$400)" in text
+    assert "\n1. A +$900 (계좌당 +$450) · " in text
+    assert "\n동전 봇 계좌당 평균 -$100" in text and "합으로 치면" not in text          # no 4- or 5-account sum

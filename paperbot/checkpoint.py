@@ -56,7 +56,11 @@ Q1 luck test
     rates) from Binance's public REST API, cached per coin and UTC day under ``--cache``, through a
     vectorised copy of the paper engine (``simulate_bots``): signal at the timeframe close, entry
     at the next minute's open plus slippage, stop 2 x ATR14 of the signal bar, the owners' sizing
-    tiers with the exchange brackets, coin priority, one position, stepped profit lock on 1m LAST
+    tiers with the exchange brackets (the restarted run's quality_v1 rule, config.V3_LEVERAGE_RULE: each
+    bot signal is 'best' - 50x / 50%, 40x / 40%, then 30x / 30%, 20x / 20% - with probability
+    config.V3_P_BEST[timeframe], the 5-year share of 'best' strategy signals, else 'normal' - 30x / 30%,
+    20x / 20%; a new-strategy account without quality edges is always 'normal', so are its bots),
+    coin priority, one position, stepped profit lock on 1m LAST
     high/low (applied from the next bar), liquidation on the mark price, bust below $10. A test
     checks it trade for trade against ``PaperEngine``. All bots of one timeframe and window run in
     one pass (each with its own account's rate), so no sharing of bots between accounts is needed.
@@ -74,6 +78,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import sqlite3
 import sys
 import time
@@ -84,10 +89,11 @@ from typing import Callable, Optional
 
 import numpy as np
 
-from .config import (V3_JUDGED_TFS, V3_OBSERVE_TFS, V3_Q1_MAIN_FAMILY, V3_STOP_ATR, V3_SYMBOLS, Settings,
+from .config import (V3_JUDGED_TFS, V3_OBSERVE_TFS, V3_P_BEST, V3_Q1_MAIN_FAMILY, V3_STOP_ATR, V3_SYMBOLS, Settings,
                      v3_settings)
+from .levrule import GROUP_SALT, edges as _quality_edges
 from .margin import Brackets
-from .notify import INFO, WARN
+from .notify import INFO, WARN, day_ko
 
 MIN = 60_000
 DAY_MS = 86_400_000
@@ -601,17 +607,33 @@ class _BracketArrays:
 
 
 def size_vec(s: Settings, eq, side, fill, stop, atr, br: _BracketArrays, qty_step: float = 0.0,
-             min_notional: float = 0.0) -> dict:
-    """``sizing.size_position`` for many candidates of one coin at once (requested tier 'best',
-    then lower; first passing candidate wins). Returns arrays ok, lev, qty, margin, liq, mmr, cum."""
+             min_notional: float = 0.0, best=None) -> dict:
+    """``sizing.size_position`` for many candidates of one coin at once (first passing candidate wins). The
+    candidates are ``s.tier_chain("best")`` (tier walk: 'best', then lower), or with the "quality_v1" leverage
+    rule the chain of each candidate's group: ``best`` (bool array, None = all True) marks the 'best' group, the
+    others request 'normal'. Returns arrays ok, lev, qty, margin, liq, mmr, cum."""
     eq, side, fill, stop, atr = (np.asarray(x, float) for x in (eq, side, fill, stop, atr))
     n = len(eq)
     res = {k: np.zeros(n) for k in ("lev", "qty", "margin", "liq", "mmr", "cum")}
-    todo = (eq > 0) & ((fill - stop) * side > 0)
+    todo0 = (eq > 0) & ((fill - stop) * side > 0)
     buffer = np.maximum(s.liq_buffer_min_frac * fill, s.liq_buffer_atr_mult * atr)
     dist = np.abs(fill - stop)
     exit_px = stop * (1 - side * s.slippage_frac)
-    for tier, lev in s.tier_chain("best"):
+    b = np.ones(n, bool) if best is None else np.asarray(best, bool)
+    plans = [("best", b)] if s.leverage_rule == "tier_walk" else [("best", b), ("normal", ~b)]
+    for group, rows in plans:
+        _walk(s, s.tier_chain(group), todo0 & rows, eq, side, fill, stop, buffer, dist, exit_px, br, qty_step,
+              min_notional, res)
+    res["ok"] = res["lev"] > 0
+    return res
+
+
+def _walk(s: Settings, chain, todo, eq, side, fill, stop, buffer, dist, exit_px, br: _BracketArrays,
+          qty_step: float, min_notional: float, res: dict) -> None:
+    """size_vec's candidate loop over one chain for the rows ``todo`` (writes the winners into ``res``)."""
+    n = len(eq)
+    todo = todo.copy()
+    for tier, lev in chain:
         margin = eq * tier.margin_frac
         raw = margin * lev / fill
         qty = np.floor(raw / qty_step + 1e-9) * qty_step if qty_step > 0 else raw
@@ -631,8 +653,14 @@ def size_vec(s: Settings, eq, side, fill, stop, atr, br: _BracketArrays, qty_ste
                      ("mmr", mmr), ("cum", cum)):
             res[k][good] = v[good]
         todo &= ~good
-    res["ok"] = res["lev"] > 0
-    return res
+
+
+def has_quality_edges(strategy: str, tf: str) -> bool:
+    """True when the strategy x timeframe has entry-quality edges (levrule): only then can a signal be 'best'."""
+    try:
+        return bool(_quality_edges().get(f"{strategy}|{tf}"))
+    except (OSError, ValueError):
+        return False
 
 
 def random_draws(rng: np.random.Generator):
@@ -645,16 +673,26 @@ def random_draws(rng: np.random.Generator):
     return draw
 
 
+def group_draws(rng: np.random.Generator, p_best: float):
+    """The quality_v1 leverage group of each coin-flip signal: 'best' with probability ``p_best`` (one draw per bot,
+    coin and signal bar, from its own stream so the fire / side draws are unchanged)."""
+    def draw(ts: int, idx: np.ndarray, n_coins: int) -> np.ndarray:
+        return rng.random((len(idx), n_coins)) < p_best
+    return draw
+
+
 def simulate_bots(m: Minutes, tf: str, lo: int, hi: int, rates: np.ndarray, s: Settings,
                   brackets: dict, specs: Optional[dict] = None, seed=0, draw=None,
                   initial: Optional[float] = None, stop_atr: float = V3_STOP_ATR,
-                  atr: Optional[tuple] = None) -> dict:
+                  atr: Optional[tuple] = None, p_best: Optional[float] = None, group_draw=None) -> dict:
     """Coin-flip accounts on real 1m bars, the paper engine's rules (see the module docstring).
 
     ``m`` must start early enough for ATR14 of the first signal bar (``ATR_PREFIX_BARS``); the
     bots trade minutes in [lo, hi) and signals of bars closing at boundaries in [lo, hi). Each bot
-    i fires with ``rates[i]``. Returns final evaluated equity per bot (``equity``), wallet, bust
-    flags and entered-trade counts."""
+    i fires with ``rates[i]``. With the "quality_v1" leverage rule each signal is 'best' with probability
+    ``p_best`` (default config.V3_P_BEST[tf], as the live coin-flip accounts) and sizes with that group's chain
+    (``group_draw(ts, idx, n_coins)`` -> bool array replaces the draw in tests). Returns final evaluated equity per
+    bot (``equity``), wallet, bust flags and entered-trade counts."""
     specs = specs or {}
     syms = m.symbols
     C = len(syms)
@@ -665,6 +703,10 @@ def simulate_bots(m: Minutes, tf: str, lo: int, hi: int, rates: np.ndarray, s: S
     ends, atr_tab = atr if atr is not None else tf_atr(m, tf)
     atr_at = {int(t): atr_tab[i] for i, t in enumerate(ends)}
     draw = draw or random_draws(np.random.default_rng(seed))
+    quality = s.leverage_rule == "quality_v1"
+    if quality and group_draw is None:
+        gseed = (list(seed) if isinstance(seed, (list, tuple)) else [int(seed)]) + [GROUP_SALT]
+        group_draw = group_draws(np.random.default_rng(gseed), V3_P_BEST.get(tf, 0.0) if p_best is None else p_best)
     br = [_BracketArrays.of(brackets[x]) for x in syms]
     steps = [(specs.get(x, {}).get("qty_step", 0.0), specs.get(x, {}).get("min_notional", 0.0)) for x in syms]
     w = m.window(lo, hi)
@@ -728,6 +770,7 @@ def simulate_bots(m: Minutes, tf: str, lo: int, hi: int, rates: np.ndarray, s: S
             a = atr_at.get(ts)
             if len(free) and a is not None:
                 fire, sd = draw(ts, free, rates, C)
+                bestm = group_draw(ts, free, C) if quality else None
                 got = np.zeros(len(free), bool)
                 for k in range(C):            # coin priority; sizing failure -> next coin
                     if np.isnan(o[k]) or not (np.isfinite(a[k]) and a[k] > 0):
@@ -740,7 +783,8 @@ def simulate_bots(m: Minutes, tf: str, lo: int, hi: int, rates: np.ndarray, s: S
                     raw = o[k]
                     fill = raw * (1 + sdk * slip)
                     st = raw - sdk * stop_atr * a[k]
-                    r = size_vec(s, wallet[j], sdk, fill, st, np.full(len(j), a[k]), br[k], *steps[k])
+                    r = size_vec(s, wallet[j], sdk, fill, st, np.full(len(j), a[k]), br[k], *steps[k],
+                                 best=None if bestm is None else bestm[cand, k])
                     okc = r["ok"]
                     j = j[okc]
                     got[cand[okc]] = True
@@ -864,6 +908,7 @@ class Task:
     cls: str = ORIG     # "orig" (the originals share one group per window) or the extra's own id
     stop_atr: float = V3_STOP_ATR
     first_lock: Optional[float] = None
+    p_best: Optional[float] = None   # quality_v1 bots' 'best' share; None = config.V3_P_BEST[tf] (originals, copies)
 
 
 def _prior(out: sqlite3.Connection, date: str) -> dict:
@@ -917,6 +962,8 @@ def plan(snap: dict, prior: dict, prev_snaps: dict, s: Settings) -> tuple[dict, 
             rl = a.get("rule") or {}
             tkw = {"cls": aid, "stop_atr": float(rl.get("stop_atr") or V3_STOP_ATR),
                    "first_lock": rl.get("first_lock")}
+            if a["kind"] == "newlab" and not has_quality_edges(a["strategy"], tf):
+                tkw["p_best"] = 0.0           # its signals are always 'normal' (no edges): so are its bots'
         else:
             tkw = {}
         if a["kind"] == "random":
@@ -999,7 +1046,9 @@ def run_tasks(tasks: list[Task], minutes_for: Callable[[int, int], Minutes], s: 
             if x.first_lock is not None and float(x.first_lock) != s.ladder_first_lock:
                 gs = _replace(s, ladder_first_lock=float(x.first_lock))
             stop_atr = float(x.stop_atr)
-        res = simulate_bots(m, tf, lo, hi, rates, gs, brackets, specs, seed=seed, initial=initial, stop_atr=stop_atr)
+        p_best = ts[0].p_best if len(key) == 4 else None
+        res = simulate_bots(m, tf, lo, hi, rates, gs, brackets, specs, seed=seed, initial=initial, stop_atr=stop_atr,
+                            p_best=p_best)
         for i, t in enumerate(ts):
             bots = res["equity"][i * n_bots:(i + 1) * n_bots]
             pvals[t.aid] = {"p": luck_p(t.value, bots), "bots_median": float(np.median(bots)),
@@ -1009,6 +1058,8 @@ def run_tasks(tasks: list[Task], minutes_for: Callable[[int, int], Minutes], s: 
         sec = time.time() - t0
         row = {"timeframe": tf, "window": [lo, hi], "accounts": len(ts), "bots": len(rates),
                "seed": seed, "seconds": round(sec, 1)}
+        if gs.leverage_rule == "quality_v1":
+            row["p_best"] = V3_P_BEST.get(tf, 0.0) if p_best is None else p_best
         if len(key) == 4:
             row.update(account_id=ts[0].aid, stop_atr=stop_atr, first_lock=gs.ladder_first_lock)
         info.append(row)
@@ -1077,26 +1128,35 @@ def decide(snap: dict, rows: dict, tasks: list[Task], pvals: dict, alpha: float 
 
 
 def verdict_text(v: dict) -> str:
-    """The Telegram / log summary in Korean."""
+    """The Telegram / log summary in Korean (owners' layout 2026-10-04; the snapshot hash is on the dashboard)."""
     c = v["counts"]
-    head = (f"[체크포인트 {v['day']}일 · {v['date']} 09:00 KST] 판정: 1차 합격 {c[PASS1]} · 2차 통과 {c[PASS2]} · "
-            f"불합격 {c[FAIL]} · 보류 {c[HOLD]} · 관찰용 {c[OBSERVE]}")
-    lines = [head,
-             f"우연 기준(동전 봇 {v['n_bots']:,}개, FDR {int(v['alpha'] * 100)}%): 검정 {v['tested']}개 중 통과 "
-             f"{v['luck_passed']}개, 우연으로 기대되는 합격 수 ≤ {v['lucky_expected']:.1f}개 "
-             f"(보정 없이 p<{v['alpha']:.2f}였다면 {v['lucky_if_uncorrected']:.1f}개)"]
+    L = [f"🏁 {v['day']}일 판정 · {day_ko(v['date'])}", "",
+         f"1차 합격 {c[PASS1]} · 2차 통과 {c[PASS2]}",
+         f"불합격 {c[FAIL]} · 보류 {c[HOLD]} · 관찰용 {c[OBSERVE]}"]
     new = [(aid, r) for aid, r in v["accounts"].items() if r.get("decided") == v["date"]]
     ko = _names_ko(v["accounts"])
     twice = Counter(ko.values())          # the code only where two accounts would read the same (copies)
     for st in (PASS2, PASS1):
-        names = [f"{ko[aid]} ({aid + ', ' if twice[ko[aid]] > 1 else ''}q {r['q']:.3f})"
+        names = [f"- {ko[aid]} ({aid + ', ' if twice[ko[aid]] > 1 else ''}q {r['q']:.3f})"
                  for aid, r in new if r["status"] == st]
         if names:
-            lines.append(f"{st}: " + ", ".join(names[:12]) + (f" 외 {len(names) - 12}개" if len(names) > 12 else ""))
+            L += ["", f"{st}"] + names[:12] + ([f"외 {len(names) - 12}개"] if len(names) > 12 else [])
+    L += ["", f"운 기준: 동전 봇 {v['n_bots']:,}개, FDR {int(v['alpha'] * 100)}%",
+          f"검정 {v['tested']}개 중 통과 {v['luck_passed']}개",
+          f"운으로 기대되는 합격 ≤ {v['lucky_expected']:.1f}개",
+          f"(보정 없었다면 {v['lucky_if_uncorrected']:.1f}개)"]
     if v.get("warnings"):
-        lines += ["주의: " + w for w in v["warnings"]]
-    lines.append(f"스냅샷 {v['snapshot_sha256'][:12]} · 대시보드 순위표 '체크포인트 판정'")
-    return "\n".join(lines)
+        L += ["", "⚠ 주의"] + [_warning_ko(w) for w in v["warnings"]]
+    L += ["", "자세히: 대시보드 순위표 '체크포인트 판정'"]
+    return "\n".join(L)
+
+
+def _warning_ko(w: str) -> str:
+    """'2026-10-12 재시작 때 체결·청산·사이즈 관련 변경(trading_code). Q5: …' -> two short lines."""
+    m = re.match(r"(\d{4}-\d{2}-\d{2}) 재시작 때 체결·청산·사이즈 관련 변경\(.*?\)\. Q5", w)
+    if m:
+        return f"- {day_ko(m[1])} 재시작 때 체결·청산·사이즈 코드 변경:\n  30일을 다시 셀지 규칙 관리자 확인 필요"
+    return f"- {w}"
 
 
 def _names_ko(accounts: dict) -> dict:
@@ -1107,7 +1167,7 @@ def _names_ko(accounts: dict) -> dict:
     except Exception:  # noqa: BLE001  (names are cosmetic)
         STRATEGY_KO = {}
     pre = {"copy": "복제 ", "newlab": "새 매매법 "}
-    return {aid: f"{pre.get(r.get('kind'), '')}{STRATEGY_KO.get(r['strategy'], r['strategy'])} · "
+    return {aid: f"{pre.get(r.get('kind'), '')}{STRATEGY_KO.get(r['strategy'], r['strategy'])} "
                  f"{TF_KO.get(r['timeframe'], r['timeframe'])}" for aid, r in accounts.items()}
 
 
@@ -1222,8 +1282,8 @@ def run_due(paper_db: str, out_path: str, minutes_for, s: Settings, brackets: di
             if load_snapshot(out, date) is None:
                 snap = freeze_snapshot(conn, cp, settings=s)
                 if snap is None:
-                    msg = (f"[체크포인트 {k * PERIOD_DAYS}일 · {date}] paper3.db에 그날 00:00 상태(day:{date})가 "
-                           "아직 없습니다. 봇이 그 시각을 처리하면 다음 실행에서 판정합니다")
+                    msg = (f"{k * PERIOD_DAYS}일 판정 대기 · {day_ko(date)}\n\n그날 09:00(한국) 상태 저장이 아직 없음\n"
+                           "봇이 그 시각을 처리하면 다음 실행에서 판정")
                     _log_once(out, date, msg, notifier, now)
                     log(msg)
                     break
@@ -1411,8 +1471,8 @@ def main(argv: Optional[list[str]] = None) -> int:
                     if out.execute("SELECT 1 FROM verdicts WHERE date = ?", (d,)).fetchone() is None]
             if left:
                 day, d = left[0]
-                _log_once(out, d, f"[체크포인트 {day}일 · {d}] 판정 중 오류({type(exc).__name__})로 판정을 못 했습니다. "
-                                  "매시 35분에 다시 시도합니다. 계속되면 서버에서 journalctl -u paperbot-checkpoint -n 50",
+                _log_once(out, d, f"{day}일 판정 오류 · {day_ko(d)}\n\n오류: {type(exc).__name__}\n매시 35분에 다시 시도\n"
+                                  "계속되면: journalctl -u paperbot-checkpoint -n 50",
                           notifier, now)
         finally:
             out.close()

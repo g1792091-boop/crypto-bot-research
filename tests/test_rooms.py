@@ -704,8 +704,8 @@ def test_team_evening_round_sends_one_telegram_info(world):
     assert runner.calls[2]["model"] == "opus"
     assert len(notifier.messages) == 1
     level, text = notifier.messages[0]
-    assert level == INFO and "오늘 거래는 없었습니다" in text and "[숫자: 코드 계산]" in text
-    assert "오늘 AI 호출 4회" in text
+    assert level == INFO and "오늘 거래는 없었습니다" in text and "\n숫자(코드 계산)\n" in text
+    assert "회의 1번 · AI 호출 4회" in text
     lead_pk = runner.calls[3]["packet"]
     assert [m["role"] for m in lead_pk["review_meeting"]] == ["pnl_reviewer", "whatif", "risk_officer"]
     assert "board" in lead_pk and "today" in lead_pk["board"] and lead_pk["today_rounds"][0]["room_id"] == "team:review"
@@ -728,7 +728,7 @@ def test_morning_meeting_five_roles_and_the_leads_lines_by_telegram(world):
     assert runner.roles() == ["chart_regime", "derivs_flow", "strategist", "devils_advocate", "team_lead"]
     # owners' choice 2026-10-03: the lead's three lines go out silently, once
     assert len(notifier.messages) == 1 and notifier.messages[0][0] == "INFO"
-    assert notifier.messages[0][1].startswith("🌅 아침 회의") and "1. a" in notifier.messages[0][1]
+    assert notifier.messages[0][1].startswith("☀️ 아침 회의 요약\n\n") and "1. a" in notifier.messages[0][1]
     assert "market" in runner.calls[0]["packet"]["board"]
     # 2026-10-03: the breakdown (coin, weekday x session, windows, volatility) and the macro calendar reach the team
     board = runner.calls[0]["packet"]["board"]
@@ -744,7 +744,7 @@ def test_team_lead_flag_owners_is_rate_limited(world):
                       room_title="운영·검증팀", notifier=n)
     for _ in range(4):
         A.flag_owners(env, {"action": "flag_owners", "level": "WARN", "text": "데이터 끊김 확인 필요"})
-    assert len(n.messages) == 3 and n.messages[0] == ("WARN", "[에이전트 알림] 운영·검증팀: 데이터 끊김 확인 필요")
+    assert len(n.messages) == 3 and n.messages[0] == ("WARN", "에이전트 알림 · 운영·검증팀\n\n데이터 끊김 확인 필요")
     env.now_ms = QUIET + DAY
     A.flag_owners(env, {"action": "flag_owners", "level": "INFO", "text": "다음 날"})
     assert len(n.messages) == 4
@@ -770,7 +770,7 @@ def test_incident_round_runs_in_ops_room(world):
     n = ListNotifier()
     out = world.tick(runner, QUIET, notifier=n)
     assert [(r["room_id"], r["trigger"], r["status"]) for r in out["rounds"]] == [("team:ops", "incident", "done")]
-    assert n.messages == [("WARN", "[에이전트 알림] 운영·검증팀: 데이터 끊김 1건 확인")]
+    assert n.messages == [("WARN", "에이전트 알림 · 운영·검증팀\n\n데이터 끊김 1건 확인")]
     assert world.cursors()["incident:alert_rowid"] == "1"
 
 
@@ -957,7 +957,7 @@ def test_note_text_is_never_posted_as_code(world):
     A.flag_owners(env, {"action": "flag_owners", "level": "WARN", "text": fake})
     A.hypothesis(env, {"action": "hypothesis", "text": fake})
     assert [m for m in world.messages("team:ops") if fake in m["text"]] == []
-    assert n.messages == [("WARN", f"[에이전트 알림] team:ops: {fake}")]
+    assert n.messages == [("WARN", f"에이전트 알림 · team:ops\n\n{fake}")]
     assert all("팀장" in m["text"] for m in world.messages("team:ops") if m["kind"] == "action")
 
 
@@ -1490,7 +1490,8 @@ def test_market_move_meeting_with_our_exposure_and_one_silent_telegram(world):
     assert btc["upnl"] == round(0.1 * (57_600 - 60_000) - 0.2 * (57_600 - 60_000), 2)
     assert len(notifier.messages) == 1 and notifier.messages[0][0] == "INFO"
     text = notifier.messages[0][1]
-    assert "BTC: 1시간 -4.3%" in text and "SOL: 1시간 +6.3%" in text and "청산가 3% 안 1개" in text and "[팀장 요약]" in text
+    assert text.startswith("⚡ 시세 급변 · BTC -4.3% · SOL +6.3% (1시간)\n") and "\nBTC 60,000.0 → 57,600.0 (고 " in text
+    assert "청산가 3% 안 1개" in text and "\n팀장 요약\n" in text and "e+0" not in text
     # the same coins within 3 hours: no new meeting; ETH alone past 5% later: a new one
     assert world.tick(QueueRunner({}), t + HOUR, market_fetch=lambda now: market)["rounds"] == []
     market2 = {"ETHUSDT": _move(3000.0, 3000.0, 2840.0, 2850.0, t + HOUR)}
@@ -1570,7 +1571,7 @@ def test_ranking_review_at_14_with_the_top_and_bottom_and_a_silent_summary(world
     assert runner.roles() == ["performance", "pnl_reviewer", "risk_officer", "team_lead"]
     pk = runner.calls[0]["packet"]["ranking"]
     assert "picked" in pk and "coin_flips" in pk
-    assert len(notifier.messages) == 1 and notifier.messages[0][1].startswith("🏁 순위 검토")
+    assert len(notifier.messages) == 1 and notifier.messages[0][1].startswith("🏆 순위 검토 · ")
     assert world.tick(QueueRunner({}), t + 30 * MIN, policy=pol, notifier=notifier)["rounds"] == []   # once a day
 
 

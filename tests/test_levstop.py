@@ -14,7 +14,7 @@ from paperbot import Bar, Brackets
 from paperbot.agents import levstop as LS
 from paperbot.agents import riskreward as RR
 from paperbot.agents import rooms as RM
-from paperbot.config import V3_SYMBOLS, v3_settings
+from paperbot.config import V3_OLD_TIER_WALK, V3_SYMBOLS, v3_settings
 from paperbot.daily3 import _alone, make_signal
 from paperbot.ladder import roe_price
 from paperbot.margin import BracketTier
@@ -60,10 +60,10 @@ def _row(tf="15m", side=1, atr=ATR):
             "ref_price": REF, "ref_time": I0 * MIN + 1000, "delay_ms": 1000, "status": "SUBMITTED"}
 
 
-def _db(tmp_path, row, steps, brackets=BR):
+def _db(tmp_path, row, steps, brackets=BR, settings=None):
     store = Store3(str(tmp_path / "p.db"))
     store.log_signals([row])
-    t, ok = _alone(ST, brackets, {}, make_signal(row), steps, I0)
+    t, ok = _alone(settings or ST, brackets, {}, make_signal(row), steps, I0)
     assert ok and t is not None
     store.trade(f"A@{row['timeframe']}", t)
     store.commit()
@@ -76,7 +76,7 @@ def _by_kind(rows):
 
 # ---------------------------------------------------------------- pre-registration
 def test_preregistration_3_hash_matches_and_earlier_docs_unchanged():
-    for name in ("observation-shadows", "observation-shadows-2", "observation-shadows-3"):
+    for name in ("observation-shadows", "observation-shadows-2", "observation-shadows-3", "observation-shadows-4"):
         line = open(os.path.join(ROOT, "docs", f"{name}.sha256")).read().split()
         body = open(os.path.join(ROOT, "docs", f"{name}.md"), "rb").read()
         assert line[1] == f"docs/{name}.md" and hashlib.sha256(body).hexdigest() == line[0]
@@ -97,7 +97,8 @@ def test_new_variant_list_and_settings():
         "lev30": (0.30, (30,)), "lev40": (0.40, (40,)), "lev50": (0.40, (50,))}
     for v in STOP_WIDTHS:
         assert variant_settings(ST, v) is ST
-    assert MARGIN_FRAC == {50: 0.40, 40: 0.40, 30: 0.30, 20: 0.20, 10: 0.20}
+    # the rule's shares since the owners' 2026-10-04 change (margin = leverage %); lev50 above keeps its registered 40%
+    assert MARGIN_FRAC == {50: 0.50, 40: 0.40, 30: 0.30, 20: 0.20, 10: 0.20}
     assert not set(VARIANTS3) & {"stop1.5", "stop2.5", "stop3.0"}            # daily3's loss-card stop rows
 
 
@@ -135,7 +136,7 @@ def test_a_stop_beyond_the_liquidation_price_is_liquidated_not_stopped():
     ss = symbol_steps(steps, SYM)
     tr, ok = run_alone(ST, BR50, {}, make_signal(row, stop_atr=3.0), ss, I0, policy=SameLeveragePolicy(ST, 50))
     assert ok and tr.leverage == 50 and tr.exit_reason == "LIQ" and stop_beyond_liq(tr) is True
-    assert tr.margin == pytest.approx(ST.initial_equity * 0.40, rel=1e-6)
+    assert tr.margin == pytest.approx(ST.initial_equity * 0.50, rel=1e-6)   # the rule's 50x share (50% since 2026-10-04)
     # the current rules would never have entered this at 50x (the stop must sit inside liquidation)
     rules = size_position(ST, ST.initial_equity, 1, ENTRY, REF - 3.0, "best", BR50[SYM], atr=1.0)
     assert not rules.ok or rules.leverage < 50
@@ -145,9 +146,11 @@ def test_a_stop_beyond_the_liquidation_price_is_liquidated_not_stopped():
 
 
 def test_fixed_leverage_30_40_50_margin_shares_and_refusals(tmp_path):
+    # the old tier walk, so that the unscored real trade is 50x (quality_v1 would make it 'normal', <= 30x)
+    ST = v3_settings(**V3_OLD_TIER_WALK)
     steps = _flat(I0 + 3)
     steps.append(((I0 + 3) * MIN, {SYM: _bar((I0 + 3) * MIN, 97.5, 97.6, 97.4, 97.5)}, {}))   # gap -2.5%
-    conn, actual = _db(tmp_path, _row(), steps, brackets=BR50)
+    conn, actual = _db(tmp_path, _row(), steps, brackets=BR50, settings=ST)
     assert actual.leverage == 50 and actual.exit_reason == "LIQ"
     rows, info = trade_shadows(ST, BR50, {}, conn, "d", 0, len(steps) * MIN, steps, make_signal, extra3=True)
     k = _by_kind(rows)
@@ -263,7 +266,7 @@ def test_tier_table_by_the_leverage_actually_used_and_its_confound_note():
     b = t["by_leverage"]
     assert list(b) == ["50", "40", "30", "20"] and t["other_leverage"] == 1
     assert b["50"]["trades"] == 3 and b["50"]["win_rate"] == pytest.approx(2 / 3, abs=1e-4)
-    assert b["50"]["mean_roe"] == pytest.approx(-0.2 / 3, abs=1e-4) and b["50"]["mean_eq"] == pytest.approx(-0.08 / 3, abs=1e-5)
+    assert b["50"]["mean_roe"] == pytest.approx(-0.2 / 3, abs=1e-4) and b["50"]["mean_eq"] == pytest.approx(-0.10 / 3, abs=1e-5)
     assert b["50"]["payoff"] == pytest.approx(0.25) and b["50"]["breakeven_win_rate"] == pytest.approx(0.8)
     assert b["40"] == {"trades": 0, "small": True} and b["30"]["liq"] == 1
     assert b["20"]["mean_eq"] == pytest.approx(0.01) and b["20"]["payoff"] == pytest.approx(1.5)

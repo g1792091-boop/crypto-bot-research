@@ -408,8 +408,8 @@ def test_evening_meeting_after_midnight_reports_its_own_day(world):
                 policy=RM.RoomsPolicy(triggers=TR.TriggerPolicy(enabled=("evening",))))
     assert [(r["room_id"], r["status"]) for r in out["rounds"]] == [("team:review", "done"), ("team:lead", "done")]
     ((level, text),) = note.messages
-    assert level == "INFO" and text.startswith("📋 에이전트 저녁 점검 (2026-10-07)")
-    assert "2026-10-07 0시부터 회의 1번" in text and "2026-10-07 0시부터 AI 호출 4회" in text
+    assert level == "INFO" and text.startswith("🌙 저녁 점검 · 10/07\n")
+    assert "10/07 0시부터 회의 1번 · AI 호출 4회" in text
 
 
 def _owner_round_staff():

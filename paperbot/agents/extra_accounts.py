@@ -553,6 +553,17 @@ def _notify(ctx: Any, text: str) -> None:
         pass
 
 
+STATUS_KO = {"rejected": "거절됨", "awaiting_owner": "승인 대기", "expired": "만료", "withdrawn": "철회"}
+
+
+def orphan_text(account_id: str, pid: Any, why: str) -> str:
+    """The owners' WARN for an extra running without its approved proposal (Korean, no codes)."""
+    from ..notify import who
+    what = {"missing": f"제안 #{pid}가 장부에 없음 (예전 백업 복원?)",
+            "other_content": f"제안 #{pid}가 다른 내용으로 바뀜"}.get(why, f"제안 #{pid}가 지금 '{STATUS_KO.get(why, why)}' 상태")
+    return f"추가 계좌 확인 필요 · {who(account_id)}\n\n{what}\n계좌는 규칙대로 계속 돕니다"
+
+
 def _orphans(ctx: Any, extras: list, now: int) -> list[str]:
     """Running extras whose proposal row is missing, has another time or content, or is not 'approved'."""
     conn = ctx.agents_conn
@@ -580,7 +591,7 @@ def _orphans(ctx: Any, extras: list, now: int) -> list[str]:
                    {"action": "extra_orphan", "account_id": e["account_id"], "proposal_id": pid, "why": why},
                    ts=now, commit=False)
             R.set_cursor(conn, key, now)
-            _notify(ctx, f"[추가 계좌] {e['account_id']}: 제안 #{pid}와 맞지 않는 상태로 실행 중 ({why})")
+            _notify(ctx, orphan_text(e["account_id"], pid, why))
     if R.get_cursor(conn, ORPHANS) != found:
         R.set_cursor(conn, ORPHANS, found)
     return sorted(found)

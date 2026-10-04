@@ -180,5 +180,7 @@ def test_the_sunday_report_has_one_line(world, tmp_path):
     assert rep["readiness"]["summary"]["headline"] == "실거래 조건: 충족 0개"
     text = DG.compose_week(rep)
     [line] = [x for x in text.splitlines() if "실거래 조건" in x]
-    assert line == "- 실거래 조건: 충족 0개 (계좌 5개) · 자료로 볼 수 있는 조건을 모두 채운 계좌 1개 · 표시만, 아무것도 켜지 않음"
+    assert line == "실거래 조건 충족 0개"
+    assert DG.readiness_line(rep["readiness"]) == \
+        "- 실거래 조건: 충족 0개 (계좌 5개) · 자료로 볼 수 있는 조건을 모두 채운 계좌 1개 · 표시만, 아무것도 켜지 않음"
     assert len(text) <= 4000

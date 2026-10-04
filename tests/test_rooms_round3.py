@@ -141,8 +141,8 @@ def test_a_copy_proposal_waiting_for_the_owners_sends_one_warn(tmp_path, good_la
     [p] = R.list_proposals(w.agents)
     assert p["status"] == "awaiting_owner"
     [(level, text)] = tg.messages                      # the round itself sends nothing else
-    assert level == WARN and f"복제 계좌 제안 #{p['id']}" in text and "켈트너·RSI 15분봉 계좌" in text
-    assert "'추세 반대 진입' 진입 건너뛰기" in text and "관문 통과" in text and "승인/거절" in text
+    assert level == WARN and text.startswith(f"승인 요청 · 복제 계좌 제안 #{p['id']}\n") and "\n원본: 켈트너·RSI 15분\n" in text
+    assert "'추세 반대 진입' 진입 건너뛰기" in text and "5년 시험 통과 (시험 #" in text and "승인/거절" in text
     assert any(m["kind"] == "action" and "알림(텔레그램, WARN)" in m["text"] for m in w.messages())
     # never twice for the same proposal (the mark is written before the send)
     env = A.ActionEnv(conn=w.agents, room_id=ROOM, strategy=S, round_id=None, meeting="x", now_ms=QUIET, notifier=tg)
@@ -200,7 +200,7 @@ def test_the_down_warn_on_the_15_minute_timer_comes_after_90_minutes(tmp_path):
         if tg.messages:
             break
     assert k * 15 == 90 and runner.calls == RM.DOWN_ROUNDS
-    assert "직원 회의가 90분째 AI를 부르지 못해" in tg.messages[0][1]
+    assert tg.messages[0][1].startswith("직원 회의 멈춤 · 90분째\n\n회의 4번 연속 실패")
 
 
 def test_no_down_warn_when_a_call_answered_during_the_streak(tmp_path):
@@ -244,7 +244,7 @@ def test_evening_numbers_say_the_coin_flips_are_in_the_pnl(tmp_path):
     ctx = RM.RoundContext(agents_conn=w.agents, paper_ro=None, daily_ro=None, inbox_ro=None, runner=None, lab=None,
                           now_ms=QUIET)
     text = RM.compose_evening(ctx, {"today": {"trades": 3, "net_pnl": -12.5, "wins": 1, "busts_total": 0}}, LEAD)
-    assert "손익(동전 봇 포함) -12.50 USDT" in text
+    assert "\n거래 3건 · 이긴 1건 · -$12 (동전 봇 포함)\n" in text
 
 
 # ------------------------------------------------------------------ the reason line of a paced stop

@@ -502,40 +502,54 @@ def _kst(ts: float) -> str:
     return datetime.fromtimestamp(ts, KST).strftime("%Y-%m-%d %H:%M")
 
 
+def _mb(n: float) -> str:
+    """A database size for the owners: '172 MB', '2 MB', '0.3 MB'."""
+    mb = n / 1024 ** 2
+    return f"{mb:.1f} MB" if mb < 1 else f"{mb:,.0f} MB"
+
+
 def part_caption(m: dict, p: dict) -> str:
-    enc = "암호화 openssl aes-256-cbc" if m["encrypted"] else "암호화 없음"
+    """A part's caption (silent, backup chat). The whole archive's sha256 stays in full: restoring without the
+    manifest reads it from here (``restore --sha256``); the part's own one is in the manifest."""
+    from .notify import day_ko
+    enc = "암호화함" if m["encrypted"] else "암호화 없음"
     return "\n".join([
-        f"paperbot 백업 {m['date']} · 조각 {p['index']}/{p['of']}",
+        f"💾 백업 {day_ko(m['date'])} · 조각 {p['index']}/{p['of']}",
+        "",
         f"파일 {p['name']}",
-        f"조각 {fmt_size(p['size'])} ({p['size']} B) · sha256 {p['sha256']}",
-        f"전체 {fmt_size(m['size'])} ({m['size']} B) · sha256 {m['sha256']}",
-        f"DB 원본 {fmt_size(sum(m['databases'].values()))} · {m['compression']} · {enc}",
-        f"백업 시각 {m['backup_kst']} (한국)",
+        f"조각 {fmt_size(p['size'])} · sha256 {p['sha256'][:12]}…",
+        f"전체 {fmt_size(m['size'])} · sha256 {m['sha256']}",
+        f"DB 원본 {_mb(sum(m['databases'].values()))} · {m['compression']} · {enc}",
+        f"백업 시각 {_short_kst(m['backup_kst'])}",
     ])[:CAPTION_LIMIT]
 
 
+def _short_kst(t: str) -> str:
+    """'2026-10-04 08:40' -> '10/04 08:40'."""
+    m = re.fullmatch(r"\d{4}-(\d{2})-(\d{2}) (\d{2}:\d{2})", str(t))
+    return f"{m[1]}/{m[2]} {m[3]}" if m else str(t)
+
+
 def summary_text(m: dict, note: str = "", dry_run: bool = False) -> str:
-    dbs = " · ".join(f"{k.removesuffix('.db')} {fmt_size(v)}" for k, v in m["databases"].items())
-    enc = "암호화함" if m["encrypted"] else "암호화 없음"
+    from .notify import day_ko
+    dbs = sorted(m["databases"].items(), key=lambda kv: -kv[1])
+    names = [f"{k.removesuffix('.db')} {_mb(v)}" for k, v in dbs]
+    enc = "암호화" if m["encrypted"] else "암호화 없음"
     problems = m.get("problems") or []
+    day = day_ko(m["date"])
     if dry_run:
-        head = f"paperbot 서버 밖 백업 시험(dry run): 아무것도 보내지 않음 — {m['date']} 폴더"
+        head = f"💾 서버 밖 백업 시험(dry run) · {day}: 아무것도 보내지 않음"
     elif problems:
-        head = f"paperbot 서버 밖 백업 일부만 보냄: {m['date']} 폴더"
+        head = f"💾 서버 밖 백업 일부만 보냄 · {day}"
     else:
-        head = f"paperbot 서버 밖 백업 완료: {m['date']} 폴더"
-    lines = [
-        f"{head} (백업 시각 {m['backup_kst']} 한국)",
-        f"DB {len(m['databases'])}개 {fmt_size(sum(m['databases'].values()))} → {'보낼' if dry_run else '보낸'} 파일 "
-        f"{fmt_size(m['size'])} ({m['compression']}, {enc}), 조각 {len(m['parts'])}개",
-        f"DB: {dbs}",
-    ]
+        head = f"💾 서버 밖 백업 완료 · {day}"
+    lines = [head, "",
+             f"DB {len(dbs)}개 {_mb(sum(m['databases'].values()))} → {'보낼 파일 ' if dry_run else ''}{fmt_size(m['size'])} ({enc})",
+             f"조각 {len(m['parts'])}개 + 이 목록 파일"]
+    lines += [" · ".join(names[i:i + 3]) for i in range(0, len(names), 3)]
     if problems:
         lines.append(f"빠진 것: {'; '.join(problems)} (알림방 경고 참고)")
-    lines += [
-        f"전체 sha256 {m['sha256'][:16]}…",
-        f"되살릴 때: 이 목록 파일과 조각 {len(m['parts'])}개를 모두 내려받습니다 (docs/offsite-backup.md)",
-    ]
+    lines.append(f"되살릴 때: 이 파일과 조각 {len(m['parts'])}개를 모두 내려받기")
     if note:
         lines.append(note)
     return "\n".join(lines)[:CAPTION_LIMIT]
@@ -549,8 +563,7 @@ def resolve_chat(env: Mapping[str, str], chat_env: str) -> tuple[str, str]:
     if not critical:
         raise OffsiteError(f"보낼 방이 없습니다: {chat_env}, TELEGRAM_CHAT_CRITICAL 값이 모두 비어 있습니다 "
                            "(/etc/paperbot/live.env)")
-    return critical, (f"참고: {chat_env} 값이 비어 있어 기본 알림방으로 보냈습니다. 이 방으로 받기로 했다면 그대로 "
-                      "두면 되고, 따로 받으려면 백업 전용 방 번호를 넣습니다 (docs/offsite-backup.md 5번)")
+    return critical, (f"참고: {chat_env}가 비어 있어 기본 알림방으로 보냄 (따로 받으려면 docs/offsite-backup.md 5번)")
 
 
 def check_token(token: str) -> None:
@@ -971,6 +984,14 @@ def _on_sigterm(signum, frame):
     raise OffsiteError(SIGTERM_REASON)
 
 
+def failure_text(date: str, reason: str) -> str:
+    """The WARN when the send failed (an HTTP error's English words dropped)."""
+    from .notify import day_ko
+    short = re.sub(r"\(HTTP (\d{3})[^)]*\)", r"(HTTP \1)", str(reason))
+    return (f"서버 밖 백업 실패 · {day_ko(date)}\n\n{short}\n서버 안 백업은 그대로 있음\n내일 같은 시각에 다시 시도\n"
+            "확인: sudo journalctl -u paperbot-offsite -n 50")
+
+
 def stopped_alert(env: Mapping[str, str]) -> Optional[str]:
     """For ExecStopPost=: the WARN text when systemd ended the send before it could alert by itself
     (killed by a signal: the memory limit, SIGKILL after the stop timeout; or a core dump), else None.
@@ -979,12 +1000,12 @@ def stopped_alert(env: Mapping[str, str]) -> Optional[str]:
     if code not in ("killed", "dumped"):
         return None
     result = (env.get("SERVICE_RESULT") or "?").strip()
-    status = (env.get("EXIT_STATUS") or "?").strip()
-    why = "메모리 한도(1 GB)를 넘었습니다" if result == "oom-kill" else "강제로 멈춰졌습니다"
-    return (f"서버 밖 백업이 비정상으로 끝났습니다: {why} (systemd {result}, {code} {status}). "
-            "이날 백업은 텔레그램에 다 가지 못했을 수 있습니다.\n"
-            "서버 안 백업(/var/backups/paperbot)은 그대로 있습니다. 내일 같은 시각에 다시 시도합니다.\n"
-            "확인: sudo journalctl -u paperbot-offsite -n 50 --no-pager")
+    why = "메모리 한도(1GB) 초과" if result == "oom-kill" else "강제로 멈춰짐"
+    return (f"서버 밖 백업 중단 · {why}\n\n"
+            "오늘 백업이 다 가지 못했을 수 있음\n"
+            "서버 안 백업은 그대로 있음\n"
+            "내일 같은 시각에 다시 시도\n"
+            "확인: sudo journalctl -u paperbot-offsite -n 50")
 
 
 def main(argv: Optional[list[str]] = None, *, env: Optional[Mapping[str, str]] = None,
@@ -1060,9 +1081,7 @@ def main(argv: Optional[list[str]] = None, *, env: Optional[Mapping[str, str]] =
             reason = redact(f"{type(exc).__name__}: {exc}", token, passphrase)
         _stderr(f"offsite {a.cmd} failed: {reason}")
         if alerting:
-            text = (f"서버 밖 백업 실패 ({info.get('date', '날짜 모름')}): {reason}\n"
-                    "서버 안 백업(/var/backups/paperbot)은 그대로 있습니다. 내일 같은 시각에 다시 시도합니다.\n"
-                    "확인: sudo journalctl -u paperbot-offsite -n 50 --no-pager")
+            text = failure_text(info.get('date', '날짜 모름'), reason)
             (notifier or default_notifier(env)).send(WARN, redact(text, token, passphrase))
         return 1
     finally:

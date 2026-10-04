@@ -49,7 +49,7 @@ from .fillcost import LIMIT as FILL_DEPTH, FillProbe
 from . import sweepsig
 from .health import DeadMan, sd_notify
 from .live import _notifier, _rest, load_brackets
-from .notify import CRITICAL, INFO, WARN, Digest, Notifier
+from .notify import CRITICAL, INFO, WARN, Digest, Notifier, Router
 from .runinfo import change_text, changes, run_record
 from .sigservice import SignalTimeout
 from .store3 import Store3
@@ -298,6 +298,8 @@ def cmd_run(args) -> int:
     store = Store3(args.db)
     lock = single_runner_lock(args.db)  # noqa: F841  (held until the process ends)
     digest = Digest(notifier)
+    # noisy lines (1m gaps, clock skew, repeated signal timeouts) go to the hourly digest (notify.Router)
+    notifier = Router(notifier, digest)
     book = AccountBook(settings, brackets, store, notifier, specs, digest=digest)
     service = SignalService(syms, RECORD_ONLY, random_rates(), procs=args.procs)
     ext, make_of = start_extras(store, notifier, args.db, settings)

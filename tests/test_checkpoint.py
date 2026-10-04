@@ -11,7 +11,7 @@ import pytest
 
 from paperbot import Bar, Brackets, Signal
 from paperbot import checkpoint as ck
-from paperbot.config import V3_SYMBOLS, v3_settings
+from paperbot.config import V3_OLD_TIER_WALK, V3_SYMBOLS, v3_settings
 from paperbot.engine import PaperEngine
 from paperbot.notify import INFO, WARN, ListNotifier
 from paperbot.sizing import size_position
@@ -71,8 +71,9 @@ def test_size_vec_matches_size_position():
             assert d.margin == pytest.approx(got["margin"][i], rel=1e-12)
 
 
-def _engine_run(m, tf, lo, hi, sigs, atr, s=S):
-    """The same bots through the real PaperEngine, minute by minute."""
+def _engine_run(m, tf, lo, hi, sigs, atr, s=S, groups=None):
+    """The same bots through the real PaperEngine, minute by minute (``groups``: True = the signal's quality_v1
+    leverage group is 'best', carried as meta["lev_group"])."""
     ends, tab = atr
     atr_at = {int(t): tab[i] for i, t in enumerate(ends)}
     w = m.window(lo, hi)
@@ -89,22 +90,26 @@ def _engine_run(m, tf, lo, hi, sigs, atr, s=S):
                 for k, s in enumerate(V3_SYMBOLS):
                     sd = int(sigs[i, bidx[ts], k])
                     if sd and np.isfinite(a[k]):
+                        meta = {"stop_dist": 2.0 * a[k], "ref_price": float(w.o[t, k])}
+                        if groups is not None:
+                            meta["lev_group"] = "best" if groups[i, bidx[ts], k] else "normal"
                         e.submit(Signal(ts=ts - 1, symbol=s, timeframe=tf, strategy_id="R", side=sd, stop_price=0.0,
-                                        tier="best", atr=float(a[k]),
-                                        meta={"stop_dist": 2.0 * a[k], "ref_price": float(w.o[t, k])}))
+                                        tier="best", atr=float(a[k]), meta=meta))
         for e in engines:
             e.step(bars, fund)
     return engines
 
 
+@pytest.mark.parametrize("rule", ["quality_v1", "tier_walk"])
 @pytest.mark.parametrize("tf,kw,bust_below,tight", [
     ("15m", dict(seed=11, vol=0.002), 10.0, False),                                         # wide stops: 20x, locks
     # tight stops (until 2026-10-04 on 5m, which the run no longer has): 30-50x, gaps, LIQ
     ("15m", dict(seed=7, vol=0.0003, gaps=0.002, gap_size=0.03, mark_wicks=0.002), 10.0, True),
     ("15m", dict(seed=8, vol=0.0003, gaps=0.002, gap_size=0.03, mark_wicks=0.002), 4500.0, True),  # bust path
 ])
-def test_bots_match_paper_engine(tf, kw, bust_below, tight):
-    s = v3_settings(bust_below=bust_below)
+def test_bots_match_paper_engine(tf, kw, bust_below, tight, rule):
+    """quality_v1: each signal's group drawn (40% 'best') and given to both; tier_walk: the old rule (all 'best')."""
+    s = v3_settings(bust_below=bust_below, **({} if rule == "quality_v1" else V3_OLD_TIER_WALK))
     lo = T0 + 4 * DAY
     hi = lo + 3 * DAY
     m = synth_minutes(T0, hi, **kw)
@@ -116,12 +121,18 @@ def test_bots_match_paper_engine(tf, kw, bust_below, tight):
     boundaries = {int(t): j for j, t in enumerate(sorted(int(t) for t in m.window(lo, hi).ts
                                                          if t % ck.TF_MS[tf] == 0))}
 
+    groups = rng.random((n_b, nbound, 6)) < 0.4 if rule == "quality_v1" else None
+
     def draw(ts, idx, rates, C):
         s_ = sigs[idx, boundaries[ts], :]
         return s_ != 0, np.where(s_ == 0, 1, s_)
 
-    res = ck.simulate_bots(m, tf, lo, hi, np.full(n_b, 0.03), s, BR, SPECS, draw=draw, atr=atr)
-    engines = _engine_run(m, tf, lo, hi, sigs, atr, s)
+    def group_draw(ts, idx, C):
+        return groups[idx, boundaries[ts], :]
+
+    res = ck.simulate_bots(m, tf, lo, hi, np.full(n_b, 0.03), s, BR, SPECS, draw=draw, atr=atr,
+                           group_draw=group_draw if groups is not None else None)
+    engines = _engine_run(m, tf, lo, hi, sigs, atr, s, groups)
     reasons = set()
     for i, e in enumerate(engines):
         reasons |= {t.exit_reason for t in e.trades}
@@ -266,8 +277,8 @@ def test_synthetic_checkpoint_run(run_db, tmp_path):
     # the signal rate given to the bots is the account's own: 400 signals / (6 coins x 1h bars)
     bars = (cp - (T0 + 6 * 3_600_000)) // 3_600_000
     assert acc["GOOD@1h"]["rate"] == pytest.approx(400 / (6 * bars), rel=0.01)
-    assert note.messages and note.messages[-1][0] == INFO and "체크포인트 30일" in note.messages[-1][1]
-    assert "1차 합격: GOOD · 1시간 (q " in note.messages[-1][1]
+    assert note.messages and note.messages[-1][0] == INFO and note.messages[-1][1].startswith("🏁 30일 판정 · ")
+    assert "\n1차 합격\n- GOOD 1시간 (q " in note.messages[-1][1]
     # read API
     assert ck.statuses(out)["GOOD@1h"] == ck.PASS1
     assert ck.account_status(out, "NOISE@1h")["status"] == ck.FAIL
@@ -286,7 +297,7 @@ def test_waits_for_runner_snapshot(tmp_path):
     out = str(tmp_path / "checkpoint.db")
     note = ListNotifier()
     assert ck.run_due(path, out, _minutes_for(), S, BR, SPECS, note, now_ms=cp + 3_600_000, log=lambda *_: None) == []
-    assert len(note.messages) == 1 and "day:" in note.messages[0][1]
+    assert len(note.messages) == 1 and "판정 대기 · " in note.messages[0][1] and "상태 저장이 아직 없음" in note.messages[0][1]
     ck.run_due(path, out, _minutes_for(), S, BR, SPECS, note, now_ms=cp + 7_200_000, log=lambda *_: None)
     assert len(note.messages) == 1                    # warned once per checkpoint
 
@@ -341,7 +352,7 @@ def test_main_failure_on_a_due_checkpoint_warns_once_per_date_and_error(tmp_path
         with pytest.raises(ConnectionError):
             ck.main(["run", "--db", path, "--out", out])
     assert [lv for lv, _ in note.messages] == [WARN]
-    assert ck.day_str(cp) in note.messages[0][1] and "ConnectionError" in note.messages[0][1]
+    assert f"판정 오류 · {ck.day_str(cp)[5:].replace('-', '/')}" in note.messages[0][1] and "ConnectionError" in note.messages[0][1]
     monkeypatch.setattr(live, "load_brackets", fail(SystemExit("No leverage brackets")))
     with pytest.raises(SystemExit):
         ck.main(["run", "--db", path, "--out", out])
@@ -349,7 +360,7 @@ def test_main_failure_on_a_due_checkpoint_warns_once_per_date_and_error(tmp_path
     # fixed: judged and sent; no warning once the verdict exists
     monkeypatch.setattr(live, "load_brackets", lambda *a: (BR, "test"))
     assert ck.main(["run", "--db", path, "--out", out]) == 0
-    assert note.messages[-1][0] == INFO and "[체크포인트 30일" in note.messages[-1][1] and len(note.messages) == 3
+    assert note.messages[-1][0] == INFO and "🏁 30일 판정" in note.messages[-1][1] and len(note.messages) == 3
 
 
 def test_main_sends_an_undelivered_verdict_again(tmp_path, monkeypatch):
@@ -395,7 +406,7 @@ def test_main_sends_a_stored_verdict_while_a_later_checkpoint_keeps_failing(tmp_
         ck.main(["run", "--db", path, "--out", out])
     assert ck.verdict(out, ck.day_str(cp1)) and ck.verdict(out, ck.day_str(cp2)) is None
     assert [lv for lv, _ in down.messages] == [INFO, WARN]
-    assert "[체크포인트 30일" in down.messages[0][1] and "[체크포인트 60일" in down.messages[1][1]
+    assert "🏁 30일 판정" in down.messages[0][1] and down.messages[1][1].startswith("60일 판정 오류 · ")
     # next hour day 60 fails again: no second warning, but the day-30 verdict Telegram did not take goes again
     up = _Telegram(ok=True)
     monkeypatch.setattr(live, "_notifier", lambda: up)
@@ -421,9 +432,10 @@ def test_verdict_text_korean_names():
          "lucky_if_uncorrected": 0.5, "snapshot_sha256": "ab" * 32, "warnings": [],
          "counts": {k: sum(r["status"] == k for r in accts.values()) for k in ck.STATUSES}, "accounts": accts}
     t = ck.verdict_text(v)
-    assert "1차 합격: 슈퍼트렌드·ROC · 1시간 (q 0.010), 복제 슈퍼트렌드·ROC · 1시간 (S2_ST_ROC@1h~c1, q 0.020), " \
-           "새 매매법 NL3 · 15분 (q 0.040)" in t
-    assert "2차 통과: 복제 슈퍼트렌드·ROC · 1시간 (S2_ST_ROC@1h~c2, q 0.030)" in t
+    assert "\n1차 합격\n- 슈퍼트렌드·ROC 1시간 (q 0.010)\n- 복제 슈퍼트렌드·ROC 1시간 (S2_ST_ROC@1h~c1, q 0.020)\n" \
+           "- 새 매매법 NL3 15분 (q 0.040)\n" in t
+    assert "\n2차 통과\n- 복제 슈퍼트렌드·ROC 1시간 (S2_ST_ROC@1h~c2, q 0.030)\n" in t
+    assert t.startswith("🏁 30일 판정 · 11/01\n\n1차 합격 3 · 2차 통과 1\n") and "abab" not in t
     assert "S2_ST_ROC@1h " not in t and "S2_ST_ROC@1h (" not in t     # an original: its Korean name only
 
 

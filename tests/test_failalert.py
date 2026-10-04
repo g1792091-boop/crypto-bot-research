@@ -19,12 +19,13 @@ def test_one_warning_per_unit_per_kst_day(tmp_path):
     assert run("paperbot-agents.service", T + 15 * MIN) == 0            # another job: its own warning
     assert run("paperbot-agents.service", T + 30 * MIN) == 0            # the next 15-minute pass: silent
     assert run("paperbot-checkpoint.service", T + 95 * MIN) == 0        # 00:35 KST: a new day, told again
-    assert [(lv, t.split(":")[0]) for lv, t in note.messages] == [
-        (WARN, "[작업 실패] 체크포인트 판정"), (WARN, "[작업 실패] 에이전트 회의"), (WARN, "[작업 실패] 체크포인트 판정")]
+    assert [(lv, t.split("\n")[0]) for lv, t in note.messages] == [
+        (WARN, "작업 실패 · 체크포인트 판정"), (WARN, "작업 실패 · 에이전트 회의"), (WARN, "작업 실패 · 체크포인트 판정")]
     text = note.messages[0][1]
-    assert "오류로 끝남, 종료 코드 1 (paperbot-checkpoint.service)" in text
-    assert "sudo journalctl -u paperbot-checkpoint.service -n 50 --no-pager" in text
-    assert "sudo systemctl reset-failed paperbot-checkpoint.service" in text and "매시 35분" in text
+    assert "\n오류로 끝남 (종료 코드 1)\n" in text
+    assert "이유: sudo journalctl -u paperbot-checkpoint -n 50\n" in text and "--no-pager" not in text
+    assert "확인 후: sudo systemctl reset-failed paperbot-checkpoint\n" in text and "매시 35분" in text
+    assert text.endswith("(오늘은 다시 알리지 않음)")
     assert open(os.path.join(tmp_path, "paperbot-checkpoint.service")).read().strip() == "2026-10-04"
 
 
@@ -46,7 +47,7 @@ def test_how_it_ended_in_korean(tmp_path):
     FA.main(["paperbot-labmonthly.service"], env={"MONITOR_SERVICE_RESULT": "timeout"}, notifier=note, now_ms=T,
             state_dir=str(tmp_path / "b"))
     assert "Claude 로그인 확인 거부이거나 설정 값 오류 (안내서 8-2·8-4)" in note.messages[0][1]
-    assert "매달 재검사: 시간 제한을 넘김 (paperbot-labmonthly.service)" in note.messages[1][1]
+    assert note.messages[1][1].startswith("작업 실패 · 매달 재검사\n\n시간 제한을 넘김\n")
 
 
 def test_only_a_unit_name_is_accepted(tmp_path):

@@ -124,7 +124,7 @@ def test_lab_meeting_tests_new_specs_handles_bad_and_duplicate_and_counts_global
     assert prop["strategy"] is None and prop["trial_id"] == t["id"] and body["proposal_id"] == prop["id"]
     assert prop["change"]["kind"] == "newlab" and prop["change"]["account"]["spec_hash"] == t["spec_hash"]
     assert [lvl for lvl, _ in note.messages] == [WARN] and "새 매매법" in note.messages[0][1]
-    assert "OK" in note.messages[0][1] and "volume_spike" in note.messages[0][1]
+    assert note.messages[0][1].startswith("승인 요청 · 새 매매법 제안") and "volume_spike" in note.messages[0][1]
     act = next(m for m in msgs if m["kind"] == "action" and (m["data"] or {}).get("action") == "newlab_proposal")
     assert "두 분 OK" in act["text"] and "승인/거절" in act["text"] and f"제안 #{prop['id']}" in act["text"]
     res = next(m for m in msgs if m["kind"] == "code_result" and (m["data"] or {}).get("trial_id") == t["id"]

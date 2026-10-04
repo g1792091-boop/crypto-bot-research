@@ -237,7 +237,7 @@ def test_daily3_replay_with_extras_zero_mismatch(results):
         snap = json.loads(c.execute("SELECT data FROM state WHERE k = ?", (day_key(day0),)).fetchone()[0])
         ext = extras_of(c)
         assert len(ext) == 13
-        rep = replay(v3_settings(), br, H.SPECS, snap, day_signals(c, day0, day0 + H.DAY, with_data=True), steps,
+        rep = replay(v3_settings(**H.RULE), br, H.SPECS, snap, day_signals(c, day0, day0 + H.DAY, with_data=True), steps,
                      extras=ext)
         stored = stored_trades(c, day0, day0 + H.DAY)
         mism = compare({a: [t for t in ts if t.exit_time < day0 + H.DAY] for a, ts in rep.items()}, stored)

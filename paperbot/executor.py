@@ -74,6 +74,7 @@ from .mainnet import (MAINNET_HOSTS, MODE_MAINNET, MODE_TESTNET, PAPER_ENV_FILE,
                       Refused, check_assets, check_balance, online_gates, read_env_file, trading_keys)
 from .margin import Brackets
 from .notify import CRITICAL, INFO, WARN, ConsoleNotifier, NullNotifier, Notifier
+from .levrule import requested_tier
 from .sizing import size_position
 from .testnet import (ALLOWED_HOSTS, BAD_TIMESTAMP, FIRED_ALGO, NOT_FOUND, ProtectionError, RateLimited,
                       TestnetClient, TestnetError, TransientError, UnknownOutcome, _round_down, cancel_stops, covers,
@@ -1598,7 +1599,8 @@ class Executor:
         fill = ref * (1 + side * settings.slippage_frac)
         stop = ref - side * dist
         spec = self._spec(sym)
-        dec = size_position(settings, float(eng.get("wallet") or 0), side, fill, stop, sig.get("tier") or "best",
+        # the paper rule's own group / tier for this signal (levrule: quality_v1 group, else the signal's tier)
+        dec = size_position(settings, float(eng.get("wallet") or 0), side, fill, stop, requested_tier(settings, sig),
                             self.brackets[sym], atr=None if atr is None else float(atr),
                             qty_step=spec["qty_step"], min_notional=spec["min_notional"])
         if not dec.ok:

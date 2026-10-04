@@ -30,6 +30,47 @@
   "alpha": 0.1,
   "min_trades": 30
  },
+ "leverage": {
+  "rule": "quality_v1",
+  "p_best": {
+   "15m": 0.2155,
+   "30m": 0.217,
+   "1h": 0.2157,
+   "4h": 0.2095
+  },
+  "best_falls_to_normal": true,
+  "tiers": [
+   [
+    "best",
+    0.5,
+    [
+     50
+    ]
+   ],
+   [
+    "best",
+    0.4,
+    [
+     40
+    ]
+   ],
+   [
+    "normal",
+    0.3,
+    [
+     30
+    ]
+   ],
+   [
+    "normal",
+    0.2,
+    [
+     20
+    ]
+   ]
+  ],
+  "note": "coin flips drawn 'best' with p_best[tf] (owners 2026-10-04, docs/paper-v3-rules-change-1.md)"
+ },
  "data": "data/pre2021 (Binance USD-M futures 2020-01..2021-08, 6 coins; 30m from 15m)",
  "rates_from": "research/strategy_profiles/out_binance/cards.json (median strategy signals_per_day)",
  "timeframes": [
@@ -48,14 +89,14 @@
  "results": {
   "15m": {
    "pool": {
-    "trades_in_pool": 4298,
+    "trades_in_pool": 4258,
     "alive_days": 990.0,
-    "trades_per_30d": 130.2,
-    "coin_flip_mean_roe": -0.02975,
-    "coin_flip_win_rate": 0.6382,
-    "mean_margin_share": 0.258,
+    "trades_per_30d": 129.0,
+    "coin_flip_mean_roe": -0.02929,
+    "coin_flip_win_rate": 0.6355,
+    "mean_margin_share": 0.2509,
     "null_bust_30d": 0.0,
-    "null_median_equity_30d": 0.2537,
+    "null_median_equity_30d": 0.2785,
     "rules_bt_windows": 33,
     "rules_bt_bust_30d": 0.0,
     "signals_per_day_median": 7.508,
@@ -64,8 +105,216 @@
    "rows": [
     {
      "edge_roe": 0.0,
-     "mean_roe": -0.02975,
-     "median_equity_30d": 0.2643,
+     "mean_roe": -0.02929,
+     "median_equity_30d": 0.2848,
+     "family_108": {
+      "p_pass1_d30": 0.0015,
+      "p_pass1_by_d30": 0.0015,
+      "p_pass1_by_d60": 0.0015,
+      "p_pass1_by_d90": 0.0015,
+      "p_pass2_by_d60": 0.0,
+      "p_pass2_by_d90": 0.0,
+      "p_judged_by_d30": 1.0,
+      "p_judged_by_d60": 1.0,
+      "p_judged_by_d90": 1.0
+     },
+     "family_144": {
+      "p_pass1_d30": 0.001,
+      "p_pass1_by_d30": 0.001,
+      "p_pass1_by_d60": 0.001,
+      "p_pass1_by_d90": 0.001,
+      "p_pass2_by_d60": 0.0,
+      "p_pass2_by_d90": 0.0,
+      "p_judged_by_d30": 1.0,
+      "p_judged_by_d60": 1.0,
+      "p_judged_by_d90": 1.0
+     }
+    },
+    {
+     "edge_roe": 0.005,
+     "mean_roe": -0.02429,
+     "median_equity_30d": 0.3326,
+     "family_108": {
+      "p_pass1_d30": 0.0013,
+      "p_pass1_by_d30": 0.0013,
+      "p_pass1_by_d60": 0.0013,
+      "p_pass1_by_d90": 0.0013,
+      "p_pass2_by_d60": 0.0,
+      "p_pass2_by_d90": 0.0,
+      "p_judged_by_d30": 1.0,
+      "p_judged_by_d60": 1.0,
+      "p_judged_by_d90": 1.0
+     },
+     "family_144": {
+      "p_pass1_d30": 0.0003,
+      "p_pass1_by_d30": 0.0003,
+      "p_pass1_by_d60": 0.0003,
+      "p_pass1_by_d90": 0.0003,
+      "p_pass2_by_d60": 0.0,
+      "p_pass2_by_d90": 0.0,
+      "p_judged_by_d30": 1.0,
+      "p_judged_by_d60": 1.0,
+      "p_judged_by_d90": 1.0
+     }
+    },
+    {
+     "edge_roe": 0.01,
+     "mean_roe": -0.01929,
+     "median_equity_30d": 0.3775,
+     "family_108": {
+      "p_pass1_d30": 0.0013,
+      "p_pass1_by_d30": 0.0013,
+      "p_pass1_by_d60": 0.0013,
+      "p_pass1_by_d90": 0.0013,
+      "p_pass2_by_d60": 0.0,
+      "p_pass2_by_d90": 0.0,
+      "p_judged_by_d30": 1.0,
+      "p_judged_by_d60": 1.0,
+      "p_judged_by_d90": 1.0
+     },
+     "family_144": {
+      "p_pass1_d30": 0.0008,
+      "p_pass1_by_d30": 0.0008,
+      "p_pass1_by_d60": 0.0008,
+      "p_pass1_by_d90": 0.0008,
+      "p_pass2_by_d60": 0.0,
+      "p_pass2_by_d90": 0.0,
+      "p_judged_by_d30": 1.0,
+      "p_judged_by_d60": 1.0,
+      "p_judged_by_d90": 1.0
+     }
+    },
+    {
+     "edge_roe": 0.02,
+     "mean_roe": -0.00929,
+     "median_equity_30d": 0.5302,
+     "family_108": {
+      "p_pass1_d30": 0.0077,
+      "p_pass1_by_d30": 0.0077,
+      "p_pass1_by_d60": 0.0077,
+      "p_pass1_by_d90": 0.0077,
+      "p_pass2_by_d60": 0.0,
+      "p_pass2_by_d90": 0.0,
+      "p_judged_by_d30": 1.0,
+      "p_judged_by_d60": 1.0,
+      "p_judged_by_d90": 1.0
+     },
+     "family_144": {
+      "p_pass1_d30": 0.007,
+      "p_pass1_by_d30": 0.007,
+      "p_pass1_by_d60": 0.007,
+      "p_pass1_by_d90": 0.007,
+      "p_pass2_by_d60": 0.0,
+      "p_pass2_by_d90": 0.0,
+      "p_judged_by_d30": 1.0,
+      "p_judged_by_d60": 1.0,
+      "p_judged_by_d90": 1.0
+     }
+    },
+    {
+     "edge_roe": 0.05,
+     "mean_roe": 0.02071,
+     "median_equity_30d": 1.4131,
+     "family_108": {
+      "p_pass1_d30": 0.118,
+      "p_pass1_by_d30": 0.118,
+      "p_pass1_by_d60": 0.118,
+      "p_pass1_by_d90": 0.118,
+      "p_pass2_by_d60": 0.0135,
+      "p_pass2_by_d90": 0.0135,
+      "p_judged_by_d30": 1.0,
+      "p_judged_by_d60": 1.0,
+      "p_judged_by_d90": 1.0
+     },
+     "family_144": {
+      "p_pass1_d30": 0.1175,
+      "p_pass1_by_d30": 0.1175,
+      "p_pass1_by_d60": 0.1175,
+      "p_pass1_by_d90": 0.1175,
+      "p_pass2_by_d60": 0.015,
+      "p_pass2_by_d90": 0.015,
+      "p_judged_by_d30": 1.0,
+      "p_judged_by_d60": 1.0,
+      "p_judged_by_d90": 1.0
+     }
+    },
+    {
+     "edge_roe": 0.1,
+     "mean_roe": 0.07071,
+     "median_equity_30d": 6.9798,
+     "family_108": {
+      "p_pass1_d30": 0.7927,
+      "p_pass1_by_d30": 0.7927,
+      "p_pass1_by_d60": 0.7927,
+      "p_pass1_by_d90": 0.7927,
+      "p_pass2_by_d60": 0.6195,
+      "p_pass2_by_d90": 0.6195,
+      "p_judged_by_d30": 1.0,
+      "p_judged_by_d60": 1.0,
+      "p_judged_by_d90": 1.0
+     },
+     "family_144": {
+      "p_pass1_d30": 0.7827,
+      "p_pass1_by_d30": 0.7827,
+      "p_pass1_by_d60": 0.7827,
+      "p_pass1_by_d90": 0.7827,
+      "p_pass2_by_d60": 0.6115,
+      "p_pass2_by_d90": 0.6115,
+      "p_judged_by_d30": 1.0,
+      "p_judged_by_d60": 1.0,
+      "p_judged_by_d90": 1.0
+     }
+    }
+   ],
+   "observation_only": false
+  },
+  "30m": {
+   "pool": {
+    "trades_in_pool": 1818,
+    "alive_days": 990.0,
+    "trades_per_30d": 55.1,
+    "coin_flip_mean_roe": -0.02455,
+    "coin_flip_win_rate": 0.6562,
+    "mean_margin_share": 0.2274,
+    "null_bust_30d": 0.0,
+    "null_median_equity_30d": 0.64,
+    "rules_bt_windows": 33,
+    "rules_bt_bust_30d": 0.0,
+    "signals_per_day_median": 3.715,
+    "rate_per_coin_bar": 0.0129
+   },
+   "rows": [
+    {
+     "edge_roe": 0.0,
+     "mean_roe": -0.02455,
+     "median_equity_30d": 0.6412,
+     "family_108": {
+      "p_pass1_d30": 0.0005,
+      "p_pass1_by_d30": 0.0005,
+      "p_pass1_by_d60": 0.0005,
+      "p_pass1_by_d90": 0.0005,
+      "p_pass2_by_d60": 0.0,
+      "p_pass2_by_d90": 0.0,
+      "p_judged_by_d30": 1.0,
+      "p_judged_by_d60": 1.0,
+      "p_judged_by_d90": 1.0
+     },
+     "family_144": {
+      "p_pass1_d30": 0.0005,
+      "p_pass1_by_d30": 0.0005,
+      "p_pass1_by_d60": 0.0005,
+      "p_pass1_by_d90": 0.0005,
+      "p_pass2_by_d60": 0.0,
+      "p_pass2_by_d90": 0.0,
+      "p_judged_by_d30": 1.0,
+      "p_judged_by_d60": 1.0,
+      "p_judged_by_d90": 1.0
+     }
+    },
+    {
+     "edge_roe": 0.005,
+     "mean_roe": -0.01955,
+     "median_equity_30d": 0.6737,
      "family_108": {
       "p_pass1_d30": 0.0003,
       "p_pass1_by_d30": 0.0003,
@@ -78,22 +327,6 @@
       "p_judged_by_d90": 1.0
      },
      "family_144": {
-      "p_pass1_d30": 0.0,
-      "p_pass1_by_d30": 0.0,
-      "p_pass1_by_d60": 0.0,
-      "p_pass1_by_d90": 0.0,
-      "p_pass2_by_d60": 0.0,
-      "p_pass2_by_d90": 0.0,
-      "p_judged_by_d30": 1.0,
-      "p_judged_by_d60": 1.0,
-      "p_judged_by_d90": 1.0
-     }
-    },
-    {
-     "edge_roe": 0.005,
-     "mean_roe": -0.02475,
-     "median_equity_30d": 0.3048,
-     "family_108": {
       "p_pass1_d30": 0.0008,
       "p_pass1_by_d30": 0.0008,
       "p_pass1_by_d60": 0.0008,
@@ -103,12 +336,28 @@
       "p_judged_by_d30": 1.0,
       "p_judged_by_d60": 1.0,
       "p_judged_by_d90": 1.0
+     }
+    },
+    {
+     "edge_roe": 0.01,
+     "mean_roe": -0.01455,
+     "median_equity_30d": 0.7314,
+     "family_108": {
+      "p_pass1_d30": 0.0015,
+      "p_pass1_by_d30": 0.0015,
+      "p_pass1_by_d60": 0.0015,
+      "p_pass1_by_d90": 0.0015,
+      "p_pass2_by_d60": 0.0,
+      "p_pass2_by_d90": 0.0,
+      "p_judged_by_d30": 1.0,
+      "p_judged_by_d60": 1.0,
+      "p_judged_by_d90": 1.0
      },
      "family_144": {
-      "p_pass1_d30": 0.0013,
-      "p_pass1_by_d30": 0.0013,
-      "p_pass1_by_d60": 0.0013,
-      "p_pass1_by_d90": 0.0013,
+      "p_pass1_d30": 0.002,
+      "p_pass1_by_d30": 0.002,
+      "p_pass1_by_d60": 0.002,
+      "p_pass1_by_d90": 0.002,
       "p_pass2_by_d60": 0.0,
       "p_pass2_by_d90": 0.0,
       "p_judged_by_d30": 1.0,
@@ -117,9 +366,9 @@
      }
     },
     {
-     "edge_roe": 0.01,
-     "mean_roe": -0.01975,
-     "median_equity_30d": 0.3486,
+     "edge_roe": 0.02,
+     "mean_roe": -0.00455,
+     "median_equity_30d": 0.8242,
      "family_108": {
       "p_pass1_d30": 0.0027,
       "p_pass1_by_d30": 0.0027,
@@ -132,10 +381,10 @@
       "p_judged_by_d90": 1.0
      },
      "family_144": {
-      "p_pass1_d30": 0.0025,
-      "p_pass1_by_d30": 0.0025,
-      "p_pass1_by_d60": 0.0025,
-      "p_pass1_by_d90": 0.0025,
+      "p_pass1_d30": 0.0018,
+      "p_pass1_by_d30": 0.0018,
+      "p_pass1_by_d60": 0.0018,
+      "p_pass1_by_d90": 0.0018,
       "p_pass2_by_d60": 0.0,
       "p_pass2_by_d90": 0.0,
       "p_judged_by_d30": 1.0,
@@ -144,233 +393,25 @@
      }
     },
     {
-     "edge_roe": 0.02,
-     "mean_roe": -0.00975,
-     "median_equity_30d": 0.496,
+     "edge_roe": 0.05,
+     "mean_roe": 0.02545,
+     "median_equity_30d": 1.1885,
      "family_108": {
-      "p_pass1_d30": 0.0067,
-      "p_pass1_by_d30": 0.0067,
-      "p_pass1_by_d60": 0.0067,
-      "p_pass1_by_d90": 0.0067,
-      "p_pass2_by_d60": 0.0005,
-      "p_pass2_by_d90": 0.0005,
-      "p_judged_by_d30": 1.0,
-      "p_judged_by_d60": 1.0,
-      "p_judged_by_d90": 1.0
-     },
-     "family_144": {
-      "p_pass1_d30": 0.0057,
-      "p_pass1_by_d30": 0.0057,
-      "p_pass1_by_d60": 0.0057,
-      "p_pass1_by_d90": 0.0057,
+      "p_pass1_d30": 0.026,
+      "p_pass1_by_d30": 0.026,
+      "p_pass1_by_d60": 0.026,
+      "p_pass1_by_d90": 0.026,
       "p_pass2_by_d60": 0.0003,
       "p_pass2_by_d90": 0.0003,
       "p_judged_by_d30": 1.0,
       "p_judged_by_d60": 1.0,
       "p_judged_by_d90": 1.0
-     }
-    },
-    {
-     "edge_roe": 0.05,
-     "mean_roe": 0.02025,
-     "median_equity_30d": 1.4081,
-     "family_108": {
-      "p_pass1_d30": 0.1045,
-      "p_pass1_by_d30": 0.1045,
-      "p_pass1_by_d60": 0.1045,
-      "p_pass1_by_d90": 0.1045,
-      "p_pass2_by_d60": 0.0105,
-      "p_pass2_by_d90": 0.0105,
-      "p_judged_by_d30": 1.0,
-      "p_judged_by_d60": 1.0,
-      "p_judged_by_d90": 1.0
      },
      "family_144": {
-      "p_pass1_d30": 0.096,
-      "p_pass1_by_d30": 0.096,
-      "p_pass1_by_d60": 0.096,
-      "p_pass1_by_d90": 0.096,
-      "p_pass2_by_d60": 0.01,
-      "p_pass2_by_d90": 0.01,
-      "p_judged_by_d30": 1.0,
-      "p_judged_by_d60": 1.0,
-      "p_judged_by_d90": 1.0
-     }
-    },
-    {
-     "edge_roe": 0.1,
-     "mean_roe": 0.07025,
-     "median_equity_30d": 6.9606,
-     "family_108": {
-      "p_pass1_d30": 0.7107,
-      "p_pass1_by_d30": 0.7107,
-      "p_pass1_by_d60": 0.7107,
-      "p_pass1_by_d90": 0.7107,
-      "p_pass2_by_d60": 0.5078,
-      "p_pass2_by_d90": 0.5078,
-      "p_judged_by_d30": 1.0,
-      "p_judged_by_d60": 1.0,
-      "p_judged_by_d90": 1.0
-     },
-     "family_144": {
-      "p_pass1_d30": 0.697,
-      "p_pass1_by_d30": 0.697,
-      "p_pass1_by_d60": 0.697,
-      "p_pass1_by_d90": 0.697,
-      "p_pass2_by_d60": 0.495,
-      "p_pass2_by_d90": 0.495,
-      "p_judged_by_d30": 1.0,
-      "p_judged_by_d60": 1.0,
-      "p_judged_by_d90": 1.0
-     }
-    }
-   ],
-   "observation_only": false
-  },
-  "30m": {
-   "pool": {
-    "trades_in_pool": 1819,
-    "alive_days": 990.0,
-    "trades_per_30d": 55.1,
-    "coin_flip_mean_roe": -0.02447,
-    "coin_flip_win_rate": 0.6564,
-    "mean_margin_share": 0.2294,
-    "null_bust_30d": 0.0,
-    "null_median_equity_30d": 0.6294,
-    "rules_bt_windows": 33,
-    "rules_bt_bust_30d": 0.0,
-    "signals_per_day_median": 3.715,
-    "rate_per_coin_bar": 0.0129
-   },
-   "rows": [
-    {
-     "edge_roe": 0.0,
-     "mean_roe": -0.02447,
-     "median_equity_30d": 0.6399,
-     "family_108": {
-      "p_pass1_d30": 0.001,
-      "p_pass1_by_d30": 0.001,
-      "p_pass1_by_d60": 0.001,
-      "p_pass1_by_d90": 0.001,
-      "p_pass2_by_d60": 0.0,
-      "p_pass2_by_d90": 0.0,
-      "p_judged_by_d30": 1.0,
-      "p_judged_by_d60": 1.0,
-      "p_judged_by_d90": 1.0
-     },
-     "family_144": {
-      "p_pass1_d30": 0.001,
-      "p_pass1_by_d30": 0.001,
-      "p_pass1_by_d60": 0.001,
-      "p_pass1_by_d90": 0.001,
-      "p_pass2_by_d60": 0.0,
-      "p_pass2_by_d90": 0.0,
-      "p_judged_by_d30": 1.0,
-      "p_judged_by_d60": 1.0,
-      "p_judged_by_d90": 1.0
-     }
-    },
-    {
-     "edge_roe": 0.005,
-     "mean_roe": -0.01947,
-     "median_equity_30d": 0.6769,
-     "family_108": {
-      "p_pass1_d30": 0.001,
-      "p_pass1_by_d30": 0.001,
-      "p_pass1_by_d60": 0.001,
-      "p_pass1_by_d90": 0.001,
-      "p_pass2_by_d60": 0.0,
-      "p_pass2_by_d90": 0.0,
-      "p_judged_by_d30": 1.0,
-      "p_judged_by_d60": 1.0,
-      "p_judged_by_d90": 1.0
-     },
-     "family_144": {
-      "p_pass1_d30": 0.0003,
-      "p_pass1_by_d30": 0.0003,
-      "p_pass1_by_d60": 0.0003,
-      "p_pass1_by_d90": 0.0003,
-      "p_pass2_by_d60": 0.0,
-      "p_pass2_by_d90": 0.0,
-      "p_judged_by_d30": 1.0,
-      "p_judged_by_d60": 1.0,
-      "p_judged_by_d90": 1.0
-     }
-    },
-    {
-     "edge_roe": 0.01,
-     "mean_roe": -0.01447,
-     "median_equity_30d": 0.7161,
-     "family_108": {
-      "p_pass1_d30": 0.003,
-      "p_pass1_by_d30": 0.003,
-      "p_pass1_by_d60": 0.003,
-      "p_pass1_by_d90": 0.003,
-      "p_pass2_by_d60": 0.0,
-      "p_pass2_by_d90": 0.0,
-      "p_judged_by_d30": 1.0,
-      "p_judged_by_d60": 1.0,
-      "p_judged_by_d90": 1.0
-     },
-     "family_144": {
-      "p_pass1_d30": 0.0025,
-      "p_pass1_by_d30": 0.0025,
-      "p_pass1_by_d60": 0.0025,
-      "p_pass1_by_d90": 0.0025,
-      "p_pass2_by_d60": 0.0,
-      "p_pass2_by_d90": 0.0,
-      "p_judged_by_d30": 1.0,
-      "p_judged_by_d60": 1.0,
-      "p_judged_by_d90": 1.0
-     }
-    },
-    {
-     "edge_roe": 0.02,
-     "mean_roe": -0.00447,
-     "median_equity_30d": 0.8245,
-     "family_108": {
-      "p_pass1_d30": 0.0037,
-      "p_pass1_by_d30": 0.0037,
-      "p_pass1_by_d60": 0.0037,
-      "p_pass1_by_d90": 0.0037,
-      "p_pass2_by_d60": 0.0,
-      "p_pass2_by_d90": 0.0,
-      "p_judged_by_d30": 1.0,
-      "p_judged_by_d60": 1.0,
-      "p_judged_by_d90": 1.0
-     },
-     "family_144": {
-      "p_pass1_d30": 0.0043,
-      "p_pass1_by_d30": 0.0043,
-      "p_pass1_by_d60": 0.0043,
-      "p_pass1_by_d90": 0.0043,
-      "p_pass2_by_d60": 0.0,
-      "p_pass2_by_d90": 0.0,
-      "p_judged_by_d30": 1.0,
-      "p_judged_by_d60": 1.0,
-      "p_judged_by_d90": 1.0
-     }
-    },
-    {
-     "edge_roe": 0.05,
-     "mean_roe": 0.02553,
-     "median_equity_30d": 1.1827,
-     "family_108": {
       "p_pass1_d30": 0.0245,
       "p_pass1_by_d30": 0.0245,
       "p_pass1_by_d60": 0.0245,
       "p_pass1_by_d90": 0.0245,
-      "p_pass2_by_d60": 0.0005,
-      "p_pass2_by_d90": 0.0005,
-      "p_judged_by_d30": 1.0,
-      "p_judged_by_d60": 1.0,
-      "p_judged_by_d90": 1.0
-     },
-     "family_144": {
-      "p_pass1_d30": 0.0238,
-      "p_pass1_by_d30": 0.0238,
-      "p_pass1_by_d60": 0.0238,
-      "p_pass1_by_d90": 0.0238,
       "p_pass2_by_d60": 0.0,
       "p_pass2_by_d90": 0.0,
       "p_judged_by_d30": 1.0,
@@ -380,27 +421,27 @@
     },
     {
      "edge_roe": 0.1,
-     "mean_roe": 0.07553,
-     "median_equity_30d": 2.2402,
+     "mean_roe": 0.07545,
+     "median_equity_30d": 2.1991,
      "family_108": {
-      "p_pass1_d30": 0.2352,
-      "p_pass1_by_d30": 0.2352,
-      "p_pass1_by_d60": 0.2352,
-      "p_pass1_by_d90": 0.2352,
-      "p_pass2_by_d60": 0.0553,
-      "p_pass2_by_d90": 0.0553,
-      "p_judged_by_d30": 1.0,
+      "p_pass1_d30": 0.227,
+      "p_pass1_by_d30": 0.227,
+      "p_pass1_by_d60": 0.2273,
+      "p_pass1_by_d90": 0.2273,
+      "p_pass2_by_d60": 0.0467,
+      "p_pass2_by_d90": 0.0467,
+      "p_judged_by_d30": 0.9998,
       "p_judged_by_d60": 1.0,
       "p_judged_by_d90": 1.0
      },
      "family_144": {
-      "p_pass1_d30": 0.2285,
-      "p_pass1_by_d30": 0.2285,
-      "p_pass1_by_d60": 0.2285,
-      "p_pass1_by_d90": 0.2285,
-      "p_pass2_by_d60": 0.0517,
-      "p_pass2_by_d90": 0.0517,
-      "p_judged_by_d30": 1.0,
+      "p_pass1_d30": 0.2072,
+      "p_pass1_by_d30": 0.2072,
+      "p_pass1_by_d60": 0.2075,
+      "p_pass1_by_d90": 0.2075,
+      "p_pass2_by_d60": 0.0377,
+      "p_pass2_by_d90": 0.0377,
+      "p_judged_by_d30": 0.9998,
       "p_judged_by_d60": 1.0,
       "p_judged_by_d90": 1.0
      }
@@ -413,11 +454,11 @@
     "trades_in_pool": 598,
     "alive_days": 990.0,
     "trades_per_30d": 18.1,
-    "coin_flip_mean_roe": -0.01674,
+    "coin_flip_mean_roe": -0.01675,
     "coin_flip_win_rate": 0.6656,
-    "mean_margin_share": 0.2115,
+    "mean_margin_share": 0.2107,
     "null_bust_30d": 0.0,
-    "null_median_equity_30d": 0.9073,
+    "null_median_equity_30d": 0.9076,
     "rules_bt_windows": 33,
     "rules_bt_bust_30d": 0.0,
     "signals_per_day_median": 1.93,
@@ -426,8 +467,8 @@
    "rows": [
     {
      "edge_roe": 0.0,
-     "mean_roe": -0.01674,
-     "median_equity_30d": 0.906,
+     "mean_roe": -0.01675,
+     "median_equity_30d": 0.9063,
      "family_108": {
       "p_pass1_d30": 0.0,
       "p_pass1_by_d30": 0.0,
@@ -442,8 +483,8 @@
      "family_144": {
       "p_pass1_d30": 0.0,
       "p_pass1_by_d30": 0.0,
-      "p_pass1_by_d60": 0.0,
-      "p_pass1_by_d90": 0.0003,
+      "p_pass1_by_d60": 0.0003,
+      "p_pass1_by_d90": 0.0008,
       "p_pass2_by_d60": 0.0,
       "p_pass2_by_d90": 0.0,
       "p_judged_by_d30": 0.009,
@@ -453,13 +494,13 @@
     },
     {
      "edge_roe": 0.005,
-     "mean_roe": -0.01174,
-     "median_equity_30d": 0.9258,
+     "mean_roe": -0.01175,
+     "median_equity_30d": 0.9269,
      "family_108": {
       "p_pass1_d30": 0.0,
       "p_pass1_by_d30": 0.0,
-      "p_pass1_by_d60": 0.0005,
-      "p_pass1_by_d90": 0.0005,
+      "p_pass1_by_d60": 0.001,
+      "p_pass1_by_d90": 0.001,
       "p_pass2_by_d60": 0.0,
       "p_pass2_by_d90": 0.0,
       "p_judged_by_d30": 0.0063,
@@ -480,13 +521,13 @@
     },
     {
      "edge_roe": 0.01,
-     "mean_roe": -0.00674,
-     "median_equity_30d": 0.9375,
+     "mean_roe": -0.00675,
+     "median_equity_30d": 0.9392,
      "family_108": {
       "p_pass1_d30": 0.0,
       "p_pass1_by_d30": 0.0,
-      "p_pass1_by_d60": 0.002,
-      "p_pass1_by_d90": 0.002,
+      "p_pass1_by_d60": 0.0022,
+      "p_pass1_by_d90": 0.0022,
       "p_pass2_by_d60": 0.0,
       "p_pass2_by_d90": 0.0,
       "p_judged_by_d30": 0.0073,
@@ -496,8 +537,8 @@
      "family_144": {
       "p_pass1_d30": 0.0,
       "p_pass1_by_d30": 0.0,
-      "p_pass1_by_d60": 0.0015,
-      "p_pass1_by_d90": 0.0015,
+      "p_pass1_by_d60": 0.0013,
+      "p_pass1_by_d90": 0.0013,
       "p_pass2_by_d60": 0.0,
       "p_pass2_by_d90": 0.0,
       "p_judged_by_d30": 0.0073,
@@ -507,13 +548,13 @@
     },
     {
      "edge_roe": 0.02,
-     "mean_roe": 0.00326,
-     "median_equity_30d": 0.9685,
+     "mean_roe": 0.00325,
+     "median_equity_30d": 0.9691,
      "family_108": {
       "p_pass1_d30": 0.0,
       "p_pass1_by_d30": 0.0,
-      "p_pass1_by_d60": 0.0027,
-      "p_pass1_by_d90": 0.003,
+      "p_pass1_by_d60": 0.0025,
+      "p_pass1_by_d90": 0.0025,
       "p_pass2_by_d60": 0.0,
       "p_pass2_by_d90": 0.0,
       "p_judged_by_d30": 0.0085,
@@ -521,10 +562,10 @@
       "p_judged_by_d90": 1.0
      },
      "family_144": {
-      "p_pass1_d30": 0.0003,
-      "p_pass1_by_d30": 0.0003,
-      "p_pass1_by_d60": 0.0032,
-      "p_pass1_by_d90": 0.0035,
+      "p_pass1_d30": 0.0,
+      "p_pass1_by_d30": 0.0,
+      "p_pass1_by_d60": 0.0027,
+      "p_pass1_by_d90": 0.0027,
       "p_pass2_by_d60": 0.0,
       "p_pass2_by_d90": 0.0,
       "p_judged_by_d30": 0.0085,
@@ -534,13 +575,13 @@
     },
     {
      "edge_roe": 0.05,
-     "mean_roe": 0.03326,
-     "median_equity_30d": 1.0918,
+     "mean_roe": 0.03325,
+     "median_equity_30d": 1.0915,
      "family_108": {
       "p_pass1_d30": 0.0,
       "p_pass1_by_d30": 0.0,
-      "p_pass1_by_d60": 0.012,
-      "p_pass1_by_d90": 0.0125,
+      "p_pass1_by_d60": 0.0105,
+      "p_pass1_by_d90": 0.0112,
       "p_pass2_by_d60": 0.0,
       "p_pass2_by_d90": 0.0,
       "p_judged_by_d30": 0.007,
@@ -550,8 +591,8 @@
      "family_144": {
       "p_pass1_d30": 0.0,
       "p_pass1_by_d30": 0.0,
-      "p_pass1_by_d60": 0.0112,
-      "p_pass1_by_d90": 0.0118,
+      "p_pass1_by_d60": 0.0115,
+      "p_pass1_by_d90": 0.012,
       "p_pass2_by_d60": 0.0,
       "p_pass2_by_d90": 0.0,
       "p_judged_by_d30": 0.007,
@@ -561,13 +602,13 @@
     },
     {
      "edge_roe": 0.1,
-     "mean_roe": 0.08326,
-     "median_equity_30d": 1.3133,
+     "mean_roe": 0.08325,
+     "median_equity_30d": 1.313,
      "family_108": {
-      "p_pass1_d30": 0.0013,
-      "p_pass1_by_d30": 0.0013,
-      "p_pass1_by_d60": 0.0855,
-      "p_pass1_by_d90": 0.095,
+      "p_pass1_d30": 0.001,
+      "p_pass1_by_d30": 0.001,
+      "p_pass1_by_d60": 0.0833,
+      "p_pass1_by_d90": 0.0935,
       "p_pass2_by_d60": 0.0,
       "p_pass2_by_d90": 0.0003,
       "p_judged_by_d30": 0.005,
@@ -575,12 +616,12 @@
       "p_judged_by_d90": 1.0
      },
      "family_144": {
-      "p_pass1_d30": 0.0013,
-      "p_pass1_by_d30": 0.0013,
-      "p_pass1_by_d60": 0.0843,
-      "p_pass1_by_d90": 0.0927,
+      "p_pass1_d30": 0.001,
+      "p_pass1_by_d30": 0.001,
+      "p_pass1_by_d60": 0.0845,
+      "p_pass1_by_d90": 0.0955,
       "p_pass2_by_d60": 0.0,
-      "p_pass2_by_d90": 0.0,
+      "p_pass2_by_d90": 0.0003,
       "p_judged_by_d30": 0.005,
       "p_judged_by_d60": 0.8745,
       "p_judged_by_d90": 1.0
@@ -606,9 +647,9 @@
   "진짜 엣지가 거래당 +0.5%(증거금 대비 순 ROE)라면 30일에 1차 합격할 확률: 15분 0%, 30분 0%, 1시간 0%(30일엔 대부분 거래 30건 미만, 60일까지 0%)",
   "진짜 엣지가 거래당 +1%(증거금 대비 순 ROE)라면 30일에 1차 합격할 확률: 15분 0%, 30분 0%, 1시간 0%(30일엔 대부분 거래 30건 미만, 60일까지 0%)",
   "진짜 엣지가 거래당 +2%(증거금 대비 순 ROE)라면 30일에 1차 합격할 확률: 15분 1%, 30분 0%, 1시간 0%(30일엔 대부분 거래 30건 미만, 60일까지 0%)",
-  "진짜 엣지가 거래당 +5%(증거금 대비 순 ROE)라면 30일에 1차 합격할 확률: 15분 10%, 30분 2%, 1시간 0%(30일엔 대부분 거래 30건 미만, 60일까지 1%)",
-  "진짜 엣지가 거래당 +10%(증거금 대비 순 ROE)라면 30일에 1차 합격할 확률: 15분 71%, 30분 24%, 1시간 0%(30일엔 대부분 거래 30건 미만, 60일까지 9%)",
-  "동전 봇의 거래당 평균 순 ROE: 15분 -3.0%, 30분 -2.4%, 1시간 -1.7%. 엣지가 이만큼을 넘어야 계좌가 시작 금액 위로 갈 수 있음(1차 조건)",
+  "진짜 엣지가 거래당 +5%(증거금 대비 순 ROE)라면 30일에 1차 합격할 확률: 15분 12%, 30분 3%, 1시간 0%(30일엔 대부분 거래 30건 미만, 60일까지 1%)",
+  "진짜 엣지가 거래당 +10%(증거금 대비 순 ROE)라면 30일에 1차 합격할 확률: 15분 79%, 30분 23%, 1시간 0%(30일엔 대부분 거래 30건 미만, 60일까지 8%)",
+  "동전 봇의 거래당 평균 순 ROE: 15분 -2.9%, 30분 -2.5%, 1시간 -1.7%. 엣지가 이만큼을 넘어야 계좌가 시작 금액 위로 갈 수 있음(1차 조건)",
   "판정 계좌 108개에서 혼자 FDR을 통과하려면 p ≤ 0.00093: 동전 봇 2,000개를 모두 이겨야 함(p = 1/2,001)"
  ],
  "assumptions": [
@@ -620,12 +661,12 @@
  ],
  "runtime_s": {
   "pool": {
-   "15m": 1.2,
-   "30m": 1.7,
+   "15m": 1.3,
+   "30m": 1.6,
    "1h": 0.3,
    "4h": 0.1
   },
-  "monte_carlo": 2.9,
-  "total": 7.1
+  "monte_carlo": 3.3,
+  "total": 7.8
  }
 }

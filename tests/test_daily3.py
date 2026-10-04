@@ -102,14 +102,16 @@ def test_notify_report_routes_by_severity():
            "shadows": {"limit_signals": 40, "limit_filled": 25, "skipped": 7},
            "data_quality": {"BTCUSDT": {"missing": 3}, "ETHUSDT": {"missing": 0}, "max_abs_funding_pct": 0.01}}
     msgs = notify_report(rep, out, trades_day=120)
-    assert [m[0] for m in msgs] == ["CRITICAL", "WARN", "INFO"]
-    assert "계좌 2개" in msgs[0][1] and "BTCUSDT 3" in msgs[1][1]
-    assert msgs[2][1] == ("[2026-10-01] 매일 점검: 재계산 일치 193/195 · 거래 120건 · "
-                          "지정가였다면 체결 25/40 · 포지션 중이라 놓친 신호 7 · 빠진 1분봉 3")
-    assert out.messages == msgs
+    # one message a day (owners' layout 2026-10-04): loud only for a real mismatch or a missing snapshot
+    assert [m[0] for m in msgs] == ["CRITICAL"] and out.messages == msgs
+    assert msgs[0][1] == ("재계산 불일치 · 10/01\n\n계좌 2개의 거래가 paper와 다름\n운영 감사관 확인 필요\n"
+                          "자세히: daily3.db mismatches\n\n매일 점검\n재계산 일치 193/195\n거래 120건\n"
+                          "지정가였다면 체결 25/40\n포지션 중이라 놓친 신호 7\n빠진 1분봉 3 (BTC 3)")
+    ok = notify_report({**rep, "parity": {"accounts": 195, "mismatched_accounts": 0}}, ListNotifier(), trades_day=120)
+    assert [m[0] for m in ok] == ["INFO"] and ok[0][1].startswith("🔎 매일 점검 · 10/01\n\n재계산 일치 195/195\n")
 
     clean = notify_report({"day": "d", "parity": "no 00:00 snapshot", "data_quality": {}}, ListNotifier())
-    assert [m[0] for m in clean] == ["WARN", "INFO"]
+    assert [m[0] for m in clean] == ["WARN"] and clean[0][1].startswith("재계산 못 함 · d\n\n그날 09:00(한국) 상태 저장이 없음")
 
 
 def test_stop_variants_cover_every_losing_trade_and_match_actual_at_2atr(tmp_path):
@@ -288,7 +290,7 @@ def test_crash_gap_label(tmp_path):
     from paperbot.notify import ListNotifier
     msgs = notify_report({"day": "d", "parity": {"accounts": 199, "mismatched_accounts": 0, "crash_gaps": 1},
                           "data_quality": {}}, ListNotifier())
-    assert [m[0] for m in msgs] == ["WARN", "INFO"] and CRASH_GAP_KO in msgs[0][1]
+    assert [m[0] for m in msgs] == ["INFO"] and CRASH_GAP_KO in msgs[0][1]                 # a line of the silent summary
     w.close()
 
 

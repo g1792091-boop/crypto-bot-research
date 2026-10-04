@@ -49,7 +49,7 @@ def trade(world, aid, roe, lev, reason, best, t, side=1, symbol="BTCUSDT", margi
 
 
 def seed(world, t=QUIET - DAY, v45=True):
-    """N17 (S): 15m at 50x (40% margin): wins +10% +10% +20% (LOCK), losses -40% (SL, best +6%) and -100% (LIQ);
+    """N17 (S): 15m at 50x (50% margin, the rule since 2026-10-04): wins +10% +10% +20% (LOCK), losses -40% (SL, best +6%) and -100% (LIQ);
     1h at 20x (20%): win +30% (LOCK), loss -20% (SL, best +13%: past the first lock's trigger).
     Winners' worst prices: 15m 0.5%, 1%, 1.5% against with the stop 2% away, 1h 0.2% with the stop 1% away.
     V45 1h at 30x (30%): 6 wins +10%, 4 losses -20% (10 trades: not small; no initial stop recorded).
@@ -72,7 +72,8 @@ def seed(world, t=QUIET - DAY, v45=True):
 
 # ---------------------------------------------------------------- the numbers
 def test_equity_terms_by_leverage_tier():
-    assert RR.pnl_equity(0.10, 50) == pytest.approx(0.04) and RR.pnl_equity(0.10, 40) == pytest.approx(0.04)
+    # margin = leverage % (owners 2026-10-04: 50x 50%, 40x 40%, 30x 30%, 20x 20%); 10x is the lev10 shadow's 20%
+    assert RR.pnl_equity(0.10, 50) == pytest.approx(0.05) and RR.pnl_equity(0.10, 40) == pytest.approx(0.04)
     assert RR.pnl_equity(0.10, 30) == pytest.approx(0.03) and RR.pnl_equity(0.10, 20) == pytest.approx(0.02)
     assert RR.pnl_equity(0.10, 10) == pytest.approx(0.02) and RR.pnl_equity(0.10, 25) is None
     from paperbot.obsshadows import MARGIN_FRAC
@@ -89,12 +90,14 @@ def test_payoff_breakeven_gap_exit_mix_giveback_and_buckets(world):
     assert r["avg_win"] == pytest.approx(0.175) and r["avg_loss"] == pytest.approx(-0.5333, abs=1e-4)
     assert r["payoff"] == pytest.approx(0.175 / 0.53333, abs=1e-3)
     assert r["breakeven_win_rate"] == pytest.approx(0.53333 / 0.70833, abs=1e-4)
-    # equity: wins .04 .04 .08 .06 -> .055; losses -.16 -.40 -.04 -> -.2
+    # equity (50x at 50% margin): wins .05 .05 .10 .06 -> .065; losses -.20 -.50 -.04 -> -.74 / 3
     e = s["equity"]
-    assert e["avg_win"] == pytest.approx(0.055) and e["avg_loss"] == pytest.approx(-0.2)
-    assert e["payoff"] == pytest.approx(0.275) and e["breakeven_win_rate"] == pytest.approx(0.2 / 0.255, abs=1e-4)
-    assert e["gap_pp"] == pytest.approx((4 / 7 - 0.2 / 0.255) * 100, abs=0.06)
-    assert e["expectancy"] == pytest.approx((0.22 - 0.60) / 7, abs=1e-4)
+    L = 0.74 / 3
+    assert e["avg_win"] == pytest.approx(0.065) and e["avg_loss"] == pytest.approx(-L, abs=1e-4)
+    assert e["payoff"] == pytest.approx(0.065 / L, abs=1e-3)
+    assert e["breakeven_win_rate"] == pytest.approx(L / (0.065 + L), abs=1e-4)
+    assert e["gap_pp"] == pytest.approx((4 / 7 - L / (0.065 + L)) * 100, abs=0.06)
+    assert e["expectancy"] == pytest.approx((0.26 - 0.74) / 7, abs=1e-4)
     assert (e["gap_pp"] < 0) == (e["expectancy"] < 0)         # same trades: gap and expectancy agree in sign
     assert s["exits"] == {"LOCK": 4, "SL": 2, "LIQ": 1, "other": 0}
     assert s["exit_share"]["LOCK"] == pytest.approx(4 / 7, abs=1e-3)
@@ -190,7 +193,7 @@ def test_meeting_packet_strategy_brief_and_ranking_brief(world):
     assert pk["coin_flips"]["since_start"]["trades"] == 1 and pk["coin_flips"]["since_start"]["exits"]["SL"] == 1
     assert [x["strategy"] for x in pk["strategies"]] == [V45, S]                     # most trades first
     n17 = pk["strategies"][1]
-    assert n17["since_start"]["payoff"] == pytest.approx(0.275) and n17["since_start"]["losers_reached_first_lock"] == 1
+    assert n17["since_start"]["payoff"] == pytest.approx(0.065 / (0.74 / 3), abs=1e-3) and n17["since_start"]["losers_reached_first_lock"] == 1
     assert n17["by_tf"]["15m"]["liq"] == 1 and n17["by_tf"]["15m"]["small"] is True
     assert n17["by_tf_7d"] == {} and "exit_share" not in n17["since_start"]          # small 7-day cells left out
     assert pk["strategies"][0]["by_tf_7d"]["1h"] == {"trades": 10, "gap_pp": pytest.approx(-6.7)}
@@ -199,7 +202,7 @@ def test_meeting_packet_strategy_brief_and_ranking_brief(world):
     assert len(json.dumps(pk, ensure_ascii=False)) < 16_000      # + tiers and docs/observation-shadows-3.md (2026-10-04)
     b = RR.strategy_brief(world.paper(), S, now)
     assert b["since_start"]["trades"] == 7 and b["7d"]["trades"] == 7 and set(b["by_tf"]) == {"15m", "1h"}
-    assert b["since_start"]["breakeven_win_rate"] == pytest.approx(0.7843, abs=1e-4)
+    assert b["since_start"]["breakeven_win_rate"] == pytest.approx(0.7914, abs=1e-4)      # (.74/3) / (.065 + .74/3)
     assert RR.strategy_brief(world.paper(), S, now + 30 * DAY)["7d"] == {"trades": 0, "small": True}
     m = RR.brief_many(world.paper(), [S, V45, "NOPE"], now)
     assert m["strategies"][V45]["gap_pp"] == pytest.approx(-6.7) and m["strategies"]["NOPE"]["trades"] == 0

@@ -8,7 +8,8 @@ the payoff ratio is low by design and the win rate has to be high to break even.
 
 - ``stats``          one cell (a list of closed trades): trades, wins / losses, win rate, the average win and loss in
                      ROE (on margin) and in account-equity terms (ROE x the tier's margin share, as
-                     docs/observation-shadows.md section 4: 50x / 40x 40%, 30x 30%, 20x / 10x 20%), the payoff ratio
+                     docs/observation-shadows.md section 4, with the restarted run's margin = leverage %: 50x 50%,
+                     40x 40%, 30x 30%, 20x / 10x 20%), the payoff ratio
                      (average win / |average loss|), the breakeven win rate |L| / (W + |L|), the actual win rate's gap
                      to it (percentage points), the expectancy per trade, the exit-reason mix (LOCK / SL / LIQ / other),
                      the winners' give-back (best ROE during the trade, from ``mfe_price``, vs the realised ROE), the
@@ -24,7 +25,12 @@ the payoff ratio is low by design and the win rate has to be high to break even.
                      same window: each variant's mean P&L on equity against the base shadow of the same trades, and
                      how often it did better / worse; ``leverage_turns``: the strategies whose base loses while
                      lev10 .. lev50 makes money on equity (and the reverse, ``turns_negative``, when there is any);
-                     ``stop_turns``: the same for the stop widths. Descriptive only ("설명용, 판정 아님").
+                     ``stop_turns``: the same for the stop widths; and from docs/observation-shadows-4.md the fixed
+                     take-profits tp1R, tp1.5R, tp2R, tp3R (2 ATR stop, no ladder) and ladder_cap2R (the ladder plus
+                     an exit at 2R), with ``tp_turns`` (base loses while the take-profit makes money, and the reverse).
+                     The 5-year comparison (research/exitstyle) found no take-profit that beat the ladder. Also
+                     lev20m20 .. lev50m50 (fixed leverage, margin = leverage %) with ``margin_turns``.
+                     Descriptive only ("설명용, 판정 아님").
 - ``tier_table``     the live closed strategy trades grouped by the leverage actually used (50 / 40 / 30 / 20x):
                      trades, win rate, mean ROE, mean P&L on equity, payoff, breakeven win rate. Confounded: the
                      tier is chosen from the stop distance (2 ATR / price), so a tier is also a kind of spot; the
@@ -46,8 +52,23 @@ DAY_MS = 86_400_000
 TFS = V3_TRADE_TFS                   # the run's timeframes (5m removed 2026-10-04, docs/paper-v3-rules-change-1.md)
 SMALL_N = 10                     # cells under this many trades are marked small (chance can explain them)
 EXITS = ("LOCK", "SL", "LIQ")    # the rest count as 'other' (TP, HALT, END, ...)
-# share of equity put up as margin at each leverage (paper v3 tiers; = obsshadows.MARGIN_FRAC, 10x is the lev10 shadow)
-MARGIN_FRAC = {50: 0.40, 40: 0.40, 30: 0.30, 20: 0.20, 10: 0.20}
+# share of equity put up as margin at each leverage: the paper v3 rule's tiers (config.v3_settings, the first tier listing
+# a leverage wins) over the 2026-10-04 table (= obsshadows.MARGIN_FRAC: margin = leverage %; 10x is the lev10 shadow)
+MARGIN_FRAC_TABLE = {50: 0.50, 40: 0.40, 30: 0.30, 20: 0.20, 10: 0.20}
+
+
+def _rule_margin_fracs() -> dict:
+    from ..config import v3_settings
+    out, seen = dict(MARGIN_FRAC_TABLE), set()
+    for t in v3_settings().tiers:
+        for lev in t.leverages:
+            if lev not in seen:
+                seen.add(lev)
+                out[int(lev)] = t.margin_frac
+    return out
+
+
+MARGIN_FRAC = _rule_margin_fracs()
 UP_5 = 0.05                      # a loser that was up this much (net ROE) at its best ("수익 났다가 손절", cards.TAGS)
 # ROE buckets (fractions): wins lo <= roe < hi, losses lo < roe <= hi
 WIN_BUCKETS = (("0~5%", 0.0, 0.05), ("5~10%", 0.05, 0.10), ("10~15%", 0.10, 0.15), ("15~20%", 0.15, 0.20),
@@ -59,12 +80,26 @@ SHADOW_VARIANTS = ("lock15", "lock20", "lock30", "timestop", "lev10", "lev20")  
 # docs/observation-shadows-3.md (paperbot/obsshadows.py VARIANTS3): fixed 30 / 40 / 50x at the tier's margin share,
 # and the initial stop at 1.5 / 2.5 / 3 ATR at the real trade's leverage
 SHADOW_VARIANTS3 = ("lev30", "lev40", "lev50", "stopw1.5", "stopw2.5", "stopw3")
-ALL_SHADOWS = SHADOW_VARIANTS + SHADOW_VARIANTS3
+# docs/observation-shadows-4.md (paperbot/obsshadows.py VARIANTS4): fixed take-profit at k x R (R = the initial
+# 2 ATR stop distance) without the ladder, and the ladder capped at 2R; the real trade's leverage
+SHADOW_VARIANTS4 = ("tp1R", "tp1.5R", "tp2R", "tp3R", "ladder_cap2R")
+# and fixed 20 / 30 / 40 / 50x with margin = leverage % (the comparison against the entry-strength leverage rule)
+SHADOW_MARGIN4 = ("lev20m20", "lev30m30", "lev40m40", "lev50m50")
+ALL_SHADOWS = SHADOW_VARIANTS + SHADOW_VARIANTS3 + SHADOW_VARIANTS4 + SHADOW_MARGIN4
 SHADOW_KO = {"lock15": "첫 잠금 15%", "lock20": "첫 잠금 20%", "lock30": "첫 잠금 30%",
              "timestop": "잠금 없이 N봉 지나면 시장가 청산", "lev10": "10배 고정·증거금 20%", "lev20": "20배 고정·증거금 20%"}
 SHADOW_KO3 = {"lev30": "30배 고정·증거금 30%", "lev40": "40배 고정·증거금 40%", "lev50": "50배 고정·증거금 40%",
               "stopw1.5": "처음 손절 1.5 ATR(레버리지는 실제 거래와 같게)", "stopw2.5": "처음 손절 2.5 ATR(〃)",
               "stopw3": "처음 손절 3 ATR(〃)"}
+SHADOW_KO4 = {"tp1R": "고정 익절 1R(R = 처음 손절 거리 2 ATR), 계단 잠금 없음", "tp1.5R": "고정 익절 1.5R(〃)",
+              "tp2R": "고정 익절 2R(〃)", "tp3R": "고정 익절 3R(〃)", "ladder_cap2R": "계단 잠금 그대로 + 2R에서 익절"}
+SHADOW_KO_M4 = {"lev20m20": "20배 고정·증거금 20%", "lev30m30": "30배 고정·증거금 30%", "lev40m40": "40배 고정·증거금 40%",
+                "lev50m50": "50배 고정·증거금 50%"}
+TP_SHADOWS = SHADOW_VARIANTS4
+# research/exitstyle/out/SUMMARY_KO.md (pre-registered research/exitstyle/PREREG_EXITSTYLE.md), 15m/30m/1h/4h
+TP_FIVE_YEAR = ("5년 비교(research/exitstyle): 어느 고정 익절도 계단 잠금을 이기지 못함(미리 정한 세 조건을 모두 만족한 방식 "
+                "없음). 거래당 자금 대비 평균: 계단 잠금 −1.415%, 1R −1.422%, 1.5R −1.418%, 2R −1.389%, 3R −1.378%, "
+                "잠금+2R −1.403%; 보정 뒤 유의하게 나은 칸은 128칸 중 많아야 9칸. 그래서 계단 잠금 유지")
 SHADOW_LABEL = "설명용, 판정 아님"
 LEVERAGE_SHADOWS = ("lev10", "lev20", "lev30", "lev40", "lev50")
 STOP_SHADOWS = ("stopw1.5", "stopw2.5", "stopw3")
@@ -329,6 +364,62 @@ def shadow_brief3(cells: dict) -> dict:
     return out
 
 
+def tp_turns(cells_by_strategy: dict) -> dict:
+    """Per take-profit shadow (tp1R, tp1.5R, tp2R, tp3R, ladder_cap2R; docs/observation-shadows-4.md):
+    ``turns_positive`` = strategies whose base (the ladder) lost on average while that take-profit made money on the
+    same trades, ``turns_negative`` = the reverse (base > 0, take-profit <= 0), ``still_negative_n`` = how many
+    stayed <= 0 (a count, not the names, to keep the packet small). A variant with nothing in any of the three is
+    left out (no strategy compared yet, or none turned and none stayed negative). Code's count; descriptive only."""
+    out = {}
+    for v, c in _turns(cells_by_strategy, TP_SHADOWS, True).items():
+        if c["turns_positive"] or c["turns_negative"] or c["still_negative"]:
+            out[v] = {"turns_positive": c["turns_positive"], "turns_negative": c["turns_negative"],
+                      "still_negative_n": len(c["still_negative"])}
+    return out
+
+
+def margin_turns(cells_by_strategy: dict) -> dict:
+    """``tp_turns`` for the margin = leverage % shadows (lev20m20 .. lev50m50, docs/observation-shadows-4.md)."""
+    out = {}
+    for v, c in _turns(cells_by_strategy, SHADOW_MARGIN4, True).items():
+        if c["turns_positive"] or c["turns_negative"] or c["still_negative"]:
+            out[v] = {"turns_positive": c["turns_positive"], "turns_negative": c["turns_negative"],
+                      "still_negative_n": len(c["still_negative"])}
+    return out
+
+
+def shadow_brief_m4(cells: dict) -> dict:
+    """A strategy's margin = leverage % shadows as short rows in ``SHADOW3_COLUMNS`` order (as shadow_brief3)."""
+    out = {}
+    for v in SHADOW_MARGIN4:
+        c = cells.get(v) or {}
+        if not c.get("trades") and not c.get("not_entered"):
+            continue
+        out[v] = [c.get("trades", 0), _r(c.get("mean_eq")), _r(c.get("base_mean_eq")), _r(c.get("vs_base_eq")),
+                  _r(c.get("better_share"), 2), _r(c.get("worse_share"), 2), c.get("liq", 0), c.get("base_liq", 0),
+                  c.get("not_entered", 0)]
+    return out
+
+
+def shadow_brief4(cells: dict) -> dict:
+    """A strategy's docs/observation-shadows-4.md shadows in a meeting packet, as short rows (columns in
+    ``SHADOW4_COLUMNS``); variants without a compared trade are left out (not entered / open: all_strategies)."""
+    out = {}
+    for v in SHADOW_VARIANTS4:
+        c = cells.get(v) or {}
+        if not c.get("trades"):
+            continue
+        out[v] = [c.get("trades", 0), _r(c.get("mean_eq")), _r(c.get("base_mean_eq")), _r(c.get("vs_base_eq")),
+                  _r(c.get("better_share"), 2), _r(c.get("worse_share"), 2), c.get("tp", 0), c.get("liq", 0),
+                  c.get("base_liq", 0)]
+    return out
+
+
+SHADOW4_COLUMNS = ["trades(비교한 거래, 10건 미만은 작음)", "mean_eq(그림자 자금 대비 평균)", "base_mean_eq(같은 거래 base)",
+                   "vs_base_eq(차이)", "better_share(base보다 나음)", "worse_share(base보다 나쁨)", "tp(익절로 끝남)",
+                   "liq(그림자 강제청산)", "base_liq"]
+
+
 SHADOW3_COLUMNS = ["trades(비교한 거래, 10건 미만은 작음)", "mean_eq(그림자 자금 대비 평균)", "base_mean_eq(같은 거래 base)", "vs_base_eq(차이)",
                    "better_share(base보다 나음)", "worse_share(base보다 나쁨)", "liq(그림자 강제청산)", "base_liq",
                    "not_entered(진입 안 함)"]
@@ -387,9 +478,11 @@ def table(rows: list[tuple], first_trigger: float = 0.12, min_n: int = SMALL_N) 
     return out
 
 
-TIER_NOTE = ("레버리지 단계별 실거래(설명용, 판정 아님). 주의: 단계는 손절 거리로 정해짐 — 모든 신호가 40%×50배를 요청하고 "
-             "손절 손실 ≤ 자금 15%·청산가 여유에 막힐 때만 40 → 30 → 20배로 내려감(docs/paper-v3-rules.md). 그래서 20배 거래는 "
-             "손절이 먼(변동성 큰) 자리, 50배 거래는 손절이 가까운(조용한) 자리이고 시간봉도 섞여 있음(긴 봉일수록 낮은 단계). "
+TIER_NOTE = ("레버리지 단계별 실거래(설명용, 판정 아님). 주의: 단계는 진입 품질과 손절 거리로 정해짐 — 진입 품질 'best'(강도 "
+             "점수 ≥ 4) 신호는 50%×50배, 나머지 신호는 30%×30배부터 시도하고, 손절 손실 ≤ 자금 15%·청산가 여유에 막힐 때만 "
+             "40 → 30 → 20배로 내려감(나머지 신호는 50·40배 없음, docs/paper-v3-rules-change-1.md). 그래서 50·40배 거래는 "
+             "품질 점수가 높고 손절이 가까운(조용한) 자리, 20배 거래는 손절이 먼(변동성 큰) 자리이고 시간봉도 섞여 있음(긴 봉일수록 "
+             "낮은 단계). "
              "단계끼리의 차이는 레버리지 때문인지 자리 때문인지 가를 수 없는 교란된 비교. 깨끗한 비교는 같은 거래를 레버리지만 "
              "바꿔 다시 돌린 그림자(lev10·lev20·lev30·lev40·lev50, docs/observation-shadows-3.md)")
 
@@ -500,7 +593,7 @@ def _shadow_cells(rows: list[tuple]) -> dict:
     out = {"base": {"trades": len(base), "mean_eq": _r(_mean(v[0] for v in base.values()), 5),
                     "actual_mean_eq": _r(_mean(v[2] for v in base.values()), 5)}}
     for v in ALL_SHADOWS:
-        pairs, not_entered, open_, beyond = [], 0, 0, 0
+        pairs, not_entered, open_, beyond, tps = [], 0, 0, 0, 0
         for kind, key, roe, reason, resolved, d in rows:
             if kind != v:
                 continue
@@ -511,7 +604,9 @@ def _shadow_cells(rows: list[tuple]) -> dict:
             elif key in base and _f(d.get("pnl_equity")) is not None:
                 pairs.append((_f(d.get("pnl_equity")), base[key][0], reason, base[key][1]))
                 beyond += 1 if d.get("stop_beyond_liq") else 0
-        extra = {k: x for k, x in (("not_entered", not_entered), ("open", open_), ("stop_beyond_liq", beyond)) if x}
+                tps += 1 if reason == "TP" else 0
+        extra = {k: x for k, x in (("not_entered", not_entered), ("open", open_), ("stop_beyond_liq", beyond),
+                                   ("tp", tps)) if x}
         out[v] = _variant_cell(pairs, extra)
     return out
 
@@ -584,6 +679,14 @@ def _brief(s: dict) -> dict:
     return out
 
 
+def _drop_empty4(cells: Optional[dict]) -> Optional[dict]:
+    """The packet's all-strategies cells without the docs/observation-shadows-4.md variants that have nothing yet
+    ({"trades": 0}); the earlier variants keep their empty cells as before."""
+    if not isinstance(cells, dict):
+        return cells
+    return {k: c for k, c in cells.items() if not (k in SHADOW_VARIANTS4 + SHADOW_MARGIN4 and c == {"trades": 0})}
+
+
 def rr_packet(paper_ro: Optional[sqlite3.Connection], daily_ro: Optional[sqlite3.Connection], now_ms: int,
               days: int = 7, round_trip: Optional[float] = None, names_ko: Optional[dict] = None) -> dict:
     """The Thursday 손익비·청산 회의 packet: all strategies and the coin flips in full (both windows), each strategy's
@@ -616,7 +719,8 @@ def rr_packet(paper_ro: Optional[sqlite3.Connection], daily_ro: Optional[sqlite3
     strategies.sort(key=lambda r: -(r["since_start"].get("trades") or 0))
     sh = {w: shadow_summary(daily_ro, paper_ro, a, b) for w, (a, b) in win.items()}
     shadows = {"label": SHADOW_LABEL, "variants_ko": SHADOW_KO,
-               "all_strategies": {w: (v.get("all") if "error" not in v else {"error": v["error"]}) for w, v in sh.items()},
+               "all_strategies": {w: (_drop_empty4(v.get("all")) if "error" not in v else {"error": v["error"]})
+                                  for w, v in sh.items()},
                "by_strategy_since_start": {k: shadow_brief(v) for k, v in
                                            (sh["since_start"].get("strategies") or {}).items()},
                "note": ("밤 점검이 그날 끝난 거래를 규칙 하나만 바꿔 혼자 다시 돌린 기록(docs/observation-shadows.md). "
@@ -637,6 +741,24 @@ def rr_packet(paper_ro: Optional[sqlite3.Connection], daily_ro: Optional[sqlite3
                  "15% 상한·청산가 여유 없이, 청산은 적용) 바꾼 기록. 전체 숫자는 all_strategies, lev30~50의 플러스 전환은 "
                  "lower_leverage, stop_turns = base(2 ATR) 마이너스→그 손절폭 플러스(turns_positive)와 반대(turns_negative). "
                  "30일 체크포인트(2026-11-01) 전 결론 없음")}
+    # docs/observation-shadows-4.md: fixed take-profits (no ladder) and the ladder capped at 2R
+    shadows["tp_variants"] = {
+        "doc": "docs/observation-shadows-4.md", "variants_ko": SHADOW_KO4, "columns": SHADOW4_COLUMNS,
+        "by_strategy_since_start": {k: b for k, b in ((k, shadow_brief4(v)) for k, v in
+                                                      (sh["since_start"].get("strategies") or {}).items()) if b},
+        "tp_turns": {w: tp_turns(v.get("strategies") or {}) for w, v in sh.items() if "error" not in v},
+        "five_year": TP_FIVE_YEAR,
+        "note": ("같은 거래를 계단 잠금 대신 고정 익절(R = 처음 손절 거리 2 ATR, 손절 2 ATR 그대로, 실제와 같은 레버리지)로, "
+                 "또는 잠금 + 2R 상한으로 나간 기록. 익절도 테이커 수수료·슬리피지, 같은 봉에서 손절과 둘 다 닿으면 손절. "
+                 "tp_turns = base(계단 잠금) 마이너스→익절 플러스(turns_positive)와 반대(turns_negative), 빈 칸은 생략. "
+                 "30일 체크포인트 전 결론 없음")}
+    # docs/observation-shadows-4.md: fixed leverage with margin = leverage % (vs the entry-strength leverage rule)
+    shadows["margin_variants"] = {
+        "doc": "docs/observation-shadows-4.md", "variants_ko": SHADOW_KO_M4, "columns": "new_variants.columns와 같음",
+        "by_strategy_since_start": {k: b for k, b in ((k, shadow_brief_m4(v)) for k, v in
+                                                      (sh["since_start"].get("strategies") or {}).items()) if b},
+        "margin_turns": {w: margin_turns(v.get("strategies") or {}) for w, v in sh.items() if "error" not in v},
+        "note": "레버리지 고정·증거금 = 레버리지 %·크기 조건 그대로(안 되면 not_entered). 계좌별 자금 곡선은 대시보드"}
     if "error" in sh["since_start"]:
         shadows["error"] = sh["since_start"]["error"]
     return {"window": {w: {"from": a, "to": b} for w, (a, b) in win.items()}, "rules": {**lad, "note": RULES_NOTE},
