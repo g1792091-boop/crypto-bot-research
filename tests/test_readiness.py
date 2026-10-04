@@ -85,7 +85,7 @@ def test_each_account_condition_with_its_numbers(world, tmp_path):
     v = acc[f"{V45}@15m"]["conditions"]
     assert v["q1_fdr"]["status"] == NO and v["second_check"]["status"] == NO and v["trades200"]["status"] == NO
     assert v["regimes2"]["status"] == NO and v["regimes2"]["plus"] == []
-    assert v["neighbour_tf"]["status"] == UNK                                  # no V45 5m / 30m account here
+    assert v["neighbour_tf"]["status"] == UNK                                  # no V45 30m account here (15m's only neighbour: 5m was removed)
     h = acc[f"{S}@1h"]["conditions"]
     assert h["regimes2"]["status"] == UNK and "5건" in h["regimes2"]["why"] and h["neighbour_tf"]["status"] == UNK
     assert h["q1_fdr"]["status"] == UNK and "판정에 이 계좌가 없음" in h["q1_fdr"]["why"]
@@ -123,7 +123,8 @@ def test_it_only_reads_and_enables_nothing(world, tmp_path):
     assert RD.LABEL == "표시만: 아무것도 켜거나 바꾸지 않음"
 
 
-def test_compact_meeting_and_line_stay_small_with_180_accounts(tmp_path):
+def test_compact_meeting_and_line_stay_small_with_144_accounts(tmp_path):
+    assert RD.TFS == ("15m", "30m", "1h", "4h")                  # 5m removed 2026-10-04: 36 x 4 strategy accounts
     from paperbot.agents.roster3 import STRATEGY_KO
     st = Store3(str(tmp_path / "paper.db"))
     t0 = START
@@ -139,14 +140,14 @@ def test_compact_meeting_and_line_stay_small_with_180_accounts(tmp_path):
                                           context={"regime": ("trend_up", "box", "chop")[k % 3]}))
     st.commit()
     full = RD.evaluate(R.open_ro(str(tmp_path / "paper.db")), NOW, {"ready": False})
-    assert full["summary"]["accounts"] == 180 and len(full["strategies"]) == 36
+    assert full["summary"]["accounts"] == 144 and len(full["strategies"]) == 36
     c = RD.compact(full)
     assert c["headline"] == "실거래 조건: 충족 0개" and len(c["closest"]) == 5 and len(c["by_condition"]) == 8
     assert len(json.dumps(c, ensure_ascii=False)) < 2_500
     m = RD.meeting(full)
-    assert m["accounts_left_out"] == 172 and len(m["strategies"]) == 36 and m["strategies"][0]["marks"]
+    assert m["accounts_left_out"] == 136 and len(m["strategies"]) == 36 and m["strategies"][0]["marks"]
     assert len(json.dumps(m, ensure_ascii=False)) < 14_000
-    assert RD.line(full).startswith("- 실거래 조건: 충족 0개 (계좌 180개)") and RD.line(None) == ""
+    assert RD.line(full).startswith("- 실거래 조건: 충족 0개 (계좌 144개)") and RD.line(None) == ""
 
 
 # ---------------------------------------------------------------- where it is shown

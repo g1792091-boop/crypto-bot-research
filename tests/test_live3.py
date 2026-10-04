@@ -1,7 +1,9 @@
 from paperbot import Bar, Brackets, Signal
 from paperbot.accounts import AccountBook
-from paperbot.config import V3_SYMBOLS, v3_settings
+from paperbot.config import (V3_ACCOUNTS, V3_JUDGED_TFS, V3_Q1_MAIN_FAMILY, V3_RANDOM_SEEDS, V3_STRATEGIES,
+                             V3_SYMBOLS, V3_TRADE_TFS, v3_settings)
 from paperbot.live3 import Runner3, account_defs
+from paperbot.sigservice import TRADE_TFS
 from paperbot.store3 import Store3
 
 MIN = 60_000
@@ -81,8 +83,35 @@ def test_restart_replays_missed_minutes_without_trading_them(tmp_path):
 
 
 def test_account_defs_count():
-    defs = account_defs([f"s{k}" for k in range(36)], ("5m", "15m", "30m", "1h", "4h"))
-    assert len(defs) == 195 and sum(d["kind"] == "random" for d in defs) == 15
+    defs = account_defs([f"s{k}" for k in range(36)], TRADE_TFS)
+    assert len(defs) == V3_ACCOUNTS == 156 and sum(d["kind"] == "random" for d in defs) == 12
+    assert len({(d["strategy"], d["timeframe"]) for d in defs}) == len(defs)
+
+
+def test_no_5m_accounts():
+    """5m was removed with the restart of 2026-10-04 (docs/paper-v3-rules-change-1.md): no 5m strategy or
+    coin-flip account is created; 5m stays only the signal service's internal base bar."""
+    assert TRADE_TFS == V3_TRADE_TFS == ("15m", "30m", "1h", "4h") and "5m" not in TRADE_TFS
+    assert V3_JUDGED_TFS == ("15m", "30m", "1h") and V3_Q1_MAIN_FAMILY == 108 == V3_STRATEGIES * 3
+    defs = account_defs([f"s{k}" for k in range(V3_STRATEGIES)], TRADE_TFS)
+    assert not [d for d in defs if d["timeframe"] == "5m"]
+    assert {d["timeframe"] for d in defs} == set(V3_TRADE_TFS)
+    assert len(defs) == V3_ACCOUNTS == (V3_STRATEGIES + len(V3_RANDOM_SEEDS)) * len(V3_TRADE_TFS)
+
+
+def test_live_account_set_from_the_locked_library(tmp_path):
+    """The accounts cmd_run opens: the locked library's 36 strategies on the traded timeframes, nothing on 5m."""
+    from paperbot import sweepsig
+    from paperbot.sigservice import strategy_names
+    names = strategy_names(sweepsig.lib())
+    assert len(names) == V3_STRATEGIES
+    store = Store3(str(tmp_path / "a.db"))
+    book = AccountBook(S, {s: Brackets.example() for s in V3_SYMBOLS}, store, None, {})
+    book.open_accounts(account_defs(names, TRADE_TFS), 0)
+    assert len(book.engines) == V3_ACCOUNTS
+    assert not [a for a in book.engines if a.endswith("@5m")]
+    tfs = [r[0] for r in store.conn.execute("SELECT timeframe FROM accounts")]
+    assert len(tfs) == V3_ACCOUNTS and "5m" not in tfs
 
 
 # ---------------------------------------------------------------------------- the extras hook (paperbot/extras.py)
@@ -195,3 +224,28 @@ def test_extras_import_failure_holds_extras(tmp_path, monkeypatch):
     assert book.load(make_of=make_of)
     assert type(book.engines["S@5m~c1"]) is HeldEngine and type(book.engines["S@5m"]).__name__ == "PaperEngine"
     assert note.messages[0][0] == "CRITICAL" and "extras code failed to load" in note.messages[0][1]
+
+
+def test_signal_service_never_computes_5m():
+    """5m bars stay the internal base bars (history, completeness check, the boundary cadence), but no 5m signal
+    is computed: at a boundary that is not a 15m close nothing is due, so no 5m coin-flip draw happens either."""
+    from paperbot.sigservice import FIVE, SignalService
+
+    class Lib:
+        NAMES = ["A", "DOGE_L", "DOGE_S"]
+
+        @staticmethod
+        def tf_minutes(tf):
+            return {"5m": 5, "15m": 15, "30m": 30, "1h": 60, "4h": 240, "1d": 1440}[tf]
+
+        @staticmethod
+        def warmup_bars(tf):
+            return 10
+
+    svc = SignalService(V3_SYMBOLS, (), {"5m": 1.0, "15m": 0.0}, lib=Lib(), procs=1)
+    assert svc.trade_tfs == V3_TRADE_TFS and "5m" not in svc.windows and FIVE == 5 * MIN
+    day = 86_400_000
+    assert svc.due(day + FIVE) == [] and svc.due(day + 2 * FIVE) == []          # 5m-only boundaries: nothing
+    assert svc.due(day + 3 * FIVE) == ["15m"] and svc.due(day) == ["15m", "30m", "1h", "4h", "1d"]
+    # the rate file still holds a 5m rate (research output): it is never reached, 5m is never due
+    assert not [tf for k in range(288) for tf in svc.due(day + k * FIVE) if tf == "5m"]

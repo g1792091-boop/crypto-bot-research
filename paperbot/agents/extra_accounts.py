@@ -1,6 +1,6 @@
 """Extra paper accounts, the agents' side (docs/agent-rooms.md "복제 계좌", "새 매매법 연구실 계좌").
 
-Two kinds of extra paper account can run next to the original 195 in the live runner (paperbot/live3.py,
+Two kinds of extra paper account can run next to the original accounts in the live runner (paperbot/live3.py,
 the only writer of paper3.db), each one a NEW account; the originals never change:
 
 - copy    one of the 36 strategies on one timeframe with exactly one lab-template change (stop_atr k,
@@ -39,7 +39,7 @@ from ..sessions import KST
 from . import rooms_db as R
 
 V = 1                                              # change.account["v"] and accounts.data["v"]
-KINDS = ("copy", "newlab")                         # accounts.kind of an extra (the 195 are strategy / random)
+KINDS = ("copy", "newlab")                         # accounts.kind of an extra (the originals are strategy / random)
 TFS = ("5m", "15m", "30m", "1h", "4h")
 COPY_PARAM = {"stop_atr": "k", "lock_start": "first_lock", "skip_tag": "tag"}   # the lab templates a copy may use
 PARENT_MIN_TRADES = 30                             # closed trades the copy's parent account needs (paper3 trades)

@@ -2,7 +2,7 @@
 volatility at entry. Descriptive only (cells under ``min_n`` trades are marked, nothing is concluded from them);
 read-only on paper3.db; no trading code reads it.
 
-- by coin: the 180 strategy accounts against the 15 coin-flip accounts on the same coin, and the best strategies
+- by coin: the 144 strategy accounts against the 12 coin-flip accounts on the same coin, and the best strategies
   of each coin (at least ``min_top`` trades there);
 - sessions: paperbot/sessions.py (entry time in Korea time: asia 09-16, europe 16-22, us 22-05, dawn 05-09;
   weekend = Sat/Sun KST; windows: funding +-10 min, US open +-60 min, 08:30 New York +-30 min);

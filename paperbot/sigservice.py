@@ -1,12 +1,14 @@
 """Live signals for the paper v3 run (docs/paper-v3-rules.md).
 
-At every 5m boundary the service holds the closed 5m bars of every coin. For
+At every 5m boundary the service holds the closed 5m bars of every coin (5m bars are only the
+internal base bars the timeframes are built from: no 5m signal is computed or traded). For
 each timeframe that closes at that boundary it builds the chart bars with the
 backtest's ``resample_ohlcv`` (``recorder.build_frames``, forming bar dropped),
 runs the locked ``compute_signals`` for all strategies and keeps the signal of
 the bar that just closed.
 
-- Trading timeframes (5m..4h) and coins (six): one Signal per strategy account,
+- Trading timeframes (config.V3_TRADE_TFS: 15m, 30m, 1h, 4h; 5m was removed on 2026-10-04,
+  docs/paper-v3-rules-change-1.md) and coins (six): one Signal per strategy account,
   stop distance 2 x ATR14 of the signal bar, reference price = best ask (long)
   or best bid (short) right after the computation. The engine adds slippage.
 - Coin-flip accounts: per timeframe, coin and bar a seeded draw with the rate
@@ -39,9 +41,10 @@ import pandas as pd
 
 from . import sweepsig
 from .aggregate import TF_MS
+from .config import V3_RANDOM_SEEDS, V3_TRADE_TFS
 from .models import Bar, Signal
 
-TRADE_TFS = ("5m", "15m", "30m", "1h", "4h")
+TRADE_TFS = V3_TRADE_TFS
 RECORD_TFS = ("1d",)
 FIVE = TF_MS["5m"]
 DOGE_PARTS = ("DOGE_L", "DOGE_S")
@@ -189,7 +192,7 @@ class SignalTimeout(RuntimeError):
 
 class SignalService:
     def __init__(self, trade_symbols: Sequence[str], record_symbols: Sequence[str] = (),
-                 random_rates: Optional[dict] = None, seeds: Sequence[int] = (1, 2, 3),
+                 random_rates: Optional[dict] = None, seeds: Sequence[int] = V3_RANDOM_SEEDS,
                  stop_atr: float = 2.0, max_delay_ms: int = 180_000, procs: int = 4,
                  trade_tfs: Sequence[str] = TRADE_TFS, record_tfs: Sequence[str] = RECORD_TFS,
                  lib=None, pool=None, timeout_s: float = 120.0):

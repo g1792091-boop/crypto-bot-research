@@ -64,7 +64,7 @@ from types import SimpleNamespace
 from typing import Callable, Iterable, Optional, Sequence
 
 from .binance import FAPI, BinanceError, BinanceREST, RegionBlocked
-from .config import V3_SYMBOLS, v3_settings
+from .config import V3_ACCOUNTS, V3_SYMBOLS, V3_TRADE_TFS, v3_settings
 from .sessions import KST
 
 OK, FIX, NOTE = "OK", "고칠 것", "참고"
@@ -169,7 +169,8 @@ ALL_UNITS = (INSTALLED + LEGACY + SYSTEM + (AUTO_UPDATES, LABBUILD) + EXTRA_TIME
              + tuple(u.replace(".timer", ".service") for u in OPTIONAL_TIMERS))
 UNIT_PROPS = ("Id,LoadState,UnitFileState,ActiveState,SubState,Result,NRestarts,ExecMainStatus,"
               "NextElapseUSecRealtime,ExecStart,ActiveEnterTimestampMonotonic,User,MainPID")
-RULES_SUMS = ("docs/paper-v3-rules.sha256", "docs/paper-v3-rules-addendum.sha256")
+RULES_SUMS = ("docs/paper-v3-rules.sha256", "docs/paper-v3-rules-addendum.sha256",
+              "docs/paper-v3-rules-change-1.sha256")    # change 1: 5m removed at the restart of 2026-10-04
 
 # the paper key must be read-only: any of these on is a problem (Binance apiRestrictions fields)
 TRADE_PERMS = {"enableFutures": "선물 거래", "enableSpotAndMarginTrading": "현물·마진 거래", "enableMargin": "마진",
@@ -1369,8 +1370,13 @@ def read_paper_db(path: str) -> dict:
         tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
         one = lambda q: (conn.execute(q).fetchone() or (None,))[0]          # noqa: E731
         start = None
+        originals = off_tf = None
         if "accounts" in tables:
             start = one("SELECT MIN(created_ts) FROM accounts WHERE kind IN ('strategy', 'random')")
+            originals = one("SELECT COUNT(*) FROM accounts WHERE kind IN ('strategy', 'random')")
+            marks = ",".join("?" * len(V3_TRADE_TFS))
+            off_tf = (conn.execute(f"SELECT COUNT(*) FROM accounts WHERE kind IN ('strategy', 'random') AND "
+                                   f"timeframe NOT IN ({marks})", V3_TRADE_TFS).fetchone() or (0,))[0]
         if start is None and "runs" in tables:
             start = one("SELECT MIN(started_ts) FROM runs")
         hb = run = run_ts = health = health_ts = None
@@ -1385,7 +1391,9 @@ def read_paper_db(path: str) -> dict:
         return {"start": None if start is None else int(start), "heartbeat": None if hb is None else int(hb),
                 "run": run if isinstance(run, dict) else None, "run_ts": None if run_ts is None else int(run_ts),
                 "health": health if isinstance(health, dict) else None,
-                "health_ts": None if health_ts is None else int(health_ts)}
+                "health_ts": None if health_ts is None else int(health_ts),
+                "originals": None if originals is None else int(originals),
+                "originals_off_tf": None if off_tf is None else int(off_tf)}
     finally:
         conn.close()
 
@@ -1506,9 +1514,26 @@ def check_paper_db(ctx: Ctx, stage: str, deadman_set: bool = False) -> list[Line
         if run.get("commit") and ver.get("commit") and run["commit"] != ver["commit"]:
             out.append(note(f"봇이 설치된 코드({str(ver['commit'])[:10]})가 아닌 {str(run['commit'])[:10]}로 돌고 있습니다: "
                             "sudo systemctl restart paperbot-live3"))
+    out += account_set_lines(db)
     if start is not None:
         out.append(ok(f"첫 시작 {kst_text(start)}(한국 시간)"))
     return out
+
+
+def account_set_lines(db: dict) -> list[Line]:
+    """The original accounts are the rules' set (config.V3_ACCOUNTS: 36 strategies + 3 coin-flip accounts on each
+    of 15m / 30m / 1h / 4h). A 5m account means paper3.db is the run before the restart of 2026-10-04
+    (docs/paper-v3-rules-change-1.md: 5m removed)."""
+    n, off = db.get("originals"), db.get("originals_off_tf")
+    if not n:
+        return []
+    if off:
+        return [fix(f"paper3.db에 규칙에 없는 봉(5분봉 등)의 원래 계좌가 {off}개 있습니다: 2026-10-04 재시작 전 실행의 "
+                    "DB입니다(5분봉은 뺐음, docs/paper-v3-rules-change-1.md). sudo bash deploy/paperbot-reset.sh --yes "
+                    "로 처음부터 다시 시작합니다")]
+    if n != V3_ACCOUNTS:
+        return [note(f"원래 계좌가 {n}개입니다(규칙은 {V3_ACCOUNTS}개): 개발자에게 알리세요")]
+    return []
 
 
 # an extra paper account's id (paperbot/extras.py: a copy "S@15m~c1", a new strategy "NL1@1h")

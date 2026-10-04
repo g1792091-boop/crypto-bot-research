@@ -21,7 +21,7 @@ import pytest
 
 from paperbot import launchcheck as L
 from paperbot.agents import labdata as LD
-from paperbot.config import V3_SYMBOLS
+from paperbot.config import V3_ACCOUNTS, V3_RANDOM_SEEDS, V3_STRATEGIES, V3_SYMBOLS, V3_TRADE_TFS
 
 NOW = int(datetime(2026, 10, 1, 12, 0, tzinfo=timezone.utc).timestamp() * 1000)
 MIN, DAY = 60_000, 86_400_000
@@ -123,7 +123,7 @@ class Server:
         with open(os.path.join(self.app, "VERSION.json"), "w") as fh:
             json.dump({"commit": COMMIT, "tag": None, "dirty": False, "source": "install.sh",
                        "installed_at": "2026-10-01T03:00:00Z"}, fh)
-        for name in ("paper-v3-rules", "paper-v3-rules-addendum"):
+        for name in ("paper-v3-rules", "paper-v3-rules-addendum", "paper-v3-rules-change-1"):
             data = f"rules {name}\n".encode()
             with open(os.path.join(self.app, "docs", f"{name}.md"), "wb") as fh:
                 fh.write(data)
@@ -165,15 +165,22 @@ class Server:
             ref[src]["5m_BTCUSD"] = {"digest": LD.content_digest(arrs), "bars": 10}
         return ref
 
-    def make_db(self, start, heartbeat=None, brackets=LIVE_BRACKETS, commit=COMMIT, health="fresh"):
+    def make_db(self, start, heartbeat=None, brackets=LIVE_BRACKETS, commit=COMMIT, health="fresh", tfs=V3_TRADE_TFS):
         """paper3.db written by the bot's own store (WAL, like the server's), then closed: the bot stopped.
-        ``health``: the bot's 'health' row ("fresh": 1m bars 30 s behind, last dead-man ping 30 s ago)."""
+        ``health``: the bot's 'health' row ("fresh": 1m bars 30 s behind, last dead-man ping 30 s ago).
+        ``tfs``: the original accounts' timeframes (36 strategies + 3 coin-flip accounts on each)."""
         from paperbot.store3 import Store3
         s = Store3(os.path.join(self.lib, "paper3.db"))
         if start is not None:
-            s.add_account("S1_15m", "S1", "15m", "strategy", start, "v3")
+            n = 0
+            for tf in tfs:
+                for k in range(V3_STRATEGIES):
+                    s.add_account(f"S{k}@{tf}", f"S{k}", tf, "strategy", start, "v3")
+                for k in V3_RANDOM_SEEDS:
+                    s.add_account(f"RANDOM_{k}@{tf}", f"RANDOM_{k}", tf, "random", start, "v3")
+                n += V3_STRATEGIES + len(V3_RANDOM_SEEDS)
             s.add_run(start, {})
-            s.put_state("run", start, {"accounts": 195, "brackets": brackets, "taker_fee": 0.0005, "commit": commit,
+            s.put_state("run", start, {"accounts": n, "brackets": brackets, "taker_fee": 0.0005, "commit": commit,
                                        "restored": False})
         if heartbeat is not None:
             s.put_state("heartbeat", heartbeat, {"steps": 100, "last_step": heartbeat - 90_000})
@@ -817,7 +824,7 @@ def test_backup_chat_is_checked_and_tested_when_set(tmp_path):
 def test_code_version_rules_and_clone(tmp_path):
     srv = Server(tmp_path)
     lines = L.check_code(srv.ctx())
-    assert st(lines) == [L.OK, L.OK] and "커밋 d86c085000" in lines[0][1] and "규칙 문서 2개" in lines[1][1]
+    assert st(lines) == [L.OK, L.OK] and "커밋 d86c085000" in lines[0][1] and "규칙 문서 3개" in lines[1][1]
     srv.head = "e" * 40
     srv.cmd_out[(VENV, "-c", "import paperbot")] = (1, "", "/opt/paperbot/venv/bin/python: No module named 'paperbot'")
     lines = L.check_code(srv.ctx())
@@ -866,7 +873,8 @@ def test_paper_db_after_the_start(tmp_path):
     srv = Server(tmp_path, "after")
     lines = L.check_paper_db(srv.ctx(), "after")
     assert st(lines) == [L.OK, L.OK, L.OK, L.OK] and "1분봉 정상" in lines[1][1]
-    assert "계좌 195개" in lines[2][1] and "0.0500%" in lines[2][1] and "거래소 실제 값" in lines[2][1]
+    assert f"계좌 {V3_ACCOUNTS}개" in lines[2][1] and "계좌 156개" in lines[2][1]
+    assert "0.0500%" in lines[2][1] and "거래소 실제 값" in lines[2][1]
     lines = L.check_paper_db(srv.ctx(), "after", True)
     assert st(lines) == [L.OK] * 5 and "healthchecks.io에 핑을 보내고 있음: 마지막 50초 전" in lines[2][1]
     stale = L.check_paper_db(srv.ctx(now_ms=lambda: NOW + 10 * MIN), "after")
@@ -877,6 +885,22 @@ def test_paper_db_after_the_start(tmp_path):
     assert st(lines) == [L.FIX, L.FIX, L.NOTE, L.OK] and "400일치" in lines[0][1] and "예시" in lines[1][1]
     os.remove(os.path.join(srv.lib, "paper3.db"))
     assert "아직 없습니다" in fixes(L.check_paper_db(srv.ctx(), "after"))[0]
+
+
+def test_paper_db_from_the_run_before_the_5m_removal(tmp_path):
+    """5m was removed with the restart of 2026-10-04: a paper3.db with 5m original accounts is the old run."""
+    assert V3_ACCOUNTS == 156 and "5m" not in V3_TRADE_TFS
+    srv = Server(tmp_path, "after")
+    os.remove(os.path.join(srv.lib, "paper3.db"))
+    srv.make_db(start=NOW - 2 * 3_600_000, heartbeat=NOW - 20_000, tfs=("5m",) + V3_TRADE_TFS)
+    lines = L.check_paper_db(srv.ctx(), "after")
+    f = fixes(lines)
+    assert len(f) == 1 and "5분봉" in f[0] and "39개" in f[0] and "paperbot-reset.sh" in f[0]
+    assert "계좌 195개" in lines[2][1]
+    os.remove(os.path.join(srv.lib, "paper3.db"))
+    srv.make_db(start=NOW - 2 * 3_600_000, heartbeat=NOW - 20_000, tfs=("15m", "30m", "1h"))
+    lines = L.check_paper_db(srv.ctx(), "after")
+    assert [x for x in lines if x[0] == L.NOTE and "117개" in x[1] and "156개" in x[1]]
 
 
 # ---------------------------------------------------------------- agent rooms

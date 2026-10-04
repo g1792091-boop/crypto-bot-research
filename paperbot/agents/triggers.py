@@ -70,7 +70,7 @@ parent strategy's room (loss_cluster, bust, weekly: accounts of kind 'strategy' 
 new-strategy accounts (kind 'newlab') have the same three triggers in team:lab (``_lab_accounts``: cursors
 ``loss:team:lab``, ``bust:<account>``, ``weekly:team:lab``, the weekly review on Sunday KST). A meeting that
 only extras' trades open (the originals alone would not) is marked ``extras`` in its data: it never uses
-the room's daily slots (those stay for the 195) and is bounded instead by its own line,
+the room's daily slots (those stay for the originals) and is bounded instead by its own line,
 ``extras_meetings_per_day`` (6) a KST day over all rooms; when the line is full it waits for the next day.
 
 Limits: at most 4 rounds per room per KST day (incidents and research exempt; one of the 4 is kept
@@ -279,7 +279,7 @@ class TriggerPolicy:
     research_every_ms: int = 0
     research_idle_max_ms: int = 6 * HOUR_MS  # the longest wait after empty lab meetings (research_gap)
     # meetings opened only by extra accounts' trades (copies, new-strategy accounts) per KST day, all rooms
-    # together: their own line, never the 195's room slots (env AGENTS_EXTRAS_MEETINGS_PER_DAY)
+    # together: their own line, never the originals' room slots (env AGENTS_EXTRAS_MEETINGS_PER_DAY)
     extras_meetings_per_day: int = 6
     max_items: int = 30                      # evidence rows copied into Due.data
 
@@ -532,7 +532,7 @@ def _incident(paper_ro, daily_ro, st: _Rooms) -> list[Due]:
     hwm_a = max(cur_a, _int(top[0]) if top else 0)
     since = st.now - p.incident_lookback_ms if cur_a == 0 else 0
     levels = sorted({lvl for _k, lvl, _f in p.incident_alerts})
-    # only the levels an incident can have: the INFO rows (every exit of 195 accounts) are never read
+    # only the levels an incident can have: the INFO rows (every exit of the original accounts) are never read
     for rowid, ts, level, text in _rows(paper_ro, "SELECT rowid, ts, level, text FROM alerts WHERE rowid > ? "
                                                   f"AND level IN ({','.join('?' * len(levels))}) ORDER BY rowid",
                                         (cur_a, *levels)):

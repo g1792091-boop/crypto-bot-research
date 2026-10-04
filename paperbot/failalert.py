@@ -17,6 +17,7 @@ import sys
 import time
 from typing import Mapping, Optional
 
+from .config import V3_ACCOUNTS
 from .notify import WARN, Notifier
 
 STATE_DIR = "/var/lib/paperbot/failalert"
@@ -47,7 +48,7 @@ def alert_text(unit: str, env: Mapping[str, str]) -> str:
     if unit == "paperbot-agents.service" and result == "exit-code" and status == "2":
         how += ": Claude 로그인 확인 거부이거나 설정 값 오류 (안내서 8-2·8-4)"
     return (f"[작업 실패] {name}: {how} ({unit}).\n"
-            f"봇(195개 계좌)은 그대로 돕니다. {again}\n"
+            f"봇(계좌 {V3_ACCOUNTS}개)은 그대로 돕니다. {again}\n"
             f"이유 보기: sudo journalctl -u {unit} -n 50 --no-pager\n"
             f"확인한 뒤: sudo systemctl reset-failed {unit}\n"
             "같은 작업은 오늘(한국 날짜) 다시 알리지 않습니다 (안내서 13-7).")

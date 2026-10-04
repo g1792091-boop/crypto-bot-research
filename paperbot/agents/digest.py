@@ -30,9 +30,10 @@ import sqlite3
 from typing import Any, Iterable, Optional
 
 from ..cards import REASON_KO
+from ..config import V3_TRADE_TFS
 from . import rooms_db as R
 
-TFS = ("5m", "15m", "30m", "1h", "4h")
+TFS = V3_TRADE_TFS                   # the run's timeframes (5m removed 2026-10-04, docs/paper-v3-rules-change-1.md)
 TF_KO = {"5m": "5분", "15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간"}
 KST_MS = 9 * 3_600_000
 DAY_MS = 86_400_000

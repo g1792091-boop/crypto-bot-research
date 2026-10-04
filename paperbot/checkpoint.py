@@ -25,7 +25,9 @@ Q2 snapshot
 Q3 schedule
     Each account (strategy x timeframe, and improved copies) gets its 1st verdict at the first
     checkpoint where it has >= 30 trades; 4h accounts and the live coin-flip accounts are
-    observation only ('관찰용'). 1st pass = trades >= 30 and equity > starting equity and not bust
+    observation only ('관찰용'). The judged timeframes are 15m, 30m and 1h (5m was removed at the restart
+    of 2026-10-04, docs/paper-v3-rules-change-1.md), so the originals' Q1 family has at most 36 x 3 = 108
+    accounts (``Q1_MAIN_FAMILY``). 1st pass = trades >= 30 and equity > starting equity and not bust
     and the Q1 luck test passed. A 1st pass is checked again on the next 30 days only (2nd check):
     >= 30 trades entered in them, positive P&L in them (scaled to the $5,000 start) and Q1 again on
     that window. A copy account's windows start at its own creation; it is judged at the run's
@@ -82,7 +84,8 @@ from typing import Callable, Optional
 
 import numpy as np
 
-from .config import V3_STOP_ATR, V3_SYMBOLS, Settings, v3_settings
+from .config import (V3_JUDGED_TFS, V3_OBSERVE_TFS, V3_Q1_MAIN_FAMILY, V3_STOP_ATR, V3_SYMBOLS, Settings,
+                     v3_settings)
 from .margin import Brackets
 from .notify import INFO, WARN
 
@@ -92,9 +95,13 @@ PERIOD_DAYS = 30
 MIN_TRADES = 30
 N_BOTS = 2000
 ALPHA = 0.10
-OBSERVE_TFS = ("4h",)
-TF_MS = {"5m": 5 * MIN, "15m": 15 * MIN, "30m": 30 * MIN, "1h": 60 * MIN, "4h": 240 * MIN}
-TF_KO = {"5m": "5분", "15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간"}
+# The run's timeframes (config.V3_TRADE_TFS). 5m was removed with the restart of 2026-10-04
+# (docs/paper-v3-rules-change-1.md): no 5m account exists, and any other timeframe is never judged.
+OBSERVE_TFS = V3_OBSERVE_TFS                   # 4h: observation only (Q3)
+JUDGED_TFS = V3_JUDGED_TFS                     # 15m / 30m / 1h
+Q1_MAIN_FAMILY = V3_Q1_MAIN_FAMILY             # 36 x 3 = 108 strategy accounts can enter the originals' Q1 family
+TF_MS = {"15m": 15 * MIN, "30m": 30 * MIN, "1h": 60 * MIN, "4h": 240 * MIN}
+TF_KO = {"15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간"}
 ATR_PREFIX_BARS = 300          # TF bars before the window for ATR14 (Wilder; (13/14)^300 ~ 2e-10)
 NO_VERDICT_DAYS = 180          # addendum Q3: still < 30 trades at day 180 -> '판정 불가'
 SNAPSHOT_VERSION = 2          # 2: extras carry rule / events / skipped bars (originals' fields unchanged)
@@ -221,7 +228,7 @@ def _extras_state(conn: sqlite3.Connection) -> dict:
 
 def _extra_code_changes(conn: sqlite3.Connection, upto: int) -> list[dict]:
     """Starts of the runner whose recorded changes touch the extras' trading code (runinfo.EXTRA_WATCHED) or the
-    signal input code they share with the 195 (runinfo.SHARED_WATCHED; for the originals that is open question
+    signal input code they share with the originals (runinfo.SHARED_WATCHED; for the originals that is open question
     Q-11, the rule keeper's decision, so it is noted on the extras' rows only)."""
     from .runinfo import EXTRA_WATCHED, SHARED_WATCHED
     keys = {k for k, _, t in EXTRA_WATCHED + SHARED_WATCHED if t}
@@ -915,8 +922,10 @@ def plan(snap: dict, prior: dict, prev_snaps: dict, s: Settings) -> tuple[dict, 
         if a["kind"] == "random":
             rows[aid] = {**base, "status": OBSERVE, "stage": None, "reason": "동전 봇 기준 계좌 (판정 안 함, 눈으로 보는 기준)"}
             continue
-        if tf in OBSERVE_TFS or tf not in TF_MS:
-            rows[aid] = {**base, "status": OBSERVE, "stage": None, "reason": "4시간봉은 처음부터 관찰용 (Q3)"}
+        if tf not in JUDGED_TFS:
+            why = ("4시간봉은 처음부터 관찰용 (Q3)" if tf in OBSERVE_TFS else
+                   f"{tf}는 판정하는 봉이 아님 (5분봉은 2026-10-04 실험에서 뺐음, 규칙 변경 1)")
+            rows[aid] = {**base, "status": OBSERVE, "stage": None, "reason": why}
             continue
         if pr and pr["status"] in (FAIL, PASS2):
             rows[aid] = {**base, "status": pr["status"], "stage": pr.get("stage"),

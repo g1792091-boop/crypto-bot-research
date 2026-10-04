@@ -103,6 +103,9 @@ SYMBOLS = tuple(V3_SYMBOLS) + ("XRPUSDT",)
 LEVELS = {"BTCUSDT": 68_000.0, "ETHUSDT": 2_600.0, "SOLUSDT": 160.0, "DOGEUSDT": 0.16, "LTCUSDT": 72.0,
           "BCHUSDT": 380.0, "XRPUSDT": 0.55}
 HALT = ("SOLUSDT", 10 * 60, 11 * 60)    # symbol, [from, to) minutes after T0: flat bars, volume 0
+# The harness's frozen account set: the timeframes the golden file was written with (the live run dropped 5m
+# on 2026-10-04, docs/paper-v3-rules-change-1.md; the isolation proof does not depend on the timeframe set).
+TRADE_TFS = ("5m", "15m", "30m", "1h", "4h")
 RANDOM_RATES = {"5m": 0.02, "15m": 0.03, "30m": 0.04, "1h": 0.05, "4h": 0.08}
 WARMUP = {"5m": 20, "15m": 12, "30m": 10, "1h": 8, "4h": 6, "1d": 1}
 COSTS = {"5m": 6_000, "15m": 7_000, "30m": 8_000, "1h": 9_000, "4h": 12_000, "1d": 15_000}
@@ -203,7 +206,7 @@ class Feed:
 
     def __init__(self, hours: int = HOURS, seed: int = SEED, hist_5m: Optional[int] = None):
         lib = signal_lib()
-        keep = max(sigservice.window_5m(lib, tf) for tf in sigservice.TRADE_TFS + sigservice.RECORD_TFS)
+        keep = max(sigservice.window_5m(lib, tf) for tf in TRADE_TFS + sigservice.RECORD_TFS)
         self.hist_5m = hist_5m or keep
         self.origin = T0 - (self.hist_5m + 12) * FIVE
         self.end = T0 + hours * HOUR
@@ -380,7 +383,7 @@ def leaky_fill_costs(runner) -> None:
 def originals(lib=None) -> list[str]:
     lib = lib or signal_lib()
     return [f"{d['strategy']}@{d['timeframe']}" for d in account_defs(sigservice.strategy_names(lib),
-                                                                      sigservice.TRADE_TFS)]
+                                                                      TRADE_TFS)]
 
 
 class Session:
@@ -403,7 +406,7 @@ class Session:
         self.digest.add = _add
         brackets = {s: Brackets.example() for s in V3_SYMBOLS}
         self.book = AccountBook(self.settings, brackets, self.store, self.notifier, SPECS, digest=self.digest)
-        self.service = sigservice.SignalService(V3_SYMBOLS, ("XRPUSDT",), RANDOM_RATES,
+        self.service = sigservice.SignalService(V3_SYMBOLS, ("XRPUSDT",), RANDOM_RATES, trade_tfs=TRADE_TFS,
                                                 procs=REAL["procs"] if REAL["on"] else 1, lib=self.lib)
         orig = self.service.compute
 
@@ -436,7 +439,7 @@ class Session:
             resume = self.book.last_ts + MIN
             start = resume - resume % FIVE
         else:
-            self.book.open_accounts(account_defs(sigservice.strategy_names(self.lib), sigservice.TRADE_TFS), T0)
+            self.book.open_accounts(account_defs(sigservice.strategy_names(self.lib), TRADE_TFS), T0)
             resume = None
             start = T0
         hist_from = start - max(self.service.windows.values()) * FIVE - FIVE

@@ -6,7 +6,7 @@
 # Before its first meeting a pass checks that Claude Code is logged in with the subscription and
 # not an API key (`claude auth status`); otherwise it exits with status 2 and runs nothing.
 # The only writer of agents3.db. Reads paper3.db, daily3.db, inbox.db and checkpoint.db read-only. Never places an
-# order, never calls an exchange API, never changes the 195 accounts, the rules or the code.
+# order, never calls an exchange API, never changes the original paper accounts, the rules or the code.
 [Unit]
 Description=paperbot agent rooms (one pass)
 After=network-online.target

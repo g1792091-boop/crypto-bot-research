@@ -29,18 +29,20 @@ How (every number is code; the choices are fixed here, before looking at any liv
    a fail stays a fail. Q1: p = (bots >= account + 1) / (2,000 + 1); the number of the 2,000 bots at or above
    the account is drawn exactly as Binomial(2,000, S(v)), S = the null's share at or above v. FDR: the account
    with the edge is tested with ``family - 1`` accounts WITHOUT an edge (their p-values uniform), BH at 10%
-   (checkpoint.ALPHA). ``family`` = 144 (36 strategies x 5m..1h: 4h is observation only, addendum Q3) and 180
-   (every strategy account: a stricter count).
+   (checkpoint.ALPHA). ``family`` = 108 (36 strategies x 15m / 30m / 1h: 4h is observation only, addendum Q3;
+   config.V3_Q1_MAIN_FAMILY) and 144 (every strategy account, 36 x 4: a stricter count).
 4. 4h is computed for completeness but the checkpoint never judges it (observation only).
+5. Timeframes: the run's (config.V3_TRADE_TFS: 15m, 30m, 1h, 4h). 5m was removed from the experiment on
+   2026-10-04 with the restart (docs/paper-v3-rules-change-1.md); until then this script also ran 5m and used the
+   families 144 (36 x 5m..1h) and 180.
 
 Assumptions that make this an estimate, not a promise (also in the JSON ``assumptions``): trades are drawn
 independently (no streaks beyond chance, no regime changes); the edge is the same on every trade; the coin
 flips' trade shape comes from 2020-01 .. 2021-08 bars; the other accounts are all without an edge (more real
 edges elsewhere would make BH slightly easier); one rate per timeframe (the median strategy).
 
-Runtime (measured 2026-10-04 in the development container, the full grid: 5 timeframes x 6 edges, ``reps``
-4,000, ``null`` 20,000): the coin-flip pool ~7 s (rules_bt on 20 months x 6 coins), the Monte Carlo ~5 s, ~13 s
-in all; the JSON keeps the measured times (``runtime_s``). ``tests/test_power.py`` runs a tiny grid on
+Runtime (the full grid: 4 timeframes x 6 edges, ``reps`` 4,000, ``null`` 20,000; seconds in the development
+container): the JSON keeps the measured times (``runtime_s``). ``tests/test_power.py`` runs a tiny grid on
 synthetic bars in about a second. 4h: the 2020-21 bars give too few coin-flip trades (most 4h signals fail the
 sizing rule, as in the live run) for a Monte Carlo (``too_few``); 4h is observation only anyway.
 """
@@ -66,9 +68,13 @@ sys.path.insert(0, os.path.join(ROOT, "research", "paper_rules"))
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "out", "power.json")
 DATA = os.path.join(ROOT, "data", "pre2021")
 CARDS = os.path.join(ROOT, "research", "strategy_profiles", "out_binance", "cards.json")
-TFS = ("5m", "15m", "30m", "1h", "4h")
+from paperbot.config import (V3_OBSERVE_TFS, V3_Q1_MAIN_FAMILY, V3_STRATEGIES,  # noqa: E402
+                             V3_TRADE_TFS)
+TFS = V3_TRADE_TFS                                  # 15m, 30m, 1h, 4h (5m removed 2026-10-04)
 EDGES = (0.0, 0.005, 0.01, 0.02, 0.05, 0.10)      # + net ROE per trade (0.01 = +1% of the margin)
-FAMILIES = (144, 180)
+FAMILIES = (V3_Q1_MAIN_FAMILY, V3_STRATEGIES * len(V3_TRADE_TFS))   # (108, 144): the judged ones, every strategy acct
+NO_5M = ("5m removed from the experiment on 2026-10-04 with the restart (docs/paper-v3-rules-change-1.md): "
+         "5-year data -2.3% equity per trade, 34 of 36 cells significantly negative")
 SEEDS = (1, 2, 3)
 SEED = 20261004
 PERIOD_DAYS = 30
@@ -356,7 +362,8 @@ def power_grid(pools: dict, edges=EDGES, families=FAMILIES, reps: int = 4000, n_
         R, mf, rate = pool["R"], pool["mf"], pool["rate_per_day"]
         if pool["trades"] < MIN_POOL:
             out[tf] = {"pool": {"trades_in_pool": int(pool["trades"]), "trades_per_30d": round(rate * PERIOD_DAYS, 2),
-                                "too_few": True, "min_pool": MIN_POOL}, "rows": [], "observation_only": tf == "4h"}
+                                "too_few": True, "min_pool": MIN_POOL}, "rows": [],
+                       "observation_only": tf in V3_OBSERVE_TFS}
             continue
         null = simulate_accounts(R, mf, rate, n_null, 0.0, rng, bust_frac)
         nulls = {d: null["equity"][:, p] for p, d in enumerate(CHECKPOINTS)}
@@ -380,7 +387,7 @@ def power_grid(pools: dict, edges=EDGES, families=FAMILIES, reps: int = 4000, n_
                                       nb["n_bots"], nb["alpha"], nb["min_trades"])
                 row[f"family_{fam}"] = {k: round(v, 4) for k, v in res.items()}
             rows.append(row)
-        out[tf] = {"pool": info, "rows": rows, "observation_only": tf == "4h"}
+        out[tf] = {"pool": info, "rows": rows, "observation_only": tf in V3_OBSERVE_TFS}
     return out
 
 
@@ -437,7 +444,9 @@ def run(out_path: str = OUT, reps: int = 4000, n_null: int = 20000, seed: int = 
            "edges_roe": list(edges), "families": list(FAMILIES), "checkpoints": list(CHECKPOINTS),
            "rules": nb, "data": "data/pre2021 (Binance USD-M futures 2020-01..2021-08, 6 coins; 30m from 15m)",
            "rates_from": "research/strategy_profiles/out_binance/cards.json (median strategy signals_per_day)",
-           "addendum_trades_30d_median": {"5m": 144, "15m": 104, "30m": 56, "1h": 27, "4h": 1},
+           "timeframes": list(tfs), "no_5m": NO_5M,
+           "addendum_trades_30d_median": {k: v for k, v in {"5m": 144, "15m": 104, "30m": 56, "1h": 27, "4h": 1}.items()
+                                          if k in tfs},
            "results": res, "summary_ko": summary_ko(res, numbers=nb),
            "assumptions": ["trades drawn independently from the coin-flip pool (no streaks or regime changes)",
                            "the same edge on every trade: net ROE + X (a liquidation still loses at most the margin)",

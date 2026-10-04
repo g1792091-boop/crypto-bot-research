@@ -10,7 +10,7 @@ Sections
 - pass_check      reference only: each strategy account's wallet against the best of its timeframe's three
                   coin-flip accounts (the pre-addendum rule); the verdict is the checkpoint's
                   (``checkpoint_section``: Q1, 2,000 coin flips + FDR, read from checkpoint.db by the rooms)
-- by_strategy     one strategy across its five timeframes (for the timeframe comparison)
+- by_strategy     one strategy across its four timeframes (15m, 30m, 1h, 4h; 5m was removed on 2026-10-04)
 - by_coin         trades and net ROE per coin, and per strategy x coin for accounts with >= min_n
 - execution       signal-to-fill delay, signal statuses, fees and funding share of losses
 - exits           how trades ended: stop / lock level / liquidation, leverage mix
@@ -18,7 +18,7 @@ Sections
 - nightly         latest nightly report: replay parity, shadows, data quality
 - extras          the extra paper accounts (copies of a strategy with one rule changed, new strategies
                   from the lab): label, rule or spec, start, the runner's status, wallet, trades. Their
-                  trades are kept OUT of every section above (the 195's numbers never include them);
+                  trades are kept OUT of every section above (the originals' numbers never include them);
                   a copy's trades are labelled ``copy: <account>, rule ...`` in its parent's packet.
 
 ``specialist_packet(packet, strategy)`` narrows a packet to one strategy for its specialist
@@ -39,7 +39,7 @@ from collections import Counter, defaultdict
 from typing import Optional
 
 from .. import breakdown as BD
-from ..config import V3_INITIAL
+from ..config import V3_ACCOUNTS, V3_INITIAL, V3_TRADE_TFS
 
 DAY_MS = 86_400_000
 INITIAL = V3_INITIAL
@@ -49,7 +49,11 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 CARDS_BINANCE = os.path.join(ROOT, "research", "strategy_profiles", "out_binance", "cards.json")
 CARDS_SPOT = os.path.join(ROOT, "research", "strategy_profiles", "out", "cards.json")
 CARDS = CARDS_BINANCE if os.path.exists(CARDS_BINANCE) else CARDS_SPOT
-TRADE_TFS = ("5m", "15m", "30m", "1h", "4h")
+TRADE_TFS = V3_TRADE_TFS
+# Said wherever the staff see the 5-year research, which still has 5m rows (historical, unchanged)
+NO_5M_KO = ("5분봉은 2026-10-04 두 분 결정으로 실험에서 뺐음 — 5년 자료 거래당 −2.3%, 36칸 중 34칸 유의한 손실. "
+            "이번 실행의 계좌는 15분·30분·1시간·4시간봉뿐이고, 5년 자료의 5분봉 줄은 과거 기록으로만 봄 "
+            "(docs/paper-v3-rules-change-1.md)")
 # What the entry study already tested on the same five years (research/entry_study/agent_summary.py)
 RESEARCH_PRIOR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "research_prior.json")
 _PRIOR: Optional[dict] = None
@@ -77,7 +81,7 @@ def build(paper_db: str, daily_db: Optional[str], now_ms: int, min_n: int = 30) 
     if c is None:
         raise FileNotFoundError(paper_db)
     allaccts = {r["account_id"]: dict(r) for r in c.execute("SELECT * FROM accounts")}
-    # the extra accounts (copies, new strategies) are reported apart: every section below is the 195's own
+    # the extra accounts (copies, new strategies) are reported apart: every section below is the originals' own
     extra_ids = {a for a, v in allaccts.items() if v.get("kind") in EXTRA_KINDS}
     accts = {a: v for a, v in allaccts.items() if a not in extra_ids}
     st = c.execute("SELECT data FROM state WHERE k = 'accounts'").fetchone()
@@ -155,7 +159,7 @@ def build(paper_db: str, daily_db: Optional[str], now_ms: int, min_n: int = 30) 
                         "coin_flip_trades": len(rs), "coin_flip_mean_roe": _r(statistics.fmean([t["roe"] for t in rs])) if rs else None}
 
     # ------------------------------------------------ execution and costs
-    # the new strategies' own signal rows (strategy 'NL<n>') are not the 195's
+    # the new strategies' own signal rows (strategy 'NL<n>') are not the originals'
     sig = [dict(r) for r in c.execute("SELECT timeframe, status, COUNT(*) AS n, AVG(delay_ms) AS avg_delay, "
                                       "MAX(delay_ms) AS max_delay FROM signal_log WHERE strategy NOT GLOB 'NL[0-9]*' "
                                       "GROUP BY timeframe, status")]
@@ -218,7 +222,7 @@ def build(paper_db: str, daily_db: Optional[str], now_ms: int, min_n: int = 30) 
                 nightly["mismatch_labels"] = labels
         d.close()
 
-    # where the 180 make or lose money: by coin (best strategies of each coin), weekday/weekend x session,
+    # where the 144 strategy accounts make or lose money: by coin (best strategies of each coin), weekday/weekend x session,
     # funding / US-open / 08:30 windows, volatility spike at entry (paperbot/breakdown.py, descriptive only)
     try:
         cb = _ro(paper_db)
@@ -231,7 +235,9 @@ def build(paper_db: str, daily_db: Optional[str], now_ms: int, min_n: int = 30) 
         breakdown = {"error": f"{type(exc).__name__}: {exc}"[:200]}
 
     return {
-        "meta": {"rules": "docs/paper-v3-rules.md", "settings_version": run.get("settings"), "min_n": min_n,
+        "meta": {"rules": "docs/paper-v3-rules.md", "rules_change": "docs/paper-v3-rules-change-1.md",
+                 "timeframes": list(TRADE_TFS), "original_accounts": V3_ACCOUNTS, "no_5m": NO_5M_KO,
+                 "settings_version": run.get("settings"), "min_n": min_n,
                  "days_running": _r(days, 2), "units": {"roe": "net return on isolated margin (0.10 = +10%)",
                                                         "wallet": f"USDT, each account starts at {INITIAL:,.0f}"},
                  "accounts": len(accts), "extra_accounts": len(extra_ids), "pass_check_note": PASS_CHECK_NOTE},
@@ -320,7 +326,8 @@ def profile_card(strategy: str, path: str = CARDS) -> Optional[dict]:
                                       for r in c["rows"]],
                         "trend_share": _r(c["trend_share"], 3),
                         "data_source": "binance_futures" if "out_binance" in path else "spot_aggregate",
-                        "note": "5-year backtest character, same rules; describes style, not proven skill"}
+                        "note": "5-year backtest character, same rules; describes style, not proven skill",
+                        "note_5m": NO_5M_KO}
     return None
 
 
@@ -343,7 +350,7 @@ def research_prior(strategy: str, path: str = RESEARCH_PRIOR) -> Optional[dict]:
         return None
     return {**doc["strategies"][strategy], "conclusion_ko": doc.get("conclusion_ko"),
             "note": "already tested, pre-registered, same 5-year data: descriptive, not a rule; "
-                    "testing the same thing again is not new evidence"}
+                    "testing the same thing again is not new evidence", "note_5m": NO_5M_KO}
 
 
 def research_counts(strategy: Optional[str] = None, path: str = RESEARCH_PRIOR) -> dict:
@@ -362,7 +369,7 @@ def research_counts(strategy: Optional[str] = None, path: str = RESEARCH_PRIOR) 
 
 
 def specialist_packet(packet: dict, strategy: str, cards_path: str = CARDS) -> dict:
-    """What one strategy's specialist sees: its five accounts, their wallets against the three coin-flip
+    """What one strategy's specialist sees: its four accounts, their wallets against the three coin-flip
     accounts (reference only; the rooms add the checkpoint verdict), the coin-flip league of each timeframe,
     the strategy's profile card and what the entry study already tested for it."""
     pc = {a: v for a, v in (packet.get("pass_check") or {}).items() if a.split("@")[0] == strategy}

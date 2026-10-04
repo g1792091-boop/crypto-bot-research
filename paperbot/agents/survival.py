@@ -15,13 +15,13 @@ trades or changes an account, and nothing here is the 30-day verdict (that is pa
                    point, median and 5th-percentile end equity. Accounts with fewer than ``MIN_TRADES`` closed trades
                    are marked too few (no simulation). Trades are drawn a block of 2-4 at a time from the table of
                    every block (exactly the same distribution, fewer random draws). Measured on a synthetic 30-day
-                   paper3.db (195 accounts): ~0.3 s for the Monte Carlo at ~1,300 closed trades a week, ~1.7 s at
+                   paper3.db (156 accounts): ~0.3 s for the Monte Carlo at ~1,300 closed trades a week, ~1.7 s at
                    ~7,000 a week; reading the 5-minute equity samples and the drawdowns ~1.5-1.8 s on top.
 - ``sizing``       the scale k of each trade's equity return (k < 1 = a smaller position, the same trades) at which
                    P(-50% within ``SIZING_TRADES`` trades) < 1% (``SIZING_PATHS`` paths, the same for every k; the
                    path minimum is concave in k, so bisection is exact and only the undecided paths are re-walked;
                    k is rounded down); and half-Kelly from the win rate and the payoff in equity terms (clip at 0,
-                   'no edge' when Kelly <= 0). Both '설명용': the 195 accounts' sizing is fixed for the 30-day run.
+                   'no edge' when Kelly <= 0). Both '설명용': the original accounts' sizing is fixed for the 30-day run.
 - ``table``        everything per account, per strategy (the sum of its five timeframe accounts) and per timeframe
                    (the sum of that timeframe's strategy accounts), the coin flips apart.
 - ``survival_packet``  the Friday 낙폭·파산 위험 회의 packet (team:risk, trigger risk_review), with the backtest gap
@@ -42,9 +42,11 @@ from typing import Any, Iterable, Optional
 
 import numpy as np
 
+from ..config import V3_TRADE_TFS
+
 DAY_MS = 86_400_000
 KST_MS = 9 * 3_600_000
-TFS = ("5m", "15m", "30m", "1h", "4h")
+TFS = V3_TRADE_TFS                   # the run's timeframes (5m removed 2026-10-04, docs/paper-v3-rules-change-1.md)
 MIN_TRADES = 20                  # fewer closed trades: too few to simulate
 PATHS = 10_000                   # bootstrap paths per account
 SEED = 20261004                  # + crc32(account id): every account its own fixed stream (order does not matter)
@@ -366,7 +368,7 @@ def _engines(paper_ro: sqlite3.Connection) -> dict:
 
 def _equity(paper_ro: sqlite3.Connection, ids: list, since_ms: int = 0) -> dict:
     """{account: (ts array, equity array)} from the ``equity`` table, in time order. One row per account
-    (group_concat, parsed by numpy): ~4x faster than a row per sample for the 195 accounts' 5-minute samples."""
+    (group_concat, parsed by numpy): ~4x faster than a row per sample for the original accounts' 5-minute samples."""
     out: dict = {}
     if not ids:
         return out
@@ -556,7 +558,7 @@ HOW_TO_READ = (
     "모두 코드 계산, 비율은 0.25 = 25%. 자금 곡선 = 엔진이 5분마다 남긴 평가 자금(열린 포지션 포함, paper3.db equity). "
     "dd_now = 지금 최고점 대비 낙폭, max_dd = 지금까지 가장 깊은 낙폭(_usd는 달러, max_dd_at = 그 바닥 시각, 한국 시간), "
     "days_since_peak = 마지막 최고점 뒤 지난 날, longest_under_water_days = 최고점 아래에 가장 오래 머문 날 수, "
-    "week_max_dd_pct = 지난 7일 중 가장 깊었던 낙폭(최고점은 실험 시작부터). 매매법 = 5개 봉 계좌의 합. "
+    "week_max_dd_pct = 지난 7일 중 가장 깊었던 낙폭(최고점은 실험 시작부터). 매매법 = 4개 봉 계좌의 합. "
     "losing_streak = 가장 긴 연속 손실 거래 수, worst_day = 끝난 거래 손익이 가장 나빴던 날(한국 시간). "
     "p_bust_max·p_dd50_max = 그 매매법 계좌 중 가장 높은 값과 그 봉, sizing_k_min = 가장 작은 k와 그 봉. "
     "by_tf(봉 계좌): n = 끝난 거래 수, mdd = 가장 깊은 낙폭, pb = 파산 확률, p50 = -50% 확률, k = 크기 k, few = 20건 미만, "
@@ -568,7 +570,7 @@ HOW_TO_READ = (
     "중앙값·하위 5%. 거래 20건 미만 계좌는 too_few(흉내 내지 않음). 과거 거래가 앞으로도 같은 모양으로 나온다는 "
     "가정이라 실제 위험보다 작거나 클 수 있음. sizing.k = 같은 거래를 k배 크기로 했다면 100거래 안에 -50%가 될 확률이 "
     "1% 아래인 가장 큰 k(1보다 작으면 지금보다 작게). kelly = 승률과 손익비(자금 대비)로 계산한 켈리, half_kelly = 그 절반"
-    "(0 이하면 no edge). 크기 숫자는 설명용: 195개 계좌의 크기 규칙은 30일 동안 고정이고 바꾸려면 두 분 결정과 규칙 "
+    "(0 이하면 no edge). 크기 숫자는 설명용: 156개 계좌의 크기 규칙은 30일 동안 고정이고 바꾸려면 두 분 결정과 규칙 "
     "v4가 필요")
 
 
@@ -596,7 +598,7 @@ PACKET_KEYS = ("trades", "dd_now_pct", "max_dd_pct", "max_dd_usd", "max_dd_at", 
 
 
 def _group_rows(tab: dict, names_ko: dict, flags: Optional[dict] = None) -> list[dict]:
-    """The meeting packet's strategy rows, deepest drawdown first: the five accounts' sum in short, each
+    """The meeting packet's strategy rows, deepest drawdown first: the four accounts' sum in short, each
     timeframe account in the shortest form, the backtest gap flag (``bt``)."""
     rows = []
     for s, g in tab["strategies"].items():
@@ -629,7 +631,7 @@ def _names(names_ko: Optional[dict]) -> dict:
 
 def survival_packet(paper_ro: Optional[sqlite3.Connection], now_ms: int, names_ko: Optional[dict] = None,
                     cards_path: Optional[str] = None) -> dict:
-    """The Friday 낙폭·파산 위험 회의 packet: every strategy (worst deepest drawdown first) with its five accounts in
+    """The Friday 낙폭·파산 위험 회의 packet: every strategy (worst deepest drawdown first) with its four accounts in
     short, the timeframes, the coin flips, the busted accounts, and the backtest gap (agents/btgap.py)."""
     if paper_ro is None:
         return {"error": "paper3.db 없음"}
@@ -670,7 +672,7 @@ def survival_packet(paper_ro: Optional[sqlite3.Connection], now_ms: int, names_k
 
 def strategy_brief(paper_ro: Optional[sqlite3.Connection], strategy: str, now_ms: int,
                    cards_path: Optional[str] = None) -> dict:
-    """A strategy specialist's own numbers: its five accounts' sum (drawdown now and deepest), each account's
+    """A strategy specialist's own numbers: its four accounts' sum (drawdown now and deepest), each account's
     drawdown, P(bust), P(-50%), sizing k and half-Kelly, and its backtest gap flag per timeframe."""
     if paper_ro is None:
         return {"error": "paper3.db 없음"}
@@ -715,7 +717,7 @@ def brief_many(paper_ro: Optional[sqlite3.Connection], strategies: Iterable[str]
         g = compact_group(tab["strategies"].get(s))
         out[s] = {k: g.get(k) for k in ("max_dd_pct", "max_dd_usd", "dd_now_pct", "p_bust_max", "p_bust_mean",
                                         "busted", "simulated", "too_few") if k in g}
-    return {"strategies": out, "note": ("max_dd_pct = 5개 봉 계좌 합의 가장 깊은 낙폭, p_bust_max = 계좌별 30일 몬테카를로 "
+    return {"strategies": out, "note": ("max_dd_pct = 4개 봉 계좌 합의 가장 깊은 낙폭, p_bust_max = 계좌별 30일 몬테카를로 "
                                         "파산 확률 중 가장 높은 것(거래 20건 이상 계좌만). 코드 계산, 설명용")}
 
 
@@ -740,7 +742,7 @@ def week_brief(paper_ro: Optional[sqlite3.Connection], now_ms: int, names_ko: Op
 
 
 def dash_strategy(paper_ro: sqlite3.Connection, strategy: str, now_ms: int) -> dict:
-    """The strategy tab's 최대 낙폭 and 파산 확률: the five accounts' summed curve and the highest account P(bust)
+    """The strategy tab's 최대 낙폭 and 파산 확률: the four accounts' summed curve and the highest account P(bust)
     among the accounts with >= ``MIN_TRADES`` closed trades (None when none has)."""
     tab = table(paper_ro, now_ms, strategies=[strategy], kinds=("strategy",), sizing_on=False)
     g = tab["strategies"].get(strategy) or {}

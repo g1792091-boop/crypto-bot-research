@@ -4,7 +4,7 @@ A new-strategy account runs a strategy of the new-strategy lab's grammar (docs/n
 the paper v3 exits, sizing and costs. Its entry signal is ``newlab_signals.signals_for_frame`` on the
 same chart bars the lab tested on, computed here at every boundary where its timeframe closes:
 
-- In the live runner's own process (no pool, no threads) and only at live boundaries, after the 195's
+- In the live runner's own process (no pool, no threads) and only at live boundaries, after the originals'
   work at that boundary was committed (paperbot/extras.py, hook phase 2), under a wall-time budget:
   before each (coin, timeframe) job the deadline is checked and systemd's watchdog is pinged; jobs
   past the deadline are skipped and counted.
@@ -13,7 +13,7 @@ same chart bars the lab tested on, computed here at every boundary where its tim
   ``drop_no_trade``): 5m drops 5m rows with volume <= 0; 30m is resampled from the dropped 5m; 15m, 1h
   and 4h are resampled from the undropped 5m (equal to the native klines) and then lose the bars whose
   summed volume is <= 0. Frames come from ``recorder.build_frames`` with the hash-checked library (the
-  bar still forming and a partial first bin are dropped, as for the 195 and the lab).
+  bar still forming and a partial first bin are dropped, as for the originals and the lab).
 - Window lengths (EMA200 residual on the seed below e^-22 everywhere, RMA14 below e^-170; finite windows
   are exact) and the warm-up below which an account is not ready yet: ``NEWLAB_WINDOW_5M`` and
   ``NEWLAB_MIN_BARS``. Readiness is reported, never asserted.

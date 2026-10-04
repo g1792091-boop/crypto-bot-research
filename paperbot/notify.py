@@ -143,7 +143,7 @@ KO_KINDS = (("BUST", "파산"), ("drawdown", "낙폭"), ("ENGINE HALTED", "정�
 
 class Digest:
     """Collects per-account WARN messages (bust, drawdown levels) and sends them
-    as one silent message per interval, so 195 accounts cannot flood a phone.
+    as one silent message per interval, so the 156 original accounts (and the extras) cannot flood a phone.
 
     ``add`` never sends; ``flush(now_ms)`` sends when the interval has passed
     (or at once with ``force``) and returns the text it sent, if any."""

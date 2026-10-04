@@ -97,14 +97,14 @@ when only that meeting keeps failing, three times in a row, it waits alone). Whe
 already answered in the meeting and this turn's model never did (one model refused), the turn is
 skipped instead.
 
-Agents never place orders or call exchange APIs, and cannot change the original 195
+Agents never place orders or call exchange APIs, and cannot change the original 156
 accounts, the rules documents, the pass criteria or code. Extra accounts (copies and new-strategy
 accounts) are not created here: the live runner reads approved proposal rows read-only, checks them
 again itself and starts the account (docs/agent-rooms.md). Once it runs, nothing here can stop or
 change it. Losses, busts and weekly reviews of copies meet in their parent strategy's room (labelled,
 never merged into the original's numbers), those of new-strategy accounts in the lab room; meetings
 opened only by extras' trades have their own daily line (``extras_meetings_per_day``) and never use
-the 195's room slots.
+the originals' room slots.
 """
 
 from __future__ import annotations
@@ -291,7 +291,9 @@ LIBRARY_PRIOR_KO = (
     "거래당 왕복 비용(약 0.14%)만큼 손실(비용 전 수익이 0). 4시간봉만 약한 흐름(세 기간 플러스 17개, 모두 4시간봉)이 "
     "있었지만 낙폭이 크고 롱·숏이 기간마다 엇갈렸음(예: 거래량 3배 급증 진입은 고르는 구간에서 롱 손실·숏 이익). "
     "잠긴 36개 매매법도 같은 자료에서 비용을 넘지 못함. 이 실험실의 청산은 paper v3(2 ATR 손절, 계단식 익절)로 "
-    "라이브러리 청산과 다르고, 필터(ADX, 위 시간봉 추세, 변동성 국면, 시간대)와 방향(롱만·숏만)이 새로 들어갈 수 있음.")
+    "라이브러리 청산과 다르고, 필터(ADX, 위 시간봉 추세, 변동성 국면, 시간대)와 방향(롱만·숏만)이 새로 들어갈 수 있음. "
+    "5분봉은 2026-10-04 두 분 결정으로 실험에서 뺐음 — 5년 자료 거래당 −2.3%, 36칸 중 34칸 유의한 손실. 이번 실행의 "
+    "계좌는 15분·30분·1시간·4시간봉뿐이라 새 매매법도 그 봉에서 고름.")
 
 
 def lab_ready(lab: Any) -> bool:
@@ -1776,7 +1778,7 @@ def _board(ctx: RoundContext) -> dict:
 
 
 def _readiness_full(ctx: RoundContext) -> dict:
-    """agents/readiness.evaluate over the 180 strategy accounts with the newest verdict, once per tick."""
+    """agents/readiness.evaluate over the 144 strategy accounts with the newest verdict, once per tick."""
     if "readiness" in ctx.cache:
         return ctx.cache["readiness"]
     from . import readiness as RD
@@ -3165,8 +3167,9 @@ def compose_ranking(pk: dict, lead: Optional[dict], hour: int = 14) -> str:
                  + (f" (계좌당 {_usd0(per)})" if per is not None else "")
                  + f" · {c.get('wins', 0)}승 {c.get('losses', 0)}패" + (f" ({wr * 100:.0f}%)" if wr is not None else ""))
     fl = (pk.get("coin_flips") or {}).get("mean_pnl")
-    if fl is not None:      # one coin-flip account's mean: next to the per-account numbers, not the 5-account sums
-        L.append(f"동전 봇 계좌당 평균 {_usd0(fl)} (5개 합으로 치면 {_usd0(fl * 5)})")
+    if fl is not None:      # one coin-flip account's mean: next to the per-account numbers, not the 4-account sums
+        n = (pk.get("coin_flips") or {}).get("accounts_per_strategy") or 4
+        L.append(f"동전 봇 계좌당 평균 {_usd0(fl)} ({n}개 합으로 치면 {_usd0(fl * n)})")
     lines = [str(x) for x in ((lead or {}).get("summary") or []) if str(x).strip()][:3]
     if lines:
         L += ["", "[팀장 요약]"] + ["- " + A.telegram_safe(" ".join(x.split()))[:300] for x in lines]

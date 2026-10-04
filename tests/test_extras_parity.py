@@ -76,7 +76,7 @@ def test_195_equal_golden(results, name):
     diff = [k for k in KEYS if got[k] != want[k]]
     accounts = sorted(a for a in want["accounts"] if want["accounts"][a] != got["accounts"].get(a))
     assert not diff and not accounts, f"{name} vs {r['golden']}: keys {diff}, accounts {accounts[:10]}"
-    assert len(got["accounts"]) == 195
+    assert len(got["accounts"]) == 195          # the harness's frozen 5-timeframe world (H.TRADE_TFS), not the live 156
 
 
 def test_negative_control_sees_a_timing_leak(results):

@@ -24,7 +24,7 @@ Tests (per strategy x timeframe with >= ``MIN_LIVE`` live trades on its strategy
   point opposite ways: ``mixed``); 'too_few' under ``MIN_LIVE`` live trades, or a backtest row with under ``MIN_BT``
   (estimated: signals_per_day x days x sized_share) trades or a win rate of 0 or 1 (no reference); 'no_backtest'
   without a card row.
-Per strategy (its five accounts pooled): the same tests against the backtest numbers weighted by the live trades
+Per strategy (its four accounts pooled; 5m was removed on 2026-10-04 and the cards' 5m rows are left out): the same tests against the backtest numbers weighted by the live trades
 per timeframe (expected win rate sum n_tf p_tf / n with a normal approximation, variance sum n_tf p_tf (1 - p_tf);
 expected mean sum n_tf m_tf / n). The aggregate share of strategies significantly worse is a code fact: about
 ``ALPHA`` (one side of two tests) is what chance alone gives; at ``TRUST_WARN_SHARE`` or more the packet says the
@@ -40,7 +40,9 @@ import os
 import sqlite3
 from typing import Any, Iterable, Optional
 
-TFS = ("5m", "15m", "30m", "1h", "4h")
+from ..config import V3_TRADE_TFS
+
+TFS = V3_TRADE_TFS                   # the run's timeframes (5m removed 2026-10-04, docs/paper-v3-rules-change-1.md)
 MIN_LIVE = 20
 MIN_BT = 30                      # a backtest row with fewer (estimated) trades is no reference: 'too_few'
 ALPHA = 0.05
@@ -186,7 +188,7 @@ def compare_cell(live: list[tuple], bt: Optional[dict], min_live: int = MIN_LIVE
 
 
 def compare_strategy(cells: dict, bt_rows: dict, min_live: int = MIN_LIVE, alpha: float = ALPHA) -> dict:
-    """A strategy's five accounts pooled against the backtest weighted by the live trades per timeframe.
+    """A strategy's four accounts pooled against the backtest weighted by the live trades per timeframe.
     cells: {tf: [(win, roe)]}."""
     used = {tf: v for tf, v in cells.items() if v and tf in bt_rows and not bt_small(bt_rows[tf])}
     n = sum(len(v) for v in used.values())
@@ -250,7 +252,8 @@ def gap_table(paper_ro: sqlite3.Connection, now_ms: int, cards: Optional[dict] =
     for s in ss:
         bt = cards.get(s) or {}
         cells = live.get(s) or {}
-        tfs = sorted(set(cells) | set(bt), key=lambda tf: TFS.index(tf) if tf in TFS else 9)
+        # the cards' 5m rows are history: 5m is not traded in this run (docs/paper-v3-rules-change-1.md)
+        tfs = sorted(set(cells) | (set(bt) & set(TFS)), key=lambda tf: TFS.index(tf) if tf in TFS else 9)
         out[s] = {"total": compare_strategy(cells, bt, min_live, alpha),
                   "by_tf": {tf: compare_cell(cells.get(tf, []), bt.get(tf), min_live, alpha) for tf in tfs}}
     return {"strategies": out, "summary": summarise(out, alpha), "cards_found": bool(cards)}
@@ -300,7 +303,7 @@ def _short(c: dict, keys: tuple = SHORT_KEYS) -> dict:
 HOW_TO_READ = (f"실전(이 매매법 계좌의 끝난 거래) 대 5년 백테스트 카드. win_rate_p = 승률 이항검정 p(양쪽), mean_roe_p = 거래당 "
                f"평균 ROE 차이의 z 검정 p(실전 표준편차와 카드의 표준오차 사용). flag: worse = p < {ALPHA}이고 실전이 낮음, "
                f"better = p < {ALPHA}이고 실전이 높음, similar = 그 밖(mixed = 두 검정이 반대 방향), too_few = 실전 "
-               f"{MIN_LIVE}건 미만 또는 백테스트 {MIN_BT}건 미만. 매매법 전체(total)는 5개 봉을 합쳐 봉별 실전 거래 수로 가중한 백테스트 숫자와 비교. 한 달 "
+               f"{MIN_LIVE}건 미만 또는 백테스트 {MIN_BT}건 미만. 매매법 전체(total)는 4개 봉을 합쳐 봉별 실전 거래 수로 가중한 백테스트 숫자와 비교. 한 달 "
                "거래는 같은 시장을 겪어 서로 닮았으므로 p는 실제보다 작게 나올 수 있음(설명용, 판정 아님). " + UNITS_NOTE)
 
 

@@ -1,4 +1,4 @@
-"""Extra paper accounts next to the 195: started from the owners' approved proposals, never changing the 195.
+"""Extra paper accounts next to the originals: started from the owners' approved proposals, never changing them.
 
     python -m paperbot.extras status --db paper3.db
 
@@ -11,15 +11,15 @@ Two kinds (docs/extra-accounts.md):
   come from paperbot/newlab_live.py, exits, sizing and costs are paper v3.
 
 Where the code runs (the parity argument, docs/extra-accounts.md)
-- The live runner calls ``Extras.post_boundary(boundary, submitted, timed_out)`` after the 195's work at a
-  boundary is committed. Phase 1 (always, pure Python on the 195's submitted list): copies get their
+- The live runner calls ``Extras.post_boundary(boundary, submitted, timed_out)`` after the originals' work at a
+  boundary is committed. Phase 1 (always, pure Python on the originals' submitted list): copies get their
   parents' signals. Phase 2 (only when the boundary is live: at most 120 s old at hook entry, after the
-  restart's catch-up, and the 195 did not time out; under a wall-time budget): new-strategy signals and the
+  restart's catch-up, and the originals did not time out; under a wall-time budget): new-strategy signals and the
   activation of approved proposals. Each phase commits only through its own ``book.save``; an exception
   rolls back that phase's writes and undoes its in-memory changes. Nothing here can stop the runner.
-- Extras step in the same engine loop as the 195, so they are ``GuardedEngine`` (an exception holds that
+- Extras step in the same engine loop as the originals, so they are ``GuardedEngine`` (an exception holds that
   account) or ``HeldEngine`` (frozen), and every Signal they get is plain JSON before it is submitted. Inside
-  that loop they cost the 195 nothing but their engines' step: their CRITICAL lines are written to the alerts
+  that loop they cost the originals nothing but their engines' step: their CRITICAL lines are written to the alerts
   table at once and sent to Telegram only after the poll (``post_batch``) or after phase 2 of a live boundary,
   and their fills never fetch an order book (live3 ``_fill_costs``).
 - At load only runtime-owned code judges an account (``COPY_TEMPLATES``, ``NEWLAB_V1``, ``spec_sha``);
@@ -521,7 +521,7 @@ class GuardedEngine(PaperEngine):
         snap = engine_state(self)
         try:
             super().step(bars, funding)
-        except Exception as exc:  # noqa: BLE001  an extra's bug must not reach the 195
+        except Exception as exc:  # noqa: BLE001  an extra's bug must not reach the originals
             self.held = f"fault: {type(exc).__name__}"
             try:
                 json.dumps(engine_state(self))
@@ -541,7 +541,7 @@ class GuardedEngine(PaperEngine):
 
 def engine_args(kind: str, rule: Optional[dict], base: Settings, digest=None, forward=None) -> dict:
     """How the book builds an extra's engine (AccountBook._make keywords). ``forward``: where its CRITICAL
-    lines go (the extras' outbox, sent when no 195 compute can wait for them)."""
+    lines go (the extras' outbox, sent when no originals' compute can wait for them)."""
     return {"settings": settings_for(base, rule if kind == "copy" else None), "cls": GuardedEngine,
             "digest": digest, "forward": forward}
 
@@ -558,7 +558,7 @@ class _Outbox:
 
 
 class ExtrasDigest(Digest):
-    """The extras' own hourly digest ("추가 계좌 알림 모음"), so the 195's digest text never changes."""
+    """The extras' own hourly digest ("추가 계좌 알림 모음"), so the originals' digest text never changes."""
 
     def flush(self, now_ms: int, force: bool = False):
         if self.last_ms is None:
@@ -809,7 +809,7 @@ class Extras:
         self.activator = Activator(self)
         self.bound = False
         # CRITICAL lines of the extras (their engines, faults, state changes): written to the alerts table at once,
-        # sent to Telegram only where no 195 compute can wait for the send (flush_outbox)
+        # sent to Telegram only where no originals' compute can wait for the send (flush_outbox)
         self.outbox: list[tuple[str, str]] = []
         self.forward = _Outbox(self)
 
@@ -880,7 +880,7 @@ class Extras:
             self.digest.add(text)
 
     def flush_outbox(self) -> None:
-        """Send the held CRITICAL lines as one Telegram message. Called only where no 195 compute can wait for
+        """Send the held CRITICAL lines as one Telegram message. Called only where no originals' compute can wait for
         the send: at start-up (bind), at a live boundary after phase 2, and at the end of a poll
         (``post_batch``). Never inside the shared step or at a catch-up boundary."""
         items, self.outbox = [t for _lvl, t in self.outbox], []
@@ -965,7 +965,7 @@ class Extras:
 
     # ------------------------------------------------------------ load
     def make_of(self, row: dict) -> Optional[dict]:
-        """How ``book.load`` builds an account. None for the 195 (nothing else is touched); never raises."""
+        """How ``book.load`` builds an account. None for the originals (nothing else is touched); never raises."""
         if row.get("kind") in ORIGINAL_KINDS:
             return None
         try:
@@ -1077,7 +1077,7 @@ class Extras:
         return (r.skip_before is None or boundary >= r.skip_before) and r.now_ms() - boundary <= LIVE_MS
 
     def post_boundary(self, boundary: int, submitted: list, timed_out: bool) -> None:
-        """Called by the runner after the 195's work at ``boundary`` was committed (see the module docstring)."""
+        """Called by the runner after the originals' work at ``boundary`` was committed (see the module docstring)."""
         if self.book.last_ts is None:
             return
         t0 = time.monotonic()
@@ -1086,7 +1086,7 @@ class Extras:
         if submitted and self._copies_of({aid for aid, _ in submitted}, boundary):
             self._phase(1, boundary, lambda j: self._phase1(boundary, submitted, j), snapshot=False)
         if not live or timed_out:
-            # nothing is sent here: in a catch-up burst a later boundary's 195 compute may still follow in this
+            # nothing is sent here: in a catch-up burst a later boundary's originals' compute may still follow in this
             # batch (the outbox and the digest go out at the end of the poll, post_batch)
             self._count_skipped(boundary)
             self.state["health"]["hook_ms"] = int((time.monotonic() - t0) * 1000)
@@ -1140,7 +1140,7 @@ class Extras:
         self.store.put_state(STATE_KEY, now, st)
 
     def _count_skipped(self, boundary: int) -> None:
-        """A boundary the new-strategy accounts were not computed at (not live, or the 195 timed out): counted
+        """A boundary the new-strategy accounts were not computed at (not live, or the originals timed out): counted
         per timeframe and kept as runs [[first, last], ...] (checkpoint leaves those bars out of the rate).
         Kept in memory and written with the next state write."""
         if self.newlab is None or not self.newlab.specs:

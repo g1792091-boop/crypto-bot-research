@@ -121,6 +121,22 @@ def test_feed_never_passes_forming_bar_and_backfills():
     assert [t for t, _, _ in more] == [T0 + 10 * MIN]
 
 
+def test_feed_waits_settle_ms_after_close_before_reading_a_bar():
+    """A 1m bar is read only once ``settle_ms`` (default 5 s) has passed after its close, so a row the exchange
+    returns in the first moments after the close (without the minute's last trades) is never used."""
+    syms = ["BTCUSDT"]
+    fake = FakeBinance(syms, T0 + 10 * MIN + 2_000)  # bar 9 closed 2 s ago
+    feed = LiveFeed(rest_for(fake), syms, start_time=T0 + 3 * MIN, clock_ms=lambda: fake.now)
+    assert feed.settle_ms == 5_000
+    assert [t for t, _, _ in feed.poll()] == [T0 + i * MIN for i in range(3, 9)]
+    fake.now = T0 + 10 * MIN + 4_000
+    assert feed.poll() == []
+    fake.now = T0 + 10 * MIN + 5_500
+    assert [t for t, _, _ in feed.poll()] == [T0 + 9 * MIN]
+    quick = LiveFeed(rest_for(fake), syms, start_time=T0 + 3 * MIN, clock_ms=lambda: fake.now, settle_ms=0)
+    assert [t for t, _, _ in quick.poll()][-1] == T0 + 9 * MIN
+
+
 def test_feed_waits_for_lagging_symbol_then_reports_gap():
     syms = ["BTCUSDT", "ETHUSDT"]
     fake = FakeBinance(syms, T0 + 5 * MIN + 1_000,

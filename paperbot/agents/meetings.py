@@ -31,12 +31,13 @@ import re
 import sqlite3
 from typing import Any, Optional
 
+from ..config import V3_TRADE_TFS
 from . import committee as CM
 
 DAY_MS = 86_400_000
 HOUR_MS = 3_600_000
 KST_MS = 9 * HOUR_MS
-TFS = ("5m", "15m", "30m", "1h", "4h")
+TFS = V3_TRADE_TFS                   # the run's timeframes (5m removed 2026-10-04, docs/paper-v3-rules-change-1.md)
 
 
 def _f(x: Any, default: float = 0.0) -> float:
@@ -251,7 +252,7 @@ def combo_packet(paper_ro: Optional[sqlite3.Connection], now_ms: int, days: int 
     except sqlite3.Error as exc:
         return {"error": f"paper3.db를 읽지 못함: {type(exc).__name__}"}
     names = _names()
-    # daily P&L of each strategy (its five accounts, KST days with at least one closed trade anywhere)
+    # daily P&L of each strategy (its four accounts, KST days with at least one closed trade anywhere)
     day_list = sorted({_kst_day(int(_f(d.get("exit_time")))) for *_x, d in rows})
     daily: dict = {}
     for _a, _k, s, _tf, d in rows:
@@ -308,7 +309,7 @@ def combo_packet(paper_ro: Optional[sqlite3.Connection], now_ms: int, days: int 
            "losses_together": {"hours": events[:10], "hours_found": len(events), "rule": f"한 시간에 {min_losers}개 이상의 "
                                "매매법이 그 시간에 끝난 거래 합계로 손실", "days": days_view},
            "consensus": _consensus(week, window_ms), "coin_flips": _flip_cell(flips)}
-    out["note"] = ("코드 계산. 상관은 하루 손익(매매법의 5개 봉 계좌 합) 기준이라 날이 적으면(small) 우연이 큼. 합의 신호 = 같은 코인·같은 "
+    out["note"] = ("코드 계산. 상관은 하루 손익(매매법의 4개 봉 계좌 합) 기준이라 날이 적으면(small) 우연이 큼. 합의 신호 = 같은 코인·같은 "
                    f"방향으로 {window_ms // 60_000}분 안에 진입한 다른 매매법 수(자기 포함). 동전 봇은 무작위 진입이라 비교 기준")
     return out
 

@@ -17,7 +17,7 @@ the payoff ratio is low by design and the win rate has to be high to break even.
                      fraction of the initial stop distance |entry - stop_initial|, median / 80th / 90th percentile, and
                      the share that stayed within 25 / 50 / 75% of it: would a tighter stop have kept them?), and the
                      distribution of win and loss ROE in buckets. ``small``: under ``SMALL_N`` trades.
-- ``table``          per strategy (all five timeframes) and per strategy x timeframe over [since, until).
+- ``table``          per strategy (all four timeframes) and per strategy x timeframe over [since, until).
 - ``shadow_summary`` the nightly exit shadows (daily3.db ``shadows``: base, lock15, lock20, lock30, timestop, lev10,
                      lev20; paperbot/obsshadows.py; and from docs/observation-shadows-3.md lev30, lev40, lev50 and
                      the stop widths stopw1.5, stopw2.5, stopw3 at the real trade's leverage) per strategy over the
@@ -40,8 +40,10 @@ import json
 import sqlite3
 from typing import Any, Iterable, Optional
 
+from ..config import V3_TRADE_TFS
+
 DAY_MS = 86_400_000
-TFS = ("5m", "15m", "30m", "1h", "4h")
+TFS = V3_TRADE_TFS                   # the run's timeframes (5m removed 2026-10-04, docs/paper-v3-rules-change-1.md)
 SMALL_N = 10                     # cells under this many trades are marked small (chance can explain them)
 EXITS = ("LOCK", "SL", "LIQ")    # the rest count as 'other' (TP, HALT, END, ...)
 # share of equity put up as margin at each leverage (paper v3 tiers; = obsshadows.MARGIN_FRAC, 10x is the lev10 shadow)
@@ -648,7 +650,7 @@ def rr_packet(paper_ro: Optional[sqlite3.Connection], daily_ro: Optional[sqlite3
 
 def strategy_brief(paper_ro: Optional[sqlite3.Connection], strategy: str, now_ms: int, days: int = 7,
                    round_trip: Optional[float] = None) -> dict:
-    """A strategy specialist's risk-reward numbers (its own five accounts only): totals of the last 7 days and
+    """A strategy specialist's risk-reward numbers (its own four accounts only): totals of the last 7 days and
     since the start, and each timeframe since the start."""
     if paper_ro is None:
         return {"error": "paper3.db 없음"}

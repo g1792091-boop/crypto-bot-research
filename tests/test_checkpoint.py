@@ -97,12 +97,13 @@ def _engine_run(m, tf, lo, hi, sigs, atr, s=S):
     return engines
 
 
-@pytest.mark.parametrize("tf,kw,bust_below", [
-    ("15m", dict(seed=11, vol=0.002), 10.0),                                          # wide stops: 20x, locks
-    ("5m", dict(seed=7, vol=0.0003, gaps=0.002, gap_size=0.03, mark_wicks=0.002), 10.0),  # 30-50x, gaps, LIQ
-    ("5m", dict(seed=8, vol=0.0003, gaps=0.002, gap_size=0.03, mark_wicks=0.002), 4500.0),  # bust path
+@pytest.mark.parametrize("tf,kw,bust_below,tight", [
+    ("15m", dict(seed=11, vol=0.002), 10.0, False),                                         # wide stops: 20x, locks
+    # tight stops (until 2026-10-04 on 5m, which the run no longer has): 30-50x, gaps, LIQ
+    ("15m", dict(seed=7, vol=0.0003, gaps=0.002, gap_size=0.03, mark_wicks=0.002), 10.0, True),
+    ("15m", dict(seed=8, vol=0.0003, gaps=0.002, gap_size=0.03, mark_wicks=0.002), 4500.0, True),  # bust path
 ])
-def test_bots_match_paper_engine(tf, kw, bust_below):
+def test_bots_match_paper_engine(tf, kw, bust_below, tight):
     s = v3_settings(bust_below=bust_below)
     lo = T0 + 4 * DAY
     hi = lo + 3 * DAY
@@ -135,7 +136,7 @@ def test_bots_match_paper_engine(tf, kw, bust_below):
     assert {"SL", "LOCK"} <= reasons          # the comparison covered stops and profit locks
     if bust_below > 10:
         assert any(e.bust for e in engines) and not all(e.bust for e in engines)
-    elif tf == "5m":
+    elif tight:
         assert "LIQ" in reasons and {t.leverage for e in engines for t in e.trades} >= {30, 40}
     assert sum(len(e.trades) for e in engines) > 50
 
@@ -415,7 +416,7 @@ def test_verdict_text_korean_names():
              "S2_ST_ROC@1h~c1": row("S2_ST_ROC", "1h", "copy", ck.PASS1, 0.02),
              "S2_ST_ROC@1h~c2": row("S2_ST_ROC", "1h", "copy", ck.PASS2, 0.03),
              "NL3@15m": row("NL3", "15m", "newlab", ck.PASS1, 0.04),
-             "N07_ICHI_CMO@5m": row("N07_ICHI_CMO", "5m", "strategy", ck.FAIL, 0.5)}
+             "N07_ICHI_CMO@30m": row("N07_ICHI_CMO", "30m", "strategy", ck.FAIL, 0.5)}
     v = {"day": 30, "date": d, "n_bots": 2000, "alpha": 0.1, "tested": 5, "luck_passed": 4, "lucky_expected": 0.4,
          "lucky_if_uncorrected": 0.5, "snapshot_sha256": "ab" * 32, "warnings": [],
          "counts": {k: sum(r["status"] == k for r in accts.values()) for k in ck.STATUSES}, "accounts": accts}
@@ -514,6 +515,23 @@ def test_4h_observation_only():
     rows, tasks = ck.plan(s, {}, {}, S)
     assert rows["A@4h"]["status"] == ck.OBSERVE
     assert [t.aid for t in tasks] == ["A@1h"]
+
+
+def test_judged_timeframes_without_5m():
+    """5m was removed at the restart of 2026-10-04 (docs/paper-v3-rules-change-1.md): the judged timeframes are
+    15m / 30m / 1h, the originals' Q1 family holds at most 36 x 3 = 108 accounts, and a 5m account (none is
+    created any more) would never be judged."""
+    from paperbot.config import V3_STRATEGIES, V3_TRADE_TFS
+    assert ck.JUDGED_TFS == ("15m", "30m", "1h") and ck.OBSERVE_TFS == ("4h",)
+    assert ck.Q1_MAIN_FAMILY == V3_STRATEGIES * len(ck.JUDGED_TFS) == 108
+    assert "5m" not in ck.TF_MS and "5m" not in ck.TF_KO and set(ck.TF_MS) == set(V3_TRADE_TFS)
+    cp = T0 + 30 * DAY
+    accts = {f"S{k}@{tf}": _acct(tf, 80, 90_000.0, T0, cp) for k in range(V3_STRATEGIES) for tf in V3_TRADE_TFS}
+    accts["OLD@5m"] = _acct("5m", 80, 90_000.0, T0, cp)
+    rows, tasks = ck.plan(_snap(cp, accts), {}, {}, S)
+    assert len(tasks) == ck.Q1_MAIN_FAMILY and {t.tf for t in tasks} == set(ck.JUDGED_TFS)
+    assert rows["OLD@5m"]["status"] == ck.OBSERVE and "5분봉" in rows["OLD@5m"]["reason"]
+    assert all(rows[f"S{k}@4h"]["status"] == ck.OBSERVE for k in range(V3_STRATEGIES))
 
 
 def test_decide_rules():

@@ -4,7 +4,7 @@ A hypothesis may carry a ``prediction`` in a fixed form (``clean_prediction``):
 
     {"metric": "mean_roe" | "win_rate" | "lock_share" | "loss_tag_share",
      "tag": "<a loss-card tag>"       (loss_tag_share only),
-     "timeframe": "5m" .. "4h" | null (all five accounts of the strategy),
+     "timeframe": "15m" .. "4h" | null (all four accounts of the strategy; 5m removed 2026-10-04),
      "direction": "above" | "below", "value": number, "after_trades": 30 .. 300}
 
 Code grades it once, on the first ``after_trades`` trades of that strategy (and timeframe) that were
@@ -26,12 +26,13 @@ import math
 import sqlite3
 from typing import Any, Optional
 
+from ..config import V3_TRADE_TFS
 from . import rooms_db as R
 
 METRICS = {"mean_roe": ("거래당 평균 ROE", -1.0, 5.0), "win_rate": ("승률", 0.0, 1.0),
            "lock_share": ("익절 잠금으로 끝난 비율", 0.0, 1.0),
            "loss_tag_share": ("손실 중 그 특징이 있는 비율", 0.0, 1.0)}
-TFS = ("5m", "15m", "30m", "1h", "4h")
+TFS = V3_TRADE_TFS                   # the run's timeframes (5m removed 2026-10-04, docs/paper-v3-rules-change-1.md)
 MIN_TRADES, MAX_TRADES = 30, 300
 EXPIRE_DAYS = 120
 DAY_MS = 86_400_000
@@ -58,7 +59,7 @@ def clean_prediction(p: Any) -> tuple[Optional[dict], Optional[str]]:
         out["tag"] = p["tag"]
     tf = p.get("timeframe")
     if tf not in (None, *TFS):
-        return None, "timeframe은 5m·15m·30m·1h·4h 또는 null"
+        return None, f"timeframe은 {'·'.join(TFS)} 또는 null"
     out["timeframe"] = tf
     if p.get("direction") not in ("above", "below"):
         return None, "direction은 above 또는 below"
@@ -79,7 +80,7 @@ def clean_prediction(p: Any) -> tuple[Optional[dict], Optional[str]]:
 
 def describe_ko(p: dict) -> str:
     what = METRICS[p["metric"]][0] + (f"('{p['tag']}')" if p.get("tag") else "")
-    tf = p.get("timeframe") or "5개 봉 합계"
+    tf = p.get("timeframe") or f"{len(TFS)}개 봉 합계"
     return (f"앞으로 {tf} 거래 {p['after_trades']}건의 {what}이(가) {p['value']:g} "
             f"{'보다 높음' if p['direction'] == 'above' else '보다 낮음'}")
 

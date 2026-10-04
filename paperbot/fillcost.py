@@ -21,11 +21,11 @@ closed; a stop that triggered inside that minute was earlier. Steps replayed aft
 symbol with an event per minute (weight 5 at 100 levels), at most six a minute.
 
 Only the original accounts' events request a book. An extra account's event (paperbot/extras.py) reuses a
-book fetched for the 195 in the same step, else it is recorded as ``status = 'skipped'``: a request runs
-before the 195's next signal compute and would move their reference prices and delays.
+book fetched for the originals in the same step, else it is recorded as ``status = 'skipped'``: a request runs
+before the originals' next signal compute and would move their reference prices and delays.
 
 The bars live used (records only, option 3a of the 2026-10-03 parity diagnosis): the call that may fetch a book
-(``fetch=True``, the 195's call in live3) also returns one ``event = 'bar'`` row per traded coin of the step,
+(``fetch=True``, the originals' call in live3) also returns one ``event = 'bar'`` row per traded coin of the step,
 with the 1m bar exactly as the accounts stepped on it (open/high/low/close/volume, mark OHLC) and
 ``processed_at`` (the runner's clock when it handled the step). Store3.fill_costs sends these rows to the
 ``live_bars`` table, never to ``fill_costs``. The nightly check replays the day on them to tell a 1m kline the
@@ -142,9 +142,9 @@ class FillProbe:
         """Rows for ``engines``' entries and exits of the step. ``books`` (symbol -> fetched book) is filled in
         and may be shared between calls of the same step. ``fetch=False`` never requests a book: an event on a
         symbol without a book already fetched in this step is recorded as ``status = 'skipped'`` (the live
-        runner uses it for the extra accounts, so they never add a request before the 195's next compute).
+        runner uses it for the extra accounts, so they never add a request before the originals' next compute).
 
-        The ``fetch=True`` call (the 195's) also returns the step's bars as ``event = 'bar'`` rows (``bar_rows``),
+        The ``fetch=True`` call (the originals') also returns the step's bars as ``event = 'bar'`` rows (``bar_rows``),
         after the entry / exit rows; the ``fetch=False`` call never does, so each bar is recorded once."""
         bar_recs: list[dict] = []
         if fetch:

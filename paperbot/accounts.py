@@ -44,8 +44,8 @@ def account_id(strategy: str, timeframe: str) -> str:
 class _StoreNotifier:
     """Per-account messages go to the store. CRITICAL ones (liquidation, operator
     action) are forwarded at once; WARN ones (bust, drawdown levels) go to the
-    digest, which sends them as one silent message per hour, so 195 accounts do
-    not flood Telegram. INFO stays on the dashboard."""
+    digest, which sends them as one silent message per hour, so the 156 original
+    accounts do not flood Telegram. INFO stays on the dashboard."""
 
     def __init__(self, store: Store3, forward: Notifier, clock, digest: Optional[Digest] = None):
         self.store, self.forward, self.clock, self.digest = store, forward, clock, digest
@@ -98,7 +98,7 @@ class AccountBook:
               digest: Optional[Digest] = None, forward: Optional[Notifier] = None) -> PaperEngine:
         """One engine. The defaults (the book's settings object, PaperEngine, the book's digest, the book's
         notifier for CRITICAL lines) are what every original account gets; an extra account may pass its own
-        (paperbot/extras.py holds an extra's CRITICAL lines until no 195 compute can wait for them)."""
+        (paperbot/extras.py holds an extra's CRITICAL lines until no originals' compute can wait for them)."""
         def on_trade(rec, aid=aid):
             self.store.trade(aid, rec)
 

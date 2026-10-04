@@ -1,13 +1,16 @@
-"""Paper v3 live runner: 195 accounts on live Binance data (docs/paper-v3-rules.md).
+"""Paper v3 live runner: the original accounts (config.V3_ACCOUNTS = 156: 36 strategies and 3 coin-flip
+accounts on each of 15m, 30m, 1h and 4h) on live Binance data (docs/paper-v3-rules.md; 5m removed on
+2026-10-04, docs/paper-v3-rules-change-1.md).
 
     python -m paperbot.live3 run --db paper3.db [--brackets FILE | --allow-example-brackets]
     python -m paperbot.live3 status --db paper3.db
 
 Every poll: closed 1m bars (last and mark price, funding) for the six coins and
 XRP -> every account's engine steps (entries, stops, profit locks, funding) ->
-5m bars -> at each 5m boundary the signal service computes the timeframes that
-close there and submits the signals; they fill on the next step at the price
-read right after the computation.
+5m bars (the internal base bars, not a traded timeframe) -> at each 5m boundary
+the signal service computes the traded timeframes that close there (none at a
+boundary that is not a 15m close) and submits the signals; they fill on the next
+step at the price read right after the computation.
 
 Restart: the account states, the last processed minute and the pending signals
 are in the store. On start the runner reloads them, rebuilds the 5m history
@@ -16,11 +19,11 @@ logged as LATE and not traded (a live bot would have missed them too).
 
 Extra accounts (copies and new strategies started from approved proposals,
 paperbot/extras.py and docs/extra-accounts.md) run in the same book. The hooks
-are ``post_boundary(boundary, submitted, timed_out)``, called after the 195's
+are ``post_boundary(boundary, submitted, timed_out)``, called after the originals'
 work at a boundary has been committed (it guards itself, and a last fence here
-rolls back its writes and keeps the 195 running), and ``post_batch(now)`` at the
+rolls back its writes and keeps the originals running), and ``post_batch(now)`` at the
 end of a poll (the extras' Telegram messages). Before a boundary's compute the
-extras cost the 195 nothing but their engines' step: they fetch no order book
+extras cost the originals nothing but their engines' step: they fetch no order book
 (fill costs) and send no message. Only one runner may write a database at a
 time (a lock on the database file itself).
 
@@ -40,7 +43,7 @@ from typing import Callable, Optional
 from .accounts import ORIGINAL_KINDS, AccountBook, hold_others
 from .aggregate import TF_MS, Aggregator
 from .binance import BinanceError, BinanceREST, RegionBlocked
-from .config import V3_SYMBOLS, v3_settings
+from .config import V3_RANDOM_SEEDS, V3_SYMBOLS, v3_settings
 from .feed import LiveFeed
 from .fillcost import LIMIT as FILL_DEPTH, FillProbe
 from . import sweepsig
@@ -58,7 +61,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RANDOM_RATES = os.path.join(ROOT, "research", "paper_rules", "out", "summary.json")
 
 
-def account_defs(strategies, tfs, seeds=(1, 2, 3)) -> list[dict]:
+def account_defs(strategies, tfs, seeds=V3_RANDOM_SEEDS) -> list[dict]:
     defs = [{"strategy": s, "timeframe": tf, "kind": "strategy"} for tf in tfs for s in strategies]
     defs += [{"strategy": f"RANDOM_{k}", "timeframe": tf, "kind": "random"} for tf in tfs for k in seeds]
     return defs
@@ -113,12 +116,12 @@ class Runner3:
         self.digest = digest
         self.signal_timeouts = 0
         self.fills = fills  # order-book cost of each entry / exit (records only, never a fill)
-        # extras (paperbot/extras.py): called after the 195's boundary commit as
+        # extras (paperbot/extras.py): called after the originals' boundary commit as
         # post_boundary(boundary: int, submitted: list[tuple[str, Signal]], timed_out: bool)
         self.post_boundary = None
         self.post_boundary_errors = 0
         # extras: called as post_batch(now_ms) at the end of process(), after every boundary of the batch and the
-        # commit (their Telegram messages wait until then, so they never delay a 195 compute of the batch)
+        # commit (their Telegram messages wait until then, so they never delay an originals' compute of the batch)
         self.post_batch = None
 
     def process(self, steps) -> None:
@@ -145,13 +148,13 @@ class Runner3:
         if self.post_batch is not None:
             try:
                 self.post_batch(now)
-            except Exception:  # noqa: BLE001  the extras' messages only; never stops the 195
+            except Exception:  # noqa: BLE001  the extras' messages only; never stops the originals
                 pass
 
     def _fill_costs(self, ts: int, snap: dict, bars: dict) -> None:
         """Order-book cost records of the step. Only the original accounts' events fetch a book (a REST call
         made before this boundary's signal compute); an extra account's event reuses a book fetched for them in
-        this step, else it is recorded as 'skipped', so the extras never move the 195's ref_time / delay_ms."""
+        this step, else it is recorded as 'skipped', so the extras never move the originals' ref_time / delay_ms."""
         try:
             now = self.now_ms()
             orig, others = {}, {}
@@ -214,8 +217,8 @@ class Runner3:
         if self.post_boundary is not None:
             try:
                 self.post_boundary(boundary, submitted, timed_out)
-            except Exception as exc:  # noqa: BLE001  the hook guards itself; this is the last fence for the 195
-                self.store.conn.rollback()          # the 195's boundary was committed just before: only hook writes go
+            except Exception as exc:  # noqa: BLE001  the hook guards itself; this is the last fence for the originals
+                self.store.conn.rollback()          # the originals' boundary was committed just before: only hook writes go
                 self.post_boundary_errors += 1
                 if self.post_boundary_errors >= 3:
                     self.post_boundary = None       # stop calling a hook that keeps failing
@@ -227,12 +230,12 @@ class Runner3:
 
 def start_extras(store: Store3, notifier: Notifier, db: str, settings):
     """(extras runtime or None, make_of for book.load). The extras code is imported inside a guard: if it is
-    broken the 195 run as always and every extra is held at its saved state (``hold_others``)."""
+    broken the originals run as always and every extra is held at its saved state (``hold_others``)."""
     try:
         from .extras import Extras
         ext = Extras.start(store, notifier, db, settings)
         return ext, ext.make_of
-    except Exception as exc:  # noqa: BLE001  extras code broken: the 195 run, every extra is held
+    except Exception as exc:  # noqa: BLE001  extras code broken: the originals run, every extra is held
         text = f"[extra] extras code failed to load: {type(exc).__name__}: {exc}"[:300]
         store.alert(int(time.time() * 1000), CRITICAL, text)
         notifier.send(CRITICAL, text)
@@ -241,7 +244,7 @@ def start_extras(store: Store3, notifier: Notifier, db: str, settings):
 
 def bind_extras(ext, runner: "Runner3", store: Store3, notifier: Notifier) -> None:
     """Attach the extras to the runner (new-strategy sources, code pins, the hook); a failure leaves the extras
-    without signals (their engines still step) and never stops the 195."""
+    without signals (their engines still step) and never stops the originals."""
     if ext is None:
         return
     try:

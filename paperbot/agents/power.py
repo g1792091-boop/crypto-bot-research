@@ -11,9 +11,13 @@ import json
 import os
 from typing import Optional
 
+from ..config import V3_Q1_MAIN_FAMILY
+
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 POWER_JSON = os.path.join(ROOT, "research", "power", "out", "power.json")
-FAMILY = 144
+FAMILY = V3_Q1_MAIN_FAMILY          # 108: 36 strategies x 15m / 30m / 1h (4h observation only; 5m removed 2026-10-04)
+NO_5M_KO = ("5분봉은 2026-10-04 두 분 결정으로 실험에서 뺐음 — 5년 자료 거래당 −2.3%, 36칸 중 34칸 유의한 손실. "
+            "그래서 판정 계좌는 15분·30분·1시간봉 36 × 3 = 108개")
 
 
 def load(path: str = POWER_JSON) -> Optional[dict]:
@@ -47,6 +51,7 @@ def brief(path: str = POWER_JSON, family: int = FAMILY) -> dict:
         if rows:
             table[tf] = rows
     return {"lines_ko": doc.get("summary_ko") or [], "family": family, "table": table, "timeframes": info,
+            "no_5m": NO_5M_KO,
             "columns": ["edge_roe(거래당 순 ROE에 더한 엣지, 0.01 = +1%)", "30일 1차 합격 확률", "60일까지 1차 합격 확률",
                         "60일까지 2차 통과 확률"],
             "generated": doc.get("generated"), "source": "research/power/power.py (out/power.json)",

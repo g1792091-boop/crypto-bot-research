@@ -17,7 +17,7 @@ For one UTC day (default: yesterday):
    after its start (minus the ones its skip tag drops), an account started during
    the day from its start, and no signals while suspended / no steps while held
    (state ``extras`` events). A copy that lost one boundary's signal in a restart
-   (killed between the 195's commit and the copy's) is reported for that copy
+   (killed between the originals' commit and the copy's) is reported for that copy
    only, as "추가 계좌 재시작 틈".
    Early 1m klines (``explain_mismatches``): the live feed takes a 1m kline as soon as the minute has closed and
    never reads it again, so a kline read within a second of its close can miss the minute's last trades (a less
@@ -259,7 +259,7 @@ CRASH_GAP_KO = "추가 계좌 재시작 틈"
 def label_crash_gaps(mism: list[dict], extras: dict, conn, gap_ms: int = 10 * MIN) -> list[dict]:
     """Mark an extra's mismatch as a restart gap when its first replayed trade the live run does not have
     came from a signal bar followed by a runner start within ``gap_ms`` (the copy lost that boundary's
-    signal in a restart; never a mismatch of the 195)."""
+    signal in a restart; never a mismatch of the originals)."""
     starts = [int(r[0]) for r in conn.execute("SELECT started_ts FROM runs")]
     for m in mism:
         x = extras.get(m["account_id"])
@@ -1044,7 +1044,7 @@ def notify_report(report: dict, notifier, trades_day: Optional[int] = None) -> l
                                "(완성된 1분봉으로는 일치, 기록 확인 필요: daily3.db reports)"))
         if par.get("crash_gaps"):
             msgs.append((WARN, f"[{day}] {CRASH_GAP_KO}: 추가 계좌 {par['crash_gaps']}개가 재시작 때 신호 하나를 놓쳤습니다 "
-                               "(원래 195개 계좌와는 무관, daily3.db mismatches)"))
+                               "(원래 계좌와는 무관, daily3.db mismatches)"))
         ok = par['accounts'] - par['mismatched_accounts'] - par.get('crash_gaps', 0) - early
         par_txt = f"재계산 일치 {ok}/{par['accounts']}" + (f" (확정 전 1분봉 {early})" if early else "")
     else:

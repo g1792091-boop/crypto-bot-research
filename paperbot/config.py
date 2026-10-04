@@ -130,6 +130,16 @@ V3_SYMBOLS = ("BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "LTCUSDT", "BCHUSDT")
 V3_STOP_ATR = 2.0
 # Each account starts with this many USDT (owners' decision 2026-09-30, was 1,000).
 V3_INITIAL = 5000.0
+# Traded timeframes. 5m was removed by the owners on 2026-10-04 together with the restart from scratch
+# (docs/paper-v3-rules-change-1.md): no 5m strategy or coin-flip accounts. 5m bars stay the signal
+# service's internal base bars (the other timeframes are built from them). 1d is record-only.
+V3_TRADE_TFS = ("15m", "30m", "1h", "4h")
+V3_OBSERVE_TFS = ("4h",)             # addendum Q3: observation only, outside the Q1 verdict family
+V3_JUDGED_TFS = tuple(tf for tf in V3_TRADE_TFS if tf not in V3_OBSERVE_TFS)
+V3_STRATEGIES = 36                   # locked strategies, DOGE_L + DOGE_S joined as DOGE (sigservice.strategy_names)
+V3_RANDOM_SEEDS = (1, 2, 3)          # coin-flip accounts per timeframe
+V3_ACCOUNTS = (V3_STRATEGIES + len(V3_RANDOM_SEEDS)) * len(V3_TRADE_TFS)   # 156 original accounts
+V3_Q1_MAIN_FAMILY = V3_STRATEGIES * len(V3_JUDGED_TFS)                      # 108 (15m / 30m / 1h)
 
 
 def v3_settings(**over) -> Settings:

@@ -296,7 +296,7 @@ def analyse(paper_ro: Optional[sqlite3.Connection], now_ms: int, level: str = "s
             out["coin_flips"] = {"units": len(flips), "best_score": _r(fb[0][0], 3),
                                  "best": [flips[i] for i in fb[0][1]],
                                  "note": (f"동전 봇 계좌 {len(flips)}개(계좌 하나씩)로 같은 탐색: 비교 기준일 뿐 조건이 같지 않음"
-                                          "(후보 수가 다르고, 매매법은 봉 계좌 5개의 합)")}
+                                          "(후보 수가 다르고, 매매법은 봉 계좌 4개의 합)")}
     out["same_bet_pairs"] = ([{"strategies": [names_ko.get(s, s) for s in sorted(k)], **v}
                               for k, v in sorted(sb.items(), key=lambda kv: -(kv[1].get("same_of_busy") or 0))][:8]
                              if sb else [])

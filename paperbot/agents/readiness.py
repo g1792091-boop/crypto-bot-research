@@ -19,7 +19,7 @@ its numbers:
 - ``regimes2``      Q6-3: P&L > 0 in >= 2 different market regimes (the trade's regime at entry, cards.REGIME_KO;
                     a regime counts with >= ``MIN_REGIME_TRADES`` trades; under ``MIN_TRADES`` trades in all:
                     아직 판단 불가).
-- ``neighbour_tf``  Q6-3: the neighbouring timeframe (5m-15m-30m-1h-4h) goes the same way: the account's P&L > 0
+- ``neighbour_tf``  Q6-3: the neighbouring timeframe (15m-30m-1h-4h; 5m removed 2026-10-04) goes the same way: the account's P&L > 0
                     and a neighbour with >= ``MIN_TRADES`` trades also > 0.
 - ``cost_ratio``    Q6-4: real cost / assumed cost <= 1.5, measured in a minimal real-money run. No such run yet,
                     and the executor's database is not readable by the agents: always 아직 판단 불가. The paper
@@ -39,11 +39,13 @@ import sqlite3
 from functools import lru_cache
 from typing import Any, Optional
 
+from ..config import V3_TRADE_TFS
+
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 ADDENDUM = "docs/paper-v3-rules-addendum.md"
 LIVE_SAFETY = "docs/live-safety.md"
 DAY_MS = 86_400_000
-TFS = ("5m", "15m", "30m", "1h", "4h")
+TFS = V3_TRADE_TFS                   # the run's timeframes (5m removed 2026-10-04, docs/paper-v3-rules-change-1.md)
 OK, NO, UNKNOWN = "✅", "❌", "아직 판단 불가"
 MARK = {OK: "✅", NO: "❌", UNKNOWN: "?"}
 MIN_TRADES = 30              # fewer closed trades: regimes and neighbours cannot say yet

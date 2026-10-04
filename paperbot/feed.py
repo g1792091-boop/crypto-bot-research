@@ -6,8 +6,11 @@ the last one seen, per symbol, and returns aligned steps
 
 A step is released when every symbol has its bar, or once ``grace_ms`` has
 passed after the bar closed (then missing symbols are reported as a data
-gap). Only bars whose close time is before the server clock are used, so a
-still-forming bar is never passed on.
+gap). Only bars that closed at least ``settle_ms`` before the server clock
+are used, so a still-forming bar is never passed on, nor one read in the
+first moments after its close, when the exchange can still return a row
+without the minute's last trades (docs/signal-recording.md, "1분봉을 확정 전에
+읽는 문제").
 """
 
 from __future__ import annotations
@@ -28,7 +31,8 @@ class LiveFeed:
                  grace_ms: int = 20_000, stale_after_ms: int = 4 * MIN_MS,
                  clock_ms: Callable[[], int] = lambda: int(time.time() * 1000),
                  on_event: Optional[Callable[[str, str], None]] = None,
-                 clock_check_every: int = 60, max_clock_skew_ms: int = 1000):
+                 clock_check_every: int = 60, max_clock_skew_ms: int = 1000,
+                 settle_ms: int = 5_000):
         self.rest = rest
         self.symbols = list(symbols)
         self.grace_ms = grace_ms
@@ -37,6 +41,7 @@ class LiveFeed:
         self.on_event = on_event or (lambda level, text: None)
         self.clock_check_every = clock_check_every
         self.max_clock_skew_ms = max_clock_skew_ms
+        self.settle_ms = settle_ms
 
         self.next_open: dict[str, Optional[int]] = {s: start_time for s in self.symbols}
         self.buffer: dict[int, dict[str, Bar]] = defaultdict(dict)
@@ -65,7 +70,7 @@ class LiveFeed:
         start = self.next_open[sym]
         if start is None:
             rows = self.rest.klines(sym, "1m", limit=3)
-            closed = [r for r in rows if int(r[6]) < now]
+            closed = [r for r in rows if int(r[6]) + self.settle_ms < now]
             if not closed:
                 return
             start = int(closed[-1][0])
@@ -74,7 +79,7 @@ class LiveFeed:
                 self.funding_since[sym] = start
         while True:
             rows = self.rest.klines(sym, "1m", start_time=start, limit=1500)
-            rows = [r for r in rows if int(r[6]) < now and int(r[0]) >= start]
+            rows = [r for r in rows if int(r[6]) + self.settle_ms < now and int(r[0]) >= start]
             if not rows:
                 return
             marks = self.rest.mark_klines(sym, "1m", start_time=start, limit=1500)

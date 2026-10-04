@@ -59,8 +59,9 @@ def test_ranking_picks_top_and_bottom_without_overlap(tmp_path):
 def test_ranking_text_compares_per_account_numbers_with_the_coin_flip_mean(tmp_path):
     from paperbot.agents import rooms as RM
     r = C.ranking(_db(tmp_path), 5000.0, 0.0014, k=2, cards_fn=lambda s: [card("BTCUSDT", 1, "5m", 10)])
-    assert r["picked"][0]["pnl_per_account"] == 450.0 and r["coin_flips"]["mean_pnl_x5"] == -500.0
+    assert r["picked"][0]["pnl_per_account"] == 450.0 and r["coin_flips"]["mean_pnl_per_strategy"] == -400.0
+    assert r["coin_flips"]["accounts_per_strategy"] == 4                 # 15m / 30m / 1h / 4h (5m removed 2026-10-04)
     text = RM.compose_ranking(r, None)
     # a strategy's sum is over its accounts, the coin-flip mean is one account's: both are shown per account
     assert "A: +$900 (계좌당 +$450)" in text
-    assert "동전 봇 계좌당 평균 -$100 (5개 합으로 치면 -$500)" in text
+    assert "동전 봇 계좌당 평균 -$100 (4개 합으로 치면 -$400)" in text

@@ -37,7 +37,7 @@ Definitions (all over one time window, ``days`` back from the last equity sample
   members' average max drawdown (5-minute points), and the worst UTC day of the
   sum vs the members' worst days added up. Ratio near 1 = no spreading of risk.
 
-Everything is vectorised with numpy (a 4-week window of 195 accounts takes well
+Everything is vectorised with numpy (a 4-week window of ~200 accounts takes well
 under a second, see tests/test_overlap.py for the timing check).
 """
 

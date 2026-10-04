@@ -1,6 +1,6 @@
 # GH Coin call recorder (docs/ghcoin-recorder.md): GH Coin's own combo engine, unchanged, from the pinned commit
 # in deploy/ghcoin.commit (copied to /opt/ghcoin by deploy/install.sh). Public market data only, no key, no order.
-# Writes only /var/lib/paperbot/ghcoin (calls.jsonl, board.json, state.json). A separate comparison: the 195
+# Writes only /var/lib/paperbot/ghcoin (calls.jsonl, board.json, state.json). A separate comparison: the original
 # paper accounts never read it.
 [Unit]
 Description=paperbot GH Coin call recorder

@@ -71,23 +71,23 @@ def test_extra_watched_keys_and_text(tmp_path):
     ch = changes(a, b)
     assert [(c["key"], c["trading"], c.get("extras_only")) for c in ch] == [("extra_code", True, True)]
     txt = change_text(ch)
-    assert "추가 계좌만 해당" in txt and "원래 195개 계좌의 코드는 그대로" in txt
+    assert "추가 계좌만 해당" in txt and "원래 계좌의 코드는 그대로" in txt
     # the checkpoint does not restart the extras' windows for this: the text asks the rule keeper, as for others
     assert "다시 세야 하는지 규칙 관리자 확인 필요" in txt and "오늘부터 다시 셉니다" not in txt
     g = changes(a, dict(a, extra_gate_code="other"))
     assert [(c["key"], c["trading"]) for c in g] == [("extra_gate_code", False)] and "영향 없음" in change_text(g)
     both = changes(a, dict(a, extra_code="o", settings="o"))
-    assert "다시 셉니다" in change_text(both) and "원래 195개" not in change_text(both)
+    assert "다시 셉니다" in change_text(both) and "원래 계좌의 코드는" not in change_text(both)
 
 
-def test_signal_input_code_shared_with_the_195_is_never_called_extras_only(tmp_path):
-    """recorder.py builds the 195's signal frames and context.py their chart context: a change to them is not an
-    extras-only change, and the restart text never says the 195 are unaffected (open question Q-11)."""
+def test_signal_input_code_shared_with_the_originals_is_never_called_extras_only(tmp_path):
+    """recorder.py builds the originals' signal frames and context.py their chart context: a change to them is not an
+    extras-only change, and the restart text never says the originals are unaffected (open question Q-11)."""
     import shutil
     from paperbot.runinfo import EXTRA_FILES, ROOT, SHARED_SIGNAL_FILES, SHARED_WATCHED, WATCHED
     assert set(SHARED_SIGNAL_FILES) == {"paperbot/recorder.py", "paperbot/context.py"}
     assert not set(SHARED_SIGNAL_FILES) & set(EXTRA_FILES)
-    # Q-11 (decided before the first start): recorder.py builds the 195's signal frames, so it is trading code
+    # Q-11 (decided before the first start): recorder.py builds the originals' signal frames, so it is trading code
     assert "paperbot/recorder.py" in TRADING_FILES and "paperbot/context.py" not in TRADING_FILES
     assert not {k for k, _, _ in WATCHED} & {k for k, _, _ in SHARED_WATCHED}
     # a change to recorder.py moves only the shared key
@@ -105,8 +105,29 @@ def test_signal_input_code_shared_with_the_195_is_never_called_extras_only(tmp_p
     assert [(c["key"], c["trading"], c.get("extras_only"), c.get("shared")) for c in ch] == \
         [("shared_signal_code", True, None, True)]
     txt = change_text(ch)
-    assert "원래 195개 계좌는 그대로" not in txt and "원래 195개 계좌의 코드는 그대로" not in txt
-    assert "추가 계좌만 해당" not in txt and "원래 195개 계좌의 신호 계산" in txt and "Q-11" in txt
+    assert "원래 계좌는 그대로" not in txt and "원래 계좌의 코드는 그대로" not in txt
+    assert "추가 계좌만 해당" not in txt and "원래 계좌의 신호 계산" in txt and "Q-11" in txt
     # a record written before the key existed is not a change
     old = {k: v for k, v in a.items() if k != "shared_signal_code"}
     assert changes(old, a) == []
+
+
+def test_rules_files_include_change_1_and_match_their_hashes():
+    """The rules change of 2026-10-04 (5m removed, restart from scratch) is part of the recorded rules text, and
+    every rules document matches its fixed sha256 file (the same check launchcheck runs on the server)."""
+    import hashlib
+    from paperbot.launchcheck import RULES_SUMS
+    from paperbot.runinfo import ROOT, RULES_FILES
+    assert RULES_FILES == ("docs/paper-v3-rules.md", "docs/paper-v3-rules-addendum.md",
+                           "docs/paper-v3-rules-change-1.md")
+    assert [p.replace(".md", ".sha256") for p in RULES_FILES] == list(RULES_SUMS)
+    for rel in RULES_SUMS:
+        with open(os.path.join(ROOT, rel)) as fh:
+            rows = [r.split() for r in fh.read().splitlines() if r.strip()]
+        assert len(rows) == 1 and rows[0][1] == rel.replace(".sha256", ".md")
+        with open(os.path.join(ROOT, rows[0][1]), "rb") as fh:
+            assert hashlib.sha256(fh.read()).hexdigest() == rows[0][0], rel
+    a = run_record(v3_settings(), BR, "exchange", ["x"], signal_lock={"prereg_sha256_file": "L"})
+    assert a["rules"] == files_hash(RULES_FILES)
+    two = files_hash(RULES_FILES[:2])
+    assert a["rules"] != two          # a start before the change file existed reads as a rules change

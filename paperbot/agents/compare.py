@@ -4,7 +4,7 @@
   side, timeframe, entry session (Korea time), weekday/weekend and market regime at entry: trades, wins, losses,
   win rate and P&L per group, plus how wins and losses were held. The staff read where losses gather and wins do
   not; groups under ``min_n`` trades are marked as too small to mean anything.
-- ``ranking(conn, ...)``: the strategies ranked by the P&L of their five timeframe accounts (wallet against the
+- ``ranking(conn, ...)``: the strategies ranked by the P&L of their four timeframe accounts (5m removed 2026-10-04) (wallet against the
   starting equity), the top and bottom ``k`` with their own comparison, against the coin-flip accounts.
 
 Descriptive only: nothing here changes an account. A strategy's 30-day verdict is the checkpoint's (coin flips x
@@ -17,6 +17,7 @@ import json
 import sqlite3
 from typing import Iterable, Optional
 
+from ..config import V3_TRADE_TFS
 from ..sessions import session_of
 
 SESSION_KO = {"asia": "아시아장(09-16)", "europe": "유럽장(16-22)", "us": "미국장(22-05)", "dawn": "새벽(05-09)"}
@@ -133,7 +134,7 @@ def ranking(conn: sqlite3.Connection, initial: float, round_trip: float, k: int 
             s["closed"] = closed[s["strategy"]]
     rows = sorted(per.values(), key=lambda r: -r["pnl"])
     for r in rows:
-        # the sum is over the strategy's 5 timeframe accounts: per account it compares with one coin flip
+        # the sum is over the strategy's timeframe accounts (4): per account it compares with one coin flip
         r["pnl_per_account"] = round(r["pnl"] / max(1, len(r["accounts"])), 2)
         r["pnl"] = round(r["pnl"], 2)
     pick = rows[:k] + [r for r in rows[-k:] if r not in rows[:k]][::-1]
@@ -153,9 +154,10 @@ def ranking(conn: sqlite3.Connection, initial: float, round_trip: float, k: int 
     mean = round(sum(f["pnl"] for f in flips) / len(flips), 2) if flips else None
     return {"strategies": len(rows), "picked": out,
             "coin_flips": {"best": flips[:3], "worst": flips[-3:][::-1], "mean_pnl": mean,
-                           "mean_pnl_x5": None if mean is None else round(mean * 5, 2)},
-            "note": "순위는 5개 봉 계좌 손익 합계(코드 집계), pnl_per_account는 그 계좌당 평균. 동전 봇 mean_pnl은 계좌 "
-                    "하나의 평균이라 pnl_per_account와 비교함(mean_pnl_x5 = 5개 합으로 친 값). 30일 판정은 체크포인트"
+                           "accounts_per_strategy": len(V3_TRADE_TFS),
+                           "mean_pnl_per_strategy": None if mean is None else round(mean * len(V3_TRADE_TFS), 2)},
+            "note": "순위는 4개 봉 계좌 손익 합계(코드 집계), pnl_per_account는 그 계좌당 평균. 동전 봇 mean_pnl은 계좌 "
+                    "하나의 평균이라 pnl_per_account와 비교함(mean_pnl_per_strategy = 매매법 하나의 봉 계좌 4개 합으로 친 값). 30일 판정은 체크포인트"
                     "(동전 봇 2,000개 비교)가 함. 거래 30건 미만이면 상위·하위 모두 운일 수 있음"}
 
 
