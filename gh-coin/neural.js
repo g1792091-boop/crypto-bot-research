@@ -2,12 +2,37 @@
 // 에이전트 '팀 회의'가 아니라, 신호 뉴런들의 온라인 학습(퍼셉트론식)으로 돌아가는 자율 데모 트레이더.
 // 전부 가상자금(데모)만 — 실주문·실자금·실지갑 없음.
 import { candlesFor } from "../nuri-ai/agent.js";
-import { brainStream, settings, PROVIDERS, modelKind, ollamaModels } from "../nuri-ai/engine.js";
+import { brainStream, settings, PROVIDERS, modelKind, ollamaModels, ollamaPull } from "../nuri-ai/engine.js";
 import * as BRAIN from "./brain.js";
 
 // 내 PC Ollama 에 설치된 무료 모델 캐시 (주기적으로 갱신 — connectedModels 는 동기라 캐시를 읽는다)
 let olCache = [], olInit = false;
 export async function refreshOllama() { try { olCache = await ollamaModels(); } catch (e) { olCache = []; } return olCache; }
+
+// GH Coin(코인 선물 데모 판단)에 쓸 만한 추천 무료 로컬 모델 — 작고 빠르고 지시·JSON 잘 따르고 한국어 가능한 것 위주.
+// 저사양(4GB 그래픽/8GB RAM)은 3b, 여유 있으면 7b 까지. 전부 Ollama 공개 레지스트리 모델.
+export const RECOMMENDED_OLLAMA = [
+  { model: "qwen2.5:3b", size: "약 2GB", desc: "빠르고 지시·JSON 잘 따름 · 한국어 OK (추천)" },
+  { model: "llama3.2:3b", size: "약 2GB", desc: "가볍고 빠른 범용" },
+  { model: "qwen2.5:7b", size: "약 4.7GB", desc: "더 똑똑한 판단 (조금 느림, RAM 16GB+ 권장)" }
+];
+// 추천 모델을 알아서 내려받고(이미 있으면 건너뜀) 끝나면 바로 트레이더·직원으로 쓰이게 한다.
+export async function installRecommended(onProgress = () => {}, which = null) {
+  const have = new Set(await refreshOllama());
+  const list = (which || RECOMMENDED_OLLAMA.map(r => r.model));
+  const done = [], failed = [];
+  for (const m of list) {
+    if (have.has(m) || have.has(m + ":latest")) { onProgress({ model: m, status: "이미 있음", pct: 100 }); done.push(m); continue; }
+    try {
+      onProgress({ model: m, status: "받는 중", pct: 0 });
+      await ollamaPull(m, p => onProgress({ model: m, status: "받는 중", pct: p.total ? Math.round((p.completed || 0) / p.total * 100) : null, raw: p.status }));
+      onProgress({ model: m, status: "완료", pct: 100 }); done.push(m);
+    } catch (e) { onProgress({ model: m, status: "실패: " + (e?.message || e), pct: null }); failed.push(m); }
+  }
+  await refreshOllama();                 // 새로 받은 모델을 즉시 트레이더 후보로
+  if (done.length) { settings.olOk = true; if (!settings.olModel && done[0]) settings.olModel = done[0]; try { (await import("../nuri-ai/engine.js")).saveSettings?.(); } catch (e) {} }
+  return { done, failed, installed: [...new Set([...have, ...done])] };
+}
 
 // 트레이더가 될 무료 AI 모델: ① 키 넣은 회사(클라우드) 모델 + ② 내 PC Ollama 로컬 모델(공짜라 한도와 무관하게 추가)
 export function connectedModels(maxN = 16) {

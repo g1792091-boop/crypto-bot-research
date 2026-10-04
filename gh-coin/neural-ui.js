@@ -15,6 +15,22 @@ export async function openNeural(ctx = {}) {
   // 🧠 뇌 그래프 호버(Obsidian식: 올린 노드와 이웃만 강조) + .canvas 내보내기(Obsidian에서 열기)
   const bcv = root.querySelector("canvas[data-brain]");
   if (bcv) { bcv.onmousemove = (e) => { const r = bcv.getBoundingClientRect(); bmouse = { x: e.clientX - r.left, y: e.clientY - r.top }; }; bcv.onmouseleave = () => { bmouse = null; }; }
+  // 🖥 추천 로컬(Ollama) 모델 자동 설치 → 받으면 바로 트레이더로
+  const obtn = root.querySelector("[data-ollama]");
+  if (obtn) obtn.onclick = async () => {
+    const names = N.RECOMMENDED_OLLAMA.map(r => `· ${r.model} (${r.size}) — ${r.desc}`).join("\n");
+    if (!confirm(`내 PC Ollama에 GH Coin용 추천 무료 모델을 자동으로 받습니다:\n\n${names}\n\n총 수 GB, 몇 분 걸릴 수 있어요. 받는 즉시 AI 모델 트레이더·직원으로 쓰입니다.\n(Ollama가 설치/실행돼 있어야 합니다 — ollama.com)\n\n시작할까요?`)) return;
+    obtn.disabled = true; const o0 = obtn.textContent;
+    const res = await N.installRecommended(p => {
+      obtn.textContent = `🖥 ${E(String(p.model).slice(0, 14))} ${p.status}${p.pct != null ? " " + p.pct + "%" : ""}`;
+      if (p.status === "완료" || p.status === "이미 있음") feed(`🖥 로컬 모델 ${p.model} ${p.status} — 트레이더로 투입`);
+    }).catch(e => ({ done: [], failed: ["" + (e?.message || e)] }));
+    obtn.disabled = false; obtn.textContent = o0;
+    const connErr = res.failed.some(f => /응답 오류|연결|fetch|Failed|load failed|NetworkError/i.test(f));
+    if (!res.done.length && connErr) alert("Ollama에 연결하지 못했습니다.\n\n1) ollama.com 에서 Ollama를 설치하세요.\n2) 설치하면 자동 실행됩니다(트레이 아이콘 확인).\n3) 다시 이 버튼을 누르면 추천 모델을 알아서 받습니다.");
+    else alert(`완료: ${res.done.join(", ") || "없음"}${res.failed.length ? "\n실패: " + res.failed.join(", ") : ""}\n\n이제 리더보드에 로컬 모델이 보이고, 직접 거래·학습합니다.`);
+    render();
+  };
   const cbtn = root.querySelector("[data-canvas]");
   if (cbtn) cbtn.onclick = () => {
     const c = N.brainCanvas();
@@ -197,7 +213,7 @@ function shortMd(m) { return String(m).split("/").pop().replace(/-instruct|-chat
 const SHELL = `
 <div class="nd-top"><b>🧠 GH COIN // NEURAL DESK</b><span class="nd-tag">AI 모델이 직접 매매·복기·학습 · 뇌 누적 · 가상자금</span>
   <marquee class="nd-feed" data-feed scrollamount="5"></marquee><span class="nd-clock"></span>
-  <button class="nd-btn" data-reset>초기화</button><button class="nd-btn nd-x" data-x>✕</button></div>
+  <button class="nd-btn" data-ollama title="내 PC Ollama에 GH Coin용 추천 무료 모델을 자동으로 받아 트레이더로 씁니다">🖥 로컬 모델 설치</button><button class="nd-btn" data-reset>초기화</button><button class="nd-btn nd-x" data-x>✕</button></div>
 <div class="nd-grid">
   <div class="nd-card nd-pnl"><div class="nd-h">ALL-TIME PnL <small>(데모)</small></div><div class="nd-big" data-pnl></div><div class="nd-kpi" data-kpi></div></div>
   <div class="nd-card nd-mkt"><div class="nd-h">🔍 스캔 · 포지션</div><div class="nd-scan" data-scan></div><div class="nd-markets" data-markets></div></div>
