@@ -153,9 +153,10 @@ function parseDecision(raw) {
   return { dir, conf: conf ?? 60 };
 }
 // 모델 한 명이 코인 하나를 직접 판단 → 포지션 갱신
-let mRot = 0;
+let mRot = 0, mBackoff = 0, mFails = 0;
 export async function modelStep() {
   load(); const cm = connectedModels(); if (!cm.length) return;
+  if (Date.now() < mBackoff) return;   // 직전에 전원 실패(한도)면 잠시 쉬었다가 재개 — 429 폭주 방지
   const tgt = cm[mRot % cm.length], [ko, sym] = COINS[((mRot++ / cm.length) | 0) % COINS.length];
   const feat = S.feat[sym], price = S.dec[sym]?.price; if (!feat || !price) return;
   S.scan = { model: shortMd(tgt.model), ko, sym, regime: BRAIN.regimeOf(feat), t: Date.now() };   // 지금 스캔 중: 어느 모델이 어느 코인을
@@ -170,7 +171,13 @@ export async function modelStep() {
       { role: "system", content: `너는 ${ko} 코인 선물 데모 트레이더다. 아래 신호로 지금 롱/숏/관망을 정한다. 반드시 JSON 한 줄만 출력: {"dir":1,"conf":70} — dir 1=롱 -1=숏 0=관망, conf 0~100. 설명·다른 말 금지.${brainLine}${les}` },
       { role: "user", content: `${ko} 신호(−1 약세 ~ +1 강세): ${Object.entries(feat).map(([k, v]) => k + " " + (+v).toFixed(2)).join(", ")} · 현재가 ${price}\nJSON 만:` }],
       role: "fast", target: tgt, fallback: true, maxTokens: 180, temperature: 0.3, noThink: true, onContent: d => raw += d, onThink: () => {} });
-  } catch (e) { feed(`[${shortMd(tgt.model)}] 응답 실패(AI 한도/연결 확인) — 다음 차례`); save(); return; }
+  } catch (e) {
+    mFails++; const rl = e?.status === 429 || /한도/.test(e?.message || "");
+    if (rl) { mBackoff = Date.now() + Math.min(90e3, 15e3 * Math.min(6, mFails)); feed(`무료 AI 한도 — ${Math.round((mBackoff - Date.now()) / 1000)}초 쉬었다 재개 (연결된 모든 회사가 사용량 초과)`); }
+    else feed(`[${shortMd(tgt.model)}] ${e?.message || "응답 실패"} — 다음 차례`);
+    save(); return;
+  }
+  mFails = 0;
   const name = route?.model || tgt.model, M = model(name); M.prov = route?.id || tgt.id; M.calls = (M.calls || 0) + 1;
   const { dir, conf } = parseDecision(raw);
   if (dir === null) { feed(`[${shortMd(name)}] ${ko} 판단 형식 못 읽음`); save(); return; }

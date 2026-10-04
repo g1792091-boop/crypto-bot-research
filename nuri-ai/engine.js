@@ -447,7 +447,11 @@ export async function brainStream(opts){
   else cands = [];
   if (opts.only) cands = (opts.only === "ollama" ? [{id:"ollama", model: settings.olModel}] : routeCandidates(role)).filter(c => c.id === opts.only);
   if (opts.target && overCap(opts.target.id)) opts = {...opts, target: null};   // 하루 한도를 넘은 회사는 지정해도 쓰지 않는다
-  if (opts.target) cands = opts.fallback ? [opts.target, ...cands.filter(c => c.id !== opts.target.id || c.model !== opts.target.model)] : [opts.target];   // 특정 회사·모델을 꼭 집어 부를 때 (fallback이면 막혔을 때 다른 AI로)
+  if (opts.target){   // 특정 회사·모델을 꼭 집어 부를 때 (fallback이면 막혔을 때 다른 AI로)
+    // fallback 풀: 현재 cands가 비어도(brain=local 등) 연결된 모든 회사에서 후보를 만든다 → target 하나가 429/오류여도 다른 회사로 넘어감
+    const pool = (opts.fallback ? (cands.length ? cands : routeCandidates(role)) : []).filter(c => c.id !== opts.target.id || c.model !== opts.target.model);
+    cands = [opts.target, ...pool];
+  }
   if (opts.exclude?.length) cands = cands.filter(c => !opts.exclude.includes(c.id));
   { const warm = cands.filter(c => !providerCooling(c.id) && !deadModels()[c.model]); if (warm.length) cands = warm; }   // 한도에 걸려 쉬는 회사·없어진 모델은 건너뛴다
   if (!cands.length && role === "vision"){ cands = routeCandidates("general"); emit("activity", {kind: "fallback", text: "이미지를 볼 수 있는 모델이 연결되어 있지 않아 글로만 답합니다 (NVIDIA·Gemini 키를 넣으면 이미지 이해 가능)"}); if (b === "local") return streamLocal(opts); }
