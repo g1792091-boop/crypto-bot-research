@@ -52,6 +52,7 @@ export async function openNeural(ctx = {}) {
     a.download = `GHCoin-brain-${new Date().toISOString().slice(0, 10)}.canvas`; a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
   };
+  try { N.seedKnowledge(); } catch (e) {}   // 📚 매매법 지식베이스를 뇌에 한 번 심기
   ST = N.state();
   render();
   let k = 0;
@@ -64,6 +65,7 @@ export async function openNeural(ctx = {}) {
     const defense = ST && ST.riskMode && ST.riskMode !== "정상";
     if (k % 26 === 13 || (defense && k % 12 === 6)) N.designStrategy().then(render).catch(() => {});
     if (k % 10 === 5) { try { N.brainThink(); } catch (e) {} }  // 뇌 자체 학습(망각+핵심규칙 승격)
+    if (k % 40 === 20) N.researchStrategies().then(render).catch(() => {});  // 🌐 인터넷·뉴스에서 매매법·대응 찾아 뇌에 저장
   };
   tick(); loop = setInterval(tick, 6000);
   raf = requestAnimationFrame(draw);
@@ -102,7 +104,7 @@ function render() {
     s.neurons.map(nu => `<div class="nrow"><span class="nk">${E(nu.name)}</span><span class="nbar"><i style="width:${Math.round(nu.w / 3 * 100)}%"></i></span><b>${nu.w.toFixed(2)}</b><small>${nu.hit == null ? "–" : nu.hit + "%"}</small></div>`).join("") +
     (s.brain ? `<div class="nsub">🧠 자체 뇌 · 지능 <b style="color:#b79cff">${s.brain.iq?.score ?? 0}/100</b> <span class="dim">정확도 ${s.brain.iq?.acc ?? 0}% · ${s.brain.iq?.n ?? 0}판 학습 · 손절회피 ${s.brain.traps ?? 0}</span></div>` +
       `<div class="nsub">누적 기억 ${s.brain.n}개 <span class="dim">${Object.entries(s.brain.byType || {}).map(([t, c]) => t + " " + c).join(" · ") || "비어있음"}</span></div>` +
-      (s.brain.top.length ? s.brain.top.slice(0, 7).map(m => `<div class="brow"><span class="bt ${m.type === "패턴" ? "up" : m.type === "교훈" ? "warn" : m.type === "전략" ? "pur" : "dim"}">${E(m.type)}</span><span class="btx" title="${E(m.text)}${m.model ? " · " + E(m.model) : ""}">${E(m.text)}</span><small>×${m.w}</small></div>`).join("")
+      (s.brain.top.length ? s.brain.top.slice(0, 7).map(m => `<div class="brow"><span class="bt ${m.type === "패턴" ? "up" : m.type === "교훈" ? "warn" : m.type === "전략" || m.type === "매매법" ? "pur" : m.type === "지식" ? "warn" : "dim"}">${E(m.type)}</span><span class="btx" title="${E(m.text)}${m.model ? " · " + E(m.model) : ""}">${E(m.text)}</span><small>×${m.w}</small></div>`).join("")
         : `<div class="dim" style="padding:4px 0">아직 비어있음 — 모델들이 복기·거래하며 기억을 쌓습니다</div>`) : "")
     + riskLearnLine();
   // 코인별 결정(스캔) 그리드
@@ -203,7 +205,7 @@ function draw() {
 // ── 🧠 뇌 지식 그래프 (Obsidian 그래프 뷰 스타일) ──
 // 발광 노드 · 연결 수(degree)로 크기 · 유형별 색 그룹 · 부드러운 물리 이동 · 호버 시 이웃만 강조(나머지 흐리게) · 새 지식 펄스.
 let brainG = null, bnodes = {}, bmouse = null;
-const BCOL = { "교훈": [224, 165, 62], "패턴": [46, 194, 126], "전략": [183, 156, 255], "핵심": [255, 120, 120], "관찰": [120, 150, 220] };
+const BCOL = { "교훈": [224, 165, 62], "패턴": [46, 194, 126], "전략": [183, 156, 255], "핵심": [255, 120, 120], "관찰": [120, 150, 220], "매매법": [94, 214, 255], "지식": [255, 200, 120] };
 function drawBrain() {
   const cv = root && root.querySelector("canvas[data-brain]"); if (!cv) return;
   const dpr = Math.min(2, window.devicePixelRatio || 1), W = cv.clientWidth, H = cv.clientHeight;

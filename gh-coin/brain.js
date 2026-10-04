@@ -212,3 +212,5 @@ export function recallText(coin, regime, n = 4) {
   const r = recall(coin, regime, n); if (!r.length) return "";
   return r.map(m => `(${m.regime || "일반"}) ${m.text}`).join(" / ");
 }
+// 특정 유형(매매법·지식 등) 상위 기억 — 설계/판단에 지식베이스를 직접 꺼내 쓰기
+export function recallType(type, n = 3) { load(); return B.mem.filter(m => m.type === type).slice(0, n).map(m => m.text); }

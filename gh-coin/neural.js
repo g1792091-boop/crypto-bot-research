@@ -2,8 +2,34 @@
 // 에이전트 '팀 회의'가 아니라, 신호 뉴런들의 온라인 학습(퍼셉트론식)으로 돌아가는 자율 데모 트레이더.
 // 전부 가상자금(데모)만 — 실주문·실자금·실지갑 없음.
 import { candlesFor } from "../nuri-ai/agent.js";
-import { brainStream, settings, PROVIDERS, modelKind, ollamaModels, ollamaPull } from "../nuri-ai/engine.js";
+import { brainStream, settings, PROVIDERS, modelKind, ollamaModels, ollamaPull, webSearch } from "../nuri-ai/engine.js";
 import * as BRAIN from "./brain.js";
+
+// 📚 코인 선물 매매법 지식베이스 — 뇌에 '매매법·지식·대응'을 처음부터 깔아둔다(교훈 외에 실제 매매법 지식).
+const STRATEGY_KB = [
+  ["매매법", "RSI 과매수>70 매도·과매도<30 매수 반전 — 추세 역행 금지, 추세장엔 50선 돌파로"],
+  ["매매법", "스토캐스틱 %K>%D 골든크로스 매수·80/20 반전 — 횡보장에 유효"],
+  ["매매법", "볼린저 스퀴즈 후 확장 돌파 — 거래량 동반 시 추세 방향 진입"],
+  ["매매법", "200EMA+Supertrend 스윙 — 200EMA 방향으로만, 전환봉에서 진입"],
+  ["매매법", "EMA20 스캘핑 — 20EMA 이탈 후 첫 반대봉 복귀, 손절은 직전 스윙"],
+  ["매매법", "VWAP 위 롱·아래 숏 — 세션 VWAP 기준 추세 추종 스캘핑"],
+  ["매매법", "Donchian 채널 돌파 추세추종 — ADX>25 필터로 횡보 제외"],
+  ["매매법", "피보 38.2~61.8% 되돌림 매수 — 임펄스 후 조정 끝에서"],
+  ["매매법", "ICT FVG 되돌림 — 불균형 갭을 채우며 추세 방향 진입"],
+  ["매매법", "ICT 오더블록 리테스트 — 변위 전 마지막 반대봉 존 재진입"],
+  ["매매법", "유동성 스윕 반전 — 스윙 고/저 쓸고 복귀 시 반대 방향"],
+  ["매매법", "MSS 구조전환+변위 진입 — BOS + 큰 몸통봉 동시"],
+  ["매매법", "킬존(런던 7~10·뉴욕 13~16 UTC) 모멘텀 — 세션 안에서만 추세방향"],
+  ["매매법", "Z-score 평균회귀 — (close-sma)/변동성 ±2 역진입, 0 부근 청산"],
+  ["매매법", "다중 MA 정렬(9>50>200) 추세순응 + 9EMA 터치 진입"],
+  ["지식", "레버리지 높을수록 청산 빠름 — 변동성 크면 낮게 잡아라"],
+  ["지식", "손익비 1:2 이상·단일거래 리스크 1~2%로 자본 보호"],
+  ["지식", "추세장=추세추종, 횡보장=역추세/평균회귀 — 국면 구분이 핵심"],
+  ["지식", "거래량 없는 돌파는 가짜 돌파가 많다 — 거래량 확인 필수"],
+  ["지식", "뉴스·지표 발표 직후 급변동엔 관망하거나 소액, 방향 확정 뒤 진입"],
+  ["지식", "연속 손절 시 쿨다운 — 일정 봉 동안 재진입 금지"],
+  ["지식", "장 마감·주말 전 오버나이트 리스크 축소"],
+];
 
 // 내 PC Ollama 에 설치된 무료 모델 캐시 (주기적으로 갱신 — connectedModels 는 동기라 캐시를 읽는다)
 let olCache = [], olInit = false;
@@ -456,7 +482,7 @@ export async function designStrategy() {
       { role: "system", content: `너는 코인 선물 퀀트다. 목표는 '잃지 않는 것' — 승률 55%+·낙폭(MDD) 작게·타이트한 손절로 자본을 지킨다.
 이번 과제: [${style.cls}] 스타일로 ${ko} ${style.iv}봉 매매법 하나를 설계. 접근: ${style.hint}
 설계 원칙: ① 추세 필터로 역행 진입 방지 ② 과매수/과매도로 타점 ③ 보조지표 2개 이상 동시 확인(컨플루언스) ④ 손절은 익절보다 타이트. 반드시 custom 수식 지표 1개 이상 포함.
-아래 JSON 스키마로만 출력(설명·코드블록 금지):\n{"name":"이름","indicators":[{"id":"r","type":"tv_rsi","length":14},{"id":"vm","type":"custom","expr":"수식"}],"long_entry":{"conditions":[{"left":"r","op":"<","right":40}]},"long_exit":{"conditions":[{"left":"r","op":">","right":65}]},"short_entry":{"conditions":[...]},"risk":{"leverage":2,"stop_loss_pct":${style.cls === "단타" ? 1 : 3},"take_profit_pct":${style.cls === "단타" ? 2 : 6}}}\n쓸 수 있는 보조지표(차트 터미널 ${Q.TV_TYPES ? Q.TV_TYPES.length : 146}종 전부 + custom 수식): ${catalog}\n추가 ICT/SMC·세션 지표(네이티브, 신호형은 조건에 ==1 또는 == -1 로): bos(구조돌파 ±1) fvg(FVG ±1) ob(오더블록 리테스트 ±1) sweep(유동성스윕 반전 ±1) disp(변위 ±1) premium(0~1, <0.3 디스카운트/>0.7 프리미엄) session(start,end 킬존 0/1).\ncustom expr 피연산자: close open high low volume · 지표 id · id.p1~p4.${M.lessons.length ? " 내 교훈: " + M.lessons.join(" / ") : ""}${BRAIN.recallText(ko, "", 3) ? " 뇌 패턴: " + BRAIN.recallText(ko, "", 3) : ""} 뇌가 이득난 규칙: ${BRAIN.refineForProfit(ko, "").text}` },
+아래 JSON 스키마로만 출력(설명·코드블록 금지):\n{"name":"이름","indicators":[{"id":"r","type":"tv_rsi","length":14},{"id":"vm","type":"custom","expr":"수식"}],"long_entry":{"conditions":[{"left":"r","op":"<","right":40}]},"long_exit":{"conditions":[{"left":"r","op":">","right":65}]},"short_entry":{"conditions":[...]},"risk":{"leverage":2,"stop_loss_pct":${style.cls === "단타" ? 1 : 3},"take_profit_pct":${style.cls === "단타" ? 2 : 6}}}\n쓸 수 있는 보조지표(차트 터미널 ${Q.TV_TYPES ? Q.TV_TYPES.length : 146}종 전부 + custom 수식): ${catalog}\n추가 ICT/SMC·세션 지표(네이티브, 신호형은 조건에 ==1 또는 == -1 로): bos(구조돌파 ±1) fvg(FVG ±1) ob(오더블록 리테스트 ±1) sweep(유동성스윕 반전 ±1) disp(변위 ±1) premium(0~1, <0.3 디스카운트/>0.7 프리미엄) session(start,end 킬존 0/1).\ncustom expr 피연산자: close open high low volume · 지표 id · id.p1~p4.${BRAIN.recallType("매매법", 4).length ? "\n뇌가 아는 매매법(참고): " + BRAIN.recallType("매매법", 4).join(" / ") : ""}${BRAIN.recallType("지식", 2).length ? "\n지식: " + BRAIN.recallType("지식", 2).join(" / ") : ""}${M.lessons.length ? "\n내 교훈: " + M.lessons.join(" / ") : ""} 뇌가 이득난 규칙: ${BRAIN.refineForProfit(ko, "").text}` },
       { role: "user", content: `[${style.cls}] ${ko} 매매법 JSON 하나만:` }],
       role: "code", target: tgt, fallback: true, json: true, maxTokens: 800, temperature: 0.6, noThink: true, onContent: d => raw += d, onThink: () => {} });
   } catch (e) { feed(`[${shortMd(tgt.model)}] ${style.cls} 설계 응답 실패`); return; }
@@ -495,6 +521,34 @@ export const brainIQ = () => BRAIN.iqScore();           // 뇌 지능 점수(자
 export const brainRefine = (coin, regime) => BRAIN.refineForProfit(coin, regime);
 export const brainIngest = (note) => BRAIN.ingest(note);   // 에이전트 팀/외부(.canvas)가 결과를 뇌에 넣음
 export const brainRisk = () => BRAIN.riskState();          // 학습한 국면별 레버·시드·손절·익절 + 시간대·급변동 성적
+// 📚 매매법 지식베이스를 뇌에 한 번 심는다(교훈 외에 실제 매매법·활용·대응 지식)
+export function seedKnowledge() {
+  try { if (localStorage.getItem("coin:kb-seeded") === "2") return; } catch (e) {}
+  for (const [type, text] of STRATEGY_KB) BRAIN.learn({ type, text, model: "지식베이스", w: 2.2 });
+  try { localStorage.setItem("coin:kb-seeded", "2"); } catch (e) {}
+}
+// 🌐 인터넷·뉴스·SNS에서 코인 선물 매매법·활용·대응을 찾아 뇌에 넣는다 (Tavily 있으면 고급, 없으면 무료 검색)
+let wRot = 0;
+const WEB_TOPICS = ["비트코인 선물 단타 매매법 추세 진입", "코인 선물 ICT 유동성 오더블록 매매법", "암호화폐 스캘핑 레버리지 손절 익절 전략", "crypto futures trading strategy 2026 setup", "비트코인 뉴스 변동성 급등 대응 매매", "코인 선물 스윙 매매법 EMA 볼린저"];
+export async function researchStrategies() {
+  load(); let results;
+  const q = WEB_TOPICS[wRot++ % WEB_TOPICS.length];
+  try { results = await webSearch(q, 5); } catch (e) { return; }
+  const items = (results?.results || results || []).slice(0, 5);
+  const text = items.map(r => `${r.title || ""}: ${(r.content || r.snippet || "").replace(/\s+/g, " ").slice(0, 220)}`).join("\n").slice(0, 2200);
+  if (!text || text.length < 40) return;
+  let raw = "";
+  try {
+    await brainStream({ messages: [
+      { role: "system", content: "다음 검색결과에서 코인 선물에 쓸 수 있는 '매매법'과 '지식/대응법'을 각각 한 줄(40자 이내, 활용·대응 포함)로 3~5개만 뽑아라. 각 줄은 `매매법|내용` 또는 `지식|내용` 형식. 다른 말·설명 금지." },
+      { role: "user", content: text }],
+      role: "fast", fallback: true, json: false, maxTokens: 300, temperature: 0.3, noThink: true, onContent: d => raw += d, onThink: () => {} });
+  } catch (e) { return; }
+  let added = 0;
+  for (const line of raw.split("\n")) { const m = line.match(/^\s*[-*]?\s*(매매법|지식|대응)\s*[|:：]\s*(.+)$/); if (m) { const t = m[1] === "대응" ? "지식" : m[1]; BRAIN.learn({ type: t, text: m[2].replace(/["`]/g, "").slice(0, 80), model: "웹리서치", w: 1.6 }); added++; } }
+  if (added) feed(`🌐 웹에서 매매법·지식 ${added}개 학습 ("${q.slice(0, 20)}…") → 뇌에 저장`);
+  save();
+}
 export function resetBrain() { BRAIN.reset(); }
 
 export function state() {
