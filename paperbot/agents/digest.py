@@ -593,6 +593,14 @@ def week_report(paper_ro: Optional[sqlite3.Connection], agents_ro: Optional[sqli
             return tx[1:tx.find("]")] if tx.startswith("[") and "]" in tx else None
         out["busts"] = [{"ts": int(ts), "account": bust_of(tx), "text": str(tx)[:160]} for ts, tx in busts
                         if bust_of(tx) in strat_ids]
+        # owners' request 2026-10-04: the 3 strategies that went deepest under their peak this week and how many are
+        # significantly worse than their 5-year backtest (agents/survival.py, agents/btgap.py; code only)
+        if "error" not in out:
+            from . import survival as SV
+            try:
+                out["survival"] = SV.week_brief(paper_ro, now, names_ko=names)
+            except (sqlite3.Error, OSError, KeyError, TypeError, ValueError) as exc:
+                out["survival"] = {"error": type(exc).__name__}
     # the staff's week
     if agents_ro is not None:
         try:
@@ -651,6 +659,20 @@ def _pct(x: Optional[float]) -> str:
     return "—" if x is None else f"{x * 100:.0f}%"
 
 
+def survival_line(sv: Optional[dict]) -> str:
+    """One short line: the week's 3 deepest drawdowns (strategy sums, from their peak) and the backtest gap count."""
+    if not isinstance(sv, dict) or sv.get("error"):
+        return ""
+    parts = []
+    deep = sv.get("deepest") or []
+    if deep:
+        parts.append("이번 주 가장 깊은 낙폭 " + " · ".join(f"{r['name_ko']} -{r['week_max_dd_pct'] * 100:.0f}%" for r in deep))
+    bt = sv.get("backtest") or {}
+    if bt.get("tested"):
+        parts.append(f"5년 시험보다 유의하게 나쁜 매매법 {bt['worse']}/{bt['tested']}")
+    return ("- " + " / ".join(parts)) if parts else ""
+
+
 def compose_week(rep: dict, limit: int = 4000) -> str:
     """The Sunday Telegram report (silent): numbers by code only, no AI text."""
     d = dt.datetime.fromtimestamp((rep["to"] + KST_MS) / 1000, dt.timezone.utc)
@@ -671,6 +693,9 @@ def compose_week(rep: dict, limit: int = 4000) -> str:
                      f" · 동전 봇 평균 {_usd(cf.get('mean_pnl'))}")
         if rep.get("busts"):
             L.append(f"- 파산 {len(rep['busts'])}개")
+        sv = survival_line(rep.get("survival"))
+        if sv:
+            L.append(sv)
     def line(r: dict) -> str:
         mv = ""
         if r.get("prev_rank"):

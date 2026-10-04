@@ -51,17 +51,31 @@ function liveRec(list) {
   r.be = r.avgW != null && r.avgL ? Math.abs(r.avgL) / (r.avgW + Math.abs(r.avgL)) : null;
   return r;
 }
+// 최대 낙폭 and 파산 확률 of the strategy's five accounts (server-side, /api/profile live_risk: agents/survival.py)
+function riskSpans(lr) {
+  if (!lr || lr.error) return "";
+  const pc = (x) => (x * 100 < 1 && x > 0 ? (x * 100).toFixed(1) : Math.round(x * 100)) + "%";
+  let s = "";
+  if (lr.max_dd_pct != null) {
+    s += `<span title="5개 봉 계좌를 합친 자금이 지금까지 가장 높았던 때에서 가장 많이 내려간 폭(5분마다 기록된 평가 자금, 열린 포지션 포함)${lr.max_dd_usd != null ? `. 금액으로 $${Math.round(lr.max_dd_usd).toLocaleString("en-US")}` : ""}${lr.max_dd_at ? `, 바닥 ${lr.max_dd_at}` : ""}">최대 낙폭 <b class="${lr.max_dd_pct >= 0.3 ? "down" : ""}">${lr.max_dd_pct > 0 ? "-" : ""}${pc(lr.max_dd_pct)}</b></span>`;
+  }
+  if (lr.p_bust != null) {
+    s += `<span title="이 매매법 봉 계좌의 지금까지 끝난 거래(20건 이상인 계좌만)를 무작위로 다시 뽑아 앞으로 30일을 ${(lr.paths || 10000).toLocaleString("en-US")}번 흉내 냈을 때, 잔고가 파산선(엔진 기준 $10) 아래로 떨어진 비율. 봉 계좌 중 가장 높은 값(${TF_KO[lr.p_bust_tf] || lr.p_bust_tf || ""}). 지난 거래가 앞으로도 같은 모양이라는 가정이라 예측이 아니라 설명용입니다">파산 확률 <b class="${lr.p_bust >= 0.05 ? "down" : ""}">${pc(lr.p_bust)}</b></span>`;
+  }
+  return s;
+}
 const stratAccts = (n) => (state.board ? state.board.accounts.filter((a) => a.kind === "strategy" && a.strategy === n) : []);
 const wlText = (r) => r.trades ? `${r.wins}승 ${r.losses}패 · ${Math.round(r.rate * 100)}%` : "거래 없음";
 function renderLive() {
   const el = $("s-live"); if (!el || !ss.name) return;
   const r = liveRec(stratAccts(ss.name));
+  const lr = ss.profile && ss.profile.strategy === ss.name ? ss.profile.live_risk : null;
   const usd0 = (x) => x == null ? "—" : `${x < 0 ? "-" : "+"}$${fmt(Math.abs(x), 0)}`;
   el.innerHTML = r.trades ? `<div class="lv"><b>실전 기록 (5개 봉 합계)</b> <span>${r.wins}승 ${r.losses}패</span>
     <span>승률 <b>${Math.round(r.rate * 100)}%</b></span><span>손익 <b class="${cls(r.pnl)}">${usd0(r.pnl)}</b></span>
     <span>평균 이익 <b class="up">${usd0(r.avgW)}</b></span><span>평균 손실 <b class="down">${usd0(r.avgL)}</b></span>
     <span title="평균 이익 ÷ 평균 손실. 승률이 낮아도 이게 크면 남을 수 있음">손익비 <b>${r.ratio == null ? "—" : r.ratio.toFixed(2)}</b></span>
-    <span title="이 평균 이익·평균 손실이라면 몇 % 이겨야 본전인지(평균 손실 ÷ (평균 이익 + 평균 손실)). 실제 승률이 이보다 높아야 남습니다. 손절이 멀고 첫 익절 잠금이 가까운 지금 규칙에서는 높게 나오는 게 자연스럽습니다">본전 승률 <b class="${r.be == null ? "" : r.rate >= r.be ? "up" : "down"}">${r.be == null ? "—" : Math.round(r.be * 100) + "%"}</b></span></div>`
+    <span title="이 평균 이익·평균 손실이라면 몇 % 이겨야 본전인지(평균 손실 ÷ (평균 이익 + 평균 손실)). 실제 승률이 이보다 높아야 남습니다. 손절이 멀고 첫 익절 잠금이 가까운 지금 규칙에서는 높게 나오는 게 자연스럽습니다">본전 승률 <b class="${r.be == null ? "" : r.rate >= r.be ? "up" : "down"}">${r.be == null ? "—" : Math.round(r.be * 100) + "%"}</b></span>${riskSpans(lr)}</div>`
     : '<div class="lv muted">실전 기록: 아직 끝난 거래가 없습니다</div>';
 }
 function pickStrat(n) { ss.name = n; renderSList(); renderStrat(); }
@@ -89,6 +103,7 @@ async function renderStrat() {
   ss.profile = await api(`/api/profile/${encodeURIComponent(ss.name)}`).catch(() => null);
   if (id !== ss.pageReq) return;
   renderProfile();
+  renderLive();
   renderSSide();
 }
 

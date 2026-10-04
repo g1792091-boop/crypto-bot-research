@@ -51,7 +51,10 @@ code-computed packet (agents/meetings.py, agents/committee.py: the debate's call
 24 hours later, never traded), and the performance analyst first in the ranking review; in a strategy room's
 timeframe-split meeting the timeframe comparer speaks after the specialist (in the expert's place). Added the same
 day (owners' request): the Thursday risk-reward / exit meeting (rr_review, team:review, agents/riskreward.py), and
-the compact risk-reward numbers in a strategy specialist's packet and in the ranking review's.
+the compact risk-reward numbers in a strategy specialist's packet and in the ranking review's; the Friday drawdown /
+bust risk meeting (risk_review, team:risk, agents/survival.py and agents/btgap.py: drawdowns, a Monte Carlo of each
+account's own trades, sizing for illustration and the live-vs-backtest gap), its compact numbers in a specialist's
+packet, the ranking review's, the Saturday learning packet's (the backtest gap) and the Sunday report's.
 New-strategy lab (team:lab, trigger 'research', budget class 'research', at most 3 calls, sonnet):
     T1 the researcher proposes up to 3 strategies in newlab's grammar -> code checks each (grammar; a repeat
     by hash is shown with its old result, never re-run) -> T2 the devil's advocate may drop near-duplicates
@@ -236,11 +239,11 @@ for _k in DIALOG_TURNS:
     SCHEMAS[_k] = SCHEMAS[_k][:-2] + ",\n" + DIALOG_FMT + "\n}"
 SCHEMAS["lead"] = (SCHEMAS["lead"][:-2]
                    + ',\n  "open_disagreement": "직원들 의견이 갈린 채 끝난 점 한 줄 (없으면 빈 문자열)",\n'
-                   '  "hypotheses": [{"strategy": "매매법 코드 (순위 검토·비용·조합·코인·손익비 회의에서만, 없으면 빈 목록)", "text": "가설 한 줄", '
+                   '  "hypotheses": [{"strategy": "매매법 코드 (순위 검토·비용·조합·코인·손익비·낙폭 회의에서만, 없으면 빈 목록)", "text": "가설 한 줄", '
                    '"how_to_confirm": "...", "prediction": "공통 규칙의 prediction 형식 또는 null"}]\n}')
 LEAD_HYPOTHESES_MAX = 3          # the ranking review's lead may put this many gradable hypotheses in the ledger
 # meetings whose lead may put gradable hypotheses in the ledger (under their strategy, graded later by code)
-LEAD_HYPOTHESIS_MEETINGS = ("ranking", "cost_review", "combo_review", "coin_review", "rr_review")
+LEAD_HYPOTHESIS_MEETINGS = ("ranking", "cost_review", "combo_review", "coin_review", "rr_review", "risk_review")
 # the lead's extra output in some meetings (added to the lead's format only there)
 LEAD_EXTRA = {
     "bull_bear": '  "call": {"direction": "상승 | 하락 | 중립 (이 셋 중 한 단어)", "confidence": 1}',
@@ -252,7 +255,7 @@ LESSON_KO = {"confirmed": "확인됨", "refuted": "틀림", "do_not_retest": "�
 MEETING_FILE = {"cost_review": "rooms_meeting_cost.md", "combo_review": "rooms_meeting_combo.md",
                 "coin_review": "rooms_meeting_coin.md", "learning_review": "rooms_meeting_learning.md",
                 "event_review": "rooms_meeting_event.md", "bull_bear": "rooms_meeting_bull_bear.md",
-                "rr_review": "rooms_meeting_rr.md"}
+                "rr_review": "rooms_meeting_rr.md", "risk_review": "rooms_meeting_risk.md"}
 TURN_FILE = {"specialist": "rooms_specialist.md", "revision": "rooms_revision.md",
              "challenge": "rooms_devils_advocate.md", "validator": "rooms_validator.md",
              "approver": "rooms_approver.md", "team": "rooms_team.md", "lead": "rooms_team_lead.md",
@@ -987,6 +990,8 @@ NEW_MEETING_HOURS = {"AGENTS_COST_REVIEW_HOUR": ("cost_review_hour_kst", ANALYSI
                      "AGENTS_LEARNING_REVIEW_HOUR": ("learning_review_hour_kst", ANALYSIS_HOUR_DEFAULT),
                      # Thursday's risk-reward / exit meeting (owners' request 2026-10-04)
                      "AGENTS_RR_REVIEW_HOUR": ("rr_review_hour_kst", ANALYSIS_HOUR_DEFAULT),
+                     # Friday's drawdown / bust risk meeting (owners' request 2026-10-04)
+                     "AGENTS_RISK_REVIEW_HOUR": ("risk_review_hour_kst", ANALYSIS_HOUR_DEFAULT),
                      "AGENTS_EVENT_REVIEW_HOUR": ("event_review_hour_kst", EVENT_REVIEW_HOUR_DEFAULT),
                      "AGENTS_BULL_BEAR_HOUR": ("bull_bear_hour_kst", BULL_BEAR_HOUR_DEFAULT)}
 
@@ -1216,7 +1221,9 @@ CODE_ROOTS = ("losses", "specialist", "board", "trials", "rules", "meeting", "ro
               # the meetings added 2026-10-04 (agents/meetings.py, agents/committee.py)
               "cost", "combo", "coins", "learning", "event", "committee",
               # the risk-reward / exit meeting (agents/riskreward.py)
-              "rr")
+              "rr",
+              # the drawdown / bust risk meeting (agents/survival.py, agents/btgap.py)
+              "survival")
 
 
 def _model_written(path: str, given: Optional[dict]) -> bool:
@@ -2185,6 +2192,7 @@ def _strategy_base(rnd: _Round) -> dict:
     spec["checkpoint"] = packets3.checkpoint_section(_checkpoint_view(ctx), s)
     spec["recent_period"] = recent_period(ctx.lab, s)
     spec["risk_reward"] = _risk_reward_brief(ctx, s)
+    spec["survival"] = _survival_brief(ctx, s)
     if board.get("error"):
         spec["error"] = board["error"]
     return {"room": {"room_id": room, "kind": "strategy", "strategy": s, "title": rnd.title},
@@ -2208,6 +2216,15 @@ def _risk_reward_brief(ctx: RoundContext, strategy: str) -> dict:
         return RRW.strategy_brief(ctx.paper_ro, strategy, ctx.now_ms, round_trip=round_trip(ctx.paper_ro))
     except (sqlite3.Error, KeyError, TypeError, ValueError) as exc:
         return {"error": f"손익비를 만들지 못함: {type(exc).__name__}"}
+
+
+def _survival_brief(ctx: RoundContext, strategy: str) -> dict:
+    """The strategy's own drawdown, bust risk, sizing and backtest gap (survival.strategy_brief, code only, small)."""
+    from . import survival as SV
+    try:
+        return SV.strategy_brief(ctx.paper_ro, strategy, ctx.now_ms, cards_path=ctx.cards_path)
+    except (sqlite3.Error, KeyError, TypeError, ValueError) as exc:
+        return {"error": f"낙폭·파산 위험을 만들지 못함: {type(exc).__name__}"}
 
 
 def _tf_packet(ctx: RoundContext, strategy: str) -> dict:
@@ -2464,6 +2481,8 @@ TEAM_VIEW = {
     "bull": ("market", "macro"),
     "bear": ("market", "macro"),
     "exit_timing": ("exits",),             # the risk-reward / exit meeting (its packet ``rr`` is the main part)
+    # the drawdown / bust risk meeting: its packet ``survival`` (with ``survival.backtest_gap``) is the main part
+    "validator": ("meta",),
 }
 OWNER_RESPONDERS = {"team:market": ("chart_regime", "strategist"), "team:risk": ("risk_officer",),
                     "team:ops": ("ops_auditor",), "team:review": ("pnl_reviewer",), "team:lead": (),
@@ -2528,6 +2547,9 @@ def team_plan(due: TR.Due, mentioned: tuple = ()) -> list[tuple[str, str]]:
     if trig == "rr_review":
         # owners' request 2026-10-04: exits first, then the shadows' what-ifs, then the losses side
         return [("exit_timing", "team"), ("whatif", "team"), ("pnl_reviewer", "team"), lead]
+    if trig == "risk_review":
+        # owners' request 2026-10-04: the risk numbers, then the validator explains the backtest gap, then the lead
+        return [("risk_officer", "team"), ("validator", "team"), lead]
     if trig == "event_review":
         return [("news_calendar", "team"), ("macro_corr", "team"), ("chart_regime", "team"), lead]
     if trig == "bull_bear":
@@ -2728,7 +2750,14 @@ def _coins(ctx: RoundContext, due: TR.Due) -> dict:
 
 def _learning(ctx: RoundContext, due: TR.Due) -> dict:
     from . import meetings as M
-    return M.learning_packet(ctx.agents_conn, ctx.now_ms)
+    pk = M.learning_packet(ctx.agents_conn, ctx.now_ms)
+    # owners' request 2026-10-04: live vs the 5-year backtest (code, short), next to the week's 5-year tests
+    from . import btgap as BG
+    try:
+        pk["backtest_gap"] = BG.summary_brief(ctx.paper_ro, ctx.now_ms, cards_path=ctx.cards_path)
+    except (sqlite3.Error, OSError, KeyError, TypeError, ValueError) as exc:
+        pk["backtest_gap"] = {"error": f"백테스트 비교를 만들지 못함: {type(exc).__name__}"}
+    return pk
 
 
 def _event(ctx: RoundContext, due: TR.Due) -> dict:
@@ -2745,6 +2774,11 @@ def _committee(ctx: RoundContext, due: TR.Due) -> dict:
                           flow_path=_side_db(ctx, "flow.db"), liq_path=_side_db(ctx, "liq.db"))
 
 
+def _survival(ctx: RoundContext, due: TR.Due) -> dict:
+    from . import survival as SV
+    return SV.survival_packet(ctx.paper_ro, ctx.now_ms, names_ko=STRATEGY_KO, cards_path=ctx.cards_path)
+
+
 def _rr(ctx: RoundContext, due: TR.Due) -> dict:
     from . import riskreward as RRW
     return RRW.rr_packet(ctx.paper_ro, ctx.daily_ro, ctx.now_ms, round_trip=round_trip(ctx.paper_ro),
@@ -2754,7 +2788,8 @@ def _rr(ctx: RoundContext, due: TR.Due) -> dict:
 # trigger -> (packet root, builder): the meeting's code-computed numbers, in every speaker's packet
 MEETING_PACKETS = {"cost_review": ("cost", _cost), "combo_review": ("combo", _combo), "coin_review": ("coins", _coins),
                    "learning_review": ("learning", _learning), "event_review": ("event", _event),
-                   "bull_bear": ("committee", _committee), "rr_review": ("rr", _rr)}
+                   "bull_bear": ("committee", _committee), "rr_review": ("rr", _rr),
+                   "risk_review": ("survival", _survival)}
 
 
 def learning_notes(rnd: "_Round", lessons: dict) -> list[dict]:
@@ -2941,6 +2976,12 @@ def ranking_packet(ctx: RoundContext) -> dict:
                                            round_trip=round_trip(ctx.paper_ro))
     except (sqlite3.Error, KeyError, TypeError, ValueError) as exc:
         pk["risk_reward"] = {"error": f"손익비를 만들지 못함: {type(exc).__name__}"}
+    # owners' request 2026-10-04: the picked strategies' deepest drawdown and bust probability (code, compact)
+    from . import survival as SV
+    try:
+        pk["survival"] = SV.brief_many(ctx.paper_ro, [r["strategy"] for r in pk.get("picked") or []], ctx.now_ms)
+    except (sqlite3.Error, KeyError, TypeError, ValueError) as exc:
+        pk["survival"] = {"error": f"낙폭·파산 위험을 만들지 못함: {type(exc).__name__}"}
     return pk
 
 

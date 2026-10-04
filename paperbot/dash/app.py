@@ -701,7 +701,7 @@ def _trigger_defaults(hours: Optional[dict] = None) -> dict:
          "ranking_hour_kst": 14, "tf_split_hour_kst": 18, "weekly_report_hour_kst": 21,
          "bull_bear_hour_kst": 12, "event_review_hour_kst": 11, "cost_review_hour_kst": 11,
          "combo_review_hour_kst": 11, "coin_review_hour_kst": 11, "learning_review_hour_kst": 11,
-         "rr_review_hour_kst": 11}
+         "rr_review_hour_kst": 11, "risk_review_hour_kst": 11}
     try:
         from ..agents.triggers import TriggerPolicy
         p = TriggerPolicy()
@@ -715,7 +715,8 @@ def _trigger_defaults(hours: Optional[dict] = None) -> dict:
                    ("bull_bear", "bull_bear_hour_kst"), ("event_review", "event_review_hour_kst"),
                    ("cost_review", "cost_review_hour_kst"), ("combo_review", "combo_review_hour_kst"),
                    ("coin_review", "coin_review_hour_kst"), ("learning_review", "learning_review_hour_kst"),
-                   ("rr_review", "rr_review_hour_kst"), ("loss_min_count", "loss_min_count"), ("loss_min_gap_ms", "loss_min_gap_ms")):
+                   ("rr_review", "rr_review_hour_kst"), ("risk_review", "risk_review_hour_kst"),
+                   ("loss_min_count", "loss_min_count"), ("loss_min_gap_ms", "loss_min_gap_ms")):
         v = (hours or {}).get(k)
         if isinstance(v, int) and not isinstance(v, bool):
             d[key] = v
@@ -744,6 +745,8 @@ def room_schedule_ko(room_id: str, hours: Optional[dict] = None) -> str:
         return f" {day}요일 {hh(h)} {what}(자료가 쌓인 뒤부터).{more}" if isinstance(h, int) and h >= 0 else ""
 
     bb, ev = d.get("bull_bear_hour_kst", -1), d.get("event_review_hour_kst", -1)
+    # the risk team: Tuesday's combination meeting, Friday's drawdown / bust risk meeting (owners' request 2026-10-04)
+    risk = weekly("combo_review_hour_kst", "화", "조합·동시 손실 회의") + weekly("risk_review_hour_kst", "금", "낙폭·파산 위험 회의")
     return {
         "team:market": f"매일 {m:02d}:00 아침 회의: 장세 → 파생·쏠림 → 전략가 → 반론 → 팀장 요약(텔레그램 발송). "
                        + (f"매일 {hh(bb)} 낙관·비관 토론(코인 하나씩, 24시간 뒤 코드가 채점, 거래 없음). " if bb >= 0 else "")
@@ -758,8 +761,8 @@ def room_schedule_ko(room_id: str, hours: Optional[dict] = None) -> str:
                      + weekly("learning_review_hour_kst", "토", "학습 정리 회의"),
         "team:ops": "사고가 나면 바로: 강제청산, 밤 점검 불일치, 데이터 끊김, 신호 지연."
                     + weekly("cost_review_hour_kst", "월", "비용·체결 회의"),
-        "team:risk": (weekly("combo_review_hour_kst", "화", "조합·동시 손실 회의").strip() + " 그 밖에는 두 분 글에 답합니다."
-                      if d.get("combo_review_hour_kst", -1) >= 0 else "정해진 회의는 없고, 두 분이 남긴 메시지에 답합니다."),
+        "team:risk": ((risk.strip() + " 그 밖에는 두 분 글에 답합니다.") if risk
+                      else "정해진 회의는 없고, 두 분이 남긴 메시지에 답합니다."),
     }.get(room_id, "")
 
 
@@ -1799,13 +1802,31 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
                  "hold": prof.get(k, {}).get("hold"), "rare": prof.get(k, {}).get("rare")}
                 for k, v in STRATEGY_KO.items()]
 
+    risk_cache: dict = {}
+
     @app.get("/api/profile/{strategy}")
     def get_profile(strategy: str):
+        """The strategy's 5-year card, plus ``live_risk`` (agents/survival.py, read-only, cached ~10 min): the five
+        accounts' deepest drawdown and the highest account bust probability (accounts with >= 20 trades)."""
         from ..agents.packets3 import profile_card
         c = profile_card(strategy)
         if c is None:
             raise HTTPException(404, "unknown strategy")
-        return c
+        hit = risk_cache.get(strategy)
+        if hit is None or time.time() - hit[0] > TRADES_TTL_S:
+            from ..agents import survival as SV
+            try:
+                conn = data.conn()
+                try:
+                    val = SV.dash_strategy(conn, strategy, int(time.time() * 1000))
+                finally:
+                    conn.close()
+            except (sqlite3.Error, ValueError, KeyError, TypeError) as exc:
+                val = {"error": type(exc).__name__}
+            if len(risk_cache) > 64:
+                risk_cache.clear()
+            risk_cache[strategy] = hit = (time.time(), val)
+        return {**c, "live_risk": hit[1]}
 
     @app.get("/api/agents/feed")
     def agents_feed(limit: int = 200):

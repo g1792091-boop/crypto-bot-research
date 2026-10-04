@@ -45,6 +45,8 @@ Triggers (defaults in ``TriggerPolicy``; every number is configurable):
     coin_review   4  team:review   Wednesday} their KST weekday, once per KST week (key = that day); a meeting the
     learning_review 4 team:lead    Saturday } budget deferred or stopped stays due on the following days until the
     rr_review     4  team:review   Thursday } (risk-reward / exit meeting, owners' request 2026-10-04: agents/riskreward.py)
+    risk_review   4  team:risk     Friday   } (drawdown / bust risk and the backtest gap, owners' request 2026-10-04:
+                                              agents/survival.py, agents/btgap.py)
                                    next one. Only once there is enough data (``analysis_ok``: >= ``analysis_min_trades``
                                    closed strategy trades in the 7 days before the slot and >= ``analysis_min_days``
                                    since the run started); otherwise nothing is due and ``analysis_status`` says why
@@ -133,9 +135,9 @@ LAB_WEEKDAY = 6                       # the new-strategy accounts' weekly review
 
 # The weekly analysis meetings (owners' choice 2026-10-04): trigger -> (KST weekday, Monday = 0, room)
 ANALYSES = {"cost_review": (0, "team:ops"), "combo_review": (1, "team:risk"), "coin_review": (2, "team:review"),
-            "learning_review": (5, "team:lead"), "rr_review": (3, "team:review")}
+            "learning_review": (5, "team:lead"), "rr_review": (3, "team:review"), "risk_review": (4, "team:risk")}
 ANALYSIS_KO = {"cost_review": "비용·체결 회의", "combo_review": "조합·동시 손실 회의", "coin_review": "코인·장세 회의",
-               "learning_review": "학습 정리 회의", "rr_review": "손익비·청산 회의"}
+               "learning_review": "학습 정리 회의", "rr_review": "손익비·청산 회의", "risk_review": "낙폭·파산 위험 회의"}
 TRIGGERS = ("incident", "owner", "loss_cluster", "bust", "checkpoint", "morning", "evening", "weekly", "research",
             "market_move", "ranking", "tf_split", *ANALYSES, "event_review", "bull_bear")
 PRIORITY = {"incident": 0, "owner": 1, "loss_cluster": 2, "bust": 2, "market_move": 2, "checkpoint": 3, "morning": 3, "ranking": 3,
@@ -255,6 +257,7 @@ class TriggerPolicy:
     coin_review_hour_kst: int = -1
     learning_review_hour_kst: int = -1
     rr_review_hour_kst: int = -1          # Thursday's risk-reward / exit meeting (owners' request 2026-10-04)
+    risk_review_hour_kst: int = -1        # Friday's drawdown / bust risk meeting (owners' request 2026-10-04)
     analysis_min_trades: int = 200
     analysis_min_days: int = 7
     # owners' decision 2026-10-04: besides its weekday, a weekly analysis may meet once more in the same KST week
