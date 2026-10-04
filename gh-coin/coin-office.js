@@ -12,9 +12,17 @@ export { TEAMS, AGENTS, TEAM_LEAD, agentById, teamById, COINS, TEAM_COLOR };
 // 사무실 일에 쓸 수 있는 모든 대화 모델 (연결된 모든 회사 · Gemini 포함). 학습 데이터 제외는 keep() 에서 따로 한다(isClaude)
 let olCache = [];   // 내 PC Ollama 설치 모델 캐시 (cycle 에서 비차단 갱신)
 export async function refreshOllama(){ try { olCache = await ollamaModels(); } catch (e) { olCache = []; } return olCache; }
-export const teamLocal = () => localStorage.getItem("coinTeamLocal") === "1";   // 직원 전원 로컬(Ollama) 전용 모드
+export const teamLocal = () => localStorage.getItem("coinTeamLocal") === "1";   // 직원 전원 로컬(Ollama) 전용 모드 (뉴럴 데스크도 공유)
 export function setTeamLocal(on){ localStorage.setItem("coinTeamLocal", on ? "1" : "0"); if (on) refreshOllama(); }
 export const ollamaCache = () => olCache.slice();
+// 클라우드(NVIDIA·SambaNova 등) 키 완전 삭제 — 완전 로컬 전환용. anthropic 은 별도라 남겨둔다(원하면 설정에서 삭제).
+export function removeCloudKeys(){
+  const removed = [];
+  for (const id of Object.keys(PROVIDERS)){ if (id === "anthropic") continue; if (settings.keys[id]){ removed.push(id); delete settings.keys[id]; delete settings.provModels[id]; delete settings.pinModel[id]; } }
+  if (settings.brain && PROVIDERS[settings.brain] && settings.brain !== "anthropic") settings.brain = "ollama";
+  saveSettings(); fire({kind: "cfg"});
+  return removed;
+}
 export function officeSources(){
   const out = [], seen = new Set();
   const ols = olCache.length ? olCache : (settings.olModel && settings.olOk ? [settings.olModel] : []);

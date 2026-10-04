@@ -289,9 +289,16 @@ function wire(el){
     const cg = e.target.closest("[data-ch-go]"); if (cg){ root.querySelector(`#ofChans [data-ch="${cg.dataset.chGo}"]`)?.click(); return; }
     if (e.target.closest("[data-resetmodels]")){ const r = O.resetModels(); showTeam(); ctx.toast(`모델 초기화 완료 · 직원들에게 서로 다른 모델 ${r.count}개 배정: ${r.models.slice(0, 4).map(m => shortModel(m)).join(", ")}${r.count > 4 ? " 등" : ""}`); return; }
     if (e.target.closest("[data-teamlocal]")){ const turningOn = !O.teamLocal?.();
-      if (turningOn){ const ols = await O.refreshOllama?.(); if (!ols || !ols.length){ ctx.toast("설치된 Ollama 로컬 모델이 없습니다. 뉴럴 데스크 '🖥 로컬 모델 설치'로 먼저 받으세요."); return; } }
-      O.setTeamLocal?.(turningOn); O.resetModels?.(); showTeam();
-      ctx.toast(turningOn ? `직원 전원을 로컬(Ollama) 모델로 전환 · 설치된 ${((await O.refreshOllama?.()) || []).length}개 중 배정 (무료·오프라인)` : "로컬 전용 해제 · 다시 클라우드+로컬 섞어 씁니다"); return; }
+      if (turningOn){ const ols = await O.refreshOllama?.(); if (!ols || !ols.length){ ctx.toast("설치된 Ollama 로컬 모델이 없습니다. 뉴럴 데스크 '🖥 로컬 모델 설치'로 먼저 받으세요."); return; }
+        O.setTeamLocal?.(true);
+        // 완전 로컬 전환: 원하면 클라우드(NVIDIA 등) 키까지 삭제
+        if (confirm("완전 로컬로 바꿉니다. 클라우드 AI 키(NVIDIA·SambaNova 등)도 아예 삭제할까요?\n\n확인=삭제(완전 오프라인) · 취소=남겨두고 로컬만 사용(나중에 다시 켤 수 있음)")){
+          const rm = O.removeCloudKeys?.() || []; ctx.toast(`클라우드 키 삭제: ${rm.join(", ") || "없음"} · 이제 로컬(Ollama)만 사용`);
+        } else ctx.toast(`직원·트레이더 전원 로컬(Ollama) 전환 · 설치 ${ols.length}개 (클라우드 키는 남겨둠, 미사용)`);
+        O.resetModels?.(); showTeam(); return;
+      }
+      O.setTeamLocal?.(false); O.resetModels?.(); showTeam();
+      ctx.toast("로컬 전용 해제 · 다시 클라우드+로컬 섞어 씁니다"); return; }
     if (e.target.closest("[data-botnew]")){ O.ask("자동매매봇 전략 만들어줘", {room: "bot"}); ctx.toast("선물 자동매매봇팀이 봇 전략을 만들어 백테스트합니다 · #선물 자동매매봇팀 방"); return; }
     if (e.target.closest("[data-botsim]")){ O.ask("그리드 봇 백테스트 돌려줘", {room: "bot"}); ctx.toast("그리드/DCA 봇을 연구용으로 백테스트합니다 (실거래로는 안 나감)"); return; }
     if (e.target.closest("[data-botopt]")){ O.ask("봇 자동개선 해줘", {room: "bot"}); ctx.toast("데모 봇의 보조지표·위험값을 하이퍼옵트로 자동 개선합니다 (검증·견고성 통과분만 새 버전)"); return; }

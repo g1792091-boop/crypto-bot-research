@@ -15,6 +15,17 @@ export async function openNeural(ctx = {}) {
   // 🧠 뇌 그래프 호버(Obsidian식: 올린 노드와 이웃만 강조) + .canvas 내보내기(Obsidian에서 열기)
   const bcv = root.querySelector("canvas[data-brain]");
   if (bcv) { bcv.onmousemove = (e) => { const r = bcv.getBoundingClientRect(); bmouse = { x: e.clientX - r.left, y: e.clientY - r.top }; }; bcv.onmouseleave = () => { bmouse = null; }; }
+  // 💻 로컬 전용 토글 (설치된 Ollama 모델만)
+  const lbtn = root.querySelector("[data-local]");
+  const paintLocal = () => { if (lbtn) { const on = N.localOnly(); lbtn.textContent = on ? "💻 로컬 전용: 켜짐" : "💻 로컬 전용"; lbtn.style.background = on ? "#1e3a1e" : ""; lbtn.style.color = on ? "#7fe08a" : ""; } };
+  paintLocal();
+  if (lbtn) lbtn.onclick = async () => {
+    const turningOn = !N.localOnly();
+    if (turningOn) { const ols = await N.refreshOllama().catch(() => []); if (!ols.length) { alert("설치된 Ollama 로컬 모델이 없습니다. 먼저 '🖥 로컬 모델 설치'를 눌러 받으세요."); return; } }
+    N.setLocalOnly(turningOn); paintLocal();
+    feed(turningOn ? "💻 로컬 전용 ON — 설치된 Ollama 모델만 거래합니다 (무료·오프라인)" : "💻 로컬 전용 OFF — 클라우드+로컬 혼합");
+    ST = N.state(); render();
+  };
   // 🖥 추천 로컬(Ollama) 모델 자동 설치 → 받으면 바로 트레이더로
   const obtn = root.querySelector("[data-ollama]");
   if (obtn) obtn.onclick = async () => {
@@ -213,7 +224,7 @@ function shortMd(m) { return String(m).split("/").pop().replace(/-instruct|-chat
 const SHELL = `
 <div class="nd-top"><b>🧠 GH COIN // NEURAL DESK</b><span class="nd-tag">AI 모델이 직접 매매·복기·학습 · 뇌 누적 · 가상자금</span>
   <marquee class="nd-feed" data-feed scrollamount="5"></marquee><span class="nd-clock"></span>
-  <button class="nd-btn" data-ollama title="내 PC Ollama에 GH Coin용 추천 무료 모델을 자동으로 받아 트레이더로 씁니다">🖥 로컬 모델 설치</button><button class="nd-btn" data-reset>초기화</button><button class="nd-btn nd-x" data-x>✕</button></div>
+  <button class="nd-btn" data-local title="켜면 설치된 Ollama 로컬 모델만 트레이더로 씁니다 (무료·오프라인·한도 없음). 끄면 클라우드+로컬 혼합.">💻 로컬 전용</button><button class="nd-btn" data-ollama title="내 PC Ollama에 GH Coin용 추천 무료 모델을 자동으로 받아 트레이더로 씁니다">🖥 로컬 모델 설치</button><button class="nd-btn" data-reset>초기화</button><button class="nd-btn nd-x" data-x>✕</button></div>
 <div class="nd-grid">
   <div class="nd-card nd-pnl"><div class="nd-h">ALL-TIME PnL <small>(데모)</small></div><div class="nd-big" data-pnl></div><div class="nd-kpi" data-kpi></div></div>
   <div class="nd-card nd-mkt"><div class="nd-h">🔍 스캔 · 포지션</div><div class="nd-scan" data-scan></div><div class="nd-markets" data-markets></div></div>
