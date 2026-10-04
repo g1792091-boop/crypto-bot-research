@@ -1,0 +1,151 @@
+// 🧠 뉴럴 데스크 — 연결된 AI 모델(+피처 뉴런)이 "직접" 데모 매매하고, 결과로 채점받아 가중치를 스스로 올리고 내린다.
+// 에이전트 '팀 회의'가 아니라, 신호 뉴런들의 온라인 학습(퍼셉트론식)으로 돌아가는 자율 데모 트레이더.
+// 전부 가상자금(데모)만 — 실주문·실자금·실지갑 없음.
+import { candlesFor } from "../nuri-ai/agent.js";
+import { brainStream, settings } from "../nuri-ai/engine.js";
+
+export const COINS = [["BTC", "BTCUSDT"], ["ETH", "ETHUSDT"], ["SOL", "SOLUSDT"], ["XRP", "XRPUSDT"], ["DOGE", "DOGEUSDT"], ["BNB", "BNBUSDT"]];
+const KEY = "coin:neural";
+const START = 10000;          // 코인별 가상 증거금
+const LR = 0.06;              // 학습률 (맞으면 가중치↑ 틀리면↓)
+const FEE = 0.0006;           // 왕복 수수료+슬리피지 가정
+const cl = (v, lo = -1, hi = 1) => Math.max(lo, Math.min(hi, v));
+
+// ── 피처 뉴런: 캔들에서 각자 [-1,1] 신호를 낸다 ──
+export const NEURONS = ["모멘텀", "추세(EMA)", "RSI", "거래흐름", "호가압력", "변동성"];
+export function featuresOf(cs) {
+  const c = cs.map(b => b.c), n = c.length, last = c[n - 1];
+  if (n < 55) return Object.fromEntries(NEURONS.map(k => [k, 0]));
+  const ema = (p) => { const k = 2 / (p + 1); let e = c[n - 3 * p] ?? c[0]; for (let i = Math.max(1, n - 3 * p + 1); i < n; i++) e = c[i] * k + e * (1 - k); return e; };
+  const rsi = (p = 14) => { let g = 0, l = 0; for (let i = n - p; i < n; i++) { const d = c[i] - c[i - 1]; if (d > 0) g += d; else l -= d; } const rs = l === 0 ? 99 : g / l; return 100 - 100 / (1 + rs); };
+  const mom = (p) => last / c[n - 1 - p] - 1;
+  let vol = 0; for (let i = n - 20; i < n; i++) vol += Math.abs(c[i] / c[i - 1] - 1); vol /= 20;
+  let up = 0, dn = 0; for (let i = n - 12; i < n; i++) { if (cs[i].c >= cs[i].o) up += cs[i].v; else dn += cs[i].v; }
+  const flow = (up - dn) / (up + dn || 1);
+  let bp = 0; for (let i = n - 6; i < n; i++) { const rng = cs[i].h - cs[i].l || 1; bp += ((cs[i].c - cs[i].l) / rng - 0.5) * 2; } bp /= 6;   // 종가가 봉 상단이면 매수압력
+  return {
+    "모멘텀": cl(mom(5) * 35 + mom(20) * 8),
+    "추세(EMA)": cl((last / ema(50) - 1) * 45),
+    "RSI": cl((rsi() - 50) / 28),
+    "거래흐름": cl(flow * 2),
+    "호가압력": cl(bp * 1.4),
+    "변동성": cl(1 - vol * 55),   // 변동성 낮을수록 진입 우호(+), 급변동이면 리스크오프(−)
+  };
+}
+
+// ── 상태 ──
+function blank() {
+  return { pnl: 0, cash: START * COINS.length, fills: 0, wins: 0,
+    w: Object.fromEntries(NEURONS.map(k => [k, 1])),              // 뉴런 가중치(학습으로 변함)
+    hit: Object.fromEntries(NEURONS.map(k => [k, { ok: 0, n: 0 }])), // 뉴런별 적중
+    models: {},                                                   // 연결된 LLM 모델 기여(이름→{ok,n,w})
+    pos: {}, feat: {}, dec: {}, trades: [], feed: [], epoch: 0, t0: Date.now() };
+}
+let S = null;
+export function load() { if (!S) { try { S = JSON.parse(localStorage.getItem(KEY)) || blank(); } catch (e) { S = blank(); } for (const k of NEURONS) { S.w[k] ??= 1; S.hit[k] ??= { ok: 0, n: 0 }; } } return S; }
+function save() { try { localStorage.setItem(KEY, JSON.stringify({ ...S, trades: S.trades.slice(-60), feed: S.feed.slice(-40) })); } catch (e) {} }
+export function reset() { S = blank(); save(); return S; }
+const feed = (t) => { S.feed.unshift({ t: Date.now(), text: t }); if (S.feed.length > 40) S.feed.pop(); };
+
+// ── 결정: 가중 뉴런 합의 (+연결 모델 보팅은 addModelVote 로) ──
+export function decide(feat) {
+  let num = 0, den = 0; const parts = {};
+  for (const k of NEURONS) { const w = Math.max(0.05, S.w[k]); parts[k] = feat[k] * w; num += parts[k]; den += w; }
+  const score = den ? num / den : 0;                 // -1..1
+  const dir = score > 0.12 ? 1 : score < -0.12 ? -1 : 0;
+  return { score: +score.toFixed(3), dir, conf: Math.round(cl(Math.abs(score) * 1.6) * 100), parts };
+}
+
+// ── 한 스텝: 코인별로 피처→결정→데모 포지션→정산→학습 ──
+export async function step() {
+  load();
+  for (const [ko, sym] of COINS) {
+    let cs; try { cs = (await candlesFor({ market: sym, exchange: "binancef", timeframe: "5" }, 300)).cs; } catch (e) { continue; }
+    if (!cs || cs.length < 60) continue;
+    const price = cs.at(-1).c, feat = featuresOf(cs), d = decide(feat);
+    S.feat[sym] = feat; S.dec[sym] = { ...d, price };
+    scoreModels(sym, price);
+    const p = S.pos[sym];
+    // 보유 중이면 마크 + 청산 판단(반대 신호 또는 손절/익절)
+    if (p) {
+      const roe = (price - p.entry) / p.entry * p.side * 100;
+      p.roe = +roe.toFixed(2); p.price = price;
+      const flip = d.dir !== 0 && d.dir !== p.side, hardSL = roe < -3.5, hardTP = roe > 6;
+      if (flip || hardSL || hardTP) closePos(sym, price, flip ? "반대신호" : hardSL ? "손절" : "익절");
+    }
+    // 무포지션 + 신호 있으면 진입
+    if (!S.pos[sym] && d.dir !== 0 && d.conf >= 25) openPos(sym, ko, d.dir, price, feat);
+  }
+  S.epoch++;
+  save();
+  return state();
+}
+function openPos(sym, ko, side, price, feat) {
+  S.pos[sym] = { ko, side, entry: price, price, size: START * 0.2, roe: 0, t: Date.now(), feat: { ...feat } };
+  feed(`${ko} ${side > 0 ? "▲ 롱" : "▼ 숏"} 진입 @ ${fmt(price)} (확신 ${S.dec[sym]?.conf}%)`);
+}
+function closePos(sym, price, why) {
+  const p = S.pos[sym]; if (!p) return;
+  const ret = (price - p.entry) / p.entry * p.side - FEE;      // 수수료 반영
+  const pnl = p.size * ret;
+  S.pnl += pnl; S.fills++; if (pnl > 0) S.wins++;
+  S.trades.unshift({ ko: p.ko, side: p.side, entry: p.entry, exit: price, roe: +(ret * 100).toFixed(2), pnl: +pnl.toFixed(2), why, t: Date.now() });
+  if (S.trades.length > 60) S.trades.pop();
+  // ── 학습: 이 거래가 맞았나? 각 뉴런의 진입 당시 신호가 결과와 같은 방향이었는지로 가중치 업데이트 ──
+  const good = ret > 0 ? 1 : -1;
+  for (const k of NEURONS) {
+    const sig = p.feat[k] || 0; if (Math.abs(sig) < 0.08) continue;
+    const agreed = Math.sign(sig) === p.side ? 1 : -1;        // 이 뉴런이 이 방향에 동의했나
+    const correct = agreed === good;                           // 동의가 옳았나
+    S.hit[k].n++; if (correct) S.hit[k].ok++;
+    S.w[k] = cl(S.w[k] + LR * (correct ? 1 : -1) * Math.abs(sig), 0.05, 3);   // 맞으면↑ 틀리면↓
+  }
+  feed(`${p.ko} 청산 @ ${fmt(price)} · ${ret >= 0 ? "+" : ""}${(ret * 100).toFixed(2)}% (${why}) → 학습 반영`);
+  delete S.pos[sym];
+}
+// 연결된 LLM 모델의 한 표를 반영. 성과로 가중치 자가조정(채점은 scoreModels).
+export function addModelVote(model, sym, dir, conf) {
+  load(); const m = S.models[model] || (S.models[model] = { ok: 0, n: 0, w: 1, last: null, pend: null });
+  const price = S.dec[sym]?.price; m.last = { sym, dir, conf, t: Date.now() };
+  if (price && dir !== 0) m.pend = { sym, dir, price, t: Date.now() };   // 2분 뒤 채점 대기
+  if (S.dec[sym]) S.dec[sym].score = cl(S.dec[sym].score + dir * (conf / 100) * 0.3 * m.w);
+}
+// 연결된 AI 모델에게 한 코인 방향을 직접 물어 투표로 반영(저비용 · 호출측에서 throttle). AI 키 없으면 skip.
+let voteRot = 0;
+export async function modelVote() {
+  load();
+  if (!settings?.keys || !Object.values(settings.keys).some(Boolean)) return;
+  const [ko, sym] = COINS[voteRot++ % COINS.length], feat = S.feat[sym];
+  if (!feat) return;
+  let raw = "", route;
+  try {
+    route = await brainStream({ messages: [
+      { role: "system", content: "코인 선물 트레이더. 아래 신호로 다음 방향을 정하라. JSON 한 줄만: {\"dir\":1|0|-1,\"conf\":0~100}. 1=롱 -1=숏 0=관망." },
+      { role: "user", content: `${ko} 지금 신호: ${Object.entries(feat).map(([k, v]) => k + " " + (+v).toFixed(2)).join(", ")}` }],
+      role: "fast", maxTokens: 50, temperature: 0.3, noThink: true, onContent: d => raw += d });
+  } catch (e) { return; }
+  const md = raw.match(/"?dir"?\s*[:=]\s*(-?[01])/), cf = raw.match(/"?conf"?\s*[:=]\s*(\d+)/);
+  if (!md || !route?.model) return;
+  addModelVote(route.model, sym, +md[1], cf ? Math.min(100, +cf[1]) : 50);
+  save();
+}
+// 모델 투표 채점: 2분+ 지난 예측이 맞았는지 가격으로 확인 → 적중률·가중치 갱신(성능 업글)
+function scoreModels(sym, price) {
+  for (const name in S.models) {
+    const m = S.models[name]; if (!m.pend || m.pend.sym !== sym) continue;
+    if (Date.now() - m.pend.t < 120000) continue;
+    const moved = (price - m.pend.price) / m.pend.price, correct = Math.sign(moved) === m.pend.dir;
+    m.n++; if (correct) m.ok++; m.w = cl(m.w + LR * (correct ? 1 : -1), 0.05, 3); m.pend = null;
+  }
+}
+
+export function state() {
+  load();
+  const wr = S.fills ? Math.round(S.wins / S.fills * 100) : 0;
+  const neurons = NEURONS.map(k => ({ name: k, w: +S.w[k].toFixed(2), hit: S.hit[k].n ? Math.round(S.hit[k].ok / S.hit[k].n * 100) : null, n: S.hit[k].n }))
+    .sort((a, b) => b.w - a.w);
+  return { pnl: +S.pnl.toFixed(2), fills: S.fills, winRate: wr, epoch: S.epoch, since: S.t0,
+    neurons, models: Object.entries(S.models).map(([name, m]) => ({ name, w: +m.w.toFixed(2), hit: m.n ? Math.round(m.ok / m.n * 100) : null, last: m.last })),
+    pos: Object.values(S.pos), dec: S.dec, feat: S.feat, trades: S.trades.slice(0, 20), feed: S.feed.slice(0, 24) };
+}
+function fmt(v) { return v >= 1000 ? Math.round(v).toLocaleString() : v >= 1 ? v.toFixed(2) : v.toPrecision(4); }
