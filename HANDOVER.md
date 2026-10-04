@@ -165,6 +165,12 @@ bash build.sh        # → dist/GHNano.exe, dist/ArchAI.exe, dist/GHCoin.exe
 - 증상: 뉴럴 데스크 UI 일부만 그려지고 "오류: N.startAuto is not a function". 원인: `문서/GHNano 사무실/app-patches/` 의 옛 수정본(neural.js 10/5 01:47 · agent.js·quant.js 10/3)이 exe 안 새 파일보다 우선 → 옛 엔진·옛 도구가 섞임.
 - 조치: 옛 수정본을 `app-patches-backup-20261005/` 로 옮김(삭제 아님). 런처 `override.go`: 수정본 저장 때 원본 지문(`.base`, sha256)을 같이 쓰고, 지금 exe 원본 지문과 다르면(또는 지문 없으면) 수정본을 **무시** → exe 를 새로 빌드하면 낡은 수정본이 자동으로 꺼짐. 목록 API 에 `stale` 표시.
 
+### 5-6. 뉴럴 셸 UI · Ollama 리더보드 · Claudian · OpenClaw (10/5)
+- 뉴럴 셸(전체 폭, 밝은 종이 테마): 마켓 인셋 7장(가격·호가압력·체결흐름·변동성·모멘텀·동시리스크 스파크라인) → 피처 48유닛 → 결정 코어 3D 입자 구(합의 셀수록 주황 코어 커짐) + CORE CHARGE·FAIR P(UP)(학습된 뉴런 가중 로지스틱) → 활성 마켓(코인별 1분 틱·보유 ◆). 전부 실데이터.
+- 리더보드: 엔진 v2 이후 '승인해야 생기던' 모델 목록 → 연결된 Ollama 모델 전부 항상 표시(최대 12, 이전 6).
+- 설치: 옵시디언(winget) · Claudian 2.3.12(볼트 `.obsidian/plugins/realclaudian`) · Claude Code CLI(npm) · OpenClaw 2026.9.8(npm). Claude Code 로컬 MCP 등록: 저장소 `neutron-local`, 볼트 `neutron-brain` (✔ Connected, 볼트에서 실제 호출 확인).
+- OpenClaw: `~/.openclaw/openclaw.json` — ollama/qwen2.5:7b, 게이트웨이 loopback+토큰, 채널 없음, tools.profile minimal + alsoAllow `neutron__*`, deny exec/process/browser/apply_patch, toolSearch 끔(작은 모델이 숨은 도구를 못 찾음), 뉴트론 도구 11개만. 하트비트 1시간(`문서/GHNano 사무실/openclaw/HEARTBEAT.md`). 예약 작업 "OpenClaw Gateway". 검증: 상태 조회·메모 쓰기 → 앱 뇌 반영까지 확인. 끄기: `openclaw daemon stop` / 제거 `openclaw daemon uninstall`.
+
 ---
 
 ## 6. 안전 규칙 (바꾸지 말 것)

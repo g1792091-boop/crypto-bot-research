@@ -190,6 +190,8 @@ export const TECH = [
     what: "get_funding_rates·arbitrage_cross_exchange 개념을 무료 공개 API 로 재구현: 거래소별 펀딩·평균·차이·차익 후보(정보용)", where: "gh-coin/lib/fundscan.js · 에이전트 도구 funding_scan(선물 스킬) · coinGate · 뉴럴 승인 자료(flowFacts) · MCP neutron_funding_scan"},
   {repo: "ocean-agent (PyPI, BUSL-1.1)", lic: "BUSL-1.1(설치 안 함·개념만)", teams: ["selfai", "demo"], status: "실동작 — 실측 셋업 순위(기대값×승률×신뢰도) + 국면별 학습 승률: 손실 검증된 국면에선 그 매매법 진입 건너뜀",
     what: "measured-edge setups·learned_winrates 개념. 실주문(Pacifica)·자율 거래 엔티티는 안전 규칙상 넣지 않음", where: "neural.js setups()·learnedWinrates()·regStat → step() 후보 선별 · MCP neutron_top_setups·neutron_learned_winrates"},
+  {repo: "openclaw/openclaw", lic: "MIT", teams: ["hq", "selfai"], status: "실동작 — 이 PC 에 설치·서비스 등록(127.0.0.1 전용). 로컬 Ollama(qwen2.5:7b) 비서가 1시간마다 뉴트론 MCP 로 상태·셋업·판정을 보고 메모·실험을 앱에 보냄",
+    what: "도구는 뉴트론 MCP 11개만(최소 프로필, exec·process·browser·apply_patch 차단, 채널 없음) — 주문 불가. 하트비트 할 일은 작업폴더 HEARTBEAT.md", where: "~/.openclaw/openclaw.json · 문서/GHNano 사무실/openclaw (AGENTS.md·HEARTBEAT.md) · 예약 작업 'OpenClaw Gateway'"},
   {repo: "yuxuan-lou/ClawTrade · VTSTech/AgentNova(→AgentKthx) · UVLabs/HyperLLM-4b", lic: "각 OSS(개념만)", teams: ["hq"], status: "참고 — 이미 같은 구조 보유/해당 없음",
     what: "ClawTrade: AI 는 브로커에 직접 접근 불가·하드코딩 안전 규칙(= live.js 보호 파일·한도) · AgentNova: 로컬 모델 자율 에이전트·하트비트(= 사무실 cycle·Ollama) · HyperLLM-4b: LoRA 어댑터뿐(GGUF 없음)·Hyperliquid 전용이라 Ollama 로 못 씀",
     where: "—"},
