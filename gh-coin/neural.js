@@ -135,26 +135,40 @@ function closeModelPos(name, sym, price, why) {
   feed(`[${shortMd(name)}] ${p.ko} 청산 ${ret >= 0 ? "+" : ""}${(ret * 100).toFixed(2)}% (${why})`);
   delete M.pos[sym];
 }
-// 모델 한 명이 코인 하나를 직접 판단 → 포지션 갱신 (호출측에서 throttle; 비용 분산)
+// 모델 응답에서 방향·확신 추출 — JSON 우선, 안 되면 키워드(롱/숏/관망)로 폴백 (파싱 실패로 거래 안 되는 걸 방지)
+function parseDecision(raw) {
+  let dir = null, conf = null;
+  const jm = raw.match(/"?dir"?\s*[:=]\s*(-?[01])/); if (jm) dir = +jm[1];
+  const cm2 = raw.match(/"?conf(?:idence)?"?\s*[:=]\s*(\d+)/i); if (cm2) conf = Math.min(100, +cm2[1]);
+  if (dir === null) {
+    const t = raw.toLowerCase();
+    if (/(숏|매도|하락|short|sell|bear|down)/.test(t)) dir = -1;
+    else if (/(롱|매수|상승|long|buy|bull|\bup\b)/.test(t)) dir = 1;
+    else if (/(관망|보류|중립|hold|flat|neutral|wait)/.test(t)) dir = 0;
+  }
+  return { dir, conf: conf ?? 60 };
+}
+// 모델 한 명이 코인 하나를 직접 판단 → 포지션 갱신
 let mRot = 0;
 export async function modelStep() {
   load(); const cm = connectedModels(); if (!cm.length) return;
   const tgt = cm[mRot % cm.length], [ko, sym] = COINS[((mRot++ / cm.length) | 0) % COINS.length];
   const feat = S.feat[sym], price = S.dec[sym]?.price; if (!feat || !price) return;
-  const M = model(tgt.model); M.prov = tgt.id;
-  const les = M.lessons.length ? `\n내가 복기로 배운 교훈(지켜라): ${M.lessons.join(" / ")}` : "";
+  const M = model(tgt.model); M.prov = tgt.id; M.calls = (M.calls || 0) + 1;
+  const les = M.lessons.length ? `\n내가 복기로 배운 교훈(꼭 지켜라): ${M.lessons.join(" / ")}` : "";
   let raw = "";
   try {
     await brainStream({ messages: [
-      { role: "system", content: `너는 ${ko} 코인 선물 데모 트레이더다. 신호를 보고 방향을 정한다. JSON 한 줄만: {"dir":1|0|-1,"conf":0~100} (1=롱 -1=숏 0=관망).${les}` },
-      { role: "user", content: `${ko} 지금 신호(−1~+1): ${Object.entries(feat).map(([k, v]) => k + " " + (+v).toFixed(2)).join(", ")} · 현재가 ${price}` }],
-      role: "fast", target: tgt, fallback: false, maxTokens: 50, temperature: 0.4, noThink: true, onContent: d => raw += d });
-  } catch (e) { return; }
-  const md = raw.match(/"?dir"?\s*[:=]\s*(-?[01])/); if (!md) return;
-  const dir = +md[1], cf = raw.match(/"?conf"?\s*[:=]\s*(\d+)/), conf = cf ? Math.min(100, +cf[1]) : 50;
+      { role: "system", content: `너는 ${ko} 코인 선물 데모 트레이더다. 아래 신호로 지금 롱/숏/관망을 정한다. 반드시 JSON 한 줄만 출력: {"dir":1,"conf":70} — dir 1=롱 -1=숏 0=관망, conf 0~100. 설명·다른 말 금지.${les}` },
+      { role: "user", content: `${ko} 신호(−1 약세 ~ +1 강세): ${Object.entries(feat).map(([k, v]) => k + " " + (+v).toFixed(2)).join(", ")} · 현재가 ${price}\nJSON 만:` }],
+      target: tgt, fallback: false, maxTokens: 180, temperature: 0.3, noThink: true, onContent: d => raw += d, onThink: () => {} });
+  } catch (e) { feed(`[${shortMd(tgt.model)}] ${ko} 응답 실패 — 다음 차례 재시도`); save(); return; }
+  const { dir, conf } = parseDecision(raw);
+  if (dir === null) { feed(`[${shortMd(tgt.model)}] ${ko} 판단 형식 못 읽음`); save(); return; }
   const p = M.pos[sym];
   if (p && dir !== 0 && dir !== p.side) closeModelPos(tgt.model, sym, price, "반대신호");
-  if (!M.pos[sym] && dir !== 0 && conf >= 25) { M.pos[sym] = { ko, side: dir, entry: price, price, size: START * 0.2, roe: 0, t: Date.now(), feat: { ...feat } }; feed(`[${shortMd(tgt.model)}] ${ko} ${dir > 0 ? "▲롱" : "▼숏"} 진입 @ ${fmt(price)} (${conf}%)`); }
+  if (!M.pos[sym] && dir !== 0) { M.pos[sym] = { ko, side: dir, entry: price, price, size: START * 0.2, roe: 0, t: Date.now(), feat: { ...feat } }; feed(`[${shortMd(tgt.model)}] ${ko} ${dir > 0 ? "▲롱" : "▼숏"} 진입 @ ${fmt(price)} (${conf}%)`); }
+  else if (dir === 0 && !p) feed(`[${shortMd(tgt.model)}] ${ko} 관망`);
   save();
 }
 // 복기: 손실 많은 모델이 자기 손실 거래를 되돌아보고 교훈 한 줄을 스스로 뽑아 기억 → 다음 판단에 주입(성능 향상)
@@ -172,6 +186,41 @@ export async function reflect() {
   const lesson = raw.replace(/["\n]/g, " ").replace(/^교훈[:\s]*/,"").trim().slice(0, 40);
   if (lesson.length > 4) { M.lessons.unshift(lesson); M.lessons = [...new Set(M.lessons)].slice(0, 4); M.losers = []; feed(`[${shortMd(tgt.model)}] 복기 완료 → 교훈: ${lesson}`); save(); }
 }
+// 매매법 설계: 성과 좋은 모델이 차트 터미널 지표(146종)를 직접 조합해 매매법 + 커스텀 수식 지표를 만들고,
+// 자동 백테스트 → 통과하면 사무실(에이전트 팀) 데모 장부로 인계한다. (HKUDS/AI-Trader·Ai-trader-pro·FinRL_DeepSeek 개념)
+export async function designStrategy() {
+  load(); const cm = connectedModels(); if (!cm.length) return;
+  const ranked = cm.map(t => ({ t, m: model(t.model) })).sort((a, b) => b.m.pnl - a.m.pnl);
+  const { t: tgt, m: M } = ranked[0];
+  const Q = await import("../nuri-ai/quant.js");
+  const catalog = "tv_rsi(length) tv_macd tv_bb(length) tv_ema(length) tv_sma(length) tv_adx(length) tv_stoch tv_supertrend tv_cci(length) tv_atr(length) tv_donchian(length) ema sma rsi · 그리고 custom(expr): 수식으로 나만의 지표. 피연산자는 close/open/high/low/volume·지표 id·id.p1~p4";
+  let raw = "";
+  try {
+    await brainStream({ messages: [
+      { role: "system", content: `너는 코인 선물 퀀트다. 아래 보조지표들을 조합해 BTCUSDT 1시간봉 매매법 하나를 설계한다. 반드시 custom 수식 지표를 1개 이상 포함(예: {"id":"vm","type":"custom","expr":"rsi*0.5+close/sma-1"}). 아래 JSON 스키마로만 출력(설명·코드블록 금지):\n{"name":"이름","indicators":[{"id":"r","type":"tv_rsi","length":14},{"id":"vm","type":"custom","expr":"수식"}],"long_entry":{"conditions":[{"left":"r","op":"<","right":35}]},"long_exit":{"conditions":[{"left":"r","op":">","right":65}]},"risk":{"leverage":2,"stop_loss_pct":4,"take_profit_pct":8}}\n쓸 수 있는 지표: ${catalog}.${M.lessons.length ? " 내 교훈: " + M.lessons.join(" / ") : ""}` },
+      { role: "user", content: "매매법 JSON 하나만 출력:" }],
+      target: tgt, fallback: false, maxTokens: 700, temperature: 0.6, noThink: true, onContent: d => raw += d, onThink: () => {} });
+  } catch (e) { feed(`[${shortMd(tgt.model)}] 매매법 설계 응답 실패`); return; }
+  let spec; try { spec = JSON.parse((raw.match(/\{[\s\S]*\}/) || [])[0]); } catch (e) { feed(`[${shortMd(tgt.model)}] 매매법 JSON 형식 오류`); return; }
+  if (!spec || !spec.indicators) return;
+  let norm; try { norm = Q.normalizeSpec({ ...spec, symbol: "BTCUSDT", interval: "1h" }); }
+  catch (e) { feed(`[${shortMd(tgt.model)}] 매매법 규격 미달: ${String(e.message || e).slice(0, 36)}`); return; }
+  let cs; try { cs = (await candlesFor({ market: "BTCUSDT", exchange: "binancef", timeframe: "60" }, 1500)).cs; } catch (e) { return; }
+  const bt = Q.backtest(norm, cs), wf = Q.walkForward(norm, cs);
+  M.designs = (M.designs || 0) + 1;
+  S.designs = S.designs || []; S.designs.unshift({ model: shortMd(tgt.model), name: norm.name, ret: +(bt.stats.return_pct ?? 0).toFixed(1), pf: bt.stats.profit_factor ?? null, pass: wf.pass, handed: false, t: Date.now() });
+  S.designs = S.designs.slice(0, 20);
+  feed(`[${shortMd(tgt.model)}] 매매법 설계 "${norm.name}" → 백테스트 ${(bt.stats.return_pct ?? 0).toFixed(1)}% · ${wf.pass ? "✅ 검증통과 → 사무실 인계" : "불통과"}`);
+  if (wf.pass) {
+    try { const P = await import("../nuri-ai/paper.js");
+      await P.addStrategy({ spec: norm, market: "BTCUSDT", exchange: "binancef", tf: "60", author: `뉴럴(${shortMd(tgt.model)})`,
+        wf: { is: {}, oos: { ret: +(wf.oos?.return_pct ?? 0), pf: wf.oos?.profit_factor ?? null, n: wf.oos?.n_trades ?? 0 } }, cls: "crypto", mname: "비트코인 선물" });
+      S.designs[0].handed = true;
+    } catch (e) {}
+  }
+  save();
+}
+
 function shortMd(m) { return String(m).split("/").pop().replace(/-instruct|-chat|-\d{6,}/gi, "").slice(0, 16); }
 
 export function state() {
@@ -185,7 +234,8 @@ export function state() {
     traders.push({ name: shortMd(name), full: name, prov: m.prov, pnl: +m.pnl.toFixed(2), hit: m.n ? Math.round(m.ok / m.n * 100) : null, w: +m.w.toFixed(2), fills: m.fills, wins: m.wins, lessons: (m.lessons || []).length, lessonList: m.lessons || [], pos: Object.values(m.pos) });
   traders.sort((a, b) => b.pnl - a.pnl);
   return { pnl: +S.pnl.toFixed(2), fills: S.fills, winRate: wr, epoch: S.epoch, since: S.t0, nModels: connectedModels().length,
-    neurons, traders, pos: Object.values(S.pos), dec: S.dec, feat: S.feat, trades: S.trades.slice(0, 22), feed: S.feed.slice(0, 24) };
+    neurons, traders, designs: (S.designs || []).slice(0, 10), nDesigns: (S.designs || []).length, handed: (S.designs || []).filter(d => d.handed).length,
+    pos: Object.values(S.pos), dec: S.dec, feat: S.feat, trades: S.trades.slice(0, 22), feed: S.feed.slice(0, 24) };
 }
 // 자체 신호 트레이더의 PnL = 전체 - 모델들 합 (모델 손익은 모델 트레이더로 분리 표시)
 function selfPnl() { let m = 0; for (const n in S.models) m += S.models[n].pnl; return S.pnl - m; }

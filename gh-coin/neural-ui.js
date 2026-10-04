@@ -18,8 +18,10 @@ export async function openNeural(ctx = {}) {
   const tick = async () => {
     try { ST = await N.step(); } catch (e) {}      // 자체 신호(뉴런) — 무료·빠름, 항상 돈다
     render();
-    N.modelStep().catch(() => {});                  // 연결 AI 모델 1명이 코인 1개 직접 판단(회전) — 비용 분산
-    if (++k % 20 === 0) N.reflect().catch(() => {}); // 2분마다 손실 많은 모델이 복기 → 교훈 학습
+    N.modelStep().then(render).catch(() => {});      // 연결 AI 모델이 코인 직접 판단(회전) — 비용 분산
+    N.modelStep().catch(() => {});                   // 틱당 2명 (더 빨리 거래 쌓이게)
+    if (++k % 16 === 0) N.reflect().catch(() => {});  // 복기 → 교훈 학습
+    if (k % 24 === 12) N.designStrategy().then(render).catch(() => {});  // ~2.4분마다 모델이 지표 조합→매매법 설계→백테스트→사무실 인계
   };
   tick(); loop = setInterval(tick, 6000);
   raf = requestAnimationFrame(draw);
@@ -33,7 +35,7 @@ function render() {
   const s = ST, up = s.pnl >= 0;
   root.querySelector("[data-pnl]").innerHTML = `<b class="${up ? "up" : "dn"}">${money(s.pnl)}</b>`;
   root.querySelector("[data-kpi]").innerHTML =
-    `<span>체결 <b>${s.fills}</b></span><span>승률 <b class="${s.winRate >= 50 ? "up" : "dn"}">${s.winRate}%</b></span><span>AI 모델 <b>${s.nModels}</b></span><span>에폭 <b>${s.epoch}</b></span><span>가동 <b>${ago(s.since)}</b></span>`;
+    `<span>체결 <b>${s.fills}</b></span><span>승률 <b class="${s.winRate >= 50 ? "up" : "dn"}">${s.winRate}%</b></span><span>AI 모델 <b>${s.nModels}</b></span><span>매매법 설계 <b>${s.nDesigns}</b><small>(사무실 인계 ${s.handed})</small></span><span>에폭 <b>${s.epoch}</b></span><span>가동 <b>${ago(s.since)}</b></span>`;
   // 트레이더 리더보드 = 연결된 AI 모델 각각 + 자체 신호. PnL 순. (교훈 = 복기로 배운 수 · 보유 = 현재 포지션)
   root.querySelector("[data-neurons]").innerHTML =
     s.traders.map((tr, i) => { const u = tr.pnl >= 0;
@@ -48,10 +50,12 @@ function render() {
     const dir = d ? (d.dir > 0 ? "▲" : d.dir < 0 ? "▼" : "·") : "·", col = d ? (d.dir > 0 ? "up" : d.dir < 0 ? "dn" : "dim") : "dim";
     return `<div class="mrow"><b>${ko}</b><span class="${col}">${dir} ${d ? d.conf + "%" : "–"}</span>${p ? `<em class="${p.roe >= 0 ? "up" : "dn"}">${p.side > 0 ? "롱" : "숏"} ${p.roe >= 0 ? "+" : ""}${p.roe}%</em>` : `<em class="dim">무포</em>`}</div>`;
   }).join("");
+  // 모델이 설계한 매매법·커스텀 지표 (백테스트 → 사무실 인계)
+  const des = (s.designs || []).map(d => `<div class="trow des"><span class="dim">${ago(d.t)}</span><b style="color:#b79cff">${E(d.model)}</b><span>매매법</span><b class="${d.ret >= 0 ? "up" : "dn"}">${d.ret}%</b><span>${E(d.name)} <em class="${d.handed ? "up" : d.pass ? "" : "dim"}">${d.handed ? "→ 사무실 인계" : d.pass ? "통과" : "불통과"}</em></span></div>`).join("");
   // 거래
-  root.querySelector("[data-trades]").innerHTML = s.trades.length ? s.trades.map(t =>
+  root.querySelector("[data-trades]").innerHTML = des + (s.trades.length ? s.trades.map(t =>
     `<div class="trow"><span class="dim">${ago(t.t)}</span><b>${t.ko}</b><span>${t.side > 0 ? "롱" : "숏"}</span><b class="${t.roe >= 0 ? "up" : "dn"}">${t.roe >= 0 ? "+" : ""}${t.roe}%</b><span class="dim">${E(t.why)}</span></div>`
-  ).join("") : `<div class="dim" style="padding:10px">아직 거래 없음 — 신호가 쌓이면 자동 진입합니다</div>`;
+  ).join("") : (des ? "" : `<div class="dim" style="padding:10px">아직 거래 없음 — 신호가 쌓이면 자동 진입합니다</div>`));
   // 라이브 피드 티커
   root.querySelector("[data-feed]").innerHTML = s.feed.map(f => `<span>▸ ${E(f.text)}</span>`).join(" ");
 }

@@ -171,6 +171,9 @@ export const TECH = [
     where: "31팀 331명 조직(coin-org.js) · 회의(전략가→반론검토관→리스크→CEO) · #파이프라인 채널 · ARTEX식 플래너/보드(lib/planner.js·board.js)"},
   {repo: "GitHub Models · xtekky/gpt4free · zebbern/no-cost-ai · CodebuffAI/freebuff · awesome-free-models", lic: "각 OSS/무료", teams: [], status: "참고(공급자 추가는 설정에서)",
     what: "무료 LLM 공급자 모음(GitHub Models·DeepSeek·Llama 등). GH Coin 은 NVIDIA·Groq·Cerebras·Gemini·OpenRouter 등 무료 공급자를 이미 지원하며, OpenAI 호환이면 '내 API 직접 연결'로 추가 가능",
-    where: "설정 → AI 두뇌(engine.js PROVIDERS·custom) · 무료 키 발급 안내"}
+    where: "설정 → AI 두뇌(engine.js PROVIDERS·custom) · 무료 키 발급 안내"},
+  {repo: "anthropics/financial-services · HKUDS/AI-Trader · benstaf/FinRL_DeepSeek · TauricResearch/TradingAgents · haidrrrry/Ai-trader-pro", lic: "각 OSS", teams: ["selfai", "dev", "demo"], status: "적용",
+    what: "연결된 AI 모델이 '직접' 매매·학습·복기·개선하는 트레이딩 데스크: 각 모델이 피처 신호로 데모 포지션 운용 → 손실 복기해 교훈을 스스로 뽑아 다음 판단에 반영(FinRL_DeepSeek식 보상 기반 개선) → 지표 146종을 조합해 매매법+커스텀 수식 지표를 설계 → 자동 백테스트 → 통과분을 에이전트 팀(사무실) 데모 장부로 인계(TradingAgents·AI-Trader 핸드오프)",
+    where: "🧠 뉴럴 데스크(neural.js·neural-ui.js): modelStep(직접 거래)·reflect(복기 학습)·designStrategy(매매법·커스텀 지표 설계→백테스트→사무실 인계) · 상단 '🧠 뉴럴 데스크' 버튼"}
 ];
-export const TECH_REPOS = 48;   // 경제적 생존·멀티에이전트·전략·무료AI 추가
+export const TECH_REPOS = 53;   // 뉴럴 데스크(모델 직접 매매·학습·설계) 추가
