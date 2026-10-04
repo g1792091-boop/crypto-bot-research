@@ -115,7 +115,9 @@ if [ "$REPO_DIR" != "$APP" ]; then
   JOBS="paperbot-daily3.service paperbot-backup.service paperbot-checkpoint.service paperbot-labmonthly.service \
 paperbot-offsite.service paperbot-rehearsal.service"
   n=0
-  while busy="$(for j in $JOBS; do systemctl is-active --quiet "$j" 2>/dev/null && echo "$j"; done)"; [ -n "$busy" ]; do
+  # A oneshot job reports "activating" (not "active") while it runs, so is-active alone never waits for it.
+  while busy="$(for j in $JOBS; do case "$(systemctl show -p ActiveState --value "$j" 2>/dev/null)" in
+                  active|activating|deactivating|reloading) echo "$j" ;; esac; done)"; [ -n "$busy" ]; do
     n=$((n+1)); [ "$n" -ge 120 ] && { echo "still running after 60 min: $busy; run this script again later"; exit 1; }
     echo "waiting for a scheduled job to finish: $busy ($n/120)"; sleep 30
   done
