@@ -1200,6 +1200,14 @@ class Handler(BaseHTTPRequestHandler):
                 if not isinstance(vid, str) or len(vid) > 40:
                     return self._json(400, {"ok": False, "err": "잘못된 요청"})
                 return self._json(200, {"ok": MIRROR.set_visible(vid, bool(body.get("visible")))})
+            if path == "/api/live-size":                     # 보는 창 크기 → 봇 화면을 같은 크기로 그림 (늘리지 않고 1:1)
+                b = body if isinstance(body, dict) else {}
+                vid, w, h, d = b.get("vid"), b.get("w"), b.get("h"), b.get("dpr", 1)
+                nums = (w, h, d)
+                if (not isinstance(vid, str) or len(vid) > 40
+                        or not all(isinstance(x, (int, float)) and not isinstance(x, bool) and 0 < x < 100000 for x in nums)):
+                    return self._json(400, {"ok": False, "err": "잘못된 요청"})
+                return self._json(200, {"ok": MIRROR.set_size(vid, w, h, d)})
             if path == "/api/dialog":
                 seq = body.get("seq") if isinstance(body, dict) else None
                 if not isinstance(seq, int) or isinstance(seq, bool):

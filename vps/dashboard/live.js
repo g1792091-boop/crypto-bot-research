@@ -72,6 +72,7 @@
     var w = +f.getAttribute("width") || 1600, h = +f.getAttribute("height") || 900;
     var W = stage.clientWidth || innerWidth, H = stage.clientHeight || innerHeight;
     var s = Math.min(W / w, H / h);
+    if (Math.abs(s - 1) < 0.02) s = 1;                    // 봇 화면을 이 창 크기로 그리면 1:1 (늘리지 않아 paperbot 처럼 딱 맞음)
     if ((fitMode || (s < 0.45 ? "real" : "fit")) === "real") {
       stage.classList.add("real");
       wrap.style.transform = ""; wrap.style.left = ""; wrap.style.top = "";
@@ -79,8 +80,8 @@
     } else {
       stage.classList.remove("real");
       wrap.style.transform = "scale(" + s + ")";
-      wrap.style.left = Math.max(0, (W - w * s) / 2) + "px";
-      wrap.style.top = Math.max(0, (H - h * s) / 2) + "px";
+      wrap.style.left = Math.round(Math.max(0, (W - w * s) / 2)) + "px";
+      wrap.style.top = Math.round(Math.max(0, (H - h * s) / 2)) + "px";
       M.scale = s;
     }
     $("fitBtn").textContent = stage.classList.contains("real") ? "🔲 화면에 맞추기 (전체 보기)" : "🔍 실제 크기로 보기";
@@ -146,7 +147,19 @@
   function reportVisible() {                            // 이 창이 보이는지 → 서버는 보이는 창이 있을 때만 차트 그림을 만든다
     if (!M.vid) return;
     post("/api/live-vis", { vid: M.vid, visible: !document.hidden }).catch(function () {});
+    if (!document.hidden) { lastSize = ""; reportSize(); }   // 다시 보게 된 창의 크기를 따르게
   }
+  // 이 창 크기 → 서버가 봇 화면을 같은 크기로 그림 (늘려서 확대돼 보이지 않게). 좁은 창(휴대폰)은 서버가 무시하고 줄여서 보여 줌
+  var lastSize = "", sizeTimer = 0;
+  function reportSize() {
+    if (!M.vid) return;
+    var w = Math.round(stage.clientWidth || innerWidth), h = Math.round(stage.clientHeight || innerHeight), d = devicePixelRatio || 1;
+    var k = w + "x" + h + "@" + d;
+    if (k === lastSize) return;
+    lastSize = k;
+    post("/api/live-size", { vid: M.vid, w: w, h: h, dpr: d }).catch(function () { lastSize = ""; });
+  }
+  addEventListener("resize", function () { clearTimeout(sizeTimer); sizeTimer = setTimeout(reportSize, 300); });
 
   function apply(b) {
     if (!replayer || (b.k === "r" && !fresh)) mk();

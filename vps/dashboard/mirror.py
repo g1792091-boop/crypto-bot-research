@@ -38,6 +38,11 @@ RESYNC_EVERY = 60.0          # 깨진 묶음이 오면 새 사진을 부탁 (이
 BUSY_RELOAD_AFTER = 150.0    # 붙지 못하고 '응답 없음'이 이만큼 이어지고 봇 상태도 '멈춤'이면 앱 새로고침 (확인 창이 떠 있던 경우)
 BUSY_RELOAD_GAP = 600.0      # 위 자동 새로고침은 10분에 한 번까지
 MAX_STATIC = 4 << 20
+# 보는 창 크기에 봇 화면을 맞춤 (확대 없이 1:1 — 1600×900 을 큰 모니터에 늘려 보이던 것 해결)
+SIZE_MIN_W = 1024            # 이보다 좁은 창(휴대폰 등)은 봇 크기를 바꾸지 않고 줄여서 보여 줌 (앱이 데스크톱용)
+SIZE_MIN_H = 600
+SIZE_MAX_W = 3840
+SIZE_MAX_H = 2400
 STATIC_RE = re.compile(r"^(gh-coin|nuri-ai)/[A-Za-z0-9._\-/]{1,200}\.(svg|png|jpe?g|gif|webp|ico|css|woff2?|ttf|otf)$")
 STATIC_TYPES = {"svg": "image/svg+xml", "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "gif": "image/gif",
                 "webp": "image/webp", "ico": "image/x-icon", "css": "text/css; charset=utf-8", "woff": "font/woff",
@@ -290,6 +295,7 @@ class Mirror:
         self.busy_since = 0.0            # 붙기가 '응답 없음'으로 계속 실패하기 시작한 때 (확인 창이 떠 있을 때 생김)
         self.busy_reload_at = 0.0
         self.lease_now = False           # 보이는 사람 수가 바뀜 → 임대를 바로 갱신 (차트 그림 켜기/끄기)
+        self.view_size = None            # (너비, 높이, 화면 배율) — 마지막으로 크기를 알린 넓은 창. 봇 화면을 이 크기로 그린다
         self.font = ""                   # 봇 화면이 쓰는 고정폭 글꼴 ("nanum" = NanumGothicCoding → 보는 쪽도 같은 글꼴 파일로)
         self.notice = None               # 보는 사람에게 한 번 알릴 것 (봇이 서버에 파일을 내려받음 등)
         self.notice_seq = 0
@@ -350,6 +356,32 @@ class Mirror:
                         self.lease_now = True
                     return True
         return False
+
+    def set_size(self, vid, w, h, dpr):
+        """보는 창 크기 (live.js 가 알림). 봇 화면을 이 크기로 그리게 해서 늘리지 않고 1:1 로 보이게 한다.
+        좁은 창(너비 1024 미만, 휴대폰 등)은 봇 크기를 바꾸지 않는다 — 앱이 데스크톱용이라 그 창은 줄여서 보여 준다.
+        여러 창이면 마지막으로 알린(크기를 바꾸거나 다시 본) 창을 따른다. 모르는 vid 면 False."""
+        with self.cond:
+            if not any(v.vid == vid and not v.gone for v in self.viewers):
+                return False
+        if w < SIZE_MIN_W or h < 480:
+            return True
+        size = (int(min(w, SIZE_MAX_W)), int(max(SIZE_MIN_H, min(h, SIZE_MAX_H))), max(1.0, min(2.0, round(float(dpr) * 4) / 4)))
+        if size != self.view_size:
+            self.view_size = size
+            sess = self.sess
+            if sess:
+                self._apply_size(sess, wait=False)
+        return True
+
+    def _apply_size(self, sess, wait):
+        w, h, d = self.view_size
+        p = {"width": w, "height": h, "deviceScaleFactor": d, "mobile": False, "screenWidth": w, "screenHeight": h}
+        if wait:
+            sess.call("Emulation.setDeviceMetricsOverride", p)
+        else:
+            sess.send("Emulation.setDeviceMetricsOverride", p, cb=lambda m: None)
+        log(f"봇 화면 크기를 보는 창에 맞춤: {w}×{h} (배율 {d})")
 
     def leave(self, v):
         with self.cond:
@@ -617,6 +649,8 @@ class Mirror:
         self.main_frame = ((sess.call("Page.getFrameTree").get("frameTree") or {}).get("frame") or {}).get("id")
         sess.call("Runtime.enable")      # 새로고침 뒤에도 바인딩이 새 문서에 들어가려면 필요 (기존 실행 공간 목록도 이때 옴)
         sess.call("Runtime.addBinding", {"name": BINDING})
+        if self.view_size:               # 다시 붙을 때(Chrome 재시작 · 05:15) 마지막 보는 창 크기를 다시 적용 (사진 찍기 전에)
+            self._apply_size(sess, wait=True)
         sess.call("Page.addScriptToEvaluateOnNewDocument", {"source": self.boot})
         r = sess.call("Runtime.evaluate", {"expression": self.boot + "\n;void 0", "returnByValue": True, "silent": True}, 30)
         if r.get("exceptionDetails"):

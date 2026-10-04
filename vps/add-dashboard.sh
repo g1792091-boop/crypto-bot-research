@@ -33,13 +33,13 @@ FILES="ghcoin_dash.py mirror.py auth.py collector.js recorder.js live.html live.
 # 받은 파일이 아래 값과 하나라도 다르면 설치하지 않는다 (이 파일들은 Chrome 통로 = 키 · 주문에 닿는 코드).
 # vps/dashboard 파일을 고치면 같이 바꿀 것:  cd vps/dashboard && sha256sum <위 FILES>
 declare -A SHA=(
-  [ghcoin_dash.py]=d89fea01769da02b0b94c88127ab62c67832fec2781d6bbb908531c0226e2f17
-  [mirror.py]=5963894d4c430f1f3af79a5c858fa64c26ccd4590de0110a982696bf2bbd0028
+  [ghcoin_dash.py]=260778342fd2b910dcf43bd95e8db7d21046dfa0758ec588984b4f31c0fc3be8
+  [mirror.py]=0d4f2330a038728b6f07b3b47a334d1cecd63a5cf999ceae106d28787fdbec55
   [auth.py]=f9a8c7aa65d73f62104a04a596376f559db9319af6ee4f55956fe1d7e2dcac3a
   [collector.js]=6c365900e5c7f1adafd67818f0943b6c167abde1264dfd741624cb73b74a9264
   [recorder.js]=3321a854f697155fbf1dd9f5ce510c6f5f86331b0bd0d18fa3d29eee54336bc6
   [live.html]=097ec17a19564ada2be9b078004caaf72bd3e75c4de6f1bc7dff40cfe89f35e8
-  [live.js]=6cdf6412ab33f7efebefc6706fba10e505315066ae8d76582de93137ea08db58
+  [live.js]=580cb926a73df898eea4e4cef1c0b9a5465a938225924fe8fd152ac56ee33117
   [live.css]=bcc0561b3607ccd051e4e3166e4061a9cfcb08dda9d548888d4dd6a24be96350
   [login.html]=1afadd954c38efad575bf7be19c19921412f452f92e51a6c5230da128425efef
   [summary.html]=9c3440b38b85d6d2c453644f1aa84fed569f4c0048317307a82e96672a5985b4
