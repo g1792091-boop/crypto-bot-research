@@ -712,15 +712,20 @@ export function normalizeSpec(spec){
       if (!out[g].conditions.length) out[g] = null;
     }
   }
-  if (!out.long_entry && !out.short_entry) problems.push("롱 또는 숏 진입 조건이 최소 1개 필요합니다.");
-  const names = seriesNames(out);
+  // 피연산자가 잘못된 조건(정의 안 된 시리즈·"<= x" 같은 깨진 식)은 그 조건만 빼고 나머지로 계속한다 → out.warnings 에 기록.
+  // 진입 조건이 하나도 안 남을 때만 전략 전체를 실패로 본다.
+  const names = seriesNames(out), warnings = [], firstBad = {};
   for (const g of ["long_entry", "short_entry", "long_exit", "short_exit"]){
-    for (const c of out[g]?.conditions || []){
-      const e1 = checkOperand(c.left, names); if (e1) problems.push(`${g}: ${e1}`);
-      if (c.op === "rising" || c.op === "falling"){ if (!isNum(c.right)) problems.push(`${g}: ${c.op} 의 right 는 봉 개수(숫자)여야 합니다: ${c.right}`); }
-      else { const e2 = checkOperand(c.right, names); if (e2) problems.push(`${g}: ${e2}`); }
-    }
+    if (!out[g]) continue;
+    out[g].conditions = out[g].conditions.filter(c => {
+      const e1 = checkOperand(c.left, names);
+      const e2 = (c.op === "rising" || c.op === "falling") ? (isNum(c.right) ? null : `${c.op} 의 right 는 봉 개수(숫자)여야 합니다: ${c.right}`) : checkOperand(c.right, names);
+      const e = e1 || e2; if (e){ warnings.push(`${g}: ${e} → 이 조건만 제외`); firstBad[g] ||= e; return false; } return true;
+    });
+    if (!out[g].conditions.length) out[g] = null;
   }
+  if (!out.long_entry && !out.short_entry) problems.push("롱 또는 숏 진입 조건이 최소 1개 필요합니다." + (Object.keys(firstBad).length ? ` (못 쓴 조건: ${Object.entries(firstBad).map(([g, e]) => g + " " + e).join("; ")})` : ""));
+  if (warnings.length) out.warnings = warnings.slice(0, 8);
   const r = {...RISK_DEFAULTS}, rin = spec.risk && typeof spec.risk === "object" ? spec.risk : {};
   for (const k of Object.keys(RISK_DEFAULTS)){
     const v = rin[k];

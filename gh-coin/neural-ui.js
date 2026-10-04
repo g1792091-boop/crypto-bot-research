@@ -114,7 +114,7 @@ function render() {
   // 트레이더 리더보드 = 연결된 AI 모델 각각 + 자체 신호. PnL 순. (교훈 = 복기로 배운 수 · 보유 = 현재 포지션)
   root.querySelector("[data-neurons]").innerHTML =
     s.traders.map((tr, i) => { const u = tr.pnl >= 0;
-      return `<div class="nrow trd"><span class="rk">${i + 1}</span><span class="nk" title="${E(tr.full || tr.name)}">${tr.prov === "self" ? "⚙️ " : tr.prov === "ollama" ? "🖥 " : "☁ "}${E(tr.name)}${tr.idle ? ' <small class="dim">대기(신호 오면 승인)</small>' : ""}</span><b class="${u ? "up" : "dn"}">${money(tr.pnl)}</b><small>${tr.hit == null ? "–" : "승" + tr.hit + "%"}${tr.approved != null ? ` ·승인${tr.approved}/거절${tr.rejected}` : ""}${(typeof tr.pos === "number" ? tr.pos : tr.pos?.length) ? ` ·보유${typeof tr.pos === "number" ? tr.pos : tr.pos.length}` : ""}</small></div>`;
+      return `<div class="nrow trd"><span class="rk">${i + 1}</span><span class="nk" title="${E(tr.full || tr.name)}">${tr.prov === "self" ? "⚙️ " : tr.prov === "ollama" ? "🖥 " : "☁ "}${E(tr.name)}${tr.last && tr.last.bias != null ? ` <small class="${tr.last.bias > 0 ? "up" : tr.last.bias < 0 ? "dn" : "dim"}" title="${E(tr.last.note || "")}">🔍${E(tr.last.ko)} ${tr.last.bias > 0 ? "▲" : tr.last.bias < 0 ? "▼" : "·"}${tr.last.conf}%</small>` : tr.idle ? ' <small class="dim">스캔 순번 대기</small>' : ""}${tr.scanAcc != null ? ` <small class="dim">읽기적중 ${tr.scanAcc}%</small>` : ""}</span><b class="${u ? "up" : "dn"}">${money(tr.pnl)}</b><small>${tr.hit == null ? "–" : "승" + tr.hit + "%"}${tr.approved != null ? ` ·승인${tr.approved}/거절${tr.rejected}` : ""}${(typeof tr.pos === "number" ? tr.pos : tr.pos?.length) ? ` ·보유${typeof tr.pos === "number" ? tr.pos : tr.pos.length}` : ""}</small></div>`;
     }).join("") +
     (s.nModels === 0 ? `<div class="nsub dim">연결된 AI 모델이 없습니다 — 자체 엔진이 검증된 신호만 집행합니다</div>` : "") +
     engineTable(s) + evoLine(s) + neutronLine(s) +
@@ -150,6 +150,9 @@ function render() {
     scEl.innerHTML = sc
       ? `🔍 <b>${E(sc.model)}</b> 가 <b>${E(sc.ko)}</b> 스캔 중 <span class="dim">· ${E(sc.regime)} 국면</span>`
       : `<span class="dim">스캔 대기 중 — 모델이 종목을 고르면 여기에 표시됩니다</span>`;
+    // 모델 순환 스캔 현황: 모델마다 최근에 읽은 코인·방향·확신 (모든 모델이 차례로 돎)
+    const ro = (s.traders || []).filter(t => t.prov !== "self");
+    scEl.innerHTML += `<div class="scan-roster">${ro.map(t => { const L = t.last; return `<span class="sr ${L?.bias > 0 ? "up" : L?.bias < 0 ? "dn" : "dim"}" title="${E(t.full || t.name)}${L?.note ? " · " + E(L.note) : ""}">${E(t.name)} ${L ? (L.err ? "⚠" : `${E(L.ko)}${L.bias > 0 ? "▲" : L.bias < 0 ? "▼" : "·"}${L.conf}%`) : "대기"}</span>`; }).join("")}</div>`;
   }
   // ⚙️ AI 자동 조절 상태 (레버리지·시드)
   const au = root.querySelector("[data-auto]");
@@ -298,12 +301,14 @@ function drawBrain() {
   for (const n of brainG.nodes) { if (!bnodes[n.id]) bnodes[n.id] = { x: cx + (Math.random() - 0.5) * 30, y: cy + (Math.random() - 0.5) * 30, vx: 0, vy: 0, born: performance.now() }; bnodes[n.id].node = n; }
   for (const id in bnodes) if (!ids.has(+id)) delete bnodes[id];
   const arr = brainG.nodes.map(n => bnodes[n.id]);
-  const rOf = (n) => 2.6 + Math.min(9, (n.deg || 0) * 1.5 + n.w * 0.9);   // 연결 많을수록 큰 허브 노드(obsidian식)
+  const rOf = (n) => 2.4 + Math.min(7, (n.deg || 0) * 0.9 + n.w * 0.7);
+  const KR = (W * H) / Math.max(12, brainG.nodes.length) * 0.55;   // 이상적 간격² (면적 / 노드 수)
+  const LBL = new Set([...brainG.nodes].sort((a, b) => (b.deg || 0) - (a.deg || 0) || b.w - a.w).slice(0, 12).map(n => n.id));   // 라벨은 허브 12개만   // 연결 많을수록 큰 허브 노드(obsidian식)
   // 물리: 반발 + 중심 인력 + 엣지 스프링
   for (let it = 0; it < 2; it++) {
     for (let i = 0; i < arr.length; i++) { const a = arr[i];
-      for (let j = i + 1; j < arr.length; j++) { const b = arr[j]; let dx = a.x - b.x, dy = a.y - b.y; const d2 = dx * dx + dy * dy + 0.01; if (d2 < 11000) { const f = 170 / d2; a.vx += dx * f; a.vy += dy * f; b.vx -= dx * f; b.vy -= dy * f; } }
-      a.vx += (cx - a.x) * 0.0020; a.vy += (cy - a.y) * 0.0020; }
+      for (let j = i + 1; j < arr.length; j++) { const b = arr[j]; let dx = a.x - b.x, dy = a.y - b.y; const d2 = dx * dx + dy * dy + 0.01; if (d2 < KR * 3) { const f = KR * 0.05 / d2; a.vx += dx * f; a.vy += dy * f; b.vx -= dx * f; b.vy -= dy * f; } }
+      a.vx += (cx - a.x) * 0.006 * (W > H ? Math.sqrt(H / W) : 1); a.vy += (cy - a.y) * 0.008; }
     for (const [i, j, kind] of brainG.edges) { const a = arr[i], b = arr[j]; if (!a || !b) continue; const k = kind === "link" ? 0.018 : 0.010, dx = b.x - a.x, dy = b.y - a.y; a.vx += dx * k; a.vy += dy * k; b.vx -= dx * k; b.vy -= dy * k; }
     for (const a of arr) { a.vx *= 0.85; a.vy *= 0.85; a.x += Math.max(-3, Math.min(3, a.vx)); a.y += Math.max(-3, Math.min(3, a.vy)); a.x = Math.max(12, Math.min(W - 12, a.x)); a.y = Math.max(14, Math.min(H - 12, a.y)); }
   }
@@ -326,7 +331,7 @@ function drawBrain() {
     g.save(); g.shadowColor = `rgba(${c},${on ? 0.9 : 0.2})`; g.shadowBlur = on ? 10 + r : 4;
     g.fillStyle = `rgba(${c},${al})`; g.beginPath(); g.arc(a.x, a.y, r * pop, 0, 7); g.fill(); g.restore();
     if (on) { g.fillStyle = `rgba(255,255,255,${0.5 * al})`; g.beginPath(); g.arc(a.x - r * 0.3, a.y - r * 0.3, r * 0.34, 0, 7); g.fill(); }   // 하이라이트 점
-    if (i === hov || (hov < 0 && (n.deg >= 3 || r > 8.5))) { g.fillStyle = i === hov ? "#eef2f8" : "#9aa4b6"; g.font = (i === hov ? "600 " : "") + "10px ui-monospace,monospace"; g.textAlign = "center"; g.fillText(String(n.text).slice(0, i === hov ? 34 : 15), a.x, a.y - r - 4); }
+    if (i === hov || (hov < 0 && LBL.has(n.id))) { const tx = String(n.text).slice(0, i === hov ? 40 : 16); g.font = (i === hov ? "600 " : "") + "10px ui-monospace,monospace"; g.textAlign = "center"; const tw = g.measureText(tx).width; g.fillStyle = "rgba(7,11,18,.78)"; g.fillRect(a.x - tw / 2 - 3, a.y - r - 15, tw + 6, 13); g.fillStyle = i === hov ? "#eef2f8" : "#aab3c3"; g.fillText(tx, a.x, a.y - r - 5); }
   }
   // 범례(좌하단)
   g.font = "9px ui-monospace,monospace"; g.textAlign = "left"; let lx = 8;
@@ -370,7 +375,7 @@ function inject() {
 .nd-feed span{margin-right:28px}.nd-clock{color:#6b7a92;font-size:11px;letter-spacing:1px}
 .nd-btn{background:rgba(22,30,44,.65);border:1px solid var(--line2);color:#aeb8c9;padding:5px 11px;border-radius:7px;cursor:pointer;font:inherit;font-size:11px;transition:background .15s,border-color .15s,color .15s}
 .nd-btn:hover{background:rgba(34,46,66,.9);border-color:#32455f;color:#dbe4f1}.nd-x{color:var(--dn)}.nd-x:hover{background:rgba(255,77,100,.15);border-color:rgba(255,77,100,.4)}
-.nd-grid{flex:1;display:grid;grid-template-columns:1.05fr 1fr;grid-template-rows:auto minmax(560px,64vh) minmax(420px,auto) 380px;gap:12px;padding:12px;min-height:0;overflow-y:auto;position:relative;z-index:1}
+.nd-grid{flex:1;display:grid;grid-template-columns:1.05fr 1fr;grid-template-rows:minmax(250px,auto) minmax(580px,64vh) 500px 560px;gap:12px;padding:12px;min-height:0;overflow-y:auto;position:relative;z-index:1}
 .nd-card{position:relative;background:linear-gradient(180deg,rgba(14,20,33,.92),rgba(9,13,22,.92));border:1px solid var(--line);border-radius:12px;padding:12px 14px;min-height:0;overflow:auto;display:flex;flex-direction:column;box-shadow:0 1px 0 rgba(255,255,255,.03) inset,0 14px 36px -24px rgba(0,0,0,.9)}
 .nd-card::before{content:"";position:absolute;left:14px;right:14px;top:0;height:1px;background:linear-gradient(90deg,transparent,rgba(34,211,238,.45),transparent)}
 .nd-h{color:#8291a8;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px;flex:0 0 auto;display:flex;align-items:center;gap:8px;padding-left:10px;position:relative}
@@ -386,7 +391,7 @@ function inject() {
 .nd-shell{grid-column:1/3;grid-row:2/3;background:#f3f4ef !important;border-color:#d9dcd3 !important}.nd-shell .nd-h{color:#23272e}.nd-shell .nd-h small{color:#7c838f}.nd-trd{grid-column:2/3;grid-row:3/4}
 .nd-trades{grid-column:1/2;grid-row:3/4}.nd-brain{grid-column:1/3;grid-row:4/5}
 .nd-shell canvas,.nd-brain canvas{flex:1;width:100%;height:100%;min-height:0;display:block}
-.nd-scan{font-size:11px;color:var(--accent);margin-bottom:9px;min-height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.nd-scan b{color:#bdeefb}
+.nd-scan{font-size:11px;color:var(--accent);margin-bottom:9px;min-height:16px;flex:0 0 auto}.nd-markets{flex:0 0 auto}.scan-roster{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}.scan-roster .sr{font-size:10px;padding:1px 6px;border:1px solid var(--line2);border-radius:4px;background:rgba(20,28,42,.6);white-space:nowrap}.nd-scan b{color:#bdeefb}
 .nd-markets{display:block}
 .nd-mgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:9px}
 .mrow{background:linear-gradient(180deg,rgba(16,22,34,.9),rgba(12,17,27,.9));border:1px solid var(--line);border-radius:8px;padding:6px 9px;display:flex;flex-direction:column;gap:2px}
@@ -403,7 +408,7 @@ function inject() {
 .nbar{height:6px;background:#121a28;border-radius:4px;overflow:hidden}.nbar i{display:block;height:100%;background:linear-gradient(90deg,var(--accent2),var(--accent))}
 .nrow>b{text-align:right;color:#eef3fb}.nrow small{color:#5a6374;text-align:right}.nrow small em{font-style:normal;color:#3d4454;margin-left:4px}
 .trd{grid-template-columns:18px 1fr 78px auto}.rk{color:#4b86ff;text-align:center;font-weight:700}.trd .nk{color:#dbe2ef}.trd small{white-space:nowrap}
-.des{grid-template-columns:36px 68px 118px 48px 1fr}
+.des{grid-template-columns:44px minmax(90px,130px) minmax(140px,1.1fr) 62px minmax(0,1.6fr)}.trow>*{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #ndesk .warn{color:#e0a53e}#ndesk .pur{color:var(--accent2)}
 .brow{display:grid;grid-template-columns:48px 1fr 34px;gap:8px;align-items:center;margin:4px 0;font-size:11px}
 .bt{font-size:9px;padding:2px 6px;border-radius:5px;background:rgba(22,30,44,.8);border:1px solid var(--line);text-align:center}
@@ -411,7 +416,7 @@ function inject() {
 .btx{color:#b3bccb;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.brow small{color:#5a6374;text-align:right}
 .nsub{color:#7f8ca3;font-size:10px;margin:10px 0 4px;letter-spacing:1px;text-transform:uppercase}
 .nd-tr{display:flex;flex-direction:column;gap:1px}
-.trow{display:grid;grid-template-columns:38px 40px 52px 58px 62px 1fr;gap:7px;align-items:center;padding:4px 4px;border-bottom:1px solid rgba(20,28,42,.7)}
+.trow{display:grid;grid-template-columns:44px 52px 74px 64px 76px minmax(0,1fr);gap:7px;align-items:center;padding:4px 4px;border-bottom:1px solid rgba(20,28,42,.7)}
 .trow>b:first-of-type{color:#e6ebf5}
 @media(max-width:760px){.nd-grid{grid-template-columns:1fr;grid-template-rows:none}.nd-grid>.nd-card{grid-column:1 !important;grid-row:auto !important;min-height:220px}.nd-pnl,.nd-mkt{min-height:auto}.nd-brand{font-size:12px;letter-spacing:1px}}`;
   document.head.appendChild(st);

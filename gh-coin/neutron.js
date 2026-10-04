@@ -39,7 +39,7 @@ export function vaultNotes(S) {
   const types = [...new Set(B.mem.map(m => m.type || "관찰"))];
   out["00 홈.md"] = `# 🧠 GHCoin 뇌 (뉴트론)\n_자동 생성 · ${now} · 앱이 10분마다 다시 씀 (직접 고친 내용은 덮어써짐 → 메모는 [[받은 편지함 사용법]] 참고)_\n\n`
     + `## 지금\n- 자본 $${n.equity} (시작 $${n.bankroll}) · 낙폭 ${n.drawdown}% · 거래 ${n.fills}회 승률 ${n.winRate}% · 동시 리스크 ${n.heat}%\n- 뇌 지능 ${B.iq.score}/100 (정확도 ${B.iq.acc}% · ${B.iq.n}판) · 기억 ${B.mem.length}개\n\n`
-    + `## 지도\n- 코인: ${coins.map(c => `[[코인/${c}|${c}]]`).join(" · ")}\n- 지식: ${types.map(t => `[[지식/${t}|${t}]]`).join(" · ")}\n- 매매법: [[매매법/전략 엔진]] · [[매매법/매매법 진화]] · [[매매법/검증된 셋업]]\n- 리스크: [[리스크/정책]] · [[리스크/학습된 리스크·시간대]]\n- 에이전트 팀: [[에이전트팀/데모 전략]] · [[에이전트팀/팀 판정]]\n- 일지: [[일지/${day(S.t)}]]\n`;
+    + `## 지도\n- 코인: ${coins.map(c => `[[코인/${c}|${c}]]`).join(" · ")}\n- 지식: ${types.map(t => `[[지식/${t}|${t}]]`).join(" · ")}\n- 매매법: [[매매법/전략 엔진]] · [[매매법/매매법 진화]] · [[매매법/검증된 셋업]]\n- 리스크: [[리스크/정책]] · [[리스크/학습된 리스크·시간대]]\n- 에이전트 팀: [[에이전트팀/데모 전략]] · [[에이전트팀/팀 판정]]\n- 일지: [[일지/${day(S.t)}]]\n- ✍ 내가 쓰는 메모(→ 뇌가 학습): [[내 메모/사용법]]\n`;
   for (const t of types) out[`지식/${t}.md`] = `# ${t}\n[[00 홈]]\n\n` + B.mem.filter(m => (m.type || "관찰") === t).slice(0, 120).map(m => `- ${m.text} ${coinOf(m) ? `[[코인/${coinOf(m)}|${coinOf(m)}]]` : ""}${m.regime ? ` #${String(m.regime).replace(/\s/g, "_")}` : ""} _(가중 ${m.w}·확인 ${m.hits}회·${m.model || "?"})_`).join("\n");
   for (const c of coins) { const sym = c + "USDT", id = c.toLowerCase(), rg = n.regime?.[sym], V = S.verdicts;
     const vd = [["리스크 결정표", V.riskVerdict?.[id]?.act], ["TA 평점", V.taRating?.[id]?.label], ["차트 패턴", V.patterns?.[id] ? `${V.patterns[id].dir > 0 ? "상승" : V.patterns[id].dir < 0 ? "하락" : "중립"} ${(V.patterns[id].names || []).join(",")}` : null],
@@ -81,11 +81,32 @@ export async function installFiles(force) {
   const script = abs ? `${abs}\\${VAULT}\\.neutron\\mcp\\neutron-mcp.mjs` : "./.neutron/mcp/neutron-mcp.mjs";
   await W(`${VAULT}/.mcp.json`, JSON.stringify({ mcpServers: { neutron: { command: "node", args: [script], env: abs ? { NEUTRON_DIR: abs } : {} } } }, null, 2));
   await W(`${VAULT}/CLAUDE.md`, CLAUDE_MD);
+  await W(`${MEMO}/사용법.md`, "# 내 메모 (옵시디언 → 뇌)\n\n이 폴더에 노트를 쓰면 GH Coin 이 10분 안에 읽어 자체 뇌에 학습합니다.\n- 한 줄에 하나씩 쓰면 각각 기억이 됩니다 (예: '- BTC 는 미국장 개장 직후 가짜 돌파가 많다').\n- 손절·실패·주의·금지 같은 말이 있으면 '교훈'으로, 아니면 '지식'으로 저장합니다.\n- 코인 이름(BTC·ETH…)을 쓰면 그 코인 기억에 연결됩니다.\n- 이 폴더는 앱이 덮어쓰지 않습니다.\n");
   try { sessionStorage.setItem("neutronInstalled", "1"); localStorage.setItem("neutronPath", abs); } catch (e) {}
 }
 
 export async function exportState() { const S = await snapshot(); await W(`${DIR}/state.json`, JSON.stringify(S)); stats.exported++; stats.at = Date.now(); return S; }
-export async function writeVault(S) { S ||= await snapshot(); const notes = vaultNotes(S); for (const [p, c] of Object.entries(notes)) await W(`${VAULT}/${p}`, c); stats.vault++; return Object.keys(notes).length; }
+export async function writeVault(S) { S ||= await snapshot(); const notes = vaultNotes(S); for (const [p, c] of Object.entries(notes)) await W(`${VAULT}/${p}`, c); stats.vault++; try { await ingestMemos(); } catch (e) {} return Object.keys(notes).length; }
+
+// ── 옵시디언 → 뇌: 볼트의 '내 메모' 폴더에 사용자·Claudian 이 쓴 노트를 읽어 자체 뇌에 학습 (바뀐 파일만, 앱은 이 폴더를 덮어쓰지 않음) ──
+const MEMO = `${VAULT}/내 메모`;
+const hashOf = t => { let h = 5381; for (let i = 0; i < t.length; i++) h = ((h << 5) + h + t.charCodeAt(i)) >>> 0; return h.toString(36); };
+export async function ingestMemos() {
+  let files = []; try { files = ((await codeCall("glob", { ws: "office", pattern: `${MEMO}/**` })).files || []).filter(f => String(f).startsWith(MEMO + "/") && /\.md$/i.test(f) && !/사용법\.md$/.test(f)); } catch (e) { return 0; }
+  let seen = {}; try { seen = JSON.parse(localStorage.getItem("neutronMemoSeen") || "{}"); } catch (e) {}
+  const BR = await import("./brain.js"); let n = 0;
+  for (const f of files.slice(0, 30)) {
+    let t = ""; try { t = (await codeCall("raw", { ws: "office", path: f })).content || ""; } catch (e) { continue; }
+    const h = hashOf(t); if (seen[f] === h) continue; seen[f] = h;
+    const title = (t.match(/^#\s+(.+)$/m)?.[1] || f.split("/").pop().replace(/\.md$/i, "")).trim();
+    const coin = (title + " " + t).match(/\b(BTC|ETH|SOL|XRP|DOGE|BNB)\b/i)?.[1]?.toUpperCase() || "";
+    const lines = t.split(/\r?\n/).filter(l => !/^\s*(#|\||```|---)/.test(l)).map(l => l.replace(/^[-*#>\s]+/, "").replace(/\[\[([^\]|]+)(\|[^\]]+)?\]\]/g, "$1").trim()).filter(l => l.length >= 6 && !/^---/.test(l)).slice(0, 6);
+    for (const l of lines) { BR.learn({ type: /손절|실패|주의|하지 마|금지/.test(l) ? "교훈" : "지식", coin, text: l.slice(0, 140), model: "옵시디언:" + title.slice(0, 20), w: 1.4 }); n++; }
+  }
+  try { localStorage.setItem("neutronMemoSeen", JSON.stringify(seen)); } catch (e) {}
+  if (n) { stats.memos = (stats.memos || 0) + n; try { (await import("./coin-office.js")).addNote("hq", `🧠 옵시디언 '내 메모' ${n}줄을 자체 뇌에 학습`, "뉴트론"); } catch (e) {} }
+  return n;
+}
 
 // ── 받은 편지함: Claude Code·Claudian 이 MCP 로 보낸 제안을 앱에 반영 (허용 3종만) ──
 export async function pollInbox() {

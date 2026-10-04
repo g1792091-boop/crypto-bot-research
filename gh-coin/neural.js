@@ -434,8 +434,44 @@ export async function calibrate() {
 function model(name) { return S.models[name] || (S.models[name] = { prov: "", pnl: 0, fills: 0, wins: 0, opened: 0, approved: 0, rejected: 0, lessons: [] }); }
 let mRot = 0, mBackoff = 0, mFails = 0, mBusy = false;
 export async function modelStep() {
-  load(); const cm = connectedModels(); if (mBusy || !cm.length || !S.queue.length || Date.now() < mBackoff) return;
+  load(); const cm = connectedModels(); if (mBusy || !cm.length || Date.now() < mBackoff) return;
+  scoreScans();
+  if (!S.queue.length) { if (Date.now() - lastScan < 30e3) return; lastScan = Date.now(); mBusy = true; try { await scanStep(cm); } finally { mBusy = false; } return; }
   mBusy = true; try { await approveNext(cm); } finally { mBusy = false; }
+}
+// 🔍 모델 순환 스캔: 신호가 없을 때 연결된 모든 모델이 차례로(한 번에 하나 — 4GB GPU) 코인 하나씩 읽고 방향 의견을 낸다.
+//   의견은 1시간 뒤 실제 가격으로 채점 → 모델별 '시장 읽기 적중률'을 학습하고, 승인 검토 때 다른 모델들의 최근 의견으로 함께 쓴다.
+let lastScan = 0, sRot = 0, cRot = 0;
+async function scanStep(cm) {
+  const tgt = cm[sRot++ % cm.length], [ko, sym] = COINS[cRot++ % COINS.length], price = S.dec[sym]?.price; if (!price) return;
+  const rg = S.regime[sym] || {}, br = S.brief?.[sym]?.text || "", top = ENG ? Object.entries(S.eng.stats).length : 0;
+  S.scan = { model: shortMd(tgt.model), ko, sym, regime: `${rg.label || "판단중"} · 시장 읽기`, t: Date.now() };
+  let raw = "", route;
+  try {
+    route = await brainStream({ messages: [
+      { role: "system", content: '너는 코인 선물 시장 분석가다. 주어진 자료만 보고 앞으로 1시간 방향을 판단한다. 반드시 JSON 한 줄: {"bias":1|0|-1,"conf":0~100,"note":"한국어 한 문장"}' },
+      { role: "user", content: `${ko} 현재가 ${price} · 1시간봉 국면: ${rg.label || "?"} (ADX ${rg.adx ?? "?"}) · 4시간 추세: ${rg.htf > 0 ? "상승" : rg.htf < 0 ? "하락" : "중립"}
+시장 요약: ${br}
+피처: ${Object.entries(S.feat[sym] || {}).map(([k, v]) => k + " " + (+v).toFixed(2)).join(", ")}
+JSON만:` }],
+      role: "fast", target: tgt, fallback: false, json: true, maxTokens: 120, temperature: 0.2, noThink: true, onContent: d => raw += d, onThink: () => {} });
+  } catch (e) { (S.scans ||= {})[tgt.model] = { ko, sym, err: String(e?.message || e).slice(0, 40), t: Date.now() }; return; }
+  let j = {}; try { j = JSON.parse((raw.match(/\{[\s\S]*\}/) || ["{}"])[0]); } catch (e) {}
+  const bias = Math.sign(+j.bias || 0), conf = Math.max(0, Math.min(100, Math.round(+j.conf || 0))), note = String(j.note || "").slice(0, 70);
+  const name = route?.model || tgt.model, M = model(name); M.prov = route?.id || tgt.id; M.scans = (M.scans || 0) + 1;
+  (S.scans ||= {})[name] = { ko, sym, bias, conf, note, price, t: Date.now() };
+  (S.scanLog ||= []).push({ m: name, sym, bias, conf, price, t: Date.now() }); if (S.scanLog.length > 300) S.scanLog.splice(0, S.scanLog.length - 300);
+  feed(`🔍 [${shortMd(name)}] ${ko} 시장 읽기: ${bias > 0 ? "▲상승" : bias < 0 ? "▼하락" : "· 중립"} ${conf}% — ${note || "근거 없음"}`);
+  if (conf >= 70 && note) BRAIN.learn({ type: "관찰", coin: ko, regime: rg.key || "", text: note, model: "스캔:" + shortMd(name), w: 0.8 });
+  save();
+}
+function scoreScans() {   // 1시간 지난 스캔 의견을 실제 가격으로 채점
+  const now = Date.now(); for (const x of S.scanLog || []) { if (x.done || now - x.t < 3600e3) continue; const p = S.dec[x.sym]?.price; if (!p) continue;
+    x.done = true; if (!x.bias) continue; const M = model(x.m), hit = Math.sign(p - x.price) === x.bias; M.scanN = (M.scanN || 0) + 1; if (hit) M.scanHit = (M.scanHit || 0) + 1; }
+}
+function peerViews(sym) {   // 승인 검토용: 다른 모델들의 최근(2시간) 같은 코인 의견 + 그 모델 적중률
+  return Object.entries(S.scans || {}).filter(([, v]) => v.sym === sym && v.bias != null && Date.now() - v.t < 2 * 3600e3)
+    .map(([m, v]) => { const M = S.models[m] || {}; return `${shortMd(m)} ${v.bias > 0 ? "상승" : v.bias < 0 ? "하락" : "중립"} ${v.conf}%${M.scanN >= 5 ? `(적중 ${Math.round((M.scanHit || 0) / M.scanN * 100)}%)` : ""}`; }).join(", ");
 }
 // 📡 에이전트 팀 스킬(도구)을 뉴럴 데스크에서도 실제로 실행: 선물 수급(OI·펀딩·상위계정)·호가창·고래 체결 → 승인 판단의 실제 입력
 async function flowFacts(sym) {
@@ -470,6 +506,7 @@ async function approveNext(cm) {
 이 전략 최근 성적: ${it.st.n}건 승률 ${it.st.wr}% 기대값 ${it.st.mean >= 0 ? "+" : ""}${it.st.mean}R (자체백테스트 ${it.st.bt}·실전 ${it.st.live})
 계획: ${plan.lev}x · 손절 ${plan.slPct}% · 익절 ${plan.tpPct}% (1:${plan.rr}) · 청산거리 ${plan.liqPct}% · 리스크 $${plan.risk}
 ${nw} · 지금 시간대 성적: ${th ? `승률 ${th.wr}%` : "데이터 적음"}
+다른 AI 모델들의 최근 시장 읽기: ${peerViews(it.sym) || "없음"}
 실시간 수급(팀 도구로 방금 조회):
 ${flow.join(" / ")}
 참고 지식: ${kn || "없음"}
@@ -682,9 +719,9 @@ export function state() {
   const traders = [{ name: "자체 엔진", prov: "self", pnl: +selfPnl().toFixed(2), hit: null, fills: 0, lessons: 0, pos: allPos.filter(P => P.trader === "자체 엔진").length }];
   for (const [name, m] of Object.entries(S.models))
     traders.push({ name: shortMd(name), full: name, prov: m.prov, pnl: +m.pnl.toFixed(2), hit: m.fills ? Math.round(m.wins / m.fills * 100) : null, fills: m.fills, wins: m.wins, lessons: 0,
-      approved: m.approved || 0, rejected: m.rejected || 0, pos: allPos.filter(P => P.trader === name) });
+      approved: m.approved || 0, rejected: m.rejected || 0, pos: allPos.filter(P => P.trader === name), scans: m.scans || 0, scanAcc: m.scanN >= 5 ? Math.round((m.scanHit || 0) / m.scanN * 100) : null, last: S.scans?.[name] || null });
   // 연결된 모델은 아직 승인한 신호가 없어도 리더보드에 항상 표시 (엔진 v2 이후 '승인해야 생기는' 문제 수정)
-  for (const c of connectedModels()) if (!S.models[c.model]) traders.push({ name: shortMd(c.model), full: c.model, prov: c.id, pnl: 0, hit: null, fills: 0, wins: 0, lessons: 0, approved: 0, rejected: 0, pos: [], idle: true });
+  for (const c of connectedModels()) if (!S.models[c.model]) traders.push({ name: shortMd(c.model), full: c.model, prov: c.id, pnl: 0, hit: null, fills: 0, wins: 0, lessons: 0, approved: 0, rejected: 0, pos: [], idle: true, scans: 0, scanAcc: null, last: null });
   traders.sort((a, b) => b.pnl - a.pnl || (b.approved + b.rejected) - (a.approved + a.rejected));
   const eq = equity(), peak = Math.max(S.peak || BANKROLL, eq), dd = peak > 0 ? +((peak - eq) / peak * 100).toFixed(1) : 0;
   const avgLev = allPos.length ? +(allPos.reduce((s, p) => s + (p.lev || 0), 0) / allPos.length).toFixed(1) : null;

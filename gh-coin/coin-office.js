@@ -1124,16 +1124,23 @@ async function research(lane = "std"){
       const kept = arr.filter(c => typeof c === "string" ? !uses(c) : !(uses(c?.left) || uses(c?.right))); if (Array.isArray(G)) y[g] = kept; else G.conditions = kept; }
     return norm0(y); } };
   try { spec = norm(spec); }
-  catch(err0){ try {   // 형식 오류는 버리지 않고 오류 내용을 돌려줘 한 번 고치게 한다(짧은 프롬프트라 로컬 모델도 빠름)
-      post({ch: L.dev, kind: "system", text: `${a.name}: 형식 오류 → 자가 수정 1회 (${String(err0.message).slice(0, 80)})`});
-      const fx = await solo(a, {room: L.dev, sys: "너는 전략 JSON 수리기다. 오류를 고친 JSON 하나만 출력한다. 지원 지표만 쓴다: " + Object.keys(Q.IND_REGISTRY || {}).filter(k => !k.startsWith("tv_")).join(", ") + " + custom 수식."
-        + ' 형식: {"name":"..","indicators":[{"id":"r","type":"rsi","length":14}],"long_entry":{"logic":"all","conditions":[{"left":"r","op":"crosses_above","right":"30"}]},"short_entry":{...},"long_exit":{...},"short_exit":{...},"risk":{"leverage":25,"stop_loss_pct":1.5,"take_profit_pct":3}}'
-        + " · op 는 > < >= <= crosses_above crosses_below 만 · left/right 는 지표 id(여러 출력이면 id.출력명, 예 m.line) 또는 숫자 · 조건은 진입마다 2~5개.", user: `오류: ${err0.message}
-
-JSON:
-${JSON.stringify(spec).slice(0, 3500)}`, maxTokens: 1600, temperature: 0.2, role: "code", json: true});
-      spec = norm(pickJSON(fx.raw || fx.text) || {}); }
-    catch(err){ post({ch: L.dev, kind: "system", text: `전략 형식 오류(${a.name}): ${err.message}`}); addResearch({lane, name: spec.name || "(형식 오류)", market: mk.market, tf, pass: false, t: Date.now()}); return; } }
+  catch(err0){   // 형식 오류는 버리지 않고 오류 내용을 돌려줘 고치게 한다: 1차 본인, 그래도 안 되면 같은 팀 다른 모델 동료가 한 번 더 (짧은 프롬프트라 로컬 모델도 빠름)
+    const FIXSYS = "너는 전략 JSON 수리기다. 오류를 고친 JSON 하나만 출력한다. 지원 지표만 쓴다: " + Object.keys(Q.IND_REGISTRY || {}).filter(k => !k.startsWith("tv_")).join(", ") + " + custom 수식."
+      + ' 형식: {"name":"..","indicators":[{"id":"r","type":"rsi","length":14},{"id":"e","type":"ema","length":50}],"long_entry":{"logic":"all","conditions":[{"left":"r","op":"crosses_above","right":"30"},{"left":"close","op":">","right":"e"}]},"short_entry":{"logic":"all","conditions":[{"left":"r","op":"crosses_below","right":"70"},{"left":"close","op":"<","right":"e"}]},"long_exit":{"logic":"any","conditions":[{"left":"r","op":">","right":"65"}]},"short_exit":{"logic":"any","conditions":[{"left":"r","op":"<","right":"35"}]},"risk":{"leverage":25,"stop_loss_pct":1.5,"take_profit_pct":3}}'
+      + " · op 는 > < >= <= crosses_above crosses_below 만 · left/right 는 indicators 의 id(여러 출력이면 id.출력명, 예 m.line) 또는 숫자 또는 close/open/high/low/volume · long_entry 와 short_entry 를 반드시 2~4개 조건으로 채운다(비우면 실패).";
+    const mate = AGENTS.find(x => x.team === a.team && x.id !== a.id && !x.lead) || AGENTS.find(x => x.team === a.team && x.id !== a.id);
+    let lastErr = err0, fixed = null;
+    for (const fixer of [a, mate].filter(Boolean)){
+      try {
+        post({ch: L.dev, kind: "system", text: `${fixer.name}: 형식 오류 → ${fixer === a ? "자가 수정" : "동료 수정"} (${String(lastErr.message).slice(0, 80)})`});
+        const fx = await solo(fixer, {room: L.dev, sys: FIXSYS, user: `오류: ${lastErr.message}\n\nJSON:\n${JSON.stringify(spec).slice(0, 3500)}`, maxTokens: 1600, temperature: 0.2, role: "code", json: true});
+        fixed = norm(pickJSON(fx.raw || fx.text) || {}); break;
+      } catch(e){ lastErr = e; }
+    }
+    if (!fixed){ post({ch: L.dev, kind: "system", text: `전략 형식 오류(${a.name}, 수정 2회 실패 → 이번 건 건너뜀): ${String(lastErr.message).slice(0, 160)}`}); addResearch({lane, name: spec.name || "(형식 오류)", market: mk.market, tf, pass: false, t: Date.now()}); return; }
+    spec = fixed;
+  }
+  if (spec.warnings?.length) post({ch: L.dev, kind: "system", text: `${a.name}: 못 쓰는 조건 ${spec.warnings.length}개는 빼고 나머지로 시험 (${spec.warnings[0].slice(0, 90)})`});
   // 청산 공식 역산 강제(코인 선물): 손절≤2%(20x 기준)로 묶고, 레버리지 = floor(40/손절%) · 최소 20배 · 비트 200·알트 100 상한
   if (mk.cls === "crypto" && spec.risk){ const sl = Math.min(2, Math.max(0.25, +spec.risk.stop_loss_pct || 2)), cap = mk.market === "BTCUSDT" ? 200 : 100;
     spec.risk.stop_loss_pct = sl; spec.risk.leverage = Math.max(20, Math.min(cap, Math.floor(40 / sl)));

@@ -171,6 +171,13 @@ bash build.sh        # → dist/GHNano.exe, dist/ArchAI.exe, dist/GHCoin.exe
 - 설치: 옵시디언(winget) · Claudian 2.3.12(볼트 `.obsidian/plugins/realclaudian`) · Claude Code CLI(npm) · OpenClaw 2026.9.8(npm). Claude Code 로컬 MCP 등록: 저장소 `neutron-local`, 볼트 `neutron-brain` (✔ Connected, 볼트에서 실제 호출 확인).
 - OpenClaw: `~/.openclaw/openclaw.json` — ollama/qwen2.5:7b, 게이트웨이 loopback+토큰, 채널 없음, tools.profile minimal + alsoAllow `neutron__*`, deny exec/process/browser/apply_patch, toolSearch 끔(작은 모델이 숨은 도구를 못 찾음), 뉴트론 도구 11개만. 하트비트 1시간(`문서/GHNano 사무실/openclaw/HEARTBEAT.md`). 예약 작업 "OpenClaw Gateway". 검증: 상태 조회·메모 쓰기 → 앱 뇌 반영까지 확인. 끄기: `openclaw daemon stop` / 제거 `openclaw daemon uninstall`.
 
+### 5-7. 모델 순환 스캔 · 옵시디언→뇌 · 형식 오류 · 화면 비율 (10/5)
+- **모델 순환 스캔** (`neural.js scanStep`): 신호가 없을 때 30초마다 연결된 모델이 차례로(한 번에 하나) 코인 하나를 읽어 {방향·확신·한 줄} → 1시간 뒤 실제 가격으로 채점(모델별 '읽기 적중률') · 승인 검토 프롬프트에 다른 모델들의 최근 의견+적중률 포함 · 확신 70%↑ 의견은 뇌 '관찰'로. UI: 스캔 카드에 모델별 칩, 리더보드에 최근 의견·적중률.
+- **옵시디언 → 뇌**: 볼트 `내 메모/` 폴더(앱이 덮어쓰지 않음)의 노트를 10분마다 읽어 줄 단위로 학습(손절·주의·금지 → 교훈, 코인 이름 → 그 코인 기억). `ingestMemos()`.
+- **형식 오류**: `quant.normalizeSpec` 이 피연산자가 깨진 조건만 빼고(`spec.warnings`) 진입 조건이 하나도 없을 때만 실패. 개발 잡 수정: 본인 → 같은 팀 다른 모델 동료 순서로 2회.
+- **비율**: 상단 행 최소 250px, 표 열 너비·말줄임, 뇌 그래프 반발력을 면적/노드 수로 맞추고 라벨은 허브 12개만.
+- Claude Code 는 사용자가(또는 Claudian 에서) 부를 때 동작 — 앱이 스스로 Claude Code 를 호출하지는 않음(구독 사용량·권한 문제). 자동으로 도는 것은 옵시디언 볼트 쓰기/읽기·OpenClaw 1시간 하트비트.
+
 ---
 
 ## 6. 안전 규칙 (바꾸지 말 것)
