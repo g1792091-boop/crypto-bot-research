@@ -47,6 +47,8 @@ function liveRec(list) {
   r.rate = r.trades ? r.wins / r.trades : null;
   r.avgW = r.wins ? r.gw / r.wins : null; r.avgL = r.losses ? r.gl / r.losses : null;
   r.ratio = r.avgW != null && r.avgL ? r.avgW / Math.abs(r.avgL) : null;
+  // 본전 승률: the win rate at which these average win and loss come out even, |avg loss| / (avg win + |avg loss|)
+  r.be = r.avgW != null && r.avgL ? Math.abs(r.avgL) / (r.avgW + Math.abs(r.avgL)) : null;
   return r;
 }
 const stratAccts = (n) => (state.board ? state.board.accounts.filter((a) => a.kind === "strategy" && a.strategy === n) : []);
@@ -58,7 +60,8 @@ function renderLive() {
   el.innerHTML = r.trades ? `<div class="lv"><b>실전 기록 (5개 봉 합계)</b> <span>${r.wins}승 ${r.losses}패</span>
     <span>승률 <b>${Math.round(r.rate * 100)}%</b></span><span>손익 <b class="${cls(r.pnl)}">${usd0(r.pnl)}</b></span>
     <span>평균 이익 <b class="up">${usd0(r.avgW)}</b></span><span>평균 손실 <b class="down">${usd0(r.avgL)}</b></span>
-    <span title="평균 이익 ÷ 평균 손실. 승률이 낮아도 이게 크면 남을 수 있음">손익비 <b>${r.ratio == null ? "—" : r.ratio.toFixed(2)}</b></span></div>`
+    <span title="평균 이익 ÷ 평균 손실. 승률이 낮아도 이게 크면 남을 수 있음">손익비 <b>${r.ratio == null ? "—" : r.ratio.toFixed(2)}</b></span>
+    <span title="이 평균 이익·평균 손실이라면 몇 % 이겨야 본전인지(평균 손실 ÷ (평균 이익 + 평균 손실)). 실제 승률이 이보다 높아야 남습니다. 손절이 멀고 첫 익절 잠금이 가까운 지금 규칙에서는 높게 나오는 게 자연스럽습니다">본전 승률 <b class="${r.be == null ? "" : r.rate >= r.be ? "up" : "down"}">${r.be == null ? "—" : Math.round(r.be * 100) + "%"}</b></span></div>`
     : '<div class="lv muted">실전 기록: 아직 끝난 거래가 없습니다</div>';
 }
 function pickStrat(n) { ss.name = n; renderSList(); renderStrat(); }

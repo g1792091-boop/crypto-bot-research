@@ -700,7 +700,8 @@ def _trigger_defaults(hours: Optional[dict] = None) -> dict:
          "checkpoint_every_days": 30, "morning_hour_kst": 8, "evening_hour_kst": 22,
          "ranking_hour_kst": 14, "tf_split_hour_kst": 18, "weekly_report_hour_kst": 21,
          "bull_bear_hour_kst": 12, "event_review_hour_kst": 11, "cost_review_hour_kst": 11,
-         "combo_review_hour_kst": 11, "coin_review_hour_kst": 11, "learning_review_hour_kst": 11}
+         "combo_review_hour_kst": 11, "coin_review_hour_kst": 11, "learning_review_hour_kst": 11,
+         "rr_review_hour_kst": 11}
     try:
         from ..agents.triggers import TriggerPolicy
         p = TriggerPolicy()
@@ -714,7 +715,7 @@ def _trigger_defaults(hours: Optional[dict] = None) -> dict:
                    ("bull_bear", "bull_bear_hour_kst"), ("event_review", "event_review_hour_kst"),
                    ("cost_review", "cost_review_hour_kst"), ("combo_review", "combo_review_hour_kst"),
                    ("coin_review", "coin_review_hour_kst"), ("learning_review", "learning_review_hour_kst"),
-                   ("loss_min_count", "loss_min_count"), ("loss_min_gap_ms", "loss_min_gap_ms")):
+                   ("rr_review", "rr_review_hour_kst"), ("loss_min_count", "loss_min_count"), ("loss_min_gap_ms", "loss_min_gap_ms")):
         v = (hours or {}).get(k)
         if isinstance(v, int) and not isinstance(v, bool):
             d[key] = v
@@ -751,7 +752,8 @@ def room_schedule_ko(room_id: str, hours: Optional[dict] = None) -> str:
         "team:review": (f"매일 {hh(d['ranking_hour_kst'])} 순위 검토(성과 분석 → 손익 복기 → 리스크 → 팀장, 텔레그램 발송), "
                         if d["ranking_hour_kst"] >= 0 else "매일 ")
                        + f"{e:02d}:00 저녁 점검: 손익 복기 → 가정 분석 → 리스크 책임자."
-                       + weekly("coin_review_hour_kst", "수", "코인·장세 회의"),
+                       + weekly("coin_review_hour_kst", "수", "코인·장세 회의")
+                       + weekly("rr_review_hour_kst", "목", "손익비·청산 회의"),
         "team:lead": f"매일 {e:02d}:00 팀장 3줄 요약(텔레그램 발송), {c}·{2 * c}·{3 * c}일째 중간 점검."
                      + weekly("learning_review_hour_kst", "토", "학습 정리 회의"),
         "team:ops": "사고가 나면 바로: 강제청산, 밤 점검 불일치, 데이터 끊김, 신호 지연."
