@@ -67,6 +67,9 @@ export function brainState() {
   return { n: B.mem.length, total: B.n, byType, iq: iqScore(), traps: B.traps.length, top: B.mem.slice(0, 12).map(m => ({ type: m.type, coin: m.coin, regime: m.regime, text: m.text, w: +m.w.toFixed(1), hits: m.hits, model: m.model })) };
 }
 export function reset() { B = { mem: [], n: 0 }; save(); }
+// 뉴트론 MCP·옵시디언 내보내기용 전체 덤프 (읽기 전용 사본)
+export function dump() { load(); return { mem: B.mem.map(m => ({ id: m.id, type: m.type, coin: m.coin, regime: m.regime, text: m.text, model: m.model, w: +(+m.w).toFixed(2), hits: m.hits || 1, t: m.t, links: m.links || [] })),
+  iq: iqScore(), traps: (B.traps || []).slice(0, 60), risk: B.risk, hours: B.hours, vol: B.vol }; }
 
 // 자체 학습(consolidate): 뇌가 스스로 ① 오래 안 쓴 기억을 잊고(망각) ② 자주 확인된 패턴을 '핵심 규칙'으로 승격한다.
 // 핵심 규칙은 근거가 된 패턴 기억들에 링크된다 → 그래프에서 허브(연결 많은 큰 노드)로 자란다.

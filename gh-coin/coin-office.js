@@ -780,6 +780,7 @@ export function startCycle(){
   startReports();
   refreshOllama();   // 내 PC Ollama 설치 모델을 직원 후보로 올림
   import("./neural.js").then(N => N.startAuto?.()).catch(() => {});   // 뉴럴 데스크·자체 뇌도 앱이 켜지면 상시 실행(패널 열 필요 없음)
+  import("./neutron.js").then(M => M.startNeutron?.()).catch(() => {});   // 🧠 뉴트론: 뇌를 MCP·옵시디언 볼트로 내보내고 Claude Code·Claudian 제안을 받음 (exe 에서만)
   if (cycleTimer) return;
   if (!localStorage.getItem("coinLastCycle")) localStorage.setItem("coinLastCycle", String(Date.now() - officeCfg().cycleMin * 60e3 + 45e3));
   cycleTimer = setInterval(() => cycle().catch(e => console.warn(e)), 20e3);
@@ -907,6 +908,9 @@ async function fundingRegimeOf(sym){   // Vibe-Trading 펀딩 상태(7일 평균
     const r = X.fundingRegime(v.reduce((x, y) => x + y, 0) / v.length, v.slice(-3)); _fundCache[sym] = {t: Date.now(), r}; return r;
   } catch(e){ return null; }
 }
+const _fsCache = {};
+async function fundScanOf(sym){ const c0 = _fsCache[sym]; if (c0 && Date.now() - c0.t < 15 * 60e3) return c0.r;
+  const F = await lib("fundscan"), {webGet} = await import("../nuri-ai/engine.js"); const r = await F.fundingScan(sym, u => webGet(u, "json")); _fsCache[sym] = {t: Date.now(), r}; return r; }
 // 🚦 진입 관문 — 각 팀·각 오픈소스의 판정이 데모(→연결된 실거래) 진입을 실제로 막거나 크기를 바꾼다
 async function coinGate({s, side, price, cs}){
   const c = COINS.find(x => x.sym === s.market); if (!c) return {ok: true, mul: 1};
@@ -950,6 +954,7 @@ async function coinGate({s, side, price, cs}){
   // ⑪ 펀딩 과열 (Vibe-Trading fundingRegime + ccxt 거래소 비교의 김치 프리미엄)
   const fr = await fundingRegimeOf(c.sym);
   if (fr?.key === "hotLong" && dir > 0) cut(0.5, "펀딩 롱 과열"); if (fr?.key === "hotShort" && dir < 0) cut(0.5, "펀딩 숏 과열");
+  try { const FS = await fundScanOf(c.sym); if (FS?.key === "hotLong" && dir > 0) cut(0.7, `전 거래소 롱 과열(평균 ${FS.avg}%)`); if (FS?.key === "hotShort" && dir < 0) cut(0.7, `전 거래소 숏 과열(평균 ${FS.avg}%)`); } catch(e){}   // Sharpe식 거래소 간 펀딩 스캔
   const dx = (readJ("coinDataV", {}) || {})[c.id]; if (fresh(dx, 12) && dx.kimchi != null && dx.kimchi > 5 && dir > 0) cut(0.7, `김치 프리미엄 ${dx.kimchi.toFixed(1)}%`);
   // ⑫ 노출 한도 (passivbot wallet exposure) ⑬ 재고 위험 (SolTrade·Guéant 마켓메이킹) ⑭ 포트폴리오 히트·켈리·손익비 (ai-trader-team rigor)
   try { const P = await import("../nuri-ai/paper.js"), book = await P.loadBook(), R = await import("./lib/rigor.js");

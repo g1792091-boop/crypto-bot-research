@@ -277,7 +277,7 @@ function openFrom(it, trader, riskOverride, note) {
   const feat = S.feat[it.sym] || {};
   S.pos[it.sym] = { sym: it.sym, ko: it.ko, side: it.side, entry: price, price, sl: plan.sl, tp: plan.tp, liq: plan.liq, lev: plan.lev, margin: plan.margin, notional: plan.notional,
     risk: plan.risk, riskPct: plan.riskPct, rr: plan.rr, slPct: plan.slPct, tpPct: plan.tpPct, rDist: Math.abs(price - plan.sl), be: false, roe: 0, proe: 0, seed: +(plan.margin / equity() * 100).toFixed(1),
-    vkey: it.vkey, name: it.name, cat: v.cat, tf: v.tf, why: it.why, regime: it.regime, trader, t: Date.now(), deadline: Date.now() + v.hold * TFMIN[v.tf] * 60e3,
+    vkey: it.vkey, name: it.name, cat: v.cat, tf: v.tf, why: it.why, regime: it.regime, regKey: it.regKey, trader, t: Date.now(), deadline: Date.now() + v.hold * TFMIN[v.tf] * 60e3,
     hour: new Date().getHours(), spike: !!S.brief?.[it.sym]?.spike, feat: { ...feat }, bReg: BRAIN.regimeOf(feat) };
   if (trader !== "자체 엔진") { const M = model(trader); M.opened = (M.opened || 0) + 1; }
   feed(`${trader === "자체 엔진" ? "" : "[" + shortMd(trader) + "] "}${it.ko} ${it.side > 0 ? "▲롱" : "▼숏"} ${plan.lev}x @ ${fmt(price)} · ${it.name} · SL ${plan.slPct}% / TP ${plan.tpPct}%(손익비 1:${plan.rr}) · 리스크 $${plan.risk}(${plan.riskPct}%)${note ? " · " + note : ""}`);
@@ -291,7 +291,7 @@ function closeP(sym, px, why) {
   S.pnl += pnl; S.fills++; if (pnl > 0) S.wins++; bumpPeak(); dayGate(); S.day.pnl += pnl;
   if (P.trader !== "자체 엔진") { const M = model(P.trader); M.pnl += pnl; M.fills++; if (pnl > 0) M.wins++; }
   // 전략 성적(실전) 기록 → 워크포워드 선별에 즉시 반영
-  const st = (S.eng.stats[P.vkey] ||= { tr: [] }); st.tr.push({ R: +R.toFixed(3), t1: Date.now(), src: "live" }); if (st.tr.length > 60) st.tr.splice(0, st.tr.length - 60);
+  const st = (S.eng.stats[P.vkey] ||= { tr: [] }); st.tr.push({ R: +R.toFixed(3), t1: Date.now(), src: "live", reg: P.regKey }); if (st.tr.length > 60) st.tr.splice(0, st.tr.length - 60);
   if (why === "손절" || why === "청산") S.cool[sym] = Date.now() + 2 * TFMIN[P.tf || "60"] * 60e3;   // 쿨다운: 손절 후 2봉 재진입 금지
   S.trades.unshift({ ko: P.ko, side: P.side, entry: P.entry, exit: px, lev: P.lev, margin: Math.round(P.margin), roe: +roe.toFixed(2), pnl: +pnl.toFixed(2), R: +R.toFixed(2), why, name: P.name, model: P.trader !== "자체 엔진" ? P.trader : null, t: Date.now() });
   if (S.trades.length > 80) S.trades.pop();
@@ -351,6 +351,7 @@ export async function step() {
         v.prep?.(mk.cs); const s = v.sig(mk.I, i); if (!s) continue;
         if (v.regimes && !v.regimes.includes(reg.key)) continue;
         if (H && !ENG.htfAllows(v, s.side, hb)) continue;
+        const rs = regStat(v.vkey, reg.key); if (rs.n >= 8 && rs.mean < 0) continue;   // 학습된 승률: 이 국면에서 손실이 검증된 매매법은 건너뜀
         s.sl = ENG.atrFloorSL(v, mk.I, i, s.side, s.sl, 1.0);
         cands.push({ v, s, st: vstat(v.vkey) });
       }
@@ -358,7 +359,7 @@ export async function step() {
       cands.sort((a, b) => b.st.mean - a.st.mean); const { v, s, st } = cands[0];
       if (!dayGate()) { feed(`${ko} 신호(${v.name}) 무시 — 오늘 손실 한도 ${FW.dailyStop * 100}% 도달`); continue; }
       if (S.news?.blockUntil > Date.now()) { feed(`${ko} 신호(${v.name}) 보류 — 📰 주요 일정/뉴스 위험 구간`); continue; }
-      S.queue.push({ sym, ko, vkey: v.vkey, name: v.name, side: s.side, sl: s.sl, why: s.why, regime: reg.label, htf: hb?.bias ?? 0, st, t: Date.now() });
+      S.queue.push({ sym, ko, vkey: v.vkey, name: v.name, side: s.side, sl: s.sl, why: s.why, regime: reg.label, regKey: reg.key, htf: hb?.bias ?? 0, st, t: Date.now() });
       S.scan = { model: "전략 엔진", ko, sym, regime: `${reg.label} · ${v.name} ${s.side > 0 ? "롱" : "숏"} 신호`, t: Date.now() };
       feed(`🎯 ${ko} ${s.side > 0 ? "롱" : "숏"} 신호: ${v.name}(${tf === "60" ? "1시간" : tf === "240" ? "4시간" : tf + "분"}봉) — ${s.why} · 최근 ${st.n}건 기대값 ${st.mean >= 0 ? "+" : ""}${st.mean}R`);
     }
@@ -417,7 +418,7 @@ export async function calibrate() {
   for (const { ko, sym, D, H } of ALL) {
     for (const v of V) { const d = D[v.tf]; if (!d) continue;
       const r = ENG.simulate(v, d.I, d.cs, { sym, H: HTF_OF[v.tf] ? H[HTF_OF[v.tf]] : null, atrK: 1, be: 1 });
-      (pool[v.vkey] ||= []).push(...r.trades.map(t => ({ R: +t.R.toFixed(3), t1: t.t1, src: "bt" })));
+      (pool[v.vkey] ||= []).push(...r.trades.map(t => ({ R: +t.R.toFixed(3), t1: t.t1, src: "bt", reg: t.reg })));
       await new Promise(r => setTimeout(r, 0)); }
     feed(`🔬 ${ko} 백테스트 완료`);
   }
@@ -438,7 +439,7 @@ export async function modelStep() {
 }
 // 📡 에이전트 팀 스킬(도구)을 뉴럴 데스크에서도 실제로 실행: 선물 수급(OI·펀딩·상위계정)·호가창·고래 체결 → 승인 판단의 실제 입력
 async function flowFacts(sym) {
-  const jobs = [["선물수급", "futures_flow", { symbol: sym, period: "1h" }], ["호가창", "orderbook", { symbol: sym, exchange: "binancef" }], ["고래체결", "whale_trades", { symbol: sym, minUsd: sym === "BTCUSDT" ? 300000 : 100000 }]];
+  const jobs = [["거래소펀딩", "funding_scan", { symbol: sym }], ["선물수급", "futures_flow", { symbol: sym, period: "1h" }], ["호가창", "orderbook", { symbol: sym, exchange: "binancef" }], ["고래체결", "whale_trades", { symbol: sym, minUsd: sym === "BTCUSDT" ? 300000 : 100000 }]];
   const res = await Promise.all(jobs.map(async ([label, t, a]) => {
     try { const r = await Promise.race([TOOLS[t].run(a), new Promise((_, rej) => setTimeout(() => rej(new Error("시간초과")), 6000))]);
       const txt = String(r?.text || r || ""), lines = txt.split("\n");
@@ -692,9 +693,23 @@ export function state() {
     fills: S.fills, winRate: wr, epoch: S.epoch, since: S.t0, nModels: connectedModels().length,
     neurons, traders, designs: (S.designs || []).slice(0, 10), nDesigns: (S.designs || []).length, handed: (S.designs || []).filter(d => d.handed).length,
     brain: BRAIN.brainState(), scan: S.scan || null, regime: S.regime, news: S.news, review: S.review, calib: S.eng.calib, calibrating,
-    engine, nActive: engine.filter(x => x.active).length, evo: { n: (S.eng.evo || []).length, seeds: (S.eng.evoSeeds || []).length, log: (S.eng.evoLog || []).slice(0, 3) }, queue: S.queue.length, heat: +(heat() / Math.max(1, eq) * 100).toFixed(2), dayPnl: +(S.day?.pnl || 0).toFixed(2),
+    engine, nActive: engine.filter(x => x.active).length, setups: setups(engine), winrates: learnedWinrates(V), evo: { n: (S.eng.evo || []).length, seeds: (S.eng.evoSeeds || []).length, log: (S.eng.evoLog || []).slice(0, 3) }, queue: S.queue.length, heat: +(heat() / Math.max(1, eq) * 100).toFixed(2), dayPnl: +(S.day?.pnl || 0).toFixed(2),
     fw: { minLev: FW.minLev, risk: FW.baseRisk * 100, maxRisk: FW.maxRisk * 100, daily: FW.dailyStop * 100, heat: FW.maxHeat * 100, fee: FW.fee * 100 },
     pos: allPos.filter(P => P.trader === "자체 엔진"), dec: S.dec, feat: S.feat, trades: S.trades.slice(0, 22), feed: S.feed.slice(0, 24) };
+}
+// ocean-agent 개념: 검증된 셋업 순위 = 기대값 × 승률 × 신뢰도(표본 수) — 실측 성적으로만 계산
+function regStat(vkey, reg) { let n = 0, r = 0; for (const t of S.eng.stats[vkey]?.tr || []) if (t.reg === reg) { n++; r += t.R; } return { n, mean: n ? r / n : 0 }; }
+function setups(engine) {
+  return engine.filter(e => e.n >= 8 && e.mean > 0).map(e => ({ vkey: e.vkey, name: e.name, tf: e.tf, mean: e.mean, wr: e.wr, n: e.n, active: e.active,
+    score: +(e.mean * (e.wr / 100) * Math.min(1, e.n / 20) * 100).toFixed(1) })).sort((a, b) => b.score - a.score).slice(0, 12);
+}
+// 학습된 승률: 매매법 × 시장 국면별 실측(백테스트+실전) — 어떤 장에서 통하는지
+function learnedWinrates(V) {
+  const out = [];
+  for (const v of V) { const tr = S.eng.stats[v.vkey]?.tr || [], by = {};
+    for (const t of tr) if (t.reg) { const b = by[t.reg] ||= { n: 0, w: 0, r: 0 }; b.n++; if (t.R > 0) b.w++; b.r += t.R; }
+    for (const [reg, b] of Object.entries(by)) if (b.n >= 5) out.push({ vkey: v.vkey, name: v.name, regime: reg, n: b.n, wr: Math.round(b.w / b.n * 100), mean: +(b.r / b.n).toFixed(3) }); }
+  return out.sort((a, b) => b.mean - a.mean).slice(0, 40);
 }
 function selfPnl() { let m = 0; for (const n in S.models) m += S.models[n].pnl; return S.pnl - m; }
 function fmt(v) { return v >= 1000 ? Math.round(v).toLocaleString() : v >= 1 ? v.toFixed(2) : v.toPrecision(4); }

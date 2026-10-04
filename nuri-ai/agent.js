@@ -278,6 +278,9 @@ export const TOOLS = {
   futures_flow: {mode:"both", label:"선물 수급", args:'{"symbol":"BTCUSDT","period":"1h"}', act: a => `${a.symbol || "BTCUSDT"} 선물 수급 보기`,
     desc:"코인 선물 수급: 상위 트레이더·전체 롱숏비율, 시장가 매수/매도, 미결제약정 변화, 펀딩비 흐름, 예상 청산 가격대",
     async run(a){ const F = await import("./flow.js"); const [r, l] = await Promise.all([F.futuresFlow({symbol: a.symbol || "BTCUSDT", period: a.period || "1h"}), F.liquidationEstimate({symbol: a.symbol || "BTCUSDT"}).catch(() => null)]); return {text: r.text + (l ? "\n\n" + l.text : ""), summary: r.summary}; }},
+  funding_scan: {mode:"both", label:"거래소 간 펀딩", args:'{"symbol":"BTCUSDT"}', act: a => `${a.symbol || "BTCUSDT"} 거래소별 펀딩 비교`,
+    desc:"바이낸스·바이빗·OKX·비트겟 선물 펀딩비를 한 번에 비교: 전 거래소 동시 과열(쏠림)·거래소 간 차이·차익 후보(정보용)",
+    async run(a){ const F = await import("../gh-coin/lib/fundscan.js"), {webGet} = await import("./engine.js"); return {text: F.fundingText(await F.fundingScan(String(a.symbol || "BTCUSDT").toUpperCase(), u => webGet(u, "json")))}; }},
   history_backtest: {mode:"both", label:"전체 과거 백테스트", args:'{"spec":{"name":"...","indicators":[],"long_entry":{},"risk":{"leverage":10}},"market":"BTCUSDT|NVDA|^GSPC|CL=F","exchange":"binancef|binance|yahoo","interval":"1d|4h|1h"}', act: a => `${a.market || "BTCUSDT"} 전체 과거 백테스트`,
     desc:"가능한 가장 오래된 과거(코인 2017~, S&P500 1927~, 주식·선물 상장 이후 전부)부터 백테스트하고, 레버리지 1~200배·상승/하락/횡보/폭락 장세·연도별·수수료 2~3배·진입 지연 시나리오까지 한 번에 검사한다",
     async run(a){
@@ -672,7 +675,7 @@ export const BUILTIN_SKILLS = [
 Object.assign(TOOLS, REALESTATE_TOOLS, MEDIA_TOOLS);
 setRealestateSettings(settings); setMediaSettings(settings);
 const EXTRA_TOOLS = {land: ["redev_scan", "redev_rank", "apt_trades", "youtube_search"], arch: ["apt_trades"],
-  crypto_spot: ["indicator_all", "sns_buzz", "orderbook", "whale_trades", "youtube_search"], crypto_futures: ["indicator_all", "sns_buzz", "strategy_backtest", "orderbook", "whale_trades", "futures_flow"], us_stocks: ["indicator_all", "sns_buzz"], kr_stocks: ["indicator_all"],
+  crypto_spot: ["indicator_all", "sns_buzz", "orderbook", "whale_trades", "youtube_search"], crypto_futures: ["indicator_all", "sns_buzz", "strategy_backtest", "orderbook", "whale_trades", "futures_flow", "funding_scan"], us_stocks: ["indicator_all", "sns_buzz"], kr_stocks: ["indicator_all"],
   global_futures: ["indicator_all"], kr_futures: ["indicator_all"], news: ["sns_buzz", "youtube_search", "community_search"], macro: ["sns_buzz", "youtube_search"], backtest: ["strategy_backtest", "history_backtest", "indicator_all", "paper_status"], research: ["sns_buzz", "youtube_search", "youtube_transcript", "instagram_search", "community_search"]};
 for (const sk of BUILTIN_SKILLS) sk.tools = [...new Set([...(sk.tools || []), ...(EXTRA_TOOLS[sk.id] || [])])];
 

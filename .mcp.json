@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "neutron": {
+      "command": "node",
+      "args": ["gh-coin/mcp/neutron-mcp.mjs"]
+    }
+  }
+}

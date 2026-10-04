@@ -178,8 +178,20 @@ export const TECH = [
   {repo: "memvid/claude-brain · toroleapinc/claude-brain · OoneBreath/project-brain · AgriciDaniel/claude-obsidian · ArcInstitute/brain-agent-template", lic: "각 OSS", teams: ["selfai"], status: "실동작 — 뇌 학습(시간대 성적이 리스크 절반, 기억이 AI 승인 자료) · 앱 켜면 상시 실행",
     what: "영속 집단 기억(자체 뇌): 모델들이 복기·거래·설계에서 배운 교훈·승리 패턴·전략을 세션 넘어 누적하고, 다음 판단 때 지금 상황(코인+국면)에 맞는 기억을 꺼내(RAG식 회상) 프롬프트에 주입. 결과로 기억을 강화/쇠퇴(obsidian식 지식 볼트 + brain-agent 기억 그래프 개념)",
     where: "자체 뇌(gh-coin/brain.js): learn/recall/reinforce + 뉴럴 데스크가 modelStep·reflect·designStrategy 에서 뇌를 읽고 씀 · 대시보드 '🧠 자체 뇌 · 누적 기억' 패널"},
-  {repo: "obsidianmd/jsoncanvas · obsidian-api · obsidian-clipper · obsidian-help · obsidian-sample-plugin · obsidian-releases", lic: "MIT 등 각 OSS", teams: ["selfai"], status: "표시용 — 뇌 지식 그래프·.canvas 내보내기",
+  {repo: "obsidianmd/jsoncanvas · obsidian-api · obsidian-clipper · obsidian-help · obsidian-sample-plugin · obsidian-releases", lic: "MIT 등 각 OSS", teams: ["selfai"], status: "실동작 — 뇌를 옵시디언 볼트(문서/GHNano 사무실/GHCoin 뇌)로 10분마다 내보냄(위키링크·백링크)",
     what: "자체 뇌의 지식 그래프화(Obsidian 개념): ① 기억끼리 위키링크[[ ]]·백링크로 연결하고 연결 수(degree)로 노드 크기 결정(obsidian-api 그래프 뷰) ② 핵심 규칙이 근거 패턴들에 링크되며 허브로 자람 ③ JSON Canvas(.canvas) 오픈 포맷으로 내보내 실제 Obsidian에서 열기(jsoncanvas) ④ 기억을 원자 노트로 정제(obsidian-clipper distill 개념)",
-    where: "brain.js: learn(links)·graph(degree/엣지)·toCanvas(.canvas 내보내기) · neural-ui.js: 🧠 뇌 지식 그래프 카드(Obsidian 그래프 뷰 스타일 — 발광 노드·호버 이웃 강조·degree 크기·.canvas ↓ 버튼)"}
+    where: "brain.js: learn(links)·graph(degree/엣지)·toCanvas(.canvas 내보내기) · neural-ui.js: 🧠 뇌 지식 그래프 카드(Obsidian 그래프 뷰 스타일 — 발광 노드·호버 이웃 강조·degree 크기·.canvas ↓ 버튼)"},
+  {repo: "anthropics/claude-code (MCP) · YishenTu/claudian", lic: "MIT 등", teams: ["selfai", "hq", "dev"], status: "실동작 — 뉴트론 MCP 서버 18개 도구: Claude Code·Claudian 이 뇌·성적·판정을 읽고 메모·실험·과제를 보냄(앱이 30초마다 반영)",
+    what: "자체 뇌·뉴럴 데스크·팀 판정을 MCP(Model Context Protocol) 서버로 공개. 읽기: 상태·기억 검색·검증된 셋업·국면별 승률·전략 성적·팀 판정·리스크 정책·데모 전략·거래·거래소 펀딩·볼트 노트. 쓰기(받은 편지함): 지식 메모·매매법 실험 제안·팀 과제 3종만 — 주문 도구 없음",
+    where: "gh-coin/mcp/neutron-mcp.mjs (의존성 없음) · gh-coin/neutron.js (state.json 1분·볼트 10분·inbox 30초) · 저장소 .mcp.json · 볼트 .mcp.json+CLAUDE.md (Claudian 이 볼트에서 Claude Code 를 열면 자동 연결)"},
+  {repo: "delian-research/brain-mcp", lic: "라이선스 없음(이름·개념만)", teams: ["selfai"], status: "실동작 — 같은 이름의 노트 도구(brain_search_notes·read_note·find_backlinks·get_structure)를 뉴트론에 내장",
+    what: "옵시디언 볼트를 에이전트 지식 베이스로 쓰는 MCP 도구 구성", where: "neutron-mcp.mjs brain_* 도구"},
+  {repo: "Sharpe MCP (sharpe-mcp, PyPI)", lic: "상용 API(설치 안 함·개념만)", teams: ["data", "qrisk", "selfai"], status: "실동작 — 거래소 간 펀딩 스캔(바이낸스·바이빗·OKX·비트겟 공개 API): 전 거래소 과열이면 그 방향 진입 0.7배",
+    what: "get_funding_rates·arbitrage_cross_exchange 개념을 무료 공개 API 로 재구현: 거래소별 펀딩·평균·차이·차익 후보(정보용)", where: "gh-coin/lib/fundscan.js · 에이전트 도구 funding_scan(선물 스킬) · coinGate · 뉴럴 승인 자료(flowFacts) · MCP neutron_funding_scan"},
+  {repo: "ocean-agent (PyPI, BUSL-1.1)", lic: "BUSL-1.1(설치 안 함·개념만)", teams: ["selfai", "demo"], status: "실동작 — 실측 셋업 순위(기대값×승률×신뢰도) + 국면별 학습 승률: 손실 검증된 국면에선 그 매매법 진입 건너뜀",
+    what: "measured-edge setups·learned_winrates 개념. 실주문(Pacifica)·자율 거래 엔티티는 안전 규칙상 넣지 않음", where: "neural.js setups()·learnedWinrates()·regStat → step() 후보 선별 · MCP neutron_top_setups·neutron_learned_winrates"},
+  {repo: "yuxuan-lou/ClawTrade · VTSTech/AgentNova(→AgentKthx) · UVLabs/HyperLLM-4b", lic: "각 OSS(개념만)", teams: ["hq"], status: "참고 — 이미 같은 구조 보유/해당 없음",
+    what: "ClawTrade: AI 는 브로커에 직접 접근 불가·하드코딩 안전 규칙(= live.js 보호 파일·한도) · AgentNova: 로컬 모델 자율 에이전트·하트비트(= 사무실 cycle·Ollama) · HyperLLM-4b: LoRA 어댑터뿐(GGUF 없음)·Hyperliquid 전용이라 Ollama 로 못 씀",
+    where: "—"},
 ];
-export const TECH_REPOS = 64;   // + Obsidian 6종(지식 그래프·위키링크·JSON Canvas)
+export const TECH_REPOS = 72;   // + Obsidian 6종 + MCP·Claudian·brain-mcp·Sharpe·ocean-agent·ClawTrade·AgentNova·HyperLLM

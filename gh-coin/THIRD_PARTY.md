@@ -90,3 +90,14 @@ GPL·LGPL 저장소와 라이선스 표시가 없는 저장소는 특히 규칙�
 - **남의 지갑을 여는 도구**: 다른 사람의 개인키·시드로 지갑을 찾아 여는 것은 절도라서 구현하지 않음.
 - **앱 내장 채굴기 + 자동 송금**: 배포되는 실행 파일 안에 채굴 기능을 넣어 한 지갑으로 자동 송금하면, 받는 사람 PC에서 몰래 도는 악성 프로그램 형태가 되므로 넣지 않음. 본인 PC에서 합법 채굴 프로그램을 본인 지갑으로 직접 돌리는 것은 사용자 자유.
 - **앱 자체 코인 지갑(실제 자금 보관)**: 개인키를 이 앱에 두는 것은 위험하고 위 흐름의 목적지라서 넣지 않음. 보관은 Rainbow 등 검증된 지갑 사용 권장.
+
+## 뉴트론 MCP · 옵시디언 연결 (10/5) — 코드 복사 없이 개념만
+
+| 출처 | 라이선스 | 적용 |
+|---|---|---|
+| Model Context Protocol (Anthropic) | 공개 사양 | `gh-coin/mcp/neutron-mcp.mjs` — 의존성 없는 stdio JSON-RPC 구현 |
+| YishenTu/claudian | MIT | 볼트에 `.mcp.json`·`CLAUDE.md` 를 깔아 Claudian(옵시디언 안 Claude Code)이 뉴트론에 바로 연결 |
+| delian-research/brain-mcp | 없음 | 노트 도구 이름·구성(brain_search_notes 등)만 |
+| Sharpe MCP | 상용 API | 거래소 간 펀딩 스캔 개념 → 무료 공개 API 로 재구현(`lib/fundscan.js`) |
+| ocean-agent | BUSL-1.1 | 실측 셋업 순위·국면별 학습 승률 개념만. 실주문·자율 거래 엔티티는 넣지 않음 |
+| ClawTrade · AgentNova · HyperLLM-4b | 각각 | 참고만(이미 같은 구조 보유 / GGUF 없음) |

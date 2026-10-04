@@ -10,7 +10,7 @@
 
 | 항목 | 상태 |
 |---|---|
-| 코드 | 이 브랜치에 전부 있음. 10/5 오픈소스 → 실제 결정 연결(5-3번)이 최신 |
+| 코드 | 이 브랜치에 전부 있음. 10/5 뉴트론 MCP·옵시디언 연결(5-4번)이 최신 |
 | GitHub 반영 | **이 PC에서만 커밋된 상태가 있을 수 있음.** 이어받기 전에 `git status` / `git log origin/claude/eloquent-ride-3o1bqv..HEAD` 로 확인하고 올릴 것 (아래 9번) |
 | 배포 exe (`dist/`) | **최신** (10/4 뉴럴 데스크 포함 재빌드, 커밋 `e6c9f5a`). push 여부만 확인 |
 | 자동 테스트 | 저장소에 고정된 테스트 묶음 **없음**. 그때그때 Node 스크립트 · 브라우저로 확인함 (4번) |
@@ -152,6 +152,15 @@ bash build.sh        # → dist/GHNano.exe, dist/ArchAI.exe, dist/GHCoin.exe
 - 작은 모델 전략 JSON 관대 파싱(`quant.js normGroup`): "rsi<30" · "a and b" · {indicator,operator,value} · 중첩 그룹 허용, 버린 조건 예시를 오류에 표시.
 - 제외: 채굴기(xmrig·RandomX·CryptoWalletMiner)·지갑(rainbow) = 안전 규칙 · biomolecular = 무관. 상태표 `gh-coin/tech.js` 갱신.
 
+### 5-4. 뉴트론 MCP — Claude Code · Claudian(옵시디언) 연결 (10/5)
+- **브리지** `gh-coin/neutron.js` (exe 에서만, `startCycle` 이 시작): `문서/GHNano 사무실/neutron/state.json` 1분마다(뉴럴 상태·뇌 전체·팀 판정·데모 전략·리스크 정책·매매법 목록) · 옵시디언 볼트 `문서/GHNano 사무실/GHCoin 뇌/` 10분마다(홈·코인별·지식 유형별·전략 엔진·진화·검증된 셋업·정책·학습된 리스크·데모·팀 판정·일지, 위키링크) · `neutron/inbox.jsonl` 30초마다 반영(**지식 메모·실험 제안·팀 과제 3종만**, 주문 등 다른 종류는 무시).
+- **MCP 서버** `gh-coin/mcp/neutron-mcp.mjs` (의존성 없음, Node 18+): 도구 18개 — neutron_status/query_knowledge/top_setups/learned_winrates/strategy_engine/strategy_library/team_verdicts/risk_policy/demo_strategies/recent_trades/funding_scan · brain_get_structure/search_notes/read_note/find_backlinks(brain-mcp 호환 이름) · neutron_log_note/propose_experiment/add_task. 주문 도구 없음.
+- 연결: 저장소 루트 `.mcp.json`(이 프로젝트의 Claude Code) · 앱이 볼트에 `.mcp.json`+`CLAUDE.md`+`.neutron/`(서버 사본) 설치 → 옵시디언 Claudian 플러그인이 볼트에서 Claude Code 를 열면 자동 연결. 다른 경로에서 쓰려면 `NEUTRON_DIR` 환경변수.
+- **거래소 간 펀딩 스캔** `gh-coin/lib/fundscan.js` (Sharpe MCP 개념, 바이낸스·바이빗·OKX·비트겟 공개 API): 에이전트 도구 `funding_scan`(선물 스킬) · 뉴럴 승인 자료 · coinGate(전 거래소 과열 방향 0.7배) · MCP.
+- **ocean-agent 개념**: 셋업 순위(기대값×승률×신뢰도) · 국면별 학습 승률 → 손실 검증된 국면(8건+, 평균<0)에선 그 매매법 진입 건너뜀(neural step).
+- 검증: MCP 핸드셰이크·도구 18개 호출(실시간 펀딩 포함) · 런처 응답을 흉내 낸 Node 테스트로 설치→내보내기→볼트 16노트→받은 편지함 3건 반영(주문 요청 무시) 확인. **실제 exe·Claudian 에서의 연결은 미확인.**
+- 설치 안 함(확인 결과): sharpe-mcp(상용 API) · ocean-agent(BUSL·실주문) · AgentNova(→AgentKthx 개명) · ClawTrade(2★·라이선스 없음) · brain-mcp(0★) · HyperLLM-4b(LoRA 어댑터뿐·GGUF 없음).
+
 ---
 
 ## 6. 안전 규칙 (바꾸지 말 것)
@@ -178,6 +187,7 @@ bash build.sh        # → dist/GHNano.exe, dist/ArchAI.exe, dist/GHCoin.exe
 - 뉴럴 엔진의 +0.06R은 약 4개월·4코인 워크포워드 결과일 뿐 — 국면이 바뀌면 마이너스 가능. 선별 기준(SEL)·수수료(FW.fee 0.08%)는 `strategies.js`/`neural.js` 상단.
 - **뉴럴 데스크**는 실제 NVIDIA 키가 있어야 모델들이 직접 판단함(키 없으면 자체 뉴런만). 모델 판단 품질·뇌 누적 효과는 실제 키로 장시간 돌려 봐야 확인됨 — 함수/문법 단위로만 검증.
 - **진입 관문(5-3)** 은 Node 시나리오 테스트로만 검증. 각 팀 판정이 쌓이려면 사무실을 몇 시간 돌려야 함(판정 없으면 관문은 통과·1배). 관문이 너무 자주 막으면 데모 거래 수가 줄어 승격(20거래)이 늦어질 수 있음.
+- **뉴트론 MCP(5-4)**: 실제 exe 로 `문서/GHNano 사무실` 에 파일이 생기는지, Claude Code 가 `.mcp.json` 을 승인 후 도구를 부르는지, Claudian 에서 볼트 연결되는지 아직 확인 못 함. 앱(Go)과 MCP 서버 모두 `%USERPROFILE%Documents` 고정 경로를 써서 서로 일치(다른 곳에서 쓰려면 `NEUTRON_DIR`).
 - 로컬 소형 모델(qwen2.5:3b 등)은 전략 JSON 형식을 자주 틀림 → 자가 수정 1회로 일부 구제. 중형 모델(14b급)을 `code` 역할에 쓰는 게 낫다.
 - `dist/*.exe` 는 **10/4 뉴럴 데스크 포함해 재빌드됨** (커밋 `e6c9f5a`). 단, 이 PC에서 아직 push 안 됐을 수 있음 → 9번대로 Cursor Sync.
 
