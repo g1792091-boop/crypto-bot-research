@@ -4,6 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Paper v3</title>
+<!-- phone home-screen shortcut (no service worker: nothing is cached offline) -->
+<link rel="manifest" href="/static/manifest.json">
+<link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+<meta name="theme-color" content="#0b0e11">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Paper v3">
 <link rel="stylesheet" href="/static/style.css">
 <script src="/static/vendor/lightweight-charts.standalone.production.js"></script>
 </head>
@@ -16,6 +25,7 @@
     <button data-v="market">마켓</button>
     <button data-v="strat">매매법</button>
     <button data-v="board">순위표</button>
+    <button data-v="analysis">분석</button>
     <button data-v="account">계좌</button>
     <button data-v="rooms" id="nav-rooms">에이전트 방<i class="ndot" hidden></i></button>
     <button data-v="office">회의실</button>
@@ -59,9 +69,13 @@
     </div>
     <div class="chartp">
       <div class="toolbar">
+        <div class="seg cmode" id="chart-mode"><button data-m="bot" class="on" title="봇이 쓰는 차트: 계좌 진입·청산, 포지션 선, 지지·저항">봇 차트</button><button data-m="tv" title="트레이딩뷰 차트 (바이낸스 무기한, 그리기 도구)">거래소 차트</button></div>
+        <span class="sep"></span>
         <div class="seg" id="tf-seg">
-          <button data-tf="5m">5분</button><button data-tf="15m" class="on">15분</button><button data-tf="30m">30분</button>
-          <button data-tf="1h">1시간</button><button data-tf="4h">4시간</button><button data-tf="1d">일</button>
+          <button data-tf="1m">1분</button><button data-tf="3m">3분</button><button data-tf="5m">5분</button><button data-tf="15m" class="on">15분</button><button data-tf="30m">30분</button>
+          <button data-tf="1h">1시간</button><button data-tf="2h">2시간</button><button data-tf="4h">4시간</button><button data-tf="6h">6시간</button>
+          <button data-tf="8h">8시간</button><button data-tf="12h">12시간</button><button data-tf="1d">일</button><button data-tf="3d">3일</button>
+          <button data-tf="1w">주</button><button data-tf="1M">월</button>
         </div>
         <span class="sep"></span>
         <select id="acct-filter" aria-label="표시할 계좌"><option value="">계좌를 고르면 진입·청산이 표시됩니다</option></select>
@@ -72,7 +86,10 @@
         <button id="gh-toggle" title="GH Coin의 지금 계획 (진입·손절·익절)">GH Coin 타점</button>
         <button id="ev-toggle" class="on" title="미국 경제지표 발표 시각 (CPI·FOMC·고용·PCE, data/macro_events.csv에 등록된 것)">경제지표</button>
       </div>
-      <div class="chartwrap"><div class="cw" id="tchart"></div><div class="legend" id="legend"></div><div class="lvnote" id="lv-note"></div></div>
+      <div class="cdstrip" id="cd-strip" aria-label="봉 마감까지 남은 시간"></div>
+      <div class="cglinks" id="cg-links"></div>
+      <div class="chartwrap" id="bot-chartwrap"><div class="cw" id="tchart"></div><div class="legend" id="legend"></div><div class="lvnote" id="lv-note"></div></div>
+      <div class="chartwrap tvwrap" id="tv-chartwrap" hidden><div class="cw" id="tvchart"></div></div>
     </div>
     <div class="side">
       <div class="ph tabs" id="side-tabs">
@@ -186,6 +203,16 @@
   </div>
 </div></section>
 
+<!-- ========================================================= analysis (analysis.js): read-only views of the agents' analyses -->
+<section class="view" id="v-analysis"><div class="page">
+  <div class="filters an-tabs"><div class="seg" id="an-tabs">
+    <button data-t="health" class="on">건강 점검</button><button data-t="risk">손익비·위험</button><button data-t="ready">실전 준비도</button>
+    <button data-t="shock">충격 테스트</button><button data-t="map">코인·장세 지도</button><button data-t="entry">진입 순간</button>
+    <button data-t="synergy">조합 시너지</button><button data-t="questions">45개 질문</button><button data-t="alerts">알림 기록</button>
+  </div><span class="grow"></span><small class="muted" id="an-at"></small></div>
+  <div id="an-body"><p class="empty">불러오는 중…</p></div>
+</div></section>
+
 <!-- ========================================================= account -->
 <section class="view" id="v-account"><div class="page">
   <button class="back" id="back">← 순위표</button>
@@ -240,7 +267,10 @@
 </section>
 
 <!-- ========================================================= meeting room (office.js): the rooms drawn as one office -->
-<section class="view" id="v-office"><div class="page"><div id="of-body"><p class="empty">불러오는 중…</p></div></div></section>
+<section class="view" id="v-office"><div class="page"><div id="of-body"><p class="empty">불러오는 중…</p></div>
+  <div class="card" id="debate"><div class="ph"><span class="t">24시간 토론방</span><span class="grow"></span><small class="muted" id="debate-at"></small></div>
+    <div class="body" id="debate-body"><p class="muted">24시간 토론방 — 준비 중</p></div></div>
+</div></section>
 
 <!-- ========================================================= meeting digest (digest.js) -->
 <section class="view" id="v-digest"><div class="page">
@@ -286,5 +316,7 @@
 <script src="/static/ghcoin.js"></script>
 <script src="/static/breakdown.js"></script>
 <script src="/static/summary.js"></script>
+<script src="/static/charts.js"></script>
+<script src="/static/analysis.js"></script>
 </body>
 </html>

@@ -1,0 +1,6 @@
+{
+  "source": null,
+  "updated": null,
+  "note": "The owners' 45-question coverage checklist for the dashboard's '45개 질문' page (paperbot/dash/analysis.py questions). Empty until the source list is added: each item {\"n\": 1, \"q\": \"질문\", \"status\": \"done|partial|todo|na\", \"where\": \"어디서 답하는지\", \"note\": \"한 줄\", \"group\": \"묶음(선택)\"}.",
+  "questions": []
+}

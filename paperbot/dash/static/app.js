@@ -2,9 +2,13 @@
 // Paper v3 dashboard. Server data: /api/* (read-only store). Live prices: Binance public streams in the browser.
 const SYMS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "LTCUSDT", "BCHUSDT", "XRPUSDT"];
 const TRADE_SYMS = SYMS.slice(0, 6);
-const TF_KO = {"5m": "5분", "15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간", "1d": "일봉"};
-const TF_SEC = {"5m": 300, "15m": 900, "30m": 1800, "1h": 3600, "4h": 14400, "1d": 86400};
+const TF_KO = {"1m": "1분", "3m": "3분", "5m": "5분", "15m": "15분", "30m": "30분", "1h": "1시간", "2h": "2시간", "4h": "4시간", "6h": "6시간", "8h": "8시간", "12h": "12시간", "1d": "일봉", "3d": "3일봉", "1w": "주봉", "1M": "월봉"};
+// seconds per bar (a month counted as 30 days: only used to place markers, never for the countdown)
+const TF_SEC = {"1m": 60, "3m": 180, "5m": 300, "15m": 900, "30m": 1800, "1h": 3600, "2h": 7200, "4h": 14400, "6h": 21600,
+  "8h": 28800, "12h": 43200, "1d": 86400, "3d": 259200, "1w": 604800, "1M": 2592000};
 const TRADE_TFS = ["5m", "15m", "30m", "1h", "4h"];
+// the chart's account features (entries, exits, position lines, S/R) exist on the accounts' own timeframes only
+const botTf = (tf) => TRADE_TFS.includes(tf);
 const REASON_KO = {SL: "손절", LOCK: "익절 잠금", LIQ: "강제청산", TP: "익절", HALT: "정지", MANUAL: "수동", END: "종료"};
 const STATUS_KO = {SUBMITTED: "진입 요청", RECORD: "기록만", LATE: "늦음(미진입)", NO_PRICE: "가격 없음", NO_ATR: "ATR 없음"};
 // engine outcomes of a signal (outcomes.status); FILTERED: a copy account's own rule skipped the entry
@@ -94,7 +98,7 @@ let plines = {};   // key -> {line, price}
 state.posLines = true;
 function renderPosLines() {
   if (!tseries) return;
-  const list = state.posLines && state.tf !== "1d" ? positions().filter((a) => a.position.symbol === state.sym && a.account_id !== state.acct) : [];
+  const list = state.posLines && TF_SEC[state.tf] < 86400 ? positions().filter((a) => a.position.symbol === state.sym && a.account_id !== state.acct) : [];
   list.sort((x, y) => x.position.entry - y.position.entry);
   const groups = [];
   for (const a of list) {
@@ -254,7 +258,7 @@ function setPref(k, v) { try { localStorage.setItem("pb-" + k, v ? "1" : "0"); }
 state.srOn = pref("sr", true); state.ghOn = pref("gh", false); state.evOn = pref("ev", true);
 let macroEvs = null;           // US releases from /api/events (code only, data/macro_events.csv)
 async function macroMarks(t0) {   // a square on the bar of each release in view (CPI · FOMC · NFP · PCE)
-  if (!state.evOn || state.tf === "1d") return [];
+  if (!state.evOn || !(TF_SEC[state.tf] < 86400)) return [];
   if (!macroEvs || Date.now() - macroEvs.t > 600000) {
     try { macroEvs = {t: Date.now(), list: (await api("/api/events?days_back=60&days_ahead=1")).events}; } catch (e) { macroEvs = {t: Date.now(), list: []}; }
   }
@@ -267,7 +271,7 @@ async function macroMarks(t0) {   // a square on the bar of each release in view
 async function loadLevels() {
   const sym = state.sym, tf = state.tf;
   let lv = null, gb = null;
-  if (state.srOn && tf !== "1d") { try { lv = await api(`/api/levels?symbol=${sym}&tf=${tf}`); } catch (e) { /* none */ } }
+  if (state.srOn && botTf(tf)) { try { lv = await api(`/api/levels?symbol=${sym}&tf=${tf}`); } catch (e) { /* none */ } }
   if (state.ghOn) { try { gb = await api("/api/ghcoin/board"); } catch (e) { /* none */ } }
   if (sym !== state.sym || tf !== state.tf) return;
   state.levels = lv; state.ghBoard = gb;
@@ -306,7 +310,7 @@ async function drawTradeMarkers(t0) {
   tlines.forEach((l) => tseries.removePriceLine(l)); tlines = [];
   // All accounts at once would bury the candles in markers: draw them for one chosen account only.
   const ev = await macroMarks(t0);
-  if (!state.markers || state.tf === "1d" || !state.acct) { tseries.setMarkers(ev.sort((a, b) => a.time - b.time)); return; }
+  if (!state.markers || !botTf(state.tf) || !state.acct) { tseries.setMarkers(ev.sort((a, b) => a.time - b.time)); return; }
   let trades = [];
   try { trades = await api(`/api/trades?symbol=${state.sym}&tf=${state.tf}&limit=600`); } catch (e) { /* none */ }
   if (state.acct) trades = trades.filter((t) => t.account_id === state.acct);
@@ -345,7 +349,7 @@ function setSym(s) {
 function fillAcctFilter() {
   const sel = $("acct-filter"); const cur = state.acct;
   const list = state.board ? state.board.accounts.filter((a) => a.timeframe === state.tf) : [];
-  sel.innerHTML = `<option value="">${state.tf === "1d" ? "일봉은 기록 전용 (계좌 없음)" : "계좌를 고르면 진입·청산이 표시됩니다"}</option>` +
+  sel.innerHTML = `<option value="">${state.tf === "1d" ? "일봉은 기록 전용 (계좌 없음)" : !botTf(state.tf) ? `${TF_KO[state.tf] || state.tf}에는 계좌가 없음 (진입·청산 표시 없음)` : "계좌를 고르면 진입·청산이 표시됩니다"}</option>` +
     list.map((a) => `<option value="${esc(a.account_id)}">${esc(name(a))}</option>`).join("");
   sel.value = list.some((a) => a.account_id === cur) ? cur : "";
   state.acct = sel.value;
@@ -376,7 +380,8 @@ function renderTicker() {
     const left = Math.max(0, f.T - Date.now()), h = Math.floor(left / 3.6e6), m = Math.floor(left % 3.6e6 / 6e4);
     $("t-fund").innerHTML = `<span class="${cls(-f.r)}">${(f.r * 100).toFixed(4)}%</span> / ${h}시간 ${m}분`;
   } else $("t-fund").textContent = "—";
-  $("t-cd-k").textContent = state.tf === "1d" ? "일봉 마감까지" : `${TF_KO[state.tf] || state.tf}봉 마감까지`;
+  const tfk = TF_KO[state.tf] || state.tf;
+  $("t-cd-k").textContent = `${tfk}${tfk.endsWith("봉") ? "" : "봉"} 마감까지`;
   $("t-cd").textContent = closeIn(state.tf);
   const n = positions().filter((a) => a.position.symbol === s).length;
   $("t-pos").textContent = state.board ? `${n}개 계좌` : "—";
@@ -738,13 +743,23 @@ function stream() {
   es.onerror = () => chip("chip-bot", false, "재연결 중");
 }
 
-// time left in the chart's current bar (bars are aligned to UTC, so the epoch modulo works up to 1 day)
-const TF_MS = {"1m": 6e4, "5m": 3e5, "15m": 9e5, "30m": 18e5, "1h": 36e5, "4h": 144e5, "1d": 864e5};
+// time left in a bar. Binance bars are aligned to UTC: up to 3 days the epoch modulo works, a week starts on Monday
+// 00:00 UTC (the epoch was a Thursday: 4 days before a Monday), a month on the 1st 00:00 UTC. The clock is the
+// server's (state.clockSkew from /api/time, charts.js), so a phone whose clock is off still counts right.
+const TF_MS = {"1m": 6e4, "3m": 18e4, "5m": 3e5, "15m": 9e5, "30m": 18e5, "1h": 36e5, "2h": 72e5, "4h": 144e5, "6h": 216e5,
+  "8h": 288e5, "12h": 432e5, "1d": 864e5, "3d": 2592e5};
+const nowMs = () => Date.now() + (state.clockSkew || 0);
+function barEnd(tf, now) {
+  if (TF_MS[tf]) return now - (now % TF_MS[tf]) + TF_MS[tf];
+  if (tf === "1w") { const w = 6048e5, mon = 3456e5; return now - ((now - mon) % w) + w; }
+  if (tf === "1M") { const d = new Date(now); return Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1); }
+  return null;
+}
 function closeIn(tf) {
-  const ms = TF_MS[tf]; if (!ms) return "—";
-  const left = Math.ceil((ms - (Date.now() % ms)) / 1000), h = Math.floor(left / 3600), m = Math.floor(left % 3600 / 60), s = left % 60;
+  const now = nowMs(), end = barEnd(tf, now); if (end == null) return "—";
+  const left = Math.ceil((end - now) / 1000), dd = Math.floor(left / 86400), h = Math.floor(left % 86400 / 3600), m = Math.floor(left % 3600 / 60), s = left % 60;
   const two = (x) => String(x).padStart(2, "0");
-  return h ? `${h}:${two(m)}:${two(s)}` : `${two(m)}:${two(s)}`;
+  return dd ? `${dd}일 ${h}:${two(m)}:${two(s)}` : h ? `${h}:${two(m)}:${two(s)}` : `${two(m)}:${two(s)}`;
 }
 
 // ------------------------------------------------------------ live: Binance public streams (browser side)

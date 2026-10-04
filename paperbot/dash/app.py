@@ -17,6 +17,9 @@
 - Live updates: /api/stream (server-sent events) sends changed accounts, new
   trades and alerts every few seconds. Prices tick in the browser straight
   from Binance's public mark-price stream.
+- '분석' tab, health card, alert history, server clock and the 24-hour debate room: dash/analysis.py (read-only,
+  heavy analyses one at a time in the background, cached 5-15 min). The '거래소 차트' (TradingView) and the
+  Coinglass links are loaded by the browser only; this server never fetches them.
 - Binds to 127.0.0.1 by default. Reach it through Tailscale or an SSH tunnel;
   never expose it directly (see docs/dashboard.md).
 """
@@ -652,7 +655,12 @@ def agent_feed(agents_db: Optional[str], limit: int = 200) -> list[dict]:
 
 
 # ---------------------------------------------------------------- agent rooms
-PUBLIC_PATHS = ("/login", "/api/login", "/static/login.html", "/static/login.css", "/static/login.js")
+PUBLIC_PATHS = ("/login", "/api/login", "/static/login.html", "/static/login.css", "/static/login.js",
+                # the phone home-screen shortcut: a browser fetches these without the login cookie (no data in them)
+                "/static/manifest.json", "/static/icon.svg", "/static/icon-192.png", "/static/icon-512.png",
+                "/static/apple-touch-icon.png")
+# every kline interval Binance futures serves: the bot chart may show any of them (the accounts trade 5m-4h only)
+CANDLE_INTERVALS = ("1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w", "1M")
 TICK_EVERY_MS = 15 * 60_000  # the agents timer (deploy/paperbot-agents.timer)
 SAY_MAX_CHARS = 1_000        # one owner post (rooms_db.MAX_OWNER_TEXT)
 SAY_PER_HOUR = 20            # owner posts per hour, both owners together (counted in inbox.db)
@@ -1601,9 +1609,12 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
                depth=fetch_depth, market=fetch_market,
                agents_db: Optional[str] = None, daily_db: Optional[str] = None, frames=fetch_frame,
                inbox_db: Optional[str] = None, say_per_hour: int = SAY_PER_HOUR,
-               checkpoint_db: Optional[str] = None) -> FastAPI:
+               checkpoint_db: Optional[str] = None, debate_db: Optional[str] = None,
+               failalert_dir: Optional[str] = None) -> FastAPI:
     # checkpoint verdicts (paperbot/checkpoint.py): by default checkpoint.db next to paper3.db, read-only
     checkpoint_db = checkpoint_db or os.path.join(os.path.dirname(os.path.abspath(db)), "checkpoint.db")
+    # the 24-hour debate room (dash/analysis.py debate): by default debate.db next to paper3.db, read-only
+    debate_db = debate_db or os.path.join(os.path.dirname(os.path.abspath(db)), "debate.db")
     if inbox_db and any(other and same_file(inbox_db, other) for other in (db, daily_db, agents_db)):
         # the dashboard creates its tables in inbox.db: never in another process's database
         raise ValueError("--inbox-db must be its own file (not paper3.db, daily3.db or agents3.db)")
@@ -2042,7 +2053,7 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
     def get_candles(symbol: str, interval: str = "15m", limit: int = 300):
         if symbol not in ("BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "LTCUSDT", "BCHUSDT", "XRPUSDT"):
             raise HTTPException(400, "unknown symbol")
-        if interval not in ("1m", "5m", "15m", "30m", "1h", "4h", "1d"):
+        if interval not in CANDLE_INTERVALS:
             raise HTTPException(400, "unknown interval")
         # the live-bar fallback asks for 2 rows every 5 s (fetch_candles caches those 4 s); the chart load asks for 300
         return candles(symbol, interval, min(max(limit, 2), 1500))
@@ -2156,6 +2167,11 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
                 yield f"data: {json.dumps(payload)}\n\n"
                 await asyncio.sleep(3)
         return StreamingResponse(gen(), media_type="text/event-stream")
+
+    # the '분석' tab, the health card, the alert history, the server clock and the debate room (read-only)
+    from . import analysis
+    app.state.analysis = analysis.register(app, data, rooms, db, daily_db, checkpoint_db, debate_db,
+                                           failalert_dir=failalert_dir or analysis.FAILALERT_DIR)
 
     app.mount("/static", StaticFiles(directory=STATIC), name="static")
     return app
