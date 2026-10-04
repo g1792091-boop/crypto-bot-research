@@ -158,6 +158,7 @@ export async function modelStep() {
   load(); const cm = connectedModels(); if (!cm.length) return;
   const tgt = cm[mRot % cm.length], [ko, sym] = COINS[((mRot++ / cm.length) | 0) % COINS.length];
   const feat = S.feat[sym], price = S.dec[sym]?.price; if (!feat || !price) return;
+  S.scan = { model: shortMd(tgt.model), ko, sym, regime: BRAIN.regimeOf(feat), t: Date.now() };   // 지금 스캔 중: 어느 모델이 어느 코인을
   const tM = model(tgt.model);
   const regime = BRAIN.regimeOf(feat), mem = BRAIN.recallText(ko, regime, 3);
   const les = tM.lessons.length ? `\n내가 복기로 배운 교훈(꼭 지켜라): ${tM.lessons.join(" / ")}` : "";
@@ -237,8 +238,10 @@ export async function designStrategy() {
 
 function shortMd(m) { return String(m).split("/").pop().replace(/-instruct|-chat|-\d{6,}/gi, "").slice(0, 16); }
 function strongFeat(feat = {}) { return Object.entries(feat).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, 2).map(([k, v]) => k + (v >= 0 ? "+" : "") + (+v).toFixed(1)).join(",") || "—"; }
-// 뇌 상태 공개 (UI용)
+// 뇌 상태·그래프·자체학습 공개 (UI용)
 export const brainState = () => BRAIN.brainState();
+export const brainGraph = () => BRAIN.graph(70);
+export const brainThink = () => BRAIN.consolidate();   // 뇌 자체 학습(망각·규칙 합성)
 export function resetBrain() { BRAIN.reset(); }
 
 export function state() {
@@ -253,7 +256,7 @@ export function state() {
   traders.sort((a, b) => b.pnl - a.pnl);
   return { pnl: +S.pnl.toFixed(2), fills: S.fills, winRate: wr, epoch: S.epoch, since: S.t0, nModels: connectedModels().length,
     neurons, traders, designs: (S.designs || []).slice(0, 10), nDesigns: (S.designs || []).length, handed: (S.designs || []).filter(d => d.handed).length,
-    brain: BRAIN.brainState(),
+    brain: BRAIN.brainState(), scan: S.scan || null,
     pos: Object.values(S.pos), dec: S.dec, feat: S.feat, trades: S.trades.slice(0, 22), feed: S.feed.slice(0, 24) };
 }
 // 자체 신호 트레이더의 PnL = 전체 - 모델들 합 (모델 손익은 모델 트레이더로 분리 표시)

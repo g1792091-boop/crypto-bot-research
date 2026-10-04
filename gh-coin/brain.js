@@ -47,6 +47,29 @@ export function brainState() {
   return { n: B.mem.length, total: B.n, byType, top: B.mem.slice(0, 12).map(m => ({ type: m.type, coin: m.coin, regime: m.regime, text: m.text, w: +m.w.toFixed(1), hits: m.hits, model: m.model })) };
 }
 export function reset() { B = { mem: [], n: 0 }; save(); }
+
+// 자체 학습(consolidate): 뇌가 스스로 ① 오래 안 쓴 기억을 잊고(망각) ② 자주 확인된 패턴을 '핵심 규칙'으로 승격한다.
+export function consolidate() {
+  load(); let changed = false;
+  for (const m of B.mem) if (Date.now() - m.t > 3 * 3600e3 && m.type !== "핵심") { m.w = Math.max(0.05, m.w - 0.04); changed = true; }
+  const before = B.mem.length; B.mem = B.mem.filter(m => m.w > 0.12); if (B.mem.length !== before) changed = true;
+  const byRule = {};
+  for (const m of B.mem) if (m.type === "패턴") { const dir = /롱/.test(m.text) ? "롱" : /숏/.test(m.text) ? "숏" : null; if (dir) { const k = (m.regime || "일반") + "|" + dir; byRule[k] = (byRule[k] || 0) + 1; } }
+  for (const [k, c] of Object.entries(byRule)) if (c >= 3) { const [regime, dir] = k.split("|"); learn({ type: "핵심", regime, text: `${regime}에선 ${dir}이 자주 통함 (${c}회 확인)`, model: "뇌", w: 3 }); changed = true; }
+  if (changed) save();
+  return changed;
+}
+
+// 지식 그래프: 노드(기억) + 엣지(같은 코인·국면·유형끼리 연결). UI 그래프 뷰용.
+export function graph(max = 70) {
+  load();
+  const nodes = B.mem.slice(0, max).map(m => ({ id: m.id, type: m.type, coin: m.coin, regime: m.regime, w: m.w, text: m.text, t: m.t }));
+  const edges = [];
+  for (let i = 0; i < nodes.length; i++) { let c = 0;
+    for (let j = i + 1; j < nodes.length && c < 3; j++) { const a = nodes[i], b = nodes[j];
+      if ((a.coin && a.coin === b.coin) || (a.regime && a.regime === b.regime && a.regime) || a.type === b.type) { edges.push([i, j]); c++; } } }
+  return { nodes, edges };
+}
 export function recallText(coin, regime, n = 4) {
   const r = recall(coin, regime, n); if (!r.length) return "";
   return r.map(m => `(${m.regime || "일반"}) ${m.text}`).join(" / ");
