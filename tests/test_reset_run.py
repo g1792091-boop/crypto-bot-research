@@ -20,7 +20,7 @@ from paperbot.store3 import Store3
 
 NOW = int(dt.datetime(2026, 10, 4, 22, 10, tzinfo=KST).timestamp() * 1000)
 OLD_START = int(dt.datetime(2026, 9, 30, 21, 0, tzinfo=KST).timestamp() * 1000)
-RESTART_KO = "실험을 2026-10-04에 처음부터 다시 시작함 (5분봉 제외, 1분봉 5초 뒤 읽기)"
+RESTART_KO = "실험을 2026-10-04에 처음부터 다시 시작함 (5분봉 제외, 좋은 자리 50·40배·보통 30·20배(비중=배수%), 1분봉 5초 뒤 읽기)"
 GATE_OK = {"pass": True, "n_trials": 3}
 
 RUN_BOUND = {"loss:strat:V45_AMB": "812", "loss:team:lab": "799", "weekly:strat:N17_KC_RSI": "640",

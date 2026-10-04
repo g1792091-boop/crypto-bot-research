@@ -162,7 +162,7 @@ def test_one_entry_shows_the_ladder_prices_and_the_stop_distance():
     lines = t.split("\n")
     assert lines[0] == "📈 진입 · 복제 슈퍼트렌드·ROC 1시간" and lines[1] == "🔴 숏 · ETH 50배 · 좋은 자리"
     assert lines[3] == f"익절 잠금 시작 {TA.px(roe_price(-1, 2400.0, 50, 0.22, rt))} (+22%)"
-    assert lines[4] == f"→ 손절을 {TA.px(roe_price(-1, 2400.0, 50, 0.20, rt))}로 올림 (+20% 확보)"
+    assert lines[4] == f"→ 손절을 {TA.px(roe_price(-1, 2400.0, 50, 0.20, rt))}로 내림 (+20% 확보)"
     assert lines[5] == "손절가 2,420.0 (+0.83%)" and lines[6] == "증거금 $2,500 (50%)"
 
 

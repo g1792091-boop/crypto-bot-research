@@ -110,14 +110,14 @@ def short_ko(w: dict) -> str:
 
 
 def first_reason_ko(downgrades: Any, leverage: Any) -> str:
-    """The Telegram form: only the first (highest) rejected candidate, '50배 불가: 손절 손실 > 자금 15% → 30배';
-    '' when nothing was rejected or not known."""
+    """The Telegram form: every rejected higher candidate, highest first, '50배 불가: 거래소 구간 한도 · 40배 불가:
+    손절 손실 > 자금 15% → 30배' (name kept from the first-reason version); '' when nothing was rejected or not known."""
     try:
         lev = int(leverage)
     except (TypeError, ValueError):
         return ""
     rej = [r for r in parse_downgrades(downgrades) if r["lev"] > lev] if downgrades is not None else []
-    return f"{rej[0]['lev']}배 불가: {rej[0]['ko']} → {lev}배" if rej else ""
+    return " · ".join(f"{r['lev']}배 불가: {r['ko']}" for r in rej) + f" → {lev}배" if rej else ""
 
 
 def signal_of_trade(d: dict) -> dict:

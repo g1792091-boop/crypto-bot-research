@@ -223,7 +223,7 @@ def test_explain_short_line_and_mix():
     assert LW.explain("normal", 30, [])["short_ko"] == "첫 후보 30배 그대로"
     assert "기록 못 찾음" in LW.explain("best", 30, None)["short_ko"]
     assert LW.first_reason_ko(["best/50x: bracket allows 25x", "best/40x: bracket allows 25x"], 30) == \
-        "50배 불가: 거래소 구간 한도 → 30배"
+        "50배 불가: 거래소 구간 한도 · 40배 불가: 거래소 구간 한도 → 30배"
     assert LW.first_reason_ko([], 50) == "" and LW.first_reason_ko(None, 30) == ""
     m = LW.mix([w, LW.explain("best", 50, []), LW.explain("best", 20, None)])
     assert m["by_leverage"] == {"50": 1, "30": 1, "20": 1}
@@ -295,7 +295,7 @@ def test_restart_line_for_meta():
     c.execute("CREATE TABLE cursors (k TEXT PRIMARY KEY, v TEXT)")
     assert P3.run_restarted(c) is None
     c.execute("INSERT INTO cursors VALUES (?, ?)", ("run:restarted", json.dumps(
-        {"day_kst": "2026-10-04", "text_ko": "실험을 2026-10-04에 처음부터 다시 시작함 (5분봉 제외, 1분봉 5초 뒤 읽기)"})))
+        {"day_kst": "2026-10-04", "text_ko": "실험을 2026-10-04에 처음부터 다시 시작함 (5분봉 제외, 좋은 자리 50·40배·보통 30·20배(비중=배수%), 1분봉 5초 뒤 읽기)"})))
     line = P3.run_restarted(c)
     assert line.startswith("실험을 2026-10-04에 처음부터 다시 시작함") and "이전 실행" in line and "\n" not in line
     from paperbot import resetrun

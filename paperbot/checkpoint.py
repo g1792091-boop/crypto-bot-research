@@ -1042,9 +1042,9 @@ def plan(snap: dict, prior: dict, prev_snaps: dict, s: Settings) -> tuple[dict, 
         if not old_enough or st1["trades"] < MIN_TRADES:
             why = ("30일 미만 (복사 계좌는 자기 시작부터 셈)" if lo == a["created_ts"] else
                    "30일 미만 (바뀐 신호 코드를 받아들인 날부터 다시 셈, Q5)") if not old_enough \
-                else f"거래 {st1['trades']}건 < 30건"
+                else f"거래 {st1['trades']}건 < {MIN_TRADES}건"
             if old_enough and cp - floor_day(lo) >= NO_VERDICT_DAYS * DAY_MS:
-                why += f" · {NO_VERDICT_DAYS}일까지 30건 미달: 판정 불가"
+                why += f" · {NO_VERDICT_DAYS}일까지 {MIN_TRADES}건 미달: 판정 불가"
             rows[aid] = {**r, "status": HOLD, "reason": why}
             continue
         r.update(stage="1차", rate=signal_rate(st1["signals"], tf, lo, cp, skipped=st1.get("skipped_bars", 0)))
@@ -1138,7 +1138,7 @@ def decide(snap: dict, rows: dict, tasks: list[Task], pvals: dict, alpha: float 
         else:
             fails = []
             if r["trades"] < MIN_TRADES:
-                fails.append(f"2차 기간 거래 {r['trades']}건 < 30건")
+                fails.append(f"2차 기간 거래 {r['trades']}건 < {MIN_TRADES}건")
             if r["pnl"] <= 0:
                 fails.append(f"2차 기간 손익 ${r['pnl']:,.0f}")
             if not ri:

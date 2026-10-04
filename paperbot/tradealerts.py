@@ -203,7 +203,7 @@ def entry_block(aid: str, p: dict, names: dict) -> list[str]:
             f"{_side(p['side'])} · {coin(p['symbol'])} {p['leverage']}배{best}", *why,
             f"진입가 {px(p['entry'])}",
             f"익절 잠금 시작 {px(p_trig)} (+{trig * 100:.0f}%)",
-            f"→ 손절을 {px(p_lock)}로 올림 (+{first * 100:.0f}% 확보)",
+            f"→ 손절을 {px(p_lock)}로 {'올림' if p['side'] > 0 else '내림'} (+{first * 100:.0f}% 확보)",
             f"손절가 {px(p['stop'])} ({dist:+.2f}%)",
             f"증거금 ${p['margin']:,.0f}{share}"]
 
