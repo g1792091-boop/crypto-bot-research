@@ -18,10 +18,9 @@ export async function openNeural(ctx = {}) {
   const tick = async () => {
     try { ST = await N.step(); } catch (e) {}      // 자체 신호(뉴런) — 무료·빠름, 항상 돈다
     render();
-    N.modelStep().then(render).catch(() => {});      // 연결 AI 모델이 코인 직접 판단(회전) — 비용 분산
-    N.modelStep().catch(() => {});                   // 틱당 2명 (더 빨리 거래 쌓이게)
-    if (++k % 16 === 0) N.reflect().catch(() => {});  // 복기 → 교훈 학습
-    if (k % 24 === 12) N.designStrategy().then(render).catch(() => {});  // ~2.4분마다 모델이 지표 조합→매매법 설계→백테스트→사무실 인계
+    N.modelStep().then(render).catch(() => {});      // 연결 AI 모델이 코인 직접 판단(회전·fallback) — 한도 쿨다운 방지 위해 틱당 1명
+    if (++k % 14 === 0) N.reflect().catch(() => {});  // 복기 → 교훈 학습(집단 뇌)
+    if (k % 26 === 13) N.designStrategy().then(render).catch(() => {});  // 모델이 지표 조합→매매법 설계→백테스트→사무실 인계
   };
   tick(); loop = setInterval(tick, 6000);
   raf = requestAnimationFrame(draw);

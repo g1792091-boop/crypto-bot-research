@@ -6,7 +6,7 @@ import { brainStream, settings, PROVIDERS, modelKind } from "../nuri-ai/engine.j
 import * as BRAIN from "./brain.js";
 
 // 연결된(키가 있는) 회사의 무료 AI 모델 목록 — 각 모델이 트레이더가 된다. 비용상 최대 maxN
-export function connectedModels(maxN = 8) {
+export function connectedModels(maxN = 16) {
   const out = [];
   for (const id of Object.keys(PROVIDERS || {})) {
     if (!settings?.keys?.[id]) continue;
@@ -158,23 +158,25 @@ export async function modelStep() {
   load(); const cm = connectedModels(); if (!cm.length) return;
   const tgt = cm[mRot % cm.length], [ko, sym] = COINS[((mRot++ / cm.length) | 0) % COINS.length];
   const feat = S.feat[sym], price = S.dec[sym]?.price; if (!feat || !price) return;
-  const M = model(tgt.model); M.prov = tgt.id; M.calls = (M.calls || 0) + 1;
+  const tM = model(tgt.model);
   const regime = BRAIN.regimeOf(feat), mem = BRAIN.recallText(ko, regime, 3);
-  const les = M.lessons.length ? `\n내가 복기로 배운 교훈(꼭 지켜라): ${M.lessons.join(" / ")}` : "";
+  const les = tM.lessons.length ? `\n내가 복기로 배운 교훈(꼭 지켜라): ${tM.lessons.join(" / ")}` : "";
   const brainLine = mem ? `\n자체 뇌의 집단 기억(${regime} 국면): ${mem}` : "";
-  let raw = "";
+  let raw = "", route;
   try {
-    await brainStream({ messages: [
+    // fallback:true → 핀한 모델이 한도/쿨다운/오류면 '응답하는 다른 모델'로 넘어가 반드시 한 번은 거래가 일어난다. 결과는 '실제 응답한 모델'에 귀속.
+    route = await brainStream({ messages: [
       { role: "system", content: `너는 ${ko} 코인 선물 데모 트레이더다. 아래 신호로 지금 롱/숏/관망을 정한다. 반드시 JSON 한 줄만 출력: {"dir":1,"conf":70} — dir 1=롱 -1=숏 0=관망, conf 0~100. 설명·다른 말 금지.${brainLine}${les}` },
       { role: "user", content: `${ko} 신호(−1 약세 ~ +1 강세): ${Object.entries(feat).map(([k, v]) => k + " " + (+v).toFixed(2)).join(", ")} · 현재가 ${price}\nJSON 만:` }],
-      target: tgt, fallback: false, maxTokens: 180, temperature: 0.3, noThink: true, onContent: d => raw += d, onThink: () => {} });
-  } catch (e) { feed(`[${shortMd(tgt.model)}] ${ko} 응답 실패 — 다음 차례 재시도`); save(); return; }
+      role: "fast", target: tgt, fallback: true, maxTokens: 180, temperature: 0.3, noThink: true, onContent: d => raw += d, onThink: () => {} });
+  } catch (e) { feed(`[${shortMd(tgt.model)}] 응답 실패(AI 한도/연결 확인) — 다음 차례`); save(); return; }
+  const name = route?.model || tgt.model, M = model(name); M.prov = route?.id || tgt.id; M.calls = (M.calls || 0) + 1;
   const { dir, conf } = parseDecision(raw);
-  if (dir === null) { feed(`[${shortMd(tgt.model)}] ${ko} 판단 형식 못 읽음`); save(); return; }
+  if (dir === null) { feed(`[${shortMd(name)}] ${ko} 판단 형식 못 읽음`); save(); return; }
   const p = M.pos[sym];
-  if (p && dir !== 0 && dir !== p.side) closeModelPos(tgt.model, sym, price, "반대신호");
-  if (!M.pos[sym] && dir !== 0) { M.pos[sym] = { ko, side: dir, entry: price, price, size: START * 0.2, roe: 0, t: Date.now(), feat: { ...feat } }; feed(`[${shortMd(tgt.model)}] ${ko} ${dir > 0 ? "▲롱" : "▼숏"} 진입 @ ${fmt(price)} (${conf}%)`); }
-  else if (dir === 0 && !p) feed(`[${shortMd(tgt.model)}] ${ko} 관망`);
+  if (p && dir !== 0 && dir !== p.side) closeModelPos(name, sym, price, "반대신호");
+  if (!M.pos[sym] && dir !== 0) { M.pos[sym] = { ko, side: dir, entry: price, price, size: START * 0.2, roe: 0, t: Date.now(), feat: { ...feat } }; feed(`[${shortMd(name)}] ${ko} ${dir > 0 ? "▲롱" : "▼숏"} 진입 @ ${fmt(price)} (${conf}%)`); }
+  else if (dir === 0 && !p) feed(`[${shortMd(name)}] ${ko} 관망`);
   save();
 }
 // 복기: 손실 많은 모델이 자기 손실 거래를 되돌아보고 교훈 한 줄을 스스로 뽑아 기억 → 다음 판단에 주입(성능 향상)
@@ -187,7 +189,7 @@ export async function reflect() {
     await brainStream({ messages: [
       { role: "system", content: "너는 코인 트레이더다. 아래 네 최근 손실 거래를 복기해, 다음에 안 틀리게 할 교훈을 한국어 한 문장(35자 이내)으로만 써라. 교훈 문장만." },
       { role: "user", content: M.losers.map(l => `${l.ko} ${l.side > 0 ? "롱" : "숏"} ${l.roe}% · 신호 ${Object.entries(l.feat || {}).slice(0, 3).map(([k, v]) => k + (+v).toFixed(1)).join(",")}`).join("\n") }],
-      role: "fast", target: tgt, fallback: false, maxTokens: 60, temperature: 0.5, noThink: true, onContent: d => raw += d });
+      role: "fast", target: tgt, fallback: true, maxTokens: 70, temperature: 0.5, noThink: true, onContent: d => raw += d, onThink: () => {} });
   } catch (e) { return; }
   const lesson = raw.replace(/["\n]/g, " ").replace(/^교훈[:\s]*/,"").trim().slice(0, 40);
   if (lesson.length > 4) {
@@ -210,7 +212,7 @@ export async function designStrategy() {
     await brainStream({ messages: [
       { role: "system", content: `너는 코인 선물 퀀트다. 아래 보조지표들을 조합해 BTCUSDT 1시간봉 매매법 하나를 설계한다. 반드시 custom 수식 지표를 1개 이상 포함(예: {"id":"vm","type":"custom","expr":"rsi*0.5+close/sma-1"}). 아래 JSON 스키마로만 출력(설명·코드블록 금지):\n{"name":"이름","indicators":[{"id":"r","type":"tv_rsi","length":14},{"id":"vm","type":"custom","expr":"수식"}],"long_entry":{"conditions":[{"left":"r","op":"<","right":35}]},"long_exit":{"conditions":[{"left":"r","op":">","right":65}]},"risk":{"leverage":2,"stop_loss_pct":4,"take_profit_pct":8}}\n쓸 수 있는 지표: ${catalog}.${M.lessons.length ? " 내 교훈: " + M.lessons.join(" / ") : ""}${BRAIN.recallText("BTC", "", 4) ? " 자체 뇌 패턴: " + BRAIN.recallText("BTC", "", 4) : ""}` },
       { role: "user", content: "매매법 JSON 하나만 출력:" }],
-      target: tgt, fallback: false, maxTokens: 700, temperature: 0.6, noThink: true, onContent: d => raw += d, onThink: () => {} });
+      role: "code", target: tgt, fallback: true, maxTokens: 700, temperature: 0.6, noThink: true, onContent: d => raw += d, onThink: () => {} });
   } catch (e) { feed(`[${shortMd(tgt.model)}] 매매법 설계 응답 실패`); return; }
   let spec; try { spec = JSON.parse((raw.match(/\{[\s\S]*\}/) || [])[0]); } catch (e) { feed(`[${shortMd(tgt.model)}] 매매법 JSON 형식 오류`); return; }
   if (!spec || !spec.indicators) return;
