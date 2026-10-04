@@ -1,0 +1,735 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0f1320">
+<meta name="referrer" content="no-referrer">
+<title>GH COIN 요약</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230f1320'/%3E%3Cpath d='M12 44 L26 30 L36 38 L52 18' stroke='%2322c55e' stroke-width='6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#0f1320; --bg2:#121829; --card:#171e31; --card2:#1c2540; --line:#253051; --line2:#2e3a60;
+  --text:#e8ebf4; --mut:#8e97ae; --dim:#646d86; --up:#22c55e; --up2:#16a34a; --dn:#ef4444; --warn:#f59e0b; --info:#4f8cff; --vio:#a78bfa;
+  --mono:ui-monospace,"SF Mono","JetBrains Mono","Cascadia Mono",Menlo,Consolas,"Noto Sans Mono","Liberation Mono",monospace;
+  --sans:system-ui,-apple-system,"Segoe UI","Apple SD Gothic Neo","Noto Sans KR","Noto Sans CJK KR","Malgun Gothic",sans-serif;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 var(--sans);-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;overflow-x:hidden}
+a{color:#8fb4ff;text-decoration:none} a:hover{text-decoration:underline}
+button{font:inherit;color:inherit}
+.top{position:sticky;top:0;z-index:10;background:rgba(15,19,32,.94);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.topin{max-width:1480px;margin:0 auto;display:flex;align-items:center;gap:18px;padding:10px 20px;flex-wrap:wrap}
+.brand{display:flex;align-items:baseline;gap:10px;white-space:nowrap}
+.brand b{font-size:19px;font-weight:800;letter-spacing:.08em}
+.brand b i{font-style:normal;color:var(--up)}
+.brand span{color:var(--dim);font-size:12px}
+.tabs{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;flex:1 1 auto;min-width:0}
+.tabs::-webkit-scrollbar{display:none}
+.tab{background:none;border:0;padding:7px 12px;border-radius:8px;color:var(--mut);cursor:pointer;white-space:nowrap;font-weight:600;font-size:13.5px;position:relative}
+.tab:hover{color:var(--text);background:var(--card)}
+.tab.on{color:var(--text);background:var(--card2)}
+.tab .bd{display:inline-block;min-width:16px;padding:0 5px;margin-left:5px;border-radius:9px;background:var(--dn);color:#fff;font-size:11px;line-height:16px;text-align:center}
+.pills{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600;border:1px solid var(--line);background:var(--card);white-space:nowrap;color:var(--mut)}
+.pill.golive{color:#cfe0ff;border-color:rgba(79,140,255,.55);background:rgba(79,140,255,.14);text-decoration:none}
+.pill.golive:hover{background:rgba(79,140,255,.25);text-decoration:none}
+.pill .dot{width:8px;height:8px;border-radius:50%;background:var(--dim)}
+.pill.ok{color:#bbf7d0;border-color:rgba(34,197,94,.45);background:rgba(34,197,94,.12)} .pill.ok .dot{background:var(--up);box-shadow:0 0 0 3px rgba(34,197,94,.22);animation:pulse 2s infinite}
+.pill.warn{color:#fde68a;border-color:rgba(245,158,11,.45);background:rgba(245,158,11,.12)} .pill.warn .dot{background:var(--warn)}
+.pill.bad{color:#fecaca;border-color:rgba(239,68,68,.5);background:rgba(239,68,68,.14)} .pill.bad .dot{background:var(--dn)}
+@keyframes pulse{50%{box-shadow:0 0 0 6px rgba(34,197,94,0)}}
+.wrap{max-width:1480px;margin:0 auto;padding:14px 20px 40px}
+.banners{max-width:1480px;margin:0 auto;padding:0 20px}
+.banner{margin-top:12px;padding:10px 14px;border-radius:10px;border:1px solid;font-weight:600;font-size:13.5px;display:flex;gap:10px;align-items:flex-start}
+.banner small{display:block;font-weight:500;opacity:.85;margin-top:2px}
+.banner.bad{background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.5);color:#fecaca}
+.banner.warn{background:rgba(245,158,11,.1);border-color:rgba(245,158,11,.45);color:#fde68a}
+.banner.info{background:rgba(79,140,255,.1);border-color:rgba(79,140,255,.4);color:#c7d7fe}
+.banner.alert{animation:blink 1.4s ease-in-out infinite}
+@keyframes blink{50%{background:rgba(239,68,68,.26)}}
+.grid{display:grid;gap:12px}
+.kpis{grid-template-columns:repeat(auto-fill,minmax(178px,1fr))}
+.cols2{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.cols3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;min-width:0}
+.card .k{color:var(--mut);font-size:12px;font-weight:600;letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card .v{font-size:24px;font-weight:800;line-height:1.25;margin-top:4px;font-variant-numeric:tabular-nums;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card .v small{font-size:13px;font-weight:700;margin-left:4px}
+.card .s{color:var(--mut);font-size:12px;margin-top:3px;min-height:18px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.card.hl-up{border-color:rgba(34,197,94,.35)} .card.hl-dn{border-color:rgba(239,68,68,.4)} .card.hl-warn{border-color:rgba(245,158,11,.45)}
+.up{color:var(--up)} .dn{color:var(--dn)} .warn{color:var(--warn)} .mut{color:var(--mut)} .dim{color:var(--dim)} .info{color:#8fb4ff} .vio{color:var(--vio)}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:12px;min-width:0;margin-top:12px}
+.grid>.panel{margin-top:0}
+.ph{display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.ph h2{margin:0;font-size:14.5px;font-weight:700}
+.ph .r{margin-left:auto;color:var(--mut);font-size:12px}
+.pb{padding:12px 14px}
+.pb.np{padding:0}
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{border-collapse:collapse;width:100%;min-width:max-content;font-size:13px}
+th{color:var(--mut);font-weight:600;font-size:12px;text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap;background:var(--bg2);position:sticky;top:0}
+td{padding:7px 10px;border-bottom:1px solid rgba(37,48,81,.6);vertical-align:middle;white-space:nowrap}
+td .sub2{white-space:normal;display:block;min-width:170px;max-width:440px}
+tr:last-child td{border-bottom:0}
+tbody tr:hover td{background:rgba(79,140,255,.05)}
+.n{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap;font-size:12.5px}
+th.n{font-family:var(--sans)}
+.nw{white-space:nowrap}
+.tname{max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:1px 8px;border-radius:999px;font-size:11.5px;font-weight:700;border:1px solid var(--line2);background:var(--card2);color:var(--mut);white-space:nowrap;line-height:18px}
+.chip.up{color:#bbf7d0;background:rgba(34,197,94,.13);border-color:rgba(34,197,94,.4)}
+.chip.dn{color:#fecaca;background:rgba(239,68,68,.13);border-color:rgba(239,68,68,.45)}
+.chip.warn{color:#fde68a;background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.4)}
+.chip.info{color:#c7d7fe;background:rgba(79,140,255,.12);border-color:rgba(79,140,255,.4)}
+.chip.vio{color:#ddd6fe;background:rgba(167,139,250,.12);border-color:rgba(167,139,250,.4)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.empty{color:var(--dim);text-align:center;padding:22px 12px;font-size:13px}
+.empty b{display:block;color:var(--mut);font-size:14px;margin-bottom:2px}
+.dotc{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:1px;background:var(--dim)}
+.spark{display:block}
+.bar{height:6px;background:var(--bg2);border-radius:4px;overflow:hidden;min-width:60px}
+.bar i{display:block;height:100%;background:var(--info);border-radius:4px}
+.bar.up i{background:var(--up)} .bar.dn i{background:var(--dn)} .bar.warn i{background:var(--warn)}
+.kv{display:grid;grid-template-columns:max-content 1fr;gap:5px 14px;font-size:13px}
+.kv dt{color:var(--mut)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.feed{display:flex;flex-direction:column}
+.fe{padding:9px 14px;border-bottom:1px solid rgba(37,48,81,.6)}
+.fe:last-child{border-bottom:0}
+.fh{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:12px;color:var(--mut)}
+.fh b{color:var(--text);font-size:13px}
+.ft{margin-top:3px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:13.5px;line-height:1.55}
+.ft.clamp{display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer}
+.fe.sys .ft{color:var(--mut);font-style:italic}
+.fe.div{text-align:center;color:var(--dim);font-size:12px;padding:6px 14px}
+.fe.chat{background:rgba(167,139,250,.04)}
+.fe.live .ft{color:#fde68a}
+.fe table{margin-top:6px;font-size:12px} .fe td,.fe th{padding:4px 8px}
+.filt{display:flex;gap:6px;overflow-x:auto;padding:10px 14px;border-bottom:1px solid var(--line);scrollbar-width:thin}
+.filt button{background:var(--card2);border:1px solid var(--line2);border-radius:999px;padding:3px 11px;font-size:12px;color:var(--mut);cursor:pointer;white-space:nowrap}
+.filt button.on{background:rgba(79,140,255,.18);border-color:rgba(79,140,255,.55);color:#dbe6ff}
+.coins{grid-template-columns:repeat(auto-fill,minmax(320px,1fr))}
+.coin .hd{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.coin .hd b{font-size:15px}
+.coin .pr{margin-left:auto;font-family:var(--mono);font-size:15px;font-weight:700}
+.tfrow{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px}
+.tf{background:var(--bg2);border:1px solid var(--line);border-radius:8px;padding:5px 7px;text-align:center}
+.tf .l{font-size:11px;color:var(--mut)} .tf .x{font-family:var(--mono);font-weight:700;font-size:14px} .tf .w{font-size:11px}
+.plan{display:grid;grid-template-columns:repeat(3,1fr);gap:4px 10px;margin-top:10px;font-size:12.5px}
+.plan div span{color:var(--mut);margin-right:6px}
+.plan div b{font-family:var(--mono);font-weight:600}
+.why{margin-top:8px;color:var(--mut);font-size:12.5px;overflow-wrap:anywhere}
+.lvl{margin-top:6px;font-size:12px;color:var(--mut)}
+.lvl b{font-family:var(--mono);color:var(--text);font-weight:600}
+.big{font-size:20px;font-weight:800}
+.speaker{background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-top:10px}
+.speaker .ft{max-height:9.5em;overflow:hidden}
+.typing::after{content:"▍";animation:blink2 1s steps(1) infinite;color:var(--info)}
+@keyframes blink2{50%{opacity:0}}
+.stl{display:flex;flex-direction:column}
+.st{display:grid;grid-template-columns:minmax(120px,190px) minmax(90px,150px) 1fr;gap:10px;padding:7px 14px;border-bottom:1px solid rgba(37,48,81,.6);align-items:baseline;font-size:13px}
+.st:last-child{border-bottom:0}
+.st .who{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.st .who small{color:var(--dim);margin-left:4px}
+.st .z{color:var(--mut);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.st .act{min-width:0;overflow-wrap:anywhere}
+.st .act small{display:block;color:var(--dim);font-size:12px}
+.funnel{display:flex;align-items:stretch;gap:6px;flex-wrap:wrap}
+.fs{flex:1 1 90px;background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:8px 10px;min-width:86px}
+.fs .l{font-size:11.5px;color:var(--mut);white-space:nowrap} .fs .x{font-size:20px;font-weight:800;font-variant-numeric:tabular-nums}
+.gate{display:flex;flex-wrap:wrap;gap:5px;margin-top:4px}
+.mono{font-family:var(--mono)}
+.foot{max-width:1480px;margin:0 auto;padding:0 20px 28px;color:var(--dim);font-size:12px}
+.sub2{color:var(--mut);font-size:12px}
+.lnk{cursor:pointer;color:#8fb4ff;background:none;border:0;padding:0;font-size:12px}
+.mtop{margin-top:12px}
+@media (max-width:1100px){.cols3{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
+@media (max-width:980px){.cols2,.cols3{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:640px){
+  body{font-size:13.5px}
+  .topin{padding:8px 12px;gap:8px}
+  .brand{order:1} .golive{order:1} .pills{order:2} .tabs{order:3;flex-basis:100%;margin:0 -4px}
+  .brand span{display:none} .brand b{font-size:17px}
+  .pill{font-size:11px;padding:3px 8px;gap:5px}
+  .tab{padding:6px 10px;font-size:13px}
+  .wrap{padding:10px 12px 30px} .banners{padding:0 12px} .foot{padding:0 12px 24px}
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .card{padding:10px 11px} .card .v{font-size:19px} .card .v small{font-size:11.5px}
+  .coins{grid-template-columns:minmax(0,1fr)}
+  .st{grid-template-columns:minmax(0,1fr) auto;gap:2px 8px}
+  .st .act{grid-column:1/-1}
+  .plan{grid-template-columns:repeat(2,1fr)}
+  .ph{padding:10px 12px} .pb{padding:10px 12px} .fe{padding:8px 12px}
+  .tname{max-width:170px}
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="topin">
+    <div class="brand"><b>GH <i>COIN</i></b><span>요약 · 보기 전용</span></div>
+    <a class="pill golive" href="/" title="봇 화면을 그대로 보고 조작">🖥 실시간 화면</a>
+    <nav class="tabs" id="tabs" aria-label="화면"></nav>
+    <div class="pills">
+      <span class="pill" id="pBot"><i class="dot"></i><span>연결 중…</span></span>
+      <span class="pill" id="pAge"><span>갱신 —</span></span>
+      <span class="pill" id="pLive"><span>실거래 —</span></span>
+    </div>
+  </div>
+</header>
+<div class="banners" id="banners"></div>
+<main class="wrap" id="main"><div class="empty"><b>불러오는 중…</b>봇 상태를 가져오고 있습니다</div></main>
+<div class="foot" id="foot">GH Coin 요약 · 보기 전용 (주문·설정·승인은 <a href="/">실시간 화면</a>에서) · 숫자는 앱이 저장한 값을 그대로 보여 줍니다</div>
+<script>
+"use strict";
+(() => {
+/* ================= 기본 ================= */
+const TABS = [["sum", "요약"], ["pos", "포지션"], ["sig", "타점판"], ["str", "전략"], ["office", "사무실"], ["live", "실거래"], ["server", "서버 상태"]];
+const NEEDS = {
+  sum: ["summary", "positions", "strategies", "feed", "office", "live", "combo", "predict", "sentiment"],
+  pos: ["positions", "trades", "live", "summary"],
+  sig: ["signals", "combo"],
+  str: ["strategies", "retired", "pipeline", "summary"],
+  office: ["office", "staff", "feed", "ic", "report", "growth", "predict"],
+  live: ["live", "audit", "strategies"],
+  server: ["server", "errors", "models", "uptimeMs", "tookMs", "redactions", "page"]
+};
+const JOB_KO = {plan: "리서치 플래너", sent: "시장 심리(자체 감정 엔진)", pos: "단타·스윙 포지션 추천", contest: "전략 콘테스트", ensemble: "앙상블 포트폴리오", reality: "정직한 현실 점검", preset: "매매법 프리셋 비교", track: "예측 적중률·캘리브레이션", report: "성과 대시보드", bot: "자동매매봇 전략 만들기", botopt: "자동매매봇 자동 개선", selfai: "자체 AI 데스크", ic: "투자위원회", qrisk: "퀀트 리스크", data: "거래소 비교·데이터 품질", opt: "하이퍼옵트로 전략 다듬기", patscan: "패턴 스캐너", drift: "데모 성과 이동 감지", feeds: "경제 캘린더·금리·변동성 지수", alpha: "알파 팩터 순위", combo: "실시간 종합 지표 타점", dev: "매매법 개발 → 백테스트", cdev: "커스텀 지표 개발 → 백테스트", ind: "보조지표 분석", trend: "다중 시간대 추세 분석", entry: "진입 타점 분석", sr: "지지·저항 분석", tpsl: "익절·손절 관리", news: "뉴스·기사 분석", macro: "경제지표 예측", situ: "코인 상황판", pattern: "차트·캔들 패턴 분석", coin: "코인팀 회의", ml: "머신러닝·딥러닝 실험", promote: "데모 → 실거래 관문 심사", live: "실거래 데스크 점검", paper: "데모거래 보고", forecast: "방향 예측 토론", sns: "SNS 여론 확인", chat: "동료 수다", computer: "컴퓨터 작업", retro: "팀 회고", task: "개선 과제 수행", selfdev: "앱 오류 찾아 고치기", economy: "경제 리서치"};
+const TF_KO = {"1": "1분", "5": "5분", "15": "15분", "60": "1시간", "240": "4시간", "D": "일봉"};
+const CB_ST = {long: ["🟢 롱 타점", "up"], short: ["🔴 숏 타점", "dn"], longWait: ["🟡 롱 대기", "warn"], shortWait: ["🟠 숏 대기", "warn"], wait: ["⚪ 관망", ""]};
+const AUDIT_KO = {decision: "판단", order: "주문", response: "응답", block: "차단", approval: "승인", config: "설정", error: "오류", warn: "경고", info: "정보", halt: "자동 정지", kill: "긴급 정지"};
+const STATUS_KO = {sent: "보냄", approved: "승인됨", rejected: "거절됨", timeout: "시간 초과", no_approver: "승인 창 없음", auto: "자동", FILLED: "체결", sl: "손절", tp: "익절", cancelled: "취소", done: "완료", partial: "일부"};
+const REASON_TONE = {"익절": "up", "손절": "dn", "강제청산": "dn", "추적 손절": "warn"};
+
+let S = {};                       // 서버에서 받은 상태
+let tab = (location.hash || "").slice(1);
+if (!TABS.some(t => t[0] === tab)) tab = "sum";
+let offset = 0, lastMsg = 0, serverDown = false, room = "all", dirty = new Set(["*"]), rendered = "", raf = 0;
+
+/* ================= 안전한 DOM 도구 (데이터는 전부 textContent) ================= */
+function h(tag, props, ...kids){
+  const el = document.createElement(tag);
+  if (props) for (const k in props){
+    const v = props[k];
+    if (v == null || v === false) continue;
+    if (k === "class") el.className = v;
+    else if (k === "style") el.style.cssText = v;
+    else if (k === "on") for (const ev in v) el.addEventListener(ev, v[ev]);
+    else if (k === "href"){ if (/^https?:\/\//i.test(String(v))){ el.setAttribute("href", String(v)); el.setAttribute("target", "_blank"); el.setAttribute("rel", "noopener noreferrer"); } }
+    else el.setAttribute(k, String(v));
+  }
+  add(el, kids);
+  return el;
+}
+function add(el, kids){ for (const c of kids){ if (c == null || c === false || c === "") continue; if (Array.isArray(c)) add(el, c); else el.append(c instanceof Node ? c : String(c)); } return el; }
+const SVGNS = "http://www.w3.org/2000/svg";
+const isN = v => typeof v === "number" && isFinite(v);
+const col = c => /^#[0-9a-f]{3,8}$/i.test(String(c || "")) ? c : "#646d86";
+
+/* ================= 숫자 · 시간 ================= */
+const nf = (v, d = 2, min) => isN(v) ? v.toLocaleString("ko-KR", {minimumFractionDigits: min ?? d, maximumFractionDigits: d}) : "—";
+const sg = (v, d = 2) => isN(v) ? (v > 0 ? "+" : v < 0 ? "-" : "") + nf(Math.abs(v), d) : "—";
+const pc = (v, d = 2) => isN(v) ? sg(v, d) + "%" : "—";
+const usd = (v, d = 2) => isN(v) ? sg(v, d) + " USDT" : "—";
+const usdV = (v, d = 2) => isN(v) ? [sg(v, d), h("small", null, "USDT")] : "—";   // 카드용 (단위는 작게)
+const px = v => { if (!isN(v)) return "—"; const a = Math.abs(v), d = a >= 1000 ? 1 : a >= 100 ? 2 : a >= 1 ? 4 : a >= 0.01 ? 5 : 8; return v.toLocaleString("ko-KR", {minimumFractionDigits: 0, maximumFractionDigits: d}); };
+const tn = v => !isN(v) || v === 0 ? "" : v > 0 ? "up" : "dn";
+const p2 = n => String(n).padStart(2, "0");
+const sNow = () => Date.now() + offset;
+function fT(ms, sec){
+  if (!isN(ms) || !ms) return "—";
+  const d = new Date(ms), n = new Date(sNow()), hm = p2(d.getHours()) + ":" + p2(d.getMinutes()) + (sec ? ":" + p2(d.getSeconds()) : "");
+  return d.toDateString() === n.toDateString() ? hm : (d.getMonth() + 1) + "/" + d.getDate() + " " + hm;
+}
+function agoS(ms){ if (!isN(ms) || !ms) return "—"; const s = Math.max(0, Math.round((sNow() - ms) / 1000)); return s < 60 ? s + "초 전" : s < 3600 ? Math.floor(s / 60) + "분 전" : s < 86400 ? Math.floor(s / 3600) + "시간 " + (Math.floor(s / 60) % 60) + "분 전" : Math.floor(s / 86400) + "일 전"; }
+function dur(ms){ if (!isN(ms)) return "—"; const s = Math.max(0, Math.round(ms / 1000)); if (s < 60) return s + "초"; if (s < 3600) return Math.floor(s / 60) + "분" + (s % 60 ? " " + (s % 60) + "초" : ""); if (s < 86400) return Math.floor(s / 3600) + "시간 " + Math.floor(s / 60) % 60 + "분"; return Math.floor(s / 86400) + "일 " + Math.floor(s / 3600) % 24 + "시간"; }
+const ago = ms => h("span", {"data-ago": ms}, agoS(ms));
+const untilAt = at => !isN(at) ? "—" : at <= 0 || at <= sNow() ? "곧" : h("span", {"data-until": at}, dur(at - sNow()));   // at = 그 시각(ms), 0 = 곧
+const sideKo = s => s === "short" || s === -1 ? "숏" : s === "long" || s === 1 ? "롱" : "—";
+const sideTone = s => s === "short" || s === -1 ? "dn" : s === "long" || s === 1 ? "up" : "";
+const tfKo = t => TF_KO[t] || (t ? t + "분" : "");
+const plain = s => String(s || "").replace(/\*\*(.+?)\*\*/g, "$1").replace(/__(.+?)__/g, "$1").replace(/`([^`]*)`/g, "$1").replace(/^#{1,6}\s+/gm, "").replace(/<\/?think>/g, "");
+
+/* ================= 화면 조각 ================= */
+const chip = (t, tone, title) => h("span", {class: "chip" + (tone ? " " + tone : ""), title}, t);
+const empty = (b, s) => h("div", {class: "empty"}, h("b", null, b), s || "");
+function card(k, v, s, tone, hl){ return h("div", {class: "card" + (hl ? " hl-" + hl : "")}, h("div", {class: "k"}, k), h("div", {class: "v" + (tone ? " " + tone : "")}, v), h("div", {class: "s"}, s || "")); }
+function panel(title, right, body, opt = {}){
+  return h("section", {class: "panel" + (opt.cls ? " " + opt.cls : "")}, h("div", {class: "ph"}, h("h2", null, title), right ? h("div", {class: "r"}, right) : null), h("div", {class: "pb" + (opt.np ? " np" : "")}, body));
+}
+function table(key, cols, rows, emptyMsg){
+  if (!rows || !rows.length) return emptyMsg || empty("자료 없음");
+  return h("div", {class: "tw", "data-k": key}, h("table", null,
+    h("thead", null, h("tr", null, cols.map(c => h("th", {class: c.n ? "n" : ""}, c.t)))),
+    h("tbody", null, rows.map(r => h("tr", null, r.map((c, i) => {
+      const cd = cols[i] || {};
+      if (c && typeof c === "object" && !(c instanceof Node) && !Array.isArray(c)) return h("td", {class: [cd.n ? "n" : "", c.cls || "", cd.cls || ""].join(" ").trim(), title: c.title}, c.v);
+      return h("td", {class: [cd.n ? "n" : "", cd.cls || ""].join(" ").trim()}, c);
+    }))))));
+}
+function spark(pts, w = 120, ht = 30){
+  const svg = document.createElementNS(SVGNS, "svg");
+  svg.setAttribute("width", w); svg.setAttribute("height", ht); svg.setAttribute("viewBox", `0 0 ${w} ${ht}`); svg.setAttribute("class", "spark");
+  const v = (pts || []).map(p => Array.isArray(p) ? p[1] : null).filter(isN);
+  if (v.length < 2) return svg;
+  let lo = Math.min(...v, 10000), hi = Math.max(...v, 10000); if (hi - lo < 1e-9){ hi += 1; lo -= 1; }
+  const X = i => 1 + i / (v.length - 1) * (w - 2), Y = y => ht - 2 - (y - lo) / (hi - lo) * (ht - 4);
+  const base = document.createElementNS(SVGNS, "line");
+  base.setAttribute("x1", 0); base.setAttribute("x2", w); base.setAttribute("y1", Y(10000).toFixed(1)); base.setAttribute("y2", Y(10000).toFixed(1));
+  base.setAttribute("stroke", "#2e3a60"); base.setAttribute("stroke-dasharray", "2 3");
+  const path = document.createElementNS(SVGNS, "path"), last = v[v.length - 1];
+  path.setAttribute("d", v.map((y, i) => (i ? "L" : "M") + X(i).toFixed(1) + " " + Y(y).toFixed(1)).join(""));
+  path.setAttribute("fill", "none"); path.setAttribute("stroke", last >= 10000 ? "#22c55e" : "#ef4444"); path.setAttribute("stroke-width", "1.6"); path.setAttribute("stroke-linejoin", "round");
+  svg.append(base, path);
+  return svg;
+}
+const bar = (pct, tone) => h("div", {class: "bar" + (tone ? " " + tone : "")}, h("i", {style: `width:${Math.max(0, Math.min(100, +pct || 0)).toFixed(1)}%`}));
+const dotc = c => h("i", {class: "dotc", style: `background:${col(c)}`});
+const kv = pairs => h("dl", {class: "kv"}, pairs.filter(Boolean).map(([k, v]) => [h("dt", null, k), h("dd", null, v)]));
+const ext = (u, t) => u ? h("a", {href: u}, t || "링크") : "";
+
+/* ================= 공통 계산 ================= */
+function liveLabel(L){
+  if (!L) return ["실거래 —", ""];
+  if (L.halted) return ["⛔ 실거래 정지됨", "bad"];
+  if (!L.enabled) return ["⚪ 실거래 꺼짐", ""];
+  return L.env === "mainnet" ? ["🔴 메인넷 켜짐 · " + (L.mode === "auto" ? "자동" : "승인"), "bad"] : ["🟢 테스트넷 켜짐 · " + (L.mode === "auto" ? "자동" : "승인"), "warn"];
+}
+function scoreVerdict(s){ if (!isN(s)) return ["—", ""]; return s >= 0.35 ? ["강한 상승", "up"] : s >= 0.12 ? ["상승", "up"] : s <= -0.35 ? ["강한 하락", "dn"] : s <= -0.12 ? ["하락", "dn"] : ["횡보", ""]; }
+function callResult(c){
+  const r = isN(c.r) ? (c.r > 0 ? "+" : "") + c.r + "R" : "";
+  return c.result === "win" ? chip("✅ 익절1 " + r, "up") : c.result === "loss" ? chip("❌ 손절 " + r, "dn") : c.result === "expire" ? chip("⌛ 만료 " + r, "") : c.result === "flip" ? chip("🔄 반대 신호 " + r, "warn") : chip("⏳ 진행 중", "info");
+}
+function gradeTone(g){ return /^A|^B/.test(g || "") ? "up" : /^C/.test(g || "") ? "" : /^D/.test(g || "") ? "warn" : g ? "dn" : ""; }
+function jobText(o){ if (!o) return ""; return o.jobNow || (o.lastJob ? "▶ 최근 업무: " + (JOB_KO[o.lastJob] || o.lastJob) : ""); }
+
+/* ================= 상단 · 경고 띠 ================= */
+const DOWN = {crashed: "봇 페이지(탭)가 죽었습니다", stuck: "봇 페이지가 응답하지 않습니다", no_app: "봇 페이지가 열리지 않았습니다"};
+function freshness(){
+  const m = S.meta || {}, age = isN(m.lastOk) ? (sNow() - m.lastOk) / 1000 : null;
+  return {m, age, fresh: !serverDown && !!lastMsg && m.status === "ok" && !m.stale && age != null && age <= 20};
+}
+function renderHeader(){
+  const {m, age, fresh} = freshness(), L = S.live, srv = S.server || {};
+  const pb = document.getElementById("pBot"), pa = document.getElementById("pAge"), pl = document.getElementById("pLive");
+  let bt, bc;
+  if (serverDown){ bt = "대시보드 연결 끊김"; bc = "bad"; }
+  else if (!lastMsg || !m.status || m.status === "starting"){ bt = "연결 중…"; bc = ""; }
+  else if (DOWN[m.status]){ bt = "봇 멈춤"; bc = "bad"; }
+  else if (m.status === "booting"){ bt = "봇 창 켜지는 중"; bc = "warn"; }
+  else if (m.status === "no_chrome" || m.status === "no_page"){ bt = "봇 창 연결 끊김"; bc = "bad"; }
+  else if (m.status === "error"){ bt = "수집 오류"; bc = "warn"; }
+  else if (!fresh){ bt = "봇 응답 지연"; bc = "warn"; }          // 'slow' · 오래된 자료 · 알 수 없는 상태
+  else { bt = "봇 실시간"; bc = "ok"; }
+  pb.className = "pill " + bc; pb.lastChild.textContent = bt;
+  pa.className = "pill " + (age == null ? "" : age < 15 ? "ok" : age < 60 ? "warn" : "bad");
+  pa.lastChild.textContent = age == null ? "갱신 —" : (innerWidth > 640 ? "마지막 갱신 " : "") + agoS(m.lastOk);
+  const [lt, lc] = liveLabel(L);
+  pl.className = "pill " + lc; pl.lastChild.textContent = lt;
+
+  const B = [];
+  const old = m.lastOk ? ` 아래는 ${agoS(m.lastOk)} 받은 자료입니다.` : " 아직 받은 자료가 없습니다.";
+  if (serverDown) B.push(["bad", "대시보드 서버(:8080)에 연결할 수 없습니다", "Tailscale 이 켜져 있는지, 서버에서 ghcoin-dash 서비스가 돌고 있는지 확인하세요. 자동으로 다시 연결합니다."]);
+  else if (lastMsg){
+    if (DOWN[m.status]) B.push(["bad alert", "⛔ 봇이 지금 거래하지 않습니다", (m.message || DOWN[m.status]) + "." + old]);
+    else if (m.status === "booting") B.push(["warn", "봇 창(Chrome)이 막 켜졌습니다 — 30초쯤 뒤부터 실시간 자료가 들어옵니다.", old]);
+    else if (m.status === "no_chrome") B.push(["bad", "봇 창(Chrome)에 연결할 수 없습니다 — 다시 붙는 중", (isN(m.downS) && m.downS > 120 ? m.message + "." : "매일 05:15 재시작·충돌 직후라면 1분 안에 자동으로 다시 연결됩니다.") + old]);
+    else if (m.status === "no_page") B.push(["bad", "Chrome 은 켜져 있지만 GH Coin 페이지가 없습니다", (m.message || "") + old]);
+    else if (m.status === "slow") B.push(["warn", "봇이 무거운 작업 중이라 응답이 늦습니다", "백테스트·지표 계산이 끝나면 다시 실시간으로 바뀝니다. 2분 넘게 답이 없으면 '봇 멈춤'으로 바뀝니다." + old]);
+    else if (m.status === "error") B.push(["warn", "자료를 읽는 중 오류가 났습니다", (srv.lastError && srv.lastError.msg ? srv.lastError.msg + " ·" : "") + old]);
+    else if (!fresh) B.push(["warn", "자료가 잠시 갱신되지 않았습니다", "봇이 백테스트처럼 무거운 일을 하는 중이면 늦어질 수 있습니다." + old]);
+    if (m.pages > 1) B.push(["warn", `GH Coin 페이지가 ${m.pages}개 열려 있습니다`, "봇이 두 번 돌고 있을 수 있습니다. 서버에서  sudo systemctl restart ghcoin-chrome  을 실행하세요."]);
+  }
+  // 승인 대기는 최신 자료일 때만 (승인 창은 60초 뒤 저절로 취소되므로 오래된 자료로는 띄우지 않음)
+  const apprOk = fresh && age < 30, items = apprOk && L && L.pendingApprovals ? L.pendingApprovals.items || [] : [];
+  if (L){
+    for (const a of items){
+      const f = Object.fromEntries(a.fields || []);
+      B.push(["bad alert", `⏳ ${a.title || "실거래 주문 승인"} 대기 중${a.mainnet ? " · 메인넷(진짜 돈)" : " · 테스트넷"} — ${a.countdown || ""}`,
+        [f["전략"], f["종목"], f["방향"], f["주문 금액"], f["레버리지"]].filter(Boolean).join(" · ") + " — 승인·거절은 실시간 화면(이 주소 맨 앞 /)에서 하세요."]);
+    }
+    if (!apprOk && L.enabled && L.mode !== "auto") B.push(["warn", "승인 대기 여부 확인 불가", "봇 자료가 최신이 아니라 지금 승인을 기다리는 주문이 있는지 알 수 없습니다. 실거래 승인 모드이니 필요하면 실시간 화면에서 직접 확인하세요."]);
+    if (L.halted) B.push(["bad", "⛔ 실거래가 오늘 자동 정지됐습니다", (L.halted.why || "") + " · 새 진입 없음 (청산은 계속)"]);
+    else if (L.enabled && L.env === "mainnet") B.push(["info", "🔴 실거래(메인넷) 켜짐 · " + (L.mode === "auto" ? "자동 모드 — 승인 없이 주문합니다" : "승인 모드"), `주문당 ${nf(L.limits && L.limits.orderNotional, 0)} · 최대 ${nf(L.limits && L.limits.maxNotional, 0)} USDT · 하루 손실 한도 ${nf(L.limits && L.limits.dailyLoss, 0)} USDT`]);
+    if (L.state === "REDUCING" && !L.halted) B.push(["warn", "오늘 실현 손실이 한도에 닿았습니다", `오늘 ${usd(L.dayPnl && L.dayPnl.usdt)} · 한도 -${nf(L.limits && L.limits.dailyLoss, 0)} USDT`]);
+  }
+  const box = document.getElementById("banners");
+  const sig = JSON.stringify(B);
+  if (box.dataset.sig !== sig){ box.dataset.sig = sig; box.replaceChildren(...B.map(([c, t, s]) => h("div", {class: "banner " + c}, h("div", null, t, s ? h("small", null, s) : null)))); }
+  const pend = items.length;
+  document.querySelectorAll(".tab").forEach(b => { const bd = b.querySelector(".bd"); const want = b.dataset.t === "live" && pend ? String(pend) : ""; if (want){ if (!bd) b.append(h("span", {class: "bd"}, want)); else bd.textContent = want; } else if (bd) bd.remove(); });
+}
+
+/* ================= 요약 ================= */
+function rSum(){
+  const sm = S.summary || {}, D = sm.demo || {}, L = S.live || {}, O = S.office || {}, cb = (S.combo && S.combo.stats) || sm.combo || {}, pr = S.predict, se = S.sentiment, u = O.usage || {};
+  const dayU = L.dayPnl ? L.dayPnl.usdt : null, dl = L.limits ? L.limits.dailyLoss : null;
+  const k = h("div", {class: "grid kpis"},
+    card("데모 총 손익", D.nActive ? usdV(D.totalPnl) : "—", D.nActive ? `${pc(D.totalRetPct)} · 가상 1만 USDT × ${D.nActive}개` : "아직 데모 전략이 없습니다", tn(D.totalPnl), D.nActive ? (D.totalPnl >= 0 ? "up" : "dn") : ""),
+    card("운용 중인 전략", (D.nActive ?? "—") + "개", `은퇴 ${D.nRetired ?? 0} · 실거래 후보 ${D.cand ?? 0} · 실거래 ${D.live ?? 0}`),
+    card("보유 포지션 (데모)", (D.open ?? 0) + "개", D.open ? `롱 ${D.longs} · 숏 ${D.shorts} · 미실현 ${usd(D.unreal)}` : "모든 전략 대기 중", D.open ? tn(D.unreal) : ""),
+    card("전체 거래 · 승률", (D.trades ?? 0) + "건", isN(D.winRate) ? `승률 ${nf(D.winRate, 1)}%` : "청산된 거래 없음"),
+    card("실거래", L.halted ? "정지됨" : !L.enabled ? "꺼짐" : (L.env === "mainnet" ? "메인넷" : "테스트넷") + " · " + (L.mode === "auto" ? "자동" : "승인"), L.enabled ? `오늘 실현 ${usd(dayU)} / 한도 -${nf(dl, 0)}` : "연결된 전략 " + ((L.linked || []).length) + "개 · 주문 없음", L.halted ? "dn" : L.enabled && L.env === "mainnet" ? "dn" : L.enabled ? "warn" : "", L.halted || (L.enabled && L.env === "mainnet") ? "dn" : L.enabled ? "warn" : ""),
+    card("타점판 적중률", isN(cb.rate) ? cb.rate + "%" : "—", cb.n ? `채점 ${cb.done} · 진행 ${cb.open} · 누적 ${sg(cb.sumR)}R` : "아직 잡힌 타점 없음", isN(cb.sumR) ? tn(cb.sumR) : ""),
+    card("예측 적중률", pr && isN(pr.winRate) ? pr.winRate + "%" : "—", pr ? (pr.n ? `채점 ${pr.n}건 · 열린 예측 ${pr.open}` : `채점 전 · 열린 예측 ${pr.open || 0}`) : "불러오는 중"),
+    card("시장 심리", se ? [String(se.score), h("small", null, "/100")] : "—", se ? `${se.verdict} · 기사 ${se.n ?? "?"}건 · ${agoS(se.t)}` : "12시간 안에 계산된 값 없음", se ? (se.score >= 55 ? "up" : se.score <= 45 ? "dn" : "") : ""),
+    card("사무실", O.modeKo || "—", O.meeting ? `#${O.meeting.name} · ${O.meeting.done}/${O.meeting.total} 발언` : (jobText(O) || (O.cycling ? "업무 중" : "다음 업무 대기"))),
+    card("AI 사용 (오늘)", (u.calls ?? 0) + "번", `회의 ${u.meetings ?? 0} (자동 ${u.auto ?? 0}) · 수다 ${u.chats ?? 0} · 학습 +${u.trained ?? 0}`)
+  );
+  const pos = (S.positions || []).map(p => [h("span", {class: "tname"}, p.name), h("span", {class: "nw"}, p.market), chip(sideKo(p.side) + (p.lev ? " ×" + p.lev : ""), sideTone(p.side)), px(p.entry), px(p.mark), {v: usd(p.unreal), cls: tn(p.unreal)}, {v: pc(p.roe), cls: tn(p.roe)}]);
+  const tposN = table("sum-pos", [{t: "전략"}, {t: "코인"}, {t: "방향"}, {t: "진입가", n: 1}, {t: "현재가", n: 1}, {t: "미실현", n: 1}, {t: "ROE", n: 1}], pos, empty("보유 중인 데모 포지션이 없습니다", "전략이 신호를 기다리는 중입니다"));
+  const strat = (S.strategies || []).slice(0, 6).map((s, i) => [String(i + 1), h("span", {class: "tname"}, s.name), h("span", {class: "nw"}, s.market + " · " + tfKo(s.tf)), spark(s.curve, 96, 26), {v: pc(s.retPct), cls: tn(s.retPct)}, isN(s.winRate) ? nf(s.winRate, 0) + "%" : "—", s.grade ? chip(s.grade, gradeTone(s.grade)) : "—"]);
+  const tStr = table("sum-str", [{t: "#"}, {t: "전략"}, {t: "시장"}, {t: "곡선"}, {t: "수익률", n: 1}, {t: "승률", n: 1}, {t: "신뢰"}], strat, empty("아직 데모 전략이 없습니다", "매매법 개발팀이 전략을 만들어 백테스트를 통과하면 여기에 나옵니다"));
+  return [k,
+    h("div", {class: "grid cols2 mtop"},
+      panel("보유 포지션 (데모)", D.updated ? ["장부 갱신 ", ago(D.updated)] : "", tposN, {np: 1}),
+      panel("지금 사무실", O.meeting ? "회의 중" : "", officeNow(O, true))),
+    h("div", {class: "grid cols2 mtop"},
+      panel("전략 순위 (데모 수익순)", "가상 1만 USDT/전략", tStr, {np: 1}),
+      panel("최근 활동", "회의록 최근 10개", feedList((S.feed || []).filter(e => e.kind !== "work").slice(0, 10), true), {np: 1}))];
+}
+
+/* ================= 사무실 지금 ================= */
+function officeNow(O, short){
+  if (!O || !O.mode) return empty("사무실 상태를 아직 못 받았습니다");
+  const m = O.meeting, sp = O.speaker;
+  const head = h("div", {class: "chips"}, chip(O.modeKo, O.mode === "meeting" ? "up" : O.mode === "auto" ? "info" : ""),
+    isN(O.pausedUntil) && O.pausedUntil > sNow() ? chip(["⏸ AI 한도 때문에 쉬는 중 · ", untilAt(O.pausedUntil)], "warn") : null,
+    O.cycling ? chip("업무 중", "vio") : null, O.chatting ? chip("수다 중", "vio") : null, O.queued ? chip("대기 회의 " + O.queued, "warn") : null);
+  const job = jobText(O);
+  const out = [head, job ? h("div", {class: "mtop"}, h("b", null, job)) : null];
+  if (m){
+    out.push(h("div", {class: "mtop"}, h("div", null, h("b", null, "#" + m.name), h("span", {class: "mut"}, ` · ${m.place} · ${m.done}/${m.total} 발언 · ${m.trigger === "user" ? "내 질문" : m.trigger === "auto" ? "자동 회의" : "급변동"}`)),
+      m.topic && !short ? h("div", {class: "sub2"}, m.topic) : null,
+      h("div", {class: "chips", style: "margin-top:6px"}, (m.order || []).map(a => chip((a.done ? "✓ " : sp && sp.id === a.id ? "🗣 " : "") + a.name + (a.title ? " · " + a.title : ""), a.done ? "up" : sp && sp.id === a.id ? "info" : "")))));
+    if (sp) out.push(h("div", {class: "speaker"}, h("div", {class: "fh"}, dotc(sp.color), h("b", null, sp.name), sp.title, sp.tool ? chip("🔧 " + sp.tool + (sp.toolStatus === "running" ? " …" : ""), sp.toolStatus === "error" ? "dn" : "info") : null, sp.live ? chip("말하는 중", "up") : null),
+      h("div", {class: "ft" + (sp.live ? " typing" : "")}, plain(sp.text) || (sp.live ? "💭 생각 중…" : ""))));
+  }
+  out.push(h("div", {class: "mtop"}, kv([
+    O.cfg && O.cfg.cycle ? ["다음 업무", O.cycling ? "일하는 중" : untilAt(O.nextCycleAt)] : null,
+    O.cfg && O.cfg.auto ? ["다음 자동 회의", O.usage && O.cfg && O.usage.auto >= O.cfg.dailyMax ? `오늘 ${O.cfg.dailyMax}번 다 함` : untilAt(O.nextAutoAt)] : ["자동 회의", "꺼짐"],
+    O.nextAgenda ? ["다음 안건", O.nextAgenda.title === O.nextAgenda.roomName ? O.nextAgenda.title : `${O.nextAgenda.title} · ${O.nextAgenda.roomName}`] : null,
+    O.cfg && O.cfg.chat ? ["다음 수다", O.chatting ? "대화 중" : untilAt(O.nextChatAt)] : null,
+    short ? null : ["오늘 사용", `회의 ${O.usage.meetings} (자동 ${O.usage.auto}/${O.cfg.dailyMax}) · 수다 ${O.usage.chats}/${O.cfg.chatMax} · AI 호출 ${O.usage.calls}/${O.cfg.callMax} · 학습 +${O.usage.trained}`],
+    short ? null : ["설정", `업무 ${O.cfg.cycleMin}분 주기 · 자동 회의 ${O.cfg.every}분 · Claude ${O.cfg.claudeMode === "all" ? "전원" : O.cfg.claudeMode === "key" ? "핵심 자리" : "안 씀"} · 타점판 ${O.cfg.combo ? "켜짐" : "꺼짐"}`]
+  ])));
+  return out;
+}
+
+/* ================= 회의록 · 피드 ================= */
+function feedList(list, compact){
+  if (!list.length) return empty("아직 회의록이 없습니다", "직원들이 회의하거나 일하면 여기에 쌓입니다");
+  return h("div", {class: "feed"}, list.map(e => feedItem(e, compact)));
+}
+function feedItem(e, compact){
+  if (e.kind === "divider") return h("div", {class: "fe div"}, "— " + plain(e.text || e.head) + " — ", h("span", {class: "dim"}, fT(e.t)));
+  const meta = [h("span", {class: "mono"}, fT(e.t)), chip("#" + (e.kind === "work" ? "업무" : e.roomName || e.room), e.kind === "work" ? "" : "info")];
+  if (e.author) meta.push(h("span", null, e.color ? dotc(e.color) : null, h("b", null, e.author), e.authorTitle ? " · " + e.authorTitle : ""));
+  if (e.chat) meta.push(chip("수다", "vio"));
+  if (e.model && !compact) meta.push(h("span", {class: "dim"}, e.model));
+  if (e.tool) meta.push(chip("🔧 " + e.tool, "info"));
+  if (e.live) meta.push(chip("작성 중", "up"));
+  const body = [];
+  const tx = plain(e.text);
+  switch (e.kind){
+    case "bt": body.push(h("div", {class: "ft"}, chip(e.ok ? "✅ 검증 통과" : "❌ 불통과", e.ok ? "up" : "dn"), " ", h("b", null, e.head || ""), " ", h("span", {class: "mut"}, [e.market, tfKo(e.tf)].filter(Boolean).join(" · ")),
+      e.oos ? h("div", {class: "sub2 mono"}, `검증 30%: 수익 ${pc(e.oos.ret)} · 낙폭 ${nf(e.oos.dd, 1)}% · 승률 ${nf(e.oos.win, 0)}% · 손익비 ${nf(e.oos.pf, 2)} · ${e.oos.n ?? 0}거래`) : null)); break;
+    case "task": body.push(h("div", {class: "ft"}, chip("🌱 과제 " + ({todo: "등록", doing: "시작", done: "완료"}[e.status] || e.status || ""), e.status === "done" ? "up" : "info"), " ", e.head || tx)); break;
+    case "report": body.push(h("div", {class: "ft"}, h("b", null, "📢 " + (e.head || "시간별 성과 발표"))), tx ? h("div", {class: "ft clamp"}, tx) : null); break;
+    case "trade": body.push(h("div", {class: "ft mono"}, tx)); break;
+    case "user": body.push(h("div", {class: "ft"}, tx)); break;
+    default:
+      if (e.head) body.push(h("div", {class: "ft"}, h("b", null, (e.icon ? e.icon + " " : "") + e.head)));
+      if (tx) body.push(h("div", {class: "ft" + (compact || tx.length > 280 ? " clamp" : "")}, (e.icon && !e.head ? e.icon + " " : "") + tx));
+  }
+  if (e.table && !compact) body.push(h("div", {class: "tw"}, table(null, e.table.cols.map(c => ({t: c})), e.table.rows), e.table.more ? h("div", {class: "dim", style: "font-size:12px"}, `… ${e.table.more}줄 더`) : null));
+  if (e.note && !compact) body.push(h("div", {class: "sub2"}, e.note));
+  if (e.url) body.push(h("div", {class: "sub2"}, ext(e.url, e.src || "출처")));
+  const cls = "fe" + (e.kind === "system" ? " sys" : "") + (e.chat ? " chat" : "") + (e.kind === "live" ? " live" : "");
+  return h("div", {class: cls}, h("div", {class: "fh"}, meta), body);
+}
+
+/* ================= 포지션 ================= */
+function rPos(){
+  const P = S.positions || [], L = S.live || {}, T = S.trades || [], D = (S.summary || {}).demo || {};
+  const rows = P.map(p => [h("span", {class: "tname", title: p.name}, p.name), chip(sideKo(p.side) + (p.lev ? " ×" + p.lev : ""), sideTone(p.side)), {v: usd(p.unreal), cls: tn(p.unreal)}, {v: pc(p.roe), cls: tn(p.roe)},
+    px(p.entry), px(p.mark), {v: px(p.sl), cls: "dn"}, {v: px(p.tp), cls: "up"}, {v: px(p.liq), cls: "warn"}, p.market, tfKo(p.tf), nf(p.margin, 2), nf(p.notional, 2), h("span", {class: "nw"}, fT(p.t), " ", h("span", {class: "dim"}, "(", ago(p.t), ")"))]);
+  const lp = (L.positions || []).map(p => [h("span", {class: "tname"}, p.name || p.sid), p.ex === "upbit" ? "업비트" : "바이낸스 선물", chip(p.env === "mainnet" ? "메인넷" : "테스트넷", p.env === "mainnet" ? "dn" : "warn"), p.symbol, chip(sideKo(p.side), sideTone(p.side)),
+    nf(p.qty, 6, 0), px(p.entry), p.lev ? "×" + p.lev : "—", {v: px(p.sl), cls: "dn"}, {v: px(p.tp), cls: "up"}, px(p.paperMark), fT(p.t)]);
+  const tr = T.map(t => [fT(t.exitT), h("span", {class: "tname"}, t.name), chip(sideKo(t.side), sideTone(t.side)), {v: usd(t.pnl), cls: tn(t.pnl)}, {v: pc(t.roe), cls: tn(t.roe)}, chip(t.reason || "—", REASON_TONE[t.reason] || ""), px(t.entryP), px(t.exitP), t.market, h("span", {class: "dim nw"}, dur((t.exitT || 0) - (t.entryT || 0)))]);
+  return [
+    h("div", {class: "grid kpis"},
+      card("데모 포지션", P.length + "개", `롱 ${D.longs ?? 0} · 숏 ${D.shorts ?? 0}`),
+      card("미실현 손익 (데모)", usdV(D.unreal), "마지막 모의 단계의 현재가 기준", tn(D.unreal)),
+      card("실거래 포지션", (L.positions || []).length + "개", "앱이 연 포지션 기록 기준"),
+      card("최근 청산", T.length + "건", T[0] ? "마지막 " + agoS(T[0].exitT) : "아직 없음")),
+    panel("데모(모의투자) 포지션", D.updated ? ["가격은 모의 단계(약 3분)마다 갱신 · ", ago(D.updated)] : "", table("pos-demo", [{t: "전략"}, {t: "방향"}, {t: "미실현", n: 1}, {t: "ROE", n: 1}, {t: "진입가", n: 1}, {t: "현재가", n: 1}, {t: "손절", n: 1}, {t: "익절", n: 1}, {t: "청산가", n: 1}, {t: "코인"}, {t: "봉"}, {t: "증거금", n: 1}, {t: "명목", n: 1}, {t: "진입 시각"}], rows,
+      empty("보유 중인 데모 포지션이 없습니다", D.nActive ? `운용 중인 전략 ${D.nActive}개가 모두 신호를 기다리는 중` : "아직 데모 전략이 없습니다")), {np: 1}),
+    panel("실거래 포지션 (앱 기록)", "거래소에 묻지 않음 · 거래소에서 직접 연 포지션은 안 보임", table("pos-live", [{t: "전략"}, {t: "거래소"}, {t: "환경"}, {t: "종목"}, {t: "방향"}, {t: "수량", n: 1}, {t: "진입가", n: 1}, {t: "레버리지", n: 1}, {t: "손절", n: 1}, {t: "익절", n: 1}, {t: "데모 현재가", n: 1}, {t: "시각"}], lp,
+      empty("실거래 포지션 없음", L.enabled ? "연결된 전략의 신호를 기다리는 중" : "실거래가 꺼져 있습니다")), {np: 1}),
+    panel("최근 청산 (데모)", "최신 40건", table("pos-closed", [{t: "청산"}, {t: "전략"}, {t: "방향"}, {t: "손익", n: 1}, {t: "ROE", n: 1}, {t: "사유"}, {t: "진입가", n: 1}, {t: "청산가", n: 1}, {t: "코인"}, {t: "보유"}], tr, empty("아직 청산된 데모 거래가 없습니다")), {np: 1})
+  ];
+}
+
+/* ================= 타점판 ================= */
+function rSig(){
+  const C = S.signals || [], cb = S.combo || {}, st = cb.stats || {};
+  const head = h("div", {class: "grid kpis"},
+    card("마지막 계산", cb.t ? fT(cb.t, true) : "—", cb.running ? "지금 계산 중…" : cb.t ? ["앱이 60초마다 다시 계산 · ", ago(cb.t)] : "타점판이 아직 안 돌았습니다"),
+    card("롱 타점 / 숏 타점", `${C.filter(c => c.plan && c.plan.state === "long").length} / ${C.filter(c => c.plan && c.plan.state === "short").length}`, `대기 ${C.filter(c => c.plan && /Wait$/.test(c.plan.state || "")).length} · 관망 ${C.filter(c => c.plan && c.plan.state === "wait").length}`),
+    card("기록장 적중률", isN(st.rate) ? st.rate + "%" : "—", `채점 ${st.done ?? 0} · 적중 ${st.win ?? 0} · 진행 ${st.open ?? 0}`),
+    card("누적 손익비", isN(st.sumR) ? sg(st.sumR) + "R" : "—", "익절1=+1.5R 기준 채점", tn(st.sumR)));
+  const cards = C.length ? h("div", {class: "grid coins mtop"}, C.map(coinCard)) : panel("⚡ 실시간 종합 지표 타점판", "", empty("타점판 자료가 아직 없습니다", cb.err ? "오류: " + cb.err : "앱이 시세를 받으면 60초마다 6개 코인을 계산합니다 (이 서버에서 바이낸스 시세가 막히면 비어 있음)"));
+  const calls = (cb.calls || []).map(c => [fT(c.t), h("b", null, c.ko || c.coin), chip(sideKo(c.side), sideTone(c.side)), px(c.entry), {v: px(c.sl), cls: "dn"}, {v: px(c.tp1), cls: "up"}, px(c.tp2), isN(c.conf) ? c.conf + "%" : "—", callResult(c), h("span", {class: "sub2"}, c.why || "")]);
+  return [head, cb.err && C.length ? h("div", {class: "banner warn"}, "타점판 오류: " + cb.err) : null, cards,
+    panel("🎯 타점 기록장", `채점 ${st.done ?? 0}건 · 적중 ${st.win ?? 0}건 ${isN(st.rate) ? st.rate + "%" : ""} · 누적 ${sg(st.sumR)}R`, table("sig-calls", [{t: "시각"}, {t: "코인"}, {t: "방향"}, {t: "진입", n: 1}, {t: "손절", n: 1}, {t: "익절1", n: 1}, {t: "익절2", n: 1}, {t: "확신", n: 1}, {t: "결과"}, {t: "근거"}], calls, empty("아직 잡힌 타점이 없습니다")), {np: 1})];
+}
+function coinCard(c){
+  const p = c.plan || {}, [stT, stC] = CB_ST[p.state] || ["—", ""];
+  const tfs = ["240", "60", "15", "5"].map(k => { const v = (c.tf || {})[k]; const [w, wc] = scoreVerdict(v && v.score);
+    return h("div", {class: "tf"}, h("div", {class: "l"}, tfKo(k)), h("div", {class: "x " + wc}, v && isN(v.score) ? sg(Math.round(v.score * 100), 0) : "—"), h("div", {class: "w " + wc}, w)); });
+  const tv = Object.entries(c.tv || {}).map(([k, v]) => chip(`TV ${tfKo(k)} ${v.label || "—"}`, /매수/.test(v.label || "") ? "up" : /매도/.test(v.label || "") ? "dn" : ""));
+  const has = isN(p.entry);
+  return h("div", {class: "card coin"},
+    h("div", {class: "hd"}, h("b", null, c.ko), h("span", {class: "dim"}, c.sym), chip(stT, stC), p.regime ? chip(p.regime, "") : null, c.syncWarn ? chip("시간대 불일치", "warn") : null, h("span", {class: "pr"}, px(p.price))),
+    h("div", {class: "tfrow"}, tfs),
+    tv.length ? h("div", {class: "chips", style: "margin-top:8px"}, tv) : null,
+    has ? h("div", {class: "plan"},
+      h("div", null, h("span", null, "진입"), h("b", null, px(p.entry))), h("div", null, h("span", null, "손절"), h("b", {class: "dn"}, px(p.sl))), h("div", null, h("span", null, "손익비"), h("b", null, isN(p.rr) ? nf(p.rr, 2) : "—")),
+      h("div", null, h("span", null, "익절1"), h("b", {class: "up"}, px(p.tp1))), h("div", null, h("span", null, "익절2"), h("b", {class: "up"}, px(p.tp2))), h("div", null, h("span", null, "확신"), h("b", null, isN(p.conf) ? p.conf + "%" : "—")))
+      : h("div", {class: "lvl"}, "확신 ", h("b", null, isN(p.conf) ? p.conf + "%" : "—"), " · 큰 추세 ", h("b", {class: tn(p.big)}, isN(p.big) ? sg(Math.round(p.big * 100), 0) : "—"), " · 작은 추세 ", h("b", {class: tn(p.small)}, isN(p.small) ? sg(Math.round(p.small * 100), 0) : "—")),
+    p.sup ? h("div", {class: "lvl"}, "지지 ", h("b", {class: "up"}, px(p.sup.price)), " ", (p.sup.names || []).slice(0, 2).join(" · ")) : null,
+    p.res ? h("div", {class: "lvl"}, "저항 ", h("b", {class: "dn"}, px(p.res.price)), " ", (p.res.names || []).slice(0, 2).join(" · ")) : null,
+    p.why ? h("div", {class: "why"}, p.why) : null,
+    h("div", {class: "lvl"}, `보조지표 ${c.n ?? "?"}종 · `, ago(c.t)));
+}
+
+/* ================= 전략 ================= */
+function rStr(){
+  const A = S.strategies || [], R = S.retired || [], D = (S.summary || {}).demo || {}, PL = S.pipeline;
+  const rows = A.map((s, i) => {
+    const g = s.gate, nOk = g ? g.checks.filter(c => c.ok).length : 0;
+    return [String(i + 1), h("div", null, h("div", {class: "tname", title: s.name}, s.name), h("div", {class: "dim", style: "font-size:11.5px"}, [s.author, s.lane === "custom" ? "커스텀 지표" : "", s.created ? "시작 " + fT(s.created) : ""].filter(Boolean).join(" · "))),
+      h("span", {class: "nw"}, s.market), tfKo(s.tf), spark(s.curve, 110, 28), {v: pc(s.retPct), cls: tn(s.retPct)}, {v: usd(s.pnl), cls: tn(s.pnl)}, isN(s.winRate) ? nf(s.winRate, 1) + "%" : "—", String(s.trades ?? 0), isN(s.mdd) ? nf(s.mdd, 1) + "%" : "—",
+      s.grade ? chip(`${s.trust} ${s.grade}`, gradeTone(s.grade)) : "—",
+      g ? chip(g.eligible ? "✅ 통과" : `⏳ ${nOk}/${g.checks.length}`, g.eligible ? "up" : "", g.checks.filter(c => !c.ok).map(c => c.name).join(", ")) : "—",
+      h("span", {class: "chips"}, s.live ? chip("실거래", "dn") : s.cand ? chip("🎓 후보", "vio") : null, s.holding ? chip(sideKo(s.holding) + " 보유", sideTone(s.holding)) : chip("대기", "")), isN(s.days) ? s.days + "일" : "—"];
+  });
+  const gates = A.filter(s => s.gate).map(s => h("div", {style: "padding:8px 14px;border-bottom:1px solid rgba(37,48,81,.6)"}, h("div", null, h("b", null, s.name), " ", s.gate.eligible ? chip("✅ 실거래 후보 자격", "up") : chip("⏳ 미통과", "")),
+    h("div", {class: "gate"}, s.gate.checks.map(c => chip((c.ok ? "✓ " : "✗ ") + c.name + (c.text && !c.name.includes(c.text) ? " " + c.text : ""), c.ok ? "up" : "dn", "기준: " + c.need)))));
+  const lane = (title, x) => x ? h("div", null, h("div", {class: "sub2", style: "margin-bottom:6px;font-weight:700"}, title),
+    h("div", {class: "funnel"}, [["개발", x.dev], ["백테스트 통과", x.ok], ["불통과", x.fail], ["데모", x.demo], ["실거래 후보", x.cand], ["실거래", x.live], ["은퇴", x.retired]].map(([l, v]) => h("div", {class: "fs"}, h("div", {class: "l"}, l), h("div", {class: "x"}, String(v ?? 0))))),
+    x.recent && x.recent.length ? h("div", {style: "margin-top:8px"}, x.recent.map(r => h("div", {class: "sub2"}, chip(r.ok ? "✅" : "❌", r.ok ? "up" : "dn"), " ", r.name, ` · ${r.market} ${tfKo(r.tf)}`, isN(r.oos) ? ` · 검증 ${pc(r.oos, 1)}` : "", " · ", ago(r.t)))) : null) : null;
+  const ret = R.map(s => [h("span", {class: "tname"}, s.name), s.market, tfKo(s.tf), {v: pc(s.retPct), cls: tn(s.retPct)}, String(s.trades), h("span", {class: "sub2"}, s.why || "—"), fT(s.created)]);
+  return [
+    h("div", {class: "grid kpis"},
+      card("운용 중", A.length + "개", `최대 16개 · 은퇴 ${D.nRetired ?? 0}`),
+      card("총 가상손익", usdV(D.totalPnl), pc(D.totalRetPct), tn(D.totalPnl)),
+      card("최고 전략", D.best ? pc(D.best.retPct) : "—", D.best ? D.best.name : "", D.best ? tn(D.best.retPct) : ""),
+      card("최저 전략", D.worst ? pc(D.worst.retPct) : "—", D.worst ? D.worst.name : "", D.worst ? tn(D.worst.retPct) : "")),
+    panel("📊 전략별 성과 (데모 수익순)", "신뢰점수 = 성과 + 견고성 + 일반화 + 표본 (앱과 같은 공식)", table("str-main", [{t: "#"}, {t: "전략"}, {t: "시장"}, {t: "봉"}, {t: "평가 곡선"}, {t: "수익률", n: 1}, {t: "손익", n: 1}, {t: "승률", n: 1}, {t: "거래", n: 1}, {t: "최대낙폭", n: 1}, {t: "신뢰"}, {t: "관문"}, {t: "상태"}, {t: "운용", n: 1}], rows,
+      empty("아직 데모 전략이 없습니다", "매매법 개발 → 백테스트 통과 → 데모 투입 순서로 채워집니다")), {np: 1}),
+    h("div", {class: "grid cols2 mtop"},
+      panel("파이프라인", "개발 → 백테스트 → 데모 → 실거래 후보 → 실거래", PL ? [lane("📈 일반 라인", PL.std), h("div", {class: "mtop"}), lane("🧮 커스텀 지표 라인", PL.custom)] : empty("불러오는 중")),
+      panel("🔐 실거래 관문 진행", "14일 · 20거래 · 손익비 1.2 · 수익 + · 낙폭 25% 미만", gates.length ? h("div", null, gates) : empty("관문 정보 없음"), {np: 1})),
+    panel("은퇴한 전략", "최근 20개", table("str-ret", [{t: "전략"}, {t: "시장"}, {t: "봉"}, {t: "수익률", n: 1}, {t: "거래", n: 1}, {t: "이유"}, {t: "시작"}], ret, empty("은퇴한 전략이 없습니다")), {np: 1})
+  ];
+}
+
+/* ================= 사무실 ================= */
+function rOffice(){
+  const O = S.office || {}, ST = S.staff || {}, F = S.feed || [], IC = S.ic, RP = S.report, G = S.growth, PR = S.predict;
+  const rooms = new Map();
+  for (const e of F) if (e.kind !== "work" && e.kind !== "divider"){ const r = rooms.get(e.room) || {n: 0, name: e.roomName || e.room}; r.n++; rooms.set(e.room, r); }
+  const filt = h("div", {class: "filt", "data-k": "office-filt"},
+    [["all", "#전체"], ["work", "#업무"], ["chat", "#수다"], ...[...rooms.entries()].sort((a, b) => b[1].n - a[1].n).map(([id, v]) => [id, "#" + v.name])].map(([id, t]) =>
+      h("button", {class: room === id ? "on" : "", on: {click: () => { room = id; dirty.add("*"); schedule(); }}}, t)));
+  const fl = F.filter(e => room === "all" ? e.kind !== "work" : room === "work" ? e.kind === "work" : room === "chat" ? e.chat : e.room === room && e.kind !== "work");
+  const c = ST.counts || {};
+  const staff = (ST.active || []).map(a => h("div", {class: "st"},
+    h("div", {class: "who"}, dotc(a.color), h("b", null, a.name), h("small", null, a.title)),
+    h("div", {class: "z"}, a.talking ? "🗣 " : a.walking ? "🚶 " : "", a.zoneName || (a.atDesk ? "자기 자리" : "")),
+    h("div", {class: "act"}, a.bubble || (a.talking ? "말하는 중" : a.walking ? "이동 중" : ""), a.seen ? h("small", null, (a.seen.icon || "") + " " + a.seen.text + " · ", ago(a.seen.t), a.seen.url ? [" · ", ext(a.seen.url, a.seen.src || "출처")] : null) : null)));
+  const left = [
+    panel("지금 사무실", O.meeting ? O.ui && O.ui.title : "", officeNow(O, false)),
+    panel("직원 활동", `직원 ${ST.total ?? "?"}명 · 팀 ${ST.teams ?? "?"}개`, [
+      h("div", {class: "chips", style: "padding:10px 14px;border-bottom:1px solid var(--line)"}, chip(`움직이는 직원 ${c.active ?? 0}`, "info"), chip(`말하는 중 ${c.talking ?? 0}`, c.talking ? "up" : ""), chip(`이동 ${c.walking ?? 0}`), chip(`대회의실 ${c.meet ?? 0}`), chip(`라운지 ${c.lounge ?? 0}`), chip(`발표 무대 ${c.stage ?? 0}`),
+        ST.officeVisible === false ? chip("사무실 화면이 닫혀 있어 말풍선이 멈춰 있음", "warn") : null),
+      staff.length ? h("div", {class: "stl"}, staff) : empty("지금은 모두 자기 자리에서 조용히 있습니다")], {np: 1}),
+  ];
+  const right = [panel("회의록", `최근 ${F.length}개 중 ${fl.length}개`, [filt, feedList(fl, false)], {np: 1})];
+  const extra = [];
+  if (IC) extra.push(panel("🏛 투자위원회 결정", `${IC.n}건 · 채점 ${IC.resolved} · 적중 ${isN(IC.hitRate) ? IC.hitRate + "%" : "—"} · 평균 초과수익 ${pc(IC.avgAlpha)}`,
+    table("of-ic", [{t: "시각"}, {t: "코인"}, {t: "최종"}, {t: "리서치"}, {t: "진입", n: 1}, {t: "손절", n: 1}, {t: "결과"}, {t: "초과수익", n: 1}, {t: "근거"}],
+      (IC.recent || []).map(d => [fT(d.t), h("span", {class: "nw"}, d.ko), chip(d.rating || "—", /매수|확대/.test(d.rating || "") ? "up" : /매도|축소/.test(d.rating || "") ? "dn" : ""), d.rmRating || "—", px(d.entry), px(d.stop),
+        d.status === "resolved" ? chip(d.hit ? "✅ 적중" : "❌ 빗나감", d.hit ? "up" : "dn") : chip(d.status === "pending" ? "⏳ 채점 대기" : d.status || "—", "info"), {v: pc(d.alpha), cls: tn(d.alpha)}, h("span", {class: "sub2"}, plain(d.why))]), empty("아직 투자위원회 결정이 없습니다")), {np: 1}));
+  if (PR) extra.push(panel("🎯 예측 적중률 · 캘리브레이션", `채점 ${PR.n}건 · 열린 예측 ${PR.open}`, PR.n ? [
+    table("of-pr", [{t: "확신도 구간"}, {t: "예측 수", n: 1}, {t: "평균 확신", n: 1}, {t: "실제 적중", n: 1}, {t: ""}], PR.bands.filter(b => b.n).map(b => [b.band, String(b.n), isN(b.avgConf) ? b.avgConf + "%" : "—", isN(b.rate) ? b.rate + "%" : "—", bar(b.rate, (b.rate ?? 0) >= (b.avgConf ?? 0) ? "up" : "warn")])),
+    PR.bySource.length ? h("div", {class: "chips", style: "padding:10px 14px"}, PR.bySource.map(s => chip(`${s.source} ${s.winRate}% (${s.n})`, s.winRate >= 50 ? "up" : "dn"))) : null] : empty("아직 채점된 예측이 없습니다", `열린 예측 ${PR.open}개 — 기한이 지나면 앱이 자동으로 채점합니다`), {np: 1}));
+  if (RP) extra.push(panel("📢 최근 성과 발표", RP.latest ? [fT(RP.latest.t), " · 모두 ", RP.count, "회"] : "", RP.latest ? [
+    h("div", {class: "pb"}, h("b", null, RP.latest.title || ""), h("div", {class: "ft clamp", style: "margin-top:6px"}, plain(RP.latest.text))),
+    (RP.latest.sections || []).length ? h("div", {class: "pb", style: "border-top:1px solid var(--line)"}, RP.latest.sections.map(s => h("div", {style: "margin-bottom:8px"}, h("b", null, s.name), s.lead ? h("span", {class: "dim"}, " · 팀장 " + s.lead) : null,
+      (s.items || []).map(i => h("div", {class: "sub2"}, "· " + i)), (s.next || []).length ? h("div", {class: "dim", style: "font-size:12px"}, "다음: " + s.next.join(" / ")) : null))) : null] : empty("아직 발표가 없습니다", "매시 CEO 발표가 여기에 나옵니다"), {np: 1}));
+  if (G) extra.push(panel("🌱 성장 과제 · 배운 것", `할 일 ${G.counts.todo} · 진행 ${G.counts.doing} · 완료 ${G.counts.done}`, [
+    table("of-bl", [{t: "상태"}, {t: "팀"}, {t: "과제"}, {t: "담당"}, {t: "결과"}], (G.backlog || []).map(x => [chip({todo: "등록", doing: "시작", done: "완료"}[x.status] || x.status, x.status === "done" ? "up" : x.status === "doing" ? "info" : ""), x.teamName, h("span", null, x.title, x.why ? h("div", {class: "dim", style: "font-size:11.5px"}, x.why) : null), x.owner || "—", h("span", {class: "sub2"}, x.result || "")]), empty("등록된 과제가 없습니다")),
+    (G.skills || []).length ? h("div", {class: "pb", style: "border-top:1px solid var(--line)"}, h("div", {class: "sub2", style: "font-weight:700;margin-bottom:4px"}, "경험에서 배운 것"), G.skills.map(s => h("div", null, "· ", s.text, h("span", {class: "dim"}, ` (반복 ${s.uses ?? 0} · 확신 ${isN(s.conf) ? Math.round(s.conf * 100) + "%" : "—"})`)))) : null,
+    (G.notes || []).length ? h("div", {class: "pb", style: "border-top:1px solid var(--line)"}, h("div", {class: "sub2", style: "font-weight:700;margin-bottom:4px"}, "팀 노트"), G.notes.map(n => h("div", null, h("span", {class: "dim"}, n.teamName + " · "), n.text, h("span", {class: "dim"}, " · ", ago(n.t))))) : null], {np: 1}));
+  return [h("div", {class: "grid cols2"}, h("div", null, left), h("div", null, right)), extra.length ? h("div", {class: "grid cols2 mtop"}, extra) : null];
+}
+
+/* ================= 실거래 ================= */
+function rLive(){
+  const L = S.live, AU = S.audit, A = S.strategies || [];
+  if (!L) return empty("실거래 상태를 아직 못 받았습니다");
+  const [lt, lc] = liveLabel(L), lim = L.limits || {}, d = L.dayPnl || {}, used = isN(d.usdt) && d.usdt < 0 && lim.dailyLoss ? -d.usdt / lim.dailyLoss * 100 : 0;
+  const stKo = {ACTIVE: ["정상", "up"], REDUCING: ["손실 한도 도달", "warn"], HALTED: ["자동 정지", "dn"]}[L.state] || ["—", ""];
+  const acc = L.exchangeAccess || {};
+  const fr = freshness(), apprOk = fr.fresh && fr.age < 30, pend = apprOk ? (L.pendingApprovals || {}).items || [] : [];
+  const audit = AU ? (AU.items || []).map(e => [h("span", {class: "mono nw"}, fT(e.t, true)), chip(AUDIT_KO[e.kind] || e.kind, e.kind === "error" || e.kind === "kill" || e.kind === "halt" ? "dn" : e.kind === "block" || e.kind === "warn" ? "warn" : e.kind === "order" || e.kind === "response" ? "info" : ""),
+    chip(e.env === "mainnet" ? "메인넷" : "테스트넷", e.env === "mainnet" ? "dn" : ""), h("span", {class: "tname"}, e.sname || "—"), [e.symbol, e.side ? sideKo(e.side) : ""].filter(Boolean).join(" ") || "—", isN(e.notional) ? nf(e.notional, 2) : "—", STATUS_KO[e.status] || e.status || "—", h("span", {class: "sub2"}, e.msg || "")]) : [];
+  return [
+    h("div", {class: "banner " + (L.halted || (L.enabled && L.env === "mainnet") ? "bad" : L.enabled ? "warn" : "info"), style: "margin:0 0 12px"},
+      h("div", null, h("span", {class: "big"}, lt), h("small", null, (L.mode === "auto" ? "자동 모드 — 승인 없이 주문합니다" : "승인 모드 — 주문마다 앱 화면에서 60초 안에 승인해야 합니다 (안 하면 자동 취소)") + ` · 마진 ${L.marginType === "CROSSED" ? "교차" : "격리"}`))),
+    h("div", {class: "grid kpis"},
+      card("오늘 실현 손익", usdV(d.usdt), `한도 -${nf(lim.dailyLoss, 0)} USDT 중 ${nf(used, 0)}% 사용${isN(d.exchange) ? " · 거래소 기록 " + usd(d.exchange) : ""}`, tn(d.usdt), used >= 100 ? "dn" : used >= 60 ? "warn" : ""),
+      card("업비트 오늘 (KRW)", isN(d.krw) ? sg(d.krw, 0) + "원" : "—", `한도 -${nf(lim.krwDailyLoss, 0)}원`, tn(d.krw)),
+      card("거래 상태", stKo[0], L.halted ? L.halted.why || "" : "하루 손실 한도에 닿으면 그날은 새 진입 멈춤", stKo[1]),
+      card("승인 대기", apprOk ? pend.length + "건" : "확인 불가", !apprOk ? "봇 자료가 최신이 아님 — 실시간 화면에서 직접 확인" : pend.length ? "실시간 화면에서 승인·거절하세요" : "대기 중인 주문 없음", pend.length ? "dn" : !apprOk ? "warn" : "", pend.length ? "dn" : !apprOk ? "warn" : ""),
+      card("연결된 전략", (L.linked || []).length + "개", "관문 통과 + 대표가 직접 연결한 것만"),
+      card("실거래 포지션", (L.positions || []).length + "개", "앱 기록 기준")),
+    pend.length ? panel("⏳ 승인 대기 주문", "승인은 실시간 화면에서", pend.map(a => h("div", {style: "margin-bottom:10px"}, h("div", null, h("b", null, a.title), " ", chip(a.mainnet ? "메인넷" : "테스트넷", a.mainnet ? "dn" : "warn"), " ", h("span", {class: "warn"}, a.countdown || "")), bar(a.remainingPct, "warn"), kv(a.fields || [])))) : null,
+    h("div", {class: "grid cols2 mtop"},
+      panel("한도", "앱 [실거래] 화면에서 바꿈", kv([["주문당 금액", nf(lim.orderNotional, 0) + " USDT"], ["1회 최대 금액", nf(lim.maxNotional, 0) + " USDT"], ["전체 최대 금액", nf(lim.maxTotalNotional, 0) + " USDT"], ["최대 레버리지", "×" + nf(lim.maxLeverage, 0)], ["동시 포지션", nf(lim.maxPositions, 0) + "개"], ["하루 손실 한도", nf(lim.dailyLoss, 0) + " USDT"],
+        ["업비트 주문당 / 최대", nf(lim.krwOrderNotional, 0) + " / " + nf(lim.krwMaxNotional, 0) + "원"], ["업비트 하루 손실", nf(lim.krwDailyLoss, 0) + "원"], ["허용 종목", (lim.symbols || []).join(", ") || "—"]])),
+      panel("거래소 연결 (키 내용은 안 보여 줌)", "", kv([["바이낸스 테스트넷", acc.binancef_test ? chip("키 있음", "up") : chip("없음")], ["바이낸스 메인넷", acc.binancef ? chip("키 있음", "dn") : chip("없음")], ["업비트", acc.upbit ? chip("키 있음", "dn") : chip("없음")],
+        AU && AU.lastKill ? ["마지막 긴급 정지", [fT(AU.lastKill.t), " · ", STATUS_KO[AU.lastKill.status] || AU.lastKill.status || "", " ", AU.lastKill.msg || ""]] : ["긴급 정지 기록", "없음"]]))),
+    panel("연결된 전략", "", table("lv-linked", [{t: "전략"}, {t: "시장"}, {t: "거래소"}, {t: "금액", n: 1}, {t: "연결 시각"}, {t: "데모 수익률", n: 1}],
+      (L.linked || []).map(x => { const s = A.find(a => a.id === x.sid); return [h("span", {class: "tname"}, x.name || x.sid), x.market || "—", x.exchange || "—", isN(x.notional) ? nf(x.notional, 0) : "기본", fT(x.t), s ? {v: pc(s.retPct), cls: tn(s.retPct)} : "—"]; }),
+      empty("실거래에 연결된 전략이 없습니다", "데모 관문을 통과한 전략만 앱 [실거래] 화면에서 연결할 수 있습니다")), {np: 1}),
+    panel("실거래 포지션 (앱 기록)", "", table("lv-pos", [{t: "전략"}, {t: "종목"}, {t: "환경"}, {t: "방향"}, {t: "수량", n: 1}, {t: "진입가", n: 1}, {t: "레버리지", n: 1}, {t: "손절", n: 1}, {t: "익절", n: 1}, {t: "시각"}],
+      (L.positions || []).map(p => [p.name || p.sid, p.symbol, chip(p.env === "mainnet" ? "메인넷" : "테스트넷", p.env === "mainnet" ? "dn" : "warn"), chip(sideKo(p.side), sideTone(p.side)), nf(p.qty, 6, 0), px(p.entry), p.lev ? "×" + p.lev : "—", px(p.sl), px(p.tp), fT(p.t)]), empty("실거래 포지션 없음")), {np: 1}),
+    panel("감사 기록", AU ? `오늘 ${AU.today.all}건 · 주문 ${AU.today.order} · 차단 ${AU.today.block} · 승인 ${AU.today.approval} · 오류 ${AU.today.error} · 전체 ${AU.total}` : "30초마다 갱신",
+      AU ? table("lv-audit", [{t: "시각"}, {t: "종류"}, {t: "환경"}, {t: "전략"}, {t: "종목"}, {t: "금액", n: 1}, {t: "상태"}, {t: "내용"}], audit, empty("감사 기록이 없습니다", "실거래를 켜고 주문 판단이 생기면 쌓입니다")) : empty("불러오는 중"), {np: 1})
+  ];
+}
+
+/* ================= 서버 상태 ================= */
+function rServer(){
+  const v = S.server || {}, m = S.meta || {}, c = v.chrome || {}, ho = v.host || {}, E = S.errors || [], M = S.models || [];
+  const memUsed = isN(ho.memTotalMb) && isN(ho.memAvailMb) ? ho.memTotalMb - ho.memAvailMb : null, memPct = memUsed != null ? memUsed / ho.memTotalMb * 100 : 0;
+  const swUsed = isN(ho.swapTotalMb) && isN(ho.swapFreeMb) ? ho.swapTotalMb - ho.swapFreeMb : null;
+  const stKo = {ok: "정상", booting: "봇 창 켜지는 중", no_chrome: "Chrome 연결 안 됨", no_page: "GH Coin 페이지 없음", error: "수집 오류", slow: "봇 응답 지연", starting: "시작 중",
+    crashed: "봇 멈춤 (탭이 죽음)", stuck: "봇 멈춤 (응답 없음)", no_app: "봇 멈춤 (페이지 안 열림)"}[m.status] || m.status || "—";
+  return [
+    h("div", {class: "grid kpis"},
+      card("수집 상태", stKo, m.message || "", m.status === "ok" && !m.stale ? "up" : m.status === "booting" || m.status === "error" || m.status === "slow" || m.status === "ok" ? "warn" : "dn"),
+      card("마지막 성공", m.lastOk ? agoS(m.lastOk) : "—", `${nf(v.intervalS, 0)}초마다 · 무거운 항목 ${nf(v.slowS, 0)}초마다`),
+      card("수집 횟수", nf(v.okPolls, 0, 0) + "회", `오류 ${nf(v.errorCount, 0, 0)} · 다시 연결 ${nf(v.reconnects, 0, 0)}`),
+      card("한 번 읽는 시간", isN(v.lastEvalMs) ? nf(v.lastEvalMs, 0) + " ms" : "—", `평균 ${nf(v.avgEvalMs, 0)} ms · 페이지 안 ${nf(S.tookMs, 0)} ms`),
+      card("대시보드 서비스", nf(v.rssMb, 1) + " MB", `CPU ${nf(v.cpuPct, 1)}% · 가동 ${dur((v.uptimeS || 0) * 1000)}`),
+      card("상태 사진 크기", nf((v.snapshotBytes || 0) / 1024, 0) + " KB", `실시간 연결 ${v.sseClients ?? 0}개 · 가린 비밀 ${S.redactions ?? 0}건`)),
+    h("div", {class: "grid cols2 mtop"},
+      panel("서버 (VPS)", ho.name || "", [kv([
+        ["메모리", h("div", null, `${nf(memUsed, 0)} / ${nf(ho.memTotalMb, 0)} MB 사용 · 남은 ${nf(ho.memAvailMb, 0)} MB`, bar(memPct, memPct > 85 ? "dn" : memPct > 70 ? "warn" : "up"))],
+        ["스왑", swUsed != null && ho.swapTotalMb ? `${nf(swUsed, 0)} / ${nf(ho.swapTotalMb, 0)} MB` : "없음"],
+        ["부하 (1·5·15분)", (ho.load || []).map(x => nf(x, 2)).join(" · ") + ` (CPU ${ho.cpus ?? "?"}개)`],
+        ["디스크 남은 공간", ho.disk && isN(ho.disk.freeGb) ? `${nf(ho.disk.freeGb, 1)} / ${nf(ho.disk.totalGb, 1)} GB` : "—"],
+        ["서버 가동", isN(ho.uptimeS) ? dur(ho.uptimeS * 1000) : "—"],
+        ["Chrome 메모리 합계", isN(c.rssMb) && c.procs ? `${nf(c.rssMb, 0)} MB (프로세스 ${c.procs}개)` : "—"]])]),
+      panel("봇 창 (Chrome)", c.connected ? chip("연결됨", "up") : chip("끊김", "dn"), kv([
+        ["Chrome", c.browser || "—"], ["페이지", c.target ? c.target.title + " · " + c.target.url : "—"], ["페이지 켜진 지", isN(S.uptimeMs) ? dur(S.uptimeMs) : "—"],
+        ["읽기 대기", isN(c.waitingS) ? chip(dur(c.waitingS * 1000) + "째 답을 기다리는 중", c.waitingS >= 120 ? "dn" : c.waitingS >= 20 ? "warn" : "") : "없음"],
+        ["열린 GH Coin 페이지", c.pages > 1 ? chip(c.pages + "개 (하나만 있어야 함)", "warn") : String(c.pages ?? 0) + "개"],
+        ["화면 상태", S.page ? (S.page.visibility === "visible" ? "보이는 중" : "가려짐 (타이머 느려지지 않게 설정됨)") : "—"],
+        ["마지막 오류", v.lastError ? [fT(v.lastError.t, true), " · ", v.lastError.msg] : "없음"]]))),
+    panel("수집 항목 오류", E.length ? E.length + "개" : "없음", E.length ? table("sv-err", [{t: "항목"}, {t: "내용"}, {t: "시각"}], E.map(e => [e.sec, h("span", {class: "sub2"}, e.msg), fT(e.t, true)])) : empty("모든 항목을 정상으로 읽고 있습니다"), {np: 1}),
+    panel("AI 모델 성적표 (최근 7일)", "느림·실패가 쌓인 모델은 앱이 덜 씀", table("sv-models", [{t: "모델"}, {t: "성공", n: 1}, {t: "느림", n: 1}, {t: "실패", n: 1}, {t: "마지막"}], M.map(x => [h("span", {class: "mono"}, x.model), String(x.ok), {v: String(x.slow), cls: x.slow ? "warn" : ""}, {v: String(x.fail), cls: x.fail ? "dn" : ""}, ago(x.t)]), empty("최근 7일 AI 호출 기록이 없습니다", "AI 키를 넣으면 채워집니다")), {np: 1})
+  ];
+}
+
+/* ================= 그리기 ================= */
+const R = {sum: rSum, pos: rPos, sig: rSig, str: rStr, office: rOffice, live: rLive, server: rServer};
+function render(){
+  raf = 0;
+  renderHeader();
+  const need = NEEDS[tab] || [];
+  if (rendered === tab && !dirty.has("*") && !need.some(k => dirty.has(k))){ dirty.clear(); return; }
+  dirty.clear();
+  const main = document.getElementById("main");
+  const keep = {};
+  main.querySelectorAll("[data-k]").forEach(el => { keep[el.dataset.k] = el.scrollLeft; });
+  const opened = new Set([...main.querySelectorAll(".ft.open")].map(el => el.dataset.oid));
+  let content;
+  if (!lastMsg) content = empty("불러오는 중…", "대시보드 서버에 연결하고 있습니다");
+  else if (S.meta && !S.meta.lastOk && tab !== "server") content = empty("아직 봇 자료를 받지 못했습니다", (S.meta.message || "") + " — 봇 창이 켜지고 30초쯤 지나면 나타납니다");
+  else { try { content = R[tab](); } catch (e){ content = empty("화면을 그리는 중 오류", String(e && e.message || e)); console.error(e); } }
+  main.replaceChildren(...[].concat(content).filter(Boolean));
+  main.querySelectorAll("[data-k]").forEach(el => { if (keep[el.dataset.k]) el.scrollLeft = keep[el.dataset.k]; });
+  main.querySelectorAll(".ft.clamp").forEach((el, i) => { el.dataset.oid = String(i); if (opened.has(String(i))){ el.classList.remove("clamp"); el.classList.add("open"); } });
+  rendered = tab;
+  tick();
+}
+function schedule(){ if (!raf) raf = requestAnimationFrame(render); }
+function tick(){
+  document.querySelectorAll("[data-ago]").forEach(el => { el.textContent = agoS(+el.dataset.ago); });
+  document.querySelectorAll("[data-until]").forEach(el => { const r = +el.dataset.until - sNow(); el.textContent = r <= 0 ? "곧" : dur(r); });
+}
+document.getElementById("main").addEventListener("click", e => {
+  const el = e.target.closest(".ft.clamp, .ft.open");
+  if (!el || window.getSelection().toString()) return;
+  el.classList.toggle("clamp"); el.classList.toggle("open");
+});
+
+/* ================= 탭 ================= */
+const tabsEl = document.getElementById("tabs");
+for (const [id, t] of TABS) tabsEl.append(h("button", {class: "tab" + (id === tab ? " on" : ""), "data-t": id, type: "button", on: {click: () => setTab(id)}}, t));
+function setTab(id){
+  tab = id; dirty.add("*");
+  tabsEl.querySelectorAll(".tab").forEach(b => b.classList.toggle("on", b.dataset.t === id));
+  try { history.replaceState(null, "", "#" + id); } catch (e){}
+  window.scrollTo(0, 0);
+  schedule();
+}
+addEventListener("hashchange", () => { const id = location.hash.slice(1); if (TABS.some(t => t[0] === id) && id !== tab) setTab(id); });
+
+/* ================= 자료 받기 (SSE, 안 되면 5초마다 /api/state) ================= */
+function onData(d, full){
+  if (!d || typeof d !== "object") return;
+  if (full){ S = d; dirty.add("*"); }
+  else { for (const k in d){ S[k] = d[k]; dirty.add(k); } }
+  if (S.meta && isN(S.meta.now)) offset = S.meta.now - Date.now();
+  lastMsg = Date.now(); serverDown = false;
+  schedule();
+}
+let es = null, polling = false, lastPoll = 0;
+function connect(){
+  if (!("EventSource" in window)) return;
+  try { if (es) es.close(); } catch (e){}
+  es = new EventSource("/api/stream");
+  es.addEventListener("full", ev => { try { onData(JSON.parse(ev.data), true); } catch (e){ console.error(e); } });
+  es.addEventListener("patch", ev => { try { onData(JSON.parse(ev.data), false); } catch (e){ console.error(e); } });
+  es.onerror = () => { if (es && es.readyState === 2) setTimeout(connect, 5000); };
+}
+async function poll(){
+  if (polling) return; polling = true; lastPoll = Date.now();
+  try {
+    const r = await fetch("/api/state", {cache: "no-store"});
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    onData(await r.json(), true);
+  } catch (e){ serverDown = true; schedule(); }
+  finally { polling = false; }
+}
+setInterval(() => {
+  tick();
+  if (Date.now() - lastMsg > 12000 && Date.now() - lastPoll >= 5000) poll();      // SSE 가 끊겼거나 막혔으면 5초마다 직접 받기
+  if (lastMsg && Date.now() - lastMsg > 25000) serverDown = true;
+  renderHeader();
+}, 1000);
+connect();
+poll();
+})();
+</script>
+</body>
+</html>
