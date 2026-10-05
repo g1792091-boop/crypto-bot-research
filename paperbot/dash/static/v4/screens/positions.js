@@ -4,8 +4,10 @@
 // rule or the reel's own exits). Tabs 포지션 / 손절·잠금 주문 / 체결 기록 (closed trades with filters). A chosen coin
 // shows its head and order book. Prices: /api/ticker through the store (5 s); nothing here can place an order.
 import {h, ui, fmt, store, local, motion, serverNow} from "../core/pb.js";
-import {normPos, posCard, tradeRow, tradeSum, coinSeg, reelExits, nameNode, dist, groupKo, sideCounts, oneSided, SKEW_MIN, SKEW_SHARE} from "./positions-kit.js";
+import {normPos, posCard, tradeRow, tradeSum, coinSeg, reelExits, nameNode, dist, groupKo, sideCounts, oneSided, SKEW_MIN, SKEW_SHARE,
+  countOnly, COUNT_ONLY_KO, COUNT_ONLY_WHY} from "./positions-kit.js";
 import {coinHead, bookPanel} from "./positions-book.js";
+import {riskLadder} from "./positions-risk.js";
 
 const COINS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "LTCUSDT", "BCHUSDT"];
 const SORTS = [["pnl", "수익 큰 순"], ["loss", "손실 큰 순"], ["new", "최근 진입"], ["liq", "청산 가까운 순"]];
@@ -23,6 +25,9 @@ export async function mount(el, ctx) {
     board: null, why: {}, open: new Set(), firstOpen: true, trades: null, tradesErr: null, tradesDirty: true, countsKey: "",
   };
   const cards = new Map();            // account_id -> {key, el}: reused, so a number counts from its last value
+  // 거래 채우기: at 1280 px and wider every card is open in a 2-3 column grid (v3 포지션); a phone keeps the accordion
+  const wideMq = typeof matchMedia === "function" ? matchMedia("(min-width: 1280px)") : null;
+  let wide = !!(wideMq && wideMq.matches);
   const markOf = (s) => store.mark(s);
   // price since the entry on each card: one /api/candles (5m, the last 24 h) per coin, asked when a card needs it
   // and again only after 5 minutes (never on a timer); the last point is the live mark the page already has
@@ -62,6 +67,9 @@ export async function mount(el, ctx) {
   const tabBar = h("div", {class: "positions-tabs"});
   const tabBody = h("div", {class: "stack"});
   const side = h("div", {class: "stack positions-side"});
+  const ladder = riskLadder(ctx);
+  const sideBook = h("div", {class: "stack"});
+  side.append(ladder.el, sideBook);
   el.append(ui.screenHead("포지션", "모의 계좌의 열린 포지션 · 주문 버튼 없음"), sumCard, coinBar,
     h("div", {class: "positions-cols"}, h("div", {class: "stack", dataset: {tour: "positions"}}, tabBar, tabBody), side));
 
@@ -73,11 +81,14 @@ export async function mount(el, ctx) {
   };
   const inScope = (x) => (!st.sym || x.pos.symbol === st.sym) && (!st.grp || fmt.groupOf(x.a) === st.grp);
   const live = (x) => { const m = markOf(x.pos.symbol); if (!m) return null; return x.pos.side * x.pos.qty * (m - x.pos.entry); };
+  // D10/D11: a DeepSeek / coin-flip position shows no money unless the 묶음 filter is its own group
+  const co = (x) => countOnly(x.a, st.grp);
+  const liveM = (x) => (co(x) ? null : live(x));
   const liqGap = (x) => { const m = markOf(x.pos.symbol); return m && x.pos.liq ? Math.abs(m - x.pos.liq) / m : 9; };
   const sorted = (list) => {
     const by = {
-      pnl: (x, y) => (live(y) ?? -1e18) - (live(x) ?? -1e18),
-      loss: (x, y) => (live(x) ?? 1e18) - (live(y) ?? 1e18),
+      pnl: (x, y) => (liveM(y) ?? -1e18) - (liveM(x) ?? -1e18),
+      loss: (x, y) => (liveM(x) ?? 1e18) - (liveM(y) ?? 1e18),
       new: (x, y) => (y.pos.entry_time || 0) - (x.pos.entry_time || 0),
       liq: (x, y) => liqGap(x) - liqGap(y),
     };
@@ -103,8 +114,9 @@ export async function mount(el, ctx) {
   // ---------------------------------------------------------------- summary (follows the coin and group filters)
   const renderSum = () => {
     const list = positions().filter(inScope);
-    let tot = 0, known = 0, up = 0, dn = 0, mg = 0, best = null, worst = null;
+    let tot = 0, known = 0, up = 0, dn = 0, mg = 0, best = null, worst = null, nCo = 0;
     for (const x of list) {
+      if (co(x)) { nCo++; continue; }
       mg += x.pos.margin || 0;
       const u = live(x);
       if (u == null) continue;
@@ -121,7 +133,8 @@ export async function mount(el, ctx) {
     const scope = [st.sym ? fmt.coin(st.sym) : "", st.grp ? fmt.GROUP_KO[st.grp] : ""].filter(Boolean).join(" · ");
     nOpenSub.textContent = `열린 ${fmt.int(list.length)}개${scope ? " · " + scope : ""}`;
     line.replaceChildren("수익 중 ", h("b", {class: "up"}, fmt.int(up)), " · 손실 중 ", h("b", {class: "down"}, fmt.int(dn)),
-      " · 묶인 증거금 ", h("b", {class: "num"}, fmt.usdt(mg)));
+      " · 묶인 증거금 ", h("b", {class: "num"}, fmt.usdt(mg)),
+      nCo ? h("span", {class: "muted", title: COUNT_ONLY_WHY}, ` · 딥시크·동전 봇 ${fmt.int(nCo)}개 (${COUNT_ONLY_KO}, 합계에서 뺌)`) : null);
     const bw = (lab, b) => b ? h("a", {class: "positions-bwl", href: ctx.href("account", b.x.a.account_id)}, h("span", {class: "muted"}, lab),
       h("b", {class: "positions-bwn"}, nameNode(b.x.a)), h("span", {class: "muted"}, fmt.coin(b.x.pos.symbol)), h("b", {class: ["num", fmt.tone(b.u)]}, fmt.money(b.u, true))) : null;
     const byG = {};
@@ -139,11 +152,11 @@ export async function mount(el, ctx) {
   grpSel.addEventListener("change", () => { st.grp = grpSel.value; local.set("pos-grp", st.grp); st.countsKey = ""; renderAll(false); });
   const cardOf = (x) => {
     const id = x.a.account_id, w = st.why[id];
-    const key = [x.pos.symbol, x.pos.entry_time, x.pos.stop, x.pos.lock_roe, x.pos.liq, x.pos.margin, x.pos.target, x.pos.timeExit,
+    const key = [wide ? "w" : "n", co(x) ? "c" : "m", x.pos.symbol, x.pos.entry_time, x.pos.stop, x.pos.lock_roe, x.pos.liq, x.pos.margin, x.pos.target, x.pos.timeExit,
       w ? `${w.entry_time}:${w.leverage}:${w.group}` : ""].join("|");
     let c = cards.get(id);
     if (!c || c.key !== key) {
-      const elc = posCard(x.a, x.pos, {why: w, wallet: x.a.wallet, collapsible: true, open: st.open.has(id), href: ctx.href, caption: true,
+      const elc = posCard(x.a, x.pos, {why: w, wallet: x.a.wallet, collapsible: true, open: wide || st.open.has(id), href: ctx.href, caption: !wide, countOnly: co(x),
         onToggle: (aid, o) => { if (o) st.open.add(aid); else st.open.delete(aid); }});
       c = {key, el: elc};
       cards.set(id, c);
@@ -153,15 +166,17 @@ export async function mount(el, ctx) {
     needPx(x.pos.symbol);
     return c.el;
   };
-  const posPager = ui.pager({size: 8, row: (x) => cardOf(x), empty: "조건에 맞는 열린 포지션이 없습니다"});
-  const posPane = h("div", {class: "stack"}, h("div", {class: "row wrap positions-filters"}, grpSel, sortSel), posPager.el,
-    h("p", {class: "pos-note"}, "한 줄을 누르면 펼쳐집니다. 미실현 손익은 마크 가격 기준이고 5초마다 서버 시세로 바뀝니다."),
+  const posPager = ui.pager({size: wide ? 12 : 8, row: (x) => cardOf(x), empty: "조건에 맞는 열린 포지션이 없습니다"});
+  const posNote = h("p", {class: "pos-note"});
+  const notePos = () => { posNote.textContent = (wide ? "넓은 화면이라 모든 카드를 펼쳐 둡니다. " : "한 줄을 누르면 펼쳐집니다. ") + "미실현 손익은 마크 가격 기준이고 5초마다 서버 시세로 바뀝니다."; };
+  notePos();
+  const posPane = h("div", {class: "stack"}, h("div", {class: "row wrap positions-filters"}, grpSel, sortSel), posPager.el, posNote,
     ui.assume("open"));
 
   // ---------------------------------------------------------------- tab: 손절·잠금 주문
   const orderRow = (x) => {
     const m = markOf(x.pos.symbol), reel = reelExits(x.a);
-    const pnl = x.pos.side * x.pos.qty * (x.pos.stop - x.pos.entry);
+    const pnl = x.pos.side * x.pos.qty * (x.pos.stop - x.pos.entry), hide = co(x);
     const kind = reel ? "손절 · 스윙 저점 (스탑 마켓)" : x.pos.lock_roe != null ? `익절 잠금 +${fmt.num(x.pos.lock_roe * 100, 0)}% (스탑 마켓)` : "손절 (스탑 마켓)";
     return h("div", {class: "lrow click", role: "listitem", tabindex: "0", onclick: () => ctx.go("account", x.a.account_id),
       onkeydown: (e) => { if (e.key === "Enter") ctx.go("account", x.a.account_id); }},
@@ -169,7 +184,7 @@ export async function mount(el, ctx) {
       h("span", {class: "ret num"}, fmt.price(x.pos.stop)),
       h("span", {class: "meta"}, h("span", null, `${fmt.coin(x.pos.symbol)} · ${fmt.lev(x.pos.leverage)}`), h("span", null, kind),
         h("span", null, `지금과 ${dist(m && x.pos.stop ? Math.abs(m - x.pos.stop) / m : null)}`),
-        h("span", {class: fmt.tone(pnl)}, `발동 시 ${fmt.money(pnl, true)} USDT`),
+        hide ? h("span", {class: "muted", title: COUNT_ONLY_WHY}, `발동 시 손익 ${COUNT_ONLY_KO}`) : h("span", {class: fmt.tone(pnl)}, `발동 시 ${fmt.money(pnl, true)} USDT`),
         reel ? h("span", null, `목표 리밋 ${x.pos.target ? fmt.price(x.pos.target) : "받는 중"}`) : null));
   };
   const ordPager = ui.pager({size: 10, row: orderRow, empty: "걸려 있는 손절·잠금 주문이 없습니다"});
@@ -187,7 +202,7 @@ export async function mount(el, ctx) {
   const tSum = h("div");
   const tNote = h("p", {class: "pos-note"});
   const acctOf = (id) => st.board && st.boardMap && st.boardMap.get(id);
-  const tPager = ui.pager({size: 10, row: (t) => tradeRow(t, acctOf(t.account_id), {onClick: (r) => ctx.go("account", r.account_id),
+  const tPager = ui.pager({size: 10, row: (t) => tradeRow(t, acctOf(t.account_id), {onClick: (r) => ctx.go("account", r.account_id), countOnly: countOnly(t, st.tGrp),
     replay: t.id != null ? ctx.href("replay", String(t.id)) : null}),
     empty: "조건에 맞는 체결이 없습니다"});
   const trPane = h("div", {class: "stack"}, h("div", {class: "row wrap positions-filters"}, perSeg, resSeg, tGrpSel), tSum, tPager.el, tNote,
@@ -217,7 +232,7 @@ export async function mount(el, ctx) {
     if (st.tRes === "win") rows = rows.filter((t) => t.pnl > 0);
     else if (st.tRes === "loss") rows = rows.filter((t) => t.pnl < 0);
     else if (st.tRes === "liq") rows = rows.filter((t) => t.exit_reason === "LIQ");
-    tSum.replaceChildren(tradeSum(rows));
+    tSum.replaceChildren(tradeSum(rows, (t) => countOnly(t, st.tGrp)));
     const oldest = st.trades[st.trades.length - 1];
     const cut = st.trades.length >= TRADE_LIMIT && oldest && (st.tPer !== "today" || oldest.exit_time >= day0);
     tNote.textContent = (st.tPer === "today" ? "오늘 = 한국 시각 0시부터. " : "") +
@@ -260,7 +275,7 @@ export async function mount(el, ctx) {
     sideSym = sym;
     head = coinHead(sym, {chartHref: ctx.href("chart", sym)});
     if (!book) book = bookPanel(ctx, sym, {rows: 7}); else book.setSym(sym);
-    side.replaceChildren(ui.card({plate: "호가", acts: [bookSel]}, head, book));
+    sideBook.replaceChildren(ui.card({plate: "호가", acts: [bookSel]}, head, book));
     head.update(store.get("ticker"));
     book.load();
   };
@@ -288,16 +303,28 @@ export async function mount(el, ctx) {
     }
     renderSum();
     renderSide();
+    ladder.set(all.filter(inScope), markOf);
     if (st.tab === "trd" && st.trades) renderTrades(false);
   }
   const onTicker = (tk) => {
     for (const c of cards.values()) if (c.el.isConnected) { c.el.update(markOf(c.el.pos.symbol)); sparkOf(c.el); }
     if (st.firstOpen && st.board) renderAll(true);
     renderSum();
+    if (st.board) ladder.set(positions().filter(inScope), markOf);
     if (head) head.update(tk);
   };
 
   // ---------------------------------------------------------------- wiring
+  const onWide = () => {
+    const w = !!(wideMq && wideMq.matches);
+    if (w === wide) return;
+    wide = w;
+    el.classList.toggle("positions-wide", wide);
+    notePos();
+    renderAll(true);
+  };
+  el.classList.toggle("positions-wide", wide);
+  if (wideMq) { wideMq.addEventListener("change", onWide); ctx.track(() => wideMq.removeEventListener("change", onWide)); }
   renderTabBar();
   showTab(false);
   renderSide();

@@ -193,3 +193,41 @@ button.dsf-row:focus-visible { outline: 2px solid var(--accent); outline-offset:
 .strat-live { gap: 6px 8px; align-items: center; margin-bottom: 8px; }
 .strat-livebtn { min-height: 30px; font-size: var(--t-sm); color: var(--accent-hi); border-color: var(--accent-line); }
 .strat-livebtn.on { background: var(--accent-soft); border-color: var(--accent); box-shadow: 0 0 12px var(--accent-glow); }
+
+/* fill-strat: the chart's live price, the list's open rows, 36 at once on PC, and 방금 나온 신호 */
+.strat-px { padding: 0 4px; border-radius: var(--r-sm); color: var(--ink); }
+.strat-hot { box-shadow: inset 3px 0 0 var(--accent), 0 0 14px var(--accent-glow); border-radius: var(--r-sm); background: var(--accent-soft); }
+.strat-open { display: inline-flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
+.strat-ochip { display: inline-flex; align-items: center; gap: 2px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--accent-line);
+  color: var(--accent-hi); font-size: var(--t-xs); white-space: nowrap; }
+.strat-ochip b { font-weight: 800; }
+.strat-ochip b.up { color: var(--up); } .strat-ochip b.down { color: var(--down); }
+@media (min-width: 1280px) {
+  .strat-coreslot.wide .plist { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 14px; }
+  .strat-coreslot.wide .strat-pitem.open { grid-column: 1 / -1; }
+  .strat-coreslot.wide .strat-prow { padding-block: 6px; }
+  .strat-coreslot.wide .strat-prow .meta { font-size: var(--t-xs); }
+}
+/* fix: no 3-column list (the page is at most ~1290 px wide, so a third column left ~80 px for a name and real Korean
+   names broke mid-word); in the 2-column list a long name stays on one line (… and the full name in the row's title), and an open
+   row's glowing edge sits left of the code instead of over its first letter */
+@media (min-width: 1280px) {
+  .strat-coreslot.wide .strat-prow .strat-nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+.strat-prow.strat-hot { padding-left: 10px; }
+
+.strat-listgrid { display: grid; gap: var(--gap); grid-template-columns: minmax(0, 1fr); align-items: start; min-width: 0; }
+@media (min-width: 1280px) { .strat-listgrid { grid-template-columns: minmax(0, 1fr) minmax(300px, 360px); } .strat-feedcard { position: sticky; top: 72px; } }
+.strat-feed { display: grid; min-width: 0; }
+.strat-frow { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; grid-template-areas: "t nm nm" "t c st"; gap: 2px 8px; align-items: center;
+  padding: 7px 6px; border-top: 1px solid var(--line); color: var(--ink); text-decoration: none; font-size: var(--t-sm); min-width: 0; border-radius: var(--r-sm); }
+.strat-frow:hover { background: var(--surface-2); }
+.strat-frow .t { grid-area: t; color: var(--muted); font-size: var(--t-xs); white-space: normal; line-height: 1.3; overflow-wrap: anywhere; }
+.strat-frow .fnm { grid-area: nm; margin: 0; padding: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
+.strat-frow .c { grid-area: c; color: var(--ink-2); font-size: var(--t-xs); }
+.strat-frow .c .side { padding: 1px 6px; }
+.strat-frow .st { grid-area: st; justify-self: end; font-size: var(--t-xs); font-weight: 700; white-space: nowrap; }
+.strat-frow .st.accent { color: var(--accent); }
+.strat-frow .st small { font-weight: 400; color: var(--muted); font-size: var(--t-xs); }
+.strat-frow.in { box-shadow: inset 2px 0 0 var(--accent-line); }
+.strat-ftag { margin-right: 6px; padding: 0 6px; border-radius: 999px; border: 1px solid var(--line-2); color: var(--muted); font-style: normal; font-size: var(--t-xs); }

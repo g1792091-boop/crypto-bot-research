@@ -34,7 +34,7 @@ function renderNav() {
   put($("#botbar"), GROUPS.map((g) => link(g)));
   const g = GROUPS.find((x) => x.id === gid) || GROUPS[0];
   put($("#subtabs"), textCycle(() => remount()), visibleScreens(g).map((n) => h("a", {href: href(n), "aria-current": n === p.name ? "page" : null, dataset: {screen: n}},
-    SCREENS[n].ko, badges[n] ? h("i", {class: "ndot", "aria-label": "새 소식"}) : null)),
+    SCREENS[n].ko, SCREENS[n].soft && !features[SCREENS[n].soft] ? h("span", {class: "pp thin", style: {marginLeft: "6px", opacity: ".75"}, title: "아직 켜지지 않음"}, "꺼짐") : null, badges[n] ? h("i", {class: "ndot", "aria-label": "새 소식"}) : null)),
   // 글자 크기 (보통 / 크게 / 아주 크게, core/textsize.js) at the end of every group's tabs, so it is one tap away on the
   // screen being read (on a phone the one-button textCycle at the start of the row stands in for it); the screen colours (AI / 클래식, core/skin.js) and the old dashboard (served at /v3; '/' is this
   // page) stay one tap away next to it at the end of the 서버 group's menu

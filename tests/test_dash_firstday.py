@@ -181,7 +181,7 @@ def test_rank_lists_best_account_flow_and_memo_skip_unranked():
     hs = _read("screens", "home-shared.js")
     tb = hs[hs.index("export function topBottom"):hs.index("// ---------------------------------------------------------------- the ranked list")]
     assert "derive.rankedOnly(board, group)" in tb and "derive.waitingKo(waiting)" in tb
-    assert "a._rk = derive.unranked(a) ? null : ++rk;" in hs                  # '—' (fmt.int(null)) instead of a rank
+    assert "a._rk = derive.unranked(a) || derive.countOnlyIn(a, st.group) ? null : ++rk;" in hs   # (+ 전체: DeepSeek/coin unranked) '—' (fmt.int(null)) instead of a rank
     assert "rows.filter((a) => !derive.unranked(a)).reduce(" in _read("screens", "board.js")
     # 순위표 전체 table: the DeepSeek row names no account with money (D11)
     assert 'r.g === "ds" ? "딥시크 화면에서" : bestCell(best(r.rows))' in _read("screens", "board.js")

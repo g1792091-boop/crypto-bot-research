@@ -1,10 +1,54 @@
 // The engine and runner write alerts in English; the page shows them in Korean (same patterns as the old app.js
 // alertKo and Telegram's notify.ko). Plus the rules that decide a CRITICAL banner line (bust, liquidation burst,
 // feed stale): they read only real records (alerts, closed trades, the health card, the live stream's heartbeat).
-import {idName, coin, tfKo, kst, hm, dur} from "./fmt.js";
+import {idName, coin, tfKo, kst, hm, dur, num, price, reasonKo} from "./fmt.js";
+
+// ---------------------------------------------------------------- the engine's ENTRY / EXIT lines (engine.py, reel_engine.py)
+//   "[V4.4_TREND@4h] ENTRY LTCUSDT SHORT V4.4_TREND normal 30x margin 1334.54 @ 75.8571 SL 76.3275 TP ladder LIQ 77.9957"
+//   "[V4.4_TREND@4h] EXIT SOLUSDT LOCK pnl +321.54 ROE +20.6% equity 5520.21"
+// DeepSeek (F<n>_...) and the coin flips (RANDOM_<k>) are counted only outside the DeepSeek screen (owners' D10/D11):
+// their lines keep the coin, side, multiple and prices, never the margin, P&L, ROE or balance.
+const TIER_KO = {best: "좋은 자리", normal: "보통 자리"};
+const ENTRY_RE = /^\[([^\]]+)\] ENTRY (\S+) (LONG|SHORT) (\S+) (\S+) (\d+)x margin ([\d.]+) @ (\S+) SL (\S+) TP (\S+) LIQ (\S+)/;
+const EXIT_RE = /^\[([^\]]+)\] EXIT (\S+) (\S+) pnl ([+-]?[\d.]+) ROE ([+-]?[\d.]+)% equity ([\d.]+)/;
+/** The account id's strategy is DeepSeek's (F<n>_...) or a coin flip (RANDOM_<k>): counts only, no money. */
+export const countOnlyId = (id) => /^(F\d+_|RANDOM_)/.test(String(id || ""));
+const usdt = (x) => `${num(Number(x), Math.abs(Number(x)) >= 100 ? 0 : 2)} USDT`;
+/**
+ * An engine ENTRY / EXIT line as parts for a row with chips, or null for any other text.
+ * -> {kind: "entry"|"exit", acct, name, head, chips: [{k, v, tone}], counted: bool, text}
+ */
+export function tradeAlert(text) {
+  const t = String(text ?? "");
+  let m = t.match(ENTRY_RE);
+  if (m) {
+    const [, acct, sym, sd, , tier, lev, margin, , sl, , liq] = m;
+    const counted = countOnlyId(acct), side = sd === "LONG" ? "롱" : "숏";
+    const head = `${coin(sym)} ${side} ${lev}배${TIER_KO[tier] ? ` (${TIER_KO[tier]})` : ""}`;
+    const chips = [counted ? null : {k: "증거금", v: usdt(margin)},
+      {k: "손절", v: price(Number(sl))}, {k: "청산가", v: price(Number(liq)), tone: "down"}].filter(Boolean);
+    return {kind: "entry", acct, name: idName(acct), head, side: sd === "LONG" ? 1 : -1, chips, counted,
+      text: `${idName(acct)} 진입: ${head}${counted ? "" : `, 증거금 ${usdt(margin)}`}, 손절 ${price(Number(sl))}, 청산가 ${price(Number(liq))}`};
+  }
+  m = t.match(EXIT_RE);
+  if (m) {
+    const [, acct, sym, reason, pnl, roe, eq] = m;
+    const counted = countOnlyId(acct), p = Number(pnl);
+    const head = `${coin(sym)} ${reasonKo(reason)}`;
+    const chips = counted ? [{k: "결과", v: p > 0 ? "이익" : p < 0 ? "손실" : "본전", tone: p > 0 ? "up" : p < 0 ? "down" : ""}]
+      : [{k: "손익", v: `${p > 0 ? "+" : ""}${usdt(p)}`, tone: p > 0 ? "up" : p < 0 ? "down" : ""},
+        {k: "ROE", v: `${Number(roe) > 0 ? "+" : ""}${num(Number(roe), 1)}%`, tone: Number(roe) > 0 ? "up" : Number(roe) < 0 ? "down" : ""},
+        {k: "잔고", v: usdt(eq)}];
+    return {kind: "exit", acct, name: idName(acct), head, chips, counted,
+      text: `${idName(acct)} 청산: ${head}, ${chips.map((c) => `${c.k} ${c.v}`).join(", ")}`};
+  }
+  return null;
+}
 
 export function alertKo(text) {
   const t = String(text ?? "");
+  const tr = tradeAlert(t);
+  if (tr) return tr.text;
   let m;
   if ((m = t.match(/^\[([^\]]+)\] drawdown ([\d.]+)% \(level (\d+)%\), equity ([\d.]+)/)))
     return `${idName(m[1])} 낙폭 ${m[2]}% (${m[3]}% 경고선), 잔고 ${m[4]} USDT`;

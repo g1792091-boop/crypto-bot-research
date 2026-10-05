@@ -363,3 +363,62 @@ Owners 10/06 03:48 on the live PC `#/terminal`: "마음에 드는데 뭔가 부�
 | Neon at rest | panels: a soft teal edge light (AI skin; the classic skin keeps its plain edge), an accent wash on the heads, glowing 미실현 합계 / 누적 손익 / top price; each panel head's underline runs a light once when that panel really got data (≤ once per 1.2 s) | none |
 | 소리 켜기 hint | 터미널 top bar: "소리 켜기" (sound off) or "한 번 누르면 소리 시작" (on, waiting for the browser's first tap); opens the header speaker's menu (the same switch); gone while the sound plays | none |
 | 이 코인 포지션 not empty | no position on the coin: its latest large market orders and (with the recorder) market liquidations, labelled "바이낸스 시장 전체 · 우리 봇 아님" | same stream, `/api/liq` |
+| 신호 레이더 · 다음 신호까지 | 매매법 목록 (기존 36) top card (screens/strategies-radar.js `radarCard`): coin + 15분/30분/1시간/4시간 picker (BTC 1시간 first, remembered on this device), the 36 closest-to-firing first, each condition a lamp (lit = on), "한 칸 남음" rows glow, "조건 모두 켜짐", "신호!" only when signal_log has a signal on that bar; the bar it is from + countdown to the next close, re-read after each close; a row opens #/strategies/<name>?tf&sym; PC top 18, phone top 12 + 모두 보기; "예측이 아닙니다" note | `/api/v4/radar?tf&symbol` (dash/more/radar.py: strategy_views.render on the same closed bars as `/api/strategy/<name>`, once per bar; per timeframe and coin the full window once, then one 5-bar request per new bar (weight 1); the page asks 45 s after the close, once more for an all-on row without a logged signal) |
+| 코인 × 봉 조건 지도 | 매매법 상세 (the 36), under 지금 조건 (`radarMatrix`): 6 coins × 15분/30분/1시간/4시간 cells "롱 2/3 · 숏 0/3", the closest cells glow, the cell on the chart is outlined, a tap moves the chart there (setChart); countdown per timeframe; cells not computed yet say so ("…", "나머지 N칸 계산 중") | `/api/v4/radar/strategy/<name>` (3 new cells per call, `pending`) |
+| 곧 신호 대기실 | 서버 › 신호, top (`waitRoom`): one timeframe (picker, remembered), the 36 on all 6 coins, the 15 closest (coin, strategy, closer side's lamps, 한 칸 남음 / 조건 모두 켜짐 / 신호!), counts of 한 칸 남음 and this bar's signals; no DeepSeek, no coin flips (said in the note) | `/api/v4/radar?tf&symbol` × 6 |
+| 24시간 신호 지도 | 서버 › 신호, next to 대기실 (signals.js `heatCard`): coin × 15분/30분/1시간/4시간 (+ 5분 when 5분 signals exist) signal counts of the last 24 h (long · short, 늦음), deeper colour = more, a cell flashes once when its count really rises, a live countdown to each timeframe's next close; counts only (no money); "최근 1,000개까지만" when capped | `/api/signals?limit=1000` |
+
+## fill-home: 홈을 살아 있게 (dashboard + one read-only server change; tests/test_dash_fill_home.py)
+
+| Addition | Screen / place | Server |
+|---|---|---|
+| 촘촘한 레이스 | 홈 head card race, 흐름 hero, 홈 group-card lines: a point every 5분 (run < 2일), 15분 (< 7일), then 1시간 / 4시간 / 하루; label "D+1 · 5분마다" | `/api/v4/flow/race?step=auto` (more/flow.py auto_step; 5- / 15-minute steps read from the 5-minute equity rows, finished steps kept) |
+| LED 잔고 곡선 첫날부터 | 홈 LED bar line: 5분 steps while the run is under 2 days, 15분 under 7 days, then hourly | `/api/v4/curves?step=300000` / `900000` (app.py CURVE_STEPS gains 300000) |
+| 시장 지금 | 홈 top band beside the story rings: 7 coins' price (glow on change), 24h %, 펀딩, 정산까지 countdown to the server's next funding time; phone: one sideways row | store `ticker` (`/api/ticker`, existing 5 s cache) |
+| 지금 열린 포지션 | 홈 under the head card: 기존 36 / 5분봉 / 추가 계좌 positions (봉·매매법, 코인, 롱/숏 + 배수, 진입, 손절 or 잠금 ROE, live ROE at the mark, tint on change), ROE order, row opens the account; "그 밖에 딥시크 n · 동전 봇 n 포지션 (개수만)" | `/api/board` positions + store `ticker` mark |
+| 방금 끝난 거래 + 오늘 잘한·못한 계좌 | 홈 full-width card: last 12 closed trades (newest close first) of 기존 36 / 5분봉 / 추가 (시각, 봉·매매법, 코인, 방향 + 배수, 익절 잠금 / 손절 / 시간, ROE, USDT), new rows slide in on the stream's trade event; 오늘 가장 잘한 / 못한 계좌 3 (기존 36, USDT, 참고, 표본 적음 under 30 trades) | `/api/trades?group=main&limit=12`, `/api/trades?group=core&limit=2000` (existing) |
+| 회의 카운트다운 + 오늘 일정 | 홈 '오늘 회의 일정' (ticking countdown to the next fixed meeting; each meeting 예정 / 진행 중 / 끝 / 지남 with one line on what it reviews); the 0 / 0 / 0 board comes back once a meeting ran today; 회의 요약 › 회의 결론 shows the same card on a day without meetings | `/api/office` schedule / running / recent (existing) |
+
+## 거래 화면 채우기 (fill-trade)
+
+Market-native data and wide layouts for 거래 and 알림 기록 (dashboard + read-only server). Tests: tests/test_dash_fill_trade.py.
+
+| Addition | Screen / place | Server (read-only) |
+|---|---|---|
+| 코인 온도판 | 시장, top: 7 tiles (price glows only when it really moved, 24h %, place inside the 24h low-high range, 24h 거래대금, funding with countdown; XRP 기록만); a tile opens 차트 | none (store ticker, /api/ticker) |
+| 시장 파생 지표판 | 시장 (screens/market-live.js `flowBoard`): per traded coin 미결제약정 USDT with 1h / 24h change, 24h sparklines of OI and 롱/숏, 롱/숏 (전체 계좌) now vs 24h ago, 고수 포지션 롱/숏, 테이커 매수/매도 1시간, 프리미엄; plain hints (롱 쏠림, 미결제 급증 ...) with their fixed rules shown; no flow.db = 수집 전 | `/api/v4/flowlive` (dash/more/flowlive.py `flow_live`, flow.db `mode=ro`, 60 s cache) |
+| 시장 강제청산 보드 | 시장 (market-live.js `liqBoard`): per coin long vs short liquidated USDT over 1h and 24h as split bars, the biggest single one, the latest 5 (new ones slide in); stale recorder (2 h without a row) says so; 1-per-second undercount note | `/api/v4/flowlive/liq` (flowlive.py `liq_board`, liq.db `mode=ro`, 20 s cache) |
+| 경제발표 일정 'null' 고침 | 시장 › 미국 경제발표 일정: no stray "null" text under the list | none |
+| 포지션 펼쳐 보기 | 포지션 at 1280 px and wider: every card open in a 2-3 column grid (v3 포지션), 12 per page; a phone keeps the accordion | none (/api/board + ticker) |
+| 위험 사다리 | 포지션 side column (screens/positions-risk.js): open positions ranked by % distance from the mark to the liquidation price, with the distance to the stop / lock line; bars move with the 5 s mark, a row within 1 % pulses; distances only, no money (DeepSeek and coin flips listed with their group) | none |
+| 알림 진입·청산 한국어 | 알림 기록 rows and every `alertKo` user: the engine's ENTRY / EXIT lines as "V4.4_TREND · 4시간 진입: LTC 숏 30배 (보통 자리)" with chips 증거금 / 손절 / 청산가 (exit: 손익 / ROE / 잔고); DeepSeek (F*) and coin flips (RANDOM_*) without margin, P&L, ROE or balance (D10/D11) | none (core/alerts.js `tradeAlert`) |
+| 알림 24시간 막대 | 알림 기록, right column at 1500 px+ (below on a phone): hourly bars of 긴급 / 주의 / 정보 and of 진입 / 청산 alert lines for the last 24 h; hours older than the newest 500 rows are hatched (모름, not 0) | `/api/analysis/alerts?limit=500` |
+| 차트 패널 쌓기 | 차트 at 1280 px+: 이 코인 포지션, 최근 신호, 시장 강제청산, 가격 알림 as stacked cards; 체결 / 호가 stay as tabs; a phone keeps one tab at a time | none |
+| 이 코인 시장 지표 | 차트, under 시세: the chosen coin's 미결제약정 (1h / 24h), 롱/숏, 고수 포지션, 테이커, 강제청산 1h / 24h and the biggest one, OI sparkline, hints; link to 시장 | `/api/v4/flowlive`, `/api/v4/flowlive/liq` |
+
+## fill-strat: 매매법 차트·목록·한눈 지도·분석 채우기 (owners 10/06 "화면들은 부족한 게 좀 있어 보여")
+
+Dashboard only (one read-only route). Tests: tests/test_dash_fill_strat.py.
+
+| Addition | Screen / place | Server |
+|---|---|---|
+| 차트 표시 말 (v3 계좌 차트처럼) | 매매법 상세 · 딥시크 · 릴스 차트: 진입 화살표 '롱 30배' / '숏 20배', 청산 점 '익절 잠금 +15%' / '손절 −22%' / '시간 청산' (딥시크: 이유만, 돈 숫자 없음); 그 코인의 모든 봉 계좌 거래, 다른 봉은 작은 봉 표시 · 회색; 최근 180봉이 보이게 | `/api/account/<id>` (기존) |
+| 차트 실시간 봉 | 마지막 봉과 가격선이 공용 시세(5초)로 움직임, 가격 글자 오르면 초록·내리면 빨강 반짝; 봉이 닫히면 한 번 다시 불러 조건표도 새로 | `/api/ticker` (store, 기존) |
+| 매매법 36개 한눈에 | 매매법 목록 ≥1280px: 페이지 없이 2단(≥1680px 3단) 모두; 포지션 열린 줄은 빛나는 테두리 + ● 코인·방향·배수 + 지금 평가 ROE (마크, 미실현 캡션); 딥시크 줄은 포지션만 | `/api/board` + store ticker |
+| 방금 나온 신호 | 매매법 목록 옆(폰: 아래): 모든 매매법의 최신 신호 12개 (시각·매매법·코인·봉·롱숏·진입 / 건너뜀 + 이유), 30초마다, 새 신호만 미끄러져 들어옴; 누르면 그 매매법 차트 그 코인·봉 | `/api/signals?limit=12` (기존) |
+| 한눈 지도 '5년 시험' 색 | 기존 36 · 딥시크 44: 칸 = 5년 과거 시험의 거래 한 건 평균 (36: 증거금 대비 ROE, 딥시크: 레버리지 없이 가격 %) + 승률, 초록/빨강, '5년 과거 시험 · 참고'; 자료 없는 칸은 점선 | `/api/v4/grid/y5` (dash/more/grid.py, vs5y.five_year, 1시간 캐시) |
+| 한눈 지도 '지금 포지션' 색 | 포지션 열린 칸만 빛남: 지금 평가 ROE (5초마다) + 코인·방향·배수; 열린 칸 수 · 평가 이익/손실 칸 수 | `/api/v4/grid` `open` + board + store ticker |
+| 분석 '채워지는 중' | 손익비·위험 / 계좌 겹침 / 조합 시너지: 실제 기준과 지금 진행을 채워지는 막대로 ('계좌마다 거래 20건 필요 · 지금 가장 많은 계좌 8건 · 20건 넘은 계좌 0/144', '같이 쌓인 기록 7일 필요 · 지금 1.2일째'), 그 사이 볼 수 있는 5년 과거 시험(한눈 지도 › 5년 시험) 링크 | 기존 답의 `drawdown.min_trades`, `rules.min_trades/min_days`, `min_trades` + board |
+| 다시보기 첫 화면 자동 재생 | #/replay: 기존 36·5분봉에서 가장 최근 닫힌 거래가 목록 위에서 저절로 한 번 재생 (움직임 줄이기 설정이면 멈춘 채), '이 거래만 크게 보기' | `/api/v4/replay/<id>` (기존) |
+| 순위표 실시간 ROE (fill-people) | 순위표 열린 포지션 칩 '● LTC 숏 30배 +20.4%' + 빛남: 기존 36 · 5분봉 · 추가만 (딥시크·동전 봇은 칩만, 손익 없음) | `/api/board` position + `/api/ticker` mark (derive.livePnl) |
+| 순위표 카드 / 표 (fill-people) | 전체 목록 '카드 · 표' 전환 (이 기기에 기억): 표 = 한 쪽 50줄, 머리글 눌러 정렬, 순위·계좌·잔고·수익률·거래·승률(n승 n패)·최대 낙폭·상태(실시간 ROE)·동전 봇 대비(참고); 섞인 목록에서 딥시크·동전 봇은 개수만 | `/api/board`, `/api/ticker` |
+| 순위표 → 분석 (fill-people) | 순위표 목록 아래 '더 보기 (분석)': 코인별 · 시간대별 성적, 코인·장세 지도, 계좌 겹침, 손익비·위험 (v3 순위표 아래에 있던 것) | links only |
+| 계좌 차트·고르기 (fill-people) | 계좌: 코인별 진입·청산 차트가 프로필 카드 바로 아래 전체 폭, 열린 포지션 또는 마지막 거래 코인으로 열림, 첫 거래 40봉 전부터 지금까지 확대, 붐비면 짧은 글씨; 프로필 카드가 곡선을 그리면 자본 곡선 칸 없음; #/account (id 없음) = 찾기 있는 계좌 고르기 (지난번 본 계좌 또는 저장된 묶음 1위 먼저) | `/api/account/<id>`, `/api/candles`, `/api/board` |
+| 회의실 상황판 (fill-people) | 대표실 옆 픽셀 상황판: 코인 시세(바뀔 때만 반짝), 오늘 닫힌 거래·승패 (기존 36·5분봉·추가는 손익, 딥시크·동전 봇은 개수만), 지금 열린 포지션 수, 오늘 손실 카드 수, 다음 정기 회의까지 남은 시간; 상태 줄에도 남은 시간 | `/api/v4/people/today` (dash/more/people.py), `/api/ticker`, `/api/board`, `/api/office` schedule.next.at_ms |
+| 판정 거래 많은 계좌 (fill-people) | 판정 무대 좌석표 옆: 닫힌 거래가 가장 많은 판정 계좌 5개 'V4.0_TREND · 4시간 9/30' + '지금 속도면 10/21쯤 30건' (참고, 합격·불합격 아님, 이틀 전엔 표본 적음; 딥시크는 이름 없음) | `/api/board`, `/api/summary` start |
+| 매매법 방 회의 전 (fill-people) | 에이전트 방: 첫 회의 전 매매법 방 목록 줄 = 그 매매법의 가장 최근 실제 일 (닫힌 거래 또는 신호); 빈 대화 칸에 코드 기록 상자 (오늘 봉별 거래·승패·손익, 지금 열린 포지션, 최근 거래, 최근 신호) | `/api/v4/people/strats`, `/api/v4/people/strat?name=`, `/api/board` |
+| 토론방 꺼짐 탭 (fill-people) | 에이전트 › 토론방 탭이 늘 보임 (꺼져 있으면 흐린 '꺼짐' 표); #/debate = '아직 시작 전 · 켜면 하루 종일 토론' 카드 (홈으로 튕기지 않음) | `/api/debate` ready / state |
+| 개수만 (fill-fix) | 포지션 카드·합계·손절 주문·체결 기록, 차트 '이 코인 포지션'·체결·가격선 이름표: 묶음을 딥시크/동전 봇으로 고르지 않으면 딥시크·동전 봇은 방향·배수·가격·거리만 (손익·ROI·증거금·크기 없음, 진입 뒤 가격 선은 회색), 합계 줄에 '딥시크·동전 봇 n개 (개수만, 합계에서 뺌)' | `/api/board`, `/api/trades` (positions-kit `countOnly`, derive `countOnlyIn`) |
+| 전체 순위 개수만 (fill-fix) | 순위표·홈 '전체' (카드·표): 딥시크·동전 봇은 순위 없이 맨 뒤 (딥시크, 동전 봇 순, 이름순), 잔고·수익률·낙폭·반짝임·순위 화살표·작은 선 없음 | `/api/board` (derive `mixedOrder`) |
+| 위험 사다리 깜빡임 (fill-fix) | 청산가 또는 손해 보는 손절선 0.5% 안일 때만 깜빡임; 수익 쪽 잠금선은 초록 '잠금까지', 깜빡이지 않음 | `/api/board`, `/api/ticker` |
+| 작은 말 바로잡기 (fill-fix) | 홈 잘한·못한 계좌 줄마다 '표본 적음' + 2,000건에서 잘리면 '최근 2,000건만'; 방 코드 기록 신호 0건 = '아직 없음' (못 읽음만 '수집 전'); 강제청산 시각 어제면 '어제 06:52'; 차트 거래대금·강제청산 만/억; 한눈 지도 5년 시험·지금 포지션 칸 글씨 12px; 매매법 목록 PC 2열·이름 한 줄; 빈 방 일정 문장 한 번만; people.py 읽기 오류 = error 필드 | — |

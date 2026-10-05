@@ -127,3 +127,25 @@
 [data-screen="rooms"] .rm-nrow time { color: var(--muted); }
 [data-screen="rooms"] .rm-gauges { display: grid; gap: 8px; }
 [data-screen="rooms"] .rm-gauges .gauge { padding: 10px; background: var(--surface-2); border-color: transparent; }
+
+/* fill-people: a strategy room before its first meeting (rooms-record.js): the newest real event in the list line and
+   the code record box in the empty chat */
+[data-screen="rooms"] .rm-ev { color: var(--ink-2); }
+[data-screen="rooms"] .rm-ev time { color: var(--accent); }
+[data-screen="rooms"] .rm-rec { display: grid; gap: 8px; margin-top: 8px; padding: 12px; border-radius: 10px; border: 1px solid var(--console-line); background: var(--surface-2); color: var(--ink); }
+[data-screen="rooms"] .rm-rec-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+[data-screen="rooms"] .rm-rec-h b { color: var(--accent); }
+[data-screen="rooms"] .rm-rec-body { display: grid; gap: 6px; }
+[data-screen="rooms"] .rm-rec-k { margin: 4px 0 0; color: var(--muted); font-size: var(--t-xs); }
+[data-screen="rooms"] .rm-rec-tfs { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 6px; }
+[data-screen="rooms"] .rm-rec-tf { display: grid; gap: 2px; padding: 7px 9px; border-radius: 8px; border: 1px solid var(--console-line); background: var(--console); }
+[data-screen="rooms"] .rm-rec-tf span { color: var(--ink-2); font-size: var(--t-xs); }
+[data-screen="rooms"] .rm-rec-tf small { font-size: var(--t-xs); }
+[data-screen="rooms"] .rm-rec-tf small.up { color: var(--up); }
+[data-screen="rooms"] .rm-rec-tf small.down { color: var(--down); }
+[data-screen="rooms"] .rm-rec-ul { margin: 0; padding-left: 18px; display: grid; gap: 3px; font-size: var(--t-sm); }
+[data-screen="rooms"] .rm-rec-ul time { color: var(--muted); font-family: var(--f-term); }
+[data-screen="rooms"] .rm-rec-ul a { color: var(--ink); }
+[data-screen="rooms"] .rm-rec-ul .up { color: var(--up); }
+[data-screen="rooms"] .rm-rec-ul .down { color: var(--down); }
+[data-screen="rooms"] .rm-rec-foot { margin: 0; font-size: var(--t-xs); }

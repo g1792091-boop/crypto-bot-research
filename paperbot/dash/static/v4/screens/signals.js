@@ -2,8 +2,9 @@
 // /api/status, and the signal log (/api/signals) with a timeframe filter, search and 10 rows a page. A signal is an
 // entry REQUEST: whether an account really entered is on its account screen. New signals (a real new id) slide in.
 // Old homes: 신호 tab, 서버 상태 › 최근 24시간 신호 (INVENTORY.md 12).
-import {h, ui, fmt, motion, local, put} from "../core/pb.js";
+import {h, ui, fmt, motion, local, put, bars, serverNow} from "../core/pb.js";
 import {SIG_KO, SIG_CLS, sigByTf, limitsOf, limitFor, sec, dayTime, note, TF_ORDER} from "./server-kit.js";
+import {waitRoom} from "./strategies-radar.js";
 
 const TFS = [{id: "", label: "전부"}, {id: "5m", label: "5분"}, {id: "15m", label: "15분"}, {id: "30m", label: "30분"}, {id: "1h", label: "1시간"},
   {id: "4h", label: "4시간"}, {id: "1d", label: "일봉(기록)"}];
@@ -14,6 +15,8 @@ const nameKo = (code) => (fmt.familyKo(String(code || "")) ? `딥시크 · ${fmt
 export async function mount(el, ctx) {
   ctx.setTitle("신호");
   el.append(ui.screenHead("신호", "봉이 닫힐 때 매매법이 낸 진입 요청"));
+  // fill-radar: 곧 신호 대기실 (the 36's conditions on 6 coins, strategies-radar.js) and the 24-hour coin x timeframe map
+  el.append(h("div", {class: "signals-top"}, waitRoom(ctx).el, heatCard(ctx).el));
 
   // ---------------------------------------------------------------- the last 24 hours per timeframe
   const sumBody = h("div", {class: "stack tight"});
@@ -99,6 +102,73 @@ export async function mount(el, ctx) {
 }
 
 export function unmount() {}
+
+// ---------------------------------------------------------------- 24 hours: coin x timeframe (fill-radar)
+const HEAT_TFS = ["5m", "15m", "30m", "1h", "4h"];
+/** /api/signals rows (newest first) -> {coins, tfs, cells: {"SYM|tf": {n, long, short, late}}, n, capped} for the last 24 h.
+ *  capped: 1,000 rows came back and the oldest is still inside the 24 h (older ones are missing from the count). */
+export function heatMap(rows, now) {
+  const since = now - 864e5, cells = {}, coins = new Set(bars.TRADE_SYMS), tfs = new Set(["15m", "30m", "1h", "4h"]);
+  let n = 0, oldest = Infinity;
+  for (const r of rows || []) {
+    if (!r || !(Number(r.bar_close) >= since)) continue;
+    oldest = Math.min(oldest, Number(r.bar_close));
+    if (!HEAT_TFS.includes(r.timeframe)) continue;
+    const c = (cells[`${r.symbol}|${r.timeframe}`] ||= {n: 0, long: 0, short: 0, late: 0});
+    c.n++; n++;
+    if (Number(r.side) > 0) c.long++; else c.short++;
+    if (r.status === "LATE") c.late++;
+    coins.add(r.symbol); tfs.add(r.timeframe);
+  }
+  return {coins: bars.SYMS.filter((s) => coins.has(s)), tfs: HEAT_TFS.filter((t) => tfs.has(t)), cells, n,
+    capped: (rows || []).length >= 1000 && oldest > since};
+}
+
+function heatCard(ctx) {
+  const body = h("div", {class: "sig-heat-wrap"}, motion.shimmer(4));
+  const foot = note();
+  const card = ui.card({plate: "24시간 신호 지도", sub: "코인 × 봉 · 모든 묶음의 신호 수", cls: "sig-heatcard"}, body, foot,
+    note("칸 = 지난 24시간 그 코인·봉에서 나온 신호 수 (초록 롱 · 빨강 숏). 색이 진할수록 많습니다. 새 신호가 들어오면 그 칸이 한 번 반짝입니다. "
+      + "딥시크·동전 봇도 수만 셉니다 (손익 아님). 봉 이름 아래 숫자는 그 봉이 다음에 닫히기까지 남은 시간입니다."));
+  let prev = null, shown = false;
+  function paint(rows) {
+    const m = heatMap(rows, serverNow());
+    const cells = new Map();
+    const max = Math.max(1, ...Object.values(m.cells).map((c) => c.n));
+    put(body, h("div", {class: "sig-heat", style: {"--cols": String(m.tfs.length)}},
+      h("span", {class: "sig-heat-h"}, "코인"),
+      m.tfs.map((tf) => h("span", {class: "sig-heat-h"}, fmt.tfKo(tf), h("small", {class: "sig-heat-cd num", dataset: {tf}}, bars.closeIn(tf, serverNow())))),
+      m.coins.map((sym) => [h("b", {class: "sig-heat-coin"}, fmt.coin(sym)), m.tfs.map((tf) => {
+        const c = m.cells[`${sym}|${tf}`];
+        if (!c) return h("span", {class: "sig-heat-cell zero"}, "0");
+        const x = h("span", {class: "sig-heat-cell", style: {"--a": `${Math.round(10 + 36 * c.n / max)}%`},
+          title: `${fmt.coin(sym)} ${fmt.tfKo(tf)} · 롱 ${c.long} · 숏 ${c.short}${c.late ? ` · 늦음 ${c.late}` : ""}`},
+          h("b", {class: "num"}, fmt.int(c.n)), h("small", null, h("span", {class: "up"}, fmt.int(c.long)), " · ", h("span", {class: "down"}, fmt.int(c.short))),
+          c.late ? h("small", {class: "warn-t"}, `늦음 ${fmt.int(c.late)}`) : null);
+        cells.set(`${sym}|${tf}`, [x, c.n]);
+        return x;
+      })])));
+    if (prev) for (const [k, [x, n]] of cells) if (n > (prev.get(k) || 0)) motion.flash(x, "accent");   // a real new signal
+    prev = new Map([...cells].map(([k, [, n]]) => [k, n]));
+    foot.textContent = m.n ? `지난 24시간 신호 ${fmt.int(m.n)}개` + (m.capped ? " · 최근 1,000개까지만 셉니다 (그보다 오래된 것은 빠짐)" : "")
+      : "지난 24시간 동안 신호가 아직 없습니다";
+  }
+  async function load() {
+    try {
+      const rows = await ctx.api("/api/signals?limit=1000");
+      if (!ctx.alive()) return;
+      paint(Array.isArray(rows) ? rows : []);
+      shown = true;
+    } catch (e) {
+      if (e && e.name === "AbortError") return;
+      if (!shown) put(body, ui.notYet("준비 전", "신호 기록을 읽지 못했습니다"));
+    }
+  }
+  ctx.every(1000, () => { const now = serverNow(); for (const x of body.querySelectorAll(".sig-heat-cd")) x.textContent = bars.closeIn(x.dataset.tf, now); }, {now: false});
+  ctx.every(60000, load, {now: false});
+  load();
+  return {el: card};
+}
 
 // the server's group keys (paperbot/groups.py, dash/app.py signal_group) in the owners' order and words. No 추가 계좌
 // row: the server never counts one (a copy trades on its original's signals, counted with the 36; the new-strategy

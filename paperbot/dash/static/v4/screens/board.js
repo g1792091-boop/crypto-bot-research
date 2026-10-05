@@ -4,7 +4,8 @@
 // HONESTY: coin-flip comparisons are '참고' (neutral colours, refNote); DeepSeek rows carry only the bare 참고 pill;
 // extras are never compared; every money table has assume().
 import {h, put, ui, fmt, derive, motion, local} from "../core/pb.js";
-import {groupCards, topBottom, rankList, groupKo, savedGroup, expInfo, extraPills, ORDER, TF_ORDER} from "./home-shared.js";
+import {groupCards, topBottom, rankList, groupKo, savedGroup, expInfo, extraPills, paintRoe, ORDER, TF_ORDER} from "./home-shared.js";
+import {boardTable} from "./board-table.js";
 import {rowMotion} from "./board-motion.js";
 
 let current = null;          // the mounted screen's group setter (update() uses it)
@@ -31,7 +32,19 @@ export async function mount(el, ctx) {
   const rowMo = rowMotion(ctx, el);         // ▲▼ since the last visit, small equity lines, a tint on a real change
   const list = rankList(ctx, {sorts: true, full: true, memo: "board-list", flips: true});   // coin flips in place (참고)
   const refBox = h("div");
-  const listCard = ui.card({plate: "전체 목록", acts: [list.countEl]}, list.el, refBox,
+  // 카드 / 표 (fill-people): the dense v3 table, 50 rows a page; the choice is remembered on this device
+  const table = boardTable(ctx, {onRender: () => paintRoe(table.el, st.board, (s) => ctx.store.mark(s))});
+  st.view = local.get("board-view", "card") === "table" ? "table" : "card";
+  const viewSeg = h("span", {class: "board-view"});
+  const paintView = () => {
+    list.el.hidden = st.view === "table";
+    table.el.hidden = st.view !== "table";
+    put(viewSeg, ui.seg([{id: "card", label: "카드"}, {id: "table", label: "표"}], st.view, (id) => {
+      st.view = id; local.set("board-view", id); paintView(); if (id === "table" && st.board) table.set(st.board, st.gs, st.sel);
+    }, {label: "보기 고르기"}));
+  };
+  paintView();
+  const listCard = ui.card({plate: "전체 목록", acts: [viewSeg, list.countEl]}, list.el, table.el, refBox,
     ui.assume(null, "수익률·잔고는 닫힌 거래 기준 (열린 포지션 손익 제외)"));
   const tfBody = h("div", {class: "board-tfbody"});
   const tfCard = ui.card({plate: "봉별 요약", sub: "참고"}, tfBody,
@@ -40,7 +53,13 @@ export async function mount(el, ctx) {
   const xBody = h("div");
   const xCard = ui.card({plate: "추가 계좌", sub: "복제·새 매매법 · 늦게 시작해 따로 셈"}, xBody, ui.assume());
   xCard.hidden = true;
-  el.append(h("div", {class: "board-grid"}, tbCard, listCard), h("div", {class: "board-grid2"}, tfCard, xCard));
+  // v3 had 코인별 · 요일·시간대별 성적 under the ranking: they live in 분석 now, one tap away
+  const links = h("nav", {class: "board-links", "aria-label": "분석으로"}, h("span", {class: "muted"}, "더 보기 (분석)"),
+    h("a", {class: "btn-line", href: href("analysis", "sessions")}, "코인별 · 시간대별 성적"),
+    h("a", {class: "btn-line", href: href("analysis", "map")}, "코인·장세 지도"),
+    h("a", {class: "btn-line", href: href("analysis", "overlap")}, "계좌 겹침"),
+    h("a", {class: "btn-line", href: href("analysis", "risk")}, "손익비·위험"));
+  el.append(h("div", {class: "board-grid"}, tbCard, listCard), links, h("div", {class: "board-grid2"}, tfCard, xCard));
 
   // ---------------------------------------------------------------- renderers
   // the four counts keep their elements: a count that really changed counts to its new value with a soft tint
@@ -129,6 +148,8 @@ export async function mount(el, ctx) {
     rowMo.update(b, st.sel);
     tb.set(b, gs, st.sel);
     list.set(b, gs, st.sel, !animate);
+    if (st.view === "table") table.set(b, gs, st.sel);
+    paintRoe(el, b, (s) => ctx.store.mark(s));
     put(moNote, rowMo.note(st.sel));
     put(tfBody, tfTable());
     tfCard.querySelector(".card-h .sub").textContent = `${groupKo(st.sel)} · 참고`;
@@ -153,6 +174,8 @@ export async function mount(el, ctx) {
   if (!ctx.alive()) return;
   if (b0 instanceof Error) el.insertBefore(ui.errorBox(b0, () => ctx.store.refresh("board").catch(() => {})), el.children[1] || null);
   ctx.watch("summary", (s) => { if (s) { st.summary = s; render(false); } });
+  // the open-position chips' live ROE (기존 36 / 5분봉 / 추가 only): the ticker's mark price, every 5 s
+  ctx.watch("ticker", () => paintRoe(el, st.board, (s) => ctx.store.mark(s)));
   ctx.watch("board", (b) => { if (b) { st.board = b; st.gs = derive.groupStats(b); render(false); } });
 }
 

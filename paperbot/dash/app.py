@@ -1540,7 +1540,7 @@ def office_schedule(now_ms: int, hours: Optional[dict] = None) -> dict:
 
 FIXED_NORMAL_KO = "딥시크·5분봉은 규칙상 늘 보통 배수"
 # /api/v4/curves: the steps it answers in (15 minutes, 1 hour, 4 hours, 1 day), its series and its longest answer
-CURVE_STEPS = (900_000, 3_600_000, 14_400_000, 86_400_000)
+CURVE_STEPS = (300_000, 900_000, 3_600_000, 14_400_000, 86_400_000)  # fill-home: 5 min for a run under 2 days
 CURVE_KEYS = ("strategy", "ds200", "reel", "random", "random_5m")
 CURVE_MAX_POINTS = 2_000
 CURVE_SETTLE_MS = 15 * 60_000       # a step is kept once it ended this long ago
@@ -3101,7 +3101,7 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
     # v4 additions (dash/more): race and calendar, strategy grid, daily story, since-last-visit, trade replay (read-only)
     from . import more
     app.state.more = more.register_all(app, data=data, rooms=rooms, db=db, daily_db=daily_db, agents_db=agents_db,
-                                       checkpoint_db=checkpoint_db, candles=candles)
+                                       checkpoint_db=checkpoint_db, candles=candles, frames=frames)
 
     app.mount("/static", StaticFiles(directory=STATIC), name="static")
     return app

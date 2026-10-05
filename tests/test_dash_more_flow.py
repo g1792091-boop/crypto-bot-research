@@ -113,7 +113,7 @@ def test_race_medians_band_and_points(db):
 
 def test_race_steps_keep_korea_time_boundaries(db):
     f = flow(db)
-    assert f.race("auto")["step"] == H                        # under 40 days: hourly
+    assert f.race("auto")["step"] == 15 * MIN                 # day 3: 15 minutes (fill-home; hourly from day 7)
     for step in (4 * H, 24 * H):
         r = f.race(str(step))
         assert r["step"] == step and r["t"][0] == START and r["t"][-1] == NOW

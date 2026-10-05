@@ -7,6 +7,7 @@ import {h, ui, fmt, local, store} from "../core/pb.js";
 import {roomAvatar, agentsState, agentsBadge, agentsBanner, syncUnread, markSeen} from "./rooms-kit.js";
 import {makeChat} from "./rooms-chat.js";
 import {makeSide} from "./rooms-side.js";
+import {latestEventKo, stratOf} from "./rooms-record.js";
 
 const NARROW = "(max-width: 1099px)";
 let cur = null;           // the mounted screen's update hook (update() is module-level by contract)
@@ -49,7 +50,11 @@ export async function mount(el, ctx) {
   listPane.append(seg, search, teamHead, teamBox, stratHead, pager.el);
 
   function lastLine(r) {
-    if (!r.last_text) return h("span", {class: "muted"}, "아직 회의 없음");
+    if (!r.last_text) {
+      // fill-people: before its first meeting a strategy room shows its strategy's newest real event (code records)
+      const ev = r.kind !== "team" ? latestEventKo(st.events && st.events[stratOf(r.room_id, r)]) : null;
+      return ev ? h("span", {class: "rm-ev", title: "회의 전 · 코드 기록"}, h("time", null, fmt.hm(ev.ts)), " ", ev.text) : h("span", {class: "muted"}, "아직 회의 없음");
+    }
     const who = r.last_speaker && !["code", "system"].includes(r.last_role) ? `${r.last_speaker}: ` : "";
     const lines = String(r.last_text).split("\n");
     if (lines.length > 1 && /^\s*↳/.test(lines[0])) lines.shift();
@@ -138,6 +143,8 @@ export async function mount(el, ctx) {
     side.render();
   });
   ctx.watch("usage", (u) => { if (u) side.setUsage(u); });
+  const loadEvents = () => ctx.api("/api/v4/people/strats").then((d) => { if (ctx.alive() && d && d.strats) { st.events = d.strats; renderList(); } }).catch(() => {});
+  ctx.every(60000, loadEvents);
   ctx.on("rooms", (map) => {
     if (st.id && (map[st.id] || 0) > 0) chat.fetchNew();
   });

@@ -2,9 +2,10 @@
 // trades, its signals, the order book, market liquidations (only while the liquidation recorder runs) and price
 // alerts. Each pane loads when it is first shown and follows the chart's coin.
 import {h, ui, fmt, store, local, motion, features} from "../core/pb.js";
-import {normPos, tradeRow, nameNode} from "./positions-kit.js";
+import {normPos, tradeRow, nameNode, countOnly, COUNT_ONLY_KO, COUNT_ONLY_WHY} from "./positions-kit.js";
 import {bookPanel} from "./positions-book.js";
 import {alertsPane} from "./chart-alerts.js";
+import {usdKo} from "./market-live.js";
 
 const STATUS_KO = {SUBMITTED: "진입 요청", RECORD: "기록만", LATE: "늦음 (진입 안 함)", NO_PRICE: "가격 없음", NO_ATR: "ATR 없음"};
 
@@ -17,26 +18,37 @@ export function sidePanels(ctx, o) {
   let tab = local.get("chart-tab", "pos");
   const body = h("div", {class: "stack"});
   const tabsEl = h("div");
-  const el = h("section", {class: "card chart-panels", "aria-label": "이 코인 자세히"}, tabsEl, body);
+  const tabCard = h("section", {class: "card chart-panels", "aria-label": "이 코인 자세히"}, tabsEl, body);
+  // 거래 채우기: at 1280 px and wider the panels in STACK are shown at once, one card each (v3 had them side by side);
+  // the rest stay as tabs under them. A phone and a narrow PC keep one tab at a time.
+  const STACK = ["pos", "sig", "liq", "al"];
+  const STACK_KO = {pos: "이 코인 포지션", sig: "최근 신호", liq: "시장 강제청산", al: "가격 알림"};
+  const wideMq = typeof matchMedia === "function" ? matchMedia("(min-width: 1280px)") : null;
+  let wide = !!(wideMq && wideMq.matches);
+  const stackEl = h("div", {class: "stack chart-stack"});
+  const el = h("div", {class: ["stack", "chart-side", wide ? "wide" : ""]}, stackEl, tabCard);
   const panes = {};
+  const stacked = (id) => wide && STACK.includes(id) && (id !== "liq" || features.liq);
+  const showing = (id) => tab === id || stacked(id);
 
   // ---------------------------------------------------------------- this coin's open positions
   const posRow = (x) => {
     const m = store.mark(x.pos.symbol);
-    const roe = m ? (x.pos.side * x.pos.qty * (m - x.pos.entry)) / x.pos.margin : null;
+    const hide = countOnly(x.a, "");      // D10/D11: a mixed list, so DeepSeek / coin flips show no money
+    const roe = m && !hide ? (x.pos.side * x.pos.qty * (m - x.pos.entry)) / x.pos.margin : null;
     const lock = x.pos.lock_roe != null && !(x.a.kind === "reel" || (x.a.kind === "random" && x.a.timeframe === "5m"));
     return h("div", {class: "lrow click", role: "listitem", tabindex: "0", title: "차트에 이 계좌 진입·청산 표시",
       onclick: () => o.onPick(x.a.account_id), onkeydown: (e) => { if (e.key === "Enter") o.onPick(x.a.account_id); }},
       ui.sideTag(x.pos.side), h("span", {class: "lname"}, nameNode(x.a)),
-      h("span", {class: ["ret", "num", fmt.tone(roe)]}, roe == null ? "—" : fmt.pct(roe)),
+      hide ? h("span", {class: "ret muted", title: COUNT_ONLY_WHY}, COUNT_ONLY_KO) : h("span", {class: ["ret", "num", fmt.tone(roe)]}, roe == null ? "—" : fmt.pct(roe)),
       h("span", {class: "meta"}, h("span", null, fmt.lev(x.pos.leverage)), h("span", null, `진입 ${fmt.price(x.pos.entry)}`),
-        h("span", {class: lock ? "up" : ""}, lock ? `잠금 +${fmt.num(x.pos.lock_roe * 100, 0)}% ${fmt.price(x.pos.stop)}` : `손절 ${fmt.price(x.pos.stop)}`),
+        h("span", {class: lock && !hide ? "up" : ""}, lock ? `잠금${hide ? "" : " +" + fmt.num(x.pos.lock_roe * 100, 0) + "%"} ${fmt.price(x.pos.stop)}` : `손절 ${fmt.price(x.pos.stop)}`),
         h("a", {href: ctx.href("account", x.a.account_id), onclick: (e) => e.stopPropagation()}, "계좌")));
   };
   const mine = () => ((board && board.accounts) || []).filter((a) => a.position && a.position.symbol === sym).map((a) => ({a, pos: normPos(a.position)}));
   const makePos = () => {
     const pg = ui.pager({size: 10, row: posRow, empty: "이 코인에 열린 포지션이 없습니다"});
-    const pane = h("div", {class: "stack tight"}, h("p", {class: "pos-note"}, "누르면 차트에 그 계좌의 진입·청산과 손절선이 나옵니다. ROE는 마크 가격 기준."), pg.el,
+    const pane = h("div", {class: "stack tight"}, h("p", {class: "pos-note"}, "누르면 차트에 그 계좌의 진입·청산과 손절선이 나옵니다. ROE는 마크 가격 기준. 딥시크·동전 봇은 개수만."), pg.el,
       ui.assume("open"));
     pane.refresh = (keep) => pg.set(mine().sort((x, y) => (y.pos.entry_time || 0) - (x.pos.entry_time || 0)), keep);
     pane.refresh(false);
@@ -46,7 +58,7 @@ export function sidePanels(ctx, o) {
   // ---------------------------------------------------------------- this coin's closed trades
   const makeTrades = () => {
     const pg = ui.pager({size: 10, row: (t) => tradeRow(t, board && board.accounts.find((a) => a.account_id === t.account_id),
-      {onClick: (r) => ctx.go("account", r.account_id)}), empty: "이 코인 체결이 아직 없습니다"});
+      {onClick: (r) => ctx.go("account", r.account_id), countOnly: countOnly(t, "")}), empty: "이 코인 체결이 아직 없습니다"});
     const sum = h("div");
     const pane = h("div", {class: "stack tight"}, sum, pg.el, ui.assume());
     let mySym = null;
@@ -90,7 +102,7 @@ export function sidePanels(ctx, o) {
   };
 
   // ---------------------------------------------------------------- market liquidations (feature: the recorder runs)
-  const usdK = (x) => (x >= 1e6 ? `${fmt.num(x / 1e6, 2)}M` : x >= 1e3 ? `${fmt.num(x / 1e3, 1)}K` : fmt.num(x, 0));
+  const usdK = (x) => usdKo(x);      // 만 / 억 like 시장 and the 이 코인 시장 지표 card (no 'K' / 'M' beside '만')
   const makeLiq = () => {
     const box = h("div", {class: "stack tight"}, motion.shimmer(3));
     const pane = h("div", {class: "stack tight"}, box);
@@ -105,21 +117,21 @@ export function sidePanels(ctx, o) {
         if (!d.recorder) { box.replaceChildren(ui.empty("강제청산 기록기 자료가 없습니다")); return; }
         const tot = (d.long_usd || 0) + (d.short_usd || 0), share = tot > 0 ? d.long_usd / tot : 0.5;
         const quiet = d.last_any ? Math.floor((Date.now() - d.last_any) / 60000) : null;
-        box.replaceChildren(
+        box.replaceChildren(...[      // (nulls left out: replaceChildren would print them as the text "null")
           quiet != null && quiet >= 10 ? h("p", {class: "chart-warn"}, `기록기가 ${fmt.int(quiet)}분째 조용합니다. 아래는 그 전까지의 기록입니다.`) : null,
           h("p", {class: "pos-sum"}, `최근 1시간 ${fmt.coin(d.symbol)} 강제청산 (바이낸스 전체, ${fmt.int(d.n || 0)}건, 달러)`),
           h("div", {class: "pos-bkbar"}, h("span", {class: "down num"}, `롱 ${usdK(d.long_usd || 0)}`), h("div", {class: "chart-liqbar"}, h("i", {style: {width: (share * 100).toFixed(1) + "%"}})),
             h("span", {class: "up num"}, `숏 ${usdK(d.short_usd || 0)}`)),
-          ...(d.rows || []).slice(0, 12).map((r) => h("div", {class: "lrow"}, h("span", {class: "rk"}, fmt.hm(r.ts)),
+          ...(d.rows || []).slice(0, stacked("liq") ? 6 : 12).map((r) => h("div", {class: "lrow"}, h("span", {class: "rk"}, fmt.hm(r.ts)),
             h("span", {class: ["lname", r.liquidated === "long" ? "down" : "up"]}, r.liquidated === "long" ? "롱 청산" : "숏 청산"),
             h("span", {class: "ret num"}, usdK(r.usd)), h("span", {class: "meta"}, `가격 ${fmt.price(r.price)}`))),
           (d.rows || []).length ? null : ui.empty("최근 1시간 기록 없음"),
-          h("p", {class: "pos-note"}, "롱 청산 = 롱 포지션이 강제로 정리됨 (가격 하락 쪽). 바이낸스가 코인마다 1초에 1건만 알려 줘서 실제보다 적게 잡힙니다."));
+          h("p", {class: "pos-note"}, "롱 청산 = 롱 포지션이 강제로 정리됨 (가격 하락 쪽). 바이낸스가 코인마다 1초에 1건만 알려 줘서 실제보다 적게 잡힙니다.")].filter(Boolean));
       } catch (e) { if (!(e && e.name === "AbortError")) box.replaceChildren(ui.errorBox(e, pane.refresh)); }
       finally { busy = false; }
     };
     pane.refresh();
-    ctx.every(10000, () => { if (tab === "liq") pane.refresh(); }, {now: false});
+    ctx.every(10000, () => { if (showing("liq")) pane.refresh(); }, {now: false});
     return pane;
   };
 
@@ -129,9 +141,24 @@ export function sidePanels(ctx, o) {
   const make = {pos: makePos, trd: makeTrades, sig: makeSignals, book: () => { const b = bookPanel(ctx, sym, {rows: 8}); b.refresh = () => b.load(); return b; },
     liq: makeLiq, al: () => { const a = alertsPane(ctx, {sym, onData: o.onAlerts}); a.refresh = () => a.load(); a.load(); return a; }};
   let tabKey = "";
+  let stackKey = "";
+  const renderStack = () => {
+    const ids = STACK.filter(stacked);
+    const key = ids.join(",") + "|" + mine().length;
+    if (key === stackKey) return;
+    stackKey = key;
+    stackEl.hidden = !ids.length;
+    stackEl.replaceChildren(...ids.map((id) => {
+      if (!panes[id]) { panes[id] = make[id](); panes[id].created = true; panes[id].symShown = sym; }
+      const label = id === "pos" ? `${STACK_KO.pos} ${fmt.int(mine().length)}` : STACK_KO[id];
+      return h("section", {class: "card chart-panels chart-stackp", "aria-label": label}, h("div", {class: "card-h"}, ui.plate(label)), panes[id]);
+    }));
+    if (ids.includes("liq") && panes.liq) panes.liq.refresh();      // (its first load ran before it was on the page)
+  };
   const renderTabs = () => {
-    const opts = TABS();
-    if (!opts.some((x) => x.id === tab)) tab = "pos";
+    renderStack();
+    const opts = TABS().filter((x) => !stacked(x.id));
+    if (!opts.some((x) => x.id === tab)) tab = opts.length ? opts[0].id : "pos";
     const key = opts.map((x) => x.label).join("|") + tab;
     if (key === tabKey) return;
     tabKey = key;
@@ -146,16 +173,30 @@ export function sidePanels(ctx, o) {
     if (tab === "book" || tab === "liq") p.refresh();
     if (animate) motion.swap(body);
   };
+  const refreshStacked = () => {
+    for (const id of STACK.filter(stacked)) {
+      const p = panes[id];
+      if (p && p.symShown !== sym) { p.symShown = sym; if (p.setSym) p.setSym(sym); if (p.refresh) p.refresh(); }
+    }
+  };
   el.setSym = (s) => {
     if (s === sym) return;
     sym = s;
     for (const [k, p] of Object.entries(panes)) if (k !== tab) p.symShown = null;
-    tabKey = ""; renderTabs(); show(false);
+    tabKey = ""; stackKey = ""; renderTabs(); show(false); refreshStacked();
   };
   el.onBoard = (b) => { board = b; renderTabs(); if (panes.pos) panes.pos.refresh(true); };
-  el.onTicker = () => { if (panes.pos && tab === "pos") panes.pos.refresh(true); if (panes.al) panes.al.tick(); };
+  el.onTicker = () => { if (panes.pos && showing("pos")) panes.pos.refresh(true); if (panes.al) panes.al.tick(); };
   el.onTrades = (rows) => { if (panes.trd && (rows || []).some((t) => t.symbol === sym)) panes.trd.refresh(); };
-  el.onFeatures = () => { tabKey = ""; renderTabs(); };
+  el.onFeatures = () => { tabKey = ""; stackKey = ""; renderTabs(); show(false); };
+  const onWide = () => {
+    const w = !!(wideMq && wideMq.matches);
+    if (w === wide) return;
+    wide = w;
+    el.classList.toggle("wide", wide);
+    tabKey = ""; stackKey = ""; renderTabs(); show(false); refreshStacked();
+  };
+  if (wideMq) { wideMq.addEventListener("change", onWide); ctx.track(() => wideMq.removeEventListener("change", onWide)); }
   el.alerts = () => { if (!panes.al) panes.al = make.al(); return panes.al; };
   renderTabs();
   show(false);

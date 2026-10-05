@@ -77,7 +77,7 @@ export function refTag(a, gs) {
 export function vsFoot(group) {
   if (group === "ds" || group === "coin" || group === "extra") return null;
   return h("p", {class: "assume home-vsfoot"}, h("b", null, "참고"), " · 동전 ▲▼ = 같은 봉 동전 봇 중앙값보다 위·아래 · 판정은 30일째",
-    group === "all" ? " · 딥시크는 계좌마다 표시 안 함" : "");
+    group === "all" ? " · 딥시크·동전 봇은 개수만 (순위 없이 맨 뒤)" : "");
 }
 
 /** Pills of a copy / new-strategy account and the runner's status when it is not running normally. */
@@ -108,25 +108,57 @@ export function rankRow(a, o) {
     h("span", {class: ["ret", "num", fmt.tone(a.ret)]}, fmt.pct(a.ret)));
   }
   // one meta line: "거래 22 · 낙폭 1.2%" (+ W-L, wallet, open position on the 순위표); the timeframe leads the name
+  // D10/D11: in a mixed list (showGroup) a DeepSeek / coin-flip row is counted only: no balance, return or drawdown
+  const co = !!o.showGroup && derive.countOnlyIn(a, "all");
   const words = [];
   if (o.showGroup) words.push(groupKo(fmt.groupOf(a)));
   words.push(`거래 ${fmt.int(a.trades)}`);
   if (o.full && a.trades) words.push(`${fmt.int(a.wins)}승 ${fmt.int(a.losses)}패`);
-  if (o.full && a.wallet != null) words.push(`잔고 ${fmt.money(a.wallet)}`);
-  if (a.max_drawdown) words.push(`낙폭 ${fmt.pct(a.max_drawdown, 1, false)}`);
+  if (o.full && a.wallet != null && !co) words.push(`잔고 ${fmt.money(a.wallet)}`);
+  if (a.max_drawdown && !co) words.push(`낙폭 ${fmt.pct(a.max_drawdown, 1, false)}`);
   const meta = [h("span", null, words.join(" · "))];
-  if (o.full && a.position) {
-    const p = a.position;
-    meta.push(h("span", {class: "home-pos"}, `● ${fmt.coin(p.symbol)} ${fmt.sideKo(p.side)} ${fmt.lev(p.leverage)}`));
-  }
+  if (o.full && a.position) meta.push(posChip(a));
   meta.push(ui.smallSample(a.trades, SMALL));
   if (a.bust) meta.push(ui.pill("파산", "bad", "잔고 10 USDT 미만으로 정지"));
   meta.push(refTag(a, o.gs), ...extraPills(a));
-  return h("a", {class: "lrow click home-row", href: o.href(a.account_id), role: "listitem", title: a.account_id},
-    h("span", {class: "rk"}, fmt.int(o.rk)),
+  return h("a", {class: ["lrow", "click", "home-row", co ? "count-only" : ""], href: o.href(a.account_id), role: "listitem", title: a.account_id},
+    h("span", {class: "rk"}, o.rk == null ? "—" : fmt.int(o.rk)),
     h("span", {class: "lname"}, fig(a, 20), ui.acctLabel(a)),
-    h("span", {class: ["ret", "num", fmt.tone(a.ret)]}, fmt.pct(a.ret)),
+    co ? h("span", {class: "ret muted", title: "딥시크·동전 봇은 섞인 목록에서 돈 숫자와 순위를 보이지 않습니다 (개수만)"}, "개수만")
+      : h("span", {class: ["ret", "num", fmt.tone(a.ret)]}, fmt.pct(a.ret)),
     h("span", {class: "meta"}, meta));
+}
+
+// ---------------------------------------------------------------- the open-position chip with its live ROE
+/** The groups whose open position may show money in a mixed list (기존 36 / 5분봉 / 추가; DeepSeek and the coin flips:
+ *  the chip names the position only, D10/D11). */
+export const ROE_GROUPS = new Set(["core", "m5", "extra"]);
+/** '● LTC 숏 30배' (+ a live ROE slot '+20.4%' that paintRoe fills from the mark price, money groups only). */
+export function posChip(a) {
+  const p = a.position;
+  const money = ROE_GROUPS.has(fmt.groupOf(a));
+  return h("span", {class: ["home-pos", money ? "roe-live" : ""], dataset: money ? {aid: a.account_id} : null,
+    title: money ? "열린 포지션 · 지금 마크 가격 기준 ROE (수수료 전, 5초마다)" : "열린 포지션 (딥시크·동전 봇은 손익을 보이지 않음)"},
+  `● ${fmt.coin(p.symbol)} ${fmt.sideKo(p.side)} ${fmt.lev(p.leverage)}`, money ? h("b", {class: "home-roe num"}) : null);
+}
+/** Fill every live chip under root: ROE = unrealized P&L at the mark price / margin (derive.livePnl, before the exit
+ *  fee). markOf(symbol) -> mark or null. A chip whose mark is unknown stays without a number (never a guess). */
+export function paintRoe(root, board, markOf) {
+  if (!root || !board) return;
+  const chips = root.querySelectorAll(".home-pos.roe-live[data-aid]");
+  if (!chips.length) return;
+  const by = new Map((board.accounts || []).map((a) => [a.account_id, a]));
+  for (const c of chips) {
+    const a = by.get(c.dataset.aid);
+    const u = a && a.position ? derive.livePnl(a.position, markOf(a.position.symbol)) : null;
+    const b = c.querySelector(".home-roe");
+    if (!b) continue;
+    if (!u || !Number.isFinite(u.roe)) { b.textContent = ""; c.classList.remove("up", "down"); continue; }
+    const txt = fmt.pct(u.roe, 1);
+    if (b.textContent !== txt) { b.textContent = txt; c.classList.remove("tick"); void c.offsetWidth; c.classList.add("tick"); }
+    c.classList.toggle("up", u.roe > 0);
+    c.classList.toggle("down", u.roe < 0);
+  }
 }
 
 // ---------------------------------------------------------------- group cards
@@ -288,10 +320,11 @@ export function rankList(ctx, o = {}) {
     if (st.tf !== "all") rows = rows.filter((a) => a.timeframe === st.tf);
     const s = SORTS.find((x) => x.id === st.sort) || SORTS[0];
     rows.sort((x, y) => { const p = s.key(x), q = s.key(y); return p < q ? -1 : p > q ? 1 : x.ret === y.ret ? 0 : y.ret - x.ret; });
-    // accounts with no closed trade and no open position: after the ranked ones, '—' instead of a rank number
-    rows = rows.filter((a) => !derive.unranked(a)).concat(rows.filter(derive.unranked));
+    // accounts with no closed trade and no open position: after the ranked ones, '—' instead of a rank number;
+    // in 전체 the DeepSeek and coin-flip accounts come last, by name, with no rank (D10/D11: counted only)
+    rows = derive.mixedOrder(rows.filter((a) => !derive.unranked(a)).concat(rows.filter(derive.unranked)), st.group);
     let rk = 0;
-    rows.forEach((a) => { a._rk = derive.unranked(a) ? null : ++rk; });
+    rows.forEach((a) => { a._rk = derive.unranked(a) || derive.countOnlyIn(a, st.group) ? null : ++rk; });
     countEl.textContent = `${groupKo(st.group)}${st.tf !== "all" ? " · " + fmt.tfKo(st.tf) : ""} · ${fmt.int(rows.length)}계좌`;
     // 순위표 only (o.flips, wave 2 part B): the same-bar coin flips sit at their real place in a 수익률 list
     const fl = o.flips && st.sort === "ret" ? withFlips(rows, st) : null;

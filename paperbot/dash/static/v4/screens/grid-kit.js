@@ -11,7 +11,7 @@
 // in the neutral pair (accent above, cyan below; also colour-blind safe) with refNote; a DeepSeek account gets no
 // per-account comparison (the 참고 pill and group-level medians only); a coin flip is the yardstick itself; money has
 // assume(); fewer than 10 trades = no colour, fewer than 30 = 표본 적음.
-import {h, s, ui, fmt, motion, store, local, stratFigure, stratHue} from "../core/pb.js";
+import {h, s, ui, fmt, motion, store, local, stratFigure, stratHue, derive} from "../core/pb.js";
 
 /** |difference| thresholds (ratios) of the colour steps 1..4; under the first one = 0 (비슷). */
 export const BINS = [0.005, 0.02, 0.05, 0.10];
@@ -131,6 +131,58 @@ export function heatCell(c, o = {}) {
   h("b", {class: "num"}, c.bust ? "파산" : cellPct(c.ret)),
   h("small", {class: "num"}, c.open ? h("i", {class: "gk-dot", "aria-hidden": "true"}) : null, `${fmt.int(c.n)}건`));
   return el;
+}
+
+// ---------------------------------------------------------------- fill-strat: 5년 시험 and 지금 포지션 cells
+/** |per-trade| thresholds of the 5-year colour steps: the 36's ROE on margin ("roe") use BINS; DeepSeek's and the
+ *  reel's net price % per trade with no leverage ("1x") are about 30x smaller, so their steps are too. */
+export const Y5_BINS_1X = [0.0002, 0.0007, 0.0017, 0.0035];
+export function y5Bin(v, unit) {
+  if (v == null || !Number.isFinite(v)) return null;
+  const t = unit === "1x" ? Y5_BINS_1X : BINS, a = Math.abs(v);
+  let k = 0;
+  for (const x of t) if (a >= x) k++;
+  return v < 0 ? -k : k;
+}
+
+/** One 5-year cell: the past test's mean result per trade (big) and win rate (small), coloured up / down (a past
+ *  fact, labelled 5년 과거 시험 · 참고; never this account's own record). y = {roe, win, per_day} or null (준비 전). */
+export function y5Cell(c, y, unit, o = {}) {
+  if (!c) return h("span", {class: "gk-cell none", title: o.noneTitle || "이 봉 계좌가 없습니다"}, h("b", null, "없음"));
+  const tf = fmt.tfKo(c.tf), what = unit === "1x" ? "가격 % (레버리지 없이)" : "ROE (증거금 대비)";
+  if (!y || y.roe == null) {
+    return h(o.href ? "a" : "span", {class: "gk-cell y5 none", href: o.href || null, title: `${o.label || nameOf(c)} · ${tf} · 5년 시험 자료 없음 (준비 전)`},
+      h("b", null, "—"), h("small", null, "자료 없음"));
+  }
+  const words = [`${o.label || nameOf(c)} · ${tf}`, `5년 과거 시험 거래 한 건 평균 ${what} ${fmt.pct(y.roe, 2)}`,
+    y.win != null ? `승률 ${fmt.pct(y.win, 0, false)}` : null, y.per_day != null ? `하루 ${fmt.num(y.per_day, 2)}건` : null, "참고 · 지금 계좌의 성적 아님"].filter(Boolean);
+  return h(o.href ? "a" : "span", {class: "gk-cell y5", href: o.href || null, dataset: {b: String(y5Bin(y.roe, unit) ?? "")},
+    title: words.join(" · "), "aria-label": words.join(", ")},
+  h("b", {class: "num"}, fmt.pct(y.roe, unit === "1x" ? 2 : 1)),
+  h("small", {class: "num"}, y.win != null ? `승률 ${fmt.pct(y.win, 0, false)}` : "5년"));
+}
+
+/** The live ROE of a board account's open position at the mark price (null without a position or a mark). */
+export function posRoe(a, mark) {
+  if (!a || !a.position) return null;
+  const u = derive.livePnl(a.position, mark ? mark(a.position.symbol) : null);
+  return u ? u.roe : null;
+}
+
+/** One 지금 포지션 cell: lit when its account holds a position (coin, side, leverage, live ROE), dim otherwise. */
+export function posCell(c, a, mark, o = {}) {
+  if (!c) return h("span", {class: "gk-cell none", title: o.noneTitle || "이 봉 계좌가 없습니다"}, h("b", null, "없음"));
+  const p = a && a.position;
+  const tf = fmt.tfKo(c.tf);
+  if (!p) {
+    return h(o.href ? "a" : "span", {class: "gk-cell pos off", href: o.href || null, title: `${o.label || nameOf(c)} · ${tf} · 지금 포지션 없음`},
+      h("b", null, "—"), h("small", null, c.bust ? "파산" : "대기"));
+  }
+  const r = posRoe(a, mark);
+  const words = `${o.label || nameOf(c)} · ${tf} · ${fmt.coin(p.symbol)} ${fmt.sideKo(p.side)} ${fmt.lev(p.leverage)} · 지금 평가 ROE (마크 가격, 나갈 때 수수료 전)`;
+  return h(o.href ? "a" : "span", {class: "gk-cell pos on", href: o.href || null, title: words, "aria-label": words},
+    h("b", {class: ["num", fmt.tone(r)], dataset: {posAcct: a.account_id}}, r == null ? "—" : fmt.pct(r, 1)),
+    h("small", null, `${fmt.coin(p.symbol)} ${fmt.sideKo(p.side)} ${fmt.lev(p.leverage)}`));
 }
 
 /** The colour scale as a legend strip: lo4 .. lo1, 0, hi1 .. hi4 with words. */

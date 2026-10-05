@@ -6,6 +6,7 @@ import {h, ui, fmt, store, motion, bars, serverNow, features} from "../core/pb.j
 import {countdown, fundPct} from "./positions-book.js";
 import {sideCounts} from "./positions-kit.js";
 import {termChip} from "./faq-terms.js";
+import {tempBoard, flowBoard, liqBoard} from "./market-live.js";
 
 const GH_KO = {long: "롱 타점", short: "숏 타점", longWait: "롱 대기", shortWait: "숏 대기", wait: "관망"};
 const GH_TONE = {long: "up", longWait: "up", short: "down", shortWait: "down"};
@@ -41,7 +42,11 @@ export async function mount(el, ctx) {
   const fundCard = ui.card({plate: "펀딩 · 우리 모의 계좌", sub: "다음 펀딩 때 내는 쪽·받는 쪽 · 개수만"}, fundBox,
     h("p", {class: "pos-note"}, "펀딩비", termChip("펀딩비"), " 비율이 +면 롱이 내고 숏이 받습니다 (−면 반대). 내고 받는 금액은 포지션 크기마다 달라 여기서는 개수만 셉니다. 줄을 누르면 그 코인의 포지션으로 갑니다."));
   const ghCard = ui.card({plate: "GH Coin 지금 판단", sub: "기록만 하는 참고용 · 계좌와 무관"}, gh);
+  // 거래 채우기: 코인 온도판 (store ticker), 시장 파생 지표판 (flow.db), 시장 강제청산 (liq.db)
+  const temp = tempBoard(ctx), flowB = flowBoard(ctx), liqB = liqBoard(ctx);
   el.append(ui.screenHead("시장", "바깥 시장 분위기 · 참고용"),
+    ui.card({plate: "코인 온도판", sub: "24시간 · 5초마다 서버 시세 · 누르면 차트"}, temp.el),
+    h("div", {class: "market-live"}, flowB.el, liqB.el),
     top,
     h("div", {class: "market-cols"},
       h("div", {class: "stack"}, ui.card({plate: "미국 지수", sub: "5일 흐름 · 장이 열린 시간에만 움직임"}, idx),
@@ -88,7 +93,8 @@ export async function mount(el, ctx) {
       return h("div", {class: ["lrow", "market-ev", past ? "past" : ""], role: "listitem"}, h("span", {class: "rk"}, fmt.kst(e.ts_ms)),
         h("span", {class: "lname"}, e.name_ko || e.kind), h("span", {class: ["ret", dd === "오늘" ? "accent" : ""]}, dd));
     }) : [ui.empty("등록된 일정이 없습니다")]),
-    (d.events_problems || []).length ? h("p", {class: "down pos-note"}, `일정 파일에서 읽지 못한 줄: ${d.events_problems.join(" · ")}`) : null);
+    // (a missing problem line is left out: replaceChildren would print a null as the text "null")
+    ...((d.events_problems || []).length ? [h("p", {class: "down pos-note"}, `일정 파일에서 읽지 못한 줄: ${d.events_problems.join(" · ")}`)] : []));
   }
   async function loadMarket() {
     try { mk = await ctx.api("/api/market"); if (ctx.alive()) renderTop(); }
@@ -174,14 +180,17 @@ export async function mount(el, ctx) {
   }
 
   ctx.watch("summary", (s) => { if (s) { sum = s; renderToday(); } });
-  ctx.watch("ticker", () => tick());
+  ctx.watch("ticker", () => { tick(); temp.update(); });
   ctx.watch("board", (b) => { if (b) { board = b; renderFund(); } });
   ctx.on("features", () => loadGh());
-  ctx.every(1000, tick, {now: false});
+  ctx.every(1000, () => { tick(); temp.tick(); }, {now: false});
+  ctx.every(60000, flowB.load, {now: false});
+  ctx.every(20000, liqB.load, {now: false});
   ctx.every(120000, loadMarket, {now: false});
   ctx.every(300000, loadGh, {now: false});
   renderToday();
-  await Promise.all([loadMarket(), loadGh(), store.need("summary", 60000).catch(() => null)]);
+  temp.update();
+  await Promise.all([loadMarket(), loadGh(), flowB.load(), liqB.load(), store.need("summary", 60000).catch(() => null)]);
 }
 
 export function unmount() {}

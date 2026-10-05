@@ -30,7 +30,7 @@ export function rowMotion(ctx, root, o = {}) {
     row.dataset.mo = "1";
     const id = row.getAttribute("title");
     const a = st.byId.get(id);
-    if (!a) return;
+    if (!a || derive.countOnlyIn(a, st.sel)) return;      // D10/D11: a count-only row (전체) gets no glow, arrow or line
     const ret = row.querySelector(".ret");
     const rk = row.querySelector(".rk");
     const fresh = performance.now() - st.updAt < FLASH_WINDOW;

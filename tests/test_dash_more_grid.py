@@ -319,7 +319,11 @@ def test_page_files_keep_the_honesty_rules():
             assert m is None or not re.search(r"--up|--down", m.group(1)), (blk[0], k)
     assert re.search(r"\.own \.gk-cell, \.gk-cell\.own \{ --hi: var\(--up\); --lo: var\(--down\); \}", css)
     # DeepSeek is coloured by its own return, never by a per-account coin-flip difference
-    assert 'group === "ds200" ? "own"' in grid_js or 'rowsOf(d, "ds200", "own")' in grid_js
+    # (fill-strat: DeepSeek's colour choices are 자기 수익률 / 5년 시험 / 지금 포지션, never the coin-flip difference)
+    ds_colors = re.search(r"const DS_COLORS = \[([^\]]*)\]", grid_js)
+    assert ('group === "ds200" ? "own"' in grid_js or 'rowsOf(d, "ds200", "own")' in grid_js
+            or (ds_colors and '"own"' in ds_colors.group(1) and '"vs"' not in ds_colors.group(1)
+                and "const mode = st.dsColor;" in grid_js))
     assert "계좌마다 동전 봇과 비교하지 않" in grid_js and "딥시크는 계좌마다 동전 봇과 비교하지 않" in kit
     for src in (kit, grid_js):
         assert "ui.refNote(" in src and "ui.assume(" in src

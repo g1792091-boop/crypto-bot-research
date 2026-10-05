@@ -8,12 +8,14 @@
 // DeepSeek only at group level); money has assume(); 표본 적음.
 // DeepSeek's first view (전체 요약, also #/strategies?g=ds&fam=all from the grid) opens with the 17-family summary
 // (strategies-dsfam.js: counts only, no money); tapping the 딥시크 group starts there, a family row opens that family.
-import {h, put, ui, fmt, motion, local} from "../core/pb.js";
+import {h, put, ui, fmt, motion, local, derive} from "../core/pb.js";
 import {miniSpark, profileCard, identicon} from "./grid-kit.js";
 import {DS_FAMILIES, FAMILY, DS_DEFS, DS_COMMON, EXITS, LEVERAGE, REEL} from "./strategies-defs.js";
 import {DS_RAW, REEL_RAW} from "./strategies-raw.js";
-import {strategyIndex} from "./strategies-calc.js";
+import {strategyIndex, accountsOf, groupOfStrategy} from "./strategies-calc.js";
+import {signalFeed} from "./strategies-panels.js";
 import {dsFamilyCard, familyStats, familyLine} from "./strategies-dsfam.js";
+import {radarCard} from "./strategies-radar.js";
 
 const GROUPS = [
   {id: "core", ko: "기존 36", intro: "잠긴 매매법 36개를 15분·30분·1시간·4시간봉 계좌로 돌립니다. 기록은 그 봉 계좌들을 더한 값입니다."},
@@ -26,6 +28,19 @@ const SORTS = [["", "기본 순서"], ["pnl", "수익률 높은 순"], ["pnl-", 
 /** One line of a record: "12승 9패 · 승률 57%" + P&L, or "거래 없음". */
 function recLine(r) {
   return r.trades ? `${fmt.int(r.wins)}승 ${fmt.int(r.losses)}패 · 승률 ${fmt.pct(r.rate, 0, false)}` : "거래 없음";
+}
+
+// PC (>= 1280 px): all 36 at once in dense columns (the v3 sidebar), phones and tablets 10 per page
+const WIDE_Q = "(min-width: 1280px)";
+const wideNow = () => typeof matchMedia === "function" && matchMedia(WIDE_Q).matches;
+
+/** A strategy's open positions (its own timeframe accounts) with their live ROE at the store's mark price:
+ *  [{a, p, roe}] (roe null while no mark is known). Unrealized, before the exit fee (ui.assume("open")). */
+export function openOf(board, id, mark) {
+  return accountsOf(board, id).filter((a) => a.position).map((a) => {
+    const u = derive.livePnl(a.position, mark ? mark(a.position.symbol) : null);
+    return {a, p: a.position, roe: u ? u.roe : null};
+  });
 }
 
 /** ?fam= from a link: "all" = the 17-family summary (""), a family id as it is; anything else = no request (null). */
@@ -42,7 +57,10 @@ export function listView(ctx, st) {
   const intro = h("p", {class: "ink2 strat-intro"});
   const filters = h("div", {class: "stack tight"});
   const body = h("div", {class: "stack"});
-  const el = h("div", {class: "stack"}, ui.card({plate: "묶음", cls: "strat-groupcard"}, gseg, intro, filters), body);
+  // 방금 나온 신호: every strategy's newest signals, beside the list on PC and under it on phones
+  const feed = signalFeed(ctx, {size: 12, groupOf: (id) => groupOfStrategy(id)});
+  const el = h("div", {class: "stack"}, ui.card({plate: "묶음", cls: "strat-groupcard"}, gseg, intro, filters),
+    h("div", {class: "strat-listgrid"}, body, feed.el));
 
   // ---------------------------------------------------------------- one row: curve + return; a tap opens the profile card
   // /api/v4/grid/sparks: each strategy's summed balance over the last 30 days (refreshed every minute while shown)
@@ -81,8 +99,22 @@ export function listView(ctx, st) {
     rowEl.setAttribute("aria-expanded", "true");
     motion.expand(c, true);
   }
+  // open positions: a glowing edge and the live ROE (the 36 and the reel; DeepSeek rows: the position only, no %)
+  const mark = (sym) => ctx.store.mark(sym);
+  function liveChips(s) {
+    const ops = openOf(st.board, s.id, mark);
+    if (!ops.length) return null;
+    const noMoney = s.group === "ds";
+    return h("span", {class: "strat-open"}, ops.slice(0, 2).map((x) => {
+      const chip = h("span", {class: "strat-ochip", title: `${fmt.tfKo(x.a.timeframe)} ${fmt.coin(x.p.symbol)} ${fmt.sideKo(x.p.side)} ${fmt.lev(x.p.leverage)} · 지금 평가 (마크 가격, 나갈 때 수수료 전)`},
+        `● ${fmt.coin(x.p.symbol)} ${fmt.sideKo(x.p.side)} ${fmt.lev(x.p.leverage)} `,
+        noMoney ? null : h("b", {class: ["num strat-roe", fmt.tone(x.roe)], dataset: {acct: x.a.account_id}}, x.roe == null ? "—" : fmt.pct(x.roe, 1)));
+      return chip;
+    }), ops.length > 2 ? h("span", {class: "muted"}, ` 외 ${fmt.int(ops.length - 2)}`) : null);
+  }
   function stratRow(s, rk, meta) {
     const x = spOf(s.id), ret = retOf(s);
+    const hot = s.rec.open > 0;
     const shown = x || s.rec.trades ? fmt.pct(ret) : "—";
     const open = sp.open === s.id;
     const rowEl = h("div", {class: "lrow click strat-row strat-prow", role: "button", tabindex: "0", "aria-expanded": String(open),
@@ -91,8 +123,9 @@ export function listView(ctx, st) {
     h("span", {class: "strat-spark"}, miniSpark(x && x.v, {label: `${s.ko} 최근 잔고 흐름`})),
     h("span", {class: ["ret num", fmt.tone(ret, shown)]}, shown),
     h("span", {class: "strat-chev", "aria-hidden": "true"}),
-    h("span", {class: "meta"}, meta));
-    const item = h("div", {class: ["strat-pitem", open ? "open" : ""], role: "listitem"}, rowEl);
+    h("span", {class: "meta"}, meta, hot ? liveChips(s) : null));
+    if (hot) rowEl.classList.add("strat-hot");
+    const item = h("div", {class: ["strat-pitem", open ? "open" : "", hot ? "hot" : ""], role: "listitem"}, rowEl);
     if (open) { const c = cardFor(s); c.hidden = false; c.style.height = ""; item.append(c); }
     rowEl.addEventListener("click", () => toggle(s, item, rowEl));
     rowEl.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(s, item, rowEl); } });
@@ -104,8 +137,10 @@ export function listView(ctx, st) {
     s.style ? ui.pill(s.style.replace(" 따라가기", "").replace(" 노리기", ""), "thin") : null,
     h("span", null, recLine(s.rec)), ui.smallSample(s.rec.trades), s.rec.open ? h("span", {class: "accent"}, `포지션 ${fmt.int(s.rec.open)}`) : null,
     s.rec.bust ? ui.pill(`파산 ${fmt.int(s.rec.bust)}`, "bad") : null, s.rare ? ui.pill("신호 드묾", "warn") : null]);
-  const coreList = ui.searchList({size: 10, row, placeholder: "매매법 이름 찾기 (예: 일목, MACD)",
+  const makeCore = (wide) => ui.searchList({size: wide ? 40 : 10, row, placeholder: "매매법 이름 찾기 (예: 일목, MACD)",
     match: (s, qq) => s.ko.toLowerCase().includes(qq) || s.id.toLowerCase().includes(qq)});
+  let wide = wideNow();
+  let coreList = makeCore(wide);
 
   // ---------------------------------------------------------------- DeepSeek: one family at a time
   const dsRow = (s) => stratRow(s, s.fam, [h("span", {class: "strat-rule1"}, DS_DEFS[s.id].lines[0]), h("span", null, recLine(s.rec)), ui.smallSample(s.rec.trades)]);
@@ -152,9 +187,22 @@ export function listView(ctx, st) {
 
   // persistent cards: a board refresh never rebuilds them (the search text, the page and open disclosures stay)
   const coreSub = h("span", {class: "sub"});
-  const coreCard = ui.card({plate: "매매법"}, coreList.el,
-    h("p", {class: "muted small"}, "곡선과 % = 봉 계좌 4개를 더한 잔고의 최근 30일 (닫힌 거래 기준). 줄을 누르면 프로필이 열립니다. 성격(추세·되돌림)은 과거 5년 시험에서 본 진입 방향입니다."),
-    ui.assume(null, "손익은 닫힌 거래 기준"));
+  const coreSlot = h("div", {class: ["strat-coreslot", wide ? "wide" : ""]}, coreList.el);
+  const coreCard = ui.card({plate: "매매법"}, coreSlot,
+    h("p", {class: "muted small"}, "곡선과 % = 봉 계좌 4개를 더한 잔고의 최근 30일 (닫힌 거래 기준). 줄을 누르면 프로필이 열립니다. 성격(추세·되돌림)은 과거 5년 시험에서 본 진입 방향입니다. 빛나는 줄 = 지금 포지션이 열린 매매법 (● 옆 % = 지금 평가 ROE)."),
+    ui.assume(null, "손익은 닫힌 거래 기준"), ui.assume("open"));
+  if (typeof matchMedia === "function") {
+    const mq = matchMedia(WIDE_Q);
+    const onWide = () => {
+      if (mq.matches === wide) return;
+      wide = mq.matches;
+      coreList = makeCore(wide);
+      coreSlot.classList.toggle("wide", wide);
+      put(coreSlot, coreList.el);
+      if (v.g === "core") fillCore(false);
+    };
+    try { mq.addEventListener("change", onWide); ctx.track(() => mq.removeEventListener("change", onWide)); } catch { /* an old browser: the width at opening */ }
+  }
   coreCard.querySelector(".card-h").append(coreSub);
   const dsAllCard = ui.card({plate: "딥시크 정의 44개", sub: "계열을 고르면 규칙을 한눈에"}, dsList.el, dsNote(), ui.assume(null, "손익은 닫힌 거래 기준"));
 
@@ -199,7 +247,7 @@ export function listView(ctx, st) {
     let kids;
     if (v.g === "core") {
       fillCore(!animate);
-      kids = [coreCard];
+      kids = [(sp.radar ||= radarCard(ctx)).el, coreCard];   // 신호 레이더 (strategies-radar.js), the 36 only
     } else if (v.g === "ds" && !v.fam) {
       dsList.set(rows, !animate);
       famCard.update(st.board);
@@ -246,6 +294,16 @@ export function listView(ctx, st) {
     for (const [id, x] of recEls) { const y = v.idx.find((z) => z.id === id); if (y) fillRec(x.el, y, x.ref); }
   }
   ctx.every(60000, loadSparks);
+  // the live ROE of the open rows follows the shared ticker (5 s); only a really changed value is repainted
+  ctx.watch("ticker", () => {
+    const accts = new Map(((st.board && st.board.accounts) || []).map((a) => [a.account_id, a]));
+    for (const b of body.querySelectorAll(".strat-roe[data-acct]")) {
+      const a = accts.get(b.dataset.acct), u = a && a.position ? derive.livePnl(a.position, mark(a.position.symbol)) : null;
+      if (!u) continue;
+      const txt = fmt.pct(u.roe, 1);
+      if (b.textContent !== txt) { b.textContent = txt; b.className = ["num strat-roe", fmt.tone(u.roe)].filter(Boolean).join(" "); }
+    }
+  });
 
   return {
     el,

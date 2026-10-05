@@ -94,7 +94,8 @@ def test_every_routed_screen_has_its_module_and_css_with_mount_and_unmount():
         src = _read(js)
         assert re.search(r"^export (async )?function mount\(el, ctx\)", src, re.M), name
         assert re.search(r"^export function unmount\(", src, re.M), name
-    assert routes["debate"]["feature"] == "debate"          # hidden until the debate room has run
+    # fill-people: the 토론방 tab is always visible, greyed with a '꺼짐' pill until the debate room has run
+    assert routes["debate"]["feature"] is None and 'soft: "debate"' in _read(os.path.join(V4, "core", "routes.js"))
 
 
 def test_inventory_maps_every_old_view_and_every_new_screen():
@@ -672,7 +673,7 @@ def test_v4_strategy_views_and_curves_are_asked_for():
     det = _read(os.path.join(V4, "screens", "strategies-detail.js"))
     assert "loadView(ctx, name, v.tf, v.sym, st.list36, kind)" in det and "researchBody(v.profile, v.tf)" in det
     home = _read(os.path.join(V4, "screens", "home.js"))
-    assert '"/api/v4/curves?step=3600000"' in home and "curvesOn = false" in home
+    assert "/api/v4/curves?step=${curveStep(st.board)}" in home and "curvesOn = false" in home  # fill-home: 15 min while young
     assert '"/api/v4/server"' in _read(os.path.join(V4, "screens", "server.js"))
 
 
