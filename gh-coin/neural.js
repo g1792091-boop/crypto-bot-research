@@ -283,6 +283,9 @@ function openFrom(it, trader, riskOverride, note) {
   { const f0 = S.feat[it.sym] || {}, bg = BRAIN.gateCheck(f0, BRAIN.regimeOf(f0), it.side);
     if (bg.block) { feed(`🧠 ${it.ko} ${it.name} 차단 — ${bg.why}`); return false; }
     if (bg.mul < 1) { tc.mul = (tc.mul ?? 1) * bg.mul; tc.why = (tc.why ? tc.why + " · " : "") + bg.why; } }
+  // 📅 일봉 추세 역행이면 리스크 절반 (4년·6코인 검증에서 우위가 확인된 건 일봉 추세 방향뿐 — lib/swing.js)
+  { let dt = null; try { dt = JSON.parse(localStorage.getItem("coinDailyTrend") || "{}")[String(it.ko).toLowerCase()]; } catch (e) {}
+    if (dt?.dir && dt.dir === -it.side && Date.now() - (dt.t || 0) < 3 * 864e5) { tc.mul = (tc.mul ?? 1) * 0.5; tc.why = (tc.why ? tc.why + " · " : "") + `일봉 추세(${dt.label}) 역행 → 리스크 절반`; } }
   // 📋 주문 미리보기(review → confirm → place, kevin1chun/robinhood-for-agents): 가격 칼라 + 포트폴리오 한도를 코드로 확인한 뒤에만 체결
   const C = cfg(), rD = Math.abs((it.px0 || price) - it.sl), moved = it.px0 ? (price - it.px0) * it.side : 0;
   if (it.px0 && rD > 0 && moved > 0.35 * rD) { feed(`📋 ${it.ko} ${it.name} 취소 — 가격 칼라: 신호 후 이미 ${(moved / rD).toFixed(2)}R 진행(추격 금지)`); return false; }

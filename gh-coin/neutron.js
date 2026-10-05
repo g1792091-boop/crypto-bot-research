@@ -5,7 +5,7 @@
 import { LAUNCHER, codeCall, webGet } from "../nuri-ai/engine.js";
 
 const VAULT = "GHCoin 뇌", DIR = "neutron";
-const VERDICT_KEYS = { riskVerdict: "coinRiskVerdict", taRating: "coinTARating", patterns: "coinPatterns", alpha: "coinAlpha", data: "coinDataV", ml: "coinML", selfAI: "coinSelfAI", calendar: "coinCalendar", sentiment: "coinSentiment", liveEntry: "coinLiveEntry" };
+const VERDICT_KEYS = { riskVerdict: "coinRiskVerdict", taRating: "coinTARating", patterns: "coinPatterns", alpha: "coinAlpha", data: "coinDataV", ml: "coinML", selfAI: "coinSelfAI", calendar: "coinCalendar", sentiment: "coinSentiment", liveEntry: "coinLiveEntry", swingAudit: "coinSwingAudit", dailyTrend: "coinDailyTrend", researchFail: "coinResearchFail" };
 const readJ = (k, d = null) => { try { return JSON.parse(localStorage.getItem(k) || "null") ?? d; } catch (e) { return d; } };
 const W = (path, content) => codeCall("write", { ws: "office", path, content });
 const day = (t = Date.now()) => new Date(t).toLocaleDateString("sv-SE");

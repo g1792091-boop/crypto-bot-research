@@ -242,6 +242,7 @@ const ACTIONS = [
   {job: "contest", re: /콘테스트|대회|리더보드|전략\s*순위|전략\s*경쟁|어느\s*전략.{0,6}(좋|나)|best\s*strategy/i, say: "데모거래팀이 지금 바로 전략 콘테스트를 열어 데모 전략들을 성과로 겨뤄 순위를 매깁니다"},
   {job: "ensemble", re: /앙상블\s*포트|포트폴리오|분산\s*(투자|운용|배분)|비중\s*(배분|분배|나눠)|여러\s*전략.{0,6}(묶|섞|합)|자본\s*배분/i, say: "데모거래팀이 신뢰점수 상위 전략들을 묶어 분산 포트폴리오(전략별 자본 비중)를 제안합니다"},
   {job: "reality", re: /1\s*억|얼마.{0,4}(벌|버|먹|불)|부자|대박|떡상|목표\s*수익|돈.{0,4}벌어|며칠.{0,6}얼마|현실\s*점검|가능\s*하냐|될\s*수\s*있/i, say: "CEO실이 '정직한 현실 점검'으로 목표 수익의 실제 도달·파산 확률을 몬테카를로로 솔직히 보여줍니다 (희망 회로 금지)"},
+  {job: "swing", re: /스윙\s*라인|일봉\s*추세|추세\s*추종.{0,6}(검증|데모)|장기\s*추세|스윙\s*(검증|전략)/i, say: "데모거래팀이 지금 바로 일봉 추세추종 뼈대를 6코인 묶음으로 검증하고, 통과한 것만 데모에 올립니다."},
   {job: "preset", re: /프리셋|준비된\s*매매법|기본\s*전략|고전\s*전략|rsi.{0,4}macd|RSI.{0,4}MACD|프리\s*셋|전략\s*비교/i, say: "준비된 매매법 프리셋(RSI·MACD·볼린저·스토캐스틱·EMA 등)을 AI 없이 바로 백테스트해 수익률·신뢰점수로 비교합니다 (io-uty 아이디어)"},
   {job: "rtentry", re: /실시간\s*진입|지금\s*(진입|들어가|롱|숏)|손\s*매매|시장가\s*진입|어디서\s*(들어가|진입)|진입\s*(자리|추천|알려)/i, say: "진입 타점팀과 뉴럴 데스크가 지금 바로 모든 코인의 실시간 진입 자리(손절·익절·유사상황 승률)를 계산하고 토론합니다"},
   {job: "evo", re: /매매법\s*.{0,6}(조합|섞|합쳐|개선|수정|진화|변형)|(조합|섞어|합쳐).{0,6}(매매법|전략)|전략\s*.{0,4}(조합|합치)/i, say: "매매법 개발팀이 지금 바로 매매법 개선(손익비·보유)·수정(필터)·조합(A+B)을 백테스트로 실험합니다 (검증 통과만 채택)"},
@@ -764,14 +765,14 @@ async function brainSyncJob(){
   await saveDoc({ title: `자체 뇌 정제 규칙 ${today()}`, path: `ghcoin/brain/refined-rules.md`, content: md, team: "hq", agent: "eng" });
   post({ ch: "hq", kind: "work", agent: "eng", icon: "🧠", text: `자체 뇌 동기화: 팀 거래 ${ingested}건 학습 → 지능 ${iq.score}/100. 정제 규칙을 ghcoin/brain/refined-rules.md 에 저장하고 설계팀·모델에 인계.` });
 }
-const JOBS = ["dev", "cdev", "evo", "bot", "opt", "dev", "botopt", "cdev", "survival", "patscan", "dev", "ml", "preset", "cdev", "combo", "dev", "evo", "bot", "contest", "ensemble", "brainsync", "dev", "cdev", "opt", "plan", "ic", "drift", "dev", "botopt", "alpha", "selfai", "retro", "task", "promote", "qrisk", "feeds", "news", "situ", "sent", "data", "selfdev", "task"];   // 개발·개선 우선(약 60%) · 판정이 진입 관문에 쓰이는 위원회·리스크·심리는 유지 · 시황은 소수
-const JOB_KO = {plan: "리서치 플래너(할 일 목록 → 워커 배정)", sent: "시장 심리(자체 감정 엔진)", pos: "단타·스윙 포지션 추천", contest: "전략 콘테스트(데모 성과 리더보드)", ensemble: "앙상블 포트폴리오(신뢰점수로 비중 배분)", reality: "정직한 현실 점검(목표 수익 도달·파산 확률)", preset: "준비된 매매법 프리셋 비교(io-uty RSI·MACD + 지표 146종)", survival: "생존 경쟁(개발자 KPI + 다윈 전략 진화)", track: "예측 적중률·캘리브레이션", report: "성과 대시보드", bot: "자동매매봇 전략 만들기", botopt: "자동매매봇 자동 개선(보조지표·위험값 하이퍼옵트)", selfai: "자체 AI 데스크(앙상블 방향·확신도 순위)", ic: "투자위원회(강세·약세 토론 → 결정)", qrisk: "퀀트 리스크(VaR·결정표·주문 전 점검)", data: "거래소 비교·데이터 품질", opt: "하이퍼옵트로 전략 다듬기", patscan: "패턴 스캐너", drift: "데모 성과 이동 감지(런 차트)", feeds: "경제 캘린더·금리·변동성 지수", alpha: "알파 팩터 순위", combo: "실시간 종합 지표 타점", dev: "매매법 개발 → 백테스트", cdev: "커스텀 지표 개발 → 백테스트", ind: "보조지표 분석", trend: "다중 시간대 추세 분석", entry: "진입 타점 분석", sr: "지지·저항 분석",
+const JOBS = ["dev", "cdev", "evo", "bot", "opt", "dev", "botopt", "cdev", "survival", "patscan", "dev", "ml", "preset", "swing", "cdev", "combo", "dev", "evo", "bot", "contest", "ensemble", "brainsync", "dev", "cdev", "opt", "plan", "ic", "drift", "dev", "botopt", "alpha", "selfai", "retro", "task", "promote", "qrisk", "feeds", "news", "situ", "sent", "data", "selfdev", "task"];   // 개발·개선 우선(약 60%) · 판정이 진입 관문에 쓰이는 위원회·리스크·심리는 유지 · 시황은 소수
+const JOB_KO = {plan: "리서치 플래너(할 일 목록 → 워커 배정)", sent: "시장 심리(자체 감정 엔진)", pos: "단타·스윙 포지션 추천", contest: "전략 콘테스트(데모 성과 리더보드)", ensemble: "앙상블 포트폴리오(신뢰점수로 비중 배분)", reality: "정직한 현실 점검(목표 수익 도달·파산 확률)", preset: "준비된 매매법 프리셋 비교(io-uty RSI·MACD + 지표 146종)", swing: "📈 스윙 라인(일봉 추세추종 뼈대 묶음 검증 → 데모)", survival: "생존 경쟁(개발자 KPI + 다윈 전략 진화)", track: "예측 적중률·캘리브레이션", report: "성과 대시보드", bot: "자동매매봇 전략 만들기", botopt: "자동매매봇 자동 개선(보조지표·위험값 하이퍼옵트)", selfai: "자체 AI 데스크(앙상블 방향·확신도 순위)", ic: "투자위원회(강세·약세 토론 → 결정)", qrisk: "퀀트 리스크(VaR·결정표·주문 전 점검)", data: "거래소 비교·데이터 품질", opt: "하이퍼옵트로 전략 다듬기", patscan: "패턴 스캐너", drift: "데모 성과 이동 감지(런 차트)", feeds: "경제 캘린더·금리·변동성 지수", alpha: "알파 팩터 순위", combo: "실시간 종합 지표 타점", dev: "매매법 개발 → 백테스트", cdev: "커스텀 지표 개발 → 백테스트", ind: "보조지표 분석", trend: "다중 시간대 추세 분석", entry: "진입 타점 분석", sr: "지지·저항 분석",
   tpsl: "익절·손절 관리", news: "뉴스·기사 분석", macro: "경제지표 예측", situ: "코인 상황판", pattern: "차트·캔들 패턴 분석", coin: "코인팀 회의", ml: "머신러닝·딥러닝 실험",
   promote: "데모 → 실거래 관문 심사", live: "실거래 데스크 점검", paper: "데모거래 보고", forecast: "방향 예측 토론", sns: "SNS 여론 확인", chat: "동료 수다", computer: "컴퓨터 작업",
   retro: "팀 회고·부족한 점 찾기", task: "개선 과제 수행", selfdev: "우리 앱 오류 찾아 코드 고치기", economy: "경제 리서치", brainsync: "자체 뇌 동기화(팀 결과→뇌 학습→정제 규칙 인계)", evo: "매매법 진화(개선·수정·조합)", rtentry: "⚡ 실시간 진입(손매매용 · 팀↔뉴럴 토론)"};
-const JOB_TEAM = {plan: "hq", sent: "news", pos: "entry", contest: "demo", ensemble: "demo", reality: "hq", preset: "demo", survival: "demo", track: "hq", report: "hq", bot: "bot", botopt: "bot", selfai: "selfai", ic: "ic", qrisk: "qrisk", data: "data", opt: "opt", patscan: "pattern", drift: "demo", feeds: "news", alpha: "ml", combo: "combo", dev: "dev", cdev: "cdev", ind: "ind", trend: "trend", entry: "entry", sr: "sr", tpsl: "tpsl", news: "news", macro: "news", situ: "situ", pattern: "pattern", coin: "btc", ml: "ml",
+const JOB_TEAM = {plan: "hq", sent: "news", pos: "entry", contest: "demo", ensemble: "demo", reality: "hq", preset: "demo", swing: "demo", survival: "demo", track: "hq", report: "hq", bot: "bot", botopt: "bot", selfai: "selfai", ic: "ic", qrisk: "qrisk", data: "data", opt: "opt", patscan: "pattern", drift: "demo", feeds: "news", alpha: "ml", combo: "combo", dev: "dev", cdev: "cdev", ind: "ind", trend: "trend", entry: "entry", sr: "sr", tpsl: "tpsl", news: "news", macro: "news", situ: "situ", pattern: "pattern", coin: "btc", ml: "ml",
   promote: "demo", live: "live", paper: "demo", forecast: "entry", sns: "news", chat: "hq", computer: "hq", retro: "hq", task: "hq", selfdev: "hq", economy: "news", brainsync: "hq", evo: "dev", rtentry: "entry"};
-const JOB_FN = () => ({plan: plannerJob, sent: sentimentJob, pos: posJob, contest: contestJob, ensemble: ensembleJob, reality: realityJob, preset: presetJob, survival: survivalJob, track: trackJob, report: dashboardJob, bot: botJob, botopt: botImproveJob, selfai: selfaiJob, ic: icJob, qrisk: qriskJob, data: dataJob, opt: optJob, patscan: patternScanJob, drift: driftJob, feeds: openFeedsJob, alpha: alphaJob, combo: comboJob, dev: () => research("std"), cdev: () => research("custom"), ind: indJob, trend: trendJob, entry: entryJob, sr: srJob, tpsl: tpslJob, news: economyCheck, macro: macroJob,
+const JOB_FN = () => ({plan: plannerJob, sent: sentimentJob, pos: posJob, contest: contestJob, ensemble: ensembleJob, reality: realityJob, preset: presetJob, swing: swingJob, survival: survivalJob, track: trackJob, report: dashboardJob, bot: botJob, botopt: botImproveJob, selfai: selfaiJob, ic: icJob, qrisk: qriskJob, data: dataJob, opt: optJob, patscan: patternScanJob, drift: driftJob, feeds: openFeedsJob, alpha: alphaJob, combo: comboJob, dev: () => research("std"), cdev: () => research("custom"), ind: indJob, trend: trendJob, entry: entryJob, sr: srJob, tpsl: tpslJob, news: economyCheck, macro: macroJob,
   situ: situJob, pattern: patternJob, coin: coinJob, ml: mlJob, promote: promoteJob, live: liveDeskJob, paper: paperReport, forecast: forecastJob, sns: snsCheck, chat: () => chatter(true),
   computer: computerWork, retro, task: doTask, selfdev: selfdevJob, economy: economyCheck, brainsync: brainSyncJob, evo: evoJob, rtentry: rtEntryJob});
 let cycleTimer = 0, cycling = false, lastJob = "";
@@ -784,6 +785,7 @@ export function startCycle(){
   import("./neutron.js").then(M => M.startNeutron?.()).catch(() => {});
   // ⚡ 실시간 진입: 3분마다 자동 분석(토론은 유력·보통 후보만, 같은 자리 10분에 한 번)
   if (!startCycle._rt){ startCycle._rt = setInterval(() => runLiveEntry({debate: hasAI()}).catch(() => {}), 3 * 60e3); setTimeout(() => runLiveEntry({debate: hasAI()}).catch(() => {}), 40e3); }   // 🧠 뉴트론: 뇌를 MCP·옵시디언 볼트로 내보내고 Claude Code·Claudian 제안을 받음 (exe 에서만)
+  if (!startCycle._sw){ startCycle._sw = 1; setTimeout(async () => { try { const a = readJ("coinSwingAudit", null); if (!a || Date.now() - a.t > 20 * 3600e3) await swingJob(); } catch(e){} }, 120e3); }
   if (cycleTimer) return;
   if (!localStorage.getItem("coinLastCycle")) localStorage.setItem("coinLastCycle", String(Date.now() - officeCfg().cycleMin * 60e3 + 45e3));
   cycleTimer = setInterval(() => cycle().catch(e => console.warn(e)), 20e3);
@@ -807,7 +809,7 @@ export async function cycle(force, onlyJob){
     if (job === "task" && !backlog().some(t => t.status !== "done")) job = "retro";
     if (job === "chat" && (running || chatting)) job = "economy";
     // AI 연결이 없어도 코드만으로 결정하는 업무(프리셋·진화·하이퍼옵트·봇개선·이동감지·리스크표·승격 심사)는 계속 돈다
-    const NOLLM = ["preset", "survival", "opt", "botopt", "drift", "qrisk", "promote", "contest", "ensemble", "evo", "patscan", "data", "feeds"];
+    const NOLLM = ["preset", "swing", "survival", "opt", "botopt", "drift", "qrisk", "promote", "contest", "ensemble", "evo", "patscan", "data", "feeds"];
     if (!ai && !NOLLM.includes(job)){ job = NOLLM[(+localStorage.getItem("coinNoAI") || 0) % NOLLM.length]; localStorage.setItem("coinNoAI", String((+localStorage.getItem("coinNoAI") || 0) + 1)); }
     lastJob = job; fire({kind: "cycle", job, label: JOB_KO[job]});
     post({ch: JOB_TEAM[job] || "hq", kind: "work", agent: TEAM_LEAD[JOB_TEAM[job]] || "lead", icon: "▶", text: `${JOB_KO[job]} 시작`});
@@ -1107,7 +1109,9 @@ async function research(lane = "std"){
     try { const F = await import("../nuri-ai/flow.js"); const [fs, dh] = await Promise.all([F.flowSnapshot({symbol: mk.market}).catch(() => null), F.derivHistory({symbol: mk.market, days: 30}).catch(() => null)]); flowText = fs?.text || ""; deriv = dh?.deriv || null; } catch(e){}
   }
   const snap = Q.snapshot(cs), cards = await Q.loadCards().catch(() => []);
-  const tried = researchLog().slice(-8).map(r => `- ${r.name} (${r.market} ${r.tf}): ${r.pass ? "통과" : "불통과"}, 검증 구간 ${r.oos?.toFixed?.(1)}%`).join("\n");
+  const last8 = researchLog().slice(-8), fewN = last8.filter(r => !r.pass && (r.n ?? 0) < 20).length;
+  const tried = last8.map(r => `- ${r.name} (${r.market} ${r.tf}): ${r.pass ? "통과" : "불통과"}, 검증 구간 ${r.oos?.toFixed?.(1)}%${r.why ? " — " + r.why : ""}`).join("\n")
+    + (fewN >= 3 ? `\n\n⚠ 최근 ${last8.length}건 중 ${fewN}건이 '거래 부족'으로 탈락했다. 이번에는 반드시: 진입 조건 2~3개만 · crosses_above/below 는 1개 이하(나머지는 > <) · funding·oi·long_short 조건 금지 · 과매도/과매수 문턱은 느슨하게(RSI 35/65, 스토캐스틱 25/75) · 검증 구간(뒤 30%)에서 20번 이상 진입할 만큼 흔한 조건으로.` : "");
   const levHint = {crypto: "코인 선물은 1~125배", us_stock: "주식은 보통 1~4배", kr_stock: "주식은 보통 1~2.5배", futures: "선물은 보통 5~20배", index: "지수 선물은 보통 5~20배"}[mk.cls];
   const tgt0 = assignModels()[a.id], local = !tgt0 || tgt0.id === "ollama";   // 로컬 모델은 1만 토큰 프롬프트를 읽다가 끊겼음 → 간결 프롬프트
   const sys = personaOf(a, (lane === "custom" ? "이번 일은 새 매매법 개발(커스텀 지표 라인)이다. 진입·청산의 핵심 조건은 반드시 직접 만든 custom 수식 지표로 하고, 기본 지표는 필터로만 쓴다. " : "이번 일은 모든 보조지표를 조합하는 새 매매법 개발이다. 기본 29종과 tv_ 지표에서 서로 다른 성격(추세·모멘텀·변동성·거래량) 3개 이상을 쓴다. ") + " 아래 형식 설명을 따라 전략 JSON 하나를 ```json 블록으로 쓰고, 블록 뒤에 왜 이 전략인지 2~3문장으로 말한다.") + "\n\n" + (local ? compactSpecPrompt(Q) : Q.STRATEGY_PROMPT)
@@ -1158,12 +1162,17 @@ async function research(lane = "std"){
   if (!vchk.ok){ post({ch: L.dev, kind: "system", text: `전략 제약 위반(${a.name}): ${vchk.fails.filter(f => f.level === "Error").map(f => f.text).join(", ")} → 다시 만듭니다`}); addResearch({lane, name: spec.name, market: mk.market, tf, pass: false, t: Date.now()}); return; }
   const v = agentById(L.checker);
   fire({kind: "busy", agent: v, text: `🧮 ${spec.name} · ${cs.length.toLocaleString()}봉 백테스트 · 시나리오 검사 중`});
+  // 거래 부족이면 코드가 조건을 자동 완화(스스로 고침) — 이후 견고성·교차코인 관문은 그대로 거친다
+  try { const rx = relaxSpec(Q, spec, cs, {deriv}, norm0); if (rx){ spec = {...rx.spec, name: spec.name}; post({ch: L.dev, kind: "system", text: `🔧 ${spec.name}: 거래가 너무 적어 자동 완화 — ${rx.log.join(" · ")}`}); } } catch(e){}
   const bt = Q.backtest(spec, cs, {deriv}), wf = Q.walkForward(spec, cs, {deriv});
   let scen = "", scenObj = null;
   try { const S = await import("../nuri-ai/scenarios.js"); scenObj = S.runScenarios(spec, cs, {deriv}); scen = S.scenarioText(scenObj); } catch(err){ scen = ""; }
   const st = x => ({ret: +(x?.return_pct ?? 0), dd: +(x?.max_dd_pct ?? 0), win: +(x?.win_rate ?? 0), pf: x?.profit_factor == null ? null : +x.profit_factor, n: x?.n_trades ?? 0});
   post({ch: L.bt, kind: "bt", agent: L.checker, lane, name: spec.name, market: mk.market, mname: mk.name, tf, hist, all: st(bt.stats), is: st(wf.is), oos: st(wf.oos), pass: wf.pass, reasons: wf.reasons, author: a.name, spec, scen, lev: spec.risk?.leverage});
-  addResearch({lane, name: spec.name, market: mk.market, tf, pass: wf.pass, oos: +(wf.oos?.return_pct ?? 0), t: Date.now()});
+  addResearch({lane, name: spec.name, market: mk.market, tf, pass: wf.pass, oos: +(wf.oos?.return_pct ?? 0), n: wf.oos?.n_trades ?? 0, why: wf.pass ? "" : failWhy(wf), t: Date.now()});
+  if (!wf.pass) try { const B = await import("./brain.js"), why = failWhy(wf).replace(/\d+건\(/, "N건("), fam = a.id === "qa" ? "추세추종" : "역추세·변동성", k = `research:${fam}:${tf}:${why.slice(0, 12)}`, cnt = (readJ("coinResearchFail", {})[k] || 0) + 1;
+    writeJ("coinResearchFail", {...readJ("coinResearchFail", {}), [k]: cnt});
+    B.learn({type: "교훈", text: `팀 매매법 연구 — ${fam} ${TF_KO[tf]}봉: ${why} (누적 ${cnt}회)`, model: "연구 채점", w: Math.min(4, 1 + cnt * 0.4), key: k}); } catch(e){}
   // 검증 보강 + 과최적화 관문: 워크포워드(70/30)에 더해 견고성(순열 검정·5구간 일관성·위생·최소 거래수)까지 통과해야 데모에 올린다
   let robust = {ok: true, why: ""};
   try {
@@ -1640,7 +1649,7 @@ export async function runLiveEntry({coins = COINS, debate = true, by = "auto"} =
     const V = k => readJ(k, {}) || {};
     for (const c of coins){
       try {
-        const ctx = {verdicts: {ta: V("coinTARating")[c.id], selfAI: V("coinSelfAI")[c.id], ml: V("coinML")[c.id]}};
+        const ctx = {verdicts: {ta: V("coinTARating")[c.id], selfAI: V("coinSelfAI")[c.id], ml: V("coinML")[c.id]}, daily: V("coinDailyTrend")[c.id] || null};
         try { ctx.whale = N?.whaleFor ? await N.whaleFor(c.sym) : null; } catch(e){}
         try { ctx.libSignal = N?.recentSignal ? N.recentSignal(c.sym) : null; } catch(e){}
         ctx.chartSigs = await chartSigsFor(c.sym, N);
@@ -1715,7 +1724,7 @@ export async function marketEntryNow({sym = "BTCUSDT", by = "user", onStep = () 
   const c = COINS.find(x => x.sym === sym) || {sym, ko: sym.replace("USDT", ""), id: sym.replace("USDT", "").toLowerCase()};
   const lead = agentById("strat") || agentById("qa"), V = k => readJ(k, {}) || {};
   onStep("📊 지지·저항 · 매수벽/매도벽 · 15분/1시간/4시간 추세 · 내 차트 지표 · 고래 · 펀딩 분석 중");
-  const ctx = {verdicts: {ta: V("coinTARating")[c.id], selfAI: V("coinSelfAI")[c.id], ml: V("coinML")[c.id]}};
+  const ctx = {verdicts: {ta: V("coinTARating")[c.id], selfAI: V("coinSelfAI")[c.id], ml: V("coinML")[c.id]}, daily: V("coinDailyTrend")[c.id] || null};
   try { ctx.whale = N?.whaleFor ? await N.whaleFor(sym) : null; } catch(e){}
   try { ctx.libSignal = N?.recentSignal ? N.recentSignal(sym) : null; } catch(e){}
   try { ctx.funding = await fundScanOf(sym); } catch(e){}
@@ -1729,6 +1738,7 @@ export async function marketEntryNow({sym = "BTCUSDT", by = "user", onStep = () 
   const facts = `${c.ko} 현재가 ${L.fmtPx(r.price)} · 추세 15분 ${r.tr["15"]} / 1시간 ${r.tr["60"]} / 4시간 ${r.tr["240"]} · ADX(1h) ${r.adx1h?.toFixed(0)} · RSI(15m) ${r.rsi15?.toFixed(0)}
 지지·저항: ${r.levels.filter(l => Math.abs(l.price / r.price - 1) < 0.03).map(l => `${L.fmtPx(l.price)}(${l.src.join("+")}, 강도 ${l.strength})`).join(", ")}
 호가: ±1% 불균형 ${r.book ? (r.book.imb1 * 100).toFixed(0) + "%" : "—"} · 매수벽 ${r.book?.bidWalls.filter(w => w.stable).slice(0, 2).map(w => L.fmtPx(w.price) + "×" + (w.xAvg || 0).toFixed(1)).join(", ") || "—"} · 매도벽 ${r.book?.askWalls.filter(w => w.stable).slice(0, 2).map(w => L.fmtPx(w.price) + "×" + (w.xAvg || 0).toFixed(1)).join(", ") || "—"}
+일봉 추세(4년 검증에서 유일하게 우위가 있던 기준): ${ctx.daily ? `${ctx.daily.label} · 50일선 대비 ${ctx.daily.distPct >= 0 ? "+" : ""}${ctx.daily.distPct}%` : "미확인"}
 내 차트 지표(15분): ${(r.myInd || []).map(x => x.name + (x.d15 > 0 ? "↑" : x.d15 < 0 ? "↓" : "·")).join(" ") || "없음"}
 ${sideTxt(A)}
 ${sideTxt(B)}
@@ -2541,6 +2551,54 @@ async function presetJob(){
   }
   addNote("demo", `프리셋 비교 ${PRE.length}개 · 데모 승격 ${promoted}개 (1위 ${results[0]?.pr.name} 신뢰 ${results[0]?.trust})`, "프리셋");
 }
+
+/* ---- 📈 스윙 라인 — 일봉 추세추종 뼈대를 6코인 묶음으로 검증해 통과한 것만 데모 장부에 올린다 (코드 검증 · AI 호출 없음) ----
+   근거(2026-10-05 실데이터): 1시간·4시간 지표 매매법 216개는 처음 보는 구간에서 우위 없음(묶음 손익비 0.84), 일봉 추세추종만 4년 묶음 손익비 1.5~1.9. lib/swing.js 머리말 참고. */
+async function swingJob(){
+  const Q = await import("../nuri-ai/quant.js"), P = await import("../nuri-ai/paper.js"), SW = await lib("swing"), RB = await lib("robust"), lead = agentById("trader") || agentById("qa");
+  const data = {}; for (const c of COINS){ try { data[c.sym] = await kl(c.sym, "D", 1500); } catch(e){} }
+  if (Object.keys(data).length < 3){ post({ch: "demo", kind: "system", text: "일봉 캔들을 못 받아 스윙 라인 검증을 건너뜁니다"}); return; }
+  const rows = SW.audit(Q, RB, data, COSTS.crypto), trends = {};
+  for (const c of COINS){ const t = SW.dailyTrend(Q, data[c.sym]); if (t) trends[c.id] = t; }
+  writeJ("coinDailyTrend", trends);
+  writeJ("coinSwingAudit", {t: Date.now(), rows: rows.map(r => ({key: r.key, name: r.name, n: r.n, pf: r.pf, pf1: r.pf1, pf2: r.pf2, recent: r.recent, pos: r.pos, coins: r.coins, p: r.p, pass: r.pass}))});
+  table("demo", lead.id, `📈 스윙 라인 검증 — 일봉 추세추종 뼈대 × ${Object.keys(data).length}코인 묶음 (약 4년 · 수수료·슬리피지·펀딩 포함 · 3배 · 손절 ATR×3)`, ["뼈대", "묶음 손익비", "거래", "전반 / 후반", "최근", "이익 코인", "운일 확률", "판정"],
+    rows.map(r => [r.name.replace("스윙 · ", ""), String(r.pf), String(r.n), `${r.pf1} / ${r.pf2}`, String(r.recent), `${r.pos}/${r.coins}`, r.p == null ? "—" : String(r.p), r.pass ? "✅ 데모" : "—"]),
+    "통과 = 묶음 손익비 1.3↑ · 60건↑ · 코인 2/3↑ 이익 · 전반·후반 둘 다 1 초과 · 운일 확률 0.2 이하 · 추세추종은 몇 달씩 잃는 구간이 있음(과거 성과가 미래를 보장하지 않음)");
+  const pass = rows.filter(r => r.pass), pick = [pass.find(r => !r.ls), pass.find(r => r.ls) || pass.filter(r => !r.ls)[1]].filter(Boolean);
+  const book = await P.loadBook(); let added = 0, retired = 0;
+  // 더는 통과 못 하는 뼈대는 (포지션이 없을 때) 내린다 → 스스로 교체
+  for (const s0 of book.strategies.filter(x => x.status === "active" && x.lane === "swing" && !x.pos)) if (!pass.some(r => r.name === s0.name)){ s0.retiredWhy = "스윙 재검증 탈락"; await P.setStatus(s0.id, "retired").catch(() => {}); retired++; }
+  for (const r of pick){ const seed = SW.SEEDS.find(x => x.key === r.key);
+    for (const c of COINS){ if (!data[c.sym]) continue;
+      if (book.strategies.some(x => x.status === "active" && x.name === seed.name && x.market === c.sym)) continue;
+      try { await P.addStrategy({spec: Q.normalizeSpec(SW.specOf(seed, c.sym, COSTS.crypto)), market: c.sym, exchange: "binancef", tf: "D", author: "스윙 라인(코드 검증)", cls: "crypto", mname: `${c.ko} 선물`, lane: "swing",
+        wf: {is: {ret: 0, dd: 0, win: 0, pf: r.pf1, n: Math.floor(r.n / 2)}, oos: {ret: 0, dd: 0, win: 0, pf: r.pf2, n: Math.ceil(r.n / 2)}}, robust: {ok: true, p: r.p, mwPos: null, mwTotal: null, sqn: null}, crossCoin: {profitable: r.pos, total: r.coins}}); added++; } catch(e){}
+    } }
+  const tl = COINS.map(c => trends[c.id] ? `${c.ko} ${trends[c.id].label}(50일선 ${trends[c.id].distPct >= 0 ? "+" : ""}${trends[c.id].distPct}%)` : "").filter(Boolean).join(" · ");
+  post({ch: "demo", kind: "system", text: `📈 스윙 라인: 통과 ${pass.length}/${rows.length}개 뼈대${added ? ` · 데모 투입 ${added}건(${pick.map(r => r.name.replace("스윙 · ", "")).join(" + ")})` : ""}${retired ? ` · 재검증 탈락 ${retired}건 내림` : ""} · 지금 일봉 추세: ${tl}`});
+  addNote("demo", `스윙 라인 검증: 통과 ${pass.length}/${rows.length} · 1위 ${rows[0]?.name} 묶음 손익비 ${rows[0]?.pf}`, "스윙");
+  try { const B = await import("./brain.js"); B.learn({type: "지식", text: `일봉 추세추종(${rows[0]?.name.replace("스윙 · ", "")}) 4년 6코인 묶음 손익비 ${rows[0]?.pf} · 1시간·4시간 지표 매매법은 처음 보는 구간 우위 없음(0.84)`, model: "스윙 검증", w: 3, key: "swing:audit"}); } catch(e){}
+  fire({kind: "liveentry"});
+}
+// 거래가 너무 적어 검증을 못 받는 전략: 진입 조건을 하나씩 빼 보며 검증 구간 거래가 기준(20건)을 채우는 가장 나은 변형을 찾는다(최대 2번, 코드가 직접)
+function relaxSpec(Q, spec, cs, opts, norm0){
+  const need = Q.GATE.min_test_trades, nOf = w => w.oos?.n_trades ?? 0; let w0;
+  try { w0 = Q.walkForward(spec, cs, opts); } catch(e){ return null; }
+  const m = Math.min(6, Math.max(spec.long_entry?.conditions?.length || 0, spec.short_entry?.conditions?.length || 0)); if (nOf(w0) >= need || m <= 1) return null;
+  // 남길 조건 묶음을 전부 시험(조건 ≤ 6개 → 최대 62가지): 기준을 채우는 것 중 조건을 가장 많이 남긴 것 → 검증 성적 좋은 것
+  let best = null;
+  for (let mask = 1; mask < (1 << m) - 1; mask++){
+    const keep = i => (mask >> i) & 1, y = JSON.parse(JSON.stringify(spec)); let kept = 0; for (let i = 0; i < m; i++) kept += keep(i);
+    for (const g of ["long_entry", "short_entry"]){ const a = y[g]?.conditions; if (!Array.isArray(a) || a.length < 2) continue; const f = a.filter((_, i) => i >= m || keep(i)); if (f.length) y[g].conditions = f; }
+    try { const z = norm0(y), w = Q.walkForward(z, cs, opts), n = nOf(w), score = (n >= need ? 1e12 : 0) + (n >= need ? kept * 1e9 : Math.min(n, need) * 1e9) + (w.pass ? 5e8 : 0) + (w.oos?.net_pnl || 0);
+      if (!best || score > best.score) best = {z, w, score, mask, n, kept}; } catch(e){}
+  }
+  if (!best || best.n <= nOf(w0)) return null;
+  const dropped = []; for (let i = 0; i < m; i++) if (!((best.mask >> i) & 1)) dropped.push(i + 1);
+  return {spec: best.z, log: [`진입 조건 ${dropped.join("·")}번 제거 → 검증 구간 거래 ${nOf(w0)}→${best.n}건`]};
+}
+const failWhy = wf => { const o = wf?.oos || {}, n = o.n_trades ?? 0; return n === 0 ? "거래 0건(조건이 너무 많아 한 번도 진입 못 함)" : n < 20 ? `거래 ${n}건(20건 미만 — 조건 과다)` : (wf.is?.net_pnl > 0 && !(o.net_pnl > 0)) ? "학습 구간만 이익(과최적화)" : !(o.net_pnl > 0) ? "검증 구간 손실" : "손익비 미달"; };
 
 /* ---- 🧬 생존 경쟁 — 개발자 KPI(성과 못 내면 경고) + 다윈 전략 진화(잘하는 전략 변이→부모보다 나은 후손만 생존) ----
    아이디어: cubexch/ai-fund(KPI 해고) · 0xSanei/darwinia·atlas-gic(다윈 진화). 전부 데모(가상)에서만 — 실자금·실지갑 없음. */

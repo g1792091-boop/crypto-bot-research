@@ -190,6 +190,9 @@ export async function analyzeCoin(sym, ctx = {}) {
     if (adx1h >= 20 && tAlign >= 2) { sc += 5; why.push(`1시간 ADX ${adx1h.toFixed(0)}(추세 있음)`); }
     const wh = ctx.whale; if (wh?.status === "approved") { if (wh.dir === side) { sc += 6; why.push(`고래 ${side > 0 ? "순매수" : "순매도"} ${Math.abs(wh.netPct)}%`); } else warn.push(`고래 반대 흐름 ${wh.netPct}%`); }
     const fd = ctx.funding; if (fd?.key === (side > 0 ? "hotLong" : "hotShort")) { sc -= 6; warn.push(`펀딩 ${side > 0 ? "롱" : "숏"} 과열`); }
+    // 일봉 추세(50일선·슈퍼트렌드·20/50): 4년·6코인 검증에서 유일하게 우위가 확인된 기준 → 같은 방향이면 근거, 역행이면 경고 + 등급 한 단계 내림
+    const dly = ctx.daily, dAgainst = !!(dly?.dir && dly.dir === -side);
+    if (dly?.dir === side) { sc += 6; why.push(`일봉 추세 ${dly.label}(50일선 ${dly.distPct >= 0 ? "+" : ""}${dly.distPct}%)`); } else if (dAgainst) { sc -= 10; warn.push(`일봉 추세 역행(일봉 ${dly.label}) — 검증상 일봉 추세 방향만 우위`); }
     const V = ctx.verdicts || {}; let vt = 0;
     if (V.ta?.all != null) { vt += Math.sign(V.ta.all) === side ? 1 : V.ta.all * side < -0.3 ? -1 : 0; }
     if (V.selfAI?.conf >= 55) vt += V.selfAI.dir === side ? 1 : V.selfAI.dir === -side ? -1 : 0;
@@ -208,12 +211,13 @@ export async function analyzeCoin(sym, ctx = {}) {
     //  유력 = 워크포워드 검증을 통과한 매매법 신호가 지금 같은 방향으로 나옴 + 추세 2/3↑ + 손익비 1.5↑ (그 매매법의 최근 실적이 근거)
     //  보통 = 3개 시간대 추세 일치 + 1시간 ADX 25↑ + 손익비 1.5↑ (표본외 ≈ 0R — 우위 미확인, 추세 동행일 뿐)
     const proven = sig || (csig?.active ? { name: csig.name, tf: csig.tf, mean: csig.mean ?? 0, n: csig.n ?? 0, wr: csig.wr ?? 0, t: Date.now() } : null);
-    const grade = tooFar && !proven ? "대기" : (proven && tAlign >= 2 && rr >= 1.5) ? "유력" : (tAlign === 3 && adx1h >= 25 && rr >= 1.5) ? "보통" : "관망";
+    const grade0 = tooFar && !proven ? "대기" : (proven && tAlign >= 2 && rr >= 1.5) ? "유력" : (tAlign === 3 && adx1h >= 25 && rr >= 1.5) ? "보통" : "관망";
+    const grade = dAgainst ? (grade0 === "유력" ? "보통" : grade0 === "보통" ? "관망" : grade0) : grade0;
     const evidence = !sig && proven ? `내 지표 매매법 '${proven.name}' 신호 · 뉴럴 실전 선별 통과(최근 ${proven.n}건 ${proven.mean >= 0 ? "+" : ""}${proven.mean}R)` : sig ? `검증 매매법 '${sig.name}'(${sig.tf === "60" ? "1시간" : sig.tf === "240" ? "4시간" : sig.tf + "분"}봉) 신호 ${Math.round((Date.now() - sig.t) / 60000)}분 전 · 최근 ${sig.n}건 기대값 ${sig.mean >= 0 ? "+" : ""}${sig.mean}R · 승률 ${sig.wr}%`
       : grade === "보통" ? "추세 동행(3개 시간대 일치·ADX 25↑) — 2개월 표본외 검증 ≈ 0R, 통계적 우위 미확인" : "검증된 근거 없음 — 관망 권장";
     const lev = Math.max(1, Math.min(sym === "BTCUSDT" ? 100 : 50, Math.floor(0.4 / slPct)));   // 청산공식: 손절 = 청산거리 40% 이하 (상한 BTC 100x·알트 50x)
     out.sides.push({ side, grade, score: sc, entry: price, sl: +slPx.toPrecision(7), tp1: +tp1.toPrecision(7), tp2: +tp2.toPrecision(7), slPct: +(slPct * 100).toFixed(2), tp1Pct: +(tp1Pct * 100).toFixed(2), tp2Pct: +(tp2Pct * 100).toFixed(2),
-      rr, rr1, wr, exp, n: nT, evidence, my, sig: sig ? { name: sig.name, tf: sig.tf, mean: sig.mean, n: sig.n, wr: sig.wr, t: sig.t } : null, wrRaw: +wrRaw.toFixed(1), expRaw: +expRaw.toFixed(3), base: { wr: base.wr, exp: base.exp }, wrTP2only: tbTP1.wr, expTP2only: tbTP1.exp, tb: { m5: tb5, m15: tb15, h1: tb1h }, lev, liq: +(price * (1 - side * 0.95 / lev)).toPrecision(7), slLevel: slLv ? { price: slLv.price, src: slLv.src, strength: slLv.strength } : null,
+      rr, rr1, wr, exp, n: nT, evidence, daily: dly ? { dir: dly.dir, label: dly.label, distPct: dly.distPct } : null, my, sig: sig ? { name: sig.name, tf: sig.tf, mean: sig.mean, n: sig.n, wr: sig.wr, t: sig.t } : null, wrRaw: +wrRaw.toFixed(1), expRaw: +expRaw.toFixed(3), base: { wr: base.wr, exp: base.exp }, wrTP2only: tbTP1.wr, expTP2only: tbTP1.exp, tb: { m5: tb5, m15: tb15, h1: tb1h }, lev, liq: +(price * (1 - side * 0.95 / lev)).toPrecision(7), slLevel: slLv ? { price: slLv.price, src: slLv.src, strength: slLv.strength } : null,
       tpLevels: tgt.slice(0, 2).map(l => ({ price: l.price, src: l.src, strength: l.strength })), why, warn,
       limitAlt: tooFar && slLv ? { entry: +(slLv.price + side * atr15 * 0.2).toPrecision(7), note: `구조 손절이 ${(slPct * 100).toFixed(1)}%로 멀어 시장가 부적합 → ${fmt(slLv.price)} 근처 지정가 대기` } : null,
       validUntil: Date.now() + 15 * 60e3, invalidPx: +(price + side * Math.abs(price - slPx) * 0.3).toPrecision(7) });
