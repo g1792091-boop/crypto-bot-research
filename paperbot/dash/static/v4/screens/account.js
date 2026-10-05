@@ -11,12 +11,21 @@
 import {h, ui, fmt, derive, store, motion, makeChart, candleOptions, tok, priceDec} from "../core/pb.js";
 import {normPos, posCard, tradeRow, reelExits, nameOf, groupKo, REEL_BARS, LADDER} from "./positions-kit.js";
 import {profileCard} from "./grid-kit.js";
+import {termChip, termify} from "./faq-terms.js";
 
 const OUTCOME_KO = {ENTERED: "진입", SKIPPED: "건너뜀", REJECTED: "거절", FILTERED: "규칙으로 건너뜀"};
 const EXTRA_ST_KO = {active: "도는 중", suspended: "멈춤 (보류)", held: "정지 (동결)"};
 const EVENT_KO = {created: "시작", suspended: "멈춤 (보류)", resumed: "다시 돎", held: "정지 (동결)", code_accepted: "새 코드 받아들임"};
 const TF_S = {"5m": 300, "15m": 900, "30m": 1800, "1h": 3600, "4h": 14400};
 const decOf = priceDec;
+/** 같은 매매법: the kinds whose timeframe accounts share one rule (a copy / new-lab extra follows its own). */
+const SAME_KINDS = new Set(["strategy", "ds200", "reel", "random"]);
+const tfRank = (tf) => { const i = fmt.TF_ORDER.indexOf(tf); return i < 0 ? 99 : i; };
+/** The board rows of a's strategy and kind, 5m → 4h (a itself included). */
+export function sameOf(board, a) {
+  return ((board && board.accounts) || []).filter((x) => x.strategy === a.strategy && x.kind === a.kind)
+    .sort((x, y) => tfRank(x.timeframe) - tfRank(y.timeframe));
+}
 const parseData = (raw) => { if (raw && typeof raw === "object") return raw; try { const d = JSON.parse(raw || "{}"); return d && typeof d === "object" ? d : {}; } catch (e) { return {}; } };
 
 let cur = null;           // {el, ctx, show(id)} of the mounted screen
@@ -152,16 +161,23 @@ export async function mount(el, ctx) {
         prof.card = profileCard(ctx, acc.account_id, {head: true, cls: "account-prof",
           sub: [acc.account_id, acc.created_ts ? `시작 ${fmt.kst(acc.created_ts)}` : null].filter(Boolean).join(" · "),
           onMissing: () => { prof.missing = true; if (view.prof === prof && view.plain) view.plain(); }});
+        if (view.prof && view.prof.mo) view.prof.mo.disconnect();
         view.prof = prof;
+        prof.mo = watchTerms(prof.card.el);
         prof.card.load();
       } else view.prof.card.load();
       headSlot.append(view.prof.card.el);
     }
-    el.replaceChildren(backLink(), headSlot,
+    const same = sameStrip(a, board, init);
+    view.same = same;
+    el.replaceChildren(backLink(), headSlot, same ? same.el : null,
       h("div", {class: "account-cols"},
         h("div", {class: "stack"}, walletCard, refSlot, posEl, eqCard, candleCard),
         h("div", {class: "stack"}, rules, extra, tradesCard)));
 
+    // "?" chips next to the number names this page draws (용어 사전 in the FAQ)
+    termify(walletCard);
+    if (posEl) termify(posEl);
     // the charts draw once their boxes are on the page
     drawEquity(eqBox, d, init, gen);
     const drawC = () => drawCandles(cBox, d, a, symSel.value, gen);
@@ -181,6 +197,57 @@ export async function mount(el, ctx) {
     return row;
   }
 
+  /** Keep the "?" chips on a card that redraws itself (the profile card): termify now and after each redraw. */
+  function watchTerms(node) {
+    termify(node);
+    if (typeof MutationObserver !== "function") return null;
+    const mo = new MutationObserver(() => termify(node));      // termify skips chipped labels: no loop
+    mo.observe(node, {childList: true, subtree: true});
+    ctx.track(() => mo.disconnect());
+    return mo;
+  }
+
+  // ---------------------------------------------------------------- 같은 매매법 (under the profile card)
+  // The same strategy's own timeframe accounts (same kind; a copy / new-lab extra follows another rule: no strip), each
+  // with its return now from the board row, or for DeepSeek and the coin flips only its trade count (counted, never
+  // money: CONTRACT §1.3, nothing per account beyond 참고), and whether it holds a position. Two buttons: the strategy page at this timeframe (rules and the
+  // indicator chart) and the strategy's own AI room when the server has one (the 36 only today).
+  function sameStrip(a, board, init) {
+    if (!board || !a.strategy || !SAME_KINDS.has(a.kind)) return null;
+    const ds = a.kind === "ds200", counts = ds || a.kind === "random";
+    const box = h("div", {class: "account-same-row", role: "list"});
+    const roomId = `strat:${a.strategy}`;
+    const rooms = store.get("rooms");
+    const hasRoom = rooms && Array.isArray(rooms.rooms) ? rooms.rooms.some((r) => r.room_id === roomId) : a.kind === "strategy";
+    const acts = h("div", {class: "row wrap account-same-acts"},
+      a.kind !== "random" ? h("a", {class: "btn-line", href: ctx.href("strategies", a.strategy, {tf: a.timeframe})}, "규칙·지표 차트 보기") : null,
+      hasRoom ? h("a", {class: "btn-line", href: ctx.href("rooms", roomId)}, "담당 AI 방") : null);
+    const paint = (b) => {
+      const sib = sameOf(b, a);
+      box.replaceChildren(...sib.map((x) => {
+        const me = x.account_id === a.account_id;
+        const pos = normPos(x.position);
+        const w = x.wallet == null ? init : x.wallet;
+        const r = w / init - 1;
+        const val = counts ? `${fmt.int(x.trades || 0)}건` : fmt.pct(r, 1);
+        const state = x.bust ? h("span", {class: "ps down"}, "파산") : pos ? h("span", {class: "ps"}, `${fmt.coin(pos.symbol)} `, ui.sideTag(pos.side))
+          : h("span", {class: "ps muted"}, "대기");
+        const kids = [h("span", {class: "tf"}, h("span", null, fmt.tfKo(x.timeframe)), me ? h("small", null, "지금") : null),
+          h("b", {class: ["num", counts ? "" : fmt.tone(r, val)]}, val), state];
+        return me ? h("div", {class: "account-same-t me", role: "listitem", "aria-current": "page"}, kids)
+          : h("a", {class: "account-same-t", role: "listitem", href: ctx.href("account", x.account_id), title: x.account_id}, kids);
+      }));
+      box.style.setProperty("--n", String(Math.max(1, Math.min(4, sib.length))));
+    };
+    paint(board);
+    const el = h("section", {class: "card account-same", "aria-label": "같은 매매법"},
+      h("div", {class: "card-h"}, ui.plate("같은 매매법"), h("span", {class: "sub"}, ds ? "봉마다 닫힌 거래 수 (딥시크는 계좌별 수익을 보지 않음)"
+        : counts ? "봉마다 닫힌 거래 수 (동전 봇은 비교 기준이라 개수만)" : "봉마다 지금 수익률"),
+        counts ? ui.pill("", "ref") : null),
+      box, acts, counts ? null : ui.assume("closed", "수익률 = 지금 잔고 ÷ 시작 잔고"));
+    return {el, update: (b) => { if (b && el.isConnected) paint(b); }};
+  }
+
   // ---------------------------------------------------------------- 참고 box
   function refBox(a, board, init) {
     const g = fmt.groupOf(a);
@@ -195,8 +262,8 @@ export async function mount(el, ctx) {
     const w = a.wallet == null ? init : a.wallet;
     if (med == null) return null;
     const where = w > med ? "위" : w < med ? "아래" : "같음";
-    return h("div", {class: "stack tight"}, h("p", {class: "pos-plain"}, h("b", null, "참고"), ` · 같은 ${fmt.tfKo(a.timeframe)}봉 동전 봇 중앙값 ${fmt.money(med)}보다 `,
-      h("b", null, where), " (이 계좌 ", fmt.money(w), ")"), ui.refNote(vts));
+    return h("div", {class: "stack tight"}, h("p", {class: "pos-plain"}, h("b", null, "참고"), ` · 같은 ${fmt.tfKo(a.timeframe)}봉 동전 봇 중앙값`, termChip("중앙값"),
+      ` ${fmt.money(med)}보다 `, h("b", null, where), " (이 계좌 ", fmt.money(w), ")"), ui.refNote(vts));
   }
 
   function extraCard(x) {
@@ -277,6 +344,7 @@ export async function mount(el, ctx) {
     if (!b || !view.id || !view.led) return;
     const r = b.accounts.find((x) => x.account_id === view.id);
     if (r && r.wallet != null) view.led(r.wallet);
+    if (view.same) view.same.update(b);
     const had = view.d && view.d.state && view.d.state.position, has = r && r.position;
     if (r && (!!had !== !!has || (had && has && had.entry_time !== has.entry_time))) reload();   // opened / closed
   });

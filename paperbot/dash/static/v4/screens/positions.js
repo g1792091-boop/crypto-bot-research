@@ -4,7 +4,7 @@
 // rule or the reel's own exits). Tabs 포지션 / 손절·잠금 주문 / 체결 기록 (closed trades with filters). A chosen coin
 // shows its head and order book. Prices: /api/ticker through the store (5 s); nothing here can place an order.
 import {h, ui, fmt, store, local, motion, serverNow} from "../core/pb.js";
-import {normPos, posCard, tradeRow, tradeSum, coinSeg, reelExits, nameNode, dist, groupKo} from "./positions-kit.js";
+import {normPos, posCard, tradeRow, tradeSum, coinSeg, reelExits, nameNode, dist, groupKo, sideCounts, oneSided, SKEW_MIN, SKEW_SHARE} from "./positions-kit.js";
 import {coinHead, bookPanel} from "./positions-book.js";
 
 const COINS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "LTCUSDT", "BCHUSDT"];
@@ -14,8 +14,11 @@ const TRADE_LIMIT = 1000;
 
 export async function mount(el, ctx) {
   ctx.setTitle("포지션");
+  // #/positions?coin=BTCUSDT (시장's funding rows): open on that coin, and remember it like a tap on its chip
+  const qCoin = String((ctx.params.query || {}).coin || "").toUpperCase();
+  if (COINS.includes(qCoin)) local.set("pos-sym", qCoin);
   const st = {
-    sym: local.get("pos-sym", ""), tab: local.get("pos-tab", "pos"), sort: local.get("pos-sort", "pnl"), grp: local.get("pos-grp", ""),
+    sym: COINS.includes(qCoin) ? qCoin : local.get("pos-sym", ""), tab: local.get("pos-tab", "pos"), sort: local.get("pos-sort", "pnl"), grp: local.get("pos-grp", ""),
     tPer: local.get("pos-tper", "today"), tRes: "all", tGrp: "",
     board: null, why: {}, open: new Set(), firstOpen: true, trades: null, tradesErr: null, tradesDirty: true, countsKey: "",
   };
@@ -82,13 +85,19 @@ export async function mount(el, ctx) {
   };
 
   // ---------------------------------------------------------------- the coin strip (counts of open positions)
+  // each coin: long ↑ / short ↓ counts and a dot when one side holds 80 % or more of at least 5 (counts only, no money)
   const renderCoins = (all) => {
     const counts = {};
-    for (const x of all) if (!st.grp || fmt.groupOf(x.a) === st.grp) counts[x.pos.symbol] = (counts[x.pos.symbol] || 0) + 1;
-    const key = JSON.stringify([counts, st.sym]);
+    const mine = all.filter((x) => !st.grp || fmt.groupOf(x.a) === st.grp);
+    for (const x of mine) counts[x.pos.symbol] = (counts[x.pos.symbol] || 0) + 1;
+    const sides = sideCounts(mine);
+    const key = JSON.stringify([counts, sides, st.sym]);
     if (key === st.countsKey) return;
     st.countsKey = key;
-    coinBar.replaceChildren(coinSeg(COINS, counts, st.sym, (s) => { st.sym = s; local.set("pos-sym", s); renderAll(false); }, {label: "코인 고르기"}));
+    const skewed = COINS.some((c) => oneSided(sides[c]));
+    coinBar.replaceChildren(coinSeg(COINS, counts, st.sym, (s) => { st.sym = s; local.set("pos-sym", s); renderAll(false); }, {label: "코인 고르기", sides}),
+      h("p", {class: "pos-note positions-skew-note"}, "↑ 롱 · ↓ 숏 개수",
+        skewed ? [" · ", h("i", {class: "pos-skew", "aria-hidden": "true"}), ` 한 방향 몰림 (${fmt.int(SKEW_MIN)}개 이상 중 한쪽 ${fmt.int(SKEW_SHARE * 100)}% 이상)`] : null));
   };
 
   // ---------------------------------------------------------------- summary (follows the coin and group filters)

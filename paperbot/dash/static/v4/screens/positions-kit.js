@@ -270,10 +270,40 @@ export function tradeSum(rows) {
     ` · 이긴 거래 ${fmt.int(wins)}`, liq ? h("span", {class: "down"}, ` · 강제청산 ${fmt.int(liq)}`) : null);
 }
 
-/** Coin strip: [전체 n] [BTC n] ... as a segmented control. counts: {sym: n}. */
+/** 한 방향 몰림: at least SKEW_MIN positions on a coin and one side holding SKEW_SHARE of them or more. Counts only. */
+export const SKEW_MIN = 5;
+export const SKEW_SHARE = 0.8;
+/** {long, short} -> "long" | "short" | null (not enough positions, or no side at 80 %). */
+export function oneSided(c) {
+  const l = Math.max(0, Number(c && c.long) || 0), sh = Math.max(0, Number(c && c.short) || 0), n = l + sh;
+  if (n < SKEW_MIN) return null;
+  return l / n >= SKEW_SHARE ? "long" : sh / n >= SKEW_SHARE ? "short" : null;
+}
+/** Open positions per coin by side: [{pos: {symbol, side}}] -> {sym: {long, short}}. */
+export function sideCounts(list) {
+  const out = {};
+  for (const x of list || []) {
+    const p = x && (x.pos || x);
+    if (!p || !p.symbol) continue;
+    const c = out[p.symbol] || (out[p.symbol] = {long: 0, short: 0});
+    if (Number(p.side) > 0) c.long++; else c.short++;
+  }
+  return out;
+}
+
+/** Coin strip: [전체 n] [BTC n] ... as a segmented control. counts: {sym: n}. o.sides ({sym: {long, short}}): each coin
+ *  shows "9↑ 3↓" (롱 ↑ · 숏 ↓) instead of its total, and a dot when it leans one way (oneSided). */
 export function coinSeg(syms, counts, value, onChange, o = {}) {
   const total = Object.values(counts || {}).reduce((s, n) => s + n, 0);
+  const lab = (s) => {
+    if (!o.sides) return [fmt.coin(s), h("small", {class: "pos-cnt"}, fmt.int((counts || {})[s] || 0))];
+    const c = o.sides[s] || {long: 0, short: 0}, sk = oneSided(c);
+    return [fmt.coin(s), h("small", {class: "pos-cnt pos-ls", title: `롱 ${fmt.int(c.long)} · 숏 ${fmt.int(c.short)}`},
+      h("span", {class: c.long ? "up" : ""}, `${fmt.int(c.long)}↑`), " ", h("span", {class: c.short ? "down" : ""}, `${fmt.int(c.short)}↓`)),
+      sk ? h("i", {class: ["pos-skew", sk], role: "img", "aria-label": `한 방향 몰림: ${sk === "long" ? "롱" : "숏"}이 80% 이상`,
+        title: `한 방향 몰림 · ${sk === "long" ? "롱" : "숏"} ${fmt.int(sk === "long" ? c.long : c.short)} / ${fmt.int(c.long + c.short)}`}) : null];
+  };
   const opts = [{id: "", label: [o.allLabel || "전체", h("small", {class: "pos-cnt"}, fmt.int(total))]}].concat(syms.map((s) =>
-    ({id: s, label: [fmt.coin(s), h("small", {class: "pos-cnt"}, fmt.int((counts || {})[s] || 0))]})));
+    ({id: s, label: lab(s)})));
   return ui.seg(opts, value, onChange, {label: o.label || "코인", scroll: true});
 }
