@@ -56,7 +56,7 @@ export function recordBox(ctx, name) {
         h("span", {class: fmt.tone(t.roe)}, tradeKo(t))))) : h("p", {class: "muted"}, "아직 없음"),
       h("p", {class: "rm-rec-k"}, "최근 신호"),
       (d.signals || []).length ? h("ul", {class: "rm-rec-ul"}, d.signals.slice(0, 4).map((s) => h("li", null, h("time", null, fmt.hm(s.bar_close)), " ", signalKo(s))))
-        : h("p", {class: "muted"}, "수집 전"),
+        : h("p", {class: "muted"}, Array.isArray(d.signals) ? "아직 없음" : "수집 전"),      // 수집 전 only when the source is missing
       h("p", {class: "muted rm-rec-foot"}, `코드가 기록한 그대로 · ${d.computed_at ? fmt.hm(d.computed_at) : ""} 기준 · 모의 계좌`));
   }).catch((e) => { if (!(e && e.name === "AbortError")) put(body, h("p", {class: "muted"}, "코드 기록을 불러오지 못했습니다")); });
   return box;

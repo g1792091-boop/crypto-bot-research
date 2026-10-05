@@ -58,17 +58,33 @@ export function groupStats(board) {
  *  would only be the alphabet). It is left out of 상위/하위, 최고 계좌 and the rank memo, and shows "—". */
 export const unranked = (a) => !!a && !((a.trades || 0) > 0) && !a.position;
 
-/** Accounts of a group ("all" = every original account) sorted by wallet, best first; unranked ones last. */
+/** D10/D11 (CONTRACT §1): a DeepSeek or coin-flip account is COUNTED ONLY outside its own group's view (no money, no
+ *  return, no place in a return ranking). view: the group the list shows ("all" / "" = a mixed list). */
+export const countOnlyIn = (a, view) => { const g = groupOf(a); return (g === "ds" || g === "coin") && view !== g; };
+const CO_ORDER = {ds: 0, coin: 1};
+/** A mixed list's order: the money accounts as they come, then the count-only ones (DeepSeek, then the coin flips) by
+ *  name, so their place never says how much they made. Other views: rows unchanged. */
+export function mixedOrder(rows, view) {
+  const money = rows.filter((a) => !countOnlyIn(a, view));
+  if (money.length === rows.length) return rows;
+  const co = rows.filter((a) => countOnlyIn(a, view)).sort((x, y) => (CO_ORDER[groupOf(x)] - CO_ORDER[groupOf(y)])
+    || String(x.account_id).localeCompare(String(y.account_id)));
+  return money.concat(co);
+}
+
+/** Accounts of a group ("all" = every original account) sorted by wallet, best first; unranked ones last. In "all"
+ *  the DeepSeek and coin-flip accounts come after everything else, by name (mixedOrder). */
 export function ranked(board, group = "all") {
   const init = (board && board.initial) || 5000;
   const rows = ((board && board.accounts) || []).filter((a) => group === "all" ? groupOf(a) !== "extra" : groupOf(a) === group);
-  return rows.map((a) => ({...a, ret: wal(a, init) / init - 1}))
-    .sort((x, y) => (unranked(x) - unranked(y)) || y.ret - x.ret || String(x.account_id).localeCompare(String(y.account_id)));
+  return mixedOrder(rows.map((a) => ({...a, ret: wal(a, init) / init - 1}))
+    .sort((x, y) => (unranked(x) - unranked(y)) || y.ret - x.ret || String(x.account_id).localeCompare(String(y.account_id))), group);
 }
 
-/** The ranked accounts only, and how many have no rank yet: {rows, waiting}. */
+/** The ranked accounts only, and how many have no rank yet: {rows, waiting}. In "all" the count-only accounts
+ *  (DeepSeek, coin flips) have no rank: they are in neither. */
 export function rankedOnly(board, group = "all") {
-  const all = ranked(board, group);
+  const all = ranked(board, group).filter((a) => !countOnlyIn(a, group));
   const rows = all.filter((a) => !unranked(a));
   return {rows, waiting: all.length - rows.length};
 }

@@ -7,7 +7,7 @@ import {posChip, refTag, groupKo} from "./home-shared.js";
 
 export const PAGE = 50;
 const COLS = [
-  {id: "rk", label: "순위", key: (a) => (a._rk == null ? 1e9 : a._rk)},
+  {id: "rk", label: "순위", key: (a) => (a._rk == null ? 1e9 + (a._at || 0) : a._rk)},
   {id: "name", label: "계좌", l: true, key: (a) => fmt.acctName(a)},
   {id: "wallet", label: "잔고", key: (a, m) => (m(a) ? -(a.wallet ?? 0) : 1e12)},
   {id: "ret", label: "수익률", key: (a, m) => (m(a) ? -a.ret : 1e12)},
@@ -33,7 +33,7 @@ export function sortRows(rows, col, dir, group) {
   return [...rows].sort((x, y) => {
     const p = c.key(x, m), q = c.key(y, m);
     const r = p < q ? -1 : p > q ? 1 : 0;
-    return r ? r * dir : (x._rk ?? 1e9) - (y._rk ?? 1e9);
+    return r ? r * dir : (x._rk ?? 1e9 + (x._at || 0)) - (y._rk ?? 1e9 + (y._at || 0));
   });
 }
 
@@ -95,7 +95,7 @@ export function boardTable(ctx, o = {}) {
     prev.disabled = st.page === 0; next.disabled = st.page >= pages - 1;
     bar.hidden = rows.length <= PAGE;
     put(note, h("b", null, "참고"), " · 상태의 % = 열린 포지션의 지금 ROE (마크 가격, 수수료 전) · 동전 ▲▼ = 같은 봉 동전 봇 중앙값보다 위·아래 · 판정은 30일째",
-      st.group === "all" ? " · 섞인 목록에서 딥시크·동전 봇은 개수만" : "");
+      st.group === "all" ? " · 섞인 목록에서 딥시크·동전 봇은 개수만 (순위 없이 맨 뒤)" : "");
     if (o.onRender) o.onRender();
   }
   return {
@@ -104,9 +104,9 @@ export function boardTable(ctx, o = {}) {
       if (group !== st.group) st.page = 0;
       st.group = group; st.gs = gs;
       let rows = derive.ranked(board, group);
-      rows = rows.filter((a) => !derive.unranked(a)).sort((x, y) => y.ret - x.ret).concat(rows.filter(derive.unranked));
+      rows = derive.mixedOrder(rows.filter((a) => !derive.unranked(a)).sort((x, y) => y.ret - x.ret).concat(rows.filter(derive.unranked)), group);
       let rk = 0;
-      st.rows = rows.map((a) => ({...a, _rk: derive.unranked(a) ? null : ++rk}));
+      st.rows = rows.map((a, i) => ({...a, _at: i, _rk: derive.unranked(a) || derive.countOnlyIn(a, group) ? null : ++rk}));
       render();
     },
   };

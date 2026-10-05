@@ -12,6 +12,7 @@ strategy (cards.py, CARD_STATS_KINDS), so today's loss cards = today's losing cl
 from __future__ import annotations
 
 import json
+import sqlite3
 import threading
 import time
 from typing import Optional
@@ -29,6 +30,11 @@ STATUS_KO = {"SUBMITTED": "진입 신호", "RECORD": "기록만", "FILTERED": "�
 def kst_midnight(now_ms: int) -> int:
     """00:00 KST of today (ms)."""
     return (now_ms + KST_MS) // DAY_MS * DAY_MS - KST_MS
+
+
+def _unread(exc: Exception) -> str:
+    """The honest empty state when paper3.db opened but a read failed (locked past the timeout, a schema change)."""
+    return f"paper3.db를 읽지 못함 ({type(exc).__name__})"
 
 
 def _side(raw) -> Optional[int]:
@@ -51,6 +57,9 @@ def today_view(paper_db: str, now_ms: int) -> dict:
         rows = c.execute("SELECT a.kind, COUNT(*), SUM(t.pnl > 0), SUM(t.pnl < 0), SUM(t.pnl) FROM trades t "
                          "JOIN accounts a ON a.account_id = t.account_id WHERE t.exit_time >= ? GROUP BY a.kind",
                          (since,)).fetchall()
+    except sqlite3.Error as exc:
+        out["error"] = _unread(exc)
+        return out
     finally:
         _close(c)
     groups: dict = {}
@@ -99,6 +108,8 @@ def strats_view(paper_db: str, now_ms: int) -> dict:
                 res[s]["signal"] = {"timeframe": tf, "symbol": sym, "side": side, "status": status, "bar_close": bc,
                                     "status_ko": STATUS_KO.get(status, status)}
         out["strats"] = res
+    except sqlite3.Error as exc:
+        out["error"] = _unread(exc)
     finally:
         _close(c)
     return out
@@ -132,6 +143,9 @@ def strat_view(paper_db: str, name: str, now_ms: int) -> dict:
                 "ORDER BY bar_close DESC LIMIT 6", (name,)):
             out["signals"].append({"bar_close": bc, "timeframe": tf, "symbol": sym, "side": side, "status": status,
                                    "status_ko": STATUS_KO.get(status, status)})
+    except sqlite3.Error as exc:
+        out["error"] = _unread(exc)
+        out["signals"] = None                # not read: the page says 수집 전, not 아직 없음
     finally:
         _close(c)
     return out

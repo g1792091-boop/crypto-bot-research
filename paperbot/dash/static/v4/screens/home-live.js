@@ -174,12 +174,19 @@ export function tradesCard(ctx) {
     const since = fmt.kstMidnight();
     const r = bestWorst(rows, since);
     if (!r.accounts) { put(bw, h("p", {class: "muted hl-small"}, "오늘 닫힌 기존 36 거래가 아직 없습니다 · 가장 잘한·못한 계좌는 첫 거래 뒤")); return; }
-    const one = (x) => h("a", {class: "hl-bwr", href: ctx.href("account", x.id)}, h("span", {class: "hl-nm"}, fmt.acctName(x)),
-      h("b", {class: ["num", fmt.tone(x.pnl)]}, fmt.money(x.pnl, true)), h("span", {class: "muted num"}, `${fmt.int(x.n)}건`));
+    // 표본 적음 is per account: a row ranked on fewer than 30 closed trades says so (every row on day 0-1)
+    const thin = (x) => x.n < 30;
+    const one = (x) => h("a", {class: "hl-bwr", href: ctx.href("account", x.id), title: thin(x) ? `오늘 거래 ${fmt.int(x.n)}건뿐 · 표본 적음` : null},
+      h("span", {class: "hl-nm"}, fmt.acctName(x)),
+      h("b", {class: ["num", fmt.tone(x.pnl)]}, fmt.money(x.pnl, true)), h("span", {class: "muted num"}, `${fmt.int(x.n)}건${thin(x) ? " · 표본 적음" : ""}`));
+    const shown = r.best.concat(r.worst);
+    // the day list is the newest 2,000 core trades: when that cuts off part of today, the note says so
+    const cut = rows.length >= 2000 && rows.reduce((m, t) => Math.min(m, Number(t.exit_time) || Infinity), Infinity) > since;
     put(bw, h("div", {class: "hl-bwc"}, h("div", {class: "hl-bwk up"}, "오늘 가장 잘한 계좌"), r.best.length ? r.best.map(one) : h("span", {class: "muted"}, "아직 없음")),
       h("div", {class: "hl-bwc"}, h("div", {class: "hl-bwk down"}, "오늘 가장 못한 계좌"), r.worst.length ? r.worst.map(one) : h("span", {class: "muted"}, "아직 없음")),
       h("p", {class: "muted hl-small hl-bwn"}, ui.pill("참고", "thin"), ` 기존 36만 · 오늘 0시부터 닫힌 거래 손익 (USDT) · 계좌 ${fmt.int(r.accounts)}개 · 거래 ${fmt.int(r.trades)}건`,
-        r.trades < 30 ? " · 표본 적음" : ""));
+        cut ? " · 최근 2,000건만 (오늘 일부)" : "",
+        shown.some(thin) ? " · 계좌마다 거래가 30건 미만이라 표본 적음 (운일 수 있음)" : ""));
   }
   async function load() {
     if (busy) return;

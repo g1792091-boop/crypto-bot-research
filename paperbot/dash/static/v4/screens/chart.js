@@ -6,10 +6,10 @@
 // /api/candles?limit=2 every 5 s for the forming bar. TradingView and Coinglass are new-tab links; the opt-in second
 // tab 거래소 차트 shows TradingView's own page in a sandboxed cross-origin iframe (chart-tv.js), built only while open.
 import {h, ui, fmt, store, local, motion, bars, serverNow, makeChart, candleOptions, tok, priceDec, features} from "../core/pb.js";
-import {normPos, reelExits, nameOf} from "./positions-kit.js";
+import {normPos, reelExits, nameOf, countOnly} from "./positions-kit.js";
 import {countdown, fundPct} from "./positions-book.js";
 import {sidePanels} from "./chart-panels.js";
-import {coinFlowCard} from "./market-live.js";
+import {coinFlowCard, usdKo} from "./market-live.js";
 import {TV_IV, tvFrame} from "./chart-tv.js";
 
 const SHORT = {"1m": "1분", "3m": "3분", "5m": "5분", "15m": "15분", "30m": "30분", "1h": "1시간", "2h": "2시간", "4h": "4시간",
@@ -199,18 +199,21 @@ export async function mount(el, ctx) {
     }
     const m = store.mark(st.sym), want = new Map(), short = narrow();
     for (const g of groups) {
-      const us = m ? g.items.map((x) => ({pnl: x.p.side * x.p.qty * (m - x.p.entry), margin: x.p.margin})) : [];
+      // D10/D11: DeepSeek / coin-flip positions are counted on the line but add no money to its label
+      const money = g.items.filter((x) => !countOnly(x.a, ""));
+      const us = m ? money.map((x) => ({pnl: x.p.side * x.p.qty * (m - x.p.entry), margin: x.p.margin})) : [];
       const pnl = us.reduce((s, u) => s + u.pnl, 0), mg = us.reduce((s, u) => s + u.margin, 0);
+      const showM = m && us.length > 0;
       let title;
       if (g.items.length === 1) {
         const p = g.items[0].p;
-        title = short ? `${fmt.sideKo(p.side)}${m ? " " + fmt.pct(pnl / p.margin, 0) : ""}` : `${fmt.sideKo(p.side)} ${fmt.lev(p.leverage)}${m ? " " + pnlShort(pnl, pnl / p.margin) : ""}`;
+        title = short ? `${fmt.sideKo(p.side)}${showM ? " " + fmt.pct(pnl / p.margin, 0) : ""}` : `${fmt.sideKo(p.side)} ${fmt.lev(p.leverage)}${showM ? " " + pnlShort(pnl, pnl / p.margin) : ""}`;
       } else {
         const L = g.items.filter((x) => x.p.side > 0).length, S = g.items.length - L;
-        title = short ? `${g.items.length}개` : `${g.items.length}개 ${L ? "롱" + L : ""}${L && S ? "·" : ""}${S ? "숏" + S : ""}${m ? " 합계 " + pnlShort(pnl, mg ? pnl / mg : 0) : ""}`;
+        title = short ? `${g.items.length}개` : `${g.items.length}개 ${L ? "롱" + L : ""}${L && S ? "·" : ""}${S ? "숏" + S : ""}${showM ? (money.length < g.items.length ? ` 합계(${money.length}개) ` : " 합계 ") + pnlShort(pnl, mg ? pnl / mg : 0) : ""}`;
       }
       want.set(g.items.map((x) => x.a.account_id).join(",") + "@" + g.price,
-        {price: g.price, color: !m ? tok("--muted") : pnl >= 0 ? tok("--up") : tok("--down"), title});
+        {price: g.price, color: !showM ? tok("--muted") : pnl >= 0 ? tok("--up") : tok("--down"), title});
     }
     for (const [k, l] of lines.pos) if (!want.has(k)) { rm(l); lines.pos.delete(k); }
     for (const [k, w] of want) {
@@ -226,11 +229,11 @@ export async function mount(el, ctx) {
     const a = (st.board && st.board.accounts.find((x) => x.account_id === st.acct)) || d.account;
     const p = normPos(d.state && d.state.position);
     if (!p || p.symbol !== st.sym) return;
-    const m = store.mark(p.symbol), pnl = m ? p.side * p.qty * (m - p.entry) : null;
+    const m = store.mark(p.symbol), pnl = m && !countOnly(a, "") ? p.side * p.qty * (m - p.entry) : null;
     const add = (price, color, style, title) => { if (price) lines.acct.push(series.createPriceLine({price, color, lineWidth: 1, lineStyle: style, title})); };
     add(p.entry, tok("--accent"), 0, `진입 ${fmt.sideKo(p.side)} ${fmt.lev(p.leverage)}${pnl != null ? " " + pnlShort(pnl, pnl / p.margin) : ""}`);
     const reel = reelExits(a);
-    add(p.stop, !reel && p.lock_roe != null ? tok("--up") : tok("--down"), 2, reel ? "손절 (스윙 저점)" : p.lock_roe != null ? `잠금 +${fmt.num(p.lock_roe * 100, 0)}%` : "손절");
+    add(p.stop, !reel && p.lock_roe != null ? tok("--up") : tok("--down"), 2, reel ? "손절 (스윙 저점)" : p.lock_roe != null ? (countOnly(a, "") ? "잠금선" : `잠금 +${fmt.num(p.lock_roe * 100, 0)}%`) : "손절");
     add(p.liq, tok("--warn"), 3, "청산가");
     if (reel && p.target) add(p.target, tok("--up"), 2, "목표 (윗밴드)");
   }
@@ -328,7 +331,7 @@ export async function mount(el, ctx) {
     tk.fund.className = "num " + (t ? fmt.tone(-Number(t.r || 0)) : "");
     tk.hi.textContent = t ? fmt.price(t.h) : "—";
     tk.lo.textContent = t ? fmt.price(t.l) : "—";
-    tk.vol.textContent = t && t.q != null ? `${fmt.compact(t.q)} USDT` : "—";
+    tk.vol.textContent = t && t.q != null ? `${usdKo(t.q)} USDT` : "—";      // 만 / 억 like 시장 (fix: no 'B' / 'K' on one screen)
     st.fundT = t && t.T;
     const n = st.board ? st.board.accounts.filter((a) => a.position && a.position.symbol === st.sym).length : null;
     tk.pos.textContent = n == null ? "—" : `${fmt.int(n)}개 계좌`;

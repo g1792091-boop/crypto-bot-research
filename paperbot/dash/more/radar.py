@@ -8,9 +8,13 @@ the same closed bars, from the same bar fetcher, same window: dash/app.view_bars
 the bar that just closed. Not a forecast: 2/3 on does not mean the third comes next. ``fired`` is a real signal in
 paper3.db signal_log on that bar (read-only), so a row says '신호!' only when the bot really logged one.
 
-Cost (the server shares Binance's IP weight with the bot): one bar fetch per (timeframe, coin) per closed bar, shared
-by all 36 (the fetcher's own 60 s cache sits under it); each strategy's conditions are computed at most once per bar
-and kept until the next bar closes. Work runs in FastAPI's thread pool (plain ``def`` routes), one computation at a
+Cost (the server shares Binance's IP weight with the bot): the first look at a (timeframe, coin) fetches its full
+window (view_bars: 15m 5,763 bars = 4 klines requests); after that each new bar is ONE small request (the newest
+``TAIL`` bars, weight 1), appended to the kept frame while the same number of the oldest bars drop off, so the window
+and its start match a fresh fetch. A gap longer than the tail (the server was asleep) falls back to a full fetch.
+Each strategy's conditions are computed at most once per bar and kept until the next bar closes (CPU: about 2 s of
+one core for all 36 on a 15m cell of 5,763 bars, 0.7 s on 1,500 bars; the page asks 45 s after the close, after the
+bot's own boundary work). Work runs in FastAPI's thread pool (plain ``def`` routes), one computation at a
 time (``_WORK``); the matrix route fills at most ``MAX_NEW_CELLS`` new (timeframe, coin) cells per call and says how
 many are still ``pending`` (the page asks again a few seconds later), so a first visit never bursts 24 fetches at once.
 """
@@ -31,7 +35,7 @@ COINS = ("BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "LTCUSDT", "BCHUSDT")     
 RETRY_S = 20.0            # after a bar closes, a fetch that still ends on the old bar is tried again this much later
 MAX_NEW_CELLS = 3         # the matrix route: new (timeframe, coin) cells computed per call
 FIRED_S = 5.0             # the signal log is re-read for a cell at most this often (signals land a few seconds late)
-SMT = "F14_SMT"           # compares with BTC's bars of the same timeframe (as /api/strategy does)
+TAIL = 5                  # bars asked per new bar once a cell has its window (the forming one is dropped: 4 closed)
 
 
 def names36() -> list:
@@ -127,7 +131,9 @@ class Radar:
         from ..app import view_bars
         n = view_bars(tf)
         try:
-            df = self.frames(sym, tf, n)
+            df = self.extend(c, sym, tf, n) if c is not None else None
+            if df is None:
+                df = self.frames(sym, tf, n)
         except Exception:  # noqa: BLE001  (Binance unreachable: keep what we have)
             self.retry[key] = self.now() + RETRY_S
             return c
@@ -142,12 +148,31 @@ class Radar:
         t = pd.to_datetime(df["ts"], utc=True)
         span = int((t.iloc[-1] - t.iloc[-2]).total_seconds() * 1000) if len(t) > 1 else TF_MS[tf]
         open_ms = int(t.iloc[-1].value // 10**6)
-        new = {"ts": ts, "df": df, "btc": None, "span": span, "open": open_ms, "bar_close": open_ms + span,
+        new = {"ts": ts, "df": df, "span": span, "open": open_ms, "bar_close": open_ms + span,
                "rows": {}, "fired": self.fired_on(tf, sym, open_ms, open_ms + span), "at": int(self.now() * 1000),
                "fired_at": self.now()}
         with self.lock:
             self.cells[key] = new
         return new
+
+    def extend(self, c: dict, sym: str, tf: str, n: int):
+        """The kept frame moved on by the newest bars: one small request (TAIL bars, weight 1) instead of the whole
+        window. Returns the new frame (same length as the kept one), the kept frame itself when no newer bar closed
+        yet, or None when the tail does not overlap the kept frame (a gap: the caller fetches the full window)."""
+        old = c.get("df")
+        if old is None or len(old) < 2 or len(old) != n:
+            return None
+        tail = self.frames(sym, tf, TAIL)
+        if tail is None or not len(tail):
+            return old
+        last = old["ts"].iloc[-1]
+        if tail["ts"].iloc[0] > last:              # no overlap: bars are missing between the two
+            return None
+        add = tail[tail["ts"] > last]
+        if not len(add):
+            return old
+        import pandas as pd
+        return pd.concat([old, add], ignore_index=True).iloc[len(add):].reset_index(drop=True)
 
     def refresh_fired(self, c: dict, tf: str, sym: str) -> None:
         """The bot logs a signal a few seconds after the bar closes, maybe after this cell was computed: re-read the
@@ -169,14 +194,8 @@ class Radar:
         if hit is not None:
             return hit
         from ...strategy_views import render
-        btc = None
-        if name == SMT and sym != "BTCUSDT":
-            if c["btc"] is None:
-                b = self.cell(tf, "BTCUSDT")
-                c["btc"] = b["df"] if b is not None else False
-            btc = c["btc"] if c["btc"] is not False else None
         try:
-            v = render(name, c["df"], tf, symbol=sym, btc=btc)
+            v = render(name, c["df"], tf, symbol=sym)
             cond = v.get("conditions") or {}
             r = {"long": side_of(cond.get("long")), "short": side_of(cond.get("short"))}
         except Exception as exc:  # noqa: BLE001  (one view failing never hides the other 35)

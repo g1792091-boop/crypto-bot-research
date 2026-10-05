@@ -2,9 +2,10 @@
 // trades, its signals, the order book, market liquidations (only while the liquidation recorder runs) and price
 // alerts. Each pane loads when it is first shown and follows the chart's coin.
 import {h, ui, fmt, store, local, motion, features} from "../core/pb.js";
-import {normPos, tradeRow, nameNode} from "./positions-kit.js";
+import {normPos, tradeRow, nameNode, countOnly, COUNT_ONLY_KO, COUNT_ONLY_WHY} from "./positions-kit.js";
 import {bookPanel} from "./positions-book.js";
 import {alertsPane} from "./chart-alerts.js";
+import {usdKo} from "./market-live.js";
 
 const STATUS_KO = {SUBMITTED: "진입 요청", RECORD: "기록만", LATE: "늦음 (진입 안 함)", NO_PRICE: "가격 없음", NO_ATR: "ATR 없음"};
 
@@ -33,20 +34,21 @@ export function sidePanels(ctx, o) {
   // ---------------------------------------------------------------- this coin's open positions
   const posRow = (x) => {
     const m = store.mark(x.pos.symbol);
-    const roe = m ? (x.pos.side * x.pos.qty * (m - x.pos.entry)) / x.pos.margin : null;
+    const hide = countOnly(x.a, "");      // D10/D11: a mixed list, so DeepSeek / coin flips show no money
+    const roe = m && !hide ? (x.pos.side * x.pos.qty * (m - x.pos.entry)) / x.pos.margin : null;
     const lock = x.pos.lock_roe != null && !(x.a.kind === "reel" || (x.a.kind === "random" && x.a.timeframe === "5m"));
     return h("div", {class: "lrow click", role: "listitem", tabindex: "0", title: "차트에 이 계좌 진입·청산 표시",
       onclick: () => o.onPick(x.a.account_id), onkeydown: (e) => { if (e.key === "Enter") o.onPick(x.a.account_id); }},
       ui.sideTag(x.pos.side), h("span", {class: "lname"}, nameNode(x.a)),
-      h("span", {class: ["ret", "num", fmt.tone(roe)]}, roe == null ? "—" : fmt.pct(roe)),
+      hide ? h("span", {class: "ret muted", title: COUNT_ONLY_WHY}, COUNT_ONLY_KO) : h("span", {class: ["ret", "num", fmt.tone(roe)]}, roe == null ? "—" : fmt.pct(roe)),
       h("span", {class: "meta"}, h("span", null, fmt.lev(x.pos.leverage)), h("span", null, `진입 ${fmt.price(x.pos.entry)}`),
-        h("span", {class: lock ? "up" : ""}, lock ? `잠금 +${fmt.num(x.pos.lock_roe * 100, 0)}% ${fmt.price(x.pos.stop)}` : `손절 ${fmt.price(x.pos.stop)}`),
+        h("span", {class: lock && !hide ? "up" : ""}, lock ? `잠금${hide ? "" : " +" + fmt.num(x.pos.lock_roe * 100, 0) + "%"} ${fmt.price(x.pos.stop)}` : `손절 ${fmt.price(x.pos.stop)}`),
         h("a", {href: ctx.href("account", x.a.account_id), onclick: (e) => e.stopPropagation()}, "계좌")));
   };
   const mine = () => ((board && board.accounts) || []).filter((a) => a.position && a.position.symbol === sym).map((a) => ({a, pos: normPos(a.position)}));
   const makePos = () => {
     const pg = ui.pager({size: 10, row: posRow, empty: "이 코인에 열린 포지션이 없습니다"});
-    const pane = h("div", {class: "stack tight"}, h("p", {class: "pos-note"}, "누르면 차트에 그 계좌의 진입·청산과 손절선이 나옵니다. ROE는 마크 가격 기준."), pg.el,
+    const pane = h("div", {class: "stack tight"}, h("p", {class: "pos-note"}, "누르면 차트에 그 계좌의 진입·청산과 손절선이 나옵니다. ROE는 마크 가격 기준. 딥시크·동전 봇은 개수만."), pg.el,
       ui.assume("open"));
     pane.refresh = (keep) => pg.set(mine().sort((x, y) => (y.pos.entry_time || 0) - (x.pos.entry_time || 0)), keep);
     pane.refresh(false);
@@ -56,7 +58,7 @@ export function sidePanels(ctx, o) {
   // ---------------------------------------------------------------- this coin's closed trades
   const makeTrades = () => {
     const pg = ui.pager({size: 10, row: (t) => tradeRow(t, board && board.accounts.find((a) => a.account_id === t.account_id),
-      {onClick: (r) => ctx.go("account", r.account_id)}), empty: "이 코인 체결이 아직 없습니다"});
+      {onClick: (r) => ctx.go("account", r.account_id), countOnly: countOnly(t, "")}), empty: "이 코인 체결이 아직 없습니다"});
     const sum = h("div");
     const pane = h("div", {class: "stack tight"}, sum, pg.el, ui.assume());
     let mySym = null;
@@ -100,7 +102,7 @@ export function sidePanels(ctx, o) {
   };
 
   // ---------------------------------------------------------------- market liquidations (feature: the recorder runs)
-  const usdK = (x) => (x >= 1e6 ? `${fmt.num(x / 1e6, 2)}M` : x >= 1e3 ? `${fmt.num(x / 1e3, 1)}K` : fmt.num(x, 0));
+  const usdK = (x) => usdKo(x);      // 만 / 억 like 시장 and the 이 코인 시장 지표 card (no 'K' / 'M' beside '만')
   const makeLiq = () => {
     const box = h("div", {class: "stack tight"}, motion.shimmer(3));
     const pane = h("div", {class: "stack tight"}, box);

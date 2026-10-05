@@ -53,6 +53,11 @@ export function nameNode(a, data) {
   return ui.acctLabel(a);
 }
 export const groupKo = (a) => fmt.GROUP_KO[fmt.groupOf(a)] || "기타";
+/** D10/D11 (CONTRACT §1): a DeepSeek or coin-flip account is COUNTED ONLY outside its own group's view: no P&L, no ROE,
+ *  no margin or size in a mixed list. view: the group the screen is filtered to ("" / "all" = mixed). */
+export const countOnly = (a, view) => derive.countOnlyIn(a, view);
+export const COUNT_ONLY_KO = "개수만";
+export const COUNT_ONLY_WHY = "딥시크·동전 봇은 섞인 목록에서 손익을 보이지 않습니다 (개수만, 자기 묶음을 고르면 금액)";
 export const qty = (x) => (x == null ? "—" : fmt.num(x, Math.abs(x) < 10 ? 3 : Math.abs(x) < 1000 ? 2 : 0));
 export const dist = (r) => (r == null ? "—" : fmt.pct(r, 2, false));
 
@@ -114,10 +119,12 @@ function stopLine(a, pos) {
 /**
  * posCard(a, pos, o) -> element with .update(mark) (call it with real mark prices only: the P&L counts to them).
  * a: board account row (kind, timeframe, strategy, wallet); pos: normPos(); o: {why, wallet, data (account.data),
- * collapsible, open, href (ctx.href), onChart, caption}.
+ * collapsible, open, href (ctx.href), onChart, caption, countOnly}. countOnly (D10/D11): side, leverage, prices and
+ * distances only: no P&L, ROI, margin, size or "what the stop pays" line, and a neutral price line.
  */
 export function posCard(a, pos, o = {}) {
   const reel = reelExits(a);
+  const co = !!o.countOnly;
   const name = nameOf(a, o.data);
   const pnlEl = h("b", {class: "led-num num"}, "—"), roiEl = h("b", {class: "led-sm num"}, "—");
   const markEl = h("span", {class: "num"}, "—");
@@ -136,7 +143,7 @@ export function posCard(a, pos, o = {}) {
     [reel ? "손절가 (스윙 저점)" : pos.lock_roe != null ? "잠금선" : "손절가", fmt.price(pos.stop)],
     reel ? ["목표가 (윗밴드)", pos.target ? fmt.price(pos.target) : ui.notYet("기록 없음", "서버가 이 포지션의 목표가를 보내지 않았습니다")] : null,
     reel ? ["시간 청산", te ? fmt.hm(te) : "—"] : null,
-    [`크기 (${fmt.coin(pos.symbol)})`, qty(pos.qty)], ["증거금 (USDT)", fmt.money(pos.margin)],
+    co ? null : [`크기 (${fmt.coin(pos.symbol)})`, qty(pos.qty)], co ? null : ["증거금 (USDT)", fmt.money(pos.margin)],
     !reel && pos.stop_initial && pos.stop_initial !== pos.stop ? ["첫 손절", fmt.price(pos.stop_initial)] : null,
   ];
   const held = pos.entry_time ? fmt.dur((serverNow() - pos.entry_time) / 1000) : null;
@@ -151,11 +158,12 @@ export function posCard(a, pos, o = {}) {
     h("div", {class: "pos-spark-k"}, h("span", null, "진입 뒤 가격"), h("span", {class: "muted"}, "5분봉 종가 · 점선 진입가 · 붉은 점선 손절")),
     h("div", {class: "pos-spark-g"}));
   const body = [
-    h("div", {class: "pnl pos-led"}, h("div", null, h("span", {class: "k"}, "미실현 손익 (USDT)"), pnlEl),
-      h("div", {class: "r"}, h("span", {class: "k"}, "ROI"), roiEl)),
+    co ? h("p", {class: "pos-plain pos-count-only"}, h("b", null, COUNT_ONLY_KO), " · ", COUNT_ONLY_WHY) :
+      h("div", {class: "pnl pos-led"}, h("div", null, h("span", {class: "k"}, "미실현 손익 (USDT)"), pnlEl),
+        h("div", {class: "r"}, h("span", {class: "k"}, "ROI"), roiEl)),
     sparkBox,
-    whyBox(a, pos, o.why, o.wallet), ui.kv(pairs), meter, stopLine(a, pos), ruleLine(a, pos), acts,
-    o.caption === false ? null : ui.assume("open"),
+    whyBox(a, pos, o.why, co ? null : o.wallet), ui.kv(pairs), meter, co ? null : stopLine(a, pos), ruleLine(a, pos), acts,
+    o.caption === false || co ? null : ui.assume("open"),
   ];
   const head = h("div", {class: "pos-top"}, h("span", {class: "pos-sym"}, `${fmt.coin(pos.symbol)}USDT`), h("span", {class: "muted pos-perp"}, "무기한"),
     ui.sideTag(pos.side), h("span", {class: "muted"}, `격리 ${fmt.lev(pos.leverage)}`), h("span", {class: "grow"}),
@@ -163,7 +171,7 @@ export function posCard(a, pos, o = {}) {
   let el, rowPnl = null, rowRoi = null;
   const rowSpark = h("span", {class: "pos-row-spark", "aria-hidden": "true"});
   if (o.collapsible) {
-    rowPnl = h("b", {class: "num"}, "—"); rowRoi = h("small", {class: "num"}, "—");
+    rowPnl = h("b", {class: ["num", co ? "muted" : ""]}, co ? COUNT_ONLY_KO : "—"); rowRoi = h("small", {class: "num"}, co ? groupKo(a) : "—");
     const region = h("div", {class: "pos-body", hidden: !o.open}, body);
     const btn = h("button", {class: "pos-row", type: "button", "aria-expanded": String(!!o.open), title: a.account_id},
       ui.sideTag(pos.side),
@@ -188,7 +196,7 @@ export function posCard(a, pos, o = {}) {
   el.setSpark = (vals) => {
     if (!vals || vals.length < 2) return;
     const last = vals[vals.length - 1];
-    const tone = pos.side * (last - pos.entry) >= 0 ? "up" : "down";
+    const tone = co ? "" : pos.side * (last - pos.entry) >= 0 ? "up" : "down";
     const refs = pos.stop != null ? [{v: pos.stop, cls: "stopl"}] : [];
     sparkBox.hidden = false;
     sparkBox.lastChild.replaceChildren(ui.miniSpark(vals, {w: 300, h: 46, fluid: true, base: pos.entry, refs, tone,
@@ -197,14 +205,16 @@ export function posCard(a, pos, o = {}) {
     sparkDrawn = true;
   };
   el.update = (mark) => {
-    const u = derive.livePnl(pos, mark);
+    const u = co ? null : derive.livePnl(pos, mark);
     // one soft ring when the unrealized P&L crosses zero, and once when the mark comes within 0.5% of the stop
     const sgn = u && u.pnl != null ? Math.sign(Math.round(u.pnl * 100)) : null;
     if (sgn && lastSgn && sgn !== lastSgn) motion.ring(el, sgn > 0 ? "up" : "down");
     if (sgn) lastSgn = sgn;
-    motion.countTo(pnlEl, u && u.pnl, {dec: 2, sign: true, tone: true, glow: true});
-    motion.countTo(roiEl, u && u.roe, {format: "pct", dec: 2, tone: true});
-    if (rowPnl) {
+    if (!co) {
+      motion.countTo(pnlEl, u && u.pnl, {dec: 2, sign: true, tone: true, glow: true});
+      motion.countTo(roiEl, u && u.roe, {format: "pct", dec: 2, tone: true});
+    }
+    if (rowPnl && !co) {
       motion.countTo(rowPnl, u && u.pnl, {dec: 2, sign: true, tone: true, glow: true});
       motion.countTo(rowRoi, u && u.roe, {format: "pct", dec: 2, tone: true});
     }
@@ -235,13 +245,13 @@ export function tradeRow(t, a, o = {}) {
   const nm = o.noName ? null : a ? ui.acctLabel(a) : fmt.idName(t.account_id);
   const meta = h("span", {class: "meta"},
     o.noName ? null : h("span", null, fmt.coin(t.symbol)), ui.sideTag(t.side), h("span", null, fmt.lev(t.leverage)),
-    h("span", {class: t.exit_reason === "LIQ" ? "down" : ""}, reason), h("span", {class: fmt.tone(t.roe)}, `ROE ${fmt.pct(t.roe)}`),
+    h("span", {class: t.exit_reason === "LIQ" ? "down" : ""}, reason), o.countOnly ? null : h("span", {class: fmt.tone(t.roe)}, `ROE ${fmt.pct(t.roe)}`),
     t.tier === "best" ? ui.pill("좋은 자리", "good") : null, a && !o.noName ? h("span", null, groupKo(a)) : null,
     o.prices ? h("span", null, `${fmt.price(t.entry_price)} → ${fmt.price(t.exit_price)}`) : null,
-    o.equity && t.equity_after != null ? h("span", null, `잔고 ${fmt.money(t.equity_after)}`) : null);
+    o.equity && !o.countOnly && t.equity_after != null ? h("span", null, `잔고 ${fmt.money(t.equity_after)}`) : null);
   const kids = [h("span", {class: "rk"}, today ? fmt.hm(t.exit_time) : fmt.kst(t.exit_time)),
     h("span", {class: "lname", title: t.account_id}, o.noName ? `${fmt.coin(t.symbol)}USDT` : nm),
-    h("span", {class: ["ret", fmt.tone(t.pnl)]}, fmt.money(t.pnl, true)), meta];
+    o.countOnly ? h("span", {class: "ret muted", title: COUNT_ONLY_WHY}, COUNT_ONLY_KO) : h("span", {class: ["ret", fmt.tone(t.pnl)]}, fmt.money(t.pnl, true)), meta];
   const rp = o.replay && t.id != null;
   if (rp) kids.push(h("a", {class: "pos-replay", href: o.replay, title: "이 거래를 봉 하나씩 다시 보기", "aria-label": "이 거래 다시보기",
     onclick: (e) => e.stopPropagation(), onkeydown: (e) => e.stopPropagation()}, "▶ 다시보기"));
@@ -262,12 +272,16 @@ export function whyShort(w, a) {
   return parts.join(" · ");
 }
 
-/** "N건 · 합계 +12.30 USDT · 이긴 거래 a" for a list of trades. */
-export function tradeSum(rows) {
-  const tot = rows.reduce((s, t) => s + (Number(t.pnl) || 0), 0), wins = rows.filter((t) => t.pnl > 0).length;
-  const liq = rows.filter((t) => t.exit_reason === "LIQ").length;
-  return h("p", {class: "pos-sum"}, `${fmt.int(rows.length)}건 · 합계 `, h("b", {class: fmt.tone(tot)}, fmt.usdt(tot, true)),
-    ` · 이긴 거래 ${fmt.int(wins)}`, liq ? h("span", {class: "down"}, ` · 강제청산 ${fmt.int(liq)}`) : null);
+/** "N건 · 합계 +12.30 USDT · 이긴 거래 a" for a list of trades. isCountOnly(t) (D10/D11): those trades are only
+ *  counted ("딥시크·동전 봇 n건 (개수만)") and left out of the sum and the wins. */
+export function tradeSum(rows, isCountOnly) {
+  const co = isCountOnly ? rows.filter(isCountOnly) : [];
+  const money = co.length ? rows.filter((t) => !isCountOnly(t)) : rows;
+  const tot = money.reduce((s, t) => s + (Number(t.pnl) || 0), 0), wins = money.filter((t) => t.pnl > 0).length;
+  const liq = money.filter((t) => t.exit_reason === "LIQ").length;
+  return h("p", {class: "pos-sum"}, `${fmt.int(money.length)}건 · 합계 `, h("b", {class: fmt.tone(tot)}, fmt.usdt(tot, true)),
+    ` · 이긴 거래 ${fmt.int(wins)}`, liq ? h("span", {class: "down"}, ` · 강제청산 ${fmt.int(liq)}`) : null,
+    co.length ? h("span", {class: "muted", title: COUNT_ONLY_WHY}, ` · 딥시크·동전 봇 ${fmt.int(co.length)}건 (개수만)`) : null);
 }
 
 /** 한 방향 몰림: at least SKEW_MIN positions on a coin and one side holding SKEW_SHARE of them or more. Counts only. */

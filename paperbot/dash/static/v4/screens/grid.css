@@ -82,7 +82,10 @@ a.grid-nm:hover .grid-nmt { color: var(--accent); }
 
 /* fill-strat: 5년 시험 cells (a past fact in the up / down pair) and 지금 포지션 (lit cells, live ROE) */
 .gk-cell.y5.none { background: transparent; border: 1px dashed var(--line-2); color: var(--muted); }
-.gk-cell.pos.off { background: var(--surface); color: var(--muted); opacity: .55; }
+.gk-cell.pos.off { background: var(--surface); color: var(--muted); }
+/* fix: the 5년 시험 / 지금 포지션 cells carry their key words in the small line ('LTC 숏 30배', '대기'): readable size */
+.gk-cell.y5 small, .gk-cell.pos small { font-size: var(--t-xs); }
+.gk-cell.pos.off small { color: var(--muted); }
 .gk-cell.pos.on { background: var(--accent-soft); border-color: var(--accent); color: var(--ink);
   box-shadow: 0 0 0 1px var(--accent-line), 0 0 14px var(--accent-glow); }
 .gk-cell.pos.on b.up { color: var(--up); } .gk-cell.pos.on b.down { color: var(--down); }

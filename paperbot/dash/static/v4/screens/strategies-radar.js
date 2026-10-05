@@ -92,10 +92,18 @@ function clockLine(tf, d) {
   el.tick(serverNow());
   return el;
 }
-/** Re-read on each bar close: after the close (+ grace for the bars and the signal log), and again while the server
- *  still has the old bar. Returns the time of the next load. */
-function nextLoadAt(d, now) {
-  if (d && d.next_close && d.next_close > now) return d.next_close + 12000;
+/** Re-read on each bar close, AFTER_CLOSE later: past the bot's own boundary fetch and its signal pool (they share
+ *  the server's Binance weight and CPU), and again while the server still has the old bar. When a row has every
+ *  condition on but no logged signal yet, one more look RECHECK later: the bot may log it after our first read
+ *  (the server re-reads signal_log from its cell cache, no new fetch). Returns the time of the next load. */
+export const AFTER_CLOSE = 45000;
+export const RECHECK = 45000;
+export function nextLoadAt(d, now) {
+  if (d && d.next_close && d.next_close > now) {
+    const waiting = d.bar_close != null && (d.rows || []).some((r) => r && r.left === 0 && !r.fired);
+    const again = waiting ? d.bar_close + AFTER_CLOSE + RECHECK : 0;
+    return again > now ? again : d.next_close + AFTER_CLOSE;
+  }
   return now + 20000;
 }
 
@@ -234,7 +242,7 @@ export function radarMatrix(ctx, name, opts = {}) {
       paint();
       const now = serverNow();
       // cells still being computed: ask again shortly; else after the next 15-minute close (the soonest timeframe)
-      st.at = d.pending ? now + 2500 : bars.barEnd("15m", now) + 12000;
+      st.at = d.pending ? now + 2500 : bars.barEnd("15m", now) + AFTER_CLOSE;
     } catch (e) {
       if (e && e.name === "AbortError") return;
       if (!st.d) put(body, ui.notYet("준비 전", "레이더를 아직 읽지 못했습니다"));
@@ -306,7 +314,8 @@ export function waitRoom(ctx) {
         st.busy = false;
         const ok = out.filter((d) => d && d.ready);
         const nx = ok.length ? Math.min(...ok.map((d) => d.next_close || 0)) : null;
-        st.at = nextLoadAt(nx ? {next_close: nx} : null, serverNow());
+        const bc = ok.length ? Math.min(...ok.map((d) => d.bar_close || 0)) : null;
+        st.at = nextLoadAt(nx ? {next_close: nx, bar_close: bc, rows: ok.flatMap((d) => d.rows || [])} : null, serverNow());
       }
     }
   }

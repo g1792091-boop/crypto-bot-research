@@ -47,5 +47,7 @@
 .risk-t b { color: var(--ink); }
 .risk-row.near { animation: risk-pulse 1.6s ease-in-out infinite; }
 .risk-row.near .risk-t b { color: var(--down); }
+.risk-key i.lock, .risk-bar i.lock { background: var(--up); }
+.risk-row.near .risk-b.lock .risk-t b, .risk-b.lock .risk-t b { color: var(--up); }
 @keyframes risk-pulse { 0%, 100% { background: transparent; } 50% { background: var(--down-soft); } }
 @media (prefers-reduced-motion: reduce) { .risk-row.near { animation: none; background: var(--down-soft); } }
