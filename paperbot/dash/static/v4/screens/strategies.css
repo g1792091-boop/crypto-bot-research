@@ -1,4 +1,5 @@
 @import url("grid-kit.css");
+@import url("reel-duel.css");
 /* strategies: 매매법 (builder C). Screen-only rules; tokens and components come from the shared css. Phones first:
    one column in reading order; from 1000 px two columns (chart side / rule and records side). */
 [data-screen="strategies"] .small { font-size: var(--t-xs); }

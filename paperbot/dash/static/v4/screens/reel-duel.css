@@ -1,0 +1,85 @@
+/* 릴스 1:3 대결 (screens/reel-duel.js): @imported by home.css and strategies.css. Tokens only: the reel = --series-m5
+   (magenta), the coin flips = --series-coin (grey, the yardstick: a dashed median and three faint lines). */
+.rd-card { --rd-me: var(--series-m5); --rd-base: var(--series-coin); position: relative; overflow: hidden; }
+.rd-card::before { content: ""; position: absolute; inset: 0 0 auto; height: 2px; pointer-events: none;
+  background: linear-gradient(90deg, var(--rd-me), transparent 55%, var(--rd-base)); opacity: .55; }
+.rd-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.rd-title { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; font-size: var(--t-md); min-width: 0; }
+.rd-title b { color: var(--rd-me); font-weight: 800; }
+.rd-title span { color: var(--ink-2); font-weight: 700; }
+.rd-title .rd-x { font: 400 11px var(--f-pixel); color: var(--muted); }
+.rd-link { min-height: 32px; }
+
+/* the two big numbers face each other */
+.rd-versus { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: stretch; gap: 8px; }
+.rd-side { display: grid; gap: 4px; align-content: start; padding: 10px; border-radius: var(--r-md); border: 1px solid var(--line); background: var(--surface-2); min-width: 0; }
+.rd-side.me { border-color: color-mix(in srgb, var(--rd-me) 45%, var(--line)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--rd-me) 12%, transparent); }
+.rd-side.base { border-style: dashed; }
+.rd-who { display: flex; align-items: center; flex-wrap: wrap; gap: 3px 6px; color: var(--ink-2); font-size: var(--t-xs); font-weight: 700; line-height: 1.3; min-width: 0; }
+.rd-coins { display: inline-flex; gap: 1px; }
+.rd-big { font: 400 clamp(26px, 7.2vw, 40px)/.95 var(--f-led); letter-spacing: .01em; color: var(--ink); }
+.rd-big.up { color: var(--up); } .rd-big.down { color: var(--down); }
+.rd-side.me .rd-big { text-shadow: 0 0 12px color-mix(in srgb, var(--rd-me) 35%, transparent); }
+.rd-sub { color: var(--muted); font-size: var(--t-xs); line-height: 1.45; min-width: 0; }
+.rd-vs { align-self: center; font: 400 12px/1 var(--f-pixel); color: var(--accent); padding: 6px 4px; border: 1px solid var(--line-2);
+  border-radius: 6px; background: var(--surface); }
+
+/* pixel pictures */
+.rd-pix { flex: none; }
+.rd-pix .pb { fill: var(--ink-2); } .rd-pix .ps { fill: var(--surface); } .rd-pix .pm { fill: var(--rd-me); }
+.rd-pix.coin .cr { fill: var(--rd-base); } .rd-pix.coin .cf { fill: var(--surface-2); }
+
+/* the chart */
+.rd-chart { position: relative; width: 100%; min-width: 0; border-radius: var(--r-sm); background: var(--surface-2); overflow: hidden; }
+.rd-svg { display: block; }
+.rd-svg .zero { stroke: var(--line-2); stroke-width: 1; stroke-dasharray: 2 4; }
+.rd-svg .ax { fill: var(--muted); font: 400 10px var(--f-term); }
+.rd-svg .f { fill: none; stroke: var(--rd-base); stroke-width: 1; opacity: .3; }
+.rd-svg .md { fill: none; stroke: var(--rd-base); stroke-width: 1.6; stroke-dasharray: 5 4; }
+.rd-svg .area { stroke: none; fill: var(--rd-me); opacity: .08; }
+.rd-svg .rglow { fill: none; stroke: var(--rd-me); stroke-width: 6; opacity: .14; stroke-linejoin: round; stroke-linecap: round; }
+.rd-svg .r { fill: none; stroke: var(--rd-me); stroke-width: 2.2; stroke-linejoin: round; stroke-linecap: round; }
+.rd-svg .r-dot { fill: var(--rd-me); stroke: var(--surface); stroke-width: 2; }
+.rd-svg .md-dot { fill: var(--rd-base); stroke: var(--surface); stroke-width: 2; }
+.rd-empty { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 6px; padding: 12px; text-align: center;
+  color: var(--muted); font-size: var(--t-xs); border: 1px dashed var(--line-2); border-radius: var(--r-sm); }
+.rd-empty > b { color: var(--ink-2); font: 400 13px var(--f-pixel); letter-spacing: .04em; }
+.rd-empty > span { max-width: 30em; }
+.rd-vs-pix { display: inline-flex; align-items: center; gap: 4px; }
+.rd-vs-pix b { font: 400 10px var(--f-pixel); color: var(--muted); }
+.rd-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; color: var(--muted); font-size: var(--t-xs); margin-top: -4px; }
+.rd-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.rd-legend i { display: inline-block; width: 14px; height: 0; border-top: 2px solid var(--rd-base); }
+.rd-legend .me i { border-top: 3px solid var(--rd-me); }
+.rd-legend .md i { border-top-style: dashed; }
+.rd-legend .f i { border-top-width: 1px; opacity: .5; }
+
+/* trades toward the verdict (a progress, never a grade: the accent colour) */
+.rd-prog { display: grid; gap: 5px; }
+.rd-prow { display: flex; justify-content: space-between; gap: 8px; font-size: var(--t-sm); }
+.rd-prow .k { color: var(--ink-2); font-weight: 700; }
+.rd-ptxt b { color: var(--accent); font-weight: 800; }
+.rd-prog .prog { height: 6px; }
+.rd-pnote { color: var(--muted); font-size: var(--t-xs); }
+
+/* the 5-year study next to now */
+.rd-study { display: grid; gap: 5px; padding: 10px 12px; border-radius: var(--r-md); background: var(--console); border: 1px solid var(--console-line); }
+.rd-srow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: var(--t-xs); }
+.rd-chip { font: 400 10px/1 var(--f-pixel); color: var(--term-yellow); border: 1px solid var(--console-line); border-radius: 4px; padding: 4px 6px; }
+.rd-sline { margin: 0; color: var(--ink); font: 700 var(--t-sm)/1.55 var(--f-body); }
+.rd-now { margin: 0; color: var(--ink-2); font-size: var(--t-xs); line-height: 1.6; }
+.rd-now .k { color: var(--muted); }
+.rd-now .me { color: var(--ink); }
+.rd-now b { font-weight: 800; } .rd-now b.up { color: var(--up); } .rd-now b.down { color: var(--down); }
+
+/* wide (the top of #/strategies/REEL_H1 on a PC): numbers left, chart right */
+@media (min-width: 900px) {
+  .rd-card.wide { grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); column-gap: 18px; }
+  .rd-card.wide > .card-h, .rd-card.wide > .rd-head, .rd-card.wide > .rd-ref, .rd-card.wide > .assume { grid-column: 1 / -1; }
+  .rd-card.wide > .rd-versus { grid-column: 1; grid-row: 3; }
+  .rd-card.wide > .rd-chart { grid-column: 2; grid-row: 3 / span 2; height: 100% !important; min-height: 168px; }
+  .rd-card.wide > .rd-legend { grid-column: 2; grid-row: 5; margin-top: 0; }
+  .rd-card.wide > .rd-prog { grid-column: 1; grid-row: 4; }
+  .rd-card.wide > .rd-study { grid-column: 1 / -1; }
+}
+@media (max-width: 360px) { .rd-versus { grid-template-columns: minmax(0, 1fr); } .rd-vs { justify-self: center; } }
