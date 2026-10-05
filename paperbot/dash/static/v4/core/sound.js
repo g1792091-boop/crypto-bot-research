@@ -12,7 +12,7 @@
 // changes that already arrived (at most ~2 a second) and drops what is too old to mean "now".
 // Controls (the speaker button in the header, core/shell.js): off until the first tap (browsers allow sound only
 // after a tap), then remembered per device (dom.js local): on / off, volume, density (잔잔 / 보통 / 활발) and the
-// night mute 00-07 KST (on by default). The page going hidden suspends the audio and drops the queue; the first
+// night mute 00-07 KST (off by default: the owners watch at night; one tick turns it on). The page going hidden suspends the audio and drops the queue; the first
 // ticker after it comes back is a new baseline (minutes of drift are not "a tick").
 import {bus} from "./api.js";
 import {store} from "./store.js";
@@ -28,7 +28,7 @@ export const DENSITY = {
 export const MIN_GAP_MS = 500;       // never more than 2 beeps a second, whatever the density
 export const MAX_AGE_MS = 6000;      // a change older than this is not "now" any more: dropped, never played late
 export const QUEUE_CAP = 8;
-const DEFAULTS = {on: false, vol: 60, density: "normal", night: true};
+const DEFAULTS = {on: false, vol: 60, density: "normal", night: false};
 export const cfg = {...DEFAULTS, ...sanitize(local.get(KEY, {}))};
 function sanitize(o) {
   const x = o && typeof o === "object" ? o : {};

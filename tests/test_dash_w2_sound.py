@@ -1,6 +1,6 @@
 """Wave 2 live sound + glow (owners 10/05 22:45: the v6 chiptune sounds; 22:28: "간지나게 빛나고 움직이고").
 
-- core/sound.js loads in node (no AudioContext, no document) and is off by default with the night mute on;
+- core/sound.js loads in node (no AudioContext, no document) and is off by default with the night mute off;
 - it never makes a sound without a real record: no timer sounds by itself, the first ticker / board / rooms answer is
   only a baseline, an unchanged price is silent; real changes map to the owners' motifs exactly (picker v6 notes);
 - the continuous layer is throttled (never more than 2 a second, stale changes dropped, one entry per coin);
@@ -52,7 +52,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 def test_loads_without_audio_and_is_off_by_default():
     out = _node("""console.log(JSON.stringify({cfg: sound.cfg, canPlay: sound.canPlay(), waiting: sound.waiting(),
       chip: sound.CHIP, motifs: sound.MOTIFS, pulse: typeof sound.pulse25}));""")
-    assert out["cfg"] == {"on": False, "vol": 60, "density": "normal", "night": True}
+    assert out["cfg"] == {"on": False, "vol": 60, "density": "normal", "night": False}
     assert out["canPlay"] is False and out["waiting"] is False and out["pulse"] == "function"
     # the owners' picker v6 (scratchpad/sounds/sound_picker.html), note for note
     assert out["chip"] == [369.99, 440.0, 493.88, 554.37, 659.26, 739.99, 830.61, 987.77]
