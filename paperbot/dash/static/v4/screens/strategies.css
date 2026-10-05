@@ -216,7 +216,7 @@ button.dsf-row:focus-visible { outline: 2px solid var(--accent); outline-offset:
 .strat-frow { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; grid-template-areas: "t nm nm" "t c st"; gap: 2px 8px; align-items: center;
   padding: 7px 6px; border-top: 1px solid var(--line); color: var(--ink); text-decoration: none; font-size: var(--t-sm); min-width: 0; border-radius: var(--r-sm); }
 .strat-frow:hover { background: var(--surface-2); }
-.strat-frow .t { grid-area: t; color: var(--muted); font-size: var(--t-xs); }
+.strat-frow .t { grid-area: t; color: var(--muted); font-size: var(--t-xs); white-space: normal; line-height: 1.3; overflow-wrap: anywhere; }
 .strat-frow .fnm { grid-area: nm; margin: 0; padding: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
 .strat-frow .c { grid-area: c; color: var(--ink-2); font-size: var(--t-xs); }
 .strat-frow .c .side { padding: 1px 6px; }
