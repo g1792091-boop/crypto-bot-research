@@ -1550,8 +1550,9 @@ def curve_keys(kind: str, timeframe: str) -> tuple:
     """The /api/v4/curves series an original account counts in: its kind, and random_5m for a 5m coin flip."""
     return (kind, "random_5m") if kind == "random" and timeframe == REEL_TF else (kind,)
 GZIP_MIN_BYTES = 1024        # responses at least this big are sent gzip-compressed when the browser accepts it
-NO_GZIP_PATHS = ("/api/stream",)   # the live stream (text/event-stream) is never compressed: a gzip buffer would hold
-                                   # its events back (older Starlette versions compress streams without flushing)
+NO_GZIP_PATHS = ("/api/stream", "/api/v4/ticks")   # the live streams (text/event-stream: the board stream and the
+                                   # sound's market trades, dash/more/ticks.py) are never compressed: a gzip buffer would
+                                   # hold their events back (older Starlette versions compress streams without flushing)
 
 
 class GZipExceptStream:

@@ -2,9 +2,12 @@
 // from the owners' picker (scratchpad/sounds/sound_picker.html: pulse25(), CHIP, chip(), chipRun(), the six motifs
 // c_entry / c_tp / c_sl / c_meet / c_liq / c_ms and the continuous layer of single beeps with a third of them short
 // runs), through ONE shared output gain (the volume).
-// HONESTY: every sound answers one real record. The continuous layer = a real price change of a coin in /api/ticker
-// (the store's 5 s poll: one beep per coin that moved, up = the upper notes, down = the lower notes, nothing when no
-// price moved) and the DeepSeek / coin-flip accounts' real fills and exits from the live stream; the motifs = our
+// HONESTY: every sound answers one real record. The continuous layer = real Binance USD-M market trades of the 7 coins
+// (/api/v4/ticks, dash/more/ticks.py: one server socket for every page, at most ~2 events a second: buy = the upper
+// notes, sell = the lower notes, louder for a bigger burst); while that relay is not live (no socket on the server,
+// blocked, refused) it falls back by itself to a real price change of a coin in /api/ticker (the store's 5 s poll: one
+// beep per coin that moved, up = the upper notes, down = the lower notes, nothing when no price moved); plus the
+// DeepSeek / coin-flip accounts' real fills and exits from the live stream; the motifs = our
 // own accounts' (기존 36 · 5분봉 · 추가 계좌) real entries (a position that appeared in the stream) and exits (the
 // stream's closed trades: profit -> 익절, loss -> 손절, LIQ -> 강제청산), a meeting that really ended with a
 // conclusion (/api/rooms: a room's newest message became a new 'decision'), and the D+10 / D+20 / 판정 day of the run
@@ -201,6 +204,70 @@ export function priceMoves(tk, now = Date.now(), state = px) {
   return out;
 }
 
+// ---------------------------------------------------------------- market trades -> the layer (server relay)
+// /api/v4/ticks (dash/more/ticks.py): ONE Binance aggTrade socket on the server shared by every page, at most ~2 events
+// a second, each {s, side, b, usd, n, p, t}: the coin whose traded notional ran furthest above its usual in that half
+// second, its side (more taker buys or sells) and size bucket b 1-4. Opened only while the sound is on, unlocked and
+// the page visible (the server closes its socket a minute after the last page left). While it is live the layer
+// follows these trades (the same queue, spacing and density as before); when it is not (state "connecting" / "down",
+// a refused or dropped answer, nothing heard for 15 s) the /api/ticker price changes above feed the layer again.
+export const TICK_SYMS = ["BCHUSDT", "BTCUSDT", "DOGEUSDT", "ETHUSDT", "LTCUSDT", "SOLUSDT", "XRPUSDT"];  // sorted: each coin keeps priceMoves' voice
+/** size bucket -> layer size (beepOf): 1-2 one beep (2 louder), 3 a two-note run, 4 a three-note run, the loudest. */
+export const BUCKET_SIZE = {1: 1, 2: 1.3, 3: 1.6, 4: 3};
+export const TICK_FRESH_MS = 15000;
+export const ticks = {es: null, state: "off", at: 0, retryMs: 30000, retryT: null};
+/** Are real market trades feeding the layer right now (else the ticker price changes do)? */
+export const tradesLive = (now = Date.now()) => ticks.state === "live" && now - ticks.at < TICK_FRESH_MS;
+/** Relay events -> layer items (buy: dir 1 = the upper notes, sell: dir -1 = the lower). Unknown coins / sides: none. */
+export function tickItems(evs, now = Date.now()) {
+  const out = [];
+  for (const e of Array.isArray(evs) ? evs : []) {
+    if (!e || typeof e !== "object") continue;
+    const voice = TICK_SYMS.indexOf(e.s);
+    if (voice < 0 || (e.side !== "buy" && e.side !== "sell")) continue;
+    out.push({key: "tk:" + e.s, dir: e.side === "buy" ? 1 : -1, size: BUCKET_SIZE[e.b] || 1, voice, at: now, src: "trade"});
+  }
+  return out;
+}
+/** One relay message {state, ev}: remembers the state and feeds the layer while it is live. */
+export function onTicks(msg, now = Date.now()) {
+  if (!msg || typeof msg !== "object") return [];
+  ticks.state = typeof msg.state === "string" ? msg.state : "down";
+  ticks.at = now;
+  if (ticks.state !== "live") return [];
+  const items = tickItems(msg.ev, now);
+  feed(items);
+  return items;
+}
+function ticksOpen() {
+  const ES = globalThis.EventSource;
+  if (ticks.es || ticks.retryT || !cfg.on || !unlocked || hidden() || typeof ES !== "function") return;
+  let es;
+  try { es = new ES("/api/v4/ticks"); } catch (e) { ticks.state = "down"; return; }
+  ticks.es = es; ticks.state = "connecting";
+  es.onmessage = (ev) => {
+    let d;
+    try { d = JSON.parse(ev.data); } catch (e) { return; }
+    if (ticks.es !== es) return;
+    ticks.retryMs = 30000;
+    onTicks(d);
+  };
+  es.onerror = () => {
+    if (ticks.es !== es) return;
+    ticks.state = "down";                         // the ticker layer takes over until the relay says "live" again
+    if (es.readyState === 2) {                     // refused for good (401, 404, 5xx): again later, with a growing wait
+      ticks.es = null;
+      ticks.retryT = setTimeout(() => { ticks.retryT = null; ticksOpen(); }, ticks.retryMs);
+      ticks.retryMs = Math.min(300000, ticks.retryMs * 2);
+    }                                              // (readyState 0: the browser reconnects by itself)
+  };
+}
+function ticksClose() {
+  clearTimeout(ticks.retryT); ticks.retryT = null;
+  if (ticks.es) { try { ticks.es.close(); } catch (e) { /* already closed */ } ticks.es = null; }
+  ticks.state = "off";
+}
+
 // ---------------------------------------------------------------- stream records -> motifs / layer
 const MOTIF_KINDS = new Set(["strategy", "reel", "copy", "newlab"]);       // 기존 36 · 5분봉 · 추가 계좌
 const MOTIF_GROUPS = new Set(["core", "reel", "extra"]);
@@ -323,7 +390,9 @@ let feeds = null, roomsT = null;
 function applyFeeds() {
   if (cfg.on && !feeds) {
     feeds = [
-      store.watch("ticker", (tk) => { if (tk) feed(priceMoves(tk)); }),   // polled every 5 s while the sound is on
+      // polled every 5 s while the sound is on; heard only while the market-trade relay is not live (the fallback),
+      // and always read so the baseline stays fresh for the moment it takes over
+      store.watch("ticker", (tk) => { if (!tk) return; const mv = priceMoves(tk); if (!tradesLive()) feed(mv); }),
       bus.on("trades", (rows) => onTrades(rows)),
       bus.on("board:changed", (ch) => onBoardChanged(ch)),
       bus.on("rooms", () => {                                  // a room has new messages: look once (debounced)
@@ -334,16 +403,18 @@ function applyFeeds() {
     ];
     seedPositions(store.get("board"));
     store.need("rooms", 60000).then((v) => onRooms(v)).catch(() => {});     // the baseline of the rooms
+    ticksOpen();
   } else if (!cfg.on && feeds) {
     for (const off of feeds) off();
     feeds = null;
+    ticksClose();
     clearTimeout(roomsT);
     layer.clear(); px.base = null;
   }
 }
 function unlock() {
   if (!cfg.on) return;
-  if (ac()) { unlocked = true; bus.emit("sound:cfg", {...cfg}); }
+  if (ac()) { unlocked = true; ticksOpen(); bus.emit("sound:cfg", {...cfg}); }
 }
 let started = false;
 export function startSound() {
@@ -354,8 +425,8 @@ export function startSound() {
   document.addEventListener("pointerdown", first, true);
   document.addEventListener("keydown", first, true);
   document.addEventListener("visibilitychange", () => {
-    if (document.hidden) { clearTimeout(layerT); layerT = null; layer.clear(); px.base = null; if (ctx) ctx.suspend().catch(() => {}); }
-    else if (ctx && cfg.on) ctx.resume().catch(() => {});
+    if (document.hidden) { clearTimeout(layerT); layerT = null; layer.clear(); px.base = null; ticksClose(); if (ctx) ctx.suspend().catch(() => {}); }
+    else if (cfg.on) { if (ctx) ctx.resume().catch(() => {}); ticksOpen(); }
   });
   applyFeeds();
 }
@@ -419,7 +490,7 @@ export function soundButton() {
     h("label", {class: "snd-row"}, night, h("span", null, "밤 00~07시(한국)엔 끄기")),
     h("label", {class: "snd-row"}, wakeBox, h("span", null, wakeSupported() ? "화면 켜두기 (휴대폰이 잠들면 소리도 멈춤)" : "화면 켜두기 · 이 기기는 지원 안 함")),
     why,
-    h("p", {class: "note"}, "바탕음 = 코인 가격이 실제로 움직일 때 한 번씩 (오르면 높은 음, 내리면 낮은 음). 우리 계좌의 진입·익절·손절·강제청산, 회의 결론, D+10·D+20·판정 날엔 정해 둔 소리. 꾸민 소리는 없습니다."));
+    h("p", {class: "note"}, "바탕음 = 바이낸스에서 실제로 체결된 거래 (사는 쪽이 많으면 높은 음, 파는 쪽이 많으면 낮은 음, 크게 몰리면 더 크게). 연결이 안 되면 코인 가격이 움직일 때 한 번씩. 우리 계좌의 진입·익절·손절·강제청산, 회의 결론, D+10·D+20·판정 날엔 정해 둔 소리. 꾸민 소리는 없습니다."));
   const wrap = h("div", {class: "snd"}, btn, pop);
   const paint = () => {
     const on = cfg.on, wait = waiting(), mute = on && cfg.night && nightKst(Date.now());
@@ -470,6 +541,6 @@ export const _test = {
   setSink(fn) { sink = fn; },
   setKinds(obj) { kinds = {b: kinds.b, m: new Map(Object.entries(obj))}; },
   unlock(v = true) { unlocked = v; },
-  layer, px, posSeen, roomSeen, lastMotif,
-  reset() { tradeSeen.clear(); layer.clear(); px.base = null; px.ema = {}; posSeen.clear(); roomSeen.clear(); for (const k of Object.keys(lastMotif)) delete lastMotif[k]; clearTimeout(layerT); layerT = null; },
+  layer, px, posSeen, roomSeen, lastMotif, ticks, ticksOpen, ticksClose,
+  reset() { ticksClose(); ticks.retryMs = 30000; tradeSeen.clear(); layer.clear(); px.base = null; px.ema = {}; posSeen.clear(); roomSeen.clear(); for (const k of Object.keys(lastMotif)) delete lastMotif[k]; clearTimeout(layerT); layerT = null; },
 };
