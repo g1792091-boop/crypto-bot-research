@@ -233,7 +233,9 @@ def test_limit_entry_block_per_group_and_no_money(tmp_path):
     assert a["paired_diff_roe"] == pytest.approx(0.075) and a["paired_better_share"] == 1.0 and a["small"]
     assert a["missed"] == 2 and a["missed_share"] == pytest.approx(0.4) and a["missed_traded"] == 1
     assert a["missed_base_roe"] == pytest.approx(0.40) and a["missed_base_win_share"] == 1.0
-    assert v["groups"]["ds200"]["signals"] == 1 and v["groups"]["reel"] == {"signals": 0, "small": True}
+    ds = v["groups"]["ds200"]
+    assert ds["signals"] == 1 and ds["paired"] == 1 and v["groups"]["reel"] == {"signals": 0, "small": True}
+    assert ds["counted_only"] and not [k for k in ds if "roe" in k]       # DeepSeek: counted only (D11), no ROE
     assert set(v["groups"]) == {"core", "ds200", "reel"} and v["signals"] == 6
     _no_money(v)                                        # ROE and counts only, for DeepSeek too
     assert SP.limit_entry(None, None, 0, 1)["error"]

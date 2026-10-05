@@ -145,7 +145,7 @@ def streak_context(paper_db: str, now_ms: int) -> dict:
         if rows:
             top = sorted(rows, key=lambda r: (-r["longest"], r.get("p_longest") if r.get("p_longest") is not None else 1))
             cell["top"] = top[:TOP]
-            now = max(rows, key=lambda r: (r["now"], -(r.get("p_now") or 1)))
+            now = max(rows, key=lambda r: (r["now"], -(r["p_now"] if r.get("p_now") is not None else 1)))
             cell["now"] = now if now["now"] else None
             k = top[0]["longest"]
             tf0 = acc.get(top[0]["account_id"], ("", ""))[1]

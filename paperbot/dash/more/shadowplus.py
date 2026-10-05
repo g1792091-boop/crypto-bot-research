@@ -7,7 +7,8 @@
    really took (obsshadows.trade_shadows; same key tail ``<account>|<symbol>|<bar close>``). Per group (기존 36 /
    딥시크 / 5분 단타), since the run start: signals, fill rate, the filled limit shadows' mean net ROE next to the
    same signals' base, and the share and the base result of the signals a limit order would have missed.
-   ROE (ratios) and counts only, for every group: no money (DeepSeek is counted, never priced; CONTRACT.md §1).
+   ROE (ratios) and counts only: no money. DeepSeek is counted only (owners' D11: its P&L stays in its own group
+   view; CONTRACT.md §1): its cell keeps the counts and shares (``COUNT_KEYS``), never an ROE.
 
 2. ``strategy_view``: /api/analysis/shadows?strategy=<name>: that strategy's rows of
    riskreward.shadow_summary(strategies=[name]) (``sh["strategies"][name]``, the same cells as the pooled view) and
@@ -20,6 +21,9 @@ import sqlite3
 from typing import Any, Optional
 
 LIMIT_GROUPS = ("core", "ds200", "reel")
+COUNTED_ONLY = ("ds200",)          # owners' D11: DeepSeek is counted here, its P&L (ROE too) only in its own group view
+COUNT_KEYS = ("signals", "filled", "fill_rate", "filled_resolved", "not_entered", "open", "paired",
+              "paired_better_share", "missed", "missed_share", "missed_traded", "small")
 GROUP_KO = {"core": "기존 36", "ds200": "딥시크", "reel": "5분 단타"}
 SMALL_N = 10                        # riskreward.SMALL_N: fewer paired signals are marked small
 LIVE_TFS = ("15m", "30m", "1h", "4h")
@@ -105,6 +109,8 @@ def limit_entry(daily_ro: Optional[sqlite3.Connection], paper_ro: Optional[sqlit
         if g in per:
             per[g].append((tail, int(filled or 0), None if roe is None else float(roe), int(resolved or 0)))
     out["groups"] = {g: limit_cell(rs, base) for g, rs in per.items()}
+    for g in COUNTED_ONLY:
+        out["groups"][g] = {**{k: v for k, v in out["groups"][g].items() if k in COUNT_KEYS}, "counted_only": True}
     out["signals"] = sum(len(rs) for rs in per.values())
     out["days"] = [lo, hi]
     return out
