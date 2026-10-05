@@ -2748,8 +2748,8 @@ def bull_bear_order(due: TR.Due) -> list[tuple[str, str]]:
 # #88: what the bull and the bear do not see (our positions bias them; past calls anchor them). The risk officer and
 # the chair still see both: exposure is the risk officer's job, the chair explains a change from its last call.
 BULL_BEAR_BLIND = ("ours", "track_record", "track_record_coin")
-BULL_BEAR_BLIND_NOTE = ("공정한 토론을 위해 낙관론자·비관론자에게는 우리 계좌 포지션(ours)과 지난 판정(track_record)을 보여 주지 "
-                        "않음. 리스크 책임자와 팀장은 봄")
+BULL_BEAR_BLIND_NOTE = ("공정한 토론을 위해 낙관론자·비관론자에게는 우리 계좌 포지션(ours)과 지난 판정(track_record), 방의 지난 "
+                        "글(room_messages)을 보여 주지 않음. 리스크 책임자와 팀장은 봄")
 
 
 def team_plan(due: TR.Due, mentioned: tuple = ()) -> list[tuple[str, str]]:
@@ -2849,6 +2849,10 @@ def _team_packet(rnd: _Round, role: str, board: dict) -> dict:
     if rnd.due.trigger == "bull_bear" and role in ("bull", "bear") and isinstance(pk.get("committee"), dict):
         pk["committee"] = {**{k: v for k, v in pk["committee"].items() if k not in BULL_BEAR_BLIND},
                            "hidden": BULL_BEAR_BLIND_NOTE}
+        # the room's past messages carry the same things (yesterday's '🎯 판정 기록', the code's grading line, the
+        # risk officer on our exposure): the bull and the bear get none of them. This round's turns still reach the
+        # second speaker through this_round.
+        pk["room_messages"] = []
     if role == "team_lead":
         pk["today_rounds"] = _today_rounds(ctx, meeting_day_start(ctx, rnd.due))
         pk["waiting_for_owners"] = len(R.list_proposals(ctx.agents_conn, status="awaiting_owner"))

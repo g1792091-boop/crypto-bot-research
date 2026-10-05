@@ -104,13 +104,27 @@ def test_who_speaks_first_alternates_by_day():
 def test_bull_and_bear_do_not_see_our_positions_or_past_calls():
     committee = {"coin": "BTC", "price": 1.0, "ours": {"open": {"long": 3}}, "track_record": {"graded": 4},
                  "track_record_coin": {"graded": 1}, "returns": {"24h": 0.01}}
-    rnd = SimpleNamespace(ctx=SimpleNamespace(), due=_due("2026-10-06"), base={"committee": committee})
+    past = [{"id": 1, "role": "code", "text": "🎯 판정 기록 #1: BTC 앞으로 24시간 상승"},
+            {"id": 2, "role": "risk_officer", "text": "우리 BTC 롱 3개"}]
+    rnd = SimpleNamespace(ctx=SimpleNamespace(), due=_due("2026-10-06"),
+                          base={"committee": committee, "room_messages": past})
     for role in ("bull", "bear"):
         pk = RM._team_packet(rnd, role, {})
         assert set(pk["committee"]) == {"coin", "price", "returns", "hidden"}, role
         assert "ours" in rnd.base["committee"]                       # the shared base is not changed
+        assert pk["room_messages"] == [] and rnd.base["room_messages"] == past     # past calls in the room: hidden too
     pk = RM._team_packet(rnd, "risk_officer", {})
     assert pk["committee"]["ours"] == {"open": {"long": 3}} and "hidden" not in pk["committee"]
+    assert pk["room_messages"] == past
+
+
+def test_change_mind_with_a_lone_surrogate_is_stored_not_raised(tmp_path):
+    call, why = CM.parse_call(json.loads('{"direction": "하락", "confidence": 1, "change_mind": "a\\ud800b"}'))
+    assert why == "" and call["change_mind"] == "a?b"
+    conn = sqlite3.connect(str(tmp_path / "a.db"))
+    rid = CM.record(conn, day="2026-10-06", symbol="BTCUSDT", round_id=1, call=call, why="", ref=(NOW, 100.0),
+                    now_ms=NOW)
+    assert rid and "a?b" in conn.execute("SELECT data FROM committee_calls").fetchone()[0]
 
 
 # ---------------------------------------------------------------- 7: model and prompt version with each message

@@ -158,7 +158,9 @@ def parse_call(raw: Any) -> tuple[Optional[dict], str]:
     out = {"direction": d, "confidence": c}
     cm = raw.get("change_mind")
     if isinstance(cm, str) and cm.strip():
-        out["change_mind"] = " ".join(cm.split())[:300]       # optional: what would change the chair's mind
+        # optional: what would change the chair's mind. Free model text: a lone surrogate (JSON "\ud800") becomes '?'
+        # so SQLite can store it (record() would otherwise raise UnicodeEncodeError and stop the meeting's finish)
+        out["change_mind"] = " ".join(cm.encode("utf-8", "replace").decode("utf-8").split())[:300]
     return out, ""
 
 
@@ -377,7 +379,12 @@ def liq_view(liq_path: Optional[str], symbol: str, since_ms: int, until_ms: int)
         return {"collected": False, "status_ko": "수집 안 됨",
                 "why": "강제청산 기록 파일(liq.db)이 없음: 0건이 아니라 모르는 것"}
     try:
-        newest = c.execute("SELECT MAX(trade_ts) FROM liq WHERE trade_ts < ?", (until_ms,)).fetchone()
+        # liq.db has no index on trade_ts alone (only symbol, trade_ts): a MAX/MIN over the whole table is a full scan
+        # per call (~0.25 s at 1.5M rows, many calls per event review). Rows are appended in time order (live stream,
+        # no backfill), so walk from the newest row back to the first one before the window's end, and read the
+        # first row for the recorder's start: the same answers within seconds, without the scans.
+        newest = c.execute("SELECT trade_ts FROM liq WHERE trade_ts < ? ORDER BY rowid DESC LIMIT 1",
+                           (until_ms,)).fetchone()
         newest = int(newest[0]) if newest and newest[0] is not None else None
         if newest is None or until_ms - newest > LIQ_STALE_MS:
             # the recorder takes every coin's liquidations: none at all for hours means the feed stopped, not a calm
@@ -386,7 +393,7 @@ def liq_view(liq_path: Optional[str], symbol: str, since_ms: int, until_ms: int)
                     "why": ("강제청산 기록이 하나도 없음" if newest is None else
                             f"마지막 기록이 {(until_ms - newest) / HOUR_MS:.1f}시간 전(기록기가 멈췄을 수 있음)")
                     + ": 0건이 아니라 모르는 것", "last_record_ts": newest}
-        first = c.execute("SELECT MIN(trade_ts) FROM liq").fetchone()
+        first = c.execute("SELECT trade_ts FROM liq ORDER BY rowid LIMIT 1").fetchone()
         partial = bool(first and first[0] is not None and int(first[0]) > since_ms)
         rows = c.execute("SELECT side, COUNT(*), SUM(COALESCE(filled_qty, qty) * COALESCE(avg_price, price)) FROM liq "
                          "WHERE symbol = ? AND trade_ts >= ? AND trade_ts < ? GROUP BY side",
