@@ -13,11 +13,13 @@ import {h, put, ui, fmt, derive, motion} from "../core/pb.js";
 const SPARK_TTL = 5 * 60000;
 const FLASH_WINDOW = 1500;          // rows drawn this soon after a board update are the update's rows
 
-export function rowMotion(ctx, root) {
+/** rowMotion(ctx, root, {sparks}) -> {update(board, sel), note(sel)}. sparks: false = no small lines (home on a phone,
+ *  where they would cut the names); the caption then does not mention them. */
+export function rowMotion(ctx, root, o = {}) {
   const memo = ui.rankMemo("board-ranks");
   const base = memo.base;           // {ts, v: {account_id: return}} of the last visit, or null
   const st = {board: null, sel: "core", byId: new Map(), rank: {}, groupRank: {}, baseRank: {}, prevRet: null, curRet: {}, updAt: 0,
-    prevDelta: new Map(), sparksOff: false, initial: 5000};
+    prevDelta: new Map(), sparksOff: o.sparks === false, initial: 5000};
   const sparks = new Map();         // id -> {at, vals}
   let want = new Set(), timer = 0;
 
