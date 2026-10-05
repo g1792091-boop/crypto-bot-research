@@ -1,0 +1,173 @@
+{
+ "configs": 40,
+ "h1_pass": false,
+ "h1_p12": 1.0,
+ "h1_pre_mean_pct": -0.13252781553059229,
+ "stage1": 0,
+ "stage1_top": 0,
+ "stage2": 0,
+ "stage3": 0,
+ "stage3_bonferroni": 0,
+ "bh12_all": 0,
+ "candidate": 0,
+ "weak_candidate": 0,
+ "candidate_20x": 0,
+ "all_three_periods_positive": 0,
+ "h1_cost_sensitive_pass": false,
+ "stage1_condition_failed": {
+  "n": 0,
+  "mean": 40,
+  "coins": 39,
+  "half1": 36,
+  "half2": 39
+ },
+ "stage2_condition_failed_of_top": {
+  "mean": 0,
+  "pf": 0,
+  "coins": 0,
+  "p": 0
+ },
+ "stage3_condition_failed_of_stage2": {
+  "mean": 0,
+  "pf": 0,
+  "coins": 0,
+  "p": 0
+ },
+ "seconds": 83,
+ "bars_dir": "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/binance/bars",
+ "pre_dir": "data/pre2021",
+ "n_boot": 2000,
+ "tfs": [
+  "5m",
+  "15m",
+  "30m",
+  "1h",
+  "4h"
+ ],
+ "code_sha256": {
+  "lib_reel5m.py": "a824717e50b0a4f7e2890ceb1457a12ee096ebc36e8a56c56e30c7e77dfc0eda"
+ },
+ "prereg_sha256": "835f786a965b8d9a268a99c576128bb7789dc8ddf06212eefcba745f7aca402a",
+ "series_bars": {
+  "15m_BCHUSD": [
+   201398,
+   56448
+  ],
+  "15m_BTCUSD": [
+   201398,
+   56448
+  ],
+  "15m_DOGEUSD": [
+   201398,
+   38076
+  ],
+  "15m_ETHUSD": [
+   201398,
+   56448
+  ],
+  "15m_LTCUSD": [
+   201398,
+   55648
+  ],
+  "15m_SOLUSD": [
+   201398,
+   31748
+  ],
+  "1h_BCHUSD": [
+   50351,
+   14112
+  ],
+  "1h_BTCUSD": [
+   50351,
+   14112
+  ],
+  "1h_DOGEUSD": [
+   50351,
+   9519
+  ],
+  "1h_ETHUSD": [
+   50351,
+   14112
+  ],
+  "1h_LTCUSD": [
+   50351,
+   13912
+  ],
+  "1h_SOLUSD": [
+   50351,
+   7937
+  ],
+  "30m_BCHUSD": [
+   100701,
+   28224
+  ],
+  "30m_BTCUSD": [
+   100701,
+   28224
+  ],
+  "30m_DOGEUSD": [
+   100701,
+   19038
+  ],
+  "30m_ETHUSD": [
+   100701,
+   28224
+  ],
+  "30m_LTCUSD": [
+   100701,
+   27824
+  ],
+  "30m_SOLUSD": [
+   100701,
+   15874
+  ],
+  "4h_BCHUSD": [
+   12588,
+   3528
+  ],
+  "4h_BTCUSD": [
+   12588,
+   3528
+  ],
+  "4h_DOGEUSD": [
+   12588,
+   2380
+  ],
+  "4h_ETHUSD": [
+   12588,
+   3528
+  ],
+  "4h_LTCUSD": [
+   12588,
+   3478
+  ],
+  "4h_SOLUSD": [
+   12588,
+   1985
+  ],
+  "5m_BCHUSD": [
+   604177,
+   169344
+  ],
+  "5m_BTCUSD": [
+   604177,
+   169344
+  ],
+  "5m_DOGEUSD": [
+   604177,
+   114228
+  ],
+  "5m_ETHUSD": [
+   604177,
+   169344
+  ],
+  "5m_LTCUSD": [
+   604177,
+   166943
+  ],
+  "5m_SOLUSD": [
+   604177,
+   95244
+  ]
+ }
+}
