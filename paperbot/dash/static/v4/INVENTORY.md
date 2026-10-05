@@ -353,3 +353,14 @@ What the owners see on the first morning after the v4 reset (dashboard only; shi
 | 코인 × 봉 조건 지도 | 매매법 상세 (the 36), under 지금 조건 (`radarMatrix`): 6 coins × 15분/30분/1시간/4시간 cells "롱 2/3 · 숏 0/3", the closest cells glow, the cell on the chart is outlined, a tap moves the chart there (setChart); countdown per timeframe; cells not computed yet say so ("…", "나머지 N칸 계산 중") | `/api/v4/radar/strategy/<name>` (3 new cells per call, `pending`) |
 | 곧 신호 대기실 | 서버 › 신호, top (`waitRoom`): one timeframe (picker, remembered), the 36 on all 6 coins, the 15 closest (coin, strategy, closer side's lamps, 한 칸 남음 / 조건 모두 켜짐 / 신호!), counts of 한 칸 남음 and this bar's signals; no DeepSeek, no coin flips (said in the note) | `/api/v4/radar?tf&symbol` × 6 |
 | 24시간 신호 지도 | 서버 › 신호, next to 대기실 (signals.js `heatCard`): coin × 15분/30분/1시간/4시간 (+ 5분 when 5분 signals exist) signal counts of the last 24 h (long · short, 늦음), deeper colour = more, a cell flashes once when its count really rises, a live countdown to each timeframe's next close; counts only (no money); "최근 1,000개까지만" when capped | `/api/signals?limit=1000` |
+
+## fill-home: 홈을 살아 있게 (dashboard + one read-only server change; tests/test_dash_fill_home.py)
+
+| Addition | Screen / place | Server |
+|---|---|---|
+| 촘촘한 레이스 | 홈 head card race, 흐름 hero, 홈 group-card lines: a point every 5분 (run < 2일), 15분 (< 7일), then 1시간 / 4시간 / 하루; label "D+1 · 5분마다" | `/api/v4/flow/race?step=auto` (more/flow.py auto_step; 5- / 15-minute steps read from the 5-minute equity rows, finished steps kept) |
+| LED 잔고 곡선 첫날부터 | 홈 LED bar line: 5분 steps while the run is under 2 days, 15분 under 7 days, then hourly | `/api/v4/curves?step=300000` / `900000` (app.py CURVE_STEPS gains 300000) |
+| 시장 지금 | 홈 top band beside the story rings: 7 coins' price (glow on change), 24h %, 펀딩, 정산까지 countdown to the server's next funding time; phone: one sideways row | store `ticker` (`/api/ticker`, existing 5 s cache) |
+| 지금 열린 포지션 | 홈 under the head card: 기존 36 / 5분봉 / 추가 계좌 positions (봉·매매법, 코인, 롱/숏 + 배수, 진입, 손절 or 잠금 ROE, live ROE at the mark, tint on change), ROE order, row opens the account; "그 밖에 딥시크 n · 동전 봇 n 포지션 (개수만)" | `/api/board` positions + store `ticker` mark |
+| 방금 끝난 거래 + 오늘 잘한·못한 계좌 | 홈 full-width card: last 12 closed trades (newest close first) of 기존 36 / 5분봉 / 추가 (시각, 봉·매매법, 코인, 방향 + 배수, 익절 잠금 / 손절 / 시간, ROE, USDT), new rows slide in on the stream's trade event; 오늘 가장 잘한 / 못한 계좌 3 (기존 36, USDT, 참고, 표본 적음 under 30 trades) | `/api/trades?group=main&limit=12`, `/api/trades?group=core&limit=2000` (existing) |
+| 회의 카운트다운 + 오늘 일정 | 홈 '오늘 회의 일정' (ticking countdown to the next fixed meeting; each meeting 예정 / 진행 중 / 끝 / 지남 with one line on what it reviews); the 0 / 0 / 0 board comes back once a meeting ran today; 회의 요약 › 회의 결론 shows the same card on a day without meetings | `/api/office` schedule / running / recent (existing) |

@@ -1,10 +1,12 @@
 """흐름 (홈 › 흐름): the group race and the profit calendar, read-only over paper3.db.
 
-    GET /api/v4/flow/race?step=auto|3600000|14400000|86400000
+    GET /api/v4/flow/race?step=auto|300000|900000|3600000|14400000|86400000
         Each group's median balance over the run (core = the 36, ds200 = DeepSeek 44, reel = the 5m reel, flip = all
         15 coin flips; flip5m = the reel's three 5m flips, its own comparison) at the end of every step, with the
-        middle 50 % of the coin flips (band lo / hi = their 25th / 75th percentile) as the baseline. step "auto": one
-        hour while the run is at most 40 days old, then 4 hours, then one day past 160 days. The first point is the
+        middle 50 % of the coin flips (band lo / hi = their 25th / 75th percentile) as the baseline. step "auto": 5
+        minutes while the run is under 2 days old, 15 minutes under 7 days (the bot writes equity every 5 minutes, so
+        day 1 is a real moving race, never a flat line of 1-2 hourly points), then one hour while it is at most 40
+        days old, then 4 hours, then one day past 160 days. The first point is the
         run start (every account at the starting balance), the last one is now.
     GET /api/v4/flow/calendar?season=k
         One entry per Korea-time (KST) day of a season (season k ends on the KST day of the (k+1)-th verdict, so the
@@ -39,7 +41,9 @@ HOUR = 3_600_000
 DAY = 86_400_000
 KST_MS = 9 * HOUR                    # Korea time: UTC+9, no daylight saving
 SETTLE_MS = 15 * 60_000              # an hour is kept once it ended this long ago (late equity rows are in by then)
-RACE_STEPS = (HOUR, 4 * HOUR, DAY)
+MIN = 60_000
+FINE_STEPS = (5 * MIN, 15 * MIN)     # the young run's steps (auto_step): read straight from equity, cached per step
+RACE_STEPS = FINE_STEPS + (HOUR, 4 * HOUR, DAY)
 RACE_TTL_S = 60.0
 CAL_TTL_S = 120.0
 CHUNK_HOURS = 24 * 31               # a long run's first read goes a month at a time (bounded memory, < 999 params)
@@ -85,7 +89,13 @@ def _r(v: Optional[float], d: int = 2) -> Optional[float]:
 
 
 def auto_step(start: int, now: int) -> int:
+    """The race's step by run age: 5 minutes under 2 days, 15 minutes under 7 days, then 1 hour (40 days), 4 hours
+    (160 days), one day. A young run has only a handful of hourly points, but 5-minute equity rows exist from the start."""
     days = (now - start) / DAY
+    if days < 2:
+        return 5 * MIN
+    if days < 7:
+        return 15 * MIN
     return HOUR if days <= 40 else 4 * HOUR if days <= 160 else DAY
 
 
@@ -99,6 +109,7 @@ class Flow:
         self.st: Optional[dict] = None
         self.synced_at = 0.0
         self.cache: dict = {}
+        self.fine: dict = {}            # step -> the finished fine steps' summaries (5 / 15 minutes, a young run only)
 
     # ------------------------------------------------------------ reading
     def _bust_below(self, c) -> float:
@@ -296,13 +307,67 @@ class Flow:
             if st is None:
                 return {"ready": False, "keys": list(GROUP_KEYS), "t": [], "median": {}, "band": {"lo": [], "hi": []},
                         "busts": [], "n": {}}
-            return self._race(st, want or auto_step(st["start"], st["tmp"]["now"]))
+            stp = want or auto_step(st["start"], st["tmp"]["now"])
+            if stp < HOUR and st["tmp"]["now"] - st["start"] >= 7 * DAY:
+                stp = HOUR                              # a fine step only while the run is young (bounded reads)
+            if stp < HOUR:
+                return self._race(st, stp, self._fine_pts(st, stp))
+            return self._race(st, stp)
         return self._cached(("race", want), RACE_TTL_S, make)
 
-    def _race(self, st: dict, stp: int) -> dict:
+    def _fine_pts(self, st: dict, stp: int) -> tuple:
+        """A young run's race at a 5- or 15-minute step: each account's last equity row in each step (carried forward
+        while it has none), summarized like the hours. Finished steps are kept per step; only newer rows are read
+        (one indexed range read per account). Only a run under 7 days old is drawn this fine (race() falls back to 1 hour)."""
+        import numpy as np
+        now = st["tmp"]["now"]
+        with self.lock:
+            fs = self.fine.get(stp)
+            if fs is None or fs["start"] != st["start"] or fs["ids"] != st["ids"]:
+                fs = {"start": st["start"], "ids": st["ids"], "done_b": st["start"] // stp - 1,
+                      "last": np.full(len(st["ids"]), st["initial"]),
+                      "pts": {k: [v[0]] for k, v in st["pts"].items()}}
+                self.fine[stp] = fs
+            cur_b, settled_b = (now - 1) // stp, (now - SETTLE_MS) // stp - 1
+
+            def put(F, b0: int, dst: dict, now_t: Optional[int]) -> None:
+                sm = self._summaries(st, F)
+                for j in range(len(F)):
+                    dst["t"].append(now_t if (now_t is not None and j == len(F) - 1) else (b0 + j + 1) * stp)
+                    for k in SERIES + ("lo", "hi"):
+                        dst[k].append(sm[k][j])
+            tmp = {k: [] for k in fs["pts"]}
+            with self.data.conn() as c:
+                if fs["done_b"] + 1 <= settled_b:
+                    F = self._steps(c, st, fs["last"], fs["done_b"] + 1, settled_b, stp)
+                    put(F, fs["done_b"] + 1, fs["pts"], None)
+                    fs["last"], fs["done_b"] = F[-1].copy(), settled_b
+                if fs["done_b"] + 1 <= cur_b:
+                    F = self._steps(c, st, fs["last"], fs["done_b"] + 1, cur_b, stp)
+                    put(F, fs["done_b"] + 1, tmp, now)
+            return fs["pts"], tmp
+
+    @staticmethod
+    def _steps(c, st: dict, last, b0: int, b1: int, stp: int):
+        """Steps b0..b1 of ``stp`` ms (step b holds rows with ts in (b*stp, (b+1)*stp]) as a steps x accounts matrix of
+        each account's last row in the step, carried forward from ``last`` (the hours' rule at a finer step)."""
+        import numpy as np
+        nb, n = b1 - b0 + 1, len(st["ids"])
+        M = np.full((nb, n), np.nan)
+        for i, aid in enumerate(st["ids"]):
+            for b, eq, _ts in c.execute("SELECT (ts - 1) / ? AS b, equity, MAX(ts) FROM equity WHERE account_id = ? "
+                                        "AND ts > ? AND ts <= ? GROUP BY b", (stp, aid, b0 * stp, (b1 + 1) * stp)):
+                if b0 <= int(b) <= b1:
+                    M[int(b) - b0, i] = eq
+        P = np.vstack([np.asarray(last, dtype=float)[None, :], M])
+        pick = np.where(np.isnan(P), 0, np.arange(nb + 1)[:, None])
+        np.maximum.accumulate(pick, axis=0, out=pick)
+        return P[pick, np.arange(n)][1:]
+
+    def _race(self, st: dict, stp: int, fine: Optional[tuple] = None) -> dict:
         tmp = st["tmp"]
         now = tmp["now"]
-        P, T = st["pts"], tmp["pts"]
+        P, T = fine if fine is not None else (st["pts"], tmp["pts"])
         ts = P["t"] + T["t"]
         keep = [j for j, t in enumerate(ts) if j == 0 or j == len(ts) - 1 or (t + KST_MS) % stp == 0]
 
