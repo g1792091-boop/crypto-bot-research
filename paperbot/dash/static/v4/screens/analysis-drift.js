@@ -2,7 +2,8 @@
 // used (ask for a long, bid for a short, read when the signal was ready) was from the signal bar's close, in bp (0.01%),
 // per group and timeframe, by the delay after the bar closed; a strategy group minus the same timeframe's coin flips.
 // The 5-year tests assumed next open + 0.02% (2 bp); a median over 3 bp (1.5x) gets a neutral '가정보다 큼' mark.
-// HONESTY: descriptive (no pass/fail words), counts and bp only, small samples say so; nothing sent → 아직 없음.
+// HONESTY: descriptive (no pass/fail words), counts and bp only, small samples say so; nothing sent → 아직 없음;
+// the '동전 봇 빼면' column is a coin-flip comparison, so the card carries ui.refNote (참고).
 import {h, put, ui, fmt, motion} from "../core/pb.js";
 
 const bp = (x, sign = true) => (x == null ? "—" : `${fmt.num(x, 1, sign)}bp`);
@@ -63,7 +64,8 @@ export function driftCard(env) {
     }
     draw(cur, false);
     put(body, h("p", {class: "an-read"}, h("b", null, "읽는 법 "), "플러스 = 신호 봉 종가보다 불리하게 들어감 (롱은 비싸게, 숏은 싸게). 동전 봇은 같은 봉에서 뽑으니 '동전 봇 빼면' = 매매법만의 차이."),
-      seg, slot, h("p", {class: "an-note"}, D.note || "", ` · ${D.label || "설명용, 판정 아님"}`));
+      seg, slot, h("p", {class: "an-note"}, D.note || "", ` · ${D.label || "설명용, 판정 아님"}`),
+      ui.refNote(env.verdictTs));         // a comparison with the coin flips: 참고 until the verdict (CONTRACT §1.3)
   };
   env.ctx.api("/api/v4/drift").then((D) => { if (env.ctx.alive()) paint(D || {}); })
     .catch(() => { if (env.ctx.alive()) put(body, h("p", {class: "muted"}, "불러오지 못했습니다. 화면을 다시 열면 다시 시도합니다.")); });

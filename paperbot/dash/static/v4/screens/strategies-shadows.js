@@ -63,7 +63,7 @@ export function stratShadows(ctx, name, kind) {
   let tries = 0;
   const load = () => ctx.api(`/api/analysis/shadows?strategy=${encodeURIComponent(name)}`).then((D) => {
     if (!ctx.alive()) return;
-    if (D && D.pending && tries++ < 10) { ctx.timeout(load, 3000); return; }
+    if (D && D.pending && tries++ < 10) { ctx.timeout(() => { if (card.isConnected) load(); }, 3000); return; }   // not for a page left
     if (!D || D.pending) { put(body, h("p", {class: "muted"}, "서버가 아직 계산하는 중입니다. 잠시 뒤 다시 열어 주세요.")); return; }
     put(body, D.error ? h("p", {class: "an-warn"}, String(D.error)) : null,
       h("h3", {class: "an-sub"}, "이번 실험 (밤 점검 그림자)"), shadowTable(D),

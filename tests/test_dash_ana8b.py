@@ -136,6 +136,9 @@ def test_streak_context_per_group_with_the_coin_flip_band(tmp_path):
     assert core["now"]["account_id"] == "B@1h" and core["now"]["now"] == 1      # a tie: the rarer run (fewer trades)
     assert core["flip_band"] == {"accounts": 2, "min": 2, "median": 3.5, "max": 5}
     assert reel["flip_band"] == {"accounts": 1, "min": 1, "median": 1, "max": 1}
+    # the named top account (A@15m) also gets the flips of its own timeframe; DeepSeek (unnamed) and the reel do not
+    assert core["flip_band_tf"] == {"tf": "15m", "accounts": 1, "min": 2, "median": 2, "max": 2}
+    assert "flip_band_tf" not in ds and "flip_band_tf" not in reel
     assert ds["top"][0]["longest"] == 3 and 0 < core["any_account"]["p"] <= 1
     assert ds["unnamed"] and len(ds["top"]) == 1 and ds["top"][0]["account_id"] is None      # DeepSeek: group level only
     assert ds["now"]["account_id"] is None and core["top"][0]["account_id"]
@@ -182,6 +185,15 @@ def test_drift_sql_on_a_synthetic_db(tmp_path):
     e = DR.drift_view(empty, 10_000)
     assert e["signals"] == 0 and all(g["all"] == {"n": 0} for g in e["groups"].values())
     assert DR.drift_view(str(tmp_path / "missing.db"), 1)["error"]
+    # data.close comes from json_extract; a malformed data blob makes that timeframe fall back to json.loads
+    c = sqlite3.connect(db)
+    c.execute("INSERT INTO signal_log (bar_close, timeframe, strategy, symbol, side, atr, ref_price, ref_time, delay_ms, "
+              "status, data) VALUES (9999, '15m', 'A', 'ETHUSDT', 1, 1.0, 100.0, 0, 1000, 'SUBMITTED', 'not json')")
+    c.commit()
+    rows = DR.rows_since(c, 0)
+    c.close()
+    assert len([r for r in rows if r[0] == "15m"]) == 7 and sum(1 for r in rows if r[5] is None) == 1
+    assert DR.drift_view(db, 10_000)["groups"]["core"]["timeframes"]["15m"]["median"] == pytest.approx(5.0)
 
 
 # ---------------------------------------------------------------- (4) limit entry

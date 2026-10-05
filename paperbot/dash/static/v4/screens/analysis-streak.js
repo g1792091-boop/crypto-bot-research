@@ -16,6 +16,7 @@ function groupRow(g, c, ko, min, ctx) {
       b ? h("span", {class: "meta"}, h("span", null, `${c.flip_band_ko || "동전 봇"} 가장 긴 연패 ${fmt.int(b.min)}~${fmt.int(b.max)}번 (중앙 ${fmt.num(b.median, 1)})`)) : null);
   }
   const now = c.now;
+  const bt = c.flip_band_tf;          // the flips on the listed account's own timeframe (none for DeepSeek / the reel)
   return h("div", {class: "lrow an-row", role: "listitem"},
     h("span", {class: "rk"}, ko),
     top.account_id ? h("a", {class: "lname", href: ctx.href("account", top.account_id), title: top.account_id}, acctLabel(top.account_id))
@@ -25,7 +26,8 @@ function groupRow(g, c, ko, min, ctx) {
       h("span", null, `${fmt.int(top.trades)}건 · 승률 ${fmt.pct(top.win_rate, 0, false)} → 이만한 연패가 나올 확률 ${chance(top.p_longest)}`),
       c.any_account ? h("span", null, `${ko} 계좌 ${fmt.int(c.with_trades)}개 중 어딘가에서 ${fmt.int(c.any_account.k)}연패 이상: ${chance(c.any_account.p)}`) : null,
       now && now.now ? h("span", null, `지금 이어지는 가장 긴 연패 ${fmt.int(now.now)}번 (`, now.account_id ? acctLabel(now.account_id) : "한 계좌", `, 확률 ${chance(now.p_now)})`) : h("span", null, "지금 이어지는 연패 없음"),
-      b ? h("span", null, `${c.flip_band_ko || "동전 봇"} 가장 긴 연패 ${fmt.int(b.min)}~${fmt.int(b.max)}번 (중앙 ${fmt.num(b.median, 1)}, ${fmt.int(b.accounts)}개)`) : null,
+      bt ? h("span", null, `같은 봉(${fmt.tfKo(bt.tf)}) 동전 봇 가장 긴 연패 ${fmt.int(bt.min)}~${fmt.int(bt.max)}번 (중앙 ${fmt.num(bt.median, 1)}, ${fmt.int(bt.accounts)}개)`)
+        : b ? h("span", null, `${c.flip_band_ko || "동전 봇"} 가장 긴 연패 ${fmt.int(b.min)}~${fmt.int(b.max)}번 (중앙 ${fmt.num(b.median, 1)}, ${fmt.int(b.accounts)}개)`) : null,
       ui.smallSample(top.trades, min)));
 }
 

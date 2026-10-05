@@ -79,18 +79,29 @@ def stats(xs: list) -> dict:
     return out
 
 
+def _close_of(data) -> Optional[float]:
+    try:
+        return (json.loads(data) or {}).get("close") if data else None
+    except (TypeError, ValueError, AttributeError):
+        return None
+
+
 def rows_since(c: sqlite3.Connection, since_ms: int) -> list[tuple]:
-    """(timeframe, strategy, side, ref_price, delay_ms, close) of the submitted signals since ``since_ms``."""
+    """(timeframe, strategy, side, ref_price, delay_ms, close) of the submitted signals since ``since_ms``.
+    ``data.close`` is read with SQLite's json_extract (``data`` also holds each signal's chart context, so parsing
+    whole rows in Python would be the slow part); a SQLite without JSON1 falls back to json.loads."""
     out: list = []
     for tf in TF_ORDER:                  # 1d is record-only (status RECORD): never submitted
-        q = ("SELECT timeframe, strategy, side, ref_price, delay_ms, data FROM signal_log "
-             "WHERE timeframe = ? AND bar_close >= ? AND status = 'SUBMITTED' ORDER BY bar_close DESC LIMIT ?")
-        for tf_, s, side, ref, delay, data in c.execute(q, (tf, int(since_ms), MAX_ROWS)):
-            try:
-                close = (json.loads(data) or {}).get("close") if data else None
-            except (TypeError, ValueError):
-                close = None
-            out.append((tf_, s, int(side or 0), ref, delay, close))
+        args = (tf, int(since_ms), MAX_ROWS)
+        try:
+            q = ("SELECT timeframe, strategy, side, ref_price, delay_ms, json_extract(data, '$.close') FROM signal_log "
+                 "WHERE timeframe = ? AND bar_close >= ? AND status = 'SUBMITTED' ORDER BY bar_close DESC LIMIT ?")
+            got = c.execute(q, args).fetchall()
+        except sqlite3.OperationalError:     # no JSON1 (or a malformed row): parse in Python
+            q = ("SELECT timeframe, strategy, side, ref_price, delay_ms, data FROM signal_log "
+                 "WHERE timeframe = ? AND bar_close >= ? AND status = 'SUBMITTED' ORDER BY bar_close DESC LIMIT ?")
+            got = [(*r[:5], _close_of(r[5])) for r in c.execute(q, args)]
+        out += [(tf_, s, int(side or 0), ref, delay, close) for tf_, s, side, ref, delay, close in got]
     return out
 
 

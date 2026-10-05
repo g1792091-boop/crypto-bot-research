@@ -581,7 +581,11 @@ def risk_view(paper_db: str, now_ms: int) -> dict:
     sims = [r for r in sv["accounts"].values() if r.get("kind") == "strategy" and "p_bust" in (r.get("mc") or {})]
     too_few = sum(1 for r in sv["accounts"].values() if r.get("kind") == "strategy" and (r.get("mc") or {}).get("too_few"))
     from .more.streaks import streak_context            # 연패 맥락 (ana8B): every group, coin flips as the band
-    return {"streaks": streak_context(paper_db, now_ms),
+    try:
+        streaks = streak_context(paper_db, now_ms)
+    except Exception as exc:  # noqa: BLE001  (an added card never takes the 손익비·위험 page down)
+        streaks = {"error": f"연패 맥락을 계산하지 못함: {type(exc).__name__}"}
+    return {"streaks": streaks,
             "rules": {k: lad.get(k) for k in ("first_lock", "first_trigger", "stop_atr", "leverage")},
             "trades": tab["all"].get("trades", 0), "flip_trades": flips.get("trades", 0),
             "all": rr(tab["all"]), "coin_flips": rr(flips),
@@ -835,7 +839,10 @@ def shadows_view(paper_db: str, daily_db: Optional[str], now_ms: int, account: O
         sh = RR.shadow_summary(d, c, int(start), int(now_ms)) if d is not None else {"error": "daily3.db 없음"}
         cv = curve_view(d, account=account if account in set(accounts) else None,
                         accounts=accounts if c is not None else None) if d is not None else {}
-        limit = SP.limit_entry(d, c, int(start or 0), int(now_ms))
+        try:
+            limit = SP.limit_entry(d, c, int(start or 0), int(now_ms))
+        except Exception as exc:  # noqa: BLE001  (an added card never takes the 그림자 비교 page down)
+            limit = {"title": "지정가 진입", "groups": {}, "error": f"지정가 진입을 계산하지 못함: {type(exc).__name__}"}
     finally:
         _close(c, d)
     allc = (sh.get("all") or {}) if isinstance(sh, dict) else {}

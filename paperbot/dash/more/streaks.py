@@ -18,7 +18,9 @@ strategy's losses can cluster, so the number is a yardstick, not a test. With ma
 expected somewhere: ``any_account`` is 1 - prod(1 - P_i) over the group's accounts (each with its own n and win rate).
 
 The coin flips' longest runs are the band: min / median / max over the coin-flip accounts with trades (the 15m-4h flips
-for 기존 36 / 딥시크 / 추가 계좌, the 5m flips for the 5분 단타, which run its exits). DeepSeek rows carry no
+for 기존 36 / 딥시크 / 추가 계좌, the 5m flips for the 5분 단타, which run its exits); ``flip_band_tf`` adds the band of
+the flips on the listed account's own timeframe (a 15m account trades far more often than a 4h one, so its runs are
+longer at the same win rate; not for DeepSeek, whose row names no account). DeepSeek rows carry no
 account id (group level only, CONTRACT.md §1.3). Counts and rates only: no money for any group (DeepSeek is counted;
 CONTRACT.md §1). Meaningful from ``MIN_TRADES`` closed trades per account.
 """
@@ -123,12 +125,14 @@ def streak_context(paper_db: str, now_ms: int) -> dict:
     finally:
         _close(c)
     flips = {"5m": [], "other": []}
+    flips_tf: dict = {}                  # the coin flips' longest runs by timeframe (the same-timeframe band)
     per: dict = {g: [] for g in GROUPS}
     for aid, xs in pn.items():
         g, tf = acc.get(aid, ("other", ""))
         r = runs(xs)
         if g == "flip":
             flips["5m" if tf == "5m" else "other"].append(r["longest"])
+            flips_tf.setdefault(tf, []).append(r["longest"])
         elif g in per:
             per[g].append(_acct_row(aid, r))
     for g in GROUPS:
@@ -144,6 +148,10 @@ def streak_context(paper_db: str, now_ms: int) -> dict:
             now = max(rows, key=lambda r: (r["now"], -(r.get("p_now") or 1)))
             cell["now"] = now if now["now"] else None
             k = top[0]["longest"]
+            tf0 = acc.get(top[0]["account_id"], ("", ""))[1]
+            if k and g not in UNNAMED and g != "reel" and flips_tf.get(tf0):
+                # the band of the coin flips on the top account's own timeframe (their trade counts are alike)
+                cell["flip_band_tf"] = {"tf": tf0, **band(flips_tf[tf0])}
             if k:
                 miss = 1.0
                 for r in rows:
