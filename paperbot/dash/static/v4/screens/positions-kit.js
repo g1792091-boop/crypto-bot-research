@@ -271,7 +271,8 @@ export function tradeSum(rows) {
 }
 
 /** 한 방향 몰림: at least SKEW_MIN positions on a coin and one side holding SKEW_SHARE of them or more. Counts only. */
-export const SKEW_MIN = 5, SKEW_SHARE = 0.8;
+export const SKEW_MIN = 5;
+export const SKEW_SHARE = 0.8;
 /** {long, short} -> "long" | "short" | null (not enough positions, or no side at 80 %). */
 export function oneSided(c) {
   const l = Math.max(0, Number(c && c.long) || 0), sh = Math.max(0, Number(c && c.short) || 0), n = l + sh;
