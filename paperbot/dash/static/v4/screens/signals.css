@@ -23,3 +23,5 @@
 [data-screen="signals"] .sig-heat-cell b { font-size: var(--t-md); }
 [data-screen="signals"] .sig-heat-cell small { font-size: var(--t-xs); }
 [data-screen="signals"] .sig-heat-cell.zero { border-color: var(--line); background: var(--surface-2); color: var(--muted); font-size: var(--t-sm); }
+/* fill-integ: with late signals in several groups the 묶음 × 봉 table outgrew its 380 px column; the 늦음 count sits under the number */
+[data-screen="signals"] .signals-cell small { display: block; white-space: nowrap; }
