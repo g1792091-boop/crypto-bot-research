@@ -2,8 +2,12 @@
 // the bot's alerts (paper3.db, every level, in Korean through alertKo), the nightly checks (daily3.db), the checkpoint
 // job log, the agents tick, scheduled-job failure warnings and fired price alerts. New alerts from the live stream
 // slide in at the top. Old homes: 분석 › 알림 기록, 서버 상태 › 경고 table (INVENTORY.md 7, 12).
+// 다듬기 7-7: identical alerts (same level, same text) fold into one row "×12 · 처음 03:10 · 마지막 05:40" that opens to
+// every time (alerts-group.js; different texts never merge), and a "여기부터 새 알림 n개" line marks what came after this
+// device's last look (local "alerts-seen": per viewer, wrapped storage).
 import {h, ui, fmt, motion, alertKo, local, put} from "../core/pb.js";
 import {LEVEL_KO, LEVEL_CLS, dayTime, rel, note} from "./server-kit.js";
+import {groupAlerts, withDivider} from "./alerts-group.js";
 
 const TABS = [{id: "bot", label: "경고"}, {id: "nightly", label: "밤 점검"}, {id: "jobs", label: "작업 기록"}, {id: "price", label: "가격 알림"}];
 const LEVELS = [{id: "all", label: "전부"}, {id: "CRITICAL", label: "긴급"}, {id: "WARN", label: "주의"}, {id: "INFO", label: "정보"}];
@@ -28,18 +32,47 @@ export async function mount(el, ctx) {
 
   // ---------------------------------------------------------------- 경고 (the bot's own alerts)
   const fresh = new Set();
+  const seenRaw = local.get("alerts-seen", null);         // this device's last look (ms), null on the first visit
+  const seenAt = seenRaw != null && Number.isFinite(Number(seenRaw)) ? Number(seenRaw) : null;
+  const opened = new Set();             // group keys opened on this visit (kept through the 60 s refresh)
   const list = ui.searchList({size: 10, placeholder: "계좌·내용 찾기", empty: "이 수준의 기록이 없습니다",
-    match: (a, q) => a.ko.toLowerCase().includes(q) || String(a.text).toLowerCase().includes(q),
-    row: (a) => {
-      const acct = /^\[([^\]]+@[^\]]+)\]/.exec(String(a.text || ""));
-      const r = h("div", {class: "server-row alerts-row", role: "listitem"},
-        h("div", {class: "body"}, ui.moreText(a.ko, 2)),
-        h("div", {class: "side-r"}, ui.pill(LEVEL_KO[a.level] || String(a.level || "—"), LEVEL_CLS[a.level] || "thin")),
-        h("div", {class: "meta"}, h("span", null, `${dayTime(a.ts)} · ${rel(a.ts)}`),
-          acct ? h("a", {href: ctx.href("account", acct[1])}, "계좌 보기") : null));
-      if (fresh.delete(key(a))) motion.slideIn(r);
-      return r;
-    }});
+    match: (g, q) => !g.divider && (String(g.ko).toLowerCase().includes(q) || String(g.text).toLowerCase().includes(q)),
+    row: (g) => (g.divider ? newLine(g) : groupRow(g))});
+  /** "▲ 여기부터 위로 새 알림 n개": after the groups that carry alerts newer than this device's last look. */
+  const newLine = (d) => h("div", {class: "alerts-new", role: "listitem", "aria-label": `여기부터 위로 새 알림 ${d.n}개`},
+    h("b", null, `▲ 여기부터 위로 새 알림 ${fmt.int(d.n)}개`), h("small", null, `아래는 지난번에 본 것 (${dayTime(d.seen)}까지)`));
+  const sameDay = (x, y) => fmt.kstMidnight(x) === fmt.kstMidnight(y);
+  function groupRow(g) {
+    const acct = /^\[([^\]]+@[^\]]+)\]/.exec(g.text);
+    const many = g.n > 1;
+    let fold = null, region = null;
+    if (many) {
+      const when = sameDay(g.first, g.last) ? `처음 ${fmt.hm(g.first)} · 마지막 ${fmt.hm(g.last)} (${dayTime(g.last).split(" ")[0]})`
+        : `처음 ${dayTime(g.first)} · 마지막 ${dayTime(g.last)}`;
+      const open = opened.has(g.key);
+      const shown = g.items.slice(0, 30);
+      region = h("div", {class: "alerts-times", hidden: !open},
+        shown.map((a) => h("span", {class: "num"}, sameDay(a.ts, g.last) ? fmt.hm(a.ts) : dayTime(a.ts))),
+        g.n > shown.length ? h("span", {class: "muted"}, `외 ${fmt.int(g.n - shown.length)}번`) : null);
+      fold = h("button", {class: "alerts-fold", type: "button", "aria-expanded": String(open), title: "같은 알림이 온 시각 모두 보기"},
+        h("b", {class: "num"}, `×${fmt.int(g.n)}`), ` · ${when}`, h("i", {class: "alerts-car", "aria-hidden": "true"}));
+      fold.addEventListener("click", () => {
+        const o = fold.getAttribute("aria-expanded") !== "true";
+        fold.setAttribute("aria-expanded", String(o));
+        if (o) opened.add(g.key); else opened.delete(g.key);
+        motion.expand(region, o);
+      });
+    }
+    const r = h("div", {class: ["server-row", "alerts-row", many ? "many" : ""], role: "listitem"},
+      h("div", {class: "body"}, ui.moreText(g.ko, 2)),
+      h("div", {class: "side-r"}, ui.pill(LEVEL_KO[g.level] || String(g.level || "—"), LEVEL_CLS[g.level] || "thin")),
+      h("div", {class: "meta"}, many ? fold : h("span", null, `${dayTime(g.last)} · ${rel(g.last)}`),
+        acct ? h("a", {href: ctx.href("account", acct[1])}, "계좌 보기") : null),
+      region);
+    // a real new arrival (live stream) slides in once
+    if (g.items.some((a) => fresh.delete(key(a)))) motion.slideIn(r);
+    return r;
+  }
   const levelSeg = ui.seg(LEVELS, level, (id) => { level = id; local.set("alerts-level", id); paintBot(true); }, {label: "수준"});
   const botNote = note();
   panels.bot.append(ui.card({plate: "봇 경고·기록", sub: "paper3.db · 최근 200건까지"}, levelSeg, list.el, botNote,
@@ -79,7 +112,7 @@ export async function mount(el, ctx) {
   showTab(tab, false);
 
   // ---------------------------------------------------------------- data
-  const st = {rows: [], d: null};
+  const st = {rows: [], d: null, savedTop: null};
   const merge = (rows) => {
     const seen = new Set(st.rows.map(key));
     for (const a of rows || []) {
@@ -90,8 +123,14 @@ export async function mount(el, ctx) {
     st.rows.sort((x, y) => y.ts - x.ts);
   };
   function paintBot(reset) {
-    list.set(level === "all" ? st.rows : st.rows.filter((a) => a.level === level), !reset);
-    botNote.textContent = `기록 ${fmt.int(st.rows.length)}건${st.d && st.d.sources ? ` · 읽은 곳: ${st.d.sources.join(", ")}` : ""}`;
+    const groups = groupAlerts(level === "all" ? st.rows : st.rows.filter((a) => a.level === level));
+    const {rows, n} = withDivider(groups, seenAt);
+    list.set(rows, !reset);
+    botNote.textContent = `기록 ${fmt.int(st.rows.length)}건 · 같은 알림을 묶어 ${fmt.int(groups.length)}줄` +
+      (n ? ` · 지난번 본 뒤 새 알림 ${fmt.int(n)}개` : "") + (st.d && st.d.sources ? ` · 읽은 곳: ${st.d.sources.join(", ")}` : "");
+    // this device has now seen everything up to the newest alert (next visit draws the line there)
+    const top = st.rows.length ? st.rows[0].ts : null;
+    if (top != null && Number.isFinite(top) && top !== st.savedTop) { st.savedTop = top; local.set("alerts-seen", top); }
   }
   function nightRow(n) {
     const p = n.parity || {};
