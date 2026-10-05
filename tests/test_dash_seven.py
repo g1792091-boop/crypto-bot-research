@@ -145,10 +145,13 @@ def test_funding_rows_are_counts_and_open_positions_for_that_coin():
     out = _node("""const m = await S('market.js');
     console.log(JSON.stringify({pos: m.fundLine(0.0001, {long: 9, short: 3}), neg: m.fundLine(-0.0001, {long: 2, short: 5}),
       zero: m.fundLine(0, {long: 1, short: 1}), none: m.fundLine(0.0001, {long: 0, short: 0}),
+      payOnly: m.fundLine(-0.0001, {long: 0, short: 2}), getOnly: m.fundLine(0.0001, {long: 0, short: 4}),
       m45: m.minsLeft(1000 + 45 * 60000, 1000), h3: m.minsLeft(3 * 3600000 + 5 * 60000, 0), past: m.minsLeft(0, 5000)}));""")
     assert out["pos"] == "우리 모의 계좌 롱 9개는 내고 숏 3개는 받음"
     assert out["neg"] == "우리 모의 계좌 숏 5개는 내고 롱 2개는 받음"
     assert "주고받는 돈 없음" in out["zero"] and out["none"] == "우리 모의 계좌 포지션 없음"
+    assert out["payOnly"] == "우리 모의 계좌 숏 2개는 냄 (롱 없음)"           # never "롱 0개는 받음"
+    assert out["getOnly"] == "우리 모의 계좌 숏 4개는 받음 (롱 없음)"
     assert (out["m45"], out["h3"], out["past"]) == ("45분", "3시간 5분", "0분")
 
 

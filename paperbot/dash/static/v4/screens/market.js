@@ -22,7 +22,11 @@ export function fundLine(r, c) {
   const l = (c && c.long) || 0, sh = (c && c.short) || 0, rate = Number(r);
   if (!l && !sh) return "우리 모의 계좌 포지션 없음";
   if (!Number.isFinite(rate) || rate === 0) return `우리 모의 계좌 롱 ${l}개 · 숏 ${sh}개 (비율 0: 주고받는 돈 없음)`;
-  return rate > 0 ? `우리 모의 계좌 롱 ${l}개는 내고 숏 ${sh}개는 받음` : `우리 모의 계좌 숏 ${sh}개는 내고 롱 ${l}개는 받음`;
+  const [pay, payN, get, getN] = rate > 0 ? ["롱", l, "숏", sh] : ["숏", sh, "롱", l];
+  // one side only: no "롱 0개는 받음"
+  if (!getN) return `우리 모의 계좌 ${pay} ${payN}개는 냄 (${get} 없음)`;
+  if (!payN) return `우리 모의 계좌 ${get} ${getN}개는 받음 (${pay} 없음)`;
+  return `우리 모의 계좌 ${pay} ${payN}개는 내고 ${get} ${getN}개는 받음`;
 }
 const bigUsd = (x) => (x == null ? "—" : x >= 1e12 ? `${fmt.num(x / 1e12, 2)}조 달러` : x >= 1e9 ? `${fmt.num(x / 1e9, 1)}B 달러` : `${fmt.num(x, 0)} 달러`);
 
