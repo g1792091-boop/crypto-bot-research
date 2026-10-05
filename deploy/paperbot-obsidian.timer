@@ -1,0 +1,10 @@
+[Unit]
+Description=Regenerate the Obsidian vault every night at 00:50 UTC (09:50 KST, after the 09:20 nightly checks and the 09:35 jobs)
+
+[Timer]
+OnCalendar=*-*-* 00:50:00 UTC
+Persistent=true
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

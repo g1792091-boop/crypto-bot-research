@@ -1,0 +1,18 @@
+{
+  "types": {
+    "tags": "tags",
+    "aliases": "aliases",
+    "cssclasses": "multitext",
+    "type": "text",
+    "source": "text",
+    "strategy": "multitext",
+    "timeframe": "multitext",
+    "status": "text",
+    "date": "date",
+    "week": "text",
+    "n_trades": "number",
+    "n_rounds": "number",
+    "n_notes": "number",
+    "small_sample": "checkbox"
+  }
+}

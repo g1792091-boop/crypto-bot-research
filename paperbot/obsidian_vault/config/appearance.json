@@ -1,0 +1,7 @@
+{
+  "theme": "obsidian",
+  "cssTheme": "",
+  "enabledCssSnippets": ["paperbot-palette", "paperbot"],
+  "baseFontSize": 17,
+  "accentColor": "#cba6f7"
+}

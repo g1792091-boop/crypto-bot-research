@@ -1,0 +1,14 @@
+{
+  "defaultViewMode": "preview",
+  "newFileLocation": "folder",
+  "newFileFolderPath": "99 내 메모",
+  "attachmentFolderPath": "99 내 메모/첨부",
+  "showInlineTitle": true,
+  "readableLineLength": true,
+  "promptDelete": true,
+  "alwaysUpdateLinks": true,
+  "useMarkdownLinks": false,
+  "propertiesInDocument": "hidden",
+  "foldHeading": true,
+  "foldIndent": true
+}

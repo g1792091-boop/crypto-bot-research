@@ -1,0 +1,43 @@
+# Nightly Obsidian vault export (docs/obsidian-vault.md): the agents' knowledge (agents3.db rooms, notes, hypotheses,
+# trials; paper3.db and daily3.db numbers; checkpoint verdicts; the repo's rule and research documents) written as a
+# folder of Korean Markdown notes that the owners read, search and browse as a graph in Obsidian on the PC and the
+# phone. A one-way VIEW: every database is opened read-only (mode=ro, query_only), nothing is written back, no
+# order, no exchange call, no model call. Regenerable at any time; the owners' own notes live in 99 내 메모, which this job
+# never touches. Template of the output: paperbot/obsidian_vault/.
+# Needs no secret: no EnvironmentFile. Runs a few seconds to a minute, started by paperbot-obsidian.timer.
+[Unit]
+Description=paperbot Obsidian vault export (read-only, nightly)
+After=paperbot-daily3.service paperbot-agents.service
+# a failed run sends one Korean Telegram warning a day (deploy/paperbot-failed@.service)
+OnFailure=paperbot-failed@%n.service
+
+[Service]
+Type=oneshot
+User=paperbot
+Group=paperbot
+WorkingDirectory=/opt/crypto-bot-research
+ExecStart=/opt/paperbot/venv/bin/python -m paperbot.obsidian_export build --out /var/lib/paperbot/obsidian --paper-db /var/lib/paperbot/paper3.db --daily-db /var/lib/paperbot/daily3.db --agents-db /var/lib/paperbot/agents3.db --checkpoint-db /var/lib/paperbot/checkpoint.db --inbox-db /var/lib/paperbot/inbox.db --repo-dir /opt/crypto-bot-research
+# Below the live runner and the agents: low CPU and disk priority, bounded memory.
+Nice=15
+CPUWeight=10
+IOSchedulingClass=idle
+MemoryHigh=1G
+MemoryMax=2G
+TimeoutStartSec=15min
+# Defence in depth. The code writes ONLY under /var/lib/paperbot/obsidian (staging folder + rename, a manifest of the
+# files it made; it never touches 99 내 메모 or a file it did not make). The directory /var/lib/paperbot has to stay
+# writable for the sandbox only because SQLite needs the -shm file next to a live WAL database even for a read-only
+# connection (the same reason paperbot-agents.service has it); the database files themselves are read-only here
+# (ReadOnlyPaths) and the code opens them read-only. The -wal files are NOT listed: the writers delete and re-create
+# them, and a listed file is pinned to the inode it had at start (see paperbot-agents.service).
+# The keys, the dashboard secret, the agents' login and every env file, the order executor's files and the backups
+# cannot be read at all, and no network is needed.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateNetwork=yes
+RestrictAddressFamilies=AF_UNIX
+ReadWritePaths=/var/lib/paperbot
+ReadOnlyPaths=-/var/lib/paperbot/paper3.db -/var/lib/paperbot/daily3.db -/var/lib/paperbot/agents3.db -/var/lib/paperbot/inbox.db -/var/lib/paperbot/checkpoint.db -/var/lib/paperbot/lab /opt/crypto-bot-research
+InaccessiblePaths=-/etc/paperbot -/var/lib/paperbot/exec -/var/lib/paperbot/.claude -/var/lib/paperbot/.local -/var/backups/paperbot
