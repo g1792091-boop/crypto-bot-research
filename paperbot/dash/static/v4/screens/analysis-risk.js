@@ -3,6 +3,7 @@
 // HONESTY: the readiness marks are neutral words (충족 / 아님 / 판단 전), never green ✓ / red ✕; money has assume().
 import {h, put, ui, fmt} from "../core/pb.js";
 import {viewHead, thin, pp, acctLabel, shareBar, dimSeg} from "./analysis-kit.js";
+import {outcomeCard} from "./analysis-shape.js";
 
 const EXIT_KO = {LOCK: "익절 잠금", SL: "손절", LIQ: "강제청산", other: "기타 (시간·정지 등)"};
 
@@ -65,6 +66,7 @@ export function risk(d, env) {
   pg.set(d.strategies || []);
   out.push(ui.card({plate: "매매법별", sub: "봉 계좌 합계 · 오른쪽 숫자 = 승률 − 본전 승률"}, pg.el,
     h("p", {class: "an-note"}, `거래 ${fmt.int(d.small_n || 10)}건 미만은 표본 적음: 우연일 수 있습니다. ${d.label || ""}`)));
+  out.push(outcomeCard(env));          // wave 3: the fixed-bin result distribution vs the coin flips
   return out;
 }
 

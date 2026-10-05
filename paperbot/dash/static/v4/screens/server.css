@@ -1,4 +1,5 @@
 @import url("server-kit.css");
+@import url("server-uptime.css");
 /* server: 서버·비용 (builder E). Shared pieces: server-kit.css; gauges / plates / pills: components.css. */
 [data-screen="server"] .server-cols { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); align-items: start;
   grid-template-areas: "t" "g" "j" "f"; }

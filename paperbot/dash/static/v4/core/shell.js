@@ -10,6 +10,7 @@ import {GROUPS, SCREENS, href, icon, parseHash} from "./routes.js";
 import {mmdd, kst} from "./fmt.js";
 import {expand, pulseLive} from "./motion.js";
 import {soundButton, startSound} from "./sound.js";
+import {bellButton, startBell} from "./bell.js";
 import {setMethod, botsKo, methodKo} from "./ui.js";
 import {criticalLines} from "./alerts.js";
 import {skinSwitch} from "./skin.js";
@@ -177,6 +178,9 @@ export function startShell() {
   // the speaker (core/sound.js): before the health dot; off until the first tap, then remembered per device
   $("#hdot").before(soundButton());
   startSound();
+  // the approval bell (core/bell.js): proposals waiting for the owners, before the speaker
+  ($(".snd") || $("#hdot")).before(bellButton());
+  startBell();
   setInterval(renderHealth, 15000);
   loadRecentTrades();
 }

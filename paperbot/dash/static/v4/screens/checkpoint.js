@@ -6,6 +6,7 @@
 // account); progress bars are the neutral accent colour; DeepSeek accounts appear only as group counts.
 import {h, put, ui, fmt, motion} from "../core/pb.js";
 import {expInfo, judgedProgress, progBar, verdictDate as vDate, MIN_TRADES} from "./home-shared.js";
+import {pixelRoad} from "./road-kit.js";
 
 const ST_CLS = {"2차 통과": "good", "1차 합격": "good", "불합격": "bad", "보류": "thin", "관찰용": "thin"};
 const ST_ORDER = ["2차 통과", "1차 합격", "불합격", "보류", "관찰용"];
@@ -33,7 +34,7 @@ export async function mount(el, ctx) {
   const st = {summary: null, board: null, ck: null, mode: null, filter: "judged"};
   const head = ui.screenHead("30일 판정", "계좌마다 동전 봇과 비교해 합격·불합격을 정하는 날");
   const body = h("div", {class: "ck-body"});
-  el.append(head, body);
+  el.append(head, pixelRoad(ctx, {card: true}), body);         // the 30-day road (road-kit.js, wave 3)
 
   // ================================================================ before the verdict
   const big = h("b", {class: "ck-d"}, "D-—");

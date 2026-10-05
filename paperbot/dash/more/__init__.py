@@ -9,6 +9,9 @@ data (dash.app.Data), rooms, db, daily_db, agents_db, checkpoint_db, candles (th
     story   오늘의 하이라이트 (홈 맨 위 스토리)
     since   지난번 본 뒤로 바뀐 것 (앱을 열 때)
     replay  거래 다시보기 (#/replay/<trade id>)
+    bell        결재함 종 (머리글: 두 분 승인을 기다리는 제안 수)
+    uptime      가동 기록 (서버·비용: 시간마다 처리한 분, 재시작, 밤 점검)
+    tradeshape  요일×시간 열지도 + 거래 결과 분포 (분석)
 """
 from __future__ import annotations
 
@@ -16,6 +19,7 @@ import importlib
 from types import SimpleNamespace
 
 MODULES = ("flow", "grid", "story", "since", "replay")
+MODULES += ("bell", "uptime", "tradeshape")          # wave 3
 
 
 def register_all(app, **kw) -> dict:

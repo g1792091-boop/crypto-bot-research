@@ -4,6 +4,7 @@
 import {h, put, ui, fmt, motion} from "../core/pb.js";
 import {viewHead, thin, cell, cmpList, dimSeg, acctLabel} from "./analysis-kit.js";
 import {tagRows} from "./strategies-panels.js";
+import {heatCard} from "./analysis-shape.js";
 
 // ---------------------------------------------------------------- 코인·장세 지도 (/api/analysis/map)
 const MAP_DIMS = [["by_coin", "코인"], ["by_regime", "진입 때 장세"], ["by_session", "시간대"], ["by_weekday", "평일·주말"], ["by_side", "방향"], ["by_timeframe", "봉"]];
@@ -86,6 +87,7 @@ export function sessions(d, env) {
   out.push(ui.card({plate: "나눠 보기"}, seg.el, body,
     h("p", {class: "an-note"}, "설명용 표입니다. 이 표로 계좌 규칙을 바꾸지 않습니다. 패턴이 보이면 에이전트가 5년치로 시험하고, 통과하면 새 계좌로 비교합니다."),
     ui.refNote(env.verdictTs), ui.assume()));
+  out.push(heatCard(env));             // wave 3: weekday x hour heat (/api/v4/tradeshape)
   return out;
 }
 
