@@ -341,7 +341,7 @@ What the owners see on the first morning after the v4 reset (dashboard only; shi
 | Addition | Screen / place | Server |
 |---|---|---|
 | 시작한 날 밤 점검 = 정상 | 서버 tile '밤 점검': "시작한 날 · 재계산 없음 (정상, 첫 재계산 내일 09:20)", grey (`st: none`); 알림 기록 › 밤 점검 the same line, muted; no health warning | `/api/analysis/health` `.nightly.start_day`, `/api/analysis/alerts` `.nightly[].start_day` (report['start_day'] from daily3) |
-| 딥시크 돈은 딥시크 화면에서만 (D11) | 홈 LED: 합계에서 딥시크 빠짐 (캡션이 말함), 오른쪽 딥시크 칸 = "N계좌 (손익은 딥시크 화면에서)"; 오늘 card: 딥시크 줄은 거래·이김·강제청산·파산만; profile card (grid-kit `dsCounts`) and a DeepSeek strategy page: 거래 수 · 이긴 거래 · 파산, link to 순위표 딥시크 | `/api/v4/curves` `total` leaves DeepSeek out |
+| 딥시크 돈은 딥시크 화면에서만 (D11) | 홈 LED: 합계에서 딥시크 빠짐 (캡션이 말함), 오른쪽 딥시크 칸 = "N계좌 (손익은 딥시크 화면에서)"; 오늘 card: 딥시크 줄은 거래·이김·강제청산·파산만; profile card (grid-kit `dsCounts`) and a DeepSeek strategy page: 거래 수 · 이긴 거래 · 파산, link to 순위표 딥시크; 순위표 전체 표의 딥시크 줄 최고 계좌 = "딥시크 화면에서" | `/api/v4/curves` `total` leaves DeepSeek out |
 | 첫날 순위 없음 | 거래 0건 + 포지션 없음 = 순위 없음 (`derive.unranked`): 상위·하위 5, 최고 계좌, 흐름 가장 많이 오른·내린 계좌에서 빠짐; 한 줄 "아직 거래 없는 계좌 N개 · 첫 거래 뒤부터 순위"; 순위표 목록에선 맨 뒤 "—"; ▲▼ 기억은 순위 있는 계좌만 | none |
 | 하이라이트 N일째 | 홈 하이라이트 rings and the story day picker: "N일째" (한국 날짜, 시작한 날 = 1일째, 흐름과 같음), so 오늘 and 어제 differ; 홈 head line: "D+는 매일 한국 09:00에 +1" | `/api/story` `days[].n` (dash/more/story.py `run_days`) |
 | 상황 태그 범위 | 분석 › 상황 태그: 기존 36 + 5분봉만, caption shows the real window ("최근 2,000건이라 MM/DD부터" when capped) | `/api/cards/stats` (no strategy): kinds strategy + reel, `from_ts`, `capped`, `cap` |
