@@ -148,6 +148,30 @@ function slipCard(d) {
 }
 const evKo = (k) => ({entry: "진입", exit: "청산"}[k] || String(k));
 
+/** 홈 한 줄 (ranked #8 "홈 한 줄"): "비용 · 기존 36 거래 한 번에 수수료 −2.96% · 수수료 전 −0.95% → 실제 −3.91% · 동전 봇 실제
+ *  −0.80% (참고)" with a link to 분석 › 비용. Hidden until the 36 have closed trades; /api/v4/costs every 5 minutes (the
+ *  server caches it 5 minutes too); a 404 (an older server) stops asking. */
+export function costLine(ctx) {
+  const el = h("a", {class: "an-cost-home", href: ctx.href("analysis", "costs"), hidden: true});
+  let on = true;
+  const load = async () => {
+    if (!on) return;
+    let d;
+    try { d = await ctx.api("/api/v4/costs"); } catch (e) { if (e && e.status === 404) on = false; return; }
+    if (!ctx.alive()) return;
+    const g = (d && d.groups) || {}, c = g.core && g.core.per_trade, f = g.flip_same && g.flip_same.per_trade;
+    el.hidden = !c;
+    if (!c) return;
+    el.replaceChildren(h("b", null, "비용"), ` 기존 36 거래 한 번에 수수료 `, h("b", {class: "num down"}, fmt.pct(-c.fees, 2)),
+      ` · 수수료 전 `, h("b", {class: ["num", fmt.tone(c.before)]}, fmt.pct(c.before, 2)), ` → 실제 `,
+      h("b", {class: ["num", fmt.tone(c.after)]}, fmt.pct(c.after, 2)),
+      ...(f ? [` · 동전 봇 실제 `, h("b", {class: "num ink2"}, fmt.pct(f.after, 2)), " (참고)"] : []),
+      h("span", {class: "an-cost-go"}, " 자세히 →"));
+  };
+  ctx.every(300000, load);
+  return el;
+}
+
 /** Horizontal bars [label, bp, "paper"|"real"] on one scale. */
 function bars(items, scale) {
   return h("div", {class: "an-cost-bars", role: "list"}, items.map(([k, v, cls]) => h("div", {class: "an-cost-brow", role: "listitem"},

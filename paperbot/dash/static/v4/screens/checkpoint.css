@@ -79,10 +79,11 @@
 .ck-pw-c b { position: relative; display: block; padding: 0 6px; line-height: 20px; color: var(--ink); text-align: right; }
 
 .ck-vhead .card-b, .ck-vhead { position: relative; }
-.ck-stamp { position: absolute; top: 10px; right: 12px; display: grid; place-items: center; width: 64px; height: 64px;
-  border: 3px double var(--accent); border-radius: 50%; color: var(--accent); transform: rotate(-12deg); line-height: 1.1;
-  pointer-events: none; }
-.ck-stamp b { font-size: var(--t-sm); } .ck-stamp small { font-size: var(--t-xs); }
-.ck-luck { display: flex; flex-wrap: wrap; gap: 4px; }
-.ck-luck i { width: 10px; height: 10px; border-radius: 50%; background: var(--ink-2); }
+.ck-stamp { position: absolute; top: 10px; right: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 1px; width: 70px; height: 70px; box-sizing: border-box; border: 3px double var(--accent); border-radius: 50%; color: var(--accent);
+  transform: rotate(-12deg); line-height: 1.05; pointer-events: none; }
+.ck-stamp b { font-size: var(--t-sm); } .ck-stamp small { font-size: 10px; }
+.ck-vhead .ck-vt { padding-right: 76px; }
+.ck-luck { display: flex; flex-wrap: wrap; gap: 5px; margin: 6px 0 2px; }
+.ck-luck i { width: 12px; height: 12px; box-sizing: border-box; border-radius: 50%; background: var(--ink-2); }
 .ck-luck i.lucky { background: transparent; border: 1px dashed var(--ink-2); }

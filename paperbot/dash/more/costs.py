@@ -21,6 +21,7 @@ a new database, read again from the start); slippage rows are one indexed range 
 from __future__ import annotations
 
 import contextlib
+import json
 import sqlite3
 import statistics
 import threading
@@ -175,7 +176,13 @@ def costs(c: sqlite3.Connection, d: Optional[sqlite3.Connection], sums: Sums, no
     sums.update(c)
     accts = accounts(c)
     start = run_start(c) or 0
-    st = v3_settings()
+    fee = None
+    try:                                             # the run's own taker fee (dash.app Data._round_trip does the same)
+        r = c.execute("SELECT data FROM state WHERE k = 'run'").fetchone()
+        fee = json.loads(r[0]).get("taker_fee") if r else None
+    except (sqlite3.Error, ValueError, TypeError, AttributeError):
+        fee = None
+    st = v3_settings(**({"taker_fee": float(fee)} if isinstance(fee, (int, float)) and fee > 0 else {}))
     paper_bps = round(st.slippage_frac * 1e4, 4)
     view = groups_view(accts, sums.acc)
     main_ids = {a["account_id"] for a in accts if a.get("group") in MAIN_GROUPS}

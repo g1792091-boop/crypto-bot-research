@@ -214,6 +214,10 @@ def test_the_cost_tab_labels_estimates_keeps_coin_flips_beside_and_no_money_for_
     assert 'const MONEY = ["core", "reel", "extra"]' in js                   # the only groups with a USDT waterfall
     assert js.count("est()") >= 2 and '"추정"' in js and "ui.assume(" in js and "ui.refNote(" in js
     assert 'ROWS = ["core", "flip_same"' in js                              # the coin flips right under the 36
+    home = _read("screens", "home.js")                                       # 홈 한 줄 -> 분석 › 비용
+    assert 'import {costLine} from "./analysis-costs.js"' in home and "costLine(ctx)" in home
+    line = js[js.index("export function costLine"):]
+    assert 'ctx.href("analysis", "costs")' in line and "e.status === 404" in line and "(참고)" in line
 
 
 def test_the_verdict_stage_is_neutral_before_the_verdict_and_stamps_only_after():
