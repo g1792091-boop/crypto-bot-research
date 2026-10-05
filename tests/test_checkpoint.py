@@ -984,3 +984,13 @@ def test_extra_window_starts_over_at_its_accepted_code_change():
     prior["NL1@1h"]["date"] = ck.day_str(T0 + 75 * DAY)
     rows, tasks = ck.plan(snap(T0 + 90 * DAY), prior, {}, S)
     assert rows["NL1@1h"]["status"] == ck.FAIL and "NL1@1h" not in [t.aid for t in tasks]
+
+
+def test_no_new_verdicts_after_day_180():
+    """Rules (paper-v4-rules §11, addendum Q3): verdicts at day 30, 60, ... 180; after that the run is observation
+    only, so the schedule never yields day 210 or later however long the bot runs."""
+    from paperbot import checkpoint as cpm
+    start = 1_790_000_000_000
+    ks = [k for k, _ in cpm.due_checkpoints(start, start + 400 * 86_400_000)]
+    assert ks == [1, 2, 3, 4, 5, 6]
+    assert cpm.due_checkpoints(start, start + 29 * 86_400_000) == []

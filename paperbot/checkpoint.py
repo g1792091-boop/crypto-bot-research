@@ -234,9 +234,10 @@ def checkpoint_ts(run_start: int, k: int) -> int:
 
 
 def due_checkpoints(run_start: int, now_ms: int) -> list[tuple[int, int]]:
-    """[(k, cp_ts)] of checkpoints at or before now."""
+    """[(k, cp_ts)] of checkpoints at or before now, up to day NO_VERDICT_DAYS (rules: after day 180 the run is
+    observation only, no new verdicts)."""
     out, k = [], 1
-    while checkpoint_ts(run_start, k) <= now_ms:
+    while k * PERIOD_DAYS <= NO_VERDICT_DAYS and checkpoint_ts(run_start, k) <= now_ms:
         out.append((k, checkpoint_ts(run_start, k)))
         k += 1
     return out
