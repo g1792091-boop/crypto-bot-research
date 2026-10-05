@@ -1302,10 +1302,12 @@ def server_facts(data: "Data", agents_db: Optional[str], daily_db: Optional[str]
 # /static/login.js), no plug-ins, never inside another site's frame. Inline style attributes stay allowed (the screens
 # build markup with style="..."); the one outside host is Google Fonts (v4/index.html: the page keeps working with
 # system fonts when it is blocked). data: covers the sound button's SVG mask and canvas snapshots; blob: the chart
-# library's images. connect-src 'self' covers /api/* and the /api/stream event stream.
+# library's images. connect-src 'self' covers /api/* and the /api/stream event stream. frame-src: the v4 chart
+# screen's TradingView chart iframe (the widget page and the host it moves to); no other site may be framed.
 CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
        "font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; "
-       "connect-src 'self'; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; "
+       "connect-src 'self'; worker-src 'self' blob:; manifest-src 'self'; "
+       "frame-src https://s.tradingview.com https://www.tradingview-widget.com; object-src 'none'; base-uri 'self'; "
        "form-action 'self'; frame-ancestors 'none'")
 # the old dashboard at /v3 ('예전 화면') reads Binance's public WebSockets (wss://fstream.binance.com: live prices,
 # candles, order book) and embeds the TradingView chart (s3.tradingview.com/tv.js) straight from the browser; the

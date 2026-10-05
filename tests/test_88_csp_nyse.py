@@ -45,6 +45,8 @@ def test_every_answer_carries_a_strict_csp(tmp_path):
     assert d["frame-ancestors"] == "'none'" and d["object-src"] == "'none'" and d["connect-src"] == "'self'"
     assert "data:" in d["img-src"] and "fonts.gstatic.com" in d["font-src"]       # the sound mask, Google Fonts
     assert "unsafe-eval" not in A.CSP and "*" not in A.CSP
+    # the v4 chart screen's TradingView iframe (and nothing else from outside)
+    assert set(d["frame-src"].split()) == {"https://s.tradingview.com", "https://www.tradingview-widget.com"}
     # the old dashboard (/v3) talks to Binance's WebSockets and TradingView from the browser: it keeps its old header
     old = c.get("/v3")
     assert old.status_code == 200 and old.headers["Content-Security-Policy"] == "frame-ancestors 'none'"
