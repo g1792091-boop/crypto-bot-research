@@ -130,6 +130,22 @@ def test_the_debate_packet_carries_no_deepseek_money(tmp_path):
         "paperbot/agents/prompts3/debate_room.md", encoding="utf-8").read()
 
 
+# ------------------------------------------------------------------ 8: the debate is told the run's rules
+def test_the_debate_prompt_has_the_v4_facts_and_the_packet_the_verdict_date(tmp_path):
+    from paperbot.agents import debate as D
+    from paperbot.agents import debate_packet as P
+    from paperbot.agents import facts as F
+    from test_debate import NOW, make_world
+    s = D.system_text()
+    assert "## 이번 실행의 규칙" in s and F.run_facts_block() in s and F.exits_block() in s
+    assert "50%×50배" in s and "30%×30배 → 20%×20배" in s and "증거금 = 레버리지 %" in s
+    assert "342개 설정 중 통과 0개" in s and "자기 청산이라 정상" in s and F.method_text() in s
+    assert s == D.system_text() and P.estimate_tokens(s) < 4500         # the same bytes every round (cached)
+    w = make_world(tmp_path, NOW, days=3, per_day=20, v4=True)
+    cp = P.build(w["paper"], w["daily"], None, None, NOW)["packet"]["meta"]["checkpoint"]
+    assert cp["verdict_exists"] is False and cp["next"].endswith("09:00 KST")     # no checkpoint.db yet
+
+
 def test_a_deepseek_room_packet_has_roe_and_counts_but_no_money(tmp_path):
     w = V4World(tmp_path)
     w.ds_losses("F3_BOS@15m", 6)

@@ -245,7 +245,10 @@ def test_no_stale_run_numbers_in_any_prompt_or_packet(tmp_path):
     common = RM.system_prompt("team_lead", "team")
     assert f"계좌 {V4_ACCOUNTS}개" in common and "딥시크" in common and "5분봉 계좌는 4개뿐" in common
     from paperbot.agents import debate as D, packets3
-    assert not STALE.search(D.system_text()) and "2026-10-26" not in D.system_text()
+    # the debate prompt carries the run's facts too (sweep2 #8): the counts there are config's (block stripped)
+    dsys = D.system_text()
+    assert block in dsys and F.RULE_B_KO in dsys and F.exits_block() in dsys and F.method_text() in dsys
+    assert not STALE.search(dsys.replace(block, "")) and "2026-10-26" not in dsys and "{{" not in dsys
     b = packets3.build(V4World(tmp_path).paths["paper"], None, QUIET)
     meta = {k: v for k, v in b["meta"].items() if k not in ("groups", "original_accounts")}     # config numbers
     assert not STALE.search(json.dumps(meta, ensure_ascii=False))

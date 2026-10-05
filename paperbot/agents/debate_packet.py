@@ -218,11 +218,12 @@ def _checkpoint(path: Optional[str], now_ms: int, start: Optional[int]) -> dict:
     """The 30-day verdict state: only whether a verdict exists and when the next one is (never the verdict itself:
     the debate does not conclude before day 30)."""
     out: dict = {"verdict_exists": False}
-    if not path or start is None:
+    if start is None:
         return out
     try:
         from .. import checkpoint as CP
-        view = CP.dashboard_view(path)
+        # no checkpoint.db yet (before the first verdict): the next date still comes from the run's start
+        view = CP.dashboard_view(path) if path and os.path.exists(path) else {}
         out["verdict_exists"] = bool(view.get("ready"))
         k, last = 1, (CP.day_ms(view["date"]) if view.get("ready") else -1)
         while CP.checkpoint_ts(start, k) <= last:

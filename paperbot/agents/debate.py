@@ -501,9 +501,11 @@ def cost_of(usage: dict, cfg: Config) -> float:
 
 # ---------------------------------------------------------------- prompts and the answer
 def system_text() -> str:
-    """The stable prefix: rules, roles, output format and the hypothesis menu (the same bytes every round)."""
+    """The stable prefix: rules, the run's facts (agents/facts.py: accounts, rule B, exits per group, the day-30 method;
+    built from config, so the same bytes every round), roles, output format and the hypothesis menu."""
+    from . import facts as F
     with open(PROMPT, encoding="utf-8") as fh:
-        return fh.read().rstrip() + "\n\n## 가설 메뉴\n" + G.MENU_KO + "\n"
+        return F.fill(fh.read().rstrip()) + "\n\n## 가설 메뉴\n" + G.MENU_KO + "\n"
 
 
 def roles_for(round_no: int, n: int) -> list[str]:
