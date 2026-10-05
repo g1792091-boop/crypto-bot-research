@@ -57,7 +57,7 @@ export const groupKo = (a) => fmt.GROUP_KO[fmt.groupOf(a)] || "기타";
  *  no margin or size in a mixed list. view: the group the screen is filtered to ("" / "all" = mixed). */
 export const countOnly = (a, view) => derive.countOnlyIn(a, view);
 export const COUNT_ONLY_KO = "개수만";
-export const COUNT_ONLY_WHY = "딥시크·동전 봇은 섞인 목록에서 손익을 보이지 않습니다 (개수만, 자기 묶음을 고르면 금액)";
+export const COUNT_ONLY_WHY = "딥시크·동전 봇은 섞인 목록에서 손익을 보이지 않습니다 (그 묶음만 고르면 보임)";
 export const qty = (x) => (x == null ? "—" : fmt.num(x, Math.abs(x) < 10 ? 3 : Math.abs(x) < 1000 ? 2 : 0));
 export const dist = (r) => (r == null ? "—" : fmt.pct(r, 2, false));
 
@@ -184,9 +184,9 @@ export function posCard(a, pos, o = {}) {
       motion.expand(region, open);
       if (o.onToggle) o.onToggle(a.account_id, open);
     });
-    el = h("article", {class: ["pos-card", "card", "pos-fold", o.open ? "open" : ""], "aria-label": `${fmt.coin(pos.symbol)} ${fmt.sideKo(pos.side)} · ${name}`}, btn, region);
+    el = h("article", {class: ["pos-card", "card", "pos-fold", o.open ? "open" : "", co ? "count-only" : ""], "aria-label": `${fmt.coin(pos.symbol)} ${fmt.sideKo(pos.side)} · ${name}`}, btn, region);
   } else {
-    el = h("article", {class: "pos-card card open", "aria-label": `${fmt.coin(pos.symbol)} ${fmt.sideKo(pos.side)} · ${name}`},
+    el = h("article", {class: ["pos-card", "card", "open", co ? "count-only" : ""], "aria-label": `${fmt.coin(pos.symbol)} ${fmt.sideKo(pos.side)} · ${name}`},
       head, o.noName ? null : h("div", {class: "pos-acct"}, name), body);
   }
   el.pos = pos;

@@ -48,6 +48,9 @@
 .risk-row.near { animation: risk-pulse 1.6s ease-in-out infinite; }
 .risk-row.near .risk-t b { color: var(--down); }
 .risk-key i.lock, .risk-bar i.lock { background: var(--up); }
+/* fix (D10/D11): a count-only card's price lines are neutral (their green / red would say profit or loss) */
+.pos-card.count-only .mspark path { stroke: var(--ink-2); filter: none; }
+.pos-card.count-only .mspark circle { fill: var(--ink-2) !important; filter: none; }
 .risk-row.near .risk-b.lock .risk-t b, .risk-b.lock .risk-t b { color: var(--up); }
 @keyframes risk-pulse { 0%, 100% { background: transparent; } 50% { background: var(--down-soft); } }
 @media (prefers-reduced-motion: reduce) { .risk-row.near { animation: none; background: var(--down-soft); } }

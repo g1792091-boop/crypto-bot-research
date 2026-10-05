@@ -163,8 +163,8 @@ export function makeChat(ctx, hooks) {
     }
   }
   function emptyRoom() {
-    const s = scheduleOf(st.id, st.room, curOv());
-    return h("div", {class: "rm-emptyroom"}, h("b", null, "아직 이 방에서 열린 회의가 없습니다"), s ? h("p", null, s) : null,
+    // (the room's schedule sentence is the line under the input box: not repeated here)
+    return h("div", {class: "rm-emptyroom"}, h("b", null, "아직 이 방에서 열린 회의가 없습니다"),
       h("p", {class: "muted"}, "회의가 열리면 직원들의 대화가 여기에 올라옵니다. 궁금한 점을 아래에 남겨 두셔도 됩니다 (선택)."),
       // fill-people: a strategy room shows its strategy's own code record until the first meeting
       stratOf(st.id, st.room) ? recordBox(ctx, stratOf(st.id, st.room)) : null);

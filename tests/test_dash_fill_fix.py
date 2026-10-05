@@ -170,5 +170,5 @@ def test_wiring_count_only_and_words():
     assert ".gk-cell.pos.off { background: var(--surface); color: var(--muted); }" in grid
     assert ".gk-cell.y5 small, .gk-cell.pos small { font-size: var(--t-xs); }" in grid
     css = _read(SCR, "strategies.css")
-    assert "@media (min-width: 1900px) { .strat-coreslot.wide .plist { grid-template-columns: repeat(3" in css
+    assert "repeat(3, minmax(0, 1fr))" not in css.split("fill-strat: the chart")[1]                     # 2 columns only
     assert ".strat-prow.strat-hot { padding-left:" in css

@@ -208,8 +208,8 @@ button.dsf-row:focus-visible { outline: 2px solid var(--accent); outline-offset:
   .strat-coreslot.wide .strat-prow { padding-block: 6px; }
   .strat-coreslot.wide .strat-prow .meta { font-size: var(--t-xs); }
 }
-@media (min-width: 1900px) { .strat-coreslot.wide .plist { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-/* fix: in the 2-3 column list a long name stays on one line (… and the full name in the row's title), and an open
+/* fix: no 3-column list (the page is at most ~1290 px wide, so a third column left ~80 px for a name and real Korean
+   names broke mid-word); in the 2-column list a long name stays on one line (… and the full name in the row's title), and an open
    row's glowing edge sits left of the code instead of over its first letter */
 @media (min-width: 1280px) {
   .strat-coreslot.wide .strat-prow .strat-nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
