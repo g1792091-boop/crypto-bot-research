@@ -105,3 +105,9 @@
 .pos-row-spark { display: inline-flex; align-items: center; min-width: 0; }
 .pos-row-spark:empty { display: none; }
 @media (max-width: 420px) { .pos-row-spark { display: none; } }
+/* 다듬기 7-5: coin chips with long ↑ / short ↓ counts and the 한 방향 몰림 dot (counts only) */
+.pos-ls { white-space: nowrap; letter-spacing: -.01em; }
+.pos-ls .up { color: var(--up); }
+.pos-ls .down { color: var(--down); }
+.pos-skew { display: inline-block; width: 7px; height: 7px; margin-left: 5px; border-radius: 50%; background: var(--warn); box-shadow: 0 0 0 2px var(--warn-soft); vertical-align: 1px; }
+.positions-skew-note { margin: 6px 0 0; }
