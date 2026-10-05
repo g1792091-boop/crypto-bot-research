@@ -351,7 +351,7 @@ export function flipRow(f, href) {
       h("span", null, "비교 기준 (순위 번호 없음)")));
 }
 
-/** The line under the list: "동전 봇 12개 자리 · 같은 봉 동전 봇 중앙값보다 위 매매법 62/144개 (참고)". */
+/** The line under the list: "동전 봇 n개 자리 · 같은 봉 동전 봇 중앙값보다 위 매매법 a/b개 (참고)". */
 export function flipFoot(fl, group) {
   return h("p", {class: "assume home-vsfoot board-flipfoot"}, h("span", {class: "board-coin", "aria-hidden": "true"}),
     group === "ds" ? `동전 봇 중앙값 줄 1개 (같은 봉 ${fmt.int(fl.n)}개) · 자기 봉의 동전 봇 중앙값보다 위 딥시크 ${fmt.int(fl.above)}/${fmt.int(fl.rows)}개`

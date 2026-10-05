@@ -253,7 +253,17 @@ systemctl show paper4-staging -p MemoryCurrent -p MemoryPeak -p NRestarts
 7. `5분봉 신호 이름`에 `REEL_H1`·`RANDOM_k`가 아닌 이름이 있음.
 8. 2-10 리셋 연습이 `[OK] 연습 리셋 통과`로 끝나지 않음.
 
-## 3. 스테이징 끄기, 그리고 진짜 리셋 (01:10~01:35)
+## 3. 스테이징 끄기, 그리고 진짜 리셋 (2026-10-06: 03:15~03:50)
+
+3-0. **최종 코드 받기** (개발자가 "최종 코드 받으세요"라고 한 뒤. 스테이징 뒤에 대시보드·분석·직원 코드가 더 들어갔습니다.
+매매 코드는 스테이징 때와 같습니다):
+
+```bash
+cd /root/crypto-bot-research && git pull && git log -1 --format='%h %s' && git status --short --untracked-files=no
+```
+
+보여야 할 것: `Fast-forward`, 개발자가 알려 준 7자리 커밋, 그 아래 **아무 줄 없음**. 이어서 2-10 리셋 연습을 **한 번 더**
+(`cd /root/crypto-bot-research && sudo bash deploy/rehearse-reset.sh`) 돌려 마지막 줄 `[OK] 연습 리셋 통과`를 봅니다.
 
 3-1. 스테이징을 끕니다(시험 DB는 개발자가 볼 수 있게 남겨 둡니다):
 
@@ -295,7 +305,7 @@ cd /root/crypto-bot-research && sudo bash deploy/paperbot-reset.sh --dry-run
 - `[지금 paper3.db] … v3 실행(이번에 보관할 것)`, `[새 실행] paper v4: $5,000 계좌 331개 …`.
 - `!! 재시작은 이미 끝났습니다`, `!! 저장소에 커밋 안 된 수정`, `!! paperbot-executor`가 나오면 멈추고 개발자에게.
 
-3-6. **리셋** (15분 경계 2~5분 뒤, 예: 01:32~01:35). 개발자가 **"에이전트는 꺼 두세요"라고 했을 때만** 끝에 ` --agents-off`를 붙여
+3-6. **리셋** (15분 경계 2~5분 뒤, 예: 03:47~03:50). 개발자가 **"에이전트는 꺼 두세요"라고 했을 때만** 끝에 ` --agents-off`를 붙여
 `sudo bash deploy/paperbot-reset.sh --yes --agents-off`로 합니다. 그런 말이 없었으면 아래 그대로:
 
 ```bash
@@ -364,7 +374,8 @@ PY
 보여야 할 것: `5분봉 이름`은 `REEL_H1`·`RANDOM_k`만. `첫 5m 줄`·`첫 15m 줄`에 시각과 이름. 15분봉 경계가 지나면 딥시크 신호가 생깁니다
 (그 봉에 신호가 없었으면 0일 수 있음). 최대 지연은 60초 안. (5분봉은 신호가 드물어 첫 5m 줄이 한동안 `아직 없음`일 수 있습니다.)
 
-4-5. **재시작 훈련** (새 시작 30분쯤 뒤, 15분 경계 2~5분 뒤):
+4-5. **재시작 훈련** (새 시작 30분쯤 뒤, 15분 경계 2~5분 뒤). 먼저 3-3처럼 healthchecks.io 체크를 **다시 Pause** 합니다
+(재시작 동안 5~15분 핑이 없어 'DOWN' 알림이 옵니다. 봇의 다음 핑에 저절로 다시 감시합니다. 이미 DOWN이 왔으면 곧 UP이 따라옵니다):
 
 ```bash
 sudo systemctl restart paperbot-live3
@@ -403,6 +414,8 @@ systemctl list-timers 'paperbot-*' --no-pager
 
 보여야 할 것: `paperbot-shadow200.timer`(15분마다), `paperbot-dscheck.timer`(다음 09:30 KST = 00:30 UTC),
 `paperbot-obsidian.timer`(다음 09:50 KST = 00:50 UTC)가 `NEXT` 칸에 시각과 함께 보임.
+  매주 수요일 판정 예행연습 `paperbot-rehearsal.timer`도 목록에 있어야 합니다(이 서버에서는 이미 켜져 있어 리셋이 다시 켭니다. 없으면
+  `sudo systemctl enable --now paperbot-rehearsal.timer`).
 - 딥시크 밤 재계산은 매일 09:30에 전날(UTC) 딥시크 신호를 다시 계산해 기록과 비교합니다. 결과 한 줄: `cat /var/lib/paperbot/dscheck/last.txt`.
   다르면 텔레그램 `⚠ [작업 실패] 딥시크 신호 밤 재계산 점검`이 옵니다(계좌·주문과 무관). 첫날 밤은 600일치 5분봉을 처음 받느라 20분쯤
   걸립니다(봇과 같은 IP의 바이낸스 한도를 지키려고 천천히 받음). 다음 날부터는 새 봉만 받습니다.
@@ -422,6 +435,15 @@ cd /opt/crypto-bot-research && sudo -u paperbot /opt/paperbot/venv/bin/python -m
 ```
 
 보여야 할 것: 새 시작 시각, 첫 30일 판정일(시작한 UTC 날짜 + 30일, 09:00 KST), 관찰 기간 끝(시작 + 21일).
+
+5-4b. **딥시크·릴스 방 회의 몫 올리기** (두 분 결정 2026-10-06 01:20: 새 방 5개와 새 매매법 연구실이 함께 쓰는 몫을
+하루 약 10번 → 30번. 하루 전체 150번은 그대로, 봇 재시작 없음, 다음 회의 차례부터 적용):
+
+```bash
+sudo sed -i 's/research=16:500000/research=30:1500000/' /etc/paperbot/agents.env && sudo grep -o 'research=[0-9:]*' /etc/paperbot/agents.env
+```
+
+보여야 할 것: `research=30:1500000` 한 줄. (`research=` 줄이 안 나오면 멈추고 개발자에게.)
 
 5-5. **24시간 토론방 켜기** (선택, 유료 API. 4-2와 4-5가 깨끗하고 5-1~5-2를 한 뒤. 설명 전체는 `docs/debate-room.md`)
 
@@ -443,7 +465,7 @@ cd /opt/crypto-bot-research && sudo -u paperbot-debate env DEBATE_MODEL=claude-s
 SUDO_EDITOR=nano sudoedit /etc/paperbot/debate.env
 ```
 
-편집기에서 이렇게 맞춥니다(`#`로 시작하는 줄은 `#`를 지웁니다). 키는 `ANTHROPIC_API_KEY=` 뒤에 **편집기 안에** 붙여 넣습니다.
+편집기에서 **이미 있는 줄을 고쳐서** 이렇게 맞춥니다(새 줄을 아래에 또 쓰지 말고, 예시 파일에 있던 `DEBATE_MODEL=…`·`DEBATE_EVERY_MIN=…`·`DEBATE_MONTHLY_USD_CAP=…` 줄의 값을 바꾸고, `#DEBATE_EFFORT=` 줄은 `#`를 지웁니다. `#DEBATE_THINKING=` 줄은 그대로 둡니다). 키는 `ANTHROPIC_API_KEY=` 뒤에 **편집기 안에** 붙여 넣습니다.
 저장 Ctrl+O, Enter, 종료 Ctrl+X.
 
 ```
@@ -535,5 +557,5 @@ cd /root/crypto-bot-research && sudo bash deploy/update-dash.sh --rollback
 
 두 분 결정(2026-10-05)으로 **모든 텔레그램 알림은 무음**입니다. 메시지는 그대로 오고, 첫 줄의 🚨(긴급)·⚠(경고) 표시로 급한 정도를
 봅니다. 봇이 멈춰도 소리가 나지 않으니 하루 한두 번 텔레그램이나 대시보드를 보세요. 나중에 긴급·경고만 다시 울리게 하려면
-`/etc/paperbot/live.env`(에이전트 방 알림은 `/etc/paperbot/agents.env`)에 `TELEGRAM_SOUND=1` 한 줄을 넣고 봇을 다시 켭니다
-(봇 재시작은 실험을 다시 시작하지 않습니다).
+`/etc/paperbot/live.env`(에이전트 방 알림은 `/etc/paperbot/agents.env`)에 `TELEGRAM_SOUND=1` 한 줄을 넣고 `sudo systemctl restart paperbot-live3 paperbot-tgtrades`로 봇과 거래 알림을 다시 켭니다
+(가격 알림은 거래 알림 서비스가 보냅니다. 에이전트·예약 작업은 다음 회차에 읽습니다. 봇 재시작은 실험을 다시 시작하지 않습니다).
