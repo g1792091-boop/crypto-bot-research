@@ -71,5 +71,44 @@ export const acctLink = (ctx, id, kids) => h("a", {class: "lrow click an-row", r
 /** "+1.2%p" from a value already in percentage points. */
 export const pp = (x, dec = 1) => (x == null ? "—" : `${fmt.num(x, dec, true)}%p`);
 
+// ---------------------------------------------------------------- fill-strat: how far a view is from its real threshold
+const GROUP_KIND = {core: "strategy", ds200: "ds200", reel: "reel"};
+
+/** Per-account progress to a trade threshold, from the board: {need, total, max, done, share}. group: core | ds200 |
+ *  reel (each group's own accounts, never the coin flips or copies). share = the best account's way there (0..1). */
+export function tradeProgress(board, group, need) {
+  const kind = GROUP_KIND[group] || "strategy";
+  const rows = ((board && board.accounts) || []).filter((a) => a.kind === kind);
+  const ns = rows.map((a) => Number(a.trades) || 0);
+  const max = ns.length ? Math.max(...ns) : 0;
+  const done = ns.filter((n) => n >= need).length;
+  const sum = ns.reduce((x, y) => x + y, 0);
+  return {need, total: rows.length, max, done, avg: rows.length ? sum / rows.length : 0, share: need ? Math.min(1, max / need) : 1};
+}
+
+/** Days since the group's accounts started (the earliest created_ts on the board), or null. */
+export function runDays(board, group, now = Date.now()) {
+  const kind = GROUP_KIND[group] || "strategy";
+  const ts = ((board && board.accounts) || []).filter((a) => a.kind === kind && a.created_ts).map((a) => Number(a.created_ts));
+  return ts.length ? Math.max(0, (now - Math.min(...ts)) / 86400000) : null;
+}
+
+/** One neon progress bar: label, the words under it, share 0..1 (filled when reached). */
+export function progressBar(label, words, share) {
+  const w = Math.max(0, Math.min(1, share || 0));
+  return h("div", {class: ["an-prog", w >= 1 ? "full" : ""]},
+    h("div", {class: "an-prog-top"}, h("b", null, label), h("span", {class: "num"}, `${fmt.num(w * 100, 0)}%`)),
+    h("span", {class: "an-prog-t", role: "progressbar", "aria-valuemin": "0", "aria-valuemax": "100", "aria-valuenow": String(Math.round(w * 100)), "aria-label": label},
+      h("i", {style: {"--w": (w * 100).toFixed(1) + "%"}})),
+    h("p", {class: "an-prog-w"}, words));
+}
+
+/** The card above a view that waits for trades: its real thresholds and how far the accounts are, plus where the
+ *  5-year reference can be seen now (bars: [{label, words, share}], y5: a Node or null). */
+export function waitCard(title, bars, y5) {
+  return ui.card({plate: "채워지는 중", sub: title, cls: "an-wait"}, ...bars.map((b) => progressBar(b.label, b.words, b.share)), y5 || null,
+    h("p", {class: "an-note"}, "막대는 지금 계좌들의 실제 거래 수입니다. 기준을 넘으면 이 보기가 숫자로 채워집니다."));
+}
+
 /** A thin horizontal share bar (0..1) in a meaning colour ("up" | "down" | "acc"). */
 export const shareBar = (share, tone = "acc") => h("span", {class: ["an-bar", tone]}, h("i", {style: {"--w": Math.max(0, Math.min(1, share || 0)) * 100 + "%"}}));
