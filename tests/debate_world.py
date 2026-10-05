@@ -17,17 +17,26 @@ TFS = ("15m", "30m", "1h", "4h")
 COINS = ("BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "DOGEUSDT")
 
 
-def make_world(folder, now_ms, days=10, per_day=150, seed=7, nightly=True):
-    """Returns {"paper": path, "daily": path, "start": ms}. ``per_day`` closed trades a day over all accounts."""
+def make_world(folder, now_ms, days=10, per_day=150, seed=7, nightly=True, v4=False):
+    """Returns {"paper": path, "daily": path, "start": ms}. ``per_day`` closed trades a day over all accounts.
+    ``v4``: the paper v4 run's 331 accounts (config.v4_account_defs: the 36 x 4, DeepSeek, the reel, 15 coin flips)
+    and the frozen group alert lines ('[ds200] ...': no account), for the debate room on the v4 shape."""
     rng = np.random.default_rng(seed)
     start = now_ms - int(days * DAY)
     paper, daily = os.path.join(str(folder), "paper3.db"), os.path.join(str(folder), "daily3.db")
     st = Store3(paper)
-    ids = [(f"{s}@{tf}", s, tf, "strategy") for s in STRATEGY_KO for tf in TFS]
-    ids += [(f"RANDOM_{i}@{TFS[i % 4]}", f"RANDOM_{i}", TFS[i % 4], "random") for i in range(12)]
-    for a, s, tf, k in ids:
-        st.add_account(a, s, tf, k, start, "paper-v3")
-    st.put_state("run", start, {"taker_fee": 0.0005, "initial_equity": 5000.0, "settings": "paper-v3"})
+    version = "paper-v4" if v4 else "paper-v3"
+    if v4:
+        from paperbot.config import v4_account_defs
+        defs = v4_account_defs(list(STRATEGY_KO))
+        ids = [(f"{d['strategy']}@{d['timeframe']}", d["strategy"], d["timeframe"], d["kind"], d["data"]) for d in defs]
+    else:
+        ids = [(f"{s}@{tf}", s, tf, "strategy", None) for s in STRATEGY_KO for tf in TFS]
+        ids += [(f"RANDOM_{i}@{TFS[i % 4]}", f"RANDOM_{i}", TFS[i % 4], "random", None) for i in range(12)]
+    for a, s, tf, k, data in ids:
+        st.add_account(a, s, tf, k, start, version, data=data)
+    ids = [x[:4] for x in ids]
+    st.put_state("run", start, {"taker_fee": 0.0005, "initial_equity": 5000.0, "settings": version})
     eng = {a: {"wallet": 5000.0, "bust": False} for a, *_ in ids}
     total = int(days * per_day)
     times = np.sort(rng.integers(start + 1, now_ms - 60_000, total))
@@ -48,6 +57,11 @@ def make_world(folder, now_ms, days=10, per_day=150, seed=7, nightly=True):
     st.put_state("accounts", now_ms, {"engines": eng})
     st.alert(now_ms - 3_600_000, "WARN", "계좌 N17_KC_RSI@15m 낙폭 경고")
     st.alert(now_ms - 7_200_000, "INFO", "시작 알림")
+    if v4:
+        from paperbot.sigservice import DS_TIMEOUT_TEXT, REFUSED_TEXT
+        st.alert(now_ms - 1_800_000, "WARN", DS_TIMEOUT_TEXT.format(secs=60, boundary=now_ms - 1_800_000, tfs="15m"))
+        st.alert(now_ms - 1_700_000, "CRITICAL", REFUSED_TEXT.format(group="ds200", why="pin mismatch lib_c.py"))
+        st.alert(now_ms - 1_600_000, "CRITICAL", "[F9_FVG@15m] LIQUIDATED BTCUSDT 30x lost margin 1500.00")
     st.commit()
     st.conn.close()
     d = sqlite3.connect(daily)
@@ -57,7 +71,7 @@ def make_world(folder, now_ms, days=10, per_day=150, seed=7, nightly=True):
             day = _day(start + k * DAY)
             d.execute("INSERT INTO reports (day, ts, data) VALUES (?,?,?)",
                       (day, start + k * DAY + 3_600_000, json.dumps({"day": day, "missing_bars": 0,
-                       "parity": {"accounts": 156, "mismatched_accounts": 0}})))
+                       "parity": {"accounts": len(ids), "mismatched_accounts": 0}})))
     d.commit()
     d.close()
     return {"paper": paper, "daily": daily, "start": start}
