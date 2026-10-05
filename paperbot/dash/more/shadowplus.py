@@ -160,8 +160,11 @@ def strategy_view(paper_db: str, daily_db: Optional[str], now_ms: int, strategy:
                                   (strategy,)).fetchone() is not None
             except sqlite3.Error:
                 start = 0
-        sh = (RR.shadow_summary(d, c, int(start), int(now_ms), strategies=[strategy]) if d is not None
-              else {"error": "daily3.db 없음"})
+        # only a known core strategy is read: shadow_summary without paper3.db would group by the account id alone
+        # (DeepSeek rows included), and an unknown name should not cost a full shadows scan
+        sh = (RR.shadow_summary(d, c, int(start), int(now_ms), strategies=[strategy]) if d is not None and known
+              else {"error": "daily3.db 없음"} if d is None
+              else {"error": "paper3.db 없음"} if c is None else {})
     finally:
         _close(c, d)
     cells = ((sh.get("strategies") or {}).get(strategy) or {}) if isinstance(sh, dict) else {}
