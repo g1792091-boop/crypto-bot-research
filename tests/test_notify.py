@@ -383,7 +383,9 @@ def test_router_bundles_30_liquidations_of_a_step_and_waits_out_a_429_without_sl
     bundle = sent[-1]
     assert bundle["disable_notification"] == ["true"]                    # every message silent (owners 2026-10-05)
     text = bundle["text"][0]
-    assert text.startswith("🚨 긴급 29건 · 모의 강제청산 29\n\n") and text.count("- 강제청산 · ") == 29
+    # T2: the bundle says the step's total, the first liquidation having gone alone
+    assert text.startswith("🚨 긴급 29건 · 모의 강제청산 29\n같은 때 모두 30건 (첫 1건은 따로 보냄)\n\n")
+    assert text.count("- 강제청산 · ") == 29
     for b in books[1:]:
         assert who(b) in text
     assert who(books[0]) in sent[19]["text"][0]
@@ -403,7 +405,8 @@ def test_router_urgent_lines_isolated_go_at_once_and_big_bursts_are_split():
     d.flush(T)
     msgs = out.messages[2:]
     assert [lv for lv, _ in msgs] == [CRITICAL] * 4                          # 1 at once + 40 + 40 + 20
-    assert [m.split("\n")[0] for _, m in msgs[1:]] == ["긴급 알림 40건", "긴급 알림 40건", "긴급 알림 20건"]
+    assert [m.split("\n")[0] for _, m in msgs[1:]] == ["긴급 알림 40건 · 총 101건", "긴급 알림 40건 · 총 101건",
+                                                       "긴급 알림 20건 · 총 101건"]
     lines = [ln for _, m in msgs for ln in m.split("\n") if "LIQUIDATED" in ln]
     assert len(lines) == 101 and len(set(lines)) == 101
     assert len(telegram_text(CRITICAL, msgs[1][1])[1]) < 4096
@@ -587,6 +590,7 @@ def test_router_bundles_a_120_liquidation_burst_of_every_group_loud(monkeypatch)
     assert texts[0].startswith("🚨 모의 강제청산 · ")
     assert [t.split("\n")[0] for t in texts[1:]] == ["🚨 긴급 40건 · 모의 강제청산 40", "🚨 긴급 40건 · 모의 강제청산 40",
                                                      "🚨 긴급 39건 · 모의 강제청산 39"]
+    assert all(t.split("\n")[1] == "같은 때 모두 120건 (첫 1건은 따로 보냄)" for t in texts[1:])
     assert sum(t.count("\n- 강제청산 · ") for t in texts[1:]) == 119 and max(len(t) for t in texts) < 4096
     for b in books:
         assert any(who(b) in t for t in texts)

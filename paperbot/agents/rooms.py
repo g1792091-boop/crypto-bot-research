@@ -3397,11 +3397,16 @@ def compose_market_move(pk: dict, lead: Optional[dict], now_ms: Optional[int] = 
     from ..tradealerts import px
     moves = pk.get("moves") or []
     head = " · ".join(f"{m['symbol'].replace('USDT', '')} {m['move'] * 100:+.1f}%" for m in moves)
-    L = [f"⚡ 시세 급변 · {head} (1시간)" if head else "⚡ 시세 급변 (1시간)"]
+    # T6: the head's % is the hour's widest swing (high or low vs an hour ago); the coin's line says where it is now
+    L = [f"⚡ 시세 급변 · 1시간 최대 {head}" if head else "⚡ 시세 급변 (1시간)"]
     for m in moves:
         c = m["symbol"].replace("USDT", "")
+        try:
+            now_pct = f"지금 {(float(m['last']) / float(m['ref']) - 1) * 100:+.1f}% · "
+        except (TypeError, ValueError, ZeroDivisionError):
+            now_pct = ""
         L += ["", (f"{c} " if len(moves) > 1 else "")
-              + f"{px(m['ref'])} → {px(m['last'])} (고 {px(m['high'])} · 저 {px(m['low'])})"]
+              + f"{px(m['ref'])} → {px(m['last'])} ({now_pct}고 {px(m['high'])} · 저 {px(m['low'])})"]
         e = (pk.get("exposure") or {}).get(m["symbol"]) or {}
         bg = e.get("by_group") if isinstance(e.get("by_group"), dict) else None
         if e and bg:

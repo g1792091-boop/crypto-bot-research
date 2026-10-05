@@ -582,7 +582,7 @@ def render(text: str) -> str:
             items = [_urgent_item(ln) if not _MORE.match(ln) else f"외 {_MORE.match(ln)[1]}건 {_SCREEN}" for ln in body]
             liq = sum(1 for ln in body if re.match(KO_LINES[0][0], ln))
             head = (f"{m[1] or ''}긴급 {m[2]}건" + (f" · 모의 강제청산 {liq}" if liq else "")
-                    + (f"\n같은 때 모두 {int(m[3]):,}건 (첫 1건은 바로 앞 메시지)" if m[3] else ""))
+                    + (f"\n같은 때 모두 {int(m[3]):,}건 (첫 1건은 따로 보냄)" if m[3] else ""))
             return "\n".join([head, ""] + items + [now_kst()])
         return "\n".join(ko(line) for line in lines)
     except Exception:  # noqa: BLE001
