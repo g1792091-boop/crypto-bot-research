@@ -214,3 +214,23 @@ def test_inventory_has_the_batch_section():
     sec = inv[re.search(r"(?m)^## (\d+\. )?ana8A", inv).start():]
     for k in ("strategies-exits.js", "strategies-prior.js", "research_prior", "v3 크기 규칙"):
         assert k in sec, k
+
+
+# ---------------------------------------------------------------- review fixes
+def test_review_fixes_deepseek_return_line_neutral_exit_bar_lock_words_and_prior_counts():
+    ex = _code(_src("strategies-exits.js"))
+    # DeepSeek counts only: the leverage tab's 1x per-trade net (a return) is for the money kinds only
+    assert 'money && v.dim === "lev" && rows.some((c) => c.r1x != null)' in ex
+    # the exit mix is a share of all trades: a neutral bar, the win / loss bar only for the other tabs
+    assert 'share ? h("span", {class: "prog"' in ex and ': h("span", {class: "wl-bar"' in ex
+    # the ladder's first lock: armed at net ROE +12%, locks +10% (paperbot/ladder.py, the live settings)
+    from paperbot.config import v3_settings
+    lad = v3_settings().ladder
+    assert (round(lad.first_lock * 100), round((lad.first_lock + lad.trigger_gap) * 100)) == (10, 12)
+    assert "첫 잠금 조건(순 ROE +12%에 닿으면 +10% 잠금)" in ex and "잠금선(순 ROE +12%)" not in ex
+    pr = _code(_src("strategies-prior.js"))
+    # what is left after the three periods comes from the study, never a typed-in 0
+    assert "남은 후보는 ${fmt.int(left)}건" in pr and "남은 후보는 0건" not in pr
+    assert "srHit.filter((x) => !x.note).length + (Number(es.passed_all3) || 0) + tlHit.length" in pr
+    # the reel never falls through to the DeepSeek wording
+    assert 'if (kind === "reel") {' in pr and 'kind === "reel" && rp.h1' not in pr

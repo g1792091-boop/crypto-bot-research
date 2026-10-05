@@ -123,9 +123,11 @@ export function exitsCard(ctx, o = {}) {
   function row(c, dim) {
     const share = dim === "reason";
     const w = Math.round(((share ? c.share : c.rate) || 0) * 100) + "%";
+    // the exit mix is a share of all trades, not wins vs losses: a neutral bar (.prog), never the up / down colours
     return h("div", {class: "strat-srow", role: "listitem"},
       h("span", {class: "nm2"}, c.ko),
-      h("span", {class: "wl-bar", title: share ? `전체의 ${fmt.pct(c.share, 0, false)}` : `이긴 비율 ${fmt.pct(c.rate, 0, false)}`}, h("i", {style: {"--w": w}})),
+      share ? h("span", {class: "prog", title: `전체의 ${fmt.pct(c.share, 0, false)}`}, h("i", {style: {"--p": w}}))
+        : h("span", {class: "wl-bar", title: `이긴 비율 ${fmt.pct(c.rate, 0, false)}`}, h("i", {style: {"--w": w}})),
       h("span", {class: "num small"}, share ? `${fmt.int(c.n)}건 · ${fmt.pct(c.share, 0, false)}` : `${fmt.int(c.wins)}승 ${fmt.int(c.losses)}패`),
       money ? h("b", {class: ["num", fmt.tone(c.pnl, fmt.money(c.pnl, true))]}, fmt.money(c.pnl, true))
         : h("span", {class: "num small muted"}, share ? "" : `${fmt.int(c.n)}건`),
@@ -148,7 +150,7 @@ export function exitsCard(ctx, o = {}) {
       return [h("div", {class: "strat-exref"},
         h("p", {class: "small"}, h("b", null, "5년 연구와 나란히"), h("span", {class: "muted"}, " · 연구와 라이브가 같은 릴스 청산")),
         ui.table([{label: "", l: true, get: (r) => (r.now ? h("b", null, r.k) : r.k)}, ...keys.map((x) => ({label: REEL_KO[x], get: (r) => r.v(x)}))], rows),
-        sp.n < MIN_ROWS ? h("p", {class: "muted small"}, ui.smallSample(sp.n, MIN_ROWS), ` 지금은 ${fmt.int(sp.n)}건이라 비율이 크게 흔들립니다.`) : null)];
+        sp.n && sp.n < MIN_ROWS ? h("p", {class: "muted small"}, ui.smallSample(sp.n, MIN_ROWS), ` 지금은 ${fmt.int(sp.n)}건이라 비율이 크게 흔들립니다.`) : null)];
     }
     // the 36: the card's lock share, per timeframe, next to the live one
     const live = lockShareByTf(v.byTf);
@@ -159,7 +161,7 @@ export function exitsCard(ctx, o = {}) {
         {label: "봉", l: true, get: (r) => fmt.tfKo(r.tf)},
         {label: "지금", get: (r) => (r.now.n ? h("span", null, fmt.pct(r.now.share, 0, false), h("span", {class: "muted"}, ` (${fmt.int(r.now.n)}건)`)) : h("span", {class: "muted"}, "아직 없음"))},
         {label: "5년 (v3 50배부터)", get: (r) => (r.y5 == null ? "—" : fmt.pct(r.y5, 0, false))}], rows),
-      h("p", {class: "muted small"}, "5년 시험은 모든 신호를 50배부터 잡은 v3 크기 규칙입니다. 지금 보통 자리는 30배부터라 같은 가격 움직임에서 ROE가 작고, 잠금선(순 ROE +12%)에 덜 닿습니다. 그래서 이 비율은 설명용이고, 차이가 나도 실력 차이를 뜻하지 않습니다."))];
+      h("p", {class: "muted small"}, "5년 시험은 모든 신호를 50배부터 잡은 v3 크기 규칙입니다. 지금 보통 자리는 30배부터라 같은 가격 움직임에서 ROE가 작고, 첫 잠금 조건(순 ROE +12%에 닿으면 +10% 잠금)에 덜 닿습니다. 그래서 이 비율은 설명용이고, 차이가 나도 실력 차이를 뜻하지 않습니다."))];
   }
 
   function render(animate) {
@@ -180,7 +182,8 @@ export function exitsCard(ctx, o = {}) {
           : h("p", {class: "muted"}, "이 기준으로 나눌 기록이 없습니다."),
         sp.n < MIN_ROWS ? h("p", {class: "muted small"}, ui.smallSample(sp.n, MIN_ROWS), ` 아직 ${fmt.int(sp.n)}건: ${MIN_ROWS}건 미만 칸은 결론 없이 참고만.`) : null,
         // the leverage tab: per-trade net in 1x price % (ROE ÷ leverage), the unit that compares across multiples
-        v.dim === "lev" && rows.some((c) => c.r1x != null) ? h("p", {class: "muted small"}, "거래당 순손익 1배 환산 (ROE ÷ 레버리지): ",
+        // DeepSeek: counts only, so no per-trade return either
+        money && v.dim === "lev" && rows.some((c) => c.r1x != null) ? h("p", {class: "muted small"}, "거래당 순손익 1배 환산 (ROE ÷ 레버리지): ",
           rows.filter((c) => c.r1x != null).map((c, i) => [i ? " · " : "", `${c.ko} `, h("span", {class: fmt.tone(c.r1x, fmt.pct(c.r1x, 2))}, fmt.pct(c.r1x, 2))])) : null,
         ...ref,
         money ? ui.assume() : h("p", {class: "muted small"}, "딥시크는 건수만 셉니다 (계좌 돈은 순위표의 묶음 숫자로)."));

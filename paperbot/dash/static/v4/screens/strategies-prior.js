@@ -35,11 +35,13 @@ function corePanel(rp) {
     return [h("p", null, "이 매매법은 5년 신호가 적어(1기 300개 미만) 진입 연구에서 시험한 칸이 없습니다.")];
   }
   const srHit = sr.passed_all3 || [], tlHit = tl.passed_all3 || [];
+  // what is left after the three periods, from the study (an S/R hit that random entries show too is the market's)
+  const left = srHit.filter((x) => !x.note).length + (Number(es.passed_all3) || 0) + tlHit.length;
   const ss = sameSign(es);
   const ssN = ss.reduce((a, x) => a + x.items.length, 0);
   const esN5 = ((es.features || []).filter((f) => f.tf === "5m")).length;
   return [
-    h("p", null, `같은 5년 자료로 이 매매법의 진입을 ${fmt.int(total)}건 시험했고, 세 기간 확인을 거쳐 남은 후보는 0건입니다.`),
+    h("p", null, `같은 5년 자료로 이 매매법의 진입을 ${fmt.int(total)}건 시험했고, 세 기간 확인을 거쳐 남은 후보는 ${fmt.int(left)}건입니다.`),
     h("ul", {class: "strat-lines small"},
       li(h("b", null, "지지·저항 "), `${n0(sr.tests)}건 · `, (sr.features || []).map((f) => SR_KO[f] || f).join(" / "),
         srHit.length ? h("span", {class: "muted"}, ` · 세 기간 같은 효과 ${fmt.int(srHit.length)}건 (${srHit.map((x) => `${fmt.tfKo(x.tf)}: ${x.note || "설명용"}`).join(", ")})`) : h("span", {class: "muted"}, " · 남은 것 없음")),
@@ -47,7 +49,7 @@ function corePanel(rp) {
       li(h("b", null, "추세선 "), `${n0(tl.tests)}건 · `, (tl.features || []).map((f) => TL_KO[f] || f).join(" / "),
         h("span", {class: "muted"}, tlHit.length ? ` · 세 기간 같은 효과 ${fmt.int(tlHit.length)}건` : " · 남은 것 없음"))),
     ssN ? ui.disclosure(`진입 수치: 세 기간 방향만 같았던 ${fmt.int(ssN)}개 보기`, h("div", {class: "stack tight"},
-      h("p", {class: "muted small"}, "아무 관계가 없어도 4개 중 1개꼴로 세 기간 방향이 같게 나옵니다. 크기는 −1~+1 (0이면 관계 없음)이고 세 기간 중 가장 큰 값을 적었습니다. 거래가 적은 칸(특히 4시간봉 3기)은 크기가 크게 흔들립니다. 이 가운데 미리 정한 기준을 넘은 것은 없습니다."),
+      h("p", {class: "muted small"}, "아무 관계가 없어도 4개 중 1개꼴로 세 기간 방향이 같게 나옵니다. 크기는 −1~+1 (0이면 관계 없음)이고 세 기간 중 가장 큰 값을 적었습니다. 거래가 적은 칸(특히 4시간봉 3기)은 크기가 크게 흔들립니다.", Number(es.passed_all3) ? "" : " 이 가운데 미리 정한 기준을 넘은 것은 없습니다."),
       h("ul", {class: "strat-lines small"}, ss.map((x) => li(h("b", null, `${fmt.tfKo(x.tf)} `),
         x.items.map((it) => `${it.ko} (${it.dir > 0 ? "강할수록 조금 나은 쪽" : "강할수록 조금 나쁜 쪽"}, 최대 ${fmt.num(it.max, 3)})`).join(" · ")))),
       esN5 ? h("p", {class: "muted small"}, `5분봉 칸 ${fmt.int(esN5)}개는 과거 기록이라 뺐습니다 (36개는 지금 5분봉을 거래하지 않음).`) : null))
@@ -57,10 +59,10 @@ function corePanel(rp) {
 
 function dsPanel(rp, kind) {
   const out = [h("p", null, "이 매매법은 진입 연구(지지·저항 · 진입 수치 · 추세선) 대상이 아닙니다.")];
-  if (kind === "reel" && rp.h1) {
+  if (kind === "reel") {
     const x = rp.h1;
-    out.push(h("p", null, "대신 사전 등록한 시험 H1(지금 계좌와 같은 5분봉 진입·청산)을 같은 5년 자료로 했습니다: ",
-      `1·2기 합친 거래당 ${fmt.num(x.mean12_pct, 3)}% (${fmt.int(x.n12)}건), 3기 ${fmt.num(x.pre_mean_pct, 3)}%. 1배 가격 %, 비용 뒤.`),
+    out.push(x ? h("p", null, "대신 사전 등록한 시험 H1(지금 계좌와 같은 5분봉 진입·청산)을 같은 5년 자료로 했습니다: ",
+      `1·2기 합친 거래당 ${fmt.num(x.mean12_pct, 3)}% (${fmt.int(x.n12)}건), 3기 ${fmt.num(x.pre_mean_pct, 3)}%. 1배 가격 %, 비용 뒤.`) : null,
       h("p", {class: "muted small"}, `봉·진입 방식을 바꾼 격자 ${fmt.int(rp.configs)}개 설정 가운데 세 기간 모두 플러스 ${fmt.int(rp.all3_positive)}개, 남은 후보 ${fmt.int(rp.candidates)}개.`));
   } else {
     const fg = rp.family_gauntlet || {};
