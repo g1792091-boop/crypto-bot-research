@@ -2859,7 +2859,8 @@ def _team_round(rnd: _Round) -> tuple[str, dict]:
         raise RoundFailed("회의에서 아무도 답하지 못했습니다")
     extra: dict = {}
     if lead and lead.get("flag_owners"):
-        extra["flag"] = A.flag_owners(rnd.env("team_lead"), lead["flag_owners"])
+        extra["flag"] = (_group_flag(rnd, lead["flag_owners"]) if room in GROUP_ROLE_OF_ROOM
+                         else A.flag_owners(rnd.env("team_lead"), lead["flag_owners"]))
     if lead and lead.get("hypotheses") and rnd.due.trigger in LEAD_HYPOTHESIS_MEETINGS:
         # the ranking review's (and the weekly analyses') hypotheses go to the ledger under their strategy: graded
         # later like the rooms' own
@@ -2956,6 +2957,45 @@ def _group_summary_lines(rnd: _Round) -> list[str]:
     if rnd.room == TR.group_room_of(REEL_NAME):
         line += f", 손익 {sum(float(x.get('pnl') or 0) for x in rows):+.2f} USDT"
     return [line]
+
+
+GROUP_FLAG_MAX_PER_DAY = 1      # the five v4 specialist rooms' owners' alerts a KST day, all five together
+GROUP_FLAG_KEY = "flag_owners:group:{day}"
+
+
+def _group_flag(rnd: _Round, flag: dict) -> dict:
+    """The lead's owners' alert in a v4 specialist room: the rooms' own counter (``GROUP_FLAG_KEY``, at most
+    ``GROUP_FLAG_MAX_PER_DAY`` for the five rooms together), so their batched loss and bust reviews never use the
+    36's daily alerts (actions.flag_owners' counter, which is left alone). In a DeepSeek room, while
+    dsmoney.DS_MONEY_STRICT, a text naming a money amount (D11: DeepSeek money only on its group screen) is kept as a
+    room note and not sent. The send itself is actions.flag_owners' (links removed, a re-run meeting sends nothing)."""
+    from ..config import REEL_NAME
+    from . import dsmoney as DM
+    env = rnd.env("team_lead")
+    text = str(flag.get("text") or "")
+    if DM.DS_MONEY_STRICT and rnd.room != TR.group_room_of(REEL_NAME) and DM.has_money(text):
+        res = A.note(env, {"text": ("두 분께 알림 대신 메모(딥시크 방 알림에는 금액을 쓰지 않음): " + text)[:800]})
+        rnd.system("딥시크 방 알림에 금액이 들어 있어 텔레그램으로 보내지 않고 방 메모로 남겼습니다.",
+                   {"action": "flag_owners", "sent": False, "reason": "ds_money"})
+        return {**res, "action": "flag_owners", "sent": False, "kept_as_note": True}
+    key = GROUP_FLAG_KEY.format(day=R.kst_day(env.now_ms))
+    used = int(R.get_cursor(env.conn, key, 0) or 0)
+    if used >= GROUP_FLAG_MAX_PER_DAY:
+        rnd.system(f"딥시크·릴스 방 알림은 다섯 방 합쳐 하루 {GROUP_FLAG_MAX_PER_DAY}번이라 오늘은 보내지 않았습니다.",
+                   {"action": "flag_owners", "sent": False, "reason": "group_daily_limit"})
+        return {"action": "flag_owners", "ok": False, "text": "그룹 방 하루 알림 한도", "sent": False}
+    # the 36's counter is put back after the send: the group rooms' alert is counted only here
+    shared = f"flag_owners:{R.kst_day(env.now_ms)}"
+    before = R.get_cursor(env.conn, shared)
+    res = A.flag_owners(replace(env, flag_max_per_day=int(before or 0) + 1), flag)
+    if res.get("sent") or (res.get("ok") is False and not res.get("duplicate")):
+        R.set_cursor(env.conn, key, used + 1)
+    if before is None:
+        env.conn.execute("DELETE FROM cursors WHERE k = ?", (shared,))
+        env.conn.commit()
+    else:
+        R.set_cursor(env.conn, shared, before)
+    return res
 
 
 # ---------------------------------------------------------------- meetings added 2026-10-04 (owners' choice)
