@@ -102,7 +102,8 @@ def test_one_fixed_systemctl_call_per_kind_with_a_2s_timeout_and_utc(systemctl):
         assert cmd[:2] == ["/usr/bin/systemctl", "show"] and "--no-pager" in cmd
         assert kw["timeout"] == J.TIMEOUT_S == 2.0 and kw["env"]["TZ"] == "UTC" and kw["env"]["LC_ALL"] == "C"
         assert not kw.get("shell")
-        assert all(c.startswith(("/", "show", "--", "-p", "Id,", "paperbot-")) for c in cmd)
+        assert all(c.startswith(("/", "show", "--no-pager", "--property=", "paperbot-")) for c in cmd)
+        assert "--property=Id" in cmd and len([c for c in cmd if c.startswith("paperbot-")]) == len(J.UNITS)
 
 
 def test_it_degrades_cleanly_without_systemctl_on_a_timeout_and_on_an_error(monkeypatch):

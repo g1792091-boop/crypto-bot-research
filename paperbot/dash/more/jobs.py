@@ -100,7 +100,8 @@ def show(units: list, props: str, runner: Optional[Callable] = None) -> dict:
            "SYSTEMD_COLORS": "0"}
     runner = runner or subprocess.run
     try:
-        r = runner([exe, "show", "--no-pager", "-p", props, *units], capture_output=True, text=True,
+        # one --property= per name (older systemd versions do not split a comma list)
+        r = runner([exe, "show", "--no-pager", *[f"--property={p}" for p in props.split(",")], *units], capture_output=True, text=True,
                    timeout=TIMEOUT_S, env=env, check=False)
     except subprocess.TimeoutExpired:
         raise Unavailable("systemctl 응답 없음 (2초)") from None
