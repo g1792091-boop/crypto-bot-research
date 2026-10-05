@@ -90,3 +90,66 @@ def test_the_reel_room_alert_may_name_its_money(tmp_path):
     w.tick(runner, QUIET, notifier=n)
     assert len(n.messages) == 1 and "-63 USDT" in n.messages[0][1]
     assert "딥시크 방 알림에는 금액을 쓰지 않음(개수만)" in RM.system_prompt("team_lead", "lead")
+
+
+# ------------------------------------------------------------------ 11: DeepSeek money strict (D11)
+def _money_keys(obj, path=""):
+    """Every money number (dsmoney.MONEY_KEYS) at any depth, as paths."""
+    from paperbot.agents import dsmoney as DM
+    out = []
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if k in DM.MONEY_KEYS and not isinstance(v, (dict, list)):
+                out.append(f"{path}.{k}")
+            out += _money_keys(v, f"{path}.{k}")
+    elif isinstance(obj, list):
+        for i, v in enumerate(obj):
+            out += _money_keys(v, f"{path}.{i}")
+    return out
+
+
+def test_the_debate_packet_carries_no_deepseek_money(tmp_path):
+    from paperbot.agents import debate_packet as P
+    from test_debate import NOW, make_world
+    w = make_world(tmp_path, NOW, days=3, per_day=60, v4=True)
+    keys = [k for k, _ko in P.TOPICS]
+    gc = P.build(w["paper"], w["daily"], None, None, NOW, round_no=keys.index("groups"))["packet"]["groups_compare"]
+    # the DeepSeek cells (the coin flips next to them are not DeepSeek: as before)
+    assert _money_keys({"all": gc["ds200"]["all"],
+                        "tf": {tf: c["group"] for tf, c in gc["ds200"]["by_timeframe"].items()}}) == []
+    assert "net_pnl" in gc["core"]["all"] and "median_wallet" in gc["reel"]["all"]      # the other groups as before
+    cells = [c["group"] for c in gc["ds200"]["by_timeframe"].values()]
+    assert cells and all(c["vs_coin_flip"] in ("above", "below", "equal", None) for c in cells)
+    assert set(cells[0]) <= {"accounts", "trades", "trades_per_account", "win_rate", "busts", "small_sample",
+                             "vs_coin_flip"}
+    assert any("돈 숫자를 말하지 않음" in n for n in gc["notes"])
+    df = P.build(w["paper"], w["daily"], None, None, NOW, round_no=keys.index("ds_families"))["packet"]["ds_families"]
+    assert _money_keys({k: v for k, v in df.items() if k != "coin_flip_by_timeframe"}) == []
+    assert df["ds200_all"]["accounts"] == 171 and "win_rate" in df["ds200_all"]
+    assert "딥시크는 돈 숫자를 말하지 않음 (개수·비율만)" in open(
+        "paperbot/agents/prompts3/debate_room.md", encoding="utf-8").read()
+
+
+def test_a_deepseek_room_packet_has_roe_and_counts_but_no_money(tmp_path):
+    w = V4World(tmp_path)
+    w.ds_losses("F3_BOS@15m", 6)
+    runner = QueueRunner({"spec_ds_structure": [team_answer("s")], "team_lead": [LEAD]})
+    w.tick(runner, QUIET)
+    for c in runner.calls:                              # the specialist and the lead
+        pk = c["packet"]
+        assert _money_keys(pk["group_accounts"]) == [], c["role"]
+        assert _money_keys(pk["board"]["groups"]["ds200"]) == [], c["role"]
+        assert "net_pnl" in pk["board"]["groups"]["core"] or "core" not in pk["board"]["groups"]
+    ga = runner.calls[0]["packet"]["group_accounts"]
+    f3 = [d for d in ga["definitions"] if d["strategy"] == "F3_BOS"][0]
+    from paperbot.config import V3_INITIAL
+    want = round(100 * sum(-20.0 - k for k in range(6)) / V3_INITIAL, 2)
+    assert f3["timeframes"]["15m"]["roe_pct"] == want and f3["trades"] == 6 and f3["win_rate"] == 0.0
+    assert "돈 숫자" in ga["money_note"] and ga["costs"]["F3_BOS"]["15m"]["trades"] == 6
+    # the reel room keeps its money (D10)
+    (tmp_path / "reel").mkdir()
+    w2 = V4World(tmp_path / "reel")
+    w2.ds_losses(f"{REEL_NAME}@5m", 3)
+    r2 = QueueRunner({"spec_reel_5m": [team_answer("r")], "team_lead": [LEAD]})
+    w2.tick(r2, QUIET)
+    assert r2.calls[0]["packet"]["group_accounts"]["definitions"][0]["pnl"] == -63.0

@@ -20,6 +20,7 @@ import sqlite3
 import urllib.parse
 from typing import Any, Optional
 
+from . import dsmoney as DM
 from . import facts as F
 
 DAY_MS = 86_400_000
@@ -262,6 +263,22 @@ def _cell(v: Optional[dict], min_n: int) -> Optional[dict]:
             "small_sample": n / acc < min_n}
 
 
+_NO_FLIPS = object()
+
+
+def _ds_cell(v: Optional[dict], min_n: int, flips: Any = _NO_FLIPS) -> Optional[dict]:
+    """A DeepSeek cell: ``_cell``, and while dsmoney.DS_MONEY_STRICT (D11) only its counts and ratios (trades,
+    trades_per_account, win_rate, busts) plus, given the same timeframe's coin-flip cell, ``vs_coin_flip``: the sign of
+    P&L per account against them (above / below / equal; None when either has no trades). No P&L or wallet."""
+    c = _cell(v, min_n)
+    if not DM.DS_MONEY_STRICT or c is None:
+        return c
+    out = DM.strict_cell(c)
+    if flips is not _NO_FLIPS:
+        out["vs_coin_flip"] = DM.sign_vs(v, flips)
+    return out
+
+
 def _groups_compare(board: dict, min_n: int) -> dict:
     """D2: the 36, DeepSeek and the reel, each timeframe next to the coin flips of the same timeframe."""
     from ..groups import GROUP_KO
@@ -272,9 +289,13 @@ def _groups_compare(board: dict, min_n: int) -> dict:
         v = gs.get(g)
         if not isinstance(v, dict) or not v.get("accounts"):
             continue
-        tfs = {tf: {"group": _cell(c, min_n), "coin_flip": _cell(flips.get(tf), min_n)}
+        tfs = {tf: {"group": _ds_cell(c, min_n, flips.get(tf)) if g == "ds200" else _cell(c, min_n),
+                    "coin_flip": _cell(flips.get(tf), min_n)}
                for tf, c in sorted((v.get("by_timeframe") or {}).items())}
-        out[g] = {"name": GROUP_KO.get(g, g), "all": _cell(v, min_n), "by_timeframe": tfs}
+        out[g] = {"name": GROUP_KO.get(g, g), "all": _ds_cell(v, min_n) if g == "ds200" else _cell(v, min_n),
+                  "by_timeframe": tfs}
+    if DM.DS_MONEY_STRICT:
+        out["notes"] = GROUP_NOTES_KO + [DM.STRICT_NOTE_KO]
     if len(out) == 1:
         out["missing"] = "이 실행에는 비교할 묶음이 없음(그룹 자료 없음)"
     return out
@@ -290,12 +311,13 @@ def _ds_families(board: dict, min_n: int) -> dict:
     flips = ((board.get("groups") or {}).get("flip") or {}).get("by_timeframe") or {}
     rooms = {}
     for _key, ko, fs, _ids in V4_ROLES:
-        cells = {f: {"name": DS_FAMILY_KO.get(f, f), **(_cell(fams.get(f), min_n) or {})} for f in fs if f in fams}
+        cells = {f: {"name": DS_FAMILY_KO.get(f, f), **(_ds_cell(fams.get(f), min_n) or {})} for f in fs if f in fams}
         if cells:
             rooms[ko] = cells
     return {"notes": GROUP_NOTES_KO[:3] + ["가족 17개를 견주면 우연히 좋아 보이는 가족이 나옴(여러 번 비교)",
-                                           "F11_PO3 하나는 세션 담당이지만 가족 숫자 F11은 구조·유동성에 한데 셈"],
-            "ds200_all": _cell(ds, min_n), "rooms": rooms,
+                                           "F11_PO3 하나는 세션 담당이지만 가족 숫자 F11은 구조·유동성에 한데 셈"]
+            + ([DM.STRICT_NOTE_KO] if DM.DS_MONEY_STRICT else []),
+            "ds200_all": _ds_cell(ds, min_n), "rooms": rooms,
             "coin_flip_by_timeframe": {tf: _cell(flips.get(tf), min_n) for tf in sorted(ds.get("by_timeframe") or {})}}
 
 

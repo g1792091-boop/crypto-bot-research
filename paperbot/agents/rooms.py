@@ -2807,6 +2807,8 @@ def _team_packet(rnd: _Round, role: str, board: dict) -> dict:
     pk = {**rnd.base, "board": {k: board.get(k) for k in view if k in board}}
     if "error" in board:
         pk["board"]["error"] = board["error"]
+    if isinstance(pk["board"].get("groups"), dict):
+        pk["board"]["groups"] = _ds_strict_groups(pk["board"]["groups"])
     if role == "team_lead":
         pk["today_rounds"] = _today_rounds(ctx, meeting_day_start(ctx, rnd.due))
         pk["waiting_for_owners"] = len(R.list_proposals(ctx.agents_conn, status="awaiting_owner"))
@@ -2827,7 +2829,7 @@ def _team_round(rnd: _Round) -> tuple[str, dict]:
         rnd.base["lab"] = lab_overview(ctx)
         rnd.base["lab_accounts"] = lab_accounts_packet(ctx, rnd.due.data.get("oldest_exit"))
     if room in GROUP_ROLE_OF_ROOM:            # a v4 specialist room: its accounts (DeepSeek families or the reel)
-        rnd.base["group_accounts"] = group_accounts_packet(ctx, room, rnd.due)
+        rnd.base["group_accounts"] = _ds_strict_room(room, group_accounts_packet(ctx, room, rnd.due))
         if rnd.due.trigger in TR.GROUP_TRIGGERS:
             # its members' loss cards, tags and wins against losses (G4; the same section a strategy room has)
             rnd.base["losses"] = _losses(ctx, room, rnd.due)
@@ -2957,6 +2959,24 @@ def _group_summary_lines(rnd: _Round) -> list[str]:
     if rnd.room == TR.group_room_of(REEL_NAME):
         line += f", 손익 {sum(float(x.get('pnl') or 0) for x in rows):+.2f} USDT"
     return [line]
+
+
+def _ds_strict_room(room: str, pk: Any) -> Any:
+    """D11 (dsmoney.DS_MONEY_STRICT): a DeepSeek room's ``group_accounts`` as ROE %, win rates and counts (no P&L,
+    wallet or USDT); the reel room's as it is."""
+    from ..config import REEL_NAME, V3_INITIAL
+    from . import dsmoney as DM
+    if not DM.DS_MONEY_STRICT or room == TR.group_room_of(REEL_NAME):
+        return pk
+    return DM.room_packet(pk, V3_INITIAL)
+
+
+def _ds_strict_groups(groups: dict) -> dict:
+    """D11 (dsmoney.DS_MONEY_STRICT): the board's ``groups`` with DeepSeek's money numbers removed (counts stay)."""
+    from . import dsmoney as DM
+    if not DM.DS_MONEY_STRICT or not isinstance(groups.get("ds200"), dict):
+        return groups
+    return {**groups, "ds200": {**DM.scrub(groups["ds200"]), "money_note": DM.STRICT_NOTE_KO}}
 
 
 GROUP_FLAG_MAX_PER_DAY = 1      # the five v4 specialist rooms' owners' alerts a KST day, all five together

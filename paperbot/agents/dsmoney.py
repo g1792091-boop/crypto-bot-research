@@ -21,8 +21,7 @@ DS_MONEY_STRICT = True
 # keys that carry money in the packets the agents read (packets3._stat, debate_packet._cell, rooms.group_accounts_packet,
 # digest.tf_stats, cards): dropped from a DeepSeek cell while strict
 MONEY_KEYS = frozenset({"pnl", "net_pnl", "net_pnl_24h", "wallet", "median_wallet", "gross_before_costs", "costs",
-                        "cost_per_trade", "move_before_costs", "fees", "funding", "equity_after", "margin",
-                        "pnl_before_costs", "gross_pnl"})
+                        "cost_per_trade", "fees", "funding", "equity_after", "margin", "pnl_before_costs", "gross_pnl"})
 
 # a money amount in model-written text: USDT / $ / 달러 next to digits (full-width forms folded first)
 _MONEY = re.compile(r"(?i)\$\s*[+-]?\d|\d\s*\$|\d\s*(?:usdt|usd|달러)|(?:usdt|달러)\s*[+-]?\d")
@@ -67,12 +66,30 @@ def sign_vs(mine: Optional[dict], flips: Optional[dict]) -> Optional[str]:
 
 
 def scrub(obj: Any) -> Any:
-    """``obj`` with every MONEY_KEYS key removed at any depth (lists and dicts; other values as they are)."""
+    """``obj`` with every MONEY_KEYS number removed at any depth (a MONEY_KEYS key holding a table, such as a room's
+    ``costs`` per definition, stays and is scrubbed inside)."""
     if isinstance(obj, dict):
-        return {k: scrub(v) for k, v in obj.items() if k not in MONEY_KEYS}
+        return {k: scrub(v) for k, v in obj.items()
+                if not (k in MONEY_KEYS and (v is None or isinstance(v, (int, float, str))))}
     if isinstance(obj, list):
         return [scrub(v) for v in obj]
     return obj
+
+
+def room_packet(pk: Any, initial: float) -> Any:
+    """A DeepSeek specialist room's ``group_accounts`` (rooms.group_accounts_packet) without money: each definition's
+    and timeframe's P&L becomes ``roe_pct`` (P&L over its accounts' starting balance, %), wallets go, and so does every
+    other money number at any depth (costs in USDT, ...). Win rates, counts, busts and ratios stay."""
+    if not isinstance(pk, dict) or not isinstance(pk.get("definitions"), list):
+        return scrub(pk)
+    defs = []
+    for row in pk["definitions"]:
+        if not isinstance(row, dict):
+            continue
+        tfs = {tf: {**c, "roe_pct": roe_pct(c.get("pnl"), 1, initial)}
+               for tf, c in (row.get("timeframes") or {}).items() if isinstance(c, dict)}
+        defs.append({**row, "roe_pct": roe_pct(row.get("pnl"), len(tfs), initial), "timeframes": tfs})
+    return {**scrub({**pk, "definitions": defs}), "money_note": STRICT_NOTE_KO}
 
 
 def strict_cell(cell: Optional[dict], flips: Optional[dict] = None) -> Optional[dict]:
