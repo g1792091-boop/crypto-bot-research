@@ -9,6 +9,7 @@
 //   stamp(v), luckDots(v)  only after /api/checkpoint says ready: the stamp on the result and the 'luck' picture.
 import {h, ui, fmt, motion, local} from "../core/pb.js";
 import {judgedTfs, MIN_TRADES} from "./home-shared.js";
+import {href as routeHref} from "../core/routes.js";
 
 const DAY = 86400000;
 const SEAT_GROUPS = [{kind: "strategy", ko: "기존 36", named: true}, {kind: "ds200", ko: "딥시크", named: false},
@@ -29,6 +30,46 @@ export function project(n, f) {
   return {mid: n * f, lo: Math.max(n, (n - sd) * f), hi: (n + sd) * f};
 }
 
+/** The date an account reaches 30 closed trades at its own pace so far (null: no trade yet, already there, bust, or
+ *  no run start). n trades in `elapsed` ms -> (30 - n) / (n / elapsed) more ms. */
+export function reachTs(n, elapsed, now = Date.now()) {
+  if (!(n > 0) || n >= MIN_TRADES || !(elapsed > 0)) return null;
+  return now + ((MIN_TRADES - n) * elapsed) / n;
+}
+
+/** fill-people: the judged accounts with the most closed trades (the 36 and the 5-minute strategy by name; DeepSeek
+ *  seats stay unnamed), each with 'n/30' and a pace line. 참고: progress, never a pass or a fail. */
+export function leaders(board, summary, k = 5, now = Date.now()) {
+  const rows = (board && board.accounts) || [];
+  const named = SEAT_GROUPS.filter((g) => g.named);
+  const mine = rows.filter((a) => named.some((g) => g.kind === a.kind && judgedTfs(board, g.kind).includes(a.timeframe)) && (a.trades || 0) > 0)
+    .sort((x, y) => (y.trades || 0) - (x.trades || 0) || String(x.account_id).localeCompare(String(y.account_id))).slice(0, k);
+  const start = summary && summary.start;
+  const elapsed = start ? now - start : null;
+  return mine.map((a) => {
+    const n = a.trades || 0;
+    const at = a.bust ? null : reachTs(n, elapsed, now);
+    return {a, n, at, small: elapsed != null && elapsed < 2 * DAY};
+  });
+}
+
+function leaderBox() {
+  const list = h("div", {class: "ck-lead-list", role: "list"});
+  const box = h("div", {class: "ck-lead"}, h("div", {class: "ck-lead-h"}, h("b", null, "거래가 가장 많은 판정 계좌"), ui.pill("", "ref"),
+    h("span", {class: "muted"}, "합격·불합격 아님 · 30건을 채우는 속도만")), list);
+  box.update = (board, summary) => {
+    const ls = leaders(board, summary);
+    if (!ls.length) { list.replaceChildren(h("p", {class: "muted home-small"}, "아직 닫힌 거래가 있는 판정 계좌가 없습니다")); return; }
+    list.replaceChildren(...ls.map(({a, n, at, small}) => h("a", {class: "ck-lead-row", role: "listitem", href: routeHref("account", a.account_id), title: a.account_id},
+      h("span", {class: "ck-lead-nm"}, fmt.acctName(a)),
+      h("b", {class: "num"}, `${fmt.int(Math.min(n, 999))}/${MIN_TRADES}`),
+      h("span", {class: "ck-lead-bar", "aria-hidden": "true"}, h("i", {style: {"--w": `${Math.round(Math.min(1, n / MIN_TRADES) * 100)}%`}})),
+      h("span", {class: "ck-lead-pace"}, n >= MIN_TRADES ? "30건 넘음 · 판정 받을 수 있음" : a.bust ? "파산 · 거래가 더 늘지 않음"
+        : at ? `지금 속도면 ${fmt.mmdd(at)}쯤 30건` : "속도 계산 전", small ? " · 표본 적음" : ""))));
+  };
+  return box;
+}
+
 export function seatsCard() {
   const head = h("p", {class: "ck-seat-head"});
   const blocks = h("div", {class: "ck-seat-blocks"});
@@ -38,7 +79,8 @@ export function seatsCard() {
     h("span", null, h("i", {class: "ck-seat proj", style: {"--f": "45%", "--p": "100%"}}), "점선 = 지금 속도면 30건"),
     h("span", null, h("i", {class: "ck-seat full", style: {"--f": "100%", "--p": "100%"}}), "꽉 참 = 30건 넘음"),
     h("span", null, "파산한 계좌는 거래가 더 늘지 않아 미리 그리지 않음"));
-  const card = ui.card({plate: "판정 무대", sub: "좌석표 · 진행 상황, 판정 아님"}, head, blocks, legend,
+  const lead = leaderBox();
+  const card = ui.card({plate: "판정 무대", sub: "좌석표 · 진행 상황, 판정 아님"}, head, h("div", {class: "ck-stage-row"}, blocks, lead), legend,
     h("p", {class: "muted home-small"}, `한 칸 = 판정받는 계좌 하나. 거래 ${MIN_TRADES}건을 채워야 판정을 받고, 못 채우면 '보류'입니다. 칸 색은 거래 수일 뿐 잘하고 못함이 아닙니다. 지금 속도는 바뀔 수 있어 범위로만 씁니다.`));
   const prevFull = new Set();
   let painted = false;
@@ -77,6 +119,7 @@ export function seatsCard() {
         h("div", {class: "ck-seats", role: "img", "aria-label": `${g.ko} ${mine.length}개 중 거래 30건 넘은 계좌 ${full}개`}, seats)));
     }
     blocks.replaceChildren(...kids);
+    lead.update(board, summary);
     if (!reach.n) head.replaceChildren(ui.empty("판정받을 계좌가 아직 없습니다"));
     else if (p && p.show) {
       head.replaceChildren(h("span", null, "지금 속도라면 판정 날 거래 30건을 넘을 계좌 "),

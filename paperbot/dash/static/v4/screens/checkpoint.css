@@ -88,3 +88,18 @@
 .ck-luck { display: flex; flex-wrap: wrap; gap: 5px; margin: 6px 0 2px; }
 .ck-luck i { width: 12px; height: 12px; box-sizing: border-box; border-radius: 50%; background: var(--ink-2); }
 .ck-luck i.lucky { background: transparent; border: 1px dashed var(--ink-2); }
+
+/* fill-people: the judged accounts with the most closed trades next to the seats (checkpoint-stage.js leaders) */
+.ck-stage-row { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+@media (min-width: 1100px) { .ck-stage-row { grid-template-columns: minmax(0, 1fr) minmax(320px, 400px); } }
+.ck-lead { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--line-2); border-radius: var(--r-md); background: var(--surface-2); min-width: 0; }
+.ck-lead-h { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.ck-lead-h .muted { flex-basis: 100%; font-size: var(--t-xs); }
+.ck-lead-list { display: grid; gap: 6px; }
+.ck-lead-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 3px 10px; padding: 7px 8px; border-radius: var(--r-sm); border: 1px solid var(--line);
+  color: var(--ink); text-decoration: none; min-width: 0; }
+.ck-lead-row:hover { border-color: var(--accent-line); }
+.ck-lead-nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.ck-lead-bar { grid-column: 1 / -1; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.ck-lead-bar i { display: block; width: var(--w, 0%); height: 100%; background: var(--accent); }
+.ck-lead-pace { grid-column: 1 / -1; color: var(--ink-2); font-size: var(--t-xs); }
