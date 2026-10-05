@@ -15,7 +15,8 @@ many to test).
 
 Special windows, flagged per trade (entry within the window):
     funding    +-10 min around 00:00/08:00/16:00 UTC settlements
-    us_open    +-60 min around 09:30 New York (weekdays, DST aware)
+    us_open    +-60 min around 09:30 New York (weekdays, DST aware; not on the
+               NYSE holidays of NYSE_HOLIDAYS, 2026-2027)
     macro      +-30 min around 08:30 New York (weekdays; the usual US
                data release time; not a calendar of actual releases)
 """
@@ -44,9 +45,29 @@ def session_of(hour_kst: int) -> str:
     return "us"
 
 
-def _near_ny(dt_utc: datetime, hh: int, mm: int, minutes: int) -> bool:
+# NYSE full-day closures 2026-2027 (NYSE's published holiday calendar; the dashboard's v4/core/bars.js keeps the same
+# list for the US market chip). Add the next year's dates here and there each December. 2027-12-31 is a normal day
+# (New Year's Day 2028 is a Saturday and NYSE does not move it). The us_open window is not flagged on these days (no
+# opening bell); the macro window is (US data can still come out, e.g. a jobs report on Good Friday).
+NYSE_HOLIDAYS = frozenset((
+    "2026-01-01", "2026-01-19", "2026-02-16", "2026-04-03", "2026-05-25", "2026-06-19", "2026-07-03", "2026-09-07",
+    "2026-11-26", "2026-12-25",
+    "2027-01-01", "2027-01-18", "2027-02-15", "2027-03-26", "2027-05-31", "2027-06-18", "2027-07-05", "2027-09-06",
+    "2027-11-25", "2027-12-24"))
+# 13:00 New York early closes (the open is as usual, so us_open is still flagged)
+NYSE_EARLY_CLOSE = frozenset(("2026-11-27", "2026-12-24", "2027-11-26"))
+
+
+def nyse_holiday(dt_utc: datetime) -> bool:
+    """Is the New York date of ``dt_utc`` a NYSE full-day holiday (2026-2027 list)?"""
+    return dt_utc.astimezone(NY).strftime("%Y-%m-%d") in NYSE_HOLIDAYS
+
+
+def _near_ny(dt_utc: datetime, hh: int, mm: int, minutes: int, skip_holidays: bool = False) -> bool:
     local = dt_utc.astimezone(NY)
     if local.weekday() >= 5:
+        return False
+    if skip_holidays and local.strftime("%Y-%m-%d") in NYSE_HOLIDAYS:
         return False
     anchor = local.replace(hour=hh, minute=mm, second=0, microsecond=0)
     return abs((local - anchor).total_seconds()) <= minutes * 60
@@ -61,7 +82,7 @@ def time_features(ts_ms: int) -> dict:
     off = sec % (8 * 3600)
     if min(off, 8 * 3600 - off) <= 600:
         windows.append("funding")
-    if _near_ny(dt, 9, 30, 60):
+    if _near_ny(dt, 9, 30, 60, skip_holidays=True):
         windows.append("us_open")
     if _near_ny(dt, 8, 30, 30):
         windows.append("macro")

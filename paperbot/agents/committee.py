@@ -17,6 +17,12 @@ grades it 24 hours later on the same public data:
 상승" on the same days; the debate's packet shows it to the staff, and the Saturday learning meeting, the Sunday
 weekly report and the staff board read it too.
 
+#88 (owners' list, 2026-10-05): the record is also compared with "always 중립" and "always 하락" (a call type that is
+right most days by itself is no skill: the best of the three simple answers is the bar, ``best_simple``), the chair
+writes what would change its mind (``change_mind``) and a short look back at the last graded call (``retro``), the bull
+and the bear do not see our positions or past calls (rooms._team_packet), and a liquidation feed that stopped is said
+plainly ("수집 안 됨") instead of reading as zero liquidations.
+
 The table lives in agents3.db (``committee_calls``, CREATE TABLE IF NOT EXISTS: an existing agents3.db keeps working;
 no trial kind and no CHECK constraint of rooms_db changes). Its only writer is the agents tick.
 """
@@ -38,6 +44,9 @@ HORIZON_MS = DAY_MS            # a call is about the next 24 hours
 THRESHOLD = 0.005              # a move smaller than 0.5% either way is 'neutral'
 EXPIRE_MS = 3 * DAY_MS         # no end price this long after the due time: expired, not graded
 DIRECTIONS = {"상승": 1, "하락": -1, "중립": 0}
+SMALL_CALLS = 30               # fewer graded calls than this: a small sample, no conclusion either way
+LIQ_STALE_MS = 3 * HOUR_MS     # liq.db with no row (any coin) this long before the window's end: the feed stopped
+SIMPLE_KO = {"상승": "늘 상승", "중립": "늘 중립", "하락": "늘 하락"}
 FAPI = "https://fapi.binance.com"
 
 SCHEMA = """
@@ -146,7 +155,11 @@ def parse_call(raw: Any) -> tuple[Optional[dict], str]:
         c = int(c.strip())
     if isinstance(c, bool) or not isinstance(c, int) or not 1 <= c <= 3:
         return None, f"confidence는 1·2·3 중 하나 (받은 값: {str(raw.get('confidence'))[:20]!r})"
-    return {"direction": d, "confidence": c}, ""
+    out = {"direction": d, "confidence": c}
+    cm = raw.get("change_mind")
+    if isinstance(cm, str) and cm.strip():
+        out["change_mind"] = " ".join(cm.split())[:300]       # optional: what would change the chair's mind
+    return out, ""
 
 
 def judge(direction: str, move: float, threshold: float = THRESHOLD) -> bool:
@@ -174,9 +187,19 @@ def record(conn: sqlite3.Connection, *, day: str, symbol: str, round_id: Optiona
         "ref_price, due_ts, data) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
         (int(now_ms), day, round_id, symbol, status, (call or {}).get("direction"), (call or {}).get("confidence"),
          ref_ts, ref_px, None if ref_ts is None else ref_ts + HORIZON_MS,
-         json.dumps({**(data or {}), **({"why": why} if why else {})}, ensure_ascii=False)))
+         json.dumps({**(data or {}), **({"why": why} if why else {}),
+                     **({"change_mind": call["change_mind"]} if (call or {}).get("change_mind") else {})},
+                    ensure_ascii=False)))
     conn.commit()
     return int(cur.lastrowid) if cur.rowcount else None
+
+
+def _data(row: dict) -> dict:
+    try:
+        d = json.loads(row.get("data") or "{}")
+    except (TypeError, ValueError):
+        return {}
+    return d if isinstance(d, dict) else {}
 
 
 def _rows(conn: Optional[sqlite3.Connection], sql: str, args: tuple = ()) -> list[dict]:
@@ -225,10 +248,21 @@ def p_at_least(k: int, n: int, p: float = 0.5) -> Optional[float]:
 def _score(rows: list[dict]) -> dict:
     n = len(rows)
     k = sum(1 for r in rows if r.get("correct"))
-    up = sum(1 for r in rows if judge("상승", float(r.get("move") or 0.0)))
-    return {"graded": n, "correct": k, "hit_rate": round(k / n, 3) if n else None,
-            "coin_flip_rate": 0.5, "p_vs_coin_flip": None if not n else round(p_at_least(k, n), 4),
-            "always_up_correct": up, "always_up_rate": round(up / n, 3) if n else None}
+    simple = {d: sum(1 for r in rows if judge(d, float(r.get("move") or 0.0))) for d in ("상승", "중립", "하락")}
+    up = simple["상승"]
+    out = {"graded": n, "correct": k, "hit_rate": round(k / n, 3) if n else None,
+           "coin_flip_rate": 0.5, "p_vs_coin_flip": None if not n else round(p_at_least(k, n), 4),
+           "always_up_correct": up, "always_up_rate": round(up / n, 3) if n else None,
+           "always_neutral_correct": simple["중립"], "always_neutral_rate": round(simple["중립"] / n, 3) if n else None,
+           "always_down_correct": simple["하락"], "always_down_rate": round(simple["하락"] / n, 3) if n else None,
+           "small_sample": n < SMALL_CALLS}
+    if n:
+        # the bar a call has to clear: the best of the three answers that need no thinking on the same days (a call
+        # type that is right most days by itself, e.g. 중립 in a quiet week, earns nothing over it)
+        best = max(("상승", "중립", "하락"), key=lambda d: simple[d])
+        out["best_simple"] = {"answer": SIMPLE_KO[best], "correct": simple[best], "rate": round(simple[best] / n, 3)}
+        out["vs_best_simple"] = k - simple[best]
+    return out
 
 
 def track_record(conn: Optional[sqlite3.Connection], symbol: Optional[str] = None, recent: int = 10) -> dict:
@@ -248,13 +282,26 @@ def track_record(conn: Optional[sqlite3.Connection], symbol: Optional[str] = Non
            "recent": [{"day": r["day"], "coin": r["symbol"].replace("USDT", ""), "direction": r["direction"],
                        "confidence": r["confidence"], "status": r["status"],
                        "move": None if r["move"] is None else round(float(r["move"]), 4),
-                       "correct": None if r["correct"] is None else bool(r["correct"])} for r in rows[-recent:][::-1]]}
+                       "correct": None if r["correct"] is None else bool(r["correct"]),
+                       **({"change_mind": _data(r).get("change_mind")} if _data(r).get("change_mind") else {})}
+                      for r in rows[-recent:][::-1]]}
+    last = [r for r in graded if r.get("graded_ts")]
+    if last:
+        r = max(last, key=lambda x: (int(x["graded_ts"]), int(x["id"])))
+        out["last_graded"] = {"day": r["day"], "coin": r["symbol"].replace("USDT", ""), "direction": r["direction"],
+                              "confidence": r["confidence"], "move": round(float(r["move"] or 0.0), 4),
+                              "correct": bool(r["correct"]), "change_mind": _data(r).get("change_mind")}
+    n = out["graded"]
+    out["period_note"] = (f"채점된 판정 {n}건: 표본 작음({SMALL_CALLS}건 미만). 맞고 틀린 것은 운이 크고, 이 숫자로 "
+                          "실력 여부를 말하지 않음" if n < SMALL_CALLS else
+                          f"채점된 판정 {n}건. 동전 던지기·단순 기준보다 나은지는 p값과 함께 봄(아직 결론 아님)")
     if not symbol:
         out["by_coin"] = {s.replace("USDT", ""): _score([r for r in graded if r["symbol"] == s])
                           for s in sorted({r["symbol"] for r in graded})}
     out["rule"] = (f"24시간 뒤 종가(바이낸스 공개 5분봉)로 코드가 채점: 상승은 +{THRESHOLD * 100:.1f}% 이상, 하락은 "
-                   f"-{THRESHOLD * 100:.1f}% 이하, 중립은 그 사이일 때 맞음. 동전 던지기는 50%, '늘 상승'은 같은 날들에 "
-                   "늘 상승이라고 했을 때의 적중률. 판정은 기록·채점만 하고 어떤 거래로도 이어지지 않음")
+                   f"-{THRESHOLD * 100:.1f}% 이하, 중립은 그 사이일 때 맞음. 동전 던지기는 50%, '늘 상승·늘 중립·늘 하락'은 "
+                   "같은 날들에 늘 그렇게 답했을 때의 적중률이고, 그중 가장 높은 것(best_simple)이 넘어야 할 기준. "
+                   "판정은 기록·채점만 하고 어떤 거래로도 이어지지 않음")
     return out
 
 
@@ -327,16 +374,30 @@ def liq_view(liq_path: Optional[str], symbol: str, since_ms: int, until_ms: int)
     stream sends at most one per symbol per second, so this undercounts bursts. SELL = longs liquidated."""
     c = _ro(liq_path)
     if c is None:
-        return None
+        return {"collected": False, "status_ko": "수집 안 됨",
+                "why": "강제청산 기록 파일(liq.db)이 없음: 0건이 아니라 모르는 것"}
     try:
+        newest = c.execute("SELECT MAX(trade_ts) FROM liq WHERE trade_ts < ?", (until_ms,)).fetchone()
+        newest = int(newest[0]) if newest and newest[0] is not None else None
+        if newest is None or until_ms - newest > LIQ_STALE_MS:
+            # the recorder takes every coin's liquidations: none at all for hours means the feed stopped, not a calm
+            # market. Say so instead of reporting zero.
+            return {"collected": False, "status_ko": "수집 안 됨",
+                    "why": ("강제청산 기록이 하나도 없음" if newest is None else
+                            f"마지막 기록이 {(until_ms - newest) / HOUR_MS:.1f}시간 전(기록기가 멈췄을 수 있음)")
+                    + ": 0건이 아니라 모르는 것", "last_record_ts": newest}
+        first = c.execute("SELECT MIN(trade_ts) FROM liq").fetchone()
+        partial = bool(first and first[0] is not None and int(first[0]) > since_ms)
         rows = c.execute("SELECT side, COUNT(*), SUM(COALESCE(filled_qty, qty) * COALESCE(avg_price, price)) FROM liq "
                          "WHERE symbol = ? AND trade_ts >= ? AND trade_ts < ? GROUP BY side",
                          (symbol, since_ms, until_ms)).fetchall()
     except sqlite3.Error:
-        return None
+        return {"collected": False, "status_ko": "수집 안 됨", "why": "강제청산 기록을 읽지 못함"}
     finally:
         c.close()
-    out = {"longs_liquidated": 0, "longs_usd": 0.0, "shorts_liquidated": 0, "shorts_usd": 0.0}
+    out = {"collected": True, "longs_liquidated": 0, "longs_usd": 0.0, "shorts_liquidated": 0, "shorts_usd": 0.0}
+    if partial:
+        out["partial"] = "기록기가 이 구간 중간에 시작됨: 앞부분은 수집 안 됨"
     for side, n, usd in rows:
         k = "longs" if side == "SELL" else "shorts"
         out[f"{k}_liquidated"] += int(n)
@@ -423,7 +484,8 @@ def coin_packet(paper_ro: Optional[sqlite3.Connection], agents_conn: Optional[sq
             "track_record": track_record(agents_conn),
             "track_record_coin": track_record(agents_conn, symbol, recent=5),
             "rules": {"horizon_hours": HORIZON_MS // HOUR_MS, "threshold": THRESHOLD,
-                      "call_format": {"direction": "상승 | 하락 | 중립", "confidence": "1 | 2 | 3"}},
+                      "call_format": {"direction": "상승 | 하락 | 중립", "confidence": "1 | 2 | 3",
+                                      "change_mind": "판단이 바뀌는 조건 한 문장"}},
             "note": ("코드 계산: 기준 가격은 바이낸스 공개 5분봉 종가, 수익률은 1시간봉 종가 기준(0.01 = 1%), regime은 신호 기록의 "
-                     "장세 판정, flow는 미결제약정·롱숏 비율(없으면 null = 모름). 이 토론의 판정은 기록·채점만 하고 어떤 주문·"
-                     "계좌 변경으로도 이어지지 않음")}
+                     "장세 판정, flow는 미결제약정·롱숏 비율(없으면 null = 모름). liquidations_24h.collected가 false면 '수집 안 됨'"
+                     "(0건이 아니라 모르는 것). 이 토론의 판정은 기록·채점만 하고 어떤 주문·계좌 변경으로도 이어지지 않음")}

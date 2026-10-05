@@ -225,10 +225,10 @@ def test_bot_chart_takes_every_binance_interval(env):
 
 def test_tradingview_and_coinglass_load_in_the_browser_only(env):
     c = env["client"]
-    # the CSP stays as it was: frames of this site refused; it has no script/frame source list that would have to
-    # name TradingView (adding one would also have to list Binance's streams)
+    # frames of this site refused; the CSP (#88) names no TradingView / Coinglass host: they open as links only
     for r in (c.get("/login"), c.get("/static/manifest.json")):
-        assert r.headers["Content-Security-Policy"] == "frame-ancestors 'none'"
+        csp = r.headers["Content-Security-Policy"]
+        assert "frame-ancestors 'none'" in csp and "tradingview" not in csp and "coinglass" not in csp
     here = os.path.dirname(STATIC)
     for f in ("app.py", "analysis.py"):
         src = open(os.path.join(here, f), encoding="utf-8").read()

@@ -17,6 +17,13 @@ Kinds (parameters, what is graded)
 
 A hit or a miss is a number about ONE claim; a speaker's hit rate (``scoreboard``) is a small-sample number until
 ``SMALL_GRADED`` graded claims, and never a verdict on a person or on a strategy.
+
+#88 (owners' list, 2026-10-05): an easy claim earns nothing. Code reads, when it can, the chance a claim comes true by
+itself (``base_rate``: for parity_streak the past nights' clean share to the power of the nights; a busts_by_day
+claim that is already settled is dropped). Claims with a base rate of ``EASY_RATE`` or more are graded but kept out of
+the room's hit rate; the room's record is shown against a coin flip and against the hits expected by chance (the base
+rates, 0.5 where unknown), as one number for the whole room: one model speaks every role, so per-speaker rates are
+not independent opinions and the dashboard does not list them.
 """
 
 from __future__ import annotations
@@ -36,6 +43,8 @@ MAX_OPEN = 30                  # open claims at once (bounded table, bounded gra
 MIN_TIER_TRADES = 5            # best_vs_normal: trades each tier needs in the window
 SMALL_GRADED = 10              # fewer graded claims than this: a speaker's hit rate is a small sample
 NAME_RE = re.compile(r"^[A-Za-z0-9_]{2,40}$")
+EASY_RATE = 0.8                # a claim this likely by itself is 'easy': graded, but not in the room's hit rate
+MIN_BASE_NIGHTS = 5            # parity_streak: past nightly checks needed to estimate its base rate
 
 MENU_KO = (
     "고를 수 있는 가설 종류는 아래 4가지뿐입니다. 이 밖의 것, 숫자가 범위를 벗어난 것은 코드가 버립니다.\n"
@@ -138,6 +147,9 @@ def _validate(item: Any, paper, daily, now_ms: int) -> tuple[Optional[dict], str
         clean = {"days": days, "base_day": base}
         if acc is not None:
             clean["accounts"] = int(acc)
+        br = _parity_base_rate(daily, days)
+        if br is not None:
+            clean["base_rate"] = br
         return {"kind": kind, "params": clean}, "", f"앞으로 밤 점검 {days}번"
     day, k = _int(p.get("day"), 1, 60), _int(p.get("max_busts"), 0, 50)       # busts_by_day
     if day is None or k is None:
@@ -147,7 +159,41 @@ def _validate(item: Any, paper, daily, now_ms: int) -> tuple[Optional[dict], str
         return None, "실험 시작 시각을 알 수 없음", ""
     if (now_ms - start) / DAY_MS >= day:
         return None, "그 날짜는 이미 지났음", ""
+    if paper is not None:
+        # a claim already settled now is no prediction: busts never come back, and no more accounts can bust than exist
+        n_acc = paper.execute("SELECT COUNT(*) FROM accounts WHERE kind = 'strategy'").fetchone()[0]
+        if n_acc and k >= int(n_acc):
+            return None, f"쉬운 예측: 전략 계좌가 {n_acc}개뿐이라 늘 맞음", ""
+        busts_now = _busts(paper)
+        if busts_now > k:
+            return None, f"이미 정해진 예측: 지금 파산 {busts_now}개로 이미 {k}개를 넘음", ""
     return {"kind": kind, "params": {"day": day, "max_busts": k, "start_ts": start}}, "", f"D+{day}"
+
+
+def _busts(paper: sqlite3.Connection) -> int:
+    st = paper.execute("SELECT data FROM state WHERE k = 'accounts'").fetchone()
+    eng = (json.loads(st[0]) or {}).get("engines", {}) if st else {}
+    ids = {r[0] for r in paper.execute("SELECT account_id FROM accounts WHERE kind = 'strategy'")}
+    return sum(1 for a, e in eng.items() if a in ids and (e or {}).get("bust"))
+
+
+def _parity_base_rate(daily: Optional[sqlite3.Connection], days: int) -> Optional[float]:
+    """The chance of ``days`` clean nights in a row by itself: the share of past nightly checks with 0 mismatches,
+    to the power of ``days``. None with fewer than MIN_BASE_NIGHTS past checks (unknown)."""
+    if daily is None:
+        return None
+    clean = seen = 0
+    for (data,) in daily.execute("SELECT data FROM reports ORDER BY day DESC LIMIT 60").fetchall():
+        try:
+            par = json.loads(data).get("parity")
+        except (TypeError, ValueError, AttributeError):
+            continue
+        if isinstance(par, dict) and "mismatched_accounts" in par:
+            seen += 1
+            clean += int(par["mismatched_accounts"]) == 0
+    if seen < MIN_BASE_NIGHTS:
+        return None
+    return round((clean / seen) ** days, 3)
 
 
 # ---------------------------------------------------------------- grading (when the horizon is reached)
@@ -275,21 +321,55 @@ def grade_open(db: sqlite3.Connection, paper: Optional[sqlite3.Connection], dail
     return changed
 
 
+def base_rate_of(params_json: Any) -> Optional[float]:
+    """The stored base rate of a claim (None when code could not read one)."""
+    try:
+        v = ((json.loads(params_json) or {}).get("params") or {}).get("base_rate")
+    except (TypeError, ValueError, AttributeError):
+        return None
+    return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) and 0 <= v <= 1 else None
+
+
+def _p_at_least(k: int, n: int, p: float = 0.5) -> Optional[float]:
+    import math
+    if n <= 0:
+        return None
+    return float(sum(math.comb(n, i) * p ** i * (1 - p) ** (n - i) for i in range(k, n + 1)))
+
+
 def scoreboard(db: sqlite3.Connection) -> dict:
-    """Per speaker: graded claims, hits and the hit rate, plus the totals; ``small`` = fewer than SMALL_GRADED graded
-    (a small sample: no conclusion about anyone)."""
+    """The room's record of graded claims, as one number for the whole room (#88): hits against a coin flip (50%, the
+    one-sided binomial p) and against the hits expected by chance (each claim's base rate, 0.5 where unknown). Easy
+    claims (base rate EASY_RATE or more) are counted apart and left out of the rate. ``small`` = fewer than
+    SMALL_GRADED graded (a small sample: no conclusion). ``speakers`` is kept for the status command's old readers;
+    the dashboard does not show it (one model speaks every role)."""
     out: dict[str, dict] = {}
-    for sp, outcome in db.execute("SELECT speaker, outcome FROM debate_hypotheses WHERE status = 'graded'"):
+    g = h = easy = easy_hit = 0
+    expected = 0.0
+    for sp, outcome, pj in db.execute("SELECT speaker, outcome, params_json FROM debate_hypotheses "
+                                      "WHERE status = 'graded'"):
+        hit = str(outcome).startswith("hit")
+        br = base_rate_of(pj)
+        if br is not None and br >= EASY_RATE:
+            easy += 1
+            easy_hit += hit
+            continue
         b = out.setdefault(sp or "?", {"graded": 0, "hit": 0})
         b["graded"] += 1
-        b["hit"] += str(outcome).startswith("hit")
+        b["hit"] += hit
+        g += 1
+        h += hit
+        expected += 0.5 if br is None else br
     for b in out.values():
         b["rate"] = round(b["hit"] / b["graded"], 3) if b["graded"] else None
         b["small"] = b["graded"] < SMALL_GRADED
-    tot_g, tot_h = sum(b["graded"] for b in out.values()), sum(b["hit"] for b in out.values())
     counts = {s: n for s, n in db.execute("SELECT status, COUNT(*) FROM debate_hypotheses GROUP BY status")}
-    return {"speakers": out, "graded": tot_g, "hit": tot_h, "rate": round(tot_h / tot_g, 3) if tot_g else None,
-            "small": tot_g < SMALL_GRADED, "by_status": counts, "small_below": SMALL_GRADED}
+    return {"speakers": out, "graded": g, "hit": h, "rate": round(h / g, 3) if g else None,
+            "small": g < SMALL_GRADED, "by_status": counts, "small_below": SMALL_GRADED,
+            "coin_flip_rate": 0.5, "p_vs_coin_flip": None if not g else round(_p_at_least(h, g), 4),
+            "expected_hits": round(expected, 2) if g else None,
+            "expected_rate": round(expected / g, 3) if g else None,
+            "easy": {"graded": easy, "hit": easy_hit, "rate_from": EASY_RATE}}
 
 
 # ---------------------------------------------------------------- Korean wording for the dashboard

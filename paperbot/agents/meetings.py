@@ -613,7 +613,10 @@ def event_packet(paper_ro: Optional[sqlite3.Connection], now_ms: int, event: dic
         e = CM.liq_view(liq_path, sym, lo, hi)
         if e is None:
             continue
-        bl = [CM.liq_view(liq_path, sym, a, b) or {} for a, b in base]
+        if not e.get("collected", True):              # #88: the feed stopped: say 수집 안 됨, never a zero
+            liq[sym.replace("USDT", "")] = {"event_window": e, "baseline_mean_usd": None}
+            continue
+        bl = [x for x in (CM.liq_view(liq_path, sym, a, b) or {} for a, b in base) if x.get("collected", True)]
         liq[sym.replace("USDT", "")] = {"event_window": e, "baseline_mean_usd": round(sum(
             x.get("longs_usd", 0) + x.get("shorts_usd", 0) for x in bl) / len(bl), 0) if bl else None}
     out["liquidations"] = liq or None

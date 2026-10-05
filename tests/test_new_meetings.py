@@ -314,7 +314,10 @@ def test_event_packet_compares_the_window_with_earlier_weekdays(world, calendar)
     assert o["event_window"]["entered"] == 2 and o["event_window"]["entered_pnl"] == -40.0
     assert o["baseline_days"] == 5 and o["baseline_mean"]["entered"] == 1 and o["baseline_mean"]["entered_pnl"] == 5.0
     assert pk["market"]["BTC"]["event_window"]["move"] == pytest.approx(0.01, abs=1e-3)
-    assert pk["coin_flips"]["event_window"]["entered"] == 0 and pk["liquidations"] is None
+    # #88: no liq.db is "수집 안 됨" (not collected), never a silent gap or a zero
+    assert pk["coin_flips"]["event_window"]["entered"] == 0
+    assert pk["liquidations"]["BTC"]["event_window"]["collected"] is False
+    assert pk["liquidations"]["BTC"]["event_window"]["status_ko"] == "수집 안 됨"
     assert M.event_packet(world.paper(), WED, {"kind": "CPI", "ts_ms": ev})["market"] == {"BTC": None, "ETH": None}
 
 
@@ -353,7 +356,10 @@ def test_bull_bear_meeting_records_the_call_and_grades_it_after_24_hours(world):
     assert [(r["trigger"], r["status"], r["class"]) for r in out["rounds"]] == [("bull_bear", "done", "scheduled")]
     assert runner.roles() == ["bull", "bear", "risk_officer", "team_lead"]
     pk = runner.calls[0]["packet"]["committee"]
-    assert pk["symbol"] == sym and pk["reference"]["price"] == 100.0 and pk["track_record"]["calls"] == 0
+    assert pk["symbol"] == sym and pk["reference"]["price"] == 100.0
+    # #88: the bull and the bear argue without our positions and past calls; the chair sees them
+    assert "track_record" not in pk and "ours" not in pk and pk["hidden"]
+    assert runner.calls[3]["packet"]["committee"]["track_record"]["calls"] == 0
     assert "어떤 주문" in pk["note"] and "주문·계좌 변경으로도 이어지지 않" in runner.calls[3]["system"]
     assert '"call"' in runner.calls[3]["system"] and '"call"' not in runner.calls[0]["system"]
     [row] = world.q("SELECT status, direction, confidence, ref_price, due_ts FROM committee_calls")
