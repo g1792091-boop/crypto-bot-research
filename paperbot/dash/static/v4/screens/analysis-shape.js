@@ -33,6 +33,9 @@ function lazyCard(env, opts, fill) {
   load(env).then((d) => {
     if (!env.ctx.alive()) return;
     if (!d || !d.ready) { put(body, ui.empty((d && d.why) || "아직 끝난 거래가 없습니다.")); return; }
+    // day 0: the run has started but no trade has closed yet (an empty grid and flat bars would read like data)
+    const t = d.trades || {};
+    if (!t.core && !t.flip) { put(body, ui.empty("아직 끝난 거래가 없습니다. 첫 거래가 끝나면 그려집니다.")); return; }
     put(body, ...fill(d));
   }).catch((e) => {
     put(body, h("p", {class: "muted"}, e && e.status === 404 ? "준비 중입니다 (서버 업데이트 뒤에 보입니다)." : "불러오지 못했습니다. 잠시 뒤 다시 봅니다."));
