@@ -102,6 +102,7 @@ export function bigFeed(ctx) {
     const m = st.min || {};
     const f = (s) => (m[s] ? usdK(m[s]) : "—");
     minNote.textContent = `· 주문 한 번에 BTC ${f("BTCUSDT")} · ETH ${f("ETHUSDT")} · 나머지 ${f("SOLUSDT")} 이상 · 고래 = ${fmt.int(st.wx)}배 이상`;
+    label.title = BIG_LABEL + " " + minNote.textContent;      // (a short footer hides the thresholds: the tooltip keeps them)
   }
   paintMin();
   function rowOf(r) {
@@ -136,6 +137,7 @@ export function bigFeed(ctx) {
     st.state = s;
     stateEl.dataset.s = s;
     stateEl.lastChild.textContent = s === "live" ? "실시간" : s === "connecting" ? "연결 중" : s === "down" ? "끊김" : "연결 전";
+    stateEl.title = `시장 체결 연결: ${stateEl.lastChild.textContent}`;
   }
   return {
     el,

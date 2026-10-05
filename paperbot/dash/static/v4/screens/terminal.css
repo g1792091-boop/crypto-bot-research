@@ -371,7 +371,19 @@ a.term-cr:hover { background: var(--surface-2); }
 /* 실시간 큰 체결: the whole market's large orders (NOT our bots) */
 .term-fills.few { flex: 0 0 auto; min-height: 0; }
 .term-bigp { flex: 1 1 0; min-height: 150px; }
-@media (min-width: 1200px) and (min-height: 940px) { .term-left.has-liq .term-liqp { flex-basis: 26%; } }
+/* the liquidation recorder runs: 실시간 큰 체결 and 시장 강제청산 share ONE place under our fills on every PC window (the
+   큰 체결 · 청산 switch in their heads). Four panels stacked left our own fills ~1.5 rows and the big-order feed 1-2 rows
+   at 1920x1080 (review 10/06, recorder on); this keeps our fills' room as before the feed came */
+@media (min-width: 1200px) {
+  .term-left.has-liq .term-duoseg { display: inline-flex; }
+  .term-left.has-liq[data-duo="big"] .term-liqp, .term-left.has-liq[data-duo="liq"] .term-bigp { display: none; }
+  .term-left.has-liq .term-liqp { flex: 1 1 0; }
+  /* the head then holds the switch: its sub line (cut to one letter) goes, the footer keeps the full label */
+  .term-left.has-liq .term-bigp .term-phs { display: none; }
+}
+@media (min-width: 1200px) and (max-width: 1599px) {
+  .term-left.has-liq .term-bst > span { display: none; }      /* the state dot alone (its title says the state) */
+}
 .term-bigp .term-pb { padding: 2px 6px; }
 .term-bigp .term-pf .note { color: var(--muted); }
 .term-bst { display: inline-flex; align-items: center; gap: 5px; flex: none; font-size: 10.5px; font-weight: 700; color: var(--muted); white-space: nowrap; }

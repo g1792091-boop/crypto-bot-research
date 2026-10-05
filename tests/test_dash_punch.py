@@ -257,3 +257,13 @@ def test_liq_feed_declares_fresh_once():
     assert len(re.findall(r"\b(?:let|const|var)\b[^;]*\bfresh\s*=", body)) == 1     # the coin-switch flag, nothing else
     assert "isNew = !fresh && !seen.has(k)" in body and "if (isNew) nNew++;" in body
 
+
+def test_big_and_liq_share_one_place_on_every_pc_window_while_the_recorder_runs():
+    """Review 10/06: with the recorder on, four stacked panels left our fills ~1.5 rows and the big-order feed 1-2 rows
+    at 1920x1080; the 큰 체결 · 청산 switch now applies to every PC height (not only windows under 940 px)."""
+    css = _src("screens", "terminal.css")
+    i = css.index("@media (min-width: 1200px) {\n  .term-left.has-liq .term-duoseg { display: inline-flex; }")
+    block = css[i:css.index("\n}\n", i)]
+    assert '.term-left.has-liq[data-duo="big"] .term-liqp, .term-left.has-liq[data-duo="liq"] .term-bigp { display: none; }' in block
+    assert "flex-basis: 26%" not in css
+
