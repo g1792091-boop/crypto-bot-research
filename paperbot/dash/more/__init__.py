@@ -19,6 +19,7 @@ data (dash.app.Data), rooms, db, daily_db, agents_db, checkpoint_db, candles (th
     uptime      가동 기록 (서버·비용: 시간마다 처리한 분, 재시작, 밤 점검)
     tradeshape  요일×시간 열지도 + 거래 결과 분포 (분석)
     drift   진입 가격 차이 (분석 › 그림자 비교: 신호 봉 종가 vs 체결 기준 가격, 묶음·봉·지연별)
+    people  오늘 코드 기록: 묶음별 오늘 거래·손실 카드 수, 매매법 방의 최근 거래·신호 (회의실 상황판, 에이전트 방)
     ticks   실시간 체결 바탕음: 바이낸스 aggTrade 소켓 하나를 모든 화면이 나눠 씀 (/api/v4/ticks, 소리를 켠 화면만)
 """
 from __future__ import annotations
@@ -32,6 +33,7 @@ MODULES += ("brief", "vs5y")                    # wave 2 part C
 MODULES += ("bell", "uptime", "tradeshape")          # wave 3
 MODULES += ("drift",)                          # analysis 8B
 MODULES += ("ticks",)                          # aggTrade sound layer
+MODULES += ("people",)                         # fill-people: 상황판 + strategy room record
 
 
 def register_all(app, **kw) -> dict:
