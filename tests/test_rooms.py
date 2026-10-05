@@ -1490,7 +1490,9 @@ def test_market_move_meeting_with_our_exposure_and_one_silent_telegram(world):
     assert btc["upnl"] == round(0.1 * (57_600 - 60_000) - 0.2 * (57_600 - 60_000), 2)
     assert len(notifier.messages) == 1 and notifier.messages[0][0] == "INFO"
     text = notifier.messages[0][1]
-    assert text.startswith("⚡ 시세 급변 · BTC -4.3% · SOL +6.3% (1시간)\n") and "\nBTC 60,000.0 → 57,600.0 (고 " in text
+    # T6: the head is the hour's widest swing, the coin's line where it is now (-4.0% here, not the -4.3% low)
+    assert text.startswith("⚡ 시세 급변 · 1시간 최대 BTC -4.3% · SOL +6.3%\n")
+    assert "\nBTC 60,000.0 → 57,600.0 (지금 -4.0% · 고 60,200.0 · 저 57,400.0)" in text
     assert "청산가 3% 안 1개" in text and "\n팀장 요약\n" in text and "e+0" not in text
     # the same coins within 3 hours: no new meeting; ETH alone past 5% later: a new one
     assert world.tick(QueueRunner({}), t + HOUR, market_fetch=lambda now: market)["rounds"] == []

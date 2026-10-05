@@ -261,6 +261,10 @@ class TriggerPolicy:
     incident_alerts: tuple = INCIDENT_ALERTS
     incident_min_gap_ms: int = 30 * MIN_MS   # batch a burst of alerts into one round
     incident_lookback_ms: int = 2 * DAY_MS   # first scan (no cursor yet) looks this far back
+    # DeepSeek map timeouts (owners' D10/D11: DeepSeek is counted, not met about): they open an incident only when
+    # this many have come in one KST day (notify.Router.DS_TIMEOUT_LOUD, the day's one loud WARN); fewer are left
+    # to the hourly digest's count line (jobs review 8)
+    ds_timeout_meeting_min: int = 12
     nightly_parity: bool = True
     nightly_no_snapshot: bool = True
     nightly_min_missing_bars: int = 1
@@ -647,6 +651,13 @@ def _incident(paper_ro, daily_ro, st: _Rooms) -> list[Due]:
         if kind:
             items.append({"source": "alert", "rowid": int(rowid), "ts": int(ts), "kind": kind,
                           "level": level, "text": (text or "")[:300]})
+    ds_days: dict = {}
+    for it in items:
+        if it["kind"] == "ds_signal_timeout":
+            ds_days[kst_date(it["ts"])] = ds_days.get(kst_date(it["ts"]), 0) + 1
+    if ds_days:      # a KST day under the threshold: its DeepSeek timeouts are counted (digest), not met about
+        items = [it for it in items if it["kind"] != "ds_signal_timeout"
+                 or ds_days[kst_date(it["ts"])] >= p.ds_timeout_meeting_min]
     cur_d = st.cursor("incident:report_day") or ""
     if not cur_d:
         cur_d = kst_date(st.now - p.incident_lookback_ms - DAY_MS)

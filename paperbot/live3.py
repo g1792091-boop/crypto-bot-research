@@ -196,8 +196,12 @@ def book_prices(rest: BinanceREST, symbols) -> dict:
     return out
 
 
-def fetch_5m(rest: BinanceREST, symbol: str, start: int, end: int, pause: float = 0.2) -> list[tuple]:
-    """Closed 5m bars with open time in [start, end), oldest first."""
+def fetch_5m(rest: BinanceREST, symbol: str, start: int, end: int, pause: float = 0.5) -> list[tuple]:
+    """Closed 5m bars with open time in [start, end), oldest first.
+
+    ``pause`` (0.5 s) after each full page paces the start's bootstrap: v4 keeps ~116,000 bars for 7 symbols, ~550
+    weight-10 calls, so at most 1,200 weight a minute however fast Binance answers. With a running bot's feed
+    (~1,000 a minute, the v3 bot during staging) that stays under the IP's 2,400 a minute (429 / 418 ban)."""
     rows, t = [], start
     while t < end:
         got = rest.klines(symbol, "5m", start_time=t, limit=1500)
@@ -350,7 +354,9 @@ class Runner3:
                 if aid in self.book.engines and (self.skip_before is None or boundary >= self.skip_before):
                     self.book.submit(aid, sig)
                     submitted.append((aid, sig))
-        timed_out = self._deepseek(boundary, submitted) or timed_out   # paper v4: after every core submit
+        # paper v4: after every core submit. A DeepSeek timeout is counted and alerted there but is NOT the extras'
+        # ``timed_out`` (that is the core map's SignalTimeout only): DeepSeek never changes another group's trading (D8)
+        self._deepseek(boundary, submitted)
         if submitted and self.strength is not None:
             try:
                 self.strength.observe(boundary, submitted)

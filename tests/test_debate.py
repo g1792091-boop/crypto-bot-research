@@ -135,7 +135,8 @@ def test_the_packet_is_small_and_has_the_required_sections(tmp_path, world):
     assert b["tokens"] <= P.MAX_PACKET_TOKENS and b["topic"] == "rank"
     for k in ("meta", "league", "totals", "last_24h", "alerts", "nightly", "hypothesis_scoreboard" if False else "meta"):
         assert k in pk, k
-    assert pk["meta"]["run_day"] == "D+10" and pk["meta"]["accounts"] == 156 and "2026-10-26" in pk["meta"]["observation"]
+    assert pk["meta"]["run_day"] == "D+10" and pk["meta"]["accounts_in_tables"] == 156
+    assert "2026-10-26" in pk["meta"]["observation"] and pk["meta"]["groups"] == {"core": 144, "flip": 12}
     assert pk["rank"]["accounts_top"] and all("small_sample" in r for r in pk["rank"]["accounts_top"])
     assert pk["nightly"]["parity"]["accounts"] == 156
     for i in range(len(P.TOPICS)):                                           # every agenda topic builds, within budget
@@ -582,3 +583,131 @@ def test_dashboard_page_and_api_through_the_app(tmp_path, world, monkeypatch):
     from paperbot.dash import app as appmod
     import inspect
     assert '"debate", "debate.db"' in inspect.getsource(appmod.create_app)
+
+
+# ---------------------------------------------------------------- the owners' settings: Sonnet 5.5, 30 min, $30, effort low
+SONNET_ENV = {"ANTHROPIC_API_KEY": KEY, "DEBATE_MODEL": "claude-sonnet-5-5", "DEBATE_EVERY_MIN": "30",
+              "DEBATE_MONTHLY_USD_CAP": "30", "DEBATE_EFFORT": "low"}
+
+
+def thinking_body(ans, usage):
+    """A Sonnet 5.5 answer: an (empty, display omitted) thinking block before the text; output_tokens include it."""
+    return 200, {"request-id": "req_t"}, json.dumps({"content": [
+        {"type": "thinking", "thinking": "", "signature": "sig"},
+        {"type": "text", "text": json.dumps(ans, ensure_ascii=False)}], "usage": usage,
+        "stop_reason": "end_turn"}).encode()
+
+
+def test_sonnet_55_effort_low_is_sent_and_its_thinking_is_in_the_cost_and_the_cap(tmp_path, world):
+    """D1: the owners' settings reach the request as the API wants them for Sonnet 5.5 (effort inside output_config,
+    no 'thinking' field: adaptive by default, never 'disabled', which is a 400 there), the ceiling leaves room for the
+    thinking (max_tokens holds thinking + answer), and the thinking tokens, billed inside usage.output_tokens, are in
+    the round's cost, the month's spend and the cap's worst case."""
+    cfg = D.config_from_env({**SONNET_ENV, "DEBATE_PAPER_DB": world["paper"], "DEBATE_DAILY_DB": world["daily"],
+                             "DEBATE_DIR": str(tmp_path / "d")})
+    assert (cfg.model, cfg.every_min, cfg.monthly_cap, cfg.effort, cfg.thinking) == ("claude-sonnet-5-5", 30, 30.0,
+                                                                                      "low", "")
+    assert cfg.max_tokens == D.THINKING_MAX_TOKENS == 1500 and cfg.prices() == (2.0, 10.0) and cfg.cache_ttl() == "1h"
+    usage = {"input_tokens": 1500, "output_tokens": 1100, "cache_read_input_tokens": 1700,
+             "cache_creation_input_tokens": 0}
+    svc = make(tmp_path, world, thinking_body(answer(4), usage), model=cfg.model, every_min=30, monthly_cap=30.0,
+               effort="low", max_tokens=cfg.max_tokens)
+    assert svc.tick(force=True) == "round"
+    _, _, body, _ = svc.fake.calls[0]
+    assert body["output_config"] == {"effort": "low"} and "thinking" not in body
+    assert body["model"] == "claude-sonnet-5-5" and body["max_tokens"] == 1500
+    assert body["system"][0]["cache_control"] == {"type": "ephemeral", "ttl": "1h"}
+    assert "temperature" not in body and body["messages"][-1]["role"] == "user"           # no sampling, no prefill
+    want = (1500 * 2.0 + 1100 * 10.0 + 1700 * 2.0 * 0.1) / 1e6
+    rd = rows(svc, "SELECT out_tokens, cost_usd, status, turns FROM debate_rounds")[0]
+    assert rd == (1100, pytest.approx(want), "ok", 4)                       # the thinking is in out_tokens and cost
+    assert svc.db.spent(NOW)["month"] == pytest.approx(want)
+    assert svc.db.get("last_usage")["thinking_blocks"] == 1 and "생각 블록 1개" in svc.logs[-1]
+    assert [m[0] for m in rows(svc, "SELECT speaker FROM debate_messages")][:2] == ["낙관론자", "비관론자"]
+    assert svc.worst_case_usd(3300) == pytest.approx((3300 * 2.0 * 2.0 + 1500 * 10.0) / 1e6)   # max_tokens bounds it
+    run = svc.db.get("run")
+    assert run["effort"] == "low" and run["thinking"] == "adaptive(기본)" and run["max_tokens"] == 1500
+    s = D.summary(svc.cfg.debate_db, NOW)
+    out = []
+    D.print_status(s, out.append)
+    assert "모델 claude-sonnet-5-5 (effort low) (생각 adaptive(기본)), 30분 간격" in out[1]
+
+
+def test_settings_a_model_would_refuse_stop_the_service_at_start():
+    """A setting the API answers with a 400 every round is refused at start (exit 2), with the fix in Korean."""
+    def err(**over):
+        with pytest.raises(ValueError) as e:
+            D.config_from_env({**SONNET_ENV, **over})
+        return str(e.value)
+    assert "between_tools" in err(DEBATE_THINKING="disabled")
+    assert "Sonnet 5.5 전용" in err(DEBATE_MODEL="claude-sonnet-5", DEBATE_THINKING="between_tools")
+    assert "받지 않습니다" in err(DEBATE_MODEL="claude-haiku-4-5-20251001")                    # effort on Haiku
+    assert D.main(["status"], environ={**SONNET_ENV, "DEBATE_THINKING": "disabled"}) == 2
+    off = D.config_from_env({**SONNET_ENV, "DEBATE_THINKING": "between_tools"})
+    assert off.max_tokens == 900 and D.request_body(off, "s", "u")["thinking"] == {"type": "between_tools"}
+    assert D.config_from_env({**SONNET_ENV, "DEBATE_MAX_TOKENS": "1200"}).max_tokens == 1200      # the env wins
+    haiku = D.config_from_env({"DEBATE_MODEL": "claude-haiku-4-5-20251001"})
+    assert haiku.max_tokens == 900 and "output_config" not in D.request_body(haiku, "s", "u")
+    assert not D.model_thinks("claude-haiku-4-5-20251001") and D.model_thinks("claude-sonnet-5-5")
+    assert not D.model_thinks("claude-sonnet-5-5", "between_tools") and D.model_thinks("claude-opus-5-5")
+
+
+def test_the_debate_room_runs_on_the_v4_shape(tmp_path, monkeypatch):
+    """D1: on the 331-account run every topic builds within the data cap; the packet says which accounts its tables
+    count (the 36 and their coin flips) and gives the real group counts; DeepSeek, reel and 5m accounts never enter the
+    rank lists; a group's frozen line ('[ds200] signal code refused', CRITICAL) is shown but is no account emergency
+    (the agenda does not jump for it); the hypothesis menu keeps to the 36; the dry run works without a key."""
+    import urllib.request
+    from paperbot.config import DS200_IDS, REEL_NAME, V4_GROUP_ACCOUNTS
+    w = make_world(tmp_path, NOW, days=10, per_day=200, v4=True)
+    for i in range(len(P.TOPICS)):
+        b = P.build(w["paper"], w["daily"], None, None, NOW, round_no=i)
+        pk = b["packet"]
+        assert b["tokens"] <= P.MAX_PACKET_TOKENS, b["topic"]
+        assert pk["meta"]["groups"] == V4_GROUP_ACCOUNTS and pk["meta"]["accounts_in_tables"] == 156
+        assert "딥시크" in pk["meta"]["tables_scope"] and "331" in pk["meta"]["observation"]
+        assert b["topic"] == P.TOPICS[i][0] and pk["unusual"] == []         # the group line jumps nothing
+        assert any(a["text"].startswith("[ds200] signal code refused") for a in pk.get("alerts", []))
+        assert not any("[F9_FVG@15m]" in a["text"] for a in pk.get("alerts", []))    # a DeepSeek account: counted
+        if b["topic"] == "rank":
+            ids = [r["account"] for k in ("accounts_top", "accounts_bottom") for r in pk["rank"][k]]
+            ids += [r["strategy"] for k in ("strategies_top", "strategies_bottom") for r in pk["rank"][k]]
+            assert ids and not [x for x in ids if x.split("@")[0] in set(DS200_IDS) | {REEL_NAME}]
+            assert not [x for x in ids if x.endswith("@5m")]
+    # a core account's liquidation still jumps the agenda
+    con = sqlite3.connect(w["paper"])
+    con.execute("INSERT INTO alerts (ts, level, text) VALUES (?, 'CRITICAL', ?)",
+                (NOW - 60_000, "[S2_ST_ROC@15m] LIQUIDATED BTCUSDT 30x lost margin 1500.00"))
+    con.commit()
+    con.close()
+    b = P.build(w["paper"], w["daily"], None, None, NOW, round_no=0)
+    assert b["topic"] == "risk" and b["why"] == "이상 징후: 긴급 알림 1건"
+    # the hypothesis menu: a DeepSeek or reel account is not a strategy account
+    paper = P.open_ro(w["paper"])
+    try:
+        for aid in (f"{DS200_IDS[0]}@15m", f"{REEL_NAME}@5m"):
+            s_, tf = aid.split("@")
+            got = D.G.validate({"kind": "strategy_roe_sign", "params": {"strategy": s_, "tf": tf, "op": "<", "n": 5}},
+                               paper, None, NOW)
+            assert got[0] is None, aid
+        assert D.G.validate({"kind": "parity_streak", "params": {"days": 2, "accounts": 331}}, paper, None, NOW)[0]
+        assert D.G.run_start(paper) == w["start"]
+    finally:
+        paper.close()
+    # a whole round on the v4 world with the owners' settings, then the dry run (no key, no network)
+    cfg_env = {"DEBATE_PAPER_DB": w["paper"], "DEBATE_DAILY_DB": w["daily"], "DEBATE_DIR": str(tmp_path / "d"),
+               "DEBATE_AGENTS_DB": str(tmp_path / "a.db"), "DEBATE_CHECKPOINT_DB": str(tmp_path / "c.db")}
+    svc = make(tmp_path, w, thinking_body(answer(4), {"input_tokens": 3300, "output_tokens": 900}),
+               model="claude-sonnet-5-5", every_min=30, monthly_cap=30.0, effort="low", max_tokens=1500)
+    assert svc.tick(force=True) == "round"
+    user = svc.fake.calls[0][2]["messages"][0]["content"]
+    assert '"groups":{"core":144,"ds200":171,"flip":15,"reel":1}' in user
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **k: (_ for _ in ()).throw(AssertionError("network")))
+    out = []
+    env = {k: v for k, v in SONNET_ENV.items() if k != "ANTHROPIC_API_KEY"}
+    assert D.main(["once", "--dry-run"], environ={**env, **cfg_env}, out=out.append) == 0
+    text = "\n".join(out)
+    assert "설정 모델 claude-sonnet-5-5" in text and "(월 한도 $30)" in text and "상한 1,500" in text
+    assert "생각(thinking)" in text and "effort low" in text and "캐시가 잡히면" in text
+    assert not os.path.exists(str(tmp_path / "d" / "debate.db"))
+

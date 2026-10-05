@@ -680,9 +680,14 @@ def empty_minutes(lo: int, hi: int, symbols) -> Minutes:
 
 class BinanceMinutes:
     """1m last and mark price klines and funding from Binance's public REST API (no key), cached
-    per coin and UTC day as .npz under ``cache_dir`` (only complete past days are cached)."""
+    per coin and UTC day as .npz under ``cache_dir`` (only complete past days are cached).
 
-    def __init__(self, rest, cache_dir: Optional[str], symbols=V3_SYMBOLS, pause: float = 0.15,
+    Paced for a server whose live bot polls the same IP: ``pause`` (1 s) after each weight-10 kline call keeps this
+    at <= 600 weight a minute (the IP limit is 2,400), and funding is fetched once per coin for every uncached day
+    of the range (``_funding``), not once per coin and day (/fapi/v1/fundingRate has its own 500 calls / 5 min per
+    IP, which the live feed's polls already use most of). The cached values are the same either way."""
+
+    def __init__(self, rest, cache_dir: Optional[str], symbols=V3_SYMBOLS, pause: float = 1.0,
                  now_ms: Optional[Callable[[], int]] = None):
         self.rest, self.cache, self.symbols, self.pause = rest, cache_dir, tuple(symbols), pause
         self.now_ms = now_ms or (lambda: int(time.time() * 1000))
@@ -690,8 +695,25 @@ class BinanceMinutes:
         if cache_dir:
             os.makedirs(cache_dir, exist_ok=True)
 
-    def _day(self, sym: str, d0: int) -> dict:
-        path = os.path.join(self.cache, f"{sym}_{day_str(d0)}.npz") if self.cache else None
+    def _path(self, sym: str, d0: int) -> Optional[str]:
+        return os.path.join(self.cache, f"{sym}_{day_str(d0)}.npz") if self.cache else None
+
+    def _funding(self, sym: str, lo: int, hi: int) -> list:
+        """Every funding row of ``sym`` with lo <= fundingTime < hi, in pages of 1000 (one page is ~333 days of
+        8-hourly funding)."""
+        out, t = [], int(lo)
+        while t < hi:
+            raw = self.rest.funding_rates(sym, start_time=t, limit=1000)
+            time.sleep(self.pause)
+            rows = [r for r in raw if t <= int(r["fundingTime"]) < hi]
+            out += rows
+            if len(raw) < 1000 or not rows:
+                break
+            t = int(rows[-1]["fundingTime"]) + 1
+        return out
+
+    def _day(self, sym: str, d0: int, funding: Optional[list] = None) -> dict:
+        path = self._path(sym, d0)
         if path and os.path.exists(path):
             z = np.load(path)
             return {k: z[k] for k in z.files}
@@ -701,8 +723,9 @@ class BinanceMinutes:
         marks = {int(r[0]): r for r in self.rest.mark_klines(sym, "1m", start_time=d0, limit=1500)
                  if int(r[0]) < d1}
         time.sleep(self.pause)
-        fund = [r for r in self.rest.funding_rates(sym, start_time=d0, limit=20) if int(r["fundingTime"]) < d1]
-        time.sleep(self.pause)
+        if funding is None:
+            funding = self._funding(sym, d0, d1)
+        fund = [r for r in funding if d0 <= int(r["fundingTime"]) < d1]
         t = np.array([int(r[0]) for r in rows], np.int64)
         last = np.array([[float(r[k]) for k in (1, 2, 3, 4)] for r in rows], float).reshape(-1, 4)
         mk = np.array([[float(marks[int(r[0])][k]) if int(r[0]) in marks else np.nan for k in (1, 2, 3, 4)]
@@ -719,10 +742,15 @@ class BinanceMinutes:
 
     def load(self, lo: int, hi: int) -> Minutes:
         m = empty_minutes(lo, hi, self.symbols)
+        end = floor_day(hi - 1) + DAY_MS
         for k, sym in enumerate(self.symbols):
             d = floor_day(lo)
+            funding = None
             while d < hi:
-                got = self._day(sym, d)
+                path = self._path(sym, d)
+                if funding is None and not (path and os.path.exists(path)):
+                    funding = self._funding(sym, d, end)       # one call per coin for every day still to fetch
+                got = self._day(sym, d, funding)
                 t = got["t"]
                 keep = (t >= lo) & (t < hi)
                 idx = (t[keep] - lo) // MIN
@@ -1446,11 +1474,15 @@ class Task:
 
 
 def _prior(out: sqlite3.Connection, date: str) -> dict:
-    """Latest decided state per account before ``date`` (from earlier verdicts)."""
+    """Latest decided state per account before ``date`` (from earlier verdicts). A hold after a 1st pass (the
+    account missing from the next snapshot, M10, or held in its 2nd window, M9) keeps that 1st pass with its
+    window, so the next checkpoint gives the account its 2nd check, not a fresh 1st verdict."""
     st = {}
     for d, aid, status, stage, data in out.execute(
             "SELECT date, account_id, status, stage, data FROM verdict_accounts WHERE date < ? ORDER BY date",
             (date,)):
+        if status == HOLD and (st.get(aid) or {}).get("status") == PASS1:
+            continue
         st[aid] = {"date": d, "status": status, "stage": stage, **json.loads(data)}
     return st
 
@@ -1741,13 +1773,14 @@ def method_ko(group: Optional[str] = None, n_bots: int = N_BOTS) -> str:
 
 def family_table(alphas: Optional[dict] = None, n_bots: int = N_BOTS, families: Optional[list] = None) -> list[dict]:
     """The FDR families as rows for the dashboard (G20): family, Korean name, alpha, judged timeframes, method_ko, and
-    from a verdict's ``families`` its "tested" / "luck_passed". ``alphas``: a verdict's ``family_alpha`` (default
-    FAMILY_ALPHA)."""
+    from a verdict's ``families`` its "tested" / "luck_passed" / "lucky_expected" / "lucky_if_uncorrected" (the
+    family's expected lucky passes, verdict doc 6). ``alphas``: a verdict's ``family_alpha`` (default FAMILY_ALPHA)."""
     al = dict(FAMILY_ALPHA if alphas is None else alphas)
     done = {f.get("group"): f for f in families or [] if isinstance(f, dict)}
     return [{"family": g, "name": FAMILY_KO.get(g, g), "alpha": al.get(g),
              "judged_tfs": list(JUDGED_BY_FAMILY.get(g, ())), "method_ko": method_ko(g, n_bots),
-             **{k: done[g][k] for k in ("tested", "luck_passed") if k in done.get(g, {})}}
+             **{k: done[g][k] for k in ("tested", "luck_passed", "lucky_expected", "lucky_if_uncorrected")
+                if k in done.get(g, {})}}
             for g in list(FAMILIES) + [g for g in al if g not in FAMILIES]]
 
 
@@ -1841,7 +1874,9 @@ def verdict_text(v: dict) -> str:
           f"(보정 없었다면 {v['lucky_if_uncorrected']:.1f}개)"]
     if v.get("families"):                     # paper v4: one line per FDR family (alpha-split, D5)
         L += ["묶음별 (FDR 나눔)"] + [f"- {f.get('name', f['group'])}: 검정 {f['tested']}개 중 통과 {f['luck_passed']}개 "
-                                    f"(FDR {f['alpha'] * 100:g}%)" for f in v["families"]]
+                                    f"(FDR {f['alpha'] * 100:g}%) · 운으로 기대 ≤ "
+                                    f"{f.get('lucky_expected', f['alpha'] * f['luck_passed']):.2f}개"
+                                    for f in v["families"]]
     if v.get("warnings"):
         L += ["", "⚠ 주의"] + [_warning_ko(w) for w in v["warnings"]]
     L += ["", "자세히: 대시보드 순위표 '체크포인트 판정'"]

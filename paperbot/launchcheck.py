@@ -740,7 +740,8 @@ def telegram_hint(reason: str) -> str:
 
 
 def telegram_chats(envs: dict[str, EnvFile], agents_wanted: bool) -> list[tuple[str, str, str, bool]]:
-    """(label, token, chat id, silent) for each distinct chat the bot and the agents send to."""
+    """(label, token, chat id, silent) for each distinct chat the bot and the agents send to. Silent everywhere unless
+    that env file says TELEGRAM_SOUND=1 (then INFO only), like notify.TelegramNotifier."""
     out, seen = [], set()
     files = [envs["live"]] + ([envs["agents"]] if agents_wanted else [])
     for ef in files:
@@ -753,7 +754,8 @@ def telegram_chats(envs: dict[str, EnvFile], agents_wanted: bool) -> list[tuple[
             if (tok, chat) in seen:
                 continue
             seen.add((tok, chat))
-            out.append((f"{ef.name}.env {level}", tok, chat, level == "INFO"))
+            sound = str(ef.get("TELEGRAM_SOUND") or "").strip() == "1"
+            out.append((f"{ef.name}.env {level}", tok, chat, (not sound) or level == "INFO"))
     return out
 
 
@@ -1343,6 +1345,9 @@ def check_data_dir(ctx: Ctx) -> list[Line]:
         elif (info.owner, info.group) != (ctx.user, ctx.user):
             out.append(fix(f"{path} 주인이 {info.owner}:{info.group}입니다: sudo chown {ctx.user}:{ctx.user} {path}"))
     exec_dir = os.path.join(ctx.lib, "exec")
+    # the 24-hour debate room's folder belongs to its own user (deploy/install.sh makes it paperbot-debate:paperbot
+    # 2750, check_debate wants exactly that): expected here too, and kept out of the chown -R remedy
+    debate_dir = os.path.join(ctx.lib, "debate")
     foreign = []
     for d in (ctx.lib, exec_dir, os.path.join(ctx.lib, "lab")):
         try:
@@ -1351,15 +1356,18 @@ def check_data_dir(ctx: Ctx) -> list[Line]:
             continue
         for n in names:
             p = os.path.join(d, n)
-            want = EXEC_USER if p == exec_dir or d == exec_dir else ctx.user
+            want = (DEBATE_USER if p == debate_dir else
+                    EXEC_USER if p == exec_dir or d == exec_dir else ctx.user)
             info = ctx.stat(p)
             if info is not None and info.owner != want:
                 foreign.append(p)
     if foreign:
         more = f" 외 {len(foreign) - 5}개" if len(foreign) > 5 else ""
+        back = (f" && sudo chown -R {DEBATE_DIR_MODE[0]}:{DEBATE_DIR_MODE[1]} {debate_dir}"
+                if ctx.stat(debate_dir) is not None else "")
         out.append(fix(f"주인이 맞지 않는 파일이 있어 서비스가 쓰지 못합니다: {', '.join(foreign[:5])}{more} → "
                        f"sudo chown -R {ctx.user}:{ctx.user} {ctx.lib} && "
-                       f"sudo chown -R {EXEC_USER}:{ctx.user} {exec_dir} (그 사용자가 없으면 먼저 {INSTALL})"))
+                       f"sudo chown -R {EXEC_USER}:{ctx.user} {exec_dir}{back} (그 사용자가 없으면 먼저 {INSTALL})"))
     elif not out:
         out.append(ok(f"데이터 폴더 주인 {ctx.user}, 주문 실행기 폴더 {EXEC_USER} (다른 사용자 소유 파일 없음)"))
     # the DeepSeek nightly recompute check's folder (install.sh and the reset make it, paperbot 750); its service can

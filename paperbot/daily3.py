@@ -1168,27 +1168,30 @@ def run_day(conn, out: sqlite3.Connection, rest: BinanceREST, settings: Settings
     # trades that closed today but were entered earlier need the steps from their signal on
     first = first_signal(conn, start, end)
     pre = fetch_steps(rest, symbols, max(first, start - LOOKBACK_MS), start) if first is not None else []
-    tv, tv_info = trade_shadows(settings, brackets, specs, conn, day, start, end, pre + steps, make_signal,
-                                quality=True, extra3=True, extra4=True)
+    # the pre-registered what-ifs (trade_variants, stop_variants) summarize the run's own population as in v3 (the
+    # 36, the coin flips, new-lab accounts); the DeepSeek accounts' shadows are summarized apart, in *_groups (jobs
+    # review 4): one trade_shadows pass per population, so every trade is still shadowed exactly once
+    def is_ds(aid):
+        return groups.get(aid) == "ds200"
+    tv, tv_info = trade_shadows(settings, brackets, specs, TradesOf(conn, lambda a: not is_ds(a)), day, start, end,
+                                pre + steps, make_signal, quality=True, extra3=True, extra4=True)
+    has_ds = "ds200" in groups.values()
+    tv_ds, tv_ds_info = (trade_shadows(settings, brackets, specs, TradesOf(conn, is_ds), day, start, end, pre + steps,
+                                       make_signal, quality=True, extra3=True, extra4=True) if has_ds else ([], {}))
     lim = [r for r in sh if r["kind"] == "limit"]
     report["shadows"] = {
         "limit_signals": len(lim), "limit_filled": sum(r["filled"] for r in lim),
         "limit_mean_roe": float(np.mean([r["roe"] for r in lim if r["roe"] is not None]))
         if any(r["roe"] is not None for r in lim) else None,
         "skipped": sum(1 for r in sh if r["kind"] == "skipped"),
-        "stop_variants": {},
+        "stop_variants": stop_variants([r for r in sh if not is_ds(r["account_id"])]),
     }
-    for k in STOP_VARIANTS:
-        v = [r for r in sh if r["kind"] == f"stop{k}" and r["roe"] is not None and r["resolved"]
-             and json.loads(r["data"]).get("actual_roe") is not None]     # the original accounts' losses
-        report["shadows"]["stop_variants"][str(k)] = {
-            "losing_trades": len(v),
-            "mean_roe": float(np.mean([r["roe"] for r in v])) if v else None,
-            "turned_positive": sum(1 for r in v if r["roe"] > 0),
-            "better_than_actual": sum(1 for r in v if r["roe"] > json.loads(r["data"])["actual_roe"]),
-        }
     report["shadows"]["groups"] = shadow_groups(sh, groups)
     report["shadows"]["trade_variants"] = summarize(tv, tv_info)
+    if has_ds:
+        report["shadows"]["stop_variants_groups"] = {"ds200": stop_variants([r for r in sh if is_ds(r["account_id"])])}
+        report["shadows"]["trade_variants_groups"] = {"ds200": summarize(tv_ds, tv_ds_info)}
+    tv = tv + tv_ds
     sh += tv
     report["data_quality"] = data_quality(day_steps, symbols, start, end)
     report["fill_costs"] = fill_cost_report(conn, start, end)
@@ -1246,6 +1249,41 @@ def parity_groups(replayed: dict, mism: list[dict], groups: dict) -> dict:
     return _group_dict(out)
 
 
+class TradesOf:
+    """``conn`` whose closed trades (obsshadows.closed_trades' query) are only those of the accounts ``keep`` accepts;
+    every other query passes through. trade_shadows then runs once per population (jobs review 4)."""
+
+    QUERY = "SELECT account_id, data FROM trades WHERE exit_time >= ? AND exit_time < ? ORDER BY id"
+
+    def __init__(self, conn, keep):
+        self._conn, self._keep = conn, keep
+
+    def execute(self, sql, *args):
+        cur = self._conn.execute(sql, *args)
+        if " ".join(sql.split()) == self.QUERY:
+            return [r for r in cur if self._keep(r[0])]
+        return cur
+
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+
+
+def stop_variants(sh: list[dict]) -> dict:
+    """report["shadows"]["stop_variants"]: per stop width, the losing trades' shadow ROE (the original accounts'
+    losses: rows whose actual ROE is known)."""
+    out = {}
+    for k in STOP_VARIANTS:
+        v = [r for r in sh if r["kind"] == f"stop{k}" and r["roe"] is not None and r["resolved"]
+             and json.loads(r["data"]).get("actual_roe") is not None]
+        out[str(k)] = {
+            "losing_trades": len(v),
+            "mean_roe": float(np.mean([r["roe"] for r in v])) if v else None,
+            "turned_positive": sum(1 for r in v if r["roe"] > 0),
+            "better_than_actual": sum(1 for r in v if r["roe"] > json.loads(r["data"])["actual_roe"]),
+        }
+    return out
+
+
 def shadow_groups(sh: list[dict], groups: dict) -> dict:
     """The limit and skipped shadows by account group (G28): {group: {"limit_signals", "limit_filled",
     "limit_mean_roe", "skipped"}}; every group of the run's original accounts is listed (0 when it had none)."""
@@ -1278,7 +1316,25 @@ def trade_counts(conn, start: int, end: int, groups: dict) -> dict:
 
 def _split_text(parts: list[tuple[str, str]]) -> str:
     from .groups import GROUP_KO
-    return " (" + " · ".join(f"{GROUP_KO.get(g, g)} {v}" for g, v in parts) + ")" if parts else ""
+    return " (" + " · ".join(f"{GROUP_KO.get(g, g)} {_n(v)}" for g, v in parts) + ")" if parts else ""
+
+
+def _n(v) -> str:
+    """A count with thousands separators (T4: '1,170', as the DeepSeek check's '1,284/1,284'); text unchanged."""
+    return f"{v:,}" if isinstance(v, int) and not isinstance(v, bool) else str(v)
+
+
+def _slip_lines(what: str, c: dict) -> list[str]:
+    """Two owner lines of the stop slippage (T3): in percent, and what the real fills would have cost in dollars.
+    ``diff_usd_total`` > 0 = the real stop fills would have lost that much more than the paper's assumed fill."""
+    out = [f"손절 체결 {what}{_n(int(c['measured']))}건: 실제 미끄러짐 {c['real_bps_median'] / 100:.3f}% · "
+           f"모의 가정 {c['paper_bps_median'] / 100:.3f}%"]
+    d = c.get("diff_usd_total")
+    if d is not None:
+        from .notify import money
+        out.append("→ 실제 손절 가격이었어도 손익 차이 $1 미만" if abs(d) < 0.5 else
+                   f"→ 실제 손절 가격이었다면 {money(abs(d))} {'더' if d > 0 else '덜'} 손실")
+    return out
 
 
 def _groups_of(d) -> dict:
@@ -1313,21 +1369,19 @@ def _shadow_lines(sh: dict, slip: dict, usd) -> list[str]:
                                                      or sg[g].get("skipped"))]
     out = []
     if num:
-        out.append("지정가였다면 체결 " + " · ".join(f"{_gko(g)} {sg[g].get('limit_filled', 0)}/"
-                                             f"{sg[g].get('limit_signals', 0)}" for g in num))
-        out.append("포지션 중이라 놓친 신호 " + " · ".join(f"{_gko(g)} {sg[g].get('skipped', 0)}" for g in num))
+        out.append("지정가였다면 체결 " + " · ".join(f"{_gko(g)} {_n(sg[g].get('limit_filled', 0))}/"
+                                             f"{_n(sg[g].get('limit_signals', 0))}" for g in num))
+        out.append("포지션 중이라 놓친 신호 " + " · ".join(f"{_gko(g)} {_n(sg[g].get('skipped', 0))}" for g in num))
     for g in NUMBER_GROUPS:
         c = gg.get(g) or {}
         if c.get("measured"):
-            out.append(f"손절 체결 {_gko(g)} {c['measured']}건: 실제 {c['real_bps_median']:.1f}bp vs paper "
-                       f"{c['paper_bps_median']:.1f}bp")
-            out.append(f"→ paper보다 {usd(c['diff_usd_total'])}")
+            out += _slip_lines(f"{_gko(g)} ", c)
     d, ds = sg.get(COUNT_LINE_GROUP), gg.get(COUNT_LINE_GROUP)
     if d is not None or ds is not None:
         d = d or {}
-        out.append(f"{_gko(COUNT_LINE_GROUP)} (개수만): 지정가 체결 {d.get('limit_filled', 0)}/{d.get('limit_signals', 0)}"
-                   f" · 놓친 신호 {d.get('skipped', 0)}"
-                   + (f" · 손절 {int((ds or {}).get('exits') or 0)}건" if ds is not None else ""))
+        out.append(f"{_gko(COUNT_LINE_GROUP)} (개수만): 지정가 체결 {_n(d.get('limit_filled', 0))}/"
+                   f"{_n(d.get('limit_signals', 0))} · 놓친 신호 {_n(d.get('skipped', 0))}"
+                   + (f" · 손절 {_n(int((ds or {}).get('exits') or 0))}건" if ds is not None else ""))
     return out
 
 
@@ -1376,7 +1430,7 @@ def notify_report(report: dict, notifier, trades_day: Optional[int] = None) -> l
         head = [f"재계산 못 함 · {day}", "", "그날 09:00(한국) 상태 저장이 없음", "봇이 그때 멈춰 있었음", "", "매일 점검"]
     if trades_day is not None:
         tg = _groups_of((report.get("trades") or {}).get("groups") if isinstance(report.get("trades"), dict) else None)
-        lines.append(f"거래 {trades_day}건" + _split_text(list(tg.items())))
+        lines.append(f"거래 {_n(trades_day)}건" + _split_text(list(tg.items())))
     sh = report.get("shadows", {})
     slip = report.get("stop_slippage") or {}
     v4 = _v4_split(sh.get("groups") if sh else None, slip.get("groups"))
@@ -1396,8 +1450,7 @@ def notify_report(report: dict, notifier, trades_day: Optional[int] = None) -> l
                  + (" (" + ", ".join(f"{s.replace('USDT', '')} {n}" for s, n in missing.items()) + ")" if missing else ""))
     ov = slip.get("overall") or {}
     if ov.get("measured") and not v4:
-        lines.append(f"손절 체결 {ov['measured']}건: 실제 {ov['real_bps_median']:.1f}bp vs paper {ov['paper_bps_median']:.1f}bp")
-        lines.append(f"→ paper보다 {usd(ov['diff_usd_total'])}")
+        lines += _slip_lines("", ov)
     if "dscheck" in report:            # a run with DeepSeek accounts: the night before's recomputation, its own day
         lines.append(report["dscheck"] or "딥시크 밤 재계산: 결과 없음 (점검이 아직 안 돌았거나 타이머가 꺼짐)")
     text = "\n".join(head + ([""] if level == INFO else []) + lines)

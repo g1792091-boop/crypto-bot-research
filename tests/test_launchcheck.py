@@ -380,9 +380,10 @@ def test_healthy_server_after_the_start_passes_with_test_message_and_ping(tmp_pa
     assert "봇이 정상으로 돌고 있습니다" in out and "봇 생존 신호 정상: 20초 전" in out
     assert "paperbot-live3: 켜짐·실행 중" in out and "다음 실행 Fri 2026-10-02 00:20:00 UTC" in out
     assert len([h for h in srv.http if "hc-ping.com" in h[1]]) == 1
-    # CRITICAL loud, INFO silent; the empty WARN chat falls back to CRITICAL and gets no second message
+    # every test message silent (owners 2026-10-05; TELEGRAM_SOUND=1 would make CRITICAL ring); the empty WARN chat
+    # falls back to CRITICAL and gets no second message
     msgs = [dict(urllib.parse.parse_qsl(h[3].decode())) for h in srv.sent("sendMessage")]
-    assert [(m["chat_id"], m["disable_notification"]) for m in msgs] == [(CHAT, "false"), (CHAT_INFO, "true")]
+    assert [(m["chat_id"], m["disable_notification"]) for m in msgs] == [(CHAT, "true"), (CHAT_INFO, "true")]
     for s in SECRETS:
         assert s not in out
 
@@ -858,6 +859,29 @@ def test_data_folder_files_must_belong_to_paperbot(tmp_path):
     srv.owners[lock] = (0o644, "root", "root")
     f = fixes(L.check_data_dir(srv.ctx()))
     assert len(f) == 1 and lock in f[0] and f"sudo chown -R paperbot:paperbot {srv.lib}" in f[0]
+    assert "debate" not in f[0]                                   # no debate folder: no remedy for it
+
+
+def test_data_folder_expects_the_debate_room_user_on_its_folder(tmp_path):
+    """Ops review 3: deploy/install.sh always makes /var/lib/paperbot/debate paperbot-debate:paperbot 2750 (also in
+    the reset's step 3). That is not a foreign owner at 4-2; the folder owned by paperbot is (the debate room could
+    no longer write debate.db), and a chown -R remedy for another file gives the folder back to its user."""
+    srv = Server(tmp_path)
+    debate = os.path.join(srv.lib, "debate")
+    os.makedirs(debate)
+    srv.owners[debate] = (0o2750, L.DEBATE_USER, "paperbot")
+    assert st(L.check_data_dir(srv.ctx())) == [L.OK]
+    srv.owners[debate] = (0o750, "paperbot", "paperbot")
+    f = fixes(L.check_data_dir(srv.ctx()))
+    assert len(f) == 1 and debate in f[0]
+    srv.owners[debate] = (0o2750, L.DEBATE_USER, "paperbot")
+    lock = os.path.join(srv.lib, "agents3.db.lock")
+    open(lock, "w").close()
+    srv.owners[lock] = (0o644, "root", "root")
+    f = fixes(L.check_data_dir(srv.ctx()))
+    assert len(f) == 1 and lock in f[0] and debate not in f[0].split(" → ")[0]
+    assert f[0].index(f"sudo chown -R paperbot:paperbot {srv.lib}") < f[0].index(
+        f"sudo chown -R paperbot-debate:paperbot {debate}")
 
 
 def test_paper_db_before_the_start(tmp_path):

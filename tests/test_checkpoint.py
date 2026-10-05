@@ -631,15 +631,32 @@ def test_minutes_cache(tmp_path):
             return [[start_time + j * MIN, "1", "2", "0.5", "1.4"] for j in range(1440)]
 
         def funding_rates(self, s, start_time, limit):
-            return [{"fundingTime": start_time + 8 * 3_600_000 + 3, "fundingRate": "0.0001"}]
+            calls.append(("f", s, start_time))                    # one row a day at 08:00 UTC, up to 5 days
+            return [{"fundingTime": d + 8 * 3_600_000 + 3, "fundingRate": "0.0001"}
+                    for d in range(d0, d0 + 5 * DAY, DAY) if d + 8 * 3_600_000 + 3 >= start_time][:limit]
 
     src = ck.BinanceMinutes(Rest(), str(tmp_path / "bars"), pause=0, now_ms=lambda: d0 + 5 * DAY)
     m = src.load(d0, d0 + 2 * DAY)
     assert m.o.shape == (2880, 6) and np.all(m.mc == 1.4)
-    assert np.nansum(m.fr) == pytest.approx(0.0001 * 12) and m.fr[480, 0] == 0.0001
+    assert np.nansum(m.fr) == pytest.approx(0.0001 * 12) and m.fr[480, 0] == 0.0001 and m.fr[1440 + 480, 5] == 0.0001
+    # jobs review 2: funding once per coin for the whole range (fundingRate's 500 / 5 min IP limit), not per day
+    assert sum(c[0] == "f" for c in calls) == 6 and sum(c[0] == "k" for c in calls) == 12
     n = len(calls)
     src.load(d0 + 3_600_000, d0 + DAY)
     assert len(calls) == n and len(os.listdir(tmp_path / "bars")) == 12
+    for k in range(6):                                            # the cached day files hold the same funding
+        z = np.load(tmp_path / "bars" / f"{ck.V3_SYMBOLS[k]}_{ck.day_str(d0 + DAY)}.npz")
+        assert list(z["fts"]) == [d0 + DAY + 8 * 3_600_000 + 3] and list(z["frate"]) == [0.0001]
+    src.load(d0 + DAY, d0 + 3 * DAY)                              # one new day: one more funding call per coin
+    assert sum(c[0] == "f" and c[2] == d0 + 2 * DAY for c in calls) == 6
+
+
+def test_minutes_default_pace_stays_far_below_the_ip_weight_limit():
+    """Jobs review 2: on day 30 the verdict fetches ~43 days x 6 coins of 1m klines and marks (weight 10 each) on the
+    live bot's IP; the default pause keeps that at <= 600 weight a minute (the limit is 2,400)."""
+    import inspect
+    pause = inspect.signature(ck.BinanceMinutes.__init__).parameters["pause"].default
+    assert pause >= 1.0 and 60 / pause * 10 <= 600
 
 
 def test_dashboard_endpoint(run_db, tmp_path):
@@ -877,6 +894,33 @@ def test_extra_warnings_only_on_extras(tmp_path):
     assert all("S@1h:" not in x and "S@1h " not in x for x in w)
     assert "notes" not in rows["S@1h"] and rows["NL1@1h"]["notes"]
     assert rows["NL1@1h"]["created_ts"] == T0 + 10 * DAY and "created_ts" not in rows["S@1h"]
+
+
+def test_prior_keeps_a_first_pass_through_a_later_hold(tmp_path):
+    """Jobs review 6: an account that passed 1차 at day 30 and was held at day 60 (missing from the snapshot, M10,
+    or no signals in its 2nd window, M9) gets its 2nd check at day 90, not a fresh 1st verdict."""
+    out = ck.open_out(str(tmp_path / "ck.db"))
+    cp1, cp2, cp3 = T0 + 30 * DAY, T0 + 60 * DAY, T0 + 90 * DAY
+    rows = [(cp1, "A@1h", ck.PASS1, "1차", {"window": [T0, cp1], "reason": "1차"}),
+            (cp2, "A@1h", ck.HOLD, None, {"missing": True, "reason": "M10"}),
+            (cp1, "B@1h", ck.PASS1, "1차", {"window": [T0, cp1]}),
+            (cp2, "B@1h", ck.HOLD, "2차", {"window": [cp1, cp2], "reason": "2차: M9"}),
+            (cp1, "C@1h", ck.HOLD, None, {"reason": "30일 미만"}),
+            (cp1, "D@1h", ck.PASS1, "1차", {"window": [T0, cp1]}),
+            (cp2, "D@1h", ck.FAIL, "2차", {"window": [cp1, cp2]})]
+    for cp, aid, status, stage, data in rows:
+        out.execute("INSERT INTO verdict_accounts (date, account_id, status, stage, data) VALUES (?,?,?,?,?)",
+                    (ck.day_str(cp), aid, status, stage, json.dumps(data)))
+    out.commit()
+    pr = ck._prior(out, ck.day_str(cp3))
+    assert pr["A@1h"]["status"] == pr["B@1h"]["status"] == ck.PASS1
+    assert pr["A@1h"]["window"] == pr["B@1h"]["window"] == [T0, cp1] and pr["A@1h"]["date"] == ck.day_str(cp1)
+    assert pr["C@1h"]["status"] == ck.HOLD and pr["D@1h"]["status"] == ck.FAIL
+    accts = {"A@1h": _acct("1h", 40, 9000.0, T0, cp3)}
+    rows3, tasks = ck.plan(_snap(cp3, accts), pr, {}, S)
+    assert rows3["A@1h"]["stage"] == "2차" and rows3["A@1h"]["window"] == [cp1, cp3]
+    assert all(t.stage == "2차" for t in tasks)                    # never a fresh 1st verdict over [T0, cp3]
+    out.close()
 
 
 def test_prior_ignores_reused_id_with_other_created_ts():

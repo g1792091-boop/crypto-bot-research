@@ -395,9 +395,30 @@ def test_a_failure_after_the_move_prints_how_to_go_on_or_back(env):
     assert f"sudo mv {arch}/paper3.db {env['data']}/" in out and f"sudo mv {arch}/tradealerts.json" in out
     assert "sudo systemctl start paperbot-live3 paperbot-dash" in out
     assert f"paperbot.resetrun apply --lib {env['data']} --archive {arch}" in out
+    # ops review 7: going back also swaps the code back (step 3 put the new code in /opt), before the start line
+    back = out.split("이전 실행으로 되돌리기:")[1]
+    swap = "sudo mv /opt/crypto-bot-research /opt/crypto-bot-research.failed-$(date -u +%H%M%S) && " \
+           "sudo mv /opt/crypto-bot-research.old /opt/crypto-bot-research"
+    assert swap in back and back.index(swap) < back.index("sudo systemctl start paperbot-live3 paperbot-dash")
     calls = env["log"].read_text().splitlines()
     assert any(c.startswith("stop") for c in calls)
     assert [c for c in calls if c.startswith("start")] == ["start paperbot-backup.service"]   # the bot stays off
+
+
+def test_a_failure_after_the_install_says_to_swap_the_code_back_before_starting(env):
+    """Ops review 7: after step 3 the new code is in /opt; starting the old run on it is refused (a restart loop), so
+    the message gives the code swap before the start line."""
+    stub = env["tmp"] / "install.sh"
+    stub.write_text("#!/bin/bash\nexit 0\n")
+    (env["data"] / "archive").write_text("not a folder")               # step 4's install -d fails: phase installed
+    env["env"].update(PAPERBOT_INSTALL=str(stub), PAPERBOT_RESET_WAIT="0", ALLOW_DIRTY="1",
+                      FAKE_ACTIVE="paperbot-live3 paperbot-dash", PAPERBOT_APP=str(env["tmp"] / "app"))
+    r = _run(env, "--yes")
+    assert r.returncode == 1 and "단계 installed" in r.stdout, r.stdout + r.stderr
+    app = env["tmp"] / "app"
+    swap = f"sudo mv {app} {app}.failed-$(date -u +%H%M%S) && sudo mv {app}.old {app}"
+    assert swap in r.stdout and r.stdout.index(swap) < r.stdout.index("다시 켜기: sudo systemctl start paperbot-live3")
+    assert (env["data"] / "paper3.db").exists()                         # nothing moved
 
 
 def test_proc_fallback_finds_an_open_run_file_under_pipefail(tmp_path):
@@ -464,14 +485,15 @@ def test_yes_keeps_a_pre_reset_copy_apart_from_the_nightly_folder(env):
     assert f"옮기기 전 새 백업: {kept}/{days[0]}" in out
 
 
-def _new_run_after_a_reset(env, start_ago_ms=3_600_000):
+def _new_run_after_a_reset(env, start_ago_ms=3_600_000, version="paper-v4"):
     import time
     now = int(time.time() * 1000)
     start = now - start_ago_ms
     (env["data"] / "paper3.db").write_bytes(b"")
     c = sqlite3.connect(str(env["data"] / "paper3.db"))
-    c.execute("CREATE TABLE accounts (account_id TEXT, strategy TEXT, timeframe TEXT, kind TEXT, created_ts INTEGER)")
-    c.execute("INSERT INTO accounts VALUES ('V45_AMB@15m', 'V45_AMB', '15m', 'strategy', ?)", (start,))
+    c.execute("CREATE TABLE accounts (account_id TEXT, strategy TEXT, timeframe TEXT, kind TEXT, created_ts INTEGER, "
+              "settings_version TEXT)")
+    c.execute("INSERT INTO accounts VALUES ('V45_AMB@15m', 'V45_AMB', '15m', 'strategy', ?, ?)", (start, version))
     c.commit()
     c.close()
     a = sqlite3.connect(str(env["data"] / "agents3.db"))
@@ -497,6 +519,18 @@ def test_a_second_yes_after_the_reset_is_refused_unless_forced(env):
     assert r.returncode == 0, r.stdout + r.stderr
     assert "--force-again" in r.stdout and not (env["data"] / "paper3.db").exists()
     assert subprocess.run(["bash", SCRIPT, "--yes", "--again"], capture_output=True, text=True).returncode == 2
+
+
+def test_a_young_v3_run_after_the_v3_restart_is_not_a_repeat(env):
+    """Ops review 1: tonight's paper3.db holds the v3 run the v3 restart started 15 h ago, with that restart's
+    run:restarted marker. --yes must go ahead (the guard protects only a v4 run)."""
+    _new_run_after_a_reset(env, start_ago_ms=15 * 3_600_000, version="paper-v3")
+    _yes_env(env)
+    r = _run(env, "--dry-run")
+    assert r.returncode == 0 and "재시작은 이미 끝났습니다" not in r.stdout
+    r = _run(env, "--yes")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "재시작은 이미 끝났습니다" not in r.stdout
 
 
 def test_a_run_older_than_a_day_is_not_a_repeat(env):
@@ -719,6 +753,9 @@ esac
         assert word in out, word
     assert _tree_hash(src) == before                               # the real folder is only read
     assert "NOT ALLOWED" not in (tmp_path / "real.log").read_text()
+    # ops review 6: a unit the reset started again reads as the real one (running), so a passing rehearsal shows no
+    # false "!!" lines about the agents or the bot
+    assert "!! 에이전트 꺼짐" not in out and "is not running" not in out, out[-3000:]
 
 
 GUIDE = os.path.join(ROOT, "docs", "server-setup-v4.md")
