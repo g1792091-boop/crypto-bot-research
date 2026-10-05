@@ -42,8 +42,13 @@ export async function mount(el, ctx) {
 
   function render(d) {
     if (!d || !d.ready) {
-      wrap.replaceChildren(ui.card({plate: "꺼짐"}, h("p", {class: "ink2"}, (d && d.note) || "24시간 토론방 — 꺼짐"),
-        h("p", {class: "rk-note"}, "에이전트와 별도로, 두 분이 API 키를 넣고 켜면 하루 종일 장을 두고 토론하는 방입니다 (유료 API, 월 한도). 지금은 비용이 들지 않습니다.")));
+      // fill-people: the tab is always visible (greyed '꺼짐'); this card says plainly what the room is and that it has not started
+      wrap.replaceChildren(ui.card({plate: "꺼짐", sub: "아직 시작 전", cls: "db-off"},
+        h("div", {class: "row wrap"}, ui.pill("꺼짐", "thin"), h("b", null, "아직 시작 전 · 켜면 하루 종일 토론")),
+        h("p", {class: "ink2"}, (d && d.note) || "24시간 토론방은 아직 한 번도 돌지 않았습니다."),
+        h("p", {class: "rk-note"}, "에이전트 회의와 별도로, 두 분이 API 키를 넣고 켜면 하루 종일 장을 두고 토론하는 방입니다 (유료 API, 월 한도). 주문·규칙·계좌는 바꾸지 않습니다. 지금은 비용이 들지 않습니다."),
+        h("p", {class: "rk-note"}, "켜는 방법: 서버 안내서 docs/debate-room.md (키를 넣고 서비스를 켜면 이 화면에 토론 글과 비용이 나옵니다)."),
+        h("div", {class: "row wrap"}, h("a", {class: "btn-line", href: ctx.href("office")}, "회의실로"))));
       return;
     }
     const [stKo, stCls] = STATE[d.state] || [d.state_ko || d.state, "thin"];

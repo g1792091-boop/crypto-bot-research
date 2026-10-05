@@ -115,10 +115,7 @@ export function rankRow(a, o) {
   if (o.full && a.wallet != null) words.push(`잔고 ${fmt.money(a.wallet)}`);
   if (a.max_drawdown) words.push(`낙폭 ${fmt.pct(a.max_drawdown, 1, false)}`);
   const meta = [h("span", null, words.join(" · "))];
-  if (o.full && a.position) {
-    const p = a.position;
-    meta.push(h("span", {class: "home-pos"}, `● ${fmt.coin(p.symbol)} ${fmt.sideKo(p.side)} ${fmt.lev(p.leverage)}`));
-  }
+  if (o.full && a.position) meta.push(posChip(a));
   meta.push(ui.smallSample(a.trades, SMALL));
   if (a.bust) meta.push(ui.pill("파산", "bad", "잔고 10 USDT 미만으로 정지"));
   meta.push(refTag(a, o.gs), ...extraPills(a));
@@ -127,6 +124,38 @@ export function rankRow(a, o) {
     h("span", {class: "lname"}, fig(a, 20), ui.acctLabel(a)),
     h("span", {class: ["ret", "num", fmt.tone(a.ret)]}, fmt.pct(a.ret)),
     h("span", {class: "meta"}, meta));
+}
+
+// ---------------------------------------------------------------- the open-position chip with its live ROE
+/** The groups whose open position may show money in a mixed list (기존 36 / 5분봉 / 추가; DeepSeek and the coin flips:
+ *  the chip names the position only, D10/D11). */
+export const ROE_GROUPS = new Set(["core", "m5", "extra"]);
+/** '● LTC 숏 30배' (+ a live ROE slot '+20.4%' that paintRoe fills from the mark price, money groups only). */
+export function posChip(a) {
+  const p = a.position;
+  const money = ROE_GROUPS.has(fmt.groupOf(a));
+  return h("span", {class: ["home-pos", money ? "roe-live" : ""], dataset: money ? {aid: a.account_id} : null,
+    title: money ? "열린 포지션 · 지금 마크 가격 기준 ROE (수수료 전, 5초마다)" : "열린 포지션 (딥시크·동전 봇은 손익을 보이지 않음)"},
+  `● ${fmt.coin(p.symbol)} ${fmt.sideKo(p.side)} ${fmt.lev(p.leverage)}`, money ? h("b", {class: "home-roe num"}) : null);
+}
+/** Fill every live chip under root: ROE = unrealized P&L at the mark price / margin (derive.livePnl, before the exit
+ *  fee). markOf(symbol) -> mark or null. A chip whose mark is unknown stays without a number (never a guess). */
+export function paintRoe(root, board, markOf) {
+  if (!root || !board) return;
+  const chips = root.querySelectorAll(".home-pos.roe-live[data-aid]");
+  if (!chips.length) return;
+  const by = new Map((board.accounts || []).map((a) => [a.account_id, a]));
+  for (const c of chips) {
+    const a = by.get(c.dataset.aid);
+    const u = a && a.position ? derive.livePnl(a.position, markOf(a.position.symbol)) : null;
+    const b = c.querySelector(".home-roe");
+    if (!b) continue;
+    if (!u || !Number.isFinite(u.roe)) { b.textContent = ""; c.classList.remove("up", "down"); continue; }
+    const txt = fmt.pct(u.roe, 1);
+    if (b.textContent !== txt) { b.textContent = txt; c.classList.remove("tick"); void c.offsetWidth; c.classList.add("tick"); }
+    c.classList.toggle("up", u.roe > 0);
+    c.classList.toggle("down", u.roe < 0);
+  }
 }
 
 // ---------------------------------------------------------------- group cards

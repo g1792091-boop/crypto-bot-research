@@ -35,3 +35,31 @@
   border: 2px solid var(--muted); background: radial-gradient(circle, var(--ink-2) 0 2px, transparent 2.5px); vertical-align: -2px; }
 [data-screen="board"] .board-flipfoot { display: block; }
 [data-screen="board"] .board-flipfoot .board-coin { width: 12px; height: 12px; margin-right: 6px; }
+
+/* fill-people: the open-position chip with its live ROE (home-shared.js posChip / paintRoe) */
+[data-screen="board"] .home-pos.roe-live { display: inline-flex; align-items: baseline; gap: 6px; padding: 1px 8px; border-radius: 999px;
+  border: 1px solid var(--line-2); background: var(--surface-2); color: var(--ink); transition: box-shadow .4s, border-color .4s; }
+[data-screen="board"] .home-pos.roe-live.up { border-color: var(--up); box-shadow: 0 0 10px 0 color-mix(in srgb, var(--up) 45%, transparent); }
+[data-screen="board"] .home-pos.roe-live.down { border-color: var(--down); box-shadow: 0 0 10px 0 color-mix(in srgb, var(--down) 45%, transparent); }
+[data-screen="board"] .home-pos.roe-live.up .home-roe { color: var(--up); }
+[data-screen="board"] .home-pos.roe-live.down .home-roe { color: var(--down); }
+[data-screen="board"] .home-pos.roe-live.tick .home-roe { animation: board-roe-tick .9s ease-out; }
+@keyframes board-roe-tick { from { opacity: .35; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { [data-screen="board"] .home-pos.roe-live.tick .home-roe { animation: none; } }
+
+/* 카드 / 표 toggle and the dense table (board-table.js) */
+[data-screen="board"] .board-view .seg button { min-height: 32px; }
+[data-screen="board"] .bt-scroll { overflow-x: auto; }
+[data-screen="board"] .bt-tbl { min-width: 980px; }
+[data-screen="board"] .bt-tbl td, [data-screen="board"] .bt-tbl th { white-space: nowrap; padding-block: 6px; }
+[data-screen="board"] .bt-th { appearance: none; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; padding: 0; }
+[data-screen="board"] .bt-tbl th.on .bt-th { color: var(--accent); }
+[data-screen="board"] .bt-name { color: var(--ink); text-decoration: none; font-weight: 600; }
+[data-screen="board"] .bt-name:hover { text-decoration: underline dotted; }
+[data-screen="board"] .bt-tf { color: var(--muted); font-weight: 400; }
+[data-screen="board"] .bt-g { margin-left: 8px; color: var(--muted); }
+[data-screen="board"] .bt-wl { color: var(--muted); }
+[data-screen="board"] .bt-flip td { color: var(--ink-2); }
+
+/* the link row to 분석 (v3 had 코인별 · 시간대별 성적 under the ranking) */
+[data-screen="board"] .board-links { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 2px; }

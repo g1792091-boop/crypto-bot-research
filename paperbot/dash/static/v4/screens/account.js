@@ -8,7 +8,8 @@
 // 수익률 / 최대 낙폭 / 승률 / 거래 수, the coin-flip difference as 참고, 7일 / 30일). An account the map does not cover (a
 // copy / new-lab extra) keeps the plain head and the 참고 box. Every closed trade row links to its replay
 // (#/replay/<trade id>).
-import {h, ui, fmt, derive, store, motion, makeChart, candleOptions, tok, priceDec} from "../core/pb.js";
+import {h, ui, fmt, derive, store, motion, makeChart, candleOptions, tok, priceDec, local} from "../core/pb.js";
+import {accountPicker, chartWindow, markLabels} from "./account-pick.js";
 import {normPos, posCard, tradeRow, reelExits, nameOf, groupKo, REEL_BARS, LADDER} from "./positions-kit.js";
 import {profileCard} from "./grid-kit.js";
 import {termChip, termify} from "./faq-terms.js";
@@ -42,7 +43,16 @@ export async function mount(el, ctx) {
     if (!quiet || id !== view.id) { view.prev = null; }
     view.id = id;
     ctx.setTitle("계좌");
-    if (!id) { clean(); el.replaceChildren(ui.screenHead("계좌", "순위표나 포지션에서 계좌를 고르세요"), ui.empty("고른 계좌가 없습니다")); return; }
+    if (!id) {
+      // no account in the link: a picker with search (the last viewed account or the top of the saved group first)
+      clean();
+      const b = await store.need("board", 120000).catch(() => null);
+      if (gen !== view.gen || !ctx.alive()) return;
+      el.replaceChildren(ui.screenHead("계좌", "계좌를 고르세요 · 이름이나 코드로 찾을 수 있습니다"),
+        b ? accountPicker(ctx, b, {last: local.get("account-last", null)}) : ui.empty("순위 자료를 불러오지 못했습니다"));
+      return;
+    }
+    local.set("account-last", id);
     if (!quiet) { clean(); view.card = null; view.d = null; el.replaceChildren(motion.shimmer(5, true)); window.scrollTo(0, 0); }
     let d;
     try { d = await ctx.api(`/api/account/${encodeURIComponent(id)}`); }
@@ -138,8 +148,9 @@ export async function mount(el, ctx) {
     const syms = [...new Set(trades.map((t) => t.symbol).concat(pos ? [pos.symbol] : []))];
     const symSel = h("select", {class: "select", "aria-label": "코인"}, (syms.length ? syms : ["BTCUSDT"]).map((s) => h("option", {value: s}, fmt.coin(s))));
     if (pos) symSel.value = pos.symbol;
+    else if (trades.length) symSel.value = [...trades].sort((x, y) => (y.exit_time || 0) - (x.exit_time || 0))[0].symbol;
     const cBox = h("div", {class: "account-candles"});
-    const candleCard = ui.card({plate: "코인별 진입·청산", sub: `${fmt.tfKo(acc.timeframe)}봉`, acts: [symSel]}, cBox,
+    const candleCard = ui.card({plate: "코인별 진입·청산", sub: `${fmt.tfKo(acc.timeframe)}봉 · 첫 거래부터 지금까지`, acts: [symSel], cls: "account-cc"}, cBox,
       h("p", {class: "pos-note"}, "화살표 = 진입, 동그라미 = 청산 (초록 수익, 빨강 손실). 열린 포지션이 있으면 진입·손절·청산가 선이 나옵니다."));
     const pg = ui.pager({size: 10, row: (t) => withReplay(tradeRow(t, a, {noName: true, why: true, prices: true, equity: true}), t), empty: "아직 거래가 없습니다"});
     pg.set(trades);
@@ -170,16 +181,19 @@ export async function mount(el, ctx) {
     }
     const same = sameStrip(a, board, init);
     view.same = same;
-    el.replaceChildren(backLink(), headSlot, same ? same.el : null,
+    // the coin chart sits full width right under the profile card (v3's centrepiece); the separate 자본 곡선 panel only
+    // where no profile card draws the curve already (an extra account, or a card the server does not have)
+    const profDraws = !isExtra && !(view.prof && view.prof.missing);
+    el.replaceChildren(backLink(), headSlot, same ? same.el : null, candleCard,
       h("div", {class: "account-cols"},
-        h("div", {class: "stack"}, walletCard, refSlot, posEl, eqCard, candleCard),
+        h("div", {class: "stack"}, walletCard, refSlot, posEl, profDraws ? null : eqCard),
         h("div", {class: "stack"}, rules, extra, tradesCard)));
 
     // "?" chips next to the number names this page draws (용어 사전 in the FAQ)
     termify(walletCard);
     if (posEl) termify(posEl);
     // the charts draw once their boxes are on the page
-    drawEquity(eqBox, d, init, gen);
+    if (!profDraws) drawEquity(eqBox, d, init, gen);
     const drawC = () => drawCandles(cBox, d, a, symSel.value, gen);
     symSel.addEventListener("change", drawC);
     drawC();
@@ -316,13 +330,23 @@ export async function mount(el, ctx) {
       s.applyOptions({priceFormat: {type: "price", precision: dec, minMove: Math.pow(10, -dec)}});
       s.setData(data);
       const t0 = data.length ? data[0].time : 0, marks = [];
+      const mine = (d.trades || []).filter((t) => t.symbol === sym && t.entry_time / 1000 >= t0);
+      const op = normPos(d.state && d.state.position);
+      const opHere = op && op.symbol === sym && op.entry_time ? op : null;
+      const win = chartWindow(data, opHere ? mine.concat([{entry_time: opHere.entry_time}]) : mine, step);
+      const lab = markLabels(mine.length, win);
       for (const t of d.trades || []) {
         if (t.symbol !== sym || t.entry_time / 1000 < t0) continue;
         const e = Math.floor(t.entry_time / 1000), x = Math.floor(t.exit_time / 1000);
         marks.push({time: e - (e % step), position: t.side > 0 ? "belowBar" : "aboveBar", color: tok("--accent"), shape: t.side > 0 ? "arrowUp" : "arrowDown",
-          text: `${fmt.sideKo(t.side)} ${fmt.lev(t.leverage)}`});
+          text: lab.entry(t)});
         marks.push({time: x - (x % step), position: t.side > 0 ? "aboveBar" : "belowBar", color: t.pnl > 0 ? tok("--up") : tok("--down"), shape: "circle",
-          text: `${fmt.reasonKo(t.exit_reason)} ${fmt.pct(t.roe, 0)}`});
+          text: lab.exit(t)});
+      }
+      if (opHere) {        // the open position's entry arrow (its exit is still to come)
+        const e = Math.floor(opHere.entry_time / 1000);
+        marks.push({time: e - (e % step), position: opHere.side > 0 ? "belowBar" : "aboveBar", color: tok("--accent"),
+          shape: opHere.side > 0 ? "arrowUp" : "arrowDown", text: lab.level === "bare" ? "보유" : `${lab.entry(opHere)} 보유 중`});
       }
       marks.sort((x, y) => x.time - y.time);
       s.setMarkers(marks);
@@ -335,7 +359,8 @@ export async function mount(el, ctx) {
         s.createPriceLine({price: p.liq, color: tok("--warn"), lineWidth: 1, lineStyle: 3, title: "청산가"});
         if (reel && p.target) s.createPriceLine({price: p.target, color: tok("--up"), lineWidth: 1, lineStyle: 2, title: "목표 (윗밴드)"});
       }
-      c.chart.timeScale().fitContent();
+      // zoom: the first trade on this coin minus ~40 bars through now, so the arrows and dots are readable
+      if (win) c.chart.timeScale().setVisibleLogicalRange(win); else c.chart.timeScale().fitContent();
     } catch (e) { box.replaceChildren(ui.errorBox(e)); }
   }
 
