@@ -256,7 +256,9 @@ LEAD_HYPOTHESES_MAX = 3          # the ranking review's lead may put this many g
 LEAD_HYPOTHESIS_MEETINGS = ("ranking", "cost_review", "combo_review", "coin_review", "rr_review", "risk_review")
 # the lead's extra output in some meetings (added to the lead's format only there)
 LEAD_EXTRA = {
-    "bull_bear": '  "call": {"direction": "상승 | 하락 | 중립 (이 셋 중 한 단어)", "confidence": 1}',
+    "bull_bear": ('  "call": {"direction": "상승 | 하락 | 중립 (이 셋 중 한 단어)", "confidence": 1, '
+                  '"change_mind": "판단이 바뀌는 조건 한 문장 (예: 4시간 안에 7일 저가 아래로 마감하면 하락으로 봄)"},\n'
+                  '  "retro": "지난 채점 판정(committee.track_record.last_graded) 되돌아보기 2~4문장 (없으면 빈 문자열)"'),
     "learning_review": ('  "lessons": {"confirmed": ["이번 주 확인된 것 (없으면 빈 목록)"], "refuted": ["틀린 것으로 '
                         '드러난 것"], "do_not_retest": ["다시 시험하지 않을 것"]}'),
 }
@@ -1243,6 +1245,19 @@ def _read_prompt(name: str) -> str:
         return F.fill(fh.read().strip())
 
 
+def written_by(model: str, sys_text: str, res: Any = None) -> dict:
+    """#88: which model and which prompt wrote a message: the model asked for, the model the runner reported (when
+    it says), and the first 12 hex characters of the system prompt's sha256 (a wording change shows as a new
+    version). Stored in the message's data; never shown as a judgement of the message."""
+    import hashlib
+    out = {"model": model, "prompt_version": hashlib.sha256(sys_text.encode("utf-8")).hexdigest()[:12]}
+    meta = getattr(res, "meta", None)
+    served = meta.get("model") if isinstance(meta, dict) else None
+    if isinstance(served, str) and served and served != model:
+        out["served_model"] = served[:80]
+    return out
+
+
 def system_prompt(role: str, turn: str, meeting: str = "") -> str:
     """Fixed text only: common rules + the role's duty in the rooms (roster3.ROOM_DUTY) + the turn's
     instructions (+ the meeting's own, ``MEETING_FILE``, for a team or lead turn) + the output format (+ the lead's
@@ -1531,6 +1546,9 @@ def check_lead(out: Any, given: dict) -> tuple[Optional[dict], list[str]]:
         if why:
             clean["call_problem"] = why
             problems.append(f"call: {why} -> 판정을 읽을 수 없음으로 기록(채점 안 함)")
+        elif not call.get("change_mind"):
+            problems.append("call.change_mind 없음: 판단이 바뀌는 조건을 적지 않음(판정은 그대로 기록)")
+        clean["retro"] = _line(out.get("retro"), 600)
     if trig == "learning_review":
         raw = out.get("lessons") if isinstance(out.get("lessons"), dict) else {}
         clean["lessons"] = {k: _strs(raw.get(k), 3, 300) for k in LESSON_KO}
@@ -2240,8 +2258,9 @@ class _Round:
                             {"role": role, "reason": "tick_call_cap" if self.tick_capped else "round_call_cap"})
                 return None
             self.calls += 1
+            sys_text = system_prompt(role, turn, self.due.trigger)
             try:
-                res = self.budget.call(model, system_prompt(role, turn, self.due.trigger), INSTRUCTION, given)
+                res = self.budget.call(model, sys_text, INSTRUCTION, given)
             except UsageLimitReached:                   # our cap (BudgetExceeded) or the plan's limit:
                 self.calls -= 1                          # not an attempt of this meeting
                 raise
@@ -2270,7 +2289,7 @@ class _Round:
                     RecursionError) as exc:             # a checker bug is an unreadable answer, never a crash
                 clean, problems = None, [f"답 검사 실패: {type(exc).__name__}"]
             if clean is not None:
-                self._say(role, turn, clean, problems)
+                self._say(role, turn, clean, problems, written_by(model, sys_text, res))
                 return clean
         if not answered and not ran:
             if not self.models_ok or model in self.models_ok:
@@ -2285,10 +2304,11 @@ class _Round:
         self.system(f"{role_ko(role)}의 답을 읽을 수 없어 이번 차례는 건너뜁니다.", {"role": role, "problems": problems[:5]})
         return None
 
-    def _say(self, role: str, turn: str, clean: dict, problems: list[str]) -> None:
+    def _say(self, role: str, turn: str, clean: dict, problems: list[str], by: Optional[dict] = None) -> None:
         ev = sorted({p for f in (clean.get("findings") or []) + (clean.get("objections") or [])
                      for p in f.get("evidence", [])})
-        self.post(role, TURN_KIND[turn], render(turn, clean), {"turn": turn, "answer": clean}, ev or None)
+        self.post(role, TURN_KIND[turn], render(turn, clean), {"turn": turn, "answer": clean, **({"by": by} if by else {})},
+                  ev or None)
         self.spoke.append(role)
         key = turn if turn not in ("team", "lead") else f"{turn}:{role}"
         self.this_round[key] = {"role": role, **clean}
@@ -2713,6 +2733,25 @@ def owner_mentions(rnd: "_Round", roles) -> list[str]:
     return mentioned_roles(texts, roles)
 
 
+def bull_bear_order(due: TR.Due) -> list[tuple[str, str]]:
+    """The bull and the bear in the day's order: the bull first on even KST days (day number since 1970), the bear
+    first on odd ones."""
+    import datetime as _dt
+    try:
+        n = _dt.date.fromisoformat(str(due.data.get("slot"))).toordinal()
+    except (TypeError, ValueError):
+        n = 0
+    pair = [("bull", "team"), ("bear", "team")]
+    return pair if n % 2 == 0 else pair[::-1]
+
+
+# #88: what the bull and the bear do not see (our positions bias them; past calls anchor them). The risk officer and
+# the chair still see both: exposure is the risk officer's job, the chair explains a change from its last call.
+BULL_BEAR_BLIND = ("ours", "track_record", "track_record_coin")
+BULL_BEAR_BLIND_NOTE = ("공정한 토론을 위해 낙관론자·비관론자에게는 우리 계좌 포지션(ours)과 지난 판정(track_record), 방의 지난 "
+                        "글(room_messages)을 보여 주지 않음. 리스크 책임자와 팀장은 봄")
+
+
 def team_plan(due: TR.Due, mentioned: tuple = ()) -> list[tuple[str, str]]:
     room, trig = due.room_id, due.trigger
     lead = ("team_lead", "lead")
@@ -2752,8 +2791,10 @@ def team_plan(due: TR.Due, mentioned: tuple = ()) -> list[tuple[str, str]]:
     if trig == "event_review":
         return [("news_calendar", "team"), ("macro_corr", "team"), ("chart_regime", "team"), lead]
     if trig == "bull_bear":
-        # the lead chairs and gives the call (committee.parse_call); code records and grades it, nothing trades
-        return [("bull", "team"), ("bear", "team"), ("risk_officer", "team"), lead]
+        # the lead chairs and gives the call (committee.parse_call); code records and grades it, nothing trades.
+        # #88: who speaks first alternates by KST day (the second answers the first), so neither side always frames
+        # the debate
+        return [*bull_bear_order(due), ("risk_officer", "team"), lead]
     if trig == "evening" and room == "team:review":
         return [("pnl_reviewer", "team"), ("whatif", "team"), ("risk_officer", "team")]
     if trig == "incident":
@@ -2805,6 +2846,13 @@ def _team_packet(rnd: _Round, role: str, board: dict) -> dict:
     pk = {**rnd.base, "board": {k: board.get(k) for k in view if k in board}}
     if "error" in board:
         pk["board"]["error"] = board["error"]
+    if rnd.due.trigger == "bull_bear" and role in ("bull", "bear") and isinstance(pk.get("committee"), dict):
+        pk["committee"] = {**{k: v for k, v in pk["committee"].items() if k not in BULL_BEAR_BLIND},
+                           "hidden": BULL_BEAR_BLIND_NOTE}
+        # the room's past messages carry the same things (yesterday's '🎯 판정 기록', the code's grading line, the
+        # risk officer on our exposure): the bull and the bear get none of them. This round's turns still reach the
+        # second speaker through this_round.
+        pk["room_messages"] = []
     if role == "team_lead":
         pk["today_rounds"] = _today_rounds(ctx, meeting_day_start(ctx, rnd.due))
         pk["waiting_for_owners"] = len(R.list_proposals(ctx.agents_conn, status="awaiting_owner"))
@@ -3159,7 +3207,8 @@ def record_call(rnd: "_Round", lead: Optional[dict]) -> dict:
     why = "" if call else ((lead or {}).get("call_problem") or "팀장 판정을 받지 못함")
     rid = CM.record(ctx.agents_conn, day=d.get("slot") or R.kst_day(ctx.now_ms), symbol=sym, round_id=rnd.round_id,
                     call=call, why=why, ref=(ref["ts"], ref["price"]) if isinstance(ref, dict) else None,
-                    now_ms=ctx.clock(), data={"speakers": rnd.spoke})
+                    now_ms=ctx.clock(), data={"speakers": rnd.spoke,
+                                              **({"retro": lead["retro"]} if (lead or {}).get("retro") else {})})
     coin = sym.replace("USDT", "")
     if rid is None:
         text = f"오늘 {coin} 판정은 앞선 시도에서 이미 기록했습니다(하루에 하나만 기록)."
@@ -3172,6 +3221,10 @@ def record_call(rnd: "_Round", lead: Optional[dict]) -> dict:
         text = (f"🎯 판정 기록 #{rid}: {coin} 앞으로 24시간 {call['direction']} (확신 {call['confidence']}/3), 기준 가격 "
                 f"{ref['price']:,.6g}. 24시간 뒤 코드가 바이낸스 공개 가격으로 채점합니다(±{CM.THRESHOLD * 100:.1f}% 기준). "
                 "거래로 이어지지 않습니다.")
+        if call.get("change_mind"):
+            text += f" 판단이 바뀌는 조건: {call['change_mind']}"
+    if rid is not None and (lead or {}).get("retro"):
+        text += f"\n지난 판정 돌아보기(팀장): {lead['retro']}"
     rnd.post("code", "action", text, {"action": "debate_call", "call_id": rid, "call": call, "symbol": sym,
                                       "reference": ref, "why": why or None})
     return {"call_id": rid, "symbol": sym, "call": call, "text_ko": text}
@@ -5032,7 +5085,7 @@ class DryRunRunner:
         elif turn in ("lead", "lab_lead"):
             ans = {"summary": [f"{head} 1", f"{head} 2", f"{head} 3"], "human_actions": [], "watch_next": []}
             if (packet.get("meeting") or {}).get("trigger") == "bull_bear":
-                ans["call"] = {"direction": "중립", "confidence": 1}
+                ans["call"] = {"direction": "중립", "confidence": 1, "change_mind": "(dry-run) 조건"}
         elif turn == "lab_inventor":
             ans = {"headline": head, "specs": [{"spec": {"timeframe": "4h", "entry": {"family": "keltner_break"},
                                                          "filters": [{"kind": "adx", "mode": "above", "level": 25}],

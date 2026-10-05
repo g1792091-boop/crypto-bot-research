@@ -41,6 +41,7 @@ cd /opt/crypto-bot-research && sudo -u paperbot-debate /opt/paperbot/venv/bin/py
 
 ## Sonnet 5.5로 켜기 (두 분 결정 2026-10-05: Sonnet 5.5, 30분, 월 $30, effort low)
 paper v4 재시작 뒤 점검이 끝나면 켭니다. 크레딧은 **$30 선불**, 콘솔 지출 한도 **$30**, 자동 충전(auto reload) **끔**.
+$30 선불 크레딧은 저절로 다시 채워지지 않습니다. 다 쓰면 토론방은 'API 잔액 부족'으로 멈추고, 두 분이 콘솔에서 충전해야 이어집니다.
 
 `debate.env`에 넣을 줄(키 넣는 법은 아래 "서버에서 켜기"의 `sudoedit`; 키는 편집기 안에만, 채팅·명령줄에는 절대 쓰지 않기):
 ```

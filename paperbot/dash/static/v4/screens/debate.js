@@ -64,14 +64,19 @@ export async function mount(el, ctx) {
     put(roundsMeta,
       skipped ? h("p", {class: "rk-note"}, `건너뛴 회차 ${fmt.int(skipped)}번: 새 청산·알림·밤 점검이 없어 같은 이야기를 되풀이하지 않았습니다.`) : null,
       bad.length ? h("p", {class: "rk-note"}, "최근 오류 · ", bad.map((r) => `${fmt.kst(r.ts)} ${String(r.error || r.status).slice(0, 80)}`).join(" / ")) : null);
-    const sb = d.scoreboard || {};
-    const speakers = Object.entries(sb.speakers || {});
+    // #88: the whole room's record only (one model speaks every role: per-speaker rates are not separate opinions),
+    // next to a coin flip and to the hits expected by chance; a small sample is marked red
+    const sb = d.scoreboard || {}, easy = sb.easy || {};
     put(score,
-      sb.small !== false ? h("p", {class: "rk-banner"}, h("b", null, "표본 적음"),
+      sb.small !== false ? h("p", {class: "rk-banner bad"}, h("b", null, "표본 적음"),
         h("span", null, `채점된 가설이 ${fmt.int(sb.graded || 0)}개입니다. ${fmt.int(sb.small_below || 10)}개 미만이면 우연과 구별할 수 없어 아무것도 말해 주지 못합니다.`)) : null,
       h("div", {class: "db-total"}, h("span", null, "방 전체 맞음"), h("b", null, sb.graded ? `${fmt.int(sb.hit)}/${fmt.int(sb.graded)} (${fmt.pct(sb.rate, 0, false)})` : "—"),
-        h("span", {class: "muted"}, "비교 기준 (우연히 맞을 확률)"), ui.notYet("기준 확률 수집 전", "주장마다 원래 맞을 확률이 달라 서버가 아직 계산하지 않습니다")),
-      speakers.length ? h("div", {class: "row wrap db-sp"}, speakers.map(([k, v]) => h("span", {class: "pp"}, `${k} ${fmt.int(v.hit)}/${fmt.int(v.graded)}`, " ", ui.smallSample(v.graded, sb.small_below || 10)))) : null);
+        h("span", {class: "muted"}, "동전 던지기 (기준)"), h("span", null, "50%"),
+        h("span", {class: "muted"}, "우연히 맞을 기대치"), sb.expected_rate != null
+          ? h("span", null, `${fmt.pct(sb.expected_rate, 0, false)} (${fmt.int(Math.round(sb.expected_hits))}개쯤)`)
+          : ui.notYet("채점된 가설 없음", "채점된 가설이 생기면 주장마다 원래 맞을 확률(모르면 50%)을 더해 보여 줍니다")),
+      easy.graded ? h("p", {class: "rk-note"}, `원래 ${fmt.pct(easy.rate_from, 0, false)} 넘게 맞는 쉬운 예측 ${fmt.int(easy.graded)}개는 따로 셌습니다 (맞음 ${fmt.int(easy.hit)}개, 성적에 넣지 않음).`) : null,
+      h("p", {class: "rk-note"}, "AI 한 번이 모든 역할을 말하는 방이라 직원별 성적은 보여 주지 않습니다."));
     hyps.set(d.hypotheses || [], true);
     ideas.set(d.ideas || [], true);
     if (!body.isConnected) wrap.replaceChildren(body);

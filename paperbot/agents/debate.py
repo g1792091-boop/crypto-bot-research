@@ -323,6 +323,11 @@ class DB:
         self.conn.execute("PRAGMA busy_timeout=5000")
         self.conn.execute("PRAGMA journal_mode=DELETE")
         self.conn.executescript(SCHEMA)
+        # #88: every round records the prompt version it ran with (next to the model); an older debate.db gets the
+        # column here (this service is the file's only writer)
+        cols = {r[1] for r in self.conn.execute("PRAGMA table_info(debate_rounds)")}
+        if "prompt_version" not in cols:
+            self.conn.execute("ALTER TABLE debate_rounds ADD COLUMN prompt_version TEXT")
         self.conn.commit()
 
     def close(self) -> None:
@@ -504,6 +509,17 @@ def system_text() -> str:
     """The stable prefix: rules, roles, output format and the hypothesis menu (the same bytes every round)."""
     with open(PROMPT, encoding="utf-8") as fh:
         return fh.read().rstrip() + "\n\n## 가설 메뉴\n" + G.MENU_KO + "\n"
+
+
+def prompt_version() -> str:
+    """The first 12 hex characters of the system prompt's sha256 (prompts3/debate_room.md + the hypothesis menu):
+    stored with each round (#88), so a change of wording can be told apart from a change of model. '' when the file
+    cannot be read."""
+    import hashlib
+    try:
+        return hashlib.sha256(system_text().encode("utf-8")).hexdigest()[:12]
+    except OSError:
+        return ""
 
 
 def roles_for(round_no: int, n: int) -> list[str]:
@@ -702,10 +718,10 @@ class Service:
         u = usage or {}
         cur = self.db.conn.execute(
             "INSERT INTO debate_rounds (ts, topic, in_tokens, out_tokens, cache_read, cache_write, cost_usd, status, "
-            "error, model, turns) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            "error, model, turns, prompt_version) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
             (now, topic, int(u.get("input_tokens") or 0), int(u.get("output_tokens") or 0),
              int(u.get("cache_read_input_tokens") or 0), int(u.get("cache_creation_input_tokens") or 0), cost, status,
-             redact(error, self.cfg.api_key)[:300] if error else None, self.cfg.model, turns))
+             redact(error, self.cfg.api_key)[:300] if error else None, self.cfg.model, turns, prompt_version()))
         self.db.conn.commit()
         return int(cur.lastrowid)
 
@@ -1106,10 +1122,11 @@ def print_status(s: dict, out: Callable[[str], Any] = print) -> None:
     a = s["avg_round"]
     out(f"최근 7일 회당 평균: 입력 {a['in_tokens']:,} 토큰, 출력 {a['out_tokens']:,} 토큰, ${a['cost_usd']:.4f} ({a['rounds_7d']}회)")
     sb = s["scoreboard"]
-    out(f"가설 채점: {sb['graded']}개 중 {sb['hit']}개 맞음" + (" (표본 작음: 결론 아님)" if sb["small"] else "")
-        + f", 열린 가설 {sb['by_status'].get('open', 0)}개")
-    for who, b in sorted(sb["speakers"].items()):
-        out(f"  {who}: {b['hit']}/{b['graded']}" + (" (표본 작음)" if b["small"] else ""))
+    # #88: the room as a whole only (one model speaks every role), next to a coin flip and the chance expectation
+    out(f"가설 채점(방 전체): {sb['graded']}개 중 {sb['hit']}개 맞음" + (" (표본 작음: 결론 아님)" if sb["small"] else "")
+        + (f", 동전 던지기 50%, 우연히 맞을 기대치 {sb['expected_hits']}개" if sb.get("expected_hits") is not None else "")
+        + f", 열린 가설 {sb['by_status'].get('open', 0)}개"
+        + (f", 쉬운 예측 {sb['easy']['graded']}개는 따로 셈" if (sb.get("easy") or {}).get("graded") else ""))
 
 
 def main(argv: Optional[list] = None, environ: Optional[dict] = None, transport: Transport = urllib_transport,

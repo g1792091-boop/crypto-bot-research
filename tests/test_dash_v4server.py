@@ -75,7 +75,7 @@ def test_the_login_redirect_keeps_only_same_origin_paths():
 
 
 def test_login_page_follows_next_only_to_a_same_origin_path():
-    html = _static("login.html")
+    html = _static("login.html") + _static("login.js")      # #88: the script moved out of the page (CSP)
     assert "<title>Paper v4 로그인</title>" in html and "<h1>Paper v4</h1>" in html and "Paper v3" not in html
     assert "location.href = nextPath()" in html
     fn = html[html.index("function nextPath()"):html.index("document.getElementById(\"f\")")]

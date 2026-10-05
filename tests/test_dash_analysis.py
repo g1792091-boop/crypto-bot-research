@@ -225,14 +225,19 @@ def test_bot_chart_takes_every_binance_interval(env):
 
 def test_tradingview_and_coinglass_load_in_the_browser_only(env):
     c = env["client"]
-    # the CSP stays as it was: frames of this site refused; it has no script/frame source list that would have to
-    # name TradingView (adding one would also have to list Binance's streams)
+    # frames of this site refused; the CSP (#88) names TradingView only as a frame source (the v4 chart screen's
+    # iframe), never as a script or connect source, and no Coinglass host (it opens as a link only)
     for r in (c.get("/login"), c.get("/static/manifest.json")):
-        assert r.headers["Content-Security-Policy"] == "frame-ancestors 'none'"
+        csp = r.headers["Content-Security-Policy"]
+        assert "frame-ancestors 'none'" in csp and "coinglass" not in csp
+        d = dict(x.strip().split(" ", 1) for x in csp.split(";"))
+        assert all("tradingview" not in v for k, v in d.items() if k != "frame-src")
     here = os.path.dirname(STATIC)
     for f in ("app.py", "analysis.py"):
         src = open(os.path.join(here, f), encoding="utf-8").read()
-        assert "tradingview.com" not in src and "coinglass.com" not in src, f      # the server never fetches them
+        assert "coinglass.com" not in src, f                                    # the server never fetches them
+        code = [ln for ln in src.splitlines() if "tradingview.com" in ln and not ln.lstrip().startswith("#")]
+        assert all("frame-src" in ln for ln in code), f                       # only the CSP (and comments)
     js = open(os.path.join(STATIC, "charts.js"), encoding="utf-8").read()
     hosts = set(re.findall(r"https://([a-z0-9.-]+)", js))
     assert hosts == {"s3.tradingview.com", "www.coinglass.com"}

@@ -1298,6 +1298,23 @@ def server_facts(data: "Data", agents_db: Optional[str], daily_db: Optional[str]
 
 
 # ---------------------------------------------------------------- agent rooms
+# Content-Security-Policy on every answer (#88): scripts only from this server (no inline script: login.html loads
+# /static/login.js), no plug-ins, never inside another site's frame. Inline style attributes stay allowed (the screens
+# build markup with style="..."); the one outside host is Google Fonts (v4/index.html: the page keeps working with
+# system fonts when it is blocked). data: covers the sound button's SVG mask and canvas snapshots; blob: the chart
+# library's images. connect-src 'self' covers /api/* and the /api/stream event stream. frame-src: the v4 chart
+# screen's TradingView chart iframe (the widget page and the host it moves to); no other site may be framed.
+CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+       "font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; "
+       "connect-src 'self'; worker-src 'self' blob:; manifest-src 'self'; "
+       "frame-src https://s.tradingview.com https://www.tradingview-widget.com; object-src 'none'; base-uri 'self'; "
+       "form-action 'self'; frame-ancestors 'none'")
+# the old dashboard at /v3 ('예전 화면') reads Binance's public WebSockets (wss://fstream.binance.com: live prices,
+# candles, order book) and embeds the TradingView chart (s3.tradingview.com/tv.js) straight from the browser; the
+# strict policy above would cut all of them off. Its page keeps the header it had before #88 (a CSP applies per page:
+# the v4 page, the login page and every API answer keep the strict one).
+CSP_V3 = "frame-ancestors 'none'"
+V3_PAGES = ("/v3", "/static/index.html")
 PUBLIC_PATHS = ("/login", "/api/login", "/static/login.html", "/static/login.css", "/static/login.js",
                 # the phone home-screen shortcut: a browser fetches these without the login cookie (no data in them)
                 "/static/manifest.json", "/static/icon.svg", "/static/icon-192.png", "/static/icon-512.png",
@@ -2325,7 +2342,8 @@ RULES_V4_KO = ("기존 36 · 딥시크 44 · 5분봉 단타 1 · 동전 봇 · �
 RULES_V4_LABEL = "v4 규칙"
 # documents the dashboard serves read-only as text (GET /api/doc/<name>); nothing else under docs/
 DOCS = {"rules-change-1": "paper-v3-rules-change-1.md", "levrule-eval": "levrule-eval.md",
-        "rules-v4": "paper-v4-rules.md", "verdict-v4": "paper-v4-verdict.md", "levrule-eval-v4": "levrule-eval-v4.md"}
+        "rules-v4": "paper-v4-rules.md", "verdict-v4": "paper-v4-verdict.md", "levrule-eval-v4": "levrule-eval-v4.md",
+        "tradingagents-limits": "tradingagents-limits.md"}       # #88 A11: linked from the FAQ
 DOCS_DIR = os.path.join(os.path.dirname(os.path.dirname(HERE)), "docs")
 DOC_MAX_BYTES = 200_000
 
@@ -2412,7 +2430,7 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
         resp = await _guarded(req, call_next)
         # never inside another site's frame (the approve / reject buttons, the login form)
         resp.headers["X-Frame-Options"] = "DENY"
-        resp.headers["Content-Security-Policy"] = "frame-ancestors 'none'"
+        resp.headers["Content-Security-Policy"] = CSP_V3 if req.url.path in V3_PAGES else CSP
         return resp
 
     @app.get("/login")

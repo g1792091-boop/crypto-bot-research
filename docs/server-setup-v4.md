@@ -450,6 +450,7 @@ sudo sed -i 's/research=16:500000/research=30:1500000/' /etc/paperbot/agents.env
 먼저 브라우저에서 (두 분, 한 번, 명령 없음): `console.anthropic.com` → Billing에서 크레딧 **$30** 구매, **자동 충전(auto reload) 끔**,
 지출 한도(spend limit) **$30** → API keys에서 새 키(이름 예: `paperbot-debate`)를 만들어 복사해 둡니다. **키는 채팅·메일·문서·명령줄에
 절대 붙이지 않습니다.** (Claude Max 구독과 API 크레딧은 별개입니다.)
+$30 선불 크레딧은 저절로 다시 채워지지 않습니다. 다 쓰면 토론방은 'API 잔액 부족'으로 멈춥니다(충전하면 이어집니다).
 
 (a) 비용 미리 재기 (키도 API 호출도 없음, 돈 안 듦; 오늘 정한 설정으로 계산):
 

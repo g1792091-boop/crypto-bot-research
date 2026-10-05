@@ -388,7 +388,7 @@ def test_pages_cannot_be_framed(env):
     c = env["client"]
     for r in (c.get("/login"), c.get("/api/rooms")):                   # before and after login
         assert r.headers["X-Frame-Options"] == "DENY"
-        assert r.headers["Content-Security-Policy"] == "frame-ancestors 'none'"
+        assert "frame-ancestors 'none'" in r.headers["Content-Security-Policy"]
     _login(c)
     assert c.get("/api/rooms").headers["X-Frame-Options"] == "DENY"
 
