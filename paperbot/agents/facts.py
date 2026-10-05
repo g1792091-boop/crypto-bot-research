@@ -182,8 +182,21 @@ def method_text() -> str:
     return facts()["method_ko"]
 
 
+# rule B in one sentence (docs/paper-v4-rules.md; the rooms' long form is rooms_common.md's 레버리지·증거금 line): the
+# debate prompt's {{RULE_B}}
+RULE_B_KO = ("레버리지·증거금(규칙 B): 증거금 = 레버리지 %. 진입 품질 `best` 신호는 50%×50배 → 40%×40배 → 30%×30배 → "
+             "20%×20배, 나머지 신호는 30%×30배 → 20%×20배를 차례로 시도해 거래소 구간·손절이 청산가보다 1 ATR 이상 안쪽·"
+             "손절 손실 ≤ 자금 15%를 처음 통과한 후보로 들어감(모두 안 되면 진입 안 함). 딥시크와 릴스는 진입 품질 점수가 "
+             f"없어 늘 보통. 낙폭 정지는 없고 자금 $10 미만이면 파산. 규칙 B는 30일 체크포인트에서 `{LEVRULE_DOC}` 방법으로 "
+             "한 번만 판정하고, 창 중간에는 바꾸지 않음")
+
+
+def rule_b_ko() -> str:
+    return RULE_B_KO
+
+
 PLACEHOLDERS = {"{{RUN_FACTS}}": run_facts_block, "{{ORIGINALS}}": originals_ko, "{{FIVE_M}}": five_m_ko,
-                "{{EXITS}}": exits_block, "{{METHOD}}": method_text}
+                "{{EXITS}}": exits_block, "{{METHOD}}": method_text, "{{RULE_B}}": rule_b_ko}
 
 
 def fill(text: str) -> str:

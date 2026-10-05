@@ -1275,6 +1275,8 @@ def system_prompt(role: str, turn: str, meeting: str = "") -> str:
     schema = SCHEMAS["expert" if turn == "expert" else turn]
     if turn == "lead" and meeting in LEAD_EXTRA:
         schema = schema[:-2] + ",\n" + LEAD_EXTRA[meeting] + "\n}"
+    if turn == "team" and role in GROUP_ROLE_OF_ROOM.values():
+        schema = schema[:-2] + ",\n" + GROUP_NOTE_FMT + "\n}"        # the v4 specialist's room note (its action)
     return (f"{common}\n\n# 당신: {info['name']}" + (f" ({team})" if team else "")
             + f"\n담당: {duty}\n\n{_read_prompt(fname)}{extra}\n\n"
             f"# 출력 형식 (JSON 객체 하나만, 다른 글 없이)\n{schema}\n")
@@ -1481,10 +1483,13 @@ def check_team(out: Any, given: dict) -> tuple[Optional[dict], list[str]]:
     if not isinstance(out, dict) or not isinstance(out.get("headline"), str):
         return None, ["headline 없음"]
     problems: list[str] = []
-    return {"headline": _line(out["headline"], 300),
-            "findings": _findings(out.get("findings"), given, "findings", problems),
-            "data_gaps": _strs(out.get("data_gaps")),
-            "reply_to_owner": _line(out.get("reply_to_owner"), 800)}, problems
+    clean = {"headline": _line(out["headline"], 300),
+             "findings": _findings(out.get("findings"), given, "findings", problems),
+             "data_gaps": _strs(out.get("data_gaps")),
+             "reply_to_owner": _line(out.get("reply_to_owner"), 800)}
+    if ((given or {}).get("room") or {}).get("room_id") in GROUP_ROLE_OF_ROOM and _line(out.get("note"), GROUP_NOTE_MAX):
+        clean["note"] = _line(out.get("note"), GROUP_NOTE_MAX)       # a v4 specialist room's note (_group_notes)
+    return clean, problems
 
 
 def check_dialog(out: Any, given: dict) -> dict:
@@ -2843,6 +2848,8 @@ def _review_meeting(ctx: RoundContext) -> list[dict]:
 def _team_packet(rnd: _Round, role: str, board: dict) -> dict:
     ctx = rnd.ctx
     view = TEAM_VIEW.get(role, ("meta", "today"))
+    if role == "team_lead" and rnd.room in GROUP_ROLE_OF_ROOM:
+        view = GROUP_LEAD_VIEW                # a v4 specialist room's lead: the groups, never the 36's sections
     pk = {**rnd.base, "board": {k: board.get(k) for k in view if k in board}}
     if "error" in board:
         pk["board"]["error"] = board["error"]
@@ -2853,6 +2860,8 @@ def _team_packet(rnd: _Round, role: str, board: dict) -> dict:
         # risk officer on our exposure): the bull and the bear get none of them. This round's turns still reach the
         # second speaker through this_round.
         pk["room_messages"] = []
+    if isinstance(pk["board"].get("groups"), dict):
+        pk["board"]["groups"] = _ds_strict_groups(pk["board"]["groups"])
     if role == "team_lead":
         pk["today_rounds"] = _today_rounds(ctx, meeting_day_start(ctx, rnd.due))
         pk["waiting_for_owners"] = len(R.list_proposals(ctx.agents_conn, status="awaiting_owner"))
@@ -2873,10 +2882,10 @@ def _team_round(rnd: _Round) -> tuple[str, dict]:
         rnd.base["lab"] = lab_overview(ctx)
         rnd.base["lab_accounts"] = lab_accounts_packet(ctx, rnd.due.data.get("oldest_exit"))
     if room in GROUP_ROLE_OF_ROOM:            # a v4 specialist room: its accounts (DeepSeek families or the reel)
-        rnd.base["group_accounts"] = group_accounts_packet(ctx, room, rnd.due)
+        rnd.base["group_accounts"] = _ds_strict_room(room, group_accounts_packet(ctx, room, rnd.due))
         if rnd.due.trigger in TR.GROUP_TRIGGERS:
             # its members' loss cards, tags and wins against losses (G4; the same section a strategy room has)
-            rnd.base["losses"] = _losses(ctx, room, rnd.due)
+            rnd.base["losses"] = _ds_strict_room(room, _losses(ctx, room, rnd.due))
     if rnd.due.trigger == "market_move":
         rnd.base["market_move"] = market_move_packet(ctx, rnd.due)
     if rnd.due.trigger == "ranking":
@@ -2904,8 +2913,11 @@ def _team_round(rnd: _Round) -> tuple[str, dict]:
     if answered == 0:
         raise RoundFailed("회의에서 아무도 답하지 못했습니다")
     extra: dict = {}
+    if room in GROUP_ROLE_OF_ROOM and (gnotes := _group_notes(rnd)):
+        extra["room_notes"] = gnotes
     if lead and lead.get("flag_owners"):
-        extra["flag"] = A.flag_owners(rnd.env("team_lead"), lead["flag_owners"])
+        extra["flag"] = (_group_flag(rnd, lead["flag_owners"]) if room in GROUP_ROLE_OF_ROOM
+                         else A.flag_owners(rnd.env("team_lead"), lead["flag_owners"]))
     if lead and lead.get("hypotheses") and rnd.due.trigger in LEAD_HYPOTHESIS_MEETINGS:
         # the ranking review's (and the weekly analyses') hypotheses go to the ledger under their strategy: graded
         # later like the rooms' own
@@ -2959,7 +2971,9 @@ def _team_summary(rnd: _Round, board: dict, extra: dict) -> str:
     L = [f"🧾 {TRIGGER_KO.get(rnd.due.trigger, rnd.due.trigger)} 끝"]
     L.append("- 발언: " + ", ".join(dict.fromkeys(role_ko(r) for r in rnd.spoke)))
     today = board.get("today") or {}
-    if today:
+    if rnd.room in GROUP_ROLE_OF_ROOM:        # board['today'] is the 36's: a v4 specialist room says its own accounts
+        L += _group_summary_lines(rnd)
+    elif today:
         L.append(f"- 최근 24시간(코드 집계): 끝난 거래 {today.get('trades', 0)}건, 손익 "
                  f"{float(today.get('net_pnl') or 0):+.2f} USDT, 파산 계좌 누적 {today.get('busts_total', 0)}개")
     if rnd.due.data.get("summary_ko"):
@@ -2973,10 +2987,115 @@ def _team_summary(rnd: _Round, board: dict, extra: dict) -> str:
         L.append(f"- 가설 장부에 {sum(1 for h in extra['hypotheses'] if h.get('trial_id'))}건 (나중 거래로 코드가 채점)")
     if extra.get("notes"):
         L.append(f"- 학습 정리 메모 {len(extra['notes'])}건")
+    if extra.get("room_notes"):
+        L.append(f"- 방 메모 {len(extra['room_notes'])}건 (다음 회의 패킷의 notes)")
     if isinstance(extra.get("call"), dict):
         L.append(f"- {extra['call'].get('text_ko', '')}")
     L.append(f"- AI 호출 {rnd.calls}회")
     return "\n".join(L)
+
+
+# the lead of a v4 specialist room (DeepSeek families, the reel): the board's group section next to the room's own
+# ``group_accounts`` (TEAM_VIEW["team_lead"] is the 36's: today, league, checkpoint, ...)
+GROUP_LEAD_VIEW = ("meta", "groups")
+
+
+def _group_summary_lines(rnd: _Round) -> list[str]:
+    """A v4 specialist room's line on its meeting card (code): its own accounts from ``group_accounts`` (accounts,
+    trades, busts since the start); P&L only for the reel (D10/D11: DeepSeek money stays on its group screen).
+    Nothing when the packet has no numbers (never the 36's ``today``)."""
+    ga = rnd.base.get("group_accounts")
+    rows = ga.get("definitions") if isinstance(ga, dict) else None
+    if not isinstance(rows, list):
+        return []
+    rows = [x for x in rows if isinstance(x, dict)]
+    trades = sum(int(x.get("trades") or 0) for x in rows)
+    busts = sum(int(x.get("busts") or 0) for x in rows)
+    line = f"- 이 방 계좌(코드 집계, 시작부터): {int(ga.get('accounts') or 0)}개, 끝난 거래 {trades}건, 파산 {busts}개"
+    from ..config import REEL_NAME
+    if rnd.room == TR.group_room_of(REEL_NAME):
+        line += f", 손익 {sum(float(x.get('pnl') or 0) for x in rows):+.2f} USDT"
+    return [line]
+
+
+# the v4 specialist's 'note' action (roster3.GROUP_ACTIONS): one optional line in its team answer, kept as the room's
+# note (actions.note) and read back in the next meeting's packet (``notes``)
+GROUP_NOTE_MAX = 400
+GROUP_NOTE_FMT = ('  "note": "다음 회의에 남길 방 메모 한 줄(이 방 계좌의 관찰·다음에 볼 것, 숫자는 패킷 값; '
+                  '없으면 빈 문자열)"')
+
+
+def _group_notes(rnd: _Round) -> list[dict]:
+    """The notes the v4 specialists of this meeting wrote in their team answers (check_team keeps ``note`` in these
+    rooms only), stored as room notes by actions.note; the next meeting's packet carries them (``notes``). In a
+    DeepSeek room, while dsmoney.DS_MONEY_STRICT, money amounts are left out of the note (D11)."""
+    from ..config import REEL_NAME
+    from . import dsmoney as DM
+    strict = DM.DS_MONEY_STRICT and rnd.room != TR.group_room_of(REEL_NAME)
+    out = []
+    for v in list(rnd.this_round.values()):
+        if isinstance(v, dict) and v.get("note") and v.get("role") in GROUP_ROLE_OF_ROOM.values():
+            out.append(A.note(rnd.env(v["role"]), {"text": DM.redact(v["note"]) if strict else v["note"]}))
+    return out
+
+
+def _ds_strict_room(room: str, pk: Any) -> Any:
+    """D11 (dsmoney.DS_MONEY_STRICT): a DeepSeek room's ``group_accounts`` as ROE %, win rates and counts (no P&L,
+    wallet or USDT; its ``losses`` section likewise, money keys dropped at any depth); the reel room's as it is."""
+    from ..config import REEL_NAME, V3_INITIAL
+    from . import dsmoney as DM
+    if not DM.DS_MONEY_STRICT or room == TR.group_room_of(REEL_NAME):
+        return pk
+    return DM.room_packet(pk, V3_INITIAL)
+
+
+def _ds_strict_groups(groups: dict) -> dict:
+    """D11 (dsmoney.DS_MONEY_STRICT): the board's ``groups`` with DeepSeek's money numbers removed (counts stay)."""
+    from . import dsmoney as DM
+    if not DM.DS_MONEY_STRICT or not isinstance(groups.get("ds200"), dict):
+        return groups
+    return {**groups, "ds200": {**DM.scrub(groups["ds200"]), "money_note": DM.STRICT_NOTE_KO}}
+
+
+GROUP_FLAG_MAX_PER_DAY = 1      # the five v4 specialist rooms' owners' alerts a KST day, all five together
+GROUP_FLAG_KEY = "flag_owners:group:{day}"
+
+
+def _group_flag(rnd: _Round, flag: dict) -> dict:
+    """The lead's owners' alert in a v4 specialist room: the rooms' own counter (``GROUP_FLAG_KEY``, at most
+    ``GROUP_FLAG_MAX_PER_DAY`` for the five rooms together), so their batched loss and bust reviews never use the
+    36's daily alerts (actions.flag_owners' counter, which is left alone). In a DeepSeek room, while
+    dsmoney.DS_MONEY_STRICT, a text naming a money amount (D11: DeepSeek money only on its group screen) is kept as a
+    room note and not sent. The send itself is actions.flag_owners' (links removed, a re-run meeting sends nothing)."""
+    from ..config import REEL_NAME
+    from . import dsmoney as DM
+    env = rnd.env("team_lead")
+    text = str(flag.get("text") or "")
+    if DM.DS_MONEY_STRICT and rnd.room != TR.group_room_of(REEL_NAME) and DM.has_money(text):
+        # the amounts are left out of the note too: the next meeting's packet reads the room notes back
+        res = A.note(env, {"text": ("두 분께 알림 대신 메모(딥시크 방 알림에는 금액을 쓰지 않음): " + DM.redact(text))[:800]})
+        rnd.system("딥시크 방 알림에 금액이 들어 있어 텔레그램으로 보내지 않고 방 메모로 남겼습니다.",
+                   {"action": "flag_owners", "sent": False, "reason": "ds_money"})
+        return {**res, "action": "flag_owners", "sent": False, "kept_as_note": True}
+    key = GROUP_FLAG_KEY.format(day=R.kst_day(env.now_ms))
+    used = int(R.get_cursor(env.conn, key, 0) or 0)
+    if used >= GROUP_FLAG_MAX_PER_DAY:
+        rnd.system(f"딥시크·릴스 방 알림은 다섯 방 합쳐 하루 {GROUP_FLAG_MAX_PER_DAY}번이라 오늘은 보내지 않았습니다.",
+                   {"action": "flag_owners", "sent": False, "reason": "group_daily_limit"})
+        return {"action": "flag_owners", "ok": False, "text": "그룹 방 하루 알림 한도", "sent": False}
+    # the 36's counter is put back after the send: the group rooms' alert is counted only here
+    shared = f"flag_owners:{R.kst_day(env.now_ms)}"
+    before = R.get_cursor(env.conn, shared)
+    R.set_cursor(env.conn, key, used + 1)     # before the send, like actions.flag_owners: a kill after it still counts
+    res = A.flag_owners(replace(env, flag_max_per_day=int(before or 0) + 1), flag)
+    if res.get("duplicate"):                  # a re-run meeting sent nothing: not counted
+        R.set_cursor(env.conn, key, used)
+    if before is None:
+        env.conn.execute("DELETE FROM cursors WHERE k = ?", (shared,))
+        env.conn.commit()
+    else:
+        R.set_cursor(env.conn, shared, before)
+    return res
 
 
 # ---------------------------------------------------------------- meetings added 2026-10-04 (owners' choice)

@@ -20,6 +20,7 @@ import sqlite3
 import urllib.parse
 from typing import Any, Optional
 
+from . import dsmoney as DM
 from . import facts as F
 
 DAY_MS = 86_400_000
@@ -217,11 +218,12 @@ def _checkpoint(path: Optional[str], now_ms: int, start: Optional[int]) -> dict:
     """The 30-day verdict state: only whether a verdict exists and when the next one is (never the verdict itself:
     the debate does not conclude before day 30)."""
     out: dict = {"verdict_exists": False}
-    if not path or start is None:
+    if start is None:
         return out
     try:
         from .. import checkpoint as CP
-        view = CP.dashboard_view(path)
+        # no checkpoint.db yet (before the first verdict): the next date still comes from the run's start
+        view = CP.dashboard_view(path) if path and os.path.exists(path) else {}
         out["verdict_exists"] = bool(view.get("ready"))
         k, last = 1, (CP.day_ms(view["date"]) if view.get("ready") else -1)
         while CP.checkpoint_ts(start, k) <= last:
@@ -262,6 +264,22 @@ def _cell(v: Optional[dict], min_n: int) -> Optional[dict]:
             "small_sample": n / acc < min_n}
 
 
+_NO_FLIPS = object()
+
+
+def _ds_cell(v: Optional[dict], min_n: int, flips: Any = _NO_FLIPS) -> Optional[dict]:
+    """A DeepSeek cell: ``_cell``, and while dsmoney.DS_MONEY_STRICT (D11) only its counts and ratios (trades,
+    trades_per_account, win_rate, busts) plus, given the same timeframe's coin-flip cell, ``vs_coin_flip``: the sign of
+    P&L per account against them (above / below / equal; None when either has no trades). No P&L or wallet."""
+    c = _cell(v, min_n)
+    if not DM.DS_MONEY_STRICT or c is None:
+        return c
+    out = DM.strict_cell(c)
+    if flips is not _NO_FLIPS:
+        out["vs_coin_flip"] = DM.sign_vs(v, flips)
+    return out
+
+
 def _groups_compare(board: dict, min_n: int) -> dict:
     """D2: the 36, DeepSeek and the reel, each timeframe next to the coin flips of the same timeframe."""
     from ..groups import GROUP_KO
@@ -272,9 +290,13 @@ def _groups_compare(board: dict, min_n: int) -> dict:
         v = gs.get(g)
         if not isinstance(v, dict) or not v.get("accounts"):
             continue
-        tfs = {tf: {"group": _cell(c, min_n), "coin_flip": _cell(flips.get(tf), min_n)}
+        tfs = {tf: {"group": _ds_cell(c, min_n, flips.get(tf)) if g == "ds200" else _cell(c, min_n),
+                    "coin_flip": _cell(flips.get(tf), min_n)}
                for tf, c in sorted((v.get("by_timeframe") or {}).items())}
-        out[g] = {"name": GROUP_KO.get(g, g), "all": _cell(v, min_n), "by_timeframe": tfs}
+        out[g] = {"name": GROUP_KO.get(g, g), "all": _ds_cell(v, min_n) if g == "ds200" else _cell(v, min_n),
+                  "by_timeframe": tfs}
+    if DM.DS_MONEY_STRICT:
+        out["notes"] = GROUP_NOTES_KO + [DM.STRICT_NOTE_KO]
     if len(out) == 1:
         out["missing"] = "이 실행에는 비교할 묶음이 없음(그룹 자료 없음)"
     return out
@@ -290,30 +312,54 @@ def _ds_families(board: dict, min_n: int) -> dict:
     flips = ((board.get("groups") or {}).get("flip") or {}).get("by_timeframe") or {}
     rooms = {}
     for _key, ko, fs, _ids in V4_ROLES:
-        cells = {f: {"name": DS_FAMILY_KO.get(f, f), **(_cell(fams.get(f), min_n) or {})} for f in fs if f in fams}
+        cells = {f: {"name": DS_FAMILY_KO.get(f, f), **(_ds_cell(fams.get(f), min_n) or {})} for f in fs if f in fams}
         if cells:
             rooms[ko] = cells
     return {"notes": GROUP_NOTES_KO[:3] + ["가족 17개를 견주면 우연히 좋아 보이는 가족이 나옴(여러 번 비교)",
-                                           "F11_PO3 하나는 세션 담당이지만 가족 숫자 F11은 구조·유동성에 한데 셈"],
-            "ds200_all": _cell(ds, min_n), "rooms": rooms,
+                                           "F11_PO3 하나는 세션 담당이지만 가족 숫자 F11은 구조·유동성에 한데 셈"]
+            + ([DM.STRICT_NOTE_KO] if DM.DS_MONEY_STRICT else []),
+            "ds200_all": _ds_cell(ds, min_n), "rooms": rooms,
             "coin_flip_by_timeframe": {tf: _cell(flips.get(tf), min_n) for tf in sorted(ds.get("by_timeframe") or {})}}
 
 
-def unusual(board: dict, levrule: Optional[dict]) -> list[tuple[str, str]]:
-    """[(topic key, why)] for the things that should jump the agenda, most urgent first (code only)."""
+def agenda_marks(board: dict, start: Optional[int] = None) -> dict:
+    """What the agenda's jumps are about now (code): the run's start, the busts so far (the 36 and their coin flips:
+    board.today), the newest CRITICAL account alert and the nightly report day with a real problem (a recompute
+    mismatch not labelled early_kline, or missing 1m bars; '' when none). The debate keeps the marks of its last ok
+    round (debate_state 'agenda_marks'), so only a NEW event jumps the agenda."""
+    today = board.get("today") or {}
+    n = board.get("nightly") if isinstance(board.get("nightly"), dict) else {}
+    labels = n.get("mismatch_labels") if isinstance(n.get("mismatch_labels"), dict) else {}
+    real = [a for a in (n.get("mismatched_accounts") or []) if labels.get(a) != "early_kline"]
+    crit = [int(a.get("ts") or 0) for a in (today.get("alerts") or []) if a.get("level") == "CRITICAL"
+            and not _group_line(str(a.get("text") or ""))]
+    return {"start": start, "busts": int(today.get("busts_total") or 0), "crit_ts": max(crit, default=0),
+            "nightly": str(n.get("day") or "?") if (real or n.get("missing_bars")) else ""}
+
+
+def unusual(board: dict, levrule: Optional[dict], seen: Optional[dict] = None,
+            start: Optional[int] = None) -> list[tuple[str, str]]:
+    """[(topic key, why)] for the things that should jump the agenda, most urgent first (code only). With ``seen`` (the
+    ``agenda_marks`` of the debate's last ok round, same run) only a NEW event counts: more busts than then, a CRITICAL
+    account alert newer than then, a nightly report day with a real problem not seen then; otherwise the agenda
+    rotates. Without it (the first round, a new run) every current thing counts."""
     out = []
+    m = agenda_marks(board, start)
+    if not isinstance(seen, dict) or seen.get("start") != start:
+        seen = None
     busts = (board.get("today") or {}).get("busts_total") or 0
-    if busts:
-        out.append(("risk", f"파산한 전략 계좌 {busts}개"))
+    if busts and (seen is None or m["busts"] > int(seen.get("busts") or 0)):
+        out.append(("risk", f"파산한 계좌(매매법·동전) {busts}개"))
     n = board.get("nightly") if isinstance(board.get("nightly"), dict) else {}
     par = n.get("parity")
     if (isinstance(par, dict) and (par.get("mismatched_accounts") or 0) > 0) or n.get("missing_bars"):
-        out.append(("nightly", "밤 점검에 재계산 불일치나 빠진 1분봉이 있음"))
+        if seen is None or (m["nightly"] and m["nightly"] != seen.get("nightly")):
+            out.append(("nightly", "밤 점검에 재계산 불일치나 빠진 1분봉이 있음"))
     # an account's emergency (liquidation, halt) or the runner's; a group's own line ('[ds200] signal code refused',
     # sigservice's frozen texts) names no account and is not a bust risk: it stays in ``alerts``, it jumps nothing
     crit = [a for a in ((board.get("today") or {}).get("alerts") or []) if a.get("level") == "CRITICAL"
             and not _group_line(str(a.get("text") or ""))]
-    if crit:
+    if crit and (seen is None or m["crit_ts"] > int(seen.get("crit_ts") or 0)):
         out.append(("risk", f"긴급 알림 {len(crit)}건"))
     return out
 
@@ -322,9 +368,10 @@ def unusual(board: dict, levrule: Optional[dict]) -> list[tuple[str, str]]:
 def build(paper_path: Optional[str], daily_path: Optional[str], agents_path: Optional[str],
           checkpoint_path: Optional[str], now_ms: int, round_no: int = 0, recent_topics: tuple = (),
           last_notes: Optional[list] = None, last_turns: Optional[list] = None, scoreboard: Optional[dict] = None,
-          min_n: int = MIN_N, max_tokens: int = MAX_PACKET_TOKENS) -> dict:
-    """{"packet": dict, "topic": key, "topic_ko": str, "why": str, "tokens": estimate}. Raises FileNotFoundError when
-    paper3.db is missing (there is nothing to debate then); every other source is optional and noted when absent."""
+          min_n: int = MIN_N, max_tokens: int = MAX_PACKET_TOKENS, seen: Optional[dict] = None) -> dict:
+    """{"packet": dict, "topic": key, "topic_ko": str, "why": str, "tokens": estimate, "marks": agenda_marks}. Raises
+    FileNotFoundError when paper3.db is missing (there is nothing to debate then); every other source is optional and
+    noted when absent. ``seen``: the last ok round's ``marks`` (only a new event jumps the agenda, ``unusual``)."""
     if not paper_path or not os.path.exists(paper_path):
         raise FileNotFoundError("paper3.db")
     from . import packets3
@@ -345,7 +392,7 @@ def build(paper_path: Optional[str], daily_path: Optional[str], agents_path: Opt
                 lev = LV.compact(LV.levrule_eval(paper, now_ms=now_ms, mix=False))
             except Exception as exc:  # noqa: BLE001  (a display never stops the debate)
                 lev = {"error": f"규칙 B 평가를 만들지 못함: {type(exc).__name__}"}
-        flags = unusual(board, lev)
+        flags = unusual(board, lev, seen, start)
         topic, why = TOPICS[round_no % len(TOPICS)][0], "정해진 순서(돌아가며)"
         for key, reason in flags:
             if list(recent_topics[:2]).count(key) < 2:             # an unusual thing jumps the queue, not forever
@@ -427,7 +474,7 @@ def build(paper_path: Optional[str], daily_path: Optional[str], agents_path: Opt
             break
         pk = shrink(pk, ml, ms)
     return {"packet": pk, "topic": topic, "topic_ko": TOPIC_KO[topic], "why": why,
-            "tokens": estimate_tokens(compact_json(pk))}
+            "tokens": estimate_tokens(compact_json(pk)), "marks": agenda_marks(board, start)}
 
 
 def compact_json(obj: Any) -> str:
