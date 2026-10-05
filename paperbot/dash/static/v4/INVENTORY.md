@@ -349,3 +349,14 @@ What the owners see on the first morning after the v4 reset (dashboard only; shi
 | 조합 시너지 첫날 | 분석 › 조합 시너지: no ranked list until the 36 average 5 closed trades per account: "거래가 쌓이면 (계좌당 5건 이상) 보여 드립니다" | `/api/analysis/synergy` `waiting`, `note` (dash/analysis.py `SYNERGY_MIN_TRADES`) |
 | 알림 기록 읽은 곳 | 알림 기록 footer: 봇 경고 · 밤 점검 보고 · 판정 작업 기록 (no file names) | none |
 | 화면 켜두기 | 🔊 menu: "화면 켜두기" (Screen Wake Lock while the sound is on; off by default, this device only; asks again when the page comes back; "이 기기는 지원 안 함" without the API); FAQ 화면: "휴대폰에서 앱처럼 쓰려면요?" (브라우저 메뉴 → 홈 화면에 추가) | none |
+
+## fill-home: 홈을 살아 있게 (dashboard + one read-only server change; tests/test_dash_fill_home.py)
+
+| Addition | Screen / place | Server |
+|---|---|---|
+| 촘촘한 레이스 | 홈 head card race, 흐름 hero, 홈 group-card lines: a point every 5분 (run < 2일), 15분 (< 7일), then 1시간 / 4시간 / 하루; label "D+1 · 5분마다" | `/api/v4/flow/race?step=auto` (more/flow.py auto_step; 5- / 15-minute steps read from the 5-minute equity rows, finished steps kept) |
+| LED 잔고 곡선 첫날부터 | 홈 LED bar line: 15분 steps while the run is under 7 days, then hourly | `/api/v4/curves?step=900000` (existing) |
+| 시장 지금 | 홈 top band beside the story rings: 7 coins' price (glow on change), 24h %, 펀딩, 정산까지 countdown to the server's next funding time; phone: one sideways row | store `ticker` (`/api/ticker`, existing 5 s cache) |
+| 지금 열린 포지션 | 홈 under the head card: 기존 36 / 5분봉 / 추가 계좌 positions (봉·매매법, 코인, 롱/숏 + 배수, 진입, 손절 or 잠금 ROE, live ROE at the mark, tint on change), ROE order, row opens the account; "그 밖에 딥시크 n · 동전 봇 n 포지션 (개수만)" | `/api/board` positions + store `ticker` mark |
+| 방금 끝난 거래 + 오늘 잘한·못한 계좌 | 홈 full-width card: last 12 closed trades of 기존 36 / 5분봉 / 추가 (시각, 봉·매매법, 코인, 방향 + 배수, 익절 잠금 / 손절 / 시간, ROE, USDT), new rows slide in on the stream's trade event; 오늘 가장 잘한 / 못한 계좌 3 (기존 36, USDT, 참고, 표본 적음 under 30 trades) | `/api/trades?group=main&limit=12`, `/api/trades?group=core&limit=2000` (existing) |
+| 회의 카운트다운 + 오늘 일정 | 홈 '오늘 회의 일정' (ticking countdown to the next fixed meeting; each meeting 예정 / 진행 중 / 끝 / 지남 with one line on what it reviews); the 0 / 0 / 0 board comes back once a meeting ran today; 회의 요약 › 회의 결론 shows the same card on a day without meetings | `/api/office` schedule / running / recent (existing) |

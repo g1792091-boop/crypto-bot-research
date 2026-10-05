@@ -158,7 +158,7 @@ export function tradesCard(ctx) {
     acts: [h("a", {class: "btn-line", href: ctx.href("positions")}, "거래 전체 →")]}, h("div", {class: "hl-trgrid"}, bw, list),
   ui.note("기존 36 · 5분봉 · 추가 계좌만 · 딥시크와 동전 봇은 빠짐 · 누르면 그 계좌"), ui.assume());
   const seen = new Set();
-  let first = true, busy = false;
+  let first = true, busy = false, coreAt = 0;     // the day list (up to 2,000 rows) at most once a minute
   const tRow = (t) => {
     const ret = h("span", {class: ["num", "hl-tret", fmt.tone(t.roe)]}, t.roe != null ? fmt.pct(t.roe, 1) : "—");
     const usd = h("b", {class: ["num", fmt.tone(t.pnl)]}, fmt.money(t.pnl, true));
@@ -185,7 +185,8 @@ export function tradesCard(ctx) {
     if (busy) return;
     busy = true;
     try {
-      const [main, core] = await Promise.all([ctx.api("/api/trades?group=main&limit=12"), ctx.api("/api/trades?group=core&limit=2000")]);
+      const wantCore = Date.now() - coreAt > 55000;
+      const [main, core] = await Promise.all([ctx.api("/api/trades?group=main&limit=12"), wantCore ? ctx.api("/api/trades?group=core&limit=2000") : null]);
       if (!ctx.alive()) return;
       const rows = Array.isArray(main) ? main : [];
       if (!rows.length) put(list, ui.empty("아직 끝난 거래가 없습니다"));
@@ -194,7 +195,7 @@ export function tradesCard(ctx) {
         put(list, els);
       }
       first = false;
-      renderBW(Array.isArray(core) ? core : []);
+      if (wantCore) { coreAt = Date.now(); renderBW(Array.isArray(core) ? core : []); }
     } catch (e) {
       if (first && ctx.alive()) put(list, ui.errorBox(e, () => load()));
     } finally { busy = false; }

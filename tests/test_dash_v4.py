@@ -672,7 +672,7 @@ def test_v4_strategy_views_and_curves_are_asked_for():
     det = _read(os.path.join(V4, "screens", "strategies-detail.js"))
     assert "loadView(ctx, name, v.tf, v.sym, st.list36, kind)" in det and "researchBody(v.profile, v.tf)" in det
     home = _read(os.path.join(V4, "screens", "home.js"))
-    assert '"/api/v4/curves?step=3600000"' in home and "curvesOn = false" in home
+    assert "/api/v4/curves?step=${curveStep(st.board)}" in home and "curvesOn = false" in home  # fill-home: 15 min while young
     assert '"/api/v4/server"' in _read(os.path.join(V4, "screens", "server.js"))
 
 
