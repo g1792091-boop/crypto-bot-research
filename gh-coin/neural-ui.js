@@ -189,9 +189,11 @@ function render() {
     + riskLearnLine();
   // 코인별 결정(스캔) 그리드
   const grid = N.COINS.map(([ko, sym]) => {
-    const d = s.dec[sym], r = s.regime?.[sym];
+    const d = s.dec[sym], r = s.regime?.[sym], mt = s.mtf?.[sym] || {};
+    // 📉 시간봉별 추세 칩: 1분·5분·15분·1시간·4시간 — ▲상승 ▼하락 ·중립, 진하게 = 강한 추세(ADX≥23 + EMA50 기울기)
+    const chips = (N.MTF || []).map(([k, ko]) => { const x = mt[k]; return `<span class="tfc ${x ? (x.dir > 0 ? "up" : x.dir < 0 ? "dn" : "dim") : "dim"}${x?.strong ? " st" : ""}" title="${ko}봉: ${x ? (x.dir > 0 ? "상승" : x.dir < 0 ? "하락" : "중립") + (x.strong ? " · 강한 추세" : "") + (x.adx != null ? " · ADX " + x.adx : "") : "자료 없음"}">${ko.replace("시간", "H").replace("분", "m")}${x ? (x.dir > 0 ? "▲" : x.dir < 0 ? "▼" : "·") : "–"}</span>`; }).join("");
     const col = r ? (r.key === "상승추세" ? "up" : r.key === "하락추세" ? "dn" : "dim") : "dim";
-    return `<div class="mrow" title="1시간봉 국면 · 4시간 상위추세 · ADX"><b>${ko} <small class="${r?.htf > 0 ? "up" : r?.htf < 0 ? "dn" : "dim"}">${r?.htf > 0 ? "4H↑" : r?.htf < 0 ? "4H↓" : "4H·"}</small></b><span class="${col}">${E(r?.label || "판단중")}${r?.adx != null ? " · ADX " + r.adx : ""}</span><em class="dim">${d ? "$" + fmtp(d.price) : "–"}</em></div>`;
+    return `<div class="mrow" title="1시간봉 국면 · 4시간 상위추세 · ADX"><b>${ko} <small class="${r?.htf > 0 ? "up" : r?.htf < 0 ? "dn" : "dim"}">${r?.htf > 0 ? "4H↑" : r?.htf < 0 ? "4H↓" : "4H·"}</small></b><span class="${col}">${E(r?.label || "판단중")}${r?.adx != null ? " · ADX " + r.adx : ""}</span><em class="dim">${d ? "$" + fmtp(d.price) : "–"}</em><span class="tfrow">${chips}</span></div>`;
   }).join("");
   // 🔴 열린 포지션 (거래소 스타일: 레버리지·증거금·진입/현재·ROE·PnL·청산가) — 자체 + 모델 전부
   const allPos = [];
@@ -312,7 +314,7 @@ function inject() {
 .nd-h::before{content:"";position:absolute;left:0;top:0;width:3px;height:12px;border-radius:2px;background:linear-gradient(var(--accent),var(--accent2));box-shadow:0 0 6px rgba(34,211,238,.4)}
 .nd-h small{color:#4b5568;letter-spacing:.3px;text-transform:none}
 .nd-mini{margin-left:auto;background:rgba(22,30,44,.7);border:1px solid var(--line2);color:#8a93a6;padding:2px 8px;border-radius:5px;cursor:pointer;font:10px ui-monospace,monospace;letter-spacing:0;text-transform:none;transition:.15s}.nd-mini:hover{background:#1c2740;color:var(--accent);border-color:rgba(34,211,238,.4)}
-.btx .nd-mini{margin:2px 4px 2px 0}.btx.wrap{white-space:normal}.nd-mini.on{border-color:rgba(52,211,153,.6);color:#6ee7b7;background:rgba(16,40,32,.7)}
+.btx .nd-mini{margin:2px 4px 2px 0}.tfrow{display:flex;gap:3px;flex-wrap:wrap;margin-top:2px}.tfc{font:10px ui-monospace,monospace;padding:0 4px;border-radius:4px;border:1px solid rgba(60,72,92,.5);opacity:.75}.tfc.st{opacity:1;font-weight:700;border-color:currentColor}.btx.wrap{white-space:normal}.nd-mini.on{border-color:rgba(52,211,153,.6);color:#6ee7b7;background:rgba(16,40,32,.7)}
 .nd-brain canvas{cursor:crosshair}
 .nd-pnl .nd-big b{font-size:42px;font-weight:800;line-height:1;letter-spacing:-.5px}
 .nd-pnl .nd-big b.up{background:linear-gradient(90deg,#26d07c,#86f7bd);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}

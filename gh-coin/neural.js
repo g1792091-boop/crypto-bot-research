@@ -425,6 +425,16 @@ function manage(sym, price, bars) {
   if (Date.now() > P.deadline) return closeP(sym, price, "시간손절");
 }
 
+// 시간봉 하나의 추세: 방향(EMA20·50 + 종가 위치) + 강도(1시간봉과 같은 국면 판정: ADX≥23 · EMA50 기울기)
+function trendOf(I, i) {
+  if (!I || i < 60) return null; const rg = ENG.regimeAt(I, i), e20 = I.ema20[i], e50 = I.ema50[i], c = I.c[i];
+  if (![e20, e50, c].every(Number.isFinite)) return null;
+  const dir = e20 > e50 && c > e50 ? 1 : e20 < e50 && c < e50 ? -1 : 0;
+  return { dir, strong: (rg.key === "상승추세" && dir > 0) || (rg.key === "하락추세" && dir < 0), key: rg.key, adx: rg.adx ? Math.round(rg.adx) : null };
+}
+export const MTF = [["1", "1분"], ["5", "5분"], ["15", "15분"], ["60", "1시간"], ["240", "4시간"]];
+export function mtfText(sym) { const m = S?.mtf?.[sym]; if (!m) return ""; return "시간봉별 추세: " + MTF.filter(([k]) => m[k]).map(([k, ko]) => `${ko} ${m[k].dir > 0 ? "상승" : m[k].dir < 0 ? "하락" : "중립"}${m[k].strong ? "(강)" : ""}`).join(" · "); }
+
 // ── 한 스텝: 코인별 시세 → 포지션 관리 → 국면 판정 → 검증된 전략 신호 → 승인 대기열 ──
 export async function step() {
   load();
@@ -448,6 +458,8 @@ export async function step() {
     if (m60) { const i = m60.I.n - 2, rg = ENG.regimeAt(m60.I, i); const hb = m240 ? ENG.htfBiasAt(m240.H ||= ENG.prepareHTF(q, m240.cs), Date.now()) : { bias: 0 };
       S.regime[sym] = { key: rg.key, label: rg.label, adx: rg.adx ? Math.round(rg.adx) : null, htf: hb.bias }; }
     S.dec[sym] = { price, dir: S.regime[sym]?.htf || 0, conf: S.regime[sym]?.adx ?? 0, regime: S.regime[sym]?.label || "판단중" };
+    // 📉 1분봉 추세(보기·AI 자료용) — 새 1분봉이 마감됐을 때만 다시 계산
+    try { const k = sym + "|1", last = cs1.at(-2)?.t; if (!MK[k] || MK[k].last !== last) MK[k] = { cs: cs1, I: ENG.prepare(q, cs1), last }; ((S.mtf ||= {})[sym] ||= {})["1"] = trendOf(MK[k].I, MK[k].I.n - 2); } catch (e) {}
     // 새로 마감된 봉이 있는 시간봉만 신호 판단
     for (const tf of tfs) {
       const mk = tf === "60" ? m60 : tf === "240" ? m240 : await getTF(sym, tf); if (!mk) continue;
@@ -484,6 +496,9 @@ export async function step() {
       feed(`🎯 ${ko} ${s.side > 0 ? "롱" : "숏"} 신호: ${v.name}(${tf === "60" ? "1시간" : tf === "240" ? "4시간" : tf + "분"}봉) — ${s.why} · 최근 ${st.n}건 기대값 ${st.mean >= 0 ? "+" : ""}${st.mean}R`);
     }
   }
+  // 📉 작은 분봉(5·15분) ~ 1시간·4시간 추세 — 위 신호 판단에서 이미 받은 봉(MK 캐시)으로만 계산(추가 요청 없음).
+  //   보기·AI 자료용이다. 진입 규칙은 그대로(5·15분 매매는 수수료 때문에 실측 우위 없음 → 관망 규칙의 상위 추세가 기준).
+  for (const [, sym] of COINS) { const mt = ((S.mtf ||= {})[sym] ||= {}); for (const tf of ["5", "15", "60", "240"]) { const mk = MK[sym + "|" + tf]; if (mk?.I) mt[tf] = trendOf(mk.I, mk.I.n - 2); } }
   const cm = connectedModels();
   // 🏃 +1R 을 찍은 포지션: 코드 초안(익절 풀고 ATR×3 추적, 실측 우위)을 AI 가 15분 안에 다르게 정하지 않으면 자체 엔진이 적용.
   //   AI 모델이 없거나, AI 의 익절·손절 조정이 원래 계획보다 손해로 채점돼 꺼져 있으면 바로 적용.
@@ -719,7 +734,7 @@ async function reviewPositions(cm) {
   const P = Object.values(S.pos); if (!P.length || !cm.length || Date.now() - prAt < 5 * 60e3) return; prAt = Date.now();
   const tgt = cm[prRot++ % cm.length], off = (S.adjOff || 0) > Date.now();
   const rows = P.map(p => { const d = draftOf(p), rg = S.regime[p.sym] || {}, a = posAtr(p); return { symbol: p.ko, side: p.side > 0 ? "long" : "short", entry: p.entry, price: p.price, R: +Rnow(p).toFixed(2), sl: p.sl, tp: p.tp ?? "없음(추적 중)",
-    breakeven: p.be, running: !!p.run, atr: a ? +(+a).toPrecision(4) : null, strategy: p.name, regime: rg.label, htf: rg.htf, adx: rg.adx, minutes: Math.round((Date.now() - p.t) / 60e3), draft: d.kind, draft_why: d.why }; });
+    breakeven: p.be, running: !!p.run, atr: a ? +(+a).toPrecision(4) : null, strategy: p.name, regime: rg.label, htf: rg.htf, adx: rg.adx, minutes: Math.round((Date.now() - p.t) / 60e3), trends: mtfText(p.sym).replace("시간봉별 추세: ", ""), draft: d.kind, draft_why: d.why }; });
   const sys = `<role>
 너는 코인 선물 포지션 관리자다. 보유 포지션마다 결정 하나를 고른다. 숫자 계산과 최종 검증은 코드가 한다.
 </role>
@@ -817,7 +832,7 @@ async function scanStep(cm) {
       { role: "system", content: '너는 코인 선물 시장 분석가다. 주어진 자료만 보고 앞으로 1시간 방향을 판단한다. 반드시 JSON 한 줄: {"bias":1|0|-1,"conf":0~100,"note":"한국어 한 문장"}' },
       { role: "user", content: `${ko} 현재가 ${price} · 1시간봉 국면: ${rg.label || "?"} (ADX ${rg.adx ?? "?"}) · 4시간 추세: ${rg.htf > 0 ? "상승" : rg.htf < 0 ? "하락" : "중립"}
 시장 요약: ${br}
-피처: ${Object.entries(S.feat[sym] || {}).map(([k, v]) => k + " " + (+v).toFixed(2)).join(", ")}\n리서치: ${researchText(sym)} · ${fngText()}\n${_whC[sym] ? WC.explain(_whC[sym].s) : ""}${myTxt ? "\n사용자 차트 터미널 보조지표 현재 방향: " + myTxt : ""}${brainTxt ? "\n과거에서 배운 것(참고): " + brainTxt : ""}
+피처: ${Object.entries(S.feat[sym] || {}).map(([k, v]) => k + " " + (+v).toFixed(2)).join(", ")}\n${mtfText(sym)}\n리서치: ${researchText(sym)} · ${fngText()}\n${_whC[sym] ? WC.explain(_whC[sym].s) : ""}${myTxt ? "\n사용자 차트 터미널 보조지표 현재 방향: " + myTxt : ""}${brainTxt ? "\n과거에서 배운 것(참고): " + brainTxt : ""}
 JSON만:` }] }));
   } catch (e) { (S.scans ||= {})[tgt.model] = { ko, sym, err: String(e?.message || e).slice(0, 40), t: Date.now() }; return; }
   let j = {}; try { j = JSON.parse((raw.match(/\{[\s\S]*\}/) || ["{}"])[0]); } catch (e) {}
@@ -1195,7 +1210,7 @@ export function state() {
     neurons, traders, designs: (S.designs || []).slice(0, 10), nDesigns: (S.designs || []).length, handed: (S.designs || []).filter(d => d.handed).length,
     brain: BRAIN.brainState(), calls: callStats(), scan: S.scan || null, regime: S.regime, news: S.news, review: S.review, calib: S.eng.calib, calibrating,
     chartDesk: S.chartDesk || null, aiExp: { ...(S.aiExp || {}), stat: vstat("aichart@15") }, chartStrats: chartStrategies(),
-    cfg: cfg(), dayN: S.day?.n || 0, mood: mood(), fng: S.fng || null, hold: holdState(), adj: adjState(), whale: { trust: whaleTrust(), last: Object.values(_whC).map(x => x.s).filter(x => x.status === "approved").slice(-6) }, review2: S.review2 || null, research: S.research || {},
+    cfg: cfg(), dayN: S.day?.n || 0, mtf: S.mtf || {}, mood: mood(), fng: S.fng || null, hold: holdState(), adj: adjState(), whale: { trust: whaleTrust(), last: Object.values(_whC).map(x => x.s).filter(x => x.status === "approved").slice(-6) }, review2: S.review2 || null, research: S.research || {},
     engine, nActive: engine.filter(x => x.active).length, setups: setups(engine), winrates: learnedWinrates(V), evo: { n: (S.eng.evo || []).length, seeds: (S.eng.evoSeeds || []).length, log: (S.eng.evoLog || []).slice(0, 3) }, queue: S.queue.length, heat: +(heat() / Math.max(1, eq) * 100).toFixed(2), dayPnl: +(S.day?.pnl || 0).toFixed(2),
     fw: { minLev: FW.minLev, risk: FW.baseRisk * 100, maxRisk: FW.maxRisk * 100, daily: FW.dailyStop * 100, heat: FW.maxHeat * 100, fee: FW.fee * 100 },
     pos: allPos.filter(P => P.trader === "자체 엔진"), dec: S.dec, feat: S.feat, trades: S.trades.slice(0, 64), feed: S.feed.slice(0, 24) };
