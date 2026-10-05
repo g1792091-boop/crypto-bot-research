@@ -50,7 +50,7 @@ export function setCfg(patch) {
   applyFeeds();
   bus.emit("sound:cfg", {...cfg});
 }
-const gainOf = () => Math.pow(cfg.vol / 100, 1.6);           // a gentler slider at the low end
+const gainOf = () => cfg.vol / 100;      // the picker's bus exactly (owners 10/06 04:00: "not the sound I liked"; the 1.6 curve made 60 % sound like 44 %)
 /** 00:00-06:59 KST (UTC+9, no daylight saving). */
 export const nightKst = (now) => new Date(Number(now) + 9 * 3600e3).getUTCHours() < 7;
 
@@ -158,17 +158,23 @@ function pump() {
   if (r.item) { const b = beepOf(r.item); sink(b.fs ? "run" : "beep", {...b, src: r.item.src, key: r.item.key}); layerT = setTimeout(pump, MIN_GAP_MS); return; }
   layerT = setTimeout(pump, Math.max(30, r.wait));
 }
-/** A layer item -> the notes. dir > 0: the upper four CHIP notes, dir < 0: the lower four; the coin picks the note
- *  (each coin keeps its own voice); a big move (size >= 1.5 x its usual move) plays a short run of 2-4 notes that
- *  climbs for up and falls for down; louder for a bigger move. */
-export function beepOf(it) {
+/** A layer item -> the notes, played the way the owners' approved "한꺼번에 듣기" plays them (picker v6, owners 10/06
+ *  04:00: "그 소리로 실시간으로 계속"): the note is picked at random from the side's four CHIP notes (buy / up: the
+ *  upper four, sell / down: the lower four), so the stream never repeats one coin's one note; a third of the ordinary
+ *  events are a quick 2-3 note '띠-링' run, a bigger burst (size >= 1.5 x usual) always a run of 2-4; every run step
+ *  rises with 3 chances in 4 (the picker's '띠-리-링↑'), 3 / 4 / 5 / 7 semitones, 70-180 ms apart, kept to 330-1100 Hz;
+ *  a single beep is the 25 % pulse wave 3 times in 10 (else square); louder for a bigger move. The side stays audible
+ *  as the register the sound starts in. ``rnd``: tests pass a fixed random. */
+export function beepOf(it, rnd) {
+  const R = typeof rnd === "function" ? rnd : Math.random;
   const region = it.dir > 0 ? CHIP.slice(4) : CHIP.slice(0, 4);
-  const f = region[Math.abs(it.voice | 0) % 4];
+  const f = region[Math.min(3, Math.floor(R() * 4))];
   const v = 0.55 + 0.35 * Math.min(1, (it.size || 1) / 3);
-  const k = it.size >= 4 ? 4 : it.size >= 2.5 ? 3 : it.size >= 1.5 ? 2 : 1;
-  if (k === 1) return {f, v, pulse: !!it.pulse};
+  let k = it.size >= 4 ? 4 : it.size >= 2.5 ? 3 : it.size >= 1.5 ? 2 : 1;
+  if (k === 1 && R() < 1 / 3) k = R() < 0.7 ? 2 : 3;            // the picker's runs: a third of the stream
+  if (k === 1) return {f, v, pulse: !!it.pulse || R() < 0.3};
   const fs = [f], gaps = [];
-  for (let i = 1; i < k; i++) { fs.push(up(fs[i - 1], Math.sign(it.dir) * [3, 4, 5, 7][Math.floor(Math.random() * 4)])); gaps.push(0.07 + Math.random() * 0.11); }
+  for (let i = 1; i < k; i++) { fs.push(up(fs[i - 1], (R() < 0.75 ? 1 : -1) * [3, 4, 5, 7][Math.min(3, Math.floor(R() * 4))])); gaps.push(0.07 + R() * 0.11); }
   return {fs: fs.map((x) => Math.min(Math.max(x, 330), 1100)), gaps, v};
 }
 

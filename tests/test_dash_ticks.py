@@ -353,7 +353,7 @@ def test_trades_drive_the_same_layer_buy_high_sell_low_bigger_louder():
     a, b = out["items"]
     assert len(out["items"]) == 2 and a["dir"] == 1 and b["dir"] == -1 and a["src"] == "trade" == b["src"]
     assert a["voice"] == 1 and b["voice"] == 3                         # sorted: the same voice as the ticker layer
-    assert out["notes"][0]["f"] >= 659.26                             # buy: the upper four notes
+    assert (out["notes"][0].get("f") or out["notes"][0]["fs"][0]) >= 659.26   # buy: starts in the upper four notes
     assert out["notes"][1]["fs"][0] <= 554.37 and len(out["notes"][1]["fs"]) == 3   # sell: lower, the top bucket a run
     assert out["vols"] == sorted(out["vols"]) and out["vols"][0] < out["vols"][-1]  # a bigger bucket is louder
     assert out["down"] == [] and out["liveA"] is False                 # not live: nothing from the relay

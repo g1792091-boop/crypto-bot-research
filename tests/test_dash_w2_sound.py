@@ -145,7 +145,8 @@ def test_price_changes_drive_the_layer_up_high_down_low():
     console.log(JSON.stringify({mv, notes}));""")
     mv = out["mv"]
     assert [(x["key"], x["dir"]) for x in mv] == [("px:BTCUSDT", 1), ("px:ETHUSDT", -1)]   # SOL did not move: silent
-    assert out["notes"][0]["f"] >= 659.26 and out["notes"][1]["f"] <= 554.37
+    first = [n.get("f") or n["fs"][0] for n in out["notes"]]         # a single beep or a run: where it starts
+    assert first[0] >= 659.26 and first[1] <= 554.37
 
 
 def test_layer_throttle_and_stale_drop():
@@ -221,3 +222,28 @@ def test_wave2_styles_use_tokens_only():
     for p in (("core", "sound.js"), ("core", "motion.js")):
         src = re.sub(r"^\s*//.*$", "", _read(*p), flags=re.M)
         assert not re.search(r"#[0-9a-fA-F]{6}\b|\brgba?\(\s*\d", src), p
+
+
+def test_layer_plays_like_the_approved_picker_mix():
+    """Owners 10/06 04:00 ("not the sound I liked; that sound, continuously"): the live layer renders each real event
+    the way the picker's 한꺼번에 듣기 did: notes vary within the side's register (no one-note-per-coin drone), a third
+    of ordinary events are quick runs that mostly rise, singles are sometimes the pulse wave, and the volume is the
+    picker's linear bus (60 -> 0.6)."""
+    out = _node("""
+    let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const N = 3000, notes = [];
+    for (let i = 0; i < N; i++) notes.push(sound.beepOf({key: "tk:BTCUSDT", dir: i % 2 ? 1 : -1, size: 1, voice: 1}, rnd));
+    const runs = notes.filter((n) => n.fs), singles = notes.filter((n) => n.f);
+    const steps = runs.flatMap((n) => n.fs.slice(1).map((f, i) => f > n.fs[i] ? 1 : f < n.fs[i] ? -1 : 0)).filter((d) => d);
+    const buyFirst = notes.filter((n, i) => i % 2).map((n) => n.f || n.fs[0]);
+    const sellFirst = notes.filter((n, i) => !(i % 2)).map((n) => n.f || n.fs[0]);
+    console.log(JSON.stringify({runShare: runs.length / N, pulseShare: singles.filter((n) => n.pulse).length / singles.length,
+      upShare: steps.filter((d) => d > 0).length / steps.length, buyNotes: [...new Set(buyFirst)].length,
+      sellNotes: [...new Set(sellFirst)].length, buyMin: Math.min(...buyFirst), sellMax: Math.max(...sellFirst),
+      maxLen: Math.max(...runs.map((n) => n.fs.length)), inRange: runs.every((n) => n.fs.every((f) => f >= 330 && f <= 1100))}));""")
+    assert 0.28 < out["runShare"] < 0.39                       # a third of the stream is a 띠-링 run
+    assert 0.24 < out["pulseShare"] < 0.36 and out["upShare"] > 0.6   # pulse 3 in 10; runs mostly climb (some clamp flat)
+    assert out["buyNotes"] == 4 and out["sellNotes"] == 4      # every note of the register, not one per coin
+    assert out["buyMin"] >= 659.26 and out["sellMax"] <= 554.37 and out["maxLen"] <= 3 and out["inRange"]
+    src = open(os.path.join(V4, "core", "sound.js"), encoding="utf-8").read()
+    assert "const gainOf = () => cfg.vol / 100;" in src         # the picker's bus: volume 60 = gain 0.6
