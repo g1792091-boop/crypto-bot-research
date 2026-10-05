@@ -64,7 +64,7 @@
 .hl-tret { text-align: right; font-size: var(--t-xs); }
 .hl-trow > b { text-align: right; }
 @media (max-width: 599px) {
-  .hl-trow { grid-template-columns: 3.2em minmax(0, 1fr) auto; gap: 2px var(--gap); padding: 7px 2px; }
+  .hl-trow { grid-template-columns: 4.8em minmax(0, 1fr) auto; gap: 2px var(--gap); padding: 7px 2px; }
   .hl-trow .hl-pcoin { grid-column: 2; grid-row: 2; }
   .hl-trow .hl-why { grid-column: 1; grid-row: 2; }
   .hl-trow .hl-tret { grid-column: 3; grid-row: 2; }

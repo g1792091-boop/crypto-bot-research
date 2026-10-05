@@ -188,7 +188,7 @@ export function tradesCard(ctx) {
       const wantCore = Date.now() - coreAt > 55000;
       const [main, core] = await Promise.all([ctx.api("/api/trades?group=main&limit=12"), wantCore ? ctx.api("/api/trades?group=core&limit=2000") : null]);
       if (!ctx.alive()) return;
-      const rows = Array.isArray(main) ? main : [];
+      const rows = (Array.isArray(main) ? main : []).slice().sort((a, b) => (Number(b.exit_time) || 0) - (Number(a.exit_time) || 0));  // newest close first
       if (!rows.length) put(list, ui.empty("아직 끝난 거래가 없습니다"));
       else {
         const els = rows.map((t) => { const e = tRow(t); if (!first && !seen.has(t.id)) motion.slideIn(e); seen.add(t.id); return e; });
