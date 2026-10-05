@@ -1260,6 +1260,8 @@ def system_prompt(role: str, turn: str, meeting: str = "") -> str:
     schema = SCHEMAS["expert" if turn == "expert" else turn]
     if turn == "lead" and meeting in LEAD_EXTRA:
         schema = schema[:-2] + ",\n" + LEAD_EXTRA[meeting] + "\n}"
+    if turn == "team" and role in GROUP_ROLE_OF_ROOM.values():
+        schema = schema[:-2] + ",\n" + GROUP_NOTE_FMT + "\n}"        # the v4 specialist's room note (its action)
     return (f"{common}\n\n# 당신: {info['name']}" + (f" ({team})" if team else "")
             + f"\n담당: {duty}\n\n{_read_prompt(fname)}{extra}\n\n"
             f"# 출력 형식 (JSON 객체 하나만, 다른 글 없이)\n{schema}\n")
@@ -1466,10 +1468,13 @@ def check_team(out: Any, given: dict) -> tuple[Optional[dict], list[str]]:
     if not isinstance(out, dict) or not isinstance(out.get("headline"), str):
         return None, ["headline 없음"]
     problems: list[str] = []
-    return {"headline": _line(out["headline"], 300),
-            "findings": _findings(out.get("findings"), given, "findings", problems),
-            "data_gaps": _strs(out.get("data_gaps")),
-            "reply_to_owner": _line(out.get("reply_to_owner"), 800)}, problems
+    clean = {"headline": _line(out["headline"], 300),
+             "findings": _findings(out.get("findings"), given, "findings", problems),
+             "data_gaps": _strs(out.get("data_gaps")),
+             "reply_to_owner": _line(out.get("reply_to_owner"), 800)}
+    if ((given or {}).get("room") or {}).get("room_id") in GROUP_ROLE_OF_ROOM and _line(out.get("note"), GROUP_NOTE_MAX):
+        clean["note"] = _line(out.get("note"), GROUP_NOTE_MAX)       # a v4 specialist room's note (_group_notes)
+    return clean, problems
 
 
 def check_dialog(out: Any, given: dict) -> dict:
@@ -2860,6 +2865,8 @@ def _team_round(rnd: _Round) -> tuple[str, dict]:
     if answered == 0:
         raise RoundFailed("회의에서 아무도 답하지 못했습니다")
     extra: dict = {}
+    if room in GROUP_ROLE_OF_ROOM and (gnotes := _group_notes(rnd)):
+        extra["room_notes"] = gnotes
     if lead and lead.get("flag_owners"):
         extra["flag"] = (_group_flag(rnd, lead["flag_owners"]) if room in GROUP_ROLE_OF_ROOM
                          else A.flag_owners(rnd.env("team_lead"), lead["flag_owners"]))
@@ -2932,6 +2939,8 @@ def _team_summary(rnd: _Round, board: dict, extra: dict) -> str:
         L.append(f"- 가설 장부에 {sum(1 for h in extra['hypotheses'] if h.get('trial_id'))}건 (나중 거래로 코드가 채점)")
     if extra.get("notes"):
         L.append(f"- 학습 정리 메모 {len(extra['notes'])}건")
+    if extra.get("room_notes"):
+        L.append(f"- 방 메모 {len(extra['room_notes'])}건 (다음 회의 패킷의 notes)")
     if isinstance(extra.get("call"), dict):
         L.append(f"- {extra['call'].get('text_ko', '')}")
     L.append(f"- AI 호출 {rnd.calls}회")
@@ -2959,6 +2968,23 @@ def _group_summary_lines(rnd: _Round) -> list[str]:
     if rnd.room == TR.group_room_of(REEL_NAME):
         line += f", 손익 {sum(float(x.get('pnl') or 0) for x in rows):+.2f} USDT"
     return [line]
+
+
+# the v4 specialist's 'note' action (roster3.GROUP_ACTIONS): one optional line in its team answer, kept as the room's
+# note (actions.note) and read back in the next meeting's packet (``notes``)
+GROUP_NOTE_MAX = 400
+GROUP_NOTE_FMT = ('  "note": "다음 회의에 남길 방 메모 한 줄(이 방 계좌의 관찰·다음에 볼 것, 숫자는 패킷 값; '
+                  '없으면 빈 문자열)"')
+
+
+def _group_notes(rnd: _Round) -> list[dict]:
+    """The notes the v4 specialists of this meeting wrote in their team answers (check_team keeps ``note`` in these
+    rooms only), stored as room notes by actions.note; the next meeting's packet carries them (``notes``)."""
+    out = []
+    for v in list(rnd.this_round.values()):
+        if isinstance(v, dict) and v.get("note") and v.get("role") in GROUP_ROLE_OF_ROOM.values():
+            out.append(A.note(rnd.env(v["role"]), {"text": v["note"]}))
+    return out
 
 
 def _ds_strict_room(room: str, pk: Any) -> Any:

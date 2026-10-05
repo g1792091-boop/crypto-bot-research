@@ -146,6 +146,29 @@ def test_the_debate_prompt_has_the_v4_facts_and_the_packet_the_verdict_date(tmp_
     assert cp["verdict_exists"] is False and cp["next"].endswith("09:00 KST")     # no checkpoint.db yet
 
 
+# ------------------------------------------------------------------ 13: the group experts' note
+def test_a_group_experts_note_is_kept_and_read_back_next_meeting(tmp_path):
+    w = V4World(tmp_path)
+    w.ds_losses("F3_BOS@15m", 6)
+    note = "F3_BOS 15분봉 손실 6건이 모두 추세 반대 진입: 다음 묶음에서 같은 태그 비율을 봄"
+    runner = QueueRunner({"spec_ds_structure": [{**team_answer("s"), "note": note}], "team_lead": [LEAD]})
+    w.tick(runner, QUIET)
+    sysp = runner.calls[0]["system"]
+    assert '"note": "다음 회의에 남길 방 메모' in sysp
+    assert "다음 회의에 남길 방 메모" not in RM.system_prompt("pnl_reviewer", "team")   # the 36's team rooms: unchanged
+    notes = R.room_notes(w.agents, "team:ds_structure", 5)
+    assert [n["text"] for n in notes] == [note]
+    assert "방 메모 1건" in _last_decision(w)["summary_ko"]
+    assert any(m["kind"] == "action" and "메모" in m["text"] for m in w.messages("team:ds_structure"))
+    # the next meeting of the room reads it back (packet ``notes``)
+    w.ds_losses("F9_FVG@1h", 6, t=QUIET + 26 * HOUR)
+    r2 = QueueRunner({"spec_ds_structure": [team_answer("s")], "team_lead": [LEAD]})
+    w.tick(r2, QUIET + 26 * HOUR)
+    assert [n["text"] for n in r2.calls[0]["packet"]["notes"]] == [note]
+    # a note in a 36 team room's answer is dropped (only the group rooms have the note action there)
+    assert "note" not in RM.check_team({**team_answer("x"), "note": "n"}, {"room": {"room_id": "team:risk"}})[0]
+
+
 # ------------------------------------------------------------------ 9: the agenda jumps only on a new event
 def _bust(paper, aid):
     import sqlite3
