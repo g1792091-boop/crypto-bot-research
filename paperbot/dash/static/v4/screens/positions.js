@@ -14,8 +14,11 @@ const TRADE_LIMIT = 1000;
 
 export async function mount(el, ctx) {
   ctx.setTitle("포지션");
+  // #/positions?coin=BTCUSDT (시장's funding rows): open on that coin, and remember it like a tap on its chip
+  const qCoin = String((ctx.params.query || {}).coin || "").toUpperCase();
+  if (COINS.includes(qCoin)) local.set("pos-sym", qCoin);
   const st = {
-    sym: local.get("pos-sym", ""), tab: local.get("pos-tab", "pos"), sort: local.get("pos-sort", "pnl"), grp: local.get("pos-grp", ""),
+    sym: COINS.includes(qCoin) ? qCoin : local.get("pos-sym", ""), tab: local.get("pos-tab", "pos"), sort: local.get("pos-sort", "pnl"), grp: local.get("pos-grp", ""),
     tPer: local.get("pos-tper", "today"), tRes: "all", tGrp: "",
     board: null, why: {}, open: new Set(), firstOpen: true, trades: null, tradesErr: null, tradesDirty: true, countsKey: "",
   };
