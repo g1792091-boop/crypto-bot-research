@@ -78,7 +78,7 @@ a.home-row.compact .board-rkd { position: absolute; left: 2px; bottom: 1px; }
 
 /* the 참고 glyph of a ranking row (neutral: before the verdict a comparison is never a pass or a fail) */
 .home-row .vsg { color: var(--ink-2); white-space: nowrap; }
-.home-row .vsg b { font-weight: 700; font-size: .9em; }
+.home-row .vsg b { font-weight: 700; font-size: max(var(--t-2xs), .9em); }
 .home-vsfoot b { color: var(--ink-2); }
 
 /* the small median line in a group card (home: the race's series in the group's own colour; empty on 순위표) */

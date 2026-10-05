@@ -16,7 +16,6 @@ V4 = os.path.join(ROOT, "paperbot", "dash", "static", "v4")
 
 # font sizes that are not a --t-* token, on purpose: relative sizes and the replay LED that fits a phone's width
 EXCEPTIONS = {
-    ("screens/home-shared.css", ".9em"),
     ("screens/replay.css", "9.5vw"),
     ("screens/replay.css", "7vw"),
     ("screens/flow.css", "0"),          # a phone calendar cell's tag shrinks to a 6px dot: no text is shown
