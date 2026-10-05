@@ -104,7 +104,8 @@ function perTradeCard(d, env) {
 // ---------------------------------------------------------------- 3. by timeframe: the 36 vs same-bar coin flips
 function byTfCard(d, env) {
   const t = (d && d.by_tf) || {};
-  const tfs = ["15m", "30m", "1h", "4h"].filter((tf) => (t.core && t.core[tf]) || (t.flip_same && t.flip_same[tf]));
+  const has = (c) => !!(c && c.trades);                 // day 0: the accounts are there, their trades are not
+  const tfs = ["15m", "30m", "1h", "4h"].filter((tf) => has(t.core && t.core[tf]) || has(t.flip_same && t.flip_same[tf]));
   if (!tfs.length) return ui.card({plate: "봉별", sub: "기존 36 vs 같은 봉 동전 봇"}, ui.empty("닫힌 거래가 아직 없습니다"));
   const v = (c, key) => (c && c.per_trade ? c.per_trade[key] : null);
   const cellOf = (c, key, flip) => (c && c.trades ? h("b", {class: ["num", flip ? "ink2" : key === "fees" ? "down" : fmt.tone(v(c, key))]},
@@ -165,7 +166,7 @@ export function costLine(ctx) {
     el.hidden = !c;
     if (!c) return;
     el.replaceChildren(h("b", null, "비용"), ` 기존 36 거래 한 번에 `,
-      g.core.trades < 20 ? [ui.smallSample(g.core.trades, 20), " "] : null, `수수료 `, h("b", {class: "num down"}, fmt.pct(-c.fees, 2)),
+      ...(g.core.trades < 20 ? [ui.smallSample(g.core.trades, 20), " "] : []), `수수료 `, h("b", {class: "num down"}, fmt.pct(-c.fees, 2)),
       ` · 수수료 전 `, h("b", {class: ["num", fmt.tone(c.before)]}, fmt.pct(c.before, 2)), ` → 실제 `,
       h("b", {class: ["num", fmt.tone(c.after)]}, fmt.pct(c.after, 2)),
       ...(f ? [` · 동전 봇 실제 `, h("b", {class: "num ink2"}, fmt.pct(f.after, 2)), " (참고)"] : []),

@@ -159,7 +159,7 @@ export function luckDots(v) {
   const lucky = Math.max(0, Math.min(n, Math.ceil(Number(v.lucky_expected) || 0)));
   if (!n) return h("p", {class: "muted home-small"}, "운 시험을 통과한 계좌가 없습니다.");
   return h("div", {class: "stack tight"},
-    h("div", {class: "ck-luck", role: "img", "aria-label": `운 시험 통과 ${n}개 중 운만으로도 약 ${lucky}개`},
+    h("div", {class: "ck-luck", role: "img", "aria-label": `운 시험 통과 ${n}개 중 운만으로 통과했을 수 있는 수 많아야 ${lucky}개`},
       Array.from({length: n}, (_, i) => h("i", {class: i < lucky ? "lucky" : ""}))),
-    h("p", {class: "muted home-small"}, `점 하나 = 운 시험을 통과한 계좌 하나 (${fmt.int(n)}개). 점선 점 ${fmt.int(lucky)}개 = 실력이 없어도 운만으로 이만큼은 통과할 수 있다는 수. 어느 계좌가 그 운인지는 알 수 없습니다.`));
+    h("p", {class: "muted home-small"}, `점 하나 = 운 시험을 통과한 계좌 하나 (${fmt.int(n)}개). 점선 점 ${fmt.int(lucky)}개 = 이 가운데 실력 없이 운만으로 통과했을 수 있는 수 (많아야 ${fmt.num(Number(v.lucky_expected) || 0, 1)}개, 올림). 어느 계좌가 그 운인지는 알 수 없습니다.`));
 }
