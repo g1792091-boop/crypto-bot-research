@@ -110,8 +110,11 @@ def uptime(c: sqlite3.Connection, daily_db: Optional[str], days: int, now: int) 
                 continue
             cells.append([int(got.get(d * 24 + hh, 0)), int(exp)])
         rows.append({"day": time.strftime("%Y-%m-%d", time.gmtime((d0 + KST_MS) / 1000)), "ts": d0, "h": cells})
+    # restarts only: the first start writes its runs row with the accounts' creation time (live3: open_accounts and
+    # add_run share one clock reading), which is the run start, so it is not a restart
     restarts = [{"ts": int(r[0]), "id": int(r[1])} for r in c.execute(
-        "SELECT started_ts, id FROM runs WHERE started_ts >= ? ORDER BY started_ts", (first_day,))]
+        "SELECT started_ts, id FROM runs WHERE started_ts >= ? AND started_ts > ? ORDER BY started_ts",
+        (first_day, int(start)))]
     return {"ready": True, "days": days, "now": now, "start": int(start), "first_day": first_day, "until": t_end,
             "expected_min": int(expected), "stepped_min": int(len(mins)),
             "share": (len(mins) / expected) if expected else None,

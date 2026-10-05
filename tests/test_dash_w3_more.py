@@ -64,6 +64,7 @@ def make_world(tmp_path, gap=True):
                 rows.append((t, sym, 1.0, 1.0, 1.0, 1.0, 1.0, t + 61_000))
         t += MIN
     c.executemany("INSERT INTO live_bars (ts, symbol, open, high, low, close, volume, processed_at) VALUES (?,?,?,?,?,?,?,?)", rows)
+    c.execute("INSERT INTO runs (started_ts, data) VALUES (?, ?)", (START, "{}"))          # the first start: not a restart
     c.execute("INSERT INTO runs (started_ts, data) VALUES (?, ?)", (stop0 + 10 * MIN, "{}"))
     c.commit()
     c.close()
