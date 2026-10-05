@@ -3,14 +3,14 @@
 // one chosen account's entries and exits, this coin's open positions as lines with live P&L, the chosen account's
 // entry / stop / liquidation (and the reel's target), support / resistance, GH Coin plan lines (only while its recorder
 // runs), US macro release marks, armed price alerts. Prices come from the server: /api/ticker (store, 5 s) and
-// /api/candles?limit=2 every 5 s for the forming bar. TradingView and Coinglass are new-tab links only.
+// /api/candles?limit=2 every 5 s for the forming bar. TradingView and Coinglass are new-tab links; the opt-in second
+// tab 거래소 차트 shows TradingView's own page in a sandboxed cross-origin iframe (chart-tv.js), built only while open.
 import {h, ui, fmt, store, local, motion, bars, serverNow, makeChart, candleOptions, tok, priceDec, features} from "../core/pb.js";
 import {normPos, reelExits, nameOf} from "./positions-kit.js";
 import {countdown, fundPct} from "./positions-book.js";
 import {sidePanels} from "./chart-panels.js";
+import {TV_IV, tvFrame} from "./chart-tv.js";
 
-const TV_IV = {"1m": "1", "3m": "3", "5m": "5", "15m": "15", "30m": "30", "1h": "60", "2h": "120", "4h": "240", "6h": "360",
-  "8h": "480", "12h": "720", "1d": "D", "3d": "3D", "1w": "W", "1M": "M"};
 const SHORT = {"1m": "1분", "3m": "3분", "5m": "5분", "15m": "15분", "30m": "30분", "1h": "1시간", "2h": "2시간", "4h": "4시간",
   "6h": "6시간", "8h": "8시간", "12h": "12시간", "1d": "일", "3d": "3일", "1w": "주", "1M": "월"};
 const TF_S = {"1m": 60, "3m": 180, "5m": 300, "15m": 900, "30m": 1800, "1h": 3600, "2h": 7200, "4h": 14400, "6h": 21600, "8h": 28800,
@@ -35,7 +35,7 @@ export async function mount(el, ctx) {
     sym: bars.SYMS.includes(p0.arg) ? p0.arg : local.get("chart-sym", "BTCUSDT"),
     tf: TF_S[p0.query.tf] ? p0.query.tf : local.get("chart-tf", "15m"),
     acct: p0.query.acct || "", board: null, show: Object.fromEntries(TOGGLES.map(([k, , d, dp]) => [k, savedShow[k] ?? (narrow() ? dp : d)])),
-    last: null, levels: null, gh: null, events: null, alerts: null, acctData: null, loadTok: 0, fitted: false,
+    last: null, levels: null, gh: null, events: null, alerts: null, acctData: null, loadTok: 0, fitted: false, view: "bot",
   };
   if (!bars.SYMS.includes(st.sym)) st.sym = "BTCUSDT";
   if (!TF_S[st.tf]) st.tf = "15m";
@@ -91,7 +91,13 @@ export async function mount(el, ctx) {
       ["24시간 고가", tk.hi], ["24시간 저가", tk.lo], ["24시간 거래대금", tk.vol]]), tk.sess);
 
   const panels = sidePanels(ctx, {sym: st.sym, onPick: (id) => pickAccount(id), onAlerts: (d) => { st.alerts = d; drawAlertLines(); }});
-  const chartCard = h("section", {class: "card chart-card", "aria-label": "봇 차트"}, tfBar, wrap,
+  // 우리 차트 (default, every visit) | 거래소 차트 (opt-in: TradingView's page in an iframe that exists only while open)
+  const tv = tvFrame();
+  ctx.track(() => tv.hide());
+  const viewSeg = ui.seg([{id: "bot", label: "우리 차트"}, {id: "tv", label: "거래소 차트", title: "트레이딩뷰 화면 (바깥 사이트)"}], "bot",
+    (v) => setView(v), {label: "차트 종류"});
+  viewSeg.classList.add("chart-views");
+  const chartCard = h("section", {class: "card chart-card", "aria-label": "봇 차트", dataset: {view: "bot"}}, viewSeg, tfBar, wrap, tv.el,
     h("div", {class: "chart-ctrl"}, acctSel), toggles, lvNote,
     ui.assume("open", "포지션 선의 손익은 그 계좌들의 미실현 손익"));
   el.append(ui.screenHead("차트", "봇이 보는 시세와 모의 계좌의 진입·청산"), coinBar, priceLine,
@@ -338,8 +344,17 @@ export async function mount(el, ctx) {
     tk.sess.textContent = `지금 ${ss.weekend ? "주말 · " : ""}${ss.ko} (한국 시각) · 미국 증시 ${us.text}`;
   }
 
-  // ---------------------------------------------------------------- links (new tab only; the page loads nothing from these hosts)
+  // ---------------------------------------------------------------- 우리 차트 / 거래소 차트
+  function setView(v) {
+    st.view = v === "tv" ? "tv" : "bot";
+    chartCard.dataset.view = st.view;
+    viewSeg.set(st.view);
+    if (st.view === "tv") tv.show(fmt.coin(st.sym), st.tf); else tv.hide();
+  }
+
+  // ---------------------------------------------------------------- links (new tab; the 거래소 차트 frame follows the coin and interval)
   function paintLinks() {
+    if (st.view === "tv") tv.show(fmt.coin(st.sym), st.tf);
     const c = encodeURIComponent(fmt.coin(st.sym));
     tvA.href = `https://www.tradingview.com/chart/?symbol=BINANCE:${c}USDT.P&interval=${TV_IV[st.tf] || "15"}`;
     cgLinks.replaceChildren(...[["코인글래스 차트", `https://www.coinglass.com/tv/Binance_${c}USDT`],
@@ -372,6 +387,7 @@ export async function mount(el, ctx) {
     const a = st.board && st.board.accounts.find((x) => x.account_id === id);
     if (!a) return;
     st.acct = id; st.acctData = null;
+    if (st.view === "tv") setView("bot");                 // entries and exits are drawn on 우리 차트 only
     if (!st.show.mk) { st.show.mk = true; toggleBtns[0].setAttribute("aria-pressed", "true"); local.set("chart-show", st.show); }
     if (a.timeframe !== st.tf && TF_S[a.timeframe]) { st.tf = a.timeframe; local.set("chart-tf", st.tf); paintTfs(); paintLinks(); tick(); fillAccounts(); reflectUrl(); loadCandles(); }
     else { fillAccounts(); reflectUrl(); drawAccount(); }

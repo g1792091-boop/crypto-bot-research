@@ -41,6 +41,15 @@
 .chart-toggles button { height: 32px; }
 .chart-toggles button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent); }
 .chart-linkrow { display: flex; flex-wrap: wrap; gap: 6px; }
+/* 우리 차트 | 거래소 차트 (TradingView opt-in: a sandboxed cross-origin iframe, chart-tv.js) */
+.chart-views button { height: 34px; padding: 0 14px; }
+.chart-card[data-view="tv"] > :is(.chart-wrap, .chart-ctrl, .chart-toggles, .pos-note, .assume) { display: none; }
+.chart-tv { display: grid; gap: 6px; min-width: 0; }
+.chart-tv-slot { height: 60vh; min-height: 360px; max-height: 600px; border-radius: var(--r-md); overflow: hidden;
+  border: 1px solid var(--line); background: var(--surface-2); }
+@media (min-width: 1000px) { .chart-tv-slot { height: 560px; max-height: none; } }
+.chart-tv-frame { display: block; width: 100%; height: 100%; border: 0; }
+.chart-tv-cap { margin: 0; color: var(--muted); font-size: var(--t-xs); line-height: 1.5; }
 .chart-links { display: contents; }
 .chart-panels { gap: 10px; }
 @media (min-width: 1000px) { .chart-panels { position: sticky; top: calc(var(--top-h) + var(--sub-h) + 12px); } }
