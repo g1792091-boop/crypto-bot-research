@@ -196,7 +196,7 @@ def test_digest_text_stays_the_record_and_reaches_telegram_grouped(monkeypatch):
                                             "[S2_ST_ROC@4h] drawdown 20.4% (level 20%), equity 3980.12",
                                             "[N07_ICHI_CMO@4h] drawdown 20.4% (level 20%), equity 3980.12",
                                             "외 2건 (대시보드 알림 목록)"]
-    assert sent[1]["text"][0].endswith("잔고 $3,980\n\n외 2건 (대시보드 '서버 상태 → 경고')")
+    assert sent[1]["text"][0].endswith("잔고 $3,980\n\n외 2건 (대시보드 '서버 › 알림 기록')")
 
 
 def test_extras_digest_counts_operational_notes_only(monkeypatch):
@@ -209,7 +209,7 @@ def test_extras_digest_counts_operational_notes_only(monkeypatch):
     xd.flush(0, force=True)
     text = sent[0]["text"][0]
     assert text == (f"📉 추가 계좌 경고 · 지난 1시간\n\n낙폭 경고 1건\n- 복제 {S2} 1시간 · -20% · 잔고 $3,985\n\n"
-                    "운영 메모 2건 (대시보드 '서버 상태 → 경고')")
+                    "운영 메모 2건 (대시보드 '서버 › 알림 기록')")
     assert "1759580400000" not in text and "NL2@15m" not in text
 
 
@@ -711,3 +711,15 @@ def test_every_accepted_telegram_message_is_counted_and_the_count_never_fails_a_
     assert os.path.dirname(TG_SENDS_DEFAULT) == "/var/lib/paperbot" and "paper3" not in TG_SENDS_DEFAULT
     cols = sqlite3.connect(str(db)).execute("PRAGMA table_info(tg_sends)").fetchall()
     assert [(c[1], c[2], c[5]) for c in cols] == [("day", "TEXT", 1), ("kind", "TEXT", 2), ("n", "INTEGER", 0)]
+
+
+def test_telegram_text_points_at_the_v4_dashboard_places():
+    """A5: the v3 tab names some senders still write (checkpoint.py is pinned, so its verdict text is rewritten here)
+    become the v4 UI's places."""
+    from paperbot import notify as N
+    _lvl, t = N.telegram_text("INFO", "30일 판정\n\n자세히: 대시보드 순위표 '체크포인트 판정'")
+    assert t.endswith("자세히: 대시보드 홈 › 판정") and "체크포인트 판정'" not in t
+    _lvl, t = N.telegram_text("INFO", "청산 3건\n외 2건 — 대시보드 '오늘 체결'")
+    assert "대시보드 '거래 › 포지션 › 체결 기록'" in t and "오늘 체결" not in t
+    for old, _new in N.V4_POINTERS:
+        assert old not in N.telegram_text("WARN", "x " + old)[1]

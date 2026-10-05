@@ -346,3 +346,16 @@ def test_the_strategy_tab_shows_the_breakeven_win_rate():
     # avg win 160/6, avg loss -170/4: breakeven = 42.5 / (26.67 + 42.5)
     assert got["a"]["ratio"] == pytest.approx((160 / 6) / 42.5) and got["a"]["be"] == pytest.approx(42.5 / (160 / 6 + 42.5))
     assert got["b"]["be"] is None and got["c"]["be"] is None
+
+
+def test_the_rr_shadow_note_carries_the_runs_own_day_30_not_a_v3_date(world):
+    """A6: the note used v3's '2026-11-01'; it now carries checkpoint_ts(start, 1) of the run in paper3.db (the World
+    starts 2026-09-20 14:00 KST, so day 30 is 2026-10-20 09:00 KST), and the prompt names no date of its own."""
+    seed(world)
+    pk = RR.rr_packet(world.paper(), world.daily, QUIET)
+    note = pk["shadows"]["new_variants"]["note"]
+    assert "30일 체크포인트(2026-10-20 09:00 KST) 전 결론 없음" in note and "2026-11-01" not in note
+    assert RR.checkpoint1_ko(None) == "시작 후 30일"
+    prompt = open(os.path.join(os.path.dirname(__file__), "..", "paperbot", "agents", "prompts3",
+                               "rooms_meeting_rr.md"), encoding="utf-8").read()
+    assert "2026-11-01" not in prompt and "rr.shadows.new_variants.note" in prompt

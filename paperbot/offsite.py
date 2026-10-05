@@ -68,7 +68,8 @@ from .notify import WARN, ConsoleNotifier, Notifier, TelegramNotifier
 API = "https://api.telegram.org"
 # the databases deploy/paperbot-backup.sh copies (keep the two lists the same: tests/test_offsite.py
 # compares them); a copy is <basename>.db
-DB_NAMES = ("agents3", "inbox", "liq", "checkpoint", "exec/executor", "exec/executor-testnet", "shadow200/shadow200", "daily3", "paper3")
+DB_NAMES = ("agents3", "inbox", "liq", "checkpoint", "exec/executor", "exec/executor-testnet", "shadow200/shadow200",
+            "debate/debate", "daily3", "paper3")
 TELEGRAM_UPLOAD_LIMIT = 50_000_000      # Bot API: documents up to 50 MB (read as decimal MB, the stricter)
 MULTIPART_ROOM = 1_000_000              # form fields, caption and boundaries around the file
 MAX_PART = TELEGRAM_UPLOAD_LIMIT - MULTIPART_ROOM
@@ -780,12 +781,28 @@ EXEC_DIR = "/var/lib/paperbot/exec"
 EXEC_USER = "paperbot-exec"
 
 
+# the 24-hour debate room's own user and its only writable folder (deploy/install.sh, deploy/paperbot-debate.service):
+# debate.db (rounds, graded claims, the spend counter) goes back there, owned by that user, group paperbot reads it
+DEBATE_DIR = "/var/lib/paperbot/debate"
+DEBATE_USER = "paperbot-debate"
+# a copy <basename>.db of a database kept in a subfolder goes back into that subfolder (exec/, shadow200/, debate/)
+_SUBDIR_OF = {f.rsplit("/", 1)[-1] + ".db": f.rsplit("/", 1)[0] for f in DB_NAMES if "/" in f}
+# the folder line for each subfolder (the same owner and mode as deploy/install.sh)
+_DIR_LINE = {EXEC_DIR: f"-o {EXEC_USER} -g paperbot -m 750", DEBATE_DIR: f"-o {DEBATE_USER} -g paperbot -m 2750",
+             "/var/lib/paperbot/shadow200": "-o paperbot -g paperbot -m 750"}
+
+
 def _target(name: str) -> str:
-    return f"{EXEC_DIR}/{name}" if name.startswith("executor") else f"/var/lib/paperbot/{name}"
+    sub = _SUBDIR_OF.get(name)
+    return f"/var/lib/paperbot/{sub}/{name}" if sub else f"/var/lib/paperbot/{name}"
 
 
 def _owner(target: str) -> str:
-    return f"{EXEC_USER} -g paperbot" if target.startswith(EXEC_DIR + "/") else "paperbot -g paperbot"
+    if target.startswith(EXEC_DIR + "/"):
+        return f"{EXEC_USER} -g paperbot"
+    if target.startswith(DEBATE_DIR + "/"):
+        return f"{DEBATE_USER} -g paperbot"
+    return "paperbot -g paperbot"
 
 
 def next_steps(dest: Path, names: Sequence[str]) -> str:
@@ -793,7 +810,7 @@ def next_steps(dest: Path, names: Sequence[str]) -> str:
         "",
         "다음 순서 (docs/offsite-backup.md 9-5):",
         "1) 봇과 작업을 모두 멈춥니다 (새 서버에서 아직 켜지 않았다면 'not loaded' 같은 말이 나와도 괜찮습니다):",
-        "   sudo systemctl stop paperbot-live3 paperbot-dash paperbot-liq paperbot-executor \\",
+        "   sudo systemctl stop paperbot-live3 paperbot-dash paperbot-liq paperbot-executor paperbot-debate \\",
         "     paperbot-agents.timer paperbot-agents.service paperbot-daily3.timer paperbot-checkpoint.timer \\",
         "     paperbot-checkpoint.service paperbot-backup.timer paperbot-offsite.timer",
         "2) 데이터베이스를 제자리에 넣고, 남아 있을 수 있는 -wal/-shm 파일을 지웁니다:",
@@ -804,6 +821,14 @@ def next_steps(dest: Path, names: Sequence[str]) -> str:
             "cd /root/crypto-bot-research && sudo bash deploy/install.sh 를 하고 이 줄부터 다시 붙여 넣습니다)",
             f"   sudo install -d -o {EXEC_USER} -g paperbot -m 750 {EXEC_DIR}",
         ]
+    if any(_target(n).startswith(DEBATE_DIR + "/") for n in names):
+        lines += [
+            f"   (토론방 DB는 토론방 전용 사용자 {DEBATE_USER}의 것입니다. 'invalid user'가 나오면 먼저 "
+            "cd /root/crypto-bot-research && sudo bash deploy/install.sh 를 하고 이 줄부터 다시 붙여 넣습니다)",
+            f"   sudo install -d {_DIR_LINE[DEBATE_DIR]} {DEBATE_DIR}",
+        ]
+    if any(_target(n).startswith("/var/lib/paperbot/shadow200/") for n in names):
+        lines.append(f"   sudo install -d {_DIR_LINE['/var/lib/paperbot/shadow200']} /var/lib/paperbot/shadow200")
     for n in names:
         t = _target(n)
         lines.append(f"   sudo install -o {_owner(t)} -m 640 {dest / n} {t}")
@@ -815,6 +840,7 @@ def next_steps(dest: Path, names: Sequence[str]) -> str:
         "   확인은 12번의 launchcheck --stage after로 합니다(그날 쉬게 한 paperbot-agents.timer 줄은 따르지 않음).",
         "   10번(--stage before)은 하지 않습니다: 되살린 paper3.db를 옮기라는 줄을 따르면 되살린 기록이 빠집니다.",
         "   주문 실행기(paperbot-executor)는 켜지 않습니다 (docs/live-safety.md).",
+        "   토론방(paperbot-debate)은 두 분이 켜 두었던 경우에만 다시 켭니다 (docs/debate-room.md).",
     ]
     return "\n".join(lines)
 

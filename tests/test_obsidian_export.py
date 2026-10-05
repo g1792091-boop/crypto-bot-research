@@ -17,7 +17,7 @@ from paperbot import obsidian_notes as N
 from paperbot import obsidian_preview as PV
 from paperbot import obsidian_util as U
 from paperbot.agents import rooms_db as R
-from paperbot.agents.roster3 import ROLES, STRATEGY_KO, TEAMS
+from paperbot.agents.roster3 import GROUP_SPECIALISTS, ROLES, STRATEGY_KO, TEAMS
 from paperbot.store3 import SCHEMA as PAPER_SCHEMA
 
 KST = timezone(timedelta(hours=9))
@@ -220,8 +220,13 @@ def test_tree_has_the_folders_and_the_key_notes(world):
               "08 규칙·문서/규칙 문서 목록.md", "99 내 메모/메모 시작.md", ".obsidian/graph.json", ".obsidian/snippets/paperbot.css",
               ".obsidian/snippets/paperbot-palette.css", X.MANIFEST):
         assert p in files, p
-    assert sum(p.startswith("02 매매법/") and "매매법 목록" not in p and "동전" not in p and "추가" not in p for p in files) == 36
-    assert sum(p.startswith("03 직원/역할/") for p in files) == len(ROLES) == 36
+    v4 = ("02 매매법/딥시크/", "02 매매법/릴스 5분 단타.md", "02 매매법/딥시크·릴스.md")
+    assert sum(p.startswith("02 매매법/") and "매매법 목록" not in p and "동전" not in p and "추가" not in p
+               and not p.startswith(v4) for p in files) == 36
+    # paper v4 (A2): one note per DeepSeek family, the reel's note and their hub; the five group specialists
+    assert sum(p.startswith("02 매매법/딥시크/") for p in files) == 17
+    assert "02 매매법/릴스 5분 단타.md" in files and "02 매매법/딥시크·릴스.md" in files
+    assert sum(p.startswith("03 직원/역할/") for p in files) == len(ROLES) + len(GROUP_SPECIALISTS) == 41
     assert sum(p.startswith("03 직원/팀/") for p in files) == len(TEAMS) == 12
     assert "04 회의/일일/회의 2026-10-06.md" in files and "07 매일 점검/일일/점검 2026-10-06.md" in files
     assert any(p.startswith("04 회의/주간/") for p in files)
@@ -679,3 +684,51 @@ def test_deploy_unit_and_timer():
     assert "EnvironmentFile" not in re.sub(r"(?m)^#.*$", "", svc)
     assert "OnCalendar=*-*-* 00:50:00 UTC" in tim and "Persistent=true" in tim and "WantedBy=timers.target" in tim
     assert "paperbot-agents.service" in svc
+
+
+# ------------------------------------------------------------------ paper v4 groups (A2)
+def test_group_rooms_and_meetings_have_korean_names_and_file_as_loss_meetings():
+    from paperbot import obsidian_notes as N
+    from paperbot import obsidian_notes_b as NB
+    from paperbot.agents import rooms_db as R
+    from paperbot.agents.triggers import GROUP_TRIGGERS
+    assert set(N.GROUP_ROOM_TITLES) == set(R.GROUP_ROOMS) and N.GROUP_ROOM_TITLES == R.GROUP_ROOM_TITLES
+    assert N.room_name_ko("team:ds_structure") == "구조·유동성 담당 방"
+    assert NB.room_label("team:reel_5m") == "[[5분봉 단타 담당|5분봉 단타 담당 방]]"
+    for t in GROUP_TRIGGERS:
+        assert N.trigger_ko(t) != t and N.group_of(t) == "loss"
+
+
+def test_plain_rules_cover_every_deepseek_definition_and_the_reel():
+    from paperbot import obsidian_notes as N
+    from paperbot.config import DS200_IDS
+    pr = N.plain_rules()
+    assert set(pr["defs"]) == set(DS200_IDS) and all(pr["defs"][d] for d in DS200_IDS)
+    assert len(pr["families"]) == 17 and set(pr["names"]) == set(DS200_IDS)
+    assert any("38.2%" in x for x in pr["defs"]["F16_FIB382"]) and not any("${" in x for v in pr["defs"].values() for x in v)
+    assert len(pr["reel"]["lines"]) >= 3 and pr["reel"]["desc"]
+
+
+def test_deepseek_family_notes_count_only_and_the_specialists_are_in_the_staff_notes(world):
+    c = sqlite3.connect(world["paper"])
+    c.execute("INSERT INTO accounts VALUES (?,?,?,?,?,?,?,?)", ("F3_BOS@15m", "F3_BOS", "15m", "ds200", START, "paper-v4", None, "{}"))
+    c.execute("INSERT INTO accounts VALUES (?,?,?,?,?,?,?,?)", ("REEL_H1@5m", "REEL_H1", "5m", "reel", START, "paper-v4", None, "{}"))
+    c.executemany("INSERT INTO trades (account_id, symbol, entry_time, exit_time, exit_reason, leverage, pnl, roe, equity_after, data)"
+                  " VALUES (?,?,?,?,?,?,?,?,?,?)", [trade("F3_BOS", "15m", i, "normal", 777.77, 0.3) for i in range(2)])
+    c.commit()
+    c.close()
+    rep = run(world)
+    assert rep["broken_links"] == 0
+    files = md_files(world["out"])
+    f3 = files["02 매매법/딥시크/딥시크 F3 구조 돌파·공급수요.md"]
+    assert "F3_BOS" in f3 and "오름 구조에서 마지막 스윙 고점" in f3 and "777" not in f3 and "$" not in f3
+    assert "| 2 |" in f3 or "trades: 2" in f3
+    assert "[[구조·유동성 담당]]" in f3 or "[[구조·유동성 담당|" in f3
+    reel = files["02 매매법/릴스 5분 단타.md"]
+    assert "200봉 평균선" in reel and "동전 던지기" in reel
+    role = files["03 직원/역할/구조·유동성 담당.md"]
+    assert "딥시크 F9" in role and "구조·유동성 담당 방" in role
+    spec = files["03 직원/팀/" + next(n for t, n in TEAMS if t == "specialist").split(" ", 1)[-1] + ".md"]
+    assert all(g[1] in spec for g in GROUP_SPECIALISTS)
+    hub = files["02 매매법/딥시크·릴스.md"]
+    assert "$" not in hub and "F17" in hub

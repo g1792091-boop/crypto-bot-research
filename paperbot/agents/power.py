@@ -32,6 +32,20 @@ def load(path: str = POWER_JSON) -> Optional[dict]:
     return doc if isinstance(doc, dict) and doc.get("version") == 2 else None
 
 
+def deepseek_line_ko() -> str:
+    """A7: the DeepSeek family has no power table (power.json has the core schemes and the reel only); one fixed line
+    with its numbers (the checkpoint's FDR and the judged count), so '0 passes' there is not over-read."""
+    try:
+        from ..checkpoint import FAMILY_ALPHA, N_BOTS
+        from ..config import V4_GROUP_JUDGED
+        a, n = float(FAMILY_ALPHA["ds200"]), int(V4_GROUP_JUDGED["ds200"])
+        p_min = 1 / (N_BOTS + 1)
+        return (f"딥시크: 판정 {n}개 · FDR {a * 100:g}% · 한 계좌 통과에 p ≤ {a / n:.1e} (가장 작은 p {p_min:.1e}) · "
+                "검정력 표 없음: 딥시크 '합격 0개'는 엣지가 없다는 증거가 아님")
+    except (ImportError, KeyError, TypeError, ValueError, ZeroDivisionError):
+        return "딥시크: 검정력 표 없음"
+
+
 def brief(path: str = POWER_JSON, family: int = FAMILY, scheme: str = SCHEME) -> dict:
     """Compact: the code-written lines ('진짜 엣지가 거래당 +X%라면 30일에 합격할 확률 Y%'), and per timeframe and
     edge [edge, P(1st pass at day 30), P(1st pass by day 60), P(2nd pass by day 60)] under the run's scheme, with the
@@ -62,7 +76,7 @@ def brief(path: str = POWER_JSON, family: int = FAMILY, scheme: str = SCHEME) ->
     sc = (doc.get("schemes") or {}).get(scheme) or {}
     return {"lines_ko": doc.get("summary_ko") or [], "family": family, "scheme": scheme,
             "alpha": sc.get("alpha"), "n_bots": sc.get("n_bots"), "table": table, "timeframes": info,
-            "no_5m": NO_5M_KO,
+            "no_5m": NO_5M_KO, "deepseek": deepseek_line_ko(),
             "columns": ["edge_roe(거래당 순 ROE에 더한 엣지, 0.01 = +1%)", "30일 1차 합격 확률", "60일까지 1차 합격 확률",
                         "60일까지 2차 통과 확률"],
             "generated": doc.get("generated"), "source": "research/power/power.py (out/power.json)",

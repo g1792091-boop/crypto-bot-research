@@ -81,7 +81,7 @@ def test_long_bursts_are_capped_and_the_state_file_round_trips(tmp_path):
     exits = [{"id": i, "account_id": "N02_ST_KST@5m", "kind": "strategy", "symbol": "BTCUSDT", "exit_reason": "SL",
               "leverage": 20, "pnl": -float(i), "roe": -0.1, "side": 1} for i in range(1, 31)]
     text = TA.message([], exits, 0, 0, {}, min_usd=5)
-    assert text.count(" · BTC · -10.0% · ") == TA.MAX_LINES and "외 18건 — 대시보드 '오늘 체결'" in text
+    assert text.count(" · BTC · -10.0% · ") == TA.MAX_LINES and "외 18건 — 대시보드 '거래 › 포지션 › 체결 기록'" in text
     assert "청산 30 · 합계 -$465" in text and "❌ 손실 30건 -$465" in text and "- N02_ST_KST 5분 · BTC · -10.0% · -$30" in text
     p = str(tmp_path / "s.json")
     TA.save_state(p, {"last_id": 7, "open": {"a": "k"}})
@@ -212,7 +212,7 @@ def test_large_batch_is_grouped_by_side_and_coin_then_profit_and_loss():
 def test_sections_are_capped_at_12_lines():
     es = [E(f"N14_ICHI_RSI@15m", "BTCUSDT" if i % 2 else "ETHUSDT", 1, 100.0 + i, 20, 1000.0 - i, 99.0) for i in range(15)]
     text = TA.message(es, [], 15, NOW, NAMES)
-    assert text.count("\n- ") == 12 and "외 3건 — 대시보드 포지션 탭" in text
+    assert text.count("\n- ") == 12 and "외 3건 — 대시보드 '거래 › 포지션'" in text
     assert "BTC\n- " in text                                                  # entry prices differ: per line
     assert "· 진입 101.00 · 손절 99.00" in text
 

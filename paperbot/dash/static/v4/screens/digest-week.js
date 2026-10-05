@@ -23,6 +23,20 @@ export function makeWeek(ctx) {
         mv ? h("span", null, "지난주 대비 ", mv) : null));
   });
 
+  // paper v4 groups outside the 36 (week_report.groups): the reel against the median of its three 5m coin flips
+  // (참고, refNote); DeepSeek and the 5m flips as counts only (owners' D10/D11: no DeepSeek money here).
+  function groupsCard(g) {
+    const r = g.reel, ds = g.ds200, f5 = g.flip_5m, rows = [];
+    if (r) rows.push(["릴스 5분 단타", h("span", null, h("b", {class: ["num", fmt.tone(r.pnl)]}, `${signMoney(r.pnl)} USDT`), " ",
+      h("small", {class: "muted"}, `${fmt.int(r.trades)}건 · 승률 ${fmt.pct(r.win_rate, 0, false)}${r.busts ? ` · 파산 ${fmt.int(r.busts)}` : ""}`), " ", ui.smallSample(r.trades))]);
+    if (r && r.flip_median_pnl != null) rows.push([`5분 동전 ${fmt.int(r.flips_5m)}개 중앙값`, h("span", null, signMoney(r.flip_median_pnl), " ",
+      ui.pill("참고", "ref"), ` 릴스가 ${r.above_flip_median ? "위" : "아래"}`)]);
+    if (ds) rows.push([`딥시크 ${fmt.int(ds.accounts)}개`, `거래 ${fmt.int(ds.trades)}건 · 거래한 계좌 ${fmt.int(ds.accounts_traded)}개${ds.busts ? ` · 파산 ${fmt.int(ds.busts)}` : ""}`]);
+    if (f5) rows.push([`5분 동전 ${fmt.int(f5.accounts)}개`, `거래 ${fmt.int(f5.trades)}건${f5.busts ? ` · 파산 ${fmt.int(f5.busts)}` : ""}`]);
+    return ui.card({plate: "다른 묶음", sub: "최근 7일 · 기존 36개와 섞지 않음 · 딥시크·동전은 개수만"}, ui.kv(rows),
+      ui.refNote(verdictTs(), "릴스의 기준은 같은 5분봉 동전 던지기입니다."), r ? ui.assume() : null);
+  }
+
   function render(d) {
     const t = d.strategies_total || {}, tp = d.strategies_total_prev || {}, cf = d.coin_flips || {}, s = d.staff;
     const prevKo = tp.trades ? `지난주 ${signMoney(tp.pnl)} USDT` : d.run_start > d.from - 7 * 86400000 ? "지난주: 실험 시작 전후라 비교 안 함" : "지난주 기록 없음";
@@ -46,6 +60,8 @@ export function makeWeek(ctx) {
       ui.card({plate: "직원의 한 주"}, s ? ui.kv([["회의", `${fmt.int(s.meetings_total)}번`], ["AI 호출", `${fmt.int(s.ai_calls)}번`], ["토큰", fmt.compact(s.ai_tokens)],
         ["가설 기록", `${fmt.int(s.hypotheses)}건`], ["예측 채점", `${fmt.int(s.predictions_correct)}/${fmt.int(s.predictions_graded)} 맞음`],
         ["5년 시험", `${fmt.int(s.tests)}건 (통과 ${fmt.int(s.tests_passed)})`], ["새 매매법 시험", `${fmt.int(s.lab_tests)}건 (통과 ${fmt.int(s.lab_passed)})`]]) : ui.empty("기록 없음"))));
+    const g = d.groups;
+    if (g && !g.error && (g.reel || g.ds200 || g.flip_5m)) kids.push(groupsCard(g));
     const gh = d.ghcoin;
     if (features.ghcoin && gh && gh.all && gh.all.calls) {
       kids.push(ui.card({plate: "GH Coin 기록기", sub: "친구 봇 타점, 기록만 · 수수료 뒤 R"}, ui.kv([["최근 7일", gh.week], ["시작부터", gh.all]].map(([k, x]) =>

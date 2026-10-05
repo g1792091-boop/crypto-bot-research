@@ -981,3 +981,24 @@ def test_next_steps_give_the_executor_databases_to_the_executor_user():
     assert "deploy/install.sh" in text                         # what to do when that user does not exist yet
     plain = off.next_steps(dest, ["paper3.db"])                 # no executor database: no executor folder line
     assert "/var/lib/paperbot/exec" not in plain and "-o paperbot-exec" not in plain
+
+
+def test_debate_db_is_backed_up_and_restored_to_the_debate_user():
+    """A3: debate.db (rounds, graded claims, the spend counter) is in the nightly and the off-site backup and goes back
+    to /var/lib/paperbot/debate owned by paperbot-debate (group paperbot reads it), with the folder line of install.sh;
+    shadow200.db goes back into its own folder."""
+    assert "debate/debate" in off.DB_NAMES
+    dest = Path("/root/restore-out/20261001")
+    text = off.next_steps(dest, ["paper3.db", "debate.db", "shadow200.db"])
+    cmds = [x.strip() for x in text.splitlines() if x.strip().startswith("sudo install")]
+    assert f"sudo install -o paperbot-debate -g paperbot -m 640 {dest / 'debate.db'} /var/lib/paperbot/debate/debate.db" in cmds
+    assert "sudo install -d -o paperbot-debate -g paperbot -m 2750 /var/lib/paperbot/debate" in cmds
+    assert f"sudo install -o paperbot -g paperbot -m 640 {dest / 'shadow200.db'} /var/lib/paperbot/shadow200/shadow200.db" in cmds
+    assert "sudo rm -f /var/lib/paperbot/debate/debate.db-wal /var/lib/paperbot/debate/debate.db-shm" in text
+    assert "paperbot-debate" in text.split("2)")[0]                    # stopped before the copy
+    install = (REPO / "deploy" / "install.sh").read_text(encoding="utf-8")
+    assert "install -d -o paperbot-debate -g paperbot -m 2750 /var/lib/paperbot/debate" in install
+    unit = (REPO / "deploy" / "paperbot-debate.service").read_text(encoding="utf-8")
+    assert f"User={off.DEBATE_USER}" in unit.splitlines()
+    plain = off.next_steps(dest, ["paper3.db"])
+    assert "/var/lib/paperbot/debate" not in plain and "paperbot -g paperbot -m 640" in plain

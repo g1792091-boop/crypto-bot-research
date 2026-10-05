@@ -14,7 +14,7 @@ from typing import Optional
 from .agents.roster3 import STRATEGY_KO
 from .obsidian_notes import (FOLDERS, LEGEND, WEEKLY_TRIGGERS, GROUPS, Ctx, Vault, check_name, day_ko, day_name, group_of,
                              hero, hyp_name, role_link, stat_row, status_ko, strat_link, strat_name, team_note, trigger_ko,
-                             week_name, TEAM_NAME)
+                             week_name, TEAM_NAME, GROUP_ROOM_TITLES, GROUP_ROLE_OF_ROOM, role_note)
 from .obsidian_sources import read_text, recorded_hash, sha256_file, split_account, split_sections
 from .obsidian_util import (DAY_MS, badge, callout, fnum, iso_week, kst_day, kst_hm, kst_min, link, mean, mermaid, num,
                             pct, quote, safe_name, sanitize, small_flag, table, usd)
@@ -250,6 +250,8 @@ def room_label(room_id: str) -> str:
         return strat_link(sid) if sid in STRATEGY_KO else sanitize(room_id)
     if room_id == "team:lab":
         return "새 매매법 연구실"
+    if room_id in GROUP_ROOM_TITLES:          # paper v4: a DeepSeek / reel specialist room -> its specialist's note
+        return link(role_note(GROUP_ROLE_OF_ROOM[room_id]), GROUP_ROOM_TITLES[room_id])
     t = room_id.split(":", 1)[-1]
     return link(team_note(t)) if t in TEAM_NAME else sanitize(room_id)
 

@@ -22,7 +22,7 @@
 | 09:15 | 그 백업을 묶어서 텔레그램으로 (`paperbot-offsite`) | 텔레그램 **'paperbot 백업'** 방 (무음) |
 | 실패하면 | "서버 밖 백업 실패 …" 경고 | 평소 알림 단체방 (WARN) |
 
-- 보내는 것: agents3(가설 장부), inbox(두 분 글·승인), liq(강제청산), checkpoint(판정), daily3(매일 점검), paper3(계좌), ghcoin(GH Coin 타점 기록 파일을 묶은 것, `docs/ghcoin-recorder.md`), 그리고 실거래 실행기 기록(executor, executor-testnet)이 있으면 그것도. 서버 안 백업 폴더에 있는 DB 전부입니다.
+- 보내는 것: agents3(가설 장부), inbox(두 분 글·승인), liq(강제청산), checkpoint(판정), daily3(매일 점검), paper3(계좌), ghcoin(GH Coin 타점 기록 파일을 묶은 것, `docs/ghcoin-recorder.md`), shadow200(그림자 200), debate(24시간 토론방: 라운드·채점·API 지출 기록), 그리고 실거래 실행기 기록(executor, executor-testnet)이 있으면 그것도. 서버 안 백업 폴더에 있는 DB 전부입니다.
 - 그중 하나가 빠졌거나 덜 써졌으면(서버 안 백업이 일부 실패), **나머지는 그대로 보내고** 알림방에 경고가 옵니다. 요약 첫 줄도 "완료" 대신 "일부만 보냄"이 됩니다.
 - 한 파일로 묶고 압축한 뒤, 텔레그램 한도(파일 하나 50 MB)에 맞게 **45 MB 조각**으로 나눠 보냅니다. 작으면 조각 1개입니다.
 - 조각마다 설명(캡션)이 붙습니다: 날짜, 조각 번호(예: 2/3), 조각과 전체 파일의 확인값(sha256), 크기.
@@ -213,6 +213,7 @@ sudo /opt/paperbot/venv/bin/python -m paperbot.offsite restore --parts /root/res
 1. "다음 순서"에 나온 명령을 위에서부터 붙여 넣습니다(멈추기 → DB 넣기 → `-wal/-shm` 지우기).
    - `ghcoin.db`(GH Coin 타점 기록)는 DB가 아니라 파일 묶음입니다. "다음 순서"의 `ghcoin.db` 두 줄(`install …`, `rm -f …`)은 건너뛰고 `docs/ghcoin-recorder.md`의 "백업과 되살리기" 네 줄을 붙여 넣습니다. 그 세 번째 줄의 `/root/restore-out/날짜/ghcoin.db`는 건너뛴 `install …` 줄의 앞쪽 경로(`/root/restore-out/…/ghcoin.db`)로 바꿔서 붙여 넣습니다.
    - 주문 실행기 DB(`executor*.db`)는 `/var/lib/paperbot/exec`에 **실행기 전용 사용자 `paperbot-exec`의 것**으로 들어갑니다(`docs/live-safety.md` 1-9: `paperbot`으로 넣으면 다른 서비스가 실행기 기록을 바꿀 수 있고, 실행기는 그 DB를 열지 못합니다). `invalid user`가 나오면 `cd /root/crypto-bot-research && sudo bash deploy/install.sh`를 먼저 하고 그 줄부터 다시 붙여 넣습니다.
+   - 토론방 DB(`debate.db`)는 `/var/lib/paperbot/debate`에 **토론방 전용 사용자 `paperbot-debate`의 것**(그룹 paperbot은 읽기만)으로 들어갑니다. `shadow200.db`는 `/var/lib/paperbot/shadow200`에 들어갑니다. 둘 다 "다음 순서"에 폴더 줄이 함께 나옵니다.
 2. `docs/server-setup-v3.md` **11번**대로 켭니다. 이때 `paperbot-offsite.timer`도 함께 켭니다.
    ```bash
    sudo systemctl enable --now paperbot-offsite.timer

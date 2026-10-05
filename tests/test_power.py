@@ -153,3 +153,14 @@ def test_the_saturday_learning_packet_carries_the_power(world):
     from paperbot.agents import rooms_db as R
     said = {m["role"]: m["text"] for m in R.room_messages(world.agents, "team:lead", limit=50)}
     assert "[사실]" in said["performance"]                                            # learning.* is code's
+
+
+def test_the_power_brief_has_a_deepseek_line_without_a_table():
+    """A7: power.json has no DeepSeek scheme, so the brief says so with the checkpoint's own numbers."""
+    line = PW.deepseek_line_ko()
+    from paperbot.config import V4_GROUP_JUDGED
+    n = V4_GROUP_JUDGED["ds200"]
+    assert line.startswith(f"딥시크: 판정 {n}개 · FDR {CP.FAMILY_ALPHA['ds200'] * 100:g}%") and "검정력 표 없음" in line
+    assert f"{CP.FAMILY_ALPHA['ds200'] / n:.1e}" in line
+    b = PW.brief()
+    assert "error" in b or b["deepseek"] == line
