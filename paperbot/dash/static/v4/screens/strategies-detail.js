@@ -6,6 +6,7 @@
 // get no per-account comparison; small samples say 표본 적음; what the server lacks says 준비 전 / 수집 전.
 import {h, put, ui, fmt, motion, local, bars} from "../core/pb.js";
 import {DS_DEFS, FAMILY, REEL, STATUS_KO} from "./strategies-defs.js";
+import {paramsCard} from "./strategies-params.js";
 import {accountsOf, record, splitTrades, nameKo, groupOfStrategy, strategyIndex, TF_ORDER} from "./strategies-calc.js";
 import {stratChart, loadView} from "./strategies-chart.js";
 import {ruleBody, condBody, profileBody, researchBody, lossCard, tagRows} from "./strategies-panels.js";
@@ -85,6 +86,7 @@ export function detailView(ctx, st, name) {
 
   const profEl = h("div", {class: "stack tight"});
   const profCard = ui.card({plate: "5년 성적", sub: "과거 시험, 같은 규칙", cls: "strat-o7"}, profEl);
+  paramsCard(ctx, name, kind, {after: profCard, scope: sc});      // 숫자(파라미터) 시험 결과, placed after the 5-year card
 
   const lossSeg = ui.seg([{id: "cards", label: "손실 카드"}, {id: "tags", label: "손실 패턴"}], v.side, (id) => { v.side = id; local.set("strat-side", id); loadLoss(); });
   const lossEl = h("div", {class: "stack tight"});

@@ -1,0 +1,41 @@
+/* 숫자(파라미터) 시험 결과 (screens/strategies-params.js, on #/strategies/<id>). Tokens only; both skins. Phones first:
+   the stats wrap, each row is name | middle | all three periods (the key column never scrolls away), details wrap under
+   the name. */
+.strat-pm .strat-pm-stats { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+.strat-pm .strat-pm-stat { display: grid; gap: 2px; padding: 10px 12px; border-radius: var(--r-md); background: var(--surface-2); min-width: 0; align-content: start; }
+.strat-pm .strat-pm-stat .k { color: var(--muted); font-size: var(--t-xs); font-weight: 700; }
+.strat-pm .strat-pm-stat b { font-size: var(--t-lg); line-height: 1.25; }
+.strat-pm .strat-pm-stat .s { color: var(--muted); font-size: var(--t-xs); overflow-wrap: anywhere; }
+.strat-pm .strat-pm-why { display: grid; gap: 6px; padding: 10px 12px; border-radius: var(--r-md); border: 1px solid var(--accent-line);
+  background: var(--accent-soft); font-size: var(--t-sm); line-height: 1.65; color: var(--ink); }
+.strat-pm .strat-pm-why > b { color: var(--accent); font-size: var(--t-xs); }
+.strat-pm .strat-pm-why p { margin: 0; }
+.strat-pm .strat-pm-none { margin: 0; font-weight: 800; font-size: var(--t-md); color: var(--ink); }
+.strat-pm .small { font-size: var(--t-xs); line-height: 1.6; margin: 0; }
+
+/* the rows */
+.strat-pm .strat-pm-list { display: grid; min-width: 0; font-size: var(--t-sm); }
+.strat-pm .strat-pm-row { display: grid; grid-template-columns: minmax(0, 1fr) 104px 64px; gap: 8px; align-items: center;
+  padding: 8px 2px; border-bottom: 1px solid var(--line); min-width: 0; }
+.strat-pm .strat-pm-head { padding-top: 0; border-bottom-color: var(--line-2); color: var(--muted); font-size: var(--t-xs); font-weight: 700; }
+.strat-pm .strat-pm-head > span:last-child, .strat-pm .strat-pm-end { text-align: right; }
+.strat-pm .strat-pm-group { padding: 10px 2px 2px; font-size: var(--t-xs); color: var(--ink-2); }
+.strat-pm .strat-pm-nm { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; min-width: 0; overflow-wrap: anywhere; }
+.strat-pm .strat-pm-code, .strat-pm .strat-pm-sub { flex-basis: 100%; font-size: var(--t-xs); line-height: 1.45; }
+.strat-pm .strat-pm-mid { min-width: 0; font-size: var(--t-xs); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.strat-pm .strat-pm-end { font-size: var(--t-sm); white-space: nowrap; }
+.strat-pm .strat-pm-hit { color: var(--ink); font-weight: 800; }
+@media (min-width: 560px) { .strat-pm .strat-pm-row { grid-template-columns: minmax(0, 1fr) 136px 96px; } .strat-pm .strat-pm-mid { font-size: var(--t-sm); } }
+
+/* the shape sign */
+.strat-pm .strat-pm-shape { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; color: var(--ink-2); }
+.strat-pm-glyph { flex: none; overflow: visible; }
+.strat-pm-glyph path { fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.strat-pm .is-smooth .strat-pm-glyph path { stroke: var(--ink-2); }
+.strat-pm .is-sharp { color: var(--warn); font-weight: 700; }
+.strat-pm .is-sharp .strat-pm-glyph path { stroke: var(--warn); }
+.strat-pm .is-thin { color: var(--muted); }
+.strat-pm .is-thin .strat-pm-glyph path { stroke: var(--line-2); stroke-dasharray: 3 3; }
+.strat-pm .strat-pm-legend { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; font-size: var(--t-xs); }
+.strat-pm .strat-pm-legend li { display: grid; grid-template-columns: 112px minmax(0, 1fr); align-items: center; gap: 8px; min-width: 0; }
+.strat-pm .strat-pm-how p { margin: 0; font-size: var(--t-xs); line-height: 1.6; overflow-wrap: anywhere; }
