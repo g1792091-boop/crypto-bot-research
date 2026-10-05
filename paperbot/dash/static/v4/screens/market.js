@@ -30,6 +30,10 @@ export async function mount(el, ctx) {
 
   // ---------------------------------------------------------------- /api/market
   let mk = null;
+  const prevNum = new Map();          // key -> the number shown last time (counts from there on a real change)
+  const drawn = new Set();
+  const drawOnce = (key, el) => { if (!drawn.has(key) && el instanceof SVGElement) { drawn.add(key); motion.drawIn(el, 700); } return el; };
+  const nf = (key, v, o) => { const el = ui.numFrom(prevNum.get(key), v, o); if (v != null) prevNum.set(key, v); return el; };
   const stale = (x) => (x && x.stale ? ui.pill("예전 값", "thin", "새 값을 받지 못해 마지막 값을 보여 줍니다") : null);
   const miss = (x, what) => h("p", {class: "muted"}, `${what}를 받지 못했습니다`, x && x.error ? ` (${x.error})` : "");
   function renderTop() {
@@ -37,7 +41,7 @@ export async function mount(el, ctx) {
     const f = d.fng || {}, fn = f.now;
     const fTone = (v) => (v == null ? "" : v < 45 ? "down" : v > 55 ? "up" : "");
     const fng = ui.card({plate: "공포·탐욕 지수", sub: "alternative.me"},
-      fn ? [h("div", {class: "market-big"}, h("b", {class: ["num", fTone(fn.value)]}, fmt.int(fn.value)), h("small", null, "/100"),
+      fn ? [h("div", {class: "market-big"}, nf("fng", fn.value, {format: "int", cls: fTone(fn.value)}), h("small", null, "/100"),
         h("span", {class: "market-lbl"}, fn.label_ko || ""), stale(f)),
         h("div", {class: "market-fbar", role: "img", "aria-label": `공포·탐욕 ${fn.value}`}, h("i", {style: {left: `${Math.max(0, Math.min(100, fn.value))}%`}})),
         h("div", {class: "market-fscale"}, h("span", null, "극단적 공포"), h("span", null, "중립"), h("span", null, "극단적 탐욕")),
@@ -45,15 +49,15 @@ export async function mount(el, ctx) {
           ["1주 전", f.week ? `${fmt.int(f.week.value)} · ${f.week.label_ko || ""}` : "—"]])] : miss(f, "공포·탐욕 지수"));
     const g = d.global || {};
     const dom = ui.card({plate: "도미넌스", sub: "CoinGecko"},
-      g.btc_dom != null ? [h("div", {class: "market-big"}, h("b", {class: "num"}, fmt.pctOf(g.btc_dom, 1)), h("span", {class: "market-lbl"}, "비트코인 도미넌스"), stale(g)),
+      g.btc_dom != null ? [h("div", {class: "market-big"}, nf("dom", g.btc_dom, {format: (v) => fmt.pctOf(v, 1)}), h("span", {class: "market-lbl"}, "비트코인 도미넌스"), stale(g)),
         ui.kv([["이더리움", fmt.pctOf(g.eth_dom, 1)], ["코인 전체 시가총액", bigUsd(g.total_mcap)],
           ["24시간", h("span", {class: fmt.tone(g.mcap_chg_24h)}, g.mcap_chg_24h == null ? "—" : fmt.pctOf(g.mcap_chg_24h, 2, true))]])] : miss(g, "도미넌스"));
     top.replaceChildren(fng, dom);
     idx.replaceChildren(...((d.indexes || []).length ? d.indexes.map((x) => h("div", {class: "market-ix"},
       h("div", {class: "market-ix-h"}, h("b", null, x.name || x.symbol), h("small", {class: "muted"}, x.symbol), stale(x)),
-      x.price != null ? [h("div", {class: "market-ix-px"}, h("b", {class: "num"}, x.symbol === "^TNX" ? fmt.pctOf(x.price, 3) : fmt.num(x.price, 2)),
+      x.price != null ? [h("div", {class: "market-ix-px"}, nf("ix:" + x.symbol, x.price, {format: x.symbol === "^TNX" ? (v) => fmt.pctOf(v, 3) : (v) => fmt.num(v, 2)}),
         h("span", {class: ["num", fmt.tone(x.chg)]}, x.chg == null ? "" : fmt.pct(x.chg, 2))),
-        ui.sparkline((x.points || []).map((p) => p[1]), {w: 220, h: 40, label: `${x.name} 5일 흐름`}),
+        drawOnce("ix:" + x.symbol, ui.sparkline((x.points || []).map((p) => p[1]), {w: 220, h: 40, label: `${x.name} 5일 흐름`})),
         h("small", {class: "muted"}, x.ts ? `마지막 ${fmt.kst(x.ts)}` : "")] : miss(x, x.name || x.symbol))) : [ui.empty("지수 자료가 없습니다")]));
     const now = serverNow();
     const evs = d.events || [];

@@ -1,9 +1,9 @@
 // Shared components. All take plain data and return DOM nodes built with h()/s() (text is never parsed as HTML).
 // HONESTY helpers live here too: assume() (the money caption), refNote() (comparison = 참고 until the verdict),
 // smallSample() (표본 적음), notYet() (수집 전). See CONTRACT.md for when each one is required.
-import {h, s, $, $$, clear, put} from "./dom.js";
+import {h, s, $, $$, clear, put, local} from "./dom.js";
 import {num, int, mmdd, acctParts} from "./fmt.js";
-import {countTo, swap, expand, popBubble, reduced} from "./motion.js";
+import {countTo, swap, expand, popBubble, reduced, drawIn, fadeIn} from "./motion.js";
 
 // ---------------------------------------------------------------- captions (non-negotiable rules)
 export const ASSUME_KO = "모의 · 실제 시세 · 수수료·펀딩·슬리피지 포함";
@@ -60,11 +60,21 @@ export function errorBox(err, retry) {
 }
 export const avatar = (label, hue, cls = "") => h("span", {class: ["rav", cls], style: {"--h": hue ?? 210}, "aria-hidden": "true"}, label);
 
-/** A number cell that counts to new values (a money / pct number: give it {format, sign, tone}). */
+/** A number cell that counts to new values (a money / pct number: give it {format, sign, tone}; flash: true | "accent"
+ *  tints it once when the value really changed). */
 export function liveNum(value, opts = {}) {
   const el = h(opts.tag || "b", {class: ["num", opts.cls]});
   countTo(el, value, opts);
   el.update = (v) => countTo(el, v, opts);
+  return el;
+}
+/** A number in a view that is drawn again on every update (a list, a card rebuilt from data): it counts from the value
+ *  it showed last time (prev) to now and tints once when they differ (opts as liveNum, flash on by default); the first
+ *  time (prev null) it simply shows now. Keep prev yourself, e.g. in a Map by key. */
+export function numFrom(prev, now, opts = {}) {
+  const el = h(opts.tag || "b", {class: ["num", opts.cls]});
+  if (prev != null && Number.isFinite(Number(prev)) && now != null) el.dataset.v = String(prev);
+  countTo(el, now, {flash: "accent", ...opts});
   return el;
 }
 
@@ -332,6 +342,91 @@ export function ledBar(o = {}) {
     cap.textContent = d.caption || ASSUME_KO;
   };
   return el;
+}
+
+// ---------------------------------------------------------------- small motion pieces (v4 additions, reusable)
+/**
+ * miniSpark(values, {w, h, base, refs: [{v, cls}], label, draw, tone}) -> a fixed-size svg for a list row or a card
+ * (w x h px, default 60 x 20): the line, a dot at its end, an optional dashed base line (the start, an entry price)
+ * and thin reference lines. The colour follows the end against the base (or the first value): up / down; tone
+ * ("up" | "down") overrides it (a short position: price down = profit). draw: true draws it in once (motion.drawIn).
+ * fluid: true fills its box's width (w is then only the drawing's aspect; no end dot, which would stretch).
+ * Real values only; fewer than 2 gives an empty box of the same size (no layout jump while loading).
+ */
+export function miniSpark(values, o = {}) {
+  const w = o.w || 60, hh = o.h || 20;
+  const box = o.fluid ? {width: "100%", height: hh + "px", display: "block"}
+    : {width: w + "px", height: hh + "px", display: "inline-block", verticalAlign: "middle", flex: "none"};
+  const vs = (values || []).map((v) => (v == null || !Number.isFinite(Number(v)) ? null : Number(v)));
+  const real = vs.filter((v) => v != null);
+  if (real.length < 2) return s("svg", {class: ["chart", "mspark", "none"], viewBox: `0 0 ${w} ${hh}`, style: box, "aria-hidden": "true"});
+  let lo = Math.min(...real), hi = Math.max(...real);
+  const refs = (o.refs || []).filter((r) => r && Number.isFinite(Number(r.v)));
+  for (const v of [o.base, ...refs.map((r) => r.v)]) if (v != null && Number.isFinite(Number(v))) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
+  const span = hi - lo || Math.abs(hi) * 0.001 || 1;
+  const pad = 2.5;
+  const X = (i) => pad + (w - 2 * pad) * i / Math.max(1, vs.length - 1);
+  const Y = (v) => hh - pad - (hh - 2 * pad) * (v - lo) / span;
+  let d = "", pen = false, lastI = 0;
+  vs.forEach((v, i) => { if (v == null) { pen = false; return; } d += `${pen ? "L" : "M"}${X(i).toFixed(1)},${Y(v).toFixed(1)}`; pen = true; lastI = i; });
+  const ref = o.base != null ? o.base : real[0];
+  const end = real[real.length - 1];
+  const up = o.tone ? o.tone === "up" : end >= ref;
+  const line = (v, cls) => s("line", {class: cls, x1: 0, x2: w, y1: Y(v).toFixed(1), y2: Y(v).toFixed(1)});
+  const svg = s("svg", {class: ["chart", "mspark"], viewBox: `0 0 ${w} ${hh}`, style: box, role: "img", "aria-label": o.label || "흐름",
+    preserveAspectRatio: o.fluid ? "none" : null},
+    o.base != null ? line(o.base, "base") : null,
+    refs.map((r) => line(Number(r.v), r.cls || "base")),
+    s("path", {class: up ? "lu" : "ld", d}),
+    o.fluid ? null : s("circle", {cx: X(lastI).toFixed(1), cy: Y(end).toFixed(1), r: 1.9, style: {fill: up ? "var(--up)" : "var(--down)"}}));
+  if (o.draw) drawIn(svg);
+  return svg;
+}
+
+/**
+ * rankDelta(delta, {title, fade}) -> "▲2" / "▼1" (delta = earlier rank − rank now: positive = moved up), or null when
+ * it did not move or there is nothing to compare with. Neutral glyph, meaning colours; fade: fade it in (a real change).
+ */
+export function rankDelta(delta, o = {}) {
+  const n = Number(delta);
+  if (!Number.isFinite(n) || n === 0) return null;
+  const up = n > 0;
+  const el = h("span", {class: ["rkd", up ? "up" : "down"], title: o.title || null,
+    "aria-label": `순위 ${int(Math.abs(n))}칸 ${up ? "오름" : "내림"}`,
+    style: {fontFamily: "var(--f-term)", fontSize: "11px", fontWeight: "700", whiteSpace: "nowrap", lineHeight: "1"}},
+  `${up ? "▲" : "▼"}${int(Math.abs(n))}`);
+  if (o.fade) fadeIn(el);
+  return el;
+}
+
+/**
+ * rankMemo(key, {gapMs}) -> {base, save(values)} : a per-viewer "since your last visit" baseline (localStorage, a
+ * convenience only: private windows simply show no arrows). values: {id: number} (e.g. each account's return now).
+ * A visit is a run of saves less than gapMs apart (default 30 min); `base` is the last values of the visit before
+ * this one ({ts, v} or null), so hopping between screens keeps the same arrows.
+ */
+export function rankMemo(key, o = {}) {
+  const gap = o.gapMs || 30 * 60000;
+  let st = local.get(key, null);
+  if (!st || typeof st !== "object") st = {};
+  const now = Date.now();
+  if (st.cur && st.cur.seen && now - st.cur.seen > gap) { st.prev = {ts: st.cur.seen, v: st.cur.v}; st.cur = null; }
+  const base = st.prev && st.prev.v && typeof st.prev.v === "object" ? st.prev : null;
+  return {
+    base,
+    save(values) {
+      const v = {};
+      for (const [k, x] of Object.entries(values || {})) if (Number.isFinite(x)) v[k] = Math.round(x * 1e5) / 1e5;
+      st.cur = {seen: Date.now(), v};
+      local.set(key, st);
+    },
+  };
+}
+/** Ranks (1 = best) of ids by value, highest first: {id: rank}. */
+export function ranksOf(values, ids) {
+  const xs = (ids || Object.keys(values || {})).filter((k) => values && Number.isFinite(values[k]));
+  xs.sort((a, b) => values[b] - values[a] || (a < b ? -1 : 1));
+  return Object.fromEntries(xs.map((k, i) => [k, i + 1]));
 }
 
 // ---------------------------------------------------------------- toast

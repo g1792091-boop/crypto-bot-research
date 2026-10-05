@@ -5,6 +5,7 @@
 // extras are never compared; every money table has assume().
 import {h, put, ui, fmt, derive, motion, local} from "../core/pb.js";
 import {groupCards, topBottom, rankList, groupKo, savedGroup, expInfo, extraPills, ORDER, TF_ORDER} from "./home-shared.js";
+import {rowMotion} from "./board-motion.js";
 
 let current = null;          // the mounted screen's group setter (update() uses it)
 const okGroup = (g) => (ORDER.includes(g) || g === "all" ? g : null);
@@ -25,7 +26,9 @@ export async function mount(el, ctx) {
 
   const stats = h("div", {class: "stats s4 board-stats"});
   const tb = topBottom(ctx, {full: true});
-  const tbCard = ui.card({plate: "상위·하위", cls: "board-tb"}, stats, tb);
+  const moNote = h("div");
+  const tbCard = ui.card({plate: "상위·하위", cls: "board-tb"}, stats, tb, moNote);
+  const rowMo = rowMotion(ctx, el);         // ▲▼ since the last visit, small equity lines, a tint on a real change
   const list = rankList(ctx, {sorts: true, full: true, memo: "board-list"});
   const refBox = h("div");
   const listCard = ui.card({plate: "전체 목록", acts: [list.countEl]}, list.el, refBox,
@@ -40,15 +43,24 @@ export async function mount(el, ctx) {
   el.append(h("div", {class: "board-grid"}, tbCard, listCard), h("div", {class: "board-grid2"}, tfCard, xCard));
 
   // ---------------------------------------------------------------- renderers
+  // the four counts keep their elements: a count that really changed counts to its new value with a soft tint
+  const cnt = ["n", "open", "above", "bust"].map(() => ui.liveNum(null, {format: "int", flash: "accent"}));
+  const cntSub = h("span", {class: "s"});
+  const aboveSub = h("span", {class: "s"});
+  put(stats, ui.stat("계좌", cnt[0], cntSub), ui.stat("포지션 중", cnt[1], "지금 열린 포지션"),
+    ui.stat("시작보다 많은 계좌", cnt[2], aboveSub), ui.stat("파산", cnt[3], "잔고 10 USDT 미만, 정지"));
+  let cntSel = null;
   function renderStats() {
     const b = st.board, gs = st.gs;
     const rows = derive.ranked(b, st.sel === "extra" ? "extra" : st.sel);
     const init = gs.initial;
-    put(stats,
-      ui.stat("계좌", fmt.int(rows.length), groupKo(st.sel)),
-      ui.stat("포지션 중", fmt.int(rows.filter((a) => a.position).length), "지금 열린 포지션"),
-      ui.stat("시작보다 많은 계좌", fmt.int(rows.filter((a) => (a.wallet ?? init) > init).length), `잔고 ${fmt.int(init)} 넘음`),
-      ui.stat("파산", fmt.int(rows.filter((a) => a.bust).length), "잔고 10 USDT 미만, 정지"));
+    if (cntSel !== st.sel) { for (const c of cnt) delete c.dataset.v; cntSel = st.sel; }      // another group: no tint
+    cnt[0].update(rows.length);
+    cnt[1].update(rows.filter((a) => a.position).length);
+    cnt[2].update(rows.filter((a) => (a.wallet ?? init) > init).length);
+    cnt[3].update(rows.filter((a) => a.bust).length);
+    cntSub.textContent = groupKo(st.sel);
+    aboveSub.textContent = `잔고 ${fmt.int(init)} 넘음`;
   }
 
   function median(xs) { return derive.median(xs); }
@@ -112,8 +124,10 @@ export async function mount(el, ctx) {
     allBtn.setAttribute("aria-pressed", String(st.sel === "all"));
     allBtn.textContent = `전체 ${fmt.int(derive.ranked(b, "all").length)}개 보기`;
     renderStats();
+    rowMo.update(b, st.sel);
     tb.set(b, gs, st.sel);
     list.set(b, gs, st.sel, !animate);
+    put(moNote, rowMo.note(st.sel));
     put(tfBody, tfTable());
     tfCard.querySelector(".card-h .sub").textContent = `${groupKo(st.sel)} · 참고`;
     renderExtras();

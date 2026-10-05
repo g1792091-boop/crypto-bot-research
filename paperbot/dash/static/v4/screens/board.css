@@ -21,3 +21,14 @@
 .board-rule { flex-basis: 100%; color: var(--ink-2); }
 .board-all[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .board-tfbody { min-width: 0; }
+
+/* motion (board-motion.js): the rank arrow sits under the rank number (the row's empty second-line cell), the small
+   line before the return; neither changes the row's height */
+[data-screen="board"] a.home-row { position: relative; }
+.board-rkd { grid-column: 1; grid-row: 2; align-self: start; line-height: 1; }
+.board-rkd .rkd.up { color: var(--up); } .board-rkd .rkd.down { color: var(--down); }
+.board-spark { display: inline-flex; vertical-align: middle; margin-right: 8px; opacity: .95; }
+.board-spark .chart .base { stroke: var(--line-2); }
+[data-screen="board"] .home-row .ret { display: inline-flex; align-items: center; justify-content: flex-end; border-radius: 4px; padding: 0 2px; }
+.board-monote { margin-top: 2px; }
+@media (max-width: 360px) { .board-spark { display: none; } }

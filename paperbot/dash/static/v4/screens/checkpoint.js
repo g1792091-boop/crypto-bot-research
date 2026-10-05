@@ -62,7 +62,9 @@ export async function mount(el, ctx) {
       return;
     }
     const ms = Math.max(0, x.verdictTs - Date.now());
-    big.textContent = `D-${fmt.int(x.left)}`;
+    const dTxt = `D-${fmt.int(x.left)}`;
+    if (big.textContent !== dTxt && /^D-\d/.test(big.textContent)) motion.flash(big);    // a new day, not the first paint
+    big.textContent = dTxt;
     when.textContent = `${x.k > 1 ? `${x.k}번째 판정 · ` : "첫 판정 · "}${fmt.date(x.verdictTs)} 09:00 (한국 시각)`;
     left.textContent = ms > 0 ? `${fmt.dur(ms / 1000)}${ms >= 86400000 ? ` ${fmt.dur((ms % 86400000) / 1000)}` : ""} 남음` : "판정 시각이 지났습니다 · 결과를 기다리는 중";
     dtext.replaceChildren(h("b", null, `D+${x.day}`), ` / ${x.of}`);
@@ -70,17 +72,19 @@ export async function mount(el, ctx) {
     dprog.setAttribute("aria-valuemax", String(x.of)); dprog.setAttribute("aria-valuenow", String(x.day));
   }
 
+  const prevReady = new Map();          // group id -> the count shown last time (it counts from there when it grows)
   function renderTargets() {
     if (!st.board) return;
     const p = judgedProgress(st.board);
+    const ready = (key, v) => { const el = ui.numFrom(prevReady.get(key), v, {format: "int"}); prevReady.set(key, v); return el; };
     const blocks = p.groups.map((g) => h("div", {class: "ck-grp"},
       h("div", {class: "ck-grph"}, h("b", null, g.ko), h("span", {class: "muted"}, `${g.tfs.map(fmt.tfKo).join("·")} · ${fmt.int(g.n)}개`)),
-      h("div", {class: "home-ckp"}, h("span", null, `거래 ${MIN_TRADES}건을 넘은 계좌`), h("b", {class: "num"}, `${fmt.int(g.ready)} / ${fmt.int(g.n)}`)),
+      h("div", {class: "home-ckp"}, h("span", null, `거래 ${MIN_TRADES}건을 넘은 계좌`), h("b", {class: "num"}, ready(g.id, g.ready), ` / ${fmt.int(g.n)}`)),
       progBar(g.n ? g.ready / g.n : 0, `${g.ko}: 거래 30건을 넘은 계좌 비율`),
       g.byTf.length > 1 ? h("div", {class: "ck-tfs"}, g.byTf.map((t) => h("span", null, `${fmt.tfKo(t.tf)} ${fmt.int(t.ready)}/${fmt.int(t.n)}`))) : null));
     const out = [
       h("div", {class: "ck-total"}, h("span", null, "판정 대상"), h("b", {class: "num"}, `${fmt.int(p.n)}개`),
-        h("span", {class: "muted"}, `그중 거래 ${MIN_TRADES}건 넘음 ${fmt.int(p.ready)}개`)),
+        h("span", {class: "muted"}, `그중 거래 ${MIN_TRADES}건 넘음 `, ready("all", p.ready), "개")),
       h("div", {class: "ck-grps"}, blocks),
       h("ul", {class: "ck-out"},
         p.obs4h ? h("li", null, h("b", null, `4시간봉 ${fmt.int(p.obs4h)}개`), " · 관찰용 (판정 밖)") : null,

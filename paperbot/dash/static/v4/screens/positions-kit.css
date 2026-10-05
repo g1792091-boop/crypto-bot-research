@@ -36,7 +36,8 @@
 .pos-row-t { display: grid; min-width: 0; }
 .pos-row-t b { font-size: var(--t-sm); }
 .pos-row-t small { color: var(--muted); font-size: var(--t-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pos-row-v { display: grid; justify-items: end; }
+.pos-row-v { display: flex; align-items: center; gap: 10px; }
+.pos-row-n { display: grid; justify-items: end; }
 .pos-row-v b { font-size: var(--t-sm); }
 .pos-row-v small { font-size: var(--t-xs); color: var(--ink-2); }
 .pos-row-v small.up { color: var(--up); } .pos-row-v small.down { color: var(--down); }
@@ -64,6 +65,12 @@
 
 /* ---------------------------------------------------------------- trade rows and small lists */
 .pos-trow .rk { min-width: 40px; }
+.pos-trow.has-replay .meta { grid-column: 2; }
+.pos-trow.has-replay .pos-replay { grid-column: 3; grid-row: 2; justify-self: end; align-self: start; }
+.pos-replay { display: inline-flex; align-items: center; min-height: 32px; padding: 0 10px; border-radius: 8px;
+  border: 1px solid var(--accent-line); background: var(--accent-soft); color: var(--accent); font: 700 var(--t-xs)/1 var(--f-body);
+  text-decoration: none; white-space: nowrap; transition: background-color var(--t-fast), color var(--t-fast); }
+.pos-replay:hover, .pos-replay:focus-visible { background: var(--accent); color: var(--accent-ink); }
 .pos-twhy { grid-column: 2 / -1; color: var(--ink-2); font-size: var(--t-xs); }
 .pos-sum { margin: 0; font-size: var(--t-sm); color: var(--ink-2); }
 .pos-sum b { color: var(--ink); } .pos-sum b.up { color: var(--up); } .pos-sum b.down { color: var(--down); }
@@ -87,3 +94,14 @@
 .pos-bkbar { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; margin-top: 8px; font-size: var(--t-xs); }
 .pos-bkbar > div { height: 6px; border-radius: 6px; background: var(--down-soft); overflow: hidden; }
 .pos-bkbar > div i { display: block; height: 100%; background: var(--up); transition: width .6s var(--ease); }
+
+/* the price since the entry (positions-kit setSpark): a wide line in the open card, a small one in the folded row */
+.pos-spark { display: grid; gap: 4px; padding: 8px 10px 6px; border-radius: var(--r-md); background: var(--surface-2); }
+.pos-spark[hidden] { display: none; }
+.pos-spark-k { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: var(--t-xs); color: var(--ink-2); }
+.pos-spark-g { min-width: 0; }
+.pos-spark .chart .base, .pos-row-spark .chart .base { stroke: var(--ink-2); stroke-dasharray: 3 3; }
+.pos-spark .chart .stopl { stroke: var(--down-line); stroke-dasharray: 2 3; }
+.pos-row-spark { display: inline-flex; align-items: center; min-width: 0; }
+.pos-row-spark:empty { display: none; }
+@media (max-width: 420px) { .pos-row-spark { display: none; } }
