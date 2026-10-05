@@ -237,7 +237,7 @@ export function detailView(ctx, st, name) {
   }
   async function drawChart() {
     const acct = accountsOf(st.board, name).find((a) => a.timeframe === v.tf);
-    await chart.draw({name, ko, tf: v.tf, sym: v.sym, bars: v.bars, view: v.view, trades: v.trades[v.tf] || [],
+    await chart.draw({name, ko, tf: v.tf, sym: v.sym, bars: v.bars, view: v.view, trades: v.trades[v.tf] || [], allTrades: v.trades, kind, onBar: () => { if (sc.alive()) loadChart(); },
       position: acct && acct.position, markers: v.markers});
   }
   async function loadTrades(only) {
