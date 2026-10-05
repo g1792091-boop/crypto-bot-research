@@ -167,7 +167,7 @@ export function floatChip(anchor, text, tone) {
   if (getComputedStyle(anchor).position === "static") anchor.style.position = "relative";
   if (anchor._chip) anchor._chip.remove();
   const chip = h("span", {class: ["mo-chip", tone || ""], "aria-hidden": "true", style: {position: "absolute", right: "0", top: "-4px",
-    padding: "1px 6px", borderRadius: "4px", font: "700 12px/1.4 var(--f-term)", whiteSpace: "nowrap", pointerEvents: "none",
+    padding: "1px 6px", borderRadius: "4px", font: "700 var(--t-xs)/1.4 var(--f-term)", whiteSpace: "nowrap", pointerEvents: "none",
     color: tone === "down" ? "var(--down)" : tone === "up" ? "var(--up)" : "var(--accent)",
     background: tone === "down" ? "var(--down-soft)" : tone === "up" ? "var(--up-soft)" : "var(--accent-soft)"}}, text);
   anchor.append(chip);

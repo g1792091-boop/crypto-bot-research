@@ -9,8 +9,8 @@
   text-decoration: none; font-variant-numeric: tabular-nums; -webkit-tap-highlight-color: transparent;
   transition: transform var(--t-fast) var(--ease), border-color var(--t-fast), box-shadow var(--t-fast); }
 .own .gk-cell, .gk-cell.own { --hi: var(--up); --lo: var(--down); }
-.gk-cell b { font: 700 12px/1.1 var(--f-body); white-space: nowrap; letter-spacing: -.01em; }
-.gk-cell small { font: 500 10px/1.1 var(--f-body); color: var(--ink-2); white-space: nowrap; }
+.gk-cell b { font: 700 var(--t-xs)/1.1 var(--f-body); white-space: nowrap; letter-spacing: -.01em; }
+.gk-cell small { font: 500 var(--t-2xs)/1.1 var(--f-body); color: var(--ink-2); white-space: nowrap; }
 .gk-cell[data-b="0"] { background: var(--surface-3); }
 .gk-cell[data-b="1"] { background: color-mix(in srgb, var(--hi) 22%, var(--base)); }
 .gk-cell[data-b="2"] { background: color-mix(in srgb, var(--hi) 38%, var(--base)); }
@@ -26,7 +26,7 @@
 .gk-cell.grey small { color: var(--muted); }
 .gk-cell.small:not(.grey) { outline: 1px dashed color-mix(in srgb, var(--ink) 24%, transparent); outline-offset: -3px; }
 .gk-cell.none { background: transparent; border: 1px dashed var(--line-2); color: var(--muted); }
-.gk-cell.none b { font-weight: 500; font-size: 11px; }
+.gk-cell.none b { font-weight: 500; font-size: var(--t-xs); }
 .gk-cell.bust { background: var(--crit-bg); border-color: var(--down-line); color: var(--down); }
 .gk-cell.bust small { color: var(--crit-ink); }
 .gk-cell.ref { background: transparent; border: 1px solid var(--line-2); color: var(--ink-2); }
@@ -42,7 +42,7 @@ a.gk-cell:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px;
 /* the colour scale */
 .gk-scale { display: grid; gap: 4px; }
 .gk-scale-row { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 3px; }
-.gk-scale-words { display: flex; justify-content: space-between; gap: 6px; font-size: 11px; color: var(--muted); }
+.gk-scale-words { display: flex; justify-content: space-between; gap: 6px; font-size: var(--t-xs); color: var(--muted); }
 
 /* the pixel badge (a hue per strategy code; the same picture on every screen) */
 .gk-av { display: inline-grid; place-items: center; flex: none; width: 22px; height: 22px; border-radius: 6px;
@@ -89,7 +89,7 @@ a.gk-cell:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px;
 .gk-ret b { font: 800 var(--t-2xl)/1.05 var(--f-body); letter-spacing: -.02em; white-space: nowrap; }
 .gk-ret .s { color: var(--ink-2); font-size: var(--t-xs); }
 .gk-curve { display: grid; gap: 5px; min-width: 0; }
-.gk-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; color: var(--muted); font-size: 11px; }
+.gk-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; color: var(--muted); font-size: var(--t-xs); }
 .gk-legend .me, .gk-legend .gh { display: inline-flex; align-items: center; gap: 5px; }
 .gk-legend .me::before { content: ""; width: 14px; height: 2px; border-radius: 2px; background: var(--accent); }
 .gk-legend .gh::before { content: ""; width: 14px; border-top: 1.5px dashed var(--ink-2); }
@@ -103,7 +103,7 @@ a.gk-cell:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px;
 .gk-stats .gk-vs .pp { font-size: var(--t-xs); }
 .gk-tfrow { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
 .gk-tf { display: grid; gap: 4px; min-width: 0; }
-.gk-tf > .k { color: var(--muted); font-size: 11px; text-align: center; }
+.gk-tf > .k { color: var(--muted); font-size: var(--t-xs); text-align: center; }
 .gk-tf .gk-cell { min-height: 44px; }
 .gk-vsline { margin: 0; color: var(--ink-2); font-size: var(--t-xs); line-height: 1.6; }
 .gk-vsline b { color: var(--ink); }

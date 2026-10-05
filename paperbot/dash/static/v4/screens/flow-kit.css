@@ -38,10 +38,10 @@
 .fk-race.focused .fk-chart .fk-link { opacity: .2; }
 .fk-chart .fk-hatch { fill: var(--line); }
 .fk-chart .fk-future { opacity: .55; }
-.fk-chart .fk-left { fill: var(--muted); font: 700 10px var(--f-pixel); letter-spacing: .04em; }
-.fk-chart .fk-left.big { fill: var(--ink-2); font: 400 12px var(--f-pixel); }
+.fk-chart .fk-left { fill: var(--muted); font: 700 var(--t-2xs) var(--f-pixel); letter-spacing: .04em; }
+.fk-chart .fk-left.big { fill: var(--ink-2); font: 400 var(--t-xs) var(--f-pixel); }
 .fk-chart .fk-ev rect { fill: var(--amber-ink); }
-.fk-chart .fk-ev text { fill: var(--amber-ink); font: 700 9px var(--f-body); opacity: .85; }
+.fk-chart .fk-ev text { fill: var(--amber-ink); font: 700 var(--t-2xs) var(--f-body); opacity: .85; }
 .fk-chart .fk-vline { stroke: var(--accent-line); stroke-width: 1; stroke-dasharray: 3 3; }
 .fk-chart .fk-flag rect { fill: var(--ink-2); }
 .fk-chart .fk-flag .f1 { fill: var(--accent); } .fk-chart .fk-flag .f2 { fill: var(--surface); }
@@ -56,16 +56,16 @@
 .fk-labels { position: absolute; inset: 0; pointer-events: none; }
 .fk-lab { position: absolute; left: 0; top: 0; display: grid; gap: 0; padding: 2px 6px 3px; border-radius: 7px; background: var(--glass);
   border: 1px solid var(--line-2); transition: transform .32s var(--ease), opacity var(--t-fast); will-change: transform; overflow: hidden; }
-.fk-lab .fk-l1 { display: flex; align-items: center; gap: 5px; font: 700 10.5px/1.35 var(--f-body); color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.fk-lab .fk-l2 { display: flex; align-items: baseline; gap: 5px; font: 800 12.5px/1.25 var(--f-body); color: var(--ink); white-space: nowrap; }
-.fk-lab .fk-rk { font: 400 11px var(--f-pixel); color: var(--muted); min-width: 8px; }
+.fk-lab .fk-l1 { display: flex; align-items: center; gap: 5px; font: 700 var(--t-xs)/1.35 var(--f-body); color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fk-lab .fk-l2 { display: flex; align-items: baseline; gap: 5px; font: 800 var(--t-xs)/1.25 var(--f-body); color: var(--ink); white-space: nowrap; }
+.fk-lab .fk-rk { font: 400 var(--t-xs) var(--f-pixel); color: var(--muted); min-width: 8px; }
 .fk-lab .fk-vv.up { color: var(--up); } .fk-lab .fk-vv.down { color: var(--down); }
 .fk-lab.core { border-color: color-mix(in srgb, var(--c-core) 50%, transparent); }
 .fk-lab.dim { opacity: .35; }
 .fk-lab.fk-bump { animation: fk-bump .5s var(--ease); }
 @keyframes fk-bump { 0% { box-shadow: 0 0 0 0 var(--accent-glow); } 40% { box-shadow: 0 0 0 4px var(--accent-glow); } 100% { box-shadow: 0 0 0 0 transparent; } }
 .fk-chip { position: absolute; left: 0; bottom: 2px; width: 140px; white-space: nowrap; text-align: center; padding: 2px 6px; border-radius: 6px; pointer-events: none;
-  background: var(--surface-3); color: var(--ink); font: 700 10.5px/1.5 var(--f-term); border: 1px solid var(--line-2); }
+  background: var(--surface-3); color: var(--ink); font: 700 var(--t-xs)/1.5 var(--f-term); border: 1px solid var(--line-2); }
 
 /* legend chips (tap = that group in front) */
 .fk-legend { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -79,7 +79,7 @@
 /* the designed empty state: the road and its flag, no line */
 .fk-empty { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 6px; text-align: center; padding: 12px;
   border: 1px dashed var(--line-2); border-radius: var(--r-md); color: var(--muted); font-size: var(--t-xs); }
-.fk-empty b { color: var(--ink-2); font: 400 13px var(--f-pixel); letter-spacing: .04em; }
+.fk-empty b { color: var(--ink-2); font: 400 var(--t-sm) var(--f-pixel); letter-spacing: .04em; }
 .fk-empty span { max-width: 30em; }
 .fk-empty .fk-road { width: 120px; height: 24px; }
 .fk-empty .fk-road .r { fill: var(--line-2); } .fk-empty .fk-road .d { fill: var(--muted); } .fk-empty .fk-road .p { fill: var(--ink-2); }
@@ -92,7 +92,7 @@
 .fk-minicard .fk-race { border-radius: var(--r-sm); background: var(--surface-2); }
 .fk-mlist { list-style: none; margin: 0; padding: 0 !important; display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 14px !important; counter-reset: fk; }
 .fk-mlist li { display: flex; align-items: center; gap: 7px; min-width: 0; font-size: var(--t-sm); counter-increment: fk; }
-.fk-mlist li::before { content: counter(fk); font: 400 11px var(--f-pixel); color: var(--muted); width: 9px; }
+.fk-mlist li::before { content: counter(fk); font: 400 var(--t-xs) var(--f-pixel); color: var(--muted); width: 9px; }
 .fk-mlist .fk-nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); }
 .fk-mlist b { margin-left: auto; font-weight: 800; }
 .fk-mlist b.up { color: var(--up); } .fk-mlist b.down { color: var(--down); }

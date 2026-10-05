@@ -10,8 +10,8 @@
 .up-row { display: grid; grid-template-columns: 52px repeat(24, minmax(0, 1fr)) 6px minmax(0, 1fr); gap: 2px; align-items: center; }
 .up-row > .up-n { grid-column: 27; }
 .up-hrs .up-nk { grid-column: 27; }
-.up-k { font-size: 10px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
-.up-hr, .up-nk { font-size: 10px; color: var(--muted); white-space: nowrap; overflow: visible; font-variant-numeric: tabular-nums; }
+.up-k { font-size: var(--t-2xs); color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.up-hr, .up-nk { font-size: var(--t-2xs); color: var(--muted); white-space: nowrap; overflow: visible; font-variant-numeric: tabular-nums; }
 .up-c { appearance: none; position: relative; padding: 0; margin: 0; height: 12px; min-width: 0; border-radius: 1px; border: 0; background: var(--surface-2); cursor: pointer; }
 @media (min-width: 760px) { .up-c { height: 16px; } .up-k { font-size: var(--t-xs); } }
 .up-c.full { background: var(--up); opacity: .75; }

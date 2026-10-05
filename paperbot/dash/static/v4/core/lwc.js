@@ -34,7 +34,7 @@ export const tok = (name) => getComputedStyle(document.documentElement).getPrope
 export function chartOptions(el) {
   return {
     width: el.clientWidth, height: el.clientHeight,
-    layout: {background: {color: tok("--surface")}, textColor: tok("--ink-2"), fontSize: 11, fontFamily: tok("--f-body")},
+    layout: {background: {color: tok("--surface")}, textColor: tok("--ink-2"), fontSize: parseFloat(tok("--t-xs")) || 13, fontFamily: tok("--f-body")},
     grid: {vertLines: {color: tok("--line")}, horzLines: {color: tok("--line")}},
     rightPriceScale: {borderColor: tok("--line-2")},
     timeScale: {borderColor: tok("--line-2"), timeVisible: true, secondsVisible: false, tickMarkFormatter: kstTick},

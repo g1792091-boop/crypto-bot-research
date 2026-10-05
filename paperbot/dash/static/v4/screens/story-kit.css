@@ -21,9 +21,9 @@
 .sk-svg.cur .sk-arc { stroke: var(--ink); }
 .sk-svg .sk-disc { fill: var(--surface-2); stroke: var(--line); stroke-width: 1; }
 .sk-in { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; line-height: 1; pointer-events: none; }
-.sk-in small { font: 400 9px/1 var(--f-pixel); color: var(--muted); letter-spacing: .04em; }
-.sk-in b { font: 400 24px/.9 var(--f-led); color: var(--accent); }
-.sk-item.big .sk-in b { font-size: 28px; }
+.sk-in small { font: 400 var(--t-2xs)/1 var(--f-pixel); color: var(--muted); letter-spacing: .04em; }
+.sk-in b { font: 400 var(--t-xl)/.9 var(--f-led); color: var(--accent); }
+.sk-item.big .sk-in b { font-size: calc(28px * var(--ts)); }
 .sk-item.seen .sk-in b { color: var(--ink-2); }
 .sk-lab { max-width: 100%; font-size: var(--t-xs); line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sk-item.big .sk-lab { color: var(--ink); font-weight: 700; }

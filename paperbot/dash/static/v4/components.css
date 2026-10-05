@@ -103,7 +103,7 @@ a.lrow:focus-visible { outline-offset: -2px; }
 
 /* ---------------------------------------------------------------- charts: thin curves, sparklines */
 .chart { display: block; width: 100%; height: auto; overflow: visible; }
-.chart .ax { fill: var(--muted); font: 400 11px var(--f-body); }
+.chart .ax { fill: var(--muted); font: 400 var(--t-xs) var(--f-body); }
 .chart .grid { stroke: var(--line); stroke-width: 1; }
 .chart .base { stroke: var(--line-2); stroke-dasharray: 3 3; }
 .chart .ls { stroke: var(--accent); fill: none; stroke-width: 1.7; stroke-linejoin: round; vector-effect: non-scaling-stroke; }

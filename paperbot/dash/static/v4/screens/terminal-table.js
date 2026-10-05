@@ -42,7 +42,7 @@ export function bottomTable(ctx, st, onPick) {
       motion.countTo(c.roe, u != null && x.p.margin ? u / x.p.margin : null, {format: "pct", dec: 1, tone: true});
       const lock = x.p.lock_roe != null && !fmt.ownExits(x.a);
       return h("tr", {class: x.p.symbol === st.sym ? "on" : ""}, nameCell(x.a, id), coinCell(x.p.symbol), h("td", null, ui.sideTag(x.p.side)),
-        h("td", {class: "r num"}, fmt.lev(x.p.leverage)), h("td", {class: "r num"}, fmt.price(x.p.entry)), h("td", {class: "r num muted"}, fmt.price(m)),
+        h("td", {class: "r num"}, fmt.lev(x.p.leverage)), h("td", {class: "r num"}, fmt.price(x.p.entry)), h("td", {class: "r num muted xm"}, fmt.price(m)),
         h("td", {class: "r"}, c.pnl), h("td", {class: "r"}, c.roe), h("td", {class: "r num down-t"}, fmt.price(x.p.liq)),
         h("td", {class: ["r", "num", lock ? "up" : ""]}, lock ? `잠금 ${fmt.price(x.p.stop)}` : fmt.price(x.p.stop)),
         h("td", {class: "r num muted xs"}, x.p.entry_time ? fmt.kst(x.p.entry_time) : "—"));
@@ -50,7 +50,7 @@ export function bottomTable(ctx, st, onPick) {
     const n = open().length;
     put(foot, ui.assume("open"), h("span", {class: "muted"}, n > MAX ? `손익 큰 ${fmt.int(MAX)}개만 · 전체 ${fmt.int(n)}개는 ` : `${fmt.int(n)}개 · `,
       h("a", {href: ctx.href("positions")}, "포지션 화면 →")));
-    return rows.length ? table([["계좌"], ["코인"], ["방향"], ["배수", "r"], ["진입가", "r"], ["마크", "r"], ["미실현 (USDT)", "r"], ["ROE", "r"], ["청산가", "r"],
+    return rows.length ? table([["계좌"], ["코인"], ["방향"], ["배수", "r"], ["진입가", "r"], ["마크", "r xm"], ["미실현 (USDT)", "r"], ["ROE", "r"], ["청산가", "r"],
       ["손절·잠금", "r"], ["진입", "r xs"]], rows) : ui.empty("열린 포지션이 없습니다");
   }
   function fillsTable() {

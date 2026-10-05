@@ -8,6 +8,7 @@ import {startRouter} from "./router.js";
 import {maybeStartTour} from "./tour.js";
 import {startSince} from "./since.js";
 import {applySkin} from "./skin.js";
+import {applyText} from "./textsize.js";
 
 function attachFonts() {
   const pre = document.getElementById("gfonts");
@@ -21,6 +22,7 @@ function attachFonts() {
 
 function boot() {
   applySkin();            // the viewer's skin (tokens.css: "ai" by default, "classic" by choice) before anything draws
+  applyText();            // the viewer's 글자 크기 (tokens.css: "md" by default, "lg" / "xl" by choice), same moment
   startShell();
   startRouter();
   startStream();

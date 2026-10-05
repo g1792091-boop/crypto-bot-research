@@ -7,7 +7,7 @@
 .bell-btn[data-state="wait"] { color: var(--accent); border-color: var(--accent-line); box-shadow: 0 0 10px var(--edge-glow); }
 .bell-btn[data-state="none"] { opacity: .6; }
 .bell-n { position: absolute; top: -4px; right: -6px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
-  display: grid; place-items: center; font: 700 11px/1 var(--mono, monospace); font-variant-numeric: tabular-nums;
+  display: grid; place-items: center; font: 700 var(--t-xs)/1 var(--mono, monospace); font-variant-numeric: tabular-nums;
   background: var(--accent); color: var(--accent-ink); border: 2px solid var(--bg); }
 .bell-n[hidden] { display: none; }
 .bell-btn.ringing svg { animation: bell-ring .9s ease-in-out 1; transform-origin: 50% 10%; }

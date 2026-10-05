@@ -394,7 +394,7 @@ export function rankDelta(delta, o = {}) {
   const up = n > 0;
   const el = h("span", {class: ["rkd", up ? "up" : "down"], title: o.title || null,
     "aria-label": `순위 ${int(Math.abs(n))}칸 ${up ? "오름" : "내림"}`,
-    style: {fontFamily: "var(--f-term)", fontSize: "11px", fontWeight: "700", whiteSpace: "nowrap", lineHeight: "1"}},
+    style: {fontFamily: "var(--f-term)", fontSize: "var(--t-2xs)", fontWeight: "700", whiteSpace: "nowrap", lineHeight: "1"}},
   `${up ? "▲" : "▼"}${int(Math.abs(n))}`);
   if (o.fade) fadeIn(el);
   return el;
