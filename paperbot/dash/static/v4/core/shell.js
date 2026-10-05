@@ -1,13 +1,15 @@
 // The shell around every screen: the 5-group nav (top on a PC, bottom tab bar on a phone), the current group's sub
 // tabs, the one-line "D+n/30 · 판정 날짜 · 관찰 ~날짜" chip that expands to the rules, the ONE health dot (red when
-// something is down) and the sticky red banner for critical alerts (bust, liquidation burst, feed stale).
+// something is down; it pulses once per real new heartbeat), the speaker button of the live sound (core/sound.js) and
+// the sticky red banner for critical alerts (bust, liquidation burst, feed stale).
 import {h, put, clear, $, local} from "./dom.js";
 import {api, bus, stream} from "./api.js";
 import {store} from "./store.js";
 import {features} from "./features.js";
 import {GROUPS, SCREENS, href, icon, parseHash} from "./routes.js";
 import {mmdd, kst} from "./fmt.js";
-import {expand} from "./motion.js";
+import {expand, pulseLive} from "./motion.js";
+import {soundButton, startSound} from "./sound.js";
 import {setMethod, botsKo, methodKo} from "./ui.js";
 import {criticalLines} from "./alerts.js";
 import {skinSwitch} from "./skin.js";
@@ -164,7 +166,17 @@ export function startShell() {
   bus.on("alerts", (a) => { st.alerts = [...a, ...st.alerts].slice(0, 100); renderHealth(); });
   bus.on("trades", (t) => { st.trades = [...t, ...st.trades].slice(0, 300); renderHealth(); });
   bus.on("stream:state", (s) => { st.streamErrSince = s === "error" ? (st.streamErrSince || Date.now()) : null; renderHealth(); });
-  bus.on("heartbeat", () => renderHealth());
+  // the live dot breathes once per REAL new heartbeat (the stream repeats the last one every 3 s: same ts, no pulse)
+  let hbTs = null;
+  bus.on("heartbeat", (hb) => {
+    renderHealth();
+    const ts = hb && hb[0];
+    if (ts != null && hbTs != null && ts !== hbTs) pulseLive($("#hdot"));
+    if (ts != null) hbTs = ts;
+  });
+  // the speaker (core/sound.js): before the health dot; off until the first tap, then remembered per device
+  $("#hdot").before(soundButton());
+  startSound();
   setInterval(renderHealth, 15000);
   loadRecentTrades();
 }

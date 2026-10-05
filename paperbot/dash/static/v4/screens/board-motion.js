@@ -36,7 +36,7 @@ export function rowMotion(ctx, root, o = {}) {
     const fresh = performance.now() - st.updAt < FLASH_WINDOW;
     // the tint: a return that changed in this update
     if (fresh && ret && st.prevRet && st.prevRet[id] != null && Math.abs(st.prevRet[id] - st.curRet[id]) > 1e-9) {
-      motion.flash(ret, st.curRet[id] > st.prevRet[id] ? "up" : "down");
+      motion.flashPrice(ret, st.curRet[id] > st.prevRet[id] ? "up" : "down");      // a teal / pink glow on a real change
     }
     if (skip(a)) return;
     // the rank arrow (only when the row's shown rank is the group's return rank)

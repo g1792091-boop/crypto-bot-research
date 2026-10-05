@@ -32,7 +32,8 @@ export const popBubble = (el) => play(el, "pop");
 /**
  * A number element that counts to its new value over ~600 ms when real data changes.
  * opts: {format: "money"|"pct"|"int"|"price"|fn, dec, sign, suffix, tone (adds up/down class),
- *        flash: true (a gentle tint in the direction of the change) | "accent" (a neutral tint), only on a real change}.
+ *        flash: true (a gentle tint in the direction of the change) | "accent" (a neutral tint), only on a real change,
+ *        glow: true (flashPrice: a teal / pink text glow in the direction of the change, only on a real change)}.
  * The first paint is instant (nothing counts up from zero on load); an unchanged value is left alone (no repaint, no
  * motion), and while the page is hidden the new value is painted at once.
  */
@@ -59,6 +60,7 @@ export function countTo(el, to, opts = {}) {
   cancelAnimationFrame(el._raf || 0);
   el._raf = 0;
   if (had && from !== Number(to) && opts.flash) flash(el, opts.flash === "accent" ? null : Number(to) > from ? "up" : "down");
+  if (had && from !== Number(to) && opts.glow) flashPrice(el, Number(to) > from ? "up" : "down");
   if (!had || still() || from === Number(to)) { paint(Number(to)); return; }
   const t0 = performance.now();
   const step = (t) => {
@@ -181,5 +183,72 @@ export function beat(el) {
   if (!el || still() || typeof el.animate !== "function") return el;
   try { el.animate([{transform: "scale(1)"}, {transform: "scale(1.25)", offset: 0.35}, {transform: "scale(1)"}], {duration: 420, easing: "ease-out"}); }
   catch (e) { /* no motion */ }
+  return el;
+}
+
+// ---------------------------------------------------------------- glow one-shots (wave 2: "간지나게 빛나고 움직이고")
+// Same rules as above: only on a REAL change, skipped under reduced motion and while the page is hidden, one short
+// Web Animation each (no loop, no timer). Colours are the skin's tokens: teal-mint for up, pink for down.
+
+/** The header's live dot: one soft ring per real new heartbeat (core/shell.js; never on a timer). */
+export function pulseLive(el) {
+  if (!el || still() || typeof el.animate !== "function") return el;
+  const dot = el.querySelector("i") || el;
+  try {
+    const c = tokv("--live-glow") || tokv("--up-line");
+    dot.animate([{boxShadow: `0 0 0 0 ${c}`, transform: "scale(1)"}, {boxShadow: `0 0 0 6px transparent`, transform: "scale(1.18)", offset: 0.4},
+      {boxShadow: "0 0 0 0 transparent", transform: "scale(1)"}], {duration: 900, easing: "ease-out"});
+  } catch (e) { /* no motion */ }
+  return el;
+}
+
+/** A price label whose value REALLY changed glows once in the direction of the move (teal up / pink down, ~700 ms):
+ *  a text glow plus a faint tint behind it, like the reference's right-axis price tag. tone: "up" | "down". */
+export function flashPrice(el, tone) {
+  if (!el || !tone || still() || typeof el.animate !== "function") return el;
+  if (!el.isConnected) { requestAnimationFrame(() => { if (el.isConnected) flashPrice(el, tone); }); return el; }
+  try {
+    if (el._fp) el._fp.cancel();
+    const glow = tokv(tone === "up" ? "--up-glow" : "--down-glow"), soft = tokv(tone === "up" ? "--up-soft" : "--down-soft");
+    const bg = getComputedStyle(el).backgroundColor;
+    el._fp = el.animate([{textShadow: `0 0 10px ${glow}`, backgroundColor: soft}, {textShadow: "0 0 0 transparent", backgroundColor: bg}],
+      {duration: 700, easing: "ease-out"});
+  } catch (e) { /* an old browser: no glow */ }
+  return el;
+}
+
+/**
+ * Paint a live price and glow it when it REALLY moved: tickPrice(el, value, text?, key?) -> "up" | "down" | null.
+ * The first paint and an unchanged value never glow (the value is kept on the element as data-pv); key names what
+ * the label shows (the coin): a label switched to another coin repaints without a glow.
+ */
+export function tickPrice(el, value, text, key) {
+  if (!el) return null;
+  if (key != null && el.dataset.pk !== String(key)) { el.dataset.pk = String(key); delete el.dataset.pv; }
+  const v = Number(value);
+  const shown = text != null ? String(text) : (Number.isFinite(v) ? String(value) : "—");
+  if (el.textContent !== shown) el.textContent = shown;
+  if (!Number.isFinite(v)) { delete el.dataset.pv; return null; }
+  const had = el.dataset.pv != null && el.dataset.pv !== "";
+  const prev = had ? Number(el.dataset.pv) : v;
+  el.dataset.pv = String(v);
+  if (!had || prev === v) return null;
+  const tone = v > prev ? "up" : "down";
+  flashPrice(el, tone);
+  return tone;
+}
+
+/** A real new fill / exit row in a feed: it slides down into place from the top with a brief glow in its colour
+ *  (tone "up" | "down" | null = accent; a liquidation passes "down" and flashes pink once). ~600 ms. */
+export function fillIn(el, tone) {
+  if (!el || still() || typeof el.animate !== "function") return el;
+  try {
+    const c = tokv(tone === "up" ? "--up-soft" : tone === "down" ? "--down-soft" : "--flash");
+    const line = tokv(tone === "up" ? "--up-line" : tone === "down" ? "--down-line" : "--accent-line");
+    el.animate([{opacity: 0, transform: "translateY(-10px)", backgroundColor: c, boxShadow: `inset 2px 0 0 ${line}`},
+      {opacity: 1, transform: "none", backgroundColor: c, boxShadow: `inset 2px 0 0 ${line}`, offset: 0.35},
+      {opacity: 1, transform: "none", backgroundColor: "transparent", boxShadow: "inset 2px 0 0 transparent"}],
+    {duration: 900, easing: EASE});
+  } catch (e) { /* no motion */ }
   return el;
 }

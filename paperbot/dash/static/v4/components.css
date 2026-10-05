@@ -272,6 +272,41 @@ a.lrow:focus-visible { outline-offset: -2px; }
 .pop { animation: pop .26s var(--ease); transform-origin: 0 100%; }
 .pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--up); animation: pulse 1.8s ease-out infinite; }
 .region { overflow: hidden; transition: height .28s var(--ease); }
+/* wave 2 glow: a thin edge light on every panel that brightens on hover / keyboard focus (static: no loop), soft
+   glowing ends on the small lines (ui.miniSpark draws the end dot with an inline var(--up) / var(--down) fill) */
+.card { transition: border-color .25s var(--ease), box-shadow .25s var(--ease); }
+:root:not([data-skin="classic"]) .card { border-color: var(--edge); }
+:root:not([data-skin="classic"]) .card:focus-within { border-color: var(--edge-hi); box-shadow: 0 0 0 1px var(--card-ring), 0 0 18px var(--edge-glow), 0 8px 26px var(--card-shadow); }
+@media (hover: hover) {
+  :root:not([data-skin="classic"]) .card:hover { border-color: var(--edge-hi); box-shadow: 0 0 0 1px var(--card-ring), 0 0 18px var(--edge-glow), 0 8px 26px var(--card-shadow); }
+  :root[data-skin="classic"] .card:hover { border-color: var(--edge-hi); }
+}
+.mspark circle[style*="--up"] { filter: drop-shadow(0 0 2.5px var(--up-glow)); }
+.mspark circle[style*="--down"] { filter: drop-shadow(0 0 2.5px var(--down-glow)); }
+:root:not([data-skin="classic"]) .mspark .lu { filter: drop-shadow(0 0 2px var(--up-glow)); }
+:root:not([data-skin="classic"]) .mspark .ld { filter: drop-shadow(0 0 2px var(--down-glow)); }
+.hdot[data-level="ok"] i { box-shadow: 0 0 6px var(--live-glow); }
+
+/* ---------------------------------------------------------------- the live sound button + its popover (core/sound.js) */
+.snd { position: relative; flex: none; }
+.snd-btn { appearance: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line-2); background: var(--surface); color: var(--muted); }
+.snd-btn:hover { border-color: var(--accent-line); color: var(--ink); }
+.snd-btn[data-state="on"] { color: var(--accent); border-color: var(--accent-line); box-shadow: 0 0 10px var(--edge-glow); }
+.snd-btn[data-state="wait"], .snd-btn[data-state="night"] { color: var(--ink-2); border-style: dashed; border-color: var(--accent-line); }
+/* a pixel speaker drawn with one mask (currentColor): cone + two waves when on, a cross when off */
+.snd-ic { width: 16px; height: 16px; background: currentColor; -webkit-mask: var(--snd-mask) center / 16px 16px no-repeat; mask: var(--snd-mask) center / 16px 16px no-repeat;
+  --snd-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Cpath d='M1 6h3v4H1zM4 5h2v6H4zM6 3h2v10H6zM10 6h1v4h-1zM12 4h1v8h-1z'/%3E%3C/svg%3E"); }
+.snd-btn[data-state="off"] .snd-ic { --snd-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Cpath d='M1 6h3v4H1zM4 5h2v6H4zM6 3h2v10H6zM10 5h1v1h-1zM11 6h1v1h-1zM12 7h1v2h-1zM11 9h1v1h-1zM10 10h1v1h-1zM14 5h1v1h-1zM13 6h1v1h-1zM13 9h1v1h-1zM14 10h1v1h-1z'/%3E%3C/svg%3E"); }
+.snd-pop { position: absolute; right: -40px; top: calc(100% + 8px); z-index: 40; width: min(300px, calc(100vw - 2 * var(--gutter))); display: grid; gap: 10px;
+  padding: 14px; border-radius: var(--r-md); border: 1px solid var(--edge-hi); background: var(--surface); box-shadow: 0 0 18px var(--edge-glow), 0 12px 30px var(--card-shadow, var(--scrim)); }
+.snd-pop[hidden] { display: none; }
+.snd-row { display: flex; align-items: center; gap: 10px; min-width: 0; font-size: var(--t-sm); color: var(--ink-2); }
+.snd-row .k { flex: none; width: 34px; color: var(--muted); font-size: var(--t-xs); }
+.snd-row input[type=range] { flex: 1 1 auto; min-width: 0; accent-color: var(--accent); }
+.snd-row input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); flex: none; }
+.snd-main b { color: var(--ink); }
+.snd-why { color: var(--ink-2); }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }

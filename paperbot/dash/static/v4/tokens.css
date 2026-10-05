@@ -42,6 +42,13 @@
   --amber-line: rgba(243, 172, 61, .42);
   --amber-ink: #f5d9a0;
   --flash: rgba(246, 196, 69, .26);
+  /* glow (wave 2, core/motion.js flashPrice / pulseLive and the panel edge light in components.css) */
+  --up-glow: rgba(52, 211, 154, .55);
+  --down-glow: rgba(244, 100, 107, .55);
+  --live-glow: rgba(52, 211, 154, .5);
+  --edge: var(--line);
+  --edge-hi: var(--accent-line);
+  --edge-glow: transparent;
   --shim-a: #17223b;
   --shim-b: #263459;
   /* chrome that used to be written in base.css: the phone tab bar and the tour's dimmed page */
@@ -171,6 +178,13 @@
   --down-line: rgba(244, 81, 122, .45);
   --warn: #f5a524;
   --flash: rgba(25, 195, 177, .20);
+  /* glow: a price that moved, the live dot, the thin teal edge light on panels (brighter on hover / focus) */
+  --up-glow: rgba(34, 201, 164, .62);
+  --down-glow: rgba(244, 81, 122, .62);
+  --live-glow: rgba(34, 201, 164, .55);
+  --edge: rgba(25, 195, 177, .16);
+  --edge-hi: rgba(25, 195, 177, .5);
+  --edge-glow: rgba(25, 195, 177, .14);
   --shim-a: #1f242a;
   --shim-b: #2a3139;
   --glass: rgba(18, 21, 25, .93);

@@ -304,17 +304,17 @@ export async function mount(el, ctx) {
     const all = store.get("ticker") || {};
     for (const [s, x] of coinBtns) {
       const t = all[s];
-      x.px.textContent = t ? fmt.price(t.c ?? t.mark) : "—";
+      motion.tickPrice(x.px, t ? (t.c ?? t.mark) : null, t ? fmt.price(t.c ?? t.mark) : "—", s);     // glows on a real move
       x.chg.textContent = t && t.p != null ? fmt.pct(Number(t.p) / 100, 2) : "";
       x.chg.className = "num " + (t ? fmt.tone(t.p) : "");
     }
     const t = all[st.sym];
     priceLine.firstChild.textContent = `${fmt.coin(st.sym)}USDT`;
-    pxBig.textContent = t ? fmt.price(t.c ?? t.mark) : "—";
+    motion.tickPrice(pxBig, t ? (t.c ?? t.mark) : null, t ? fmt.price(t.c ?? t.mark) : "—", st.sym);
     pxBig.className = "chart-px num " + (t ? fmt.tone(t.p) : "");
     pxChg.textContent = t && t.p != null ? `24시간 ${fmt.pct(Number(t.p) / 100, 2)}` : "";
     pxChg.className = "num " + (t ? fmt.tone(t.p) : "");
-    tk.mark.textContent = t ? fmt.price(t.mark) : "—";
+    motion.tickPrice(tk.mark, t ? t.mark : null, t ? fmt.price(t.mark) : "—", st.sym);
     tk.fund.textContent = t ? fundPct(t.r) : "—";
     tk.fund.className = "num " + (t ? fmt.tone(-Number(t.r || 0)) : "");
     tk.hi.textContent = t ? fmt.price(t.h) : "—";
