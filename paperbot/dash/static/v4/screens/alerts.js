@@ -5,8 +5,7 @@
 // 다듬기 7-7: identical alerts (same level, same text) fold into one row "×12 · 처음 03:10 · 마지막 05:40" that opens to
 // every time (alerts-group.js; different texts never merge), and a "여기부터 새 알림 n개" line marks what came after this
 // device's last look (local "alerts-seen": per viewer, wrapped storage).
-import {h, ui, fmt, motion, alertKo, local, put, serverNow} from "../core/pb.js";
-import {tradeAlert} from "../core/alerts.js";
+import {h, ui, fmt, motion, alertKo, tradeAlert, local, put, serverNow} from "../core/pb.js";
 import {LEVEL_KO, LEVEL_CLS, dayTime, rel, note} from "./server-kit.js";
 import {groupAlerts, withDivider} from "./alerts-group.js";
 
