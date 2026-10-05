@@ -32,6 +32,7 @@ MODULES += ("brief", "vs5y")                    # wave 2 part C
 MODULES += ("bell", "uptime", "tradeshape")          # wave 3
 MODULES += ("drift",)                          # analysis 8B
 MODULES += ("ticks",)                          # aggTrade sound layer
+MODULES += ("radar",)                          # 신호 레이더 (36개 조건 켜짐 수)
 
 
 def register_all(app, **kw) -> dict:
