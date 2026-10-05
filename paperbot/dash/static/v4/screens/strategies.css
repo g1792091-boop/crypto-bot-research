@@ -139,3 +139,38 @@
 .strat-recline .gk-mini { width: 72px; height: 22px; }
 @media (max-width: 380px) { .strat-prow { grid-template-columns: minmax(26px, auto) minmax(0, 1fr) 48px minmax(52px, auto) 10px; } .strat-prow .gk-mini { width: 48px; } }
 .strat-pcard .stat, .strat-reelprof .stat { background: var(--surface-3); }
+
+/* DeepSeek 17-family summary (gap batch B, strategies-dsfam.js): counts only. Phones: one label row on top, then per
+   family its name on one line and the five numbers under it; from 640 px one line per family. */
+.dsf-intro { font-size: var(--t-sm); line-height: 1.6; }
+.dsf-table { display: grid; min-width: 0; }
+.dsf-list { display: grid; }
+.dsf-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1px 6px; align-items: center; width: 100%; min-width: 0; min-height: 44px;
+  padding: 6px 8px; border: 0; border-top: 1px solid var(--line); background: transparent; color: var(--ink); font: inherit; text-align: left; }
+.dsf-name { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; min-width: 0; font-size: var(--t-sm); }
+.dsf-ko { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dsf-id { flex: none; min-width: 30px; font: 700 var(--t-xs)/1 var(--f-term); color: var(--series-ds, var(--accent)); }
+.dsf-small { display: contents; }
+.dsf-c { min-width: 0; font-size: var(--t-sm); color: var(--ink); white-space: nowrap; }
+.dsf-c.down { color: var(--down); }
+.dsf-head { min-height: 0; padding-block: 2px 4px; border-top: 0; }
+.dsf-head .dsf-name { display: none; }
+.dsf-head .dsf-name, .dsf-head .dsf-c { font-size: var(--t-xs); color: var(--muted); }
+button.dsf-row { cursor: pointer; transition: background-color var(--t-fast) var(--ease); }
+button.dsf-row:hover { background: var(--surface-2); }
+button.dsf-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.dsf-total { border-top: 1px solid var(--line-2); background: var(--surface-2); }
+.dsf-total .dsf-ko { font-weight: 700; }
+.dsf-coin .dsf-ko { color: var(--ink-2); }
+.dsf-foot { display: grid; }
+.dsf-keys { margin: 4px 0 0; padding-left: 18px; display: grid; gap: 3px; line-height: 1.55; }
+.dsf-acts { gap: 8px; }
+.dsf-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin: 4px 0 0; font-size: var(--t-sm); color: var(--ink-2); }
+@media (min-width: 640px) {
+  .dsf-row { grid-template-columns: minmax(0, 2.2fr) repeat(5, minmax(52px, .55fr)); min-height: 38px; padding: 6px 10px; }
+  .dsf-name { grid-column: auto; }
+  .dsf-c { text-align: right; }
+  .dsf-head { padding-block: 4px; }
+  .dsf-head .dsf-name { display: flex; }
+}
+@media (min-width: 1000px) { .dsf-card { max-width: 980px; } }

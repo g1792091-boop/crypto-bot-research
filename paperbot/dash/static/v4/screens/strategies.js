@@ -20,14 +20,14 @@ export async function mount(el, ctx) {
   function show(params, animate) {
     const arg = params.arg || null;
     if (arg === shownArg && view) {
-      if (!arg && list) list.setGroup((params.query || {}).g);
+      if (!arg && list) list.setGroup((params.query || {}).g, (params.query || {}).fam);
       return;
     }
     shownArg = arg;
     if (view && view !== list) view.dispose();
     if (!arg) {
       head.hidden = false;
-      if (!list) { list = listView(ctx, st); list.set(); } else { list.setGroup((params.query || {}).g); list.refresh(); }
+      if (!list) { list = listView(ctx, st); list.set(); } else { list.setGroup((params.query || {}).g, (params.query || {}).fam); list.refresh(); }
       view = list;
       ctx.setTitle("매매법");
     } else {

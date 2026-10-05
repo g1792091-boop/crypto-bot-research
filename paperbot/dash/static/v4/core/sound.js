@@ -11,9 +11,10 @@
 // (/api/summary, once per device). No timer ever makes a sound by itself: the queue's timer only spaces out real
 // changes that already arrived (at most ~2 a second) and drops what is too old to mean "now".
 // Controls (the speaker button in the header, core/shell.js): off until the first tap (browsers allow sound only
-// after a tap), then remembered per device (dom.js local): on / off, volume, density (잔잔 / 보통 / 활발) and the
-// night mute 00-07 KST (off by default: the owners watch at night; one tick turns it on). The page going hidden suspends the audio and drops the queue; the first
-// ticker after it comes back is a new baseline (minutes of drift are not "a tick").
+// after a tap); ONE tap on the speaker turns it on and opens the menu (startOnTap), then remembered per device
+// (dom.js local): on / off, volume, density (잔잔 / 보통 / 활발) and the night mute 00-07 KST (off by default: the
+// owners watch at night; one tick turns it on). The page going hidden suspends the audio and drops the queue; the
+// first ticker after it comes back is a new baseline (minutes of drift are not "a tick").
 import {bus} from "./api.js";
 import {store} from "./store.js";
 import {h, local} from "./dom.js";
@@ -360,6 +361,14 @@ export function startSound() {
 }
 /** Is the sound waiting for the first tap (on, but the browser has not allowed audio yet)? */
 export const waiting = () => cfg.on && !unlocked;
+/** The 🔊 tap that opens the menu: an off sound turns on and is unlocked by this very tap (true when it switched on).
+ *  An on sound is left as it is (no second unlock, no change). */
+export function startOnTap() {
+  if (cfg.on) return false;
+  setCfg({on: true});
+  unlock();
+  return true;
+}
 
 // ---------------------------------------------------------------- the header button + popover
 export function soundButton() {
@@ -384,7 +393,7 @@ export function soundButton() {
     const on = cfg.on, wait = waiting(), mute = on && cfg.night && nightKst(Date.now());
     btn.dataset.state = !on ? "off" : wait ? "wait" : mute ? "night" : "on";
     const t = !on ? "실시간 소리 꺼짐" : wait ? "실시간 소리 켜짐 · 화면을 한 번 누르면 들립니다" : mute ? "실시간 소리 · 밤이라 쉬는 중 (07시부터)" : "실시간 소리 켜짐";
-    btn.title = t; btn.setAttribute("aria-label", t + ". 누르면 설정");
+    btn.title = t; btn.setAttribute("aria-label", t + (on ? ". 누르면 설정" : ". 누르면 켜지고 설정이 열립니다"));
     onBox.checked = on; vol.value = String(cfg.vol); night.checked = cfg.night;
     for (const b of dens.children) b.setAttribute("aria-pressed", String(b.dataset.d === cfg.density));
     why.textContent = !on ? "꺼져 있습니다." : mute ? "지금은 밤이라 쉬는 중입니다 (07시부터 다시)." : wait ? "화면을 한 번 누르면 소리가 시작됩니다." : "켜져 있습니다. 실제로 일이 생길 때만 소리가 납니다.";
@@ -393,7 +402,14 @@ export function soundButton() {
     pop.hidden = !open; btn.setAttribute("aria-expanded", String(open));
     if (open) paint();
   };
-  btn.addEventListener("click", () => setOpen(pop.hidden));
+  // one tap starts it (gap batch B, owners were told "🔊 한 번 누르면 시작"): a tap that OPENS the menu while the sound
+  // is off turns it on (the tap itself lets the browser play) and the menu shows it ticked; a tap that closes the menu
+  // only closes it, so an owner who just unticked it there keeps the quiet.
+  btn.addEventListener("click", () => {
+    const opening = pop.hidden;
+    if (opening) startOnTap();
+    setOpen(opening);
+  });
   onBox.addEventListener("change", () => { setCfg({on: onBox.checked}); if (onBox.checked) unlock(); });
   vol.addEventListener("input", () => setCfg({vol: Number(vol.value)}));
   night.addEventListener("change", () => setCfg({night: night.checked}));

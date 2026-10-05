@@ -1,6 +1,7 @@
 """Wave 2 live sound + glow (owners 10/05 22:45: the v6 chiptune sounds; 22:28: "간지나게 빛나고 움직이고").
 
-- core/sound.js loads in node (no AudioContext, no document) and is off by default with the night mute off;
+- core/sound.js loads in node (no AudioContext, no document) and is off by default with the night mute off (one tap
+  on the speaker then turns it on: startOnTap, tests/test_dash_gaps_b.py);
 - it never makes a sound without a real record: no timer sounds by itself, the first ticker / board / rooms answer is
   only a baseline, an unchanged price is silent; real changes map to the owners' motifs exactly (picker v6 notes);
 - the continuous layer is throttled (never more than 2 a second, stale changes dropped, one entry per coin);

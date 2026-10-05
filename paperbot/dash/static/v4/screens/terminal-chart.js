@@ -5,6 +5,11 @@
 // tooltip, and the price tag on the right axis: the last price, dashed across the chart, with the bar-close countdown
 // under it; it glows teal / pink when the server's price really moved. A small dot breathes on the last candle while the
 // stream is live (never while the page is hidden or under reduced motion).
+// Our entry and stop lines carry a soft glow (gap batch B): lightweight-charts price lines cannot glow, so a thin band
+// per line sits in an overlay over the chart at the line's price (series.priceToCoordinate, moved with the price tag
+// in place()), in the line's own meaning colour (--up-glow / --down-glow, --accent-glow before a mark price). It is
+// static; a glow that newly appears (a real new position or stop) draws itself in once (motion.drawIn: skipped under
+// reduced motion and on a hidden page). No position on this coin: no line, no glow.
 import {h, put, ui, fmt, store, motion, bars, serverNow, stream, makeChart, candleOptions, tok, priceDec} from "../core/pb.js";
 import {normPos} from "./positions-kit.js";
 import {panel} from "./terminal-kit.js";
@@ -28,15 +33,18 @@ export function termChart(ctx, st, onTf) {
   const tag = h("div", {class: "term-ptag", hidden: true}, h("b", {class: "num"}, "—"), h("small", {class: "num"}, "—"));
   const dot = h("i", {class: "term-dot", hidden: true, "aria-hidden": "true"});
   const tip = h("div", {class: "term-tip", hidden: true, role: "tooltip"});
-  const wrap = h("div", {class: "term-cwrap"}, box, legend, dot, tag, tip);
+  const glows = h("div", {class: "term-glows", "aria-hidden": "true"});
+  const wrap = h("div", {class: "term-cwrap"}, box, glows, legend, dot, tag, tip);
   const keyLine = h("div", {class: "term-ckey"});
   if (!TFS.includes(st.tf)) st.tf = "15m";
   const el = panel("차트", {cls: "term-chart", acts: [tfBar, h("a", {class: "term-more", href: ctx.href("chart", st.sym, {tf: st.tf})}, "차트 화면 →")]}, wrap, keyLine);
   const moreA = el.head.querySelector(".term-more");
 
   let C = null, series = null, last = null, t0 = 0, loadTok = 0, events = null, levels = null, trades = [], board = null, lastPx = null;
-  const lines = {pos: new Map(), lv: []};
+  let glowSeen = false;          // the first lines drawn for a coin are the baseline: their glows appear without motion
+  const lines = {pos: new Map(), lv: [], glow: new Map()};
   const rm = (l) => { try { series.removePriceLine(l); } catch (e) { /* gone */ } };
+  const dropGlow = (k) => { const g = lines.glow.get(k); if (g) { g.el.remove(); lines.glow.delete(k); } };
 
   function paintLegend(d) {
     if (!d) { legend.textContent = ""; return; }
@@ -45,9 +53,25 @@ export function termChart(ctx, st, onTf) {
       h("span", {class: fmt.tone(ch)}, fmt.pct(ch, 2)));
   }
 
-  // ---------------------------------------------------------------- overlays: the price tag + countdown, the dot
+  // ---------------------------------------------------------------- overlays: the price tag + countdown, the dot, line glows
+  /** Each entry / stop glow sits on its line's price; a line scrolled out of the price range hides its glow. */
+  function placeGlows() {
+    if (!lines.glow.size) return;
+    let sw;
+    try { sw = C.chart.priceScale("right").width(); } catch (e) { return; }       // the chart is mid-layout: next place()
+    const W = Math.max(0, box.clientWidth - sw), H = box.clientHeight - 26;
+    for (const g of lines.glow.values()) {
+      const y = series.priceToCoordinate(g.price);
+      if (y == null || y < 0 || y > H) { g.el.hidden = true; continue; }
+      g.el.hidden = false;
+      g.el.style.width = W + "px";
+      g.el.style.transform = `translateY(${Math.round(y)}px)`;
+    }
+  }
   function place() {
+    glows.hidden = !series || !last;
     if (!series || !last) { tag.hidden = true; dot.hidden = true; return; }
+    placeGlows();
     const y = series.priceToCoordinate(last.close);
     const x = C.chart.timeScale().timeToCoordinate(last.time);
     const sw = C.chart.priceScale("right").width();
@@ -168,20 +192,33 @@ export function termChart(ctx, st, onTf) {
       const L = g.items.filter((x) => x.p.side > 0).length, S = g.items.length - L;
       const title = g.items.length === 1 ? `${fmt.sideKo(g.items[0].p.side)} ${fmt.lev(g.items[0].p.leverage)}${pnl != null ? " " + fmt.pct(pnl / mg, 1) : ""}`
         : `${g.items.length}개 ${L ? "롱" + L : ""}${L && S ? "·" : ""}${S ? "숏" + S : ""}${pnl != null && mg ? " " + fmt.pct(pnl / mg, 1) : ""}`;
-      want.set("e" + g.items.map((x) => x.a.account_id).join(",") + "@" + g.price, {price: g.price, color: pnl == null ? tok("--muted") : pnl >= 0 ? tok("--up") : tok("--down"), title, w: 2, style: 0});
+      const tone = pnl == null ? "flat" : pnl >= 0 ? "up" : "down";
+      want.set("e" + g.items.map((x) => x.a.account_id).join(",") + "@" + g.price, {price: g.price, color: tone === "flat" ? tok("--muted") : tok(tone === "up" ? "--up" : "--down"), title, w: 2, style: 0, tone});
     }
     if (list.length <= 4) {
       for (const x of list) if (x.p.stop) {
         const lock = x.p.lock_roe != null && !fmt.ownExits(x.a);
         want.set("s" + x.a.account_id + "@" + x.p.stop, {price: x.p.stop, color: lock ? tok("--up") : tok("--down"), w: 1, style: 2,
-          title: lock ? `잠금 +${fmt.num(x.p.lock_roe * 100, 0)}%` : "손절"});
+          title: lock ? `잠금 +${fmt.num(x.p.lock_roe * 100, 0)}%` : "손절", tone: lock ? "up" : "down"});
       }
     }
-    for (const [k, l] of lines.pos) if (!want.has(k)) { rm(l); lines.pos.delete(k); }
+    for (const [k, l] of lines.pos) if (!want.has(k)) { rm(l); lines.pos.delete(k); dropGlow(k); }
     for (const [k, w] of want) {
       const o = {price: w.price, color: w.color, lineWidth: w.w, lineStyle: w.style, axisLabelVisible: true, title: w.title};
       if (lines.pos.has(k)) lines.pos.get(k).applyOptions(o); else lines.pos.set(k, series.createPriceLine(o));
+      let g = lines.glow.get(k);
+      if (!g) {
+        const band = h("i");
+        g = {price: w.price, el: h("span", {class: "term-glow", hidden: true, dataset: {k: k[0] === "e" ? "entry" : "stop"}}, band), band, fresh: true};
+        lines.glow.set(k, g);
+        glows.append(g.el);
+      }
+      g.el.dataset.tone = w.tone;
     }
+    if (series && last) placeGlows();
+    const real = glowSeen;
+    if (board) glowSeen = true;
+    for (const g of lines.glow.values()) if (g.fresh) { g.fresh = false; if (real && !g.el.hidden) motion.drawIn(g.band, 500); }
   }
   function drawLevels() {
     if (!series) return;
@@ -232,7 +269,7 @@ export function termChart(ctx, st, onTf) {
   ctx.every(120000, loadLevels, {now: false});
   return {
     el, ready,
-    setSym() { lines.pos.forEach(rm); lines.pos.clear(); trades = []; moreA.href = ctx.href("chart", st.sym, {tf: st.tf}); loadCandles(); },
+    setSym() { lines.pos.forEach(rm); lines.pos.clear(); [...lines.glow.keys()].forEach(dropGlow); glowSeen = false; trades = []; moreA.href = ctx.href("chart", st.sym, {tf: st.tf}); loadCandles(); },
     onTicker() { drawPos(); },
     onBoard(b) { board = b; drawPos(); },
     onTrades(rows) { if ((rows || []).some((t) => t.symbol === st.sym)) loadTrades(); },
