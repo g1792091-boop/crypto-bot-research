@@ -269,7 +269,8 @@ def test_run_day_writes_stop_slips_and_the_report_line(tmp_path, monkeypatch):
     assert "size_costs" in rep and json.loads(out.execute("SELECT data FROM reports").fetchone()[0])[
         "stop_slippage"]["overall"]["measured"] == 2
     info = D.notify_report(rep, ListNotifier())[-1][1]
-    assert "\n손절 체결 2건: 실제 " in info and " vs paper " in info and "\n→ paper보다 " in info and "$-" not in info
+    assert "\n손절 체결 2건: 실제 미끄러짐 " in info and " · 모의 가정 " in info and "\n→ 실제 손절 가격이" in info
+    assert "$-" not in info and "paper" not in info.split("손절 체결")[1]
     # without the flag (the tests of the other parts): no aggTrades for it, no rows written
     (tmp_path / "b").mkdir()
     out2 = sqlite3.connect(str(tmp_path / "b" / "daily3.db"))

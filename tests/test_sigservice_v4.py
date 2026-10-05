@@ -534,7 +534,8 @@ def _sleepy(job):
 def test_deepseek_timeout_after_the_core_submits(tmp_path, monkeypatch, fake_ds):
     """A hung DeepSeek worker: the core group's signals of the boundary are SUBMITTED (before the DeepSeek map
     starts), the DeepSeek map gives up after its own timeout with its own error class and message, the pool is
-    replaced and the extras' hook is told the boundary timed out."""
+    replaced, and the extras' hook is NOT told the boundary timed out (trading review 1: a DeepSeek-only problem must
+    not make the extras skip their phase 2, D8; ``timed_out`` is the core map's SignalTimeout only)."""
     fake_ds(FakeDs())
     monkeypatch.setattr(SS, "ds_last", _sleepy)
     svc = SS.SignalService(SYMS, (), {}, lib=FakeLib(), procs=2, trade_tfs=C.V3_TRADE_TFS, record_tfs=(),
@@ -553,7 +554,7 @@ def test_deepseek_timeout_after_the_core_submits(tmp_path, monkeypatch, fake_ds)
         run._signals(B15)
     finally:
         svc.close()
-    assert hook == [(["A@15m"], True)] and len(book.engines["A@15m"].pending) == 1
+    assert hook == [(["A@15m"], False)] and len(book.engines["A@15m"].pending) == 1
     assert store.conn.execute("SELECT strategy, status FROM signal_log").fetchall() == [("A", "SUBMITTED")]
     assert run.ds_timeouts == 1 and svc.ds_timeouts == 1 and svc.pool_restarts == 1 and run.signal_timeouts == 0
     warn = [t for lvl, t in note.messages if lvl == "WARN"]

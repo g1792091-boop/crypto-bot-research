@@ -350,7 +350,9 @@ class Runner3:
                 if aid in self.book.engines and (self.skip_before is None or boundary >= self.skip_before):
                     self.book.submit(aid, sig)
                     submitted.append((aid, sig))
-        timed_out = self._deepseek(boundary, submitted) or timed_out   # paper v4: after every core submit
+        # paper v4: after every core submit. A DeepSeek timeout is counted and alerted there but is NOT the extras'
+        # ``timed_out`` (that is the core map's SignalTimeout only): DeepSeek never changes another group's trading (D8)
+        self._deepseek(boundary, submitted)
         if submitted and self.strength is not None:
             try:
                 self.strength.observe(boundary, submitted)

@@ -653,7 +653,21 @@ def test_v4_run_day_split_report_and_shadows(v4_day, tmp_path, monkeypatch):
     # shadows: the reel-exit accounts get limit and skipped shadows on their own engine, no house what-ifs
     tv = rep["shadows"]["trade_variants"]
     assert tv["own_exit_trades"] == per["REEL_H1@5m"] + per["RANDOM_1@5m"]
-    assert tv["closed"] == n - tv["own_exit_trades"] and tv["no_signal"] == 0
+    # jobs review 4: the what-ifs summarize the run's own population as in v3; DeepSeek apart, each trade once
+    ds_n = per[f"{DS_ID}@15m"]
+    assert ds_n > 0 and tv["closed"] == n - tv["own_exit_trades"] - ds_n and tv["no_signal"] == 0
+    tvd = rep["shadows"]["trade_variants_groups"]["ds200"]
+    assert tvd["closed"] == ds_n and tvd["no_signal"] == 0 and "own_exit_trades" not in tvd
+    assert tv["base"]["trades"] == per["C0@15m"] + per["RANDOM_1@15m"] and tvd["base"]["trades"] == ds_n
+    shadowed = dict(out.execute("SELECT account_id, COUNT(*) FROM shadows WHERE kind = 'base' GROUP BY account_id"))
+    assert shadowed == {"C0@15m": per["C0@15m"], "RANDOM_1@15m": per["RANDOM_1@15m"], f"{DS_ID}@15m": ds_n}
+    for k, v in rep["shadows"]["stop_variants"].items():
+        w = rep["shadows"]["stop_variants_groups"]["ds200"][k]
+        stored = dict(out.execute("SELECT account_id = ?, COUNT(*) FROM shadows WHERE kind = ? AND resolved = 1 AND "
+                                  "roe IS NOT NULL AND json_extract(data, '$.actual_roe') IS NOT NULL GROUP BY 1",
+                                  (f"{DS_ID}@15m", f"stop{k}")))
+        assert (v["losing_trades"], w["losing_trades"]) == (stored.get(0, 0), stored.get(1, 0)), k
+    assert sum(w["losing_trades"] for w in rep["shadows"]["stop_variants_groups"]["ds200"].values()) > 0
     kinds = {}
     for aid, kind, reason in out.execute("SELECT account_id, kind, exit_reason FROM shadows"):
         kinds.setdefault(aid, {}).setdefault(kind, []).append(reason)
@@ -721,9 +735,18 @@ def test_v4_notify_report_shadow_and_stop_slippage_lines():
     text = notify_report(rep, ListNotifier())[0][1]
     assert text == ("🔎 매일 점검 · 10/07\n\n재계산 일치 331/331\n지정가였다면 체결 매매법 25/40 · 5분 단타 0/1\n"
                     "포지션 중이라 놓친 신호 매매법 7 · 5분 단타 0\n"
-                    f"손절 체결 매매법 6건: 실제 2.5bp vs paper 1.0bp\n→ paper보다 {usd(1.25)}\n"
-                    f"손절 체결 5분 단타 1건: 실제 4.0bp vs paper 1.0bp\n→ paper보다 {usd(0.25)}\n"
+                    "손절 체결 매매법 6건: 실제 미끄러짐 0.025% · 모의 가정 0.010%\n→ 실제 손절 가격이었다면 $1 더 손실\n"
+                    "손절 체결 5분 단타 1건: 실제 미끄러짐 0.040% · 모의 가정 0.010%\n"
+                    "→ 실제 손절 가격이었어도 손익 차이 $1 미만\n"
                     "딥시크 (개수만): 지정가 체결 30/70 · 놓친 신호 20 · 손절 12건\n빠진 1분봉 0")
+    assert "paper" not in text and "bp" not in text and "+$" not in text           # T3: plain words, no gain-looking +$
+    # T3 / T4: a cheaper real fill reads as less loss; counts get thousands separators
+    rep["stop_slippage"]["groups"]["core"] = cell(1500, 1284, 1.0, 2.0, -12.4)
+    rep["shadows"]["groups"]["core"] = sh(1481, 1459, 2)
+    t2 = notify_report(rep, ListNotifier(), trades_day=1170)[0][1]
+    assert "\n손절 체결 매매법 1,284건: 실제 미끄러짐 0.010% · 모의 가정 0.020%\n→ 실제 손절 가격이었다면 $12 덜 손실\n" in t2
+    assert "\n거래 1,170건\n지정가였다면 체결 매매법 1,459/1,481 · 5분 단타 0/1\n" in t2
+    rep["shadows"]["groups"]["core"] = sh(40, 25, 7)
     # extras with signals get their numbers; a v3 report (no DeepSeek / reel group) keeps the old lines
     rep["shadows"]["groups"]["extra"] = sh(4, 1, 2)
     assert "\n지정가였다면 체결 매매법 25/40 · 5분 단타 0/1 · 추가 계좌 1/4\n" in notify_report(rep, ListNotifier())[0][1]
@@ -731,7 +754,7 @@ def test_v4_notify_report_shadow_and_stop_slippage_lines():
                              "groups": {"core": sh(40, 25, 7), "flip": sh(9, 5, 3)}},
           "stop_slippage": {"overall": cell(7, 7, 2.0, 1.0, 1.0), "groups": {"core": cell(6, 6), "flip": cell(1, 1)}}}
     t3 = notify_report(v3, ListNotifier())[0][1]
-    assert "\n지정가였다면 체결 30/49\n포지션 중이라 놓친 신호 10\n" in t3 and "\n손절 체결 7건: 실제 2.0bp" in t3
+    assert "\n지정가였다면 체결 30/49\n포지션 중이라 놓친 신호 10\n" in t3 and "\n손절 체결 7건: 실제 미끄러짐 0.020%" in t3
 
 
 def test_start_day_is_a_silent_line_not_a_missing_snapshot(tmp_path, monkeypatch):

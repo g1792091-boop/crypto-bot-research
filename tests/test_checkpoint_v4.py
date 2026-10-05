@@ -297,6 +297,13 @@ def test_account_missing_from_the_day_state_is_held_and_warned(tmp_path):
     assert [(f["family"], f["alpha"], f["judged_tfs"]) for f in view["family_table"]] == [
         ("core", 0.07, ["15m", "30m", "1h"]), ("ds200", 0.025, ["15m", "30m", "1h"]), ("reel", 0.005, ["5m"])]
     assert view["family_table"][0]["tested"] == 1 and view["method_ko"] == ck.method_ko(None, view["n_bots"])
+    # jobs review 7: each family's expected lucky passes (verdict doc 6) on the dashboard too
+    fam = {f["group"]: f for f in v["families"]}
+    for row in view["family_table"]:
+        if row["family"] in fam:
+            assert (row["lucky_expected"], row["lucky_if_uncorrected"]) == (
+                fam[row["family"]]["lucky_expected"], fam[row["family"]]["lucky_if_uncorrected"])
+    assert view["family_table"][0]["lucky_if_uncorrected"] == pytest.approx(0.07)
 
 
 def test_q5_warning_names_only_the_hit_group(tmp_path):
@@ -316,7 +323,8 @@ def test_q5_warning_names_only_the_hit_group(tmp_path):
     assert len(w) == 1 and "ds_code" in w[0] and "해당 묶음: 딥시크" in w[0]
     assert w[0] in v["accounts"]["F3_BOS@1h"]["notes"] and "notes" not in v["accounts"]["GOOD@1h"]
     assert "재시작 때 체결·청산·사이즈 코드 변경 (딥시크):" in v["text"]
-    assert "묶음별 (FDR 나눔)\n- 매매법: 검정 1개 중 통과 1개 (FDR 7%)\n- 딥시크: 검정 1개 중 통과 " in v["text"]
+    assert "묶음별 (FDR 나눔)\n- 매매법: 검정 1개 중 통과 1개 (FDR 7%) · 운으로 기대 ≤ 0.07개\n- 딥시크: 검정 1개 중 통과 " \
+        in v["text"]
 
 
 # ---------------------------------------------------------------------------- the reel's bots vs ReelEngine

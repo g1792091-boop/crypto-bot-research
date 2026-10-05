@@ -1773,13 +1773,14 @@ def method_ko(group: Optional[str] = None, n_bots: int = N_BOTS) -> str:
 
 def family_table(alphas: Optional[dict] = None, n_bots: int = N_BOTS, families: Optional[list] = None) -> list[dict]:
     """The FDR families as rows for the dashboard (G20): family, Korean name, alpha, judged timeframes, method_ko, and
-    from a verdict's ``families`` its "tested" / "luck_passed". ``alphas``: a verdict's ``family_alpha`` (default
-    FAMILY_ALPHA)."""
+    from a verdict's ``families`` its "tested" / "luck_passed" / "lucky_expected" / "lucky_if_uncorrected" (the
+    family's expected lucky passes, verdict doc 6). ``alphas``: a verdict's ``family_alpha`` (default FAMILY_ALPHA)."""
     al = dict(FAMILY_ALPHA if alphas is None else alphas)
     done = {f.get("group"): f for f in families or [] if isinstance(f, dict)}
     return [{"family": g, "name": FAMILY_KO.get(g, g), "alpha": al.get(g),
              "judged_tfs": list(JUDGED_BY_FAMILY.get(g, ())), "method_ko": method_ko(g, n_bots),
-             **{k: done[g][k] for k in ("tested", "luck_passed") if k in done.get(g, {})}}
+             **{k: done[g][k] for k in ("tested", "luck_passed", "lucky_expected", "lucky_if_uncorrected")
+                if k in done.get(g, {})}}
             for g in list(FAMILIES) + [g for g in al if g not in FAMILIES]]
 
 
@@ -1873,7 +1874,9 @@ def verdict_text(v: dict) -> str:
           f"(보정 없었다면 {v['lucky_if_uncorrected']:.1f}개)"]
     if v.get("families"):                     # paper v4: one line per FDR family (alpha-split, D5)
         L += ["묶음별 (FDR 나눔)"] + [f"- {f.get('name', f['group'])}: 검정 {f['tested']}개 중 통과 {f['luck_passed']}개 "
-                                    f"(FDR {f['alpha'] * 100:g}%)" for f in v["families"]]
+                                    f"(FDR {f['alpha'] * 100:g}%) · 운으로 기대 ≤ "
+                                    f"{f.get('lucky_expected', f['alpha'] * f['luck_passed']):.2f}개"
+                                    for f in v["families"]]
     if v.get("warnings"):
         L += ["", "⚠ 주의"] + [_warning_ko(w) for w in v["warnings"]]
     L += ["", "자세히: 대시보드 순위표 '체크포인트 판정'"]
