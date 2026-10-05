@@ -1,6 +1,7 @@
 // 오늘의 하이라이트: the seven pages of one day's story, each one big picture and one or two lines, built from
 // /api/v4/story (dash/more/story.py). HONESTY: every comparison with the coin flips is 참고 (refNote) and carries the
-// same-bar flips as its yardstick; the day's best / worst account comes with "하루 성적은 운이 큽니다"; DeepSeek is
+// same-bar flips as its yardstick; the day's best / worst account (core / reel / extra only: DeepSeek and coin flips are
+// never named with money, D11) comes with "하루 성적은 운이 큽니다"; DeepSeek is
 // shown at count level only (no account numbers, 참고); the meeting bubble is the stored conclusion line as it was
 // written (text node); the money caption sits in the story frame's footer. Nothing here is invented: an empty part
 // says so in a designed empty state.
@@ -72,18 +73,19 @@ function pMovers(d, env) {
     return h("div", {class: ["sp-mover", kind]},
       h("div", {class: "sp-mv-top"}, pixIcon(kind === "best" ? "crown" : "down", 28),
         h("span", {class: "sp-mv-k"}, kind === "best" ? "가장 많이 번 계좌" : "가장 많이 잃은 계좌"),
-        h("span", {class: "grow"}), chip(a.group), a.group === "ds200" ? ui.pill("", "ref") : null),
+        h("span", {class: "grow"}), chip(a.group)),
       h("div", {class: "sp-mv-name"}, ui.acctLabel(a)),
       h("div", {class: ["sp-mv-num", "num", tone(a.pnl)]}, fmt.money(a.pnl, true), h("small", null, " USDT")),
       h("div", {class: "sp-mv-sub"}, h("span", {class: tone(a.change)}, pct2(a.change)), ` · 거래 ${fmt.int(a.trades)}건 · ${fmt.int(a.wins)}번 이김`,
         h("a", {class: "sp-mv-go", href: env.ctx.href("account", a.account_id)}, "계좌 보기 →")));
   };
-  const coinTop = d.best && d.best.group === "flip";
+  // core / reel / extra only (the server picks them): DeepSeek and the coin flips are never named with money per
+  // account (CONTRACT rule 3, owners' D11); their day is on pages 1 and 4 as counts and medians
   return h("div", {class: "sp sp-movers"},
     kick(2, `${dayIs(d)} 가장 많이 번·잃은 계좌`),
     h("div", {class: "sp-mvs"}, card(d.best, "best"), card(d.worst, "worst")),
     note(h("b", null, "하루 성적은 운이 큽니다. "), "같은 계좌도 다음 날엔 순위가 또 섞입니다. 30일 판정만 실력을 봅니다."),
-    coinTop ? note("오늘 1등이 동전 봇입니다: 하루 순위만으로는 실력을 알 수 없다는 뜻입니다.") : null);
+    note("기존 36 · 5분봉 · 추가 계좌 중에서 골랐습니다. 딥시크와 동전 봇은 계좌마다 돈으로 보여 주지 않고 묶음 숫자로만 봅니다."));
 }
 
 // ---------------------------------------------------------------- 03 5분봉 영상 매매법

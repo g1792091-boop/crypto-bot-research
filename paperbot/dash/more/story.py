@@ -11,8 +11,9 @@ One answer is small (counts, medians and a few named accounts, never a list of e
   that trade); an account without a trade that day is flat (0); an account already bust before the day is left out.
   "flip_same" = the coin flips on the 36's timeframes (15m-4h, the same-bar comparison), "flip5" = the three 5m flips
   (the reel's comparison).
-- best / worst: the account that made / lost the most that day, any group, with its group (one day is mostly luck;
-  the page says so).
+- best / worst: the account that made / lost the most that day among core / reel / extra (MAIN_GROUPS), with its group
+  (one day is mostly luck; the page says so). DeepSeek and coin-flip accounts are never named with money (D10 / D11,
+  CONTRACT rule 3): they are counted in groups / ds / reel.flips only.
 - reel: the 5m reel's day (trades, P&L, win / loss pips) and its three 5m coin flips.
 - ds: DeepSeek at count level only: up / flat / down, the median, the families' medians (참고), no account numbers.
 - busts: liquidations per group and the accounts that went bust that day (named for core / reel / extra, counted for
@@ -300,8 +301,9 @@ def story(c: sqlite3.Connection, agents: Optional[sqlite3.Connection], day: Opti
         if g in MAIN_GROUPS:
             t["pnl"] = st["pnl"]
         trades["groups"][g] = t
-    # the day's biggest winner and loser, any group (the page names the group and says one day is mostly luck)
-    traded = [(per[a["account_id"]]["pnl"], a) for a in alive if a["account_id"] in per]
+    # the day's biggest winner and loser of core / reel / extra (the page names the group and says one day is mostly
+    # luck); DeepSeek and the coin flips are never named with money per account (D10 / D11)
+    traded = [(per[a["account_id"]]["pnl"], a) for a in alive if a["account_id"] in per and a["group"] in MAIN_GROUPS]
     best = max(traded, key=lambda x: x[0], default=None)
     worst = min(traded, key=lambda x: x[0], default=None)
     # the reel and its three 5m coin flips

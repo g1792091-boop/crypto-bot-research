@@ -1,6 +1,6 @@
 """v4 additions: 오늘의 하이라이트 (/api/v4/story, dash/more/story.py) and 지난번 본 뒤로 (/api/v4/since,
 dash/more/since.py) on a small synthetic world: the day's numbers per group (up / down / flat, medians, trades, P&L only
-for core / reel / extra), the best and worst account of any group, the reel against its three 5m coin flips, DeepSeek at
+for core / reel / extra), the best and worst account of core / reel / extra (never DeepSeek or a coin flip), the reel against its three 5m coin flips, DeepSeek at
 count level, busts and liquidations, meeting conclusions (the lead's line first), D+n and the run's days; the since
 summary (clamped to the run and to 7 days, per-group counts, best / worst trade of core / reel / extra, busts, alerts,
 milestones); empty databases; the routes behind the login, cached and small; and the page side's rules (storage
@@ -117,7 +117,7 @@ def world(tmp_path_factory):
 
 
 # ---------------------------------------------------------------- the story of one day
-def test_story_counts_the_day_per_group_and_names_the_best_and_worst_of_any_group(world):
+def test_story_counts_the_day_per_group_and_names_the_best_and_worst_of_the_main_groups(world):
     c, a = _conns(*world)
     d = S.story(c, a, DAY0, NOW)
     assert d["ready"] and d["day"] == DAY0 and d["today"] and d["t0"] == T0
@@ -131,9 +131,11 @@ def test_story_counts_the_day_per_group_and_names_the_best_and_worst_of_any_grou
     assert core["median"] == pytest.approx(-0.01) and core["median_active"] == pytest.approx(-0.02)
     assert d["groups"]["flip_same"]["n"] == 2 and d["groups"]["flip5"]["n"] == 3
     assert d["groups"]["flip"]["n"] == 5
-    # best / worst: any group, with the group (the page names it and says one day is luck)
-    assert d["best"]["account_id"] == "F3_BOS@15m" and d["best"]["group"] == "ds200" and d["best"]["pnl"] == 200.0
-    assert d["best"]["change"] == pytest.approx(0.04)
+    # best / worst: core / reel / extra only, with the group (the page names it and says one day is luck); DeepSeek's
+    # F3_BOS@15m made more (+200) but DeepSeek and coin flips are never named with money per account (D10 / D11)
+    assert d["best"]["account_id"] == "A@15m" and d["best"]["group"] == "core" and d["best"]["pnl"] == 75.0
+    assert d["best"]["change"] == pytest.approx(0.015)
+    assert "F3_BOS@15m" not in json.dumps(d)
     assert d["worst"]["account_id"] == "E@30m" and d["worst"]["liq"] == 1
 
 
