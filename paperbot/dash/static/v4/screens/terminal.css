@@ -425,3 +425,8 @@ a.term-cr:hover { background: var(--surface-2); }
   .term-rb-s, .term-p { transition: none; }
   .term-uline.run::after, .term-px[data-hit], .term-wr[data-hit], .term-ptag[data-hit] { animation: none; }
 }
+/* the sound hint (terminal-top.js): only while the live sound is off or waits for its first tap */
+.term-snd { flex: none; height: 26px; padding: 0 10px; border: 1px solid var(--accent-line); border-radius: 999px; background: var(--accent-soft);
+  color: var(--accent-hi); font: 700 11px/1 var(--f-body); cursor: pointer; white-space: nowrap; }
+.term-snd:hover { background: var(--accent); color: var(--accent-ink); box-shadow: 0 0 12px var(--accent-glow); }
+.term-snd[hidden] { display: none; }

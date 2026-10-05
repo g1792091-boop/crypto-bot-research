@@ -2,7 +2,7 @@
 // numbers, mark, funding and the time to the next funding, the trading session, the KST clock, and one slow line of
 // the latest real AI meeting conclusions (/api/office: finished meetings' decision lines; '회의 중' only from
 // office.running). The office is read through the shared store like 홈 (every 30 s and when a room changes).
-import {h, put, fmt, store, motion, bars, serverNow} from "../core/pb.js";
+import {h, put, fmt, store, motion, bars, serverNow, sound} from "../core/pb.js";
 import {countdown, fundPct} from "./positions-book.js";
 import {hit} from "./terminal-live.js";
 
@@ -23,6 +23,17 @@ export function topBar(ctx, st) {
   const liveDot = h("i", {class: "term-live", "aria-hidden": "true"});
   const clockBox = h("div", {class: "term-clockbox", title: "한국 시각 (서버 시계 기준)"}, liveDot, clock, h("small", null, "KST"));
   let relayAt = 0;
+  // the live sound starts only from a tap (a browser rule): while it is off or waiting for that tap, a small button
+  // here says so and opens the header speaker's menu (the same switch, core/sound.js); gone once the sound plays
+  const sndHint = h("button", {type: "button", class: "term-snd", hidden: true, onclick: () => { const b = document.getElementById("sndbtn"); if (b) b.click(); }});
+  const paintSnd = () => {
+    const off = !sound.cfg.on, wait = sound.waiting();
+    sndHint.hidden = !(off || wait);
+    sndHint.textContent = off ? "소리 켜기" : "한 번 누르면 소리 시작";
+    sndHint.title = "실시간 체결 소리 (실제 바이낸스 체결 · 우리 봇 진입·익절·손절)";
+  };
+  paintSnd();
+  ctx.on("sound:cfg", paintSnd);
   // the meetings line: a label, a running count (real), the conclusions (duplicated once for a seamless loop; the copy is
   // hidden from screen readers)
   const meetN = h("span", {class: "term-mrun", hidden: true});
@@ -34,7 +45,7 @@ export function topBar(ctx, st) {
       h("div", {class: "term-id"}, symEl, perp),
       h("div", {class: "term-pxbox"}, px, chg),
       h("div", {class: "term-stats"}, hi.el, lo.el, vol.el, mark.el, fund.el),
-      h("span", {class: "grow"}), sess, clockBox),
+      h("span", {class: "grow"}), sndHint, sess, clockBox),
     line);
 
   let fundT = null, sig = "";

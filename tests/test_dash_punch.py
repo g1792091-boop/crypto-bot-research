@@ -236,6 +236,13 @@ def test_tokens_only_and_both_skins():
     assert "--tglow" in css and "var(--accent-glow)" in css
 
 
+def test_sound_hint_shows_only_while_the_sound_is_off_or_waits_and_uses_the_header_switch():
+    top = _src("screens", "terminal-top.js")
+    assert "const off = !sound.cfg.on, wait = sound.waiting();" in top and "sndHint.hidden = !(off || wait);" in top
+    assert 'document.getElementById("sndbtn")' in top and 'ctx.on("sound:cfg", paintSnd)' in top
+    assert "AudioContext" not in top                                              # no sound of its own
+
+
 def test_inventory_and_contract_name_the_new_section():
     inv = _src("INVENTORY.md")
     assert "## 터미널 살아 있게" in inv and "실시간 큰 체결" in inv and "/api/v4/ticks" in inv
