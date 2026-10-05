@@ -52,7 +52,11 @@ DEBATE_EFFORT=low
 `DEBATE_THINKING`과 `DEBATE_MAX_TOKENS`는 비워 둡니다(생각은 Sonnet 5.5 기본, 출력 상한은 생각까지 담는 1,500이 저절로 쓰임).
 
 순서(서버에서):
-1. 키 없이 비용 재 보기: `cd /opt/crypto-bot-research && sudo -u paperbot-debate /opt/paperbot/venv/bin/python -m paperbot.agents.debate once --dry-run` (키·API 호출 없음. 위 네 줄을 넣은 뒤 돌리면 설정 모델·간격·한도로 계산합니다)
+1. 키 없이 비용 재 보기(키·API 호출 없음; 이 명령은 `debate.env`를 읽지 않으므로 네 설정을 명령에 직접 줌, 키는 주지 않음):
+   ```
+   cd /opt/crypto-bot-research && sudo -u paperbot-debate env DEBATE_MODEL=claude-sonnet-5-5 DEBATE_EVERY_MIN=30 DEBATE_MONTHLY_USD_CAP=30 DEBATE_EFFORT=low /opt/paperbot/venv/bin/python -m paperbot.agents.debate once --dry-run
+   ```
+   `설정 모델 claude-sonnet-5-5 … (월 한도 $30)`, `캐시가 잡히면 …`, `생각(thinking) … effort low, 출력 상한 1,500` 줄이 나오면 됩니다.
 2. 키 넣기: `SUDO_EDITOR=nano sudoedit /etc/paperbot/debate.env` (위 네 줄도 이때 고침)
 3. 켜기: `sudo systemctl enable --now paperbot-debate`
 4. 확인: `sudo -u paperbot-debate /opt/paperbot/venv/bin/python -m paperbot.agents.debate status` 의 첫 줄이 `돌고 있음`이고 둘째 줄이 `모델 claude-sonnet-5-5 (effort low) (생각 adaptive(기본)), 30분 간격`. `journalctl -u paperbot-debate -n 20 --no-pager` 에 `회차 0 … 출력 N 토큰(생각 블록 n개 포함), $0.0…`.

@@ -475,7 +475,7 @@ sudo systemctl enable --now paperbot-debate
 sudo -u paperbot-debate /opt/paperbot/venv/bin/python -m paperbot.agents.debate status
 ```
 
-보여야 할 것: `모델 claude-sonnet-5-5, 30분 간격, 마지막 토론 …`과 `이번 달(…) $0.0… / 한도 $30` 줄, 오류 줄 없음. 첫 회차는 켜자마자
+보여야 할 것: `모델 claude-sonnet-5-5 (effort low) (생각 adaptive(기본)), 30분 간격` 줄과 `이번 달(…) $0.0… / 한도 $30` 줄, 오류 줄 없음. 첫 회차는 켜자마자
 돌고 그 뒤 30분마다입니다. 이상하면 `sudo systemctl disable --now paperbot-debate`로 끄고 개발자에게(기록은 남음).
 
 ## 6. 되돌리기 (rollback)
