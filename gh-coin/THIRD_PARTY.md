@@ -128,3 +128,15 @@ GPL·LGPL 저장소와 라이선스 표시가 없는 저장소는 특히 규칙�
 | warren618/AlphaForge · perpsignal (선물 백테스트 현실성) | 이미 보유(다음 봉 시가 체결 · 펀딩 차감 · 청산 · 슬리피지) — 추가 없음 |
 | Fincept Terminal · MarketTerminal · OpenTerminalUI · profitmaker · hypeterminal · bbterm 등 터미널 | 구조 참고만. Tauri/React 재작성·TradingView 위젯(라이선스·값 읽기 불가)은 적용하지 않음 |
 | chart-to-code(VLM) · rl-trading-binance · advanced-ml-crypto-trading-bot 등 학습형 | 4GB GPU·브라우저 앱에서 학습 불가 + 이미지 판독보다 값 계산이 정확 → 적용하지 않음 |
+
+### 2026-10-06 — DeepSeek 정리 문서(올라마 자동매매: 관망·추세 자기수정 · 뉴스·감정 · 20배 · 익절/손절 자체 조정) 적용
+| 출처 | 우리 쪽 적용 (코드 복사 없음 · 개념만) |
+|---|---|
+| chrisworsey55/atlas-gic (ATLAS: 프롬프트·규칙을 한 번에 하나만 고치고 성과로 유지/되돌림 · git 이력) | `lib/holdrules.js` 관망 규칙집 진화: AI 제안 또는 코드 이웃 탐색 → 데스크 재연(코인당 1포지션·동시 상한) → 1SE 이상 개선 + 전·후반 모두 나빠지지 않을 때만 채택 · 버전·이력 |
+| The-R4V3N/Nexus (규칙집 자기 재작성) | 규칙집을 데이터(켜기/끄기·값)로 두고 진화 대상으로 — 자유 글쓰기 재작성은 하지 않음(검증 불가) |
+| mcqx4/ffrdm · Ganador1/FenixAI_tradingBot (연속 손실 휴식 · 낙폭 서킷브레이커 · 공포탐욕 추세 표기 "20 (어제 27, −7)") | 연속 3손실 → 24시간 휴식(1년 실측으로 확인) · 고점 대비 30% → 24시간 신규 진입 중지 · 공포탐욕지수(alternative.me) 표시·AI 자료 |
+| DeepSeek 문서의 관망 조건(ADX·거래량·RSI 중립·과매수/과매도·EMA 배열) · 감정 규칙(공포·탐욕·피로·확신) | 6코인 1년 실측으로 하나씩 시험: 4H 역행·EMA 배열·연속 손실 휴식만 기본 켜짐. ADX<20·거래량·RSI·공포탐욕·펀딩 과열은 효과 없어 기본 꺼짐. '연속 이익 뒤 축소'는 손해(+0.23R 구간을 깎음) → 미채택 |
+| Yaass1ne/mt5-ftmo-trader (LLM 은 거부·조정만) · lablab finagent (가격 부등호 명시 · 진입가 재기준) · azkpeilbeiro/crypto-trading-ai-smart-risk-management-bot (ATR 동적 TP/SL) | 포지션 관리 하이브리드: 코드 초안(+1R → 익절 풀고 ATR×3 추적, 실측 −0.046R → −0.002R) → AI 결정 → 코드 검증(손절 넓히기 금지 등) → '조정 안 했다면'과 ΔR 채점 → 누적 손해면 3일 중지 |
+| ygwyg/MAHORAGA (정체 포지션 정리) | 시험 결과 효과 없음(−0.046 → −0.046R) → 미채택 |
+| tripolskypetr/backtest-kit (@backtest-kit/ollama: format=JSON 스키마) · Ollama structured outputs | `lib/olschema.js`: 로컬 모델 호출에 JSON 스키마(보유 코인·결정 enum). 실측: 포지션 관리 llama3.2:3b 사용 가능 0/5 → 5/5 · 매매법 설계 JSON 15/18 → 18/18(형식 통과는 15 → 15) |
+| FFRDM 신뢰도→레버리지 표 · Hyperliquid-Auto-Trader 20~100x | 적용하지 않음 — 레버리지는 손절폭에서 역산(최소 20배, 손절 ≤ 청산거리 40%)하는 사용자 프레임워크 유지 |

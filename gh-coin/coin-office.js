@@ -2855,17 +2855,18 @@ export async function traderDecision({sym = "BTCUSDT", interval = "1h", onStep =
   // 보유 포지션: ① 차트에 그린 롱/숏 포지션 도구(내 손매매 계획) ② 뉴럴 데스크 데모 포지션
   let P = null; try { const dr = JSON.parse(localStorage.getItem(`nuri:term:draw:binancef:${sym}`) || "[]").filter(d => d && !d.hidden && (d.type === "long" || d.type === "short") && d.pts?.[2]).slice(-1)[0];
     if (dr){ const rd = v => +(+v).toPrecision(8); P = {side: dr.type === "long" ? 1 : -1, entry: rd(dr.pts[0].p), sl: rd(dr.pts[1].p), tp: rd(dr.pts[2].p), src: "차트에 그린 포지션 도구"}; } } catch(e){}
-  if (!P && N) try { const st = N.state(), np = [...(st.pos || []), ...(st.traders || []).flatMap(t => Array.isArray(t.pos) ? t.pos : [])].find(x => x.sym === sym); if (np) P = {side: np.side, entry: np.entry, sl: np.sl, tp: np.tp, src: `뉴럴 데스크 데모(${np.name})`, be: np.be}; } catch(e){}
+  if (!P && N) try { const st = N.state(), np = [...(st.pos || []), ...(st.traders || []).flatMap(t => Array.isArray(t.pos) ? t.pos : [])].find(x => x.sym === sym); if (np) P = {side: np.side, entry: np.entry, sl: np.sl, tp: np.tp ?? null, rDist: np.rDist, run: !!np.run, src: `뉴럴 데스크 데모(${np.name})`, be: np.be}; } catch(e){}
   const rules = [], D = {action: "HOLD", symbol: sym, side: "", size_pct: 0, entry_ref: price, stop_loss: null, take_profit: null, risk_reward: null, regime: R.regime.key === "RANGE" ? "RANGE" : R.regime.key, rationale: "", confidence: 0.5};
   const sizeOf = slPct => +Math.min(300, 1 / Math.max(0.05, slPct)).toFixed(1);   // 1회 손실 = 계좌의 1% → 포지션(명목) = 1% ÷ 손절폭
   if (P){   // ── 관리·청산 (규칙 3·4) ──
-    const risk = Math.abs(P.entry - P.sl) || atr, r = (price - P.entry) * P.side / risk, trail = +(price - P.side * 2 * atr).toPrecision(7);
-    D.side = P.side > 0 ? "LONG" : "SHORT"; D.entry_ref = P.entry; D.stop_loss = P.sl; D.take_profit = P.tp; D.risk_reward = +(Math.abs(P.tp - P.entry) / risk).toFixed(2);
-    const hitSl = (price - P.sl) * P.side <= 0, hitTp = (price - P.tp) * P.side >= 0, flip = daily?.dir === -P.side && R.regime.key !== "TREND" && r < 0.5;
+    const risk = P.rDist || Math.abs(P.entry - P.sl) || atr, r = (price - P.entry) * P.side / risk, trail = +(price - P.side * 2 * atr).toPrecision(7);
+    D.side = P.side > 0 ? "LONG" : "SHORT"; D.entry_ref = P.entry; D.stop_loss = P.sl; D.take_profit = P.tp; D.risk_reward = P.tp != null ? +(Math.abs(P.tp - P.entry) / risk).toFixed(2) : null;
+    const hitSl = (price - P.sl) * P.side <= 0, hitTp = P.tp != null && (price - P.tp) * P.side >= 0, flip = daily?.dir === -P.side && R.regime.key !== "TREND" && r < 0.5;
     if (hitSl){ D.action = "EXIT"; D.rationale = `손절선 ${P.sl} 도달(현재 ${price}) — 규칙대로 청산`; D.confidence = 0.95; }
     else if (hitTp){ D.action = "EXIT"; D.rationale = `목표가 ${P.tp} 도달 — 청산`; D.confidence = 0.9; }
     else if (flip){ D.action = "EXIT"; D.rationale = `레짐 전환: 일봉 추세가 ${daily.label}로 포지션과 반대이고 아직 +0.5R 미만(${r.toFixed(2)}R) — 조기 정리`; D.confidence = 0.6; }
     else if (r >= 1 && !P.be){ D.action = "REDUCE"; D.size_pct = 50; D.stop_loss = +P.entry.toPrecision(7); D.rationale = `+${r.toFixed(2)}R 도달 — 절반 익절하고 손절을 본전(${D.stop_loss})으로`; D.confidence = 0.8; }
+    else if (P.run){ D.action = "HOLD"; D.rationale = `익절을 풀고 손절을 ATR×3 뒤에서 따라가는 중(${r >= 0 ? "+" : ""}${r.toFixed(2)}R · 손절 ${P.sl}) — 추세가 끝날 때까지 보유`; D.confidence = 0.7; }
     else { D.action = "HOLD"; if (r >= 1.5 && (trail - P.sl) * P.side > 0) D.stop_loss = trail; D.rationale = `보유 유지(${r >= 0 ? "+" : ""}${r.toFixed(2)}R)${D.stop_loss !== P.sl ? ` · 추적 손절을 ${D.stop_loss}(2 ATR)로 올림` : ""}`; D.confidence = 0.65; }
     rules.push(["포지션 출처", P.src], ["현재 손익", `${r >= 0 ? "+" : ""}${r.toFixed(2)}R`], ["추적 손절(2 ATR)", String(trail)]);
   } else {   // ── 진입 전·진입 (규칙 1·2) ──

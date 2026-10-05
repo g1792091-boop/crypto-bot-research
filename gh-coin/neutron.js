@@ -35,7 +35,8 @@ export async function snapshot() {
   return {
     v: 1, t: Date.now(), app: "GH Coin",
     neural: { equity: s.equity, bankroll: s.bankroll, pnl: s.pnl, drawdown: s.drawdown, fills: s.fills, winRate: s.winRate, heat: s.heat, dayPnl: s.dayPnl, riskMode: s.riskMode,
-      positions: (s.pos || []).map(p => ({ sym: p.sym, side: p.side > 0 ? "long" : "short", lev: p.lev, entry: p.entry, sl: p.sl, tp: p.tp, strategy: p.name, riskPct: p.riskPct })),
+      positions: (s.pos || []).map(p => ({ sym: p.sym, side: p.side > 0 ? "long" : "short", lev: p.lev, entry: p.entry, sl: p.sl, tp: p.tp ?? null, running: !!p.run, strategy: p.name, riskPct: p.riskPct })),
+      mood: s.mood || null, fng: s.fng || null, hold: s.hold ? { ver: s.hold.book?.ver, rules: s.hold.rules, eval: s.hold.eval, log: s.hold.log, prop: s.hold.prop } : null, adj: s.adj ? { stat: s.adj.stat, kind: s.adj.kind, log: s.adj.log, off: s.adj.off, schema: s.adj.schema } : null,
       regime: s.regime, news: s.news, review: s.review, review2: s.review2, research: s.research, whale: s.whale, cfg: s.cfg, dayN: s.dayN, calls: s.calls || null, engine: (s.engine || []).slice(0, 40), setups: s.setups || [], evo: s.evo, trades: (s.trades || []).slice(0, 40), feed: (s.feed || []).slice(0, 20) },
     brain, verdicts, demo: book,
     policy: { framework: ENG.FW, live: limits, rules: ["AI 는 주문하지 않는다(주문은 live.js 코드가 한도·승인 안에서만)", "실거래 기본 꺼짐 · 테스트넷 먼저", "최소 20배·손절 ≤ 청산거리 40%·1회 리스크 0.5~1%·동시 리스크 4%·일일 손실 3%"] },
@@ -53,6 +54,7 @@ export function vaultNotes(S) {
   out["00 홈.md"] = `# 🧠 GHCoin 뇌 (뉴트론)\n_자동 생성 · ${now} · 앱이 10분마다 다시 씀 (직접 고친 내용은 덮어써짐 → 메모는 [[받은 편지함 사용법]] 참고)_\n\n`
     + `## 지금\n- 자본 $${n.equity} (시작 $${n.bankroll}) · 낙폭 ${n.drawdown}% · 거래 ${n.fills}회 승률 ${n.winRate}% · 동시 리스크 ${n.heat}%\n- 뇌 지능 ${B.iq.score}/100 (정확도 ${B.iq.acc}% · ${B.iq.n}판) · 기억 ${B.mem.length}개\n\n`
     + `## 지도\n- 코인: ${coins.map(c => `[[코인/${c}|${c}]]`).join(" · ")}\n- 지식: ${types.map(t => `[[지식/${t}|${t}]]`).join(" · ")}\n- 뇌: [[뇌/핵심 규칙·교훈·추천 채점]] · 프롬프트: [[프롬프트/차트 분석 프롬프트]]
+- 관망·감정: [[뇌/관망 규칙·감정·조정 채점]]
 - 매매법: [[매매법/전략 엔진]] · [[매매법/매매법 진화]] · [[매매법/검증된 셋업]]\n- 리스크: [[리스크/정책]] · [[리스크/학습된 리스크·시간대]]\n- 에이전트 팀: [[에이전트팀/데모 전략]] · [[에이전트팀/팀 판정]]\n- 일지: [[일지/${day(S.t)}]]\n- ✍ 내가 쓰는 메모(→ 뇌가 학습): [[내 메모/사용법]]\n`;
   for (const t of types) out[`지식/${t}.md`] = `# ${t}\n[[00 홈]]\n\n` + B.mem.filter(m => (m.type || "관찰") === t).slice(0, 120).map(m => `- ${m.text} ${coinOf(m) ? `[[코인/${coinOf(m)}|${coinOf(m)}]]` : ""}${m.regime ? ` #${String(m.regime).replace(/\s/g, "_")}` : ""} _(가중 ${m.w}·확인 ${m.hits}회·${m.model || "?"})_`).join("\n");
   for (const c of coins) { const sym = c + "USDT", id = c.toLowerCase(), rg = n.regime?.[sym], V = S.verdicts;
@@ -69,6 +71,35 @@ export function vaultNotes(S) {
   const hours = Object.entries(B.hours || {}).filter(([, h]) => h.n >= 3).map(([hr, h]) => `| ${hr}시 | ${h.n} | ${Math.round(h.wins / h.n * 100)}% | ${h.pnl.toFixed(2)} |`).join("\n");
   out["리스크/학습된 리스크·시간대.md"] = `# 학습된 리스크·시간대\n[[00 홈]] · [[리스크/정책]]\n\n## 시간대별 성적\n| 시간 | 거래 | 승률 | 손익$ |\n|---|---|---|---|\n${hours || "| — | | | |"}\n\n## 손절 함정 (비슷한 자리 회피)\n` + ((B.traps || []).slice(0, 30).map(t => `- ${esc(t.coin || "")} ${esc(t.regime || "")} ${t.dir > 0 ? "롱" : "숏"} ROE ${t.roe ?? ""}`).join("\n") || "- (없음)");
   { const mem = B.mem || [], st = B.st || {}, C = n.calls || {}, ln = (t) => mem.filter(m => m.type === t).slice(0, 12).map(m => `- ${esc(m.text)} _(강도 ${m.w} · ${m.hits}회)_`).join("\n") || "- 아직 없음";
+    { const H = n.hold, M = n.mood, A = n.adj;
+      out["뇌/관망 규칙·감정·조정 채점.md"] = `# 🧘 관망 규칙집 · 🎭 감정 · 🗂 익절·손절 조정
+[[00 홈]]
+
+`
+        + (M ? `## 데스크 감정 (코드 계산)
+- 공포 ${M.fear}/10 · 탐욕 ${M.greed}/10 · 피로 ${M.fatigue}/10(${M.L}연패) · 확신 ${M.conf}/10${n.fng ? ` · 공포탐욕지수 ${n.fng.v}(${n.fng.label}, 어제 ${n.fng.y ?? "?"})` : ""}
+${(M.notes || []).map(x => "- " + x).join("
+")}
+
+` : "")
+        + (H ? `## 관망 규칙집 v${H.ver}
+${(H.rules || []).map(r => `- ${r.on ? "✅" : "⬜"} ${r.on ? r.text : r.label}${r.score?.n ? ` (관망 채점: 손절 먼저 ${r.score.right}/${r.score.n})` : ""}`).join("
+")}
+
+`
+          + (H.eval ? `지난 점검: 데스크 재연 ${H.eval.base.all.n}건 평균 ${H.eval.base.all.mean}R · 전반 ${H.eval.base.h1.mean} / 후반 ${H.eval.base.h2.mean}
+
+` : "")
+          + `### 변경 이력
+${(H.log || []).map(x => `- ${new Date(x.t).toLocaleString("ko-KR")} v${x.ver} ${x.kind} (${x.src}): ${x.e} — ${x.why}`).join("
+") || "- 아직 없음"}
+
+` : "")
+        + (A ? `## 익절·손절 조정 채점 (조정 안 했다면과 비교한 ΔR)
+${Object.entries(A.stat || {}).map(([k, v]) => `- ${k}: ${v.n}건 누적 ${v.dR}R`).join("
+") || "- 아직 없음"}${A.off ? "
+- ⛔ AI 가격 조정 일시 중지 중(손해 누적)" : ""}
+` : ""); }
     out["뇌/핵심 규칙·교훈·추천 채점.md"] = `# 🧠 뇌가 진입 전에 쓰는 것\n[[00 홈]] · 누적: 교훈 ${st.lessons || 0} · 함정 ${st.traps || 0} · 승격 ${st.promoted || 0} · 진입 차단 ${st.avoided || 0} · 리스크 절반 ${st.softened || 0} · 망각 ${st.forgot || 0}\n\n## 핵심 규칙 (같은 결과 3회↑)\n${ln("핵심")}\n\n## 교훈\n${ln("교훈")}\n\n## ⚡ 손매매 추천 채점 (시장가 · 실시간 진입)\n익절1 먼저 ${C.wr ?? "—"}% · 채점 ${C.done || 0}건 · 합계 ${C.sumR || 0}R · 추적 중 ${C.open || 0}\n\n| 코인 | 방향 | 출처 | 등급 | 결과 | R |\n|---|---|---|---|---|---|\n`
       + (C.list || []).map(c => `| ${c.ko} | ${c.side > 0 ? "롱" : "숏"} | ${c.src} | ${c.grade || ""} | ${c.res || "추적 중"} | ${c.R ?? ""} |`).join("\n"); }
   out["프롬프트/차트 분석 프롬프트.md"] = `# 차트 분석 프롬프트 (Claude Code · Claudian · OpenClaw 에서 그대로 붙여 쓰기)

@@ -6,6 +6,15 @@
 // 예시는 코드가 검증한 실제 유효 JSON 이고, 호출마다 '이번 재료'를 바꿔 같은 답만 반복하지 않게 한다.
 const J = o => JSON.stringify(o);
 const cond = (left, op, right) => ({ left, op, right: String(right) });
+// Ollama 구조화 출력(format 에 JSON 스키마 · tripolskypetr/backtest-kit 의 'JSON 스키마 강제' 개념): 모델이 이 모양 밖의 글자를 아예 못 쓰게 한다.
+const COND_S = { type: "object", properties: { left: { type: "string" }, op: { type: "string", enum: [">", "<", ">=", "<=", "crosses_above", "crosses_below"] }, right: { type: "string" } }, required: ["left", "op", "right"] };
+const SIDE_S = { type: "object", properties: { logic: { type: "string", enum: ["all", "any"] }, conditions: { type: "array", items: COND_S, minItems: 1, maxItems: 4 } }, required: ["logic", "conditions"] };
+export const SPEC_SCHEMA = { type: "object", properties: {
+  name: { type: "string" },
+  indicators: { type: "array", minItems: 1, maxItems: 5, items: { type: "object", properties: { id: { type: "string" }, type: { type: "string" }, length: { type: "integer" }, mult: { type: "number" }, expr: { type: "string" } }, required: ["id", "type"] } },
+  long_entry: SIDE_S, short_entry: SIDE_S, long_exit: SIDE_S, short_exit: SIDE_S,
+  risk: { type: "object", properties: { stop_loss_pct: { type: "number" }, take_profit_pct: { type: "number" } }, required: ["stop_loss_pct", "take_profit_pct"] } },
+  required: ["name", "indicators", "long_entry", "short_entry", "risk"] };
 export const EXAMPLES = {
   trend: { name: "EMA 추세 + RSI 50 재돌파", indicators: [{ id: "ef", type: "ema", length: 50 }, { id: "es", type: "ema", length: 200 }, { id: "r", type: "rsi", length: 14 }],
     long_entry: { logic: "all", conditions: [cond("ef", ">", "es"), cond("r", "crosses_above", 50)] }, short_entry: { logic: "all", conditions: [cond("ef", "<", "es"), cond("r", "crosses_below", 50)] },

@@ -95,6 +95,14 @@ const TOOLS = [
       return rows.length ? rows.map(d => { const { meta, ...j } = d; return `${new Date(meta?.t || 0).toLocaleString("ko-KR")} ${J(j)}`; }).join("\n") : "결정 기록 없음 — 차트 터미널 [📖 차트 AI → 트레이더 결정] 또는 채팅 '트레이더 결정 해줘'"; } },
   { name: "neutron_strategy_review", description: "전략 분석 5항목 최근 기록: ① 레짐 적합성 ② 리스크 노출 ③ 과최적화 가능성 ④ 실행 현실성 ⑤ 개선 방향 (코드 측정값 + 판정)", input: { limit: { type: "number" } },
     run: a => { const s = state(), L = s.verdicts.stratReviews || []; return L.length ? L.slice(0, a.limit || 2).map(r => `# ${r.name} (${r.market} ${r.tf}) · ${r.trades}건 · 손익비 ${r.pf} · 건전성 ${r.score}/4\n${r.rows.map(x => `${x[0]}: ${x[1]} → ${x[2]}`).join("\n")}${r.text ? "\n해설: " + r.text : ""}`).join("\n\n") : "분석 기록 없음 — 채팅 '전략 분석해줘' 또는 터미널 [📖 차트 AI → 전략 분석]"; } },
+  { name: "neutron_hold_rules", description: "🧘 관망 규칙집(버전·켜진 규칙·지난 점검 숫자·변경 이력: 코드/AI 가 고치고 데스크 재연으로 검증해 채택/기각) + 🎭 데스크 감정(공포·탐욕·피로·확신, 코드 계산) + 공포탐욕지수 + 🗂 익절·손절 조정 채점(ΔR). 규칙 수정 제안은 neutron_propose_experiment 로", input: {},
+    run: () => { const n = state().neural || {}, H = n.hold, M = n.mood, A = n.adj;
+      return [M ? `감정: 공포 ${M.fear}/10 · 탐욕 ${M.greed}/10 · 피로 ${M.fatigue}/10(${M.L}연패) · 확신 ${M.conf}/10${(M.notes || []).length ? " · " + M.notes.join(" · ") : ""}` : "감정: 없음",
+        n.fng ? `공포탐욕지수 ${n.fng.v}(${n.fng.label}) · 어제 ${n.fng.y ?? "?"}` : "공포탐욕지수: 없음",
+        H ? `관망 규칙집 v${H.ver}: ${(H.rules || []).map(r => `${r.on ? "✅" : "⬜"}${r.on ? r.text : r.label}`).join(" · ")}` : "관망 규칙집: 없음",
+        H?.eval ? `지난 점검: 데스크 재연 ${H.eval.base.all.n}건 평균 ${H.eval.base.all.mean}R (전반 ${H.eval.base.h1.mean} / 후반 ${H.eval.base.h2.mean}) · 후보: ${(H.eval.top || []).map(x => `${x.ok ? "✅" : "✗"}${x.e}(${x.why})`).join(" | ")}` : "",
+        `이력: ${(H?.log || []).slice(0, 6).map(x => `v${x.ver} ${x.kind}(${x.src}) ${x.e}`).join(" | ") || "없음"}`,
+        A ? `조정 채점: ${Object.entries(A.stat || {}).map(([k, v]) => `${k} ${v.n}건 ${v.dR}R`).join(" · ") || "없음"}${A.off ? " · AI 가격 조정 중지 중" : ""}` : ""].filter(Boolean).join("\n"); } },
   { name: "neutron_funding_scan", description: "거래소 간 펀딩비 실시간 스캔(바이낸스·바이빗·OKX·비트겟): 전 거래소 과열·거래소 간 차이·차익 후보(정보용)", input: { symbol: { type: "string", description: "BTCUSDT 등" } }, required: ["symbol"],
     run: async a => { const F = await import(new URL("../lib/fundscan.js", import.meta.url)); return F.fundingText(await F.fundingScan(String(a.symbol || "BTCUSDT").toUpperCase(), async u => (await fetch(u, { signal: AbortSignal.timeout(8000) })).json())); } },
   // brain-mcp 호환 노트 도구 (옵시디언 볼트)
