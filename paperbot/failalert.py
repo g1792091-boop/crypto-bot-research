@@ -32,6 +32,9 @@ JOBS_KO = {
     "paperbot-rehearsal.service": ("판정 미리 연습(매주 수요일)",
                                    "다음 주 수요일 12:30에 다시 돎 (진짜 판정에는 영향 없음)\n"
                                    "지금 다시: sudo systemctl start paperbot-rehearsal"),
+    "paperbot-shadow200.service": ("딥시크 200 그림자 시험(기록만)",
+                                   "15분마다 다시 돎 (빠진 부분은 다음 실행이 스스로 메움, 계좌·주문과 무관)\n"
+                                   "지금 상태: cd /opt/crypto-bot-research && sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.shadow200 status"),
 }
 RESULT_KO = {"exit-code": "오류로 끝남", "timeout": "시간 제한을 넘김", "signal": "강제로 멈춰짐",
              "core-dump": "강제로 멈춰짐", "oom-kill": "메모리 한도를 넘김", "watchdog": "응답 없음"}

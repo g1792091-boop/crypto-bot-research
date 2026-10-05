@@ -98,6 +98,8 @@ install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot/obsidian
 install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot/failalert
 # the weekly checkpoint rehearsal's files and its own bar cache (deploy/paperbot-rehearsal.service)
 install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot/rehearsal
+# the DeepSeek-200 forward shadow test's database (docs: research/deepseek200/FORWARD_TEST_PLAN.md): the only folder that job writes
+install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot/shadow200
 install -d -o root -g paperbot -m 750 /etc/paperbot
 
 echo "== code version"
@@ -133,7 +135,7 @@ if [ "$REPO_DIR" != "$APP" ]; then
   # Scheduled jobs (nightly check, backups, checkpoint, monthly re-check) are not stopped for the swap:
   # wait for a running one to finish so it never reads a half-swapped tree.
   JOBS="paperbot-daily3.service paperbot-backup.service paperbot-checkpoint.service paperbot-labmonthly.service \
-paperbot-offsite.service paperbot-rehearsal.service paperbot-obsidian.service"
+paperbot-offsite.service paperbot-rehearsal.service paperbot-obsidian.service paperbot-shadow200.service"
   n=0
   # A oneshot job reports "activating" (not "active") while it runs, so is-active alone never waits for it.
   while busy="$(for j in $JOBS; do case "$(systemctl show -p ActiveState --value "$j" 2>/dev/null)" in
@@ -220,6 +222,7 @@ for u in paperbot-live3.service paperbot-dash.service paperbot-daily3.service pa
          paperbot-liq.service paperbot-labmonthly.service paperbot-labmonthly.timer \
          paperbot-checkpoint.service paperbot-checkpoint.timer paperbot-offsite.service paperbot-offsite.timer \
          paperbot-rehearsal.service paperbot-rehearsal.timer paperbot-obsidian.service paperbot-obsidian.timer \
+         paperbot-shadow200.service paperbot-shadow200.timer \
          paperbot-failed@.service paperbot-debate.service \
          paperbot-ghcoin.service paperbot-tgtrades.service paperbot-executor.service; do
   install -m 644 "$APP/deploy/$u" /etc/systemd/system/$u
@@ -236,6 +239,8 @@ if ! systemctl is-enabled --quiet paperbot-rehearsal.timer 2>/dev/null; then
 fi
 # The Obsidian export is read-only and free (no key, no network, no order): its nightly timer is switched on here.
 systemctl enable --now paperbot-obsidian.timer >/dev/null 2>&1 || echo "obsidian timer could not be enabled: sudo systemctl enable --now paperbot-obsidian.timer"
+# The DeepSeek-200 shadow test is record-only (public bars, no key, no order, no account, its own database): its timer is switched on here.
+systemctl enable --now paperbot-shadow200.timer >/dev/null 2>&1 || echo "shadow200 timer could not be enabled: sudo systemctl enable --now paperbot-shadow200.timer"
 # The debate room is installed only: never enabled, started or restarted here (it spends the owners' own API money).
 if systemctl is-active --quiet paperbot-debate 2>/dev/null; then
   echo "paperbot-debate is running the previous code; restart it yourself when ready:"

@@ -710,7 +710,7 @@ def test_backup_unit_copies_every_database_read_only_and_fails_on_a_failed_copy(
     with open(BACKUP_SH, encoding="utf-8") as fh:
         script = fh.read()
     # the small databases first; the order executor's records (mainnet and testnet) are in exec/
-    assert "for f in agents3 inbox liq checkpoint exec/executor exec/executor-testnet daily3 paper3; do" in script
+    assert "for f in agents3 inbox liq checkpoint exec/executor exec/executor-testnet shadow200/shadow200 daily3 paper3; do" in script
     assert "VACUUM INTO" in script and "sqlite3 -bail -readonly" in script and ".backup" not in script.split(
         "\nlib=")[1]
     lib, bk = tmp_path / "lib", tmp_path / "bk"

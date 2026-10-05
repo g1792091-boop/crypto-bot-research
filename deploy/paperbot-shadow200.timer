@@ -1,0 +1,9 @@
+[Unit]
+Description=paperbot DeepSeek-200 forward shadow test: every 15 minutes, 2 minutes after the bars close
+
+[Timer]
+OnCalendar=*-*-* *:02,17,32,47:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

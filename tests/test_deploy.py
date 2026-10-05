@@ -52,12 +52,12 @@ def test_failed_scheduled_jobs_send_one_korean_warning():
 
 def test_the_owners_check_of_the_units_shows_only_the_settings():
     """The owners' check after a deploy (`systemctl cat <the five jobs> | grep -E ...`): one line per setting, no
-    comment that only mentions one (6 failure hooks with the weekly rehearsal and the Obsidian export, 1 pinned Claude Code, 1 clean stop)."""
+    comment that only mentions one (7 failure hooks with the weekly rehearsal, the Obsidian export and the shadow test, 1 pinned Claude Code, 1 clean stop)."""
     text = "\n".join(f"# /etc/systemd/system/{u}\n" + (DEPLOY / u).read_text(encoding="utf-8") for u in FA.JOBS_KO)
     for pat in (r"OnFailure|DISABLE_AUTOUPDATER|SuccessExitStatus",
                 r"^(OnFailure=|Environment=DISABLE_AUTOUPDATER|SuccessExitStatus=)"):
         got = [ln for ln in text.splitlines() if re.search(pat, ln)]
-        assert len(got) == 8 and sum("OnFailure" in ln for ln in got) == 6 == len(FA.JOBS_KO), (pat, got)
+        assert len(got) == 9 and sum("OnFailure" in ln for ln in got) == 7 == len(FA.JOBS_KO), (pat, got)
 
 
 def test_agents_unit_keeps_claude_code_from_updating_itself():
@@ -168,3 +168,37 @@ def test_weekly_checkpoint_rehearsal_unit_is_sandboxed_and_never_the_real_verdic
         "echo \"weekly checkpoint rehearsal installed but off; to turn it on once: sudo systemctl enable --now "
         "paperbot-rehearsal.timer\"", ""))
     assert "paperbot-rehearsal.service" in FA.JOBS_KO
+
+
+def test_shadow200_unit_is_record_only_and_sandboxed():
+    """deploy/paperbot-shadow200.service/.timer: the DeepSeek-200 forward shadow test. No key, no token (no EnvironmentFile,
+    /etc/paperbot hidden), none of the trading databases visible, its own folder the only writable path, the failure
+    warning through paperbot-failed@, installed and its timer enabled by install.sh."""
+    u = _unit("paperbot-shadow200.service")
+    svc, unit = u["[Service]"], u["[Unit]"]
+    assert "OnFailure=paperbot-failed@%n.service" in unit
+    assert "User=paperbot" in svc and "Group=paperbot" in svc and "Type=oneshot" in svc
+    assert not any(ln.startswith(("EnvironmentFile=", "PassEnvironment=")) for ln in svc)
+    ex = next(ln for ln in svc if ln.startswith("ExecStart="))
+    assert "-m paperbot.shadow200 run " in ex and "--db /var/lib/paperbot/shadow200/shadow200.db" in ex
+    paths = {k: next(ln for ln in svc if ln.startswith(k + "=")).split("=", 1)[1].split()
+             for k in ("ReadWritePaths", "InaccessiblePaths")}
+    assert paths["ReadWritePaths"] == ["/var/lib/paperbot/shadow200"]
+    for hidden in ("-/etc/paperbot", "-/var/lib/paperbot/paper3.db", "-/var/lib/paperbot/daily3.db", "-/var/lib/paperbot/agents3.db",
+                   "-/var/lib/paperbot/inbox.db", "-/var/lib/paperbot/liq.db", "-/var/lib/paperbot/exec", "-/var/backups/paperbot"):
+        assert hidden in paths["InaccessiblePaths"], hidden
+    for k in ("NoNewPrivileges=yes", "PrivateTmp=yes", "ProtectSystem=strict", "Nice=15", "IOSchedulingClass=idle"):
+        assert k in svc, k
+    assert any(ln.startswith("MemoryMax=") for ln in svc) and any(ln.startswith("TimeoutStartSec=") for ln in svc)
+    t = _unit("paperbot-shadow200.timer")
+    assert "OnCalendar=*-*-* *:02,17,32,47:00 UTC" in t["[Timer]"] and "WantedBy=timers.target" in t["[Install]"]
+    inst = (DEPLOY / "install.sh").read_text(encoding="utf-8")
+    loop = re.search(r"for u in ([^;]*); do\s+install -m 644", inst).group(1).replace("\\", " ").split()
+    assert {"paperbot-shadow200.service", "paperbot-shadow200.timer"} <= set(loop)
+    assert "install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot/shadow200" in inst
+    jobs = re.search(r'JOBS="([^"]*)"', inst).group(1).replace("\\", " ").split()
+    assert "paperbot-shadow200.service" in jobs                              # a deploy waits for a running one
+    assert "systemctl enable --now paperbot-shadow200.timer" in inst
+    assert "paperbot-shadow200.service" in FA.JOBS_KO
+    sh = (DEPLOY / "paperbot-backup.sh").read_text(encoding="utf-8")
+    assert "shadow200/shadow200" in sh                                       # its database is in the nightly backup

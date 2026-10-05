@@ -68,7 +68,7 @@
 ## 3. 어디서 돌리나, 얼마나 드나 (측정)
 
 ### 3-1. 돌리는 곳
-- **프로세스:** 새 systemd 작업 `paperbot-shadow200`(한 번짜리, 타이머로 15분마다 `:02, :17, :32, :47` UTC). live 봇과 **다른 프로세스**입니다. `paperbot` 사용자, `Nice=15`, `CPUWeight=10`, `IOSchedulingClass=idle`, `MemoryMax=512M`(다른 작업들과 같은 패턴).
+- **프로세스:** 새 systemd 작업 `paperbot-shadow200`(한 번짜리, 타이머로 15분마다 `:02, :17, :32, :47` UTC). live 봇과 **다른 프로세스**입니다. `paperbot` 사용자, `Nice=15`, `CPUWeight=10`, `IOSchedulingClass=idle`, `MemoryMax=768M`(다른 작업들과 같은 패턴, 측정 최대 약 230MB).
 - **DB:** 새 파일 `/var/lib/paperbot/shadow200/shadow200.db`(SQLite, WAL). **쓰는 쪽은 이 작업 하나뿐**이고, 시작할 때 DB 파일에 `flock`을 걸어 두 개가 동시에 쓰지 못하게 합니다(`live3.single_runner_lock`과 같은 방식). `paper3.db`는 **열지도 않습니다**(서비스 설정에서 `InaccessiblePaths`로 막음). 키 파일(`/etc/paperbot/*.env`)도 막아, **구조적으로** 텔레그램·주문·계좌 접근이 불가능하게 합니다.
 - **자료:** 바이낸스 공개 시세(`/fapi/v1/klines`, 키 없음)에서 봉을 받아 **DB에 쌓아 둡니다**(봉마다 처음 본 시각 기록). 이미 있는 `checkpoint.py`가 하는 일과 같은 종류이고, 서버 IP 호출량은 15분마다 24회 안팎입니다. 한 번 몰아서 받는 건 처음 시작할 때뿐입니다(요청 사이 0.2초 쉼, live의 `fetch_5m`과 같음).
 - **기록:** 신호는 계산하는 순간 **고칠 수 없는 표**(append-only)에 코드 해시·계산 시각과 함께 저장합니다. 가상 거래는 저장된 신호와 저장된 봉으로 잠긴 엔진(`run_backtest`)이 **처음부터 다시 계산**합니다(같은 입력이면 같은 출력이라, 실행이 몇 번 빠져도 다음 실행이 메움). 아직 안 끝난 거래는 "열림"으로 두고 끝나야 확정합니다.
@@ -85,7 +85,7 @@
 | 가상 거래 계산(설정 88개, 90일, 코인 1개) | 0.06~0.23초 | — |
 | 메모리 | 프로세스 최대 약 **170~200MB**(기존 신호 일감은 177MB) | 서버 8GB |
 | 동전 던지기 봇 | 15분봉 한 봇·코인 1개·60일에 2.4ms. **최종 판정 때만** 돌림(5장, 생존 30개 × 코인 6 × 봇 2,000 ≈ 약 10~15분 CPU) | 가지치기 단계에서는 안 돌림 |
-| DB 크기 | 180일 기준 100MB 이하(봉 약 30만 줄, 거래 약 33만 줄) | — |
+| DB 크기 | 합성 자료로 22일째 23MB, 180일째 약 80~100MB로 추정(밤 백업·서버 밖 백업 목록에 넣음) | — |
 
 - **한 가지 주의(측정으로 발견):** 정의 `F7_RF_TRIPLE`·`F7_RF_ONLY`(Range Filter, 설정 16개)는 값이 **처음 봉부터 이어서 계산하는 상태 기계**여서, "최근 N봉만 잘라서" 계산하면 가끔 다릅니다(4시간 DOGE에서 200봉 중 2~4봉, 1시간 ETH는 600봉 창에서 1봉 다름). 나머지 42개 정의는 창 길이 1,200~4,800봉 시험(ETH, 봉 4개)과 3,000봉 시험(코인 4개 × 봉 4개 × 200봉 × 정의 44개 = 약 14만 번 비교, 이 중 약 5,000번이 실제로 신호가 난 봉)에서 **차이 0**이었습니다. 어긋난 것은 위 F7뿐입니다. 그래서 **창을 자르지 않고 고정된 시작점부터 이어서** 계산합니다(시작점 = 2026-06-01 00:00 UTC, 5장에 고정). 이렇게 하면 실행이 몇 번 빠지거나 나중에 채워 계산해도 **같은 입력에서 항상 같은 신호**가 나옵니다. 5년 시험은 시리즈 처음부터였으므로 F7의 값은 5년 때와 미세하게 다를 수 있습니다(알려진 차이, 문서에 적음). 대가로 자료가 길어질수록 계산이 늘어납니다(위 표의 "처음 → 180일째").
 - **다른 발견:** 정의 `F14_SMT`는 BTC 봉을 **시각으로 맞춰** 넘기지 않으면(비어 있으면) 예외로 44개 전부를 못 냅니다(내 측정 코드의 정렬 실수로 우연히 발견). 2단계 코드는 BTC 봉을 시각으로 자르고, 코인·봉마다 예외를 따로 잡아 한 곳의 오류가 다른 곳을 막지 않게 합니다. `lib_c.py`는 고치지 않습니다.
@@ -228,3 +228,8 @@ J1 "후보"만 대상(m₂개). 5-4의 1·4·5와 동일하게, p ≤ 0.05 ÷ m�
 ## 부록. 이 계획이 근거한 파일
 
 `docs/paper-v3-rules.md`, `docs/paper-v3-rules-addendum.md`(Q1~Q10), `docs/paper-v3-rules-change-1.md`, `docs/server-setup-v3.md`(13-5), `docs/extra-accounts.md`, `docs/agent-rooms.md`, `paperbot/runinfo.py`(TRADING_FILES·EXTRA_FILES), `paperbot/extras.py`, `paperbot/newlab_live.py`, `paperbot/agents/newlab_signals.py`, `paperbot/live3.py`, `paperbot/sigservice.py`, `paperbot/checkpoint.py`, `deploy/install.sh`, `deploy/*.service`, `research/deepseek200/{PREREG_DEEPSEEK200.md, lib_c.py, RESULTS_DEEPSEEK200.md, out/results.csv}`, `third_party/sweep/harness/vendor/engine.py`.
+
+## 9. 2단계 결과 (2026-10-05 구현, 서버는 건드리지 않음)
+- 두 분 결정(기본값): K = 30, 4시간 78개 관찰용, 실패 알림 유지(`failalert.py`에 한 줄), 펀딩은 5년 시험과 같은 일정값. 사전 등록: `FORWARD_PREREG.md` + `FORWARD_PREREG.sha256`.
+- 코드: `paperbot/shadow200.py`(`run`, `backfill`, `stage prune1|prune2|judge1|judge2`, `interim`, `status`, `parity`), `deploy/paperbot-shadow200.service/.timer`, `tests/test_shadow200.py`. 작업은 `lib_c.py`나 `FORWARD_PREREG.md`의 해시가 다르면 거부합니다.
+- 5년 결과와 일치 확인(`parity`): 실제 2020-01~2021-08 봉(3기)을 운영 경로(봉 → DB → 신호 → 저장된 신호 → 엔진)로 다시 계산해 342개 설정 **342개 모두** 거래 수와 평균이 `out/results.csv`의 `pre_n`, `pre_mean_pct`와 정확히 같음. 2021-08 이후 자료는 읽지 않았고 2026-10-05 이후 성과는 계산하지 않았습니다.

@@ -1,0 +1,24 @@
+[Unit]
+Description=paperbot DeepSeek-200 forward shadow test (record only: no account, no order, no Telegram, public bars only)
+After=network-online.target
+Wants=network-online.target
+OnFailure=paperbot-failed@%n.service
+
+[Service]
+Type=oneshot
+User=paperbot
+Group=paperbot
+WorkingDirectory=/opt/crypto-bot-research
+# no EnvironmentFile: the job needs no key and no token (public klines only), and /etc/paperbot is hidden below
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/paperbot/venv/bin/python -m paperbot.shadow200 run --db /var/lib/paperbot/shadow200/shadow200.db
+Nice=15
+CPUWeight=10
+IOSchedulingClass=idle
+MemoryMax=768M
+TimeoutStartSec=2h
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/paperbot/shadow200
+InaccessiblePaths=-/etc/paperbot -/var/lib/paperbot/paper3.db -/var/lib/paperbot/daily3.db -/var/lib/paperbot/agents3.db -/var/lib/paperbot/inbox.db -/var/lib/paperbot/liq.db -/var/lib/paperbot/checkpoint.db -/var/lib/paperbot/checkpoint_bars -/var/lib/paperbot/rehearsal -/var/lib/paperbot/exec -/var/lib/paperbot/debate -/var/lib/paperbot/ghcoin -/var/lib/paperbot/failalert -/var/lib/paperbot/.claude -/var/lib/paperbot/.claude.json -/var/lib/paperbot/.local -/var/backups/paperbot

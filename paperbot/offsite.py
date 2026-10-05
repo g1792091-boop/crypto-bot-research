@@ -68,7 +68,7 @@ from .notify import WARN, ConsoleNotifier, Notifier, TelegramNotifier
 API = "https://api.telegram.org"
 # the databases deploy/paperbot-backup.sh copies (keep the two lists the same: tests/test_offsite.py
 # compares them); a copy is <basename>.db
-DB_NAMES = ("agents3", "inbox", "liq", "checkpoint", "exec/executor", "exec/executor-testnet", "daily3", "paper3")
+DB_NAMES = ("agents3", "inbox", "liq", "checkpoint", "exec/executor", "exec/executor-testnet", "shadow200/shadow200", "daily3", "paper3")
 TELEGRAM_UPLOAD_LIMIT = 50_000_000      # Bot API: documents up to 50 MB (read as decimal MB, the stricter)
 MULTIPART_ROOM = 1_000_000              # form fields, caption and boundaries around the file
 MAX_PART = TELEGRAM_UPLOAD_LIMIT - MULTIPART_ROOM

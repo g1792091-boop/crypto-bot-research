@@ -170,7 +170,7 @@ EXTRA_SERVICES = ("paperbot-ghcoin.service", "paperbot-tgtrades.service")
 OFFSITE_TIMER = "paperbot-offsite.timer"
 # optional: installed by install.sh but left off (the owners turn it on once, docs/server-setup-v3.md); when it is
 # installed its state is shown as [참고] only, never [고칠 것]: the weekly checkpoint rehearsal (checkpoint_preview)
-OPTIONAL_TIMERS = ("paperbot-rehearsal.timer", "paperbot-obsidian.timer")
+OPTIONAL_TIMERS = ("paperbot-rehearsal.timer", "paperbot-obsidian.timer", "paperbot-shadow200.timer")
 # optional, paid: the 24-hour debate room. Installed by install.sh and left off; shown as [참고] unless the owners
 # turned it on, and then a missing key is a [고칠 것]. Never part of INSTALLED (not installed is not a problem).
 DEBATE_UNIT = "paperbot-debate.service"
