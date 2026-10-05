@@ -93,14 +93,16 @@ def _names_ko() -> dict:
 
 
 def _closed(paper_ro: sqlite3.Connection, since_ms: int = 0, until_ms: Optional[int] = None,
-            kinds: Iterable[str] = ("strategy",)) -> list[tuple]:
-    """(account_id, kind, strategy, timeframe, trade dict) of trades closed in [since, until), oldest first."""
+            kinds: Iterable[str] = ("strategy",), tfs: Optional[Iterable[str]] = None) -> list[tuple]:
+    """(account_id, kind, strategy, timeframe, trade dict) of trades closed in [since, until), oldest first.
+    ``tfs`` None = the core timeframes (the default); the reel and its coin flips pass ('5m',)."""
     ks = list(kinds)
     # the core timeframes only (paper v4): a 5m coin flip (kind 'random', the reel's comparison) is never the 36's
+    tl = list(TFS) if tfs is None else list(tfs)
     sql = ("SELECT t.account_id, a.kind, a.strategy, a.timeframe, t.data FROM trades t JOIN accounts a "
            f"ON a.account_id = t.account_id WHERE a.kind IN ({','.join('?' * len(ks))}) "
-           f"AND a.timeframe IN ({','.join('?' * len(TFS))}) AND t.exit_time >= ?")
-    args: list = [*ks, *TFS, int(since_ms)]
+           f"AND a.timeframe IN ({','.join('?' * len(tl))}) AND t.exit_time >= ?")
+    args: list = [*ks, *tl, int(since_ms)]
     if until_ms is not None:
         sql += " AND t.exit_time < ?"
         args.append(int(until_ms))
