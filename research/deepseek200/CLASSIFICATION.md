@@ -238,3 +238,16 @@
 | 198 | 장악형 | A | engulfing |
 | 199 | 도지 | A | 캔들 계열 |
 | 200 | 트위저 | A | 캔들 계열 |
+
+
+## Addendum 2026-10-05: items found outside the numbered list
+
+The first, shorter version of the text contained five strategies that are not in the 200 numbered items.
+
+| Strategy | Class | Family |
+|---|---|---|
+| Power of 3 (AMD) | B, new | F11 liquidity sweep |
+| Opening Range Breakout | B, new | F15 session range and open bias |
+| Gap trading | E, not fit for 24h crypto | none |
+| Earnings momentum | E, not fit for crypto | none |
+| 5-minute open breakout | E, 5m timeframe removed | none |
