@@ -304,18 +304,19 @@ function openFrom(it, trader, riskOverride, note) {
   feed(`${trader === "자체 엔진" ? "" : "[" + shortMd(trader) + "] "}${it.ko} ${it.side > 0 ? "▲롱" : "▼숏"} ${plan.lev}x @ ${fmt(price)} · ${it.name} · SL ${plan.slPct}% / TP ${plan.tpPct}%(손익비 1:${plan.rr}) · 리스크 $${plan.risk}(${plan.riskPct}%)${note ? " · " + note : ""}`);
   return true;
 }
-function closeP(sym, px, why) {
+function closeP(sym, px, why, at) {
   const P = S.pos[sym]; if (!P) return;
+  const base = String(why).replace(/\(.*\)$/, "");   // "익절(놓친 봉 반영)" → "익절"
   const pret = (px - P.entry) / P.entry * P.side - FW.fee;
-  let pnl = why === "청산" ? -P.margin : Math.max(-P.margin, P.notional * pret); if (!Number.isFinite(pnl)) pnl = 0;
+  let pnl = base === "청산" ? -P.margin : Math.max(-P.margin, P.notional * pret); if (!Number.isFinite(pnl)) pnl = 0;
   const R = P.risk ? pnl / P.risk : 0, roe = P.margin ? pnl / P.margin * 100 : 0;
   S.pnl += pnl; S.fills++; if (pnl > 0) S.wins++; bumpPeak(); dayGate(); S.day.pnl += pnl;
   if (P.trader !== "자체 엔진") { const M = model(P.trader); M.pnl += pnl; M.fills++; if (pnl > 0) M.wins++; }
   // 전략 성적(실전) 기록 → 워크포워드 선별에 즉시 반영
   const st = (S.eng.stats[P.vkey] ||= { tr: [] }); st.tr.push({ R: +R.toFixed(3), t1: Date.now(), src: "live", reg: P.regKey }); if (st.tr.length > 60) st.tr.splice(0, st.tr.length - 60);
-  if (why === "손절" || why === "청산") S.cool[sym] = Date.now() + 2 * TFMIN[P.tf || "60"] * 60e3;
+  if (base === "손절" || base === "청산") S.cool[sym] = Date.now() + 2 * TFMIN[P.tf || "60"] * 60e3;
   S.cool[sym] = Math.max(S.cool[sym] || 0, Date.now() + cfg().coolMin * 60e3);   // 어떤 청산이든 설정한 분만큼 같은 코인 재진입 금지   // 쿨다운: 손절 후 2봉 재진입 금지
-  S.trades.unshift({ ko: P.ko, side: P.side, entry: P.entry, exit: px, lev: P.lev, margin: Math.round(P.margin), roe: +roe.toFixed(2), pnl: +pnl.toFixed(2), R: +R.toFixed(2), why, name: P.name, model: P.trader !== "자체 엔진" ? P.trader : null, t: Date.now() });
+  S.trades.unshift({ ko: P.ko, side: P.side, entry: P.entry, exit: px, lev: P.lev, margin: Math.round(P.margin), roe: +roe.toFixed(2), pnl: +pnl.toFixed(2), R: +R.toFixed(2), why, name: P.name, model: P.trader !== "자체 엔진" ? P.trader : null, at: at || null, t: Date.now() });
   if (S.trades.length > 80) S.trades.pop();
   // 학습: 뉴런(시각화) · 뇌 지능 · 시간대 · 급변동 · 교훈/패턴
   const good = pret > 0 ? 1 : -1;
@@ -328,17 +329,23 @@ function closeP(sym, px, why) {
   delete S.pos[sym];
 }
 // 시세로 포지션 관리: 손절·익절·+1R 본절 이동·시간손절 (1분봉 고저로 꼬리까지 판정, 진입 이전 구간 제외)
-function manage(sym, price, cs1) {
+// 포지션 관리: 마지막으로 확인한 시각(P.chk) 이후의 봉을 '시간 순서대로 전부' 다시 본다.
+//   앱이 닫혀 있거나 멈춰 있던 동안 익절·손절·본절·시간청산에 닿은 것도 놓치지 않는다(같은 봉에서 손절·익절이 둘 다 닿으면 보수적으로 손절).
+function manage(sym, price, bars) {
   const P = S.pos[sym]; if (!P) return;
-  let hi = price, lo = price;
-  for (const b of cs1.slice(-4)) if (b.t > P.t) { hi = Math.max(hi, b.h); lo = Math.min(lo, b.l); }
+  const from = Math.max(P.t, P.chk || 0) - 60e3, seq = (bars || []).filter(b => b.t + (b.dur || 60e3) > from).sort((a, b) => a.t - b.t);
+  for (const b of seq) {
+    if (b.t > P.deadline) { const late = Date.now() - P.deadline > 120e3; return closeP(sym, late ? b.o : price, "시간손절" + (late ? "(지연 반영)" : ""), b.t); }
+    const late = Date.now() - b.t > 180e3, tag = late ? "(놓친 봉 반영)" : "";
+    if (P.side > 0 ? b.l <= P.liq : b.h >= P.liq) return closeP(sym, P.liq, "청산", b.t);
+    if (P.side > 0 ? b.l <= P.sl : b.h >= P.sl) return closeP(sym, P.sl, (P.be ? "본절" : "손절") + tag, b.t);
+    if (P.side > 0 ? b.h >= P.tp : b.l <= P.tp) return closeP(sym, P.tp, "익절" + tag, b.t);
+    const fav = P.side > 0 ? b.h - P.entry : P.entry - b.l;
+    if (!P.be && fav >= P.rDist) { P.sl = P.side > 0 ? P.entry * (1 + FW.fee) : P.entry * (1 - FW.fee); P.be = true; feed(`${P.ko} +1R 도달 → 손절을 본절로 이동(손실 제거)${tag}`); }
+    P.chk = Math.max(P.chk || 0, b.t);
+  }
   markPos(P, price);
-  if (P.side > 0 ? lo <= P.liq : hi >= P.liq) return closeP(sym, P.liq, "청산");
-  if (P.side > 0 ? lo <= P.sl : hi >= P.sl) return closeP(sym, P.sl, P.be ? "본절" : "손절");
-  if (P.side > 0 ? hi >= P.tp : lo <= P.tp) return closeP(sym, P.tp, "익절");
-  const fav = P.side > 0 ? hi - P.entry : P.entry - lo;
-  if (!P.be && fav >= P.rDist) { P.sl = P.side > 0 ? P.entry * (1 + FW.fee) : P.entry * (1 - FW.fee); P.be = true; feed(`${P.ko} +1R 도달 → 손절을 본절로 이동(손실 제거)`); }
-  if (Date.now() > P.deadline) closeP(sym, price, "시간손절");
+  if (Date.now() > P.deadline) return closeP(sym, price, "시간손절");
 }
 
 // ── 한 스텝: 코인별 시세 → 포지션 관리 → 국면 판정 → 검증된 전략 신호 → 승인 대기열 ──
@@ -353,7 +360,10 @@ export async function step() {
     S.feat[sym] = feat; (S.brief ||= {})[sym] = marketBrief(cs1);
     // 엔진 교체 전 포지션 정리
     if (S.legacy?.length) for (const L of S.legacy.filter(x => x.sym === sym || x.ko === ko)) { const pr = (price - L.entry) / L.entry * L.side - FW.fee, m = L.margin || 0, pnl = Math.max(-m, (L.notional || m * (L.lev || 1)) * pr); if (Number.isFinite(pnl)) { S.pnl += pnl; feed(`${ko} 예전 엔진 포지션 정리 ${pnl >= 0 ? "+" : "−"}$${Math.abs(pnl).toFixed(2)}`); } S.legacy = S.legacy.filter(x => x !== L); }
-    manage(sym, price, cs1);
+    // 놓친 구간이 1분봉 300개(5시간)보다 길면 5분봉으로 메운다
+    { const P0 = S.pos[sym]; let bars = cs1;
+      if (P0 && Date.now() - Math.max(P0.t, P0.chk || 0) > 4.5 * 3600e3) { try { const c5 = (await candlesFor({ market: sym, exchange: "binancef", timeframe: "5" }, 1000)).cs; bars = [...c5.filter(b => b.t < cs1[0].t).map(b => ({ ...b, dur: 300e3 })), ...cs1]; feed(`${ko} 마지막 확인 이후 ${Math.round((Date.now() - Math.max(P0.t, P0.chk || 0)) / 3600e3)}시간을 5분봉으로 되짚어 익절·손절 확인`); } catch (e) {} }
+      manage(sym, price, bars); }
     // 국면(1시간봉) + 상위 추세(4시간봉)
     const m60 = await getTF(sym, "60"), m240 = await getTF(sym, "240", 400);
     if (m60) { const i = m60.I.n - 2, rg = ENG.regimeAt(m60.I, i); const hb = m240 ? ENG.htfBiasAt(m240.H ||= ENG.prepareHTF(q, m240.cs), Date.now()) : { bias: 0 };
