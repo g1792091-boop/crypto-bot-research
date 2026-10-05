@@ -170,3 +170,46 @@ export function liqBoard(ctx) {
   };
   return {el: card, load};
 }
+
+// ---------------------------------------------------------------- 차트 › 이 코인 시장 지표 (the same two answers, one coin)
+export function coinFlowCard(ctx, sym0) {
+  let sym = sym0, f = null, l = null;
+  const body = h("div", {class: "mk-cf"}, motion.shimmer(2));
+  const foot = h("p", {class: "pos-note"});
+  const el = ui.card({plate: "이 코인 시장 지표", sub: "바이낸스 선물 전체 · 우리 계좌와 무관"}, body, foot);
+  const cell = (k, v, sub) => h("div", {class: "mk-cf-c"}, h("span", null, k), v, sub ? h("small", null, sub) : null);
+  const paint = () => {
+    if (!f && !l) return;
+    const x = f && f.ready ? (f.coins || []).find((c) => c.symbol === sym && c.ts) : null;
+    const q = l && l.ready ? (l.coins || []).find((c) => c.symbol === sym) : null;
+    if (!x && !q) {
+      body.replaceChildren(h("div", {class: "mk-wait"}, ui.notYet(sym === "XRPUSDT" ? "기록 안 함" : "수집 전"),
+        h("span", null, sym === "XRPUSDT" ? "XRP는 시장 지표를 기록하지 않습니다" : "이 코인의 시장 지표 기록이 아직 없습니다")));
+      foot.textContent = "";
+      return;
+    }
+    const rules = (f && f.hint_rules) || {};
+    const parts = [
+      x ? cell("미결제약정", h("b", {class: "num"}, `${usdKo(x.oi_usd)} USDT`), h("span", null, "1시간 ", chgEl(x.oi_chg_1h), " · 24시간 ", chgEl(x.oi_chg_24h))) : cell("미결제약정", ui.notYet()),
+      x ? cell("롱/숏 (전체 계좌)", h("b", {class: "num"}, ratio(x.ls_global)), `24시간 전 ${ratio(x.ls_global_24h)}`) : null,
+      x ? cell("고수 포지션 롱/숏", h("b", {class: "num"}, ratio(x.ls_top)), `24시간 전 ${ratio(x.ls_top_24h)}`) : null,
+      x ? cell("테이커 매수/매도 1시간", h("b", {class: ["num", x.taker_1h > 1 ? "up" : x.taker_1h < 1 ? "down" : ""]}, ratio(x.taker_1h)), null) : null,
+      q ? cell("강제청산 1시간 (롱 · 숏)", h("b", {class: "num"}, h("span", {class: "down"}, usdKo(q.h1.long_usd)), " · ", h("span", {class: "up"}, usdKo(q.h1.short_usd))), "USDT") : cell("강제청산", ui.notYet()),
+      q ? cell("강제청산 24시간 (롱 · 숏)", h("b", {class: "num"}, h("span", {class: "down"}, usdKo(q.h24.long_usd)), " · ", h("span", {class: "up"}, usdKo(q.h24.short_usd))),
+        q.biggest ? `가장 큰 한 건 ${usdKo(q.biggest.usd)} (${q.biggest.liquidated === "long" ? "롱" : "숏"} ${fmt.hm(q.biggest.ts)})` : "24시간 0건") : null,
+      x ? h("div", {class: "mk-cf-s"}, h("span", null, "미결제약정 24시간"), ui.sparkline((x.oi_series || []).map((p) => p[1]), {w: 240, h: 30, cls: "lc", label: "미결제약정 24시간"})) : null,
+      x && x.hints && x.hints.length ? h("div", {class: "mk-cf-hint"}, x.hints.map((k) => ui.pill((rules[k] || {}).ko || k, "warn", (rules[k] || {}).rule))) : null,
+    ];
+    body.replaceChildren(...parts.filter(Boolean));
+    foot.replaceChildren(x ? `시장 지표 마지막 기록 ${fmt.kst(x.ts)} (1시간마다) · ` : "", "강제청산은 20초마다 · ", h("a", {href: ctx.href("market")}, "여섯 코인 전부 보기 (시장)"));
+  };
+  const load = async () => {
+    const [a, b] = await Promise.all([ctx.api("/api/v4/flowlive").catch(() => null), ctx.api("/api/v4/flowlive/liq").catch(() => null)]);
+    if (a) f = a;
+    if (b) l = b;
+    if (ctx.alive()) paint();
+  };
+  el.setSym = (s) => { sym = s; paint(); };
+  el.load = load;
+  return el;
+}
