@@ -33,7 +33,7 @@ export async function mount(el, ctx) {
   // the group race (/api/v4/flow/race: each group's median balance, the coin flips' middle 50 % as a band); its legend
   // is the order now = the lines' right ends, so the numbers always match the curve. Until two real points: the
   // designed empty road (nothing made up). Its model also feeds the small line in each group card.
-  const race = raceParts(ctx, {height: 92, css: false, onModel: (m) => { st.race = m; renderSparks(); }});
+  const race = raceParts(ctx, {height: 92, css: false, short: true, onModel: (m) => { st.race = m; renderSparks(); }});
   const raceBox = h("div", {class: "home-race"}, h("div", {class: "home-rtop"}, h("span", {class: "home-rk"}, "묶음 레이스"), race.sub,
     h("span", {class: "grow"}), h("a", {class: "home-more", href: href("flow")}, "흐름 자세히 →")), race.chart, race.list);
   const wlA = ui.liveNum(null, {format: "int", cls: "up", flash: "accent"}), wlB = ui.liveNum(null, {format: "int", cls: "down", flash: "accent"});

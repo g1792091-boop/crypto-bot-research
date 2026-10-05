@@ -308,9 +308,15 @@ def _read(name):
 
 def test_page_files_keep_the_honesty_rules():
     kit, grid_js, css = _read("grid-kit.js"), _read("grid.js"), _read("grid-kit.css")
-    # a coin-flip comparison never uses the up / down (pass / fail looking) colours: accent / cyan, 참고
+    # a coin-flip comparison never uses the up / down (pass / fail looking) colours: the neutral --cmp-hi / --cmp-lo
+    # pair of tokens.css (classic: accent yellow / cyan; ai skin: yellow / blue), 참고
     base = re.search(r"\.gk-cell \{([^}]*)\}", css).group(1)
-    assert "--hi: var(--accent)" in base and "--lo: var(--term-cyan)" in base
+    assert "--hi: var(--cmp-hi)" in base and "--lo: var(--cmp-lo)" in base
+    tokens = open(os.path.join(SCREENS, "..", "tokens.css"), encoding="utf-8").read()
+    for blk in re.findall(r"(:root[^{]*)\{([^}]*)\}", tokens):
+        for k in ("--cmp-hi", "--cmp-lo"):
+            m = re.search(k + r":\s*([^;]+);", blk[1])
+            assert m is None or not re.search(r"--up|--down", m.group(1)), (blk[0], k)
     assert re.search(r"\.own \.gk-cell, \.gk-cell\.own \{ --hi: var\(--up\); --lo: var\(--down\); \}", css)
     # DeepSeek is coloured by its own return, never by a per-account coin-flip difference
     assert 'group === "ds200" ? "own"' in grid_js or 'rowsOf(d, "ds200", "own")' in grid_js

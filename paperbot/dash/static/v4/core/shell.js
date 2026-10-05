@@ -10,6 +10,8 @@ import {mmdd, kst} from "./fmt.js";
 import {expand} from "./motion.js";
 import {setMethod, botsKo, methodKo} from "./ui.js";
 import {criticalLines} from "./alerts.js";
+import {skinSwitch} from "./skin.js";
+import {remount} from "./router.js";
 
 const badges = {};       // screen -> true (a small dot on its tab, e.g. new room messages)
 
@@ -29,7 +31,9 @@ function renderNav() {
   const g = GROUPS.find((x) => x.id === gid) || GROUPS[0];
   put($("#subtabs"), visibleScreens(g).map((n) => h("a", {href: href(n), "aria-current": n === p.name ? "page" : null, dataset: {screen: n}},
     SCREENS[n].ko, badges[n] ? h("i", {class: "ndot", "aria-label": "새 소식"}) : null)),
-  // the old dashboard (served at /v3; '/' is this page) stays one tap away from the 서버 group's menu
+  // the screen colours (AI / 클래식, core/skin.js) and the old dashboard (served at /v3; '/' is this page) stay one tap
+  // away at the end of the 서버 group's menu
+  g.id === "server" ? skinSwitch(() => remount()) : null,
   g.id === "server" ? h("a", {class: "oldui", href: "/v3", title: "지금까지 쓰던 대시보드 (/v3, 같은 로그인)"}, "예전 화면", h("span", {"aria-hidden": "true"}, " ↗")) : null);
 }
 export function setBadge(screen, on) {

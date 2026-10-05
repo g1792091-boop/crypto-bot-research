@@ -60,7 +60,7 @@
 .fk-lab .fk-l2 { display: flex; align-items: baseline; gap: 5px; font: 800 12.5px/1.25 var(--f-body); color: var(--ink); white-space: nowrap; }
 .fk-lab .fk-rk { font: 400 11px var(--f-pixel); color: var(--muted); min-width: 8px; }
 .fk-lab .fk-vv.up { color: var(--up); } .fk-lab .fk-vv.down { color: var(--down); }
-.fk-lab.core { border-color: var(--accent-line); }
+.fk-lab.core { border-color: color-mix(in srgb, var(--c-core) 50%, transparent); }
 .fk-lab.dim { opacity: .35; }
 .fk-lab.fk-bump { animation: fk-bump .5s var(--ease); }
 @keyframes fk-bump { 0% { box-shadow: 0 0 0 0 var(--accent-glow); } 40% { box-shadow: 0 0 0 4px var(--accent-glow); } 100% { box-shadow: 0 0 0 0 transparent; } }

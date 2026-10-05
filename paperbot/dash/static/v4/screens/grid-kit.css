@@ -1,8 +1,9 @@
 /* grid kit (builder grid): heat cells, the pixel badge, the curves and the profile card shared by 한눈 지도 (grid.css),
    매매법 목록 (strategies.css) and 계좌 (account.css), each of which @imports this file. Tokens only.
-   A cell's colour step is data-b = -4..4. The pair is --hi / --lo: accent / cyan for a coin-flip comparison (참고, never
+   A cell's colour step is data-b = -4..4. The pair is --hi / --lo: the --cmp-hi / --cmp-lo tokens (classic: accent
+   yellow / cyan; ai skin: yellow / blue) for a coin-flip comparison (참고, never
    green / red before the verdict, and colour-blind safe), up / down for an account's own return (.own). */
-.gk-cell { --hi: var(--accent); --lo: var(--term-cyan); --base: var(--surface-2);
+.gk-cell { --hi: var(--cmp-hi); --lo: var(--cmp-lo); --base: var(--surface-2);
   position: relative; display: grid; place-content: center; justify-items: center; gap: 2px; min-width: 0; min-height: 40px;
   padding: 4px 2px; border-radius: 7px; border: 1px solid transparent; background: var(--base); color: var(--ink);
   text-decoration: none; font-variant-numeric: tabular-nums; -webkit-tap-highlight-color: transparent;
@@ -33,7 +34,7 @@
 a.gk-cell:hover { border-color: var(--ink-2); transform: translateY(-1px); z-index: 1; }
 a.gk-cell:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; z-index: 2; }
 .gk-cell small { display: inline-flex; align-items: center; gap: 4px; }
-.gk-dot { flex: none; width: 6px; height: 6px; background: var(--accent); box-shadow: 0 0 0 1.5px var(--bg); }
+.gk-dot { flex: none; width: 6px; height: 6px; background: var(--term-yellow); box-shadow: 0 0 0 1.5px var(--bg); }
 .gk-cell.sw { min-height: 0; height: 14px; padding: 0; border-radius: 3px; }
 .gk-flash { animation: gkFlash 1.2s var(--ease) 1; }
 @keyframes gkFlash { 0% { box-shadow: 0 0 0 0 var(--accent-glow); } 30% { box-shadow: 0 0 0 5px var(--accent-glow); } 100% { box-shadow: 0 0 0 0 transparent; } }

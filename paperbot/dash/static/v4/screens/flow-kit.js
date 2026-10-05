@@ -410,7 +410,7 @@ export function laneLegend(o = {}) {
 }
 
 /**
- * raceParts(ctx, {height, onModel, css}) -> {chart, list, sub, note}: the small race without its frame, for home's head card
+ * raceParts(ctx, {height, onModel, css, short}) -> {chart, list, sub, note} (short: the short group names): the small race without its frame, for home's head card
  * (the four groups' median lines with the coin flips' band, and the order now as the legend: the numbers ARE the
  * lines' right ends, so the legend always matches the curve). It loads /api/v4/flow/race itself every 5 minutes while
  * the screen is open; onModel(model | null) gets each new model (home draws its group-card lines from it).
@@ -446,7 +446,7 @@ export function raceParts(ctx, o = {}) {
       const w = was.get(l.id);
       if (w && w.v !== shown) motion.flash(b, l.at > Number(w.r) ? "up" : "down");
       return h("li", {class: l.id, dataset: {id: l.id, v: shown, r: String(l.at)}}, h("i", {class: ["fk-sw", l.id === "coin" ? "band" : l.id]}),
-        h("span", {class: "fk-nm"}, laneKo(l.id)), b);
+        h("span", {class: "fk-nm"}, o.short ? SHORT[l.id] || laneKo(l.id) : laneKo(l.id)), b);
     }));
   };
   ctx.every(300000, load, {now: true});

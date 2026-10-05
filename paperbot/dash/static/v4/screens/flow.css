@@ -31,7 +31,7 @@
 .fl-nhead span:last-child { text-align: right; }
 .fl-now { display: grid; gap: 6px; }
 .fl-nrow { padding: 10px 10px; border-radius: var(--r-md); background: var(--surface-2); border: 1px solid transparent; min-height: 58px; }
-.fl-nrow.core { border-color: var(--accent-line); background-image: linear-gradient(90deg, var(--accent-soft), transparent 70%); }
+.fl-nrow.core { border-color: color-mix(in srgb, var(--c-core) 50%, transparent); background-image: linear-gradient(90deg, color-mix(in srgb, var(--c-core) 12%, transparent), transparent 70%); }
 .fl-ng { display: flex; align-items: center; gap: 7px; min-width: 0; }
 .fl-ng .fk-sw { width: 4px; height: 28px; border-radius: 2px; border: 0; }
 .fl-ng .fk-sw.band { background: var(--c-coin); opacity: .55; }

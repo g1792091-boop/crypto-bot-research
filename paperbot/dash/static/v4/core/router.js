@@ -113,3 +113,8 @@ export function startRouter() {
   go();
 }
 export const currentScreen = () => cur.name;
+/** Draw the current screen again from scratch (a skin switch: charts read their colours from the tokens when drawn). */
+export function remount() {
+  cur.name = null;
+  show(parseHash(location.hash));
+}
