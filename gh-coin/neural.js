@@ -914,7 +914,7 @@ export function state() {
     cfg: cfg(), dayN: S.day?.n || 0, whale: { trust: whaleTrust(), last: Object.values(_whC).map(x => x.s).filter(x => x.status === "approved").slice(-6) }, review2: S.review2 || null, research: S.research || {},
     engine, nActive: engine.filter(x => x.active).length, setups: setups(engine), winrates: learnedWinrates(V), evo: { n: (S.eng.evo || []).length, seeds: (S.eng.evoSeeds || []).length, log: (S.eng.evoLog || []).slice(0, 3) }, queue: S.queue.length, heat: +(heat() / Math.max(1, eq) * 100).toFixed(2), dayPnl: +(S.day?.pnl || 0).toFixed(2),
     fw: { minLev: FW.minLev, risk: FW.baseRisk * 100, maxRisk: FW.maxRisk * 100, daily: FW.dailyStop * 100, heat: FW.maxHeat * 100, fee: FW.fee * 100 },
-    pos: allPos.filter(P => P.trader === "자체 엔진"), dec: S.dec, feat: S.feat, trades: S.trades.slice(0, 22), feed: S.feed.slice(0, 24) };
+    pos: allPos.filter(P => P.trader === "자체 엔진"), dec: S.dec, feat: S.feat, trades: S.trades.slice(0, 64), feed: S.feed.slice(0, 24) };
 }
 // ocean-agent 개념: 검증된 셋업 순위 = 기대값 × 승률 × 신뢰도(표본 수) — 실측 성적으로만 계산
 function regStat(vkey, reg) { let n = 0, r = 0; for (const t of S.eng.stats[vkey]?.tr || []) if (t.reg === reg) { n++; r += t.R; } return { n, mean: n ? r / n : 0 }; }

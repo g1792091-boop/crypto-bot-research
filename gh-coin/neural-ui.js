@@ -1,5 +1,6 @@
 // 🧠 뉴럴 데스크 대시보드 — 연결된 AI 모델/피처 뉴런이 직접 데모 매매·학습하는 모습을 풀스크린으로.
 // 디자인: 다크 터미널 + NEURAL SHELL(피처 → 결정 코어 → 확률 셸) 애니메이션. 전부 가상자금.
+import * as VZ from "./neural-viz.js";
 let root = null, raf = 0, loop = 0, N = null, ST = null;
 const E = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const money = (v) => (v >= 0 ? "+" : "−") + "$" + Math.abs(v).toLocaleString(undefined, { maximumFractionDigits: 0 });
@@ -223,6 +224,8 @@ function render() {
   if (au) { const nw = s.news; au.innerHTML = `⚙️ 청산공식 <b>${s.fw?.minLev ?? 20}x+</b> · 1회 리스크 <b>${s.fw?.risk ?? 0.5}~${s.fw?.maxRisk ?? 1}%</b> · 실전 전략 <b>${s.nActive ?? 0}</b>${s.calibrating ? " (백테스트 중)" : ""} · 평균 <b>${s.avgLev != null ? s.avgLev + "x" : "—"}</b>${nw ? ` · 📰 <b class="${nw.score > 0 ? "up" : nw.score < 0 ? "dn" : ""}">${nw.score > 0 ? "+" : ""}${nw.score}</b>${nw.event ? " ⚠일정" : ""}` : ""}`; }
   // 🧠 뇌 그래프 데이터 갱신 + 요약 (오른쪽 아래)
   brainG = N.brainGraph();
+  try { VZ.renderShell(root.querySelector("[data-vzshell]"), s, N); } catch (e) { console.warn(e); }
+  try { VZ.renderBrain(root.querySelector("[data-vzbrain]"), s, brainG); } catch (e) { console.warn(e); }
   const bi = root.querySelector("[data-braininfo]");
   if (bi && s.brain) { const iq = s.brain.iq || {};
     bi.innerHTML = `지능 <b style="color:#b79cff">${iq.score ?? 0}</b>/100 <span class="dim">(정확도 ${iq.acc ?? 0}% ·${iq.n ?? 0}판)</span> · 지식 ${s.brain.n} · 연결 ${(brainG && brainG.edges.length) || 0} · 🛑회피 ${s.brain.traps ?? 0}`; }
@@ -258,13 +261,9 @@ function bezPt(x0, y0, x1, y1, u) { const mx = (x0 + x1) / 2, a = 1 - u; return 
 function rrect(g, x, y, w, h, r) { g.beginPath(); if (g.roundRect) g.roundRect(x, y, w, h, r); else g.rect(x, y, w, h); }
 function draw() {
   raf = requestAnimationFrame(draw);
-  drawBrain();
-  const cv = root && root.querySelector("canvas[data-shell]"); if (!cv || !ST) return;
-  const dpr = Math.min(2, window.devicePixelRatio || 1), W = cv.clientWidth, H = cv.clientHeight; if (W < 50 || H < 50) return;
-  if (cv.width !== W * dpr || cv.height !== H * dpr) { cv.width = W * dpr; cv.height = H * dpr; }
-  const g = cv.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0);
-  t += 0.016;
-  drawGraph(g, W, H);
+  if (!root || !ST) return;
+  try { VZ.frameShell(root.querySelector("[data-vzshell]")); } catch (e) {}
+  try { VZ.frameBrain(root.querySelector("[data-vzbrain]")); } catch (e) {}
 }
 
 // ── NEURAL SHELL: 실행 그래프 (노드 = 코인·피처·내 지표·매매법·AI 모델·게이트·포지션 / 엣지 = 실제 데이터 흐름) ──
@@ -408,17 +407,17 @@ const SHELL = `
 <div class="nd-grid">
   <div class="nd-card nd-pnl"><div class="nd-h">가상 자본 <small>(데모 · $1000 시작 · 나만 초기화)</small></div><div class="nd-big" data-pnl></div><div class="nd-kpi" data-kpi></div></div>
   <div class="nd-card nd-mkt"><div class="nd-h">🔍 스캔 · 포지션</div><div class="nd-scan" data-scan></div><div class="nd-markets" data-markets></div></div>
-  <div class="nd-card nd-shell"><div class="nd-h">NEURAL SHELL <small>실행 그래프 · 코인 → 피처·내 지표 → 매매법 → AI 워커 → 게이트(주문 대기열) → 포지션 · 실데이터</small></div><canvas data-shell></canvas></div>
+  <div class="nd-card nd-shell"><div class="nd-h">NEURAL SHELL <small>입력 카드 → SHARED SURFACE(주문 대기열 게이트) → 매매법 → AI 워커 → 출력 · 실데이터</small></div><div class="vz-shell" data-vzshell></div></div>
   <div class="nd-card nd-rtcard"><div class="nd-h">⚡ 실시간 진입 <small>손매매용 · 시장가 기준 · 에이전트 팀 ↔ 뉴럴 데스크 토론 · 주문은 직접</small><span class="rt-coins" data-rtcoins></span><button class="nd-mini" data-rtgo title="지금 모든 코인을 다시 분석하고 토론합니다">전체 분석</button></div><div class="nd-rt" data-rt></div></div>
   <div class="nd-card nd-trd"><div class="nd-h">AI 모델 트레이더 리더보드 <small>(직접 거래·복기·학습 · PnL 순)</small></div><div class="nd-neurons" data-neurons></div></div>
   <div class="nd-card nd-trades"><div class="nd-h">최근 데모 거래 · 매매법 설계</div><div class="nd-tr" data-trades></div></div>
-  <div class="nd-card nd-brain"><div class="nd-h">🧠 BRAIN FOUNDRY · 자체 뇌 레이더 <small data-braininfo></small><button class="nd-mini" data-canvas title="JSON Canvas로 내보내기 — Obsidian에서 열 수 있어요">.canvas ↓</button></div><canvas data-brain></canvas></div>
+  <div class="nd-card nd-brain"><div class="nd-h">🧠 자체 뇌 FOUNDRY <small data-braininfo></small><button class="nd-mini" data-canvas title="JSON Canvas로 내보내기 — Obsidian에서 열 수 있어요">.canvas ↓</button></div><div class="vb" data-vzbrain></div></div>
 </div>`;
 
 function inject() {
   if (document.getElementById("nd-css")) return;
   const st = document.createElement("style"); st.id = "nd-css";
-  st.textContent = `
+  st.textContent = VZ.SHELL_CSS + VZ.BRAIN_CSS + `
 #ndesk{position:fixed;inset:0;z-index:99999;color:var(--txt);font:12px/1.45 "SF Mono",ui-monospace,Menlo,Consolas,monospace;display:flex;flex-direction:column;overflow:hidden;font-variant-numeric:tabular-nums;
   --txt:#d4dcea;--dim:#5b6678;--line:#15202f;--line2:#1f2c40;--accent:#22d3ee;--accent2:#7c9fff;--up:#26d07c;--dn:#ff4d64;
   background:radial-gradient(1100px 560px at 82% -12%,rgba(34,211,238,.07),transparent 60%),radial-gradient(900px 520px at -5% 112%,rgba(124,159,255,.07),transparent 60%),linear-gradient(#070b12,#05080e)}
@@ -436,7 +435,7 @@ function inject() {
 .nd-feed span{margin-right:28px}.nd-clock{color:#6b7a92;font-size:11px;letter-spacing:1px}
 .nd-btn{background:rgba(22,30,44,.65);border:1px solid var(--line2);color:#aeb8c9;padding:5px 11px;border-radius:7px;cursor:pointer;font:inherit;font-size:11px;transition:background .15s,border-color .15s,color .15s}
 .nd-btn:hover{background:rgba(34,46,66,.9);border-color:#32455f;color:#dbe4f1}.nd-x{color:var(--dn)}.nd-x:hover{background:rgba(255,77,100,.15);border-color:rgba(255,77,100,.4)}
-.nd-grid{flex:1;display:grid;grid-template-columns:1.05fr 1fr;grid-template-rows:minmax(250px,auto) minmax(580px,64vh) minmax(540px,auto) 500px 560px;gap:12px;padding:12px;min-height:0;overflow-y:auto;position:relative;z-index:1}
+.nd-grid{flex:1;display:grid;grid-template-columns:1.05fr 1fr;grid-template-rows:minmax(250px,auto) minmax(860px,auto) minmax(540px,auto) 500px minmax(900px,auto);gap:12px;padding:12px;min-height:0;overflow-y:auto;position:relative;z-index:1}
 .nd-card{position:relative;background:linear-gradient(180deg,rgba(14,20,33,.92),rgba(9,13,22,.92));border:1px solid var(--line);border-radius:12px;padding:12px 14px;min-height:0;overflow:auto;display:flex;flex-direction:column;box-shadow:0 1px 0 rgba(255,255,255,.03) inset,0 14px 36px -24px rgba(0,0,0,.9)}
 .nd-card::before{content:"";position:absolute;left:14px;right:14px;top:0;height:1px;background:linear-gradient(90deg,transparent,rgba(34,211,238,.45),transparent)}
 .nd-h{color:#8291a8;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px;flex:0 0 auto;display:flex;align-items:center;gap:8px;padding-left:10px;position:relative}

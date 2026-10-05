@@ -10,9 +10,9 @@
 
 | 항목 | 상태 |
 |---|---|
-| 코드 | 이 브랜치에 전부 있음. 10/5 뉴트론 MCP·옵시디언 연결(5-4번)이 최신 |
+| 코드 | 이 브랜치에 전부 있음. 10/5 뉴럴 셸·뇌 릴 화면(`neural-viz.js`, 5-14번)이 최신 |
 | GitHub 반영 | **이 PC에서만 커밋된 상태가 있을 수 있음.** 이어받기 전에 `git status` / `git log origin/claude/eloquent-ride-3o1bqv..HEAD` 로 확인하고 올릴 것 (아래 9번) |
-| 배포 exe (`dist/`) | **최신** (10/4 뉴럴 데스크 포함 재빌드, 커밋 `e6c9f5a`). push 여부만 확인 |
+| 배포 exe (`dist/`) | **최신** (10/5 neural-viz 포함 재빌드). push 여부만 확인 |
 | 자동 테스트 | 저장소에 고정된 테스트 묶음 **없음**. 그때그때 Node 스크립트 · 브라우저로 확인함 (4번) |
 | 실제 거래소 · 실제 AI 로 확인 | 일부만. 대부분 가짜 시세 · 가짜 AI 로 확인 (7번) |
 
@@ -214,6 +214,12 @@ bash build.sh        # → dist/GHNano.exe, dist/ArchAI.exe, dist/GHCoin.exe
 - **NEURAL SHELL** = 실행 그래프(참고: atsmatrix 'GRAPH REPO-RUN' 릴): 노드 = 코인·피처·내 지표·매매법(실전 통과는 초록)·AI 워커·노란 GATE(주문 대기열 = 공유 면, 일일 손실·동시 리스크·뉴스 통과 시 초록)·포지션, 엣지 = 실제 데이터 흐름 + 흐르는 펄스, 하단 8단계 파이프라인(SCAN→MANAGE) 실제 숫자.
 - **뇌** = BRAIN FOUNDRY 레이더(참고: atsmatrix 'BINDER FOUNDRY' 릴): 유형별 구역·안쪽일수록 강한 기억·스윕·판독 패널(지능·정확도·남은/만든 기억·잊힘·연결·'핵심 규칙 N of M through the gate')·관찰→정제 파이프라인. 릴 영상은 직접 볼 수 없어 캡션·설명 기준으로 구현.
 
+### 5-14. 뉴럴 셸 · 뇌 = 릴 화면 그대로 (10/5, `gh-coin/neural-viz.js`)
+- 사용자 스크린샷 2장(REPO-RUN-48 · DE NOVO BINDER FOUNDRY)을 기준으로 5-13 의 셸/뇌 화면을 **새로 그림**. `neural-ui.js` 는 `VZ.renderShell/frameShell`, `VZ.renderBrain/frameBrain` 만 부름(옛 drawGraph·레이더 코드는 남아 있지만 안 씀).
+- **셸**: 밝은 점무늬 종이 + 상단 메타(GRAPH/FILES/EDGES/BUS READERS/DEPTH/T/FRAME) + 카드 4열(입력 피드·내 지표·고래·뉴스 | 검은 SHARED SURFACE 버스(주문 대기열 게이트, 노란 틱 = 대기열 길이) | 상위 매매법 `.rule` | AI 워커 `.ai` | 포지션·실시간 진입·brain.md·risk.gate) + 카드 사이 200여 개 베지어 선(흔들림, 지금 스캔 중인 모델·코인 선은 파랑) + RUN LOG(피드에서 op 추출)·DISPATCH(w1~w7)·GRAPH STATS(비용 블록·자산 스파크라인) + 하단 푸터.
+- **뇌**: 어두운 실험실 + RUN/IQ 헤더 + 단계 탭·타일 6개(SCAN 관찰·DESIGN 학습·SYNTH 연결·DOSE 정리·READ 회상·RECUT 정제, 4초마다 활성 단계 순환) + 가운데 회전 3D 이중 나선(구슬 120개, 가로대 색 = 기억 유형) + 상위 기억 16개를 분자 클러스터·라벨로 + 왼쪽 학습 대기열 + 하단 산점도(강도×최근성)·학습 라인·거래 판독 플레이트(64칸, 익절/스톱/손절/보류) + 티커. 마우스를 올리면 기억 내용.
+- 확인: 헤드리스 Edge 스크린샷(devserver + 임시 테스트 페이지)으로 배치 확인. 실제 앱 데이터로 장시간 돌린 모습은 아직.
+
 ---
 
 ## 6. 안전 규칙 (바꾸지 말 것)
@@ -242,7 +248,8 @@ bash build.sh        # → dist/GHNano.exe, dist/ArchAI.exe, dist/GHCoin.exe
 - **진입 관문(5-3)** 은 Node 시나리오 테스트로만 검증. 각 팀 판정이 쌓이려면 사무실을 몇 시간 돌려야 함(판정 없으면 관문은 통과·1배). 관문이 너무 자주 막으면 데모 거래 수가 줄어 승격(20거래)이 늦어질 수 있음.
 - **뉴트론 MCP(5-4)**: 실제 exe 로 `문서/GHNano 사무실` 에 파일이 생기는지, Claude Code 가 `.mcp.json` 을 승인 후 도구를 부르는지, Claudian 에서 볼트 연결되는지 아직 확인 못 함. 앱(Go)과 MCP 서버 모두 `%USERPROFILE%Documents` 고정 경로를 써서 서로 일치(다른 곳에서 쓰려면 `NEUTRON_DIR`).
 - 로컬 소형 모델(qwen2.5:3b 등)은 전략 JSON 형식을 자주 틀림 → 자가 수정 1회로 일부 구제. 중형 모델(14b급)을 `code` 역할에 쓰는 게 낫다.
-- `dist/*.exe` 는 **10/4 뉴럴 데스크 포함해 재빌드됨** (커밋 `e6c9f5a`). 단, 이 PC에서 아직 push 안 됐을 수 있음 → 9번대로 Cursor Sync.
+- **뉴럴 셸·뇌 새 화면(5-14)** 은 헤드리스 스크린샷으로만 확인. 데이터가 적으면(거래 0건 등) 판독 플레이트·산점도가 비어 보임. 익절 재생(5-13)은 앱 창이 열려 있어야 실행됨 — 실제 앱에서 BNB/ETH 정리 여부 확인 필요.
+- `dist/*.exe` 는 **10/5 neural-viz 포함해 재빌드됨**. 단, 이 PC에서 아직 push 안 됐을 수 있음 → 9번대로 Cursor Sync.
 
 ## 8. 다음 할 일 후보 (우선순위 순)
 
