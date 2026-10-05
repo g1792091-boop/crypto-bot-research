@@ -19,8 +19,8 @@
   --line-2: #2d3c60;
   /* ink */
   --ink: #eef2f9;
-  --ink-2: #aeb8cd;
-  --muted: #7d89a5;
+  --ink-2: #bec7d9;
+  --muted: #97a3bd;
   /* the one accent */
   --accent: #f6c445;
   --accent-hi: #ffd977;
@@ -73,7 +73,7 @@
   --led-line: #1c4a33;
   --led-green: #45d98a;
   --led-digit: #f6c445;
-  --led-dim: #5f7d6b;
+  --led-dim: #7f9e8b;   /* captions on the LED boxes (.led-cap, 흐름 .fl-when): 4.8:1 or more on every surface in both skins */
   /* pixel office */
   --wood: #a9855a;
   --wood-2: #a27f55;
@@ -134,13 +134,18 @@
   --f-term: "Nanum Gothic Coding", "D2Coding", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
   --f-pixel: "Silkscreen", "Nanum Gothic Coding", ui-monospace, monospace;
   --f-led: "VT323", "Nanum Gothic Coding", ui-monospace, monospace;
-  --t-xs: 12px;
-  --t-sm: 13.5px;
-  --t-md: 15px;
-  --t-lg: 18px;
-  --t-xl: 24px;
-  --t-2xl: 34px;
-  --t-led: 46px;
+  /* type scale (owners 10/06: "예전 대시보드보다 글자가 작다"): no visible text below 12px (--t-2xs), tables and lists
+     13-14px, every font size in v4 css is one of these tokens (or calc(Npx * var(--ts)) for the big LED digits), so the
+     글자 크기 control (core/textsize.js, <html data-text="md|lg|xl">, the blocks at the end of this file) scales all of it */
+  --ts: 1;
+  --t-2xs: 12px;
+  --t-xs: 13px;
+  --t-sm: 14px;
+  --t-md: 15.5px;
+  --t-lg: 19px;
+  --t-xl: 26px;
+  --t-2xl: 36px;
+  --t-led: 50px;
   /* radii, spacing, motion */
   --r-xl: 26px;
   --r-lg: 18px;
@@ -160,7 +165,7 @@
 
 /* ---------------------------------------------------------------- skin "ai" (the default; "classic" = the block above)
    Sampled from the owners' reference (10/05): charcoal #121519 / panels #1a1e23, teal accent, mint up, pink down.
-   Text contrast on the panels (#1a1e23 / #1f242a): ink 13.9 / 12.9, ink-2 7.6 / 7.1, muted 5.0 / 4.7, accent 7.6 / 7.1,
+   Text contrast on the panels (#1a1e23 / #1f242a): ink 13.9 / 12.9, ink-2 9.4 / 8.8, muted 6.6 / 6.2, accent 7.6 / 7.1,
    up 7.9 / 7.4, down 5.0 / 4.7 (WCAG AA for small text is 4.5). The reference's pink #f2496f is lifted a touch to
    #f4517a so a loss stays readable on the lighter panel. */
 :root:not([data-skin="classic"]) {
@@ -173,8 +178,8 @@
   --line: #262c33;
   --line-2: #313841;
   --ink: #e7eaee;
-  --ink-2: #a8b0ba;
-  --muted: #848e9a;
+  --ink-2: #bcc3cc;
+  --muted: #9aa4b0;
   --accent: #19c3b1;
   --accent-hi: #5fe0d2;
   --accent-ink: #001512;
@@ -226,4 +231,16 @@
   --card-ring: rgba(25, 195, 177, .05);
   --card-shadow: rgba(0, 0, 0, .35);
   --head-glow: rgba(25, 195, 177, .18);
+}
+
+/* ---------------------------------------------------------------- 글자 크기 (core/textsize.js, per device)
+   보통 = the scale above; 크게 about 112 %; 아주 크게 about 125 %. Every v4 font size reads these tokens. */
+html[data-text="md"] { --ts: 1; }
+html[data-text="lg"] {
+  --ts: 1.12;
+  --t-2xs: 13.5px; --t-xs: 14.5px; --t-sm: 15.5px; --t-md: 17.5px; --t-lg: 21px; --t-xl: 29px; --t-2xl: 40px; --t-led: 56px;
+}
+html[data-text="xl"] {
+  --ts: 1.25;
+  --t-2xs: 15px; --t-xs: 16px; --t-sm: 17.5px; --t-md: 19.5px; --t-lg: 24px; --t-xl: 32.5px; --t-2xl: 45px; --t-led: 62px;
 }

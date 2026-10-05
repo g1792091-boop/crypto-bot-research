@@ -15,7 +15,7 @@
 .vs-now { color: var(--ink); font-weight: 700; }
 .vs-flip { color: var(--series-coin); }
 .vs-w { display: flex; justify-content: flex-end; }
-.vs-w .pp { font-size: 11px; padding: 0 6px; }
+.vs-w .pp { font-size: var(--t-xs); padding: 0 6px; }
 .vs-seg:empty { display: none; }
 @media (max-width: 420px) {
   .vs-row { grid-template-columns: minmax(0, 1fr) repeat(3, minmax(0, .9fr)) 52px; gap: 4px; padding: 6px 8px; font-size: var(--t-xs); }

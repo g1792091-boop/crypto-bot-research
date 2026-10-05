@@ -32,7 +32,7 @@ export function applySkin(id = currentSkin()) {
  * remembers it on this device and calls onChange(id) (the shell draws the current screen again).
  */
 export function skinSwitch(onChange) {
-  const cur = currentSkin();
+  const cur = document.documentElement.dataset.skin || currentSkin(); // what is applied wins over storage (blocked storage)
   const btns = SKINS.map((x) => h("button", {type: "button", "aria-pressed": String(x.id === cur), dataset: {skin: x.id},
     onclick: () => {
       if (document.documentElement.dataset.skin === x.id) return;

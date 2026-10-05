@@ -28,7 +28,7 @@ html.st-open, html.st-open body { overflow: hidden; }
 /* head: ring, title, day, buttons */
 .st-head { position: relative; display: flex; align-items: center; gap: 8px; min-width: 0; padding: 10px 0 4px; }
 .st-av { flex: none; }
-.st-av .sk-in b { font-size: 19px; }
+.st-av .sk-in b { font-size: var(--t-lg); }
 .st-ht { display: grid; min-width: 0; line-height: 1.3; }
 .st-ht b { font-size: var(--t-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .st-day { font-size: var(--t-xs); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -78,7 +78,7 @@ html.st-open, html.st-open body { overflow: hidden; }
   .st-frame { width: 430px; height: min(880px, calc(100vh - 64px)); border-radius: var(--r-xl); border: 1px solid var(--line-2);
     box-shadow: 0 40px 90px var(--bubble-shadow), 0 0 0 6px var(--surface); padding: 14px 20px 14px; overflow: hidden; }
   .st-nav { position: absolute; z-index: 2; top: 50%; display: grid; place-items: center; width: 48px; height: 48px; margin-top: -24px; padding: 0 0 4px;
-    border-radius: 50%; border: 1px solid var(--line-2); background: var(--surface-2); color: var(--ink); font-size: 30px; line-height: 1; }
+    border-radius: 50%; border: 1px solid var(--line-2); background: var(--surface-2); color: var(--ink); font-size: calc(30px * var(--ts)); line-height: 1; }
   .st-nav:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
   .st-nav:disabled { opacity: .3; }
   .st-nav.prev { left: calc(50% - 215px - 76px); }
@@ -91,7 +91,7 @@ html.st-open, html.st-open body { overflow: hidden; }
 /* ================================================================ the pages (story-pages.js) */
 .sp { display: grid; gap: 14px; align-content: start; min-width: 0; }
 .sp-kick { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: var(--t-sm); font-weight: 700; color: var(--ink-2); }
-.sp-n { flex: none; padding: 4px 6px 3px; border-radius: 4px; background: var(--accent); color: var(--accent-ink); font: 400 11px/1 var(--f-pixel); letter-spacing: .05em; }
+.sp-n { flex: none; padding: 4px 6px 3px; border-radius: 4px; background: var(--accent); color: var(--accent-ink); font: 400 var(--t-xs)/1 var(--f-pixel); letter-spacing: .05em; }
 .sp-line { font-size: var(--t-md); line-height: 1.6; color: var(--ink); }
 .sp-line .pp { margin-left: 6px; vertical-align: 1px; }
 .sp-note { font-size: var(--t-xs); line-height: 1.6; color: var(--muted); }
@@ -109,7 +109,7 @@ html.st-open, html.st-open body { overflow: hidden; }
 
 /* 01 summary */
 .sp-hero { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; }
-.sp-hero .sp-led { font-size: 84px; }
+.sp-hero .sp-led { font-size: calc(84px * var(--ts)); }
 .sp-unit { font-size: var(--t-xl); color: var(--ink-2); }
 .sp-herot { flex-basis: 100%; display: grid; font-size: var(--t-sm); color: var(--ink-2); line-height: 1.45; }
 .sp-herot small { font-size: var(--t-xs); color: var(--muted); }
@@ -142,7 +142,7 @@ html.st-open, html.st-open body { overflow: hidden; }
 .sp-mv-top { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: var(--t-xs); color: var(--ink-2); }
 .sp-mv-k { font-weight: 700; white-space: nowrap; }
 .sp-mv-name { min-width: 0; font-size: var(--t-md); font-weight: 700; }
-.sp-mv-num { font: 400 50px/.95 var(--f-led); }
+.sp-mv-num { font: 400 calc(50px * var(--ts))/.95 var(--f-led); }
 .sp-mv-num small { font: 400 var(--t-sm)/1 var(--f-body); color: var(--muted); }
 .sp-mv-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: var(--t-xs); color: var(--ink-2); }
 .sp-mv-go { margin-left: auto; display: inline-flex; align-items: center; min-height: 32px; padding: 0 10px; border-radius: 10px;
@@ -167,7 +167,7 @@ html.st-open, html.st-open body { overflow: hidden; }
 .sp-col.own .sp-cval { font-size: var(--t-sm); }
 .sp-clab { max-width: 100%; font-size: var(--t-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink-2); }
 .sp-col.own .sp-clab { color: var(--accent); font-weight: 700; }
-.sp-cn { font-size: 11px; color: var(--muted); }
+.sp-cn { font-size: var(--t-xs); color: var(--muted); }
 .sp-pipsw { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; font-size: var(--t-xs); }
 .sp-pips { display: flex; flex-wrap: wrap; gap: 3px; }
 .sp-pips i { width: 11px; height: 11px; border-radius: 2px; background: var(--line-2); animation: spPop .3s var(--ease) both; }
@@ -182,7 +182,7 @@ html.st-open, html.st-open body { overflow: hidden; }
 .sp-waffle .f { background: var(--surface-3); box-shadow: inset 0 0 0 1px var(--line-2); }
 .sp-wcount { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .sp-wcount > div { display: grid; justify-items: center; gap: 2px; padding: 8px 4px; border-radius: var(--r-sm); background: var(--surface-2); }
-.sp-wcount b { font: 400 36px/1 var(--f-led); }
+.sp-wcount b { font: 400 var(--t-2xl)/1 var(--f-led); }
 .sp-wcount .up b { color: var(--up); } .sp-wcount .down b { color: var(--down); }
 .sp-wcount span { font-size: var(--t-xs); color: var(--ink-2); }
 .sp-fam { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 10px 12px; border-radius: var(--r-md); border: 1px dashed var(--line-2); font-size: var(--t-sm); }
@@ -193,11 +193,11 @@ html.st-open, html.st-open body { overflow: hidden; }
   border-radius: var(--r-lg); border: 1px solid var(--line); background: radial-gradient(circle at 50% 32%, var(--up-soft), transparent 68%), var(--surface); }
 .sp-calm-art { animation: spPop .5s var(--ease) both; }
 .sp-calm-k { margin-top: 4px; font-size: var(--t-md); font-weight: 700; color: var(--ink); }
-.sp-calm-big { margin-top: -6px; font: 400 96px/.9 var(--f-led); color: var(--up); text-shadow: 0 0 22px var(--up-soft); }
+.sp-calm-big { margin-top: -6px; font: 400 calc(96px * var(--ts))/.9 var(--f-led); color: var(--up); text-shadow: 0 0 22px var(--up-soft); }
 .sp-bhero { display: flex; align-items: center; gap: 16px; padding: 16px; border-radius: var(--r-lg); border: 1px solid var(--warn-line); background: var(--warn-soft); }
 .sp-bnums { flex: 1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .sp-bnums > div { display: grid; }
-.sp-bnums b { font: 400 52px/1 var(--f-led); color: var(--warn); }
+.sp-bnums b { font: 400 calc(52px * var(--ts))/1 var(--f-led); color: var(--warn); }
 .sp-bnums span { font-size: var(--t-xs); color: var(--ink-2); }
 .sp-bgroups { display: flex; flex-wrap: wrap; gap: 8px 12px; font-size: var(--t-xs); color: var(--ink-2); }
 .sp-bg { display: inline-flex; align-items: center; gap: 6px; }
@@ -222,7 +222,7 @@ html.st-open, html.st-open body { overflow: hidden; }
 
 /* 07 D-day */
 .sp-dbig { display: grid; justify-items: center; gap: 8px; padding: 14px 0 4px; }
-.sp-dbig .sp-led { font-size: 108px; }
+.sp-dbig .sp-led { font-size: calc(108px * var(--ts)); }
 .sp-dsub { font-size: var(--t-sm); color: var(--ink-2); }
 .sp-road { display: flex; align-items: flex-end; gap: 6px; }
 .sp-cells { flex: 1; display: grid; grid-template-columns: repeat(var(--of), minmax(0, 1fr)); gap: 2px; }
@@ -234,18 +234,18 @@ html.st-open, html.st-open body { overflow: hidden; }
 .sp-roadl { display: flex; justify-content: space-between; gap: 8px; font-size: var(--t-xs); color: var(--muted); }
 
 @media (min-width: 760px) {
-  .sp-hero .sp-led { font-size: 76px; }
-  .sp-dbig .sp-led { font-size: 96px; }
+  .sp-hero .sp-led { font-size: calc(76px * var(--ts)); }
+  .sp-dbig .sp-led { font-size: calc(96px * var(--ts)); }
 }
 @media (max-height: 700px) {
-  .sp-hero .sp-led { font-size: 60px; }
+  .sp-hero .sp-led { font-size: calc(60px * var(--ts)); }
   .sp-cbox { height: 130px; }
-  .sp-dbig .sp-led { font-size: 76px; }
+  .sp-dbig .sp-led { font-size: calc(76px * var(--ts)); }
   .sp { gap: 10px; }
   .sp-groups { gap: 8px; padding: 10px 12px; }
-  .sp-mv-num { font-size: 40px; }
+  .sp-mv-num { font-size: calc(40px * var(--ts)); }
   .sp-calm { padding: 20px 12px; }
-  .sp-calm-big { font-size: 72px; }
-  .sp-wcount b { font-size: 28px; }
+  .sp-calm-big { font-size: calc(72px * var(--ts)); }
+  .sp-wcount b { font-size: calc(28px * var(--ts)); }
   .sp-room { min-height: 80px; }
 }

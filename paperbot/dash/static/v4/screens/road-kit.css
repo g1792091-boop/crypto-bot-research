@@ -40,5 +40,5 @@ a.proad-c:focus-visible { outline: none; }
 @media (prefers-reduced-motion: reduce) { .proad-step { animation: none; } }
 .proad-err { font-size: var(--t-xs); grid-column: 1 / -1; }
 .proad-card .proad { gap: 8px; }
-.proad-mini { font-size: 11px; }
+.proad-mini { font-size: var(--t-xs); }
 .proad-compact { gap: 4px; }

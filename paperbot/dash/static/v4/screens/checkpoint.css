@@ -10,7 +10,7 @@
 .ck-dtext { font: 700 var(--t-md)/1 var(--f-pixel); color: var(--ink-2); white-space: nowrap; }
 .ck-dtext b { color: var(--accent); }
 .ck-big { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
-.ck-d { font: 400 64px/.85 var(--f-led); color: var(--accent); text-shadow: 0 0 18px var(--accent-glow); letter-spacing: .02em; }
+.ck-d { font: 400 calc(64px * var(--ts))/.85 var(--f-led); color: var(--accent); text-shadow: 0 0 18px var(--accent-glow); letter-spacing: .02em; }
 .ck-bigt { display: grid; gap: 4px; min-width: 0; }
 .ck-when { font-weight: 700; font-size: var(--t-md); }
 .ck-left { color: var(--ink-2); font-size: var(--t-sm); }
@@ -83,7 +83,7 @@
 .ck-stamp { position: absolute; top: 10px; right: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 1px; width: 70px; height: 70px; box-sizing: border-box; border: 3px double var(--accent); border-radius: 50%; color: var(--accent);
   transform: rotate(-12deg); line-height: 1.05; pointer-events: none; }
-.ck-stamp b { font-size: var(--t-sm); } .ck-stamp small { font-size: 10px; }
+.ck-stamp b { font-size: var(--t-sm); } .ck-stamp small { font-size: var(--t-2xs); }
 .ck-vhead .ck-vt { padding-right: 76px; }
 .ck-luck { display: flex; flex-wrap: wrap; gap: 5px; margin: 6px 0 2px; }
 .ck-luck i { width: 12px; height: 12px; box-sizing: border-box; border-radius: 50%; background: var(--ink-2); }

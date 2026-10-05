@@ -4,7 +4,7 @@
 .ash-grid { display: grid; gap: 2px; min-width: 300px; }
 .ash-row { display: grid; grid-template-columns: 18px repeat(24, minmax(0, 1fr)); gap: 2px; align-items: center; }
 .ash-k { font-size: var(--t-xs); color: var(--muted); text-align: center; }
-.ash-hr { font-size: 10px; color: var(--muted); text-align: left; white-space: nowrap; overflow: visible; font-variant-numeric: tabular-nums; }
+.ash-hr { font-size: var(--t-2xs); color: var(--muted); text-align: left; white-space: nowrap; overflow: visible; font-variant-numeric: tabular-nums; }
 .ash-c { appearance: none; position: relative; padding: 0; margin: 0; aspect-ratio: 1; min-height: 10px; border-radius: 2px;
   border: 1px solid var(--line); background: var(--surface-2); cursor: pointer; overflow: hidden; }
 .ash-c::before { content: ""; position: absolute; inset: 0; opacity: calc(.12 + .78 * var(--a, 0)); }
@@ -35,7 +35,7 @@
 .ash-bin.sel .ash-fill, .ash-bin:focus-visible .ash-fill { opacity: 1; }
 .ash-bin:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
 .ash-axis { position: absolute; left: 0; right: 0; bottom: 0; height: 16px; }
-.ash-axis span { position: absolute; left: var(--x); transform: translateX(-50%); font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ash-axis span { position: absolute; left: var(--x); transform: translateX(-50%); font-size: var(--t-2xs); color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ash-unit { margin: 0; font-size: var(--t-xs); color: var(--muted); }
 @keyframes ash-grow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
 @media (prefers-reduced-motion: reduce) { .ash-bin .ash-fill { animation: none; } }

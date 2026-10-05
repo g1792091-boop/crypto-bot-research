@@ -10,6 +10,8 @@ body {
   word-break: keep-all; overflow-wrap: break-word; -webkit-font-smoothing: antialiased; overflow-x: hidden;
 }
 button, input, select, textarea { font: inherit; color: inherit; }
+/* a <small> without its own size never drops below the 12px floor (the browser default is "smaller") */
+small { font-size: max(var(--t-2xs), .86em); }
 button { cursor: pointer; }
 button:disabled { cursor: default; }
 a { color: var(--accent); }
@@ -97,6 +99,13 @@ em { font-style: normal; color: var(--accent); }
 .skinsw .k { padding: 0 6px 0 6px; color: var(--muted); font: 700 var(--t-xs)/1 var(--f-body); white-space: nowrap; }
 .skinsw button { appearance: none; height: 28px; padding: 0 9px; border-radius: 7px; border: 0; background: transparent; color: var(--ink-2); font: 700 var(--t-xs)/1 var(--f-body); white-space: nowrap; cursor: pointer; }
 .skinsw button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+/* 글자 크기 (core/textsize.js): the same small control, first at the end of the tabs; 화면 색 follows right after it */
+.textsw + .skinsw { margin-left: 6px; }
+/* 글자 크기 on a phone: one cycling button first in the sub-tab row (the full control is at the far end of that row) */
+.textcyc { display: none; flex: none; align-items: baseline; gap: 4px; height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line-2);
+  background: var(--surface); color: var(--ink); font: 800 var(--t-sm)/1 var(--f-body); cursor: pointer; }
+.textcyc small { color: var(--muted); font: 700 var(--t-2xs)/1 var(--f-body); }
+@media (max-width: 759px) { .textcyc { display: inline-flex; } .subtabs .textsw { display: none; } }
 
 /* the screen container */
 .screen { display: block; max-width: var(--page-max); margin-inline: auto; padding: 16px var(--gutter) 40px; min-height: 60vh; outline: none; }
@@ -108,7 +117,7 @@ em { font-style: normal; color: var(--accent); }
 
 /* phone bottom tab bar */
 .botbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); height: calc(var(--bot-h) + env(safe-area-inset-bottom, 0px)); padding-bottom: env(safe-area-inset-bottom, 0px); background: var(--botbar); border-top: 1px solid var(--line-2); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
-.botbar a { display: grid; justify-items: center; align-content: center; gap: 4px; color: var(--muted); text-decoration: none; font: 700 12px/1 var(--f-body); position: relative; }
+.botbar a { display: grid; justify-items: center; align-content: center; gap: 4px; color: var(--muted); text-decoration: none; font: 700 var(--t-xs)/1 var(--f-body); position: relative; }
 .botbar a svg { width: 20px; height: 20px; }
 .botbar a[aria-current="page"] { color: var(--accent); }
 .botbar a[aria-current="page"]::before { content: ""; position: absolute; top: 0; left: 28%; right: 28%; height: 3px; border-radius: 0 0 3px 3px; background: var(--accent); }
