@@ -410,36 +410,56 @@ export function laneLegend(o = {}) {
 }
 
 /**
- * raceMini(ctx) -> a small home card: the four groups' median lines with the coin flips' band, the order now, and a
- * "자세히 →" link to #/flow. It loads /api/v4/flow/race itself (every 5 minutes while home is open).
+ * raceParts(ctx, {height, onModel, css}) -> {chart, list, sub, note}: the small race without its frame, for home's head card
+ * (the four groups' median lines with the coin flips' band, and the order now as the legend: the numbers ARE the
+ * lines' right ends, so the legend always matches the curve). It loads /api/v4/flow/race itself every 5 minutes while
+ * the screen is open; onModel(model | null) gets each new model (home draws its group-card lines from it).
  */
-export function raceMini(ctx) {
-  ensureKitCss();
+export function raceParts(ctx, o = {}) {
+  if (o.css !== false) ensureKitCss();          // home.css @imports the kit itself (css: false)
   let clipped = [], model = null;
-  const chart = raceChart({mini: true, height: 74, onClip: (_f, c) => { const was = clipped.join(); clipped = c; if (was !== c.join() && model) list.render(); }});
+  const chart = raceChart({mini: true, height: o.height || 74, onClip: (_f, c) => { const was = clipped.join(); clipped = c; if (was !== c.join() && model) list.render(); }});
   const list = h("ol", {class: "fk-mlist", "aria-label": "지금 순서 (참고)"});
   const sub = h("span", {class: "sub"});
-  const el = ui.card({plate: "묶음 레이스", cls: "fk-minicard", label: "묶음 레이스",
-    acts: [h("a", {class: "btn-line", href: ctx.href("flow")}, "자세히 →")]},
-  h("div", {class: "fk-mtop"}, sub, ui.pill("", "ref")), chart, list,
-  ui.note("선 = 묶음 안 계좌 잔고의 중앙값 · 회색 띠 = 동전 봇 가운데 50% · 순서는 중간 기록일 뿐 판정이 아닙니다"));
+  const note = ui.note("선 = 묶음 안 계좌 평가금(열린 포지션 포함)의 중앙값 · 회색 띠 = 동전 봇 가운데 50% · 순서는 중간 기록일 뿐 판정이 아닙니다");
   let off = false;
   async function load() {
     if (off) return;
     let d;
-    try { d = await ctx.api(RACE_API + "?step=auto"); } catch (e) { if (e && e.status === 404) off = true; chart.set(null); return; }
+    try { d = await ctx.api(RACE_API + "?step=auto"); } catch (e) { if (e && e.status === 404) off = true; if (!model) chart.set(null); return; }
     if (!ctx.alive()) return;
     const m = (model = prep(d));
     chart.set(m);
+    if (o.onModel) o.onModel(m);
     if (!m) { list.replaceChildren(); sub.textContent = ""; return; }
     sub.textContent = `D+${dayN(m.now, m.start)} · ${m.step >= DAY ? "하루" : m.step >= 4 * 3600000 ? "4시간" : "1시간"}마다`;
     list.render();
   }
-  // the order now; a group whose line runs off the small chart (one account: the reel) carries an arrow
-  list.render = () => put(list, orderAt(model, model.now).map((l) => h("li", {class: l.id},
-    h("i", {class: ["fk-sw", l.id === "coin" ? "band" : l.id]}), h("span", {class: "fk-nm"}, laneKo(l.id)),
-    h("b", {class: ["num", fmt.tone(l.at, fmt.pct(l.at))], title: clipped.includes(l.id) ? "1계좌라 흔들림이 커서 작은 그래프 밖으로 나갑니다" : null},
-      clipped.includes(l.id) ? (l.at > 0 ? "↑ " : "↓ ") : "", fmt.pct(l.at)))));
+  // the order now; a group whose line runs off the small chart (one account: the reel) carries an arrow. A value that
+  // really changed since the last answer gets one soft tint (motion.flash: real data only, never on a timer).
+  list.render = () => {
+    const was = new Map([...list.querySelectorAll("li[data-id]")].map((li) => [li.dataset.id, li.dataset]));
+    put(list, orderAt(model, model.now).map((l) => {
+      const shown = fmt.pct(l.at);
+      const b = h("b", {class: ["num", fmt.tone(l.at, shown)], title: clipped.includes(l.id) ? "1계좌라 흔들림이 커서 작은 그래프 밖으로 나갑니다" : null},
+        clipped.includes(l.id) ? (l.at > 0 ? "↑ " : "↓ ") : "", shown);
+      const w = was.get(l.id);
+      if (w && w.v !== shown) motion.flash(b, l.at > Number(w.r) ? "up" : "down");
+      return h("li", {class: l.id, dataset: {id: l.id, v: shown, r: String(l.at)}}, h("i", {class: ["fk-sw", l.id === "coin" ? "band" : l.id]}),
+        h("span", {class: "fk-nm"}, laneKo(l.id)), b);
+    }));
+  };
   ctx.every(300000, load, {now: true});
-  return el;
+  return {chart, list, sub, note, model: () => model};
+}
+
+/**
+ * raceMini(ctx) -> a small card: the race parts above in a card with the plate 묶음 레이스 and a "자세히 →" link to
+ * #/flow (home puts the same parts inside its head card instead).
+ */
+export function raceMini(ctx) {
+  const p = raceParts(ctx);
+  return ui.card({plate: "묶음 레이스", cls: "fk-minicard", label: "묶음 레이스",
+    acts: [h("a", {class: "btn-line", href: ctx.href("flow")}, "자세히 →")]},
+  h("div", {class: "fk-mtop"}, p.sub, ui.pill("", "ref")), p.chart, p.list, p.note);
 }

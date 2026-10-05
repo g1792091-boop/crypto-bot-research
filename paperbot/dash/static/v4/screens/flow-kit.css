@@ -1,12 +1,12 @@
 /* 흐름 kit (screens/flow-kit.js): the group race chart, its labels and the small home card. Loaded by flow.css
-   (@import) and, on home, by raceMini (a link to this file). One fixed colour per group, tokens only:
-   기존 36 = the accent yellow, 딥시크 = terminal cyan, 5분봉 = a magenta on the avatar recipe, 동전 봇 = grey (the
-   baseline: band + dashed median). Identity is never colour alone: labels and legends name every line. */
-[data-screen="flow"], .fk-minicard {
-  --c-core: var(--accent);
-  --c-ds: var(--term-cyan);
-  --c-m5: hsl(300 var(--av-s) var(--av-ring-l));
-  --c-coin: var(--ink-2);
+   (@import) and by home.css (@import; raceMini / raceParts also add a link when used elsewhere). One fixed colour per
+   group, the --series-* tokens of tokens.css: 기존 36 yellow, 딥시크 cyan, 5분봉 magenta, 동전 봇 grey (the baseline:
+   band + dashed median). Identity is never colour alone: labels and legends name every line. */
+[data-screen], .fk-minicard {
+  --c-core: var(--series-core);
+  --c-ds: var(--series-ds);
+  --c-m5: var(--series-m5);
+  --c-coin: var(--series-coin);
 }
 
 /* swatches (legend, labels, table, calendar): each carries its group's class; "band" = the coin flips' band */
