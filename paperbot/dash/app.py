@@ -1307,6 +1307,12 @@ CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' 
        "font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; "
        "connect-src 'self'; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; "
        "form-action 'self'; frame-ancestors 'none'")
+# the old dashboard at /v3 ('예전 화면') reads Binance's public WebSockets (wss://fstream.binance.com: live prices,
+# candles, order book) and embeds the TradingView chart (s3.tradingview.com/tv.js) straight from the browser; the
+# strict policy above would cut all of them off. Its page keeps the header it had before #88 (a CSP applies per page:
+# the v4 page, the login page and every API answer keep the strict one).
+CSP_V3 = "frame-ancestors 'none'"
+V3_PAGES = ("/v3", "/static/index.html")
 PUBLIC_PATHS = ("/login", "/api/login", "/static/login.html", "/static/login.css", "/static/login.js",
                 # the phone home-screen shortcut: a browser fetches these without the login cookie (no data in them)
                 "/static/manifest.json", "/static/icon.svg", "/static/icon-192.png", "/static/icon-512.png",
@@ -2422,7 +2428,7 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
         resp = await _guarded(req, call_next)
         # never inside another site's frame (the approve / reject buttons, the login form)
         resp.headers["X-Frame-Options"] = "DENY"
-        resp.headers["Content-Security-Policy"] = CSP
+        resp.headers["Content-Security-Policy"] = CSP_V3 if req.url.path in V3_PAGES else CSP
         return resp
 
     @app.get("/login")
