@@ -4,9 +4,9 @@
 import {s} from "./dom.js";
 
 export const GROUPS = [
-  {id: "home", ko: "홈", screens: ["home", "board", "checkpoint"]},
+  {id: "home", ko: "홈", screens: ["home", "board", "flow", "checkpoint"]},
   {id: "trade", ko: "거래", screens: ["positions", "chart", "market"]},
-  {id: "strat", ko: "매매법", screens: ["strategies", "analysis"]},
+  {id: "strat", ko: "매매법", screens: ["strategies", "grid", "analysis"]},
   {id: "agents", ko: "에이전트", screens: ["office", "rooms", "digest", "debate"]},
   {id: "server", ko: "서버", screens: ["server", "alerts", "signals", "howto", "faq"]},
 ];
@@ -14,12 +14,16 @@ export const GROUPS = [
 export const SCREENS = {
   home: {ko: "요약", group: "home", title: "홈"},
   board: {ko: "순위표", group: "home", title: "순위표"},
+  flow: {ko: "흐름", group: "home", title: "흐름"},
+  story: {ko: "하이라이트", group: "home", title: "오늘의 하이라이트", hidden: true},
   checkpoint: {ko: "판정", group: "home", title: "30일 판정"},
   account: {ko: "계좌", group: "home", title: "계좌", hidden: true},
   positions: {ko: "포지션", group: "trade", title: "포지션"},
   chart: {ko: "차트", group: "trade", title: "차트"},
   market: {ko: "시장", group: "trade", title: "시장"},
   strategies: {ko: "매매법", group: "strat", title: "매매법"},
+  grid: {ko: "한눈 지도", group: "strat", title: "한눈 지도"},
+  replay: {ko: "다시보기", group: "strat", title: "거래 다시보기", hidden: true},
   analysis: {ko: "분석", group: "strat", title: "분석"},
   office: {ko: "회의실", group: "agents", title: "회의실"},
   rooms: {ko: "에이전트 방", group: "agents", title: "에이전트 방"},

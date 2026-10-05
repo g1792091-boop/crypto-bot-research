@@ -3051,5 +3051,10 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
     app.state.analysis = analysis.register(app, data, rooms, db, daily_db, checkpoint_db, debate_db,
                                            failalert_dir=failalert_dir or analysis.FAILALERT_DIR)
 
+    # v4 additions (dash/more): race and calendar, strategy grid, daily story, since-last-visit, trade replay (read-only)
+    from . import more
+    app.state.more = more.register_all(app, data=data, rooms=rooms, db=db, daily_db=daily_db, agents_db=agents_db,
+                                       checkpoint_db=checkpoint_db, candles=candles)
+
     app.mount("/static", StaticFiles(directory=STATIC), name="static")
     return app

@@ -108,7 +108,7 @@ def test_inventory_maps_every_old_view_and_every_new_screen():
         if not name.startswith("_"):
             assert name in inv, name
     # every GET route of the old server is listed
-    app_src = _read(os.path.join(ROOT, "paperbot", "dash", "app.py")) + _read(os.path.join(ROOT, "paperbot", "dash", "analysis.py"))
+    app_src = _server_src()
     for path in re.findall(r'@app\.get\("(/api/[^"{]+)', app_src):
         base = path.rstrip("/")
         assert base in inv or base.rsplit("/", 1)[0] in inv, path
@@ -302,8 +302,16 @@ def _api_paths(text: str) -> set:
     return out
 
 
+def _server_src() -> str:
+    """dash/app.py, dash/analysis.py and the v4 additions in dash/more/*.py (each registers its own routes)."""
+    more = os.path.join(ROOT, "paperbot", "dash", "more")
+    files = [os.path.join(ROOT, "paperbot", "dash", f) for f in ("app.py", "analysis.py")]
+    files += sorted(os.path.join(more, f) for f in os.listdir(more) if f.endswith(".py")) if os.path.isdir(more) else []
+    return "".join(_read(f) for f in files)
+
+
 def _server_routes() -> set:
-    src = _read(os.path.join(ROOT, "paperbot", "dash", "app.py")) + _read(os.path.join(ROOT, "paperbot", "dash", "analysis.py"))
+    src = _server_src()
     return {re.sub(r"\{[^}]+\}", "{}", p) for p in re.findall(r'@app\.(?:get|post)\("(/api/[^"]+)"', src)}
 
 

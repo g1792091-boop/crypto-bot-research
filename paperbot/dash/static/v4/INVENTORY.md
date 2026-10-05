@@ -224,3 +224,14 @@ Still missing:
 - `/login` sends the owners to `/` (the old UI); v4 is at `/static/v4/index.html` until the owners switch. v4 now sends an expired session to `/login?next=<the v4 screen>`; the login page still has to honour it.
 - `/api/levwhy` says "위 단계가 안 된 이유 기록 못 찾음" for DeepSeek and 5m accounts, which always trade at the 보통 multiple: the page shows "딥시크·5분봉은 규칙상 늘 보통 배수" instead.
 - No compression: `/api/board` (about 220 KB) and `/api/trades` travel uncompressed.
+
+## 16. v4 additions (after the first build; dashboard only, no experiment reset)
+
+| Addition | Screen / place | Server (dash/more, read-only) |
+|---|---|---|
+| 묶음 레이스 · 수익 달력 | flow (홈 › 흐름); a small race card on home | dash/more/flow.py |
+| 매매법 × 봉 지도 · 매매법 프로필 카드 | grid (매매법 › 한눈 지도); profile cards in strategies and account | dash/more/grid.py |
+| 오늘의 하이라이트 | story (opened from the top of home) | dash/more/story.py |
+| 지난번 본 뒤로 바뀐 것 | core/since.js (sheet when the app opens) | dash/more/since.py |
+| 거래 다시보기 | replay (#/replay/<trade id>), opened from trade rows | dash/more/replay.py |
+| 움직임 다듬기 | core/motion.js and the screens it touches | none |
