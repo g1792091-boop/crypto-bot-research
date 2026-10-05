@@ -365,7 +365,7 @@ def _grouped_entries(entries: list[tuple[str, dict]], names: dict) -> list[str]:
             if body:
                 L += [f"{c} · 진입 {px(ce[0][1]['entry'])}" if same else c] + body
         if len(es) > shown:
-            L.append(f"외 {len(es) - shown}건 — 대시보드 포지션 탭")
+            L.append(f"외 {len(es) - shown}건 — 대시보드 '거래 › 포지션'")
     return L
 
 
@@ -382,7 +382,7 @@ def _grouped_exits(exits: list[dict], shown: list[dict], names: dict) -> list[st
             L.append(f"- {label(x['account_id'], x['kind'], names)} · {coin(x['symbol'])}"
                      f" · {x['roe'] * 100:+.1f}% · {usd(x['pnl'])}{bal}")
         if len(xs) > len(listed):
-            L.append(f"외 {len(xs) - len(listed)}건 — 대시보드 '오늘 체결'")
+            L.append(f"외 {len(xs) - len(listed)}건 — 대시보드 '거래 › 포지션 › 체결 기록'")
     return L
 
 
@@ -447,7 +447,7 @@ def message(entries: list[tuple[str, dict]], exits: list[dict], open_n: int, now
         for x in sorted(shown, key=lambda x: -abs(x["pnl"])):
             L += [""] + exit_block(x, names)
         if len(exits) > len(shown):
-            L += ["", f"외 {len(exits) - len(shown)}건 (작은 손익) — 대시보드 '오늘 체결'"]
+            L += ["", f"외 {len(exits) - len(shown)}건 (작은 손익) — 대시보드 '거래 › 포지션 › 체결 기록'"]
     else:
         L += _grouped_exits(exits, shown, names)
     L += ["", f"열린 포지션 {open_n}개"] + tail

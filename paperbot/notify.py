@@ -452,7 +452,7 @@ KO_LINES = (
     (r"\[extra\] (\S+@\S+): (.*)", lambda m: f"추가 계좌 · {who(m[1])}\n\n{m[2]}"),
     (r"\[extra\] (.*)", lambda m: f"추가 계좌: {m[1]}"),
     # the last line of a digest (Digest here, extras.py): the screen that lists the rest
-    (r"외 (\d+)건 \(대시보드 알림 목록\)$", lambda m: f"외 {m[1]}건 (대시보드 '서버 상태 → 경고')"),
+    (r"외 (\d+)건 \(대시보드 알림 목록\)$", lambda m: f"외 {m[1]}건 (대시보드 '서버 › 알림 기록')"),
 )
 
 
@@ -473,7 +473,7 @@ _BUST = re.compile(r"\[([^\]]+)\] BUST: bust: equity (-?[\d.]+) below ([\d.]+)")
 _DD = re.compile(r"\[([^\]]+)\] drawdown ([\d.]+)% \(level (\d+)%\), equity (-?[\d.]+)")
 _MORE = re.compile(r"외 (\d+)건 \(대시보드 알림 목록\)$")
 _GROUPED = re.compile(r"(\S+) 계좌 경고 (\d+)건 · 계좌 (\d+)개: (.*) \(대시보드 알림 목록\)$")
-_SCREEN = "(대시보드 '서버 상태 → 경고')"
+_SCREEN = "(대시보드 '서버 › 알림 기록')"
 _KIND_ORDER = ("파산", "강제청산", "정지", "낙폭", "기타")
 
 
@@ -604,11 +604,29 @@ def level_for(level: str, text: str) -> str:
     return level
 
 
+# Dashboard places named by senders this module does not word (v3 tab names -> the v4 UI's menu › screen › tab). The
+# checkpoint's own verdict text (paperbot/checkpoint.py, pinned by docs/paper-v4-verdict.md) is rewritten here, so
+# that file stays as pinned.
+V4_POINTERS = (("자세히: 대시보드 순위표 '체크포인트 판정'", "자세히: 대시보드 홈 › 판정"),
+               ("대시보드 '서버 상태 → 경고'", "대시보드 '서버 › 알림 기록'"),
+               ("대시보드 '오늘 체결'", "대시보드 '거래 › 포지션 › 체결 기록'"))
+
+
+def v4_pointers(text: str) -> str:
+    """``text`` with any v3 dashboard place replaced by its v4 name (V4_POINTERS). Never raises."""
+    try:
+        for old, new in V4_POINTERS:
+            text = text.replace(old, new)
+    except Exception:  # noqa: BLE001
+        pass
+    return text
+
+
 def telegram_text(level: str, text: str) -> tuple[str, str]:
     """(level, text) exactly as Telegram gets them: the level after ``level_for``, the wording (``render``) and
     one level mark in front unless the text already starts with an emoji."""
     lvl = level_for(level, text)
-    body = render(text)
+    body = v4_pointers(render(text))
     return lvl, ("" if starts_with_emoji(body) else PREFIX.get(lvl, f"[{lvl}] ")) + body
 
 
