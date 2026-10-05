@@ -1,3 +1,4 @@
+@import url("strategies-params.css");
 @import url("grid-kit.css");
 @import url("reel-duel.css");
 /* strategies: 매매법 (builder C). Screen-only rules; tokens and components come from the shared css. Phones first:

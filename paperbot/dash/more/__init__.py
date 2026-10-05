@@ -9,13 +9,14 @@ data (dash.app.Data), rooms, db, daily_db, agents_db, checkpoint_db, candles (th
     story   오늘의 하이라이트 (홈 맨 위 스토리)
     since   지난번 본 뒤로 바뀐 것 (앱을 열 때)
     replay  거래 다시보기 (#/replay/<trade id>)
+    params  숫자(파라미터) 시험 결과 (매매법 상세: 5년 과거 시험, 연구 파일만 읽음)
 """
 from __future__ import annotations
 
 import importlib
 from types import SimpleNamespace
 
-MODULES = ("flow", "grid", "story", "since", "replay")
+MODULES = ("flow", "grid", "story", "since", "replay", "params")
 
 
 def register_all(app, **kw) -> dict:
