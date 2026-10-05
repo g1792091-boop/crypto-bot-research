@@ -545,7 +545,8 @@ function renderStatus(){
   const nc = O.nextChatIn();
   const nx = O.nextCycleIn(), cs = O.cycleState(), cu = provUse().n.anthropic || 0, cap = provCapOf("anthropic");
   const cmode = claudeMode(c);
-  $o("#ofFoot").innerHTML = `${c.cycle !== false ? `${c.cycleMin}분 주기 ${cs.cycling ? "일하는 중" : `다음 ${nx > 60e3 ? Math.ceil(nx / 60e3) + "분" : "곧"}`} · ` : ""}${settings.keys.anthropic ? `Claude(${cmode === "all" ? "전원" : cmode === "key" ? "핵심 자리" : "안 씀"}) 오늘 ${cu}/${cap}번 <button id="ofCap" class="of-link">한도 바꾸기</button> · ` : `<button id="ofCapKey" class="of-link">Claude 키 넣기</button> · `}${c.train !== false ? `오늘 학습 예시 +${u.trained || 0} · ` : ""}오늘 회의 ${u.meetings || 0}번 (자동 ${u.auto || 0}/${c.dailyMax}) · 수다 ${u.chats || 0}/${c.chatMax}${c.chat ? (O.isChatting() ? " (지금 대화 중)" : ` (다음 ${nc > 60e3 ? Math.round(nc / 60e3) + "분" : "곧"})`) : ""} · AI 호출 ${u.calls || 0}번 · <button id="ofClear" class="of-link">기록 지우기</button>`;
+  const msn = (() => { try { return O.missionState?.() || null; } catch(e){ return null; } })();
+  $o("#ofFoot").innerHTML = `${msn?.doing ? `<b style="color:#e0a53e">📌 대표 지시 ${msn.doing}건 진행 중</b> (${msn.list.map(x => `${E(x.text.slice(0, 16))}… ${x.attempts}/${x.max}`).join(" · ")}) · ` : ""}${c.cycle !== false ? `${c.cycleMin}분 주기 ${cs.cycling ? "일하는 중" : `다음 ${nx > 60e3 ? Math.ceil(nx / 60e3) + "분" : "곧"}`} · ` : ""}${settings.keys.anthropic ? `Claude(${cmode === "all" ? "전원" : cmode === "key" ? "핵심 자리" : "안 씀"}) 오늘 ${cu}/${cap}번 <button id="ofCap" class="of-link">한도 바꾸기</button> · ` : `<button id="ofCapKey" class="of-link">Claude 키 넣기</button> · `}${c.train !== false ? `오늘 학습 예시 +${u.trained || 0} · ` : ""}오늘 회의 ${u.meetings || 0}번 (자동 ${u.auto || 0}/${c.dailyMax}) · 수다 ${u.chats || 0}/${c.chatMax}${c.chat ? (O.isChatting() ? " (지금 대화 중)" : ` (다음 ${nc > 60e3 ? Math.round(nc / 60e3) + "분" : "곧"})`) : ""} · AI 호출 ${u.calls || 0}번 · <button id="ofClear" class="of-link">기록 지우기</button>`;
 }
 /* ============ 회의록 패널 ============ */
 // #전체: 회의·수다·보고·내 메시지 / #업무: 직원들이 본 차트·뉴스 / #성장 과제: 과제 보드 / 팀 방: 그 팀의 모든 것
@@ -602,6 +603,11 @@ function entryHTML(e){
   }
   if (e.kind === "promo") return `<div class="of-kc of-promo" style="--tc:${tc(e.ch)}"><div class="of-kch"><b>🎓 실거래 후보 · ${E(e.name)}</b><span>${E(a.name)} · ${time}</span></div><p>${E(e.text)}</p>${typeof ctx.openLive === "function" ? `<button class="of-btn2" data-openlive>실거래 화면에서 연결하기</button>` : ""}</div>`;
   // ---- 새 기록 종류 ----
+  if (e.kind === "mission"){
+    const lines = String(e.text || "").split("\n"), i1 = lines.findIndex(l => /^## 1\./.test(l)), i2 = lines.findIndex((l, k) => k > i1 && /^## /.test(l));
+    const head = lines.slice(i1 + 1, i2 > 0 ? i2 : i1 + 8).join("\n").trim();
+    return `<div class="of-kc of-rep" style="--tc:${e.ok ? "#2ec27e" : "#e0a53e"}" data-e="${e.id}"><div class="of-kch"><b>📌 ${E(e.title || "지시 보고서")}</b><span>${E(String(e.attempts ?? ""))}번 시도 · ${E(String(e.mins ?? ""))}분 · ${time}</span></div><div class="of-kmd md">${ctx.md(head)}</div><details><summary>완성 보고서 전체 보기 (명세 · 검증 수치 · 시도 내역 · 한계)</summary><div class="of-kmd md">${ctx.md(String(e.text || ""))}</div></details>${e.path ? `<p class="of-dim">문서: ${E(e.path)}</p>` : ""}</div>`;
+  }
   if (e.kind === "report"){
     const lines = String(e.text || "").split("\n").filter(l => l.trim()).slice(0, 6).join("\n");
     const ceo = agentById(CEO);

@@ -42,7 +42,7 @@ const DECIDE = /사도|살까|팔까|매수|매도|진입|청산|롱|숏|레버�
 const RESEARCH = /검색|찾아|조사|자료|논문|출처|리서치|비교해|후기|리뷰|최신 정보/;
 const BUILD = /$^/;
 // 장부도 GH Nano 와 따로
-import("../nuri-ai/paper.js").then(P => P.setBookKey?.("coin:paper", 16)).catch(() => {});
+import("../nuri-ai/paper.js").then(P => P.setBookKey?.("coin:paper", 24)).catch(() => {});
 
 /* ============ 직원마다 다른 AI 모델 배정 ============ */
 // 연결된 모든 대화 모델 중에서, 역할에 맞는 종류를 우선해 서로 다른 모델을 고르게 나눠 준다
@@ -284,8 +284,15 @@ async function runJobNow(job, note){
 export async function ask(text, {room = "hq"} = {}){
   await loadLog();
   post({ch: room, kind: "user", text});
+  // 지시 취소·현황
+  if (/(지시|미션|시킨\s*(일|거)).{0,8}(취소|중단|그만|멈춰)/.test(text)){ const n = cancelMissions(); post({ch: room, kind: "system", text: n ? `📌 진행 중이던 지시 ${n}건을 취소했습니다` : "진행 중인 지시가 없습니다"}); return {answer: ""}; }
   const act = ACTIONS.find(x => x.re.test(text));
-  if (act){ post({ch: JOB_TEAM[act.job] || room, kind: "system", text: `▶ ${act.say} (결과는 #${teamById(JOB_TEAM[act.job])?.name || "업무"} 방 카드로)`}); fire({kind: "cycle", job: act.job, label: JOB_KO[act.job]}); runJobNow(act.job, text).finally(() => fire({kind: "cycle-end"})); }
+  if (act){
+    // 말로 시킨 일은 '지시'로 등록 → 목표를 이룰 때까지(또는 정해진 시도를 다 할 때까지) 계속하고, 끝나면 완성 보고서를 낸다. 다른 지시가 와도 번갈아 계속한다.
+    const m = addMission(text, act.job, JOB_TEAM[act.job] || room), others = missions().filter(x => x.status === "doing" && x.id !== m.id).length;
+    post({ch: JOB_TEAM[act.job] || room, kind: "system", text: `📌 지시 접수: ${act.say} · 목표 = ${m.goal} · 최대 ${m.plan.length}번 시도 후 완성 보고서${others ? ` · 앞서 받은 지시 ${others}건도 번갈아 계속합니다` : ""} (결과는 #${teamById(JOB_TEAM[act.job])?.name || "업무"} 방)`});
+    setTimeout(() => missionStep().catch(() => {}), 300);
+  }
   // 대표님(사용자) 질문이 먼저: 진행 중인 자동 회의는 잠시 멈췄다가 답한 뒤 다시 하고, 질문은 대기열 맨 앞에 넣는다
   if (running && running.trigger !== "user"){
     const r = running; r.preempted = true;
@@ -295,6 +302,101 @@ export async function ask(text, {room = "hq"} = {}){
   return new Promise(res => { const at = queue.findIndex(j => j.trigger !== "user"); queue.splice(at < 0 ? queue.length : at, 0, {topic: text, room, trigger: "user", res}); pump(); });
 }
 export function stopMeeting(){ running?.ctl.abort(); queue.length = 0; }
+
+/* ============ 📌 대표 지시(미션) — 시킨 일은 끝날 때까지 한다 ============
+   · 지시마다 목표·시도 계획을 갖고, 한 번 시도할 때마다 '실제 결과'(백테스트 카드·데모 투입 여부)를 기록에서 읽어 목표 달성을 코드가 판정한다.
+   · 지시가 있는 동안 순환 업무는 양보한다(모의투자 갱신만 계속). 지시가 여러 개면 한 번씩 번갈아 진행 → 앞 지시도 멈추지 않는다.
+   · 끝나면(달성 또는 시도 소진) 완성 보고서(결론·명세·검증 수치·시도 내역·한계)를 카드 + 문서로 낸다. 앱을 껐다 켜도 이어서 한다. */
+const MS_KEY = "coinMissions", MBUILD = {dev: 1, cdev: 1, bot: 1};
+export function missions(){ try { return JSON.parse(localStorage.getItem(MS_KEY) || "[]") || []; } catch(e){ return []; } }
+function saveMissions(l){ try { localStorage.setItem(MS_KEY, JSON.stringify(l.slice(-30))); } catch(e){} fire({kind: "mission"}); }
+function addMission(text, job, room, opt = {}){
+  const l = missions(), t = String(text).replace(/\s+/g, " ").trim().slice(0, 300), dup = l.find(m => m.status === "doing" && m.job === job && m.text === t); if (dup) return dup;
+  // 만들기 지시: 새로 개발 3번 → 아깝게 탈락한 후보 최적화 → 개발 2번 → 진화(조합) → 최적화. 분석 지시: 1번(오류면 한 번 더).
+  const plan = opt.plan || (MBUILD[job] ? [job, job, job, "opt", job, job, "evo", "opt"] : [job, job]);
+  const m = {id: uid(), text: t, job, room, status: "doing", t: Date.now(), attempts: 0, plan, goal: MBUILD[job] ? "검증(워크포워드·견고성·교차코인)을 통과한 매매법 1개를 데모에 올린다" : `${String(JOB_KO[job] || job).split("(")[0]} 결과를 낸다`, log: [], from: opt.from || "user", taskId: opt.taskId || ""};
+  l.push(m); saveMissions(l); return m;
+}
+export function cancelMissions(){ const l = missions(); let n = 0; for (const m of l) if (m.status === "doing"){ m.status = "canceled"; n++; } saveMissions(l); return n; }
+let missionBusy = false, msRot = 0;
+export const missionState = () => { const l = missions(), d = l.filter(m => m.status === "doing"); return {busy: missionBusy, doing: d.length, list: d.map(m => ({text: m.text, attempts: m.attempts, max: m.plan.length})), last: l.filter(m => m.status !== "doing").slice(-1)[0] || null}; };
+const btLine = b => `'${b.name}' ${b.pass ? "통과" : "불통과"} · 검증 구간 거래 ${b.oos?.n ?? 0}건 · 수익 ${b.oos?.ret ?? 0}% · 손익비 ${b.oos?.pf ?? "—"}${b.pass ? "" : " — " + String((b.reasons || []).find(r => /^미달/.test(r)) || "").replace(/^미달: /, "").slice(0, 70)}`;
+async function missionStep(){
+  if (missionBusy || cycling) return false;
+  const doing = missions().filter(m => m.status === "doing"); if (!doing.length) return false;
+  missionBusy = true;
+  const m = doing[msRot++ % doing.length];   // 번갈아 한 번씩
+  try {
+    await loadLog();
+    const P = await import("../nuri-ai/paper.js"), job = m.plan[Math.min(m.attempts, m.plan.length - 1)], t0 = Date.now();
+    const before = new Set((await P.loadBook()).strategies.map(x => x.id));
+    post({ch: m.room || "hq", kind: "system", text: `📌 지시 "${m.text.slice(0, 46)}" — ${m.attempts + 1}/${m.plan.length}번째 시도: ${String(JOB_KO[job] || job).split("(")[0]}${doing.length > 1 ? ` (진행 중인 지시 ${doing.length}건을 번갈아 처리)` : ""}`});
+    lastJob = job; fire({kind: "cycle", job, label: `📌 지시 · ${JOB_KO[job] || job}`});
+    let err = "";
+    userNote = m.text + (m.log.length && MBUILD[m.job] ? `\n\n[이 지시로 지금까지 시도한 결과 — 같은 실패를 반복하지 말고 다르게]\n${m.log.slice(-4).map(x => "- " + x.text).join("\n")}` : "");
+    try { await (JOB_FN()[job] || (() => research("std")))(); } catch(e){ err = String(e.message || e).slice(0, 140); } finally { userNote = ""; }
+    // 이번 시도의 실제 결과를 기록에서 읽는다(말이 아니라 카드)
+    // (3분마다 도는 실시간 진입·관찰 기록은 이 지시의 결과가 아니므로 제외)
+    const fresh = (LOG || []).filter(e => e.t >= t0 && (JOB_TEAM[job] === "entry" || e.ch !== "entry") && e.kind !== "work" && !e.chat), bts = fresh.filter(e => e.kind === "bt");
+    const added = (await P.loadBook()).strategies.filter(x => !before.has(x.id) && x.lane !== "swing");
+    const lastCard = fresh.filter(e => e.kind === "table" || e.kind === "ml" || e.kind === "forecast").slice(-1)[0], lastSys = fresh.filter(e => e.kind === "system" && !/^📌/.test(e.text || "")).slice(-1)[0];
+    const failSys = fresh.filter(e => e.kind === "system" && /형식 오류|건너뜀|제약 위반|못 받아|찾지 못했|실패|없어/.test(e.text || "")).slice(-1)[0];
+    if (!err && !bts.length && MBUILD[job] && failSys) err = String(failSys.text).replace(/\s+/g, " ").slice(0, 140);   // 만들기 시도가 백테스트까지 못 갔으면 실패로 기록
+    const line = err ? `오류: ${err}` : bts.length ? bts.map(btLine).join(" / ") + (added.length ? ` → 데모 투입: ${added.map(x => x.name).join(", ")}` : "") : String(lastCard?.title || lastSys?.text || "결과 카드 없음").replace(/\s+/g, " ").slice(0, 200);
+    const L = missions(), M = L.find(x => x.id === m.id); if (!M || M.status !== "doing") return true;   // 그 사이 취소됨
+    M.attempts++;
+    M.log.push({t: Date.now(), job, text: line, err: !!err, bt: bts.map(b => ({name: b.name, pass: b.pass, all: b.all, is: b.is, oos: b.oos, market: b.mname || b.market, tf: b.tf, lev: b.lev, author: b.author, reasons: b.reasons, spec: (b.pass || (b.oos?.n ?? 0) >= 8) ? b.spec : null, scen: String(b.scen || "").slice(0, 1200)})), card: lastCard ? {title: lastCard.title || "", ch: lastCard.ch} : null});
+    const success = MBUILD[M.job] ? added.length > 0 : !err;
+    if (success){ M.status = "done"; M.added = added.map(x => ({id: x.id, name: x.name, market: x.mname || x.market, tf: x.tf})); }
+    else if (M.attempts >= M.plan.length) M.status = "ended";
+    saveMissions(L);
+    if (M.status === "doing") post({ch: M.room || "hq", kind: "system", text: `📌 ${M.attempts}번째 결과: ${line.slice(0, 220)} → 아직 목표 미달 · 계속합니다(남은 시도 ${M.plan.length - M.attempts})`});
+    else await missionReport(M).catch(e => post({ch: M.room || "hq", kind: "system", text: `📌 지시 보고서 작성 실패: ${String(e.message || e).slice(0, 100)}`}));
+    return true;
+  } finally { missionBusy = false; fire({kind: "cycle-end"}); setTimeout(() => missionStep().catch(() => {}), 5000); }
+}
+const OP_KO = {">": "＞", "<": "＜", ">=": "≥", "<=": "≤", crosses_above: "위로 돌파", crosses_below: "아래로 이탈", rising: "봉 연속 상승", falling: "봉 연속 하락"};
+function specMd(spec){
+  if (!spec) return "(명세 없음)";
+  const g = (G, label) => { const a = G?.conditions || []; return a.length ? `- **${label}** (${G.logic === "any" ? "하나라도" : "모두"} 충족): ${a.map(c => `\`${c.left} ${OP_KO[c.op] || c.op} ${c.right}\``).join(" · ")}` : ""; };
+  const r = spec.risk || {};
+  return [`- **지표**: ${(spec.indicators || []).map(i => `${i.id}=${i.type}${i.length ? "(" + i.length + ")" : ""}${i.expr ? " 수식 `" + String(i.expr).slice(0, 80) + "`" : ""}`).join(", ") || "—"}`,
+    g(spec.long_entry, "롱 진입"), g(spec.short_entry, "숏 진입"), g(spec.long_exit, "롱 청산"), g(spec.short_exit, "숏 청산"),
+    `- **리스크**: 레버리지 ${r.leverage ?? "—"}배 · 손절 ${r.stop_loss_pct != null ? r.stop_loss_pct + "%" : r.atr_stop_mult ? "ATR×" + r.atr_stop_mult : "—"} · 익절 ${r.take_profit_pct != null ? r.take_profit_pct + "%" : r.atr_tp_mult ? "ATR×" + r.atr_tp_mult : "조건 청산"} · 비중 ${r.position_pct ?? 20}% · 수수료 ${r.fee_pct ?? 0.04}%`].filter(Boolean).join("\n");
+}
+async function missionReport(M){
+  const ok = M.status === "done", lead = agentById("lead"), room = M.room || "hq", mins = Math.max(1, Math.round((Date.now() - M.t) / 60e3));
+  const allBt = M.log.flatMap(x => x.bt || []), win = allBt.filter(b => b.pass).slice(-1)[0];
+  const best = win || [...allBt].filter(b => (b.oos?.n ?? 0) >= 8).sort((a, b) => (b.oos?.pf ?? 0) - (a.oos?.pf ?? 0))[0] || allBt.slice(-1)[0] || null;
+  const stRow = (k, x) => `| ${k} | ${x?.ret ?? "—"}% | ${x?.dd ?? "—"}% | ${x?.win ?? "—"}% | ${x?.pf ?? "—"} | ${x?.n ?? "—"} |`;
+  const build = !!MBUILD[M.job], title = `${ok ? "✅ 지시 완료" : build ? "⚠ 지시 종료 — 목표 미달" : "⚠ 지시 종료"} · ${M.text.slice(0, 40)}`;
+  const concl = ok ? (build ? `검증을 통과한 매매법 **${(M.added || []).map(x => `${x.name} (${x.market} ${TF_KO[x.tf] || x.tf}봉)`).join(", ")}** 을(를) 데모 장부에 올렸습니다. 지금부터 실제 시세로 모의 운용되고, 14일·20거래 뒤 실거래 관문 심사 대상이 됩니다.` : `요청한 분석을 마쳤습니다. 결과 카드: ${M.log.slice(-1)[0]?.card?.title || M.log.slice(-1)[0]?.text || ""}`)
+    : build ? `${M.attempts}번 시도했지만 워크포워드·견고성·교차코인 관문을 모두 통과한 매매법은 없었습니다. 통과하지 못한 것을 억지로 올리지 않았습니다.${best ? ` 가장 나았던 후보는 **${best.name}** (검증 구간 손익비 ${best.oos?.pf ?? "—"} · 거래 ${best.oos?.n ?? 0}건)이며 '개선 후보'로 보관돼 하이퍼옵트·진화가 계속 다듬습니다.` : ""}` : `${M.attempts}번 시도했지만 오류로 끝내지 못했습니다: ${M.log.slice(-1)[0]?.text || ""}`;
+  let exec = "";
+  if (hasAI()) try { const e = await solo(lead, {room, sys: personaOf(lead, "대표가 시킨 일의 완성 보고서 맨 위에 들어갈 '핵심 요약'을 쓴다. 아래 사실만 사용하고 숫자를 지어내지 않는다. 정확히 3줄: ① 무엇을 했고 결과가 무엇인지 ② 그 결과를 얼마나 믿을 수 있는지(검증 수치 근거) ③ 대표가 알아야 할 위험·다음 단계. 각 줄 한 문장, 과장 금지."),
+    user: `지시: ${M.text}\n판정: ${concl}\n시도 내역:\n${M.log.map((x, i) => `${i + 1}. ${x.text}`).join("\n")}${best ? `\n대표 후보 검증 구간: 수익 ${best.oos?.ret}% · 낙폭 ${best.oos?.dd}% · 승률 ${best.oos?.win}% · 손익비 ${best.oos?.pf} · 거래 ${best.oos?.n}건` : ""}`, maxTokens: 500, temperature: 0.3});
+    exec = noMind(e.text || "").trim().split("\n").filter(l => l.trim()).slice(0, 4).join("\n"); } catch(e){}
+  const md = [`# 지시 보고서 — ${M.text.slice(0, 80)}`, "",
+    `| 항목 | 내용 |`, `|---|---|`, `| 지시 | ${M.text.replace(/\|/g, "/")} |`, `| 목표 | ${M.goal} |`, `| 판정 | ${ok ? "✅ 달성" : "⚠ 미달(정해진 시도 소진)"} |`, `| 시도 | ${M.attempts}번 / 계획 ${M.plan.length}번 · ${mins}분 |`, `| 접수 | ${new Date(M.t).toLocaleString("ko-KR")} |`, "",
+    `## 1. 결론`, concl, exec ? `\n**핵심 요약 (CEO)**\n${exec}` : "", "",
+    ...(build && best ? [`## 2. ${win ? "산출물" : "가장 나았던 후보"} — ${best.name}`, `${best.market || ""} · ${TF_KO[best.tf] || best.tf}봉 · 개발 ${best.author || "—"}`, "", specMd(best.spec), "",
+      `## 3. 검증 수치 (수수료·슬리피지·펀딩 포함)`, `| 구간 | 수익 | 최대 낙폭 | 승률 | 손익비 | 거래 |`, `|---|---|---|---|---|---|`, stRow("전체", best.all), stRow("학습(앞 70%)", best.is), stRow("검증(뒤 30% · 처음 보는 구간)", best.oos), "",
+      `## 4. 관문 판정`, ...(best.reasons || []).map(r => `- ${r}`), "", ...(best.scen ? [`## 5. 시나리오 시험`, "```", best.scen, "```", ""] : [])] : []),
+    `## ${build && best ? "6" : "2"}. 시도 내역`, `| # | 한 일 | 실제 결과 |`, `|---|---|---|`, ...M.log.map((x, i) => `| ${i + 1} | ${String(JOB_KO[x.job] || x.job).split("(")[0]} | ${x.text.replace(/\|/g, "/")} |`), "",
+    `## ${build && best ? "7" : "3"}. 한계와 다음 단계`,
+    ...(build ? [`- 과거 검증을 통과했어도 미래 수익을 보장하지 않습니다. 데모(가상 자금)에서 먼저 지켜봅니다.`, ok ? `- 다음: 데모 14일·20거래 → 실거래 관문 심사(코드) → 대표가 직접 연결해야만 실거래.` : `- 다음: 개선 후보는 하이퍼옵트·진화 업무가 자동으로 계속 다듬습니다. 같은 지시를 다시 주면 이어서 시도합니다.`,
+      `- 참고(2026-10-05 실데이터 검증): 1시간·4시간 지표 매매법은 '20배·손절 2%' 조건에서 통과가 드뭅니다. 일봉 추세추종(스윙 라인)은 통과해 데모 운용 중입니다.`] : [`- 결과 카드는 #${teamById(room)?.name || room} 방에 있습니다.`])].filter(x => x != null).join("\n");
+  const stamp = new Date(Date.now() - new Date().getTimezoneOffset() * 60e3).toISOString().slice(0, 16).replace(/[:T]/g, "-"), path = `ghcoin/missions/${stamp}_${M.text.replace(/[\\/:*?"<>|\s]+/g, "_").slice(0, 30)}.md`;
+  try { await saveDoc({title: `지시 보고서 · ${M.text.slice(0, 40)}`, path, content: md, team: room, agent: "lead"}); } catch(e){}
+  post({ch: room, kind: "mission", agent: "lead", title, ok, text: md, path, attempts: M.attempts, mins});
+  if (room !== "hq") post({ch: "hq", kind: "system", text: `📌 ${title} — 완성 보고서는 #${teamById(room)?.name || room} 방 · 문서 ${path}`});
+  if (M.taskId) try { updateTask(M.taskId, {status: "done", result: concl.replace(/\*\*/g, "").slice(0, 300), done: Date.now()}); post({ch: room, kind: "task", agent: backlog().find(x => x.id === M.taskId)?.owner || "lead", title: backlog().find(x => x.id === M.taskId)?.title || M.text, status: "done", result: concl.replace(/\*\*/g, "").slice(0, 200)}); } catch(e){}
+  addNote(room, `지시 '${M.text.slice(0, 40)}' ${ok ? "완료" : "미달"}: ${concl.replace(/\*\*/g, "").slice(0, 150)}`, "지시");
+  // 보고서를 낸 뒤 저장 공간 절약: 큰 필드는 지운다
+  const L = missions(), X = L.find(x => x.id === M.id); if (X){ for (const g of X.log) for (const b of g.bt || []){ b.spec = null; b.scen = ""; } X.reportPath = path; saveMissions(L); }
+  try { if (typeof Notification !== "undefined" && Notification.permission === "granted") new Notification("GH Coin · " + title, {body: concl.replace(/\*\*/g, "").slice(0, 160)}); } catch(e){}
+  fire({kind: "alert", text: title});
+}
 function enqueue(m){
   return new Promise(res => { queue.push({...m, res}); pump(); });
 }
@@ -355,6 +457,11 @@ async function pump(){
       }
     }
     if (job.trigger !== "user" && officeCfg().alert && last) fire({kind: "alert", meeting: m, text: last.text});
+    // 회의 결론의 '다음 할 일' → 과제 등록(말로만 끝내지 않기). 팀장 정리에서 먼저, 없으면 다른 발언에서 최대 2개
+    try { const src = [last, ...turns.slice(0, -1).reverse()].filter(Boolean), todos = [];
+      for (const t of src){ for (const mm of String(t.text || "").matchAll(/다음\s*할\s*일\s*[:：]\s*([^\n]{6,140})/g)){ if (todos.length < 2 && !todos.some(x => x.title === mm[1])) todos.push({title: mm[1].replace(/[*`"]/g, "").trim(), by: t.agent}); } if (todos.length) break; }
+      for (const td of todos){ const own = AGENTS.find(x => td.title.includes(x.name)), team = own?.team && own.team !== "hq" ? own.team : (m.room !== "hq" ? m.room : (td.by?.team || "dev"));
+        const it = addTask({team, title: td.title.slice(0, 120), why: `회의 '${m.name}' 결론`, owner: own?.name || ""}); if (it) post({ch: m.room, kind: "system", text: `📝 회의 결론을 과제로 등록 → 실제로 실행합니다: ${td.title.slice(0, 90)} (담당 ${agentById(it.owner)?.name || "팀"})`, meeting: m.id}); } } catch(e){}
     job.res?.({meeting: m, turns, answer: last?.text || ""});
   } catch (e){
     if (m.preempted) queue.push(job);   // 사용자 질문 때문에 멈춘 회의는 질문에 답한 뒤 다시
@@ -372,7 +479,8 @@ function statusText(){
   const recent = (LOG || []).filter(e => ["work", "bt", "re", "arch", "ml", "macro", "forecast", "biz", "files", "task", "report"].includes(e.kind)).slice(-8)
     .map(e => `- ${new Date(e.t).toLocaleTimeString("ko-KR", {hour: "2-digit", minute: "2-digit"})} ${agentById(e.agent)?.name || ""} ${e.kind === "bt" ? `매매법 '${e.name}' ${e.pass ? "통과" : "불통과"}` : e.kind === "re" ? `재개발 후보 ${e.items?.length || 0}곳` : e.kind === "arch" ? `설계안 '${e.name}'` : e.kind === "biz" ? `사업 '${e.name}' ${String(e.verdict || "").split(" — ")[0]}` : e.kind === "task" ? `과제 '${e.title}' ${e.status}` : String(e.text || e.title || e.name || e.kind).slice(0, 60)}`).join("\n");
   const open = backlog().filter(x => x.status !== "done").slice(0, 4).map(x => `- ${teamById(x.team)?.name}: ${x.title}`).join("\n");
-  return `[지금 사무실 상황 · 코드가 확인한 사실]\n진행 중인 회의: ${running && running.trigger !== "user" ? running.name : "없음"} · 지금 하는 업무: ${cycling ? JOB_KO[lastJob] || lastJob : "없음"} · 다음 업무: ${JOB_KO[JOBS[(+localStorage.getItem("coinJob") || 0) % JOBS.length]]}\n최근에 한 일:\n${recent || "- (아직 없음)"}\n남은 성장 과제:\n${open || "- (없음)"}${comboText() ? "\n" + comboText() : ""}`;
+  const ms = missions().filter(x => x.status === "doing").map(x => `- "${x.text.slice(0, 50)}" ${x.attempts}/${x.plan.length}번 시도${x.log.length ? " · 최근: " + x.log.slice(-1)[0].text.slice(0, 80) : ""}`).join("\n");
+  return `[지금 사무실 상황 · 코드가 확인한 사실]\n${ms ? "📌 진행 중인 대표 지시(끝날 때까지 계속):\n" + ms + "\n" : ""}진행 중인 회의: ${running && running.trigger !== "user" ? running.name : "없음"} · 지금 하는 업무: ${cycling ? JOB_KO[lastJob] || lastJob : "없음"} · 다음 업무: ${JOB_KO[JOBS[(+localStorage.getItem("coinJob") || 0) % JOBS.length]]}\n최근에 한 일:\n${recent || "- (아직 없음)"}\n남은 성장 과제:\n${open || "- (없음)"}${comboText() ? "\n" + comboText() : ""}`;
 }
 // 같은 이유가 반복되면 한 줄로 묶는다 ("… → 다른 모델로 (3번)")
 function addNote2(entry, text){
@@ -396,7 +504,7 @@ async function speak(a, m, turns, target, signal){
 - ${prev ? `앞사람(${prev.name})의 말에 이름을 불러 반응하며 시작한다(동의·보충·반박). ` : ""}같은 말은 반복하지 말고 네 전문 분야 관점을 더한다. 다른 전문가가 꼭 필요하면 @이름 으로 한 명만 부른다(동료: ${mates}).
 - 반드시 한국어로만 쓴다. 영어로 생각하거나 '어떻게 답할지' 계획을 쓰지 말고 바로 말한다.
 - 회사 동료와 대화하듯 자연스러운 한국어로 말한다. 숫자 나열이 아니라 해설로 말한다. 수치는 도구로 확인한 것만 쓰고 지어내지 않는다. 차트·뉴스를 봤다면 무엇을 봤는지 말한다.
-${notesText(a.team)}- ${isLead ? "너는 마지막 정리 담당이다. 사용자에게 주는 최종 답을 결론부터 짧고 쉽게 쓴다(5~8줄, 꼭 필요할 때만 표)." : "3~5문장으로 짧게. 사용자에게 주는 최종 답은 팀장이 정리하니, 너는 네 판단과 근거 한두 개에 집중한다."}`;
+${notesText(a.team)}- ${isLead ? "너는 마지막 정리 담당이다. 사용자에게 주는 최종 답을 결론부터 짧고 쉽게 쓴다(5~8줄, 꼭 필요할 때만 표). 회의에서 실제로 해야 할 일이 나왔다면 맨 끝에 '다음 할 일: 담당자 이름 — 무엇을(한 문장)' 형식으로 1~2줄 적는다(없으면 쓰지 않는다). 적은 일은 코드가 과제로 등록해 실제로 실행하고 결과를 보고한다." : "3~5문장으로 짧게. 사용자에게 주는 최종 답은 팀장이 정리하니, 너는 네 판단과 근거 한두 개에 집중한다."}`;
   const ask = `${m.trigger === "user" ? "사용자 질문" : "회의 안건"}: ${m.topic}\n\n${m.trigger === "user" ? statusText() + "\n\n" : ""}${turns.length ? "지금까지 회의 내용:\n" + transcript(m, turns) + "\n\n" : ""}이제 ${a.name}(${a.title}) 차례입니다.`;
   const entry = post({ch: m.room, kind: "agent", agent: a.id, text: "", think: "", steps: [], meeting: m.id, live: true, model: target?.model || ""});
   fire({kind: "turn", meeting: m, agent: a, entry});
@@ -785,6 +893,7 @@ export function startCycle(){
   import("./neutron.js").then(M => M.startNeutron?.()).catch(() => {});
   // ⚡ 실시간 진입: 3분마다 자동 분석(토론은 유력·보통 후보만, 같은 자리 10분에 한 번)
   if (!startCycle._rt){ startCycle._rt = setInterval(() => runLiveEntry({debate: hasAI()}).catch(() => {}), 3 * 60e3); setTimeout(() => runLiveEntry({debate: hasAI()}).catch(() => {}), 40e3); }   // 🧠 뉴트론: 뇌를 MCP·옵시디언 볼트로 내보내고 Claude Code·Claudian 제안을 받음 (exe 에서만)
+  if (!startCycle._ms){ startCycle._ms = 1; setTimeout(() => { const d = missions().filter(m => m.status === "doing"); if (d.length){ post({ch: "hq", kind: "system", text: `📌 끝내지 못한 지시 ${d.length}건을 이어서 합니다: ${d.map(m => `"${m.text.slice(0, 30)}"(${m.attempts}/${m.plan.length})`).join(" · ")}`}); missionStep().catch(() => {}); } }, 60e3); }
   if (!startCycle._sw){ startCycle._sw = 1; setTimeout(async () => { try { const a = readJ("coinSwingAudit", null); if (!a || Date.now() - a.t > 20 * 3600e3) await swingJob(); } catch(e){} }, 120e3); }
   if (cycleTimer) return;
   if (!localStorage.getItem("coinLastCycle")) localStorage.setItem("coinLastCycle", String(Date.now() - officeCfg().cycleMin * 60e3 + 45e3));
@@ -792,7 +901,7 @@ export function startCycle(){
 }
 export async function cycle(force, onlyJob){
   const c = officeCfg();
-  if (cycling || (!force && (!c.cycle || nextCycleIn() > 0 || officePaused()))) return false;
+  if (cycling || missionBusy || (!force && (!c.cycle || nextCycleIn() > 0 || officePaused()))) return false;
   const ai = hasAI();
   cycling = true; localStorage.setItem("coinLastCycle", String(Date.now()));
   try {
@@ -803,7 +912,11 @@ export async function cycle(force, onlyJob){
     // 회의가 열려 있어도 주기 업무는 따로 계속한다 (사람처럼 각자 일함). 단, 질문에 답하는 중에는 잡담만 쉰다
     if (usage().calls >= c.callMax){ if (!usage().capNoted){ bump("capNoted"); post({ch: "hq", kind: "system", text: `오늘 사무실 AI 호출 한도(${c.callMax}번)를 다 썼습니다. 모의투자 갱신과 차트·뉴스 확인은 계속합니다.`}); } return true; }
     let job = onlyJob;
+    // 📌 대표 지시가 진행 중이면 순환 업무는 양보(모의투자 갱신은 위에서 이미 함) → finally 에서 지시를 이어 간다
+    if (!job && missions().some(m => m.status === "doing")) return true;
     if (!job){ const i = +localStorage.getItem("coinJob") || 0; job = JOBS[i % JOBS.length]; localStorage.setItem("coinJob", String(i + 1)); }
+    // 📝 토론·회고·회의에서 나온 '다음 할 일'이 쌓여 있으면 두 주기에 한 번은 그 과제를 실제로 실행한다(말로만 끝내지 않기)
+    if (!onlyJob && job !== "task" && ai && (+localStorage.getItem("coinCyc") || 0) % 2 === 0 && backlog().some(t => t.status === "todo")) job = "task";
     if (job === "paper" && !(await paperActive())) job = "dev";
     if (job === "computer" && !computerOn()) job = "economy";
     if (job === "task" && !backlog().some(t => t.status !== "done")) job = "retro";
@@ -828,7 +941,7 @@ export async function cycle(force, onlyJob){
     import("../nuri-ai/selfdev.js").then(S => S.recordError({msg: String(e.message || e), stack: e.stack || "", src: "job:" + lastJob})).catch(() => {});
     return false;
   }
-  finally { cycling = false; fire({kind: "cycle-end"}); setTimeout(pump, 200); }
+  finally { cycling = false; fire({kind: "cycle-end"}); setTimeout(pump, 200); setTimeout(() => missionStep().catch(() => {}), 1500); }
 }
 
 // 혼자 하는 일 한 번: 배정 모델로 생각·말을 실시간으로 보여 주고, 빈 답이면 다른 모델로
@@ -1097,7 +1210,16 @@ const fmtDay = t => t ? new Date(t).toISOString().slice(0, 10) : "?";
 async function research(lane = "std"){
   const L = LANES[lane] || LANES.std;
   const Q = await import("../nuri-ai/quant.js"), P = await import("../nuri-ai/paper.js");
-  const n = researchLog(lane).length, a = agentById(L.authors[n % L.authors.length]), mk = MARKETS[(n * 5 + (lane === "custom" ? 3 : 0)) % MARKETS.length], tf = mk.tf, iv = IV_NAME[tf];
+  const n = researchLog(lane).length; let a = agentById(L.authors[n % L.authors.length]);
+  // 대표 지시에 계열(추세추종 / 역추세·되돌림)이 있으면 그 계열로
+  const wantFam = userNote ? (/추세\s*추종|추세\s*매매|돌파|트렌드/.test(userNote.split(String.fromCharCode(10))[0]) ? "trend" : /역추세|되돌림|평균\s*회귀|과매도|과매수|반전/.test(userNote.split(String.fromCharCode(10))[0]) ? "revert" : null) : null;
+  const fam = wantFam || (a.id === "qa" ? "trend" : "revert");
+  if (wantFam === "trend" && agentById("qa")) a = agentById("qa");
+  let mk = MARKETS[(n * 5 + (lane === "custom" ? 3 : 0)) % MARKETS.length];
+  // 대표 지시에 코인·시간봉이 있으면 그 시장으로 (예: "솔라나 1시간봉 매매법 만들어줘")
+  if (userNote){ const head = userNote.split("\n")[0], nc = COINS.find(c => new RegExp(`${c.ko}|${c.sym.replace("USDT", "")}|${c.ko.slice(0, 2)}`, "i").test(head)), wantTf = /4\s*시간|4h/i.test(head) ? "240" : /1\s*시간|1h|60\s*분/i.test(head) ? "60" : null;
+    const cand = MARKETS.filter(x => (!nc || x.market === nc.sym) && (!wantTf || x.tf === wantTf)); if ((nc || wantTf) && cand.length) mk = cand[n % cand.length]; }
+  const tf = mk.tf, iv = IV_NAME[tf];
   fire({kind: "busy", agent: a, text: `🧪 ${mk.name} ${TF_KO[tf]}봉 매매법 구상 중 (가장 오래된 과거부터)`});
   // ① 가능한 가장 긴 과거 캔들 (없으면 최근 1,500봉)
   let cs = null, hist = "";
@@ -1121,10 +1243,12 @@ async function research(lane = "std"){
     + "\n\n## ICT/SMC·세션 지표 (네이티브, 신호형은 조건에 ==1 또는 == -1)\nbos(구조돌파 BOS/MSS ±1) · fvg(Fair Value Gap ±1) · ob(오더블록 리테스트 ±1) · sweep(유동성 스윕 반전 ±1) · disp(변위 ±1) · premium(0~1, <0.3 디스카운트=매수존·>0.7 프리미엄=매도존) · session(start,end: UTC 시각 킬존 0/1, 런던 7~10·뉴욕 13~16). 스캘핑/스윙 어디든 추세필터와 조합 가능."
     + (userNote ? `\n\n## 대표님 지시 (최우선)\n${userNote}\n지시에 맞춰 만든다. 커스텀 수식 지표를 반드시 1개 이상 쓰고, 여러 보조지표(기본 29종 + tv_ 지표)를 조합한다.` : "")
     + (cards.length ? "\n\n## 지금까지의 백테스트 연구 카드(참고)\n" + Q.cardsText(cards, local ? 4 : 14) : "");
-  const user = `시장: ${mk.name} (${mk.market}, ${mk.exchange === "binancef" ? "바이낸스 선물" : mk.exchange === "yahoo" ? "야후 파이낸스" : mk.exchange}) · ${TF_KO[tf]}봉\n시험할 과거: ${hist}\n지금 차트(보조지표 29종):\n${snapText(snap)}\n${JSON.stringify(snap.ind || {}).slice(0, 2200)}${flowText ? "\n\n호가·고래·선물 흐름(지금):\n" + flowText.slice(0, 1500) : ""}\n\n최근 우리 팀이 시험한 전략(겹치지 않게):\n${tried || "(아직 없음)"}\n\n${a.id === "qa" ? "추세추종" : "역추세·변동성"} 계열로 새 전략 하나를 만들어 주세요. symbol은 ${mk.market}, interval은 ${iv}.${deriv ? " funding·oi·oi_change_pct·long_short 피연산자도 쓸 수 있습니다." : ""}`;
+  const user = `시장: ${mk.name} (${mk.market}, ${mk.exchange === "binancef" ? "바이낸스 선물" : mk.exchange === "yahoo" ? "야후 파이낸스" : mk.exchange}) · ${TF_KO[tf]}봉\n시험할 과거: ${hist}\n지금 차트(보조지표 29종):\n${snapText(snap)}\n${JSON.stringify(snap.ind || {}).slice(0, 2200)}${flowText ? "\n\n호가·고래·선물 흐름(지금):\n" + flowText.slice(0, 1500) : ""}\n\n최근 우리 팀이 시험한 전략(겹치지 않게):\n${tried || "(아직 없음)"}\n\n${fam === "trend" ? "추세추종" : "역추세·변동성"} 계열로 새 전략 하나를 만들어 주세요. symbol은 ${mk.market}, interval은 ${iv}.${deriv ? " funding·oi·oi_change_pct·long_short 피연산자도 쓸 수 있습니다." : ""}`;
   const e = await solo(a, {room: L.dev, sys, user, maxTokens: 2200, temperature: 0.8, role: "code", json: true});   // 전략 JSON은 코드·구조화 잘하는 모델로 라우팅 + 토큰 넉넉히(잘림 방지)
   let spec = pickJSON(e.raw || e.text);
-  if (!spec){ post({ch: L.dev, kind: "system", text: `${a.name}의 답에서 전략 JSON을 찾지 못했습니다`}); addResearch({lane, name: "(형식 오류)", market: mk.market, tf, pass: false, t: Date.now()}); return; }
+  const SK = await lib("skeletons").catch(() => null), skN = +localStorage.getItem("coinSkN") || 0;
+  const useSkeleton = why => { if (!SK) return null; localStorage.setItem("coinSkN", String(skN + 1)); const v = SK.variant(skN, fam, mk.name.replace(" 선물", "")); post({ch: L.dev, kind: "system", text: `🦴 ${a.name}: ${why} → 시도를 버리지 않고 코드가 뼈대 변형으로 대신 시험합니다: ${v.name}`}); return v; };
+  if (!spec){ spec = useSkeleton("답에서 전략 JSON을 찾지 못함"); if (!spec){ addResearch({lane, name: "(형식 오류)", market: mk.market, tf, pass: false, why: "AI 형식 오류", t: Date.now()}); return; } }
   const norm0 = x => Q.normalizeSpec({...x, symbol: mk.market, interval: iv, risk: {...(x.risk || {}), ...COSTS[mk.cls]}});
   // 모르는 지표: 수식(expr)이 있으면 custom 으로, 없으면 그 지표와 그 지표를 쓰는 조건만 빼고 나머지로 시험 (작은 모델 오타 구제)
   const known = t => { t = String(t || "").toLowerCase(); return t === "custom" || !!Q.IND_REGISTRY[t] || !!Q.IND_REGISTRY[(Q.IND_ALIAS || {})[t]]; };
@@ -1149,7 +1273,8 @@ async function research(lane = "std"){
         fixed = norm(pickJSON(fx.raw || fx.text) || {}); break;
       } catch(e){ lastErr = e; }
     }
-    if (!fixed){ post({ch: L.dev, kind: "system", text: `전략 형식 오류(${a.name}, 수정 2회 실패 → 이번 건 건너뜀): ${String(lastErr.message).slice(0, 160)}`}); addResearch({lane, name: spec.name || "(형식 오류)", market: mk.market, tf, pass: false, t: Date.now()}); return; }
+    if (!fixed){ const sv = useSkeleton(`형식 오류 수정 2회 실패(${String(lastErr.message).slice(0, 60)})`); try { fixed = sv ? norm(sv) : null; } catch(e){ fixed = null; } }
+    if (!fixed){ post({ch: L.dev, kind: "system", text: `전략 형식 오류(${a.name}, 수정 2회 실패 → 이번 건 건너뜀): ${String(lastErr.message).slice(0, 160)}`}); addResearch({lane, name: spec.name || "(형식 오류)", market: mk.market, tf, pass: false, why: "AI 형식 오류", t: Date.now()}); return; }
     spec = fixed;
   }
   if (spec.warnings?.length) post({ch: L.dev, kind: "system", text: `${a.name}: 못 쓰는 조건 ${spec.warnings.length}개는 빼고 나머지로 시험 (${spec.warnings[0].slice(0, 90)})`});
@@ -1163,7 +1288,7 @@ async function research(lane = "std"){
   const v = agentById(L.checker);
   fire({kind: "busy", agent: v, text: `🧮 ${spec.name} · ${cs.length.toLocaleString()}봉 백테스트 · 시나리오 검사 중`});
   // 거래 부족이면 코드가 조건을 자동 완화(스스로 고침) — 이후 견고성·교차코인 관문은 그대로 거친다
-  try { const rx = relaxSpec(Q, spec, cs, {deriv}, norm0); if (rx){ spec = {...rx.spec, name: spec.name}; post({ch: L.dev, kind: "system", text: `🔧 ${spec.name}: 거래가 너무 적어 자동 완화 — ${rx.log.join(" · ")}`}); } } catch(e){}
+  try { const rx = await relaxSpec(Q, spec, cs, {deriv}, norm0); if (rx){ spec = {...rx.spec, name: spec.name}; post({ch: L.dev, kind: "system", text: `🔧 ${spec.name}: 거래가 너무 적어 자동 완화 — ${rx.log.join(" · ")}`}); } } catch(e){}
   const bt = Q.backtest(spec, cs, {deriv}), wf = Q.walkForward(spec, cs, {deriv});
   let scen = "", scenObj = null;
   try { const S = await import("../nuri-ai/scenarios.js"); scenObj = S.runScenarios(spec, cs, {deriv}); scen = S.scenarioText(scenObj); } catch(err){ scen = ""; }
@@ -1331,18 +1456,24 @@ async function retro(){
 }
 // 과제 실행: 가장 오래된 과제를 담당자가 도구를 써서 직접 해낸다
 async function doTask(){
-  const it = backlog().find(x => x.status === "todo"); if (!it) return retro();
+  // 과제 정리: '진행 중'으로 30분 넘게 멈춘 것은 다시 대기로, 72시간 넘게 실행 못 한 것은 만료 처리(말만 쌓인 과제가 새 과제를 막지 않게)
+  { const list = backlog(), ms = missions(); let ch = false;
+    for (const x of list){ if (x.status === "doing" && !ms.some(m => m.taskId === x.id && m.status === "doing") && Date.now() - (x.t0 || x.t) > 30 * 60e3){ x.status = "todo"; ch = true; }
+      if (x.status === "todo" && Date.now() - x.t > 72 * 3600e3){ x.status = "done"; x.result = "만료 — 72시간 넘게 실행되지 못해 정리"; x.done = Date.now(); ch = true; } }
+    if (ch) saveBacklog(list); }
+  const routeOf = x => { const tx = `${x.title} ${x.why || ""}`; return /커스텀|수식\s*지표|지표.{0,8}(만들|개발|발명|설계)/.test(tx) ? "cdev" : /봇/.test(tx) ? "bot" : /하이퍼옵트|최적화|파라미터|ROI|추적손절|보호장치/.test(tx) ? "opt"
+    : /매매법|전략|진입|조건|백테스트|필터|시간봉|손절|익절|손익비/.test(tx) ? "dev" : null; };
+  // 실행 순서: 실제 업무로 돌릴 수 있는 과제 먼저 · 그 안에서는 최근 것 먼저(방금 회의·대표가 준 일이 묵은 과제 뒤에 밀리지 않게)
+  const it = backlog().filter(x => x.status === "todo").sort((x, y) => (!!routeOf(y) - !!routeOf(x)) || (y.t - x.t))[0]; if (!it) return retro();
   const a = agentById(it.owner) || agentById(TEAM_LEAD[it.team]);
-  updateTask(it.id, {status: "doing"}); post({ch: it.team, kind: "task", agent: a.id, title: it.title, status: "doing", result: ""});
+  updateTask(it.id, {status: "doing", t0: Date.now()}); post({ch: it.team, kind: "task", agent: a.id, title: it.title, status: "doing", result: ""});
   // 개발형 과제는 말로 끝내지 않고 실제 파이프라인(개발→백테스트→관문→데모)으로 실행한다
-  const tx = `${it.title} ${it.why || ""}`;
-  const route = /커스텀|수식\s*지표|지표.{0,8}(만들|개발|발명|설계)/.test(tx) ? "cdev" : /봇/.test(tx) ? "bot" : /하이퍼옵트|최적화|파라미터|ROI|추적손절|보호장치/.test(tx) ? "opt"
-    : /매매법|전략|진입|조건|백테스트|필터|시간봉|손절|익절|손익비/.test(tx) ? "dev" : null;
+  const route = routeOf(it);
   if (route){
-    post({ch: it.team, kind: "system", text: `🛠 과제를 실제 업무로 실행: ${JOB_KO[route]} ← "${it.title.slice(0, 60)}"`});
-    await runJobNow(route, `팀 과제(최우선 반영): ${it.title}${it.why ? ` — 이유: ${it.why}` : ""}`);
-    const res = `${JOB_KO[route]} 업무로 실행함 (결과 카드는 #${teamById(JOB_TEAM[route])?.name || route} 방)`;
-    updateTask(it.id, {status: "done", result: res, done: Date.now()}); post({ch: it.team, kind: "task", agent: a.id, title: it.title, status: "done", result: res}); return;
+    // 한 번 돌리고 '완료' 처리하지 않는다: 지시(미션)로 넘겨 실제 결과(통과·데모 투입 또는 시도 소진 보고서)가 나올 때 과제를 닫는다
+    post({ch: it.team, kind: "system", text: `🛠 과제를 실제 업무로 실행(결과가 날 때까지 최대 3번): ${String(JOB_KO[route]).split("(")[0]} ← "${it.title.slice(0, 60)}"`});
+    addMission(`팀 과제: ${it.title}${it.why ? ` — 이유: ${it.why}` : ""}`, route, JOB_TEAM[route] || it.team, {plan: MBUILD[route] ? [route, route, "opt"] : [route, route], from: "task", taskId: it.id});
+    return;
   }
   const m = {id: uid(), room: it.team, name: "과제-" + it.title.slice(0, 12), trigger: "auto", topic: `성장 과제: ${it.title}\n왜: ${it.why}\n도구(검색·차트·백테스트·사무실 파일 등)를 써서 실제로 해내고, 결과물과 배운 점을 보고해 주세요. 못 한 부분은 솔직히 말합니다.`, order: [a.id], done: [], ctl: new AbortController(), t: Date.now(), models: assignModels(), place: it.team};
   const turn = await speak(a, m, [], m.models[a.id], m.ctl.signal);
@@ -1772,13 +1903,23 @@ ${sideTxt(B)}
   const votes = [team.stance, neural?.stance].filter(x => x === "찬성" || x === "반대"), con = votes.filter(x => x === "반대").length;
   let grade = pick.grade; if (con === 2 || (final && !final.keep && neural?.stance === "반대")) grade = grade === "유력" ? "보통" : "관망";
   // 2개월·6코인 표본외: 지표·지지저항·호가·내 지표 조합으로 '더 나은 쪽'을 골라도 평균 −0.03~−0.12R → '진입 가능'은 검증 매매법 신호(유력)일 때만
-  const go = grade === "유력";
-  const decision = {side: pick.side, grade, go, label: go ? `${pick.side > 0 ? "롱" : "숏"} 시장가 진입 가능 [유력 · 검증 매매법 신호]` : `진입 비권장 — 지금은 검증된 우위 없음 · 굳이 들어간다면 ${pick.side > 0 ? "롱" : "숏"} 쪽이 계산상 덜 불리`};
+  const go0 = grade === "유력";
+  // 🏆 일봉 검증 셋업이 지금 신호면 그것이 1순위(4년·6코인 검증 통과). 단타 계획과 별개의 '스윙 계획'으로 제시한다.
+  onStep("📅 일봉 검증 셋업 확인");
+  const dset = await dailySetupsFor(sym), sw = (dset?.setups || []).find(x => !x.chased) || null;
+  // 프로 체크리스트(코드가 확인한 사실만)
+  const chk = [["일봉 추세와 같은 방향", ctx.daily?.dir ? ctx.daily.dir === pick.side : null], ["검증된 셋업 신호(일봉 뼈대 또는 워크포워드 통과 매매법)", !!(sw && sw.side === pick.side) || !!pick.sig],
+    ["손익비 1.5 이상", pick.rr >= 1.5], ["펀딩 과열 아님", !pick.warn.some(w => /펀딩/.test(w))], ["고래 흐름 반대 아님", !pick.warn.some(w => /고래 반대/.test(w))], ["추격 아님(자리에서 멀지 않음)", !pick.warn.some(w => /추격|멀/.test(w))],
+    ["토론에서 반대 합의 아님", con < 2]];
+  const go = go0 || !!sw;
+  const decision = sw ? {side: sw.side, grade: "유력", go: true, swing: true, label: `${sw.side > 0 ? "롱" : "숏"} 진입 가능 — 일봉 검증 셋업 '${sw.name}' (4년·${sw.coins}코인 ${sw.n}건 · 승률 ${sw.wr}% · 손익비 ${sw.pf}) · 단타가 아니라 스윙 계획`}
+    : {side: pick.side, grade, go, label: go ? `${pick.side > 0 ? "롱" : "숏"} 시장가 진입 가능 [유력 · 검증 매매법 신호]` : `진입 비권장 — 지금은 검증된 우위 없음 · 굳이 들어간다면 ${pick.side > 0 ? "롱" : "숏"} 쪽이 계산상 덜 불리`};
   pick.debate = {team, neural, final, verdict: votes.length === 2 ? (con === 0 ? "합의: 찬성" : con === 2 ? "합의: 반대" : "의견 갈림") : votes.length ? "한쪽만 응답" : "토론 없음", t: Date.now()};
   const res = {t: Date.now(), by, sym, ko: c.ko, price: r.price, tr: r.tr, adx1h: r.adx1h, rsi15: r.rsi15, myInd: r.myInd, book: r.book ? {imb1: r.book.imb1, bidWalls: r.book.bidWalls.slice(0, 3), askWalls: r.book.askWalls.slice(0, 3)} : null,
-    levels: r.levels.filter(l => Math.abs(l.price / r.price - 1) < 0.04).map(l => ({price: l.price, src: l.src, strength: l.strength})), sides: r.sides, best: pick, other: B, decision};
+    levels: r.levels.filter(l => Math.abs(l.price / r.price - 1) < 0.04).map(l => ({price: l.price, src: l.src, strength: l.strength})), sides: r.sides, best: pick, other: B, decision, swing: sw, daily: dset ? {atrPct: dset.atrPct, rsi2: dset.rsi2, sma50: dset.sma50, inTrend: dset.inTrend, watch: dset.watch, chased: (dset.setups || []).filter(x => x.chased).map(x => x.name)} : null, checklist: chk};
   writeJ("coinMarketEntry", res);
-  try { N?.trackCall?.({sym, ko: c.ko, side: pick.side, entry: pick.entry, sl: pick.sl, tp1: pick.tp1, grade, src: "시장가"}); } catch(e){}   // 내가 누른 시장가 추천도 채점 → 뇌 학습
+  try { N?.trackCall?.({sym, ko: c.ko, side: pick.side, entry: pick.entry, sl: pick.sl, tp1: pick.tp1, grade, src: "시장가"}); } catch(e){}
+  if (sw) try { N?.trackCall?.({sym, ko: c.ko, side: sw.side, entry: sw.entry, sl: sw.sl, tp1: sw.target && (sw.target - sw.entry) * sw.side > 0 ? sw.target : sw.entry + sw.side * Math.abs(sw.entry - sw.sl), grade: "일봉셋업", src: "시장가·스윙"}); } catch(e){}   // 내가 누른 시장가 추천도 채점 → 뇌 학습
   // 실시간 진입 목록에도 이 코인을 갱신 → 뉴럴 데스크 카드·MCP 에 바로 보임
   try { const cur = readJ("coinLiveEntry", null) || {t: Date.now(), list: []}; const i = cur.list.findIndex(x => x.sym === sym), row = {sym, ko: c.ko, t: res.t, price: r.price, trend: r.trend, tr: r.tr, adx1h: r.adx1h, rsi15: r.rsi15, book: res.book, levels: res.levels, sides: r.sides, best: {...pick, grade}, market: decision};
     if (i >= 0) cur.list[i] = row; else cur.list.push(row); cur.t = Date.now(); writeJ("coinLiveEntry", cur); } catch(e){}
@@ -2561,11 +2702,18 @@ async function swingJob(){
   const rows = SW.audit(Q, RB, data, COSTS.crypto), trends = {};
   for (const c of COINS){ const t = SW.dailyTrend(Q, data[c.sym]); if (t) trends[c.id] = t; }
   writeJ("coinDailyTrend", trends);
-  writeJ("coinSwingAudit", {t: Date.now(), rows: rows.map(r => ({key: r.key, name: r.name, n: r.n, pf: r.pf, pf1: r.pf1, pf2: r.pf2, recent: r.recent, pos: r.pos, coins: r.coins, p: r.p, pass: r.pass}))});
-  table("demo", lead.id, `📈 스윙 라인 검증 — 일봉 추세추종 뼈대 × ${Object.keys(data).length}코인 묶음 (약 4년 · 수수료·슬리피지·펀딩 포함 · 3배 · 손절 ATR×3)`, ["뼈대", "묶음 손익비", "거래", "전반 / 후반", "최근", "이익 코인", "운일 확률", "판정"],
-    rows.map(r => [r.name.replace("스윙 · ", ""), String(r.pf), String(r.n), `${r.pf1} / ${r.pf2}`, String(r.recent), `${r.pos}/${r.coins}`, r.p == null ? "—" : String(r.p), r.pass ? "✅ 데모" : "—"]),
+  // 오늘(어제 일봉 마감 기준) 코인별 검증 셋업 신호·대기 타점 → 뉴럴 데스크 카드·알림
+  const today = {}; for (const c of COINS){ try { const ls = SW.liveSetups(Q, data[c.sym], rows, c.sym); if (ls) today[c.id] = {ko: c.ko, setups: ls.setups.map(x => ({name: x.name, side: x.side, wr: x.wr, pf: x.pf, n: x.n, entry: x.entry, sl: x.sl, slPct: x.slPct, lev: x.lev, exitKo: x.exitKo, chased: x.chased})), watch: ls.watch, rsi2: ls.rsi2}; } catch(e){} }
+  const prevSet = readJ("coinDailySetups", {}); writeJ("coinDailySetups", {t: Date.now(), coins: today});
+  for (const [id, v] of Object.entries(today)) for (const x of v.setups.filter(x => !x.chased)){ const k = id + x.name; if ((prevSet.coins?.[id]?.setups || []).some(y => id + y.name === k)) continue;
+    const msg = `📅 일봉 검증 셋업: ${v.ko} ${x.side > 0 ? "롱" : "숏"} — ${x.name} (승률 ${x.wr}% · 손익비 ${x.pf} · ${x.n}건) · 시장가 ${x.entry} · 손절 ${x.sl}(−${x.slPct}%) · ≤${x.lev}배 · ${x.exitKo}`;
+    post({ch: "hq", kind: "system", text: "🔔 " + msg}); try { if (typeof Notification !== "undefined" && Notification.permission === "granted") new Notification("GH Coin 일봉 셋업", {body: msg.slice(0, 180)}); } catch(e){} }
+  writeJ("coinSwingAudit", {t: Date.now(), rows: rows.map(r => ({key: r.key, name: r.name, n: r.n, wr: r.wr, pf: r.pf, pf1: r.pf1, pf2: r.pf2, recent: r.recent, pos: r.pos, coins: r.coins, p: r.p, pass: r.pass}))});
+  table("demo", lead.id, `📈 스윙 라인 검증 — 일봉 추세추종 뼈대 × ${Object.keys(data).length}코인 묶음 (약 4년 · 수수료·슬리피지·펀딩 포함 · 3배 · 손절 ATR×3)`, ["뼈대", "승률", "묶음 손익비", "거래", "전반 / 후반", "최근", "이익 코인", "운일 확률", "판정"],
+    rows.map(r => [r.name.replace("스윙 · ", ""), `${r.wr}%`, String(r.pf), String(r.n), `${r.pf1} / ${r.pf2}`, String(r.recent), `${r.pos}/${r.coins}`, r.p == null ? "—" : String(r.p), r.pass ? "✅ 데모" : "—"]),
     "통과 = 묶음 손익비 1.3↑ · 60건↑ · 코인 2/3↑ 이익 · 전반·후반 둘 다 1 초과 · 운일 확률 0.2 이하 · 추세추종은 몇 달씩 잃는 구간이 있음(과거 성과가 미래를 보장하지 않음)");
-  const pass = rows.filter(r => r.pass), pick = [pass.find(r => !r.ls), pass.find(r => r.ls) || pass.filter(r => !r.ls)[1]].filter(Boolean);
+  // 데모 투입: 추세형 롱 1위 + 승률형(눌림 매수) + 롱·숏 1위(통과했을 때만)
+  const pass = rows.filter(r => r.pass), pick = [...new Set([pass.find(r => !r.ls && r.key !== "dip_rsi2"), pass.find(r => r.key === "dip_rsi2"), pass.find(r => r.ls)].filter(Boolean))];
   const book = await P.loadBook(); let added = 0, retired = 0;
   // 더는 통과 못 하는 뼈대는 (포지션이 없을 때) 내린다 → 스스로 교체
   for (const s0 of book.strategies.filter(x => x.status === "active" && x.lane === "swing" && !x.pos)) if (!pass.some(r => r.name === s0.name)){ s0.retiredWhy = "스윙 재검증 탈락"; await P.setStatus(s0.id, "retired").catch(() => {}); retired++; }
@@ -2581,22 +2729,34 @@ async function swingJob(){
   try { const B = await import("./brain.js"); B.learn({type: "지식", text: `일봉 추세추종(${rows[0]?.name.replace("스윙 · ", "")}) 4년 6코인 묶음 손익비 ${rows[0]?.pf} · 1시간·4시간 지표 매매법은 처음 보는 구간 우위 없음(0.84)`, model: "스윙 검증", w: 3, key: "swing:audit"}); } catch(e){}
   fire({kind: "liveentry"});
 }
+// 📅 손매매용: 이 코인에서 일봉 검증 셋업(스윙 라인 통과 뼈대)이 지금 신호인지 + 스윙 계획 + 대기 타점
+async function dailySetupsFor(sym){
+  try { const a = readJ("coinSwingAudit", null); if (!a?.rows?.length) return null;
+    const Q = await import("../nuri-ai/quant.js"), SW = await lib("swing"); return SW.liveSetups(Q, await kl(sym, "D", 300), a.rows, sym); } catch(e){ return null; }
+}
 // 거래가 너무 적어 검증을 못 받는 전략: 진입 조건을 하나씩 빼 보며 검증 구간 거래가 기준(20건)을 채우는 가장 나은 변형을 찾는다(최대 2번, 코드가 직접)
-function relaxSpec(Q, spec, cs, opts, norm0){
-  const need = Q.GATE.min_test_trades, nOf = w => w.oos?.n_trades ?? 0; let w0;
+async function relaxSpec(Q, spec, cs0, opts, norm0){
+  // 화면이 멈추지 않게: 최근 5,000봉만으로 찾고, 한 번 시험할 때마다 양보하며, 25초를 넘기면 그때까지의 최선으로 끝낸다(최종 판정은 어차피 전체 데이터로 다시 한다)
+  const cs = cs0.length > 5000 ? cs0.slice(-5000) : cs0, need = Q.GATE.min_test_trades, nOf = w => w.oos?.n_trades ?? 0, t0 = Date.now(); let w0;
   try { w0 = Q.walkForward(spec, cs, opts); } catch(e){ return null; }
   const m = Math.min(6, Math.max(spec.long_entry?.conditions?.length || 0, spec.short_entry?.conditions?.length || 0)); if (nOf(w0) >= need || m <= 1) return null;
-  // 남길 조건 묶음을 전부 시험(조건 ≤ 6개 → 최대 62가지): 기준을 채우는 것 중 조건을 가장 많이 남긴 것 → 검증 성적 좋은 것
+  // 조건을 1개 또는 2개(조건이 4개 이상이면 3개까지) 빼는 모든 경우를 시험: 기준을 채우는 것 중 조건을 가장 많이 남긴 것 → 검증 성적 좋은 것
+  const bits = x => { let k = 0; while (x){ k += x & 1; x >>= 1; } return k; }, maxDrop = m >= 4 ? 3 : m - 1;
+  const masks = []; for (let mask = 1; mask < (1 << m) - 1; mask++) if (m - bits(mask) <= maxDrop) masks.push(mask);
+  masks.sort((a, b) => bits(b) - bits(a));
   let best = null;
-  for (let mask = 1; mask < (1 << m) - 1; mask++){
-    const keep = i => (mask >> i) & 1, y = JSON.parse(JSON.stringify(spec)); let kept = 0; for (let i = 0; i < m; i++) kept += keep(i);
+  for (const mask of masks){
+    if (Date.now() - t0 > 25e3) break;
+    if (best && best.n >= need && bits(mask) < best.kept) break;   // 더 많이 남긴 변형이 이미 기준을 채움
+    await sleep(0);
+    const keep = i => (mask >> i) & 1, y = JSON.parse(JSON.stringify(spec)), kept = bits(mask);
     for (const g of ["long_entry", "short_entry"]){ const a = y[g]?.conditions; if (!Array.isArray(a) || a.length < 2) continue; const f = a.filter((_, i) => i >= m || keep(i)); if (f.length) y[g].conditions = f; }
     try { const z = norm0(y), w = Q.walkForward(z, cs, opts), n = nOf(w), score = (n >= need ? 1e12 : 0) + (n >= need ? kept * 1e9 : Math.min(n, need) * 1e9) + (w.pass ? 5e8 : 0) + (w.oos?.net_pnl || 0);
       if (!best || score > best.score) best = {z, w, score, mask, n, kept}; } catch(e){}
   }
   if (!best || best.n <= nOf(w0)) return null;
   const dropped = []; for (let i = 0; i < m; i++) if (!((best.mask >> i) & 1)) dropped.push(i + 1);
-  return {spec: best.z, log: [`진입 조건 ${dropped.join("·")}번 제거 → 검증 구간 거래 ${nOf(w0)}→${best.n}건`]};
+  return {spec: best.z, log: [`진입 조건 ${dropped.join("·")}번 제거 → 검증 구간 거래 ${nOf(w0)}→${best.n}건(최근 5,000봉 기준)`]};
 }
 const failWhy = wf => { const o = wf?.oos || {}, n = o.n_trades ?? 0; return n === 0 ? "거래 0건(조건이 너무 많아 한 번도 진입 못 함)" : n < 20 ? `거래 ${n}건(20건 미만 — 조건 과다)` : (wf.is?.net_pnl > 0 && !(o.net_pnl > 0)) ? "학습 구간만 이익(과최적화)" : !(o.net_pnl > 0) ? "검증 구간 손실" : "손익비 미달"; };
 

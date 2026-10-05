@@ -19,6 +19,11 @@ export async function snapshot() {
   let book = []; try { const P = await import("../nuri-ai/paper.js"); book = (await P.loadBook()).strategies.map(x => ({ id: x.id, name: x.name, market: x.market, tf: x.tf, status: x.status, author: x.author, lane: x.lane || "std", trades: (x.trades || []).length, equity: Math.round(P.equityOf(x)), lev: x.spec?.risk?.leverage ?? null, sl: x.spec?.risk?.stop_loss_pct ?? null, tp: x.spec?.risk?.take_profit_pct ?? null })); } catch (e) {}
   let limits = null; try { const L = await import("../nuri-ai/live.js"); const c = L.liveCfg?.() || {}; limits = { limits: c.limits || null, halted: !!c.halted }; } catch (e) {}
   const verdicts = Object.fromEntries(Object.entries(VERDICT_KEYS).map(([k, key]) => [k, readJ(key)]));
+  try { const O = await import("./coin-office.js"); verdicts.missions = O.missionState();
+    const log = (await O.loadLog?.()) || [], bl = O.backlog?.() || [];
+    verdicts.office = { cycle: O.cycleState?.(), nextCycleSec: Math.round((O.nextCycleIn?.() || 0) / 1000), paused: O.officePaused?.() || 0, backlogTodo: bl.filter(x => x.status === "todo").length, backlogDoing: bl.filter(x => x.status === "doing").length,
+      recent: log.slice(-14).map(e => ({ t: e.t, ch: e.ch, kind: e.kind, text: String(e.text || e.title || e.name || "").replace(/\s+/g, " ").slice(0, 150) })) }; } catch (e) {}
+  verdicts.marketEntry = readJ("coinMarketEntry");
   return {
     v: 1, t: Date.now(), app: "GH Coin",
     neural: { equity: s.equity, bankroll: s.bankroll, pnl: s.pnl, drawdown: s.drawdown, fills: s.fills, winRate: s.winRate, heat: s.heat, dayPnl: s.dayPnl, riskMode: s.riskMode,
