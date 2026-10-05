@@ -8,7 +8,8 @@
 # copied. The small databases go first: agents3.db (the hypothesis ledger behind the gate's test count)
 # and inbox.db (the owners' posts and approvals), liq.db (liquidations: no public history, a lost day is
 # lost for good), the order executor's records (exec/executor.db for mainnet, exec/executor-testnet.db: its
-# trades, fills, halts and open-position state; copied as executor.db / executor-testnet.db), then daily3.db
+# trades, fills, halts and open-position state; copied as executor.db / executor-testnet.db), the debate room's
+# debate/debate.db (rounds, graded claims, the paid-API spend counter; group paperbot reads it), then daily3.db
 # and paper3.db. The backup writes none
 # of them: a read-only connection never checkpoints a left-over WAL into the database file.
 # A copy is written as <name>.db.part and renamed when complete, so a failed copy never looks whole;
@@ -22,7 +23,7 @@ mkdir -p "$d" || exit 1
 find "$out" -name '*.db.part' -type f -delete
 fail=0
 # keep this list the same as DB_NAMES in paperbot/offsite.py (tests/test_offsite.py checks it)
-for f in agents3 inbox liq checkpoint exec/executor exec/executor-testnet shadow200/shadow200 daily3 paper3; do
+for f in agents3 inbox liq checkpoint exec/executor exec/executor-testnet shadow200/shadow200 debate/debate daily3 paper3; do
   src="$lib/$f.db"
   [ -f "$src" ] || continue
   n=$(basename "$f")
