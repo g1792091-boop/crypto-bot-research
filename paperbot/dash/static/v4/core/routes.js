@@ -1,6 +1,7 @@
 // The navigation: 5 groups (홈 · 거래 · 매매법 · 에이전트 · 서버), each with its screens (sub tabs). A screen is
 // screens/<name>.js + screens/<name>.css (CONTRACT.md). `feature`: shown only while that feature really runs
-// (core/features.js); `hidden`: not a tab (reached by links, e.g. one account). The 터미널 is a PC screen: its
+// (core/features.js); `soft`: always a tab, greyed with a '꺼짐' pill while that feature is off (the 토론방: the owners
+// should see it exists; its screen says plainly that it has not started); `hidden`: not a tab (reached by links, e.g. one account). The 터미널 is a PC screen: its
 // `feature: "wide"` (a window at least 760 px wide, core/features.js) keeps it off the phone's menu, and it is the
 // landing screen (an empty hash) only on a window at least 1200 px wide; phones and narrow windows land on 홈.
 import {s} from "./dom.js";
@@ -31,7 +32,7 @@ export const SCREENS = {
   office: {ko: "회의실", group: "agents", title: "회의실"},
   rooms: {ko: "에이전트 방", group: "agents", title: "에이전트 방"},
   digest: {ko: "회의 요약", group: "agents", title: "회의 요약"},
-  debate: {ko: "토론방", group: "agents", title: "24시간 토론방", feature: "debate"},
+  debate: {ko: "토론방", group: "agents", title: "24시간 토론방", soft: "debate"},
   server: {ko: "서버·비용", group: "server", title: "서버·비용"},
   alerts: {ko: "알림 기록", group: "server", title: "알림 기록"},
   signals: {ko: "신호", group: "server", title: "신호"},
