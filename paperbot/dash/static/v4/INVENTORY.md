@@ -349,3 +349,11 @@ What the owners see on the first morning after the v4 reset (dashboard only; shi
 | 조합 시너지 첫날 | 분석 › 조합 시너지: no ranked list until the 36 average 5 closed trades per account: "거래가 쌓이면 (계좌당 5건 이상) 보여 드립니다" | `/api/analysis/synergy` `waiting`, `note` (dash/analysis.py `SYNERGY_MIN_TRADES`) |
 | 알림 기록 읽은 곳 | 알림 기록 footer: 봇 경고 · 밤 점검 보고 · 판정 작업 기록 (no file names) | none |
 | 화면 켜두기 | 🔊 menu: "화면 켜두기" (Screen Wake Lock while the sound is on; off by default, this device only; asks again when the page comes back; "이 기기는 지원 안 함" without the API); FAQ 화면: "휴대폰에서 앱처럼 쓰려면요?" (브라우저 메뉴 → 홈 화면에 추가) | none |
+| 순위표 실시간 ROE (fill-people) | 순위표 열린 포지션 칩 '● LTC 숏 30배 +20.4%' + 빛남: 기존 36 · 5분봉 · 추가만 (딥시크·동전 봇은 칩만, 손익 없음) | `/api/board` position + `/api/ticker` mark (derive.livePnl) |
+| 순위표 카드 / 표 (fill-people) | 전체 목록 '카드 · 표' 전환 (이 기기에 기억): 표 = 한 쪽 50줄, 머리글 눌러 정렬, 순위·계좌·잔고·수익률·거래·승률(n승 n패)·최대 낙폭·상태(실시간 ROE)·동전 봇 대비(참고); 섞인 목록에서 딥시크·동전 봇은 개수만 | `/api/board`, `/api/ticker` |
+| 순위표 → 분석 (fill-people) | 순위표 목록 아래 '더 보기 (분석)': 코인별 · 시간대별 성적, 코인·장세 지도, 계좌 겹침, 손익비·위험 (v3 순위표 아래에 있던 것) | links only |
+| 계좌 차트·고르기 (fill-people) | 계좌: 코인별 진입·청산 차트가 프로필 카드 바로 아래 전체 폭, 열린 포지션 또는 마지막 거래 코인으로 열림, 첫 거래 40봉 전부터 지금까지 확대, 붐비면 짧은 글씨; 프로필 카드가 곡선을 그리면 자본 곡선 칸 없음; #/account (id 없음) = 찾기 있는 계좌 고르기 (지난번 본 계좌 또는 저장된 묶음 1위 먼저) | `/api/account/<id>`, `/api/candles`, `/api/board` |
+| 회의실 상황판 (fill-people) | 대표실 옆 픽셀 상황판: 코인 시세(바뀔 때만 반짝), 오늘 닫힌 거래·승패 (기존 36·5분봉·추가는 손익, 딥시크·동전 봇은 개수만), 지금 열린 포지션 수, 오늘 손실 카드 수, 다음 정기 회의까지 남은 시간; 상태 줄에도 남은 시간 | `/api/v4/people/today` (dash/more/people.py), `/api/ticker`, `/api/board`, `/api/office` schedule.next.at_ms |
+| 판정 거래 많은 계좌 (fill-people) | 판정 무대 좌석표 옆: 닫힌 거래가 가장 많은 판정 계좌 5개 'V4.0_TREND · 4시간 9/30' + '지금 속도면 10/21쯤 30건' (참고, 합격·불합격 아님, 이틀 전엔 표본 적음; 딥시크는 이름 없음) | `/api/board`, `/api/summary` start |
+| 매매법 방 회의 전 (fill-people) | 에이전트 방: 첫 회의 전 매매법 방 목록 줄 = 그 매매법의 가장 최근 실제 일 (닫힌 거래 또는 신호); 빈 대화 칸에 코드 기록 상자 (오늘 봉별 거래·승패·손익, 지금 열린 포지션, 최근 거래, 최근 신호) | `/api/v4/people/strats`, `/api/v4/people/strat?name=`, `/api/board` |
+| 토론방 꺼짐 탭 (fill-people) | 에이전트 › 토론방 탭이 늘 보임 (꺼져 있으면 흐린 '꺼짐' 표); #/debate = '아직 시작 전 · 켜면 하루 종일 토론' 카드 (홈으로 튕기지 않음) | `/api/debate` ready / state |

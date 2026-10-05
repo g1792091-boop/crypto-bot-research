@@ -7,9 +7,8 @@
 //   powerCard()  30일 판정으로 알 수 있는 것: /api/v4/power (research/power/out/power.json) per timeframe: if an account
 //                really earned +0 / 1 / 2 / 5 / 10 % per trade, its chance to pass by day 30 / 60 / 90.
 //   stamp(v), luckDots(v)  only after /api/checkpoint says ready: the stamp on the result and the 'luck' picture.
-import {h, ui, fmt, motion, local} from "../core/pb.js";
+import {h, ui, fmt, motion, local, href as routeHref} from "../core/pb.js";
 import {judgedTfs, MIN_TRADES} from "./home-shared.js";
-import {href as routeHref} from "../core/routes.js";
 
 const DAY = 86400000;
 const SEAT_GROUPS = [{kind: "strategy", ko: "기존 36", named: true}, {kind: "ds200", ko: "딥시크", named: false},
