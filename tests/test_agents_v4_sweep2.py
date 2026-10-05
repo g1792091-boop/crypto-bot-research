@@ -146,6 +146,55 @@ def test_the_debate_prompt_has_the_v4_facts_and_the_packet_the_verdict_date(tmp_
     assert cp["verdict_exists"] is False and cp["next"].endswith("09:00 KST")     # no checkpoint.db yet
 
 
+# ------------------------------------------------------------------ 9: the agenda jumps only on a new event
+def _bust(paper, aid):
+    import sqlite3
+    con = sqlite3.connect(paper)
+    eng = json.loads(con.execute("SELECT data FROM state WHERE k = 'accounts'").fetchone()[0])
+    eng["engines"].setdefault(aid, {})["bust"] = True
+    con.execute("UPDATE state SET data = ? WHERE k = 'accounts'", (json.dumps(eng),))
+    con.commit()
+    con.close()
+
+
+def test_one_bust_jumps_the_agenda_once_then_it_rotates(tmp_path):
+    from paperbot.agents import debate_packet as P
+    from debate_world import make_world
+    from test_debate import NOW
+    w = make_world(tmp_path, NOW, days=3, per_day=20)
+    _bust(w["paper"], "N01_ST_EMA@1h")
+    first = P.build(w["paper"], w["daily"], None, None, NOW, round_no=0)          # no marks yet: it jumps
+    assert first["topic"] == "risk" and "파산한 계좌(매매법·동전) 1개" in first["why"]
+    seen = first["marks"]
+    assert seen["busts"] == 1 and seen["start"] is not None
+    topics = [P.build(w["paper"], w["daily"], None, None, NOW, round_no=i, seen=seen)["topic"] for i in range(1, 6)]
+    assert topics == [k for k, _ko in P.TOPICS[1:6]]                                # plain rotation after the jump
+    later = P.build(w["paper"], w["daily"], None, None, NOW, round_no=1, seen=seen)
+    assert later["topic"] == P.TOPICS[1][0] and later["packet"]["unusual"] == []
+    _bust(w["paper"], "V45_AMB@15m")                                                # a NEW bust: one more jump
+    again = P.build(w["paper"], w["daily"], None, None, NOW, round_no=1, seen=seen)
+    assert again["topic"] == "risk" and "2개" in again["why"] and again["marks"]["busts"] == 2
+    assert P.build(w["paper"], w["daily"], None, None, NOW, round_no=1, seen=again["marks"])["topic"] == P.TOPICS[1][0]
+    other_run = {**again["marks"], "start": 1}                                      # marks of another run: ignored
+    assert P.build(w["paper"], w["daily"], None, None, NOW, round_no=1, seen=other_run)["topic"] == "risk"
+
+
+def test_the_debate_service_jumps_once_for_a_bust_then_rotates(tmp_path):
+    from paperbot.agents import debate as D
+    from debate_world import make_world
+    from test_debate import NOW, answer, make, ok_body, rows
+    w = make_world(tmp_path, NOW, days=3, per_day=20)
+    _bust(w["paper"], "N01_ST_EMA@1h")
+    svc = make(tmp_path, w, *[ok_body(answer())] * 6)
+    for _ in range(6):
+        svc.clk.t += 21 * 60_000
+        assert svc.tick(force=True) == "round"
+    topics = [r[0] for r in rows(svc, "SELECT topic FROM debate_rounds WHERE status = 'ok' ORDER BY round_id")]
+    from paperbot.agents import debate_packet as P
+    assert topics[0] == P.TOPIC_KO["risk"] and topics.count(P.TOPIC_KO["risk"]) == 1, topics
+    assert svc.db.get(D.AGENDA_MARKS)["busts"] == 1
+
+
 def test_a_deepseek_room_packet_has_roe_and_counts_but_no_money(tmp_path):
     w = V4World(tmp_path)
     w.ds_losses("F3_BOS@15m", 6)

@@ -63,6 +63,7 @@ HEARTBEAT_STALE_S = 300                    # the loop beats every <= 30 s (a rou
 SLICE_S = 5.0                              # the loop's sleep slice (stop flag, heartbeat)
 GRADE_EVERY_MS = 10 * 60_000
 FORCE_AFTER_MS = 6 * HOUR_MS               # never skip for longer than this: one round runs anyway
+AGENDA_MARKS = "agenda_marks"              # debate_state: the last ok round's debate_packet.agenda_marks
 
 # USD per million tokens. Built-in guesses by model family; the owners' env (DEBATE_PRICE_IN / DEBATE_PRICE_OUT)
 # wins. They must be re-checked in the Anthropic console: a wrong constant only mis-states the cost counter,
@@ -758,7 +759,8 @@ class Service:
         self.db.put("last_attempt", now, commit=False)
         try:
             built = P.build(*self._paths(), now, round_no=n, recent_topics=recent_keys,
-                            last_notes=notes, last_turns=turns_prev, scoreboard=G.scoreboard(self.db.conn))
+                            last_notes=notes, last_turns=turns_prev, scoreboard=G.scoreboard(self.db.conn),
+                            seen=self.db.get(AGENDA_MARKS))       # only a new bust / alert / report jumps the agenda
         except Exception as exc:  # noqa: BLE001  (a bot database that cannot be read is a state, not a crash)
             self.record_round(now, "error", error=f"packet: {type(exc).__name__}: {exc}")
             self.fail("packet", f"{type(exc).__name__}: {exc}", now)
@@ -796,6 +798,7 @@ class Service:
                 self.db.conn.commit()
             return "error"
         self.db.put("bad_output", 0, commit=False)
+        self.db.put(AGENDA_MARKS, built.get("marks"), commit=False)     # what this ok round has seen (agenda)
         self.store_answer(rid, t, built["topic_ko"], ans)
         self.finish_round(rid, "ok", usage=res["usage"], cost=cost, turns=len(ans["turns"]),
                           error="답이 잘려 일부만 씀(max_tokens)" if ans["truncated"] else None)
