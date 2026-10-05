@@ -4,6 +4,9 @@
 // office.running). The office is read through the shared store like 홈 (every 30 s and when a room changes).
 import {h, put, fmt, store, motion, bars, serverNow} from "../core/pb.js";
 import {countdown, fundPct} from "./positions-book.js";
+import {hit} from "./terminal-live.js";
+
+const RELAY_FRESH_MS = 6000;      // the selected coin's relay price this fresh keeps the big price (the ticker is older)
 
 const two = (x) => String(x).padStart(2, "0");
 const clockKst = (ms) => { const d = new Date(ms + 9 * 3.6e6); return `${two(d.getUTCHours())}:${two(d.getUTCMinutes())}:${two(d.getUTCSeconds())}`; };
@@ -16,7 +19,10 @@ export function topBar(ctx, st) {
   const stat = (k) => { const v = h("b", {class: "num"}, "—"); return {v, el: h("div", {class: "term-st"}, h("span", null, k), v)}; };
   const hi = stat("24시간 고가"), lo = stat("24시간 저가"), vol = stat("24시간 거래대금"), mark = stat("마크 가격"), fund = stat("펀딩비 / 다음까지");
   const sess = h("span", {class: "term-sess"}), clock = h("b", {class: "term-clock num"}, "—");
-  const clockBox = h("div", {class: "term-clockbox", title: "한국 시각 (서버 시계 기준)"}, h("i", {class: "term-live", "aria-hidden": "true"}), clock, h("small", null, "KST"));
+  // the live dot: lit while the market-trade relay is really connected, one pulse per real relay message
+  const liveDot = h("i", {class: "term-live", "aria-hidden": "true"});
+  const clockBox = h("div", {class: "term-clockbox", title: "한국 시각 (서버 시계 기준)"}, liveDot, clock, h("small", null, "KST"));
+  let relayAt = 0;
   // the meetings line: a label, a running count (real), the conclusions (duplicated once for a seamless loop; the copy is
   // hidden from screen readers)
   const meetN = h("span", {class: "term-mrun", hidden: true});
@@ -37,7 +43,7 @@ export function topBar(ctx, st) {
     symEl.textContent = `${fmt.coin(st.sym)}USDT`;
     if (!t) { px.textContent = "—"; return; }
     const p = Number(t.c ?? t.mark);
-    motion.tickPrice(px, p, fmt.price(p), st.sym);           // glows teal / pink only when the price really moved
+    if (Date.now() - relayAt > RELAY_FRESH_MS || px.dataset.pk !== st.sym) motion.tickPrice(px, p, fmt.price(p), st.sym);   // glows only on a real move
     px.classList.toggle("up", Number(t.p) > 0); px.classList.toggle("down", Number(t.p) < 0);
     chg.textContent = t.p == null ? "" : fmt.pct(Number(t.p) / 100, 2);
     chg.className = "term-chg num " + fmt.tone(t.p);
@@ -76,8 +82,23 @@ export function topBar(ctx, st) {
 
   return {
     el,
-    setSym() { paint(store.get("ticker")); },
+    setSym() { relayAt = 0; paint(store.get("ticker")); },
     onTicker: paint,
+    /** Every relay message: the dot says the relay's real state and pulses once per message that carried trades. */
+    onRelay(m) {
+      liveDot.dataset.s = m.state;
+      liveDot.title = m.state === "live" ? "바이낸스 실시간 체결 연결됨" : "실시간 체결 연결 안 됨 (가격은 5초마다)";
+      if (m.state === "live" && Array.isArray(m.ev) && m.ev.length) motion.pulseLive(liveDot);
+    },
+    /** A real relay event of the selected coin {s, side, p}: the big price shows that trade's price and lights once
+     *  (the direction of the move, or the side that led when the price did not move). */
+    onTick(ev) {
+      const p = Number(ev.p);
+      if (ev.s !== st.sym || !Number.isFinite(p) || p <= 0) return;
+      relayAt = Date.now();
+      const tone = motion.tickPrice(px, p, fmt.price(p), st.sym) || (ev.side === "buy" ? "up" : "down");
+      hit(px, tone);
+    },
     tick() {
       const now = serverNow();
       clock.textContent = clockKst(now);

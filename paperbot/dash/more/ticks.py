@@ -26,6 +26,18 @@ bucket: that half second's score (its notional over the coin's usual one) ranked
   the relay is full / stopped): the page's sound layer then uses /api/ticker price changes as before. The browser only
   talks to this server (CSP connect-src 'self').
 - A daemon thread, stopped by the app's shutdown handler (never holds the process up). Read-only: no database.
+
+실시간 큰 체결 (the 터미널's market feed, 10/06): the same socket ALSO keeps the last ``BIG_KEEP`` large market orders.
+The aggTrades of one taker order (same coin, same side, same trade time: an order that swept several prices) are added
+up; an order whose notional reaches its coin's ``BIG_USD`` (BTC $150k, ETH $80k, others $30k) is kept as
+
+    {"t": <trade ms>, "s": "BTCUSDT", "side": "buy" | "sell", "p": <last price>, "usd": 412345, "n": <aggTrades>,
+     "x": <notional / the coin's threshold, 1 decimal>, "w": 1 when at least ``WHALE_X`` times the threshold}
+
+and the taker-buy / taker-sell notional of those orders over the last ``FLOW_S`` (5 minutes) is summed. An SSE message
+that has something new for the page carries ``"big": {"rows": [new rows], "buy": usd, "sell": usd, "n": orders,
+"span": seconds the sums really cover, "min": {coin: threshold}, "whale_x": 4}``; the first message of an answer
+carries the whole kept list (real past orders with their own times). The whole market's trades, never our bots'.
 """
 from __future__ import annotations
 
@@ -64,6 +76,19 @@ BEAT_S = 5.0              # an idle answer repeats the state this often (the pag
 STREAM_MAX_S = 600.0      # one answer lasts at most this long; the browser's EventSource reconnects by itself
 RETRY_MS = 3000           # the EventSource reconnect wait (SSE 'retry:')
 BUSY_RETRY_MS = 60000     # ... for a page the full relay turned away (no knock every 3 s)
+# 실시간 큰 체결 (see the top)
+BIG_USD = {"BTCUSDT": 150_000.0, "ETHUSDT": 80_000.0}
+BIG_USD_OTHER = 30_000.0  # every other coin
+WHALE_X = 4               # 고래: at least this many times the coin's threshold
+BIG_KEEP = 40             # the kept list of large orders
+BURST_S = 0.25            # one taker order's aggTrades arrive together: an open order closes this long after it began
+FLOW_S = 300.0            # the buy / sell sums cover the last 5 minutes
+FLOW_KEEP = 4000          # at most this many orders in those sums (bounded memory on a wild day)
+
+
+def big_usd(sym: str) -> float:
+    """The notional from which one market order of ``sym`` counts as large."""
+    return BIG_USD.get(sym, BIG_USD_OTHER)
 
 
 def symbols() -> tuple:
@@ -161,6 +186,70 @@ class Agg:
         return {"s": best, "side": side, "b": b, "usd": round(a[0] + a[1]), "n": a[2], "p": a[3], "t": a[4]}
 
 
+class Big:
+    """Large market orders: the aggTrades of one taker order (same coin, side and trade ms) added up; an order at or
+    above its coin's threshold becomes a row. Plus the 5-minute taker buy / sell sums of those rows."""
+
+    def __init__(self, burst_s: float = BURST_S, flow_s: float = FLOW_S):
+        self.burst_s, self.flow_s = burst_s, flow_s
+        self.open: dict = {}                   # symbol -> [is_buy, trade ms, usd, last price, n, began (clock)]
+        self.flow: collections.deque = collections.deque(maxlen=FLOW_KEEP)   # (clock, is_buy, usd)
+        self.since: Optional[float] = None     # when this connection began counting (the sums' real span)
+
+    def reset(self, now: float) -> None:
+        """A new connection: the old one's open orders are dropped (half an order is not an order)."""
+        self.open = {}
+        self.since = now
+
+    def _close(self, s: str, now: float) -> Optional[dict]:
+        o = self.open.pop(s, None)
+        if o is None:
+            return None
+        buy, ms, usd, p, n, _ = o
+        lim = big_usd(s)
+        if usd < lim:
+            return None
+        self.flow.append((now, buy, usd))
+        return {"t": ms, "s": s, "side": "buy" if buy else "sell", "p": p, "usd": round(usd), "n": n,
+                "x": round(usd / lim, 1), "w": 1 if usd >= WHALE_X * lim else 0}
+
+    def add(self, trade: tuple, now: float) -> list:
+        """Count one parsed trade; returns the large orders this closed (the coin's previous order, old open ones)."""
+        out = self.flush(now)
+        s, buy, usd, p, ms = trade
+        o = self.open.get(s)
+        if o is not None and (o[0] != buy or o[1] != ms or not ms):
+            r = self._close(s, now)
+            if r:
+                out.append(r)
+            o = None
+        if o is None:
+            self.open[s] = [buy, ms, usd, p, 1, now]
+        else:
+            o[2] += usd
+            o[3] = p
+            o[4] += 1
+        return out
+
+    def flush(self, now: float) -> list:
+        """Close the open orders that began ``burst_s`` ago (their aggTrades have all arrived)."""
+        out = []
+        for s in [k for k, o in self.open.items() if now - o[5] >= self.burst_s]:
+            r = self._close(s, now)
+            if r:
+                out.append(r)
+        return out
+
+    def sums(self, now: float) -> dict:
+        """Taker buy / sell notional of the large orders in the last ``flow_s``, and the seconds that really covers."""
+        while self.flow and now - self.flow[0][0] > self.flow_s:
+            self.flow.popleft()
+        b = sum(u for _, buy, u in self.flow if buy)
+        sl = sum(u for _, buy, u in self.flow if not buy)
+        span = 0 if self.since is None else int(min(self.flow_s, max(0.0, now - self.since)))
+        return {"buy": round(b), "sell": round(sl), "n": len(self.flow), "span": span}
+
+
 class TickRelay:
     """ONE shared aggTrade socket for every page: opened on the first listener, closed ``linger_s`` after the last."""
 
@@ -188,7 +277,10 @@ class TickRelay:
         self.state = "connecting"
         self.seq = 0
         self.events: collections.deque = collections.deque(maxlen=EVENTS_KEEP)
-        self.stats = {"connects": 0, "fails": 0, "msgs": 0, "events": 0, "threads": 0}
+        self.bigs: collections.deque = collections.deque(maxlen=BIG_KEEP)    # (big seq, row): the kept large orders
+        self.bseq = 0
+        self.big = Big()
+        self.stats = {"connects": 0, "fails": 0, "msgs": 0, "events": 0, "threads": 0, "big": 0}
 
     def _ws_connect(self, url: str):
         import websocket  # websocket-client (requirements.txt), as paperbot/liqstream.py
@@ -238,6 +330,12 @@ class TickRelay:
                 self.subs[tok] = self.clock()
             return self.state, self.seq, [e for n, e in self.events if n > seq]
 
+    def big_after(self, bseq: int) -> tuple:
+        """(newest big seq, [large orders after ``bseq``], the 5-minute sums) for one page's answer."""
+        with self.lock:
+            sums = self.big.sums(self.clock()) if self.state == "live" else {"buy": 0, "sell": 0, "n": 0, "span": 0}
+            return self.bseq, [r for n, r in self.bigs if n > bseq], sums
+
     def snapshot(self) -> dict:
         with self.lock:
             return {"state": self.state, "listeners": len(self.subs), "running": self.thread is not None,
@@ -267,6 +365,14 @@ class TickRelay:
             self.events.append((self.seq, ev))
             self.stats["events"] += 1
 
+    def _big(self, t: Optional[tuple], now: float) -> None:
+        """One parsed trade (or None: a quiet moment) through the large-order counter; new rows are kept."""
+        with self.lock:
+            for r in self.big.add(t, now) if t else self.big.flush(now):
+                self.bseq += 1
+                self.bigs.append((self.bseq, r))
+                self.stats["big"] += 1
+
     def _set_state(self, state: str) -> None:
         with self.lock:
             if not self.stopping:
@@ -287,6 +393,8 @@ class TickRelay:
                     self.state = "live"
                 agg = Agg(self.syms, self.window_s)
                 opened = last = self.clock()
+                with self.lock:
+                    self.big.reset(opened)
                 while not self._finished(me):
                     now = self.clock()
                     if now - opened >= self.max_conn_s:
@@ -297,11 +405,13 @@ class TickRelay:
                         if now - last >= self.idle_s:
                             raise TimeoutError("no message")
                         self._publish(agg.tick(now))
+                        self._big(None, now)
                         continue
                     last = now
                     self.stats["msgs"] += 1
                     t = parse(raw, self.syms)
                     self._publish(agg.add(t, now) if t else agg.tick(now))
+                    self._big(t, now)
                 self._set_state("connecting")
                 backoff = 1.0                         # (the scheduled reconnect: at once, the wait starts over)
             except Exception:  # noqa: BLE001  network errors, timeouts, closes, a blocked host
@@ -346,6 +456,16 @@ def _sse(obj: dict) -> str:
     return "data: " + json.dumps(obj, separators=(",", ":")) + "\n\n"
 
 
+def _big(rows: list, sums: dict, syms=None) -> dict:
+    """The 'big' part of an SSE message: new large orders (newest last) and the 5-minute sums; the first one also says
+    the thresholds."""
+    out = {"rows": rows, **sums}
+    if syms:
+        out["min"] = {s: big_usd(s) for s in syms}
+        out["whale_x"] = WHALE_X
+    return out
+
+
 def register(app, ctx) -> dict:
     relay = TickRelay()
     app.router.on_shutdown.append(relay.stop)
@@ -362,15 +482,20 @@ def register(app, ctx) -> dict:
             try:
                 yield f"retry: {RETRY_MS}\n\n"
                 state, seq, _ = relay.after(1 << 62, tok)     # from now on: no replay of older events
-                yield _sse({"state": state, "ev": []})
+                bseq, rows, sums = relay.big_after(0)          # ... but the kept large orders (real, with their times)
+                yield _sse({"state": state, "ev": [], "big": _big(rows, sums, relay.syms)})
                 began = beat = time.monotonic()
                 while not await req.is_disconnected():
                     await asyncio.sleep(POLL_S)
                     now = time.monotonic()
                     st, seq2, evs = relay.after(seq, tok)
-                    if evs or st != state or now - beat >= BEAT_S:
-                        state, seq, beat = st, seq2, now
-                        yield _sse({"state": st, "ev": evs})
+                    bseq2, rows, sums2 = relay.big_after(bseq)
+                    if evs or rows or st != state or now - beat >= BEAT_S:
+                        out = {"state": st, "ev": evs}
+                        if rows or sums2 != sums:
+                            out["big"] = _big(rows, sums2)
+                        state, seq, beat, bseq, sums = st, seq2, now, bseq2, sums2
+                        yield _sse(out)
                     if now - began >= relay.stream_max_s or relay.stopping:
                         break
             finally:
