@@ -117,6 +117,7 @@ def test_the_deepseek_view_has_no_money(w):
     s = json.dumps(v, ensure_ascii=False)
     assert v["no_money"] is True and v["trades"] == 2 and v["group"] == "ds200"
     assert '"eq"' not in s and '"pnl"' not in s and "$" not in s
+    assert EM.EQ_READ in EM.HOW_TO_READ and "eq" not in v["how_to_read"] and "손익" not in v["how_to_read"]
     assert v["all"]["trend_align"]["반대"]["n"] == 1 and set(v["all"]["hold"]["2h-8h"]) <= {"n", "wr", "roe", "small"}
     core = EM.group_dash_view(w.paper(), QUIET, "core")
     assert core["trades"] == 1 and "eq" in core["all"]["hold"]["2h-8h"] and "coin_flips" not in core

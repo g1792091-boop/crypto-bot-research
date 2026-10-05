@@ -92,7 +92,7 @@ export function sessions(d, env) {
 // ---------------------------------------------------------------- 진입 순간 (/api/analysis/entry)
 const DIM_KO = {strength: "진입 강도", volatility: "변동성", body: "몸통 크기(ATR 대비)", wick_against: "반대쪽 꼬리", wick_with: "같은 쪽 꼬리",
   close_loc: "종가 위치", streak: "연속 봉", pattern: "봉 모양", liq: "직전 강제청산 몰림", hold: "보유 시간", funding: "펀딩비", weekday: "요일",
-  trend_stage: "추세 초입·중간·막판", range_pos: "최근 범위 안 위치", trend_align: "장세 방향"};
+  trend_stage: "추세 초입·중간·막판", range_pos: "범위 안 위치(거래 방향 기준)", trend_align: "장세 방향"};
 const BK_KO = {weak: "약함", mid: "중간", strong: "강함", unknown: "모름", low: "낮음", high: "높음", with_1: "같은 방향 1개", with_2: "같은 방향 2개",
   "with_3+": "같은 방향 3개+", against_1: "반대 1개", "against_2+": "반대 2개+", doji: "도지", engulf_with: "장악형(같은 방향)",
   engulf_against: "장악형(반대)", pin_with: "망치형(같은 방향)", pin_against: "망치형(반대)", none: "없음", burst_with: "몰림(같은 방향)",

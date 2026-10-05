@@ -142,6 +142,7 @@ HOW_TO_READ = ("진입 순간의 모습별 끝난 거래 성적(코드 계산). 
                "반대 쪽. trend_stage 추세 단계(EMA20에서 거래 방향으로 ATR 몇 배: 0 미만 역방향, 0~1 초입, 1~2 중간, 2 이상 "
                "막판), range_pos 최근 범위 안 위치(거래 방향 기준 0.33 미만 아래쪽, 0.67 이상 위쪽), trend_align 이 봉·상위 "
                "봉 장세가 거래와 같은 방향/반대(하나라도 반대면 반대)/횡보·불분명. unknown = 그 자료가 없음")
+EQ_READ = "eq 자금 대비 평균 손익. "            # HOW_TO_READ's line on the eq column (left out where there is no money)
 NOTE = ("설명용 집계일 뿐 규칙이 아님. 칸을 아주 많이 보므로(multiple_comparisons) 20칸 중 1칸쯤은 우연만으로 달라 보임: "
         "칸 차이는 가설로만, 나중 거래로 확인할 예측을 붙여 남김")
 
@@ -871,6 +872,8 @@ def group_dash_view(paper_ro: Optional[sqlite3.Connection], now_ms: int, group: 
     if not has_money(kinds):
         v = _no_eq(v)
         v["no_money"] = True
+        if isinstance(v.get("how_to_read"), str):        # no eq column, so no line about one either
+            v["how_to_read"] = v["how_to_read"].replace(EQ_READ, "")
     return v
 
 
@@ -913,7 +916,7 @@ def group_brief(rows: list, families: Optional[dict] = None, flip_rows: Optional
     e, b = _examined(tab)
     out["multiple_comparisons"] = {"buckets_examined": e, "buckets_not_small": b,
                                    "chance_hits_at_5pct": round(0.05 * b, 1)}
-    out["how_to_read"] = HOW_TO_READ.replace("eq 자금 대비 평균 손익. ", "")
+    out["how_to_read"] = HOW_TO_READ.replace(EQ_READ, "")
     out["note"] = NOTE
     left = []
     for dim in BRIEF_DROP:
