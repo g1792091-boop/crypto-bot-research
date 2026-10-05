@@ -37,3 +37,69 @@
 .market-fr-h .muted { font-size: var(--t-xs); }
 .market-fr-h .go { margin-left: auto; color: var(--muted); }
 .market-fr p { margin: 0; color: var(--ink-2); font-size: var(--t-xs); }
+/* 거래 채우기: 코인 온도판 (market-live.js) */
+.mk-temp { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 760px) { .mk-temp { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (min-width: 1200px) { .mk-temp { grid-template-columns: repeat(7, minmax(0, 1fr)); } }
+.mk-t { display: grid; gap: 6px; padding: 10px 12px; border-radius: var(--r-md); background: var(--surface-2); border: 1px solid var(--line); color: var(--ink); text-decoration: none; min-width: 0; transition: border-color .3s var(--ease); }
+.mk-t:hover { border-color: var(--accent-line); }
+.mk-t[data-tone="up"] { border-color: var(--up-line); } .mk-t[data-tone="down"] { border-color: var(--down-line); }
+.mk-t-h { display: flex; align-items: center; gap: 6px; font-size: var(--t-sm); }
+.mk-t-c { font-weight: 700; }
+.mk-t-h .num.up { color: var(--up); } .mk-t-h .num.down { color: var(--down); }
+.mk-t-px { font-size: var(--t-lg); font-weight: 700; border-radius: var(--r-sm); justify-self: start; padding: 0 2px; }
+.mk-t-rng { display: grid; gap: 2px; }
+.mk-t-bar { position: relative; height: 6px; border-radius: 6px; background: linear-gradient(90deg, var(--down-soft), var(--surface-3) 50%, var(--up-soft)); }
+.mk-t-dot { position: absolute; top: -3px; width: 4px; height: 12px; margin-left: -2px; border-radius: 2px; background: var(--accent); box-shadow: 0 0 6px var(--accent-glow); transition: left .6s var(--ease); }
+.mk-t-lh { display: flex; justify-content: space-between; gap: 6px; font-size: var(--t-xs); color: var(--muted); }
+.mk-t-kv { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 2px 6px; font-size: var(--t-xs); }
+.mk-t-kv > span:first-child { color: var(--muted); }
+.mk-t-kv b.up { color: var(--up); } .mk-t-kv b.down { color: var(--down); }
+/* 시장 파생 지표판 + 시장 강제청산 */
+.market-live { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+@media (min-width: 1280px) { .market-live { grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); } }
+.mk-wait { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 14px 4px; color: var(--ink-2); font-size: var(--t-sm); }
+.mk-ftab { display: grid; gap: 0; }
+.mk-fr { display: grid; gap: 4px 12px; padding: 8px 4px; border-top: 1px solid var(--line); align-items: center; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); border-radius: var(--r-sm); }
+.mk-fr.mk-fh { display: none; }
+.mk-fc { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.mk-fv { display: grid; gap: 0; min-width: 0; }
+.mk-fv::before { content: attr(data-k); font-size: var(--t-xs); color: var(--muted); }
+.mk-fv b { font-size: var(--t-md); }
+.mk-fv b.up { color: var(--up); } .mk-fv b.down { color: var(--down); }
+.mk-fv small { font-size: var(--t-xs); color: var(--ink-2); }
+.mk-fv small .up { color: var(--up); } .mk-fv small .down { color: var(--down); }
+.mk-fs { grid-column: 1 / -1; display: grid; gap: 2px; }
+.mk-fs .spark { width: 100%; height: 28px; }
+.mk-fs .spark + .spark { height: 20px; }
+.mk-span { grid-column: 2 / -1; font-size: var(--t-xs); }
+@media (min-width: 900px) {
+  .mk-fr { grid-template-columns: 74px minmax(0, 1.2fr) 120px repeat(4, minmax(0, 1fr)); }
+  .mk-fr.mk-fh { display: grid; font-size: var(--t-xs); color: var(--muted); border-top: 0; }
+  .mk-fc { grid-column: auto; display: grid; justify-items: start; gap: 2px; }
+  .mk-fs { grid-column: auto; }
+  .mk-fs .spark { width: 120px; }
+  .mk-fv::before { content: none; }
+}
+.mk-hints { display: flex; flex-wrap: wrap; gap: 2px 14px; margin-top: 8px; font-size: var(--t-xs); color: var(--muted); }
+.mk-hints b { color: var(--ink-2); }
+.mk-lk { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: var(--t-xs); color: var(--ink-2); }
+.mk-lk i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+.mk-lk i.l, .mk-lb-bar i.l { background: var(--down); } .mk-lk i.s, .mk-lb-bar i.s { background: var(--up); }
+.mk-lr { display: grid; grid-template-columns: 52px minmax(0, 1fr) 88px; gap: 4px 10px; align-items: center; padding: 8px 2px; border-top: 1px solid var(--line); }
+.mk-lr-c { font-size: var(--t-sm); }
+.mk-lr-bars { display: grid; gap: 4px; min-width: 0; }
+.mk-lb { display: grid; grid-template-columns: 54px minmax(0, 1fr); gap: 0 8px; align-items: center; font-size: var(--t-xs); }
+.mk-lb-k { color: var(--muted); grid-row: span 2; }
+.mk-lb-bar { display: flex; height: 8px; border-radius: 8px; overflow: hidden; background: var(--surface-3); }
+.mk-lb-bar i { display: block; height: 100%; transition: width .6s var(--ease); }
+.mk-lb-bar i.z { width: 100%; background: transparent; }
+.mk-lb-v { color: var(--ink-2); }
+.mk-lb-v b.up { color: var(--up); } .mk-lb-v b.down { color: var(--down); }
+.mk-lr-big { display: grid; justify-items: end; gap: 0; text-align: right; }
+.mk-lr-big small { font-size: var(--t-xs); color: var(--muted); }
+.mk-lr-big b.up { color: var(--up); } .mk-lr-big b.down { color: var(--down); }
+.mk-lf-h { margin-top: 10px; font-size: var(--t-xs); color: var(--muted); font-weight: 700; }
+.mk-lfeed { display: grid; gap: 0; }
+.mk-lfr { display: grid; grid-template-columns: 48px 44px 64px minmax(0, 1fr) auto; gap: 8px; align-items: baseline; padding: 6px 4px; border-top: 1px solid var(--line); font-size: var(--t-sm); border-radius: var(--r-sm); }
+.mk-lfr .up { color: var(--up); } .mk-lfr .down { color: var(--down); }

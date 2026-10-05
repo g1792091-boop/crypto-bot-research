@@ -32,6 +32,7 @@ MODULES += ("brief", "vs5y")                    # wave 2 part C
 MODULES += ("bell", "uptime", "tradeshape")          # wave 3
 MODULES += ("drift",)                          # analysis 8B
 MODULES += ("ticks",)                          # aggTrade sound layer
+MODULES += ("flowlive",)                       # 시장 파생 지표판 + 시장 강제청산 보드 (flow.db, liq.db)
 
 
 def register_all(app, **kw) -> dict:

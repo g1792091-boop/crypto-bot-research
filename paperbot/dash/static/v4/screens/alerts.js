@@ -5,7 +5,8 @@
 // 다듬기 7-7: identical alerts (same level, same text) fold into one row "×12 · 처음 03:10 · 마지막 05:40" that opens to
 // every time (alerts-group.js; different texts never merge), and a "여기부터 새 알림 n개" line marks what came after this
 // device's last look (local "alerts-seen": per viewer, wrapped storage).
-import {h, ui, fmt, motion, alertKo, local, put} from "../core/pb.js";
+import {h, ui, fmt, motion, alertKo, local, put, serverNow} from "../core/pb.js";
+import {tradeAlert} from "../core/alerts.js";
 import {LEVEL_KO, LEVEL_CLS, dayTime, rel, note} from "./server-kit.js";
 import {groupAlerts, withDivider} from "./alerts-group.js";
 
@@ -21,6 +22,9 @@ export async function mount(el, ctx) {
   ctx.setTitle("알림 기록");
   const counts = h("div", {class: "server-counts"});
   el.append(ui.screenHead("알림 기록", "서버에 실제로 남아 있는 기록만"), counts);
+  // 지난 24시간 시간별 막대 (오른쪽 칸, 넓은 화면): 수준별 + 진입·청산, 받은 기록에서 세기만 함
+  const dayBox = h("div", {class: "alerts-day"});
+  const dayCard = ui.card({plate: "지난 24시간 · 시간별", sub: "한 칸 = 1시간 · 오른쪽 끝이 지금"}, dayBox);
 
   let tab = TABS.some((t) => t.id === local.get("alerts-tab")) ? local.get("alerts-tab") : "bot";
   let level = LEVELS.some((l) => l.id === local.get("alerts-level")) ? local.get("alerts-level") : "all";
@@ -31,7 +35,8 @@ export async function mount(el, ctx) {
     put(body, panels[id]);
     if (animate) motion.swap(body);
   };
-  el.append(ui.seg(TABS, tab, (id) => showTab(id, true), {label: "알림 종류", scroll: true}), body);
+  el.append(ui.seg(TABS, tab, (id) => showTab(id, true), {label: "알림 종류", scroll: true}),
+    h("div", {class: "alerts-wrap"}, body, h("aside", {class: "alerts-aside"}, dayCard)));
 
   // ---------------------------------------------------------------- 경고 (the bot's own alerts)
   const fresh = new Set();
@@ -66,8 +71,9 @@ export async function mount(el, ctx) {
         motion.expand(region, o);
       });
     }
-    const r = h("div", {class: ["server-row", "alerts-row", many ? "many" : ""], role: "listitem"},
-      h("div", {class: "body"}, ui.moreText(g.ko, 2)),
+    const tr = tradeAlert(g.text);
+    const r = h("div", {class: ["server-row", "alerts-row", many ? "many" : "", tr ? `tr-${tr.kind}` : ""], role: "listitem"},
+      h("div", {class: "body"}, tr ? tradeBody(tr) : ui.moreText(g.ko, 2)),
       h("div", {class: "side-r"}, ui.pill(LEVEL_KO[g.level] || String(g.level || "—"), LEVEL_CLS[g.level] || "thin")),
       h("div", {class: "meta"}, many ? fold : h("span", null, `${dayTime(g.last)} · ${rel(g.last)}`),
         acct ? h("a", {href: ctx.href("account", acct[1])}, "계좌 보기") : null),
@@ -77,9 +83,17 @@ export async function mount(el, ctx) {
     if (g.items.filter((a) => fresh.delete(key(a))).length) motion.slideIn(r);
     return r;
   }
+  /** An engine ENTRY / EXIT line: who · 진입/청산, the headline in bold, then one chip per number. */
+  function tradeBody(tr) {
+    return h("div", {class: "alerts-tr"},
+      h("span", {class: "alerts-tr-h"}, h("span", {class: ["alerts-tr-k", tr.kind]}, tr.kind === "entry" ? "진입" : "청산"),
+        h("span", {class: "alerts-tr-n"}, tr.name), h("b", {class: tr.side > 0 ? "up" : tr.side < 0 ? "down" : ""}, tr.head)),
+      h("span", {class: "alerts-chips"}, tr.chips.map((c) => h("span", {class: ["alerts-chip", c.tone || ""]}, h("small", null, c.k), " ", h("b", {class: "num"}, c.v)))),
+      tr.counted ? h("small", {class: "muted"}, "딥시크·동전 봇: 여기선 금액 없이 (돈은 딥시크 화면에서)") : null);
+  }
   const levelSeg = ui.seg(LEVELS, level, (id) => { level = id; local.set("alerts-level", id); paintBot(true); }, {label: "수준"});
   const botNote = note();
-  panels.bot.append(ui.card({plate: "봇 경고·기록", sub: "paper3.db · 최근 200건까지"}, levelSeg, list.el, botNote,
+  panels.bot.append(ui.card({plate: "봇 경고·기록", sub: "paper3.db · 최근 500건까지"}, levelSeg, list.el, botNote,
     ui.assume("closed", "경고 속 잔고·증거금은 모의 계좌의 숫자")));
 
   // ---------------------------------------------------------------- 밤 점검 (daily3.db)
@@ -116,7 +130,7 @@ export async function mount(el, ctx) {
   showTab(tab, false);
 
   // ---------------------------------------------------------------- data
-  const st = {rows: [], d: null, savedTop: null};
+  const st = {rows: [], d: null, savedTop: null, limit: 500};
   const merge = (rows) => {
     const seen = new Set(st.rows.map(key));
     for (const a of rows || []) {
@@ -137,6 +151,41 @@ export async function mount(el, ctx) {
     // this device has now seen everything up to the newest alert (next visit draws the line there)
     const top = st.rows.length ? st.rows[0].ts : null;
     if (top != null && Number.isFinite(top) && top !== st.savedTop) { st.savedTop = top; local.set("alerts-seen", top); }
+  }
+  // ---------------------------------------------------------------- 지난 24시간 시간별 막대
+  function paintDay() {
+    const now = serverNow(), H = 3600000, end = Math.floor(now / H) * H + H, start = end - 24 * H;
+    const lv = Array.from({length: 24}, () => ({CRITICAL: 0, WARN: 0, INFO: 0})), tr = Array.from({length: 24}, () => ({entry: 0, exit: 0}));
+    let nIn = 0;
+    for (const a of st.rows) {
+      if (a.ts < start || a.ts >= end) continue;
+      const i = Math.floor((a.ts - start) / H);
+      nIn++;
+      if (lv[i][a.level] != null) lv[i][a.level]++;
+      const t = tradeAlert(a.text);
+      if (t) tr[i][t.kind]++;
+    }
+    // the history holds the newest rows only: hours older than its oldest row are unknown, never zero
+    const oldest = st.rows.length ? st.rows[st.rows.length - 1].ts : null;
+    const capped = st.rows.length >= st.limit && oldest != null && oldest > start;
+    const cut = capped ? Math.floor((oldest - start) / H) : -1;
+    const maxL = Math.max(1, ...lv.map((x) => x.CRITICAL + x.WARN + x.INFO)), maxT = Math.max(1, ...tr.map((x) => Math.max(x.entry, x.exit)));
+    const hourLab = (i) => fmt.hm(start + i * H);
+    const col = (i, parts, max, title) => h("div", {class: ["alerts-col", i < cut ? "unk" : ""], title: i < cut ? `${hourLab(i)} · 기록 못 받음 (최근 ${fmt.int(st.limit)}건 밖)` : `${hourLab(i)} · ${title}`},
+      i < cut ? null : parts.map(([cls, n]) => n ? h("i", {class: cls, style: {height: `${(100 * n / max).toFixed(1)}%`}}) : null));
+    const axis = h("div", {class: "alerts-axis"}, h("span", null, hourLab(0)), h("span", null, hourLab(12)), h("span", null, "지금"));
+    const sum = (k) => lv.reduce((a, x) => a + x[k], 0), sumT = (k) => tr.reduce((a, x) => a + x[k], 0);
+    put(dayBox,
+      h("div", {class: "alerts-leg"}, h("span", null, h("i", {class: "lc"}), `긴급 ${fmt.int(sum("CRITICAL"))}`),
+        h("span", null, h("i", {class: "lw"}), `주의 ${fmt.int(sum("WARN"))}`), h("span", null, h("i", {class: "li"}), `정보 ${fmt.int(sum("INFO"))}`)),
+      h("div", {class: "alerts-bars", role: "img", "aria-label": `지난 24시간 알림 ${fmt.int(nIn)}건 시간별`},
+        lv.map((x, i) => col(i, [["lc", x.CRITICAL], ["lw", x.WARN], ["li", x.INFO]], maxL, `긴급 ${x.CRITICAL} · 주의 ${x.WARN} · 정보 ${x.INFO}`))), axis,
+      h("div", {class: "alerts-leg"}, h("span", null, h("i", {class: "le"}), `진입 ${fmt.int(sumT("entry"))}`), h("span", null, h("i", {class: "lx"}), `청산 ${fmt.int(sumT("exit"))}`)),
+      h("div", {class: "alerts-bars two", role: "img", "aria-label": "지난 24시간 진입·청산 알림 시간별"},
+        tr.map((x, i) => col(i, [["le", x.entry], ["lx", x.exit]], maxT, `진입 ${x.entry} · 청산 ${x.exit}`))), axis.cloneNode(true),
+      nIn ? null : ui.empty("지난 24시간에 받은 알림이 없습니다"),
+      capped ? h("p", {class: "pos-note"}, `최근 ${fmt.int(st.limit)}건까지만 읽어서 ${hourLab(cut + 1)} 앞 시간은 빗금 (0건이 아니라 모름)`) : null,
+      h("p", {class: "pos-note"}, "진입·청산 막대는 알림으로 남은 줄만 셉니다 (거래마다 알림을 남기는 계좌만)."));
   }
   function nightRow(n) {
     const p = n.parity || {};
@@ -167,9 +216,9 @@ export async function mount(el, ctx) {
   }
   async function load() {
     try {
-      const d = await ctx.api("/api/analysis/alerts");
+      const d = await ctx.api(`/api/analysis/alerts?limit=${st.limit}`);
       if (!ctx.alive()) return;
-      st.d = d; merge(d.bot); paintBot(false); paintRest(d);
+      st.d = d; merge(d.bot); paintBot(false); paintRest(d); paintDay();
     } catch (e) {
       if (e && e.name === "AbortError") return;
       if (!st.d) panels.bot.prepend(ui.errorBox(e, load));
@@ -182,7 +231,7 @@ export async function mount(el, ctx) {
       " · 주의 ", h("b", {class: al.WARN ? "warn-t" : ""}, fmt.int(al.WARN || 0))),
       h("a", {href: ctx.href("server")}, "서버 상태 보기"));
   });
-  ctx.on("alerts", (rows) => { for (const a of rows) fresh.add(key(a)); merge(rows); paintBot(false); });
+  ctx.on("alerts", (rows) => { for (const a of rows) fresh.add(key(a)); merge(rows); paintBot(false); paintDay(); });
   await load();
   ctx.every(60000, load, {now: false});
 }
