@@ -119,7 +119,7 @@ export function dsFamilyCard(ctx, o = {}) {
       if (was && ["trades", "bust"].includes(k) && was[k] !== r[k]) motion.flash(e, k === "bust" ? "down" : null);
     }
     c.cells.bust.classList.toggle("down", r.bust > 0);
-    put(c.small, r.id === "coin" ? null : ui.smallSample(r.trades, MIN_TRADES));
+    put(c.small, ui.smallSample(r.trades, MIN_TRADES));          // the baseline row too: its few trades are a small sample
     c.row.setAttribute("aria-label", ariaOf(r));
     prev.set(r.id, {trades: r.trades, bust: r.bust});
   }

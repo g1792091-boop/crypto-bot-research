@@ -103,6 +103,7 @@ def test_family_card_is_honest_and_tokens_only():
     assert "ui.refNote(" in code and "ui.smallSample(" in code and "pp ref" in code
     assert "innerHTML" not in src and "localStorage" not in src and "setInterval" not in src
     assert "motion.flash(" in code and "was &&" in code                     # a tint only on a real change, never the first paint
+    assert "put(c.small, ui.smallSample(r.trades, MIN_TRADES));" in code     # every row says 표본 적음, the baseline too
     css = _read("screens", "strategies.css")
     part = css[css.index("/* DeepSeek 17-family summary"):]
     assert not re.search(r"#[0-9a-fA-F]{3,8}\b|\brgba?\(\s*\d", part)
@@ -116,6 +117,9 @@ def test_family_summary_is_on_the_deepseek_list_and_linked_from_the_grid():
     assert 'label: "전체 요약"' in lst and 'q === "all" ? ""' in lst          # ?fam=all opens it
     assert 'if (id === "ds") { v.fam = ""; local.set("strat-fam", ""); }' in lst   # choosing 딥시크 starts there
     assert "famCard.update(st.board)" in lst and "familyLine(" in lst          # repainted with the board, family line
+    # the chosen family stays in the address: back from a definition to "?fam=all" must not reset it to the summary
+    assert 'ctx.href("strategies", null, {g: "ds", fam: v.fam || "all"})' in lst
+    assert 'v.fam = id; local.set("strat-fam", id); famUrl();' in lst and lst.count("famUrl();") == 2
     assert "list.setGroup((params.query || {}).g, (params.query || {}).fam)" in _read("screens", "strategies.js")
     grid = _read("screens", "grid.js")
     assert 'ctx.href("strategies", null, {g: "ds", fam: "all"})' in grid and "딥시크 17계열 요약" in grid

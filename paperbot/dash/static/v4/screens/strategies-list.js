@@ -138,8 +138,11 @@ export function listView(ctx, st) {
 
   // ---------------------------------------------------------------- DeepSeek: the 17-family summary (counts only)
   const verdictTs = () => { const s = st.summary || {}; return (s.restart && s.restart.ready && s.restart.verdict_ts) || (s.next_checkpoint && s.next_checkpoint.ts) || null; };
+  // the family stays in the address (?fam=), so coming back from a definition (#/strategies/<id>) to an address that
+  // says ?fam=all does not throw the owner back to the summary: setGroup() reads it again on the way back
+  const famUrl = () => { try { window.history.replaceState(null, "", ctx.href("strategies", null, {g: "ds", fam: v.fam || "all"})); } catch { /* keep the hash */ } };
   function pickFam(id) {
-    v.fam = id; local.set("strat-fam", id);
+    v.fam = id; local.set("strat-fam", id); famUrl();
     renderFilters(); renderBody(true);
     const top = filters.getBoundingClientRect().top + window.scrollY - 96;      // the family's rules start under the tabs
     if (window.scrollY > top) window.scrollTo(0, Math.max(0, top));
@@ -175,7 +178,7 @@ export function listView(ctx, st) {
         ui.seg(STYLES, v.style, (id) => { v.style = id; local.set("strat-style", id); fillCore(false); }, {label: "성격"}), h("span", {class: "grow"}), sortSel));
     } else if (v.g === "ds") {
       put(filters, ui.seg([{id: "", label: "전체 요약"}, ...DS_FAMILIES.map((f) => ({id: f.id, label: `${f.id} ${f.ko}`}))], v.fam,
-        (id) => { v.fam = id; local.set("strat-fam", id); renderBody(true); }, {label: "계열", scroll: true}));
+        (id) => { v.fam = id; local.set("strat-fam", id); famUrl(); renderBody(true); }, {label: "계열", scroll: true}));
       filters.firstChild.classList.add("strat-famseg");
     } else put(filters);
   }
