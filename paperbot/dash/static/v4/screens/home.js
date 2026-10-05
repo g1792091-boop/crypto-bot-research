@@ -98,8 +98,9 @@ export async function mount(el, ctx) {
       put(refBox, ui.refNote(null));
     }
     if (!gs) return;
-    legS.name.textContent = `매매법 ${fmt.int(gs.strat.n)}개 중앙값`;
-    legC.name.textContent = `동전 봇 ${fmt.int(gs.coin.n)}개 중앙값`;
+    // U1: these numbers are every strategy account (기존 36 · 딥시크 · 5분봉), not the curve's 36 only
+    legS.name.textContent = `매매법 계좌 ${fmt.int(gs.strat.n)}개(기존·딥시크·5분봉) 중앙값`;
+    legC.name.textContent = `동전 봇 계좌 ${fmt.int(gs.coin.n)}개 중앙값`;
     legS.val.update(gs.strat.medWallet); legS.ret.update(gs.strat.medRet);
     legC.val.update(gs.coin.medWallet); legC.ret.update(gs.coin.medRet);
     wlA.update(gs.strat.above); wlB.update(gs.strat.below);
@@ -270,7 +271,8 @@ export async function mount(el, ctx) {
     if (real(ms) >= 2 || real(mc) >= 2) {
       put(curve, ui.curves({series: [{values: ms, cls: "ls", label: "기존 36 중앙값"}, {values: mc, cls: "lc", label: "동전 봇 중앙값"}],
         base: c.initial, height: 120, xlabels: [fmt.mmdd(c.t[0]), "", "지금"], label: "기존 36과 동전 봇의 잔고 중앙값 흐름"}),
-      h("p", {class: "muted small"}, "곡선(1시간마다): 실선 = 기존 36 중앙값 · 점선 = 동전 봇 중앙값. 아래 숫자는 지금 값"));
+      h("p", {class: "muted small"}, "곡선(1시간마다): 실선 = 기존 36 매매법 계좌만의 중앙값 · 점선 = 동전 봇 중앙값. "
+        + "아래 숫자는 지금 값이고, 매매법 쪽은 기존 36 · 딥시크 · 5분봉 계좌 전체의 중앙값"));
     }
     if (real(c.total || []) >= 2) { st.total = c.total; if (st.led) { st.led.curve = c.total; led.update(st.led); } }
   }

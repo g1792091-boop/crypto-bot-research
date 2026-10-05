@@ -379,7 +379,8 @@ def _run_started(m) -> str:
     split = _split(total, given) if version >= 4 else None
     return (f"▶️ 봇 {'시작' if fresh else '재시작'} · {run}계좌 {total}개\n\n"
             f"{'새로 시작' if fresh else '이어서 돌림'}\n" + (f"{split}\n" if split else "")
-            + f"레버리지 구간: {_brackets_ko(src)}\n수수료 {fee:g}%")
+            + f"레버리지 구간: {_brackets_ko(src)}\n수수료 {fee:g}%"
+            + (f"\n{now_kst()}" if version >= 4 else ""))       # T8: when it (re)started, KST
 
 
 def _tfs(text: str) -> str:

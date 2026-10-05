@@ -83,6 +83,7 @@ INSTALL="${PAPERBOT_INSTALL:-$REPO_DIR/deploy/install.sh}"
 WAIT_S="${PAPERBOT_RESET_WAIT:-180}"           # how long to wait for the bot's new accounts
 POLL_S="${PAPERBOT_RESET_POLL:-30}"            # how often to look again while a scheduled job runs
 BACKUPS="${PAPERBOT_BACKUPS:-/var/backups/paperbot}"   # where paperbot-backup.service writes (deploy/paperbot-backup.sh)
+APP="${PAPERBOT_APP:-/opt/crypto-bot-research}"         # where install.sh puts the code (the previous code: $APP.old)
 # (the PAPERBOT_* overrides exist for tests/test_reset_script.py; the server uses the defaults)
 
 # What a restart archives (moved with their -wal/-shm/-journal) and what it keeps. Only the run's own files are
@@ -282,6 +283,7 @@ ARCH=""
 MOVED=""
 on_fail() {
   local line="$1"
+  local code_back="sudo mv $APP $APP.failed-\$(date -u +%H%M%S) && sudo mv $APP.old $APP"
   trap - ERR
   echo
   echo "!! 실패 (줄 $line, 단계 $PHASE)"
@@ -291,8 +293,12 @@ on_fail() {
       if [ "$PHASE" = backup ]; then
         echo "(새 백업이 끝나지 않아 멈췄습니다. 원인 보기: sudo journalctl -u paperbot-backup -n 50 --no-pager)"
       fi
+      if [ "$PHASE" = installed ]; then
+        echo "(새 코드는 설치됐습니다. 원인을 고친 뒤 이 스크립트를 다시 돌리면 됩니다. 그 전에 이전 실행을 다시 켜려면"
+        echo " 먼저 코드를 이전 것으로 되돌립니다. 새 코드로는 이전 봇이 거절되고 15초마다 다시 켜집니다:)"
+        echo "  $code_back"
+      fi
       if [ -n "$RUNNING" ]; then echo "다시 켜기: sudo systemctl start$RUNNING"; fi
-      if [ "$PHASE" = installed ]; then echo "(새 코드는 설치됐습니다. 원인을 고친 뒤 이 스크립트를 다시 돌리면 됩니다)"; fi
       if [ "$PHASE" = installing ]; then
         echo "(install.sh가 코드를 바꾼 뒤에 멈췄다면 새 코드로 이전 실행이 켜집니다: 원인을 고친 뒤 이 스크립트를 다시 돌리세요)"
       fi
@@ -305,6 +311,8 @@ on_fail() {
       echo "이전 실행으로 되돌리기:"
       for m in $MOVED; do echo "  sudo mv $ARCH/$m $DATA/"; done
       echo "  (agents3.db/inbox.db를 이전 상태로: sudo -u paperbot cp $ARCH/agents3-before-reset.db $DATA/agents3.db 등 — 커서만 다르고 기억은 같음)"
+      echo "  코드도 이전 것으로(3단계가 새 코드를 $APP 에 넣었습니다. 그대로 켜면 이전 봇이 거절되고 15초마다 다시 켜짐):"
+      echo "  $code_back"
       if [ -n "$RUNNING" ]; then echo "  sudo systemctl start$RUNNING"; fi
       ;;
     starting)

@@ -453,7 +453,7 @@ def test_the_v4_start_line_names_the_run_and_its_split():
     assert V4_GROUP_ACCOUNTS == {"core": 144, "ds200": 171, "reel": 1, "flip": 15} and V4_ACCOUNTS == 331
     assert ko(f"paper v4 started: {V4_ACCOUNTS} accounts, brackets: Binance leverageBracket (live), taker fee 0.0500%") == (
         "▶️ 봇 시작 · 모의 v4 · 계좌 331개\n\n새로 시작\n매매법 144 · 딥시크 171 · 5분 단타 1 · 동전 15\n"
-        "레버리지 구간: 바이낸스 실시간\n수수료 0.05%")
+        "레버리지 구간: 바이낸스 실시간\n수수료 0.05%\n10/03 21:15")                  # T8: the KST time last
     # resumed with two extra accounts; a split carried by the line itself wins
     assert ko("paper v4 resumed: 333 accounts, brackets: file b.json, taker fee 0.0400%").split("\n")[3] == \
         "매매법 144 · 딥시크 171 · 5분 단타 1 · 동전 15 · 추가 계좌 2"
@@ -462,7 +462,7 @@ def test_the_v4_start_line_names_the_run_and_its_split():
                                                     "매매법 144 · 딥시크 171 · 5분 단타 1 · 동전 15 · 추가 계좌 2"]
     # fewer accounts than the v4 shape: no made-up split; v3 lines unchanged; never in English
     assert ko("paper v4 started: 12 accounts, brackets: x, taker fee 0.05%") == \
-        "▶️ 봇 시작 · 모의 v4 · 계좌 12개\n\n새로 시작\n레버리지 구간: x\n수수료 0.05%"
+        "▶️ 봇 시작 · 모의 v4 · 계좌 12개\n\n새로 시작\n레버리지 구간: x\n수수료 0.05%\n10/03 21:15"
     assert ko("paper v3 started: 156 accounts, brackets: x, taker fee 0.05%").startswith("▶️ 봇 시작 · 계좌 156개\n")
     assert telegram_text(INFO, "paper v5 resumed: 400 accounts, brackets: x, taker fee 0.05%")[1].startswith(
         "▶️ 봇 재시작 · 모의 v5 · 계좌 400개")

@@ -395,9 +395,30 @@ def test_a_failure_after_the_move_prints_how_to_go_on_or_back(env):
     assert f"sudo mv {arch}/paper3.db {env['data']}/" in out and f"sudo mv {arch}/tradealerts.json" in out
     assert "sudo systemctl start paperbot-live3 paperbot-dash" in out
     assert f"paperbot.resetrun apply --lib {env['data']} --archive {arch}" in out
+    # ops review 7: going back also swaps the code back (step 3 put the new code in /opt), before the start line
+    back = out.split("이전 실행으로 되돌리기:")[1]
+    swap = "sudo mv /opt/crypto-bot-research /opt/crypto-bot-research.failed-$(date -u +%H%M%S) && " \
+           "sudo mv /opt/crypto-bot-research.old /opt/crypto-bot-research"
+    assert swap in back and back.index(swap) < back.index("sudo systemctl start paperbot-live3 paperbot-dash")
     calls = env["log"].read_text().splitlines()
     assert any(c.startswith("stop") for c in calls)
     assert [c for c in calls if c.startswith("start")] == ["start paperbot-backup.service"]   # the bot stays off
+
+
+def test_a_failure_after_the_install_says_to_swap_the_code_back_before_starting(env):
+    """Ops review 7: after step 3 the new code is in /opt; starting the old run on it is refused (a restart loop), so
+    the message gives the code swap before the start line."""
+    stub = env["tmp"] / "install.sh"
+    stub.write_text("#!/bin/bash\nexit 0\n")
+    (env["data"] / "archive").write_text("not a folder")               # step 4's install -d fails: phase installed
+    env["env"].update(PAPERBOT_INSTALL=str(stub), PAPERBOT_RESET_WAIT="0", ALLOW_DIRTY="1",
+                      FAKE_ACTIVE="paperbot-live3 paperbot-dash", PAPERBOT_APP=str(env["tmp"] / "app"))
+    r = _run(env, "--yes")
+    assert r.returncode == 1 and "단계 installed" in r.stdout, r.stdout + r.stderr
+    app = env["tmp"] / "app"
+    swap = f"sudo mv {app} {app}.failed-$(date -u +%H%M%S) && sudo mv {app}.old {app}"
+    assert swap in r.stdout and r.stdout.index(swap) < r.stdout.index("다시 켜기: sudo systemctl start paperbot-live3")
+    assert (env["data"] / "paper3.db").exists()                         # nothing moved
 
 
 def test_proc_fallback_finds_an_open_run_file_under_pipefail(tmp_path):

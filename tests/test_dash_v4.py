@@ -663,3 +663,12 @@ def test_v4_strategy_views_and_curves_are_asked_for():
     home = _read(os.path.join(V4, "screens", "home.js"))
     assert '"/api/v4/curves?step=3600000"' in home and "curvesOn = false" in home
     assert '"/api/v4/server"' in _read(os.path.join(V4, "screens", "server.js"))
+
+
+def test_home_legend_says_whose_median_it_is():
+    """U1: the numbers under the curve are every strategy account (기존 36 · 딥시크 · 5분봉, groupStats().strat), the
+    solid curve is the 36's only; the legend and the caption say which is which (never '매매법 316개')."""
+    home = _read(os.path.join(V4, "screens", "home.js"))
+    assert "legS.name.textContent = `매매법 계좌 ${fmt.int(gs.strat.n)}개(기존·딥시크·5분봉) 중앙값`" in home
+    assert "실선 = 기존 36 매매법 계좌만의 중앙값" in home and "기존 36 · 딥시크 · 5분봉 계좌 전체의 중앙값" in home
+    assert "`매매법 ${fmt.int(gs.strat.n)}개 중앙값`" not in home
