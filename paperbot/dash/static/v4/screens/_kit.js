@@ -1,7 +1,7 @@
 // #/_kit — the foundation's component sheet on REAL server data (not a tab). Builders read this file as the worked
 // example of the screen contract: mount(el, ctx) builds with h()/ui.*, data comes from ctx.watch / ctx.api, money has
 // its caption, comparisons are '참고', small samples say so, and the screen cleans up through ctx.
-import {h, ui, fmt, derive, figure, clock, windowArt, consolePanel, TEAM_HUE, motion, stream} from "../core/pb.js";
+import {h, ui, fmt, derive, figure, clock, windowArt, consolePanel, TEAM_HUE, motion, stream, stratFigure, PHASE_KO} from "../core/pb.js";
 
 export async function mount(el, ctx) {
   ctx.setTitle("부품 견본");
@@ -64,6 +64,11 @@ export async function mount(el, ctx) {
   const say = h("div", {class: "kit-say"});
   const con = consolePanel({title: "에이전트 콘솔", maxHeight: "320px", foot: "회의 시작 줄을 누르면 그 회의만 봅니다"});
   el.append(ui.card({plate: "픽셀 사람 · 말풍선 · 시계"}, figs, say, h("div", {class: "row wrap"}, windowArt(), clock("KST", "Asia/Seoul"), clock("UTC", "UTC"), clock("NYC", "America/New_York"))), con);
+  // wave 2 ⑦ ⑧: the window's four Korea-time phases and the per-strategy characters (core/figure.js)
+  el.append(ui.card({plate: "창문 (한국 시간) · 매매법 캐릭터"},
+    h("div", {class: "row wrap"}, ["dawn", "day", "dusk", "night"].map((p) => h("div", {class: "kit-fig"}, windowArt(p), h("span", {class: "nm"}, PHASE_KO[p])))),
+    h("div", {class: "row wrap"}, ["S5_DONCHIAN_MFI", "S1_SUPERTREND_EMA", "F3_BOS", "F15_OPEN0930", "REEL_H1", "RANDOM_1"].map((id) =>
+      h("div", {class: "kit-fig"}, stratFigure({strategy: id, size: 34}), h("span", {class: "nm"}, fmt.stratKo(id)))))));
   ctx.watch("office", (o) => {
     if (!o) return;
     const m = (o.running || [])[0];
