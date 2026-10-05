@@ -131,9 +131,12 @@ export function startTour() {
   requestAnimationFrame(() => show(0));
 }
 
-/** First visit: starts only when the page opened on 홈 (a shared deep link such as #/board is shown as it is). */
+/** First visit: starts only when the page opened on 홈 or on the landing screen (an empty hash: the 터미널 on a wide
+ *  PC; the tour's first step walks to 홈). A shared deep link such as #/board is shown as it is. */
+const landed = () => !location.hash || location.hash === "#" || location.hash === "#/";
 export function maybeStartTour() {
   if (local.get("tour-done", 0)) return;
-  if (parseHash(location.hash).name !== "home") return;
-  setTimeout(() => { if (!local.get("tour-done", 0) && parseHash(location.hash).name === "home") startTour(); }, 1200);
+  if (parseHash(location.hash).name !== "home" && !landed()) return;
+  const was = landed();
+  setTimeout(() => { if (!local.get("tour-done", 0) && (parseHash(location.hash).name === "home" || (was && landed()))) startTour(); }, 1200);
 }

@@ -320,7 +320,7 @@ export function ledBar(o = {}) {
     mid, right, cap);
   const rightEls = new Map();
   el.update = (d) => {
-    countTo(totalEl, d.total, {dec: 2});
+    countTo(totalEl, d.total, {dec: 2, glow: true});          // glows teal / pink when the real total moved
     const ch = d.total != null && d.initialTotal ? d.total - d.initialTotal : null;
     countTo(pctEl, ch != null ? ch / d.initialTotal : null, {format: "pct", dec: 2, tone: true});
     countTo(absEl, ch, {dec: 2, sign: true, suffix: " USDT", tone: true});

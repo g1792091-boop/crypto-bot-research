@@ -1,11 +1,13 @@
 // The navigation: 5 groups (홈 · 거래 · 매매법 · 에이전트 · 서버), each with its screens (sub tabs). A screen is
 // screens/<name>.js + screens/<name>.css (CONTRACT.md). `feature`: shown only while that feature really runs
-// (core/features.js); `hidden`: not a tab (reached by links, e.g. one account).
+// (core/features.js); `hidden`: not a tab (reached by links, e.g. one account). The 터미널 is a PC screen: its
+// `feature: "wide"` (a window at least 760 px wide, core/features.js) keeps it off the phone's menu, and it is the
+// landing screen (an empty hash) only on a window at least 1200 px wide; phones and narrow windows land on 홈.
 import {s} from "./dom.js";
 
 export const GROUPS = [
   {id: "home", ko: "홈", screens: ["home", "board", "flow", "checkpoint"]},
-  {id: "trade", ko: "거래", screens: ["positions", "chart", "market"]},
+  {id: "trade", ko: "거래", screens: ["terminal", "positions", "chart", "market"]},
   {id: "strat", ko: "매매법", screens: ["strategies", "grid", "analysis"]},
   {id: "agents", ko: "에이전트", screens: ["office", "rooms", "digest", "debate"]},
   {id: "server", ko: "서버", screens: ["server", "alerts", "signals", "howto", "faq"]},
@@ -18,6 +20,7 @@ export const SCREENS = {
   story: {ko: "하이라이트", group: "home", title: "오늘의 하이라이트", hidden: true},
   checkpoint: {ko: "판정", group: "home", title: "30일 판정"},
   account: {ko: "계좌", group: "home", title: "계좌", hidden: true},
+  terminal: {ko: "터미널", group: "trade", title: "터미널", feature: "wide"},
   positions: {ko: "포지션", group: "trade", title: "포지션"},
   chart: {ko: "차트", group: "trade", title: "차트"},
   market: {ko: "시장", group: "trade", title: "시장"},
@@ -37,14 +40,20 @@ export const SCREENS = {
   _kit: {ko: "부품", group: "server", title: "부품 견본", hidden: true},
 };
 
-export const DEFAULT = "home";
+export const DEFAULT = "home";          // unknown or switched-off screens fall back here (never the terminal: no loop)
+/** The screen an empty hash opens: the 터미널 on a window at least 1200 px wide, else 홈 (phones keep 홈). */
+export const LANDING_MIN_PX = 1200;
+export function landing() {
+  const wide = typeof matchMedia === "function" && matchMedia(`(min-width: ${LANDING_MIN_PX}px)`).matches;
+  return wide ? "terminal" : DEFAULT;
+}
 
 /** "#/rooms/strat:S5?x=1" -> {name, arg, query}. */
 export function parseHash(hash) {
   const raw = String(hash || "").replace(/^#\/?/, "");
   const [path, qs] = raw.split("?");
   const parts = (path || "").split("/");
-  const name = decodeURIComponent(parts[0] || "") || DEFAULT;
+  const name = decodeURIComponent(parts[0] || "") || landing();
   const arg = parts.length > 1 ? decodeURIComponent(parts.slice(1).join("/")) : null;
   const query = {};
   if (qs) for (const [k, v] of new URLSearchParams(qs)) query[k] = v;

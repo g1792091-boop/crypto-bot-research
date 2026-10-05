@@ -10,8 +10,16 @@ export const features = {
   ghcoin: false,        // the GH Coin recorder has a board or finished calls
   liq: false,           // the liquidation recorder's liq.db exists
   priceSender: false,   // the price-alert sender (tgtrades) is alive
+  wide: true,           // not a feature of the server: the window is at least 760 px wide (the PC 터미널 tab shows)
   probed: false,
 };
+// the PC-only screens (routes.js `feature: "wide"`): measured here, now and whenever the window crosses 760 px
+const WIDE = typeof matchMedia === "function" ? matchMedia("(min-width: 760px)") : null;
+if (WIDE) {
+  features.wide = WIDE.matches;
+  const onWide = () => { if (features.wide !== WIDE.matches) { features.wide = WIDE.matches; bus.emit("features", {...features}); } };
+  if (WIDE.addEventListener) WIDE.addEventListener("change", onWide);
+}
 
 async function one(path) {
   try { return await api(path); } catch (e) { return null; }

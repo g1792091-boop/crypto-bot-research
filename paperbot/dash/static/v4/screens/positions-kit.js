@@ -202,13 +202,13 @@ export function posCard(a, pos, o = {}) {
     const sgn = u && u.pnl != null ? Math.sign(Math.round(u.pnl * 100)) : null;
     if (sgn && lastSgn && sgn !== lastSgn) motion.ring(el, sgn > 0 ? "up" : "down");
     if (sgn) lastSgn = sgn;
-    motion.countTo(pnlEl, u && u.pnl, {dec: 2, sign: true, tone: true});
+    motion.countTo(pnlEl, u && u.pnl, {dec: 2, sign: true, tone: true, glow: true});
     motion.countTo(roiEl, u && u.roe, {format: "pct", dec: 2, tone: true});
     if (rowPnl) {
-      motion.countTo(rowPnl, u && u.pnl, {dec: 2, sign: true, tone: true});
+      motion.countTo(rowPnl, u && u.pnl, {dec: 2, sign: true, tone: true, glow: true});
       motion.countTo(rowRoi, u && u.roe, {format: "pct", dec: 2, tone: true});
     }
-    markEl.textContent = mark ? fmt.price(mark) : "—";
+    motion.tickPrice(markEl, mark || null, mark ? fmt.price(mark) : "—", pos.symbol);
     const dLiq = derive.distTo(mark, pos.liq), dStop = derive.distTo(mark, pos.stop);
     if (dStop != null && dStop < 0.005 && !nearDone) { nearDone = true; motion.ring(el, "down"); }
     dLiqEl.textContent = dist(dLiq);
