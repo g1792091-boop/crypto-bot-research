@@ -37,13 +37,32 @@ export const SKELETONS = [
     return { name: `추세 속 RSI(2)<${lo} 눌림 + EMA${e}`, indicators: [{ id: "r2", type: "rsi", length: 2 }, { id: "e", type: "ema", length: e }, { id: "s5", type: "sma", length: 5 }],
       long_entry: G([c("r2", "<", lo), c("close", ">", "e")]), short_entry: G([c("r2", ">", 100 - lo), c("close", "<", "e")]),
       long_exit: { logic: "any", conditions: [c("close", ">", "s5")] }, short_exit: { logic: "any", conditions: [c("close", "<", "s5")] } }; } },
+  // ── 커스텀 수식 지표 뼈대(직접 만든 지표가 진입의 핵심) ──
+  { key: "c_vmom", fam: "custom", build: r => { const n = pick(r, [12, 20, 30]), k = pick(r, [0.8, 1, 1.3]), e = pick(r, [100, 200]);
+    return { name: `[커스텀] 변동성 조정 모멘텀(${n}) ±${k} + EMA${e}`, indicators: [{ id: "vmom", type: "custom", expr: `(close - close[${n}]) / (ind("atr", {length:14}) * sqrt(${n}))` }, { id: "e", type: "ema", length: e }],
+      long_entry: G([c("vmom", "crosses_above", k), c("close", ">", "e")]), short_entry: G([c("vmom", "crosses_below", -k), c("close", "<", "e")]) }; } },
+  { key: "c_volshock", fam: "custom", build: r => { const z = pick(r, [1.5, 2, 2.5]), e = pick(r, [50, 100]);
+    return { name: `[커스텀] 거래량 충격(방향) ${z}σ + EMA${e}`, indicators: [{ id: "vs", type: "custom", expr: `zscore(log(volume), 50) * sign(close - open)` }, { id: "e", type: "ema", length: e }],
+      long_entry: G([c("vs", ">", z), c("close", ">", "e")]), short_entry: G([c("vs", "<", -z), c("close", "<", "e")]) }; } },
+  { key: "c_trendscore", fam: "custom", build: r => { const f = pick(r, [20, 30]), s = pick(r, [50, 100]);
+    return { name: `[커스텀] 추세 강도 종합 점수(EMA${f}/${s}·ADX·기울기)`, indicators: [{ id: "ts", type: "custom", expr: `(sign(close - ema(close,${s})) + sign(ema(close,${f}) - ema(close,${s})) + (ind("adx",{length:14},"adx") > 25 ? sign(slope(close,20)) : 0)) / 3` }],
+      long_entry: G([c("ts", "crosses_above", 0.6)]), short_entry: G([c("ts", "crosses_below", -0.6)]) }; } },
+  { key: "c_effratio", fam: "custom", build: r => { const n = pick(r, [10, 14, 20]), k = pick(r, [0.35, 0.45, 0.55]);
+    return { name: `[커스텀] 효율 비율(${n}) > ${k} 방향 추종`, indicators: [{ id: "er", type: "custom", expr: `(close - close[${n}]) / sum(abs(close - close[1]), ${n})` }, { id: "e", type: "ema", length: 100 }],
+      long_entry: G([c("er", "crosses_above", k), c("close", ">", "e")]), short_entry: G([c("er", "crosses_below", -k), c("close", "<", "e")]) }; } },
+  { key: "c_zrevert", fam: "custom", build: r => { const n = pick(r, [30, 50, 80]), z = pick(r, [1.8, 2, 2.3]), a = pick(r, [22, 28]);
+    return { name: `[커스텀] Z점수(${n}) ±${z} 복귀 + ADX<${a}`, indicators: [{ id: "z", type: "custom", expr: `zscore(close, ${n})` }, { id: "adx", type: "adx", length: 14 }],
+      long_entry: G([c("z", "crosses_above", -z), c("adx.adx", "<", a)]), short_entry: G([c("z", "crosses_below", z), c("adx.adx", "<", a)]) }; } },
+  { key: "c_rankbreak", fam: "custom", build: r => { const n = pick(r, [50, 100]), v = pick(r, [60, 70]);
+    return { name: `[커스텀] 가격 백분위(${n}) 95 돌파 + 거래량 백분위 ${v}`, indicators: [{ id: "pr", type: "custom", expr: `rank(close, ${n})` }, { id: "vr", type: "custom", expr: `rank(volume, 50)` }],
+      long_entry: G([c("pr", "crosses_above", 95), c("vr", ">", v)]), short_entry: G([c("pr", "crosses_below", 5), c("vr", ">", v)]) }; } },
 ];
 // seed 로 재현 가능한 난수
 function rng(seed) { let x = (seed >>> 0) || 1; return () => { x ^= x << 13; x >>>= 0; x ^= x >> 17; x ^= x << 5; x >>>= 0; return x / 4294967296; }; }
 // n 번째 시도용 뼈대 변형. fam = "trend" | "revert" | null(둘 다). 손절·익절은 코인 선물 프레임워크(손절 ≤ 2%)에 맞춘 값 중에서 고른다.
 export function variant(n, fam = null, tag = "") {
   const r = rng(1234567 + n * 7919), pool = SKELETONS.filter(s => !fam || s.fam === fam), sk = pool[n % pool.length], b = sk.build(r);
-  const [sl, tp] = pick(r, sk.fam === "trend" ? [[1.5, 3], [1.5, 4.5], [2, 4], [2, 6]] : [[1.5, 1.5], [1.5, 2.25], [2, 2], [2, 3]]);
+  const [sl, tp] = pick(r, sk.fam !== "revert" ? [[1.5, 3], [1.5, 4.5], [2, 4], [2, 6]] : [[1.5, 1.5], [1.5, 2.25], [2, 2], [2, 3]]);
   return { name: `${tag ? tag + " " : ""}${b.name} [손절 ${sl}% · 익절 ${tp}%]`, description: `뼈대 변형(${sk.key}) — AI 형식 실패 시 코드가 대신 구성`, indicators: b.indicators, long_entry: b.long_entry, short_entry: b.short_entry,
     long_exit: b.long_exit || null, short_exit: b.short_exit || null, risk: { leverage: Math.floor(40 / sl), stop_loss_pct: sl, take_profit_pct: tp }, _skeleton: sk.key };
 }

@@ -22,6 +22,7 @@ export async function snapshot() {
   try { const O = await import("./coin-office.js"); verdicts.missions = O.missionState();
     const log = (await O.loadLog?.()) || [], bl = O.backlog?.() || [];
     verdicts.office = { cycle: O.cycleState?.(), nextCycleSec: Math.round((O.nextCycleIn?.() || 0) / 1000), paused: O.officePaused?.() || 0, backlogTodo: bl.filter(x => x.status === "todo").length, backlogDoing: bl.filter(x => x.status === "doing").length,
+      labErr: readJ("coinLabErr"), labI: +localStorage.getItem("coinLabI") || 0, lab: log.filter(e => /실험 리그/.test(String(e.text || e.title || ""))).slice(-5).map(e => ({ t: e.t, text: String(e.text || e.title || "").slice(0, 260) + (e.note ? " | " + String(e.note).slice(0, 200) : "") })),
       recent: log.slice(-14).map(e => ({ t: e.t, ch: e.ch, kind: e.kind, text: String(e.text || e.title || e.name || "").replace(/\s+/g, " ").slice(0, 150) })) }; } catch (e) {}
   verdicts.marketEntry = readJ("coinMarketEntry");
   return {

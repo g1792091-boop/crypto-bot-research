@@ -520,7 +520,7 @@ async function refreshBoard(){
   const pct = s => (P.equityOf(s) / 10000 - 1) * 100;
   const sum = act.reduce((a, s) => a + P.equityOf(s), 0) / (act.length * 10000) * 100 - 100;
   tot.innerHTML = `<i class="${sum >= 0 ? "up" : "dn"}">${sum >= 0 ? "+" : ""}${sum.toFixed(2)}%</i>`;
-  list.innerHTML = act.sort((x, y) => pct(y) - pct(x)).slice(0, 8).map(s => `<div><span>${ctx.esc(s.name).slice(0, 18)}</span><small>${ctx.esc((s.mname || s.market).replace("USDT", "").slice(0, 10))} x${s.spec?.risk?.leverage ?? "?"} ${s.pos ? (s.pos.side === "long" ? "롱" : "숏") : "대기"}</small><i class="${pct(s) >= 0 ? "up" : "dn"}">${pct(s) >= 0 ? "+" : ""}${pct(s).toFixed(2)}%</i></div>`).join("");
+  list.innerHTML = act.sort((x, y) => (!!y.pos - !!x.pos) || (((y.trades || []).length > 0) - ((x.trades || []).length > 0)) || (pct(y) - pct(x)) || (!!y.exp - !!x.exp)).slice(0, 12).map(s => `<div><span>${s.exp ? "🧪 " : s.lane === "swing" ? "📈 " : ""}${ctx.esc(s.name.replace(/^스윙 · /, "")).slice(0, 18)}</span><small>${ctx.esc((s.mname || s.market).replace("USDT", "").slice(0, 10))} x${s.spec?.risk?.leverage ?? "?"} ${s.pos ? (s.pos.side === "long" ? "롱" : "숏") : "대기"}</small><i class="${pct(s) >= 0 ? "up" : "dn"}">${pct(s) >= 0 ? "+" : ""}${pct(s).toFixed(2)}%</i></div>`).join("");
 }
 function highlight(id){ root.querySelectorAll(".of-ag.talk").forEach(e => e.classList.remove("talk")); if (id) root.querySelector(`[data-ag="${id}"]`)?.classList.add("talk"); }
 let curJob = "";
