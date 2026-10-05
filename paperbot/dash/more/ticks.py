@@ -16,8 +16,9 @@ bucket: that half second's score (its notional over the coin's usual one) ranked
 ``RANK_MIN`` events are all 1: no history yet, no loud guess). A half second without a single trade sends nothing.
 
 - The socket opens with the first listening page and closes a minute after the last one left (a reload keeps it);
-  it reconnects with a growing wait (1 s up to 60 s), when nothing arrives for ``IDLE_S`` and every 23 hours (Binance
-  closes a connection after 24 h).
+  it reconnects with a growing wait (1 s up to 60 s; back to 1 s only after a connection that stayed up ``HEALTHY_S``,
+  so a server that accepts and drops at once is never asked every second), when nothing arrives for ``IDLE_S`` and
+  every 23 hours (Binance closes a connection after 24 h). A page the full relay turned away asks again in a minute.
 - Bounded memory: seven accumulators, the last ``EVENTS_KEEP`` events, ``RANK_KEEP`` scores, at most ``MAX_LISTENERS``
   pages (one more is told "down" and its sound layer falls back; a page whose answer stopped looking for events for
   ``LISTENER_TTL_S`` no longer counts), messages over ``MAX_MSG_BYTES`` skipped.
@@ -47,6 +48,8 @@ LINGER_S = 60.0           # the socket stays this long after the last page left
 IDLE_S = 20.0             # connect timeout, and no message at all for this long (7 coins trade every second): reconnect
 MAX_CONN_S = 23 * 3600    # scheduled reconnect (Binance closes a connection after 24 h)
 MAX_BACKOFF_S = 60.0
+HEALTHY_S = 30.0          # the wait starts over at 1 s only after a connection that stayed up this long (a server
+                          # that accepts and drops at once never gets a reconnect a second: the IP is the bot's too)
 EVENTS_KEEP = 32          # the relay's ring of recent events (a slow page skips, never piles up)
 RANK_KEEP = 240           # scores the size bucket is ranked among (~2 minutes of events)
 RANK_MIN = 20             # fewer scores than this: bucket 1
@@ -60,6 +63,7 @@ POLL_S = 0.25             # how often a page's answer looks for new events
 BEAT_S = 5.0              # an idle answer repeats the state this often (the page's freshness check)
 STREAM_MAX_S = 600.0      # one answer lasts at most this long; the browser's EventSource reconnects by itself
 RETRY_MS = 3000           # the EventSource reconnect wait (SSE 'retry:')
+BUSY_RETRY_MS = 60000     # ... for a page the full relay turned away (no knock every 3 s)
 
 
 def symbols() -> tuple:
@@ -93,7 +97,11 @@ def parse(raw, syms) -> Optional[tuple]:
         return None
     if not (0 < p < math.inf and 0 < q < math.inf):
         return None
-    return d["s"], d.get("m") is False, p * q, p, int(d.get("T") or d.get("E") or 0)
+    try:
+        ms = int(d.get("T") or d.get("E") or 0)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return d["s"], d.get("m") is False, p * q, p, ms
 
 
 class Agg:
@@ -167,6 +175,7 @@ class TickRelay:
         self.linger_s, self.idle_s, self.max_backoff = linger_s, idle_s, max_backoff
         self.window_s, self.max_listeners, self.max_conn_s = window_s, max_listeners, max_conn_s
         self.listener_ttl_s = listener_ttl_s
+        self.healthy_s = HEALTHY_S
         self.stream_max_s = STREAM_MAX_S
         self.lock = threading.Lock()
         self.wake = threading.Event()          # set by stop(): ends a backoff wait at once
@@ -267,7 +276,7 @@ class TickRelay:
         me = threading.current_thread()
         backoff = 1.0
         while not self._finished(me):
-            ws = None
+            ws = opened = None
             try:
                 ws = self.connect(self.url)
                 with self.lock:
@@ -276,7 +285,6 @@ class TickRelay:
                     if self.stopping:
                         continue                      # (finally closes it; the loop ends)
                     self.state = "live"
-                backoff = 1.0
                 agg = Agg(self.syms, self.window_s)
                 opened = last = self.clock()
                 while not self._finished(me):
@@ -295,11 +303,14 @@ class TickRelay:
                     t = parse(raw, self.syms)
                     self._publish(agg.add(t, now) if t else agg.tick(now))
                 self._set_state("connecting")
+                backoff = 1.0                         # (the scheduled reconnect: at once, the wait starts over)
             except Exception:  # noqa: BLE001  network errors, timeouts, closes, a blocked host
                 with self.lock:
                     self.stats["fails"] += 1
                     if not self.stopping:
                         self.state = "down"
+                if opened is not None and self.clock() - opened >= self.healthy_s:
+                    backoff = 1.0                     # it worked for a while: a first quick retry
                 if self._finished(me):
                     break
                 self.wake.wait(backoff)
@@ -343,12 +354,13 @@ def register(app, ctx) -> dict:
     async def get_ticks(req: Request):
         """Real market trades of the 7 coins, at most ~2 events a second (server-sent events; see the module)."""
         async def gen():
-            yield f"retry: {RETRY_MS}\n\n"
             tok = relay.subscribe()
-            if tok is None:
+            if tok is None:                                 # full / stopped: the browser asks again in a minute
+                yield f"retry: {BUSY_RETRY_MS}\n\n"
                 yield _sse({"state": "down", "ev": [], "why": "busy"})
                 return
             try:
+                yield f"retry: {RETRY_MS}\n\n"
                 state, seq, _ = relay.after(1 << 62, tok)     # from now on: no replay of older events
                 yield _sse({"state": state, "ev": []})
                 began = beat = time.monotonic()

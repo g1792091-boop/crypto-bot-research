@@ -216,6 +216,37 @@ def test_full_relay_and_dropped_socket():
     r.stop()
 
 
+def test_a_server_that_accepts_and_drops_at_once_is_not_asked_every_second():
+    tries = []
+
+    class Drop:
+        def recv(self):
+            raise ConnectionError("closed by the server")
+
+        def shutdown(self):
+            pass
+
+        def close(self):
+            pass
+
+    def connect(url):
+        tries.append(time.time())
+        return Drop()
+    r = T.TickRelay(SYMS, connect=connect, linger_s=60)
+    assert r.subscribe()
+    time.sleep(3.6)
+    r.stop()
+    gaps = [b - a for a, b in zip(tries, tries[1:])]
+    assert 2 <= len(tries) <= 3 and all(g >= 0.9 for g in gaps)          # 1 s, then 2 s: never back to 1 s a time
+    assert len(gaps) < 2 or gaps[1] >= 1.8
+
+
+def test_a_junk_trade_time_is_skipped_not_a_reconnect():
+    d = json.loads(msg())
+    d["data"]["T"] = d["data"]["E"] = "soon"
+    assert T.parse(json.dumps(d), SYMS) is None
+
+
 # ---------------------------------------------------------------- the route
 def _app(tmp_path):
     db = str(tmp_path / "p.db")
@@ -264,6 +295,19 @@ def test_route_says_down_when_the_socket_cannot_connect(tmp_path):
     text = c.get("/api/v4/ticks").text
     msgs = [json.loads(line[6:]) for line in text.splitlines() if line.startswith("data: ")]
     assert msgs[-1]["state"] == "down" and not any(m["ev"] for m in msgs)
+    relay.stop()
+
+
+def test_a_turned_away_page_asks_again_in_a_minute(tmp_path):
+    app = _app(tmp_path)
+    relay = app.state.more["ticks"]["relay"]
+    relay.max_listeners = 0                                              # full
+    c = TestClient(app)
+    c.post("/api/login", json={"password": PW})
+    text = c.get("/api/v4/ticks").text
+    assert text.startswith(f"retry: {T.BUSY_RETRY_MS}\n\n") and T.BUSY_RETRY_MS >= 60000
+    assert json.loads(text.split("data: ")[1]) == {"state": "down", "ev": [], "why": "busy"}
+    assert relay.snapshot()["running"] is False
     relay.stop()
 
 
