@@ -218,9 +218,9 @@ export function signalFeed(ctx, o = {}) {
     const s = sigState(r), g = o.groupOf ? o.groupOf(r.strategy) : null;
     const x = h("a", {class: ["strat-frow", s.ko === "진입" ? "in" : ""], role: "listitem", href: ctx.href("strategies", r.strategy, {tf: r.timeframe, sym: r.symbol}),
       title: `${fmt.stratKo(r.strategy)} · ${fmt.coin(r.symbol)} ${fmt.tfKo(r.timeframe)}봉 · 봉 마감 ${fmt.kst(r.bar_close)}`},
-    h("span", {class: "t num"}, fmt.hm(r.bar_close)),
-    h("span", {class: "nm"}, g === "ds" ? h("i", {class: "strat-ftag"}, "딥시크") : g === "m5" ? h("i", {class: "strat-ftag"}, "5분봉") : null, fmt.stratKo(r.strategy)),
-    h("span", {class: "c"}, `${fmt.coin(r.symbol)} · ${fmt.tfKo(r.timeframe)}`), ui.sideTag(r.side),
+    h("span", {class: "t num"}, fmt.dayKey(r.bar_close) === fmt.dayKey(Date.now()) ? fmt.hm(r.bar_close) : fmt.kst(r.bar_close)),
+    h("span", {class: "fnm"}, g === "ds" ? h("i", {class: "strat-ftag"}, "딥시크") : g === "m5" ? h("i", {class: "strat-ftag"}, "5분봉") : null, fmt.stratKo(r.strategy)),
+    h("span", {class: "c"}, ui.sideTag(r.side), ` ${fmt.coin(r.symbol)} · ${fmt.tfKo(r.timeframe)}`),
     h("span", {class: ["st", s.tone]}, s.ko, s.why ? h("small", null, ` · ${s.why}`) : null));
     if (fresh) motion.fillIn(x, null);
     return x;

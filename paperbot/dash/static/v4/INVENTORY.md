@@ -349,3 +349,18 @@ What the owners see on the first morning after the v4 reset (dashboard only; shi
 | 조합 시너지 첫날 | 분석 › 조합 시너지: no ranked list until the 36 average 5 closed trades per account: "거래가 쌓이면 (계좌당 5건 이상) 보여 드립니다" | `/api/analysis/synergy` `waiting`, `note` (dash/analysis.py `SYNERGY_MIN_TRADES`) |
 | 알림 기록 읽은 곳 | 알림 기록 footer: 봇 경고 · 밤 점검 보고 · 판정 작업 기록 (no file names) | none |
 | 화면 켜두기 | 🔊 menu: "화면 켜두기" (Screen Wake Lock while the sound is on; off by default, this device only; asks again when the page comes back; "이 기기는 지원 안 함" without the API); FAQ 화면: "휴대폰에서 앱처럼 쓰려면요?" (브라우저 메뉴 → 홈 화면에 추가) | none |
+
+## fill-strat: 매매법 차트·목록·한눈 지도·분석 채우기 (owners 10/06 "화면들은 부족한 게 좀 있어 보여")
+
+Dashboard only (one read-only route). Tests: tests/test_dash_fill_strat.py.
+
+| Addition | Screen / place | Server |
+|---|---|---|
+| 차트 표시 말 (v3 계좌 차트처럼) | 매매법 상세 · 딥시크 · 릴스 차트: 진입 화살표 '롱 30배' / '숏 20배', 청산 점 '익절 잠금 +15%' / '손절 −22%' / '시간 청산' (딥시크: 이유만, 돈 숫자 없음); 그 코인의 모든 봉 계좌 거래, 다른 봉은 작은 봉 표시 · 회색; 최근 180봉이 보이게 | `/api/account/<id>` (기존) |
+| 차트 실시간 봉 | 마지막 봉과 가격선이 공용 시세(5초)로 움직임, 가격 글자 오르면 초록·내리면 빨강 반짝; 봉이 닫히면 한 번 다시 불러 조건표도 새로 | `/api/ticker` (store, 기존) |
+| 매매법 36개 한눈에 | 매매법 목록 ≥1280px: 페이지 없이 2단(≥1680px 3단) 모두; 포지션 열린 줄은 빛나는 테두리 + ● 코인·방향·배수 + 지금 평가 ROE (마크, 미실현 캡션); 딥시크 줄은 포지션만 | `/api/board` + store ticker |
+| 방금 나온 신호 | 매매법 목록 옆(폰: 아래): 모든 매매법의 최신 신호 12개 (시각·매매법·코인·봉·롱숏·진입 / 건너뜀 + 이유), 30초마다, 새 신호만 미끄러져 들어옴; 누르면 그 매매법 차트 그 코인·봉 | `/api/signals?limit=12` (기존) |
+| 한눈 지도 '5년 시험' 색 | 기존 36 · 딥시크 44: 칸 = 5년 과거 시험의 거래 한 건 평균 (36: 증거금 대비 ROE, 딥시크: 레버리지 없이 가격 %) + 승률, 초록/빨강, '5년 과거 시험 · 참고'; 자료 없는 칸은 점선 | `/api/v4/grid/y5` (dash/more/grid.py, vs5y.five_year, 1시간 캐시) |
+| 한눈 지도 '지금 포지션' 색 | 포지션 열린 칸만 빛남: 지금 평가 ROE (5초마다) + 코인·방향·배수; 열린 칸 수 · 평가 이익/손실 칸 수 | `/api/v4/grid` `open` + board + store ticker |
+| 분석 '채워지는 중' | 손익비·위험 / 계좌 겹침 / 조합 시너지: 실제 기준과 지금 진행을 채워지는 막대로 ('계좌마다 거래 20건 필요 · 지금 가장 많은 계좌 8건 · 20건 넘은 계좌 0/144', '같이 쌓인 기록 7일 필요 · 지금 1.2일째'), 그 사이 볼 수 있는 5년 과거 시험(한눈 지도 › 5년 시험) 링크 | 기존 답의 `drawdown.min_trades`, `rules.min_trades/min_days`, `min_trades` + board |
+| 다시보기 첫 화면 자동 재생 | #/replay: 기존 36·5분봉에서 가장 최근 닫힌 거래가 목록 위에서 저절로 한 번 재생 (움직임 줄이기 설정이면 멈춘 채), '이 거래만 크게 보기' | `/api/v4/replay/<id>` (기존) |

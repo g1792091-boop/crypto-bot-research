@@ -89,7 +89,7 @@ export function tradeProgress(board, group, need) {
 /** Days since the group's accounts started (the earliest created_ts on the board), or null. */
 export function runDays(board, group, now = Date.now()) {
   const kind = GROUP_KIND[group] || "strategy";
-  const ts = ((board && board.accounts) || []).filter((a) => a.kind === kind && a.created_ts).map((a) => Number(a.created_ts));
+  const ts = ((board && board.accounts) || []).filter((a) => a.kind === kind && a.created_ts != null).map((a) => Number(a.created_ts));
   return ts.length ? Math.max(0, (now - Math.min(...ts)) / 86400000) : null;
 }
 

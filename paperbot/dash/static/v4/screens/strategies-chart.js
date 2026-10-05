@@ -159,6 +159,8 @@ export function stratChart(ctx) {
       if (p.target) add(p.target, tok("--up"), 2, "목표 (윗밴드)");
     }
     chart.timeScale().fitContent();
+    // the recent bars (where the trades are) at a readable width; the older ones stay a scroll away
+    if (bs.length > 180) { try { chart.timeScale().setVisibleLogicalRange({from: bs.length - 180, to: bs.length + 4}); } catch { /* old library */ } }
     const last = bs[bs.length - 1];
     live.o = o; live.bar = last ? {...last} : null;
     // only a forming last bar (its close still ahead) arms the one reload at its close: closed-only bars never loop
