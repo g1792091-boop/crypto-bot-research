@@ -144,7 +144,7 @@ export function posCard(a, pos, o = {}) {
     h("span", {class: "muted pos-when"}, pos.entry_time ? `${fmt.kst(pos.entry_time)} 진입` : "", held ? ` · ${held} 보유` : "",
       ` · ${fmt.tfKo(a.timeframe)}봉`, o.collapsible ? ` · ${groupKo(a)}` : ""),
     o.href ? h("a", {class: "btn-line", href: o.href("chart", pos.symbol, {acct: a.account_id, tf: a.timeframe})}, "차트") : null,
-    o.href && (a.kind === "strategy" || a.kind === "copy") ? h("a", {class: "btn-line", href: o.href("strategies", a.strategy)}, "매매법") : null,
+    o.href && (a.kind === "strategy" || a.kind === "copy" || a.kind === "reel") ? h("a", {class: "btn-line", href: o.href("strategies", a.strategy, {tf: a.timeframe, sym: pos.symbol}), title: "이 매매법 차트에서 이 포지션 보기"}, "매매법 차트") : null,
     o.href && !o.noAccountLink ? h("a", {class: "btn-line", href: o.href("account", a.account_id)}, "계좌") : null);
   // the price since the entry (5m closes + the mark now): filled by setSpark when the page has the bars
   const sparkBox = h("div", {class: "pos-spark", hidden: true},

@@ -188,3 +188,8 @@ button.dsf-row:focus-visible { outline: 2px solid var(--accent); outline-offset:
 .strat-prior > p { font-size: var(--t-sm); }
 .strat-priorh b { font-weight: 800; }
 .strat-priorc { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px; align-items: start; }
+
+/* 지금 진입 중 (owners 10/06, the v3 매매법 tab's live chart): one button per open position above the chart */
+.strat-live { gap: 6px 8px; align-items: center; margin-bottom: 8px; }
+.strat-livebtn { min-height: 30px; font-size: var(--t-sm); color: var(--accent-hi); border-color: var(--accent-line); }
+.strat-livebtn.on { background: var(--accent-soft); border-color: var(--accent); box-shadow: 0 0 12px var(--accent-glow); }

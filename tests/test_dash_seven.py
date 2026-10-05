@@ -42,7 +42,7 @@ def test_account_strip_links_and_deepseek_counts_only():
     js = _read("screens", "account.js")
     strip = _between(js, "function sameStrip(", "// ---------------------------------------------------------------- 참고 box")
     # the two buttons: the strategy page at this timeframe, the strategy's AI room (only when it exists)
-    assert 'ctx.href("strategies", a.strategy, {tf: a.timeframe})' in strip and "규칙·지표 차트 보기" in strip
+    assert '{tf: a.timeframe})' in strip and "규칙·지표 차트 보기" in strip     # + the open position's coin (test_dash_livechart)
     assert "const roomId = `strat:${a.strategy}`;" in strip and 'ctx.href("rooms", roomId)' in strip and "담당 AI 방" in strip
     assert "rooms.rooms.some((r) => r.room_id === roomId)" in strip
     # DeepSeek and the coin flips: the closed-trade count and one 참고 pill, never a return, a wallet or USDT per account

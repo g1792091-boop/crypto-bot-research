@@ -220,7 +220,8 @@ export async function mount(el, ctx) {
     const rooms = store.get("rooms");
     const hasRoom = rooms && Array.isArray(rooms.rooms) ? rooms.rooms.some((r) => r.room_id === roomId) : a.kind === "strategy";
     const acts = h("div", {class: "row wrap account-same-acts"},
-      a.kind !== "random" ? h("a", {class: "btn-line", href: ctx.href("strategies", a.strategy, {tf: a.timeframe})}, "규칙·지표 차트 보기") : null,
+      a.kind !== "random" ? h("a", {class: "btn-line", href: ctx.href("strategies", a.strategy, a.position && a.position.symbol ? {tf: a.timeframe, sym: a.position.symbol} : {tf: a.timeframe})},
+        a.position && a.position.symbol ? "진입 중인 차트 보기 (규칙·지표)" : "규칙·지표 차트 보기") : null,
       hasRoom ? h("a", {class: "btn-line", href: ctx.href("rooms", roomId)}, "담당 AI 방") : null);
     const paint = (b) => {
       const sib = sameOf(b, a);

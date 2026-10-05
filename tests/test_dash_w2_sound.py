@@ -133,7 +133,7 @@ def test_deepseek_and_coin_flips_only_feed_the_layer():
     console.log(JSON.stringify({m, log}));""")
     assert out["m"] == []
     assert len(out["log"]) == 2 and all(x["name"] is None and x["src"] == "fill" for x in out["log"])
-    up = [x for x in out["log"] if x["f"] and x["f"] >= 659]
+    up = [x for x in out["log"] if (x["f"] or x["fs"][0]) >= 659]   # a beep, or a quick run: where it starts
     assert len(up) == 1                                        # the profit = an upper note, the loss = a lower one
 
 

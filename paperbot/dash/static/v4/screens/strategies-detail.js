@@ -48,6 +48,13 @@ export function detailView(ctx, st, name) {
     markers: local.get("strat-mk", true) !== false, dim: local.get("strat-dim", "coin"), side: local.get("strat-side", "cards"),
     view: undefined, bars: [], sigs: [], trades: {}, profile: undefined, gen: 0};
   if (!bars.TRADE_SYMS.includes(v.sym)) v.sym = "BTCUSDT";
+  // the old 매매법 tab's habit (owners 10/06 04:10, v3 photo): opened without a coin, the chart goes where this strategy
+  // is IN a position right now (its account on the chosen timeframe first, else the first timeframe that holds one)
+  if (!bars.TRADE_SYMS.includes(q.sym)) {
+    const held = first.filter((a) => a.position && bars.TRADE_SYMS.includes(a.position.symbol));
+    const here = held.find((a) => a.timeframe === v.tf) || (q.tf ? null : held[0]);
+    if (here) { v.tf = here.timeframe; v.sym = here.position.symbol; }
+  }
 
   // ---------------------------------------------------------------- head
   const famLine = kind === "ds200" && DS_DEFS[name] ? ui.pill(`${DS_DEFS[name].fam} ${FAMILY[DS_DEFS[name].fam].ko}`, "thin") : null;
@@ -72,7 +79,8 @@ export function detailView(ctx, st, name) {
   const mkBtn = h("button", {type: "button", class: "btn-line strat-mk", "aria-pressed": String(v.markers)}, "이 계좌 진입·청산");
   const chart = stratChart(ctx);
   sc.track(chart.dispose);
-  const chartCard = ui.card({plate: "차트", cls: "strat-o2 strat-chartcard", acts: [symSel, mkBtn]}, tfSeg, chart.el);
+  const liveEl = h("div", {class: "row wrap strat-live", "aria-live": "polite"});
+  const chartCard = ui.card({plate: "차트", cls: "strat-o2 strat-chartcard", acts: [symSel, mkBtn]}, liveEl, tfSeg, chart.el);
 
   const condEl = h("div", {class: "stack tight"}, motion.shimmer(3));
   const condCard = ui.card({plate: "지금 조건", sub: "마지막으로 닫힌 봉", cls: "strat-o3"}, condEl);
@@ -123,9 +131,28 @@ export function detailView(ctx, st, name) {
     return (s.restart && s.restart.ready && s.restart.verdict_ts) || (s.next_checkpoint && s.next_checkpoint.ts) || null;
   }
 
+  /** 지금 진입 중: one button per open position of this strategy (any timeframe); a tap puts the chart on it. */
+  function renderLive(rows) {
+    const held = rows.filter((a) => a.position && bars.TRADE_SYMS.includes(a.position.symbol));
+    put(liveEl, ...(held.length ? [h("span", {class: "muted small"}, "지금 진입 중")].concat(held.map((a) => {
+      const p = a.position, on = a.timeframe === v.tf && p.symbol === v.sym;
+      return h("button", {type: "button", class: ["btn-line strat-livebtn", on ? "on" : ""], "aria-pressed": String(on),
+        title: "이 포지션의 차트로", onclick: () => setChart(a.timeframe, p.symbol)},
+        `● ${fmt.tfKo(a.timeframe)} ${fmt.coin(p.symbol)} ${fmt.sideKo(p.side)} ${fmt.lev(p.leverage)}`, on ? " · 보는 중" : " · 차트 보기");
+    })) : [h("span", {class: "muted small"}, "지금 진입한 포지션 없음 · 진입하면 여기서 바로 그 차트로 갑니다")]));
+  }
+  function setChart(tf, sym) {
+    if (tf === v.tf && sym === v.sym) return;
+    const tfMoved = tf !== v.tf;
+    v.tf = tf; v.sym = sym; symSel.value = sym; local.set("strat-sym", sym); local.set("strat-tf", tf);
+    loadChart(); loadSignals(); renderAccounts();
+    if (tfMoved) vs.setTf(tf);
+  }
+
   const recNums = {};
   function renderAccounts() {
     const rows = accountsOf(st.board, name);
+    renderLive(rows);
     const dsK = kind === "ds200";
     const init = (st.board && st.board.initial) || 5000;
     const gs = st.gs;
