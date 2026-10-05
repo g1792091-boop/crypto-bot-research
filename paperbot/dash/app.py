@@ -2665,6 +2665,15 @@ def create_app(db: str, password_hash: Optional[str], secret: bytes, candles=fet
                 c = None
         if c is None:
             raise HTTPException(404, "unknown strategy")
+        # 이미 해 본 시험 (strategy page, batch ana8A): what the pre-registered studies already tested for this name
+        # (packets3.research_prior: the entry study for the 36, agents/ds_prior.json for DeepSeek and the reel).
+        # json_finite: the rare 36 (N14_ICHI_RSI, N15_KC_AO) have NaN cells in their 5-year card (no signals on a
+        # timeframe), which made this route a 500; they go out as null ("—" on the page).
+        from ..agents.packets3 import research_prior
+        try:
+            c = json_finite({**c, "research_prior": research_prior(strategy)})
+        except Exception:  # noqa: BLE001  (a description only: no prior, never a 500)
+            c = json_finite({**c, "research_prior": None})
         hit = risk_cache.get(strategy)
         if hit is None or time.time() - hit[0] > TRADES_TTL_S:
             from ..agents import survival as SV

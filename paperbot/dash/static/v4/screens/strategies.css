@@ -139,3 +139,12 @@
 .strat-recline .gk-mini { width: 72px; height: 22px; }
 @media (max-width: 380px) { .strat-prow { grid-template-columns: minmax(26px, auto) minmax(0, 1fr) 48px minmax(52px, auto) 10px; } .strat-prow .gk-mini { width: 48px; } }
 .strat-pcard .stat, .strat-reelprof .stat { background: var(--surface-3); }
+
+/* 어떻게 끝났나 (strategies-exits.js) and 이미 해 본 시험 (strategies-prior.js), batch ana8A */
+.strat-howend .strat-srow { grid-template-columns: minmax(76px, 1.3fr) minmax(32px, 0.7fr) auto minmax(64px, auto); }
+@media (min-width: 560px) { .strat-howend .strat-srow { grid-template-columns: minmax(110px, 1.2fr) minmax(80px, 1.4fr) 96px 92px 74px; } }
+.strat-exref { display: grid; gap: 6px; margin-top: 4px; padding-top: 10px; border-top: 1px dashed var(--line-2); min-width: 0; }
+.strat-prior { margin-top: 6px; padding-top: 10px; border-top: 1px dashed var(--line-2); min-width: 0; overflow-wrap: anywhere; }
+.strat-prior > p { font-size: var(--t-sm); }
+.strat-priorh b { font-weight: 800; }
+.strat-priorc { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px; align-items: start; }
