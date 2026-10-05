@@ -20,7 +20,7 @@ from test_rooms import DAY, HOUR, MIN, QUIET, START, QueueRunner, World, rec, te
 
 LEAD = {"summary": ["a", "b", "c"], "human_actions": [], "watch_next": []}
 # literal shapes of the v3 run that must never reach a prompt or a packet again
-STALE = re.compile(r"(?<![0-9,.$])(156|144|195)(?![0-9])|뺐음")
+STALE = re.compile(r"(?<![0-9,.$])(156|144|195)(?![0-9])|뺐음|(?<![0-9,.$])180개|규칙 v4가 필요|paper v3 규칙|paper v3로")
 
 
 class V4World(World):
