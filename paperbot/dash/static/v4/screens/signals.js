@@ -3,7 +3,7 @@
 // entry REQUEST: whether an account really entered is on its account screen. New signals (a real new id) slide in.
 // Old homes: 신호 tab, 서버 상태 › 최근 24시간 신호 (INVENTORY.md 12).
 import {h, ui, fmt, motion, local, put} from "../core/pb.js";
-import {SIG_KO, SIG_CLS, sigByTf, limitsOf, limitFor, sec, dayTime, note} from "./server-kit.js";
+import {SIG_KO, SIG_CLS, sigByTf, limitsOf, limitFor, sec, dayTime, note, TF_ORDER} from "./server-kit.js";
 
 const TFS = [{id: "", label: "전부"}, {id: "5m", label: "5분"}, {id: "15m", label: "15분"}, {id: "30m", label: "30분"}, {id: "1h", label: "1시간"},
   {id: "4h", label: "4시간"}, {id: "1d", label: "일봉(기록)"}];
@@ -36,6 +36,22 @@ export async function mount(el, ctx) {
   };
   ctx.watch("status", paintSum);
 
+  // ---------------------------------------------------------------- groups x timeframes (v4_missing A8)
+  // status.signals_by_group (the server's G15 rows): a stopped DeepSeek timeframe shows as a 0 next to the 36's counts.
+  // "Expected" timeframes come from the board's own accounts (a group with no account on a timeframe shows ·).
+  const grpBody = h("div", {class: "stack tight"});
+  const grpCard = ui.card({plate: "묶음별 신호", sub: "최근 24시간 · 묶음 × 봉"}, grpBody,
+    note("숫자 = 신호 수, 주황 '늦음' = 한도를 넘겨 진입하지 않은 신호. · = 그 묶음은 그 봉에 계좌가 없음. "
+      + "다른 봉은 신호가 있는데 한 봉만 0이면 주황으로 표시합니다 (멈췄는지 확인; 신호가 드문 4시간봉은 빼고)."));
+  const gst = {status: null, board: null};
+  const paintGroups = () => {
+    const rows = gst.status && Array.isArray(gst.status.signals_by_group) ? gst.status.signals_by_group : null;
+    if (!rows) { put(grpBody, gst.status ? ui.notYet("묶음별 신호 수집 전") : ui.empty("읽는 중")); return; }
+    put(grpBody, groupGrid(rows, gst.board));
+  };
+  ctx.watch("status", (s) => { if (s) { gst.status = s; paintGroups(); } });
+  ctx.watch("board", (b) => { if (b) { gst.board = b; paintGroups(); } });
+
   // ---------------------------------------------------------------- the log
   let tf = TFS.some((t) => t.id === local.get("signals-tf")) ? local.get("signals-tf") : "";
   let seen = null;                                   // ids already shown (null: first load, nothing slides)
@@ -58,7 +74,7 @@ export async function mount(el, ctx) {
     }});
   const tfSeg = ui.seg(TFS, tf, (id) => { tf = id; local.set("signals-tf", id); seen = null; load(true); }, {label: "봉", scroll: true});
   const listNote = note();
-  el.append(h("div", {class: "signals-cols"}, sumCard,
+  el.append(h("div", {class: "signals-cols"}, h("div", {class: "stack signals-left"}, sumCard, grpCard),
     ui.card({plate: "신호 기록", sub: "최근 300개까지"}, tfSeg, list.el, listNote,
       note("표시가 없는 줄은 '진입 요청'입니다. 일봉은 기록만 합니다 (거래하지 않음). 실제로 들어갔는지는 계좌 화면에서 봅니다."))));
 
@@ -82,3 +98,45 @@ export async function mount(el, ctx) {
 }
 
 export function unmount() {}
+
+// the server's group keys (paperbot/groups.py, dash/app.py signal_group) in the owners' order and words
+const SIG_GROUPS = [["core", "기존 36"], ["ds200", "딥시크"], ["reel", "5분봉"], ["flip", "동전 봇"], ["extra", "추가 계좌"]];
+const KIND_GROUP = {strategy: "core", ds200: "ds200", reel: "reel", random: "flip", copy: "extra", newlab: "extra"};
+const RARE_TF = new Set(["4h", "1d"]);
+
+/** status.signals_by_group [{group, timeframe, status, n}] + the board's accounts -> a small group x timeframe table. */
+export function groupGrid(rows, board) {
+  const by = {}, seenTf = new Set();
+  for (const r of rows || []) {
+    if (!r || typeof r !== "object") continue;
+    const c = ((by[r.group] ||= {})[r.timeframe] ||= {n: 0, late: 0});
+    const n = Number(r.n) || 0;
+    c.n += n;
+    if (r.status === "LATE") c.late += n;
+    seenTf.add(r.timeframe);
+  }
+  const has = {};                                      // group -> Set of timeframes it has accounts on
+  for (const a of (board && board.accounts) || []) {
+    const g = a.group || KIND_GROUP[a.kind];
+    if (g) (has[g] ||= new Set()).add(a.timeframe);
+  }
+  const tfs = TF_ORDER.filter((tf) => seenTf.has(tf) || Object.values(has).some((s) => s.has(tf)));
+  const groups = SIG_GROUPS.filter(([g]) => by[g] || has[g]);
+  if (!groups.length || !tfs.length) return ui.empty("지난 24시간 동안 신호가 없었습니다");
+  const cell = (g, tf) => {
+    const c = by[g] && by[g][tf];
+    const mine = has[g];
+    if (!c && board && mine && !mine.has(tf)) return h("span", {class: "muted", title: "이 봉에는 계좌가 없음"}, "·");
+    const n = c ? c.n : 0;
+    if (!n) {
+      // 0 on a timeframe the group trades while another of its timeframes has signals: worth a look (not on 4h / 1d,
+      // where a quiet day is normal: about 0.07 trades a month per account on 4h, research/power)
+      const others = board && mine && mine.size > 1 && !RARE_TF.has(tf)
+        && [...mine].some((t) => t !== tf && by[g] && by[g][t] && by[g][t].n >= 5);
+      return others ? h("b", {class: "warn-t", title: "다른 봉은 신호가 있는데 이 봉은 24시간 동안 0개입니다: 멈췄는지 확인"}, "0") : "0";
+    }
+    return h("span", {class: "signals-cell"}, fmt.int(n), c.late ? h("small", {class: "warn-t"}, ` 늦음 ${fmt.int(c.late)}`) : null);
+  };
+  return ui.table([{label: "묶음", l: true, get: (r) => r[1]},
+    ...tfs.map((tf) => ({label: fmt.tfKo(tf), get: (r) => cell(r[0], tf)}))], groups);
+}

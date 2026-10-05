@@ -6,3 +6,6 @@
 [data-screen="signals"] .signals-row .lname { white-space: nowrap; }
 [data-screen="signals"] .signals-coin { color: var(--ink); font-weight: 700; }
 [data-screen="signals"] .tbl td, [data-screen="signals"] .tbl th { padding-inline: 6px; }
+/* wave 2 part B (A8): the group x timeframe card sits under the 24-hour card */
+[data-screen="signals"] .signals-left { gap: 16px; min-width: 0; }
+[data-screen="signals"] .signals-cell small { font-size: var(--t-xs); font-weight: 400; }

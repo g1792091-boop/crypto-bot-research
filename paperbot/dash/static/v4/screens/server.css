@@ -40,3 +40,7 @@
 @media (min-width: 560px) { [data-screen="server"] .kv { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 
 .server-out { padding-top: 4px; font-size: var(--t-xs); }
+
+/* wave 2 part B (A9): a timer systemd reports switched off or missing is dimmed; the 꺼짐 pill says why */
+.server-job-off .body b, .server-job-off .meta { color: var(--muted); }
+.server-jobs-off { color: var(--warn); }

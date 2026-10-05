@@ -9,6 +9,9 @@ data (dash.app.Data), rooms, db, daily_db, agents_db, checkpoint_db, candles (th
     story   오늘의 하이라이트 (홈 맨 위 스토리)
     since   지난번 본 뒤로 바뀐 것 (앱을 열 때)
     replay  거래 다시보기 (#/replay/<trade id>)
+    jobs    예약 작업: systemd 타이머 켜짐·꺼짐, 마지막·다음 실행 (서버·비용)
+    costs   비용 점검: 묶음별 수수료·펀딩, 실제 호가·손절 미끄러짐 추정 (매매법 › 분석 › 비용)
+    power   판정 감도: 진짜 실력별 30·60·90일 합격 확률 (research/power/out/power.json, 판정 화면)
 """
 from __future__ import annotations
 
@@ -16,6 +19,7 @@ import importlib
 from types import SimpleNamespace
 
 MODULES = ("flow", "grid", "story", "since", "replay")
+MODULES += ("jobs", "costs", "power")          # wave 2 part B
 
 
 def register_all(app, **kw) -> dict:

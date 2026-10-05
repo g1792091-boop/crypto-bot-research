@@ -11,6 +11,7 @@ import {h, put, ui, motion, local} from "../core/pb.js";
 import * as R from "./analysis-risk.js";
 import * as W from "./analysis-where.js";
 import * as X from "./analysis-rules.js";
+import * as C from "./analysis-costs.js";
 
 const VIEWS = [
   {id: "risk", label: "손익비·위험", path: "/api/analysis/risk", render: R.risk, desc: "이길 때와 질 때의 크기, 낙폭과 파산 위험"},
@@ -24,6 +25,7 @@ const VIEWS = [
   {id: "synergy", label: "조합 시너지", path: "/api/analysis/synergy", render: X.synergy, desc: "매매법 여러 개를 같이 돌렸다면"},
   {id: "shock", label: "충격 테스트", path: "/api/analysis/shock", render: R.shock, desc: "가격이 한 번에 크게 움직이면 지금 포지션은"},
   {id: "ready", label: "실전 준비도", path: "/api/analysis/readiness", render: R.ready, desc: "실거래 전에 정한 조건 8개를 계좌마다"},
+  {id: "costs", label: "비용", path: "/api/v4/costs", render: C.costs, desc: "수수료·펀딩이 깎아 먹는 몫과 실제 호가였다면 (추정)"},
   {id: "ghcoin", label: "GH Coin", path: "/api/ghcoin", render: X.ghcoin, feature: "ghcoin", desc: "GH Coin 타점 기록 (따로 도는 기록기)"},
   {id: "questions", label: "45개 질문", path: "/api/analysis/questions", render: X.questions, feature: "questions", desc: "질문마다 답이 있는지"},
 ];

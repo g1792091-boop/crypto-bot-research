@@ -58,6 +58,14 @@ export async function mount(el, ctx) {
     try { const v = await ctx.api("/api/v4/server"); gauges.setServer(v); gauges.setSignals(st.status, v); } catch (e) { if (e && e.status === 404) v4Server = false; }
   });
 
+  // /api/v4/jobs (dash/more/jobs.py): systemd's timer state, the same 60 s rhythm; a 404 (an older server) stops it and
+  // the 예약 작업 rows keep the calendar and 수집 전
+  let v4Jobs = true;
+  ctx.every(60000, async () => {
+    if (!v4Jobs) return;
+    try { const v = await ctx.api("/api/v4/jobs"); if (ctx.alive()) jobs.setJobs(v); } catch (e) { if (e && e.status === 404) v4Jobs = false; }
+  });
+
   async function logout() {
     try { await ctx.post("/api/logout", {}); } catch { /* the cookie is cleared or gone either way */ }
     location.href = "/login";

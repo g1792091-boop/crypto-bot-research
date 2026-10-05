@@ -259,9 +259,9 @@ export function rankList(ctx, o = {}) {
   const foot = h("div");
   const filters = h("div", {class: "home-filters"}, tfBox, sortSel ? h("label", {class: "home-sort"}, h("span", null, "정렬"), sortSel) : null);
   const list = ui.searchList({size: 10, placeholder: "이름·코드 찾기 (예: 돈치안, F9, REEL)",
-    match: (a, q) => fmt.acctName(a).toLowerCase().includes(q) || String(a.account_id).toLowerCase().includes(q)
-      || (famKo(a) || "").toLowerCase().includes(q),
-    row: (a) => rankRow(a, {gs: st.gs, rk: a._rk, href, showGroup: st.group === "all", full: !!o.full}),
+    match: (a, q) => !a._flip && !a._flipMed && (fmt.acctName(a).toLowerCase().includes(q) || String(a.account_id).toLowerCase().includes(q)
+      || (famKo(a) || "").toLowerCase().includes(q)),
+    row: (a) => (a._flip || a._flipMed ? flipRow(a, href) : rankRow(a, {gs: st.gs, rk: a._rk, href, showGroup: st.group === "all", full: !!o.full})),
     filters, empty: "맞는 계좌가 없습니다"});
   list.input.setAttribute("enterkeyhint", "search");
 
@@ -284,8 +284,10 @@ export function rankList(ctx, o = {}) {
     rows.sort((x, y) => { const p = s.key(x), q = s.key(y); return p < q ? -1 : p > q ? 1 : x.ret === y.ret ? 0 : y.ret - x.ret; });
     rows.forEach((a, i) => { a._rk = i + 1; });
     countEl.textContent = `${groupKo(st.group)}${st.tf !== "all" ? " · " + fmt.tfKo(st.tf) : ""} · ${fmt.int(rows.length)}계좌`;
-    list.set(rows, keep);
-    put(foot, vsFoot(st.group));
+    // 순위표 only (o.flips, wave 2 part B): the same-bar coin flips sit at their real place in a 수익률 list
+    const fl = o.flips && st.sort === "ret" ? withFlips(rows, st) : null;
+    list.set(fl ? fl.items : rows, keep);
+    put(foot, vsFoot(st.group), fl ? flipFoot(fl, st.group) : null);
   }
   return {
     el: h("div", {class: "stack tight"}, list.el, foot), countEl,
@@ -295,6 +297,63 @@ export function rankList(ctx, o = {}) {
       apply(keep && !changed);
     },
   };
+}
+
+// ---------------------------------------------------------------- coin flips inside the 순위표 list (ranked #5)
+/**
+ * withFlips(rows, st) -> {items, n, above, rows, med} or null. rows: the group's accounts, already sorted by 수익률.
+ * 기존 36: every same-bar coin flip (15분~4시간; the list's timeframe filter applies) as a dimmed dashed row at its real
+ * place; 5분봉: its three 5m flips; 딥시크: ONE line, the same-bar flips' median (no flip per DeepSeek account, CONTRACT
+ * rule 3). The accounts keep their own rank numbers (1..n); a flip never takes a number.
+ */
+export function withFlips(rows, st) {
+  const g = st.group;
+  if (!["core", "m5", "ds"].includes(g) || !rows.length) return null;
+  const tfs = new Set(rows.map((a) => a.timeframe));
+  const flips = derive.ranked(st.board, "coin").filter((f) => tfs.has(f.timeframe) && (g === "m5" ? fmt.isFlip5(f) : !fmt.isFlip5(f))
+    && (st.tf === "all" || f.timeframe === st.tf));
+  if (!flips.length) return null;
+  const marks = g === "ds"
+    ? [{_flipMed: true, account_id: "__flip_median", ret: derive.median(flips.map((f) => f.ret)), n: flips.length,
+      tfs: TF_ORDER.filter((tf) => flips.some((f) => f.timeframe === tf))}]
+    : flips.map((f) => ({...f, _flip: true})).sort((x, y) => y.ret - x.ret);
+  const items = [];
+  let i = 0;
+  for (const a of rows) {
+    while (i < marks.length && marks[i].ret > a.ret) items.push(marks[i++]);
+    items.push(a);
+  }
+  while (i < marks.length) items.push(marks[i++]);
+  const medBy = {};
+  for (const tf of tfs) { const xs = flips.filter((f) => f.timeframe === tf).map((f) => f.ret); if (xs.length) medBy[tf] = derive.median(xs); }
+  const above = rows.filter((a) => medBy[a.timeframe] != null && a.ret > medBy[a.timeframe]).length;
+  return {items, n: flips.length, above, rows: rows.length, med: g === "ds" ? marks[0].ret : null};
+}
+
+/** One coin-flip row (or the DeepSeek tab's one median line): dimmed, dashed, no rank number. */
+export function flipRow(f, href) {
+  if (f._flipMed) {
+    return h("div", {class: "lrow home-row board-fliprow", role: "listitem", "aria-label": `동전 봇 ${f.n}개 중앙값 ${fmt.pct(f.ret)} (참고)`},
+      h("span", {class: "rk board-coin", "aria-hidden": "true"}),
+      h("span", {class: "lname"}, `동전 봇 중앙값 · ${f.tfs.map(fmt.tfKo).join("·")} ${fmt.int(f.n)}개`),
+      h("span", {class: "ret num ink2"}, fmt.pct(f.ret)),
+      h("span", {class: "meta"}, h("span", null, "비교 기준 · 참고 · 딥시크는 계좌마다 비교하지 않음")));
+  }
+  return h("a", {class: "lrow click home-row board-fliprow", href: href(f.account_id), role: "listitem",
+    "aria-label": `동전 봇 ${fmt.tfKo(f.timeframe)} ${fmt.pct(f.ret)} (비교 기준, 순위 번호 없음)`},
+    h("span", {class: "rk board-coin", "aria-hidden": "true"}),
+    h("span", {class: "lname"}, ui.acctLabel(f)),
+    h("span", {class: "ret num ink2"}, fmt.pct(f.ret)),
+    h("span", {class: "meta"}, h("span", null, `동전 봇 · 거래 ${fmt.int(f.trades)}`), f.bust ? ui.pill("파산", "thin", "동전 봇도 파산할 수 있습니다") : null,
+      h("span", null, "비교 기준 (순위 번호 없음)")));
+}
+
+/** The line under the list: "동전 봇 12개 자리 · 같은 봉 동전 봇 중앙값보다 위 매매법 62/144개 (참고)". */
+export function flipFoot(fl, group) {
+  return h("p", {class: "assume home-vsfoot board-flipfoot"}, h("span", {class: "board-coin", "aria-hidden": "true"}),
+    group === "ds" ? `동전 봇 중앙값 줄 1개 (같은 봉 ${fmt.int(fl.n)}개) · 그보다 위 딥시크 ${fmt.int(fl.above)}/${fmt.int(fl.rows)}개`
+      : `동전 봇 ${fmt.int(fl.n)}개 자리 · 같은 봉 동전 봇 중앙값보다 위 ${group === "m5" ? "5분봉" : "매매법"} ${fmt.int(fl.above)}/${fmt.int(fl.rows)}개`,
+    " (참고 · 수익률 순일 때만 끼움)");
 }
 
 // ---------------------------------------------------------------- the judged-account progress (counts only)

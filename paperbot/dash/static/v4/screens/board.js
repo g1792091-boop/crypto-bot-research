@@ -29,7 +29,7 @@ export async function mount(el, ctx) {
   const moNote = h("div");
   const tbCard = ui.card({plate: "상위·하위", cls: "board-tb"}, stats, tb, moNote);
   const rowMo = rowMotion(ctx, el);         // ▲▼ since the last visit, small equity lines, a tint on a real change
-  const list = rankList(ctx, {sorts: true, full: true, memo: "board-list"});
+  const list = rankList(ctx, {sorts: true, full: true, memo: "board-list", flips: true});   // coin flips in place (참고)
   const refBox = h("div");
   const listCard = ui.card({plate: "전체 목록", acts: [list.countEl]}, list.el, refBox,
     ui.assume(null, "수익률·잔고는 닫힌 거래 기준 (열린 포지션 손익 제외)"));
