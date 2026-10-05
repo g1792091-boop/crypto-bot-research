@@ -1,11 +1,13 @@
-// Boot: the live stream, the server clock, the feature probe, the shell (nav, chip, health dot, banner), the router,
-// and the first-visit tour. The Google Fonts stylesheet is attached only after boot (index.html preloads it), so a font
-// host that hangs instead of failing never holds back the first paint or the data.
+// Boot: the skin (core/skin.js), the live stream, the server clock, the feature probe, the shell (nav, chip, health dot, banner), the router,
+// the first-visit tour and the "지난번 본 뒤로" sheet (core/since.js). The Google Fonts stylesheet is attached only after
+// boot (index.html preloads it), so a font host that hangs instead of failing never holds back the first paint or the data.
 import {startStream, syncClock} from "./api.js";
 import {startFeatureProbe} from "./features.js";
 import {startShell} from "./shell.js";
 import {startRouter} from "./router.js";
 import {maybeStartTour} from "./tour.js";
+import {startSince} from "./since.js";
+import {applySkin} from "./skin.js";
 
 function attachFonts() {
   const pre = document.getElementById("gfonts");
@@ -18,6 +20,7 @@ function attachFonts() {
 }
 
 function boot() {
+  applySkin();            // the viewer's skin (tokens.css: "ai" by default, "classic" by choice) before anything draws
   startShell();
   startRouter();
   startStream();
@@ -25,6 +28,7 @@ function boot() {
   syncClock();
   setInterval(syncClock, 600000);
   maybeStartTour();
+  startSince();            // "지난번 본 뒤로" sheet (never on the first visit)
   attachFonts();
 }
 

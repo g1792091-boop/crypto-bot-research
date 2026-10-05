@@ -1,0 +1,36 @@
+/* 오늘의 하이라이트: the story rings (storyRing() on 홈, the story's day picker) and the pixel icons of the story.
+   home.css and story.css @import this file. Tokens only. The bottom-sheet look the day picker shares with the
+   "지난번 본 뒤로" sheet is core/since.css. */
+@import url("../core/since.css");
+
+.sk-ring { display: grid; gap: 6px; min-width: 0; }
+.sk-cap { display: flex; align-items: baseline; gap: 8px; min-width: 0; font-size: var(--t-xs); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sk-cap b { font: 400 var(--t-xs)/1 var(--f-pixel); color: var(--accent); letter-spacing: .06em; }
+.sk-row { display: flex; gap: 10px; min-width: 0; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none;
+  margin: 0 calc(var(--gutter) * -1); padding: 2px var(--gutter) 4px; scroll-padding-inline: var(--gutter); scroll-snap-type: x proximity; }
+.sk-row::-webkit-scrollbar { display: none; }
+.sk-item { flex: none; display: grid; justify-items: center; align-content: start; gap: 4px; width: 62px; padding: 2px 0;
+  color: var(--ink-2); text-decoration: none; scroll-snap-align: start; border-radius: 14px; -webkit-tap-highlight-color: transparent; }
+.sk-item.big { width: 72px; }
+.sk-ava { position: relative; display: grid; place-items: center; transition: transform .16s var(--ease); }
+.sk-item:active .sk-ava, .st-dayb:active .sk-ava { transform: scale(.94); }
+.sk-svg { display: block; overflow: visible; }
+.sk-svg .sk-arc { stroke: var(--accent); stroke-width: 3.4; }
+.sk-svg:not(.seen) { filter: drop-shadow(0 0 5px var(--accent-glow)); }
+.sk-svg.seen .sk-arc { stroke: var(--line-2); }
+.sk-svg.cur .sk-arc { stroke: var(--ink); }
+.sk-svg .sk-disc { fill: var(--surface-2); stroke: var(--line); stroke-width: 1; }
+.sk-in { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; line-height: 1; pointer-events: none; }
+.sk-in small { font: 400 9px/1 var(--f-pixel); color: var(--muted); letter-spacing: .04em; }
+.sk-in b { font: 400 24px/.9 var(--f-led); color: var(--accent); }
+.sk-item.big .sk-in b { font-size: 28px; }
+.sk-item.seen .sk-in b { color: var(--ink-2); }
+.sk-lab { max-width: 100%; font-size: var(--t-xs); line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sk-item.big .sk-lab { color: var(--ink); font-weight: 700; }
+.sk-item:hover .sk-lab { color: var(--ink); }
+
+/* pixel icons (story-kit.js pixIcon) */
+.pix { display: block; flex: none; overflow: visible; }
+.pix .pa { fill: var(--accent); } .pix .pd { fill: var(--accent-ink); } .pix .ph { fill: var(--wall); }
+.pix .pr { fill: var(--down); } .pix .pg { fill: var(--up); } .pix .pl { fill: var(--line-2); }
+.pix .pw { fill: var(--warn); } .pix .pk { fill: var(--ink); } .pix .pq { fill: var(--surface-3); }

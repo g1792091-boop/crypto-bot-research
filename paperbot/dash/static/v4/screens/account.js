@@ -4,8 +4,13 @@
 // pill only); its exit rules in plain words; an extra account's rule, proposal and events; the open position card;
 // the equity curve with the start line; a candle chart per coin with its entries and exits; its trades with the why
 // line, ten per page; the CSV. update(params) swaps the account in place.
+// Top (builder grid): the profile card (grid-kit.js; name, group chip, curve with the same-timeframe coin flips' median,
+// 수익률 / 최대 낙폭 / 승률 / 거래 수, the coin-flip difference as 참고, 7일 / 30일). An account the map does not cover (a
+// copy / new-lab extra) keeps the plain head and the 참고 box. Every closed trade row links to its replay
+// (#/replay/<trade id>).
 import {h, ui, fmt, derive, store, motion, makeChart, candleOptions, tok, priceDec} from "../core/pb.js";
 import {normPos, posCard, tradeRow, reelExits, nameOf, groupKo, REEL_BARS, LADDER} from "./positions-kit.js";
+import {profileCard} from "./grid-kit.js";
 
 const OUTCOME_KO = {ENTERED: "진입", SKIPPED: "건너뜀", REJECTED: "거절", FILTERED: "규칙으로 건너뜀"};
 const EXTRA_ST_KO = {active: "도는 중", suspended: "멈춤 (보류)", held: "정지 (동결)"};
@@ -17,7 +22,7 @@ const parseData = (raw) => { if (raw && typeof raw === "object") return raw; try
 let cur = null;           // {el, ctx, show(id)} of the mounted screen
 
 export async function mount(el, ctx) {
-  const view = {id: null, gen: 0, disposers: [], card: null, led: null, d: null};
+  const view = {id: null, gen: 0, disposers: [], card: null, led: null, d: null, prof: null};
   const clean = () => { for (const f of view.disposers.splice(0)) { try { f(); } catch (e) { /* gone */ } } };
   ctx.track(clean);
 
@@ -81,11 +86,14 @@ export async function mount(el, ctx) {
     const timeX = trades.filter((t) => t.exit_reason === "TIME" || t.exit_reason === "END").length;
     const sig = d.signals || {}, sigN = Object.values(sig).reduce((s, x) => s + x, 0);
     const mdd = stt.max_drawdown ?? a.max_drawdown;
-    const stats = h("div", {class: "stats s4"},
-      ui.stat("거래", `${fmt.int(n)}건`, h("span", {class: "s"}, `승률 ${n ? fmt.pct(wins / n, 0, false) : "—"} `, ui.smallSample(n))),
+    // the profile card (top) carries trades, win rate and drawdown for its window; an extra account (no card) keeps
+    // them here
+    const isExtra = fmt.groupOf(a) === "extra" || fmt.groupOf(a) === "other";
+    const stats = h("div", {class: ["stats", isExtra ? "s4" : "account-s2"]},
+      isExtra ? ui.stat("거래", `${fmt.int(n)}건`, h("span", {class: "s"}, `승률 ${n ? fmt.pct(wins / n, 0, false) : "—"} `, ui.smallSample(n))) : null,
       reel ? ui.stat("윗밴드 익절 · 시간 청산", `${fmt.int(bandTp)} · ${fmt.int(timeX)}`, "사다리 잠금 없음")
         : ui.stat("익절 잠금 청산", `${fmt.int(locks)}건`, n ? `거래의 ${fmt.pct(locks / n, 0, false)}` : ""),
-      ui.stat("최대 낙폭", mdd ? fmt.pct(-mdd, 1) : "—", stt.bust || a.bust ? h("span", {class: "s down"}, "파산") : ""),
+      isExtra ? ui.stat("최대 낙폭", mdd ? fmt.pct(-mdd, 1) : "—", stt.bust || a.bust ? h("span", {class: "s down"}, "파산") : "") : null,
       // the signal tile only where signals are recorded: a DeepSeek / 5m / coin-flip account with none shows nothing
       // ("신호 0개 · 기록 없음" next to 25 trades read like a fault)
       !sigN && (a.kind === "ds200" || a.kind === "random" || reel) ? null
@@ -124,17 +132,34 @@ export async function mount(el, ctx) {
     const cBox = h("div", {class: "account-candles"});
     const candleCard = ui.card({plate: "코인별 진입·청산", sub: `${fmt.tfKo(acc.timeframe)}봉`, acts: [symSel]}, cBox,
       h("p", {class: "pos-note"}, "화살표 = 진입, 동그라미 = 청산 (초록 수익, 빨강 손실). 열린 포지션이 있으면 진입·손절·청산가 선이 나옵니다."));
-    const pg = ui.pager({size: 10, row: (t) => tradeRow(t, a, {noName: true, why: true, prices: true, equity: true}), empty: "아직 거래가 없습니다"});
+    const pg = ui.pager({size: 10, row: (t) => withReplay(tradeRow(t, a, {noName: true, why: true, prices: true, equity: true}), t), empty: "아직 거래가 없습니다"});
     pg.set(trades);
     const tradesCard = ui.card({plate: "거래 내역", sub: `${fmt.int(n)}건 · 최근 것부터`,
       acts: [h("a", {class: "btn-line", href: `/api/export/trades.csv?account=${encodeURIComponent(acc.account_id)}`, download: ""}, "엑셀(CSV)")]},
       pg.el, ui.assume("closed", "거래마다 나갈 때 수수료·펀딩 뒤"));
 
-    el.replaceChildren(backLink(),
-      h("div", {class: "scr-head account-head"}, h("h1", null, name), h("span", {class: "sub"}, sub)),
-      h("div", {class: "row wrap account-pills"}, pills),
+    // the head: the profile card for every account on the map; the plain head + 참고 box otherwise (or when the card's
+    // route answers 404)
+    const plainHead = () => [h("div", {class: "scr-head account-head"}, h("h1", null, name), h("span", {class: "sub"}, sub)),
+      h("div", {class: "row wrap account-pills"}, pills)];
+    const headSlot = h("div", {class: "stack account-top"});
+    view.plain = () => { headSlot.replaceChildren(...plainHead()); if (ref) headSlot.append(ref); };
+    let refSlot = null;
+    if (isExtra || (view.prof && view.prof.id === acc.account_id && view.prof.missing)) { headSlot.append(...plainHead()); refSlot = ref; }
+    else {
+      if (!view.prof || view.prof.id !== acc.account_id) {
+        const prof = {id: acc.account_id, missing: false};
+        prof.card = profileCard(ctx, acc.account_id, {head: true, cls: "account-prof",
+          sub: [acc.account_id, acc.created_ts ? `시작 ${fmt.kst(acc.created_ts)}` : null].filter(Boolean).join(" · "),
+          onMissing: () => { prof.missing = true; if (view.prof === prof && view.plain) view.plain(); }});
+        view.prof = prof;
+        prof.card.load();
+      } else view.prof.card.load();
+      headSlot.append(view.prof.card.el);
+    }
+    el.replaceChildren(backLink(), headSlot,
       h("div", {class: "account-cols"},
-        h("div", {class: "stack"}, walletCard, ref, posEl, eqCard, candleCard),
+        h("div", {class: "stack"}, walletCard, refSlot, posEl, eqCard, candleCard),
         h("div", {class: "stack"}, rules, extra, tradesCard)));
 
     // the charts draw once their boxes are on the page
@@ -142,6 +167,18 @@ export async function mount(el, ctx) {
     const drawC = () => drawCandles(cBox, d, a, symSel.value, gen);
     symSel.addEventListener("change", drawC);
     drawC();
+  }
+
+  // ---------------------------------------------------------------- 다시보기 on a closed trade row
+  // an inline link at the end of the meta line (keeps the phone rows short; positions-kit's o.replay button squeezes
+  // this page's longer meta line into one column); nothing is added when the row already has a replay link
+  function withReplay(row, t) {
+    if (!t || t.id == null || row.querySelector('a[href^="#/replay/"]')) return row;
+    const link = h("a", {class: "account-replay", href: ctx.href("replay", String(t.id)), title: "이 거래를 봉 차트에서 다시 보기",
+      "aria-label": `${fmt.coin(t.symbol)} 거래 다시보기`}, h("span", {class: "pl", "aria-hidden": "true"}, "▶"), "다시보기");
+    const meta = row.querySelector(".meta");
+    if (meta) meta.append(link); else row.append(link);
+    return row;
   }
 
   // ---------------------------------------------------------------- 참고 box

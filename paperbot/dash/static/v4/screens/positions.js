@@ -21,6 +21,29 @@ export async function mount(el, ctx) {
   };
   const cards = new Map();            // account_id -> {key, el}: reused, so a number counts from its last value
   const markOf = (s) => store.mark(s);
+  // price since the entry on each card: one /api/candles (5m, the last 24 h) per coin, asked when a card needs it
+  // and again only after 5 minutes (never on a timer); the last point is the live mark the page already has
+  const px = new Map();               // symbol -> {at, bars, busy}
+  const PX_TTL = 5 * 60000;
+  const needPx = (sym) => {
+    const c = px.get(sym);
+    if (c && (c.busy || Date.now() - c.at < PX_TTL)) return;
+    px.set(sym, {...(c || {}), busy: true, at: c ? c.at : 0});
+    ctx.api(`/api/candles?symbol=${encodeURIComponent(sym)}&interval=5m&limit=288`).then((bars) => {
+      px.set(sym, {at: Date.now(), bars: Array.isArray(bars) ? bars : [], busy: false});
+      if (ctx.alive()) for (const c2 of cards.values()) if (c2.el.pos.symbol === sym) sparkOf(c2.el);
+    }).catch(() => { px.set(sym, {at: Date.now(), bars: (c && c.bars) || [], busy: false}); });
+  };
+  const sparkOf = (cardEl) => {
+    const pos = cardEl.pos, c = px.get(pos.symbol);
+    if (!c || !c.bars || !pos.entry_time) return;
+    const t0 = Math.floor(pos.entry_time / 300000) * 300;
+    const vals = c.bars.filter((b) => b.time >= t0).map((b) => b.close);
+    if (pos.entry) vals.unshift(pos.entry);
+    const m = markOf(pos.symbol);
+    if (m) vals.push(m);
+    if (vals.length >= 2) cardEl.setSpark(vals);
+  };
 
   // ---------------------------------------------------------------- skeleton
   const sumNum = ui.liveNum(null, {dec: 2, sign: true, tone: true});
@@ -116,7 +139,9 @@ export async function mount(el, ctx) {
       c = {key, el: elc};
       cards.set(id, c);
       elc.update(markOf(x.pos.symbol));
+      sparkOf(elc);
     }
+    needPx(x.pos.symbol);
     return c.el;
   };
   const posPager = ui.pager({size: 8, row: (x) => cardOf(x), empty: "조건에 맞는 열린 포지션이 없습니다"});
@@ -153,7 +178,8 @@ export async function mount(el, ctx) {
   const tSum = h("div");
   const tNote = h("p", {class: "pos-note"});
   const acctOf = (id) => st.board && st.boardMap && st.boardMap.get(id);
-  const tPager = ui.pager({size: 10, row: (t) => tradeRow(t, acctOf(t.account_id), {onClick: (r) => ctx.go("account", r.account_id)}),
+  const tPager = ui.pager({size: 10, row: (t) => tradeRow(t, acctOf(t.account_id), {onClick: (r) => ctx.go("account", r.account_id),
+    replay: t.id != null ? ctx.href("replay", String(t.id)) : null}),
     empty: "조건에 맞는 체결이 없습니다"});
   const trPane = h("div", {class: "stack"}, h("div", {class: "row wrap positions-filters"}, perSeg, resSeg, tGrpSel), tSum, tPager.el, tNote,
     ui.assume("closed", "손익은 나갈 때 수수료·펀딩 뒤"));
@@ -186,7 +212,7 @@ export async function mount(el, ctx) {
     const oldest = st.trades[st.trades.length - 1];
     const cut = st.trades.length >= TRADE_LIMIT && oldest && (st.tPer !== "today" || oldest.exit_time >= day0);
     tNote.textContent = (st.tPer === "today" ? "오늘 = 한국 시각 0시부터. " : "") +
-      (cut ? `거래가 많아 최근 ${fmt.int(TRADE_LIMIT)}건까지만 셉니다. ` : "") + "한 줄을 누르면 그 계좌로 갑니다.";
+      (cut ? `거래가 많아 최근 ${fmt.int(TRADE_LIMIT)}건까지만 셉니다. ` : "") + "한 줄을 누르면 그 계좌로, '다시보기'는 그 거래를 봉 하나씩 다시 봅니다.";
     tPager.set(rows, !animate);
   }
 
@@ -256,7 +282,7 @@ export async function mount(el, ctx) {
     if (st.tab === "trd" && st.trades) renderTrades(false);
   }
   const onTicker = (tk) => {
-    for (const c of cards.values()) if (c.el.isConnected) c.el.update(markOf(c.el.pos.symbol));
+    for (const c of cards.values()) if (c.el.isConnected) { c.el.update(markOf(c.el.pos.symbol)); sparkOf(c.el); }
     if (st.firstOpen && st.board) renderAll(true);
     renderSum();
     if (head) head.update(tk);

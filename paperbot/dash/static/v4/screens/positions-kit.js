@@ -146,9 +146,14 @@ export function posCard(a, pos, o = {}) {
     o.href ? h("a", {class: "btn-line", href: o.href("chart", pos.symbol, {acct: a.account_id, tf: a.timeframe})}, "차트") : null,
     o.href && (a.kind === "strategy" || a.kind === "copy") ? h("a", {class: "btn-line", href: o.href("strategies", a.strategy)}, "매매법") : null,
     o.href && !o.noAccountLink ? h("a", {class: "btn-line", href: o.href("account", a.account_id)}, "계좌") : null);
+  // the price since the entry (5m closes + the mark now): filled by setSpark when the page has the bars
+  const sparkBox = h("div", {class: "pos-spark", hidden: true},
+    h("div", {class: "pos-spark-k"}, h("span", null, "진입 뒤 가격"), h("span", {class: "muted"}, "5분봉 종가 · 점선 진입가 · 붉은 점선 손절")),
+    h("div", {class: "pos-spark-g"}));
   const body = [
     h("div", {class: "pnl pos-led"}, h("div", null, h("span", {class: "k"}, "미실현 손익 (USDT)"), pnlEl),
       h("div", {class: "r"}, h("span", {class: "k"}, "ROI"), roiEl)),
+    sparkBox,
     whyBox(a, pos, o.why, o.wallet), ui.kv(pairs), meter, stopLine(a, pos), ruleLine(a, pos), acts,
     o.caption === false ? null : ui.assume("open"),
   ];
@@ -156,13 +161,14 @@ export function posCard(a, pos, o = {}) {
     ui.sideTag(pos.side), h("span", {class: "muted"}, `격리 ${fmt.lev(pos.leverage)}`), h("span", {class: "grow"}),
     ui.pill(groupKo(a), fmt.groupOf(a) === "core" ? "accent" : ""));
   let el, rowPnl = null, rowRoi = null;
+  const rowSpark = h("span", {class: "pos-row-spark", "aria-hidden": "true"});
   if (o.collapsible) {
     rowPnl = h("b", {class: "num"}, "—"); rowRoi = h("small", {class: "num"}, "—");
     const region = h("div", {class: "pos-body", hidden: !o.open}, body);
     const btn = h("button", {class: "pos-row", type: "button", "aria-expanded": String(!!o.open), title: a.account_id},
       ui.sideTag(pos.side),
       h("span", {class: "pos-row-t"}, h("b", null, `${fmt.coin(pos.symbol)}USDT · 격리 ${fmt.lev(pos.leverage)}`), h("small", null, nameNode(a, o.data))),
-      h("span", {class: "pos-row-v"}, rowPnl, rowRoi), h("span", {class: "pos-chev", "aria-hidden": "true"}, "▾"));
+      h("span", {class: "pos-row-v"}, rowSpark, h("span", {class: "pos-row-n"}, rowPnl, rowRoi)), h("span", {class: "pos-chev", "aria-hidden": "true"}, "▾"));
     btn.addEventListener("click", () => {
       const open = btn.getAttribute("aria-expanded") !== "true";
       btn.setAttribute("aria-expanded", String(open));
@@ -176,8 +182,26 @@ export function posCard(a, pos, o = {}) {
       head, o.noName ? null : h("div", {class: "pos-acct"}, name), body);
   }
   el.pos = pos;
+  let sparkDrawn = false, lastSgn = null, nearDone = false;
+  /** The price path since the entry (real closes, then the mark now). The line is green while the position is in
+   *  profit (a short: the price below the entry), red otherwise; it draws itself in once. */
+  el.setSpark = (vals) => {
+    if (!vals || vals.length < 2) return;
+    const last = vals[vals.length - 1];
+    const tone = pos.side * (last - pos.entry) >= 0 ? "up" : "down";
+    const refs = pos.stop != null ? [{v: pos.stop, cls: "stopl"}] : [];
+    sparkBox.hidden = false;
+    sparkBox.lastChild.replaceChildren(ui.miniSpark(vals, {w: 300, h: 46, fluid: true, base: pos.entry, refs, tone,
+      draw: !sparkDrawn, label: "진입 뒤 가격 흐름"}));
+    rowSpark.replaceChildren(ui.miniSpark(vals, {w: 52, h: 20, base: pos.entry, tone, label: "진입 뒤 가격 흐름"}));
+    sparkDrawn = true;
+  };
   el.update = (mark) => {
     const u = derive.livePnl(pos, mark);
+    // one soft ring when the unrealized P&L crosses zero, and once when the mark comes within 0.5% of the stop
+    const sgn = u && u.pnl != null ? Math.sign(Math.round(u.pnl * 100)) : null;
+    if (sgn && lastSgn && sgn !== lastSgn) motion.ring(el, sgn > 0 ? "up" : "down");
+    if (sgn) lastSgn = sgn;
     motion.countTo(pnlEl, u && u.pnl, {dec: 2, sign: true, tone: true});
     motion.countTo(roiEl, u && u.roe, {format: "pct", dec: 2, tone: true});
     if (rowPnl) {
@@ -186,6 +210,7 @@ export function posCard(a, pos, o = {}) {
     }
     markEl.textContent = mark ? fmt.price(mark) : "—";
     const dLiq = derive.distTo(mark, pos.liq), dStop = derive.distTo(mark, pos.stop);
+    if (dStop != null && dStop < 0.005 && !nearDone) { nearDone = true; motion.ring(el, "down"); }
     dLiqEl.textContent = dist(dLiq);
     dStopEl.textContent = dist(dStop);
     dLiqEl.classList.toggle("pos-near", dLiq != null && dLiq < 0.02);
@@ -202,7 +227,8 @@ export function posCard(a, pos, o = {}) {
 }
 
 // ---------------------------------------------------------------- closed trades
-/** A closed trade as one list row (tap -> account). t: /api/trades or /api/account trade row; a: its board row. */
+/** A closed trade as one list row (tap -> account). t: /api/trades or /api/account trade row; a: its board row.
+ *  o.replay: the 거래 다시보기 link of this trade (ctx.href("replay", String(t.id))) -> a "다시보기" button in the row. */
 export function tradeRow(t, a, o = {}) {
   const today = t.exit_time >= fmt.kstMidnight(serverNow());
   const reason = fmt.reasonKo(t.exit_reason) + (t.exit_reason === "LOCK" && t.lock_roe ? ` +${fmt.num(t.lock_roe * 100, 0)}%` : "");
@@ -216,8 +242,11 @@ export function tradeRow(t, a, o = {}) {
   const kids = [h("span", {class: "rk"}, today ? fmt.hm(t.exit_time) : fmt.kst(t.exit_time)),
     h("span", {class: "lname", title: t.account_id}, o.noName ? `${fmt.coin(t.symbol)}USDT` : nm),
     h("span", {class: ["ret", fmt.tone(t.pnl)]}, fmt.money(t.pnl, true)), meta];
+  const rp = o.replay && t.id != null;
+  if (rp) kids.push(h("a", {class: "pos-replay", href: o.replay, title: "이 거래를 봉 하나씩 다시 보기", "aria-label": "이 거래 다시보기",
+    onclick: (e) => e.stopPropagation(), onkeydown: (e) => e.stopPropagation()}, "▶ 다시보기"));
   if (o.why && t.why) kids.push(h("span", {class: "pos-twhy"}, `왜 ${fmt.lev(t.leverage)}: `, whyShort(t.why, a)));
-  const attrs = {class: ["lrow", "pos-trow", o.onClick ? "click" : ""], role: "listitem"};
+  const attrs = {class: ["lrow", "pos-trow", o.onClick ? "click" : "", rp ? "has-replay" : ""], role: "listitem"};
   if (o.onClick) { attrs.onclick = () => o.onClick(t); attrs.tabindex = "0"; attrs.onkeydown = (e) => { if (e.key === "Enter") o.onClick(t); }; }
   return h("div", attrs, kids);
 }

@@ -76,7 +76,7 @@ The architect has built the shared foundation. Five builders now fill the screen
 
 ## 2. Design rules
 
-- Colours: only the tokens in `tokens.css`, never a hex value in a screen. Dark navy surfaces, ONE yellow accent (`--accent`), green/red only for meaning (up/down, ok/bad).
+- Colours: only the tokens in `tokens.css`, never a hex value in a screen (css or js). Two skins share the token names (`<html data-skin>`, core/skin.js): **ai** (the default: charcoal, ONE teal accent, mint up / pink down) and **classic** (dark navy, ONE yellow accent). Up/down colours only for meaning (up/down, ok/bad); a group's line colour is `--series-*`, a coin-flip comparison's neutral pair is `--cmp-hi` / `--cmp-lo`, so both skins hold without screen changes.
 - Signature pieces (`components.css`):
   - `ui.plate("이름")`: the ◆ label plate
   - `ui.bubble({...})`: the white 2 px pixel speech bubble, tails `tl` / `tr` / `lft`

@@ -108,7 +108,7 @@ def test_inventory_maps_every_old_view_and_every_new_screen():
         if not name.startswith("_"):
             assert name in inv, name
     # every GET route of the old server is listed
-    app_src = _read(os.path.join(ROOT, "paperbot", "dash", "app.py")) + _read(os.path.join(ROOT, "paperbot", "dash", "analysis.py"))
+    app_src = _server_src()
     for path in re.findall(r'@app\.get\("(/api/[^"{]+)', app_src):
         base = path.rstrip("/")
         assert base in inv or base.rsplit("/", 1)[0] in inv, path
@@ -302,8 +302,16 @@ def _api_paths(text: str) -> set:
     return out
 
 
+def _server_src() -> str:
+    """dash/app.py, dash/analysis.py and the v4 additions in dash/more/*.py (each registers its own routes)."""
+    more = os.path.join(ROOT, "paperbot", "dash", "more")
+    files = [os.path.join(ROOT, "paperbot", "dash", f) for f in ("app.py", "analysis.py")]
+    files += sorted(os.path.join(more, f) for f in os.listdir(more) if f.endswith(".py")) if os.path.isdir(more) else []
+    return "".join(_read(f) for f in files)
+
+
 def _server_routes() -> set:
-    src = _read(os.path.join(ROOT, "paperbot", "dash", "app.py")) + _read(os.path.join(ROOT, "paperbot", "dash", "analysis.py"))
+    src = _server_src()
     return {re.sub(r"\{[^}]+\}", "{}", p) for p in re.findall(r'@app\.(?:get|post)\("(/api/[^"]+)"', src)}
 
 
@@ -666,9 +674,13 @@ def test_v4_strategy_views_and_curves_are_asked_for():
 
 
 def test_home_legend_says_whose_median_it_is():
-    """U1: the numbers under the curve are every strategy account (기존 36 · 딥시크 · 5분봉, groupStats().strat), the
-    solid curve is the 36's only; the legend and the caption say which is which (never '매매법 316개')."""
+    """U1: the head card's lines are the group race (dash/more/flow.py medians) and its legend IS the lines' right ends
+    (flow-kit.js raceParts: orderAt(model, model.now)), so the numbers always match the curve; the above / below counts
+    say they are every strategy account (기존 36 · 딥시크 · 5분봉) against its own timeframe's coin flips (never
+    '매매법 316개 중앙값' next to a line of the 36 only)."""
     home = _read(os.path.join(V4, "screens", "home.js"))
-    assert "legS.name.textContent = `매매법 계좌 ${fmt.int(gs.strat.n)}개(기존·딥시크·5분봉) 중앙값`" in home
-    assert "실선 = 기존 36 매매법 계좌만의 중앙값" in home and "기존 36 · 딥시크 · 5분봉 계좌 전체의 중앙값" in home
+    kit = _read(os.path.join(V4, "screens", "flow-kit.js"))
+    assert "raceParts(ctx," in home and "race.chart, race.list" in home
+    assert "export function raceParts(ctx, o = {})" in kit and "orderAt(model, model.now)" in kit
+    assert "매매법 계좌 ${fmt.int(gs.strat.n)}개(기존 36 · 딥시크 · 5분봉)를 각자 같은 봉 동전 봇 3개와 비교" in home
     assert "`매매법 ${fmt.int(gs.strat.n)}개 중앙값`" not in home

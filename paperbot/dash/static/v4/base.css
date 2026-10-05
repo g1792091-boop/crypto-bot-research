@@ -91,7 +91,12 @@ em { font-style: normal; color: var(--accent); }
 .subtabs a:hover { color: var(--ink); }
 .subtabs a[aria-current="page"] { color: var(--ink); border-color: var(--line-2); background: var(--surface); }
 .subtabs a .ndot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
-.subtabs a.oldui { margin-left: auto; border: 1px dashed var(--line-2); color: var(--ink-2); }
+.subtabs a.oldui { border: 1px dashed var(--line-2); color: var(--ink-2); }
+/* the skin switch (core/skin.js): two small buttons before 예전 화면, pushed to the end of the 서버 tabs */
+.skinsw { margin-left: auto; flex: none; display: inline-flex; align-items: center; gap: 2px; padding: 2px; border-radius: 9px; border: 1px solid var(--line-2); }
+.skinsw .k { padding: 0 6px 0 6px; color: var(--muted); font: 700 var(--t-xs)/1 var(--f-body); white-space: nowrap; }
+.skinsw button { appearance: none; height: 28px; padding: 0 9px; border-radius: 7px; border: 0; background: transparent; color: var(--ink-2); font: 700 var(--t-xs)/1 var(--f-body); white-space: nowrap; cursor: pointer; }
+.skinsw button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
 
 /* the screen container */
 .screen { display: block; max-width: var(--page-max); margin-inline: auto; padding: 16px var(--gutter) 40px; min-height: 60vh; outline: none; }
@@ -102,7 +107,7 @@ em { font-style: normal; color: var(--accent); }
 .scr-head .sub { color: var(--ink-2); font-size: var(--t-sm); }
 
 /* phone bottom tab bar */
-.botbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); height: calc(var(--bot-h) + env(safe-area-inset-bottom, 0px)); padding-bottom: env(safe-area-inset-bottom, 0px); background: rgba(13, 21, 40, .97); border-top: 1px solid var(--line-2); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+.botbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); height: calc(var(--bot-h) + env(safe-area-inset-bottom, 0px)); padding-bottom: env(safe-area-inset-bottom, 0px); background: var(--botbar); border-top: 1px solid var(--line-2); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
 .botbar a { display: grid; justify-items: center; align-content: center; gap: 4px; color: var(--muted); text-decoration: none; font: 700 12px/1 var(--f-body); position: relative; }
 .botbar a svg { width: 20px; height: 20px; }
 .botbar a[aria-current="page"] { color: var(--accent); }
@@ -117,7 +122,7 @@ body { padding-bottom: calc(var(--bot-h) + env(safe-area-inset-bottom, 0px)); }
 @media (min-width: 900px) { .toast { bottom: 24px; } }
 
 /* first-visit tour */
-.tour-ring { position: fixed; z-index: 80; border-radius: 12px; box-shadow: 0 0 0 3px var(--accent), 0 0 0 9999px rgba(4, 8, 18, .72); pointer-events: none; transition: left .25s var(--ease), top .25s var(--ease), width .25s var(--ease), height .25s var(--ease); }
+.tour-ring { position: fixed; z-index: 80; border-radius: 12px; box-shadow: 0 0 0 3px var(--accent), 0 0 0 9999px var(--scrim); pointer-events: none; transition: left .25s var(--ease), top .25s var(--ease), width .25s var(--ease), height .25s var(--ease); }
 .tour-card { position: fixed; z-index: 81; width: min(340px, calc(100vw - 32px)); display: grid; gap: 10px; padding: 14px 16px; border-radius: 4px; background: var(--bubble); color: var(--bubble-ink); border: 2px solid var(--bubble-line); box-shadow: 4px 4px 0 var(--bubble-shadow); font: 400 var(--t-sm)/1.6 var(--f-body); }
 .tour-card h3 { font: 900 var(--t-md)/1.3 var(--f-body); }
 .tour-card .tn { font: 700 var(--t-xs)/1 var(--f-pixel); color: #8a6a00; }
@@ -125,3 +130,15 @@ body { padding-bottom: calc(var(--bot-h) + env(safe-area-inset-bottom, 0px)); }
 .tour-card button { appearance: none; height: 32px; padding: 0 12px; border-radius: 8px; border: 2px solid var(--bubble-line); background: #fff; color: var(--bubble-ink); font: 700 var(--t-xs)/1 var(--f-body); }
 .tour-card button.go { background: var(--accent); }
 .tour-card .skipb { border: 0; background: none; text-decoration: underline; padding: 0; height: auto; }
+
+/* ---------------------------------------------------------------- skin "ai" (the default; tokens.css): a faint grid
+   with two soft corner glows instead of the navy dots, a hairline teal ring around cards and a soft glow on the screen
+   title. Static (no animation), no blur on body text; "classic" keeps the dots and flat cards. */
+:root:not([data-skin="classic"]) body {
+  background-image: radial-gradient(1100px 520px at 75% -10%, var(--skin-glow-a), transparent 60%),
+    radial-gradient(800px 460px at -5% 110%, var(--skin-glow-b), transparent 60%),
+    linear-gradient(var(--skin-grid) 1px, transparent 1px), linear-gradient(90deg, var(--skin-grid) 1px, transparent 1px);
+  background-size: auto, auto, 40px 40px, 40px 40px;
+}
+:root:not([data-skin="classic"]) .card { box-shadow: 0 0 0 1px var(--card-ring), 0 8px 26px var(--card-shadow); }
+:root:not([data-skin="classic"]) .scr-head h1 { text-shadow: 0 0 16px var(--head-glow); }

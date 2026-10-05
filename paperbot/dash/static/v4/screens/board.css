@@ -21,3 +21,5 @@
 .board-rule { flex-basis: 100%; color: var(--ink-2); }
 .board-all[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .board-tfbody { min-width: 0; }
+
+/* motion (board-motion.js): the arrow / small line / tint rules live in home-shared.css (home's 상위·하위 uses them too) */

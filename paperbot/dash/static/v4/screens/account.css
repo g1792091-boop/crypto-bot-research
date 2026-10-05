@@ -1,4 +1,5 @@
 @import url("positions-kit.css");
+@import url("grid-kit.css");
 /* account: 계좌 (builder B). */
 .account-back { justify-self: start; display: inline-flex; align-items: center; min-height: 32px; color: var(--ink-2); text-decoration: none; font-size: var(--t-sm); }
 .account-back:hover { color: var(--accent); }
@@ -18,3 +19,11 @@
 .account-candles { height: 320px; border-radius: var(--r-md); overflow: hidden; }
 .account-spec { margin: 0; padding: 10px; border-radius: var(--r-sm); background: var(--surface-2); color: var(--ink-2); font: 400 var(--t-xs)/1.5 var(--f-term); white-space: pre-wrap; overflow-wrap: anywhere; }
 .account-ev { font-size: var(--t-xs); color: var(--ink-2); }
+.account-top { gap: 10px; }
+.account-prof.card { border-color: var(--line-2); }
+.account-prof .gk-pname h1 { font-size: min(var(--t-xl), 7vw); }
+.account-s2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.account-replay { position: relative; display: inline-flex; align-items: center; gap: 4px; padding: 8px 4px; margin: -8px 0; color: var(--ink-2);
+  font-weight: 700; text-decoration: none; white-space: nowrap; }
+.account-replay .pl { color: var(--accent); font-size: 10px; }
+.account-replay:hover { color: var(--accent); }

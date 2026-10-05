@@ -26,7 +26,7 @@ Sample answers of every GET route were recorded on the synthetic fixture world, 
 | Critical toasts (BUST, LIQUIDATED, blocked, data gap) | app.js `toastWorthy` | **sticky red banner** (core/alerts.js `criticalLines`): busts of the last 6 h folded into ONE line ("파산 n개 계좌 · 최근 …", acknowledged until a newer bust), liquidation burst (≥ 3 LIQ exits in 15 min among 기존 36 · 5분봉 · 추가 계좌, the groups whose every trade is announced; DeepSeek and coin flips at 20-50x would light it on every wick), feed stale (heartbeat / 1m data). Bust and burst lines can be acknowledged (localStorage); stale lines stay while true |
 | Toast for every closed trade | app.js `stream()` | **CHANGED**: with 331 accounts this was noise. Closed trades become `[거래]` console lines in office (D) (home shows the server's per-group day count and a three-line 최근 회의 strip instead of a console); the account screen (B) refreshes when its account trades |
 | Experiment strip (D+n, first verdict, observation, rules change 1 + 원문) | summary.js `expbar` | top chip `D+n/30 · 판정 MM/DD · 관찰 ~MM/DD` (the 판정 date at every width; 관찰 drops only under 380 px); tapping it expands the rules (at most 60% of the screen, scrolls inside, 닫기 button, closes on a route change or when the page is scrolled on): verdict method, 4h = observation, observation period, rules change 1 + `/api/doc/rules-change-1` |
-| Theme button 밝게/어둡게 | app.js `themeInit` | **CHANGED**: dropped. The owners approved one dark navy look. Can come back as a token swap if they ask (flagged in the report) |
+| Theme button 밝게/어둡게 | app.js `themeInit` | **CHANGED**: two dark skins instead (owners 10/05, "미래 AI 느낌"): **AI** (default: charcoal, teal accent, mint up / pink down, faint grid) and **클래식** (the first navy + yellow look), a token swap in tokens.css (`<html data-skin>`, core/skin.js). The switch "화면 색 AI / 클래식" sits at the end of the 서버 group's tabs, next to 예전 화면; remembered per device. No light theme |
 | 로그아웃 | index.html `#logout` | faq (E) and server (E): a button that POSTs `/api/logout`, then goes to `/login` |
 | Rooms nav dot (new messages) | rooms.js `navDot` | `setBadge("rooms", true)` puts a dot on the 에이전트 group and the 에이전트 방 tab (D) |
 | Server clock skew (`/api/time`) | charts.js `syncClock` | core/api.js `syncClock` / `serverNow()` |
@@ -142,7 +142,7 @@ Sample answers of every GET route were recorded on the synthetic fixture world, 
 
 | Item | Where |
 |---|---|
-| Headline card: strategy-account median vs coin-flip median, W-L vs the same-TF coin median (참고), thin curves | home (A). The curves need a server series (NEEDS SERVER `/api/v4/curves`); until then they show `수집 전` |
+| Headline card: strategy-account median vs coin-flip median, W-L vs the same-TF coin median (참고), thin curves | home (A). Since the v4 additions the head card's lines are the group race (`/api/v4/flow/race`: 기존 36 · 딥시크 · 5분봉 medians, the coin flips' middle 50 % band and dashed median) and its legend is the lines' right ends (U1); designed empty road until two real points |
 | Group summary cards 기존 36 / 딥시크 44 / 5분봉 / 동전 봇 | home (A), board (A); `core/derive.js groupStats` |
 | 어떻게 돌아가나 step page | howto (E) |
 | First-visit guided tour (7 steps, skippable, remembered) | core/tour.js: the steps open their screens and point at real elements: the D+n chip, the health dot, the headline card, the group cards (홈), the first position's why-leverage line (포지션), the pixel office (회의실), the 예전 화면 link (서버). 건너뛰기 or 끝 returns to where it started. Restart from faq (E) and home (A) |
@@ -168,7 +168,8 @@ GET routes (sample files in `api_samples/`):
 | `/api/agents/roster` | {teams, roles, meetings} | — | office, howto |
 | `/api/agents/feed?limit` | [{id, ts, meeting, role, kind, text, data}] | — (unused) | **not used**: no room id / speaker name yet, so the console is built from `/api/office` + room messages (NEEDS SERVER #3) |
 | `/api/v4/server` (arrived) | server (E) | — | polled every 60 s; a 404 (an older server) keeps CPU, memory, disk, DB size and the Telegram count at `수집 전` |
-| `/api/v4/curves` (arrived) | 홈 headline + LED bar | — | the 36's and the coin flips' median balance and the total, hourly; until two real points (or on a 404) the `곡선 수집 전` pills stay |
+| `/api/v4/curves` (arrived) | 홈 LED bar | — | the total of every wallet, hourly, for the LED bar's line (the head card's lines now come from `/api/v4/flow/race`); until two real points (or on a 404) the `잔고 곡선 수집 전` pill stays |
+| `/api/v4/flow/*`, `/api/v4/grid*`, `/api/v4/story`, `/api/v4/since`, `/api/v4/replay/*` (additions) | see §16 | — | flow, grid, strategies, account, story, home (ring, race card, 1:3 card), since sheet, replay, board (row lines) |
 | `/api/cards`, `/api/cards/stats` | loss cards / {trades, losses, wins, tags} | strat.js | strategies |
 | `/api/overlap?days` | {window, rules, accounts, exposure, pairs, groups, …} | 순위표 | analysis |
 | `/api/breakdown` | {trades, min_n, by_coin, sessions, volatility, note} | 순위표 | analysis |
@@ -224,3 +225,15 @@ Still missing:
 - `/login` sends the owners to `/` (the old UI); v4 is at `/static/v4/index.html` until the owners switch. v4 now sends an expired session to `/login?next=<the v4 screen>`; the login page still has to honour it.
 - `/api/levwhy` says "위 단계가 안 된 이유 기록 못 찾음" for DeepSeek and 5m accounts, which always trade at the 보통 multiple: the page shows "딥시크·5분봉은 규칙상 늘 보통 배수" instead.
 - No compression: `/api/board` (about 220 KB) and `/api/trades` travel uncompressed.
+
+## 16. v4 additions (after the first build; dashboard only, no experiment reset)
+
+| Addition | Screen / place | Server (dash/more, read-only) |
+|---|---|---|
+| 묶음 레이스 · 수익 달력 | flow (홈 › 흐름); `raceMini` card on home (screens/flow-kit.js) | dash/more/flow.py: `/api/v4/flow/race?step=`, `/api/v4/flow/calendar?season=` (race 60 s, calendar 120 s cache; incremental, read-only) |
+| 매매법 × 봉 지도 · 매매법 프로필 카드 | grid (매매법 › 한눈 지도); `profileCard` in the strategies list, at the top of `#/strategies/<name>` and on the account page | dash/more/grid.py: `/api/v4/grid?days=`, `/api/v4/grid/sparks?days=`, `/api/v4/grid/profile/<account id or strategy>?days=` (60 s cache) |
+| 오늘의 하이라이트 | story (`#/story[/<YYYY-MM-DD>]`, 7 pages); `storyRing` at the top of home (screens/story-kit.js) | dash/more/story.py: `/api/v4/story?day=` (today 60 s, earlier days 30 min cache) |
+| 지난번 본 뒤로 바뀐 것 | core/since.js (sheet when the app opens after ≥ 30 min away; started from core/main.js) | dash/more/since.py: `/api/v4/since?after=<ms>` (clamped to the run start / 7 days, per-minute cache) |
+| 거래 다시보기 | replay (`#/replay/<trade id>`), opened from closed-trade rows (positions, account) | dash/more/replay.py: `/api/v4/replay/<trade id>`, `/api/v4/replay/sparks?ids=` (board row lines) |
+| 움직임 다듬기 | core/motion.js (countTo flash, flash, floatChip, ring, drawIn), core/ui.js (miniSpark, rankDelta, liveNum flash), screens/board-motion.js (rank arrows on board and home lists) | none |
+| 릴스 1:3 대결 | home 5분봉 group card (펼치기) and the top of `#/strategies/REEL_H1` (screens/reel-duel.js) | reuses `/api/v4/flow/race` (reel + 5m flips' medians), `/api/v4/grid/profile/` (balance curves) |

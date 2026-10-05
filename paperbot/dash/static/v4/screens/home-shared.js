@@ -94,6 +94,16 @@ export function extraPills(a) {
  * a: a derive.ranked() row (has .ret). full: the 순위표 meta (W-L, max drawdown, open position).
  */
 export function rankRow(a, o) {
+  // compact (home's 상위·하위): one line (rank, timeframe + name, return); a small sample is a dimmed row (the list's
+  // caption says so, the row's title gives the count), a bust keeps its pill; the full meta is on 순위표
+  if (o.compact) {
+    const small = (a.trades || 0) < SMALL;
+    return h("a", {class: ["lrow", "click", "home-row", "compact", small ? "thin" : ""], href: o.href(a.account_id), role: "listitem",
+      title: a.account_id, "aria-label": `${fmt.acctName(a)} ${fmt.tfKo(a.timeframe)} ${fmt.pct(a.ret)} · 거래 ${fmt.int(a.trades)}건${small ? " · 표본 적음" : ""}${a.bust ? " · 파산" : ""}`},
+    h("span", {class: "rk"}, fmt.int(o.rk)),
+    h("span", {class: "lname"}, ui.acctLabel(a), a.bust ? ui.pill("파산", "bad", "잔고 10 USDT 미만으로 정지") : null),
+    h("span", {class: ["ret", "num", fmt.tone(a.ret)]}, fmt.pct(a.ret)));
+  }
   // one meta line: "거래 22 · 낙폭 1.2%" (+ W-L, wallet, open position on the 순위표); the timeframe leads the name
   const words = [];
   if (o.showGroup) words.push(groupKo(fmt.groupOf(a)));
@@ -140,15 +150,28 @@ export function groupCards(o) {
   function make(id) {
     const g = fmt.GROUPS.find((x) => x.id === id) || {ko: groupKo(id), desc: ""};
     const cnt = h("span", {class: "gc"});
-    const med = ui.liveNum(null, {format: "pct", tone: true, cls: "gm"});
+    const med = ui.liveNum(null, {format: "pct", tone: true, cls: "gm", flash: true});
     const vs = h("span", {class: "gs"});
     const foot = h("span", {class: "gb"});
+    const line = h("span", {class: ["home-gline", id], "aria-hidden": "true"});
     const btn = h("button", {type: "button", class: "home-gcard", "aria-pressed": "false", title: g.desc || null,
       onclick: () => o.onPick(id)},
       h("span", {class: "gn"}, id === "all" ? o.allLabel || "전체" : g.ko), cnt,
-      h("span", {class: "gmw"}, med, h("small", null, "중앙값")), vs, foot);
-    return {btn, cnt, med, vs, foot};
+      h("span", {class: "gmw"}, med, h("small", null, "중앙값")), line, vs, foot);
+    return {btn, cnt, med, vs, foot, line, sig: ""};
   }
+  /** sparks({group id: [ratio to the start ...]}): a small median line in each card (home: the race's own series,
+   *  the group's colour); a card without a series keeps an empty slot. Drawn in once, redrawn only when it changed. */
+  el.sparks = (series) => {
+    for (const [id, c] of cards) {
+      const v = series && series[id];
+      const sig = v ? v.length + ":" + v[v.length - 1] : "";
+      if (sig === c.sig) continue;
+      const first = !c.sig;
+      c.sig = sig;
+      put(c.line, v ? ui.miniSpark(v, {w: 120, h: 22, base: 0, fluid: true, draw: first, label: `${groupKo(id)} 중앙값 흐름`}) : null);
+    }
+  };
   el.update = (board, gs, sel) => {
     const ids = ORDER.filter((id) => gs.groups[id]);
     if (o.allLabel) ids.push("all");
@@ -182,7 +205,8 @@ export function groupCards(o) {
 }
 
 // ---------------------------------------------------------------- top 5 / bottom 5
-/** topBottom(ctx) -> {el, set(board, gs, group)}: the best and worst five of a group (one list when it has <= 10). */
+/** topBottom(ctx, {full, compact}) -> {el, set(board, gs, group)}: the best and worst five of a group (one list when it
+ *  has <= 10). compact: one-line rows (home). */
 export function topBottom(ctx, o = {}) {
   const head = h("div", {class: "home-tbh"});
   const body = h("div", {class: "home-tb"});
@@ -190,10 +214,11 @@ export function topBottom(ctx, o = {}) {
   const el = h("div", {class: "stack tight"}, head, body, foot);
   const href = (id) => ctx.href("account", id);
   el.set = (board, gs, group) => {
-    put(foot, vsFoot(group));
+    put(foot, o.compact ? h("p", {class: "assume home-vsfoot"}, h("b", null, "흐린 줄"), ` = 거래 ${MIN_TRADES}건 미만 (표본 적음) · 거래 수·낙폭·동전 봇 비교(참고)는 순위표에서`)
+      : vsFoot(group));
     const rows = derive.ranked(board, group);
     const n = rows.length;
-    const row = (a, i) => rankRow(a, {gs, rk: i + 1, href, showGroup: group === "all", full: !!o.full});
+    const row = (a, i) => rankRow(a, {gs, rk: i + 1, href, showGroup: group === "all", full: !!o.full, compact: !!o.compact});
     if (n <= 10) {
       put(body, h("div", {class: "home-tbcol"}, h("div", {class: "tb-h"}, h("b", null, groupKo(group)), h("span", null, `전체 ${fmt.int(n)}개`)),
         h("div", {role: "list"}, n ? rows.map(row) : ui.empty("계좌가 없습니다"))));

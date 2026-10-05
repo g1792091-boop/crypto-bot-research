@@ -68,7 +68,10 @@ export function liveGauge(name) {
     const have = o.value != null && Number.isFinite(Number(o.value));
     const r = !have || o.off ? null : o.ratio != null ? o.ratio : o.cap ? Number(o.value) / Number(o.cap) : null;
     const st = o.off ? "none" : !have ? "none" : o.state || (r == null ? "ok" : r < 0.6 ? "ok" : r < 0.85 ? "warn" : "bad");
+    const was = el._st;
+    el._st = st;
     el.className = `gauge ${st}${!have && !o.off ? " idle" : ""}`;
+    if (was && was !== st && was !== "none" && st !== "none") motion.ring(el, st === "ok" ? "up" : "down");
     el.title = !have && !o.off && typeof o.mean === "string" ? o.mean : "";
     stEl.textContent = o.off || (!have ? "수집 전" : {ok: "여유", warn: "지켜볼 것", bad: "조치 필요", none: "—"}[st]);
     if (have) motion.countTo(valEl, Number(o.value), {format: o.fmt || ((v) => fmt.int(v))});

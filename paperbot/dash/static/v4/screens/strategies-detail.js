@@ -9,6 +9,8 @@ import {DS_DEFS, FAMILY, REEL, STATUS_KO} from "./strategies-defs.js";
 import {accountsOf, record, splitTrades, nameKo, groupOfStrategy, strategyIndex, TF_ORDER} from "./strategies-calc.js";
 import {stratChart, loadView} from "./strategies-chart.js";
 import {ruleBody, condBody, profileBody, researchBody, lossCard, tagRows} from "./strategies-panels.js";
+import {profileCard} from "./grid-kit.js";
+import {reelDuel} from "./reel-duel.js";
 
 const GROUP_PLATE = {core: "기존 36", ds: "딥시크 44", m5: "5분봉"};
 const DIMS = [{id: "coin", label: "코인"}, {id: "side", label: "방향"}, {id: "tf", label: "봉"}, {id: "session", label: "시간대"}];
@@ -89,9 +91,15 @@ export function detailView(ctx, st, name) {
   const lossPg = ui.pager({size: 4, empty: "최근 30일 손실 거래가 없습니다", row: lossCard});
   const lossCardEl = ui.card({plate: "손실 카드", sub: "최근 30일", cls: "strat-o8"}, kind === "strategy" ? lossSeg : null, lossEl);
 
+  // the top card: the reel's 1:3 card (it against its three 5m coin flips, with the 5-year study), else the profile card
+  // (combined return and curve, drawdown, win rate, trades, one cell per timeframe; v4 additions, grid-kit.js)
+  const duel = kind === "reel" ? reelDuel(ctx, {wide: true, scope: sc, link: {href: ctx.href("account", "REEL_H1@5m"), text: "계좌 보기 →"}}) : null;
+  const prof = duel ? null : profileCard(ctx, name, {cls: "strat-prof"});
+  const top = duel || prof.el;
+
   const left = h("div", {class: "strat-col"}, chartCard, condCard, sigCard);
   const right = h("div", {class: "strat-col"}, ruleCard, acctCard, splitCard, profCard, lossCardEl);
-  const el = h("div", {class: "strat-detail stack"}, head, h("div", {class: "strat-grid"}, left, right));
+  const el = h("div", {class: "strat-detail stack"}, head, top, h("div", {class: "strat-grid"}, left, right));
 
   // ---------------------------------------------------------------- renderers
   function renderRule() { put(ruleEl, ...ruleBody(name, kind, meta, v.view)); }
@@ -274,12 +282,13 @@ export function detailView(ctx, st, name) {
 
   return {
     el,
-    start() { loadChart(); loadTrades(); loadSignals(); loadProfile(); loadLoss(); },
+    start() { loadChart(); loadTrades(); loadSignals(); loadProfile(); loadLoss(); if (duel) duel.set(st.board); else prof.load(); },
     /** New board (or summary): tiles and record update in place; a strategy whose timeframes changed redraws its tabs. */
     refresh() {
       const nt = tfsOf(accountsOf(st.board, name));
       if (nt.join() !== tfs.join()) { tfs = nt; v.tf = pickTf(v.tf); renderTfSeg(); }
       renderAccounts();
+      if (duel) duel.set(st.board);
     },
     dispose: () => sc.close(),
     get tfOrder() { return TF_ORDER; },

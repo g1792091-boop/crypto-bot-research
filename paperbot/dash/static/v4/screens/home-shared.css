@@ -36,6 +36,12 @@ a.home-row:focus-visible { outline-offset: -2px; }
 .home-row .meta { line-height: 1.6; }
 .home-row .meta .pp { line-height: 1.45; }
 .home-pos { color: var(--accent); }
+/* compact rows (home's 상위·하위): one line; a small sample is dimmed (the caption says so) */
+a.home-row.compact { padding: 9px 2px; align-items: center; }
+a.home-row.compact .lname { display: flex; align-items: center; gap: 6px; }
+a.home-row.compact .lname .pp { flex: none; line-height: 1.45; }
+a.home-row.compact.thin .lname .an-n, a.home-row.compact.thin .ret { opacity: .62; }
+a.home-row.compact .board-rkd { position: absolute; left: 2px; bottom: 1px; }
 .home-fam { color: var(--ink-2); }
 
 /* top 5 / bottom 5 */
@@ -63,3 +69,24 @@ a.home-row:focus-visible { outline-offset: -2px; }
 .home-row .vsg { color: var(--ink-2); white-space: nowrap; }
 .home-row .vsg b { font-weight: 700; font-size: .9em; }
 .home-vsfoot b { color: var(--ink-2); }
+
+/* the small median line in a group card (home: the race's series in the group's own colour; empty on 순위표) */
+.home-gline { display: block; height: 22px; margin: 2px 0 1px; }
+.home-gline:empty { display: none; }
+.home-gline .chart path { stroke: var(--series-coin); stroke-width: 1.6; fill: none; vector-effect: non-scaling-stroke; }
+.home-gline.core .chart path { stroke: var(--series-core); }
+.home-gline.ds .chart path { stroke: var(--series-ds); }
+.home-gline.m5 .chart path { stroke: var(--series-m5); }
+.home-gline.coin .chart path { stroke-dasharray: 4 3; }
+.home-gline .chart .base { stroke: var(--line-2); stroke-dasharray: 2 3; vector-effect: non-scaling-stroke; }
+
+/* list motion (board-motion.js, on 순위표 and home's 상위·하위): the rank arrow sits under the rank number (the row's
+   empty second-line cell), the small line before the return; neither changes the row's height */
+[data-screen="board"] a.home-row, [data-screen="home"] a.home-row { position: relative; }
+.board-rkd { grid-column: 1; grid-row: 2; align-self: start; line-height: 1; }
+.board-rkd .rkd.up { color: var(--up); } .board-rkd .rkd.down { color: var(--down); }
+.board-spark { display: inline-flex; vertical-align: middle; margin-right: 8px; opacity: .95; }
+.board-spark .chart .base { stroke: var(--line-2); }
+[data-screen="board"] .home-row .ret, [data-screen="home"] .home-row .ret { display: inline-flex; align-items: center; justify-content: flex-end; border-radius: 4px; padding: 0 2px; }
+.board-monote { margin-top: 2px; }
+@media (max-width: 360px) { .board-spark { display: none; } }
