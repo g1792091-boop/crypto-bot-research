@@ -43,4 +43,12 @@ a.account-same-t:hover { border-color: var(--accent-line); }
 .account-same-t .ps { font-size: var(--t-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .account-same-t .ps .side { font-size: 10px; padding: 0 4px; }
 .account-same-acts .btn-line { min-height: 36px; }
+/* fill-people: the coin chart full width under the profile card, taller on a PC */
+.account-cc .account-candles { height: 360px; }
+@media (min-width: 1000px) { .account-cc .account-candles { height: 480px; } }
+/* the account picker (#/account with no id, account-pick.js) */
+.acp-qrow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-width: 0; }
+.acp-quick { border-color: var(--accent-line); }
+.acp-g { color: var(--muted); white-space: nowrap; }
+.acp-pos { color: var(--accent); }
 @media (max-width: 420px) { .account-same-row { gap: 6px; } .account-same-t { padding: 7px 6px; } .account-same-t b { font-size: var(--t-sm); letter-spacing: -.02em; } }
