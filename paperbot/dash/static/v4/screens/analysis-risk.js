@@ -1,59 +1,73 @@
 // 분석: 손익비·위험 / 실전 준비도 / 충격 테스트 (builder C; old analysis.js rRisk / rReady / rShock).
-// All of these stand on the 36 strategy accounts (kind 'strategy'), with the coin flips as the 참고 baseline.
+// 손익비·위험 stands on the group chosen in 묶음 (기존 36 by default; 딥시크 44 or 5분봉 via ?group=), the others on the 36
+// strategy accounts (kind 'strategy'); the coin flips are the 참고 baseline line only.
 // HONESTY: the readiness marks are neutral words (충족 / 아님 / 판단 전), never green ✓ / red ✕; money has assume().
 import {h, put, ui, fmt} from "../core/pb.js";
-import {viewHead, thin, pp, acctLabel, shareBar, dimSeg} from "./analysis-kit.js";
+import {viewHead, thin, pp, acctLabel, shareBar, dimSeg, groupWords} from "./analysis-kit.js";
 
-const EXIT_KO = {LOCK: "익절 잠금", SL: "손절", LIQ: "강제청산", other: "기타 (시간·정지 등)"};
+const EXIT_KO = {LOCK: "익절 잠금", TP: "목표가 도달", SL: "손절", TIME: "시간 청산 (8시간)", LIQ: "강제청산", other: "기타 (시간·정지 등)"};
 
 // ---------------------------------------------------------------- 손익비·위험
+// ?group= (analysis.js 묶음): d.group says whose trades these are. DeepSeek (d.no_money): the server sent no money, and
+// nothing is listed per definition; the reel: its own exits (목표가 / 손절 / 시간 청산, no ladder), its 5m coin flips.
+// the reel's own exits in the words of account.js (reel_engine.py): its stop is the swing low (the 5m coin flips' is the
+// low of the previous 12 bars), the target the previous 5m bar's upper band, a 96-bar time exit, no ladder
+const REEL_RULE = "릴스 규칙: 롱만 · 손절 = 스윙 저점 아래 고정 · 목표 = 직전 5분봉의 볼린저(20, 2) 윗밴드 (5분마다 옮겨짐) · 96봉(8시간)이 지나면 청산. 계단 잠금은 없습니다.";
 export function risk(d, env) {
   const a = d.all || {}, f = d.coin_flips || {}, dd = d.drawdown || {}, g = a.giveback || {}, r = d.rules || {};
+  const grp = d.group || "core", W = groupWords(grp), money = !d.no_money && W.money;  // no_money: DeepSeek
   const out = [viewHead({plate: "손익비·위험", q: "이길 때 얼마, 질 때 얼마? 그리고 얼마나 깊이 빠졌나",
-    meta: `기존 36 매매법 계좌의 끝난 거래 ${fmt.int(d.trades)}건 · 동전 봇 ${fmt.int(d.flip_trades)}건`, at: d.computed_at, stale: d.stale,
+    meta: `${W.who} 계좌의 끝난 거래 ${fmt.int(d.trades)}건 · ${W.flips} ${fmt.int(d.flip_trades)}건`, at: d.computed_at, stale: d.stale,
     read: "손익비 = 평균 이익 ÷ 평균 손실. 본전 승률 = 그 손익비에서 본전이 되는 승률. 차이가 플러스면 실제 승률이 본전 승률보다 높아 남는 쪽입니다.",
-    warn: [thin(d.trades, 30, "매매법 계좌 끝난 거래")]})];
+    warn: [thin(d.trades, 30, `${W.short} 계좌 끝난 거래`),
+      !money ? h("p", {class: "an-read"}, ui.pill("돈 숫자 없음", "ref"), " 딥시크는 거래 수와 비율만 봅니다. 정의별 순위도 보여 주지 않습니다.") : null]})];
   // metrics down, the two groups across: three narrow columns read well on a phone
   const M = [["거래", (x) => fmt.int(x.trades)], ["승률", (x) => fmt.pct(x.win_rate, 0, false)], ["손익비", (x) => fmt.num(x.payoff, 2)],
     ["본전 승률", (x) => fmt.pct(x.breakeven_win_rate, 0, false)], ["차이 (승률 − 본전)", (x) => h("span", {class: fmt.tone(x.gap_pp)}, pp(x.gap_pp))],
     ["거래당 자금 대비", (x) => h("span", {class: fmt.tone(x.expectancy_eq)}, fmt.pct(x.expectancy_eq, 2))]];
   const have = (x) => x && x.trades;
-  out.push(ui.card({plate: "매매법 vs 동전 봇", sub: "참고"},
+  out.push(ui.card({plate: grp === "core" ? "매매법 vs 동전 봇" : `${W.short} vs ${W.flips}`, sub: "참고"},
     ui.table([{label: "", l: true, get: (m) => m[0]},
-      {label: "매매법 계좌", get: (m) => (have(a) ? m[1](a) : "—")},
-      {label: "동전 봇", get: (m) => (have(f) ? m[1](f) : "—")}], M),
-    h("p", {class: "an-note"}, "동전 봇 = 같은 청산 규칙으로 무작위로 들어가는 비교 계좌.",
-      (a.trades || 0) < 30 || (f.trades || 0) < 30 ? [" ", ui.pill("표본 적음", "thin"), ` 30건 미만인 쪽이 있습니다 (매매법 ${fmt.int(a.trades || 0)}건 · 동전 봇 ${fmt.int(f.trades || 0)}건).`] : null),
-    h("p", {class: "an-note"}, `지금 규칙: 손절 ${fmt.num(r.stop_atr, 1)} ATR · 레버리지 ${r.leverage || "—"} · 최고 수익 ${fmt.pct(r.first_trigger, 0)}에서 ${fmt.pct(r.first_lock, 0)} 잠금. 이 규칙은 손익비가 낮고 본전 승률이 높게 나오는 것이 설계상 자연스럽습니다.`),
+      {label: grp === "core" ? "매매법 계좌" : W.short, get: (m) => (have(a) ? m[1](a) : "—")},
+      {label: W.flips, get: (m) => (have(f) ? m[1](f) : "—")}], M),
+    h("p", {class: "an-note"}, W.flipNote,
+      (a.trades || 0) < 30 || (f.trades || 0) < 30 ? [" ", ui.pill("표본 적음", "thin"), ` 30건 미만인 쪽이 있습니다 (${grp === "core" ? "매매법" : W.short} ${fmt.int(a.trades || 0)}건 · ${W.flips} ${fmt.int(f.trades || 0)}건).`] : null),
+    d.house_exits === false ? h("p", {class: "an-note"}, REEL_RULE)
+      : h("p", {class: "an-note"}, `지금 규칙: 손절 ${fmt.num(r.stop_atr, 1)} ATR · 레버리지 ${grp === "ds200" ? "늘 보통 배수 (30배, 안 되면 20배)" : r.leverage || "—"} · 최고 수익 ${fmt.pct(r.first_trigger, 0)}에서 ${fmt.pct(r.first_lock, 0)} 잠금. 이 규칙은 손익비가 낮고 본전 승률이 높게 나오는 것이 설계상 자연스럽습니다.`),
     ui.refNote(env.verdictTs)));
   // how winners gave back and how trades ended
   const ex = a.exit_share || {};
-  out.push(ui.card({plate: "어떻게 끝났나", sub: "매매법 계좌"},
+  out.push(ui.card({plate: "어떻게 끝났나", sub: grp === "core" ? "매매법 계좌" : W.short},
     h("div", {class: "an-bars"}, Object.keys(EXIT_KO).filter((k) => ex[k] != null).map((k) => h("div", {class: "an-barrow"},
-      h("span", null, EXIT_KO[k]), shareBar(ex[k], k === "LOCK" ? "up" : k === "other" ? "acc" : "down"), h("b", {class: "num"}, fmt.pct(ex[k], 1, false))))),
+      h("span", null, EXIT_KO[k]), shareBar(ex[k], k === "LOCK" || k === "TP" ? "up" : k === "other" || k === "TIME" ? "acc" : "down"), h("b", {class: "num"}, fmt.pct(ex[k], 1, false))))),
     g.winners ? h("p", null, `이긴 거래 ${fmt.int(g.winners)}건: 거래 중 최고 수익(ROE) 평균 `, h("b", {class: "up"}, fmt.pct(g.mean_best_roe)), " → 실제 ",
       h("b", {class: "up"}, fmt.pct(g.mean_roe)), ` (최고점의 ${fmt.pct(g.kept_share, 0, false)}를 지키고 나머지는 돌려줌).`) : null,
     a.losers_reached_first_lock != null ? h("p", {class: "an-note"}, `진 거래 중 첫 잠금 발동선까지 갔다가 진 것 ${fmt.int(a.losers_reached_first_lock)}건.`) : null));
   // drawdown and bust probability per timeframe
   const tfRows = Object.entries(dd.timeframes || {}).map(([tf, x]) => ({label: fmt.tfKo(tf), x}));
-  if (dd.coin_flips) tfRows.push({label: "동전 봇", x: dd.coin_flips});
+  if (dd.coin_flips && Object.keys(dd.coin_flips).length) tfRows.push({label: W.flips, x: dd.coin_flips});
+  const nBust = dd.busted_n != null ? dd.busted_n : (dd.busted || []).length;
   out.push(ui.card({plate: "낙폭·파산 위험"},
-    h("p", {class: "an-note"}, `봉별 = 그 봉의 매매법 계좌를 합친 자금. 파산 확률 = 계좌마다 지금까지 끝난 거래를 다시 뽑아 앞으로 ${fmt.int(dd.horizon_days || 30)}일을 ${fmt.int(dd.paths || 10000)}번 흉내 냈을 때 파산선 아래로 간 비율 (거래 ${fmt.int(dd.min_trades || 20)}건 이상 계좌만, 가장 높은 계좌). 예측이 아니라 설명용입니다.`),
+    h("p", {class: "an-note"}, `봉별 = 그 봉의 ${grp === "core" ? "매매법" : W.short} 계좌를 합친 자금. 파산 확률 = 계좌마다 지금까지 끝난 거래를 다시 뽑아 앞으로 ${fmt.int(dd.horizon_days || 30)}일을 ${fmt.int(dd.paths || 10000)}번 흉내 냈을 때 파산선 아래로 간 비율 (거래 ${fmt.int(dd.min_trades || 20)}건 이상 계좌만, 가장 높은 계좌). 예측이 아니라 설명용입니다.`),
     h("div", {class: "stats s4"}, ui.stat("흉내 낸 계좌", fmt.int(dd.simulated), `거래 적어 못 함 ${fmt.int(dd.too_few)}`),
       ui.stat("파산 확률 5% 이상", fmt.int(dd.p_bust_over_5pct), "계좌 수"), ui.stat("−50% 확률 10% 이상", fmt.int(dd.p_dd50_over_10pct), "계좌 수"),
-      ui.stat("이미 파산", fmt.int((dd.busted || []).length), "계좌 수")),
+      ui.stat("이미 파산", fmt.int(nBust), "계좌 수")),
     !dd.simulated ? h("p", {class: "an-warn"}, "아직 거래 20건이 넘은 계좌가 없어 파산 확률을 계산하지 않았습니다.") : null,
     tfRows.length ? ui.table([
       {label: "봉", l: true, get: (r0) => r0.label},
       {label: "거래", get: (r0) => fmt.int(r0.x.trades)},
       {label: "지금 낙폭", get: (r0) => fmt.pct(-(r0.x.dd_now_pct || 0), 1)},
       {label: "최대 낙폭", get: (r0) => (r0.x.max_dd_pct ? fmt.pct(-r0.x.max_dd_pct, 1) : "—")},
-      {label: "최악의 날", get: (r0) => (r0.x.worst_day ? h("span", {class: fmt.tone(r0.x.worst_day.pnl)}, fmt.money(r0.x.worst_day.pnl, true)) : "—")},
+      money ? {label: "최악의 날", get: (r0) => (r0.x.worst_day ? h("span", {class: fmt.tone(r0.x.worst_day.pnl)}, fmt.money(r0.x.worst_day.pnl, true)) : "—")} : null,
       {label: "파산 확률 (최고)", get: (r0) => (r0.x.p_bust_max ? fmt.pct(r0.x.p_bust_max.p, 1, false) : "—")},
       {label: "파산 계좌", get: (r0) => fmt.int(r0.x.busted || 0)},
-    ], tfRows) : null,
-    ui.assume()));
-  // per strategy (36): a paged list, tap → 매매법
+    ].filter(Boolean), tfRows) : null,
+    money ? ui.assume() : null));
+  if (!money) {
+    out.push(ui.card({plate: "정의별", sub: "참고"}, h("p", {class: "muted"}, "딥시크는 정의별 성적과 순위를 보여 주지 않습니다. 위의 묶음 전체 숫자만 참고로 봅니다."), ui.refNote(env.verdictTs)));
+    return out;
+  }
+  // per strategy (the 36, or the reel's one): a paged list, tap → 매매법
   const pg = ui.pager({size: 10, row: (s) => h("a", {class: "lrow click an-row", role: "listitem", href: env.ctx.href("strategies", s.strategy)},
     h("span", {class: "rk"}, String(s.strategy).split("_")[0]), h("span", {class: "lname"}, s.name_ko || s.strategy),
     h("span", {class: ["ret num", fmt.tone(s.gap_pp)], title: "실제 승률 − 본전 승률"}, pp(s.gap_pp)),
@@ -63,7 +77,7 @@ export function risk(d, env) {
       s.p_bust_max ? h("span", null, `파산 확률 ${fmt.pct(s.p_bust_max.p, 1, false)}`) : null,
       ui.smallSample(s.trades, d.small_n || 10), s.busted ? ui.pill(`파산 ${fmt.int(s.busted)}`, "bad") : null))});
   pg.set(d.strategies || []);
-  out.push(ui.card({plate: "매매법별", sub: "봉 계좌 합계 · 오른쪽 숫자 = 승률 − 본전 승률"}, pg.el,
+  out.push(ui.card({plate: grp === "core" ? "매매법별" : "매매법", sub: "봉 계좌 합계 · 오른쪽 숫자 = 승률 − 본전 승률"}, pg.el,
     h("p", {class: "an-note"}, `거래 ${fmt.int(d.small_n || 10)}건 미만은 표본 적음: 우연일 수 있습니다. ${d.label || ""}`)));
   return out;
 }

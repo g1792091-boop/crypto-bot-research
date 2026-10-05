@@ -19,12 +19,17 @@ Routes (registered by ``register``; all behind the dashboard login like every ot
 - ``GET /api/analysis/health``      ① one card: bot heartbeat, 1m data, signals, agents, nightly check (parity with the
                                     early_kline label), checkpoint, AI usage, scheduled-job failure warnings
 - ``GET /api/analysis/risk``        ② payoff, breakeven win rate, gap, give-back (agents/riskreward.py) and drawdown,
-                                    bust probability (agents/survival.py) of the strategy accounts and the coin flips
+                                    bust probability (agents/survival.py) of the strategy accounts and the coin flips;
+                                    ``?group=core|ds200|reel`` (default core = the 36): one group against its own coin
+                                    flips (DeepSeek: no money, no per-definition list; see ``group_risk_view``)
 - ``GET /api/analysis/readiness``   ③ the real-trading conditions table (agents/readiness.py)
 - ``GET /api/analysis/shock``       ④ the shock test (agents/shock.py dash_view)
 - ``GET /api/analysis/map``         ⑤ coin / side / timeframe / session / weekday / regime (agents/compare.py), plus the
-                                    volatility and weekday buckets of agents/entrymoment.py when that one is cached
+                                    volatility and weekday buckets of agents/entrymoment.py when that one is cached;
+                                    ``?group=`` as risk (the entry buckets only for the 36)
 - ``GET /api/analysis/entry``       ⑥ the moment of entry (agents/entrymoment.py dash_view, '준비 중' when missing)
+- ``GET /api/analysis/breakdown``   코인·시간대 per group: /api/breakdown's card (paperbot/breakdown.py) for ``?group=``
+                                    (core = breakdown.report itself; ds200 / reel see ``group_breakdown``)
 - ``GET /api/analysis/synergy``     조합 시너지 (agents/synergy.py dash_view)
 - ``GET /api/analysis/levrule``     좋은 자리 vs 보통: leverage rule B's pre-registered evaluation (agents/leveval.py,
                                     docs/levrule-eval.md; '30일 판정 전 결론 없음' until day 30)
@@ -69,6 +74,7 @@ SHOCK_TTL_S = 300
 MAP_TTL_S = 900
 ENTRY_TTL_S = 900
 SYNERGY_TTL_S = 900
+BREAKDOWN_TTL_S = 600            # app.py keeps /api/breakdown this long too
 LEVRULE_TTL_S = 600
 SHADOWS_TTL_S = 3 * 3600        # per daily3 report (a new nightly report is a new key)
 HEAVY_KEEP = 256                # cached results kept (expired ones are dropped beyond this)
@@ -533,6 +539,208 @@ def alert_history(data, rooms, daily_db: Optional[str], checkpoint_db: Optional[
     return out
 
 
+# ---------------------------------------------------------------- 분석 탭 묶음 (group switch, gapA)
+# ``?group=`` on /api/analysis/risk and /api/analysis/map: the 36 (core, the default: an old caller gets exactly what
+# it got before), DeepSeek (ds200) or the reel (reel). Keys are paperbot/groups.py's. Each group is read on its own
+# timeframes against ITS coin flips (the 36 and DeepSeek trade the house exits on 15m-4h: the core flips; the reel
+# trades its own exits on 5m: the three 5m flips, long only). The coin flips are only that baseline line, never a
+# group of their own here. No '전체': the groups have different exits and different flips, and DeepSeek's money may
+# not be shown, so one mixed number would mean nothing. DeepSeek (owners' D10 / CONTRACT section 1): counts and rates
+# only; every money amount is taken out on the server (``no_money``) and nothing is listed per DeepSeek account or
+# definition.
+AN_GROUPS = ("core", "ds200", "reel")
+AN_GROUP_KINDS = {"core": ("strategy",), "ds200": ("ds200",), "reel": ("reel",)}
+REEL_TFS = ("5m",)                       # config.REEL_TF: the reel and its three coin flips
+NO_MONEY_GROUPS = ("ds200",)
+MONEY_KEYS = frozenset(("pnl", "equity", "worst_day", "dd_now_usd", "max_dd_usd", "wallet", "equity_total",
+                        "change_usd", "margin", "best", "sum_pnl", "avg_pnl"))
+REEL_EXITS = ("TP", "SL", "TIME", "LIQ")  # reel_engine.EXIT_REASONS (EOD only at the end of a backtest)
+
+
+def an_group(group: Optional[str]) -> str:
+    """The checked ``?group=`` value ('core' when absent); anything else is a 400 (never silently the 36)."""
+    g = (group or "core").strip().lower()
+    if g not in AN_GROUPS:
+        from fastapi import HTTPException
+        raise HTTPException(400, "group은 core(기존 36) · ds200(딥시크) · reel(5분봉) 중 하나입니다")
+    return g
+
+
+def own_tfs(group: str) -> tuple:
+    """The timeframes a group trades and its coin flips are read on."""
+    return REEL_TFS if group == "reel" else CORE_FLIP_TFS
+
+
+def no_money(x: Any) -> Any:
+    """``x`` without any money amount (keys in MONEY_KEYS, at any depth): what a DeepSeek view may carry."""
+    if isinstance(x, dict):
+        return {k: no_money(v) for k, v in x.items() if k not in MONEY_KEYS}
+    if isinstance(x, list):
+        return [no_money(v) for v in x]
+    return x
+
+
+def _closed_raw(c: sqlite3.Connection, kinds: tuple, tfs: tuple, rt: float) -> list:
+    """(strategy, timeframe, normalised trade, raw exit reason) of every closed trade of ``kinds`` on ``tfs``
+    (agents/riskreward.closed reads the core timeframes only; the reel and its flips trade 5m)."""
+    from ..agents.riskreward import norm_trade
+    sql = ("SELECT a.strategy, a.timeframe, t.exit_reason, t.data FROM trades t JOIN accounts a "
+           f"ON a.account_id = t.account_id WHERE a.kind IN ({','.join('?' * len(kinds))}) "
+           f"AND a.timeframe IN ({','.join('?' * len(tfs))}) ORDER BY t.exit_time, t.id")
+    out = []
+    for strat, tf, reason, data in c.execute(sql, (*kinds, *tfs)):
+        try:
+            d = json.loads(data)
+        except (TypeError, ValueError):
+            continue
+        t = norm_trade(d, rt) if isinstance(d, dict) else None
+        if t is not None:
+            out.append((strat, tf, t, str(reason or d.get("exit_reason") or "")))
+    return out
+
+
+def _reel_exit_share(rows: list) -> dict:
+    n = len(rows)
+    if not n:
+        return {}
+    ks = {k: sum(1 for *_x, r in rows if r == k) for k in REEL_EXITS}
+    ks["other"] = n - sum(ks.values())
+    return {k: round(v / n, 3) for k, v in ks.items() if v or k in ("TP", "SL", "TIME")}
+
+
+def group_risk_view(paper_db: str, now_ms: int, group: str) -> dict:
+    """``risk_view`` for DeepSeek or the reel: the same shape, the group's own trades and its own coin flips, the
+    reel's own exit mix (목표가 / 손절 / 시간 청산), no money for DeepSeek, no per-definition list for DeepSeek."""
+    from ..agents import riskreward as RR
+    from ..agents import survival as SV
+    from ..agents.roster3 import STRATEGY_KO
+    from ..groups import label_ko
+    kinds, tfs = AN_GROUP_KINDS[group], own_tfs(group)
+    c = ro_connect(paper_db)
+    if c is None:
+        return {"error": "paper3.db 없음", "group": group}
+    try:
+        lad = RR.ladder()
+        rt = RR.round_trip_of(c)
+        rows = _closed_raw(c, kinds, tfs, rt)
+        frows = _closed_raw(c, ("random",), tfs, rt)
+        tab = RR.table([(s, tf, t) for s, tf, t, _x in rows], lad["first_trigger"])
+        flips = RR.stats([t for _s, _tf, t, _x in frows], lad["first_trigger"])
+        sv = SV.table(c, now_ms, kinds=(*kinds, "random"), sizing_on=False, tfs=tfs)
+    except sqlite3.Error as exc:
+        return {"error": f"paper3.db를 읽지 못함: {type(exc).__name__}", "group": group}
+    finally:
+        _close(c)
+    house = group != "reel"
+
+    def rr(s: dict, raw: list) -> dict:
+        if not s.get("trades"):
+            return {"trades": 0, "small": True}
+        out = RR.compact(s)
+        g = s.get("giveback") or {}
+        out["giveback"] = {k: g.get(k) for k in ("winners", "mean_best_roe", "mean_roe", "kept_share")}
+        if house:
+            out["losers_reached_first_lock"] = (s.get("losers_reached_first_lock") or {}).get("n")
+            out["exits"] = s.get("exits")
+        else:
+            out["exit_share"] = _reel_exit_share(raw)
+        return out
+
+    strategies = []
+    if group == "reel":
+        for s, e in tab["strategies"].items():
+            g = SV.compact_group(sv["strategies"].get(s))
+            strategies.append({"strategy": s, "name_ko": label_ko(s) or STRATEGY_KO.get(s, s),
+                               **{k: v for k, v in RR.compact(e["all"]).items() if k != "exit_share"},
+                               "max_dd_pct": g.get("max_dd_pct"), "dd_now_pct": g.get("dd_now_pct"),
+                               "p_bust_max": g.get("p_bust_max"), "busted": g.get("busted")})
+    mine = [r for r in sv["accounts"].values() if r.get("kind") in kinds]
+    sims = [r for r in mine if "p_bust" in (r.get("mc") or {})]
+    busted = [a for a in sv["busted"] if sv["accounts"][a]["kind"] in kinds]
+    out = {"group": group, "house_exits": house,
+           "rules": {k: lad.get(k) for k in ("first_lock", "first_trigger", "stop_atr", "leverage")} if house else None,
+           "trades": tab["all"].get("trades", 0), "flip_trades": flips.get("trades", 0),
+           "all": rr(tab["all"], rows), "coin_flips": rr(flips, frows),
+           "drawdown": {"timeframes": {tf: SV.compact_group(g) for tf, g in sv["timeframes"].items()},
+                        "coin_flips": SV.compact_group(sv["coin_flips"]),
+                        "simulated": len(sims), "too_few": sum(1 for r in mine if (r.get("mc") or {}).get("too_few")),
+                        "min_trades": SV.MIN_TRADES, "paths": SV.PATHS, "horizon_days": SV.HORIZON_DAYS,
+                        "p_bust_over_5pct": sum(1 for r in sims if r["mc"]["p_bust"] >= 0.05),
+                        "p_dd50_over_10pct": sum(1 for r in sims if r["mc"]["p_dd50"] >= 0.10),
+                        "busted": [] if group in NO_MONEY_GROUPS else busted[:50], "busted_n": len(busted)},
+           "strategies": strategies[:60], "small_n": RR.SMALL_N, "label": SV.LABEL}
+    if group in NO_MONEY_GROUPS:
+        out = no_money(out)
+        out["no_money"] = True
+    return out
+
+
+def group_breakdown(paper_db: str, group: str, min_n: int = 30, min_top: int = 10, top: int = 5) -> dict:
+    """/api/breakdown's card (paperbot/breakdown.report: by coin, weekday/weekend x session, time windows, volatility
+    at entry) for one group against its own coin flips. breakdown.load_trades reads the 36 only, so the rows are read
+    here and the same cells, session table and volatility tag are used. DeepSeek: no money and no per-account list."""
+    from ..breakdown import _FIELDS, _atr_share, _cell, vol_tag
+    from ..models import TradeRecord
+    from ..sessions import session_report
+    kinds, tfs = AN_GROUP_KINDS[group], own_tfs(group)
+    c = ro_connect(paper_db)
+    if c is None:
+        return {"error": "paper3.db 없음", "group": group}
+    try:
+        q = ("SELECT t.account_id, a.kind, a.timeframe, t.symbol, t.entry_time, t.pnl, t.roe, t.data FROM trades t "
+             f"JOIN accounts a ON a.account_id = t.account_id WHERE a.kind IN ({','.join('?' * (len(kinds) + 1))}) "
+             f"AND a.timeframe IN ({','.join('?' * len(tfs))})")
+        rows = []
+        for aid, kind, tf, sym, et, pnl, roe, data in c.execute(q, (*kinds, "random", *tfs)):
+            try:
+                d = json.loads(data)
+            except (TypeError, ValueError):
+                d = {}
+            d = d if isinstance(d, dict) else {}
+            if pnl is None or roe is None:
+                continue
+            rows.append({"account_id": aid, "kind": kind, "symbol": sym, "entry_time": et, "pnl": pnl, "roe": roe,
+                         "strategy": aid.split("@")[0], "timeframe": d.get("timeframe") or tf,
+                         "signal_ts": d.get("signal_ts"), "data": d})
+        series = _atr_share(c)
+    except sqlite3.Error as exc:
+        return {"error": f"paper3.db를 읽지 못함: {type(exc).__name__}", "group": group}
+    finally:
+        _close(c)
+    mine = [r for r in rows if r["kind"] in kinds]
+    by_coin = {}
+    for sym in sorted({r["symbol"] for r in rows}):
+        s = [r for r in mine if r["symbol"] == sym]
+        per: dict = {}
+        for r in s:
+            per.setdefault(r["account_id"], []).append(r)
+        best = sorted(((k, _cell(v, min_n)) for k, v in per.items() if len(v) >= min_top),
+                      key=lambda kv: kv[1]["pnl"], reverse=True)[:top]
+        by_coin[sym] = {"strategies": _cell(s, min_n),
+                        "coin_flips": _cell([r for r in rows if r["kind"] == "random" and r["symbol"] == sym], min_n),
+                        "best": [{"account": k, **x} for k, x in best]}
+    recs = []
+    for r in mine:
+        if _FIELDS <= set(r["data"]):
+            try:
+                recs.append(TradeRecord(**{k: v for k, v in r["data"].items() if k in _FIELDS}))
+            except (TypeError, ValueError):
+                continue
+    sess = session_report(recs, min_n) if recs else None
+    tags = [(r, vol_tag(series, r["symbol"], r["timeframe"], r["signal_ts"])) for r in mine]
+    out = {"group": group, "trades": len(mine), "flip_trades": sum(1 for r in rows if r["kind"] == "random"),
+           "min_n": min_n, "by_coin": by_coin,
+           "sessions": None if sess is None else {k: sess[k] for k in ("primary", "weekday", "windows")},
+           "volatility": {"spike": _cell([r for r, v in tags if v is True], min_n),
+                          "normal": _cell([r for r, v in tags if v is False], min_n),
+                          "unknown": sum(v is None for _r, v in tags)},
+           "note": "descriptive only: cells under min_n are not conclusions; nothing here changes an account"}
+    if group in NO_MONEY_GROUPS:
+        out = no_money(out)
+        out["no_money"] = True
+    return out
+
+
 # ---------------------------------------------------------------- ② risk-reward and drawdown
 def risk_view(paper_db: str, now_ms: int) -> dict:
     """The strategy accounts and the coin flips: payoff, breakeven win rate, gap, give-back, exit mix
@@ -639,20 +847,25 @@ def shock_view(paper_db: str) -> dict:
 
 
 # ---------------------------------------------------------------- ⑤ coin / regime / weekday map
-def map_view(data) -> dict:
+def map_view(data, group: str = "core") -> dict:
     """The latest ``MAP_CARDS`` closed strategy trades (and coin-flip trades) by coin, side, timeframe, session,
-    weekday/weekend and market regime at entry (agents/compare.win_loss_compare)."""
+    weekday/weekend and market regime at entry (agents/compare.win_loss_compare). ``group``: the 36 (default), DeepSeek
+    (no money: counts and win rates only) or the reel (against the 5m coin flips); the answer says which (``group``)."""
     from ..agents.compare import win_loss_compare
     try:
-        st = _cards(data, "strategy")
-        flips = _cards(data, "random", tfs=CORE_FLIP_TFS)       # the 36's coin flips (the 5m ones are the reel's)
+        st = _cards(data, AN_GROUP_KINDS[group][0], tfs=REEL_TFS if group == "reel" else None)
+        flips = _cards(data, "random", tfs=own_tfs(group))      # the group's coin flips (the 5m ones are the reel's)
     except sqlite3.Error as exc:
-        return {"error": f"paper3.db를 읽지 못함: {type(exc).__name__}"}
+        return {"error": f"paper3.db를 읽지 못함: {type(exc).__name__}", "group": group}
     keep =("trades", "all", "by_coin", "by_side", "by_timeframe", "by_session", "by_weekday", "by_regime", "note")
     a = win_loss_compare(st)
     f = win_loss_compare(flips)
-    return {"strategy": {k: a.get(k) for k in keep if k in a}, "coin_flips": {k: f.get(k) for k in keep if k in f},
-            "cap": MAP_CARDS, "small_n": 10}
+    out = {"strategy": {k: a.get(k) for k in keep if k in a}, "coin_flips": {k: f.get(k) for k in keep if k in f},
+           "cap": MAP_CARDS, "small_n": 10, "group": group}
+    if group in NO_MONEY_GROUPS:
+        out = no_money(out)
+        out["no_money"] = True
+    return out
 
 
 CORE_FLIP_TFS = ("15m", "30m", "1h", "4h")   # the coin flips the 36 are compared with (G21: not the reel's 5m flips)
@@ -948,8 +1161,11 @@ def register(app, data, rooms, db: str, daily_db: Optional[str], checkpoint_db: 
                                                level=lv or None, exclude_info=bool(exclude_info)))
 
     @app.get("/api/analysis/risk")
-    def get_risk():
-        return heavy.get("risk", RISK_TTL_S, lambda: risk_view(db, _now()))
+    def get_risk(group: Optional[str] = None):
+        g = an_group(group)
+        if g == "core":                  # the old key and the old answer: nothing changes for a caller without ?group=
+            return {**heavy.get("risk", RISK_TTL_S, lambda: risk_view(db, _now())), "group": "core"}
+        return heavy.get(f"risk:{g}", RISK_TTL_S, lambda: group_risk_view(db, _now(), g))
 
     @app.get("/api/analysis/readiness")
     def get_readiness():
@@ -970,13 +1186,32 @@ def register(app, data, rooms, db: str, daily_db: Optional[str], checkpoint_db: 
         return heavy.get("entry", ENTRY_TTL_S, lambda: entry_view(db, daily, _now()))
 
     @app.get("/api/analysis/map")
-    def get_map():
+    def get_map(group: Optional[str] = None):
+        g = an_group(group)
+        if g != "core":                  # the entry view's buckets are the 36's: not added to another group's map
+            return heavy.get(f"map:{g}", MAP_TTL_S, lambda: map_view(data, g))
         out = heavy.get("map", MAP_TTL_S, lambda: map_view(data))
         em = heavy.peek("entry")         # the entry view's volatility and weekday buckets, when already computed
         if isinstance(em, dict) and isinstance(em.get("all"), dict):
             out = {**out, "entry_buckets": {k: em["all"].get(k) for k in ("volatility", "weekday") if k in em["all"]},
                    "entry_trades": em.get("trades")}
         return out
+
+    @app.get("/api/analysis/breakdown")
+    def get_group_breakdown(group: Optional[str] = None):
+        """/api/breakdown's card for one group (?group=core|ds200|reel, default core = the same report)."""
+        g = an_group(group)
+        if g != "core":
+            return heavy.get(f"breakdown:{g}", BREAKDOWN_TTL_S, lambda: group_breakdown(db, g))
+
+        def core() -> dict:
+            from ..breakdown import report as bd_report
+            c = data.conn()
+            try:
+                return {**bd_report(c), "group": "core"}
+            finally:
+                c.close()
+        return heavy.get("breakdown", BREAKDOWN_TTL_S, core)
 
     @app.get("/api/analysis/synergy")
     def get_synergy():

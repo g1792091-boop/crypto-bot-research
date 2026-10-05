@@ -21,14 +21,28 @@ export function thin(n, need, what) {
   return h("p", {class: "an-warn"}, ui.pill("표본 적음", "thin"), ` ${what} ${fmt.int(n || 0)}건 (${fmt.int(need)}건 미만). 숫자가 우연일 수 있어 여기서 결론을 내리지 않습니다.`);
 }
 
-/** A cell "n건 · 승률 45% · −1,234.00" (+ 표본 적음 under min). c = {trades|n, win_rate|wr, pnl}. */
-export function cell(c, min = 10) {
+/** The words a grouped view uses for its group (?group=, analysis.js GROUPS): who it is, its short name, its coin flips
+ *  (the baseline line only: the 36 and DeepSeek against the 15m-4h flips, the reel against the three 5m flips),
+ *  and whether money may be shown (DeepSeek: counts and rates only, CONTRACT section 1). */
+const GW = {
+  core: {who: "기존 36 매매법", short: "기존 36", flips: "동전 봇", money: true,
+    flipNote: "동전 봇 = 같은 청산 규칙으로 무작위로 들어가는 비교 계좌."},
+  ds200: {who: "딥시크 44개 정의", short: "딥시크", flips: "동전 봇", money: false,
+    flipNote: "동전 봇 = 딥시크와 같은 청산 규칙(2 ATR 손절 + 계단 잠금)으로 같은 봉에서 무작위로 들어가는 비교 계좌."},
+  reel: {who: "릴스 5분 단타", short: "릴스", flips: "5분봉 동전 봇", money: true,
+    flipNote: "5분봉 동전 봇 = 릴스와 같은 청산 규칙으로 5분봉에서 롱만 무작위로 들어가는 비교 계좌 3개."},
+};
+export const groupWords = (g) => GW[g] || GW.core;
+
+/** A cell "n건 · 승률 45% · −1,234.00" (+ 표본 적음 under min). c = {trades|n, win_rate|wr, pnl}.
+ *  noMoney (DeepSeek): the money part is left out even if a number came. */
+export function cell(c, min = 10, noMoney = false) {
   const n = c ? (c.trades ?? c.n) : 0;
   if (!c || !n) return h("span", {class: "muted"}, "—");
   const wr = c.win_rate ?? c.wr;
   const small = c.status ? c.status !== "ok" : n < min;
   return h("span", {class: "an-cell"}, h("span", {class: "num"}, `${fmt.int(n)}건`), " · ", h("span", {class: "num"}, `승률 ${fmt.pct(wr, 0, false)}`),
-    c.pnl != null ? [" · ", h("b", {class: ["num", fmt.tone(c.pnl)]}, fmt.money(c.pnl, true))] : null,
+    c.pnl != null && !noMoney ? [" · ", h("b", {class: ["num", fmt.tone(c.pnl)]}, fmt.money(c.pnl, true))] : null,
     small ? [" ", ui.pill("표본 적음", "thin")] : null);
 }
 

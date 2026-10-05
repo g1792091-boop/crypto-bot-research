@@ -7,41 +7,74 @@
 //   GH Coin /api/ghcoin (only while its recorder runs) · 45개 질문 questions (only when filled)
 // 건강 점검 moved to 서버·비용 and 알림 기록 to 알림 기록 (builder E). A {pending: true} answer shows the shimmer and asks
 // again after 3 s (the server computes heavy views in the background). The last view is remembered (local).
+// 묶음 (gapA, the 20:09 promise): 기존 36 / 딥시크 44 / 5분봉 above the view. Views marked `groups` ask the server for
+// that group (?group=, paperbot/dash/analysis.py: each against its own coin flips; DeepSeek with no money); views marked
+// `core` are computed for the 36 only and, under another group, say so with one tap back to 기존 36 (never the 36's
+// numbers under another group's name); views marked `any` are not about a group (the switch is hidden there). No coin-
+// flip group (they are the baseline line inside each view) and no mixed 전체 (different exits, different flips).
 import {h, put, ui, motion, local} from "../core/pb.js";
 import * as R from "./analysis-risk.js";
 import * as W from "./analysis-where.js";
 import * as X from "./analysis-rules.js";
 
 const VIEWS = [
-  {id: "risk", label: "손익비·위험", path: "/api/analysis/risk", render: R.risk, desc: "이길 때와 질 때의 크기, 낙폭과 파산 위험"},
-  {id: "map", label: "코인·장세 지도", path: "/api/analysis/map", render: W.map, desc: "코인·장세·시간대·방향·봉별로 어디서 벌고 잃었나"},
-  {id: "sessions", label: "코인·시간대", path: "/api/breakdown", render: W.sessions, desc: "코인별, 평일·주말 × 시간대, 펀딩·미국장 개장·지표 발표 시간"},
-  {id: "entry", label: "진입 순간", path: "/api/analysis/entry", render: W.entry, desc: "들어가는 봉의 모습별 성적"},
-  {id: "tags", label: "상황 태그", path: "/api/cards/stats?days=30", render: W.tags, desc: "손실과 이익에 붙은 상황 표시 (경제지표 발표 전후 등)"},
-  {id: "levrule", label: "좋은 자리 vs 보통", path: "/api/analysis/levrule", render: X.levrule, desc: "좋은 자리에서 배수를 높인 레버리지 규칙 B의 중간 숫자"},
-  {id: "shadows", label: "그림자 비교", path: "/api/analysis/shadows", render: X.shadows, desc: "같은 거래를 손절·잠금·익절·레버리지 하나만 바꿔 다시 계산"},
-  {id: "overlap", label: "계좌 겹침", path: "/api/overlap?days=7", render: X.overlap, desc: "같이 움직이는 계좌와 한 코인에 몰린 순간"},
-  {id: "synergy", label: "조합 시너지", path: "/api/analysis/synergy", render: X.synergy, desc: "매매법 여러 개를 같이 돌렸다면"},
-  {id: "shock", label: "충격 테스트", path: "/api/analysis/shock", render: R.shock, desc: "가격이 한 번에 크게 움직이면 지금 포지션은"},
-  {id: "ready", label: "실전 준비도", path: "/api/analysis/readiness", render: R.ready, desc: "실거래 전에 정한 조건 8개를 계좌마다"},
-  {id: "ghcoin", label: "GH Coin", path: "/api/ghcoin", render: X.ghcoin, feature: "ghcoin", desc: "GH Coin 타점 기록 (따로 도는 기록기)"},
-  {id: "questions", label: "45개 질문", path: "/api/analysis/questions", render: X.questions, feature: "questions", desc: "질문마다 답이 있는지"},
+  {id: "risk", label: "손익비·위험", path: "/api/analysis/risk", render: R.risk, groups: "groups", desc: "이길 때와 질 때의 크기, 낙폭과 파산 위험"},
+  {id: "map", label: "코인·장세 지도", path: "/api/analysis/map", render: W.map, groups: "groups", desc: "코인·장세·시간대·방향·봉별로 어디서 벌고 잃었나"},
+  {id: "sessions", label: "코인·시간대", path: "/api/breakdown", render: W.sessions, groups: "groups", gpath: "/api/analysis/breakdown", desc: "코인별, 평일·주말 × 시간대, 펀딩·미국장 개장·지표 발표 시간"},
+  {id: "entry", label: "진입 순간", path: "/api/analysis/entry", render: W.entry, groups: "core", desc: "들어가는 봉의 모습별 성적"},
+  {id: "tags", label: "상황 태그", path: "/api/cards/stats?days=30", render: W.tags, groups: "any", desc: "손실과 이익에 붙은 상황 표시 (경제지표 발표 전후 등)"},
+  {id: "levrule", label: "좋은 자리 vs 보통", path: "/api/analysis/levrule", render: X.levrule, groups: "core", desc: "좋은 자리에서 배수를 높인 레버리지 규칙 B의 중간 숫자"},
+  {id: "shadows", label: "그림자 비교", path: "/api/analysis/shadows", render: X.shadows, groups: "core", desc: "같은 거래를 손절·잠금·익절·레버리지 하나만 바꿔 다시 계산"},
+  {id: "overlap", label: "계좌 겹침", path: "/api/overlap?days=7", render: X.overlap, groups: "core", desc: "같이 움직이는 계좌와 한 코인에 몰린 순간"},
+  {id: "synergy", label: "조합 시너지", path: "/api/analysis/synergy", render: X.synergy, groups: "core", desc: "매매법 여러 개를 같이 돌렸다면"},
+  {id: "shock", label: "충격 테스트", path: "/api/analysis/shock", render: R.shock, groups: "core", desc: "가격이 한 번에 크게 움직이면 지금 포지션은"},
+  {id: "ready", label: "실전 준비도", path: "/api/analysis/readiness", render: R.ready, groups: "core", desc: "실거래 전에 정한 조건 8개를 계좌마다"},
+  {id: "ghcoin", label: "GH Coin", path: "/api/ghcoin", render: X.ghcoin, feature: "ghcoin", groups: "any", desc: "GH Coin 타점 기록 (따로 도는 기록기)"},
+  {id: "questions", label: "45개 질문", path: "/api/analysis/questions", render: X.questions, feature: "questions", groups: "any", desc: "질문마다 답이 있는지"},
 ];
+// the server's group keys (paperbot/groups.py), labels as on 격자 (grid.js) and 홈's group cards
+const GROUPS = [
+  {id: "core", label: "기존 36", title: "잠긴 매매법 36개 × 15분·30분·1시간·4시간"},
+  {id: "ds200", label: "딥시크 44", title: "딥시크 44개 정의 · 거래 수와 비율만 (돈 숫자 없음)"},
+  {id: "reel", label: "5분봉", title: "릴스 5분 단타 1개 · 비교: 5분봉 동전 봇 3개"},
+];
+const okGroup = (g) => (GROUPS.some((x) => x.id === g) ? g : "core");
 const FRESH_MS = 5 * 60 * 1000;
 
 let current = null;
 
 export async function mount(el, ctx) {
   ctx.setTitle("분석");
-  const st = {tab: null, cache: {}, gen: 0, disposers: [], summary: null, ready: false};
+  const st = {tab: null, cache: {}, gen: 0, disposers: [], summary: null, ready: false, group: "core"};
   const shown = () => VIEWS.filter((v) => !v.feature || ctx.features[v.feature]);
   const pick = (id) => (shown().some((v) => v.id === id) ? id : "risk");
   st.tab = pick(ctx.params.arg || local.get("an-tab", "risk"));
+  st.group = okGroup(((ctx.params && ctx.params.query) || {}).group || local.get("an-group", "core"));
+  local.set("an-group", st.group);   // a ?group= link is remembered like a tap (a later tab change drops it from the address)
 
   const segSlot = h("div", {class: "an-tabs"});
+  const groupSeg = ui.seg(GROUPS.map((g) => ({id: g.id, label: g.label, title: g.title})), st.group, (id) => setGroup(id), {label: "묶음 고르기"});
+  const groupRow = h("div", {class: "an-gsel"}, h("span", {class: "an-glabel"}, "묶음"), groupSeg);
   const desc = h("p", {class: "an-desc"});
   const body = h("div", {class: "stack an-body"});
-  el.append(ui.screenHead("분석", "매매법 계좌의 거래를 여러 방향으로 나눠 봅니다 · 설명용, 판정 아님"), segSlot, desc, body);
+  el.append(ui.screenHead("분석", "매매법 계좌의 거래를 여러 방향으로 나눠 봅니다 · 설명용, 판정 아님"), segSlot, groupRow, desc, body);
+
+  function setGroup(id) {
+    id = okGroup(id);
+    if (id === st.group) return;
+    st.group = id;
+    local.set("an-group", id);
+    groupSeg.set(id);
+    // an old ?group= in the address would bring the old group back on reload: drop it (the choice is remembered)
+    const q = (ctx.params && ctx.params.query) || {};
+    if (q.group != null) {
+      const rest = {...q};
+      delete rest.group;
+      try { window.history.replaceState(null, "", ctx.href("analysis", st.tab, rest)); } catch { /* keep the hash */ }
+      ctx.params = {...ctx.params, query: rest};
+    }
+    load(false);
+  }
 
   function renderSeg() {
     put(segSlot, ui.seg(shown().map((v) => ({id: v.id, label: v.label})), st.tab, (id) => go(id, true), {label: "분석 보기", scroll: true}));
@@ -62,9 +95,17 @@ export async function mount(el, ctx) {
   async function load(force) {
     const v = VIEWS.find((x) => x.id === st.tab) || VIEWS[0];
     const q = (ctx.params && ctx.params.query) || {};
-    const path = v.id === "shadows" && q.account ? `${v.path}?account=${encodeURIComponent(q.account)}` : v.path;
+    let path = v.id === "shadows" && q.account ? `${v.path}?account=${encodeURIComponent(q.account)}` : v.path;
     const g = ++st.gen;
     desc.textContent = v.desc;
+    groupRow.hidden = v.groups === "any";
+    if (v.groups === "core" && st.group !== "core") {   // the 5-minute refresh (force) changes nothing here: no motion
+      closeTab(); put(body, coreOnly(v)); if (!force) motion.swap(body); return;
+    }
+    if (v.groups === "groups" && st.group !== "core") {
+      path = v.gpath || path;
+      path += `${path.includes("?") ? "&" : "?"}group=${encodeURIComponent(st.group)}`;
+    }
     const hit = st.cache[path];
     if (hit && !force && Date.now() - hit.at < FRESH_MS) { paint(v, hit.d, q); return; }
     closeTab();
@@ -89,7 +130,7 @@ export async function mount(el, ctx) {
     closeTab();
     if (d && d.unavailable) { put(body, ui.card({plate: v.label}, h("p", {class: "muted"}, "준비 중입니다. ", d.note || ""))); return; }
     if (d && d.error && v.id !== "shadows") { put(body, ui.card({plate: v.label}, h("p", {class: "muted"}, String(d.error)))); return; }
-    const env = {ctx, verdictTs: verdictTs(), ready: st.ready, query: q,
+    const env = {ctx, verdictTs: verdictTs(), ready: st.ready, query: q, group: v.groups === "groups" ? st.group : "core",
       track: (f) => st.disposers.push(f),
       reload: (nq) => { ctx.go("analysis", v.id, nq); }};
     let nodes;
@@ -99,6 +140,17 @@ export async function mount(el, ctx) {
     }
     put(body, ...nodes);
     motion.swap(body);
+  }
+
+  // a view computed for the 36 only, while another group is chosen: say so, one tap to 기존 36 or to a view that has it
+  function coreOnly(v) {
+    const gl = (GROUPS.find((x) => x.id === st.group) || GROUPS[0]).label;
+    const has = shown().filter((x) => x.groups === "groups");
+    return ui.card({plate: v.label},
+      h("p", null, `이 보기는 기존 36만 계산합니다. ${gl} 묶음으로 나눈 숫자는 아직 없습니다.`),
+      h("div", {class: "an-gacts"},
+        h("button", {class: "btn-y", type: "button", onclick: () => setGroup("core")}, "기존 36으로 보기"),
+        has.map((x) => h("button", {class: "btn-line", type: "button", onclick: () => go(x.id, true)}, `${gl} · ${x.label}`))));
   }
 
   function go(id, user) {
@@ -118,6 +170,8 @@ export async function mount(el, ctx) {
     const id = pick(params.arg || st.tab);
     const changed = id !== st.tab;
     st.tab = id; local.set("an-tab", id);
+    const qg = (params.query || {}).group;
+    if (qg && okGroup(qg) !== st.group) { st.group = okGroup(qg); local.set("an-group", st.group); groupSeg.set(st.group); }
     renderSeg();
     load(!changed);           // same view, new query (the shadow account): fetch it
   };
