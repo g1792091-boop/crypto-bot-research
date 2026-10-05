@@ -18,6 +18,7 @@ data (dash.app.Data), rooms, db, daily_db, agents_db, checkpoint_db, candles (th
     bell        결재함 종 (머리글: 두 분 승인을 기다리는 제안 수)
     uptime      가동 기록 (서버·비용: 시간마다 처리한 분, 재시작, 밤 점검)
     tradeshape  요일×시간 열지도 + 거래 결과 분포 (분석)
+    drift   진입 가격 차이 (분석 › 그림자 비교: 신호 봉 종가 vs 체결 기준 가격, 묶음·봉·지연별)
 """
 from __future__ import annotations
 
@@ -28,6 +29,7 @@ MODULES = ("flow", "grid", "story", "since", "replay", "params")
 MODULES += ("jobs", "costs", "power")          # wave 2 part B
 MODULES += ("brief", "vs5y")                    # wave 2 part C
 MODULES += ("bell", "uptime", "tradeshape")          # wave 3
+MODULES += ("drift",)                          # analysis 8B
 
 
 def register_all(app, **kw) -> dict:

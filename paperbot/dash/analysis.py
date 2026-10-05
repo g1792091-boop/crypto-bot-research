@@ -36,14 +36,17 @@ Routes (registered by ``register``; all behind the dashboard login like every ot
 - ``GET /api/analysis/levrule``     좋은 자리 vs 보통: leverage rule B's pre-registered evaluation (agents/leveval.py,
                                     docs/levrule-eval.md; '30일 판정 전 결론 없음' until day 30)
 - ``GET /api/analysis/shadows``     그림자 비교: every nightly shadow vs base for the new run, grouped, with the 5-year
-                                    reference lines, and the leverage equity curves (``?account=`` one account's)
+                                    reference lines, and the leverage equity curves (``?account=`` one account's); the
+                                    '지정가 진입' block (``limit_entry``, dash/more/shadowplus.py); ``?strategy=<name>``
+                                    answers that strategy's rows and its 5-year levstop cells instead
 - ``GET /api/analysis/questions``   ⑦ the 45-question checklist (paperbot/dash/questions45.json, see below)
 - ``GET /api/analysis/alerts``      알림 기록: what is stored somewhere readable (see ``alert_history``)
 - ``GET /api/debate``               the 24-hour debate room (paperbot/agents/debate.py, own service; see ``debate``)
 
 The 45-question checklist reads ``paperbot/dash/questions45.json``:
 ``{"source": "<doc it was taken from>", "updated": "YYYY-MM-DD", "questions": [{"n": 1, "q": "질문", "status":
-"done|partial|todo|na", "where": "어디서 답하는지", "note": "한 줄"}]}``. An empty list shows '준비 중'.
+"done|partial|todo|na|checking", "where": "어디서 답하는지", "note": "한 줄", "group": "묶음"}]}``. An empty list shows
+'준비 중'; ``checking`` = 확인 중 (an item not verified against the code yet).
 
 The 24-hour debate room reads, read-only, ``debate/debate.db`` next to paper3.db (``create_app(debate_db=...)``
 overrides): tables debate_messages, debate_rounds, debate_hypotheses, debate_ideas, debate_state; the debate service
@@ -787,7 +790,13 @@ def risk_view(paper_db: str, now_ms: int) -> dict:
     strategies.sort(key=lambda r: -(r.get("trades") or 0))
     sims = [r for r in sv["accounts"].values() if r.get("kind") == "strategy" and "p_bust" in (r.get("mc") or {})]
     too_few = sum(1 for r in sv["accounts"].values() if r.get("kind") == "strategy" and (r.get("mc") or {}).get("too_few"))
-    return {"rules": {k: lad.get(k) for k in ("first_lock", "first_trigger", "stop_atr", "leverage")},
+    from .more.streaks import streak_context            # 연패 맥락 (ana8B): every group, coin flips as the band
+    try:
+        streaks = streak_context(paper_db, now_ms)
+    except Exception as exc:  # noqa: BLE001  (an added card never takes the 손익비·위험 page down)
+        streaks = {"error": f"연패 맥락을 계산하지 못함: {type(exc).__name__}"}
+    return {"streaks": streaks,
+            "rules": {k: lad.get(k) for k in ("first_lock", "first_trigger", "stop_atr", "leverage")},
             "trades": tab["all"].get("trades", 0), "flip_trades": flips.get("trades", 0),
             "all": rr(tab["all"]), "coin_flips": rr(flips),
             "drawdown": {"timeframes": {tf: SV.compact_group(g) for tf, g in sv["timeframes"].items()},
@@ -972,6 +981,7 @@ SHADOW_KEYS = ("trades", "mean_eq", "base_mean_eq", "vs_base_eq", "better_share"
 EXITSTYLE_JSON = os.path.join(os.path.dirname(os.path.dirname(HERE)), "research", "exitstyle", "out", "exitstyle.json")
 CURVE_ACCOUNT_DAYS = 400
 ACCOUNT_RE = re.compile(r"^[A-Za-z0-9_]+@[0-9a-z]+$")         # a strategy account id ("N17_KC_RSI@15m")
+STRATEGY_RE = re.compile(r"^[A-Za-z0-9_]+$")                   # a strategy name ("N17_KC_RSI"; ?strategy=)
 
 
 def _pct(x: Optional[float], d: int = 2) -> str:
@@ -1035,13 +1045,17 @@ def report_key(daily_db: Optional[str]) -> str:
         _close(d)
 
 
-def shadows_view(paper_db: str, daily_db: Optional[str], now_ms: int, account: Optional[str] = None) -> dict:
+def shadows_view(paper_db: str, daily_db: Optional[str], now_ms: int, account: Optional[str] = None,
+                 strategy: Optional[str] = None) -> dict:
     """Every nightly shadow variant against the base for the new run (since the run start, strategy accounts;
     agents/riskreward.shadow_summary), grouped, with each group's 5-year reference line, and the leverage variants'
     equity curves (obsshadows.curve_view: median strategy-account equity per day, busts so far; one account's
     curves when ``account`` is a strategy account)."""
     from ..agents import riskreward as RR
     from ..obsshadows import curve_view
+    from .more import shadowplus as SP                  # ana8B: one strategy (?strategy=), the '지정가 진입' block
+    if strategy:
+        return SP.strategy_view(paper_db, daily_db, now_ms, strategy)
     c = ro_connect(paper_db)
     d = ro_connect(daily_db)
     try:
@@ -1058,6 +1072,10 @@ def shadows_view(paper_db: str, daily_db: Optional[str], now_ms: int, account: O
         sh = RR.shadow_summary(d, c, int(start), int(now_ms)) if d is not None else {"error": "daily3.db 없음"}
         cv = curve_view(d, account=account if account in set(accounts) else None,
                         accounts=accounts if c is not None else None) if d is not None else {}
+        try:
+            limit = SP.limit_entry(d, c, int(start or 0), int(now_ms))
+        except Exception as exc:  # noqa: BLE001  (an added card never takes the 그림자 비교 page down)
+            limit = {"title": "지정가 진입", "groups": {}, "error": f"지정가 진입을 계산하지 못함: {type(exc).__name__}"}
     finally:
         _close(c, d)
     allc = (sh.get("all") or {}) if isinstance(sh, dict) else {}
@@ -1087,7 +1105,7 @@ def shadows_view(paper_db: str, daily_db: Optional[str], now_ms: int, account: O
                                  "curves": {v: (x or [])[-CURVE_ACCOUNT_DAYS:] for v, x in (a.get("curves") or {}).items()},
                                  "bust_day": a.get("bust_day"), "n_trades": a.get("n_trades")}
     return {"label": RR.SHADOW_LABEL, "since": int(start or 0), "base": allc.get("base") or {"trades": 0},
-            "groups": groups, "curves": curves, "accounts": accounts[:400],
+            "groups": groups, "curves": curves, "accounts": accounts[:400], "limit_entry": limit,
             "account": account if account in set(accounts) else None,
             **({"error": sh["error"]} if isinstance(sh, dict) and sh.get("error") else {}),
             "note": ("밤 점검이 새 실행(시작 뒤) 매매법 계좌의 끝난 거래를 규칙 하나만 바꿔 다시 돌린 기록. 차이 = 그 그림자 평균 − "
@@ -1096,7 +1114,7 @@ def shadows_view(paper_db: str, daily_db: Optional[str], now_ms: int, account: O
 
 
 # ---------------------------------------------------------------- ⑦ the 45 questions
-STATUSES = ("done", "partial", "todo", "na")
+STATUSES = ("done", "partial", "todo", "na", "checking")       # checking = 확인 중 (not verified yet, never a guess)
 
 
 def questions(path: str = QUESTIONS_FILE) -> dict:
@@ -1245,10 +1263,11 @@ def register(app, data, rooms, db: str, daily_db: Optional[str], checkpoint_db: 
         return heavy.get("levrule", LEVRULE_TTL_S, lambda: levrule_view(db, _now()))
 
     @app.get("/api/analysis/shadows")
-    def get_shadows(account: Optional[str] = None):
+    def get_shadows(account: Optional[str] = None, strategy: Optional[str] = None):
         acct = account if account and len(account) <= 80 and ACCOUNT_RE.match(account) else None
-        return heavy.get(f"shadows:{acct or ''}:{report_key(daily)}", SHADOWS_TTL_S,
-                         lambda: shadows_view(db, daily, _now(), acct))
+        strat = strategy if strategy and len(strategy) <= 60 and STRATEGY_RE.match(strategy) else None
+        return heavy.get(f"shadows:{acct or ''}:{strat or ''}:{report_key(daily)}", SHADOWS_TTL_S,
+                         lambda: shadows_view(db, daily, _now(), acct, strat))
 
     @app.get("/api/analysis/questions")
     def get_questions():

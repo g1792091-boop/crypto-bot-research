@@ -15,6 +15,7 @@ import {reelDuel} from "./reel-duel.js";
 import {vs5yCard} from "./vs5y-kit.js";
 import {exitsCard} from "./strategies-exits.js";
 import {priorPanel} from "./strategies-prior.js";
+import {stratShadows} from "./strategies-shadows.js";
 
 const GROUP_PLATE = {core: "기존 36", ds: "딥시크 44", m5: "5분봉"};
 const DIMS = [{id: "coin", label: "코인"}, {id: "side", label: "방향"}, {id: "tf", label: "봉"}, {id: "session", label: "시간대"}];
@@ -107,6 +108,7 @@ export function detailView(ctx, st, name) {
   // wave 2 ⑨: 5년 시험 vs 지금 vs 동전 봇, per timeframe (vs5y-kit.js), next to the 5-year card
   const vs = vs5yCard(ctx, name, kind, {tf: v.tf, verdictTs: () => verdictTs()});
   const right = h("div", {class: "strat-col"}, ruleCard, acctCard, splitCard, vs.el, exits.el, profCard, lossCardEl);
+  { const ss = stratShadows(ctx, name, kind); if (ss) right.append(ss); }     // ana8B: this strategy's shadows + 5-year cells
   const el = h("div", {class: "strat-detail stack"}, head, top, h("div", {class: "strat-grid"}, left, right));
 
   // ---------------------------------------------------------------- renderers
