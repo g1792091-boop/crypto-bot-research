@@ -380,9 +380,10 @@ def test_healthy_server_after_the_start_passes_with_test_message_and_ping(tmp_pa
     assert "봇이 정상으로 돌고 있습니다" in out and "봇 생존 신호 정상: 20초 전" in out
     assert "paperbot-live3: 켜짐·실행 중" in out and "다음 실행 Fri 2026-10-02 00:20:00 UTC" in out
     assert len([h for h in srv.http if "hc-ping.com" in h[1]]) == 1
-    # CRITICAL loud, INFO silent; the empty WARN chat falls back to CRITICAL and gets no second message
+    # every test message silent (owners 2026-10-05; TELEGRAM_SOUND=1 would make CRITICAL ring); the empty WARN chat
+    # falls back to CRITICAL and gets no second message
     msgs = [dict(urllib.parse.parse_qsl(h[3].decode())) for h in srv.sent("sendMessage")]
-    assert [(m["chat_id"], m["disable_notification"]) for m in msgs] == [(CHAT, "false"), (CHAT_INFO, "true")]
+    assert [(m["chat_id"], m["disable_notification"]) for m in msgs] == [(CHAT, "true"), (CHAT_INFO, "true")]
     for s in SECRETS:
         assert s not in out
 

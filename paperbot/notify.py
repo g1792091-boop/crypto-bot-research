@@ -4,7 +4,11 @@ Telegram wording (owners' redesign 2026-10-04; plain text, Telegram gets no pars
 and the runner's lines stay as they are in the alerts table and the dashboard (English, trading files); they are
 worded here, at the Telegram edge (``telegram_text``): a title line '<what> · <whom>', a blank line, short lines,
 the KST time last where the line itself has none. One emoji first: the level mark (🚨 CRITICAL, ⚠ WARN) unless
-the text already starts with its own emoji (🔔, 📈, ✅ …). Sound comes only from the level (INFO = silent).
+the text already starts with its own emoji (🔔, 📈, ✅ …).
+
+Sound (owners' decision 2026-10-05 21:15 KST, "전부 다 무음으로"): EVERY message goes silent; the level mark and the
+first line still say how urgent it is. ``TELEGRAM_SOUND=1`` in the env file brings back the level-based sound
+(CRITICAL and WARN ring, INFO silent); the words 'loud' / '소리' below describe that optional mode.
 
 ``Router`` holds the live runner's noisy lines (1m gaps, clock skew, signal timeouts) for the hourly digest and
 rings only past a threshold; real emergencies (liquidation, job failure, …) are never held: the first CRITICAL of a
@@ -594,6 +598,16 @@ class ConsoleNotifier:
         print(f"[{level}] {text}", file=sys.stderr)
 
 
+def sound_on(env=None) -> bool:
+    """True only when the env file says TELEGRAM_SOUND=1 (default: every Telegram message is silent)."""
+    return str((os.environ if env is None else env).get("TELEGRAM_SOUND", "")).strip() == "1"
+
+
+def silent(level: str, sound: bool) -> bool:
+    """Telegram's disable_notification: always, unless sound is on; then INFO only (CRITICAL and WARN ring)."""
+    return (not sound) or level == INFO
+
+
 class TelegramNotifier:
     """Sends to one chat per level. Token and chat ids come from the
     environment so they never land in the repository:
@@ -612,6 +626,7 @@ class TelegramNotifier:
             INFO: os.environ.get("TELEGRAM_CHAT_INFO") or critical,
         }
         self.timeout = timeout
+        self.sound = sound_on()
 
     def send(self, level: str, text: str) -> bool:
         """True when Telegram accepted the message; False when delivery failed (never raises). A 429 'retry after
@@ -630,7 +645,7 @@ class TelegramNotifier:
         data = urllib.parse.urlencode({
             "chat_id": self.chats.get(level, self.chats[CRITICAL]),
             "text": body,
-            "disable_notification": json.dumps(level == INFO),
+            "disable_notification": json.dumps(silent(level, self.sound)),
         }).encode()
         url = f"https://api.telegram.org/bot{self.token}/sendMessage"
         try:

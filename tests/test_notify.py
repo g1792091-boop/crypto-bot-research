@@ -147,7 +147,23 @@ def test_telegram_text_has_one_mark_and_korean_wording(monkeypatch):
     assert texts[0] == f"🚨 모의 강제청산 · {S2} 15분\n\nSOL 25배\n증거금 $123 전액 손실\n10/03 21:15"
     assert texts[1] == "⚠ 1분봉 빠짐 · 09:00\n\nBTC\n그 코인은 그 1분을 건너뜀"
     assert texts[2] == "📊 주간 성적표"                         # silent, and no '[INFO]' in front
-    assert [d["disable_notification"][0] for d in sent] == ["false", "false", "true", "true"]
+    assert [d["disable_notification"][0] for d in sent] == ["true", "true", "true", "true"]   # all silent (owners)
+
+
+def test_every_message_is_silent_unless_the_env_turns_sound_on(monkeypatch):
+    """Owners 2026-10-05: every Telegram message silent. TELEGRAM_SOUND=1 brings back the level rule (INFO only)."""
+    sent = _telegram(monkeypatch)
+    monkeypatch.delenv("TELEGRAM_SOUND", raising=False)
+    quiet = TelegramNotifier()
+    for level in (CRITICAL, WARN, INFO):
+        assert quiet.send(level, "x") is True
+    monkeypatch.setenv("TELEGRAM_SOUND", "1")
+    loud = TelegramNotifier()
+    for level in (CRITICAL, WARN, INFO):
+        assert loud.send(level, "x") is True
+    monkeypatch.setenv("TELEGRAM_SOUND", "0")
+    assert TelegramNotifier().send(CRITICAL, "x") is True
+    assert [d["disable_notification"][0] for d in sent] == ["true"] * 3 + ["false", "false", "true"] + ["true"]
 
 
 def test_digest_text_stays_the_record_and_reaches_telegram_grouped(monkeypatch):
@@ -354,7 +370,7 @@ def test_router_bundles_30_liquidations_of_a_step_and_waits_out_a_429_without_sl
     d.flush(clk.t)
     assert len(calls) == 22 and len(sent) == 21 and r.pending == []
     bundle = sent[-1]
-    assert bundle["disable_notification"] == ["false"]                   # CRITICAL stays loud
+    assert bundle["disable_notification"] == ["true"]                    # every message silent (owners 2026-10-05)
     text = bundle["text"][0]
     assert text.startswith("🚨 긴급 29건 · 모의 강제청산 29\n\n") and text.count("- 강제청산 · ") == 29
     for b in books[1:]:
@@ -488,7 +504,7 @@ def test_router_bundles_a_120_liquidation_burst_of_every_group_loud(monkeypatch)
         r.send(CRITICAL, f"[{b}] LIQUIDATED BTCUSDT 30x lost margin 1500.00")
     d.flush(T)
     texts = [s["text"][0] for s in sent]
-    assert len(texts) == 4 and all(s["disable_notification"] == ["false"] for s in sent)
+    assert len(texts) == 4 and all(s["disable_notification"] == ["true"] for s in sent)   # silent (owners 2026-10-05)
     assert texts[0].startswith("🚨 모의 강제청산 · ")
     assert [t.split("\n")[0] for t in texts[1:]] == ["🚨 긴급 40건 · 모의 강제청산 40", "🚨 긴급 40건 · 모의 강제청산 40",
                                                      "🚨 긴급 39건 · 모의 강제청산 39"]

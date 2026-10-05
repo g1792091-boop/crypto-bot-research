@@ -740,7 +740,8 @@ def telegram_hint(reason: str) -> str:
 
 
 def telegram_chats(envs: dict[str, EnvFile], agents_wanted: bool) -> list[tuple[str, str, str, bool]]:
-    """(label, token, chat id, silent) for each distinct chat the bot and the agents send to."""
+    """(label, token, chat id, silent) for each distinct chat the bot and the agents send to. Silent everywhere unless
+    that env file says TELEGRAM_SOUND=1 (then INFO only), like notify.TelegramNotifier."""
     out, seen = [], set()
     files = [envs["live"]] + ([envs["agents"]] if agents_wanted else [])
     for ef in files:
@@ -753,7 +754,8 @@ def telegram_chats(envs: dict[str, EnvFile], agents_wanted: bool) -> list[tuple[
             if (tok, chat) in seen:
                 continue
             seen.add((tok, chat))
-            out.append((f"{ef.name}.env {level}", tok, chat, level == "INFO"))
+            sound = str(ef.get("TELEGRAM_SOUND") or "").strip() == "1"
+            out.append((f"{ef.name}.env {level}", tok, chat, (not sound) or level == "INFO"))
     return out
 
 
