@@ -79,3 +79,11 @@ a.grid-nm:hover .grid-nmt { color: var(--accent); }
 .grid-ghostname { display: block; width: 70%; height: 10px; border-radius: 4px; background: var(--surface-3); }
 .grid-emptytxt { position: absolute; margin: 0; padding: 8px 12px; border-radius: var(--r-sm); background: var(--glass); color: var(--ink-2); font-size: var(--t-sm); text-align: center; }
 .grid-reelcard .stat { background: var(--surface-3); }
+
+/* fill-strat: 5년 시험 cells (a past fact in the up / down pair) and 지금 포지션 (lit cells, live ROE) */
+.gk-cell.y5.none { background: transparent; border: 1px dashed var(--line-2); color: var(--muted); }
+.gk-cell.pos.off { background: var(--surface); color: var(--muted); opacity: .55; }
+.gk-cell.pos.on { background: var(--accent-soft); border-color: var(--accent); color: var(--ink);
+  box-shadow: 0 0 0 1px var(--accent-line), 0 0 14px var(--accent-glow); }
+.gk-cell.pos.on b.up { color: var(--up); } .gk-cell.pos.on b.down { color: var(--down); }
+.gk-cell.pos.on small { color: var(--accent-hi); }

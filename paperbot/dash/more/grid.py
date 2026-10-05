@@ -9,6 +9,12 @@
     GET /api/v4/grid/sparks?days=30|7          per strategy (the 36, DeepSeek 44, the reel) the summed realized balance
                                                of its own timeframe accounts at 41 points over the window (the
                                                strategies list's small curves).
+    GET /api/v4/grid/y5                        the 5-year past test per strategy x timeframe (fill-strat: the map's
+                                               '5년 시험' colour, so it is coloured on day 1): the 36's per-trade ROE on
+                                               margin from their 5-year cards (unit "roe"), DeepSeek's and the reel's
+                                               net price % per trade with no leverage (unit "1x"), win rate, trades
+                                               per day. The same rows the strategy page's 5-year card and 5년 시험 vs
+                                               지금 show (more/vs5y.five_year); research files only, cached 1 hour.
     GET /api/v4/grid/profile/<key>?days=30|7   the profile card. key = an account id ("S5_DONCHIAN_MFI@15m"): its
                                                balance path (as a return from the window start, 91 points), the same
                                                timeframe coin flips' median path (not for DeepSeek or a coin flip), max
@@ -55,6 +61,7 @@ STRAT_KINDS = ("strategy", "ds200", "reel")      # a strategy's own accounts (co
 HORIZON_MS = 32 * DAY_MS    # closed trades kept in memory (the 30-day window plus a margin)
 CACHE_MAX = 256
 TF_ORDER = ("5m", "15m", "30m", "1h", "4h")
+Y5_TTL_S = 3600.0           # the 5-year rows come from research files that change only with a deploy
 
 
 def window(days, now: int, start: Optional[int]) -> tuple[int, int, bool]:
@@ -310,6 +317,32 @@ class Grid:
         return {"days": g["days"], "from": frm, "now": now, "start": g["start"], "covers_run": g["covers_run"],
                 "initial": g["initial"], "t": pts, "strategies": out, "basis_ko": "봉 계좌들을 더한 닫힌 거래 기준 잔고"}
 
+    # ---------------------------------------------------------------- /api/v4/grid/y5
+    def y5(self) -> dict:
+        """{strategies: {name: {unit, group, tfs: {tf: {roe, win, per_day}}}}} for every strategy on the grid (one call
+        of vs5y.five_year per strategy; an unreadable research file gives that strategy no row, never a 500)."""
+        hit = self._cache.get(("y5",))
+        if hit and time.monotonic() - hit[0] < Y5_TTL_S:
+            return hit[1]
+        from .vs5y import five_year
+        names = sorted({(x["s"], x["g"]) for x in self.grid(30)["cells"] if x["g"] in ("core", "ds200", "reel")})
+        out: dict = {}
+        for name, grp in names:
+            try:
+                unit, rows, _meta = five_year(name)
+            except Exception:  # noqa: BLE001  (a changed research file: no 5-year row for it)
+                unit, rows = None, {}
+            if not unit or not rows:
+                continue
+            out[name] = {"unit": unit, "group": grp,
+                         "tfs": {tf: {"roe": _r(r.get("roe")), "win": _r(r.get("win"), 4), "per_day": _r(r.get("per_day"), 3)}
+                                 for tf, r in rows.items()}}
+        val = {"strategies": out, "computed_at": int(time.time() * 1000),
+               "basis_ko": "5년 과거 시험 · 거래 한 건의 평균 결과 (기존 36: 증거금 대비 ROE, 딥시크·릴스: 레버리지 없이 가격 %) · 참고"}
+        with self._lock:
+            self._cache[("y5",)] = (time.monotonic(), val)
+        return val
+
     # ---------------------------------------------------------------- /api/v4/grid/profile/<key>
     def profile(self, key: str, days=30, now_ms: Optional[int] = None) -> dict:
         """The card of one account or one strategy, from the grid's own cells (the same numbers and the same clock as
@@ -412,6 +445,11 @@ def register(app, ctx) -> Grid:
     def get_grid_sparks(days: int = 30):
         """The strategies list's small curves: each strategy's summed realized balance (60 s cache)."""
         return guard(lambda: grid.sparks(days))
+
+    @app.get("/api/v4/grid/y5")
+    def get_grid_y5():
+        """The 5-year past test per strategy x timeframe (research files only, 1 hour cache)."""
+        return guard(grid.y5)
 
     @app.get("/api/v4/grid/profile/{key}")
     def get_grid_profile(key: str, days: int = 30):

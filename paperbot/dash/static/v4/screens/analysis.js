@@ -12,7 +12,8 @@
 // `core` are computed for the 36 only and, under another group, say so with one tap back to 기존 36 (never the 36's
 // numbers under another group's name); views marked `any` are not about a group (the switch is hidden there). No coin-
 // flip group (they are the baseline line inside each view) and no mixed 전체 (different exits, different flips).
-import {h, put, ui, motion, local} from "../core/pb.js";
+import {h, put, ui, motion, local, fmt} from "../core/pb.js";
+import {tradeProgress, runDays, waitCard} from "./analysis-kit.js";
 import * as R from "./analysis-risk.js";
 import * as W from "./analysis-where.js";
 import * as X from "./analysis-rules.js";
@@ -41,6 +42,40 @@ const GROUPS = [
   {id: "reel", label: "5분봉", title: "릴스 5분 단타 1개 · 비교: 5분봉 동전 봇 3개"},
 ];
 const okGroup = (g) => (GROUPS.some((x) => x.id === g) ? g : "core");
+const GROUP_N = {core: "기존 36", ds200: "딥시크", reel: "릴스"};
+
+/**
+ * fill-strat: the real thresholds of the views that wait for trades, and how far the accounts are now (board
+ * trades), as filling bars: 손익비·위험 (파산 확률 흉내: 계좌마다 거래 N건), 계좌 겹침 (계좌마다 거래 N건 + 같이 쌓인 기록
+ * N일), 조합 시너지 (36 계좌 평균 N건). Null once every bar is full (the view then stands on its own numbers).
+ * Thresholds come from the server's answer (d.drawdown.min_trades, d.rules.min_trades / min_days, d.min_trades),
+ * with the server's constants as fallbacks (agents/survival.MIN_TRADES 20, overlap 20 / 7, SYNERGY_MIN_TRADES 5).
+ */
+export function waitBars(id, d, group, board, now = Date.now()) {
+  d = d || {};
+  const gk = GROUP_N[group] || "기존 36";
+  const perAcct = (need, why) => {
+    const p = tradeProgress(board, group, need);
+    if (!p.total) return null;
+    return {label: `${why} · 계좌마다 거래 ${fmt.int(need)}건 필요`, share: p.share, full: p.done >= p.total,
+      words: `지금 가장 많은 계좌 ${fmt.int(p.max)}건 · ${fmt.int(need)}건 넘은 ${gk} 계좌 ${fmt.int(p.done)}/${fmt.int(p.total)}`};
+  };
+  let bars = [];
+  if (id === "risk") {
+    bars = [perAcct((d.drawdown && d.drawdown.min_trades) || 20, "파산 확률 흉내")];
+  } else if (id === "overlap") {
+    const r = d.rules || {}, days = runDays(board, "core", now), need = r.min_days || 7;
+    bars = [perAcct(r.min_trades || 20, "계좌끼리 비교"),
+      days == null ? null : {label: `같이 쌓인 기록 ${fmt.int(need)}일 필요`, share: Math.min(1, days / need), full: days >= need,
+        words: `지금 ${fmt.num(days, 1)}일째`}];
+  } else if (id === "synergy") {
+    const need = d.min_trades || 5, p = tradeProgress(board, "core", need);
+    if (p.total) bars = [{label: `조합 점수 · 36 계좌 평균 거래 ${fmt.int(need)}건 필요`, share: Math.min(1, p.avg / need), full: !d.waiting && p.avg >= need,
+      words: `지금 계좌당 평균 ${fmt.num(p.avg, 1)}건 · 가장 많은 계좌 ${fmt.int(p.max)}건`}];
+  }
+  bars = bars.filter(Boolean);
+  return bars.length && bars.some((b) => !b.full) ? bars : null;
+}
 const FRESH_MS = 5 * 60 * 1000;
 
 let current = null;
@@ -139,6 +174,15 @@ export async function mount(el, ctx) {
     try { nodes = v.render(d || {}, env); } catch (e) {
       console.error(e);
       nodes = [ui.card({plate: v.label}, h("p", {class: "muted"}, "이 화면을 그리지 못했습니다 (자료 모양이 바뀌었을 수 있음)."))];
+    }
+    // a view that waits for trades: its real thresholds as filling bars right under its head, and the 5-year past
+    // test that can be seen today (한눈 지도 › 5년 시험, 참고)
+    const bars = waitBars(v.id, d, env.group, ctx.store.get("board"));
+    if (bars && Array.isArray(nodes)) {
+      const y5 = env.group === "reel" ? null : h("p", {class: "an-note"}, h("b", null, "5년 과거 시험 · 참고 "),
+        "지금 계좌가 쌓이는 동안 과거 5년 시험 결과는 바로 볼 수 있습니다: ",
+        h("a", {href: ctx.href("grid", null, {g: env.group === "ds200" ? "ds" : "core"}), onclick: () => local.set(env.group === "ds200" ? "grid-dscolor" : "grid-color", "y5")}, "한눈 지도 › 5년 시험 →"));
+      nodes = [nodes[0], waitCard(v.label, bars, y5), ...nodes.slice(1)];
     }
     put(body, ...nodes);
     motion.swap(body);

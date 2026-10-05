@@ -5,7 +5,9 @@
 // Data: GET /api/v4/replay/<id> (dash/more/replay.py, cached per trade). Without an id: the latest closed trades.
 // HONESTY: one trade's story, never a verdict (the page says so); money carries ui.assume(); what the server rebuilt
 // from bars (lock times, the reel's breach bar) is labelled; bars that do not match the trade's prices are flagged.
-// Motion: the player is started by the viewer only, pauses when the page is hidden or left; no other animation runs.
+// Motion: on a trade's own page the player is started by the viewer only; the landing (#/replay, fill-strat) plays the
+// most recently closed trade (the 36 or the 5분봉 group) once on its own, above the list (a replay of a real stored trade,
+// labelled 다시보기; not with reduced motion). It pauses when the page is hidden or left; no other animation runs.
 import {h, ui, fmt, motion, local, makeChart, candleOptions, tok, priceDec} from "../core/pb.js";
 import {exitKo, entryWho, stopPath, eventLines, caption, startBar, notes, summary} from "./replay-story.js";
 import {tradeRow} from "./positions-kit.js";
@@ -67,16 +69,34 @@ export async function mount(el, ctx) {
     const reel = (reelRows || []).slice(0, 5);
     const core = (coreRows || []).slice(0, 10);
     const list = (xs, empty) => (xs.length ? h("div", {role: "list"}, xs.map((t) => tradeRow(t, byId.get(t.account_id), {onClick: pick}))) : ui.empty(empty));
-    body.replaceChildren(lead || "",
+    // the most recently closed trade of the two lists plays on its own above them
+    const newest = latestOf([...reel, ...core]);
+    const auto = h("div", {class: "stack rp-auto"});
+    body.replaceChildren(lead || "", auto,
       ui.card({plate: "최근 닫힌 거래", sub: "한 줄을 누르면 다시보기"},
         h("h3", {class: "rp-pick-h"}, "5분봉 (매매법과 5분봉 동전 봇)"), list(reel, "아직 닫힌 5분봉 거래가 없습니다"),
         h("h3", {class: "rp-pick-h"}, "기존 36"), list(core, "아직 닫힌 기존 36 거래가 없습니다"),
         h("p", {class: "note"}, "다른 거래는 포지션 › 체결 기록이나 계좌 화면의 거래 줄에서 '다시보기'를 누르세요."),
         ui.assume()));
+    if (!newest) { auto.replaceChildren(ui.card({plate: "방금 닫힌 거래"}, ui.empty("아직 닫힌 거래가 없습니다 · 첫 거래가 닫히면 여기서 저절로 다시 봅니다"))); return; }
+    auto.replaceChildren(ui.card({plate: "방금 닫힌 거래", sub: "불러오는 중"}, motion.shimmer(3, true)));
+    let d;
+    try { d = await ctx.api(`/api/v4/replay/${newest.id}`); } catch (e) {
+      if (e && e.name === "AbortError") return;
+      if (gen === view.gen) auto.replaceChildren(ui.card({plate: "방금 닫힌 거래"}, h("p", {class: "muted"}, "이 거래의 다시보기를 불러오지 못했습니다. 아래 목록에서 골라 보세요.")));
+      return;
+    }
+    if (gen !== view.gen || !ctx.alive()) return;
+    auto.replaceChildren(h("div", {class: "row wrap rp-autohead"}, ui.plate("방금 닫힌 거래 · 저절로 다시보기"),
+      h("span", {class: "muted small"}, `${fmt.kst(newest.exit_time)}에 닫힘 · 가장 최근 거래`),
+      h("a", {class: "btn-line", href: ctx.href("replay", String(newest.id))}, "이 거래만 크게 보기")));
+    const slot = h("div");
+    auto.append(slot);
+    render(d, gen, {into: slot, autoplay: !motion.reduced()});
   }
 
   // ---------------------------------------------------------------- one trade
-  function render(d, gen) {
+  function render(d, gen, opts = {}) {
     const t = d.trade, a = d.account || {};
     const n = d.bars.length;
     const evs = eventLines(d);
@@ -144,8 +164,9 @@ export async function mount(el, ctx) {
       h("a", {class: "btn-line", href: ctx.href("account", t.account_id)}, "← 계좌로"),
       h("a", {class: "btn-line", href: ctx.href("chart", t.symbol, {tf: d.tf_own})}, "차트에서 보기"),
       h("a", {class: "btn-line", href: ctx.href("replay")}, "다른 거래"));
-    body.replaceChildren(h("div", {class: "rp-grid"}, h("div", {class: "rp-main"}, chartCard, facts, links), h("div", {class: "rp-side"}, hero, storyCard)));
-    motion.swap(body);
+    const target = opts.into || body;
+    target.replaceChildren(h("div", {class: "rp-grid"}, h("div", {class: "rp-main"}, chartCard, opts.into ? null : facts, opts.into ? null : links), h("div", {class: "rp-side"}, hero, storyCard)));
+    motion.swap(target);
 
     // ---- player
     let chartApi = null;
@@ -212,6 +233,8 @@ export async function mount(el, ctx) {
     goTo(n - 1, false);
     pause();
     if (n) { capText.textContent = summary(d, evs); cap.className = "rp-cap accent"; }
+    // the landing's newest trade starts by itself once the chart is up (the viewer can stop it any time)
+    if (n && opts.autoplay) setTimeout(() => { if (gen === view.gen && !document.hidden && !P.playing) { goTo(startBar(d, evs), false); play(); } }, 900);
 
     if (n) {
       drawChart(box, d, stops, gen).then((api) => {
@@ -304,6 +327,16 @@ export async function mount(el, ctx) {
 }
 
 /** Legend keys under the chart: what each line is (only the lines this trade has). */
+/** The most recently closed of some /api/trades rows (by exit time, then id), or null. */
+export function latestOf(rows) {
+  let best = null;
+  for (const t of rows || []) {
+    if (!t || t.id == null) continue;
+    if (!best || (Number(t.exit_time) || 0) > (Number(best.exit_time) || 0) || ((Number(t.exit_time) || 0) === (Number(best.exit_time) || 0) && t.id > best.id)) best = t;
+  }
+  return best;
+}
+
 function legendItems(d) {
   const out = [["k-entry", "진입가"], ["k-stop", "손절선"]];
   if (d.exits === "reel") out.push(["k-target", "목표 (직전 봉 윗밴드)"], ["k-band", "볼린저 띠"], ["k-ma", "200선"]);

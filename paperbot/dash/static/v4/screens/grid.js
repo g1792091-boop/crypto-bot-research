@@ -8,14 +8,19 @@
 // server), polled every 60 s while the screen is open (paused when the page is hidden).
 // Not a copy of 분석 › 코인·장세 지도 (where money was made by coin / regime / session over all trades): this is per
 // account; the legend links there and to 회의 요약 › 봉 비교.
-import {h, put, ui, fmt, motion, local} from "../core/pb.js";
-import {heatCell, bin, nameOf, scaleStrip, verdictTs, periodKo, cellPct, profileCard, identicon, BINS, MIN_COLOR, SMALL} from "./grid-kit.js";
+import {h, put, ui, fmt, motion, local, derive} from "../core/pb.js";
+import {heatCell, bin, nameOf, scaleStrip, verdictTs, periodKo, cellPct, profileCard, identicon, BINS, MIN_COLOR, SMALL,
+  y5Cell, y5Bin, posCell, posRoe} from "./grid-kit.js";
 
 const TABS = [{id: "core", label: "기존 36"}, {id: "ds", label: "딥시크 44"}, {id: "m5", label: "5분봉"}];
 // "높은 순": the mean of the coloured cells (a sort, never a ranking claim; the legend says so)
 const SORTS = [{id: "name", label: "이름"}, {id: "good", label: "높은 순"}];
 const PERIODS = [{id: "30", label: "30일"}, {id: "7", label: "7일"}];
-const COLORS = [{id: "vs", label: "동전 봇 대비"}, {id: "own", label: "자기 수익률"}];
+// fill-strat: '5년 시험' (the 5-year past test per trade, so the map has colour on day 1, 참고) and '지금 포지션' (the
+// cells holding a position now, lit, with the live ROE at the mark price)
+const COLORS = [{id: "vs", label: "동전 봇 대비"}, {id: "own", label: "자기 수익률"}, {id: "y5", label: "5년 시험"}, {id: "pos", label: "지금 포지션"}];
+const DS_COLORS = [{id: "own", label: "자기 수익률"}, {id: "y5", label: "5년 시험"}, {id: "pos", label: "지금 포지션"}];
+const LIVE = new Set(["y5", "pos"]);
 const COLS = ["15m", "30m", "1h", "4h"];
 const okTab = (g) => (TABS.some((t) => t.id === g) ? g : null);
 const median = (xs) => {
@@ -31,8 +36,9 @@ export async function mount(el, ctx) {
   ctx.setTitle("한눈 지도");
   const q = ctx.params.query || {};
   const st = {tab: okTab(q.g) || okTab(local.get("grid-tab", "core")) || "core", sort: local.get("grid-sort", "name"),
-    days: String(local.get("grid-days", "30")), color: local.get("grid-color", "vs"), d: null, gen: 0, painted: false, prev: new Map(), reel: null};
+    days: String(local.get("grid-days", "30")), color: local.get("grid-color", "vs"), dsColor: local.get("grid-dscolor", "own"), y5: null, d: null, gen: 0, painted: false, prev: new Map(), reel: null};
   if (!COLORS.some((x) => x.id === st.color)) st.color = "vs";
+  if (!DS_COLORS.some((x) => x.id === st.dsColor)) st.dsColor = "own";
   if (!SORTS.some((x) => x.id === st.sort)) st.sort = "name";
   if (!PERIODS.some((x) => x.id === st.days)) st.days = "30";
 
@@ -43,6 +49,17 @@ export async function mount(el, ctx) {
   // 기존 36 only: the colour can also be the account's own return (money made or lost; DeepSeek always is)
   const colorSeg = ui.seg(COLORS, st.color, (id) => { st.color = id; local.set("grid-color", id); st.prev.clear(); st.painted = false; paint(true); }, {label: "색"});
   const colorBox = h("span", {class: "grid-opt"}, h("span", {class: "k"}, "색"), colorSeg);
+  const dsColorSeg = ui.seg(DS_COLORS, st.dsColor, (id) => { st.dsColor = id; local.set("grid-dscolor", id); st.prev.clear(); st.painted = false; paint(true); }, {label: "색"});
+  const dsColorBox = h("span", {class: "grid-opt"}, h("span", {class: "k"}, "색"), dsColorSeg);
+  const modeNow = () => (st.tab === "ds" ? st.dsColor : st.tab === "core" ? st.color : "vs");
+  // the 5-year rows: research files only (one small answer, cached an hour on the server); fetched once
+  async function loadY5() {
+    if (st.y5) return st.y5;
+    try { st.y5 = await ctx.api("/api/v4/grid/y5"); } catch (e) { st.y5 = {strategies: {}, failed: true}; }
+    return st.y5;
+  }
+  const accts = () => new Map((((ctx.store.get("board") || {}).accounts) || []).map((a) => [a.account_id, a]));
+  const markOf = (sym) => ctx.store.mark(sym);
   const summary = h("div", {class: "grid-sum"});
   const mapCard = h("section", {class: "card grid-mapcard", "aria-label": "매매법 × 봉 지도"}, motion.shimmer(8, true));
   const legend = h("div", {class: "stack grid-side"});
@@ -86,8 +103,11 @@ export async function mount(el, ctx) {
       if (!by.has(c.s)) by.set(c.s, {s: c.s, name: nameOf(c), fam: c.fam, role: c.role, cells: {}});
       by.get(c.s).cells[c.tf] = c;
     }
+    const y5 = (st.y5 && st.y5.strategies) || {};
     for (const r of by.values()) {
-      const xs = Object.values(r.cells).filter((c) => c.n >= MIN_COLOR && !c.bust).map((c) => (mode === "own" ? c.ret : c.vs)).filter((v) => v != null);
+      const xs = mode === "y5" ? Object.values((y5[r.s] || {}).tfs || {}).map((y) => y.roe).filter((v) => v != null)
+        : mode === "pos" ? Object.values(r.cells).map((c) => (c.open ? 1 : 0))
+        : Object.values(r.cells).filter((c) => c.n >= MIN_COLOR && !c.bust).map((c) => (mode === "own" ? c.ret : c.vs)).filter((v) => v != null);
       r.score = xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
     }
     const rows = [...by.values()];
@@ -109,6 +129,7 @@ export async function mount(el, ctx) {
   }
 
   function paintSummary(cells, mode) {
+    if (LIVE.has(mode)) { paintLiveSummary(cells, mode); return; }
     const n = counts(cells, mode);
     const segs = [];
     for (const k of [-4, -3, -2, -1, 0, 1, 2, 3, 4]) if (n.bins[k]) segs.push(h("i", {class: "gk-cell sw", dataset: {b: String(k)}, style: {flex: String(n.bins[k])}, title: `${fmt.int(n.bins[k])}칸`}));
@@ -122,6 +143,30 @@ export async function mount(el, ctx) {
     put(summary, segs.length && cells.length > 3 ? h("div", {class: ["grid-bar", mode === "own" ? "own" : ""], role: "img", "aria-label": words.join(", ")}, segs) : null,
       h("p", {class: "grid-sumtxt"}, ui.pill("", "ref"), words.join(" · ")),
       h("p", {class: "note"}, `${periodKo(st.d)} · ${fmt.mmdd(st.d.from)}부터 지금까지 · 닫힌 거래 기준`));
+  }
+
+  /** 5년 시험: how many cells had a positive / negative 5-year result per trade; 지금 포지션: open cells and their live
+   *  ROE (unrealized, at the mark price, before the exit fee). */
+  function paintLiveSummary(cells, mode) {
+    if (mode === "y5") {
+      const y5 = (st.y5 && st.y5.strategies) || {};
+      let up = 0, down = 0, none = 0;
+      for (const c of cells) {
+        const y = ((y5[c.s] || {}).tfs || {})[c.tf];
+        if (!y || y.roe == null) none++; else if (y.roe > 0) up++; else if (y.roe < 0) down++;
+      }
+      put(summary, h("p", {class: "grid-sumtxt"}, ui.pill("5년 과거 시험 · 참고", "ref"), ` ${fmt.int(cells.length)}칸 · 거래당 평균이 + 인 칸 ${fmt.int(up)} · − 인 칸 ${fmt.int(down)}`,
+        none ? ` · 자료 없음 ${fmt.int(none)}` : ""),
+      h("p", {class: "note"}, st.y5 && st.y5.failed ? "5년 시험 자료를 불러오지 못했습니다 (준비 전)." : "과거 5년 시험의 거래 한 건 평균입니다. 지금 계좌의 성적이 아니며 앞으로도 그렇다는 뜻이 아닙니다."));
+      return;
+    }
+    const by = accts();
+    const open = cells.filter((c) => c.open);
+    let gain = 0, loss = 0;
+    for (const c of open) { const r = posRoe(by.get(c.id), markOf); if (r != null) { if (r > 0) gain++; else if (r < 0) loss++; } }
+    put(summary, h("p", {class: "grid-sumtxt"}, `${fmt.int(cells.length)}칸 중 지금 포지션 ${fmt.int(open.length)}칸`,
+      open.length ? ` · 평가 이익 ${fmt.int(gain)} · 평가 손실 ${fmt.int(loss)}` : " · 지금 열린 포지션 없음"),
+    h("p", {class: "note"}, "빛나는 칸 = 지금 포지션이 열린 계좌 · % = 지금 평가 ROE (마크 가격, 나갈 때 수수료 전) · 5초마다 실제 시세"));
   }
 
   // ---------------------------------------------------------------- the map
@@ -145,12 +190,28 @@ export async function mount(el, ctx) {
   }
 
   function bodyRow(r, group, idx, mode) {
+    const noneTitle = group === "ds200" ? "세션 정의는 4시간봉 계좌가 없습니다" : "이 봉 계좌가 없습니다";
+    const by = mode === "pos" ? accts() : null, y5 = (st.y5 && st.y5.strategies) || {};
     return h("div", {class: "grid-row", role: "row", style: {"--i": idx}}, nameCell(r, group),
-      COLS.map((tf) => heatCell(r.cells[tf], {mode, href: r.cells[tf] ? ctx.href("account", r.cells[tf].id) : null, label: r.name,
-        noneTitle: group === "ds200" ? "세션 정의는 4시간봉 계좌가 없습니다" : "이 봉 계좌가 없습니다"})));
+      COLS.map((tf) => {
+        const c = r.cells[tf], href = c ? ctx.href("account", c.id) : null;
+        if (mode === "y5") return y5Cell(c, (y5[r.s] || {}).tfs ? y5[r.s].tfs[tf] : null, (y5[r.s] || {}).unit, {href, label: r.name, noneTitle});
+        if (mode === "pos") return posCell(c, c ? by.get(c.id) : null, markOf, {href, label: r.name, noneTitle});
+        return heatCell(c, {mode, href, label: r.name, noneTitle});
+      }));
   }
 
   function footRow(cells, mode) {
+    if (LIVE.has(mode)) {
+      const y5 = (st.y5 && st.y5.strategies) || {};
+      return h("div", {class: "grid-row grid-foot", role: "row"}, h("span", {class: "grid-nm"}, mode === "y5" ? "5년 + · −" : "열린 칸"),
+        COLS.map((tf) => {
+          const xs = cells.filter((c) => c.tf === tf);
+          if (mode === "pos") return h("span", {class: "grid-ft num"}, h("b", {class: "hi"}, fmt.int(xs.filter((c) => c.open).length)), h("i", null, "/"), h("b", null, fmt.int(xs.length)));
+          const ys = xs.map((c) => ((y5[c.s] || {}).tfs || {})[tf]).filter((y) => y && y.roe != null);
+          return h("span", {class: "grid-ft num"}, h("b", {class: "hi"}, fmt.int(ys.filter((y) => y.roe > 0).length)), h("i", null, "·"), h("b", {class: "lo"}, fmt.int(ys.filter((y) => y.roe < 0).length)));
+        }));
+    }
     return h("div", {class: "grid-row grid-foot", role: "row"}, h("span", {class: "grid-nm"}, mode === "own" ? "번 칸 · 잃은 칸" : "위 · 아래"),
       COLS.map((tf) => {
         const n = counts(cells.filter((c) => c.tf === tf), mode);
@@ -169,22 +230,23 @@ export async function mount(el, ctx) {
     if (!cells.length) return [emptyMap()];
     const mode = st.color;
     paintSummary(cells, mode);
-    return [h("div", {class: ["grid-map", mode === "own" ? "own" : ""], role: "table", "aria-label": "기존 36 매매법 × 봉"}, headRow(d, "core"),
-      refRow("동전 봇 중앙값", flipVals(d), mode === "own" ? "같은 봉 동전 봇 3개의 중앙값 (참고)" : "같은 봉 동전 봇 3개의 중앙값: 칸 색의 기준 (참고)", "flip"),
+    return [h("div", {class: ["grid-map", mode !== "vs" ? "own" : "", mode === "pos" ? "pos" : ""], role: "table", "aria-label": "기존 36 매매법 × 봉"}, headRow(d, "core"),
+      LIVE.has(mode) ? null : refRow("동전 봇 중앙값", flipVals(d), mode === "own" ? "같은 봉 동전 봇 3개의 중앙값 (참고)" : "같은 봉 동전 봇 3개의 중앙값: 칸 색의 기준 (참고)", "flip"),
       rowsOf(d, "core", mode).map((r, i) => bodyRow(r, "core", i, mode)), footRow(cells, mode))];
   }
 
   function dsMap(d) {
     const cells = d.cells.filter((c) => c.g === "ds200");
     if (!cells.length) return [emptyMap()];
-    paintSummary(cells, "own");
+    const mode = st.dsColor;
+    paintSummary(cells, mode);
     const dsMed = {};
     for (const tf of COLS) { const xs = cells.filter((c) => c.tf === tf); dsMed[tf] = xs.length ? {ret: median(xs.map((c) => c.ret)), n: xs.length} : null; }
-    const rows = rowsOf(d, "ds200", "own");
+    const rows = rowsOf(d, "ds200", mode);
     const roles = (d.roles || []).filter((r) => r.key !== "reel_5m");
     const kids = [headRow(d, "ds200"),
-      refRow("동전 봇 중앙값", flipVals(d), "같은 봉 동전 봇 3개의 중앙값 (묶음끼리 볼 때의 기준, 참고)", "flip"),
-      refRow("딥시크 중앙값", dsMed, "같은 봉 딥시크 계좌 전체의 중앙값 (묶음 숫자, 참고)", "dsmed")];
+      LIVE.has(mode) ? null : refRow("동전 봇 중앙값", flipVals(d), "같은 봉 동전 봇 3개의 중앙값 (묶음끼리 볼 때의 기준, 참고)", "flip"),
+      LIVE.has(mode) ? null : refRow("딥시크 중앙값", dsMed, "같은 봉 딥시크 계좌 전체의 중앙값 (묶음 숫자, 참고)", "dsmed")];
     let i = 0;
     for (const role of roles) {
       const mine = rows.filter((r) => r.role === role.key);
@@ -193,15 +255,15 @@ export async function mount(el, ctx) {
       kids.push(h("div", {class: "grid-row grid-sec", role: "row"},
         h("span", {class: "grid-secname"}, h("b", null, role.ko.replace(/ 담당$/, "")), h("span", {class: "sub"}, ` 정의 ${fmt.int(mine.length)}개 · ${role.families.join("·")}`)),
         h("span", {class: ["grid-secmed", "num", fmt.tone(m, cellPct(m))]}, `중앙값 ${cellPct(m)}`)));
-      for (const r of mine) kids.push(bodyRow(r, "ds200", i++, "own"));
+      for (const r of mine) kids.push(bodyRow(r, "ds200", i++, mode));
     }
     const left = rows.filter((r) => !roles.some((x) => x.key === r.role));
     if (left.length) {
       kids.push(h("div", {class: "grid-row grid-sec", role: "row"}, h("span", {class: "grid-secname"}, h("b", null, "그 밖"))));
-      for (const r of left) kids.push(bodyRow(r, "ds200", i++, "own"));
+      for (const r of left) kids.push(bodyRow(r, "ds200", i++, mode));
     }
-    kids.push(footRow(cells, "own"));
-    return [h("div", {class: "grid-map own", role: "table", "aria-label": "딥시크 44 정의 × 봉"}, kids)];
+    kids.push(footRow(cells, mode));
+    return [h("div", {class: ["grid-map own", mode === "pos" ? "pos" : ""], role: "table", "aria-label": "딥시크 44 정의 × 봉"}, kids.filter(Boolean))];
   }
 
   function m5Map(d) {
@@ -237,13 +299,16 @@ export async function mount(el, ctx) {
   function paint(animate) {
     const d = st.d;
     if (!d) return;
-    const mode = st.tab === "ds" ? "own" : st.tab === "core" ? st.color : "vs";
+    const mode = modeNow();
+    if (mode === "y5" && !st.y5) { put(mapCard, motion.shimmer(8, true)); loadY5().then(() => { if (ctx.alive()) paint(false); }); return; }
     sortBox.hidden = st.tab === "m5";
     const kids = st.tab === "core" ? coreMap(d) : st.tab === "ds" ? dsMap(d) : m5Map(d);
     const title = st.tab === "core" ? "기존 36 × 봉" : st.tab === "ds" ? "딥시크 44 × 봉" : "5분봉 · 릴스와 동전 3개";
-    const sub = st.tab === "core" ? (mode === "own" ? "색 = 자기 수익률 (시작 대비)" : "색 = 같은 봉 동전 봇 중앙값과의 차이 (참고)") : st.tab === "ds" ? "색 = 자기 수익률 · 계좌마다 동전 봇과 비교하지 않음"
-      : "색 = 5분봉 동전 3개 중앙값과의 차이 (참고)";
-    put(mapCard, h("div", {class: "card-h grid-maph"}, ui.plate(title), st.tab === "core" ? colorBox : null), h("p", {class: "grid-mapsub"}, sub), ...kids);
+    const sub = mode === "y5" ? (st.tab === "ds" ? "색 = 5년 과거 시험의 거래 한 건 평균 (레버리지 없이 가격 %) · 참고" : "색 = 5년 과거 시험의 거래 한 건 평균 ROE (증거금 대비) · 참고")
+      : mode === "pos" ? "빛나는 칸 = 지금 포지션이 열린 계좌 · % = 지금 평가 ROE (마크 가격)"
+      : st.tab === "core" ? (mode === "own" ? "색 = 자기 수익률 (시작 대비)" : "색 = 같은 봉 동전 봇 중앙값과의 차이 (참고)") : st.tab === "ds" ? "색 = 자기 수익률 · 계좌마다 동전 봇과 비교하지 않음"
+        : "색 = 5분봉 동전 3개 중앙값과의 차이 (참고)";
+    put(mapCard, h("div", {class: "card-h grid-maph"}, ui.plate(title), st.tab === "core" ? colorBox : st.tab === "ds" ? dsColorBox : null), h("p", {class: "grid-mapsub"}, sub), ...kids);
     // a cell whose colour step changed since the last answer flashes once (real data only, never on the first paint)
     const first = !st.painted;
     for (const a of mapCard.querySelectorAll("a.gk-cell[href]")) {
@@ -262,6 +327,7 @@ export async function mount(el, ctx) {
 
   function paintLegend(mode) {
     const step = (k) => `${fmt.num(BINS[k] * 100, 1)}%p`;
+    if (LIVE.has(mode)) { put(legend, liveLegend(mode), linksCard()); return; }
     put(legend,
       ui.card({plate: "읽는 법"},
         scaleStrip(mode),
@@ -277,7 +343,30 @@ export async function mount(el, ctx) {
           h("li", null, h("span", {class: "gk-legdot", "aria-hidden": "true"}), h("span", null, "노란 점 = 지금 포지션이 열려 있음 · 파산 = 잔고 10 USDT 미만으로 멈춤"))),
         ui.refNote(verdictTs(), "칸 색은 순위도 판정도 아닙니다."),
         ui.assume("closed", "수익률은 닫힌 거래 기준")),
-      ui.card({plate: "함께 보기", cls: "grid-links"},
+      linksCard());
+  }
+
+  function liveLegend(mode) {
+    if (mode === "y5") {
+      return ui.card({plate: "읽는 법 · 5년 시험"}, scaleStrip("own"),
+        h("ul", {class: "grid-keys"},
+          h("li", null, st.tab === "ds" ? "칸 = 그 정의·봉의 5년 과거 시험에서 거래 한 건의 평균 결과 (레버리지 없이 가격 %, 수수료 뒤). 큰 숫자 = 그 평균, 작은 숫자 = 승률."
+            : "칸 = 그 매매법·봉의 5년 과거 시험에서 거래 한 건의 평균 ROE (증거금 대비, v3 크기 규칙). 큰 숫자 = 그 평균, 작은 숫자 = 승률."),
+          h("li", null, "초록 = 5년 동안 거래당 평균이 + · 빨강 = − . 진할수록 큽니다."),
+          h("li", null, "점선 칸 = 5년 자료가 없는 칸 (준비 전)."),
+          h("li", null, "칸을 누르면 지금 그 계좌로 갑니다. 지금 성적은 색 '자기 수익률'에서 봅니다.")),
+        h("p", {class: "refnote"}, h("b", null, "참고"), " · 5년 과거 시험 · 지금 계좌의 성적도, 판정도, 앞으로의 약속도 아닙니다."));
+    }
+    return ui.card({plate: "읽는 법 · 지금 포지션"},
+      h("ul", {class: "grid-keys"},
+        h("li", null, "빛나는 칸 = 지금 포지션이 열린 계좌. 칸 안에 코인·방향·배수와 지금 평가 ROE."),
+        h("li", null, "% 는 마크 가격으로 본 미실현 ROE (나갈 때 수수료 전). 5초마다 실제 시세로 바뀝니다."),
+        h("li", null, "흐린 칸 = 지금 포지션 없음 · 칸을 누르면 그 계좌.")),
+      ui.assume("open"));
+  }
+
+  function linksCard() {
+    return ui.card({plate: "함께 보기", cls: "grid-links"},
         st.tab === "ds" ? h("a", {class: "lrow click", href: ctx.href("strategies", null, {g: "ds", fam: "all"})}, h("span", {class: "rk"}, "매매법"),
           h("span", {class: "lname"}, "딥시크 17계열 요약"), h("span", {class: "ret"}, "→"),
           h("span", {class: "meta"}, "계열마다 정의·계좌·거래·승률·파산 (셈만, 돈 숫자 없음)")) : null,
@@ -286,14 +375,33 @@ export async function mount(el, ctx) {
         h("a", {class: "lrow click", href: ctx.href("digest", "tf")}, h("span", {class: "rk"}, "회의"), h("span", {class: "lname"}, "봉 비교"), h("span", {class: "ret"}, "→"),
           h("span", {class: "meta"}, "매매법마다 봉별 수수료·보유 시간·방향")),
         h("a", {class: "lrow click", href: ctx.href("board", null, {g: st.tab})}, h("span", {class: "rk"}, "홈"), h("span", {class: "lname"}, "순위표"), h("span", {class: "ret"}, "→"),
-          h("span", {class: "meta"}, "같은 계좌를 한 줄씩 순서대로"))));
+          h("span", {class: "meta"}, "같은 계좌를 한 줄씩 순서대로")));
   }
 
   await Promise.all([ctx.store.need("board", 120000).catch(() => null), ctx.store.need("summary", 120000).catch(() => null)]);
   if (!ctx.alive()) return;
   await load(false);
   ctx.every(60000, () => load(false));
-  ctx.watch("summary", () => { if (st.d) paintLegend(st.tab === "ds" ? "own" : st.tab === "core" ? st.color : "vs"); });
+  ctx.watch("summary", () => { if (st.d) paintLegend(modeNow()); });
+  if (modeNow() === "y5") loadY5();
+  // 지금 포지션: the lit cells' ROE follows the shared ticker (5 s); a new board (a position opened / closed) repaints
+  ctx.watch("ticker", () => {
+    if (modeNow() !== "pos" || !st.d) return;
+    const by = accts();
+    for (const b of mapCard.querySelectorAll("[data-pos-acct]")) {
+      const r = posRoe(by.get(b.dataset.posAcct), markOf);
+      if (r == null) continue;
+      const txt = fmt.pct(r, 1);
+      if (b.textContent !== txt) { b.textContent = txt; b.className = ["num", fmt.tone(r)].filter(Boolean).join(" "); }
+    }
+  });
+  let lastOpen = null;
+  ctx.watch("board", (b) => {
+    if (!b || modeNow() !== "pos" || !st.d) return;
+    const key = (b.accounts || []).filter((a) => a.position).map((a) => a.account_id).join();
+    if (lastOpen != null && key !== lastOpen) load(false);
+    lastOpen = key;
+  });
 }
 
 export function update(params) { if (current) current(params); }

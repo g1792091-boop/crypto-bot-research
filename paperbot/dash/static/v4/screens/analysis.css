@@ -123,3 +123,16 @@ a.an-row { color: inherit; text-decoration: none; transition: background-color v
 .an-cost-brow .t.paper i { background: var(--muted); }
 .an-cost-brow .t.real i { background: var(--warn); }
 .an-cost-brow b { text-align: right; }
+
+/* fill-strat: 채워지는 중 (a view's real threshold as a filling neon bar) */
+.an-wait { border-color: var(--accent-line); }
+.an-prog { display: grid; gap: 6px; padding: 10px 0; border-top: 1px solid var(--line); }
+.an-prog:first-of-type { border-top: 0; }
+.an-prog-top { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; font-size: var(--t-sm); }
+.an-prog-top .num { color: var(--accent); font-weight: 800; }
+.an-prog-t { display: block; height: 12px; border-radius: 999px; background: var(--surface-3); border: 1px solid var(--line); overflow: hidden; }
+.an-prog-t i { display: block; height: 100%; width: var(--w, 0%); min-width: 4px; border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent-line), var(--accent)); box-shadow: 0 0 12px var(--accent-glow); transition: width .9s var(--ease); }
+.an-prog.full .an-prog-t i { background: var(--accent); }
+.an-prog-w { margin: 0; color: var(--ink-2); font-size: var(--t-sm); }
+.an-wait .an-note a { color: var(--accent); }

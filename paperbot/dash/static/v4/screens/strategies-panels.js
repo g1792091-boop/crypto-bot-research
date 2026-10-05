@@ -1,7 +1,7 @@
 // 매매법 상세의 부품 (builder C): the rule card, the live condition checklist, the 5-year card and the loss cards /
 // loss patterns. Every server string goes in as text (h()). Old strat.js renderConds / lastMarks / renderProfile /
 // renderSSide / lossCard, rebuilt on the shared components.
-import {h, ui, fmt} from "../core/pb.js";
+import {h, put, ui, fmt, motion} from "../core/pb.js";
 import {DS_DEFS, FAMILY, DS_COMMON, EXITS, LEVERAGE, REEL, STATUS_KO} from "./strategies-defs.js";
 import {DS_RAW, DS_COMMON_RAW, REEL_RAW} from "./strategies-raw.js";
 
@@ -184,4 +184,63 @@ export function tagRows(st) {
         h("span", {class: "k"}, "이익"), bar(t.win_share, "up"), h("span", {class: "num"}, t.win_share == null ? "—" : fmt.pct(t.win_share, 0, false)))))),
     h("p", {class: "muted small"}, MARKS_NOTE),
   ];
+}
+
+// ---------------------------------------------------------------- 방금 나온 신호 (all strategies, /api/signals)
+/** The signal's state in plain words: 진입 (the bot sent the order) or 건너뜀 · why (signal_log.status). */
+export function sigState(r) {
+  const st = String((r && r.status) || "");
+  if (st === "SUBMITTED") return {ko: "진입", tone: "accent", why: ""};
+  const why = {RECORD: "기록만 하는 봉", LATE: "늦게 와서", NO_PRICE: "가격 없음", NO_ATR: "ATR 없음"}[st] || STATUS_KO[st] || st || "—";
+  return {ko: "건너뜀", tone: "muted", why};
+}
+
+/** New signal ids since the last answer (the first answer marks none: nothing slides in on opening the page). */
+export function newIds(prev, rows) {
+  if (!prev) return new Set();
+  return new Set((rows || []).map((r) => r.id).filter((id) => id != null && !prev.has(id)));
+}
+
+/**
+ * signalFeed(ctx, {size, groupOf}) -> {el, load()}: the newest signals of every strategy (the 36, DeepSeek, the reel)
+ * with time, strategy, coin, 봉, side and what the bot did. Polled every 30 s while the screen is open (one indexed read
+ * of signal_log); a row that really is new slides in with a glow (motion.fillIn), never on the first paint.
+ * Signals carry no money, so DeepSeek rows are listed like the others (with a 딥시크 tag).
+ */
+export function signalFeed(ctx, o = {}) {
+  const size = o.size || 12;
+  const list = h("div", {class: "strat-feed", role: "list", "aria-live": "polite"});
+  const meta = h("p", {class: "muted small"});
+  const el = ui.card({plate: "방금 나온 신호", sub: "모든 매매법 · 30초마다", cls: "strat-feedcard"}, list, meta,
+    h("p", {class: "note"}, "진입 = 봇이 모의 주문을 낸 신호 · 건너뜀 = 기록만 하는 봉이거나 늦게 온 신호. 신호 하나는 성적이 아닙니다."));
+  let seen = null;
+  const row = (r, fresh) => {
+    const s = sigState(r), g = o.groupOf ? o.groupOf(r.strategy) : null;
+    const x = h("a", {class: ["strat-frow", s.ko === "진입" ? "in" : ""], role: "listitem", href: ctx.href("strategies", r.strategy, {tf: r.timeframe, sym: r.symbol}),
+      title: `${fmt.stratKo(r.strategy)} · ${fmt.coin(r.symbol)} ${fmt.tfKo(r.timeframe)}봉 · 봉 마감 ${fmt.kst(r.bar_close)}`},
+    h("span", {class: "t num"}, fmt.dayKey(r.bar_close) === fmt.dayKey(Date.now()) ? fmt.hm(r.bar_close) : fmt.kst(r.bar_close)),
+    h("span", {class: "fnm"}, g === "ds" ? h("i", {class: "strat-ftag"}, "딥시크") : g === "m5" ? h("i", {class: "strat-ftag"}, "5분봉") : null, fmt.stratKo(r.strategy)),
+    h("span", {class: "c"}, ui.sideTag(r.side), ` ${fmt.coin(r.symbol)} · ${fmt.tfKo(r.timeframe)}`),
+    h("span", {class: ["st", s.tone]}, s.ko, s.why ? h("small", null, ` · ${s.why}`) : null));
+    if (fresh) motion.fillIn(x, null);
+    return x;
+  };
+  async function load() {
+    let rows;
+    try { rows = await ctx.api(`/api/signals?limit=${size}`); } catch (e) {
+      if (e && e.name === "AbortError") return;
+      if (!seen) put(list, ui.errorBox(e, load));
+      return;
+    }
+    if (!ctx.alive()) return;
+    rows = Array.isArray(rows) ? rows : [];
+    const fresh = newIds(seen, rows);
+    seen = new Set(rows.map((r) => r.id));
+    put(list, ...(rows.length ? rows.map((r) => row(r, fresh.has(r.id))) : [ui.empty("아직 나온 신호가 없습니다 · 봉이 닫히고 조건이 모두 켜지면 여기에 바로 나옵니다")]));
+    const newest = rows[0];
+    meta.textContent = newest ? `가장 최근 신호 ${fmt.ago(newest.bar_close)} · 최근 ${fmt.int(rows.length)}개` : "";
+  }
+  put(list, motion.shimmer(4));
+  ctx.every(30000, load);
+  return {el, load};
 }
