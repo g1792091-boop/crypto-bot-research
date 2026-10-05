@@ -349,3 +349,16 @@ What the owners see on the first morning after the v4 reset (dashboard only; shi
 | 조합 시너지 첫날 | 분석 › 조합 시너지: no ranked list until the 36 average 5 closed trades per account: "거래가 쌓이면 (계좌당 5건 이상) 보여 드립니다" | `/api/analysis/synergy` `waiting`, `note` (dash/analysis.py `SYNERGY_MIN_TRADES`) |
 | 알림 기록 읽은 곳 | 알림 기록 footer: 봇 경고 · 밤 점검 보고 · 판정 작업 기록 (no file names) | none |
 | 화면 켜두기 | 🔊 menu: "화면 켜두기" (Screen Wake Lock while the sound is on; off by default, this device only; asks again when the page comes back; "이 기기는 지원 안 함" without the API); FAQ 화면: "휴대폰에서 앱처럼 쓰려면요?" (브라우저 메뉴 → 홈 화면에 추가) | none |
+
+## 터미널 살아 있게
+
+Owners 10/06 03:48 on the live PC `#/terminal`: "마음에 드는데 뭔가 부족하다, 빛나거나 막 움직이는 게 안 보인다". Dashboard only (ships with deploy/update-dash.sh, the bot keeps running). Every light answers one real message; nothing under prefers-reduced-motion; the stream is closed while the page is hidden. Tests: tests/test_dash_punch.py.
+
+| Addition | Screen / place | Server |
+|---|---|---|
+| 실시간 큰 체결 | 터미널 left column under 우리 봇 체결 (while the liquidation recorder runs it shares one place with 시장 강제청산: a 큰 체결 · 청산 switch on every PC window): large market orders of the whole Binance market, labelled "바이낸스 시장 전체 체결 (우리 봇 아님)"; time (KST, seconds), coin, 매수 / 매도 (taker side), price (wide windows), notional, ×threshold or a 고래 badge (4x); a new row slides in with a green / pink glow; the bar = taker buy / sell notional of those orders in the last 5 minutes ("최근 N분" right after the relay connected) | `/api/v4/ticks` messages carry `big` {rows, buy, sell, n, span; first message also min, whale_x} (dash/more/ticks.py `Big`: one taker order = its aggTrades with the same coin, side and trade ms; BTC $150k, ETH $80k, others $30k; last 40 kept) |
+| 우리 봇 체결 shrinks on day 0 | fewer than 6 rows: the panel takes only what it needs and 실시간 큰 체결 gets the room | none |
+| Live ticks light the screen | each relay event (≤ ~2 a second for all coins): that coin's 관심 종목 row shows the traded price and lights (≤ 2 a second per row); the selected coin's big price and the chart's price tag light and the forming candle takes the trade price (kept against the 5 s candle poll for 6 s); the KST clock's dot = relay state, one pulse per message with trades | `/api/v4/ticks` `ev` (unchanged) |
+| Neon at rest | panels: a soft teal edge light (AI skin; the classic skin keeps its plain edge), an accent wash on the heads, glowing 미실현 합계 / 누적 손익 / top price; each panel head's underline runs a light once when that panel really got data (≤ once per 1.2 s) | none |
+| 소리 켜기 hint | 터미널 top bar: "소리 켜기" (sound off) or "한 번 누르면 소리 시작" (on, waiting for the browser's first tap); opens the header speaker's menu (the same switch); gone while the sound plays | none |
+| 이 코인 포지션 not empty | no position on the coin: its latest large market orders and (with the recorder) market liquidations, labelled "바이낸스 시장 전체 · 우리 봇 아님" | same stream, `/api/liq` |

@@ -12,13 +12,15 @@
 // reduced motion and on a hidden page). No position on this coin: no line, no glow.
 import {h, put, ui, fmt, store, motion, bars, serverNow, stream, makeChart, candleOptions, tok, priceDec} from "../core/pb.js";
 import {normPos} from "./positions-kit.js";
-import {panel} from "./terminal-kit.js";
+import {panel, ping} from "./terminal-kit.js";
+import {hit} from "./terminal-live.js";
 
 const TFS = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"];
 const SHORT = {"1m": "1분", "5m": "5분", "15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간", "1d": "일"};
 const LEVEL_TFS = ["15m", "30m", "1h", "4h"];
 const MAIN = new Set(["core", "m5", "extra"]);
 const TF_S = Object.fromEntries(Object.entries(bars.TF_MS).map(([k, v]) => [k, v / 1000]));
+const RELAY_FRESH_MS = 6000;     // the forming bar keeps the relay's trade price this long against the 5 s candle poll
 
 /** termChart(ctx, st, onTf) -> {el, ready, setSym, onTicker, onBoard, onTrades, tick} */
 export function termChart(ctx, st, onTf) {
@@ -40,7 +42,7 @@ export function termChart(ctx, st, onTf) {
   const el = panel("차트", {cls: "term-chart", acts: [tfBar, h("a", {class: "term-more", href: ctx.href("chart", st.sym, {tf: st.tf})}, "차트 화면 →")]}, wrap, keyLine);
   const moreA = el.head.querySelector(".term-more");
 
-  let C = null, series = null, last = null, t0 = 0, loadTok = 0, events = null, levels = null, trades = [], board = null, lastPx = null;
+  let C = null, series = null, last = null, t0 = 0, loadTok = 0, events = null, levels = null, trades = [], board = null, lastPx = null, relayAt = 0;
   let glowSeen = false;          // the first lines drawn for a coin are the baseline: their glows appear without motion
   const lines = {pos: new Map(), lv: [], glow: new Map()};
   const rm = (l) => { try { series.removePriceLine(l); } catch (e) { /* gone */ } };
@@ -122,8 +124,15 @@ export function termChart(ctx, st, onTf) {
     try {
       const rows = await ctx.api(`/api/candles?symbol=${sym}&interval=${tf}&limit=2`);
       if (sym !== st.sym || tf !== st.tf) return;
-      for (const c of rows) if (c.time >= last.time) { try { series.update(c); last = c; } catch (e) { /* older bar */ } }
+      const before = last.close;
+      for (let c of rows) {
+        if (c.time < last.time) continue;
+        // the relay's trade price of this bar is newer than the server's 4 s candle cache: keep it, take the wider range
+        if (c.time === last.time && Date.now() - relayAt < RELAY_FRESH_MS) c = {...c, close: last.close, high: Math.max(c.high, last.high), low: Math.min(c.low, last.low)};
+        try { series.update(c); last = c; } catch (e) { /* older bar */ }
+      }
       paintLegend(last); paintTag(true); place();
+      if (last.close !== before) ping(el);
     } catch (e) { /* next poll */ }
   }
   async function eventsList() {
@@ -269,10 +278,23 @@ export function termChart(ctx, st, onTf) {
   ctx.every(120000, loadLevels, {now: false});
   return {
     el, ready,
-    setSym() { lines.pos.forEach(rm); lines.pos.clear(); [...lines.glow.keys()].forEach(dropGlow); glowSeen = false; trades = []; moreA.href = ctx.href("chart", st.sym, {tf: st.tf}); loadCandles(); },
+    setSym() { relayAt = 0; lines.pos.forEach(rm); lines.pos.clear(); [...lines.glow.keys()].forEach(dropGlow); glowSeen = false; trades = []; moreA.href = ctx.href("chart", st.sym, {tf: st.tf}); loadCandles(); },
     onTicker() { drawPos(); },
     onBoard(b) { board = b; drawPos(); },
     onTrades(rows) { if ((rows || []).some((t) => t.symbol === st.sym)) loadTrades(); },
+    /** A real relay event of the selected coin {s, side, p, t}: the forming candle takes that trade's price (only a
+     *  trade inside the bar on screen; the next bar comes with the 5 s poll) and the price tag lights once. */
+    onTick(ev) {
+      const p = Number(ev.p), t = Number(ev.t) / 1000, span = TF_S[st.tf];
+      if (ev.s !== st.sym || !series || !last || !Number.isFinite(p) || p <= 0 || !span) return;
+      if (!(t >= last.time && t < last.time + span)) return;
+      const prev = last.close, c = {...last, close: p, high: Math.max(last.high, p), low: Math.min(last.low, p)};
+      try { series.update(c); } catch (e) { return; }
+      last = c; relayAt = Date.now();
+      paintLegend(last); paintTag(false); place();
+      hit(tag, p > prev ? "up" : p < prev ? "down" : ev.side === "buy" ? "up" : "down");
+      ping(el);
+    },
     tick() {
       if (!last) return;
       tag.lastChild.textContent = bars.closeIn(st.tf, serverNow());

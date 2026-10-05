@@ -17,7 +17,8 @@ import {termChart} from "./terminal-chart.js";
 import {coinPositions, pnlPanel} from "./terminal-side.js";
 import {bottomTable} from "./terminal-table.js";
 import {bookPanel} from "./positions-book.js";
-import {panel, duoSwitch} from "./terminal-kit.js";
+import {panel, duoSwitch, ping} from "./terminal-kit.js";
+import {tickStream, bigFeed} from "./terminal-live.js";
 
 export async function mount(el, ctx) {
   ctx.setTitle("터미널");
@@ -34,9 +35,10 @@ export async function mount(el, ctx) {
   const top = topBar(ctx, st);
   const watch = watchList(ctx, st, pick);
   const fills = fillsFeed(ctx);
-  const liq = liqFeed(ctx, st);
+  const liq = liqFeed(ctx, st, () => mine.onMarket());
+  const big = bigFeed(ctx);
   const chart = termChart(ctx, st, (tf) => { st.tf = tf; local.set("term-tf", tf); });
-  const mine = coinPositions(ctx, st);
+  const mine = coinPositions(ctx, st, {big: big.rows, liq: liq.recent, rowOf: big.rowOf});
   const book = bookPanel(ctx, st.sym, {rows: 5});
   // the book loads only while it is on screen; its first shimmer would stay up while the 호가 switch is off (a shimmer
   // means a request in flight), so it starts empty and fills on its first answer
@@ -45,13 +47,13 @@ export async function mount(el, ctx) {
   const table = bottomTable(ctx, st, pick);
 
   const bookP = panel("호가", {sub: "위 20개 기준", cls: "term-book"}, book);
-  const left = h("aside", {class: "term-col term-left", "aria-label": "관심 종목과 실시간 체결"}, watch.el, fills.el, liq.el);
+  const left = h("aside", {class: "term-col term-left", "aria-label": "관심 종목과 실시간 체결"}, watch.el, fills.el, big.el, liq.el);
   const mid = h("div", {class: "term-mid"}, chart.el, table.el);
   const right = h("aside", {class: "term-col term-right", "aria-label": "이 코인과 손익"}, mine.el, bookP, pnl.el);
   // a window under 940 px tall: this coin's positions and the book share a place, and so do our fills and the
   // market liquidations (a small switch in both heads; terminal.css)
   duoSwitch(right, "duo", [{id: "pos", label: "포지션", panel: mine.el}, {id: "book", label: "호가", panel: bookP}], (id) => { if (id === "book") book.load(); });
-  duoSwitch(left, "duo", [{id: "fills", label: "체결", panel: fills.el}, {id: "liq", label: "청산", panel: liq.el}], (id) => { if (id === "liq") liq.load(); });
+  duoSwitch(left, "duo", [{id: "big", label: "큰 체결", panel: big.el}, {id: "liq", label: "청산", panel: liq.el}], (id) => { if (id === "liq") liq.load(); });
   const root = h("div", {class: "term"}, top.el, h("div", {class: "term-grid"}, left, mid, right));
   el.append(h("h1", {class: "term-sr"}, "터미널"), root);
 
@@ -68,6 +70,23 @@ export async function mount(el, ctx) {
   syncLiq();
   ctx.on("features", () => { syncLiq(); watch.onFeatures(); liq.onFeatures(); });
   ctx.every(1000, () => { top.tick(); chart.tick(); }, {now: true});
+
+  // 터미널 살아 있게: the server's real market-trade relay while this screen is on screen and the page visible (each
+  // message lights only what it carries: the live dot, that coin's watchlist row, the selected coin's price and tag)
+  const ticks = tickStream(ctx);
+  ticks.on((m) => {
+    top.onRelay(m);
+    for (const ev of Array.isArray(m.ev) ? m.ev : []) {
+      if (!ev || typeof ev.s !== "string") continue;
+      watch.onTick(ev);
+      if (ev.s === st.sym) { top.onTick(ev); chart.onTick(ev); }
+    }
+    big.onMsg(m);
+    if (m.big && Array.isArray(m.big.rows) && m.big.rows.some((r) => r && r.s === st.sym)) mine.onMarket();
+  });
+  ticks.start();
+  // the bottom table lights its head when real closed trades arrived (its 체결 tab changed)
+  ctx.on("trades", (rows) => { if (Array.isArray(rows) && rows.length) ping(table.el); });
 
   await Promise.all([store.need("board", 60000).catch(() => null), chart.ready, fills.ready]);
   if (!ctx.alive()) return;

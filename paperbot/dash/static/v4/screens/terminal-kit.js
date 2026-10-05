@@ -1,15 +1,30 @@
 // 터미널 kit: the panel frame and the ratio bar every part of the terminal uses.
-import {h, ui, fmt} from "../core/pb.js";
+import {h, ui, fmt, motion} from "../core/pb.js";
 
 /** A terminal panel: a thin-edged box with a small head (title, a sub line, optional right side) and a body.
  *  o: {sub, acts: [el], cls, label, scroll (the body scrolls inside the panel)}. */
 export function panel(title, o = {}, ...kids) {
   const sub = h("span", {class: "term-phs"}, o.sub || "");
-  const head = h("div", {class: "term-ph"}, h("h2", null, title), sub, h("span", {class: "grow"}), ...(o.acts || []));
+  // the head's thin accent underline: a light runs along it once when the panel really receives data (ping below)
+  const head = h("div", {class: "term-ph"}, h("h2", null, title), sub, h("span", {class: "grow"}), ...(o.acts || []),
+    h("i", {class: "term-uline", "aria-hidden": "true"}));
   const body = h("div", {class: ["term-pb", o.scroll ? "scroll" : ""]}, kids);
   const el = h("section", {class: ["term-p", o.cls || ""], "aria-label": o.label || title}, head, body);
   el.head = head; el.body = body; el.sub = sub;
   return el;
+}
+
+const PING_GAP_MS = 1200;
+/** A panel REALLY received data (a new row, a real tick, a new answer that changed something): the light runs along
+ *  its head's underline once (terminal.css, ~0.9 s), at most once per 1.2 s per panel so it reads as "data came",
+ *  never a strobe. Skipped under reduced motion and while the page is hidden; never called from a timer. */
+export function ping(el) {
+  const u = el && el.head && el.head.querySelector(".term-uline");
+  if (!u || motion.reduced() || !motion.visible()) return;
+  const now = Date.now();
+  if (now - (el._ping || 0) < PING_GAP_MS) return;
+  el._ping = now;
+  u.classList.remove("run"); void u.offsetWidth; u.classList.add("run");
 }
 
 /**

@@ -11,12 +11,29 @@ import {CAL_API} from "./flow-cal.js";
 import {panel} from "./terminal-kit.js";
 
 // ---------------------------------------------------------------- this coin's positions
-/** coinPositions(ctx, st) -> {el, setSym, onBoard, onTicker} */
-export function coinPositions(ctx, st) {
+/** coinPositions(ctx, st, market) -> {el, setSym, onBoard, onTicker, onMarket}. market (optional): {big(sym), liq(sym),
+ *  rowOf(bigRow)}: with no position on this coin the panel shows the coin's latest real large market orders and market
+ *  liquidations instead of an empty box, labelled as the whole market's (우리 봇 아님). */
+export function coinPositions(ctx, st, market) {
   const list = h("div", {class: "term-cp", role: "list"});
   const el = panel("이 코인 포지션", {cls: "term-mine", scroll: true}, list);
   el.append(h("div", {class: "term-pf"}, ui.assume("open")));
-  let board = null;
+  let board = null, emptyNow = false;
+  const usdK = (x) => "$" + (x >= 1e6 ? `${fmt.num(x / 1e6, 2)}M` : `${fmt.num(x / 1e3, 0)}K`);
+  function marketBox() {
+    const big = market ? market.big(st.sym).slice(0, 6) : [], lq = market ? market.liq(st.sym).slice(0, 4) : [];
+    const kids = [ui.empty(board ? "이 코인에 열린 포지션이 없습니다" : "불러오는 중")];
+    if (!market) return kids;
+    kids.push(h("div", {class: "term-cpm"}, h("b", null, `${fmt.coin(st.sym)} 시장 큰 체결`), h("span", {class: "muted"}, "바이낸스 시장 전체 · 우리 봇 아님")));
+    kids.push(big.length ? h("div", {class: "term-feed term-big"}, big.map((r) => market.rowOf(r))) : h("p", {class: "term-cpn muted"}, "이 코인 큰 체결이 아직 없습니다"));
+    if (lq.length) {
+      kids.push(h("div", {class: "term-cpm"}, h("b", null, `${fmt.coin(st.sym)} 시장 강제청산`), h("span", {class: "muted"}, "최근 1시간")));
+      kids.push(h("div", {class: "term-feed term-liq"}, lq.map((r) => h("div", {class: ["term-fr", "liq", r.liquidated === "long" ? "lg" : "sh"]},
+        h("span", {class: "term-ft num"}, fmt.hm(r.ts)), h("span", {class: ["term-tag", r.liquidated === "long" ? "down" : "up"]}, r.liquidated === "long" ? "롱" : "숏"),
+        h("span", {class: "num term-lp"}, fmt.price(r.price)), h("b", {class: "num"}, usdK(r.usd))))));
+    }
+    return kids;
+  }
   const rows = new Map();          // account id -> {key, node, roe}
   function render() {
     const mk = store.mark(st.sym);
@@ -41,11 +58,14 @@ export function coinPositions(ctx, st) {
       motion.countTo(r.roe, u, {format: "pct", dec: 1, tone: true, glow: true});
       return r.node;
     });
-    if (!nodes.length) put(list, ui.empty(board ? "이 코인에 열린 포지션이 없습니다" : "불러오는 중"));
+    emptyNow = !nodes.length;
+    if (!nodes.length) put(list, marketBox());
     else list.replaceChildren(h("div", {class: "term-cr hd", "aria-hidden": "true"}, h("span", null, "방향"), h("span", null, "계좌"), h("span", null, "배수"),
       h("span", null, "ROE"), h("span", null, "청산가")), ...nodes);
   }
-  return {el, setSym() { rows.clear(); render(); }, onBoard(b) { board = b; render(); }, onTicker: render};
+  return {el, setSym() { rows.clear(); render(); }, onBoard(b) { board = b; render(); }, onTicker: render,
+    /** New real market rows (large orders / liquidations) arrived: redrawn only while the panel shows them. */
+    onMarket() { if (emptyNow) put(list, marketBox()); }};
 }
 
 // ---------------------------------------------------------------- group P&L: line + daily bars + calendar

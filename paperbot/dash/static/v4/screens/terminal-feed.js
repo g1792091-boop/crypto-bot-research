@@ -5,14 +5,18 @@
 // are named one by one; DeepSeek and the coin flips are folded into count rows per minute (no per-account money for
 // them here). A row that really arrived while the page is open slides in from the top with one brief glow.
 import {h, put, ui, fmt, store, motion, bars, features} from "../core/pb.js";
-import {panel, ratioBar} from "./terminal-kit.js";
+import {panel, ratioBar, ping} from "./terminal-kit.js";
+import {hit} from "./terminal-live.js";
 
 const GH_KO = {long: "롱 타점", short: "숏 타점", longWait: "롱 대기", shortWait: "숏 대기", wait: "관망"};
 const GH_TONE = {long: "up", longWait: "up", short: "down", shortWait: "down"};
 const FOLD = new Set(["ds", "coin"]);             // groups shown as count rows
 const GSHORT = {core: "기존 36", ds: "딥시크", m5: "5분봉", coin: "동전 봇", extra: "추가"};
 const MAX_ROWS = 28;
+const FEW_ROWS = 6;                                // fewer rows: the fills panel shrinks and 실시간 큰 체결 takes the room
 const live = () => motion.visible() && !motion.reduced();
+export const TICK_FRESH_MS = 6000;                 // a coin whose relay price is this fresh keeps it (the ticker is older)
+const ROW_GAP_MS = 500;                            // a watchlist row lights at most twice a second
 
 // ---------------------------------------------------------------- watchlist
 /** watchList(ctx, st, onPick) -> {el, setSym, onTicker, onFeatures} */
@@ -23,7 +27,7 @@ export function watchList(ctx, st, onPick) {
     const px = h("span", {class: "num term-wpx"}, "—"), chg = h("span", {class: "num term-wch"}, ""), gh = h("span", {class: "term-wgh", hidden: !features.ghcoin});
     const b = h("button", {type: "button", class: "term-wr", role: "option", "aria-selected": String(s === st.sym), onclick: () => onPick(s)},
       h("b", null, fmt.coin(s), s === "XRPUSDT" ? h("small", null, "기록") : null), px, chg, gh);
-    rows.set(s, {b, px, chg, gh, last: null});
+    rows.set(s, {b, px, chg, gh, last: null, at: 0, lit: 0});
     return b;
   }));
   const head = h("div", {class: "term-wr hd", "aria-hidden": "true"}, h("span", null, "코인"), h("span", null, "가격"), h("span", null, "24시간"), ghHead);
@@ -53,12 +57,25 @@ export function watchList(ctx, st, onPick) {
         const t = tk[s];
         if (!t) continue;
         const p = Number(t.c ?? t.mark);
-        motion.tickPrice(r.px, p, fmt.price(p), s);
+        if (Date.now() - r.at > TICK_FRESH_MS) motion.tickPrice(r.px, p, fmt.price(p), s);   // else the relay's is newer
         r.chg.textContent = t.p == null ? "" : fmt.pct(Number(t.p) / 100, 2);
         r.chg.className = "num term-wch " + fmt.tone(t.p);
       }
     },
     onFeatures: loadGh,
+    /** One real relay event {s, side, p}: that coin's row shows the traded price and lights once (teal when the
+     *  price went up or buyers led, pink when it went down or sellers led), at most twice a second per row. */
+    onTick(ev) {
+      const r = rows.get(ev.s), p = Number(ev.p);
+      if (!r || !Number.isFinite(p) || p <= 0) return;
+      const now = Date.now();
+      r.at = now;
+      if (now - r.lit < ROW_GAP_MS) { r.px.textContent = fmt.price(p); r.px.dataset.pv = String(p); r.px.dataset.pk = ev.s; return; }
+      r.lit = now;
+      const tone = motion.tickPrice(r.px, p, fmt.price(p), ev.s) || (ev.side === "buy" ? "up" : "down");
+      hit(r.b, tone);
+      ping(el);
+    },
   };
 }
 
@@ -151,6 +168,9 @@ export function fillsFeed(ctx) {
     for (const e of st.ev) e.live = false;
     if (!nodes.length) put(list, ui.empty("아직 체결이 없습니다"));
     else list.replaceChildren(...nodes);
+    // few rows (day 0): the panel takes only what it needs and 실시간 큰 체결 below gets the room (terminal.css)
+    el.classList.toggle("few", ms.length < FEW_ROWS);
+    if (ms.some((m) => m.live) && live()) ping(el);
     // long / short share of the last 100 entries (every group: the market side our bots took)
     let L = 0, S = 0, n = 0;
     for (const e of st.ev) { if (e.kind !== "entry") continue; if (e.side > 0) L++; else S++; if (++n >= 100) break; }
@@ -194,13 +214,13 @@ export function fillsFeed(ctx) {
 const usdK = (x) => (x >= 1e6 ? `${fmt.num(x / 1e6, 2)}M` : x >= 1e3 ? `${fmt.num(x / 1e3, 1)}K` : fmt.num(x, 0));
 
 /** liqFeed(ctx, st) -> {el, setSym, onFeatures}: /api/liq of the chosen coin every 10 s (as 차트's tab) while the recorder runs. */
-export function liqFeed(ctx, st) {
+export function liqFeed(ctx, st, onNew) {
   const list = h("div", {class: "term-feed term-liq", role: "list"});
   const ratio = ratioBar([{key: "long", label: "롱 청산", tone: "down"}, {key: "short", label: "숏 청산", tone: "up"}], {label: "최근 1시간 강제청산 롱·숏"});
   const el = panel("시장 강제청산", {cls: "term-liqp", sub: "", scroll: true}, list);
   el.append(h("div", {class: "term-pf"}, ratio, ui.note("바이낸스 전체 · 코인마다 1초에 1건만 알려 줘서 실제보다 적게 잡힙니다")));
   const seen = new Set();
-  let sym = null, busy = false;
+  let sym = null, busy = false, last = {sym: null, rows: []};
   async function load() {
     el.hidden = !features.liq;
     if (!features.liq || busy || (sym === st.sym && !el.getClientRects().length)) return;      // on screen only (the first answer always)
@@ -213,6 +233,9 @@ export function liqFeed(ctx, st) {
       el.sub.textContent = `${fmt.coin(want)} · 최근 1시간 ${fmt.int(d.n || 0)}건`;
       if (!d.recorder) { put(list, ui.empty("강제청산 기록기 자료가 없습니다")); ratio.set({}); return; }
       const rows = (d.rows || []).slice(0, 14);
+      const had = last.sym === want ? last.rows.length : -1;
+      last = {sym: want, rows};
+      let nNew = 0;                                // rows that really arrived since the last answer
       put(list, rows.length ? rows.map((r) => {
         const k = `${r.ts}:${r.usd}:${r.price}`, isNew = !fresh && !seen.has(k);
         seen.add(k);
@@ -220,13 +243,18 @@ export function liqFeed(ctx, st) {
           h("span", {class: "term-ft num"}, fmt.hm(r.ts)),
           h("span", {class: ["term-tag", r.liquidated === "long" ? "down" : "up"]}, r.liquidated === "long" ? "롱" : "숏"),
           h("span", {class: "num term-lp"}, fmt.price(r.price)), h("b", {class: "num"}, "$" + usdK(r.usd)));
+        if (isNew) nNew++;
         if (isNew && live()) motion.fillIn(node, "down");
         return node;
       }) : ui.empty("최근 1시간 기록 없음"));
       ratio.set({long: d.long_usd || 0, short: d.short_usd || 0}, (n) => "$" + usdK(n));
+      if (nNew && live()) ping(el);
+      if ((nNew || had !== rows.length) && onNew) onNew();      // 이 코인 포지션 shows them when it has no position
     } catch (e) { if (!(e && e.name === "AbortError") && fresh) put(list, ui.errorBox(e, load)); }
     finally { busy = false; }
   }
   ctx.every(10000, load, {now: true});
-  return {el, load, setSym() { put(list, motion.shimmer(3)); load(); }, onFeatures: load};
+  return {el, load, setSym() { put(list, motion.shimmer(3)); load(); }, onFeatures: load,
+    /** The last loaded liquidations of ``s`` (none for another coin, or before the first answer). */
+    recent: (s) => (features.liq && last.sym === s ? last.rows : [])};
 }
