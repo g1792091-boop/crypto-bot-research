@@ -102,7 +102,7 @@ def validate(item: Any, paper: Optional[sqlite3.Connection], daily: Optional[sql
     including the baselines code read now (``base_id``, ``base_day``). Never raises."""
     try:
         return _validate(item, paper, daily, now_ms)
-    except (sqlite3.Error, TypeError, ValueError, KeyError) as exc:
+    except (sqlite3.Error, TypeError, ValueError, KeyError, AttributeError) as exc:   # e.g. odd JSON in state
         return None, f"검증 중 오류: {type(exc).__name__}", ""
 
 
