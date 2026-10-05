@@ -197,6 +197,66 @@ def test_week_report_baseline_leaves_the_5m_flips_out(tmp_path):
     assert rep["coin_flips"]["mean_pnl"] in (None, 0.0)
 
 
+def test_week_report_groups_block_reel_against_its_5m_flips_and_counts_only_for_deepseek(tmp_path):
+    """A1 (plan T10/C6): the Sunday report's own block for the reel (vs the median of its three 5m flips, its bust
+    kept), DeepSeek and the 5m flips as counts (no money in Telegram, D10/D11); the 36's numbers stay the 36's."""
+    w = V4World(tmp_path)
+    sunday = QUIET + 4 * DAY
+    w.trade("N17_KC_RSI@15m", 10.0, sunday - DAY)
+    for k in range(3):
+        w.trade(f"{REEL_NAME}@5m", 20.0, sunday - (k + 1) * HOUR)
+    w.trade("RANDOM_1@5m", -30.0, sunday - DAY)
+    w.trade("RANDOM_2@5m", 5.0, sunday - DAY)
+    w.trade("RANDOM_3@5m", 40.0, sunday - DAY)
+    w.trade("F3_BOS@15m", 777.0, sunday - DAY)
+    w.trade("F9_FVG@1h", -333.0, sunday - DAY)
+    w.trade("F9_FVG@1h", 1.0, sunday - 9 * DAY)                    # the week before: not this week
+    w.store.alert(sunday - DAY, "WARN", f"[{REEL_NAME}@5m] BUST: equity 0.00")
+    w.store.alert(sunday - DAY, "WARN", "[F9_FVG@1h] BUST: equity 0.00")
+    w.store.commit()
+    p = w.paper()
+    try:
+        rep = DG.week_report(p, w.agents, sunday)
+    finally:
+        p.close()
+    g = rep["groups"]
+    assert (g["reel"]["pnl"], g["reel"]["trades"], g["reel"]["busts"]) == (60.0, 3, 1)
+    assert g["reel"]["bust_accounts"][0]["account"] == f"{REEL_NAME}@5m"
+    assert (g["reel"]["flips_5m"], g["reel"]["flip_median_pnl"], g["reel"]["above_flip_median"]) == (3, 5.0, True)
+    assert g["ds200"] == {"accounts": len(V4World.DS), "accounts_traded": 2, "trades": 2, "busts": 1}
+    assert g["flip_5m"] == {"accounts": 3, "accounts_traded": 3, "trades": 3, "busts": 0}
+    assert "pnl" not in g["ds200"] and "pnl" not in g["flip_5m"]
+    assert rep["busts"] == [] and rep["strategies_total"]["trades"] == 1           # the 36's own numbers
+    text = DG.compose_week(rep)
+    lines = text.split("\n")
+    reel = [x for x in lines if x.startswith("릴스 5분 단타")]
+    assert reel and "+$60" in reel[0] and "중간값 +$5보다 위" in reel[0] and "파산 1개" in reel[0]
+    ds = [x for x in lines if x.startswith("딥시크")]
+    assert ds and "$" not in ds[0] and "거래 2건" in ds[0] and "파산 1개" in ds[0]
+    f5 = [x for x in lines if x.startswith("5분 동전")]
+    assert f5 and "$" not in f5[0] and "RANDOM" not in text and "777" not in text and "333" not in text
+    assert "다른 묶음 (참고)" in text and len(text) <= 4000
+
+
+def test_week_report_without_v4_groups_has_no_group_lines(tmp_path):
+    from test_rooms import World
+    w = World(tmp_path)
+    p = w.paper()
+    try:
+        rep = DG.week_report(p, w.agents, QUIET + 4 * DAY)
+    finally:
+        p.close()
+    assert rep["groups"] == {} and "다른 묶음" not in DG.compose_week(rep)
+
+
+def test_dashboard_week_screen_shows_the_group_block_without_deepseek_money():
+    import pathlib
+    js = (pathlib.Path(__file__).resolve().parents[1] / "paperbot/dash/static/v4/screens/digest-week.js").read_text()
+    assert "d.groups" in js and "groupsCard" in js and "flip_median_pnl" in js and "refNote" in js
+    body = js[js.index("function groupsCard"):js.index("function render(d)")]
+    assert "ds.pnl" not in body and "f5.pnl" not in body
+
+
 # ------------------------------------------------------------------ G25 / G26 / G27: incidents
 def _due_incident(w, now):
     p = w.paper()

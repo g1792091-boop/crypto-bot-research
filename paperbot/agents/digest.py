@@ -598,6 +598,14 @@ def week_report(paper_ro: Optional[sqlite3.Connection], agents_ro: Optional[sqli
             return tx[1:tx.find("]")] if tx.startswith("[") and "]" in tx else None
         out["busts"] = [{"ts": int(ts), "account": bust_of(tx), "text": str(tx)[:160]} for ts, tx in busts
                         if bust_of(tx) in strat_ids]
+        # paper v4 (plan T10/C6): the reel, DeepSeek and the 5m coin flips in their own block, never in the 36's
+        # numbers above. The reel against the median of its three 5m flips; DeepSeek and the flips as counts only
+        # (owners' D10/D11). Its busts are kept here (the 36's list above stays the 36's).
+        if "error" not in out:
+            try:
+                out["groups"] = groups_week(paper_ro, w0, now, [(int(ts), bust_of(tx)) for ts, tx in busts])
+            except sqlite3.Error as exc:
+                out["groups"] = {"error": type(exc).__name__}
         # owners' request 2026-10-04: the 3 strategies that went deepest under their peak this week and how many are
         # significantly worse than their 5-year backtest (agents/survival.py, agents/btgap.py; code only)
         if "error" not in out:
@@ -655,6 +663,78 @@ def week_report(paper_ro: Optional[sqlite3.Connection], agents_ro: Optional[sqli
     out["note"] = ("최근 7일(코드 계산, 끝난 거래 손익·수수료와 펀딩 포함). 7일 성적은 운이 큼: 30일 판정은 체크포인트"
                    f"({F.method_ko()})가 함")
     return out
+
+
+def groups_week(paper_ro: sqlite3.Connection, w0: int, now: int, busts: Iterable[tuple] = ()) -> dict:
+    """The week of the v4 groups outside the 36 (code, closed trades in [w0, now)). ``reel``: the reel's P&L,
+    trades, win rate and busts against the median P&L of the 5m coin flips (same 5m bars, long only, the reel's
+    exits; the median only, never a flip's own money). ``ds200`` and ``flip_5m``: counts only (accounts, accounts
+    that traded, trades, busts; owners' D10/D11: DeepSeek money stays in its own group view). Empty groups are
+    left out (a run without them)."""
+    five = F.facts()["five_minute"]["timeframe"]
+    accts = {aid: (kind, tf) for aid, kind, tf in paper_ro.execute(
+        "SELECT account_id, kind, timeframe FROM accounts WHERE kind IN ('reel', 'ds200') "
+        "OR (kind = 'random' AND timeframe = ?)", (five,))}
+    if not accts:
+        return {}
+    grp = {aid: ("reel" if k == "reel" else "ds200" if k == "ds200" else "flip_5m") for aid, (k, _tf) in accts.items()}
+    per: dict = {aid: {"pnl": 0.0, "trades": 0, "wins": 0} for aid in accts}
+    for aid, pnl in paper_ro.execute(
+            "SELECT t.account_id, t.pnl FROM trades t JOIN accounts a ON a.account_id = t.account_id WHERE "
+            "(a.kind IN ('reel', 'ds200') OR (a.kind = 'random' AND a.timeframe = ?)) AND t.exit_time >= ? "
+            "AND t.exit_time < ?", (five, int(w0), int(now))):
+        v = per[aid]
+        v["pnl"] += _f(pnl)
+        v["trades"] += 1
+        v["wins"] += _f(pnl) > 0
+    bust_ids: dict = {}
+    for ts, aid in busts:
+        if aid in grp:
+            bust_ids.setdefault(aid, ts)
+    out: dict = {}
+    for g in ("reel", "ds200", "flip_5m"):
+        ids = sorted(a for a, x in grp.items() if x == g)
+        if not ids:
+            continue
+        n = sum(per[a]["trades"] for a in ids)
+        out[g] = {"accounts": len(ids), "accounts_traded": sum(1 for a in ids if per[a]["trades"]), "trades": n,
+                  "busts": sum(1 for a in ids if a in bust_ids)}
+    if "reel" in out:
+        ids = sorted(a for a, x in grp.items() if x == "reel")
+        n, w = out["reel"]["trades"], sum(per[a]["wins"] for a in ids)
+        pnl = round(sum(per[a]["pnl"] for a in ids), 2)
+        flips = [per[a]["pnl"] for a, x in grp.items() if x == "flip_5m"]
+        med = _median(flips)
+        out["reel"].update({"pnl": pnl, "wins": w, "win_rate": round(w / n, 3) if n else None,
+                            "bust_accounts": [{"account": a, "ts": bust_ids[a]} for a in ids if a in bust_ids],
+                            "flips_5m": len(flips), "flip_median_pnl": _r(med, 2),
+                            "above_flip_median": (pnl > med) if med is not None else None})
+    out["note"] = ("릴스는 같은 5분봉 동전 던지기(롱만, 릴스 청산) 중간값이 기준, 딥시크·동전은 개수만(두 분 D10/D11). "
+                   "7일 숫자는 참고: 판정은 30일 체크포인트")
+    return out
+
+
+def groups_lines(gr: Optional[dict]) -> list[str]:
+    """The Sunday text's group lines (no DeepSeek or coin-flip money, no account list)."""
+    if not isinstance(gr, dict) or gr.get("error") or not any(k in gr for k in ("reel", "ds200", "flip_5m")):
+        return []
+    L = ["", "다른 묶음 (참고)"]
+    r = gr.get("reel")
+    if r:
+        cmp = ""
+        if r.get("flip_median_pnl") is not None:
+            cmp = (f" · 5분 동전 {r['flips_5m']}개 중간값 {_usd(r['flip_median_pnl'])}보다 "
+                   f"{'위' if r.get('above_flip_median') else '아래'}")
+        bust = f" · 파산 {r['busts']}개" if r.get("busts") else ""
+        L.append(f"릴스 5분 단타: {_usd(r.get('pnl'))} · 거래 {r['trades']:,}건{cmp}{bust}")
+    d = gr.get("ds200")
+    if d:
+        L.append(f"딥시크 {d['accounts']}개 계좌: 거래 {d['trades']:,}건 · 거래한 계좌 {d['accounts_traded']}개"
+                 + (f" · 파산 {d['busts']}개" if d.get("busts") else "") + " (손익은 대시보드 딥시크 묶음에서)")
+    f5 = gr.get("flip_5m")
+    if f5:
+        L.append(f"5분 동전 {f5['accounts']}개: 거래 {f5['trades']:,}건" + (f" · 파산 {f5['busts']}개" if f5.get("busts") else ""))
+    return L
 
 
 def _usd(x: Optional[float]) -> str:
@@ -747,6 +827,7 @@ def compose_week(rep: dict, limit: int = 4000) -> str:
     if rep.get("timeframes"):
         tfs = [f"{TF_KO.get(tf, tf)} {_usd(v['pnl'])}" for tf, v in rep["timeframes"].items()]
         L += ["", "봉별"] + [" · ".join(tfs[i:i + 2]) for i in range(0, len(tfs), 2)]
+    L += groups_lines(rep.get("groups"))
     st = rep.get("staff")
     if st:
         L += ["", "직원", f"회의 {st['meetings_total']}번 · AI 호출 {st['ai_calls']:,}번",
