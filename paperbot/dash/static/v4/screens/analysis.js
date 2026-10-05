@@ -21,7 +21,7 @@ const VIEWS = [
   {id: "risk", label: "손익비·위험", path: "/api/analysis/risk", render: R.risk, groups: "groups", desc: "이길 때와 질 때의 크기, 낙폭과 파산 위험"},
   {id: "map", label: "코인·장세 지도", path: "/api/analysis/map", render: W.map, groups: "groups", desc: "코인·장세·시간대·방향·봉별로 어디서 벌고 잃었나"},
   {id: "sessions", label: "코인·시간대", path: "/api/breakdown", render: W.sessions, groups: "groups", gpath: "/api/analysis/breakdown", desc: "코인별, 평일·주말 × 시간대, 펀딩·미국장 개장·지표 발표 시간"},
-  {id: "entry", label: "진입 순간", path: "/api/analysis/entry", render: W.entry, groups: "core", desc: "들어가는 봉의 모습별 성적"},
+  {id: "entry", label: "진입 순간", path: "/api/analysis/entry", render: W.entry, groups: "groups", desc: "들어가는 봉의 모습별 성적"},
   {id: "tags", label: "상황 태그", path: "/api/cards/stats?days=30", render: W.tags, groups: "any", desc: "손실과 이익에 붙은 상황 표시 (경제지표 발표 전후 등)"},
   {id: "levrule", label: "좋은 자리 vs 보통", path: "/api/analysis/levrule", render: X.levrule, groups: "core", desc: "좋은 자리에서 배수를 높인 레버리지 규칙 B의 중간 숫자"},
   {id: "shadows", label: "그림자 비교", path: "/api/analysis/shadows", render: X.shadows, groups: "core", desc: "같은 거래를 손절·잠금·익절·레버리지 하나만 바꿔 다시 계산"},

@@ -44,6 +44,12 @@ Dimensions (``DIMS``), each with an ``unknown`` bucket when its data is missing:
                   ``LIQ_AFTER_MIN`` minutes before the entry and its dominant side pushed price with / against the
                   trade (shorts liquidated push up: "with" for a long), ``none`` = no burst, ``unknown`` = no record
                   covering that time.
+- 추세 초입·중간·막판 (owners' request 2026-10-06 00:45 KST), from the trade's chart context of the signal bar
+  (``context``: paperbot/context.py; the reel's 5m context may lack a field: ``unknown``), side-relative:
+  ``trend_stage``  x = ema20_dist_atr x side: ``역방향`` x < 0, ``초입`` 0 <= x < 1, ``중간`` 1 <= x < 2, ``막판`` x >= 2.
+  ``range_pos``    range_pct (1 - range_pct for a short): ``아래쪽`` < 0.33, ``가운데``, ``위쪽`` >= 0.67.
+  ``trend_align``  regime and htf_regime against the side: ``반대`` when either trends the other way, else ``같은 방향``
+                   when either trends this way, else ``횡보·불분명``; ``unknown`` when neither was recorded.
 - ``hold``        holding time: ``<30m``, ``30m-2h``, ``2h-8h``, ``8h+``.
 - ``funding``     funding rate at the entry: the last settlement at most 9 hours before (market.db ``funding``), else
                   an estimate from the latest completed 5-minute premium index (flow.db ``premium5m``, at most 15
@@ -100,10 +106,20 @@ FUNDING_MAX_AGE_MS = 9 * HOUR_MS
 PREMIUM_MAX_AGE_MS = 15 * MIN
 HOLD_EDGES_MIN = (30, 120, 480)
 WEEKDAY_KO = ("월", "화", "수", "목", "금", "토", "일")
+# 추세 초입·중간·막판 (owners' request 2026-10-06 00:45 KST; roster3 entry_timing). Edges fixed before any result was
+# looked at, read from the trade's chart context of the signal bar (paperbot/context.py, read only):
+STAGE_EDGES = (0.0, 1.0, 2.0)   # side-relative EMA20 distance in ATR14 (ema20_dist_atr x side): <0 역방향, <1 초입,
+                                # <2 중간, else 막판 (= the loss card's '많이 오른/내린 뒤 추격' at 2 ATR)
+RANGE_EDGES = (0.33, 0.67)      # side-relative place in the regime window's range (range_pct; 1 - range_pct for a
+                                # short): <0.33 아래쪽, <0.67 가운데, else 위쪽 (위쪽 = far along in the trade's way)
+TREND_OF_SIDE = {1: "trend_up", -1: "trend_down"}   # context.regime labels; box / chop / unknown = no trend
 
 BUCKETS = {
     "strength": ("weak", "mid", "strong", "unknown"),
     "volatility": ("low", "mid", "high", "unknown"),
+    "trend_stage": ("역방향", "초입", "중간", "막판", "unknown"),
+    "range_pos": ("아래쪽", "가운데", "위쪽", "unknown"),
+    "trend_align": ("같은 방향", "반대", "횡보·불분명", "unknown"),
     "body": ("<0.3", "0.3-1", "1+", "unknown"),
     "wick_against": ("<0.2", "0.2-0.4", "0.4+", "unknown"),
     "wick_with": ("<0.2", "0.2-0.4", "0.4+", "unknown"),
@@ -118,11 +134,15 @@ BUCKETS = {
 DIMS = tuple(BUCKETS)
 # the order dimensions leave a brief that is too big (the least specific first)
 BRIEF_DROP = ("weekday", "wick_with", "streak", "hold", "funding", "body", "wick_against", "close_loc", "pattern",
-              "liq", "volatility")
+              "liq", "range_pos", "trend_align", "volatility", "trend_stage")
+STAGE_DIMS = ("trend_stage", "range_pos", "trend_align")
 
 HOW_TO_READ = ("진입 순간의 모습별 끝난 거래 성적(코드 계산). 칸: n 거래 수, wr 승률, roe 평균 ROE(0.01=1%), eq 자금 대비 평균 "
                "손익. small = 거래 적어 우연일 수 있음. 정의는 회의 안내(진입 순간 칸)에 있음. with/against = 거래 방향과 같은/"
-               "반대 쪽. unknown = 그 자료가 없음")
+               "반대 쪽. trend_stage 추세 단계(EMA20에서 거래 방향으로 ATR 몇 배: 0 미만 역방향, 0~1 초입, 1~2 중간, 2 이상 "
+               "막판), range_pos 최근 범위 안 위치(거래 방향 기준 0.33 미만 아래쪽, 0.67 이상 위쪽), trend_align 이 봉·상위 "
+               "봉 장세가 거래와 같은 방향/반대(하나라도 반대면 반대)/횡보·불분명. unknown = 그 자료가 없음")
+EQ_READ = "eq 자금 대비 평균 손익. "            # HOW_TO_READ's line on the eq column (left out where there is no money)
 NOTE = ("설명용 집계일 뿐 규칙이 아님. 칸을 아주 많이 보므로(multiple_comparisons) 20칸 중 1칸쯤은 우연만으로 달라 보임: "
         "칸 차이는 가설로만, 나중 거래로 확인할 예측을 붙여 남김")
 
@@ -407,16 +427,74 @@ def weekday_bucket(entry_ms: int) -> str:
     return WEEKDAY_KO[_kst(int(entry_ms))[1]]
 
 
+# ---------------------------------------------------------------- trend stage, range position, trend alignment
+def _ctx_of(d: dict) -> dict:
+    c = d.get("context") if isinstance(d, dict) else None
+    return c if isinstance(c, dict) else {}
+
+
+def _num(x) -> Optional[float]:
+    if isinstance(x, bool) or x is None:
+        return None
+    try:
+        v = float(x)
+    except (TypeError, ValueError):
+        return None
+    return v if math.isfinite(v) else None
+
+
+def trend_stage_bucket(ctx: dict, side: int) -> str:
+    """역방향 / 초입 / 중간 / 막판 from the side-relative EMA20 distance in ATR14 (``STAGE_EDGES``)."""
+    x = _num((ctx or {}).get("ema20_dist_atr"))
+    if x is None:
+        return "unknown"
+    return _cut(x * (1 if side > 0 else -1), STAGE_EDGES, BUCKETS["trend_stage"])
+
+
+def range_pos_bucket(ctx: dict, side: int) -> str:
+    """아래쪽 / 가운데 / 위쪽 of the side-relative range_pct (``RANGE_EDGES``)."""
+    x = _num((ctx or {}).get("range_pct"))
+    if x is None:
+        return "unknown"
+    # rounded: 1 - 0.67 is 0.32999999999999996 in floats, and a short at range_pct 0.67 sits on the 0.33 edge
+    return _cut(round(x if side > 0 else 1.0 - x, 12), RANGE_EDGES, BUCKETS["range_pos"])
+
+
+def trend_align_bucket(ctx: dict, side: int) -> str:
+    """The signal bar's regime and the higher timeframe's (``htf_regime``) against the trade: 반대 when either is a trend
+    the other way (the loss cards' '추세 반대 진입' / '상위 봉 추세 반대'), else 같은 방향 when either is a trend this way,
+    else 횡보·불분명 (box, chop, 'unknown' label); ``unknown`` when neither label was recorded."""
+    regs = [v for v in ((ctx or {}).get("regime"), (ctx or {}).get("htf_regime")) if isinstance(v, str) and v]
+    if not regs:
+        return "unknown"
+    s = 1 if side > 0 else -1
+    if TREND_OF_SIDE[-s] in regs:
+        return "반대"
+    if TREND_OF_SIDE[s] in regs:
+        return "같은 방향"
+    return "횡보·불분명"
+
+
+def stage_buckets(d: dict, side: int) -> dict:
+    ctx = _ctx_of(d)
+    return {"trend_stage": trend_stage_bucket(ctx, side), "range_pos": range_pos_bucket(ctx, side),
+            "trend_align": trend_align_bucket(ctx, side)}
+
+
 # ---------------------------------------------------------------- per-trade features
 def features(paper_ro: sqlite3.Connection, now_ms: int, since_ms: int = 0, strategy: Optional[str] = None,
              liq_path: Optional[str] = None, flow_path: Optional[str] = None,
-             market_path: Optional[str] = None) -> dict:
-    """{"window", "rows": [{strategy, timeframe, symbol, side, pnl, roe, eq, b: {dim: bucket}}], "coverage"} of the
-    strategy accounts' trades closed in [since_ms, now_ms) (one strategy when ``strategy`` is given)."""
+             market_path: Optional[str] = None, kinds: tuple = ("strategy",),
+             timeframes: Optional[tuple] = None) -> dict:
+    """{"window", "rows": [{kind, strategy, timeframe, symbol, side, pnl, roe, eq, b: {dim: bucket}}], "coverage"} of
+    the accounts' trades closed in [since_ms, now_ms) (one strategy when ``strategy`` is given). ``kinds`` = the
+    account kinds (default the 36: 'strategy'; DeepSeek 'ds200', the reel 'reel', coin flips 'random');
+    ``timeframes`` None = the core timeframes (digest.TFS); the reel and its coin flips pass ('5m',)."""
     from .digest import _closed
-    raw = [x for x in _closed(paper_ro, since_ms, now_ms) if strategy is None or x[2] == strategy]
+    raw = [x for x in _closed(paper_ro, since_ms, now_ms, kinds=tuple(kinds), tfs=timeframes)
+           if strategy is None or x[2] == strategy]
     rows: list = []
-    cov = {"trades": len(raw), "candle": 0, "volatility": 0, "strength": 0, "liq": 0,
+    cov = {"trades": len(raw), "candle": 0, "volatility": 0, "strength": 0, "liq": 0, "trend_stage": 0,
            "funding_source": {"settled": 0, "premium_est": 0, "none": 0}}
     if not raw:
         return {"window": {"from": since_ms, "to": now_ms}, "rows": rows, "coverage": cov}
@@ -428,7 +506,7 @@ def features(paper_ro: sqlite3.Connection, now_ms: int, since_ms: int = 0, strat
     tfb: dict = {}
     liq = load_liq(liq_path, syms, first - VOL_LOOKBACK_MS, hi)
     fund = load_funding(market_path, flow_path, syms, first - DAY_MS, hi)
-    for _aid, _k, strat, tf, d in raw:
+    for _aid, kind, strat, tf, d in raw:
         sym = str(d.get("symbol"))
         side = 1 if _f(d.get("side")) > 0 else -1
         entry, exit_ = int(_f(d.get("entry_time"))), int(_f(d.get("exit_time")))
@@ -458,7 +536,9 @@ def features(paper_ro: sqlite3.Connection, now_ms: int, since_ms: int = 0, strat
         cov["funding_source"][src or "none"] += 1
         b["hold"] = hold_bucket((exit_ - entry) / MIN)
         b["weekday"] = weekday_bucket(entry)
-        rows.append({"strategy": strat, "timeframe": tf, "symbol": sym, "side": side, "pnl": pnl,
+        b.update(stage_buckets(d, side))
+        cov["trend_stage"] += b["trend_stage"] != "unknown"
+        rows.append({"kind": kind, "strategy": strat, "timeframe": tf, "symbol": sym, "side": side, "pnl": pnl,
                      "roe": _f(d.get("roe")), "eq": pnl / before if before > 0 else None, "b": b})
     if liq is None:
         cov["liq_note"] = "liq.db 없음"
@@ -519,15 +599,18 @@ def _multiple(examined: int, big: int) -> dict:
 
 # ---------------------------------------------------------------- shadows of the signals not taken
 def skipped_signals(paper_ro: Optional[sqlite3.Connection], daily_ro: Optional[sqlite3.Connection], since_ms: int,
-                    until_ms: int, strategy: Optional[str] = None, entered_rows: Optional[list] = None) -> dict:
+                    until_ms: int, strategy: Optional[str] = None, entered_rows: Optional[list] = None,
+                    kinds: tuple = ("strategy",), timeframes: Optional[tuple] = None) -> dict:
     """Counts of the strategy accounts' signals not taken by status and reason (paper3.db ``outcomes``) and the
-    hypothetical outcome of the skipped ones (daily3.db ``shadows`` kind 'skipped')."""
+    hypothetical outcome of the skipped ones (daily3.db ``shadows`` kind 'skipped'). ``kinds`` / ``timeframes`` as
+    ``features`` (``timeframes`` None = any timeframe of those kinds, as before)."""
     out: dict = {}
     accts: dict = {}
     if paper_ro is not None:
         try:
-            accts = {a: s for a, s, k in paper_ro.execute("SELECT account_id, strategy, kind FROM accounts")
-                     if k == "strategy" and (strategy is None or s == strategy)}
+            accts = {a: s for a, s, k, tf in paper_ro.execute("SELECT account_id, strategy, kind, timeframe FROM accounts")
+                     if k in kinds and (strategy is None or s == strategy)
+                     and (timeframes is None or tf in timeframes)}
             by: dict = {}
             for aid, status, reason, n in paper_ro.execute(
                     "SELECT account_id, status, reason, COUNT(*) FROM outcomes WHERE status != 'ENTERED' AND "
@@ -596,13 +679,14 @@ def _notable(rows: list, min_n: int, names_ko: Optional[dict], k: int = NOTABLE)
 
 
 def packet_from(feat: dict, skipped: Optional[dict] = None, min_n: int = SMALL_N, names_ko: Optional[dict] = None,
-                max_bytes: int = MAX_BYTES) -> dict:
+                max_bytes: int = MAX_BYTES, money: bool = True) -> dict:
+    """``money`` False (DeepSeek, coin flips: CONTRACT section 1, D11): no ``eq`` column anywhere."""
     rows = feat["rows"]
     out: dict = {"window": feat["window"], "trades": len(rows), "min_n": min_n, "coverage": feat["coverage"]}
     if not rows:
         out["note"] = "이 기간에 끝난 매매법 거래 없음"
         return out
-    tab = table(rows, min_n)
+    tab = table(rows, min_n, eq=money)
     e_all, b_all = _examined(tab)
     notable, e_s, b_s = _notable(rows, min_n, names_ko)
     out["all"] = tab
@@ -622,23 +706,35 @@ def packet_from(feat: dict, skipped: Optional[dict] = None, min_n: int = SMALL_N
     if compact_bytes(out) > max_bytes:
         out["all"].pop("weekday", None)
         out["trimmed"] = True
+    for dim in BRIEF_DROP:                      # still too big (more dimensions since 2026-10-06): the least specific
+        if compact_bytes(out) <= max_bytes:
+            break
+        out["all"].pop(dim, None)
     return out
 
 
 def packet(paper_ro: Optional[sqlite3.Connection], now_ms: int, since_ms: int = 0,
            daily_ro: Optional[sqlite3.Connection] = None, liq_path: Optional[str] = None,
            flow_path: Optional[str] = None, market_path: Optional[str] = None, min_n: int = SMALL_N,
-           names_ko: Optional[dict] = None, feat: Optional[dict] = None) -> dict:
-    """The Wednesday coin and regime meeting's ``entry_moment`` (all strategy trades closed since ``since_ms``)."""
+           names_ko: Optional[dict] = None, feat: Optional[dict] = None, kinds: tuple = ("strategy",),
+           timeframes: Optional[tuple] = None) -> dict:
+    """The Wednesday coin and regime meeting's ``entry_moment`` (all strategy trades closed since ``since_ms``);
+    ``kinds`` / ``timeframes`` as ``features`` (DeepSeek and coin flips: no ``eq``)."""
     if paper_ro is None:
         return {"error": "paper3.db 없음"}
     try:
         feat = feat or features(paper_ro, now_ms, since_ms, liq_path=liq_path, flow_path=flow_path,
-                                market_path=market_path)
-        sk = skipped_signals(paper_ro, daily_ro, since_ms, now_ms, entered_rows=feat["rows"])
+                                market_path=market_path, kinds=kinds, timeframes=timeframes)
+        sk = skipped_signals(paper_ro, daily_ro, since_ms, now_ms, entered_rows=feat["rows"], kinds=kinds,
+                             timeframes=timeframes)
     except sqlite3.Error as exc:
         return {"error": f"paper3.db를 읽지 못함: {type(exc).__name__}"}
-    return packet_from(feat, sk, min_n, names_ko)
+    return packet_from(feat, sk, min_n, names_ko, money=has_money(kinds))
+
+
+def _fits(out: dict, left: list, max_bytes: int) -> bool:
+    """``out`` with the ``left_out`` list it will carry (when any) fits ``max_bytes``."""
+    return compact_bytes({**out, "left_out": left} if left else out) <= max_bytes
 
 
 def strategy_brief_from(feat: dict, strategy: str, min_n: int = SMALL_N, max_bytes: int = BRIEF_MAX_BYTES) -> dict:
@@ -657,7 +753,7 @@ def strategy_brief_from(feat: dict, strategy: str, min_n: int = SMALL_N, max_byt
     out["note"] = "진입 순간 모습별 성적(코드, 설명용). small은 우연일 수 있고, 칸이 많아 차이는 가설로만"
     left = []
     for dim in BRIEF_DROP:
-        if compact_bytes(out) <= max_bytes:
+        if _fits(out, left, max_bytes):
             break
         tab.pop(dim, None)
         left.append(dim)
@@ -683,13 +779,156 @@ def strategy_brief(paper_ro: Optional[sqlite3.Connection], strategy: str, now_ms
 def dash_view(paper_ro: Optional[sqlite3.Connection], now_ms: int, since_ms: int = 0,
               daily_ro: Optional[sqlite3.Connection] = None, liq_path: Optional[str] = None,
               flow_path: Optional[str] = None, market_path: Optional[str] = None,
-              names_ko: Optional[dict] = None) -> dict:
+              names_ko: Optional[dict] = None, kinds: tuple = ("strategy",),
+              timeframes: Optional[tuple] = None) -> dict:
     """For the dashboard: the whole table, the notable strategy buckets, coverage, the not-taken signals and the
-    multiple-comparison count (the same numbers as the meeting packet, bounded the same way)."""
+    multiple-comparison count (the same numbers as the meeting packet, bounded the same way). ``kinds`` /
+    ``timeframes`` as ``features``; ``group_dash_view`` picks them per v4 group."""
     pk = packet(paper_ro, now_ms, since_ms, daily_ro=daily_ro, liq_path=liq_path, flow_path=flow_path,
-                market_path=market_path, names_ko=names_ko)
+                market_path=market_path, names_ko=names_ko, kinds=kinds, timeframes=timeframes)
     if "error" in pk:
         return pk
     return {"generated_ms": now_ms, "dims": list(DIMS), "bucket_order": {k: list(v) for k, v in BUCKETS.items()},
             **{k: pk.get(k) for k in ("window", "trades", "min_n", "coverage", "all", "notable", "skipped_signals",
                                       "multiple_comparisons", "how_to_read", "note") if k in pk}}
+
+
+# ---------------------------------------------------------------- v4 groups (owners' request 2026-10-06 00:45 KST)
+# The entry analyses cover DeepSeek and the reel too, not only the 36. Each group is read on its own timeframes
+# (the 36 and DeepSeek: the core 15m-4h; the reel: 5m) and the reel is set next to ITS three 5m coin flips (same 5m
+# bars, long only, the reel's exits) the way the 36 are set next to theirs elsewhere (coin meeting all_strategies /
+# coin_flips, risk view all / coin_flips): the same buckets side by side. DeepSeek and the coin flips are counted only
+# (CONTRACT section 1, D11): no eq, no money; n, win rate and ROE only.
+GROUPS = ("core", "ds200", "reel")
+GROUP_LABEL_KO = {"core": "기존 36 매매법", "ds200": "딥시크", "reel": "릴스 5분 단타"}
+REEL_TFS = ("5m",)                       # config.REEL_TF (a test keeps them equal)
+NO_MONEY_KINDS = ("ds200", "random")
+GROUP_BRIEF_MAX_BYTES = 6_000            # a v4 group room's entry-moment section
+FLIPS_NOTE = ("coin_flips = 같은 칸의 5분봉 동전 던지기 3개(같은 5분봉, 롱만, 릴스와 같은 청산, 비교용): 동전도 같은 칸에서 "
+              "지면 릴스 진입 탓이 아니라 그 시장 모습 탓일 수 있음. 동전은 개수·승률·ROE만")
+
+
+def has_money(kinds) -> bool:
+    """False for DeepSeek and the coin flips (counted only)."""
+    return not any(k in NO_MONEY_KINDS for k in kinds)
+
+
+def group_scope(group: str) -> tuple:
+    """(kinds, timeframes) of a v4 group: the 36 and DeepSeek on the core timeframes (None), the reel on 5m."""
+    if group == "ds200":
+        return ("ds200",), None
+    if group == "reel":
+        return ("reel",), REEL_TFS
+    return ("strategy",), None
+
+
+def _no_eq(x):
+    if isinstance(x, dict):
+        return {k: _no_eq(v) for k, v in x.items() if k != "eq"}
+    if isinstance(x, list):
+        return [_no_eq(v) for v in x]
+    return x
+
+
+def _bare(c: dict) -> dict:
+    """A cell without money: n, wr, roe (and small)."""
+    return {k: c[k] for k in ("n", "wr", "roe", "small") if k in c}
+
+
+def flips_side_by_side(flip_rows: list, min_n: int = SMALL_N, dims=DIMS) -> dict:
+    """The coin flips' cells in the same buckets (n, wr, roe only: counted only) and their total."""
+    return {"flip_trades": len(flip_rows), "flip_all": _bare(cell(flip_rows, min_n)) if flip_rows else {"n": 0},
+            "coin_flips": table(flip_rows, min_n, dims, eq=False)}
+
+
+def group_dash_view(paper_ro: Optional[sqlite3.Connection], now_ms: int, group: str = "core", since_ms: int = 0,
+                    daily_ro: Optional[sqlite3.Connection] = None, liq_path: Optional[str] = None,
+                    flow_path: Optional[str] = None, market_path: Optional[str] = None,
+                    names_ko: Optional[dict] = None) -> dict:
+    """``dash_view`` for one v4 group (``GROUPS``): 'core' is exactly ``dash_view`` (plus ``group``); 'ds200' has no
+    money (``no_money``: no eq anywhere); 'reel' carries its three 5m coin flips' cells side by side (``coin_flips``)."""
+    g = group if group in GROUPS else "core"
+    kinds, tfs = group_scope(g)
+    if g != "core" and names_ko is None and paper_ro is not None:
+        try:
+            from ..groups import label_ko
+            names_ko = {s: label_ko(s) or s for (s,) in paper_ro.execute(
+                f"SELECT DISTINCT strategy FROM accounts WHERE kind IN ({','.join('?' * len(kinds))})", kinds)}
+        except (ImportError, sqlite3.Error):
+            names_ko = None
+    v = dash_view(paper_ro, now_ms, since_ms, daily_ro=daily_ro, liq_path=liq_path, flow_path=flow_path,
+                  market_path=market_path, names_ko=names_ko, kinds=kinds, timeframes=tfs)
+    if "error" in v:
+        return {**v, "group": g}
+    v["group"], v["group_label"] = g, GROUP_LABEL_KO[g]
+    if g == "reel":
+        try:
+            ff = features(paper_ro, now_ms, since_ms, liq_path=liq_path, flow_path=flow_path, market_path=market_path,
+                          kinds=("random",), timeframes=REEL_TFS)
+            v.update(flips_side_by_side(ff["rows"], v.get("min_n", SMALL_N)))
+            v["coin_flips_note"] = FLIPS_NOTE
+        except sqlite3.Error as exc:
+            v["coin_flips"] = {"error": type(exc).__name__}
+    if not has_money(kinds):
+        v = _no_eq(v)
+        v["no_money"] = True
+        if isinstance(v.get("how_to_read"), str):        # no eq column, so no line about one either
+            v["how_to_read"] = v["how_to_read"].replace(EQ_READ, "")
+    return v
+
+
+def group_brief(rows: list, families: Optional[dict] = None, flip_rows: Optional[list] = None,
+                min_n: int = SMALL_N, max_bytes: int = GROUP_BRIEF_MAX_BYTES) -> dict:
+    """A v4 group room's entry-moment section (money-free: n, wr, roe only, CONTRACT section 1). ``rows`` = the room's
+    accounts' ``features`` rows. ``families`` {strategy: family} (DeepSeek): per family the total and the three
+    stage dimensions (trend_stage, range_pos, trend_align). ``flip_rows`` (the reel): the 5m coin flips' cells in the
+    same buckets side by side. Dimensions are left out in ``BRIEF_DROP`` order until it fits ``max_bytes``."""
+    out: dict = {"trades": len(rows), "min_n": min_n}
+    if not rows:
+        out["note"] = "이 방 계좌의 끝난 거래 없음"
+        if flip_rows is not None:
+            out["flip_trades"] = len(flip_rows)
+        return out
+    out["all"] = _bare(cell(rows, min_n))
+    tab = table(rows, min_n, eq=False)
+    for t in tab.values():
+        t.pop("unknown", None)
+    out["buckets"] = tab
+    if families:
+        per: dict = {}
+        for r in rows:
+            per.setdefault(families.get(r["strategy"]) or "?", []).append(r)
+        fam = {}
+        for f, rs in sorted(per.items()):
+            ft = table(rs, min_n, dims=STAGE_DIMS, eq=False)
+            for t in ft.values():
+                t.pop("unknown", None)
+            fam[f] = {**_bare(cell(rs, min_n)), **{d: t for d, t in ft.items() if t}}
+        out["families"] = fam
+    ftab = None
+    if flip_rows is not None:
+        side = flips_side_by_side(flip_rows, min_n)
+        ftab = side["coin_flips"]
+        for t in ftab.values():
+            t.pop("unknown", None)
+        out.update(flip_trades=side["flip_trades"], flip_all=side["flip_all"], coin_flips=ftab,
+                   coin_flips_note=FLIPS_NOTE)
+    e, b = _examined(tab)
+    out["multiple_comparisons"] = {"buckets_examined": e, "buckets_not_small": b,
+                                   "chance_hits_at_5pct": round(0.05 * b, 1)}
+    out["how_to_read"] = HOW_TO_READ.replace(EQ_READ, "")
+    out["note"] = NOTE
+    left = []
+    for dim in BRIEF_DROP:
+        if _fits(out, left, max_bytes):
+            break
+        tab.pop(dim, None)
+        if ftab is not None:
+            ftab.pop(dim, None)
+        left.append(dim)
+    if not _fits(out, left, max_bytes) and "families" in out:
+        out["families"] = {f: _bare(c) for f, c in out["families"].items()}
+        left.append("families.stage")
+    if left:
+        out["left_out"] = left
+    return out

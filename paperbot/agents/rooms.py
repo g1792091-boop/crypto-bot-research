@@ -3892,9 +3892,46 @@ def group_accounts_packet(ctx: RoundContext, room: str, due: Optional[TR.Due] = 
         out["costs_note"] = COSTS_NOTE
     if any(v[2] == "ds200" for v in accts.values()):
         out.update(_ds_room_analyses(ctx, accts))
-    out["core_only_note"] = ("진입 순간(봉 모양)·시너지 분석은 잠긴 36개 매매법에만 있음(딥시크·릴스 계좌에는 없음). "
-                             "이 방의 분석은 위의 손실 카드·비용·손익비 숫자까지")
+    out["entry_moment"] = group_entry_moment(ctx, accts)
+    out["core_only_note"] = ("조합 시너지 분석은 잠긴 36개 매매법에만 있음(딥시크·릴스 계좌에는 없음). 진입 순간 분석은 이 방 "
+                             "계좌에도 있음: entry_moment(돈 숫자 없이 거래 수·승률·ROE, 딥시크는 계열별, 릴스는 같은 칸의 "
+                             "5분봉 동전 3개와 나란히)")
     return out
+
+
+def group_entry_moment(ctx: RoundContext, accts: dict) -> dict:
+    """A v4 group room's accounts by the moment of entry (owners' request 2026-10-06 00:45 KST; agents/entrymoment
+    group_brief, code, since the start, money-free: n, win rate, ROE). DeepSeek: the room's definitions, per family;
+    the reel: next to its three 5m coin flips in the same buckets. ``accts`` = group_accounts_packet's
+    {account_id: (strategy, timeframe, kind, data)}. The features are built once per tick per group (ctx.cache)."""
+    from . import entrymoment as EM
+    from ..groups import family_of
+    if ctx.paper_ro is None:
+        return {"error": "paper3.db 없음"}
+    kinds = {v[2] for v in accts.values()}
+    members = {v[0] for v in accts.values()}
+    try:
+        rows: list = []
+        for g in ("ds200", "reel"):
+            if g in kinds:
+                rows += [r for r in _group_entry_feat(ctx, g)["rows"] if r["strategy"] in members]
+        fams = {s: family_of({"kind": k, "strategy": s, "data": d}) for s, _tf, k, d in accts.values()
+                if k == "ds200"}
+        flips = _group_entry_feat(ctx, "flip_5m")["rows"] if "reel" in kinds else None
+        return EM.group_brief(rows, families=fams or None, flip_rows=flips)
+    except Exception as exc:  # noqa: BLE001  (a description only: the meeting still runs and says it is missing)
+        return {"error": f"진입 순간 집계를 만들지 못함: {type(exc).__name__}"}
+
+
+def _group_entry_feat(ctx: RoundContext, key: str) -> dict:
+    """entrymoment.features of one v4 group ('ds200', 'reel') or the reel's 5m coin flips ('flip_5m'), once per tick."""
+    from . import entrymoment as EM
+    ck = f"entry_moment:{key}"
+    if ck not in ctx.cache:
+        kinds, tfs = (("random",), EM.REEL_TFS) if key == "flip_5m" else EM.group_scope(key)
+        ctx.cache[ck] = EM.features(ctx.paper_ro, ctx.now_ms, 0, kinds=kinds, timeframes=tfs,
+                                    **_entry_moment_paths(ctx))
+    return ctx.cache[ck]
 
 
 COSTS_NOTE = ("costs = 끝난 거래 숫자(digest.tf_stats): move_before_costs 거래 방향 평균 가격 움직임, cost_per_trade "
