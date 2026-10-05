@@ -85,7 +85,13 @@
   .rd-row .rd-sides { grid-column: 3; grid-row: 1 / span 2; }
   .rd-row .rd-rk { grid-row: 1 / span 2; }
   .rd-card:not(.all) .rd-extra { display: none; }
-  .rd-wrow { grid-template-columns: 20px 3.2em minmax(0, 1fr) auto; gap: 6px; padding: 6px; }
-  .rd-wrow .rd-badge { grid-column: 3 / -1; justify-self: start; }
+  .rd-wrow { grid-template-columns: 20px 3.2em minmax(0, 1fr) auto; gap: 4px 6px; padding: 6px; }
+  .rd-wrow .rd-rk { grid-row: 1 / span 2; }
+  .rd-wrow .rd-name { grid-column: 3 / -1; }
+  .rd-wrow .rd-name b { white-space: normal; }
+  .rd-wrow .rd-side { grid-column: 2 / 4; grid-row: 2; justify-self: start; }
+  .rd-wrow .rd-badge { grid-column: 4; grid-row: 2; justify-self: end; }
   .rd-clock { white-space: normal; }
+  .rd-mx { grid-template-columns: 2.9em repeat(var(--rd-cols, 4), minmax(0, 1fr)); gap: 3px; }
+  .rd-mx-cell { padding: 5px 2px; }
 }

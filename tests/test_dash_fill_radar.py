@@ -102,7 +102,7 @@ def test_radar_rejects_and_matrix(client):
     assert len({(s, tf) for s, tf, _n in calls}) == 24                # one fetch per cell
 
 
-def test_fired_only_from_signal_log(client):
+def test_fired_only_from_signal_log(client, monkeypatch):
     c, _calls, db = client
     d = c.get("/api/v4/radar", params={"tf": "4h", "symbol": "SOLUSDT"}).json()
     assert all(x["fired"] is None for x in d["rows"])
@@ -112,6 +112,11 @@ def test_fired_only_from_signal_log(client):
                      "atr": 1.0, "ref_price": 1.0, "ref_time": d["bar_close"] + 4000, "delay_ms": 4000, "status": "SUBMITTED"}])
     st.commit()
     st.close()
+    monkeypatch.setattr(R, "FIRED_S", 0.0)                            # the signal landed after the bar was computed
+    d2 = c.get("/api/v4/radar", params={"tf": "4h", "symbol": "SOLUSDT"}).json()
+    hit = next(x for x in d2["rows"] if x["strategy"] == "N24_DMI")
+    assert hit["fired"] == {"long": False, "short": True} and d2["rows"][0]["strategy"] == "N24_DMI"
+    assert sum(1 for x in d2["rows"] if x["fired"]) == 1
     rd = R.Radar(lambda *a: None, db)
     assert rd.fired_on("4h", "SOLUSDT", d["bar_close"] - 14_400_000, d["bar_close"]) == {"N24_DMI": [-1]}
     assert rd.fired_on("4h", "BTCUSDT", d["bar_close"] - 14_400_000, d["bar_close"]) == {}

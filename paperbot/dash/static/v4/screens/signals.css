@@ -1,4 +1,5 @@
 @import url("server-kit.css");
+@import url("strategies-radar.css");
 /* signals: 신호 (builder E). Rows: components.css .lrow; notes / counts: server-kit.css. */
 [data-screen="signals"] .signals-cols { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); align-items: start; }
 @media (min-width: 1100px) { [data-screen="signals"] .signals-cols { grid-template-columns: minmax(0, 380px) minmax(0, 1fr); } }

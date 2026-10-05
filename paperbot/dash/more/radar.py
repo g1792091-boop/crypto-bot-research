@@ -30,6 +30,7 @@ TF_MS = {"15m": 900_000, "30m": 1_800_000, "1h": 3_600_000, "4h": 14_400_000}
 COINS = ("BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "LTCUSDT", "BCHUSDT")      # the six traded coins
 RETRY_S = 20.0            # after a bar closes, a fetch that still ends on the old bar is tried again this much later
 MAX_NEW_CELLS = 3         # the matrix route: new (timeframe, coin) cells computed per call
+FIRED_S = 5.0             # the signal log is re-read for a cell at most this often (signals land a few seconds late)
 SMT = "F14_SMT"           # compares with BTC's bars of the same timeframe (as /api/strategy does)
 
 
@@ -142,10 +143,25 @@ class Radar:
         span = int((t.iloc[-1] - t.iloc[-2]).total_seconds() * 1000) if len(t) > 1 else TF_MS[tf]
         open_ms = int(t.iloc[-1].value // 10**6)
         new = {"ts": ts, "df": df, "btc": None, "span": span, "open": open_ms, "bar_close": open_ms + span,
-               "rows": {}, "fired": self.fired_on(tf, sym, open_ms, open_ms + span), "at": int(self.now() * 1000)}
+               "rows": {}, "fired": self.fired_on(tf, sym, open_ms, open_ms + span), "at": int(self.now() * 1000),
+               "fired_at": self.now()}
         with self.lock:
             self.cells[key] = new
         return new
+
+    def refresh_fired(self, c: dict, tf: str, sym: str) -> None:
+        """The bot logs a signal a few seconds after the bar closes, maybe after this cell was computed: re-read the
+        signal log (one small read-only query, at most every FIRED_S seconds) and update the rows' ``fired``."""
+        if self.now() - c.get("fired_at", 0) < FIRED_S:
+            return
+        c["fired_at"] = self.now()
+        f = self.fired_on(tf, sym, c["open"], c["bar_close"])
+        if f == c["fired"]:
+            return
+        c["fired"] = f
+        for name, r in c["rows"].items():
+            sides = f.get(name) or []
+            r["fired"] = {"long": 1 in sides, "short": -1 in sides} if sides else None
 
     def row(self, c: dict, name: str, tf: str, sym: str) -> dict:
         """One strategy's conditions on the cell's bar, computed once per bar (as /api/strategy renders them)."""
@@ -179,6 +195,7 @@ class Radar:
             if c is None:
                 return {"tf": tf, "symbol": sym, "ready": False, "rows": [], "bar_close": None,
                         "next_close": None, "why": "가격 자료를 아직 받지 못했습니다"}
+            self.refresh_fired(c, tf, sym)
             rows = [{"strategy": n, "ko": self.ko.get(n, n), **self.row(c, n, tf, sym)} for n in names]
         rows.sort(key=closeness)
         return {"tf": tf, "symbol": sym, "ready": True, "bar_close": c["bar_close"], "next_close": c["bar_close"] + c["span"],
@@ -203,6 +220,7 @@ class Radar:
                     cells.append({"tf": tf, "symbol": sym, "ready": False})
                     continue
                 with self.work:
+                    self.refresh_fired(c, tf, sym)
                     r = self.row(c, name, tf, sym)
                 cells.append({"tf": tf, "symbol": sym, "ready": True, "bar_close": c["bar_close"],
                               "long": {"on": r["long"]["on"], "of": r["long"]["of"]},

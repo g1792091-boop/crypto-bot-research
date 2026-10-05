@@ -141,7 +141,7 @@ function heatCard(ctx) {
       m.coins.map((sym) => [h("b", {class: "sig-heat-coin"}, fmt.coin(sym)), m.tfs.map((tf) => {
         const c = m.cells[`${sym}|${tf}`];
         if (!c) return h("span", {class: "sig-heat-cell zero"}, "0");
-        const x = h("span", {class: "sig-heat-cell", style: {"--a": `${Math.round(12 + 58 * c.n / max)}%`},
+        const x = h("span", {class: "sig-heat-cell", style: {"--a": `${Math.round(10 + 36 * c.n / max)}%`},
           title: `${fmt.coin(sym)} ${fmt.tfKo(tf)} · 롱 ${c.long} · 숏 ${c.short}${c.late ? ` · 늦음 ${c.late}` : ""}`},
           h("b", {class: "num"}, fmt.int(c.n)), h("small", null, h("span", {class: "up"}, fmt.int(c.long)), " · ", h("span", {class: "down"}, fmt.int(c.short))),
           c.late ? h("small", {class: "warn-t"}, `늦음 ${fmt.int(c.late)}`) : null);
