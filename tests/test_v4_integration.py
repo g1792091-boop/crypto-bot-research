@@ -156,9 +156,11 @@ def test_grep_gate_no_stale_v3_numbers_in_owner_facing_text():
                 continue
             hits.append(f"{rel}:{i}: {ln.strip()[:160]}")
     for must in ("paperbot/extras.py", "paperbot/obsidian_notes.py", "paperbot/dash/app.py",
-                 "paperbot/dash/static/v4/index.html", "docs/server-setup-v4.md", "docs/paper-v4-rules.md"):
+                 "paperbot/dash/static/v4/index.html", "docs/server-setup-v4.md"):
         assert must in scanned, must
-    assert "docs/paper-v3-rules.md" not in scanned                # frozen and hashed: out of the gate
+    # frozen and hashed: out of the gate (the v4 rules passed this gate before their .sha256 was written)
+    for frozen in ("docs/paper-v3-rules.md", "docs/paper-v4-rules.md", "docs/paper-v4-verdict.md"):
+        assert frozen not in scanned, frozen
     assert not hits, "\n".join(hits)
 
 
