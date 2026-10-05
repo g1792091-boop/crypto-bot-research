@@ -5,6 +5,7 @@
 import {h, ui, motion, features, apiText, startTour, local, put} from "../core/pb.js";
 import {note} from "./server-kit.js";
 import {FAQ, costRows} from "./faq-items.js";
+import {termsCard} from "./faq-terms.js";
 
 const DOCS = [["doc", "실험 규칙 원문"], ["verdict_doc", "판정 방법 원문"], ["levrule_doc", "좋은 자리 vs 보통 평가 계획"]];
 
@@ -12,6 +13,9 @@ export async function mount(el, ctx) {
   ctx.setTitle("자주 묻는 질문");
   const f = {verdict: null, usage: null, debate: null, debateOn: !!features.debate};
   el.append(ui.screenHead("자주 묻는 질문", "짧게 묻고 짧게 답합니다"));
+  // 용어 사전 first: #/faq?q=<term> (the "?" chips on the account screen) opens that term and brings it into view
+  const terms = termsCard((ctx.params.query || {}).q);
+  el.append(terms);
 
   // ---------------------------------------------------------------- questions (smooth expand; open ones remembered)
   const opened = new Set(local.get("faq-open", []));
@@ -90,6 +94,7 @@ export async function mount(el, ctx) {
     note("로그아웃하면 다음에 비밀번호를 다시 넣어야 합니다."));
 
   el.append(h("div", {class: "faq-cols"}, qaCard, h("div", {class: "stack"}, costCard, docCard, tourCard)));
+  if ((ctx.params.query || {}).q) requestAnimationFrame(() => { if (ctx.alive()) terms.focusTerm(); });
   paintCost();
   paintDocs(ctx.store.get("summary"));
 

@@ -11,6 +11,7 @@
 import {h, ui, fmt, derive, store, motion, makeChart, candleOptions, tok, priceDec} from "../core/pb.js";
 import {normPos, posCard, tradeRow, reelExits, nameOf, groupKo, REEL_BARS, LADDER} from "./positions-kit.js";
 import {profileCard} from "./grid-kit.js";
+import {termChip, termify} from "./faq-terms.js";
 
 const OUTCOME_KO = {ENTERED: "진입", SKIPPED: "건너뜀", REJECTED: "거절", FILTERED: "규칙으로 건너뜀"};
 const EXTRA_ST_KO = {active: "도는 중", suspended: "멈춤 (보류)", held: "정지 (동결)"};
@@ -160,7 +161,9 @@ export async function mount(el, ctx) {
         prof.card = profileCard(ctx, acc.account_id, {head: true, cls: "account-prof",
           sub: [acc.account_id, acc.created_ts ? `시작 ${fmt.kst(acc.created_ts)}` : null].filter(Boolean).join(" · "),
           onMissing: () => { prof.missing = true; if (view.prof === prof && view.plain) view.plain(); }});
+        if (view.prof && view.prof.mo) view.prof.mo.disconnect();
         view.prof = prof;
+        prof.mo = watchTerms(prof.card.el);
         prof.card.load();
       } else view.prof.card.load();
       headSlot.append(view.prof.card.el);
@@ -172,6 +175,9 @@ export async function mount(el, ctx) {
         h("div", {class: "stack"}, walletCard, refSlot, posEl, eqCard, candleCard),
         h("div", {class: "stack"}, rules, extra, tradesCard)));
 
+    // "?" chips next to the number names this page draws (용어 사전 in the FAQ)
+    termify(walletCard);
+    if (posEl) termify(posEl);
     // the charts draw once their boxes are on the page
     drawEquity(eqBox, d, init, gen);
     const drawC = () => drawCandles(cBox, d, a, symSel.value, gen);
@@ -189,6 +195,16 @@ export async function mount(el, ctx) {
     const meta = row.querySelector(".meta");
     if (meta) meta.append(link); else row.append(link);
     return row;
+  }
+
+  /** Keep the "?" chips on a card that redraws itself (the profile card): termify now and after each redraw. */
+  function watchTerms(node) {
+    termify(node);
+    if (typeof MutationObserver !== "function") return null;
+    const mo = new MutationObserver(() => termify(node));      // termify skips chipped labels: no loop
+    mo.observe(node, {childList: true, subtree: true});
+    ctx.track(() => mo.disconnect());
+    return mo;
   }
 
   // ---------------------------------------------------------------- 같은 매매법 (under the profile card)
@@ -245,8 +261,8 @@ export async function mount(el, ctx) {
     const w = a.wallet == null ? init : a.wallet;
     if (med == null) return null;
     const where = w > med ? "위" : w < med ? "아래" : "같음";
-    return h("div", {class: "stack tight"}, h("p", {class: "pos-plain"}, h("b", null, "참고"), ` · 같은 ${fmt.tfKo(a.timeframe)}봉 동전 봇 중앙값 ${fmt.money(med)}보다 `,
-      h("b", null, where), " (이 계좌 ", fmt.money(w), ")"), ui.refNote(vts));
+    return h("div", {class: "stack tight"}, h("p", {class: "pos-plain"}, h("b", null, "참고"), ` · 같은 ${fmt.tfKo(a.timeframe)}봉 동전 봇 중앙값`, termChip("중앙값"),
+      ` ${fmt.money(med)}보다 `, h("b", null, where), " (이 계좌 ", fmt.money(w), ")"), ui.refNote(vts));
   }
 
   function extraCard(x) {

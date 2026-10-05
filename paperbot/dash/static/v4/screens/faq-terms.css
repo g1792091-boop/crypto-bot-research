@@ -1,0 +1,23 @@
+/* 용어 사전 (다듬기 7-4): the terms card at the top of the FAQ and the small "?" chips next to number names
+   (account screen). @imported by faq.css and account.css. Tokens only. */
+.ft-q { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; margin-left: 2px;
+  border-radius: 50%; border: 1px solid var(--line-2); color: var(--muted); font: 700 10px/1 var(--f-body); text-decoration: none; vertical-align: 1px; }
+.ft-q::after { content: ""; position: absolute; inset: -9px; }          /* a 34 px touch target around a small mark */
+.ft-q:hover, .ft-q:focus-visible { border-color: var(--accent-line); color: var(--accent); }
+
+.ft-card { gap: 10px; }
+.ft-list { display: grid; gap: 0; }
+.ft-row { border-top: 1px solid var(--line); border-radius: var(--r-sm); }
+.ft-row:last-child { border-bottom: 1px solid var(--line); }
+.ft-row.sel { background: var(--accent-soft); }
+.ft-t { appearance: none; width: 100%; display: grid; grid-template-columns: 86px minmax(0, 1fr) auto; gap: 10px; align-items: center; min-height: 44px;
+  padding: 8px 4px; border: 0; background: none; color: var(--ink); text-align: left; font: inherit; cursor: pointer; }
+.ft-t b { font-size: var(--t-sm); }
+.ft-first { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: var(--t-xs); }
+.ft-row.open .ft-first { visibility: hidden; }
+.ft-t[aria-expanded="true"] .faq-car { transform: rotate(225deg) translate(-2px, -2px); border-color: var(--accent); }
+.ft-t .faq-car { flex: none; width: 9px; height: 9px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg) translate(-2px, -2px);
+  transition: transform var(--t-fast) var(--ease), border-color var(--t-fast); }
+.ft-a { display: grid; gap: 4px; padding: 0 4px 12px; color: var(--ink-2); font-size: var(--t-sm); line-height: 1.65; }
+.ft-a p { margin: 0; }
+@media (min-width: 1100px) { .ft-list { grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 18px; } .ft-row:last-child { border-bottom: 0; } }
