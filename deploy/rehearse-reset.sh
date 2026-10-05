@@ -83,8 +83,9 @@ done
 install -d -m 750 "$W/lib/checkpoint_bars" "$W/lib/rehearsal"
 own "$W/lib"
 
-# the fake systemctl: read-only questions go to the real one (a unit stopped here then reads "inactive"), stop /
-# start / disable are only logged; starting the backup unit copies the rehearsal databases like paperbot-backup.sh
+# the fake systemctl: read-only questions go to the real one (a unit stopped here then reads "inactive" until it is
+# started here again), stop / start / disable are only logged; starting the backup unit copies the rehearsal databases
+# like paperbot-backup.sh
 cat > "$W/stub/systemctl" <<STUB
 #!/bin/bash
 echo "\$*" >> "$W/stub/systemctl.log"
@@ -103,6 +104,7 @@ case "\$cmd" in
   stop) for x in "\$@"; do echo "\$x" >> "$W/stub/stopped"; done ;;
   start)
     for x in "\$@"; do
+      grep -vxF -- "\$x" "$W/stub/stopped" > "$W/stub/stopped.tmp"; cat "$W/stub/stopped.tmp" > "$W/stub/stopped"
       if [ "\$x" = paperbot-backup.service ]; then
         d="$W/backups/\$(date -u +%Y%m%d)"; mkdir -p "\$d"
         for db in $DBS; do [ -f "$W/lib/\$db.db" ] && cp "$W/lib/\$db.db" "\$d/\$db.db"; done

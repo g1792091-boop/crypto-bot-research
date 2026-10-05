@@ -231,9 +231,36 @@ def test_incidents_open_for_core_reel_and_extras_only_and_the_ds_timeout_has_its
     w.store.commit()
     ds = _due_incident(w, t)
     assert len(ds) == 1
-    assert ds[0].data["counts"] == {"ds_signal_timeout": 1, "liquidation": 1, "engine_halted": 1}
+    # one DeepSeek timeout in the day: counted in the digest, not part of the meeting (jobs review 8)
+    assert ds[0].data["counts"] == {"liquidation": 1, "engine_halted": 1}
     assert T.DS_TIMEOUT_FRAGMENT and DS_TIMEOUT_TEXT.startswith(T.DS_TIMEOUT_FRAGMENT)
     assert "did not answer within" not in T.DS_TIMEOUT_FRAGMENT
+
+
+def test_deepseek_timeouts_open_an_incident_only_past_the_daily_threshold(tmp_path):
+    """Jobs review 8: every DeepSeek map timeout used to open an ops meeting (every 30 min at worst, spending the
+    incident class's calls). Now a KST day's timeouts open one only once ``ds_timeout_meeting_min`` (12, the
+    Router's one loud WARN a day) have come; the 36's own signal timeout still opens one at once."""
+    from paperbot.sigservice import DS_TIMEOUT_TEXT
+    w = V4World(tmp_path)
+    _daily(w).close()
+    t = QUIET
+    n = T.TriggerPolicy().ds_timeout_meeting_min
+    assert n == 12
+    for k in range(n - 1):
+        w.store.alert(t - (n - k) * MIN, "WARN", DS_TIMEOUT_TEXT.format(secs=60, boundary=123 + k, tfs="15m"))
+    w.store.commit()
+    assert _due_incident(w, t) == []
+    w.store.alert(t - 30_000, "WARN", DS_TIMEOUT_TEXT.format(secs=60, boundary=999, tfs="15m"))
+    w.store.commit()
+    ds = _due_incident(w, t)
+    assert len(ds) == 1 and ds[0].data["counts"] == {"ds_signal_timeout": n}
+    (tmp_path / "core").mkdir()
+    w2 = V4World(tmp_path / "core")
+    _daily(w2).close()
+    w2.store.alert(t - MIN, "WARN", "signal workers did not answer within 120s; signals skipped at 123 for 15m")
+    w2.store.commit()
+    assert [d.data["counts"] for d in _due_incident(w2, t)] == [{"signal_timeout": 1}]
 
 
 def test_no_snapshot_on_the_first_day_opens_no_incident(tmp_path):

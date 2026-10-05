@@ -445,3 +445,28 @@ def test_pool_terminate_still_kills_workers_forked_after_the_sigterm_handler():
         assert not stop.is_set()
     finally:
         restore()
+
+
+def test_bootstrap_fetch_is_paced_below_the_ip_weight_limit(monkeypatch):
+    """Ops review 5: the start downloads ~540 weight-10 pages of 5m klines from the same IP as a running bot's feed
+    (~1,000 weight a minute). The default pause keeps the burst at <= 1,200 a minute even with instant answers."""
+    import inspect
+
+    from paperbot import live3
+    pause = inspect.signature(live3.fetch_5m).parameters["pause"].default
+    assert pause >= 0.5 and 60 / pause * 10 + 1_000 <= 2_400
+
+    class Rest:
+        def __init__(self):
+            self.calls = []
+
+        def klines(self, symbol, interval, start_time, limit):
+            self.calls.append(start_time)
+            return [[start_time + k * FIVE, "1", "2", "0.5", "1.5", "10"] for k in range(limit)]
+
+    slept = []
+    monkeypatch.setattr(live3.time, "sleep", slept.append)
+    rest, t0 = Rest(), 1_790_000_000_000 - 1_790_000_000_000 % FIVE
+    rows = live3.fetch_5m(rest, "BTCUSDT", t0, t0 + 3_200 * FIVE)
+    assert len(rows) == 3_200 and len(rest.calls) == 3 and slept == [pause, pause]
+

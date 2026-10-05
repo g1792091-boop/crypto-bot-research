@@ -732,6 +732,9 @@ esac
         assert word in out, word
     assert _tree_hash(src) == before                               # the real folder is only read
     assert "NOT ALLOWED" not in (tmp_path / "real.log").read_text()
+    # ops review 6: a unit the reset started again reads as the real one (running), so a passing rehearsal shows no
+    # false "!!" lines about the agents or the bot
+    assert "!! 에이전트 꺼짐" not in out and "is not running" not in out, out[-3000:]
 
 
 GUIDE = os.path.join(ROOT, "docs", "server-setup-v4.md")

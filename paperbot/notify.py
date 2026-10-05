@@ -576,12 +576,13 @@ def render(text: str) -> str:
             return _digest_ko(lines[1:], extras=False)
         if lines[0].startswith("추가 계좌 알림 모음: "):
             return _digest_ko(lines[1:], extras=True)
-        m = re.match(r"(추가 계좌 )?긴급 알림 (\d+)건$", lines[0])
+        m = re.match(r"(추가 계좌 )?긴급 알림 (\d+)건(?: · 총 (\d+)건)?$", lines[0])
         if m:
             body = [ln for ln in lines[1:] if ln.strip()]
             items = [_urgent_item(ln) if not _MORE.match(ln) else f"외 {_MORE.match(ln)[1]}건 {_SCREEN}" for ln in body]
             liq = sum(1 for ln in body if re.match(KO_LINES[0][0], ln))
-            head = f"{m[1] or ''}긴급 {m[2]}건" + (f" · 모의 강제청산 {liq}" if liq else "")
+            head = (f"{m[1] or ''}긴급 {m[2]}건" + (f" · 모의 강제청산 {liq}" if liq else "")
+                    + (f"\n같은 때 모두 {int(m[3]):,}건 (첫 1건은 바로 앞 메시지)" if m[3] else ""))
             return "\n".join([head, ""] + items + [now_kst()])
         return "\n".join(ko(line) for line in lines)
     except Exception:  # noqa: BLE001
@@ -910,7 +911,9 @@ class Router:
         lines, self.urgent, self.urgent_sent = self.urgent, [], False
         for i in range(0, len(lines), self.URGENT_MAX_LINES):
             part = lines[i:i + self.URGENT_MAX_LINES]
-            self.deliver(CRITICAL, part[0] if len(part) == 1 else "\n".join([f"긴급 알림 {len(part)}건"] + part))
+            # the step's first emergency went alone: the bundle says the step's total (T2)
+            self.deliver(CRITICAL, part[0] if len(part) == 1 else
+                         "\n".join([f"긴급 알림 {len(part)}건 · 총 {len(lines) + 1}건"] + part))
         self.retry()
 
     def deliver(self, level: str, text: str, sends: int = 0):
