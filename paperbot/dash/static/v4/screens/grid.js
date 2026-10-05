@@ -4,7 +4,7 @@
 // the four DeepSeek specialists (paperbot/groups.py V4_ROLES), the colour is the account's own return (up / down: money
 // made or lost) because DeepSeek gets no per-account coin-flip comparison (CONTRACT honesty rule 3); the five session
 // definitions have no 4시간 account ('없음'). 5분봉: the reel and its three 5m coin flips as one strip, with the reel's
-// profile card. Sort 이름 / 잘하는 순, window 30일 / 7일. Data: /api/v4/grid (one small answer, 60 s cache on the
+// profile card. Sort 이름 / 높은 순, window 30일 / 7일. Data: /api/v4/grid (one small answer, 60 s cache on the
 // server), polled every 60 s while the screen is open (paused when the page is hidden).
 // Not a copy of 분석 › 코인·장세 지도 (where money was made by coin / regime / session over all trades): this is per
 // account; the legend links there and to 회의 요약 › 봉 비교.
@@ -12,7 +12,8 @@ import {h, put, ui, fmt, motion, local} from "../core/pb.js";
 import {heatCell, bin, nameOf, scaleStrip, verdictTs, periodKo, cellPct, profileCard, identicon, BINS, MIN_COLOR, SMALL} from "./grid-kit.js";
 
 const TABS = [{id: "core", label: "기존 36"}, {id: "ds", label: "딥시크 44"}, {id: "m5", label: "5분봉"}];
-const SORTS = [{id: "name", label: "이름"}, {id: "good", label: "잘하는 순"}];
+// "높은 순": the mean of the coloured cells (a sort, never a ranking claim; the legend says so)
+const SORTS = [{id: "name", label: "이름"}, {id: "good", label: "높은 순"}];
 const PERIODS = [{id: "30", label: "30일"}, {id: "7", label: "7일"}];
 const COLORS = [{id: "vs", label: "동전 봇 대비"}, {id: "own", label: "자기 수익률"}];
 const COLS = ["15m", "30m", "1h", "4h"];

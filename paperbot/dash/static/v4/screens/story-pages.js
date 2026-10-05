@@ -71,7 +71,7 @@ function pMovers(d, env) {
         h("span", null, kind === "best" ? `${dayIs(d)} 번 계좌가 없습니다` : `${dayIs(d)} 잃은 계좌가 없습니다`));
     }
     return h("div", {class: ["sp-mover", kind]},
-      h("div", {class: "sp-mv-top"}, pixIcon(kind === "best" ? "crown" : "down", 28),
+      h("div", {class: "sp-mv-top"}, pixIcon(kind === "best" ? "up" : "down", 28),
         h("span", {class: "sp-mv-k"}, kind === "best" ? "가장 많이 번 계좌" : "가장 많이 잃은 계좌"),
         h("span", {class: "grow"}), chip(a.group)),
       h("div", {class: "sp-mv-name"}, ui.acctLabel(a)),
