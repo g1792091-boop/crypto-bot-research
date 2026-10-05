@@ -16,9 +16,10 @@ function load() {
   if (!B.risk) B.risk = {};                                                    // 국면별 최적 레버리지·시드·손절·익절 (결과로 학습)
   if (!B.hours) B.hours = {};                                                  // 시간대별 성적 (0~23시)
   if (!B.vol) B.vol = { calm: { pnl: 0, n: 0, wins: 0 }, spike: { pnl: 0, n: 0, wins: 0 } };   // 평온 vs 급변동(뉴스성) 성적
+  if (!B.st) B.st = { lessons: 0, traps: 0, promoted: 0, forgot: 0, avoided: 0, softened: 0, lastC: 0 };   // 학습 라인 누적 카운터
   return B;
 }
-function save() { try { localStorage.setItem(KEY, JSON.stringify({ mem: B.mem.slice(0, 400), n: B.n, iq: B.iq, traps: B.traps.slice(0, 60), risk: B.risk, hours: B.hours, vol: B.vol })); } catch (e) {} }
+function save() { try { localStorage.setItem(KEY, JSON.stringify({ mem: B.mem.slice(0, 400), n: B.n, iq: B.iq, traps: B.traps.slice(0, 60), risk: B.risk, hours: B.hours, vol: B.vol, st: B.st })); } catch (e) {} }
 const IQLR = 0.08;
 const FEATS = ["모멘텀", "추세(EMA)", "RSI", "거래흐름", "호가압력", "변동성"];
 function cos(a = {}, b = {}) { let d = 0, na = 0, nb = 0; for (const k of FEATS) { const x = a[k] || 0, y = b[k] || 0; d += x * y; na += x * x; nb += y * y; } return (na && nb) ? d / Math.sqrt(na * nb) : 0; }
@@ -34,11 +35,12 @@ export function regimeOf(feat = {}) {
 
 // 기억 추가/병합. type: 교훈·패턴·전략·관찰·핵심
 // links: 이 기억이 가리키는 다른 기억 id들(obsidian 위키링크 [[ ]] 개념). 없으면 같은 코인·국면 기억에 자동 연결.
-export function learn({ type = "관찰", coin = "", regime = "", text = "", model = "", w = 1, links = [] } = {}) {
+export function learn({ type = "관찰", coin = "", regime = "", text = "", model = "", w = 1, links = [], key: k0 = "" } = {}) {
   load(); text = String(text).replace(/\s+/g, " ").trim(); if (text.length < 4) return null;
-  const key = (coin + "|" + regime + "|" + text).slice(0, 140);
+  const key = k0 || (coin + "|" + regime + "|" + text).slice(0, 140);
   const ex = B.mem.find(m => m.key === key);
-  if (ex) { ex.w = Math.min(5, ex.w + 0.5); ex.t = Date.now(); ex.hits = (ex.hits || 1) + 1; if (links.length) ex.links = [...new Set([...(ex.links || []), ...links])].slice(0, 8); save(); return ex; }
+  if (ex) { ex.w = Math.min(5, Math.max(ex.w + (k0 ? 0 : 0.5), k0 ? w : 0)); ex.t = Date.now(); ex.hits = (ex.hits || 1) + 1; if (k0) { ex.text = text.slice(0, 140); ex.type = type; } if (links.length) ex.links = [...new Set([...(ex.links || []), ...links])].slice(0, 8); save(); return ex; }
+  if (type === "교훈") B.st.lessons++;
   // 자동 연결: 같은 코인·국면의 가장 센 기억 2개에 링크(지식들이 서로 이어지며 그래프가 자란다)
   if (!links.length) links = B.mem.filter(m => (m.coin === coin && coin) || (m.regime === regime && regime)).sort((a, b) => b.w - a.w).slice(0, 2).map(m => m.id);
   const m = { id: ++B.n, key, type, coin, regime, text: text.slice(0, 140), model, w, hits: 1, t: Date.now(), links: [...new Set(links)].slice(0, 8) };
@@ -64,27 +66,51 @@ export function reinforce(coin, regime, good) {
 export function brainState() {
   load();
   const byType = {}; for (const m of B.mem) byType[m.type] = (byType[m.type] || 0) + 1;
-  return { n: B.mem.length, total: B.n, byType, iq: iqScore(), traps: B.traps.length, top: B.mem.slice(0, 12).map(m => ({ type: m.type, coin: m.coin, regime: m.regime, text: m.text, w: +m.w.toFixed(1), hits: m.hits, model: m.model })) };
+  const row = m => ({ type: m.type, coin: m.coin, regime: m.regime, text: m.text, w: +m.w.toFixed(1), hits: m.hits, model: m.model, t: m.t });
+  return { n: B.mem.length, total: B.n, byType, iq: iqScore(), traps: B.traps.length, st: { ...B.st }, top: B.mem.slice(0, 12).map(row),
+    rules: B.mem.filter(m => m.type === "핵심").slice(0, 8).map(row), lessons: B.mem.filter(m => m.type === "교훈").sort((a, b) => b.t - a.t).slice(0, 6).map(row),
+    trapList: B.traps.slice(0, 6).map(t => ({ coin: t.coin, regime: t.regime, dir: t.dir, hits: t.hits, w: +t.w.toFixed(1), roe: t.roe, keys: strongKeys(t.feat), t: t.t })) };
 }
 export function reset() { B = { mem: [], n: 0 }; save(); }
 // 뉴트론 MCP·옵시디언 내보내기용 전체 덤프 (읽기 전용 사본)
 export function dump() { load(); return { mem: B.mem.map(m => ({ id: m.id, type: m.type, coin: m.coin, regime: m.regime, text: m.text, model: m.model, w: +(+m.w).toFixed(2), hits: m.hits || 1, t: m.t, links: m.links || [] })),
-  iq: iqScore(), traps: (B.traps || []).slice(0, 60), risk: B.risk, hours: B.hours, vol: B.vol }; }
+  iq: iqScore(), traps: (B.traps || []).slice(0, 60), risk: B.risk, hours: B.hours, vol: B.vol, st: B.st }; }
 
 // 자체 학습(consolidate): 뇌가 스스로 ① 오래 안 쓴 기억을 잊고(망각) ② 자주 확인된 패턴을 '핵심 규칙'으로 승격한다.
 // 핵심 규칙은 근거가 된 패턴 기억들에 링크된다 → 그래프에서 허브(연결 많은 큰 노드)로 자란다.
+// 망각은 '시간'으로 계산(호출 빈도와 무관): 오래 안 쓰인 기억만 시간당 조금씩 약해진다. 교훈·함정은 더 오래 간다, 핵심은 잊지 않는다.
+const DECAY = { "관찰": [6, 0.06], "지식": [24, 0.02], "매매법": [24, 0.02], "전략": [24, 0.02], "패턴": [24, 0.02], "교훈": [48, 0.01] };
+const dirOf = t => /롱/.test(t) ? "롱" : /숏/.test(t) ? "숏" : null;
 export function consolidate() {
-  load(); let changed = false;
-  for (const m of B.mem) if (Date.now() - m.t > 3 * 3600e3 && m.type !== "핵심") { m.w = Math.max(0.05, m.w - 0.04); changed = true; }
-  const before = B.mem.length; B.mem = B.mem.filter(m => m.w > 0.12); if (B.mem.length !== before) changed = true;
-  const byRule = {};
-  for (const m of B.mem) if (m.type === "패턴") { const dir = /롱/.test(m.text) ? "롱" : /숏/.test(m.text) ? "숏" : null; if (dir) { const k = (m.regime || "일반") + "|" + dir; (byRule[k] = byRule[k] || []).push(m.id); } }
-  for (const [k, ids] of Object.entries(byRule)) if (ids.length >= 3) { const [regime, dir] = k.split("|"); learn({ type: "핵심", regime, text: `${regime}에선 ${dir}이 자주 통함 (${ids.length}회 확인)`, model: "뇌", w: 3, links: ids }); changed = true; }
-  // 손절 함정도 오래되면 약화(시장이 변함) → 바닥이면 삭제
-  for (const t of B.traps) if (Date.now() - t.t > 4 * 3600e3) { t.w = Math.max(0.1, t.w - 0.1); changed = true; }
-  const bt = B.traps.length; B.traps = B.traps.filter(t => t.w > 0.25); if (B.traps.length !== bt) changed = true;
+  load(); const now = Date.now(), hrs = B.st.lastC ? Math.min(3, (now - B.st.lastC) / 3600e3) : 0; B.st.lastC = now; let changed = hrs > 0;
+  for (const m of B.mem) { const d = DECAY[m.type]; if (!d) continue; if (now - m.t > d[0] * 3600e3) m.w = Math.max(0.05, m.w - d[1] * hrs); }
+  const before = B.mem.length; B.mem = B.mem.filter(m => m.w > 0.12); if (B.mem.length !== before) { B.st.forgot += before - B.mem.length; changed = true; }
+  // ── 규칙 승격(핵심): 같은 국면·방향에서 반복 확인된 것만. 문장이 바뀌어도 같은 규칙(key)으로 갱신 → 중복 없음 ──
+  const grp = {};
+  for (const m of B.mem) { if (m.type !== "패턴" && m.type !== "교훈") continue; const d = dirOf(m.text); if (!d) continue; const k = (m.regime || "일반") + "|" + d; const g = grp[k] ||= { win: [], loss: [], wh: 0, lh: 0 };
+    if (m.type === "패턴") { g.win.push(m.id); g.wh += m.hits || 1; } else { g.loss.push(m.id); g.lh += m.hits || 1; } }
+  const promote = (key, text, links, w = 3) => { const had = B.mem.some(m => m.key === key); learn({ type: "핵심", text, model: "뇌", w, links, key }); if (!had) B.st.promoted++; changed = true; };
+  for (const [k, g] of Object.entries(grp)) { const [regime, dir] = k.split("|");
+    if (g.wh >= 3 && g.wh >= g.lh * 1.5) promote("core:win:" + k, `${regime}에선 ${dir}이 통함 — 익절 ${g.wh}회 · 손절 ${g.lh}회`, g.win.slice(0, 8));
+    else if (g.lh >= 3 && g.lh >= g.wh * 1.5) promote("core:loss:" + k, `${regime}에서 ${dir} 조심 — 손절 ${g.lh}회 · 익절 ${g.wh}회 (리스크 절반)`, g.loss.slice(0, 8));
+    else { const old = B.mem.filter(m => m.key === "core:win:" + k || m.key === "core:loss:" + k); if (old.length) { B.mem = B.mem.filter(m => !old.includes(m)); changed = true; } } }   // 증거가 엇갈리면 규칙 해제
+  // 반복 확인된 단일 기억(4회↑·강도 3↑) → 핵심
+  for (const m of [...B.mem]) if (m.type !== "핵심" && m.type !== "관찰" && (m.hits || 1) >= 4 && m.w >= 3) promote("core:m:" + m.id, `${m.coin ? m.coin + " " : ""}${m.text}`.slice(0, 120) + ` (${m.hits}회 확인)`, [m.id]);
+  // 3번 이상 반복된 손절 함정 → 핵심
+  for (const t of B.traps) if (t.hits >= 3) promote("core:trap:" + t.id, `함정: ${t.regime || "일반"} ${t.dir > 0 ? "롱" : "숏"} · ${strongKeys(t.feat)} — 손절 ${t.hits}회 (진입 차단)`, []);
+  // 손절 함정: 24시간 넘게 다시 안 걸리면 천천히 약화(시장이 변함) → 바닥이면 삭제
+  for (const t of B.traps) if (now - t.t > 24 * 3600e3) t.w = Math.max(0.1, t.w - 0.05 * hrs);
+  const bt = B.traps.length; B.traps = B.traps.filter(t => t.w > 0.25); if (B.traps.length !== bt) { B.st.forgot += bt - B.traps.length; changed = true; }
   if (changed) save();
   return changed;
+}
+// 진입 전 뇌 점검: 손절 함정과 닮았는지 + 핵심 '조심' 규칙 → 차단/리스크 절반. 실제로 피하면 avoided 카운트.
+export function gateCheck(feat = {}, regime = "", dir = 0) {
+  load(); const risk = trapRisk(feat, regime, dir), d = dir > 0 ? "롱" : "숏";
+  const rule = B.mem.find(m => m.key === "core:loss:" + (regime || "일반") + "|" + d);
+  if (risk >= 0.6) { B.st.avoided++; save(); return { block: true, mul: 0, why: `뇌 함정 회피(과거 손절과 ${Math.round(risk * 100)}% 닮음)` }; }
+  if (risk >= 0.4 || rule) { B.st.softened++; save(); return { block: false, mul: 0.5, why: rule ? `뇌 규칙: ${rule.text.slice(0, 40)}` : `뇌 함정 유사 ${Math.round(risk * 100)}% → 리스크 절반` }; }
+  return { block: false, mul: 1, why: "" };
 }
 
 // 지식 그래프: 노드(기억) + 엣지. 엣지 = 명시적 링크(위키링크) + 같은 코인·국면·유형. degree(연결 수)로 노드 크기 결정(obsidian 그래프 뷰).
@@ -154,7 +180,7 @@ export function learnLoss({ coin = "", regime = "", feat = {}, dir = 0, roe = 0 
   load();
   const ex = B.traps.find(t => t.dir === dir && (!t.regime || t.regime === regime) && cos(t.feat, feat) > 0.85);
   if (ex) { ex.hits++; ex.w = Math.min(5, ex.w + 0.5); ex.t = Date.now(); for (const k of FEATS) ex.feat[k] = (ex.feat[k] || 0) * 0.7 + (feat[k] || 0) * 0.3; }
-  else B.traps.unshift({ id: ++B.n, coin, regime, dir, feat: { ...feat }, roe: +roe.toFixed(1), hits: 1, w: 1.2, t: Date.now() });
+  else { B.traps.unshift({ id: ++B.n, coin, regime, dir, feat: { ...feat }, roe: +roe.toFixed(1), hits: 1, w: 1.2, t: Date.now() }); B.st.traps++; }
   B.traps.sort((a, b) => b.w - a.w); B.traps = B.traps.slice(0, 60);
   learn({ type: "교훈", coin, regime, text: `${regime} ${dir > 0 ? "롱" : "숏"} 손절 ${roe.toFixed(1)}% — ${strongKeys(feat)}에서 진입 금지`, model: "뇌", w: 2 });
   save();
@@ -216,4 +242,4 @@ export function recallText(coin, regime, n = 4) {
   return r.map(m => `(${m.regime || "일반"}) ${m.text}`).join(" / ");
 }
 // 특정 유형(매매법·지식 등) 상위 기억 — 설계/판단에 지식베이스를 직접 꺼내 쓰기
-export function recallType(type, n = 3) { load(); return B.mem.filter(m => m.type === type).slice(0, n).map(m => m.text); }
+export function recallType(type, n = 3, coin = "") { load(); return B.mem.filter(m => m.type === type && (!coin || !m.coin || m.coin === coin)).slice(0, n).map(m => m.text); }

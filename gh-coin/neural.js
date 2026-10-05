@@ -279,6 +279,10 @@ function teamCheck(it) {
 function openFrom(it, trader, riskOverride, note) {
   const price = S.dec[it.sym]?.price; if (!price || S.pos[it.sym]) return false;
   const tc = teamCheck(it); if (tc.block) { feed(`🚦 ${it.ko} ${it.name} 차단 — 에이전트 팀 판정: ${tc.block}`); return false; }
+  // 🧠 뇌 점검: 과거 손절 함정과 닮은 자리면 차단, 핵심 '조심' 규칙이면 리스크 절반
+  { const f0 = S.feat[it.sym] || {}, bg = BRAIN.gateCheck(f0, BRAIN.regimeOf(f0), it.side);
+    if (bg.block) { feed(`🧠 ${it.ko} ${it.name} 차단 — ${bg.why}`); return false; }
+    if (bg.mul < 1) { tc.mul = (tc.mul ?? 1) * bg.mul; tc.why = (tc.why ? tc.why + " · " : "") + bg.why; } }
   // 📋 주문 미리보기(review → confirm → place, kevin1chun/robinhood-for-agents): 가격 칼라 + 포트폴리오 한도를 코드로 확인한 뒤에만 체결
   const C = cfg(), rD = Math.abs((it.px0 || price) - it.sl), moved = it.px0 ? (price - it.px0) * it.side : 0;
   if (it.px0 && rD > 0 && moved > 0.35 * rD) { feed(`📋 ${it.ko} ${it.name} 취소 — 가격 칼라: 신호 후 이미 ${(moved / rD).toFixed(2)}R 진행(추격 금지)`); return false; }
@@ -323,8 +327,10 @@ function closeP(sym, px, why, at) {
   for (const k of NEURONS) { const sig = P.feat?.[k] || 0; if (Math.abs(sig) < 0.08) continue; const correct = (Math.sign(sig) === P.side ? 1 : -1) === good; S.hit[k].n++; if (correct) S.hit[k].ok++; S.w[k] = cl(S.w[k] + LR * (correct ? 1 : -1) * Math.abs(sig), 0.05, 3); }
   BRAIN.learnOutcome({ coin: P.ko, regime: P.bReg, feat: P.feat, dir: P.side, pnl: pret });
   if (P.hour != null) BRAIN.learnTime(P.hour, pnl); BRAIN.learnEvent(!!P.spike, pnl);
-  if (R <= -0.9) BRAIN.learn({ type: "교훈", coin: P.ko, regime: P.regime, text: `[${P.name}] ${P.regime}에서 ${P.side > 0 ? "롱" : "숏"} 손절 — 이 국면에선 신호 질 확인`, model: P.trader === "자체 엔진" ? "엔진" : shortMd(P.trader) });
-  if (R >= 1.4) BRAIN.learn({ type: "패턴", coin: P.ko, regime: P.regime, text: `[${P.name}] ${P.regime} ${P.side > 0 ? "롱" : "숏"} +${R.toFixed(1)}R 익절`, model: P.trader === "자체 엔진" ? "엔진" : shortMd(P.trader) });
+  const who = P.trader === "자체 엔진" ? "엔진" : shortMd(P.trader), bReg = P.bReg || P.regime || "";
+  if (R <= -0.3) { BRAIN.learnLoss({ coin: P.ko, regime: bReg, feat: P.feat || {}, dir: P.side, roe });
+    BRAIN.learn({ type: "교훈", coin: P.ko, regime: bReg, text: `[${P.name}] ${bReg} ${P.side > 0 ? "롱" : "숏"} ${base} ${R.toFixed(1)}R — 이 국면에선 신호 질 확인`, model: who, w: 1.5 }); }
+  if (R >= 1) BRAIN.learn({ type: "패턴", coin: P.ko, regime: bReg, text: `[${P.name}] ${bReg} ${P.side > 0 ? "롱" : "숏"} +${R.toFixed(1)}R ${base}`, model: who, w: 1.5 });
   feed(`${P.trader === "자체 엔진" ? "" : "[" + shortMd(P.trader) + "] "}${P.ko} 청산(${why}) ${R >= 0 ? "+" : ""}${R.toFixed(2)}R · ${pnl >= 0 ? "+" : "−"}$${Math.abs(pnl).toFixed(2)} · ROE ${roe.toFixed(1)}%(${P.lev}x) · ${P.name}`);
   delete S.pos[sym];
 }
@@ -511,6 +517,7 @@ async function aiDesignChart(specs, T, R, c, tf, now) {
   const g = { id: "ai" + Date.now().toString(36), tf, specs: gs, k: Math.max(2, Math.min(gs.length, Math.round(+j.k || 2))), rr: Math.max(1.5, Math.min(3, +j.rr || 2)), atrK: Math.max(1, Math.min(2.5, +j.atrK || 1.5)), exitFlip: j.exitFlip !== false, from: c.sym, label: `AI ${shortMd(tgt.model)}` };
   const V = await CL.validate(g, c.sym), att = { t: Date.now(), model: shortMd(tgt.model), reason: String(j.reason || "").slice(0, 80), k: g.k, n: gs.length, rr: g.rr, test: V.test, crossPos: V.crossPos, pass: V.pass, verdict: V.verdict, names: gs.map(s => String(s.key).replace(/^q:|^x:/, "")) };
   (S.chartDesk.attempts ||= []).unshift(att); S.chartDesk.attempts = S.chartDesk.attempts.slice(0, 10);
+  if (!V.pass) BRAIN.learn({ type: "교훈", coin: c.sym.replace("USDT", ""), text: `내 지표 ${att.names.join("+")} ${g.k}/${gs.length} 조합은 처음 보는 구간 ${V.test.mean}R(${V.test.n}) · 다른 코인 ${V.crossPos}/5 — ${V.verdict || "검증 탈락"}`, model: "내지표설계", w: 1.2, key: "chartfail:" + c.sym + "|" + att.names.slice().sort().join("+") + "|" + g.k });
   if (V.pass) { addChartStrategy(g, { by: att.model, test: V.test, crossPos: V.crossPos, pass: true }); BRAIN.learn({ type: "매매법", coin: c.sym.replace("USDT", ""), text: `AI(${att.model}) 내 지표 매매법 ${att.names.join("+")} ${g.k}/${gs.length} 처음 보는 구간 ${V.test.mean}R · 다른 코인 ${V.crossPos}/5`, model: "내지표설계", w: 1.5 }); }
   feed(`📈 [${att.model}] 내 지표 매매법 설계: ${att.names.join("+")} ${g.k}/${gs.length} · 손익비 ${g.rr} → 처음 보는 구간 ${V.test.mean}R(${V.test.n}) · 다른 코인 ${V.crossPos}/5 → ${V.pass ? "✅ 데모 투입" : "❌ " + V.verdict}`);
   save();
@@ -633,7 +640,7 @@ JSON만:` }],
   const bias = Math.sign(+j.bias || 0), conf = Math.max(0, Math.min(100, Math.round(+j.conf || 0))), note = String(j.note || "").slice(0, 70);
   const name = route?.model || tgt.model, M = model(name); M.prov = route?.id || tgt.id; M.scans = (M.scans || 0) + 1;
   (S.scans ||= {})[name] = { ko, sym, bias, conf, note, price, t: Date.now() };
-  (S.scanLog ||= []).push({ m: name, sym, bias, conf, price, t: Date.now() }); if (S.scanLog.length > 300) S.scanLog.splice(0, S.scanLog.length - 300);
+  { const f0 = S.feat[sym] || {}; (S.scanLog ||= []).push({ m: name, sym, ko, bias, conf, price, t: Date.now(), feat: { ...f0 }, reg: BRAIN.regimeOf(f0) }); } if (S.scanLog.length > 300) S.scanLog.splice(0, S.scanLog.length - 300);
   feed(`🔍 [${shortMd(name)}] ${ko} 시장 읽기: ${bias > 0 ? "▲상승" : bias < 0 ? "▼하락" : "· 중립"} ${conf}% — ${note || "근거 없음"}`);
   if (conf >= 70 && note) BRAIN.learn({ type: "관찰", coin: ko, regime: rg.key || "", text: note, model: "스캔:" + shortMd(name), w: 0.8 });
   // 🤖 AI 내 지표 실험 진입: 확신 75%↑ + 내 차트 지표(15분) 60%↑ 같은 방향 + 4시간 추세 역행 아님 → 리스크 0.25% 데모 진입 (실전 성적이 나쁘면 자동 중지)
@@ -642,7 +649,11 @@ JSON만:` }],
 }
 function scoreScans() {   // 1시간 지난 스캔 의견을 실제 가격으로 채점
   const now = Date.now(); for (const x of S.scanLog || []) { if (x.done || now - x.t < 3600e3) continue; const p = S.dec[x.sym]?.price; if (!p) continue;
-    x.done = true; if (!x.bias) continue; const M = model(x.m), hit = Math.sign(p - x.price) === x.bias; M.scanN = (M.scanN || 0) + 1; if (hit) M.scanHit = (M.scanHit || 0) + 1; }
+    x.done = true; if (!x.bias) continue; const M = model(x.m), hit = Math.sign(p - x.price) === x.bias; M.scanN = (M.scanN || 0) + 1; if (hit) M.scanHit = (M.scanHit || 0) + 1;
+    const mv = (p - x.price) / x.price * x.bias;
+    if (x.feat) BRAIN.learnOutcome({ coin: x.ko || "", regime: x.reg || "", feat: x.feat, dir: x.bias, pnl: mv });   // 결과 채점 → 국면별 가중치 교정
+    if (!hit && x.conf >= 75 && mv <= -0.004) { const d = x.bias > 0 ? "롱" : "숏", k = `scan:${shortMd(x.m)}|${x.reg || "일반"}|${d}`, ex = (S.scanMiss ||= {})[k] = (S.scanMiss[k] || 0) + 1;
+      BRAIN.learn({ type: "교훈", coin: x.ko || "", regime: x.reg || "", text: `[${shortMd(x.m)}] ${x.reg || "일반"}에서 ${d} 읽기 과신 — 확신 ${x.conf}%인데 1시간 뒤 ${(mv * 100).toFixed(1)}% (누적 ${ex}회)`, model: "스캔 채점", w: 1.2, key: k }); } }
 }
 function peerViews(sym) {   // 승인 검토용: 다른 모델들의 최근(2시간) 같은 코인 의견 + 그 모델 적중률
   return Object.entries(S.scans || {}).filter(([, v]) => v.sym === sym && v.bias != null && Date.now() - v.t < 2 * 3600e3)
@@ -666,7 +677,7 @@ async function approveNext(cm) {
   if (!plan || plan.skip) { S.queue.shift(); feed(`${it.ko} ${it.name} 보류 — ${plan?.skip || "계획 실패"}`); return; }
   S.scan = { model: shortMd(tgt.model), ko: it.ko, sym: it.sym, regime: `${it.regime} · ${it.name} 승인 검토`, t: Date.now() };
   const nw = S.news && Date.now() - S.news.t < 3600e3 ? `뉴스 심리 ${S.news.score > 0 ? "+" : ""}${S.news.score}(${S.news.reason || ""})` : "뉴스 정보 없음";
-  const kn = [...BRAIN.recallType("매매법", 2), ...BRAIN.recallType("지식", 2)].join(" / ");
+  const kn = [...BRAIN.recallType("핵심", 2, it.ko), ...BRAIN.recallType("교훈", 2, it.ko), ...BRAIN.recallType("매매법", 2), ...BRAIN.recallType("지식", 1)].join(" / ");
   const th = BRAIN.timeAdvice(new Date().getHours());
   const flow = await flowFacts(it.sym);
   feed(`📡 ${it.ko} 수급 확인 — ${flow.map(f => f.slice(0, 70)).join(" | ")}`);
@@ -870,6 +881,37 @@ export async function newsCheck() {
 }
 export function resetBrain() { BRAIN.reset(); }
 
+// ⚡ 손매매 추천 채점: 시장가 버튼·실시간 진입이 낸 추천을 실제 봉으로 따라가 '익절1 먼저 / 손절 먼저 / 24시간 무승부'를 기록 → 뇌가 교훈·패턴·함정으로 학습
+export function trackCall(c = {}) {
+  load(); if (!c.sym || !c.side || !c.entry || !c.sl || !c.tp1) return false;
+  const L = (S.calls ||= []); if (L.some(x => !x.res && x.sym === c.sym && x.side === c.side && Date.now() - x.t < 30 * 60e3)) return false;
+  const f0 = S.feat[c.sym] || {};
+  L.unshift({ id: Date.now().toString(36), sym: c.sym, ko: c.ko || c.sym.replace("USDT", ""), side: c.side, entry: +c.entry, sl: +c.sl, tp1: +c.tp1, grade: c.grade || "", src: c.src || "시장가", t: Date.now(), feat: { ...f0 }, reg: BRAIN.regimeOf(f0) });
+  S.calls = L.slice(0, 40); save(); return true;
+}
+let callAt = 0;
+async function scoreCalls() {
+  if (Date.now() - callAt < 120e3) return; callAt = Date.now();
+  for (const c of (S.calls || []).filter(x => !x.res).slice(0, 6)) {
+    let cs; try { cs = (await candlesFor({ market: c.sym, exchange: "binancef", timeframe: "5" }, 300)).cs; } catch (e) { continue; }
+    let res = null, at = 0;
+    for (const b of cs || []) { if (b.t + 300e3 <= c.t) continue; const hitSl = c.side > 0 ? b.l <= c.sl : b.h >= c.sl, hitTp = c.side > 0 ? b.h >= c.tp1 : b.l <= c.tp1;
+      if (hitSl) { res = "손절"; at = b.t; break; } if (hitTp) { res = "익절1"; at = b.t; break; } }
+    if (!res && Date.now() - c.t > 24 * 3600e3) { res = "무승부"; at = Date.now(); }
+    if (!res) continue;
+    const rD = Math.abs(c.entry - c.sl), px = res === "손절" ? c.sl : res === "익절1" ? c.tp1 : (S.dec[c.sym]?.price || c.entry), R = rD ? +(((px - c.entry) * c.side) / rD).toFixed(2) : 0;
+    Object.assign(c, { res, at, R }); const d = c.side > 0 ? "롱" : "숏";
+    if (res === "손절") { BRAIN.learnLoss({ coin: c.ko, regime: c.reg, feat: c.feat || {}, dir: c.side, roe: (px / c.entry - 1) * 100 * c.side });
+      BRAIN.learn({ type: "교훈", coin: c.ko, regime: c.reg, text: `[${c.src}${c.grade ? " " + c.grade : ""}] ${c.reg} ${d} 추천이 손절 먼저 — 같은 자리 다시 나오면 관망`, model: "추천 채점", w: 1.6 }); }
+    else if (res === "익절1") BRAIN.learn({ type: "패턴", coin: c.ko, regime: c.reg, text: `[${c.src}${c.grade ? " " + c.grade : ""}] ${c.reg} ${d} 추천 익절1 먼저 +${R}R`, model: "추천 채점", w: 1.6 });
+    if (c.feat) BRAIN.learnOutcome({ coin: c.ko, regime: c.reg, feat: c.feat, dir: c.side, pnl: (px - c.entry) / c.entry * c.side });
+    feed(`⚡ 추천 채점: ${c.ko} ${d} [${c.src}${c.grade ? "·" + c.grade : ""}] → ${res} ${R >= 0 ? "+" : ""}${R}R (${Math.round((at - c.t) / 60e3)}분)`);
+  }
+  save();
+}
+export function callStats() { load(); const L = S.calls || [], done = L.filter(x => x.res && x.res !== "무승부"), w = done.filter(x => x.res === "익절1").length;
+  return { n: L.length, open: L.filter(x => !x.res).length, done: done.length, wins: w, wr: done.length ? Math.round(w / done.length * 100) : null, sumR: +done.reduce((a, x) => a + (x.R || 0), 0).toFixed(2), list: L.slice(0, 8).map(({ feat, ...x }) => x) }; }
+
 // ⏱ 상시 자동 실행(패널을 닫아도 돈다): 시세·포지션·신호(6초) · AI 승인 · 뇌 정리(1분) · 웹 리서치(3분) · 뉴스 위험(5분) · 매매법 개발(8분) · 전략 회의(10분)
 let autoTimer = 0, autoK = 0, ticking = false;
 export async function tick() {
@@ -877,6 +919,7 @@ export async function tick() {
   try {
     await step(); modelStep().catch(() => {}); autoK++;
     if (autoK % 10 === 5) { try { BRAIN.consolidate(); } catch (e) {} }
+    if (autoK % 20 === 7) scoreCalls().catch(() => {});
     if (autoK % 30 === 3) researchStrategies().catch(() => {});
     if (autoK % 50 === 8) newsCheck().catch(() => {});
     if (autoK % 80 === 40) designStrategy().catch(() => {});
@@ -909,7 +952,7 @@ export function state() {
   return { pnl: +S.pnl.toFixed(2), bankroll: BANKROLL, equity: eq, peak: +peak.toFixed(2), drawdown: dd, riskMode: riskMode(), avgLev, avgSeed, openN: allPos.length,
     fills: S.fills, winRate: wr, epoch: S.epoch, since: S.t0, nModels: connectedModels().length,
     neurons, traders, designs: (S.designs || []).slice(0, 10), nDesigns: (S.designs || []).length, handed: (S.designs || []).filter(d => d.handed).length,
-    brain: BRAIN.brainState(), scan: S.scan || null, regime: S.regime, news: S.news, review: S.review, calib: S.eng.calib, calibrating,
+    brain: BRAIN.brainState(), calls: callStats(), scan: S.scan || null, regime: S.regime, news: S.news, review: S.review, calib: S.eng.calib, calibrating,
     chartDesk: S.chartDesk || null, aiExp: { ...(S.aiExp || {}), stat: vstat("aichart@15") }, chartStrats: chartStrategies(),
     cfg: cfg(), dayN: S.day?.n || 0, whale: { trust: whaleTrust(), last: Object.values(_whC).map(x => x.s).filter(x => x.status === "approved").slice(-6) }, review2: S.review2 || null, research: S.research || {},
     engine, nActive: engine.filter(x => x.active).length, setups: setups(engine), winrates: learnedWinrates(V), evo: { n: (S.eng.evo || []).length, seeds: (S.eng.evoSeeds || []).length, log: (S.eng.evoLog || []).slice(0, 3) }, queue: S.queue.length, heat: +(heat() / Math.max(1, eq) * 100).toFixed(2), dayPnl: +(S.day?.pnl || 0).toFixed(2),

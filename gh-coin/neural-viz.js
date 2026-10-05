@@ -138,46 +138,57 @@ export const BRAIN_CSS = `
 .vb-stage{position:relative;flex:1;min-height:440px;margin:0 14px;border:1px solid #1a2433;border-radius:4px;background:radial-gradient(ellipse at 50% 45%,#0d1a2c 0%,#03070d 70%)}
 .vb-stage canvas{position:absolute;inset:0;width:100%;height:100%}
 .vb-ov{position:absolute;font-size:10px;letter-spacing:1px;color:#8d9ab0}.vb-ov.tl{left:10px;top:8px}.vb-ov.tr{right:10px;top:8px;color:#ff5a5a}.vb-ov.bl{left:10px;bottom:8px;color:#56637a}
-.vb-panels{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;padding:10px 14px}
+.vb-panels{display:grid;grid-template-columns:1fr 1.25fr 1fr;gap:10px;padding:10px 14px}
+.vb-rl{display:flex;flex-direction:column;gap:3px;max-height:250px;overflow:auto}.vb-rl div{display:grid;grid-template-columns:44px 1fr 34px;gap:6px;font-size:10px;color:#b8c2d3;align-items:start;padding:2px 0;border-bottom:1px dashed #141c28}
+.vb-rl em{font-style:normal;font-size:9px;padding:0 4px;border-radius:3px;text-align:center;color:#0b0f16;font-weight:700}.vb-rl em.c{background:#ff5a6a}.vb-rl em.t{background:#f6c20a}.vb-rl em.l{background:#ff9a3c}.vb-rl b{color:#6d7a8f;font-weight:400;text-align:right;font-size:9px}
+.vb-rl .x{color:#56637a;font-size:9.5px;padding:3px 0}
+.vb-call div{display:grid;grid-template-columns:34px 24px 1fr 84px;gap:6px;font-size:10px;color:#b8c2d3;padding:2px 0;align-items:center}.vb-call span:last-child{text-align:right;white-space:nowrap}.vb-call .w{color:#3fd18a}.vb-call .l{color:#ff5a6a}.vb-call .o{color:#56637a}
+.vb-sum{display:flex;gap:12px;font-size:10px;color:#8d9ab0;margin:2px 0 6px}.vb-sum b{color:#e6ebf3;font-size:13px}
 .vb-p{border:1px solid #1f2b3d;border-radius:4px;padding:8px 10px;background:#060c15;min-width:0}.vb-ph{display:flex;justify-content:space-between;font-size:10.5px;letter-spacing:1px;color:#e6ebf3;font-weight:700;margin-bottom:6px}.vb-ph em{font-style:normal;color:#ff5a5a;font-size:9.5px}
-.vb-line div{display:grid;grid-template-columns:72px 1fr 30px;gap:8px;align-items:center;font-size:10px;padding:2px 0;color:#9aa6ba}.vb-line s{display:block;height:6px;background:#1a2433;border-radius:3px;overflow:hidden;text-decoration:none}.vb-line s i{display:block;height:100%;background:linear-gradient(90deg,#ff8a3d,#ffb070)}
-.vb-plate{display:grid;grid-template-columns:repeat(8,16px);gap:6px 8px;margin:6px 0;justify-content:start}.vb-plate i{width:16px;height:16px;border-radius:50%;background:#141c28}.vb-plate i.a{background:#ff9a3c;box-shadow:0 0 6px #ff9a3c}.vb-plate i.s{background:#f6c20a}.vb-plate i.d{background:#8a1f2b}.vb-plate i.r{background:#9b6cf0}
-.vb-leg{display:flex;gap:10px;font-size:9.5px;color:#6d7a8f}.vb-leg i{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:3px;vertical-align:middle}
+.vb-line div.r{display:grid;grid-template-columns:72px 1fr 64px;gap:8px;align-items:center;font-size:10px;padding:2px 0;color:#9aa6ba}.vb-line s{display:block;height:6px;background:#1a2433;border-radius:3px;overflow:hidden;text-decoration:none}.vb-line s i{display:block;height:100%;background:linear-gradient(90deg,#ff8a3d,#ffb070)}
+.vb-plate{display:grid;grid-template-columns:repeat(16,10px);gap:5px;margin:6px 0;justify-content:start}.vb-plate i{width:10px;height:10px;border-radius:50%;background:#141c28}.vb-plate i.a{background:#ff9a3c;box-shadow:0 0 6px #ff9a3c}.vb-plate i.s{background:#f6c20a}.vb-plate i.d{background:#8a1f2b}.vb-plate i.r{background:#9b6cf0}
+.vb-leg{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:9.5px;color:#6d7a8f}.vb-leg span{white-space:nowrap}.vb-leg i{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:3px;vertical-align:middle}
 .vb-tick{border-top:1px solid #1a2433;padding:6px 14px;font-size:10.5px;color:#8d9ab0;white-space:nowrap;overflow:hidden}.vb-tick span{display:inline-block;animation:vbt 60s linear infinite;padding-left:100%}@keyframes vbt{to{transform:translateX(-100%)}}
 .vb-tick b{color:#ff8a3d;font-weight:700}
 `;
 const BT = { "교훈": "#ff9a3c", "패턴": "#3fd18a", "전략": "#a98bff", "핵심": "#ff5a6a", "관찰": "#5aa0ff", "매매법": "#46d6ff", "지식": "#ffd166" };
-const STAGES = [["SCAN", "관찰", "observed"], ["DESIGN", "학습", "learned"], ["SYNTH", "연결", "links"], ["DOSE", "정리", "pruned"], ["READ", "회상", "predicted"], ["RECUT", "정제", "core rules"]];
+const STAGES = [["SCAN", "관찰", "스캔·뉴스·내 지표"], ["DESIGN", "학습", "패턴 + 교훈"], ["SYNTH", "연결", "기억 사이 링크"], ["DOSE", "망각", "안 쓰여 정리됨"], ["READ", "채점", "결과로 맞춤 확인"], ["RECUT", "승격", "핵심 규칙"]];
 export function renderBrain(el, s, G) {
   if (!el || !s) return;
-  if (!el._init) { el._init = 1; el.innerHTML = `<div class="vb-head"></div><div class="vb-tiles"></div><div class="vb-stage"><canvas></canvas><div class="vb-ov tl">TARGET STRUCTURE · LIVE<br><span style="color:#56637a">기억 나선 · 유형별 분자 클러스터</span></div><div class="vb-ov tr">● ROTATING</div><div class="vb-ov bl">마우스를 올리면 기억 내용</div></div><div class="vb-panels"><div class="vb-p vb-sc"></div><div class="vb-p vb-line"></div><div class="vb-p vb-pl"></div></div><div class="vb-tick"></div>`;
+  if (!el._init) { el._init = 1; el.innerHTML = `<div class="vb-head"></div><div class="vb-tiles"></div><div class="vb-stage"><canvas></canvas><div class="vb-ov tl">TARGET STRUCTURE · LIVE<br><span style="color:#56637a">기억 나선 · 유형별 분자 클러스터</span></div><div class="vb-ov tr">● ROTATING</div><div class="vb-ov bl">마우스를 올리면 기억 내용</div></div><div class="vb-panels"><div class="vb-p vb-line"></div><div class="vb-p vb-rules"></div><div class="vb-p vb-pl"></div></div><div class="vb-tick"></div>`;
     const cv = el.querySelector("canvas"); cv.onmousemove = e => { const r = cv.getBoundingClientRect(); el._m = { x: e.clientX - r.left, y: e.clientY - r.top }; }; cv.onmouseleave = () => { el._m = null; }; }
-  const B = s.brain || {}, iq = B.iq || {}, nodes = G?.nodes || [], links = G?.edges?.length || 0, core = B.byType?.["핵심"] || 0, total = B.total || 0, kept = B.n || 0;
-  const vals = [B.byType?.["관찰"] || 0, total, links, Math.max(0, total - kept), iq.n || 0, core];
+  const B = s.brain || {}, iq = B.iq || {}, st = B.st || {}, bt = B.byType || {}, nodes = G?.nodes || [], links = G?.edges?.length || 0, core = bt["핵심"] || 0, total = B.total || 0, kept = B.n || 0;
+  const vals = [bt["관찰"] || 0, (bt["패턴"] || 0) + (bt["교훈"] || 0), links, st.forgot || 0, iq.n || 0, core];
   const stage = Math.floor(Date.now() / 4000) % 6; el._G = G; el._B = B;
   const set = (sel, html) => { const n = el.querySelector(sel); if (n && n._h !== html) { n.innerHTML = html; n._h = html; } };
-  set(".vb-head", `<div><div class="k">RUN ${String(s.epoch || 0).padStart(2, "0")} · NEUTRON MEMORY PROGRAM</div><h3>자체 뇌 FOUNDRY</h3><div class="s">IQ ${iq.score ?? 0}/100 · 정확도 ${iq.acc ?? 0}% · 학습 ${iq.n ?? 0}판 · 함정 회피 ${B.traps ?? 0}</div></div>
+  set(".vb-head", `<div><div class="k">RUN ${String(s.epoch || 0).padStart(2, "0")} · NEUTRON MEMORY PROGRAM</div><h3>자체 뇌 FOUNDRY</h3><div class="s">IQ ${iq.score ?? 0}/100 · 정확도 ${iq.acc ?? 0}% · 채점 ${iq.n ?? 0}판 · 함정 ${B.traps ?? 0}개 · 진입 차단 ${st.avoided || 0} · 리스크 절반 ${st.softened || 0}</div></div>
     <div class="vb-tabs">${STAGES.map(([en, ko], i) => `<div class="${i === stage ? "on" : ""}"><b>${en}</b>${ko}<small>${vals[i]}</small></div>`).join("")}</div>
     <div class="vb-t"><small>T+</small><b>${String(Math.min(99, iq.acc ?? 0)).padStart(2, "0")}.${String(iq.score ?? 0).padStart(2, "0")}</b><small>ARM CYCLE ${Math.round(((Date.now() / 1000) % 60) / 60 * 100)}%</small></div>`);
   set(".vb-tiles", STAGES.map(([en, ko, sub], i) => `<div class="vb-tile ${i === stage ? "on" : ""}"><b>${en} · ${ko}</b><small>${sub}</small><i>${String(vals[i]).padStart(3, "0")}</i></div>`).join(""));
-  // 산점도: 기억 강도(가중) × 최근성
-  const now = Date.now(), maxAge = Math.max(1, ...nodes.map(n => now - (n.t || now)));
-  const pts = nodes.map(n => ({ x: 1 - (now - (n.t || now)) / maxAge, y: Math.min(1, (n.w || 1) / 5), c: BT[n.type] || "#8899aa", core: n.type === "핵심" }));
-  set(".vb-sc", `<div class="vb-ph">기억 강도 × 최근성 <em></em></div><svg viewBox="0 0 220 110" width="100%" height="110"><line x1="10" y1="100" x2="215" y2="100" stroke="#1f2b3d"/><line x1="10" y1="5" x2="10" y2="100" stroke="#1f2b3d"/>
-    <rect x="150" y="5" width="65" height="35" fill="rgba(255,138,61,.07)" stroke="rgba(255,138,61,.4)" stroke-dasharray="2 2"/>${pts.map(p => `<circle cx="${(12 + p.x * 200).toFixed(1)}" cy="${(98 - p.y * 90).toFixed(1)}" r="${p.core ? 3.2 : 2}" fill="${p.c}" opacity="${p.core ? 1 : 0.75}"/>`).join("")}
-    <text x="12" y="109" fill="#56637a" font-size="7">오래됨</text><text x="190" y="109" fill="#56637a" font-size="7">최근</text><text x="152" y="13" fill="#ff8a3d" font-size="7">강하고 최근</text></svg>
-    <div class="vb-leg"><span>DESIGNED <b style="color:#e6ebf3">${String(kept).padStart(4, "0")} / ${String(total).padStart(4, "0")}</b></span><span style="margin-left:auto;color:#ff8a3d">KEPT ${String(core).padStart(2, "0")}</span></div>`);
-  const steps = [["관찰 수집", B.byType?.["관찰"] || 0], ["결과 채점", iq.n || 0], ["패턴", B.byType?.["패턴"] || 0], ["교훈", B.byType?.["교훈"] || 0], ["함정 기록", B.traps || 0], ["규칙 승격", core], ["망각 정리", Math.max(0, total - kept)]];
+  // ① 학습 라인: 지금 남아 있는 수 + (누적) — 무엇이 실제로 돌아가는지
+  const steps = [["관찰 수집", bt["관찰"] || 0, ""], ["결과 채점", iq.n || 0, ""], ["패턴", bt["패턴"] || 0, ""], ["교훈", bt["교훈"] || 0, st.lessons], ["함정 기록", B.traps || 0, st.traps], ["규칙 승격", core, st.promoted], ["함정 회피", (st.avoided || 0) + (st.softened || 0), null], ["망각 정리", st.forgot || 0, null]];
   const mx = Math.max(1, ...steps.map(x => x[1]));
-  set(".vb-line", `<div class="vb-ph">학습 라인 <em style="color:#6d7a8f">walking down the loop</em></div>` + steps.map(([k, v]) => `<div><span>${k}</span><s><i style="width:${Math.round(v / mx * 100)}%"></i></s><b style="color:#e6ebf3">${v}</b></div>`).join("")
-    + `<div class="vb-leg" style="margin-top:6px"><span>정확도 ${iq.acc ?? 0}%</span><span>예측 ${iq.n ?? 0}판</span><span style="margin-left:auto">brier ${iq.brier ?? "—"}</span></div>`);
-  // 플레이트 판독: 최근 거래 64칸 (익절=ALIVE · 작은 손익=STRESSED · 손절=DEAD · 보유 중=RETEST)
-  const tr = (s.trades || []).slice(0, 64), open = [...(s.pos || []), ...(s.traders || []).filter(x => Array.isArray(x.pos)).flatMap(x => x.pos)];
-  const cells = [...open.map(() => "r"), ...tr.map(t => t.R >= 0.5 ? "a" : t.R <= -0.5 ? "d" : "s")].slice(0, 64); while (cells.length < 64) cells.push("");
-  const dead = cells.filter(c => c === "d").length;
-  set(".vb-pl", `<div class="vb-ph">거래 판독 <em>● LIVE</em></div><div class="vb-plate">${cells.map(c => `<i class="${c}"></i>`).join("")}</div>
-    <div class="vb-leg"><span><i style="background:#ff9a3c"></i>익절</span><span><i style="background:#f6c20a"></i>소폭</span><span><i style="background:#8a1f2b"></i>손절</span><span><i style="background:#9b6cf0"></i>보유</span><span style="margin-left:auto">BELOW GATE <b style="color:#ff5a5a">${dead}/64</b></span></div>`);
-  const ev = (s.feed || []).filter(f => /뇌|학습|기억|교훈|패턴|설계|진화|익절|손절/.test(f.text)).slice(0, 8).map(f => `${new Date(f.t).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} · ${f.text.slice(0, 60)}`);
+  set(".vb-line", `<div class="vb-ph">학습 라인 <em style="color:#6d7a8f">walking down the loop</em></div>` + steps.map(([k, v, cum]) => `<div class="r"><span>${k}</span><s><i style="width:${Math.round(v / mx * 100)}%"></i></s><b style="color:#e6ebf3">${v}${cum != null && cum !== "" && cum > v ? `<small style="color:#56637a"> /누적 ${cum}</small>` : ""}</b></div>`).join("")
+    + `<div class="vb-leg" style="margin-top:6px"><span>방향 정확도 ${iq.acc ?? 0}%</span><span>채점 ${iq.n ?? 0}판</span><span style="margin-left:auto">brier ${iq.brier ?? "—"}</span></div>
+    <div style="margin-top:4px;color:#56637a;font-size:9.5px">교훈 = 손절·과신·검증 탈락 · 함정 = 손절난 자리 모양 · 승격 = 같은 결과 3회↑</div>`);
+  // ② 뇌가 지금 진입에 쓰는 것: 핵심 규칙(리스크 절반/근거) · 손절 함정(닮으면 차단) · 최근 교훈
+  const dk = d => d > 0 ? "롱" : "숏", rows = [
+    ...(B.rules || []).slice(0, 5).map(m => `<div><em class="c">핵심</em><span>${E(m.text)}</span><b>${m.hits || 1}회</b></div>`),
+    ...(B.trapList || []).slice(0, 4).map(t => `<div><em class="t">함정</em><span>${E(t.coin || "")} ${E(t.regime || "일반")} ${dk(t.dir)} · ${E(t.keys)} · 손절 ${t.roe}%</span><b>${t.hits}회</b></div>`),
+    ...(B.lessons || []).slice(0, 5).map(m => `<div><em class="l">교훈</em><span>${E(m.text)}</span><b>${ago(m.t || Date.now())}</b></div>`)];
+  set(".vb-rules", `<div class="vb-ph">뇌가 지금 쓰는 규칙 · 함정 · 교훈 <em style="color:#6d7a8f">진입 전 자동 점검</em></div><div class="vb-rl">${rows.join("") || `<div class="x">아직 없음 — 손절·과신 스캔·검증 탈락·추천 손절이 생기면 교훈과 함정이 쌓이고, 같은 결과가 3번 나오면 핵심 규칙으로 승격됩니다.</div>`}</div>
+    <div class="vb-leg" style="margin-top:6px"><span><i style="background:#ff5a6a"></i>핵심 = 손절 쪽이면 리스크 절반</span><span><i style="background:#f6c20a"></i>함정 60%↑ 닮으면 진입 차단</span></div>`);
+  // ③ 내 손매매 추천 채점(⚡ 시장가 · 실시간 진입) + 데모 거래 판독
+  const C = s.calls || {}, cl = C.list || [];
+  const callRows = cl.slice(0, 6).map(c => `<div><span>${E(c.ko)}</span><span>${c.side > 0 ? "롱" : "숏"}</span><span style="color:#6d7a8f">${E(c.src)}${c.grade ? "·" + E(c.grade) : ""} · ${ago(c.t)}</span><span class="${c.res === "익절1" ? "w" : c.res === "손절" ? "l" : "o"}">${c.res ? c.res + " " + (c.R >= 0 ? "+" : "") + c.R + "R" : "추적 중"}</span></div>`).join("");
+  const tr = (s.trades || []).slice(0, 32), open = [...(s.pos || []), ...(s.traders || []).filter(x => Array.isArray(x.pos)).flatMap(x => x.pos)];
+  const cells = [...open.map(() => "r"), ...tr.map(t => t.R >= 0.5 ? "a" : t.R <= -0.5 ? "d" : "s")].slice(0, 32); while (cells.length < 32) cells.push("");
+  set(".vb-pl", `<div class="vb-ph">⚡ 내 손매매 추천 채점 <em>● LIVE</em></div>
+    <div class="vb-sum"><span>익절1 먼저 <b>${C.wr == null ? "—" : C.wr + "%"}</b></span><span>채점 <b>${C.done || 0}</b></span><span>합계 <b style="color:${(C.sumR || 0) >= 0 ? "#3fd18a" : "#ff5a6a"}">${(C.sumR || 0) >= 0 ? "+" : ""}${C.sumR || 0}R</b></span><span>추적 중 <b>${C.open || 0}</b></span></div>
+    <div class="vb-call">${callRows || `<div style="grid-template-columns:1fr;color:#56637a">⚡ 시장가 버튼을 누르거나 실시간 진입이 '유력·보통'을 내면 여기서 손절/익절1 중 먼저 닿은 쪽으로 채점 → 뇌가 학습</div>`}</div>
+    <div class="vb-ph" style="margin-top:8px">데모 거래 판독 <em style="color:#6d7a8f">최근 32</em></div><div class="vb-plate">${cells.map(c => `<i class="${c}"></i>`).join("")}</div>
+    <div class="vb-leg"><span><i style="background:#ff9a3c"></i>익절</span><span><i style="background:#f6c20a"></i>소폭</span><span><i style="background:#8a1f2b"></i>손절</span><span><i style="background:#9b6cf0"></i>보유</span></div>`);
+  const ev = (s.feed || []).filter(f => /뇌|학습|기억|교훈|패턴|설계|진화|익절|손절|채점|함정/.test(f.text)).slice(0, 8).map(f => `${new Date(f.t).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} · ${f.text.slice(0, 60)}`);
   set(".vb-tick", `<span>${ev.map(x => E(x)).join(" &nbsp;<b>›</b>&nbsp; ")} &nbsp;<b>·</b>&nbsp; 목표는 사람이 정했다. 나머지는 루프가 한다. — A HUMAN SET THE GOAL. THE LOOP DID EVERYTHING ELSE.</span>`);
 }
 // 3D 이중 나선 + 기억 분자 클러스터 (깊이 정렬)
