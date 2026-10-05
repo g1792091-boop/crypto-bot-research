@@ -12,6 +12,10 @@
 .sk-item { flex: none; display: grid; justify-items: center; align-content: start; gap: 4px; width: 62px; padding: 2px 0;
   color: var(--ink-2); text-decoration: none; scroll-snap-align: start; border-radius: 14px; -webkit-tap-highlight-color: transparent; }
 .sk-item.big { width: 72px; }
+/* 크게 / 아주 크게: the ring grows with the text inside it, so the '일째' caption stays inside the stroke */
+.sk-item { width: calc(62px * var(--ts)); } .sk-item.big { width: calc(72px * var(--ts)); }
+.sk-item .sk-svg { width: calc(58px * var(--ts)); height: calc(58px * var(--ts)); }
+.sk-item.big .sk-svg { width: calc(66px * var(--ts)); height: calc(66px * var(--ts)); }
 .sk-ava { position: relative; display: grid; place-items: center; transition: transform .16s var(--ease); }
 .sk-item:active .sk-ava, .st-dayb:active .sk-ava { transform: scale(.94); }
 .sk-svg { display: block; overflow: visible; }

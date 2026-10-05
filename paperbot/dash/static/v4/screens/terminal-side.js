@@ -87,8 +87,10 @@ export function pnlPanel(ctx) {
       s("path", {class: ["ln", up ? "up" : "dn"], d}),
       s("circle", {class: ["glow", up ? "up" : "dn"], cx: X(end[0]).toFixed(1), cy: Y(end[1]).toFixed(1), r: 6}),
       s("circle", {class: ["end", up ? "up" : "dn"], cx: X(end[0]).toFixed(1), cy: Y(end[1]).toFixed(1), r: 2.6}),
-      s("text", {class: "ax", x: W - 44, y: Y(hi - pad) + 8}, pctS(hi - pad)), s("text", {class: "ax", x: W - 44, y: Y(lo + pad)}, pctS(lo + pad)),
-    ];
+      s("text", {class: "ax", x: W - 44, y: Y(hi - pad) + 8}, pctS(hi - pad)),
+      // the bottom label only when it reads differently from the top one (a flat line would print '0.00%' twice)
+      pctS(lo + pad) !== pctS(hi - pad) ? s("text", {class: "ax", x: W - 44, y: Y(lo + pad)}, pctS(lo + pad)) : null,
+    ].filter(Boolean);
     // daily bars: that day's change of the group's median (the calendar answer), on the same time axis
     const gk = (LANES.find((l) => l.id === st.g) || {}).key;
     const days = cal && cal.ready ? (cal.days || []).filter((x) => (x.state === "done" || x.state === "today") && x.g && x.g[gk] && x.g[gk].chg != null) : [];

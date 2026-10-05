@@ -78,6 +78,13 @@ def test_v4_font_sizes_use_tokens():
             continue
         for v in _sizes(_nocomment(_read(f))):
             if "var(--t" in v:
+                # a token may be used as is, or grown, never shrunk (e.g. calc(var(--t-xs) * .6) is a 7.8px font)
+                if any(float(x) < 1 for x in re.findall(r"\*\s*(\d*\.?\d+)(?![\d.]*px)", v)):
+                    bad.append((f, v))
+                if any(float(x) > 1 for x in re.findall(r"/\s*(\d*\.?\d+)", v)):
+                    bad.append((f, v))
+                if any(float(n) < 12 for n in re.findall(r"(\d*\.?\d+)px", v)) and not re.match(r"calc\(\s*[\d.]+px\s*\*\s*var\(--ts\)\s*\)$", v):
+                    bad.append((f, v))
                 continue
             if (f, v) in EXCEPTIONS:
                 continue
@@ -92,7 +99,14 @@ def test_js_font_sizes_use_tokens():
             if not fn.endswith(".js"):
                 continue
             src = _read(f"{d}/{fn}")
-            for m in re.finditer(r"(fontSize|font):\s*\"[^\"]*?(\d+(?:\.\d+)?)px", src):
+            # fontSize / font / "font-size" keys and .style.fontSize = assignments with a px literal in any quote style
+            for m in re.finditer(r"(?:fontSize|font-size|\bfont)[\"']?\s*[:=]\s*[\"'`][^\"'`\n]*?\d+(?:\.\d+)?px", src):
+                bad.append((fn, m.group(0)))
+            # a bare number (canvas libraries read it as px)
+            for m in re.finditer(r"fontSize[\"']?\s*[:=]\s*\d", src):
+                bad.append((fn, m.group(0)))
+            # inline style strings inside templates: style="font-size:9px"
+            for m in re.finditer(r"font-size:\s*\d+(?:\.\d+)?px", src):
                 bad.append((fn, m.group(0)))
     assert not bad, bad
     assert 'fontSize: parseFloat(tok("--t-xs"))' in _read("core/lwc.js")
@@ -127,7 +141,10 @@ def test_text_size_control_is_in_the_header_and_per_device():
     assert re.search(r"get\(k, d = null\)\s*\{\s*try \{ const v = localStorage.getItem", dom)
     assert re.search(r"set\(k, v\)\s*\{\s*try \{ localStorage.setItem", dom)
     shell = _read("core/shell.js")
-    assert 'import {textSwitch} from "./textsize.js"' in shell and "textSwitch(() => remount())" in shell
+    assert 'import {textCycle, textSwitch} from "./textsize.js"' in shell and "textSwitch(() => remount())" in shell
+    # the phone button (start of the sub-tab row) and the pressed state from what is applied, not from storage
+    assert "textCycle(() => remount())" in shell and ".textcyc" in _read("base.css")
+    assert "document.documentElement.dataset.text || currentText()" in js
     # next to the skin switch
     i, j = shell.index("textSwitch(() => remount())"), shell.index("skinSwitch(() => remount())")
     assert 0 < j - i < 120
@@ -158,9 +175,11 @@ def _skins():
 def test_small_text_contrast_both_skins():
     worst = []
     for name, t in _skins().items():
-        for fg in ("--muted", "--ink-2"):
-            for bg in ("--bg", "--surface", "--surface-2", "--console"):
-                r = _ratio(t[fg], t[bg])
-                if r < 4.5:
-                    worst.append((name, fg, bg, round(r, 2)))
+        pairs = [(fg, bg) for fg in ("--muted", "--ink-2") for bg in ("--bg", "--surface", "--surface-2", "--surface-3", "--console")]
+        # the LED captions (.led-cap, 흐름 .fl-when) use --led-dim on the LED box and on the cards around it
+        pairs += [("--led-dim", bg) for bg in ("--led-bg", "--surface", "--surface-2", "--surface-3")]
+        for fg, bg in pairs:
+            r = _ratio(t[fg], t[bg])
+            if r < 4.5:
+                worst.append((name, fg, bg, round(r, 2)))
     assert not worst, worst

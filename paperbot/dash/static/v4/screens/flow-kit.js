@@ -93,9 +93,15 @@ export function raceChart(o = {}) {
     return m && m.verdict && (m.now - m.start) < (m.verdict - m.start) / 3 ? "now" : "road";
   }
 
+  function textScale() {
+    const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ts"));
+    return v > 0 ? v : 1;
+  }
+
   function geometry(W, H) {
     const m = st.m;
-    const gut = mini ? 6 : W < 520 ? 96 : 128;
+    // the label gutter grows with the 글자 크기 setting (--ts on <html>); the screen is drawn again when it changes
+    const gut = mini ? 6 : Math.round((W < 520 ? 112 : 140) * textScale());
     // two views of the road still to go (now -> the verdict): "road" (the owners' 30일 길) draws the axis to scale up to
     // the verdict day with the finish flag; "now" gives the lines the whole width and shows the rest as a short hatched
     // stub that is NOT to scale ('남은 n일')
@@ -221,7 +227,7 @@ export function raceChart(o = {}) {
   function label(l) {
     let el = st.labs.get(l.id);
     if (!el) {
-      el = {root: h("div", {class: ["fk-lab", l.id]}), rk: h("b", {class: "fk-rk num"}), nm: h("span", {class: "fk-nm"}, laneKo(l.id)), vv: h("span", {class: "fk-vv num"})};
+      el = {root: h("div", {class: ["fk-lab", l.id]}), rk: h("b", {class: "fk-rk num"}, "0"), nm: h("span", {class: "fk-nm"}, laneKo(l.id)), vv: h("span", {class: "fk-vv num"}, "—")};
       el.root.append(h("span", {class: "fk-l1"}, h("i", {class: ["fk-sw", l.id === "coin" ? "band" : l.id]}), el.nm), h("span", {class: "fk-l2"}, el.rk, el.vv));
       st.labs.set(l.id, el);
       labels.append(el.root);
@@ -247,7 +253,10 @@ export function raceChart(o = {}) {
     }
     if (!mini) {
       // labels in the right gutter, in order, at their line's height (pushed apart so they never overlap)
-      const LH = 34, top = g.y0 - 4, bot = g.y1 - LH + 4;
+      // label pitch = the real label height (it grows with the bigger type and 글자 크기), measured once per draw
+      // of the chart; 34 px is the floor the old fixed pitch used
+      if (!st.lh) { const h0 = ord.length ? label(ord[0]).root.offsetHeight : 0; if (h0) st.lh = Math.max(34, Math.ceil(h0) + 3); }
+      const LH = st.lh || Math.round(40 * textScale()), top = g.y0 - 4, bot = g.y1 - LH + 4;
       const ys = ord.map((l) => (l.at == null ? bot : g.Yc(l.at) - LH / 2));
       for (let i = 1; i < ys.length; i++) ys[i] = Math.max(ys[i], ys[i - 1] + LH);
       const over = ys.length ? ys[ys.length - 1] - bot : 0;

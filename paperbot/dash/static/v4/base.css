@@ -101,6 +101,11 @@ em { font-style: normal; color: var(--accent); }
 .skinsw button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
 /* 글자 크기 (core/textsize.js): the same small control, first at the end of the tabs; 화면 색 follows right after it */
 .textsw + .skinsw { margin-left: 6px; }
+/* 글자 크기 on a phone: one cycling button first in the sub-tab row (the full control is at the far end of that row) */
+.textcyc { display: none; flex: none; align-items: baseline; gap: 4px; height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line-2);
+  background: var(--surface); color: var(--ink); font: 800 var(--t-sm)/1 var(--f-body); cursor: pointer; }
+.textcyc small { color: var(--muted); font: 700 var(--t-2xs)/1 var(--f-body); }
+@media (max-width: 759px) { .textcyc { display: inline-flex; } .subtabs .textsw { display: none; } }
 
 /* the screen container */
 .screen { display: block; max-width: var(--page-max); margin-inline: auto; padding: 16px var(--gutter) 40px; min-height: 60vh; outline: none; }

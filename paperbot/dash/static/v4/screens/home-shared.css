@@ -57,6 +57,11 @@ a.home-row.compact .board-rkd { position: absolute; left: 2px; bottom: 1px; }
 
 /* top 5 / bottom 5 */
 .home-tb { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
+/* the strategy name is the row's key: an empty sparkline takes no room, and at 크게 / 아주 크게 the sparkline gives its
+   56 px to the name (the % stays; 순위표 keeps the sparkline) */
+.home-tb .board-spark:has(> .mspark.none) { display: none; }
+html[data-text="lg"] .home-tb .board-spark, html[data-text="xl"] .home-tb .board-spark { display: none; }
+.home-tb a.home-row.compact { column-gap: 6px; } .home-tb a.home-row.compact .an { gap: 4px; } .home-tb a.home-row.compact .an-tf { padding: 0 3px; }
 @media (min-width: 760px) { .home-tb { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; } }
 .home-tb > :only-child { grid-column: 1 / -1; }
 .home-tbcol { min-width: 0; }

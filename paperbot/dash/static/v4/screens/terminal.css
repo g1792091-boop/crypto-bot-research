@@ -93,9 +93,9 @@ a.term-mi:hover span:last-child { color: var(--ink); text-decoration: underline;
 /* watchlist */
 .term-watch { flex: none; }
 .term-watch .term-pb { padding: 2px 4px 4px; }
-.term-wr { display: grid; grid-template-columns: 62px minmax(0, 1fr) 64px; gap: 6px; align-items: center; width: 100%; padding: 4px 6px; border: 0; border-radius: 4px;
+.term-wr { display: grid; grid-template-columns: calc(62px * var(--ts)) minmax(0, 1fr) calc(64px * var(--ts)); gap: 6px; align-items: center; width: 100%; padding: 4px 6px; border: 0; border-radius: 4px;
   background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; border-left: 2px solid transparent; }
-.term-watch.gh .term-wr { grid-template-columns: 40px minmax(0, 1fr) 52px 50px; }
+.term-watch.gh .term-wr { grid-template-columns: calc(40px * var(--ts)) minmax(0, 1fr) calc(52px * var(--ts)) calc(50px * var(--ts)); }
 .term-watch.gh .term-wr b small { display: none; }
 .term-wr.hd { cursor: default; color: var(--muted); font-size: var(--t-xs); padding-block: 3px 2px; }
 .term-wr:not(.hd):hover { background: var(--surface-2); }
@@ -112,7 +112,7 @@ a.term-mi:hover span:last-child { color: var(--ink); text-decoration: underline;
 .term-liqp { flex: 0 1 34%; min-height: 120px; }
 .term-feed { display: grid; }
 .term-fills .term-pb, .term-liqp .term-pb { padding: 2px 6px; }
-.term-fr { display: grid; grid-template-columns: 70px minmax(0, 1fr) auto; grid-template-rows: auto auto; column-gap: 7px; row-gap: 2px; align-items: center;
+.term-fr { display: grid; grid-template-columns: calc(70px * var(--ts)) minmax(0, 1fr) auto; grid-template-rows: auto auto; column-gap: 7px; row-gap: 2px; align-items: center;
   padding: 5px 4px; border-bottom: 1px solid var(--line); color: inherit; text-decoration: none; border-left: 2px solid transparent; }
 a.term-fr:hover { background: var(--surface-2); }
 .term-fr .term-ft { grid-column: 1; grid-row: 1; color: var(--muted); font-size: var(--t-xs); }
@@ -122,8 +122,12 @@ a.term-fr:hover { background: var(--surface-2); }
 .term-fn .an { min-width: 0; overflow: hidden; }
 .term-fn .an-n { overflow: hidden; text-overflow: ellipsis; }
 .term-fn .an-tf { padding: 0 3px; font-size: var(--t-2xs); line-height: 1.4; }
-.term-fm { grid-column: 2; grid-row: 2; display: flex; gap: 6px; font-size: var(--t-xs); color: var(--ink-2); white-space: nowrap; overflow: hidden; }
-.term-fr > b, .term-fr > .num:last-child, .term-fr > .pp, .term-fbase { grid-column: 3; grid-row: 1 / span 2; text-align: right; font-size: var(--t-xs); }
+.term-fm { grid-column: 2 / span 2; grid-row: 2; display: flex; gap: 5px; font-size: var(--t-xs); color: var(--ink-2); white-space: nowrap; overflow: hidden; }
+/* when the result line is still too long, the muted parts (leverage, coin list) give way first; the side and the
+   result % keep their full width */
+.term-fm > span { flex: none; }
+.term-fm > .muted { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.term-fr > b, .term-fr > .num:last-child, .term-fr > .pp, .term-fbase { grid-column: 3; grid-row: 1; text-align: right; font-size: var(--t-xs); }
 .term-fr.fold { opacity: .86; }
 .term-fr.fold .term-fn span { overflow: hidden; text-overflow: ellipsis; }
 .term-fbase { font-size: var(--t-xs); }
@@ -216,8 +220,9 @@ a.term-fr:hover { background: var(--surface-2); }
 .term-t .r { text-align: right; }
 .term-t tr:hover td { background: var(--surface-2); }
 .term-t tr.on td:first-child { box-shadow: inset 2px 0 0 var(--accent); }
-.term-t .nm { min-width: 150px; }
-.term-t .nm a { display: inline-flex; align-items: center; gap: 5px; color: var(--ink); text-decoration: none; max-width: 230px; overflow: hidden; }
+.term-t .nm { min-width: 130px; max-width: calc(184px * var(--ts)); overflow: hidden; }
+.term-t .nm a { display: flex; align-items: center; gap: 5px; color: var(--ink); text-decoration: none; max-width: 100%; min-width: 0; overflow: hidden; }
+.term-t .nm a .an { overflow: hidden; }
 .term-t .nm a:hover .an-n { text-decoration: underline; }
 .term-t .nm a .an-n { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .term-t .side { padding: 1px 6px; font-size: var(--t-xs); }
@@ -228,7 +233,7 @@ a.term-fr:hover { background: var(--surface-2); }
 /* ---------------------------------------------------------------- right column */
 .term-mine { flex: 1 1 0; min-height: 96px; }
 .term-mine .term-pb { padding: 2px 6px; }
-.term-cr { display: grid; grid-template-columns: 28px minmax(0, 1fr) 36px 58px 74px; gap: 4px; align-items: center; padding: 4px 2px; border-bottom: 1px solid var(--line);
+.term-cr { display: grid; grid-template-columns: calc(30px * var(--ts)) minmax(0, 1fr) calc(36px * var(--ts)) calc(62px * var(--ts)) calc(76px * var(--ts)); gap: 4px; align-items: center; padding: 4px 2px; border-bottom: 1px solid var(--line);
   color: inherit; text-decoration: none; }
 .term-cr.hd { color: var(--muted); font-size: var(--t-xs); padding-block: 2px; white-space: nowrap; }
 .term-cr.hd > span { overflow: hidden; text-overflow: ellipsis; }
@@ -236,7 +241,7 @@ a.term-fr:hover { background: var(--surface-2); }
 a.term-cr:hover { background: var(--surface-2); }
 .term-cr .side { padding: 1px 4px; font-size: var(--t-xs); justify-self: start; }
 .term-cr .term-fn .an-tf { font-size: var(--t-2xs); padding: 0 3px; line-height: 1.4; }
-.term-cr .term-fn .an { display: inline-flex; gap: 4px; min-width: 0; }
+.term-cr .term-fn .an { display: inline-flex; gap: 4px; min-width: 0; overflow: hidden; }
 .term-cr .term-fn .an-n { overflow: hidden; text-overflow: ellipsis; }
 .term-cr > .num { text-align: right; }
 .term-roe { padding: 0 3px; border-radius: 3px; }
@@ -273,7 +278,7 @@ a.term-cr:hover { background: var(--surface-2); }
 .term-calt { font-weight: 700; font-size: var(--t-xs); color: var(--ink-2); }
 .term-cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
 .term-cw { text-align: center; color: var(--muted); font-size: var(--t-2xs); } .term-cw.we { color: var(--ink-2); }
-.term-cc { position: relative; display: grid; align-content: center; justify-items: center; height: 24px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
+.term-cc { position: relative; display: grid; align-content: center; justify-items: center; min-height: calc(24px * var(--ts)); padding-block: 2px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
 .term-cc.pad { background: none; }
 .term-cc.s-future { background: none; border: 1px dashed var(--line); }
 .term-cc.s-empty { background: var(--bg); }
@@ -295,11 +300,11 @@ a.term-cr:hover { background: var(--surface-2); }
 .term-t .xs, .term-t .xm { display: none; }
 @media (min-width: 1600px) {
   .term-t .xs, .term-t .xm { display: table-cell; }
+  .term-t .nm { max-width: calc(230px * var(--ts)); }
   .term-grid { grid-template-columns: 320px minmax(0, 1fr) 380px; }
   .term-mid { grid-template-rows: minmax(0, 1fr) 290px; }
   .term-px { font-size: calc(30px * var(--ts)); }
   .term-pchart { height: 104px; }
-  .term-cc { height: 24px; }
   .term-mine { min-height: 140px; }
   .term-cc .dn, .term-cc .dv { font-size: var(--t-xs); }
 }
@@ -317,11 +322,42 @@ a.term-cr:hover { background: var(--surface-2); }
   .term-mine { min-height: 150px; }
   .term-pnl .note { display: none; }
 }
-/* 1200-1439 px: slimmer side columns and no leverage column (the fills feed and the account page still show it), so
-   the table keeps P&L, ROE and the liquidation price in view at the bigger type */
-@media (max-width: 1439px) {
-  .term-grid { grid-template-columns: 272px minmax(0, 1fr) 304px; }
-  .term-t .xn { display: none; }
+/* 1200-1439 px: no leverage or entry-price column in the table (the fills feed, the positions screen and the account
+   page still show them), so P&L, ROE, the liquidation price and 손절·잠금 stay in view at the bigger type; the left
+   column keeps room for the fills feed's names and result %. Below 1600 px 이 코인 포지션 drops its leverage column
+   too (block below), so the account name has room */
+@media (min-width: 1200px) and (max-width: 1439px) {
+  .term-grid { grid-template-columns: 288px minmax(0, 1fr) 296px; }
+  .term-t .xn, .term-t .xe { display: none; }
+  .term-t .nm { max-width: calc(164px * var(--ts)); }
+}
+/* 크게 / 아주 크게: wider side columns so the lists keep their names and numbers; 이 코인 포지션 drops its leverage
+   column, and below 1600 px the table drops 배수 and 진입가 (the fills feed and the positions screen still show them) */
+@media (min-width: 1200px) {
+  html[data-text="lg"] .term-grid { grid-template-columns: 300px minmax(0, 1fr) 312px; }
+  html[data-text="xl"] .term-grid { grid-template-columns: 316px minmax(0, 1fr) 328px; }
+  html[data-text="lg"] .term-cr, html[data-text="xl"] .term-cr { grid-template-columns: calc(30px * var(--ts)) minmax(0, 1fr) calc(62px * var(--ts)) calc(76px * var(--ts)); }
+  html[data-text="lg"] .term-cr > :nth-child(3), html[data-text="xl"] .term-cr > :nth-child(3) { display: none; }
+}
+@media (min-width: 1200px) and (max-width: 1599px) {
+  .term-cr { grid-template-columns: calc(30px * var(--ts)) minmax(0, 1fr) calc(62px * var(--ts)) calc(76px * var(--ts)); }
+  .term-cr > :nth-child(3) { display: none; }
+  html[data-text="lg"] .term-t .xn, html[data-text="xl"] .term-t .xn, html[data-text="lg"] .term-t .xe, html[data-text="xl"] .term-t .xe { display: none; }
+}
+/* the table's rows grow with the type: give it the same number of rows by taking the height from the chart */
+@media (min-width: 1200px) and (min-height: 640px) {
+  html[data-text="lg"] .term-mid, html[data-text="xl"] .term-mid { grid-template-rows: minmax(0, 1fr) calc(238px * var(--ts)); }
+}
+@media (min-width: 1600px) and (min-height: 640px) {
+  html[data-text="lg"] .term-mid, html[data-text="xl"] .term-mid { grid-template-rows: minmax(0, 1fr) calc(290px * var(--ts)); }
+}
+@media (min-width: 1440px) {
+  html[data-text="lg"] .term-grid { grid-template-columns: 316px minmax(0, 1fr) 344px; }
+  html[data-text="xl"] .term-grid { grid-template-columns: 344px minmax(0, 1fr) 372px; }
+}
+@media (min-width: 1600px) {
+  html[data-text="lg"] .term-grid { grid-template-columns: 348px minmax(0, 1fr) 404px; }
+  html[data-text="xl"] .term-grid { grid-template-columns: 372px minmax(0, 1fr) 432px; }
 }
 /* a tablet or a narrow PC window (760-1199 px): the chart and the table first, then the two side columns, page scroll */
 @media (max-width: 1199px) {

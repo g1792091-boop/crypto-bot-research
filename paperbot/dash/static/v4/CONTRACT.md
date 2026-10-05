@@ -78,7 +78,7 @@ The architect has built the shared foundation. Five builders now fill the screen
 ## 2. Design rules
 
 - Colours: only the tokens in `tokens.css`, never a hex value in a screen (css or js). Two skins share the token names (`<html data-skin>`, core/skin.js): **ai** (the default: charcoal, ONE teal accent, mint up / pink down) and **classic** (dark navy, ONE yellow accent). Up/down colours only for meaning (up/down, ok/bad); a group's line colour is `--series-*`, a coin-flip comparison's neutral pair is `--cmp-hi` / `--cmp-lo`, so both skins hold without screen changes.
-- Type: no visible text below 12px (owners 10/06: "예전보다 글자가 작다"). Every font size in v4 css / js is a `--t-*` token from tokens.css (`--t-2xs` 12px is the floor; tables and lists 13-14px; big LED digits `calc(Npx * var(--ts))`), so the **글자 크기** control (보통 / 크게 / 아주 크게, core/textsize.js, `<html data-text="md|lg|xl">`, per device, next to 화면 색) scales the whole page; `--muted` / `--ink-2` stay at 4.5:1 or better on the panels in both skins (tests/test_dash_read.py).
+- Type: no visible text below 12px (owners 10/06: "예전보다 글자가 작다"). Every font size in v4 css / js is a `--t-*` token from tokens.css (`--t-2xs` 12px is the floor; tables and lists 13-14px; big LED digits `calc(Npx * var(--ts))`), so the **글자 크기** control (보통 / 크게 / 아주 크게, core/textsize.js, `<html data-text="md|lg|xl">`, per device, next to 화면 색) scales the whole page; `--muted` / `--ink-2` (and `--led-dim` for the LED captions) stay at 4.5:1 or better on the panels in both skins (tests/test_dash_read.py).
 - Signature pieces (`components.css`):
   - `ui.plate("이름")`: the ◆ label plate
   - `ui.bubble({...})`: the white 2 px pixel speech bubble, tails `tl` / `tr` / `lft`

@@ -73,7 +73,7 @@
   --led-line: #1c4a33;
   --led-green: #45d98a;
   --led-digit: #f6c445;
-  --led-dim: #5f7d6b;
+  --led-dim: #7f9e8b;   /* captions on the LED boxes (.led-cap, 흐름 .fl-when): 4.8:1 or more on every surface in both skins */
   /* pixel office */
   --wood: #a9855a;
   --wood-2: #a27f55;

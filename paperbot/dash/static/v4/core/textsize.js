@@ -28,7 +28,9 @@ export function applyText(id = currentText()) {
  * charts measure their labels at the new size).
  */
 export function textSwitch(onChange) {
-  const cur = currentText();
+  // the size actually applied (<html data-text>) wins over storage, so a device whose storage is blocked still shows
+  // the right button pressed after the shell redraws this control
+  const cur = document.documentElement.dataset.text || currentText();
   const btns = TEXT_SIZES.map((x) => h("button", {type: "button", "aria-pressed": String(x.id === cur), dataset: {text: x.id},
     onclick: () => {
       if (document.documentElement.dataset.text === x.id) return;
@@ -39,4 +41,25 @@ export function textSwitch(onChange) {
     }}, x.ko));
   return h("span", {class: "skinsw textsw", role: "group", "aria-label": "글자 크기", title: "글자 크기: 이 기기에만 기억합니다"},
     h("span", {class: "k"}, "글자 크기"), btns);
+}
+
+/**
+ * textCycle(onChange) -> the phone version: one small "가" button at the start of the sub-tab row (the three-button
+ * control sits at the end of that row, which scrolls sideways on a phone). Each tap goes 보통 → 크게 → 아주 크게 → 보통.
+ */
+export function textCycle(onChange) {
+  const at = () => document.documentElement.dataset.text || currentText();
+  const ko = (id) => (TEXT_SIZES.find((x) => x.id === id) || TEXT_SIZES[0]).ko;
+  const btn = h("button", {type: "button", class: "textcyc", dataset: {text: at()}, "aria-label": `글자 크기: ${ko(at())} (누르면 바뀝니다)`,
+    title: "글자 크기: 이 기기에만 기억합니다",
+    onclick: () => {
+      const i = TEXT_SIZES.findIndex((x) => x.id === at());
+      const next = TEXT_SIZES[(i + 1) % TEXT_SIZES.length].id;
+      local.set(KEY, next);
+      applyText(next);
+      btn.dataset.text = next;
+      btn.setAttribute("aria-label", `글자 크기: ${ko(next)} (누르면 바뀝니다)`);
+      if (onChange) onChange(next);
+    }}, h("span", {"aria-hidden": "true"}, "가"), h("small", {"aria-hidden": "true"}, ko(at())));
+  return btn;
 }
