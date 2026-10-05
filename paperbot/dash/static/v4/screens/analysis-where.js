@@ -167,7 +167,8 @@ export function entry(d, env) {
 // ---------------------------------------------------------------- 상황 태그 (/api/cards/stats, every account)
 export function tags(d) {
   return [viewHead({plate: "상황 태그", q: "손실에 자주 붙은 상황은?",
-    meta: `최근 30일 끝난 거래 ${fmt.int(d.trades || 0)}건 (최근 2,000건까지, 동전 봇 포함 모든 계좌)`,
+    // honest window: at the cap the newest trades only reach back to from_ts (a busy run fills it in a few days)
+    meta: `기존 36 매매법 + 5분봉 · 끝난 거래 ${fmt.int(d.trades || 0)}건 · ${d.capped && d.from_ts ? `최근 ${fmt.int(d.cap || 2000)}건이라 ${fmt.mmdd(d.from_ts)}부터` : "최근 30일"}${d.kinds ? " · 딥시크·동전 봇은 각자 화면에서" : ""}`,
     read: "손실이 날 때마다 코드가 거래에 상황 표시(태그)를 붙입니다. 경제지표 발표 전후, 추세 반대 진입, 수익 났다가 손절 같은 것입니다. 손실 쪽 막대가 이익 쪽보다 훨씬 길면 먼저 볼 곳입니다.",
     warn: [thin(d.trades || 0, 30, "끝난 거래")]}),
   ui.card({plate: "태그별 손실 · 이익 비율"}, ...tagRows(d),

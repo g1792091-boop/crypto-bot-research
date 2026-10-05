@@ -190,7 +190,10 @@ export function calendar(ctx) {
         ui.stat("닫힌 거래", fmt.int(x.trades), x.trades ? `이김 ${fmt.int(x.wins)} (${fmt.pct(x.wins / x.trades, 0, false)})` : null),
         ui.stat("오른 계좌", h("b", {class: "num up"}, fmt.int(x.up)), `내린 계좌 ${fmt.int(x.down)}`),
         ui.stat("강제청산", fmt.int(x.liq), x.busts ? h("span", {class: "s down"}, `파산 ${fmt.int(x.busts)}`) : h("span", {class: "s"}, "파산 0"))),
-      one ? acct("그날 계좌", best) : h("div", {class: "flc-accts"}, acct("가장 많이 오른 계좌", best), acct("가장 많이 내린 계좌", worst)),
+      // no move at all (day 0, nobody traded): no pick among ties, one muted line instead
+      one ? acct("그날 계좌", best) : (best && best.chg > 0) || (worst && worst.chg < 0)
+        ? h("div", {class: "flc-accts"}, best && best.chg > 0 ? acct("가장 많이 오른 계좌", best) : null, worst && worst.chg < 0 ? acct("가장 많이 내린 계좌", worst) : null)
+        : h("p", {class: "muted"}, "아직 오르내린 계좌가 없습니다 · 첫 거래 뒤부터 순위"),
       h("p", {class: "flc-pnl"}, h("span", {class: "muted"}, "그날 닫힌 거래 손익 합"), h("b", {class: ["num", fmt.tone(x.pnl)]}, fmt.usdt(x.pnl, true))),
       ui.assume("closed", "계좌 변화 = 그날 끝 잔고 ÷ 전날 끝 잔고"),
       dayLinks(d.d));

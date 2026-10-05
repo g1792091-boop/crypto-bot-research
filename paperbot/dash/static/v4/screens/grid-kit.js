@@ -176,7 +176,7 @@ export function profileCard(ctx, key, o = {}) {
     if (g !== st.gen || !ctx.alive()) return;
     st.d = d;
     if (o.head) headSlot.replaceChildren(headBlock(d));
-    body.replaceChildren(...(d.kind === "strategy" ? strategyBody(ctx, d) : accountBody(d)));
+    body.replaceChildren(...(d.group === "ds200" ? dsCounts(ctx, d) : d.kind === "strategy" ? strategyBody(ctx, d) : accountBody(d)));
     if (animate) motion.swap(body);
   }
 
@@ -229,6 +229,25 @@ export function profileCard(ctx, key, o = {}) {
   }
 
   return {el, load: () => load(false), set(days) { st.days = String(days); seg.set(st.days); load(true); }};
+}
+
+/** DeepSeek (an account or one definition's accounts): counts only, never money or returns. Owners' D11: DeepSeek
+ *  P&L is shown only on the DeepSeek group screen (순위표 · 딥시크). */
+export function dsCounts(ctx, d) {
+  const strat = d.kind === "strategy";
+  const c = strat ? (d.combined || {}) : d;
+  const accts = strat ? (d.accounts || []) : [];
+  const trades = c.trades || 0, wins = c.wins || 0;
+  const busts = strat ? accts.filter((a) => a.bust).length : (d.bust ? 1 : 0);
+  const stats = [
+    ui.stat("거래 수", `${fmt.int(trades)}건`, strat ? `봉 계좌 ${fmt.int(accts.length)}개 합` : "닫힌 거래"),
+    ui.stat("이긴 거래", `${fmt.int(wins)}건`, trades ? `진 거래 ${fmt.int(trades - wins)}건` : "거래 없음"),
+    ui.stat("파산", `${fmt.int(busts)}${strat ? "개" : ""}`, strat ? "파산한 봉 계좌" : d.bust ? "이 계좌는 파산" : "아직 없음")];
+  const tiles = strat ? h("div", {class: "gk-tfrow own"}, accts.map((a) => h("a", {class: "gk-tf", href: ctx.href("account", a.id)},
+    h("span", {class: "k"}, fmt.tfKo(a.tf)), h("span", {class: "num"}, `거래 ${fmt.int(a.trades || 0)}`), a.bust ? ui.pill("파산", "bad") : null))) : null;
+  return [h("div", {class: "stats gk-stats s3"}, stats), tiles,
+    h("p", {class: "gk-vsline"}, ui.pill("딥시크는 여기서 개수만", "ref"), " 손익은 ",
+      h("a", {href: ctx.href("board", null, {g: "ds"})}, "딥시크 화면"), "에서만 봅니다.")];
 }
 
 /** The strategy-level card body: combined return + curve, the four numbers, and one cell per timeframe (the map's

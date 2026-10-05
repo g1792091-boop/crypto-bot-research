@@ -87,7 +87,11 @@ export function tiles(hl, o = {}) {
     }
   }
   const n = (hl && hl.nightly) || {};
-  if (n.ready) {
+  if (n.ready && n.start_day && (n.parity || {}).accounts == null) {
+    // the run's start day: no 00:00 snapshot by design, so nothing to recompute (normal, not a warning)
+    out.push(tile({k: `밤 점검 (${String(n.day || "").slice(5).replace("-", "/")})`, v: "시작한 날",
+      s: "재계산 없음 (정상, 첫 재계산 내일 09:20)", st: "none"}));
+  } else if (n.ready) {
     const p = n.parity || {};
     const okN = p.accounts != null ? p.accounts - (p.mismatched_accounts || 0) - (p.crash_gaps || 0) - (p.early_kline || 0) : null;
     const bits = [p.mismatched_accounts ? `불일치 ${fmt.int(p.mismatched_accounts)}` : "재계산 일치",

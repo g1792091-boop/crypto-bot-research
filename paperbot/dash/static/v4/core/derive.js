@@ -54,12 +54,27 @@ export function groupStats(board) {
     coin: fin(coin), total: {wallet: tw, initial: ti, n: rows.length}, flipMedByTf};
 }
 
-/** Accounts of a group ("all" = every original account) sorted by wallet, best first. */
+/** An account with no closed trade and no open position has no rank yet (day 0: every return is 0.0%, so a rank
+ *  would only be the alphabet). It is left out of 상위/하위, 최고 계좌 and the rank memo, and shows "—". */
+export const unranked = (a) => !!a && !((a.trades || 0) > 0) && !a.position;
+
+/** Accounts of a group ("all" = every original account) sorted by wallet, best first; unranked ones last. */
 export function ranked(board, group = "all") {
   const init = (board && board.initial) || 5000;
   const rows = ((board && board.accounts) || []).filter((a) => group === "all" ? groupOf(a) !== "extra" : groupOf(a) === group);
-  return rows.map((a) => ({...a, ret: wal(a, init) / init - 1})).sort((x, y) => y.ret - x.ret || String(x.account_id).localeCompare(String(y.account_id)));
+  return rows.map((a) => ({...a, ret: wal(a, init) / init - 1}))
+    .sort((x, y) => (unranked(x) - unranked(y)) || y.ret - x.ret || String(x.account_id).localeCompare(String(y.account_id)));
 }
+
+/** The ranked accounts only, and how many have no rank yet: {rows, waiting}. */
+export function rankedOnly(board, group = "all") {
+  const all = ranked(board, group);
+  const rows = all.filter((a) => !unranked(a));
+  return {rows, waiting: all.length - rows.length};
+}
+
+/** The one muted line for the accounts without a rank yet ('' when none). */
+export const waitingKo = (n) => (n > 0 ? `아직 거래 없는 계좌 ${n}개 · 첫 거래 뒤부터 순위` : "");
 
 /** Unrealized P&L of a board position at a mark price: {pnl, roe} (before the exit fee, like the exchange app). */
 export function livePnl(pos, mark) {

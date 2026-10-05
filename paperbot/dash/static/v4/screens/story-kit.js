@@ -29,13 +29,15 @@ export const dayStart = (day) => Date.parse(`${day}T00:00:00+09:00`);
 /** D+n on the checkpoint clock (whole days since 00:00 UTC of the start day). */
 export const dnOf = (start, ms) => Math.max(0, Math.floor((ms - (start - start % DAY)) / DAY));
 
-/** The run's Korea-time days, newest first: [{day, dn}] (dn at the day's end, now for today). */
+/** The run's Korea-time days, newest first: [{day, n, dn}]. n = the Korea-time day number (1 = the start day), the
+ *  same count as 흐름 'N일째', so 오늘 and 어제 always differ; dn = D+ on the checkpoint clock at the day's end (now for
+ *  today), which moves at 09:00 KST (00:00 UTC). */
 export function runDays(start, now = serverNow(), limit = 30) {
   if (!start) return [];
   const out = [];
   const first = dayStart(fmt.dayKey(start));
   for (let t = fmt.kstMidnight(now); t >= first && out.length < limit; t -= DAY) {
-    out.push({day: fmt.dayKey(t + 3600000), dn: dnOf(start, Math.min(now, t + DAY - 1))});
+    out.push({day: fmt.dayKey(t + 3600000), n: Math.round((t - first) / DAY) + 1, dn: dnOf(start, Math.min(now, t + DAY - 1))});
   }
   return out;
 }
@@ -63,10 +65,10 @@ export function ringItem(d, o = {}) {
   const word = dayWord(d.day);
   const seen = isSeen(d.day);
   const a = h("a", {class: ["sk-item", o.big ? "big" : "", seen ? "seen" : ""], href: o.href,
-    "aria-label": `${word} 하이라이트 · D+${d.dn}${seen ? " · 본 날" : ""}`, role: "listitem",
+    "aria-label": `${word} 하이라이트 · ${d.n ?? "—"}일째${seen ? " · 본 날" : ""}`, role: "listitem",
     onclick: () => { nav.from = location.hash || "#/home"; }},
   h("span", {class: "sk-ava"}, ringSvg({seen, size: o.big ? 66 : 58}),
-    h("span", {class: "sk-in"}, h("small", null, "D+"), h("b", null, String(d.dn)))),
+    h("span", {class: "sk-in"}, h("b", null, d.n == null ? "—" : String(d.n)), h("small", null, "일째"))),
   h("span", {class: "sk-lab"}, word));
   return a;
 }
@@ -82,9 +84,9 @@ export function storyRing(ctx) {
   let sig = "";
   const render = (sum) => {
     const start = sum && sum.start;
-    const days = start ? runDays(start, serverNow(), 14) : [{day: fmt.dayKey(serverNow()), dn: (sum && sum.restart && sum.restart.day) || 0}];
+    const days = start ? runDays(start, serverNow(), 14) : [{day: fmt.dayKey(serverNow()), n: null, dn: (sum && sum.restart && sum.restart.day) || 0}];
     const seen = seenDays();
-    const next = days.map((d) => d.day + d.dn + (seen.includes(d.day) ? "s" : "")).join("|");
+    const next = days.map((d) => d.day + d.n + (seen.includes(d.day) ? "s" : "")).join("|");
     if (next === sig) return;
     sig = next;
     row.replaceChildren(...days.map((d, i) => ringItem(d, {big: i === 0, href: ctx.href("story", i === 0 ? null : d.day)})));

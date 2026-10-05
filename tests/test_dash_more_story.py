@@ -168,7 +168,8 @@ def test_story_busts_liquidations_meetings_and_the_run_clock(world):
     assert m["lines"][0]["line"].startswith("상위 5개 중 4개가")              # the lead's first line, decision first
     assert m["lines"][1]["line"] == "아침 회의: 큰 변화 없음"                  # else the code summary, lead mark cut
     assert d["dn"] == 2 and d["dn_now"] == 2 and d["of"] == 30
-    assert d["days"] == [{"day": "2026-09-29", "dn": 0}, {"day": "2026-09-30", "dn": 1}, {"day": DAY0, "dn": 2}]
+    assert d["days"] == [{"day": "2026-09-29", "n": 1, "dn": 0}, {"day": "2026-09-30", "n": 2, "dn": 1},
+                         {"day": DAY0, "n": 3, "dn": 2}]                       # n: the Korea-day number (첫날 다듬기)
     assert d["verdict_ts"] > NOW and d["days_left"] >= 27
     # the day before: its own trades and meetings only
     y = S.story(c, a, "2026-09-30", NOW)

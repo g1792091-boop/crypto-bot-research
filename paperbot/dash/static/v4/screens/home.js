@@ -112,7 +112,7 @@ export async function mount(el, ctx) {
       put(dcount, h("b", null, `D+${x.day}`), ` / ${x.of}`);
       const n = gs ? gs.total.n : null;
       const xn = gs && gs.groups.extra ? gs.groups.extra.n : 0;
-      hsub.textContent = `${x.k > 1 ? `${x.k}번째` : "첫"} 판정 ${fmt.date(x.verdictTs)} 09:00 · ${fmt.int(x.left)}일 남음`
+      hsub.textContent = `${x.k > 1 ? `${x.k}번째` : "첫"} 판정 ${fmt.date(x.verdictTs)} 09:00 · ${fmt.int(x.left)}일 남음 · D+는 매일 한국 09:00에 +1`
         + (n != null ? ` · 계좌 ${fmt.int(n - xn)}개${xn ? ` + 추가 ${fmt.int(xn)}개` : ""}` : "");
       put(refBox, ui.refNote(x.verdictTs));
     } else {
@@ -157,12 +157,19 @@ export async function mount(el, ctx) {
     const gs = st.gs;
     if (!gs) return;
     const t = todayStats(st.summary, st.board);
-    let stats = [`계좌 ${fmt.int(gs.total.n)}개 합계`];
+    // owners' D11: DeepSeek money only on the DeepSeek group screen. The headline total leaves its wallets out and
+    // its cell on the right is a count, never an amount.
+    const dsG = gs.groups.ds, init = gs.initial || 5000;
+    const dsN = dsG ? dsG.n : 0;
+    const wallet = gs.total.wallet - (dsG ? dsG.sumWallet : 0), initial = gs.total.initial - dsN * init;
+    let stats = [`계좌 ${fmt.int(gs.total.n - dsN)}개 합계${dsN ? " (딥시크 제외)" : ""}`];
     if (t.ready && t.byGroup) stats = stats.concat([`오늘 거래 ${fmt.int(t.total.trades)}`, `이긴 거래 ${fmt.int(t.total.wins)}`, `강제청산 ${fmt.int(t.total.liq)}`]);
     else if (t.ready) stats = stats.concat([`오늘 거래 ${fmt.int(t.total.trades)}`, `강제청산 ${fmt.int(t.total.liq)}`]);
-    st.led = {total: gs.total.wallet, initialTotal: gs.total.initial, live: stream.live(), curve: st.total || null, stats,
-      right: ORDER.filter((g) => gs.groups[g]).map((g) => ({k: groupKo(g), v: gs.groups[g].pnl})),
-      caption: `${ui.ASSUME_KO} · 잔고 = 닫힌 거래 기준 (열린 포지션 손익 제외) · 아래·옆 숫자는 묶음별 시작부터 손익`};
+    st.led = {total: wallet, initialTotal: initial, live: stream.live(), curve: st.total || null, stats,
+      right: ORDER.filter((g) => gs.groups[g]).map((g) => g === "ds"
+        ? {k: groupKo(g), text: `${fmt.int(gs.groups[g].n)}계좌 (손익은 딥시크 화면에서)`}
+        : {k: groupKo(g), v: gs.groups[g].pnl}),
+      caption: `${ui.ASSUME_KO} · 잔고 = 닫힌 거래 기준 (열린 포지션 손익 제외) · 합계에 딥시크는 빠짐 (손익은 딥시크 화면에서) · 옆 숫자는 묶음별 시작부터 손익`};
     led.update(st.led);
   }
   const relive = () => { if (st.led) { st.led.live = stream.live(); led.update(st.led); } };
@@ -194,7 +201,9 @@ export async function mount(el, ctx) {
   function tRow(id) {
     let r = trows.get(id);
     if (r) return r;
-    const v = ui.liveNum(null, {dec: 2, sign: true, tone: true, cls: "tv", flash: true});
+    // DeepSeek: counts only here (D11: its money only on the DeepSeek group screen)
+    const v = id === "ds" ? Object.assign(h("span", {class: "tv muted"}, "손익은 딥시크 화면에서"), {update() {}})
+      : ui.liveNum(null, {dec: 2, sign: true, tone: true, cls: "tv", flash: true});
     const meta = h("span", {class: "tm"});
     r = {el: h("div", {class: "home-trow", role: "listitem"}, h("span", {class: "tn"}, TODAY_KO[id] || groupKo(id)), v, meta), v, meta};
     trows.set(id, r);

@@ -370,6 +370,31 @@ export function startOnTap() {
   return true;
 }
 
+// ---------------------------------------------------------------- 화면 켜두기 (Screen Wake Lock)
+// A phone that locks its screen stops the page and its sound. With this ticked (off by default; a per-device choice
+// on this device) the page asks the browser to keep the screen on while the sound is on, and asks again when the page
+// comes back to the front (the browser drops the lock whenever the page is hidden). No API, no option.
+const wake = {on: local.get("snd-wake", false) === true, lock: null};
+export const wakeSupported = () => typeof navigator !== "undefined" && !!navigator.wakeLock && typeof navigator.wakeLock.request === "function";
+async function wakeGet() {
+  if (!wake.on || !cfg.on || wake.lock || !wakeSupported() || (typeof document !== "undefined" && document.hidden)) return;
+  try {
+    const l = await navigator.wakeLock.request("screen");
+    wake.lock = l;
+    l.addEventListener("release", () => { if (wake.lock === l) wake.lock = null; });
+  } catch (e) { wake.lock = null; }
+}
+function wakeDrop() {
+  const l = wake.lock;
+  wake.lock = null;
+  if (l) { try { l.release().catch(() => {}); } catch (e) { /* already gone */ } }
+}
+const wakeSync = () => { if (wake.on && cfg.on) wakeGet(); else wakeDrop(); };
+/** Turn 화면 켜두기 on / off (remembered on this device only). */
+export function setWake(on) { wake.on = !!on; local.set("snd-wake", wake.on); wakeSync(); }
+export const wakeOn = () => wake.on;
+if (typeof document !== "undefined") document.addEventListener("visibilitychange", () => { if (!document.hidden) wakeGet(); });
+
 // ---------------------------------------------------------------- the header button + popover
 export function soundButton() {
   const icon = h("span", {class: "snd-ic", "aria-hidden": "true"});
@@ -380,12 +405,14 @@ export function soundButton() {
   const dens = h("div", {class: "seg", role: "group", "aria-label": "소리 빈도"},
     Object.entries(DENSITY).map(([id, d]) => h("button", {type: "button", dataset: {d: id}, onclick: () => setCfg({density: id})}, d.ko)));
   const night = h("input", {type: "checkbox", id: "snd-night"});
+  const wakeBox = h("input", {type: "checkbox", id: "snd-wake", disabled: !wakeSupported()});
   const why = h("p", {class: "note snd-why"});
   const pop = h("div", {class: "snd-pop", id: "sndpop", role: "dialog", "aria-label": "실시간 소리", hidden: true},
     h("label", {class: "snd-row snd-main"}, onBox, h("b", null, "실시간 소리")),
     h("label", {class: "snd-row"}, h("span", {class: "k"}, "크기"), vol),
     h("div", {class: "snd-row"}, h("span", {class: "k"}, "빈도"), dens),
     h("label", {class: "snd-row"}, night, h("span", null, "밤 00~07시(한국)엔 끄기")),
+    h("label", {class: "snd-row"}, wakeBox, h("span", null, wakeSupported() ? "화면 켜두기 (휴대폰이 잠들면 소리도 멈춤)" : "화면 켜두기 · 이 기기는 지원 안 함")),
     why,
     h("p", {class: "note"}, "바탕음 = 코인 가격이 실제로 움직일 때 한 번씩 (오르면 높은 음, 내리면 낮은 음). 우리 계좌의 진입·익절·손절·강제청산, 회의 결론, D+10·D+20·판정 날엔 정해 둔 소리. 꾸민 소리는 없습니다."));
   const wrap = h("div", {class: "snd"}, btn, pop);
@@ -394,7 +421,7 @@ export function soundButton() {
     btn.dataset.state = !on ? "off" : wait ? "wait" : mute ? "night" : "on";
     const t = !on ? "실시간 소리 꺼짐" : wait ? "실시간 소리 켜짐 · 화면을 한 번 누르면 들립니다" : mute ? "실시간 소리 · 밤이라 쉬는 중 (07시부터)" : "실시간 소리 켜짐";
     btn.title = t; btn.setAttribute("aria-label", t + (on ? ". 누르면 설정" : ". 누르면 켜지고 설정이 열립니다"));
-    onBox.checked = on; vol.value = String(cfg.vol); night.checked = cfg.night;
+    onBox.checked = on; vol.value = String(cfg.vol); night.checked = cfg.night; wakeBox.checked = wake.on;
     for (const b of dens.children) b.setAttribute("aria-pressed", String(b.dataset.d === cfg.density));
     why.textContent = !on ? "꺼져 있습니다." : mute ? "지금은 밤이라 쉬는 중입니다 (07시부터 다시)." : wait ? "화면을 한 번 누르면 소리가 시작됩니다." : "켜져 있습니다. 실제로 일이 생길 때만 소리가 납니다.";
   };
@@ -413,10 +440,12 @@ export function soundButton() {
   onBox.addEventListener("change", () => { setCfg({on: onBox.checked}); if (onBox.checked) unlock(); });
   vol.addEventListener("input", () => setCfg({vol: Number(vol.value)}));
   night.addEventListener("change", () => setCfg({night: night.checked}));
+  wakeBox.addEventListener("change", () => setWake(wakeBox.checked));
   document.addEventListener("pointerdown", (e) => { if (!pop.hidden && !wrap.contains(e.target)) setOpen(false); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !pop.hidden) { setOpen(false); btn.focus(); } });
-  bus.on("sound:cfg", paint);
+  bus.on("sound:cfg", () => { paint(); wakeSync(); });
   bus.on("route", () => setOpen(false));
+  wakeSync();
   paint();
   setInterval(paint, 60000);           // the night mute starts / ends on the clock (the label only, no sound)
   return wrap;

@@ -13,6 +13,9 @@ const TABS = [{id: "bot", label: "경고"}, {id: "nightly", label: "밤 점검"}
 const LEVELS = [{id: "all", label: "전부"}, {id: "CRITICAL", label: "긴급"}, {id: "WARN", label: "주의"}, {id: "INFO", label: "정보"}];
 const key = (a) => `${a.ts}|${a.text}`;
 const md = (day) => String(day || "").slice(5).replace("-", "/");
+// the server's source ids in plain words (the footer is for the owners, not a file list)
+const SOURCE_KO = {"paper3.db alerts": "봇 경고", "daily3.db reports, mismatches": "밤 점검 보고", "checkpoint.db job_log": "판정 작업 기록"};
+const sourceKo = (x) => SOURCE_KO[x] || "기타 기록";
 
 export async function mount(el, ctx) {
   ctx.setTitle("알림 기록");
@@ -130,7 +133,7 @@ export async function mount(el, ctx) {
     list.set(rows, !reset);
     // "묶어 n줄" only when something really folded
     botNote.textContent = `기록 ${fmt.int(st.rows.length)}건` + (groups.length < mine.length ? ` · 같은 알림을 묶어 ${fmt.int(groups.length)}줄` : "") +
-      (n ? ` · 지난번 본 뒤 새 알림 ${fmt.int(n)}개` : "") + (st.d && st.d.sources ? ` · 읽은 곳: ${st.d.sources.join(", ")}` : "");
+      (n ? ` · 지난번 본 뒤 새 알림 ${fmt.int(n)}개` : "") + (st.d && st.d.sources && st.d.sources.length ? ` · 읽은 곳: ${st.d.sources.map(sourceKo).join(", ")}` : "");
     // this device has now seen everything up to the newest alert (next visit draws the line there)
     const top = st.rows.length ? st.rows[0].ts : null;
     if (top != null && Number.isFinite(top) && top !== st.savedTop) { st.savedTop = top; local.set("alerts-seen", top); }
@@ -140,6 +143,7 @@ export async function mount(el, ctx) {
     const okN = p.accounts != null ? p.accounts - (p.mismatched_accounts || 0) - (p.crash_gaps || 0) - (p.early_kline || 0) : null;
     return h("div", {class: "server-row", role: "listitem"},
       h("div", {class: "body"}, p.accounts != null ? h("span", null, h("b", null, `${fmt.int(okN)}/${fmt.int(p.accounts)}`), " 계좌 일치")
+        : n.start_day ? h("span", {class: "muted"}, "시작한 날 · 재계산 없음 (정상, 첫 재계산 내일 09:20)")
         : h("span", {class: "warn-t"}, p.note || "재계산을 하지 못함")),
       h("div", {class: "side-r"}, h("span", {class: "t"}, md(n.day))),
       h("div", {class: "meta"}, p.mismatched_accounts ? ui.pill(`불일치 ${fmt.int(p.mismatched_accounts)}`, "bad") : null,

@@ -68,7 +68,8 @@ export async function mount(el, ctx) {
     const b = st.board, gs = st.gs, init = gs.initial;
     const accts = (b.accounts || []);
     const flipsBy = (tf) => accts.filter((a) => a.kind === "random" && a.timeframe === tf);
-    const best = (rows) => rows.reduce((m, a) => (!m || (a.wallet ?? init) > (m.wallet ?? init) ? a : m), null);
+    // 최고 계좌: ranked accounts only (day 0: no trade and no position = no rank, so no pick among ties)
+    const best = (rows) => rows.filter((a) => !derive.unranked(a)).reduce((m, a) => (!m || (a.wallet ?? init) > (m.wallet ?? init) ? a : m), null);
     const bestCell = (a) => (a ? h("a", {class: "board-best", href: href("account", a.account_id), title: a.account_id},
       h("span", {class: "nm2"}, fmt.acctName(a)), " ", h("b", {class: ["num", fmt.tone((a.wallet ?? init) - init)]}, fmt.money(a.wallet ?? init))) : "—");
     const vs = (rows) => {

@@ -55,6 +55,7 @@
 .home-tlist .home-trow:first-child { border-top: 0; padding-top: 2px; }
 .home-trow .tn { font-weight: 700; font-size: var(--t-sm); }
 .home-trow .tv { font-weight: 700; font-size: var(--t-sm); }
+.home-trow .tv.muted { font-weight: 400; font-size: var(--t-xs); color: var(--muted); }
 .home-trow .tm { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 2px 10px; color: var(--muted); font-size: var(--t-xs); }
 .home-bwh { color: var(--muted); font-size: var(--t-xs); font-weight: 700; padding-top: 4px; }
 .home-next:empty { display: none; }
