@@ -16,8 +16,9 @@
 # OFF (disabled) whatever their state before; the owners switch them on, with the DeepSeek-200 shadow test's timer,
 # after the post-reset checks (docs/server-setup-v4.md step 5). Every other unit that ran (or was enabled) comes back.
 #
-# --yes refuses to run a second time: when the current paper3.db's run started less than 24 h ago right after a
-# restart marker (agents3.db cursor run:restarted, paperbot.resetrun guard), that run is the reset's new run.
+# --yes refuses to run a second time: when the current paper3.db holds a v4 run (paper-v4) that started less than
+# 24 h ago right after a restart marker (agents3.db cursor run:restarted, paperbot.resetrun guard), that run is the
+# reset's new run. A young v3 run (the v3 restart wrote the same marker) is not refused.
 # `--yes --force-again` overrides it (only after talking to the developer).
 #
 # 1. stops the bot, dashboard, trade alerts, the 24-hour debate room, the agents and the scheduled jobs (also the

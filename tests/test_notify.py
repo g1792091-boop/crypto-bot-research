@@ -178,14 +178,25 @@ def test_digest_text_stays_the_record_and_reaches_telegram_grouped(monkeypatch):
     d.add("[N07_ICHI_CMO@4h] drawdown 40.2% (level 40%), equity 2990.80")
     d.add("[S2_ST_ROC@4h] drawdown 30.1% (level 30%), equity 3495.55")
     text = d.flush(10)
+    # the coin flip's line would push S2_ST_ROC@4h past the cut: it gets a count line instead (jobs review 3)
     assert text.splitlines() == ["알림 모음: 낙폭 3 · 파산 1", "[S2_ST_ROC@1h] drawdown 20.4% (level 20%), equity 3980.12",
-                                 "[RANDOM_2@15m] BUST: bust: equity 8.40 below 10.00",
-                                 "[N07_ICHI_CMO@4h] drawdown 40.2% (level 40%), equity 2990.80", "외 1건 (대시보드 알림 목록)"]
+                                 "[N07_ICHI_CMO@4h] drawdown 40.2% (level 40%), equity 2990.80",
+                                 "[S2_ST_ROC@4h] drawdown 30.1% (level 30%), equity 3495.55",
+                                 "동전 계좌 경고 1건 · 계좌 1개: 파산 1 (대시보드 알림 목록)"]
     assert sent[0]["text"][0] == (
-        "📉 파산·낙폭 모음 · 지난 1시간\n\n낙폭 경고 2건\n"
-        f"- {STRATEGY_KO['N07_ICHI_CMO']} 4시간 · -40% · 잔고 $2,991\n- {S2} 1시간 · -20% · 잔고 $3,980\n\n"
-        "개수만 (계좌별 줄은 대시보드)\n- 동전 1건 · 파산 1\n\n외 1건 (대시보드 '서버 상태 → 경고')")
+        "📉 파산·낙폭 모음 · 지난 1시간\n\n낙폭 경고 3건\n"
+        f"- {STRATEGY_KO['N07_ICHI_CMO']} 4시간 · -40% · 잔고 $2,991\n- {S2} 4시간 · -30% · 잔고 $3,496\n"
+        f"- {S2} 1시간 · -20% · 잔고 $3,980\n\n개수만 (계좌별 줄은 대시보드)\n- 동전 계좌 1개 · 파산 1")
     assert sent[0]["disable_notification"] == ["true"]
+    # no coin flip in the listed places: the record, its cut and '외 N건' as before (v3 shape)
+    for b in ("S2_ST_ROC@1h", "S2_ST_ROC@4h", "N07_ICHI_CMO@4h", "N07_ICHI_CMO@1h"):
+        d.add(f"[{b}] drawdown 20.4% (level 20%), equity 3980.12")
+    d.add("[RANDOM_2@15m] BUST: bust: equity 8.40 below 10.00")
+    assert d.flush(20).splitlines()[1:] == ["[S2_ST_ROC@1h] drawdown 20.4% (level 20%), equity 3980.12",
+                                            "[S2_ST_ROC@4h] drawdown 20.4% (level 20%), equity 3980.12",
+                                            "[N07_ICHI_CMO@4h] drawdown 20.4% (level 20%), equity 3980.12",
+                                            "외 2건 (대시보드 알림 목록)"]
+    assert sent[1]["text"][0].endswith("잔고 $3,980\n\n외 2건 (대시보드 '서버 상태 → 경고')")
 
 
 def test_extras_digest_counts_operational_notes_only(monkeypatch):
@@ -475,15 +486,83 @@ def test_digest_lists_the_36_and_the_reel_and_counts_deepseek_and_coin_flips(mon
                           "[S2_ST_ROC@1h] drawdown 40.4% (level 40%), equity 2980.12",
                           f"[{REEL_NAME}@5m] BUST: bust: equity 9.00 below 10.00",
                           "[S2_ST_ROC@1h~c1] drawdown 20.0% (level 20%), equity 3999.00"]
-    assert lines[5:] == ["딥시크 계좌 경고 177건: 낙폭 176 · 파산 1 (대시보드 알림 목록)"]
+    # counted as accounts at their deepest line (T1): the 44 ids x 4 lines above fall on 44 books (44 is a multiple
+    # of 4, so each id always gets the same timeframe), plus F9_FVG@15m's bust: 45 accounts, not 177 lines
+    assert lines[5:] == ["딥시크 계좌 경고 177건 · 계좌 45개: 파산 1 · 낙폭 44 (대시보드 알림 목록)"]
     tg = sent[0]["text"][0]
     assert tg.startswith("📉 파산·낙폭 모음 · 지난 1시간\n\n파산 1건\n- 릴스 5분 단타")
     assert f"- {S2} 1시간 · -40% · 잔고 $2,980" in tg and f"- 복제 {S2} 1시간 · -20%" in tg
-    assert tg.endswith("개수만 (계좌별 줄은 대시보드)\n- 딥시크 177건 · 낙폭 176 · 파산 1\n- 동전 1건 · 낙폭 1")
+    assert tg.endswith("개수만 (계좌별 줄은 대시보드)\n- 딥시크 계좌 45개 · 파산 1 · 낙폭 44\n- 동전 계좌 1개 · 낙폭 1")
     assert "F9_FVG" not in tg and len(tg) < 4096
     assert notify.count_only_group("[F9_FVG@15m] drawdown") == "ds200" and notify.count_only_group("[RANDOM_3@4h] x") == "flip"
     for line in ("[S2_ST_ROC@15m] x", f"[{REEL_NAME}@5m] x", "[F9_FVG@15m~c1] x", "[NL2@15m] x", "gaps", "[extra] x"):
         assert notify.count_only_group(line) is None
+
+
+def test_digest_coin_flip_lines_never_hide_a_core_or_reel_line_past_the_cut(monkeypatch):
+    """Jobs review 3: 15 coin-flip lines first in the hour used to fill the 15 listed places, so the 36's bust and
+    the reel's -40% fell into '외 N건'. When the flips would push such a line past the cut they get a count line;
+    when nothing would be hidden the record lists them as before (the v3 parity record)."""
+    from paperbot.config import DS200_IDS, REEL_NAME
+    sent = _telegram(monkeypatch)
+    d = Digest(TelegramNotifier(), every_ms=1)
+    d.flush(0)
+    flips = [f"[RANDOM_{k}@{tf}] drawdown {lv}.5% (level {lv}%), equity {5000 - 10 * lv:.2f}"
+             for k in (1, 2, 3) for tf in ("5m", "15m") for lv in (20, 30)] + \
+            [f"[RANDOM_{k}@30m] drawdown 20.1% (level 20%), equity 3990.00" for k in (1, 2, 3)]
+    assert len(flips) == 15
+    for t in flips:
+        d.add(t)
+    d.add("[RANDOM_1@5m] drawdown 40.2% (level 40%), equity 2990.00")
+    d.add("[RANDOM_2@5m] BUST: bust: equity 9.00 below 10.00")
+    d.add("[S2_ST_ROC@15m] BUST: bust: equity 8.00 below 10.00")
+    d.add(f"[{REEL_NAME}@5m] drawdown 41.0% (level 40%), equity 2950.00")
+    d.add(f"[{list(DS200_IDS)[0]}@15m] drawdown 20.0% (level 20%), equity 4000.00")
+    text = d.flush(10)
+    lines = text.splitlines()
+    assert lines[1:3] == ["[S2_ST_ROC@15m] BUST: bust: equity 8.00 below 10.00",
+                          f"[{REEL_NAME}@5m] drawdown 41.0% (level 40%), equity 2950.00"]
+    assert lines[3:] == ["딥시크 계좌 경고 1건 · 계좌 1개: 낙폭 1 (대시보드 알림 목록)",
+                         "동전 계좌 경고 17건 · 계좌 9개: 파산 1 · 낙폭 8 (대시보드 알림 목록)"]
+    tg = sent[0]["text"][0]
+    assert f"파산 1건\n- {who('S2_ST_ROC@15m')} · 잔고 $8" in tg
+    assert f"낙폭 경고 1건\n- {who(REEL_NAME + '@5m')} · -40% · 잔고 $2,950" in tg
+    assert tg.endswith("- 딥시크 계좌 1개 · 낙폭 1\n- 동전 계좌 9개 · 파산 1 · 낙폭 8") and "외 " not in tg
+    # nothing hidden: the flips stay listed in the record exactly as before
+    for t in flips[:3] + ["[S2_ST_ROC@15m] BUST: bust: equity 8.00 below 10.00"]:
+        d.add(t)
+    assert d.flush(20).splitlines()[1:] == flips[:3] + ["[S2_ST_ROC@15m] BUST: bust: equity 8.00 below 10.00"]
+    # more than 15 core lines and no flip in the first 15: the cut and '외 N건' as before
+    for k in range(16):
+        d.add(f"[S2_ST_ROC@{('15m', '30m', '1h', '4h')[k % 4]}~c{k}] drawdown 20.0% (level 20%), equity 4000.00")
+    d.add(flips[0])
+    lines = d.flush(30).splitlines()
+    assert len(lines) == 17 and lines[-1] == "외 2건 (대시보드 알림 목록)"
+
+
+def test_digest_lists_an_account_once_at_its_deepest_level(monkeypatch):
+    """T1: one step crossing -20% and -30% at the same balance (and a bust after a drawdown) is one line per account
+    in Telegram, the deepest; the count-only groups count accounts, not lines."""
+    sent = _telegram(monkeypatch)
+    d = Digest(TelegramNotifier(), every_ms=1)
+    d.flush(0)
+    for b in ("S2_ST_ROC@15m", "S2_ST_ROC@1h"):
+        d.add(f"[{b}] drawdown 31.2% (level 30%), equity 3478.00")
+        d.add(f"[{b}] drawdown 31.2% (level 20%), equity 3478.00")
+    d.add("[S2_ST_ROC@30m] drawdown 22.0% (level 20%), equity 3900.00")
+    d.add("[S2_ST_ROC@30m] BUST: bust: equity 9.00 below 10.00")
+    for lv in (20, 30):
+        d.add(f"[RANDOM_1@5m] drawdown 31.0% (level {lv}%), equity 3450.00")
+        d.add(f"[RANDOM_2@15m] drawdown 31.0% (level {lv}%), equity 3450.00")
+    d.flush(10)
+    tg = sent[0]["text"][0]
+    assert tg.count(who("S2_ST_ROC@15m")) == 1 and tg.count(who("S2_ST_ROC@1h")) == 1
+    assert f"낙폭 경고 2건\n- {who('S2_ST_ROC@15m')} · -30% · 잔고 $3,478\n- {who('S2_ST_ROC@1h')} · -30%" in tg
+    assert f"파산 1건\n- {who('S2_ST_ROC@30m')} · 잔고 $9" in tg and "-20%" not in tg
+    assert tg.endswith("개수만 (계좌별 줄은 대시보드)\n- 동전 계좌 2개 · 낙폭 2")
+    assert notify.group_count(["[F9_FVG@15m] drawdown 31% (level 20%), equity 1", "[F9_FVG@15m] drawdown 31% (level 30%),"
+                               " equity 1", "[F9_FVG@30m] BUST: bust: equity 1 below 10", "[F9_FVG@30m] drawdown 20.0% "
+                               "(level 20%), equity 4000"]) == (2, "파산 1 · 낙폭 1")
 
 
 def test_router_bundles_a_120_liquidation_burst_of_every_group_loud(monkeypatch):
@@ -570,11 +649,14 @@ def test_router_counts_deepseek_timeouts_in_the_digest_and_rings_once_a_day_past
         clk.t = T + k * 900_000
         assert r.send(WARN, ds(clk.t)) is None
     assert out.messages == [] and r.timeouts == 0 and r.last_timeout is None      # the 36's timeout rule untouched
-    assert d.notes["ds_timeouts"].startswith(f"딥시크 신호 건너뜀 {Router.DS_TIMEOUT_LOUD - 1}번 (마지막 11:30 봉: 15분, 30분")
+    # T5: the bar's time and timeframe together, then the seconds; the same 'not affected' words as the WARN
+    assert d.notes["ds_timeouts"] == (f"딥시크 신호 건너뜀 {Router.DS_TIMEOUT_LOUD - 1}번 (마지막 11:30 · 15분·30분봉 · "
+                                      "60초 안에 계산 못 끝냄 · 매매법·5분 단타 신호는 정상)")
     clk.t += 900_000
     r.send(WARN, ds(clk.t))
     assert [lv for lv, _ in out.messages] == [WARN]
-    assert out.messages[0][1].startswith(f"딥시크 신호 건너뜀 많음 · 오늘 {Router.DS_TIMEOUT_LOUD}번\n\n")
+    assert out.messages[0][1].startswith(f"딥시크 신호 건너뜀 많음 · 오늘 {Router.DS_TIMEOUT_LOUD}번\n\n"
+                                         "마지막 11:45 · 15분·30분봉 · 60초 안에 계산 못 끝냄\n매매법·5분 단타 신호는 정상")
     for k in range(5):
         r.send(WARN, ds(clk.t))
     assert len(out.messages) == 1                                                 # once a KST day

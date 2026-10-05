@@ -361,16 +361,19 @@ def config_warnings(extras_json: str, executor_json: str) -> list[str]:
 
 
 # ---------------------------------------------------------------- already reset?
-REPEAT_MS = 24 * 3_600_000      # a run younger than this, made right after a restart marker, is the reset's new run
+REPEAT_MS = 24 * 3_600_000      # a v4 run younger than this, made right after a restart marker, is the reset's new run
 
 
 def repeat_reason(paper_path: str, agents_path: str, now_ms: Optional[int] = None) -> Optional[str]:
-    """Korean text when the reset has already been done: the current paper3.db's run started less than 24 h ago and
-    agents3.db holds a ``run:restarted`` marker written at most 24 h before that start (or after it), so that run is
-    the reset's NEW run and another --yes would archive it. None otherwise (the old run, no marker, no paper3.db)."""
+    """Korean text when the reset has already been done: the current paper3.db holds a v4 run (settings_version
+    paper-v4) that started less than 24 h ago and agents3.db holds a ``run:restarted`` marker written at most 24 h
+    before that start (or after it), so that run is the reset's NEW run and another --yes would archive it. None
+    otherwise (a v3 run however young: the v3 restart wrote the same marker, and the v4 reset must replace that run;
+    no marker, no paper3.db)."""
     now = int(time.time() * 1000) if now_ms is None else int(now_ms)
-    start = paper_facts(paper_path).get("start")
-    if start is None or now - start >= REPEAT_MS:
+    facts = paper_facts(paper_path)
+    start = facts.get("start")
+    if start is None or V4_VERSION not in (facts.get("versions") or []) or now - start >= REPEAT_MS:
         return None
     conn = R.open_ro(agents_path)
     if conn is None:

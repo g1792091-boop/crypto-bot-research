@@ -366,10 +366,10 @@ def test_as_root_it_works_as_the_services_user(lib):
         shutil.rmtree(top, ignore_errors=True)
 
 
-def _paper_at(path, start):
+def _paper_at(path, start, version="paper-v4"):
     st = Store3(str(path))
     for tf in ("15m", "30m", "1h", "4h"):
-        st.add_account(f"V45_AMB@{tf}", "V45_AMB", tf, "strategy", start, "paper-v3")
+        st.add_account(f"V45_AMB@{tf}", "V45_AMB", tf, "strategy", start, version)
     st.commit()
     st.close()
 
@@ -378,7 +378,7 @@ def test_guard_refuses_a_second_reset_of_the_new_run(lib, capsys, monkeypatch):
     """Review 3b m2: after the reset, paper3.db holds the NEW run (started minutes after the run:restarted marker):
     another --yes would archive it, so `guard` refuses (exit 4) with a Korean explanation."""
     paper = lib["data"] / "paper3.db"
-    _paper_at(paper, OLD_START)                                     # before the reset: the old run, days old
+    _paper_at(paper, OLD_START, "paper-v3")                         # before the reset: the old run, days old
     assert RR.repeat_reason(str(paper), lib["agents"], NOW) is None
     assert RR.main(["guard", "--lib", str(lib["data"])]) == 0
     paper.unlink()
@@ -395,6 +395,24 @@ def test_guard_refuses_a_second_reset_of_the_new_run(lib, capsys, monkeypatch):
     monkeypatch.setattr(RR.time, "time", lambda: later / 1000)
     assert RR.main(["guard", "--lib", str(lib["data"])]) == 4
     assert "재시작은 이미 끝났습니다" in capsys.readouterr().out
+
+
+def test_guard_ignores_a_young_v3_run_made_by_the_v3_restart(lib, capsys, monkeypatch):
+    """Ops review 1 (BLOCKER): the v3 restart (10-05) used this script too, so agents3.db holds a run:restarted
+    marker minutes before the v3 run's start, and tonight's v4 reset comes less than 24 h later. That v3 run is not
+    the v4 reset's new run: the guard must let --yes through. The same young run made by v4 is refused."""
+    paper = lib["data"] / "paper3.db"
+    _apply(lib)                                                      # the v3 restart's marker at NOW
+    start = NOW + 4 * 60_000
+    _paper_at(paper, start, "paper-v3")                              # the v3 run it started
+    later = start + 15 * 3_600_000                                   # tonight's reset, 15 h later
+    assert RR.repeat_reason(str(paper), lib["agents"], later) is None
+    monkeypatch.setattr(RR.time, "time", lambda: later / 1000)
+    assert RR.main(["guard", "--lib", str(lib["data"])]) == 0
+    paper.unlink()
+    _paper_at(paper, start)                                          # the same start, written by a v4 runner
+    assert "재시작은 이미 끝났습니다" in (RR.repeat_reason(str(paper), lib["agents"], later) or "")
+    capsys.readouterr()
 
 
 def test_guard_ignores_an_old_marker_and_a_missing_agents_db(lib, tmp_path):

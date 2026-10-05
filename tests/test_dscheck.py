@@ -477,6 +477,19 @@ def test_rest_source_caches_final_bars_and_extends_its_span(tmp_path):
         assert c.execute("SELECT lo, hi FROM spans").fetchone() == (D0 - 3000 * FIVE, D0 + 86_400_000)
 
 
+def test_rest_source_default_pace_stays_far_below_the_ip_weight_limit(tmp_path):
+    """Jobs review 1: the first night fills an empty cache (~700 weight-10 calls) while the live feed and daily3 use
+    the same IP. The default pause keeps dscheck at <= 400 weight a minute even with instant responses."""
+    import inspect
+    pause = inspect.signature(D.RestSource.__init__).parameters["pause"].default
+    assert pause >= 1.5 and 60 / pause * 10 <= 400
+    slept = []
+    rest = FakeRest(synth(start=D0 - 4000 * FIVE))
+    src = D.RestSource(str(tmp_path / "bars5m.db"), rest=rest, now_ms=lambda: D0 + 3_600_000, sleep=slept.append)
+    src.load("BTCUSDT", D0 - 3500 * FIVE, D0)
+    assert len(rest.calls) == 3 and slept == [pause, pause]           # a pause between calls, none after the last
+
+
 # ---------------------------------------------------------------- pins and the real lib_c
 def test_pins_refuse_a_changed_file(tmp_path, monkeypatch):
     want = D.wanted_pins()

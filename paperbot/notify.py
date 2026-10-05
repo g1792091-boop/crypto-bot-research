@@ -386,6 +386,11 @@ def _tfs(text: str) -> str:
     return ", ".join(TF_KO.get(t.strip(), t.strip()) for t in text.split(","))
 
 
+def _bong(text: str) -> str:
+    """'15m, 30m' -> '15분·30분봉' (T5: the timeframe reads as a bar, never next to the seconds)."""
+    return "·".join(TF_KO.get(t.strip(), t.strip()) for t in text.split(",")) + "봉"
+
+
 # The English lines of the engine, the feed and the runner (trading files, kept as they are: the alerts table,
 # the dashboard and the parity golden read them) and the extras' lines, as Telegram words them. Applied per line
 # of a message (``ko``); a format may return several lines. Anything else is unchanged.
@@ -466,34 +471,66 @@ def ko(text: str) -> str:
 _BUST = re.compile(r"\[([^\]]+)\] BUST: bust: equity (-?[\d.]+) below ([\d.]+)")
 _DD = re.compile(r"\[([^\]]+)\] drawdown ([\d.]+)% \(level (\d+)%\), equity (-?[\d.]+)")
 _MORE = re.compile(r"외 (\d+)건 \(대시보드 알림 목록\)$")
-_GROUPED = re.compile(r"(\S+) 계좌 경고 (\d+)건: (.*) \(대시보드 알림 목록\)$")
+_GROUPED = re.compile(r"(\S+) 계좌 경고 (\d+)건 · 계좌 (\d+)개: (.*) \(대시보드 알림 목록\)$")
 _SCREEN = "(대시보드 '서버 상태 → 경고')"
+_KIND_ORDER = ("파산", "강제청산", "정지", "낙폭", "기타")
+
+
+def _deepest(texts) -> dict:
+    """{account: kind} of per-account lines ('[X@15m] BUST ...', '[X@15m] drawdown ... (level 30%) ...'), each account
+    once at its deepest line (a bust over any drawdown, -30% over -20%), so one step crossing two levels is one
+    account, not two (T1). Lines without an account id count as one each. Never raises."""
+    best: dict = {}
+    for k, t in enumerate(texts):
+        try:
+            m = _BOOK.match(t) or re.match(r"\[([^\]]+)\] ", t)
+            acct = m[0] if m else f"#{k}"
+            kind = next((ko for key, ko in KO_KINDS if key in t), "기타")
+            d = _DD.match(t)
+            rank = (len(_KIND_ORDER) - _KIND_ORDER.index(kind), int(d[3]) if d else 0)
+        except Exception:  # noqa: BLE001
+            acct, kind, rank = f"#{k}", "기타", (0, 0)
+        if acct not in best or rank >= best[acct][0]:
+            best[acct] = (rank, kind)
+    return {a: kind for a, (_, kind) in best.items()}
+
+
+def group_count(texts) -> tuple:
+    """(accounts, '파산 1 · 낙폭 3'): a count-only group's lines counted as accounts at their deepest line (T1)."""
+    per: dict = {}
+    for kind in _deepest(texts).values():
+        per[kind] = per.get(kind, 0) + 1
+    kinds = sorted(per, key=lambda k: _KIND_ORDER.index(k) if k in _KIND_ORDER else 99)
+    return sum(per.values()), " · ".join(f"{k} {per[k]}" for k in kinds)
 
 
 def _digest_ko(lines: list[str], extras: bool) -> str:
-    busts, dds, other, ops, more, grouped = [], [], [], 0, 0, []
-    counted: dict[str, dict] = {}            # a coin flip's line (listed in the record): counted here (owners' D10)
+    busts, dds, other, ops, more, grouped = {}, {}, [], 0, 0, []
+    counted: dict[str, list] = {}            # a coin flip's line (listed in the record): counted here (owners' D10)
     for ln in lines:
         b, d, mo, g = _BUST.match(ln), _DD.match(ln), _MORE.match(ln), _GROUPED.match(ln)
         cg = count_only_group(ln) if (b or d) and not extras else None
         if g:
-            grouped.append(f"- {g[1]} {g[2]}건 · {g[3]}")
+            grouped.append(f"- {g[1]} 계좌 {g[3]}개 · {g[4]}")
         elif cg:
-            c = counted.setdefault(cg, {})
-            k = "파산" if b else "낙폭"
-            c[k] = c.get(k, 0) + 1
+            counted.setdefault(cg, []).append(ln)
         elif b:
-            busts.append(f"- {who(b[1])} · 잔고 {money(_floor(b[2]))} (파산선 {money(float(b[3]))})")
+            busts[b[1]] = f"- {who(b[1])} · 잔고 {money(_floor(b[2]))} (파산선 {money(float(b[3]))})"
         elif d:
-            dds.append((int(d[3]), float(d[2]), f"- {who(d[1])} · -{d[3]}% · 잔고 {money(float(d[4]))}"))
+            # one line per account, its deepest level (one step can cross -20% and -30% at the same balance, T1)
+            if d[1] not in dds or int(d[3]) >= dds[d[1]][0]:
+                dds[d[1]] = (int(d[3]), float(d[2]), f"- {who(d[1])} · -{d[3]}% · 잔고 {money(float(d[4]))}")
         elif mo:
             more = int(mo[1])
         elif ln.startswith("[extra]"):
             ops += 1                       # operational notes (codes, ms boundaries): the count only
         elif ln.strip():
             other.append("- " + _one_line(ko(ln)))
-    for cg, c in counted.items():
-        grouped.append(f"- {COUNT_ONLY_KO.get(cg, cg)} {sum(c.values())}건 · " + " · ".join(f"{k} {n}" for k, n in c.items()))
+    dds = [x for a, x in dds.items() if a not in busts]      # a bust is deeper than any drawdown level
+    busts = list(busts.values())
+    for cg, texts in counted.items():
+        n, kinds = group_count(texts)
+        grouped.append(f"- {COUNT_ONLY_KO.get(cg, cg)} 계좌 {n}개 · {kinds}")
     if extras:
         title = "📉 추가 계좌 경고 · 지난 1시간"
     elif busts or dds or grouped:
@@ -717,7 +754,7 @@ class Digest:
     as one silent message per interval, so the original accounts (and the extras) cannot flood a phone. The
     DeepSeek accounts' lines (owners' D10, ``RECORD_COUNT_GROUPS``) become one count line, so they never push the
     36's and the reel's lines out of the ``max_lines`` listed; the coin flips' lines stay listed here and are counted
-    in the Telegram wording.
+    in the Telegram wording, unless they would push another line past ``max_lines``: then they get a count line too.
 
     ``add`` never sends; ``flush(now_ms)`` sends when the interval has passed
     (or at once with ``force``) and returns the text it sent, if any. ``note(key, text)`` keeps one summary
@@ -756,12 +793,18 @@ class Digest:
         head = "알림 모음: " + " · ".join(f"{k} {n}" for k, n in counts.items())
         listed, grouped = self.items, {}
         try:
-            split = [(g if g in RECORD_COUNT_GROUPS else None, t) for t, g in
-                     ((t, count_only_group(t)) for t in self.items)]
-            if any(g for g, _ in split):
-                listed = [t for g, t in split if g is None]
-                for g, t in split:
-                    if g is not None:
+            split = [(t, count_only_group(t)) for t in self.items]
+            out = set(RECORD_COUNT_GROUPS)
+            # the coin flips' lines stay listed as in v3, unless they would push a line of the 36, the reel or the
+            # extras past the ``max_lines`` cut (5m flips cross the drawdown levels early): then they are counted
+            # too (jobs review 3), so the cut never hides a core account's bust behind coin-flip lines
+            rest = [g for _, g in split if g not in out]
+            if "flip" in rest[:self.max_lines] and any(g != "flip" for g in rest[self.max_lines:]):
+                out.add("flip")
+            if any(g in out for _, g in split):
+                listed = [t for t, g in split if g not in out]
+                for t, g in split:
+                    if g in out:
                         grouped.setdefault(g, []).append(t)
         except Exception:  # noqa: BLE001  (the digest goes out as before)
             listed, grouped = self.items, {}
@@ -769,12 +812,9 @@ class Digest:
         more = len(listed) - len(lines)
         group_lines = []
         for g in sorted(grouped, key=lambda g: list(COUNT_ONLY_KO).index(g) if g in COUNT_ONLY_KO else 99):
-            per = {}
-            for t in grouped[g]:
-                kind = next((ko for key, ko in KO_KINDS if key in t), "기타")
-                per[kind] = per.get(kind, 0) + 1
-            group_lines.append(f"{COUNT_ONLY_KO.get(g, g)} 계좌 경고 {len(grouped[g])}건: "
-                               + " · ".join(f"{k} {n}" for k, n in per.items()) + " (대시보드 알림 목록)")
+            n, kinds = group_count(grouped[g])      # accounts at their deepest line (T1)
+            group_lines.append(f"{COUNT_ONLY_KO.get(g, g)} 계좌 경고 {len(grouped[g])}건 · 계좌 {n}개: {kinds}"
+                               " (대시보드 알림 목록)")
         text = "\n".join([head] + lines + list(self.notes.values()) + group_lines
                          + ([f"외 {more}건 (대시보드 알림 목록)"] if more else []))
         self.forward.send(INFO, text)
@@ -983,12 +1023,12 @@ class Router:
         if "ds_timeouts" not in self.digest.notes:    # the digest went out: count afresh
             self.ds_timeouts = 0
         self.ds_timeouts += 1
-        self.digest.note("ds_timeouts", f"딥시크 신호 건너뜀 {self.ds_timeouts}번 (마지막 {hm(m[2])} 봉: {_tfs(m[3])}, "
-                                        f"{m[1]}초 안에 안 끝남 · 매매법 신호는 정상)")
+        self.digest.note("ds_timeouts", f"딥시크 신호 건너뜀 {self.ds_timeouts}번 (마지막 {hm(m[2])} · {_bong(m[3])} · "
+                                        f"{m[1]}초 안에 계산 못 끝냄 · 매매법·5분 단타 신호는 정상)")
         if self.ds_today >= self.DS_TIMEOUT_LOUD and not self.ds_loud:
             self.ds_loud = True
             return True, self.deliver(WARN, f"딥시크 신호 건너뜀 많음 · 오늘 {self.ds_today}번\n\n"
-                                            f"마지막 {hm(m[2])} 봉: {_tfs(m[3])} ({m[1]}초 안에 안 끝남)\n"
+                                            f"마지막 {hm(m[2])} · {_bong(m[3])} · {m[1]}초 안에 계산 못 끝냄\n"
                                             "매매법·5분 단타 신호는 정상 · 봇은 계속 돎\n"
                                             "오늘 나머지는 매시 알림 모음(무음)에")
         return True, None

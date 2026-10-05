@@ -275,7 +275,12 @@ class CsvSource:
 
 class RestSource:
     """Binance's public 5m klines (no key), final bars only, cached in a SQLite file. ``spans`` records the range of
-    open times fetched completely per symbol, so a bar the exchange never had is not fetched again."""
+    open times fetched completely per symbol, so a bar the exchange never had is not fetched again.
+
+    ``pause`` (1.5 s) paces the fetch: each ``limit=1500`` call weighs 10, so at most 40 calls (400 weight) a minute.
+    The first night fills an empty cache with ~600 days x 6 coins (~700 calls, ~18 min, inside TimeoutStartSec=1h)
+    while the live bot's feed (~1,000/min) and daily3 (<=1,600/min) share the server IP's 2,400/min limit; later
+    nights make about one call per coin."""
 
     SCHEMA = """
     CREATE TABLE IF NOT EXISTS bars5m (symbol TEXT NOT NULL, open_time INTEGER NOT NULL, open REAL NOT NULL,
@@ -285,7 +290,7 @@ class RestSource:
     """
 
     def __init__(self, cache_path: str, rest=None, now_ms: Callable[[], int] = lambda: int(time.time() * 1000),
-                 pause: float = 0.3, sleep: Callable[[float], None] = time.sleep):
+                 pause: float = 1.5, sleep: Callable[[float], None] = time.sleep):
         if rest is None:
             from .binance import BinanceREST
             rest = BinanceREST()

@@ -464,14 +464,15 @@ def test_yes_keeps_a_pre_reset_copy_apart_from_the_nightly_folder(env):
     assert f"옮기기 전 새 백업: {kept}/{days[0]}" in out
 
 
-def _new_run_after_a_reset(env, start_ago_ms=3_600_000):
+def _new_run_after_a_reset(env, start_ago_ms=3_600_000, version="paper-v4"):
     import time
     now = int(time.time() * 1000)
     start = now - start_ago_ms
     (env["data"] / "paper3.db").write_bytes(b"")
     c = sqlite3.connect(str(env["data"] / "paper3.db"))
-    c.execute("CREATE TABLE accounts (account_id TEXT, strategy TEXT, timeframe TEXT, kind TEXT, created_ts INTEGER)")
-    c.execute("INSERT INTO accounts VALUES ('V45_AMB@15m', 'V45_AMB', '15m', 'strategy', ?)", (start,))
+    c.execute("CREATE TABLE accounts (account_id TEXT, strategy TEXT, timeframe TEXT, kind TEXT, created_ts INTEGER, "
+              "settings_version TEXT)")
+    c.execute("INSERT INTO accounts VALUES ('V45_AMB@15m', 'V45_AMB', '15m', 'strategy', ?, ?)", (start, version))
     c.commit()
     c.close()
     a = sqlite3.connect(str(env["data"] / "agents3.db"))
@@ -497,6 +498,18 @@ def test_a_second_yes_after_the_reset_is_refused_unless_forced(env):
     assert r.returncode == 0, r.stdout + r.stderr
     assert "--force-again" in r.stdout and not (env["data"] / "paper3.db").exists()
     assert subprocess.run(["bash", SCRIPT, "--yes", "--again"], capture_output=True, text=True).returncode == 2
+
+
+def test_a_young_v3_run_after_the_v3_restart_is_not_a_repeat(env):
+    """Ops review 1: tonight's paper3.db holds the v3 run the v3 restart started 15 h ago, with that restart's
+    run:restarted marker. --yes must go ahead (the guard protects only a v4 run)."""
+    _new_run_after_a_reset(env, start_ago_ms=15 * 3_600_000, version="paper-v3")
+    _yes_env(env)
+    r = _run(env, "--dry-run")
+    assert r.returncode == 0 and "재시작은 이미 끝났습니다" not in r.stdout
+    r = _run(env, "--yes")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "재시작은 이미 끝났습니다" not in r.stdout
 
 
 def test_a_run_older_than_a_day_is_not_a_repeat(env):
