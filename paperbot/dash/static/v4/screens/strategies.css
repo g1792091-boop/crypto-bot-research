@@ -1,3 +1,4 @@
+@import url("grid-kit.css");
 /* strategies: 매매법 (builder C). Screen-only rules; tokens and components come from the shared css. Phones first:
    one column in reading order; from 1000 px two columns (chart side / rule and records side). */
 [data-screen="strategies"] .small { font-size: var(--t-xs); }
@@ -117,3 +118,23 @@
 
 .strat-nav { gap: 8px; }
 .strat-jump { max-width: min(100%, 320px); min-height: 32px; }
+
+/* rows with a curve (builder grid): rk | name | curve | return | chevron; a tap opens the profile card in place */
+.strat-prow { grid-template-columns: minmax(28px, auto) minmax(0, 1fr) 64px minmax(58px, auto) 12px; align-items: center; }
+.strat-prow .lname { align-self: center; }
+.strat-prow .ret { text-align: right; font-size: var(--t-md); }
+.strat-prow:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.strat-spark { display: flex; align-items: center; justify-content: flex-end; min-width: 0; }
+.strat-chev { width: 8px; height: 8px; justify-self: end; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted);
+  transform: translateY(-2px) rotate(45deg); transition: transform var(--t-fast) var(--ease), border-color var(--t-fast); }
+.strat-pitem.open > .strat-prow { background: var(--surface-2); }
+.strat-pitem.open .strat-chev { transform: translateY(2px) rotate(-135deg); border-color: var(--accent); }
+.strat-preg { overflow: hidden; padding: 6px 0 14px; }
+.strat-preg[hidden] { display: none; }
+.strat-pcard.card, .strat-reelprof.card { background-color: var(--surface-2); border-color: var(--line-2); }
+.strat-pacts { gap: 8px; margin-top: 10px; }
+.strat-pacts a { min-height: 34px; display: inline-flex; align-items: center; }
+.strat-recspark { margin-left: auto; }
+.strat-recline .gk-mini { width: 72px; height: 22px; }
+@media (max-width: 380px) { .strat-prow { grid-template-columns: minmax(26px, auto) minmax(0, 1fr) 48px minmax(52px, auto) 10px; } .strat-prow .gk-mini { width: 48px; } }
+.strat-pcard .stat, .strat-reelprof .stat { background: var(--surface-3); }
