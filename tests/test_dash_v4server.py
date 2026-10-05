@@ -147,7 +147,7 @@ def test_big_answers_are_gzipped_and_the_live_stream_never_is(tmp_path):
     r = c.get("/api/board", headers={"Accept-Encoding": "gzip"})
     assert r.headers.get("content-encoding") == "gzip" and r.json()["accounts"]
     assert c.get("/api/time", headers={"Accept-Encoding": "gzip"}).headers.get("content-encoding") is None   # small
-    assert A.NO_GZIP_PATHS == ("/api/stream",)
+    assert A.NO_GZIP_PATHS == ("/api/stream", "/api/v4/ticks")   # the board stream and the sound's market trades
     seen = []
 
     async def inner(scope, receive, send):
