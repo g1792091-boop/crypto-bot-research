@@ -124,7 +124,7 @@ export function outcomeCard(env) {
     // a group with few trades says so (CONTRACT §1.5): its shares can be luck
     ui.kv([["기존 36", [`이긴 거래 ${share("core")} · 강제청산 ${fmt.int(liq.core || 0)}건 `, ui.smallSample(tot.core || 0, SMALL_DIST)]],
       ["같은 봉 동전 봇 (참고)", [`이긴 거래 ${share("flip")} · 강제청산 ${fmt.int(liq.flip || 0)}건 `, ui.smallSample(tot.flip || 0, SMALL_DIST)]]]),
-    h("p", {class: "an-note"}, "구간은 숫자를 보기 전에 정해 두었습니다. 수수료·펀딩이 들어간 실제 결과입니다. 동전 봇은 같은 봉(15분·30분·1시간·4시간)만, 5분 동전 봇은 5분봉 단타와 비교하므로 뺐습니다."),
+    h("p", {class: "an-note"}, "구간은 숫자를 보기 전에 정해 두었습니다. 수수료·펀딩이 들어간 실제 결과입니다. 동전 봇은 같은 봉(15분·30분·1시간·4시간)만, 5분 동전 봇은 릴스(5분 단타)의 짝이라 여기에는 넣지 않았습니다."),
     ui.refNote(env.verdictTs), ui.assume()];
   });
 }

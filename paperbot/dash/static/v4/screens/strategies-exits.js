@@ -8,7 +8,7 @@
 // live; /api/profile rows[].periods[].exit_reason_pct). DeepSeek: none (its study used other exits).
 // HONESTY: descriptive only (no pass / fail words); small cells say 표본 적음; DeepSeek shows counts, never money; money
 // rows carry assume().
-import {h, put, ui, fmt, motion, local} from "../core/pb.js";
+import {h, put, ui, fmt, motion, local, bars} from "../core/pb.js";
 
 const DAY = 86400000;
 const MIN_ROWS = 10;                 // a cell under 10 trades: 표본 적음 (the split card's floor)
@@ -34,8 +34,9 @@ export function timeWin(ms) {
   const ny = ms + nyOffsetH(ms) * 3600000;
   const nwd = new Date(ny).getUTCDay();
   const tod = ((ny % DAY) + DAY) % DAY;                             // New York time of day, ms
+  const nyDay = new Date(ny).toISOString().slice(0, 10);              // New York date: NYSE holidays have no open (sessions.py)
   return {weekend: kwd === 0 || kwd === 6, funding: Math.min(sec, 28800 - sec) <= 600,
-    usOpen: nwd !== 0 && nwd !== 6 && Math.abs(tod - 34200000) <= 3600000};
+    usOpen: nwd !== 0 && nwd !== 6 && !bars.NYSE_HOLIDAYS[nyDay] && Math.abs(tod - 34200000) <= 3600000};
 }
 
 // ---------------------------------------------------------------- the split
