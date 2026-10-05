@@ -14,6 +14,7 @@ import {DS_FAMILIES, FAMILY, DS_DEFS, DS_COMMON, EXITS, LEVERAGE, REEL} from "./
 import {DS_RAW, REEL_RAW} from "./strategies-raw.js";
 import {strategyIndex} from "./strategies-calc.js";
 import {dsFamilyCard, familyStats, familyLine} from "./strategies-dsfam.js";
+import {radarCard} from "./strategies-radar.js";
 
 const GROUPS = [
   {id: "core", ko: "기존 36", intro: "잠긴 매매법 36개를 15분·30분·1시간·4시간봉 계좌로 돌립니다. 기록은 그 봉 계좌들을 더한 값입니다."},
@@ -199,7 +200,7 @@ export function listView(ctx, st) {
     let kids;
     if (v.g === "core") {
       fillCore(!animate);
-      kids = [coreCard];
+      kids = [(sp.radar ||= radarCard(ctx)).el, coreCard];   // 신호 레이더 (strategies-radar.js), the 36 only
     } else if (v.g === "ds" && !v.fam) {
       dsList.set(rows, !animate);
       famCard.update(st.board);

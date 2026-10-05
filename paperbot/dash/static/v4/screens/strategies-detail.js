@@ -16,6 +16,7 @@ import {vs5yCard} from "./vs5y-kit.js";
 import {exitsCard} from "./strategies-exits.js";
 import {priorPanel} from "./strategies-prior.js";
 import {stratShadows} from "./strategies-shadows.js";
+import {radarMatrix} from "./strategies-radar.js";
 
 const GROUP_PLATE = {core: "기존 36", ds: "딥시크 44", m5: "5분봉"};
 const DIMS = [{id: "coin", label: "코인"}, {id: "side", label: "방향"}, {id: "tf", label: "봉"}, {id: "session", label: "시간대"}];
@@ -112,7 +113,7 @@ export function detailView(ctx, st, name) {
   const prof = duel ? null : profileCard(ctx, name, {cls: "strat-prof"});
   const top = duel || prof.el;
 
-  const left = h("div", {class: "strat-col"}, chartCard, condCard, sigCard);
+  const left = h("div", {class: "strat-col"}, chartCard, condCard, kind === "strategy" ? radarMatrix(ctx, name, {pick: (tf, sym) => setChart(tf, sym), sel: () => v}).el : null, sigCard);
   // wave 2 ⑨: 5년 시험 vs 지금 vs 동전 봇, per timeframe (vs5y-kit.js), next to the 5-year card
   const vs = vs5yCard(ctx, name, kind, {tf: v.tf, verdictTs: () => verdictTs()});
   const right = h("div", {class: "strat-col"}, ruleCard, acctCard, splitCard, vs.el, exits.el, profCard, lossCardEl);

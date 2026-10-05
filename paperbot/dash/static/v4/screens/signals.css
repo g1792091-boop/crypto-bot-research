@@ -9,3 +9,16 @@
 /* wave 2 part B (A8): the group x timeframe card sits under the 24-hour card */
 [data-screen="signals"] .signals-left { gap: 16px; min-width: 0; }
 [data-screen="signals"] .signals-cell small { font-size: var(--t-xs); font-weight: 400; }
+/* fill-radar: 곧 신호 대기실 (strategies-radar.css) + 24시간 신호 지도 on top */
+[data-screen="signals"] .signals-top { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); align-items: start; margin-bottom: 16px; }
+@media (min-width: 1280px) { [data-screen="signals"] .signals-top { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); } }
+[data-screen="signals"] .sig-heat-wrap { overflow-x: auto; }
+[data-screen="signals"] .sig-heat { display: grid; grid-template-columns: 3.4em repeat(var(--cols, 4), minmax(58px, 1fr)); gap: 4px; }
+[data-screen="signals"] .sig-heat-h { display: flex; flex-direction: column; align-items: center; font-size: var(--t-xs); color: var(--ink-2); }
+[data-screen="signals"] .sig-heat-cd { font-size: var(--t-xs); color: var(--accent); }
+[data-screen="signals"] .sig-heat-coin { display: flex; align-items: center; font-size: var(--t-sm); color: var(--ink); }
+[data-screen="signals"] .sig-heat-cell { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 46px; padding: 4px 2px;
+  border: 1px solid var(--accent-line); border-radius: var(--r-sm); background: color-mix(in srgb, var(--accent) var(--a, 20%), var(--surface)); color: var(--ink); }
+[data-screen="signals"] .sig-heat-cell b { font-size: var(--t-md); }
+[data-screen="signals"] .sig-heat-cell small { font-size: var(--t-xs); }
+[data-screen="signals"] .sig-heat-cell.zero { border-color: var(--line); background: var(--surface-2); color: var(--muted); font-size: var(--t-sm); }
