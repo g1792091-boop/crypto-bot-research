@@ -11,7 +11,7 @@
 // in the neutral pair (accent above, cyan below; also colour-blind safe) with refNote; a DeepSeek account gets no
 // per-account comparison (the 참고 pill and group-level medians only); a coin flip is the yardstick itself; money has
 // assume(); fewer than 10 trades = no colour, fewer than 30 = 표본 적음.
-import {h, s, ui, fmt, motion, store, hueOf, local} from "../core/pb.js";
+import {h, s, ui, fmt, motion, store, local, stratFigure, stratHue} from "../core/pb.js";
 
 /** |difference| thresholds (ratios) of the colour steps 1..4; under the first one = 0 (비슷). */
 export const BINS = [0.005, 0.02, 0.05, 0.10];
@@ -61,23 +61,13 @@ export function vsWords(v) {
 }
 
 // ---------------------------------------------------------------- pixel badge
-function hash(str) {
-  let x = 2166136261;
-  for (const ch of String(str)) { x ^= ch.charCodeAt(0); x = Math.imul(x, 16777619) >>> 0; }
-  return x >>> 0;
-}
-/** A 5 x 5 mirrored pixel badge from a code (decoration only: aria-hidden). */
+/** The strategy's own pixel character (core/figure.js stratFigure, wave 2 ⑦: body colour by family, hair / cap from the
+ *  code, DeepSeek's numbered cap, the reel's phone, a coin head for a coin flip) in the badge frame; the same person on
+ *  every screen. Decoration only: aria-hidden. */
 export function identicon(id, cls = "") {
-  const bits = hash(id);
-  const rects = [];
-  for (let y = 0; y < 5; y++) for (let x = 0; x < 3; x++) {
-    if (!((bits >> (y * 3 + x)) & 1)) continue;
-    rects.push(s("rect", {x: x + 1, y: y + 1, width: 1, height: 1}));
-    if (x < 2) rects.push(s("rect", {x: 5 - x, y: y + 1, width: 1, height: 1}));
-  }
-  if (rects.length < 4) rects.push(s("rect", {x: 3, y: 2, width: 1, height: 3}), s("rect", {x: 2, y: 3, width: 3, height: 1}));
-  return h("span", {class: ["gk-av", cls], style: {"--h": hueOf(id)}, "aria-hidden": "true"},
-    s("svg", {viewBox: "0 0 7 7", "shape-rendering": "crispEdges"}, rects));
+  const hue = stratHue(String(id ?? "").split("@")[0]);
+  return h("span", {class: ["gk-av", "gk-fig", cls], style: {"--h": hue == null ? 210 : hue}, "aria-hidden": "true"},
+    stratFigure({strategy: String(id ?? "").split("@")[0], size: 22}));
 }
 
 // ---------------------------------------------------------------- the card's curve

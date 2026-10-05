@@ -97,6 +97,17 @@
   --sun: #f7d56e;
   --city: #2d405e;
   --window-frame: #5b4431;
+  /* the window by Korea time (wave 2 ⑧, core/figure.js skyPhase): dawn / dusk / night skies, low sun, moon, stars */
+  --sky-glow: #f3c79a;
+  --sky-dawn: #b9b3dc;
+  --sky-dusk: #6f5a94;
+  --sky-dusk-glow: #ef9563;
+  --sky-night: #142146;
+  --sun-low: #f59a52;
+  --moon: #f1e6bd;
+  --star: #e9eefb;
+  --city-night: #0c1426;
+  --city-lit: #f7d56e;
   --clock-face: #f3efe4;
   --clock-rim: #262c3a;
   --clock-hand: #1a1f2b;

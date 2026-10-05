@@ -5,7 +5,10 @@
 // HONESTY (CONTRACT.md section 1): comparisons with the coin flips are '참고' pills in neutral colours (never a pass or
 // fail before /api/checkpoint says ready); a DeepSeek account gets nothing per account beyond the bare '참고' pill;
 // late-started extras are never compared; small samples say 표본 적음.
-import {h, put, ui, fmt, derive, local} from "../core/pb.js";
+import {h, put, ui, fmt, derive, local, stratFigure} from "../core/pb.js";
+
+// wave 2 ⑦: the strategy's own pixel character in front of its name (no idle motion in lists)
+const fig = (a, size) => stratFigure({strategy: a.strategy, kind: a.kind, size, cls: "row-fig"});
 
 // ---------------------------------------------------------------- names the server does not send yet
 // DeepSeek family names live in core/names.js (fmt.familyKo); /api/board drops accounts.data (NEEDS SERVER #1).
@@ -101,7 +104,7 @@ export function rankRow(a, o) {
     return h("a", {class: ["lrow", "click", "home-row", "compact", small ? "thin" : ""], href: o.href(a.account_id), role: "listitem",
       title: a.account_id, "aria-label": `${fmt.acctName(a)} ${fmt.tfKo(a.timeframe)} ${fmt.pct(a.ret)} · 거래 ${fmt.int(a.trades)}건${small ? " · 표본 적음" : ""}${a.bust ? " · 파산" : ""}`},
     h("span", {class: "rk"}, fmt.int(o.rk)),
-    h("span", {class: "lname"}, ui.acctLabel(a), a.bust ? ui.pill("파산", "bad", "잔고 10 USDT 미만으로 정지") : null),
+    h("span", {class: "lname"}, fig(a, 18), ui.acctLabel(a), a.bust ? ui.pill("파산", "bad", "잔고 10 USDT 미만으로 정지") : null),
     h("span", {class: ["ret", "num", fmt.tone(a.ret)]}, fmt.pct(a.ret)));
   }
   // one meta line: "거래 22 · 낙폭 1.2%" (+ W-L, wallet, open position on the 순위표); the timeframe leads the name
@@ -121,7 +124,7 @@ export function rankRow(a, o) {
   meta.push(refTag(a, o.gs), ...extraPills(a));
   return h("a", {class: "lrow click home-row", href: o.href(a.account_id), role: "listitem", title: a.account_id},
     h("span", {class: "rk"}, fmt.int(o.rk)),
-    h("span", {class: "lname"}, ui.acctLabel(a)),
+    h("span", {class: "lname"}, fig(a, 20), ui.acctLabel(a)),
     h("span", {class: ["ret", "num", fmt.tone(a.ret)]}, fmt.pct(a.ret)),
     h("span", {class: "meta"}, meta));
 }

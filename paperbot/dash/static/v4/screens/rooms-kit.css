@@ -35,3 +35,6 @@
 .rk-stance { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; color: var(--ink-2); font-size: var(--t-xs); }
 .rk-code .rk-body, .rm-dec .rk-body { font-size: var(--t-sm); line-height: 1.6; }
 .rk-code .disclosure .linkish, .rk-rule .disclosure .linkish { color: var(--muted); font: 700 var(--t-xs)/1.3 var(--f-term); }
+/* wave 2 ⑦: a strategy room's avatar is its strategy's pixel character (rooms-kit.js roomAvatar) */
+.rav.rav-fig { overflow: hidden; border-radius: 8px; }
+.rav.rav-fig .sfig { width: 100%; height: 100%; border-radius: 0; }

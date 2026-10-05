@@ -7,6 +7,7 @@ export * as ui from "./ui.js";
 export * as motion from "./motion.js";
 export * as derive from "./derive.js";
 export {figure, clock, windowArt, TEAM_HUE} from "./figure.js";
+export {skyPhase, PHASE_KO, stratFigure, stratHue} from "./figure.js";
 export {consolePanel} from "./console.js";
 export {alertKo, criticalLines} from "./alerts.js";
 export {store} from "./store.js";

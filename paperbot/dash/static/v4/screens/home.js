@@ -2,7 +2,7 @@
 // "지난번 본 뒤로" sheet (core/since.js, over the page) → the story rings (오늘의 하이라이트) → the head card (the 30-day
 // question, the group race with the coin flips' band, above / below the same-timeframe coin median, the checkpoint
 // progress in one line) → 오늘 per group → the group cards (each with its median line) → 상위·하위 of the chosen group
-// (the 5분봉 group shows its 1:3 card with its three 5m coin flips instead) → the green LED balance bar → 최근 회의 →
+// (the 5분봉 group shows its 1:3 card with its three 5m coin flips instead) → the green LED balance bar → 오늘의 회의 결론 →
 // the way into '어떻게 돌아가나'. The full ranked list lives on 순위표 only (one link here, no second copy).
 // HONESTY: every comparison is '참고' with refNote; every money card has assume(); LIVE / 회의 중 only from real state
 // (stream.live(), /api/office running); numbers count to new values and tint only when the server's data changed; the
@@ -14,8 +14,7 @@ import {storyRing} from "./story-kit.js";
 import {raceParts} from "./flow-kit.js";
 import {rowMotion} from "./board-motion.js";
 import {reelDuel} from "./reel-duel.js";
-
-const DECISION_KO = {done: "결정", no_action: "행동 없음", failed: "멈춤", stopped_budget: "한도로 멈춤"};
+import {meetBoard} from "./meetboard-kit.js";
 
 export async function mount(el, ctx) {
   ctx.setTitle("홈");
@@ -81,9 +80,9 @@ export async function mount(el, ctx) {
   const todaySub = h("span", {class: "sub"});
   const todayCard = ui.card({plate: "오늘", cls: "home-today home-o2", acts: [todaySub]}, todayBody, nextEl, ui.assume());
 
-  // ---------------------------------------------------------------- 6. 최근 회의 (three stored lines -> 회의실)
-  const meetBody = h("div", {class: "home-meets", role: "list"}, motion.shimmer(2));
-  const meetCard = ui.card({plate: "최근 회의", cls: "home-o7", acts: [h("a", {class: "btn-line", href: href("office")}, "회의실 →")]}, meetBody);
+  // ---------------------------------------------------------------- 6. 오늘의 회의 결론 (wave 2 ⑥: today's finished
+  // meetings in three stored lines, counts 회의 · 결정 · 갈린 의견, 회의 중 from /api/office; screens/meetboard-kit.js)
+  const meetCard = meetBoard(ctx, {cls: "home-o7"});
 
   // ---------------------------------------------------------------- 7. 어떻게 돌아가나 (one compact card)
   const flow = ["신호", "진입", "레버리지", "청산", "손실 회의", "판정"];
@@ -238,17 +237,9 @@ export async function mount(el, ctx) {
     put(nextEl, items.length ? h("div", {class: "home-bwh"}, "다음 일정") : null, items.length ? h("ul", {class: "home-nextl"}, items) : null);
   }
 
-  // 최근 회의: the running meetings (회의 중 only from /api/office running) and the newest finished ones, three lines
+  // 오늘의 회의 결론: 회의 중 (only from /api/office running) and the next meeting for its empty state
   function renderMeetings() {
-    if (!st.officeTried) return;
-    const o = st.office;
-    if (!o || o.ready === false) { put(meetBody, ui.empty("아직 회의 기록이 없습니다")); return; }
-    const line = (m, running) => h("a", {class: "home-mrow", role: "listitem", href: href("rooms", m.room_id)},
-      h("span", {class: "rk num"}, fmt.hm(running ? m.started_ts : m.ended_ts || m.started_ts)),
-      h("span", {class: "home-mt"}, h("b", null, m.title || m.room_id), ` · ${running ? m.trigger_ko || "" : String(m.decision || DECISION_KO[m.status] || m.trigger_ko || "").replace(/^\s*🧾\s*/u, "")}`),
-      running ? ui.pill("회의 중", "accent") : null);
-    const rows = [...(o.running || []).map((m) => line(m, true)), ...(o.recent || []).map((m) => line(m, false))].slice(0, 3);
-    put(meetBody, rows.length ? rows : ui.empty("오늘 회의가 아직 없습니다"));
+    if (st.officeTried) meetCard.office(st.office);
   }
 
   // ================================================================ data

@@ -33,6 +33,10 @@ a.home-row { color: inherit; text-decoration: none; transition: background-color
 a.home-row:focus-visible { outline-offset: -2px; }
 .home-row .ret { text-align: right; }
 .home-row .lname { color: var(--ink); }
+/* wave 2 ⑦: the strategy's pixel character before its name */
+.home-row .lname:has(> .row-fig) { display: flex; align-items: center; gap: 6px; }
+.home-row .row-fig { flex: none; }
+a.home-row.compact.thin .row-fig { opacity: .62; }
 .home-row .meta { line-height: 1.6; }
 .home-row .meta .pp { line-height: 1.45; }
 .home-pos { color: var(--accent); }

@@ -80,7 +80,7 @@ export function listView(ctx, st) {
     const open = sp.open === s.id;
     const rowEl = h("div", {class: "lrow click strat-row strat-prow", role: "button", tabindex: "0", "aria-expanded": String(open),
       "aria-controls": `strat-p-${s.id}`, title: `${s.ko} · 눌러서 프로필 보기`},
-    h("span", {class: "rk"}, rk), h("span", {class: "lname"}, s.ko),
+    h("span", {class: "rk"}, rk), h("span", {class: "lname strat-lname"}, identicon(s.id, "sm"), h("span", {class: "strat-nm"}, s.ko)),
     h("span", {class: "strat-spark"}, miniSpark(x && x.v, {label: `${s.ko} 최근 잔고 흐름`})),
     h("span", {class: ["ret num", fmt.tone(ret, shown)]}, shown),
     h("span", {class: "strat-chev", "aria-hidden": "true"}),

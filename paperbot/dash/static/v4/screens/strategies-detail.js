@@ -11,6 +11,7 @@ import {stratChart, loadView} from "./strategies-chart.js";
 import {ruleBody, condBody, profileBody, researchBody, lossCard, tagRows} from "./strategies-panels.js";
 import {profileCard} from "./grid-kit.js";
 import {reelDuel} from "./reel-duel.js";
+import {vs5yCard} from "./vs5y-kit.js";
 
 const GROUP_PLATE = {core: "기존 36", ds: "딥시크 44", m5: "5분봉"};
 const DIMS = [{id: "coin", label: "코인"}, {id: "side", label: "방향"}, {id: "tf", label: "봉"}, {id: "session", label: "시간대"}];
@@ -98,14 +99,16 @@ export function detailView(ctx, st, name) {
   const top = duel || prof.el;
 
   const left = h("div", {class: "strat-col"}, chartCard, condCard, sigCard);
-  const right = h("div", {class: "strat-col"}, ruleCard, acctCard, splitCard, profCard, lossCardEl);
+  // wave 2 ⑨: 5년 시험 vs 지금 vs 동전 봇, per timeframe (vs5y-kit.js), next to the 5-year card
+  const vs = vs5yCard(ctx, name, kind, {tf: v.tf, verdictTs: () => verdictTs()});
+  const right = h("div", {class: "strat-col"}, ruleCard, acctCard, splitCard, vs.el, profCard, lossCardEl);
   const el = h("div", {class: "strat-detail stack"}, head, top, h("div", {class: "strat-grid"}, left, right));
 
   // ---------------------------------------------------------------- renderers
   function renderRule() { put(ruleEl, ...ruleBody(name, kind, meta, v.view)); }
 
   function renderTfSeg() {
-    put(tfSeg, ui.seg(tfs.map((tf) => ({id: tf, label: fmt.tfKo(tf)})), v.tf, (tf) => { v.tf = tf; local.set("strat-tf", tf); loadChart(); loadSignals(); renderAccounts(); }, {label: "봉"}));
+    put(tfSeg, ui.seg(tfs.map((tf) => ({id: tf, label: fmt.tfKo(tf)})), v.tf, (tf) => { v.tf = tf; local.set("strat-tf", tf); loadChart(); loadSignals(); renderAccounts(); vs.setTf(tf); }, {label: "봉"}));
   }
 
   function verdictTs() {
@@ -282,7 +285,10 @@ export function detailView(ctx, st, name) {
 
   return {
     el,
-    start() { loadChart(); loadTrades(); loadSignals(); loadProfile(); loadLoss(); if (duel) duel.set(st.board); else prof.load(); },
+    start() {
+      loadChart(); loadTrades(); loadSignals(); loadProfile(); loadLoss(); if (duel) duel.set(st.board); else prof.load();
+      sc.every(300000, () => vs.load());                // the server keeps it 60 s; a closed trade moves it slowly
+    },
     /** New board (or summary): tiles and record update in place; a strategy whose timeframes changed redraws its tabs. */
     refresh() {
       const nt = tfsOf(accountsOf(st.board, name));

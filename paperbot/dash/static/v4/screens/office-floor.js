@@ -5,8 +5,13 @@
 // stand at the table only as that meeting's participants; bubbles are the stored last line of a speaker (first
 // sentence) and pop only when that line changed; staff walk to the table only when a meeting id is NEW since the last
 // poll; "다음 차례" only when the meeting's own order names the next speaker. Every text is a text node.
-import {h, ui, fmt, motion, figure, clock, windowArt} from "../core/pb.js";
+// Wave 2 ⑧: the 대표실 window follows Korea time (core/figure.js skyPhase), a wall plate names the market session now and
+// the US stock market's next open / close (core/bars.js), every room's floor carries its team's colour (TEAM_HUE), and
+// only a room holding a real meeting (/api/office running) has its lamp on (after dark the others dim). The desk holds
+// today's report (screens/meetboard-kit.js deskReport: finished meetings' conclusions -> 회의 결론).
+import {h, ui, fmt, motion, figure, clock, windowArt, bars, hueOf, TEAM_HUE, skyPhase, PHASE_KO} from "../core/pb.js";
 import {roleOf, shortName, hueFor, roleName, GROUP_ROLES, KIND_KO, triggerKo, whyOf} from "./rooms-kit.js";
+import {deskReport} from "./meetboard-kit.js";
 
 const SPEC_SHOWN = 5;
 
@@ -14,7 +19,7 @@ const SPEC_SHOWN = 5;
 export function zonesOf(o, roster) {
   const run = [...(o.running || [])].sort((a, b) => (b.started_ts || 0) - (a.started_ts || 0));
   const byRoom = (o.today && o.today.by_room) || {};
-  const zones = (o.zones || []).map((z) => ({key: z.room_id, kind: "team", title: z.title, room: z.room_id, members: z.members || [],
+  const zones = (o.zones || []).map((z) => ({key: z.room_id, kind: "team", title: z.title, room: z.room_id, members: z.members || [], group: !!z.group_role,
     meeting: run.find((m) => m.room_id === z.room_id) || null, others: 0, count: byRoom[z.room_id] || 0,
     last: (o.recent || []).find((r) => r.room_id === z.room_id) || null}));
   const sruns = run.filter((m) => m.kind === "strategy" || String(m.room_id).startsWith("strat:"));
@@ -164,23 +169,44 @@ export function makeFloor(ctx) {
         h("div", {class: "of-side r"}, ppl.slice(half))));
       if (m.next_role) kids.push(h("p", {class: "of-next"}, `다음 차례 · ${roleName(roles, m.next_role)}`));
     }
-    return h("section", {class: ["of-room", md.live ? "live" : "", small ? "quiet" : "", z.kind === "spec" ? "spec" : ""], "aria-label": z.title,
-      dataset: {zone: z.key}}, kids);
+    return h("section", {class: ["of-room", "tint", md.live ? "live" : "", small ? "quiet" : "", z.kind === "spec" ? "spec" : ""], "aria-label": z.title,
+      dataset: {zone: z.key}, style: {"--h": zoneHue(z)}}, h("i", {class: "of-lamp", "aria-hidden": "true", title: md.live ? "회의 중: 불 켜짐" : null}), kids);
+  }
+  /** The team colour of a room's floor: its team (TEAM_HUE), a group specialist room, the strategy rooms. */
+  function zoneHue(z) {
+    if (z.kind === "spec") return TEAM_HUE.specialist;
+    const t = String(z.room || "").replace(/^team:/, "");
+    return TEAM_HUE[t] ?? (z.group ? TEAM_HUE.group : hueOf(z.room));
   }
 
   function ceoNode() {
     const say = h("div", {class: "of-ceo-say"});
+    const win = h("div", {class: "of-win"}, windowArt(), h("span", {class: "of-phase"}));
     const node = h("section", {class: "of-room of-ceo", "aria-label": "대표실"},
       h("div", {class: "of-room-h"}, h("span", {class: "plate"}, "대표실")),
       h("div", {class: "of-ceo-in"},
-        h("div", {class: "of-wall"}, windowArt(), h("div", {class: "of-clocks"}, clock("KST", "Asia/Seoul"), clock("UTC", "UTC"), clock("NYC", "America/New_York"))),
+        h("div", {class: "of-wall"}, win, h("div", {class: "of-wallr"},
+          h("div", {class: "of-clocks"}, clock("KST", "Asia/Seoul"), clock("UTC", "UTC"), clock("NYC", "America/New_York")), sess)),
         h("div", {class: "of-boss"}, say,
           h("div", {class: "of-boss-figs"}, h("span", null, figure({kind: "owner", size: 28, i: 3, breathe: true})), h("span", null, figure({kind: "owner", size: 28, i: 5, breathe: true}))),
-          h("div", {class: "of-bigdesk"}, h("span", {class: "of-deskplate"}, "두 분")),
+          h("div", {class: "of-bigdesk"}, deskReport(ctx), h("span", {class: "of-deskplate"}, "두 분")),
           h("p", {class: "of-boss-note"}, "주문 버튼 없음 · 모든 계좌는 모의"))));
     node._say = say;
+    node._phase = win.lastChild;
     return node;
   }
+
+  // the wall plate and the floor's time of day: Korea time, checked once a minute (paused while the page is hidden)
+  const sess = h("div", {class: "of-sess", "aria-live": "off"});
+  const SESS_KO = {asia: "아시아장", europe: "유럽장", us: "미국장", dawn: "장 사이 (새벽)"};
+  function tickTime() {
+    const now = Date.now();
+    const se = bars.session(now), us = bars.usMarket(now), ph = skyPhase(now);
+    el.dataset.ph = ph;
+    sess.replaceChildren(h("b", null, `지금 ${SESS_KO[se.id] || se.ko}${se.weekend ? " · 주말" : ""}`), h("span", null, `미국 증시 ${us.text}`));
+    if (st.ceo) st.ceo._phase.textContent = `창밖: 한국 ${PHASE_KO[ph]}`;
+  }
+  ctx.every(60000, tickTime);
 
   /** The owners' latest post today as their bubble (a real stored post), or nothing. */
   function setOwner(post, first) {
@@ -228,7 +254,7 @@ export function makeFloor(ctx) {
       if (node.parentNode !== box) box.append(node);
       node.style.order = String(idx);
     });
-    if (!st.ceo) { st.ceo = ceoNode(); grid.append(st.ceo); }
+    if (!st.ceo) { st.ceo = ceoNode(); grid.append(st.ceo); tickTime(); }
     st.ceo.style.order = "999";
     setOwner(owner, first);
     quietRow.hidden = !quietRow.children.length;
