@@ -207,8 +207,8 @@ export function priceMoves(tk, now = Date.now(), state = px) {
 // ---------------------------------------------------------------- market trades -> the layer (server relay)
 // /api/v4/ticks (dash/more/ticks.py): ONE Binance aggTrade socket on the server shared by every page, at most ~2 events
 // a second, each {s, side, b, usd, n, p, t}: the coin whose traded notional ran furthest above its usual in that half
-// second, its side (more taker buys or sells) and size bucket b 1-4. Opened only while the sound is on, unlocked and
-// the page visible (the server closes its socket a minute after the last page left). While it is live the layer
+// second, its side (more taker buys or sells) and size bucket b 1-4. Opened only while the sound is on, unlocked, the
+// page visible and not in the night mute (the server closes its socket a minute after the last page left). While it is live the layer
 // follows these trades (the same queue, spacing and density as before); when it is not (state "connecting" / "down",
 // a refused or dropped answer, nothing heard for 15 s) the /api/ticker price changes above feed the layer again.
 export const TICK_SYMS = ["BCHUSDT", "BTCUSDT", "DOGEUSDT", "ETHUSDT", "LTCUSDT", "SOLUSDT", "XRPUSDT"];  // sorted: each coin keeps priceMoves' voice
@@ -241,7 +241,7 @@ export function onTicks(msg, now = Date.now()) {
 }
 function ticksOpen() {
   const ES = globalThis.EventSource;
-  if (ticks.es || ticks.retryT || !cfg.on || !unlocked || hidden() || typeof ES !== "function") return;
+  if (ticks.es || ticks.retryT || !cfg.on || !unlocked || hidden() || (cfg.night && nightKst(Date.now())) || typeof ES !== "function") return;
   let es;
   try { es = new ES("/api/v4/ticks"); } catch (e) { ticks.state = "down"; return; }
   ticks.es = es; ticks.state = "connecting";
@@ -266,6 +266,12 @@ function ticksClose() {
   clearTimeout(ticks.retryT); ticks.retryT = null;
   if (ticks.es) { try { ticks.es.close(); } catch (e) { /* already closed */ } ticks.es = null; }
   ticks.state = "off";
+}
+/** The night mute (00-07 KST, when ticked) closes the stream too: nothing is heard, so the server's socket may close.
+ *  Checked with every ticker poll (5 s) and every setting change, so it opens again by itself at 07:00. */
+function ticksSync(now = Date.now()) {
+  if (cfg.night && nightKst(now)) { if (ticks.es || ticks.retryT) ticksClose(); }
+  else ticksOpen();
 }
 
 // ---------------------------------------------------------------- stream records -> motifs / layer
@@ -392,7 +398,7 @@ function applyFeeds() {
     feeds = [
       // polled every 5 s while the sound is on; heard only while the market-trade relay is not live (the fallback),
       // and always read so the baseline stays fresh for the moment it takes over
-      store.watch("ticker", (tk) => { if (!tk) return; const mv = priceMoves(tk); if (!tradesLive()) feed(mv); }),
+      store.watch("ticker", (tk) => { ticksSync(); if (!tk) return; const mv = priceMoves(tk); if (!tradesLive()) feed(mv); }),
       bus.on("trades", (rows) => onTrades(rows)),
       bus.on("board:changed", (ch) => onBoardChanged(ch)),
       bus.on("rooms", () => {                                  // a room has new messages: look once (debounced)
@@ -403,14 +409,14 @@ function applyFeeds() {
     ];
     seedPositions(store.get("board"));
     store.need("rooms", 60000).then((v) => onRooms(v)).catch(() => {});     // the baseline of the rooms
-    ticksOpen();
+    ticksSync();
   } else if (!cfg.on && feeds) {
     for (const off of feeds) off();
     feeds = null;
     ticksClose();
     clearTimeout(roomsT);
     layer.clear(); px.base = null;
-  }
+  } else if (cfg.on) ticksSync();                               // the night mute ticked / unticked
 }
 function unlock() {
   if (!cfg.on) return;
@@ -541,6 +547,6 @@ export const _test = {
   setSink(fn) { sink = fn; },
   setKinds(obj) { kinds = {b: kinds.b, m: new Map(Object.entries(obj))}; },
   unlock(v = true) { unlocked = v; },
-  layer, px, posSeen, roomSeen, lastMotif, ticks, ticksOpen, ticksClose,
+  layer, px, posSeen, roomSeen, lastMotif, ticks, ticksOpen, ticksClose, ticksSync,
   reset() { ticksClose(); ticks.retryMs = 30000; tradeSeen.clear(); layer.clear(); px.base = null; px.ema = {}; posSeen.clear(); roomSeen.clear(); for (const k of Object.keys(lastMotif)) delete lastMotif[k]; clearTimeout(layerT); layerT = null; },
 };

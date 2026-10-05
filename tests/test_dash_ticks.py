@@ -363,7 +363,7 @@ def test_trades_drive_the_same_layer_buy_high_sell_low_bigger_louder():
 
 def test_ticker_is_the_fallback_and_the_layer_rules_are_unchanged():
     src = open(os.path.join(V4, "core", "sound.js"), encoding="utf-8").read()
-    assert 'store.watch("ticker", (tk) => { if (!tk) return; const mv = priceMoves(tk); if (!tradesLive()) feed(mv); })' in src
+    assert 'store.watch("ticker", (tk) => { ticksSync(); if (!tk) return; const mv = priceMoves(tk); if (!tradesLive()) feed(mv); })' in src
     assert 'new ES("/api/v4/ticks")' in src and "wss://" not in src and "binance.com" not in src   # only our server
     assert "export const MIN_GAP_MS = 500;" in src and 'normal: {ko: "보통", gap: 1333},' in src     # ~0.75 / s
     assert src.count("setInterval(") == 1
@@ -396,3 +396,22 @@ def test_event_source_opens_only_when_on_unlocked_visible_and_retries_when_refus
     assert out["closed"] == {"st": "off", "t": None}
     assert out["dropped"] == {"st": "down", "es": True}               # the browser reconnects by itself (readyState 0)
     assert out["reset"] == {"closed": True, "st": "off"}
+
+
+def test_the_night_mute_closes_the_stream_and_07_opens_it_again():
+    out = _node("""
+    const made = [];
+    globalThis.EventSource = class { constructor(u) { this.url = u; this.readyState = 0; this.closed = false; made.push(this); }
+      close() { this.closed = true; this.readyState = 2; } };
+    const NIGHT = Date.UTC(2026, 9, 5, 18, 30), DAY = Date.UTC(2026, 9, 5, 22, 30);     // 03:30 / 07:30 KST
+    const out = {};
+    sound.cfg.night = true; Date.now = () => NIGHT;
+    sound._test.ticksOpen(); sound._test.ticksSync(); out.night = made.length;
+    Date.now = () => DAY; sound._test.ticksSync(); out.day = made.length;
+    Date.now = () => NIGHT; sound._test.ticksSync(); out.closed = {c: made[0].closed, st: sound._test.ticks.state};
+    sound.cfg.night = false; sound._test.ticksSync(); out.unticked = made.length;
+    sound._test.reset();
+    """)
+    assert out["night"] == 0 and out["day"] == 1                         # muted night: no stream; 07:00: it opens
+    assert out["closed"] == {"c": True, "st": "off"} and out["unticked"] == 2
+
