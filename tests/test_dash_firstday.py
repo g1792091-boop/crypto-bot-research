@@ -248,7 +248,7 @@ def test_alert_footer_names_sources_in_korean():
 def test_wake_lock_is_opt_in_guarded_and_reacquired():
     src = _read("core", "sound.js")
     assert 'local.get("snd-wake", false) === true' in src                  # off by default, per device
-    assert 'navigator.wakeLock.request("screen")' in src and "catch (e) { wake.lock = null; }" in src
+    assert 'navigator.wakeLock.request("screen")' in src and "catch (e) { l = null; }" in src
     assert 'document.addEventListener("visibilitychange"' in src and "if (!document.hidden) wakeGet();" in src
     assert "if (!wake.on || !cfg.on" in src                                 # only while the sound is on
     assert "화면 켜두기" in src and "이 기기는 지원 안 함" in src
@@ -263,3 +263,23 @@ def test_wake_lock_is_opt_in_guarded_and_reacquired():
 def test_faq_says_how_to_add_the_page_to_the_home_screen():
     faq = _read("screens", "faq-items.js")
     assert "홈 화면에 추가" in faq and "화면 켜두기" in faq
+
+
+def test_wake_lock_one_request_at_a_time_and_released_when_turned_off():
+    # a fake Screen Wake Lock: the tick and the page coming back ask together, then the owner turns it off (also
+    # before the browser answered): at most one lock, and none left once it is off
+    fake = ("const _vis = [];\n"
+            "globalThis.document = {visibilityState: 'visible', hidden: false, addEventListener(t, f) { if (t === 'visibilitychange') _vis.push(f); }, removeEventListener() {}};\n"
+            "let made = 0, active = 0;\n"
+            "Object.defineProperty(globalThis, 'navigator', {configurable: true, value: {wakeLock: {request: async () => {\n"
+            "  await new Promise((r) => setTimeout(r, 5)); made++; active++; let rel = false; const ls = [];\n"
+            "  return {addEventListener: (e, f) => ls.push(f), release: async () => { if (!rel) { rel = true; active--; ls.forEach((f) => f()); } }};\n"
+            "}}}});\n")
+    out = _node(fake + f"const s = await import('{CORE}/sound.js');\n"
+                "const wait = () => new Promise((r) => setTimeout(r, 30));\n"
+                "s.cfg.on = true; const o = {};\n"
+                "s.setWake(true); _vis.forEach((f) => f()); await wait(); o.on = {made, active};\n"
+                "s.setWake(false); await wait(); o.off = {made, active};\n"
+                "s.setWake(true); s.setWake(false); await wait(); o.quick = {made, active};\n"
+                "process.stdout.write(JSON.stringify(o) + '\\n', () => process.exit(0));", store={})
+    assert out == {"on": {"made": 1, "active": 1}, "off": {"made": 1, "active": 0}, "quick": {"made": 2, "active": 0}}

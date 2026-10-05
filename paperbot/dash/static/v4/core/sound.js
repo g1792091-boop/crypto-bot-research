@@ -374,20 +374,25 @@ export function startOnTap() {
 // A phone that locks its screen stops the page and its sound. With this ticked (off by default; a per-device choice
 // on this device) the page asks the browser to keep the screen on while the sound is on, and asks again when the page
 // comes back to the front (the browser drops the lock whenever the page is hidden). No API, no option.
-const wake = {on: local.get("snd-wake", false) === true, lock: null};
+const wake = {on: local.get("snd-wake", false) === true, lock: null, asking: false};
 export const wakeSupported = () => typeof navigator !== "undefined" && !!navigator.wakeLock && typeof navigator.wakeLock.request === "function";
+const wakeFree = (l) => { try { l.release().catch(() => {}); } catch (e) { /* already gone */ } };
 async function wakeGet() {
-  if (!wake.on || !cfg.on || wake.lock || !wakeSupported() || (typeof document !== "undefined" && document.hidden)) return;
-  try {
-    const l = await navigator.wakeLock.request("screen");
-    wake.lock = l;
-    l.addEventListener("release", () => { if (wake.lock === l) wake.lock = null; });
-  } catch (e) { wake.lock = null; }
+  // one request at a time (a tick and the page coming back can ask together: two locks, one never released)
+  if (!wake.on || !cfg.on || wake.lock || wake.asking || !wakeSupported() || (typeof document !== "undefined" && document.hidden)) return;
+  wake.asking = true;
+  let l = null;
+  try { l = await navigator.wakeLock.request("screen"); } catch (e) { l = null; }
+  wake.asking = false;
+  if (!l) return;
+  if (!wake.on || !cfg.on || wake.lock) { wakeFree(l); return; }      // turned off while the browser was asking
+  wake.lock = l;
+  try { l.addEventListener("release", () => { if (wake.lock === l) wake.lock = null; }); } catch (e) { /* no event: fine */ }
 }
 function wakeDrop() {
   const l = wake.lock;
   wake.lock = null;
-  if (l) { try { l.release().catch(() => {}); } catch (e) { /* already gone */ } }
+  if (l) wakeFree(l);
 }
 const wakeSync = () => { if (wake.on && cfg.on) wakeGet(); else wakeDrop(); };
 /** Turn 화면 켜두기 on / off (remembered on this device only). */
