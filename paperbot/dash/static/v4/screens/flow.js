@@ -13,7 +13,7 @@ import {h, put, ui, fmt, derive, motion, local} from "../core/pb.js";
 import {RACE_API, LANES, SHORT, raceChart, laneLegend, prep, dayN, laneKo} from "./flow-kit.js";
 import {calendar} from "./flow-cal.js";
 
-const STEP_KO = (ms) => (ms >= 86400000 ? "하루" : ms >= 14400000 ? "4시간" : "1시간");
+const STEP_KO = (ms) => (ms >= 86400000 ? "하루" : ms >= 14400000 ? "4시간" : ms >= 3600000 ? "1시간" : ms >= 900000 ? "15분" : "5분");
 
 export async function mount(el, ctx) {
   ctx.setTitle("흐름");

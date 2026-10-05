@@ -4,6 +4,7 @@
 // results and 방 열기. Result: 결정 / 행동 없음 / 멈춤 / 한도로 멈춤, and 진행 중 only while the meeting really runs.
 // GET /api/digest/day?day=YYYY-MM-DD; a row's turns come from the room's stored messages when it is opened.
 import {h, put, ui, fmt, motion, serverNow} from "../core/pb.js";
+import {meetSchedule} from "./home-live.js";
 import {STEPS, KIND_KO, SPEAKING, STANCE, statusPill, stripLead, triggerKo, whyOf, miniFigure, ACTION_KO, bodyLines, messageBody, roleName} from "./rooms-kit.js";
 
 const dayKeyNow = () => fmt.dayKey(serverNow());
@@ -38,7 +39,11 @@ export function makeDay(ctx) {
   const decidedBtn = h("button", {class: "dg-chip dg-decided", type: "button", "aria-pressed": "false",
     onclick: () => { st.decided = !st.decided; decidedBtn.setAttribute("aria-pressed", String(st.decided)); paintList(false); }}, "결정 난 것만");
   const body = h("div", {class: "dg-dbody"}, motion.shimmer(4));
-  const el = h("div", {class: "dg-day stack"}, h("div", {class: "dg-nav"}, prev, label, next, today), sumLine, chipBox, body,
+  // fill-home: today before its first meeting, a ticking countdown to the next fixed meeting and today's timeline
+  // (home-live.js meetSchedule over /api/office schedule) in place of a bare empty list
+  const sched = meetSchedule(ctx, {cls: "dg-sched"});
+  sched.hidden = true;
+  const el = h("div", {class: "dg-day stack"}, h("div", {class: "dg-nav"}, prev, label, next, today), sched, sumLine, chipBox, body,
     h("p", {class: "rk-note"}, "최신 회의가 위. 결론 요약과 숫자는 코드가 정리한 것이고, 발언 전문은 '방 열기'에서 봅니다. 단계는 실제로 말한 차례만 켜집니다."));
 
   function go(day) { if (day > dayKeyNow()) return; ctx.go("digest", "day", day === dayKeyNow() ? null : {d: day}); }
@@ -142,6 +147,7 @@ export function makeDay(ctx) {
     if (req !== st.req || !ctx.alive()) return;
     const same = st.d && JSON.stringify(st.d.meetings) === JSON.stringify(d.meetings);
     st.d = d;
+    showSched(!(d.meetings || []).length);
     if (d.error) { body.replaceChildren(ui.empty(String(d.error))); sumLine.textContent = ""; st.ms = []; paintChips(); return; }
     const ms = (d.meetings || []).slice().reverse();
     // the kinds of meeting are the chips under this line (counts on each chip)
@@ -155,6 +161,19 @@ export function makeDay(ctx) {
     const target = query && query.r ? el.querySelector(`.dg-row[data-round="${window.CSS.escape(String(query.r))}"]`) : null;
     if (target) requestAnimationFrame(() => target.scrollIntoView({block: "start", behavior: motion.reduced() ? "auto" : "smooth"}));
   }
+
+  // ---------------------------------------------------------------- 오늘 회의 일정 (today, no meeting yet)
+  let schedOn = false, schedT = null;
+  async function office() {
+    try { sched.set(await ctx.store.need("office", 25000)); } catch { sched.set(null); }
+  }
+  function showSched(empty) {
+    const on = empty && st.day === dayKeyNow();
+    sched.hidden = !on;
+    if (on && !schedOn) { schedOn = true; office(); schedT = setInterval(() => ctx.alive() && schedOn && office(), 30000); }
+    if (!on && schedOn) { schedOn = false; clearInterval(schedT); }
+  }
+  ctx.track(() => clearInterval(schedT));
 
   // ---------------------------------------------------------------- kind chips + 결정 난 것만
   function paintChips() {

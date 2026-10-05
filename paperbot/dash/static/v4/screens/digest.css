@@ -1,4 +1,5 @@
 @import url("rooms-kit.css");
+@import url("home-live.css");
 /* digest: 회의 요약 (builder D). One row per meeting that opens smoothly (mockup section 07); score cards. Tokens only. */
 [data-screen="digest"] .dg-body { display: grid; gap: 12px; min-width: 0; }
 [data-screen="digest"] .dg-nav { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }

@@ -1,0 +1,106 @@
+/* home-live (fill-home): 시장 지금, 지금 열린 포지션, 방금 끝난 거래, 오늘 회의 일정 (screens/home-live.js). Colours, sizes and
+   radii from tokens only; font sizes only var(--t-*). Also used by 회의 요약 › 회의 결론 (the countdown card). */
+.hl-small { font-size: var(--t-xs); }
+
+/* ---------------------------------------------------------------- the band: story rings | 시장 지금 */
+[data-screen="home"] .home-band { display: grid; gap: var(--gap); min-width: 0; align-items: center; }
+@media (min-width: 1100px) {
+  [data-screen="home"] .home-band { grid-template-columns: auto minmax(0, 1fr); gap: var(--gutter); }
+}
+@media (max-width: 1099px) {
+  [data-screen="home"] .home-o3 { order: 3; }
+}
+.hl-mktwrap { display: grid; gap: calc(var(--gap) / 2); min-width: 0; }
+.hl-mhead { display: flex; align-items: center; gap: var(--gap); flex-wrap: wrap; }
+.hl-mkt { display: grid; grid-template-columns: repeat(var(--n, 7), minmax(0, 1fr)); gap: calc(var(--gap) / 2); min-width: 0; }
+.hl-coin { display: grid; gap: 2px; padding: calc(var(--gap) * .66) var(--gap); border: 1px solid var(--line); border-radius: var(--r-md);
+  background: var(--surface); color: var(--ink); text-decoration: none; min-width: 0; }
+.hl-coin:hover { border-color: var(--line-2); background: var(--surface-2); }
+.hl-cn { font-weight: 800; font-size: var(--t-sm); color: var(--ink-2); }
+.hl-px { font-size: var(--t-lg); font-weight: 800; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-radius: var(--r-sm); }
+.hl-ch { font-size: var(--t-sm); font-weight: 700; color: var(--muted); }
+.hl-ch.up { color: var(--up); } .hl-ch.down { color: var(--down); }
+.hl-fund { font-size: var(--t-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 1099px) and (min-width: 600px) { .hl-mkt { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 599px) {
+  /* phone: one row that scrolls sideways inside itself (the page never scrolls sideways) */
+  .hl-mkt { display: flex; overflow-x: auto; scroll-snap-type: x proximity; padding-bottom: 2px; }
+  .hl-coin { flex: 0 0 calc(50% - var(--gap)); scroll-snap-align: start; }
+}
+
+/* ---------------------------------------------------------------- shared row parts */
+.hl-pname { display: flex; align-items: center; gap: calc(var(--gap) / 2); min-width: 0; }
+.hl-tf { flex: none; padding: 1px 6px; border: 1px solid var(--line-2); border-radius: var(--r-sm); color: var(--ink-2); font-size: var(--t-xs); font-weight: 700; }
+.hl-nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; color: var(--ink); font-size: var(--t-sm); }
+.hl-pcoin { white-space: nowrap; font-size: var(--t-sm); display: inline-flex; align-items: center; gap: 4px; }
+
+/* ---------------------------------------------------------------- 지금 열린 포지션 */
+.hl-pos { display: grid; min-width: 0; }
+.hl-prow { display: grid; grid-template-columns: minmax(0, 1.3fr) auto minmax(0, .9fr) minmax(0, .9fr) 5.5em; align-items: center;
+  gap: calc(var(--gap) * .75); min-height: 42px; padding: 4px 2px; border-top: 1px solid var(--line); color: var(--ink-2); text-decoration: none; }
+.hl-pos .hl-prow:first-child { border-top: 0; }
+.hl-prow:hover { background: var(--surface-2); }
+.hl-pent, .hl-pguard { font-size: var(--t-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hl-roe { justify-self: end; font-size: var(--t-md); font-weight: 800; padding: 1px 4px; border-radius: var(--r-sm); }
+.hl-roe.up { color: var(--up); } .hl-roe.down { color: var(--down); }
+@media (min-width: 1100px) { .hl-pos { max-height: 470px; overflow-y: auto; } }
+@media (max-width: 599px) {
+  .hl-prow { grid-template-columns: minmax(0, 1fr) auto; gap: 2px var(--gap); padding: 8px 2px; }
+  .hl-prow .hl-pcoin { grid-column: 1; grid-row: 2; }
+  .hl-prow .hl-roe { grid-column: 2; grid-row: 1 / span 2; }
+  .hl-prow .hl-pent { grid-column: 1; grid-row: 3; }
+  .hl-prow .hl-pguard { grid-column: 2; grid-row: 3; justify-self: end; }
+}
+
+/* ---------------------------------------------------------------- 방금 끝난 거래 + best / worst */
+.hl-trades { display: grid; min-width: 0; }
+.hl-trow { display: grid; grid-template-columns: 3.2em minmax(0, 15em) minmax(0, 1fr) 5em 4.6em 6.4em; align-items: center; gap: calc(var(--gap) * .66);
+  min-height: 38px; padding: 3px 2px; border-top: 1px solid var(--line); color: var(--ink-2); text-decoration: none; font-size: var(--t-sm); }
+.hl-trades .hl-trow:first-child { border-top: 0; }
+.hl-trow:hover { background: var(--surface-2); }
+.hl-tt { font-size: var(--t-xs); }
+.hl-why { font-size: var(--t-xs); font-weight: 700; white-space: nowrap; }
+.hl-why.up, .hl-trow .up { color: var(--up); } .hl-why.down, .hl-trow .down { color: var(--down); }
+.hl-tret { text-align: right; font-size: var(--t-xs); }
+.hl-trow > b { text-align: right; }
+@media (max-width: 599px) {
+  .hl-trow { grid-template-columns: 3.2em minmax(0, 1fr) auto; gap: 2px var(--gap); padding: 7px 2px; }
+  .hl-trow .hl-pcoin { grid-column: 2; grid-row: 2; }
+  .hl-trow .hl-why { grid-column: 1; grid-row: 2; }
+  .hl-trow .hl-tret { grid-column: 3; grid-row: 2; }
+  .hl-trow > b { grid-column: 3; grid-row: 1; }
+}
+.hl-bw { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: calc(var(--gap) / 2) var(--gap); padding-bottom: calc(var(--gap) / 2);
+  border-bottom: 1px dashed var(--line-2); }
+.hl-bw > p { grid-column: 1 / -1; margin: 0; }
+.hl-bwc { display: grid; gap: 2px; min-width: 0; align-content: start; }
+.hl-bwk { font-size: var(--t-xs); font-weight: 800; }
+.hl-bwk.up { color: var(--up); } .hl-bwk.down { color: var(--down); }
+.hl-bwr { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: calc(var(--gap) / 2); align-items: baseline; color: var(--ink-2);
+  text-decoration: none; padding: 2px 0; font-size: var(--t-sm); }
+.hl-bwr:hover .hl-nm { text-decoration: underline; }
+.hl-bwr .up { color: var(--up); } .hl-bwr .down { color: var(--down); }
+.hl-bwr .muted { font-size: var(--t-xs); }
+@media (max-width: 599px) { .hl-bw { grid-template-columns: minmax(0, 1fr); } }
+/* PC: 방금 끝난 거래 runs across the page: best / worst on the left, the 12 trades on the right */
+.hl-trgrid { display: grid; gap: var(--gap); min-width: 0; }
+@media (min-width: 1100px) {
+  .hl-trgrid { grid-template-columns: minmax(0, 1fr) minmax(0, 2.3fr); gap: var(--gutter); align-items: start; }
+  .hl-trgrid .hl-bw { grid-template-columns: minmax(0, 1fr); border-bottom: 0; border-right: 1px dashed var(--line-2);
+    padding: 0 var(--gutter) 0 0; gap: var(--gap); }
+}
+
+/* ---------------------------------------------------------------- 오늘 회의 일정 (countdown + timeline) */
+.hl-meet[hidden] { display: none; }
+.hl-cdrow { display: flex; align-items: baseline; flex-wrap: wrap; gap: calc(var(--gap) / 2) var(--gap); }
+.hl-cd { font: 700 var(--t-2xl)/1 var(--f-pixel); color: var(--accent); letter-spacing: .02em; }
+.hl-cdk { font-weight: 700; color: var(--ink); font-size: var(--t-sm); }
+.card ol.hl-tl, ol.hl-tl { list-style: none; margin: 0; padding: 0; display: grid; }
+.hl-tli { display: grid; grid-template-columns: 3.4em minmax(0, 1fr) auto; align-items: center; gap: var(--gap); padding: 6px 2px;
+  border-top: 1px solid var(--line); font-size: var(--t-sm); }
+.hl-tl .hl-tli:first-child { border-top: 0; }
+.hl-tli > b { color: var(--ink); }
+.hl-tli.done > b, .hl-tli.past > b { color: var(--muted); }
+.hl-tli.run { background: var(--accent-soft); border-radius: var(--r-sm); }
+.hl-tlb { display: grid; gap: 1px; min-width: 0; }
+.hl-tln { font-weight: 700; color: var(--ink); }

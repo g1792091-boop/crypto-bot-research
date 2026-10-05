@@ -432,7 +432,7 @@ export function raceParts(ctx, o = {}) {
     chart.set(m);
     if (o.onModel) o.onModel(m);
     if (!m) { list.replaceChildren(); sub.textContent = ""; return; }
-    sub.textContent = `D+${dayN(m.now, m.start)} · ${m.step >= DAY ? "하루" : m.step >= 4 * 3600000 ? "4시간" : "1시간"}마다`;
+    sub.textContent = `D+${dayN(m.now, m.start)} · ${m.step >= DAY ? "하루" : m.step >= 4 * 3600000 ? "4시간" : m.step >= 3600000 ? "1시간" : m.step >= 900000 ? "15분" : "5분"}마다`;
     list.render();
   }
   // the order now; a group whose line runs off the small chart (one account: the reel) carries an arrow. A value that

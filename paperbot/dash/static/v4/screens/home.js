@@ -17,6 +17,7 @@ import {reelDuel} from "./reel-duel.js";
 import {costLine} from "./analysis-costs.js";
 import {meetBoard} from "./meetboard-kit.js";
 import {pixelRoad} from "./road-kit.js";
+import {marketStrip, openCard, tradesCard, meetSchedule} from "./home-live.js";
 
 export async function mount(el, ctx) {
   ctx.setTitle("홈");
@@ -87,6 +88,17 @@ export async function mount(el, ctx) {
   // ---------------------------------------------------------------- 6. 오늘의 회의 결론 (wave 2 ⑥: today's finished
   // meetings in three stored lines, counts 회의 · 결정 · 갈린 의견, 회의 중 from /api/office; screens/meetboard-kit.js)
   const meetCard = meetBoard(ctx, {cls: "home-o7"});
+  // fill-home: before the day's first meeting the board's 0 / 0 / 0 gives way to the countdown and today's timeline
+  // (home-live.js meetSchedule); the board comes back once a meeting ran or runs today
+  const meetSched = meetSchedule(ctx, {cls: "home-o7"});
+
+  // fill-home: 시장 지금 (store ticker), 지금 열린 포지션 (board positions at the mark), 방금 끝난 거래 (+ best / worst)
+  const market = marketStrip(ctx);
+  market.classList.add("home-o0");
+  const posCard = openCard(ctx);
+  posCard.classList.add("home-o3");
+  const trCard = tradesCard(ctx);
+  trCard.classList.add("home-o3");
 
   // ---------------------------------------------------------------- 7. 어떻게 돌아가나 (one compact card)
   const flow = ["신호", "진입", "레버리지", "청산", "손실 회의", "판정"];
@@ -97,11 +109,13 @@ export async function mount(el, ctx) {
       h("button", {class: "btn-line", type: "button", onclick: () => startTour()}, "안내 다시 보기")),
     h("p", {class: "muted home-small"}, "AI 직원은 회의와 기록만 하고 거래하지 않습니다. 모든 계좌는 모의(가상 돈)입니다."));
 
-  // PC: two columns (head card | 오늘 + 최근 회의), the LED bar, the group cards, then (상위·하위 or 1:3 | 처음이라면).
+  // PC: the story rings beside 시장 지금; two columns (head card + 지금 열린 포지션 | 오늘 + 회의 일정 / 회의 결론); 방금 끝난
+  // 거래 across the page; the LED bar, the group cards, then (상위·하위 or 1:3 | 처음이라면).
   // Phone: one column in the order of the home-o* classes (home.css).
-  el.append(ui.screenHead("요약", "30일 모의 실험을 한눈에"), ring,
-    h("div", {class: "home-wrap home-top"}, h("div", {class: "home-col"}, hero), h("div", {class: "home-col"}, todayCard, meetCard)),
-    led, groupSec,
+  el.append(ui.screenHead("요약", "30일 모의 실험을 한눈에"), h("div", {class: "home-band"}, ring, market),
+    h("div", {class: "home-wrap home-top"}, h("div", {class: "home-col"}, hero, posCard),
+      h("div", {class: "home-col"}, todayCard, meetSched, meetCard)),
+    trCard, led, groupSec,
     h("div", {class: "home-wrap"}, h("div", {class: "home-col"}, ranksCard, duel), h("div", {class: "home-col"}, howCard)));
 
   // ================================================================ renderers
@@ -250,13 +264,19 @@ export async function mount(el, ctx) {
 
   // 오늘의 회의 결론: 회의 중 (only from /api/office running) and the next meeting for its empty state
   function renderMeetings() {
-    if (st.officeTried) meetCard.office(st.office);
+    if (!st.officeTried) return;
+    meetCard.office(st.office);
+    meetSched.set(st.office);
+    const of = st.office;
+    const ran = !!(of && ((of.recent || []).length || (of.running || []).length));
+    meetCard.hidden = !!of && !ran;               // no answer at all: the board (with its own message) stays
   }
 
   // ================================================================ data
   const onBoard = (b) => {
     if (!b) return;
     st.board = b; st.gs = derive.groupStats(b);
+    posCard.setBoard(b);
     renderHero(); renderLed(); renderGroupParts(false); renderCheckpoint(); renderToday();
   };
   const onSummary = (s) => {
@@ -310,18 +330,26 @@ export async function mount(el, ctx) {
   ctx.on("stream:state", relive);
   ctx.every(60000, () => { renderHero(); renderNext(); }, {now: false});
 
-  // /api/v4/curves (paper3.db equity, hourly steps): the total of every wallet over the run for the LED bar's line (the
+  // /api/v4/curves (paper3.db equity; 15-minute steps while the run is under 7 days old, then hourly): the total of every wallet over the run for the LED bar's line (the
   // head card's lines come from the race). Real points only; a 404 (an older server) stops asking and the pill stays.
   let curvesOn = true;
   async function loadCurves() {
     if (!curvesOn) return;
     let c;
-    try { c = await ctx.api("/api/v4/curves?step=3600000"); } catch (e) { if (e && e.status === 404) curvesOn = false; return; }
+    try { c = await ctx.api(`/api/v4/curves?step=${curveStep(st.board)}`); } catch (e) { if (e && e.status === 404) curvesOn = false; return; }
     if (!ctx.alive() || !c || !Array.isArray(c.t) || c.t.length < 2) return;
     const real = (xs) => xs.filter((v) => v != null && Number.isFinite(v)).length;
     if (real(c.total || []) >= 2) { st.total = c.total; if (st.led) { st.led.curve = c.total; led.update(st.led); } }
   }
   ctx.every(300000, loadCurves);
+}
+
+/** The LED line's step by run age (the oldest account's start in the board): 15 minutes under 7 days, else 1 hour
+ *  (the server's /api/v4/curves steps; equity rows are written every 5 minutes, so a young run still has a real line). */
+export function curveStep(board, now = Date.now()) {
+  const ts = ((board && board.accounts) || []).map((a) => Number(a.created_ts)).filter((x) => x > 0);
+  const start = ts.length ? Math.min(...ts) : null;
+  return start != null && now - start < 7 * 86400000 ? 900000 : 3600000;
 }
 
 export function unmount() {}
