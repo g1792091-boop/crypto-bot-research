@@ -229,6 +229,20 @@ def _checkpoint(path: Optional[str], now_ms: int, start: Optional[int]) -> dict:
     return out
 
 
+def _group_line(text: str) -> bool:
+    """'[ds200] ...', '[reel] ...', '[extra] ...': a tag without '@' is a group's or a service's line, not an account."""
+    return text.startswith("[") and "]" in text and "@" not in text[1:text.find("]")]
+
+
+def group_counts(board: dict) -> dict:
+    """{group: accounts} counted from paper3.db by packets3 (core, ds200, reel, flip, ...): the run's real shape."""
+    return {g: v.get("accounts") for g, v in (board.get("groups") or {}).items() if isinstance(v, dict)}
+
+
+TABLES_SCOPE_KO = ("league·totals·last_24h·rank·tf·coin·exits 숫자는 잠긴 매매법 36개 계좌와 같은 봉의 동전 봇만 "
+                   "(accounts_in_tables개). 딥시크·릴스 5분 단타·5분봉 동전은 groups에 그룹별 계좌 수만 있고 섞지 않음")
+
+
 def unusual(board: dict, levrule: Optional[dict]) -> list[tuple[str, str]]:
     """[(topic key, why)] for the things that should jump the agenda, most urgent first (code only)."""
     out = []
@@ -239,7 +253,10 @@ def unusual(board: dict, levrule: Optional[dict]) -> list[tuple[str, str]]:
     par = n.get("parity")
     if (isinstance(par, dict) and (par.get("mismatched_accounts") or 0) > 0) or n.get("missing_bars"):
         out.append(("nightly", "밤 점검에 재계산 불일치나 빠진 1분봉이 있음"))
-    crit = [a for a in ((board.get("today") or {}).get("alerts") or []) if a.get("level") == "CRITICAL"]
+    # an account's emergency (liquidation, halt) or the runner's; a group's own line ('[ds200] signal code refused',
+    # sigservice's frozen texts) names no account and is not a bust risk: it stays in ``alerts``, it jumps nothing
+    crit = [a for a in ((board.get("today") or {}).get("alerts") or []) if a.get("level") == "CRITICAL"
+            and not _group_line(str(a.get("text") or ""))]
     if crit:
         out.append(("risk", f"긴급 알림 {len(crit)}건"))
     return out
@@ -309,7 +326,8 @@ def build(paper_path: Optional[str], daily_path: Optional[str], agents_path: Opt
         ev = board.get("exits") or {}
         core = {
             "meta": {"now_kst": kst_day(now_ms), "run_day": None if days is None else f"D+{int(days)}",
-                     "days_running": days, "accounts": meta.get("accounts"),
+                     "days_running": days, "accounts_in_tables": meta.get("accounts"),
+                     "groups": group_counts(board), "tables_scope": TABLES_SCOPE_KO,
                      "run_restarted": meta.get("run_restarted"),
                      "observation": (f"{observe_until(start) or f'시작 후 {OBSERVE_DAYS}일'}까지 관찰 기간: "
                                      f"{F.originals_ko()} 규칙 변경 제안 금지(아이디어만)"),

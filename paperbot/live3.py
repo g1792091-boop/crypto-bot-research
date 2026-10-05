@@ -199,7 +199,7 @@ def book_prices(rest: BinanceREST, symbols) -> dict:
 def fetch_5m(rest: BinanceREST, symbol: str, start: int, end: int, pause: float = 0.5) -> list[tuple]:
     """Closed 5m bars with open time in [start, end), oldest first.
 
-    ``pause`` (0.5 s) after each full page paces the start's bootstrap: v4 keeps 115,200 bars for 7 symbols, ~540
+    ``pause`` (0.5 s) after each full page paces the start's bootstrap: v4 keeps ~116,000 bars for 7 symbols, ~550
     weight-10 calls, so at most 1,200 weight a minute however fast Binance answers. With a running bot's feed
     (~1,000 a minute, the v3 bot during staging) that stays under the IP's 2,400 a minute (429 / 418 ban)."""
     rows, t = [], start

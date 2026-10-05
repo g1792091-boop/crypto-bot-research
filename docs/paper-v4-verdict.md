@@ -141,7 +141,7 @@
 
   | 파일 | sha256 |
   |---|---|
-  | `paperbot/checkpoint.py` | `993d3573523ddce1419621dddf364f258fdccc81606436ea7b3e6e4ee924a375` |
+  | `paperbot/checkpoint.py` | `b0b636f66d73619dde046b623490a3dfd276fcc46871a01730aa035d06e2c2bd` |
 
 - **판정 코드를 고칠 때:**
   - 고친 코드는 새 문서에 새 해시와 고친 이유를 적은 뒤에만 씁니다.

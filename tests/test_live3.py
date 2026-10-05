@@ -448,7 +448,7 @@ def test_pool_terminate_still_kills_workers_forked_after_the_sigterm_handler():
 
 
 def test_bootstrap_fetch_is_paced_below_the_ip_weight_limit(monkeypatch):
-    """Ops review 5: the start downloads ~540 weight-10 pages of 5m klines from the same IP as a running bot's feed
+    """Ops review 5: the start downloads ~550 weight-10 pages of 5m klines from the same IP as a running bot's feed
     (~1,000 weight a minute). The default pause keeps the burst at <= 1,200 a minute even with instant answers."""
     import inspect
 

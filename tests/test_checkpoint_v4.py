@@ -492,3 +492,17 @@ def test_method_ko_is_built_from_the_code_never_typed():
     # the observe reasons say which timeframes a family judges (no "5분봉 ... 뺐음" of the v3 run)
     import inspect
     assert "뺐음" not in inspect.getsource(ck)
+
+
+def test_the_verdict_doc_pins_this_checkpoint_py():
+    """docs/paper-v4-verdict.md 7 records the sha256 of paperbot/checkpoint.py: every edit of the verdict code must
+    update that pin before the document's own .sha256 is written (jobs review 5)."""
+    import hashlib
+    import os
+    import re
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    doc = open(os.path.join(root, "docs", "paper-v4-verdict.md"), encoding="utf-8").read()
+    pinned = re.findall(r"`paperbot/checkpoint\.py` \| `([0-9a-f]{64})`", doc)
+    with open(os.path.join(root, "paperbot", "checkpoint.py"), "rb") as fh:
+        assert pinned == [hashlib.sha256(fh.read()).hexdigest()]
+

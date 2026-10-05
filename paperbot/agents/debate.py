@@ -71,6 +71,35 @@ PRICES = {"haiku": (1.0, 5.0), "sonnet": (2.0, 10.0), "opus": (4.0, 20.0)}
 UNKNOWN_PRICE = (5.0, 25.0)                # an unknown model: counted high on purpose
 CACHE_READ_MULT, CACHE_WRITE_5M_MULT, CACHE_WRITE_1H_MULT = 0.1, 1.25, 2.0
 CACHE_MIN_TOKENS = {"haiku": 4096}         # shorter prefixes are silently not cached (others: check the docs)
+CACHE_MIN_TOKENS_5 = 512                   # Claude 5.x models (Sonnet 5.5 among them): 512-token minimum
+# Claude 5.x models think by default when ``thinking`` is not sent (adaptive). Thinking tokens are billed as OUTPUT
+# tokens (``usage.output_tokens`` includes them, whatever ``display`` is) and count against ``max_tokens`` (thinking +
+# answer), so a thinking model gets a larger default ceiling: 900 would cut the JSON answer short.
+THINKING_MAX_TOKENS = 1500
+
+
+def model_thinks(model: str, thinking: str = "") -> bool:
+    """Will this request think (and bill thinking as output)? Claude 5.x (Sonnet 5 / 5.5, Opus 5 / 5.5, Fable) unless
+    ``thinking`` turns it off (``disabled`` / ``between_tools``); older models only with ``adaptive``."""
+    m = model.lower()
+    if thinking in ("disabled", "between_tools"):
+        return False
+    return thinking == "adaptive" or any(x in m for x in ("sonnet-5", "opus-5", "fable"))
+
+
+def model_options_error(model: str, thinking: str, effort: str) -> Optional[str]:
+    """Why this model refuses these settings (the API's 400, caught at start instead of a 400 every round), or None.
+    Sonnet 5.5 / Opus 5.5 / Fable: ``thinking: disabled`` is a 400 (Sonnet 5.5 turns thinking off with
+    ``between_tools``, which only Sonnet 5.5 accepts); Haiku 4.5: no ``effort`` and no adaptive thinking."""
+    m = model.lower()
+    if thinking == "disabled" and any(x in m for x in ("sonnet-5-5", "opus-5-5", "fable")):
+        return (f"DEBATE_THINKING=disabled: {model}은(는) 받지 않습니다(400). 생각을 끄려면 Sonnet 5.5에서는 "
+                "between_tools, 아니면 비워 두고 DEBATE_EFFORT=low")
+    if thinking == "between_tools" and "sonnet-5-5" not in m:
+        return f"DEBATE_THINKING=between_tools: Sonnet 5.5 전용입니다 ({model}은(는) 400)"
+    if "haiku" in m and (effort or thinking in ("adaptive", "between_tools")):
+        return f"{model}은(는) DEBATE_EFFORT / DEBATE_THINKING={thinking or '(비움)'}을(를) 받지 않습니다(400): 비워 두세요"
+    return None
 
 
 # ---------------------------------------------------------------- redaction, time, flags
@@ -205,17 +234,22 @@ def config_from_env(environ: Optional[dict] = None) -> Config:
     c.hourly_cap = _num(env, "DEBATE_HOURLY_USD_CAP", 0.0, 0.0, 10000)
     c.daily_cap = _num(env, "DEBATE_DAILY_USD_CAP", 0.0, 0.0, 10000)
     c.turns = _num(env, "DEBATE_TURNS", c.turns, 3, 5, int)
-    c.max_tokens = _num(env, "DEBATE_MAX_TOKENS", c.max_tokens, 300, 2000, int)
+    c.thinking = str(env.get("DEBATE_THINKING") or "").strip()
+    c.effort = str(env.get("DEBATE_EFFORT") or "").strip()
+    # a thinking model's ceiling holds its thinking too (THINKING_MAX_TOKENS); DEBATE_MAX_TOKENS still wins
+    c.max_tokens = _num(env, "DEBATE_MAX_TOKENS", THINKING_MAX_TOKENS if model_thinks(c.model, c.thinking)
+                        else c.max_tokens, 300, 2000, int)
     c.price_in = _num(env, "DEBATE_PRICE_IN", 0.0, 0.0, 1000)
     c.price_out = _num(env, "DEBATE_PRICE_OUT", 0.0, 0.0, 1000)
     c.min_new_trades = _num(env, "DEBATE_MIN_NEW_TRADES", c.min_new_trades, 0, 100000, int)
     c.est_out_tokens = _num(env, "DEBATE_EST_OUT_TOKENS", c.est_out_tokens, 100, 4000, int)
-    c.thinking = str(env.get("DEBATE_THINKING") or "").strip()
-    c.effort = str(env.get("DEBATE_EFFORT") or "").strip()
     if c.thinking not in ("", "disabled", "adaptive", "between_tools"):
         raise ValueError(f"DEBATE_THINKING={c.thinking!r}: 비우거나 disabled / adaptive / between_tools")
     if c.effort not in ("", "low", "medium", "high"):
         raise ValueError(f"DEBATE_EFFORT={c.effort!r}: 비우거나 low / medium / high")
+    bad = model_options_error(c.model, c.thinking, c.effort)
+    if bad:
+        raise ValueError(bad)
     for attr, name in (("paper_db", "DEBATE_PAPER_DB"), ("daily_db", "DEBATE_DAILY_DB"),
                        ("agents_db", "DEBATE_AGENTS_DB"), ("checkpoint_db", "DEBATE_CHECKPOINT_DB"),
                        ("debate_dir", "DEBATE_DIR")):
@@ -438,16 +472,20 @@ def call_api(cfg: Config, system_text: str, user_text: str, transport: Transport
             data = json.loads(raw)
         except ValueError:
             raise ApiError("server", "200인데 답이 JSON이 아님", 200) from None
-        text = "".join(b.get("text", "") for b in data.get("content", []) if isinstance(b, dict) and b.get("type") == "text")
+        blocks = [b for b in data.get("content", []) if isinstance(b, dict)]
+        text = "".join(b.get("text", "") for b in blocks if b.get("type") == "text")      # thinking blocks: not text
+        # thinking blocks (their text is empty by default): seen here, billed inside usage.output_tokens
+        thought = sum(1 for b in blocks if b.get("type") in ("thinking", "redacted_thinking"))
         return {"text": text, "usage": data.get("usage") or {}, "stop_reason": data.get("stop_reason"),
-                "request_id": hdrs.get("request-id")}
+                "request_id": hdrs.get("request-id"), "thinking_blocks": thought}
     assert last is not None
     raise last
 
 
 def cost_of(usage: dict, cfg: Config) -> float:
     """USD from the API's usage fields: input, output, cache reads (0.1x) and cache writes (1.25x for 5 minutes, 2x
-    for one hour: the split is read from ``usage.cache_creation`` when present)."""
+    for one hour: the split is read from ``usage.cache_creation`` when present). ``output_tokens`` is the billed
+    output, thinking included (a thinking model's thinking is in the cost and the cap)."""
     pin, pout = cfg.prices()
     g = lambda k: int(usage.get(k) or 0)          # noqa: E731
     cc = usage.get("cache_creation") if isinstance(usage.get("cache_creation"), dict) else None
@@ -584,7 +622,9 @@ class Service:
     def set_run_state(self, state: str, reason: str = "", now: Optional[int] = None) -> None:
         now = self.clock() if now is None else now
         self.db.put("run", {"state": state, "reason": reason[:200], "ts": now, "model": self.cfg.model,
-                            "every_min": self.cfg.every_min, "cap": self.cfg.monthly_cap}, commit=False)
+                            "every_min": self.cfg.every_min, "cap": self.cfg.monthly_cap, "effort": self.cfg.effort,
+                            "thinking": self.cfg.thinking or ("adaptive(기본)" if model_thinks(self.cfg.model) else ""),
+                            "max_tokens": self.cfg.max_tokens}, commit=False)
         self.db.put("heartbeat", now)
 
     # -- outage bookkeeping: one WARN per cause per hour, one INFO on recovery
@@ -762,7 +802,8 @@ class Service:
         self.db.put("last_round_ok", t, commit=False)
         self.db.put("last_usage", {"in": res["usage"].get("input_tokens"), "out": res["usage"].get("output_tokens"),
                                    "cache_read": res["usage"].get("cache_read_input_tokens"),
-                                   "cache_write": res["usage"].get("cache_creation_input_tokens")}, commit=False)
+                                   "cache_write": res["usage"].get("cache_creation_input_tokens"),
+                                   "thinking_blocks": res.get("thinking_blocks", 0)}, commit=False)
         self.recovered(t)
         self.set_run_state("running", "", t)
         if int(self.db.get("pruned_at", 0)) + 6 * HOUR_MS < t:
@@ -770,7 +811,8 @@ class Service:
             self.db.prune(t)
         self.db.conn.commit()
         self.grade(t)
-        self.log(f"debate: 회차 {n} 주제 '{built['topic_ko']}' 발언 {len(ans['turns'])}개, ${cost:.4f}")
+        self.log(f"debate: 회차 {n} 주제 '{built['topic_ko']}' 발언 {len(ans['turns'])}개, 출력 "
+                 f"{res['usage'].get('output_tokens')} 토큰(생각 블록 {res.get('thinking_blocks', 0)}개 포함), ${cost:.4f}")
         return "round"
 
     def finish_round(self, rid: int, status: str, error: Optional[str] = None, usage: Optional[dict] = None,
@@ -922,6 +964,7 @@ def summary(debate_db: Optional[str], now_ms: Optional[int] = None, rounds: int 
                        (now - DAY_MS,)).fetchone()[0]
         out.update(ready=True, state=state, state_ko=STATE_KO.get(state, state), reason=reason, heartbeat_ts=hb,
                    model=run.get("model"), every_min=every, last_round_ts=last_ok[0] if last_ok else None,
+                   effort=run.get("effort") or "", thinking=run.get("thinking") or "",
                    last_attempt=None if not last_any else {"ts": last_any[0], "status": last_any[1], "error": last_any[2]},
                    spend={"month_key": month_key, "month": round(month, 4), "day": round(day, 4), "cap": cap,
                           "pct": round(100 * month / cap, 1) if cap else None},
@@ -1014,8 +1057,19 @@ def dry_run(cfg: Config, now_ms: Optional[int] = None, show_packet: bool = False
     out(f"  → 평균 {usr_avg:,}, 가장 큰 것 {usr_max:,} 토큰 (자료 상한 {P.MAX_PACKET_TOKENS:,})")
     out(f"입력 토큰 추정(평균): {sys_tok:,} + {usr_avg:,} = {in_tok:,}   출력 토큰 추정: {out_tok:,} (상한 {cfg.max_tokens:,}; 발언 {cfg.turns}개 + 정리·가설·아이디어)")
     per = round_cost(in_tok, out_tok, price)
+    rounds = 30 * 24 * 60 / cfg.every_min
     out(f"설정 모델 {cfg.model}: 단가 입력 ${price[0]:g} / 출력 ${price[1]:g} (100만 토큰당) → 회당 약 ${per:.4f}, "
-        f"한 달({cfg.every_min}분 간격, 건너뛰기 없이) 약 ${per * 30 * 24 * 60 / cfg.every_min:.2f} (월 한도 ${cfg.monthly_cap:g})")
+        f"한 달({cfg.every_min}분 간격, 건너뛰기 없이) 약 ${per * rounds:.2f} (월 한도 ${cfg.monthly_cap:g})")
+    five = any(x in cfg.model.lower() for x in ("sonnet-5", "opus-5", "fable"))
+    if five and cfg.cache_ttl() and sys_tok >= CACHE_MIN_TOKENS_5:
+        cached = (sys_tok * price[0] * CACHE_READ_MULT + usr_avg * price[0] + out_tok * price[1]) / 1e6
+        out(f"  캐시가 잡히면(이 모델의 최소 {CACHE_MIN_TOKENS_5}토큰 넘음, {cfg.cache_ttl()} 캐시): 고정 앞부분은 0.1배 → 회당 "
+            f"약 ${cached:.4f}, 한 달 약 ${cached * rounds:.2f} (첫 회차와 캐시가 끊긴 뒤 한 번은 쓰기 2배)")
+    if model_thinks(cfg.model, cfg.thinking):
+        out(f"  생각(thinking): 이 모델은 생각을 하고 그 토큰은 출력으로 청구됩니다(usage.output_tokens에 들어 있고 비용·한도에 "
+            f"그대로 셈). 위 숫자는 생각을 뺀 값: 회당 생각이 평균 100토큰 늘 때마다 한 달 약 "
+            f"${100 * price[1] / 1e6 * rounds:.2f} 더. effort {cfg.effort or '기본(high)'}, 출력 상한 {cfg.max_tokens:,}"
+            "(생각+답 합계; 실제 생각 양은 첫 회차 뒤 status의 출력 토큰 평균에서 봄)")
     out("")
     out(format_table(cost_table(in_tok, out_tok)))
     out("")
@@ -1044,7 +1098,8 @@ def print_status(s: dict, out: Callable[[str], Any] = print) -> None:
         return
     sp = s["spend"]
     out(f"24시간 토론방: {s['state_ko']}" + (f" — {s['reason']}" if s.get("reason") else ""))
-    out(f"모델 {s.get('model')}, {s.get('every_min')}분 간격, 마지막 토론 "
+    out(f"모델 {s.get('model')}" + (f" (effort {s['effort']})" if s.get("effort") else "")
+        + (f" (생각 {s['thinking']})" if s.get("thinking") else "") + f", {s.get('every_min')}분 간격, 마지막 토론 "
         f"{'없음' if not s.get('last_round_ts') else _ago(_now_ms() - s['last_round_ts'])}")
     out(f"이번 달({sp['month_key']}) ${sp['month']:.2f} / 한도 ${sp['cap']:g}" + (f" ({sp['pct']}%)" if sp["pct"] is not None else "")
         + f", 오늘 ${sp['day']:.2f}, 하루 안에 건너뛴 회차 {s['skipped_24h']}번")

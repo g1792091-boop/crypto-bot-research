@@ -39,7 +39,7 @@ v3 실행은 30일 판정 없이 **보관**하고(지우지 않음), 새 실행�
 | 01:05~01:10 | 2단계 측정과 판단 (멈춤 기준) | 10분 |
 | 01:10~01:35 | **3. 스테이징 끄기 → 진짜 리셋** (리셋 시작은 01:32~01:35 또는 01:47~01:50) | 10~60분 |
 | 리셋 뒤 | **4. 시작 뒤 확인** (launchcheck, 시작 알림, 첫 5분봉·15분봉) | 40분 |
-| 4단계가 깨끗하면 | **5. 타이머 켜기** (그림자 시험·옵시디언·딥시크 밤 점검) | 2분 |
+| 4단계가 깨끗하면 | **5. 타이머 켜기** (그림자 시험·옵시디언·딥시크 밤 점검; 선택: 5-5 24시간 토론방) | 2분 (+토론방 10분) |
 | 문제가 보이면 | **6. 되돌리기** | — |
 
 - **안전한 분(分)**: 봇을 멈추거나 켜는 명령(2-4, 3-6)은 15분봉 경계(00·15·30·45분) **2~5분 뒤**에 붙여 넣습니다. 예: 23:32~23:35,
@@ -178,7 +178,10 @@ cd /var/lib/paperbot/staging/repo && sudo -u paperbot /opt/paperbot/venv/bin/pyt
 sudo systemctl stop paper4-staging
 ```
 
-보여야 할 것: 아무 출력 없음(최대 1분). 그다음 **2-6 상자를 그대로 한 번 더** 붙여 넣고, 2~5분 뒤 **2-8 상자를 다시** 돌립니다.
+보여야 할 것: 아무 출력 없음(최대 1분). 그다음 **2-6 상자를 그대로 한 번 더** 붙여 넣고, 2-7처럼 `sudo journalctl -u paper4-staging -f`로
+지켜봅니다. 다시 켤 때도 400일치 5분봉을 처음부터 다시 받느라 5~15분 걸리고, 그동안은 봇 생존 신호가 멈춰 있어 launchcheck가
+`[고칠 것] 봇 생존 신호가 …초 전입니다`를 냅니다(이때 돌리면 멈춤 기준 2로 잘못 읽힘). 재시작이라 `started`가 아니라
+`paper v4 resumed: 331 accounts …` 줄이 나옵니다. **그 줄이 나오고 5분 뒤** 2-8 상자를 다시 돌립니다.
 보여야 할 것: 2-8과 같은 `[OK]` 줄들, 계좌 줄에 `재시작 뒤 이어서 돌림`, `멈춘(동결된) 계좌 0개 (held = 0)`.
 
 2-10. **리셋 연습** (00:20쯤): 진짜 DB의 **복사본**에 리셋 스크립트를 끝까지 돌려 봅니다. 진짜 서비스는 멈추지도, 바꾸지도, 옮기지도
@@ -306,7 +309,9 @@ cd /root/crypto-bot-research && sudo bash deploy/paperbot-reset.sh --yes
   3개의 `자동 시작 …, 지금 …` 줄
 - `== 4.` 아래 `moved to /var/lib/paperbot/archive/run-…` (지우지 않고 옮김)
 - `== 5.` 아래 `방 n곳에 재시작 메모`
-- `== 6.` 아래 `started: …`, 그리고 `kept off (and not started at boot): …`(옵시디언·딥시크 밤 점검, `--agents-off`면 에이전트도)
+- `== 6.` 아래 먼저 `kept off (and not started at boot): paperbot-obsidian.timer`(옵시디언 내보내기; `--agents-off`면
+  `paperbot-agents.timer`도), 그다음 `started: …`. 딥시크 밤 재계산 타이머(`paperbot-dscheck.timer`)는 이번 3단계에서 처음 설치되어 이
+  줄에 없어도 정상입니다(켜지지 않은 채로 있고 5-1에서 켭니다). 옵시디언 타이머가 원래 꺼져 있었으면 `kept off` 줄 자체가 없습니다.
 - 요약: `에이전트 회의(paperbot-agents.timer): 켜짐` — `--agents-off`로 했으면 대신
   `!! 에이전트 꺼짐: 아침·순위·저녁·주간·급변 알림 없음 (paperbot-agents.timer 꺼짐, --agents-off).`
 - 요약 끝: `새 실행 시작 … KST, 원래 계좌 331개 (…; 매매법 … · 딥시크 171 · 릴스 5분 단타 1 · 동전 15)` 와 `첫 30일 판정 … KST`
@@ -365,7 +370,9 @@ PY
 sudo systemctl restart paperbot-live3
 ```
 
-보여야 할 것: 아무 출력 없음. 5분 뒤 **4-2를 다시** 돌립니다: 계좌 줄에 `재시작 뒤 이어서 돌림`, `held = 0`, `[고칠 것]` 없음.
+보여야 할 것: 아무 출력 없음. 그다음 `sudo journalctl -u paperbot-live3 -f`로 지켜봅니다. 400일치 5분봉을 다시 받느라 5~15분 걸리고,
+그동안 4-2를 돌리면 `[고칠 것] 봇 생존 신호가 …초 전입니다`가 나옵니다(아직 받는 중이라 정상). `paper v4 resumed: 331 accounts …` 줄이
+나오고 **5분 뒤 4-2를 다시** 돌립니다: 계좌 줄에 `재시작 뒤 이어서 돌림`, `held = 0`, `[고칠 것]` 없음.
 
 4-6. 그 밖에 알아 둘 것 (명령 없음):
 - 다음 날 09:20 밤 점검 보고: 시작한 날이라 재계산이 없습니다. 조용한(알림음 없는) 한 줄
@@ -397,7 +404,8 @@ systemctl list-timers 'paperbot-*' --no-pager
 보여야 할 것: `paperbot-shadow200.timer`(15분마다), `paperbot-dscheck.timer`(다음 09:30 KST = 00:30 UTC),
 `paperbot-obsidian.timer`(다음 09:50 KST = 00:50 UTC)가 `NEXT` 칸에 시각과 함께 보임.
 - 딥시크 밤 재계산은 매일 09:30에 전날(UTC) 딥시크 신호를 다시 계산해 기록과 비교합니다. 결과 한 줄: `cat /var/lib/paperbot/dscheck/last.txt`.
-  다르면 텔레그램 `⚠ [작업 실패] 딥시크 신호 밤 재계산 점검`이 옵니다(계좌·주문과 무관). 첫날 밤은 시세를 처음 받느라 몇 분 더 걸립니다.
+  다르면 텔레그램 `⚠ [작업 실패] 딥시크 신호 밤 재계산 점검`이 옵니다(계좌·주문과 무관). 첫날 밤은 600일치 5분봉을 처음 받느라 20분쯤
+  걸립니다(봇과 같은 IP의 바이낸스 한도를 지키려고 천천히 받음). 다음 날부터는 새 봉만 받습니다.
 
 5-3. (`--agents-off`로 리셋한 경우에만, 개발자가 "에이전트 v4 준비 끝"이라고 한 뒤) 에이전트 회의를 켭니다:
 
@@ -415,21 +423,81 @@ cd /opt/crypto-bot-research && sudo -u paperbot /opt/paperbot/venv/bin/python -m
 
 보여야 할 것: 새 시작 시각, 첫 30일 판정일(시작한 UTC 날짜 + 30일, 09:00 KST), 관찰 기간 끝(시작 + 21일).
 
+5-5. **24시간 토론방 켜기** (선택, 유료 API. 4-2와 4-5가 깨끗하고 5-1~5-2를 한 뒤. 설명 전체는 `docs/debate-room.md`)
+
+먼저 브라우저에서 (두 분, 한 번, 명령 없음): `console.anthropic.com` → Billing에서 크레딧 **$30** 구매, **자동 충전(auto reload) 끔**,
+지출 한도(spend limit) **$30** → API keys에서 새 키(이름 예: `paperbot-debate`)를 만들어 복사해 둡니다. **키는 채팅·메일·문서·명령줄에
+절대 붙이지 않습니다.** (Claude Max 구독과 API 크레딧은 별개입니다.)
+
+(a) 비용 미리 재기 (키도 API 호출도 없음, 돈 안 듦; 오늘 정한 설정으로 계산):
+
+```bash
+cd /opt/crypto-bot-research && sudo -u paperbot-debate env DEBATE_MODEL=claude-sonnet-5-5 DEBATE_EVERY_MIN=30 DEBATE_MONTHLY_USD_CAP=30 DEBATE_EFFORT=low /opt/paperbot/venv/bin/python -m paperbot.agents.debate once --dry-run
+```
+
+보여야 할 것: 입력 토큰 수와 회당·한 달 예상 비용 줄. `Traceback`이나 DB를 읽지 못한다는 줄이 나오면 켜지 말고 개발자에게.
+
+(b) 키와 설정 넣기 (편집기 안에서만):
+
+```bash
+SUDO_EDITOR=nano sudoedit /etc/paperbot/debate.env
+```
+
+편집기에서 이렇게 맞춥니다(`#`로 시작하는 줄은 `#`를 지웁니다). 키는 `ANTHROPIC_API_KEY=` 뒤에 **편집기 안에** 붙여 넣습니다.
+저장 Ctrl+O, Enter, 종료 Ctrl+X.
+
+```
+ANTHROPIC_API_KEY=(콘솔에서 복사한 키)
+DEBATE_MODEL=claude-sonnet-5-5
+DEBATE_EVERY_MIN=30
+DEBATE_MONTHLY_USD_CAP=30
+DEBATE_EFFORT=low
+```
+
+확인(키 내용은 안 보임):
+
+```bash
+sudo grep -c '^ANTHROPIC_API_KEY=.' /etc/paperbot/debate.env; sudo grep -E '^DEBATE_(MODEL|EVERY_MIN|MONTHLY_USD_CAP|EFFORT|THINKING)=' /etc/paperbot/debate.env
+```
+
+보여야 할 것: `1`, 그리고 `DEBATE_MODEL=claude-sonnet-5-5`, `DEBATE_EVERY_MIN=30`, `DEBATE_MONTHLY_USD_CAP=30`, `DEBATE_EFFORT=low` 네 줄
+(`DEBATE_THINKING=` 줄은 없어야 함). 코드의 월 한도는 $30의 95%에서 호출을 멈추고, 진짜 안전장치는 콘솔의 $30 지출 한도입니다.
+
+(c) 켜기와 확인:
+
+```bash
+sudo systemctl enable --now paperbot-debate
+```
+
+보여야 할 것: `Created symlink …` 한 줄. 1분쯤 뒤:
+
+```bash
+sudo -u paperbot-debate /opt/paperbot/venv/bin/python -m paperbot.agents.debate status
+```
+
+보여야 할 것: `모델 claude-sonnet-5-5, 30분 간격, 마지막 토론 …`과 `이번 달(…) $0.0… / 한도 $30` 줄, 오류 줄 없음. 첫 회차는 켜자마자
+돌고 그 뒤 30분마다입니다. 이상하면 `sudo systemctl disable --now paperbot-debate`로 끄고 개발자에게(기록은 남음).
+
 ## 6. 되돌리기 (rollback)
 
 - **스테이징 중 문제(2단계)**: 3-1로 스테이징만 끕니다. v3 봇은 처음부터 그대로 돌고 있습니다. 끝.
 - **리셋 스크립트가 중간에 실패하면** 화면 끝에 어디까지 했는지와 다음 명령이 나옵니다. 그대로 따릅니다.
   - 1~3단계(멈춤·백업·설치)에서 실패: 이전 실행(v3)은 그대로입니다. 화면의 `sudo systemctl start …`로 다시 켜고 개발자에게.
-    (설치까지 끝난 뒤라면 v3 봇이 v4 코드로 켜지려다 거절됩니다: 그때는 아래 "v3로 완전히 돌아가기"의 코드 부분만 하거나, 개발자와
-    원인을 고친 뒤 리셋을 다시 돌립니다.)
-  - 4단계 뒤(파일을 옮긴 뒤) 실패: 화면에 "새 실행으로 계속하기"와 "이전 실행으로 되돌리기"(`sudo mv …` 줄들)가 나옵니다. 개발자와 고릅니다.
+    (설치까지 끝난 뒤라면 그대로 켜면 v3 봇이 v4 코드로 켜지려다 거절됩니다. 그래서 화면에 코드를 이전 것으로 되돌리는
+    `sudo mv /opt/crypto-bot-research … && sudo mv /opt/crypto-bot-research.old /opt/crypto-bot-research` 줄이 먼저 나옵니다. 그것을 한
+    뒤에 켭니다. 또는 개발자와 원인을 고친 뒤 리셋을 다시 돌립니다.)
+  - 4단계 뒤(파일을 옮긴 뒤) 실패: 화면에 "새 실행으로 계속하기"와 "이전 실행으로 되돌리기"(`sudo mv …` 줄들, 코드를 이전 것으로
+    되돌리는 줄, 다시 켜는 줄)가 나옵니다. 개발자와 고릅니다.
 - **v4가 시작된 뒤 문제가 보이면**: 원칙은 고쳐서 앞으로 갑니다. 개발자가 고친 코드를 받은 뒤(1-3처럼 `git pull`) 같은 날 처음부터
   다시 시작합니다: `cd /root/crypto-bot-research && sudo bash deploy/paperbot-reset.sh --yes --force-again`
   (24시간 안의 두 번째 리셋은 `--force-again` 없이는 거절됩니다. 새 시작 시각이 새 0일이 됩니다.)
 - **v3로 완전히 돌아가기**(드묾, 반드시 개발자와 함께): v3 파일은 `/var/lib/paperbot/archive/run-<리셋 시각>/`에, v3 코드는
-  `/opt/crypto-bot-research.old`와 git 기록에 있습니다. 순서: 봇·대시보드·거래 알림·토론방을 멈춤 → v4 파일(`paper3.db*`, `daily3.db*`,
-  `checkpoint.db*`, `tradealerts.json`)을 다른 보관 폴더로 옮김 → 보관 폴더의 v3 파일을 `/var/lib/paperbot/`로 옮김 →
-  `agents3-before-reset.db`를 `agents3.db`로 복사(커서만 다름) → v3 커밋으로 `git checkout` 후 `sudo bash deploy/install.sh` → 다시 켬.
+  `/opt/crypto-bot-research.old`와 git 기록에 있습니다. 순서: 봇·대시보드·거래 알림·토론방·에이전트 타이머를 멈춤 → v4 파일을 다른
+  보관 폴더로 옮김: 리셋이 옮긴 것과 같은 목록(`paper3.db*`, `daily3.db*`, `checkpoint.db*`, `tradealerts.json`, `evening-latest.json`,
+  `checkpoint_bars/`, `rehearsal/`, `dscheck/`) → 보관 폴더의 v3 파일을 `/var/lib/paperbot/`로 옮김 → **지금의 `agents3.db`를 먼저 그
+  다른 보관 폴더에 복사** → `agents3-before-reset.db`를 `agents3.db`로 복사. 이 복사는 리셋 뒤에 에이전트가 쓴 메모·시험·회의 기록을
+  `agents3.db`에서 없앱니다("커서만 다름"은 리셋 직후에만 맞음). 그 기록은 앞에서 만든 사본에만 남으니, 개발자가 커서만 되돌리는 방법을
+  쓸 수 있으면 그쪽을 고릅니다 → v3 커밋으로 `git checkout` 후 `sudo bash deploy/install.sh` → 다시 켬.
   두 분은 v3를 이미 끝내기로 했으므로 마지막 수단입니다.
 
 ## 7. 무엇을 그대로 두고 무엇을 옮기나
