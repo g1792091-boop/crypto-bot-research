@@ -13,6 +13,8 @@ import {ruleBody, condBody, profileBody, researchBody, lossCard, tagRows} from "
 import {profileCard} from "./grid-kit.js";
 import {reelDuel} from "./reel-duel.js";
 import {vs5yCard} from "./vs5y-kit.js";
+import {exitsCard} from "./strategies-exits.js";
+import {priorPanel} from "./strategies-prior.js";
 
 const GROUP_PLATE = {core: "기존 36", ds: "딥시크 44", m5: "5분봉"};
 const DIMS = [{id: "coin", label: "코인"}, {id: "side", label: "방향"}, {id: "tf", label: "봉"}, {id: "session", label: "시간대"}];
@@ -80,13 +82,14 @@ export function detailView(ctx, st, name) {
   const splitSeg = ui.seg(DIMS, v.dim, (id) => { v.dim = id; local.set("strat-dim", id); renderSplit(true); }, {label: "나눠 볼 기준"});
   const splitEl = h("div", {class: "stack tight"}, motion.shimmer(3));
   const splitCard = ui.card({plate: "이긴 거래 · 진 거래", cls: "strat-o5"}, splitSeg, splitEl);
+  const exits = exitsCard(ctx, {kind});   // 어떻게 끝났나: exit reason / leverage / time windows + the 5-year reference
 
   const sigEl = h("div", {class: "stack tight"}, motion.shimmer(3));
   const sigPg = ui.pager({size: 8, empty: "이 봉에서 최근 신호가 없습니다", row: sigRow});
   const sigCard = ui.card({plate: "신호 기록", cls: "strat-o6"}, sigEl, sigPg.el);
 
   const profEl = h("div", {class: "stack tight"});
-  const profCard = ui.card({plate: "5년 성적", sub: "과거 시험, 같은 규칙", cls: "strat-o7"}, profEl);
+  const profCard = ui.card({plate: "5년 성적", sub: kind === "strategy" ? "과거 시험 · v3 크기 규칙 (모든 신호 50배부터)" : "과거 연구 · 레버리지 없이 가격 %", cls: "strat-o7"}, profEl);
   paramsCard(ctx, name, kind, {after: profCard, scope: sc});      // 숫자(파라미터) 시험 결과, placed after the 5-year card
 
   const lossSeg = ui.seg([{id: "cards", label: "손실 카드"}, {id: "tags", label: "손실 패턴"}], v.side, (id) => { v.side = id; local.set("strat-side", id); loadLoss(); });
@@ -103,7 +106,7 @@ export function detailView(ctx, st, name) {
   const left = h("div", {class: "strat-col"}, chartCard, condCard, sigCard);
   // wave 2 ⑨: 5년 시험 vs 지금 vs 동전 봇, per timeframe (vs5y-kit.js), next to the 5-year card
   const vs = vs5yCard(ctx, name, kind, {tf: v.tf, verdictTs: () => verdictTs()});
-  const right = h("div", {class: "strat-col"}, ruleCard, acctCard, splitCard, vs.el, profCard, lossCardEl);
+  const right = h("div", {class: "strat-col"}, ruleCard, acctCard, splitCard, vs.el, exits.el, profCard, lossCardEl);
   const el = h("div", {class: "strat-detail stack"}, head, top, h("div", {class: "strat-grid"}, left, right));
 
   // ---------------------------------------------------------------- renderers
@@ -208,6 +211,7 @@ export function detailView(ctx, st, name) {
     if (!sc.alive()) return;
     for (const [tf, tr] of got) if (tr) v.trades[tf] = tr;
     renderSplit(false);
+    exits.trades(v.trades);
     if (v.bars.length) drawChart();
   }
   async function loadSignals() {
@@ -229,6 +233,8 @@ export function detailView(ctx, st, name) {
     if (!sc.alive()) return;
     // DeepSeek and the reel: their 5-year research card (paperbot/ds_profiles.py), research exits labelled as such
     put(profEl, ...(kind === "strategy" ? profileBody(v.profile, v.tf) : researchBody(v.profile, v.tf)));
+    profEl.append(priorPanel(v.profile, kind));   // 이미 해 본 시험 (strategies-prior.js)
+    exits.profile(v.profile);
     renderAccounts();
   }
   async function loadLoss() {
