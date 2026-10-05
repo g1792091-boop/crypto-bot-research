@@ -12,7 +12,8 @@ import {h, put, ui, fmt, motion} from "../core/pb.js";
 const WORD = {similar: ["비슷", "thin"], differs: ["다름", ""], fewer: ["적음", "thin"], small: ["표본 적음", "thin"]};
 const ROWS = [
   {k: "per_day", ko: "하루 거래", fmt: (v) => fmt.num(v, v != null && v < 10 ? 2 : 1)},
-  {k: "roe", ko: "거래당 ROE", fmt: (v) => (v == null ? "—" : fmt.pct(v, 2))},
+  // fewer decimals for big ROE (a liquidation is −100%): "−100.00%" does not fit a 390 px column
+  {k: "roe", ko: "거래당 ROE", fmt: (v) => (v == null ? "—" : fmt.pct(v, Math.abs(v) >= 0.995 ? 0 : Math.abs(v) >= 0.1 ? 1 : 2))},
   {k: "win", ko: "이긴 비율", fmt: (v) => (v == null ? "—" : fmt.pct(v, 0, false))},
   {k: "hold_h", ko: "보유 (중간)", fmt: (v) => (v == null ? "—" : `${fmt.num(v, v < 10 ? 1 : 0)}시간`)},
   {k: "lock", ko: "잠금 청산", fmt: (v) => (v == null ? "—" : fmt.pct(v, 0, false))},
