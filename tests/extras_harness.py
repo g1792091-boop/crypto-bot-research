@@ -398,6 +398,25 @@ def originals(lib=None) -> list[str]:
                                                                       TRADE_TFS)]
 
 
+def v3_service(**kw) -> sigservice.SignalService:
+    """The pre-2026-10-04 service with 5m among the core timeframes, as the golden file was written. Paper v4's
+    SignalService refuses 5m in its core timeframes (the 36 never run on 5m live: plan risk 2), so the harness
+    builds it without 5m and adds 5m back exactly as the v3 constructor did (windows, mark windows, kept history)."""
+    from collections import deque
+    svc = sigservice.SignalService(V3_SYMBOLS, ("XRPUSDT",), RANDOM_RATES,
+                                   trade_tfs=tuple(tf for tf in TRADE_TFS if tf != "5m"), **kw)
+    if "5m" in TRADE_TFS:
+        svc.trade_tfs = tuple(TRADE_TFS)
+        tfs = svc.trade_tfs + svc.record_tfs
+        svc.windows = {tf: sigservice.window_5m(svc.lib, tf) for tf in tfs}
+        svc.mark_windows = {tf: sigservice._marks_window(svc.lib, tf) for tf in tfs}
+        keep = max([svc.keep] + list(svc.windows.values()))
+        if keep != svc.keep:
+            svc.keep = keep
+            svc.hist = {s: deque(maxlen=keep) for s in svc.symbols}
+    return svc
+
+
 class Session:
     """One process lifetime of the live runner on ``db`` (as live3.cmd_run builds it, without the network)."""
 
@@ -418,8 +437,7 @@ class Session:
         self.digest.add = _add
         brackets = {s: Brackets.example() for s in V3_SYMBOLS}
         self.book = AccountBook(self.settings, brackets, self.store, self.notifier, SPECS, digest=self.digest)
-        self.service = sigservice.SignalService(V3_SYMBOLS, ("XRPUSDT",), RANDOM_RATES, trade_tfs=TRADE_TFS,
-                                                procs=REAL["procs"] if REAL["on"] else 1, lib=self.lib)
+        self.service = v3_service(procs=REAL["procs"] if REAL["on"] else 1, lib=self.lib)
         orig = self.service.compute
 
         def compute(boundary, tf, now_ms, book, _orig=orig):
