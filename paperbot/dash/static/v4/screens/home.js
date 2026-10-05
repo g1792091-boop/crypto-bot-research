@@ -16,6 +16,7 @@ import {rowMotion} from "./board-motion.js";
 import {reelDuel} from "./reel-duel.js";
 import {costLine} from "./analysis-costs.js";
 import {meetBoard} from "./meetboard-kit.js";
+import {pixelRoad} from "./road-kit.js";
 
 export async function mount(el, ctx) {
   ctx.setTitle("홈");
@@ -28,7 +29,8 @@ export async function mount(el, ctx) {
 
   // ---------------------------------------------------------------- 1. headline card
   const dcount = h("span", {class: "home-dcount"}, h("b", null, "D+—"), " / 30");
-  const prog = h("div", {class: "prog", role: "progressbar", "aria-label": "30일 중 지난 날", "aria-valuemin": "0", "aria-valuemax": "30"}, h("i"));
+  // the 30-day road (road-kit.js, wave 3) in place of the progress bar: one pixel cell per day, the owners on today
+  const road = pixelRoad(ctx);
   const hsub = h("p", {class: "home-hsub"});
   // the group race (/api/v4/flow/race: each group's median balance, the coin flips' middle 50 % as a band); its legend
   // is the order now = the lines' right ends, so the numbers always match the curve. Until two real points: the
@@ -45,7 +47,7 @@ export async function mount(el, ctx) {
   const ckLine = h("div", {class: "home-ckline"});           // the checkpoint in one line (progress, never a verdict)
   const refBox = h("div");
   const hero = ui.card({hero: true, cls: "home-hero home-o1", label: "30일 실험 요약"},
-    h("div", {class: "home-hrow"}, ui.plate("30일 실험"), dcount), prog,
+    h("div", {class: "home-hrow"}, ui.plate("30일 실험"), dcount), road,
     h("h2", null, "동전 봇보다 나은 ", h("em", null, "매매법"), "이 있나?"), hsub, raceBox,
     ui.note("선 = 묶음 계좌 평가금(열린 포지션 포함)의 중앙값 · 회색 띠 = 동전 봇 가운데 50%"), wl, wlNote, ckLine, refBox, ui.assume());
   hero.dataset.tour = "headline";                       // the first-visit tour points here (core/tour.js)
@@ -108,8 +110,6 @@ export async function mount(el, ctx) {
     const x = expInfo(s);
     if (x) {
       put(dcount, h("b", null, `D+${x.day}`), ` / ${x.of}`);
-      prog.firstChild.style.setProperty("--p", Math.max(0, Math.min(100, x.day / x.of * 100)) + "%");
-      prog.setAttribute("aria-valuemax", String(x.of)); prog.setAttribute("aria-valuenow", String(x.day));
       const n = gs ? gs.total.n : null;
       const xn = gs && gs.groups.extra ? gs.groups.extra.n : 0;
       hsub.textContent = `${x.k > 1 ? `${x.k}번째` : "첫"} 판정 ${fmt.date(x.verdictTs)} 09:00 · ${fmt.int(x.left)}일 남음`

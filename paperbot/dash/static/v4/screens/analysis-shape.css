@@ -1,0 +1,42 @@
+/* 분석 wave 3 (screens/analysis-shape.js): the weekday x hour heat and the result distribution. Tokens only. */
+.ash-body { display: grid; gap: 10px; min-width: 0; }
+.ash-scroll { min-width: 0; overflow-x: auto; }
+.ash-grid { display: grid; gap: 2px; min-width: 300px; }
+.ash-row { display: grid; grid-template-columns: 18px repeat(24, minmax(0, 1fr)); gap: 2px; align-items: center; }
+.ash-k { font-size: var(--t-xs); color: var(--muted); text-align: center; }
+.ash-hr { font-size: 10px; color: var(--muted); text-align: left; white-space: nowrap; overflow: visible; font-variant-numeric: tabular-nums; }
+.ash-c { appearance: none; position: relative; padding: 0; margin: 0; aspect-ratio: 1; min-height: 10px; border-radius: 2px;
+  border: 1px solid var(--line); background: var(--surface-2); cursor: pointer; overflow: hidden; }
+.ash-c::before { content: ""; position: absolute; inset: 0; opacity: calc(.12 + .78 * var(--a, 0)); }
+.ash-c.none::before { opacity: 0; }
+.ash-c.up::before { background: var(--up); }
+.ash-c.down::before { background: var(--down); }
+.ash-c.acc::before { background: var(--accent); }
+.ash-c.few { border-style: dashed; }
+.ash-c.few::before { opacity: calc(.06 + .25 * var(--a, 0)); }
+.ash-c.sel, .ash-c:focus-visible { outline: 2px solid var(--ink); outline-offset: 0; z-index: 1; }
+.ash-detail { margin: 0; min-height: 1.4em; font-size: var(--t-sm); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+
+.ash-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: var(--t-xs); color: var(--ink-2); }
+.ash-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.ash-legend .sw { display: inline-block; width: 12px; height: 10px; border-radius: 2px; }
+.ash-legend .sw.loss { background: var(--down); opacity: .7; width: 8px; border-radius: 2px 0 0 2px; }
+.ash-legend .sw.gain { background: var(--up); opacity: .7; width: 8px; border-radius: 0 2px 2px 0; margin-left: -4px; }
+.ash-legend .sw.flip { border: 2px solid var(--cmp-hi); background: transparent; }
+.ash-plot { position: relative; padding-bottom: 18px; min-width: 0; }
+.ash-bars { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 3px; height: 150px; align-items: end;
+  border-bottom: 1px solid var(--line-2); }
+.ash-bin { appearance: none; position: relative; height: 100%; padding: 0; margin: 0; border: 0; background: transparent; cursor: pointer; }
+.ash-bin .ash-fill { position: absolute; left: 12%; right: 12%; bottom: 0; height: var(--h, 0%); border-radius: 2px 2px 0 0; background: var(--series-core); opacity: .85;
+  transform-origin: bottom; animation: ash-grow .5s ease-out both; }
+.ash-bin.loss .ash-fill { background: var(--down); opacity: .7; }
+.ash-bin.gain .ash-fill { background: var(--up); opacity: .7; }
+.ash-bin .ash-flip { position: absolute; left: 0; right: 0; bottom: 0; height: var(--h, 0%); border: 2px solid var(--cmp-hi); border-bottom: 0; border-radius: 2px 2px 0 0; }
+.ash-bin.sel .ash-fill, .ash-bin:focus-visible .ash-fill { opacity: 1; }
+.ash-bin:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
+.ash-axis { position: absolute; left: 0; right: 0; bottom: 0; height: 16px; }
+.ash-axis span { position: absolute; left: var(--x); transform: translateX(-50%); font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ash-unit { margin: 0; font-size: var(--t-xs); color: var(--muted); }
+@keyframes ash-grow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@media (prefers-reduced-motion: reduce) { .ash-bin .ash-fill { animation: none; } }
+@media (max-width: 420px) { .ash-axis span:nth-child(even) { display: none; } }

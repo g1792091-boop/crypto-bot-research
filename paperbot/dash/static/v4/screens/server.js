@@ -6,6 +6,7 @@ import {h, ui, fmt, features} from "../core/pb.js";
 import {summaryCard, tilesCard} from "./server-health.js";
 import {gaugeBoard} from "./server-gauges.js";
 import {jobsCard, factsCard} from "./server-jobs.js";
+import {uptimeCard} from "./server-uptime.js";
 
 export async function mount(el, ctx) {
   ctx.setTitle("서버·비용");
@@ -23,6 +24,7 @@ export async function mount(el, ctx) {
   el.append(head, sum,
     // phone: tiles, gauges, jobs, facts; wide PC: the gauges in their own column (server.css grid areas)
     h("div", {class: "server-cols"}, tiles, ui.card({cls: "server-gcard", label: "서버·비용 계기판"}, gauges), jobs, facts),
+    uptimeCard(ctx),            // wave 3: 7 / 30 days x 24 hours of stepped minutes, restarts, night checks
     out);
 
   const st = {health: null, healthErr: null, status: null, board: null};
