@@ -67,7 +67,7 @@ def test_detail_wires_the_two_new_modules_additively():
     assert 'import {exitsCard} from "./strategies-exits.js";' in det
     assert 'import {priorPanel} from "./strategies-prior.js";' in det
     assert "const exits = exitsCard(ctx, {kind});" in det
-    assert re.search(r"splitCard, exits\.el, profCard", det)
+    assert re.search(r"splitCard, (vs\.el, )?exits\.el, profCard", det)   # wave 2 ⑨ sits before it after the merge
     assert "exits.trades(v.trades);" in det and "exits.profile(v.profile);" in det
     assert "profEl.append(priorPanel(v.profile, kind));" in det
     for f in NEW:
