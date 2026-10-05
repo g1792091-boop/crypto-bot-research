@@ -195,3 +195,24 @@ def test_panel_module_is_present_imported_and_honest():
     assert '@import url("strategies-params.css");' in _read(os.path.join(SCREENS, "strategies.css"))
     assert not re.search(r"#[0-9a-fA-F]{3,8}\b", re.sub(r"/\*.*?\*/", "", css, flags=re.S))
     assert "/api/v4/params" in _read(os.path.join(ROOT, "paperbot", "dash", "static", "v4", "INVENTORY.md"))
+
+
+def test_texts_match_the_sources(monkeypatch, tmp_path):
+    """Review fixes: every parameter of the study has a plain name; 뾰족 is about the CURRENT number (the study's
+    definition: the default better than both neighbours), not any lone point; the lab line says a pass is only a
+    proposal that needs both owners' OK (docs/newlab-prereg.md 6장); a positive variant is labelled as a x-variant, not
+    "기본의 n배" (a level variant moves the distance from a neutral line); the reel never claims an H1 result or "no
+    combination" without its summary file."""
+    names = {r["param"] for s in _prior()["strategies"].values() for r in s["parameters"]["params"]}
+    assert not sorted(n for n in names if n not in P.PARAM_KO)
+    assert "지금 숫자" in P.SHAPE_NOTE_KO["sharp"] and "지금 숫자" in P.answer("V39_ALL")["core"]["meaning_ko"]
+    assert "두 분이 OK" in P.LAB_KO and "제안" in P.LAB_KO
+    js = _read(os.path.join(SCREENS, "strategies-params.js"))
+    assert "기본의 ${" not in js and " 변형)`" in js
+    monkeypatch.setattr(P, "REEL_SUMMARY", str(tmp_path / "gone.json"))
+    P._CACHE.pop("reel", None)
+    try:
+        r = P.answer("REEL_H1")["reel"]
+        assert r["h1_pass"] is None and r["configs"] is None and r["meaning_ko"] is None
+    finally:
+        P._CACHE.pop("reel", None)

@@ -72,7 +72,7 @@ function coreBody(d) {
     rows: g.rows.map((r) => ({
       name: r.param_ko || r.param, code: r.param_ko ? r.param : null, mid: shapeTag(r.shape, r.shape_ko),
       end: `${fmt.int(r.positive_all3)} / ${fmt.int(r.variants)}`, hit: r.positive_all3 > 0,
-      sub: r.positive_all3 ? `세 기간 플러스였던 값: ${r.positive_values.map((x) => `${x.value}${x.mult != null ? ` (기본의 ${fmt.num(x.mult, Number.isInteger(x.mult * 10) ? 1 : 2)}배)` : ""}`).join(", ")}` : null,
+      sub: r.positive_all3 ? `세 기간 플러스였던 값: ${r.positive_values.map((x) => `${x.value}${x.mult != null ? ` (×${fmt.num(x.mult, Number.isInteger(x.mult * 10) ? 1 : 2)} 변형)` : ""}`).join(", ")}` : null,
     })),
   }));
   const anyHit = (c.rows || []).some((r) => r.positive_all3);
@@ -117,7 +117,7 @@ function reelBody(d) {
     h("div", {class: "strat-pm-stats"},
       stat("설정 시험", r.configs == null ? "—" : `${fmt.int(r.configs)}개`, "선택을 바꾼 조합"),
       stat("세 기간 모두 플러스", r.all3_positive == null ? "—" : `${fmt.int(r.all3_positive)}개`, `통과 ${r.candidates == null ? "—" : fmt.int(r.candidates)}개`),
-      stat("지금 계좌 (H1)", r.h1_pass ? "통과" : "불통과", "사전 등록 시험")),
+      stat("지금 설정 (H1) 5년 시험", r.h1_pass == null ? "—" : r.h1_pass ? "통과" : "불통과", "사전 등록 시험 · 30일 판정 아님")),
     why(d, r.meaning_ko),
     h("p", {class: "note"}, r.how_ko),
     rowList(heads, vgroups),

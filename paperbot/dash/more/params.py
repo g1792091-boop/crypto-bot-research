@@ -49,9 +49,9 @@ SHAPE_KEY = {"평평": "flat", "완만": "smooth", "뾰족": "sharp", "표본 �
              "insufficient": "thin", "thin": "thin"}
 SHAPE_KO = {"flat": "평평", "smooth": "완만", "sharp": "뾰족", "thin": "표본 부족"}
 SHAPE_NOTE_KO = {
-    "flat": "숫자를 바꿔도 결과가 거의 같음",
-    "smooth": "숫자를 바꾸면 조금 움직이지만 한 숫자만 튀지는 않음",
-    "sharp": "특정 숫자에서만 좋음 = 위험 신호 (운일 가능성)",
+    "flat": "숫자를 바꿔도 결과가 거의 같음 (손실이면 바꿔도 비슷하게 손실)",
+    "smooth": "숫자를 바꾸면 결과가 좀 움직이지만 지금 숫자만 튀지는 않음",
+    "sharp": "지금 숫자만 양옆 숫자보다 좋음 = 위험 신호 (운일 가능성)",
     "thin": "거래가 적어서 모양을 매기지 않음",
 }
 SHAPE_ORDER = ("flat", "smooth", "sharp", "thin")
@@ -88,6 +88,9 @@ PARAM_KO = {
     "big_body": "큰 몸통 기준", "small_body": "작은 몸통 기준", "body_min": "최소 몸통", "engulf_min": "장악형 최소 크기",
     "wick_tol": "꼬리 허용 폭", "gap_tol": "갭 허용 폭", "touch_atr": "닿음 판정 폭 (ATR)", "slope_thr": "기울기 기준",
     "stc_level": "STC 기준선",
+    "spread_min": "EMA 간격 최소 %", "pierce_frac": "POC 관통 비율", "ac_len": "AC 다듬기 길이",
+    "ext_cap": "돌파 뒤 최대 거리 (ATR 배수)", "map_scale": "RSI 겹침 배율", "match_tol": "저점 맞춤 허용 폭 (ATR)",
+    "sync": "신호 맞춤 봉 수",
 }
 
 REEL_DIM_KO = {"ma": "이평 종류", "breach": "이탈 기준", "sides": "방향", "tf": "봉"}
@@ -96,9 +99,13 @@ REEL_VARIANT_KO = {"SMA200": "SMA 200 (단순 이평)", "EMA200": "EMA 200 (지�
 DS_EXIT_KO = {"X5_TRAIL2": "2 ATR 손절 + 추적 손절", "X2_SL15_TP3": "1.5 ATR 손절 · 3 ATR 익절"}
 
 TRAP_KO = ("지난 5년에서 가장 좋았던 숫자를 골라 쓰는 것은 함정입니다. 숫자를 많이 바꿔 볼수록 운으로 좋아 보이는 숫자가 "
-           "반드시 나오고, 그 숫자가 앞으로도 좋다는 보장은 없습니다.")
-LAB_KO = ("새 숫자는 AI 연구실(새 매매법 실험실)이 세 기간 시험으로 따로 시험하고, 통과한 것만 새 모의 계좌로 따로 "
-          "돌립니다. 지금 돌고 있는 계좌의 숫자는 바꾸지 않습니다 (규칙이 바뀌면 새 계좌).")
+           "반드시 나오고, 그 숫자가 앞으로도 좋다는 보장은 없습니다. 같은 5년 자료로 숫자를 다시 바꿔 봐도 새 정보가 "
+           "아닙니다 (이미 본 자료).")
+# docs/newlab-prereg.md 2장·6장, docs/extra-accounts.md: the lab builds NEW strategies in its own grammar (30 entry
+# triggers, numbers from fixed choices); a pass only makes a proposal, and both owners' OK starts the account
+LAB_KO = ("새 아이디어는 AI 연구실(새 매매법 실험실)이 정해진 틀(진입 신호 30종, 숫자는 정해진 몇 가지 중 선택)로 "
+          "새 매매법을 만들어 세 기간 시험으로 따로 시험하고, 통과하면 새 모의 계좌를 제안합니다. 두 분이 OK해야 따로 "
+          "돌기 시작합니다. 지금 돌고 있는 계좌의 숫자는 바꾸지 않습니다 (규칙이 바뀌면 새 계좌).")
 PERIODS_KO = ("세 기간 = 1기 2021-08 ~ 2024-06 (고르기), 2기 2024-07 ~ 2026-09 (확인), 3기 2020-01 ~ 2021-07 (최종). "
               "세 기간 모두 플러스여야 '우연이 아닐 수도' 있는 후보입니다.")
 
@@ -172,7 +179,7 @@ def _core_doc() -> Optional[dict]:
 def _core_study(doc: dict) -> dict:
     """The whole study over the 36 (counted from the file, never typed in)."""
     shapes = {k: 0 for k in SHAPE_ORDER}
-    params = variants = pos = 0
+    params = variants = pos = adopted = 0
     names = 0
     for s in (doc.get("strategies") or {}).values():
         p = (s or {}).get("parameters") or {}
@@ -180,11 +187,13 @@ def _core_study(doc: dict) -> dict:
             continue
         names += 1
         variants += _int(p.get("variants"))
+        adopted += _int(p.get("adopted"))
         for r in p.get("params") or []:
             params += 1
             shapes[_shape(r)] += 1
             pos += len(r.get("positive_all3") or [])
-    return {"strategies": names, "params": params, "variants": variants, "positive_all3": pos, "shapes": shapes,
+    return {"strategies": names, "params": params, "variants": variants, "positive_all3": pos, "adopted": adopted,
+            "shapes": shapes,
             "total_tests": (doc.get("totals") or {}).get("parameters")}
 
 
@@ -214,11 +223,14 @@ def _core(strategy: str, doc: dict) -> dict:
         "conclusion_ko": doc.get("conclusion_ko"),
         "summary_ko": (f"이 매매법: 숫자 변형 {_int(p.get('variants')):,}개 시험 → 세 기간 모두 플러스 {pos}개, "
                        f"채택 {_int(p.get('adopted'))}개."),
-        "meaning_ko": (f"돈을 버는 '마법의 숫자'는 찾지 못했습니다. 36개 매매법 전체로 변형 {study['variants']:,}개 중 세 기간 "
-                       f"모두 플러스는 {study['positive_all3']}개였고, 이 수는 '숫자는 결과와 상관없다'고 가정해도 우연히 "
-                       f"나오는 만큼입니다. 특정 숫자에서만 좋은 뾰족한 곳은 {study['shapes']['sharp']}개였습니다."),
-        "positive_note_ko": ("36개 전체로 보면 세 기간 모두 플러스였던 변형은 대부분 이웃 숫자가 플러스가 아닌 외딴 점이었고, "
-                             "그 수도 우연 수준이라 사전 등록 규칙대로 어느 변형도 채택하지 않았습니다."),
+        "meaning_ko": ((f"돈을 버는 '마법의 숫자'는 찾지 못했습니다 (채택 {study['adopted']}개). " if not study["adopted"]
+                        else f"36개 전체로 채택된 변형 {study['adopted']}개. ")
+                       + f"36개 매매법 전체로 변형 {study['variants']:,}개 중 세 기간 모두 플러스는 "
+                       f"{study['positive_all3']}개였고, 이 수는 '숫자는 결과와 상관없다'고 가정해도 우연히 나오는 만큼입니다. "
+                       f"지금 숫자만 우연히 좋은 '뾰족' 모양은 {study['shapes']['sharp']}개였습니다."),
+        "positive_note_ko": ("36개 전체로 보면 세 기간 모두 플러스였던 변형은 대부분 거래가 적은 칸에서 나왔고, 대부분 이웃 "
+                             "숫자가 플러스가 아닌 외딴 점이었습니다. 그 수도 우연 수준이라 사전 등록 규칙대로 어느 변형도 "
+                             "채택하지 않았습니다."),
         "source": "paperbot/agents/research_prior.json (research/entry_study, RESULTS_ENTRY_BC.md C)",
     }
 
@@ -270,9 +282,11 @@ def _reel(doc: dict) -> dict:
                    f"바꿔 설정 {configs if configs is not None else '—'}개를 시험했습니다. 한 줄 = 그 선택이 들어간 설정들."),
         "summary_ko": (f"설정 {configs}개 시험 → 세 기간 모두 플러스 {g.get('all3_positive')}개, 통과 {g.get('candidates')}개."
                        if configs is not None else None),
-        "meaning_ko": ("어느 선택도 돈을 버는 조합이 아니었습니다. 지금 계좌는 SMA 200 · 종가 이탈 · 롱만 · 5분봉(H1)이고, "
-                       "사전 등록 시험을 통과하지 못했습니다." if not g.get("h1_pass") else
-                       "지금 계좌의 선택(H1)은 사전 등록 시험을 통과했습니다. 그래도 과거 결과입니다."),
+        "meaning_ko": (" ".join(x for x in (
+            "어느 조합도 시험을 통과하지 못했습니다 (돈을 버는 조합 없음)." if g.get("candidates") == 0 else None,
+            {False: "지금 계좌의 설정(SMA 200 · 종가 이탈 · 롱만 · 5분봉, H1)도 사전 등록 시험을 통과하지 못했습니다.",
+             True: "지금 계좌의 설정(H1)은 사전 등록 시험을 통과했습니다. 그래도 과거 결과입니다."}.get(g.get("h1_pass")),
+        ) if x) or None),
         "unit_ko": "거래당 % = 진입가 대비 가격 %, 레버리지 없음, 수수료·슬리피지·펀딩 뺀 뒤 (그 선택이 들어간 설정들의 평균).",
         "source": "research/reel5m/out/per_variant.csv, per_tf.csv, summary.json",
     }
