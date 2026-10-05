@@ -50,7 +50,7 @@ export function uptimeCard(ctx) {
     const rows = d.rows.slice().reverse().map((r) => {
       const di = d.rows.indexOf(r);
       const night = nights.get(r.day);
-      const ntxt = night ? `${r.day} 밤 점검: ${night.accounts != null ? `${fmt.int(night.accounts - (night.mismatched || 0))}/${fmt.int(night.accounts)} 일치` : "기록 있음"}` : `${r.day} 밤 점검 기록 없음`;
+      const ntxt = night ? `${r.day} 밤 점검: ${night.accounts != null ? `${fmt.int(night.ok != null ? night.ok : night.accounts - (night.mismatched || 0))}/${fmt.int(night.accounts)} 일치` : "기록 있음"}` : `${r.day} 밤 점검 기록 없음`;
       return h("div", {class: "up-row", role: "row"}, h("span", {class: "up-k", role: "rowheader"}, dayLabel(r.ts)),
         r.h.map((c, hr) => {
           const rs = rsHours.has(di * 24 + hr);

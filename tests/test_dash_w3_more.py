@@ -128,7 +128,8 @@ def test_uptime_counts_minutes_stops_restarts_and_night_checks(tmp_path):
     assert d["missing_min"] == 10 and d["stops_min"] == 10
     assert d["expected_min"] - d["stepped_min"] == 10 and 0.99 < d["share"] < 1
     assert [r["ts"] for r in d["restarts"]] == [stop0 + 10 * MIN]
-    assert d["nightly"] == [{"day": "2026-10-05", "ts": START + DAY - 9 * H + 30 * MIN, "accounts": 6, "mismatched": 1}]
+    assert d["nightly"] == [{"day": "2026-10-05", "ts": START + DAY - 9 * H + 30 * MIN, "accounts": 6, "mismatched": 1,
+                             "ok": 5}]
     rows = {r["day"]: r["h"] for r in d["rows"]}
     assert rows["2026-10-05"][9] is None                               # before the run: nothing expected
     assert rows["2026-10-05"][10] == [60, 60]
@@ -155,6 +156,25 @@ def test_uptime_without_gaps_and_before_any_account(tmp_path):
     st.conn.close()
     with _ro(str(tmp_path / "e.db")) as c:
         assert U.uptime(c, None, 7, NOW)["ready"] is False
+
+
+def test_night_check_ok_count_matches_the_telegram_daily_check(tmp_path):
+    # daily3's Telegram line: 일치 = accounts - mismatched - crash gaps - early klines (those were not shown to match)
+    from paperbot import daily3
+    ddb = str(tmp_path / "daily3.db")
+    d = sqlite3.connect(ddb)
+    d.executescript(daily3.SCHEMA)
+    d.execute("INSERT INTO reports (day, ts, data) VALUES (?,?,?)", ("2026-10-05", START + DAY, json.dumps(
+        {"parity": {"accounts": 200, "mismatched_accounts": 1, "crash_gaps": 2, "early_kline": 3}})))
+    d.commit()
+    d.close()
+    assert U.nightly(ddb, START) == [{"day": "2026-10-05", "ts": START + DAY, "accounts": 200, "mismatched": 1, "ok": 194}]
+    assert "night.ok" in _src("screens", "server-uptime.js")
+
+
+def test_trade_pictures_show_an_empty_state_before_the_first_closed_trade():
+    shape = _src("screens", "analysis-shape.js")
+    assert "if (!t.core && !t.flip)" in shape and "아직 끝난 거래가 없습니다" in shape
 
 
 # ---------------------------------------------------------------- routes (bell, uptime, tradeshape)

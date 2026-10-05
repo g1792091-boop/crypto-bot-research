@@ -47,23 +47,27 @@ def _ro(path: Optional[str]) -> Optional[sqlite3.Connection]:
 
 
 def nightly(daily_db: Optional[str], t0: int) -> list[dict]:
-    """[{day, ts, accounts, mismatched, missing}] of the nightly checks written since ``t0`` (oldest first)."""
+    """[{day, ts, accounts, mismatched, ok}] of the nightly checks written since ``t0`` (oldest first). ``ok`` is the
+    same "재계산 일치" count as the Telegram daily check (daily3.daily_text): accounts minus the mismatched, the
+    extras' crash gaps and the early-kline ones (those were not shown to match)."""
     d = _ro(daily_db)
     if d is None:
         return []
     try:
         rows = d.execute(
-            "SELECT day, ts, json_extract(data, '$.parity.accounts'), json_extract(data, '$.parity.mismatched_accounts') "
+            "SELECT day, ts, json_extract(data, '$.parity.accounts'), json_extract(data, '$.parity.mismatched_accounts'), "
+            "json_extract(data, '$.parity.crash_gaps'), json_extract(data, '$.parity.early_kline') "
             "FROM reports WHERE ts >= ? ORDER BY day", (int(t0),)).fetchall()
     except sqlite3.Error:
         return []
     finally:
         d.close()
     out = []
-    for day, ts, acc, mis in rows:
-        out.append({"day": str(day), "ts": int(ts),
-                    "accounts": int(acc) if isinstance(acc, (int, float)) else None,
-                    "mismatched": int(mis) if isinstance(mis, (int, float)) else None})
+    num = lambda x: int(x) if isinstance(x, (int, float)) else None      # noqa: E731
+    for day, ts, acc, mis, gaps, early in rows:
+        acc, mis = num(acc), num(mis)
+        ok = None if acc is None or mis is None else acc - mis - (num(gaps) or 0) - (num(early) or 0)
+        out.append({"day": str(day), "ts": int(ts), "accounts": acc, "mismatched": mis, "ok": ok})
     return out
 
 
