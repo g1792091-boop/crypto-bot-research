@@ -1,0 +1,20 @@
+{
+ "configs": 342,
+ "stage1": 2,
+ "stage1_top": 2,
+ "stage2": 0,
+ "stage3": 0,
+ "stage3_bonferroni": 0,
+ "bh12_all": 0,
+ "candidate": 0,
+ "weak_candidate": 0,
+ "candidate_20x": 0,
+ "all_three_periods_positive": 2,
+ "seconds": 194,
+ "bars_dir": "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/binance/bars",
+ "n_boot": 2000,
+ "code_sha256": {
+  "lib_c.py": "3210c6024d39ec1bfd12e95d9c602510dac7667f1f955a5bae1dfc150d696b63"
+ },
+ "prereg_sha256": "c2113ffacd8085cdad2074c64d78e2e1bdb69d2e75d3cbe196326c7d3028783e"
+}
