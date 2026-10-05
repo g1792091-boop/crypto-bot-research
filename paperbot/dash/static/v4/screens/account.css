@@ -27,3 +27,19 @@
   font-weight: 700; text-decoration: none; white-space: nowrap; }
 .account-replay .pl { color: var(--accent); font-size: 10px; }
 .account-replay:hover { color: var(--accent); }
+/* 같은 매매법: the same strategy's timeframe accounts in one row (phone: up to 4 small tiles), then two links */
+.account-same { gap: 10px; }
+.account-same-row { display: grid; gap: 8px; grid-template-columns: repeat(var(--n, 4), minmax(0, 1fr)); }
+.account-same-t { display: grid; gap: 2px; align-content: start; min-width: 0; min-height: 56px; padding: 8px 10px; border-radius: var(--r-md);
+  border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); text-decoration: none; }
+a.account-same-t:hover { border-color: var(--accent-line); }
+.account-same-t.me { border-color: var(--accent-line); background: var(--accent-soft); }
+.account-same-t .tf { display: flex; justify-content: space-between; gap: 4px; color: var(--ink-2); font-size: var(--t-xs); font-weight: 700; white-space: nowrap; overflow: hidden; }
+.account-same-t .tf small { color: var(--accent); font-weight: 700; }
+.account-same-t b { font-size: var(--t-md); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.account-same-t b.up { color: var(--up); }
+.account-same-t b.down { color: var(--down); }
+.account-same-t .ps { font-size: var(--t-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.account-same-t .ps .side { font-size: 10px; padding: 0 4px; }
+.account-same-acts .btn-line { min-height: 36px; }
+@media (max-width: 420px) { .account-same-row { gap: 6px; } .account-same-t { padding: 7px 6px; } .account-same-t b { font-size: var(--t-sm); letter-spacing: -.02em; } }
