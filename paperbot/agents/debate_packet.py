@@ -48,6 +48,9 @@ TOPICS = (
     ("shadow", "그림자 비교(다른 규칙이었다면)"),
     ("risk", "파산·낙폭·가격 충격 위험"),
     ("ideas", "새 매매법 연구실에 줄 아이디어"),
+    # paper v4's groups (D2, lead 2026-10-05): the same honesty rules, each group next to its own timeframe's coin flips
+    ("groups", "묶음 비교: 기존 36 · 딥시크 · 5분봉(영상) vs 같은 봉 동전 봇"),
+    ("ds_families", "딥시크 가족별 차이 (구조·유동성 / 추세·눌림 / 세션·시가 / 반전·되돌림)"),
 )
 TOPIC_KO = dict(TOPICS)
 
@@ -239,8 +242,64 @@ def group_counts(board: dict) -> dict:
     return {g: v.get("accounts") for g, v in (board.get("groups") or {}).items() if isinstance(v, dict)}
 
 
-TABLES_SCOPE_KO = ("league·totals·last_24h·rank·tf·coin·exits 숫자는 잠긴 매매법 36개 계좌와 같은 봉의 동전 봇만 "
-                   "(accounts_in_tables개). 딥시크·릴스 5분 단타·5분봉 동전은 groups에 그룹별 계좌 수만 있고 섞지 않음")
+TABLES_SCOPE_KO = ("league·totals·last_24h·rank·tf·coin·exits는 잠긴 매매법 36개 계좌와 같은 봉 동전 봇만"
+                   "(accounts_in_tables개). 딥시크·릴스 5분 단타·5분봉 동전은 groups에 계좌 수만, 숫자는 "
+                   "groups_compare·ds_families 주제에만. 섞지 않음")
+# short lines (the packet cuts any text over 200 characters): the honesty rules of the two group topics
+GROUP_NOTES_KO = ["참고일 뿐: 30일 체크포인트(meta.checkpoint) 전에는 어느 묶음·가족이 낫다는 결론이 없음",
+                  "묶음마다 계좌 수·봉·거래 수가 달라 합계 손익을 바로 견주지 않음: 같은 봉의 동전 봇(coin_flip, 무작위 진입·"
+                  "같은 청산)과 계좌당 숫자(median_wallet, trades_per_account)로 봄",
+                  "small_sample = 계좌당 거래 30건 미만(우연일 수 있음)",
+                  "릴스 5분 단타와 5분봉 동전은 롱만, 자기 청산(볼린저 윗선·8시간)"]
+
+
+def _cell(v: Optional[dict], min_n: int) -> Optional[dict]:
+    """One group / timeframe / family cell of packets3's ``groups`` (counted from paper3.db), per account where it
+    matters: accounts, trades, trades per account, win rate, net P&L, median wallet, busts, small_sample."""
+    if not isinstance(v, dict) or not v.get("accounts"):
+        return None
+    n, acc = int(v.get("trades") or 0), int(v["accounts"])
+    return {"accounts": acc, "trades": n, "trades_per_account": _r(n / acc, 1),
+            "win_rate": _r((v.get("wins") or 0) / n, 3) if n else None, "net_pnl": _r(v.get("net_pnl"), 0),
+            "median_wallet": _r(v.get("median_wallet"), 0), "busts": v.get("busts"),
+            "small_sample": n / acc < min_n}
+
+
+def _groups_compare(board: dict, min_n: int) -> dict:
+    """D2: the 36, DeepSeek and the reel, each timeframe next to the coin flips of the same timeframe."""
+    from ..groups import GROUP_KO
+    gs = board.get("groups") or {}
+    flips = (gs.get("flip") or {}).get("by_timeframe") or {}
+    out: dict = {"notes": GROUP_NOTES_KO}
+    for g in ("core", "ds200", "reel"):
+        v = gs.get(g)
+        if not isinstance(v, dict) or not v.get("accounts"):
+            continue
+        tfs = {tf: {"group": _cell(c, min_n), "coin_flip": _cell(flips.get(tf), min_n)}
+               for tf, c in sorted((v.get("by_timeframe") or {}).items())}
+        out[g] = {"name": GROUP_KO.get(g, g), "all": _cell(v, min_n), "by_timeframe": tfs}
+    if len(out) == 1:
+        out["missing"] = "이 실행에는 비교할 묶음이 없음(그룹 자료 없음)"
+    return out
+
+
+def _ds_families(board: dict, min_n: int) -> dict:
+    """D2: the DeepSeek families under their four specialist rooms, with the coin flips of the DeepSeek timeframes."""
+    from ..groups import DS_FAMILY_KO, V4_ROLES
+    ds = (board.get("groups") or {}).get("ds200")
+    if not isinstance(ds, dict) or not ds.get("accounts"):
+        return {"missing": "딥시크 계좌 없음", "notes": GROUP_NOTES_KO}
+    fams = ds.get("by_family") or {}
+    flips = ((board.get("groups") or {}).get("flip") or {}).get("by_timeframe") or {}
+    rooms = {}
+    for _key, ko, fs, _ids in V4_ROLES:
+        cells = {f: {"name": DS_FAMILY_KO.get(f, f), **(_cell(fams.get(f), min_n) or {})} for f in fs if f in fams}
+        if cells:
+            rooms[ko] = cells
+    return {"notes": GROUP_NOTES_KO[:3] + ["가족 17개를 견주면 우연히 좋아 보이는 가족이 나옴(여러 번 비교)",
+                                           "F11_PO3 하나는 세션 담당이지만 가족 숫자 F11은 구조·유동성에 한데 셈"],
+            "ds200_all": _cell(ds, min_n), "rooms": rooms,
+            "coin_flip_by_timeframe": {tf: _cell(flips.get(tf), min_n) for tf in sorted(ds.get("by_timeframe") or {})}}
 
 
 def unusual(board: dict, levrule: Optional[dict]) -> list[tuple[str, str]]:
@@ -316,6 +375,10 @@ def build(paper_path: Optional[str], daily_path: Optional[str], agents_path: Opt
                 sections["shock"] = SH.compact(paper)
             except Exception as exc:  # noqa: BLE001
                 sections["shock"] = {"error": f"가격 충격 시험을 만들지 못함: {type(exc).__name__}"}
+        elif topic == "groups":
+            sections["groups_compare"] = _groups_compare(board, min_n)
+        elif topic == "ds_families":
+            sections["ds_families"] = _ds_families(board, min_n)
         elif topic == "ideas":
             sections["note"] = "이번 주제는 새 매매법 연구실에 줄 아이디어 찾기: 아래 자료에서 눈에 띈 점을 아이디어 후보로 바꿔 본다"
             sections["by_timeframe"] = _tf(board)

@@ -653,7 +653,8 @@ def test_settings_a_model_would_refuse_stop_the_service_at_start():
 
 
 def test_the_debate_room_runs_on_the_v4_shape(tmp_path, monkeypatch):
-    """D1: on the 331-account run every topic builds within the data cap; the packet says which accounts its tables
+    """D1 / D2: on the 331-account run every topic (the two group topics too) builds within the data cap; the packet
+    says which accounts its tables
     count (the 36 and their coin flips) and gives the real group counts; DeepSeek, reel and 5m accounts never enter the
     rank lists; a group's frozen line ('[ds200] signal code refused', CRITICAL) is shown but is no account emergency
     (the agenda does not jump for it); the hypothesis menu keeps to the 36; the dry run works without a key."""
@@ -669,6 +670,25 @@ def test_the_debate_room_runs_on_the_v4_shape(tmp_path, monkeypatch):
         assert b["topic"] == P.TOPICS[i][0] and pk["unusual"] == []         # the group line jumps nothing
         assert any(a["text"].startswith("[ds200] signal code refused") for a in pk.get("alerts", []))
         assert not any("[F9_FVG@15m]" in a["text"] for a in pk.get("alerts", []))    # a DeepSeek account: counted
+        if b["topic"] == "groups":                     # D2: each group's timeframe next to the same timeframe's flips
+            gc = pk["groups_compare"]
+            assert set(gc) == {"notes", "core", "ds200", "reel"} and not any(n.endswith("…") for n in gc["notes"])
+            assert {g: gc[g]["all"]["accounts"] for g in ("core", "ds200", "reel")} == \
+                {g: V4_GROUP_ACCOUNTS[g] for g in ("core", "ds200", "reel")}
+            assert list(gc["reel"]["by_timeframe"]) == ["5m"] and gc["reel"]["by_timeframe"]["5m"]["coin_flip"]["accounts"] == 3
+            assert set(gc["core"]["by_timeframe"]) == {"15m", "30m", "1h", "4h"}
+            for g in ("core", "ds200"):
+                for tf, c in gc[g]["by_timeframe"].items():
+                    assert c["coin_flip"]["accounts"] == 3 and isinstance(c["group"]["small_sample"], bool), (g, tf)
+            assert "체크포인트" in gc["notes"][0] and "동전 봇" in gc["notes"][1]
+        if b["topic"] == "ds_families":
+            from paperbot.groups import DS_FAMILY_KO, V4_ROLES
+            df = pk["ds_families"]
+            assert list(df["rooms"]) == [ko for _k, ko, fams, _i in V4_ROLES if fams]
+            fams = {f: c for room in df["rooms"].values() for f, c in room.items()}
+            assert set(fams) == set(DS_FAMILY_KO) and sum(c["accounts"] for c in fams.values()) == 171
+            assert fams["F9"]["name"] == "FVG·오더 블록" and set(df["coin_flip_by_timeframe"]) == {"15m", "30m", "1h", "4h"}
+            assert any("여러 번 비교" in n for n in df["notes"]) and not any(n.endswith("…") for n in df["notes"])
         if b["topic"] == "rank":
             ids = [r["account"] for k in ("accounts_top", "accounts_bottom") for r in pk["rank"][k]]
             ids += [r["strategy"] for k in ("strategies_top", "strategies_bottom") for r in pk["rank"][k]]
