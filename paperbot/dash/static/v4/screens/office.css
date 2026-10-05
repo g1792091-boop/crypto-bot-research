@@ -1,4 +1,5 @@
 @import url("rooms-kit.css");
+@import url("meetboard-kit.css");
 /* office: 회의실 (builder D). The warm wooden pixel office of the approved mockup (section 05): wood floor, wall-coloured
    room borders, desks with green monitors, a meeting table, plates, white pixel bubbles; the console on the right on a
    PC and below on a phone. Tokens only. Motion: the shared figure breathe, bubble pop and walk (off under reduced
@@ -98,5 +99,28 @@
 [data-screen="office"] .of-drow-f { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: var(--t-xs); }
 [data-screen="office"] .of-honest { padding-inline: 2px; }
 @media (max-width: 559px) { [data-screen="office"] .of-office { padding: 10px; border-radius: var(--r-lg); } [data-screen="office"] .of-floor { padding: 8px; } }
+
+/* ---------------------------------------------------------------- wave 2 ⑧: Korea time, team floors, lamps, the report */
+/* each room's floor carries its team's colour (TEAM_HUE through --h), mixed into the wood so the office stays warm */
+[data-screen="office"] .of-room.tint { background-color: color-mix(in srgb, var(--wood) 80%, hsl(var(--h, 30) var(--px-sat) var(--px-lit))); }
+/* the lamp: on only while the room holds a real meeting (/api/office running) */
+[data-screen="office"] .of-lamp { position: absolute; top: -3px; left: 50%; width: 22px; height: 5px; margin-left: -11px; background: var(--wall-dark); pointer-events: none; }
+[data-screen="office"] .of-room.live .of-lamp { background: var(--sun); box-shadow: 0 6px 18px 6px var(--accent-glow); }
+[data-screen="office"] .of-room.live::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(ellipse 60% 55% at 50% 0%, var(--accent-soft), transparent 70%); }
+/* after dark (Korea time) the rooms without a meeting dim; the 대표실 keeps its light */
+[data-screen="office"] .of-floor[data-ph="night"] .of-room:not(.live):not(.of-ceo) { filter: brightness(.78) saturate(.9); }
+[data-screen="office"] .of-floor[data-ph="dusk"] .of-room:not(.live):not(.of-ceo) { filter: brightness(.9); }
+[data-screen="office"] .of-ceo .of-lamp { display: none; }
+/* the desk holds today's report (meetboard-kit.js deskReport) next to the 두 분 plate */
+[data-screen="office"] .of-bigdesk:has(> .mb-desk:not([hidden])) { display: flex; justify-content: center; align-items: center; gap: 8px; width: 210px; }
+[data-screen="office"] .of-win { display: grid; justify-items: center; gap: 4px; }
+[data-screen="office"] .of-phase { padding: 1px 6px; border-radius: 2px; background: var(--plate); color: var(--plate-ink); font: 400 var(--t-xs)/1.3 var(--f-term); }
+[data-screen="office"] .of-phase:empty { display: none; }
+[data-screen="office"] .of-wallr { display: grid; gap: 8px; min-width: 0; }
+[data-screen="office"] .of-sess { display: grid; gap: 2px; max-width: 250px; padding: 4px 8px; border-radius: 3px; border: 2px solid var(--plate-line);
+  background: var(--plate); color: var(--plate-ink); font: 400 var(--t-xs)/1.4 var(--f-term); }
+[data-screen="office"] .of-sess b { color: var(--accent); font-weight: 700; }
+[data-screen="office"] .of-sess:empty { display: none; }
 [data-screen="office"] .of-jump { min-height: 32px; }
 @media (min-width: 1100px) { [data-screen="office"] .of-jump { display: none; } }

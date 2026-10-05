@@ -254,6 +254,23 @@ a.lrow:focus-visible { outline-offset: -2px; }
 .clock .ct { padding: 2px 5px; border-radius: 2px; background: var(--plate); color: var(--plate-ink); font: 400 var(--t-xs)/1.2 var(--f-pixel); white-space: nowrap; }
 .window { display: block; width: 104px; height: 72px; }
 .window .wf { fill: var(--window-frame); } .window .sk { fill: var(--sky); } .window .sn { fill: var(--sun); } .window .ct { fill: var(--city); }
+/* wave 2 ⑧: the window follows Korea time (core/figure.js skyPhase: data-ph dawn / day / dusk / night) */
+.window .hz { fill: var(--sky-glow); } .window .mo { fill: var(--moon); } .window .st { fill: var(--star); } .window .cl { fill: var(--city-lit); }
+.window[data-ph="dawn"] .sk { fill: var(--sky-dawn); } .window[data-ph="dawn"] .sn { fill: var(--sun-low); }
+.window[data-ph="dusk"] .sk { fill: var(--sky-dusk); } .window[data-ph="dusk"] .sn { fill: var(--sun-low); }
+.window[data-ph="dusk"] .hz { fill: var(--sky-dusk-glow); }
+.window[data-ph="night"] .sk { fill: var(--sky-night); } .window[data-ph="night"] .ct { fill: var(--city-night); }
+
+/* wave 2 ⑦: one pixel character per strategy (core/figure.js stratFigure): body hue by family, coin flips grey */
+.sfig { display: block; flex: none; border-radius: 3px; overflow: hidden; }
+.sfig .abg { fill: hsl(var(--h, 210) var(--av-s) var(--av-bg-l)); }
+.sfig .as { fill: var(--px-skin); } .sfig .ae { fill: var(--px-eye); } .sfig .am { fill: var(--px-hair); }
+.sfig .ah { fill: var(--px-hair); } .sfig .av { fill: var(--accent); }
+.sfig .ab, .sfig .ab2 { fill: hsl(var(--h, 210) var(--px-sat) var(--px-lit)); }
+.sfig .ad { fill: var(--px-skin); }
+.sfig .ac { fill: var(--sun); } .sfig .acs { fill: var(--sun-low); } .sfig .ag { fill: var(--px-spec); }
+.sfig.k-random .abg { fill: var(--surface-3); }
+.sfig .ap { fill: var(--px-foot); } .sfig .aps { fill: var(--screen); }
 
 /* ---------------------------------------------------------------- motion (all off under reduced motion) */
 @keyframes fadeSlide { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }

@@ -50,6 +50,9 @@ a.gk-cell:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px;
 .gk-av svg { display: block; width: 100%; height: 100%; fill: currentColor; }
 .gk-av.sm { width: 18px; height: 18px; border-radius: 5px; }
 .gk-av.lg { width: 52px; height: 52px; border-radius: 14px; box-shadow: inset 0 0 0 1px hsl(var(--h) var(--av-s) var(--av-line-l)), 0 6px 18px -10px hsl(var(--h) var(--av-s) var(--av-ring-l)); }
+/* wave 2 ⑦: the badge holds the strategy's pixel character (core/figure.js stratFigure) */
+.gk-av.gk-fig { overflow: hidden; }
+.gk-av.gk-fig .sfig { width: 100%; height: 100%; border-radius: 0; }
 
 /* the curves */
 .gk-spark { display: block; width: 100%; height: 76px; overflow: visible; }

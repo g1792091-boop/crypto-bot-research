@@ -2,7 +2,7 @@
 // stances, short staff labels and avatars, a model rule (JSON) turned into a readable Korean line with its raw text
 // folded away, the agents' running state, the unread dot of the rooms tab. Used only by the 에이전트 screens.
 // Every string here becomes a TEXT node (h()); nothing is parsed as HTML. Model text is shown as written.
-import {h, ui, fmt, local, setBadge, hueOf, TEAM_HUE, figure} from "../core/pb.js";
+import {h, ui, fmt, local, setBadge, hueOf, TEAM_HUE, figure, stratFigure, stratHue} from "../core/pb.js";
 // Its css (rooms-kit.css) is @imported by office.css, rooms.css, digest.css and debate.css.
 
 // ---------------------------------------------------------------- words
@@ -77,7 +77,13 @@ export function miniFigure(roles, id) {
 export function roomAvatar(r) {
   if (!r) return ui.avatar("?", 210);
   if (r.kind === "team") return ui.avatar(TEAM_AV[r.room_id] || String(r.title || "").slice(0, 2), hueOf(r.room_id));
-  return ui.avatar(String(r.strategy || r.title || "").split("_")[0].slice(0, 3), TEAM_HUE.specialist, "strat");
+  // wave 2 ⑦: a strategy room shows its strategy's own pixel character (core/figure.js stratFigure), not "S5" letters
+  const code = r.strategy || (String(r.room_id || "").startsWith("strat:") ? String(r.room_id).slice(6) : "");
+  if (code) {
+    const hue = stratHue(code);
+    return h("span", {class: "rav strat rav-fig", style: {"--h": hue == null ? 210 : hue}, "aria-hidden": "true"}, stratFigure({strategy: code, size: 30}));
+  }
+  return ui.avatar(String(r.title || "").slice(0, 3), TEAM_HUE.specialist, "strat");
 }
 export const roomTitle = (rooms, id) => ((rooms || []).find((r) => r.room_id === id) || {}).title || roomIdKo(id);
 export function roomIdKo(id) {

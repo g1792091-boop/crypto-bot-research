@@ -37,6 +37,9 @@ export function rowMotion(ctx, root, o = {}) {
     // the tint: a return that changed in this update
     if (fresh && ret && st.prevRet && st.prevRet[id] != null && Math.abs(st.prevRet[id] - st.curRet[id]) > 1e-9) {
       motion.flashPrice(ret, st.curRet[id] > st.prevRet[id] ? "up" : "down");      // a teal / pink glow on a real change
+      // wave 2 ⑦: the strategy's character hops (profit) or slumps (loss) once on that same real change
+      const fig = row.querySelector(".row-fig");
+      if (fig && !skip(a) && motion.visible()) motion.play(fig, st.curRet[id] > st.prevRet[id] ? "fig-hop" : "fig-slump");
     }
     if (skip(a)) return;
     // the rank arrow (only when the row's shown rank is the group's return rank)

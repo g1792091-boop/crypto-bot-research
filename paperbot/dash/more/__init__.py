@@ -13,6 +13,8 @@ data (dash.app.Data), rooms, db, daily_db, agents_db, checkpoint_db, candles (th
     jobs    예약 작업: systemd 타이머 켜짐·꺼짐, 마지막·다음 실행 (서버·비용)
     costs   비용 점검: 묶음별 수수료·펀딩, 실제 호가·손절 미끄러짐 추정 (매매법 › 분석 › 비용)
     power   판정 감도: 진짜 실력별 30·60·90일 합격 확률 (research/power/out/power.json, 판정 화면)
+    brief   오늘의 회의 결론 보고판 (홈 · 대표실 책상)
+    vs5y    5년 시험 vs 지금 vs 동전 봇 (매매법 상세, 봉마다)
 """
 from __future__ import annotations
 
@@ -21,6 +23,7 @@ from types import SimpleNamespace
 
 MODULES = ("flow", "grid", "story", "since", "replay", "params")
 MODULES += ("jobs", "costs", "power")          # wave 2 part B
+MODULES += ("brief", "vs5y")                    # wave 2 part C
 
 
 def register_all(app, **kw) -> dict:

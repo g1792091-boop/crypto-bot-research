@@ -1,0 +1,23 @@
+/* 5년 시험 vs 지금 vs 동전 봇 (screens/vs5y-kit.js, wave 2 ⑨): a small aligned table that fits a 390 px phone without
+   scrolling. Tokens only; @import-ed by strategies.css. */
+.vs-card .vs-tbl { display: grid; min-width: 0; border: 1px solid var(--line); border-radius: var(--r-sm); overflow: hidden; }
+.vs-row { display: grid; grid-template-columns: minmax(0, 1.25fr) repeat(3, minmax(0, 1fr)) 64px; align-items: center; gap: 6px;
+  min-height: 36px; padding: 6px 10px; border-top: 1px solid var(--line); font-size: var(--t-sm); }
+.vs-tbl.counts .vs-row { grid-template-columns: minmax(0, 1.25fr) repeat(2, minmax(0, 1fr)) 64px; }
+.vs-row:first-child { border-top: 0; }
+.vs-head { min-height: 30px; background: var(--surface-2); color: var(--muted); font-size: var(--t-xs); font-weight: 700; }
+.vs-head span:not(:first-child) { text-align: right; }
+.vs-k { color: var(--ink-2); line-height: 1.3; overflow-wrap: anywhere; }
+.vs-small { color: var(--muted); font-weight: 700; padding-right: 8px; }
+.vs-smallnote { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; color: var(--ink-2); font-size: var(--t-xs); }
+.vs-row .num { text-align: right; white-space: nowrap; font-family: var(--f-term); }
+.vs-y5 { color: var(--ink-2); }
+.vs-now { color: var(--ink); font-weight: 700; }
+.vs-flip { color: var(--series-coin); }
+.vs-w { display: flex; justify-content: flex-end; }
+.vs-w .pp { font-size: 11px; padding: 0 6px; }
+.vs-seg:empty { display: none; }
+@media (max-width: 420px) {
+  .vs-row { grid-template-columns: minmax(0, 1fr) repeat(3, minmax(0, .9fr)) 52px; gap: 4px; padding: 6px 8px; font-size: var(--t-xs); }
+  .vs-tbl.counts .vs-row { grid-template-columns: minmax(0, 1fr) repeat(2, minmax(0, .9fr)) 52px; }
+}
