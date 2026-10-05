@@ -112,3 +112,27 @@ def test_a_specialist_sees_its_own_entry_moment_brief(world):
     assert em["trades"] == 10 and em["buckets"]["hold"]["2h-8h"]["n"] == 10
     assert EM.compact_bytes(em) < EM.BRIEF_MAX_BYTES and "가설" in em["note"]
     assert "entry_moment" in runner.calls[0]["system"]
+
+
+def test_the_rehearsal_brief_reads_the_v4_keys_and_names_the_real_numbers(world, tmp_path):
+    """L4: the rehearsal's runtime projection, expected/missing accounts and per-group rows reach the staff; the note
+    says the summary's own trades and bots (2,000 by default) next to the real verdict's, never '500'."""
+    from paperbot import checkpoint as CK
+    os.makedirs(tmp_path / "rehearsal")
+    summary = {"status": "ok", "as_of": "2026-10-28", "days": 23, "runtime_s": 900.0, "min_trades": 10,
+               "bots": CK.REHEARSAL_BOTS, "verdict_runtime_s": 600.0, "projected_runtime_s_real": 3000.0,
+               "n_bots_real": CK.N_BOTS, "accounts_expected": 241, "accounts_in_snapshot": 239,
+               "missing_accounts": [f"M{k}@1h" for k in range(7)],
+               "by_group": {"core": {"expected": 144, "found": 144, "tested": 100, "counts": {}},
+                            "ds200": {"expected": 132, "found": 130, "tested": 3, "counts": {}}}}
+    with open(tmp_path / "rehearsal" / "latest.json", "w") as fh:
+        json.dump(summary, fh)
+    ctx = RM.RoundContext(agents_conn=world.agents, paper_ro=world.paper(), daily_ro=None, inbox_ro=None,
+                          runner=None, lab=None, now_ms=QUIET)
+    out = RM._rehearsal(ctx)
+    assert out["available"] and out["projected_runtime_s_real"] == 3000.0 and out["n_bots_real"] == CK.N_BOTS
+    assert out["accounts_expected"] == 241 and out["by_group"]["ds200"]["found"] == 130
+    assert out["missing_accounts"] == {"count": 7, "first": ["M0@1h", "M1@1h", "M2@1h", "M3@1h", "M4@1h"]}
+    assert out["projected_runtime_s_day30"] == round(3000.0 * 30 / 23, 1) and out["timeout_s"] == 8 * 3600
+    assert f"동전 봇 {CK.REHEARSAL_BOTS:,}개" in out["note"] and f"{CK.N_BOTS:,}개" in out["note"]
+    assert "500개" not in out["note"]

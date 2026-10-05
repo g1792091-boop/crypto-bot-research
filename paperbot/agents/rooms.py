@@ -3072,15 +3072,21 @@ def _checkpoint_meeting(ctx: RoundContext, due: TR.Due) -> dict:
 
 
 REHEARSAL_KEYS = ("status", "as_of", "days", "finished_utc", "runtime_s", "min_trades", "bots", "accounts_in_snapshot",
-                  "tested", "counts", "rate_min", "rate_max")
+                  "tested", "counts", "rate_min", "rate_max",
+                  # paper v4 (plan C1/C2): the verdict step's own time, scaled to the real bot count, the accounts the
+                  # rehearsal expected, and per group (core / ds200 / reel / flip) what it found and tested
+                  "verdict_runtime_s", "projected_runtime_s_real", "n_bots_real", "accounts_expected", "by_group")
+# deploy/paperbot-checkpoint.service TimeoutStartSec (provisional): the real verdict must finish inside it
+CHECKPOINT_TIMEOUT_S = 8 * 3600
 
 
 def _rehearsal(ctx: RoundContext) -> dict:
     """The newest weekly checkpoint rehearsal (paperbot/checkpoint_preview.latest_summary: rehearsal/latest.json next
-    to paper3.db, read-only), bounded: a dress rehearsal of the verdict path, never the verdict (10 trades, 500 coin
-    flips instead of 30 and 2,000)."""
+    to paper3.db, read-only), bounded: a dress rehearsal of the verdict path, never the verdict (fewer trades and
+    coin-flip bots than the real one: the summary's own min_trades and bots against checkpoint.MIN_TRADES / N_BOTS)."""
     if "rehearsal" in ctx.cache:
         return ctx.cache["rehearsal"]
+    from .. import checkpoint as CK
     from ..checkpoint_preview import latest_summary
     folder = _side_db(ctx, "rehearsal")
     s = latest_summary(folder) if folder else None
@@ -3090,11 +3096,29 @@ def _rehearsal(ctx: RoundContext) -> dict:
         out = {"available": True, **{k: s.get(k) for k in REHEARSAL_KEYS if k in s}}
         z = s.get("zero_rate_accounts") or []
         out["zero_rate_accounts"] = {"count": len(z), "first": [str(a)[:40] for a in z[:5]]}
+        if "missing_accounts" in s:
+            m = s.get("missing_accounts") or []
+            out["missing_accounts"] = {"count": len(m), "first": [str(a)[:40] for a in m[:5]]}
         out["warnings"] = [str(w)[:160] for w in (s.get("warnings") or [])[:3]]
         if s.get("error"):
             out["error"] = str(s["error"])[:200]
-        out["note"] = ("판정 경로 미리 연습(오늘을 판정일처럼, 거래 10건·동전 봇 500개). 공식 판정이 아님: 합격·불합격은 "
-                       "checkpoint만 말함. status가 failed거나 zero_rate_accounts가 있으면 판정 날 문제가 될 수 있음")
+        proj = s.get("projected_runtime_s_real")
+        try:
+            days = int(s.get("days") or 0)
+            if proj is not None and days > 0:
+                # the projection scales by bots only; the real verdict has 30 days of trades (C1: read the day-23 run)
+                d30 = float(proj) * CK.PERIOD_DAYS / days
+                out["projected_runtime_s_day30"] = round(d30, 1)
+                out["timeout_s"] = CHECKPOINT_TIMEOUT_S
+                out["projected_share_of_timeout"] = round(d30 / CHECKPOINT_TIMEOUT_S, 3)
+        except (TypeError, ValueError):
+            pass
+        mt, bots = s.get("min_trades") or 10, s.get("bots") or CK.REHEARSAL_BOTS
+        out["note"] = (f"판정 경로 미리 연습(오늘을 판정일처럼, 거래 {mt}건·동전 봇 {int(bots):,}개; 실제 판정은 거래 "
+                       f"{CK.MIN_TRADES}건·동전 봇 {CK.N_BOTS:,}개). 공식 판정이 아님: 합격·불합격은 checkpoint만 말함. "
+                       "status가 failed거나 zero_rate_accounts·missing_accounts가 있으면 판정 날 문제가 될 수 있음. "
+                       "projected_runtime_s_day30 = 판정 계산 시간을 실제 봇 수와 30일 거래로 늘린 대략값(봇 수·날수 비례 "
+                       "가정), timeout_s(판정 서비스 제한, 잠정)의 75%를 넘으면 두 분께 알릴 일")
     ctx.cache["rehearsal"] = out
     return out
 
