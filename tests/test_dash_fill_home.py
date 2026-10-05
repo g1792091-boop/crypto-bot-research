@@ -181,3 +181,14 @@ def test_new_css_uses_tokens_only():
         assert re.search(r"var\(--t-(xs|sm|md|lg|xl|2xl|led)\)", m.group(1)), m.group(0)
     assert not re.search(r"#[0-9a-fA-F]{3,8}\b|rgba?\(", css)
     assert "fontSize" not in _read("screens", "home-live.js") and "font-size" not in _read("screens", "home-live.js")
+
+
+def test_led_curve_steps_five_minutes_on_day_one(tmp_path):
+    """The LED line (home.js curveStep): 5 minutes under 2 days, 15 under 7, then hourly; the server keeps a 5-minute
+    step (CURVE_STEPS) and day 1 has one point per 5-minute equity row, not a flat 2-point line."""
+    db = make_db(str(tmp_path / "paper3.db"), hours=6)
+    c = Data(db).curves(5 * MIN, now_ms=START + 6 * H)
+    assert c["step"] == 5 * MIN and len(c["t"]) >= 60
+    assert len(set(v for v in c["total"] if v is not None)) > 10       # it moves
+    js = _read("screens", "home.js")
+    assert "age < 2 * 86400000 ? 300000 : age < 7 * 86400000 ? 900000 : 3600000" in js

@@ -330,7 +330,7 @@ export async function mount(el, ctx) {
   ctx.on("stream:state", relive);
   ctx.every(60000, () => { renderHero(); renderNext(); }, {now: false});
 
-  // /api/v4/curves (paper3.db equity; 15-minute steps while the run is under 7 days old, then hourly): the total of every wallet over the run for the LED bar's line (the
+  // /api/v4/curves (paper3.db equity; 5-minute steps under 2 days, 15-minute under 7 days, then hourly): the total of every wallet over the run for the LED bar's line (the
   // head card's lines come from the race). Real points only; a 404 (an older server) stops asking and the pill stays.
   let curvesOn = true;
   async function loadCurves() {
@@ -344,12 +344,13 @@ export async function mount(el, ctx) {
   ctx.every(300000, loadCurves);
 }
 
-/** The LED line's step by run age (the oldest account's start in the board): 15 minutes under 7 days, else 1 hour
- *  (the server's /api/v4/curves steps; equity rows are written every 5 minutes, so a young run still has a real line). */
+/** The LED line's step by run age (the oldest account's start in the board): 5 minutes under 2 days, 15 minutes under
+ *  7 days, else 1 hour (the server's /api/v4/curves steps; equity rows are written every 5 minutes, so day 1 has a real line). */
 export function curveStep(board, now = Date.now()) {
   const ts = ((board && board.accounts) || []).map((a) => Number(a.created_ts)).filter((x) => x > 0);
   const start = ts.length ? Math.min(...ts) : null;
-  return start != null && now - start < 7 * 86400000 ? 900000 : 3600000;
+  const age = start != null ? now - start : Infinity;
+  return age < 2 * 86400000 ? 300000 : age < 7 * 86400000 ? 900000 : 3600000;
 }
 
 export function unmount() {}
