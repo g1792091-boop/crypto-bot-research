@@ -45,9 +45,10 @@ def test_account_strip_links_and_deepseek_counts_only():
     assert 'ctx.href("strategies", a.strategy, {tf: a.timeframe})' in strip and "규칙·지표 차트 보기" in strip
     assert "const roomId = `strat:${a.strategy}`;" in strip and 'ctx.href("rooms", roomId)' in strip and "담당 AI 방" in strip
     assert "rooms.rooms.some((r) => r.room_id === roomId)" in strip
-    # DeepSeek: the closed-trade count and one 참고 pill, never a return, a wallet or USDT per account
-    assert 'const val = ds ? `${fmt.int(x.trades || 0)}건` : fmt.pct(r, 1);' in strip
-    assert 'ds ? ui.pill("", "ref") : null' in strip and 'ds ? null : ui.assume("closed"' in strip
+    # DeepSeek and the coin flips: the closed-trade count and one 참고 pill, never a return, a wallet or USDT per account
+    assert 'const ds = a.kind === "ds200", counts = ds || a.kind === "random";' in strip
+    assert 'const val = counts ? `${fmt.int(x.trades || 0)}건` : fmt.pct(r, 1);' in strip
+    assert 'counts ? ui.pill("", "ref") : null' in strip and 'counts ? null : ui.assume("closed"' in strip
     # the strip lives under the profile card and follows the board
     assert "el.replaceChildren(backLink(), headSlot, same ? same.el : null," in js
     assert "if (view.same) view.same.update(b);" in js

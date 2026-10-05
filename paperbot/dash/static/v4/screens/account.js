@@ -209,12 +209,12 @@ export async function mount(el, ctx) {
 
   // ---------------------------------------------------------------- 같은 매매법 (under the profile card)
   // The same strategy's own timeframe accounts (same kind; a copy / new-lab extra follows another rule: no strip), each
-  // with its return now from the board row, or for DeepSeek only its trade count (CONTRACT §1.3: nothing per account
-  // beyond 참고), and whether it holds a position. Two buttons: the strategy page at this timeframe (rules and the
+  // with its return now from the board row, or for DeepSeek and the coin flips only its trade count (counted, never
+  // money: CONTRACT §1.3, nothing per account beyond 참고), and whether it holds a position. Two buttons: the strategy page at this timeframe (rules and the
   // indicator chart) and the strategy's own AI room when the server has one (the 36 only today).
   function sameStrip(a, board, init) {
     if (!board || !a.strategy || !SAME_KINDS.has(a.kind)) return null;
-    const ds = a.kind === "ds200";
+    const ds = a.kind === "ds200", counts = ds || a.kind === "random";
     const box = h("div", {class: "account-same-row", role: "list"});
     const roomId = `strat:${a.strategy}`;
     const rooms = store.get("rooms");
@@ -229,11 +229,11 @@ export async function mount(el, ctx) {
         const pos = normPos(x.position);
         const w = x.wallet == null ? init : x.wallet;
         const r = w / init - 1;
-        const val = ds ? `${fmt.int(x.trades || 0)}건` : fmt.pct(r, 1);
+        const val = counts ? `${fmt.int(x.trades || 0)}건` : fmt.pct(r, 1);
         const state = x.bust ? h("span", {class: "ps down"}, "파산") : pos ? h("span", {class: "ps"}, `${fmt.coin(pos.symbol)} `, ui.sideTag(pos.side))
           : h("span", {class: "ps muted"}, "대기");
         const kids = [h("span", {class: "tf"}, h("span", null, fmt.tfKo(x.timeframe)), me ? h("small", null, "지금") : null),
-          h("b", {class: ["num", ds ? "" : fmt.tone(r, val)]}, val), state];
+          h("b", {class: ["num", counts ? "" : fmt.tone(r, val)]}, val), state];
         return me ? h("div", {class: "account-same-t me", role: "listitem", "aria-current": "page"}, kids)
           : h("a", {class: "account-same-t", role: "listitem", href: ctx.href("account", x.account_id), title: x.account_id}, kids);
       }));
@@ -241,9 +241,10 @@ export async function mount(el, ctx) {
     };
     paint(board);
     const el = h("section", {class: "card account-same", "aria-label": "같은 매매법"},
-      h("div", {class: "card-h"}, ui.plate("같은 매매법"), h("span", {class: "sub"}, ds ? "봉마다 닫힌 거래 수 (딥시크는 계좌별 수익을 보지 않음)" : "봉마다 지금 수익률"),
-        ds ? ui.pill("", "ref") : null),
-      box, acts, ds ? null : ui.assume("closed", "수익률 = 지금 잔고 ÷ 시작 잔고"));
+      h("div", {class: "card-h"}, ui.plate("같은 매매법"), h("span", {class: "sub"}, ds ? "봉마다 닫힌 거래 수 (딥시크는 계좌별 수익을 보지 않음)"
+        : counts ? "봉마다 닫힌 거래 수 (동전 봇은 비교 기준이라 개수만)" : "봉마다 지금 수익률"),
+        counts ? ui.pill("", "ref") : null),
+      box, acts, counts ? null : ui.assume("closed", "수익률 = 지금 잔고 ÷ 시작 잔고"));
     return {el, update: (b) => { if (b && el.isConnected) paint(b); }};
   }
 
