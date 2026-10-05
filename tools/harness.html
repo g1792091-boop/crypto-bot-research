@@ -31,6 +31,17 @@ try {
   if (q === "chart") { const r = await O.chartAnalyze({sym: "ETHUSDT", interval: "4h"}); out.r = {facts: r.facts, keys: Object.keys(r.json), text: r.text}; }
   if (q === "compare") { const r = await O.chartCompare({post: false}); out.r = r; }
   if (q === "store") { out.r = await O.storageProbe(); }
+  if (q === "mkt") {   // 시장가 분석(토론 없이): 시간봉 추세 · 관망 규칙 · 스캘핑/타이밍 · 체크리스트 · 결론
+    const N = await import("../gh-coin/neural.js"); N.load(); try { await N.step(); } catch (e) {}
+    const r = await O.marketEntryNow({sym: new URLSearchParams(location.search).get("sym") || "BTCUSDT", debate: false});
+    out.r = {decision: r.decision, extra: r.extra, checklist: r.checklist, best: {side: r.best.side, grade: r.best.grade, sl: r.best.sl, slPct: r.best.slPct, tp1: r.best.tp1, evidence: r.best.evidence}}; }
+  if (q === "termmkt") {   // 차트 터미널을 열고 [⚡ 시장가] 패널을 실제로 그린다(토론 없이) → 스크린샷용
+    const N = await import("../gh-coin/neural.js"); N.load(); try { await N.step(); } catch (e) {}
+    window.ghCoinMarketEntry = (sym, onStep, opt = {}) => O.marketEntryNow({sym, by: "terminal", onStep, ...opt, debate: false});
+    const T = await import("../nuri-ai/terminal/terminal.js"); await T.openTerminal({market: "BTCUSDT", interval: "15m"}); await new Promise(r => setTimeout(r, 4000));
+    await T._term()._marketEntry(); await new Promise(r => setTimeout(r, 1500));
+    const pn = document.querySelector(".nt-mkt"); if (pn) { pn.style.maxHeight = "none"; const sec = [...pn.querySelectorAll(".nt-mkt-sec")].find(x => x.textContent.includes("시간봉별")); sec?.scrollIntoView({block: "start"}); }
+    document.title = "DONE"; await new Promise(r => setTimeout(r, 60e3)); }
   if (q === "ui") {   // 뉴럴 데스크 화면을 띄우고 &find=글자 가 있는 줄로 스크롤 → 스크린샷용
     const U = await import("../gh-coin/neural-ui.js"); await U.openNeural(); await new Promise(r => setTimeout(r, 9000));
     const f = new URLSearchParams(location.search).get("find"); if (f) { const el = [...document.querySelectorAll(".nsub")].find(e => e.textContent.includes(f)); el?.scrollIntoView({ block: "start" }); out.found = !!el; }

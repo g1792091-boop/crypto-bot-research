@@ -26,7 +26,7 @@ export async function openNeural(ctx = {}) {
       try { const O = await import("./coin-office.js"); await O.marketEntryNow({ sym: b.dataset.mkt, by: "user", onStep: (t) => { b.textContent = "⏳ " + t.replace(/^\S+\s*/, "").slice(0, 10); } }); } catch (e) { feed("⚡ 시장가 실패: " + (e?.message || e)); }
       b.disabled = false; b.textContent = t0; ST = N.state(); render(); }; }
   // 📈 내 차트 지표 데스크 버튼(지금 점검·복사) — 렌더가 3초마다 바뀌므로 위임
-  root.querySelector("[data-neurons]")?.addEventListener("click", async (ev) => {
+  root.addEventListener("click", async (ev) => {
     const tm = ev.target.closest("[data-tpm]"); if (tm) { const n = N.setCfg({ tpMode: tm.dataset.tpm }); feed(`🎯 익절 방식: ${N.TP_MODES[n.tpMode].ko} — 다음 진입부터 (자체 백테스트도 이 방식으로 다시)`); ST = N.state(); render(); return; }
     const sy = ev.target.closest("[data-sty]"); if (sy) { const n = N.setCfg({ style: sy.dataset.sty }); feed(`🎯 매매 스타일: ${N.STYLES_KO[n.style]} — 다음 신호부터`); ST = N.state(); render(); return; }
     const lm = ev.target.closest("[data-levm]"); if (lm) { const n = N.setCfg({ levMode: lm.dataset.levm }); feed(`🎯 레버리지 방식: ${n.levMode === "min" ? "20배 고정" : "손절폭에서 역산"} — 다음 진입부터`); ST = N.state(); render(); return; }
@@ -112,15 +112,19 @@ function chartDeskLine(s) {
   h += `<div class="brow"><span class="bt dim">AI실험</span><span class="btx" title="스캔한 모델이 확신 75%↑ + 내 지표 60%↑ 동조일 때 리스크 0.25% 데모 진입 · 실전 10건 평균이 마이너스면 24시간 중지">${X.pausedUntil > Date.now() ? "⏸ 중지 중 · " : ""}오늘 ${X.n || 0}/4회 · 실전 ${st.live || 0}건 ${st.live ? `평균 ${st.mean >= 0 ? "+" : ""}${st.mean}R · 승률 ${st.wr}%` : ""}</span></div>`;
   return h;
 }
+// ⚙ 매매 설정(항상 보이는 '가상 자본' 카드): 스타일 · 익절 방식 · 레버리지 방식 — 기본값은 실측 기대값이 가장 높은 쪽
+function setRows(c = {}) {
+  return `<div class="nsub" style="margin-top:8px">⚙ 매매 설정 <span class="dim">(누르면 다음 진입부터 적용)</span></div>`
+    + `<div class="brow"><span class="bt warn">익절</span><span class="btx wrap" title="6코인 1년 실측(관망 규칙 적용). 손익비를 줄이면 승률은 오르지만 건당 기대값은 내려갑니다">${Object.entries(N.TP_MODES || {}).map(([k, m]) => `<button class="nd-mini${(c.tpMode || "ev") === k ? " on" : ""}" data-tpm="${k}">${(c.tpMode || "ev") === k ? "✓ " : ""}${E(m.ko)} <small>승률 ${m.wr}% · +${m.exp}R</small></button>`).join(" ")}</span></div>`
+    + `<div class="brow"><span class="bt warn">스타일</span><span class="btx wrap" title="어느 쪽이든 최근 성적(워크포워드)이 플러스인 매매법만 실제로 진입합니다. 스캘핑은 1시간·4시간 추세가 모두 같은 방향일 때만(관망 규칙).">${Object.entries(N.STYLES_KO || {}).map(([k, ko]) => `<button class="nd-mini${(c.style || "auto") === k ? " on" : ""}" data-sty="${k}">${(c.style || "auto") === k ? "✓ " : ""}${ko}</button>`).join(" ")}</span></div>`
+    + `<div class="brow"><span class="bt warn">레버</span><span class="btx wrap" title="1회 손실 금액은 둘 다 같습니다(자본의 0.25~1%). 20배 고정은 증거금이 커지는 대신 ROE 출렁임이 작고 청산가가 멀어집니다">${[["fw", "손절폭에서 역산(기본 · 20~200배)"], ["min", "20배 고정(ROE 덜 출렁임)"]].map(([k, ko]) => `<button class="nd-mini${(c.levMode || "fw") === k ? " on" : ""}" data-levm="${k}">${(c.levMode || "fw") === k ? "✓ " : ""}${ko}</button>`).join(" ")}</span></div>`;
+}
 function robinLine(s) {
   const w = s.whale, tr = w?.trust, c = s.cfg || {}, rv = s.review2;
   return `<div class="nsub">🐋 고래 카피 · 🗂 포지션 관리 · ⚙ 한도</div>`
     + `<div class="brow"><span class="bt pur">고래</span><span class="btx" title="감지→필터→리스크→신호 · 30분 뒤 채점">${(w?.last || []).map(x => `${E(x.sym.replace("USDT", ""))} ${x.dir > 0 ? "▲" : "▼"}${Math.abs(x.netPct)}%`).join(" · ") || "승인된 고래 신호 없음"} <small class="dim">· 적중 ${tr?.n ? Math.round(tr.acc * 100) + "% (" + tr.n + "회)" : "학습 중"}</small></span></div>`
     + (rv ? `<div class="brow"><span class="bt up">관리</span><span class="btx" title="${E((rv.dropped || []).join(" / "))}">${E(rv.by)}: ${E((rv.done || []).join(" · ") || "모두 유지")}${rv.dropped?.length ? ` <small class="dim">· 검증 탈락 ${rv.dropped.length}건</small>` : ""}${rv.schema ? ' <small class="dim">· 스키마</small>' : ""} <small class="dim">${ago(rv.t)} 전</small></span></div>` : "")
     + (() => { let cs = []; try { cs = N.chartStrategies?.() || []; } catch (e) {} return cs.length ? `<div class="brow"><span class="bt up">내지표</span><span class="btx" title="차트 터미널 🔬 내 지표 연구소에서 데모 투입한 매매법 — 자체 백테스트 + 최근 기대값 +0.1R↑ 이어야 실제 데모 진입">${cs.map(x => `${x.active ? "✅" : "··"} ${E(x.name)}@${x.tf}${x.stat.n ? ` ${x.stat.mean >= 0 ? "+" : ""}${x.stat.mean}R/${x.stat.n}` : " (검증 대기)"}`).join(" · ")}</span></div>` : ""; })()
-    + `<div class="brow"><span class="bt warn">익절</span><span class="btx wrap" title="6코인 1년 실측(관망 규칙 적용). 손익비를 줄이면 승률은 오르지만 건당 기대값은 내려갑니다">${Object.entries(N.TP_MODES || {}).map(([k, m]) => `<button class="nd-mini${(c.tpMode || "ev") === k ? " on" : ""}" data-tpm="${k}">${(c.tpMode || "ev") === k ? "✓ " : ""}${E(m.ko)} <small>승률 ${m.wr}% · +${m.exp}R</small></button>`).join(" ")}</span></div>`
-    + `<div class="brow"><span class="bt warn">스타일</span><span class="btx wrap" title="어느 쪽이든 최근 성적(워크포워드)이 플러스인 매매법만 실제로 진입합니다. 스캘핑은 1시간·4시간 추세가 모두 같은 방향일 때만(관망 규칙).">${Object.entries(N.STYLES_KO || {}).map(([k, ko]) => `<button class="nd-mini${(c.style || "auto") === k ? " on" : ""}" data-sty="${k}">${(c.style || "auto") === k ? "✓ " : ""}${ko}</button>`).join(" ")}</span></div>`
-    + `<div class="brow"><span class="bt warn">레버</span><span class="btx wrap" title="1회 손실 금액은 둘 다 같습니다(자본의 0.25~1%). 20배 고정은 증거금이 커지는 대신 ROE 출렁임이 작고 청산가가 멀어집니다">${[["fw", "손절폭에서 역산(기본 · 20~200배)"], ["min", "20배 고정(ROE 덜 출렁임)"]].map(([k, ko]) => `<button class="nd-mini${(c.levMode || "fw") === k ? " on" : ""}" data-levm="${k}">${(c.levMode || "fw") === k ? "✓ " : ""}${ko}</button>`).join(" ")}</span></div>`
     + `<div class="brow"><span class="bt dim">한도</span><span class="btx">동시 ${c.maxPos ?? 4}개 · 오늘 진입 ${s.dayN ?? 0}/${c.dailyMax ?? 12} · 쿨다운 ${c.coolMin ?? 30}분${c.exclude?.length ? " · 제외 " + c.exclude.join(",") : ""}</span></div>`;
 }
 // 🎭 감정 · 🧘 관망 규칙집 · 🗂 익절·손절 조정 채점 — 전부 코드가 계산·검증한 숫자
@@ -175,6 +179,7 @@ function render() {
   const s = ST, up = s.pnl >= 0, eq = s.equity ?? (1000 + s.pnl);
   const dmode = s.riskMode && s.riskMode !== "정상";
   root.querySelector("[data-pnl]").innerHTML = `<b class="${eq >= (s.bankroll || 1000) ? "up" : "dn"}">$${eq.toLocaleString(undefined, { maximumFractionDigits: 0 })}</b> <small class="${up ? "up" : "dn"}">${money(s.pnl)}</small>`;
+  { const sx = root.querySelector("[data-setx]"); if (sx) sx.innerHTML = setRows(s.cfg || {}); }
   root.querySelector("[data-kpi]").innerHTML =
     `<span>시작 <b>$${(s.bankroll || 1000).toLocaleString()}</b></span><span>낙폭 <b class="${(s.drawdown || 0) > 7 ? "dn" : "dim"}">${s.drawdown || 0}%</b></span><span>모드 <b class="${dmode ? "dn" : "up"}">${s.riskMode || "정상"}</b></span><span>승률 <b class="${s.winRate >= 50 ? "up" : "dn"}">${s.winRate}%</b></span><span>체결 <b>${s.fills}</b></span><span>AI <b>${s.nModels}</b></span><span>매매법 <b>${s.nDesigns}</b><small>(인계 ${s.handed})</small></span><span>가동 <b>${ago(s.since)}</b></span>`;
   // 트레이더 리더보드 = 연결된 AI 모델 각각 + 자체 신호. PnL 순. (교훈 = 복기로 배운 수 · 보유 = 현재 포지션)
@@ -279,7 +284,7 @@ const SHELL = `
   <span class="nd-cfg" data-auto title="레버리지·시드비중·손절·익절은 AI 모델이 상황에 맞게 스스로 정합니다 (사용자 조절 아님)"></span>
   <button class="nd-btn" data-cfg title="동시 포지션 상한 · 하루 최대 진입 · 재진입 쿨다운 · 제외 코인">⚙ 한도</button><button class="nd-btn" data-local title="켜면 설치된 Ollama 로컬 모델만 트레이더로 씁니다 (무료·오프라인·한도 없음). 끄면 클라우드+로컬 혼합.">💻 로컬 전용</button><button class="nd-btn" data-ollama title="내 PC Ollama에 GH Coin용 추천 무료 모델을 자동으로 받아 트레이더로 씁니다">🖥 로컬 모델 설치</button><button class="nd-btn" data-reset>초기화</button><button class="nd-btn nd-x" data-x>✕</button></div>
 <div class="nd-grid">
-  <div class="nd-card nd-pnl"><div class="nd-h">가상 자본 <small>(데모 · $1000 시작 · 나만 초기화)</small></div><div class="nd-big" data-pnl></div><div class="nd-kpi" data-kpi></div></div>
+  <div class="nd-card nd-pnl"><div class="nd-h">가상 자본 <small>(데모 · $1000 시작 · 나만 초기화)</small></div><div class="nd-big" data-pnl></div><div class="nd-kpi" data-kpi></div><div class="nd-setx" data-setx></div></div>
   <div class="nd-card nd-mkt"><div class="nd-h">🔍 스캔 · 포지션</div><div class="nd-scan" data-scan></div><div class="nd-markets" data-markets></div></div>
   <div class="nd-card nd-shell"><div class="nd-h">NEURAL SHELL <small>입력 카드 → SHARED SURFACE(주문 대기열 게이트) → 매매법 → AI 워커 → 출력 · 실데이터</small></div><div class="vz-shell" data-vzshell></div></div>
   <div class="nd-card nd-rtcard"><div class="nd-h">⚡ 실시간 진입 <small>손매매용 · 시장가 기준 · 에이전트 팀 ↔ 뉴럴 데스크 토론 · 주문은 직접</small><span class="rt-coins" data-rtcoins></span><button class="nd-mini" data-rtgo title="지금 모든 코인을 다시 분석하고 토론합니다">전체 분석</button></div><div class="nd-rt" data-rt></div></div>

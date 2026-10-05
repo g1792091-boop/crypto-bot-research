@@ -699,6 +699,14 @@ class Terminal {
       paint(`<div class="nt-mkt-dec ${d.go ? "go" : "no"}">${e(d.label)}</div>
         ${swHtml}
         ${ck.length ? `<div class="nt-mkt-sec">✅ 진입 전 체크리스트 ${ckOk}/${ckN}</div><div class="nt-mkt-chips">${ck.map((x) => `<span class="${x[1] === true ? "" : x[1] === false ? "w" : "n"}">${x[1] === true ? "✓" : x[1] === false ? "✗" : "?"} ${e(x[0])}</span>`).join("")}</div>` : ""}
+        ${r.extra ? (() => { const X = r.extra, ar = (v) => v > 0 ? "▲" : v < 0 ? "▼" : v === 0 ? "·" : "?", cl = (v) => v > 0 ? "" : v < 0 ? "w" : "n", sk = b.side > 0 ? 1 : "-1", h = X.hold?.[b.side];
+          return `<div class="nt-mkt-sec">📉 시간봉별 추세 · 🧘 관망 규칙 · 스캘핑/스윙</div>
+          <div class="nt-mkt-chips">${[["1", "1분"], ["5", "5분"], ["15", "15분"], ["60", "1시간"], ["240", "4시간"]].map(([k, ko]) => `<span class="${cl(X.mtf?.[k])}">${ko} ${ar(X.mtf?.[k])}</span>`).join("")}</div>
+          <div class="nt-mkt-chips"><span class="${h ? (h.ok ? "" : "w") : "n"}" title="뉴럴 데스크 데모 매매와 같은 관망 규칙집(1년 실측 −0.040 → +0.158R)">🧘 ${b.side > 0 ? "롱" : "숏"} 관망 규칙: ${e(h ? h.why : "확인 못 함")}</span>
+            <span class="${X.timing?.[sk] ? "" : "w"}" title="1시간봉 매매에 15분 추세 같은 방향: 1년 실측 −0.046 → −0.016R">⏱ 진입 타이밍(5분·15분 같은 방향) ${X.timing?.[sk] ? "충족" : "아님"}</span>
+            <span class="${X.scalp?.[sk] ? "" : "w"}" title="15분봉 매매에 1시간·4시간 같은 방향: −0.123 → −0.084R (줄지만 여전히 마이너스)">⚡ 스캘핑 조건(1시간·4시간 같은 방향) ${X.scalp?.[sk] ? "충족" : "아님 — 스캘핑 비권장"}</span>
+            <span class="${sw ? "" : "n"}">📅 스윙: ${sw ? "일봉 검증 셋업 신호 있음" : "일봉 셋업 대기"}</span></div>
+          ${X.fng || X.mood ? `<div class="muted">${e([X.fng, X.mood].filter(Boolean).join(" · "))}</div>` : ""}`; })() : ""}
         <div class="nt-mkt-sec">${sw ? "단타 계획(참고 — 검증된 우위 없음)" : "단타 계획"}</div>
         <div class="nt-mkt-px"><div><small>시장가</small><b>${f(b.entry)}</b></div><div><small>손절 −${b.slPct}%</small><b class="down">${f(b.sl)}</b></div><div><small>익절1 ${b.rr1}R</small><b class="up">${f(b.tp1)}</b></div><div><small>익절2 ${b.rr}R</small><b class="up">${f(b.tp2)}</b></div></div>
         <div class="muted">권장 레버 ≤${b.lev}x · 청산 ${f(b.liq)} · 익절1에서 절반 익절 후 손절을 본전으로 · 포지션 크기: 계좌 $1,000당 $${Math.round(10 / (b.slPct / 100)).toLocaleString()} (손절 시 1% 손실)</div>

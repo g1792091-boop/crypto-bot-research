@@ -1916,19 +1916,42 @@ async function chartSigsFor(sym, N){
 }
 // ⚡ 시장가 버튼: 한 코인을 지금 바로 분석 → 에이전트 팀 의견 → 뉴트론(뉴럴 데스크) 반박 → 팀 최종 답 → 시장가 추천 (손매매용, 주문 안 함)
 //   롱·숏 둘 다 계산해 '덜 불리한/더 유리한 쪽'을 고르되, 검증된 근거가 없으면 '비권장'이라고 분명히 말한다.
+// 📉 시장가 보조 판정: 시간봉별 추세(1분~4시간) · 🧘 관망 규칙집(뉴럴 데스크 데모와 같은 책, 1시간봉 기준) · 스캘핑 조건 · 😱 공포탐욕·데스크 감정
+//   판정에 쓰는 것은 실측 근거가 있는 것만: 관망 규칙집(1년 −0.040 → +0.158R) · 스캘핑은 1시간·4시간 모두 같은 방향(−0.123 → −0.084R, 그래도 마이너스)
+//   · 진입 타이밍 5분·15분 같은 방향(1시간봉 매매 단독 −0.046 → −0.016R). 공포탐욕·감정은 참고 정보.
+async function entryExtras(sym, N){
+  const Q = await import("../nuri-ai/quant.js"), ENG = await import("./strategies.js"), HR = await import("./lib/holdrules.js");
+  const get = async (tf, n) => { try { return (await candlesFor({market: sym, exchange: "binancef", timeframe: tf}, n)).cs; } catch(e){ return null; } };
+  const dirOf = cs => { if (!cs || cs.length < 80) return null; const e20 = Q.computeInd(cs, "ema", {length: 20}).value, e50 = Q.computeInd(cs, "ema", {length: 50}).value, i = cs.length - 2, c = cs[i].c;
+    return e20[i] > e50[i] && c > e50[i] ? 1 : e20[i] < e50[i] && c < e50[i] ? -1 : 0; };   // 마감봉 기준(진행 중인 봉은 안 봄)
+  const [c1, c5, c15, c60, c240] = await Promise.all([get("1", 300), get("5", 300), get("15", 300), get("60", 1000), get("240", 500)]);
+  const mtf = {"1": dirOf(c1), "5": dirOf(c5), "15": dirOf(c15), "60": dirOf(c60), "240": dirOf(c240)};
+  let book = null, rest = 0; try { book = N?.holdState?.().book || null; rest = N?.mood?.().rest || 0; } catch(e){}
+  book = HR.normBook(book ? JSON.parse(JSON.stringify(book)) : null);
+  const hold = {};
+  if (c60?.length > 260 && c240?.length > 220){ const I = ENG.prepare(Q, c60), H = ENG.prepareHTF(Q, c240), i = I.n - 2, tcl = c60[i].t + 3600e3;
+    for (const side of [1, -1]){ const k = HR.check(book, HR.ctxAt(ENG, I, i, H, side, tcl, {ltf: mtf["15"], small: false, fng: null}));
+      hold[side] = rest > Date.now() ? {ok: false, why: `연속 손실 휴식 중(${Math.ceil((rest - Date.now()) / 3600e3)}시간 남음)`} : k ? {ok: false, why: k.why} : {ok: true, why: `관망 규칙집 v${book.ver} 통과`}; } }
+  const same = (side, ks) => ks.every(k => mtf[k] === side);
+  const scalp = {1: same(1, ["60", "240"]), "-1": same(-1, ["60", "240"])}, timing = {1: same(1, ["5", "15"]), "-1": same(-1, ["5", "15"])};
+  let fng = null, mood = null; try { await N?.fngCheck?.(); fng = N?.fngText?.() || null; mood = N?.moodText?.() || null; } catch(e){}
+  return {mtf, hold, scalp, timing, fng, mood, ver: book.ver};
+}
+const MTF_KO = [["1", "1분"], ["5", "5분"], ["15", "15분"], ["60", "1시간"], ["240", "4시간"]];
+const mtfLine = m => MTF_KO.map(([k, ko]) => `${ko} ${m?.[k] > 0 ? "상승" : m?.[k] < 0 ? "하락" : m?.[k] === 0 ? "중립" : "?"}`).join(" · ");
 export async function marketEntryNow({sym = "BTCUSDT", by = "user", onStep = () => {}, debate = true} = {}){
   try { await loadLog(); } catch(e){}
   sym = String(sym).toUpperCase().replace(/^KRW-(\w+)$/, "$1USDT"); if (!/USDT$/.test(sym)) sym += "USDT";
   const L = await import("./liveentry.js"); let N = null; try { N = await import("./neural.js"); } catch(e){}
   const c = COINS.find(x => x.sym === sym) || {sym, ko: sym.replace("USDT", ""), id: sym.replace("USDT", "").toLowerCase()};
   const lead = agentById("strat") || agentById("qa"), V = k => readJ(k, {}) || {};
-  onStep("📊 지지·저항 · 매수벽/매도벽 · 15분/1시간/4시간 추세 · 내 차트 지표 · 고래 · 펀딩 분석 중");
+  onStep("📊 지지·저항 · 매수벽/매도벽 · 1분~4시간 추세 · 관망 규칙 · 내 차트 지표 · 고래 · 펀딩 · 공포탐욕 분석 중");
   const ctx = {verdicts: {ta: V("coinTARating")[c.id], selfAI: V("coinSelfAI")[c.id], ml: V("coinML")[c.id]}, daily: V("coinDailyTrend")[c.id] || null};
   try { ctx.whale = N?.whaleFor ? await N.whaleFor(sym) : null; } catch(e){}
   try { ctx.libSignal = N?.recentSignal ? N.recentSignal(sym) : null; } catch(e){}
   try { ctx.funding = await fundScanOf(sym); } catch(e){}
   ctx.chartSigs = await chartSigsFor(sym, N);
-  const r = await L.analyzeCoin(sym, ctx);
+  const [r, X] = await Promise.all([L.analyzeCoin(sym, ctx), entryExtras(sym, N).catch(() => null)]);
   // 고르기: 검증 매매법 신호(유력)가 있으면 그쪽, 아니면 '유사상황 기대값'과 '내 지표 같은 상태 기대값'의 평균이 높은 쪽
   const ce = x => x.grade === "유력" ? 9 + (x.sig?.mean || 0) : (x.exp + (x.my ? x.my.exp : x.exp)) / 2;
   const [A, B] = [...r.sides].sort((a, b) => ce(b) - ce(a)), pick = A;
@@ -1941,6 +1964,10 @@ export async function marketEntryNow({sym = "BTCUSDT", by = "user", onStep = () 
 내 차트 지표(15분): ${(r.myInd || []).map(x => x.name + (x.d15 > 0 ? "↑" : x.d15 < 0 ? "↓" : "·")).join(" ") || "없음"}
 ${sideTxt(A)}
 ${sideTxt(B)}
+시간봉별 추세(마감봉): ${mtfLine(X?.mtf)}
+관망 규칙집(데모 매매와 같은 규칙): 롱 ${X?.hold?.[1] ? (X.hold[1].ok ? "통과" : "걸림 — " + X.hold[1].why) : "?"} · 숏 ${X?.hold?.[-1] ? (X.hold[-1].ok ? "통과" : "걸림 — " + X.hold[-1].why) : "?"}
+스캘핑 조건(1시간·4시간 같은 방향): 롱 ${X?.scalp?.[1] ? "충족" : "아님"} · 숏 ${X?.scalp?.["-1"] ? "충족" : "아님"} · 진입 타이밍(5분·15분 같은 방향): 롱 ${X?.timing?.[1] ? "충족" : "아님"} · 숏 ${X?.timing?.["-1"] ? "충족" : "아님"}
+${X?.fng || ""}${X?.mood ? " · " + X.mood : ""}
 코드 추천: ${A.side > 0 ? "롱" : "숏"} (${ok ? "진입 가능" : "우위 근거 부족 — 비권장"})`;
   let team = {who: lead.name, stance: "기권", reason: "AI 없음"}, neural = null, final = null;
   if (hasAI() && debate){
@@ -1973,20 +2000,26 @@ ${sideTxt(B)}
   const votes = judges.map(j => j.stance), con = judges.filter(j => j.stance === "반대").reduce((a, j) => a + (N?.judgeWeight ? N.judgeWeight(j.who) : 1), 0);
   let grade = pick.grade; if (con >= 2 || (final && !final.keep && neural?.stance === "반대")) grade = grade === "유력" ? "보통" : "관망";
   // 2개월·6코인 표본외: 지표·지지저항·호가·내 지표 조합으로 '더 나은 쪽'을 골라도 평균 −0.03~−0.12R → '진입 가능'은 검증 매매법 신호(유력)일 때만
-  const go0 = grade === "유력";
   // 🏆 일봉 검증 셋업이 지금 신호면 그것이 1순위(4년·6코인 검증 통과). 단타 계획과 별개의 '스윙 계획'으로 제시한다.
   onStep("📅 일봉 검증 셋업 확인");
   const dset = await dailySetupsFor(sym), sw = (dset?.setups || []).find(x => !x.chased) || null;
   // 프로 체크리스트(코드가 확인한 사실만)
   const chk = [["일봉 추세와 같은 방향", ctx.daily?.dir ? ctx.daily.dir === pick.side : null], ["검증된 셋업 신호(일봉 뼈대 또는 워크포워드 통과 매매법)", !!(sw && sw.side === pick.side) || !!pick.sig],
     ["손익비 1.5 이상", pick.rr >= 1.5], ["펀딩 과열 아님", !pick.warn.some(w => /펀딩/.test(w))], ["고래 흐름 반대 아님", !pick.warn.some(w => /고래 반대/.test(w))], ["추격 아님(자리에서 멀지 않음)", !pick.warn.some(w => /추격|멀/.test(w))],
-    ["토론에서 반대 합의 아님", con < 2]];
+    ["토론에서 반대 합의 아님", con < 2],
+    ["관망 규칙집 통과(상위 추세·EMA 배열·연속 손실 휴식 — 데모와 같은 규칙)", X?.hold?.[pick.side] ? X.hold[pick.side].ok : null],
+    ["진입 타이밍: 5분·15분 추세가 같은 방향", X ? !!X.timing[pick.side > 0 ? 1 : "-1"] : null],
+    ["스캘핑이면: 1시간·4시간 추세가 같은 방향", X ? !!X.scalp[pick.side > 0 ? 1 : "-1"] : null]];
+  // 관망 규칙에 지금 걸리면(신호 뒤에 상황이 바뀜) 단타 '진입 가능'을 내린다 — 일봉 스윙 셋업은 별도 검증이라 그대로
+  const holdBad = X?.hold?.[pick.side] && !X.hold[pick.side].ok;
+  if (holdBad && grade === "유력") grade = "보통";
+  const go0 = grade === "유력";
   const go = go0 || !!sw;
   const decision = sw ? {side: sw.side, grade: "유력", go: true, swing: true, label: `${sw.side > 0 ? "롱" : "숏"} 진입 가능 — 일봉 검증 셋업 '${sw.name}' (4년·${sw.coins}코인 ${sw.n}건 · 승률 ${sw.wr}% · 손익비 ${sw.pf}) · 단타가 아니라 스윙 계획`}
     : {side: pick.side, grade, go, label: go ? `${pick.side > 0 ? "롱" : "숏"} 시장가 진입 가능 [유력 · 검증 매매법 신호]` : `진입 비권장 — 지금은 검증된 우위 없음 · 굳이 들어간다면 ${pick.side > 0 ? "롱" : "숏"} 쪽이 계산상 덜 불리`};
   pick.debate = {team, neural, final, verdict: votes.length === 2 ? (votes.every(x => x === "찬성") ? "합의: 찬성" : votes.every(x => x === "반대") ? "합의: 반대" : "의견 갈림") : votes.length ? "한쪽만 응답" : "토론 없음", t: Date.now()};
   const res = {t: Date.now(), by, sym, ko: c.ko, price: r.price, tr: r.tr, adx1h: r.adx1h, rsi15: r.rsi15, myInd: r.myInd, book: r.book ? {imb1: r.book.imb1, bidWalls: r.book.bidWalls.slice(0, 3), askWalls: r.book.askWalls.slice(0, 3)} : null,
-    levels: r.levels.filter(l => Math.abs(l.price / r.price - 1) < 0.04).map(l => ({price: l.price, src: l.src, strength: l.strength})), sides: r.sides, best: pick, other: B, decision, swing: sw, daily: dset ? {atrPct: dset.atrPct, rsi2: dset.rsi2, sma50: dset.sma50, inTrend: dset.inTrend, watch: dset.watch, chased: (dset.setups || []).filter(x => x.chased).map(x => x.name)} : null, checklist: chk};
+    levels: r.levels.filter(l => Math.abs(l.price / r.price - 1) < 0.04).map(l => ({price: l.price, src: l.src, strength: l.strength})), sides: r.sides, extra: X, best: pick, other: B, decision, swing: sw, daily: dset ? {atrPct: dset.atrPct, rsi2: dset.rsi2, sma50: dset.sma50, inTrend: dset.inTrend, watch: dset.watch, chased: (dset.setups || []).filter(x => x.chased).map(x => x.name)} : null, checklist: chk};
   writeJ("coinMarketEntry", res);
   try { N?.trackCall?.({sym, ko: c.ko, side: pick.side, entry: pick.entry, sl: pick.sl, tp1: pick.tp1, grade, src: "시장가", judges}); } catch(e){}
   if (sw) try { N?.trackCall?.({sym, ko: c.ko, side: sw.side, entry: sw.entry, sl: sw.sl, tp1: sw.target && (sw.target - sw.entry) * sw.side > 0 ? sw.target : sw.entry + sw.side * Math.abs(sw.entry - sw.sl), grade: "일봉셋업", src: "시장가·스윙"}); } catch(e){}   // 내가 누른 시장가 추천도 채점 → 뇌 학습
