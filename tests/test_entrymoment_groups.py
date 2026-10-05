@@ -137,6 +137,31 @@ def test_group_brief_is_money_free_per_family_and_bounded(w):
     assert EM.group_brief([], flip_rows=[])["trades"] == 0
 
 
+
+def _spread_rows(n=600, defs=7):
+    """Rows that fill every bucket of every dimension (no database): the briefs' size bounds at their worst."""
+    rows = []
+    for k in range(n):
+        b = {d: EM.BUCKETS[d][(k * (i + 1) + k // 7) % len(EM.BUCKETS[d])] for i, d in enumerate(EM.DIMS)}
+        rows.append({"kind": "ds200", "strategy": f"D{k % defs}", "timeframe": "15m", "symbol": "BTCUSDT",
+                     "side": 1 if k % 3 else -1, "pnl": (k % 5) - 2.0, "roe": ((k % 5) - 2.0) / 50, "eq": None, "b": b})
+    return rows
+
+
+def test_the_briefs_hold_their_cap_with_the_left_out_list_counted():
+    """The left_out list is part of the brief: a brief that only fitted before the list was added would go over."""
+    rows = _spread_rows()
+    fams = {f"D{k}": f"F{k}" for k in range(7)}
+    for cap in range(2_500, 7_001, 125):
+        br = EM.group_brief(rows, families=fams, flip_rows=rows[:300], max_bytes=cap)
+        assert EM.compact_bytes(br) <= cap, (cap, br.get("left_out"))
+    assert EM.compact_bytes(EM.group_brief(rows, families=fams)) <= EM.GROUP_BRIEF_MAX_BYTES
+    for cap in range(1_000, 2_401, 50):
+        sb = EM.strategy_brief_from({"rows": rows}, "D0", max_bytes=cap)
+        assert EM.compact_bytes(sb) <= cap, (cap, sb.get("left_out"))
+    assert EM.strategy_brief_from({"rows": rows}, "D0", max_bytes=1_000)["left_out"]
+
+
 # ------------------------------------------------------------------ C: the group rooms
 def test_a_deepseek_room_gets_its_entry_moment_without_money(tmp_path):
     w = V4World(tmp_path)

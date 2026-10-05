@@ -731,6 +731,11 @@ def packet(paper_ro: Optional[sqlite3.Connection], now_ms: int, since_ms: int = 
     return packet_from(feat, sk, min_n, names_ko, money=has_money(kinds))
 
 
+def _fits(out: dict, left: list, max_bytes: int) -> bool:
+    """``out`` with the ``left_out`` list it will carry (when any) fits ``max_bytes``."""
+    return compact_bytes({**out, "left_out": left} if left else out) <= max_bytes
+
+
 def strategy_brief_from(feat: dict, strategy: str, min_n: int = SMALL_N, max_bytes: int = BRIEF_MAX_BYTES) -> dict:
     rows = [r for r in feat["rows"] if r["strategy"] == strategy]
     out: dict = {"trades": len(rows), "min_n": min_n}
@@ -747,7 +752,7 @@ def strategy_brief_from(feat: dict, strategy: str, min_n: int = SMALL_N, max_byt
     out["note"] = "진입 순간 모습별 성적(코드, 설명용). small은 우연일 수 있고, 칸이 많아 차이는 가설로만"
     left = []
     for dim in BRIEF_DROP:
-        if compact_bytes(out) <= max_bytes:
+        if _fits(out, left, max_bytes):
             break
         tab.pop(dim, None)
         left.append(dim)
@@ -912,13 +917,13 @@ def group_brief(rows: list, families: Optional[dict] = None, flip_rows: Optional
     out["note"] = NOTE
     left = []
     for dim in BRIEF_DROP:
-        if compact_bytes(out) <= max_bytes:
+        if _fits(out, left, max_bytes):
             break
         tab.pop(dim, None)
         if ftab is not None:
             ftab.pop(dim, None)
         left.append(dim)
-    if compact_bytes(out) > max_bytes and "families" in out:
+    if not _fits(out, left + ["families.stage"], max_bytes) and "families" in out:
         out["families"] = {f: _bare(c) for f, c in out["families"].items()}
         left.append("families.stage")
     if left:
