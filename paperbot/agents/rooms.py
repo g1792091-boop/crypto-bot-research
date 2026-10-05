@@ -2802,6 +2802,8 @@ def _review_meeting(ctx: RoundContext) -> list[dict]:
 def _team_packet(rnd: _Round, role: str, board: dict) -> dict:
     ctx = rnd.ctx
     view = TEAM_VIEW.get(role, ("meta", "today"))
+    if role == "team_lead" and rnd.room in GROUP_ROLE_OF_ROOM:
+        view = GROUP_LEAD_VIEW                # a v4 specialist room's lead: the groups, never the 36's sections
     pk = {**rnd.base, "board": {k: board.get(k) for k in view if k in board}}
     if "error" in board:
         pk["board"]["error"] = board["error"]
@@ -2911,7 +2913,9 @@ def _team_summary(rnd: _Round, board: dict, extra: dict) -> str:
     L = [f"🧾 {TRIGGER_KO.get(rnd.due.trigger, rnd.due.trigger)} 끝"]
     L.append("- 발언: " + ", ".join(dict.fromkeys(role_ko(r) for r in rnd.spoke)))
     today = board.get("today") or {}
-    if today:
+    if rnd.room in GROUP_ROLE_OF_ROOM:        # board['today'] is the 36's: a v4 specialist room says its own accounts
+        L += _group_summary_lines(rnd)
+    elif today:
         L.append(f"- 최근 24시간(코드 집계): 끝난 거래 {today.get('trades', 0)}건, 손익 "
                  f"{float(today.get('net_pnl') or 0):+.2f} USDT, 파산 계좌 누적 {today.get('busts_total', 0)}개")
     if rnd.due.data.get("summary_ko"):
@@ -2929,6 +2933,29 @@ def _team_summary(rnd: _Round, board: dict, extra: dict) -> str:
         L.append(f"- {extra['call'].get('text_ko', '')}")
     L.append(f"- AI 호출 {rnd.calls}회")
     return "\n".join(L)
+
+
+# the lead of a v4 specialist room (DeepSeek families, the reel): the board's group section next to the room's own
+# ``group_accounts`` (TEAM_VIEW["team_lead"] is the 36's: today, league, checkpoint, ...)
+GROUP_LEAD_VIEW = ("meta", "groups")
+
+
+def _group_summary_lines(rnd: _Round) -> list[str]:
+    """A v4 specialist room's line on its meeting card (code): its own accounts from ``group_accounts`` (accounts,
+    trades, busts since the start); P&L only for the reel (D10/D11: DeepSeek money stays on its group screen).
+    Nothing when the packet has no numbers (never the 36's ``today``)."""
+    ga = rnd.base.get("group_accounts")
+    rows = ga.get("definitions") if isinstance(ga, dict) else None
+    if not isinstance(rows, list):
+        return []
+    rows = [x for x in rows if isinstance(x, dict)]
+    trades = sum(int(x.get("trades") or 0) for x in rows)
+    busts = sum(int(x.get("busts") or 0) for x in rows)
+    line = f"- 이 방 계좌(코드 집계, 시작부터): {int(ga.get('accounts') or 0)}개, 끝난 거래 {trades}건, 파산 {busts}개"
+    from ..config import REEL_NAME
+    if rnd.room == TR.group_room_of(REEL_NAME):
+        line += f", 손익 {sum(float(x.get('pnl') or 0) for x in rows):+.2f} USDT"
+    return [line]
 
 
 # ---------------------------------------------------------------- meetings added 2026-10-04 (owners' choice)
