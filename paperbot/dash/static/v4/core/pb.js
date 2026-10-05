@@ -1,4 +1,4 @@
-// One import for screens: import {h, s, fmt, ui, motion, derive, figure, consolePanel, alertKo, store, features}
+// One import for screens: import {h, s, fmt, ui, motion, sound, derive, figure, consolePanel, alertKo, store, features}
 // from "../core/pb.js". (Screens get api / watch / polling through ctx, see CONTRACT.md.)
 export {h, s, $, $$, clear, put, text, on, esc, hueOf, local} from "./dom.js";
 export * as fmt from "./fmt.js";
@@ -17,3 +17,4 @@ export {setBadge} from "./shell.js";
 export {startTour} from "./tour.js";
 export * as bars from "./bars.js";
 export {loadLwc, makeChart, chartOptions, candleOptions, tok, kstTick, priceDec} from "./lwc.js";
+export * as sound from "./sound.js";
