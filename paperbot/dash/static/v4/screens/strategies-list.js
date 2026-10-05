@@ -6,11 +6,14 @@
 // 승률 / 거래 수, one cell per timeframe in the 한눈 지도 colours, 7일 / 30일) with the link to its chart and rules.
 // HONESTY: no pass / fail hints in the rows (no coin-flip comparison on a row; the card shows it as 참고 with refNote,
 // DeepSeek only at group level); money has assume(); 표본 적음.
+// DeepSeek's first view (전체 요약, also #/strategies?g=ds&fam=all from the grid) opens with the 17-family summary
+// (strategies-dsfam.js: counts only, no money); tapping the 딥시크 group starts there, a family row opens that family.
 import {h, put, ui, fmt, motion, local} from "../core/pb.js";
 import {miniSpark, profileCard, identicon} from "./grid-kit.js";
 import {DS_FAMILIES, FAMILY, DS_DEFS, DS_COMMON, EXITS, LEVERAGE, REEL} from "./strategies-defs.js";
 import {DS_RAW, REEL_RAW} from "./strategies-raw.js";
 import {strategyIndex} from "./strategies-calc.js";
+import {dsFamilyCard, familyStats, familyLine} from "./strategies-dsfam.js";
 
 const GROUPS = [
   {id: "core", ko: "기존 36", intro: "잠긴 매매법 36개를 15분·30분·1시간·4시간봉 계좌로 돌립니다. 기록은 그 봉 계좌들을 더한 값입니다."},
@@ -25,11 +28,15 @@ function recLine(r) {
   return r.trades ? `${fmt.int(r.wins)}승 ${fmt.int(r.losses)}패 · 승률 ${fmt.pct(r.rate, 0, false)}` : "거래 없음";
 }
 
+/** ?fam= from a link: "all" = the 17-family summary (""), a family id as it is; anything else = no request (null). */
+const famQuery = (q) => (q === "all" ? "" : FAMILY[q] ? q : null);
+
 export function listView(ctx, st) {
-  const v = {g: ["core", "ds", "m5"].includes((ctx.params.query || {}).g) ? ctx.params.query.g : local.get("strat-group", "core"),
-    style: local.get("strat-style", ""), sort: local.get("strat-sort", ""), fam: local.get("strat-fam", "F1"), idx: []};
+  const q0 = ctx.params.query || {};
+  const v = {g: ["core", "ds", "m5"].includes(q0.g) ? q0.g : local.get("strat-group", "core"),
+    style: local.get("strat-style", ""), sort: local.get("strat-sort", ""), fam: famQuery(q0.fam) ?? local.get("strat-fam", ""), idx: []};
   if (!GROUPS.some((g) => g.id === v.g)) v.g = "core";
-  if (v.fam !== "" && !FAMILY[v.fam]) v.fam = "F1";
+  if (v.fam !== "" && !FAMILY[v.fam]) v.fam = "";
 
   const gseg = h("div");
   const intro = h("p", {class: "ink2 strat-intro"});
@@ -129,6 +136,20 @@ export function listView(ctx, st) {
   }
   const dsNote = () => h("p", {class: "refnote"}, h("b", null, "참고"), " · 딥시크는 계좌마다 동전 봇과 비교하지 않습니다. 정의별 숫자는 봉 계좌를 더한 기록일 뿐 판정이 아닙니다.");
 
+  // ---------------------------------------------------------------- DeepSeek: the 17-family summary (counts only)
+  const verdictTs = () => { const s = st.summary || {}; return (s.restart && s.restart.ready && s.restart.verdict_ts) || (s.next_checkpoint && s.next_checkpoint.ts) || null; };
+  // the family stays in the address (?fam=), so coming back from a definition (#/strategies/<id>) to an address that
+  // says ?fam=all does not throw the owner back to the summary: setGroup() reads it again on the way back
+  const famUrl = () => { try { window.history.replaceState(null, "", ctx.href("strategies", null, {g: "ds", fam: v.fam || "all"})); } catch { /* keep the hash */ } };
+  function pickFam(id) {
+    v.fam = id; local.set("strat-fam", id); famUrl();
+    renderFilters(); renderBody(true);
+    const top = filters.getBoundingClientRect().top + window.scrollY - 96;      // the family's rules start under the tabs
+    if (window.scrollY > top) window.scrollTo(0, Math.max(0, top));
+  }
+  const famCard = dsFamilyCard(ctx, {onPick: pickFam, verdictTs});
+  let famLineEl = null;               // the chosen family's own count line (family view), repainted with the board
+
   // persistent cards: a board refresh never rebuilds them (the search text, the page and open disclosures stay)
   const coreSub = h("span", {class: "sub"});
   const coreCard = ui.card({plate: "매매법"}, coreList.el,
@@ -142,6 +163,7 @@ export function listView(ctx, st) {
     const n = (g) => v.idx.filter((s) => s.group === g).length;
     put(gseg, ui.seg(GROUPS.map((g) => ({id: g.id, label: g.ko, title: `${fmt.int(n(g.id))}개`})), v.g, (id) => {
       v.g = id; local.set("strat-group", id);
+      if (id === "ds") { v.fam = ""; local.set("strat-fam", ""); }       // choosing 딥시크 starts at the 17-family summary
       try { window.history.replaceState(null, "", ctx.href("strategies", null, {g: id})); } catch { /* keep the hash */ }
       render(true);
     }, {label: "묶음"}));
@@ -155,8 +177,8 @@ export function listView(ctx, st) {
       put(filters, h("div", {class: "row wrap strat-filters"},
         ui.seg(STYLES, v.style, (id) => { v.style = id; local.set("strat-style", id); fillCore(false); }, {label: "성격"}), h("span", {class: "grow"}), sortSel));
     } else if (v.g === "ds") {
-      put(filters, ui.seg([{id: "", label: "전체"}, ...DS_FAMILIES.map((f) => ({id: f.id, label: `${f.id} ${f.ko}`}))], v.fam,
-        (id) => { v.fam = id; local.set("strat-fam", id); renderBody(true); }, {label: "계열", scroll: true}));
+      put(filters, ui.seg([{id: "", label: "전체 요약"}, ...DS_FAMILIES.map((f) => ({id: f.id, label: `${f.id} ${f.ko}`}))], v.fam,
+        (id) => { v.fam = id; local.set("strat-fam", id); famUrl(); renderBody(true); }, {label: "계열", scroll: true}));
       filters.firstChild.classList.add("strat-famseg");
     } else put(filters);
   }
@@ -173,16 +195,20 @@ export function listView(ctx, st) {
   function renderBody(animate) {
     const rows = v.idx.filter((s) => s.group === v.g);
     recEls.clear();
+    famLineEl = null;
     let kids;
     if (v.g === "core") {
       fillCore(!animate);
       kids = [coreCard];
     } else if (v.g === "ds" && !v.fam) {
       dsList.set(rows, !animate);
-      kids = [dsAllCard];
+      famCard.update(st.board);
+      kids = [famCard.el, dsAllCard];
     } else if (v.g === "ds") {
       const f = FAMILY[v.fam], mine = rows.filter((s) => s.fam === v.fam);
-      kids = [ui.card({plate: `${f.id} ${f.ko}`, sub: `정의 ${fmt.int(mine.length)}개`}, h("p", {class: "ink2"}, f.desc)),
+      famLineEl = h("div", {class: "dsf-linebox"}, familyLine(familyStats(st.board).rows.find((r) => r.id === v.fam)));
+      kids = [ui.card({plate: `${f.id} ${f.ko}`, sub: `정의 ${fmt.int(mine.length)}개`,
+        acts: [h("button", {type: "button", class: "btn-line", onclick: () => pickFam("")}, "17계열 요약")]}, h("p", {class: "ink2"}, f.desc), famLineEl),
         h("div", {class: "strat-defs"}, mine.map(defCard)),
         ui.card({cls: "flat strat-dsfoot"}, dsNote(), ui.disclosure("딥시크 44개 공통 약속", h("ul", {class: "strat-lines small"}, DS_COMMON.map((t) => h("li", null, t)))),
           ui.assume(null, "손익은 닫힌 거래 기준"))];
@@ -228,11 +254,18 @@ export function listView(ctx, st) {
     refresh() {
       v.idx = strategyIndex(st.board, st.list36);
       if (v.g === "core") fillCore(true);
-      else if (v.g === "ds" && !v.fam) dsList.set(v.idx.filter((s) => s.group === "ds"), true);
+      else if (v.g === "ds" && !v.fam) { dsList.set(v.idx.filter((s) => s.group === "ds"), true); famCard.update(st.board); }
+      else if (v.g === "ds" && famLineEl) put(famLineEl, familyLine(familyStats(st.board).rows.find((r) => r.id === v.fam)));
       for (const [id, x] of recEls) { const s = v.idx.find((y) => y.id === id); if (s) fillRec(x.el, s, x.ref); }
       renderGroups();
     },
-    setGroup(g) { if (GROUPS.some((x) => x.id === g) && g !== v.g) { v.g = g; local.set("strat-group", g); render(true); } },
+    /** Same screen, new query (#/strategies?g=ds&fam=all from the grid): switch the group and / or the family. */
+    setGroup(g, fam) {
+      const okG = GROUPS.some((x) => x.id === g) && g !== v.g, f = famQuery(fam), okF = f != null && f !== v.fam;
+      if (okG) { v.g = g; local.set("strat-group", g); }
+      if (okF) { v.fam = f; local.set("strat-fam", f); }
+      if (okG || okF) render(true);
+    },
     dispose() {},
   };
 }

@@ -173,6 +173,20 @@ a.term-fr:hover { background: var(--surface-2); }
 .term-dot.on { animation: term-breathe 2.4s var(--ease) infinite; }
 .term[data-still="1"] .term-dot.on { animation-play-state: paused; }
 @keyframes term-breathe { 0%, 100% { box-shadow: 0 0 0 0 var(--accent-glow); opacity: 1; } 50% { box-shadow: 0 0 0 7px transparent; opacity: .75; } }
+/* gap batch B: a soft glow along our entry / stop lines (terminal-chart.js placeGlows). A static band per line in the
+   line's meaning colour, faded in from the left so the price labels on the right stay crisp; screen-blended so it only
+   lightens the chart. No loop: a new line's glow draws in once (motion.drawIn), nothing under reduced motion. */
+.term-glows { position: absolute; inset: 0; z-index: 2; pointer-events: none; overflow: hidden; }
+.term-glows[hidden], .term-glow[hidden] { display: none; }
+.term-glow { position: absolute; left: 0; top: 0; height: 0; pointer-events: none; --gl: var(--accent-glow); }
+.term-glow[data-tone="up"] { --gl: var(--ug); }
+.term-glow[data-tone="down"] { --gl: var(--dg); }
+.term-glow > i { position: absolute; left: 0; right: 0; top: -6px; height: 12px; display: block; opacity: .45; mix-blend-mode: screen;
+  background: linear-gradient(to bottom, transparent, var(--gl) 50%, transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, var(--ink) 22%); mask-image: linear-gradient(to right, transparent, var(--ink) 22%); }
+.term-glow[data-k="stop"] > i { top: -4px; height: 8px; opacity: .32; }
+:root[data-skin="classic"] .term-glow > i { opacity: .38; }
+:root[data-skin="classic"] .term-glow[data-k="stop"] > i { opacity: .28; }
 .term-tip { position: absolute; left: 0; top: 0; z-index: 6; display: grid; gap: 3px; max-width: 220px; padding: 6px 9px; border-radius: 5px; pointer-events: none;
   background: var(--glass); border: 1px solid var(--warn); color: var(--ink); font-size: 11px; box-shadow: 0 6px 18px var(--card-shadow, transparent); }
 .term-tip b { color: var(--warn); }
@@ -182,7 +196,7 @@ a.term-fr:hover { background: var(--surface-2); }
 .term-ckey .k-ar { background: var(--accent); clip-path: polygon(50% 0, 100% 100%, 0 100%); border-radius: 0; }
 .term-ckey .k-up { background: var(--up); } .term-ckey .k-dn { background: var(--down); }
 .term-ckey .k-ev { background: var(--warn); border-radius: 1px; }
-.term-ckey .k-ln { width: 14px; height: 2px; border-radius: 0; background: var(--up); }
+.term-ckey .k-ln { width: 14px; height: 2px; border-radius: 0; background: var(--up); box-shadow: 0 0 5px var(--ug); }
 .term-ckey .k-sr { width: 14px; height: 0; border-radius: 0; border-top: 1px dotted var(--ink-2); }
 .term-cfail { padding: 20px; }
 
