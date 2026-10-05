@@ -24,7 +24,9 @@ Routes (registered by ``register``; all behind the dashboard login like every ot
 - ``GET /api/analysis/shock``       ④ the shock test (agents/shock.py dash_view)
 - ``GET /api/analysis/map``         ⑤ coin / side / timeframe / session / weekday / regime (agents/compare.py), plus the
                                     volatility and weekday buckets of agents/entrymoment.py when that one is cached
-- ``GET /api/analysis/entry``       ⑥ the moment of entry (agents/entrymoment.py dash_view, '준비 중' when missing)
+- ``GET /api/analysis/entry``       ⑥ the moment of entry (agents/entrymoment.py dash_view, '준비 중' when missing);
+                                    ``?group=core|ds200|reel`` (default core = the 36): entrymoment.group_dash_view
+                                    (DeepSeek with no money, the reel next to its three 5m coin flips)
 - ``GET /api/analysis/synergy``     조합 시너지 (agents/synergy.py dash_view)
 - ``GET /api/analysis/levrule``     좋은 자리 vs 보통: leverage rule B's pre-registered evaluation (agents/leveval.py,
                                     docs/levrule-eval.md; '30일 판정 전 결론 없음' until day 30)
@@ -675,7 +677,21 @@ def _cards(data, kind: str, tfs: Optional[tuple] = None) -> list:
 
 
 # ---------------------------------------------------------------- ⑥ moment of entry
-def entry_view(paper_db: str, daily_db: Optional[str], now_ms: int) -> dict:
+ENTRY_GROUPS = ("core", "ds200", "reel")   # ?group= on /api/analysis/entry (agents/entrymoment.GROUPS)
+
+
+def entry_group(group: Optional[str]) -> str:
+    """The checked ``?group=`` of the entry view ('core' when absent); anything else is a 400."""
+    g = (group or "core").strip().lower()
+    if g not in ENTRY_GROUPS:
+        from fastapi import HTTPException
+        raise HTTPException(400, "group은 core(기존 36) · ds200(딥시크) · reel(5분봉) 중 하나입니다")
+    return g
+
+
+def entry_view(paper_db: str, daily_db: Optional[str], now_ms: int, group: str = "core") -> dict:
+    """⑥ for the 36 (default, as before) or one v4 group (entrymoment.group_dash_view: DeepSeek without money, the
+    reel next to its three 5m coin flips)."""
     try:
         import importlib
         EM = importlib.import_module("..agents.entrymoment", __package__)
@@ -691,8 +707,12 @@ def entry_view(paper_db: str, daily_db: Optional[str], now_ms: int) -> dict:
     side = os.path.dirname(os.path.abspath(paper_db))
     p = lambda n: os.path.join(side, n) if os.path.exists(os.path.join(side, n)) else None  # noqa: E731
     try:
-        v = EM.dash_view(c, now_ms, 0, daily_ro=d, liq_path=p("liq.db"), flow_path=p("flow.db"),
-                         market_path=p("market.db"), names_ko=dict(STRATEGY_KO))
+        if group == "core":
+            v = EM.dash_view(c, now_ms, 0, daily_ro=d, liq_path=p("liq.db"), flow_path=p("flow.db"),
+                             market_path=p("market.db"), names_ko=dict(STRATEGY_KO))
+        else:
+            v = EM.group_dash_view(c, now_ms, group, 0, daily_ro=d, liq_path=p("liq.db"), flow_path=p("flow.db"),
+                                   market_path=p("market.db"))
     finally:
         _close(c, d)
     return v if isinstance(v, dict) else {"unavailable": True, "note": "준비 중"}
@@ -966,8 +986,11 @@ def register(app, data, rooms, db: str, daily_db: Optional[str], checkpoint_db: 
         return heavy.get("shock", SHOCK_TTL_S, lambda: shock_view(db))
 
     @app.get("/api/analysis/entry")
-    def get_entry():
-        return heavy.get("entry", ENTRY_TTL_S, lambda: entry_view(db, daily, _now()))
+    def get_entry(group: Optional[str] = None):
+        g = entry_group(group)
+        if g == "core":        # the key /api/analysis/map peeks at stays the 36's
+            return heavy.get("entry", ENTRY_TTL_S, lambda: entry_view(db, daily, _now()))
+        return heavy.get(f"entry:{g}", ENTRY_TTL_S, lambda: entry_view(db, daily, _now(), g))
 
     @app.get("/api/analysis/map")
     def get_map():

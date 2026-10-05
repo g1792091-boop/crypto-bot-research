@@ -91,7 +91,8 @@ export function sessions(d, env) {
 
 // ---------------------------------------------------------------- 진입 순간 (/api/analysis/entry)
 const DIM_KO = {strength: "진입 강도", volatility: "변동성", body: "몸통 크기(ATR 대비)", wick_against: "반대쪽 꼬리", wick_with: "같은 쪽 꼬리",
-  close_loc: "종가 위치", streak: "연속 봉", pattern: "봉 모양", liq: "직전 강제청산 몰림", hold: "보유 시간", funding: "펀딩비", weekday: "요일"};
+  close_loc: "종가 위치", streak: "연속 봉", pattern: "봉 모양", liq: "직전 강제청산 몰림", hold: "보유 시간", funding: "펀딩비", weekday: "요일",
+  trend_stage: "추세 초입·중간·막판", range_pos: "최근 범위 안 위치", trend_align: "장세 방향"};
 const BK_KO = {weak: "약함", mid: "중간", strong: "강함", unknown: "모름", low: "낮음", high: "높음", with_1: "같은 방향 1개", with_2: "같은 방향 2개",
   "with_3+": "같은 방향 3개+", against_1: "반대 1개", "against_2+": "반대 2개+", doji: "도지", engulf_with: "장악형(같은 방향)",
   engulf_against: "장악형(반대)", pin_with: "망치형(같은 방향)", pin_against: "망치형(반대)", none: "없음", burst_with: "몰림(같은 방향)",
@@ -100,7 +101,7 @@ export function entry(d, env) {
   const cov = d.coverage || {}, mc = d.multiple_comparisons || {}, min = d.min_n || 10;
   const T = cov.trades || d.trades || 1;
   const out = [viewHead({plate: "진입 순간", q: "들어가는 순간의 모습에 따라 성적이 달랐나",
-    meta: `기존 36 매매법의 끝난 거래 ${fmt.int(d.trades || 0)}건 · 칸 최소 ${fmt.int(min)}건`, at: d.computed_at || d.generated_ms, stale: d.stale,
+    meta: `${d.group_label || "기존 36 매매법"}의 끝난 거래 ${fmt.int(d.trades || 0)}건${d.coin_flips ? ` · 5분봉 동전 ${fmt.int(d.flip_trades || 0)}건` : ""}${d.no_money ? " · 돈 숫자 없음" : ""} · 칸 최소 ${fmt.int(min)}건`, at: d.computed_at || d.generated_ms, stale: d.stale,
     read: "진입 봉의 모양·변동성·보유 시간 같은 것으로 거래를 나눴습니다. 칸을 아주 많이 보므로 20칸 중 1칸쯤은 우연만으로도 달라 보입니다: 칸 차이는 가설일 뿐입니다.",
     warn: [thin(d.trades || 0, 100, "끝난 매매법 거래"), mc.note || null]})];
   if (!d.trades) { out.push(ui.card({}, ui.empty(d.note || "아직 끝난 거래가 없습니다"))); return out; }
@@ -110,18 +111,26 @@ export function entry(d, env) {
   function paint(anim) {
     const k = seg.get(), t = (d.all || {})[k] || {}, order = (d.bucket_order || {})[k] || Object.keys(t);
     const keys = [...order.filter((b) => t[b]), ...Object.keys(t).filter((b) => !order.includes(b))];
+    // the reel: its three 5m coin flips in the same bucket (n, win rate, ROE only: the flips are counted, never money)
+    const f = d.coin_flips && !d.coin_flips.error ? (d.coin_flips[k] || {}) : null;
     put(body, ui.table([
       {label: "칸", l: true, get: (b) => h("span", {class: t[b].n < min ? "muted" : ""}, BK_KO[b] || b)},
       {label: "거래", get: (b) => fmt.int(t[b].n)},
       {label: "승률", get: (b) => fmt.pct(t[b].wr, 0, false)},
       {label: "평균 ROE", get: (b) => h("span", {class: fmt.tone(t[b].roe)}, fmt.pct(t[b].roe))},
+      ...(f ? [
+        {label: "동전 거래", get: (b) => (f[b] ? fmt.int(f[b].n) : "—")},
+        {label: "동전 승률", get: (b) => (f[b] ? fmt.pct(f[b].wr, 0, false) : "—")},
+        {label: "동전 ROE", get: (b) => (f[b] ? h("span", {class: fmt.tone(f[b].roe)}, fmt.pct(f[b].roe)) : "—")},
+      ] : []),
       {label: "", get: (b) => ui.smallSample(t[b].n, min)},
     ], keys));
     if (anim) motion.swap(body);
   }
   paint(false);
   out.push(ui.card({plate: "모습별 성적"}, seg.el, body,
-    h("p", {class: "an-note"}, `자료가 붙은 비율: 봉 모양 ${fmt.pct((cov.candle || 0) / T, 0, false)} · 변동성 ${fmt.pct((cov.volatility || 0) / T, 0, false)} · 진입 강도 ${fmt.pct((cov.strength || 0) / T, 0, false)} · 강제청산 ${fmt.pct((cov.liq || 0) / T, 0, false)}${cov.liq_note ? ` (${cov.liq_note})` : ""}`)));
+    h("p", {class: "an-note"}, `자료가 붙은 비율: 봉 모양 ${fmt.pct((cov.candle || 0) / T, 0, false)} · 변동성 ${fmt.pct((cov.volatility || 0) / T, 0, false)} · 진입 강도 ${fmt.pct((cov.strength || 0) / T, 0, false)} · 강제청산 ${fmt.pct((cov.liq || 0) / T, 0, false)}${cov.liq_note ? ` (${cov.liq_note})` : ""}${cov.trend_stage != null ? ` · 추세 단계 ${fmt.pct((cov.trend_stage || 0) / T, 0, false)}` : ""}`),
+    d.coin_flips_note ? h("p", {class: "an-note"}, d.coin_flips_note) : null));
   if ((d.notable || []).length) {
     const pg = ui.pager({size: 8, row: (x) => h("a", {class: "lrow click an-row", role: "listitem", href: env.ctx.href("strategies", x.strategy)},
       h("span", {class: "rk"}, String(x.strategy).split("_")[0]), h("span", {class: "lname"}, x.name_ko || x.strategy),

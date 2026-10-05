@@ -3,6 +3,7 @@ timeframes) and the reel (5m) are analysed too, the reel next to its three 5m co
 (trend_stage), range position and trend alignment with fixed edges; DeepSeek and the coin flips without money."""
 
 import json
+import os
 
 import pytest
 
@@ -163,3 +164,31 @@ def test_the_reel_room_gets_the_reel_next_to_its_5m_flips(tmp_path):
     assert em["trades"] == 3 and em["flip_trades"] == 1 and em["coin_flips"]["trend_stage"]["초입"]["n"] == 1
     assert "families" not in em and '"eq"' not in json.dumps(em)
     assert len(json.dumps(pk, ensure_ascii=False)) < 40_000
+
+
+# ------------------------------------------------------------------ D: the dashboard route
+def test_the_entry_route_takes_a_group(tmp_path):
+    pytest.importorskip("fastapi")
+    import time
+    from test_dash_analysis import _client, _login
+    w = V4World(tmp_path)
+    t = int(time.time() * 1000) - 2 * HOUR
+    w.trade(f"{S}@15m", 5.0, t, context=UP)
+    w.trade("F3_BOS@15m", -4.0, t, side=-1, context={"regime": "trend_up", "ema20_dist_atr": -2.5})
+    w.trade(f"{REEL_NAME}@5m", 2.0, t, context={"ema20_dist_atr": 1.2})
+    w.trade("RANDOM_3@5m", -2.0, t, context={"ema20_dist_atr": 0.2})
+    c = _client(w.paths["paper"], failalert_dir=str(tmp_path / "failalert"))
+    _login(c)
+    core = c.get("/api/analysis/entry").json()
+    assert core["trades"] == 1 and "group" not in core and "eq" in core["all"]["hold"]["2h-8h"]
+    assert core == c.get("/api/analysis/entry?group=core").json()
+    ds = c.get("/api/analysis/entry?group=ds200")
+    assert ds.status_code == 200 and ds.json()["no_money"] is True and ds.json()["trades"] == 1
+    assert '"eq"' not in ds.text and '"pnl"' not in ds.text and ds.json()["all"]["trend_stage"] == {
+        "막판": {"n": 1, "wr": 0.0, "roe": pytest.approx(-0.08), "small": True}}
+    reel = c.get("/api/analysis/entry?group=reel").json()
+    assert reel["trades"] == 1 and reel["flip_trades"] == 1 and reel["coin_flips"]["trend_stage"]["초입"]["n"] == 1
+    assert c.get("/api/analysis/entry?group=all").status_code == 400
+    js = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "paperbot", "dash", "static",
+                           "v4", "screens", "analysis-where.js"), encoding="utf-8").read()
+    assert "trend_stage" in js and "d.coin_flips" in js and "d.group_label" in js
