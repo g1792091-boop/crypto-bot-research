@@ -161,7 +161,7 @@ export function bigFeed(ctx) {
           ratioK.textContent = span >= 290 ? "최근 5분" : `최근 ${fmt.int(Math.max(1, Math.round(span / 60)))}분`;
           ratio.set({buy: Number(b.buy) || 0, sell: Number(b.sell) || 0}, (n) => usdK(n));
         }
-        if (fresh.size || m.first) { render(fresh); if (fresh.size) ping(el); }
+        if (fresh.size || m.first || was !== m.state) { render(fresh); if (fresh.size) ping(el); }   // (a new state: the empty line says it)
       } else if (was !== m.state) render(new Set());
       if (m.state !== "live") { ratioK.textContent = "최근 5분"; ratio.set({}); }
     },

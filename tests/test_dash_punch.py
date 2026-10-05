@@ -246,3 +246,14 @@ def test_sound_hint_shows_only_while_the_sound_is_off_or_waits_and_uses_the_head
 def test_inventory_and_contract_name_the_new_section():
     inv = _src("INVENTORY.md")
     assert "## 터미널 살아 있게" in inv and "실시간 큰 체결" in inv and "/api/v4/ticks" in inv
+
+
+def test_liq_feed_declares_fresh_once():
+    """Review 10/06: a second `let fresh` inside liqFeed's try block put the first `if (fresh)` in its temporal dead
+    zone (a ReferenceError on every answer), so 시장 강제청산 showed "불러오지 못했습니다" whenever the recorder ran."""
+    feed = _code(_src("screens", "terminal-feed.js"))
+    body = feed[feed.index("export function liqFeed("):]
+    body = body[:body.index("ctx.every(10000, load")]
+    assert len(re.findall(r"\b(?:let|const|var)\b[^;]*\bfresh\s*=", body)) == 1     # the coin-switch flag, nothing else
+    assert "isNew = !fresh && !seen.has(k)" in body and "if (isNew) nNew++;" in body
+
