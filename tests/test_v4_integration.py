@@ -195,6 +195,26 @@ def test_the_frozen_deepseek_texts_have_one_source():
     assert set(dscheck.EXCUSED_RUN) == {"timeout", "failed", "refused", "incomplete"}
 
 
+def test_group_prefixes_name_a_group_never_an_account():
+    """"[ds200] " / "[reel] " head the v4 groups' frozen texts: the dashboard keeps them among the operations alerts
+    (never an account line), the agents never read an account from them, and both pages word them as a group."""
+    from paperbot import sigservice
+    from paperbot.agents import triggers
+    from paperbot.dash import app as A
+    texts = [sigservice.DS_TIMEOUT_TEXT.format(secs="60", boundary=1, tfs="15m"),
+             sigservice.DS_ERROR_TEXT.format(tf="15m", symbol="ETHUSDT", error="x"),
+             sigservice.REEL_FAILED_TEXT.format(boundary=1, error="x"),
+             sigservice.REFUSED_TEXT.format(group="reel", why="pin")]
+    for t in texts:
+        assert t.startswith(("[ds200] ", "[reel] ")) and A.account_line(t) is None and triggers._alert_account(t) is None
+    assert A.account_line("[F9_FVG@15m] LIQUIDATED ETHUSDT 30x lost margin 1.0") == "F9_FVG@15m"
+    v4 = (PKG / "dash" / "static" / "v4" / "core" / "alerts.js").read_text(encoding="utf-8")
+    old = (PKG / "dash" / "static" / "app.js").read_text(encoding="utf-8")
+    assert "딥시크 그룹: " in v4 and "5분봉 그룹: " in v4 and "딥시크 그룹: " in old
+    guide = (ROOT / "docs" / "server-setup-v4.md").read_text(encoding="utf-8")
+    assert "`[ds200] …`·`[reel] …`로 시작하는 줄은 **그룹** 알림" in guide
+
+
 def test_the_telegram_counter_file_is_read_read_only(tmp_path, monkeypatch):
     from paperbot import notify
     from paperbot.dash import app as A

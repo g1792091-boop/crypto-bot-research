@@ -726,6 +726,16 @@ GUIDE = os.path.join(ROOT, "docs", "server-setup-v4.md")
 
 def test_v4_guide_has_the_staging_run_the_reset_and_no_v3_numbers():
     text = open(GUIDE, encoding="utf-8").read()
+    # the two lines the guide quotes verbatim name the core group's own 144 (P13): the start banner (live3 cmd_run,
+    # split by group) and the first full 09:20 parity line (daily3); both built here from config, then left out
+    from paperbot import daily3
+    from paperbot.config import V4_ACCOUNTS, V4_GROUP_ACCOUNTS
+    banner = (f"paper v4 started: {V4_ACCOUNTS} accounts ("
+              + ", ".join(f"{g} {n}" for g, n in V4_GROUP_ACCOUNTS.items()) + "), brackets: …, taker fee …%")
+    parity = f"재계산 일치 {V4_ACCOUNTS}/{V4_ACCOUNTS}" + daily3._split_text(
+        [(g, f"{n}/{n}") for g, n in V4_GROUP_ACCOUNTS.items()])
+    assert text.count(banner) == 2 and parity in text
+    text = text.replace(banner, "").replace(parity, "")
     for word in ("156", "144", "5분봉 제외", "뺐음"):
         assert word not in text, word
     # the staging run: its own unit, database and env file without Telegram / healthchecks, the 01:00 boundary

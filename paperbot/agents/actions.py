@@ -642,9 +642,9 @@ def runtime_ready(paper_ro: Optional[sqlite3.Connection]) -> bool:
 def start_text(paper_ro: Optional[sqlite3.Connection]) -> str:
     """What an approval does now (Korean, code-written)."""
     if runtime_ready(paper_ro):
-        from ..config import V3_ACCOUNTS
+        from ..config import V4_ACCOUNTS
         return ("승인이 반영되면 live 실행기가 코드로 다시 확인한 뒤 다음 봉 경계에 새 paper 계좌로 시작합니다"
-                f"(원본 계좌와 같은 시작 자금, 원본 {V3_ACCOUNTS}개 계좌는 그대로). 시작된 계좌는 거절로 멈출 수 없습니다.")
+                f"(원본 계좌와 같은 시작 자금, 원본 {V4_ACCOUNTS}개 계좌는 그대로). 시작된 계좌는 거절로 멈출 수 없습니다.")
     return ("live 실행기의 추가 계좌 기능이 아직 켜지지 않아 지금은 계좌를 만들지 않습니다. 기능이 켜진 뒤 두 분이 한 번 더 "
             "승인하면 그때 시작합니다.")
 
