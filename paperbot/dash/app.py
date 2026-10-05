@@ -78,6 +78,9 @@ LEVEL_TFS = CORE_TFS
 GROUP_ORDER = ("core", "ds200", "reel", "flip", "extra")
 # the groups the home summary's best / worst lists span (the DeepSeek P&L stays inside its own group view, D11)
 MAIN_GROUPS = ("core", "reel", "extra")
+# /api/cards/stats without a strategy (분석 · 상황 태그): the 36 and the reel; the cap is cards.py's own limit
+CARD_STATS_KINDS = ("strategy", "reel")
+CARD_STATS_CAP = 2000
 # the page's group views (app.js GROUP_VIEWS / inView) as SQL on the accounts table ``a`` (/api/trades?group=): "main" =
 # the 36, the reel and the extras (the default); "reel" = the 5m card: the reel with its three 5m coin flips as its
 # labelled comparison. A view, not a count: the 5m flips count in the coin-flip group everywhere (owners' decision;
@@ -336,10 +339,26 @@ class Data:
                 d.close()
 
     def card_stats(self, strategy: Optional[str], tf: Optional[str], days: Optional[float]) -> dict:
-        from ..cards import tag_stats
-        cs = self.cards(strategy, tf, days, 2000, losses_only=False)
+        """Tag shares of the last ``days`` days' closed trades (at most CARD_STATS_CAP, newest first). Without a
+        strategy: the 36 and the reel only (DeepSeek and the coin flips are counted on their own screens). ``from_ts``
+        / ``capped`` say which window the cap really covers (a busy run fills the cap in a few days)."""
+        from ..cards import cards_from_db, tag_stats
+        if strategy:
+            cs = self.cards(strategy, tf, days, CARD_STATS_CAP, losses_only=False)
+        else:
+            since = 0 if days is None else int(time.time() * 1000 - days * 86_400_000)
+            d = self._daily()
+            try:
+                with self.conn() as c:
+                    cs = cards_from_db(c, self._round_trip(c), None, tf, False, since, CARD_STATS_CAP, d, names_ko(),
+                                       kinds=CARD_STATS_KINDS)
+            finally:
+                if d is not None:
+                    d.close()
+        times = [c.get("exit_time") for c in cs if c.get("exit_time")]
         return {"trades": len(cs), "losses": sum(c["pnl"] < 0 for c in cs), "wins": sum(c["pnl"] > 0 for c in cs),
-                "tags": tag_stats(cs)}
+                "tags": tag_stats(cs), "from_ts": min(times) if times else None, "capped": len(cs) >= CARD_STATS_CAP,
+                "cap": CARD_STATS_CAP, "kinds": None if strategy else list(CARD_STATS_KINDS)}
 
     def last_marks(self, strategy: str, tf: str, symbol: str, days: float = 30) -> Optional[dict]:
         """Entry marks (support / resistance, entry strength) of the strategy's latest logged signal
@@ -799,7 +818,7 @@ class Data:
         """/api/v4/curves: the original accounts' equity over the run (paper3.db ``equity``, every 5 minutes per
         account): each account's last value in each ``step`` (carried forward while it has none), the median per kind
         (strategy = the 36, ds200, reel, random = all 15 coin flips, random_5m = the reel's three 5m flips) and the
-        sum over every original account. Points are the end of each step (the running step: now). Incremental: the
+        sum over every original account except DeepSeek (owners' D11: its money only on the DeepSeek screen). Points are the end of each step (the running step: now). Incremental: the
         finished steps are kept, only the new rows are read (one indexed query per account)."""
         from ..accounts import ORIGINAL_KINDS
         step = min(CURVE_STEPS, key=lambda x: abs(x - int(step_ms)))
@@ -837,7 +856,7 @@ class Data:
                 for a, v in vals.items():
                     for k in key_of.get(a, ()):
                         xs[k].append(v)
-                    if a in key_of:
+                    if a in key_of and "ds200" not in key_of[a]:   # DeepSeek money only on its own screen (D11)
                         tot += v
                 return {k: round(statistics.median(x), 2) if x else None for k, x in xs.items()}, round(tot, 2)
             # steps that ended CURVE_SETTLE_MS ago are kept (a late equity row of theirs is in by then); the newer

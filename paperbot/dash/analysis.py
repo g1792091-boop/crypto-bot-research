@@ -239,6 +239,8 @@ def _nightly(daily_db: Optional[str]) -> dict:
                                                  "extra_accounts") if par.get(k) is not None}
     else:
         out["parity"] = {"note": str(par or "")[:200]}
+    if rep.get("start_day"):  # the run's start day: no 00:00 snapshot by design, nothing to recompute (normal)
+        out["start_day"] = True
     dq = rep.get("data_quality") or {}
     out["missing_bars"] = sum(int(q.get("missing") or 0) for q in dq.values() if isinstance(q, dict))
     return out
@@ -388,7 +390,7 @@ def health(data, rooms, daily_db: Optional[str], checkpoint_db: Optional[str], l
             problems.append(f"밤 점검 재계산 불일치 {par['mismatched_accounts']}개 계좌 ({n['day']})")
         elif par.get("early_kline"):
             warnings.append(f"밤 점검 차이 {par['early_kline']}개 계좌: 모두 '1분봉을 확정 전에 읽음'(early_kline)으로 확인됨")
-        if "accounts" not in par:
+        if "accounts" not in par and not n.get("start_day"):
             warnings.append(f"밤 점검이 재계산을 하지 못했습니다 ({n['day']})")
         if n.get("missing_bars"):
             warnings.append(f"밤 점검: 빠진 1분봉 {n['missing_bars']}개 ({n['day']})")
@@ -501,6 +503,7 @@ def alert_history(data, rooms, daily_db: Optional[str], checkpoint_db: Optional[
                                 "parity": ({k: par.get(k) for k in ("accounts", "mismatched_accounts", "early_kline",
                                                                      "crash_gaps") if par.get(k) is not None}
                                            if isinstance(par, dict) else {"note": str(par or "")[:200]}),
+                                "start_day": bool(rep.get("start_day")),
                                 "missing_bars": sum(int(q.get("missing") or 0) for q in dq.values()
                                                     if isinstance(q, dict))})
             mm = []
@@ -947,9 +950,25 @@ def synergy_view(paper_db: str, now_ms: int) -> dict:
     if c is None:
         return {"error": "paper3.db 없음"}
     try:
-        return SY.dash_view(c, now_ms)
+        out = SY.dash_view(c, now_ms)
+        # day 0: before the 36 have SYNERGY_MIN_TRADES closed trades per account on average (or while every score is
+        # still 0), the 'top' list would be a tie in alphabetical order: none, and a plain note instead
+        try:
+            n_acc, n_tr = c.execute("SELECT COUNT(DISTINCT a.account_id), COUNT(t.id) FROM accounts a "
+                                    "LEFT JOIN trades t ON t.account_id = a.account_id WHERE a.kind = 'strategy'").fetchone()
+        except sqlite3.Error:
+            n_acc, n_tr = 0, 0
+        top = out.get("top") or [] if isinstance(out, dict) else []
+        if isinstance(out, dict) and (not n_acc or n_tr / n_acc < SYNERGY_MIN_TRADES
+                                      or not any((x or {}).get("score") for x in top)):
+            out = {**out, "top": [], "waiting": True, "min_trades": SYNERGY_MIN_TRADES,
+                   "note": f"거래가 쌓이면 (계좌당 {SYNERGY_MIN_TRADES}건 이상) 보여 드립니다"}
+        return out
     finally:
         _close(c)
+
+
+SYNERGY_MIN_TRADES = 5   # 조합 시너지: average closed trades per account of the 36 before a 'top' list is shown
 
 
 # ---------------------------------------------------------------- 좋은 자리 vs 보통 (rule B, docs/levrule-eval.md)

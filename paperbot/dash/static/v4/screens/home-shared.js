@@ -219,18 +219,21 @@ export function topBottom(ctx, o = {}) {
   el.set = (board, gs, group) => {
     put(foot, o.compact ? h("p", {class: "assume home-vsfoot"}, h("b", null, "흐린 줄"), ` = 거래 ${MIN_TRADES}건 미만 (표본 적음) · 거래 수·낙폭·동전 봇 비교(참고)는 순위표에서`)
       : vsFoot(group));
-    const rows = derive.ranked(board, group);
+    // day 0: accounts with no closed trade and no open position have no rank yet (one muted line, never a tie list)
+    const {rows, waiting} = derive.rankedOnly(board, group);
     const n = rows.length;
     const row = (a, i) => rankRow(a, {gs, rk: i + 1, href, showGroup: group === "all", full: !!o.full, compact: !!o.compact});
-    if (n <= 10) {
+    const wait = waiting ? h("p", {class: "muted home-small tb-wait"}, derive.waitingKo(waiting)) : null;
+    if (!n && waiting) put(body, wait);
+    else if (n <= 10) {
       put(body, h("div", {class: "home-tbcol"}, h("div", {class: "tb-h"}, h("b", null, groupKo(group)), h("span", null, `전체 ${fmt.int(n)}개`)),
-        h("div", {role: "list"}, n ? rows.map(row) : ui.empty("계좌가 없습니다"))));
+        h("div", {role: "list"}, n ? rows.map(row) : ui.empty("계좌가 없습니다"))), wait);
     } else {
       put(body, 
         h("div", {class: "home-tbcol"}, h("div", {class: "tb-h"}, h("b", null, groupKo(group)), h("span", null, "상위 5")),
           h("div", {role: "list"}, rows.slice(0, 5).map(row))),
         h("div", {class: "home-tbcol"}, h("div", {class: "tb-h"}, h("b", null, groupKo(group)), h("span", null, "하위 5")),
-          h("div", {role: "list"}, rows.slice(-5).map((a, i) => row(a, n - 5 + i)))));
+          h("div", {role: "list"}, rows.slice(-5).map((a, i) => row(a, n - 5 + i)))), wait);
     }
   };
   return el;
@@ -285,7 +288,10 @@ export function rankList(ctx, o = {}) {
     if (st.tf !== "all") rows = rows.filter((a) => a.timeframe === st.tf);
     const s = SORTS.find((x) => x.id === st.sort) || SORTS[0];
     rows.sort((x, y) => { const p = s.key(x), q = s.key(y); return p < q ? -1 : p > q ? 1 : x.ret === y.ret ? 0 : y.ret - x.ret; });
-    rows.forEach((a, i) => { a._rk = i + 1; });
+    // accounts with no closed trade and no open position: after the ranked ones, '—' instead of a rank number
+    rows = rows.filter((a) => !derive.unranked(a)).concat(rows.filter(derive.unranked));
+    let rk = 0;
+    rows.forEach((a) => { a._rk = derive.unranked(a) ? null : ++rk; });
     countEl.textContent = `${groupKo(st.group)}${st.tf !== "all" ? " · " + fmt.tfKo(st.tf) : ""} · ${fmt.int(rows.length)}계좌`;
     // 순위표 only (o.flips, wave 2 part B): the same-bar coin flips sit at their real place in a 수익률 list
     const fl = o.flips && st.sort === "ret" ? withFlips(rows, st) : null;

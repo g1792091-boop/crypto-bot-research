@@ -68,7 +68,8 @@ export async function mount(el, ctx) {
     const b = st.board, gs = st.gs, init = gs.initial;
     const accts = (b.accounts || []);
     const flipsBy = (tf) => accts.filter((a) => a.kind === "random" && a.timeframe === tf);
-    const best = (rows) => rows.reduce((m, a) => (!m || (a.wallet ?? init) > (m.wallet ?? init) ? a : m), null);
+    // 최고 계좌: ranked accounts only (day 0: no trade and no position = no rank, so no pick among ties)
+    const best = (rows) => rows.filter((a) => !derive.unranked(a)).reduce((m, a) => (!m || (a.wallet ?? init) > (m.wallet ?? init) ? a : m), null);
     const bestCell = (a) => (a ? h("a", {class: "board-best", href: href("account", a.account_id), title: a.account_id},
       h("span", {class: "nm2"}, fmt.acctName(a)), " ", h("b", {class: ["num", fmt.tone((a.wallet ?? init) - init)]}, fmt.money(a.wallet ?? init))) : "—");
     const vs = (rows) => {
@@ -83,7 +84,8 @@ export async function mount(el, ctx) {
       {label: "포지션", get: (r) => fmt.int(r.rows.filter((a) => a.position).length)},
       {label: "파산", get: (r) => fmt.int(r.rows.filter((a) => a.bust).length)},
       {label: "잔고 중앙값", get: (r) => fmt.money(median(r.rows.map((a) => a.wallet ?? init)))},
-      {label: "최고 계좌", l: true, get: (r) => bestCell(best(r.rows))},
+      // the 전체 table's DeepSeek row names no account with money (D11: that only on the DeepSeek screen itself)
+      {label: "최고 계좌", l: true, get: (r) => (r.g === "ds" ? "딥시크 화면에서" : bestCell(best(r.rows)))},
     ];
     if (st.sel === "all") {
       const rows = ORDER.filter((g) => gs.groups[g]).map((g) => ({key: groupKo(g), g, rows: accts.filter((a) => fmt.groupOf(a) === g)}));

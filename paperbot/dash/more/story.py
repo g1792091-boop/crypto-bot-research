@@ -73,11 +73,12 @@ def day_n(start: int, ms: int) -> int:
 
 
 def run_days(start: int, now: int, limit: int = MAX_DAYS) -> list[dict]:
-    """The run's Korea-time days, oldest first (the last ``limit``): [{day, dn}] with dn = D+n at the day's end (now
-    for today)."""
+    """The run's Korea-time days, oldest first (the last ``limit``): [{day, n, dn}] with n = the Korea-time day number
+    (1 = the start day, the same count as 흐름 'N일째', so 오늘 and 어제 always differ) and dn = D+n at the day's end
+    (now for today; the checkpoint clock moves at 09:00 KST)."""
     out, t = [], day_start(kst_day(start))
     while t <= now:
-        out.append({"day": kst_day(t), "dn": day_n(start, min(now, t + DAY_MS - 1))})
+        out.append({"day": kst_day(t), "n": len(out) + 1, "dn": day_n(start, min(now, t + DAY_MS - 1))})
         t += DAY_MS
     return out[-limit:]
 

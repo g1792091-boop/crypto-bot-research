@@ -252,7 +252,7 @@ def test_curves_median_per_kind_and_total_carried_forward(tmp_path):
     last = {k: s[-1] for k, s in v["median"].items()}
     assert last["strategy"] == 5100 and last["ds200"] == 5200 and last["reel"] == 5060
     assert last["random"] == (4800 + 5010) / 2 and last["random_5m"] == 5010                # carried forward
-    assert v["total"][-1] == 5100 + 4800 + 5200 + 5060 + 5010                             # the copy is not in it
+    assert v["total"][-1] == 5100 + 4800 + 5060 + 5010           # the copy is not in it, nor DeepSeek (F9_FVG, D11)
     assert data.curves(3_600_000, now_ms=now) == v                                        # incremental = the same
     assert data.curves(1, now_ms=now)["step"] == 900_000                                  # the nearest allowed step
     c = _client(db)

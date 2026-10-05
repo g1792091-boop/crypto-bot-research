@@ -132,8 +132,8 @@ export async function mount(el, ctx) {
       const cur = !!st.d && x.day === st.d.day;
       const seen = isSeen(x.day) && !cur;
       return h("button", {class: ["st-dayb", cur ? "cur" : "", seen ? "seen" : ""], type: "button", role: "listitem",
-        "aria-current": cur ? "true" : null, "aria-label": `${dayWord(x.day)} · D+${x.dn}`, onclick: () => pickDay(x.day)},
-      h("span", {class: "sk-ava"}, ringSvg({seen, cur, size: 52}), h("span", {class: "sk-in"}, h("small", null, "D+"), h("b", null, String(x.dn)))),
+        "aria-current": cur ? "true" : null, "aria-label": `${dayWord(x.day)} · ${x.n ?? "—"}일째`, onclick: () => pickDay(x.day)},
+      h("span", {class: "sk-ava"}, ringSvg({seen, cur, size: 52}), h("span", {class: "sk-in"}, h("b", null, x.n == null ? "—" : String(x.n)), h("small", null, "일째"))),
       h("span", {class: "st-dayl"}, dayWord(x.day)));
     }));
   }

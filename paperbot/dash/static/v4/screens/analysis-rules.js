@@ -184,6 +184,10 @@ export function synergy(d, env) {
     meta: `${fmt.int(d.days || 0)}일 · 기존 36 매매법 · ${d.label || ""}`, at: d.computed_at, stale: d.stale,
     read: "매매법 2~5개를 같은 크기로 같이 돌렸다면의 합친 자금 곡선 중 점수(총손익 ÷ 최대 낙폭)가 높은 순입니다. 분산 효과 = 각자 최대 낙폭의 합 ÷ 합친 곡선의 최대 낙폭 (1이면 위험이 안 나뉨).",
     warn: [thin(d.days || 0, 14, "날 수(하루 손익)"), "수만 개 조합 중 고른 최고값이라 실제보다 좋아 보이기 쉽습니다. 계좌를 묶거나 바꾸지 않습니다: 설명용, 판정 아님."]})];
+  if (d.waiting) {      // day 0: no ranked list before trades exist (it would be ties in alphabetical order)
+    out.push(ui.card({plate: "점수 높은 조합"}, h("p", {class: "muted"}, d.note || `거래가 쌓이면 (계좌당 ${fmt.int(d.min_trades || 5)}건 이상) 보여 드립니다`)));
+    return out;
+  }
   const pg = ui.pager({size: 8, empty: "조합이 없습니다", row: (r) => h("div", {class: "lrow an-row", role: "listitem"},
     h("span", {class: "rk"}, `${fmt.int(r.k || r.names.length)}개`), h("span", {class: "lname an-wrap"}, r.names.join(" + ")),
     h("span", {class: ["ret num", fmt.tone(r.return_pct)]}, fmt.pct(r.return_pct)),

@@ -333,3 +333,18 @@ Not in w3 (left for later): the bell does not count replies / busts / verdict-re
 | 미국 증시 휴장일 2026-2027 · 단축 마감 13:00 | `bars.usMarket` (market 오늘·일정 card, chart, terminal top title): "휴장 (추수감사절) · 다음 개장 11월 27일 밤 (한국)", "(단축 마감)" | none (browser list `bars.NYSE_HOLIDAYS` = `paperbot/sessions.py` `NYSE_HOLIDAYS`; tests/test_88_csp_nyse.py keeps them equal) |
 | AI 회의 구조와 한계 (FAQ 기본) | faq: "AI 회의 구조는 어디서 왔고, 한계는요?" → link | `/api/doc/tradingagents-limits` (docs/tradingagents-limits.md) |
 | Content-Security-Policy | every answer (app.py `CSP`): scripts only from this server, Google Fonts allowed, TradingView chart iframe (`frame-src` s.tradingview.com, www.tradingview-widget.com), `frame-ancestors 'none'`; the old `/v3` page keeps `frame-ancestors 'none'` only (`CSP_V3`) | login.html's script moved to `/static/login.js` (public path) |
+
+## 첫날 다듬기
+
+What the owners see on the first morning after the v4 reset (dashboard only; ships with deploy/update-dash.sh). Tests: tests/test_dash_firstday.py.
+
+| Addition | Screen / place | Server |
+|---|---|---|
+| 시작한 날 밤 점검 = 정상 | 서버 tile '밤 점검': "시작한 날 · 재계산 없음 (정상, 첫 재계산 내일 09:20)", grey (`st: none`); 알림 기록 › 밤 점검 the same line, muted; no health warning | `/api/analysis/health` `.nightly.start_day`, `/api/analysis/alerts` `.nightly[].start_day` (report['start_day'] from daily3) |
+| 딥시크 돈은 딥시크 화면에서만 (D11) | 홈 LED: 합계에서 딥시크 빠짐 (캡션이 말함), 오른쪽 딥시크 칸 = "N계좌 (손익은 딥시크 화면에서)"; 오늘 card: 딥시크 줄은 거래·이김·강제청산·파산만; profile card (grid-kit `dsCounts`) and a DeepSeek strategy page: 거래 수 · 이긴 거래 · 파산, link to 순위표 딥시크; 순위표 전체 표의 딥시크 줄 최고 계좌 = "딥시크 화면에서" | `/api/v4/curves` `total` leaves DeepSeek out |
+| 첫날 순위 없음 | 거래 0건 + 포지션 없음 = 순위 없음 (`derive.unranked`): 상위·하위 5, 최고 계좌, 흐름 가장 많이 오른·내린 계좌에서 빠짐; 한 줄 "아직 거래 없는 계좌 N개 · 첫 거래 뒤부터 순위"; 순위표 목록에선 맨 뒤 "—"; ▲▼ 기억은 순위 있는 계좌만 | none |
+| 하이라이트 N일째 | 홈 하이라이트 rings and the story day picker: "N일째" (한국 날짜, 시작한 날 = 1일째, 흐름과 같음), so 오늘 and 어제 differ; 홈 head line: "D+는 매일 한국 09:00에 +1" | `/api/story` `days[].n` (dash/more/story.py `run_days`) |
+| 상황 태그 범위 | 분석 › 상황 태그: 기존 36 + 5분봉만, caption shows the real window ("최근 2,000건이라 MM/DD부터" when capped) | `/api/cards/stats` (no strategy): kinds strategy + reel, `from_ts`, `capped`, `cap` |
+| 조합 시너지 첫날 | 분석 › 조합 시너지: no ranked list until the 36 average 5 closed trades per account: "거래가 쌓이면 (계좌당 5건 이상) 보여 드립니다" | `/api/analysis/synergy` `waiting`, `note` (dash/analysis.py `SYNERGY_MIN_TRADES`) |
+| 알림 기록 읽은 곳 | 알림 기록 footer: 봇 경고 · 밤 점검 보고 · 판정 작업 기록 (no file names) | none |
+| 화면 켜두기 | 🔊 menu: "화면 켜두기" (Screen Wake Lock while the sound is on; off by default, this device only; asks again when the page comes back; "이 기기는 지원 안 함" without the API); FAQ 화면: "휴대폰에서 앱처럼 쓰려면요?" (브라우저 메뉴 → 홈 화면에 추가) | none |

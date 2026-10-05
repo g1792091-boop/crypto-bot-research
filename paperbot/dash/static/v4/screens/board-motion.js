@@ -103,7 +103,7 @@ export function rowMotion(ctx, root, o = {}) {
       st.board = board; st.sel = sel;
       st.initial = (board && board.initial) || st.initial;
       st.byId = new Map(((board && board.accounts) || []).map((a) => [a.account_id, a]));
-      const rows = derive.ranked(board, sel);
+      const rows = derive.rankedOnly(board, sel).rows;        // the rank memo and arrows: ranked accounts only
       const ret = Object.fromEntries(rows.map((a) => [a.account_id, a.ret]));
       st.prevRet = Object.keys(st.curRet).length ? st.curRet : null;
       st.curRet = Object.fromEntries(derive.ranked(board, "all").concat(derive.ranked(board, "extra")).map((a) => [a.account_id, a.ret]));
@@ -116,7 +116,7 @@ export function rowMotion(ctx, root, o = {}) {
         st.rank = ui.ranksOf(ret, ids);
       }
       st.updAt = performance.now();
-      memo.save(st.curRet);
+      memo.save(Object.fromEntries(Object.entries(st.curRet).filter(([id]) => !derive.unranked(st.byId.get(id)))));
     },
     /** The caption (and, with a baseline, how many of the top 10 are still there: ranks move with luck). */
     note(sel) {

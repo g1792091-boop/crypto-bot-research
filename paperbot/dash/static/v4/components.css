@@ -144,6 +144,7 @@ a.lrow:focus-visible { outline-offset: -2px; }
 .led-r > div { display: grid; gap: 2px; }
 .led-r span { color: var(--led-green); }
 .led-r b { font: 400 var(--t-xl)/1 var(--f-led); }
+.led-r b.led-txt { font: 400 var(--t-xs)/1.35 var(--f-body); color: var(--led-green); opacity: .8; max-width: 22ch; overflow-wrap: anywhere; }
 .led-cap { grid-column: 1 / -1; margin: 0; color: var(--led-dim); font-size: var(--t-xs); }
 .pnl { display: flex; justify-content: space-between; align-items: flex-end; gap: 10px; padding: 12px 14px; border-radius: var(--r-md); background: var(--led-bg); border: 1px solid var(--led-line); }
 .pnl .k { display: block; color: var(--led-green); font: 400 var(--t-xs)/1.4 var(--f-term); margin-bottom: 4px; }

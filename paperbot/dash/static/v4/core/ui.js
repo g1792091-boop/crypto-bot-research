@@ -305,7 +305,7 @@ export function curves(o) {
 // ---------------------------------------------------------------- the green LED balance bar
 /**
  * ledBar({label}) -> {el, update(d)}; d = {total, initialTotal, live: bool, curve: [v...]|null, stats: [text...],
- *   right: [{k, v (number), sign: true}], caption}. Money counts to its new value when it changes (real data only).
+ *   right: [{k, v (number), sign: true} | {k, text}], caption}. A `text` cell is words only (DeepSeek: counts, no money). Money counts to its new value when it changes (real data only).
  *   live: true only while the live stream is really connected.
  */
 export function ledBar(o = {}) {
@@ -337,6 +337,7 @@ export function ledBar(o = {}) {
         cell = {wrap: h("div", null, h("span", null, r.k), v), v};
         rightEls.set(r.k, cell); right.append(cell.wrap);
       }
+      if (r.text != null) { cell.v.className = "led-txt"; cell.v.textContent = r.text; continue; }
       countTo(cell.v, r.v, {dec: 2, sign: r.sign !== false, tone: true});
     }
     cap.textContent = d.caption || ASSUME_KO;

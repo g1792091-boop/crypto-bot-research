@@ -126,6 +126,7 @@ export function detailView(ctx, st, name) {
   const recNums = {};
   function renderAccounts() {
     const rows = accountsOf(st.board, name);
+    const dsK = kind === "ds200";
     const init = (st.board && st.board.initial) || 5000;
     const gs = st.gs;
     const tiles = rows.map((a) => {
@@ -138,8 +139,9 @@ export function detailView(ctx, st, name) {
       const p = a.position;
       return h("a", {class: ["strat-tile", a.timeframe === v.tf ? "sel" : ""], href: ctx.href("account", a.account_id), title: a.account_id},
         h("span", {class: "k"}, fmt.tfKo(a.timeframe)),
-        h("b", {class: ["num", fmt.tone(w - init)]}, fmt.money(w)),
-        h("span", {class: ["num small", fmt.tone(w - init)]}, fmt.pct(w / init - 1)),
+        // DeepSeek: counts only here (owners' D11: its money only on the DeepSeek group screen)
+        dsK ? h("b", {class: "num"}, `거래 ${fmt.int(a.trades || 0)}`) : h("b", {class: ["num", fmt.tone(w - init)]}, fmt.money(w)),
+        dsK ? null : h("span", {class: ["num small", fmt.tone(w - init)]}, fmt.pct(w / init - 1)),
         h("span", {class: "s"}, a.trades ? `${fmt.int(a.wins)}승 ${fmt.int(a.losses)}패` : "거래 없음", " ", ui.smallSample(a.trades || 0)),
         a.bust ? ui.pill("파산", "bad") : p ? h("span", {class: "s accent"}, `● ${fmt.coin(p.symbol)} ${fmt.sideKo(p.side)} ${fmt.lev(p.leverage)}`) : null,
         vs);
@@ -147,7 +149,11 @@ export function detailView(ctx, st, name) {
     const r = record(rows, init);
     const lr = v.profile && v.profile.live_risk && !v.profile.live_risk.error ? v.profile.live_risk : null;
     const num = (key, val, o) => { if (!recNums[key]) recNums[key] = ui.liveNum(val, o); else recNums[key].update(val); return recNums[key]; };
-    const stats = h("div", {class: "strat-stats"},
+    const stats = dsK ? h("div", {class: "strat-stats"},
+      ui.stat("거래", r.trades ? `${fmt.int(r.wins)}승 ${fmt.int(r.losses)}패` : "거래 없음", r.rate == null ? "—" : `승률 ${fmt.pct(r.rate, 0, false)}`),
+      ui.stat("파산", `${fmt.int(rows.filter((a) => a.bust).length)}개`, `봉 계좌 ${fmt.int(r.n)}개 중`),
+      ui.stat("손익", "딥시크 화면에서", h("a", {href: ctx.href("board", null, {g: "ds"})}, "딥시크 순위표 →")))
+    : h("div", {class: "strat-stats"},
       ui.stat("거래", r.trades ? `${fmt.int(r.wins)}승 ${fmt.int(r.losses)}패` : "거래 없음", r.rate == null ? "—" : `승률 ${fmt.pct(r.rate, 0, false)}`),
       ui.stat("손익 합계", num("pnl", r.pnl, {dec: 2, sign: true, tone: true}), `봉 계좌 ${fmt.int(r.n)}개 합`),
       ui.stat("평균 이익 · 손실", h("b", {class: "num"}, h("span", {class: "up"}, fmt.money(r.avgW, true)), " · ", h("span", {class: "down"}, fmt.money(r.avgL, true))),
@@ -158,7 +164,7 @@ export function detailView(ctx, st, name) {
     const list = rows.length ? h("div", {class: "strat-tiles"}, tiles) : ui.empty("이 매매법의 계좌가 아직 없습니다");
     put(acctEl, list, stats, ui.smallSample(r.trades) ? h("p", {class: "muted small"}, ui.smallSample(r.trades), " 거래가 30건 미만이라 숫자가 우연일 수 있습니다.") : null,
       kind === "strategy" ? ui.refNote(verdictTs()) : kind === "ds200" ? h("p", {class: "refnote"}, h("b", null, "참고"), " · 딥시크 계좌는 계좌마다 동전 봇과 비교하지 않습니다. 묶음 숫자는 순위표에 있습니다.") : null,
-      ui.assume(null, "잔고·손익은 닫힌 거래 기준"));
+      dsK ? null : ui.assume(null, "잔고·손익은 닫힌 거래 기준"));
   }
 
   function renderSplit(animate) {
@@ -172,8 +178,8 @@ export function detailView(ctx, st, name) {
       h("div", {class: "strat-split", role: "list"}, rows.map((c) => h("div", {class: "strat-srow", role: "listitem"},
         h("span", {class: "nm2"}, c.ko), h("span", {class: "wl-bar", title: `이긴 비율 ${fmt.pct(c.rate, 0, false)}`}, h("i", {style: {"--w": Math.round((c.rate || 0) * 100) + "%"}})),
         h("span", {class: "num small"}, `${fmt.int(c.wins)}승 ${fmt.int(c.losses)}패`),
-        h("b", {class: ["num", fmt.tone(c.pnl)]}, fmt.money(c.pnl, true)), h("span", {class: "strat-sp"}, ui.smallSample(c.n, 10))))),
-      ui.assume());
+        kind === "ds200" ? null : h("b", {class: ["num", fmt.tone(c.pnl)]}, fmt.money(c.pnl, true)), h("span", {class: "strat-sp"}, ui.smallSample(c.n, 10))))),
+      kind === "ds200" ? null : ui.assume());
     if (animate) motion.swap(splitEl);
   }
 

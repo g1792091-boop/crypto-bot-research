@@ -30,7 +30,8 @@ export function todayStats(summary, board) {
       (groups[id] ||= blank()).busts++; total.busts++;
     }
   }
-  if (bg) for (const x of Object.values(groups)) { total.trades += x.trades; total.wins += x.wins; total.pnl += x.pnl; total.liq += x.liq; }
+  // total.pnl leaves DeepSeek out (owners' D11: DeepSeek money only on the DeepSeek group screen); counts include it
+  if (bg) for (const [id, x] of Object.entries(groups)) { total.trades += x.trades; total.wins += x.wins; if (id !== "ds") total.pnl += x.pnl; total.liq += x.liq; }
   else { total.trades = t.trades || 0; total.liq = t.liquidations || 0; }
   return {ready: true, byGroup: !!bg, since: t.since, total, groups};
 }
