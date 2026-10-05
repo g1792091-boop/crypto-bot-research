@@ -187,6 +187,8 @@ def test_alert_screen_uses_the_groups_and_wrapped_per_viewer_storage():
     assert local.count("try {") == 3 and "catch (e)" in local          # storage blocked / private window: no throw
     assert "▲ 여기부터 위로 새 알림" in js and "`×${fmt.int(g.n)}`" in js and "처음 " in js and "마지막 " in js
     assert 'match: (g, q) => !g.divider' in js                           # a search never shows the line
+    # a live arrival slides its row in once: every fresh key of the group is used up (some() would leave the rest)
+    assert "g.items.filter((a) => fresh.delete(key(a))).length" in js and "g.items.some((a) => fresh.delete" not in js
 
 
 # ---------------------------------------------------------------- shared rules for the new pieces

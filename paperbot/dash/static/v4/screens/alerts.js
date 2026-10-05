@@ -69,8 +69,9 @@ export async function mount(el, ctx) {
       h("div", {class: "meta"}, many ? fold : h("span", null, `${dayTime(g.last)} · ${rel(g.last)}`),
         acct ? h("a", {href: ctx.href("account", acct[1])}, "계좌 보기") : null),
       region);
-    // a real new arrival (live stream) slides in once
-    if (g.items.some((a) => fresh.delete(key(a)))) motion.slideIn(r);
+    // a real new arrival (live stream) slides in once: every fresh key of the group is used up here (some() would stop
+    // at the first and leave the rest to slide the same row in again on the next repaint)
+    if (g.items.filter((a) => fresh.delete(key(a))).length) motion.slideIn(r);
     return r;
   }
   const levelSeg = ui.seg(LEVELS, level, (id) => { level = id; local.set("alerts-level", id); paintBot(true); }, {label: "수준"});
@@ -123,10 +124,12 @@ export async function mount(el, ctx) {
     st.rows.sort((x, y) => y.ts - x.ts);
   };
   function paintBot(reset) {
-    const groups = groupAlerts(level === "all" ? st.rows : st.rows.filter((a) => a.level === level));
+    const mine = level === "all" ? st.rows : st.rows.filter((a) => a.level === level);
+    const groups = groupAlerts(mine);
     const {rows, n} = withDivider(groups, seenAt);
     list.set(rows, !reset);
-    botNote.textContent = `기록 ${fmt.int(st.rows.length)}건 · 같은 알림을 묶어 ${fmt.int(groups.length)}줄` +
+    // "묶어 n줄" only when something really folded
+    botNote.textContent = `기록 ${fmt.int(st.rows.length)}건` + (groups.length < mine.length ? ` · 같은 알림을 묶어 ${fmt.int(groups.length)}줄` : "") +
       (n ? ` · 지난번 본 뒤 새 알림 ${fmt.int(n)}개` : "") + (st.d && st.d.sources ? ` · 읽은 곳: ${st.d.sources.join(", ")}` : "");
     // this device has now seen everything up to the newest alert (next visit draws the line there)
     const top = st.rows.length ? st.rows[0].ts : null;
